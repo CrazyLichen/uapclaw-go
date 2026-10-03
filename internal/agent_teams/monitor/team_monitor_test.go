@@ -14,9 +14,9 @@ import (
 
 // fakeTeamAgent 实现 EventListenerRegistrar 接口
 type fakeTeamAgent struct {
-	mu             sync.Mutex
-	handlers       map[uint64]*messager.EventListenerHandle
-	listenerSeq    uint64
+	mu          sync.Mutex
+	handlers    map[uint64]*messager.EventListenerHandle
+	listenerSeq uint64
 }
 
 func newFakeTeamAgent() *fakeTeamAgent {

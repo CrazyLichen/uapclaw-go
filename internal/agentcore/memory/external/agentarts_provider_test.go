@@ -900,8 +900,8 @@ func (s *errorKVStore) ExclusiveSet(_ context.Context, _ string, _ []byte, _ int
 func (s *errorKVStore) Get(_ context.Context, _ string) ([]byte, error) {
 	return nil, s.getErr
 }
-func (s *errorKVStore) Exists(_ context.Context, _ string) (bool, error)    { return false, nil }
-func (s *errorKVStore) Delete(_ context.Context, _ string) error             { return nil }
+func (s *errorKVStore) Exists(_ context.Context, _ string) (bool, error) { return false, nil }
+func (s *errorKVStore) Delete(_ context.Context, _ string) error         { return nil }
 func (s *errorKVStore) GetByPrefix(_ context.Context, _ string) (map[string][]byte, error) {
 	return nil, nil
 }

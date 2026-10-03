@@ -70,13 +70,13 @@ var (
 		TeamEventMemberExecutionChanged: EventCategoryMember,
 		TeamEventMemberRestarted:        EventCategoryMember,
 		TeamEventMemberShutdown:         EventCategoryMember,
-		TeamEventTaskCreated:   EventCategoryTask,
-		TeamEventTaskClaimed:   EventCategoryTask,
-		TeamEventTaskCompleted: EventCategoryTask,
-		TeamEventTaskCancelled: EventCategoryTask,
-		TeamEventTaskUnblocked: EventCategoryTask,
-		TeamEventMessageP2P:       EventCategoryMessage,
-		TeamEventMessageBroadcast: EventCategoryMessage,
+		TeamEventTaskCreated:            EventCategoryTask,
+		TeamEventTaskClaimed:            EventCategoryTask,
+		TeamEventTaskCompleted:          EventCategoryTask,
+		TeamEventTaskCancelled:          EventCategoryTask,
+		TeamEventTaskUnblocked:          EventCategoryTask,
+		TeamEventMessageP2P:             EventCategoryMessage,
+		TeamEventMessageBroadcast:       EventCategoryMessage,
 	}
 
 	// sdkToTeamEventMap SDK MonitorEventType → 前端 TeamEventType 映射。
@@ -89,13 +89,13 @@ var (
 		monitor.MonitorEventTypeMemberExecutionChanged: TeamEventMemberExecutionChanged,
 		monitor.MonitorEventTypeMemberRestarted:        TeamEventMemberRestarted,
 		monitor.MonitorEventTypeMemberShutdown:         TeamEventMemberShutdown,
-		monitor.MonitorEventTypeTaskCreated:   TeamEventTaskCreated,
-		monitor.MonitorEventTypeTaskClaimed:   TeamEventTaskClaimed,
-		monitor.MonitorEventTypeTaskCompleted: TeamEventTaskCompleted,
-		monitor.MonitorEventTypeTaskCancelled: TeamEventTaskCancelled,
-		monitor.MonitorEventTypeTaskUnblocked: TeamEventTaskUnblocked,
-		monitor.MonitorEventTypeMessage:   TeamEventMessageP2P,
-		monitor.MonitorEventTypeBroadcast: TeamEventMessageBroadcast,
+		monitor.MonitorEventTypeTaskCreated:            TeamEventTaskCreated,
+		monitor.MonitorEventTypeTaskClaimed:            TeamEventTaskClaimed,
+		monitor.MonitorEventTypeTaskCompleted:          TeamEventTaskCompleted,
+		monitor.MonitorEventTypeTaskCancelled:          TeamEventTaskCancelled,
+		monitor.MonitorEventTypeTaskUnblocked:          TeamEventTaskUnblocked,
+		monitor.MonitorEventTypeMessage:                TeamEventMessageP2P,
+		monitor.MonitorEventTypeBroadcast:              TeamEventMessageBroadcast,
 	}
 )
 

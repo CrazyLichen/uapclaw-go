@@ -252,13 +252,13 @@ func (TaskInfo) FromInternal(task *database.TeamTaskBase) *TaskInfo {
 		updatedAt = &task.UpdatedAt
 	}
 	return &TaskInfo{
-		TaskID:     task.TaskID,
-		TeamName:   task.TeamName,
-		Title:      task.Title,
-		Content:    task.Content,
-		Status:     task.Status,
-		Assignee:   task.Assignee,
-		UpdatedAt:  updatedAt,
+		TaskID:    task.TaskID,
+		TeamName:  task.TeamName,
+		Title:     task.Title,
+		Content:   task.Content,
+		Status:    task.Status,
+		Assignee:  task.Assignee,
+		UpdatedAt: updatedAt,
 	}
 }
 

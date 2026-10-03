@@ -16,7 +16,7 @@ func TestExtractMemoryParams_字段赋值(t *testing.T) {
 		ScopeID:         "scope1",
 		Messages:        nil,
 		HistoryMessages: nil,
-		BaseChatModel:    nil,
+		BaseChatModel:   nil,
 	}
 	if params.UserID != "user1" {
 		t.Errorf("UserID = %q, want %q", params.UserID, "user1")

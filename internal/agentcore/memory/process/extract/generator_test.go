@@ -488,10 +488,10 @@ func TestCategoriesToMemoryUnit_无指令(t *testing.T) {
 
 	g := NewGenerator(mem_model.NewDataIdManager(), nil)
 	params := &ExtractMemoryParams{
-		UserID:          "user1",
-		ScopeID:         "scope1",
-		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
-		BaseChatModel:   model,
+		UserID:        "user1",
+		ScopeID:       "scope1",
+		Messages:      []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		BaseChatModel: model,
 	}
 
 	result, err := g.categoriesToMemoryUnit(
@@ -678,10 +678,10 @@ func TestCategoriesToMemoryUnit_有指令(t *testing.T) {
 	// searchManager 为 nil，handleMemoryWithInstruct 内部 processMemoryOperations 返回空
 	g := NewGenerator(mem_model.NewDataIdManager(), nil)
 	params := &ExtractMemoryParams{
-		UserID:          "user1",
-		ScopeID:         "scope1",
-		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
-		BaseChatModel:   model,
+		UserID:        "user1",
+		ScopeID:       "scope1",
+		Messages:      []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		BaseChatModel: model,
 	}
 
 	result, err := g.categoriesToMemoryUnit(

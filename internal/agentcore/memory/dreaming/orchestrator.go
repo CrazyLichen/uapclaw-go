@@ -20,8 +20,8 @@ import (
 //
 // 调度策略：
 //
-//	1. Busy Backoff: busyChecker() 返回 true → 跳过本轮
-//	2. 定时执行: 间隔 interval 执行 sweepFn
+//  1. Busy Backoff: busyChecker() 返回 true → 跳过本轮
+//  2. 定时执行: 间隔 interval 执行 sweepFn
 //
 // 幂等：重复 Start()/Stop() 安全。
 //

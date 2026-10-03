@@ -568,4 +568,3 @@ func (p *Mem0Provider) handleConclude(ctx context.Context, client *mem0HTTPClien
 	b, _ := json.Marshal(map[string]string{"result": "Fact stored."})
 	return string(b), nil
 }
-

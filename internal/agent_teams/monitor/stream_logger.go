@@ -49,15 +49,15 @@ type TeamStreamLogger struct {
 
 const (
 	// 块类型常量，对齐 Python _CHUNK_*
-	chunkLLMOutput       = "llm_output"
-	chunkLLMReasoning    = "llm_reasoning"
-	chunkAnswer          = "answer"
-	chunkInteraction     = "__interaction__"
-	chunkMessage         = "message"
-	chunkToolCall        = "tool_call"
-	chunkToolResult      = "tool_result"
-	chunkToolUpdate      = "tool_update"
-	chunkTodoUpdated     = "todo.updated"
+	chunkLLMOutput        = "llm_output"
+	chunkLLMReasoning     = "llm_reasoning"
+	chunkAnswer           = "answer"
+	chunkInteraction      = "__interaction__"
+	chunkMessage          = "message"
+	chunkToolCall         = "tool_call"
+	chunkToolResult       = "tool_result"
+	chunkToolUpdate       = "tool_update"
+	chunkTodoUpdated      = "todo.updated"
 	chunkControllerOutput = "controller_output"
 
 	// runtime_ready 事件类型
@@ -85,17 +85,17 @@ var (
 	// categoryLevel 类别→日志级别映射
 	// 对齐 Python: _CATEGORY_LEVEL
 	categoryLevel = map[string]string{
-		"text":             "INFO",
-		"reasoning":        "DEBUG",
-		"tool_call":        "DEBUG",
-		"tool_result":      "DEBUG",
-		"tool_update":      "DEBUG",
-		"interaction":      "WARN",
+		"text":              "INFO",
+		"reasoning":         "DEBUG",
+		"tool_call":         "DEBUG",
+		"tool_result":       "DEBUG",
+		"tool_update":       "DEBUG",
+		"interaction":       "WARN",
 		"controller_output": "WARN",
-		"runtime_ready":    "INFO",
-		"message":          "INFO",
-		"todo":             "INFO",
-		"other":            "INFO",
+		"runtime_ready":     "INFO",
+		"message":           "INFO",
+		"todo":              "INFO",
+		"other":             "INFO",
 	}
 )
 

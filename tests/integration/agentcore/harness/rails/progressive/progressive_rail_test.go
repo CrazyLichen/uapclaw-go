@@ -11,8 +11,8 @@ import (
 	progressive "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

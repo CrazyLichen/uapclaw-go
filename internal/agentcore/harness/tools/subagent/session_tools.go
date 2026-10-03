@@ -403,4 +403,3 @@ func generateTokenHex(n int) string {
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
-

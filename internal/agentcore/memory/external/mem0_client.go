@@ -232,4 +232,3 @@ func (c *mem0HTTPClient) add(ctx context.Context, messages []mem0Message, filter
 	_, err := c.doRequest(ctx, http.MethodPost, "/v1/memories/", req)
 	return err
 }
-

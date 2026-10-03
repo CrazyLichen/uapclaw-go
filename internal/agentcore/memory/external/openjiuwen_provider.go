@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"path/filepath"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	db "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	vector "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	memconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/ltm"
 	apiembedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"

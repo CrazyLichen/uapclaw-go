@@ -68,11 +68,11 @@ func TestAgentArtsClient_SearchMemories_正常(t *testing.T) {
 			"records": []map[string]any{
 				{
 					"record": map[string]any{"id": "m1", "content": "用户偏好Go语言", "strategy_type": "semantic"},
-					"score":   0.95,
+					"score":  0.95,
 				},
 				{
 					"record": map[string]any{"id": "m2", "content": "用户使用VSCode", "strategy_type": "semantic"},
-					"score":   0.8,
+					"score":  0.8,
 				},
 			},
 			"total": 2,

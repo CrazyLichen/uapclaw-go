@@ -10,11 +10,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

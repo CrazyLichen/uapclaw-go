@@ -10,10 +10,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -141,7 +141,7 @@ func (s *stubBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...agentin
 func (s *stubBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
 	return nil, nil
 }
-func (s *stubBaseAgent) Card() *agentschema.AgentCard      { return s.card }
+func (s *stubBaseAgent) Card() *agentschema.AgentCard        { return s.card }
 func (s *stubBaseAgent) Config() agentinterfaces.AgentConfig { return nil }
 func (s *stubBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface {
 	return nil

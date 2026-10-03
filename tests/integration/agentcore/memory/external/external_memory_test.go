@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	ext "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/external"
-	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -38,7 +38,7 @@ type fakeMemoryProvider struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (p *fakeMemoryProvider) Name() string       { return p.name }
+func (p *fakeMemoryProvider) Name() string        { return p.name }
 func (p *fakeMemoryProvider) IsAvailable() bool   { return p.available }
 func (p *fakeMemoryProvider) IsInitialized() bool { return p.initialized }
 

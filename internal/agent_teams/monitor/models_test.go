@@ -273,8 +273,8 @@ func TestFromEventMessage_消息事件(t *testing.T) {
 	msg := &events.EventMessage{
 		EventType: "message",
 		Payload: map[string]any{
-			"team_name":       "team1",
-			"message_id":      "msg-1",
+			"team_name":        "team1",
+			"message_id":       "msg-1",
 			"from_member_name": "m1",
 			"to_member_name":   "m2",
 		},

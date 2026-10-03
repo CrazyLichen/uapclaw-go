@@ -239,9 +239,9 @@ func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[strin
 // Python 步骤：
 //  1. if self._monitor is None: return
 //  2. async for event in self._monitor.events():
-//  3.     if not self._running: break
-//  4.     event_dict = await self._convert_event_to_dict(event)
-//  5.     if event_dict: await self._event_queue.put(event_dict)
+//  3. if not self._running: break
+//  4. event_dict = await self._convert_event_to_dict(event)
+//  5. if event_dict: await self._event_queue.put(event_dict)
 func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context) {
 	defer logger.Info(logComponent).Str("session_id", h.sessionID).Msg("事件收集 goroutine 退出")
 	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("事件收集 goroutine 启动")

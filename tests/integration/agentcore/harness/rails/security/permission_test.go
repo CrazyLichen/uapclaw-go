@@ -12,8 +12,8 @@ import (
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -262,7 +262,7 @@ func (s *PermissionInterruptRailSuite) TestPermissionRail_注册到Agent() {
 	config := map[string]any{
 		"enabled": true,
 		"tools": map[string]any{
-			"read_file": "allow",
+			"read_file":  "allow",
 			"write_file": "ask",
 			"rm_file":    "deny",
 		},

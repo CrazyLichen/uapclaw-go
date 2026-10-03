@@ -14,12 +14,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	worktree "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	worktree "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

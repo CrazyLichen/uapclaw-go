@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	swarmmemory "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )

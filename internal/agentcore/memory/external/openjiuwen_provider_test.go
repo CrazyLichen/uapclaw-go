@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/ltm"
 	memconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/ltm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

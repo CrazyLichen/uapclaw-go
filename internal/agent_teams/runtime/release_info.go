@@ -220,4 +220,3 @@ func deleteTeamDB(ctx context.Context, dbConfig database.DatabaseConfig, teamNam
 	}
 	return db.Team().DeleteTeam(ctx, teamName)
 }
-

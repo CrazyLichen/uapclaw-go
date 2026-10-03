@@ -32,3 +32,6 @@ internal/agent_teams/tools/tasks/task_test-*/
 # SQLite 运行时产物
 *.db-shm
 *.db-wal
+tests/integration/agentcore/harness/rails/memory/coding_memory/
+tests/integration/agentcore/harness/rails/memory/memory/
+internal/agent_teams/tools/index.json
