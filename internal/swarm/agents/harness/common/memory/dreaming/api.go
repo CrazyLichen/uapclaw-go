@@ -19,7 +19,10 @@ import (
 
 // orchestrators 全局 Orchestrator 映射。
 // Python: _orchestrators: dict[str, DreamingOrchestrator] = {}
-var orchestrators sync.Map
+var (
+	orchestratorsMu sync.RWMutex
+	orchestrators   = make(map[string]*dreaming.DreamingOrchestrator)
+)
 
 // apiLogComponent 日志组件标识
 var apiLogComponent = logger.ComponentAgentServer
@@ -29,21 +32,23 @@ var apiLogComponent = logger.ComponentAgentServer
 // GetDreamingOrchestrator 获取指定 mode 的 Orchestrator 实例。
 // Python: get_dreaming_orchestrator(mode)
 func GetDreamingOrchestrator(mode string) *dreaming.DreamingOrchestrator {
-	if v, ok := orchestrators.Load(mode); ok {
-		return v.(*dreaming.DreamingOrchestrator)
-	}
-	return nil
+	orchestratorsMu.RLock()
+	defer orchestratorsMu.RUnlock()
+	return orchestrators[mode]
 }
 
 // StartDreaming 启动 dreaming 服务。
 // 幂等：同一 mode 重复调用返回已有实例。
 //
 // Python: start_dreaming(sessions_dir, output_dir, mode, busy_checker)
-func StartDreaming(sessionsDir, outputDir, mode, language string, busyChecker func() bool) (*dreaming.DreamingOrchestrator, error) {
+func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode, language string, busyChecker func() bool) (*dreaming.DreamingOrchestrator, error) {
 	// Python: if mode in _orchestrators: return _orchestrators[mode]
-	if v, ok := orchestrators.Load(mode); ok {
-		return v.(*dreaming.DreamingOrchestrator), nil
+	orchestratorsMu.RLock()
+	if existing, ok := orchestrators[mode]; ok {
+		orchestratorsMu.RUnlock()
+		return existing, nil
 	}
+	orchestratorsMu.RUnlock()
 
 	// Python: cfg = DreamingConfig.load(mode)
 	cfg := LoadDreamingConfig(mode)
@@ -78,14 +83,15 @@ func StartDreaming(sessionsDir, outputDir, mode, language string, busyChecker fu
 	)
 
 	// Python: await orch.start()
-	ctx := context.Background()
 	if err := orch.Start(ctx); err != nil {
 		logger.Error(apiLogComponent).Str("mode", mode).Err(err).Msg("[dreaming] orchestrator start failed")
 		return nil, err
 	}
 
 	// Python: _orchestrators[mode] = orch
-	orchestrators.Store(mode, orch)
+	orchestratorsMu.Lock()
+	orchestrators[mode] = orch
+	orchestratorsMu.Unlock()
 	logger.Info(apiLogComponent).Str("mode", mode).Msg("[dreaming] started")
 	return orch, nil
 }
@@ -95,12 +101,16 @@ func StartDreaming(sessionsDir, outputDir, mode, language string, busyChecker fu
 // mode 为空时停止所有模式。
 //
 // Python: stop_dreaming(mode)
-func StopDreaming(mode string) {
-	ctx := context.Background()
+func StopDreaming(ctx context.Context, mode string) {
 	if mode != "" {
 		// Python: orch = _orchestrators.pop(mode, None)
-		if v, loaded := orchestrators.LoadAndDelete(mode); loaded {
-			orch := v.(*dreaming.DreamingOrchestrator)
+		orchestratorsMu.Lock()
+		orch, ok := orchestrators[mode]
+		if ok {
+			delete(orchestrators, mode)
+		}
+		orchestratorsMu.Unlock()
+		if ok {
 			if err := orch.Stop(ctx); err != nil {
 				// Python: logger.warning("[dreaming] stop(%s) exception: %s", mode, exc)
 				logger.Warn(apiLogComponent).Str("mode", mode).Err(err).Msg("[dreaming] stop exception")
@@ -110,23 +120,26 @@ func StopDreaming(mode string) {
 	}
 
 	// Python: for m, orch in list(_orchestrators.items()):
-	orchestrators.Range(func(key, value any) bool {
-		orchestrators.Delete(key)
-		orch := value.(*dreaming.DreamingOrchestrator)
+	orchestratorsMu.Lock()
+	snapshot := make(map[string]*dreaming.DreamingOrchestrator, len(orchestrators))
+	for m, o := range orchestrators {
+		snapshot[m] = o
+	}
+	orchestrators = make(map[string]*dreaming.DreamingOrchestrator)
+	orchestratorsMu.Unlock()
+
+	for m, orch := range snapshot {
 		if err := orch.Stop(ctx); err != nil {
-			m, _ := key.(string)
 			logger.Warn(apiLogComponent).Str("mode", m).Err(err).Msg("[dreaming] stop exception")
 		}
-		return true
-	})
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resetOrchestrators 清空全局 orchestrators（仅测试使用）。
 func resetOrchestrators() {
-	orchestrators.Range(func(key, _ any) bool {
-		orchestrators.Delete(key)
-		return true
-	})
+	orchestratorsMu.Lock()
+	orchestrators = make(map[string]*dreaming.DreamingOrchestrator)
+	orchestratorsMu.Unlock()
 }

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -49,11 +50,11 @@ type SweeperSession struct {
 // HistoryEvent history.json 中的一条事件。
 type HistoryEvent struct {
 	// Role 消息角色
-	Role string
+	Role string `json:"role"`
 	// Content 消息内容
-	Content string
+	Content string `json:"content"`
 	// EventType 事件类型（如 "chat.final"）
-	EventType string
+	EventType string `json:"event_type"`
 }
 
 // Round 对话轮次（user 消息起始索引, assistant 消息索引）。
@@ -606,26 +607,20 @@ func ParseHistory(sessionDir string) []HistoryEvent {
 	if err != nil {
 		return nil
 	}
-	var rawList []map[string]any
-	if err := json.Unmarshal(data, &rawList); err != nil {
+	var allEvents []HistoryEvent
+	if err := json.Unmarshal(data, &allEvents); err != nil {
 		return nil
 	}
 
+	// Python: _should_keep(entry)
 	var events []HistoryEvent
-	for _, entry := range rawList {
-		role, _ := entry["role"].(string)
-		eventType, _ := entry["event_type"].(string)
-
-		// Python: _should_keep(entry)
-		if role == "user" {
-			content, _ := entry["content"].(string)
-			events = append(events, HistoryEvent{Role: role, Content: content, EventType: eventType})
-		} else if eventType == "chat.final" {
-			content, _ := entry["content"].(string)
-			events = append(events, HistoryEvent{Role: role, Content: content, EventType: eventType})
-		} else if role == "assistant" && eventType == "" {
-			content, _ := entry["content"].(string)
-			events = append(events, HistoryEvent{Role: role, Content: content, EventType: eventType})
+	for _, e := range allEvents {
+		if e.Role == "user" {
+			events = append(events, e)
+		} else if e.EventType == "chat.final" {
+			events = append(events, e)
+		} else if e.Role == "assistant" && e.EventType == "" {
+			events = append(events, e)
 		}
 	}
 	return events
@@ -773,27 +768,27 @@ func (s *Sweeper) extractViaLLM(ctx context.Context, compressedText, existingSum
 	// Python: model_name = mcc.get("model_name", "")
 	modelName, _ := mcc["model_name"].(string)
 
-	// 构造 ModelClientConfig（对齐 Python: ModelClientConfig(**mcc_fields)）
-	provider, _ := mcc["client_provider"].(string)
-	apiKey, _ := mcc["api_key"].(string)
-	apiBase, _ := mcc["api_base"].(string)
-	if provider == "" {
-		provider = "OpenAI"
-	}
-	clientConfigOpts := []llmschema.ModelClientConfigOption{}
-	if v, ok := mcc["timeout"]; ok {
-		if f, ok := v.(float64); ok {
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(f))
+	// 将 mcc 的 map[string]any 转成 ModelClientConfig（消除后续类型断言）
+	// ModelClientConfig 自定义了 UnmarshalJSON，支持 known/extra 字段拆分
+	var clientConfig llmschema.ModelClientConfig
+	if mccData, err := json.Marshal(mcc); err == nil {
+		if err := json.Unmarshal(mccData, &clientConfig); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("[Sweeper] ModelClientConfig 反序列化失败，使用默认值")
 		}
 	}
-	if v, ok := mcc["verify_ssl"]; ok {
-		if b, ok := v.(bool); ok {
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithVerifySSL(b))
-		}
+	// 回退默认值
+	if clientConfig.ClientProvider == "" {
+		clientConfig.ClientProvider = "OpenAI"
 	}
-	clientConfig, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, clientConfigOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("构造 ModelClientConfig 失败: %w", err)
+	if clientConfig.Timeout <= 0 {
+		clientConfig.Timeout = 60.0
+	}
+	if clientConfig.MaxRetries <= 0 {
+		clientConfig.MaxRetries = 3
+	}
+	// 补充自动生成的 ClientID
+	if clientConfig.ClientID == "" {
+		clientConfig.ClientID = uuid.New().String()
 	}
 
 	// Python: ModelRequestConfig(model=model_name, temperature=0.3)
@@ -802,7 +797,7 @@ func (s *Sweeper) extractViaLLM(ctx context.Context, compressedText, existingSum
 		llmschema.WithTemperature(0.3),
 	)
 
-	model, err := llm.NewModel(clientConfig, modelConfig)
+	model, err := llm.NewModel(&clientConfig, modelConfig)
 	if err != nil {
 		return nil, fmt.Errorf("构造 Model 失败: %w", err)
 	}

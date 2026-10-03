@@ -84,7 +84,7 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
 	//     mode=mode,
 	//     busy_checker=busy_checker,
 	// )
-	orch, err := swarmdreaming.StartDreaming(sessionsDir, outputDir, d.dreamingMode, language, busyChecker)
+	orch, err := swarmdreaming.StartDreaming(ctx, sessionsDir, outputDir, d.dreamingMode, language, busyChecker)
 	if err != nil {
 		// 步骤 6: 启动失败，回退标记
 		// Python: except Exception: logger.error(...); self._dreaming_started = False
@@ -128,7 +128,7 @@ func (d *DeepAdapter) TryStopDreaming(ctx context.Context) error {
 	// Python: from jiuwenswarm.agents.harness.common.memory.dreaming import stop_dreaming
 	// Python: mode = getattr(self, "_dreaming_mode", "agent")
 	// Python: await stop_dreaming(mode=mode)
-	swarmdreaming.StopDreaming(d.dreamingMode)
+	swarmdreaming.StopDreaming(ctx, d.dreamingMode)
 	logger.Info(logComponent).Str("dreaming_mode", d.dreamingMode).Msg("dreaming stopped")
 
 	return nil

@@ -46,6 +46,15 @@ type DreamingOrchestrator struct {
 	doneCh chan struct{}
 }
 
+// OrchestratorHealth 编排器健康状态。
+// Python: DreamingOrchestrator.health (property)
+type OrchestratorHealth struct {
+	// Running 是否运行中
+	Running bool `json:"running"`
+	// IntervalSeconds 调度间隔秒数
+	IntervalSeconds float64 `json:"interval_seconds"`
+}
+
 // OrchestratorOption 编排器可选参数函数。
 type OrchestratorOption func(*DreamingOrchestrator)
 
@@ -104,12 +113,12 @@ func WithName(name string) OrchestratorOption {
 
 // Health 返回编排器健康状态。
 // Python: DreamingOrchestrator.health (property)
-func (o *DreamingOrchestrator) Health() map[string]any {
+func (o *DreamingOrchestrator) Health() OrchestratorHealth {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	return map[string]any{
-		"running":          o.running,
-		"interval_seconds": o.interval.Seconds(),
+	return OrchestratorHealth{
+		Running:         o.running,
+		IntervalSeconds: o.interval.Seconds(),
 	}
 }
 

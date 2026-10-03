@@ -35,8 +35,9 @@ func TestGetDreamingOrchestrator_空映射(t *testing.T) {
 // TestStartDreaming_配置未启用 验证 enabled=false 时返回 nil
 func TestStartDreaming_配置未启用(t *testing.T) {
 	resetOrchestrators()
+	ctx := context.Background()
 	// 默认配置 enabled=false
-	orch, err := StartDreaming("/nonexistent/sessions", "/nonexistent/output", "agent", "zh", nil)
+	orch, err := StartDreaming(ctx, "/nonexistent/sessions", "/nonexistent/output", "agent", "zh", nil)
 	if err != nil {
 		t.Errorf("未启用时应返回 nil, nil，实际 err=%v", err)
 	}
@@ -65,7 +66,8 @@ func TestStartDreaming_幂等性(t *testing.T) {
 	os.Setenv("DREAMING_INTERVAL", "999999")
 	defer os.Unsetenv("DREAMING_INTERVAL")
 
-	orch1, err := StartDreaming(sessionsDir, outputDir, "agent", "zh", nil)
+	ctx := context.Background()
+	orch1, err := StartDreaming(ctx, sessionsDir, outputDir, "agent", "zh", nil)
 	if err != nil {
 		t.Fatalf("首次启动失败: %v", err)
 	}
@@ -74,7 +76,7 @@ func TestStartDreaming_幂等性(t *testing.T) {
 	}
 
 	// 重复调用应返回同一实例
-	orch2, err := StartDreaming(sessionsDir, outputDir, "agent", "zh", nil)
+	orch2, err := StartDreaming(ctx, sessionsDir, outputDir, "agent", "zh", nil)
 	if err != nil {
 		t.Fatalf("重复调用失败: %v", err)
 	}
@@ -83,7 +85,7 @@ func TestStartDreaming_幂等性(t *testing.T) {
 	}
 
 	// 清理
-	StopDreaming("agent")
+	StopDreaming(ctx, "agent")
 }
 
 // TestStopDreaming_指定模式 验证停止指定模式
@@ -102,12 +104,13 @@ func TestStopDreaming_指定模式(t *testing.T) {
 	os.Setenv("DREAMING_INTERVAL", "999999")
 	defer os.Unsetenv("DREAMING_INTERVAL")
 
-	orch, _ := StartDreaming(sessionsDir, outputDir, "agent", "zh", nil)
+	ctx := context.Background()
+	orch, _ := StartDreaming(ctx, sessionsDir, outputDir, "agent", "zh", nil)
 	if orch == nil {
 		t.Fatal("启动失败")
 	}
 
-	StopDreaming("agent")
+	StopDreaming(ctx, "agent")
 
 	result := GetDreamingOrchestrator("agent")
 	if result != nil {
@@ -146,11 +149,13 @@ func TestStopDreaming_空模式停止全部(t *testing.T) {
 
 	orch1.Start(ctx)
 	orch2.Start(ctx)
-	orchestrators.Store("agent", orch1)
-	orchestrators.Store("code", orch2)
+	orchestratorsMu.Lock()
+	orchestrators["agent"] = orch1
+	orchestrators["code"] = orch2
+	orchestratorsMu.Unlock()
 
 	// 停止全部
-	StopDreaming("")
+	StopDreaming(ctx, "")
 
 	if GetDreamingOrchestrator("agent") != nil {
 		t.Error("agent 应已停止")
@@ -163,9 +168,10 @@ func TestStopDreaming_空模式停止全部(t *testing.T) {
 // TestStopDreaming_幂等性 验证重复停止不做任何操作
 func TestStopDreaming_幂等性(t *testing.T) {
 	resetOrchestrators()
+	ctx := context.Background()
 	// 未启动时停止不应 panic
-	StopDreaming("agent")
-	StopDreaming("")
+	StopDreaming(ctx, "agent")
+	StopDreaming(ctx, "")
 }
 
 // TestStartDreaming_SweeperInit失败 验证 Sweeper init 失败时返回错误
@@ -178,8 +184,9 @@ func TestStartDreaming_SweeperInit失败(t *testing.T) {
 	os.Setenv("DREAMING_INTERVAL", "999999")
 	defer os.Unsetenv("DREAMING_INTERVAL")
 
+	ctx := context.Background()
 	// 使用不可能的路径
-	_, err := StartDreaming("/proc/impossible/path", "/proc/impossible/path", "agent", "zh", nil)
+	_, err := StartDreaming(ctx, "/proc/impossible/path", "/proc/impossible/path", "agent", "zh", nil)
 	if err == nil {
 		t.Error("Sweeper init 失败时应返回错误")
 	}
@@ -207,7 +214,8 @@ func TestStartDreaming_WithBusyChecker(t *testing.T) {
 		return false
 	}
 
-	orch, err := StartDreaming(sessionsDir, outputDir, "agent", "zh", busyChecker)
+	ctx := context.Background()
+	orch, err := StartDreaming(ctx, sessionsDir, outputDir, "agent", "zh", busyChecker)
 	if err != nil {
 		t.Fatalf("启动失败: %v", err)
 	}
@@ -217,11 +225,11 @@ func TestStartDreaming_WithBusyChecker(t *testing.T) {
 
 	// Health 应该报告 running=true
 	h := orch.Health()
-	if running, _ := h["running"].(bool); !running {
+	if !h.Running {
 		t.Error("Orchestrator 应在运行")
 	}
 
-	StopDreaming("agent")
+	StopDreaming(ctx, "agent")
 }
 
 // TestStartDreaming_CodeMode 验证 code 模式启动
@@ -240,7 +248,8 @@ func TestStartDreaming_CodeMode(t *testing.T) {
 	os.Setenv("DREAMING_INTERVAL", "999999")
 	defer os.Unsetenv("DREAMING_INTERVAL")
 
-	orch, err := StartDreaming(sessionsDir, outputDir, "code", "zh", nil)
+	ctx := context.Background()
+	orch, err := StartDreaming(ctx, sessionsDir, outputDir, "code", "zh", nil)
 	if err != nil {
 		t.Fatalf("code 模式启动失败: %v", err)
 	}
@@ -248,7 +257,7 @@ func TestStartDreaming_CodeMode(t *testing.T) {
 		t.Fatal("code 模式应返回非 nil")
 	}
 
-	StopDreaming("code")
+	StopDreaming(ctx, "code")
 }
 
 // TestResetOrchestrators 验证 resetOrchestrators 清空全局映射
@@ -261,7 +270,9 @@ func TestResetOrchestrators(t *testing.T) {
 		999999*time.Second,
 		dreaming.WithName("dreaming-test"),
 	)
-	orchestrators.Store("test", orch)
+	orchestratorsMu.Lock()
+	orchestrators["test"] = orch
+	orchestratorsMu.Unlock()
 
 	if GetDreamingOrchestrator("test") == nil {
 		t.Error("存入后应可获取")
@@ -295,8 +306,9 @@ func TestStartDreaming_并发安全(t *testing.T) {
 	// 并发启动
 	go func() {
 		defer func() { done <- struct{}{} }()
+		ctx := context.Background()
 		for i := 0; i < 5; i++ {
-			StartDreaming(sessionsDir, outputDir, "agent", "zh", nil)
+			StartDreaming(ctx, sessionsDir, outputDir, "agent", "zh", nil)
 			time.Sleep(10 * time.Millisecond)
 		}
 	}()
@@ -304,8 +316,9 @@ func TestStartDreaming_并发安全(t *testing.T) {
 	// 并发停止
 	go func() {
 		defer func() { done <- struct{}{} }()
+		ctx := context.Background()
 		for i := 0; i < 5; i++ {
-			StopDreaming("agent")
+			StopDreaming(ctx, "agent")
 			time.Sleep(10 * time.Millisecond)
 		}
 	}()
@@ -314,5 +327,6 @@ func TestStartDreaming_并发安全(t *testing.T) {
 	<-done
 
 	// 不应 panic
-	StopDreaming("agent")
+	ctx := context.Background()
+	StopDreaming(ctx, "agent")
 }

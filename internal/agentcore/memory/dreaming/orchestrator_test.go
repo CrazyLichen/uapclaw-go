@@ -59,8 +59,8 @@ func TestNewDreamingOrchestrator_Health属性(t *testing.T) {
 	sweepCalled := func(_ context.Context) error { return nil }
 	orch := NewDreamingOrchestrator(sweepCalled, 3600*time.Second)
 	h := orch.Health()
-	assert.False(t, h["running"].(bool))
-	assert.Equal(t, 3600.0, h["interval_seconds"].(float64))
+	assert.False(t, h.Running)
+	assert.Equal(t, 3600.0, h.IntervalSeconds)
 }
 
 // ---------------------------------------------------------------------------
