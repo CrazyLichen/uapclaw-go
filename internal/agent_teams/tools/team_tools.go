@@ -927,12 +927,17 @@ func (t *ViewTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...t
 		for i, b := range detail.Blocks {
 			blocks[i] = b.TaskID
 		}
+		// M-26: 对齐 Python — assignee 为 nil 时显示 "<unassigned>"
+		assignee := "<unassigned>"
+		if detail.Task.Assignee != nil && *detail.Task.Assignee != "" {
+			assignee = *detail.Task.Assignee
+		}
 		data := map[string]any{
 			"task_id":    detail.Task.TaskID,
 			"title":      detail.Task.Title,
 			"content":    detail.Task.Content,
 			"status":     detail.Task.Status,
-			"assignee":   detail.Task.Assignee,
+			"assignee":   assignee,
 			"blocked_by": blockedBy,
 			"blocks":     blocks,
 		}
@@ -956,11 +961,16 @@ func (t *ViewTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...t
 	for i, s := range summaries {
 		blockedBy := make([]string, len(s.BlockedBy))
 		copy(blockedBy, s.BlockedBy)
+		// M-26: 对齐 Python — assignee 为空时显示 "<unassigned>"
+		assignee := "<unassigned>"
+		if s.Assignee != "" {
+			assignee = s.Assignee
+		}
 		taskList[i] = map[string]any{
 			"task_id":    s.TaskID,
 			"title":      s.Title,
 			"status":     s.Status,
-			"assignee":   s.Assignee,
+			"assignee":   assignee,
 			"blocked_by": blockedBy,
 		}
 	}
@@ -1063,7 +1073,11 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 
 	// 添加依赖
 	if len(addBlockedBy) > 0 {
-		depsResult, _ := t.agentTeam.TaskManager().AddDependencies(ctx, taskID, addBlockedBy)
+		depsResult, depsErr := t.agentTeam.TaskManager().AddDependencies(ctx, taskID, addBlockedBy)
+		if depsErr != nil {
+			logger.Warn(logComponent).Err(depsErr).Str("task_id", taskID).Strs("add_blocked_by", addBlockedBy).Msg("AddDependencies 失败")
+			return toolError(fmt.Sprintf("Failed to add dependencies: %s", depsErr))
+		}
 		if !depsResult.OK {
 			return toolError(depsResult.Reason)
 		}
