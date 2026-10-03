@@ -1,6 +1,6 @@
 # CI 自动化流水线
 # 触发条件：push 到 main 或 PR 到 main
-# 阶段：Lint → Test（覆盖率 ≥ 73.0% + 修改文件覆盖检查 + 回归检查）→ Build（Linux + Windows 双平台）
+# 阶段：Build（编译门禁）→ Lint / Unit-Test / Integration-Test（三 job 并行）
 
 name: CI
 
@@ -24,10 +24,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ──────────────────────────── Build（编译门禁）────────────────────────────
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-latest
+            goos: linux
+          - os: windows
+            runner: windows-latest
+            goos: windows
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v6
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: 验证编译
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: amd64
+        run: |
+          echo "验证 ${GOOS}/amd64 编译..."
+          go build -mod=mod ./...
+          echo "编译通过"
+
   # ──────────────────────────── Lint ────────────────────────────
 
   lint:
     name: Lint
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 代码
@@ -55,7 +91,7 @@ jobs:
             done
             exit 1
           fi
-          echo "✅ 所有文件格式符合 gofmt"
+          echo "所有文件格式符合 gofmt"
 
       - name: 运行 golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -63,10 +99,11 @@ jobs:
           version: v2.12
           args: --modules-download-mode=mod --timeout=5m
 
-  # ──────────────────────────── Test ────────────────────────────
+  # ──────────────────────────── Unit Test ────────────────────────────
 
-  test:
-    name: Test
+  unit-test:
+    name: Unit Test
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 代码
@@ -94,13 +131,13 @@ jobs:
       - name: 检查覆盖率阈值（≥ 73.0%）
         run: |
           COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
-          echo "📊 总覆盖率: ${COVERAGE}%"
+          echo "总覆盖率: ${COVERAGE}%"
           PASS=$(echo "$COVERAGE >= 73.0" | bc -l)
           if [ "$PASS" != "1" ]; then
             echo "::error::覆盖率 ${COVERAGE}% 低于阈值 73.0%"
             exit 1
           fi
-          echo "✅ 覆盖率达标"
+          echo "覆盖率达标"
 
       - name: 检查修改文件覆盖率
         run: |
@@ -115,11 +152,11 @@ jobs:
           CHANGED_FILES=$(git diff --name-only --diff-filter=ACM $BASE_REF...HEAD -- '*.go' | grep -v '_test\.go$' | grep -v '/doc\.go$' || true)
 
           if [ -z "$CHANGED_FILES" ]; then
-            echo "📋 没有检测到修改的源码文件，跳过覆盖率检查"
+            echo "没有检测到修改的源码文件，跳过覆盖率检查"
             exit 0
           fi
 
-          echo "📋 修改的源码文件："
+          echo "修改的源码文件："
           echo "$CHANGED_FILES"
           echo ""
 
@@ -128,7 +165,7 @@ jobs:
           if [ -f .coverage-exempt ]; then
             EXEMPT_FILES=$(grep -v '^#' .coverage-exempt | grep -v '^$' || true)
             if [ -n "$EXEMPT_FILES" ]; then
-              echo "📋 豁免文件列表："
+              echo "豁免文件列表："
               echo "$EXEMPT_FILES"
               echo ""
             fi
@@ -136,7 +173,7 @@ jobs:
 
           # 从 coverage.out 计算每个修改文件的加权覆盖率
           HAS_ERROR=false
-          echo "📊 修改文件覆盖率检查结果："
+          echo "修改文件覆盖率检查结果："
           echo "| 文件 | 覆盖率 | 状态 |"
           echo "|------|--------|------|"
 
@@ -159,7 +196,7 @@ jobs:
             file_data=$(grep "^${mod_path}:" coverage.out || true)
 
             if [ -z "$file_data" ]; then
-              echo "| \`${file}\` | N/A | ⏭️ 无可执行语句 |"
+              echo "| \`${file}\` | N/A | 跳过 无可执行语句 |"
               continue
             fi
 
@@ -177,21 +214,21 @@ jobs:
             done <<< "$file_data"
 
             if [ "$total_stmts" -eq 0 ]; then
-              echo "| \`${file}\` | N/A | ⏭️ 无可执行语句 |"
+              echo "| \`${file}\` | N/A | 跳过 无可执行语句 |"
               continue
             fi
 
             pct=$(echo "scale=1; $covered_stmts * 100 / $total_stmts" | bc)
 
             if [ "$IS_EXEMPT" = true ]; then
-              echo "| \`${file}\` | ${pct}% | 📝 豁免（无法 mock 的外部依赖） |"
+              echo "| \`${file}\` | ${pct}% | 豁免（无法 mock 的外部依赖） |"
               echo "::notice file=${file}::修改文件的覆盖率 ${pct}% 低于 85%，但已在 .coverage-exempt 中豁免"
             elif [ "$(echo "$pct < 85" | bc -l)" = "1" ]; then
-              echo "| \`${file}\` | ${pct}% | ❌ 覆盖率不足 |"
+              echo "| \`${file}\` | ${pct}% | 覆盖率不足 |"
               echo "::error file=${file}::修改文件的覆盖率 ${pct}% 低于 85%，请补充单元测试（如无法 mock，可在 .coverage-exempt 中豁免）"
               HAS_ERROR=true
             else
-              echo "| \`${file}\` | ${pct}% | ✅ |"
+              echo "| \`${file}\` | ${pct}% | OK |"
             fi
           done
 
@@ -213,7 +250,7 @@ jobs:
           CURRENT=$(GOFLAGS=-mod=mod go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
           DIFF=$(echo "scale=1; $BASELINE - $CURRENT" | bc)
 
-          echo "📊 覆盖率回归检查："
+          echo "覆盖率回归检查："
           echo "  - main 基线覆盖率: ${BASELINE}%"
           echo "  - 当前 PR 覆盖率:  ${CURRENT}%"
           echo "  - 差值: ${DIFF}%"
@@ -224,7 +261,7 @@ jobs:
           elif [ "$(echo "$DIFF > 0" | bc -l)" = "1" ]; then
             echo "::warning::覆盖率有所下降（基线 ${BASELINE}% → 当前 ${CURRENT}%，下降 ${DIFF}%），建议补充单元测试"
           else
-            echo "✅ 覆盖率未下降"
+            echo "覆盖率未下降"
           fi
 
       - name: 上传覆盖率报告
@@ -238,7 +275,7 @@ jobs:
         run: |
           COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
           echo "$COVERAGE" > coverage-baseline.txt
-          echo "📊 已保存覆盖率基线: ${COVERAGE}%"
+          echo "已保存覆盖率基线: ${COVERAGE}%"
 
       - name: 写入覆盖率基线缓存
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -247,25 +284,12 @@ jobs:
           path: coverage-baseline.txt
           key: coverage-baseline-main-${{ github.sha }}
 
-  # ──────────────────────────── Build ────────────────────────────
+  # ──────────────────────────── Integration Test ────────────────────────────
 
-  build:
-    name: Build (${{ matrix.os }}-${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    needs: [lint, test]
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - os: linux
-            arch: amd64
-            runner: ubuntu-latest
-            goos: linux
-          - os: windows
-            arch: amd64
-            runner: windows-latest
-            goos: windows
-
+  integration-test:
+    name: Integration Test
+    needs: [build]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout 代码
         uses: actions/checkout@v6
@@ -276,47 +300,194 @@ jobs:
           go-version: "1.26"
           cache: true
 
-      - name: 获取版本信息
-        id: version
-        shell: bash
+      - name: 验证集成测试合规性
         run: |
-          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0-dev")
-          GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "commit=${GIT_COMMIT}" >> $GITHUB_OUTPUT
-          echo "date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+          HAS_ERROR=false
+          echo "检查集成测试合规性..."
+          echo ""
 
-      - name: 构建 uapclaw
-        shell: bash
+          for file in $(find tests/integration -name '*_test.go'); do
+            echo "::group::检查 ${file}"
+            VIOLATIONS=""
+
+            # 规则 1: 必须有 //go:build integration
+            if ! head -1 "$file" | grep -q '//go:build integration'; then
+              VIOLATIONS="${VIOLATIONS}  缺少 //go:build integration 标签\n"
+            fi
+
+            # 规则 2: 必须使用 suite 框架
+            if ! grep -q 'suite.Run(' "$file"; then
+              VIOLATIONS="${VIOLATIONS}  未使用 suite 框架（缺少 suite.Run(）\n"
+            fi
+
+            # 规则 3: 必须至少 import 3 个 internal/ 包（按二级路径去重）
+            internal_count=$(grep '"github.com/uapclaw/uapclaw-go/internal/' "$file" | \
+              sed 's|.*/internal/|internal/|' | \
+              cut -d'/' -f1-2 | \
+              sort -u | wc -l)
+            if [ "$internal_count" -lt 3 ]; then
+              VIOLATIONS="${VIOLATIONS}  仅 import ${internal_count} 个 internal/ 包（要求至少 3 个）\n"
+            fi
+
+            if [ -n "$VIOLATIONS" ]; then
+              echo -e "$VIOLATIONS"
+              echo "::error file=${file}::集成测试合规性检查失败"
+              HAS_ERROR=true
+            else
+              echo "  合规"
+            fi
+
+            echo "::endgroup::"
+          done
+
+          echo ""
+          if [ "$HAS_ERROR" = true ]; then
+            echo "::error::存在不合规的集成测试文件，请修复后重试"
+            exit 1
+          fi
+          echo "所有集成测试文件合规"
+
+      - name: 运行集成测试（带覆盖率）
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
         run: |
-          mkdir -p bin
-          go build -mod=mod \
-            -ldflags "-X github.com/uapclaw/uapclaw-go/internal/common/version.Version=${{ steps.version.outputs.version }} \
-              -X github.com/uapclaw/uapclaw-go/internal/common/version.GitCommit=${{ steps.version.outputs.commit }} \
-              -X github.com/uapclaw/uapclaw-go/internal/common/version.BuildDate=${{ steps.version.outputs.date }}" \
-            -o bin/ \
-            ./cmd/uapclaw/
+          go test -mod=mod -tags "sqlite_fts5 test integration" \
+            -coverprofile=integration_coverage.out \
+            ./tests/integration/...
 
-      - name: 构建 jiuwenbox
-        shell: bash
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.arch }}
+      - name: 检查集成测试总覆盖率（≥ 40.0%）
         run: |
-          mkdir -p bin
-          go build -mod=mod \
-            -ldflags "-X github.com/uapclaw/uapclaw-go/internal/common/version.Version=${{ steps.version.outputs.version }} \
-              -X github.com/uapclaw/uapclaw-go/internal/common/version.GitCommit=${{ steps.version.outputs.commit }} \
-              -X github.com/uapclaw/uapclaw-go/internal/common/version.BuildDate=${{ steps.version.outputs.date }}" \
-            -o bin/ \
-            ./cmd/jiuwenbox/
+          COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=integration_coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          echo "集成测试总覆盖率: ${COVERAGE}%"
+          PASS=$(echo "$COVERAGE >= 40.0" | bc -l)
+          if [ "$PASS" != "1" ]; then
+            echo "::error::集成测试覆盖率 ${COVERAGE}% 低于阈值 40.0%"
+            exit 1
+          fi
+          echo "集成测试覆盖率达标"
 
-      - name: 验证构建产物
-        shell: bash
+      - name: 检查修改文件集成测试覆盖率（≥ 50%）
         run: |
-          echo "📋 构建产物："
-          ls -la bin/ 2>/dev/null || dir bin\\
+          # 确定对比基准
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="origin/main"
+          else
+            BASE_REF="HEAD~1"
+          fi
+
+          # 获取修改的 .go 源码文件（排除 _test.go 和 doc.go）
+          CHANGED_FILES=$(git diff --name-only --diff-filter=ACM $BASE_REF...HEAD -- '*.go' | grep -v '_test\.go$' | grep -v '/doc\.go$' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "没有检测到修改的源码文件，跳过集成测试覆盖率检查"
+            exit 0
+          fi
+
+          echo "修改的源码文件："
+          echo "$CHANGED_FILES"
+          echo ""
+
+          # 读取集成测试豁免文件列表
+          EXEMPT_FILES=""
+          if [ -f .integration-coverage-exempt ]; then
+            EXEMPT_FILES=$(grep -v '^#' .integration-coverage-exempt | grep -v '^$' || true)
+            if [ -n "$EXEMPT_FILES" ]; then
+              echo "集成测试豁免文件列表："
+              echo "$EXEMPT_FILES"
+              echo ""
+            fi
+          fi
+
+          # 从 integration_coverage.out 计算每个修改文件的加权覆盖率
+          HAS_ERROR=false
+          echo "修改文件集成测试覆盖率检查结果："
+          echo "| 文件 | 覆盖率 | 状态 |"
+          echo "|------|--------|------|"
+
+          for file in $CHANGED_FILES; do
+            # 检查是否在豁免列表中
+            IS_EXEMPT=false
+            if [ -n "$EXEMPT_FILES" ]; then
+              for exempt in $EXEMPT_FILES; do
+                if [ "$file" = "$exempt" ]; then
+                  IS_EXEMPT=true
+                  break
+                fi
+              done
+            fi
+
+            # 将文件路径转换为模块路径（integration_coverage.out 中的格式）
+            mod_path="github.com/uapclaw/uapclaw-go/${file}"
+
+            # 从 integration_coverage.out 提取该文件的覆盖数据
+            file_data=$(grep "^${mod_path}:" integration_coverage.out || true)
+
+            if [ -z "$file_data" ]; then
+              # 文件未出现在集成测试覆盖数据中，覆盖率为 0%
+              if [ "$IS_EXEMPT" = true ]; then
+                echo "| \`${file}\` | 0% | 豁免（无法通过集成测试覆盖） |"
+                echo "::notice file=${file}::修改文件未被集成测试覆盖，但已在 .integration-coverage-exempt 中豁免"
+              else
+                echo "| \`${file}\` | 0% | 未被集成测试覆盖 |"
+                echo "::error file=${file}::修改文件未被任何集成测试覆盖（0%），请补充集成测试或在 .integration-coverage-exempt 中豁免"
+                HAS_ERROR=true
+              fi
+              continue
+            fi
+
+            # 计算加权覆盖率：被执行语句数 / 总语句数
+            total_stmts=0
+            covered_stmts=0
+            while IFS= read -r line; do
+              stmts=$(echo "$line" | awk '{print $(NF-1)}')
+              count=$(echo "$line" | awk '{print $NF}')
+              total_stmts=$((total_stmts + stmts))
+              if [ "$count" -gt 0 ]; then
+                covered_stmts=$((covered_stmts + stmts))
+              fi
+            done <<< "$file_data"
+
+            if [ "$total_stmts" -eq 0 ]; then
+              echo "| \`${file}\` | N/A | 跳过 无可执行语句 |"
+              continue
+            fi
+
+            pct=$(echo "scale=1; $covered_stmts * 100 / $total_stmts" | bc)
+
+            if [ "$IS_EXEMPT" = true ]; then
+              echo "| \`${file}\` | ${pct}% | 豁免（无法通过集成测试覆盖） |"
+              echo "::notice file=${file}::修改文件的集成测试覆盖率 ${pct}% 低于 50%，但已在 .integration-coverage-exempt 中豁免"
+            elif [ "$(echo "$pct < 50" | bc -l)" = "1" ]; then
+              echo "| \`${file}\` | ${pct}% | 覆盖率不足 |"
+              echo "::error file=${file}::修改文件的集成测试覆盖率 ${pct}% 低于 50%，请补充集成测试或在 .integration-coverage-exempt 中豁免"
+              HAS_ERROR=true
+            else
+              echo "| \`${file}\` | ${pct}% | OK |"
+            fi
+          done
+
+          if [ "$HAS_ERROR" = true ]; then
+            echo ""
+            echo "::error::存在集成测试覆盖率低于 50% 的修改文件，请补充集成测试或在 .integration-coverage-exempt 中豁免"
+            exit 1
+          fi
+
+      - name: 上传集成测试覆盖率报告
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-coverage-report
+          path: integration_coverage.out
+
+      - name: 保存集成测试覆盖率基线
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=integration_coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          echo "$COVERAGE" > integration-coverage-baseline.txt
+          echo "已保存集成测试覆盖率基线: ${COVERAGE}%"
+
+      - name: 写入集成测试覆盖率基线缓存
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v5
+        with:
+          path: integration-coverage-baseline.txt
+          key: integration-coverage-baseline-main-${{ github.sha }}
