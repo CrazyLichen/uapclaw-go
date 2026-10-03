@@ -18,8 +18,7 @@ import (
 // TeamMonitorHandler 团队监控 handler 接口。
 // 对齐 Python: TeamMonitorHandler (jiwenswarm/agents/harness/team/monitor_handler.py)
 //
-// 提供团队事件流的生命周期管理和事件消费。
-// Go 端完整实现待 monitor 模块就绪后回填（⤵️(#9.72)）。
+// 提供团队事件流的生命周期管理、事件消费和快照查询。
 type TeamMonitorHandler interface {
 	// Stop 停止监控，取消后台事件收集，清理资源。
 	// 对齐 Python: TeamMonitorHandler.stop()
@@ -27,6 +26,12 @@ type TeamMonitorHandler interface {
 	// IsRunning 返回 handler 是否正在运行。
 	// 对齐 Python: TeamMonitorHandler.is_running
 	IsRunning() bool
+	// Events 返回前端事件流 channel，供消费者 range 遍历。
+	// 对齐 Python: TeamMonitorHandler.events() -> AsyncIterator[dict[str, Any]]
+	Events() <-chan map[string]any
+	// GetTeamSnapshot 获取团队快照（成员+任务聚合视图）。
+	// 对齐 Python: TeamMonitorHandler.get_team_snapshot() -> dict[str, Any] | None
+	GetTeamSnapshot(ctx context.Context) (map[string]any, error)
 }
 
 // LiveRailEntry 活跃 Rail 实例及其所有者。
