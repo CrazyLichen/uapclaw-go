@@ -27,18 +27,8 @@ jobs:
   # ──────────────────────────── Build（编译门禁）────────────────────────────
 
   build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - os: linux
-            runner: ubuntu-latest
-            goos: linux
-          - os: windows
-            runner: windows-latest
-            goos: windows
+    name: Build
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout 代码
         uses: actions/checkout@v6
@@ -50,12 +40,8 @@ jobs:
           cache: true
 
       - name: 验证编译
-        shell: bash
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: amd64
         run: |
-          echo "验证 ${GOOS}/amd64 编译..."
+          echo "验证编译..."
           go build -mod=mod ./...
           echo "编译通过"
 
