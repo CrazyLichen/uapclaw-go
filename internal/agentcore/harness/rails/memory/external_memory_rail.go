@@ -247,7 +247,9 @@ func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	}
 
 	// 7. 调用基类 MemoryRail.Uninit 清理通用记忆工具
-	r.MemoryRail.Uninit(agent)
+	if err := r.MemoryRail.Uninit(agent); err != nil {
+		logger.Error(extMemoryLogComponent).Err(err).Msg("MemoryRail.Uninit 失败")
+	}
 
 	return nil
 }

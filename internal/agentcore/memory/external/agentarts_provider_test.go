@@ -866,9 +866,6 @@ func TestAgentArtsClient_DoRequest_序列化失败(t *testing.T) {
 func TestAgentArtsProvider_SyncTurn_KVStore读取失败(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r, ok := w.(http.ResponseWriter); ok && r != nil {
-			_ = r
-		}
 		json.NewEncoder(w).Encode(map[string]any{
 			"id": "ms-uuid-kvfail", "space_id": "test-space",
 		})

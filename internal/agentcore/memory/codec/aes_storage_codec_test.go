@@ -280,7 +280,7 @@ func TestAesStorageCodec_Encode_输出为hex字符串(t *testing.T) {
 	encrypted := c.Encode(plaintext)
 
 	for _, ch := range encrypted {
-		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
+		if ch < '0' || (ch > '9' && ch < 'a') || ch > 'f' {
 			t.Errorf("加密输出应全为 hex 字符, 发现 %q", ch)
 			break
 		}

@@ -272,44 +272,42 @@ func buildAgentsConfig(teamRaw map[string]any, configBase map[string]any) map[st
 	defaultModel := buildDefaultModelDict(configBase)
 	defaultWorkspace, maxIter, timeout := buildAgentDefaults()
 
-	if agentsSrc != nil {
-		for name, spec := range agentsSrc {
-			var agentConfig map[string]any
-			// 检查 $ref 引用
-			if specMap, ok := spec.(map[string]any); ok {
-				if ref, ok := specMap["$ref"].(string); ok && ref != "" {
-					// 从 config_base["models"]["agents"] 中查找引用
-					if configBaseAgents != nil {
-						if refConfig, ok := configBaseAgents[ref].(map[string]any); ok {
-							agentConfig = utils.DeepCopyMap(refConfig)
-							logger.Debug(logComponent).
-								Str("agent_name", name).
-								Str("ref", ref).
-								Msg("解析 $ref 引用成功")
-						} else {
-							logger.Warn(logComponent).
-								Str("agent_name", name).
-								Str("ref", ref).
-								Msg("$ref 引用在 config_base.models.agents 中未找到")
-							agentConfig = make(map[string]any)
-						}
+	for name, spec := range agentsSrc {
+		var agentConfig map[string]any
+		// 检查 $ref 引用
+		if specMap, ok := spec.(map[string]any); ok {
+			if ref, ok := specMap["$ref"].(string); ok && ref != "" {
+				// 从 config_base["models"]["agents"] 中查找引用
+				if configBaseAgents != nil {
+					if refConfig, ok := configBaseAgents[ref].(map[string]any); ok {
+						agentConfig = utils.DeepCopyMap(refConfig)
+						logger.Debug(logComponent).
+							Str("agent_name", name).
+							Str("ref", ref).
+							Msg("解析 $ref 引用成功")
 					} else {
 						logger.Warn(logComponent).
 							Str("agent_name", name).
 							Str("ref", ref).
-							Msg("$ref 引用但 config_base.models.agents 不存在")
+							Msg("$ref 引用在 config_base.models.agents 中未找到")
 						agentConfig = make(map[string]any)
 					}
 				} else {
-					// 直接配置
-					agentConfig = utils.DeepCopyMap(specMap)
+					logger.Warn(logComponent).
+						Str("agent_name", name).
+						Str("ref", ref).
+						Msg("$ref 引用但 config_base.models.agents 不存在")
+					agentConfig = make(map[string]any)
 				}
 			} else {
-				agentConfig = make(map[string]any)
+				// 直接配置
+				agentConfig = utils.DeepCopyMap(specMap)
 			}
-
-			agents[name] = buildAgentSpecDict(agentConfig, defaultModel, defaultWorkspace, maxIter, timeout)
+		} else {
+			agentConfig = make(map[string]any)
 		}
+
+		agents[name] = buildAgentSpecDict(agentConfig, defaultModel, defaultWorkspace, maxIter, timeout)
 	}
 
 	// 确保 "leader" 键存在

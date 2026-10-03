@@ -260,7 +260,7 @@ func (s *Sweeper) Init() error {
 	cp := s.loadCheckpoint()
 	// Python: raw = cp.get("scanned_sessions", [])
 	raw := cp.ScannedSessions
-	if raw != nil && len(raw) > 0 {
+	if len(raw) > 0 {
 		s.scannedSessions = raw
 	} else {
 		s.scannedSessions = make(map[string]ScannedSession)

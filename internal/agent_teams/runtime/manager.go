@@ -298,7 +298,7 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 		logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", activeSession).
 			Msg("delete_team(force=true): 先停止活跃运行时")
 		if entry != nil {
-			m.StopTeam(ctx, teamName, activeSession)
+			_, _ = m.StopTeam(ctx, teamName, activeSession)
 		}
 	}
 
@@ -397,7 +397,7 @@ func (m *TeamRuntimeManager) ReleaseSession(ctx context.Context, sessionID strin
 		for _, team := range activeTeams {
 			logger.Info(mgrLogComponent).Str("team_name", team.TeamName).Str("session_id", sessionID).
 				Msg("release_session(force=true): 停止活跃团队")
-			m.StopTeam(ctx, team.TeamName, sessionID)
+			_, _ = m.StopTeam(ctx, team.TeamName, sessionID)
 		}
 	}
 

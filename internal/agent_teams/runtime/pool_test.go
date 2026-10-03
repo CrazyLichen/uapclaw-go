@@ -155,6 +155,6 @@ func TestTeamRuntimeManager_满足RegistryPoolAccessor(t *testing.T) {
 		t.Error("PoolReader() 应返回非 nil")
 	}
 	// PoolReader() 返回的值应满足 PoolReader
-	var _ registry.PoolReader = pool
+	var _ = pool
 	_ = context.Background()
 }
