@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	db "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
@@ -137,6 +136,8 @@ func NewOpenJiuwenProvider(config map[string]any, opts ...OpenJiuwenProviderOpti
 		sessionID:         ltm.DefaultValue,
 		agentMemoryConfig: memconfig.DefaultAgentMemoryConfig(),
 	}
+	// 对齐 Python L79: self._scope_config = scope_config or self._parse_scope_config()
+	p.scopeConfig = p.parseScopeConfig()
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -299,9 +300,7 @@ func (p *OpenJiuwenProvider) Initialize(ctx context.Context, opts ...ProviderOpt
 	}
 
 	// 对齐 Python: if self._scope_config: await self._ltm.set_scope_config(self._scope_id, self._scope_config)
-	if p.scopeConfig == nil {
-		p.scopeConfig = p.parseScopeConfig()
-	}
+	// 注意：scopeConfig 在构造时已解析（对齐 Python L79），此处仅使用
 	if p.scopeConfig != nil {
 		if err := ltmInstance.SetScopeConfig(ctx, p.scopeID, p.scopeConfig); err != nil {
 			logger.Warn(ojLogComponent).Err(err).Str("scope_id", p.scopeID).Msg("SetScopeConfig 失败")
@@ -327,14 +326,22 @@ func (p *OpenJiuwenProvider) HandleToolCall(ctx context.Context, toolName string
 		return string(b), nil
 	}
 
-	// 对齐 Python L156-163: try: if/elif/else except Exception as e: return json.dumps({"error": str(e), "results": []})
-	result, err := p.dispatchToolCall(ctx, toolName, args)
-	if err != nil {
-		b, _ := json.Marshal(map[string]any{"error": err.Error(), "results": []any{}})
+	// 对齐 Python L156-164: try: if/elif/else except Exception as e: return json.dumps({"error": str(e), "results": []})
+	switch toolName {
+	case "ltm_search", "ltm_search_summary":
+		result, err := p.dispatchToolCall(ctx, toolName, args)
+		if err != nil {
+			// 对齐 Python L163-164: except Exception as e: return json.dumps({"error": str(e), "results": []})
+			b, _ := json.Marshal(map[string]any{"error": err.Error(), "results": []any{}})
+			return string(b), nil
+		}
+		b, _ := json.Marshal(result)
+		return string(b), nil
+	default:
+		// 对齐 Python L162: return json.dumps({"error": f"Unknown tool: {tool_name}"})
+		b, _ := json.Marshal(map[string]string{"error": fmt.Sprintf("Unknown tool: %s", toolName)})
 		return string(b), nil
 	}
-	b, _ := json.Marshal(result)
-	return string(b), nil
 }
 
 // Prefetch 根据查询预取记忆上下文。
@@ -505,7 +512,7 @@ func (p *OpenJiuwenProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 
 // dispatchToolCall 分发工具调用到对应的 handleXxx 方法。
 // 对齐 Python: handle_tool_call 中的 if/elif 分支
-func (p *OpenJiuwenProvider) dispatchToolCall(ctx context.Context, toolName string, args map[string]any) (any, error) {
+func (p *OpenJiuwenProvider) dispatchToolCall(ctx context.Context, toolName string, args map[string]any) (map[string]any, error) {
 	switch toolName {
 	case "ltm_search":
 		return p.handleSearch(ctx, args)
@@ -518,21 +525,18 @@ func (p *OpenJiuwenProvider) dispatchToolCall(ctx context.Context, toolName stri
 
 // handleSearch 处理 ltm_search 工具调用。
 // 对齐 Python: _handle_search (L302-324)
-func (p *OpenJiuwenProvider) handleSearch(ctx context.Context, args map[string]any) (any, error) {
+func (p *OpenJiuwenProvider) handleSearch(ctx context.Context, args map[string]any) (map[string]any, error) {
 	// 对齐 Python L303-308: results = await self._ltm.search_user_mem(query=..., num=..., user_id=..., scope_id=..., threshold=...)
 	query, _ := args["query"].(string)
 	num := defaultRecallUserMemNum
 	if n, ok := args["num"]; ok {
-		switch v := n.(type) {
-		case float64:
-			num = int(v)
-		case int:
-			num = v
-		}
+		num = int(floatVal(n))
 	}
+	// 对齐 Python L308: threshold=args.get("threshold", 0.3)
+	// 使用 floatVal 统一处理 int/float64 等数字类型
 	threshold := 0.3
 	if t, ok := args["threshold"]; ok {
-		if v, ok := t.(float64); ok {
+		if v := floatVal(t); v != 0 {
 			threshold = v
 		}
 	}
@@ -575,17 +579,12 @@ func (p *OpenJiuwenProvider) handleSearch(ctx context.Context, args map[string]a
 
 // handleSearchSummary 处理 ltm_search_summary 工具调用。
 // 对齐 Python: _handle_search_summary (L326-347)
-func (p *OpenJiuwenProvider) handleSearchSummary(ctx context.Context, args map[string]any) (any, error) {
+func (p *OpenJiuwenProvider) handleSearchSummary(ctx context.Context, args map[string]any) (map[string]any, error) {
 	// 对齐 Python L327-331: results = await self._ltm.search_user_history_summary(query=..., num=..., user_id=..., scope_id=..., threshold=0.3)
 	query, _ := args["query"].(string)
 	num := defaultRecallHistoryMemNum
 	if n, ok := args["num"]; ok {
-		switch v := n.(type) {
-		case float64:
-			num = int(v)
-		case int:
-			num = v
-		}
+		num = int(floatVal(n))
 	}
 
 	ltmInstance := ltm.GetLongTermMemory()
@@ -780,11 +779,4 @@ func (p *OpenJiuwenProvider) parseScopeConfig() *memconfig.MemoryScopeConfig {
 // 对齐 Python: _resolve_ltm_dir() → {workspace_dir}/memory/ltm
 func resolveLTMDir() string {
 	return filepath.Join(workspace.WorkspaceDir(), "memory", "ltm")
-}
-
-// ensureLTMDir 确保 LTM 数据目录存在。
-func ensureLTMDir() string {
-	dir := resolveLTMDir()
-	_ = os.MkdirAll(dir, 0o755)
-	return dir
 }
