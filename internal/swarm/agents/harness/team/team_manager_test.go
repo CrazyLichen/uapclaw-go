@@ -278,10 +278,25 @@ func TestMonitorRegistration(t *testing.T) {
 		t.Error("初始不应有监控")
 	}
 
-	mgr.RegisterMonitor("sess-1", "monitor-handler")
+	handler := &fakeMonitorHandler{}
+	mgr.RegisterMonitor("sess-1", handler)
 	if mgr.GetMonitor("sess-1") == nil {
 		t.Error("注册后应有监控")
 	}
+}
+
+// fakeMonitorHandler 测试用的 TeamMonitorHandler 实现
+type fakeMonitorHandler struct {
+	stopped bool
+}
+
+func (f *fakeMonitorHandler) Stop(_ context.Context) error {
+	f.stopped = true
+	return nil
+}
+
+func (f *fakeMonitorHandler) IsRunning() bool {
+	return !f.stopped
 }
 
 // TestEvolutionWatcher 测试演进监控注册/查询

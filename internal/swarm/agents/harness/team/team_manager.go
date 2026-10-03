@@ -13,6 +13,20 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// TeamMonitorHandler 团队监控 handler 接口。
+// 对齐 Python: TeamMonitorHandler (jiwenswarm/agents/harness/team/monitor_handler.py)
+//
+// 提供团队事件流的生命周期管理和事件消费。
+// Go 端完整实现待 monitor 模块就绪后回填（⤵️(#9.72)）。
+type TeamMonitorHandler interface {
+	// Stop 停止监控，取消后台事件收集，清理资源。
+	// 对齐 Python: TeamMonitorHandler.stop()
+	Stop(ctx context.Context) error
+	// IsRunning 返回 handler 是否正在运行。
+	// 对齐 Python: TeamMonitorHandler.is_running
+	IsRunning() bool
+}
+
 // LiveRailEntry 活跃 Rail 实例及其所有者。
 // 对齐 Python: TeamManager._team_live_rails 条目 (agent, rail) 二元组
 type LiveRailEntry struct {
@@ -102,7 +116,7 @@ type TeamManager struct {
 
 	// 监控
 	// 对齐 Python: _team_monitors
-	teamMonitors map[string]any // sessionID → TeamMonitorHandler
+	teamMonitors map[string]TeamMonitorHandler // sessionID → TeamMonitorHandler
 
 	// 流任务
 	// 对齐 Python: _stream_tasks（Go 用 context.CancelFunc 替代 asyncio.Task）
@@ -147,7 +161,7 @@ func NewTeamManager() *TeamManager {
 	return &TeamManager{
 		teamAgents:              make(map[string]*agent.TeamAgent),
 		runnerTeamAgents:        make(map[string]*agent.TeamAgent),
-		teamMonitors:            make(map[string]any),
+		teamMonitors:            make(map[string]TeamMonitorHandler),
 		streamTasks:             make(map[string]context.CancelFunc),
 		teamSkillRails:          make(map[string]*evolution.TeamSkillEvolutionRail),
 		teamMemberSkillEvoRails: make(map[string][]*evolution.SkillEvolutionRail),
@@ -303,7 +317,7 @@ func (m *TeamManager) GetTeamAgent(sessionID string) *agent.TeamAgent {
 
 // GetMonitorHandler 获取指定 session 的监控 handler。
 // 对齐 Python: TeamManager.get_monitor_handler(session_id)
-func (m *TeamManager) GetMonitorHandler(sessionID string) any {
+func (m *TeamManager) GetMonitorHandler(sessionID string) TeamMonitorHandler {
 	return m.teamMonitors[sessionID]
 }
 

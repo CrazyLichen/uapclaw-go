@@ -70,13 +70,13 @@ func (m *TeamManager) CancelAllStreamTasks(reason string) {
 
 // GetMonitor 获取指定 session 的监控 handler。
 // 对齐 Python: TeamManager.get_monitor(session_id)
-func (m *TeamManager) GetMonitor(sessionID string) any {
+func (m *TeamManager) GetMonitor(sessionID string) TeamMonitorHandler {
 	return m.teamMonitors[sessionID]
 }
 
 // RegisterMonitor 注册监控 handler。
 // 对齐 Python: TeamManager.register_monitor(session_id, handler)
-func (m *TeamManager) RegisterMonitor(sessionID string, handler any) {
+func (m *TeamManager) RegisterMonitor(sessionID string, handler TeamMonitorHandler) {
 	m.teamMonitors[sessionID] = handler
 }
 
@@ -142,10 +142,12 @@ func (m *TeamManager) cleanupRuntimeLocals(sessionID string) {
 
 	// 步骤 3: 停止监控 handler
 	// Python: await monitor_handler.stop()
-	// Go 差异：TeamMonitorHandler 在 Go 中尚未完全对齐，先移除引用
-	if _, ok := m.teamMonitors[sessionID]; ok {
+	if handler, ok := m.teamMonitors[sessionID]; ok {
+		if err := handler.Stop(context.Background()); err != nil {
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("停止监控 handler 失败")
+		}
 		delete(m.teamMonitors, sessionID)
-		logger.Info(logComponent).Str("session_id", sessionID).Msg("监控 handler 已移除")
+		logger.Info(logComponent).Str("session_id", sessionID).Msg("监控 handler 已停止并移除")
 	}
 
 	// 步骤 4: 清理 Rail 注册
