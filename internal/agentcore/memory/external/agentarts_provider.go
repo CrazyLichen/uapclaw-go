@@ -186,13 +186,14 @@ func (p *AgentArtsProvider) Initialize(ctx context.Context, opts ...ProviderOpti
 		Str("user_id", p.actorID).
 		Str("assistant_id", p.assistantID).
 		Str("session_id", sessionID).
-		Msg("[AgentArtsProvider] initializing with params")
+		Msg("[AgentArtsMemoryProvider] initializing with params")
 
 	// 对齐 Python: await self._ensure_memory_session(session_id, actor_id=..., assistant_id=...)
+	// Python 无 try/except，异常直接传播
 	if sessionID != "" {
 		if _, err := p.ensureMemorySession(ctx, sessionID, p.actorID, p.assistantID); err != nil {
-			logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsProvider] ensureMemorySession 失败")
-			// 对齐 Python: 仅 warn，继续运行
+			// 对齐 Python: 异常传播，initialized 不设为 true
+			return fmt.Errorf("ensureMemorySession 失败: %w", err)
 		}
 	}
 
@@ -215,7 +216,7 @@ func (p *AgentArtsProvider) Prefetch(ctx context.Context, query string, _ ...Pro
 	if err != nil {
 		p.recordFailure()
 		// 对齐 Python: logger.debug("[AgentArtsMemoryProvider] prefetch failed: %s", exc)
-		logger.Debug(agentartsLogComponent).Err(err).Msg("[AgentArtsProvider] prefetch failed")
+		logger.Debug(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] prefetch failed")
 		return "", nil
 	}
 
@@ -259,7 +260,7 @@ func (p *AgentArtsProvider) HandleToolCall(ctx context.Context, toolName string,
 	if err != nil {
 		p.recordFailure()
 		// 对齐 Python: logger.warning("[AgentArtsMemoryProvider] failed to search relevant memories", exc)
-		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsProvider] failed to search relevant memories")
+		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] failed to search relevant memories")
 		b, _ := json.Marshal(map[string]string{"error": err.Error()})
 		return string(b), nil
 	}
@@ -318,14 +319,14 @@ func (p *AgentArtsProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg 
 		Str("user_id", actorID).
 		Str("assistant_id", assistantID).
 		Str("session_id", sessionID).
-		Msg("[AgentArtsProvider] sync_turn with params")
+		Msg("[AgentArtsMemoryProvider] sync_turn with params")
 
 	// 对齐 Python: await self._ensure_memory_session(kwargs.get("session_id"), ...)
 	memorySessionID, err := p.ensureMemorySession(ctx, sessionID, actorID, assistantID)
 	if err != nil {
 		p.recordFailure()
 		// 对齐 Python: 吞掉错误
-		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsProvider] SyncTurn ensureMemorySession 失败")
+		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] SyncTurn ensureMemorySession 失败")
 		return nil
 	}
 
@@ -338,7 +339,7 @@ func (p *AgentArtsProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg 
 	if err := client.addMessages(ctx, p.spaceID, memorySessionID, msgs); err != nil {
 		p.recordFailure()
 		// 对齐 Python: logger.warning("AgentArts sync failed: %s", exc)
-		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsProvider] AgentArts sync failed")
+		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] AgentArts sync failed")
 		return nil // 对齐 Python: 吞掉错误
 	}
 
@@ -374,6 +375,12 @@ func (p *AgentArtsProvider) getClient() *agentartsClient {
 // ensureMemorySession 确保记忆会话存在，返回 memory_session_id。
 // 对齐 Python: _ensure_memory_session(session_id, actor_id=..., assistant_id=...)
 func (p *AgentArtsProvider) ensureMemorySession(ctx context.Context, sessionID, actorID, assistantID string) (string, error) {
+	// 对齐 Python: session_id = session_id or self._session_id
+	if sessionID == "" {
+		p.mu.RLock()
+		sessionID = p.sessionID
+		p.mu.RUnlock()
+	}
 	// 对齐 Python: if not session_id: raise RuntimeError("`session_id` is required")
 	if sessionID == "" {
 		return "", fmt.Errorf("session_id is required")
@@ -400,7 +407,7 @@ func (p *AgentArtsProvider) ensureMemorySession(ctx context.Context, sessionID, 
 	// 对齐 Python: memory_session_id = self._normalize_memory_session_id(...)
 	existing, err := p.sessionMappingStore.Get(ctx, mappingKey)
 	if err != nil {
-		logger.Debug(agentartsLogComponent).Err(err).Str("key", mappingKey).Msg("[AgentArtsProvider] 读取 session 映射失败")
+		logger.Debug(agentartsLogComponent).Err(err).Str("key", mappingKey).Msg("[AgentArtsMemoryProvider] 读取 session 映射失败")
 	}
 	if len(existing) > 0 {
 		memorySessionID := string(existing)
@@ -408,7 +415,7 @@ func (p *AgentArtsProvider) ensureMemorySession(ctx context.Context, sessionID, 
 		logger.Info(agentartsLogComponent).
 			Str("session_id", sessionID).
 			Str("memory_session_id", memorySessionID).
-			Msg("[AgentArtsProvider] use exist session mapping entry")
+			Msg("[AgentArtsMemoryProvider] use exist session mapping entry")
 		return memorySessionID, nil
 	}
 
@@ -431,11 +438,11 @@ func (p *AgentArtsProvider) ensureMemorySession(ctx context.Context, sessionID, 
 	logger.Info(agentartsLogComponent).
 		Str("session_id", sessionID).
 		Str("memory_session_id", info.ID).
-		Msg("[AgentArtsProvider] add session mapping entry")
+		Msg("[AgentArtsMemoryProvider] add session mapping entry")
 
 	// 对齐 Python: await self._session_mapping_store.set(mapping_key, memory_session_id)
 	if err := p.sessionMappingStore.Set(ctx, mappingKey, []byte(info.ID)); err != nil {
-		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsProvider] 存储 session 映射失败")
+		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] 存储 session 映射失败")
 	}
 
 	return info.ID, nil
@@ -497,7 +504,7 @@ func (p *AgentArtsProvider) search(ctx context.Context, query string, args map[s
 		Int("top_k", topK).
 		Float64("min_score", minScore).
 		Str("strategy_type", filter.StrategyType).
-		Msg("[AgentArtsProvider] search agentarts memory space")
+		Msg("[AgentArtsMemoryProvider] search agentarts memory space")
 
 	items, err := client.searchMemories(ctx, p.spaceID, filter)
 	if err != nil {
@@ -507,7 +514,7 @@ func (p *AgentArtsProvider) search(ctx context.Context, query string, args map[s
 	// 对齐 Python: logger.info("[AgentArtsMemoryProvider] found %d relevant memory records", len(items))
 	logger.Info(agentartsLogComponent).
 		Int("count", len(items)).
-		Msg("[AgentArtsProvider] found relevant memory records")
+		Msg("[AgentArtsMemoryProvider] found relevant memory records")
 
 	return items, nil
 }

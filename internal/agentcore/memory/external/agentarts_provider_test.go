@@ -454,11 +454,28 @@ func TestAgentArtsProvider_SessionMappingKey(t *testing.T) {
 
 // ──────────────────────────── 补充覆盖率测试 ────────────────────────────
 
-func TestAgentArtsProvider_EnsureMemorySession_无sessionID报错(t *testing.T) {
+func TestAgentArtsProvider_EnsureMemorySession_无sessionID回退到实例存储(t *testing.T) {
+	store := kv.NewInMemoryKVStore()
+	store.Set(context.Background(), "agentarts/session_mapping/stored-sess", []byte("ms-stored"))
+
+	p := NewAgentArtsProvider("", "key", "space", "", "", store)
+	// 不传 sessionID，但 p.sessionID 有值 → 应回退到 p.sessionID
+	p.sessionID = "stored-sess"
+
+	id, err := p.ensureMemorySession(context.Background(), "", "actor1", "asst1")
+	if err != nil {
+		t.Fatalf("ensureMemorySession() 应回退到 p.sessionID, error = %v", err)
+	}
+	if id != "ms-stored" {
+		t.Errorf("id = %q, want %q", id, "ms-stored")
+	}
+}
+
+func TestAgentArtsProvider_EnsureMemorySession_无sessionID且无实例存储报错(t *testing.T) {
 	p := NewAgentArtsProvider("", "key", "space", "", "", nil)
 	_, err := p.ensureMemorySession(context.Background(), "", "actor1", "asst1")
 	if err == nil {
-		t.Fatal("ensureMemorySession() 空 sessionID 应返回错误")
+		t.Fatal("ensureMemorySession() 空 sessionID 且无实例存储应返回错误")
 	}
 }
 
@@ -816,7 +833,7 @@ func TestAgentArtsProvider_Prefetch_所有记忆为空content(t *testing.T) {
 	}
 }
 
-func TestAgentArtsProvider_Initialize_ensureMemorySession失败继续(t *testing.T) {
+func TestAgentArtsProvider_Initialize_ensureMemorySession失败传播错误(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -825,13 +842,13 @@ func TestAgentArtsProvider_Initialize_ensureMemorySession失败继续(t *testing
 	p := NewAgentArtsProvider(server.URL, "test-key", "test-space", "default-actor", "default-asst", nil)
 	p.client = newAgentArtsClient(server.URL, "test-key")
 
-	// ensureMemorySession 失败但 Initialize 仍应成功
+	// 对齐 Python: ensureMemorySession 失败时异常传播，initialized 不设为 true
 	err := p.Initialize(context.Background(), WithSessionID("sess-fail"))
-	if err != nil {
-		t.Fatalf("Initialize() 应不返回错误（仅 warn）, got %v", err)
+	if err == nil {
+		t.Fatal("Initialize() 应返回错误（ensureMemorySession 失败）")
 	}
-	if !p.IsInitialized() {
-		t.Error("Initialize() 后 IsInitialized() 应为 true（即使 ensureMemorySession 失败）")
+	if p.IsInitialized() {
+		t.Error("Initialize() ensureMemorySession 失败时 IsInitialized() 不应为 true")
 	}
 }
 

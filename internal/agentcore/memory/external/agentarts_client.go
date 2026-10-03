@@ -33,7 +33,6 @@ type memorySearchFilter struct {
 	StrategyType string  `json:"strategy_type,omitempty"`
 	ActorID      string  `json:"actor_id,omitempty"`
 	AssistantID  string  `json:"assistant_id,omitempty"`
-	SessionID    string  `json:"session_id,omitempty"`
 }
 
 // memorySearchResponse 记忆搜索响应。
