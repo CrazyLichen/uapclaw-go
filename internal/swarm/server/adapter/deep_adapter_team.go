@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
@@ -220,7 +221,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 		// 后续请求：通过 TeamManager.Interact 路由
 		// 对齐 Python: team_manager.interact(session_id, user_input)
 		query := paramsString(inputs, "query", "")
-		ok, err := teamManager.Interact(ctx, sessionID, query)
+		ok, err := teamManager.Interact(ctx, sessionID, interaction.NewInteractInput(query))
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("session_id", sessionID).
 				Msg("processTeamMessageStream: Interact failed")
