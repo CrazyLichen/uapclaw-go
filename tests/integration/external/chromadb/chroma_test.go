@@ -1,13 +1,6 @@
 //go:build integration
 
-package vector
-
-// 集成测试需要真实的 ChromaDB 实例。
-// 运行方式: go test -tags=integration ./internal/agentcore/foundation/store/vector/...
-//
-// 前提条件：
-// - 已安装 chroma-go-local 的原生库（自动下载到 ~/.cache/chroma/local_shim/）
-// - 或有可访问的 ChromaDB 服务端
+package chromadb_test
 
 import (
 	"context"
@@ -15,19 +8,35 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 )
 
+// newTestSchema 创建测试用的向量集合 schema
+// 原位置：internal/agentcore/foundation/store/vector/milvus_test.go:createTestSchema()
+func newTestSchema() *vector.CollectionSchema {
+	pk, _ := vector.NewFieldSchema("id", vector.VectorDataTypeVarchar, vector.WithPrimary())
+	vec, _ := vector.NewFieldSchema("embedding", vector.VectorDataTypeFloatVector, vector.WithDim(3))
+	text, _ := vector.NewFieldSchema("text", vector.VectorDataTypeVarchar)
+	schema, _ := vector.NewCollectionSchemaFromFields([]*vector.FieldSchema{pk, vec, text})
+	return schema
+}
+
 // TestChromaVectorStore_集成_创建集合 测试真实创建集合
-// 运行方式: go test -tags=integration ./internal/agentcore/foundation/store/vector/ -run TestChromaVectorStore_集成
+// 运行方式: go test -tags=integration ./tests/integration/external/chromadb/...
+//
+// 前提条件：
+// - 已安装 chroma-go-local 的原生库（自动下载到 ~/.cache/chroma/local_shim/）
+// - 或有可访问的 ChromaDB 服务端
 func TestChromaVectorStore_集成_创建集合(t *testing.T) {
 	persistPath := filepath.Join(t.TempDir(), "chroma_data")
-	store := NewChromaVectorStore(persistPath)
+	store := vector.NewChromaVectorStore(persistPath)
 	defer store.Close()
 
 	ctx := context.Background()
-	schema := createTestSchema()
+	schema := newTestSchema()
 
-	err := store.CreateCollection(ctx, "integration_test", schema, WithDistanceMetric("COSINE"))
+	err := store.CreateCollection(ctx, "integration_test", schema, vector.WithDistanceMetric("COSINE"))
 	if err != nil {
 		t.Fatalf("CreateCollection() error = %v", err)
 	}
@@ -42,20 +51,18 @@ func TestChromaVectorStore_集成_创建集合(t *testing.T) {
 }
 
 // TestChromaVectorStore_集成_添加和搜索文档 测试真实添加和搜索文档
-// 运行方式: go test -tags=integration ./internal/agentcore/foundation/store/vector/ -run TestChromaVectorStore_集成
 func TestChromaVectorStore_集成_添加和搜索文档(t *testing.T) {
 	persistPath := filepath.Join(t.TempDir(), "chroma_data")
-	store := NewChromaVectorStore(persistPath)
+	store := vector.NewChromaVectorStore(persistPath)
 	defer store.Close()
 
 	ctx := context.Background()
-	schema := createTestSchema()
-	err := store.CreateCollection(ctx, "integration_test", schema, WithDistanceMetric("COSINE"))
+	schema := newTestSchema()
+	err := store.CreateCollection(ctx, "integration_test", schema, vector.WithDistanceMetric("COSINE"))
 	if err != nil {
 		t.Fatalf("CreateCollection() error = %v", err)
 	}
 
-	// 添加文档
 	docs := []map[string]any{
 		{"id": "doc1", "text": "hello world", "embedding": []float32{0.1, 0.2, 0.3}},
 		{"id": "doc2", "text": "goodbye world", "embedding": []float32{0.4, 0.5, 0.6}},
@@ -65,7 +72,6 @@ func TestChromaVectorStore_集成_添加和搜索文档(t *testing.T) {
 		t.Fatalf("AddDocs() error = %v", err)
 	}
 
-	// 搜索
 	results, err := store.Search(ctx, "integration_test", []float64{0.1, 0.2, 0.3}, "embedding", 5, nil)
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
@@ -76,15 +82,14 @@ func TestChromaVectorStore_集成_添加和搜索文档(t *testing.T) {
 }
 
 // TestChromaVectorStore_集成_删除集合 测试真实删除集合
-// 运行方式: go test -tags=integration ./internal/agentcore/foundation/store/vector/ -run TestChromaVectorStore_集成
 func TestChromaVectorStore_集成_删除集合(t *testing.T) {
 	persistPath := filepath.Join(t.TempDir(), "chroma_data")
-	store := NewChromaVectorStore(persistPath)
+	store := vector.NewChromaVectorStore(persistPath)
 	defer store.Close()
 
 	ctx := context.Background()
-	schema := createTestSchema()
-	err := store.CreateCollection(ctx, "integration_test", schema, WithDistanceMetric("COSINE"))
+	schema := newTestSchema()
+	err := store.CreateCollection(ctx, "integration_test", schema, vector.WithDistanceMetric("COSINE"))
 	if err != nil {
 		t.Fatalf("CreateCollection() error = %v", err)
 	}
@@ -104,15 +109,14 @@ func TestChromaVectorStore_集成_删除集合(t *testing.T) {
 }
 
 // TestChromaVectorStore_集成_获取所有文档 测试真实获取所有文档
-// 运行方式: go test -tags=integration ./internal/agentcore/foundation/store/vector/ -run TestChromaVectorStore_集成
 func TestChromaVectorStore_集成_获取所有文档(t *testing.T) {
 	persistPath := filepath.Join(t.TempDir(), "chroma_data")
-	store := NewChromaVectorStore(persistPath)
+	store := vector.NewChromaVectorStore(persistPath)
 	defer store.Close()
 
 	ctx := context.Background()
-	schema := createTestSchema()
-	err := store.CreateCollection(ctx, "integration_test", schema, WithDistanceMetric("COSINE"))
+	schema := newTestSchema()
+	err := store.CreateCollection(ctx, "integration_test", schema, vector.WithDistanceMetric("COSINE"))
 	if err != nil {
 		t.Fatalf("CreateCollection() error = %v", err)
 	}
@@ -136,16 +140,15 @@ func TestChromaVectorStore_集成_获取所有文档(t *testing.T) {
 }
 
 // TestChromaVectorStore_集成_持久化 测试数据持久化（创建、关闭、重新打开）
-// 运行方式: go test -tags=integration ./internal/agentcore/foundation/store/vector/ -run TestChromaVectorStore_集成_持久化
 func TestChromaVectorStore_集成_持久化(t *testing.T) {
 	persistPath := filepath.Join(t.TempDir(), "chroma_persist")
 
 	// 第一步：创建集合并添加文档
 	{
-		store := NewChromaVectorStore(persistPath)
+		store := vector.NewChromaVectorStore(persistPath)
 		ctx := context.Background()
-		schema := createTestSchema()
-		err := store.CreateCollection(ctx, "persist_test", schema, WithDistanceMetric("COSINE"))
+		schema := newTestSchema()
+		err := store.CreateCollection(ctx, "persist_test", schema, vector.WithDistanceMetric("COSINE"))
 		if err != nil {
 			t.Fatalf("CreateCollection() error = %v", err)
 		}
@@ -161,7 +164,7 @@ func TestChromaVectorStore_集成_持久化(t *testing.T) {
 
 	// 第二步：重新打开，验证数据持久化
 	{
-		store := NewChromaVectorStore(persistPath)
+		store := vector.NewChromaVectorStore(persistPath)
 		defer store.Close()
 		ctx := context.Background()
 

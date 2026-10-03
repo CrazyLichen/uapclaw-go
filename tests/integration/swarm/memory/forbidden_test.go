@@ -1,6 +1,6 @@
 //go:build integration
 
-package memory
+package forbidden_test
 
 import (
 	"os"
@@ -9,15 +9,26 @@ import (
 	"testing"
 
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	swarmmemory "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// originalDataDir 保存原始 UAPCLAW_DATA_DIR 环境变量
+var originalDataDir string
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // TestGetForbiddenMemoryPrompt_中文输出_integration 验证从真实配置文件读取并生成中文提示词
-// 运行方式: go test -tags=integration ./internal/swarm/agents/harness/common/memory/...
+// 运行方式: go test -tags=integration ./tests/integration/swarm/memory/...
 func TestGetForbiddenMemoryPrompt_中文输出_integration(t *testing.T) {
 	setupTestConfig(t, "forbidden_enabled")
 	defer restoreConfig()
 
-	prompt := GetForbiddenMemoryPrompt("cn")
+	prompt, err := swarmmemory.GetForbiddenMemoryPrompt("cn")
+	if err != nil {
+		t.Fatalf("GetForbiddenMemoryPrompt 返回错误: %v", err)
+	}
 	if prompt == "" {
 		t.Fatal("配置 enabled=true 时应返回非空中文提示词")
 	}
@@ -36,12 +47,14 @@ func TestGetForbiddenMemoryPrompt_中文输出_integration(t *testing.T) {
 }
 
 // TestGetForbiddenMemoryPrompt_英文输出_integration 验证从真实配置文件读取并生成英文提示词
-// 运行方式: go test -tags=integration ./internal/swarm/agents/harness/common/memory/...
 func TestGetForbiddenMemoryPrompt_英文输出_integration(t *testing.T) {
 	setupTestConfig(t, "forbidden_enabled")
 	defer restoreConfig()
 
-	prompt := GetForbiddenMemoryPrompt("en")
+	prompt, err := swarmmemory.GetForbiddenMemoryPrompt("en")
+	if err != nil {
+		t.Fatalf("GetForbiddenMemoryPrompt 返回错误: %v", err)
+	}
 	if prompt == "" {
 		t.Fatal("配置 enabled=true 时应返回非空英文提示词")
 	}
@@ -54,12 +67,14 @@ func TestGetForbiddenMemoryPrompt_英文输出_integration(t *testing.T) {
 }
 
 // TestGetForbiddenMemoryPrompt_无Patterns_integration 验证无 patterns 时不输出列表
-// 运行方式: go test -tags=integration ./internal/swarm/agents/harness/common/memory/...
 func TestGetForbiddenMemoryPrompt_无Patterns_integration(t *testing.T) {
 	setupTestConfig(t, "forbidden_no_patterns")
 	defer restoreConfig()
 
-	prompt := GetForbiddenMemoryPrompt("cn")
+	prompt, err := swarmmemory.GetForbiddenMemoryPrompt("cn")
+	if err != nil {
+		t.Fatalf("GetForbiddenMemoryPrompt 返回错误: %v", err)
+	}
 	if prompt == "" {
 		t.Fatal("配置 enabled=true 时应返回非空提示词")
 	}
@@ -71,32 +86,28 @@ func TestGetForbiddenMemoryPrompt_无Patterns_integration(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── 测试辅助 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
-// originalDataDir 保存原始 UAPCLAW_DATA_DIR 环境变量
-var originalDataDir string
+// testdataBaseDir 指向原始 testdata 目录的绝对路径
+// 原位置：internal/swarm/agents/harness/common/memory/testdata/
+const testdataBaseDir = "../../../internal/swarm/agents/harness/common/memory/testdata"
 
-// setupTestConfig 设置 UAPCLAW_DATA_DIR 指向 testdata 下的指定子目录，
-// 并重置 pathutil 缓存让 config.New("") 读取测试配置。
+// setupTestConfig 设置 UAPCLAW_DATA_DIR 指向 testdata 下的指定子目录
 func setupTestConfig(t *testing.T, scenario string) {
 	t.Helper()
-	// 保存原始环境变量
 	originalDataDir = os.Getenv("UAPCLAW_DATA_DIR")
 
-	// testdata 下每个场景有自己的 config/ 子目录
-	testdataDir := filepath.Join("testdata", scenario)
+	testdataDir := filepath.Join(testdataBaseDir, scenario)
 	absPath, err := filepath.Abs(testdataDir)
 	if err != nil {
 		t.Fatalf("获取测试目录绝对路径失败: %v", err)
 	}
 
-	// 确认配置文件存在
 	configFile := filepath.Join(absPath, "config", "config.yaml")
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		t.Fatalf("测试配置文件不存在: %s", configFile)
 	}
 
-	// 设置环境变量 + 重置缓存
 	os.Setenv("UAPCLAW_DATA_DIR", absPath)
 	pathutil.ResetCache()
 }
