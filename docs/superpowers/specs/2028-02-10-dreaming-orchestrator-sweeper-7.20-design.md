@@ -166,17 +166,20 @@ type Sweeper struct {
     language       string   // "zh" / "en"
     dreamsDir      string   // outputDir + "/.dreams"
     scannedSessions map[string]ScannedSession  // checkpoint 缓存
-    modelGetter    func() []map[string]any     // 获取默认模型配置
 }
 ```
 
-**`modelGetter` 注入方式**：构造 Sweeper 时传入 `func() []map[string]any`，每次 `_extractViaLLM` 时调用获取当前默认模型，然后构造 `llm.Model` + `Invoke`。完全对齐 Python 的动态获取行为（`from jiuwenswarm.common.config import get_default_models`）。
+**配置获取方式**：和 Python 一致，Sweeper 内部直接调用配置获取函数，不需要外部注入回调：
+- `_extractViaLLM` 中调用 `getDefaultModels()` 获取默认模型列表（对齐 Python `from jiuwenswarm.common.config import get_default_models`）
+- `DreamingConfig.Load` 中调用 `get_config()` 读取配置段（对齐 Python `from jiuwenswarm.common.config import get_config`）
+
+Go 等价方式：`config.New("")` + `Load()` 获取全局配置，从中提取 `models.defaults`（已有先例：`web/config_apply.go` 的 `GetDefaultModels()`）。
 
 #### Sweeper 方法清单
 
 | 方法 | Python 对应 | 说明 |
 |------|------------|------|
-| `NewSweeper(sessionsDir, outputDir, mode, language, modelGetter)` | `__init__` | 构造 |
+| `NewSweeper(sessionsDir, outputDir, mode, language)` | `__init__` | 构造 |
 | `Init() error` | `init()` | 创建目录 + 加载 checkpoint |
 | `RunSweep(ctx) error` | `async run_sweep()` | 完整管线（Scan→Compress→Extract→Promote） |
 | `ScanNewSessions() []ScannedSession` | `scan_new_sessions()` | 增量扫描 |
@@ -215,7 +218,7 @@ const (
 ```go
 var orchestrators sync.Map  // key: mode(string), value: *DreamingOrchestrator
 
-func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode string, busyChecker func() bool, modelGetter func() []map[string]any) (*DreamingOrchestrator, error)
+func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode string, busyChecker func() bool) (*DreamingOrchestrator, error)
 func StopDreaming(ctx context.Context, mode string) error
 func GetDreamingOrchestrator(mode string) *DreamingOrchestrator
 ```
@@ -230,6 +233,9 @@ func GetDreamingOrchestrator(mode string) *DreamingOrchestrator
 Python `_extract_via_llm` 完整调用链：
 
 ```python
+from jiuwenswarm.common.config import get_default_models
+from openjiuwen.core.foundation.llm import Model, ModelClientConfig, ModelRequestConfig, UserMessage, SystemMessage
+
 entries = get_default_models()
 entry = entries[0]
 mcc = entry.get("model_client_config", {})
@@ -242,10 +248,23 @@ model = Model(
 response = await model.invoke([SystemMessage(...), UserMessage(...)])
 ```
 
-Go 等价实现：
+Go 等价实现——Sweeper 内部直接获取配置（不通过外部注入回调）：
 
 ```go
-entries := s.modelGetter()   // 对齐 get_default_models()
+// getDefaultModels 内部获取默认模型列表。
+// 对齐 Python: from jiuwenswarm.common.config import get_default_models
+func getDefaultModels() []map[string]any {
+    cfg, err := config.New("")
+    if err != nil { return nil }
+    cfgData, err := cfg.Load()
+    if err != nil { return nil }
+    modelsSection, _ := cfgData["models"].(map[string]any)
+    // 优先级：models.defaults（列表） > models.default（单对象）
+    // ... 同 adapter/deep_adapter.go 中的 getDefaultModels 逻辑
+}
+
+// _extractViaLLM 内部调用
+entries := getDefaultModels()   // 对齐 Python: get_default_models()
 entry := entries[0]
 mcc, _ := entry["model_client_config"].(map[string]any)
 modelName, _ := mcc["model_name"].(string)
@@ -306,9 +325,7 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
     baseDir := d.getAgentWorkspaceDir()
     outputDir := filepath.Join(baseDir, outputName)
 
-    modelGetter := func() []map[string]any { return getDefaultModels(d.configBase) }
-
-    orch, err := dreaming.StartDreaming(ctx, sessionsDir, outputDir, d.dreamingMode, busyChecker, modelGetter)
+    orch, err := dreaming.StartDreaming(ctx, sessionsDir, outputDir, d.dreamingMode, busyChecker)
     if err != nil {
         logger.Warn(logComponent).Err(err).Msg("start_dreaming failed")
         return err
