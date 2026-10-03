@@ -2,7 +2,6 @@ package ltm
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -182,7 +181,7 @@ func validateID(eventType string, scopeID string) bool {
 func (m *LongTermMemory) checkMessages(messages []llmschema.BaseMessage) (bool, []llmschema.BaseMessage) {
 	outMessages := make([]llmschema.BaseMessage, 0, len(messages))
 	hasHumanMsg := false
-	inputMsgMaxLen := 2000
+	inputMsgMaxLen := config.DefaultMemoryEngineConfig().InputMsgMaxLen
 	if m.sysMemConfig != nil && m.sysMemConfig.InputMsgMaxLen > 0 {
 		inputMsgMaxLen = m.sysMemConfig.InputMsgMaxLen
 	}
@@ -217,7 +216,7 @@ func (m *LongTermMemory) getHistoryMessages(ctx context.Context, userID string, 
 			Str("scope_id", scopeID).Msg("获取历史消息失败")
 		return nil, err
 	}
-	inputMsgMaxLen := 2000
+	inputMsgMaxLen := config.DefaultMemoryEngineConfig().InputMsgMaxLen
 	if m.sysMemConfig != nil && m.sysMemConfig.InputMsgMaxLen > 0 {
 		inputMsgMaxLen = m.sysMemConfig.InputMsgMaxLen
 	}
@@ -243,15 +242,15 @@ func (m *LongTermMemory) getHistoryMessages(ctx context.Context, userID string, 
 // runMigration 执行单个迁移函数，统一日志和错误处理。
 // 对齐 Python: LongTermMemory._run_migration(migrate_func, store, store_type)
 func runMigration(ctx context.Context, migrateFunc func(ctx context.Context) error, storeType string) error {
-	logger.Info(logComponent).Str("store_type", storeType).
-		Msg(fmt.Sprintf("Starting %s migration", storeType))
+	logger.Info(logComponent).Str("event_type", "MEMORY_INIT").Str("store_type", storeType).
+		Msg("Starting migration")
 	err := migrateFunc(ctx)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("store_type", storeType).
-			Msg(fmt.Sprintf("%s migration failed", storeType))
+		logger.Error(logComponent).Str("event_type", "MEMORY_INIT").Err(err).Str("store_type", storeType).
+			Msg("Migration failed")
 		return err
 	}
-	logger.Info(logComponent).Str("store_type", storeType).
-		Msg(fmt.Sprintf("%s migration completed successfully", storeType))
+	logger.Info(logComponent).Str("event_type", "MEMORY_INIT").Str("store_type", storeType).
+		Msg("Migration completed successfully")
 	return nil
 }

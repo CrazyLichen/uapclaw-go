@@ -156,10 +156,10 @@ func (m *TeamManager) FindTeamSkillRailForRequest(requestID string) *evolution.T
 func (m *TeamManager) DrainTeamSkillEvents(sessionID string) []map[string]any {
 	rail, ok := m.teamSkillRails[sessionID]
 	if !ok || rail == nil {
-		return nil
+		return []map[string]any{}
 	}
 	// ⤵️(#9.72) rail.drain_pending_approval_events() — 待 Rail 完整实现后回填
-	return nil
+	return []map[string]any{}
 }
 
 // UpdateEvolutionConfig 热更新 team evolution rails。

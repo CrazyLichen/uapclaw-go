@@ -53,6 +53,7 @@ const (
 
 var (
 	// logComponent migrator 包日志组件
+	// 对齐 Python: memory_logger，使用 ComponentAgentCore 与 ltm/migration 包相同
 	logComponent = logger.ComponentAgentCore
 )
 

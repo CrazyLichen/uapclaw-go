@@ -403,7 +403,13 @@ func (m *LongTermMemory) getScopeEmbeddingModel(ctx context.Context, scopeID str
 
 	if scopeCfg != nil && scopeCfg.EmbeddingCfg != nil {
 		// 使用 APIEmbedding 实例化
+		// 对齐 Python: 外层 try/except 捕获实例化失败
 		emb := apiembedding.NewAPIEmbedding(*scopeCfg.EmbeddingCfg)
+		if emb == nil {
+			logger.Warn(logComponent).Str("event_type", "MEMORY_RETRIEVE").
+				Str("scope_id", scopeID).Msg("Failed to create APIEmbedding instance.")
+			return nil
+		}
 		m.scopeMu.Lock()
 		m.scopeEmbedding[scopeID] = emb
 		m.scopeMu.Unlock()

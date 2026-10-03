@@ -148,8 +148,8 @@ type TeamManager struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// logComponent 日志组件
-	logComponent = logger.ComponentChannel
+	// logComponent 日志组件（TeamManager 使用 ComponentTeam 区分于 channel 层）
+	logComponent = logger.ComponentTeam
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

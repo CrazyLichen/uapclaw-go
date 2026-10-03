@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/mattn/go-sqlite3"
@@ -1508,12 +1509,14 @@ func blobToVector(blob []byte) []float64 {
 	return vec
 }
 
-// truncateString 截断字符串
+// truncateString 截断字符串（按 Unicode 码点长度，CJK 安全）。
+// 对齐 Python: s[:max_len] 使用字符长度而非字节长度。
 func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	if utf8.RuneCountInString(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen]
+	runes := []rune(s)
+	return string(runes[:maxLen])
 }
 
 // containsSource 检查 sources 列表是否包含指定来源

@@ -95,16 +95,20 @@ func RunIndexVersionMigrations(ctx context.Context, idx index.BaseMemoryIndex) e
 	registryMap := IndexRegistry.GetAllOperations()
 
 	if len(registryMap) == 0 {
-		logger.Info(logComponent).Msg("无已注册的 index version 迁移，跳过")
+		logger.Info(logComponent).Str("event_type", "MEMORY_INIT").
+			Str("sub_component", "run_migrations").Msg("无已注册的 index version 迁移，跳过")
 		return nil
 	}
 
 	for entityKey, operations := range registryMap {
 		m := migrator.NewIndexVersionMigrator()
 		if err := m.TryMigrate(ctx, idx, operations); err != nil {
-			logger.Error(logComponent).Err(err).Str("entity_key", entityKey).
+			logger.Error(logComponent).Str("event_type", "MEMORY_INIT").Err(err).
+				Str("sub_component", "run_migrations").
+				Str("store_name", "index version").Str("entity_key", entityKey).
 				Msg("index version 迁移失败")
 			return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
+				exception.WithParam("store_name", "index version"),
 				exception.WithParam("entity_key", entityKey),
 				exception.WithParam("error_msg", fmt.Sprintf("index version 迁移失败: %v", err)),
 			)
@@ -129,14 +133,16 @@ func runMigrationsWithRegistry(
 	registryMap := registry.GetAllOperations()
 
 	if len(registryMap) == 0 {
-		logger.Info(logComponent).Str("store_name", storeName).Msg("无已注册的迁移，跳过")
+		logger.Info(logComponent).Str("event_type", "MEMORY_INIT").
+			Str("sub_component", "run_migrations").Str("store_name", storeName).Msg("无已注册的迁移，跳过")
 		return nil
 	}
 
 	for entityKey, operations := range registryMap {
 		if err := m.TryMigrate(ctx, entityKey, operations); err != nil {
-			logger.Error(logComponent).Err(err).Str("entity_key", entityKey).
-				Str("store_name", storeName).Msg("迁移失败")
+			logger.Error(logComponent).Str("event_type", "MEMORY_INIT").Err(err).
+				Str("sub_component", "run_migrations").
+				Str("store_name", storeName).Str("entity_key", entityKey).Msg("迁移失败")
 			return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 				exception.WithParam("entity_key", entityKey),
 				exception.WithParam("store_name", storeName),

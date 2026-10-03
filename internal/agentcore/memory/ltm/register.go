@@ -236,7 +236,7 @@ func MigrateBetweenIndices(ctx context.Context, sourceIndex, targetIndex storein
 		}
 	}
 
-	logger.Info(logComponent).Int("scope_count", len(scopes)).
+	logger.Info(logComponent).Str("event_type", "MEMORY_INIT").Int("scope_count", len(scopes)).
 		Msg("Cross-index migration completed")
 
 	return nil
