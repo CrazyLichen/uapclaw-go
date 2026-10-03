@@ -3,6 +3,7 @@ package subagent
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
@@ -495,9 +496,9 @@ func TestSessionsCancelTool_Invoke_Scheduler为nil(t *testing.T) {
 	}
 }
 
-// TestJoinLines 多行连接
+// TestJoinLines 多行连接（使用 strings.Join 替代已删除的 joinLines）
 func TestJoinLines(t *testing.T) {
-	result := joinLines([]string{"a", "b", "c"})
+	result := strings.Join([]string{"a", "b", "c"}, "\n")
 	if result != "a\nb\nc" {
 		t.Errorf("期望 'a\\nb\\nc', 实际 %q", result)
 	}

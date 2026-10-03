@@ -383,7 +383,7 @@ func TestTeamAgent_HumanAgentSay(t *testing.T) {
 func TestTeamAgent_StartCoordination(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
-	err := a.StartCoordination(context.Background(), nil)
+	err := a.StartCoordination(context.Background(), "")
 	assert.NoError(t, err)
 }
 
@@ -655,6 +655,63 @@ func TestTeamAgent_SetTeamBackend(t *testing.T) {
 	a := NewTeamAgent(card)
 	// configurator 为 nil 时不 panic
 	a.SetTeamBackend(nil)
+}
+
+// TestTeamAgent_Configure后TeamBackend设置 测试 Configure 后 TeamBackend 状态
+func TestTeamAgent_Configure后TeamBackend设置(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+
+	spec := atschema.NewTeamAgentSpec()
+	ctx := atschema.TeamRuntimeContext{
+		Role:       atschema.TeamRoleLeader,
+		MemberName: "leader_1",
+		TeamSpec:   &atschema.TeamSpec{TeamName: "test_team"},
+	}
+
+	// Configure 后 TeamBackend 尚未设置（需 SetupTeamBackend 单独注入）
+	a.Configure(context.Background(), spec, ctx)
+	assert.Nil(t, a.TeamBackend(), "Configure 后 TeamBackend 应为 nil，需通过 SetTeamBackend 或 SetupTeamBackend 注入")
+	// TODO: 补充完整集成测试，验证 SetupTeamBackend 后 TeamBackend 不为 nil
+}
+
+// TestTeamAgent_Configure后Messager设置 测试 Configure 后 Messager 状态
+func TestTeamAgent_Configure后Messager设置(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+
+	spec := atschema.NewTeamAgentSpec()
+	ctx := atschema.TeamRuntimeContext{
+		Role:       atschema.TeamRoleLeader,
+		MemberName: "leader_1",
+		TeamSpec:   &atschema.TeamSpec{TeamName: "test_team"},
+	}
+
+	// Configure 后 Messager 取决于 CreateMessager 是否成功
+	a.Configure(context.Background(), spec, ctx)
+	// 测试环境中 CreateMessager 通常无法成功创建，Messager 为 nil
+	assert.Nil(t, a.configurator.Messager(), "测试环境下 Messager 为 nil（CreateMessager 需要真实传输配置）")
+	// TODO: 补充完整集成测试，验证有传输配置时 Messager 不为 nil
+}
+
+// TestTeamAgent_Configure后TeamName设置 测试 Configure 后 TeamName 正确返回
+func TestTeamAgent_Configure后TeamName设置(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+
+	spec := atschema.NewTeamAgentSpec()
+	ctx := atschema.TeamRuntimeContext{
+		Role:       atschema.TeamRoleLeader,
+		MemberName: "leader_1",
+		TeamSpec:   &atschema.TeamSpec{TeamName: "my_test_team"},
+	}
+
+	// Configure 前
+	assert.Equal(t, "", a.TeamName(), "Configure 前 TeamName 应为空")
+
+	// Configure 后
+	a.Configure(context.Background(), spec, ctx)
+	assert.Equal(t, "my_test_team", a.TeamName(), "Configure 后 TeamName 应从 TeamSpec 获取")
 }
 
 // TestTaskFailedError_Error 测试 taskFailedError.Error 方法

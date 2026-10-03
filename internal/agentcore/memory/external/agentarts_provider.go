@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -236,7 +237,7 @@ func (p *AgentArtsProvider) Prefetch(ctx context.Context, query string, _ ...Pro
 	if len(lines) == 0 {
 		return "", nil
 	}
-	return "## External Memory\n" + joinLines(lines), nil
+	return "## External Memory\n" + strings.Join(lines, "\n"), nil
 }
 
 // HandleToolCall 处理工具调用并返回结果字符串。

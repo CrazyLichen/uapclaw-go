@@ -569,7 +569,7 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 	ok := tb.db.Member().TryTransitionMemberStatus(ctx, memberName, tb.teamName,
 		member.Status, string(atschema.MemberStatusShutdownRequested))
 	if !ok {
-		return atschema.NewMemberOpResultFail("CAS 状态转换失败: " + memberName)
+		return atschema.NewMemberOpResultFail("Database rejected status update: " + memberName)
 	}
 	// 步骤 5: 发送 shutdown 消息（对齐 Python: message_manager.send_message）
 	shutdownMsg, shutdownI18nErr := atschema.T("team.shutdown_request_content")

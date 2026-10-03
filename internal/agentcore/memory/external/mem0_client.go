@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -205,7 +206,7 @@ func (c *mem0HTTPClient) getAll(ctx context.Context, filters map[string]any) ([]
 		for k, v := range filters {
 			params = append(params, fmt.Sprintf("%s=%v", k, v))
 		}
-		path += "?" + joinParams(params)
+		path += "?" + strings.Join(params, "&")
 	}
 
 	data, err := c.doRequest(ctx, http.MethodGet, path, nil)
@@ -232,14 +233,3 @@ func (c *mem0HTTPClient) add(ctx context.Context, messages []mem0Message, filter
 	return err
 }
 
-// joinParams 拼接 query 参数。
-func joinParams(params []string) string {
-	result := ""
-	for i, p := range params {
-		if i > 0 {
-			result += "&"
-		}
-		result += p
-	}
-	return result
-}

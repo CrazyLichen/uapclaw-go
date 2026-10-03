@@ -173,7 +173,7 @@ func NewSessionsListTool(toolkit *SessionToolkit, language, agentID string) tool
 
 		var data string
 		if len(lines) > 0 {
-			data = joinLines(lines)
+			data = strings.Join(lines, "\n")
 		} else if language == "cn" {
 			data = "当前会话没有后台子任务"
 		} else {
@@ -404,14 +404,3 @@ func generateTokenHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// joinLines 将多行文本用换行符连接。
-func joinLines(lines []string) string {
-	if len(lines) == 0 {
-		return ""
-	}
-	result := lines[0]
-	for i := 1; i < len(lines); i++ {
-		result += "\n" + lines[i]
-	}
-	return result
-}

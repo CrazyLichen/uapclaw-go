@@ -53,7 +53,7 @@ func (f *fakeKernelHost) SetWorkspaceInitialized()                            {}
 func (f *fakeKernelHost) MemoryManager() *memory.TeamMemoryManager            { return nil }
 func (f *fakeKernelHost) HarnessAccessor() types.HarnessAccessor              { return nil }
 func (f *fakeKernelHost) SpecAny() any                                        { return nil }
-func (f *fakeKernelHost) SubscribeTransport(_ context.Context) error          { return nil }
+func (f *fakeKernelHost) SubscribeTransport(_ context.Context, _ string) error          { return nil }
 func (f *fakeKernelHost) UnsubscribeTransport(_ context.Context) error          { return nil }
 func (f *fakeKernelHost) PersistAllocatorState()                              {}
 func (f *fakeKernelHost) DrainAgentTask(_ context.Context)                    {}
@@ -112,7 +112,7 @@ func TestCoordinationKernel_Start(t *testing.T) {
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k.Setup(schema.TeamRoleLeader, bp, nil)
 
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 
 	if !k.IsRunning() {
 		t.Error("start 后应运行中")
@@ -127,7 +127,7 @@ func TestCoordinationKernel_Start无Setup(t *testing.T) {
 	k := NewCoordinationKernel(host)
 
 	// 无 setup 时 start 应直接返回，不 panic
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 	if k.IsRunning() {
 		t.Error("无 setup 时 start 不应运行")
 	}
@@ -138,7 +138,7 @@ func TestCoordinationKernel_Pause(t *testing.T) {
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k.Setup(schema.TeamRoleLeader, bp, nil)
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 
 	k.Pause(context.Background())
 
@@ -163,7 +163,7 @@ func TestCoordinationKernel_Stop(t *testing.T) {
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k.Setup(schema.TeamRoleLeader, bp, nil)
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 
 	k.Stop(context.Background())
 
@@ -295,7 +295,7 @@ func TestCoordinationKernel_生命周期转换(t *testing.T) {
 	k.Setup(schema.TeamRoleLeader, bp, nil)
 
 	// idle → running
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 	if k.LifecycleState() != kernelStateRunning {
 		t.Errorf("期望 running，实际 %q", k.LifecycleState())
 	}

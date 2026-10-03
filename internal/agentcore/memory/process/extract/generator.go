@@ -145,7 +145,7 @@ func (g *Generator) GenAllMemory(
 		ScopeID:         params.ScopeID,
 		Messages:        params.Messages,
 		HistoryMessages: params.HistoryMessages,
-		BaseModel:       params.BaseModel,
+		BaseChatModel:   params.BaseModel,
 	}
 
 	allMemoryResults := map[string][]mem_model.MemoryUnit{}
@@ -273,7 +273,7 @@ func (g *Generator) categoriesToMemoryUnit(
 				ScopeID:       extractMemoryParams.ScopeID,
 				MessageMemID:  messageMemID,
 				Timestamp:     timestamp,
-				BaseModel:     extractMemoryParams.BaseModel,
+				BaseModel:     extractMemoryParams.BaseChatModel,
 				SemanticStore: semanticStore,
 			}
 			instructUnits := g.handleMemoryWithInstruct(ctx, memoryOperationParams, instructMemories)

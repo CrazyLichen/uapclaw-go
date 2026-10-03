@@ -19,8 +19,8 @@ type ExtractMemoryParams struct {
 	Messages []schema.BaseMessage
 	// HistoryMessages 历史消息列表
 	HistoryMessages []schema.BaseMessage
-	// BaseModel 基础聊天模型
-	BaseModel *llm.Model
+	// BaseChatModel 基础聊天模型（对齐 Python base_chat_model）
+	BaseChatModel *llm.Model
 }
 
 // MemoryOperationParams 记忆操作参数（UPDATE/DELETE 语义验证时使用）。

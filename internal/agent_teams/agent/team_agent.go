@@ -557,7 +557,7 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	}
 
 	// Python: await self._coordination.start(session)
-	a.coordination.Start(ctx)
+	a.coordination.Start(ctx, agentteams.GetSessionID(ctx))
 
 	// Python: try:
 	//   await self._coordination.enqueue_user_input(inputs)
@@ -623,7 +623,7 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	}
 
 	// Python: await self._coordination.start(session)
-	a.coordination.Start(ctx)
+	a.coordination.Start(ctx, agentteams.GetSessionID(ctx))
 
 	// Python: try:
 	//   await self._coordination.enqueue_user_input(inputs)
@@ -857,9 +857,9 @@ func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
 
 // StartCoordination 启动协调。
 // Python: TeamAgent._start_coordination(session)
-func (a *TeamAgent) StartCoordination(ctx context.Context, session any) error {
+func (a *TeamAgent) StartCoordination(ctx context.Context, sessionID string) error {
 	if a.coordination != nil {
-		a.coordination.Start(ctx, session)
+		a.coordination.Start(ctx, sessionID)
 	}
 	return nil
 }
@@ -1282,7 +1282,7 @@ func (a *TeamAgent) FirstIterGate() types.FirstIterGateAccessor {
 // 1. 注册 direct_message_handler（将点对点消息推入 eventBus）
 // 2. 遍历 TeamTopic 订阅（team/task/message），使用 self-filter 回调
 // 3. self-filter: 先触发 event_listeners，然后跳过自己发出的事件，非自身事件推入 eventBus
-func (a *TeamAgent) SubscribeTransport(ctx context.Context) error {
+func (a *TeamAgent) SubscribeTransport(ctx context.Context, teamName string) error {
 	if a.configurator == nil {
 		return nil
 	}
@@ -1290,7 +1290,6 @@ func (a *TeamAgent) SubscribeTransport(ctx context.Context) error {
 	if mgr == nil {
 		return nil
 	}
-	teamName := a.TeamName()
 	if teamName == "" {
 		return nil
 	}
@@ -1576,5 +1575,13 @@ func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
 	if pool.GetSessionIDForTeam(teamName) != sessionID {
 		return
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).
+				Str("team_name", teamName).
+				Any("panic", r).
+				Msg("removeSelfFromPool panic recovered")
+		}
+	}()
 	pool.RemoveTeam(teamName)
 }

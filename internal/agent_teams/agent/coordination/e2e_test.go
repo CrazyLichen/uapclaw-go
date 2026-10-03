@@ -73,7 +73,7 @@ func TestEndToEnd_Kernel完整链路(t *testing.T) {
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k.Setup(schema.TeamRoleLeader, bp, nil)
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 
 	// 1. 验证 user_input → lifecycle.OnUserInput → DeliverInput
 	k.EnqueueUserInput("hello from user")
@@ -120,7 +120,7 @@ func TestEndToEnd_Teammate取消(t *testing.T) {
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
 	k.Setup(schema.TeamRoleTeammate, bp, nil)
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 
 	// 发送 member_canceled 目标为自己
 	k.Enqueue(types.CoordinationEvent{
@@ -150,7 +150,7 @@ func TestEndToEnd_Teammate清理(t *testing.T) {
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
 	k.Setup(schema.TeamRoleTeammate, bp, nil)
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 
 	k.Enqueue(types.CoordinationEvent{
 		Transport: &events.EventMessage{EventType: events.TeamEventCleaned},
@@ -188,7 +188,7 @@ func TestEndToEnd_HumanAgent轮询过滤(t *testing.T) {
 		return nil
 	})
 
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 
 	// Dispatcher 粗筛应阻止 Human-agent 的 poll 事件
 	// 直接通过 Dispatcher.Dispatch 测试
@@ -218,7 +218,7 @@ func TestEndToEnd_TeamCompletion回调(t *testing.T) {
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k.Setup(schema.TeamRoleLeader, bp, nil)
-	k.Start(context.Background())
+	k.Start(context.Background(), "")
 
 	var mu sync.Mutex
 	var callbackInvoked bool

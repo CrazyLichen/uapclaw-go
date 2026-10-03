@@ -16,7 +16,7 @@ func TestExtractMemoryParams_字段赋值(t *testing.T) {
 		ScopeID:         "scope1",
 		Messages:        nil,
 		HistoryMessages: nil,
-		BaseModel:       nil,
+		BaseChatModel:    nil,
 	}
 	if params.UserID != "user1" {
 		t.Errorf("UserID = %q, want %q", params.UserID, "user1")
@@ -55,9 +55,9 @@ func TestExtractMemoryParams_类型检查(t *testing.T) {
 	// 验证 HistoryMessages 字段可赋值 []schema.BaseMessage
 	//nolint:staticcheck // QF1011: 保留类型声明以实现编译时接口检查
 	var _ []schema.BaseMessage = ExtractMemoryParams{}.HistoryMessages
-	// 验证 BaseModel 字段可赋值 *llm.Model
+	// 验证 BaseChatModel 字段可赋值 *llm.Model
 	//nolint:staticcheck // QF1011: 保留类型声明以实现编译时接口检查
-	var _ *llm.Model = ExtractMemoryParams{}.BaseModel
+	var _ *llm.Model = ExtractMemoryParams{}.BaseChatModel
 }
 
 // TestMemoryOperationParams_类型检查 测试模型字段和语义存储字段的类型

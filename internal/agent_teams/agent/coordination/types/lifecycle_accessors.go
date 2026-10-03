@@ -119,7 +119,7 @@ type BlueprintAccessor interface {
 // Python: host.infra.team_backend → messager
 type TransportAccessor interface {
 	// SubscribeTransport 订阅团队传输主题
-	SubscribeTransport(ctx context.Context) error
+	SubscribeTransport(ctx context.Context, teamName string) error
 	// UnsubscribeTransport 取消订阅
 	UnsubscribeTransport(ctx context.Context) error
 	// PublishTeamEvent 发布团队事件到 TEAM 主题

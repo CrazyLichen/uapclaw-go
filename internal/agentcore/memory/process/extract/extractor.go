@@ -110,7 +110,7 @@ func ExtractLongTermMemory(
 	parser := output_parsers.NewJsonOutputParser()
 
 	for attempt := 0; attempt < retries; attempt++ {
-		response, invokeErr := params.BaseModel.Invoke(ctx, msgsParam,
+		response, invokeErr := params.BaseChatModel.Invoke(ctx, msgsParam,
 			model_clients.WithInvokeOutputParser(parser))
 		if invokeErr != nil {
 			// 对齐 Python: invoke 异常向上传播（不在 except JSONDecodeError 内）
@@ -162,7 +162,6 @@ func buildTimeContext(timestamp string) string {
 	// 尝试多种格式解析（对齐 Python: datetime.fromisoformat）
 	formats := []string{
 		"2006-01-02T15:04:05Z07:00",
-		"2006-01-02T15:04:05-07:00",
 		"2006-01-02T15:04:05",
 		"2006-01-02 15:04:05",
 		"2006-01-02",

@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -350,6 +352,83 @@ func TestMapToMemoryAnalyzerResult_variables类型错误(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, result.HasKeyInformation)
 	assert.Empty(t, result.Variables)
+}
+
+// TestAnalyze_上下文取消 测试 ctx 取消时提前返回
+func TestAnalyze_上下文取消(t *testing.T) {
+	// 创建可取消的 ctx，立即取消
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// 使用支持 ctx 检查的 mock：如果 ctx 已取消则返回 context.Canceled
+	client := &mockLLMClient{
+		invokeFn: func(ctx context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+				return llmschema.NewAssistantMessage(`{}`), nil
+			}
+		},
+	}
+	clientCfg, err := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	require.NoError(t, err)
+	model, err := llm.NewModel(clientCfg, nil, llm.WithClient(client))
+	require.NoError(t, err)
+
+	memoryConfig := config.DefaultAgentMemoryConfig()
+
+	result, err := Analyze(
+		ctx,
+		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		nil,
+		model,
+		memoryConfig,
+		128,
+		nil,
+		"",
+		3,
+	)
+
+	assert.Error(t, err, "ctx 取消时应返回错误")
+	assert.Nil(t, result, "ctx 取消时 result 应为 nil")
+	assert.Contains(t, err.Error(), "记忆分析 LLM 调用失败", "错误信息应包含记忆分析上下文")
+}
+
+// TestAnalyze_retries为1时仅尝试一次 测试 retries=1 时 LLM 返回无法解析的 JSON 只尝试一次
+func TestAnalyze_retries为1时仅尝试一次(t *testing.T) {
+	invokeCount := 0
+	client := &mockLLMClient{
+		invokeFn: func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+			invokeCount++
+			return llmschema.NewAssistantMessage("not valid json {{{"), nil
+		},
+	}
+	clientCfg, err := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	require.NoError(t, err)
+	model, err := llm.NewModel(clientCfg, nil, llm.WithClient(client))
+	require.NoError(t, err)
+
+	memoryConfig := config.DefaultAgentMemoryConfig()
+
+	result, err := Analyze(
+		context.Background(),
+		[]llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		nil,
+		model,
+		memoryConfig,
+		128,
+		nil,
+		"",
+		1, // retries=1，仅尝试一次
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.HasKeyInformation)
+	assert.Empty(t, result.Variables)
+	assert.Empty(t, result.Summary)
+	assert.Equal(t, 1, invokeCount, "retries=1 时 LLM 应仅调用一次")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

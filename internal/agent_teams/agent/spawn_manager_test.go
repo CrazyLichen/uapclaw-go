@@ -242,7 +242,7 @@ func TestSpawnManager_PublishRestartEvent_占位(t *testing.T) {
 	sm := newTestSpawnManager(t)
 
 	// 当前为 no-op（TODO #9.65），不应 panic
-	sm.PublishRestartEvent("alice", 1)
+	sm.PublishRestartEvent(context.Background(), "alice", 1)
 }
 
 // TestSpawnManager_RestartTeammate_无DB上下文 测试重启时 DB 上下文为空。

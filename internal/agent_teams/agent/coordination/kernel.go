@@ -165,7 +165,7 @@ func (k *CoordinationKernel) LifecycleState() string {
 
 // Start 启动协调子系统，编排完整初始化链。
 // 对齐 Python: CoordinationKernel.start(session)
-func (k *CoordinationKernel) Start(ctx context.Context, session ...any) {
+func (k *CoordinationKernel) Start(ctx context.Context, sessionID string) {
 	if k.eventBus == nil {
 		return
 	}
@@ -186,12 +186,8 @@ func (k *CoordinationKernel) Start(ctx context.Context, session ...any) {
 
 	// 步骤 3: Session bind/release
 	sessCtrl := k.host.SessionController()
-	var sess any
-	if len(session) > 0 {
-		sess = session[0]
-	}
-	if sess != nil && sessCtrl != nil {
-		_, _ = sessCtrl.BindSession(ctx, sess)
+	if sessionID != "" && sessCtrl != nil {
+		_, _ = sessCtrl.BindSession(ctx, sessionID)
 	} else if sessCtrl != nil {
 		_ = sessCtrl.ReleaseSession(ctx)
 	}
@@ -254,7 +250,7 @@ func (k *CoordinationKernel) Start(ctx context.Context, session ...any) {
 	}
 
 	// 步骤 9: Subscribe transport
-	_ = k.host.SubscribeTransport(ctx)
+	_ = k.host.SubscribeTransport(ctx, k.host.TeamName())
 
 	// 步骤 10: TeamCompletion rearmed
 	if k.dispatcher != nil && k.dispatcher.TeamCompletion != nil {

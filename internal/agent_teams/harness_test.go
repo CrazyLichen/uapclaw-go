@@ -85,7 +85,7 @@ func TestTeamHarness_RunAgentCustomizer_Nil(t *testing.T) {
 // TestBuildTeamHarness 测试 Build 函数
 func TestBuildTeamHarness(t *testing.T) {
 	h := agent_teams.BuildTeamHarness(
-		nil, // agentSpec
+		atschema.DeepAgentSpec{}, // agentSpec
 		string(atschema.TeamRoleTeammate),
 		"teammate_1",
 		nil, // teamToolRail — ⤴️ 9.68 回填后类型为 *rails.TeamToolRail

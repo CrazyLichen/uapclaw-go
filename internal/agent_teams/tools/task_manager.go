@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/fsm"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -1322,9 +1323,9 @@ func findRefreshedTask(refreshed []*database.TeamTaskBase, taskID string) *datab
 	return nil
 }
 
-// generateTaskID 生成任务 ID，对齐 Python: uuid.uuid4() 的等价逻辑。
+// generateTaskID 生成任务 ID，对齐 Python: uuid.uuid4()。
 func generateTaskID(teamName string, suffixes ...string) string {
-	base := fmt.Sprintf("task_%s_%d_%d", teamName, time.Now().UnixMilli(), time.Now().UnixNano()%1000)
+	base := "task_" + teamName + "_" + uuid.New().String()
 	if len(suffixes) > 0 {
 		base += "_" + strings.Join(suffixes, "_")
 	}

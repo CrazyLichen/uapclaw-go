@@ -90,6 +90,69 @@ func TestBuildTimeContext_空格分隔时间(t *testing.T) {
 	}
 }
 
+// TestExtractLongTermMemory_上下文取消 测试 ctx 取消时提前返回
+func TestExtractLongTermMemory_上下文取消(t *testing.T) {
+	// 创建可取消的 ctx，立即取消
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// 使用支持 ctx 检查的 mock：检查 ctx 状态，如果已取消则返回 context.Canceled
+	client := &mockLLMClient{
+		invokeFn: func(ctx context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+			// 模拟真实 LLM 客户端行为：检查 ctx 是否已取消
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+				return llmschema.NewAssistantMessage(`{}`), nil
+			}
+		},
+	}
+	clientCfg, _ := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	model, _ := llm.NewModel(clientCfg, nil, llm.WithClient(client))
+
+	params := &ExtractMemoryParams{
+		UserID:          "user1",
+		ScopeID:         "scope1",
+		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		HistoryMessages: nil,
+		BaseChatModel:   model,
+	}
+
+	result, err := ExtractLongTermMemory(ctx, params, "2026-01-06 10:00:00", nil, 3)
+	if err == nil {
+		t.Fatal("ctx 取消时应返回错误")
+	}
+	if result != nil {
+		t.Errorf("ctx 取消时 result 应为 nil，实际 %v", result)
+	}
+	if !strings.Contains(err.Error(), "长期记忆提取 LLM 调用失败") {
+		t.Errorf("错误信息应包含'长期记忆提取 LLM 调用失败'，实际: %v", err)
+	}
+}
+
+// TestBuildTimeContext_UTC时间戳 测试 Z 后缀 UTC 时间戳
+func TestBuildTimeContext_UTC时间戳(t *testing.T) {
+	result := buildTimeContext("2026-01-06T10:00:00Z")
+	// Z 后缀是 UTC 时间，2026-01-06 周二，应返回该周范围
+	if result == "" || result == "2026-01-06T10:00:00Z" {
+		t.Errorf("buildTimeContext('Z') = %q, want week range string", result)
+	}
+	// 验证具体输出
+	expected := "2026年1月5日(周一)～2026年1月11日(周日)（即01.05～01.11）"
+	if result != expected {
+		t.Errorf("buildTimeContext = %q, want %q", result, expected)
+	}
+}
+
+// TestBuildTimeContext_负时区时间戳 测试 -05:00 格式时间戳
+func TestBuildTimeContext_负时区时间戳(t *testing.T) {
+	result := buildTimeContext("2026-01-06T10:00:00-05:00")
+	if result == "" || result == "2026-01-06T10:00:00-05:00" {
+		t.Errorf("buildTimeContext('-05:00') = %q, want week range string", result)
+	}
+}
+
 // TestExtractLongTermMemory_合法JSON返回 测试 LLM 返回合法 JSON
 func TestExtractLongTermMemory_合法JSON返回(t *testing.T) {
 	jsonResponse := `{
@@ -115,7 +178,7 @@ func TestExtractLongTermMemory_合法JSON返回(t *testing.T) {
 		ScopeID:         "scope1",
 		Messages:        messages,
 		HistoryMessages: historyMessages,
-		BaseModel:       model,
+		BaseChatModel:   model,
 	}
 
 	result, err := ExtractLongTermMemory(context.Background(), params, "2026-01-06 10:00:00", nil, 3)
@@ -145,7 +208,7 @@ func TestExtractLongTermMemory_解析失败返回空map(t *testing.T) {
 		ScopeID:         "scope1",
 		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		HistoryMessages: nil,
-		BaseModel:       model,
+		BaseChatModel:   model,
 	}
 
 	result, err := ExtractLongTermMemory(context.Background(), params, "2026-01-06 10:00:00", nil, 2)
@@ -169,7 +232,7 @@ func TestExtractLongTermMemory_Invoke错误向上传播(t *testing.T) {
 		ScopeID:         "scope1",
 		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		HistoryMessages: nil,
-		BaseModel:       model,
+		BaseChatModel:   model,
 	}
 
 	result, err := ExtractLongTermMemory(context.Background(), params, "2026-01-06 10:00:00", nil, 3)
@@ -201,7 +264,7 @@ func TestExtractLongTermMemory_scopeConfig为nil使用默认值(t *testing.T) {
 		ScopeID:         "scope1",
 		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		HistoryMessages: nil,
-		BaseModel:       model,
+		BaseChatModel:   model,
 	}
 
 	result, err := ExtractLongTermMemory(context.Background(), params, "2026-01-06 10:00:00", nil, 3)
@@ -230,7 +293,7 @@ func TestExtractLongTermMemory_自定义scopeConfig(t *testing.T) {
 		ScopeID:         "scope1",
 		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
 		HistoryMessages: nil,
-		BaseModel:       model,
+		BaseChatModel:   model,
 	}
 
 	scopeConfig := &config.MemoryScopeConfig{
@@ -245,6 +308,41 @@ func TestExtractLongTermMemory_自定义scopeConfig(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("result 不应为 nil")
+	}
+}
+
+// TestExtractLongTermMemory_retries为1时仅尝试一次 测试 retries=1 时 LLM 返回无法解析的 JSON 只尝试一次
+func TestExtractLongTermMemory_retries为1时仅尝试一次(t *testing.T) {
+	invokeCount := 0
+	client := &mockLLMClient{
+		invokeFn: func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+			invokeCount++
+			return llmschema.NewAssistantMessage("not valid json {{{"), nil
+		},
+	}
+	clientCfg, _ := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	model, _ := llm.NewModel(clientCfg, nil, llm.WithClient(client))
+
+	params := &ExtractMemoryParams{
+		UserID:          "user1",
+		ScopeID:         "scope1",
+		Messages:        []llmschema.BaseMessage{llmschema.NewUserMessage("测试")},
+		HistoryMessages: nil,
+		BaseChatModel:   model,
+	}
+
+	result, err := ExtractLongTermMemory(context.Background(), params, "2026-01-06 10:00:00", nil, 1)
+	if err != nil {
+		t.Fatalf("ExtractLongTermMemory 不应返回错误: %v", err)
+	}
+	if result == nil {
+		t.Fatal("result 不应为 nil")
+	}
+	if len(result) != 0 {
+		t.Errorf("解析失败时应返回空 map，实际 %d 个键", len(result))
+	}
+	if invokeCount != 1 {
+		t.Errorf("retries=1 时 LLM 应仅调用一次，实际调用 %d 次", invokeCount)
 	}
 }
 

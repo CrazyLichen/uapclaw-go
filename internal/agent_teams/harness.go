@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
@@ -113,7 +114,7 @@ func NewTeamHarness(
 //
 // ⤴️ 9.68 回填完成：Rails 挂载逻辑已实现
 func BuildTeamHarness(
-	agentSpec any, // TODO(#9.56): DeepAgentSpec 类型
+	agentSpec atschema.DeepAgentSpec,
 	role string,
 	memberName string,
 	teamToolRail *rails.TeamToolRail,
@@ -124,7 +125,6 @@ func BuildTeamHarness(
 	teamPlanModeRail *rails.TeamPlanModeRail,
 	initialPlanMode bool,
 ) *TeamHarness {
-	// TODO(#9.56): 构建深度Agent deepAgent = agentSpec.Build()
 	// ⤴️ 9.68: 以下 Rail 挂载需要 deepAgent 实例
 	// deepAgent.AddRail(teamToolRail)
 	// deepAgent.AddRail(teamPolicyRail)

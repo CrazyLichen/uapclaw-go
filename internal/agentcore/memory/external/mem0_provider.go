@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -251,7 +252,7 @@ func (p *Mem0Provider) Prefetch(ctx context.Context, query string, opts ...Provi
 	if len(lines) == 0 {
 		return "", nil
 	}
-	result := "## Mem0 Memory\n" + joinLines(lines)
+	result := "## Mem0 Memory\n" + strings.Join(lines, "\n")
 	return result, nil
 }
 
@@ -485,7 +486,7 @@ func (p *Mem0Provider) handleProfile(ctx context.Context, client *mem0HTTPClient
 	}
 
 	b, _ := json.Marshal(map[string]any{
-		"result": joinLines(lines),
+		"result": strings.Join(lines, "\n"),
 		"count":  len(lines),
 	})
 	return string(b), nil
@@ -568,14 +569,3 @@ func (p *Mem0Provider) handleConclude(ctx context.Context, client *mem0HTTPClien
 	return string(b), nil
 }
 
-// joinLines 拼接多行文本。
-func joinLines(lines []string) string {
-	result := ""
-	for i, line := range lines {
-		if i > 0 {
-			result += "\n"
-		}
-		result += line
-	}
-	return result
-}

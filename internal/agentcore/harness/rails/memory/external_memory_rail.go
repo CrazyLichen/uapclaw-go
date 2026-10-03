@@ -49,7 +49,7 @@ type providerTool struct {
 //
 // Python: ExternalMemoryRail (openjiuwen/harness/rails/memory/external_memory_rail.py)
 type ExternalMemoryRail struct {
-	rails.DeepAgentRail
+	MemoryRail
 	// provider 外部记忆提供者
 	provider ext.MemoryProvider
 	// userID 用户标识
@@ -60,12 +60,6 @@ type ExternalMemoryRail struct {
 	sessionID string
 	// initialized 是否已初始化
 	initialized bool
-	// ownedToolNames 本 Rail 注册到 ability_manager 的工具名称集合
-	ownedToolNames map[string]struct{}
-	// ownedToolIDs 本 Rail 注册到 resource_mgr 的工具 ID 集合
-	ownedToolIDs map[string]struct{}
-	// systemPromptBuilder 系统提示词构建器引用
-	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// prefetchCache 预取缓存（指针区分空串和未缓存）
 	prefetchCache *string
 	// prefetchInvokeID 预取缓存对应的 invoke ID
@@ -124,14 +118,16 @@ func NewExternalMemoryRail(
 	userID, scopeID, sessionID string,
 ) *ExternalMemoryRail {
 	r := &ExternalMemoryRail{
-		DeepAgentRail:  *rails.NewDeepAgentRail(),
-		provider:       provider,
-		userID:         userID,
-		scopeID:        scopeID,
-		sessionID:      sessionID,
-		ownedToolNames: make(map[string]struct{}),
-		ownedToolIDs:   make(map[string]struct{}),
-		syncDone:       make(chan struct{}, 1),
+		MemoryRail: MemoryRail{
+			DeepAgentRail:  *rails.NewDeepAgentRail(),
+			ownedToolNames: make(map[string]struct{}),
+			ownedToolIDs:   make(map[string]struct{}),
+		},
+		provider:  provider,
+		userID:    userID,
+		scopeID:   scopeID,
+		sessionID: sessionID,
+		syncDone:  make(chan struct{}, 1),
 	}
 	// 初始标记 syncDone 已完成
 	r.syncDone <- struct{}{}
@@ -147,8 +143,11 @@ func (r *ExternalMemoryRail) Provider() ext.MemoryProvider {
 
 // Init 注册 Provider 工具 + 注入 system_prompt_block。
 // Python: ExternalMemoryRail.init(agent)
-func (r *ExternalMemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
-	r.systemPromptBuilder = agent.SystemPromptBuilder()
+func (r *ExternalMemoryRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent) error {
+	// 先调用基类 MemoryRail.Init 注册通用记忆工具
+	if err := r.MemoryRail.Init(ctx, agent); err != nil {
+		return err
+	}
 
 	// 注册 Provider 工具
 	r.registerProviderTools(agent)
@@ -173,7 +172,7 @@ func (r *ExternalMemoryRail) Init(_ context.Context, agent agentinterfaces.BaseA
 // Uninit 注销工具 + 关闭 Provider。
 // Python: ExternalMemoryRail.uninit(agent)
 func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
-	// 1. 从 ability_manager 移除工具
+	// 1. 从 ability_manager 移除 Provider 工具
 	// Python: for tool_name in list(self._owned_tool_names): agent.ability_manager.remove(tool_name)
 	am := agent.AbilityManager()
 	if am != nil {
@@ -192,7 +191,7 @@ func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 
-	// 2. 从 resource_mgr 移除工具
+	// 2. 从 resource_mgr 移除 Provider 工具
 	// Python: for tool_id in list(self._owned_tool_ids): Runner.resource_mgr.remove_tool(tool_id)
 	resourceMgr := runner.GetResourceMgr()
 	if resourceMgr != nil {
@@ -211,18 +210,17 @@ func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 
-	// 3. 清理状态
+	// 3. 清理 ExternalMemoryRail 自身状态
 	r.ownedToolNames = make(map[string]struct{})
 	r.ownedToolIDs = make(map[string]struct{})
 	r.initialized = false
 
-	// 4. 从 systemPromptBuilder 移除 section
+	// 4. 从 systemPromptBuilder 移除 ExternalMemory 相关 section
 	// Python: self.system_prompt_builder.remove_section(SectionName.EXTERNAL_MEMORY)
 	//         self.system_prompt_builder.remove_section(EXTERNAL_MEMORY_PREFETCH_SECTION)
 	if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.RemoveSection(sections.SectionExternalMemory)
 		r.systemPromptBuilder.RemoveSection(externalMemoryPrefetchSection)
-		r.systemPromptBuilder = nil
 	}
 
 	// 5. 通知 Provider 会话结束（在 Shutdown 之前，对齐 Python: on_session_end 语义）
@@ -247,6 +245,9 @@ func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			Err(err).
 			Msg("Provider shutdown 失败")
 	}
+
+	// 7. 调用基类 MemoryRail.Uninit 清理通用记忆工具
+	r.MemoryRail.Uninit(agent)
 
 	return nil
 }
@@ -464,7 +465,7 @@ func (r *ExternalMemoryRail) AfterInvoke(ctx context.Context, cbc *agentinterfac
 // GetCallbacks 覆盖基类回调映射。
 // Python: ExternalMemoryRail 隐式覆盖 before_invoke/before_model_call/after_invoke
 func (r *ExternalMemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
-	callbacks := r.DeepAgentRail.GetCallbacks()
+	callbacks := r.MemoryRail.GetCallbacks()
 
 	callbacks[agentinterfaces.CallbackBeforeInvoke] = func(ctx context.Context, railCtx any) error {
 		return r.BeforeInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))

@@ -346,18 +346,6 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// TODO(#9.runtime): 从 DeepAgentSpec 或 TeamMemberSpec 获取 persona
 	persona := ""
 	var teamPolicyRail *rails.TeamPolicyRail
-	teamPolicyRail = rails.NewTeamPolicyRail(
-		rails.WithPolicyRole(ctx.Role),
-		rails.WithPolicyPersona(persona),
-		rails.WithPolicyMemberName(ctx.MemberName),
-		rails.WithPolicyLifecycle(c.Lifecycle()),
-		rails.WithPolicyTeammateMode(string(spec.TeammateMode)),
-		rails.WithPolicyLanguage(resolvedLanguage),
-		rails.WithPolicyTeamMode(teamMode),
-		rails.WithPolicyBasePrompt(agentSpec.SystemPrompt),
-		rails.WithPolicyTeamBackend(c.TeamBackend()),
-		rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
-	)
 	if spec.Workspace != nil && c.WorkspaceManager() != nil {
 		teamPolicyRail = rails.NewTeamPolicyRail(
 			rails.WithPolicyRole(ctx.Role),
@@ -370,6 +358,19 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 			rails.WithPolicyBasePrompt(agentSpec.SystemPrompt),
 			rails.WithPolicyTeamWorkspaceMount("/.team/workspace"),
 			rails.WithPolicyTeamWorkspacePath(c.WorkspaceManager().WorkspacePath()),
+			rails.WithPolicyTeamBackend(c.TeamBackend()),
+			rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
+		)
+	} else {
+		teamPolicyRail = rails.NewTeamPolicyRail(
+			rails.WithPolicyRole(ctx.Role),
+			rails.WithPolicyPersona(persona),
+			rails.WithPolicyMemberName(ctx.MemberName),
+			rails.WithPolicyLifecycle(c.Lifecycle()),
+			rails.WithPolicyTeammateMode(string(spec.TeammateMode)),
+			rails.WithPolicyLanguage(resolvedLanguage),
+			rails.WithPolicyTeamMode(teamMode),
+			rails.WithPolicyBasePrompt(agentSpec.SystemPrompt),
 			rails.WithPolicyTeamBackend(c.TeamBackend()),
 			rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
 		)
@@ -400,7 +401,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 		wsRail = team_workspace.NewTeamWorkspaceRail(c.WorkspaceManager(), c.MemberName())
 	}
 	harness := agentteams.BuildTeamHarness(
-		nil, // TODO(#9.56): 构建规格
+		agentSpec,
 		string(ctx.Role),
 		ctx.MemberName,
 		teamToolRail,
