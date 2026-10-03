@@ -28,3 +28,7 @@ vendor/
 
 # 运行时 task 目录
 internal/agent_teams/tools/tasks/task_test-*/
+
+# SQLite 运行时产物
+*.db-shm
+*.db-wal
