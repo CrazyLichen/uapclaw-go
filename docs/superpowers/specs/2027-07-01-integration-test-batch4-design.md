@@ -252,4 +252,22 @@ type XxxRailSuite struct {
 
 | 文件 | 测试数 | 状态 |
 |------|--------|------|
-| — | — | 待实施 |
+| interrupt/confirm_rail_test.go（扩展） | 5（2 原有 + 3 新增） | ✅ |
+| subagent/subagent_rail_test.go | 3 | ✅ |
+| skills/skill_use_rail_test.go | 2 | ✅ |
+| planning/task_planning_rail_test.go | 3 | ✅ |
+| agent_mode/agent_mode_rail_test.go | 3 | ✅ |
+| heartbeat/heartbeat_rail_test.go | 2 | ✅ |
+| progressive/progressive_rail_test.go | 3 | ✅ |
+| sys_operation/sys_operation_rail_test.go | 3 | ✅ |
+| mcp/mcp_rail_test.go | 3 | ✅ |
+| context_engineer/context_engineer_rail_test.go | 3 | ✅ |
+| **合计** | **30** | **✅** |
+
+### 实施调整记录
+
+1. **interrupt 多工具选择性拦截**：InterruptResult 在子 goroutine 中 panic，无法被 recover 捕获。改用 AutoConfirm 验证拦截逻辑。
+2. **先 Invoke 触发 Init**：Rail Init 在 ensureInitialized（第一次 Invoke）时触发，所有检查 AbilityManager 工具注册的测试需先 Invoke。
+3. **TaskPlanningRail GetCallbacks 6 事件**：继承 DeepAgentRail 的 `before_task_iteration`，共 6 个（非设计文档中的 5 个）。
+4. **ContextProcessorRail GetCallbacks 7 事件**：继承 DeepAgentRail 的 `before_task_iteration` + `after_task_iteration`，共 7 个（非设计文档中的 5 个）。
+5. **AgentModeRail 默认模式**：Go 端为 `AgentModeNormal`（不是 Python 的 "code"）。
