@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 

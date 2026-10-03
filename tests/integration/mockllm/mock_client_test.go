@@ -12,14 +12,15 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MockClientSuite MockModelClient 集成测试套件
+// 注意：mockllm 是 suite 包的上游依赖，不可导入 suite 包（循环导入），
+// 因此直接内嵌 suite.Suite 而非 BaseIntegrationSuite
 type MockClientSuite struct {
-	isuite.BaseIntegrationSuite
+	suite.Suite
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

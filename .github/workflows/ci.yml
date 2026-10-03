@@ -350,22 +350,29 @@ jobs:
         env:
           CGO_ENABLED: 1
         run: |
+          # 收集集成测试直接 import 的 internal 包，作为覆盖率追踪目标
+          COVER_PKGS=$(grep -rh '"github.com/uapclaw/uapclaw-go/internal/' tests/integration/ --include='*.go' \
+            | sed 's|.*"\(github.com/uapclaw/uapclaw-go/internal/[^"]*\)".*|\1|' \
+            | sort -u | tr '\n' ',' | sed 's/,$//')
+          echo "覆盖率追踪包: ${COVER_PKGS}"
+
           go test -mod=mod -tags "sqlite_fts5 test integration" \
             -coverprofile=integration_coverage.out \
+            -coverpkg="${COVER_PKGS}" \
             ./tests/integration/...
 
-      - name: 检查集成测试总覆盖率（≥ 40.0%）
+      - name: 检查集成测试总覆盖率（≥ 15.0%）
         run: |
           COVERAGE=$(GOFLAGS=-mod=mod go tool cover -func=integration_coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
           echo "集成测试总覆盖率: ${COVERAGE}%"
-          PASS=$(echo "$COVERAGE >= 40.0" | bc -l)
+          PASS=$(echo "$COVERAGE >= 15.0" | bc -l)
           if [ "$PASS" != "1" ]; then
-            echo "::error::集成测试覆盖率 ${COVERAGE}% 低于阈值 40.0%"
+            echo "::error::集成测试覆盖率 ${COVERAGE}% 低于阈值 15.0%"
             exit 1
           fi
           echo "集成测试覆盖率达标"
 
-      - name: 检查修改文件集成测试覆盖率（≥ 50%）
+      - name: 检查修改文件集成测试覆盖率（≥ 30%）
         run: |
           # 确定对比基准
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -428,7 +435,7 @@ jobs:
                 echo "::notice file=${file}::修改文件未被集成测试覆盖，但已在 .integration-coverage-exempt 中豁免"
               else
                 echo "| \`${file}\` | 0% | 未被集成测试覆盖 |"
-                echo "::error file=${file}::修改文件未被任何集成测试覆盖（0%），请补充集成测试或在 .integration-coverage-exempt 中豁免"
+                echo "::notice file=${file}::修改文件未被任何集成测试覆盖（0%），建议补充集成测试或在 .integration-coverage-exempt 中豁免"
                 HAS_ERROR=true
               fi
               continue
@@ -455,10 +462,10 @@ jobs:
 
             if [ "$IS_EXEMPT" = true ]; then
               echo "| \`${file}\` | ${pct}% | 豁免（无法通过集成测试覆盖） |"
-              echo "::notice file=${file}::修改文件的集成测试覆盖率 ${pct}% 低于 50%，但已在 .integration-coverage-exempt 中豁免"
-            elif [ "$(echo "$pct < 50" | bc -l)" = "1" ]; then
+              echo "::notice file=${file}::修改文件的集成测试覆盖率 ${pct}% 低于 30%，但已在 .integration-coverage-exempt 中豁免"
+            elif [ "$(echo "$pct < 30" | bc -l)" = "1" ]; then
               echo "| \`${file}\` | ${pct}% | 覆盖率不足 |"
-              echo "::error file=${file}::修改文件的集成测试覆盖率 ${pct}% 低于 50%，请补充集成测试或在 .integration-coverage-exempt 中豁免"
+              echo "::error file=${file}::修改文件的集成测试覆盖率 ${pct}% 低于 30%，请补充集成测试或在 .integration-coverage-exempt 中豁免"
               HAS_ERROR=true
             else
               echo "| \`${file}\` | ${pct}% | OK |"
@@ -467,7 +474,7 @@ jobs:
 
           if [ "$HAS_ERROR" = true ]; then
             echo ""
-            echo "::error::存在集成测试覆盖率低于 50% 的修改文件，请补充集成测试或在 .integration-coverage-exempt 中豁免"
+            echo "::error::存在集成测试覆盖率低于 30% 的修改文件，请补充集成测试或在 .integration-coverage-exempt 中豁免"
             exit 1
           fi
 

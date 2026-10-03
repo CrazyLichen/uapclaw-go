@@ -84,7 +84,7 @@ func (s *ForbiddenSuite) TestForbiddenDoc_包引用验证() {
 
 // testdataBaseDir 指向原始 testdata 目录的绝对路径
 // 原位置：internal/swarm/agents/harness/common/memory/testdata/
-const testdataBaseDir = "../../../internal/swarm/agents/harness/common/memory/testdata"
+const testdataBaseDir = "../../../../internal/swarm/agents/harness/common/memory/testdata"
 
 // setupTestConfig 设置 UAPCLAW_DATA_DIR 指向 testdata 下的指定子目录
 func setupTestConfig(t *testing.T, scenario string) {

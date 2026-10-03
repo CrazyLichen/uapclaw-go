@@ -40,5 +40,5 @@ func (s *SkillManagerSuite) TestSkillManager_待补充() {
 func (s *SkillManagerSuite) TestSkillManagerDoc_包引用验证() {
 	// 验证 server 和 runner 包可正常导入
 	s.NotNil(runner.GetResourceMgr)
-	_ = server.Server{}
+	_ = server.AgentServer{}
 }
