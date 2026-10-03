@@ -1,4 +1,4 @@
-.PHONY: build clean test lint
+.PHONY: build clean test test-integration test-llm test-e2e test-all lint
 
 # 项目名称
 BINARY_NAME=uapclaw
@@ -40,6 +40,27 @@ test:
 test-cover:
 	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test" -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
+
+# 集成测试（Mock LLM + 真实逻辑，无需外部服务）
+test-integration:
+	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test integration" ./tests/integration/...
+
+# LLM 真实调用测试（需要 API Key 环境变量）
+test-llm:
+	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test llm" ./...
+
+# E2E 端到端测试
+test-e2e:
+	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test e2e" ./tests/e2e/...
+
+# 全量测试（单元 + 集成 + LLM，不含 e2e）
+test-all:
+	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test integration llm" ./... ./tests/integration/...
+
+# 集成测试覆盖率
+test-integration-cover:
+	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test integration" -coverprofile=integration_coverage.out ./tests/integration/...
+	$(GOCMD) tool cover -html=integration_coverage.out -o integration_coverage.html
 
 # 代码格式化
 fmt:
