@@ -628,6 +628,19 @@ func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[s
 			return nil
 		}
 		return provider
+	case "agentarts":
+		// 对齐 Python: agentarts provider 分支
+		baseURL := strVal(cfg["base_url"])
+		apiKey := strVal(cfg["api_key"])
+		spaceID := strVal(cfg["space_id"])
+		actorID := strVal(cfg["actor_id"])
+		assistantID := strVal(cfg["assistant_id"])
+		provider := ext.NewAgentArtsProvider(baseURL, apiKey, spaceID, actorID, assistantID, nil)
+		if !provider.IsAvailable() {
+			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: AgentArtsProvider unavailable")
+			return nil
+		}
+		return provider
 	default:
 		logger.Warn(logComponent).Str("provider", providerName).Msg("buildExternalMemoryProvider: unsupported provider type")
 		return nil

@@ -9,6 +9,8 @@
 //	external/
 //	├── doc.go                    # 包文档
 //	├── provider.go               # MemoryProvider 接口 + BaseMemoryProvider + ToolSchema + ProviderOption
+//	├── agentarts_client.go       # AgentArts HTTP 客户端（REST API 封装：searchMemories/createMemorySession/addMessages）
+//	├── agentarts_provider.go     # AgentArtsProvider — MemoryProvider 的 AgentArts 实现（session 映射+consecutiveFailures 计数）
 //	├── mem0_client.go            # Mem0 HTTP 客户端（REST API 封装：search/getAll/add）
 //	├── mem0_provider.go          # Mem0Provider — MemoryProvider 的 Mem0 实现（熔断器+工具调用）
 //	├── openjiuwen_provider.go    # OpenJiuwenProvider — MemoryProvider 的 openjiuwen LTM 实现（全局单例+双模式构造）
