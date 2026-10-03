@@ -63,8 +63,8 @@ func NewDistributedLock(store kv.BaseKVStore, lockName string) *DistributedLock 
 //
 // Python: DistributedLock.acquire()
 func (l *DistributedLock) Acquire(ctx context.Context) error {
-	l.lockValue = uuid.New().String()
 	for {
+		l.lockValue = uuid.New().String()
 		ok, err := l.store.ExclusiveSet(ctx, l.lockKey, []byte(l.lockValue), l.ttl)
 		if err != nil {
 			return err

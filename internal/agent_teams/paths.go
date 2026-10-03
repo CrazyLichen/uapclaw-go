@@ -74,4 +74,14 @@ func DefaultTeamMemoryDir(teamName string) string {
 	return filepath.Join(TeamHome(teamName), "team-workspace", "team-memory")
 }
 
+// IndependentMemberWorkspace 返回成员独立工作空间路径。
+// Python: independent_member_workspace(member_name)
+//
+// 布局：{GetHome()}/{member_name}_workspace/
+// 当 WorkspaceSpec.StableBase 为 true 时，symlink 从
+// {TeamHome(teamName)}/workspaces/{member_name}_workspace/ 指向此处。
+func IndependentMemberWorkspace(memberName string) string {
+	return filepath.Join(GetHome(), memberName+"_workspace")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

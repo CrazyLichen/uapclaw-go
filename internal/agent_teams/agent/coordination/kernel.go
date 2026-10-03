@@ -176,7 +176,7 @@ func (k *CoordinationKernel) Start(ctx context.Context, session ...any) {
 	logger.Info(logComponent).Str("member_name", memberName).Msg("coordination starting")
 
 	// 步骤 1: setMemberId
-	k.host.SetMemberID(memberName)
+	ctx = k.host.SetMemberID(ctx, memberName)
 
 	// 步骤 2: DB 初始化
 	backendAccessor := k.host.TeamBackendAccessor()
@@ -314,7 +314,7 @@ func (k *CoordinationKernel) Pause(ctx context.Context) {
 	}
 
 	// 步骤 8: Unsubscribe transport
-	_ = k.host.UnsubscribeTransport()
+	_ = k.host.UnsubscribeTransport(ctx)
 
 	// 步骤 9: 停止事件总线
 	if k.eventBus != nil {
@@ -358,7 +358,7 @@ func (k *CoordinationKernel) Stop(ctx context.Context) {
 	}
 
 	// 步骤 4: Unsubscribe transport
-	_ = k.host.UnsubscribeTransport()
+	_ = k.host.UnsubscribeTransport(ctx)
 
 	// 步骤 5: 取消恢复任务（所有角色，非 Leader 专有）
 	// 修复 S-07: 对齐 Python: await host.spawn_manager.cancel_recovery_tasks()

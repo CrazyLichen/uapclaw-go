@@ -24,6 +24,10 @@ type SessionState struct {
 // sessionStateKeyType SessionState 的 context key 类型。
 type sessionStateKeyType struct{}
 
+// memberIDKeyType 成员 ID 的 context key 类型。
+// 对齐 Python: _member_id_context (contextvars.ContextVar)
+type memberIDKeyType struct{}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -77,4 +81,21 @@ func (s *SessionState) SetSessionID(sessionID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessionID = sessionID
+}
+
+// WithMemberID 将成员 ID 注入 context。
+// 对齐 Python: set_member_id(member_name) — Python 用 contextvars.ContextVar，
+// Go 通过 context.WithValue 传播，返回新 ctx 供下游使用。
+func WithMemberID(ctx context.Context, memberName string) context.Context {
+	return context.WithValue(ctx, memberIDKeyType{}, memberName)
+}
+
+// MemberIDFromCtx 从 context 中获取成员 ID。
+// 返回空字符串表示当前 context 未绑定成员 ID。
+// 对齐 Python: get_member_id()
+func MemberIDFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(memberIDKeyType{}).(string); ok {
+		return v
+	}
+	return ""
 }

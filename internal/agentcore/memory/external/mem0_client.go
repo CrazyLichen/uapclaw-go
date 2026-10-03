@@ -109,9 +109,23 @@ func newMem0HTTPClient(apiKey string, baseURL string) *mem0HTTPClient {
 func unwrapResults(data []byte) ([]mem0MemoryItem, error) {
 	// 先尝试 dict 格式
 	// 对齐 Python: isinstance(response, dict) → response.get("results", [])
-	// 仅检查 unmarshal 成功，空 results 列表也是合法的 dict 格式
 	var dictResp mem0SearchResponse
 	if err := json.Unmarshal(data, &dictResp); err == nil {
+		if dictResp.Results != nil {
+			return dictResp.Results, nil
+		}
+		// dict 解析成功但 Results 为 nil，检查原始 JSON 是否包含 "results" 键
+		// 如果不包含 "results" 键，说明可能是 list 格式被误解析为空 dict
+		var rawCheck map[string]json.RawMessage
+		if json.Unmarshal(data, &rawCheck) == nil {
+			if _, hasResults := rawCheck["results"]; !hasResults {
+				// 原始 JSON 不含 "results" 键，尝试 list 格式
+				var listResp []mem0MemoryItem
+				if err := json.Unmarshal(data, &listResp); err == nil {
+					return listResp, nil
+				}
+			}
+		}
 		return dictResp.Results, nil
 	}
 	// 再尝试 list 格式

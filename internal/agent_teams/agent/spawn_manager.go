@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
@@ -33,6 +34,8 @@ type SpawnManager struct {
 	configurator *AgentConfigurator
 	// getTeamAgent 获取当前 TeamAgent 实例的闭包
 	getTeamAgent func() *TeamAgent
+	// baseCtx 基础上下文，用于替代 context.Background()
+	baseCtx context.Context
 	// spawnedHandles 已生成的句柄，key=memberName
 	spawnedHandles map[string]spawn.SpawnHandle
 	// recoveryCancel 恢复任务取消函数，key=memberName
@@ -70,6 +73,7 @@ func NewSpawnManager(
 		state:          state,
 		configurator:   configurator,
 		getTeamAgent:   teamAgentGetter,
+		baseCtx:        context.Background(),
 		spawnedHandles: make(map[string]spawn.SpawnHandle),
 		recoveryCancel: make(map[string]context.CancelFunc),
 	}
@@ -263,7 +267,7 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		err := m.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)
 		if err == nil {
-			m.PublishRestartEvent(memberName, attempt)
+			m.PublishRestartEvent(ctx, memberName, attempt)
 			logger.Info(spawnLogComponent).
 				Str("member_name", memberName).
 				Int("attempt", attempt).
@@ -295,21 +299,22 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 // Python: SpawnManager.on_teammate_unhealthy(member_name)
 func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 	logger.Warn(spawnLogComponent).
+		Str("event_type", "TEAM_RESTART").
 		Str("member_name", memberName).
 		Msg("teammate 不健康，尝试重启")
 
 	// Python: await self.cleanup_teammate(member_name)
-	m.CleanupTeammate(context.Background(), memberName)
+	m.CleanupTeammate(m.baseCtx, memberName)
 
 	// Python: await db.update_member_status(member_name, MemberStatus.RESTARTING)
 	backend := m.configurator.TeamBackend()
 	if backend != nil {
-		backend.DB().Member().UpdateMemberStatus(context.Background(), memberName, backend.TeamName(),
+		backend.DB().Member().UpdateMemberStatus(m.baseCtx, memberName, backend.TeamName(),
 			string(atschema.MemberStatusRestarting))
 	}
 
 	// 在独立 goroutine 中重启，避免阻塞健康检查
-	recoverCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	recoverCtx, cancel := context.WithTimeout(m.baseCtx, 60*time.Second)
 
 	m.mu.Lock()
 	m.recoveryCancel[memberName] = cancel
@@ -351,7 +356,12 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 	}
 
 	// 解析 model_ref_json → resolveMemberModelFromDB
-	_ = resolveMemberModelFromDB(m.configurator, teammate.ModelRefJSON) // TODO(#9.64): 接入 MemberModel
+	var memberModel *models.TeamModelConfig
+	if raw := resolveMemberModelFromDB(m.configurator, teammate.ModelRefJSON); raw != nil {
+		if mm, ok := raw.(*models.TeamModelConfig); ok {
+			memberModel = mm
+		}
+	}
 
 	// 从 configurator 继承 team_spec、db_config 等
 	runtimeCtx := m.configurator.RuntimeContext()
@@ -363,25 +373,38 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 		role = atschema.TeamRoleTeammate
 	}
 
+	// 构建成员 MessagerConfig（对齐 Python: build_member_messager_config）
+	var messagerConfig *atschema.MessagerTransportConfig
+	if m.configurator != nil {
+		messagerConfig = m.configurator.BuildMemberMessagerConfig(memberName)
+	}
+
 	return atschema.TeamRuntimeContext{
-		Role:        role,
-		MemberName:  teammate.MemberName,
-		Persona:     teammate.Desc,
-		TeamSpec:    runtimeCtx.TeamSpec,
-		DBConfig:    runtimeCtx.DBConfig,
-		MemberModel: nil, // TODO(#9.64): resolveMemberModelFromDB 返回 *models.TeamModelConfig
+		Role:           role,
+		MemberName:     teammate.MemberName,
+		Persona:        teammate.Desc,
+		TeamSpec:       runtimeCtx.TeamSpec,
+		DBConfig:       runtimeCtx.DBConfig,
+		MemberModel:    memberModel,
+		MessagerConfig: messagerConfig,
 	}, nil
 }
 
 // PublishRestartEvent 发布重启事件。
 // Python: SpawnManager.publish_restart_event(member_name, restart_count)
-// ⤵️ 预留：Messager（9.65）实现后回填
-func (m *SpawnManager) PublishRestartEvent(memberName string, restartCount int) {
-	// TODO(#9.65): 通过 Messager 发布 MemberRestartedEvent
+func (m *SpawnManager) PublishRestartEvent(ctx context.Context, memberName string, restartCount int) {
+	if m.configurator != nil && m.configurator.Messager() != nil {
+		// 对齐 Python: publish MemberRestartedEvent via Messager
+		// ⤵️ 9.65: 完整事件构造待 Messager 事件协议回填
+		logger.Debug(spawnLogComponent).
+			Str("member_name", memberName).
+			Int("restart_count", restartCount).
+			Msg("PublishRestartEvent: Messager 发布待回填")
+	}
 	logger.Debug(spawnLogComponent).
 		Str("member_name", memberName).
 		Int("restart_count", restartCount).
-		Msg("PublishRestartEvent 当前为 no-op（TODO #9.65）")
+		Msg("PublishRestartEvent 已记录")
 }
 
 // ShutdownAllHandles 关闭所有已生成的句柄。
@@ -440,18 +463,19 @@ func (m *SpawnManager) spawnInprocess(
 	sessionID string,
 ) (*spawn.InProcessSpawnHandle, error) {
 	// 构建工厂函数（对齐 Python: _TeamAgent(card) + teammate.configure(spec, ctx)）
-	factory := func(ctx atschema.TeamRuntimeContext) (spawn.SpawnableAgent, error) {
+	// 注意：闭包参数重命名为 runtimeCtxParam，避免遮蔽外层 ctx context.Context
+	factory := func(runtimeCtxParam atschema.TeamRuntimeContext) (spawn.SpawnableAgent, error) {
 		// Python: agent_spec = spec.agents.get(ctx.role.value) or spec.agents["leader"]
 		spec := m.configurator.Spec()
-		agentSpec := ResolveAgentSpec(*spec, ctx.Role, ctx.MemberName)
+		agentSpec := ResolveAgentSpec(*spec, runtimeCtxParam.Role, runtimeCtxParam.MemberName)
 
 		// Python: card = agent_spec.card or AgentCard(...)
 		card := agentSpec.Card
 		if card == nil {
 			card = agentschema.NewAgentCard(
-				agentschema.WithAgentID(fmt.Sprintf("%s_%s", spec.TeamName, ctx.MemberName)),
-				agentschema.WithAgentName(ctx.MemberName),
-				agentschema.WithAgentDescription(fmt.Sprintf("Teammate: %s", ctx.Persona)),
+				agentschema.WithAgentID(fmt.Sprintf("%s_%s", spec.TeamName, runtimeCtxParam.MemberName)),
+				agentschema.WithAgentName(runtimeCtxParam.MemberName),
+				agentschema.WithAgentDescription(fmt.Sprintf("Teammate: %s", runtimeCtxParam.Persona)),
 			)
 		}
 
@@ -459,7 +483,8 @@ func (m *SpawnManager) spawnInprocess(
 		teammate := NewTeamAgent(card)
 
 		// Python: teammate.configure(spec, ctx)
-		teammate.Configure(context.Background(), *spec, ctx)
+		// 修复 M-04：使用外层 ctx（context.Context）而非 context.Background()
+		teammate.Configure(ctx, *spec, runtimeCtxParam)
 
 		return teammate, nil
 	}

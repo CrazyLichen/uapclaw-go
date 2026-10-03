@@ -407,6 +407,22 @@ func (r *ExternalMemoryRail) AfterInvoke(ctx context.Context, cbc *agentinterfac
 
 	go func() {
 		defer close(done)
+		// 捕获 rail 引用，避免 recover 中变量名遮蔽
+		rail := r
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Warn(extMemoryLogComponent).
+					Any("recover", rec).
+					Str("event_type", "external_memory_rail_sync_panic").
+					Msg("AfterInvoke sync goroutine panic recovered")
+				rail.syncMu.Lock()
+				rail.syncConsecutiveFailures++
+				if rail.syncConsecutiveFailures >= externalMemorySyncBreakerThreshold {
+					rail.syncBreakerUntil = time.Now().Add(externalMemorySyncBreakerCooldown)
+				}
+				rail.syncMu.Unlock()
+			}
+		}()
 		// 修复 S-32: 使用 context.WithoutCancel 隔离请求生命周期
 		// Python 中 asyncio.create_task 创建的协程不受请求 context 影响，
 		// Go 的 context.WithoutCancel(ctx) 实现等价效果：请求取消后 SyncTurn 继续执行
@@ -604,7 +620,13 @@ func (r *ExternalMemoryRail) registerProviderTools(agent agentinterfaces.BaseAge
 					}
 				}()
 				existing, err := resourceMgr.GetTool([]string{pt.Card().ID})
-				if err != nil || len(existing) == 0 {
+				if err != nil {
+					logger.Warn(extMemoryLogComponent).
+						Str("event_type", "external_memory_rail_register_tools").
+						Str("tool_id", pt.Card().ID).
+						Err(err).
+						Msg("查询 resource_mgr 已有工具失败，跳过注册")
+				} else if len(existing) == 0 {
 					if addErr := resourceMgr.AddTool(pt); addErr != nil {
 						logger.Warn(extMemoryLogComponent).
 							Str("event_type", "external_memory_rail_register_tools").

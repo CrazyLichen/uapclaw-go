@@ -69,7 +69,7 @@ func (d *DeepAdapter) handleSlashCommand(ctx context.Context, query string, sess
 // 返回空字符串表示可用，非空表示错误信息。
 func (d *DeepAdapter) ensureEvolutionRailForSlash(mode string) string {
 	if mode != "agent.plan" {
-		return "agent 模式下演进功能不可用。"
+		return "当前模式下演进功能不可用，仅 agent.plan 模式支持。"
 	}
 	evolutionConfig, _ := d.configCache["evolution"].(map[string]any)
 	enabled, _ := evolutionConfig["enabled"].(bool)

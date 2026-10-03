@@ -54,12 +54,12 @@ func (f *fakeKernelHost) MemoryManager() *memory.TeamMemoryManager            { 
 func (f *fakeKernelHost) HarnessAccessor() types.HarnessAccessor              { return nil }
 func (f *fakeKernelHost) SpecAny() any                                        { return nil }
 func (f *fakeKernelHost) SubscribeTransport(_ context.Context) error          { return nil }
-func (f *fakeKernelHost) UnsubscribeTransport() error                         { return nil }
+func (f *fakeKernelHost) UnsubscribeTransport(_ context.Context) error          { return nil }
 func (f *fakeKernelHost) PersistAllocatorState()                              {}
 func (f *fakeKernelHost) DrainAgentTask(_ context.Context)                    {}
 func (f *fakeKernelHost) MarkLiveTeammates(_ context.Context, _ string) error { return nil }
 func (f *fakeKernelHost) CloseStream()                                        {}
-func (f *fakeKernelHost) SetMemberID(_ string)                                {}
+func (f *fakeKernelHost) SetMemberID(ctx context.Context, _ string) context.Context { return ctx }
 func (f *fakeKernelHost) Lifecycle() string                                   { return "temporary" }
 func (f *fakeKernelHost) CancelRecoveryTasks()                                {}
 func (f *fakeKernelHost) ShutdownAllHandles(_ context.Context)                {}

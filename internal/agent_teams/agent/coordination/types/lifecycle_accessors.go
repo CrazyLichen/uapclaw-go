@@ -121,7 +121,7 @@ type TransportAccessor interface {
 	// SubscribeTransport 订阅团队传输主题
 	SubscribeTransport(ctx context.Context) error
 	// UnsubscribeTransport 取消订阅
-	UnsubscribeTransport() error
+	UnsubscribeTransport(ctx context.Context) error
 	// PublishTeamEvent 发布团队事件到 TEAM 主题
 	// 对齐 Python: messager.publish(TeamTopic.TEAM.build(session_id, team_name), EventMessage.from_event(event))
 	PublishTeamEvent(ctx context.Context, eventType string, payload map[string]any) error
@@ -138,8 +138,9 @@ type LifecycleAccessor interface {
 	MarkLiveTeammates(ctx context.Context, status string) error
 	// CloseStream 关闭流
 	CloseStream()
-	// SetMemberID 设置成员 ID 上下文
-	SetMemberID(name string)
+	// SetMemberID 设置成员 ID 上下文，返回携带成员 ID 的新 context
+	// 对齐 Python: set_member_id(member_name) — Python 用 ContextVar，Go 用 context.WithValue
+	SetMemberID(ctx context.Context, name string) context.Context
 	// Lifecycle 返回生命周期模式
 	Lifecycle() string
 	// CancelRecoveryTasks 取消所有恢复任务

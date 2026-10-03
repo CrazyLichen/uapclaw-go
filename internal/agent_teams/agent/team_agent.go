@@ -42,7 +42,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"time"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
@@ -412,7 +411,11 @@ func (a *TeamAgent) UpdateStatus(ctx context.Context, status atschema.MemberStat
 // PersistAllocatorState 持久化模型分配器状态到当前会话。
 // Python: TeamAgent.persist_allocator_state()
 func (a *TeamAgent) PersistAllocatorState() {
-	// TODO(#9.64): 委托 _persistAllocatorState()
+	if a.recoveryManager != nil {
+		if sf, ok := a.sessionManager.TeamSession().(sessinterfaces.SessionFacade); ok {
+			a.recoveryManager.PersistAllocatorState(sf)
+		}
+	}
 }
 
 // AddEventListener 添加事件监听器，返回可移除的句柄。
@@ -1095,6 +1098,10 @@ func (a *TeamAgent) PersistSessionManifest(session any) {
 // UpdateModelPool 更新模型池。
 // Python: TeamAgent.update_model_pool(new_pool)
 func (a *TeamAgent) UpdateModelPool(newPool []models.ModelPoolEntry) {
+	// 对齐 Python: if self.role != TeamRole.LEADER: return
+	if a.configurator != nil && a.configurator.Role() != atschema.TeamRoleLeader {
+		return
+	}
 	if a.configurator != nil {
 		a.configurator.UpdateModelPool(newPool)
 	}
@@ -1342,7 +1349,7 @@ func (a *TeamAgent) SubscribeTransport(ctx context.Context) error {
 // 2. 逐个取消订阅所有已订阅的 topics
 // 3. 清空 subscribedTopics
 // 4. 传递 ctx 而非 context.Background()
-func (a *TeamAgent) UnsubscribeTransport() error {
+func (a *TeamAgent) UnsubscribeTransport(ctx context.Context) error {
 	if a.configurator == nil {
 		return nil
 	}
@@ -1350,7 +1357,6 @@ func (a *TeamAgent) UnsubscribeTransport() error {
 	if mgr == nil {
 		return nil
 	}
-	ctx := context.Background()
 	// 对齐 Python: messager.unregister_direct_message_handler()
 	_ = mgr.UnregisterDirectMessageHandler(ctx)
 
@@ -1395,14 +1401,8 @@ func (a *TeamAgent) PublishTeamEvent(ctx context.Context, eventType string, payl
 // 满足 types.LifecycleAccessor 接口。
 // 对齐 Python: drain_agent_task()
 func (a *TeamAgent) DrainAgentTask(ctx context.Context) {
-	// 当前简化实现：等待飞行中的 round 完成
-	// TODO(#9.60): 通过 StreamController.WaitForRoundCompletion 实现
-	if a.streamController != nil && a.streamController.HasInFlightRound() {
-		// 等待一段合理时间让当前 round 完成
-		select {
-		case <-ctx.Done():
-		case <-time.After(30 * time.Second):
-		}
+	if a.streamController != nil {
+		_ = a.streamController.DrainAgentTask(ctx)
 	}
 }
 
@@ -1458,15 +1458,14 @@ func (a *TeamAgent) CloseStream() {
 
 // SetMemberID 设置成员 ID 上下文。
 // 满足 types.LifecycleAccessor 接口。
-// 对齐 Python: set_member_id(member_name)
-func (a *TeamAgent) SetMemberID(name string) {
-	// Python: 通过 contextvar 设置，Go 端通过 SessionState 传播
-	// 当前仅记录日志
+// 对齐 Python: set_member_id(member_name) — Python 用 ContextVar，Go 用 context.WithValue
+func (a *TeamAgent) SetMemberID(ctx context.Context, name string) context.Context {
 	memberName := name
 	if memberName == "" {
 		memberName = a.MemberName()
 	}
 	logger.Debug(logComponent).Str("member_name", memberName).Msg("SetMemberID")
+	return sessionctx.WithMemberID(ctx, memberName)
 }
 
 // CancelRecoveryTasks 取消所有恢复任务。

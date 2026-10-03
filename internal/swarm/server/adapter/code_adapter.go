@@ -410,7 +410,9 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 		logger.Warn(logComponent).Err(regErr).Msg("MCP service registration (code mode) failed, continuing")
 	}
 
-	// 步骤 24: ⤵️ 10.6.3-10: load_user_rails()
+	// 步骤 24: load_user_rails()
+	// Python: await self.load_user_rails()
+	c.deep.loadUserRails()
 
 	// 存储 mode/subMode
 	c.deep.mode = mode

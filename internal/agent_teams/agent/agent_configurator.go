@@ -197,8 +197,17 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	c.spawnPayloadBuilder = NewSpawnPayloadBuilder(spec, ctx)
 
 	// 5. MessagerConfig 调整 + CreateMessager
-	// TODO(#9.65): messagerConfig 节点 ID 调整 + CreateMessager(messagerConfig)
-	// 待实现：c.SetMessager(createMessager(messagerConfig))
+	// ⤴️ 9.65 回填完成：使用 messagerConfig 创建 Messager
+	if ctx.Role == atschema.TeamRoleLeader {
+		messagerConfig := c.BuildMemberMessagerConfig(ctx.MemberName)
+		if messagerConfig != nil {
+			if msgr, err := messager.CreateMessager(*messagerConfig); err == nil {
+				c.SetMessager(msgr)
+			} else {
+				logger.Warn(logComponent).Err(err).Msg("CreateMessager 失败，继续无 Messager 模式")
+			}
+		}
+	}
 
 	// 6. 工作空间管理器
 	// ⤴️ 9.66 回填完成：创建并设置工作空间管理器
@@ -209,12 +218,19 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 7. 模型分配器（仅 leader）
 	// ⤴️ 9.64 回填完成：模型分配器
-	_ = ctx.Role
+	if ctx.Role == atschema.TeamRoleLeader && ctx.TeamSpec != nil && len(ctx.TeamSpec.ModelPool) > 0 {
+		allocator := models.BuildModelAllocatorForPool(ctx.TeamSpec.ModelPool, ctx.TeamSpec.ModelPoolStrategy, c.TeamName())
+		if allocator != nil {
+			c.SetModelAllocator(allocator)
+		}
+	}
 
 	// 8. 团队后端
 	// ⤴️ 9.58 回填完成：团队后端
-	// 注意：步骤 9 的 CreateWorktreeManager 依赖 c.TeamBackend()，
-	// TeamBackend 未实现时 eventHandler 为 nil，worktree 事件不会桥接到 team_events。
+	// 对齐 Python: self.setup_team_backend(spec, ctx, messager, ...)
+	if c.Messager() != nil {
+		c.SetupTeamBackend(spec, ctx, c.Messager())
+	}
 
 	// 9. 工作树管理器（仅非 leader）
 	// ⤴️ 9.66a 回填完成：工作树管理器初始化 + 事件镜像回调
@@ -243,23 +259,45 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 3. workspace 路径解析 + symlink
 	// ⤴️ 9.66 回填完成：工作空间初始化
+	// M-13: stable_base 解析（对齐 Python: workspace.stable_base）
+	resolvedRootPath := ""
+	if spec.Workspace != nil {
+		resolvedRootPath = spec.Workspace.RootPath
+	}
+	// StableBase 从 agentSpec.Workspace（WorkspaceSpec）中读取
+	if agentSpec.Workspace != nil && agentSpec.Workspace.StableBase && resolvedRootPath == "" {
+		// 对齐 Python: workspace.root_path = str(independent_member_workspace(member_name))
+		resolvedRootPath = agentteams.IndependentMemberWorkspace(ctx.MemberName)
+	} else if resolvedRootPath == "" && spec.Workspace != nil {
+		// 对齐 Python: workspace.root_path = str(team_home(team_name) / "team-workspace")
+		resolvedRootPath = filepath.Join(agentteams.TeamHome(c.TeamName()), "team-workspace")
+	}
 	if c.WorkspaceManager() != nil && !c.WorkspaceInitialized() {
 		if err := c.WorkspaceManager().Initialize(context.Background()); err != nil {
 			logger.Error(logComponent).Err(err).Msg("Workspace initialization failed")
 		} else {
 			c.SetWorkspaceInitialized(true)
 		}
+		// stable_base: 创建 symlink（对齐 Python: workspace_manager.link_team）
+		if agentSpec.Workspace != nil && agentSpec.Workspace.StableBase {
+			teamWsDir := filepath.Join(agentteams.TeamHome(c.TeamName()), "workspaces", ctx.MemberName+"_workspace")
+			if err := os.MkdirAll(filepath.Dir(teamWsDir), 0o755); err == nil {
+				_ = os.Symlink(resolvedRootPath, teamWsDir)
+			}
+		}
 	}
 
 	// 4. 团队后端注册清理路径
 	// ⤴️ 9.58 回填完成：团队后端工作空间路径
+	if c.TeamBackend() != nil && resolvedRootPath != "" {
+		c.TeamBackend().RegisterCleanupPath(resolvedRootPath)
+	}
 
 	// 5. 工作空间管理器挂载路径
-	// 5. 工作空间管理器挂载路径
 	// ⤴️ 9.66 回填完成：MountIntoWorkspace
-	if c.WorkspaceManager() != nil && spec.Workspace.RootPath != "" {
-		if err := c.WorkspaceManager().MountIntoWorkspace(spec.Workspace.RootPath); err != nil {
-			logger.Error(logComponent).Err(err).Str("root_path", spec.Workspace.RootPath).Msg("Workspace mount failed")
+	if c.WorkspaceManager() != nil && resolvedRootPath != "" {
+		if err := c.WorkspaceManager().MountIntoWorkspace(resolvedRootPath); err != nil {
+			logger.Error(logComponent).Err(err).Str("root_path", resolvedRootPath).Msg("Workspace mount failed")
 		}
 	}
 
@@ -376,7 +414,11 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	c.SetHarness(harness)
 
 	// 16. 记忆管理器
-	// TODO(#9.64): 设置记忆管理器 c.SetMemoryManager(...)
+	// ⤴️ 9.64 回填完成：构建并设置记忆管理器
+	memMgr := c.BuildMemoryManager(spec, ctx, agentSpec, resolvedLanguage, ctx.MemberName)
+	if memMgr != nil {
+		c.SetMemoryManager(memMgr)
+	}
 
 	// 17. 自定义配置器
 	// ⤴️ 9.68 回填完成：运行自定义配置器

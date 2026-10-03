@@ -31,16 +31,18 @@ func CreateMemberHandle(
 	infra *TeamInfra,
 	agentCard *agentschema.AgentCard,
 ) *TeamMember {
-	// TODO(#9.57): infra.TeamBackend 为 nil 时返回 nil
-	// TODO(#9.57): 从 infra.TeamBackend 获取 db/messager/team_name 构造 TeamMember
 	if infra.TeamBackend == nil {
 		return nil
 	}
 	return &TeamMember{
 		MemberName:  memberName,
+		TeamName:    infra.TeamBackend.TeamName(),
 		DisplayName: memberName,
 		AgentCard:   agentCard,
-		Desc:        blueprint.Ctx.Persona,
+		DB:          infra.TeamBackend.DB(),
+		// Messager 通过 AgentConfigurator.Messager() 单独注入，
+		// TeamBackend 未暴露 messager.Messager 接口
+		Desc: blueprint.Ctx.Persona,
 	}
 }
 
