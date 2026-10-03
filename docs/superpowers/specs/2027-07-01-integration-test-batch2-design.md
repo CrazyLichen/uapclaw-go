@@ -303,3 +303,44 @@ type ConfirmInterruptRailSuite struct {
 | Suite 共享状态 | 每个测试方法独立 SetResponses | 避免 testify suite 方法间响应队列干扰 |
 | CustomPredicateEvaluator | 跳过 | Go 端尚未实现 |
 | 交付方式 | 三批交付 | 基础层 → 核心层 → 扩展层 |
+
+---
+
+## 10. 实施状态
+
+### 第一交：基础层
+
+| 步骤 | 状态 | 说明 |
+|------|------|------|
+| 补全 SessionSuite.NewTestSession() | ✅ | 按需创建，返回 *session.Session |
+| Runner 生命周期集成测试 | ✅ | 5 个测试场景 |
+| Session doc.go | ✅ | 包文档 |
+| Session 生命周期集成测试 | ✅ | 8 个测试场景 |
+
+### 第二交：核心层
+
+| 步骤 | 状态 | 说明 |
+|------|------|------|
+| 补全 AgentSuite.NewDeepAgentForTest() | ✅ | 工厂模式，预填 MockLLM Model |
+| 工具注册与执行集成测试 | ✅ | 4 个测试场景 |
+| DeepAgent ReAct 循环集成测试 | ✅ | 6 个测试场景 |
+| 修复 BaseSecurityRail Go embedding 虚方法派发 bug | ✅ | 添加 securityCheckFn 函数指针，SafetyPromptRail 构造时注入 |
+
+### 第三交：扩展层
+
+| 步骤 | 状态 | 说明 |
+|------|------|------|
+| TaskCompletionRail 集成测试 | ✅ | 4 个测试场景 |
+| ConfirmInterruptRail 集成测试 | ✅ | 2 个测试场景（完整中断/恢复待 HITL 回填） |
+
+### 测试总计
+
+| 模块 | 测试数 | 状态 |
+|------|--------|------|
+| Runner 生命周期 | 5 | ✅ |
+| Session 生命周期 | 8 | ✅ |
+| 工具注册与执行 | 4 | ✅ |
+| DeepAgent ReAct 循环 | 6 | ✅ |
+| TaskCompletionRail | 4 | ✅ |
+| ConfirmInterruptRail | 2 | ✅ |
+| **合计** | **29** | **全部 PASS** |
