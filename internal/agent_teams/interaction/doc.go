@@ -15,6 +15,7 @@
 //	interaction/
 //	├── doc.go                # 包文档
 //	├── payload.go            # 载荷类型（GodViewMessage/OperatorMessage/HumanAgentMessage/InteractPayload/DeliverResult/HumanAgentInboundEvent）
+//	├── interact_input.go     # InteractInput 统一交互输入类型
 //	├── router.go             # 输入解析器（ParseInteractStr/ParseMention/IsReservedName/ResolveTargets/DeliverDirect）
 //	├── user_inbox.go         # 用户侧收件箱（UserInbox）
 //	└── human_agent_inbox.go  # Human-Agent 收件箱（HumanAgentInbox + 错误类型）

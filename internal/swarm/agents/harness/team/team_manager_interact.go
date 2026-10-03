@@ -3,6 +3,7 @@ package team
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -22,7 +23,8 @@ import (
 //
 // Go 差异：Python 委托 Runner.interact_agent_team → TeamRuntimeManager.interact，
 // Go 直接调 TeamRuntimeManager.Interact（省略 Runner 桥接层）。
-func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput any) (bool, error) {
+// Python user_input 类型为 Any；Go 端统一为 *InteractInput，外层自行包装。
+func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput *interaction.InteractInput) (bool, error) {
 	m.mu.Lock()
 	if m.activeSessionID == nil || *m.activeSessionID != sessionID || m.activeTeamName == nil {
 		logger.Warn(logComponent).
@@ -37,7 +39,12 @@ func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput 
 	m.mu.Unlock()
 
 	mgr := runtime.GetTeamRuntimeManager()
-	result, err := mgr.Interact(ctx, userInput, teamName, sessionID)
+	// 提取 InteractInput.Raw 传递给 TeamRuntimeManager.Interact
+	var rawPayload any
+	if userInput != nil {
+		rawPayload = userInput.Raw
+	}
+	result, err := mgr.Interact(ctx, rawPayload, teamName, sessionID)
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("session_id", sessionID).
