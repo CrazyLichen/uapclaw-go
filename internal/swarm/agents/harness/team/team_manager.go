@@ -8,7 +8,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -33,7 +35,7 @@ type LiveRailEntry struct {
 	// Agent Rail 所属的 Agent
 	Agent interfaces.DeepAgentInterface
 	// Rail Rail 实例
-	Rail any
+	Rail agentinterfaces.AgentRail
 }
 
 // SkillSyncTarget 技能同步目录对。
@@ -76,8 +78,9 @@ type TeamWorkspaceInfo struct {
 	TeamID *string
 	// Config 配置字典
 	Config map[string]any
-	// TrajectoryRegistry 轨迹注册表
-	TrajectoryRegistry any // ⤵️(#9.72) 待 TrajectoryRegistry 类型实现后回填
+	// TrajectoryRegistry 轨迹注册表（同时实现 TrajectorySource + TrajectorySink）
+	// 对齐 Python: TeamWorkspaceInfo.trajectory_registry（实际为 InMemoryTrajectoryRegistry）
+	TrajectoryRegistry trajectory.TrajectorySource
 }
 
 // TeamRailMountContext 重建 team rails 所需的上下文。

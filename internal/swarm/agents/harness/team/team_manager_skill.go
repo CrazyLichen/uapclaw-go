@@ -4,6 +4,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -93,7 +94,7 @@ func (m *TeamManager) GetTeamRailContext(sessionID string) *TeamRailMountContext
 //	rails = self._team_live_rails.setdefault(session_id, [])
 //	entry = (agent, rail)
 //	if entry not in rails: rails.append(entry)
-func (m *TeamManager) RegisterTeamLiveRail(sessionID string, agent interfaces.DeepAgentInterface, rail any) {
+func (m *TeamManager) RegisterTeamLiveRail(sessionID string, agent interfaces.DeepAgentInterface, rail agentinterfaces.AgentRail) {
 	rails := m.teamLiveRails[sessionID]
 	entry := LiveRailEntry{Agent: agent, Rail: rail}
 	for _, r := range rails {
@@ -203,7 +204,7 @@ func isLeaderRole(ctx *TeamRailMountContext) bool {
 
 // unregisterLiveRail 从 live rails 中移除并反注册指定 rail。
 // 对齐 Python: TeamManager._unregister_live_rail(session_id, rail)
-func (m *TeamManager) unregisterLiveRail(sessionID string, rail any) {
+func (m *TeamManager) unregisterLiveRail(sessionID string, rail agentinterfaces.AgentRail) {
 	liveRails, ok := m.teamLiveRails[sessionID]
 	if !ok {
 		return
