@@ -26,7 +26,7 @@ import (
 // Python user_input 类型为 Any；Go 端统一为 *InteractInput，外层自行包装。
 func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput *interaction.InteractInput) (bool, error) {
 	m.mu.Lock()
-	if m.activeSessionID == nil || *m.activeSessionID != sessionID || m.activeTeamName == nil {
+	if m.activeSessionID == "" || m.activeSessionID != sessionID || m.activeTeamName == "" {
 		logger.Warn(logComponent).
 			Str("session_id", sessionID).
 			Str("active_session_id", ptrToStr(m.activeSessionID)).
@@ -35,7 +35,7 @@ func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput 
 		m.mu.Unlock()
 		return false, nil
 	}
-	teamName := *m.activeTeamName
+	teamName := m.activeTeamName
 	m.mu.Unlock()
 
 	mgr := runtime.GetTeamRuntimeManager()

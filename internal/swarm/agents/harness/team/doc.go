@@ -24,6 +24,7 @@
 //
 //	team/
 //	├── doc.go                        # 包文档
+//	├── config_loader.go              # Team 配置加载与规格构建
 //	├── team_manager.go               # TeamManager 结构体 + 全局索引 + 访问器
 //	├── team_manager_lifecycle.go     # 生命周期方法
 //	├── team_manager_interact.go      # interact 路由

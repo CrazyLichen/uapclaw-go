@@ -198,8 +198,8 @@ func isLeaderRole(ctx *TeamRailMountContext) bool {
 	if ctx.MemberInfo.Role != nil {
 		return *ctx.MemberInfo.Role == "leader"
 	}
-	// Role 为 nil 时，保守存储（Python 中 role=None 也允许注册）
-	return true
+	// S-26: 对齐 Python，Role 为 nil 时返回 false（Python: getattr(ctx.member_info, "role", None) == "leader" → False）
+	return false
 }
 
 // unregisterLiveRail 从 live rails 中移除并反注册指定 rail。

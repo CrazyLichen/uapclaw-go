@@ -117,10 +117,10 @@ type TeamManager struct {
 
 	// 活跃状态（单活跃 session 语义）
 	// 对齐 Python: _active_session_id, _active_team_name, _pending_session_id, _pending_team_name
-	activeSessionID  *string
-	activeTeamName   *string
-	pendingSessionID *string
-	pendingTeamName  *string
+	activeSessionID  string
+	activeTeamName   string
+	pendingSessionID string
+	pendingTeamName  string
 
 	// 监控
 	// 对齐 Python: _team_monitors
@@ -295,25 +295,25 @@ func ResetTeamManager(channelID string) {
 
 // ActiveSessionID 返回当前活跃的 session ID。
 // 对齐 Python: TeamManager.active_session_id property
-func (m *TeamManager) ActiveSessionID() *string {
+func (m *TeamManager) ActiveSessionID() string {
 	return m.activeSessionID
 }
 
 // ActiveTeamName 返回当前活跃的 team 名称。
 // 对齐 Python: TeamManager.active_team_name property
-func (m *TeamManager) ActiveTeamName() *string {
+func (m *TeamManager) ActiveTeamName() string {
 	return m.activeTeamName
 }
 
 // PendingSessionID 返回等待中的 session ID。
 // 对齐 Python: TeamManager.pending_session_id property
-func (m *TeamManager) PendingSessionID() *string {
+func (m *TeamManager) PendingSessionID() string {
 	return m.pendingSessionID
 }
 
 // PendingTeamName 返回等待中的 team 名称。
 // 对齐 Python: TeamManager.pending_team_name property
-func (m *TeamManager) PendingTeamName() *string {
+func (m *TeamManager) PendingTeamName() string {
 	return m.pendingTeamName
 }
 
@@ -331,10 +331,10 @@ func (m *TeamManager) GetMonitorHandler(sessionID string) TeamMonitorHandler {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// ptrToStr 安全地将 *string 转为字符串（nil 时返回 "<nil>"）
-func ptrToStr(p *string) string {
-	if p == nil {
+// ptrToStr 将 string 转为日志字符串（空字符串时返回 "<nil>"）
+func ptrToStr(s string) string {
+	if s == "" {
 		return "<nil>"
 	}
-	return *p
+	return s
 }

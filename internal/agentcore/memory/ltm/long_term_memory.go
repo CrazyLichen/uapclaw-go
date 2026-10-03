@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -37,6 +38,8 @@ type LongTermMemory struct {
 	sysMemConfig *config.MemoryEngineConfig
 	// scopeConfig 内存中的 scope 配置缓存（已加密）
 	scopeConfig map[string]*config.MemoryScopeConfig
+	// scopeMu 保护 scopeConfig 和 scopeEmbedding 的读写
+	scopeMu sync.RWMutex
 	// store 后端存储
 	kvStore      kv.BaseKVStore
 	vectorStore  vector.BaseVectorStore
@@ -192,8 +195,9 @@ func (m *LongTermMemory) checkMessages(messages []llmschema.BaseMessage) (bool, 
 		// 截断非 human 消息内容
 		content := msg.GetContent()
 		text := content.Text()
-		if len(text) > inputMsgMaxLen {
-			msg.SetContent(llmschema.NewTextContent(text[:inputMsgMaxLen]))
+		if utf8.RuneCountInString(text) > inputMsgMaxLen {
+			runes := []rune(text)
+			msg.SetContent(llmschema.NewTextContent(string(runes[:inputMsgMaxLen])))
 		}
 		outMessages = append(outMessages, msg)
 	}
@@ -204,7 +208,7 @@ func (m *LongTermMemory) checkMessages(messages []llmschema.BaseMessage) (bool, 
 // 对齐 Python: LongTermMemory._get_history_messages(user_id, scope_id, session_id, history_window_size)
 func (m *LongTermMemory) getHistoryMessages(ctx context.Context, userID string, scopeID string, sessionID string, historyWindowSize int) ([]llmschema.BaseMessage, error) {
 	if m.messageManager == nil {
-		return nil, nil
+		return []llmschema.BaseMessage{}, nil
 	}
 	msgAndMetas, err := m.messageManager.Get(ctx, userID, scopeID, sessionID, historyWindowSize)
 	if err != nil {
@@ -226,8 +230,9 @@ func (m *LongTermMemory) getHistoryMessages(ctx context.Context, userID string, 
 		}
 		// 截断非 human 消息内容
 		text := msg.GetContent().Text()
-		if len(text) > inputMsgMaxLen {
-			msg.SetContent(llmschema.NewTextContent(text[:inputMsgMaxLen]))
+		if utf8.RuneCountInString(text) > inputMsgMaxLen {
+			runes := []rune(text)
+			msg.SetContent(llmschema.NewTextContent(string(runes[:inputMsgMaxLen])))
 		}
 		historyMessages = append(historyMessages, msg)
 	}

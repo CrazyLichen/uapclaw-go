@@ -2,11 +2,14 @@ package team
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -19,14 +22,19 @@ import (
 //  2. self._active_team_name = team_name
 //  3. if self._pending_session_id == session_id: clear pending
 //  4. logger.info("[TeamManager] commit_runtime_ready ...")
+//  5. ensure_monitor_for_active_runtime(...) — 自动启动监控
+//
+// Go 差异：Python 在 commit_runtime_ready 中直接调用 ensure_monitor，
+// Go 侧因持有 mu 锁，不能在锁内调用 EnsureMonitor（可能触发其他锁操作），
+// 因此 CommitRuntimeReady 仅更新状态，调用方应在锁释放后调用 OnRuntimeReady。
 func (m *TeamManager) CommitRuntimeReady(sessionID string, teamName string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.activeSessionID = &sessionID
-	m.activeTeamName = &teamName
-	if m.pendingSessionID != nil && *m.pendingSessionID == sessionID {
-		m.pendingSessionID = nil
-		m.pendingTeamName = nil
+	m.activeSessionID = sessionID
+	m.activeTeamName = teamName
+	if m.pendingSessionID != "" && m.pendingSessionID == sessionID {
+		m.pendingSessionID = ""
+		m.pendingTeamName = ""
 	}
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
@@ -36,14 +44,38 @@ func (m *TeamManager) CommitRuntimeReady(sessionID string, teamName string) {
 		Msg("commit_runtime_ready")
 }
 
+// OnRuntimeReady 运行时就绪后的自动启动逻辑。
+// 对齐 Python: commit_runtime_ready 中调用 ensure_monitor_for_active_runtime
+//
+// 调用方在 CommitRuntimeReady 之后调用此方法，自动启动监控和演进 watcher。
+// 此方法不在 CommitRuntimeReady 内部调用，避免死锁。
+func (m *TeamManager) OnRuntimeReady(ctx context.Context, sessionID string, teamAgent *agent.TeamAgent, hideDM bool) {
+	if teamAgent == nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("OnRuntimeReady: teamAgent 为 nil，跳过监控启动")
+		return
+	}
+
+	// 对齐 Python: ensure_monitor_for_active_runtime(channel_id, session_id, team_name, hide_dm)
+	if err := m.EnsureMonitor(ctx, sessionID, teamAgent, hideDM); err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("OnRuntimeReady: EnsureMonitor 失败")
+	}
+
+	// 自动启动 evolution watcher — ⤵️ 待回填
+	// Python: 当 runtime_ready 事件触发时，start_team_evolution_watcher 自动启动
+	// Go 差异：event bus 完整实现后，由 runtime_ready 事件自动触发
+	logger.Debug(logComponent).Str("session_id", sessionID).
+		Msg("OnRuntimeReady: evolution watcher 自动启动待回填")
+}
+
 // ClearPendingRuntime 清除指定 session 的 pending 状态。
 // 对齐 Python: TeamManager.clear_pending_runtime(session_id)
 func (m *TeamManager) ClearPendingRuntime(sessionID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.pendingSessionID != nil && *m.pendingSessionID == sessionID {
-		m.pendingSessionID = nil
-		m.pendingTeamName = nil
+	if m.pendingSessionID != "" && m.pendingSessionID == sessionID {
+		m.pendingSessionID = ""
+		m.pendingTeamName = ""
 	}
 }
 
@@ -52,9 +84,9 @@ func (m *TeamManager) ClearPendingRuntime(sessionID string) {
 func (m *TeamManager) ClearActiveRuntime(sessionID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.activeSessionID != nil && *m.activeSessionID == sessionID {
-		m.activeSessionID = nil
-		m.activeTeamName = nil
+	if m.activeSessionID != "" && m.activeSessionID == sessionID {
+		m.activeSessionID = ""
+		m.activeTeamName = ""
 	}
 }
 
@@ -70,8 +102,8 @@ func (m *TeamManager) PrepareRuntimeActivation(ctx context.Context, sessionID st
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.pendingSessionID = &sessionID
-	m.pendingTeamName = &teamName
+	m.pendingSessionID = sessionID
+	m.pendingTeamName = teamName
 	return nil
 }
 
@@ -86,11 +118,11 @@ func (m *TeamManager) PrepareRuntimeActivation(ctx context.Context, sessionID st
 func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID string, reason string) error {
 	m.mu.Lock()
 	var staleSessions []string
-	if m.activeSessionID != nil && *m.activeSessionID != targetSessionID {
-		staleSessions = append(staleSessions, *m.activeSessionID)
+	if m.activeSessionID != "" && m.activeSessionID != targetSessionID {
+		staleSessions = append(staleSessions, m.activeSessionID)
 	}
-	if m.pendingSessionID != nil && *m.pendingSessionID != targetSessionID {
-		staleSessions = append(staleSessions, *m.pendingSessionID)
+	if m.pendingSessionID != "" && m.pendingSessionID != targetSessionID {
+		staleSessions = append(staleSessions, m.pendingSessionID)
 	}
 	logger.Info(logComponent).
 		Str("reason", reason).
@@ -141,14 +173,44 @@ func (m *TeamManager) CreateTeam(
 
 	// 步骤 3-4: 加载 spec + session 作用域 team_name — 由调用方提前完成
 	// 步骤 5: agent_customizer — 由调用方提前完成
-	// 步骤 7: spec.build() — 委托到调用方构建 TeamAgent，本方法仅注册到 teamAgents
-	// Go 差异：Python 中 spec.build() 在 TeamManager 内执行，Go 中由调用方构建后传入
+
+	// 步骤 7: spec.build() — 对齐 Python: team_agent = spec.build(); self._team_agents[session_id] = team_agent
+	// Go 差异：因循环依赖，spec.Build() 不能直接返回 *agent.TeamAgent，
+	// 因此在 CreateTeam 中完成 NewTeamAgent + Configure 构建。
+	if spec == nil {
+		return nil, fmt.Errorf("spec 不能为 nil")
+	}
+	if err := spec.Validate(); err != nil {
+		return nil, fmt.Errorf("spec 校验失败: %w", err)
+	}
+
+	// 构造 AgentCard
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID(fmt.Sprintf("%s_leader", spec.TeamName)),
+		agentschema.WithAgentName(spec.Leader.MemberName),
+		agentschema.WithAgentDescription(spec.Leader.Persona),
+	)
+
+	// NewTeamAgent + Configure
+	teamAgent := agent.NewTeamAgent(card)
+	runtimeCtx := atschema.TeamRuntimeContext{
+		MemberName: spec.Leader.MemberName,
+		Persona:    spec.Leader.Persona,
+		Role:       atschema.TeamRoleLeader,
+	}
+	teamAgent.Configure(ctx, *spec, runtimeCtx)
+
+	// 注册到 teamAgents
+	m.mu.Lock()
+	m.teamAgents[sessionID] = teamAgent
+	m.mu.Unlock()
 
 	// 步骤 8: ensure_team_shared_skills_initialized — ⤵️(#9.72) 待回填
 	// 步骤 9: attach distributed hooks — ⤵️(#9.72) 待回填
 
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("Team 已创建")
-	return nil, nil
+	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", spec.TeamName).
+		Msg("Team 已创建")
+	return teamAgent, nil
 }
 
 // GetOrCreateTeam 获取或创建 TeamAgent 实例。
@@ -224,8 +286,8 @@ func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID str
 	hasStreamTask := m.HasStreamTask(sessionID)
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasMonitor(sessionID) ||
-		(m.activeSessionID != nil && *m.activeSessionID == sessionID) ||
-		(m.pendingSessionID != nil && *m.pendingSessionID == sessionID)
+		(m.activeSessionID != "" && m.activeSessionID == sessionID) ||
+		(m.pendingSessionID != "" && m.pendingSessionID == sessionID)
 	if !hasStreamTask && !hasTeamRuntime {
 		m.mu.Unlock()
 		return false, nil
@@ -273,8 +335,8 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 	hasStreamTask := m.HasStreamTask(sessionID)
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasMonitor(sessionID) ||
-		(m.activeSessionID != nil && *m.activeSessionID == sessionID) ||
-		(m.pendingSessionID != nil && *m.pendingSessionID == sessionID)
+		(m.activeSessionID != "" && m.activeSessionID == sessionID) ||
+		(m.pendingSessionID != "" && m.pendingSessionID == sessionID)
 	if !hasStreamTask && !hasTeamRuntime {
 		m.mu.Unlock()
 		return false, nil
@@ -320,8 +382,8 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 	hasStreamTask := m.HasStreamTask(sessionID)
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasRunnerTeamAgent(sessionID) || m.hasMonitor(sessionID) ||
-		(m.activeSessionID != nil && *m.activeSessionID == sessionID) ||
-		(m.pendingSessionID != nil && *m.pendingSessionID == sessionID)
+		(m.activeSessionID != "" && m.activeSessionID == sessionID) ||
+		(m.pendingSessionID != "" && m.pendingSessionID == sessionID)
 	if !hasStreamTask && !hasTeamRuntime {
 		m.mu.Unlock()
 		return false, nil
@@ -380,8 +442,8 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 	hasStreamTask := m.HasStreamTask(sessionID)
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasMonitor(sessionID) ||
-		(m.activeSessionID != nil && *m.activeSessionID == sessionID) ||
-		(m.pendingSessionID != nil && *m.pendingSessionID == sessionID)
+		(m.activeSessionID != "" && m.activeSessionID == sessionID) ||
+		(m.pendingSessionID != "" && m.pendingSessionID == sessionID)
 	if !hasStreamTask && !hasTeamRuntime {
 		m.mu.Unlock()
 		return false, nil
@@ -430,6 +492,7 @@ func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string
 	} else {
 		logger.Warn(logComponent).Str("session_id", sessionID).
 			Msg("无法解析 team_name，回退到 session release")
+		// ⤵️(#9.62) Runner.release — 待回填
 	}
 
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
@@ -449,13 +512,19 @@ func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string
 //  4. if team_name: return team_name
 //  5. logger.warning("failed to resolve team_name"); return None
 func (m *TeamManager) resolveSessionTeamName(sessionID string) string {
-	if m.activeSessionID != nil && *m.activeSessionID == sessionID && m.activeTeamName != nil {
-		return *m.activeTeamName
+	if m.activeSessionID != "" && m.activeSessionID == sessionID && m.activeTeamName != "" {
+		return m.activeTeamName
 	}
-	if m.pendingSessionID != nil && *m.pendingSessionID == sessionID && m.pendingTeamName != nil {
-		return *m.pendingTeamName
+	if m.pendingSessionID != "" && m.pendingSessionID == sessionID && m.pendingTeamName != "" {
+		return m.pendingTeamName
 	}
-	// ⤵️(#9.72) 从 session metadata 解析 team_name — 待回填
+	// Step 3: 从 session metadata 获取 team_name
+	// 对齐 Python: metadata = get_session_metadata(session_id); team_name = str(metadata.get("team_name") or "").strip()
+	if metadata := session.GetSessionMetadata(sessionID); metadata != nil {
+		if teamName, ok := metadata["team_name"].(string); ok && teamName != "" {
+			return teamName
+		}
+	}
 	logger.Warn(logComponent).Str("session_id", sessionID).
 		Msg("无法从 active/pending/metadata 解析 team_name")
 	return ""
@@ -463,8 +532,18 @@ func (m *TeamManager) resolveSessionTeamName(sessionID string) string {
 
 // resolveDeleteSessionTeamName 从 session metadata 解析用于删除的 team_name。
 // 对齐 Python: TeamManager._resolve_delete_session_team_name(session_id)
+//
+// Python 步骤：
+//  1. metadata = get_session_metadata(session_id)
+//  2. team_name = str(metadata.get("team_name") or "").strip()
+//  3. if team_name: return team_name
+//  4. logger.warning("failed to resolve delete team_name"); return None
 func (m *TeamManager) resolveDeleteSessionTeamName(sessionID string) string {
-	// ⤵️(#9.72) 从 session metadata 解析 team_name — 待回填
+	if metadata := session.GetSessionMetadata(sessionID); metadata != nil {
+		if teamName, ok := metadata["team_name"].(string); ok && teamName != "" {
+			return teamName
+		}
+	}
 	logger.Warn(logComponent).Str("session_id", sessionID).
 		Msg("无法从 metadata 解析 delete team_name")
 	return ""
@@ -516,8 +595,11 @@ func (m *TeamManager) destroyTeam(ctx context.Context, sessionID string) (bool, 
 	// Python: cleaned = await team_agent.destroy_team(force=True)
 	cleaned := false
 	if teamAgent != nil {
-		// ⤵️(#9.62) TeamAgent.DestroyTeam — 待 TeamAgent 完整实现后回填
-		logger.Info(logComponent).Str("session_id", sessionID).Msg("销毁 TeamAgent（待回填）")
+		c, err := teamAgent.DestroyTeam(ctx, true)
+		if err != nil {
+			logger.Error(logComponent).Str("session_id", sessionID).Err(err).Msg("DestroyTeam 失败")
+		}
+		cleaned = c
 	}
 
 	// Python: await release_a2x_reservations_for_session + await _stop_team_messager
@@ -532,9 +614,15 @@ func (m *TeamManager) destroyTeam(ctx context.Context, sessionID string) (bool, 
 // 对齐 Python: TeamManager._stop_local_team_runtime(session_id, team_agent)
 func (m *TeamManager) stopLocalTeamRuntime(ctx context.Context, sessionID string, teamAgent *agent.TeamAgent) bool {
 	stopped := false
-	// ⤵️(#9.62) TeamAgent.StopCoordination — 待回填
 	// Python: stop_coordination = getattr(team_agent, "stop_coordination", None)
 	// Python: if callable(stop_coordination): await stop_coordination(); stopped = True
+	if teamAgent != nil {
+		if err := teamAgent.StopCoordination(ctx); err != nil {
+			logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("StopCoordination 失败")
+		} else {
+			stopped = true
+		}
+	}
 
 	// Python: await release_a2x_reservations_for_session(session_id, team_agent=)
 	// Python: await _stop_team_messager(team_agent, session_id=session_id)

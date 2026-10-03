@@ -2,6 +2,8 @@ package migrator
 
 import (
 	"context"
+
+	"gorm.io/gorm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -17,6 +19,15 @@ type SqlDbQuerier interface {
 	Exist(ctx context.Context, table string, conditions map[string]any) (bool, error)
 	// Delete 条件删除
 	Delete(ctx context.Context, table string, conditions map[string]any) error
+}
+
+// SqlDbStoreForMigrator 扩展 SqlDbQuerier，增加获取底层 *gorm.DB 的能力。
+// model.SqlDbStore 隐式实现此接口。
+// 用于 RunSQLMigrations 内部从 SqlDbStore 派生 *gorm.DB 和 MemoryMetaManager。
+type SqlDbStoreForMigrator interface {
+	SqlDbQuerier
+	// GetDB 返回底层 GORM 数据库实例
+	GetDB() *gorm.DB
 }
 
 // MemoryMetaManager 内存元数据管理器，基于 SqlDbQuerier 操作 memory_meta 表。

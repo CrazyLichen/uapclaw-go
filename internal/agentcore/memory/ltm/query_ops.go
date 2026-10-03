@@ -42,10 +42,10 @@ func (m *LongTermMemory) GetRecentMessages(
 	}
 
 	if m.messageManager == nil {
-		return nil, nil
+		return []llmschema.BaseMessage{}, nil
 	}
 
-	msgAndMetas, err := m.messageManager.Get(ctx, p.UserID, p.ScopeID, "", num)
+	msgAndMetas, err := m.messageManager.Get(ctx, p.UserID, p.ScopeID, p.SessionID, num)
 	if err != nil {
 		return nil, err
 	}
@@ -171,9 +171,10 @@ func (m *LongTermMemory) GetUserMemByPage(
 			memType = mem_model.ParseMemoryType(item.Doc.Type)
 		}
 		memResults = append(memResults, &MemInfo{
-			MemID:   item.Doc.ID,
-			Content: item.Doc.Text,
-			Type:    memType,
+			MemID:     item.Doc.ID,
+			Content:   item.Doc.Text,
+			Type:      memType,
+			Timestamp: &item.Doc.Timestamp,
 		})
 	}
 	return memResults, nil

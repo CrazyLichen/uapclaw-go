@@ -535,6 +535,8 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 // Invoke 非流式调用 TeamAgent。
 // Python: TeamAgent.invoke(inputs, session)
 func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
+	defer a.coordination.FinalizeRound(ctx) // S-35: 对齐 Python try/finally
+
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent Invoke 开始")
@@ -542,7 +544,6 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	// 未配置时直接返回（对齐 Python：未 configure 的 TeamAgent 无法执行 invoke）
 	if a.configurator == nil || a.configurator.Blueprint() == nil {
 		logger.Warn(logComponent).Msg("TeamAgent Invoke: 未配置，跳过执行")
-		a.coordination.FinalizeRound(ctx)
 		return nil, nil
 	}
 
@@ -581,21 +582,18 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 			select {
 			case chunk, ok := <-a.streamController.streamQueue:
 				if !ok || chunk == nil {
-					goto done
+					return lastResult, nil
 				}
 				// 将 stream.Schema 转换为 map[string]any
 				if m, ok := chunk.(interface{ ToMap() map[string]any }); ok {
 					lastResult = m.ToMap()
 				}
 			case <-ctx.Done():
-				goto done
+				return lastResult, nil
 			}
 		}
 	}
-done:
 
-	// Python: finally: await self._coordination.finalize_round()
-	a.coordination.FinalizeRound(ctx)
 	return lastResult, nil
 }
 

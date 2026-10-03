@@ -73,6 +73,9 @@ func (f *fakeDeepAgentForAgentMode) SaveState(_ sessioninterfaces.SessionFacade,
 func (f *fakeDeepAgentForAgentMode) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
 	return nil
 }
+func (f *fakeDeepAgentForAgentMode) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
+	return nil
+}
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForAgentMode)(nil)

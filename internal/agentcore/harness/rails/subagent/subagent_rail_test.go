@@ -114,6 +114,9 @@ func (f *fakeDeepAgentForTest) SaveState(_ sessioninterfaces.SessionFacade, _ *h
 func (f *fakeDeepAgentForTest) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
 	return nil
 }
+func (f *fakeDeepAgentForTest) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
+	return nil
+}
 
 // 编译时验证
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgentForTest)(nil)

@@ -54,6 +54,11 @@ func NewSqlDbStore(dbStore db.BaseDbStore) *SqlDbStore {
 	}
 }
 
+// GetDB 返回底层 GORM 数据库实例。
+func (s *SqlDbStore) GetDB() *gorm.DB {
+	return s.db
+}
+
 // Write 插入一行数据到指定表。
 // data 为列名到值的映射。
 //

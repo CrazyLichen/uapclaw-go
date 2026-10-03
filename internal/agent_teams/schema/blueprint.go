@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -153,6 +155,34 @@ func RegisterStorage(name string, builder StorageBuilder) {
 	storageRegistry[name] = builder
 }
 
+// NewTeamAgentSpecFromDict 从 map[string]any 字典构建 TeamAgentSpec。
+// 对齐 Python: TeamAgentSpec(**spec_dict)
+// Go 差异：Python 直接用 **dict 展开，Go 使用 JSON 序列化/反序列化桥接。
+func NewTeamAgentSpecFromDict(specDict map[string]any) *TeamAgentSpec {
+	if specDict == nil {
+		spec := NewTeamAgentSpec()
+		return &spec
+	}
+	// JSON 桥接：dict → JSON → TeamAgentSpec
+	data, err := json.Marshal(specDict)
+	if err != nil {
+		logger.Warn(logger.ComponentAgentCore).Err(err).Msg("NewTeamAgentSpecFromDict: JSON marshal 失败，使用默认值")
+		spec := NewTeamAgentSpec()
+		return &spec
+	}
+	var spec TeamAgentSpec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		logger.Warn(logger.ComponentAgentCore).Err(err).Msg("NewTeamAgentSpecFromDict: JSON unmarshal 失败，使用默认值")
+		spec := NewTeamAgentSpec()
+		return &spec
+	}
+	// 确保 Agents map 不为 nil
+	if spec.Agents == nil {
+		spec.Agents = make(map[string]DeepAgentSpec)
+	}
+	return &spec
+}
+
 // NewTeamAgentSpec 创建默认 TeamAgentSpec。
 func NewTeamAgentSpec() TeamAgentSpec {
 	return TeamAgentSpec{
@@ -208,8 +238,16 @@ func (s *TeamAgentSpec) ResolveDBConfig() any {
 	return dbCfg
 }
 
-// Build 构建 TeamAgent。⤵️ 回填: 9.57
-func (s *TeamAgentSpec) Build() (any, error) { return nil, nil }
+// Build 校验 TeamAgentSpec 并返回自身。
+// 对齐 Python: TeamAgentSpec.build() → TeamAgent
+// Go 差异：因循环依赖，schema 包无法导入 agent 包，
+// 因此 Build() 仅做校验，实际 TeamAgent 构造由 TeamManager.CreateTeam 完成。
+func (s *TeamAgentSpec) Build() (*TeamAgentSpec, error) {
+	if err := s.Validate(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
 
 // ValidateLeaderModelResolved 校验 Leader 模型是否已解析。
 // 一比一复刻 Python: openjiuwen/agent_teams/schema/blueprint.py _validate_leader_model_resolved

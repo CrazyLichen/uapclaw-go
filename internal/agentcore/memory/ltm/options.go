@@ -35,6 +35,8 @@ type userScopeParams struct {
 	UserID string
 	// ScopeID 作用域标识
 	ScopeID string
+	// SessionID 会话标识
+	SessionID string
 }
 
 // searchParams SearchUserMem / SearchUserHistorySummary 的全部参数。
@@ -115,6 +117,11 @@ func Sid(sid string) UserScopeOption {
 	return func(p *userScopeParams) { p.ScopeID = sid }
 }
 
+// SessionID 设置会话标识。
+func SessionID(sid string) UserScopeOption {
+	return func(p *userScopeParams) { p.SessionID = sid }
+}
+
 // SearchWithUserID 设置用户标识。
 func SearchWithUserID(uid string) SearchOption {
 	return func(p *searchParams) { p.UserID = uid }
@@ -152,8 +159,9 @@ func newAddMessagesParams(messages []llmschema.BaseMessage, agentConfig *config.
 // newUserScopeParams 从选项构建用户+作用域参数。
 func newUserScopeParams(opts ...UserScopeOption) *userScopeParams {
 	p := &userScopeParams{
-		UserID:  DefaultValue,
-		ScopeID: DefaultValue,
+		UserID:    DefaultValue,
+		ScopeID:   DefaultValue,
+		SessionID: DefaultValue,
 	}
 	for _, opt := range opts {
 		opt(p)

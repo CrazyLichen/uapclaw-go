@@ -17,11 +17,11 @@ func TestNewTeamManager(t *testing.T) {
 	if mgr == nil {
 		t.Fatal("NewTeamManager 应返回非 nil")
 	}
-	if mgr.activeSessionID != nil {
-		t.Error("初始 activeSessionID 应为 nil")
+	if mgr.activeSessionID != "" {
+		t.Error("初始 activeSessionID 应为空")
 	}
-	if mgr.activeTeamName != nil {
-		t.Error("初始 activeTeamName 应为 nil")
+	if mgr.activeTeamName != "" {
+		t.Error("初始 activeTeamName 应为空")
 	}
 	if len(mgr.teamAgents) != 0 {
 		t.Error("初始 teamAgents 应为空")
@@ -100,41 +100,41 @@ func TestGetTeamManager_并发安全(t *testing.T) {
 // TestActivePendingState 测试 Active/Pending 状态管理
 func TestActivePendingState(t *testing.T) {
 	mgr := NewTeamManager()
+	sid1 := "sess-1"
+	tn1 := "team-1"
 
 	// 初始状态
-	if mgr.ActiveSessionID() != nil {
-		t.Error("初始 ActiveSessionID 应为 nil")
+	if mgr.ActiveSessionID() != "" {
+		t.Error("初始 ActiveSessionID 应为空")
 	}
 
 	// 设置 pending
-	sid1 := "sess-1"
-	tn1 := "team-1"
-	mgr.pendingSessionID = &sid1
-	mgr.pendingTeamName = &tn1
-	if *mgr.PendingSessionID() != "sess-1" {
+	mgr.pendingSessionID = sid1
+	mgr.pendingTeamName = tn1
+	if mgr.PendingSessionID() != "sess-1" {
 		t.Error("PendingSessionID 应为 sess-1")
 	}
 
 	// CommitRuntimeReady
 	mgr.CommitRuntimeReady(sid1, tn1)
-	if *mgr.ActiveSessionID() != "sess-1" {
+	if mgr.ActiveSessionID() != "sess-1" {
 		t.Error("CommitRuntimeReady 后 ActiveSessionID 应为 sess-1")
 	}
-	if mgr.PendingSessionID() != nil {
-		t.Error("CommitRuntimeReady 后 PendingSessionID 应为 nil")
+	if mgr.PendingSessionID() != "" {
+		t.Error("CommitRuntimeReady 后 PendingSessionID 应为空")
 	}
 
 	// ClearActiveRuntime
 	mgr.ClearActiveRuntime(sid1)
-	if mgr.ActiveSessionID() != nil {
-		t.Error("ClearActiveRuntime 后 ActiveSessionID 应为 nil")
+	if mgr.ActiveSessionID() != "" {
+		t.Error("ClearActiveRuntime 后 ActiveSessionID 应为空")
 	}
 
 	// ClearActiveRuntime 不匹配时不改变
 	sid2 := "sess-2"
-	mgr.activeSessionID = &sid2
+	mgr.activeSessionID = sid2
 	mgr.ClearActiveRuntime("wrong-session")
-	if *mgr.ActiveSessionID() != "sess-2" {
+	if mgr.ActiveSessionID() != "sess-2" {
 		t.Error("不匹配的 ClearActiveRuntime 不应改变状态")
 	}
 }
@@ -146,15 +146,15 @@ func TestPrepareRuntimeActivation(t *testing.T) {
 
 	sid1 := "sess-old"
 	tn1 := "team-old"
-	mgr.activeSessionID = &sid1
-	mgr.activeTeamName = &tn1
+	mgr.activeSessionID = sid1
+	mgr.activeTeamName = tn1
 
 	// PrepareRuntimeActivation 应设置 pending
 	err := mgr.PrepareRuntimeActivation(ctx, "sess-new", "team-new")
 	if err != nil {
 		t.Fatalf("PrepareRuntimeActivation 不应返回错误: %v", err)
 	}
-	if mgr.PendingSessionID() == nil || *mgr.PendingSessionID() != "sess-new" {
+	if mgr.PendingSessionID() == "" || mgr.PendingSessionID() != "sess-new" {
 		t.Error("PrepareRuntimeActivation 后 PendingSessionID 应为 sess-new")
 	}
 }
@@ -175,9 +175,9 @@ func TestInteract_非活跃Session拒绝(t *testing.T) {
 
 	// session 不匹配
 	sid := "sess-active"
-	mgr.activeSessionID = &sid
+	mgr.activeSessionID = sid
 	tn := "team-active"
-	mgr.activeTeamName = &tn
+	mgr.activeTeamName = tn
 	ok, err = mgr.Interact(ctx, "sess-wrong", interaction.NewInteractInput("hello"))
 	if err != nil {
 		t.Fatalf("Interact 不应返回错误: %v", err)

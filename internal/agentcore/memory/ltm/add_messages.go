@@ -38,9 +38,11 @@ func (m *LongTermMemory) AddMessages(
 	// ① 触发 MEMORY_ADDED 回调
 	p := newAddMessagesParams(messages, agentConfig, opts...)
 	triggerMemoryBefore(ctx, callback.MemoryAdded, &callback.MemoryEventData{
-		Event:   callback.MemoryAdded,
-		UserID:  p.UserID,
-		ScopeID: p.ScopeID,
+		Event:      callback.MemoryAdded,
+		UserID:     p.UserID,
+		ScopeID:    p.ScopeID,
+		MemoryType: "all",
+		SessionID:  p.SessionID,
 	})
 
 	// ② 执行核心逻辑
@@ -117,8 +119,7 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 		// Step 8: scopeUserMappingManager.Add
 		if m.scopeUserMappingManager != nil {
 			if addErr := m.scopeUserMappingManager.Add(ctx, p.UserID, p.ScopeID); addErr != nil {
-				logger.Error(logComponent).Err(addErr).Str("user_id", p.UserID).
-					Str("scope_id", p.ScopeID).Msg("添加 scope_user_mapping 失败")
+				return addErr
 			}
 		}
 
@@ -145,9 +146,7 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 			if m.messageManager != nil {
 				id, addErr := m.messageManager.Add(ctx, addReq)
 				if addErr != nil {
-					logger.Error(logComponent).Err(addErr).Str("user_id", p.UserID).
-						Str("scope_id", p.ScopeID).Msg("添加消息失败")
-					continue
+					return addErr
 				}
 				msgID = id
 			}

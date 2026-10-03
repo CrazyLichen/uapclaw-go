@@ -12,7 +12,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/migrator"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -37,7 +36,14 @@ type registerStoreParams struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+func init() {
+	// S-14: 设置默认支持记忆类型，打破 migration → mem_model 的循环依赖
+	migration.DefaultSupportMemoryTypes = mem_model.AllSupportMemoryTypeValues
+}
 
 // RegisterStore 注册存储实例。
 //
@@ -77,9 +83,7 @@ func (m *LongTermMemory) RegisterStore(
 	// Step 3: vector_store + kv_store → 自动注册 SimpleMemoryIndex
 	if m.vectorStore != nil && m.kvStore != nil {
 		simpleIndex := storeindex.NewSimpleMemoryIndex(m.kvStore, m.vectorStore, m.baseEmbed)
-		if m.memoryIndex == nil {
-			m.memoryIndex = simpleIndex
-		}
+		m.RegisterPlugin(simpleIndex)
 	}
 
 	// Step 4: create_tables
@@ -131,9 +135,8 @@ func (m *LongTermMemory) RegisterStore(
 
 	if m.dbStore != nil {
 		sqlDbStore := mem_model.NewSqlDbStore(m.dbStore)
-		metaManager := migrator.NewMemoryMetaManager(sqlDbStore)
 		if err := runMigration(ctx, func(ctx context.Context) error {
-			return migration.RunSQLMigrations(ctx, m.dbStore.GetDB(ctx), metaManager)
+			return migration.RunSQLMigrations(ctx, sqlDbStore)
 		}, "db store"); err != nil {
 			return err
 		}

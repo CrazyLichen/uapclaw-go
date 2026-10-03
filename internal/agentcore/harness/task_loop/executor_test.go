@@ -564,6 +564,11 @@ func (f *fakeDeepAgentProvider) FindRailsByType(_ ...reflect.Type) []agentinterf
 	return nil
 }
 
+// UnregisterRail 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
+	return nil
+}
+
 // GetSessionID 实现 SessionFacade 接口
 func (f *fakeSessionFacade) GetSessionID() string {
 	return f.sessionID

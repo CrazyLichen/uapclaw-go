@@ -65,6 +65,9 @@ type DeepAgentInterface interface {
 	// FindRailsByType 返回排队和已注册中匹配指定类型的 Rail。
 	// Python: DeepAgent.find_rails_by_type(rail_types)
 	FindRailsByType(railTypes ...reflect.Type) []agentinterfaces.AgentRail
+	// UnregisterRail 注销 Rail。
+	// Python: DeepAgent.unregister_rail(rail)
+	UnregisterRail(ctx context.Context, r agentinterfaces.AgentRail) error
 }
 
 // LoopCoordinatorInterface 循环协调器接口（最小集）。

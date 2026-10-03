@@ -30,10 +30,11 @@ func (m *LongTermMemory) DeleteMemByID(
 	p := newUserScopeParams(opts...)
 	// ① 触发 MEMORY_DELETED 回调
 	triggerMemoryBefore(ctx, callback.MemoryDeleted, &callback.MemoryEventData{
-		Event:    callback.MemoryDeleted,
-		UserID:   p.UserID,
-		ScopeID:  p.ScopeID,
-		MemoryID: memID,
+		Event:      callback.MemoryDeleted,
+		UserID:     p.UserID,
+		ScopeID:    p.ScopeID,
+		MemoryID:   memID,
+		MemoryType: "all",
 	})
 
 	// ② 执行删除
@@ -51,9 +52,10 @@ func (m *LongTermMemory) DeleteMemByUserID(
 	p := newUserScopeParams(opts...)
 	// ① 触发 MEMORY_DELETED 回调
 	triggerMemoryBefore(ctx, callback.MemoryDeleted, &callback.MemoryEventData{
-		Event:   callback.MemoryDeleted,
-		UserID:  p.UserID,
-		ScopeID: p.ScopeID,
+		Event:      callback.MemoryDeleted,
+		UserID:     p.UserID,
+		ScopeID:    p.ScopeID,
+		MemoryType: "all",
 	})
 
 	// ② 执行删除
@@ -94,16 +96,14 @@ func (m *LongTermMemory) DeleteMemByScope(ctx context.Context, scopeID string) e
 				return m.writeManager.DeleteMemByUserID(ctx, userID, scopeID)
 			})
 			if lockErr != nil {
-				logger.Error(logComponent).Err(lockErr).Str("user_id", userID).
-					Str("scope_id", scopeID).Msg("DeleteMemByUserID 失败")
+				return lockErr
 			}
 		}
 	}
 
 	if m.scopeUserMappingManager != nil {
 		if delErr := m.scopeUserMappingManager.DeleteByScopeID(ctx, scopeID); delErr != nil {
-			logger.Error(logComponent).Err(delErr).Str("scope_id", scopeID).
-				Msg("DeleteByScopeID 失败")
+			return delErr
 		}
 	}
 
@@ -169,8 +169,7 @@ func (m *LongTermMemory) DeleteVariables(
 		}
 		for _, name := range names {
 			if err := m.variableManager.DeleteUserVariable(ctx, p.UserID, p.ScopeID, name); err != nil {
-				logger.Error(logComponent).Err(err).Str("name", name).
-					Msg("删除变量失败")
+				return err
 			}
 		}
 		return nil

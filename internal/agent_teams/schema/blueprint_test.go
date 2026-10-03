@@ -317,12 +317,18 @@ func TestTeamAgentSpec_ResolveDBConfig_SQLite自动填充路径(t *testing.T) {
 	}
 }
 
-// TestTeamAgentSpec_Build_留桩 测试 Build 留桩
-func TestTeamAgentSpec_Build_留桩(t *testing.T) {
+// TestTeamAgentSpec_Build 测试 Build 校验并返回 spec
+func TestTeamAgentSpec_Build(t *testing.T) {
 	s := NewTeamAgentSpec()
 	r, err := (&s).Build()
-	if r != nil || err != nil {
-		t.Errorf("期望 (nil, nil), 实际=(%v, %v)", r, err)
+	if err != nil {
+		t.Fatalf("期望无错误, 实际=%v", err)
+	}
+	if r == nil {
+		t.Fatal("期望非 nil spec, 实际=nil")
+	}
+	if r.TeamName != s.TeamName {
+		t.Errorf("期望 TeamName=%q, 实际=%q", s.TeamName, r.TeamName)
 	}
 }
 

@@ -2,6 +2,7 @@ package ltm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -35,10 +36,11 @@ func (m *LongTermMemory) SearchUserMem(
 	p := newSearchParams(query, num, opts...)
 	// ① 触发 MEMORY_SEARCH_STARTED 回调
 	triggerMemoryBefore(ctx, callback.MemorySearchStarted, &callback.MemoryEventData{
-		Event:   callback.MemorySearchStarted,
-		UserID:  p.UserID,
-		ScopeID: p.ScopeID,
-		Query:   p.Query,
+		Event:      callback.MemorySearchStarted,
+		UserID:     p.UserID,
+		ScopeID:    p.ScopeID,
+		Query:      p.Query,
+		SearchType: "user_mem",
 	})
 
 	// ② 执行搜索逻辑
@@ -49,10 +51,12 @@ func (m *LongTermMemory) SearchUserMem(
 
 	// ③ 触发 MEMORY_SEARCH_FINISHED 回调
 	triggerMemoryAfter(ctx, callback.MemorySearchFinished, &callback.MemoryEventData{
-		Event:   callback.MemorySearchFinished,
-		UserID:  p.UserID,
-		ScopeID: p.ScopeID,
-		Query:   p.Query,
+		Event:       callback.MemorySearchFinished,
+		UserID:      p.UserID,
+		ScopeID:     p.ScopeID,
+		Query:       p.Query,
+		SearchType:  "user_mem",
+		ResultCount: len(results),
 	})
 
 	return results, nil
@@ -71,10 +75,11 @@ func (m *LongTermMemory) SearchUserHistorySummary(
 	p := newSearchParams(query, num, opts...)
 	// ① 触发 MEMORY_SEARCH_STARTED 回调
 	triggerMemoryBefore(ctx, callback.MemorySearchStarted, &callback.MemoryEventData{
-		Event:   callback.MemorySearchStarted,
-		UserID:  p.UserID,
-		ScopeID: p.ScopeID,
-		Query:   p.Query,
+		Event:      callback.MemorySearchStarted,
+		UserID:     p.UserID,
+		ScopeID:    p.ScopeID,
+		Query:      p.Query,
+		SearchType: "history_summary",
 	})
 
 	// ② 执行搜索逻辑（搜索类型限 SUMMARY）
@@ -85,10 +90,12 @@ func (m *LongTermMemory) SearchUserHistorySummary(
 
 	// ③ 触发 MEMORY_SEARCH_FINISHED 回调
 	triggerMemoryAfter(ctx, callback.MemorySearchFinished, &callback.MemoryEventData{
-		Event:   callback.MemorySearchFinished,
-		UserID:  p.UserID,
-		ScopeID: p.ScopeID,
-		Query:   p.Query,
+		Event:       callback.MemorySearchFinished,
+		UserID:      p.UserID,
+		ScopeID:     p.ScopeID,
+		Query:       p.Query,
+		SearchType:  "history_summary",
+		ResultCount: len(results),
 	})
 
 	return results, nil
@@ -140,10 +147,7 @@ func (m *LongTermMemory) GetVariables(
 	for _, name := range names {
 		value, err := m.searchManager.GetUserVariable(ctx, p.UserID, p.ScopeID, name)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Str("name", name).
-				Msg("获取变量失败")
-			ret[name] = ""
-			continue
+			return nil, err
 		}
 		ret[name] = value
 	}
@@ -185,9 +189,21 @@ func (m *LongTermMemory) searchUserMemImpl(ctx context.Context, p *searchParams,
 
 	searchData, err := m.searchManager.Search(ctx, params)
 	if err != nil {
-		logger.Debug(logComponent).Err(err).Str("event_type", "MEMORY_RETRIEVE").
-			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).Str("query", p.Query).
-			Msg("Search user mem has exception.")
+		// S-04: 对齐 Python，按错误类型分类日志级别
+		var baseErr *exception.BaseError
+		if errors.As(err, &baseErr) && baseErr.Category() == exception.ErrorCategoryValidation {
+			// Python ValueError → Warning 级别
+			logger.Warn(logComponent).Err(err).Str("event_type", "LLM_CALL_ERROR").
+				Str("method", "SearchUserMem").Str("user_id", p.UserID).
+				Str("scope_id", p.ScopeID).Str("query", p.Query).
+				Msg("Search user mem has ValueError-like exception.")
+		} else {
+			// Python Exception → Error 级别
+			logger.Error(logComponent).Err(err).Str("event_type", "LLM_CALL_ERROR").
+				Str("method", "SearchUserMem").Str("user_id", p.UserID).
+				Str("scope_id", p.ScopeID).Str("query", p.Query).
+				Msg("Search user mem has exception.")
+		}
 		return nil, exception.BuildError(exception.StatusMemoryGetMemoryExecutionError,
 			exception.WithParam("memory_type", "user_mem"),
 			exception.WithMsg(fmt.Sprintf("%v", err)),
@@ -212,9 +228,10 @@ func (m *LongTermMemory) searchUserMemImpl(ctx context.Context, p *searchParams,
 		}
 		memResults = append(memResults, &MemResult{
 			MemInfo: &MemInfo{
-				MemID:   item.Doc.ID,
-				Content: item.Doc.Text,
-				Type:    memType,
+				MemID:     item.Doc.ID,
+				Content:   item.Doc.Text,
+				Type:      memType,
+				Timestamp: &item.Doc.Timestamp,
 			},
 			Score: item.Score,
 		})

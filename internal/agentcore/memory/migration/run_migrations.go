@@ -12,7 +12,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"gorm.io/gorm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -26,13 +25,22 @@ const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// DefaultSupportMemoryTypes 返回默认支持的记忆类型列表。
+// 由调用方（如 ltm 包）在 init 中设置，以打破 migration → mem_model 的循环依赖。
+var DefaultSupportMemoryTypes func() []string
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RunVectorMigrations 执行所有已注册的向量迁移。
 // supportedTypes 为支持的记忆类型列表（如 []string{"user_profile", "summary"}）。
+// 当 supportedTypes 为 nil 或空时，从 DefaultSupportMemoryTypes 获取默认值。
 //
 // Python: run_vector_migrations(vector_store)
 func RunVectorMigrations(ctx context.Context, vectorStore vector.BaseVectorStore, supportedTypes []string) error {
+	// S-14: 对齐 Python，nil 时从 SupportMemoryType 枚举默认获取
+	if len(supportedTypes) == 0 && DefaultSupportMemoryTypes != nil {
+		supportedTypes = DefaultSupportMemoryTypes()
+	}
 	return runMigrationsWithRegistry(ctx, VectorRegistry,
 		func() migrator.Migrator {
 			return migrator.NewVectorMigrator(vectorStore, supportedTypes)
@@ -56,7 +64,9 @@ func RunKVMigrations(ctx context.Context, kvStore kv.BaseKVStore) error {
 // RunSQLMigrations 执行所有已注册的 SQL 迁移。
 //
 // Python: run_sql_migrations(sql_db_store)
-func RunSQLMigrations(ctx context.Context, db *gorm.DB, metaManager *migrator.MemoryMetaManager) error {
+func RunSQLMigrations(ctx context.Context, sqlDbStore migrator.SqlDbStoreForMigrator) error {
+	db := sqlDbStore.GetDB()
+	metaManager := migrator.NewMemoryMetaManager(sqlDbStore)
 	return runMigrationsWithRegistry(ctx, SQLRegistry,
 		func() migrator.Migrator {
 			return migrator.NewSQLMigrator(db, metaManager)

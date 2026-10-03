@@ -76,6 +76,10 @@ func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
 
 	// 初始化 MessageManager
 	if m.messageStore != nil {
+		// S-01: 对齐 Python set_config，为 SqlMessageStore 回填 crypto_key
+		if sqlMsg, ok := m.messageStore.(*mem_model.SqlMessageStore); ok {
+			sqlMsg.SetStorageCodec(c)
+		}
 		m.messageManager = mem_model.NewMessageManager(m.messageStore)
 	}
 
@@ -154,7 +158,9 @@ func (m *LongTermMemory) SetScopeConfig(ctx context.Context, scopeID string, sco
 		encryptedConfig.EmbeddingCfg.APIKey = m.storageCodec.Encode(encryptedConfig.EmbeddingCfg.APIKey)
 	}
 
+	m.scopeMu.Lock()
 	m.scopeConfig[scopeID] = encryptedConfig
+	m.scopeMu.Unlock()
 
 	configKey := fmt.Sprintf("%s/%s", ScopeConfigKey, scopeID)
 	configJSON, err := encryptedConfig.ToJSON()
@@ -173,7 +179,9 @@ func (m *LongTermMemory) SetScopeConfig(ctx context.Context, scopeID string, sco
 	}
 
 	// 清除 scope embedding 缓存
+	m.scopeMu.Lock()
 	delete(m.scopeEmbedding, scopeID)
+	m.scopeMu.Unlock()
 
 	return nil
 }
@@ -243,8 +251,10 @@ func (m *LongTermMemory) DeleteScopeConfig(ctx context.Context, scopeID string) 
 		)
 	}
 
+	m.scopeMu.Lock()
 	delete(m.scopeConfig, scopeID)
 	delete(m.scopeEmbedding, scopeID)
+	m.scopeMu.Unlock()
 
 	logger.Debug(logComponent).Str("event_type", "MEMORY_DELETE").
 		Str("scope_id", scopeID).Msg("Successfully deleted configuration.")
@@ -327,7 +337,10 @@ func (m *LongTermMemory) getScopeLLM(ctx context.Context, scopeID string) (*llm.
 // 对齐 Python: LongTermMemory._get_scope_config(scope_id)
 func (m *LongTermMemory) getScopeConfig(ctx context.Context, scopeID string) (*config.MemoryScopeConfig, error) {
 	// 先查内存缓存
-	if cfg, ok := m.scopeConfig[scopeID]; ok {
+	m.scopeMu.RLock()
+	cfg, ok := m.scopeConfig[scopeID]
+	m.scopeMu.RUnlock()
+	if ok {
 		// 深拷贝避免修改缓存中的加密配置
 		decryptedConfig := deepCopyScopeConfig(cfg)
 		// 解密 API Key
@@ -362,7 +375,10 @@ func (m *LongTermMemory) applyScopeEmbedding(ctx context.Context, scopeID string
 // 对齐 Python: LongTermMemory._get_scope_embedding_model(scope_id)
 func (m *LongTermMemory) getScopeEmbeddingModel(ctx context.Context, scopeID string) embedding.BaseEmbedding {
 	// 检查缓存
-	if emb, ok := m.scopeEmbedding[scopeID]; ok {
+	m.scopeMu.RLock()
+	emb, ok := m.scopeEmbedding[scopeID]
+	m.scopeMu.RUnlock()
+	if ok {
 		return emb
 	}
 
@@ -377,7 +393,9 @@ func (m *LongTermMemory) getScopeEmbeddingModel(ctx context.Context, scopeID str
 	if scopeCfg != nil && scopeCfg.EmbeddingCfg != nil {
 		// 使用 APIEmbedding 实例化
 		emb := apiembedding.NewAPIEmbedding(*scopeCfg.EmbeddingCfg)
+		m.scopeMu.Lock()
 		m.scopeEmbedding[scopeID] = emb
+		m.scopeMu.Unlock()
 		return emb
 	}
 

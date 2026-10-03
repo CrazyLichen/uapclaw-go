@@ -2,9 +2,12 @@ package team
 
 import (
 	"context"
+	"strings"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -26,18 +29,44 @@ type AgentCustomizer func(ctx context.Context, agent interfaces.DeepAgentInterfa
 //  5. self.apply_team_plan_mode(spec, request_metadata=)
 //  6. spec.agent_customizer = self.build_agent_customizer(...)
 //  7. return spec
-//
-// Go 差异：此方法涉及大量 Python 专属逻辑（PostgreSQL、config 加载、customizer 闭包），
-// 当前作为编排入口，具体步骤由调用方或后续回填完成。
 func (m *TeamManager) GetEnrichedTeamSpec(
+	ctx context.Context,
 	sessionID string,
 	deepAgent interfaces.DeepAgentInterface,
-	requestID *string,
-	channelID *string,
+	requestID string,
+	channelID string,
 	requestMetadata map[string]any,
 ) *atschema.TeamAgentSpec {
-	// ⤵️(#9.72) 完整实现 — 待 config_loader / distributed_runtime / team_runtime_inheritance 回填
-	return nil
+	// 步骤 1-2: 加载 spec（Go 差异：configBase 由 loadTeamSpec 内部获取或调用方注入）
+	spec := loadTeamSpec(sessionID)
+	if spec == nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("loadTeamSpec 返回 nil，使用默认 spec")
+		s := atschema.NewTeamAgentSpec()
+		spec = &s
+	}
+
+	// 步骤 3: 应用 session 作用域 team name
+	m.applySessionScopedTeamName(spec, sessionID)
+
+	// 步骤 4: 应用 team plan mode
+	m.ApplyTeamPlanMode(spec, requestMetadata)
+
+	// 步骤 5: 构建 agent customizer 并设置到 spec
+	customizer := m.BuildAgentCustomizer(spec, deepAgent, sessionID, requestID, channelID, requestMetadata)
+	if customizer != nil {
+		spec.AgentCustomizer = customizer
+	}
+
+	// 步骤 6: 同步 team identity metadata
+	m.SyncTeamIdentityMetadata(ctx, sessionID, spec.TeamName)
+
+	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Str("team_name", spec.TeamName).
+		Bool("has_customizer", spec.AgentCustomizer != nil).
+		Msg("GetEnrichedTeamSpec 完成")
+
+	return spec
 }
 
 // ApplyTeamPlanMode 应用 team plan mode。
@@ -49,12 +78,29 @@ func (m *TeamManager) GetEnrichedTeamSpec(
 func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMetadata map[string]any) {
 	mode := ""
 	if requestMetadata != nil {
-		if m, ok := requestMetadata["mode"].(string); ok {
-			mode = m
+		if raw, ok := requestMetadata["mode"].(string); ok {
+			mode = strings.TrimSpace(raw)
 		}
 	}
-	_ = mode
-	// ⤵️(#9.72) 设置 spec.EnableTeamPlan = true — 待 TeamAgentSpec 回填
+	if strings.EqualFold(mode, "team.plan") {
+		spec.EnableTeamPlan = true
+		logger.Info(logComponent).Msg("ApplyTeamPlanMode: 启用 team.plan 模式")
+	}
+}
+
+// SyncTeamIdentityMetadata 将 team_name 写入 session metadata。
+// 对齐 Python: TeamManager.sync_team_identity_metadata(session_id, team_name)
+func (m *TeamManager) SyncTeamIdentityMetadata(ctx context.Context, sessionID string, teamName string) {
+	if sessionID == "" || teamName == "" {
+		return
+	}
+	teamNamePtr := &teamName
+	session.UpdateSessionMetadata(session.SessionMetadataUpdate{
+		SessionID: sessionID,
+		TeamName:  teamNamePtr,
+	})
+	logger.Debug(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
+		Msg("同步 team identity metadata")
 }
 
 // BuildAgentCustomizer 构建 agent customizer 闭包。
@@ -74,17 +120,51 @@ func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMet
 //  4. return customizer
 //
 // Go 差异：Python 的 customizer 是一个闭包，Go 中改为 AgentCustomizer 函数类型。
-// 当前返回 nil，待后续回填。
+// 当前实现骨架，内部步骤待后续回填。
 func (m *TeamManager) BuildAgentCustomizer(
 	spec *atschema.TeamAgentSpec,
 	deepAgent interfaces.DeepAgentInterface,
 	sessionID string,
-	requestID *string,
-	channelID *string,
+	requestID string,
+	channelID string,
 	requestMetadata map[string]any,
 ) AgentCustomizer {
-	// ⤵️(#9.72) 完整实现 — 待 team_runtime_inheritance / rail_manager / skill_manager 回填
-	return nil
+	if spec == nil || deepAgent == nil {
+		return nil
+	}
+
+	// 捕获闭包变量
+	capturedSpec := spec
+	capturedSessionID := sessionID
+	capturedRequestID := requestID
+	capturedChannelID := channelID
+	capturedRequestMetadata := requestMetadata
+	mgr := m
+
+	// 对齐 Python: 返回 customizer(agent, member_name, role) 闭包
+	return func(ctx context.Context, agent interfaces.DeepAgentInterface, memberName string, role string) error {
+		// 步骤 a: 继承能力卡 — ⤵️ 待回填
+		_ = capturedSpec
+
+		// 步骤 b: 技能同步（copy member skills + sync team skills + write skills_state）— ⤵️ 待回填
+
+		// 步骤 c: code adapter 配置 — ⤵️ 待回填
+
+		// 步骤 d: build_member_rails + 注册 TeamSkillEvolutionRail/SkillCreateRail — ⤵️ 待回填
+
+		// 步骤 e: 注册 TeamRailContext（leader）— ⤵️ 待回填
+
+		// 步骤 f: 注册 member runtime tools
+		mgr.RegisterMemberRuntimeTools(agent, capturedSessionID, &capturedRequestID, &capturedChannelID, capturedRequestMetadata)
+
+		logger.Info(logComponent).
+			Str("session_id", capturedSessionID).
+			Str("member_name", memberName).
+			Str("role", role).
+			Msg("AgentCustomizer 闭包执行（骨架，内部步骤待回填）")
+
+		return nil
+	}
 }
 
 // RegisterMemberRuntimeTools 注册成员运行时工具（CronRuntimeBridge + SendFileToolkit）。
@@ -181,7 +261,61 @@ func trimDotsUnderscores(s string) string {
 
 // loadTeamSpec 加载团队配置并构建 TeamAgentSpec。
 // 对齐 Python: TeamManager._load_team_spec(session_id)
-func loadTeamSpec(sessionID string) *atschema.TeamAgentSpec {
-	// ⤵️(#9.72) 完整实现 — 待 config_loader / distributed_runtime 回填
-	return nil
+//
+// Python 步骤：
+//  1. config_base = get_config()
+//  2. spec_dict = load_team_spec_dict(config_base)
+//  3. spec_dict = normalize_team_identity_fields(spec_dict)
+//  4. 分布式模式标准化 — ⤵️ 待回填
+//  5. return TeamAgentSpec(**spec_dict)
+//
+// Go 差异：Python 使用全局 get_config()，Go 通过参数注入 configBase。
+// 当 configBase 为 nil 时，返回默认 spec。
+func loadTeamSpec(sessionID string, configBase ...map[string]any) *atschema.TeamAgentSpec {
+	var cb map[string]any
+	if len(configBase) > 0 {
+		cb = configBase[0]
+	}
+	if cb == nil {
+		// Go 差异：无 configBase 时返回默认 spec
+		logger.Warn(logComponent).Str("session_id", sessionID).
+			Msg("loadTeamSpec: configBase 为 nil，使用默认 spec")
+		s := atschema.NewTeamAgentSpec()
+		return &s
+	}
+
+	// 步骤 2: 构建 spec 字典
+	specDict := LoadTeamSpecDict(cb)
+
+	// 步骤 3: 标准化身份字段
+	specDict = normalizeTeamIdentityFields(specDict)
+
+	// 步骤 4: 分布式模式标准化 — ⤵️ 待回填
+
+	// 步骤 5: 从 dict 构建 TeamAgentSpec
+	spec := atschema.NewTeamAgentSpecFromDict(specDict)
+
+	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Str("team_name", spec.TeamName).
+		Msg("loadTeamSpec 完成")
+
+	return spec
+}
+
+// applySessionScopedTeamName 应用 session 作用域的 team name 到 spec。
+// 对齐 Python: TeamManager._apply_session_scoped_team_name(spec, session_id=session_id)
+func (m *TeamManager) applySessionScopedTeamName(spec *atschema.TeamAgentSpec, sessionID string) {
+	if spec == nil {
+		return
+	}
+	scopedName := buildSessionScopedTeamName(spec.TeamName, sessionID)
+	if scopedName != spec.TeamName {
+		logger.Info(logComponent).
+			Str("session_id", sessionID).
+			Str("original_name", spec.TeamName).
+			Str("scoped_name", scopedName).
+			Msg("应用 session 作用域 team name")
+		spec.TeamName = scopedName
+	}
 }

@@ -137,7 +137,7 @@ func TestGetRecentMessages_ManagerNil(t *testing.T) {
 	env := newTestEnv(t)
 	msgs, err := env.m.GetRecentMessages(context.Background(), 10, Uid("u1"), Sid("s1"))
 	assert.NoError(t, err)
-	assert.Nil(t, msgs)
+	assert.Empty(t, msgs)
 }
 
 // TestGetRecentMessages_无效ScopeID 测试无效 scopeID。
@@ -197,7 +197,7 @@ func TestGetHistoryMessages_ManagerNil(t *testing.T) {
 	m := NewLongTermMemory()
 	msgs, err := m.getHistoryMessages(context.Background(), "u1", "s1", "sess1", 10)
 	assert.NoError(t, err)
-	assert.Nil(t, msgs)
+	assert.Empty(t, msgs)
 }
 
 // TestAddMessages_正常流程 测试完整 AddMessages 流程。

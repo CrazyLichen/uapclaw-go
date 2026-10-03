@@ -70,6 +70,12 @@ func NewSqlMessageStore(cryptoKey []byte, sqlDbStore *SqlDbStore, tableName stri
 	}, nil
 }
 
+// SetStorageCodec 设置存储编解码器（用于 SetConfig 回填 crypto_key）。
+// 对齐 Python: SqlMessageStore.crypto_key = config.crypto_key
+func (s *SqlMessageStore) SetStorageCodec(c index.StorageCodec) {
+	s.codec = c
+}
+
 // AddMessage 添加单条消息，返回 message_id。
 //
 // Python: SqlMessageStore.add_message(message_add)

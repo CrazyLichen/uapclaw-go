@@ -167,10 +167,16 @@ type MemoryEventData struct {
 	ScopeID string
 	// Query 搜索查询
 	Query string
+	// ResultCount 搜索结果数量
+	ResultCount int
+	// SearchType 搜索类型（"user_mem" / "history_summary"）
+	SearchType string
 	// MemoryType 记忆类型
 	MemoryType string
 	// MemoryID 记忆标识
 	MemoryID string
+	// SessionID 会话标识
+	SessionID string
 	// Score 相关度分数
 	Score float64
 	// Timestamp 时间戳

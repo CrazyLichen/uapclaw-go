@@ -230,6 +230,11 @@ func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamA
 		go m.consumeMonitorEvents(consumeCtx, sessionID, handler)
 	}
 
+	// 自动启动 evolution watcher
+	// 对齐 Python: ensure_monitor_for_active_runtime 中，监控启动后自动触发 evolution watcher
+	// Python: asyncio.create_task(start_team_evolution_watcher(channel_id, session_id, team_name))
+	m.autoStartEvolutionWatcher(ctx, sessionID, teamName)
+
 	return nil
 }
 
@@ -264,4 +269,44 @@ func (m *TeamManager) consumeMonitorEvents(ctx context.Context, sessionID string
 				Msg("监控事件")
 		}
 	}
+}
+
+// autoStartEvolutionWatcher 自动启动 evolution watcher。
+// 对齐 Python: start_team_evolution_watcher(channel_id, session_id, team_name)
+//
+// Python 步骤：
+//  1. 检查是否已有 watcher 在运行
+//  2. 创建 asyncio task 运行 evolution watcher 循环
+//  3. 注册到 _team_evolution_watchers
+//
+// Go 差异：Python 的 evolution watcher 是一个 async task，
+// Go 侧使用 goroutine + context.CancelFunc 模拟。
+// 当前实现为占位，待 evolution watcher 完整实现后回填。
+func (m *TeamManager) autoStartEvolutionWatcher(ctx context.Context, sessionID string, teamName string) {
+	// 检查是否已有 watcher
+	if existing := m.GetTeamEvolutionWatcher(sessionID); existing != nil {
+		logger.Debug(logComponent).Str("session_id", sessionID).
+			Msg("evolution watcher 已存在，跳过自动启动")
+		return
+	}
+
+	// ⤵️ 待回填：完整实现 evolution watcher goroutine
+	// 对齐 Python: asyncio.create_task(start_team_evolution_watcher(channel_id, session_id, team_name))
+	// 当 evolution event bus 完整实现后，此 goroutine 应：
+	//   1. 订阅 TeamSkillEvolutionRail 的 evolution 事件
+	//   2. 监听 skill 变更通知
+	//   3. 推送 server_push 消息到前端
+	watcherCtx, cancel := context.WithCancel(ctx)
+	m.RegisterTeamEvolutionWatcher(sessionID, cancel)
+
+	// 启动占位 goroutine，等待 watcher 实现后替换
+	go func() {
+		defer logger.Info(logComponent).Str("session_id", sessionID).Msg("evolution watcher goroutine 退出")
+		logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
+			Msg("evolution watcher goroutine 启动（占位，待回填）")
+		<-watcherCtx.Done()
+	}()
+
+	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
+		Msg("自动启动 evolution watcher（占位）")
 }

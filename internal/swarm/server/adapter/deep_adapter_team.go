@@ -213,6 +213,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			//  2. teamManager.PrepareRuntimeActivation(ctx, sessionID, teamSpec.TeamName)
 			//  3. 创建 TeamAgent + 启动 streaming goroutine
 			//  4. teamManager.CommitRuntimeReady(sessionID, teamSpec.TeamName)
+			//  5. teamManager.OnRuntimeReady(ctx, sessionID, teamAgent, hideDM)
 			//  5. 注册 stream task cancel
 			// ⤵️(#9.85): TeamRunner 完整创建 TeamAgent + streaming 流程
 			return

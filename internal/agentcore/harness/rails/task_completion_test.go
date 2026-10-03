@@ -614,5 +614,10 @@ func (f *fakeDeepAgentForNotify) FindRailsByType(_ ...reflect.Type) []agentinter
 	return nil
 }
 
+// UnregisterRail 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForNotify) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
+	return nil
+}
+
 // 确保编译时 fakeDeepAgentForNotify 满足必要的接口
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForNotify)(nil)
