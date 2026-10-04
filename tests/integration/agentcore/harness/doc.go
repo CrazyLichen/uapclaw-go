@@ -10,6 +10,7 @@
 //	harness/
 //	├── doc.go               # 包文档
 //	├── deep_agent_test.go   # DeepAgent E2E 测试
+//	├── force_finish_test.go # ForceFinish 机制集成测试
 //	├── outer_loop_test.go   # 外层循环（TaskLoop）集成测试
 //	├── steer_test.go        # Steering 内循环集成测试
 //	└── rails/               # Rail 子系统测试
