@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	memory "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -20,8 +21,8 @@ import (
 // 覆盖：
 //   - Init 注册 coding_memory 工具
 //   - BeforeInvoke 异步预取
-//   - BeforeModelCall 有/无召回结果注入
-//   - Uninit 清理
+//   - BeforeModelCall 有/无召回结果注入 + SectionMemory 内容
+//   - Uninit 清理工具和 Section
 //
 // 对应 Python 代码：openjiuwen/harness/rails/memory/coding_memory_rail.py
 type CodingMemoryRailSuite struct {
@@ -34,9 +35,9 @@ func TestCodingMemoryRailSuite(t *testing.T) {
 	suite.Run(t, new(CodingMemoryRailSuite))
 }
 
-// TestCodingMemoryRail_Init注册工具 测试 CodingMemoryRail.Init 注册 coding_memory 工具到 ability_manager。
+// TestCodingMemoryRail_Init注册3个工具 测试 CodingMemoryRail.Init 注册 3 个 coding_memory 工具到 ability_manager。
 // 对齐 Python: CodingMemoryRail.init(agent) 中 _register_coding_memory_tools
-func (s *CodingMemoryRailSuite) TestCodingMemoryRail_Init注册工具() {
+func (s *CodingMemoryRailSuite) TestCodingMemoryRail_Init注册3个工具() {
 	tempDir := s.T().TempDir()
 	rail := memory.NewCodingMemoryRail(tempDir, nil, "cn")
 
@@ -53,9 +54,41 @@ func (s *CodingMemoryRailSuite) TestCodingMemoryRail_Init注册工具() {
 	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "测试 coding memory"})
 	s.Require().NoError(err, "Invoke 不应返回错误")
 
-	// 验证 ability_manager 包含 coding_memory 工具
+	// 验证 ability_manager 包含 3 个 coding_memory 工具
 	am := agent.AbilityManager()
 	s.Require().NotNil(am, "AbilityManager 不应为 nil")
+	s.NotNil(am.Get("coding_memory_read"), "应注册 coding_memory_read")
+	s.NotNil(am.Get("coding_memory_write"), "应注册 coding_memory_write")
+	s.NotNil(am.Get("coding_memory_edit"), "应注册 coding_memory_edit")
+}
+
+// TestCodingMemoryRail_BeforeModelCall_注入SectionMemory 测试 BeforeModelCall 注入 SectionMemory 节。
+// 对齐 Python: CodingMemoryRail.before_model_call(ctx) 中向 SystemPromptBuilder 添加 memory section
+func (s *CodingMemoryRailSuite) TestCodingMemoryRail_BeforeModelCall_注入SectionMemory() {
+	tempDir := s.T().TempDir()
+	rail := memory.NewCodingMemoryRail(tempDir, nil, "cn")
+
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("Section 注入测试"))
+
+	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
+		Rails:         []agentinterfaces.AgentRail{rail},
+		MaxIterations: 3,
+	})
+	s.Require().NoError(err)
+
+	// Invoke 触发 BeforeModelCall，应注入 SectionMemory
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "记忆查询"})
+	s.Require().NoError(err, "BeforeModelCall 应成功完成")
+
+	// 验证 SectionMemory 已注入
+	spb := agent.SystemPromptBuilder()
+	s.Require().NotNil(spb, "SystemPromptBuilder 不应为 nil")
+	s.True(spb.HasSection(hsections.SectionMemory), "应存在 SectionMemory 节")
+
+	// 验证节内容非空
+	section := spb.GetSection(hsections.SectionMemory)
+	s.Require().NotNil(section, "SectionMemory 节不应为 nil")
+	s.NotEmpty(section.Content, "SectionMemory 节内容不应为空")
 }
 
 // TestCodingMemoryRail_BeforeInvoke_异步预取 测试 BeforeInvoke 启动异步预取 goroutine。
@@ -77,48 +110,9 @@ func (s *CodingMemoryRailSuite) TestCodingMemoryRail_BeforeInvoke_异步预取()
 	s.Require().NoError(err, "BeforeInvoke 应成功完成（无 manager 时降级）")
 }
 
-// TestCodingMemoryRail_BeforeModelCall_有结果注入 测试 BeforeModelCall 注入"已加载的相关记忆"节。
-// 对齐 Python: CodingMemoryRail.before_model_call(ctx) 中有召回结果时的注入
-func (s *CodingMemoryRailSuite) TestCodingMemoryRail_BeforeModelCall_有结果注入() {
-	tempDir := s.T().TempDir()
-	rail := memory.NewCodingMemoryRail(tempDir, nil, "cn")
-
-	s.MockLLM.SetResponses(mockllm.CreateTextResponse("有结果注入测试"))
-
-	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
-		Rails:         []agentinterfaces.AgentRail{rail},
-		MaxIterations: 3,
-	})
-	s.Require().NoError(err)
-
-	// 无真实 embedding 时 manager 为 nil，BeforeModelCall 降级注入索引
-	// 验证 Invoke 完成无错误
-	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "记忆查询"})
-	s.Require().NoError(err, "BeforeModelCall 应成功完成（无召回时降级注入索引）")
-}
-
-// TestCodingMemoryRail_BeforeModelCall_无结果降级 测试 BeforeModelCall 无召回结果时降级注入索引。
-// 对齐 Python: CodingMemoryRail.before_model_call(ctx) 中无结果时的降级路径
-func (s *CodingMemoryRailSuite) TestCodingMemoryRail_BeforeModelCall_无结果降级() {
-	tempDir := s.T().TempDir()
-	rail := memory.NewCodingMemoryRail(tempDir, nil, "cn")
-
-	s.MockLLM.SetResponses(mockllm.CreateTextResponse("无结果降级测试"))
-
-	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
-		Rails:         []agentinterfaces.AgentRail{rail},
-		MaxIterations: 3,
-	})
-	s.Require().NoError(err)
-
-	// 无 MemoryIndexManager 时，BeforeModelCall 降级路径
-	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "无记忆查询"})
-	s.Require().NoError(err, "BeforeModelCall 降级路径应成功完成")
-}
-
-// TestCodingMemoryRail_Uninit清理 测试 Uninit 注销工具后无崩溃。
-// 对齐 Python: CodingMemoryRail.uninit(agent) 中工具移除 + 状态清理
-func (s *CodingMemoryRailSuite) TestCodingMemoryRail_Uninit清理() {
+// TestCodingMemoryRail_Uninit清理工具和节 测试 Uninit 注销工具并移除 SectionMemory。
+// 对齐 Python: CodingMemoryRail.uninit(agent) 中工具移除 + 状态清理 + section 移除
+func (s *CodingMemoryRailSuite) TestCodingMemoryRail_Uninit清理工具和节() {
 	tempDir := s.T().TempDir()
 	rail := memory.NewCodingMemoryRail(tempDir, nil, "cn")
 
@@ -133,8 +127,20 @@ func (s *CodingMemoryRailSuite) TestCodingMemoryRail_Uninit清理() {
 	// 执行一次 Invoke
 	_, _ = agent.Invoke(s.Ctx, map[string]any{"query": "测试"})
 
-	// Uninit 不应崩溃
+	// Uninit 应成功
 	s.NotPanics(func() {
 		rail.Uninit(agent)
 	}, "Uninit 不应 panic")
+
+	// 验证工具已从 AM 注销
+	am := agent.AbilityManager()
+	s.Require().NotNil(am)
+	s.Nil(am.Get("coding_memory_read"), "Uninit 后应注销 coding_memory_read")
+	s.Nil(am.Get("coding_memory_write"), "Uninit 后应注销 coding_memory_write")
+	s.Nil(am.Get("coding_memory_edit"), "Uninit 后应注销 coding_memory_edit")
+
+	// 验证 SectionMemory 已移除
+	spb := agent.SystemPromptBuilder()
+	s.Require().NotNil(spb)
+	s.False(spb.HasSection(hsections.SectionMemory), "Uninit 后应移除 SectionMemory 节")
 }

@@ -10,6 +10,7 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -292,6 +293,22 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 	}
 
 	return nil
+}
+
+// GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall + BeforeToolCall。
+//
+// Python: VerificationRail 隐式覆盖 before_model_call/before_tool_call
+func (r *VerificationRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.DeepAgentRail.GetCallbacks()
+
+	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+	callbacks[agentinterfaces.CallbackBeforeToolCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeToolCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+
+	return callbacks
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

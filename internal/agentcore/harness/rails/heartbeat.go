@@ -6,6 +6,7 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -169,6 +170,19 @@ func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterface
 	sb.AddSection(heartbeatSection)
 
 	return nil
+}
+
+// GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall。
+//
+// Python: HeartbeatRail 隐式覆盖 before_model_call
+func (r *HeartbeatRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.DeepAgentRail.GetCallbacks()
+
+	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+
+	return callbacks
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

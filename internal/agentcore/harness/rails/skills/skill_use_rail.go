@@ -21,6 +21,7 @@ import (
 	shelltool "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/shell"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
@@ -369,6 +370,22 @@ func (r *SkillUseRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.Age
 // Python: SkillUseRail.after_invoke()
 func (r *SkillUseRail) AfterInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
+}
+
+// GetCallbacks 覆盖基类回调映射，增加 BeforeInvoke + BeforeModelCall。
+//
+// Python: SkillUseRail 隐式覆盖 before_invoke/before_model_call
+func (r *SkillUseRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.DeepAgentRail.GetCallbacks()
+
+	callbacks[agentinterfaces.CallbackBeforeInvoke] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+
+	return callbacks
 }
 
 // LoadSkillsFromDir 类方法：静态加载技能。

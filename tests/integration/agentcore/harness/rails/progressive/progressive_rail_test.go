@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	progressive "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -19,8 +20,12 @@ import (
 
 // ProgressiveToolRailSuite 测试 ProgressiveToolRail 渐进式工具。
 //
+// 覆盖：
+//   - Init 注册 search_tools/load_tools 元工具
+//   - BeforeModelCall 注入导航节和规则节
+//   - Uninit 清理元工具
+//
 // 对齐 Python: tests/unit_tests/harness/test_progressive_tool_rail.py
-// ProgressiveToolRail 覆盖了 GetCallbacks()，可测回调链路。
 type ProgressiveToolRailSuite struct {
 	isuite.AgentSuite
 }
@@ -31,11 +36,9 @@ func TestProgressiveToolRailSuite(t *testing.T) {
 	suite.Run(t, new(ProgressiveToolRailSuite))
 }
 
-// TestProgressiveToolRail_Init成功 测试 NewProgressiveToolRail + Init 成功。
-// 对齐 Python: test_before_model_call_updates_builder_and_keeps_preview_messages_intact ——
-// Python 中 ProgressiveToolRail.init 注册 search_tools/load_tools 元工具。
-// 注意：需先 Invoke 触发 ensureInitialized。
-func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_Init成功() {
+// TestProgressiveToolRail_Init注册元工具 测试 NewProgressiveToolRail + Init 注册 search_tools/load_tools。
+// 对齐 Python: ProgressiveToolRail.init() 中元工具注册
+func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_Init注册元工具() {
 	config := hschema.NewDeepAgentConfig()
 	config.ProgressiveToolEnabled = true
 	rail := progressive.NewProgressiveToolRail(config)
@@ -48,7 +51,6 @@ func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_Init成功() {
 	})
 	s.Require().NoError(err)
 
-	// 先 Invoke 触发 ensureInitialized → Rail Init
 	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "渐进式测试"})
 	s.Require().NoError(err, "Invoke 不应返回错误")
 
@@ -64,31 +66,9 @@ func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_Init成功() {
 	s.NotNil(am.Get("load_tools"), "应注册 load_tools")
 }
 
-// TestProgressiveToolRail_BeforeInvoke缓存建立 测试 BeforeInvoke 建立工具导航缓存。
-// 对齐 Python: test_before_model_call_updates_builder ——
-// Python 中 BeforeInvoke/BeforeModelCall 建立和更新工具导航缓存。
-func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_BeforeInvoke缓存建立() {
-	config := hschema.NewDeepAgentConfig()
-	config.ProgressiveToolEnabled = true
-	rail := progressive.NewProgressiveToolRail(config)
-
-	s.MockLLM.SetResponses(mockllm.CreateTextResponse("缓存建立测试"))
-
-	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
-		Rails:         []agentinterfaces.AgentRail{rail},
-		MaxIterations: 3,
-	})
-	s.Require().NoError(err)
-
-	// Invoke 触发 BeforeInvoke → BeforeModelCall 链路
-	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "缓存测试"})
-	s.Require().NoError(err, "Invoke 不应返回错误")
-}
-
-// TestProgressiveToolRail_BeforeModelCall导航节注入 测试 BeforeModelCall 注入工具导航 section。
-// 对齐 Python: test_before_model_call_updates_builder ——
-// Python 中 BeforeModelCall 向 SystemPromptBuilder 注入工具导航 section。
-func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_BeforeModelCall导航节注入() {
+// TestProgressiveToolRail_BeforeModelCall_注入导航节和规则节 测试 BeforeModelCall 注入 SectionToolNavigation + SectionProgressiveToolRules。
+// 对齐 Python: ProgressiveToolRail.before_model_call() 中 section 注入
+func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_BeforeModelCall_注入导航节和规则节() {
 	config := hschema.NewDeepAgentConfig()
 	config.ProgressiveToolEnabled = true
 	rail := progressive.NewProgressiveToolRail(config)
@@ -101,11 +81,49 @@ func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_BeforeModelCall导航
 	})
 	s.Require().NoError(err)
 
-	// Invoke 触发 BeforeModelCall
 	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "导航测试"})
 	s.Require().NoError(err, "Invoke 不应返回错误")
 
-	// 验证 SystemPromptBuilder
+	// 验证导航节和规则节已注入
 	spb := agent.SystemPromptBuilder()
-	s.Require().NotNil(spb, "SystemPromptBuilder 不应为 nil")
+	s.Require().NotNil(spb)
+	s.True(spb.HasSection(hsections.SectionToolNavigation), "应存在 SectionToolNavigation 节")
+	s.True(spb.HasSection(hsections.SectionProgressiveToolRules), "应存在 SectionProgressiveToolRules 节")
+
+	// 验证节内容非空
+	navSection := spb.GetSection(hsections.SectionToolNavigation)
+	s.Require().NotNil(navSection)
+	s.NotEmpty(navSection.Content, "SectionToolNavigation 内容不应为空")
+
+	rulesSection := spb.GetSection(hsections.SectionProgressiveToolRules)
+	s.Require().NotNil(rulesSection)
+	s.NotEmpty(rulesSection.Content, "SectionProgressiveToolRules 内容不应为空")
+}
+
+// TestProgressiveToolRail_Uninit清理 测试 Uninit 移除元工具。
+func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_Uninit清理() {
+	config := hschema.NewDeepAgentConfig()
+	config.ProgressiveToolEnabled = true
+	rail := progressive.NewProgressiveToolRail(config)
+
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("Uninit 测试"))
+
+	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
+		Rails:         []agentinterfaces.AgentRail{rail},
+		MaxIterations: 3,
+	})
+	s.Require().NoError(err)
+
+	_, _ = agent.Invoke(s.Ctx, map[string]any{"query": "测试"})
+
+	// Uninit
+	s.NotPanics(func() {
+		rail.Uninit(agent)
+	}, "Uninit 不应 panic")
+
+	// 验证元工具已从 AM 注销
+	am := agent.AbilityManager()
+	s.Require().NotNil(am)
+	s.Nil(am.Get("search_tools"), "Uninit 后应注销 search_tools")
+	s.Nil(am.Get("load_tools"), "Uninit 后应注销 load_tools")
 }

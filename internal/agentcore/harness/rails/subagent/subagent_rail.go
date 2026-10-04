@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hsubagent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -172,6 +173,19 @@ func (r *SubagentRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces
 
 	// ⤵️ 异步模式待回填：注入 session_tools prompt section
 	return nil
+}
+
+// GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall。
+//
+// Python: SubagentRail 隐式覆盖 before_model_call
+func (r *SubagentRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.DeepAgentRail.GetCallbacks()
+
+	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+
+	return callbacks
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
