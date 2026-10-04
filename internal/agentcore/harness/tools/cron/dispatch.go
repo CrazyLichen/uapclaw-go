@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -39,14 +40,14 @@ func dispatchCronAction(
 ) (map[string]any, error) {
 	// 1. 提取 action
 	// Python: action_name = str(action or "").strip().lower()
-	actionName := strings.TrimSpace(strings.ToLower(strVal(inputs, "action")))
+	actionName := strings.TrimSpace(strings.ToLower(utils.StrValFromMap(inputs, "action")))
 
 	// 2. 提取 jobId（兼容 Python kwargs.pop("id", None)）
 	// Python: legacy_job_id = kwargs.pop("id", None)
 	// Python: target_job_id = str(jobId or legacy_job_id or "").strip()
-	targetJobID := strings.TrimSpace(strVal(inputs, "jobId"))
+	targetJobID := strings.TrimSpace(utils.StrValFromMap(inputs, "jobId"))
 	if targetJobID == "" {
-		targetJobID = strings.TrimSpace(strVal(inputs, "id"))
+		targetJobID = strings.TrimSpace(utils.StrValFromMap(inputs, "id"))
 	}
 
 	// 3. 防御性日志：记录 action 和 jobId
@@ -176,8 +177,8 @@ func dispatchCronAction(
 	case "wake":
 		// Python: L199-200:
 		// return await backend.wake(text or "", context=context, mode=mode)
-		text := strVal(inputs, "text")
-		mode := strVal(inputs, "mode")
+		text := utils.StrValFromMap(inputs, "text")
+		mode := utils.StrValFromMap(inputs, "mode")
 		result, err := backend.Wake(ctx, text, cronCtx, mode)
 		if err != nil {
 			return nil, err
@@ -191,19 +192,6 @@ func dispatchCronAction(
 			Msg("不支持的 cron action")
 		return nil, fmt.Errorf("不支持的 cron action: %s", actionName)
 	}
-}
-
-// strVal 从 map[string]any 中提取字符串值。
-func strVal(m map[string]any, key string) string {
-	v, ok := m[key]
-	if !ok {
-		return ""
-	}
-	s, ok := v.(string)
-	if !ok {
-		return fmt.Sprintf("%v", v)
-	}
-	return s
 }
 
 // boolVal 从 map[string]any 中提取布尔值。

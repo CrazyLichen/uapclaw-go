@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -497,9 +498,9 @@ func (p *OpenVikingProvider) handleVikingSearch(ctx context.Context, args map[st
 			sortScore := rawScore
 
 			entry := map[string]any{
-				"uri":      strVal(itemMap["uri"]),
+				"uri":      utils.StrVal(itemMap["uri"]),
 				"type":     strings.TrimRight(ctxType, "s"), // 对齐 Python: ctx_type.rstrip("s")
-				"abstract": strVal(itemMap["abstract"]),
+				"abstract": utils.StrVal(itemMap["abstract"]),
 			}
 			// 对齐 Python: entry["score"] = round(raw_score, 3) if raw_score is not None else 0.0
 			if hasScore {
@@ -516,7 +517,7 @@ func (p *OpenVikingProvider) handleVikingSearch(ctx context.Context, args map[st
 						break
 					}
 					if rMap, ok := r.(map[string]any); ok {
-						related = append(related, strVal(rMap["uri"]))
+						related = append(related, utils.StrVal(rMap["uri"]))
 					}
 				}
 				entry["related"] = related
@@ -560,9 +561,9 @@ func (p *OpenVikingProvider) handleVikingRead(ctx context.Context, args map[stri
 	}
 
 	// 对齐 Python: level = args.get("level", args.get("detail", "overview"))
-	level := strVal(args["level"])
+	level := utils.StrVal(args["level"])
 	if level == "" {
-		level = strVal(args["detail"])
+		level = utils.StrVal(args["detail"])
 	}
 	if level == "" {
 		level = "overview"
@@ -662,9 +663,9 @@ func (p *OpenVikingProvider) handleVikingBrowse(ctx context.Context, args map[st
 				if eMap == nil {
 					continue
 				}
-				name := strVal(eMap["rel_path"])
+				name := utils.StrVal(eMap["rel_path"])
 				if name == "" {
-					name = strVal(eMap["name"])
+					name = utils.StrVal(eMap["name"])
 				}
 				entryType := "file"
 				if isDir, _ := eMap["isDir"].(bool); isDir {
@@ -672,9 +673,9 @@ func (p *OpenVikingProvider) handleVikingBrowse(ctx context.Context, args map[st
 				}
 				formatted = append(formatted, map[string]any{
 					"name":     name,
-					"uri":      strVal(eMap["uri"]),
+					"uri":      utils.StrVal(eMap["uri"]),
 					"type":     entryType,
-					"abstract": strVal(eMap["abstract"]),
+					"abstract": utils.StrVal(eMap["abstract"]),
 				})
 			}
 			return map[string]any{
@@ -803,12 +804,6 @@ func floatVal(v any) float64 {
 	default:
 		return 0
 	}
-}
-
-// strVal 从 map 值中提取 string。
-func strVal(v any) string {
-	s, _ := v.(string)
-	return s
 }
 
 // floatValOK 从 map 值中提取 float64，同时返回是否存在。

@@ -1,9 +1,10 @@
 package adapter
 
 import (
-	"fmt"
 	"os"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -39,10 +40,10 @@ func ApplyVideoModelConfigFromYAML(configBase map[string]any) {
 	}
 
 	mc := getModelConfig(configBase, "video")
-	apiKey := strVal(mc["api_key"])
-	apiBase := strVal(mc["api_base"])
+	apiKey := utils.StrVal(mc["api_key"])
+	apiBase := utils.StrVal(mc["api_base"])
 	modelName := strOr(mc["model_name"], mc["model"])
-	provider := strVal(mc["model_provider"])
+	provider := utils.StrVal(mc["model_provider"])
 	strict := parseBool(mc["strict"], false)
 
 	if strict {
@@ -91,10 +92,10 @@ func ApplyVisionModelConfigFromYAML(configBase map[string]any) {
 	}
 
 	mc := getModelConfig(configBase, "vision")
-	apiKey := strVal(mc["api_key"])
-	apiBase := strVal(mc["api_base"])
+	apiKey := utils.StrVal(mc["api_key"])
+	apiBase := utils.StrVal(mc["api_base"])
 	modelName := strOr(mc["model_name"], mc["model"])
-	provider := strVal(mc["model_provider"])
+	provider := utils.StrVal(mc["model_provider"])
 	strict := parseBool(mc["strict"], false)
 
 	if !strict {
@@ -140,10 +141,10 @@ func ApplyAudioModelConfigFromYAML(configBase map[string]any) {
 	}
 
 	mc := getModelConfig(configBase, "audio")
-	apiKey := strVal(mc["api_key"])
-	apiBase := strVal(mc["api_base"])
+	apiKey := utils.StrVal(mc["api_key"])
+	apiBase := utils.StrVal(mc["api_base"])
 	modelName := strOr(mc["model_name"], mc["model"])
-	provider := strVal(mc["model_provider"])
+	provider := utils.StrVal(mc["model_provider"])
 	strict := parseBool(mc["strict"], false)
 
 	if !strict {
@@ -186,7 +187,7 @@ func DedicatedMultimodalModelConfigured(configBase map[string]any, modelType str
 		return false
 	}
 	mc := getModelConfig(configBase, modelType)
-	apiKey := strings.TrimSpace(strVal(mc["api_key"]))
+	apiKey := strings.TrimSpace(utils.StrVal(mc["api_key"]))
 	return apiKey != ""
 }
 
@@ -252,7 +253,7 @@ func getEmbedModelName(embedCfg map[string]any, modelType string) string {
 	if !ok || embedCfg == nil {
 		return ""
 	}
-	return strings.TrimSpace(strVal(embedCfg[key]))
+	return strings.TrimSpace(utils.StrVal(embedCfg[key]))
 }
 
 // parseBool 解析布尔值。
@@ -264,28 +265,16 @@ func parseBool(val any, defaultVal bool) bool {
 	if b, ok := val.(bool); ok {
 		return b
 	}
-	s := strings.ToLower(strings.TrimSpace(strVal(val)))
+	s := strings.ToLower(strings.TrimSpace(utils.StrVal(val)))
 	return s == "1" || s == "true" || s == "yes" || s == "on"
-}
-
-// strVal 提取字符串值。
-// Python: str(val).strip()
-func strVal(v any) string {
-	if v == nil {
-		return ""
-	}
-	if s, ok := v.(string); ok {
-		return strings.TrimSpace(s)
-	}
-	return strings.TrimSpace(fmt.Sprintf("%v", v))
 }
 
 // strOr 返回第一个非空字符串值。
 // Python: val1 or val2 逻辑
 func strOr(v1, v2 any) string {
-	s1 := strVal(v1)
+	s1 := strings.TrimSpace(utils.StrVal(v1))
 	if s1 != "" {
 		return s1
 	}
-	return strVal(v2)
+	return strings.TrimSpace(utils.StrVal(v2))
 }

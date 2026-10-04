@@ -2,6 +2,7 @@ package coordination
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"time"
 
@@ -298,9 +299,13 @@ func (b *EventBus) runLoop(ctx context.Context) {
 					defer func() {
 						if r := recover(); r != nil {
 							eventType := event.EventType()
+							// 对齐 Python: logger.exception 自动包含完整堆栈
+							buf := make([]byte, 4096)
+							n := runtime.Stack(buf, false)
 							logger.Error(logComponent).
 								Str("event_type", eventType).
 								Any("recover", r).
+								Str("stack", string(buf[:n])).
 								Msg("EventBus: error in wakeCallback")
 						}
 					}()

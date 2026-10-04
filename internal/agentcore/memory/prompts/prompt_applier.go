@@ -2,9 +2,9 @@ package prompts
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
@@ -18,12 +18,18 @@ import (
 // 单例模式（对齐 Python: PromptApplier(metaclass=Singleton)），
 // 缓存已加载的 PromptTemplate 实例，避免重复 I/O。
 //
+// 支持两种模板源：
+//   - embed.FS（默认）：编译时嵌入 .md 文件，部署后无需源码路径
+//   - 文件系统目录（测试用）：NewPromptApplier(dir) 从指定目录读取
+//
 // Python: openjiuwen/core/memory/prompts/prompt_applier.py (PromptApplier)
 type PromptApplier struct {
 	// cache 已加载的模板缓存：file_prefix → *prompt.PromptTemplate
 	cache sync.Map
-	// promptDir 模板文件目录路径
+	// promptDir 模板文件目录路径（文件系统模式，空字符串表示使用 embed.FS）
 	promptDir string
+	// useEmbed 是否使用 embed.FS 读取模板
+	useEmbed bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -45,25 +51,22 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DefaultApplier 返回全局 PromptApplier 单例。
-// 模板目录通过 runtime.Caller(0) 获取当前文件所在目录（对齐 Python: Path(__file__).parent）。
+// 默认使用 go:embed 嵌入的模板文件，编译部署后无需源码路径。
+// 对齐 Python: Path(__file__).parent（Python 依赖源码部署，Go 使用 embed 确保二进制自带模板）。
 func DefaultApplier() *PromptApplier {
 	defaultApplierOnce.Do(func() {
-		_, thisFile, _, ok := runtime.Caller(0)
-		if !ok {
-			panic("无法获取 PromptApplier 源文件路径")
-		}
-		dir := filepath.Dir(thisFile)
-		defaultApplierInstance = NewPromptApplier(dir)
-		logger.Info(logComponent).Msg("PromptApplier 单例初始化")
+		defaultApplierInstance = &PromptApplier{useEmbed: true}
+		logger.Info(logComponent).Msg("PromptApplier 单例初始化（embed 模式）")
 	})
 	return defaultApplierInstance
 }
 
-// NewPromptApplier 创建 PromptApplier 实例。
-// dir 为模板 .md 文件所在目录。
+// NewPromptApplier 创建 PromptApplier 实例（文件系统模式）。
+// dir 为模板 .md 文件所在目录。适用于测试或需要运行时热更新模板的场景。
 func NewPromptApplier(dir string) *PromptApplier {
 	return &PromptApplier{
 		promptDir: dir,
+		useEmbed:  false,
 	}
 }
 
@@ -101,10 +104,23 @@ func (a *PromptApplier) GetTemplate(filePrefix string) (*prompt.PromptTemplate, 
 		return cached.(*prompt.PromptTemplate), nil
 	}
 
-	filePath := filepath.Join(a.promptDir, filePrefix+".md")
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("提示词模板文件不存在: %s: %w", filePath, err)
+	var content []byte
+	var err error
+	fileName := filePrefix + ".md"
+
+	if a.useEmbed {
+		// embed.FS 模式：从编译时嵌入的文件系统读取
+		content, err = fs.ReadFile(templateFS, fileName)
+		if err != nil {
+			return nil, fmt.Errorf("提示词模板文件不存在（embed）: %s: %w", fileName, err)
+		}
+	} else {
+		// 文件系统模式：从指定目录读取
+		filePath := filepath.Join(a.promptDir, fileName)
+		content, err = os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("提示词模板文件不存在: %s: %w", filePath, err)
+		}
 	}
 
 	tmpl := prompt.NewPromptTemplate(filePrefix, string(content))

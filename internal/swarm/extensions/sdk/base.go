@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"gopkg.in/yaml.v3"
 )
@@ -80,12 +81,12 @@ func (b *BaseExtensionImpl) LoadMetadataFromYAML() (*extensions.ExtensionMetadat
 	}
 
 	m := &extensions.ExtensionMetadata{
-		ID:                    strVal(raw, "id"),
-		Name:                  strVal(raw, "name"),
-		Version:               strVal(raw, "version"),
-		Description:           strVal(raw, "description"),
-		Author:                strVal(raw, "author"),
-		MinJiuwenSwarmVersion: strVal(raw, "min_jiuwenswarm_version"),
+		ID:                    utils.StrValFromMap(raw, "id"),
+		Name:                  utils.StrValFromMap(raw, "name"),
+		Version:               utils.StrValFromMap(raw, "version"),
+		Description:           utils.StrValFromMap(raw, "description"),
+		Author:                utils.StrValFromMap(raw, "author"),
+		MinJiuwenSwarmVersion: utils.StrValFromMap(raw, "min_jiuwenswarm_version"),
 	}
 	if deps, ok := raw["dependencies"].(map[string]any); ok {
 		m.Dependencies = make(map[string]string, len(deps))
@@ -132,11 +133,3 @@ func (b *BaseExtensionImpl) LoadConfigFromYAML() map[string]any {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// strVal 从 map 中安全提取字符串值
-func strVal(m map[string]any, key string) string {
-	v, ok := m[key]
-	if !ok {
-		return ""
-	}
-	return fmt.Sprintf("%v", v)
-}

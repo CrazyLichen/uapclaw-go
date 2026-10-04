@@ -3,6 +3,8 @@ package browser_move
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -32,7 +34,7 @@ func ExtractJSONObject(text any) map[string]any {
 		return map[string]any{}
 	}
 
-	raw := strings.TrimSpace(strVal(text))
+	raw := strings.TrimSpace(utils.StrVal(text))
 	if raw == "" {
 		return map[string]any{}
 	}
@@ -178,18 +180,3 @@ func SanitizeJSONSchema(schema any) any {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// strVal 将 any 转换为字符串
-func strVal(v any) string {
-	if v == nil {
-		return ""
-	}
-	switch val := v.(type) {
-	case string:
-		return val
-	case []byte:
-		return string(val)
-	default:
-		b, _ := json.Marshal(v)
-		return string(b)
-	}
-}

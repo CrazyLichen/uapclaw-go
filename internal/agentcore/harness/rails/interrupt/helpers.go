@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -110,22 +111,22 @@ func extractQuestionFromInteraction(payload any) map[string]any {
 		valueObj, hasValue := m["value"]
 		if hasValue {
 			if valueMap, ok := valueObj.(map[string]any); ok {
-				message = strVal(valueMap, "message")
+				message = utils.StrValFromMap(valueMap, "message")
 				if message == "" {
-					message = strVal(valueMap, "question")
+					message = utils.StrValFromMap(valueMap, "question")
 				}
-				toolName = strVal(valueMap, "tool_name")
+				toolName = utils.StrValFromMap(valueMap, "tool_name")
 				uiOptions = valueMap["ui_options"]
 			} else {
-				message = strVal(m, "message")
+				message = utils.StrValFromMap(m, "message")
 				if message == "" {
-					message = strVal(m, "question")
+					message = utils.StrValFromMap(m, "question")
 				}
 			}
 		} else {
-			message = strVal(m, "message")
+			message = utils.StrValFromMap(m, "message")
 			if message == "" {
-				message = strVal(m, "question")
+				message = utils.StrValFromMap(m, "question")
 			}
 		}
 	} else {
@@ -174,7 +175,7 @@ func iterInteractions(outputs []any) []any {
 // Python: _extract_interaction_parts(interaction) (line 351-362)
 func extractInteractionParts(interaction any) (string, any) {
 	if m, ok := interaction.(map[string]any); ok {
-		requestID := strVal(m, "id")
+		requestID := utils.StrValFromMap(m, "id")
 		valueObj := m["value"]
 		return strings.TrimSpace(requestID), valueObj
 	}
@@ -250,8 +251,8 @@ func buildMultiQuestions(questionsData []any) []map[string]any {
 					continue
 				}
 				options = append(options, map[string]any{
-					"label":       strVal(optMap, "label"),
-					"description": strVal(optMap, "description"),
+					"label":       utils.StrValFromMap(optMap, "label"),
+					"description": utils.StrValFromMap(optMap, "description"),
 				})
 			}
 			// 追加 Other 选项
@@ -267,26 +268,13 @@ func buildMultiQuestions(questionsData []any) []map[string]any {
 		}
 
 		questions = append(questions, map[string]any{
-			"question":     strVal(qMap, "question"),
-			"header":       strVal(qMap, "header"),
+			"question":     utils.StrValFromMap(qMap, "question"),
+			"header":       utils.StrValFromMap(qMap, "header"),
 			"options":      options,
 			"multi_select": multiSelect,
 		})
 	}
 	return questions
-}
-
-// strVal 从 map 中提取字符串值。
-func strVal(m map[string]any, key string) string {
-	v, ok := m[key]
-	if !ok {
-		return ""
-	}
-	s, ok := v.(string)
-	if !ok {
-		return ""
-	}
-	return s
 }
 
 // toSlice 将 any 转换为 []any。

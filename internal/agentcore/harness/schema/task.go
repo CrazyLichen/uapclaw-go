@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -133,10 +134,10 @@ func (item TodoItem) ToDict() map[string]any {
 // FromDict 从序列化字典恢复 TodoItem
 func (TodoItem) FromDict(data map[string]any) TodoItem {
 	item := TodoItem{
-		ID:          strVal(data, "id", ""),
-		Content:     strVal(data, "content", ""),
-		ActiveForm:  strVal(data, "activeForm", ""),
-		Description: strVal(data, "description", ""),
+		ID:          utils.StrValDefault(data["id"], ""),
+		Content:     utils.StrValDefault(data["content"], ""),
+		ActiveForm:  utils.StrValDefault(data["activeForm"], ""),
+		Description: utils.StrValDefault(data["description"], ""),
 	}
 	if statusStr, ok := data["status"].(string); ok {
 		if parsed, err := ParseTodoStatus(statusStr); err == nil {
@@ -300,7 +301,7 @@ func (tp TaskPlan) ToDict() map[string]any {
 // FromDict 从序列化字典恢复 TaskPlan
 func (TaskPlan) FromDict(data map[string]any) TaskPlan {
 	tp := TaskPlan{
-		Goal: strVal(data, "goal", ""),
+		Goal: utils.StrValDefault(data["goal"], ""),
 	}
 	if v, ok := data["tasks"].([]any); ok {
 		for _, item := range v {

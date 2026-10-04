@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -632,20 +633,6 @@ func extractSessionID(opts []tool.ToolOption) (string, error) {
 	return sessionID, nil
 }
 
-// strVal 从 map 中提取字符串值，不存在或非字符串类型时返回空字符串
-func strVal(data map[string]any, key string) string {
-	val, _ := data[key].(string)
-	return val
-}
-
-// strValDefault 从 map 中提取字符串值，不存在或非字符串类型时返回默认值
-func strValDefault(data map[string]any, key string, defaultVal string) string {
-	if val, ok := data[key].(string); ok {
-		return val
-	}
-	return defaultVal
-}
-
 // uniqueIDs 对 ID 列表做去重，返回 map[string]struct{}
 // Python: delete_ids = set(ids)
 func uniqueIDs(ids []string) map[string]struct{} {
@@ -719,7 +706,7 @@ func updateTodos(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.
 	// Python: L664-688: 逐个就地修改
 	updatedCount := 0
 	for _, todoData := range updates {
-		todoID := strVal(todoData, "id")
+		todoID := utils.StrValFromMap(todoData, "id")
 		if todoID == "" {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
@@ -734,26 +721,26 @@ func updateTodos(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.
 			)
 		}
 		if _, exists := todoData["content"]; exists {
-			currentTodo.Content = strVal(todoData, "content")
+			currentTodo.Content = utils.StrValFromMap(todoData, "content")
 		}
 		if _, exists := todoData["activeForm"]; exists {
-			currentTodo.ActiveForm = strVal(todoData, "activeForm")
+			currentTodo.ActiveForm = utils.StrValFromMap(todoData, "activeForm")
 		}
 		if _, exists := todoData["description"]; exists {
-			currentTodo.Description = strVal(todoData, "description")
+			currentTodo.Description = utils.StrValFromMap(todoData, "description")
 		}
 		if _, exists := todoData["status"]; exists {
-			parsed, err := hschema.ParseTodoStatus(strVal(todoData, "status"))
+			parsed, err := hschema.ParseTodoStatus(utils.StrValFromMap(todoData, "status"))
 			if err != nil {
 				return nil, "", exception.BuildError(
 					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", fmt.Sprintf("无效的状态 '%s'（任务 '%s'）", strVal(todoData, "status"), todoID)),
+					exception.WithParam("reason", fmt.Sprintf("无效的状态 '%s'（任务 '%s'）", utils.StrValFromMap(todoData, "status"), todoID)),
 				)
 			}
 			currentTodo.Status = parsed
 		}
 		if _, exists := todoData["selected_model_id"]; exists {
-			currentTodo.SelectedModelID = strVal(todoData, "selected_model_id")
+			currentTodo.SelectedModelID = utils.StrValFromMap(todoData, "selected_model_id")
 		}
 		updatedCount++
 	}
@@ -850,7 +837,7 @@ func appendTodos(todos []hschema.TodoItem, newItems []map[string]any) ([]hschema
 		if err := validateSingleTodoItem(todoData); err != nil {
 			return nil, "", err
 		}
-		todoID := strVal(todoData, "id")
+		todoID := utils.StrValFromMap(todoData, "id")
 		if _, exists := todoIDs[todoID]; exists {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
@@ -898,7 +885,7 @@ func insertAfterTodos(todos []hschema.TodoItem, targetID string, items []map[str
 	}
 	insertTodos := make([]hschema.TodoItem, 0, len(items))
 	for _, todoData := range items {
-		todoID := strVal(todoData, "id")
+		todoID := utils.StrValFromMap(todoData, "id")
 		if _, exists := existingIDs[todoID]; exists {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
@@ -953,7 +940,7 @@ func insertBeforeTodos(todos []hschema.TodoItem, targetID string, items []map[st
 	}
 	insertTodos := make([]hschema.TodoItem, 0, len(items))
 	for _, todoData := range items {
-		todoID := strVal(todoData, "id")
+		todoID := utils.StrValFromMap(todoData, "id")
 		if _, exists := existingIDs[todoID]; exists {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
@@ -1052,14 +1039,14 @@ func validateSingleTodoItem(item map[string]any) error {
 // Python: TodoModifyTool._convert_to_todo_item L625-633
 // 所有字符串字段 TrimSpace，id 为空时自动生成 uuid
 func todoItemFromMap(data map[string]any) hschema.TodoItem {
-	id := strings.TrimSpace(strVal(data, "id"))
+	id := strings.TrimSpace(utils.StrValFromMap(data, "id"))
 	if id == "" {
 		id = uuid.New().String()
 	}
-	content := strings.TrimSpace(strVal(data, "content"))
-	activeForm := strings.TrimSpace(strValDefault(data, "activeForm", ""))
-	description := strings.TrimSpace(strValDefault(data, "description", ""))
-	selectedModelID := strings.TrimSpace(strValDefault(data, "selected_model_id", ""))
+	content := strings.TrimSpace(utils.StrValFromMap(data, "content"))
+	activeForm := strings.TrimSpace(utils.StrValDefault(data["activeForm"], ""))
+	description := strings.TrimSpace(utils.StrValDefault(data["description"], ""))
+	selectedModelID := strings.TrimSpace(utils.StrValDefault(data["selected_model_id"], ""))
 
 	item := hschema.TodoItem{
 		ID:              id,
@@ -1070,7 +1057,7 @@ func todoItemFromMap(data map[string]any) hschema.TodoItem {
 		SelectedModelID: selectedModelID,
 	}
 
-	if statusStr := strVal(data, "status"); statusStr != "" {
+	if statusStr := utils.StrValFromMap(data, "status"); statusStr != "" {
 		if parsed, err := hschema.ParseTodoStatus(statusStr); err == nil {
 			item.Status = parsed
 		}

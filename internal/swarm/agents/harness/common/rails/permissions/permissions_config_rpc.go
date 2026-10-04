@@ -9,6 +9,7 @@ import (
 
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -147,7 +148,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		if params == nil {
 			return false, errPayload("params must be object", "BAD_REQUEST")
 		}
-		rid := strVal(params["id"])
+		rid := utils.StrVal(params["id"])
 		patch, _ := params["patch"].(map[string]any)
 		if patch == nil {
 			return false, errPayload("patch must be object", "BAD_REQUEST")
@@ -162,7 +163,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		if params == nil {
 			return false, errPayload("params must be object", "BAD_REQUEST")
 		}
-		rid := strVal(params["id"])
+		rid := utils.StrVal(params["id"])
 		ok, err := DeletePermissionsRuleInConfig(rid)
 		if err != nil {
 			logger.Error(permRpcLogComponent).
@@ -184,7 +185,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		if params == nil {
 			return false, errPayload("params must be object", "BAD_REQUEST")
 		}
-		oid := strVal(params["id"])
+		oid := utils.StrVal(params["id"])
 		ok, err := DeletePermissionsApprovalOverrideInConfig(oid)
 		if err != nil {
 			logger.Error(permRpcLogComponent).
@@ -391,7 +392,7 @@ func CreatePermissionsRuleInConfig(rule map[string]any) (map[string]any, error) 
 	persistLock.Lock()
 	defer persistLock.Unlock()
 
-	rid := strings.TrimSpace(strVal(rule["id"]))
+	rid := strings.TrimSpace(utils.StrVal(rule["id"]))
 	if rid == "" {
 		rid = "ui_rule_" + randomHex(12)
 	}
@@ -415,11 +416,11 @@ func CreatePermissionsRuleInConfig(rule map[string]any) (map[string]any, error) 
 		return nil, err
 	}
 	stored["tools"] = normalized
-	stored["pattern"] = strings.TrimSpace(strVal(stored["pattern"]))
+	stored["pattern"] = strings.TrimSpace(utils.StrVal(stored["pattern"]))
 	if len(normalized) == 0 {
 		return nil, fmt.Errorf("tools must be a non-empty list")
 	}
-	if strVal(stored["pattern"]) == "" {
+	if utils.StrVal(stored["pattern"]) == "" {
 		return nil, fmt.Errorf("pattern must be non-empty")
 	}
 	normalizeRuleSeverityAction(stored)
@@ -436,7 +437,7 @@ func CreatePermissionsRuleInConfig(rule map[string]any) (map[string]any, error) 
 	// 重复 ID 检查
 	for _, r := range rules {
 		if m, ok := r.(map[string]any); ok {
-			if strings.TrimSpace(strVal(m["id"])) == rid {
+			if strings.TrimSpace(utils.StrVal(m["id"])) == rid {
 				return nil, fmt.Errorf("rule id already exists: %s", rid)
 			}
 		}
@@ -474,7 +475,7 @@ func UpdatePermissionsRuleInConfig(ruleID string, patch map[string]any) (map[str
 	idx := -1
 	for i, r := range rules {
 		if m, ok := r.(map[string]any); ok {
-			if strings.TrimSpace(strVal(m["id"])) == rid {
+			if strings.TrimSpace(utils.StrVal(m["id"])) == rid {
 				idx = i
 				break
 			}
@@ -513,14 +514,14 @@ func UpdatePermissionsRuleInConfig(ruleID string, patch map[string]any) (map[str
 		merged["tools"] = normalized
 	}
 	if _, hasPattern := merged["pattern"]; hasPattern {
-		merged["pattern"] = strings.TrimSpace(strVal(merged["pattern"]))
+		merged["pattern"] = strings.TrimSpace(utils.StrVal(merged["pattern"]))
 	}
 	// 必填检查
 	toolsList, _ := merged["tools"].([]string)
 	if len(toolsList) == 0 {
 		return nil, fmt.Errorf("tools must be a non-empty list")
 	}
-	if strVal(merged["pattern"]) == "" {
+	if utils.StrVal(merged["pattern"]) == "" {
 		return nil, fmt.Errorf("pattern must be non-empty")
 	}
 	normalizeRuleSeverityAction(merged)
@@ -557,7 +558,7 @@ func DeletePermissionsRuleInConfig(ruleID string) (bool, error) {
 	found := false
 	for _, r := range rules {
 		m, ok := r.(map[string]any)
-		if ok && strings.TrimSpace(strVal(m["id"])) == rid {
+		if ok && strings.TrimSpace(utils.StrVal(m["id"])) == rid {
 			found = true
 			continue
 		}
@@ -595,7 +596,7 @@ func DeletePermissionsApprovalOverrideInConfig(overrideID string) (bool, error) 
 	found := false
 	for _, x := range ov {
 		m, ok := x.(map[string]any)
-		if ok && strings.TrimSpace(strVal(m["id"])) == oid {
+		if ok && strings.TrimSpace(utils.StrVal(m["id"])) == oid {
 			found = true
 			continue
 		}
@@ -659,19 +660,11 @@ func errPayload(message, code string) map[string]any {
 // toolNameFromParams 从 params 中提取 tool/name 字段。
 // Python: str(params.get("tool") or params.get("name") or "").strip()
 func toolNameFromParams(params map[string]any) string {
-	name := strVal(params["tool"])
+	name := utils.StrVal(params["tool"])
 	if name == "" {
-		name = strVal(params["name"])
+		name = utils.StrVal(params["name"])
 	}
 	return strings.TrimSpace(name)
-}
-
-// strVal 安全获取 string 值
-func strVal(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
 }
 
 // validateToolsMap 校验 tools 映射值。

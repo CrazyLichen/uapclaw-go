@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -103,11 +104,11 @@ func NewBrowserProfileFromDict(raw map[string]any) *BrowserProfile {
 	}
 
 	return &BrowserProfile{
-		Name:          strValOrEmpty(raw["name"]),
+		Name:          utils.StrVal(raw["name"]),
 		DriverType:    driverType,
-		CDPURL:        strValOrEmpty(raw["cdp_url"]),
-		BrowserBinary: strValOrEmpty(raw["browser_binary"]),
-		UserDataDir:   strValOrEmpty(raw["user_data_dir"]),
+		CDPURL:        utils.StrVal(raw["cdp_url"]),
+		BrowserBinary: utils.StrVal(raw["browser_binary"]),
+		UserDataDir:   utils.StrVal(raw["user_data_dir"]),
 		DebugPort:     debugPort,
 		Host:          host,
 		ExtraArgs:     extraArgs,
@@ -338,14 +339,3 @@ func (s *BrowserProfileStore) sortedProfileDicts() []map[string]any {
 	return result
 }
 
-// strValOrEmpty 从 any 值取字符串，nil 或 "<nil>" 返回空字符串。
-func strValOrEmpty(v any) string {
-	if v == nil {
-		return ""
-	}
-	s := strings.TrimSpace(fmt.Sprintf("%v", v))
-	if s == "<nil>" {
-		return ""
-	}
-	return s
-}

@@ -117,6 +117,10 @@ type SessionMemoryAgent interface {
 // SessionMemoryAgentOption agent 调用选项（简化版）。
 type SessionMemoryAgentOption any
 
+// SessionMemoryTaskCallback 后台任务完成回调。
+// 对齐 Python: _on_task_done(session_id, task)
+type SessionMemoryTaskCallback func(sessionID string, err error)
+
 // SessionMemoryManager 会话记忆管理器，协调何时触发更新、后台任务调度和文件管理。
 //
 // Python: openjiuwen/core/context_engine/context/session_memory_manager.py (SessionMemoryManager)
@@ -129,6 +133,9 @@ type SessionMemoryManager struct {
 	mu sync.Mutex
 	// tasks 后台任务取消函数（key=sessionID）
 	tasks map[string]context.CancelFunc
+	// onTaskDone 后台任务完成回调，对齐 Python: _on_task_done
+	// 任务被取消时 err 为 nil，任务异常时 err 非 nil
+	onTaskDone SessionMemoryTaskCallback
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -655,12 +662,31 @@ func (m *SessionMemoryManager) MaybeScheduleUpdate(
 		Msg("调度会话记忆更新")
 
 	go func() {
+		var panicked any
 		defer func() {
+			if r := recover(); r != nil {
+				panicked = r
+				// 对齐 Python: logger.warning("Session memory background task failed: %s", exc)
+				logger.Warn(logComponent).
+					Str("session_id", sessionID).
+					Any("panic", r).
+					Msg("Session memory background task panicked")
+			}
 			m.mu.Lock()
 			delete(m.tasks, sessionID)
+			callback := m.onTaskDone
 			m.mu.Unlock()
+			if callback != nil {
+				// 对齐 Python _on_task_done: cancelled 返回 nil，异常返回 error
+				var taskErr error
+				if panicked != nil {
+					taskErr = fmt.Errorf("session memory task panicked: %v", panicked)
+				}
+				callback(sessionID, taskErr)
+			}
 		}()
 
+		// 对齐 Python _on_task_done：被取消时不记录异常
 		m.updateBackground(bgCtx, sess, mc, completedContextWindow, notesPath, pendingNotesPath)
 	}()
 }
@@ -778,6 +804,15 @@ func (m *SessionMemoryManager) CollectContextWindow(mc iface.ModelContext) *ifac
 func (m *SessionMemoryManager) UpdateInheritedSystemPrompt(messages []llm_schema.BaseMessage) {
 	inheritedSystemPrompt := buildSystemPromptText(messages)
 	m.updater.SetInheritedSystemPrompt(inheritedSystemPrompt)
+}
+
+// SetOnTaskDone 设置后台任务完成回调。
+// 对齐 Python: task.add_done_callback(lambda done: self._on_task_done(session_id, done))
+// 回调参数：sessionID 为任务标识，err 为 nil（正常完成或取消）或非 nil（异常）。
+func (m *SessionMemoryManager) SetOnTaskDone(cb SessionMemoryTaskCallback) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onTaskDone = cb
 }
 
 // Shutdown 取消所有后台任务。

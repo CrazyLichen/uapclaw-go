@@ -86,8 +86,9 @@ func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event types.Coo
 // Python: AgentLifecycleHandler.on_standby
 func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ types.CoordinationEvent) {
 	memberName := h.blueprint.MemberName()
+	// 对齐 Python: team_logger.info("[{}] received TEAM_STANDBY, pausing polls", member_name)
+	logger.Info(logComponent).Str("member_name", memberName).Msg("received TEAM_STANDBY, pausing polls")
 	h.poll.PausePolls()
-	logger.Info(logComponent).Str("member_name", memberName).Msg("on_standby: 已暂停周期轮询")
 }
 
 // OnCleaned 收到 TEAM_CLEANED 事件，非 leader 成员关闭自身。
@@ -95,9 +96,12 @@ func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ types.Coordinatio
 // Python: AgentLifecycleHandler.on_cleaned
 func (h *AgentLifecycleHandler) OnCleaned(ctx context.Context, event types.CoordinationEvent) {
 	if h.blueprint.Role() == schema.TeamRoleLeader {
-		logger.Debug(logComponent).Str("member_name", h.blueprint.MemberName()).Msg("on_cleaned: leader 忽略 team_cleaned")
+		// 对齐 Python: team_logger.debug("[{}] ignoring TEAM_CLEANED on leader path", member_name)
+		logger.Debug(logComponent).Str("member_name", h.blueprint.MemberName()).Msg("ignoring TEAM_CLEANED on leader path")
 		return
 	}
+	// 对齐 Python: team_logger.info("[{}] received TEAM_CLEANED, shutting down coordination", member_name)
+	logger.Info(logComponent).Str("member_name", h.blueprint.MemberName()).Msg("received TEAM_CLEANED, shutting down coordination")
 	if err := h.lifecycle.ShutdownSelf(ctx); err != nil {
 		logger.Error(logComponent).
 			Str("member_name", h.blueprint.MemberName()).
@@ -128,6 +132,15 @@ func (h *AgentLifecycleHandler) OnToolApprovalResult(ctx context.Context, event 
 		logger.Debug(logComponent).Msg("on_tool_approval_result: 无法构建 InteractiveInput，跳过")
 		return
 	}
+
+	// 对齐 Python: team_logger.debug("[{}] received tool approval result for tool_call_id={}, approved={}", ...)
+	toolCallID, _ := em.Payload["tool_call_id"].(string)
+	approved, _ := em.Payload["approved"].(bool)
+	logger.Debug(logComponent).
+		Str("member_name", memberName).
+		Str("tool_call_id", toolCallID).
+		Bool("approved", approved).
+		Msg("received tool approval result")
 
 	if err := h.round.ResumeInterrupt(ctx, input); err != nil {
 		logger.Error(logComponent).
@@ -174,6 +187,13 @@ func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event ty
 		return
 	}
 	input := inputPlan
+
+	// 对齐 Python: team_logger.debug("[{}] received task plan response for tool_call_id={}, approved={}", ...)
+	logger.Debug(logComponent).
+		Str("member_name", memberName).
+		Str("tool_call_id", toolCallIDPlan).
+		Bool("approved", approvedPlan).
+		Msg("received task plan response")
 
 	if err := h.round.ResumeInterrupt(ctx, input); err != nil {
 		logger.Error(logComponent).

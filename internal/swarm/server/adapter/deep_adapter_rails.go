@@ -22,6 +22,7 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	permowner "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
@@ -597,9 +598,9 @@ func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[string]any) ext.MemoryProvider {
 	switch providerName {
 	case "mem0":
-		apiKey := strVal(cfg["api_key"])
-		userID := strVal(cfg["user_id"])
-		agentID := strVal(cfg["agent_id"])
+		apiKey := utils.StrVal(cfg["api_key"])
+		userID := utils.StrVal(cfg["user_id"])
+		agentID := utils.StrVal(cfg["agent_id"])
 		rerank := boolVal(cfg["rerank"])
 		provider := ext.NewMem0Provider(apiKey, userID, agentID, rerank)
 		if !provider.IsAvailable() {
@@ -608,11 +609,11 @@ func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[s
 		}
 		return provider
 	case "openviking":
-		endpoint := strVal(cfg["endpoint"])
-		apiKey := strVal(cfg["api_key"])
-		account := strVal(cfg["account"])
-		user := strVal(cfg["user"])
-		agent := strVal(cfg["agent"])
+		endpoint := utils.StrVal(cfg["endpoint"])
+		apiKey := utils.StrVal(cfg["api_key"])
+		account := utils.StrVal(cfg["account"])
+		user := utils.StrVal(cfg["user"])
+		agent := utils.StrVal(cfg["agent"])
 		provider := ext.NewOpenVikingProvider(endpoint, apiKey, account, user, agent)
 		if !provider.IsAvailable() {
 			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenVikingProvider unavailable")
@@ -630,11 +631,11 @@ func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[s
 		return provider
 	case "agentarts":
 		// 对齐 Python: agentarts provider 分支
-		baseURL := strVal(cfg["base_url"])
-		apiKey := strVal(cfg["api_key"])
-		spaceID := strVal(cfg["space_id"])
-		actorID := strVal(cfg["actor_id"])
-		assistantID := strVal(cfg["assistant_id"])
+		baseURL := utils.StrVal(cfg["base_url"])
+		apiKey := utils.StrVal(cfg["api_key"])
+		spaceID := utils.StrVal(cfg["space_id"])
+		actorID := utils.StrVal(cfg["actor_id"])
+		assistantID := utils.StrVal(cfg["assistant_id"])
 		provider := ext.NewAgentArtsProvider(baseURL, apiKey, spaceID, actorID, assistantID, nil)
 		if !provider.IsAvailable() {
 			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: AgentArtsProvider unavailable")
@@ -651,7 +652,7 @@ func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[s
 func (d *DeepAdapter) resolveExternalMemoryUserID() string {
 	_, cfg := getExternalMemoryProviderConfig(d.configCache)
 	if cfg != nil {
-		if uid := strVal(cfg["user_id"]); uid != "" {
+		if uid := utils.StrVal(cfg["user_id"]); uid != "" {
 			return uid
 		}
 	}
@@ -665,7 +666,7 @@ func (d *DeepAdapter) resolveExternalMemoryScopeID() string {
 	if memCfg != nil {
 		extCfg, _ := memCfg["external"].(map[string]any)
 		if extCfg != nil {
-			if sid := strVal(extCfg["scope_id"]); sid != "" {
+			if sid := utils.StrVal(extCfg["scope_id"]); sid != "" {
 				return sid
 			}
 		}
@@ -1591,27 +1592,27 @@ func buildOpenJiuwenProviderConfig(cfg map[string]any, configCache map[string]an
 	ltmDir := filepath.Join(workspace.WorkspaceDir(), "memory", "ltm")
 
 	// KV 配置
-	kvBackend := strOr(strVal(ojCfg["kv_type"]), "shelve")
+	kvBackend := strOr(utils.StrVal(ojCfg["kv_type"]), "shelve")
 	kvBackend = strings.ToLower(strings.TrimSpace(kvBackend))
-	kvPath := strOr(strVal(ojCfg["kv_path"]), filepath.Join(ltmDir, "kv"))
+	kvPath := strOr(utils.StrVal(ojCfg["kv_path"]), filepath.Join(ltmDir, "kv"))
 
 	// Vector 配置
-	vectorBackend := strOr(strVal(ojCfg["vector_type"]), "chroma")
+	vectorBackend := strOr(utils.StrVal(ojCfg["vector_type"]), "chroma")
 	vectorBackend = strings.ToLower(strings.TrimSpace(vectorBackend))
-	vectorDir := strOr(strVal(ojCfg["vector_persist_dir"]), filepath.Join(ltmDir, "chroma"))
+	vectorDir := strOr(utils.StrVal(ojCfg["vector_persist_dir"]), filepath.Join(ltmDir, "chroma"))
 
 	// DB 配置
-	dbBackend := strOr(strVal(ojCfg["db_type"]), "sqlite")
+	dbBackend := strOr(utils.StrVal(ojCfg["db_type"]), "sqlite")
 	dbBackend = strings.ToLower(strings.TrimSpace(dbBackend))
-	dbPath := strOr(strVal(ojCfg["db_path"]), filepath.Join(ltmDir, "ltm.db"))
+	dbPath := strOr(utils.StrVal(ojCfg["db_path"]), filepath.Join(ltmDir, "ltm.db"))
 
 	// Embedding 配置 — 从顶层 embed 配置获取
 	embedCfg, _ := configCache["embed"].(map[string]any)
 	embeddingConfig := map[string]any{}
 	if embedCfg != nil {
-		modelName := strOr(strVal(embedCfg["embed_model"]), os.Getenv("EMBED_MODEL"))
-		baseURL := strOr(strVal(embedCfg["embed_api_base"]), os.Getenv("EMBED_BASE_URL"))
-		apiKey := strOr(strVal(embedCfg["embed_api_key"]), os.Getenv("EMBED_API_KEY"))
+		modelName := strOr(utils.StrVal(embedCfg["embed_model"]), os.Getenv("EMBED_MODEL"))
+		baseURL := strOr(utils.StrVal(embedCfg["embed_api_base"]), os.Getenv("EMBED_BASE_URL"))
+		apiKey := strOr(utils.StrVal(embedCfg["embed_api_key"]), os.Getenv("EMBED_API_KEY"))
 		embeddingConfig["model_name"] = modelName
 		embeddingConfig["base_url"] = baseURL
 		embeddingConfig["api_key"] = apiKey

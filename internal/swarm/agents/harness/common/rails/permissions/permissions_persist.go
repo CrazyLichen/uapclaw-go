@@ -12,6 +12,7 @@ import (
 
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -107,9 +108,9 @@ func PersistCliTrustedDirectoryWithOverrides(rawPath string) map[string]any {
 	shellPattern := "re:" + ".*" + regexp.QuoteMeta(dirNorm) + ".*"
 
 	// 是否写 approval_overrides
-	schemaKey := strings.TrimSpace(strings.ToLower(strVal(permissions["schema"])))
+	schemaKey := strings.TrimSpace(strings.ToLower(utils.StrVal(permissions["schema"])))
 	if schemaKey == "" {
-		schemaKey = strings.TrimSpace(strings.ToLower(strVal(permissions["version"])))
+		schemaKey = strings.TrimSpace(strings.ToLower(utils.StrVal(permissions["version"])))
 	}
 	tiered := schemaKey == "tiered_policy" || schemaKey == "v_cc" || schemaKey == "v4.2" || schemaKey == ""
 
@@ -228,7 +229,7 @@ func ensureApprovalOverridesList(permissions map[string]any) []map[string]any {
 // Python: _has_override_id(overrides, oid) (permissions_persist.py L73-74)
 func hasOverrideID(overrides []map[string]any, oid string) bool {
 	for _, item := range overrides {
-		if strVal(item["id"]) == oid {
+		if utils.StrVal(item["id"]) == oid {
 			return true
 		}
 	}

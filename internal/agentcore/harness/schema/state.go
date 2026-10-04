@@ -1,5 +1,9 @@
 package schema
 
+import (
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // PlanModeState 规划模式会话级状态
@@ -76,7 +80,7 @@ func (PlanModeState) FromDict(data map[string]any) PlanModeState {
 	planSlug, _ := data["plan_slug"].(string)
 	promptContext, _ := data["prompt_context"].(string)
 	return PlanModeState{
-		Mode:          strVal(data, "mode", "normal"),
+		Mode:          utils.StrValDefault(data["mode"], "normal"),
 		PrePlanMode:   prePlanMode,
 		PlanSlug:      planSlug,
 		PromptContext: promptContext,
@@ -155,14 +159,6 @@ func (DeepAgentState) FromSessionDict(data map[string]any) DeepAgentState {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// strVal 从字典中获取字符串值，键不存在时返回默认值
-func strVal(data map[string]any, key string, defaultVal string) string {
-	if v, ok := data[key].(string); ok {
-		return v
-	}
-	return defaultVal
-}
 
 // intVal 从字典中获取整数值，键不存在时返回默认值
 func intVal(data map[string]any, key string, defaultVal int) int {

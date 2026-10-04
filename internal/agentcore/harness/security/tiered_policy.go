@@ -10,6 +10,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/resources"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -392,7 +393,7 @@ func convertBuiltinRules(parsed *resources.BuiltinRules) []map[string]any {
 
 // parsePermissionMode 从配置中解析权限模式
 func parsePermissionMode(config map[string]any) string {
-	mode := strings.ToLower(strings.TrimSpace(strVal(config["permission_mode"])))
+	mode := strings.ToLower(strings.TrimSpace(utils.StrVal(config["permission_mode"])))
 	if mode != "normal" && mode != "strict" {
 		mode = "normal"
 	}
@@ -573,7 +574,7 @@ func collectParamRuleHits(rules []map[string]any, toolName string, toolArgs map[
 		}
 		if !RuleToolsCategoryConsistent(rToolsStr) {
 			logger.Warn(tieredPolicyLogComponent).
-				Str("id", strVal(rule["id"])).
+				Str("id", utils.StrVal(rule["id"])).
 				Strs("tools", rToolsStr).
 				Msg("permission.tiered_policy.rule_skipped: reason=inconsistent_tool_category")
 			continue
@@ -619,7 +620,7 @@ func collectParamRuleHits(rules []map[string]any, toolName string, toolArgs map[
 func collectApprovalOverrideHits(rules []map[string]any, toolName string, toolArgs map[string]any) []string {
 	var hits []string
 	for _, rule := range rules {
-		action := strings.ToLower(strings.TrimSpace(strVal(rule["action"])))
+		action := strings.ToLower(strings.TrimSpace(utils.StrVal(rule["action"])))
 		if action != "allow" {
 			continue
 		}
@@ -636,7 +637,7 @@ func collectApprovalOverrideHits(rules []map[string]any, toolName string, toolAr
 		}
 		if !RuleToolsCategoryConsistent(rToolsStr) {
 			logger.Warn(tieredPolicyLogComponent).
-				Str("id", strVal(rule["id"])).
+				Str("id", utils.StrVal(rule["id"])).
 				Strs("tools", rToolsStr).
 				Msg("permission.tiered_policy.override_skipped: reason=inconsistent_tool_category")
 			continue

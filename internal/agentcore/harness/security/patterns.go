@@ -695,7 +695,7 @@ func ensureSingleAllowOverride(overrides *[]any, toolName, matchType, pattern, a
 		tools := ruleToolsList(m)
 		existingMatchType, _ := m["match_type"].(string)
 		existingPattern, _ := m["pattern"].(string)
-		existingAction := strings.TrimSpace(strings.ToLower(strVal(m["action"])))
+		existingAction := strings.TrimSpace(strings.ToLower(utils.StrVal(m["action"])))
 
 		sig := approvalOverrideSignature{
 			ToolName:          toolName,
@@ -864,10 +864,3 @@ func ruleToolsList(rule map[string]any) []string {
 	}
 }
 
-// strVal 安全获取 string 值
-func strVal(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
-}

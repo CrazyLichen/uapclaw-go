@@ -1,7 +1,7 @@
 // Package utils 提供通用工具函数。
 //
-// 包含单例模式、哈希工具、网络工具、字典操作、端口等待、后台任务管理
-// 和连接池管理等工具，作为 agentcore 和 swarm 共用的工具基础层。
+// 包含单例模式、哈希工具、网络工具、字典操作、字符串值转换、端口等待、
+// 后台任务管理和连接池管理等工具，作为 agentcore 和 swarm 共用的工具基础层。
 //
 // 文件目录：
 //
@@ -15,7 +15,9 @@
 //	├── port_unix.go      # Unix 平台进程存在性检查（syscall.Kill）
 //	├── port_windows.go   # Windows 平台进程存在性检查（os.FindProcess）
 //	├── background.go     # 后台任务：BackgroundTask + Task + TaskManager
-//	└── pool.go           # 引用计数连接池：RefCountedResource + TransportPool + ResourcePool[T]
+//	├── deepcopy.go       # 深拷贝：DeepCopyMap
+//	├── pool.go           # 引用计数连接池：RefCountedResource + TransportPool + ResourcePool[T]
+//	└── strval.go         # 字符串值转换：StrVal + StrValFromMap + StrValDefault
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/common/utils.py

@@ -12,6 +12,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -100,7 +101,7 @@ func (h *OtelTeamMonitorHandler) HandleEvent(ctx context.Context, event *events.
 	if payload == nil {
 		payload = make(map[string]any)
 	}
-	teamName := strVal(payload["team_name"])
+	teamName := utils.StrVal(payload["team_name"])
 
 	switch {
 	case etype == events.TeamEventCreated:
@@ -145,10 +146,10 @@ func (h *OtelTeamMonitorHandler) openTeamSpan(ctx context.Context, teamName stri
 	_, span := h.tracer().Start(ctx, "team."+teamName, trace.WithSpanKind(trace.SpanKindInternal))
 	span.SetAttributes(
 		attribute.String(ATTeamName, teamName),
-		attribute.String(ATTeamDisplayName, strVal(payload["display_name"], teamName)),
+		attribute.String(ATTeamDisplayName, utils.StrValDefault(payload["display_name"], teamName)),
 		attribute.String(ATEventType, events.TeamEventCreated),
 	)
-	if leader := strVal(payload["leader_member_name"]); leader != "" {
+	if leader := utils.StrVal(payload["leader_member_name"]); leader != "" {
 		span.SetAttributes(attribute.String(ATTeamLeader, leader))
 	}
 	h.teamSpans[teamName] = span
@@ -185,7 +186,7 @@ func (h *OtelTeamMonitorHandler) recordTeamEvent(teamName string, name string, a
 func (h *OtelTeamMonitorHandler) openTaskSpan(ctx context.Context, teamName string, payload map[string]any) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	taskID := strVal(payload["task_id"])
+	taskID := utils.StrVal(payload["task_id"])
 	if taskID == "" {
 		return
 	}
@@ -197,12 +198,12 @@ func (h *OtelTeamMonitorHandler) openTaskSpan(ctx context.Context, teamName stri
 	if teamName != "" {
 		span.SetAttributes(attribute.String(ATTeamName, teamName))
 	}
-	if status := strVal(payload["status"]); status != "" {
+	if status := utils.StrVal(payload["status"]); status != "" {
 		span.SetAttributes(attribute.String(ATTaskStatus, status))
 	}
-	assignee := strVal(payload["assignee"])
+	assignee := utils.StrVal(payload["assignee"])
 	if assignee == "" {
-		assignee = strVal(payload["member_name"])
+		assignee = utils.StrVal(payload["member_name"])
 	}
 	if assignee != "" {
 		span.SetAttributes(attribute.String(ATTaskAssignee, assignee))
@@ -215,7 +216,7 @@ func (h *OtelTeamMonitorHandler) openTaskSpan(ctx context.Context, teamName stri
 func (h *OtelTeamMonitorHandler) closeTaskSpan(payload map[string]any, etype string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	taskID := strVal(payload["task_id"])
+	taskID := utils.StrVal(payload["task_id"])
 	span, ok := h.taskSpans[taskID]
 	if !ok {
 		return
@@ -232,13 +233,13 @@ func (h *OtelTeamMonitorHandler) closeTaskSpan(payload map[string]any, etype str
 func (h *OtelTeamMonitorHandler) recordTaskEvent(payload map[string]any, etype string) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	taskID := strVal(payload["task_id"])
+	taskID := utils.StrVal(payload["task_id"])
 	span, ok := h.taskSpans[taskID]
 	if !ok {
 		return
 	}
 	attrs := map[string]any{ATEventType: etype, ATTaskID: taskID}
-	if member := strVal(payload["member_name"]); member != "" {
+	if member := utils.StrVal(payload["member_name"]); member != "" {
 		attrs[ATTaskAssignee] = member
 	}
 	span.AddEvent(etype, trace.WithAttributes(mapToAttributes(attrs)...))
@@ -249,16 +250,16 @@ func (h *OtelTeamMonitorHandler) recordTaskEvent(payload map[string]any, etype s
 func (h *OtelTeamMonitorHandler) recordMemberEvent(teamName string, payload map[string]any, etype string) {
 	attrs := map[string]any{
 		ATEventType:  etype,
-		ATMemberName: strVal(payload["member_name"]),
+		ATMemberName: utils.StrVal(payload["member_name"]),
 	}
 	if _, ok := payload["old_status"]; ok {
-		attrs[ATMemberStatusOld] = strVal(payload["old_status"])
+		attrs[ATMemberStatusOld] = utils.StrVal(payload["old_status"])
 	}
 	if _, ok := payload["new_status"]; ok {
-		attrs[ATMemberStatusNew] = strVal(payload["new_status"])
+		attrs[ATMemberStatusNew] = utils.StrVal(payload["new_status"])
 	}
 	if _, ok := payload["reason"]; ok {
-		attrs[ATMemberRestartReason] = strVal(payload["reason"])
+		attrs[ATMemberRestartReason] = utils.StrVal(payload["reason"])
 	}
 	if rc, ok := payload["restart_count"]; ok {
 		attrs[ATMemberRestartCount] = toInt(rc)
@@ -274,23 +275,12 @@ func (h *OtelTeamMonitorHandler) recordMemberEvent(teamName string, payload map[
 func (h *OtelTeamMonitorHandler) recordMessageEvent(teamName string, payload map[string]any, etype string) {
 	attrs := map[string]any{
 		ATEventType:        etype,
-		ATMessageID:        strVal(payload["message_id"]),
-		ATMessageFrom:      strVal(payload["from_member_name"]),
-		ATMessageTo:        strVal(payload["to_member_name"]),
+		ATMessageID:        utils.StrVal(payload["message_id"]),
+		ATMessageFrom:      utils.StrVal(payload["from_member_name"]),
+		ATMessageTo:        utils.StrVal(payload["to_member_name"]),
 		ATMessageBroadcast: etype == events.TeamEventBroadcast,
 	}
 	h.recordTeamEvent(teamName, etype, attrs)
-}
-
-// strVal 从 map 中提取字符串值，支持默认值。
-func strVal(v any, defaults ...string) string {
-	if v == nil {
-		if len(defaults) > 0 {
-			return defaults[0]
-		}
-		return ""
-	}
-	return fmt.Sprintf("%v", v)
 }
 
 // toInt 将 any 转换为 int。

@@ -5,6 +5,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -305,7 +306,7 @@ func FromEventMessage(msg *events.EventMessage) *MonitorEvent {
 
 	evt := &MonitorEvent{
 		EventType: MonitorEventType(rawType),
-		TeamName:  strValFromMap(p, "team_name"),
+		TeamName:  utils.StrValFromMap(p, "team_name"),
 		Timestamp: time.Now().UnixMilli(),
 	}
 
@@ -369,16 +370,6 @@ func init() {
 	} {
 		monitorEventValues[string(v)] = true
 	}
-}
-
-// strValFromMap 从 map 中提取字符串值，不存在时返回空字符串。
-func strValFromMap(m map[string]any, key string) string {
-	v, ok := m[key]
-	if !ok || v == nil {
-		return ""
-	}
-	s, _ := v.(string)
-	return s
 }
 
 // strPtrFromMap 从 map 中提取 *string，不存在或为空时返回 nil。
