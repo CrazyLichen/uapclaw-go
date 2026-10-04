@@ -49,6 +49,10 @@ func (a *ReActAgent) callModel(
 		previewMsgs = append(previewMsgs, msgs...)
 	}
 	// Python: L648-652: ctx.inputs = ModelCallInputs(messages=..., tools=..., model_context=...)
+	// 保存当前 inputs，Rail 执行后恢复（对齐 Python: model_call rail 内部修改 ctx.inputs，
+	// 但退出 rail 后 ctx.inputs 应恢复为调用前的类型，否则 reactLoop 中
+	// cbc.Inputs().(*InvokeInputs) 类型断言会失败）
+	savedInputs := cbc.Inputs()
 	cbc.SetInputs(&interfaces.ModelCallInputs{
 		Messages:     previewMsgs,
 		Tools:        tools,
@@ -61,6 +65,9 @@ func (a *ReActAgent) callModel(
 		result, e = a.railedModelCall(ctx, cbc, sess)
 		return e
 	})
+
+	// 恢复 inputs，确保 reactLoop 中 cbc.Inputs() 仍为 *InvokeInputs
+	cbc.SetInputs(savedInputs)
 
 	// Python: L659: log_llm_response
 	if result != nil {

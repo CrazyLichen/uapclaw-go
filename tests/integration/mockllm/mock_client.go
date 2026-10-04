@@ -96,6 +96,34 @@ func CreateToolCallResponse(toolName string, argsJSON string) MockResponse {
 	}
 }
 
+// ToolCallSpec 工具调用规格，用于 CreateMultiToolCallResponse。
+type ToolCallSpec struct {
+	// Name 工具名称
+	Name string
+	// ArgsJSON 工具参数 JSON
+	ArgsJSON string
+	// CallID 工具调用 ID（可选，为空时自动生成）
+	CallID string
+}
+
+// CreateMultiToolCallResponse 创建并发工具调用预设响应。
+// 对齐 Python: create_tool_call_response 多个工具同时调用。
+// 每个工具调用自动生成唯一 ID（mock_call_<name>_<index>）。
+func CreateMultiToolCallResponse(specs []ToolCallSpec) MockResponse {
+	toolCalls := make([]*llmschema.ToolCall, 0, len(specs))
+	for i, spec := range specs {
+		callID := spec.CallID
+		if callID == "" {
+			callID = fmt.Sprintf("mock_call_%s_%d", spec.Name, i)
+		}
+		tc := llmschema.NewToolCall(callID, spec.Name, spec.ArgsJSON)
+		toolCalls = append(toolCalls, tc)
+	}
+	return MockResponse{
+		ToolCalls: toolCalls,
+	}
+}
+
 // CreateJSONResponse 创建 JSON 格式的预设响应。
 // 对齐 Python: create_json_response(data, model_name)
 func CreateJSONResponse(data map[string]any) MockResponse {

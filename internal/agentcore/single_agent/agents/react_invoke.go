@@ -587,6 +587,14 @@ func (a *ReActAgent) reactLoop(
 	modelCtx ceinterface.ModelContext,
 	startIteration int,
 ) (map[string]any, error) {
+	// 保存原始 invokeInputs 引用。
+	// callModel 中 cbc.SetInputs(&ModelCallInputs{}) 会覆盖 cbc.inputs，
+	// 循环内 HITL 中断检测需要原始 invokeInputs 来设置 Result。
+	var savedInvokeInputs *interfaces.InvokeInputs
+	if ii, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok {
+		savedInvokeInputs = ii
+	}
+
 	maxIter := defaultMaxIterations
 	if a.config != nil && a.config.MaxIterations > 0 {
 		maxIter = a.config.MaxIterations
@@ -663,8 +671,14 @@ func (a *ReActAgent) reactLoop(
 			results, aiMsg.ToolCalls, aiMsg, iteration, originalQuery,
 		)
 		if hitlInterrupt != nil {
-			if invokeInputs, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok {
-				_, _ = a.CommitInterrupt(ctx, hitlInterrupt, modelCtx, sess, invokeInputs, subAgentOutputs)
+			// 使用循环开始时保存的 savedInvokeInputs，而非 cbc.Inputs()。
+			// callModel 中 cbc.SetInputs(&ModelCallInputs{}) 会临时覆盖 cbc.inputs，
+			// 虽已修复为恢复，但仍使用 savedInvokeInputs 更安全。
+			if savedInvokeInputs != nil {
+				commitResult, commitErr := a.CommitInterrupt(ctx, hitlInterrupt, modelCtx, sess, savedInvokeInputs, subAgentOutputs)
+				if commitErr == nil && commitResult != nil {
+					iterResult = commitResult
+				}
 			}
 			break
 		}

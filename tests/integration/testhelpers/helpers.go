@@ -20,6 +20,7 @@ import (
 
 // AssertInterruptResult 验证 result_type=="interrupt" 并提取中断信息。
 // 对齐 Python assert_interrupt_result(result, expected_count)。
+// expectedCount < 0 时跳过数量断言（并发工具数量不确定的场景）。
 func AssertInterruptResult(t testing.TB, result map[string]any, expectedCount int) (interruptIDs []string, stateList []any) {
 	t.Helper()
 	require.NotNil(t, result, "结果不应为 nil")
@@ -32,13 +33,17 @@ func AssertInterruptResult(t testing.TB, result map[string]any, expectedCount in
 	if ok && ids != nil {
 		interruptIDs, _ = ids.([]string)
 	}
-	assert.Equal(t, expectedCount, len(interruptIDs), "interrupt_ids 数量")
+	if expectedCount >= 0 {
+		assert.Equal(t, expectedCount, len(interruptIDs), "interrupt_ids 数量")
+	}
 
 	state, ok := result["state"]
 	if ok && state != nil {
 		stateList, _ = state.([]any)
 	}
-	assert.Equal(t, expectedCount, len(stateList), "state 列表数量")
+	if expectedCount >= 0 {
+		assert.Equal(t, expectedCount, len(stateList), "state 列表数量")
+	}
 
 	return interruptIDs, stateList
 }

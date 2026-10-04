@@ -5,6 +5,7 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -85,7 +86,7 @@ func NewReActAgent(
 ) *ReActAgent {
 	agent := &ReActAgent{
 		card:            card,
-		abilityManager:  ability.NewAbilityManager(nil),
+		abilityManager:  ability.NewAbilityManager(runner.GetResourceMgr()),
 		callbackManager: interfaces.NewAgentCallbackManager(card.ID),
 		config:          config,
 		promptBuilder:   prompts.NewSystemPromptBuilder(),

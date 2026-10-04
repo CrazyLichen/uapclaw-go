@@ -17,11 +17,11 @@
 // 文件目录：
 //
 //	real_llm/
-//	├── doc.go                  # 包文档
-//	├── llm_invoke_test.go      # LLM Invoke/Stream 基础连通测试
-//	├── ask_user_rail_test.go   # AskUserRail + 真实 LLM
-//	├── task_planning_rail_test.go # TaskPlanningRail + 真实 LLM
-//	└── deep_agent_e2e_test.go  # DeepAgent e2e 真实 LLM
+//	├── doc.go                       # 包文档
+//	├── llm_invoke_test.go           # LLM Invoke/Stream 基础连通测试
+//	├── ask_user_rail_test.go        # AskUserRail + 真实 LLM
+//	├── task_planning_rail_test.go   # TaskPlanningRail + 真实 LLM
+//	└── deep_agent_e2e_test.go       # DeepAgent e2e 真实 LLM
 //
 // 对应 Python 代码：tests/system_tests/harness/rail/test_deep_agent_ask_user.py 等
 package real_llm

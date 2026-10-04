@@ -31,6 +31,12 @@ type AgentSuite struct {
 	AgentCard *agentschema.AgentCard
 	// Agent 已创建的 Agent 实例
 	Agent agentinterfaces.BaseAgent
+	// registeredToolIDs 每个测试方法中注册到 ResourceMgr 的工具 ID，
+	// TearDownTest 时清理，避免 suite 内测试间工具 ID 冲突。
+	registeredToolIDs []string
+	// registeredSysOpIDs 每个测试方法中注册到 ResourceMgr 的 SysOperation ID，
+	// TearDownTest 时清理。
+	registeredSysOpIDs []string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -43,6 +49,22 @@ func (s *AgentSuite) SetupSuite() {
 // TearDownSuite 清理 Agent 测试环境。
 func (s *AgentSuite) TearDownSuite() {
 	s.SessionSuite.TearDownSuite()
+}
+
+// TearDownTest 每个测试方法后清理全局 ResourceMgr 中注册的工具和 SysOperation。
+// 避免 suite 内测试间因工具 ID 重复注册导致后续测试使用前一个测试的工具实例。
+func (s *AgentSuite) TearDownTest() {
+	rm := s.GetResourceMgr()
+	if rm != nil {
+		if len(s.registeredToolIDs) > 0 {
+			_, _ = rm.RemoveTool(s.registeredToolIDs)
+			s.registeredToolIDs = nil
+		}
+		if len(s.registeredSysOpIDs) > 0 {
+			_ = rm.RemoveSysOperation(s.registeredSysOpIDs)
+			s.registeredSysOpIDs = nil
+		}
+	}
 }
 
 // RegisterAgent 向 ResourceMgr 注册一个 Agent。
@@ -69,10 +91,25 @@ func (s *AgentSuite) NewAgentCard(id, name string) *agentschema.AgentCard {
 // 预填 MockLLM 的 Model 和默认 AgentCard，
 // 测试只需传入 ToolInstances/Rails 等差异化参数。
 // 对齐 Python: create_deep_agent(model=mock_model, ...)
+//
+// 注意：CreateDeepAgent 会将 ToolInstances 注册到全局 ResourceMgr。
+// 本方法跟踪注册的工具 ID，TearDownTest 时自动清理，避免 suite 内测试间冲突。
 func (s *AgentSuite) NewDeepAgentForTest(
 	ctx context.Context,
 	params hconfig.CreateDeepAgentParams,
 ) (*harness.DeepAgent, error) {
+	// 记录工具 ID，TearDownTest 时清理
+	for _, t := range params.ToolInstances {
+		card := t.Card()
+		toolID := card.GetID()
+		if toolID == "" {
+			toolID = card.GetName()
+		}
+		if toolID != "" {
+			s.registeredToolIDs = append(s.registeredToolIDs, toolID)
+		}
+	}
+
 	// 确保传入 Model（从 ClientConfig + ModelConfig 创建，走 ClientRegistry 获取 MockLLM）
 	if params.Model == nil {
 		model, err := llm.NewModel(s.ClientConfig, s.ModelConfig)

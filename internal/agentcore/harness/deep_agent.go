@@ -193,7 +193,7 @@ var (
 func NewDeepAgent(card *agentschema.AgentCard) *DeepAgent {
 	return &DeepAgent{
 		card:            card,
-		abilityManager:  ability.NewAbilityManager(nil),
+		abilityManager:  ability.NewAbilityManager(runner.GetResourceMgr()),
 		callbackManager: agentinterfaces.NewAgentCallbackManager(card.ID),
 	}
 }

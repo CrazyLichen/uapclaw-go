@@ -447,6 +447,24 @@ func (am *AbilityManager) Execute(
 		wg.Add(1)
 		go func(idx int, toolCall *llmschema.ToolCall, toolCtx *interfaces.AgentCallbackContext) {
 			defer wg.Done()
+			// 捕获 BeforeToolCall 中 raiseInterrupt 引发的 panic。
+			// raiseInterrupt 通过 panic 传播 ToolInterruptException，
+			// 在 goroutine 中必须 recover 否则进程崩溃。
+			defer func() {
+				if r := recover(); r != nil {
+					switch v := r.(type) {
+					case *agentschema.ToolInterruptException:
+						results[idx] = agentschema.ExecuteResult{Result: v}
+					case error:
+						results[idx] = errorToExecuteResult(v, toolCall.ID)
+					default:
+						results[idx] = errorToExecuteResult(
+							fmt.Errorf("工具执行 panic: %v", r),
+							toolCall.ID,
+						)
+					}
+				}
+			}()
 			results[idx] = am.railedExecuteSingleToolCall(ctx, toolCtx, toolCall, sess, tag)
 		}(i, tc, toolCtxs[i])
 	}
