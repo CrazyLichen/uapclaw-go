@@ -21,9 +21,8 @@ type fakeSession struct {
 	err     error
 }
 
-func (s *fakeSession) GetSessionID() string           { return "test-session" }
-func (s *fakeSession) UpdateState(map[string]any)     {}
-func (s *fakeSession) ClearSession(_ context.Context) {}
+func (s *fakeSession) GetSessionID() string       { return "test-session" }
+func (s *fakeSession) UpdateState(map[string]any) {}
 func (s *fakeSession) WriteStream(_ context.Context, data any) error {
 	s.written = append(s.written, data)
 	return s.err
@@ -33,7 +32,9 @@ func (s *fakeSession) GetState(_ state.StateKey) (any, error)              { ret
 func (s *fakeSession) DumpState() map[string]any                           { return map[string]any{} }
 func (s *fakeSession) GetEnv(_ string, _ ...any) any                       { return nil }
 func (s *fakeSession) Interact(_ context.Context, _ any) error             { return nil }
-func (s *fakeSession) ClearSession(_ context.Context)                      {}
+
+// ClearSession 清空会话状态。
+func (s *fakeSession) ClearSession(_ context.Context) {}
 
 // lastOutput 获取最后写入的 OutputSchema
 func (s *fakeSession) lastOutput() *stream.OutputSchema {

@@ -459,15 +459,6 @@ func TestStrVal(t *testing.T) {
 	assert.Equal(t, "", strVal(nil))
 }
 
-// strVal 将任意值转为字符串，仅 string 类型返回原值，其他返回空串
-func strVal(v any) string {
-	s, ok := v.(string)
-	if !ok {
-		return ""
-	}
-	return s
-}
-
 // ──────────────────────────── commandText ────────────────────────────
 
 func TestCommandText_从command键(t *testing.T) {

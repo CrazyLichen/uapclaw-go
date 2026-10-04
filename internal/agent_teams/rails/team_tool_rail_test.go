@@ -107,6 +107,9 @@ func (f *fakeBaseAgentTeam) SaveState(_ sessioninterfaces.SessionFacade, _ *hsch
 func (f *fakeBaseAgentTeam) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
 	return nil
 }
+func (f *fakeBaseAgentTeam) InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil
+}
 
 // 编译时验证
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgentTeam)(nil)

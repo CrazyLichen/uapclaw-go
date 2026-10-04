@@ -564,9 +564,6 @@ func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 }
 func (f *fakeSessionFacade) ClearSession(_ context.Context) {}
 
-// ClearSession 清空会话状态。
-func (f *fakeSessionFacade) ClearSession(_ context.Context) {}
-
 // 确保实现接口
 var _ trajectory.TrajectorySink = (*fakeTrajectorySink)(nil)
 var _ sessioninterfaces.SessionFacade = (*fakeSessionFacade)(nil)
