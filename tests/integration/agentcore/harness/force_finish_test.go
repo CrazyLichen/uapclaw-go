@@ -11,8 +11,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
@@ -143,9 +143,9 @@ func (s *ForceFinishSuite) TestForceFinish_AfterModelCall阻止工具执行() {
 	)
 
 	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
-		ToolInstances:  []tool.Tool{addTool},
-		Rails:          []agentinterfaces.AgentRail{rail, toolTrace},
-		MaxIterations:  5,
+		ToolInstances: []tool.Tool{addTool},
+		Rails:         []agentinterfaces.AgentRail{rail, toolTrace},
+		MaxIterations: 5,
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 
@@ -201,9 +201,9 @@ func (s *ForceFinishSuite) TestForceFinish_AfterToolCall中断循环() {
 	)
 
 	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
-		ToolInstances:  []tool.Tool{addTool},
-		Rails:          []agentinterfaces.AgentRail{rail},
-		MaxIterations:  5,
+		ToolInstances: []tool.Tool{addTool},
+		Rails:         []agentinterfaces.AgentRail{rail},
+		MaxIterations: 5,
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 

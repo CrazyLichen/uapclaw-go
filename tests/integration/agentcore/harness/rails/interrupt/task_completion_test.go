@@ -208,9 +208,9 @@ func (s *TaskCompletionRailSuite) TestCustomPredicate_自定义谓词停止() {
 	tcr := rails.NewTaskCompletionRail(rails.WithExtraEvaluators(customEval))
 
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
-		Rails:          []agentinterfaces.AgentRail{tcr},
-		EnableTaskLoop: true,
-		MaxIterations:  100,
+		Rails:             []agentinterfaces.AgentRail{tcr},
+		EnableTaskLoop:    true,
+		MaxIterations:     100,
 		CompletionTimeout: 30.0,
 	})
 	s.Require().NoError(err)

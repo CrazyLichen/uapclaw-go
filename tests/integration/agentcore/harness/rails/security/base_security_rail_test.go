@@ -581,7 +581,7 @@ func (r *interruptBeforeToolCallRail) TypeName() string {
 // check 安全检查：在 BEFORE_TOOL_CALL 上触发 SecurityInterrupt。
 func (r *interruptBeforeToolCallRail) check(_ context.Context, _ *securityrail.SecurityCheckContext) (securityrail.SecurityDecision, error) {
 	req := &saschema.InterruptRequest{
-		Message:        "此工具调用需要人工审批",
+		Message: "此工具调用需要人工审批",
 		PayloadSchema: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"approved": map[string]any{"type": "boolean"}},
