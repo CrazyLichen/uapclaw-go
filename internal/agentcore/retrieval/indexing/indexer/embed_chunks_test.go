@@ -128,8 +128,8 @@ func makeTextChunks(n int) []common.TextChunk {
 // makeImageChunk 创建带 image_path 的 TextChunk
 func makeImageChunk(imagePath string) common.TextChunk {
 	return common.TextChunk{
-		ID:   "img-chunk-1",
-		Text: "图片描述文本",
+		ID:    "img-chunk-1",
+		Text:  "图片描述文本",
 		DocID: "doc-1",
 		Metadata: map[string]any{
 			"image_path": imagePath,
