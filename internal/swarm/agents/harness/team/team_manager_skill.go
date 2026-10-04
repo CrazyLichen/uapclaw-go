@@ -1,6 +1,8 @@
 package team
 
 import (
+	"context"
+
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
@@ -17,7 +19,20 @@ import (
 //  1. TeamManager._copy_global_skills_to_team_shared_dir(spec)
 //  2. TeamManager._sync_team_shared_skills_to_agent_global(spec)
 func (m *TeamManager) EnsureTeamSharedSkillsInitialized(spec *atschema.TeamAgentSpec) {
-	// ⤵️(#9.72) 完整实现 — 待 skill_manager / workspace 路径回填
+	if spec == nil {
+		return
+	}
+	// 步骤 1: 复制全局技能到团队共享目录
+	// 对齐 Python: TeamManager._copy_global_skills_to_team_shared_dir(spec)
+	// TODO(#9.72): 实现 skill 目录复制逻辑
+	logger.Debug(logComponent).Str("team_name", spec.TeamName).
+		Msg("EnsureTeamSharedSkillsInitialized: 全局技能复制（待文件系统实现）")
+
+	// 步骤 2: 同步团队共享技能到 Agent 全局
+	// 对齐 Python: TeamManager._sync_team_shared_skills_to_agent_global(spec)
+	// TODO(#9.72): 实现 skill 目录同步逻辑
+	logger.Debug(logComponent).Str("team_name", spec.TeamName).
+		Msg("EnsureTeamSharedSkillsInitialized: 技能同步（待文件系统实现）")
 }
 
 // SyncTeamSkills 同步指定 session 的技能（从 workspace 到 global）。
@@ -158,8 +173,22 @@ func (m *TeamManager) DrainTeamSkillEvents(sessionID string) []map[string]any {
 	if !ok || rail == nil {
 		return []map[string]any{}
 	}
-	// ⤵️(#9.72) rail.drain_pending_approval_events() — 待 Rail 完整实现后回填
-	return []map[string]any{}
+	// 对齐 Python: await rail.drain_pending_approval_events()
+	// DrainPendingApprovalEvents 返回 []*stream.OutputSchema，转为 []map[string]any
+	events := rail.DrainPendingApprovalEvents(true, nil)
+	if len(events) == 0 {
+		return []map[string]any{}
+	}
+	result := make([]map[string]any, 0, len(events))
+	for _, e := range events {
+		if e == nil {
+			continue
+		}
+		if payload, ok := e.Payload.(map[string]any); ok {
+			result = append(result, payload)
+		}
+	}
+	return result
 }
 
 // UpdateEvolutionConfig 热更新 team evolution rails。
@@ -183,11 +212,79 @@ func (m *TeamManager) DrainTeamSkillEvents(sessionID string) []map[string]any {
 //     mount_team_skill_rail=False, mount_team_skill_create_rail=True,
 //     mount_skill_evolution_rail=False)
 func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
-	// ⤵️(#9.72) 完整实现 — 待 Rail 类型和 evolution config 回填
-	logger.Info(logComponent).Msg("更新 evolution 配置（待回填）")
+	autoScanEnabled := getEvolutionAutoScanEnabled(config)
+	skillCreateEnabled := getSkillCreateEnabled(config)
+
+	// 步骤 3: 更新所有成员 SkillEvolutionRail 的 autoScan
+	for _, rails := range m.teamMemberSkillEvoRails {
+		for _, rail := range rails {
+			rail.SetAutoScan(autoScanEnabled)
+		}
+	}
+
+	// 步骤 4: 更新所有 TeamSkillEvolutionRail 的 autoScan
+	for _, rail := range m.teamSkillRails {
+		rail.SetAutoScan(autoScanEnabled)
+	}
+
+	// 步骤 5: 若 skill_create 未启用，反注册所有 skill create rails
+	if !skillCreateEnabled {
+		for sessionID, rail := range m.teamSkillCreateRails {
+			m.unregisterLiveRail(sessionID, rail)
+			delete(m.teamSkillCreateRails, sessionID)
+		}
+		return
+	}
+
+	// 步骤 6: 若 skill_create 启用，为缺少 skill create rail 的 session 挂载
+	// TODO(#9.72): _build_and_mount_member_rails_for_context 待回填
+	for sessionID := range m.teamRailContexts {
+		if _, ok := m.teamSkillCreateRails[sessionID]; ok {
+			continue
+		}
+		// TODO(#9.72): 调用 _build_and_mount_member_rails_for_context(sessionID, context,
+		//   mount_team_skill_rail=False, mount_team_skill_create_rail=True,
+		//   mount_skill_evolution_rail=False)
+		logger.Info(logComponent).
+			Str("session_id", sessionID).
+			Msg("updateEvolutionConfig: session 缺少 skill create rail，待 _build_and_mount 回填")
+	}
+
+	logger.Info(logComponent).
+		Bool("auto_scan_enabled", autoScanEnabled).
+		Bool("skill_create_enabled", skillCreateEnabled).
+		Msg("更新 evolution 配置完成")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getEvolutionAutoScanEnabled 从 config 读取 auto_scan_enabled。
+// 对齐 Python: get_evolution_auto_scan_enabled(config)
+func getEvolutionAutoScanEnabled(config map[string]any) bool {
+	if config == nil {
+		return true
+	}
+	if v, ok := config["auto_scan_enabled"]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return true
+}
+
+// getSkillCreateEnabled 从 config 读取 skill_create_enabled。
+// 对齐 Python: get_skill_create_enabled(config)
+func getSkillCreateEnabled(config map[string]any) bool {
+	if config == nil {
+		return true
+	}
+	if v, ok := config["skill_create_enabled"]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return true
+}
 
 // isLeaderRole 检查 TeamRailMountContext 中的 member_info 是否为 leader 角色。
 // 对齐 Python: getattr(context.member_info, "role", None) == "leader"
@@ -212,7 +309,10 @@ func (m *TeamManager) unregisterLiveRail(sessionID string, rail agentinterfaces.
 	var remaining []LiveRailEntry
 	for _, entry := range liveRails {
 		if entry.Rail == rail {
-			// 调用 agent.unregister_rail(live_rail) — ⤵️(#9.72) 待回填
+			// 对齐 Python: agent.unregister_rail(live_rail)
+			if entry.Agent != nil {
+				_ = entry.Agent.UnregisterRail(context.Background(), rail)
+			}
 			continue
 		}
 		remaining = append(remaining, entry)

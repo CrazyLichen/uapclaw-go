@@ -1308,7 +1308,7 @@ func (a *TeamAgent) SubscribeTransport(ctx context.Context, teamName string) err
 	//   await messager.subscribe(topic_str, _filter_self)
 	//   self._subscribed_topics.append(topic_str)
 	localMemberName := a.MemberName()
-	for _, topic := range []atevents.TeamTopic{atevents.TeamTopicTeam, atevents.TeamTopicTask, atevents.TeamTopicMessage} {
+	for _, topic := range atevents.AllTeamTopics {
 		topicID := topic.Build(sessionID, teamName)
 		// 对齐 Python: _filter_self 回调
 		handler := func(ctx context.Context, event *atevents.EventMessage) error {

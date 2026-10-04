@@ -105,16 +105,35 @@ func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ types.Coordina
 
 	// TODO(#9.63): 等任务后端接口就绪后补充 is_team_completed 检查
 	// 对齐 Python 步骤：
-	// 1. 调用 TeamBackend.is_team_completed()
-	// 2. 若 snapshot == nil（下降沿）：重置 teamCompletedEmitted = False，return
+	// 1. 调用 TeamBackend.IsTeamCompleted() → (snapshot, error)
+	// 2. 若 snapshot == nil（下降沿）：重置 teamCompletedEmitted = false，return
 	// 3. 上升沿：!teamCompletedEmitted && is_completed → publish_team_completed
 	// 4. 持久团队：conclude_completed_round
+	//
+	// 结构化框架（待 IsTeamCompleted 就绪后取消注释）：
+	//
+	//   backend := h.blueprint.TeamBackendAccessor()
+	//   if backend == nil { return }
+	//   snapshot, err := backend.IsTeamCompleted(ctx)
+	//   if err != nil { logger.Error(...); return }
+	//   if snapshot == nil {
+	//       // 下降沿：任务列表非空或有成员未 settled，重置上升沿
+	//       h.teamCompletedEmitted = false
+	//       return
+	//   }
+	//   // 上升沿检测：仅首次从 false → true 时发出
+	//   if !h.teamCompletedEmitted {
+	//       h.teamCompletedEmitted = true
+	//       // 发布 TEAM_COMPLETED 事件
+	//       h.publishTeamCompleted(ctx, snapshot)
+	//       // 持久团队需 conclude_completed_round
+	//       // TODO(#9.63): backend.ConcludeCompletedRound(ctx)
+	//   }
+
 	logger.Debug(logComponent).
 		Str("role", string(role)).
 		Bool("emitted", h.teamCompletedEmitted).
-		Msg("onPollTask: TODO 等任务后端就绪")
-
-	_ = ctx
+		Msg("onPollTask: 等待任务后端就绪，跳过完成检查")
 }
 
 // OnTaskListDrained 记录任务列表清空事件并触发所有注册的完成回调。

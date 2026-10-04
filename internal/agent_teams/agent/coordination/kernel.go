@@ -94,15 +94,16 @@ func NewCoordinationKernel(host types.KernelHost) *CoordinationKernel {
 // dispatcher.dispatch 在 Start() 时绑定回 bus 作为 wake callback，此处不绑定。
 // Python: CoordinationKernel.setup(role)
 func (k *CoordinationKernel) Setup(role schema.TeamRole, bp types.DispatcherBlueprint, inf types.DispatcherInfra, opts ...KernelOption) {
-	// 修复 S-05: 对齐 Python kernel.py:55-69
+	// M-01: 对齐 Python kernel.py:55-69
 	// Python 从 host 获取 blueprint/infra，当 blueprint 或 infra 为 None 时抛 RuntimeError。
-	// Go 侧当前 TeamAgent.Configure 传 nil（host 通过 KernelHost 子接口可达 blueprint/infra），
-	// 当 bp/inf 为 nil 时记录警告，Dispatcher 会在实际使用时处理 nil 情况。
+	// Go 侧当 bp/inf 为 nil 时记录错误并返回，防止后续 nil pointer panic。
+	// 注意：签名不变（返回 void），调用方需检查 Setup 后 EventBus/Dispatcher 是否为 nil。
 	if bp == nil || inf == nil {
-		logger.Warn(logComponent).
+		logger.Error(logComponent).
 			Bool("blueprint_nil", bp == nil).
 			Bool("infra_nil", inf == nil).
-			Msg("Setup 收到 nil blueprint/infra，对齐 Python 应从 host 获取")
+			Msg("Setup 收到 nil blueprint/infra，对齐 Python RuntimeError，无法继续")
+		return
 	}
 	// 应用选项
 	o := &kernelOptions{}
@@ -483,7 +484,9 @@ func (k *CoordinationKernel) FinalizeRound(ctx context.Context) {
 
 // persistTeamLifecycle 将团队生命周期状态写入 session 的 per-team 命名空间。
 // 对齐 Python: CoordinationKernel._persist_team_lifecycle(lifecycle) (kernel.py:278-294)
-func (k *CoordinationKernel) persistTeamLifecycle(_ context.Context, lifecycle string) {
+func (k *CoordinationKernel) persistTeamLifecycle(ctx context.Context, lifecycle string) {
+	// TODO(#ctx): GetState/UpdateState 目前不接受 ctx，未来添加 ctx 支持后应传入
+	_ = ctx
 	teamName := k.host.TeamName()
 	if teamName == "" {
 		return

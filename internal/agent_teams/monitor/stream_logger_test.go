@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // TestNewTeamStreamLogger_创建文件 校验文件创建
@@ -46,15 +49,16 @@ func TestTeamStreamLogger_Feed_离散型(t *testing.T) {
 		t.Fatalf("NewTeamStreamLogger 返回 error: %v", err)
 	}
 
-	sl.Feed(map[string]any{
-		"type":          chunkToolCall,
-		"source_member": "m1",
-		"role":          "leader",
-		"payload": map[string]any{
-			"tool_name": "test_tool",
-			"tool_args": "arg1",
+	member := "m1"
+	role := atschema.TeamRoleLeader
+	sl.Feed(atschema.NewTeamOutputSchema(
+		stream.OutputSchema{
+			Type:    chunkToolCall,
+			Payload: map[string]any{"tool_name": "test_tool", "tool_args": "arg1"},
 		},
-	})
+		&member,
+		&role,
+	))
 	sl.Flush()
 
 	data, err := os.ReadFile(path)
@@ -79,31 +83,36 @@ func TestTeamStreamLogger_Feed_累积型(t *testing.T) {
 		t.Fatalf("NewTeamStreamLogger 返回 error: %v", err)
 	}
 
+	member := "m1"
+	role := atschema.TeamRoleLeader
+
 	// 累积 llm_output
-	sl.Feed(map[string]any{
-		"type":          chunkLLMOutput,
-		"source_member": "m1",
-		"role":          "leader",
-		"payload": map[string]any{
-			"content": "hello ",
+	sl.Feed(atschema.NewTeamOutputSchema(
+		stream.OutputSchema{
+			Type:    chunkLLMOutput,
+			Payload: map[string]any{"content": "hello "},
 		},
-	})
-	sl.Feed(map[string]any{
-		"type":          chunkLLMOutput,
-		"source_member": "m1",
-		"role":          "leader",
-		"payload": map[string]any{
-			"content": "world",
+		&member,
+		&role,
+	))
+	sl.Feed(atschema.NewTeamOutputSchema(
+		stream.OutputSchema{
+			Type:    chunkLLMOutput,
+			Payload: map[string]any{"content": "world"},
 		},
-	})
+		&member,
+		&role,
+	))
 
 	// 触发刷新：发送离散型块
-	sl.Feed(map[string]any{
-		"type":          chunkToolCall,
-		"source_member": "m1",
-		"role":          "leader",
-		"payload":       map[string]any{"tool_name": "flush_trigger"},
-	})
+	sl.Feed(atschema.NewTeamOutputSchema(
+		stream.OutputSchema{
+			Type:    chunkToolCall,
+			Payload: map[string]any{"tool_name": "flush_trigger"},
+		},
+		&member,
+		&role,
+	))
 	sl.Flush()
 
 	data, err := os.ReadFile(path)
@@ -125,20 +134,27 @@ func TestTeamStreamLogger_Feed_去重answer(t *testing.T) {
 		t.Fatalf("NewTeamStreamLogger 返回 error: %v", err)
 	}
 
+	member := "m1"
+	role := atschema.TeamRoleLeader
+
 	// 先 llm_output
-	sl.Feed(map[string]any{
-		"type":          chunkLLMOutput,
-		"source_member": "m1",
-		"role":          "leader",
-		"payload":       map[string]any{"content": "text"},
-	})
+	sl.Feed(atschema.NewTeamOutputSchema(
+		stream.OutputSchema{
+			Type:    chunkLLMOutput,
+			Payload: map[string]any{"content": "text"},
+		},
+		&member,
+		&role,
+	))
 	// 再 answer，应被丢弃
-	sl.Feed(map[string]any{
-		"type":          chunkAnswer,
-		"source_member": "m1",
-		"role":          "leader",
-		"payload":       map[string]any{"content": "duplicate"},
-	})
+	sl.Feed(atschema.NewTeamOutputSchema(
+		stream.OutputSchema{
+			Type:    chunkAnswer,
+			Payload: map[string]any{"content": "duplicate"},
+		},
+		&member,
+		&role,
+	))
 	sl.Flush()
 
 	data, err := os.ReadFile(path)
@@ -160,10 +176,14 @@ func TestTeamStreamLogger_Flush(t *testing.T) {
 		t.Fatalf("NewTeamStreamLogger 返回 error: %v", err)
 	}
 
-	sl.Feed(map[string]any{
-		"type":    chunkToolCall,
-		"payload": map[string]any{"tool_name": "t1"},
-	})
+	sl.Feed(atschema.NewTeamOutputSchema(
+		stream.OutputSchema{
+			Type:    chunkToolCall,
+			Payload: map[string]any{"tool_name": "t1"},
+		},
+		nil,
+		nil,
+	))
 	sl.Flush()
 
 	data, err := os.ReadFile(path)
@@ -175,7 +195,7 @@ func TestTeamStreamLogger_Flush(t *testing.T) {
 	}
 }
 
-// TestTeamStreamLogger_Feed_绝不panic 校验 nil chunk 不 panic
+// TestTeamStreamLogger_Feed_绝不panic 校验 nil chunk 和非 TeamOutputSchema 不 panic
 func TestTeamStreamLogger_Feed_绝不panic(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "stream.log")
@@ -186,8 +206,14 @@ func TestTeamStreamLogger_Feed_绝不panic(t *testing.T) {
 
 	// nil chunk 不 panic
 	sl.Feed(nil)
-	// 无效字段不 panic
-	sl.Feed(map[string]any{})
+	// 非 TeamOutputSchema 的 chunk（如 TraceSchema）被跳过，不 panic
+	sl.Feed(&stream.TraceSchema{Type: "trace", Payload: "data"})
+	// 空 Type 的 TeamOutputSchema 不 panic
+	sl.Feed(atschema.NewTeamOutputSchema(
+		stream.OutputSchema{Type: ""},
+		nil,
+		nil,
+	))
 	sl.Flush()
 }
 

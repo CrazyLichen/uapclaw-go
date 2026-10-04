@@ -345,6 +345,8 @@ func (h *teamMonitorHandlerImpl) convertEventToDict(ctx context.Context, event *
 		h.handleMemberRestarted(eventData, event)
 	case monitor.MonitorEventTypeMemberShutdown:
 		h.handleMemberShutdown(eventData, event)
+	case monitor.MonitorEventTypeMemberCanceled:
+		h.handleMemberCanceled(eventData, event)
 	case monitor.MonitorEventTypeTaskCreated:
 		h.handleTaskCreated(eventData, event)
 	case monitor.MonitorEventTypeTaskClaimed:
@@ -420,6 +422,15 @@ func (h *teamMonitorHandlerImpl) handleMemberShutdown(base map[string]any, event
 	if event.Force != nil {
 		base["force"] = *event.Force
 	}
+}
+
+// handleMemberCanceled 处理成员取消事件。
+// 对齐 Python: TeamMonitorHandler._handle_member_canceled(base, event)
+func (h *teamMonitorHandlerImpl) handleMemberCanceled(base map[string]any, event *monitor.MonitorEvent) {
+	if event.MemberName != nil {
+		base["member_id"] = *event.MemberName
+	}
+	base["reason"] = ptrStrVal(event.Reason)
 }
 
 // handleTaskCreated 处理任务创建事件。

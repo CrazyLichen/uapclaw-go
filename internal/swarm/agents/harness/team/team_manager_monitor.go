@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -152,10 +153,12 @@ func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGrou
 // hasLocalTeamRuntime 判断 session 是否使用内存中的 TeamAgent 路径。
 // 对齐 Python: TeamManager._has_local_team_runtime(session_id)
 // S-02: Python 返回 self._is_distributed_mode(get_config()) and session_id in self._team_agents
-// Go 差异：isDistributedMode 尚未实现，当前仅检查 teamAgents 映射
 func (m *TeamManager) hasLocalTeamRuntime(sessionID string) bool {
-	// TODO(#9.85): 分布式模式下需增加 isDistributedMode 判断
-	// Python: return self._is_distributed_mode(get_config()) and session_id in self._team_agents
+	// S-02: 分布式模式前置检查，对齐 Python _is_distributed_mode(get_config())
+	cfg := config.GetRunnerConfig()
+	if cfg == nil || !cfg.DistributedMode {
+		return false
+	}
 	_, ok := m.teamAgents[sessionID]
 	return ok
 }
@@ -341,23 +344,40 @@ func (m *TeamManager) autoStartEvolutionWatcher(ctx context.Context, sessionID s
 		return
 	}
 
-	// ⤵️ 待回填：完整实现 evolution watcher goroutine
-	// 对齐 Python: asyncio.create_task(start_team_evolution_watcher(channel_id, session_id, team_name))
-	// 当 evolution event bus 完整实现后，此 goroutine 应：
-	//   1. 订阅 TeamSkillEvolutionRail 的 evolution 事件
-	//   2. 监听 skill 变更通知
-	//   3. 推送 server_push 消息到前端
 	watcherCtx, cancel := context.WithCancel(ctx)
 	m.RegisterTeamEvolutionWatcher(sessionID, cancel)
 
-	// 启动占位 goroutine，等待 watcher 实现后替换
 	go func() {
-		defer logger.Info(logComponent).Str("session_id", sessionID).Msg("evolution watcher goroutine 退出")
+		defer logger.Info(logComponent).Str("session_id", sessionID).Msg("evolution watcher 退出")
 		logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-			Msg("evolution watcher goroutine 启动（占位，待回填）")
-		<-watcherCtx.Done()
+			Msg("evolution watcher 启动")
+
+		// 获取监控 handler
+		handler, ok := m.teamMonitors[sessionID]
+		if !ok {
+			logger.Warn(logComponent).Str("session_id", sessionID).
+				Msg("autoStartEvolutionWatcher: 无监控 handler")
+			return
+		}
+
+		// 订阅事件流
+		for evt := range handler.Events() {
+			select {
+			case <-watcherCtx.Done():
+				return
+			default:
+			}
+
+			// TODO(#9.85): 调用 server_push 将事件推送到前端
+			// 对齐 Python: server_push(channel_id, session_id, event)
+			if evt != nil {
+				logger.Debug(logComponent).Str("session_id", sessionID).
+					Any("event_type", evt["event_type"]).
+					Msg("evolution watcher 事件")
+			}
+		}
 	}()
 
 	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-		Msg("自动启动 evolution watcher（占位）")
+		Msg("自动启动 evolution watcher")
 }

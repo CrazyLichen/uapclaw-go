@@ -271,7 +271,8 @@ func (s *Sweeper) Init() error {
 
 // RunSweep 执行完整管线。由 Orchestrator 调用。
 // Python: Sweeper.run_sweep()
-func (s *Sweeper) RunSweep(ctx context.Context) error {
+// T-01: 移除 error 返回值，对齐 Python void 语义（内部已通过 recover + 日志处理所有异常）
+func (s *Sweeper) RunSweep(ctx context.Context) {
 	// 对齐 Python: try/except 包裹 scan_new_sessions，异常时 log + 安全返回
 	defer func() {
 		if r := recover(); r != nil {
@@ -286,7 +287,7 @@ func (s *Sweeper) RunSweep(ctx context.Context) error {
 	sessions := s.ScanNewSessions()
 	if len(sessions) == 0 {
 		logger.Debug(logComponent).Msg("[Sweeper] No eligible session found")
-		return nil
+		return
 	}
 
 	// ── LLM 提取 ──
@@ -360,7 +361,7 @@ func (s *Sweeper) RunSweep(ctx context.Context) error {
 		Int("promoted", promoted).
 		Msg("[Sweeper] sweep completed")
 
-	return nil
+	return
 }
 
 // ScanNewSessions 增量扫描 session 目录，返回新/更新的 session 列表（含压缩文本）。

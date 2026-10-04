@@ -14,6 +14,14 @@ import (
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
+// fakeDispatcherInfra M-01: 测试用 DispatcherInfra 实现
+type fakeDispatcherInfra struct{}
+
+func (f *fakeDispatcherInfra) TaskManager() types.DispTaskManager    { return nil }
+func (f *fakeDispatcherInfra) MessageManager() types.DispMessageManager { return nil }
+func (f *fakeDispatcherInfra) TeamBackend() types.DispTeamBackend    { return nil }
+func (f *fakeDispatcherInfra) Messager() types.DispMessager          { return nil }
+
 // fakeKernelHost 实现 KernelHost 用于测试
 type fakeKernelHost struct {
 	agentReady   bool
@@ -93,7 +101,7 @@ func TestCoordinationKernel_Setup(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, nil)
+	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
 
 	if k.EventBus() == nil {
 		t.Error("setup 后 EventBus 不应为 nil")
@@ -110,7 +118,7 @@ func TestCoordinationKernel_Start(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, nil)
+	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
 
 	k.Start(context.Background(), "")
 
@@ -137,7 +145,7 @@ func TestCoordinationKernel_Pause(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, nil)
+	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
 	k.Start(context.Background(), "")
 
 	k.Pause(context.Background())
@@ -162,7 +170,7 @@ func TestCoordinationKernel_Stop(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, nil)
+	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
 	k.Start(context.Background(), "")
 
 	k.Stop(context.Background())
@@ -194,7 +202,7 @@ func TestCoordinationKernel_EnqueueUserInput(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, nil)
+	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
 
 	var mu sync.Mutex
 	var receivedEvent types.CoordinationEvent
@@ -219,7 +227,7 @@ func TestCoordinationKernel_WakeMailboxIfInterruptCleared(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleTeammate, memberName: "worker1", agentReady: true, pendingInt: false}
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
-	k.Setup(schema.TeamRoleTeammate, bp, nil)
+	k.Setup(schema.TeamRoleTeammate, bp, &fakeDispatcherInfra{})
 
 	var mu sync.Mutex
 	var receivedEvent types.CoordinationEvent
@@ -244,7 +252,7 @@ func TestCoordinationKernel_WakeMailbox_Leader跳过(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true, pendingInt: false}
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, nil)
+	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
 
 	var mu sync.Mutex
 	var received bool
@@ -268,7 +276,7 @@ func TestCoordinationKernel_WakeMailbox_有中断跳过(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleTeammate, memberName: "worker1", agentReady: true, pendingInt: true}
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
-	k.Setup(schema.TeamRoleTeammate, bp, nil)
+	k.Setup(schema.TeamRoleTeammate, bp, &fakeDispatcherInfra{})
 
 	var mu sync.Mutex
 	var received bool
@@ -292,7 +300,7 @@ func TestCoordinationKernel_生命周期转换(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, nil)
+	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
 
 	// idle → running
 	k.Start(context.Background(), "")

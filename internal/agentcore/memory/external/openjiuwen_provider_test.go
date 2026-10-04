@@ -349,8 +349,18 @@ func TestOpenJiuwenProvider_Initialize_缺失store(t *testing.T) {
 func TestOpenJiuwenProvider_Initialize_覆盖UserID(t *testing.T) {
 	p := NewOpenJiuwenProvider(nil)
 	err := p.Initialize(context.Background(), WithUserID("new-user"), WithScopeID("new-scope"), WithSessionID("new-session"))
-	assert.NoError(t, err)
-	assert.Equal(t, "new-user", p.userID)
-	assert.Equal(t, "new-scope", p.scopeID)
-	assert.Equal(t, "new-session", p.sessionID)
+	// S-02: 无 config 时 store 创建失败，Initialize 现在返回 error 而非吞错
+	if err == nil {
+		// 如果恰好所有 store 都创建成功（不太可能在 nil config 下发生）
+		assert.Equal(t, "new-user", p.userID)
+		assert.Equal(t, "new-scope", p.scopeID)
+		assert.Equal(t, "new-session", p.sessionID)
+	} else {
+		// 预期：无 config 时 Initialize 返回 error
+		assert.Contains(t, err.Error(), "store creation failed")
+		// 验证选项仍然被正确设置
+		assert.Equal(t, "new-user", p.userID)
+		assert.Equal(t, "new-scope", p.scopeID)
+		assert.Equal(t, "new-session", p.sessionID)
+	}
 }

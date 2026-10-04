@@ -21,6 +21,9 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// AllTeamTopics 所有 TeamTopic 枚举值，对齐 Python: for topic in TeamTopic
+var AllTeamTopics = []TeamTopic{TeamTopicTeam, TeamTopicTask, TeamTopicMessage}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildTopic 构建 topic 字符串。

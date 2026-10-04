@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	db "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
@@ -329,11 +330,20 @@ func (p *OpenJiuwenProvider) HandleToolCall(ctx context.Context, toolName string
 	}
 
 	// 对齐 Python L156-164: try: if/elif/else except Exception as e: return json.dumps({"error": str(e), "results": []})
+	// M-04: 拆分 ltm_search 和 ltm_search_summary 为独立 case，提升可维护性
 	switch toolName {
-	case "ltm_search", "ltm_search_summary":
+	case "ltm_search":
 		result, err := p.dispatchToolCall(ctx, toolName, args)
 		if err != nil {
 			// 对齐 Python L163-164: except Exception as e: return json.dumps({"error": str(e), "results": []})
+			b, _ := json.Marshal(map[string]any{"error": err.Error(), "results": []any{}})
+			return string(b), nil
+		}
+		b, _ := json.Marshal(result)
+		return string(b), nil
+	case "ltm_search_summary":
+		result, err := p.dispatchToolCall(ctx, toolName, args)
+		if err != nil {
 			b, _ := json.Marshal(map[string]any{"error": err.Error(), "results": []any{}})
 			return string(b), nil
 		}
@@ -422,8 +432,9 @@ func (p *OpenJiuwenProvider) Prefetch(ctx context.Context, query string, opts ..
 			return
 		}
 		if len(results) > 0 {
-			// 对齐 Python L196: parts.append("\n## Related History Summaries")
-			parts = append(parts, "\n## Related History Summaries")
+			// 对齐 Python L196: parts.append("## Related History Summaries")
+			// M-03: 移除前导 "\n"，由 strings.Join 统一处理分隔符
+			parts = append(parts, "## Related History Summaries")
 			for _, r := range results {
 				content := ""
 				if r.MemInfo != nil {
@@ -439,13 +450,8 @@ func (p *OpenJiuwenProvider) Prefetch(ctx context.Context, query string, opts ..
 	if len(parts) == 0 {
 		return "", nil
 	}
-	result := ""
-	for i, part := range parts {
-		if i > 0 {
-			result += "\n"
-		}
-		result += part
-	}
+	// M-03: 对齐 Python "\n".join(parts)，使用 strings.Join 替代手动拼接
+	result := strings.Join(parts, "\n")
 	return result, nil
 }
 

@@ -8,6 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -121,7 +123,8 @@ func NewTeamStreamLogger(filePath string) (*TeamStreamLogger, error) {
 
 // Feed 消费一个流块。绝不 panic。
 // 对齐 Python: TeamStreamLogger.feed(chunk)
-func (l *TeamStreamLogger) Feed(chunk map[string]any) {
+// T-01: 参数类型从 map[string]any 改为 stream.Schema，对齐 Python isinstance 检查
+func (l *TeamStreamLogger) Feed(chunk stream.Schema) {
 	defer func() {
 		if r := recover(); r != nil {
 			l.safeWrite(fmt.Sprintf("[WARN] stream logger feed error: %v", r))
@@ -157,19 +160,29 @@ func (l *TeamStreamLogger) Flush() {
 
 // feed 核心处理逻辑。
 // 对齐 Python: TeamStreamLogger._feed(chunk)
-func (l *TeamStreamLogger) feed(chunk map[string]any) {
+// T-01: 参数类型从 map[string]any 改为 stream.Schema
+func (l *TeamStreamLogger) feed(chunk stream.Schema) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	l.chunkCount++
 
-	ctype, _ := chunk["type"].(string)
+	// T-01: 类型断言为 TeamOutputSchema，对齐 Python isinstance(chunk, TeamOutputSchema) 检查
+	// 非 TeamOutputSchema 的 chunk（如 TraceSchema）直接跳过
+	teamChunk, ok := chunk.(*atschema.TeamOutputSchema)
+	if !ok {
+		return
+	}
+	ctype := teamChunk.Type
 	if ctype == "" {
 		return
 	}
-	payload := chunk["payload"]
-	member, _ := chunk["source_member"].(string)
-	role := renderRole(chunk["role"])
+	payload := teamChunk.Payload
+	var member string
+	if teamChunk.SourceMember != nil {
+		member = *teamChunk.SourceMember
+	}
+	role := renderRole(teamChunk.Role)
 	key := sourceKey{member: member, role: role}
 
 	// answer 重复了已流式传输的 llm_output；去重

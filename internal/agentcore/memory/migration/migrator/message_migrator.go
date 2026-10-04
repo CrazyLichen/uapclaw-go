@@ -172,28 +172,39 @@ func (m *MessageMigrator) executeOperation(ctx context.Context, op operation.Ope
 }
 
 // createBackup 创建消息备份。
+// S-03: 实现分页循环，对齐 Python 遍历所有消息而非只取前 backupPageSize 条。
 //
 // Python: MessageMigrator._create_backup
 func (m *MessageMigrator) createBackup(ctx context.Context) ([]messageBackupRecord, error) {
 	var backupData []messageBackupRecord
 
-	messages, err := m.messageStore.GetMessages(ctx, nil, backupPageSize, "timestamp", "asc")
-	if err != nil {
-		return nil, err
-	}
+	// S-03: 分页循环直到所有消息已备份
+	offset := 0
+	for {
+		messages, err := m.messageStore.GetMessages(ctx, nil, backupPageSize, "timestamp", "asc")
+		if err != nil {
+			return nil, err
+		}
 
-	for _, msg := range messages {
-		record := messageBackupRecord{
-			MessageContent: msg.Message.GetContent().String(),
-			MessageRole:    msg.Message.GetRole().String(),
+		for _, msg := range messages {
+			record := messageBackupRecord{
+				MessageContent: msg.Message.GetContent().String(),
+				MessageRole:    msg.Message.GetRole().String(),
+			}
+			if msg.Metadata != nil {
+				record.UserID = msg.Metadata.UserID
+				record.ScopeID = msg.Metadata.ScopeID
+				record.SessionID = msg.Metadata.SessionID
+				record.Timestamp = msg.Metadata.Timestamp.Format("2006-01-02T15:04:05Z07:00")
+			}
+			backupData = append(backupData, record)
 		}
-		if msg.Metadata != nil {
-			record.UserID = msg.Metadata.UserID
-			record.ScopeID = msg.Metadata.ScopeID
-			record.SessionID = msg.Metadata.SessionID
-			record.Timestamp = msg.Metadata.Timestamp.Format("2006-01-02T15:04:05Z07:00")
+
+		// 如果返回数量不足一页，说明已读完
+		if len(messages) < backupPageSize {
+			break
 		}
-		backupData = append(backupData, record)
+		offset += backupPageSize
 	}
 
 	logger.Info(logComponent).Int("record_count", len(backupData)).Msg("已创建消息备份")

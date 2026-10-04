@@ -73,10 +73,12 @@ func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode, language s
 	//     busy_checker=busy_checker,
 	//     name=f"dreaming-{mode}",
 	// )
+	// T-01: RunSweep 已改为 void（对齐 Python run_sweep），包装为返回 error 的闭包
 	interval := time.Duration(cfg.IntervalSeconds * float64(time.Second))
 	orch := dreaming.NewDreamingOrchestrator(
 		func(ctx context.Context) error {
-			return sweeper.RunSweep(ctx)
+			sweeper.RunSweep(ctx)
+			return nil
 		},
 		interval,
 		dreaming.WithBusyChecker(busyChecker),

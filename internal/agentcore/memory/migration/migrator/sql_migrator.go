@@ -23,13 +23,34 @@ type SQLMigrator struct {
 	db *gorm.DB
 	// metaManager 版本跟踪管理器
 	metaManager *MemoryMetaManager
+	// allowedTables S-01: 支持迁移的表名白名单（nil 时使用默认白名单）
+	allowedTables map[string]bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const (
+	// memoryTablesConfig S-01: 支持迁移的表名白名单。
+	// 对齐 Python: MEMORY_TABLES_CONFIG (openjiuwen/core/memory/manage/mem_model/db_model.py)
+	// 只允许对已知表执行 DDL 迁移操作，防止对任意表的操作。
+	memoryTablesConfig = "user_messages,scope_user_mapping"
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// memoryTablesSet S-01: 支持迁移的表名集合（从 memoryTablesConfig 解析）
+	memoryTablesSet map[string]bool
+)
+
+func init() {
+	memoryTablesSet = make(map[string]bool)
+	for _, name := range strings.Split(memoryTablesConfig, ",") {
+		memoryTablesSet[strings.TrimSpace(name)] = true
+	}
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -37,7 +58,17 @@ type SQLMigrator struct {
 //
 // Python: SQLMigrator(sql_db_store)
 func NewSQLMigrator(db *gorm.DB, metaManager *MemoryMetaManager) *SQLMigrator {
-	return &SQLMigrator{db: db, metaManager: metaManager}
+	return &SQLMigrator{
+		db:            db,
+		metaManager:   metaManager,
+		allowedTables: memoryTablesSet,
+	}
+}
+
+// SetAllowedTables 设置允许迁移的表名白名单。
+// S-01: 测试或扩展时可用此方法覆盖默认白名单。
+func (m *SQLMigrator) SetAllowedTables(tables map[string]bool) {
+	m.allowedTables = tables
 }
 
 // BatchMigrate 批量执行表 schema 迁移。
@@ -78,7 +109,14 @@ func (m *SQLMigrator) TryMigrate(ctx context.Context, entityKey string, operatio
 		return nil
 	}
 
+	// S-01: 校验表名是否在白名单
 	tableName := entityKey
+	if !m.validateTableName(tableName) {
+		return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
+			exception.WithParam("table_name", tableName),
+			exception.WithParam("error_msg", fmt.Sprintf("unsupported table name: %s (allowed: %s)", tableName, memoryTablesConfig)),
+		)
+	}
 	currentVersion, err := m.getCurrentVersion(ctx, tableName)
 	if err != nil {
 		return err
@@ -376,4 +414,14 @@ func isValidIdentifier(name string) bool {
 		return false
 	}
 	return true
+}
+
+// validateTableName S-01: 校验表名是否在白名单。
+// 对齐 Python: SQLMigrator._validate_table(table_name)
+func (m *SQLMigrator) validateTableName(tableName string) bool {
+	allowed := m.allowedTables
+	if allowed == nil {
+		allowed = memoryTablesSet
+	}
+	return allowed[tableName]
 }

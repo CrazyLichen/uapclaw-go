@@ -37,6 +37,8 @@ const (
 	TeamEventMemberRestarted TeamEventType = "team.member.restarted"
 	// TeamEventMemberShutdown 成员已关闭
 	TeamEventMemberShutdown TeamEventType = "team.member.shutdown"
+	// TeamEventMemberCanceled 成员已取消
+	TeamEventMemberCanceled TeamEventType = "team.member.canceled"
 
 	// ── 任务事件 ──
 	// TeamEventTaskCreated 任务已创建
@@ -70,6 +72,7 @@ var (
 		TeamEventMemberExecutionChanged: EventCategoryMember,
 		TeamEventMemberRestarted:        EventCategoryMember,
 		TeamEventMemberShutdown:         EventCategoryMember,
+		TeamEventMemberCanceled:         EventCategoryMember,
 		TeamEventTaskCreated:            EventCategoryTask,
 		TeamEventTaskClaimed:            EventCategoryTask,
 		TeamEventTaskCompleted:          EventCategoryTask,
@@ -89,6 +92,7 @@ var (
 		monitor.MonitorEventTypeMemberExecutionChanged: TeamEventMemberExecutionChanged,
 		monitor.MonitorEventTypeMemberRestarted:        TeamEventMemberRestarted,
 		monitor.MonitorEventTypeMemberShutdown:         TeamEventMemberShutdown,
+		monitor.MonitorEventTypeMemberCanceled:         TeamEventMemberCanceled,
 		monitor.MonitorEventTypeTaskCreated:            TeamEventTaskCreated,
 		monitor.MonitorEventTypeTaskClaimed:            TeamEventTaskClaimed,
 		monitor.MonitorEventTypeTaskCompleted:          TeamEventTaskCompleted,

@@ -125,6 +125,7 @@ func TestSQLMigrator_TryMigrate_空操作(t *testing.T) {
 	db := newTestDB(t)
 	metaManager := newTestMetaManager(t, db)
 	m := NewSQLMigrator(db, metaManager)
+	m.SetAllowedTables(map[string]bool{"test_table": true})
 
 	err := m.TryMigrate(context.Background(), "test_table", nil)
 	if err != nil {
@@ -153,6 +154,7 @@ func TestSQLMigrator_TryMigrate_添加列(t *testing.T) {
 	}
 
 	m := NewSQLMigrator(db, metaManager)
+	m.SetAllowedTables(map[string]bool{"test_table": true})
 	err := m.TryMigrate(context.Background(), "test_table", ops)
 	if err != nil {
 		t.Fatalf("TryMigrate 失败: %v", err)
@@ -193,6 +195,7 @@ func TestSQLMigrator_TryMigrate_重命名列(t *testing.T) {
 	}
 
 	m := NewSQLMigrator(db, metaManager)
+	m.SetAllowedTables(map[string]bool{"test_table": true})
 	err := m.TryMigrate(context.Background(), "test_table", ops)
 	if err != nil {
 		t.Fatalf("TryMigrate 失败: %v", err)
@@ -236,6 +239,7 @@ func TestSQLMigrator_TryMigrate_部分操作待执行(t *testing.T) {
 	}
 
 	m := NewSQLMigrator(db, metaManager)
+	m.SetAllowedTables(map[string]bool{"test_table": true})
 	err := m.TryMigrate(context.Background(), "test_table", ops)
 	if err != nil {
 		t.Fatalf("TryMigrate 失败: %v", err)
@@ -267,6 +271,7 @@ func TestSQLMigrator_TryMigrate_不支持的操作类型(t *testing.T) {
 	}
 
 	m := NewSQLMigrator(db, metaManager)
+	m.SetAllowedTables(map[string]bool{"test_table": true})
 	err := m.TryMigrate(context.Background(), "test_table", ops)
 	if err == nil {
 		t.Error("不支持的 SQL 操作类型应返回错误")
@@ -300,6 +305,7 @@ func TestSQLMigrator_TryMigrate_事务回滚(t *testing.T) {
 	}
 
 	m := NewSQLMigrator(db, metaManager)
+	m.SetAllowedTables(map[string]bool{"test_table": true})
 	err := m.TryMigrate(context.Background(), "test_table", ops)
 	if err == nil {
 		t.Error("迁移失败应返回错误")
@@ -334,6 +340,7 @@ func TestSQLMigrator_TryMigrate_版本已是最新(t *testing.T) {
 	}
 
 	m := NewSQLMigrator(db, metaManager)
+	m.SetAllowedTables(map[string]bool{"test_table": true})
 	err := m.TryMigrate(context.Background(), "test_table", ops)
 	if err != nil {
 		t.Errorf("版本已是最新时应返回 nil, got %v", err)
@@ -356,6 +363,7 @@ func TestSQLMigrator_TryMigrate_错误码(t *testing.T) {
 	}
 
 	m := NewSQLMigrator(db, metaManager)
+	m.SetAllowedTables(map[string]bool{"test_table": true})
 	err := m.TryMigrate(context.Background(), "test_table", ops)
 	if err == nil {
 		t.Fatal("应返回错误")
