@@ -4,6 +4,7 @@ package harness_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -286,4 +287,142 @@ func newAddTool() tool.Tool {
 		}, nil,
 	)
 	return t
+}
+
+// ForceFinishCaptureRail 在 BeforeModelCall 中请求强制完成并在 AfterInvoke 中捕获结果的辅助 Rail。
+// 对照 Python: CaptureRail（before_model_call=request_force_finish, after_invoke=capture）
+type ForceFinishCaptureRail struct {
+	agentinterfaces.BaseRail
+	// forcedResult 强制完成的结果
+	forcedResult map[string]any
+	// captured AfterInvoke 中捕获的 result
+	captured []map[string]any
+	// mu 保护 captured
+	mu sync.Mutex
+}
+
+// GetCallbacks 注册 BeforeModelCall + AfterInvoke 回调。
+func (r *ForceFinishCaptureRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	return r.BuildCallbacks(
+		r.CallbackFrom(agentinterfaces.CallbackBeforeModelCall, func(ctx context.Context, railCtx any) error {
+			cbc := railCtx.(*agentinterfaces.AgentCallbackContext)
+			cbc.RequestForceFinish(r.forcedResult)
+			return nil
+		}),
+		r.CallbackFrom(agentinterfaces.CallbackAfterInvoke, func(ctx context.Context, railCtx any) error {
+			cbc := railCtx.(*agentinterfaces.AgentCallbackContext)
+			if inputs, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs); ok && inputs != nil {
+				r.mu.Lock()
+				r.captured = append(r.captured, inputs.Result)
+				r.mu.Unlock()
+			}
+			return nil
+		}),
+	)
+}
+
+// GetCaptured 返回捕获的 AfterInvoke 结果列表。
+func (r *ForceFinishCaptureRail) GetCaptured() []map[string]any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	result := make([]map[string]any, len(r.captured))
+	copy(result, r.captured)
+	return result
+}
+
+// TestForceFinish_Result在AfterInvoke中可见 测试强制完成结果在 AfterInvoke 回调中通过 inputs.Result 可访问。
+// 对照 Python: test_force_finish_result_visible_in_after_invoke
+//
+// 核心验证：
+//   - Rail 在 BeforeModelCall 中调用 RequestForceFinish
+//   - AfterInvoke 回调中 cbc.Inputs().(*InvokeInputs).Result 等于 forcedResult
+func (s *ForceFinishSuite) TestForceFinish_Result在AfterInvoke中可见() {
+	ctx := s.Ctx
+
+	forcedResult := map[string]any{
+		"output":      "forced_result",
+		"result_type": "answer",
+	}
+	captureRail := &ForceFinishCaptureRail{forcedResult: forcedResult}
+
+	s.MockLLM.SetResponses(
+		mockllm.CreateTextResponse("不应出现"),
+	)
+
+	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
+		Rails:         []agentinterfaces.AgentRail{captureRail},
+		MaxIterations: 5,
+	})
+	s.Require().NoError(err, "创建 DeepAgent 失败")
+
+	sess := s.NewTestSession("force-finish-after-invoke")
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+
+	result, err := agent.Invoke(ctx, map[string]any{"query": "测试强制完成"},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err, "Invoke 失败")
+	s.Require().NotNil(result)
+
+	sess.PostRun(ctx)
+
+	// 验证返回 forced result
+	s.Equal(forcedResult["output"], result["output"],
+		"应返回强制完成的结果")
+
+	// 验证 AfterInvoke 中捕获的结果与 forcedResult 相同
+	captured := captureRail.GetCaptured()
+	s.Len(captured, 1, "AfterInvoke 应被调用恰好 1 次")
+	if len(captured) > 0 {
+		s.Equal(forcedResult["output"], captured[0]["output"],
+			"AfterInvoke 中 inputs.Result.output 应等于 forcedResult.output")
+		s.Equal(forcedResult["result_type"], captured[0]["result_type"],
+			"AfterInvoke 中 inputs.Result.result_type 应等于 forcedResult.result_type")
+	}
+}
+
+// TestForceFinish_带ConversationID 测试带 conversation_id 时强制完成正常工作。
+// 对照 Python: test_force_finish_with_conversation_id
+//
+// 核心验证：
+//   - Invoke 传入 conversation_id
+//   - Rail 在 BeforeModelCall 中调用 RequestForceFinish
+//   - 返回 forced result，conversation_id 不影响行为
+func (s *ForceFinishSuite) TestForceFinish_带ConversationID() {
+	ctx := s.Ctx
+
+	forcedResult := map[string]any{
+		"output":      "with_conv_id",
+		"result_type": "answer",
+	}
+	rail := &ForceFinishBeforeModelCallRail{forcedResult: forcedResult}
+
+	s.MockLLM.SetResponses(
+		mockllm.CreateTextResponse("不应出现"),
+	)
+
+	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
+		Rails:         []agentinterfaces.AgentRail{rail},
+		MaxIterations: 5,
+	})
+	s.Require().NoError(err, "创建 DeepAgent 失败")
+
+	sess := s.NewTestSession("force-finish-conv-id")
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+
+	// 带 conversation_id 的 Invoke
+	result, err := agent.Invoke(ctx, map[string]any{
+		"query":           "测试强制完成",
+		"conversation_id": "conv_123",
+	}, agentinterfaces.WithSession(sess))
+	s.Require().NoError(err, "Invoke 失败")
+	s.Require().NotNil(result)
+
+	sess.PostRun(ctx)
+
+	// 验证返回 forced result
+	s.Equal(forcedResult["output"], result["output"],
+		"带 conversation_id 时应返回强制完成的结果")
+	s.Equal(forcedResult["result_type"], result["result_type"],
+		"result_type 应为 answer")
 }

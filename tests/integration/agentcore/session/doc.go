@@ -9,6 +9,7 @@
 // 文件目录：
 //
 //	session/
-//	├── doc.go            # 包文档
-//	└── session_test.go   # Session 生命周期测试
+//	├── doc.go                 # 包文档
+//	├── session_test.go        # Session 生命周期测试
+//	└── session_reuse_test.go  # Session 复用集成测试（同一/不同 session 多次 Invoke）
 package session_test

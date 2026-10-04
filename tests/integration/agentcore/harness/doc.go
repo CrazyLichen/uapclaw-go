@@ -9,6 +9,7 @@
 //
 //	harness/
 //	├── doc.go               # 包文档
+//	├── code_agent_test.go   # CodeAgent E2E 集成测试
 //	├── deep_agent_test.go   # DeepAgent E2E 测试
 //	├── force_finish_test.go # ForceFinish 机制集成测试
 //	├── outer_loop_test.go   # 外层循环（TaskLoop）集成测试
