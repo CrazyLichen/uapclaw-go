@@ -276,25 +276,6 @@ func TestDedicatedMultimodalModelConfigured_NilConfigBase(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// TestStrVal 测试 strVal 辅助函数
-func TestStrVal(t *testing.T) {
-	if strVal(nil) != "" {
-		t.Error("nil 应返回空字符串")
-	}
-	if strVal("hello") != "hello" {
-		t.Errorf("字符串应原样返回，实际 %q", strVal("hello"))
-	}
-	if strVal("  spaces  ") != "spaces" {
-		t.Errorf("应 trim 空格，实际 %q", strVal("  spaces  "))
-	}
-	if strVal(123) != "123" {
-		t.Errorf("整数应转为字符串，实际 %q", strVal(123))
-	}
-	if strVal(true) != "true" {
-		t.Errorf("布尔应转为字符串，实际 %q", strVal(true))
-	}
-}
-
 // TestStrOr 测试 strOr 辅助函数
 func TestStrOr(t *testing.T) {
 	if strOr("first", "second") != "first" {
@@ -360,7 +341,7 @@ func TestGetModelConfig(t *testing.T) {
 		},
 	}
 	mc := getModelConfig(configBase, "video")
-	if mc == nil || strVal(mc["api_key"]) != "test" {
+	if mc == nil || strOr(mc["api_key"], "") != "test" {
 		t.Error("应正确解析 dict 格式 models")
 	}
 
@@ -375,7 +356,7 @@ func TestGetModelConfig(t *testing.T) {
 		},
 	}
 	mc2 := getModelConfig(configBase2, "video")
-	if mc2 == nil || strVal(mc2["api_key"]) != "test2" {
+	if mc2 == nil || strOr(mc2["api_key"], "") != "test2" {
 		t.Error("应支持 model_client_config 兼容")
 	}
 
@@ -398,7 +379,7 @@ func TestGetModelConfig(t *testing.T) {
 		},
 	}
 	mc4 := getModelConfig(configBase4, "video")
-	if mc4 == nil || strVal(mc4["api_key"]) != "list-key" {
+	if mc4 == nil || strOr(mc4["api_key"], "") != "list-key" {
 		t.Error("应支持 list 格式 models")
 	}
 }

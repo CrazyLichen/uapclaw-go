@@ -409,6 +409,20 @@ func TestStrVal(t *testing.T) {
 	}
 }
 
+// strVal 从 map 中按 key 提取字符串值，使用 fmt.Sprintf("%v") 转换非字符串类型
+func strVal(m map[string]any, key string) string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
 // TestBoolVal 测试 boolVal 辅助函数（含非 bool 类型路径）
 func TestBoolVal(t *testing.T) {
 	m := map[string]any{

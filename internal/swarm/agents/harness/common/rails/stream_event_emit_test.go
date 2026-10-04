@@ -23,6 +23,7 @@ type fakeSession struct {
 
 func (s *fakeSession) GetSessionID() string       { return "test-session" }
 func (s *fakeSession) UpdateState(map[string]any) {}
+func (s *fakeSession) ClearSession(_ context.Context) {}
 func (s *fakeSession) WriteStream(_ context.Context, data any) error {
 	s.written = append(s.written, data)
 	return s.err
