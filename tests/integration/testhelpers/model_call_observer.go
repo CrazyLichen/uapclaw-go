@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
@@ -42,6 +43,16 @@ type ModelCallObserver struct {
 // NewModelCallObserver 创建模型调用观测器。
 func NewModelCallObserver() *ModelCallObserver {
 	return &ModelCallObserver{}
+}
+
+// GetCallbacks 覆盖基类回调映射，注册 BeforeModelCall 回调。
+// Go struct embedding 不提供虚方法派发，必须显式注册才能被回调框架调用。
+func (o *ModelCallObserver) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	return o.BuildCallbacks(
+		o.CallbackFrom(agentinterfaces.CallbackBeforeModelCall, func(ctx context.Context, railCtx any) error {
+			return o.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+		}),
+	)
 }
 
 // BeforeModelCall 记录模型调用消息。

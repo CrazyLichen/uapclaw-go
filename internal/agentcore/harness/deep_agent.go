@@ -7,6 +7,7 @@ import (
 	"math"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1911,11 +1912,20 @@ func (d *DeepAgent) normalizeInputs(inputs any) (*agentinterfaces.InvokeInputs, 
 				}
 			}
 		}
+		// 保留以 "_" 开头的额外 key 到 Extra（如 _steering_queue、_streaming）
+		// 对齐 Python: inputs 为 dict 时，额外 key 自然保留到 effective_inputs
+		extra := make(map[string]any)
+		for k, v2 := range v {
+			if strings.HasPrefix(k, "_") {
+				extra[k] = v2
+			}
+		}
 		return &agentinterfaces.InvokeInputs{
 			Query:          query,
 			ConversationID: conversationID,
 			RunKind:        runKind,
 			RunContext:     runContext,
+			Extra:          extra,
 		}, nil
 	case string:
 		return &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(v)}, nil
@@ -1940,6 +1950,10 @@ func toEffectiveInputs(invokeInputs *agentinterfaces.InvokeInputs) map[string]an
 	}
 	if invokeInputs.RunContext != nil {
 		result["run_context"] = invokeInputs.RunContext
+	}
+	// 合并 Extra 字段（如 _steering_queue），对齐 Python dict 自然保留额外 key 的行为
+	for k, v := range invokeInputs.Extra {
+		result[k] = v
 	}
 	return result
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
@@ -36,6 +37,16 @@ func NewToolTraceRail() *ToolTraceRail {
 	return &ToolTraceRail{
 		toolExecCounts: make(map[string]int),
 	}
+}
+
+// GetCallbacks 覆盖基类回调映射，注册 BeforeToolCall 回调。
+// Go struct embedding 不提供虚方法派发，必须显式注册才能被回调框架调用。
+func (r *ToolTraceRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	return r.BuildCallbacks(
+		r.CallbackFrom(agentinterfaces.CallbackBeforeToolCall, func(ctx context.Context, railCtx any) error {
+			return r.BeforeToolCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+		}),
+	)
 }
 
 // BeforeToolCall 记录工具调用。

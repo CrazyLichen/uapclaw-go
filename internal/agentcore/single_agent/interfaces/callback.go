@@ -170,6 +170,9 @@ type InvokeInputs struct {
 	RunKind RunKind
 	// RunContext 结构化运行时上下文
 	RunContext *RunContext
+	// Extra 额外参数，透传到 ReActAgent inputs（如 _steering_queue）
+	// 对齐 Python: DeepAgent.invoke(inputs) 中 inputs 为 dict，额外 key 自然保留
+	Extra map[string]any
 }
 
 // ModelCallInputs BEFORE/AFTER_MODEL_CALL 事件输入。
