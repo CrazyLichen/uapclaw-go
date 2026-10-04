@@ -68,6 +68,10 @@ type DeepAgentInterface interface {
 	// UnregisterRail 注销 Rail。
 	// Python: DeepAgent.unregister_rail(rail)
 	UnregisterRail(ctx context.Context, r agentinterfaces.AgentRail) error
+	// InnerInvokeOverride 返回内层 invoke 覆写函数（仅测试使用）。
+	// 在 TaskLoop 模式下，executor 调用此函数优先于 reactAgent.Invoke。
+	// Python: 测试中通过 agent.set_react_agent(fake_react) 替换内层 Agent。
+	InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
 }
 
 // LoopCoordinatorInterface 循环协调器接口（最小集）。

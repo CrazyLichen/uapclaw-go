@@ -128,6 +128,11 @@ func (f *fakeDeepAgentForTaskPlanning) UnregisterRail(_ context.Context, _ agent
 	return nil
 }
 
+// InnerInvokeOverride 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForTaskPlanning) InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil
+}
+
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForTaskPlanning)(nil)
 
@@ -1630,6 +1635,11 @@ func (f *fakeDeepAgentWithAm) FindRailsByType(_ ...reflect.Type) []agentinterfac
 
 // UnregisterRail 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentWithAm) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
+	return nil
+}
+
+// InnerInvokeOverride 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentWithAm) InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
 	return nil
 }
 

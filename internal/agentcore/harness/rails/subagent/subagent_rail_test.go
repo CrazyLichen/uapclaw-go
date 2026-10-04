@@ -117,6 +117,9 @@ func (f *fakeDeepAgentForTest) FindRailsByType(_ ...reflect.Type) []agentinterfa
 func (f *fakeDeepAgentForTest) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
 	return nil
 }
+func (f *fakeDeepAgentForTest) InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil
+}
 
 // 编译时验证
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgentForTest)(nil)

@@ -584,6 +584,11 @@ func (f *fakeDeepAgentProvider) UnregisterRail(_ context.Context, _ agentinterfa
 	return nil
 }
 
+// InnerInvokeOverride 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil
+}
+
 // Iteration 实现 LoopCoordinatorInterface 接口
 func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }
 

@@ -619,5 +619,10 @@ func (f *fakeDeepAgentForNotify) UnregisterRail(_ context.Context, _ agentinterf
 	return nil
 }
 
+// InnerInvokeOverride 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForNotify) InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil
+}
+
 // 确保编译时 fakeDeepAgentForNotify 满足必要的接口
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForNotify)(nil)

@@ -9,8 +9,8 @@ import (
 
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
@@ -191,7 +191,7 @@ func (s *AskUserSuite) TestAskUserRail_多问题中断恢复() {
 		UserInputs: map[string]any{
 			interruptIDs[0]: map[string]any{
 				"answers": map[string]any{
-					"你使用哪个框架？": "React",
+					"你使用哪个框架？":  "React",
 					"使用哪种认证方式？": "JWT",
 				},
 			},

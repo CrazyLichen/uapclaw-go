@@ -247,7 +247,14 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	go func() {
 		defer close(ch)
 
-		result, invokeErr := reactAgent.Invoke(ctx, effective, agentinterfaces.WithSession(sess))
+		// 测试覆写优先（对齐 runSingleRoundInvoke 的 override 逻辑）
+		var result map[string]any
+		var invokeErr error
+		if override := agent.InnerInvokeOverride(); override != nil {
+			result, invokeErr = override(ctx, effective, agentinterfaces.WithSession(sess))
+		} else {
+			result, invokeErr = reactAgent.Invoke(ctx, effective, agentinterfaces.WithSession(sess))
+		}
 
 		if invokeErr != nil {
 			// 错误路径：标记取消 + 发送失败事件

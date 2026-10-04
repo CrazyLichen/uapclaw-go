@@ -758,12 +758,20 @@ func (d *DeepAgent) SetReactAgent(reactAgent *agents.ReActAgent, initd bool) {
 }
 
 // SetInnerInvokeOverride 设置内层 invoke 覆写函数（仅测试使用）。
-// 设置后，runSingleRoundInvoke 将调用此函数而非 reactAgent.Invoke。
+// 设置后，runSingleRoundInvoke 和 executor.ExecuteAbility 将调用此函数而非 reactAgent.Invoke。
 // 对齐 Python agent.set_react_agent(fake_react) 的测试替身能力。
 func (d *DeepAgent) SetInnerInvokeOverride(fn func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)) {
 	d.configMu.Lock()
 	defer d.configMu.Unlock()
 	d.innerInvokeOverride = fn
+}
+
+// InnerInvokeOverride 返回内层 invoke 覆写函数（仅测试使用）。
+// executor 在 TaskLoop 模式下优先使用此函数替代 reactAgent.Invoke。
+func (d *DeepAgent) InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.innerInvokeOverride
 }
 
 // SetInnerStreamOverride 设置内层 stream 覆写函数（仅测试使用）。
