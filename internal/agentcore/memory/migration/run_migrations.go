@@ -108,6 +108,7 @@ func RunIndexVersionMigrations(ctx context.Context, idx index.BaseMemoryIndex) e
 				Str("store_name", "index version").Str("entity_key", entityKey).
 				Msg("index version 迁移失败")
 			return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
+				exception.WithCause(err),
 				exception.WithParam("store_name", "index version"),
 				exception.WithParam("entity_key", entityKey),
 				exception.WithParam("error_msg", fmt.Sprintf("index version 迁移失败: %v", err)),
@@ -144,6 +145,7 @@ func runMigrationsWithRegistry(
 				Str("sub_component", "run_migrations").
 				Str("store_name", storeName).Str("entity_key", entityKey).Msg("迁移失败")
 			return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
+				exception.WithCause(err),
 				exception.WithParam("entity_key", entityKey),
 				exception.WithParam("store_name", storeName),
 				exception.WithParam("error_msg", fmt.Sprintf("%s 迁移失败 (entity: %s): %v", storeName, entityKey, err)),

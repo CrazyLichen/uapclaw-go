@@ -131,6 +131,18 @@ func (h *teamMonitorHandlerImpl) IsRunning() bool {
 	return h.running
 }
 
+// TeamID 返回团队标识。
+// M-06: 对齐 Python: TeamMonitorHandler.team_id property
+func (h *teamMonitorHandlerImpl) TeamID() string {
+	h.mu.Lock()
+	mon := h.monitor
+	h.mu.Unlock()
+	if mon == nil {
+		return ""
+	}
+	return mon.TeamName()
+}
+
 // Events 返回前端事件流 channel。
 // 对齐 Python: TeamMonitorHandler.events() -> AsyncIterator[dict[str, Any]]
 //
@@ -163,7 +175,8 @@ func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[strin
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("session_id", h.sessionID).
 			Msg("GetTeamSnapshot 获取成员失败")
-		return nil, nil
+		// M-05: 对齐 Python except 返回 None，Go 返回 error 让调用方区分失败
+		return nil, fmt.Errorf("GetTeamSnapshot 获取成员失败: %w", err)
 	}
 
 	// 过滤掉 leader
@@ -273,7 +286,7 @@ func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context) {
 			continue
 		}
 
-		eventDict := h.convertEventToDict(evt)
+		eventDict := h.convertEventToDict(ctx, evt)
 		if eventDict != nil {
 			select {
 			case h.eventQueue <- eventDict:
@@ -295,7 +308,7 @@ func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context) {
 //  4. if event.member_name: event_data["member_id"] = event.member_name
 //  5. 按 event.event_type 分派到各 handler
 //  6. return {"event_type": event_category.value, "session_id": self._session_id, "event": event_data}
-func (h *teamMonitorHandlerImpl) convertEventToDict(event *monitor.MonitorEvent) map[string]any {
+func (h *teamMonitorHandlerImpl) convertEventToDict(ctx context.Context, event *monitor.MonitorEvent) map[string]any {
 	if event == nil {
 		return nil
 	}
@@ -343,9 +356,9 @@ func (h *teamMonitorHandlerImpl) convertEventToDict(event *monitor.MonitorEvent)
 	case monitor.MonitorEventTypeTaskUnblocked:
 		h.handleTaskUnblocked(eventData, event)
 	case monitor.MonitorEventTypeMessage:
-		h.handleMessage(eventData, event)
+		h.handleMessage(ctx, eventData, event)
 	case monitor.MonitorEventTypeBroadcast:
-		h.handleBroadcast(eventData, event)
+		h.handleBroadcast(ctx, eventData, event)
 	default:
 		return nil
 	}
@@ -448,9 +461,9 @@ func (h *teamMonitorHandlerImpl) handleTaskUnblocked(base map[string]any, event 
 //  2. base.update({"message_id": ..., "from_member": ..., "to_member": ..., "content": ...})
 //
 // Go 差异：Python 异步查询消息内容，Go 直接调用 monitor 查询。
-func (h *teamMonitorHandlerImpl) handleMessage(base map[string]any, event *monitor.MonitorEvent) {
-	// 获取消息内容
-	messageContent := h.getMessageContent(event.MessageID)
+func (h *teamMonitorHandlerImpl) handleMessage(ctx context.Context, base map[string]any, event *monitor.MonitorEvent) {
+	// S-02: 传递 ctx 到 getMessageContent，替代 context.Background()
+	messageContent := h.getMessageContent(ctx, event.MessageID)
 	base["message_id"] = ptrStrVal(event.MessageID)
 	base["from_member"] = ptrStrVal(event.FromMemberName)
 	base["to_member"] = ptrStrVal(event.ToMemberName)
@@ -463,8 +476,8 @@ func (h *teamMonitorHandlerImpl) handleMessage(base map[string]any, event *monit
 // Python 步骤：
 //  1. message_content = await self._get_message_content(event.message_id)
 //  2. base.update({"message_id": ..., "from_member": ..., "content": ...})
-func (h *teamMonitorHandlerImpl) handleBroadcast(base map[string]any, event *monitor.MonitorEvent) {
-	messageContent := h.getMessageContent(event.MessageID)
+func (h *teamMonitorHandlerImpl) handleBroadcast(ctx context.Context, base map[string]any, event *monitor.MonitorEvent) {
+	messageContent := h.getMessageContent(ctx, event.MessageID)
 	base["message_id"] = ptrStrVal(event.MessageID)
 	base["from_member"] = ptrStrVal(event.FromMemberName)
 	base["content"] = messageContent
@@ -481,8 +494,8 @@ func (h *teamMonitorHandlerImpl) handleBroadcast(base map[string]any, event *mon
 //  5. except: return ""
 //
 // Go 差异：Go 端 getMessages 已内置 boundSession，不需要手动设置 contextvar。
-// 在事件收集 goroutine 中直接调用，无法返回 error，故使用 context.Background()。
-func (h *teamMonitorHandlerImpl) getMessageContent(messageID *string) string {
+// S-02: 增加 ctx 参数，替代 context.Background()，使 session 上下文可传播。
+func (h *teamMonitorHandlerImpl) getMessageContent(ctx context.Context, messageID *string) string {
 	if messageID == nil || *messageID == "" {
 		return ""
 	}
@@ -494,8 +507,8 @@ func (h *teamMonitorHandlerImpl) getMessageContent(messageID *string) string {
 	}
 
 	// 对齐 Python: messages = await self._monitor.get_messages()
-	// 遍历所有消息按 messageID 查找
-	msgs, err := mon.GetMessages(context.Background(), "", "")
+	// S-02: 使用传入的 ctx 替代 context.Background()
+	msgs, err := mon.GetMessages(ctx, "", "")
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("message_id", *messageID).
 			Msg("查询消息内容失败")

@@ -182,6 +182,12 @@ func (o *DreamingOrchestrator) Stop(ctx context.Context) error {
 // Python: DreamingOrchestrator._loop()
 func (o *DreamingOrchestrator) loop(ctx context.Context) {
 	defer close(o.doneCh)
+	// M-06: 确保任何退出路径都清除 running 标志
+	defer func() {
+		o.mu.Lock()
+		o.running = false
+		o.mu.Unlock()
+	}()
 
 	// 初始延迟 120s（对齐 Python: await asyncio.sleep(120.0)）
 	select {
@@ -196,7 +202,12 @@ func (o *DreamingOrchestrator) loop(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			o.tick(ctx)
+			if err := o.tick(ctx); err != nil {
+				// M-02: tick 返回 context.Canceled 时退出 loop，对齐 Python raise
+				if errors.Is(err, context.Canceled) {
+					return
+				}
+			}
 		case <-ctx.Done():
 			return
 		}
@@ -205,7 +216,8 @@ func (o *DreamingOrchestrator) loop(ctx context.Context) {
 
 // tick 执行一轮 sweep。
 // Python: DreamingOrchestrator._tick()
-func (o *DreamingOrchestrator) tick(ctx context.Context) {
+// 返回 error 以便 loop 根据错误类型决定是否退出。
+func (o *DreamingOrchestrator) tick(ctx context.Context) error {
 	// Busy Backoff（对齐 Python: busy_checker() 返回 True → 跳过）
 	// Python: try: if self._busy_checker(): return
 	//         except Exception: logger.warning("busy_checker raised exception, skipping check")
@@ -229,7 +241,7 @@ func (o *DreamingOrchestrator) tick(ctx context.Context) {
 		}()
 	}
 	if busy {
-		return
+		return nil
 	}
 
 	// 执行 sweep（对齐 Python: await self._sweep_fn()）
@@ -237,12 +249,13 @@ func (o *DreamingOrchestrator) tick(ctx context.Context) {
 	if err := o.sweepFn(ctx); err != nil {
 		if errors.Is(err, context.Canceled) {
 			// 对齐 Python: CancelledError → raise（由 loop 外层处理）
-			logger.Error(logComponent).Str("name", o.name).Msg("sweep cancelled")
-			return
+			logger.Info(logComponent).Str("name", o.name).Msg("sweep cancelled")
+			return err // M-02: 传播 Canceled 给 loop，让 loop 退出
 		}
 		// 对齐 Python: except Exception → logger.exception("sweep exception: %s", exc)
 		logger.Error(logComponent).Err(err).Str("name", o.name).Msg("sweep exception")
 	} else {
 		logger.Info(logComponent).Str("name", o.name).Msg("sweep completed")
 	}
+	return nil
 }

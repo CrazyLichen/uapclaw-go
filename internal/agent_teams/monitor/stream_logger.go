@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -252,6 +253,7 @@ func classify(ctype string, payload any) string {
 
 // emit 写入格式化日志行。
 // 对齐 Python: _emit(category, member, role, content)
+// M-04: 时间戳统一由 safeWrite 添加（对齐 Python _safe_write），emit 只传 body
 func (l *TeamStreamLogger) emit(category, member, role, content string) {
 	if content == "" {
 		return
@@ -269,15 +271,22 @@ func (l *TeamStreamLogger) emit(category, member, role, content string) {
 	prefixed := strings.Join(strings.Split(content, "\n"), "\n  | ")
 	prefixed = "  | " + prefixed
 	header := fmt.Sprintf("[%s] member=%s role=%s category=%s", level, member, role, category)
-	l.safeWrite(fmt.Sprintf("%s %s\n%s", time.Now().Format("2006-01-02 15:04:05.000"), header, prefixed))
+	l.safeWrite(fmt.Sprintf("%s\n%s", header, prefixed))
 }
 
 // safeWrite 安全写入文件行。
-func (l *TeamStreamLogger) safeWrite(line string) {
+// M-02: 对齐 Python _safe_write，统一添加本地时区时间戳。
+// M-03: 对齐 Python _safe_write，写入后立即 flush。
+// M-04: 时间戳从 emit 移到 safeWrite，统一管理。
+func (l *TeamStreamLogger) safeWrite(body string) {
 	if l.file == nil {
 		return
 	}
-	_, _ = l.file.WriteString(line + "\n")
+	// M-02: 使用本地时区格式化，对齐 Python datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000 MST")
+	_, _ = l.file.WriteString(fmt.Sprintf("%s %s\n", timestamp, body))
+	// M-03: 对齐 Python self._file.flush()，写入后立即刷新
+	_ = l.file.Sync()
 }
 
 // discreteSummary 离散型块摘要。
@@ -430,11 +439,13 @@ func extractContent(payload any) string {
 
 // capStr 截断字符串。
 // 对齐 Python: _cap(text, limit)
+// M-01: 使用 rune 计数代替 byte 计数，对齐 Python len() 的字符语义
 func capStr(text string, limit int) string {
-	if len(text) <= limit {
+	if utf8.RuneCountInString(text) <= limit {
 		return text
 	}
-	return text[:limit] + "… (truncated)"
+	runes := []rune(text)
+	return string(runes[:limit]) + "… (truncated)"
 }
 
 // renderRole 渲染角色值。

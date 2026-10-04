@@ -316,6 +316,10 @@ func (f *fakeMonitorHandler) GetTeamSnapshot(_ context.Context) (map[string]any,
 	return map[string]any{"team_id": "test-team"}, nil
 }
 
+func (f *fakeMonitorHandler) TeamID() string {
+	return "test-team"
+}
+
 // TestEvolutionWatcher 测试演进监控注册/查询
 func TestEvolutionWatcher(t *testing.T) {
 	mgr := NewTeamManager()
@@ -400,7 +404,7 @@ func TestCleanupRuntimeLocals(t *testing.T) {
 	mgr.teamRailContexts["sess-1"] = &TeamRailMountContext{}
 
 	// 清理
-	mgr.cleanupRuntimeLocals("sess-1")
+	mgr.cleanupRuntimeLocals(context.Background(), "sess-1")
 
 	if mgr.HasStreamTask("sess-1") {
 		t.Error("cleanupRuntimeLocals 后不应有流任务")

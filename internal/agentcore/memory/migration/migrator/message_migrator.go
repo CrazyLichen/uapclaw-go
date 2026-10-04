@@ -246,14 +246,15 @@ func (m *MessageMigrator) restoreFromBackup(ctx context.Context, backupData []me
 
 	logger.Info(logComponent).Int("record_count", len(backupData)).Msg("已从备份恢复消息")
 
-	// 重置 schema 版本
+	// 重置 schema 版本（M-05: 对齐 Python，版本重置失败只记录日志，不影响恢复流程）
 	if preMigrationVersion != nil {
 		if err := m.messageStore.SetSchemaVersion(ctx, int32(*preMigrationVersion)); err != nil {
 			logger.Error(logComponent).Err(err).Int("version", *preMigrationVersion).
 				Msg("重置 schema 版本失败")
-			return err
+			// 对齐 Python: except 后只记录日志，不返回错误
+		} else {
+			logger.Info(logComponent).Int("version", *preMigrationVersion).Msg("已重置 schema 版本")
 		}
-		logger.Info(logComponent).Int("version", *preMigrationVersion).Msg("已重置 schema 版本")
 	}
 
 	return nil

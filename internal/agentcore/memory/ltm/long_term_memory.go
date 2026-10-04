@@ -167,7 +167,8 @@ func validateID(eventType string, scopeID string) bool {
 			Msg("Scope_id cannot contain separator '/'.")
 		return false
 	}
-	if len(scopeID) > 128 {
+	// M-01: 使用 rune 计数代替 byte 计数，对齐 Python len() 的字符语义
+	if utf8.RuneCountInString(scopeID) > 128 {
 		logger.Error(logComponent).Str("event_type", eventType).
 			Str("scope_id", scopeID).
 			Msg("Scope_id length exceeds limit (128).")

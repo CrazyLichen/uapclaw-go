@@ -153,7 +153,7 @@ func TestConvertEventToDict_未映射事件(t *testing.T) {
 		EventType: monitor.MonitorEventTypeTeamCreated,
 		TeamName:  "team",
 	}
-	result := handler.convertEventToDict(evt)
+	result := handler.convertEventToDict(context.Background(), evt)
 	if result != nil {
 		t.Error("未映射事件应返回 nil")
 	}
@@ -172,7 +172,7 @@ func TestConvertEventToDict_成员状态变更(t *testing.T) {
 		OldStatus:  &oldStatus,
 		NewStatus:  &newStatus,
 	}
-	result := handler.convertEventToDict(evt)
+	result := handler.convertEventToDict(context.Background(), evt)
 	if result == nil {
 		t.Fatal("convertEventToDict 返回 nil")
 	}
@@ -196,7 +196,7 @@ func TestConvertEventToDict_任务创建(t *testing.T) {
 		TaskID:    &taskID,
 		Status:    &status,
 	}
-	result := handler.convertEventToDict(evt)
+	result := handler.convertEventToDict(context.Background(), evt)
 	if result == nil {
 		t.Fatal("convertEventToDict 返回 nil")
 	}
@@ -223,7 +223,7 @@ func TestConvertEventToDict_消息事件(t *testing.T) {
 		MessageID:      &msgID,
 		FromMemberName: &fromMember,
 	}
-	result := handler.convertEventToDict(evt)
+	result := handler.convertEventToDict(context.Background(), evt)
 	if result == nil {
 		t.Fatal("convertEventToDict 返回 nil")
 	}

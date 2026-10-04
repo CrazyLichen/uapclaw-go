@@ -128,12 +128,7 @@ func (m *SQLMigrator) getCurrentVersion(ctx context.Context, tableName string) (
 func (m *SQLMigrator) updateVersion(ctx context.Context, tableName string, version int) error {
 	versionStr := strconv.Itoa(version)
 
-	// 先尝试 Add（幂等），若已存在则跳过
-	if err := m.metaManager.Add(ctx, tableName, versionStr); err != nil {
-		return err
-	}
-
-	// 更新已有记录的 schema_version
+	// S-02: 对齐 Python upsert 模式 — 先 Update，RowsAffected==0 再 Insert
 	result := m.db.WithContext(ctx).Table("memory_meta").
 		Where("table_name = ?", tableName).
 		Update("schema_version", versionStr)
@@ -141,6 +136,14 @@ func (m *SQLMigrator) updateVersion(ctx context.Context, tableName string, versi
 		logger.Error(logComponent).Err(result.Error).Str("table_name", tableName).
 			Int("version", version).Msg("更新 schema 版本失败")
 		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		// 不存在记录，插入新行
+		if err := m.metaManager.Add(ctx, tableName, versionStr); err != nil {
+			logger.Error(logComponent).Err(err).Str("table_name", tableName).
+				Int("version", version).Msg("插入 schema 版本失败")
+			return err
+		}
 	}
 
 	return nil
@@ -172,6 +175,14 @@ func (m *SQLMigrator) migrateAddColumn(tx *gorm.DB, op *operation.AddColumnOpera
 	tableName := op.Table
 	columnName := op.ColumnName
 	columnType := getGORMColumnType(op.ColumnType)
+
+	// S-04: SQL 注入防护 — 校验表名/列名只含合法字符
+	if !isValidIdentifier(tableName) {
+		return fmt.Errorf("invalid table name: %s", tableName)
+	}
+	if !isValidIdentifier(columnName) {
+		return fmt.Errorf("invalid column name: %s", columnName)
+	}
 
 	// 使用原生 SQL 添加列，支持 DEFAULT 和 NULL/NOT NULL
 	var nullStr string
@@ -228,6 +239,14 @@ func (m *SQLMigrator) migrateUpdateColumnType(tx *gorm.DB, op *operation.UpdateC
 	columnName := op.ColumnName
 	newColumnType := getGORMColumnType(op.NewColumnType)
 
+	// S-04: SQL 注入防护
+	if !isValidIdentifier(tableName) {
+		return fmt.Errorf("invalid table name: %s", tableName)
+	}
+	if !isValidIdentifier(columnName) {
+		return fmt.Errorf("invalid column name: %s", columnName)
+	}
+
 	// 检测方言名
 	dialectName := tx.Dialector.Name()
 
@@ -241,8 +260,14 @@ func (m *SQLMigrator) migrateUpdateColumnType(tx *gorm.DB, op *operation.UpdateC
 			return err
 		}
 	} else {
-		// MySQL / PostgreSQL：使用 ALTER TABLE ALTER COLUMN
-		sql := fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", tableName, columnName, newColumnType)
+		// S-05: 按方言区分 SQL 语法
+		// MySQL 使用 MODIFY COLUMN，PostgreSQL 使用 ALTER COLUMN TYPE
+		var sql string
+		if dialectName == "mysql" {
+			sql = fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s %s", tableName, columnName, newColumnType)
+		} else {
+			sql = fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", tableName, columnName, newColumnType)
+		}
 		if err := tx.Exec(sql).Error; err != nil {
 			// 回退到 GORM Migrator
 			logger.Warn(logComponent).Err(err).Str("table", tableName).Str("column", columnName).
@@ -297,4 +322,29 @@ func getGORMColumnType(typeString string) string {
 
 	// 默认 TEXT
 	return "TEXT"
+}
+
+// isValidIdentifier 校验 SQL 标识符（表名/列名）只含合法字符，防止 SQL 注入。
+// 合法字符：字母、数字、下划线，且不以数字开头。
+func isValidIdentifier(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, ch := range name {
+		if ch == '_' {
+			continue
+		}
+		if ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' {
+			continue
+		}
+		if ch >= '0' && ch <= '9' {
+			// 数字不能出现在首位
+			if i == 0 {
+				return false
+			}
+			continue
+		}
+		return false
+	}
+	return true
 }

@@ -27,9 +27,9 @@ import (
 //  1. if self._dreaming_started: return
 //  2. if not self._dreaming_mode: return
 //  3. if busy_checker and busy_checker(): logger.warning("agent busy, skip dreaming"); return
-//  4. self._dreaming_started = True
-//  5. try: await self._instance.memory.dreaming.start_dreaming(...)
-//  6. except Exception: logger.error(...); self._dreaming_started = False
+//  4. try: await self._instance.memory.dreaming.start_dreaming(...)
+//  5. except Exception: logger.warning(...); # _dreaming_started 保持 False
+//  6. self._dreaming_started = orch is not None  # 仅在成功后设置
 func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() bool) error {
 	// 步骤 1: 已启动则跳过
 	if d.dreamingStarted {
@@ -48,10 +48,7 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
 		return nil
 	}
 
-	// 步骤 4: 标记已启动
-	d.dreamingStarted = true
-
-	// 步骤 5: 调用 swarm memory dreaming.startDreaming(...)
+	// 步骤 4: 调用 swarm memory dreaming.startDreaming(...)
 	// Python: from jiuwenswarm.common.utils import get_agent_sessions_dir
 	// Python: sessions_dir = str(get_agent_sessions_dir() or "")
 	sessionsDir := workspace.AgentSessionsDir()
@@ -86,14 +83,14 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
 	// )
 	orch, err := swarmdreaming.StartDreaming(ctx, sessionsDir, outputDir, d.dreamingMode, language, busyChecker)
 	if err != nil {
-		// 步骤 6: 启动失败，回退标记
-		// Python: except Exception: logger.error(...); self._dreaming_started = False
-		logger.Error(logComponent).Str("dreaming_mode", d.dreamingMode).Err(err).Msg("start_dreaming failed")
-		d.dreamingStarted = false
+		// 对齐 Python: except Exception as exc: logger.warning(...)
+		// dreaming 启动失败不是致命错误，系统仍可正常运行
+		logger.Warn(logComponent).Str("dreaming_mode", d.dreamingMode).Err(err).Msg("start_dreaming failed")
 		return err
 	}
 
 	// Python: self._dreaming_started = orch is not None
+	// 仅在成功后设置，不存在中间态
 	d.dreamingStarted = orch != nil
 	if orch != nil {
 		logger.Info(logComponent).
@@ -112,23 +109,23 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
 //
 // Python 执行步骤：
 //  1. if not self._dreaming_started: return
-//  2. self._dreaming_started = False
-//  3. try: await self._instance.memory.dreaming.stop_dreaming()
-//  4. except Exception: logger.error(...)
+//  2. try: await stop_dreaming(mode=mode)
+//  3. self._dreaming_started = False  # 仅在成功后清除
+//  4. except Exception: logger.warning(...)
 func (d *DeepAdapter) TryStopDreaming(ctx context.Context) error {
 	// 步骤 1: 未启动则跳过
 	if !d.dreamingStarted {
 		return nil
 	}
 
-	// 步骤 2: 标记已停止
-	d.dreamingStarted = false
-
-	// 步骤 3: 调用 swarm memory dreaming.stopDreaming()
-	// Python: from jiuwenswarm.agents.harness.common.memory.dreaming import stop_dreaming
-	// Python: mode = getattr(self, "_dreaming_mode", "agent")
-	// Python: await stop_dreaming(mode=mode)
+	// 步骤 2: 调用 swarm memory dreaming.stopDreaming()
+	// Python: await stop_dreaming(mode=mode) — Python 的 stop_dreaming 内部吞错
+	// Go 的 StopDreaming 是 void，内部已处理错误日志
 	swarmdreaming.StopDreaming(ctx, d.dreamingMode)
+
+	// S-05: 对齐 Python，仅在成功后清除标志
+	// Python: self._dreaming_started = False  # 仅在成功后清除
+	d.dreamingStarted = false
 	logger.Info(logComponent).Str("dreaming_mode", d.dreamingMode).Msg("dreaming stopped")
 
 	return nil

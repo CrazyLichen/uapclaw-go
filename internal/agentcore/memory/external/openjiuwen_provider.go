@@ -279,8 +279,10 @@ func (p *OpenJiuwenProvider) Initialize(ctx context.Context, opts ...ProviderOpt
 	// 对齐 Python: if not self._kv_store or not self._vector_store or not self._db_store: logger.error(...); return
 	if p.kvStore == nil || p.vectorStore == nil || p.dbStore == nil {
 		// 对齐 Python L114-116: logger.error("[OpenJiuwenMemoryProvider] Store creation failed")
+		// Go 差异：Python 是 void 返回，Go 签名返回 error，应返回 error 让调用方感知失败
 		logger.Error(ojLogComponent).Msg("Store 创建失败")
-		return nil
+		return fmt.Errorf("store creation failed: kv=%v vector=%v db=%v",
+			p.kvStore != nil, p.vectorStore != nil, p.dbStore != nil)
 	}
 
 	// 对齐 Python: self._ltm = LongTermMemory()
@@ -534,11 +536,11 @@ func (p *OpenJiuwenProvider) handleSearch(ctx context.Context, args map[string]a
 	}
 	// 对齐 Python L308: threshold=args.get("threshold", 0.3)
 	// 使用 floatVal 统一处理 int/float64 等数字类型
+	// 对齐 Python L308: threshold=args.get("threshold", 0.3)
+	// 直接使用传入值，threshold=0 是合法的（不进行相关性过滤）
 	threshold := 0.3
 	if t, ok := args["threshold"]; ok {
-		if v := floatVal(t); v != 0 {
-			threshold = v
-		}
+		threshold = floatVal(t)
 	}
 
 	ltmInstance := ltm.GetLongTermMemory()

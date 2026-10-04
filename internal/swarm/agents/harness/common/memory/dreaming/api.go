@@ -42,13 +42,14 @@ func GetDreamingOrchestrator(mode string) *dreaming.DreamingOrchestrator {
 //
 // Python: start_dreaming(sessions_dir, output_dir, mode, busy_checker)
 func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode, language string, busyChecker func() bool) (*dreaming.DreamingOrchestrator, error) {
+	// M-04: 使用单个 Lock 覆盖检查-创建-存储全过程，消除 TOCTOU 竞态
+	orchestratorsMu.Lock()
+	defer orchestratorsMu.Unlock()
+
 	// Python: if mode in _orchestrators: return _orchestrators[mode]
-	orchestratorsMu.RLock()
 	if existing, ok := orchestrators[mode]; ok {
-		orchestratorsMu.RUnlock()
 		return existing, nil
 	}
-	orchestratorsMu.RUnlock()
 
 	// Python: cfg = DreamingConfig.load(mode)
 	cfg := LoadDreamingConfig(mode)
@@ -89,9 +90,7 @@ func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode, language s
 	}
 
 	// Python: _orchestrators[mode] = orch
-	orchestratorsMu.Lock()
 	orchestrators[mode] = orch
-	orchestratorsMu.Unlock()
 	logger.Info(apiLogComponent).Str("mode", mode).Msg("[dreaming] started")
 	return orch, nil
 }

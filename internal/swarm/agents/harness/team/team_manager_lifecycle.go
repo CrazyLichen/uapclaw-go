@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	runner "github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -318,7 +319,7 @@ func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID str
 		cleaned = c
 	}
 
-	m.cleanupRuntimeLocals(sessionID)
+	m.cleanupRuntimeLocals(ctx, sessionID)
 	m.ClearActiveRuntime(sessionID)
 	m.ClearPendingRuntime(sessionID)
 
@@ -365,7 +366,7 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 		}
 	}
 
-	m.cleanupRuntimeLocals(sessionID)
+	m.cleanupRuntimeLocals(ctx, sessionID)
 	m.ClearActiveRuntime(sessionID)
 	m.ClearPendingRuntime(sessionID)
 
@@ -408,7 +409,7 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 	}
 	m.mu.Unlock()
 
-	m.cleanupRuntimeLocals(sessionID)
+	m.cleanupRuntimeLocals(ctx, sessionID)
 
 	stopped := false
 	if hasLocalTeamRuntime && teamAgent != nil {
@@ -477,7 +478,7 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 		}
 	}
 
-	m.cleanupRuntimeLocals(sessionID)
+	m.cleanupRuntimeLocals(ctx, sessionID)
 	m.ClearActiveRuntime(sessionID)
 	m.ClearPendingRuntime(sessionID)
 
@@ -598,7 +599,7 @@ func (m *TeamManager) destroyOtherSessions(ctx context.Context, currentSessionID
 //  6. await _stop_team_messager(team_agent, session_id=)
 //  7. return cleaned
 func (m *TeamManager) destroyTeam(ctx context.Context, sessionID string) (bool, error) {
-	m.cleanupRuntimeLocals(sessionID)
+	m.cleanupRuntimeLocals(ctx, sessionID)
 
 	m.mu.Lock()
 	teamAgent, ok := m.teamAgents[sessionID]
@@ -613,9 +614,14 @@ func (m *TeamManager) destroyTeam(ctx context.Context, sessionID string) (bool, 
 	}
 
 	// Python: cleaned = await team_agent.destroy_team(force=True)
+	// S-04: 对齐 Python，注入 session_id 到 context（Python 用 set_session_id）
 	cleaned := false
 	if teamAgent != nil {
-		c, err := teamAgent.DestroyTeam(ctx, true)
+		// 注入 sessionID 到 ctx，对齐 Python: token = set_session_id(session_id)
+		ss := sessionctx.InitSessionState()
+		ss.SetSessionID(sessionID)
+		destroyCtx := sessionctx.WithSessionState(ctx, ss)
+		c, err := teamAgent.DestroyTeam(destroyCtx, true)
 		if err != nil {
 			logger.Error(logComponent).Str("session_id", sessionID).Err(err).Msg("DestroyTeam 失败")
 		}

@@ -25,6 +25,14 @@ import (
 // Go 直接调 TeamRuntimeManager.Interact（省略 Runner 桥接层）。
 // Python user_input 类型为 Any；Go 端统一为 *InteractInput，外层自行包装。
 func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput *interaction.InteractInput) (bool, error) {
+	// S-01: 对齐 Python 的 try/except 兜底，防止 panic 传播到上层
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).Any("panic", r).Str("session_id", sessionID).
+				Msg("Interact panic recovered")
+		}
+	}()
+
 	m.mu.Lock()
 	if m.activeSessionID == "" || m.activeSessionID != sessionID || m.activeTeamName == "" {
 		logger.Warn(logComponent).

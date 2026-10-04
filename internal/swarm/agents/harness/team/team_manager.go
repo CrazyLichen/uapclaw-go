@@ -32,6 +32,9 @@ type TeamMonitorHandler interface {
 	// GetTeamSnapshot 获取团队快照（成员+任务聚合视图）。
 	// 对齐 Python: TeamMonitorHandler.get_team_snapshot() -> dict[str, Any] | None
 	GetTeamSnapshot(ctx context.Context) (map[string]any, error)
+	// TeamID 返回团队标识。
+	// M-06: 对齐 Python: TeamMonitorHandler.team_id property
+	TeamID() string
 }
 
 // LiveRailEntry 活跃 Rail 实例及其所有者。

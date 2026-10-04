@@ -1591,8 +1591,8 @@ func buildOpenJiuwenProviderConfig(cfg map[string]any, configCache map[string]an
 	}
 	ltmDir := filepath.Join(workspace.WorkspaceDir(), "memory", "ltm")
 
-	// KV 配置
-	kvBackend := strOr(utils.StrVal(ojCfg["kv_type"]), "shelve")
+	// KV 配置 — 对齐 Python: _DEFAULT_KV_BACKEND = "memory"
+	kvBackend := strOr(utils.StrVal(ojCfg["kv_type"]), "memory")
 	kvBackend = strings.ToLower(strings.TrimSpace(kvBackend))
 	kvPath := strOr(utils.StrVal(ojCfg["kv_path"]), filepath.Join(ltmDir, "kv"))
 

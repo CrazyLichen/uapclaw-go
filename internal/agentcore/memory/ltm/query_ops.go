@@ -50,7 +50,8 @@ func (m *LongTermMemory) GetRecentMessages(
 		return nil, err
 	}
 
-	var recentMessages []llmschema.BaseMessage
+	// M-04: 初始化为 empty slice 而非 nil，对齐 Python 返回 [] 而非 None
+	recentMessages := make([]llmschema.BaseMessage, 0, len(msgAndMetas))
 	for _, mm := range msgAndMetas {
 		recentMessages = append(recentMessages, mm.Message)
 	}

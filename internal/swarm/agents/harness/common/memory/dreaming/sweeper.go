@@ -271,6 +271,13 @@ func (s *Sweeper) Init() error {
 // RunSweep 执行完整管线。由 Orchestrator 调用。
 // Python: Sweeper.run_sweep()
 func (s *Sweeper) RunSweep(ctx context.Context) error {
+	// 对齐 Python: try/except 包裹 scan_new_sessions，异常时 log + 安全返回
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).Any("panic", r).Msg("[Sweeper] Scan stage failed")
+		}
+	}()
+
 	sweepStart := time.Now()
 
 	// ── 扫描 + 预过滤 + 压缩 ──
@@ -313,7 +320,7 @@ func (s *Sweeper) RunSweep(ctx context.Context) error {
 			historyPath := filepath.Join(sessionsRoot, sid, "history.json")
 			var historyMtime float64
 			if info, err := os.Stat(historyPath); err == nil {
-				historyMtime = float64(info.ModTime().Unix())
+				historyMtime = float64(info.ModTime().UnixNano()) / 1e9
 			}
 			// Python: events = self._parse_history(sessions_root / sid)
 			events := ParseHistory(filepath.Join(sessionsRoot, sid))
@@ -406,7 +413,7 @@ func (s *Sweeper) ScanNewSessions() []SweeperSession {
 		if err != nil {
 			continue
 		}
-		currentMtime := float64(info.ModTime().Unix())
+		currentMtime := float64(info.ModTime().UnixNano()) / 1e9
 		snapshot, exists := s.scannedSessions[id]
 		if !exists {
 			continue
@@ -428,7 +435,7 @@ func (s *Sweeper) ScanNewSessions() []SweeperSession {
 			if err != nil {
 				continue
 			}
-			if now-float64(info.ModTime().Unix()) > ageBypass {
+			if now-float64(info.ModTime().UnixNano())/1e9 > ageBypass {
 				hasOld = true
 				break
 			}
@@ -456,7 +463,7 @@ func (s *Sweeper) ScanNewSessions() []SweeperSession {
 			continue
 		}
 		// Python: if now - mtime > max_age: ... continue
-		if now-float64(info.ModTime().Unix()) > maxAge {
+		if now-float64(info.ModTime().UnixNano())/1e9 > maxAge {
 			s.scannedSessions[sessionID] = ScannedSession{}
 			continue
 		}

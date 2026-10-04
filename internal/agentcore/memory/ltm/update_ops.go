@@ -69,10 +69,12 @@ func (m *LongTermMemory) UpdateVariables(
 				exception.WithMsg("variable manager is not initialized"),
 			)
 		}
+		// S-01: 对齐 Python，update_user_variable 失败直接返回错误（Python 无 try/except，异常自然传播）
 		for name, value := range variables {
 			if err := m.variableManager.UpdateUserVariable(ctx, p.UserID, p.ScopeID, name, value); err != nil {
 				logger.Error(logComponent).Err(err).Str("name", name).
 					Msg("更新变量失败")
+				return err
 			}
 		}
 		return nil

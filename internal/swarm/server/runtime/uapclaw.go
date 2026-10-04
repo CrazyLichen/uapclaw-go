@@ -50,6 +50,12 @@ type UapClaw struct {
 
 	// skilldevMu 保护 skilldevService 字段的并发访问。
 	skilldevMu sync.Mutex
+
+	// appCtx 应用级 context，随服务生命周期创建和取消。
+	// dreaming 等后台服务使用此 context 而非 context.Background()，
+	// 确保服务关闭时后台服务可优雅停止。
+	appCtx    context.Context
+	appCancel context.CancelFunc
 }
 
 // agentConfigListerBridge 将 runtime.AgentConfigService 桥接到 adapter.AgentConfigLister 接口。
@@ -101,10 +107,13 @@ func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
 //
 // Python: JiuWenClaw.__init__()
 func NewUapClaw() *UapClaw {
+	appCtx, appCancel := context.WithCancel(context.Background())
 	return &UapClaw{
 		sessionManager:     session.NewSessionManager(),
 		skillManager:       skill.NewSkillManager(workspace.AgentWorkspaceDir()),
 		agentConfigService: NewAgentConfigService(workspace.WorkspaceDir()),
+		appCtx:             appCtx,
+		appCancel:          appCancel,
 	}
 }
 
@@ -632,7 +641,7 @@ func (uc *UapClaw) CreateInstance(opts ...CreateInstanceOption) error {
 	// 启动 dreaming 后台任务（对齐 Python: interface.py:319-322）
 	if dreamer, ok := a.(adapter.DreamingController); ok {
 		go func() {
-			_ = dreamer.TryStartDreaming(context.Background(), func() bool {
+			_ = dreamer.TryStartDreaming(uc.appCtx, func() bool {
 				return uc.sessionManager.HasActiveTasks()
 			})
 		}()
@@ -652,7 +661,7 @@ func (uc *UapClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map
 	}
 	// 停止 dreaming（对齐 Python: interface.py:336-337）
 	if dreamer, ok := a.(adapter.DreamingController); ok {
-		_ = dreamer.TryStopDreaming(context.Background())
+		_ = dreamer.TryStopDreaming(uc.appCtx)
 	}
 	if err := a.ReloadAgentConfig(context.Background(), configBase, envOverrides); err != nil {
 		return err
@@ -660,7 +669,7 @@ func (uc *UapClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map
 	// 重启 dreaming（对齐 Python: interface.py:340-343）
 	if dreamer, ok := a.(adapter.DreamingController); ok {
 		go func() {
-			_ = dreamer.TryStartDreaming(context.Background(), func() bool {
+			_ = dreamer.TryStartDreaming(uc.appCtx, func() bool {
 				return uc.sessionManager.HasActiveTasks()
 			})
 		}()

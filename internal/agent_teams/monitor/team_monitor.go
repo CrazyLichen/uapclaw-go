@@ -126,6 +126,10 @@ func (m *TeamMonitor) Start(ctx context.Context) error {
 	if m.started {
 		return nil
 	}
+	// S-01: Start 时如果 channel 已关闭（被 Stop 关闭），重新创建
+	if m.eventCh == nil {
+		m.eventCh = make(chan *MonitorEvent, monitorEventChSize)
+	}
 	handle := m.teamAgent.AddEventListener(m.onEvent)
 	m.listenerHandle = handle
 	m.started = true
@@ -161,6 +165,8 @@ func (m *TeamMonitor) Stop(ctx context.Context) error {
 	}
 	// 关闭 channel，终止 range 遍历
 	close(m.eventCh)
+	// S-01: 置 nil，Start 时可重新创建
+	m.eventCh = nil
 	logger.Info(logComponentMon).Str("team_name", m.teamName).Msg("TeamMonitor 已停止")
 	return nil
 }
@@ -172,6 +178,12 @@ func (m *TeamMonitor) Stop(ctx context.Context) error {
 // 消费者通过 `for evt := range monitor.Events()` 遍历。
 // channel 关闭（Stop() 调用后）时迭代终止。
 func (m *TeamMonitor) Events() <-chan *MonitorEvent {
+	// S-01: channel 可能被 Stop 关闭后置 nil，返回一个已关闭的 dummy channel
+	if m.eventCh == nil {
+		ch := make(chan *MonitorEvent)
+		close(ch)
+		return ch
+	}
 	return m.eventCh
 }
 

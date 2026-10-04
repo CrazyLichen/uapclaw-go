@@ -151,13 +151,18 @@ func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGrou
 
 // hasLocalTeamRuntime 判断 session 是否使用内存中的 TeamAgent 路径。
 // 对齐 Python: TeamManager._has_local_team_runtime(session_id)
+// S-02: Python 返回 self._is_distributed_mode(get_config()) and session_id in self._team_agents
+// Go 差异：isDistributedMode 尚未实现，当前仅检查 teamAgents 映射
 func (m *TeamManager) hasLocalTeamRuntime(sessionID string) bool {
+	// TODO(#9.85): 分布式模式下需增加 isDistributedMode 判断
+	// Python: return self._is_distributed_mode(get_config()) and session_id in self._team_agents
 	_, ok := m.teamAgents[sessionID]
 	return ok
 }
 
 // cleanupRuntimeLocals 清理指定 session 的本地运行时状态。
 // 对齐 Python: TeamManager._cleanup_runtime_locals(session_id)
+// S-03: 增加 ctx 参数，传播 context 到 handler.Stop
 //
 // Python 步骤：
 //  1. watcher_task = self._team_evolution_watchers.pop(session_id)
@@ -167,7 +172,7 @@ func (m *TeamManager) hasLocalTeamRuntime(sessionID string) bool {
 //  3. monitor_handler = self._team_monitors.pop(session_id)
 //     if monitor_handler: await monitor_handler.stop()
 //  4. self._clear_team_rail_registries(session_id)
-func (m *TeamManager) cleanupRuntimeLocals(sessionID string) {
+func (m *TeamManager) cleanupRuntimeLocals(ctx context.Context, sessionID string) {
 	// 步骤 1: 取消演进监控
 	if cancel, ok := m.teamEvolutionWatchers[sessionID]; ok && cancel != nil {
 		cancel()
@@ -190,8 +195,9 @@ func (m *TeamManager) cleanupRuntimeLocals(sessionID string) {
 
 	// 步骤 3: 停止监控 handler
 	// Python: await monitor_handler.stop()
+	// S-03: 使用传入的 ctx 替代 context.Background()
 	if handler, ok := m.teamMonitors[sessionID]; ok {
-		if err := handler.Stop(context.Background()); err != nil {
+		if err := handler.Stop(ctx); err != nil {
 			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("停止监控 handler 失败")
 		}
 		delete(m.teamMonitors, sessionID)
