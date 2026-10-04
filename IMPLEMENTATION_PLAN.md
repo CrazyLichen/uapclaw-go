@@ -480,7 +480,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **7.x 检索系统** | — | | | |
 | 7.34 | ✅ | 检索嵌入适配 | ✅ BaseEmbedding 接口 + EmbeddingConfig + Callback + APIEmbedding（通用HTTP+3种响应格式+重试+并发）+ OpenAIEmbedding（SDK+Matryoshka+base64）+ DashscopeEmbedding（多模态+Matryoshka）+ VLLMEmbedding（组合OpenAI+messages注入）+ MultimodalEmbedder 接口 + MultimodalDocument + lite EmbeddingProvider/Mock/工厂/环境变量解析；覆盖率 base 100%、retrieval/embedding 87.3% | `openjiuwen/core/foundation/store/base_embedding.py` 及实现 |
 | 7.35 | ✅ | 检索重排序适配 | ✅ BaseReranker 接口 + RerankerConfig + Document + RerankOption(instruct/topN/extraParams/multimodalQuery) + RerankerBase(基类: requestHeaders/requestParams/parseResponse/assembleParams) + StandardReranker（/rerank API+重试+ExtraBody+ExtraParams+APIBase去除端点后缀）+ ChatReranker（/chat/completions+logprobs+logit_bias+yesNoIDs+TestCompatibility+size=1校验）+ DashScopeReranker（DashScope格式{model,input,parameters}+多模态查询+多模态文档+RerankMultimodal/Sync）+ api_requests重试工具；覆盖率 base 96.7%、retrieval/reranker 94.1% | `openjiuwen/core/foundation/store/base_reranker.py` 及实现 |
-| 7.36 | ☐ | 检索索引 | 向量索引编排 | `openjiuwen/core/foundation/store/index/` |
+| 7.36 | ✅ | 检索索引 | ✅ BaseMemoryIndex 接口(16方法) + StorageCodec + MemoryDoc + MemorySearchResult + UserScope + MemoryIndexBase(7个默认实现+RWMutex并发安全) + SimpleMemoryIndex(KV+Vector双存储编排：AddMemories按类型分组→嵌入→Vector→KV+ID追踪 / Search嵌入→逐类型向量搜索→KV获取→解码→排序截取 / UpdateMemories先删后加 / DeleteMemories+3种DeleteBy* / GetByID / ListMemories分页+类型排序 / ListUserScopes / SchemaVersion+Backup三方法 / ensureCollection懒创建+缓存)；覆盖率 89.8%；⤵️ retrieval/indexing 文档索引管理器（Indexer+Parser+Chunker+Extractor）缺口见领域十三 | `openjiuwen/core/foundation/store/index/` |
 
 **验证点**：✅ Agent 可存取长期记忆，跨会话保持上下文；安全护栏可拦截恶意输入
 
@@ -772,4 +772,37 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 12.10 | ☐ | Web UI 启动 | `uapclaw web` | `jiuwenswarm/channels/web/app_web.py` |
 | 12.11 | ☐ | 工作区初始化 | `uapclaw init` | `jiuwenswarm/init_workspace.py` |
 | 12.12 | ☐ | 服务启动器 | `uapclaw start` | `jiuwenswarm/start_services.py` |
+
+---
+
+## 领域十三：检索文档索引管理（retrieval/indexing 缺口）
+
+> 文档级索引管线：解析 → 分块 → 嵌入 → 入库。与 7.36 记忆索引（用户记忆 CRUD）不同，本章节处理外部文档（上传文件/链接/图片）的索引构建与维护。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| **13.x Indexer 层** | — | | | |
+| 13.1 | ☐ | Indexer 抽象接口 | `BuildIndex/UpdateIndex/DeleteIndex/IndexExists/GetIndexInfo` | `openjiuwen/core/retrieval/indexing/indexer/base.py` |
+| 13.2 | ☐ | ChromaIndexer | ChromaDB 文档索引（build_index+去重+嵌入+写入 / update先删后建 / delete按doc_id / index_exists / get_index_info） | `openjiuwen/core/retrieval/indexing/indexer/chroma_indexer.py` |
+| 13.3 | ☐ | MilvusIndexer | Milvus 文档索引（build_index+ensure_collection+去重+嵌入+写入 / update先删flush后建 / delete按doc_id过滤 / index_exists / get_index_info / _ensure_collection含BM25+dense索引） | `openjiuwen/core/retrieval/indexing/indexer/milvus_indexer.py` |
+| 13.4 | ☐ | ComputeChunkEmbeddings | 共享嵌入逻辑（文本embed_documents + 多模态embed_multimodal + image_path检测 + use_caption_for_images分支） | `openjiuwen/core/retrieval/indexing/indexer/embed_chunks.py` |
+| **13.x Chunker 层** | — | | | |
+| 13.5 | ☐ | Chunker 抽象接口 | `Chunk` 方法 | `openjiuwen/core/retrieval/indexing/processor/chunker/base.py` |
+| 13.6 | ☐ | CharChunker | 字符级分块（chunk_size+chunk_overlap） | `openjiuwen/core/retrieval/indexing/processor/chunker/char_chunker.py` |
+| 13.7 | ☐ | TokenizerChunker | Tokenizer 分块（tiktoken 兼容） | `openjiuwen/core/retrieval/indexing/processor/chunker/tokenizer_chunker.py` |
+| 13.8 | ☐ | HybridChunker | 混合分块（递归文本分割+语义感知） | `openjiuwen/core/retrieval/indexing/processor/chunker/hybrid_chunker.py` |
+| 13.9 | ☐ | 分块工具 | chunking 函数 + text_preprocessor + text_splitter | `openjiuwen/core/retrieval/indexing/processor/chunker/` |
+| **13.x Parser 层** | — | | | |
+| 13.10 | ☐ | Parser 抽象接口 | `Parse` 方法 | `openjiuwen/core/retrieval/indexing/processor/parser/base.py` |
+| 13.11 | ☐ | AutoParser 路由 | 文件/链接自动识别分发 | `openjiuwen/core/retrieval/indexing/processor/parser/auto_*.py` |
+| 13.12 | ☐ | PDF Parser | PDF 文档解析 | `openjiuwen/core/retrieval/indexing/processor/parser/pdf_parser.py` |
+| 13.13 | ☐ | Word/Excel Parser | Office 文档解析 | `openjiuwen/core/retrieval/indexing/processor/parser/word_parser.py` · `excel_parser.py` |
+| 13.14 | ☐ | HTML/Web Parser | 网页解析（含微信文章） | `openjiuwen/core/retrieval/indexing/processor/parser/html_file_parser.py` · `web_page_parser.py` · `wechat_article_parser.py` |
+| 13.15 | ☐ | Image Parser + Captioner | 图片解析 + LLM 描述生成 | `openjiuwen/core/retrieval/indexing/processor/parser/image_parser.py` · `captioner.py` |
+| 13.16 | ☐ | JSON/TxtMd Parser | JSON / 文本 / Markdown 解析 | `openjiuwen/core/retrieval/indexing/processor/parser/` |
+| **13.x Extractor/Splitter 层** | — | | | |
+| 13.17 | ☐ | TripleExtractor | 三元组抽取（LLM 调用） | `openjiuwen/core/retrieval/indexing/processor/extractor/triple_extractor.py` |
+| 13.18 | ☐ | Splitter | 语义分割 | `openjiuwen/core/retrieval/indexing/processor/splitter/splitter.py` |
+
+**验证点**：✅ 外部文档可被解析、分块、嵌入、索引，并支持增删改查
 | 12.13 | ☐ | 自动更新器 | 版本检测与升级 | `jiuwenswarm/common/updater.py` · `upgrade_executor.py` |
