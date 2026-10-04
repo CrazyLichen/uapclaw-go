@@ -351,10 +351,14 @@ func (f *fakeBaseAgentForIntegration) Invoke(_ context.Context, _ map[string]any
 func (f *fakeBaseAgentForIntegration) Stream(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
 	return nil, nil
 }
-func (f *fakeBaseAgentForIntegration) Card() *agentschema.AgentCard                            { return nil }
-func (f *fakeBaseAgentForIntegration) Config() agentinterfaces.AgentConfig                     { return nil }
-func (f *fakeBaseAgentForIntegration) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
-func (f *fakeBaseAgentForIntegration) CallbackManager() *agentinterfaces.AgentCallbackManager  { return nil }
+func (f *fakeBaseAgentForIntegration) Card() *agentschema.AgentCard        { return nil }
+func (f *fakeBaseAgentForIntegration) Config() agentinterfaces.AgentConfig { return nil }
+func (f *fakeBaseAgentForIntegration) AbilityManager() agentinterfaces.AbilityManagerInterface {
+	return nil
+}
+func (f *fakeBaseAgentForIntegration) CallbackManager() *agentinterfaces.AgentCallbackManager {
+	return nil
+}
 func (f *fakeBaseAgentForIntegration) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
 	return f.sb
 }

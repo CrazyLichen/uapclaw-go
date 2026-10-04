@@ -445,11 +445,17 @@ func (f *fakeIntegrationBaseAgent) Invoke(_ context.Context, _ map[string]any, _
 func (f *fakeIntegrationBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
 	return nil, nil
 }
-func (f *fakeIntegrationBaseAgent) Card() *agentschema.AgentCard                               { return f.card }
-func (f *fakeIntegrationBaseAgent) Config() agentinterfaces.AgentConfig                        { return nil }
-func (f *fakeIntegrationBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface    { return f.am }
-func (f *fakeIntegrationBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager     { return nil }
-func (f *fakeIntegrationBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return f.sb }
+func (f *fakeIntegrationBaseAgent) Card() *agentschema.AgentCard        { return f.card }
+func (f *fakeIntegrationBaseAgent) Config() agentinterfaces.AgentConfig { return nil }
+func (f *fakeIntegrationBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface {
+	return f.am
+}
+func (f *fakeIntegrationBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager {
+	return nil
+}
+func (f *fakeIntegrationBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return f.sb
+}
 func (f *fakeIntegrationBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }

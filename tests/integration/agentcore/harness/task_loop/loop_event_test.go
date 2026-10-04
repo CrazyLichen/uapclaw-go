@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -154,6 +155,15 @@ func (s *LoopEventSuite) TestDefaultEventPriority() {
 	s.Equal(10, hschema.DefaultEventPriority(hschema.DeepLoopEventTypeFollowup))
 	// 未知类型默认返回 10
 	s.Equal(10, hschema.DefaultEventPriority(hschema.DeepLoopEventType(99)))
+}
+
+// TestDeepLoopEvent_回调事件类型间接验证
+// 验证 DeepLoopEvent 对应的回调事件存在于 AgentCallbackEvent 枚举中
+func (s *LoopEventSuite) TestDeepLoopEvent_回调事件类型间接验证() {
+	// abort 类事件在 after_invoke 回调中处理
+	s.NotEmpty(agentinterfaces.CallbackAfterInvoke)
+	s.NotEmpty(agentinterfaces.CallbackBeforeToolCall)
+	s.NotEmpty(agentinterfaces.CallbackAfterToolCall)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

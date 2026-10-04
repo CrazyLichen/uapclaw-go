@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	security "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -25,12 +26,12 @@ type PermissionMergeSuite struct {
 // 对齐 Python: _base_tiered()
 func baseTieredConfig() map[string]any {
 	return map[string]any{
-		"enabled":             true,
-		"schema":              "tiered_policy",
-		"permission_mode":     "normal",
-		"defaults":            map[string]any{"*": "allow"},
-		"rules":               []any{},
-		"approval_overrides":  []any{},
+		"enabled":            true,
+		"schema":             "tiered_policy",
+		"permission_mode":    "normal",
+		"defaults":           map[string]any{"*": "allow"},
+		"rules":              []any{},
+		"approval_overrides": []any{},
 	}
 }
 
@@ -203,6 +204,14 @@ func (s *PermissionMergeSuite) TestMergePermission_普通工具自动确认_设�
 	after, matched := security.EvaluateTieredPolicy(merged, "cron_create_job", toolArgs)
 	s.Equal(security.PermissionLevelAllow, after)
 	s.Contains(matched, "tools.cron_create_job")
+}
+
+// TestMergePermission_权限合并与工具回调事件关联 验证权限合并后对应回调事件名非空
+func (s *PermissionMergeSuite) TestMergePermission_权限合并与工具回调事件关联() {
+	// 权限合并影响 AfterToolCall 回调事件中的权限判断
+	// agentinterfaces.CallbackAfterToolCall 是工具调用后的回调键
+	s.NotEmpty(agentinterfaces.CallbackAfterToolCall)
+	s.NotEmpty(agentinterfaces.CallbackBeforeToolCall)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

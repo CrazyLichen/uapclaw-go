@@ -13,12 +13,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	evolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
-	evolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -277,7 +277,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_WithTeamSkillDi
 	// 经过 normalizeSkillNames（TrimSpace + 过滤空串）
 	baseDisabled := rail.EvolutionRail.DisabledSkills()
 	s.True(baseDisabled["TeamSkill-A"])
-	s.True(baseDisabled["team_skill_b"]) // TrimSpace 后
+	s.True(baseDisabled["team_skill_b"])  // TrimSpace 后
 	s.False(baseDisabled[""])             // 空串被过滤
 	s.False(baseDisabled["team-skill-c"]) // 不存在
 }
@@ -566,7 +566,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_OnAfterToolCall
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "skill_tool",
 		ToolArgs: map[string]any{
-			"skill_name":          "my_team_skill",
+			"skill_name":         "my_team_skill",
 			"relative_file_path": "evolution/experience1.md",
 		},
 		ToolResult: map[string]any{
@@ -588,7 +588,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_OnAfterToolCall
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "skill_tool",
 		ToolArgs: map[string]any{
-			"skill_name":          "my_team_skill",
+			"skill_name":         "my_team_skill",
 			"relative_file_path": "SKILL.md",
 		},
 		ToolResult: map[string]any{

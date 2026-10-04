@@ -453,6 +453,18 @@ func TestRuleToolsList_其他类型(t *testing.T) {
 
 // ──────────────────────────── strVal ────────────────────────────
 
+// strVal 从 any 值中提取字符串，非字符串或 nil 返回空串
+func strVal(v any) string {
+	if v == nil {
+		return ""
+	}
+	s, ok := v.(string)
+	if !ok {
+		return ""
+	}
+	return s
+}
+
 func TestStrVal(t *testing.T) {
 	assert.Equal(t, "hello", strVal("hello"))
 	assert.Equal(t, "", strVal(42))

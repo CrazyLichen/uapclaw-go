@@ -17,8 +17,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	evolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/experience"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
@@ -170,7 +170,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_WithDisabledSkillsSet()
 	// 基类字段经过 normalizeSkillNames（TrimSpace + 过滤空串）
 	baseDisabled := rail.EvolutionRail.DisabledSkills()
 	s.True(baseDisabled["Skill-A"])
-	s.True(baseDisabled["skill_b"]) // TrimSpace 后
+	s.True(baseDisabled["skill_b"])  // TrimSpace 后
 	s.False(baseDisabled[""])        // 空串被过滤
 	s.False(baseDisabled["skill-c"]) // 不存在
 }
@@ -563,7 +563,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_OnAfterToolCall_skillTo
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "skill_tool",
 		ToolArgs: map[string]any{
-			"skill_name":          "my_skill",
+			"skill_name":         "my_skill",
 			"relative_file_path": "evolution/experience1.md",
 		},
 		ToolResult: map[string]any{
@@ -586,7 +586,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_OnAfterToolCall_skillTo
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolName: "skill_tool",
 		ToolArgs: map[string]any{
-			"skill_name":          "my_skill",
+			"skill_name":         "my_skill",
 			"relative_file_path": "SKILL.md",
 		},
 		ToolResult: map[string]any{
@@ -1076,12 +1076,12 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_EvolutionSnapshot_FromL
 // TestSkillEvolutionRail_EvolutionHostEventMeta_ToPayload 测试事件元数据序列化。
 func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_EvolutionHostEventMeta_ToPayload() {
 	meta := evolution.EvolutionHostEventMeta{
-		EventKind:  evolution.EvolutionEventKindProgress,
-		RailKind:   stringPtr("regular"),
-		Stage:      stringPtr("detecting_signals"),
-		SkillName:  stringPtr("my_skill"),
-		RequestID:  stringPtr("req_001"),
-		Status:     stringPtr("started"),
+		EventKind: evolution.EvolutionEventKindProgress,
+		RailKind:  stringPtr("regular"),
+		Stage:     stringPtr("detecting_signals"),
+		SkillName: stringPtr("my_skill"),
+		RequestID: stringPtr("req_001"),
+		Status:    stringPtr("started"),
 	}
 
 	payload := meta.ToPayload()

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	task_loop "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -125,6 +126,18 @@ func (s *LoopCoordinatorSuite) TestLoopCoordinator_Reset() {
 	s.Equal(0, lc.Iteration())
 	s.Equal(0, lc.TokenUsage())
 	s.False(lc.IsAborted())
+}
+
+// TestLoopCoordinator_Abort与DeepLoopEventType关联 验证 abort 协调器状态与 schema 层事件类型一致
+func (s *LoopCoordinatorSuite) TestLoopCoordinator_Abort与DeepLoopEventType关联() {
+	lc := task_loop.NewLoopCoordinator(nil)
+	s.False(lc.IsAborted())
+
+	lc.RequestAbort()
+	s.True(lc.IsAborted())
+
+	// abort 类事件在 schema 层有对应枚举
+	s.Equal("abort", hschema.DeepLoopEventTypeAbort.String())
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

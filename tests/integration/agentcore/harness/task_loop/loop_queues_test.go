@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	task_loop "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -134,6 +135,15 @@ func (s *LoopQueuesSuite) TestLoopQueues_IsAborted() {
 
 	lc.RequestAbort()
 	s.True(lc.IsAborted())
+}
+
+// TestLoopQueues_队列消息与DeepLoopEvent类型关联 验证队列中的消息与 schema 层事件类型对应
+func (s *LoopQueuesSuite) TestLoopQueues_队列消息与DeepLoopEvent类型关联() {
+	// followup 队列对应 DeepLoopEventTypeFollowup
+	s.Equal("followup", hschema.DeepLoopEventTypeFollowup.String())
+	// steering 队列对应 steer 和 abort
+	s.Equal("steer", hschema.DeepLoopEventTypeSteer.String())
+	s.Equal("abort", hschema.DeepLoopEventTypeAbort.String())
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

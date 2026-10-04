@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	security "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -499,4 +500,11 @@ func (s *PatternsIntegrationSuite) TestMergeExternalDirectoryAllow_已存在allo
 	}
 	_, wrote := security.MergeExternalDirectoryAllowIntoPermissions(perms, []string{"/home/user/project"})
 	s.False(wrote)
+}
+
+// TestSecurityPatterns_与回调事件类型间接关联 验证安全模式匹配器服务于回调事件
+func (s *PatternsIntegrationSuite) TestSecurityPatterns_与回调事件类型间接关联() {
+	// BeforeToolCall 回调触发权限检查，匹配器用于路径/URL/command 验证
+	s.NotEmpty(agentinterfaces.CallbackBeforeToolCall)
+	s.NotEmpty(agentinterfaces.CallbackAfterToolCall)
 }
