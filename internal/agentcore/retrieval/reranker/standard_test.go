@@ -9,6 +9,7 @@ import (
 	"time"
 
 	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 )
 
 // ──────────────────────────── 构造函数测试 ────────────────────────────
@@ -325,10 +326,157 @@ func TestNewStandardReranker_自定义HTTPClient(t *testing.T) {
 	}
 }
 
-// TestWithExtraHeaders 验证 WithExtraHeaders 选项不 panic
+// TestWithExtraHeaders 验证 WithExtraHeaders 选项可合并额外请求头
 func TestWithExtraHeaders(t *testing.T) {
-	headers := map[string]string{"X-Custom": "value"}
-	opt := WithExtraHeaders(headers)
-	// 验证选项函数可正常创建
-	_ = opt
+	config := reranker.RerankerConfig{
+		APIBase:   "https://api.example.com",
+		ModelName: "rerank-model",
+		Timeout:   10,
+	}
+	r, err := NewStandardReranker(config, WithExtraHeaders(map[string]string{"X-Custom": "value"}))
+	if err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+	if r.headers["X-Custom"] != "value" {
+		t.Errorf("X-Custom: 期望 value, 实际 %q", r.headers["X-Custom"])
+	}
+}
+
+// ──────────────────────────── RerankDocsSync 测试 ────────────────────────────
+
+func TestStandardReranker_RerankDocsSync_Document输入(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"results": []any{
+				map[string]any{"index": float64(0), "relevance_score": 0.77},
+			},
+		})
+	}))
+	defer server.Close()
+
+	config := reranker.RerankerConfig{
+		APIBase:   server.URL,
+		ModelName: "rerank-model",
+		Timeout:   10,
+	}
+	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
+
+	doc := reranker.NewDocument("同步文档内容")
+	result, err := r.RerankDocsSync(context.Background(), "查询", []*reranker.Document{doc})
+	if err != nil {
+		t.Fatalf("RerankDocsSync 失败: %v", err)
+	}
+	if result[doc.ID] != 0.77 {
+		t.Errorf("文档分数: 期望 0.77, 实际 %f", result[doc.ID])
+	}
+}
+
+// ──────────────────────────── doRerank 错误分支测试 ────────────────────────────
+
+func TestStandardReranker_Rerank_服务端错误(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error": "internal"}`))
+	}))
+	defer server.Close()
+
+	config := reranker.RerankerConfig{
+		APIBase:   server.URL,
+		ModelName: "rerank-model",
+		Timeout:   10,
+	}
+	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
+
+	_, err := r.Rerank(context.Background(), "查询", []string{"文档1"})
+	if err == nil {
+		t.Fatal("服务端 500 错误应返回错误")
+	}
+}
+
+func TestStandardReranker_RerankSync_服务端错误(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error": "internal"}`))
+	}))
+	defer server.Close()
+
+	config := reranker.RerankerConfig{
+		APIBase:   server.URL,
+		ModelName: "rerank-model",
+		Timeout:   10,
+	}
+	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
+
+	_, err := r.RerankSync(context.Background(), "查询", []string{"文档1"})
+	if err == nil {
+		t.Fatal("服务端 500 错误应返回错误")
+	}
+}
+
+// ──────────────────────────── validateStandardConfig 多模态分支测试 ────────────────────────────
+
+func TestValidateStandardConfig_Multimodal文档记录警告(t *testing.T) {
+	mmDoc, err := common.NewMultimodalDocument().AddField(common.ModalityText, "多模态内容")
+	if err != nil {
+		t.Fatalf("创建多模态文档失败: %v", err)
+	}
+	docs := []any{mmDoc}
+	// 多模态文档不应返回错误，仅记录 warning 日志
+	if err := validateStandardConfig(docs); err != nil {
+		t.Errorf("多模态文档不应返回错误: %v", err)
+	}
+}
+
+func TestValidateStandardConfig_不支持的类型(t *testing.T) {
+	docs := []any{123}
+	if err := validateStandardConfig(docs); err == nil {
+		t.Fatal("不支持的文档类型应返回错误")
+	}
+}
+
+// ──────────────────────────── formatAPIBase 测试 ────────────────────────────
+
+func TestFormatAPIBase(t *testing.T) {
+	if formatAPIBase("https://api.example.com/rerank", "/rerank") != "https://api.example.com" {
+		t.Error("应去除 /rerank 后缀")
+	}
+	if formatAPIBase("https://api.example.com", "/rerank") != "https://api.example.com" {
+		t.Error("无后缀时应保持不变")
+	}
+}
+
+// ──────────────────────────── RerankDocs 输出格式测试 ────────────────────────────
+
+func TestStandardReranker_Rerank_output嵌套格式(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"output": map[string]any{
+				"results": []any{
+					map[string]any{"index": float64(0), "relevance_score": 0.91},
+					map[string]any{"index": float64(1), "relevance_score": 0.62},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	config := reranker.RerankerConfig{
+		APIBase:   server.URL,
+		ModelName: "rerank-model",
+		Timeout:   10,
+	}
+	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
+
+	result, err := r.Rerank(context.Background(), "查询", []string{"文档1", "文档2"})
+	if err != nil {
+		t.Fatalf("Rerank 失败: %v", err)
+	}
+	if result["文档1"] != 0.91 {
+		t.Errorf("文档1 分数: 期望 0.91, 实际 %f", result["文档1"])
+	}
+	if result["文档2"] != 0.62 {
+		t.Errorf("文档2 分数: 期望 0.62, 实际 %f", result["文档2"])
+	}
 }

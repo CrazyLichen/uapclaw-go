@@ -421,3 +421,147 @@ func TestWithDashScopeHTTPClient(t *testing.T) {
 		t.Error("应使用自定义 HTTP 客户端")
 	}
 }
+
+// ──────────────────────────── RerankDocsSync 测试 ────────────────────────────
+
+func TestDashScopeReranker_RerankDocsSync(t *testing.T) {
+	server := newTestDashScopeServer(dashScopeTestResponse)
+	defer server.Close()
+
+	r := newTestDashScopeReranker(server.URL)
+	docs := []*reranker.Document{
+		reranker.NewDocument("文档1"),
+		reranker.NewDocument("文档2"),
+	}
+	result, err := r.RerankDocsSync(context.Background(), "测试查询", docs)
+	if err != nil {
+		t.Fatalf("RerankDocsSync 返回错误: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("结果数量期望 2, 实际 %d", len(result))
+	}
+}
+
+// ──────────────────────────── RerankMultimodalSync 测试 ────────────────────────────
+
+func TestDashScopeReranker_RerankMultimodalSync(t *testing.T) {
+	server := newTestDashScopeServer(dashScopeTestResponse)
+	defer server.Close()
+
+	r := newTestDashScopeReranker(server.URL)
+	doc1, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "多模态同步文档")
+	require.NoError(t, addErr)
+	docs := []*common.MultimodalDocument{doc1}
+	result, err := r.RerankMultimodalSync(context.Background(), "测试查询", docs)
+	if err != nil {
+		t.Fatalf("RerankMultimodalSync 返回错误: %v", err)
+	}
+	if len(result) != 1 {
+		t.Fatalf("结果数量期望 1, 实际 %d", len(result))
+	}
+}
+
+// ──────────────────────────── requestParams ExtraBody/ExtraParams 合并测试 ────────────────────────────
+
+func TestDashScopeReranker_requestParams_ExtraBody合并到parameters(t *testing.T) {
+	config := reranker.RerankerConfig{
+		APIKey:    "test-key",
+		APIBase:   "https://dashscope.aliyuncs.com",
+		ModelName: "test-model",
+		Timeout:   10,
+		ExtraBody: map[string]any{"custom_field": "custom_value"},
+	}
+	r, _ := NewDashScopeReranker(config)
+
+	opt := reranker.RerankOption{ExtraParams: map[string]any{"extra_key": "extra_val"}}
+	params := r.requestParams("测试查询", []string{"文档1"}, 1, &opt)
+
+	parameters := params["parameters"].(map[string]any)
+	if parameters["custom_field"] != "custom_value" {
+		t.Errorf("ExtraBody: custom_field 期望 custom_value, 实际 %v", parameters["custom_field"])
+	}
+	if parameters["extra_key"] != "extra_val" {
+		t.Errorf("ExtraParams: extra_key 期望 extra_val, 实际 %v", parameters["extra_key"])
+	}
+}
+
+// ──────────────────────────── assembleParams 多模态查询测试 ────────────────────────────
+
+func TestDashScopeReranker_assembleParams_多模态查询(t *testing.T) {
+	config := reranker.RerankerConfig{
+		APIKey:    "test-key",
+		APIBase:   "https://dashscope.aliyuncs.com",
+		ModelName: "test-model",
+		Timeout:   10,
+		ExtraBody: map[string]any{},
+	}
+	r, _ := NewDashScopeReranker(config)
+
+	mmQuery, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "图文查询")
+	require.NoError(t, addErr)
+	mmQuery, addErr = mmQuery.AddField(common.ModalityImage, "https://example.com/query-img.png")
+	require.NoError(t, addErr)
+
+	opt := &reranker.RerankOption{MultimodalQuery: mmQuery}
+	docs := []any{"文档1"}
+	_, params, _, err := r.assembleParams("文本查询", docs, opt)
+	if err != nil {
+		t.Fatalf("assembleParams 返回错误: %v", err)
+	}
+
+	// 验证 input.query 为 dashscope 格式的 map
+	input := params["input"].(map[string]any)
+	queryMap, ok := input["query"].(map[string]any)
+	if !ok {
+		t.Fatal("多模态查询时 input.query 应为 map[string]any 类型")
+	}
+	if queryMap["text"] != "图文查询" {
+		t.Errorf("query.text: 期望 图文查询, 实际 %v", queryMap["text"])
+	}
+}
+
+// ──────────────────────────── doRerank/请求失败测试 ────────────────────────────
+
+func TestDashScopeReranker_RerankSync_请求失败(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error": "internal error"}`))
+	}))
+	defer server.Close()
+
+	r := newTestDashScopeReranker(server.URL)
+	_, err := r.RerankSync(context.Background(), "测试查询", []string{"文档1"})
+	if err == nil {
+		t.Fatal("期望返回错误，实际返回 nil")
+	}
+}
+
+// ──────────────────────────── assembleParams 纯文本无多模态测试 ────────────────────────────
+
+func TestDashScopeReranker_assembleParams_纯文本无多模态(t *testing.T) {
+	config := reranker.RerankerConfig{
+		APIKey:    "test-key",
+		APIBase:   "https://dashscope.aliyuncs.com",
+		ModelName: "test-model",
+		Timeout:   10,
+		ExtraBody: map[string]any{},
+	}
+	r, _ := NewDashScopeReranker(config)
+
+	docs := []any{"文档1", "文档2"}
+	_, params, docIDs, err := r.assembleParams("测试查询", docs, nil)
+	if err != nil {
+		t.Fatalf("assembleParams 返回错误: %v", err)
+	}
+
+	if len(docIDs) != 2 {
+		t.Fatalf("docIDs 长度期望 2, 实际 %d", len(docIDs))
+	}
+
+	// 纯文本时 documents 应为 []string 格式
+	input := params["input"].(map[string]any)
+	documents := input["documents"]
+	if _, ok := documents.([]string); !ok {
+		t.Fatalf("纯文本时 documents 应为 []string 类型, 实际类型: %T", documents)
+	}
+}

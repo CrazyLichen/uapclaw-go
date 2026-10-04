@@ -372,3 +372,148 @@ func TestFirstDocID(t *testing.T) {
 		t.Error("应返回第一个元素")
 	}
 }
+
+// ──────────────────────────── RerankDocsSync 测试 ────────────────────────────
+
+func TestChatReranker_RerankDocsSync_Document输入(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := makeChatCompletionResponse([]map[string]any{
+			{"token": "yes", "logprob": -0.15},
+			{"token": "no", "logprob": -1.8},
+		})
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	config := reranker.RerankerConfig{
+		APIBase:   server.URL,
+		YesNoIDs:  [2]int{1234, 5678},
+		ModelName: "chat-model",
+		Timeout:   10,
+	}
+	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
+
+	doc := reranker.NewDocument("文档内容")
+	result, err := c.RerankDocsSync(context.Background(), "查询", []*reranker.Document{doc})
+	if err != nil {
+		t.Fatalf("RerankDocsSync 失败: %v", err)
+	}
+	if _, ok := result[doc.ID]; !ok {
+		t.Error("结果应包含文档 ID")
+	}
+}
+
+// ──────────────────────────── requestParams ExtraBody/ExtraParams 测试 ────────────────────────────
+
+func TestChatReranker_requestParams_ExtraBody合并(t *testing.T) {
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+		resp := makeChatCompletionResponse([]map[string]any{
+			{"token": "yes", "logprob": -0.1},
+		})
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	config := reranker.RerankerConfig{
+		APIBase:   server.URL,
+		YesNoIDs:  [2]int{1234, 5678},
+		ModelName: "chat-model",
+		Timeout:   10,
+		ExtraBody: map[string]any{"custom_field": "custom_value"},
+	}
+	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
+
+	_, err := c.Rerank(context.Background(), "查询", []string{"文档"})
+	if err != nil {
+		t.Fatalf("Rerank 失败: %v", err)
+	}
+
+	if receivedBody["custom_field"] != "custom_value" {
+		t.Errorf("custom_field: 期望 custom_value, 实际 %v", receivedBody["custom_field"])
+	}
+}
+
+func TestChatReranker_requestParams_ExtraParams合并(t *testing.T) {
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+		resp := makeChatCompletionResponse([]map[string]any{
+			{"token": "yes", "logprob": -0.1},
+		})
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	config := reranker.RerankerConfig{
+		APIBase:   server.URL,
+		YesNoIDs:  [2]int{1234, 5678},
+		ModelName: "chat-model",
+		Timeout:   10,
+	}
+	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
+
+	opt := reranker.RerankOption{ExtraParams: map[string]any{"extra_key": "extra_val"}}
+	_, err := c.Rerank(context.Background(), "查询", []string{"文档"}, opt)
+	if err != nil {
+		t.Fatalf("Rerank 失败: %v", err)
+	}
+
+	if receivedBody["extra_key"] != "extra_val" {
+		t.Errorf("extra_key: 期望 extra_val, 实际 %v", receivedBody["extra_key"])
+	}
+}
+
+// ──────────────────────────── parseResponse 降级分支测试 ────────────────────────────
+
+func TestChatReranker_parseResponse_无choices(t *testing.T) {
+	c := &ChatReranker{StandardReranker: &StandardReranker{RerankerBase: NewRerankerBase(reranker.RerankerConfig{ModelName: "test"}, 1, 10*time.Millisecond)}}
+
+	result, err := c.parseResponse(map[string]any{}, []string{"doc-1"})
+	if err != nil {
+		t.Fatalf("无 choices 时应降级返回默认分数, 实际错误: %v", err)
+	}
+	if result["doc-1"] != 0.0 {
+		t.Errorf("无 choices 时分数应为 0, 实际 %f", result["doc-1"])
+	}
+}
+
+func TestChatReranker_parseResponse_choices非map(t *testing.T) {
+	c := &ChatReranker{StandardReranker: &StandardReranker{RerankerBase: NewRerankerBase(reranker.RerankerConfig{ModelName: "test"}, 1, 10*time.Millisecond)}}
+
+	responseData := map[string]any{
+		"choices": []any{"not-a-map"},
+	}
+	result, err := c.parseResponse(responseData, []string{"doc-1"})
+	if err != nil {
+		t.Fatalf("应降级返回默认分数, 实际错误: %v", err)
+	}
+	if result["doc-1"] != 0.0 {
+		t.Errorf("非 map choices 时分数应为 0, 实际 %f", result["doc-1"])
+	}
+}
+
+func TestChatReranker_parseResponse_logprobs无content(t *testing.T) {
+	c := &ChatReranker{StandardReranker: &StandardReranker{RerankerBase: NewRerankerBase(reranker.RerankerConfig{ModelName: "test"}, 1, 10*time.Millisecond)}}
+
+	responseData := map[string]any{
+		"choices": []any{
+			map[string]any{
+				"logprobs": map[string]any{},
+			},
+		},
+	}
+	result, err := c.parseResponse(responseData, []string{"doc-1"})
+	if err != nil {
+		t.Fatalf("应降级返回默认分数, 实际错误: %v", err)
+	}
+	if result["doc-1"] != 0.0 {
+		t.Errorf("无 content 时分数应为 0, 实际 %f", result["doc-1"])
+	}
+}

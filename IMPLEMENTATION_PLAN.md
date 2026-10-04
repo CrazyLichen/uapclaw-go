@@ -478,8 +478,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.32 | ☐ | JailbreakGuardrail | 越狱检测 | `openjiuwen/core/security/guardrail/` |
 | 7.33 | ☐ | Security Schema | 安全数据模型 | `openjiuwen/core/security/schema/` |
 | **7.x 检索系统** | — | | | |
-| 7.34 | ☐ | 检索嵌入适配 | OpenAI/DashScope/API/VLLM Embedding | `openjiuwen/core/foundation/store/base_embedding.py` 及实现 |
-| 7.35 | ☐ | 检索重排序适配 | Standard/Chat/DashScope Reranker | `openjiuwen/core/foundation/store/base_reranker.py` 及实现 |
+| 7.34 | ✅ | 检索嵌入适配 | ✅ BaseEmbedding 接口 + EmbeddingConfig + Callback + APIEmbedding（通用HTTP+3种响应格式+重试+并发）+ OpenAIEmbedding（SDK+Matryoshka+base64）+ DashscopeEmbedding（多模态+Matryoshka）+ VLLMEmbedding（组合OpenAI+messages注入）+ MultimodalEmbedder 接口 + MultimodalDocument + lite EmbeddingProvider/Mock/工厂/环境变量解析；覆盖率 base 100%、retrieval/embedding 87.3% | `openjiuwen/core/foundation/store/base_embedding.py` 及实现 |
+| 7.35 | ✅ | 检索重排序适配 | ✅ BaseReranker 接口 + RerankerConfig + Document + RerankOption(instruct/topN/extraParams/multimodalQuery) + RerankerBase(基类: requestHeaders/requestParams/parseResponse/assembleParams) + StandardReranker（/rerank API+重试+ExtraBody+ExtraParams+APIBase去除端点后缀）+ ChatReranker（/chat/completions+logprobs+logit_bias+yesNoIDs+TestCompatibility+size=1校验）+ DashScopeReranker（DashScope格式{model,input,parameters}+多模态查询+多模态文档+RerankMultimodal/Sync）+ api_requests重试工具；覆盖率 base 96.7%、retrieval/reranker 94.1% | `openjiuwen/core/foundation/store/base_reranker.py` 及实现 |
 | 7.36 | ☐ | 检索索引 | 向量索引编排 | `openjiuwen/core/foundation/store/index/` |
 
 **验证点**：✅ Agent 可存取长期记忆，跨会话保持上下文；安全护栏可拦截恶意输入
