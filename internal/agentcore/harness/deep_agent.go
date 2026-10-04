@@ -1641,6 +1641,22 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 		agent.SetLLM(cfg.Model)
 	}
 
+	// 创建并注入 ContextEngine（对齐 Python ReActAgent.__init__ 中 self.context_engine = ContextEngine(...)）
+	// Python 中 ReActAgent 总是创建 ContextEngine，即使 context_engine_config 使用默认值
+	ceConfig := ceschema.NewContextEngineConfig()
+	if cfg.ContextEngineConfig != nil {
+		ceConfig = *cfg.ContextEngineConfig
+	}
+	var ceOpts []ceinterface.ContextEngineOption
+	if cfg.Workspace != nil {
+		ceOpts = append(ceOpts, ceinterface.WithWorkspace(cfg.Workspace))
+	}
+	if cfg.SysOperation != nil {
+		ceOpts = append(ceOpts, ceinterface.WithEngineSysOperation(cfg.SysOperation))
+	}
+	ce := context_engine.NewContextEngine(ceConfig, ceOpts...)
+	agent.SetContextEngine(ce)
+
 	// 保存 builder 引用
 	d.systemPromptBuilder = promptBuilder
 

@@ -31,6 +31,8 @@ type bus struct {
 type InProcessMessager struct {
 	// config 传输配置
 	config schema.MessagerTransportConfig
+	// bus 构造时缓存的 Bus 引用，对齐 Python: self._bus = _get_bus()
+	bus *bus
 	// subscribedTopics 已订阅的主题列表（用于 Unsubscribe 时移除条目）
 	subscribedTopics []string
 }
@@ -58,8 +60,12 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInProcessMessager 创建进程内消息通信实例。
+// 构造时缓存 Bus 引用，对齐 Python: self._bus = _get_bus()。
 func NewInProcessMessager(config schema.MessagerTransportConfig) *InProcessMessager {
-	return &InProcessMessager{config: config}
+	return &InProcessMessager{
+		config: config,
+		bus:    getBus(),
+	}
 }
 
 // CleanupInProcessBus 重置进程全局 Bus（测试间调用）。
@@ -94,7 +100,7 @@ func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message
 		msgCopy.SenderID = agentID
 		message = &msgCopy
 	}
-	b := getBus()
+	b := m.bus
 	b.mu.Lock()
 	subs, ok := b.topicSubs[topicID]
 	if !ok {
@@ -120,7 +126,7 @@ func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message
 
 // Subscribe 订阅主题，注册回调。
 func (m *InProcessMessager) Subscribe(_ context.Context, topicID string, handler MessagerHandler) error {
-	b := getBus()
+	b := m.bus
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.topicSubs == nil {
@@ -136,7 +142,7 @@ func (m *InProcessMessager) Subscribe(_ context.Context, topicID string, handler
 
 // Unsubscribe 取消订阅。
 func (m *InProcessMessager) Unsubscribe(_ context.Context, topicID string) error {
-	b := getBus()
+	b := m.bus
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	subs, ok := b.topicSubs[topicID]
@@ -158,7 +164,7 @@ func (m *InProcessMessager) Unsubscribe(_ context.Context, topicID string) error
 
 // Send 点对点发送消息给指定 agent。
 func (m *InProcessMessager) Send(ctx context.Context, agentID string, message *events.EventMessage) error {
-	b := getBus()
+	b := m.bus
 	b.mu.Lock()
 	handler, ok := b.p2p[agentID]
 	b.mu.Unlock()
@@ -172,7 +178,7 @@ func (m *InProcessMessager) Send(ctx context.Context, agentID string, message *e
 
 // RegisterDirectMessageHandler 注册点对点消息回调。
 func (m *InProcessMessager) RegisterDirectMessageHandler(_ context.Context, handler MessagerHandler) error {
-	b := getBus()
+	b := m.bus
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.p2p[m.agentID()] = handler
@@ -181,7 +187,7 @@ func (m *InProcessMessager) RegisterDirectMessageHandler(_ context.Context, hand
 
 // UnregisterDirectMessageHandler 取消注册点对点消息回调。
 func (m *InProcessMessager) UnregisterDirectMessageHandler(_ context.Context) error {
-	b := getBus()
+	b := m.bus
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	delete(b.p2p, m.agentID())

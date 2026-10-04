@@ -85,6 +85,16 @@ func (a *ReActAgent) ContextEngine() ceinterface.ContextEngine {
 	return a.contextEngine
 }
 
+// SetContextEngine 设置上下文引擎。
+// 对齐 Python: ReActAgent.__init__ 中 self.context_engine = ContextEngine(...)
+// 以及 self._ability_manager.set_context_engine(self.context_engine)
+func (a *ReActAgent) SetContextEngine(ce ceinterface.ContextEngine) {
+	a.contextEngine = ce
+	if a.abilityManager != nil {
+		a.abilityManager.SetContextEngine(ce)
+	}
+}
+
 // Card 返回Agent身份卡片。
 // Python: BaseAgent.card 属性
 func (a *ReActAgent) Card() *agentschema.AgentCard {

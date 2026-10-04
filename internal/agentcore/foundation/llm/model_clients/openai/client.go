@@ -110,10 +110,6 @@ func (c *OpenAIModelClient) Invoke(
 	// 5. 处理 extra_body
 	HandleExtraBody(reqParams)
 
-	// DEBUG: 打印请求参数
-	jsonBytes, _ := json.Marshal(reqParams)
-	fmt.Printf("[DEBUG LLM REQUEST PARAMS] %s\n", string(jsonBytes))
-
 	// 5.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_params=params)
 	// 请求发送前调用 tracer_record_data 回调，记录请求参数
 	if params.TracerRecordData != nil {
