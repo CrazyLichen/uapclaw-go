@@ -203,6 +203,72 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 	go func() {
 		defer close(ch)
 
+		// 步骤 4: 提取 query directives（对齐 Python: _extract_query_directives）
+		// Python: if is_first_request: query, hide_dm, debug = _extract_query_directives(str(query or ""))
+		queryText := paramsString(inputs, "query", "")
+		if isFirstRequest {
+			cleanedQuery, hideDM, debug := extractQueryDirectives(queryText)
+			if hideDM || debug {
+				logger.Info(logComponent).
+					Str("session_id", sessionID).
+					Str("channel_id", channelID).
+					Bool("hide_dm", hideDM).
+					Bool("debug", debug).
+					Msg("processTeamMessageStream: query directives captured for first team request")
+			}
+			// 对齐 Python: query 变量替换为 cleanedQuery
+			queryText = cleanedQuery
+			_ = hideDM
+			_ = debug
+		}
+
+		// 步骤 5: 处理 team slash 命令
+		// 对齐 Python: slash_result = await _handle_team_slash_command(channel_id, session_id, query_text)
+		slashResult := HandleTeamSlashCommand(ctx, channelID, sessionID, queryText)
+		if slashResult != nil {
+			// 审批 chunks（对齐 Python: if approval_chunks → yield chunks + done + complete）
+			if approvalChunks, ok := slashResult["approval_chunks"].([]map[string]any); ok && len(approvalChunks) > 0 {
+				for _, chunk := range approvalChunks {
+					ch <- &agentschema.AgentResponseChunk{
+						RequestID:  req.RequestID,
+						ChannelID:  channelID,
+						Payload:    chunk,
+						IsComplete: false,
+					}
+				}
+				ch <- teamProcessingDoneChunk(req.RequestID, channelID, sessionID)
+				ch <- &agentschema.AgentResponseChunk{
+					RequestID:  req.RequestID,
+					ChannelID:  channelID,
+					Payload:    map[string]any{"event_type": "chat.done"},
+					IsComplete: true,
+				}
+				return
+			}
+			// 非审批结果（对齐 Python: result_type == "error" → chat.error, else → chat.final）
+			resultType, _ := slashResult["result_type"].(string)
+			content, _ := slashResult["output"].(string)
+			var payload map[string]any
+			if resultType == "error" {
+				payload = map[string]any{"event_type": "chat.error", "error": content}
+			} else {
+				payload = map[string]any{"event_type": "chat.final", "content": content}
+			}
+			ch <- &agentschema.AgentResponseChunk{
+				RequestID:  req.RequestID,
+				ChannelID:  channelID,
+				Payload:    payload,
+				IsComplete: false,
+			}
+			ch <- teamProcessingDoneChunk(req.RequestID, channelID, sessionID)
+			ch <- &agentschema.AgentResponseChunk{
+				RequestID:  req.RequestID,
+				ChannelID:  channelID,
+				IsComplete: true,
+			}
+			return
+		}
+
 		if isFirstRequest {
 			// 首次请求：创建 TeamAgent + 启动后台流任务
 			logger.Info(logComponent).Str("session_id", sessionID).Str("channel_id", channelID).
@@ -235,4 +301,81 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 	}()
 
 	return ch, nil
+}
+
+// ensureMonitorForActiveRuntime 在 runtime 就绪后挂载 TeamMonitorHandler。
+// 对齐 Python: ensure_monitor_for_active_runtime(channel_id, session_id, team_name, hide_dm) (line 133-178)
+// ⤵️(#9.85): 依赖 Runner.get_agent_team_monitor
+func (d *DeepAdapter) ensureMonitorForActiveRuntime(ctx context.Context, channelID, sessionID, teamName string, hideDM bool) {
+	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Str("team_name", teamName).
+		Msg("ensureMonitorForActiveRuntime: ⤵️(#9.85) pending Runner.get_agent_team_monitor")
+}
+
+// ensureTeamEvolutionWatcher 启动 team evolution 监控。
+// 对齐 Python: ensure_team_evolution_watcher(channel_id, session_id, *, source) (line 331-379)
+// 检查逻辑可落地，启动 goroutine 处 ⤵️(#9.85)
+func (d *DeepAdapter) ensureTeamEvolutionWatcher(ctx context.Context, channelID, sessionID, source string) {
+	tm := team.GetTeamManager(channelID)
+
+	// Python: watcher = tm.get_team_evolution_watcher(session_id)
+	// Python: if watcher is not None and not watcher.done()
+	cancelFn := tm.GetTeamEvolutionWatcher(sessionID)
+	if cancelFn != nil {
+		logger.Info(logComponent).
+			Str("channel_id", channelID).Str("session_id", sessionID).Str("source", source).
+			Msg("ensureTeamEvolutionWatcher: evolution monitor already running")
+		return
+	}
+
+	// Python: rail = tm.get_team_skill_rail(session_id)
+	rail := tm.GetTeamSkillRail(sessionID)
+	if rail == nil {
+		logger.Warn(logComponent).
+			Str("session_id", sessionID).Str("source", source).
+			Msg("ensureTeamEvolutionWatcher: no TeamSkillEvolutionRail found, deferred")
+		return
+	}
+
+	// Python: if not getattr(rail, "auto_scan", True)
+	if !rail.AutoScan() {
+		logger.Info(logComponent).
+			Str("channel_id", channelID).Str("session_id", sessionID).Str("source", source).
+			Msg("ensureTeamEvolutionWatcher: auto_scan disabled, skipped")
+		return
+	}
+
+	// ⤵️(#9.85): 启动 watcher goroutine
+	// Python: task = asyncio.create_task(_watch_team_evolution_and_push(channel_id, session_id, rail))
+	logger.Info(logComponent).
+		Str("channel_id", channelID).Str("session_id", sessionID).Str("source", source).
+		Msg("ensureTeamEvolutionWatcher: ⤵️(#9.85) pending watchTeamEvolutionAndPush goroutine")
+}
+
+// consumeStreamWithQuery 后台消费 team 流并广播事件。
+// 对齐 Python: _consume_stream_with_query(channel_id, session_id, team_spec, initial_query, *, round_id, envs) (line 889-1048)
+// ⤵️(#9.85): 依赖 Runner.run_agent_team_streaming
+func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, sessionID string, teamSpec any, initialQuery string) {
+	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Msg("consumeStreamWithQuery: ⤵️(#9.85) pending Runner.run_agent_team_streaming")
+}
+
+// consumeMonitorEvents 后台消费 monitor 事件并广播。
+// 对齐 Python: _consume_monitor_events(channel_id, session_id, monitor_handler) (line 1050-1083)
+// ⤵️(#10.6): 依赖 TeamMonitorHandler 事件流
+func (d *DeepAdapter) consumeMonitorEvents(ctx context.Context, channelID, sessionID string) {
+	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Msg("consumeMonitorEvents: ⤵️(#10.6) pending TeamMonitorHandler events")
+}
+
+// watchTeamEvolutionAndPushTeam 后台监控 TeamSkillEvolutionRail 并推送状态。
+// 对齐 Python: _watch_team_evolution_and_push(channel_id, session_id, rail) (line 1101-1393)
+// ⤵️(#9.85): 依赖 Runner 流式接口
+func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channelID, sessionID string, rail *evolution.TeamSkillEvolutionRail) {
+	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Msg("watchTeamEvolutionAndPushTeam: ⤵️(#9.85) pending evolution watcher implementation")
 }
