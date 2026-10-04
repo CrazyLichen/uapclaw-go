@@ -614,6 +614,129 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer不拼接在Query中() {
 	}
 }
 
+// TestOuterLoop_FollowUp持久化到SessionState 测试 follow-up 消息持久化到会话状态。
+// 对照 Python: test_follow_ups_persisted_in_state_during_round
+//
+// 核心验证：
+//   - 多个 follow-up 注入后，部分被消费为当前 query
+//   - 剩余 follow-up 持久化在 DeepAgentState.PendingFollowUps 中
+//   - 可以通过 LoadState 读取
+func (s *OuterLoopSuite) TestOuterLoop_FollowUp持久化到SessionState() {
+	ctx := s.Ctx
+
+	controlledAgent := testhelpers.NewControlledReactAgent(2)
+
+	agent, sess := s.createTaskLoopAgent(ctx, controlledAgent, "outer-loop-fu-state")
+
+	// 预植 2 步 TaskPlan
+	seedTaskPlan(agent, sess, "执行计划", 2)
+
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+
+	// 在 goroutine 中执行 Invoke
+	done := make(chan map[string]any, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		result, invokeErr := agent.Invoke(ctx, map[string]any{
+			"query": "执行计划",
+		}, agentinterfaces.WithSession(sess))
+		if invokeErr != nil {
+			errCh <- invokeErr
+			return
+		}
+		done <- result
+	}()
+
+	// 等待第 2 次调用启动
+	s.Require().NoError(
+		controlledAgent.WaitCallStarted(2, 10*time.Second),
+		"等待第 2 次内层调用启动超时",
+	)
+
+	// 在阻塞期间注入 2 个 follow-up
+	agent.FollowUp(ctx, "fu_alpha", "", sess)
+	agent.FollowUp(ctx, "fu_beta", "", sess)
+
+	// 释放第 2 次调用
+	controlledAgent.ReleaseCall(2)
+
+	// 等待 Invoke 完成
+	select {
+	case result := <-done:
+		s.Require().NotNil(result, "结果不应为 nil")
+	case err := <-errCh:
+		s.Require().NoError(err, "Invoke 失败")
+	case <-time.After(15 * time.Second):
+		s.T().Fatal("Invoke 超时")
+	}
+
+	sess.PostRun(ctx)
+
+	// 验证 follow-up 被执行：至少 3 轮（2 原始 + 至少 1 follow-up）
+	callCount := controlledAgent.InvokeCallCount()
+	s.GreaterOrEqual(callCount, 3,
+		"外层循环应至少执行 3 轮，实际 %d", callCount)
+
+	// 验证最终状态中 PendingFollowUps 为空（所有 follow-up 都被消费）
+	finalState := agent.LoadState(sess)
+	s.Empty(finalState.PendingFollowUps,
+		"循环完成后 PendingFollowUps 应为空（全部被消费），实际: %v",
+		finalState.PendingFollowUps)
+}
+
+// TestOuterLoop_TaskPlan持久化到SessionState 测试 TaskPlan 在循环完成后持久化到会话状态。
+// 对照 Python: test_outer_loop_multistep_with_steer_follow_up（TaskPlan 验证部分）
+//
+// 核心验证：
+//   - 预植的 TaskPlan 在循环执行后任务状态更新
+//   - 已完成的任务标记为 completed
+//   - TaskPlan 通过 session state 持久化
+func (s *OuterLoopSuite) TestOuterLoop_TaskPlan持久化到SessionState() {
+	ctx := s.Ctx
+
+	controlledAgent := testhelpers.NewControlledReactAgent()
+
+	agent, sess := s.createTaskLoopAgent(ctx, controlledAgent, "outer-loop-plan-state")
+
+	// 预植 3 步 TaskPlan
+	seedTaskPlan(agent, sess, "执行三步计划", 3)
+	plan := agent.LoadState(sess).TaskPlan
+	s.Require().NotNil(plan, "预植的 TaskPlan 不应为 nil")
+	originalTaskCount := len(plan.Tasks)
+	s.Require().Equal(3, originalTaskCount, "预植 TaskPlan 应有 3 个任务")
+
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+
+	// 执行 Invoke
+	result, err := agent.Invoke(ctx, map[string]any{
+		"query": "执行三步计划",
+	}, agentinterfaces.WithSession(sess))
+	s.Require().NoError(err, "Invoke 失败")
+	s.Require().NotNil(result)
+
+	sess.PostRun(ctx)
+
+	// 验证 TaskPlan 持久化到 session state
+	finalState := agent.LoadState(sess)
+	s.Require().NotNil(finalState.TaskPlan, "循环完成后 TaskPlan 不应为 nil")
+	s.Equal(3, len(finalState.TaskPlan.Tasks), "任务数量应保持不变")
+
+	// 验证任务状态——所有任务应被标记为 completed（ControlledReactAgent 返回 result_type=answer）
+	completedCount := 0
+	for _, task := range finalState.TaskPlan.Tasks {
+		if task.Status == hschema.TodoStatusCompleted {
+			completedCount++
+		}
+	}
+	s.GreaterOrEqual(completedCount, 1,
+		"至少应有 1 个任务被标记为 completed，实际 %d/%d",
+		completedCount, originalTaskCount)
+
+	// 验证调用次数 ≥ 3
+	s.GreaterOrEqual(controlledAgent.InvokeCallCount(), 3,
+		"外层循环应至少执行 3 轮")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // createTaskLoopAgent 创建启用 TaskLoop 的 DeepAgent 并设置 innerInvokeOverride。

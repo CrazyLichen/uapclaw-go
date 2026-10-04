@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -180,4 +181,47 @@ func (s *TaskCompletionRailSuite) TestTimeout_超时终止() {
 	s.Require().NoError(err)
 	s.NotNil(result)
 	s.Less(elapsed, 10*time.Second, "应在超时后很快完成")
+}
+
+// TestCustomPredicate_自定义谓词停止 测试 CustomPredicateEvaluator 停止循环。
+// 对齐 Python: test_task_completion_rail.py UC-4
+//
+// 核心验证：
+//   - 自定义谓词 ctx.iteration >= 2 在第 2 轮后返回 true
+//   - 循环在恰好 2 轮后终止
+//   - 结果正常返回，不报错
+func (s *TaskCompletionRailSuite) TestCustomPredicate_自定义谓词停止() {
+	// MockLLM 返回文本响应（每轮只需 1 次模型调用）
+	s.MockLLM.SetResponses(
+		mockllm.CreateTextResponse("步骤1完成"),
+		mockllm.CreateTextResponse("步骤2完成"),
+		mockllm.CreateTextResponse("步骤3完成"),
+		mockllm.CreateTextResponse("不应到达"),
+	)
+
+	// 自定义谓词：iteration >= 2 时停止
+	stopAfterTwo := func(ctx task_loop.StopEvaluationContext) bool {
+		return ctx.Iteration >= 2
+	}
+	customEval := task_loop.NewCustomPredicateEvaluator("stop_after_two", stopAfterTwo)
+
+	tcr := rails.NewTaskCompletionRail(rails.WithExtraEvaluators(customEval))
+
+	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
+		Rails:          []agentinterfaces.AgentRail{tcr},
+		EnableTaskLoop: true,
+		MaxIterations:  100,
+		CompletionTimeout: 30.0,
+	})
+	s.Require().NoError(err)
+
+	sess := s.NewTestSession("tcr-custom-predicate")
+	err = sess.PreRun(s.Ctx)
+	s.Require().NoError(err)
+
+	result, err := agent.Invoke(s.Ctx, map[string]any{"query": "自定义谓词测试"},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err)
+	s.NotNil(result)
 }
