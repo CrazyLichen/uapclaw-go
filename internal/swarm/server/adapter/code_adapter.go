@@ -977,9 +977,9 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	}
 
 	// 12: ConfirmInterruptRail（确认中断护栏）
-	if ci := c.buildConfirmInterruptRail(); ci != nil {
-		railsList = append(railsList, ci)
-	}
+	// buildConfirmInterruptRail 永远返回非 nil，无需 nil 检查
+	ci := c.buildConfirmInterruptRail()
+	railsList = append(railsList, ci)
 
 	// 13: ContextProcessorRail（上下文处理器护栏）
 	cp := c.deep.buildContextProcessorRail()
