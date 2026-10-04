@@ -232,7 +232,7 @@ type DeepAdapter struct {
 	// 适配器层 MCP 管理待实现
 	registeredMCPServers map[string]any
 	// autoHarnessService 自动 Harness 服务
-	// ⤵️ 10.6.11-12
+	// ⤵️ 10.6.11
 	autoHarnessService any
 	// sendFileToolkit 发送文件工具包
 	// ⤵️ agentcore.DeepAgent
@@ -994,7 +994,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		return d.processTeamMessageStream(ctx, req, inputs)
 	}
 	// 步骤 8: auto_harness 分流
-	// ⤵️ 10.6.11-12: if mode == "auto_harness" → autoHarnessService.run()
+	// ⤵️ 10.6.11: if mode == "auto_harness" → autoHarnessService.run()
 
 	// 步骤 9: slash 命令处理
 	// Python: slash_result = await self._handle_slash_command(query, session_id, mode)
@@ -1564,6 +1564,15 @@ func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string)
 	}
 
 	return nil
+}
+
+// Instance 返回底层 DeepAgent 实例。
+// Python: JiuWenClaw.get_instance() → self._adapter._instance
+func (d *DeepAdapter) Instance() *harness.DeepAgent {
+	if d == nil {
+		return nil
+	}
+	return d.instance
 }
 
 // Cleanup 清理适配器资源。

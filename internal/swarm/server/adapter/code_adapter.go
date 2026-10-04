@@ -481,6 +481,14 @@ func (c *CodeAdapter) Cleanup() error {
 	return c.deep.Cleanup()
 }
 
+// Instance 返回底层 DeepAgent 实例，委托给内嵌 DeepAdapter。
+func (c *CodeAdapter) Instance() *harness.DeepAgent {
+	if c.deep == nil {
+		return nil
+	}
+	return c.deep.Instance()
+}
+
 // CompressContext 委托 DeepAdapter 的 ContextCompressor 接口。
 func (c *CodeAdapter) CompressContext(ctx context.Context, sessionID string, session sessioninterfaces.SessionFacade, returnState bool) (map[string]any, error) {
 	return c.deep.CompressContext(ctx, sessionID, session, returnState)

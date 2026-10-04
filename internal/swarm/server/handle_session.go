@@ -8,7 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	singleagentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
@@ -165,19 +168,155 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 	), nil
 }
 
-// handleSessionRewind 处理 session.rewind 请求。stub：返回 NOT_IMPLEMENTED。
-func (s *AgentServer) handleSessionRewind(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	return notImplementedResponse(request)
+// handleSessionRewind 处理 session.rewind 请求，对齐 Python _handle_session_rewind_full(restore_files=False)。
+func (s *AgentServer) handleSessionRewind(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	var params struct {
+		SessionID string `json:"session_id"`
+		TurnIndex int    `json:"turn_index"`
+	}
+	if request.Params != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, fmt.Errorf("解析参数失败: %w", err)
+		}
+	}
+	if params.SessionID == "" {
+		return nil, fmt.Errorf("session_id required")
+	}
+	if params.TurnIndex < 1 {
+		return nil, fmt.Errorf("turn_index must be >= 1")
+	}
+
+	// Python: 1. rewind_session
+	rewindResult, err := sessionops.RewindSession(sessionops.RewindSessionParams{
+		SessionID: params.SessionID,
+		TurnIndex: params.TurnIndex,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Python: 2. resolve_rewind_agent → rewind_session_context
+	rewindContext := false
+	deepAgent := s.resolveRewindAgent(request.ChannelID)
+	if deepAgent != nil {
+		rewindContext = sessionops.RewindSessionContext(ctx, deepAgent, params.SessionID, params.TurnIndex)
+	}
+
+	payload := map[string]any{
+		"session_id":       rewindResult.SessionID,
+		"turn_index":       rewindResult.TurnIndex,
+		"content":          rewindResult.Content,
+		"content_preview":  rewindResult.ContentPreview,
+		"remaining_records": rewindResult.RemainingRecords,
+		"removed_records":  rewindResult.RemovedRecords,
+		"rewind_context":   rewindContext,
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(payload),
+	), nil
 }
 
-// handleSessionRewindAndRestore 处理 session.rewind_and_restore 请求。stub：返回 NOT_IMPLEMENTED。
-func (s *AgentServer) handleSessionRewindAndRestore(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	return notImplementedResponse(request)
+// handleSessionRewindAndRestore 处理 session.rewind_and_restore 请求，对齐 Python _handle_session_rewind_full(restore_files=True)。
+func (s *AgentServer) handleSessionRewindAndRestore(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	var params struct {
+		SessionID string `json:"session_id"`
+		TurnIndex int    `json:"turn_index"`
+	}
+	if request.Params != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, fmt.Errorf("解析参数失败: %w", err)
+		}
+	}
+	if params.SessionID == "" {
+		return nil, fmt.Errorf("session_id required")
+	}
+	if params.TurnIndex < 1 {
+		return nil, fmt.Errorf("turn_index must be >= 1")
+	}
+
+	// Python: 1. restore_session_files
+	restoreResult := sessionops.RestoreSessionFiles(params.SessionID, params.TurnIndex)
+
+	// Python: 2. rewind_session
+	rewindResult, err := sessionops.RewindSession(sessionops.RewindSessionParams{
+		SessionID: params.SessionID,
+		TurnIndex: params.TurnIndex,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Python: 3. resolve_rewind_agent → rewind_session_context
+	rewindContext := false
+	deepAgent := s.resolveRewindAgent(request.ChannelID)
+	if deepAgent != nil {
+		rewindContext = sessionops.RewindSessionContext(ctx, deepAgent, params.SessionID, params.TurnIndex)
+	}
+
+	payload := map[string]any{
+		"session_id":       rewindResult.SessionID,
+		"turn_index":       rewindResult.TurnIndex,
+		"content":          rewindResult.Content,
+		"content_preview":  rewindResult.ContentPreview,
+		"remaining_records": rewindResult.RemainingRecords,
+		"removed_records":  rewindResult.RemovedRecords,
+		"rewind_context":   rewindContext,
+		"restored_files":   restoreResult.RestoredFiles,
+		"deleted_files":    restoreResult.DeletedFiles,
+		"restore_errors":   restoreResult.Errors,
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(payload),
+	), nil
 }
 
-// handleSessionRewindContext 处理 session.rewind_context 请求。stub：返回 NOT_IMPLEMENTED。
-func (s *AgentServer) handleSessionRewindContext(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	return notImplementedResponse(request)
+// handleSessionRewindContext 处理 session.rewind_context 请求，对齐 Python _handle_session_rewind_context。
+func (s *AgentServer) handleSessionRewindContext(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	var params struct {
+		SessionID string `json:"session_id"`
+		TurnIndex int    `json:"turn_index"`
+	}
+	if request.Params != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, fmt.Errorf("解析参数失败: %w", err)
+		}
+	}
+	if params.SessionID == "" {
+		return nil, fmt.Errorf("session_id required")
+	}
+	if params.TurnIndex < 1 {
+		return nil, fmt.Errorf("turn_index must be >= 1")
+	}
+
+	// Python: 先截断 history 再重建上下文
+	rewindResult, err := sessionops.RewindSession(sessionops.RewindSessionParams{
+		SessionID: params.SessionID,
+		TurnIndex: params.TurnIndex,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Python: resolve_rewind_agent，如果 nil → 返回错误
+	deepAgent := s.resolveRewindAgent(request.ChannelID)
+	if deepAgent == nil {
+		return nil, fmt.Errorf("no agent instance available")
+	}
+
+	rewindContext := sessionops.RewindSessionContext(ctx, deepAgent, params.SessionID, params.TurnIndex)
+
+	payload := map[string]any{
+		"session_id":       rewindResult.SessionID,
+		"turn_index":       rewindResult.TurnIndex,
+		"content":          rewindResult.Content,
+		"content_preview":  rewindResult.ContentPreview,
+		"remaining_records": rewindResult.RemainingRecords,
+		"removed_records":  rewindResult.RemovedRecords,
+		"rewind_context":   rewindContext,
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(payload),
+	), nil
 }
 
 // handleSessionCreate 处理 session.create 请求，对齐 Python _handle_session_create。
@@ -212,7 +351,122 @@ func (s *AgentServer) handleSessionCreate(_ context.Context, request *schema.Age
 	), nil
 }
 
-// handleSessionFork 处理 session.fork 请求。stub：返回 NOT_IMPLEMENTED。
-func (s *AgentServer) handleSessionFork(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	return notImplementedResponse(request)
+// handleSessionFork 处理 session.fork 请求，对齐 Python _handle_session_fork。
+func (s *AgentServer) handleSessionFork(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	var params struct {
+		SourceSessionID string `json:"source_session_id"`
+		TargetSessionID string `json:"target_session_id"`
+		Title           string `json:"title"`
+	}
+	if request.Params != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, fmt.Errorf("解析参数失败: %w", err)
+		}
+	}
+	if params.SourceSessionID == "" {
+		return nil, fmt.Errorf("source_session_id required")
+	}
+	if params.TargetSessionID == "" {
+		return nil, fmt.Errorf("target_session_id required")
+	}
+
+	// Python: 1. fork_session
+	forkResult, err := sessionops.ForkSession(sessionops.ForkSessionParams{
+		SourceSessionID: params.SourceSessionID,
+		TargetSessionID: params.TargetSessionID,
+		Title:           params.Title,
+		ChannelID:       request.ChannelID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Python: 2. resolve_rewind_agent → copy_session_context
+	deepAgent := s.resolveRewindAgent(request.ChannelID)
+	if deepAgent != nil {
+		sessionops.CopySessionContext(ctx, deepAgent, params.SourceSessionID, params.TargetSessionID)
+	}
+
+	// Python: 3. copy_session_state
+	var card *singleagentschema.AgentCard
+	if deepAgent != nil {
+		card = deepAgent.Card()
+	}
+	sessionops.CopySessionState(ctx, params.SourceSessionID, params.TargetSessionID, card, deepAgent)
+
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"session_id":        forkResult.SessionID,
+			"source_session_id": forkResult.SourceSessionID,
+			"title":             forkResult.Title,
+		}),
+	), nil
+}
+
+// handleHistoryListTurns 处理 history.list_turns 请求，对齐 Python _handle_history_list_turns。
+func (s *AgentServer) handleHistoryListTurns(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	var params struct {
+		SessionID string `json:"session_id"`
+	}
+	if request.Params != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, fmt.Errorf("解析参数失败: %w", err)
+		}
+	}
+	if params.SessionID == "" {
+		return nil, fmt.Errorf("session_id required")
+	}
+
+	result := sessionops.ListSessionTurns(params.SessionID)
+
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"turns": result.Turns,
+			"total": result.Total,
+		}),
+	), nil
+}
+
+// handleSessionRestoreFiles 处理 session.restore_files 请求，对齐 Python _handle_session_restore_files。
+func (s *AgentServer) handleSessionRestoreFiles(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	var params struct {
+		SessionID string `json:"session_id"`
+		TurnIndex int    `json:"turn_index"`
+	}
+	if request.Params != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, fmt.Errorf("解析参数失败: %w", err)
+		}
+	}
+	if params.SessionID == "" {
+		return nil, fmt.Errorf("session_id required")
+	}
+	if params.TurnIndex < 1 {
+		return nil, fmt.Errorf("turn_index must be >= 1")
+	}
+
+	result := sessionops.RestoreSessionFiles(params.SessionID, params.TurnIndex)
+
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"session_id":     result.SessionID,
+			"turn_index":     result.TurnIndex,
+			"restored_files": result.RestoredFiles,
+			"deleted_files":  result.DeletedFiles,
+			"errors":         result.Errors,
+		}),
+	), nil
+}
+
+// resolveRewindAgent 获取指定渠道的 DeepAgent 实例，用于 rewind/fork 操作。
+// Python: AgentWebSocketServer._resolve_rewind_agent(channel_id)
+func (s *AgentServer) resolveRewindAgent(channelID string) *harness.DeepAgent {
+	if channelID == "" {
+		channelID = "default"
+	}
+	agent := s.agentManager.GetAgentNoWait(channelID, "", "", "")
+	if agent == nil {
+		return nil
+	}
+	return agent.GetInstance()
 }

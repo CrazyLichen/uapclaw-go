@@ -933,7 +933,7 @@ func TestGetProjectDirFromMetadata(t *testing.T) {
 	writeSessionMetadata(t, "meta-session", metadata)
 
 	ds := GetDiffService()
-	projectDir := ds.getProjectDirFromMetadata("meta-session")
+	projectDir := ds.GetProjectDirFromMetadata("meta-session")
 	if projectDir != "/home/user/project" {
 		t.Errorf("期望 /home/user/project，实际 %s", projectDir)
 	}
@@ -954,7 +954,7 @@ func TestGetProjectDirFromMetadata_deliveryContext(t *testing.T) {
 	writeSessionMetadata(t, "delivery-session", metadata)
 
 	ds := GetDiffService()
-	projectDir := ds.getProjectDirFromMetadata("delivery-session")
+	projectDir := ds.GetProjectDirFromMetadata("delivery-session")
 	if projectDir != "/home/user/other-project" {
 		t.Errorf("期望 /home/user/other-project，实际 %s", projectDir)
 	}
@@ -965,7 +965,7 @@ func TestGetProjectDirFromMetadata_不存在(t *testing.T) {
 	defer cleanup()
 
 	ds := GetDiffService()
-	projectDir := ds.getProjectDirFromMetadata("nonexistent-session")
+	projectDir := ds.GetProjectDirFromMetadata("nonexistent-session")
 	if projectDir != "" {
 		t.Errorf("不存在的 session 期望空字符串，实际 %s", projectDir)
 	}
@@ -983,7 +983,7 @@ func TestGetProjectDirFromMetadata_无cwd字段(t *testing.T) {
 	writeSessionMetadata(t, "no-cwd-session", metadata)
 
 	ds := GetDiffService()
-	projectDir := ds.getProjectDirFromMetadata("no-cwd-session")
+	projectDir := ds.GetProjectDirFromMetadata("no-cwd-session")
 	if projectDir != "" {
 		t.Errorf("无 cwd 字段期望空字符串，实际 %s", projectDir)
 	}

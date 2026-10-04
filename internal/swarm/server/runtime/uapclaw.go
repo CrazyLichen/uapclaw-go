@@ -709,7 +709,12 @@ func (uc *UapClaw) Cleanup() error {
 // GetInstance 获取底层 DeepAgent 实例。
 //
 // Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
-func (uc *UapClaw) GetInstance() *harness.DeepAgent { return nil }
+func (uc *UapClaw) GetInstance() *harness.DeepAgent {
+	if uc == nil || uc.adapter == nil {
+		return nil
+	}
+	return uc.adapter.Instance()
+}
 
 // ListCustomAgents 实现 adapter.AgentConfigLister 接口。
 func (b *agentConfigListerBridge) ListCustomAgents() []*types.AgentDefinition {

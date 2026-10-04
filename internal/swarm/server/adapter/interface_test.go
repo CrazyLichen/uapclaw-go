@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -44,6 +45,10 @@ func (s *stubAdapter) HandleHeartbeat(_ context.Context, _ *schema.AgentRequest)
 }
 
 func (s *stubAdapter) Cleanup() error {
+	return nil
+}
+
+func (s *stubAdapter) Instance() *harness.DeepAgent {
 	return nil
 }
 

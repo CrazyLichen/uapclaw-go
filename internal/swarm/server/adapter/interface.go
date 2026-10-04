@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -48,6 +49,10 @@ type AgentAdapter interface {
 	// Cleanup 清理适配器资源。
 	// Python 中不在 Protocol 里但门面会调用，Go 纳入接口更规范，避免运行时类型断言。
 	Cleanup() error
+
+	// Instance 返回底层 DeepAgent 实例，未初始化时返回 nil。
+	// Python: JiuWenClaw.get_instance() → self._adapter._instance
+	Instance() *harness.DeepAgent
 
 	// SwitchMode 切换运行模式，执行完整的 session 生命周期。
 	// 流程：preRun → switchMode → loadState → updateState → postRun

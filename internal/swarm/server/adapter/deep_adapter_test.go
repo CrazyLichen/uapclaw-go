@@ -30,6 +30,20 @@ func TestDeepAdapter_接口满足性(t *testing.T) {
 	var _ AgentAdapter = (*DeepAdapter)(nil)
 }
 
+func TestDeepAdapter_Instance_未初始化(t *testing.T) {
+	d := NewDeepAdapter()
+	if inst := d.Instance(); inst != nil {
+		t.Error("未初始化时 Instance() 应返回 nil")
+	}
+}
+
+func TestDeepAdapter_Instance_nil适配器(t *testing.T) {
+	var d *DeepAdapter
+	if inst := d.Instance(); inst != nil {
+		t.Error("nil DeepAdapter Instance() 应返回 nil")
+	}
+}
+
 // TestDeepAdapter_SessionActive 测试 session 活跃计数四个方法的完整语义。
 func TestDeepAdapter_SessionActive(t *testing.T) {
 	d := NewDeepAdapter()

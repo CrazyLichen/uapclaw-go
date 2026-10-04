@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -74,6 +75,7 @@ func (f *fakeAdapter) HandleHeartbeat(_ context.Context, _ *schema.AgentRequest)
 }
 func (f *fakeAdapter) Cleanup() error                                  { return nil }
 func (f *fakeAdapter) SwitchMode(_ context.Context, _, _ string) error { return nil }
+func (f *fakeAdapter) Instance() *harness.DeepAgent                     { return nil }
 
 // ContextCompressor 接口实现
 func (f *fakeAdapter) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ bool) (map[string]any, error) {
@@ -310,8 +312,27 @@ func TestUapClaw_ReloadAgentConfig_无Adapter(t *testing.T) {
 
 func TestUapClaw_GetInstance(t *testing.T) {
 	uc := NewUapClaw()
-	// 当前 stub 返回 nil
+	// 无 adapter 时返回 nil
 	assert.Nil(t, uc.GetInstance())
+
+	// 有 fakeAdapter 时返回 nil（fakeAdapter.Instance() 返回 nil）
+	fa := newFakeAdapter()
+	uc.adapter = fa
+	assert.Nil(t, uc.GetInstance())
+}
+
+func TestUapClaw_GetInstance_未初始化(t *testing.T) {
+	uc := &UapClaw{}
+	if inst := uc.GetInstance(); inst != nil {
+		t.Error("未初始化 UapClaw GetInstance() 应返回 nil")
+	}
+}
+
+func TestUapClaw_GetInstance_nil适配器(t *testing.T) {
+	uc := &UapClaw{adapter: nil}
+	if inst := uc.GetInstance(); inst != nil {
+		t.Error("adapter 为 nil 时 GetInstance() 应返回 nil")
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

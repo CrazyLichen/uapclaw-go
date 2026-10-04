@@ -67,6 +67,22 @@ func writeTestMetadata(t *testing.T, sessionsDir, sessionID string, meta map[str
 	}
 }
 
+// writeTestHistory 写入测试用 history.json。
+func writeTestHistory(t *testing.T, sessionsDir, sessionID string, records []map[string]any) {
+	t.Helper()
+	sessionDir := filepath.Join(sessionsDir, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("创建会话目录失败: %v", err)
+	}
+	data, err := json.MarshalIndent(records, "", "  ")
+	if err != nil {
+		t.Fatalf("序列化 history 失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "history.json"), data, 0o644); err != nil {
+		t.Fatalf("写入 history.json 失败: %v", err)
+	}
+}
+
 // toSessionSlice 将 payload["sessions"] 转为 []map[string]any，处理 Go 泛型切片类型断言。
 func toSessionSlice(t *testing.T, payload map[string]any) []map[string]any {
 	t.Helper()
@@ -380,31 +396,172 @@ func TestHandleSessionSwitch(t *testing.T) {
 	}
 }
 
-// TestHandleSessionRewind 验证 session.rewind 返回 NOT_IMPLEMENTED。
-func TestHandleSessionRewind(t *testing.T) {
+// TestHandleSessionRewind_缺少参数 验证 session.rewind 缺少参数时返回错误。
+func TestHandleSessionRewind_缺少参数(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionRewind, nil)
+
+	_, err := s.handleSessionRewind(context.Background(), req)
+	if err == nil {
+		t.Error("期望返回错误（缺少 session_id）")
+	}
+}
+
+// TestHandleSessionRewind_正常回退 验证 session.rewind 正常回退。
+func TestHandleSessionRewind_正常回退(t *testing.T) {
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	sessionID := "sess_rewind_test"
+	writeTestMetadata(t, sessionsDir, sessionID, map[string]any{
+		"session_id":      sessionID,
+		"title":           "回退测试",
+		"last_message_at": 1000.0,
+		"message_count":   3,
+	})
+	writeTestHistory(t, sessionsDir, sessionID, []map[string]any{
+		{"role": "user", "content": "q1"},
+		{"role": "assistant", "content": "a1"},
+		{"role": "user", "content": "q2"},
+		{"role": "assistant", "content": "a2"},
+	})
+
+	params, _ := json.Marshal(map[string]any{
+		"session_id": sessionID,
+		"turn_index": 1,
+	})
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionRewind, params)
 
 	resp, err := s.handleSessionRewind(context.Background(), req)
 	if err != nil {
 		t.Fatalf("handleSessionRewind 返回错误: %v", err)
 	}
-	if resp.OK {
-		t.Error("resp.OK 应为 false（NOT_IMPLEMENTED）")
+	if !resp.OK {
+		t.Error("resp.OK 应为 true")
+	}
+	if resp.Payload["session_id"] != sessionID {
+		t.Errorf("payload session_id = %q, 期望 %q", resp.Payload["session_id"], sessionID)
 	}
 }
 
-// TestHandleSessionFork 验证 session.fork 返回 NOT_IMPLEMENTED。
-func TestHandleSessionFork(t *testing.T) {
+// TestHandleSessionRewindAndRestore_缺少参数 验证 session.rewind_and_restore 缺少参数时返回错误。
+func TestHandleSessionRewindAndRestore_缺少参数(t *testing.T) {
+	s, _ := newTestServer()
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionRewindAndRestore, nil)
+
+	_, err := s.handleSessionRewindAndRestore(context.Background(), req)
+	if err == nil {
+		t.Error("期望返回错误（缺少 session_id）")
+	}
+}
+
+// TestHandleSessionRewindContext_缺少参数 验证 session.rewind_context 缺少参数时返回错误。
+func TestHandleSessionRewindContext_缺少参数(t *testing.T) {
+	s, _ := newTestServer()
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionRewindContext, nil)
+
+	_, err := s.handleSessionRewindContext(context.Background(), req)
+	if err == nil {
+		t.Error("期望返回错误（缺少 session_id）")
+	}
+}
+
+// TestHandleSessionFork_缺少参数 验证 session.fork 缺少参数时返回错误。
+func TestHandleSessionFork_缺少参数(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionFork, nil)
+
+	_, err := s.handleSessionFork(context.Background(), req)
+	if err == nil {
+		t.Error("期望返回错误（缺少 source_session_id）")
+	}
+}
+
+// TestHandleSessionFork_正常分叉 验证 session.fork 正常分叉。
+func TestHandleSessionFork_正常分叉(t *testing.T) {
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	sourceID := "sess_fork_source"
+	writeTestMetadata(t, sessionsDir, sourceID, map[string]any{
+		"session_id":      sourceID,
+		"title":           "源会话",
+		"last_message_at": 1000.0,
+		"message_count":   1,
+	})
+	writeTestHistory(t, sessionsDir, sourceID, []map[string]any{
+		{"role": "user", "content": "hello"},
+		{"role": "assistant", "content": "hi"},
+	})
+
+	targetID := "sess_fork_target"
+	params, _ := json.Marshal(map[string]any{
+		"source_session_id": sourceID,
+		"target_session_id": targetID,
+	})
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionFork, params)
 
 	resp, err := s.handleSessionFork(context.Background(), req)
 	if err != nil {
 		t.Fatalf("handleSessionFork 返回错误: %v", err)
 	}
-	if resp.OK {
-		t.Error("resp.OK 应为 false（NOT_IMPLEMENTED）")
+	if !resp.OK {
+		t.Error("resp.OK 应为 true")
+	}
+	if resp.Payload["session_id"] != targetID {
+		t.Errorf("payload session_id = %q, 期望 %q", resp.Payload["session_id"], targetID)
+	}
+	if resp.Payload["source_session_id"] != sourceID {
+		t.Errorf("payload source_session_id = %q, 期望 %q", resp.Payload["source_session_id"], sourceID)
+	}
+}
+
+// TestHandleHistoryListTurns_缺少参数 验证 history.list_turns 缺少参数时返回错误。
+func TestHandleHistoryListTurns_缺少参数(t *testing.T) {
+	s, _ := newTestServer()
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodHistoryListTurns, nil)
+
+	_, err := s.handleHistoryListTurns(context.Background(), req)
+	if err == nil {
+		t.Error("期望返回错误（缺少 session_id）")
+	}
+}
+
+// TestHandleHistoryListTurns_正常 验证 history.list_turns 正常返回 turn 列表。
+func TestHandleHistoryListTurns_正常(t *testing.T) {
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	sessionID := "sess_list_turns"
+	writeTestHistory(t, sessionsDir, sessionID, []map[string]any{
+		{"role": "user", "content": "q1", "id": "m1"},
+		{"role": "assistant", "content": "a1"},
+	})
+
+	params, _ := json.Marshal(map[string]any{"session_id": sessionID})
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodHistoryListTurns, params)
+
+	resp, err := s.handleHistoryListTurns(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleHistoryListTurns 返回错误: %v", err)
+	}
+	if !resp.OK {
+		t.Error("resp.OK 应为 true")
+	}
+	total, ok := resp.Payload["total"].(int)
+	if !ok || total != 1 {
+		t.Errorf("payload total = %v, 期望 1", resp.Payload["total"])
+	}
+}
+
+// TestHandleSessionRestoreFiles_缺少参数 验证 session.restore_files 缺少参数时返回错误。
+func TestHandleSessionRestoreFiles_缺少参数(t *testing.T) {
+	s, _ := newTestServer()
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionRestoreFiles, nil)
+
+	_, err := s.handleSessionRestoreFiles(context.Background(), req)
+	if err == nil {
+		t.Error("期望返回错误（缺少 session_id）")
 	}
 }
 

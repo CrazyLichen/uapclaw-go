@@ -98,6 +98,10 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		resp, err = s.handleSessionRewindAndRestore(ctx, request)
 	case schema.ReqMethodSessionRewindContext:
 		resp, err = s.handleSessionRewindContext(ctx, request)
+	case schema.ReqMethodHistoryListTurns:
+		resp, err = s.handleHistoryListTurns(ctx, request)
+	case schema.ReqMethodSessionRestoreFiles:
+		resp, err = s.handleSessionRestoreFiles(ctx, request)
 	// 团队
 	case schema.ReqMethodTeamDelete:
 		resp, err = s.handleTeamDelete(ctx, request)

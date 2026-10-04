@@ -447,7 +447,7 @@ func (ds *DiffService) readAgentHistory(sessionID string, projectDir string) map
 
 	// 3. 从项目目录读取
 	if projectDir == "" && sessionID != "" {
-		projectDir = ds.getProjectDirFromMetadata(sessionID)
+		projectDir = ds.GetProjectDirFromMetadata(sessionID)
 	}
 	if projectDir != "" {
 		projectHistDir := filepath.Join(projectDir, ".agent_history")
@@ -558,9 +558,9 @@ func (ds *DiffService) isValidFileOpsFile(name string, sessionID string, require
 	return sessionID == "" || strings.Contains(name, sessionID)
 }
 
-// getProjectDirFromMetadata 从 session metadata.json 中读取项目目录。
+// GetProjectDirFromMetadata 从 session metadata.json 中读取项目目录。
 // Python: _get_project_dir_from_metadata (line 159-181)
-func (ds *DiffService) getProjectDirFromMetadata(sessionID string) string {
+func (ds *DiffService) GetProjectDirFromMetadata(sessionID string) string {
 	sessionsDir := workspace.AgentSessionsDir()
 	metadataFile := filepath.Join(sessionsDir, sessionID, "metadata.json")
 
