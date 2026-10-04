@@ -70,11 +70,11 @@ func RolePolicy(role atschema.TeamRole, language string) string {
 //
 // 参数：
 //   - memberName: 当前成员名，空时不显示
-//   - role: "leader" / "teammate" / "human_agent"
+//   - role: 角色类型，"leader" / "teammate" / "human_agent"
 //   - language: "cn" 或 "en"
 //   - persona: 人设描述
 //   - lifecycle: "temporary" 或 "persistent"
-//   - teamMode: "default" / "predefined" / "hybrid"
+//   - teamMode: 团队模式，"default" / "predefined" / "hybrid"
 //   - teamInfo: 团队元数据，nil 时省略
 //   - teamMembers: 成员列表，nil 时省略
 //   - basePrompt: 用户自定义额外指令，空时省略

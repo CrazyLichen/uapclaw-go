@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	interruptHelpers "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
@@ -212,12 +213,14 @@ func askUserQuestionPayloadFromInterrupt(tc *llmschema.ToolCall, interrupt *sasc
 	return interruptHelpers.ConvertInteractionsToAskUserQuestion(interactions)
 }
 
-// TruncateString 截断字符串到指定最大长度，对齐 Python: str(result)[:60000]
+// TruncateString 截断字符串到指定最大 rune 长度，CJK 安全。
+// 对齐 Python: str(result)[:60000] — Python 按字符截断，Go 按 rune 截断以避免破坏多字节字符。
 func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	if utf8.RuneCountInString(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen]
+	runes := []rune(s)
+	return string(runes[:maxLen])
 }
 
 // ToolCallName 安全获取 ToolCall 的 Name 字段

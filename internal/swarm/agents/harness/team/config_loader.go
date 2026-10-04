@@ -155,14 +155,14 @@ func buildDefaultModelDict(configBase map[string]any) map[string]any {
 	defaults := resolveDefaultModelConfig(configBase)
 	result := make(map[string]any)
 
-	// model_client_config
+	// model_client_config 模型客户端配置
 	if mcc, ok := defaults["model_client_config"].(map[string]any); ok {
 		result["model_client_config"] = utils.DeepCopyMap(mcc)
 	} else {
 		result["model_client_config"] = make(map[string]any)
 	}
 
-	// model_request_config
+	// model_request_config 模型请求配置
 	if mrc, ok := defaults["model_request_config"].(map[string]any); ok {
 		result["model_request_config"] = utils.DeepCopyMap(mrc)
 	} else {

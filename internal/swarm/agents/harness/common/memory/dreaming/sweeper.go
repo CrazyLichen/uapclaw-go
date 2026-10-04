@@ -273,7 +273,7 @@ func (s *Sweeper) Init() error {
 func (s *Sweeper) RunSweep(ctx context.Context) error {
 	sweepStart := time.Now()
 
-	// ── Scan + Pre-filter + Compression ──
+	// ── 扫描 + 预过滤 + 压缩 ──
 	// Python: sessions = await asyncio.get_running_loop().run_in_executor(None, self.scan_new_sessions)
 	sessions := s.ScanNewSessions()
 	if len(sessions) == 0 {
@@ -281,7 +281,7 @@ func (s *Sweeper) RunSweep(ctx context.Context) error {
 		return nil
 	}
 
-	// ── LLM Extraction ──
+	// ── LLM 提取 ──
 	// Python: existing_summary = self.load_existing_summary()
 	existingSummary := s.LoadExistingSummary()
 	var allKnowledge []KnowledgeItem
@@ -304,7 +304,7 @@ func (s *Sweeper) RunSweep(ctx context.Context) error {
 		succeededIDs = append(succeededIDs, sess.SessionID)
 	}
 
-	// ── Update checkpoint for succeeded sessions ──
+	// ── 更新成功会话的检查点 ──
 	// Python: if succeeded_ids: ... self.save_checkpoint()
 	if len(succeededIDs) > 0 {
 		sessionsRoot := filepath.Clean(s.sessionsDir)
@@ -327,7 +327,7 @@ func (s *Sweeper) RunSweep(ctx context.Context) error {
 		s.saveCheckpoint()
 	}
 
-	// ── Promotion ──
+	// ── 晋升 ──
 	// Python: for k in all_knowledge: result = self._promote(...)
 	promoted := 0
 	for _, k := range allKnowledge {

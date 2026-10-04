@@ -68,13 +68,13 @@ func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event types.Coo
 	if !event.IsInner() {
 		return
 	}
-	content := event.Inner.Payload["content"]
-	if content == nil {
-		logger.Debug(logComponent).Msg("on_user_input: payload 缺少 content，跳过")
-		return
+	// 对齐 Python: content = event.payload.get("content", "") — content 缺失时用空字符串替代，仍投递
+	contentStr := ""
+	if c, ok := event.Inner.Payload["content"]; ok && c != nil {
+		contentStr, _ = c.(string)
 	}
 	// 对齐 Python: self._round.deliver_input(content)（Python 默认 use_steer=True）
-	if err := h.round.DeliverInput(ctx, content, true); err != nil {
+	if err := h.round.DeliverInput(ctx, contentStr, true); err != nil {
 		logger.Error(logComponent).
 			Err(err).
 			Str("event_type", string(event.Inner.EventType)).

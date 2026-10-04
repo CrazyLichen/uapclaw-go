@@ -23,7 +23,7 @@ type AgentArtsProvider struct {
 	BaseMemoryProvider
 	// baseURL Data Plane 基础 URL
 	baseURL string
-	// apiKey Bearer token
+	// apiKey Bearer 令牌
 	apiKey string
 	// spaceID AgentArts Space 标识
 	spaceID string

@@ -190,7 +190,7 @@ var memberSet = mergeSets(memberOnlySet, sharedSet)
 //
 // 参数：
 //   - teamBackend: TeamBackend 门面实例
-//   - role: "leader" / "teammate" / "human_agent"
+//   - role: 角色类型，"leader" / "teammate" / "human_agent"
 //   - teammateMode: "build_mode" 或 "plan_mode"
 //   - lifecycle: "temporary" 或 "persistent"
 //   - language: "cn" 或 "en"

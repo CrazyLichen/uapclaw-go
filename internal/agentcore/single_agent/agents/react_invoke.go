@@ -74,6 +74,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 			Err(err).
 			Msg("Agent invoke 错误")
 		return nil, exception.NewBaseError(exception.StatusAgentControllerRuntimeError,
+			exception.WithParam("error_msg", err.Error()),
 			exception.WithCause(err),
 		)
 	}
@@ -145,6 +146,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 			Err(err).
 			Msg("Agent stream 错误")
 		return nil, exception.NewBaseError(exception.StatusAgentControllerRuntimeError,
+			exception.WithParam("error_msg", err.Error()),
 			exception.WithCause(err),
 		)
 	}

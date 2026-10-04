@@ -538,7 +538,7 @@ func (tb *TeamBackend) StartupMember(
 // Python 步骤：
 //  1. 查成员
 //  2. 若不存在/已是终态 → fail
-//  3. CAS: current → SHUTDOWN_REQUESTED
+//  3. CAS 操作: current → SHUTDOWN_REQUESTED
 //  4. 取消该成员的任务（skip self）
 //  5. 发布 MemberShutdownEvent
 //  6. 返回 MemberOpResult

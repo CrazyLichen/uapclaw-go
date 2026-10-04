@@ -48,6 +48,8 @@ type MockModelClient struct {
 	invokeCalls []InvokeRecord
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -58,6 +60,11 @@ const (
 	// 对齐 Python: MockLLMModel.__init__ 中 model_config.model_name = "mock-model"
 	defaultMockModelName = "mock-model"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时接口断言
+var _ model_clients.BaseModelClient = (*MockModelClient)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -313,6 +320,3 @@ func (m *MockModelClient) buildAssistantMessage(resp MockResponse) *llmschema.As
 	}
 	return llmschema.NewAssistantMessage(resp.Text, opts...)
 }
-
-// 编译时接口断言
-var _ model_clients.BaseModelClient = (*MockModelClient)(nil)

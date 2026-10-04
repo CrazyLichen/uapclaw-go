@@ -19,6 +19,20 @@ type TeamTool struct {
 	card *tool.ToolCard
 }
 
+// loggedTeamTool 包装工具的 Invoke，添加日志和 map_result 逻辑。
+// 对齐 Python: _wrap_invoke_with_logging 装饰器
+type loggedTeamTool struct {
+	tool.Tool
+	// toolName 工具名称
+	toolName string
+	// isTeamTool 是否为 TeamTool 类型
+	isTeamTool bool
+	// teamToolImpl TeamTool 的 MapResult 方法（仅 isTeamTool 为 true 时非 nil）
+	teamToolImpl interface {
+		MapResult(output map[string]any) string
+	}
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -93,20 +107,6 @@ func WrapInvokeWithLogging(t tool.Tool) tool.Tool {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// loggedTeamTool 包装工具的 Invoke，添加日志和 map_result 逻辑。
-// 对齐 Python: _wrap_invoke_with_logging 装饰器
-type loggedTeamTool struct {
-	tool.Tool
-	// toolName 工具名称
-	toolName string
-	// isTeamTool 是否为 TeamTool 类型
-	isTeamTool bool
-	// teamToolImpl TeamTool 的 MapResult 方法（仅 isTeamTool 为 true 时非 nil）
-	teamToolImpl interface {
-		MapResult(output map[string]any) string
-	}
-}
 
 // Invoke 包装原始 Invoke，添加日志和 map_result 逻辑。
 func (l *loggedTeamTool) Invoke(ctx context.Context, args map[string]any, opts ...tool.ToolOption) (map[string]any, error) {

@@ -65,6 +65,7 @@ const coordEventMapKey = "__coordination_event"
 // handler 创建顺序和注册顺序一致：
 //
 //	(lifecycle, member, message, task_board, stale_task, team_completion)
+//	即：生命周期、成员、消息、任务面板、过期任务、团队完成
 //
 // 共享 staleClaimThrottle 映射在 Member 和 StaleTask 之间传递。
 // Python: EventDispatcher.__init__
@@ -102,6 +103,7 @@ func NewEventDispatcher(
 
 	// 注册顺序决定 fan-out 顺序，与 Python 一致：
 	// (lifecycle, member, message, task_board, stale_task, team_completion)
+	// 即：生命周期、成员、消息、任务面板、过期任务、团队完成
 	handlerList := []types.CallbacksProvider{lifecycle, member, message, taskBoard, staleTask, teamCompletion}
 	for _, handler := range handlerList {
 		for eventKey, cb := range handler.GetCallbacks() {

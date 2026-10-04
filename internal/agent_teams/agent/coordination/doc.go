@@ -21,6 +21,7 @@
 //	├── types/                 # 共享类型子包（打破 coordination ↔ handlers 循环依赖）
 //	│   ├── events.go          # CoordinationEvent / InnerEventType / InnerEventMessage
 //	│   ├── protocols.go       # AgentRoundController / TeamLifecycleController / PollController / DispatcherHost / Blueprint / Infra
+//	│   ├── lifecycle_accessors.go # SessionAccessor / SessionController / InfraAccessor / TeamBackendAccessor / ResourceAccessor / HarnessAccessor / LifecycleAccessor / KernelHost
 //	│   └── callbacks.go       # EventCallbackFunc / CallbacksProvider
 //	└── handlers/              # 场景 handler 子包
 //	    ├── base.go            # BaseCoordinationHandler 基类

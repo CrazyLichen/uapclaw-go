@@ -70,7 +70,7 @@ func (m *LongTermMemory) AddMessages(
 // 14. writeManager.AddMemories(ctx, userID, scopeID, allMemory, llm)
 // 15. 按 MemoryType 分类填充 AddMemResult
 func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesParams) (*AddMemResult, error) {
-	// Step 1: validateID
+	// 步骤 1：validateID
 	if !validateID("MEMORY_STORE", p.ScopeID) {
 		logger.Error(logComponent).Str("event_type", "MEMORY_STORE").
 			Str("scope_id", p.ScopeID).Str("user_id", p.UserID).
@@ -81,25 +81,25 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 		)
 	}
 
-	// Step 2: getScopeLLM
+	// 步骤 2：getScopeLLM
 	llmInstance, err := m.getScopeLLM(ctx, p.ScopeID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Step 3: getScopeConfig
+	// 步骤 3：getScopeConfig
 	scopeConfig, err := m.getScopeConfig(ctx, p.ScopeID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Step 4: applyScopeEmbedding
+	// 步骤 4：applyScopeEmbedding
 	m.applyScopeEmbedding(ctx, p.ScopeID)
 
-	// Step 5-15: 分布式锁内执行
+	// 步骤 5-15：分布式锁内执行
 	var result *AddMemResult
 	lockErr := acquireUserLock(ctx, m.kvStore, p.UserID, func(ctx context.Context) error {
-		// Step 6: LLM 未初始化返回错误
+		// 步骤 6：LLM 未初始化返回错误
 		if llmInstance == nil {
 			logger.Error(logComponent).Str("event_type", "MEMORY_STORE").
 				Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
@@ -110,20 +110,20 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 			)
 		}
 
-		// Step 7: getHistoryMessages
+		// 步骤 7：getHistoryMessages
 		historyMessages, histErr := m.getHistoryMessages(ctx, p.UserID, p.ScopeID, p.SessionID, p.GenMemWithHistoryMsgNum)
 		if histErr != nil {
 			return histErr
 		}
 
-		// Step 8: scopeUserMappingManager.Add
+		// 步骤 8：scopeUserMappingManager.Add
 		if m.scopeUserMappingManager != nil {
 			if addErr := m.scopeUserMappingManager.Add(ctx, p.UserID, p.ScopeID); addErr != nil {
 				return addErr
 			}
 		}
 
-		// Step 9: timestamp 为 nil 时 time.Now()
+		// 步骤 9：timestamp 为 nil 时 time.Now()
 		timestamp := p.Timestamp
 		if timestamp == nil {
 			now := time.Now()
@@ -131,7 +131,7 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 		}
 		timestampStr := timestamp.Format("2006-01-02 15:04:05")
 
-		// Step 10: 遍历 messages 调 messageManager.Add()
+		// 步骤 10：遍历 messages 调 messageManager.Add()
 		msgID := "-1"
 		for i, msg := range p.Messages {
 			msgTimestamp := timestamp.Add(time.Millisecond * time.Duration(i))
@@ -152,13 +152,13 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 			}
 		}
 
-		// Step 11: genMem=false → 返回空 AddMemResult
+		// 步骤 11：genMem=false → 返回空 AddMemResult
 		if !p.GenMem {
 			result = &AddMemResult{}
 			return nil
 		}
 
-		// Step 12: checkMessages → 无 human 消息返回空 AddMemResult
+		// 步骤 12：checkMessages → 无 human 消息返回空 AddMemResult
 		hasHumanMsg, checkedMessages := m.checkMessages(p.Messages)
 		if !hasHumanMsg {
 			logger.Debug(logComponent).Str("event_type", "MEMORY_STORE").
@@ -169,7 +169,7 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 			return nil
 		}
 
-		// Step 13: generator.GenAllMemory
+		// 步骤 13：generator.GenAllMemory
 		forbiddenVariables := ""
 		summaryMaxToken := 0
 		if m.sysMemConfig != nil {
@@ -195,7 +195,7 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 			return genErr
 		}
 
-		// Step 14: writeManager.AddMemories（对齐 Python: write_manager.add_memories(memories, llm=llm)）
+		// 步骤 14：writeManager.AddMemories（对齐 Python: write_manager.add_memories(memories, llm=llm)）
 		writeResult, writeErr := m.writeManager.AddMemories(ctx, p.UserID, p.ScopeID, allMemory, index.WithLLMModel(llmInstance))
 		if writeErr != nil {
 			logger.Error(logComponent).Err(writeErr).Str("memory_type", "unknown").
@@ -213,7 +213,7 @@ func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesPara
 			Str("user_id", p.UserID).Str("scope_id", p.ScopeID).
 			Msg("Successfully added memory units.")
 
-		// Step 15: 按 MemoryType 分类填充 AddMemResult
+		// 步骤 15：按 MemoryType 分类填充 AddMemResult
 		result = classifyWriteResult(writeResult)
 		return nil
 	})

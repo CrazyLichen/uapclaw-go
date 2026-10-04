@@ -642,7 +642,8 @@ func (m *SessionMemoryManager) MaybeScheduleUpdate(
 	updateSessionMemoryRuntime(sess, runtime)
 
 	// 创建后台 goroutine 执行更新
-	bgCtx, cancel := context.WithCancel(context.Background())
+	// 继承调用方 ctx，请求取消时后台任务随之取消；Shutdown() 通过独立 cancel 路径强制终止
+	bgCtx, cancel := context.WithCancel(ctx)
 	m.tasks[sessionID] = cancel
 	m.mu.Unlock()
 
@@ -924,12 +925,16 @@ func readOrInitSessionMemory(path string) string {
 	// 检查模板文件
 	templatePath := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(path))), "session_memory.md")
 	if tmplData, err := os.ReadFile(templatePath); err == nil {
-		_ = os.WriteFile(path, tmplData, 0644)
+		if writeErr := os.WriteFile(path, tmplData, 0644); writeErr != nil {
+			logger.Error(logComponent).Err(writeErr).Str("path", path).Msg("写入会话记忆模板失败")
+		}
 		return string(tmplData)
 	}
 
 	// 写入默认模板
-	_ = os.WriteFile(path, []byte(defaultSessionMemoryTemplate), 0644)
+	if writeErr := os.WriteFile(path, []byte(defaultSessionMemoryTemplate), 0644); writeErr != nil {
+		logger.Error(logComponent).Err(writeErr).Str("path", path).Msg("写入默认会话记忆模板失败")
+	}
 	return defaultSessionMemoryTemplate
 }
 
@@ -1198,12 +1203,16 @@ func preparePendingSessionMemory(activePath, pendingPath, currentNotes string) {
 
 	// 如果 active 文件存在，复制到 pending
 	if data, err := os.ReadFile(activePath); err == nil {
-		_ = os.WriteFile(pendingPath, data, 0644)
+		if writeErr := os.WriteFile(pendingPath, data, 0644); writeErr != nil {
+			logger.Error(logComponent).Err(writeErr).Str("pending_path", pendingPath).Msg("写入 pending 会话记忆失败")
+		}
 		return
 	}
 
 	// 否则写入当前笔记内容
-	_ = os.WriteFile(pendingPath, []byte(currentNotes), 0644)
+	if writeErr := os.WriteFile(pendingPath, []byte(currentNotes), 0644); writeErr != nil {
+		logger.Error(logComponent).Err(writeErr).Str("pending_path", pendingPath).Msg("写入当前笔记到 pending 失败")
+	}
 }
 
 // commitPendingSessionMemory 提交 pending 文件为正式文件。

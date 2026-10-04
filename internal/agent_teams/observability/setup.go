@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -69,6 +68,8 @@ var (
 	// monitorHandler 全局 OtelTeamMonitorHandler（由 InitObservability 设置）
 	// Python: _monitor_handler: Optional[OtelTeamMonitorHandler] = None
 	monitorHandler *OtelTeamMonitorHandler
+	// monitorHandle AttachToTeamAgent 注册的事件监听句柄，用于 DetachFromTeamAgent 移除
+	monitorHandle *messager.EventListenerHandle
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -175,9 +176,13 @@ func ShutdownObservability() {
 		}
 	}
 
+	// Python: reset_all() — 重置所有活跃 OtelSpanState，确保测试隔离
+	ResetAllSpanStates()
+
 	provider = nil
 	callbackHandler = nil
 	monitorHandler = nil
+	monitorHandle = nil
 
 	logger.Info(logComponent).Msg("可观测性已关闭")
 }
@@ -201,13 +206,9 @@ func AttachToTeamAgent(teamAgent EventListenerRegistrar) {
 		return
 	}
 	// Python: team_agent.add_event_listener(_monitor_handler)
-	// ✅(#9.55): 将 OtelTeamMonitorHandler 包装为 MessagerHandler 注册
-	handler := func(ctx context.Context, msg *events.EventMessage) error {
-		// OtelTeamMonitorHandler 不直接匹配 MessagerHandler，简化为 no-op
-		// TODO(#9.67): 完整实现 OtelTeamMonitorHandler 事件桥接
-		return nil
-	}
-	teamAgent.AddEventListener(handler)
+	// OtelTeamMonitorHandler.HandleEvent 签名与 MessagerHandler 兼容
+	handler := messager.MessagerHandler(monitorHandler.HandleEvent)
+	monitorHandle = teamAgent.AddEventListener(handler)
 	logger.Info(logComponent).Msg("attach_to_team_agent 已注册 monitor handler")
 }
 
@@ -218,8 +219,13 @@ func DetachFromTeamAgent(teamAgent EventListenerRegistrar) {
 		return
 	}
 	// Python: team_agent.remove_event_listener(_monitor_handler)
-	// ✅(#9.55): 简化实现 — 由于 AddEventListener 返回 handle，实际移除需保存 handle
-	logger.Info(logComponent).Msg("detach_from_team_agent 当前为简化实现")
+	if monitorHandle != nil {
+		teamAgent.RemoveEventListener(monitorHandle)
+		monitorHandle = nil
+		logger.Info(logComponent).Msg("detach_from_team_agent 已移除 monitor handler")
+	} else {
+		logger.Warn(logComponent).Msg("detach_from_team_agent: 无已注册的 monitor handle")
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

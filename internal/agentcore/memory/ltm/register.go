@@ -36,14 +36,7 @@ type registerStoreParams struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-func init() {
-	// S-14: 设置默认支持记忆类型，打破 migration → mem_model 的循环依赖
-	migration.DefaultSupportMemoryTypes = mem_model.AllSupportMemoryTypeValues
-}
 
 // RegisterStore 注册存储实例。
 //
@@ -86,7 +79,7 @@ func (m *LongTermMemory) RegisterStore(
 		m.RegisterPlugin("simple_memory_index", simpleIndex, nil)
 	}
 
-	// Step 4: create_tables
+	// 步骤 4：create_tables
 	if m.dbStore != nil {
 		if err := mem_model.CreateTables(m.dbStore.GetDB(ctx)); err != nil {
 			logger.Error(logComponent).Err(err).Msg("CreateTables 失败")
@@ -243,6 +236,11 @@ func MigrateBetweenIndices(ctx context.Context, sourceIndex, targetIndex storein
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+func init() {
+	// S-14: 设置默认支持记忆类型，打破 migration → mem_model 的循环依赖
+	migration.DefaultSupportMemoryTypes = mem_model.AllSupportMemoryTypeValues
+}
 
 // copyFields 深拷贝 fields map。
 func copyFields(fields map[string]any) map[string]any {

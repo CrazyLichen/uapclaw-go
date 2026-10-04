@@ -43,10 +43,14 @@ type EventBus struct {
 	eventCh chan types.CoordinationEvent
 	// cancelFunc 用于停止 runLoop goroutine
 	cancelFunc context.CancelFunc
+	// loopDone runLoop goroutine 退出信号，对齐 Python: await wait_for(_loop_task, timeout=5.0)
+	loopDone chan struct{}
 	// mailboxPollCancel 邮箱轮询定时器取消函数
 	mailboxPollCancel context.CancelFunc
 	// taskPollCancel 任务轮询定时器取消函数
 	taskPollCancel context.CancelFunc
+	// pollWg 跟踪 poll goroutine 退出，对齐 Python: await task（等待 poll task 真正退出）
+	pollWg sync.WaitGroup
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -59,6 +63,12 @@ type WakeCallback func(ctx context.Context, event types.CoordinationEvent)
 
 // logComponent 协调子系统的日志组件
 const logComponent = logger.ComponentTeam
+
+// stopWaitTimeout Stop 等待 runLoop 退出的超时，对齐 Python: asyncio.wait_for(..., timeout=5.0)
+const stopWaitTimeout = 5 * time.Second
+
+// pollWaitTimeout PausePolls/Stop 等待 poll goroutine 退出的超时
+const pollWaitTimeout = 2 * time.Second
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -109,16 +119,17 @@ func (b *EventBus) Start(ctx context.Context, wakeCallback WakeCallback) {
 	b.running = true
 	loopCtx, cancel := context.WithCancel(ctx)
 	b.cancelFunc = cancel
+	b.loopDone = make(chan struct{})
 	go b.runLoop(loopCtx)
 	b.startPollTasksLocked(loopCtx)
 }
 
 // Stop 停止事件循环、取消轮询定时器。
-// Python: EventBus.stop
+// 对齐 Python: EventBus.stop — 等待 runLoop 和 poll goroutine 优雅退出，超时后强制取消。
 func (b *EventBus) Stop() {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	if !b.running {
+		b.mu.Unlock()
 		return
 	}
 	logger.Info(logComponent).Str("role", string(b.role)).Msg("EventBus stopping")
@@ -143,19 +154,55 @@ func (b *EventBus) Stop() {
 		// channel 满则跳过，context cancel 也会退出
 	}
 
-	// 取消 runLoop 的 context
-	if b.cancelFunc != nil {
-		b.cancelFunc()
-		b.cancelFunc = nil
+	// 释放锁后等待 goroutine 退出（对齐 Python: await wait_for + await task）
+	loopDone := b.loopDone
+	pollWg := &b.pollWg
+	cancelFunc := b.cancelFunc
+	b.loopDone = nil
+	b.mu.Unlock()
+
+	// 等待 poll goroutine 退出，对齐 Python: await task（带超时）
+	waitDone := make(chan struct{})
+	go func() {
+		pollWg.Wait()
+		close(waitDone)
+	}()
+	select {
+	case <-waitDone:
+		// poll goroutine 正常退出
+	case <-time.After(pollWaitTimeout):
+		logger.Warn(logComponent).Msg("EventBus: 等待 poll goroutine 退出超时")
 	}
+
+	// 等待 runLoop goroutine 退出，对齐 Python: await wait_for(_loop_task, timeout=5.0)
+	select {
+	case <-loopDone:
+		// runLoop 正常退出
+	case <-time.After(stopWaitTimeout):
+		// 超时后强制取消，对齐 Python: except TimeoutError → task.cancel()
+		logger.Warn(logComponent).Msg("EventBus: 等待 runLoop 退出超时，强制取消")
+		if cancelFunc != nil {
+			cancelFunc()
+		}
+		// 等待取消后退出
+		select {
+		case <-loopDone:
+		case <-time.After(time.Second):
+			logger.Error(logComponent).Msg("EventBus: runLoop 强制取消后仍未退出")
+		}
+	}
+
+	b.mu.Lock()
+	b.cancelFunc = nil
+	b.mu.Unlock()
 }
 
 // PausePolls 停止周期轮询，但保持事件循环运行。
-// Python: EventBus.pause_polls
+// 对齐 Python: EventBus.pause_polls — 取消后等待 poll task 真正退出。
 func (b *EventBus) PausePolls() {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	if b.pollsPaused {
+		b.mu.Unlock()
 		return
 	}
 	logger.Info(logComponent).Str("role", string(b.role)).Msg("EventBus pausing polls")
@@ -168,6 +215,21 @@ func (b *EventBus) PausePolls() {
 		b.taskPollCancel = nil
 	}
 	b.pollsPaused = true
+	pollWg := &b.pollWg
+	b.mu.Unlock()
+
+	// 等待 poll goroutine 退出，对齐 Python: await task
+	waitDone := make(chan struct{})
+	go func() {
+		pollWg.Wait()
+		close(waitDone)
+	}()
+	select {
+	case <-waitDone:
+		// poll goroutine 正常退出
+	case <-time.After(pollWaitTimeout):
+		logger.Warn(logComponent).Msg("EventBus: pause_polls 等待 poll goroutine 退出超时")
+	}
 }
 
 // ResumePolls 恢复周期轮询。
@@ -201,16 +263,26 @@ func (b *EventBus) startPollTasksLocked(ctx context.Context) {
 	}
 	mailboxCtx, mailboxCancel := context.WithCancel(ctx)
 	b.mailboxPollCancel = mailboxCancel
-	go b.pollLoop(mailboxCtx, types.InnerEventTypePollMailbox, b.mailboxPollInterval)
+	b.pollWg.Add(1)
+	go func() {
+		defer b.pollWg.Done()
+		b.pollLoop(mailboxCtx, types.InnerEventTypePollMailbox, b.mailboxPollInterval)
+	}()
 
 	taskCtx, taskCancel := context.WithCancel(ctx)
 	b.taskPollCancel = taskCancel
-	go b.pollLoop(taskCtx, types.InnerEventTypePollTask, b.taskPollInterval)
+	b.pollWg.Add(1)
+	go func() {
+		defer b.pollWg.Done()
+		b.pollLoop(taskCtx, types.InnerEventTypePollTask, b.taskPollInterval)
+	}()
 }
 
 // runLoop 后台 goroutine：从 channel 读取事件，调用 wakeCallback。
+// 退出时关闭 loopDone 通知 Stop()，对齐 Python: await _loop_task。
 // Python: EventBus._run_loop
 func (b *EventBus) runLoop(ctx context.Context) {
+	defer close(b.loopDone)
 	for {
 		select {
 		case <-ctx.Done():

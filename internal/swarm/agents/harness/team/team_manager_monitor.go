@@ -10,6 +10,24 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// streamTaskEntry 流任务条目，包含 cancel 函数和可选的 WaitGroup。
+// M-23: 对齐 Python 的 await task 语义，cancel 后等待 goroutine 退出。
+type streamTaskEntry struct {
+	// cancel 取消函数（context.WithCancel 返回的 cancel）
+	cancel context.CancelFunc
+	// wg 可选的 WaitGroup，goroutine 启动时 wg.Add(1)，退出时 wg.Done()
+	// 调用方通过 SetStreamTaskWaitGroup 注入
+	wg *sync.WaitGroup
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HasStreamTask 检查指定 session 是否有活跃的流任务。
@@ -122,16 +140,6 @@ func (m *TeamManager) PopTeamEvolutionWatcher(sessionID string) context.CancelFu
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// streamTaskEntry 流任务条目，包含 cancel 函数和可选的 WaitGroup。
-// M-23: 对齐 Python 的 await task 语义，cancel 后等待 goroutine 退出。
-type streamTaskEntry struct {
-	// cancel 取消函数（context.WithCancel 返回的 cancel）
-	cancel context.CancelFunc
-	// wg 可选的 WaitGroup，goroutine 启动时 wg.Add(1)，退出时 wg.Done()
-	// 调用方通过 SetStreamTaskWaitGroup 注入
-	wg *sync.WaitGroup
-}
 
 // SetStreamTaskWaitGroup 为指定 session 的流任务设置 WaitGroup。
 // goroutine 启动时调用 wg.Add(1)，退出时调用 wg.Done()。

@@ -18,7 +18,7 @@ import (
 type agentartsClient struct {
 	// baseURL Data Plane 基础 URL
 	baseURL string
-	// apiKey Bearer token
+	// apiKey Bearer 令牌
 	apiKey string
 	// httpClient HTTP 客户端
 	httpClient *http.Client
@@ -173,7 +173,7 @@ func (c *agentartsClient) doRequest(ctx context.Context, method, path string, bo
 
 // searchMemories 搜索记忆。
 // 对齐 Python: client.search_memories(space_id, filters=...)
-// REST: POST /v1/core/spaces/{space_id}/memories/search
+// REST 搜索记忆接口: POST /v1/core/spaces/{space_id}/memories/search
 func (c *agentartsClient) searchMemories(ctx context.Context, spaceID string, filter memorySearchFilter) ([]normalizedMemoryItem, error) {
 	path := fmt.Sprintf("/v1/core/spaces/%s/memories/search", spaceID)
 	var resp memorySearchResponse
@@ -196,7 +196,7 @@ func (c *agentartsClient) searchMemories(ctx context.Context, spaceID string, fi
 
 // createMemorySession 创建记忆会话。
 // 对齐 Python: client.create_memory_session(space_id=..., actor_id=..., assistant_id=...)
-// REST: POST /v1/core/spaces/{space_id}/sessions
+// REST 创建会话接口: POST /v1/core/spaces/{space_id}/sessions
 func (c *agentartsClient) createMemorySession(ctx context.Context, spaceID string, req sessionCreateRequest) (*sessionInfo, error) {
 	path := fmt.Sprintf("/v1/core/spaces/%s/sessions", spaceID)
 	var info sessionInfo
@@ -208,7 +208,7 @@ func (c *agentartsClient) createMemorySession(ctx context.Context, spaceID strin
 
 // addMessages 添加消息到会话。
 // 对齐 Python: client.add_messages(space_id=..., session_id=..., messages=[...])
-// REST: POST /v1/core/spaces/{space_id}/sessions/{session_id}/messages
+// REST 添加消息接口: POST /v1/core/spaces/{space_id}/sessions/{session_id}/messages
 func (c *agentartsClient) addMessages(ctx context.Context, spaceID, sessionID string, msgs []textMessage) error {
 	path := fmt.Sprintf("/v1/core/spaces/%s/sessions/%s/messages", spaceID, sessionID)
 	return c.doRequest(ctx, http.MethodPost, path, addMessagesRequest{Messages: msgs}, nil)

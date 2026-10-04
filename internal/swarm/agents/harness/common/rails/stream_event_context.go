@@ -14,7 +14,23 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// toolCacheEntry 待匹配的 tool_call 缓存条目，对齐 Python: tool_id_cache item
+type toolCacheEntry struct {
+	toolCallID string
+	toolName   string
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // EnsureJSONArguments 确保工具调用参数为合法 JSON 字符串，对齐 Python: _ensure_json_arguments
 //
@@ -224,14 +240,6 @@ func fixIncompleteToolContext(ctx context.Context, modelCtx ceinterface.ModelCon
 	}
 
 	return nil
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// toolCacheEntry 待匹配的 tool_call 缓存条目，对齐 Python: tool_id_cache item
-type toolCacheEntry struct {
-	toolCallID string
-	toolName   string
 }
 
 // insertPlaceholderToolMessages 为未匹配的 tool_call 插入占位 ToolMessage

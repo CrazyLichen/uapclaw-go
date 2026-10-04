@@ -14,7 +14,24 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// todoToolLoader TodoTool 的最小接口，用于依赖注入和可测试性
+//
+// 通过接口而非具体类型引用，允许测试中注入 fake 实现，避免真实 TodoTool 的外部依赖。
+type todoToolLoader interface {
+	LoadTodos(ctx context.Context, sessionID string) ([]hschema.TodoItem, error)
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // EmitToolCall 发送 tool_call 事件，对齐 Python: _emit_tool_call
 //
@@ -209,15 +226,6 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 	}); err != nil {
 		logger.Debug(logComponent).Err(err).Msg("context_usage emit failed")
 	}
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// todoToolLoader TodoTool 的最小接口，用于依赖注入和可测试性
-//
-// 通过接口而非具体类型引用，允许测试中注入 fake 实现，避免真实 TodoTool 的外部依赖。
-type todoToolLoader interface {
-	LoadTodos(ctx context.Context, sessionID string) ([]hschema.TodoItem, error)
 }
 
 // formatTodosForFrontend 将 TodoItem 列表格式化为前端兼容格式，对齐 Python: _format_todos_for_frontend

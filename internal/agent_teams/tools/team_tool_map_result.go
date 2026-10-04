@@ -214,7 +214,7 @@ func (t *ViewTaskTool) MapResult(output map[string]any) string {
 		}
 		return strings.Join(lines, "\n")
 	}
-	// List view（list/claimable action）
+	// 列表视图（list/claimable 动作）
 	tasks, _ := d["tasks"].([]any)
 	if len(tasks) == 0 {
 		return "No tasks found"

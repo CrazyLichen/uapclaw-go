@@ -446,5 +446,5 @@ func renderRole(role any) string {
 	return fmt.Sprintf("%v", role)
 }
 
-// ensure logComponent is used
+// 确保 logComponent 被引用
 var _ = logger.ComponentChannel

@@ -59,13 +59,18 @@ func (s *LlmSpanState) NextChunkSeq() int {
 	return s.ChunkCount
 }
 
-// InitSpanState 创建新的 OtelSpanState 实例。
+// InitSpanState 创建新的 OtelSpanState 实例，并注册到全局注册表。
 // Python: _llm_span_stack = ContextVar(default=[]) 等 3 个
 func InitSpanState() *OtelSpanState {
-	return &OtelSpanState{
+	s := &OtelSpanState{
 		toolSpanMap:  make(map[string][]trace.Span),
 		agentSpanMap: make(map[string][]trace.Span),
 	}
+	// 注册到全局注册表，供 ShutdownObservability 时 ResetAll
+	spanStateRegistryMu.Lock()
+	spanStateRegistry[s] = struct{}{}
+	spanStateRegistryMu.Unlock()
+	return s
 }
 
 // WithSpanState 将 OtelSpanState 注入 context。
@@ -187,4 +192,26 @@ func (s *OtelSpanState) ResetAll() {
 func WithSpanStateAndTimeout(ctx context.Context, state *OtelSpanState, timeout time.Duration) (context.Context, context.CancelFunc) {
 	ctx = WithSpanState(ctx, state)
 	return context.WithTimeout(ctx, timeout)
+}
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// spanStateRegistry 全局 OtelSpanState 注册表，用于 ShutdownObservability 时批量重置
+	// 对齐 Python: reset_all() 重置所有 ContextVars
+	spanStateRegistry   = make(map[*OtelSpanState]struct{})
+	spanStateRegistryMu sync.Mutex
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ResetAllSpanStates 重置所有已注册的 OtelSpanState 实例。
+// 对齐 Python: reset_all() — 在 ShutdownObservability 中调用，确保测试隔离。
+func ResetAllSpanStates() {
+	spanStateRegistryMu.Lock()
+	defer spanStateRegistryMu.Unlock()
+	for s := range spanStateRegistry {
+		s.ResetAll()
+	}
+	spanStateRegistry = make(map[*OtelSpanState]struct{})
 }

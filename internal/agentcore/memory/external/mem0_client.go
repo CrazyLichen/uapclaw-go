@@ -176,7 +176,7 @@ func (c *mem0HTTPClient) doRequest(ctx context.Context, method, path string, bod
 
 // search 执行语义搜索。
 // 对齐 Python: _client_call("search", query=..., filters=..., rerank=..., top_k=...)
-// REST: POST /v1/memories/search/
+// REST 搜索记忆接口: POST /v1/memories/search/
 func (c *mem0HTTPClient) search(ctx context.Context, query string, filters map[string]any, rerank bool, topK int) ([]mem0MemoryItem, error) {
 	req := mem0SearchRequest{
 		Query:   query,
@@ -197,7 +197,7 @@ func (c *mem0HTTPClient) search(ctx context.Context, query string, filters map[s
 
 // getAll 获取全部记忆。
 // 对齐 Python: _client_call("get_all", filters=...)
-// REST: GET /v1/memories/
+// REST 获取全部记忆接口: GET /v1/memories/
 func (c *mem0HTTPClient) getAll(ctx context.Context, filters map[string]any) ([]mem0MemoryItem, error) {
 	// 构建 query string
 	path := "/v1/memories/"
@@ -222,7 +222,7 @@ func (c *mem0HTTPClient) getAll(ctx context.Context, filters map[string]any) ([]
 
 // add 添加记忆。
 // 对齐 Python: _client_call("add", messages, **filters) 和 _client_call("add", ..., infer=False)
-// REST: POST /v1/memories/
+// REST 添加记忆接口: POST /v1/memories/
 func (c *mem0HTTPClient) add(ctx context.Context, messages []mem0Message, filters map[string]any, infer *bool) error {
 	req := mem0AddRequest{
 		Messages: messages,

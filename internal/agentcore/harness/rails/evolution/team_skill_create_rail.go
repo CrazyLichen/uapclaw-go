@@ -14,6 +14,9 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// TeamSkillCreateRailOption 构造选项函数。
+type TeamSkillCreateRailOption func(*TeamSkillCreateRail)
+
 // TeamSkillCreateRail 团队技能创建护栏，在检测到多 Agent 协作模式后
 // 提议用户创建团队技能。
 //
@@ -195,11 +198,6 @@ func (r *TeamSkillCreateRail) OnAfterToolCall(_ context.Context, _ *agentinterfa
 func (r *TeamSkillCreateRail) OnAfterEvolutionTriggered(_ context.Context, _ *trajectory.Trajectory, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
-
-// ──────────────────────────── TeamSkillCreateRailOption ────────────────────────────
-
-// TeamSkillCreateRailOption 构造选项函数。
-type TeamSkillCreateRailOption func(*TeamSkillCreateRail)
 
 // WithTeamSkillCreateAutoTrigger 设置是否自动触发。
 func WithTeamSkillCreateAutoTrigger(auto bool) TeamSkillCreateRailOption {

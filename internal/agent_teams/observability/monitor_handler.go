@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -19,8 +20,10 @@ import (
 // Python: OtelTeamMonitorHandler (monitor_handler.py)
 //
 // 通过 TeamAgent.add_event_listener 注册，将团队/任务事件转换为 OTel span。
-// 当前为桩实现：HandleEvent 逻辑完整，但 attach_to_team_agent 暂为 no-op（待 9.55 完成后回填）。
+// mu 保护 teamSpans / taskSpans map 的并发访问（Python asyncio 单线程无此问题，Go 需要）。
 type OtelTeamMonitorHandler struct {
+	// mu 保护 teamSpans / taskSpans 的并发读写
+	mu sync.RWMutex
 	// config 当前可观测性配置
 	config *ObservabilityConfig
 	// injectedTracer 可选显式注入的 tracer（测试用）
@@ -133,6 +136,8 @@ func (h *OtelTeamMonitorHandler) tracer() trace.Tracer {
 // openTeamSpan 打开长生命周期的 team root span。
 // Python: _open_team_span(team_name, payload)
 func (h *OtelTeamMonitorHandler) openTeamSpan(ctx context.Context, teamName string, payload map[string]any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if _, exists := h.teamSpans[teamName]; exists {
 		return
 	}
@@ -152,6 +157,8 @@ func (h *OtelTeamMonitorHandler) openTeamSpan(ctx context.Context, teamName stri
 // closeTeamSpan 关闭 team root span。
 // Python: _close_team_span(team_name)
 func (h *OtelTeamMonitorHandler) closeTeamSpan(teamName string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	span, ok := h.teamSpans[teamName]
 	if !ok {
 		return
@@ -164,6 +171,8 @@ func (h *OtelTeamMonitorHandler) closeTeamSpan(teamName string) {
 // recordTeamEvent 在 team span 上记录事件。
 // Python: _record_team_event(team_name, name, attrs)
 func (h *OtelTeamMonitorHandler) recordTeamEvent(teamName string, name string, attrs map[string]any) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	span, ok := h.teamSpans[teamName]
 	if !ok {
 		return
@@ -174,6 +183,8 @@ func (h *OtelTeamMonitorHandler) recordTeamEvent(teamName string, name string, a
 // openTaskSpan 打开 per-task span。
 // Python: _open_task_span(team_name, payload)
 func (h *OtelTeamMonitorHandler) openTaskSpan(ctx context.Context, teamName string, payload map[string]any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	taskID := strVal(payload["task_id"])
 	if taskID == "" {
 		return
@@ -202,6 +213,8 @@ func (h *OtelTeamMonitorHandler) openTaskSpan(ctx context.Context, teamName stri
 // closeTaskSpan 关闭 task span。
 // Python: _close_task_span(payload, etype)
 func (h *OtelTeamMonitorHandler) closeTaskSpan(payload map[string]any, etype string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	taskID := strVal(payload["task_id"])
 	span, ok := h.taskSpans[taskID]
 	if !ok {
@@ -217,6 +230,8 @@ func (h *OtelTeamMonitorHandler) closeTaskSpan(payload map[string]any, etype str
 // recordTaskEvent 在 task span 上记录事件。
 // Python: _record_task_event(payload, etype)
 func (h *OtelTeamMonitorHandler) recordTaskEvent(payload map[string]any, etype string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	taskID := strVal(payload["task_id"])
 	span, ok := h.taskSpans[taskID]
 	if !ok {

@@ -105,12 +105,20 @@ func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfac
 	//     self.system_prompt_builder.remove_section(SectionName.MODE_INSTRUCTIONS)
 	//     return
 	sess := cbc.Session()
-	if sess != nil {
-		state := r.agent.LoadState(sess)
-		if state != nil && state.PlanMode.Mode != "plan" {
-			r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
-			return nil
-		}
+	if sess == nil {
+		// 保守策略：无法确认 plan 模式则不注入 team.plan 指令，移除残留 section
+		r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
+		return nil
+	}
+	state := r.agent.LoadState(sess)
+	if state == nil {
+		// 同上：state 不可用时保守不注入
+		r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
+		return nil
+	}
+	if state.PlanMode.Mode != "plan" {
+		r.systemPromptBuilder.RemoveSection(harnesssections.SectionModeInstructions)
+		return nil
 	}
 
 	// Plan 模式：特化 plan_agent + 注入 team.plan 指令

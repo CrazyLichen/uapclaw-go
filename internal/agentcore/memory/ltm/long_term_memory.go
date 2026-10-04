@@ -60,9 +60,9 @@ type LongTermMemory struct {
 	generator               *extract.Generator
 	// fragmentType 碎片记忆类型列表
 	fragmentType []string
-	// llm
+	// llm LLM 服务实例
 	baseLLM *llm.Model
-	// embedding
+	// embedding 嵌入模型实例
 	baseEmbed embedding.BaseEmbedding
 	// scopeEmbedding scope 级 embedding 模型缓存
 	scopeEmbedding map[string]embedding.BaseEmbedding

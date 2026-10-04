@@ -35,7 +35,13 @@ type milvusClient interface {
 	Close(ctx context.Context) error
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
+// persistenceClientAdapter 将 milvusclient.Client 适配到 milvusClient 接口。
+//
+// 桥接真实 SDK 的 Client 方法签名到内部 milvusClient 接口。
+// 对齐 foundation/store/vector/milvus_adapter.go 的 milvusClientAdapter。
+type persistenceClientAdapter struct {
+	client *milvusclient.Client
+}
 
 // MilvusConnectorImpl Milvus 向量数据库连接器实现。
 //
@@ -911,20 +917,12 @@ func findColumn(ds milvusclient.DataSet, name string) column.Column {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// ──────────────────────────── 结构体（适配器） ────────────────────────────
-
-// persistenceClientAdapter 将 milvusclient.Client 适配到 milvusClient 接口。
-//
-// 桥接真实 SDK 的 Client 方法签名到内部 milvusClient 接口。
-// 对齐 foundation/store/vector/milvus_adapter.go 的 milvusClientAdapter。
-type persistenceClientAdapter struct {
-	client *milvusclient.Client
-}
-
+// CreateCollection 实现 milvusClient 接口。
 func (a *persistenceClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption) error {
 	return a.client.CreateCollection(ctx, option)
 }
 
+// HasCollection 实现 milvusClient 接口。
 func (a *persistenceClientAdapter) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption) (bool, error) {
 	return a.client.HasCollection(ctx, option)
 }

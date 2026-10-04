@@ -208,7 +208,7 @@ func Analyze(
 func mapToMemoryAnalyzerResult(m map[string]any) (*MemoryAnalyzerResult, error) {
 	result := &MemoryAnalyzerResult{}
 
-	// has_key_information
+	// has_key_information 包含关键信息
 	if v, ok := m["has_key_information"]; ok {
 		switch val := v.(type) {
 		case bool:
@@ -219,14 +219,14 @@ func mapToMemoryAnalyzerResult(m map[string]any) (*MemoryAnalyzerResult, error) 
 		}
 	}
 
-	// summary
+	// summary 摘要
 	if v, ok := m["summary"]; ok {
 		if s, ok := v.(string); ok {
 			result.Summary = s
 		}
 	}
 
-	// variables
+	// variables 变量
 	if v, ok := m["variables"]; ok {
 		varList, ok := v.([]any)
 		if !ok {
