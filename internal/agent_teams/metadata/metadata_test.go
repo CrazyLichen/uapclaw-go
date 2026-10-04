@@ -42,6 +42,9 @@ func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 	return nil
 }
 
+// ClearSession 清空会话状态。
+func (f *fakeSessionFacade) ClearSession(_ context.Context) {}
+
 // 编译时检查
 var _ interfaces.SessionFacade = (*fakeSessionFacade)(nil)
 

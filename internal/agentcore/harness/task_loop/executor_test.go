@@ -606,3 +606,6 @@ func (f *fakeSessionFacade) GetEnv(_ string, _ ...any) any {
 func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 	return nil
 }
+
+// ClearSession 清空会话状态。
+func (f *fakeSessionFacade) ClearSession(_ context.Context) {}

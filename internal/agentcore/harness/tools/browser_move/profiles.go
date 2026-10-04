@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -338,4 +338,3 @@ func (s *BrowserProfileStore) sortedProfileDicts() []map[string]any {
 	}
 	return result
 }
-

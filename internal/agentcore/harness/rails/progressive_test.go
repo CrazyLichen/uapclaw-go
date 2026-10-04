@@ -643,6 +643,7 @@ func (m *mockSession) WriteStream(_ context.Context, _ any) error       { return
 func (m *mockSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
 func (m *mockSession) GetEnv(_ string, _ ...any) any                    { return nil }
 func (m *mockSession) Interact(_ context.Context, _ any) error          { return nil }
+func (m *mockSession) ClearSession(_ context.Context)                   {}
 
 // 编译时验证 mockSession 满足 SessionFacade 接口
 var _ sessioninterfaces.SessionFacade = (*mockSession)(nil)

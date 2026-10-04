@@ -132,4 +132,3 @@ func (b *BaseExtensionImpl) LoadConfigFromYAML() map[string]any {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-

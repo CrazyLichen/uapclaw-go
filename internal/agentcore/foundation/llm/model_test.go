@@ -88,7 +88,8 @@ type mockSession struct {
 	id string
 }
 
-func (s *mockSession) GetSessionID() string { return s.id }
+func (s *mockSession) GetSessionID() string           { return s.id }
+func (s *mockSession) ClearSession(_ context.Context) {}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

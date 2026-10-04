@@ -210,6 +210,7 @@ func (s *fakeSession) WriteStream(_ context.Context, _ any) error       { return
 func (s *fakeSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
 func (s *fakeSession) GetEnv(_ string, _ ...any) any                    { return nil }
 func (s *fakeSession) Interact(_ context.Context, _ any) error          { return nil }
+func (s *fakeSession) ClearSession(_ context.Context)                   {}
 
 // 编译时验证
 var _ sessioninterfaces.SessionFacade = (*fakeSession)(nil)

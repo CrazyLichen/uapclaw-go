@@ -1292,6 +1292,9 @@ func (f *fakeSessionFacade) GetEnv(_ string, defaultValue ...any) any {
 func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error { return nil }
 func (f *fakeSessionFacade) GetState(_ any) (any, error)             { return nil, nil }
 
+// ClearSession 清空会话状态。
+func (f *fakeSessionFacade) ClearSession(_ context.Context) {}
+
 // ──────────────────────────── 新增测试：reactLoop ────────────────────────────
 
 // TestReActAgent_reactLoop_无工具调用 验证 LLM 返回无工具调用时正常结束

@@ -87,6 +87,9 @@ func (f *schedulerFakeSessionFacade) GetEnv(_ string, _ ...any) any { return nil
 // Interact 实现 SessionFacade 接口
 func (f *schedulerFakeSessionFacade) Interact(_ context.Context, _ any) error { return nil }
 
+// ClearSession 实现 SessionFacade 接口
+func (f *schedulerFakeSessionFacade) ClearSession(_ context.Context) {}
+
 // getWrittenChunks 获取已写入的 chunk 列表
 func (f *schedulerFakeSessionFacade) getWrittenChunks() []any {
 	f.mu.Lock()

@@ -189,7 +189,9 @@ func TestMergeRailsWithRequired_全部缺失(t *testing.T) {
 		{railType: (*rails.SysOperationRail)(nil), factory: func() sainterfaces.AgentRail { return rails.NewSysOperationRail() }},
 		{railType: (*rails.AgentModeRail)(nil), factory: func() sainterfaces.AgentRail { return rails.NewAgentModeRail(nil) }},
 		{railType: (*interrupt.AskUserRail)(nil), factory: func() sainterfaces.AgentRail { return interrupt.NewAskUserRail() }},
-		{railType: (*interrupt.ConfirmInterruptRail)(nil), factory: func() sainterfaces.AgentRail { return interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("switch_mode")) }},
+		{railType: (*interrupt.ConfirmInterruptRail)(nil), factory: func() sainterfaces.AgentRail {
+			return interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("switch_mode"))
+		}},
 	}
 
 	result := mergeRailsWithRequired(userRails, required)
@@ -208,7 +210,9 @@ func TestMergeRailsWithRequired_部分已存在(t *testing.T) {
 		{railType: (*rails.SysOperationRail)(nil), factory: func() sainterfaces.AgentRail { return rails.NewSysOperationRail() }},
 		{railType: (*rails.AgentModeRail)(nil), factory: func() sainterfaces.AgentRail { return rails.NewAgentModeRail(nil) }},
 		{railType: (*interrupt.AskUserRail)(nil), factory: func() sainterfaces.AgentRail { return interrupt.NewAskUserRail() }},
-		{railType: (*interrupt.ConfirmInterruptRail)(nil), factory: func() sainterfaces.AgentRail { return interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("switch_mode")) }},
+		{railType: (*interrupt.ConfirmInterruptRail)(nil), factory: func() sainterfaces.AgentRail {
+			return interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("switch_mode"))
+		}},
 	}
 
 	result := mergeRailsWithRequired(userRails, required)

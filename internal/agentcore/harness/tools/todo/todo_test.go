@@ -43,6 +43,7 @@ func (m *mockSession) WriteStream(_ context.Context, _ any) error       { return
 func (m *mockSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
 func (m *mockSession) GetEnv(_ string, _ ...any) any                    { return nil }
 func (m *mockSession) Interact(_ context.Context, _ any) error          { return nil }
+func (m *mockSession) ClearSession(_ context.Context)                   {}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

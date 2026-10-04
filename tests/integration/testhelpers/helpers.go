@@ -3,9 +3,9 @@ package testhelpers
 import (
 	"testing"
 
-	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -57,6 +57,9 @@ func (f *fakeSessionFacade) GetEnv(_ string, _ ...any) any { return nil }
 // Interact 实现 SessionFacade 接口
 func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error { return nil }
 
+// ClearSession 清空会话状态。
+func (f *fakeSessionFacade) ClearSession(_ context.Context) {}
+
 // HandleInput 实现 EventHandler 接口
 func (h *fakeEventHandler) HandleInput(_ context.Context, _ *EventHandlerInput) (map[string]any, error) {
 	h.handledInput.Add(1)

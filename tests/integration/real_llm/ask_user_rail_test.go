@@ -1,4 +1,4 @@
-//go:build llm
+//go:build integration && llm
 
 package real_llm
 

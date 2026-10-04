@@ -863,4 +863,3 @@ func ruleToolsList(rule map[string]any) []string {
 		return nil
 	}
 }
-

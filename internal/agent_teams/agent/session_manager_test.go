@@ -18,6 +18,9 @@ func (m *mockSession) GetSessionID() string {
 	return m.sessionID
 }
 
+// ClearSession 实现 SessionFacade 接口
+func (m *mockSession) ClearSession(_ context.Context) {}
+
 // TestNewSessionManager_基本构造 测试构造函数
 // Python: SessionManager.__init__(state, configurator, recovery_manager)
 func TestNewSessionManager_基本构造(t *testing.T) {
