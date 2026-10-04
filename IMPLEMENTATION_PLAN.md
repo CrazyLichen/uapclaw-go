@@ -786,7 +786,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 13.1 | ✅ | Indexer 抽象接口 + 前置类型 | `TextChunk + IndexConfig/KnowledgeBaseConfig/RetrievalConfig/VectorStoreConfig + Indexer 接口(BuildIndex/UpdateIndex/DeleteIndex/IndexExists/GetIndexInfo)` | `openjiuwen/core/retrieval/common/config.py + document.py + indexing/indexer/base.py` |
 | 13.2 | ☐ | ChromaIndexer | ChromaDB 文档索引（build_index+去重+嵌入+写入 / update先删后建 / delete按doc_id / index_exists / get_index_info） | `openjiuwen/core/retrieval/indexing/indexer/chroma_indexer.py` |
 | 13.3 | ☐ | MilvusIndexer | Milvus 文档索引（build_index+ensure_collection+去重+嵌入+写入 / update先删flush后建 / delete按doc_id过滤 / index_exists / get_index_info / _ensure_collection含BM25+dense索引） | `openjiuwen/core/retrieval/indexing/indexer/milvus_indexer.py` |
-| 13.4 | ☐ | ComputeChunkEmbeddings | 共享嵌入逻辑（文本embed_documents + 多模态embed_multimodal + image_path检测 + use_caption_for_images分支） | `openjiuwen/core/retrieval/indexing/indexer/embed_chunks.py` |
+| 13.4 | ✅ | ComputeChunkEmbeddings | ComputeChunkEmbeddings + isImageChunk（接口断言检测 MultimodalEmbedder + 纯文本/图片/文本三条路径 + os.Stat 三级防御 + 透传 EmbedOption + 原地修改 Embedding）；附带修复 document.go mime.TypeByExtension 传完整路径的 bug（改用 filepath.Ext） | `openjiuwen/core/retrieval/indexing/indexer/embed_chunks.py` |
 | **13.x Chunker 层** | — | | | |
 | 13.5 | ☐ | Chunker 抽象接口 | `Chunk` 方法 | `openjiuwen/core/retrieval/indexing/processor/chunker/base.py` |
 | 13.6 | ☐ | CharChunker | 字符级分块（chunk_size+chunk_overlap） | `openjiuwen/core/retrieval/indexing/processor/chunker/char_chunker.py` |

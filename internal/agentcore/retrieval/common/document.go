@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mime"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -385,7 +386,7 @@ func loadFromFile(kind ModalityKind, path string) (ModalityKind, string, error) 
 		return kind, string(content), nil
 	}
 
-	mimeType := mime.TypeByExtension(path)
+	mimeType := mime.TypeByExtension(filepath.Ext(path))
 	if mimeType == "" || !strings.Contains(mimeType, "/") {
 		return "", "", exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
