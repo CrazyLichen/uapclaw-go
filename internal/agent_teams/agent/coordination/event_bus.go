@@ -120,8 +120,9 @@ func (b *EventBus) Start(ctx context.Context, wakeCallback WakeCallback) {
 	b.running = true
 	loopCtx, cancel := context.WithCancel(ctx)
 	b.cancelFunc = cancel
-	b.loopDone = make(chan struct{})
-	go b.runLoop(loopCtx)
+	loopDone := make(chan struct{})
+	b.loopDone = loopDone
+	go b.runLoop(loopCtx, loopDone)
 	b.startPollTasksLocked(loopCtx)
 }
 
@@ -282,8 +283,8 @@ func (b *EventBus) startPollTasksLocked(ctx context.Context) {
 // runLoop 后台 goroutine：从 channel 读取事件，调用 wakeCallback。
 // 退出时关闭 loopDone 通知 Stop()，对齐 Python: await _loop_task。
 // Python: EventBus._run_loop
-func (b *EventBus) runLoop(ctx context.Context) {
-	defer close(b.loopDone)
+func (b *EventBus) runLoop(ctx context.Context, loopDone chan struct{}) {
+	defer close(loopDone)
 	for {
 		select {
 		case <-ctx.Done():

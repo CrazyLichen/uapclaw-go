@@ -1,7 +1,9 @@
 package adapter
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -419,5 +421,18 @@ func TestGetEmbedModelName(t *testing.T) {
 	}
 	if getEmbedModelName(embedCfg, "unknown") != "" {
 		t.Error("未知 modelType 应返回空")
+	}
+}
+
+// strVal 将任意值转为字符串并 TrimSpace，nil 返回空串。
+func strVal(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return strings.TrimSpace(val)
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", val))
 	}
 }

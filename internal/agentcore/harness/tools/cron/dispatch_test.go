@@ -2,6 +2,7 @@ package cron
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -451,5 +452,21 @@ func TestMapVal(t *testing.T) {
 	result = mapVal(m, "missing")
 	if len(result) != 0 {
 		t.Errorf("mapVal(missing) = %v, want empty map", result)
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// strVal 从 map 中按键提取字符串值，非字符串类型用 fmt.Sprintf 转换。
+func strVal(m map[string]any, key string) string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	default:
+		return fmt.Sprintf("%v", val)
 	}
 }

@@ -1162,3 +1162,6 @@ func (f *fakeHandlerSess) GetEnv(_ string, _ ...any) any {
 func (f *fakeHandlerSess) Interact(_ context.Context, _ any) error {
 	return nil
 }
+
+// ClearSession 实现 SessionFacade 接口
+func (f *fakeHandlerSess) ClearSession(_ context.Context) {}

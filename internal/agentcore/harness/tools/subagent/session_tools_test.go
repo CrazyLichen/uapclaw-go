@@ -684,6 +684,9 @@ func (f *fakeHandlerSess) Interact(_ context.Context, _ any) error {
 	return nil
 }
 
+// ClearSession 实现 SessionFacade 接口
+func (f *fakeHandlerSess) ClearSession(_ context.Context) {}
+
 // 编译时接口检查
 var _ interfaces.DeepAgentInterface = (*fakeDeepAgentProvider)(nil)
 var _ controller.ControllerInterface = (*fakeController)(nil)

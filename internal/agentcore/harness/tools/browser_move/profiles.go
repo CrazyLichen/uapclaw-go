@@ -104,9 +104,9 @@ func NewBrowserProfileFromDict(raw map[string]any) *BrowserProfile {
 	}
 
 	return &BrowserProfile{
-		Name:          utils.StrVal(raw["name"]),
+		Name:          strings.TrimSpace(utils.StrVal(raw["name"])),
 		DriverType:    driverType,
-		CDPURL:        utils.StrVal(raw["cdp_url"]),
+		CDPURL:        strings.TrimSpace(utils.StrVal(raw["cdp_url"])),
 		BrowserBinary: utils.StrVal(raw["browser_binary"]),
 		UserDataDir:   utils.StrVal(raw["user_data_dir"]),
 		DebugPort:     debugPort,
