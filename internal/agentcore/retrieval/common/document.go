@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -54,6 +55,22 @@ type addFieldOptions struct {
 
 // AddFieldOption AddField 可选参数函数
 type AddFieldOption func(*addFieldOptions)
+
+// TextChunk 文本分块数据模型，用于文档索引管线中的分块传递。
+//
+// Python: openjiuwen/core/retrieval/common/document.py (TextChunk)
+type TextChunk struct {
+	// ID 分块 ID
+	ID string `json:"id_"`
+	// Text 分块文本内容
+	Text string `json:"text"`
+	// DocID 父文档 ID
+	DocID string `json:"doc_id"`
+	// Metadata 分块元数据
+	Metadata map[string]any `json:"metadata"`
+	// Embedding 分块嵌入向量（嵌入计算后填充）
+	Embedding []float64 `json:"embedding,omitempty"`
+}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -259,6 +276,26 @@ func (d *MultimodalDocument) Fields() []ModalityField {
 	result := make([]ModalityField, len(d.fields))
 	copy(result, d.fields)
 	return result
+}
+
+// NewTextChunkFromDocument 从 Document 创建 TextChunk。
+//
+// Python: TextChunk.from_document()
+// id 为空时自动生成 UUID。
+func NewTextChunkFromDocument(doc *reranker.Document, chunkText string, id string) *TextChunk {
+	if id == "" {
+		id = uuid.NewString()
+	}
+	meta := doc.Metadata
+	if meta == nil {
+		meta = make(map[string]any)
+	}
+	return &TextChunk{
+		ID:       id,
+		Text:     chunkText,
+		DocID:    doc.ID,
+		Metadata: meta,
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

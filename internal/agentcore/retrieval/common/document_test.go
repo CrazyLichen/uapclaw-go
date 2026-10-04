@@ -1,11 +1,13 @@
 package common
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 )
 
 func TestNewMultimodalDocument(t *testing.T) {
@@ -244,4 +246,69 @@ func TestMultimodalDocument_AddField_文件路径和DataID组合(t *testing.T) {
 	doc, err := NewMultimodalDocument().AddField(ModalityText, "", FieldFilePath(txtFile))
 	assert.NoError(t, err)
 	assert.Equal(t, "内容", doc.Fields()[0].Data)
+}
+
+// ──── TextChunk 测试 ────
+
+func TestTextChunk_基本字段(t *testing.T) {
+	tc := &TextChunk{
+		ID:       "chunk-001",
+		Text:     "分块内容",
+		DocID:    "doc-001",
+		Metadata: map[string]any{"page": 1},
+	}
+	assert.Equal(t, "chunk-001", tc.ID)
+	assert.Equal(t, "分块内容", tc.Text)
+	assert.Equal(t, "doc-001", tc.DocID)
+	assert.Equal(t, map[string]any{"page": 1}, tc.Metadata)
+	assert.Nil(t, tc.Embedding)
+}
+
+func TestTextChunk_EmbeddingOmitEmpty(t *testing.T) {
+	// 无 Embedding 时 JSON 不包含 embedding 字段
+	tc := &TextChunk{ID: "c1", Text: "text", DocID: "d1"}
+	data, err := json.Marshal(tc)
+	assert.NoError(t, err)
+	assert.NotContains(t, string(data), "embedding")
+
+	// 有 Embedding 时 JSON 包含 embedding 字段
+	tc.Embedding = []float64{0.1, 0.2}
+	data, err = json.Marshal(tc)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), "embedding")
+}
+
+func TestNewTextChunkFromDocument(t *testing.T) {
+	doc := &reranker.Document{
+		ID:       "doc-001",
+		Text:     "原始文档",
+		Metadata: map[string]any{"source": "test"},
+	}
+	tc := NewTextChunkFromDocument(doc, "分块文本", "")
+	assert.NotEmpty(t, tc.ID) // ID 自动生成
+	assert.Equal(t, "分块文本", tc.Text)
+	assert.Equal(t, "doc-001", tc.DocID)
+	assert.Equal(t, map[string]any{"source": "test"}, tc.Metadata)
+	assert.Nil(t, tc.Embedding)
+}
+
+func TestNewTextChunkFromDocument_自定义ID(t *testing.T) {
+	doc := &reranker.Document{
+		ID:       "doc-001",
+		Text:     "原始文档",
+		Metadata: map[string]any{"source": "test"},
+	}
+	tc := NewTextChunkFromDocument(doc, "分块文本", "my-chunk-id")
+	assert.Equal(t, "my-chunk-id", tc.ID)
+}
+
+func TestNewTextChunkFromDocument_Metadata为nil(t *testing.T) {
+	doc := &reranker.Document{
+		ID:       "doc-001",
+		Text:     "原始文档",
+		Metadata: nil,
+	}
+	tc := NewTextChunkFromDocument(doc, "分块文本", "c1")
+	assert.NotNil(t, tc.Metadata)
+	assert.Equal(t, map[string]any{}, tc.Metadata)
 }
