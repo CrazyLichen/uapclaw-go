@@ -565,7 +565,7 @@ func addDefaultRails(
 
 	// ConfirmInterruptRail — 不自动添加（需指定拦截的工具名列表）
 	// 由具体场景（如 CLI、SecurityRail）显式提供，例如：
-	//   agent.AddRail(interrupt.NewConfirmInterruptRail("write_file", "edit_file"))（添加确认中断 Rail）
+	//   agent.AddRail(interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("write_file", "edit_file")))（添加确认中断 Rail）
 	// 或由 PermissionInterruptRail（SecurityRail 体系）内部继承复用
 	// ⤴️ 9.19 回填：PermissionInterruptRail 已在 deep_agent.go 中按 config.Permissions 条件创建
 

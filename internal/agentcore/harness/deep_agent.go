@@ -74,6 +74,13 @@ type DeepAgent struct {
 	// reactAgent 内层 ReActAgent
 	reactAgent *agents.ReActAgent
 
+	// innerInvokeOverride 内层 invoke 覆写函数（仅测试使用）。
+	// 设置后，runSingleRoundInvoke 和 runSingleRoundStream 将调用此函数
+	// 而非 reactAgent.Invoke/Stream，对齐 Python agent.set_react_agent(fake_react) 的能力。
+	innerInvokeOverride func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
+	// innerStreamOverride 内层 stream 覆写函数（仅测试使用）。
+	innerStreamOverride func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error)
+
 	// deepConfig Harness 编排配置
 	deepConfig *hschema.DeepAgentConfig
 	// systemPromptBuilder 系统提示词构建器（与 ReActAgent 共享同一实例）
@@ -747,6 +754,22 @@ func (d *DeepAgent) SetReactAgent(reactAgent *agents.ReActAgent, initd bool) {
 	d.initMu.Lock()
 	d.initialized = initd
 	d.initMu.Unlock()
+}
+
+// SetInnerInvokeOverride 设置内层 invoke 覆写函数（仅测试使用）。
+// 设置后，runSingleRoundInvoke 将调用此函数而非 reactAgent.Invoke。
+// 对齐 Python agent.set_react_agent(fake_react) 的测试替身能力。
+func (d *DeepAgent) SetInnerInvokeOverride(fn func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)) {
+	d.configMu.Lock()
+	defer d.configMu.Unlock()
+	d.innerInvokeOverride = fn
+}
+
+// SetInnerStreamOverride 设置内层 stream 覆写函数（仅测试使用）。
+func (d *DeepAgent) SetInnerStreamOverride(fn func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error)) {
+	d.configMu.Lock()
+	defer d.configMu.Unlock()
+	d.innerStreamOverride = fn
 }
 
 // IsInitialized 返回是否已完成懒初始化。
@@ -2017,14 +2040,21 @@ func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfac
 
 	d.configMu.RLock()
 	reactAgent := d.reactAgent
+	invokeOverride := d.innerInvokeOverride
 	d.configMu.RUnlock()
+
+	effectiveInputs := toEffectiveInputs(modified)
+
+	// 测试覆写优先
+	if invokeOverride != nil {
+		return invokeOverride(ctx, effectiveInputs, agentinterfaces.WithSession(sess))
+	}
 
 	if reactAgent == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
 			exception.WithMsg("DeepAgent 未配置，请先调用 Configure()"))
 	}
 
-	effectiveInputs := toEffectiveInputs(modified)
 	return reactAgent.Invoke(ctx, effectiveInputs, agentinterfaces.WithSession(sess))
 }
 
@@ -2319,14 +2349,23 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 func (d *DeepAgent) runSingleRoundStream(ctx context.Context, invokeInputs *agentinterfaces.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
 	d.configMu.RLock()
 	reactAgent := d.reactAgent
+	streamOverride := d.innerStreamOverride
 	d.configMu.RUnlock()
+
+	effectiveInputs := toEffectiveInputs(invokeInputs)
+
+	// 测试覆写优先
+	if streamOverride != nil {
+		return streamOverride(ctx, effectiveInputs,
+			agentinterfaces.WithSession(sess),
+			agentinterfaces.WithStreamModes(streamModes))
+	}
 
 	if reactAgent == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
 			exception.WithMsg("DeepAgent 未配置，请先调用 Configure()"))
 	}
 
-	effectiveInputs := toEffectiveInputs(invokeInputs)
 	return reactAgent.Stream(ctx, effectiveInputs,
 		agentinterfaces.WithSession(sess),
 		agentinterfaces.WithStreamModes(streamModes))

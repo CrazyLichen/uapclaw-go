@@ -135,6 +135,18 @@ func (s *AgentStateCollection) SetState(st map[string]any) {
 	}
 }
 
+// Clear 清空所有状态（globalState + agentState + traceState）。
+// 对齐 Python StateCollection.clear()：重置所有内部状态为空。
+//
+// Python: session.clear_session() → StateCollection 级别的 clear
+func (s *AgentStateCollection) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.globalState.Clear()
+	s.agentState.Clear()
+	s.traceState = make(map[string]any)
+}
+
 // GetByPrefix 根据 key 和嵌套前缀获取状态值。委托到 agentState。
 func (s *AgentStateCollection) GetByPrefix(key StateKey, nestedPrefix string) any {
 	s.mu.RLock()

@@ -43,6 +43,11 @@ type SessionFacade interface {
 	// value 通常传 string；内部序列化为 InteractionOutput.Value (any)。
 	// Python: Session.interact(value) 的任意类型签名。
 	Interact(ctx context.Context, value any) error
+	// ClearSession 清空所有会话状态并重置生命周期标志。
+	// 对齐 Python session.clear_session()：清除 globalState + agentState + traceState，
+	// 释放 checkpointer 资源，重置 preRunDone/postRunDone。
+	// 用于测试场景中需要重置 auto_confirm 等会话状态的情况。
+	ClearSession(ctx context.Context)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

@@ -14,7 +14,7 @@ import (
 
 // TestNewConfirmInterruptRail 验证构造函数和优先级
 func TestNewConfirmInterruptRail(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file", "edit_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file", "edit_file"))
 	assert.Equal(t, 90, r.Priority())
 	assert.Contains(t, r.toolNames, "write_file")
 	assert.Contains(t, r.toolNames, "edit_file")
@@ -25,7 +25,7 @@ func TestNewConfirmInterruptRail(t *testing.T) {
 
 // TestConfirmInterruptRail_resolveInterrupt_无输入无AutoConfirm 验证无输入无auto_confirm → InterruptResult
 func TestConfirmInterruptRail_resolveInterrupt_无输入无AutoConfirm(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 
 	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, nil, nil)
@@ -37,7 +37,7 @@ func TestConfirmInterruptRail_resolveInterrupt_无输入无AutoConfirm(t *testin
 
 // TestConfirmInterruptRail_resolveInterrupt_无输入有AutoConfirm 验证无输入有auto_confirm → ApproveResult
 func TestConfirmInterruptRail_resolveInterrupt_无输入有AutoConfirm(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	autoConfirmConfig := map[string]any{"write_file": true}
 
@@ -47,7 +47,7 @@ func TestConfirmInterruptRail_resolveInterrupt_无输入有AutoConfirm(t *testin
 
 // TestConfirmInterruptRail_resolveInterrupt_批准 验证 approved → ApproveResult
 func TestConfirmInterruptRail_resolveInterrupt_批准(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := &ConfirmPayload{Approved: true}
 
@@ -57,7 +57,7 @@ func TestConfirmInterruptRail_resolveInterrupt_批准(t *testing.T) {
 
 // TestConfirmInterruptRail_resolveInterrupt_拒绝 验证 !approved → RejectResult 含 feedback
 func TestConfirmInterruptRail_resolveInterrupt_拒绝(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := &ConfirmPayload{Approved: false, Feedback: "文件过大"}
 
@@ -69,7 +69,7 @@ func TestConfirmInterruptRail_resolveInterrupt_拒绝(t *testing.T) {
 
 // TestConfirmInterruptRail_resolveInterrupt_拒绝无Feedback 验证 !approved 无 feedback → 默认消息
 func TestConfirmInterruptRail_resolveInterrupt_拒绝无Feedback(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := &ConfirmPayload{Approved: false}
 
@@ -81,7 +81,7 @@ func TestConfirmInterruptRail_resolveInterrupt_拒绝无Feedback(t *testing.T) {
 
 // TestConfirmInterruptRail_resolveInterrupt_无效输入 验证无效输入 → InterruptResult
 func TestConfirmInterruptRail_resolveInterrupt_无效输入(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	// 不支持的输入类型
 	userInput := 42
@@ -92,7 +92,7 @@ func TestConfirmInterruptRail_resolveInterrupt_无效输入(t *testing.T) {
 
 // TestConfirmInterruptRail_resolveInterrupt_Dict批准 验证 map 输入 approved=true
 func TestConfirmInterruptRail_resolveInterrupt_Dict批准(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := map[string]any{"approved": true, "feedback": ""}
 
@@ -102,7 +102,7 @@ func TestConfirmInterruptRail_resolveInterrupt_Dict批准(t *testing.T) {
 
 // TestConfirmInterruptRail_resolveInterrupt_Dict拒绝 验证 map 输入 approved=false
 func TestConfirmInterruptRail_resolveInterrupt_Dict拒绝(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := map[string]any{"approved": false, "feedback": "不安全"}
 
@@ -136,7 +136,7 @@ func TestIsAutoConfirmed(t *testing.T) {
 
 // TestConfirmInterruptRail_getAutoConfirmKey 验证 key 生成
 func TestConfirmInterruptRail_getAutoConfirmKey(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 
 	// 正常 ToolCall
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
@@ -237,7 +237,7 @@ func TestConfirmPayloadSchema(t *testing.T) {
 
 // TestConfirmInterruptRail_InterruptRequester接口 验证 InterruptResult.Request 满足 InterruptRequester
 func TestConfirmInterruptRail_InterruptRequester接口(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, nil, nil)
 	interruptResult, ok := decision.(*InterruptResult)
@@ -249,7 +249,7 @@ func TestConfirmInterruptRail_InterruptRequester接口(t *testing.T) {
 
 // TestConfirmInterruptRail_resolveInterrupt_无效类型 验证不支持的输入类型 → InterruptResult
 func TestConfirmInterruptRail_resolveInterrupt_无效类型(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 
 	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, 42, nil)
@@ -258,7 +258,7 @@ func TestConfirmInterruptRail_resolveInterrupt_无效类型(t *testing.T) {
 
 // TestConfirmInterruptRail_resolveInterrupt_AutoConfirmKeyNilToolCall 验证 nil ToolCall 的 auto_confirm_key
 func TestConfirmInterruptRail_resolveInterrupt_AutoConfirmKeyNilToolCall(t *testing.T) {
-	r := NewConfirmInterruptRail("write_file")
+	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	autoConfirmConfig := map[string]any{"": true}
 
 	// nil toolCall → autoConfirmKey="" → config[""]=true → Approve

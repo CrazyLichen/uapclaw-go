@@ -260,6 +260,18 @@ func (s *WorkflowCommitState) SetUpdates(updates map[string]any) {
 	}
 }
 
+// Clear 清空所有子状态和追踪数据。
+// 对齐 Python StateCollection.clear()。
+func (s *WorkflowCommitState) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ioState.SetState(make(map[string]any))
+	s.globalState.SetState(make(map[string]any))
+	s.compState.SetState(make(map[string]any))
+	s.workflowState.SetState(make(map[string]any))
+	s.traceState = make(map[string]any)
+}
+
 // WorkflowOnly 返回是否仅工作流模式。
 func (s *WorkflowCommitState) WorkflowOnly() bool {
 	s.mu.RLock()

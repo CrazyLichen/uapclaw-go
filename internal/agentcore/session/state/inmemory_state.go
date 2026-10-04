@@ -89,6 +89,14 @@ func (s *InMemoryStateLike) UpdateGlobal(data map[string]any) {}
 // UpdateTrace 单存储单元无追踪概念，空操作
 func (s *InMemoryStateLike) UpdateTrace(span any) {}
 
+// Clear 清空所有内部状态。
+// 对齐 Python InMemoryStateLike.clear()：将 state 重置为空 map。
+func (s *InMemoryStateLike) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state = make(map[string]any)
+}
+
 // Dump 导出完整状态，委托 GetState
 func (s *InMemoryStateLike) Dump() map[string]any { return s.GetState() }
 

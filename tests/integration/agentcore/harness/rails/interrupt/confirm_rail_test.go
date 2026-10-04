@@ -34,7 +34,7 @@ func TestConfirmInterruptRailSuite(t *testing.T) {
 // TestConfirmInterruptRail_初始化成功 测试 ConfirmInterruptRail 可成功创建和初始化。
 // 对齐 Python: test_hitl_tool_permission_interrupt_read_file_ask（初始化部分）
 func (s *ConfirmInterruptRailSuite) TestConfirmInterruptRail_初始化成功() {
-	rail := interrupt.NewConfirmInterruptRail("write_file", "delete_file")
+	rail := interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("write_file", "delete_file"))
 	s.Require().NotNil(rail)
 
 	// 创建带 Rail 的 DeepAgent
@@ -53,7 +53,7 @@ func (s *ConfirmInterruptRailSuite) TestConfirmInterruptRail_初始化成功() {
 // 注意：完整的中断/恢复流程依赖 HITL Session.Interact() 机制，
 // 此测试仅验证 Rail 注册和 Agent 创建成功。
 func (s *ConfirmInterruptRailSuite) TestConfirmInterruptRail_拦截未授权工具() {
-	rail := interrupt.NewConfirmInterruptRail("write_file")
+	rail := interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("write_file"))
 
 	s.MockLLM.SetResponses(
 		mockllm.CreateTextResponse("确认后继续"),
@@ -94,7 +94,7 @@ func newConfirmWriteFileTool() tool.Tool {
 // 此测试通过 AutoConfirm 验证：对注册的 write_file 设置 auto_confirm=true
 // 使其放行（证明 write_file 在拦截列表中且决策逻辑正确工作）。
 func (s *ConfirmInterruptRailSuite) TestConfirmInterrupt_多工具选择性拦截() {
-	rail := interrupt.NewConfirmInterruptRail("write_file", "delete_file")
+	rail := interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("write_file", "delete_file"))
 
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("write_file", `{"path":"/tmp/test.txt","content":"hello"}`),
@@ -129,7 +129,7 @@ func (s *ConfirmInterruptRailSuite) TestConfirmInterrupt_多工具选择性拦�
 // 对齐 Python: test_confirm_interrupt_rail（auto_confirm）——
 // Python 通过 session.state["__interrupt_auto_confirm__"] 设置后工具直接放行。
 func (s *ConfirmInterruptRailSuite) TestConfirmInterrupt_AutoConfirm跳过确认() {
-	rail := interrupt.NewConfirmInterruptRail("write_file")
+	rail := interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("write_file"))
 
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("write_file", `{"path":"/tmp/test.txt","content":"hello"}`),
@@ -164,7 +164,7 @@ func (s *ConfirmInterruptRailSuite) TestConfirmInterrupt_AutoConfirm跳过确认
 // 对齐 Python: test_confirm_interrupt_rail（非拦截工具）——
 // Python 中工具不在 tool_names 列表时 BeforeToolCall 直接 return。
 func (s *ConfirmInterruptRailSuite) TestConfirmInterrupt_未注册工具放行() {
-	rail := interrupt.NewConfirmInterruptRail("delete_file") // 只拦截 delete_file
+	rail := interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("delete_file")) // 只拦截 delete_file
 
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("read_file", `{"path":"/tmp/test.txt"}`),

@@ -2351,6 +2351,12 @@ func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 	return nil
 }
 
+func (f *fakeSessionFacade) ClearSession(_ context.Context) {
+	f.stateMu.Lock()
+	defer f.stateMu.Unlock()
+	f.stateMap = make(map[string]any)
+}
+
 // 确认 fakeSessionFacade 满足 SessionFacade 接口
 var _ sessioninterfaces.SessionFacade = (*fakeSessionFacade)(nil)
 

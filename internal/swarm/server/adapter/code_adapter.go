@@ -1233,7 +1233,7 @@ func (c *CodeAdapter) buildStructuredAskUserRail() sainterfaces.AgentRail {
 // buildConfirmInterruptRail 构建确认中断护栏。
 // ✅ 已回填：ConfirmInterruptRail（对齐 Python: _build_confirm_interrupt_rail() — ConfirmInterruptRail(tool_names=["switch_mode"])）
 func (c *CodeAdapter) buildConfirmInterruptRail() sainterfaces.AgentRail {
-	rail := interrupt.NewConfirmInterruptRail("switch_mode")
+	rail := interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("switch_mode"))
 	logger.Info(logComponent).Msg("ConfirmInterruptRail created")
 	return rail
 }

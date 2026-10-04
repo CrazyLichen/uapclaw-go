@@ -221,6 +221,36 @@ func (s *AgentTeamSession) GetEnvs() map[string]any {
 	return cfg.GetEnvs()
 }
 
+// ClearSession 清空所有会话状态并重置生命周期标志。
+//
+// 对齐 Python session.clear_session()：
+//   - 清除 globalState / agentState / traceState
+//   - 释放 checkpointer 资源
+//   - 重置 preRunDone / postRunDone 标志
+func (s *AgentTeamSession) ClearSession(ctx context.Context) {
+	// 1. 清除状态
+	if stateColl, ok := s.inner.State().(*state.AgentStateCollection); ok {
+		stateColl.Clear()
+	} else if ims, ok := s.inner.State().(*state.InMemoryStateLike); ok {
+		ims.Clear()
+	}
+
+	// 2. 释放 checkpointer 资源
+	if cp := s.inner.Checkpointer(); cp != nil {
+		_ = cp.Release(ctx, s.sessionID)
+	}
+
+	// 3. 重置生命周期标志
+	s.preRunDone = false
+	s.postRunDone = false
+
+	logger.Info(logComponent).
+		Str("action", "agent_team_session_clear").
+		Str("session_id", s.sessionID).
+		Str("team_id", s.teamID).
+		Msg("AgentTeamSession 已清空")
+}
+
 // Interact 团队会话不支持交互，始终返回错误。
 // Python: raise ValueError("team session does not support interact")
 func (s *AgentTeamSession) Interact(ctx context.Context, value any) error {

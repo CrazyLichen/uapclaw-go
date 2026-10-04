@@ -33,6 +33,16 @@ type ConfirmRequest struct {
 	PayloadSchema map[string]any `json:"payload_schema"`
 }
 
+// AutoConfirmKeyFn 自动确认键生成函数。
+// 接收 ToolCall，返回用于 session auto_confirm 配置查找的 key。
+// 默认使用 toolCall.Name。
+//
+// Python: ConfirmInterruptRail._get_auto_confirm_key(tool_call)
+type AutoConfirmKeyFn func(toolCall *llmschema.ToolCall) string
+
+// ConfirmInterruptRailOption ConfirmInterruptRail 配置选项函数类型。
+type ConfirmInterruptRailOption func(*ConfirmInterruptRail)
+
 // ConfirmInterruptRail 确认中断 Rail。
 // 仅当 ConfirmPayload.Approved 为 true 时放行工具执行。
 // 支持 auto_confirm 机制：当 session 状态中对应 key 为 true 时自动放行。
@@ -42,6 +52,8 @@ type ConfirmInterruptRail struct {
 	BaseInterruptRail
 	// request 确认请求配置
 	request ConfirmRequest
+	// autoConfirmKeyFn 自动确认键生成函数（nil 时使用默认 toolCall.Name）
+	autoConfirmKeyFn AutoConfirmKeyFn
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -57,12 +69,18 @@ var _ agentinterfaces.AgentRail = (*ConfirmInterruptRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewConfirmInterruptRail 创建 ConfirmInterruptRail 实例。
-// toolNames 为需确认拦截的工具名列表。
+//
+// 通过选项函数配置，例如：
+//
+//	interrupt.NewConfirmInterruptRail(
+//	    interrupt.WithConfirmToolNames("write_file", "edit_file"),
+//	    interrupt.WithAutoConfirmKeyFn(fn),
+//	)
 //
 // Python: ConfirmInterruptRail.__init__(tool_names)
-func NewConfirmInterruptRail(toolNames ...string) *ConfirmInterruptRail {
+func NewConfirmInterruptRail(opts ...ConfirmInterruptRailOption) *ConfirmInterruptRail {
 	r := &ConfirmInterruptRail{
-		BaseInterruptRail: *NewBaseInterruptRail(toolNames...),
+		BaseInterruptRail: *NewBaseInterruptRail(),
 		request: ConfirmRequest{
 			Message:       "请批准或拒绝？",
 			PayloadSchema: confirmPayloadSchema(),
@@ -70,7 +88,38 @@ func NewConfirmInterruptRail(toolNames ...string) *ConfirmInterruptRail {
 	}
 	// 覆盖 ResolveInterruptFn
 	r.ResolveInterruptFn = r.resolveConfirmInterrupt
+	// 应用选项
+	for _, opt := range opts {
+		opt(r)
+	}
 	return r
+}
+
+// WithConfirmToolNames 设置需确认拦截的工具名列表。
+func WithConfirmToolNames(names ...string) ConfirmInterruptRailOption {
+	return func(r *ConfirmInterruptRail) {
+		for _, name := range names {
+			r.AddTool(name)
+		}
+	}
+}
+
+// WithAutoConfirmKeyFn 设置自动确认键生成函数。
+// 默认使用 toolCall.Name 作为 key；通过此选项可实现细粒度 auto_confirm，
+// 例如基于工具参数生成 key（如 "read_a" 对应读取 a.txt）。
+//
+// Python: 子类覆写 ConfirmInterruptRail._get_auto_confirm_key(tool_call)
+func WithAutoConfirmKeyFn(fn AutoConfirmKeyFn) ConfirmInterruptRailOption {
+	return func(r *ConfirmInterruptRail) {
+		r.autoConfirmKeyFn = fn
+	}
+}
+
+// WithConfirmMessage 设置确认请求消息。
+func WithConfirmMessage(msg string) ConfirmInterruptRailOption {
+	return func(r *ConfirmInterruptRail) {
+		r.request.Message = msg
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -125,10 +174,13 @@ func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
 }
 
 // getAutoConfirmKey 返回 auto_confirm 配置键。
-// 默认使用 toolCall.Name 作为 key。
+// 优先使用 autoConfirmKeyFn（细粒度），否则默认使用 toolCall.Name。
 //
 // Python: ConfirmInterruptRail._get_auto_confirm_key(tool_call)
 func (r *ConfirmInterruptRail) getAutoConfirmKey(toolCall *llmschema.ToolCall) string {
+	if r.autoConfirmKeyFn != nil {
+		return r.autoConfirmKeyFn(toolCall)
+	}
 	if toolCall == nil {
 		return ""
 	}

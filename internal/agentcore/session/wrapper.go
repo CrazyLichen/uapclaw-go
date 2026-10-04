@@ -141,4 +141,10 @@ func (r *RouterSessionFacade) GetNodeConfig() any {
 	return nil
 }
 
+// ClearSession 清空会话状态 — 禁止操作。
+// 路由函数不允许修改状态，静默忽略。
+func (r *RouterSessionFacade) ClearSession(ctx context.Context) {
+	// 路由场景禁止清除会话，静默忽略
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

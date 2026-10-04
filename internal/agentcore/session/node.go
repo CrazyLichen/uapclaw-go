@@ -251,4 +251,23 @@ func (f *NodeSessionFacade) GetNodeConfig() any {
 	return f.inner.NodeConfig()
 }
 
+// ClearSession 清空节点会话状态。
+// 对齐 Python session.clear_session()。
+// 节点会话使用 WorkflowCommitState，清除组件状态。
+func (f *NodeSessionFacade) ClearSession(ctx context.Context) {
+	if st := f.inner.State(); st != nil {
+		if wst, ok := st.(*state.WorkflowCommitState); ok {
+			wst.Clear()
+		} else if coll, ok := st.(*state.AgentStateCollection); ok {
+			coll.Clear()
+		} else if ims, ok := st.(*state.InMemoryStateLike); ok {
+			ims.Clear()
+		}
+	}
+	logger.Info(logComponent).
+		Str("action", "node_session_clear").
+		Str("node_id", f.inner.NodeID()).
+		Msg("NodeSession 已清空")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

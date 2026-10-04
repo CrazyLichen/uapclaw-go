@@ -393,6 +393,41 @@ func (s *Session) Commit(ctx context.Context) error {
 	return nil
 }
 
+// ClearSession 清空所有会话状态并重置生命周期标志。
+//
+// 对齐 Python session.clear_session()：
+//   - 清除 globalState / agentState / traceState
+//   - 释放 checkpointer 资源
+//   - 重置 preRunDone / postRunDone 标志
+//
+// Python: openjiuwen/core/single_agent/agents/react_agent.py clear_session(session_id)
+// Python: await Runner.release(session_id=session_id)
+// Python: await self.context_engine.clear_context(session_id=session_id)
+func (s *Session) ClearSession(ctx context.Context) {
+	// 1. 清除状态
+	if stateColl, ok := s.inner.State().(*state.AgentStateCollection); ok {
+		stateColl.Clear()
+	} else if ims, ok := s.inner.State().(*state.InMemoryStateLike); ok {
+		ims.Clear()
+	}
+
+	// 2. 释放 checkpointer 资源
+	// Python: await Runner.release(session_id=session_id)
+	//         → await CheckpointerFactory.get_checkpointer().release(session_id)
+	if cp := s.inner.Checkpointer(); cp != nil {
+		_ = cp.Release(ctx, s.sessionID)
+	}
+
+	// 3. 重置生命周期标志（允许 session 被复用）
+	s.preRunDone = false
+	s.postRunDone = false
+
+	logger.Info(logComponent).
+		Str("action", "session_clear").
+		Str("session_id", s.sessionID).
+		Msg("Session 已清空")
+}
+
 // Interact 请求用户输入。
 // ✅ 5.7 已回填：SimpleAgentInteraction 实现后填充真实逻辑
 // Python: Session.interact(value)
