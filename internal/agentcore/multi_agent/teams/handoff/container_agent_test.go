@@ -98,12 +98,12 @@ func (m *mockContainerSessionFacade) UpdateState(data map[string]any) { m.state[
 func (m *mockContainerSessionFacade) GetState(key state.StateKey) (any, error) {
 	return m.state[key.String()], nil
 }
-func (m *mockContainerSessionFacade) DumpState() map[string]any                        { return m.state }
-func (m *mockContainerSessionFacade) WriteStream(_ context.Context, _ any) error       { return nil }
+func (m *mockContainerSessionFacade) DumpState() map[string]any { return m.state }
+func (m *mockContainerSessionFacade) WriteStream(_ context.Context, _ any) error { return nil }
 func (m *mockContainerSessionFacade) WriteCustomStream(_ context.Context, _ any) error { return nil }
-func (m *mockContainerSessionFacade) GetEnv(_ string, _ ...any) any                    { return nil }
-func (m *mockContainerSessionFacade) Interact(_ context.Context, _ any) error          { return nil }
-func (m *mockContainerSessionFacade) ClearSession(_ context.Context)                   {}
+func (m *mockContainerSessionFacade) GetEnv(_ string, _ ...any) any { return nil }
+func (m *mockContainerSessionFacade) Interact(_ context.Context, _ any) error { return nil }
+func (m *mockContainerSessionFacade) ClearSession(_ context.Context) {}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
