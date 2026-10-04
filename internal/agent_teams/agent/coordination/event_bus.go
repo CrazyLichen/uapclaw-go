@@ -38,6 +38,8 @@ type EventBus struct {
 	running bool
 	// pollsPaused 周期轮询是否暂停
 	pollsPaused bool
+	// pollsDone 暂停后 poll goroutine 是否已全部退出（ResumePolls 需等待此标记才能安全 Add）
+	pollsDone bool
 	// periodicPollEnabled 是否启用周期轮询（HUMAN_AGENT 角色为 false）
 	periodicPollEnabled bool
 	// eventCh 事件队列 channel
@@ -138,6 +140,7 @@ func (b *EventBus) Stop() {
 	b.running = false
 	// 重置暂停标志，确保后续 start() 不继承残留状态
 	b.pollsPaused = false
+	b.pollsDone = false
 
 	// 取消轮询定时器
 	if b.mailboxPollCancel != nil {
@@ -220,18 +223,22 @@ func (b *EventBus) PausePolls() {
 	pollWg := &b.pollWg
 	b.mu.Unlock()
 
-	// 等待 poll goroutine 退出，对齐 Python: await task
-	waitDone := make(chan struct{})
+	// 同步等待 poll goroutine 退出，避免与 ResumePolls 的 pollWg.Add 竞争
+	done := make(chan struct{}, 1)
 	go func() {
 		pollWg.Wait()
-		close(waitDone)
+		close(done)
 	}()
 	select {
-	case <-waitDone:
-		// poll goroutine 正常退出
+	case <-done:
 	case <-time.After(pollWaitTimeout):
 		logger.Warn(logComponent).Msg("EventBus: pause_polls 等待 poll goroutine 退出超时")
 	}
+
+	// 等待完成后设置标记，确保 ResumePolls 知道 poll goroutine 已完全退出
+	b.mu.Lock()
+	b.pollsDone = true
+	b.mu.Unlock()
 }
 
 // ResumePolls 恢复周期轮询。
@@ -242,9 +249,14 @@ func (b *EventBus) ResumePolls(ctx context.Context) {
 	if !b.pollsPaused || !b.running {
 		return
 	}
+	// 等待 PausePolls 的 pollWg.Wait() 完成，否则 startPollTasksLocked 的 Add 会与 Wait 冲突
+	if !b.pollsDone {
+		return
+	}
 	logger.Info(logComponent).Str("role", string(b.role)).Msg("EventBus resuming polls")
 	b.startPollTasksLocked(ctx)
 	b.pollsPaused = false
+	b.pollsDone = false
 }
 
 // Enqueue 将事件推入处理队列。

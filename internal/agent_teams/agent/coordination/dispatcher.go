@@ -3,6 +3,7 @@ package coordination
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/handlers"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
@@ -21,6 +22,8 @@ import (
 //
 // Python: EventDispatcher
 type EventDispatcher struct {
+	// dispatchMu 保护 Dispatch 串行化，避免 EventBus goroutine 与外部调用并发访问 CallbackFramework
+	dispatchMu sync.Mutex
 	// round dispatch() 只需要 round-readiness 查询
 	round types.AgentRoundController
 	// blueprint 静态身份
@@ -117,6 +120,9 @@ func NewEventDispatcher(
 // Dispatch 唤醒入口。应用粗筛规则，然后触发 framework。
 // Python: EventDispatcher.dispatch
 func (d *EventDispatcher) Dispatch(ctx context.Context, event types.CoordinationEvent) {
+	d.dispatchMu.Lock()
+	defer d.dispatchMu.Unlock()
+
 	// 粗筛 1：agent 未就绪，跳过
 	if !d.round.IsAgentReady() {
 		logger.Debug(logComponent).Msg("agent not ready, skipping coordination wake")
