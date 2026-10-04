@@ -14,8 +14,8 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
-	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

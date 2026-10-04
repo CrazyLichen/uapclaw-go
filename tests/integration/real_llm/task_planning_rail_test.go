@@ -12,10 +12,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -51,9 +51,9 @@ func (s *TaskPlanningRailSuite) TestTaskPlanningRail_真实LLM_规划() {
 		agentschema.WithAgentName("PlanningRealLLMAgent"),
 	)
 	agent, err := harness.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
-		Card:              card,
-		Model:             model,
-		MaxIterations:     5,
+		Card:               card,
+		Model:              model,
+		MaxIterations:      5,
 		EnableTaskPlanning: true,
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
