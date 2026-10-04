@@ -493,12 +493,15 @@ func (p *OpenJiuwenProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 		return nil
 	}
 
-	// 对齐 Python L216-224: try: await self._ltm.add_messages(...) except Exception as e: logger.warning(...)
+	// S-03: 对齐 Python L216-224: try: await self._ltm.add_messages(...) except Exception as e: logger.warning(...)
+	// Go 差异：Python 是 void 返回可吞错，Go 签名返回 error，应传播错误
+	var syncErr error
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
 				// 对齐 Python L224-225: except Exception as e: logger.warning(f"sync_turn add_messages failed: {e}")
 				logger.Warn(ojLogComponent).Any("panic", r).Msg("sync_turn add_messages 失败")
+				syncErr = fmt.Errorf("sync_turn add_messages panic: %v", r)
 			}
 		}()
 		// 对齐 Python L217-223: await self._ltm.add_messages(messages, self._agent_memory_config, user_id=user_id, scope_id=scope_id, session_id=session_id)
@@ -510,10 +513,11 @@ func (p *OpenJiuwenProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 		if err != nil {
 			// 对齐 Python L224-225: logger.warning(f"sync_turn add_messages failed: {e}")
 			logger.Warn(ojLogComponent).Err(err).Msg("sync_turn add_messages 失败")
+			syncErr = err
 		}
 	}()
 
-	return nil
+	return syncErr
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

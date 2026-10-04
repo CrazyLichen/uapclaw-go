@@ -172,21 +172,37 @@ func (m *MessageMigrator) executeOperation(ctx context.Context, op operation.Ope
 }
 
 // createBackup 创建消息备份。
-// S-03: 实现分页循环，对齐 Python 遍历所有消息而非只取前 backupPageSize 条。
+// S-03: 实现基于游标的分页循环，对齐 Python 遍历所有消息而非只取前 backupPageSize 条。
+// GetMessages 接口不支持 offset 参数，使用 StartTime 游标分页：每页取完后用最后一条消息的
+// timestamp 作为下一页的 StartTime，避免重复取同一页数据。
 //
 // Python: MessageMigrator._create_backup
 func (m *MessageMigrator) createBackup(ctx context.Context) ([]messageBackupRecord, error) {
 	var backupData []messageBackupRecord
 
-	// S-03: 分页循环直到所有消息已备份
-	offset := 0
+	// S-03: 基于游标的分页循环，直到所有消息已备份
+	var cursorTime time.Time
 	for {
-		messages, err := m.messageStore.GetMessages(ctx, nil, backupPageSize, "timestamp", "asc")
+		// 构建 filter：使用游标时间作为 StartTime，避免重复
+		var filter *db.MessageFilter
+		if !cursorTime.IsZero() {
+			filter = &db.MessageFilter{StartTime: &cursorTime}
+		}
+		messages, err := m.messageStore.GetMessages(ctx, filter, backupPageSize, "timestamp", "asc")
 		if err != nil {
 			return nil, err
 		}
 
-		for _, msg := range messages {
+		// 跳过游标重复：第一页之后，首条消息 timestamp 可能等于 cursorTime（已备份过）
+		skipIdx := 0
+		if !cursorTime.IsZero() && len(messages) > 0 {
+			for skipIdx < len(messages) && messages[skipIdx].Metadata != nil &&
+				!messages[skipIdx].Metadata.Timestamp.After(cursorTime) {
+				skipIdx++
+			}
+		}
+
+		for _, msg := range messages[skipIdx:] {
 			record := messageBackupRecord{
 				MessageContent: msg.Message.GetContent().String(),
 				MessageRole:    msg.Message.GetRole().String(),
@@ -204,7 +220,14 @@ func (m *MessageMigrator) createBackup(ctx context.Context) ([]messageBackupReco
 		if len(messages) < backupPageSize {
 			break
 		}
-		offset += backupPageSize
+
+		// 更新游标为当前页最后一条消息的 timestamp
+		if lastMsg := messages[len(messages)-1]; lastMsg.Metadata != nil {
+			cursorTime = lastMsg.Metadata.Timestamp
+		} else {
+			// 无 metadata 无法继续分页，终止循环
+			break
+		}
 	}
 
 	logger.Info(logComponent).Int("record_count", len(backupData)).Msg("已创建消息备份")
