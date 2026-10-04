@@ -783,7 +783,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **13.x Indexer 层** | — | | | |
-| 13.1 | ☐ | Indexer 抽象接口 | `BuildIndex/UpdateIndex/DeleteIndex/IndexExists/GetIndexInfo` | `openjiuwen/core/retrieval/indexing/indexer/base.py` |
+| 13.1 | ✅ | Indexer 抽象接口 + 前置类型 | `TextChunk + IndexConfig/KnowledgeBaseConfig/RetrievalConfig/VectorStoreConfig + Indexer 接口(BuildIndex/UpdateIndex/DeleteIndex/IndexExists/GetIndexInfo)` | `openjiuwen/core/retrieval/common/config.py + document.py + indexing/indexer/base.py` |
 | 13.2 | ☐ | ChromaIndexer | ChromaDB 文档索引（build_index+去重+嵌入+写入 / update先删后建 / delete按doc_id / index_exists / get_index_info） | `openjiuwen/core/retrieval/indexing/indexer/chroma_indexer.py` |
 | 13.3 | ☐ | MilvusIndexer | Milvus 文档索引（build_index+ensure_collection+去重+嵌入+写入 / update先删flush后建 / delete按doc_id过滤 / index_exists / get_index_info / _ensure_collection含BM25+dense索引） | `openjiuwen/core/retrieval/indexing/indexer/milvus_indexer.py` |
 | 13.4 | ☐ | ComputeChunkEmbeddings | 共享嵌入逻辑（文本embed_documents + 多模态embed_multimodal + image_path检测 + use_caption_for_images分支） | `openjiuwen/core/retrieval/indexing/indexer/embed_chunks.py` |
