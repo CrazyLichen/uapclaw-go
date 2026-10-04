@@ -79,9 +79,12 @@ func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
 
 	// 初始化 MessageManager
 	if m.messageStore != nil {
-		// S-01: 对齐 Python set_config，为 SqlMessageStore 回填 crypto_key
+		// M-05: 对齐 Python isinstance(self.message_store, SqlMessageStore) and self.message_store.crypto_key is None
+		// 仅当 SqlMessageStore 的 codec 处于 passthrough 模式时才回填 crypto_key
 		if sqlMsg, ok := m.messageStore.(*mem_model.SqlMessageStore); ok {
-			sqlMsg.SetStorageCodec(c)
+			if aesCodec, codecOk := sqlMsg.GetStorageCodec().(*codec.AesStorageCodec); codecOk && aesCodec.IsPassthrough() {
+				sqlMsg.SetStorageCodec(c)
+			}
 		}
 		m.messageManager = mem_model.NewMessageManager(m.messageStore)
 	}

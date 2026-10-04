@@ -173,6 +173,12 @@ func (m *TeamManager) CreateTeam(
 ) (*agent.TeamAgent, error) {
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("创建 TeamAgent（应用层）")
 
+	// 步骤 2: _ensure_postgresql_for_leader — ⤵️(#9.72) 待回填
+	// Python: await self._ensure_postgresql_for_leader(config_base)
+	// 仅分布式部署（PostgreSQL 模式）时需要启动 PG，
+	// 本地环境（SQLite）不需要启动 PG，因此本地环境跳过此步骤。
+	// TODO: 分布式部署时需实现 _ensure_postgresql_for_leader
+
 	// 步骤 3-4: 加载 spec + session 作用域 team_name — 由调用方提前完成
 	// 步骤 5: agent_customizer — 由调用方提前完成
 

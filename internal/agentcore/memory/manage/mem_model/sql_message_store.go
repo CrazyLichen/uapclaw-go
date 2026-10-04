@@ -76,6 +76,13 @@ func (s *SqlMessageStore) SetStorageCodec(c index.StorageCodec) {
 	s.codec = c
 }
 
+// GetStorageCodec 获取当前存储编解码器。
+// M-05: 对齐 Python self.message_store.crypto_key is None 检查，
+// SetConfig 通过此方法读取当前 codec 判断是否需要回填。
+func (s *SqlMessageStore) GetStorageCodec() index.StorageCodec {
+	return s.codec
+}
+
 // AddMessage 添加单条消息，返回 message_id。
 //
 // Python: SqlMessageStore.add_message(message_add)

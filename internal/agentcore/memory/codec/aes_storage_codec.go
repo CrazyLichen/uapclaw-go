@@ -117,6 +117,13 @@ func (c *AesStorageCodec) Decode(ciphertext string) string {
 	return decrypted
 }
 
+// IsPassthrough 返回是否处于 passthrough 模式（key 为空）。
+// M-05: 对齐 Python self.message_store.crypto_key is None 检查，
+// 在 SetConfig 中仅在 codec 为 passthrough 时才回填 crypto_key。
+func (c *AesStorageCodec) IsPassthrough() bool {
+	return len(c.key) == 0
+}
+
 // Encrypt 加密明文，委托 BaseCrypt 并传入持有密钥
 func (p *keyedProvider) Encrypt(plaintext string) (string, error) {
 	return p.crypt.Encrypt(p.key, plaintext)

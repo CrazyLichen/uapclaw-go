@@ -34,21 +34,39 @@ func validateKVStore(store kv.BaseKVStore) error {
 	return nil
 }
 
-// validateVectorStore 校验向量存储类型。
-func validateVectorStore(_ vector.BaseVectorStore) error {
-	// Go 的静态类型系统已保证类型正确，无需 isinstance 检查
+// validateVectorStore 校验向量存储。
+// S-02: 对齐 Python isinstance + None 检查，Go 额外增加 nil 校验（接口值为 nil 时类型仍匹配）。
+func validateVectorStore(store vector.BaseVectorStore) error {
+	if store == nil {
+		return exception.BuildError(exception.StatusMemoryRegisterStoreExecutionError,
+			exception.WithParam("store_type", "vector store"),
+			exception.WithMsg("vector store is required, cannot be None"),
+		)
+	}
 	return nil
 }
 
-// validateDbStore 校验数据库存储类型。
-func validateDbStore(_ db.BaseDbStore) error {
-	// Go 的静态类型系统已保证类型正确，无需 isinstance 检查
+// validateDbStore 校验数据库存储。
+// S-02: 对齐 Python isinstance + None 检查，Go 额外增加 nil 校验（接口值为 nil 时类型仍匹配）。
+func validateDbStore(store db.BaseDbStore) error {
+	if store == nil {
+		return exception.BuildError(exception.StatusMemoryRegisterStoreExecutionError,
+			exception.WithParam("store_type", "db store"),
+			exception.WithMsg("db store is required, cannot be None"),
+		)
+	}
 	return nil
 }
 
-// validateMessageStore 校验消息存储类型。
-func validateMessageStore(_ db.BaseMessageStore) error {
-	// Go 的静态类型系统已保证类型正确，无需 isinstance 检查
+// validateMessageStore 校验消息存储。
+// S-02: 对齐 Python isinstance + None 检查，Go 额外增加 nil 校验（接口值为 nil 时类型仍匹配）。
+func validateMessageStore(store db.BaseMessageStore) error {
+	if store == nil {
+		return exception.BuildError(exception.StatusMemoryRegisterStoreExecutionError,
+			exception.WithParam("store_type", "message store"),
+			exception.WithMsg("message store is required, cannot be None"),
+		)
+	}
 	return nil
 }
 

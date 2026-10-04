@@ -40,6 +40,35 @@ func NewSQLMigrator(db *gorm.DB, metaManager *MemoryMetaManager) *SQLMigrator {
 	return &SQLMigrator{db: db, metaManager: metaManager}
 }
 
+// BatchMigrate 批量执行表 schema 迁移。
+// 对齐 Python: SQLMigrator.batch_migrate(migrations) -> Dict[str, bool]
+//
+// 参数 migrations 中每项包含 table_name 和 operations，
+// 返回每个表的迁移结果（true=成功, false=失败）。
+//
+// Python: SQLMigrator.batch_migrate(migrations: List[Dict[str, Any]]) -> Dict[str, bool]
+func (m *SQLMigrator) BatchMigrate(ctx context.Context, migrations []BatchMigrationItem) map[string]bool {
+	results := make(map[string]bool, len(migrations))
+	for _, mg := range migrations {
+		err := m.TryMigrate(ctx, mg.TableName, mg.Operations)
+		results[mg.TableName] = err == nil
+		if err != nil {
+			logger.Error(logComponent).Err(err).Str("table_name", mg.TableName).
+				Msg("BatchMigrate: 表迁移失败")
+		}
+	}
+	return results
+}
+
+// BatchMigrationItem 批量迁移的单项。
+// 对齐 Python: batch_migrate 参数列表中的单个 dict，含 table_name 和 operations。
+type BatchMigrationItem struct {
+	// TableName 表名
+	TableName string
+	// Operations 迁移操作列表
+	Operations []operation.Operation
+}
+
 // TryMigrate 尝试执行 SQL 表迁移。
 // 获取当前版本→过滤待执行操作→事务内执行 DDL→更新版本。
 //

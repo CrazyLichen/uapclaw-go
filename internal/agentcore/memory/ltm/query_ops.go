@@ -162,7 +162,8 @@ func (m *LongTermMemory) GetUserMemByPage(
 	}
 
 	if len(searchData) == 0 {
-		return nil, nil
+		// M-04: 对齐 Python 返回 [] 而非 None，Go 返回 empty slice 而非 nil
+		return []*MemInfo{}, nil
 	}
 
 	memResults := make([]*MemInfo, 0, len(searchData))

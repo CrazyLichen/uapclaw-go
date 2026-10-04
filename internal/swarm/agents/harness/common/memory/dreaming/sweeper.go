@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -569,10 +570,17 @@ func (s *Sweeper) LoadExistingSummary() string {
 	if err != nil {
 		return ui.EmptySummary
 	}
+	// T-02: 对齐 Python sorted(output.glob(...))，按文件名排序保证确定性
+	var consolidatedFiles []os.DirEntry
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "consolidated_") || !strings.HasSuffix(entry.Name(), ".md") {
-			continue
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "consolidated_") && strings.HasSuffix(entry.Name(), ".md") {
+			consolidatedFiles = append(consolidatedFiles, entry)
 		}
+	}
+	sort.Slice(consolidatedFiles, func(i, j int) bool {
+		return consolidatedFiles[i].Name() < consolidatedFiles[j].Name()
+	})
+	for _, entry := range consolidatedFiles {
 		data, err := os.ReadFile(filepath.Join(output, entry.Name()))
 		if err != nil {
 			logger.Warn(logComponent).Str("file", entry.Name()).Err(err).Msg("[dreaming] failed to read consolidated file")
@@ -1039,18 +1047,12 @@ func getUIText(language string) UIText {
 }
 
 // sortedKeys 返回 map 的已排序键（对齐 Python 的 sorted(new_ids)）。
+// T-03: 用 sort.Strings 替换冒泡排序，复杂度 O(n log n)。
 func sortedKeys(m map[string]bool) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
-	// 简单排序
-	for i := 0; i < len(keys); i++ {
-		for j := i + 1; j < len(keys); j++ {
-			if keys[i] > keys[j] {
-				keys[i], keys[j] = keys[j], keys[i]
-			}
-		}
-	}
+	sort.Strings(keys)
 	return keys
 }

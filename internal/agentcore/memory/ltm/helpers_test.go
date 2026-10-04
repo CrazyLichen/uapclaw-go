@@ -23,22 +23,33 @@ func TestValidateKVStore(t *testing.T) {
 }
 
 // TestValidateVectorStore 测试向量存储校验。
+// S-02: 对齐 Python isinstance + None 检查，nil 返回错误。
 func TestValidateVectorStore(t *testing.T) {
-	// Go 静态类型，无 nil 检查场景
 	err := validateVectorStore(nil)
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	baseErr, ok := err.(*exception.BaseError)
+	assert.True(t, ok)
+	assert.Equal(t, exception.StatusMemoryRegisterStoreExecutionError, baseErr.Status())
 }
 
 // TestValidateDbStore 测试数据库存储校验。
+// S-02: 对齐 Python isinstance + None 检查，nil 返回错误。
 func TestValidateDbStore(t *testing.T) {
 	err := validateDbStore(nil)
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	baseErr, ok := err.(*exception.BaseError)
+	assert.True(t, ok)
+	assert.Equal(t, exception.StatusMemoryRegisterStoreExecutionError, baseErr.Status())
 }
 
 // TestValidateMessageStore 测试消息存储校验。
+// S-02: 对齐 Python isinstance + None 检查，nil 返回错误。
 func TestValidateMessageStore(t *testing.T) {
 	err := validateMessageStore(nil)
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	baseErr, ok := err.(*exception.BaseError)
+	assert.True(t, ok)
+	assert.Equal(t, exception.StatusMemoryRegisterStoreExecutionError, baseErr.Status())
 }
 
 // TestValidateKVStore_错误类型 测试 nil KV store 返回正确的错误类型。
