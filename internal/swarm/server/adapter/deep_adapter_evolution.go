@@ -571,4 +571,3 @@ func parseApprovalAnswers(answers []ApprovalAnswer) bool {
 	}
 	return false
 }
-

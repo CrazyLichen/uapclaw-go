@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	gatewaypush "github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
+	gatewaypush "github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

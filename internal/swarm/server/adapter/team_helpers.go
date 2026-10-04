@@ -7,11 +7,11 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -17,10 +17,10 @@ import (
 // fakeDispatcherInfra M-01: 测试用 DispatcherInfra 实现
 type fakeDispatcherInfra struct{}
 
-func (f *fakeDispatcherInfra) TaskManager() types.DispTaskManager    { return nil }
+func (f *fakeDispatcherInfra) TaskManager() types.DispTaskManager       { return nil }
 func (f *fakeDispatcherInfra) MessageManager() types.DispMessageManager { return nil }
-func (f *fakeDispatcherInfra) TeamBackend() types.DispTeamBackend    { return nil }
-func (f *fakeDispatcherInfra) Messager() types.DispMessager          { return nil }
+func (f *fakeDispatcherInfra) TeamBackend() types.DispTeamBackend       { return nil }
+func (f *fakeDispatcherInfra) Messager() types.DispMessager             { return nil }
 
 // fakeKernelHost 实现 KernelHost 用于测试
 type fakeKernelHost struct {
