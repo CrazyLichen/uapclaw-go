@@ -891,11 +891,8 @@ func flushSourceState(deepAgent *harness.DeepAgent, sessionID string) {
 		return
 	}
 	// Python: session_obj = getattr(ctx, "session", None)
-	sessRef := modelCtx.GetSessionRef()
+	var sessRef sessioninterfaces.SessionFacade = modelCtx.GetSessionRef()
 	if sessRef != nil {
 		deepAgent.SaveState(sessRef, deepAgent.LoadState(sessRef))
 	}
 }
-
-// 确保 sessioninterfaces 被引用（用于 GetSessionRef 返回类型）
-var _ sessioninterfaces.SessionFacade = nil

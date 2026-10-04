@@ -402,7 +402,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 22: c.deep.registeredMCPServerIDs = make(map[string]bool)
 	c.deep.registeredMCPServerIDs = make(map[string]bool)
-	c.deep.registeredMCPServers = make(map[string]any)
+	c.deep.registeredMCPServers = make(map[string]*mcptypes.McpServerConfig)
 
 	// 步骤 23: _register_mcp_servers_from_config(configBase, tag="code")
 	// Python: await self._register_mcp_servers_from_config(config_base, tag="code")

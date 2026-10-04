@@ -14,6 +14,7 @@ import (
 	modelclients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
@@ -219,9 +220,6 @@ type DeepAdapter struct {
 	// cronRuntime Cron 运行时桥接
 	// ⤵️ 11.10
 	cronRuntime any
-	// evolutionWatchers evolution 观察任务集合
-	// EvolutionHelpers 已实现，watcher 字段类型待具体化（当前 any）
-	evolutionWatchers any
 	// dreamingMode dreaming 模式
 	dreamingMode string
 	// dreamingStarted dreaming 是否已启动
@@ -229,8 +227,7 @@ type DeepAdapter struct {
 	// registeredMCPServerIDs 已注册 MCP 服务 ID 集合
 	registeredMCPServerIDs map[string]bool
 	// registeredMCPServers 已注册 MCP 服务配置
-	// 适配器层 MCP 管理待实现
-	registeredMCPServers map[string]any
+	registeredMCPServers map[string]*mcptypes.McpServerConfig
 	// autoHarnessService 自动 Harness 服务
 	// ⤵️ 10.6.11
 	autoHarnessService any
@@ -317,7 +314,7 @@ func NewDeepAdapter() *DeepAdapter {
 		modelCache:             make(map[string]*llm.Model),
 		modelNameToKeys:        make(map[string][]string),
 		registeredMCPServerIDs: make(map[string]bool),
-		registeredMCPServers:   make(map[string]any),
+		registeredMCPServers:   make(map[string]*mcptypes.McpServerConfig),
 		interactionConverter:   interrupt.ConvertInteractionsToAskUserQuestion,
 	}
 	// 默认指向 DeepAdapter 自身的 updateRuntimeConfig 方法
@@ -576,7 +573,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 
 	// 步骤 23: d.registeredMCPServerIDs.clear()
 	d.registeredMCPServerIDs = make(map[string]bool)
-	d.registeredMCPServers = make(map[string]any)
+	d.registeredMCPServers = make(map[string]*mcptypes.McpServerConfig)
 
 	// 步骤 24: _register_mcp_servers_from_config(configBase, tag)
 	// Python: await self._register_mcp_servers_from_config(config_base, tag=f"agent.{mode}")
@@ -745,7 +742,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	// 步骤 12-13: 重新注册 MCP
 	// Python: await self._sync_mcp_servers_for_runtime(config_base, tag="agent.reload")
 	d.registeredMCPServerIDs = make(map[string]bool)
-	d.registeredMCPServers = make(map[string]any)
+	d.registeredMCPServers = make(map[string]*mcptypes.McpServerConfig)
 	if syncErr := d.syncMcpServersForRuntime(ctx, configBase, "agent.reload"); syncErr != nil {
 		logger.Warn(logComponent).Err(syncErr).Msg("MCP service hot-sync failed, continuing")
 	}

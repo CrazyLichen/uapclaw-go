@@ -5,6 +5,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -44,6 +45,13 @@ type Indexer interface {
 	// GetIndexInfo 获取索引元信息。
 	GetIndexInfo(ctx context.Context, indexName string) (map[string]any, error)
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

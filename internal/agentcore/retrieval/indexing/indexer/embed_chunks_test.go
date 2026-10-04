@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
+	storeEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	retrievalEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 )
@@ -45,11 +45,11 @@ type fakeMultimodalEmbedding struct {
 
 // fakeBaseEmbedding 实现 BaseEmbedding
 
-func (f *fakeBaseEmbedding) EmbedQuery(_ context.Context, _ string, _ ...embedding.EmbedOption) ([]float64, error) {
+func (f *fakeBaseEmbedding) EmbedQuery(_ context.Context, _ string, _ ...storeEmbedding.EmbedOption) ([]float64, error) {
 	return []float64{0.1, 0.2, 0.3}, nil
 }
 
-func (f *fakeBaseEmbedding) EmbedDocuments(_ context.Context, texts []string, _ ...embedding.EmbedOption) ([][]float64, error) {
+func (f *fakeBaseEmbedding) EmbedDocuments(_ context.Context, texts []string, _ ...storeEmbedding.EmbedOption) ([][]float64, error) {
 	f.embedDocsCalled++
 	f.embedDocsInput = texts
 	if f.embedDocsErr != nil {

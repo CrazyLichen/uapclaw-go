@@ -1010,15 +1010,3 @@ func stringsLower(s string) string {
 	}
 	return string(result)
 }
-
-// strVal 将任意值转为字符串，非字符串类型返回空串。
-func strVal(v any) string {
-	if v == nil {
-		return ""
-	}
-	s, ok := v.(string)
-	if !ok {
-		return ""
-	}
-	return s
-}

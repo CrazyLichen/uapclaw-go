@@ -4,17 +4,10 @@ import (
 	"context"
 	"os"
 
-	foundationEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
+	storeEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
+	retrievalEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-)
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// embedLogComponent 日志组件
-	embedLogComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -31,9 +24,9 @@ const (
 func ComputeChunkEmbeddings(
 	ctx context.Context,
 	chunks []common.TextChunk,
-	embedModel foundationEmbedding.BaseEmbedding,
+	embedModel storeEmbedding.BaseEmbedding,
 	useCaptionForImages bool,
-	opts ...foundationEmbedding.EmbedOption,
+	opts ...storeEmbedding.EmbedOption,
 ) error {
 	if len(chunks) == 0 {
 		return nil
@@ -41,11 +34,11 @@ func ComputeChunkEmbeddings(
 
 	// 对齐 Python: embed_multimodal = getattr(embed_model, "embed_multimodal", None)
 	// 对齐 Python: if not callable(embed_multimodal) or use_caption_for_images
-	multimodal, multimodalOK := embedModel.(embedding.MultimodalEmbedder)
+	multimodal, multimodalOK := embedModel.(retrievalEmbedding.MultimodalEmbedder)
 
 	// 纯文本路径：模型不支持多模态 或 用户要求使用标题
 	if !multimodalOK || useCaptionForImages {
-		logger.Info(embedLogComponent).
+		logger.Info(logComponent).
 			Bool("multimodal_supported", multimodalOK).
 			Bool("use_caption_for_images", useCaptionForImages).
 			Int("total_chunk_count", len(chunks)).
@@ -61,7 +54,7 @@ func ComputeChunkEmbeddings(
 		// 对齐 Python: embeddings = await embed_model.embed_documents(texts, **kwargs)
 		embeddings, err := embedModel.EmbedDocuments(ctx, texts, opts...)
 		if err != nil {
-			logger.Error(embedLogComponent).
+			logger.Error(logComponent).
 				Str("event_type", "INDEXING_EMBED_ERROR").
 				Str("method", "EmbedDocuments").
 				Int("chunk_count", len(chunks)).
@@ -100,7 +93,7 @@ func ComputeChunkEmbeddings(
 		}
 	}
 
-	logger.Info(embedLogComponent).
+	logger.Info(logComponent).
 		Bool("multimodal_supported", true).
 		Int("image_chunk_count", len(imageIndices)).
 		Int("text_chunk_count", len(textOnly)).
@@ -131,7 +124,7 @@ func ComputeChunkEmbeddings(
 		// 对齐 Python: chunk.embedding = await embed_model.embed_multimodal(multimodal_doc)
 		vec, err := multimodal.EmbedMultimodal(ctx, doc)
 		if err != nil {
-			logger.Error(embedLogComponent).
+			logger.Error(logComponent).
 				Str("event_type", "INDEXING_EMBED_ERROR").
 				Str("method", "EmbedMultimodal").
 				Int("chunk_index", idx).
@@ -158,7 +151,7 @@ func ComputeChunkEmbeddings(
 
 		embeddings, err := embedModel.EmbedDocuments(ctx, texts, opts...)
 		if err != nil {
-			logger.Error(embedLogComponent).
+			logger.Error(logComponent).
 				Str("event_type", "INDEXING_EMBED_ERROR").
 				Str("method", "EmbedDocuments").
 				Int("chunk_count", len(textOnly)).

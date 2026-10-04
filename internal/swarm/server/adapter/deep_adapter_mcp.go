@@ -42,7 +42,7 @@ func (d *DeepAdapter) registerMcpServersFromConfig(ctx context.Context, configBa
 			continue
 		}
 		d.registeredMCPServerIDs[config.ServerID] = true
-		d.registeredMCPServers[config.ServerID] = entry
+		d.registeredMCPServers[config.ServerID] = config
 	}
 
 	logger.Info(logComponent).
@@ -89,7 +89,7 @@ func (d *DeepAdapter) syncMcpServersForRuntime(ctx context.Context, configBase m
 				continue
 			}
 			d.registeredMCPServerIDs[config.ServerID] = true
-			d.registeredMCPServers[config.ServerID] = entry
+			d.registeredMCPServers[config.ServerID] = config
 		}
 	}
 

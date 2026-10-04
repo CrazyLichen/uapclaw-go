@@ -326,6 +326,19 @@ func TestStrVal(t *testing.T) {
 	}
 }
 
+// strVal 从 map 中按 key 提取字符串值，非字符串类型或缺失键返回空串
+func strVal(m map[string]any, key string) string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	s, ok := v.(string)
+	if !ok {
+		return ""
+	}
+	return s
+}
+
 func TestToSlice(t *testing.T) {
 	// []any
 	s1, ok1 := toSlice([]any{1, 2, 3})
@@ -371,16 +384,3 @@ func TestHeaderFromToolName(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// strVal 从 map 中按键提取字符串值，非字符串类型返回空串。
-func strVal(m map[string]any, key string) string {
-	v, ok := m[key]
-	if !ok || v == nil {
-		return ""
-	}
-	s, ok := v.(string)
-	if !ok {
-		return ""
-	}
-	return s
-}
