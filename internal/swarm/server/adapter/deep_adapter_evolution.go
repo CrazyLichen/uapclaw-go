@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
@@ -189,14 +190,15 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 			}
 
 			// Python: await push_evolution_progress(push_context, rid, events, ...)
-			// 通过 globalSendPushFunc 推送进度事件，避免循环依赖
-			if globalSendPushFunc != nil {
+			// 通过 d.getSendPushFunc() 推送进度事件，避免循环依赖
+			sendPush := d.getSendPushFunc()
+			if sendPush != nil {
 				for _, evt := range dicts {
-					if isEvolutionApprovalEventLocal(evt) || isEvolutionOutcomeEventLocal(evt) {
+					if evolutionlogic.IsEvolutionApprovalEvent(evt) || evolutionlogic.IsEvolutionOutcomeEvent(evt) {
 						continue
 					}
 					msg := sessionmd.BuildServerPushMessage(sessionID, requestID, evt, channelID)
-					_ = globalSendPushFunc(ctx, msg)
+					_ = sendPush(ctx, msg)
 				}
 			}
 
@@ -206,7 +208,7 @@ func (d *DeepAdapter) watchEvolutionAndPush(ctx context.Context, sessionID strin
 				if evt == nil {
 					continue
 				}
-				if isEvolutionApprovalEventLocal(evt) || isEvolutionOutcomeEventLocal(evt) {
+				if evolutionlogic.IsEvolutionApprovalEvent(evt) || evolutionlogic.IsEvolutionOutcomeEvent(evt) {
 					d.pushEventToFrontend(ctx, event, sessionID, channelID, requestID)
 				}
 				// 检查是否包含 outcome 事件（完成/失败/超时）
@@ -501,28 +503,29 @@ func outputSchemaToDict(schema *stream.OutputSchema) map[string]any {
 
 // pushEventToFrontend 将演进事件推送到前端。
 // Python: _push_event_to_frontend(event)
-// ✅ 已回填：通过 globalSendPushFunc 推送，避免 adapter→server 循环依赖
+// ✅ 已回填：通过 d.getSendPushFunc() 推送，避免 adapter→server 循环依赖
 func (d *DeepAdapter) pushEventToFrontend(ctx context.Context, event *stream.OutputSchema, sessionID string, channelID string, requestID string) {
 	evt := outputSchemaToDict(event)
 	if evt == nil {
 		return
 	}
-	if globalSendPushFunc == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("pushEventToFrontend: globalSendPushFunc not injected")
+	sendPush := d.getSendPushFunc()
+	if sendPush == nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("pushEventToFrontend: sendPushFunc not injected")
 		return
 	}
 
-	evtKind := evolutionEventKindLocal(evt)
+	evtKind := evolutionlogic.EvolutionEventKind(evt)
 	switch evtKind {
 	case "approval":
 		// Python: await push_evolution_event(push_context, rid, evt, build_server_push_message)
 		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, evt, channelID)
-		if err := globalSendPushFunc(ctx, msg); err != nil {
+		if err := sendPush(ctx, msg); err != nil {
 			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("failed to push approval event")
 		}
 	case "outcome":
 		// Python: await push_evolution_status(push_context, update, build_server_push_message)
-		outcome := evolutionOutcomeFromEventLocal(evt)
+		outcome := evolutionlogic.EvolutionOutcomeFromEvent(evt)
 		payload := map[string]any{
 			"event_type": "chat.evolution_status",
 			"status":     outcome["status"],
@@ -531,7 +534,7 @@ func (d *DeepAdapter) pushEventToFrontend(ctx context.Context, event *stream.Out
 			"request_id": requestID,
 		}
 		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, payload, channelID)
-		if err := globalSendPushFunc(ctx, msg); err != nil {
+		if err := sendPush(ctx, msg); err != nil {
 			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("failed to push outcome status")
 		}
 	default:
@@ -569,87 +572,3 @@ func parseApprovalAnswers(answers []ApprovalAnswer) bool {
 	return false
 }
 
-// isEvolutionApprovalEventLocal 判断是否为演进审批事件（内联，避免循环导入 helpers）。
-// 对齐 Python: is_evolution_approval_event()
-func isEvolutionApprovalEventLocal(evt map[string]any) bool {
-	return eventTypeLocal(evt) == "chat.ask_user_question"
-}
-
-// isEvolutionOutcomeEventLocal 判断是否为演进结果事件（内联）。
-// 对齐 Python: is_evolution_outcome_event()
-func isEvolutionOutcomeEventLocal(evt map[string]any) bool {
-	return evolutionEventKindLocal(evt) == "outcome"
-}
-
-// eventTypeLocal 从事件中提取 event_type（内联）。
-func eventTypeLocal(evt map[string]any) string {
-	payload := eventPayloadDictLocal(evt)
-	if payload == nil {
-		return ""
-	}
-	if t, ok := payload["event_type"].(string); ok {
-		return t
-	}
-	return ""
-}
-
-// eventPayloadDictLocal 从事件提取 payload dict（内联）。
-func eventPayloadDictLocal(evt map[string]any) map[string]any {
-	if evt == nil {
-		return nil
-	}
-	if payload, ok := evt["payload"].(map[string]any); ok {
-		return payload
-	}
-	// evt 本身可能就是 payload（从 OutputSchema.Payload 提取）
-	return evt
-}
-
-// evolutionEventKindLocal 判断事件类别（内联）。
-// 对齐 Python: evolution_event_kind()
-func evolutionEventKindLocal(evt map[string]any) string {
-	payload := eventPayloadDictLocal(evt)
-	if meta, ok := payload["_evolution_meta"].(map[string]any); ok {
-		if kind, ok := meta["event_kind"].(string); ok && strings.TrimSpace(kind) != "" {
-			return kind
-		}
-	}
-	if isEvolutionApprovalEventLocal(evt) {
-		return "approval"
-	}
-	return "progress"
-}
-
-// evolutionOutcomeFromEventLocal 提取演进结果（内联）。
-// 对齐 Python: evolution_outcome_from_event()
-func evolutionOutcomeFromEventLocal(evt map[string]any) map[string]string {
-	payload := eventPayloadDictLocal(evt)
-	if payload == nil {
-		return map[string]string{"status": "completed", "message": ""}
-	}
-
-	meta, _ := evt["_evolution_meta"].(map[string]any)
-	var metaStatus any
-	if meta != nil {
-		metaStatus = meta["status"]
-	}
-
-	status := "completed"
-	if s, ok := evt["status"].(string); ok && strings.TrimSpace(s) != "" {
-		status = strings.TrimSpace(strings.ToLower(s))
-	} else if ms, ok := metaStatus.(string); ok && strings.TrimSpace(ms) != "" {
-		status = strings.TrimSpace(strings.ToLower(ms))
-	}
-	if status == "" {
-		status = "completed"
-	}
-
-	message := ""
-	if m, ok := evt["message"].(string); ok {
-		message = m
-	} else if c, ok := evt["content"].(string); ok {
-		message = c
-	}
-
-	return map[string]string{"status": status, "message": message}
-}

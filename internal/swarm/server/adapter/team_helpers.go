@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -337,37 +338,14 @@ func unregisterWaiter(channelID, sessionID, requestID string) {
 // groupTeamEvolutionApprovals 审批分组（team 版包装）。
 // 对齐 Python: _group_team_evolution_approvals(session_id, events) (line 314-328)
 //
-// 内联实现，避免 adapter → adapter/evolution 循环依赖。
-// 逻辑等价于 adapterEvolution.GroupEvolutionApprovals + warnMissingRequestID 回调。
+// 委托 evolutionlogic.GroupEvolutionApprovals + warnMissingRequestID 回调。
 func groupTeamEvolutionApprovals(sessionID string, events []map[string]any) (map[string][]map[string]any, []string) {
-	grouped := make(map[string][]map[string]any)
-
-	for _, evt := range events {
-		// 对齐 Python: is_evolution_approval_event(evt)
-		evtType, _ := evt["event_type"].(string)
-		if evtType != "chat.ask_user_question" {
-			continue
-		}
-		// 对齐 Python: extract_evolution_request_id(evt)
-		requestID := ""
-		if rid, _ := evt["request_id"].(string); strings.TrimSpace(rid) != "" {
-			requestID = strings.TrimSpace(rid)
-		} else if meta, ok := evt["_evolution_meta"].(map[string]any); ok {
-			if rid, _ := meta["request_id"].(string); strings.TrimSpace(rid) != "" {
-				requestID = strings.TrimSpace(rid)
-			}
-		}
-		if requestID == "" {
-			// Python: warn_missing_request_id(session_id)
-			logger.Warn(logComponent).
-				Str("session_id", sessionID).
-				Msg("team evolution approval missing request_id")
-			continue
-		}
-		grouped[requestID] = append(grouped[requestID], evt)
+	warnFn := func(sid string) {
+		logger.Warn(logComponent).
+			Str("session_id", sid).
+			Msg("team evolution approval missing request_id")
 	}
-
-	return grouped, nil
+	return evolutionlogic.GroupEvolutionApprovals(sessionID, events, evolutionlogic.WarnMissingRequestIDFunc(warnFn))
 }
 
 // SyncTeamIdentityMetadata 持久化 team 身份元数据（仅新创建的 team 会话）。

@@ -1,0 +1,593 @@
+package logic
+
+import (
+	"math"
+	"strconv"
+	"strings"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// EvolutionProgressStatus evolution 进度状态。
+// Python: EvolutionProgressStatus
+type EvolutionProgressStatus struct {
+	// Stage 阶段
+	Stage string
+	// Message 消息
+	Message string
+	// RequestID 请求标识（nil 表示无）
+	RequestID *string
+	// Terminal 是否终结
+	Terminal bool
+}
+
+// TerminalProgressItem 终结进度条目。
+// Python: terminal_progress_from_events 返回的 tuple
+type TerminalProgressItem struct {
+	// RequestID 请求标识
+	RequestID *string
+	// Terminal 终结信息
+	Terminal map[string]string
+}
+
+// EvolutionStatusUpdate evolution 状态更新。
+// Python: EvolutionStatusUpdate
+type EvolutionStatusUpdate struct {
+	// RequestID 请求标识
+	RequestID string
+	// Status 状态
+	Status string
+	// Stage 阶段
+	Stage string
+	// Message 消息
+	Message string
+}
+
+// WarnMissingRequestIDFunc 缺少 request_id 时的警告回调。
+// Python: group_evolution_approvals 的 warn_missing_request_id 参数
+type WarnMissingRequestIDFunc func(sessionID string)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// TeamEvolutionIdleSleepSec watcher 空闲轮询间隔
+	TeamEvolutionIdleSleepSec = 1.0
+	// TeamEvolutionEventTimeoutSec 事件超时
+	TeamEvolutionEventTimeoutSec = 900.0
+	// TeamEvolutionEventTimeoutGraceSec 超时宽限
+	TeamEvolutionEventTimeoutGraceSec = 5.0
+
+	// TeamEvolutionStartStage 起始阶段
+	TeamEvolutionStartStage = "collecting"
+	// TeamEvolutionStartMessage 起始消息
+	TeamEvolutionStartMessage = "Running team skill evolution analysis..."
+	// TeamEvolutionNoopStage 无演进（通用）
+	TeamEvolutionNoopStage = "no_evolution_generated"
+	// TeamEvolutionNoopNoSkillStage 无演进（无技能）
+	TeamEvolutionNoopNoSkillStage = "no_evolution_no_skill"
+	// TeamEvolutionNoopNoSignalStage 无演进（无信号）
+	TeamEvolutionNoopNoSignalStage = "no_evolution_no_signal"
+	// TeamEvolutionNoopNoRecordsStage 无演进（无记录）
+	TeamEvolutionNoopNoRecordsStage = "no_evolution_no_records"
+	// TeamEvolutionHiddenStage 隐藏阶段
+	TeamEvolutionHiddenStage = "hidden"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// TeamEvolutionNoopMarkers 通用 noop 标记
+	TeamEvolutionNoopMarkers = []string{
+		"no existing skill found",
+		"no evolution signals detected",
+		"no evolution records generated",
+	}
+	// TeamEvolutionNoSkillMarkers 无技能标记
+	TeamEvolutionNoSkillMarkers = []string{
+		"no skill usage",
+		"no existing skill",
+		"no regular skill could be attributed",
+		"no team/swarm skill",
+	}
+	// TeamEvolutionNoSignalMarkers 无信号标记
+	TeamEvolutionNoSignalMarkers = []string{
+		"no actionable evolution signals detected",
+		"no evolution signals detected",
+	}
+
+	// TeamEvolutionNoopStages noop 阶段集合
+	TeamEvolutionNoopStages = map[string]struct{}{
+		TeamEvolutionNoopStage:          {},
+		TeamEvolutionNoopNoSkillStage:   {},
+		TeamEvolutionNoopNoSignalStage:  {},
+		TeamEvolutionNoopNoRecordsStage: {},
+	}
+	// TeamEvolutionHiddenTerminalStages 隐藏终结阶段集合
+	TeamEvolutionHiddenTerminalStages = map[string]struct{}{
+		TeamEvolutionHiddenStage: {},
+		"failed":                 {},
+		"timed_out":              {},
+	}
+	// TeamEvolutionVisibleProgressStages 可见进度阶段集合
+	TeamEvolutionVisibleProgressStages = map[string]struct{}{
+		"generating":                    {},
+		"approval_required":             {},
+		"completed":                     {},
+		TeamEvolutionNoopStage:          {},
+		TeamEvolutionNoopNoSkillStage:   {},
+		TeamEvolutionNoopNoSignalStage:  {},
+		TeamEvolutionNoopNoRecordsStage: {},
+	}
+
+	// sdkProgressStageMap SDK→显示阶段映射
+	// Python: _SDK_PROGRESS_STAGE_MAP
+	SdkProgressStageMap = map[string]string{
+		"started":            "detecting",
+		"detecting_signals":  "detecting",
+		"staging":            "generating",
+		"generating_updates": "generating",
+		"approval_required":  "approval_required",
+		"auto_approved":      "completed",
+		"cancelled":          TeamEvolutionHiddenStage,
+		"completed":          "completed",
+		"failed":             "failed",
+		"timed_out":          "timed_out",
+	}
+
+	// sdkProgressTerminalStages SDK 终结阶段集合
+	// Python: _SDK_PROGRESS_TERMINAL_STAGES
+	SdkProgressTerminalStages = map[string]struct{}{
+		"auto_approved": {},
+		"cancelled":     {},
+		"completed":     {},
+		"failed":        {},
+		"timed_out":     {},
+	}
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// EventPayloadDict 提取事件 payload 为 map。
+// Python: event_payload_dict() — 当前事件来源始终返回 dict。
+func EventPayloadDict(evt map[string]any) map[string]any {
+	if evt == nil {
+		return map[string]any{}
+	}
+	return cloneMap(evt)
+}
+
+// EventType 提取事件类型字符串。
+// Python: event_type() — 仅从 map[string]any 的 event_type 字段提取，
+// 不再使用 reflect 访问 struct.Type 字段（过度对齐 Python hasattr 防御性代码）。
+func EventType(evt map[string]any) string {
+	payload := EventPayloadDict(evt)
+	if t, ok := payload["event_type"].(string); ok {
+		return t
+	}
+	return ""
+}
+
+// ResolveEvolutionEventTimeoutSec 解析演进事件超时时间。
+// Python: resolve_evolution_event_timeout_sec() — 仅从 map[string]any 读取，
+// 不再使用 reflect 访问 struct 字段（过度对齐 Python hasattr 防御性代码）。
+func ResolveEvolutionEventTimeoutSec(rail map[string]any, opts ...float64) float64 {
+	fallback := TeamEvolutionEventTimeoutSec
+	grace := TeamEvolutionEventTimeoutGraceSec
+
+	if len(opts) > 0 {
+		fallback = opts[0] // Python: fallback_sec is not None → 使用传入值（含 0.0）
+	}
+	if len(opts) > 1 && opts[1] >= 0 {
+		grace = opts[1]
+	}
+
+	if rail == nil {
+		return fallback
+	}
+
+	sdkTimeout := rail["evolution_total_timeout_secs"]
+	if sdkTimeout == nil {
+		return fallback
+	}
+
+	parsedTimeout, ok := ToFloat64(sdkTimeout)
+	if !ok || math.IsInf(parsedTimeout, 0) || math.IsNaN(parsedTimeout) || parsedTimeout <= 0 {
+		return fallback
+	}
+	return parsedTimeout + math.Max(grace, 0.0)
+}
+
+// IsEvolutionApprovalEvent 判断是否为演进审批事件（检查 event_type）。
+// Python: is_evolution_approval_event()
+func IsEvolutionApprovalEvent(evt map[string]any) bool {
+	return EventType(evt) == "chat.ask_user_question"
+}
+
+// EvolutionEventKind 判断事件类别（approval/outcome/progress/stream）。
+// Python: evolution_event_kind()
+func EvolutionEventKind(evt map[string]any) string {
+	payload := EventPayloadDict(evt)
+	if meta, ok := payload["_evolution_meta"].(map[string]any); ok {
+		if kind, ok := meta["event_kind"].(string); ok && strings.TrimSpace(kind) != "" {
+			return kind
+		}
+	}
+	if IsEvolutionApprovalEvent(evt) {
+		return "approval"
+	}
+	return "stream"
+}
+
+// IsEvolutionOutcomeEvent 判断是否为演进结果事件。
+// Python: is_evolution_outcome_event()
+func IsEvolutionOutcomeEvent(evt map[string]any) bool {
+	return EvolutionEventKind(evt) == "outcome"
+}
+
+// EvolutionOutcomeFromEvent 提取演进结果。
+// Python: evolution_outcome_from_event()
+func EvolutionOutcomeFromEvent(evt map[string]any) map[string]string {
+	payload := EventPayloadDict(evt)
+	if payload == nil {
+		return map[string]string{"status": "completed", "message": ""}
+	}
+
+	meta, _ := evt["_evolution_meta"].(map[string]any)
+	var metaStatus any
+	if meta != nil {
+		metaStatus = meta["status"]
+	}
+
+	status := "completed"
+	if s, ok := evt["status"].(string); ok && strings.TrimSpace(s) != "" {
+		status = strings.TrimSpace(strings.ToLower(s))
+	} else if ms, ok := metaStatus.(string); ok && strings.TrimSpace(ms) != "" {
+		status = strings.TrimSpace(strings.ToLower(ms))
+	}
+	if status == "" {
+		status = "completed"
+	}
+
+	message := ""
+	if m, ok := evt["message"].(string); ok {
+		message = m
+	} else if c, ok := evt["content"].(string); ok {
+		message = c
+	}
+
+	return map[string]string{"status": status, "message": message}
+}
+
+// ExtractEvolutionRequestID 从事件中提取 request_id。
+// Python: extract_evolution_request_id()
+func ExtractEvolutionRequestID(evt map[string]any) *string {
+	payload := EventPayloadDict(evt)
+	requestID := payload["request_id"]
+	if requestID == nil {
+		if meta, ok := evt["_evolution_meta"].(map[string]any); ok {
+			requestID = meta["request_id"]
+		}
+	}
+	if s, ok := requestID.(string); ok {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			return &s
+		}
+	}
+	return nil
+}
+
+// EvolutionProgressStatusFromEvent 提取进度状态。
+// Python: evolution_progress_status_from_event()
+func EvolutionProgressStatusFromEvent(evt map[string]any) *EvolutionProgressStatus {
+	payload := EventPayloadDict(evt)
+	meta, ok := payload["_evolution_meta"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	eventKind := strings.TrimSpace(strings.ToLower(StrFromAny(meta["event_kind"])))
+	if eventKind != "progress" {
+		return nil
+	}
+
+	rawStage := strings.TrimSpace(strings.ToLower(StrFromAny(evt["stage"], meta["stage"])))
+	if rawStage == "" {
+		return nil
+	}
+
+	message := strings.TrimSpace(StrFromAny(evt["message"], evt["content"]))
+	noopStage := noopStageFromMessage(strings.ToLower(message))
+
+	stage := rawStage
+	if rawStage != "cancelled" && noopStage != nil {
+		stage = *noopStage
+	} else if mapped, ok := SdkProgressStageMap[rawStage]; ok {
+		stage = mapped
+	}
+
+	_, terminal := SdkProgressTerminalStages[rawStage]
+	requestID := ExtractEvolutionRequestID(evt)
+
+	return &EvolutionProgressStatus{
+		Stage:     stage,
+		Message:   message,
+		RequestID: requestID,
+		Terminal:  terminal,
+	}
+}
+
+// VisibleEvolutionProgressFromEvents 过滤可见进度。
+// Python: visible_evolution_progress_from_events()
+func VisibleEvolutionProgressFromEvents(events []map[string]any) []EvolutionProgressStatus {
+	var result []EvolutionProgressStatus
+	for _, evt := range events {
+		progress := EvolutionProgressStatusFromEvent(evt)
+		if progress != nil {
+			if _, ok := TeamEvolutionVisibleProgressStages[progress.Stage]; ok {
+				result = append(result, *progress)
+			}
+		}
+	}
+	return result
+}
+
+// ProgressForRequest 按 requestID 过滤进度。
+// Python: progress_for_request()
+func ProgressForRequest(statuses []EvolutionProgressStatus, requestID string) []EvolutionProgressStatus {
+	var result []EvolutionProgressStatus
+	for _, p := range statuses {
+		if p.RequestID == nil || *p.RequestID == requestID {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// TerminalStage 提取终结阶段。
+// Python: terminal_stage()
+func TerminalStage(terminal map[string]string) string {
+	s := terminal["stage"]
+	if s == "" {
+		s = terminal["status"]
+	}
+	return strings.TrimSpace(strings.ToLower(s))
+}
+
+// TerminalProgressFromEvents 提取终结进度。
+// Python: terminal_progress_from_events()
+func TerminalProgressFromEvents(events []map[string]any) []TerminalProgressItem {
+	var result []TerminalProgressItem
+	for _, evt := range events {
+		terminal := TeamEvolutionTerminalProgress(evt)
+		if terminal != nil {
+			requestID := ExtractEvolutionRequestID(evt)
+			result = append(result, TerminalProgressItem{
+				RequestID: requestID,
+				Terminal:  terminal,
+			})
+		}
+	}
+	return result
+}
+
+// TeamEvolutionTerminalProgress 判断终结进度。
+// Python: team_evolution_terminal_progress()
+func TeamEvolutionTerminalProgress(evt map[string]any) map[string]string {
+	progress := EvolutionProgressStatusFromEvent(evt)
+
+	// 隐藏终结阶段
+	if progress != nil && progress.Terminal && progress.Stage == TeamEvolutionHiddenStage {
+		return map[string]string{
+			"status":  progress.Stage,
+			"stage":   progress.Stage,
+			"message": progress.Message,
+		}
+	}
+
+	message := StrFromAny(evt["message"], evt["content"])
+	messageLower := strings.ToLower(message)
+	noopStage := noopStageFromMessage(messageLower)
+	if noopStage != nil {
+		return map[string]string{
+			"status":  "completed",
+			"stage":   *noopStage,
+			"message": OrStr(message, "No evolution generated"),
+		}
+	}
+
+	if progress != nil && progress.Terminal {
+		if progress.Stage == TeamEvolutionNoopStage {
+			return map[string]string{
+				"status":  "completed",
+				"stage":   TeamEvolutionNoopStage,
+				"message": OrStr(progress.Message, "No evolution generated"),
+			}
+		}
+		return map[string]string{
+			"status":  progress.Stage,
+			"stage":   progress.Stage,
+			"message": progress.Message,
+		}
+	}
+
+	// 从 meta 中提取状态
+	meta, _ := evt["_evolution_meta"].(map[string]any)
+	var metaStatus, metaStage any
+	if meta != nil {
+		metaStatus = meta["status"]
+		metaStage = meta["stage"]
+	}
+
+	status := strings.TrimSpace(strings.ToLower(StrFromAny(evt["status"], metaStatus)))
+	stage := strings.TrimSpace(strings.ToLower(StrFromAny(evt["stage"], metaStage)))
+
+	if status == "end" || stage == "completed" || stage == "failed" || stage == "timed_out" {
+		return map[string]string{
+			"status":  OrStr(status, "end"),
+			"stage":   OrStr(stage, "completed"),
+			"message": message,
+		}
+	}
+
+	return nil
+}
+
+// BuildEvolutionStatusUpdate 构建状态更新。
+// Python: build_evolution_status_update()
+func BuildEvolutionStatusUpdate(requestID, status, stage string, message ...string) EvolutionStatusUpdate {
+	msg := ""
+	if len(message) > 0 {
+		msg = message[0]
+	}
+	return EvolutionStatusUpdate{
+		RequestID: requestID,
+		Status:    status,
+		Stage:     stage,
+		Message:   msg,
+	}
+}
+
+// TeamEvolutionEndUpdate 构建终结更新。
+// Python: team_evolution_end_update()
+func TeamEvolutionEndUpdate(requestID string, terminal map[string]string) EvolutionStatusUpdate {
+	if terminal == nil {
+		return BuildEvolutionStatusUpdate(
+			requestID,
+			"end",
+			"completed",
+			"Team skill evolution analysis completed",
+		)
+	}
+
+	stage := strings.TrimSpace(strings.ToLower(OrStr(terminal["stage"], terminal["status"], "completed")))
+	message := terminal["message"]
+
+	if stage == "failed" || stage == "timed_out" {
+		return BuildEvolutionStatusUpdate(requestID, "end", TeamEvolutionHiddenStage, message)
+	}
+	if _, ok := TeamEvolutionNoopStages[stage]; ok {
+		return BuildEvolutionStatusUpdate(requestID, "end", stage, message)
+	}
+	return BuildEvolutionStatusUpdate(
+		requestID,
+		"end",
+		OrStr(stage, "completed"),
+		OrStr(message, "Team skill evolution analysis completed"),
+	)
+}
+
+// GroupEvolutionApprovals 审批分组。
+// Python: group_evolution_approvals() — 第二项始终返回 nil（Python 始终返回空列表 []）
+func GroupEvolutionApprovals(sessionID string, events []map[string]any, warnMissing ...WarnMissingRequestIDFunc) (map[string][]map[string]any, []string) {
+	grouped := make(map[string][]map[string]any)
+
+	for _, evt := range events {
+		if !IsEvolutionApprovalEvent(evt) {
+			continue
+		}
+		requestID := ExtractEvolutionRequestID(evt)
+		if requestID == nil {
+			// Python: 仅调用 warn 回调，不收集到返回值中
+			if len(warnMissing) > 0 && warnMissing[0] != nil {
+				warnMissing[0](sessionID)
+			}
+			continue
+		}
+		grouped[*requestID] = append(grouped[*requestID], evt)
+	}
+
+	return grouped, nil
+}
+
+// MakeTeamEvolutionCycleRequestID 生成 request_id。
+// Python: make_team_evolution_cycle_request_id()
+func MakeTeamEvolutionCycleRequestID(sessionID string, cycleIndex int) string {
+	return "team_evolve_" + sessionID + "_" + strconv.Itoa(cycleIndex)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// noopStageFromMessage 从消息内容推断 noop 阶段。
+// Python: _noop_stage_from_message()
+func noopStageFromMessage(messageLower string) *string {
+	if containsAnyMarker(messageLower, TeamEvolutionNoSkillMarkers) {
+		result := TeamEvolutionNoopNoSkillStage
+		return &result
+	}
+	if containsAnyMarker(messageLower, TeamEvolutionNoSignalMarkers) {
+		result := TeamEvolutionNoopNoSignalStage
+		return &result
+	}
+	if strings.Contains(messageLower, "no evolution records generated") {
+		result := TeamEvolutionNoopNoRecordsStage
+		return &result
+	}
+	if containsAnyMarker(messageLower, TeamEvolutionNoopMarkers) {
+		result := TeamEvolutionNoopStage
+		return &result
+	}
+	return nil
+}
+
+// containsAnyMarker 检查消息是否包含任一标记。
+func containsAnyMarker(messageLower string, markers []string) bool {
+	for _, marker := range markers {
+		if strings.Contains(messageLower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// StrFromAny 从多个 any 值中获取第一个非空字符串。
+func StrFromAny(values ...any) string {
+	for _, v := range values {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// OrStr 返回第一个非空字符串。
+func OrStr(values ...string) string {
+	for _, s := range values {
+		if strings.TrimSpace(s) != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// ToFloat64 尝试将 any 转换为 float64。
+func ToFloat64(v any) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	case int32:
+		return float64(val), true
+	default:
+		return 0, false
+	}
+}
+
+// cloneMap 浅拷贝 map（替代被移除的 maps.Clone，避免引入 maps 包依赖）。
+func cloneMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
+}

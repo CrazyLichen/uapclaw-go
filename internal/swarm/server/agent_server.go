@@ -112,8 +112,8 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	// Python: from jiuwenswarm.common.config import get_config
 	serverhooks.RegisterConfig(s.config)
 
-	// 注入 SendPush 到 adapter 包，避免 adapter→server→adapter 循环依赖
-	adapter.SetGlobalSendPushFunc(s.SendPush)
+	// 注入默认 SendPush 到 adapter 包，避免 adapter→server→adapter 循环依赖
+	adapter.SetDefaultSendPushFunc(s.SendPush)
 
 	ctx, s.cancel = context.WithCancel(ctx)
 	go s.run(ctx)

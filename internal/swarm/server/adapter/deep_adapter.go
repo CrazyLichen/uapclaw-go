@@ -246,6 +246,10 @@ type DeepAdapter struct {
 	uapswarmCodeProjectDir string
 	// uapswarmProjectMemoryDir 项目记忆目录，对齐 Python: _jiuwenswarm_project_memory_dir
 	uapswarmProjectMemoryDir string
+	// sendPushFunc 推送函数，由 AgentServer 创建 DeepAdapter 时注入。
+	// 替代原 globalSendPushFunc 全局变量，实现实例级隔离。
+	// 避免 adapter→server→adapter 循环依赖：adapter 包不导入 server 包。
+	sendPushFunc func(ctx context.Context, msg map[string]any) error
 }
 
 // ApprovalAnswer 审批回答条目，从前端 WebSocket 消息解析。
@@ -271,23 +275,39 @@ var persistentCheckpointerReady bool
 // Python: interface_deep.py (_PERSISTENT_CHECKPOINTER_LOCK)
 var persistentCheckpointerLock sync.Mutex
 
-// globalSendPushFunc 全局推送函数，由 AgentServer 初始化时通过 SetGlobalSendPushFunc 设置。
-// 避免 adapter→server→adapter 循环依赖：adapter 包不导入 server 包，
-// server 包在初始化时调用 SetGlobalSendPushFunc 注入 SendPush 能力。
-var globalSendPushFunc func(ctx context.Context, msg map[string]any) error
+// defaultSendPushFunc 默认推送函数，由 AgentServer 启动时通过 SetDefaultSendPushFunc 设置。
+// DeepAdapter 实例未显式注入 sendPushFunc 时使用此默认值。
+// 避免 adapter→server→adapter 循环依赖：adapter 包不导入 server 包。
+var defaultSendPushFunc func(ctx context.Context, msg map[string]any) error
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// SetGlobalSendPushFunc 设置全局推送函数。
-// 由 server 包在初始化时调用，注入 AgentServer.SendPush，避免 adapter→server 循环依赖。
-func SetGlobalSendPushFunc(fn func(ctx context.Context, msg map[string]any) error) {
-	globalSendPushFunc = fn
+// SetDefaultSendPushFunc 设置默认推送函数。
+// 由 AgentServer 启动时调用，为未显式注入 sendPushFunc 的 DeepAdapter 实例提供默认值。
+// 避免 adapter→server→adapter 循环依赖。
+func SetDefaultSendPushFunc(fn func(ctx context.Context, msg map[string]any) error) {
+	defaultSendPushFunc = fn
 }
 
 // SetSkillManager 设置技能管理器。
 // Python: def set_skill_manager(self, skill_manager: SkillManager) -> None: self._skill_manager = skill_manager
 func (d *DeepAdapter) SetSkillManager(skillMgr *skill.SkillManager) {
 	d.skillManager = skillMgr
+}
+
+// SetSendPushFunc 设置推送函数，由 AgentServer 创建适配器后注入。
+// 替代原 SetGlobalSendPushFunc，实现实例级隔离。
+// 避免 adapter→server→adapter 循环依赖：adapter 包不导入 server 包。
+func (d *DeepAdapter) SetSendPushFunc(fn func(ctx context.Context, msg map[string]any) error) {
+	d.sendPushFunc = fn
+}
+
+// getSendPushFunc 获取推送函数。优先使用实例级 sendPushFunc，回退到 defaultSendPushFunc。
+func (d *DeepAdapter) getSendPushFunc() func(ctx context.Context, msg map[string]any) error {
+	if d.sendPushFunc != nil {
+		return d.sendPushFunc
+	}
+	return defaultSendPushFunc
 }
 
 // SetConfigLister 设置自定义 agent 配置列表接口。
