@@ -103,7 +103,7 @@ func (m *mockContainerSessionFacade) WriteStream(_ context.Context, _ any) error
 func (m *mockContainerSessionFacade) WriteCustomStream(_ context.Context, _ any) error { return nil }
 func (m *mockContainerSessionFacade) GetEnv(_ string, _ ...any) any                    { return nil }
 func (m *mockContainerSessionFacade) Interact(_ context.Context, _ any) error          { return nil }
-func (m *mockContainerSessionFacade) ClearSession(_ context.Context)                    {}
+func (m *mockContainerSessionFacade) ClearSession(_ context.Context)                   {}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
