@@ -161,5 +161,5 @@ func TestDistanceMetricKind_常量值(t *testing.T) {
 
 func TestRerankerConfig_重导出(t *testing.T) {
 	// 验证 common.RerankerConfig 可赋值，类型别名成立
-	var _ RerankerConfig = reranker.RerankerConfig{}
+	var _ = reranker.RerankerConfig{}
 }

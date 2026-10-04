@@ -360,8 +360,6 @@ func (s *Sweeper) RunSweep(ctx context.Context) {
 		Int("extracted", len(allKnowledge)).
 		Int("promoted", promoted).
 		Msg("[Sweeper] sweep completed")
-
-	return
 }
 
 // ScanNewSessions 增量扫描 session 目录，返回新/更新的 session 列表（含压缩文本）。

@@ -14,10 +14,8 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentmode "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/agent_mode"
 	agentsession "github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	singleagentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -204,7 +202,9 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 					}
 					// Python: json.dumps(data, ensure_ascii=False, indent=2)
 					if updated, err := json.MarshalIndent(records, "", "  "); err == nil {
-						os.WriteFile(targetHistory, updated, 0o644)
+						if writeErr := os.WriteFile(targetHistory, updated, 0o644); writeErr != nil {
+							logger.Warn(logComponent).Str("file", targetHistory).Err(writeErr).Msg("fork_session: 写入历史文件失败")
+						}
 					}
 				}
 			}
@@ -465,7 +465,10 @@ func RestoreSessionFiles(sessionID string, turnIndex int) *RestoreSessionFilesRe
 			// 勘误 E5: FileRestoreInfo.RestoreContent 是 *string，不是 string
 			if info.RestoreContent != nil {
 				dir := filepath.Dir(filePath)
-				os.MkdirAll(dir, 0o755)
+				if mkdirErr := os.MkdirAll(dir, 0o755); mkdirErr != nil {
+					result.Errors = append(result.Errors, FileRestoreError{File: dir, Error: mkdirErr.Error()})
+					logger.Warn(logComponent).Str("dir", dir).Err(mkdirErr).Msg("restore_session_files: 创建目录失败")
+				}
 				if err := os.WriteFile(filePath, []byte(*info.RestoreContent), 0o644); err != nil {
 					result.Errors = append(result.Errors, FileRestoreError{File: filePath, Error: err.Error()})
 					logger.Warn(logComponent).Str("file", filePath).Err(err).Msg("restore_session_files: 写回文件失败")
@@ -604,7 +607,9 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 			Msg("rewind_session_context: 清空旧上下文")
 	}
 	// 勘误 E1: WithSessionID 而非 WithClearSessionID
-	contextEngine.ClearContext(ctx, ceinterface.WithSessionID(sessionID))
+	if err := contextEngine.ClearContext(ctx, ceinterface.WithSessionID(sessionID)); err != nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("rewind_session_context: 清空上下文失败")
+	}
 
 	// --- 4. 构建新上下文 ---
 	// Python: session = create_agent_session(session_id=session_id, card=deep_agent.card)
@@ -617,7 +622,7 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 
 	// Python: Wipe stale context / deep_agent_state in the checkpointer
 	sess.UpdateState(map[string]any{"context": nil})
-	sess.UpdateState(map[string]any{hschema.SessionStateKey: nil})
+	sess.UpdateState(map[string]any{agentschema.SessionStateKey: nil})
 
 	// Python: await context_engine.create_context(session=session, history_messages=context_messages)
 	_, err = contextEngine.CreateContext(ctx, "default_context_id", sess,
@@ -679,7 +684,9 @@ func CopySessionState(ctx context.Context, sourceSessionID, targetSessionID stri
 	sourceStateRaw, stateErr := sourceSess.GetState(state.StringKey(agentschema.SessionStateKey))
 	if stateErr != nil {
 		logger.Warn(logComponent).Err(stateErr).Str("source", sourceSessionID).Msg("copy_session_state: 读取源 state 失败")
-		sourceSess.PostRun(ctx)
+		if postErr := sourceSess.PostRun(ctx); postErr != nil {
+			logger.Warn(logComponent).Err(postErr).Str("source", sourceSessionID).Msg("copy_session_state: 源 session PostRun 失败")
+		}
 		return false
 	}
 
@@ -851,13 +858,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return err
@@ -875,7 +882,10 @@ func copyFile(src, dst string) error {
 func deepCopyMap(m map[string]any) map[string]any {
 	data, _ := json.Marshal(m)
 	var result map[string]any
-	json.Unmarshal(data, &result)
+	if err := json.Unmarshal(data, &result); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("deepCopyMap: JSON 反序列化失败")
+		return make(map[string]any)
+	}
 	return result
 }
 
@@ -891,7 +901,7 @@ func flushSourceState(deepAgent *harness.DeepAgent, sessionID string) {
 		return
 	}
 	// Python: session_obj = getattr(ctx, "session", None)
-	var sessRef sessioninterfaces.SessionFacade = modelCtx.GetSessionRef()
+	var sessRef = modelCtx.GetSessionRef()
 	if sessRef != nil {
 		deepAgent.SaveState(sessRef, deepAgent.LoadState(sessRef))
 	}

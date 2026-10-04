@@ -297,7 +297,7 @@ func (l *TeamStreamLogger) safeWrite(body string) {
 	}
 	// M-02: 使用本地时区格式化，对齐 Python datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000 MST")
-	_, _ = l.file.WriteString(fmt.Sprintf("%s %s\n", timestamp, body))
+	_, _ = fmt.Fprintf(l.file, "%s %s\n", timestamp, body)
 	// M-03: 对齐 Python self._file.flush()，写入后立即刷新
 	_ = l.file.Sync()
 }
