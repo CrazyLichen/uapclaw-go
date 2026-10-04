@@ -203,13 +203,13 @@ func (s *AgentServer) handleSessionRewind(ctx context.Context, request *schema.A
 	}
 
 	payload := map[string]any{
-		"session_id":       rewindResult.SessionID,
-		"turn_index":       rewindResult.TurnIndex,
-		"content":          rewindResult.Content,
-		"content_preview":  rewindResult.ContentPreview,
+		"session_id":        rewindResult.SessionID,
+		"turn_index":        rewindResult.TurnIndex,
+		"content":           rewindResult.Content,
+		"content_preview":   rewindResult.ContentPreview,
 		"remaining_records": rewindResult.RemainingRecords,
-		"removed_records":  rewindResult.RemovedRecords,
-		"rewind_context":   rewindContext,
+		"removed_records":   rewindResult.RemovedRecords,
+		"rewind_context":    rewindContext,
 	}
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(payload),
@@ -254,16 +254,16 @@ func (s *AgentServer) handleSessionRewindAndRestore(ctx context.Context, request
 	}
 
 	payload := map[string]any{
-		"session_id":       rewindResult.SessionID,
-		"turn_index":       rewindResult.TurnIndex,
-		"content":          rewindResult.Content,
-		"content_preview":  rewindResult.ContentPreview,
+		"session_id":        rewindResult.SessionID,
+		"turn_index":        rewindResult.TurnIndex,
+		"content":           rewindResult.Content,
+		"content_preview":   rewindResult.ContentPreview,
 		"remaining_records": rewindResult.RemainingRecords,
-		"removed_records":  rewindResult.RemovedRecords,
-		"rewind_context":   rewindContext,
-		"restored_files":   restoreResult.RestoredFiles,
-		"deleted_files":    restoreResult.DeletedFiles,
-		"restore_errors":   restoreResult.Errors,
+		"removed_records":   rewindResult.RemovedRecords,
+		"rewind_context":    rewindContext,
+		"restored_files":    restoreResult.RestoredFiles,
+		"deleted_files":     restoreResult.DeletedFiles,
+		"restore_errors":    restoreResult.Errors,
 	}
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(payload),
@@ -306,13 +306,13 @@ func (s *AgentServer) handleSessionRewindContext(ctx context.Context, request *s
 	rewindContext := sessionops.RewindSessionContext(ctx, deepAgent, params.SessionID, params.TurnIndex)
 
 	payload := map[string]any{
-		"session_id":       rewindResult.SessionID,
-		"turn_index":       rewindResult.TurnIndex,
-		"content":          rewindResult.Content,
-		"content_preview":  rewindResult.ContentPreview,
+		"session_id":        rewindResult.SessionID,
+		"turn_index":        rewindResult.TurnIndex,
+		"content":           rewindResult.Content,
+		"content_preview":   rewindResult.ContentPreview,
 		"remaining_records": rewindResult.RemainingRecords,
-		"removed_records":  rewindResult.RemovedRecords,
-		"rewind_context":   rewindContext,
+		"removed_records":   rewindResult.RemovedRecords,
+		"rewind_context":    rewindContext,
 	}
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(payload),

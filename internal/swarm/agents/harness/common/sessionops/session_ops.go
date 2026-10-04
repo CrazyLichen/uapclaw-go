@@ -14,11 +14,11 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	agentmode "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/agent_mode"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentmode "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/agent_mode"
 	agentsession "github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	singleagentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -376,8 +376,8 @@ func ListSessionTurns(sessionID string) *ListSessionTurnsResult {
 		ti := td.TurnIndex
 		if ti > 0 {
 			diffStatsMap[ti] = map[string]int{
-				"filesChanged":  td.Stats.FilesChanged,
-				"linesAdded":    td.Stats.LinesAdded,
+				"filesChanged": td.Stats.FilesChanged,
+				"linesAdded":   td.Stats.LinesAdded,
 				"linesRemoved": td.Stats.LinesRemoved,
 			}
 			// 勘误 E6: TurnDiff.Files 是 map[string]*FileDiff，不是切片

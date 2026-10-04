@@ -75,7 +75,7 @@ func (f *fakeAdapter) HandleHeartbeat(_ context.Context, _ *schema.AgentRequest)
 }
 func (f *fakeAdapter) Cleanup() error                                  { return nil }
 func (f *fakeAdapter) SwitchMode(_ context.Context, _, _ string) error { return nil }
-func (f *fakeAdapter) Instance() *harness.DeepAgent                     { return nil }
+func (f *fakeAdapter) Instance() *harness.DeepAgent                    { return nil }
 
 // ContextCompressor 接口实现
 func (f *fakeAdapter) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ bool) (map[string]any, error) {
