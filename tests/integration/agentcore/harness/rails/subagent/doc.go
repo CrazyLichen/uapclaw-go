@@ -8,8 +8,9 @@
 // 文件目录：
 //
 //	subagent/
-//	├── doc.go                  # 包文档
-//	└── subagent_rail_test.go   # 3 个 Rail 测试（SubagentRail + VerificationRail + VerificationContractRail）
+//	├── doc.go                     # 包文档
+//	├── subagent_rail_test.go      # SubagentRail + VerificationRail + VerificationContractRail 基础测试
+//	└── verification_rail_test.go  # VerificationRail + VerificationContractRail 完整集成测试
 //
 // 对应 Python 代码：openjiuwen/harness/rails/subagent/
 package subagent
