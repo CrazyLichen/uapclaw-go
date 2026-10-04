@@ -26,6 +26,7 @@ func (m *mockSessionFacade) WriteCustomStream(_ context.Context, _ any) error {
 }
 func (m *mockSessionFacade) GetEnv(_ string, _ ...any) any           { return nil }
 func (m *mockSessionFacade) Interact(_ context.Context, _ any) error { return nil }
+func (m *mockSessionFacade) ClearSession(_ context.Context)          {}
 
 // 确保 mockSessionFacade 实现了 SessionFacade 接口
 var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)
