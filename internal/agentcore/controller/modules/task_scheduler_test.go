@@ -901,6 +901,41 @@ func TestTaskScheduler_CancelTask_终态幂等(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestTaskScheduler_RemoveSession 测试 RemoveSession 移除会话
+func TestTaskScheduler_RemoveSession(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, nil)
+
+	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
+	sched.AddSession("sess-1", sess)
+	assert.Contains(t, sched.Sessions(), "sess-1")
+
+	sched.RemoveSession("sess-1")
+	assert.NotContains(t, sched.Sessions(), "sess-1")
+
+	// 移除不存在的 session 不 panic
+	sched.RemoveSession("nonexistent")
+}
+
+// TestTaskScheduler_GetSession 测试 GetSession 获取会话
+func TestTaskScheduler_GetSession(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, nil)
+
+	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
+	sched.AddSession("sess-1", sess)
+
+	// 获取存在的 session
+	got, ok := sched.GetSession("sess-1")
+	assert.True(t, ok)
+	assert.Equal(t, sess, got)
+
+	// 获取不存在的 session
+	got, ok = sched.GetSession("nonexistent")
+	assert.False(t, ok)
+	assert.Nil(t, got)
+}
+
 // TestTaskScheduler_EnsureSessionCompletionSignal_会话不存在 测试完成信号在会话不存在时优雅返回。
 func TestTaskScheduler_EnsureSessionCompletionSignal_会话不存在(t *testing.T) {
 	cfg := config.DefaultControllerConfig()
