@@ -53,6 +53,17 @@ const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+var (
+	// TeamRunnerFunc 团队执行函数变量（由 runtime 包注入，打破循环依赖）。
+	// 签名：func(ctx, agentTeam, inputs, base, member, sess) (map[string]any, error)
+	TeamRunnerFunc any
+)
+
+// SetTeamRunnerFunc 设置团队执行函数（由 runtime 包注入）。
+func SetTeamRunnerFunc(fn any) {
+	TeamRunnerFunc = fn
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RunSpawnedProcess 子进程主入口。
@@ -319,7 +330,29 @@ func ExecuteAgent(
 	case SpawnAgentKindClassAgent:
 		return executeChildAgent(ctx, agentConfig, inputs, stdout, streaming, streamModes, childRunner, agentCreator)
 	case SpawnAgentKindTeamAgent:
-		return nil, fmt.Errorf("team_agent 模式尚未实现：⤵️ 预留 TeamRunner（9.85）实现后回填")
+		// 回填（#9.85）：通过函数变量调用 TeamRunner
+		// 因循环依赖，runner/spawn 无法直接导入 agent_teams/runtime
+		fn := TeamRunnerFunc
+		if fn == nil {
+			return nil, fmt.Errorf("team_agent 模式未初始化：TeamRunner 尚未注入（需先调用 runtime.GetTeamRuntimeManager()）")
+		}
+		runFn, ok := fn.(func(context.Context, any, any, bool, bool, any) (map[string]any, error))
+		if !ok {
+			return nil, fmt.Errorf("team_agent 模式初始化异常：TeamRunner 函数类型不匹配")
+		}
+		// agentTeam 从 Payload 中提取 spec 或 team_name
+		var agentTeam any
+		if agentConfig.Payload != nil {
+			if spec, exists := agentConfig.Payload["spec"]; exists {
+				agentTeam = spec
+			} else if name, exists := agentConfig.Payload["team_name"]; exists {
+				agentTeam = name
+			}
+		}
+		if agentTeam == nil {
+			return nil, fmt.Errorf("team_agent 模式：Payload 中缺少 spec 或 team_name")
+		}
+		return runFn(ctx, agentTeam, inputs, false, false, agentConfig.SessionID)
 	default:
 		return nil, fmt.Errorf("不支持的 Agent 启动方式: %s", agentConfig.AgentKind)
 	}

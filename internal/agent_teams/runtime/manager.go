@@ -8,11 +8,18 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/registry"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -27,6 +34,17 @@ import (
 type TeamRuntimeManager struct {
 	// pool 活跃团队运行时池
 	pool *TeamRuntimePool
+}
+
+// TeamRuntimeActivation 激活结果。
+// Python: TeamRuntimeActivation (openjiuwen/agent_teams/runtime/manager.py)
+type TeamRuntimeActivation struct {
+	// Agent 激活的 TeamAgent 实例
+	Agent *agent.TeamAgent
+	// Session 绑定的 AgentTeamSession
+	Session *session.AgentTeamSession
+	// Action 调度决策结果
+	Action RunAction
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -46,6 +64,13 @@ var (
 	globalTeamRuntimeManager *TeamRuntimeManager
 	// globalTeamRuntimeMu 保护全局单例
 	globalTeamRuntimeMu sync.Mutex
+	// memberFinalizedStatuses 成员已终结状态集合
+	// Python: _MEMBER_FINALIZED_STATUSES = frozenset({STOPPED, PAUSED, SHUTDOWN})
+	memberFinalizedStatuses = map[atschema.MemberStatus]bool{
+		atschema.MemberStatusStopped:  true,
+		atschema.MemberStatusPaused:   true,
+		atschema.MemberStatusShutdown: true,
+	}
 )
 
 // 编译期检查：确保 TeamRuntimeManager 满足 registry.PoolAccessor
@@ -69,6 +94,13 @@ func GetTeamRuntimeManager() *TeamRuntimeManager {
 		globalTeamRuntimeManager = NewTeamRuntimeManager()
 		// 同步到 Runner.teamRuntimeManager（any 类型）
 		runner.SetTeamRuntimeManager(globalTeamRuntimeManager)
+		// 注入 TeamRunner 函数到 Runner 包（打破循环依赖）
+		runner.SetTeamRunnerFunc(RunAgentTeam)
+		runner.SetTeamRunnerStreamingFunc(RunAgentTeamStreaming)
+		// 注入 RunTeamMember 函数到 spawn 包（打破 spawn ↔ runtime 循环依赖）
+		spawn.SetRunTeamMemberFunc(RunTeamMember)
+		// 注入 TeamRunner 函数到 runner/spawn 包（打破循环依赖）
+		runnerspawn.SetTeamRunnerFunc(RunAgentTeam)
 	}
 	return globalTeamRuntimeManager
 }
@@ -180,13 +212,70 @@ func (m *TeamRuntimeManager) Interact(
 	return lastResult, nil
 }
 
-// Activate 激活团队。
-// ⤵️(#9.62) CoordinationKernel 骨架已实现
-func (m *TeamRuntimeManager) Activate(ctx context.Context, teamName string, sessionID string, agent any) error {
-	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("Activate（桩实现）")
-	// ⤵️(#9.62) 创建 ActiveTeam → pool.Add(entry)
-	return nil
+// Activate 激活团队（完整实现，内联回填 #9.62）。
+// Python: TeamRuntimeManager.activate(spec, session, inputs)
+//
+// 执行步骤（对齐 Python manager.py L108-169）：
+//  1. buildTeamSession → 创建 AgentTeamSession
+//  2. pool.Get → 查看是否有活跃池条目
+//  3. 跨 session 策略：若池条目 session 不匹配，stop_team + 清空 poolEntry
+//  4. inspectSession → 检查 DB 和 session 中团队状态
+//  5. DecideRunAction → 纯调度决策
+//  6. applyAction → 执行决策副作用
+func (m *TeamRuntimeManager) Activate(
+	ctx context.Context,
+	spec *atschema.TeamAgentSpec,
+	sess any,
+	inputs any,
+) (*TeamRuntimeActivation, error) {
+	// Python 步骤 1: _build_session(spec, session)
+	teamSession := buildTeamSession(spec, sess)
+	targetSessionID := teamSession.GetSessionID()
+	teamName := spec.TeamName
+
+	// Python 步骤 2: pool_entry = await self._pool.get(team_name)
+	poolEntry := m.pool.Get(teamName)
+
+	// Python 步骤 3: 跨 session 策略
+	// Python: L130-137 — 任何不同 session 的池条目在 dispatch 前被拆除，
+	// 折叠旧的 WARM_RECOVER / NEW_TEAM_IN_SESSION_WARM 路径为 stop+remove+cold-rebuild。
+	if poolEntry != nil && poolEntry.SessionID != targetSessionID {
+		logger.Info(mgrLogComponent).
+			Str("team_name", teamName).
+			Str("old_session_id", poolEntry.SessionID).
+			Str("new_session_id", targetSessionID).
+			Msg("activate: 池条目 session 不匹配，stop+remove 后重建")
+		_, _ = m.StopTeam(ctx, teamName, poolEntry.SessionID)
+		poolEntry = nil
+	}
+
+	// Python 步骤 4: _inspect_session(spec, team_session, team_name)
+	teamInSession, teamInDB, teamDBState, err := m.inspectSession(ctx, spec, teamSession, teamName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Python 步骤 5: decide_run_action(...)
+	action := DecideRunAction(
+		teamInDB, teamInSession,
+		poolEntry,
+		targetSessionID, teamName,
+		teamDBState,
+	)
+
+	// Python: L152-158 — 日志记录调度结果
+	logger.Info(mgrLogComponent).
+		Str("team_name", teamName).
+		Str("session_id", targetSessionID).
+		Str("action_kind", string(action.Kind)).
+		Bool("in_db", teamInDB).
+		Bool("in_session", teamInSession).
+		Str("db_state", teamDBState).
+		Bool("pooled", poolEntry != nil).
+		Msg("activate: 调度决策完成")
+
+	// Python 步骤 6: _apply_action(action, spec, team_session, pool_entry, inputs)
+	return m.applyAction(ctx, action, spec, teamSession, poolEntry, inputs)
 }
 
 // Finalize 终结团队运行：选择暂停或停止。
@@ -425,6 +514,111 @@ func (m *TeamRuntimeManager) IsTeamSession(sessionID string) bool {
 	return info != nil
 }
 
+// FinalizeMember 终结 teammate/human-agent（非 leader）。
+// Python: TeamRuntimeManager.finalize_member(agent) (manager.py L244-309)
+//
+// 决策规则（对齐 Python）：
+//   - 已终结（STOPPED/PAUSED/SHUTDOWN）→ 仅关闭 kernel
+//   - SHUTDOWN_REQUESTED → stop + mark SHUTDOWN
+//   - 默认 → pause + mark READY（下次可被分配）
+func FinalizeMember(ctx context.Context, ag *agent.TeamAgent) error {
+	member := ag.TeamMemberHandle()
+	memberName := ag.MemberName()
+
+	// Python: try/except 外层
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Debug(mgrLogComponent).
+					Str("member_name", memberName).
+					Any("recover", r).
+					Msg("finalize_member: 读取状态异常")
+			}
+		}()
+
+		// Python: L268-274 — 读取 member status
+		var currentStatus atschema.MemberStatus
+		var hasStatus bool
+		if member != nil {
+			status, err := member.Status(ctx)
+			if err == nil {
+				currentStatus = status
+				hasStatus = true
+			} else {
+				// Python: L272-274 — logger.debug("Failed to read...")
+				logger.Debug(mgrLogComponent).
+					Str("member_name", memberName).
+					Err(err).
+					Msg("finalize_member: 读取 member 状态失败")
+			}
+		}
+
+		// Python: L275-277 — already_finalized
+		if hasStatus && memberFinalizedStatuses[currentStatus] {
+			logger.Info(mgrLogComponent).
+				Str("member_name", memberName).
+				Str("status", string(currentStatus)).
+				Msg("finalize_member: 已终结，仅关闭 kernel")
+			_ = ag.StopCoordination(ctx)
+			return
+		}
+
+		// Python: L282-286 — SHUTDOWN_REQUESTED
+		if hasStatus && currentStatus == atschema.MemberStatusShutdownRequested {
+			logger.Info(mgrLogComponent).
+				Str("member_name", memberName).
+				Msg("finalize_member: 按请求关闭")
+			_ = ag.StopCoordination(ctx)
+			if member != nil {
+				_, _ = member.UpdateStatus(ctx, atschema.MemberStatusShutdown)
+			}
+			return
+		}
+
+		// Python: L287-291 — 默认 pause + mark READY
+		logger.Info(mgrLogComponent).
+			Str("member_name", memberName).
+			Msg("finalize_member: 暂停并标记 READY")
+		_ = ag.PauseCoordination(ctx)
+		if member != nil {
+			_, _ = member.UpdateStatus(ctx, atschema.MemberStatusReady)
+		}
+	}()
+
+	return nil
+}
+
+// GetMonitor 获取活跃团队的 TeamMonitor。
+// Python: TeamRuntimeManager.get_monitor(team_name, session_id, hide_dm) (manager.py L545-560)
+func (m *TeamRuntimeManager) GetMonitor(
+	ctx context.Context,
+	teamName string,
+	sessionID string,
+	hideDM bool,
+) (*monitor.TeamMonitor, error) {
+	// Python: L557-558
+	entry := m.resolveEntry(teamName, sessionID)
+	if entry == nil {
+		return nil, nil
+	}
+	// Python: create_monitor(entry.agent, hide_dm=hide_dm)
+	// Go 差异：CreateMonitor 需要显式传入 db/teamName/sessionID
+	backend := getTeamBackend(entry.Agent)
+	if backend == nil {
+		return nil, nil
+	}
+	return monitor.CreateMonitor(entry.Agent, backend.DB(), teamName, sessionID, hideDM)
+}
+
+// ListActiveTeams 列出所有活跃团队。
+// Python: TeamRuntimeManager.list_active_teams() (manager.py L562-568)
+//
+// 返回只读快照，排除活跃 TeamAgent 和 InteractGate 引用，
+// 使 SDK/CLI 调用者无法通过结果修改运行时状态。
+func (m *TeamRuntimeManager) ListActiveTeams() []ActiveTeamInfo {
+	return m.pool.ListAllInfo()
+}
+
 // RegisterHumanAgentInbound 注册团队→用户通知回调。
 // Python: team_backend.register_human_agent_inbound(member_name, callback)
 func (m *TeamRuntimeManager) RegisterHumanAgentInbound(ctx context.Context, teamName string, sessionID string, memberName string, callback any) (bool, error) {
@@ -590,7 +784,8 @@ func (m *TeamRuntimeManager) dispatchPayload(
 			backend,
 			backend.MessageManager(),
 			agentLookup,
-			nil, // TODO(#9.85): 注入 onInbound（需 TeamRunner 完整实现后回填）
+			nil, // onInbound 为 nil 时 HumanAgentInbox 内部跳过入站通知；
+			// 实际回调需由 server 层通过 RegisterHumanAgentInbound 注入
 		)
 		result, err := hInbox.Send(ctx, p.Body(), p.Target(), strPtr(p.Sender()))
 		if err != nil {
@@ -621,3 +816,307 @@ func getTeamBackend(a *agent.TeamAgent) *tools.TeamBackend {
 
 // strPtr 返回字符串指针。
 func strPtr(s string) *string { return &s }
+
+// inspectSession 检查 DB 和 session 中的团队状态。
+// Python: TeamRuntimeManager._inspect_session(spec, team_session, team_name) (manager.py L820-850)
+//
+// team_in_session 来自 checkpoint 桶；team_in_db 来自静态团队表。
+// 两者都是 dispatch 真值表所需 — 团队表查询区分 CREATE 和 NEW_TEAM_IN_SESSION。
+func (m *TeamRuntimeManager) inspectSession(
+	ctx context.Context,
+	spec *atschema.TeamAgentSpec,
+	teamSession *session.AgentTeamSession,
+	teamName string,
+) (teamInSession bool, teamInDB bool, teamDBState string, err error) {
+	// Python: L822-823
+	cp := getCheckpointer()
+	sessionExists := false
+	if cp != nil {
+		sessionExists, _ = cp.SessionExists(ctx, teamSession.GetSessionID())
+	}
+
+	// Python: L824
+	if preErr := teamSession.PreRun(ctx); preErr != nil {
+		// Python 中 pre_run 失败不影响后续流程，Go 中记录警告
+		logger.Warn(mgrLogComponent).Err(preErr).
+			Str("session_id", teamSession.GetSessionID()).
+			Msg("inspectSession: PreRun 失败")
+	}
+
+	// Python: L825-830
+	if !sessionExists {
+		teamInSession = false
+		teamDBState = ""
+	} else {
+		// Python: L828-829
+		bucket := metadata.ReadTeamNamespace(teamSession, teamName)
+		teamInSession = bucket != nil
+		teamDBState = metadata.ReadTeamDBState(teamSession, teamName)
+	}
+
+	// Python: L832-834
+	// spec.ResolveDBConfig() 返回 any，需要类型断言为 database.DBConfigProvider
+	dbCfgAny := spec.ResolveDBConfig()
+	dbCfgProvider, _ := dbCfgAny.(database.DBConfigProvider)
+	db := spawn.GetSharedDB(dbCfgProvider)
+	if db != nil {
+		if initErr := db.Initialize(ctx); initErr != nil {
+			logger.Warn(mgrLogComponent).Err(initErr).
+				Str("team_name", teamName).
+				Msg("inspectSession: 数据库初始化失败")
+		} else {
+			// Python: L834: team_in_db = await db.team.team_exists(team_name)
+			teamInDB = db.Team().TeamExists(ctx, teamName)
+		}
+	}
+
+	return teamInSession, teamInDB, teamDBState, nil
+}
+
+// applyAction 执行调度决策的副作用。
+// Python: TeamRuntimeManager._apply_action(action, spec, team_session, pool_entry, inputs) (manager.py L852-921)
+func (m *TeamRuntimeManager) applyAction(
+	ctx context.Context,
+	action RunAction,
+	spec *atschema.TeamAgentSpec,
+	teamSession *session.AgentTeamSession,
+	poolEntry *ActiveTeam,
+	inputs any,
+) (*TeamRuntimeActivation, error) {
+	teamName := spec.TeamName
+	sessionID := teamSession.GetSessionID()
+	kind := action.Kind
+
+	// Python: L861-870 — 拒绝类：不执行副作用
+	if IsTeamRejectKind(kind) {
+		var ag *agent.TeamAgent
+		if poolEntry != nil {
+			ag = poolEntry.Agent
+		}
+		logger.Warn(mgrLogComponent).
+			Str("team_name", teamName).
+			Str("session_id", sessionID).
+			Str("reason", action.Reason).
+			Str("kind", string(kind)).
+			Msg("run_agent_team rejected")
+		return &TeamRuntimeActivation{Agent: ag, Session: teamSession, Action: action}, nil
+	}
+
+	// Python: L872-879 — RESUME_FROM_PAUSE
+	if kind == RunActionKindResumeFromPause {
+		if poolEntry == nil {
+			return nil, fmt.Errorf("%s requires an active pool entry", kind)
+		}
+		if err := preRunWithInputs(ctx, teamSession, inputs); err != nil {
+			return nil, err
+		}
+		poolEntry.State = RuntimeStateRunning
+		poolEntry.InteractGate.Reset()
+		return &TeamRuntimeActivation{Agent: poolEntry.Agent, Session: teamSession, Action: action}, nil
+	}
+
+	// Python: L881-915 — 冷路径（无 pool 条目）
+	var ag *agent.TeamAgent
+	var buildErr error
+
+	switch kind {
+	case RunActionKindColdRecover:
+		// Python: L884-886
+		ag, buildErr = agent.RecoverFromSession(ctx, teamSession, teamName, spec)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		if _, recErr := ag.RecoverTeam(ctx); recErr != nil {
+			return nil, recErr
+		}
+
+	case RunActionKindNewTeamInSession:
+		// Python: L888-895
+		if err := preRunWithInputs(ctx, teamSession, inputs); err != nil {
+			return nil, err
+		}
+		ag, buildErr = buildTeamAgent(ctx, spec)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		if _, resumeErr := ag.ResumeForNewSession(ctx, teamSession); resumeErr != nil {
+			return nil, resumeErr
+		}
+		// Python: L893-895 — team_in_db 为 True，可能有待恢复的 DB 成员
+		if _, recErr := ag.RecoverTeam(ctx); recErr != nil {
+			return nil, recErr
+		}
+		if flushErr := flushTeamManifest(ctx, ag, teamSession); flushErr != nil {
+			return nil, flushErr
+		}
+
+	case RunActionKindCreate:
+		// Python: L897-900
+		if err := preRunWithInputs(ctx, teamSession, inputs); err != nil {
+			return nil, err
+		}
+		ag, buildErr = buildTeamAgent(ctx, spec)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		if flushErr := flushTeamManifest(ctx, ag, teamSession); flushErr != nil {
+			return nil, flushErr
+		}
+
+	default:
+		return nil, fmt.Errorf("unhandled RunActionKind: %s", kind)
+	}
+
+	// Python: L917-919 — 加入池
+	m.pool.Add(&ActiveTeam{
+		TeamName:     teamName,
+		Agent:        ag,
+		SessionID:    sessionID,
+		State:        RuntimeStateRunning,
+		InteractGate: NewInteractGate(),
+	})
+
+	return &TeamRuntimeActivation{Agent: ag, Session: teamSession, Action: action}, nil
+}
+
+// buildTeamSession 从 spec+session 参数创建 AgentTeamSession。
+// Python: TeamRuntimeManager._build_session(spec, session) (manager.py L923-932)
+func buildTeamSession(spec *atschema.TeamAgentSpec, sess any) *session.AgentTeamSession {
+	switch s := sess.(type) {
+	case *session.AgentTeamSession:
+		// Python: L926 — isinstance(session, AgentTeamSession)
+		return s
+	case string:
+		// Python: L927 — isinstance(session, str)
+		return session.NewAgentTeamSession(session.WithAgentTeamSessionID(s))
+	default:
+		// Python: L928 — return create_agent_team_session()
+		return session.NewAgentTeamSession()
+	}
+}
+
+// preRunWithInputs 调用 session.pre_run(inputs)。
+// Python: TeamRuntimeManager._pre_run_with_inputs(session, inputs) (manager.py L934-937)
+//
+// 仅在 inputs 为 dict 时转发，否则传 nil（对齐 Python: isinstance(inputs, dict)）。
+func preRunWithInputs(ctx context.Context, sess *session.AgentTeamSession, inputs any) error {
+	inputsDict, _ := inputs.(map[string]any)
+	return sess.PreRun(ctx, inputsDict)
+}
+
+// flushTeamManifest 持久化团队清单 + 刷检查点。
+// Python: TeamRuntimeManager._flush_team_manifest(agent, session) (manager.py L939-943)
+//
+// 在暴露 runtime_ready 之前，持久化最小团队清单。
+func flushTeamManifest(ctx context.Context, ag *agent.TeamAgent, sess *session.AgentTeamSession) error {
+	// Python: L941 — agent.persist_session_manifest(session)
+	ag.PersistSessionManifest(sess)
+	// Python: L942 — await session.flush_checkpoint()
+	return sess.FlushCheckpoint(ctx)
+}
+
+// buildTeamAgent 从 TeamAgentSpec 构建 TeamAgent（对齐 Python spec.build()）。
+// Python: TeamAgentSpec.build() → TeamAgent (blueprint.py L370-446)
+//
+// 因 Go 循环依赖，schema 包无法导入 agent 包，因此 spec.Build() 仅做校验。
+// 本函数在 runtime 包中完成 Python spec.build() 的完整构造流程：
+//  1. spec.Build() 校验
+//  2. 构建 TeamSpec（含 model_pool/model_pool_strategy）
+//  3. 解析 transport/messager_config
+//  4. 构建 ModelAllocator + 预分配 leader 模型
+//  5. 构建 TeamRuntimeContext
+//  6. NewTeamAgent(card) + AttachModelAllocator + Configure
+func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.TeamAgent, error) {
+	// Python: L372-373 — self._validate_reserved_names() / self._validate_hitt_consistency()
+	if _, err := spec.Build(); err != nil {
+		return nil, fmt.Errorf("buildTeamAgent: spec 校验失败: %w", err)
+	}
+
+	// Python: L389-399 — 构建 TeamSpec
+	var teamPool []models.ModelPoolEntry
+	var teamStrategy string
+	if spec.ModelRouter != nil {
+		teamPool = spec.ModelRouter.ToPoolEntries()
+		teamStrategy = "router"
+	} else {
+		teamPool = spec.ModelPool
+		teamStrategy = spec.ModelPoolStrategy
+	}
+
+	teamSpec := &atschema.TeamSpec{
+		TeamName:          spec.TeamName,
+		DisplayName:       spec.TeamName,
+		LeaderMemberName:  spec.Leader.MemberName,
+		Language:          spec.Language,
+		ModelPool:         teamPool,
+		ModelPoolStrategy: teamStrategy,
+	}
+
+	// Python: L402 — messager_config = self.transport.build() if self.transport else None
+	var messagerConfig *atschema.MessagerTransportConfig
+	if spec.Transport != nil {
+		if mc, err := spec.Transport.Build(); err == nil {
+			messagerConfig = &mc
+		}
+	}
+
+	// Python: L403 — db_config = self.resolve_db_config()
+	dbCfgAny := spec.ResolveDBConfig()
+	dbCfgProvider, _ := dbCfgAny.(database.DBConfigProvider)
+
+	// Python: L419-425 — build model allocator + leader allocation
+	var modelAllocator models.ModelAllocator
+	var leaderMemberModel *models.TeamModelConfig
+	if len(teamPool) > 0 {
+		modelAllocator = models.BuildModelAllocatorForPool(teamPool, teamStrategy, spec.TeamName)
+		if modelAllocator != nil {
+			leaderAlloc := modelAllocator.Allocate(spec.Leader.ModelName)
+			if leaderAlloc != nil {
+				cfg := leaderAlloc.ToTeamModelConfig()
+				leaderMemberModel = &cfg
+			}
+		}
+	}
+
+	// Python: L426 — self._validate_leader_model_resolved(...)
+	if err := atschema.ValidateLeaderModelResolved(*spec, leaderMemberModel, *teamSpec); err != nil {
+		return nil, fmt.Errorf("buildTeamAgent: leader 模型校验失败: %w", err)
+	}
+
+	// Python: L428-436 — 构建 TeamRuntimeContext
+	runtimeCtx := atschema.TeamRuntimeContext{
+		Role:          atschema.TeamRoleLeader,
+		MemberName:    spec.Leader.MemberName,
+		Persona:       spec.Leader.Persona,
+		TeamSpec:      teamSpec,
+		MessagerConfig: messagerConfig,
+		DBConfig:      dbCfgProvider,
+		MemberModel:   leaderMemberModel,
+	}
+
+	// Python: L405-410 — 构建 leader_card
+	leaderCardID := fmt.Sprintf("%s_%s", spec.TeamName, spec.Leader.MemberName)
+	leaderCard := agentschema.NewAgentCard(
+		agentschema.WithAgentID(leaderCardID),
+		agentschema.WithAgentName(spec.Leader.DisplayName),
+		agentschema.WithAgentDescription(fmt.Sprintf("Leader of team %s", spec.TeamName)),
+	)
+
+	// Python: L438 — agent = _TeamAgent(leader_card)
+	ag := agent.NewTeamAgent(leaderCard)
+
+	// Python: L444 — agent.attach_model_allocator(model_allocator, leader_allocation=leader_allocation)
+	if modelAllocator != nil {
+		var leaderAlloc *models.Allocation
+		if len(teamPool) > 0 {
+			alloc := modelAllocator.Allocate(spec.Leader.ModelName)
+			leaderAlloc = alloc
+		}
+		ag.AttachModelAllocator(modelAllocator, leaderAlloc)
+	}
+
+	// Python: L445 — agent.configure(self, context)
+	ag.Configure(ctx, *spec, runtimeCtx)
+
+	return ag, nil
+}

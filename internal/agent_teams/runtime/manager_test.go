@@ -262,11 +262,15 @@ func TestTeamRuntimeManager_Interact_井号字符串解析(t *testing.T) {
 
 // ──────────── 生命周期测试 ────────────
 
-func TestTeamRuntimeManager_Activate_stub(t *testing.T) {
+func TestTeamRuntimeManager_Activate_空spec(t *testing.T) {
 	m := NewTeamRuntimeManager()
-	err := m.Activate(context.Background(), "team-1", "sess-1", nil)
+	spec := atschema.NewTeamAgentSpec()
+	result, err := m.Activate(context.Background(), &spec, nil, nil)
 	if err != nil {
-		t.Errorf("Activate stub 应返回 nil, got %v", err)
+		t.Errorf("Activate 空 spec 应返回 nil error, got %v", err)
+	}
+	if result == nil {
+		t.Error("Activate 应返回非 nil TeamRuntimeActivation")
 	}
 }
 

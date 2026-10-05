@@ -27,6 +27,16 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+var (
+	// runTeamMemberFunc 团队成员执行函数（由 runtime 包注入，打破 spawn ↔ runtime 循环依赖）。
+	// 签名：func(ctx context.Context, agentTeam any, inputs any, sess any) (map[string]any, error)
+	runTeamMemberFunc any
+)
+
+// SetRunTeamMemberFunc 设置团队成员执行函数（由 runtime 包注入）。
+func SetRunTeamMemberFunc(fn any) {
+	runTeamMemberFunc = fn
+}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InProcessSpawn 以进程内 goroutine 方式生成 teammate。
@@ -71,12 +81,13 @@ func InProcessSpawn(
 			Msg("[inprocess] teammate started")
 
 		// Python: await Runner.run_agent_team(teammate, inputs, member=True, session=session_id)
-		// ⤵️ 预留：TeamRunner（9.85）实现后回填
-		// Python: _, err := runner.RunAgentTeam(runCtx, teammate, inputs, true, sessionID)
-		_ = runCtx    // 同上
-		_ = inputs    // 避免未使用变量警告
-		_ = query     // 同上
-		_ = sessionID // 同上
+		// 回填（#9.85）：调用 TeamRunner 的 Member 路径（通过函数注入打破循环依赖）
+		if runTeamMemberFunc != nil {
+			if runFn, ok := runTeamMemberFunc.(func(context.Context, any, any, any) (map[string]any, error)); ok {
+				_, _ = runFn(runCtx, teammate, inputs, sessionID)
+			}
+		}
+		_ = query // 同上
 
 		logger.Info(inprocessLogComponent).
 			Str("member_name", runtimeCtx.MemberName).
