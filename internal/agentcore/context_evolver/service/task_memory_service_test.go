@@ -755,7 +755,8 @@ func TestWithPersistType(t *testing.T) {
 	opt := WithPersistType("milvus")
 	cfg := &taskMemoryServiceConfig{}
 	opt(cfg)
-	assert.Equal(t, "milvus", cfg.persistType)
+	require.NotNil(t, cfg.persistType)
+	assert.Equal(t, "milvus", *cfg.persistType)
 }
 
 // TestWithPersistPath 验证 WithPersistPath 选项。

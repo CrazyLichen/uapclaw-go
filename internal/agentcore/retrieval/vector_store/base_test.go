@@ -49,10 +49,10 @@ func TestIsNumericString(t *testing.T) {
 		{"12.5", true},
 		{"", false},
 		{"abc", false},
-		{"12.3.4", false},  // 多个小数点
-		{"-5", true},       // 负号开头
-		{"-", false},       // 仅负号
-		{"12a", false},     // 包含字母
+		{"12.3.4", false}, // 多个小数点
+		{"-5", true},      // 负号开头
+		{"-", false},      // 仅负号
+		{"12a", false},    // 包含字母
 	}
 	for _, tt := range tests {
 		got := isNumericString(tt.input)
