@@ -7,13 +7,16 @@
 //
 //	indexer/
 //	├── doc.go            # 包文档
-//	├── base.go           # Indexer 接口定义
-//	└── embed_chunks.go   # ComputeChunkEmbeddings 共享嵌入逻辑
+//	├── base.go           # Indexer 接口定义 + IndexOptions
+//	├── embed_chunks.go   # ComputeChunkEmbeddings 共享嵌入逻辑 + ChunkEmbedOptions
+//	└── chroma.go         # ChromaIndexer ChromaDB 文档索引实现
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/indexer/
 //
 // 核心类型索引：
 //
-//	Indexer — 文档索引抽象接口
+//	Indexer              — 文档索引抽象接口
 //	ComputeChunkEmbeddings — 分块嵌入计算共享函数
+//	ChunkEmbedOptions    — ComputeChunkEmbeddings 选项结构
+//	ChromaIndexer        — ChromaDB 文档索引实现
 package indexer

@@ -143,7 +143,7 @@ func makeImageChunk(imagePath string) common.TextChunk {
 func TestComputeChunkEmbeddings_空chunks(t *testing.T) {
 	fake := newFakeBaseEmbedding(0)
 	chunks := []common.TextChunk{}
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 	assert.NoError(t, err)
 	assert.Equal(t, 0, fake.embedDocsCalled)
 }
@@ -154,7 +154,7 @@ func TestComputeChunkEmbeddings_模型不支持多模态(t *testing.T) {
 	fake := newFakeBaseEmbedding(3)
 	chunks := makeTextChunks(3)
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, fake.embedDocsCalled)
@@ -172,7 +172,7 @@ func TestComputeChunkEmbeddings_useCaptionForImages为true(t *testing.T) {
 	imgPath := createTempImageFile(t)
 	chunks := []common.TextChunk{makeImageChunk(imgPath)}
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, true)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(true))
 
 	assert.NoError(t, err)
 	// useCaptionForImages=true → 走纯文本路径，不调 EmbedMultimodal
@@ -192,7 +192,7 @@ func TestComputeChunkEmbeddings_图片文本混合(t *testing.T) {
 		makeImageChunk(imgPath),
 	}
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 
 	assert.NoError(t, err)
 	// 图片 chunk 调 EmbedMultimodal 1 次
@@ -214,7 +214,7 @@ func TestComputeChunkEmbeddings_imagePath文件不存在(t *testing.T) {
 		{ID: "img1", Text: "图片描述", DocID: "doc-1", Metadata: map[string]any{"image_path": "/nonexistent/path.png"}},
 	}
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 
 	assert.NoError(t, err)
 	// 文件不存在 → 降级到纯文本
@@ -230,7 +230,7 @@ func TestComputeChunkEmbeddings_imagePath非string类型(t *testing.T) {
 		{ID: "img1", Text: "图片描述", DocID: "doc-1", Metadata: map[string]any{"image_path": 12345}},
 	}
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 
 	assert.NoError(t, err)
 	// 类型断言失败 → 降级到纯文本
@@ -244,7 +244,7 @@ func TestComputeChunkEmbeddings_无imagePath键(t *testing.T) {
 	fake := newFakeMultimodalEmbedding(2, 0)
 	chunks := makeTextChunks(2)
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, fake.embedDocsCalled)
@@ -259,7 +259,7 @@ func TestComputeChunkEmbeddings_imagePath为空字符串(t *testing.T) {
 		{ID: "img1", Text: "图片描述", DocID: "doc-1", Metadata: map[string]any{"image_path": ""}},
 	}
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 
 	assert.NoError(t, err)
 	// 空串 → 降级到纯文本
@@ -272,7 +272,7 @@ func TestComputeChunkEmbeddings_EmbedDocuments失败(t *testing.T) {
 	fake := &fakeBaseEmbedding{embedDocsErr: fmt.Errorf("嵌入服务不可用")}
 	chunks := makeTextChunks(2)
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 
 	assert.Error(t, err)
 	assert.Equal(t, 1, fake.embedDocsCalled)
@@ -288,7 +288,7 @@ func TestComputeChunkEmbeddings_EmbedMultimodal失败(t *testing.T) {
 	}
 	chunks := []common.TextChunk{makeImageChunk(imgPath)}
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 
 	assert.Error(t, err)
 	assert.Equal(t, 1, fake.embedMMCalled)
@@ -303,7 +303,7 @@ func TestComputeChunkEmbeddings_imagePath是目录(t *testing.T) {
 		{ID: "img1", Text: "图片描述", DocID: "doc-1", Metadata: map[string]any{"image_path": dir}},
 	}
 
-	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, false)
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 
 	// dir 是目录不是文件，isImageChunk 返回 false → 降级到纯文本
 	assert.NoError(t, err)
@@ -362,5 +362,63 @@ func TestIsImageChunk(t *testing.T) {
 			result := isImageChunk(&tt.chunk)
 			assert.Equal(t, tt.expected, result)
 		})
+	}
+}
+
+// ──────────────────────────── ChunkEmbedOptions 测试 ────────────────────────────
+
+// TestNewChunkEmbedOptions_默认值 测试默认选项
+func TestNewChunkEmbedOptions_默认值(t *testing.T) {
+	opts := NewChunkEmbedOptions()
+	assert.False(t, opts.UseCaptionForImages)
+	assert.Nil(t, opts.DocIndexCallback)
+	assert.Nil(t, opts.EmbedOpts)
+}
+
+// TestWithUseCaptionForImages 测试 UseCaptionForImages 选项
+func TestWithUseCaptionForImages(t *testing.T) {
+	opts := NewChunkEmbedOptions(WithUseCaptionForImages(true))
+	assert.True(t, opts.UseCaptionForImages)
+}
+
+// TestWithDocIndexCallback 测试 DocIndexCallback 选项
+func TestWithDocIndexCallback(t *testing.T) {
+	cb := &common.NoOpDocIndexCallback{}
+	opts := NewChunkEmbedOptions(WithDocIndexCallback(cb))
+	assert.NotNil(t, opts.DocIndexCallback)
+}
+
+// TestComputeChunkEmbeddings_新签名_纯文本 测试 option 模式下的纯文本路径
+func TestComputeChunkEmbeddings_新签名_纯文本(t *testing.T) {
+	fake := newFakeBaseEmbedding(3)
+	chunks := makeTextChunks(3)
+
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake,
+		WithUseCaptionForImages(false),
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, fake.embedDocsCalled)
+	for _, c := range chunks {
+		assert.NotNil(t, c.Embedding)
+	}
+}
+
+// TestComputeChunkEmbeddings_新签名_带回调 测试带 DocIndexCallback 的调用
+func TestComputeChunkEmbeddings_新签名_带回调(t *testing.T) {
+	fake := newFakeBaseEmbedding(2)
+	cb := &common.NoOpDocIndexCallback{}
+	chunks := makeTextChunks(2)
+
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake,
+		WithUseCaptionForImages(false),
+		WithDocIndexCallback(cb),
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, fake.embedDocsCalled)
+	// NoOpDocIndexCallback 不影响嵌入结果
+	for _, c := range chunks {
+		assert.NotNil(t, c.Embedding)
 	}
 }

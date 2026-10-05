@@ -8,12 +8,18 @@
 //	common/
 //	├── doc.go           # 包文档
 //	├── config.go        # 索引/知识库/检索/向量存储配置类型
-//	└── document.go      # MultimodalDocument + TextChunk 文档数据模型
+//	├── document.go      # MultimodalDocument + TextChunk 文档数据模型
+//	├── callbacks.go     # DocIndexCallback 类型别名 + NoOpDocIndexCallback + LoggingDocIndexCallback
+//	├── callbacks_test.go # 回调测试
+//	├── result.go        # SearchResult + RetrievalResult 数据模型
+//	└── result_test.go   # 结果模型测试
 //
 // 对应 Python 代码：
 //
 //	openjiuwen/core/retrieval/common/config.py
 //	openjiuwen/core/retrieval/common/document.py
+//	openjiuwen/core/retrieval/common/callbacks.py
+//	openjiuwen/core/retrieval/common/retrieval_result.py
 //
 // 核心类型索引：
 //
@@ -28,4 +34,7 @@
 //	IndexTypeKind      — 索引类型枚举
 //	StoreType          — 向量存储提供商枚举
 //	DistanceMetricKind — 距离度量枚举
+//	DocIndexCallback   — 文档索引进度回调接口（= embedding.Callback）
+//	SearchResult       — 搜索结果数据模型
+//	RetrievalResult    — 检索结果数据模型
 package common

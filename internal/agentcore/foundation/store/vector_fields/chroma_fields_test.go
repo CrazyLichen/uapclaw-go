@@ -1,6 +1,11 @@
 package vector_fields
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -110,4 +115,126 @@ func TestChromaVectorField_ToDict_ExtraSearch(t *testing.T) {
 	} else if v != 4 {
 		t.Errorf("num_threads = %v, want 4", v)
 	}
+}
+
+// TestNewDefaultChromaVectorField 测试默认参数构造
+func TestNewDefaultChromaVectorField(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	assert.Equal(t, "embedding", f.VectorFieldName)
+	assert.Equal(t, DatabaseTypeChroma, f.DatabaseType)
+	assert.Equal(t, IndexTypeHNSW, f.IndexType)
+	assert.Equal(t, 16, f.MaxNeighbors)
+	assert.Equal(t, 100, f.EfConstruction)
+	assert.Equal(t, 100.0, f.EfSearch)
+}
+
+// TestNewChromaVectorFieldFromName 测试从字段名创建
+func TestNewChromaVectorFieldFromName(t *testing.T) {
+	f := NewChromaVectorFieldFromName("my_vector")
+	assert.Equal(t, "my_vector", f.VectorFieldName)
+	assert.Equal(t, DatabaseTypeChroma, f.DatabaseType)
+	assert.Equal(t, IndexTypeHNSW, f.IndexType)
+	assert.Equal(t, 16, f.MaxNeighbors)
+}
+
+// TestChromaVectorField_ToConstructDict 测试 ToConstructDict 便捷方法
+func TestChromaVectorField_ToConstructDict(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	result := f.ToConstructDict()
+
+	// stage:"-" 的字段应被移除
+	assert.NotContains(t, result, "DatabaseType")
+	assert.NotContains(t, result, "IndexType")
+	assert.NotContains(t, result, "VectorFieldName")
+
+	// stage:"construct" 的字段应保留
+	assert.Equal(t, 16, result["MaxNeighbors"])
+	assert.Equal(t, 100, result["EfConstruction"])
+	assert.Equal(t, 100.0, result["EfSearch"])
+
+	// stage:"search" 的字段应被移除
+	assert.NotContains(t, result, "ExtraSearch")
+}
+
+// TestChromaVectorField_ToSearchDict_无额外参数 测试无 ExtraSearch 时返回空
+func TestChromaVectorField_ToSearchDict_无额外参数(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	result := f.ToSearchDict()
+	assert.Empty(t, result)
+}
+
+// TestChromaVectorField_ToSearchDict_有额外参数 测试 ExtraSearch 展开
+func TestChromaVectorField_ToSearchDict_有额外参数(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	f.ExtraSearch = map[string]any{
+		"resize_factor": 1.5,
+		"num_threads":   4,
+	}
+	result := f.ToSearchDict()
+
+	// ExtraSearch 应被展开
+	assert.NotContains(t, result, "ExtraSearch")
+	assert.Equal(t, 1.5, result["resize_factor"])
+	assert.Equal(t, 4, result["num_threads"])
+
+	// construct 阶段字段不应出现
+	assert.NotContains(t, result, "MaxNeighbors")
+	assert.NotContains(t, result, "EfConstruction")
+}
+
+// TestChromaVectorField_ValidateExtraSearch_合法 测试合法的 ExtraSearch
+func TestChromaVectorField_ValidateExtraSearch_合法(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	f.ExtraSearch = map[string]any{
+		"resize_factor":  1.5,
+		"num_threads":    4,
+		"batch_size":     100,
+		"sync_threshold": 1000,
+	}
+	err := f.ValidateExtraSearch()
+	assert.NoError(t, err)
+}
+
+// TestChromaVectorField_ValidateExtraSearch_resizeFactor类型错误 测试非法类型
+func TestChromaVectorField_ValidateExtraSearch_resizeFactor类型错误(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	f.ExtraSearch = map[string]any{
+		"resize_factor": "invalid",
+	}
+	err := f.ValidateExtraSearch()
+	assert.Error(t, err)
+}
+
+// TestChromaVectorField_ValidateExtraSearch_numThreads类型错误 测试 int 属性传 float
+func TestChromaVectorField_ValidateExtraSearch_numThreads类型错误(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	f.ExtraSearch = map[string]any{
+		"num_threads": 3.14,
+	}
+	err := f.ValidateExtraSearch()
+	assert.Error(t, err)
+}
+
+// TestChromaVectorField_ValidateExtraSearch_空字典 测试空字典
+func TestChromaVectorField_ValidateExtraSearch_空字典(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	f.ExtraSearch = map[string]any{}
+	err := f.ValidateExtraSearch()
+	assert.NoError(t, err)
+}
+
+// TestChromaVectorField_ValidateExtraSearch_nil 测试 nil 不校验
+func TestChromaVectorField_ValidateExtraSearch_nil(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	require.NoError(t, f.ValidateExtraSearch())
+}
+
+// TestChromaVectorField_ValidateExtraSearch_int类型合法 测试 resize_factor 传 int 也合法
+func TestChromaVectorField_ValidateExtraSearch_int类型合法(t *testing.T) {
+	f := NewDefaultChromaVectorField()
+	f.ExtraSearch = map[string]any{
+		"resize_factor": 2,
+	}
+	err := f.ValidateExtraSearch()
+	assert.NoError(t, err)
 }
