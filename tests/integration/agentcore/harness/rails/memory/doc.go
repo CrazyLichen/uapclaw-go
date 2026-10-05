@@ -7,9 +7,10 @@
 // 文件目录：
 //
 //	memory/
-//	├── doc.go                    # 包文档
-//	├── coding_memory_rail_test.go # CodingMemoryRail 集成测试
-//	└── memory_rail_test.go       # MemoryRail 集成测试
+//	├── doc.go                          # 包文档
+//	├── coding_memory_rail_test.go      # CodingMemoryRail 集成测试
+//	├── coding_memory_rail_deep_test.go # CodingMemoryRail 深度 BeforeModelCall 测试
+//	└── memory_rail_test.go             # MemoryRail 集成测试
 //
 // 对应 Python 代码：openjiuwen/harness/rails/memory/
 package memory
