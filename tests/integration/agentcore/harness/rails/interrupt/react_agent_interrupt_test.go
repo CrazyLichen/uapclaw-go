@@ -297,6 +297,77 @@ func (s *ReactAgentInterruptSuite) TestConfirm_并发工具部分拒绝() {
 	sess.PostRun(ctx)
 }
 
+// TestConfirm_并发工具两轮部分拒绝 测试并发工具调用两轮部分拒绝。
+// 对齐 Python: test_hitl_rail_concurrent_tools_partial_reject_two_rounds
+//
+// 流程：
+//  1. MockLLM 返回 2 个并发 write_file tool_calls + 后续 text response
+//  2. 第 1 次 Invoke：触发中断，得到 2 个 interrupt_ids
+//  3. 第 2 次 Invoke：只拒绝第 2 个，保留第 1 个不做处理 → 应得到新的中断（第 1 个仍待处理）
+//  4. 第 3 次 Invoke：确认第 1 个，得到 answer
+func (s *ReactAgentInterruptSuite) TestConfirm_并发工具两轮部分拒绝() {
+	ctx := s.Ctx
+
+	var writeInvokeCount atomic.Int32
+	writeTool := newTrackedWriteFileTool(&writeInvokeCount)
+
+	rail := interrupt.NewConfirmInterruptRail(interrupt.WithConfirmToolNames("write_file"))
+
+	s.MockLLM.SetResponses(
+		mockllm.CreateMultiToolCallResponse([]mockllm.ToolCallSpec{
+			{Name: "write_file", ArgsJSON: `{"filepath":"/tmp/a.txt","content":"aa"}`},
+			{Name: "write_file", ArgsJSON: `{"filepath":"/tmp/b.txt","content":"bb"}`},
+		}),
+		mockllm.CreateTextResponse("部分操作完成"),
+	)
+
+	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
+		ToolInstances: []tool.Tool{writeTool},
+		Rails:         []agentinterfaces.AgentRail{rail},
+		MaxIterations: 5,
+	})
+	s.Require().NoError(err, "创建 DeepAgent 失败")
+
+	sess := s.NewTestSession("react-interrupt-partial-reject-two-rounds")
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+
+	// 第 1 次 Invoke：触发中断，得到 2 个 interrupt_ids
+	result, err := agent.Invoke(ctx, map[string]any{"query": "写入两个文件"},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err, "首次 Invoke 失败")
+	s.Require().NotNil(result, "结果不应为 nil")
+
+	interruptIDs, _ := testhelpers.AssertInterruptResult(s.T(), result, 2)
+	s.Len(interruptIDs, 2, "应有 2 个 interrupt_id")
+
+	// 第 2 次 Invoke：只拒绝第 2 个，保留第 1 个不做处理
+	interactiveInput := testhelpers.RejectInterrupt(interruptIDs[1], "不允许写入此文件")
+
+	result, err = agent.Invoke(ctx, map[string]any{"query": interactiveInput},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err, "第 2 次 Invoke 失败")
+	s.Require().NotNil(result, "第 2 次结果不应为 nil")
+
+	// 第 1 个仍待处理，应得到新的中断（1 个 interrupt_id）
+	remainingIDs, _ := testhelpers.AssertInterruptResult(s.T(), result, 1)
+	s.Len(remainingIDs, 1, "应剩余 1 个 interrupt_id")
+	s.Equal(interruptIDs[0], remainingIDs[0], "剩余的 interrupt_id 应为第 1 个")
+
+	// 第 3 次 Invoke：确认第 1 个，得到 answer
+	confirmInput := testhelpers.ConfirmInterrupt(remainingIDs[0], false)
+	result, err = agent.Invoke(ctx, map[string]any{"query": confirmInput},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err, "第 3 次 Invoke 失败")
+
+	testhelpers.AssertAnswerResult(s.T(), result)
+	s.Equal(int32(1), writeInvokeCount.Load(), "只有确认的 write_file 应执行")
+
+	sess.PostRun(ctx)
+}
+
 // TestConfirm_不同工具选择性拦截 测试只拦截列表中的工具，其他工具放行。
 // 对齐 Python: test_hitl_rail_concurrent_tools_one_pass_one_interrupt
 func (s *ReactAgentInterruptSuite) TestConfirm_不同工具选择性拦截() {

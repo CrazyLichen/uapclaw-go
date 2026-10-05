@@ -3,17 +3,22 @@
 package security
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	securityrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -282,4 +287,158 @@ func (s *PermissionInterruptRailSuite) TestPermissionRail_注册到Agent() {
 	railType := reflect.TypeOf(&securityrail.PermissionInterruptRail{})
 	foundRails := agent.FindRailsByType(railType)
 	s.NotEmpty(foundRails, "应注册 PermissionInterruptRail")
+}
+
+// TestPermissionRail_ASK_中断恢复后继续执行 测试 ask 配置下通过 interrupt 路径中断后恢复执行。
+// 对齐 Python: test_hitl_tool_permission_interrupt_read_file_ask
+//
+// 流程：
+//  1. 创建 PermissionInterruptRail 配置 read_file=ask
+//  2. 不设置 RequestPermissionConfirmation（走标准 interrupt 路径）
+//  3. MockLLM 设置：read_file tool_call → text response
+//  4. 创建带 read_file 工具的 agent + session
+//  5. 第 1 次 Invoke：read_file 触发 ASK → 返回 interrupt 结果
+//  6. 提取 interrupt_id，构建 ConfirmPayload（approved=true）恢复输入
+//  7. 第 2 次 Invoke：恢复 → 正常完成
+func (s *PermissionInterruptRailSuite) TestPermissionRail_ASK_中断恢复后继续执行() {
+	ctx := s.Ctx
+
+	config := map[string]any{
+		"enabled": true,
+		"tools": map[string]any{
+			"read_file": "ask",
+		},
+	}
+
+	// 不设置 RequestPermissionConfirmation → ASK 走标准 interrupt 路径
+	host := &harnesssecurity.ToolPermissionHost{
+		ResolveWorkspaceDir: func() string { return "/workspace" },
+	}
+	permRail := s.newPermRailWithHost(config, host)
+
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("read_file", `{"filepath":"/tmp/test.txt"}`),
+		mockllm.CreateTextResponse("文件内容已读取"),
+	)
+
+	readTool := newReadFileToolForPermTest()
+
+	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
+		ToolInstances: []tool.Tool{readTool},
+		Rails:         []agentinterfaces.AgentRail{permRail},
+		MaxIterations: 5,
+	})
+	s.Require().NoError(err, "创建 DeepAgent 失败")
+
+	sess := s.NewTestSession("perm-ask-interrupt-resume")
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+
+	// 第 1 次 Invoke：read_file 触发 ASK → interrupt 结果
+	result, err := agent.Invoke(ctx, map[string]any{"query": "读取文件"},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err, "首次 Invoke 失败")
+	s.Require().NotNil(result, "结果不应为 nil")
+
+	// 验证 result_type=="interrupt"
+	interruptIDs, _ := testhelpers.AssertInterruptResult(s.T(), result, 1)
+	s.Require().NotEmpty(interruptIDs, "应有至少一个 interrupt_id")
+
+	// 构建 ConfirmPayload 恢复输入（approved=true）
+	interactiveInput := testhelpers.ConfirmInterrupt(interruptIDs[0], false)
+
+	// 第 2 次 Invoke：恢复 → 正常完成
+	result, err = agent.Invoke(ctx, map[string]any{"query": interactiveInput},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err, "恢复 Invoke 失败")
+	s.Require().NotNil(result, "恢复结果不应为 nil")
+
+	testhelpers.AssertAnswerResult(s.T(), result)
+
+	sess.PostRun(ctx)
+}
+
+// TestPermissionRail_ASK_ConfirmPayload对象恢复 测试使用 ConfirmPayload struct 对象恢复中断。
+// 对齐 Python: test_hitl_tool_permission_interrupt_resume_with_confirm_payload_object
+//
+// 与 TestPermissionRail_ASK_中断恢复后继续执行 类似，但恢复时使用 ConfirmPayload struct
+// （而非 map[string]any），验证 Go 侧也能正确解析。
+func (s *PermissionInterruptRailSuite) TestPermissionRail_ASK_ConfirmPayload对象恢复() {
+	ctx := s.Ctx
+
+	config := map[string]any{
+		"enabled": true,
+		"tools": map[string]any{
+			"read_file": "ask",
+		},
+	}
+
+	// 不设置 RequestPermissionConfirmation → ASK 走标准 interrupt 路径
+	host := &harnesssecurity.ToolPermissionHost{
+		ResolveWorkspaceDir: func() string { return "/workspace" },
+	}
+	permRail := s.newPermRailWithHost(config, host)
+
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("read_file", `{"filepath":"/tmp/test.txt"}`),
+		mockllm.CreateTextResponse("文件内容已读取"),
+	)
+
+	readTool := newReadFileToolForPermTest()
+
+	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
+		ToolInstances: []tool.Tool{readTool},
+		Rails:         []agentinterfaces.AgentRail{permRail},
+		MaxIterations: 5,
+	})
+	s.Require().NoError(err, "创建 DeepAgent 失败")
+
+	sess := s.NewTestSession("perm-ask-confirm-payload-struct")
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+
+	// 第 1 次 Invoke：read_file 触发 ASK → interrupt 结果
+	result, err := agent.Invoke(ctx, map[string]any{"query": "读取文件"},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err, "首次 Invoke 失败")
+	s.Require().NotNil(result, "结果不应为 nil")
+
+	interruptIDs, _ := testhelpers.AssertInterruptResult(s.T(), result, 1)
+	s.Require().NotEmpty(interruptIDs, "应有至少一个 interrupt_id")
+
+	// 使用 ConfirmPayload struct（而非 map[string]any）构建恢复输入
+	interactiveInput := &sessioninteraction.InteractiveInput{
+		UserInputs: map[string]any{
+			interruptIDs[0]: &interrupt.ConfirmPayload{
+				Approved:    true,
+				Feedback:    "Confirm",
+				AutoConfirm: false,
+			},
+		},
+	}
+
+	// 第 2 次 Invoke：恢复 → 正常完成
+	result, err = agent.Invoke(ctx, map[string]any{"query": interactiveInput},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err, "恢复 Invoke 失败")
+	s.Require().NotNil(result, "恢复结果不应为 nil")
+
+	testhelpers.AssertAnswerResult(s.T(), result)
+
+	sess.PostRun(ctx)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newReadFileToolForPermTest 创建用于权限测试的 read_file 工具。
+func newReadFileToolForPermTest() tool.Tool {
+	tc := tool.NewToolCardWithID("read_file", "read_file", "读取文件", nil, nil)
+	t, _ := tool.NewMapFunction(tc,
+		func(_ context.Context, _ map[string]any) (map[string]any, error) {
+			return map[string]any{"status": "ok", "tool": "read_file", "content": "file content"}, nil
+		}, nil,
+	)
+	return t
 }
