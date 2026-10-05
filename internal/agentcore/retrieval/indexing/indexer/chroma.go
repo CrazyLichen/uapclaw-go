@@ -343,9 +343,7 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 
 	// 对齐 Python: ids_to_delete = results["ids"]; collection.delete(ids=ids_to_delete)
 	chromaIDs := make([]chromav2.DocumentID, len(ids))
-	for i, id := range ids {
-		chromaIDs[i] = id
-	}
+	copy(chromaIDs, ids)
 
 	if err := collection.Delete(ctx, chromav2.WithIDs(chromaIDs...)); err != nil {
 		logger.Error(logComponent).

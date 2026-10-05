@@ -574,7 +574,7 @@ func closeTeamInteractGate(teamName string, sessionID string) {
 	if entry == nil || entry.SessionID != sessionID {
 		return
 	}
-	entry.InteractGate.CloseAndDrain(context.Background())
+	_ = entry.InteractGate.CloseAndDrain(context.Background())
 }
 
 // buildTeamRuntimeReadyChunk 构建团队运行时就绪首帧。

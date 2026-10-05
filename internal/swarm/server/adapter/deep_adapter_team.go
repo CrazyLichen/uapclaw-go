@@ -801,7 +801,7 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 
 	// 内部清理函数
 	cleanupEvolutionRail := func() {
-		rail.CleanupBackgroundTasks()
+		_ = rail.CleanupBackgroundTasks()
 	}
 
 	// 内部推送 evolution status 函数（内联对齐 Python: push_evolution_status）

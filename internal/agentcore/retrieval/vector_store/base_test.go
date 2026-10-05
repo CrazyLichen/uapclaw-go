@@ -114,3 +114,11 @@ func TestToFloat(t *testing.T) {
 	assert.True(t, math.IsNaN(toFloat("not a number")))
 	assert.True(t, math.IsNaN(toFloat(nil)))
 }
+
+// TestCheckConfigsMatching_数值不近似匹配 测试数值差距过大时不匹配
+func TestCheckConfigsMatching_数值不近似匹配(t *testing.T) {
+	configured := map[string]any{"max_neighbors": 16}
+	actual := map[string]any{"max_neighbors": 100}
+	err := CheckConfigsMatching(configured, actual)
+	assert.Error(t, err)
+}

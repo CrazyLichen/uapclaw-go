@@ -671,7 +671,8 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 		var finalScore float64
 		var rawScoreScaled *float64
 
-		if mode == "vector" {
+		switch mode {
+		case "vector":
 			if rawScoreVal != nil {
 				switch s.distanceMetric {
 				case "l2":
@@ -688,7 +689,7 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 					finalScore = scaled
 				}
 			}
-		} else if mode == "sparse" {
+		case "sparse":
 			if rawScoreVal != nil {
 				if *rawScoreVal <= 1.0 {
 					finalScore = 1.0 - *rawScoreVal

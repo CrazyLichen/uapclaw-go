@@ -1820,3 +1820,25 @@ func (f *fakeSuccessUpdater) Invoke(_ context.Context, _ SessionMemoryUpdateOpti
 func (f *fakeSuccessUpdater) BindModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {
 }
 func (f *fakeSuccessUpdater) SetInheritedSystemPrompt(_ string) {}
+
+// TestSetOnTaskDone 测试 SetOnTaskDone 回调设置
+func TestSetOnTaskDone(t *testing.T) {
+	mgr := NewSessionMemoryManager()
+	cb := func(sessionID string, err error) {}
+	mgr.SetOnTaskDone(cb)
+	// 验证回调被设置
+	if mgr.onTaskDone == nil {
+		t.Error("onTaskDone 应被设置，但为 nil")
+	}
+}
+
+// TestSetOnTaskDone_nil 测试 SetOnTaskDone 设置 nil 回调
+func TestSetOnTaskDone_nil(t *testing.T) {
+	mgr := NewSessionMemoryManager()
+	cb := func(sessionID string, err error) {}
+	mgr.SetOnTaskDone(cb)
+	mgr.SetOnTaskDone(nil)
+	if mgr.onTaskDone != nil {
+		t.Error("onTaskDone 应为 nil")
+	}
+}
