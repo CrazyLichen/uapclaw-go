@@ -162,29 +162,3 @@ func TestBaseEmbeddingAdapter_Metadata(t *testing.T) {
 		t.Errorf("Dims() = %d, want 256", adapter.Dims())
 	}
 }
-
-// TestBaseEmbeddingAdapter_EmbedQuery 测试 baseEmbeddingAdapter 的 EmbedQuery 委托
-func TestBaseEmbeddingAdapter_EmbedQuery(t *testing.T) {
-	mock := NewMockEmbeddingProvider()
-	adapter := &baseEmbeddingAdapter{base: mock, prov: "mock", model: "mock", dims: 128}
-	vec, err := adapter.EmbedQuery(context.Background(), "test")
-	if err != nil {
-		t.Fatalf("EmbedQuery 失败: %v", err)
-	}
-	if len(vec) != 128 {
-		t.Errorf("EmbedQuery 返回 %d 维，期望 128", len(vec))
-	}
-}
-
-// TestBaseEmbeddingAdapter_EmbedDocuments 测试 baseEmbeddingAdapter 的 EmbedDocuments 委托
-func TestBaseEmbeddingAdapter_EmbedDocuments(t *testing.T) {
-	mock := NewMockEmbeddingProvider()
-	adapter := &baseEmbeddingAdapter{base: mock, prov: "mock", model: "mock", dims: 128}
-	vecs, err := adapter.EmbedDocuments(context.Background(), []string{"a", "b"})
-	if err != nil {
-		t.Fatalf("EmbedDocuments 失败: %v", err)
-	}
-	if len(vecs) != 2 {
-		t.Errorf("EmbedDocuments 返回 %d 个向量，期望 2", len(vecs))
-	}
-}

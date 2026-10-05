@@ -124,7 +124,10 @@ func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterface
 	}
 
 	// Python: L46: ctx.extra.get("run_kind") != RunKind.HEARTBEAT
-	runKind, _ := cbc.Extra()["run_kind"].(string)
+	runKind := ""
+	if val, ok := cbc.GetExtra("run_kind"); ok {
+		runKind, _ = val.(string)
+	}
 	if runKind != string(agentinterfaces.RunKindHeartbeat) {
 		return nil
 	}

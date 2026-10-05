@@ -310,18 +310,18 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 
 	// 设置 extra（对齐 Python L1289-1296）
 	if userID, ok := inputs["user_id"].(string); ok {
-		cbc.Extra()["user_id"] = userID
+		cbc.SetExtra("user_id", userID)
 	}
 	if runKind, ok := inputs["run_kind"].(string); ok {
-		cbc.Extra()["run_kind"] = runKind
+		cbc.SetExtra("run_kind", runKind)
 	}
 	if runContext, ok := inputs["run_context"].(string); ok {
-		cbc.Extra()["run_context"] = runContext
+		cbc.SetExtra("run_context", runContext)
 	}
 	if streaming, ok := inputs["_streaming"].(bool); ok {
-		cbc.Extra()["_streaming"] = streaming
+		cbc.SetExtra("_streaming", streaming)
 	} else {
-		cbc.Extra()["_streaming"] = false
+		cbc.SetExtra("_streaming", false)
 	}
 	if sq, ok := inputs["_steering_queue"]; ok {
 		if ch, ok2 := sq.(chan string); ok2 {
@@ -370,7 +370,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 
 		// 如果存在中断状态，恢复原始 query
 		if hitlState != nil {
-			cbc.Extra()["_original_query"] = hitlState.OriginalQuery
+			cbc.SetExtra("_original_query", hitlState.OriginalQuery)
 		}
 
 		// 初始化上下文
@@ -410,9 +410,10 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 				return nil
 			}
 			// 无新中断，从恢复起始迭代继续
-			if si, ok := cbc.Extra()[interrupt.ResumeStartIterationKey].(int); ok {
-				startIteration = si
-				delete(cbc.Extra(), interrupt.ResumeStartIterationKey)
+			if si, ok := cbc.DeleteExtra(interrupt.ResumeStartIterationKey); ok {
+				if siInt, ok := si.(int); ok {
+					startIteration = siInt
+				}
 			}
 		} else {
 			// 正常路径：添加 UserMessage
@@ -439,7 +440,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	}
 
 	// Python: L1434: return ctx.extra.get("invoke_result", invoke_inputs.result)
-	if invokeResult, ok := cbc.Extra()["invoke_result"]; ok {
+	if invokeResult, ok := cbc.GetExtra("invoke_result"); ok {
 		if r, ok2 := invokeResult.(map[string]any); ok2 {
 			return r, nil
 		}
@@ -664,8 +665,10 @@ func (a *ReActAgent) reactLoop(
 
 		// HITL 中断检测
 		originalQuery := ""
-		if oq, ok := cbc.Extra()["_original_query"].(string); ok {
-			originalQuery = oq
+		if val, ok := cbc.GetExtra("_original_query"); ok {
+			if oq, ok := val.(string); ok {
+				originalQuery = oq
+			}
 		}
 		hitlInterrupt, subAgentOutputs := a.AfterExecuteToolCallForHITL(
 			results, aiMsg.ToolCalls, aiMsg, iteration, originalQuery,

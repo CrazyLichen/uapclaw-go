@@ -207,7 +207,7 @@ func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 // Python: L165-233
 func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// Python: L179-180: if ctx.extra.get("_skip_tool"): return
-	if _, skip := cbc.Extra()["_skip_tool"]; skip {
+	if _, skip := cbc.GetExtra("_skip_tool"); skip {
 		return nil
 	}
 
@@ -331,7 +331,7 @@ func (r *VerificationRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext,
 	//   Python: ctx.extra["_skip_tool"] = True
 	//   Python: ctx.inputs.tool_result = {"error": error_msg}
 	//   Python: ctx.inputs.tool_msg = msg
-	cbc.Extra()["_skip_tool"] = true
+	cbc.SetExtra("_skip_tool", true)
 	inputs.ToolResult = map[string]any{"error": errorMsg}
 	inputs.ToolMsg = msg
 }

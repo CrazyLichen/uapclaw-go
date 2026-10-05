@@ -514,8 +514,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 		// Python: L664-667: skip_result = ctx.extra.pop("_skip_tool", None)
 		// before hook 在设置 _skip_tool 的同时，会在 inputs 中预设 tool_result 和 tool_msg
 		// 注意：_skip_tool 判断必须在 toolName/toolArgs 回写之前，skip 时不需要回写
-		if skipVal, exists := toolCtx.Extra()["_skip_tool"]; exists {
-			delete(toolCtx.Extra(), "_skip_tool") // pop 语义：一次性消费
+		if skipVal, exists := toolCtx.DeleteExtra("_skip_tool"); exists {
 			if skipBool, ok := skipVal.(bool); ok && skipBool {
 				if inputs, ok := toolCtx.Inputs().(*interfaces.ToolCallInputs); ok {
 					result = agentschema.ExecuteResult{Result: inputs.ToolResult, ToolMsg: inputs.ToolMsg}

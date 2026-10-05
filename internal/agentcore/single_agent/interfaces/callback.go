@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -108,6 +109,8 @@ type AgentCallbackContext struct {
 	modelContext ceinterface.ModelContext
 	// extra 跨 rail 通信字典（单次 invoke 内跨事件持久，子 ctx 共享）
 	extra map[string]any
+	// extraMu 保护 extra 字典的并发读写
+	extraMu sync.RWMutex
 	// exception 异常对象（在错误事件上设置）
 	exception error
 	// retryAttempt 当前重试索引号
@@ -414,8 +417,35 @@ func (c *AgentCallbackContext) ModelContext() ceinterface.ModelContext { return 
 // SetModelContext 设置 ModelContext
 func (c *AgentCallbackContext) SetModelContext(mc ceinterface.ModelContext) { c.modelContext = mc }
 
-// Extra 返回 extra 通信字典
+// Extra 返回 extra 通信字典。
+// 注意：返回值可直接读写，内部通过 extraMu 保护并发安全。
 func (c *AgentCallbackContext) Extra() map[string]any { return c.extra }
+
+// GetExtra 线程安全地读取 extra 字典中的值。
+func (c *AgentCallbackContext) GetExtra(key string) (any, bool) {
+	c.extraMu.RLock()
+	defer c.extraMu.RUnlock()
+	v, ok := c.extra[key]
+	return v, ok
+}
+
+// SetExtra 线程安全地设置 extra 字典中的值。
+func (c *AgentCallbackContext) SetExtra(key string, value any) {
+	c.extraMu.Lock()
+	defer c.extraMu.Unlock()
+	c.extra[key] = value
+}
+
+// DeleteExtra 线程安全地删除 extra 字典中的值，返回被删除的值。
+func (c *AgentCallbackContext) DeleteExtra(key string) (any, bool) {
+	c.extraMu.Lock()
+	defer c.extraMu.Unlock()
+	v, ok := c.extra[key]
+	if ok {
+		delete(c.extra, key)
+	}
+	return v, ok
+}
 
 // Exception 返回异常对象
 func (c *AgentCallbackContext) Exception() error { return c.exception }

@@ -187,7 +187,7 @@ func (r *PermissionInterruptRail) BeforeToolCall(ctx context.Context, cbc *agent
 	}
 
 	decision := r.ResolveInterruptFn(ctx, cbc, toolInputs.ToolCall, userInput, autoConfirmConfig)
-	cbc.Extra()["_interrupt_decision"] = decision
+	cbc.SetExtra("_interrupt_decision", decision)
 	r.applyDecision(cbc, toolInputs, decision)
 
 	return nil
@@ -915,7 +915,7 @@ func (r *PermissionInterruptRail) skipPermissionTool(
 	reject *interrupt.RejectResult,
 ) {
 	toolCallID := r.resolveToolCallID(toolInputs.ToolCall)
-	cbc.Extra()["_skip_tool"] = true
+	cbc.SetExtra("_skip_tool", true)
 	toolInputs.ToolResult = reject.ToolResult
 	if reject.ToolMessage != nil {
 		toolInputs.ToolMsg = reject.ToolMessage
@@ -951,7 +951,7 @@ func (r *PermissionInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall
 // getUserInput 从回调上下文中提取用户输入。
 // Python: BaseInterruptRail._get_user_input
 func (r *PermissionInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
-	rawInput, exists := cbc.Extra()[saschema.ResumeUserInputKey]
+	rawInput, exists := cbc.GetExtra(saschema.ResumeUserInputKey)
 	// Python: logger.info("[_get_user_input] tool_call_id=%r raw_input_type=%s", ...)
 	if !exists || rawInput == nil {
 		logger.Info(permRailLogComponent).

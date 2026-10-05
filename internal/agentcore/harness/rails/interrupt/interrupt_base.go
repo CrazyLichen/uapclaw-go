@@ -253,7 +253,7 @@ func (r *BaseInterruptRail) skipTool(
 	reject *RejectResult,
 ) {
 	toolCallID := r.resolveToolCallID(toolInputs.ToolCall)
-	cbc.Extra()["_skip_tool"] = true
+	cbc.SetExtra("_skip_tool", true)
 	toolInputs.ToolResult = reject.ToolResult
 	if reject.ToolMessage != nil {
 		toolInputs.ToolMsg = reject.ToolMessage
@@ -272,7 +272,7 @@ func (r *BaseInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall) stri
 
 // getUserInput 从回调上下文中提取用户输入。
 func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
-	rawInput, exists := cbc.Extra()[saschema.ResumeUserInputKey]
+	rawInput, exists := cbc.GetExtra(saschema.ResumeUserInputKey)
 	if !exists || rawInput == nil {
 		return nil
 	}

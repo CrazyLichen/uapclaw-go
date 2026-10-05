@@ -39,6 +39,33 @@ func TestCheckConfigsMatching_忽略efSearchFactor(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestIsNumericString 测试 isNumericString 的各种场景
+func TestIsNumericString(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"123", true},
+		{"12.5", true},
+		{"", false},
+		{"abc", false},
+		{"12.3.4", false},  // 多个小数点
+		{"-5", true},       // 负号开头
+		{"-", false},       // 仅负号
+		{"12a", false},     // 包含字母
+	}
+	for _, tt := range tests {
+		got := isNumericString(tt.input)
+		assert.Equal(t, tt.want, got, "isNumericString(%q)", tt.input)
+	}
+}
+
+// TestCheckConfigsMatching_配置为空 测试空配置始终匹配
+func TestCheckConfigsMatching_配置为空(t *testing.T) {
+	err := CheckConfigsMatching(map[string]any{}, map[string]any{"space": "cosine"})
+	assert.NoError(t, err)
+}
+
 // TestCheckConfigsMatching_大小写不敏感 测试字符串比较大小写不敏感
 func TestCheckConfigsMatching_大小写不敏感(t *testing.T) {
 	configured := map[string]any{"space": "Cosine"}

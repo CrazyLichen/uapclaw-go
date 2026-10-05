@@ -152,7 +152,10 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 		}
 	}
 
-	isStreaming, _ := cbc.Extra()["_streaming"].(bool)
+	isStreaming := false
+	if val, ok := cbc.GetExtra("_streaming"); ok {
+		isStreaming, _ = val.(bool)
+	}
 	modelName := ""
 	if a.config != nil {
 		modelName = a.config.ModelNameVal

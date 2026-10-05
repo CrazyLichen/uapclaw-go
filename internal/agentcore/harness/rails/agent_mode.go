@@ -340,7 +340,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 	// ─── 段 3: plan 模式 → 白名单 + 路径校验 + 硬性隐藏 ───
 
 	// Python: L267-268: 已被跳过则放行
-	if skipVal, exists := cbc.Extra()[extraSkipToolKey]; exists && skipVal == true {
+	if skipVal, exists := cbc.GetExtra(extraSkipToolKey); exists && skipVal == true {
 		return nil
 	}
 
@@ -434,14 +434,14 @@ func (r *AgentModeRail) AfterToolCall(_ context.Context, cbc *agentinterfaces.Ag
 
 	// Python: L340-341
 	if toolName == "enter_plan_mode" {
-		if skipVal, exists := cbc.Extra()[extraSkipToolKey]; !exists || skipVal != true {
+		if skipVal, exists := cbc.GetExtra(extraSkipToolKey); !exists || skipVal != true {
 			r.registerTaskTool(cbc.Agent())
 		}
 	}
 
 	// Python: L343-344
 	if toolName == "exit_plan_mode" {
-		if skipVal, exists := cbc.Extra()[extraSkipToolKey]; !exists || skipVal != true {
+		if skipVal, exists := cbc.GetExtra(extraSkipToolKey); !exists || skipVal != true {
 			r.unregisterTaskTool(cbc.Agent())
 		}
 	}
@@ -489,7 +489,7 @@ func (r *AgentModeRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, er
 	if !ok || inputs == nil {
 		// Python: Python 不检查 inputs 类型，直接设置所有字段
 		// Go 类型系统中 inputs 可能不是 ToolCallInputs，设置 skip 标记并记录警告
-		cbc.Extra()[extraSkipToolKey] = true
+		cbc.SetExtra(extraSkipToolKey, true)
 		logger.Warn(agentModeLogComponent).
 			Str("event_type", "agent_mode_reject_tool_type_mismatch").
 			Str("error_msg", errorMsg).
@@ -503,7 +503,7 @@ func (r *AgentModeRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, er
 	}
 
 	msg := llmschema.NewToolMessage(toolCallID, errorMsg)
-	cbc.Extra()[extraSkipToolKey] = true
+	cbc.SetExtra(extraSkipToolKey, true)
 	inputs.ToolResult = map[string]any{"error": errorMsg}
 	inputs.ToolMsg = msg
 }

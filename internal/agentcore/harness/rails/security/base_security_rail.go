@@ -571,7 +571,7 @@ func (r *BaseSecurityRail) runAndApply(
 	}
 
 	// Python: ctx.extra["_interrupt_decision"] = decision
-	cbc.Extra()["_interrupt_decision"] = decision
+	cbc.SetExtra("_interrupt_decision", decision)
 
 	return r.applySecurityDecision(ctx, securityCtx, decision)
 }
@@ -804,7 +804,7 @@ func (r *BaseSecurityRail) skipTool(
 	toolResult any,
 	toolMessage *llmschema.ToolMessage,
 ) {
-	cbc.Extra()["_skip_tool"] = true
+	cbc.SetExtra("_skip_tool", true)
 	if toolInputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs); ok {
 		toolInputs.ToolResult = toolResult
 		toolInputs.ToolMsg = toolMessage
@@ -920,7 +920,7 @@ func (r *BaseSecurityRail) resolveSubjectID(cbc *agentinterfaces.AgentCallbackCo
 //
 // Python: BaseSecurityRail._get_user_input(ctx, subject_id) (base_security_rail.py L276-300)
 func (r *BaseSecurityRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, subjectID string) any {
-	rawInput, exists := cbc.Extra()[saschema.ResumeUserInputKey]
+	rawInput, exists := cbc.GetExtra(saschema.ResumeUserInputKey)
 	if !exists || rawInput == nil {
 		return nil
 	}

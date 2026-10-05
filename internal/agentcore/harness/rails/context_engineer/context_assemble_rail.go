@@ -152,9 +152,11 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 	// Python: context_section = await _build_context(self.sys_operation, workspace, lang, include_daily_memory=not is_heartbeat)
 	// Python: ctx.extra.get("run_kind") == RunKind.HEARTBEAT
 	isHeartbeat := false
-	if cbc != nil && cbc.Extra() != nil {
-		if runKind, ok := cbc.Extra()["run_kind"].(string); ok {
-			isHeartbeat = runKind == string(sainterfaces.RunKindHeartbeat)
+	if cbc != nil {
+		if val, ok := cbc.GetExtra("run_kind"); ok {
+			if runKind, ok := val.(string); ok {
+				isHeartbeat = runKind == string(sainterfaces.RunKindHeartbeat)
+			}
 		}
 	}
 
