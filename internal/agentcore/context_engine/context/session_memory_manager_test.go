@@ -1823,7 +1823,8 @@ func (f *fakeSuccessUpdater) SetInheritedSystemPrompt(_ string) {}
 
 // TestSetOnTaskDone 测试 SetOnTaskDone 回调设置
 func TestSetOnTaskDone(t *testing.T) {
-	mgr := NewSessionMemoryManager()
+	cfg := NewSessionMemoryConfig()
+	mgr := NewSessionMemoryManager(cfg)
 	cb := func(sessionID string, err error) {}
 	mgr.SetOnTaskDone(cb)
 	// 验证回调被设置
@@ -1834,7 +1835,8 @@ func TestSetOnTaskDone(t *testing.T) {
 
 // TestSetOnTaskDone_nil 测试 SetOnTaskDone 设置 nil 回调
 func TestSetOnTaskDone_nil(t *testing.T) {
-	mgr := NewSessionMemoryManager()
+	cfg := NewSessionMemoryConfig()
+	mgr := NewSessionMemoryManager(cfg)
 	cb := func(sessionID string, err error) {}
 	mgr.SetOnTaskDone(cb)
 	mgr.SetOnTaskDone(nil)
