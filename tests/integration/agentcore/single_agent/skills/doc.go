@@ -11,8 +11,9 @@
 // 文件目录：
 //
 //	skills/
-//	├── doc.go                    # 包文档
-//	└── skill_manager_e2e_test.go # SkillManager + SkillUtil E2E 集成测试
+//	├── doc.go                       # 包文档
+//	├── skill_manager_e2e_test.go    # SkillManager + SkillUtil E2E 集成测试
+//	└── skill_lifecycle_test.go      # SkillUtil 生命周期 + 注册委托集成测试
 //
-// 对应 Python 代码：openjiuwen/single_agent/skills/ + tests/system_tests/agent/skill/test_skill_real_system.py
+// 对应 Python 代码：openjiuwen/single_agent/skills/ + tests/system_tests/agent/skill/test_skill_init.py
 package skills
