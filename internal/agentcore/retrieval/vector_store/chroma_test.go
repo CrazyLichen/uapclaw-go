@@ -9,8 +9,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 )
 
-// TestChromaVectorField_String类型 测试 string 类型的 vectorField 自动包装
-func TestChromaVectorField_String类型(t *testing.T) {
+// TestChromaVectorField_字符串字段名 测试通过字段名创建 ChromaVectorField
+func TestChromaVectorField_字符串字段名(t *testing.T) {
 	config := common.VectorStoreConfig{
 		StoreProvider:  common.StoreTypeChroma,
 		CollectionName: "test-collection",
@@ -18,9 +18,10 @@ func TestChromaVectorField_String类型(t *testing.T) {
 	}
 	dir := t.TempDir()
 
-	// 使用 string 类型创建
+	// 使用 NewChromaVectorFieldFromName 从字段名创建
+	vf := vector_fields.NewChromaVectorFieldFromName("embedding")
 	vs, err := NewChromaVectorStore(config, dir,
-		"content", "embedding", "sparse_vector", "metadata", "document_id",
+		"content", vf, "sparse_vector", "metadata", "document_id",
 	)
 
 	require.NoError(t, err)
@@ -57,14 +58,14 @@ func TestChromaVectorStore_chromaPath为空(t *testing.T) {
 	}
 
 	_, err := NewChromaVectorStore(config, "",
-		"content", "embedding", "sparse_vector", "metadata", "document_id",
+		"content", vector_fields.NewChromaVectorFieldFromName("embedding"), "sparse_vector", "metadata", "document_id",
 	)
 
 	assert.Error(t, err)
 }
 
-// TestChromaVectorStore_vectorField无效类型 测试无效类型
-func TestChromaVectorStore_vectorField无效类型(t *testing.T) {
+// TestChromaVectorStore_vectorField为nil 测试 nil vectorField
+func TestChromaVectorStore_vectorField为nil(t *testing.T) {
 	config := common.VectorStoreConfig{
 		StoreProvider:  common.StoreTypeChroma,
 		CollectionName: "test-collection",
@@ -73,7 +74,7 @@ func TestChromaVectorStore_vectorField无效类型(t *testing.T) {
 	dir := t.TempDir()
 
 	_, err := NewChromaVectorStore(config, dir,
-		"content", 123, "sparse_vector", "metadata", "document_id",
+		"content", nil, "sparse_vector", "metadata", "document_id",
 	)
 
 	assert.Error(t, err)
@@ -100,7 +101,7 @@ func TestChromaVectorStore_距离度量归一化(t *testing.T) {
 			dir := t.TempDir()
 
 			vs, err := NewChromaVectorStore(config, dir,
-				"content", "embedding", "sparse_vector", "metadata", "document_id",
+				"content", vector_fields.NewChromaVectorFieldFromName("embedding"), "sparse_vector", "metadata", "document_id",
 			)
 
 			require.NoError(t, err)
@@ -119,7 +120,7 @@ func TestChromaVectorStore_ConstructConfig(t *testing.T) {
 	dir := t.TempDir()
 
 	vs, err := NewChromaVectorStore(config, dir,
-		"content", "embedding", "sparse_vector", "metadata", "document_id",
+		"content", vector_fields.NewChromaVectorFieldFromName("embedding"), "sparse_vector", "metadata", "document_id",
 	)
 
 	require.NoError(t, err)
@@ -146,12 +147,6 @@ func TestBuildChromaWhereFilter_dict(t *testing.T) {
 func TestBuildChromaWhereFilter_emptyDict(t *testing.T) {
 	filters := map[string]any{}
 	result := BuildChromaWhereFilter(filters)
-	assert.Nil(t, result)
-}
-
-// TestBuildChromaWhereFilter_nonDict 测试非 dict 类型
-func TestBuildChromaWhereFilter_nonDict(t *testing.T) {
-	result := BuildChromaWhereFilter("some_string")
 	assert.Nil(t, result)
 }
 

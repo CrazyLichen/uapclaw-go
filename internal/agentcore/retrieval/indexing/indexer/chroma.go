@@ -166,7 +166,7 @@ func (ci *ChromaIndexer) BuildIndex(
 	// 对齐 Python: vector_store = ChromaVectorStore(...)
 	vectorStore, err := vector_store.NewChromaVectorStore(
 		vectorStoreConfig, ci.chromaPath,
-		ci.textField, ci.vectorField.VectorFieldName,
+		ci.textField, ci.vectorField,
 		ci.sparseVectorField, ci.metadataField, ci.docIDField,
 	)
 	if err != nil {
@@ -306,7 +306,7 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 
 	vectorStore, err := vector_store.NewChromaVectorStore(
 		vectorStoreConfig, ci.chromaPath,
-		ci.textField, ci.vectorField.VectorFieldName,
+		ci.textField, ci.vectorField,
 		ci.sparseVectorField, ci.metadataField, ci.docIDField,
 	)
 	if err != nil {
@@ -377,7 +377,7 @@ func (ci *ChromaIndexer) IndexExists(ctx context.Context, indexName string) (boo
 
 	vectorStore, err := vector_store.NewChromaVectorStore(
 		vectorStoreConfig, ci.chromaPath,
-		ci.textField, ci.vectorField.VectorFieldName,
+		ci.textField, ci.vectorField,
 		ci.sparseVectorField, ci.metadataField, ci.docIDField,
 	)
 	if err != nil {
@@ -413,7 +413,7 @@ func (ci *ChromaIndexer) GetIndexInfo(ctx context.Context, indexName string) (ma
 
 	vectorStore, err := vector_store.NewChromaVectorStore(
 		vectorStoreConfig, ci.chromaPath,
-		ci.textField, ci.vectorField.VectorFieldName,
+		ci.textField, ci.vectorField,
 		ci.sparseVectorField, ci.metadataField, ci.docIDField,
 	)
 	if err != nil {

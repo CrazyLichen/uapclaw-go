@@ -19,9 +19,6 @@ import (
 //
 // Python: retrieval/vector_store/base.py (VectorStore)
 type VectorStore interface {
-	// CreateClient 创建向量数据库客户端，对齐 Python create_client
-	CreateClient(databaseName, pathOrURI string, token string, opts ...StoreOption) (any, error)
-
 	// CheckVectorField 校验向量字段配置是否和实际数据库一致
 	// 对齐 Python check_vector_field / _check_configs_matching
 	CheckVectorField() error
@@ -30,16 +27,16 @@ type VectorStore interface {
 	Add(ctx context.Context, data []map[string]any, opts ...StoreOption) error
 
 	// Search 向量搜索，对齐 Python search
-	Search(ctx context.Context, queryVector []float64, topK int, filters any, opts ...StoreOption) ([]common.SearchResult, error)
+	Search(ctx context.Context, queryVector []float64, topK int, filters map[string]any, opts ...StoreOption) ([]common.SearchResult, error)
 
 	// SparseSearch 稀疏搜索（文本匹配），对齐 Python sparse_search
-	SparseSearch(ctx context.Context, queryText string, topK int, filters any, opts ...StoreOption) ([]common.SearchResult, error)
+	SparseSearch(ctx context.Context, queryText string, topK int, filters map[string]any, opts ...StoreOption) ([]common.SearchResult, error)
 
 	// HybridSearch 混合搜索（向量+文本 RRF 融合），对齐 Python hybrid_search
-	HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters any, opts ...StoreOption) ([]common.SearchResult, error)
+	HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters map[string]any, opts ...StoreOption) ([]common.SearchResult, error)
 
 	// Delete 删除向量，对齐 Python delete
-	Delete(ctx context.Context, ids []string, filterExpr any) (bool, error)
+	Delete(ctx context.Context, ids []string, filterExpr map[string]any) (bool, error)
 
 	// TableExists 检查集合是否存在，对齐 Python table_exists
 	TableExists(ctx context.Context, tableName string) (bool, error)

@@ -113,13 +113,13 @@ func (f *chromaWhereFilter) UnmarshalJSON(b []byte) error {
 // NewChromaVectorStore 创建 retrieval 层 ChromaVectorStore。
 //
 // 对齐 Python ChromaVectorStore.__init__。
-// vectorField 参数支持 string（字段名）或 *vector_fields.ChromaVectorField（完整配置），
-// 对齐 Python vector_field: str | ChromaVectorField。
+// vectorField 参数为 *vector_fields.ChromaVectorField 完整配置，
+// 对齐 Python vector_field: ChromaVectorField。
 func NewChromaVectorStore(
 	config common.VectorStoreConfig,
 	chromaPath string,
 	textField string,
-	vectorField any,
+	vectorField *vector_fields.ChromaVectorField,
 	sparseVectorField string,
 	metadataField string,
 	docIDField string,
@@ -134,6 +134,13 @@ func NewChromaVectorStore(
 		)
 	}
 
+	if vectorField == nil {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalIndexingVectorFieldInvalid,
+			exception.WithParam("error_msg", "vector_field must not be nil"),
+		)
+	}
+
 	s := &ChromaVectorStore{
 		config:            config,
 		collectionName:    config.CollectionName,
@@ -143,20 +150,7 @@ func NewChromaVectorStore(
 		metadataField:     metadataField,
 		docIDField:        docIDField,
 		databaseName:      config.DatabaseName,
-	}
-
-	// 对齐 Python: if isinstance(vector_field, str):
-	//   self.vector_field = ChromaVectorField(vector_field=vector_field)
-	switch vf := vectorField.(type) {
-	case string:
-		s.vectorField = vector_fields.NewChromaVectorFieldFromName(vf)
-	case *vector_fields.ChromaVectorField:
-		s.vectorField = vf
-	default:
-		return nil, exception.BuildError(
-			exception.StatusRetrievalIndexingVectorFieldInvalid,
-			exception.WithParam("error_msg", "vector_field must be either a string or *ChromaVectorField instance"),
-		)
+		vectorField:       vectorField,
 	}
 
 	// 对齐 Python: self._distance_metric = config.distance_metric.replace("dot", "ip").replace("euclidean", "l2")
@@ -172,12 +166,20 @@ func NewChromaVectorStore(
 	// 对齐 Python: self._search_config = self.vector_field.to_dict(stage="search")
 	s.searchConfig = s.vectorField.ToSearchDict()
 
-	// 创建客户端
-	clientAny, err := s.CreateClient(s.databaseName, chromaPath, "")
-	if err != nil {
-		return nil, err
+	// 创建 ChromaDB 客户端
+	clientOpts := []chromav2.PersistentClientOption{
+		chromav2.WithPersistentPath(chromaPath),
+		chromav2.WithPersistentLibraryAutoDownload(true),
 	}
-	s.client = clientAny.(chromav2.Client)
+	client, err := chromav2.NewPersistentClient(clientOpts...)
+	if err != nil {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalVectorStoreProviderInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("创建 ChromaDB 客户端失败: %s", err)),
+			exception.WithCause(err),
+		)
+	}
+	s.client = client
 
 	// 对齐 Python: self._collection = self._client.get_or_create_collection(
 	//   name=self.collection_name, configuration={"hnsw": self._construct_config | self._search_config})
@@ -213,22 +215,6 @@ func (s *ChromaVectorStore) SearchConfig() map[string]any { return s.searchConfi
 
 // CreateClient 创建 ChromaDB 客户端。
 // 对齐 Python ChromaVectorStore.create_client。
-func (s *ChromaVectorStore) CreateClient(databaseName, pathOrURI string, token string, _ ...StoreOption) (any, error) {
-	opts := []chromav2.PersistentClientOption{
-		chromav2.WithPersistentPath(pathOrURI),
-		chromav2.WithPersistentLibraryAutoDownload(true),
-	}
-	client, err := chromav2.NewPersistentClient(opts...)
-	if err != nil {
-		return nil, exception.BuildError(
-			exception.StatusRetrievalVectorStoreProviderInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("创建 ChromaDB 客户端失败: %s", err)),
-			exception.WithCause(err),
-		)
-	}
-	return client, nil
-}
-
 // CheckVectorField 校验向量字段配置是否一致。
 func (s *ChromaVectorStore) CheckVectorField() error {
 	return CheckConfigsMatching(s.constructConfig, map[string]any{})
@@ -287,7 +273,7 @@ func (s *ChromaVectorStore) Add(ctx context.Context, data []map[string]any, opts
 
 // Search 向量搜索。
 // 对齐 Python ChromaVectorStore.search。
-func (s *ChromaVectorStore) Search(ctx context.Context, queryVector []float64, topK int, filters any, _ ...StoreOption) ([]common.SearchResult, error) {
+func (s *ChromaVectorStore) Search(ctx context.Context, queryVector []float64, topK int, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
 	collection, err := s.getCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -318,7 +304,7 @@ func (s *ChromaVectorStore) Search(ctx context.Context, queryVector []float64, t
 
 // SparseSearch 稀疏搜索（文本匹配）。
 // 对齐 Python ChromaVectorStore.sparse_search。
-func (s *ChromaVectorStore) SparseSearch(ctx context.Context, queryText string, topK int, filters any, _ ...StoreOption) ([]common.SearchResult, error) {
+func (s *ChromaVectorStore) SparseSearch(ctx context.Context, queryText string, topK int, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
 	collection, err := s.getCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -349,7 +335,7 @@ func (s *ChromaVectorStore) SparseSearch(ctx context.Context, queryText string, 
 
 // HybridSearch 混合搜索（向量+文本 RRF 融合）。
 // 对齐 Python ChromaVectorStore.hybrid_search。
-func (s *ChromaVectorStore) HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters any, _ ...StoreOption) ([]common.SearchResult, error) {
+func (s *ChromaVectorStore) HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
 	type searchResult struct {
 		results []common.SearchResult
 		err     error
@@ -442,7 +428,7 @@ func (s *ChromaVectorStore) HybridSearch(ctx context.Context, queryText string, 
 
 // Delete 删除向量。
 // 对齐 Python ChromaVectorStore.delete。
-func (s *ChromaVectorStore) Delete(ctx context.Context, ids []string, filterExpr any) (bool, error) {
+func (s *ChromaVectorStore) Delete(ctx context.Context, ids []string, filterExpr map[string]any) (bool, error) {
 	collection, err := s.getCollection(ctx)
 	if err != nil {
 		return false, err
@@ -734,15 +720,13 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 
 // BuildChromaWhereFilter 构建 ChromaDB where 过滤器。
 // 返回 chromav2.WhereFilter 接口，可跨包使用（如 indexer 包调用）。
-func BuildChromaWhereFilter(filters any) chromav2.WhereFilter {
+// filters 为 nil 或空 map 时返回 nil。
+func BuildChromaWhereFilter(filters map[string]any) chromav2.WhereFilter {
 	if filters == nil {
 		return nil
 	}
 
-	f, ok := filters.(map[string]any)
-	if !ok {
-		return nil
-	}
+	f := filters
 
 	var clauses []chromav2.WhereClause
 	for key, value := range f {
