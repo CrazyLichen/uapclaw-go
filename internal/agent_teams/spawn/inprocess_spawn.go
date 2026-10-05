@@ -85,7 +85,16 @@ func InProcessSpawn(
 		if runTeamMemberFunc != nil {
 			if runFn, ok := runTeamMemberFunc.(func(context.Context, any, any, any) (map[string]any, error)); ok {
 				_, _ = runFn(runCtx, teammate, inputs, sessionID)
+			} else {
+				logger.Error(inprocessLogComponent).
+					Str("member_name", runtimeCtx.MemberName).
+					Any("func_type", fmt.Sprintf("%T", runTeamMemberFunc)).
+					Msg("[inprocess] runTeamMemberFunc 类型断言失败，teammate 无法执行")
 			}
+		} else {
+			logger.Error(inprocessLogComponent).
+				Str("member_name", runtimeCtx.MemberName).
+				Msg("[inprocess] runTeamMemberFunc 为 nil，teammate 无法执行")
 		}
 		_ = query // 同上
 

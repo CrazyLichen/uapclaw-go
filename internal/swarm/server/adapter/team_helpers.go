@@ -59,9 +59,26 @@ var (
 	// key: [2]string{channelID, sessionID}，value: []pendingWaiter
 	// 对齐 Python: _pending_waiters: dict[tuple[str, str], list[tuple[str, asyncio.Queue]]] (line 61)
 	pendingWaiters = make(map[[2]string][]pendingWaiter)
+	// eventBroadcastInitialized 标记是否已向 TeamManager 注入事件广播回调
+	eventBroadcastInitialized bool
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// EnsureEventBroadcastInjected 确保 TeamManager 的事件广播回调已注入。
+// 对齐 Python: _broadcast_event(channel_id, session_id, event)
+// 由 adapter 层在首次使用 TeamManager 时调用，将 broadcastEvent 绑定到 TeamManager。
+// 此函数幂等，多次调用无副作用。
+func EnsureEventBroadcastInjected(channelID string) {
+	if eventBroadcastInitialized {
+		return
+	}
+	tm := team.GetTeamManager(channelID)
+	tm.SetOnEventBroadcast(func(chID, sessID string, event map[string]any) {
+		broadcastEvent(chID, sessID, event)
+	})
+	eventBroadcastInitialized = true
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

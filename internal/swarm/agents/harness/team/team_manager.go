@@ -113,6 +113,9 @@ type TeamRailMountContext struct {
 type TeamManager struct {
 	mu sync.Mutex
 
+	// channelID 本 Manager 所属的 channel 标识
+	channelID string
+
 	// team agent 引用
 	// 对齐 Python: _team_agents, _runner_team_agents
 	teamAgents       map[string]*agent.TeamAgent // sessionID → TeamAgent（内存持有）
@@ -146,6 +149,10 @@ type TeamManager struct {
 	// 演进监控
 	// 对齐 Python: _team_evolution_watchers
 	teamEvolutionWatchers map[string]context.CancelFunc
+
+	// 事件广播回调，由 adapter 层注入（将事件广播到 channel waiters）
+	// 对齐 Python: _broadcast_event(channel_id, session_id, event)
+	onEventBroadcast func(channelID, sessionID string, event map[string]any)
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -184,6 +191,13 @@ func NewTeamManager() *TeamManager {
 	}
 }
 
+// SetOnEventBroadcast 设置事件广播回调（由 adapter 层注入）。
+// 回调将 monitor/evolution 事件广播到 channel waiters。
+// 对齐 Python: _broadcast_event(channel_id, session_id, event)
+func (m *TeamManager) SetOnEventBroadcast(fn func(channelID, sessionID string, event map[string]any)) {
+	m.onEventBroadcast = fn
+}
+
 // GetTeamManager 获取指定 channel 的 TeamManager 实例（懒创建）。
 // 对齐 Python: get_team_manager(channel_id)
 func GetTeamManager(channelID string) *TeamManager {
@@ -204,6 +218,7 @@ func GetTeamManager(channelID string) *TeamManager {
 		return mgr
 	}
 	mgr = NewTeamManager()
+	mgr.channelID = resolved
 	teamManagers[resolved] = mgr
 	return mgr
 }

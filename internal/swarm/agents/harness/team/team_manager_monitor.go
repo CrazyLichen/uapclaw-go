@@ -302,8 +302,8 @@ func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamA
 //  4. except CancelledError: raise
 //  5. except Exception: logger.error
 //
-// Go 差异：Python 的 _broadcast_event 查找 _pending_waiters 并放入每个 waiter 的 queue。
-// Go 端 pending_waiters 机制待 #9.85 实现，当前仅记录日志。
+// Go 差异：Python 通过 _broadcast_event 查找 _pending_waiters 并放入每个 waiter 的 queue。
+// Go 端通过 onEventBroadcast 回调实现，由 adapter 层在初始化时注入。
 func (m *TeamManager) consumeMonitorEvents(ctx context.Context, sessionID string, handler TeamMonitorHandler) {
 	defer logger.Info(logComponent).Str("session_id", sessionID).Msg("监控事件消费 goroutine 退出")
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("监控事件消费 goroutine 启动")
@@ -314,13 +314,16 @@ func (m *TeamManager) consumeMonitorEvents(ctx context.Context, sessionID string
 			return
 		default:
 		}
-		// TODO(#9.85): 广播到 channel waiters（需要 _pending_waiters 机制）
-		// 当前仅记录日志，待前端通道层实现后回填
+		// 对齐 Python: _broadcast_event(channel_id, session_id, event)
 		if evt != nil {
-			logger.Debug(logComponent).
-				Any("event_type", evt["event_type"]).
-				Str("session_id", sessionID).
-				Msg("监控事件")
+			if m.onEventBroadcast != nil {
+				m.onEventBroadcast(m.channelID, sessionID, evt)
+			} else {
+				logger.Debug(logComponent).
+					Any("event_type", evt["event_type"]).
+					Str("session_id", sessionID).
+					Msg("监控事件（无广播回调，仅记录）")
+			}
 		}
 	}
 }
@@ -368,12 +371,16 @@ func (m *TeamManager) autoStartEvolutionWatcher(ctx context.Context, sessionID s
 			default:
 			}
 
-			// TODO(#9.85): 调用 server_push 将事件推送到前端
-			// 对齐 Python: server_push(channel_id, session_id, event)
+			// 对齐 Python: server_push(channel_id, session_id, event) + _broadcast_event
 			if evt != nil {
-				logger.Debug(logComponent).Str("session_id", sessionID).
-					Any("event_type", evt["event_type"]).
-					Msg("evolution watcher 事件")
+				// 广播到 channel waiters（通过注入的回调）
+				if m.onEventBroadcast != nil {
+					m.onEventBroadcast(m.channelID, sessionID, evt)
+				} else {
+					logger.Debug(logComponent).Str("session_id", sessionID).
+						Any("event_type", evt["event_type"]).
+						Msg("evolution watcher 事件（无广播回调，仅记录）")
+				}
 			}
 		}
 	}()

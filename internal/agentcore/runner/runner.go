@@ -661,35 +661,6 @@ func GetTeamRuntimeManager() registry.PoolAccessor {
 	return getRunner().teamRuntimeManager
 }
 
-// teamRunnerFunc 团队执行函数变量（打破 runner ↔ agent_teams 循环依赖）。
-// 由 agent_teams/runtime 包在初始化时通过 SetTeamRunnerFunc 注入。
-// 签名：func(ctx, agentTeam, inputs, base, member, sess) (map[string]any, error)
-var teamRunnerFunc any
-
-// teamRunnerStreamingFunc 团队流式执行函数变量。
-// 签名：func(ctx, agentTeam, inputs, base, member, sess) (<-chan stream.Schema, error)
-var teamRunnerStreamingFunc any
-
-// SetTeamRunnerFunc 设置团队非流式执行函数（由 runtime 包注入）。
-func SetTeamRunnerFunc(fn any) {
-	teamRunnerFunc = fn
-}
-
-// SetTeamRunnerStreamingFunc 设置团队流式执行函数（由 runtime 包注入）。
-func SetTeamRunnerStreamingFunc(fn any) {
-	teamRunnerStreamingFunc = fn
-}
-
-// GetTeamRunnerFunc 获取团队非流式执行函数。
-func GetTeamRunnerFunc() any {
-	return teamRunnerFunc
-}
-
-// GetTeamRunnerStreamingFunc 获取团队流式执行函数。
-func GetTeamRunnerStreamingFunc() any {
-	return teamRunnerStreamingFunc
-}
-
 // IsRemoteAgent 判断Agent是否为远程Agent。
 // Python: _RunnerImpl._is_remote_agent() (runner.py L123-131)
 // ⤵️ 预留：远程Agent判断（依赖 RemoteAgent 实现）

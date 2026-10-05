@@ -144,6 +144,10 @@ func RunBaseTeam(
 	if resultMap, ok := result.(map[string]any); ok {
 		return resultMap, invokeErr
 	}
+	// 结果不是 map[string]any 但调用无错误 → 返回包装错误
+	if invokeErr == nil {
+		return nil, fmt.Errorf("RunBaseTeam: invoke 返回了非 map[string]any 类型的结果（类型: %T）", result)
+	}
 	return nil, invokeErr
 }
 

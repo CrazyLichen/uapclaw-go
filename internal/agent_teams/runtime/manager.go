@@ -94,9 +94,6 @@ func GetTeamRuntimeManager() *TeamRuntimeManager {
 		globalTeamRuntimeManager = NewTeamRuntimeManager()
 		// 同步到 Runner.teamRuntimeManager（any 类型）
 		runner.SetTeamRuntimeManager(globalTeamRuntimeManager)
-		// 注入 TeamRunner 函数到 Runner 包（打破循环依赖）
-		runner.SetTeamRunnerFunc(RunAgentTeam)
-		runner.SetTeamRunnerStreamingFunc(RunAgentTeamStreaming)
 		// 注入 RunTeamMember 函数到 spawn 包（打破 spawn ↔ runtime 循环依赖）
 		spawn.SetRunTeamMemberFunc(RunTeamMember)
 		// 注入 TeamRunner 函数到 runner/spawn 包（打破循环依赖）
@@ -857,7 +854,13 @@ func (m *TeamRuntimeManager) inspectSession(
 	// Python: L832-834
 	// spec.ResolveDBConfig() 返回 any，需要类型断言为 database.DBConfigProvider
 	dbCfgAny := spec.ResolveDBConfig()
-	dbCfgProvider, _ := dbCfgAny.(database.DBConfigProvider)
+	dbCfgProvider, ok := dbCfgAny.(database.DBConfigProvider)
+	if !ok && dbCfgAny != nil {
+		logger.Warn(mgrLogComponent).
+			Str("team_name", teamName).
+			Any("db_config_type", fmt.Sprintf("%T", dbCfgAny)).
+			Msg("inspectSession: ResolveDBConfig 返回类型非 DBConfigProvider")
+	}
 	db := spawn.GetSharedDB(dbCfgProvider)
 	if db != nil {
 		if initErr := db.Initialize(ctx); initErr != nil {
@@ -1062,7 +1065,13 @@ func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.T
 
 	// Python: L403 — db_config = self.resolve_db_config()
 	dbCfgAny := spec.ResolveDBConfig()
-	dbCfgProvider, _ := dbCfgAny.(database.DBConfigProvider)
+	dbCfgProvider, ok := dbCfgAny.(database.DBConfigProvider)
+	if !ok && dbCfgAny != nil {
+		logger.Warn(mgrLogComponent).
+			Str("team_name", spec.TeamName).
+			Any("db_config_type", fmt.Sprintf("%T", dbCfgAny)).
+			Msg("buildTeamAgent: ResolveDBConfig 返回类型非 DBConfigProvider")
+	}
 
 	// Python: L419-425 — build model allocator + leader allocation
 	var modelAllocator models.ModelAllocator

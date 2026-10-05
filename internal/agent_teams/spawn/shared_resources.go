@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	teamruntime "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -23,8 +24,8 @@ const (
 
 var (
 	// sharedRuntime 进程级 TeamRuntime 单例
-	// ⤵️ 预留：TeamRuntime（9.85）实现后回填类型
-	sharedRuntime any
+	// Python: _runtime: TeamRuntime | None = None
+	sharedRuntime *teamruntime.TeamRuntime
 	// sharedMemoryDB 进程级 InMemoryTeamDatabase 单例
 	sharedMemoryDB *database.InMemoryTeamDatabase
 	// sharedDBInstances 按 db_type::connection_string 索引的 TeamDatabase 实例
@@ -37,14 +38,16 @@ var (
 
 // GetSharedRuntime 返回进程级 TeamRuntime 单例，首次调用时创建。
 // Python: get_shared_runtime()
-// ⤵️ 预留：TeamRuntime（9.85）实现后回填
-func GetSharedRuntime() any {
+func GetSharedRuntime() *teamruntime.TeamRuntime {
 	resourcesMu.Lock()
 	defer resourcesMu.Unlock()
 
 	if sharedRuntime == nil {
-		logger.Info(sharedLogComponent).Msg("创建共享 TeamRuntime 单例（TODO #9.85）")
-		// TODO(#9.85): sharedRuntime = NewTeamRuntime()
+		logger.Info(sharedLogComponent).Msg("创建共享 TeamRuntime 单例")
+		// Python: _runtime = TeamRuntime()
+		sharedRuntime = teamruntime.NewTeamRuntime(teamruntime.RuntimeConfig{
+			TeamID: "default",
+		})
 	}
 	return sharedRuntime
 }
