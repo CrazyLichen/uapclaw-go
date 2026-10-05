@@ -389,3 +389,26 @@ func TestExtractContentStr_纯文本(t *testing.T) {
 	result := extractContentStr(content)
 	assert.Equal(t, "hello", result)
 }
+
+// ---------------------------------------------------------------------------
+// sortedKeys
+// ---------------------------------------------------------------------------
+
+// TestSortedKeys_基本排序 测试返回已排序的键。
+func TestSortedKeys_基本排序(t *testing.T) {
+	m := map[string]bool{"c": true, "a": true, "b": true}
+	keys := sortedKeys(m)
+	assert.Equal(t, []string{"a", "b", "c"}, keys)
+}
+
+// TestSortedKeys_空map 测试空 map 返回空切片。
+func TestSortedKeys_空map(t *testing.T) {
+	keys := sortedKeys(map[string]bool{})
+	assert.Empty(t, keys)
+}
+
+// TestSortedKeys_单元素 测试单元素 map。
+func TestSortedKeys_单元素(t *testing.T) {
+	keys := sortedKeys(map[string]bool{"x": true})
+	assert.Equal(t, []string{"x"}, keys)
+}

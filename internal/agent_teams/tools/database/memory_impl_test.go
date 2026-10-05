@@ -1536,3 +1536,29 @@ func TestCleanupAllRuntimeState_消息(t *testing.T) {
 		t.Errorf("清理后消息数 = %d, want 0", len(msgs))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SetMemberMode
+// ---------------------------------------------------------------------------
+
+// TestSetMemberMode_存在成员 测试设置已存在成员的模式。
+func TestSetMemberMode_存在成员(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	ctx := context.Background()
+
+	db.CreateTeam(ctx, "team1", "Team1", "leader", "desc", "prompt")
+	db.CreateMember(ctx, "alice", "team1", "Alice", "", "active", "teammate", "desc", "idle", "plan", "prompt", "")
+
+	db.SetMemberMode("alice", "team1", "code")
+	member, _ := db.GetMember(ctx, "alice", "team1")
+	if member.Mode != "code" {
+		t.Errorf("Mode = %q, want %q", member.Mode, "code")
+	}
+}
+
+// TestSetMemberMode_不存在成员 测试设置不存在成员时无 panic。
+func TestSetMemberMode_不存在成员(t *testing.T) {
+	db := NewInMemoryTeamDatabase()
+	// 不应 panic
+	db.SetMemberMode("nobody", "team1", "code")
+}

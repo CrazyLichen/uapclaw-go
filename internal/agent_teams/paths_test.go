@@ -81,3 +81,29 @@ func TestTeamHome(t *testing.T) {
 		t.Errorf("TeamHome() = %q, want %q", th, "/custom/home/.agent_teams/my-team")
 	}
 }
+
+// TestIndependentMemberWorkspace 测试成员独立工作空间路径
+func TestIndependentMemberWorkspace(t *testing.T) {
+	origHome := configuredHome
+	defer func() { configuredHome = origHome }()
+
+	ConfigureHome("/custom/home")
+	result := IndependentMemberWorkspace("alice")
+	expected := "/custom/home/alice_workspace"
+	if result != expected {
+		t.Errorf("IndependentMemberWorkspace(\"alice\") = %q, want %q", result, expected)
+	}
+}
+
+// TestIndependentMemberWorkspace_空成员名 测试空成员名路径
+func TestIndependentMemberWorkspace_空成员名(t *testing.T) {
+	origHome := configuredHome
+	defer func() { configuredHome = origHome }()
+
+	ConfigureHome("/custom/home")
+	result := IndependentMemberWorkspace("")
+	expected := "/custom/home/_workspace"
+	if result != expected {
+		t.Errorf("IndependentMemberWorkspace(\"\") = %q, want %q", result, expected)
+	}
+}

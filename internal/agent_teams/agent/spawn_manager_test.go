@@ -266,3 +266,60 @@ func newTestSpawnManager(t *testing.T) *SpawnManager {
 	configurator := NewAgentConfigurator(card)
 	return NewSpawnManager(state, configurator, nil)
 }
+
+// ---------------------------------------------------------------------------
+// SpawnedHandles / SpawnedHandleNames
+// ---------------------------------------------------------------------------
+
+// TestSpawnManager_SpawnedHandles_空 测试无句柄时返回空 map。
+func TestSpawnManager_SpawnedHandles_空(t *testing.T) {
+	sm := newTestSpawnManager(t)
+	handles := sm.SpawnedHandles()
+	assert.Empty(t, handles)
+}
+
+// TestSpawnManager_SpawnedHandles_有句柄 测试手动添加句柄后返回快照。
+func TestSpawnManager_SpawnedHandles_有句柄(t *testing.T) {
+	sm := newTestSpawnManager(t)
+
+	handle1 := &stubSpawnHandle{processID: "p1", alive: true}
+	handle2 := &stubSpawnHandle{processID: "p2", alive: true}
+	sm.mu.Lock()
+	sm.spawnedHandles["alice"] = handle1
+	sm.spawnedHandles["bob"] = handle2
+	sm.mu.Unlock()
+
+	handles := sm.SpawnedHandles()
+	assert.Len(t, handles, 2)
+	assert.Contains(t, handles, "alice")
+	assert.Contains(t, handles, "bob")
+
+	// 验证是快照而非引用
+	delete(handles, "alice")
+	sm.mu.Lock()
+	_, exists := sm.spawnedHandles["alice"]
+	sm.mu.Unlock()
+	assert.True(t, exists, "删除快照不应影响原始 map")
+}
+
+// TestSpawnManager_SpawnedHandleNames_空 测试无句柄时返回空切片。
+func TestSpawnManager_SpawnedHandleNames_空(t *testing.T) {
+	sm := newTestSpawnManager(t)
+	names := sm.SpawnedHandleNames()
+	assert.Empty(t, names)
+}
+
+// TestSpawnManager_SpawnedHandleNames_有句柄 测试返回所有成员名。
+func TestSpawnManager_SpawnedHandleNames_有句柄(t *testing.T) {
+	sm := newTestSpawnManager(t)
+
+	sm.mu.Lock()
+	sm.spawnedHandles["alice"] = &stubSpawnHandle{processID: "p1"}
+	sm.spawnedHandles["bob"] = &stubSpawnHandle{processID: "p2"}
+	sm.mu.Unlock()
+
+	names := sm.SpawnedHandleNames()
+	assert.Len(t, names, 2)
+	assert.Contains(t, names, "alice")
+	assert.Contains(t, names, "bob")
+}

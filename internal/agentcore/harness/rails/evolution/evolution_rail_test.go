@@ -590,3 +590,60 @@ func (c *countingExtension) SnapshotForEvolution(_ context.Context, traj *trajec
 	messages := collectMessagesFromTrajectory(traj)
 	return &EvolutionSnapshot{Trajectory: traj, Messages: messages}
 }
+
+// ---------------------------------------------------------------------------
+// formatTimeoutSecs
+// ---------------------------------------------------------------------------
+
+// TestFormatTimeoutSecs_整数 测试整数秒格式化。
+func TestFormatTimeoutSecs_整数(t *testing.T) {
+	assert.Equal(t, "30", formatTimeoutSecs(30.0))
+}
+
+// TestFormatTimeoutSecs_小数 测试小数秒格式化。
+func TestFormatTimeoutSecs_小数(t *testing.T) {
+	assert.Equal(t, "1.5", formatTimeoutSecs(1.5))
+}
+
+// TestFormatTimeoutSecs_零 测试零值格式化。
+func TestFormatTimeoutSecs_零(t *testing.T) {
+	assert.Equal(t, "0", formatTimeoutSecs(0.0))
+}
+
+// TestFormatTimeoutSecs_去除尾零 测试去除尾部零。
+func TestFormatTimeoutSecs_去除尾零(t *testing.T) {
+	assert.Equal(t, "10", formatTimeoutSecs(10.00))
+}
+
+// TestFormatTimeoutSecs_去除尾点 测试去除尾部小数点。
+func TestFormatTimeoutSecs_去除尾点(t *testing.T) {
+	assert.Equal(t, "5", formatTimeoutSecs(5.0))
+}
+
+// ---------------------------------------------------------------------------
+// containsTeamSkillKind
+// ---------------------------------------------------------------------------
+
+// TestContainsTeamSkillKind_团队技能 测试 kind=team-skill 返回 true。
+func TestContainsTeamSkillKind_团队技能(t *testing.T) {
+	content := "---\nkind: team-skill\n---\nsome content"
+	assert.True(t, containsTeamSkillKind(content))
+}
+
+// TestContainsTeamSkillKind_群体技能 测试 kind=swarm-skill 返回 true。
+func TestContainsTeamSkillKind_群体技能(t *testing.T) {
+	content := "---\nkind: swarm-skill\n---\nsome content"
+	assert.True(t, containsTeamSkillKind(content))
+}
+
+// TestContainsTeamSkillKind_普通技能 测试 kind=skill 返回 false。
+func TestContainsTeamSkillKind_普通技能(t *testing.T) {
+	content := "---\nkind: skill\n---\nsome content"
+	assert.False(t, containsTeamSkillKind(content))
+}
+
+// TestContainsTeamSkillKind_无frontmatter 测试无 frontmatter 返回 false。
+func TestContainsTeamSkillKind_无frontmatter(t *testing.T) {
+	content := "just some content without frontmatter"
+	assert.False(t, containsTeamSkillKind(content))
+}

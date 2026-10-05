@@ -1746,6 +1746,38 @@ func TestAnySliceToStrings(t *testing.T) {
 	assert.Empty(t, anySliceToStrings(nil))
 }
 
+// TestAnySliceToStringSlice 测试 anySliceToStringSlice
+func TestAnySliceToStringSlice(t *testing.T) {
+	input := []any{"hello", 42, "world", true}
+	result := anySliceToStringSlice(input)
+	assert.Equal(t, []string{"hello", "world"}, result)
+	assert.Empty(t, anySliceToStringSlice(nil))
+	assert.Empty(t, anySliceToStringSlice([]any{}))
+}
+
+// TestAnySliceToStringSlice_全字符串 测试全字符串输入。
+func TestAnySliceToStringSlice_全字符串(t *testing.T) {
+	input := []any{"a", "b", "c"}
+	result := anySliceToStringSlice(input)
+	assert.Equal(t, []string{"a", "b", "c"}, result)
+}
+
+// TestAnySliceToFloat64Slice 测试 anySliceToFloat64Slice
+func TestAnySliceToFloat64Slice(t *testing.T) {
+	input := []any{1.0, "not a number", 2.5, 42, true}
+	result := anySliceToFloat64Slice(input)
+	assert.Equal(t, []float64{1.0, 2.5}, result)
+	assert.Empty(t, anySliceToFloat64Slice(nil))
+	assert.Empty(t, anySliceToFloat64Slice([]any{}))
+}
+
+// TestAnySliceToFloat64Slice_全浮点 测试全 float64 输入。
+func TestAnySliceToFloat64Slice_全浮点(t *testing.T) {
+	input := []any{1.1, 2.2, 3.3}
+	result := anySliceToFloat64Slice(input)
+	assert.Equal(t, []float64{1.1, 2.2, 3.3}, result)
+}
+
 // TestContainsString 测试 containsString
 func TestContainsString(t *testing.T) {
 	slice := []string{"a", "b", "c"}

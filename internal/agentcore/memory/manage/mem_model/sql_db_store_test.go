@@ -24,6 +24,18 @@ func newTestSqlDbStore(t *testing.T) (*SqlDbStore, *gorm.DB) {
 	return store, gormDB
 }
 
+// TestSqlDbStore_GetDB 测试 GetDB 返回 GORM 数据库实例
+func TestSqlDbStore_GetDB(t *testing.T) {
+	store, gormDB := newTestSqlDbStore(t)
+	db := store.GetDB()
+	if db == nil {
+		t.Fatal("GetDB 不应返回 nil")
+	}
+	if db != gormDB {
+		t.Error("GetDB 返回的实例应与构造时传入的 GORM 实例一致")
+	}
+}
+
 // TestSqlDbStore_Write 写入数据
 func TestSqlDbStore_Write(t *testing.T) {
 	store, gormDB := newTestSqlDbStore(t)

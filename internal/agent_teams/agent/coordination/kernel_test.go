@@ -346,3 +346,63 @@ func TestCoordinationKernel_生命周期转换(t *testing.T) {
 		t.Errorf("stop 幂等应保持 stopped，实际 %q", k.LifecycleState())
 	}
 }
+
+// ──────────────────────────── SubscribedTopics 测试 ────────────────────────────
+
+// TestCoordinationKernel_SubscribedTopics 测试初始订阅主题为空
+func TestCoordinationKernel_SubscribedTopics(t *testing.T) {
+	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}
+	k := NewCoordinationKernel(host)
+
+	topics := k.SubscribedTopics()
+	if topics != nil {
+		t.Errorf("初始订阅主题应为 nil，实际 %v", topics)
+	}
+}
+
+// TestCoordinationKernel_AddSubscribedTopic 测试添加订阅主题
+func TestCoordinationKernel_AddSubscribedTopic(t *testing.T) {
+	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}
+	k := NewCoordinationKernel(host)
+
+	k.AddSubscribedTopic("topic-1")
+	k.AddSubscribedTopic("topic-2")
+
+	topics := k.SubscribedTopics()
+	if len(topics) != 2 {
+		t.Fatalf("应有 2 个订阅主题，实际 %d", len(topics))
+	}
+	if topics[0] != "topic-1" || topics[1] != "topic-2" {
+		t.Errorf("订阅主题内容不匹配，实际 %v", topics)
+	}
+}
+
+// TestCoordinationKernel_ClearSubscribedTopics 测试清空订阅主题
+func TestCoordinationKernel_ClearSubscribedTopics(t *testing.T) {
+	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}
+	k := NewCoordinationKernel(host)
+
+	k.AddSubscribedTopic("topic-1")
+	k.AddSubscribedTopic("topic-2")
+	k.ClearSubscribedTopics()
+
+	topics := k.SubscribedTopics()
+	if topics != nil {
+		t.Errorf("清空后订阅主题应为 nil，实际 %v", topics)
+	}
+}
+
+// TestCoordinationKernel_AddSubscribedTopic后追加 测试追加不影响已有主题
+func TestCoordinationKernel_AddSubscribedTopic后追加(t *testing.T) {
+	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}
+	k := NewCoordinationKernel(host)
+
+	k.AddSubscribedTopic("topic-a")
+	before := k.SubscribedTopics()
+	k.AddSubscribedTopic("topic-b")
+	after := k.SubscribedTopics()
+
+	if len(before) != 1 || len(after) != 2 {
+		t.Errorf("追加后应从 1 变为 2，实际 %d → %d", len(before), len(after))
+	}
+}

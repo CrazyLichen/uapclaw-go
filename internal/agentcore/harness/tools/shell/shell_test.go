@@ -1,6 +1,10 @@
 package shell
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+)
 
 // TestNewPermissionConfig 测试创建权限配置
 func TestNewPermissionConfig(t *testing.T) {
@@ -54,5 +58,47 @@ func TestCheckPermission_AllowPattern(t *testing.T) {
 	ok, _ := CheckPermission("ls -la", cfg, false)
 	if !ok {
 		t.Error("匹配 allow pattern 的命令应被允许")
+	}
+}
+
+// ──────────────────────────── 工具构造函数测试 ────────────────────────────
+
+// TestNewBashTool 测试创建 BashTool 实例
+func TestNewBashTool(t *testing.T) {
+	op := &sys_operation.BaseSysOperation{}
+	permCfg := NewPermissionConfig(PermissionModeBypass, nil, nil)
+	tool := NewBashTool(op, "cn", "test-agent-id", permCfg)
+	if tool == nil {
+		t.Error("NewBashTool 不应返回 nil")
+	}
+}
+
+// TestNewBashStreamTool 测试创建 BashStreamTool 实例
+func TestNewBashStreamTool(t *testing.T) {
+	op := &sys_operation.BaseSysOperation{}
+	permCfg := NewPermissionConfig(PermissionModeBypass, nil, nil)
+	tool := NewBashStreamTool(op, "cn", "test-agent-id", permCfg)
+	if tool == nil {
+		t.Error("NewBashStreamTool 不应返回 nil")
+	}
+}
+
+// TestNewPowerShellTool 测试创建 PowerShellTool 实例
+func TestNewPowerShellTool(t *testing.T) {
+	op := &sys_operation.BaseSysOperation{}
+	permCfg := NewPermissionConfig(PermissionModeBypass, nil, nil)
+	tool := NewPowerShellTool(op, "cn", "test-agent-id", permCfg)
+	if tool == nil {
+		t.Error("NewPowerShellTool 不应返回 nil")
+	}
+}
+
+// TestNewPowerShellStreamTool 测试创建 PowerShellStreamTool 实例
+func TestNewPowerShellStreamTool(t *testing.T) {
+	op := &sys_operation.BaseSysOperation{}
+	permCfg := NewPermissionConfig(PermissionModeBypass, nil, nil)
+	tool := NewPowerShellStreamTool(op, "cn", "test-agent-id", permCfg)
+	if tool == nil {
+		t.Error("NewPowerShellStreamTool 不应返回 nil")
 	}
 }
