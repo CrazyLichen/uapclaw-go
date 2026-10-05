@@ -465,6 +465,13 @@ func TestNormalizeSkillNames(t *testing.T) {
 	assert.Equal(t, map[string]bool{"a": true, "b": true}, result)
 }
 
+// TestWithDefaultMemberRole 验证 WithDefaultMemberRole 选项。
+func TestWithDefaultMemberRole(t *testing.T) {
+	r := &EvolutionRail{}
+	WithDefaultMemberRole("leader")(r)
+	assert.Equal(t, "leader", r.defaultMemberRole)
+}
+
 func TestNormalizeNameSet_字符串输入(t *testing.T) {
 	result := normalizeSkillNames([]string{"x"})
 	assert.Equal(t, map[string]bool{"x": true}, result)

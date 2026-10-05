@@ -274,3 +274,19 @@ func TestConfirmPayload_EdgeCases(t *testing.T) {
 	assert.Empty(t, payload.Feedback)
 	assert.False(t, payload.AutoConfirm)
 }
+
+// TestWithAutoConfirmKeyFn 验证 WithAutoConfirmKeyFn 选项。
+func TestWithAutoConfirmKeyFn(t *testing.T) {
+	fn := func(tc *llmschema.ToolCall) string { return "custom_key" }
+	r := &ConfirmInterruptRail{}
+	WithAutoConfirmKeyFn(fn)(r)
+	assert.NotNil(t, r.autoConfirmKeyFn)
+	assert.Equal(t, "custom_key", r.autoConfirmKeyFn(nil))
+}
+
+// TestWithConfirmMessage 验证 WithConfirmMessage 选项。
+func TestWithConfirmMessage(t *testing.T) {
+	r := &ConfirmInterruptRail{}
+	WithConfirmMessage("自定义确认消息")(r)
+	assert.Equal(t, "自定义确认消息", r.request.Message)
+}

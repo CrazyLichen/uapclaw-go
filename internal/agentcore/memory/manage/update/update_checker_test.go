@@ -366,3 +366,23 @@ func TestMemoryStatus_String(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestWithModel 验证 WithModel 选项。
+func TestWithModel(t *testing.T) {
+	opt := WithModel(nil)
+	cfg := &checkConfig{}
+	opt(cfg)
+	if cfg.model != nil {
+		t.Error("model 应为 nil")
+	}
+}
+
+// TestWithRetries 验证 WithRetries 选项。
+func TestWithRetries(t *testing.T) {
+	opt := WithRetries(5)
+	cfg := &checkConfig{}
+	opt(cfg)
+	if cfg.retries != 5 {
+		t.Errorf("retries = %d, want 5", cfg.retries)
+	}
+}

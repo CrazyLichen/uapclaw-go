@@ -5,7 +5,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -326,4 +328,45 @@ func TestTeamToolRail_RegisteredTools(t *testing.T) {
 	if r.RegisteredTools() != nil {
 		t.Fatal("expected nil before Init")
 	}
+}
+
+// TestWithOnTeammateCreated 验证 WithOnTeammateCreated 选项。
+func TestWithOnTeammateCreated(t *testing.T) {
+	called := false
+	fn := func(_ context.Context, _ string) error { called = true; return nil }
+	r := &TeamToolRail{}
+	WithOnTeammateCreated(fn)(r)
+	assert.NotNil(t, r.onTeammateCreated)
+	r.onTeammateCreated(context.Background(), "alice")
+	assert.True(t, called)
+}
+
+// TestWithModelConfigAllocator 验证 WithModelConfigAllocator 选项。
+func TestWithModelConfigAllocator(t *testing.T) {
+	alloc := func(_ string) *models.Allocation { return nil }
+	r := &TeamToolRail{}
+	WithModelConfigAllocator(alloc)(r)
+	assert.NotNil(t, r.modelConfigAlloc)
+}
+
+// TestWithExcludeTools 验证 WithExcludeTools 选项。
+func TestWithExcludeTools(t *testing.T) {
+	names := map[string]struct{}{"bash": {}}
+	r := &TeamToolRail{}
+	WithExcludeTools(names)(r)
+	assert.Equal(t, names, r.excludeTools)
+}
+
+// TestWithWorkspaceManager 验证 WithWorkspaceManager 选项。
+func TestWithWorkspaceManager(t *testing.T) {
+	r := &TeamToolRail{}
+	WithWorkspaceManager(nil)(r)
+	assert.Nil(t, r.workspaceManager)
+}
+
+// TestWithWorktreeManager 验证 WithWorktreeManager 选项。
+func TestWithWorktreeManager(t *testing.T) {
+	r := &TeamToolRail{}
+	WithWorktreeManager(nil)(r)
+	assert.Nil(t, r.worktreeManager)
 }

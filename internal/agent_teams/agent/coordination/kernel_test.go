@@ -296,6 +296,26 @@ func TestCoordinationKernel_WakeMailbox_有中断跳过(t *testing.T) {
 	}
 }
 
+// TestWithMailboxPollInterval 验证 WithMailboxPollInterval 选项。
+func TestWithMailboxPollInterval(t *testing.T) {
+	opt := WithMailboxPollInterval(2.5)
+	cfg := &kernelOptions{}
+	opt(cfg)
+	if cfg.mailboxPollInterval != 2.5 {
+		t.Errorf("mailboxPollInterval = %v, want 2.5", cfg.mailboxPollInterval)
+	}
+}
+
+// TestWithTaskPollInterval 验证 WithTaskPollInterval 选项。
+func TestWithTaskPollInterval(t *testing.T) {
+	opt := WithTaskPollInterval(3.0)
+	cfg := &kernelOptions{}
+	opt(cfg)
+	if cfg.taskPollInterval != 3.0 {
+		t.Errorf("taskPollInterval = %v, want 3.0", cfg.taskPollInterval)
+	}
+}
+
 func TestCoordinationKernel_生命周期转换(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)

@@ -388,6 +388,14 @@ func TestWithDocIndexCallback(t *testing.T) {
 	assert.NotNil(t, opts.DocIndexCallback)
 }
 
+// TestWithEmbedOpts 验证 WithEmbedOpts 选项。
+func TestWithEmbedOpts(t *testing.T) {
+	opt1 := storeEmbedding.WithBatchSize(10)
+	opt2 := storeEmbedding.WithBatchSize(20)
+	opts := NewChunkEmbedOptions(WithEmbedOpts(opt1, opt2))
+	assert.Len(t, opts.EmbedOpts, 2)
+}
+
 // TestComputeChunkEmbeddings_新签名_纯文本 测试 option 模式下的纯文本路径
 func TestComputeChunkEmbeddings_新签名_纯文本(t *testing.T) {
 	fake := newFakeBaseEmbedding(3)

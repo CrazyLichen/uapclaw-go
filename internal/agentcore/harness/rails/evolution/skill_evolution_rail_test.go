@@ -8,6 +8,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/experience"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
 )
 
@@ -329,6 +330,59 @@ func TestWithDisabledSkillsSet_基类已初始化(t *testing.T) {
 	assert.Equal(t, []string{"foo", "bar"}, r.disabledSkills)
 	assert.True(t, r.EvolutionRail.disabledSkills["foo"])
 	assert.True(t, r.EvolutionRail.disabledSkills["bar"])
+}
+
+// TestWithAutoScan 验证 WithAutoScan 选项。
+func TestWithAutoScan(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	WithAutoScan(true)(r)
+	assert.True(t, r.autoScan)
+}
+
+// TestWithAutoSave 验证 WithAutoSave 选项。
+func TestWithAutoSave(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	WithAutoSave(true)(r)
+	assert.True(t, r.autoSave)
+}
+
+// TestWithEvolutionTimeout 验证 WithEvolutionTimeout 选项。
+func TestWithEvolutionTimeout(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	WithEvolutionTimeout(120.0)(r)
+	assert.Equal(t, 120.0, r.evolutionTimeoutSec)
+}
+
+// TestWithGenerateRecordsLLMPolicy 验证 WithGenerateRecordsLLMPolicy 选项。
+func TestWithGenerateRecordsLLMPolicy(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	p := llm_resilience.LLMInvokePolicy{MaxAttempts: 3}
+	WithGenerateRecordsLLMPolicy(p)(r)
+	assert.Equal(t, 3, r.generateRecordsLLMPolicy.MaxAttempts)
+}
+
+// TestWithEvaluateLLMPolicy 验证 WithEvaluateLLMPolicy 选项。
+func TestWithEvaluateLLMPolicy(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	p := llm_resilience.LLMInvokePolicy{MaxAttempts: 5}
+	WithEvaluateLLMPolicy(p)(r)
+	assert.Equal(t, 5, r.evaluateLLMPolicy.MaxAttempts)
+}
+
+// TestWithSimplifyLLMPolicy 验证 WithSimplifyLLMPolicy 选项。
+func TestWithSimplifyLLMPolicy(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	p := llm_resilience.LLMInvokePolicy{MaxAttempts: 2}
+	WithSimplifyLLMPolicy(p)(r)
+	assert.Equal(t, 2, r.simplifyLLMPolicy.MaxAttempts)
+}
+
+// TestWithSharingConfigMap 验证 WithSharingConfigMap 选项。
+func TestWithSharingConfigMap(t *testing.T) {
+	r := &SkillEvolutionRail{}
+	cfg := map[string]any{"key": "value"}
+	WithSharingConfigMap(cfg)(r)
+	assert.Equal(t, cfg, r.sharingConfig)
 }
 
 func TestNormalizeNameSet(t *testing.T) {

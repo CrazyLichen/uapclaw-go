@@ -4,7 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/stretchr/testify/assert"
+	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -191,12 +192,12 @@ func TestMergeConfigWithOverrides_float64转int(t *testing.T) {
 // ──────────────────────────── MergeProcessors 测试 ────────────────────────────
 
 func TestMergeProcessors_基础合并(t *testing.T) {
-	base := []iface.ProcessorSpec{
+	base := []ceiface.ProcessorSpec{
 		{Type: "DialogueCompressor", Config: &testConfig{TokensThreshold: 100000}},
 		{Type: "MessageSummaryOffloader", Config: &testConfig{TokensThreshold: 20000}},
 	}
 
-	overrides := []iface.ProcessorSpec{
+	overrides := []ceiface.ProcessorSpec{
 		{
 			Type:            "DialogueCompressor",
 			ConfigOverrides: map[string]any{"tokens_threshold": 50000},
@@ -231,11 +232,11 @@ func TestMergeProcessors_基础合并(t *testing.T) {
 }
 
 func TestMergeProcessors_追加新processor(t *testing.T) {
-	base := []iface.ProcessorSpec{
+	base := []ceiface.ProcessorSpec{
 		{Type: "DialogueCompressor", Config: &testConfig{TokensThreshold: 100000}},
 	}
 
-	overrides := []iface.ProcessorSpec{
+	overrides := []ceiface.ProcessorSpec{
 		{Type: "NewProcessor", Config: &testConfig{TokensThreshold: 5000}},
 	}
 
@@ -256,7 +257,7 @@ func TestMergeProcessors_无base时dict覆盖应panic(t *testing.T) {
 		}
 	}()
 
-	overrides := []iface.ProcessorSpec{
+	overrides := []ceiface.ProcessorSpec{
 		{
 			Type:            "NewProcessor",
 			ConfigOverrides: map[string]any{"tokens_threshold": 5000},
@@ -267,12 +268,12 @@ func TestMergeProcessors_无base时dict覆盖应panic(t *testing.T) {
 }
 
 func TestMergeProcessors_完整配置替换(t *testing.T) {
-	base := []iface.ProcessorSpec{
+	base := []ceiface.ProcessorSpec{
 		{Type: "DialogueCompressor", Config: &testConfig{TokensThreshold: 100000, MessagesToKeep: 10}},
 	}
 
 	replacementCfg := &testConfig{TokensThreshold: 50000, MessagesToKeep: 5, KeepLastRound: true}
-	overrides := []iface.ProcessorSpec{
+	overrides := []ceiface.ProcessorSpec{
 		{Type: "DialogueCompressor", Config: replacementCfg},
 	}
 
@@ -384,4 +385,23 @@ func TestSetFieldValue_各种类型(t *testing.T) {
 	if cfg.Model == nil || cfg.Model.ModelName != "test" {
 		t.Error("指针字段设置失败")
 	}
+}
+
+// ──────────────────────────── WithPreset / WithUserProcessors 测试 ────────────────────────────
+
+// TestWithPreset 验证 WithPreset 选项。
+func TestWithPreset(t *testing.T) {
+	r := &ContextProcessorRail{}
+	WithPreset(true)(r)
+	assert.True(t, r.preset)
+}
+
+// TestWithUserProcessors 验证 WithUserProcessors 选项。
+func TestWithUserProcessors(t *testing.T) {
+	procs := []ceiface.ProcessorSpec{
+		{Type: "TestProcessor", Config: &testConfig{TokensThreshold: 5000}},
+	}
+	r := &ContextProcessorRail{}
+	WithUserProcessors(procs)(r)
+	assert.Equal(t, procs, r.userProcessors)
 }

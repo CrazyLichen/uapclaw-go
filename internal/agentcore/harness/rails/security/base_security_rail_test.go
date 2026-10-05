@@ -382,3 +382,13 @@ func TestResolveSubjectID_工具调用无ToolCall(t *testing.T) {
 	subjectID := r.resolveSubjectID(cbc, agentinterfaces.CallbackBeforeToolCall)
 	assert.Contains(t, subjectID, "BaseSecurityRail:")
 }
+
+// TestWithSecurityCheckFn 验证 WithSecurityCheckFn 选项。
+func TestWithSecurityCheckFn(t *testing.T) {
+	fn := func(_ context.Context, _ *SecurityCheckContext) (SecurityDecision, error) {
+		return NewBaseSecurityRail().Allow(nil), nil
+	}
+	r := NewBaseSecurityRail()
+	WithSecurityCheckFn(fn)(r)
+	assert.NotNil(t, r.securityCheckFn)
+}
