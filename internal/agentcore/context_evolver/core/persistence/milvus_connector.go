@@ -915,8 +915,6 @@ func findColumn(ds milvusclient.DataSet, name string) column.Column {
 	return nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // CreateCollection 实现 milvusClient 接口。
 func (a *persistenceClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption) error {
 	return a.client.CreateCollection(ctx, option)

@@ -101,9 +101,9 @@ func (s *AgentTeamSessionE2ESuite) TestAgentTeamSession_状态读写() {
 
 	// UpdateState
 	sess.UpdateState(map[string]any{
-		"task_status":  "running",
-		"iteration":    3,
-		"last_agent":   "agent-b",
+		"task_status": "running",
+		"iteration":   3,
+		"last_agent":  "agent-b",
 	})
 
 	// GetState

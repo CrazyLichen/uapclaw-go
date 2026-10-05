@@ -12,13 +12,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/teams/hierarchical_msgbus"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/teams/hierarchical_tools"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── mock 类型 ────────────────────────────
@@ -42,10 +42,10 @@ func (a *mockBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...agentin
 	close(ch)
 	return ch, nil
 }
-func (a *mockBaseAgent) Card() *agentschema.AgentCard                              { return a.card }
-func (a *mockBaseAgent) Config() agentinterfaces.AgentConfig                       { return nil }
-func (a *mockBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface   { return nil }
-func (a *mockBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager    { return nil }
+func (a *mockBaseAgent) Card() *agentschema.AgentCard                               { return a.card }
+func (a *mockBaseAgent) Config() agentinterfaces.AgentConfig                        { return nil }
+func (a *mockBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface    { return nil }
+func (a *mockBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager     { return nil }
 func (a *mockBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 func (a *mockBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
@@ -53,20 +53,24 @@ func (a *mockBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.Ag
 func (a *mockBaseAgent) RegisterRail(_ context.Context, _ agentinterfaces.AgentRail, _ ...callback.CallbackOption) error {
 	return nil
 }
-func (a *mockBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error { return nil }
+func (a *mockBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
+	return nil
+}
 
 type mockMessageBus struct{}
 
-func (m *mockMessageBus) Start(_ context.Context) error                                         { return nil }
-func (m *mockMessageBus) Stop(_ context.Context) error                                          { return nil }
-func (m *mockMessageBus) CleanupSession(_ context.Context, _ string) error                      { return nil }
-func (m *mockMessageBus) Send(_ context.Context, _ any, _, _, _ string, _ float64) (any, error) { return nil, nil }
-func (m *mockMessageBus) Publish(_ context.Context, _ any, _, _, _ string) error                { return nil }
-func (m *mockMessageBus) AddSubscription(_, _ string)                                           {}
-func (m *mockMessageBus) RemoveSubscription(_, _ string)                                        {}
-func (m *mockMessageBus) RemoveAllSubscriptions(_ string)                                       {}
-func (m *mockMessageBus) ListSubscriptions(_ string) any                                        { return nil }
-func (m *mockMessageBus) GetSubscriptionCount() int                                             { return 0 }
+func (m *mockMessageBus) Start(_ context.Context) error                    { return nil }
+func (m *mockMessageBus) Stop(_ context.Context) error                     { return nil }
+func (m *mockMessageBus) CleanupSession(_ context.Context, _ string) error { return nil }
+func (m *mockMessageBus) Send(_ context.Context, _ any, _, _, _ string, _ float64) (any, error) {
+	return nil, nil
+}
+func (m *mockMessageBus) Publish(_ context.Context, _ any, _, _, _ string) error { return nil }
+func (m *mockMessageBus) AddSubscription(_, _ string)                            {}
+func (m *mockMessageBus) RemoveSubscription(_, _ string)                         {}
+func (m *mockMessageBus) RemoveAllSubscriptions(_ string)                        {}
+func (m *mockMessageBus) ListSubscriptions(_ string) any                         { return nil }
+func (m *mockMessageBus) GetSubscriptionCount() int                              { return 0 }
 
 func newMockMessageBus() *mockMessageBus { return &mockMessageBus{} }
 

@@ -151,8 +151,6 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 	return nil, fmt.Errorf("嵌入提供者未配置: provider=%s, model=%s", provider, model)
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // EmbedQuery baseEmbeddingAdapter 的 EmbedQuery 实现，委托给 base。
 func (a *baseEmbeddingAdapter) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
 	return a.base.EmbedQuery(ctx, text)

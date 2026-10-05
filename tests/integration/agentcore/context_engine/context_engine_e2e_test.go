@@ -345,7 +345,7 @@ func (s *ContextEngineE2ESuite) TestSessionModelContext_GetContextWindow() {
 // TestSessionModelContext_GetContextWindow_窗口截断 测试窗口大小截断
 func (s *ContextEngineE2ESuite) TestSessionModelContext_GetContextWindow_窗口截断() {
 	config := ceschema.ContextEngineConfig{
-		DefaultWindowMessageNum: 2,
+		DefaultWindowMessageNum:  2,
 		ModelContextWindowTokens: map[string]int{},
 	}
 	ce := context_engine.NewContextEngine(config)
@@ -525,10 +525,10 @@ func (s *ContextEngineE2ESuite) TestMicroCompactProcessor_创建和配置() {
 // TestMicroCompactProcessor_配置校验失败 测试无效配置
 func (s *ContextEngineE2ESuite) TestMicroCompactProcessor_配置校验失败() {
 	cfg := &compressor.MicroCompactProcessorConfig{
-		TriggerThreshold:   0, // 无效：必须 > 0
+		TriggerThreshold:     0, // 无效：必须 > 0
 		CompactableToolNames: []string{"grep"},
-		KeepRecentPerTool:  5,
-		ClearedMarker:      "[cleared]",
+		KeepRecentPerTool:    5,
+		ClearedMarker:        "[cleared]",
 	}
 	err := cfg.Validate()
 	s.Error(err, "TriggerThreshold=0 应校验失败")
@@ -562,10 +562,10 @@ func (s *ContextEngineE2ESuite) TestMicroCompactProcessor_触发判断_未超过
 // TestMicroCompactProcessor_清除旧工具结果 测试清除旧工具结果
 func (s *ContextEngineE2ESuite) TestMicroCompactProcessor_清除旧工具结果() {
 	cfg := &compressor.MicroCompactProcessorConfig{
-		TriggerThreshold:      1,
-		CompactableToolNames:  []string{"read_file"},
-		KeepRecentPerTool:     2,
-		ClearedMarker:         compressor.MicroCompactClearedMarker,
+		TriggerThreshold:     1,
+		CompactableToolNames: []string{"read_file"},
+		KeepRecentPerTool:    2,
+		ClearedMarker:        compressor.MicroCompactClearedMarker,
 	}
 	mcp, err := compressor.NewMicroCompactProcessor(cfg)
 	s.NoError(err)
@@ -620,11 +620,11 @@ func (s *ContextEngineE2ESuite) TestMicroCompactProcessor_SaveLoadState() {
 // TestMessageOffloader_创建和配置 测试创建和配置验证
 func (s *ContextEngineE2ESuite) TestMessageOffloader_创建和配置() {
 	cfg := &offloader.MessageOffloaderConfig{
-		TokensThreshold:      1000,
+		TokensThreshold:       1000,
 		LargeMessageThreshold: 500,
-		TrimSize:             100,
-		OffloadMessageTypes:  []string{"tool"},
-		KeepLastRound:        ptrBool(true),
+		TrimSize:              100,
+		OffloadMessageTypes:   []string{"tool"},
+		KeepLastRound:         ptrBool(true),
 	}
 	mo, err := offloader.NewMessageOffloader(cfg)
 	s.NoError(err)

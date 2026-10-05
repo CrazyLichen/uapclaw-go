@@ -16,11 +16,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -1094,13 +1094,13 @@ func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.T
 
 	// Python: L428-436 — 构建 TeamRuntimeContext
 	runtimeCtx := atschema.TeamRuntimeContext{
-		Role:          atschema.TeamRoleLeader,
-		MemberName:    spec.Leader.MemberName,
-		Persona:       spec.Leader.Persona,
-		TeamSpec:      teamSpec,
+		Role:           atschema.TeamRoleLeader,
+		MemberName:     spec.Leader.MemberName,
+		Persona:        spec.Leader.Persona,
+		TeamSpec:       teamSpec,
 		MessagerConfig: messagerConfig,
-		DBConfig:      dbCfgProvider,
-		MemberModel:   leaderMemberModel,
+		DBConfig:       dbCfgProvider,
+		MemberModel:    leaderMemberModel,
 	}
 
 	// Python: L405-410 — 构建 leader_card

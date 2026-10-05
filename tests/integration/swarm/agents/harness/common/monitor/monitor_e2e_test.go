@@ -135,11 +135,11 @@ func (s *MonitorE2ESuite) TestFromEventMessage_消息事件() {
 	msg := events.NewEventMessage(
 		string(monitor.MonitorEventTypeMessage),
 		map[string]any{
-			"team_name":         "test-team",
-			"from_member_name":  "member-1",
-			"to_member_name":    "member-2",
-			"content":           "你好",
-			"message_id":        "msg-001",
+			"team_name":        "test-team",
+			"from_member_name": "member-1",
+			"to_member_name":   "member-2",
+			"content":          "你好",
+			"message_id":       "msg-001",
 		},
 		"sender-1",
 	)

@@ -31,77 +31,77 @@ func TestIsTeamRejectKind(t *testing.T) {
 // Python: dispatch.py decide_run_action 真值表
 func TestDecideRunAction(t *testing.T) {
 	tests := []struct {
-		name           string
-		teamInDB       bool
-		teamInSession  bool
-		poolEntry      *ActiveTeam
-		sessionID      string
-		teamName       string
-		teamDBState    string
-		wantKind       RunActionKind
+		name            string
+		teamInDB        bool
+		teamInSession   bool
+		poolEntry       *ActiveTeam
+		sessionID       string
+		teamName        string
+		teamDBState     string
+		wantKind        RunActionKind
 		wantRequireSpec bool
-		wantReason     bool // 是否期望有 reason
-		wantPanic      bool
+		wantReason      bool // 是否期望有 reason
+		wantPanic       bool
 	}{
 		{
-			name: "全新团队_无DB无Session无Pool",
+			name:     "全新团队_无DB无Session无Pool",
 			teamInDB: false, teamInSession: false, poolEntry: nil,
 			sessionID: "sess-1", teamName: "team-a", teamDBState: "",
 			wantKind: RunActionKindCreate, wantRequireSpec: true, wantReason: false,
 		},
 		{
-			name: "不一致_Pool有条目但DB无行",
+			name:     "不一致_Pool有条目但DB无行",
 			teamInDB: false, teamInSession: false,
 			poolEntry: &ActiveTeam{TeamName: "team-a", SessionID: "sess-1", State: RuntimeStateRunning},
 			sessionID: "sess-1", teamName: "team-a", teamDBState: "",
 			wantKind: RunActionKindRejectInconsistent, wantRequireSpec: false, wantReason: true,
 		},
 		{
-			name: "孤立_Session有桶但DB无行",
+			name:     "孤立_Session有桶但DB无行",
 			teamInDB: false, teamInSession: true, poolEntry: nil,
 			sessionID: "sess-1", teamName: "team-a", teamDBState: "",
 			wantKind: RunActionKindRejectOrphaned, wantRequireSpec: false, wantReason: true,
 		},
 		{
-			name: "可重建_PendingCreate状态",
+			name:     "可重建_PendingCreate状态",
 			teamInDB: false, teamInSession: true, poolEntry: nil,
 			sessionID: "sess-1", teamName: "team-a", teamDBState: "pending_create",
 			wantKind: RunActionKindCreate, wantRequireSpec: true, wantReason: false,
 		},
 		{
-			name: "可重建_Cleaned状态",
+			name:     "可重建_Cleaned状态",
 			teamInDB: false, teamInSession: true, poolEntry: nil,
 			sessionID: "sess-1", teamName: "team-a", teamDBState: "cleaned",
 			wantKind: RunActionKindCreate, wantRequireSpec: true, wantReason: false,
 		},
 		{
-			name: "新Session上的已有团队_DB有行无Session无Pool",
+			name:     "新Session上的已有团队_DB有行无Session无Pool",
 			teamInDB: true, teamInSession: false, poolEntry: nil,
 			sessionID: "sess-1", teamName: "team-a", teamDBState: "",
 			wantKind: RunActionKindNewTeamInSession, wantRequireSpec: false, wantReason: false,
 		},
 		{
-			name: "冷恢复_DB有行Session有桶无Pool",
+			name:     "冷恢复_DB有行Session有桶无Pool",
 			teamInDB: true, teamInSession: true, poolEntry: nil,
 			sessionID: "sess-1", teamName: "team-a", teamDBState: "",
 			wantKind: RunActionKindColdRecover, wantRequireSpec: false, wantReason: false,
 		},
 		{
-			name: "拒绝运行_Pool有条目且Running",
+			name:     "拒绝运行_Pool有条目且Running",
 			teamInDB: true, teamInSession: true,
 			poolEntry: &ActiveTeam{TeamName: "team-a", SessionID: "sess-1", State: RuntimeStateRunning},
 			sessionID: "sess-1", teamName: "team-a", teamDBState: "",
 			wantKind: RunActionKindRejectRunning, wantRequireSpec: false, wantReason: true,
 		},
 		{
-			name: "从暂停恢复_Pool有条目且Paused",
+			name:     "从暂停恢复_Pool有条目且Paused",
 			teamInDB: true, teamInSession: true,
 			poolEntry: &ActiveTeam{TeamName: "team-a", SessionID: "sess-1", State: RuntimeStatePaused},
 			sessionID: "sess-1", teamName: "team-a", teamDBState: "",
 			wantKind: RunActionKindResumeFromPause, wantRequireSpec: false, wantReason: false,
 		},
 		{
-			name: "契约违反_Pool条目Session不匹配",
+			name:     "契约违反_Pool条目Session不匹配",
 			teamInDB: true, teamInSession: true,
 			poolEntry: &ActiveTeam{TeamName: "team-a", SessionID: "sess-old", State: RuntimeStateRunning},
 			sessionID: "sess-new", teamName: "team-a", teamDBState: "",

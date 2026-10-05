@@ -37,6 +37,7 @@ var (
 func SetRunTeamMemberFunc(fn any) {
 	runTeamMemberFunc = fn
 }
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InProcessSpawn 以进程内 goroutine 方式生成 teammate。

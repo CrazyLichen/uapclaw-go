@@ -388,7 +388,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			// 对齐 Python: while team_manager.has_stream_task(session_id):
 			//   event = await asyncio.wait_for(request_queue.get(), timeout=0.1)
 			//   yield AgentResponseChunk(...)
-				for teamManager.HasStreamTask(sessionID) {
+			for teamManager.HasStreamTask(sessionID) {
 				var event map[string]any
 				select {
 				case event = <-requestQueue:
@@ -520,6 +520,7 @@ func (d *DeepAdapter) ensureMonitorForActiveRuntime(ctx context.Context, channel
 //  7. task = asyncio.create_task(_watch_team_evolution_and_push(channel_id, session_id, rail))
 //  8. setattr(task, "_team_channel_id", channel_id)
 //  9. setattr(task, "_team_session_id", session_id)
+//
 // 10. task.add_done_callback(_on_team_watcher_done)
 // 11. tm.register_team_evolution_watcher(session_id, task)
 func (d *DeepAdapter) ensureTeamEvolutionWatcher(ctx context.Context, channelID, sessionID, source string) {

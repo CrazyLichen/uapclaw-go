@@ -25,9 +25,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/config"
-	migrationop "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/ltm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/manage/mem_model"
+	migrationop "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/operation"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -70,9 +70,9 @@ type mockVectorStore struct {
 
 // mockCollection 内存向量集合
 type mockCollection struct {
-	schema  *vector.CollectionSchema
-	docs    []mockDoc
-	nextID  int
+	schema *vector.CollectionSchema
+	docs   []mockDoc
+	nextID int
 }
 
 // mockDoc 内存向量文档

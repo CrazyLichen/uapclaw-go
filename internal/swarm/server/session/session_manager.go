@@ -295,8 +295,6 @@ func (sm *SessionManager) HasActiveTasks() bool {
 	return false
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Len 实现 heap.Interface。
 func (h priorityHeap) Len() int { return len(h) }
 

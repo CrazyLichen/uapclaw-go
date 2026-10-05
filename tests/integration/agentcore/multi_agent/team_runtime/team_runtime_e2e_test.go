@@ -18,8 +18,8 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -27,12 +27,12 @@ import (
 
 // mockMessageBus 内存消息总线 mock，记录 Send/Publish 调用
 type mockMessageBus struct {
-	started  atomic.Bool
-	sends    []mockSendCall
+	started   atomic.Bool
+	sends     []mockSendCall
 	publishes []mockPublishCall
-	subs     map[string]map[string]struct{} // agentID → topic set
-	mu       sync.RWMutex
-	subMu    sync.RWMutex
+	subs      map[string]map[string]struct{} // agentID → topic set
+	mu        sync.RWMutex
+	subMu     sync.RWMutex
 }
 
 type mockSendCall struct {
@@ -162,10 +162,10 @@ func (a *mockBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...agentin
 	close(ch)
 	return ch, nil
 }
-func (a *mockBaseAgent) Card() *agentschema.AgentCard                              { return a.card }
-func (a *mockBaseAgent) Config() agentinterfaces.AgentConfig                       { return nil }
-func (a *mockBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface   { return nil }
-func (a *mockBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager    { return nil }
+func (a *mockBaseAgent) Card() *agentschema.AgentCard                               { return a.card }
+func (a *mockBaseAgent) Config() agentinterfaces.AgentConfig                        { return nil }
+func (a *mockBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface    { return nil }
+func (a *mockBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager     { return nil }
 func (a *mockBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 func (a *mockBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
 	return nil
@@ -184,9 +184,9 @@ func (a *mockBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.Agen
 // test_message_router.py, test_communicable_agent.py
 type TeamRuntimeE2ESuite struct {
 	suite.Suite
-	runtime   *team_runtime.TeamRuntime
-	mockBus   *mockMessageBus
-	agentIDs  []string
+	runtime  *team_runtime.TeamRuntime
+	mockBus  *mockMessageBus
+	agentIDs []string
 }
 
 func TestTeamRuntimeE2E(t *testing.T) {

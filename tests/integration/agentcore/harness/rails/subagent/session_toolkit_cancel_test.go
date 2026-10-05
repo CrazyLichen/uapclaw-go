@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	hsubagent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -27,6 +29,11 @@ import (
 type SessionToolkitCancelSuite struct {
 	isuite.BaseIntegrationSuite
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时验证 SessionToolkit 与 TaskScheduler 依赖关系
+var _ *modules.TaskScheduler = nil
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

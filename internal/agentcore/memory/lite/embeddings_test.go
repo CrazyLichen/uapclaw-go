@@ -130,7 +130,61 @@ func TestMockEmbeddingProvider_接口满足(t *testing.T) {
 	var _ EmbeddingProvider = NewMockEmbeddingProvider()
 }
 
+// TestMockEmbeddingProvider_Metadata 测试 MockEmbeddingProvider 的 ID/Model/Dims
+func TestMockEmbeddingProvider_Metadata(t *testing.T) {
+	mock := NewMockEmbeddingProvider()
+	if mock.ID() != "mock" {
+		t.Errorf("ID 应为 mock，实际为 %s", mock.ID())
+	}
+	if mock.Model() != "mock" {
+		t.Errorf("Model 应为 mock，实际为 %s", mock.Model())
+	}
+	if mock.Dims() != 128 {
+		t.Errorf("Dims 应为 128，实际为 %d", mock.Dims())
+	}
+}
+
 // TestBaseEmbeddingAdapter_接口满足 编译期验证 baseEmbeddingAdapter 满足 EmbeddingProvider
 func TestBaseEmbeddingAdapter_接口满足(t *testing.T) {
 	var _ EmbeddingProvider = &baseEmbeddingAdapter{}
+}
+
+// TestBaseEmbeddingAdapter_Metadata 测试 baseEmbeddingAdapter 的 ID/Model/Dims
+func TestBaseEmbeddingAdapter_Metadata(t *testing.T) {
+	adapter := &baseEmbeddingAdapter{prov: "test-prov", model: "test-model", dims: 256}
+	if adapter.ID() != "test-prov" {
+		t.Errorf("ID() = %q, want %q", adapter.ID(), "test-prov")
+	}
+	if adapter.Model() != "test-model" {
+		t.Errorf("Model() = %q, want %q", adapter.Model(), "test-model")
+	}
+	if adapter.Dims() != 256 {
+		t.Errorf("Dims() = %d, want 256", adapter.Dims())
+	}
+}
+
+// TestBaseEmbeddingAdapter_EmbedQuery 测试 baseEmbeddingAdapter 的 EmbedQuery 委托
+func TestBaseEmbeddingAdapter_EmbedQuery(t *testing.T) {
+	mock := NewMockEmbeddingProvider()
+	adapter := &baseEmbeddingAdapter{base: mock, prov: "mock", model: "mock", dims: 128}
+	vec, err := adapter.EmbedQuery(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("EmbedQuery 失败: %v", err)
+	}
+	if len(vec) != 128 {
+		t.Errorf("EmbedQuery 返回 %d 维，期望 128", len(vec))
+	}
+}
+
+// TestBaseEmbeddingAdapter_EmbedDocuments 测试 baseEmbeddingAdapter 的 EmbedDocuments 委托
+func TestBaseEmbeddingAdapter_EmbedDocuments(t *testing.T) {
+	mock := NewMockEmbeddingProvider()
+	adapter := &baseEmbeddingAdapter{base: mock, prov: "mock", model: "mock", dims: 128}
+	vecs, err := adapter.EmbedDocuments(context.Background(), []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("EmbedDocuments 失败: %v", err)
+	}
+	if len(vecs) != 2 {
+		t.Errorf("EmbedDocuments 返回 %d 个向量，期望 2", len(vecs))
+	}
 }

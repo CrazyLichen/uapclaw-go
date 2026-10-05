@@ -121,19 +121,19 @@ func (s *DeepSearchE2ESuite) TearDownTest() {
 
 // ─── mockSessionFacade 实现 sessioninterfaces.SessionFacade ───
 
-func (m *mockSessionFacade) GetSessionID() string { return m.sessionID }
+func (m *mockSessionFacade) GetSessionID() string         { return m.sessionID }
 func (m *mockSessionFacade) UpdateState(_ map[string]any) {}
 func (m *mockSessionFacade) GetState(_ state.StateKey) (any, error) {
 	return nil, nil
 }
-func (m *mockSessionFacade) DumpState() map[string]any { return nil }
+func (m *mockSessionFacade) DumpState() map[string]any                  { return nil }
 func (m *mockSessionFacade) WriteStream(_ context.Context, _ any) error { return nil }
 func (m *mockSessionFacade) WriteCustomStream(_ context.Context, _ any) error {
 	return nil
 }
-func (m *mockSessionFacade) GetEnv(_ string, _ ...any) any { return nil }
+func (m *mockSessionFacade) GetEnv(_ string, _ ...any) any           { return nil }
 func (m *mockSessionFacade) Interact(_ context.Context, _ any) error { return nil }
-func (m *mockSessionFacade) ClearSession(_ context.Context) {}
+func (m *mockSessionFacade) ClearSession(_ context.Context)          {}
 
 // 编译期接口合规检查
 var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)

@@ -136,8 +136,8 @@ func (s *OnlineEvolutionE2ESuite) buildConversationWithScript() []map[string]any
 			"role": "assistant",
 			"tool_calls": []map[string]any{
 				{
-					"id":       "tc_read",
-					"name":     "read_file",
+					"id":        "tc_read",
+					"name":      "read_file",
 					"arguments": `{"file_path": "/skills/data-processor/SKILL.md"}`,
 				},
 			},
@@ -152,8 +152,8 @@ func (s *OnlineEvolutionE2ESuite) buildConversationWithScript() []map[string]any
 			"role": "assistant",
 			"tool_calls": []map[string]any{
 				{
-					"id":       "tc_code",
-					"name":     "code",
+					"id":        "tc_code",
+					"name":      "code",
 					"arguments": `{"code": "import pandas as pd\nimport matplotlib.pyplot as plt\n\ndf = pd.read_csv('data.csv')\nfig, ax = plt.subplots()\nax.bar(df['category'], df['value'])\nax.set_title('Category Distribution')\nplt.savefig('chart.png')\nprint('Chart saved to chart.png')"}`,
 				},
 			},
@@ -168,8 +168,8 @@ func (s *OnlineEvolutionE2ESuite) buildConversationWithScript() []map[string]any
 			"role": "assistant",
 			"tool_calls": []map[string]any{
 				{
-					"id":       "tc_bash",
-					"name":     "bash",
+					"id":        "tc_bash",
+					"name":      "bash",
 					"arguments": `{"command": "cat /etc/hosts | head"}`,
 				},
 			},
@@ -354,7 +354,7 @@ func (s *OnlineEvolutionE2ESuite) TestOnlineEvolution_DataFetch误报抑制() {
 			"role":         "tool",
 			"tool_call_id": "tc_s",
 			"name":         "web_search",
-			"content": "Search results:\n1. How to handle Python timeout errors\n2. Common ValueError exceptions and fixes\n3. ConnectionError troubleshooting guide",
+			"content":      "Search results:\n1. How to handle Python timeout errors\n2. Common ValueError exceptions and fixes\n3. ConnectionError troubleshooting guide",
 		},
 		{
 			"role": "assistant",

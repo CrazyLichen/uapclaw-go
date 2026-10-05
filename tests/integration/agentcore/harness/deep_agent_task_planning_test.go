@@ -255,4 +255,3 @@ func (s *DeepAgentTaskPlanningE2ESuite) TestDeepAgent_TaskPlanning_AfterInvoke�
 	s.Require().NotNil(spb)
 	s.True(spb.HasSection(hsections.SectionTodo), "AfterInvoke 后 SectionTodo 应仍存在")
 }
-

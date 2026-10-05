@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 	goskills "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -27,6 +28,11 @@ import (
 type SkillLifecycleSuite struct {
 	isuite.BaseIntegrationSuite
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时验证技能提示词依赖 prompt 包
+var _ *prompt.PromptTemplate = nil
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

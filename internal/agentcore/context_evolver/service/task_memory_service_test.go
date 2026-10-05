@@ -717,3 +717,83 @@ func TestTaskMemoryService_Summarize_执行失败(t *testing.T) {
 
 // strPtr 辅助函数，返回字符串指针。
 func strPtr(s string) *string { return &s }
+
+// TestWithLLMModel 验证 WithLLMModel 选项。
+func TestWithLLMModel(t *testing.T) {
+	opt := WithLLMModel("gpt-4")
+	cfg := &taskMemoryServiceConfig{}
+	opt(cfg)
+	assert.Equal(t, "gpt-4", cfg.llmModel)
+}
+
+// TestWithEmbeddingModel 验证 WithEmbeddingModel 选项。
+func TestWithEmbeddingModel(t *testing.T) {
+	opt := WithEmbeddingModel("text-embedding-3-large")
+	cfg := &taskMemoryServiceConfig{}
+	opt(cfg)
+	assert.Equal(t, "text-embedding-3-large", cfg.embeddingModel)
+}
+
+// TestWithAPIKey 验证 WithAPIKey 选项。
+func TestWithAPIKey(t *testing.T) {
+	opt := WithAPIKey("sk-test-123")
+	cfg := &taskMemoryServiceConfig{}
+	opt(cfg)
+	assert.Equal(t, "sk-test-123", cfg.apiKey)
+}
+
+// TestWithAPIBase 验证 WithAPIBase 选项。
+func TestWithAPIBase(t *testing.T) {
+	opt := WithAPIBase("https://api.custom.com/v1")
+	cfg := &taskMemoryServiceConfig{}
+	opt(cfg)
+	assert.Equal(t, "https://api.custom.com/v1", cfg.apiBase)
+}
+
+// TestWithPersistType 验证 WithPersistType 选项。
+func TestWithPersistType(t *testing.T) {
+	opt := WithPersistType("milvus")
+	cfg := &taskMemoryServiceConfig{}
+	opt(cfg)
+	assert.Equal(t, "milvus", cfg.persistType)
+}
+
+// TestWithPersistPath 验证 WithPersistPath 选项。
+func TestWithPersistPath(t *testing.T) {
+	opt := WithPersistPath("/data/memories")
+	cfg := &taskMemoryServiceConfig{}
+	opt(cfg)
+	assert.Equal(t, "/data/memories", cfg.persistPath)
+}
+
+// TestWithMilvusHost 验证 WithMilvusHost 选项。
+func TestWithMilvusHost(t *testing.T) {
+	opt := WithMilvusHost("milvus.internal")
+	cfg := &taskMemoryServiceConfig{}
+	opt(cfg)
+	assert.Equal(t, "milvus.internal", cfg.milvusHost)
+}
+
+// TestWithMilvusPort 验证 WithMilvusPort 选项。
+func TestWithMilvusPort(t *testing.T) {
+	opt := WithMilvusPort(19530)
+	cfg := &taskMemoryServiceConfig{}
+	opt(cfg)
+	assert.Equal(t, 19530, cfg.milvusPort)
+}
+
+// TestWithMilvusCollection 验证 WithMilvusCollection 选项。
+func TestWithMilvusCollection(t *testing.T) {
+	opt := WithMilvusCollection("my_collection")
+	cfg := &taskMemoryServiceConfig{}
+	opt(cfg)
+	assert.Equal(t, "my_collection", cfg.milvusCollection)
+}
+
+// TestVectorStore 测试 VectorStore() 返回向量存储服务。
+func TestVectorStore(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService()
+	require.NoError(t, err)
+	vs := svc.VectorStore()
+	assert.NotNil(t, vs)
+}

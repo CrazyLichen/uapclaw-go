@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 	goskills "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -420,6 +422,7 @@ var (
 	_ *goskills.SkillManager = nil
 	_ *goskills.SkillUtil    = nil
 	_ *goskills.Skill        = nil
+	_ *prompt.PromptTemplate = nil // 技能提示词依赖 prompt 包
 )
 
 // 确保 strings 包被使用

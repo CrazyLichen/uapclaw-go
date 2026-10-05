@@ -312,7 +312,7 @@ type mockInterruptRequest struct {
 	autoConfirmKey string
 }
 
-func (m *mockInterruptRequest) GetMessage() string       { return m.message }
+func (m *mockInterruptRequest) GetMessage() string        { return m.message }
 func (m *mockInterruptRequest) GetAutoConfirmKey() string { return m.autoConfirmKey }
 
 // mockInterruptRequestAdapter 适配 InterruptRequester 到 saschema.InterruptRequester。

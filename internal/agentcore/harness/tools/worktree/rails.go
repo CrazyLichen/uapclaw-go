@@ -66,8 +66,6 @@ type WorktreeRailOption func(*worktreeRailOptions)
 // AutoSetupRailOption AutoSetupRail 构造选项
 type AutoSetupRailOption func(*AutoSetupRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // sessionStateKey Session state 持久化 key。

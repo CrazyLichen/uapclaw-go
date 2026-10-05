@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	evolving "github.com/uapclaw/uapclaw-go/internal/evolving"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
@@ -92,8 +92,8 @@ func (a *tMockTrainableAgent) Invoke(ctx context.Context, inputs map[string]any,
 	}
 	return map[string]any{"result": "ok"}, nil
 }
-func (a *tMockTrainableAgent) Card() *agentschema.AgentCard                              { return a.card }
-func (a *tMockTrainableAgent) GetOperators() map[string]operator.Operator                { return a.operators }
+func (a *tMockTrainableAgent) Card() *agentschema.AgentCard               { return a.card }
+func (a *tMockTrainableAgent) GetOperators() map[string]operator.Operator { return a.operators }
 
 // ─── tMockUpdater 实现 ───
 

@@ -22,8 +22,6 @@ type BaseOp interface {
 	Execute(ctx context.Context, rc *cecontext.RuntimeContext) error
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // OpBase 操作基类，提供对 ServiceContext 中服务的统一访问。
 //
 // 对齐 Python BaseOp._service_context 属性及其 llm/embedding_model/vector_store 属性。
