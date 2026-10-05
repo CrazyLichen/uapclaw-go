@@ -37,12 +37,14 @@ func GetTeamPlanModePrompt(language string) string {
 // BuildTeamPlanModePrompt 渲染 team.plan 提示词模板。
 // Python: build_team_plan_mode_prompt(language, enter_plan_mode_status, plan_file_info)
 //
-// 使用单花括号 {var} 占位符渲染（team_plan_mode.md 格式）。
+// 使用 PromptTemplate.Render 渲染 {var} 占位符（对齐 Python .format() 风格）。
 func BuildTeamPlanModePrompt(language string, enterPlanModeStatus string, planFileInfo string) string {
 	tpl := GetTeamPlanModePrompt(language)
-	return strings.ReplaceAll(strings.ReplaceAll(tpl,
-		"{enter_plan_mode_status}", enterPlanModeStatus),
-		"{plan_file_info}", planFileInfo)
+	pt := &PromptTemplate{content: tpl}
+	return pt.Render(map[string]string{
+		"enter_plan_mode_status": enterPlanModeStatus,
+		"plan_file_info":         planFileInfo,
+	})
 }
 
 // BuildTeamPlanModeSection 构建 team.plan MODE_INSTRUCTIONS PromptSection。

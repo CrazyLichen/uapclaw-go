@@ -71,6 +71,9 @@ type TeamToolRailOption func(*TeamToolRail)
 // toolRailLogComponent 日志组件标识
 const toolRailLogComponent = logger.ComponentChannel
 
+// teamToolRailPriority TeamToolRail 优先级，对齐 Python priority=90
+const teamToolRailPriority = 90
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证：确保 TeamToolRail 满足 DeepAgentRailProvider 接口
@@ -82,8 +85,10 @@ var _ harnessrails.DeepAgentRailProvider = (*TeamToolRail)(nil)
 // Python: TeamToolRail.__init__(team_backend, role, ...)
 func NewTeamToolRail(opts ...TeamToolRailOption) *TeamToolRail {
 	r := &TeamToolRail{
-		teamName: "default",
+		DeepAgentRail: *harnessrails.NewDeepAgentRail(),
+		teamName:      "default",
 	}
+	r.WithPriority(teamToolRailPriority)
 	for _, opt := range opts {
 		opt(r)
 	}

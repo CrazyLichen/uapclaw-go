@@ -37,14 +37,6 @@ var policyLabels = map[string]map[string]string{
 	},
 }
 
-// workflowTemplates 工作流模板名映射。
-// Python: _WORKFLOW_TEMPLATES (openjiuwen/agent_teams/prompts/policy.py)
-var workflowTemplates = map[string]string{
-	"default":    "leader_workflow",
-	"predefined": "leader_workflow_predefined",
-	"hybrid":     "leader_workflow_hybrid",
-}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RolePolicy 返回指定角色的策略文本。
@@ -80,7 +72,7 @@ func RolePolicy(role atschema.TeamRole, language string) string {
 //   - basePrompt: 用户自定义额外指令，空时省略
 func BuildSystemPrompt(
 	memberName string,
-	role string,
+	role atschema.TeamRole,
 	language string,
 	persona string,
 	lifecycle string,
@@ -99,16 +91,16 @@ func BuildSystemPrompt(
 
 	// 角色策略
 	policyName := "leader_policy"
-	if role != "leader" {
+	if role != atschema.TeamRoleLeader {
 		policyName = "teammate_policy"
 	}
 	rolePolicyText := LoadTemplate(policyName, language).Content()
 
 	// workflow_section（仅 LEADER）
 	workflowSection := ""
-	if role == "leader" {
+	if role == atschema.TeamRoleLeader {
 		workflowName := "leader_workflow"
-		if mapped, ok := workflowTemplates[teamMode]; ok {
+		if mapped, ok := workflowTemplateName[teamMode]; ok {
 			workflowName = mapped
 		}
 		workflowSection = LoadTemplate(workflowName, language).Content()
@@ -116,7 +108,7 @@ func BuildSystemPrompt(
 
 	// lifecycle_section（仅 LEADER）
 	lifecycleSection := ""
-	if role == "leader" {
+	if role == atschema.TeamRoleLeader {
 		lcName := "lifecycle_temporary"
 		if lifecycle == "persistent" {
 			lcName = "lifecycle_persistent"

@@ -221,16 +221,11 @@ func (r *ConfirmInterruptRail) parseConfirmInput(userInput any) (*ConfirmPayload
 	}
 }
 
-// isAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 truthy。
-// Python: ConfirmInterruptRail._is_auto_confirmed(config, key)
-// Python 的 config.get(key, False) 使用宽松真值判断：
-// True/1/"yes"/"true"/非空字符串都视为 truthy。
-func isAutoConfirmed(config map[string]any, key string) bool {
-	if config == nil {
-		return false
-	}
-	val, ok := config[key]
-	if !ok {
+// IsTruthyValue 判断任意值是否为 truthy。
+// Python: bool(value) — True/1/"yes"/"true"/非空字符串视为 truthy，False/0/""/"false"/"no" 为 falsy。
+// 对齐 Python ConfirmInterruptRail._is_auto_confirmed 的宽松真值判断逻辑。
+func IsTruthyValue(val any) bool {
+	if val == nil {
 		return false
 	}
 	// 先尝试 bool 类型断言
@@ -252,6 +247,21 @@ func isAutoConfirmed(config map[string]any, key string) bool {
 		return s != "" && s != "false" && s != "no" && s != "0"
 	}
 	return false
+}
+
+// isAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 truthy。
+// Python: ConfirmInterruptRail._is_auto_confirmed(config, key)
+// Python 的 config.get(key, False) 使用宽松真值判断：
+// True/1/"yes"/"true"/非空字符串都视为 truthy。
+func isAutoConfirmed(config map[string]any, key string) bool {
+	if config == nil {
+		return false
+	}
+	val, ok := config[key]
+	if !ok {
+		return false
+	}
+	return IsTruthyValue(val)
 }
 
 // confirmPayloadSchema 返回 ConfirmPayload 的 JSON Schema。

@@ -67,6 +67,9 @@ type TeamPolicyRailOption func(*TeamPolicyRail)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// teamPolicyRailPriority TeamPolicyRail 优先级，对齐 Python priority=12
+const teamPolicyRailPriority = 12
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // dynamicSectionNames 动态 Section 名称列表（对应 Python _DYNAMIC_SECTION_NAMES）
@@ -83,7 +86,10 @@ var _ harnessrails.DeepAgentRailProvider = (*TeamPolicyRail)(nil)
 // NewTeamPolicyRail 创建 TeamPolicyRail 实例。
 // Python: TeamPolicyRail.__init__(role, persona, ...)
 func NewTeamPolicyRail(opts ...TeamPolicyRailOption) *TeamPolicyRail {
-	r := &TeamPolicyRail{}
+	r := &TeamPolicyRail{
+		DeepAgentRail: *harnessrails.NewDeepAgentRail(),
+	}
+	r.WithPriority(teamPolicyRailPriority)
 	for _, opt := range opts {
 		opt(r)
 	}

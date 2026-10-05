@@ -463,8 +463,8 @@ func (p *OpenVikingProvider) handleVikingSearch(ctx context.Context, args map[st
 	}
 
 	// 对齐 Python: if args.get("limit"): payload["top_k"] = args["limit"]
-	if limit := floatVal(args["limit"]); limit > 0 {
-		payload["top_k"] = int(limit)
+	if limit := utils.IntVal(args["limit"]); limit > 0 {
+		payload["top_k"] = limit
 	}
 
 	// 对齐 Python: resp = await asyncio.to_thread(self._client.post, "/api/v1/search/find", payload)

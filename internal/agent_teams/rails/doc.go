@@ -3,7 +3,7 @@
 // 本包包含：
 //   - FirstIterationGate：首次迭代信号门（channel 替代 Python asyncio.Event）
 //   - TeamToolRail：团队协调工具注册（priority=90）
-//   - TeamPolicyRail：团队策略提示注入（8 个 PromptSection，priority=12）
+//   - TeamPolicyRail：团队策略提示注入（6 个静态 + 2 个动态 PromptSection，priority=12）
 //   - TeamToolApprovalRail：teammate 工具调用审批（继承 BaseInterruptRail）
 //   - TeamPlanModeRail：team.plan leader 提示词叠加（priority=84）
 //

@@ -1,6 +1,10 @@
 package utils
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -45,6 +49,67 @@ func StrValDefault(v any, defaultVal string) string {
 		return defaultVal
 	}
 	return s
+}
+
+// IntVal 将任意值转为 int。
+// 对齐 Python: int(value) — nil 返回 0，数值类型直接转换，string 尝试 strconv.Atoi，其他返回 0。
+func IntVal(v any) int {
+	if v == nil {
+		return 0
+	}
+	switch val := v.(type) {
+	case int:
+		return val
+	case int8:
+		return int(val)
+	case int16:
+		return int(val)
+	case int32:
+		return int(val)
+	case int64:
+		return int(val)
+	case uint:
+		return int(val)
+	case uint8:
+		return int(val)
+	case uint16:
+		return int(val)
+	case uint32:
+		return int(val)
+	case uint64:
+		return int(val)
+	case float64:
+		return int(val)
+	case float32:
+		return int(val)
+	case string:
+		if n, err := strconv.Atoi(val); err == nil {
+			return n
+		}
+		return 0
+	case json.Number:
+		if n, err := val.Int64(); err == nil {
+			return int(n)
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
+// IntValDefault 将任意值转为 int，转换失败或为零值时返回默认值。
+func IntValDefault(v any, defaultVal int) int {
+	n := IntVal(v)
+	if n == 0 && v != nil {
+		// v 非 nil 但 IntVal 返回 0，可能是 string 解析失败
+		if _, ok := v.(string); ok {
+			return defaultVal
+		}
+	}
+	if n == 0 {
+		return defaultVal
+	}
+	return n
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

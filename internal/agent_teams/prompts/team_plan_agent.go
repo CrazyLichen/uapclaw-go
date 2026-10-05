@@ -3,6 +3,7 @@ package prompts
 import (
 	"strings"
 
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -109,13 +110,10 @@ func ApplyTeamPlanAgentPrompt(subagents []hschema.SubagentSpec, language string)
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// resolveLanguage 解析语言参数，空字符串回退到 "cn"。
+// resolveLanguage 解析语言参数，使用 hprompts.ResolveLanguage 做规范化。
 // Python: resolve_language(language) (openjiuwen/agent_teams/prompts/__init__.py)
 func resolveLanguage(language string) string {
-	if language == "en" {
-		return "en"
-	}
-	return "cn"
+	return hprompts.ResolveLanguage(language)
 }
 
 // init 初始化 plan_agent 的中英文系统提示词（从模板加载）

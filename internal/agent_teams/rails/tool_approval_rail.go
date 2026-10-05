@@ -113,7 +113,7 @@ func (r *TeamToolApprovalRail) resolveInterrupt(
 	if userInput == nil {
 		// Python: 检查 auto_confirm
 		autoConfirmKey := r.getAutoConfirmKey(toolCall)
-		if isAutoConfirmedSimple(autoConfirmConfig, autoConfirmKey) {
+		if interrupt.IsTruthyValue(autoConfirmConfig[autoConfirmKey]) {
 			logger.Debug(approvalLogComponent).
 				Str("tool_name", toolName).
 				Str("member_name", r.memberName).
@@ -243,22 +243,6 @@ func (r *TeamToolApprovalRail) parseApprovalInput(userInput any) (*interrupt.Con
 	default:
 		return nil, false
 	}
-}
-
-// isAutoConfirmedSimple 检查 auto_confirm 配置。
-// Python: TeamToolApprovalRail._is_auto_confirmed(config, key)
-func isAutoConfirmedSimple(config map[string]any, key string) bool {
-	if config == nil {
-		return false
-	}
-	val, ok := config[key]
-	if !ok {
-		return false
-	}
-	if b, ok := val.(bool); ok {
-		return b
-	}
-	return false
 }
 
 // confirmPayloadSchemaForApproval 返回审批请求的 ConfirmPayload JSON Schema。

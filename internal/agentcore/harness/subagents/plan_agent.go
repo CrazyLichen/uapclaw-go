@@ -3,7 +3,9 @@ package subagents
 import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -120,6 +122,10 @@ func BuildPlanAgentConfig(model *llm.Model, params *hschema.SubagentCreateParams
 	cfg.Mcps = params.Mcps
 	cfg.Model = model
 	cfg.Rails = params.Rails
+	if cfg.Rails == nil {
+		// Python: rails=rails if rails is not None else [SysOperationRail()]
+		cfg.Rails = []agentinterfaces.AgentRail{rails.NewSysOperationRail()}
+	}
 	cfg.Skills = params.Skills
 	cfg.Backend = params.Backend
 	cfg.Workspace = params.Workspace

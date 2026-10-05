@@ -2,9 +2,11 @@ package rails
 
 import (
 	"context"
+	"os"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	harnessinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	harnesssections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	harnessrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -48,6 +50,9 @@ const (
 	// modeInstructionsSectionName MODE_INSTRUCTIONS Section 名称
 	// Python: SectionName.MODE_INSTRUCTIONS (harness/prompts/sections.py)
 	modeInstructionsSectionName = "MODE_INSTRUCTIONS"
+
+	// teamPlanModeRailPriority TeamPlanModeRail 优先级，对齐 Python priority=84
+	teamPlanModeRailPriority = 84
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -60,7 +65,10 @@ var _ harnessrails.DeepAgentRailProvider = (*TeamPlanModeRail)(nil)
 // NewTeamPlanModeRail 创建 TeamPlanModeRail 实例。
 // Python: TeamPlanModeRail.__init__(language=None)
 func NewTeamPlanModeRail(opts ...TeamPlanModeRailOption) *TeamPlanModeRail {
-	r := &TeamPlanModeRail{}
+	r := &TeamPlanModeRail{
+		DeepAgentRail: *harnessrails.NewDeepAgentRail(),
+	}
+	r.WithPriority(teamPlanModeRailPriority)
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -125,8 +133,27 @@ func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfac
 	r.specializePlanAgent()
 
 	language := r.resolveLanguage()
+
 	// Python: build_team_plan_mode_section(language, agent, session)
-	section := prompts.BuildTeamPlanModeSection(language, "", "")
+	// 计算 enterPlanModeStatus 和 planFileInfo
+	planFilePath := r.agent.GetPlanFilePath(sess)
+	var planFileExists bool
+	if planFilePath != "" {
+		// 检查文件是否存在
+		planFileExists = fileExists(planFilePath)
+	}
+
+	var enterPlanModeStatus string
+	var planFileInfo string
+	if language == "en" {
+		enterPlanModeStatus = prompts.BuildEnterPlanModeStatusEN(planFilePath)
+		planFileInfo = prompts.BuildPlanFileInfoEN(planFilePath, planFileExists)
+	} else {
+		enterPlanModeStatus = prompts.BuildEnterPlanModeStatusCN(planFilePath)
+		planFileInfo = prompts.BuildPlanFileInfoCN(planFilePath, planFileExists)
+	}
+
+	section := prompts.BuildTeamPlanModeSection(language, enterPlanModeStatus, planFileInfo)
 	if section != nil {
 		r.systemPromptBuilder.AddSection(*section)
 	}
@@ -141,20 +168,26 @@ func WithLanguageOverride(lang string) TeamPlanModeRailOption {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// fileExists 检查文件是否存在
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // resolveLanguage 解析 team.plan 提示词语言。
-// Python: TeamPlanModeRail._resolve_language()
+// Python: TeamPlanModeRail._resolve_language() → resolve_language()
 func (r *TeamPlanModeRail) resolveLanguage() string {
 	if r.languageOverride != "" {
-		return r.languageOverride
+		return hprompts.ResolveLanguage(r.languageOverride)
 	}
 	// 从 systemPromptBuilder 获取语言
 	if r.systemPromptBuilder != nil {
 		lang := r.systemPromptBuilder.Language()
 		if lang != "" {
-			return lang
+			return hprompts.ResolveLanguage(lang)
 		}
 	}
-	return "cn"
+	return hprompts.ResolveLanguage("")
 }
 
 // specializePlanAgent 特化内置 plan_agent。

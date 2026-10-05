@@ -49,7 +49,7 @@ func TestRolePolicy_HumanAgent(t *testing.T) {
 func TestBuildSystemPrompt(t *testing.T) {
 	info := &TeamInfo{TeamName: "test", DisplayName: "Test", Description: "Desc"}
 	members := []TeamMember{{MemberName: "bob", DisplayName: "Bob", Description: "Eng"}}
-	result := BuildSystemPrompt("alice", "leader", "cn", "高级工程师", "temporary", "default",
+	result := BuildSystemPrompt("alice", atschema.TeamRoleLeader, "cn", "高级工程师", "temporary", "default",
 		info, members, "extra prompt")
 	if result == "" {
 		t.Fatal("BuildSystemPrompt returned empty")
@@ -70,13 +70,13 @@ func TestBuildSystemPrompt(t *testing.T) {
 
 // TestBuildSystemPrompt_Teammate 测试 Teammate 组装（无工作流/生命周期）
 func TestBuildSystemPrompt_Teammate(t *testing.T) {
-	result := BuildSystemPrompt("bob", "teammate", "cn", "助手", "temporary", "default",
+	result := BuildSystemPrompt("bob", atschema.TeamRoleTeammate, "cn", "助手", "temporary", "default",
 		nil, nil, "")
 	if result == "" {
 		t.Fatal("BuildSystemPrompt returned empty for teammate")
 	}
 	// Teammate 不应有工作流内容
-	leaderResult := BuildSystemPrompt("alice", "leader", "cn", "人设", "temporary", "default",
+	leaderResult := BuildSystemPrompt("alice", atschema.TeamRoleLeader, "cn", "人设", "temporary", "default",
 		nil, nil, "")
 	if len(result) >= len(leaderResult) {
 		t.Fatal("Teammate system prompt should be shorter than leader's (no workflow/lifecycle)")
@@ -86,7 +86,7 @@ func TestBuildSystemPrompt_Teammate(t *testing.T) {
 // TestBuildSystemPrompt_English 测试英文组装
 func TestBuildSystemPrompt_English(t *testing.T) {
 	info := &TeamInfo{TeamName: "team1", DisplayName: "Team One", Description: "Test team"}
-	result := BuildSystemPrompt("leader1", "leader", "en", "Senior Engineer", "persistent", "hybrid",
+	result := BuildSystemPrompt("leader1", atschema.TeamRoleLeader, "en", "Senior Engineer", "persistent", "hybrid",
 		info, nil, "")
 	if result == "" {
 		t.Fatal("BuildSystemPrompt returned empty for English")
@@ -101,7 +101,7 @@ func TestBuildSystemPrompt_English(t *testing.T) {
 
 // TestBuildSystemPrompt_无BasePrompt 测试无 base prompt 时无多余换行
 func TestBuildSystemPrompt_无BasePrompt(t *testing.T) {
-	result := BuildSystemPrompt("bob", "teammate", "cn", "助手", "temporary", "default",
+	result := BuildSystemPrompt("bob", atschema.TeamRoleTeammate, "cn", "助手", "temporary", "default",
 		nil, nil, "")
 	if result == "" {
 		t.Fatal("BuildSystemPrompt returned empty")

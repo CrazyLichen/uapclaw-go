@@ -33,11 +33,14 @@ type DistributedLock struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logEventMemoryStore 对齐 Python LogEventType.MEMORY_STORE 枚举值
+const logEventMemoryStore = "memory_store"
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentCore
+	// logComponent 日志组件标识 — 分布式锁属于基础设施层，使用 ComponentCommon
+	logComponent = logger.ComponentCommon
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -88,14 +91,14 @@ func (l *DistributedLock) Release(ctx context.Context) error {
 	val, err := l.store.Get(ctx, l.lockKey)
 	if err != nil {
 		logger.Error(logComponent).Err(err).
-			Str("event_type", "MEMORY_STORE").
+			Str("event_type", logEventMemoryStore).
 			Msg("释放锁失败")
 		return nil
 	}
 	if string(val) == l.lockValue {
 		if delErr := l.store.Delete(ctx, l.lockKey); delErr != nil {
 			logger.Error(logComponent).Err(delErr).
-				Str("event_type", "MEMORY_STORE").
+				Str("event_type", logEventMemoryStore).
 				Msg("释放锁失败")
 		}
 	}

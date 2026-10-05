@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -457,7 +459,7 @@ func (p *Mem0Provider) recordFailure() {
 		logger.Warn(mem0LogComponent).
 			Int("consecutive_failures", p.consecutiveFailures).
 			Int("cooldown_secs", mem0BreakerCooldownSecs).
-			Msg("[Mem0Provider] 熔断器开启")
+			Msg("[Mem0Provider] Circuit breaker opened")
 	}
 }
 
@@ -503,11 +505,9 @@ func (p *Mem0Provider) handleSearch(ctx context.Context, client *mem0HTTPClient,
 
 	topK := 10
 	if v, ok := args["top_k"]; ok {
-		switch n := v.(type) {
-		case float64:
-			topK = int(n)
-		case int:
-			topK = n
+		topK = utils.IntVal(v)
+		if topK == 0 {
+			topK = 10
 		}
 	}
 	if topK > 50 {
@@ -516,7 +516,12 @@ func (p *Mem0Provider) handleSearch(ctx context.Context, client *mem0HTTPClient,
 
 	rerank := false
 	if v, ok := args["rerank"]; ok {
-		rerank, _ = v.(bool)
+		switch val := v.(type) {
+		case bool:
+			rerank = val
+		case string:
+			rerank, _ = strconv.ParseBool(val)
+		}
 	}
 
 	response, err := client.search(ctx, query, p.readFilters(), rerank, topK)
