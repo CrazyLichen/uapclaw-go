@@ -19,3 +19,5 @@ func CreateTaskTool(parentAgent hinterfaces.DeepAgentInterface, availableAgents,
 	t := subagent.NewTaskTool(parentAgent, availableAgents, language, agentID)
 	return []tool.Tool{t}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

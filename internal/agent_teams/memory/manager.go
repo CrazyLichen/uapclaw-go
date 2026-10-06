@@ -165,3 +165,5 @@ func (m *TeamMemoryManager) TeamName() string { return m.teamName }
 
 // Role 返回角色
 func (m *TeamMemoryManager) Role() TeamRole { return m.role }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

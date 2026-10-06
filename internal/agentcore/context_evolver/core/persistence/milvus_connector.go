@@ -76,6 +76,8 @@ type MilvusConnectorImpl struct {
 // MilvusConnectorOption 构造选项函数。
 type MilvusConnectorOption func(*MilvusConnectorImpl)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

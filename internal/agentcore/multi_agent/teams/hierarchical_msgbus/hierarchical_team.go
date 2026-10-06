@@ -45,7 +45,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 HierarchicalTeam 满足 BaseTeam 接口
 // _ 编译时验证 HierarchicalTeam 满足 BaseTeam 接口
 var _ maschema.BaseTeam = (*HierarchicalTeam)(nil)
 

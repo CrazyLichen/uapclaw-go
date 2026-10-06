@@ -48,7 +48,7 @@ var (
 	ErrTransportClosed = errors.New("传输通道已关闭")
 )
 
-// 编译时验证 ChannelTransport 满足 AgentTransport 接口
+// _ 编译时验证 ChannelTransport 满足 AgentTransport 接口
 var _ AgentTransport = (*ChannelTransport)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

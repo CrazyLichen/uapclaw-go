@@ -41,17 +41,16 @@ const (
 	streamTraceEnvKey = "JIUWENSWARM_TEAM_STREAM_TRACE"
 )
 
-// teamCreateKinds 团队创建类型集合。
-// 对齐 Python: _TEAM_CREATE_KINDS = {RunActionKind.CREATE.value, RunActionKind.NEW_TEAM_IN_SESSION.value} (line 62-65)
-// Go 端无 RunActionKind 枚举，直接用字符串常量集合。
-var teamCreateKinds = map[string]bool{
-	"CREATE":              true,
-	"NEW_TEAM_IN_SESSION": true,
-}
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
+	// teamCreateKinds 团队创建类型集合。
+	// 对齐 Python: _TEAM_CREATE_KINDS = {RunActionKind.CREATE.value, RunActionKind.NEW_TEAM_IN_SESSION.value} (line 62-65)
+	// Go 端无 RunActionKind 枚举，直接用字符串常量集合。
+	teamCreateKinds = map[string]bool{
+		"CREATE":              true,
+		"NEW_TEAM_IN_SESSION": true,
+	}
 	// pendingWaitersMu 保护 pendingWaiters 的读写锁。
 	// Python 用 asyncio（单线程事件循环）无需锁，Go 需要 sync.RWMutex 保护并发安全。
 	pendingWaitersMu sync.RWMutex
@@ -78,291 +77,6 @@ func EnsureEventBroadcastInjected(channelID string) {
 		broadcastEvent(chID, sessID, event)
 	})
 	eventBroadcastInitialized = true
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// stripDirective 从 query 开头去除 slash 指令前缀。
-// 仅当 query 以 prefix 开头且后跟空格或结尾时才去除。
-// 对齐 Python: _strip_directive(query, prefix) (line 71-82)
-func stripDirective(query, prefix string) (string, bool) {
-	stripped := strings.TrimLeft(query, " \t")
-	if !strings.HasPrefix(stripped, prefix) {
-		return query, false
-	}
-	remainder := stripped[len(prefix):]
-	if len(remainder) > 0 && remainder[0] != ' ' {
-		return query, false
-	}
-	return strings.TrimLeft(remainder, " \t"), true
-}
-
-// extractQueryDirectives 从首次 team 请求中提取并去除所有 slash 指令。
-// 返回 (cleanedQuery, hideDM, debug)。
-// 对齐 Python: _extract_query_directives(query) (line 85-92)
-func extractQueryDirectives(query string) (string, bool, bool) {
-	query, hideDM := stripDirective(query, hideDMPrefix)
-	query, debug := stripDirective(query, debugPrefix)
-	return query, hideDM, debug
-}
-
-// resolveChannelID 规范化 channelID，空串回退为 "default"。
-// 对齐 Python: _resolve_channel_id(channel_id) (line 129-130)
-func resolveChannelID(channelID string) string {
-	id := strings.TrimSpace(channelID)
-	if id == "" {
-		return "default"
-	}
-	return id
-}
-
-// isLeaderOutput 判断 team OutputSchema chunk 是否应展示给 claw 用户。
-// 对齐 Python: _is_leader_output(chunk) (line 237-257)
-//
-// 规则：
-//   - chunk["type"]=="message" 且 payload 中 event_type 为 "team.runtime_ready"/"team.completed" → true
-//   - chunk["type"]=="team.runtime_ready" → true
-//   - chunk["role"] 为 TeamRole.LEADER → true
-//   - role 为 nil → true（默认视为 leader）
-//   - 其他 → false
-func isLeaderOutput(chunk map[string]any) bool {
-	if chunk == nil {
-		return true
-	}
-	chunkType, _ := chunk["type"].(string)
-	payload, _ := chunk["payload"].(map[string]any)
-
-	// team.runtime_ready 和 team.completed 是 leader 级控制事件
-	if chunkType == "message" && payload != nil {
-		if evtType, _ := payload["event_type"].(string); evtType == "team.runtime_ready" || evtType == "team.completed" {
-			return true
-		}
-	}
-	if chunkType == "team.runtime_ready" {
-		return true
-	}
-
-	role := chunk["role"]
-	if role == nil {
-		return true
-	}
-	// Python: role == TeamRole.LEADER 或 str(role_value).strip().lower() == TeamRole.LEADER.value
-	if roleStr, ok := role.(string); ok {
-		return strings.TrimSpace(strings.ToLower(roleStr)) == "leader"
-	}
-	return false
-}
-
-// isTeammateOutput 判断 team OutputSchema chunk 是否来自 teammate。
-// 对齐 Python: _is_teammate_output(chunk) (line 260-268)
-func isTeammateOutput(chunk map[string]any) bool {
-	if chunk == nil {
-		return false
-	}
-	role := chunk["role"]
-	if role == nil {
-		return false
-	}
-	if roleStr, ok := role.(string); ok {
-		return strings.TrimSpace(strings.ToLower(roleStr)) == "teammate"
-	}
-	return false
-}
-
-// enrichTeammateEvent 丰富 teammate 事件，添加 role 和 member_name 字段。
-// 对齐 Python: _enrich_teammate_event(parsed, chunk) (line 271-278)
-func enrichTeammateEvent(parsed map[string]any, chunk map[string]any) map[string]any {
-	if parsed == nil {
-		parsed = map[string]any{}
-	}
-	parsed["role"] = "teammate"
-	// Python: source_member = getattr(chunk, "source_member", None)
-	if sourceMember, _ := chunk["source_member"].(string); sourceMember != "" {
-		parsed["member_name"] = sourceMember
-	}
-	return parsed
-}
-
-// isDuplicateAskUserQuestion 去重 chat.ask_user_question 事件。
-// 对齐 Python: _is_duplicate_ask_user_question(parsed, emitted_request_ids) (line 281-293)
-//
-// 若 event_type != "chat.ask_user_question" 或 request_id 为空 → false（不去重）。
-// 若 request_id 已在集合中 → true（重复）。
-// 否则加入集合返回 false。
-func isDuplicateAskUserQuestion(parsed map[string]any, emittedRequestIDs map[string]bool) bool {
-	if parsed == nil {
-		return false
-	}
-	evtType, _ := parsed["event_type"].(string)
-	if evtType != "chat.ask_user_question" {
-		return false
-	}
-	requestID := strings.TrimSpace(teamHelperStrFromAny(parsed["request_id"]))
-	if requestID == "" {
-		return false
-	}
-	if emittedRequestIDs[requestID] {
-		return true
-	}
-	emittedRequestIDs[requestID] = true
-	return false
-}
-
-// teamHelperStrFromAny 从 any 值中提取字符串。
-// 命名为 teamHelperStrFromAny 避免与同包 deep_adapter_evolution.go 中已有的 strFromAny 混淆。
-func teamHelperStrFromAny(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
-}
-
-// approvalChunkFromEvent 从事件中提取审批 chunk。
-// 对齐 Python: _approval_chunk_from_event(evt) (line 199-209)
-//
-// 检查 event_type == "chat.ask_user_question" 且 request_id 和 questions 有效。
-// Go 端直接对 map[string]any 操作（Python 调 parse_stream_chunk，但 Go 端的事件已是解析后的 dict）。
-func approvalChunkFromEvent(evt map[string]any) map[string]any {
-	if evt == nil {
-		return nil
-	}
-	evtType, _ := evt["event_type"].(string)
-	if evtType != "chat.ask_user_question" {
-		return nil
-	}
-	requestID, _ := evt["request_id"].(string)
-	if strings.TrimSpace(requestID) == "" {
-		return nil
-	}
-	questions, _ := evt["questions"].([]any)
-	if len(questions) == 0 {
-		return nil
-	}
-	return evt
-}
-
-// approvalResultFromEventOrItems 构建审批结果 dict。
-// 对齐 Python: _approval_result_from_event_or_items(...) (line 212-234)
-//
-// 优先从 event 提取 approval_chunk；次选 items 非空时返回 invalid_output；最后返回 no_changes_output。
-func approvalResultFromEventOrItems(skillName string, event any, items []map[string]any, noChangesOutput, invalidOutput string) map[string]any {
-	approvalChunk := approvalChunkFromEvent(teamHelperEventAsMap(event))
-	if approvalChunk != nil {
-		questions, _ := approvalChunk["questions"].([]any)
-		return map[string]any{
-			"output":          fmt.Sprintf("Skill '%s' 演进请求已生成，请在审批弹框中确认。", skillName),
-			"result_type":     "answer",
-			"approval_chunks": []map[string]any{approvalChunk},
-			"question_count":  len(questions),
-		}
-	}
-	if len(items) > 0 {
-		return map[string]any{
-			"output":      invalidOutput,
-			"result_type": "error",
-		}
-	}
-	return map[string]any{
-		"output":      noChangesOutput,
-		"result_type": "answer",
-	}
-}
-
-// teamHelperEventAsMap 将 any 转为 map[string]any（对齐 Python 中 event 可以是 dict 或对象）。
-func teamHelperEventAsMap(v any) map[string]any {
-	if v == nil {
-		return nil
-	}
-	if m, ok := v.(map[string]any); ok {
-		return m
-	}
-	return nil
-}
-
-// teamProcessingDoneChunk 构建 chat.processing_status(is_complete=True) chunk。
-// 对齐 Python: _team_processing_done_chunk(request_id, channel_id, session_id) (line 296-311)
-func teamProcessingDoneChunk(requestID, channelID, sessionID string) *agentschema.AgentResponseChunk {
-	return &agentschema.AgentResponseChunk{
-		RequestID: requestID,
-		ChannelID: channelID,
-		Payload: map[string]any{
-			"event_type":    "chat.processing_status",
-			"session_id":    sessionID,
-			"is_processing": false,
-			"is_complete":   true,
-		},
-		IsComplete: false,
-	}
-}
-
-// broadcastEvent 向所有等待同一 (channelID, sessionID) 的请求队列广播事件。
-// 对齐 Python: _broadcast_event(channel_id, session_id, event) (line 181-196)
-func broadcastEvent(channelID, sessionID string, event map[string]any) {
-	key := [2]string{resolveChannelID(channelID), sessionID}
-	pendingWaitersMu.RLock()
-	waiters := pendingWaiters[key]
-	pendingWaitersMu.RUnlock()
-
-	for _, w := range waiters {
-		// Python: queue.put_nowait(dict(event)) — 浅拷贝，避免多个 waiter 共享同一 map 被修改
-		copied := make(map[string]any, len(event))
-		for k, v := range event {
-			copied[k] = v
-		}
-		select {
-		case w.Ch <- copied:
-		default:
-			// Python: except Exception — channel 满时丢弃并 debug 日志
-			logger.Debug(logComponent).
-				Str("channel_id", key[0]).
-				Str("session_id", sessionID).
-				Str("request_id", w.RequestID).
-				Msg("broadcastEvent: channel full, dropping event")
-		}
-	}
-}
-
-// registerWaiter 注册一个请求等待者。
-// 对齐 Python: _pending_waiters[key].append((request_id, queue))
-func registerWaiter(channelID, sessionID, requestID string, ch chan map[string]any) {
-	key := [2]string{resolveChannelID(channelID), sessionID}
-	pendingWaitersMu.Lock()
-	defer pendingWaitersMu.Unlock()
-	pendingWaiters[key] = append(pendingWaiters[key], pendingWaiter{
-		RequestID: requestID,
-		Ch:        ch,
-	})
-}
-
-// unregisterWaiter 注销一个请求等待者。
-// 对齐 Python: 从 _pending_waiters[key] 中移除对应 (request_id, queue) 条目
-func unregisterWaiter(channelID, sessionID, requestID string) {
-	key := [2]string{resolveChannelID(channelID), sessionID}
-	pendingWaitersMu.Lock()
-	defer pendingWaitersMu.Unlock()
-	waiters := pendingWaiters[key]
-	for i, w := range waiters {
-		if w.RequestID == requestID {
-			pendingWaiters[key] = append(waiters[:i], waiters[i+1:]...)
-			break
-		}
-	}
-	if len(pendingWaiters[key]) == 0 {
-		delete(pendingWaiters, key)
-	}
-}
-
-// groupTeamEvolutionApprovals 审批分组（team 版包装）。
-// 对齐 Python: _group_team_evolution_approvals(session_id, events) (line 314-328)
-//
-// 委托 evolutionlogic.GroupEvolutionApprovals + warnMissingRequestID 回调。
-func groupTeamEvolutionApprovals(sessionID string, events []map[string]any) (map[string][]map[string]any, []string) {
-	warnFn := func(sid string) {
-		logger.Warn(logComponent).
-			Str("session_id", sid).
-			Msg("team evolution approval missing request_id")
-	}
-	return evolutionlogic.GroupEvolutionApprovals(sessionID, events, evolutionlogic.WarnMissingRequestIDFunc(warnFn))
 }
 
 // SyncTeamIdentityMetadata 持久化 team 身份元数据（仅新创建的 team 会话）。
@@ -673,6 +387,291 @@ func ResolveTeamRebuildFollowup(ctx context.Context, channelID, sessionID, query
 	}
 
 	return followupPrompt, ""
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// stripDirective 从 query 开头去除 slash 指令前缀。
+// 仅当 query 以 prefix 开头且后跟空格或结尾时才去除。
+// 对齐 Python: _strip_directive(query, prefix) (line 71-82)
+func stripDirective(query, prefix string) (string, bool) {
+	stripped := strings.TrimLeft(query, " \t")
+	if !strings.HasPrefix(stripped, prefix) {
+		return query, false
+	}
+	remainder := stripped[len(prefix):]
+	if len(remainder) > 0 && remainder[0] != ' ' {
+		return query, false
+	}
+	return strings.TrimLeft(remainder, " \t"), true
+}
+
+// extractQueryDirectives 从首次 team 请求中提取并去除所有 slash 指令。
+// 返回 (cleanedQuery, hideDM, debug)。
+// 对齐 Python: _extract_query_directives(query) (line 85-92)
+func extractQueryDirectives(query string) (string, bool, bool) {
+	query, hideDM := stripDirective(query, hideDMPrefix)
+	query, debug := stripDirective(query, debugPrefix)
+	return query, hideDM, debug
+}
+
+// resolveChannelID 规范化 channelID，空串回退为 "default"。
+// 对齐 Python: _resolve_channel_id(channel_id) (line 129-130)
+func resolveChannelID(channelID string) string {
+	id := strings.TrimSpace(channelID)
+	if id == "" {
+		return "default"
+	}
+	return id
+}
+
+// isLeaderOutput 判断 team OutputSchema chunk 是否应展示给 claw 用户。
+// 对齐 Python: _is_leader_output(chunk) (line 237-257)
+//
+// 规则：
+//   - chunk["type"]=="message" 且 payload 中 event_type 为 "team.runtime_ready"/"team.completed" → true
+//   - chunk["type"]=="team.runtime_ready" → true
+//   - chunk["role"] 为 TeamRole.LEADER → true
+//   - role 为 nil → true（默认视为 leader）
+//   - 其他 → false
+func isLeaderOutput(chunk map[string]any) bool {
+	if chunk == nil {
+		return true
+	}
+	chunkType, _ := chunk["type"].(string)
+	payload, _ := chunk["payload"].(map[string]any)
+
+	// team.runtime_ready 和 team.completed 是 leader 级控制事件
+	if chunkType == "message" && payload != nil {
+		if evtType, _ := payload["event_type"].(string); evtType == "team.runtime_ready" || evtType == "team.completed" {
+			return true
+		}
+	}
+	if chunkType == "team.runtime_ready" {
+		return true
+	}
+
+	role := chunk["role"]
+	if role == nil {
+		return true
+	}
+	// Python: role == TeamRole.LEADER 或 str(role_value).strip().lower() == TeamRole.LEADER.value
+	if roleStr, ok := role.(string); ok {
+		return strings.TrimSpace(strings.ToLower(roleStr)) == "leader"
+	}
+	return false
+}
+
+// isTeammateOutput 判断 team OutputSchema chunk 是否来自 teammate。
+// 对齐 Python: _is_teammate_output(chunk) (line 260-268)
+func isTeammateOutput(chunk map[string]any) bool {
+	if chunk == nil {
+		return false
+	}
+	role := chunk["role"]
+	if role == nil {
+		return false
+	}
+	if roleStr, ok := role.(string); ok {
+		return strings.TrimSpace(strings.ToLower(roleStr)) == "teammate"
+	}
+	return false
+}
+
+// enrichTeammateEvent 丰富 teammate 事件，添加 role 和 member_name 字段。
+// 对齐 Python: _enrich_teammate_event(parsed, chunk) (line 271-278)
+func enrichTeammateEvent(parsed map[string]any, chunk map[string]any) map[string]any {
+	if parsed == nil {
+		parsed = map[string]any{}
+	}
+	parsed["role"] = "teammate"
+	// Python: source_member = getattr(chunk, "source_member", None)
+	if sourceMember, _ := chunk["source_member"].(string); sourceMember != "" {
+		parsed["member_name"] = sourceMember
+	}
+	return parsed
+}
+
+// isDuplicateAskUserQuestion 去重 chat.ask_user_question 事件。
+// 对齐 Python: _is_duplicate_ask_user_question(parsed, emitted_request_ids) (line 281-293)
+//
+// 若 event_type != "chat.ask_user_question" 或 request_id 为空 → false（不去重）。
+// 若 request_id 已在集合中 → true（重复）。
+// 否则加入集合返回 false。
+func isDuplicateAskUserQuestion(parsed map[string]any, emittedRequestIDs map[string]bool) bool {
+	if parsed == nil {
+		return false
+	}
+	evtType, _ := parsed["event_type"].(string)
+	if evtType != "chat.ask_user_question" {
+		return false
+	}
+	requestID := strings.TrimSpace(teamHelperStrFromAny(parsed["request_id"]))
+	if requestID == "" {
+		return false
+	}
+	if emittedRequestIDs[requestID] {
+		return true
+	}
+	emittedRequestIDs[requestID] = true
+	return false
+}
+
+// teamHelperStrFromAny 从 any 值中提取字符串。
+// 命名为 teamHelperStrFromAny 避免与同包 deep_adapter_evolution.go 中已有的 strFromAny 混淆。
+func teamHelperStrFromAny(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// approvalChunkFromEvent 从事件中提取审批 chunk。
+// 对齐 Python: _approval_chunk_from_event(evt) (line 199-209)
+//
+// 检查 event_type == "chat.ask_user_question" 且 request_id 和 questions 有效。
+// Go 端直接对 map[string]any 操作（Python 调 parse_stream_chunk，但 Go 端的事件已是解析后的 dict）。
+func approvalChunkFromEvent(evt map[string]any) map[string]any {
+	if evt == nil {
+		return nil
+	}
+	evtType, _ := evt["event_type"].(string)
+	if evtType != "chat.ask_user_question" {
+		return nil
+	}
+	requestID, _ := evt["request_id"].(string)
+	if strings.TrimSpace(requestID) == "" {
+		return nil
+	}
+	questions, _ := evt["questions"].([]any)
+	if len(questions) == 0 {
+		return nil
+	}
+	return evt
+}
+
+// approvalResultFromEventOrItems 构建审批结果 dict。
+// 对齐 Python: _approval_result_from_event_or_items(...) (line 212-234)
+//
+// 优先从 event 提取 approval_chunk；次选 items 非空时返回 invalid_output；最后返回 no_changes_output。
+func approvalResultFromEventOrItems(skillName string, event any, items []map[string]any, noChangesOutput, invalidOutput string) map[string]any {
+	approvalChunk := approvalChunkFromEvent(teamHelperEventAsMap(event))
+	if approvalChunk != nil {
+		questions, _ := approvalChunk["questions"].([]any)
+		return map[string]any{
+			"output":          fmt.Sprintf("Skill '%s' 演进请求已生成，请在审批弹框中确认。", skillName),
+			"result_type":     "answer",
+			"approval_chunks": []map[string]any{approvalChunk},
+			"question_count":  len(questions),
+		}
+	}
+	if len(items) > 0 {
+		return map[string]any{
+			"output":      invalidOutput,
+			"result_type": "error",
+		}
+	}
+	return map[string]any{
+		"output":      noChangesOutput,
+		"result_type": "answer",
+	}
+}
+
+// teamHelperEventAsMap 将 any 转为 map[string]any（对齐 Python 中 event 可以是 dict 或对象）。
+func teamHelperEventAsMap(v any) map[string]any {
+	if v == nil {
+		return nil
+	}
+	if m, ok := v.(map[string]any); ok {
+		return m
+	}
+	return nil
+}
+
+// teamProcessingDoneChunk 构建 chat.processing_status(is_complete=True) chunk。
+// 对齐 Python: _team_processing_done_chunk(request_id, channel_id, session_id) (line 296-311)
+func teamProcessingDoneChunk(requestID, channelID, sessionID string) *agentschema.AgentResponseChunk {
+	return &agentschema.AgentResponseChunk{
+		RequestID: requestID,
+		ChannelID: channelID,
+		Payload: map[string]any{
+			"event_type":    "chat.processing_status",
+			"session_id":    sessionID,
+			"is_processing": false,
+			"is_complete":   true,
+		},
+		IsComplete: false,
+	}
+}
+
+// broadcastEvent 向所有等待同一 (channelID, sessionID) 的请求队列广播事件。
+// 对齐 Python: _broadcast_event(channel_id, session_id, event) (line 181-196)
+func broadcastEvent(channelID, sessionID string, event map[string]any) {
+	key := [2]string{resolveChannelID(channelID), sessionID}
+	pendingWaitersMu.RLock()
+	waiters := pendingWaiters[key]
+	pendingWaitersMu.RUnlock()
+
+	for _, w := range waiters {
+		// Python: queue.put_nowait(dict(event)) — 浅拷贝，避免多个 waiter 共享同一 map 被修改
+		copied := make(map[string]any, len(event))
+		for k, v := range event {
+			copied[k] = v
+		}
+		select {
+		case w.Ch <- copied:
+		default:
+			// Python: except Exception — channel 满时丢弃并 debug 日志
+			logger.Debug(logComponent).
+				Str("channel_id", key[0]).
+				Str("session_id", sessionID).
+				Str("request_id", w.RequestID).
+				Msg("broadcastEvent: channel full, dropping event")
+		}
+	}
+}
+
+// registerWaiter 注册一个请求等待者。
+// 对齐 Python: _pending_waiters[key].append((request_id, queue))
+func registerWaiter(channelID, sessionID, requestID string, ch chan map[string]any) {
+	key := [2]string{resolveChannelID(channelID), sessionID}
+	pendingWaitersMu.Lock()
+	defer pendingWaitersMu.Unlock()
+	pendingWaiters[key] = append(pendingWaiters[key], pendingWaiter{
+		RequestID: requestID,
+		Ch:        ch,
+	})
+}
+
+// unregisterWaiter 注销一个请求等待者。
+// 对齐 Python: 从 _pending_waiters[key] 中移除对应 (request_id, queue) 条目
+func unregisterWaiter(channelID, sessionID, requestID string) {
+	key := [2]string{resolveChannelID(channelID), sessionID}
+	pendingWaitersMu.Lock()
+	defer pendingWaitersMu.Unlock()
+	waiters := pendingWaiters[key]
+	for i, w := range waiters {
+		if w.RequestID == requestID {
+			pendingWaiters[key] = append(waiters[:i], waiters[i+1:]...)
+			break
+		}
+	}
+	if len(pendingWaiters[key]) == 0 {
+		delete(pendingWaiters, key)
+	}
+}
+
+// groupTeamEvolutionApprovals 审批分组（team 版包装）。
+// 对齐 Python: _group_team_evolution_approvals(session_id, events) (line 314-328)
+//
+// 委托 evolutionlogic.GroupEvolutionApprovals + warnMissingRequestID 回调。
+func groupTeamEvolutionApprovals(sessionID string, events []map[string]any) (map[string][]map[string]any, []string) {
+	warnFn := func(sid string) {
+		logger.Warn(logComponent).
+			Str("session_id", sid).
+			Msg("team evolution approval missing request_id")
+	}
+	return evolutionlogic.GroupEvolutionApprovals(sessionID, events, evolutionlogic.WarnMissingRequestIDFunc(warnFn))
 }
 
 // onTeamWatcherDone evolution 观察任务完成回调。

@@ -202,3 +202,5 @@ func IsValidExecutionTransition(current, target ExecutionStatus) bool {
 func IsValidTaskTransition(current, target TaskStatus) bool {
 	return fsm.IsValidTaskTransition(string(current), string(target))
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

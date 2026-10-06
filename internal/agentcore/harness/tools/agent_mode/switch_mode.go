@@ -92,3 +92,5 @@ func NewSwitchModeTool(agent hinterfaces.DeepAgentInterface, language, agentID s
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
 	return invokeFn
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -318,3 +318,5 @@ func DefaultVerificationAgentDescription(language string) string {
 	}
 	return defaultVerificationAgentDescription["cn"]
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

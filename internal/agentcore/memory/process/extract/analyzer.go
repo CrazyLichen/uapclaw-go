@@ -39,6 +39,7 @@ type MemoryAnalyzerResult struct {
 	Summary string `json:"summary"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Analyze 分析对话消息，提取变量和摘要。
@@ -200,6 +201,7 @@ func Analyze(
 	return &MemoryAnalyzerResult{}, nil
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // mapToMemoryAnalyzerResult 将解析后的 map 转换为 MemoryAnalyzerResult。
@@ -251,3 +253,5 @@ func mapToMemoryAnalyzerResult(m map[string]any) (*MemoryAnalyzerResult, error) 
 
 	return result, nil
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────

@@ -72,10 +72,10 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 AgentModeRail 满足 AgentRail 接口
 // _ 编译时验证 AgentModeRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*AgentModeRail)(nil)
 
+// agentModeLogComponent 日志组件
 var agentModeLogComponent = logger.ComponentAgentCore
 
 // todoToolNames todo 工具名称集合

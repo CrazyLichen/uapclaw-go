@@ -140,8 +140,6 @@ func (m *TeamManager) PopTeamEvolutionWatcher(sessionID string) context.CancelFu
 	return cancel
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // SetStreamTaskWaitGroup 为指定 session 的流任务设置 WaitGroup。
 // goroutine 启动时调用 wg.Add(1)，退出时调用 wg.Done()。
 func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGroup) {
@@ -149,6 +147,78 @@ func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGrou
 		entry.wg = wg
 	}
 }
+
+// EnsureMonitor 为指定 session 创建并启动监控 handler。
+// 对齐 Python: ensure_monitor_for_active_runtime(channel_id, session_id, team_name, hide_dm)
+//
+// Python 步骤：
+//  1. tm = get_team_manager(channel_id)
+//  2. existing = tm.get_monitor(session_id); if existing and existing.is_running: return
+//  3. monitor = await Runner.get_agent_team_monitor(team_name=, session_id=, hide_dm=)
+//  4. if monitor is None: logger.warning; return
+//  5. monitor_handler = TeamMonitorHandler(monitor, session_id)
+//  6. await monitor_handler.start()
+//  7. tm.register_monitor(session_id, monitor_handler)
+//  8. if monitor_handler.is_running: asyncio.create_task(_consume_monitor_events(...))
+//
+// Go 差异：Python 通过 Runner.get_agent_team_monitor 获取 TeamMonitor，
+// Go 端直接通过 TeamAgent 创建 TeamMonitor（省略 Runner 桥接层）。
+func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamAgent *agent.TeamAgent, hideDM bool) error {
+	// Python 步骤 2: 检查是否已有 handler 且 is_running → 提前返回
+	m.mu.Lock()
+	existing := m.teamMonitors[sessionID]
+	m.mu.Unlock()
+	if existing != nil && existing.IsRunning() {
+		return nil
+	}
+
+	// Python 步骤 3-4: 从 TeamAgent 获取 TeamBackend → db → 创建 TeamMonitor
+	backend := teamAgent.TeamBackend()
+	if backend == nil {
+		return fmt.Errorf("team_agent 没有 team_backend")
+	}
+	db := backend.DB()
+	teamName := backend.TeamName()
+
+	// Python 步骤 4: 创建 TeamMonitor
+	mon, err := monitor.CreateMonitor(teamAgent, db, teamName, sessionID, hideDM)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Str("team_name", teamName).
+			Msg("创建 TeamMonitor 失败")
+		return fmt.Errorf("创建 TeamMonitor 失败: %w", err)
+	}
+
+	// Python 步骤 5: 创建 handler
+	handler := newTeamMonitorHandlerImpl(mon, sessionID)
+
+	// Python 步骤 6: 启动 handler
+	if err := handler.Start(ctx); err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("TeamMonitorHandler 启动失败")
+		return fmt.Errorf("TeamMonitorHandler 启动失败: %w", err)
+	}
+
+	// Python 步骤 7: 注册到 teamMonitors
+	m.RegisterMonitor(sessionID, handler)
+	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
+		Msg("TeamMonitorHandler 启动成功")
+
+	// Python 步骤 8: 启动事件消费 goroutine
+	if handler.IsRunning() {
+		consumeCtx, cancel := context.WithCancel(context.Background())
+		m.RegisterStreamTask(sessionID+"_monitor", cancel)
+		go m.consumeMonitorEvents(consumeCtx, sessionID, handler)
+	}
+
+	// 自动启动 evolution watcher
+	// 对齐 Python: ensure_monitor_for_active_runtime 中，监控启动后自动触发 evolution watcher
+	// Python: asyncio.create_task(start_team_evolution_watcher(channel_id, session_id, team_name))
+	m.autoStartEvolutionWatcher(ctx, sessionID, teamName)
+
+	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // hasLocalTeamRuntime 判断 session 是否使用内存中的 TeamAgent 路径。
 // 对齐 Python: TeamManager._has_local_team_runtime(session_id)
@@ -220,76 +290,6 @@ func (m *TeamManager) clearTeamRailRegistries(sessionID string) {
 	delete(m.teamRailContexts, sessionID)
 	delete(m.teamLiveRails, sessionID)
 	delete(m.teamSkillSyncTargets, sessionID)
-}
-
-// EnsureMonitor 为指定 session 创建并启动监控 handler。
-// 对齐 Python: ensure_monitor_for_active_runtime(channel_id, session_id, team_name, hide_dm)
-//
-// Python 步骤：
-//  1. tm = get_team_manager(channel_id)
-//  2. existing = tm.get_monitor(session_id); if existing and existing.is_running: return
-//  3. monitor = await Runner.get_agent_team_monitor(team_name=, session_id=, hide_dm=)
-//  4. if monitor is None: logger.warning; return
-//  5. monitor_handler = TeamMonitorHandler(monitor, session_id)
-//  6. await monitor_handler.start()
-//  7. tm.register_monitor(session_id, monitor_handler)
-//  8. if monitor_handler.is_running: asyncio.create_task(_consume_monitor_events(...))
-//
-// Go 差异：Python 通过 Runner.get_agent_team_monitor 获取 TeamMonitor，
-// Go 端直接通过 TeamAgent 创建 TeamMonitor（省略 Runner 桥接层）。
-func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamAgent *agent.TeamAgent, hideDM bool) error {
-	// Python 步骤 2: 检查是否已有 handler 且 is_running → 提前返回
-	m.mu.Lock()
-	existing := m.teamMonitors[sessionID]
-	m.mu.Unlock()
-	if existing != nil && existing.IsRunning() {
-		return nil
-	}
-
-	// Python 步骤 3-4: 从 TeamAgent 获取 TeamBackend → db → 创建 TeamMonitor
-	backend := teamAgent.TeamBackend()
-	if backend == nil {
-		return fmt.Errorf("team_agent 没有 team_backend")
-	}
-	db := backend.DB()
-	teamName := backend.TeamName()
-
-	// Python 步骤 4: 创建 TeamMonitor
-	mon, err := monitor.CreateMonitor(teamAgent, db, teamName, sessionID, hideDM)
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Str("team_name", teamName).
-			Msg("创建 TeamMonitor 失败")
-		return fmt.Errorf("创建 TeamMonitor 失败: %w", err)
-	}
-
-	// Python 步骤 5: 创建 handler
-	handler := newTeamMonitorHandlerImpl(mon, sessionID)
-
-	// Python 步骤 6: 启动 handler
-	if err := handler.Start(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
-			Msg("TeamMonitorHandler 启动失败")
-		return fmt.Errorf("TeamMonitorHandler 启动失败: %w", err)
-	}
-
-	// Python 步骤 7: 注册到 teamMonitors
-	m.RegisterMonitor(sessionID, handler)
-	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-		Msg("TeamMonitorHandler 启动成功")
-
-	// Python 步骤 8: 启动事件消费 goroutine
-	if handler.IsRunning() {
-		consumeCtx, cancel := context.WithCancel(context.Background())
-		m.RegisterStreamTask(sessionID+"_monitor", cancel)
-		go m.consumeMonitorEvents(consumeCtx, sessionID, handler)
-	}
-
-	// 自动启动 evolution watcher
-	// 对齐 Python: ensure_monitor_for_active_runtime 中，监控启动后自动触发 evolution watcher
-	// Python: asyncio.create_task(start_team_evolution_watcher(channel_id, session_id, team_name))
-	m.autoStartEvolutionWatcher(ctx, sessionID, teamName)
-
-	return nil
 }
 
 // consumeMonitorEvents 消费监控事件并广播到 channel waiters。

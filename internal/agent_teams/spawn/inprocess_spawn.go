@@ -10,12 +10,12 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // AgentFactory 创建并配置 Agent 的工厂函数。
 // Python: _TeamAgent(card) + teammate.configure(spec, ctx)
 // 由 SpawnManager 注入具体实现，封装 spec 解析 / card 构建 / 配置全流程。
 type AgentFactory func(runtimeCtx atschema.TeamRuntimeContext) (SpawnableAgent, error)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -33,12 +33,12 @@ var (
 	runTeamMemberFunc any
 )
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // SetRunTeamMemberFunc 设置团队成员执行函数（由 runtime 包注入）。
 func SetRunTeamMemberFunc(fn any) {
 	runTeamMemberFunc = fn
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // InProcessSpawn 以进程内 goroutine 方式生成 teammate。
 // Python: inprocess_spawn(team_agent, ctx, initial_message, session_id)
@@ -119,3 +119,5 @@ func InProcessSpawn(
 
 	return handle, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

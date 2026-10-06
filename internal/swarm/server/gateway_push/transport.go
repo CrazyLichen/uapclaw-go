@@ -43,7 +43,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 ChannelPushTransport 满足 GatewayPushTransport 接口
+// _ 编译时验证 ChannelPushTransport 满足 GatewayPushTransport 接口
 var _ GatewayPushTransport = (*ChannelPushTransport)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -100,3 +100,5 @@ func (t *PromptTemplate) ToSection(name string, language string, priority int) s
 	content := t.Render(nil)
 	return saprompt.NewPromptSection(name, map[string]string{language: content}, priority)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -19,6 +19,7 @@ type IndexOptions struct {
 // IndexOption Indexer 方法的可选参数。
 type IndexOption func(*IndexOptions)
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 接口 ────────────────────────────
 
 // Indexer 文档索引抽象接口。
@@ -53,6 +54,7 @@ const (
 	logComponent = logger.ComponentAgentCore
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewIndexOptions 从可变参数构建 IndexOptions。
@@ -73,3 +75,5 @@ func WithIndexExtra(key string, value any) IndexOption {
 		o.Extra[key] = value
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

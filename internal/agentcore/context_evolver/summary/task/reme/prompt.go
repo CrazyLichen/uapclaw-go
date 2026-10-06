@@ -19,6 +19,7 @@ type ReMeSummaryPrompts struct {
 	MemoryValidationPrompt *template.Template
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -226,3 +227,5 @@ func NewReMeSummaryPrompts() *ReMeSummaryPrompts {
 		MemoryValidationPrompt:     template.Must(template.New("validation").Parse(memoryValidationPrompt)),
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

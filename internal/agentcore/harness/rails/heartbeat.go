@@ -46,10 +46,10 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 HeartbeatRail 满足 AgentRail 接口
 // _ 编译时验证 HeartbeatRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*HeartbeatRail)(nil)
 
+// heartbeatLogComponent 日志组件
 var heartbeatLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────

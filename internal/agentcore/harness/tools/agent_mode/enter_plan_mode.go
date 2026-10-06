@@ -86,3 +86,5 @@ func NewEnterPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentI
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
 	return invokeFn
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -57,7 +57,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证：确保 TeamPlanModeRail 满足 DeepAgentRailProvider 接口
+// _ 编译时验证：确保 TeamPlanModeRail 满足 DeepAgentRailProvider 接口
 var _ harnessrails.DeepAgentRailProvider = (*TeamPlanModeRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

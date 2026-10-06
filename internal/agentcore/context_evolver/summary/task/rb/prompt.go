@@ -22,6 +22,7 @@ type ReasoningBankSummaryPrompt struct {
 	ParallelScalingUserPrompt *template.Template
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -145,3 +146,5 @@ func NewReasoningBankSummaryPrompt() *ReasoningBankSummaryPrompt {
 		ParallelScalingUserPrompt:      template.Must(template.New("parallel_scaling_user").Parse(parallelScalingUserPrompt)),
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

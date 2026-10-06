@@ -101,3 +101,5 @@ func (r *ToolCallInterruptRequest) GetAutoConfirmKey() string {
 	}
 	return ""
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -13,6 +13,7 @@ type ReMeRetrievePrompts struct {
 	RewritePrompt *template.Template
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 提示词模板 — 一比一复刻 Python 原文，不做自行翻译
@@ -94,3 +95,5 @@ func NewReMeRetrievePrompts() *ReMeRetrievePrompts {
 		RewritePrompt: template.Must(template.New("rewrite").Parse(memoryRewritePrompt)),
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

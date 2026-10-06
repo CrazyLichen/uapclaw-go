@@ -25,6 +25,7 @@ type JSONFileConnector struct {
 // JSONFileConnectorOption JSON 文件连接器配置选项。
 type JSONFileConnectorOption func(*JSONFileConnector)
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -32,6 +33,7 @@ const (
 	defaultIndent = 2
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewJSONFileConnector 创建 JSON 文件连接器。

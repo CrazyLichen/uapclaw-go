@@ -169,3 +169,5 @@ func (a *baseEmbeddingAdapter) Model() string { return a.model }
 
 // Dims 返回嵌入向量维度。
 func (a *baseEmbeddingAdapter) Dims() int { return a.dims }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

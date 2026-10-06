@@ -100,3 +100,5 @@ func ApplySessionRename(
 		"previous_title": previousTitle,
 	}, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

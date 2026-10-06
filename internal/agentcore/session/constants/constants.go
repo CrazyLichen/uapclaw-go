@@ -139,3 +139,5 @@ func BuiltinDefaults() map[string]any {
 		ForceDelWorkflowStateKey:                ForceDelWorkflowStateDefault,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

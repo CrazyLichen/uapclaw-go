@@ -137,3 +137,5 @@ func (c *SkillDevContext) CreateStageAgent(
 func (c *SkillDevContext) RegisterTools(_ *agents.ReActAgent, _ []string) error {
 	return fmt.Errorf("_register_tools 尚未实现")
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -190,3 +190,5 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 func (t *Task) String() string {
 	return fmt.Sprintf("Task(task_id=%s, session_id=%s, type=%s, status=%s)", t.TaskID, t.SessionID, t.TaskType, t.Status)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

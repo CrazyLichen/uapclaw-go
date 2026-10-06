@@ -76,7 +76,7 @@ const teamToolRailPriority = 90
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证：确保 TeamToolRail 满足 DeepAgentRailProvider 接口
+// _ 编译时验证：确保 TeamToolRail 满足 DeepAgentRailProvider 接口
 var _ harnessrails.DeepAgentRailProvider = (*TeamToolRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

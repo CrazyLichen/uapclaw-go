@@ -50,6 +50,7 @@ type PersistMemoryOp struct {
 	helper *cepersistence.MemoryPersistenceHelper
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSummarizeMemoryOp 创建单轨迹推理策略提取操作。
@@ -341,6 +342,7 @@ func (o *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 	return nil
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // persistType 获取持久化助手的类型描述。
@@ -350,3 +352,5 @@ func (o *PersistMemoryOp) persistType() string {
 	}
 	return "none"
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────

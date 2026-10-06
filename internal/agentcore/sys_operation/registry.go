@@ -109,3 +109,5 @@ func (r *OperationRegistry) GetSupportedOperations(mode OperationMode) []string 
 	}
 	return names
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

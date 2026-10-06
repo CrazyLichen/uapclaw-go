@@ -12,3 +12,5 @@ import (
 func NewTeamConfig() *schema.TeamConfig {
 	return schema.NewTeamConfig()
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

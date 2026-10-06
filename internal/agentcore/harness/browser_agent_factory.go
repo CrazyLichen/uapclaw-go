@@ -127,3 +127,5 @@ func CreateBrowserAgent(ctx context.Context, params *hschema.SubagentCreateParam
 		RestrictToWorkDir:  &restrictToWorkDir,
 	})
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

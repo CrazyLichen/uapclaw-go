@@ -69,7 +69,7 @@ var displayToInternal = map[string]string{
 // Python: TOOL_GROUPS (code_agent_rail.py L34-41)
 var toolGroups = types.ToolGroups
 
-// 编译时验证 CodeAgentRail 满足 AgentRail 接口
+// _ 编译时验证 CodeAgentRail 满足 AgentRail 接口
 var _ sainterfaces.AgentRail = (*CodeAgentRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

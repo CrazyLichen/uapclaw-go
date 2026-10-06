@@ -63,3 +63,6 @@ var (
 		"SYS_OPERATION_SANDBOX_ISOLATION_KEY_ERROR", 199010,
 		"sandbox isolation key error, operation: {operation}, reason: {error_msg}")
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────

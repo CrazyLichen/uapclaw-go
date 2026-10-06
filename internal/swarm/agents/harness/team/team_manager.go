@@ -155,6 +155,8 @@ type TeamManager struct {
 	onEventBroadcast func(channelID, sessionID string, event map[string]any)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

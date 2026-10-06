@@ -100,7 +100,6 @@ var modeDisplayMap = map[string]map[string]string{
 // runtimeLogComponent 日志组件标识
 var runtimeLogComponent = logger.ComponentAgentServer
 
-// 编译时验证 RuntimePromptRail 满足 AgentRail 接口
 // _ 编译时验证 RuntimePromptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*RuntimePromptRail)(nil)
 

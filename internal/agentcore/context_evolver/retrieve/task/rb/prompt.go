@@ -20,6 +20,7 @@ type ReasoningBankPrompt struct {
 	SequentialFollowUpRefinePrompt *template.Template
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 提示词模板 — 一比一复刻 Python 原文，不做自行翻译
@@ -144,3 +145,5 @@ func NewReasoningBankPrompt() *ReasoningBankPrompt {
 		SequentialFollowUpRefinePrompt: template.Must(template.New("seq_follow_up_refine").Parse(sequentialFollowUpRefinePrompt)),
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

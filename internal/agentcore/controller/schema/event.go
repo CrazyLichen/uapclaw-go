@@ -405,3 +405,5 @@ func (es *eventSlice) UnmarshalJSON(data []byte) error {
 	*es = result
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

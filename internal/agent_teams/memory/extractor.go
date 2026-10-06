@@ -68,6 +68,7 @@ TEAM_MEMORY.md 中每条记忆用三级标题 + 类型标签，示例：
 保持 TEAM_MEMORY.md 在 200 行以内。超出时合并或删除最旧的条目。
 如果没有值得提取的新信息，不要修改文件。`
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildExtractionContext 构建提取上下文。⤵️ 回填: 7.2+9.65a
@@ -82,3 +83,5 @@ func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamN
 func ExtractTeamMemories(ctx context.Context, teamName string, db database.TeamDatabase, taskMgr *tools.TeamTaskManager, teamMemoryDir string, sysOp sysop.SysOperation, model *llm.Model, tzOffsetHours float64) error {
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

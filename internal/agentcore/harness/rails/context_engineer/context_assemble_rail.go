@@ -36,9 +36,10 @@ const (
 	// contextAssembleRailPriority ContextAssembleRail 优先级
 	// Python: ContextAssembleRail.priority = 85
 	contextAssembleRailPriority = 85
-)
 
-const logComponent = logger.ComponentAgentCore
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

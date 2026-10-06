@@ -77,3 +77,5 @@ func InitCodingMemoryManagerAsync(ctx context.Context, ws *workspace.Workspace, 
 	logger.Info(logComponent).Str("cm_dir", cmDir).Msg("编程记忆管理器已初始化")
 	return mgr, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

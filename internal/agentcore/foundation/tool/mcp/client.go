@@ -55,3 +55,5 @@ func NewMcpClient(config *types.McpServerConfig) (types.McpClient, error) {
 		)
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

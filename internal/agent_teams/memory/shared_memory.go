@@ -148,3 +148,5 @@ func (m *SharedMemoryManager) AppendEntry(ctx context.Context, entry string) err
 	}
 	return m.WriteTeamSummary(ctx, newContent)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

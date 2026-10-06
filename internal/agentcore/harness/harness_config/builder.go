@@ -34,6 +34,7 @@ type toolGroupDef struct {
 // HarnessConfigBuilder 将 ResolvedHarnessConfig 转换为配置好的 DeepAgent
 type HarnessConfigBuilder struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // builtinToolGroups 内置工具组注册表
@@ -79,6 +80,7 @@ var toolDottedToGroup = buildToolDottedToGroup()
 // railDottedToName 反转注册表：Rail 点分路径 → 名称
 var railDottedToName = buildRailDottedToName()
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Build 将 ResolvedHarnessConfig 转换为 CreateDeepAgentParams，

@@ -42,7 +42,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 SupervisorAgent 满足 BaseAgent 接口
 // _ 编译时验证 SupervisorAgent 满足 BaseAgent 接口
 var _ agentinterfaces.BaseAgent = (*SupervisorAgent)(nil)
 

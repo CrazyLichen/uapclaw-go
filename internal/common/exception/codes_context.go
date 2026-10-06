@@ -338,3 +338,6 @@ var (
 		"MEMORY_GRAPH_PROMPT_FILES_MISSING", 158204,
 		"graph memory prompt files not found in directory {prompt_dir}")
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────

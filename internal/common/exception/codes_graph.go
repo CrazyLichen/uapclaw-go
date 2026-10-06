@@ -76,3 +76,6 @@ var (
 		"PREGEL_GRAPH_CONDITION_EDGE_INVALID", 112103,
 		"condition edge is invalid, source_id={source_id}, error='{reason}'")
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────

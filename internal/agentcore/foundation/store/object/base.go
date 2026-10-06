@@ -109,3 +109,5 @@ func (c *ObjectStorageConfig) ApplyEnvFallback() {
 		c.RegionName = os.Getenv("OBS_REGION")
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

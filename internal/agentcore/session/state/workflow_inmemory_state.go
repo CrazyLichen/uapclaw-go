@@ -29,3 +29,5 @@ func NewInMemoryWorkflowState(globalState ...CommitStateLike) *WorkflowCommitSta
 		workflowOnly,
 	)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

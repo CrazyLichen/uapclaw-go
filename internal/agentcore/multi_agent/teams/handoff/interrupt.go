@@ -93,3 +93,5 @@ func FlushTeamSession(ctx context.Context, sess *session.AgentTeamSession) error
 
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

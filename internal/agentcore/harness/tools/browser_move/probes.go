@@ -1241,3 +1241,5 @@ func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, quer
 	js := strings.Replace(template, "__PARAMS__", string(paramsJSON), 1)
 	return strings.ReplaceAll(js, "JS_BACKTICK", "`")
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

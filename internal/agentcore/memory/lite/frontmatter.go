@@ -130,3 +130,5 @@ func ExtractBody(content string) string {
 	}
 	return strings.TrimSpace(content[3+end+3:])
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

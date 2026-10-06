@@ -174,3 +174,5 @@ func EnsureJSONArguments(arguments string) string {
 		Msg("Illegal Tool call arguments")
 	return "{}"
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -629,3 +629,5 @@ func BuildCodeSessionGuidanceSection() saprompt.PromptSection {
 		Priority: int(CodePrioritySessionGuidance),
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -63,7 +63,6 @@ var memoryAllTools = map[string]struct{}{
 // avatarLogComponent 日志组件标识
 var avatarLogComponent = logger.ComponentAgentServer
 
-// 编译时验证 AvatarPromptRail 满足 AgentRail 接口
 // _ 编译时验证 AvatarPromptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*AvatarPromptRail)(nil)
 

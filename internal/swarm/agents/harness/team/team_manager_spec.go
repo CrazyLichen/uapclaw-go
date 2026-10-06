@@ -16,6 +16,7 @@ import (
 // 对齐 Python: build_agent_customizer 返回的 customizer(agent, member_name, role) 闭包
 type AgentCustomizer func(ctx context.Context, agent interfaces.DeepAgentInterface, memberName string, role string) error
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetEnrichedTeamSpec 获取增强的 TeamAgentSpec。
@@ -198,6 +199,7 @@ func (m *TeamManager) ParsePort(value any, defaultPort int, fieldName string) in
 	return defaultPort
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildSessionScopedTeamName 构建 session 作用域的 team name。
@@ -320,3 +322,5 @@ func (m *TeamManager) applySessionScopedTeamName(spec *atschema.TeamAgentSpec, s
 		spec.TeamName = scopedName
 	}
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────

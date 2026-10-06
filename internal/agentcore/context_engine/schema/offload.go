@@ -239,3 +239,5 @@ func UnmarshalOffloadMessage(data []byte) (Offloadable, error) {
 		return nil, fmt.Errorf("UnmarshalOffloadMessage 不支持的角色: %q", peek.Role)
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

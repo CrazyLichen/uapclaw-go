@@ -35,11 +35,9 @@ var errRuntimeNotBound = exception.BuildError(exception.StatusAgentTeamExecution
 	exception.WithParam("error_msg", "Agent 未绑定到 TeamRuntime，请先注册到 TeamRuntime"),
 )
 
-// 编译时验证 CommunicableAgent 满足 Communicable 接口
 // _ 编译时验证 CommunicableAgent 满足 Communicable 接口
 var _ Communicable = (*CommunicableAgent)(nil)
 
-// 编译时验证 CommunicableAgent 满足 RuntimeBindable 接口
 // _ 编译时验证 CommunicableAgent 满足 RuntimeBindable 接口
 var _ RuntimeBindable = (*CommunicableAgent)(nil)
 
@@ -135,3 +133,5 @@ func (c *CommunicableAgent) Unsubscribe(ctx context.Context, topic string) error
 func (c *CommunicableAgent) Runtime() *TeamRuntime {
 	return c.runtime
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

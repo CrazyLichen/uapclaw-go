@@ -37,3 +37,7 @@ const (
 		"If you change this file, tell the user — it's your soul, and they should know.\n\n" +
 		"_This file is yours to evolve. As you learn who you are, update it._\n"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────

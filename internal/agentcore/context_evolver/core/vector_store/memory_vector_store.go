@@ -24,6 +24,7 @@ type MemoryVectorStore struct {
 	vectors map[string]*schema.VectorNode
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemoryVectorStore 创建空的内存向量库。
@@ -167,6 +168,7 @@ func (s *MemoryVectorStore) String() string {
 	return fmt.Sprintf("MemoryVectorStore(count=%d)", len(s.vectors))
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // cosineSimilarity 计算两个向量的余弦相似度。
@@ -217,3 +219,5 @@ func matchesMetadata(metadata, filter map[string]any) bool {
 	}
 	return true
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────

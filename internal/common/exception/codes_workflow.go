@@ -279,3 +279,6 @@ var (
 		"COMPONENT_TOOL_INIT_FAILED", 102002,
 		"component tool initialization failed, reason: {error_msg}")
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────

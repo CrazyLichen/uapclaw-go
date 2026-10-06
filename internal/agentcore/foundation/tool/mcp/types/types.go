@@ -94,7 +94,6 @@ const NoTimeout = -1
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 McpToolCard 满足 schema.CardInterface。
 // _ 编译时验证 McpToolCard 满足 CardInterface 接口
 var _ schema.CardInterface = (*McpToolCard)(nil)
 
@@ -199,3 +198,5 @@ func (c *McpServerConfig) AbilityID() string { return c.ServerID }
 
 // AbilityKind 实现 schema.Ability 接口。
 func (c *McpServerConfig) AbilityKind() schema.AbilityKind { return schema.AbilityKindMcpServer }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
