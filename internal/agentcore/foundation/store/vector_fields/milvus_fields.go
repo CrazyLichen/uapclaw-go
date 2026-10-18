@@ -6,6 +6,24 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
+// ──────────────────────────── 接口 ────────────────────────────
+
+// MilvusVectorFieldConfig Milvus 向量字段统一接口。
+//
+// 对齐 Python MilvusVectorField（Union[MilvusAUTO, MilvusFLAT, MilvusHNSW, MilvusIVF, MilvusSCANN] 类型的接口面），
+// MilvusAUTO/MilvusFLAT/MilvusHNSW/MilvusIVF/MilvusSCANN 均实现此接口。
+// retrieval 层 MilvusVectorStore/MilvusIndexer 通过此接口访问向量字段配置。
+type MilvusVectorFieldConfig interface {
+	// IndexType 返回索引类型
+	IndexType() IndexType
+	// VectorFieldName 返回向量字段名
+	VectorFieldName() string
+	// ToConstructDict 返回构建阶段配置
+	ToConstructDict() map[string]any
+	// ToSearchDict 返回搜索阶段配置
+	ToSearchDict() map[string]any
+}
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MilvusAUTO Milvus AUTOINDEX 配置。
@@ -86,6 +104,24 @@ type baseIVF struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// IndexType 返回 AUTO 索引类型。
+func (a *MilvusAUTO) IndexType() IndexType { return a.VectorField.IndexType }
+
+// VectorFieldName 返回向量字段名。
+func (a *MilvusAUTO) VectorFieldName() string { return a.VectorField.VectorFieldName }
+
+// ToConstructDict 返回构建阶段配置。
+// 对齐 Python to_dict(stage="construct")。
+func (a *MilvusAUTO) ToConstructDict() map[string]any {
+	return ToDict(a, StageConstruct)
+}
+
+// ToSearchDict 返回搜索阶段配置。
+// 对齐 Python to_dict(stage="search")。
+func (a *MilvusAUTO) ToSearchDict() map[string]any {
+	return ToDict(a, StageSearch)
+}
+
 // NewMilvusAUTO 创建 Milvus AUTOINDEX 配置。
 func NewMilvusAUTO(fieldName string) *MilvusAUTO {
 	return &MilvusAUTO{
@@ -93,11 +129,47 @@ func NewMilvusAUTO(fieldName string) *MilvusAUTO {
 	}
 }
 
+// IndexType 返回 FLAT 索引类型。
+func (f *MilvusFLAT) IndexType() IndexType { return f.VectorField.IndexType }
+
+// VectorFieldName 返回向量字段名。
+func (f *MilvusFLAT) VectorFieldName() string { return f.VectorField.VectorFieldName }
+
+// ToConstructDict 返回构建阶段配置。
+// 对齐 Python to_dict(stage="construct")。
+func (f *MilvusFLAT) ToConstructDict() map[string]any {
+	return ToDict(f, StageConstruct)
+}
+
+// ToSearchDict 返回搜索阶段配置。
+// 对齐 Python to_dict(stage="search")。
+func (f *MilvusFLAT) ToSearchDict() map[string]any {
+	return ToDict(f, StageSearch)
+}
+
 // NewMilvusFLAT 创建 Milvus FLAT 索引配置。
 func NewMilvusFLAT(fieldName string) *MilvusFLAT {
 	return &MilvusFLAT{
 		VectorField: *NewVectorField(DatabaseTypeMilvus, IndexTypeFLAT, fieldName),
 	}
+}
+
+// IndexType 返回 HNSW 索引类型。
+func (h *MilvusHNSW) IndexType() IndexType { return h.VectorField.IndexType }
+
+// VectorFieldName 返回向量字段名。
+func (h *MilvusHNSW) VectorFieldName() string { return h.VectorField.VectorFieldName }
+
+// ToConstructDict 返回构建阶段配置。
+// 对齐 Python to_dict(stage="construct")。
+func (h *MilvusHNSW) ToConstructDict() map[string]any {
+	return ToDict(h, StageConstruct)
+}
+
+// ToSearchDict 返回搜索阶段配置。
+// 对齐 Python to_dict(stage="search")。
+func (h *MilvusHNSW) ToSearchDict() map[string]any {
+	return ToDict(h, StageSearch)
 }
 
 // NewMilvusHNSW 创建 Milvus HNSW 索引配置。
@@ -133,6 +205,24 @@ func (h *MilvusHNSW) Validate() error {
 	return nil
 }
 
+// IndexType 返回 IVF 索引类型。
+func (iv *MilvusIVF) IndexType() IndexType { return iv.VectorField.IndexType }
+
+// VectorFieldName 返回向量字段名。
+func (iv *MilvusIVF) VectorFieldName() string { return iv.VectorField.VectorFieldName }
+
+// ToConstructDict 返回构建阶段配置。
+// 对齐 Python to_dict(stage="construct")。
+func (iv *MilvusIVF) ToConstructDict() map[string]any {
+	return ToDict(iv, StageConstruct)
+}
+
+// ToSearchDict 返回搜索阶段配置。
+// 对齐 Python to_dict(stage="search")。
+func (iv *MilvusIVF) ToSearchDict() map[string]any {
+	return ToDict(iv, StageSearch)
+}
+
 // NewMilvusIVF 创建 Milvus IVF 索引配置。
 // nlist: 构建时的簇数，范围 [1, 65536]，默认 128
 // nprobe: 搜索时的查询簇数，范围 [1, 65536] 且 <= nlist，默认 8
@@ -164,6 +254,24 @@ func (iv *MilvusIVF) Validate() error {
 		)
 	}
 	return nil
+}
+
+// IndexType 返回 SCANN 索引类型。
+func (sc *MilvusSCANN) IndexType() IndexType { return sc.VectorField.IndexType }
+
+// VectorFieldName 返回向量字段名。
+func (sc *MilvusSCANN) VectorFieldName() string { return sc.VectorField.VectorFieldName }
+
+// ToConstructDict 返回构建阶段配置。
+// 对齐 Python to_dict(stage="construct")。
+func (sc *MilvusSCANN) ToConstructDict() map[string]any {
+	return ToDict(sc, StageConstruct)
+}
+
+// ToSearchDict 返回搜索阶段配置。
+// 对齐 Python to_dict(stage="search")。
+func (sc *MilvusSCANN) ToSearchDict() map[string]any {
+	return ToDict(sc, StageSearch)
 }
 
 // NewMilvusSCANN 创建 Milvus SCANN 索引配置。
