@@ -1,6 +1,13 @@
 package memory
 
-import "strings"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -144,6 +151,103 @@ func IsExternalMemoryEnabled(cfg map[string]any) bool {
 	return GetExternalMemoryConfig(cfg).Provider != ""
 }
 
+// ResolveLtmDir 返回 LTM 数据目录 {workspace}/memory/ltm（自动创建）。
+// 对齐 Python _resolve_ltm_dir (L80-84)：base.mkdir(parents=True, exist_ok=True)。
+// mkdir 失败返回 error，沿 builder 链路传播为整体 nil（对齐 Python 异常传播）。
+func ResolveLtmDir() (string, error) {
+	base := filepath.Join(workspace.WorkspaceDir(), ltmSubdir)
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		return "", err
+	}
+	return base, nil
+}
+
+// BuildOpenJiuwenProviderConfig 将 memory.external.openjiuwen 配置映射为
+// OpenJiuwenProvider 预期的 config dict。
+// 对齐 Python build_openjiuwen_provider_config (L87-126)：
+//
+//	{
+//	  "kv":        {"backend": "shelve", "path": "..."},
+//	  "vector":    {"backend": "chroma", "persist_directory": "..."},
+//	  "db":        {"backend": "sqlite", "path": "..."},
+//	  "embedding": {"model_name": "...", "base_url": "...", "api_key": "..."},
+//	}
+//
+// kv 默认 shelve 是 jiuwenswarm builder 基线（L101: or "shelve"）；
+// agentcore provider 内部默认 memory 是 openjiuwen 基线，两层各自对齐各自基线，
+// builder 总是显式填 backend，provider 默认在本链路不生效（与 Python 一致）。
+func BuildOpenJiuwenProviderConfig(extCfg ExternalMemoryConfig, cfg map[string]any) (map[string]any, error) {
+	ltmDir, err := ResolveLtmDir()
+	if err != nil {
+		return nil, err
+	}
+
+	ojCfg := extCfg.OpenJiuwen
+	strOr := func(v any, def string) string {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			return strings.ToLower(strings.TrimSpace(s))
+		}
+		return def
+	}
+	pathOr := func(v any, def string) string {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+		return def
+	}
+
+	// Python L101: kv_backend = (oj_cfg.get("kv_type") or "shelve").lower()
+	kvBackend := strOr(ojCfg["kv_type"], "shelve")
+	kvPath := pathOr(ojCfg["kv_path"], filepath.Join(ltmDir, "kv"))
+
+	vectorBackend := strOr(ojCfg["vector_type"], "chroma")
+	vectorDir := pathOr(ojCfg["vector_persist_dir"], filepath.Join(ltmDir, "chroma"))
+
+	dbBackend := strOr(ojCfg["db_type"], "sqlite")
+	dbPath := pathOr(ojCfg["db_path"], filepath.Join(ltmDir, "ltm.db"))
+
+	// Python L110-115: embed_cfg = get_embed_config() or {} + EMBED_* env 回退
+	// 注意键名 embed_base_url（GetEmbedConfig），env 回退 EMBED_BASE_URL
+	var modelName, baseURL, apiKey string
+	if cfg == nil {
+		// 显式 cfg 为空时走包内 GetEmbedConfig（读 config.yaml embed 段）
+		ec := GetEmbedConfig()
+		modelName, baseURL, apiKey = ec.Model, ec.BaseURL, ec.APIKey
+	} else {
+		// 调用方持有配置缓存时直接读 embed 段
+		embedCfg, _ := cfg["embed"].(map[string]any)
+		get := func(key string) string {
+			if embedCfg != nil {
+				if s, ok := embedCfg[key].(string); ok && s != "" {
+					return s
+				}
+			}
+			return ""
+		}
+		modelName = get("embed_model")
+		baseURL = get("embed_base_url")
+		apiKey = get("embed_api_key")
+	}
+	// Python L111-114: embed_cfg.get("model") or os.getenv("EMBED_MODEL", "")
+	// 空串回落 env（config.go 的 strValDefault 是类型断言语义，不做空回落）
+	modelName = strOrEnv(modelName, "EMBED_MODEL")
+	baseURL = strOrEnv(baseURL, "EMBED_BASE_URL")
+	apiKey = strOrEnv(apiKey, "EMBED_API_KEY")
+	if modelName == "" {
+		// Python L116-119: logger.warning("[external_memory] Embedding not configured — ...")
+		logger.Warn(logComponent).
+			Str("event_type", "external_memory").
+			Msg("Embedding not configured — OpenJiuwen LTM will skip vector search")
+	}
+
+	return map[string]any{
+		"kv":        map[string]any{"backend": kvBackend, "path": kvPath},
+		"vector":    map[string]any{"backend": vectorBackend, "persist_directory": vectorDir},
+		"db":        map[string]any{"backend": dbBackend, "path": dbPath},
+		"embedding": map[string]any{"model_name": modelName, "base_url": baseURL, "api_key": apiKey},
+	}, nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // strValDefaultExternal 空串回落外接记忆默认值。
@@ -154,4 +258,13 @@ func strValDefaultExternal(s string) string {
 		return s
 	}
 	return defaultExternalUser
+}
+
+// strOrEnv 空串回落环境变量。
+// 对齐 Python: cfg.get(key) or os.getenv(ENV, "")
+func strOrEnv(s, envKey string) string {
+	if s != "" {
+		return s
+	}
+	return os.Getenv(envKey)
 }

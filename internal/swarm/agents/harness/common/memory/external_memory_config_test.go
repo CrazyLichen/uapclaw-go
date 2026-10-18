@@ -1,6 +1,12 @@
 package memory
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+)
 
 // TestGetMemoryEngine_合法值 对齐 Python get_memory_engine L30-39
 func TestGetMemoryEngine_合法值(t *testing.T) {
@@ -158,5 +164,133 @@ func TestIsExternalMemoryEnabled_组合矩阵(t *testing.T) {
 				t.Errorf("engine=%s provider=%q → %v, want %v", c.engine, c.provider, got, c.want)
 			}
 		})
+	}
+}
+
+// TestResolveLtmDir_创建目录 对齐 Python _resolve_ltm_dir (L80-84)：mkdir parents
+func TestResolveLtmDir_创建目录(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	workspace.SetUserHome(workspace.UserHomeDir())
+	defer workspace.SetUserHome(workspace.UserHomeDir())
+
+	dir, err := ResolveLtmDir()
+	if err != nil {
+		t.Fatalf("ResolveLtmDir 失败: %v", err)
+	}
+	want := filepath.Join(tmpDir, "memory", "ltm")
+	if dir != want {
+		t.Fatalf("dir = %q, want %q", dir, want)
+	}
+	// 目录应已创建
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		t.Errorf("ltm 目录未创建: %v", err)
+	}
+	// 幂等：再次调用不报错
+	if _, err := ResolveLtmDir(); err != nil {
+		t.Errorf("二次调用失败: %v", err)
+	}
+}
+
+// TestBuildOpenJiuwenProviderConfig_默认值 对齐 L87-126
+// 回归偏差 #6：kv 默认 shelve（jiuwenswarm builder 基线），非 memory
+func TestBuildOpenJiuwenProviderConfig_默认值(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	workspace.SetUserHome(workspace.UserHomeDir())
+	defer workspace.SetUserHome(workspace.UserHomeDir())
+	t.Setenv("EMBED_MODEL", "env-model")
+	t.Setenv("EMBED_BASE_URL", "http://env-base")
+	t.Setenv("EMBED_API_KEY", "env-key")
+
+	extCfg := ExternalMemoryConfig{OpenJiuwen: map[string]any{}}
+	got, err := BuildOpenJiuwenProviderConfig(extCfg, nil)
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	ltmDir := filepath.Join(tmpDir, "memory", "ltm")
+
+	kv := got["kv"].(map[string]any)
+	if kv["backend"] != "shelve" {
+		t.Errorf("kv.backend = %v, want shelve（回归偏差 #6）", kv["backend"])
+	}
+	if kv["path"] != filepath.Join(ltmDir, "kv") {
+		t.Errorf("kv.path = %v, want %q", kv["path"], filepath.Join(ltmDir, "kv"))
+	}
+	vector := got["vector"].(map[string]any)
+	if vector["backend"] != "chroma" || vector["persist_directory"] != filepath.Join(ltmDir, "chroma") {
+		t.Errorf("vector = %v", vector)
+	}
+	db := got["db"].(map[string]any)
+	if db["backend"] != "sqlite" || db["path"] != filepath.Join(ltmDir, "ltm.db") {
+		t.Errorf("db = %v", db)
+	}
+	embedding := got["embedding"].(map[string]any)
+	if embedding["model_name"] != "env-model" || embedding["base_url"] != "http://env-base" {
+		t.Errorf("embedding = %v（应读 EMBED_* env 回退）", embedding)
+	}
+}
+
+// TestBuildOpenJiuwenProviderConfig_配置覆盖 对齐 kv_type/vector_type 等覆盖
+func TestBuildOpenJiuwenProviderConfig_配置覆盖(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	workspace.SetUserHome(workspace.UserHomeDir())
+	defer workspace.SetUserHome(workspace.UserHomeDir())
+
+	extCfg := ExternalMemoryConfig{OpenJiuwen: map[string]any{
+		"kv_type":     "sqlite",
+		"kv_path":     "/custom/kv",
+		"vector_type": "milvus",
+		"db_path":     "/custom/db",
+	}}
+	got, err := BuildOpenJiuwenProviderConfig(extCfg, nil)
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	kv := got["kv"].(map[string]any)
+	if kv["backend"] != "sqlite" || kv["path"] != "/custom/kv" {
+		t.Errorf("kv = %v", kv)
+	}
+	if got["vector"].(map[string]any)["backend"] != "milvus" {
+		t.Errorf("vector.backend 应支持覆盖")
+	}
+	if got["db"].(map[string]any)["path"] != "/custom/db" {
+		t.Errorf("db.path 应支持覆盖")
+	}
+}
+
+// TestBuildOpenJiuwenProviderConfig_embed配置段覆盖env 对齐：get_embed_config 优先于 EMBED_* env
+// 回归偏差 #7：键名 embed_base_url（包内 GetEmbedConfig），非 embed_api_base
+func TestBuildOpenJiuwenProviderConfig_embed配置段覆盖env(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	workspace.SetUserHome(workspace.UserHomeDir())
+	defer workspace.SetUserHome(workspace.UserHomeDir())
+	t.Setenv("EMBED_MODEL", "env-model-should-lose")
+
+	// 注入 config.yaml embed 段（GetEmbedConfig 走包内 loadConfig）
+	injectTestConfigLoader(t, `
+embed:
+  embed_api_key: cfg-key
+  embed_base_url: http://cfg-base
+  embed_model: cfg-model
+`)
+	ClearConfigCache()
+	defer ClearConfigCache()
+
+	got, err := BuildOpenJiuwenProviderConfig(ExternalMemoryConfig{}, nil)
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	embedding := got["embedding"].(map[string]any)
+	if embedding["model_name"] != "cfg-model" {
+		t.Errorf("model_name = %v, want cfg-model（config 优先于 env）", embedding["model_name"])
+	}
+	if embedding["base_url"] != "http://cfg-base" {
+		t.Errorf("base_url = %v, want http://cfg-base（键名 embed_base_url，回归偏差 #7）", embedding["base_url"])
+	}
+	if embedding["api_key"] != "cfg-key" {
+		t.Errorf("api_key = %v, want cfg-key", embedding["api_key"])
 	}
 }
