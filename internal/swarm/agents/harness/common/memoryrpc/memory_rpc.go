@@ -10,8 +10,10 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utilpath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -103,6 +105,76 @@ func HandleMemoryOpen(ctx context.Context, workspace string, params map[string]a
 		result["coding_memory_dir"] = codingDir
 	}
 	return result
+}
+
+// HandleMemoryToggle 切换记忆开关并写回 config。
+// Python: handle_memory_toggle (memory_rpc.py L392-444)
+func HandleMemoryToggle(ctx context.Context, workspace, mode string, params map[string]any) map[string]any {
+	// Python: key = params.get("key", ""); config = get_config()
+	key, _ := params["key"].(string)
+	cfg := loadConfigMap()
+
+	// Python L402-412：全局禁止记忆开关
+	if key == "memory_forbidden_enabled" {
+		old := isForbiddenEnabled(cfg)
+		newVal := !old
+		// Python: update_memory_forbidden_enabled_in_config(new)
+		if err := updateMemoryForbiddenEnabledInConfig(newVal); err != nil {
+			// D6 决策：写回失败 log + new_value 置 old_value 如实上报未变更
+			logger.Error(logComponent).Err(err).Msg("memory.toggle write forbidden enabled failed")
+			newVal = old
+		}
+		return map[string]any{
+			"key":           key,
+			"old_value":     old,
+			"new_value":     newVal,
+			"mode_affected": "global",
+			"needs_restart": true,
+		}
+	}
+
+	// Python L414-424：模式级 memory_enabled
+	if key == "memory_enabled" {
+		old := commmem.IsMemoryEnabled(mode, cfg)
+		newVal := !old
+		if err := updateModeMemoryConfig(mode, "enabled", newVal); err != nil {
+			logger.Error(logComponent).Err(err).Msg("memory.toggle write mode enabled failed")
+			newVal = old
+		}
+		return map[string]any{
+			"key":           key,
+			"old_value":     old,
+			"new_value":     newVal,
+			"mode_affected": mode,
+			"needs_restart": true,
+		}
+	}
+
+	// Python L426-436：模式级 memory_proactive
+	if key == "memory_proactive" {
+		old := commmem.IsProactiveMemory(mode, cfg)
+		newVal := !old
+		if err := updateModeMemoryConfig(mode, "is_proactive", newVal); err != nil {
+			logger.Error(logComponent).Err(err).Msg("memory.toggle write mode proactive failed")
+			newVal = old
+		}
+		return map[string]any{
+			"key":           key,
+			"old_value":     old,
+			"new_value":     newVal,
+			"mode_affected": mode,
+			"needs_restart": true,
+		}
+	}
+
+	// Python L438-444：未知 key 兜底
+	return map[string]any{
+		"key":           key,
+		"old_value":     false,
+		"new_value":     false,
+		"mode_affected": "",
+		"needs_restart": false,
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -397,4 +469,47 @@ func scanMDFiles(dir, kind, workspace string, projectDir string) []map[string]an
 // Python: _is_code_mode (L194-195)：mode.startswith("code")
 func isCodeMode(mode string) bool {
 	return strings.HasPrefix(mode, "code")
+}
+
+// loadConfigMap 读取全局 config（不缓存，每次现读）。
+// 对齐 Python get_config()（toggle/status 每次取最新）
+func loadConfigMap() map[string]any {
+	cfg, err := config.New("")
+	if err != nil {
+		return map[string]any{}
+	}
+	data, err := cfg.Load()
+	if err != nil || data == nil {
+		return map[string]any{}
+	}
+	return data
+}
+
+// updateModeMemoryConfig 更新 modes.agent.{mode}.memory.{field} 并写回。
+// Python: _update_mode_memory_config (memory_rpc.py L447-456)：
+// round-trip 写回 modes→agent→{mode}→memory→{field}；Go 用 Load+Set 点路径等价
+// （对齐 11.14 web 通道先例：Set 前必须 Load，否则空 raw 覆盖整个文件）
+func updateModeMemoryConfig(mode, field string, value bool) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return err
+	}
+	if _, err := cfg.Load(); err != nil {
+		return err
+	}
+	return cfg.Set("modes.agent."+mode+".memory."+field, value)
+}
+
+// updateMemoryForbiddenEnabledInConfig 更新 memory.forbidden_memory_definition.enabled 并写回。
+// Python: update_memory_forbidden_enabled_in_config (common/config.py L1190-1198)；
+// 与 11.14 web 通道 forbidden.set 同键同先例（Load + Config.Set 点路径）
+func updateMemoryForbiddenEnabledInConfig(value bool) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return err
+	}
+	if _, err := cfg.Load(); err != nil {
+		return err
+	}
+	return cfg.Set("memory.forbidden_memory_definition.enabled", value)
 }
