@@ -24,7 +24,7 @@
 - Modify: `go.mod` / `go.sum`
 - Create: `internal/agentcore/retrieval/indexing/processor/splitter/doc.go`
 
-- [ ] **Step 1: 添加依赖**
+- [x] **Step 1: 添加依赖**
 
 ```bash
 cd /home/opensource/uapclaw-gateway
@@ -34,7 +34,7 @@ go get github.com/sentencizer/sentencizer@v0.3.0
 
 Expected: go.mod require 块出现 sentencizer v0.3.0。
 
-- [ ] **Step 2: 创建 splitter/doc.go**
+- [x] **Step 2: 创建 splitter/doc.go**
 
 ```go
 // Package splitter 提供句级文本分割：把整篇文档文本按句子边界切分，
@@ -55,7 +55,7 @@ Expected: go.mod require 块出现 sentencizer v0.3.0。
 package splitter
 ```
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 ```bash
 go build ./internal/agentcore/retrieval/indexing/processor/splitter/
@@ -63,7 +63,7 @@ go build ./internal/agentcore/retrieval/indexing/processor/splitter/
 
 Expected: 编译通过（空包+doc.go）。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add go.mod go.sum internal/agentcore/retrieval/indexing/processor/splitter/doc.go
@@ -80,7 +80,7 @@ git commit -m "feat(13.7): 新增 sentencizer 依赖 + splitter 包骨架"
 
 对齐 Python `splitter/base.py`（Splitter ABC 全部 154 行）。155102 tokenizer 校验省略（设计文档偏差 6：enc 函数由调用方解析后传入，类型系统静态保证）。
 
-- [ ] **Step 1: 写失败测试（构造校验 + GetTokenCount + SplitText）**
+- [x] **Step 1: 写失败测试（构造校验 + GetTokenCount + SplitText）**
 
 ```go
 package splitter
@@ -162,7 +162,7 @@ func TestSplitText(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run "TestNewBaseSplitter|TestGetTokenCount|TestSplitText" -v
@@ -170,7 +170,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run "TestNe
 
 Expected: FAIL（NewBaseSplitter/ChunkSpan 未定义）。
 
-- [ ] **Step 3: 实现 base.go**
+- [x] **Step 3: 实现 base.go**
 
 ```go
 package splitter
@@ -364,7 +364,7 @@ func (b *BaseSplitter) splitDocOf(text string) ([]ChunkSpan, error) {
 
 **注意**：上面 `splitDocOf` 引用了 `fmt`，import 块需补 `"fmt"`。BaseSplitter 的 `self` 字段与 `SetSelf` 方法已并入上方结构体定义（对齐 chunker.BaseChunker 的 SetSelf 注入模式，13.5 定稿约定）。
 
-- [ ] **Step 4: 运行测试通过**
+- [x] **Step 4: 运行测试通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -v
@@ -372,7 +372,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -v
 
 Expected: 全 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/splitter/
@@ -389,7 +389,7 @@ git commit -m "feat(13.7): splitter 包 BaseSplitter 基类（构造校验+GetNo
 
 对齐 Python `_detect_chinese`。numpy 向量化与 5000 万字符分块省略（偏差 7），语义早退保留。
 
-- [ ] **Step 1: 写失败测试（表驱动）**
+- [x] **Step 1: 写失败测试（表驱动）**
 
 ```go
 package splitter
@@ -422,7 +422,7 @@ func TestDetectChinese(t *testing.T) {
 
 import 补 `"strings"`。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run TestDetectChinese -v
@@ -430,7 +430,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run TestDet
 
 Expected: FAIL（detectChinese 未定义）。
 
-- [ ] **Step 3: 实现 splitter.go 的 detectChinese 部分**
+- [x] **Step 3: 实现 splitter.go 的 detectChinese 部分**
 
 ```go
 package splitter
@@ -485,7 +485,7 @@ import 补 `"strings"`。
 
 ⚠️ **注意阈值语义**：Python 源码 `threshold_val = int(threshold * total_chars)` 且 numpy 路径**没有**循环内早退（早退只在 >5000 万字符的分块路径），统一路径最后 `chinese_count >= threshold_val` 判定。Go 侧把早退引入主循环是**行为增强**（同判定的更快路径，结果等价：循环内达到阈值 → 最终判定必为 zh）。如对此增强有疑虑，可去掉循环内早退改为纯计数——两者测试结果一致。
 
-- [ ] **Step 4: 运行测试通过**
+- [x] **Step 4: 运行测试通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run TestDetectChinese -v
@@ -493,7 +493,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run TestDet
 
 Expected: 全 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/splitter/
@@ -510,7 +510,7 @@ git commit -m "feat(13.7): detectChinese 中英检测（CJK 占比+标点启发�
 
 对齐 Python `splitter/splitter.py` 的 `SentenceSplitter.__init__`/`__call__`/`_flush`。span 恢复省略（偏差 2：sentencizer TextSpans 原生产出）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 // splitter_test.go 追加
@@ -632,7 +632,7 @@ func TestSentenceSplitter_SplitDoc_英文lan透传(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run "TestSentenceSplitter" -v
@@ -640,7 +640,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run "TestSe
 
 Expected: FAIL（NewSentenceSplitter 未定义）。
 
-- [ ] **Step 3: 实现 SentenceSplitter**
+- [x] **Step 3: 实现 SentenceSplitter**
 
 splitter.go 追加（结构体区块加结构体，导出函数区块加构造，非导出区块加算法）：
 
@@ -833,7 +833,7 @@ import 块加 `"github.com/sentencizer/sentencizer"`。
 1. `sentencesWithSpans` 返回 `([]sentenceSpan, error)`，SplitDoc 内调用处写为 `sentences, err := s.sentencesWithSpans(doc); if err != nil { return nil, err }`
 2. 删除 `len()` 辅助方法，循环内统一用 `sent.tokenLen` 字段直取
 
-- [ ] **Step 4: 运行测试通过**
+- [x] **Step 4: 运行测试通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -v
@@ -841,7 +841,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -v
 
 Expected: 全 PASS（含 Task 3 的 detectChinese 用例）。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/splitter/
@@ -858,7 +858,7 @@ git commit -m "feat(13.7): SentenceSplitter 主体（分句+token预算打包+fl
 
 对齐 Python `_split_long_segment`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 // splitter_test.go 追加
@@ -950,7 +950,7 @@ func TestSentenceSplitter_splitLongSegment_step退化1(t *testing.T) {
 
 import 补 `"fmt"`（若尚无）。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run splitLongSegment -v
@@ -958,7 +958,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -run splitLo
 
 Expected: FAIL 或 panic（splitLongSegment 未定义/未接线）。
 
-- [ ] **Step 3: 实现 splitLongSegment**
+- [x] **Step 3: 实现 splitLongSegment**
 
 splitter.go 非导出区块追加：
 
@@ -1007,7 +1007,7 @@ func (s *SentenceSplitter) splitLongSegment(sentText string, sentStart, sentEnd 
 }
 ```
 
-- [ ] **Step 4: 运行测试通过**
+- [x] **Step 4: 运行测试通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/splitter/ -v
@@ -1026,7 +1026,7 @@ Expected: 全 PASS。
 	}
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/splitter/
@@ -1043,7 +1043,7 @@ git commit -m "feat(13.7): splitLongSegment 长句滑窗子切分（decode失败
 
 对齐 Python `_resolve_tokenizer`/`_max_length`。偏差 1（max_token_value 不模拟）、偏差 4（失败链保留）、决策 2b（encode 上抛）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 // text_splitter_test.go 追加
@@ -1178,7 +1178,7 @@ func TestResolveChunkSize(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run "TestResolve" -v
@@ -1186,7 +1186,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run "TestRes
 
 Expected: FAIL（resolveTokenizers/resolveChunkSize 未定义）。
 
-- [ ] **Step 3: 实现接口三态 + 适配器 + resolve 函数**
+- [x] **Step 3: 实现接口三态 + 适配器 + resolve 函数**
 
 text_splitter.go 追加。结构体区块追加：
 
@@ -1367,7 +1367,7 @@ func resolveChunkSize(chunkSize, maxTokenLength int) int {
 
 import 块追加 `"strings"`、`"github.com/tiktoken-go/tokenizer"`、`"github.com/uapclaw/uapclaw-go/internal/common/logger"`（logger 若 chunker 包已有则复用 char_chunker.go 的 logComponent 常量——**注意**：logComponent 定义在 char_chunker.go，本文件直接引用）。
 
-- [ ] **Step 4: 运行测试通过**
+- [x] **Step 4: 运行测试通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -v
@@ -1375,7 +1375,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -v
 
 Expected: 全 PASS（含既有 13.5/13.6 测试）。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/chunker/
@@ -1391,7 +1391,7 @@ git commit -m "feat(13.7): Tokenizer 接口三态 + TiktokenTokenizer 适配器 
 - Create: `internal/agentcore/retrieval/indexing/processor/chunker/tokenizer_chunker.go`
 - Test: `internal/agentcore/retrieval/indexing/processor/chunker/tokenizer_chunker_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package chunker
@@ -1515,7 +1515,7 @@ func TestIndexSentenceSplitter_maxLength参与chunkSize(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run "TestTokenizerChunker|TestIndexSentenceSplitter" -v
@@ -1523,7 +1523,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run "TestTok
 
 Expected: FAIL（NewTokenizerChunker/NewIndexSentenceSplitter 未定义）。
 
-- [ ] **Step 3: 实现 IndexSentenceSplitter（text_splitter.go 追加）**
+- [x] **Step 3: 实现 IndexSentenceSplitter（text_splitter.go 追加）**
 
 结构体区块追加：
 
@@ -1594,7 +1594,7 @@ var _ TextSplitter = (*IndexSentenceSplitter)(nil)
 
 import 追加 `"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/indexing/processor/splitter"`。
 
-- [ ] **Step 4: 实现 TokenizerChunker（tokenizer_chunker.go 新文件）**
+- [x] **Step 4: 实现 TokenizerChunker（tokenizer_chunker.go 新文件）**
 
 ```go
 package chunker
@@ -1677,7 +1677,7 @@ func (c *TokenizerChunker) ChunkText(text string) ([]string, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 ```
 
-- [ ] **Step 5: 更新 chunker/doc.go 文件目录**
+- [x] **Step 5: 更新 chunker/doc.go 文件目录**
 
 ```go
 // 文件目录：
@@ -1692,7 +1692,7 @@ func (c *TokenizerChunker) ChunkText(text string) ([]string, error) {
 //	└── tokenizer_chunker.go # TokenizerChunker token 预算分块器（"tokenizer" 注册项）
 ```
 
-- [ ] **Step 6: 运行测试通过**
+- [x] **Step 6: 运行测试通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -v
@@ -1700,7 +1700,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -v
 
 Expected: 全 PASS。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/chunker/
@@ -1715,7 +1715,7 @@ git commit -m "feat(13.7): IndexSentenceSplitter + TokenizerChunker（构造链+
 - Modify: `internal/agentcore/retrieval/indexing/processor/chunker/registry.go`
 - Test: `internal/agentcore/retrieval/indexing/processor/chunker/registry_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 // registry_test.go 追加
@@ -1758,7 +1758,7 @@ func TestGetChunker_tokenizer_extra缺省走nil(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run "TestGetChunker_tokenizer" -v
@@ -1766,7 +1766,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run "TestGet
 
 Expected: FAIL（tokenizer 未注册，GetChunker 报 Unknown chunker）。
 
-- [ ] **Step 3: 实现 registry 注册**
+- [x] **Step 3: 实现 registry 注册**
 
 registry.go 的 `init()` 追加一行：
 
@@ -1820,7 +1820,7 @@ func tokenizerFactory(opts ...ChunkerOption) (Chunker, error) {
 }
 ```
 
-- [ ] **Step 4: 运行测试通过**
+- [x] **Step 4: 运行测试通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -v
@@ -1828,7 +1828,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -v
 
 Expected: 全 PASS。⚠️ 同时检查既有 registry_test.go 中 `GetChunker` 未知名测试的错误信息断言——注册名列表现在含 "char, hybrid, tokenizer"，如有硬编码断言需同步更新。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/chunker/
@@ -1843,7 +1843,7 @@ git commit -m "feat(13.7): registry 注册 tokenizer 工厂（主动增强，Ext
 - Modify: `IMPLEMENTATION_PLAN.md`（13.7/13.18/13.9 行）
 - Modify: `internal/agentcore/retrieval/indexing/processor/splitter/doc.go`（如文件目录有变）
 
-- [ ] **Step 1: 全包编译 + 测试**
+- [x] **Step 1: 全包编译 + 测试**
 
 ```bash
 go build ./...
@@ -1852,7 +1852,7 @@ go test ./internal/agentcore/retrieval/... -v 2>&1 | tail -30
 
 Expected: 编译零错误、retrieval 域全测试 PASS。
 
-- [ ] **Step 2: 覆盖率检查（≥85%）**
+- [x] **Step 2: 覆盖率检查（≥85%）**
 
 ```bash
 go test -cover ./internal/agentcore/retrieval/indexing/processor/splitter/ ./internal/agentcore/retrieval/indexing/processor/chunker/
@@ -1860,7 +1860,7 @@ go test -cover ./internal/agentcore/retrieval/indexing/processor/splitter/ ./int
 
 Expected: 两包覆盖率 ≥85%。不足则补测试（重点：flush 边界、sentencesWithSpans 空白过滤、resolveTokenizers 分支）。
 
-- [ ] **Step 3: 计划表回填（遵守"回填不丢失"约定——13.1-13.6 行一字不动）**
+- [x] **Step 3: 计划表回填（遵守"回填不丢失"约定——13.1-13.6 行一字不动）**
 
 13.7 行改为：
 
@@ -1880,11 +1880,11 @@ Expected: 两包覆盖率 ≥85%。不足则补测试（重点：flush 边界、
 | 13.9 | ☐ | 分块工具 | chunking 函数 + text_preprocessor + text_splitter。⚠️ 13.6 已带出 CharSplitter + TextSplitter 接口；13.7 已带出 IndexSentenceSplitter + splitter 包全部；本步骤仅剩 chunking.py TextChunker + text_preprocessor.py | `openjiuwen/core/retrieval/indexing/processor/chunker/` |
 ```
 
-- [ ] **Step 4: memory 更新提示**
+- [x] **Step 4: memory 更新提示**
 
 提醒主会话更新 memory：`tokenizerchunker-13.7-design-decisions.md` 状态从"spec 待实施"改为"已实施完成 + 覆盖率数字 + commit 范围"。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add IMPLEMENTATION_PLAN.md internal/agentcore/retrieval/indexing/processor/splitter/doc.go
