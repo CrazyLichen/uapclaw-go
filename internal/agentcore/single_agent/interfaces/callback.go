@@ -109,8 +109,11 @@ type AgentCallbackContext struct {
 	modelContext ceinterface.ModelContext
 	// extra 跨 rail 通信字典（单次 invoke 内跨事件持久，子 ctx 共享）
 	extra map[string]any
-	// extraMu 保护 extra 字典的并发读写
-	extraMu sync.RWMutex
+	// extraMuPtr 保护 extra 字典的并发读写。
+	// 必须为指针：ForkForToolCall 创建的子上下文共享父的 extra map，
+	// 若各自持有独立的 sync.RWMutex 值，锁的是不同实例，对共享 map 的
+	// 并发写不加锁（多工具并行 BeforeToolCall 时数据竞争）。
+	extraMuPtr *sync.RWMutex
 	// exception 异常对象（在错误事件上设置）
 	exception error
 	// retryAttempt 当前重试索引号
@@ -380,10 +383,11 @@ func NewAgentCallbackContext(
 	sess sessioninterfaces.SessionFacade,
 ) *AgentCallbackContext {
 	return &AgentCallbackContext{
-		agent:   agent,
-		inputs:  inputs,
-		session: sess,
-		extra:   make(map[string]any),
+		agent:      agent,
+		inputs:     inputs,
+		session:    sess,
+		extra:      make(map[string]any),
+		extraMuPtr: &sync.RWMutex{},
 	}
 }
 
@@ -423,23 +427,26 @@ func (c *AgentCallbackContext) Extra() map[string]any { return c.extra }
 
 // GetExtra 线程安全地读取 extra 字典中的值。
 func (c *AgentCallbackContext) GetExtra(key string) (any, bool) {
-	c.extraMu.RLock()
-	defer c.extraMu.RUnlock()
+	mu := c.extraLock()
+	mu.RLock()
+	defer mu.RUnlock()
 	v, ok := c.extra[key]
 	return v, ok
 }
 
 // SetExtra 线程安全地设置 extra 字典中的值。
 func (c *AgentCallbackContext) SetExtra(key string, value any) {
-	c.extraMu.Lock()
-	defer c.extraMu.Unlock()
+	mu := c.extraLock()
+	mu.Lock()
+	defer mu.Unlock()
 	c.extra[key] = value
 }
 
 // DeleteExtra 线程安全地删除 extra 字典中的值，返回被删除的值。
 func (c *AgentCallbackContext) DeleteExtra(key string) (any, bool) {
-	c.extraMu.Lock()
-	defer c.extraMu.Unlock()
+	mu := c.extraLock()
+	mu.Lock()
+	defer mu.Unlock()
 	v, ok := c.extra[key]
 	if ok {
 		delete(c.extra, key)
@@ -629,8 +636,26 @@ func (c *AgentCallbackContext) HasForceFinishRequest() bool {
 
 // ForkForToolCall 为单个工具调用创建隔离的子上下文。
 //
-// Python: AbilityManager.execute 中 tool_ctx = AgentCallbackContext(...)
+// Python: AbilityManager.execute 中 tool_ctx = AgentCallbackContext(..., extra=ctx.extra)
+//
+// 并发说明：Python 注释明示 "Each tool call gets an isolated callback context
+// to avoid races between concurrent BEFORE/AFTER_TOOL_CALL hooks"——Python 的
+// extra=ctx.extra 共享在 asyncio 单线程下安全（before hook 到 pop("_skip_tool")
+// 之间无切换点）；Go 多工具为真并行，若共享同一 map，A 工具 Reject 写入的
+// _skip_tool=true 会被 B 工具的 DeleteExtra 读到，导致跳过决策串位。
+// 因此 fork 时对 extra 做浅拷贝快照，各工具的写入互相隔离；
+// 跨工具传播的信号不走 extra（force-finish 走字段传播、steering 走 channel），
+// 不受此拷贝影响。
 func (c *AgentCallbackContext) ForkForToolCall(toolCall *llmschema.ToolCall) *AgentCallbackContext {
+	// 快照父 extra（父的写入在 fork 前完成，读锁内拷贝保证与并发 fork 一致）
+	forkedExtra := make(map[string]any, len(c.extra))
+	mu := c.extraLock()
+	mu.RLock()
+	for k, v := range c.extra {
+		forkedExtra[k] = v
+	}
+	mu.RUnlock()
+
 	return &AgentCallbackContext{
 		agent: c.agent,
 		inputs: &ToolCallInputs{
@@ -641,7 +666,8 @@ func (c *AgentCallbackContext) ForkForToolCall(toolCall *llmschema.ToolCall) *Ag
 		config:        c.config,
 		session:       c.session,
 		modelContext:  c.modelContext,
-		extra:         c.extra,
+		extra:         forkedExtra,
+		extraMuPtr:    &sync.RWMutex{},
 		steeringQueue: c.steeringQueue,
 	}
 }
@@ -918,6 +944,16 @@ func (i *TaskIterationInputs) EventKind() string { return "task_iteration" }
 func (m *MapInputs) EventKind() string { return "map" }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// extraLock 返回 extra 字典的并发保护锁。
+// ForkForToolCall 创建的子上下文与父共享同一把锁；兼容历史路径下
+// extraMuPtr 未初始化的上下文（返回独立的临时锁，仅保证不 panic）。
+func (c *AgentCallbackContext) extraLock() *sync.RWMutex {
+	if c.extraMuPtr != nil {
+		return c.extraMuPtr
+	}
+	return &sync.RWMutex{}
+}
 
 // parseToolArguments 将 JSON 字符串解析为 map[string]any
 // Python: json.loads(tool_call.arguments) if isinstance(str) else tool_call.arguments

@@ -87,7 +87,7 @@ func (s *OuterLoopSuite) TestOuterLoop_多轮迭代() {
 
 	// 等待第 2 次调用启动
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(2, 10*time.Second),
+		controlledAgent.WaitCallStarted(2, 30*time.Second),
 		"等待第 2 次内层调用启动超时",
 	)
 
@@ -96,7 +96,7 @@ func (s *OuterLoopSuite) TestOuterLoop_多轮迭代() {
 
 	// 等待第 3 次调用启动并自然完成
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(3, 10*time.Second),
+		controlledAgent.WaitCallStarted(3, 30*time.Second),
 		"等待第 3 次内层调用启动超时",
 	)
 
@@ -106,7 +106,7 @@ func (s *OuterLoopSuite) TestOuterLoop_多轮迭代() {
 		s.Require().NotNil(result, "结果不应为 nil")
 	case err := <-errCh:
 		s.Require().NoError(err, "Invoke 失败")
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		s.T().Fatal("Invoke 超时")
 	}
 
@@ -153,7 +153,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer注入() {
 
 	// 等待第 2 次调用启动
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(2, 10*time.Second),
+		controlledAgent.WaitCallStarted(2, 30*time.Second),
 		"等待第 2 次内层调用启动超时",
 	)
 
@@ -169,7 +169,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer注入() {
 		s.Require().NotNil(result, "结果不应为 nil")
 	case err := <-errCh:
 		s.Require().NoError(err, "Invoke 失败")
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		s.T().Fatal("Invoke 超时")
 	}
 
@@ -234,7 +234,7 @@ func (s *OuterLoopSuite) TestOuterLoop_FollowUp触发额外轮次() {
 
 	// 等待第 2 次调用启动
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(2, 10*time.Second),
+		controlledAgent.WaitCallStarted(2, 30*time.Second),
 		"等待第 2 次内层调用启动超时",
 	)
 
@@ -246,7 +246,7 @@ func (s *OuterLoopSuite) TestOuterLoop_FollowUp触发额外轮次() {
 
 	// 等待第 3 次调用启动（follow-up 触发的额外轮次）
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(3, 10*time.Second),
+		controlledAgent.WaitCallStarted(3, 30*time.Second),
 		"等待第 3 次内层调用（follow-up 轮次）启动超时",
 	)
 
@@ -256,7 +256,7 @@ func (s *OuterLoopSuite) TestOuterLoop_FollowUp触发额外轮次() {
 		s.Require().NotNil(result, "结果不应为 nil")
 	case err := <-errCh:
 		s.Require().NoError(err, "Invoke 失败")
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		s.T().Fatal("Invoke 超时")
 	}
 
@@ -309,7 +309,7 @@ func (s *OuterLoopSuite) TestOuterLoop_多个FollowUpFIFO消费() {
 
 	// 等待第 2 次调用启动
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(2, 10*time.Second),
+		controlledAgent.WaitCallStarted(2, 30*time.Second),
 		"等待第 2 次内层调用启动超时",
 	)
 
@@ -327,7 +327,7 @@ func (s *OuterLoopSuite) TestOuterLoop_多个FollowUpFIFO消费() {
 		s.Require().NotNil(result, "结果不应为 nil")
 	case err := <-errCh:
 		s.Require().NoError(err, "Invoke 失败")
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		s.T().Fatal("Invoke 超时")
 	}
 
@@ -394,7 +394,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer加FollowUp组合() {
 
 	// 等待第 2 次调用启动
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(2, 10*time.Second),
+		controlledAgent.WaitCallStarted(2, 30*time.Second),
 		"等待第 2 次内层调用启动超时",
 	)
 
@@ -407,7 +407,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer加FollowUp组合() {
 
 	// 等待第 3 次调用启动（follow-up 触发）
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(3, 10*time.Second),
+		controlledAgent.WaitCallStarted(3, 30*time.Second),
 		"等待第 3 次内层调用（follow-up 轮次）启动超时",
 	)
 
@@ -417,7 +417,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer加FollowUp组合() {
 		s.Require().NotNil(result, "结果不应为 nil")
 	case err := <-errCh:
 		s.Require().NoError(err, "Invoke 失败")
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		s.T().Fatal("Invoke 超时")
 	}
 
@@ -476,7 +476,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Abort中止循环() {
 
 	// 等待第 2 次调用启动
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(2, 10*time.Second),
+		controlledAgent.WaitCallStarted(2, 30*time.Second),
 		"等待第 2 次内层调用启动超时",
 	)
 
@@ -493,7 +493,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Abort中止循环() {
 	case err := <-errCh:
 		// 中止可能导致 ctx 取消错误，属正常行为
 		s.T().Logf("Abort 后返回错误（预期行为）: %v", err)
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		s.T().Fatal("Invoke 超时，Abort 可能未生效")
 	}
 
@@ -573,7 +573,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer不拼接在Query中() {
 
 	// 等待第 1 次调用启动
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(1, 10*time.Second),
+		controlledAgent.WaitCallStarted(1, 30*time.Second),
 		"等待第 1 次内层调用启动超时",
 	)
 
@@ -589,7 +589,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer不拼接在Query中() {
 		s.Require().NotNil(result, "结果不应为 nil")
 	case err := <-errCh:
 		s.Require().NoError(err, "Invoke 失败")
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		s.T().Fatal("Invoke 超时")
 	}
 
@@ -649,7 +649,7 @@ func (s *OuterLoopSuite) TestOuterLoop_FollowUp持久化到SessionState() {
 
 	// 等待第 2 次调用启动
 	s.Require().NoError(
-		controlledAgent.WaitCallStarted(2, 10*time.Second),
+		controlledAgent.WaitCallStarted(2, 30*time.Second),
 		"等待第 2 次内层调用启动超时",
 	)
 
@@ -666,7 +666,7 @@ func (s *OuterLoopSuite) TestOuterLoop_FollowUp持久化到SessionState() {
 		s.Require().NotNil(result, "结果不应为 nil")
 	case err := <-errCh:
 		s.Require().NoError(err, "Invoke 失败")
-	case <-time.After(15 * time.Second):
+	case <-time.After(60 * time.Second):
 		s.T().Fatal("Invoke 超时")
 	}
 

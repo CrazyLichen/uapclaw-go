@@ -354,7 +354,7 @@ func TestForkForToolCall_字段共享与隔离(t *testing.T) {
 	parent := NewAgentCallbackContext(agent, parentInputs, sess)
 	q := make(chan string, 4096)
 	parent.BindSteeringQueue(q)
-	parent.Extra()["shared_key"] = "shared_val"
+	parent.SetExtra("shared_key", "shared_val")
 
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "search", Arguments: `{"q":"hello"}`}
 	child := parent.ForkForToolCall(toolCall)
@@ -362,7 +362,6 @@ func TestForkForToolCall_字段共享与隔离(t *testing.T) {
 	// 共享字段
 	assert.Equal(t, agent, child.Agent())                          // agent 引用共享
 	assert.Equal(t, sess, child.Session())                         // session 引用共享
-	assert.Equal(t, parent.Extra(), child.Extra())                 // extra 字典引用共享
 	assert.Equal(t, parent.SteeringQueue(), child.SteeringQueue()) // steeringQueue 引用共享
 
 	// 独立字段
@@ -377,9 +376,20 @@ func TestForkForToolCall_字段共享与隔离(t *testing.T) {
 	assert.Equal(t, toolCall, inputs.ToolCall)
 	assert.Equal(t, "search", inputs.ToolName)
 
-	// extra 修改互相可见（引用共享）
-	child.Extra()["child_key"] = "child_val"
-	assert.Equal(t, "child_val", parent.Extra()["child_key"])
+	// extra 为 fork 时刻的快照拷贝：父已有 key 对子可见，写入互相隔离
+	// （多工具并行时 _skip_tool 等决策信号不得串位，对齐 Python
+	// "isolated callback context to avoid races" 注释意图）
+	v, ok := child.GetExtra("shared_key")
+	assert.True(t, ok)
+	assert.Equal(t, "shared_val", v)
+
+	child.SetExtra("child_key", "child_val")
+	_, exists := parent.GetExtra("child_key")
+	assert.False(t, exists, "子 ctx 写入不应泄漏到父 extra")
+
+	parent.SetExtra("parent_key", "parent_val")
+	_, exists = child.GetExtra("parent_key")
+	assert.False(t, exists, "fork 后父写入不应泄漏到子 extra")
 
 	// force-finish 独立：子 ctx 设置不影响父
 	child.RequestForceFinish(map[string]any{"reason": "budget_exceeded"})

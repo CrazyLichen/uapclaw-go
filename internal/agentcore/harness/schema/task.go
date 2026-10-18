@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
@@ -34,6 +35,13 @@ type TodoItem struct {
 }
 
 // TaskPlan 任务计划
+//
+// 并发说明：Python 端 TaskPlan 依赖 asyncio 单线程保证任务状态变更的
+// 原子性；Go 端外层循环 goroutine（saveState→ToDict 读）与内层任务
+// 执行器 goroutine（MarkCompleted/MarkCancelled 写）真并发访问同一
+// TaskPlan 实例，因此变更方法与读取方法内部用锁保护。
+// 锁为指针字段：TaskPlan 存在值拷贝使用（ToDict 值接收者），
+// 拷贝体与原体共享同一把锁。
 type TaskPlan struct {
 	// Goal 目标描述
 	Goal string `json:"goal"`
@@ -41,6 +49,8 @@ type TaskPlan struct {
 	Tasks []TodoItem `json:"tasks,omitempty"`
 	// CurrentTaskID 当前执行中的任务标识
 	CurrentTaskID string `json:"current_task_id,omitempty"`
+	// mu 状态变更锁（拷贝共享，见类型注释；nil 时按无锁路径处理）
+	mu *sync.RWMutex `json:"-"`
 }
 
 // ModelUsageRecord 模型使用记录
@@ -167,11 +177,18 @@ func (TodoItem) FromDict(data map[string]any) TodoItem {
 func NewTaskPlan(goal string) TaskPlan {
 	return TaskPlan{
 		Goal: goal,
+		mu:   &sync.RWMutex{},
 	}
 }
 
-// GetTask 根据 ID 查找任务，未找到返回 nil
+// GetTask 根据 ID 查找任务，未找到返回 nil。
+// 返回的指针仅供只读（Content/Description/Status 等字段访问），
+// 状态变更必须通过 MarkInProgress/MarkCompleted/MarkCancelled。
 func (tp *TaskPlan) GetTask(taskID string) *TodoItem {
+	if mu := tp.lock(); mu != nil {
+		mu.RLock()
+		defer mu.RUnlock()
+	}
 	for i := range tp.Tasks {
 		if tp.Tasks[i].ID == taskID {
 			return &tp.Tasks[i]
@@ -180,13 +197,18 @@ func (tp *TaskPlan) GetTask(taskID string) *TodoItem {
 	return nil
 }
 
-// GetNextTask 获取下一个可执行的任务：状态为 Pending 且所有依赖项已完成
+// GetNextTask 获取下一个可执行的任务：状态为 Pending 且所有依赖项已完成。
+// 返回的指针仅供只读，状态变更必须通过 Mark* 方法。
 func (tp *TaskPlan) GetNextTask() *TodoItem {
+	if mu := tp.lock(); mu != nil {
+		mu.RLock()
+		defer mu.RUnlock()
+	}
 	for i := range tp.Tasks {
 		if tp.Tasks[i].Status != TodoStatusPending {
 			continue
 		}
-		if tp.allDepsCompleted(tp.Tasks[i]) {
+		if tp.allDepsCompletedLocked(tp.Tasks[i]) {
 			return &tp.Tasks[i]
 		}
 	}
@@ -195,50 +217,46 @@ func (tp *TaskPlan) GetNextTask() *TodoItem {
 
 // AddTask 向计划中添加任务
 func (tp *TaskPlan) AddTask(task TodoItem) {
+	if mu := tp.lock(); mu != nil {
+		mu.Lock()
+		defer mu.Unlock()
+	}
 	tp.Tasks = append(tp.Tasks, task)
 }
 
 // MarkInProgress 将任务标记为执行中，同时更新 CurrentTaskID
 func (tp *TaskPlan) MarkInProgress(taskID string) error {
-	task := tp.GetTask(taskID)
-	if task == nil {
-		return fmt.Errorf("任务不存在: %q", taskID)
+	if mu := tp.lock(); mu != nil {
+		mu.Lock()
+		defer mu.Unlock()
 	}
-	task.Status = TodoStatusInProgress
-	tp.CurrentTaskID = taskID
-	return nil
+	return tp.markInProgressLocked(taskID)
 }
 
 // MarkCompleted 将任务标记为已完成，并设置结果摘要；若为当前任务则清除 CurrentTaskID
 func (tp *TaskPlan) MarkCompleted(taskID string, summary string) error {
-	task := tp.GetTask(taskID)
-	if task == nil {
-		return fmt.Errorf("任务不存在: %q", taskID)
+	if mu := tp.lock(); mu != nil {
+		mu.Lock()
+		defer mu.Unlock()
 	}
-	task.Status = TodoStatusCompleted
-	task.ResultSummary = summary
-	if tp.CurrentTaskID == taskID {
-		tp.CurrentTaskID = ""
-	}
-	return nil
+	return tp.markCompletedLocked(taskID, summary)
 }
 
 // MarkCancelled 将任务标记为已取消，并设置取消原因；若为当前任务则清除 CurrentTaskID
 func (tp *TaskPlan) MarkCancelled(taskID string, reason string) error {
-	task := tp.GetTask(taskID)
-	if task == nil {
-		return fmt.Errorf("任务不存在: %q", taskID)
+	if mu := tp.lock(); mu != nil {
+		mu.Lock()
+		defer mu.Unlock()
 	}
-	task.Status = TodoStatusCancelled
-	task.ResultSummary = reason
-	if tp.CurrentTaskID == taskID {
-		tp.CurrentTaskID = ""
-	}
-	return nil
+	return tp.markCancelledLocked(taskID, reason)
 }
 
 // GetProgressSummary 返回进度摘要，如 "3/7 completed"
 func (tp *TaskPlan) GetProgressSummary() string {
+	if mu := tp.lock(); mu != nil {
+		mu.RLock()
+		defer mu.RUnlock()
+	}
 	completed := 0
 	for _, task := range tp.Tasks {
 		if task.Status == TodoStatusCompleted {
@@ -251,6 +269,10 @@ func (tp *TaskPlan) GetProgressSummary() string {
 // ToMarkdown 将任务计划渲染为 Markdown 格式。
 // Python: TaskPlan.to_markdown()
 func (tp *TaskPlan) ToMarkdown() string {
+	if mu := tp.lock(); mu != nil {
+		mu.RLock()
+		defer mu.RUnlock()
+	}
 	var sb strings.Builder
 	sb.WriteString("## Goal: ")
 	sb.WriteString(tp.Goal)
@@ -280,8 +302,13 @@ func (tp *TaskPlan) ToMarkdown() string {
 	return sb.String()
 }
 
-// ToDict 将 TaskPlan 序列化为 JSON 友好的字典
-func (tp TaskPlan) ToDict() map[string]any {
+// ToDict 将 TaskPlan 序列化为 JSON 友好的字典。
+// 指针接收者：避免值拷贝在锁外复制 Tasks slice header（并发 Mark* 时触发 race）。
+func (tp *TaskPlan) ToDict() map[string]any {
+	if mu := tp.lock(); mu != nil {
+		mu.RLock()
+		defer mu.RUnlock()
+	}
 	result := map[string]any{
 		"goal": tp.Goal,
 	}
@@ -302,6 +329,7 @@ func (tp TaskPlan) ToDict() map[string]any {
 func (TaskPlan) FromDict(data map[string]any) TaskPlan {
 	tp := TaskPlan{
 		Goal: utils.StrValDefault(data["goal"], ""),
+		mu:   &sync.RWMutex{},
 	}
 	if v, ok := data["tasks"].([]any); ok {
 		for _, item := range v {
@@ -369,13 +397,72 @@ func (s *TodoStatus) UnmarshalJSON(data []byte) error {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// allDepsCompleted 检查任务的所有依赖项是否已完成（Completed 或 Cancelled 均视为完成）
-func (tp *TaskPlan) allDepsCompleted(task TodoItem) bool {
+// lock 返回状态变更锁；值拷贝体（FromDict 等未初始化锁的路径）返回 nil，
+// 调用方按无锁路径执行（单 goroutine 持有的临时对象）。
+func (tp *TaskPlan) lock() *sync.RWMutex {
+	if tp.mu == nil {
+		return nil
+	}
+	return tp.mu
+}
+
+// allDepsCompleted 检查任务的所有依赖项是否已完成（Completed 或 Cancelled 均视为完成）。
+// 调用方（GetNextTask）已持有读锁，此处直接遍历不加锁。
+func (tp *TaskPlan) allDepsCompletedLocked(task TodoItem) bool {
 	for _, depID := range task.DependsOn {
-		dep := tp.GetTask(depID)
+		dep := tp.getTaskLocked(depID)
 		if dep == nil || (dep.Status != TodoStatusCompleted && dep.Status != TodoStatusCancelled) {
 			return false
 		}
 	}
 	return true
+}
+
+// getTaskLocked 无锁版本的 GetTask，供已持锁的内部路径使用
+func (tp *TaskPlan) getTaskLocked(taskID string) *TodoItem {
+	for i := range tp.Tasks {
+		if tp.Tasks[i].ID == taskID {
+			return &tp.Tasks[i]
+		}
+	}
+	return nil
+}
+
+// markInProgressLocked 无锁版本的 MarkInProgress，供已持写锁的外部方法使用
+func (tp *TaskPlan) markInProgressLocked(taskID string) error {
+	task := tp.getTaskLocked(taskID)
+	if task == nil {
+		return fmt.Errorf("任务不存在: %q", taskID)
+	}
+	task.Status = TodoStatusInProgress
+	tp.CurrentTaskID = taskID
+	return nil
+}
+
+// markCompletedLocked 无锁版本的 MarkCompleted，供已持写锁的外部方法使用
+func (tp *TaskPlan) markCompletedLocked(taskID string, summary string) error {
+	task := tp.getTaskLocked(taskID)
+	if task == nil {
+		return fmt.Errorf("任务不存在: %q", taskID)
+	}
+	task.Status = TodoStatusCompleted
+	task.ResultSummary = summary
+	if tp.CurrentTaskID == taskID {
+		tp.CurrentTaskID = ""
+	}
+	return nil
+}
+
+// markCancelledLocked 无锁版本的 MarkCancelled，供已持写锁的外部方法使用
+func (tp *TaskPlan) markCancelledLocked(taskID string, reason string) error {
+	task := tp.getTaskLocked(taskID)
+	if task == nil {
+		return fmt.Errorf("任务不存在: %q", taskID)
+	}
+	task.Status = TodoStatusCancelled
+	task.ResultSummary = reason
+	if tp.CurrentTaskID == taskID {
+		tp.CurrentTaskID = ""
+	}
+	return nil
 }

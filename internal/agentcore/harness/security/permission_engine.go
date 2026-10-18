@@ -3,6 +3,7 @@ package security
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -13,7 +14,14 @@ import (
 // PermissionEngine 权限引擎 — 负责加载配置、评估权限。
 //
 // Python: PermissionEngine (core.py L33-52)
+//
+// 并发说明：Python 依赖 GIL 保证属性读写的原子性；Go 端多工具并行执行时
+// BeforeToolCall 回调会在多个 goroutine 并发进入 UpdateConfig/CheckPermission，
+// 因此用 RWMutex 保护全部可变字段（config/enabled/externalChecker/llm/modelName/
+// permissionChecksActive/workspaceRoot/sceneHook）。
 type PermissionEngine struct {
+	// mu 可变字段读写锁
+	mu sync.RWMutex
 	// config 权限配置（运行时为可变 dict）
 	config map[string]any
 	// enabled 是否启用
@@ -70,26 +78,32 @@ func (e *PermissionEngine) UpdateConfig(config map[string]any) {
 	if config == nil {
 		config = make(map[string]any)
 	}
-	e.config = config
 	enabled := true
 	if v, ok := config["enabled"]; ok {
 		if b, ok := v.(bool); ok {
 			enabled = b
 		}
 	}
+	e.mu.Lock()
+	e.config = config
 	e.enabled = enabled
 	e.externalChecker = NewExternalDirectoryChecker(config, e.workspaceRoot)
+	e.mu.Unlock()
 }
 
 // UpdateLLM 热更新模型实例。
 // Python: PermissionEngine.update_llm(llm, model_name) (core.py L64-67)
 func (e *PermissionEngine) UpdateLLM(llmModel *llm.Model, modelName string) {
+	e.mu.Lock()
 	e.llm = llmModel
 	e.modelName = modelName
+	e.mu.Unlock()
 }
 
 // Enabled 返回权限系统是否启用。
 func (e *PermissionEngine) Enabled() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.enabled
 }
 
@@ -97,33 +111,50 @@ func (e *PermissionEngine) Enabled() bool {
 //
 // Python: PermissionEngine.set_permission_checks_active(fn) (core.py L73-75)
 func (e *PermissionEngine) SetPermissionChecksActive(fn func() bool) {
+	e.mu.Lock()
 	e.permissionChecksActive = fn
+	e.mu.Unlock()
 }
 
 // SetWorkspaceRoot 设置工作空间根目录。
 func (e *PermissionEngine) SetWorkspaceRoot(root string) {
+	e.mu.Lock()
 	e.workspaceRoot = root
 	e.externalChecker = NewExternalDirectoryChecker(e.config, root)
+	e.mu.Unlock()
 }
 
 // SetSceneHook 设置宿主场景钩子。
 //
 // Python: PermissionEngine.set_scene_hook(fn)
 func (e *PermissionEngine) SetSceneHook(fn PermissionSceneHookFn) {
+	e.mu.Lock()
 	e.sceneHook = fn
+	e.mu.Unlock()
 }
 
 // CheckPermission 检查工具调用权限。
 //
 // Python: PermissionEngine.check_permission(tool_name, tool_args) (core.py L128-221)
 func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string, toolArgs map[string]any) *PermissionResult {
+	// 并发说明：先快照可变字段（RWMutex 读锁），评估全程使用快照，
+	// 避免多工具并行时读到半更新状态；外部目录检查器自身为不可变值
+	// （构造后只读），快照引用可安全并发调用。
+	e.mu.RLock()
+	enabled := e.enabled
+	checksActive := e.permissionChecksActive
+	sceneHook := e.sceneHook
+	config := e.config
+	externalChecker := e.externalChecker
+	e.mu.RUnlock()
+
 	logger.Info(logComponent).
 		Str("tool", toolName).
-		Bool("enabled", e.enabled).
+		Bool("enabled", enabled).
 		Msg("permission check: started")
 
 	// 未启用 → 允许
-	if !e.enabled {
+	if !enabled {
 		logger.Info(logComponent).Msg("permission check: skipped, reason=system disabled, decision=allow")
 		return &PermissionResult{
 			Permission: PermissionLevelAllow,
@@ -132,7 +163,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 	}
 
 	// 宿主说不要校验 → 允许
-	if e.permissionChecksActive != nil && !e.permissionChecksActive() {
+	if checksActive != nil && !checksActive() {
 		logger.Info(logComponent).Msg("permission check: skipped, reason=permission check not activated, decision=allow")
 		return &PermissionResult{
 			Permission: PermissionLevelAllow,
@@ -145,8 +176,8 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 	}
 
 	// 0. PermissionSceneHook 短路：在分层评估前调用宿主场景钩子
-	if e.sceneHook != nil {
-		sceneOut, err := e.sceneHook(PermissionSceneHookInput{
+	if sceneHook != nil {
+		sceneOut, err := sceneHook(PermissionSceneHookInput{
 			NormalizedToolName: toolName,
 			ToolArgs:           toolArgs,
 			Engine:             e,
@@ -189,7 +220,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 
 	// 1. 工具级 + 参数规则 + 默认（分层策略 evaluate_tiered_policy）
 	var externalPaths []string
-	permission, matchedRule, evalErr := e.EvaluateGlobalPolicyDirectly(toolName, toolArgs, false)
+	permission, matchedRule, evalErr := evaluateGlobalPolicyWithSnapshot(config, externalChecker, toolName, toolArgs, false)
 	if evalErr != nil {
 		// 对齐 Python except 行为：error 时将 globalLevel 视为 PermissionLevelNone（不参与后续比较）
 		logger.Warn(logComponent).
@@ -211,7 +242,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 		Msg("permission.policy.result")
 
 	// 2. 外部路径：与当前决策取更严（不放宽）
-	extResult := e.externalChecker.CheckExternalPaths(toolName, toolArgs)
+	extResult := externalChecker.CheckExternalPaths(toolName, toolArgs)
 	if extResult != nil {
 		logger.Info(logComponent).
 			Str("tool", toolName).
@@ -271,7 +302,35 @@ func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArg
 		toolArgs = make(map[string]any)
 	}
 
-	permission, matchedRule := EvaluateTieredPolicy(e.config, toolName, toolArgs)
+	e.mu.RLock()
+	config := e.config
+	externalChecker := e.externalChecker
+	e.mu.RUnlock()
+
+	return evaluateGlobalPolicyWithSnapshot(config, externalChecker, toolName, toolArgs, includeExternalDirectory)
+}
+
+// Config 返回当前配置
+func (e *PermissionEngine) Config() map[string]any {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.config
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// evaluateGlobalPolicyWithSnapshot 以配置/外部检查器快照执行全局权限评估。
+// CheckPermission / EvaluateGlobalPolicyDirectly 在读锁内快照字段后调用，
+// 避免评估期间并发 UpdateConfig/UpdateLLM 引发的数据竞争。
+// 逻辑等价 Python evaluate_global_policy_directly 主体。
+func evaluateGlobalPolicyWithSnapshot(
+	config map[string]any,
+	externalChecker *ExternalDirectoryChecker,
+	toolName string,
+	toolArgs map[string]any,
+	includeExternalDirectory bool,
+) (PermissionLevel, string, error) {
+	permission, matchedRule := EvaluateTieredPolicy(config, toolName, toolArgs)
 
 	// fallback(no_config) → 返回 (None, "")
 	// Python: permission = None, matched_rule = None
@@ -283,7 +342,7 @@ func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArg
 	}
 
 	if includeExternalDirectory {
-		extResult := e.externalChecker.CheckExternalPaths(toolName, toolArgs)
+		extResult := externalChecker.CheckExternalPaths(toolName, toolArgs)
 		if extResult != nil {
 			if permission == PermissionLevelNone {
 				permission = extResult.Permission
@@ -301,13 +360,6 @@ func (e *PermissionEngine) EvaluateGlobalPolicyDirectly(toolName string, toolArg
 
 	return permission, matchedRule, nil
 }
-
-// Config 返回当前配置
-func (e *PermissionEngine) Config() map[string]any {
-	return e.config
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getReason 根据 permission 和 matchedRule 生成 reason
 // Python: PermissionEngine._get_reason(permission, tool_name, matched_rule) (core.py L225-233)

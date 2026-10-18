@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
@@ -28,18 +29,23 @@ import (
 //  2. 互斥注入: 有召回结果 → 注入 top5 全文; 无结果 → 降级注入 MEMORY.md 索引
 //  3. 数据隔离: coding_memory/ 目录与 personal memory/ 完全隔离
 //
+// 并发说明: manager/recallResult/recallDone 等可变字段由 mu 保护，
+// autoRecall goroutine（写）与 BeforeModelCall（读）并发访问。
+//
 // Python: CodingMemoryRail (openjiuwen/harness/rails/memory/coding_memory_rail.py)
 type CodingMemoryRail struct {
 	rails.DeepAgentRail
+	// mu 保护下方可变字段的并发访问（autoRecall goroutine 与主流程并行）
+	mu sync.RWMutex
 	// codingMemoryDir 编程记忆目录路径
 	codingMemoryDir string
 	// embeddingConfig 嵌入模型配置
 	embeddingConfig *embedding.EmbeddingConfig
 	// language 语言 ("cn" | "en")
 	language string
-	// manager 记忆索引管理器
+	// manager 记忆索引管理器（受 mu 保护）
 	manager lite.MemoryIndexManager
-	// managerInitialized 管理器是否已初始化
+	// managerInitialized 管理器是否已初始化（受 mu 保护）
 	managerInitialized bool
 	// toolCtx 编程记忆工具上下文
 	toolCtx *lite.CodingMemoryToolContext
@@ -47,9 +53,9 @@ type CodingMemoryRail struct {
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// agentID Agent 标识
 	agentID string
-	// recallResult 召回结果内容
+	// recallResult 召回结果内容（受 mu 保护）
 	recallResult *recallResult
-	// recallDone 预取完成信号通道
+	// recallDone 预取完成信号通道（受 mu 保护）
 	recallDone chan struct{}
 	// ownedToolNames 本 Rail 注册到 ability_manager 的工具名称集合
 	ownedToolNames map[string]struct{}
@@ -111,9 +117,11 @@ func NewCodingMemoryRail(codingMemoryDir string, embeddingConfig *embedding.Embe
 // Python: CodingMemoryRail.init(agent)
 func (r *CodingMemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
 	// 获取 systemPromptBuilder
+	r.mu.Lock()
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
+	r.mu.Unlock()
 
-	// 保存 agentID
+	// 保存 agentID（仅在 Init 写入一次，后续只读）
 	r.agentID = ""
 	if card := agent.Card(); card != nil {
 		r.agentID = card.ID
@@ -129,10 +137,22 @@ func (r *CodingMemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 //
 // Python: CodingMemoryRail.uninit(agent)
 func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
+	// 锁内快照待移除的工具集合（Uninit 后清理状态会重置 map）
+	r.mu.RLock()
+	toolNames := make([]string, 0, len(r.ownedToolNames))
+	for name := range r.ownedToolNames {
+		toolNames = append(toolNames, name)
+	}
+	toolIDs := make([]string, 0, len(r.ownedToolIDs))
+	for toolID := range r.ownedToolIDs {
+		toolIDs = append(toolIDs, toolID)
+	}
+	r.mu.RUnlock()
+
 	// 从 ability_manager 移除工具
 	am := agent.AbilityManager()
 	if am != nil {
-		for name := range r.ownedToolNames {
+		for _, name := range toolNames {
 			func(name string) {
 				defer func() {
 					if rec := recover(); rec != nil {
@@ -150,7 +170,7 @@ func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	// 从 resource_mgr 移除工具
 	resourceMgr := runner.GetResourceMgr()
 	if resourceMgr != nil {
-		for toolID := range r.ownedToolIDs {
+		for _, toolID := range toolIDs {
 			func(toolID string) {
 				defer func() {
 					if rec := recover(); rec != nil {
@@ -165,18 +185,23 @@ func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 
+	// 锁内快照 systemPromptBuilder，供下方移除 memory section
+	r.mu.RLock()
+	spb := r.systemPromptBuilder
+	r.mu.RUnlock()
+	if spb != nil {
+		spb.RemoveSection(sections.SectionMemory)
+	}
+
 	// 清理状态
+	r.mu.Lock()
 	r.ownedToolNames = make(map[string]struct{})
 	r.ownedToolIDs = make(map[string]struct{})
 	r.managerInitialized = false
 	r.manager = nil
 	r.toolCtx = nil
-
-	// 从 systemPromptBuilder 移除 memory section
-	if r.systemPromptBuilder != nil {
-		r.systemPromptBuilder.RemoveSection(sections.SectionMemory)
-		r.systemPromptBuilder = nil
-	}
+	r.systemPromptBuilder = nil
+	r.mu.Unlock()
 
 	logger.Info(logComponent).
 		Str("event_type", "coding_memory_rail_uninit").
@@ -196,35 +221,42 @@ func (r *CodingMemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterface
 	// Go 行为差异：仅在初始化成功时设置 managerInitialized = true，失败后每次 BeforeInvoke 重试。
 	// Python 行为：无条件设置 _manager_initialized = True，失败后不再重试。
 	// Go 的重试策略更合理（初始化失败可能是临时问题），保留当前行为。
-	if !r.managerInitialized {
+	r.mu.RLock()
+	initialized := r.managerInitialized
+	r.mu.RUnlock()
+	if !initialized {
 		r.initCodingMemoryManager(ctx)
 	}
 
-	// 重置召回状态
+	// 重置召回状态（本轮 turn 的预取通道）
+	r.mu.Lock()
 	r.recallResult = nil
 	r.recallDone = make(chan struct{}, 1)
+	done := r.recallDone
+	mgr := r.manager
+	r.mu.Unlock()
 
 	// 检查是否为只读模式（cron/heartbeat）
 	readOnly := r.isReadOnly(cbc)
 
 	// 启动预取 goroutine（非阻塞，与主流程并行）
-	if !readOnly && r.manager != nil {
+	if !readOnly && mgr != nil {
 		query := r.extractLastUserQuery(cbc)
 		if query != "" {
 			go r.autoRecall(ctx, query)
 		} else {
 			// 无查询，直接标记完成
-			r.recallDone <- struct{}{}
+			done <- struct{}{}
 		}
 	} else {
 		// 只读或无 manager，直接标记完成
-		r.recallDone <- struct{}{}
+		done <- struct{}{}
 	}
 
 	logger.Info(logComponent).
 		Str("event_type", "coding_memory_rail_before_invoke").
 		Bool("read_only", readOnly).
-		Bool("has_manager", r.manager != nil).
+		Bool("has_manager", mgr != nil).
 		Msg("CodingMemoryRail BeforeInvoke completed")
 
 	return nil
@@ -238,14 +270,18 @@ func (r *CodingMemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterface
 //
 // Python: CodingMemoryRail.before_model_call(ctx)
 func (r *CodingMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	if r.systemPromptBuilder == nil {
+	// 锁内快照 systemPromptBuilder（Uninit 会并发置 nil）
+	r.mu.RLock()
+	spb := r.systemPromptBuilder
+	r.mu.RUnlock()
+	if spb == nil {
 		return nil
 	}
 
 	// 移除旧的 memory section
-	r.systemPromptBuilder.RemoveSection(sections.SectionMemory)
+	spb.RemoveSection(sections.SectionMemory)
 
-	lang := r.systemPromptBuilder.Language()
+	lang := spb.Language()
 	if lang == "" {
 		lang = r.language
 	}
@@ -266,22 +302,29 @@ func (r *CodingMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 			}
 			section.Content[lang] += "\n\n" + header + index
 		}
-		r.systemPromptBuilder.AddSection(section)
+		spb.AddSection(section)
 		return nil
 	}
 
 	// 非阻塞检查预取结果
-	if r.recallResult == nil {
+	r.mu.RLock()
+	rr := r.recallResult
+	done := r.recallDone
+	r.mu.RUnlock()
+	if rr == nil && done != nil {
 		select {
-		case <-r.recallDone:
-			// 预取完成，recallResult 已在 autoRecall 中设置
+		case <-done:
+			// 预取完成，recallResult 已在 autoRecall 中设置，重新快照
+			r.mu.RLock()
+			rr = r.recallResult
+			r.mu.RUnlock()
 		default:
 			// 预取未完成，本次降级，下次 model call 再检查
 		}
 	}
 
 	// 互斥注入: 召回结果 vs 索引
-	if r.recallResult != nil && r.recallResult.content != "" {
+	if rr != nil && rr.content != "" {
 		// 有召回结果 → 注入全文
 		header := "## 已加载的相关记忆\n\n"
 		if lang == "en" {
@@ -289,15 +332,15 @@ func (r *CodingMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 		}
 		footer := fmt.Sprintf(
 			"\n\n（共 %d 条记忆，用 coding_memory_read 读取其他。）",
-			r.recallResult.totalMemories,
+			rr.totalMemories,
 		)
 		if lang == "en" {
 			footer = fmt.Sprintf(
 				"\n\n(%d total. Use coding_memory_read for others.)",
-				r.recallResult.totalMemories,
+				rr.totalMemories,
 			)
 		}
-		section.Content[lang] += "\n\n" + header + r.recallResult.content + footer
+		section.Content[lang] += "\n\n" + header + rr.content + footer
 	} else {
 		// 无召回结果 → 降级注入索引
 		index := r.readMemoryIndex(ctx)
@@ -310,11 +353,11 @@ func (r *CodingMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 		}
 	}
 
-	r.systemPromptBuilder.AddSection(section)
+	spb.AddSection(section)
 
 	logger.Info(logComponent).
 		Str("event_type", "coding_memory_rail_before_model_call").
-		Bool("has_recall", r.recallResult != nil && r.recallResult.content != "").
+		Bool("has_recall", rr != nil && rr.content != "").
 		Msg("CodingMemoryRail BeforeModelCall completed")
 
 	return nil
@@ -457,6 +500,8 @@ func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseA
 
 // initCodingMemoryManager 初始化 Coding Memory Index Manager。
 //
+// 初始化涉及磁盘/DB 操作较耗时，在锁外执行，成功后在锁内提交结果。
+//
 // Python: CodingMemoryRail._init_coding_memory_manager(ctx)
 func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 	agentID := r.agentID
@@ -472,6 +517,7 @@ func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 		return
 	}
 
+	// 锁外执行耗时的管理器初始化
 	mgr, err := lite.InitCodingMemoryManagerAsync(
 		ctx,
 		r.Workspace(),
@@ -490,11 +536,13 @@ func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 	}
 
 	if mgr != nil {
+		r.mu.Lock()
 		r.manager = mgr
 		r.managerInitialized = true
 		if r.toolCtx != nil {
 			r.toolCtx.Manager = mgr
 		}
+		r.mu.Unlock()
 		logger.Info(logComponent).
 			Str("event_type", "coding_memory_rail_init_manager").
 			Str("agent_id", agentID).
@@ -511,24 +559,33 @@ func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 //
 // 只注入 body（不含 frontmatter），避免浪费 token。
 // 标题附加时间标注辅助模型判断记忆时效性。
+// 注意: 本方法在 goroutine 中执行，写入字段须持有 r.mu 写锁。
 //
 // Python: CodingMemoryRail._auto_recall(query)
 func (r *CodingMemoryRail) autoRecall(ctx context.Context, query string) {
 	defer func() {
 		// 确保通知完成
-		select {
-		case r.recallDone <- struct{}{}:
-		default:
+		r.mu.RLock()
+		done := r.recallDone
+		r.mu.RUnlock()
+		if done != nil {
+			select {
+			case done <- struct{}{}:
+			default:
+			}
 		}
 	}()
 
-	if r.manager == nil {
+	r.mu.RLock()
+	mgr := r.manager
+	r.mu.RUnlock()
+	if mgr == nil {
 		return
 	}
 
-	// 执行混合检索
+	// 执行混合检索（锁外，Search 可能涉及 IO）
 	opts := lite.SearchOpts{MaxResults: maxRecallResults}
-	results, err := r.manager.Search(ctx, query, opts)
+	results, err := mgr.Search(ctx, query, opts)
 	if err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "coding_memory_rail_auto_recall").
@@ -541,7 +598,9 @@ func (r *CodingMemoryRail) autoRecall(ctx context.Context, query string) {
 	total := r.countMemoryFiles(ctx)
 
 	if len(results) == 0 {
+		r.mu.Lock()
 		r.recallResult = &recallResult{content: "", totalMemories: total}
+		r.mu.Unlock()
 		return
 	}
 
@@ -618,8 +677,10 @@ func (r *CodingMemoryRail) autoRecall(ctx context.Context, query string) {
 		totalBytes += bodyBytes
 	}
 
+	r.mu.Lock()
 	if len(parts) == 0 {
 		r.recallResult = &recallResult{content: "", totalMemories: total}
+		r.mu.Unlock()
 		return
 	}
 
@@ -627,6 +688,7 @@ func (r *CodingMemoryRail) autoRecall(ctx context.Context, query string) {
 		content:       strings.Join(parts, "\n\n---\n\n"),
 		totalMemories: total,
 	}
+	r.mu.Unlock()
 }
 
 // buildDateTag 构建时间标注。

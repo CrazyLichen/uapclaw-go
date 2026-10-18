@@ -36,3 +36,39 @@ internal/agentcore/context_engine/context/session_memory_manager.go
 
 # stream_event_helpers.go — 流事件辅助函数，分隔线添加
 internal/swarm/agents/harness/common/rails/stream_event_helpers.go
+
+# ── 2026-10-25 gofmt(1.26) import 重排 + 注释中文化，未改变逻辑行为 ──
+# 历史覆盖率不足，本次仅格式/注释调整，后续迭代补充测试
+
+# agent_configurator.go — 注释中文化
+internal/agent_teams/agent/agent_configurator.go
+
+# team_agent.go — ToMap 类型断言移除（接口方法直调，行为等价）+ 注释中文化
+internal/agent_teams/agent/team_agent.go
+
+# harness.go — gofmt import 重排
+internal/agent_teams/harness.go
+
+# team_monitor.go — gofmt import 重排
+internal/agent_teams/monitor/team_monitor.go
+
+# openjiuwen_provider.go — 外部记忆提供者（远程服务依赖），注释中文化
+internal/agentcore/memory/external/openjiuwen_provider.go
+
+# react_invoke.go — gofmt import 重排
+internal/agentcore/single_agent/agents/react_invoke.go
+
+# chroma.go — DefaultChromaCreateClient 声明区块迁移 + gofmt
+internal/agentcore/retrieval/vector_store/chroma.go
+
+# milvus.go — DefaultMilvusCreateClient 声明区块迁移 + gofmt
+internal/agentcore/retrieval/vector_store/milvus.go
+
+# memory/manager.go — gofmt import 重排
+internal/swarm/agents/harness/common/memory/manager.go
+
+# session_ops.go — gofmt import 重排
+internal/swarm/agents/harness/common/sessionops/session_ops.go
+
+# deep_adapter_team.go — gofmt import 重排
+internal/swarm/server/adapter/deep_adapter_team.go
