@@ -151,3 +151,107 @@ func TestSentenceSplitter_SplitDoc_encode失败上抛(t *testing.T) {
 		t.Fatal("encode 失败应上抛")
 	}
 }
+
+// subWindowDec 把 id 列表解码回可见文本（id → 单字符），保证子窗口文本非空
+func subWindowDec(ids []int) (string, error) {
+	runes := make([]rune, len(ids))
+	for i, id := range ids {
+		runes[i] = rune('A' + (id % 26))
+	}
+	return string(runes), nil
+}
+
+func TestSentenceSplitter_splitLongSegment_滑窗子切分(t *testing.T) {
+	enc := oneTokPerCharEnc
+	dec := subWindowDec
+	bs, _ := NewBaseSplitter(5, 2, enc, dec) // 预算5，overlap2 → step=3
+	ss := NewSentenceSplitter(bs, "auto")
+	bs.SetSelf(ss)
+
+	// 构造超长单句：10 rune（含句号）= 10 token > 预算 5
+	text := "一二三四五六七八九。"
+	spans, err := ss.SplitDoc(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// range(0,10,3)=0,3,6,9 → 窗口 [0:5],[3:8],[6:10],[9:10] → 4 块（与 Python 模拟一致）
+	if len(spans) != 4 {
+		t.Fatalf("10 token 预算 5 step 3 应 4 块, got %d: %+v", len(spans), spans)
+	}
+	// 子窗口 span 沿用父句坐标
+	parentEnd := len("一二三四五六七八九。")
+	for _, sp := range spans {
+		if sp.Start != 0 || sp.End != parentEnd {
+			t.Fatalf("子窗口 span 应沿用父句坐标: %+v", sp)
+		}
+	}
+}
+
+func TestSentenceSplitter_splitLongSegment_dec为nil整句保留(t *testing.T) {
+	enc := oneTokPerCharEnc
+	bs, _ := NewBaseSplitter(5, 2, enc, nil) // dec=nil
+	ss := NewSentenceSplitter(bs, "auto")
+	bs.SetSelf(ss)
+
+	text := "一二三四五六七八九。"
+	spans, err := ss.SplitDoc(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spans) != 1 || spans[0].Text != "一二三四五六七八九。" {
+		t.Fatalf("dec=nil 长句应整句保留: %+v", spans)
+	}
+}
+
+func TestSentenceSplitter_splitLongSegment_decode失败跳过窗口(t *testing.T) {
+	enc := oneTokPerCharEnc
+	failDec := func(ids []int) (string, error) { return "", fmt.Errorf("decode boom") }
+	bs, _ := NewBaseSplitter(5, 2, enc, failDec)
+	ss := NewSentenceSplitter(bs, "auto")
+	bs.SetSelf(ss)
+
+	spans, err := ss.SplitDoc("一二三四五六七八九。")
+	if err != nil {
+		t.Fatalf("decode 失败应跳过不报错: %v", err)
+	}
+	// 全部窗口 decode 失败 → 整句 fallback（Python: out 为空时返回原句）
+	if len(spans) != 1 {
+		t.Fatalf("全失败应整句 fallback: %+v", spans)
+	}
+}
+
+func TestSentenceSplitter_splitLongSegment_step最小1(t *testing.T) {
+	enc := oneTokPerCharEnc
+	dec := subWindowDec
+	// size-overlap=1 → step=1（Python max(1,...) 防御在合法参数下等价于 step≥1，
+	// 基类校验 overlap>=size 抛错使 max(1,0) 分支不可达，故用合法参数测 step=1 路径）
+	bs, _ := NewBaseSplitter(5, 4, enc, dec)
+	ss := NewSentenceSplitter(bs, "auto")
+	bs.SetSelf(ss)
+
+	spans, err := ss.SplitDoc("一二三四五六七八九。")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// step=1：range(0,10,1) 10 个起点，每个窗口非空 → 10 块（与 Python 模拟一致）
+	if len(spans) != 10 {
+		t.Fatalf("step=1 应 10 块, got %d: %+v", len(spans), spans)
+	}
+}
+
+func TestSentenceSplitter_splitLongSegment_encode空ids整句(t *testing.T) {
+	// enc 恒返回空 ids：整句单块 fallback
+	emptyEnc := func(s string) ([]int, error) { return []int{}, nil }
+	dec := subWindowDec
+	bs, _ := NewBaseSplitter(5, 2, emptyEnc, dec)
+	ss := NewSentenceSplitter(bs, "auto")
+	bs.SetSelf(ss)
+
+	spans, err := ss.SplitDoc("一二三四五六七八九。")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spans) != 1 || spans[0].Text != "一二三四五六七八九。" {
+		t.Fatalf("空 ids 应整句单块: %+v", spans)
+	}
+}
