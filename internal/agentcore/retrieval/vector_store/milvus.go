@@ -2,16 +2,21 @@ package vector_store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
+	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────
@@ -217,6 +222,179 @@ func (s *MilvusVectorStore) Client(ctx context.Context) (MilvusClient, error) {
 // 对齐 Python distance_metric property。
 func (s *MilvusVectorStore) DistanceMetric() string { return s.distanceMetric }
 
+// Add 添加向量数据。
+//
+// 对齐 Python MilvusVectorStore.add：
+//   - _ensure_loaded 确保集合已加载
+//   - 按 batch_size（默认128）分批 insert
+//   - 每 100 条打进度日志
+//   - 最后 flush
+func (s *MilvusVectorStore) Add(ctx context.Context, data []map[string]any, opts ...StoreOption) error {
+	if err := s.ensureLoaded(ctx); err != nil {
+		return err
+	}
+	storeOpts := NewStoreOptions(opts...)
+	batchSize := storeOpts.BatchSize
+	// 对齐 Python: if batch_size is None or batch_size <= 0: batch_size = 128
+	if batchSize <= 0 {
+		batchSize = defaultMilvusBatchSize
+	}
+
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	processed := 0
+	total := len(data)
+	var cache []map[string]any
+	for _, doc := range data {
+		cache = append(cache, doc)
+		if len(cache) >= batchSize {
+			nodes := cache[:batchSize]
+			cache = cache[batchSize:]
+			if err := s.insertBatch(ctx, c, nodes); err != nil {
+				return err
+			}
+			processed += len(nodes)
+			// 对齐 Python: if processed % 100 == 0: logger.info("Written %d/%d records to %s", ...)
+			if processed%100 == 0 {
+				logger.Info(logComponent).
+					Int("processed", processed).
+					Int("total", total).
+					Str("collection_name", s.collectionName).
+					Msg("写入进度")
+			}
+		}
+	}
+	if len(cache) > 0 {
+		if err := s.insertBatch(ctx, c, cache); err != nil {
+			return err
+		}
+		processed += len(cache)
+	}
+	// 对齐 Python: logger.info("Writing completed, total %d/%d records to %s", ...)
+	logger.Info(logComponent).
+		Int("processed", processed).
+		Int("total", total).
+		Str("collection_name", s.collectionName).
+		Msg("写入完成")
+
+	// 对齐 Python: self._client.flush(self.collection_name)
+	if err := c.Flush(ctx, milvusclient.NewFlushOption(s.collectionName)); err != nil {
+		logger.Warn(logComponent).Err(err).Str("collection_name", s.collectionName).Msg("Flush 失败")
+	}
+	return nil
+}
+
+// Delete 删除向量。
+//
+// 对齐 Python MilvusVectorStore.delete：按 ids 或 filter_expr 删除 + flush。
+// 异常时 logger.error 并返回 False（不抛错，对齐 Python except 分支）。
+func (s *MilvusVectorStore) Delete(ctx context.Context, ids []string, filterExpr map[string]any) (bool, error) {
+	if err := s.ensureLoaded(ctx); err != nil {
+		return false, err
+	}
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	deleteOpt := milvusclient.NewDeleteOption(s.collectionName)
+	// 对齐 Python: ids 非空时按主键删除（pymilvus ids 参数语义，Go 用 in 表达式等价）
+	if len(ids) > 0 {
+		quoted := make([]string, 0, len(ids))
+		for _, id := range ids {
+			quoted = append(quoted, fmt.Sprintf("%q", id))
+		}
+		deleteOpt = deleteOpt.WithExpr(fmt.Sprintf("pk in [%s]", strings.Join(quoted, ",")))
+	} else if len(filterExpr) > 0 {
+		// 对齐 Python: filter_expr（dict）构建等值过滤
+		expr := buildMilvusFilterExpr(filterExpr)
+		if expr == "" {
+			return false, nil
+		}
+		deleteOpt = deleteOpt.WithExpr(expr)
+	} else {
+		// 对齐 Python: ids 和 filter 都为空时 delete 无条件 → 直接返回 False
+		return false, nil
+	}
+
+	result, err := c.Delete(ctx, deleteOpt)
+	if err != nil {
+		// 对齐 Python: except Exception as e: logger.error(f"Failed to delete vectors: {e}"); return False
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "Delete").
+			Str("collection_name", s.collectionName).
+			Err(err).
+			Msg("删除向量失败")
+		return false, nil
+	}
+	if err := c.Flush(ctx, milvusclient.NewFlushOption(s.collectionName)); err != nil {
+		logger.Warn(logComponent).Err(err).Str("collection_name", s.collectionName).Msg("Flush 失败")
+	}
+	// 对齐 Python: result.get("delete_count", 0) > 0
+	return result.DeleteCount > 0, nil
+}
+
+// TableExists 检查集合是否存在。
+// 对齐 Python MilvusVectorStore.table_exists。
+func (s *MilvusVectorStore) TableExists(ctx context.Context, tableName string) (bool, error) {
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return false, err
+	}
+	return c.HasCollection(ctx, milvusclient.NewHasCollectionOption(tableName))
+}
+
+// DeleteTable 删除集合。
+// 对齐 Python MilvusVectorStore.delete_table。
+func (s *MilvusVectorStore) DeleteTable(ctx context.Context, tableName string) error {
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return err
+	}
+	return c.DropCollection(ctx, milvusclient.NewDropCollectionOption(tableName))
+}
+
+// Close 关闭存储（不释放集合）。
+// 实现 VectorStore 接口。
+func (s *MilvusVectorStore) Close() {
+	s.CloseWithRelease(false)
+}
+
+// CloseWithRelease 关闭存储，可选释放集合。
+//
+// 对齐 Python MilvusVectorStore.close(release_collection=False)：
+// release 时检查集合存在 + load state == Loaded 后 release，然后关闭 client。
+func (s *MilvusVectorStore) CloseWithRelease(releaseCollection bool) {
+	c, err := s.getClient(context.Background())
+	if err != nil || c == nil {
+		return
+	}
+	ctx := context.Background()
+	if releaseCollection {
+		// 对齐 Python: if release_collection and has_collection(...):
+		//   if get_load_state(...).state == Loaded: release_collection(...)
+		if has, hasErr := c.HasCollection(ctx, milvusclient.NewHasCollectionOption(s.collectionName)); hasErr == nil && has {
+			if state, stateErr := c.GetLoadState(ctx, milvusclient.NewGetLoadStateOption(s.collectionName)); stateErr == nil && state.State == entity.LoadStateLoaded {
+				if err := c.ReleaseCollection(ctx, milvusclient.NewReleaseCollectionOption(s.collectionName)); err != nil {
+					// 对齐 Python: logger.warning(f"Failed to release Milvus collection: {e}")
+					logger.Warn(logComponent).Err(err).Str("collection_name", s.collectionName).Msg("释放集合失败")
+				}
+				s.mu.Lock()
+				s.collectionLoaded = false
+				s.mu.Unlock()
+			}
+		}
+	}
+	if err := c.Close(ctx); err != nil {
+		// 对齐 Python: logger.warning(f"Failed to close Milvus client: {e}")
+		logger.Warn(logComponent).Err(err).Msg("关闭 Milvus 客户端失败")
+	}
+}
+
 // WithMilvusClientOption 注入 MilvusClient 实现。
 func WithMilvusClientOption(c MilvusClient) MilvusStoreOption {
 	return func(s *MilvusVectorStore) {
@@ -389,4 +567,171 @@ func (s *MilvusVectorStore) getClient(ctx context.Context) (MilvusClient, error)
 	}
 	s.client = client
 	return client, nil
+}
+
+// ensureLoaded 确保集合已加载。
+//
+// 对齐 Python MilvusVectorStore._ensure_loaded：
+// 首次调用时 has_collection → load_collection，之后缓存跳过。
+func (s *MilvusVectorStore) ensureLoaded(ctx context.Context) error {
+	s.mu.RLock()
+	loaded := s.collectionLoaded
+	s.mu.RUnlock()
+	if loaded {
+		return nil
+	}
+
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	// 对齐 Python: if self.client.has_collection(self.collection_name):
+	has, err := c.HasCollection(ctx, milvusclient.NewHasCollectionOption(s.collectionName))
+	if err != nil {
+		return err
+	}
+	if !has {
+		return nil
+	}
+
+	// 对齐 Python: logger.info("Retrieval Milvus Store: loading collection %s", ...)
+	logger.Info(logComponent).Str("collection_name", s.collectionName).Msg("正在加载集合")
+	if err := c.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(s.collectionName)); err != nil {
+		return err
+	}
+	// 对齐 Python: logger.info("Retrieval Milvus Store: %s collection loaded", ...)
+	logger.Info(logComponent).Str("collection_name", s.collectionName).Msg("集合加载完成")
+
+	s.mu.Lock()
+	s.collectionLoaded = true
+	s.mu.Unlock()
+	return nil
+}
+
+// insertBatch 将一批 map 数据转为 Milvus 列并插入。
+//
+// 对齐 Python asyncio.to_thread(self._client.insert, collection_name=..., data=nodes)。
+// 列类型推断：[]float64 → FloatVector、string → VarChar、map[string]any → JSON。
+func (s *MilvusVectorStore) insertBatch(ctx context.Context, c MilvusClient, nodes []map[string]any) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+	columns, err := dataToColumns(nodes)
+	if err != nil {
+		return err
+	}
+	insertOpt := milvusclient.NewColumnBasedInsertOption(s.collectionName).WithColumns(columns...)
+	if _, err := c.Insert(ctx, insertOpt); err != nil {
+		// 对齐 Python build_index: insert 失败抛 ADD_DOC_RUNTIME_ERROR（由调用方包装）
+		return exception.BuildError(
+			exception.StatusRetrievalIndexingAddDocRuntimeError,
+			exception.WithParam("error_msg", fmt.Sprintf("批量插入数据失败: %s", err)),
+			exception.WithCause(err),
+		)
+	}
+	return nil
+}
+
+// dataToColumns 将 map 数据列表转为 Milvus 列。
+// 对齐 Python client.insert(data=[dict...]) 的 SDK 内部列转换。
+func dataToColumns(nodes []map[string]any) ([]column.Column, error) {
+	// 收集所有字段名（保持首次出现顺序）
+	fieldSet := make(map[string]bool)
+	var fieldOrder []string
+	for _, doc := range nodes {
+		for k := range doc {
+			if !fieldSet[k] {
+				fieldSet[k] = true
+				fieldOrder = append(fieldOrder, k)
+			}
+		}
+	}
+
+	var columns []column.Column
+	for _, fieldName := range fieldOrder {
+		// 找第一个非 nil 值判断类型
+		var firstVal any
+		for _, doc := range nodes {
+			if v, ok := doc[fieldName]; ok && v != nil {
+				firstVal = v
+				break
+			}
+		}
+		if firstVal == nil {
+			continue
+		}
+
+		switch v := firstVal.(type) {
+		case []float64:
+			vecs := make([][]float32, 0, len(nodes))
+			dim := len(v)
+			for _, doc := range nodes {
+				if f64, ok := doc[fieldName].([]float64); ok && len(f64) > 0 {
+					f32 := make([]float32, len(f64))
+					for i, f := range f64 {
+						f32[i] = float32(f)
+					}
+					vecs = append(vecs, f32)
+				} else {
+					vecs = append(vecs, make([]float32, dim))
+				}
+			}
+			if len(vecs) > 0 && dim > 0 {
+				columns = append(columns, column.NewColumnFloatVector(fieldName, dim, vecs))
+			}
+		case string:
+			strs := make([]string, 0, len(nodes))
+			for _, doc := range nodes {
+				if str, ok := doc[fieldName].(string); ok {
+					strs = append(strs, str)
+				} else {
+					strs = append(strs, "")
+				}
+			}
+			columns = append(columns, column.NewColumnVarChar(fieldName, strs))
+		case map[string]any:
+			// metadata 字段 → JSON 列
+			jsonBytes := make([][]byte, 0, len(nodes))
+			for _, doc := range nodes {
+				if m, ok := doc[fieldName].(map[string]any); ok {
+					bs, err := json.Marshal(m)
+					if err != nil {
+						return nil, fmt.Errorf("序列化字段 %s 失败: %w", fieldName, err)
+					}
+					jsonBytes = append(jsonBytes, bs)
+				} else {
+					jsonBytes = append(jsonBytes, []byte("{}"))
+				}
+			}
+			columns = append(columns, column.NewColumnJSONBytes(fieldName, jsonBytes))
+		}
+	}
+	return columns, nil
+}
+
+// buildMilvusFilterExpr 构建等值过滤表达式。
+//
+// 对齐 Python MilvusVectorStore.search 中的 filter 构建逻辑：
+// 字符串值用 QueryExpr.sanitize_str 转义，非字符串直接拼接，条件用 " && " 连接。
+// Go map 遍历顺序不确定（Python dict 有序），为保证确定性对 key 排序。
+func buildMilvusFilterExpr(filters map[string]any) string {
+	if len(filters) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(filters))
+	for k := range filters {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var parts []string
+	for _, key := range keys {
+		value := filters[key]
+		if str, ok := value.(string); ok {
+			parts = append(parts, fmt.Sprintf("%s == %s", key, query.SanitizeStr(str)))
+		} else {
+			parts = append(parts, fmt.Sprintf("%s == %v", key, value))
+		}
+	}
+	return strings.Join(parts, " && ")
 }
