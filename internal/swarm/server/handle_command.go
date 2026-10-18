@@ -35,7 +35,7 @@ func (s *AgentServer) handleCommandAddDir(_ context.Context, request *schema.Age
 			logger.Warn(logComponent).
 				Err(err).
 				Str("request_id", request.RequestID).
-				Msg("command.add_dir 参数解析失败")
+				Msg("command.add_dir failed to parse params")
 		}
 	}
 
@@ -56,7 +56,7 @@ func (s *AgentServer) handleCommandAddDir(_ context.Context, request *schema.Age
 				Err(err).
 				Str("request_id", request.RequestID).
 				Str("dir", params.Dir).
-				Msg("写入受信目录配置失败")
+				Msg("failed to write trusted dirs config")
 			return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 				schema.WithResponseOK(false),
 				schema.WithPayload(map[string]any{
@@ -100,7 +100,7 @@ func (s *AgentServer) handleCommandCompact(ctx context.Context, request *schema.
 
 	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandCompact: 获取 Agent 失败")
+		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandCompact: failed to get Agent")
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{"error": err.Error()}),
@@ -136,7 +136,7 @@ func (s *AgentServer) handleCommandContext(ctx context.Context, request *schema.
 
 	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandContext: 获取 Agent 失败")
+		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandContext: failed to get Agent")
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{"error": err.Error()}),
@@ -172,7 +172,7 @@ func (s *AgentServer) handleCommandRecap(ctx context.Context, request *schema.Ag
 
 	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandRecap: 获取 Agent 失败")
+		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandRecap: failed to get Agent")
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{"status": "failed", "error": err.Error()}),
@@ -206,7 +206,7 @@ func (s *AgentServer) handleCommandDiff(_ context.Context, request *schema.Agent
 			logger.Warn(logComponent).
 				Err(err).
 				Str("request_id", request.RequestID).
-				Msg("command.diff 参数解析失败")
+				Msg("command.diff failed to parse params")
 			return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 				schema.WithPayload(map[string]any{
 					"diffs": []any{},
@@ -253,7 +253,7 @@ func (s *AgentServer) handleCommandModel(_ context.Context, request *schema.Agen
 			logger.Warn(logComponent).
 				Err(err).
 				Str("request_id", request.RequestID).
-				Msg("command.model 参数解析失败")
+				Msg("command.model failed to parse params")
 		}
 	}
 
@@ -261,7 +261,7 @@ func (s *AgentServer) handleCommandModel(_ context.Context, request *schema.Agen
 		Str("request_id", request.RequestID).
 		Str("action", params.Action).
 		Str("model", params.Model).
-		Msg("command.model 请求")
+		Msg("command.model request")
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{

@@ -125,13 +125,10 @@ func BuildTeamHarness(
 	teamPlanModeRail *rails.TeamPlanModeRail,
 	initialPlanMode bool,
 ) *TeamHarness {
-	// ⤴️ 9.68: 以下 Rail 挂载需要 deepAgent 实例
-	// deepAgent.AddRail(teamToolRail)
-	// deepAgent.AddRail(teamPolicyRail)
-	// deepAgent.AddRail(firstIterGate)
-	// deepAgent.AddRail(teamWorkspaceRail)
-	// deepAgent.AddRail(toolApprovalRail)
-	// deepAgent.AddRail(teamPlanModeRail)
+	// ⤴️ 9.68: Rail 挂载需要 deepAgent 实例，此处先组装到 MountedRails，
+	// 后续由调用方在创建 deepAgent 后统一注册这 6 个 Rail：
+	// TeamToolRail、TeamPolicyRail、FirstIterationGate、
+	// TeamWorkspaceRail、TeamToolApprovalRail、TeamPlanModeRail。
 	rails := &MountedRails{
 		TeamTool:      teamToolRail,
 		TeamPolicy:    teamPolicyRail,
@@ -159,7 +156,7 @@ func (h *TeamHarness) RunAgentCustomizer(customizer AgentCustomizer) {
 			logger.Warn(logComponent).
 				Str("member_name", h.memberName).
 				Any("error", r).
-				Msg("agent_customizer 失败")
+				Msg("agent_customizer failed")
 		}
 	}()
 	customizer(h.deepAgent, h.memberName, h.role)

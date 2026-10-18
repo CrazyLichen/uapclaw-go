@@ -207,13 +207,13 @@ func (a *APIEmbedding) Dimension() int {
 			logger.Warn(logComponent).
 				Str("model_provider", a.config.ModelName).
 				Err(err).
-				Msg("探测嵌入向量维度失败")
+				Msg("failed to detect embedding dimension")
 			return
 		}
 		a.dimension = len(vec)
 		logger.Debug(logComponent).
 			Int("dimension", len(vec)).
-			Msg("探测到嵌入向量维度")
+			Msg("embedding dimension detected")
 	})
 	return a.dimension
 }
@@ -233,13 +233,13 @@ func (a *APIEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
 			logger.Warn(logComponent).
 				Str("model_provider", a.config.ModelName).
 				Err(err).
-				Msg("探测嵌入向量维度失败")
+				Msg("failed to detect embedding dimension")
 			return
 		}
 		a.dimension = len(vec)
 		logger.Debug(logComponent).
 			Int("dimension", len(vec)).
-			Msg("探测到嵌入向量维度")
+			Msg("embedding dimension detected")
 	})
 	if a.dimension == 0 {
 		return 0, fmt.Errorf("探测嵌入向量维度失败")
@@ -312,7 +312,7 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input any) ([][]float6
 				Int("attempt", attempt+1).
 				Int("max_retries", a.maxRetries).
 				Err(err).
-				Msg("嵌入 HTTP 请求失败")
+				Msg("embedding HTTP request failed")
 			return nil, err
 		}
 		defer func() { _ = resp.Body.Close() }()
@@ -354,7 +354,7 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input any) ([][]float6
 				a.dimension = len(embeddings[0])
 				logger.Debug(logComponent).
 					Int("dimension", a.dimension).
-					Msg("探测到嵌入向量维度")
+					Msg("embedding dimension detected")
 			}
 		})
 

@@ -149,6 +149,6 @@ func (a *ReActAgent) saveContexts(ctx context.Context, sess sessioninterfaces.Se
 		return
 	}
 	if _, err := a.contextEngine.SaveContexts(ctx, sess, nil); err != nil {
-		logger.Warn(logComponent).Str("event_type", "save_contexts_error").Err(err).Msg("保存上下文失败")
+		logger.Warn(logComponent).Str("event_type", "save_contexts_error").Err(err).Msg("savecontext failed")
 	}
 }

@@ -265,7 +265,7 @@ func (s *Span) Update(data map[string]any) {
 			logger.Warn(logComponent).
 				Str("field", key).
 				Err(err).
-				Msg("Span.Update 设置字段失败")
+				Msg("Span.Update failed to set field")
 		}
 	}
 }

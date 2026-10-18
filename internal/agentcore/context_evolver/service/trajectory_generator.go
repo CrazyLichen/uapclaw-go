@@ -333,21 +333,6 @@ func SummarizeTrajectories(ctx context.Context, memoryService SummarizeTrajector
 	return result, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// algoToName 将算法名称映射为持久化命名空间短名称。
-// 对齐 Python _ALGO_TO_NAME。
-func algoToName(ms SummarizeTrajectorier) string {
-	algo := ""
-	if ms != nil {
-		algo = ms.SummaryAlgorithm()
-	}
-	if name, ok := algoToNameMap[algo]; ok {
-		return name
-	}
-	return "ace"
-}
-
 // FormatTrajectory 将消息列表格式化为轨迹文本。对齐 Python format_trajectory()。
 func FormatTrajectory(messages []Message) string {
 	var transcript []string
@@ -386,6 +371,21 @@ func FormatTrajectory(messages []Message) string {
 	}
 
 	return strings.Join(transcript, "\n")
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// algoToName 将算法名称映射为持久化命名空间短名称。
+// 对齐 Python _ALGO_TO_NAME。
+func algoToName(ms SummarizeTrajectorier) string {
+	algo := ""
+	if ms != nil {
+		algo = ms.SummaryAlgorithm()
+	}
+	if name, ok := algoToNameMap[algo]; ok {
+		return name
+	}
+	return "ace"
 }
 
 // runTrialsInner 内部试验循环。对齐 Python _run_trials_inner()。

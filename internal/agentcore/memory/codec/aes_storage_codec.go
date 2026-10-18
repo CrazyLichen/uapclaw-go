@@ -87,7 +87,7 @@ func (c *AesStorageCodec) Encode(plaintext string) string {
 		logger.Warn(logComponent).Err(err).
 			Str("method", "Encode").
 			Str("event_type", "MEMORY_PROCESS").
-			Msg("加密失败，返回原文（对齐 Python 容错行为）")
+			Msg("encryption failed, returning original text (aligned with Python fault tolerance)")
 		return plaintext
 	}
 	return encrypted
@@ -111,7 +111,7 @@ func (c *AesStorageCodec) Decode(ciphertext string) string {
 		logger.Warn(logComponent).Err(err).
 			Str("method", "Decode").
 			Str("event_type", "MEMORY_PROCESS").
-			Msg("解密失败，返回原文（对齐 Python 容错行为）")
+			Msg("decryption failed, returning original text (aligned with Python fault tolerance)")
 		return ciphertext
 	}
 	return decrypted
@@ -152,7 +152,7 @@ func (c *AesStorageCodec) getProvider() crypto.CryptoProvider {
 			Str("method", "getProvider").
 			Str("event_type", "MEMORY_PROCESS").
 			Str("crypt_name", crypto.AesGcmName).
-			Msg("注册表中未找到加密算法，passthrough 降级")
+			Msg("encryption algorithm not found in registry, falling back to passthrough")
 		return nil
 	}
 	return &keyedProvider{key: c.key, crypt: crypt}

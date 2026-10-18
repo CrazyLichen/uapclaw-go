@@ -2253,7 +2253,7 @@ func (gm *GraphMemory) resolveEntityMerges(ctx context.Context, mergingArgs []Me
 			if err := gm.resolveEachRelation(ctx, tgtUUID, srcEntity, mapSrc2Tgt, entityRelationUpdates, state, alias); err != nil {
 				logger.Warn(logComponent).Err(err).
 					Str("src_entity_uuid", srcEntity.UUID).
-					Msg("Graph Memory: resolveEachRelation 失败")
+					Msg("Graph Memory: resolveEachRelation failed")
 			}
 		}
 		tgtEntity.Episodes = uniqueStringSlice(tgtEntity.Episodes)

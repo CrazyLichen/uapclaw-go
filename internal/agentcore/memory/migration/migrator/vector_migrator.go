@@ -64,7 +64,7 @@ func (m *VectorMigrator) migrateCollections(ctx context.Context, collectionNames
 		metadata, err := m.vectorStore.GetCollectionMetadata(ctx, collectionName)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-				Msg("获取集合元数据失败")
+				Msg("failed to get collection metadata")
 			return err
 		}
 
@@ -92,7 +92,7 @@ func (m *VectorMigrator) migrateCollections(ctx context.Context, collectionNames
 		// 一次性应用所有操作
 		if err := m.vectorStore.UpdateSchema(ctx, collectionName, opsToApply); err != nil {
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-				Int("pending_count", len(opsToApply)).Msg("集合 schema 更新失败")
+				Int("pending_count", len(opsToApply)).Msg("collection schema  update failed")
 			return err
 		}
 
@@ -106,13 +106,13 @@ func (m *VectorMigrator) migrateCollections(ctx context.Context, collectionNames
 		if err := m.vectorStore.UpdateCollectionMetadata(ctx, collectionName,
 			map[string]any{"schema_version": maxVersion}); err != nil {
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-				Int("new_version", maxVersion).Msg("更新集合 schema_version 失败")
+				Int("new_version", maxVersion).Msg("updatecollection schema_version failed")
 			return err
 		}
 
 		logger.Info(logComponent).Str("collection_name", collectionName).
 			Int("old_version", currentVersion).Int("new_version", maxVersion).
-			Msg("集合 schema 迁移完成")
+			Msg("collection schema migration completed")
 	}
 	return nil
 }
@@ -137,7 +137,7 @@ func (m *VectorMigrator) findCollections(ctx context.Context, memTypeStr string)
 	if !isSupported {
 		logger.Error(logComponent).Str("mem_type", memTypeStr).
 			Strs("supported_types", m.supportedTypes).
-			Msg("不支持的 memory type")
+			Msg("unsupported memory type")
 		return nil, exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 			exception.WithParam("mem_type", memTypeStr),
 			exception.WithParam("error_msg", fmt.Sprintf("不支持的 memory type: '%s', 支持的类型: %v", memTypeStr, m.supportedTypes)),

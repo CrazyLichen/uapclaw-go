@@ -75,9 +75,6 @@ const (
 // _ 编译时验证 AgentModeRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*AgentModeRail)(nil)
 
-// agentModeLogComponent 日志组件
-var agentModeLogComponent = logger.ComponentAgentCore
-
 // todoToolNames todo 工具名称集合
 // Python: L44: _TODO_TOOL_NAMES
 var todoToolNames = map[string]struct{}{
@@ -157,10 +154,10 @@ func (r *AgentModeRail) Init(_ context.Context, agent agentinterfaces.BaseAgent)
 	// Python: L111: self._agent = agent
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if !ok {
-		logger.Warn(agentModeLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "agent_mode_rail_init_skip").
 			Str("agent_type", fmt.Sprintf("%T", agent)).
-			Msg("agent 未实现 DeepAgentInterface，跳过初始化")
+			Msg("agent does not implement DeepAgentInterface, skipping initialization")
 		return nil
 	}
 	r.agent = deepAgent
@@ -198,9 +195,9 @@ func (r *AgentModeRail) Init(_ context.Context, agent agentinterfaces.BaseAgent)
 		}
 	}
 
-	logger.Info(agentModeLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "agent_mode_rail_init").
-		Msg("AgentModeRail 已注册 enter/exit plan mode 工具")
+		Msg("AgentModeRail registered enter/exit plan mode tools")
 
 	return nil
 }
@@ -217,10 +214,10 @@ func (r *AgentModeRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		func(t tool.Tool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(agentModeLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "agent_mode_rail_uninit").
 						Str("tool_name", t.Card().Name).
-						Msgf("移除工具失败: %v", rec)
+						Msgf("failed to remove tool: %v", rec)
 				}
 			}()
 			if am != nil {
@@ -238,9 +235,9 @@ func (r *AgentModeRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		r.unregisterTaskTool(agent)
 	}
 
-	logger.Info(agentModeLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "agent_mode_rail_uninit").
-		Msg("AgentModeRail 注销完成")
+		Msg("AgentModeRail unregistered")
 
 	return nil
 }
@@ -361,10 +358,10 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 	// Python: L282-293
 	if len(r.allowedTools) > 0 {
 		if _, allowed := r.allowedTools[toolName]; !allowed {
-			logger.Info(agentModeLogComponent).
+			logger.Info(logComponent).
 				Str("event_type", "reject_tool_not_in_allowed").
 				Str("tool_name", toolName).
-				Msg("工具调用被拒绝：不在允许的工具列表中")
+				Msg("tool call rejected: not in allowed tool list")
 			var msg string
 			if r.languageIsCN() {
 				msg = fmt.Sprintf("[AgentModeRail] 工具「%s」不在 plan 模式允许列表中。", toolName)
@@ -381,10 +378,10 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 	if toolName == "bash" {
 		command := r.extractBashCommand(cbc)
 		if gitWriteRE.MatchString(command) {
-			logger.Info(agentModeLogComponent).
+			logger.Info(logComponent).
 				Str("event_type", "reject_bash_git_write").
 				Str("command", command).
-				Msg("bash 调用被拒绝：plan 模式下禁止 git 写操作")
+				Msg("bash call rejected: git write operations forbidden in plan mode")
 			var msg string
 			if r.languageIsCN() {
 				msg = fmt.Sprintf("[AgentModeRail] plan 模式下禁止执行 git 写操作（%q）。", command)
@@ -402,12 +399,12 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 		filePath := r.extractFilePath(cbc)
 		planPath := agent.GetPlanFilePath(sess)
 		if !r.isPlanFile(filePath, planPath) {
-			logger.Info(agentModeLogComponent).
+			logger.Info(logComponent).
 				Str("event_type", "reject_tool_not_plan_file").
 				Str("tool_name", toolName).
 				Str("file_path", filePath).
 				Str("plan_path", planPath).
-				Msg("工具调用被拒绝：不在计划文件中")
+				Msg("tool call rejected: not in plan file")
 			var msg string
 			if r.languageIsCN() {
 				msg = fmt.Sprintf("[AgentModeRail] 「%s」仅能用于计划文件（%s）。", toolName, planPath)
@@ -490,10 +487,10 @@ func (r *AgentModeRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext, er
 		// Python: Python 不检查 inputs 类型，直接设置所有字段
 		// Go 类型系统中 inputs 可能不是 ToolCallInputs，设置 skip 标记并记录警告
 		cbc.SetExtra(extraSkipToolKey, true)
-		logger.Warn(agentModeLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "agent_mode_reject_tool_type_mismatch").
 			Str("error_msg", errorMsg).
-			Msg("inputs 类型不匹配，无法完整拒绝工具（仅设置 skip 标记）")
+			Msg("inputs type mismatch, cannot fully reject tool (only setting skip flag)")
 		return
 	}
 
@@ -518,9 +515,9 @@ func (r *AgentModeRail) handleEnter(cbc *agentinterfaces.AgentCallbackContext) {
 
 	// Python: L445-446: 不在 plan 模式则拒绝
 	if planState.Mode != hschema.AgentModePlan.String() {
-		logger.Info(agentModeLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "reject_enter_not_plan_mode").
-			Msg("工具进入被拒绝：当前非 plan 模式")
+			Msg("tool entry rejected: not in plan mode")
 		var msg string
 		if r.languageIsCN() {
 			msg = "[AgentModeRail] enter_plan_mode 只能在 plan 模式下被调用。请调用 switch_mode 工具切换到 plan 模式。"
@@ -616,9 +613,9 @@ func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 
 	existing := r.isTaskToolRegistered()
 	if existing {
-		logger.Info(agentModeLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "agent_mode_task_tool_exists").
-			Msg("任务工具已注册，跳过")
+			Msg("task tool already registered, skipping")
 		return
 	}
 
@@ -657,9 +654,9 @@ func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 
 	r.ownsTaskTool = true
 
-	logger.Info(agentModeLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "agent_mode_register_task_tool").
-		Msg("AgentModeRail 已注册 task_tool for plan mode")
+		Msg("AgentModeRail registered task_tool for plan mode")
 }
 
 // unregisterTaskTool 注销本 Rail 持有的 task_tool。
@@ -667,9 +664,9 @@ func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 // Python: AgentModeRail._unregister_task_tool() L389-408
 func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 	if !r.ownsTaskTool || len(r.taskTools) == 0 {
-		logger.Info(agentModeLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "agent_mode_no_task_tool_to_unregister").
-			Msg("无已注册的任务工具，跳过注销")
+			Msg("no registered task tool, skipping unregistration")
 		return
 	}
 
@@ -680,10 +677,10 @@ func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 		func(t tool.Tool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(agentModeLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "agent_mode_unregister_task_tool_failed").
 						Str("tool_name", t.Card().Name).
-						Msgf("注销 task_tool 失败: %v", rec)
+						Msgf("failed to unregister task_tool: %v", rec)
 				}
 			}()
 			if am != nil {
@@ -692,10 +689,10 @@ func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 			if resourceMgr != nil {
 				_, _ = resourceMgr.RemoveTool([]string{t.Card().ID})
 			}
-			logger.Info(agentModeLogComponent).
+			logger.Info(logComponent).
 				Str("event_type", "agent_mode_unregistered_task_tool").
 				Str("tool_name", t.Card().Name).
-				Msg("AgentModeRail 已注销 plan-mode task_tool")
+				Msg("AgentModeRail unregistered plan-mode task_tool")
 		}(t)
 	}
 

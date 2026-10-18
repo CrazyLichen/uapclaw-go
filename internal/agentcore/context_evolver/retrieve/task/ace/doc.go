@@ -7,8 +7,7 @@
 //
 //	ace/
 //	├── doc.go           # 包文档
-//	├── run.go           # ACERecallMemoryOp 检索操作
-//	└── run_test.go      # 测试
+//	└── run.go           # ACERecallMemoryOp 检索操作
 //
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/retrieve/task/ace/
 package ace

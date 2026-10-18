@@ -33,8 +33,8 @@ type ReadMcpResourceInput struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// mcpResourcesLogComponent 日志组件标识
-var mcpResourcesLogComponent = logger.ComponentAgentCore
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -58,21 +58,21 @@ func NewListMcpResourcesTool(language string, agentID string) tool.Tool {
 
 		resources, err := resourceMgr.ListMcpResources(ctx, input.ServerID)
 		if err != nil {
-			logger.Warn(mcpResourcesLogComponent).
+			logger.Warn(logComponent).
 				Str("tool_name", "list_mcp_resources").
 				Str("server_id", input.ServerID).
 				Err(err).
-				Msg("ListMcpResourcesTool 列出资源失败")
+				Msg("ListMcpResourcesTool failed to list resources")
 			return map[string]any{"success": false, "error": err.Error()}, nil
 		}
 
 		// Python: L28-36: resources 类型为 []map[string]any，直接透传给 LLM。
 
-		logger.Info(mcpResourcesLogComponent).
+		logger.Info(logComponent).
 			Str("tool_name", "list_mcp_resources").
 			Str("server_id", input.ServerID).
 			Int("resource_count", len(resources)).
-			Msg("ListMcpResourcesTool 列出资源完成")
+			Msg("ListMcpResourcesTool listed resources")
 
 		return map[string]any{"success": true, "data": resources}, nil
 	}
@@ -105,22 +105,22 @@ func NewReadMcpResourceTool(language string, agentID string) tool.Tool {
 
 		contents, err := resourceMgr.ReadMcpResource(ctx, input.ServerID, input.URI)
 		if err != nil {
-			logger.Warn(mcpResourcesLogComponent).
+			logger.Warn(logComponent).
 				Str("tool_name", "read_mcp_resource").
 				Str("server_id", input.ServerID).
 				Str("uri", input.URI).
 				Err(err).
-				Msg("ReadMcpResourceTool 读取资源失败")
+				Msg("ReadMcpResourceTool failed to read resource")
 			return map[string]any{"success": false, "error": err.Error()}, nil
 		}
 
 		// Python: L55-63: contents 类型为 []map[string]any，直接透传给 LLM。
 
-		logger.Info(mcpResourcesLogComponent).
+		logger.Info(logComponent).
 			Str("tool_name", "read_mcp_resource").
 			Str("server_id", input.ServerID).
 			Str("uri", input.URI).
-			Msg("ReadMcpResourceTool 读取资源完成")
+			Msg("ReadMcpResourceTool read resource")
 
 		return map[string]any{"success": true, "data": contents}, nil
 	}

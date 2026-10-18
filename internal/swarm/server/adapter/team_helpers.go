@@ -55,7 +55,7 @@ var (
 	// Python 用 asyncio（单线程事件循环）无需锁，Go 需要 sync.RWMutex 保护并发安全。
 	pendingWaitersMu sync.RWMutex
 	// pendingWaiters 等待事件广播的请求队列。
-	// key: [2]string{channelID, sessionID}，value: []pendingWaiter
+	// 键: [2]string{channelID, sessionID}，值: []pendingWaiter
 	// 对齐 Python: _pending_waiters: dict[tuple[str, str], list[tuple[str, asyncio.Queue]]] (line 61)
 	pendingWaiters = make(map[[2]string][]pendingWaiter)
 	// eventBroadcastInitialized 标记是否已向 TeamManager 注入事件广播回调

@@ -49,8 +49,6 @@ type OpenVikingProvider struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// vikingLogComponent 日志组件标识
-	vikingLogComponent = logger.ComponentAgentCore
 
 	// vikingSearchSchema viking_search 工具 Schema
 	// 对齐 Python: VIKING_SEARCH_SCHEMA
@@ -150,7 +148,7 @@ var (
 // NewOpenVikingProvider 创建 OpenVikingProvider 实例。
 // 对齐 Python: OpenVikingMemoryProvider.__init__(endpoint, api_key, account, user, agent)
 //
-// 参数为空时从环境变量 fallback：
+// 参数为空时从环境变量回退：
 //   - endpoint → OPENVIKING_ENDPOINT
 //   - apiKey → OPENVIKING_API_KEY
 //   - account → OPENVIKING_ACCOUNT（默认 "default"）
@@ -254,9 +252,9 @@ func (p *OpenVikingProvider) Initialize(ctx context.Context, opts ...ProviderOpt
 	if !healthy {
 		// 对齐 Python: logger.warning("OpenViking at %s not reachable", self._endpoint)
 		// Python 静默返回 None（不抛异常），client=None，initialized=True
-		logger.Warn(vikingLogComponent).
+		logger.Warn(logComponent).
 			Str("endpoint", p.endpoint).
-			Msg("OpenViking 不可达，静默降级")
+			Msg("OpenViking unreachable, degrading silently")
 		p.client = nil
 		p.initialized = true // 标记已初始化，允许后续 Prefetch/SyncTurn 检查 client==nil 优雅跳过
 		return nil           // 静默降级，对齐 Python
@@ -281,7 +279,7 @@ func (p *OpenVikingProvider) Prefetch(ctx context.Context, query string, _ ...Pr
 	})
 	if err != nil {
 		// 对齐 Python: logger.debug("OpenViking prefetch failed: %s", e)
-		logger.Debug(vikingLogComponent).Err(err).Msg("OpenViking prefetch 失败")
+		logger.Debug(logComponent).Err(err).Msg("OpenViking prefetch  failed")
 		return "", nil
 	}
 
@@ -342,7 +340,7 @@ func (p *OpenVikingProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 	})
 	if err != nil {
 		// 对齐 Python: logger.debug("OpenViking sync failed: %s", e)
-		logger.Debug(vikingLogComponent).Err(err).Msg("OpenViking sync_turn 失败")
+		logger.Debug(logComponent).Err(err).Msg("OpenViking sync_turn  failed")
 		return nil
 	}
 
@@ -352,7 +350,7 @@ func (p *OpenVikingProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 		"content": truncStr(assistantMsg, 4000),
 	})
 	if err != nil {
-		logger.Debug(vikingLogComponent).Err(err).Msg("OpenViking sync_turn 失败")
+		logger.Debug(logComponent).Err(err).Msg("OpenViking sync_turn  failed")
 		return nil
 	}
 
@@ -390,7 +388,7 @@ func (p *OpenVikingProvider) OnSessionEnd(ctx context.Context, _ []map[string]an
 	_, err := p.client.post(ctx, fmt.Sprintf("/api/v1/sessions/%s/commit", p.sessionID), map[string]any{})
 	if err != nil {
 		// 对齐 Python: logger.debug("OpenViking session commit failed: %s", e)
-		logger.Debug(vikingLogComponent).Err(err).Msg("OpenViking session commit 失败")
+		logger.Debug(logComponent).Err(err).Msg("OpenViking session commit  failed")
 	}
 	return nil
 }
@@ -404,10 +402,10 @@ func (p *OpenVikingProvider) Shutdown(_ context.Context) error {
 			defer func() {
 				if r := recover(); r != nil {
 					// 对齐 Python: logger.debug("OpenViking client close failed: %s", e)
-					logger.Debug(vikingLogComponent).
+					logger.Debug(logComponent).
 						Str("event_type", "viking_provider_shutdown").
 						Any("error", r).
-						Msg("关闭客户端失败")
+						Msg("failed to close client")
 				}
 			}()
 			p.client.close()

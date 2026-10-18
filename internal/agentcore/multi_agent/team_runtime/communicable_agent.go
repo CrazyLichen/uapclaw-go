@@ -79,7 +79,7 @@ func (c *CommunicableAgent) BindRuntime(runtime *TeamRuntime, agentID string) {
 			Str("event_type", "RUNTIME_REBIND").
 			Str("class_name", "CommunicableAgent").
 			Str("agent_id", c.agentID).
-			Msg("Agent 已绑定到运行时，重新绑定可能导致意外行为")
+			Msg("agent already bound to runtime, rebinding may cause unexpected behavior")
 	}
 	c.runtime = runtime
 	c.agentID = agentID

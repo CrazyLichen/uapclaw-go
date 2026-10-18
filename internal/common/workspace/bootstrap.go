@@ -69,7 +69,7 @@ func CreateBootstrapEnv(config *InstanceConfig) (string, error) {
 		return "", fmt.Errorf("写入 .env 失败: %w", err)
 	}
 
-	logger.Info(logComponent).Str("instance", config.Name).Str("path", envPath).Msg("已创建实例 bootstrap .env")
+	logger.Info(logComponent).Str("instance", config.Name).Str("path", envPath).Msg("created instance bootstrap .env")
 	return envPath, nil
 }
 

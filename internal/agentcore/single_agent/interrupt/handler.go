@@ -173,7 +173,7 @@ func (h *ToolInterruptHandler) CommitInterrupt(
 	ce := h.agent.ContextEngine()
 	if ce != nil && sess != nil {
 		if _, err := ce.SaveContexts(ctx, sess, nil); err != nil {
-			logger.Error(logComponent).Err(err).Msg("commit_interrupt: 保存上下文失败")
+			logger.Error(logComponent).Err(err).Msg("commit_interrupt: failed to save context")
 			return nil, fmt.Errorf("commit_interrupt: 保存上下文失败: %w", err)
 		}
 	}
@@ -214,7 +214,7 @@ func (h *ToolInterruptHandler) WriteInterruptToStream(
 	for _, schema := range schemas {
 		if sess != nil {
 			if err := sess.WriteStream(context.Background(), schema); err != nil {
-				logger.Warn(logComponent).Err(err).Msg("write_interrupt_to_stream: 写入流失败")
+				logger.Warn(logComponent).Err(err).Msg("write_interrupt_to_stream: stream write failed")
 				// Python: await session.write_stream(schema) 失败时异常传播给调用方
 				return fmt.Errorf("write_interrupt_to_stream: 写入流失败: %w", err)
 			}
@@ -244,7 +244,7 @@ func (h *ToolInterruptHandler) HandleResume(
 	resumeIteration := intState.Iteration
 	logger.Info(logComponent).
 		Int("resume_iteration", resumeIteration+1).
-		Msg("从迭代恢复工具中断")
+		Msg("resuming tool interrupt from iteration")
 
 	// 保存自动确认配置
 	saveAutoConfirmFromState(intState, userInput, sess)
@@ -272,7 +272,7 @@ func (h *ToolInterruptHandler) HandleResume(
 		var err error
 		results, err = resumeCtx.ExecuteToolCall(ctx, cbc, toolsToExecute, sess, modelCtx)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("handle_resume: 重执行工具调用失败")
+			logger.Error(logComponent).Err(err).Msg("handle_resume: re-execute tool call failed")
 			return nil, fmt.Errorf("handle_resume: 重执行工具调用失败: %w", err)
 		}
 	}
@@ -545,7 +545,7 @@ func buildSubAgentResumeToolCall(toolCall *llmschema.ToolCall, userInput any) *l
 	} else {
 		// 序列化失败，使用 fmt.Sprintf 兜底
 		toolCall.Arguments = fmt.Sprintf("%v", args)
-		logger.Warn(logComponent).Err(err).Msg("buildSubAgentResumeToolCall: 序列化 args 失败")
+		logger.Warn(logComponent).Err(err).Msg("buildSubAgentResumeToolCall: args serialization failed")
 	}
 
 	return toolCall

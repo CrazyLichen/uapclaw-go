@@ -63,7 +63,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 			Str("subagent_type", input.SubagentType).
 			Str("parent_session_id", parentSessionID).
 			Str("sub_session_id", subSessionID).
-			Msg("TaskTool 创建子代理")
+			Msg("TaskTool creating subagent")
 
 		// Python: L100-107: 创建子代理
 		subagent, err := parentAgent.CreateSubagent(ctx, input.SubagentType, subSessionID)
@@ -72,7 +72,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("subagent_type", input.SubagentType).
 				Err(err).
-				Msg("TaskTool 子代理创建失败")
+				Msg("TaskTool failed to create subagent")
 			return nil, fmt.Errorf("子代理 %s 创建失败: %w", input.SubagentType, err)
 		}
 
@@ -86,7 +86,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("subagent_type", input.SubagentType).
 				Err(err).
-				Msg("TaskTool 子代理执行失败")
+				Msg("TaskTool subagent execution failed")
 			return nil, fmt.Errorf("子代理 %s 执行失败: %w", input.SubagentType, err)
 		}
 

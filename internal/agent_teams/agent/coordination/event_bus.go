@@ -176,7 +176,7 @@ func (b *EventBus) Stop() {
 	case <-waitDone:
 		// poll goroutine 正常退出
 	case <-time.After(pollWaitTimeout):
-		logger.Warn(logComponent).Msg("EventBus: 等待 poll goroutine 退出超时")
+		logger.Warn(logComponent).Msg("EventBus: wait for poll goroutine exit timed out")
 	}
 
 	// 等待 runLoop goroutine 退出，对齐 Python: await wait_for(_loop_task, timeout=5.0)
@@ -185,7 +185,7 @@ func (b *EventBus) Stop() {
 		// runLoop 正常退出
 	case <-time.After(stopWaitTimeout):
 		// 超时后强制取消，对齐 Python: except TimeoutError → task.cancel()
-		logger.Warn(logComponent).Msg("EventBus: 等待 runLoop 退出超时，强制取消")
+		logger.Warn(logComponent).Msg("EventBus: wait for runLoop exit timed out, force canceling")
 		if cancelFunc != nil {
 			cancelFunc()
 		}
@@ -193,7 +193,7 @@ func (b *EventBus) Stop() {
 		select {
 		case <-loopDone:
 		case <-time.After(time.Second):
-			logger.Error(logComponent).Msg("EventBus: runLoop 强制取消后仍未退出")
+			logger.Error(logComponent).Msg("EventBus: runLoop still running after force cancel")
 		}
 	}
 
@@ -232,7 +232,7 @@ func (b *EventBus) PausePolls() {
 	select {
 	case <-done:
 	case <-time.After(pollWaitTimeout):
-		logger.Warn(logComponent).Msg("EventBus: pause_polls 等待 poll goroutine 退出超时")
+		logger.Warn(logComponent).Msg("EventBus: pause_polls wait for poll goroutine exit timed out")
 	}
 
 	// 等待完成后设置标记，确保 ResumePolls 知道 poll goroutine 已完全退出

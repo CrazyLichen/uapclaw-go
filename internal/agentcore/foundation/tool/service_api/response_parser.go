@@ -317,7 +317,7 @@ func (d GzipDecompressor) Decompress(data []byte) ([]byte, error) {
 	logger.Warn(logComponent).
 		Str("encoding", "gzip").
 		Int("data_size", len(data)).
-		Msg("GZIP 三级解压均失败（gzip → zlib → raw deflate）")
+		Msg("all three GZIP decompression attempts failed (gzip → zlib → raw deflate)")
 
 	return nil, fmt.Errorf("GZIP 解压失败: %w", err)
 }
@@ -361,7 +361,7 @@ func (d DeflateDecompressor) Decompress(data []byte) ([]byte, error) {
 	logger.Warn(logComponent).
 		Str("encoding", "deflate").
 		Int("data_size", len(data)).
-		Msg("deflate 两级解压均失败（zlib → raw deflate）")
+		Msg("both deflate decompression attempts failed (zlib → raw deflate)")
 
 	return nil, fmt.Errorf("deflate 解压失败: %w", rawErr)
 }
@@ -409,7 +409,7 @@ func (r *ParserRegistry) applyDecompression(data []byte, contentEncoding string)
 					logger.Warn(logComponent).
 						Str("encoding", enc).
 						Err(err).
-						Msg("响应解压失败")
+						Msg("failed to decompress response")
 					break
 				}
 				data = decompressed

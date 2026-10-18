@@ -125,19 +125,19 @@ func (w *graphWriter) delete(ctx context.Context, collection string, opts ...gra
 	deleteOpt := milvusclient.NewDeleteOption(collection).WithExpr(expr)
 	if _, err := w.client.Delete(ctx, deleteOpt); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection", collection).
-			Str("expr", expr).Msg("删除数据失败")
+			Str("expr", expr).Msg("delete data failed")
 		return fmt.Errorf("删除集合 %s 数据失败: %w", collection, err)
 	}
 
 	// 刷盘确保删除生效
 	if o.Flush {
 		if err := w.client.Flush(ctx, milvusclient.NewFlushOption(collection)); err != nil {
-			logger.Warn(logComponent).Err(err).Str("collection", collection).Msg("删除后 Flush 失败")
+			logger.Warn(logComponent).Err(err).Str("collection", collection).Msg("post-delete flush failed")
 		}
 	}
 
 	logger.Info(logComponent).Str("collection", collection).
-		Str("expr", expr).Msg("成功删除数据")
+		Str("expr", expr).Msg("delete data succeeded")
 	return nil
 }
 
@@ -182,11 +182,11 @@ func (w *graphWriter) addData(ctx context.Context, collection string, objects []
 		if err := w.insertBatch(ctx, collection, batch, o.Upsert); err != nil {
 			// 批量失败，尝试逐条回退
 			logger.Warn(logComponent).Err(err).Str("collection", collection).
-				Int("batch", i).Int("batch_size", len(batch)).Msg("批量写入失败，尝试逐条写入")
+				Int("batch", i).Int("batch_size", len(batch)).Msg("batch write failed, trying single writes")
 			for _, item := range batch {
 				if err := w.insertBatch(ctx, collection, []map[string]any{item}, o.Upsert); err != nil {
 					if o.SilenceErrors {
-						logger.Warn(logComponent).Err(err).Str("collection", collection).Msg("逐条写入失败（静默）")
+						logger.Warn(logComponent).Err(err).Str("collection", collection).Msg("single write failed (silent)")
 					} else {
 						return fmt.Errorf("逐条写入失败: %w", err)
 					}
@@ -198,14 +198,14 @@ func (w *graphWriter) addData(ctx context.Context, collection string, objects []
 	// 步骤6：Flush
 	if o.Flush {
 		if err := w.client.Flush(ctx, milvusclient.NewFlushOption(collection)); err != nil {
-			logger.Warn(logComponent).Err(err).Str("collection", collection).Msg("Flush 失败")
+			logger.Warn(logComponent).Err(err).Str("collection", collection).Msg("flush failed")
 		}
 	}
 
 	logger.Info(logComponent).Str("collection", collection).
 		Int("count", len(objects)).
 		Dur("duration", time.Since(start)).
-		Msg("成功写入图数据")
+		Msg("graph data written successfully")
 	return nil
 }
 

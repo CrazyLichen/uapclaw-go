@@ -113,7 +113,7 @@ func (s *TaskScheduler) Start(ctx context.Context) error {
 	if s.running.Load() {
 		logger.Warn(logComponent).
 			Str("event_type", "task_scheduler_already_running").
-			Msg("TaskScheduler 已在运行，忽略重复启动")
+			Msg("TaskScheduler already running, ignoring duplicate start")
 		return nil
 	}
 	s.running.Store(true)
@@ -128,7 +128,7 @@ func (s *TaskScheduler) Start(ctx context.Context) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "task_scheduler_start").
-		Msg("TaskScheduler 已启动")
+		Msg("TaskScheduler started")
 	return nil
 }
 
@@ -139,7 +139,7 @@ func (s *TaskScheduler) Stop(ctx context.Context) error {
 	if !s.running.Load() {
 		logger.Warn(logComponent).
 			Str("event_type", "task_scheduler_not_running").
-			Msg("TaskScheduler 未运行，忽略停止")
+			Msg("TaskScheduler not running, ignoring stop")
 		return nil
 	}
 	s.running.Store(false)
@@ -154,7 +154,7 @@ func (s *TaskScheduler) Stop(ctx context.Context) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "task_scheduler_stop").
-		Msg("TaskScheduler 已停止")
+		Msg("TaskScheduler stopped")
 	return nil
 }
 
@@ -222,7 +222,7 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, err
 	if !exists {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
-			Msg("暂停任务失败：任务不在运行中")
+			Msg("failed to pause task: task not running")
 		return false, nil
 	}
 
@@ -233,14 +233,14 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, err
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("暂停任务失败：无法获取任务")
+			Msg("failed to pause task: unable to get task")
 		return false, err
 	}
 	if len(tasks) == 0 {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
-			Msg("暂停任务失败：任务不存在")
+			Msg("failed to pause task: task not found")
 		return false, nil
 	}
 	task := tasks[0]
@@ -252,7 +252,7 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, err
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Str("session_id", task.SessionID).
-			Msg("暂停任务失败：会话不存在")
+			Msg("failed to pause task: session not found")
 		return false, nil
 	}
 
@@ -263,14 +263,14 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, err
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("检查暂停失败")
+			Msg("failed to check pause")
 		return false, err
 	}
 	if !canPause {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
 			Str("reason", reason).
-			Msg("任务不可暂停")
+			Msg("task cannot be paused")
 		return false, nil
 	}
 
@@ -280,12 +280,12 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, err
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("暂停任务执行失败")
+			Msg("failed to execute task pause")
 		return false, err
 	} else if !paused {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
-			Msg("executor.Pause 返回 false")
+			Msg("executor.Pause returned false")
 		return false, nil
 	}
 
@@ -308,14 +308,14 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, err
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("更新任务状态为 PAUSED 失败")
+			Msg("failed to update task status to PAUSED")
 		return false, err
 	}
 
 	logger.Info(logComponent).
 		Str("event_type", "task_paused").
 		Str("task_id", taskID).
-		Msg("任务已暂停")
+		Msg("task paused")
 	return true, nil
 }
 
@@ -331,14 +331,14 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("取消任务失败：无法获取任务")
+			Msg("failed to cancel task: unable to get task")
 		return false, err
 	}
 	if len(tasks) == 0 {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
-			Msg("取消任务失败：任务不存在")
+			Msg("failed to cancel task: task not found")
 		return false, nil
 	}
 	task := tasks[0]
@@ -350,13 +350,13 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("task_id", taskID).
 				Err(err).
-				Msg("更新已提交任务状态为 CANCELED 失败")
+				Msg("failed to update submitted task status to CANCELED")
 			return false, err
 		}
 		logger.Info(logComponent).
 			Str("event_type", "task_canceled").
 			Str("task_id", taskID).
-			Msg("已提交任务已取消")
+			Msg("submitted task canceled")
 		return true, nil
 	}
 
@@ -366,7 +366,7 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 			Str("event_type", "task_canceled_idempotent").
 			Str("task_id", taskID).
 			Str("status", string(task.Status)).
-			Msg("任务已处于终态，取消操作幂等返回")
+			Msg("task already in terminal state, cancel returned idempotently")
 		return true, nil
 	}
 
@@ -378,7 +378,7 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 	if !exists {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
-			Msg("取消任务失败：任务不在运行中")
+			Msg("failed to cancel task: task not running")
 		return false, nil
 	}
 
@@ -389,7 +389,7 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Str("session_id", task.SessionID).
-			Msg("取消任务失败：会话不存在")
+			Msg("failed to cancel task: session not found")
 		return false, nil
 	}
 
@@ -400,14 +400,14 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("检查取消失败")
+			Msg("failed to check cancel")
 		return false, err
 	}
 	if !canCancel {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
 			Str("reason", reason).
-			Msg("任务不可取消")
+			Msg("task cannot be canceled")
 		return false, nil
 	}
 
@@ -417,12 +417,12 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("取消任务执行失败")
+			Msg("failed to execute task cancel")
 		return false, err
 	} else if !canceled {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
-			Msg("executor.Cancel 返回 false")
+			Msg("executor.Cancel returned false")
 		return false, nil
 	}
 
@@ -445,14 +445,14 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("更新任务状态为 CANCELED 失败")
+			Msg("failed to update task status to CANCELED")
 		return false, err
 	}
 
 	logger.Info(logComponent).
 		Str("event_type", "task_canceled").
 		Str("task_id", taskID).
-		Msg("任务已取消")
+		Msg("task canceled")
 	return true, nil
 }
 
@@ -469,7 +469,7 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 	if suppress {
 		logger.Debug(logComponent).
 			Str("session_id", sessionID).
-			Msg("完成信号被抑制")
+			Msg("completion signal suppressed")
 		return
 	}
 
@@ -485,7 +485,7 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 	if !exists {
 		logger.Warn(logComponent).
 			Str("session_id", sessionID).
-			Msg("会话不存在，无法发送完成信号")
+			Msg("session not found, cannot send completion signal")
 		return
 	}
 
@@ -505,14 +505,14 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("session_id", sessionID).
 			Err(err).
-			Msg("写入 all_tasks_processed 信号失败")
+			Msg("failed to write all_tasks_processed signal")
 		return
 	}
 
 	logger.Info(logComponent).
 		Str("event_type", "all_tasks_processed").
 		Str("session_id", sessionID).
-		Msg("所有任务已处理，已发送完成信号")
+		Msg("all tasks processed, completion signal sent")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -523,7 +523,7 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 func (s *TaskScheduler) schedule(ctx context.Context) {
 	logger.Info(logComponent).
 		Str("event_type", "task_scheduler_started").
-		Msg("TaskScheduler 调度循环已启动")
+		Msg("TaskScheduler schedule loop started")
 
 	for s.running.Load() {
 		// 1. 扫描 SUBMITTED 任务
@@ -532,7 +532,7 @@ func (s *TaskScheduler) schedule(ctx context.Context) {
 			logger.Error(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Err(err).
-				Msg("扫描 SUBMITTED 任务失败")
+				Msg("failed to scan SUBMITTED tasks")
 		}
 
 		// 2. 并发启动（受 maxConcurrentTasks 限制）
@@ -542,7 +542,7 @@ func (s *TaskScheduler) schedule(ctx context.Context) {
 				logger.Warn(logComponent).
 					Str("task_id", task.TaskID).
 					Str("session_id", task.SessionID).
-					Msg("任务对应会话不存在，跳过")
+					Msg("session for task not found, skipping")
 				continue
 			}
 
@@ -575,7 +575,7 @@ func (s *TaskScheduler) schedule(ctx context.Context) {
 				Str("event_type", "task_started").
 				Str("task_id", task.TaskID).
 				Str("task_type", task.TaskType).
-				Msg("任务已启动")
+				Msg("task started")
 		}
 
 		// 3. 等待唤醒或超时
@@ -597,7 +597,7 @@ done:
 	s.waitAllTasksComplete(ctx)
 	logger.Info(logComponent).
 		Str("event_type", "task_scheduler_stopped").
-		Msg("TaskScheduler 调度循环已停止")
+		Msg("TaskScheduler schedule loop stopped")
 }
 
 // executeTask 执行单个任务，读取 chunk channel 并处理状态转换。
@@ -611,9 +611,9 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("执行任务失败：无法获取任务")
+			Msg("failed to execute task: unable to get task")
 		// Python: 抛出 AGENT_CONTROLLER_TASK_EXECUTION_ERROR
-		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("任务 %s 未找到", taskID))
+		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("task %s not found", taskID))
 		return
 	}
 	task := tasks[0]
@@ -636,9 +636,9 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			Str("task_id", taskID).
 			Str("task_type", task.TaskType).
 			Err(err).
-			Msg("获取任务执行器失败")
+			Msg("failed to get task executor")
 		// Python: 失败时构建 failed chunk 并发布事件
-		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("获取任务执行器失败: %v", err))
+		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("failed to get task executor: %v", err))
 		return
 	}
 
@@ -655,7 +655,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("更新任务状态为 WORKING 失败")
+			Msg("failed to update task status to WORKING")
 		return
 	}
 
@@ -666,9 +666,9 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("任务执行启动失败")
+			Msg("failed to start task execution")
 		// Python: 失败时构建 failed chunk 并发布事件
-		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("任务执行启动失败: %v", err))
+		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("failed to start task execution: %v", err))
 		return
 	}
 
@@ -684,7 +684,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("task_id", taskID).
 				Err(writeErr).
-				Msg("写入流数据失败")
+				Msg("failed to write stream data")
 		}
 
 		// 7. 根据 payload.type 判断状态（Payload 为 any，类型断言为 *ControllerOutputPayload）
@@ -701,12 +701,12 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("task_id", taskID).
 					Err(err).
-					Msg("更新任务状态为 COMPLETED 失败")
+					Msg("failed to update task status to COMPLETED")
 			}
 			logger.Info(logComponent).
 				Str("event_type", "task_completed").
 				Str("task_id", taskID).
-				Msg("任务已完成")
+				Msg("task completed")
 			// 发布任务事件
 			s.publishTaskEvent(ctx, taskID, payload, sess)
 			return
@@ -718,12 +718,12 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("task_id", taskID).
 					Err(err).
-					Msg("更新任务状态为 INPUT_REQUIRED 失败")
+					Msg("failed to update task status to INPUT_REQUIRED")
 			}
 			logger.Info(logComponent).
 				Str("event_type", "task_input_required").
 				Str("task_id", taskID).
-				Msg("任务需要用户输入")
+				Msg("task requires user input")
 			// 发布任务事件
 			s.publishTaskEvent(ctx, taskID, payload, sess)
 			return
@@ -741,12 +741,12 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("task_id", taskID).
 					Err(err).
-					Msg("更新任务状态为 FAILED 失败")
+					Msg("failed to update task status to FAILED")
 			}
 			logger.Info(logComponent).
 				Str("event_type", "task_failed").
 				Str("task_id", taskID).
-				Msg("任务已失败")
+				Msg("task failed")
 			// 发布任务事件
 			s.publishTaskEvent(ctx, taskID, payload, sess)
 			return
@@ -755,7 +755,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			// 处理中 → 继续
 			logger.Debug(logComponent).
 				Str("task_id", taskID).
-				Msg("任务处理中分片")
+				Msg("task processing chunk")
 			continue
 
 		default:
@@ -763,7 +763,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			logger.Debug(logComponent).
 				Str("task_id", taskID).
 				Str("payload_type", payload.Type).
-				Msg("未知 payload 类型")
+				Msg("unknown payload type")
 		}
 	}
 }
@@ -821,9 +821,9 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 				Str("task_id", taskID).
 				Str("method", "executeTaskWrapper").
 				Str("model_provider", "task_scheduler").
-				Msg("executeTaskWrapper panic 恢复")
+				Msg("executeTaskWrapper panic recovered")
 			// Python: _handle_task_execution_failure — 更新状态+构建failed chunk+发布事件
-			s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("任务执行异常: %v", r))
+			s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("task execution panic: %v", r))
 		}
 	}()
 
@@ -842,11 +842,11 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 			s.mu.Lock()
 			timeout := s.config.TaskTimeout
 			s.mu.Unlock()
-			timeoutStr := "未知"
+			timeoutStr := "unknown"
 			if timeout != nil {
 				timeoutStr = fmt.Sprintf("%v", *timeout)
 			}
-			errorMsg := fmt.Sprintf("任务超时，超时时间 %s 秒", timeoutStr)
+			errorMsg := fmt.Sprintf("task timeout, timeout %s seconds", timeoutStr)
 			logger.Error(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("task_id", taskID).
@@ -857,7 +857,7 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 			logger.Info(logComponent).
 				Str("event_type", "task_canceled").
 				Str("task_id", taskID).
-				Msg("任务已取消")
+				Msg("task canceled")
 		}
 	}
 }
@@ -872,7 +872,7 @@ func (s *TaskScheduler) areAllTasksCompleted(ctx context.Context, sessionID stri
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("session_id", sessionID).
 			Err(err).
-			Msg("检查任务完成状态失败")
+			Msg("failed to check task completion status")
 		return false
 	}
 
@@ -918,7 +918,7 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("发布任务事件失败：无法获取任务")
+			Msg("failed to publish task event: unable to get task")
 		return
 	}
 	task := tasks[0]
@@ -946,7 +946,7 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 		}
 	case payloadTypeTaskFailed:
 		// Python: error_msg = payload_data[0].text if payload_data else "Unknown error"
-		errMsg := "未知错误"
+		errMsg := "Unknown error"
 		if len(payload.Data) > 0 {
 			if textDF, ok := payload.Data[0].(*schema.TextDataFrame); ok {
 				errMsg = textDF.Text
@@ -982,13 +982,13 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
-			Msg("同步发布任务事件失败")
+			Msg("failed to publish task event synchronously")
 	} else {
 		logger.Info(logComponent).
 			Str("event_type", "task_event_published").
 			Str("task_id", taskID).
 			Str("payload_type", payload.Type).
-			Msg("任务事件已发布")
+			Msg("task event published")
 	}
 }
 
@@ -1005,7 +1005,7 @@ func (s *TaskScheduler) waitAllTasksComplete(_ context.Context) {
 		logger.Info(logComponent).
 			Str("event_type", "task_cancel_on_stop").
 			Str("task_id", id).
-			Msg("停止时取消运行中任务")
+			Msg("canceling running task on stop")
 	}
 	s.mu.Unlock()
 
@@ -1019,7 +1019,7 @@ func (s *TaskScheduler) waitAllTasksComplete(_ context.Context) {
 	case <-done:
 		// 所有任务 goroutine 已退出
 	case <-time.After(5 * time.Second):
-		logger.Warn(logComponent).Msg("等待任务完成超时（5s）")
+		logger.Warn(logComponent).Msg("timeout waiting for task completion (5s)")
 	}
 }
 
@@ -1035,6 +1035,6 @@ func (s *TaskScheduler) waitForTaskDone(done chan struct{}, taskID string) {
 	case <-time.After(5 * time.Second):
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
-			Msg("等待任务 goroutine 退出超时（5s）")
+			Msg("timeout waiting for task goroutine to exit (5s)")
 	}
 }

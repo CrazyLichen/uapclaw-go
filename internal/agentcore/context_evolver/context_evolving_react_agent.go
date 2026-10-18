@@ -120,7 +120,7 @@ func NewContextEvolvingReActAgent(
 	// 对齐 Python：构造时加载记忆
 	if memoryService != nil {
 		if loadErr := memoryService.LoadMemories(ctx, userID); loadErr != nil {
-			logger.Error(logger.ComponentAgentCore).Err(loadErr).Msg("初始化期间加载记忆失败")
+			logger.Error(logger.ComponentAgentCore).Err(loadErr).Msg("failed to load memory during initialization")
 			return nil, fmt.Errorf("加载记忆失败: %w", loadErr)
 		}
 	}
@@ -130,7 +130,7 @@ func NewContextEvolvingReActAgent(
 		Str("user_id", userID).
 		Bool("inject_in_context", injectMemoriesInContext).
 		Bool("auto_summarize", autoSummarize).
-		Msg("ContextEvolvingReActAgent 初始化完成")
+		Msg("ContextEvolvingReActAgent initialized")
 
 	return agent, nil
 }
@@ -142,7 +142,7 @@ func (a *ContextEvolvingReActAgent) Invoke(ctx context.Context, inputs map[strin
 	query, _ := inputs["query"].(string)
 	if query == "" {
 		// 对齐 Python：无 query 时补警告日志
-		logger.Warn(logger.ComponentAgentCore).Msg("输入中未提供 query")
+		logger.Warn(logger.ComponentAgentCore).Msg("query not provided in input")
 		return a.ReActAgent.Invoke(ctx, inputs, opts...)
 	}
 
@@ -243,7 +243,7 @@ func (a *ContextEvolvingReActAgent) AutoConfigure(ctx context.Context) error {
 	logger.Info(logger.ComponentAgentCore).
 		Str("model_name", modelName).
 		Str("api_base", apiBase).
-		Msg("AutoConfigure: 从 context_evolver 配置自动配置 Agent")
+		Msg("AutoConfigure: auto-configuring Agent from context_evolver config")
 
 	// 重新创建 TaskMemoryService（如果存在）
 	if a.memoryService != nil {
@@ -308,14 +308,14 @@ func (a *ContextEvolvingReActAgent) invokeWithMemory(ctx context.Context, inputs
 	if a.memoryService != nil {
 		if a.lastRetrievedQuery == retrievalQuery && a.lastRetrievalResult != nil {
 			// 对齐 Python：logger.info("Reusing cached memory retrieval result")
-			logger.Info(logger.ComponentAgentCore).Msg("复用缓存的记忆检索结果")
+			logger.Info(logger.ComponentAgentCore).Msg("reusing cached memory retrieval results")
 			memoryString = a.lastRetrievalResult.MemoryString
 			memoriesUsed = len(a.lastRetrievalResult.RetrievedMemory)
 		} else {
 			result, err := a.memoryService.Retrieve(ctx, a.userID, retrievalQuery)
 			if err != nil {
 				// 对齐 Python：logger.error("Failed to retrieve memories: %s", e)
-				logger.Error(logger.ComponentAgentCore).Err(err).Msg("检索记忆失败")
+				logger.Error(logger.ComponentAgentCore).Err(err).Msg("memory retrieval failed")
 			} else {
 				a.lastRetrievedQuery = retrievalQuery
 				a.lastRetrievalResult = result
@@ -324,7 +324,7 @@ func (a *ContextEvolvingReActAgent) invokeWithMemory(ctx context.Context, inputs
 				// 对齐 Python：logger.info("Retrieved %s memories for query", ...)
 				logger.Info(logger.ComponentAgentCore).
 					Int("memories_used", memoriesUsed).
-					Msg("检索记忆完成")
+					Msg("memory retrieval completed")
 			}
 		}
 	}

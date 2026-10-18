@@ -132,7 +132,7 @@ func (g *GlobalSessionController) FlushAgent(agentID string) error {
 		logger.Warn(logComponent).
 			Str("action", "flush_agent").
 			Str("agent_id", agentID).
-			Msg("Agent 未找到，跳过刷盘")
+			Msg("agent not found, skipping flush")
 		return nil
 	}
 	return controller.Flush()
@@ -228,7 +228,7 @@ func (g *GlobalSessionController) RemoveAgent(agentID string) (bool, error) {
 			Str("agent_id", agentID).
 			Str("path", agentDir).
 			Err(err).
-			Msg("删除 Agent 目录失败")
+			Msg("failed to remove agent directory")
 	}
 
 	return true, nil
@@ -248,7 +248,7 @@ func (g *GlobalSessionController) RemoveAll() {
 			Str("action", "remove_all_dirs").
 			Str("path", g.BasePath).
 			Err(err).
-			Msg("删除存储根目录失败")
+			Msg("failed to remove storage root directory")
 	}
 }
 
@@ -386,14 +386,14 @@ func (g *GlobalSessionController) CleanupOrphanFiles(agentID string, dryRun bool
 							Str("agent_id", currentAgentID).
 							Str("path", orphanDir).
 							Err(err).
-							Msg("删除孤立目录失败")
+							Msg("failed to remove orphan directory")
 					}
 				}
 				logger.Info(logComponent).
 					Str("action", "cleanup_orphan_files").
 					Str("agent_id", currentAgentID).
 					Int("deleted", len(orphanDirs)).
-					Msg("删除孤立目录")
+					Msg("removed orphan directories")
 			}
 		}
 	}
@@ -485,7 +485,7 @@ func AddDirectSessionDownstream(callerAgentID, callerUserID, targetAgentID, targ
 			Str("caller_agent_id", callerAgentID).
 			Str("session_id", callerSession.SessionID).
 			Err(err).
-			Msg("刷盘调用方会话失败")
+			Msg("failed to flush caller session")
 	}
 	return true
 }
@@ -624,7 +624,7 @@ func onAgentSessionCreated(ctx context.Context, data *callback.SessionCallEventD
 				Str("action", "on_session_created").
 				Str("agent_id", card.ID).
 				Str("session_id", data.SessionID).
-				Msg("注入 StateAccessor 到 AgentSessionContainer")
+				Msg("injected StateAccessor into AgentSessionContainer")
 		}
 	}
 	return nil
@@ -635,7 +635,7 @@ func onAgentP2PReceived(ctx context.Context, data *callback.AgentTeamEventData) 
 	logger.Debug(logComponent).
 		Str("event_type", "agent_p2p_received").
 		Str("agent_id", data.AgentID).
-		Msg("收到 P2P 消息")
+		Msg("received P2P message")
 	return nil
 }
 
@@ -644,7 +644,7 @@ func onAgentPubsubReceived(ctx context.Context, data *callback.AgentTeamEventDat
 	logger.Debug(logComponent).
 		Str("event_type", "agent_pubsub_received").
 		Str("agent_id", data.AgentID).
-		Msg("收到 Pub-Sub 消息")
+		Msg("received Pub-Sub message")
 	return nil
 }
 
@@ -656,7 +656,7 @@ func (g *GlobalSessionController) ensureBasePath() error {
 				Str("action", "ensure_base_path").
 				Str("path", g.BasePath).
 				Err(err).
-				Msg("创建存储根目录失败")
+				Msg("failed to create storage root directory")
 			return err
 		}
 	}
@@ -681,7 +681,7 @@ func (g *GlobalSessionController) getOrCreateController(agentID string) *Session
 			Str("action", "get_or_create_controller").
 			Str("agent_id", agentID).
 			Err(err).
-			Msg("创建存储根目录失败，继续使用空路径")
+			Msg("failed to create storage root directory, continuing with empty path")
 	}
 	controller := NewSessionController(agentID, g.BasePath, g.dataContainerType)
 	g.Controllers[agentID] = controller

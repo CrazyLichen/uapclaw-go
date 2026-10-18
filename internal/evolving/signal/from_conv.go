@@ -41,10 +41,10 @@ type skillReadEntry struct {
 	skillName string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ConvDetectorOption ConversationSignalDetector 构造选项函数。
 type ConvDetectorOption func(*ConversationSignalDetector)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // SignalDetector 向后兼容别名。
 //
@@ -332,7 +332,7 @@ func (d *ConversationSignalDetector) DetectUserIntent(
 		logger.Warn(logComponent).
 			Str("method", "DetectUserIntent").
 			Str("error", err.Error()).
-			Msg("[ConversationSignalDetector] 用户反馈检测失败")
+			Msg("[ConversationSignalDetector] user feedback detection failed")
 		return d.fallbackUserFeedbackSignals(userMessages, skillName), nil
 	}
 

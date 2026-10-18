@@ -25,7 +25,7 @@ import (
 
 // SearchUserMem 搜索用户记忆。
 //
-// ① emit_before MEMORY_SEARCH_STARTED → ② searchUserMemImpl → ③ trigger SEARCH_FINISHED
+// 流程：① emit_before MEMORY_SEARCH_STARTED → ② searchUserMemImpl → ③ trigger SEARCH_FINISHED
 // 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_SEARCH_STARTED) + search_user_mem
 func (m *LongTermMemory) SearchUserMem(
 	ctx context.Context,
@@ -64,7 +64,7 @@ func (m *LongTermMemory) SearchUserMem(
 
 // SearchUserHistorySummary 搜索用户历史摘要。
 //
-// ① emit_before MEMORY_SEARCH_STARTED → ② searchUserMemImpl → ③ trigger SEARCH_FINISHED
+// 流程：① emit_before MEMORY_SEARCH_STARTED → ② searchUserMemImpl → ③ trigger SEARCH_FINISHED
 // 对齐 Python: @_fw.emit_before(MemoryEvents.MEMORY_SEARCH_STARTED) + search_user_history_summary
 func (m *LongTermMemory) SearchUserHistorySummary(
 	ctx context.Context,

@@ -53,7 +53,7 @@ func NewNodeSessionFacade(inner *internal.NodeSession, streamMode bool) *NodeSes
 		Str("action", "new_node_session_facade").
 		Str("node_id", inner.NodeID()).
 		Bool("stream_mode", streamMode).
-		Msg("创建节点会话门面")
+		Msg("created node session facade")
 
 	desc := fmt.Sprintf("[wf_id=%s,comp_id=%s]", inner.WorkflowID(), inner.NodeID())
 	return &NodeSessionFacade{
@@ -107,7 +107,7 @@ func (f *NodeSessionFacade) UpdateState(data map[string]any) {
 			Err(err).
 			Str("action", "update_state").
 			Str("node_id", f.GetComponentID()).
-			Msg("更新组件状态失败")
+			Msg("failed to update component state")
 	}
 }
 
@@ -267,7 +267,7 @@ func (f *NodeSessionFacade) ClearSession(ctx context.Context) {
 	logger.Info(logComponent).
 		Str("action", "node_session_clear").
 		Str("node_id", f.inner.NodeID()).
-		Msg("NodeSession 已清空")
+		Msg("NodeSession cleared")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

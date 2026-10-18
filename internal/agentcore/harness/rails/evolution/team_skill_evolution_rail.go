@@ -314,7 +314,7 @@ func NewTeamSkillEvolutionRail(
 		Str("model", model).
 		Bool("auto_save", r.autoSave).
 		Str("team_id", r.teamID).
-		Msg("[TeamSkillEvolutionRail] 初始化完成")
+		Msg("[TeamSkillEvolutionRail] initialized")
 
 	return r
 }
@@ -480,14 +480,14 @@ func (r *TeamSkillEvolutionRail) OnAfterToolCall(ctx context.Context, cbc *agent
 	}
 	logger.Info(logComponent).
 		Str("result_preview", resultPreview).
-		Msg("[TeamSkillEvolutionRail] view_task 拦截")
+		Msg("[TeamSkillEvolutionRail] view_task intercepted")
 
 	// Python: completed = self._all_tasks_completed(inputs.tool_result)
 	completed := isCompletedTeamTaskView(inputs.ToolResult)
 	logger.Debug(logComponent).
 		Bool("completed", completed).
 		Str("session_id", r.currentBuilderSessionID()).
-		Msg("[TeamSkillEvolutionRail] view_task 完成检查结果")
+		Msg("[TeamSkillEvolutionRail] view_task completion check result")
 
 	if !completed {
 		logger.Info(logComponent).Msg("[TeamSkillEvolutionRail] view_task: task still in progress, skipping")
@@ -591,7 +591,7 @@ func (r *TeamSkillEvolutionRail) RunEvolution(ctx context.Context, traj *traject
 		if rec := recover(); rec != nil {
 			logger.Error(logComponent).
 				Any("panic", rec).
-				Msg("[TeamSkillEvolutionRail] run_evolution 全局异常捕获")
+				Msg("[TeamSkillEvolutionRail] run_evolution global exception caught")
 			r.emitProgress("failed", fmt.Sprintf("团队技能演进因意外错误失败: %v", rec))
 		}
 	}()
@@ -733,7 +733,7 @@ func (r *TeamSkillEvolutionRail) NotifyTeamCompleted(_ context.Context) (bool, e
 	r.hostCompletionPendingSessionID = &sessionID
 	logger.Debug(logComponent).
 		Str("session_id", sessionID).
-		Msg("[TeamSkillEvolutionRail] notify_team_completed 已标记")
+		Msg("[TeamSkillEvolutionRail] notify_team_completed marked")
 	return true, nil
 }
 
@@ -851,7 +851,7 @@ func (r *TeamSkillEvolutionRail) ApproveRecord(ctx context.Context, requestID st
 	logger.Info(logComponent).
 		Int("applied_count", result.AppliedCount).
 		Str("skill_name", pending.SkillName).
-		Msg("[TeamSkillEvolutionRail] 用户已批准记录")
+		Msg("[TeamSkillEvolutionRail] user approved records")
 	return nil
 }
 
@@ -869,7 +869,7 @@ func (r *TeamSkillEvolutionRail) RejectRecord(ctx context.Context, requestID str
 		logger.Info(logComponent).
 			Int("rejected_count", result.RejectedCount).
 			Str("skill_name", pending.SkillName).
-			Msg("[TeamSkillEvolutionRail] 用户已拒绝记录")
+			Msg("[TeamSkillEvolutionRail] user rejected records")
 	}
 	return nil
 }
@@ -895,7 +895,7 @@ func (r *TeamSkillEvolutionRail) RequestSimplify(ctx context.Context, skillName 
 	logger.Info(logComponent).
 		Str("skill_name", skillName).
 		Str("request_id", requestID).
-		Msg("[TeamSkillEvolutionRail] simplify 已暂存")
+		Msg("[TeamSkillEvolutionRail] simplify staged")
 
 	return &SimplifyRequestResult{
 		SkillName:     skillName,
@@ -1102,7 +1102,7 @@ func (r *TeamSkillEvolutionRail) detectUsedTeamSkill(ctx context.Context, traj *
 	if len(knownSkills) == 0 {
 		logger.Info(logComponent).
 			Int("total", len(allSkillNames)).
-			Msg("[TeamSkillEvolutionRail] 未找到 team-skill 类型技能")
+			Msg("[TeamSkillEvolutionRail] no team-skill type skills found")
 		return ""
 	}
 
@@ -1508,7 +1508,7 @@ func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 			r.emitRecordApprovalEvent(skillName, stagedReq)
 			logger.Info(logComponent).
 				Str("change_id", stagedReq.RequestID).
-				Msg("[TeamSkillEvolutionRail] 信号已消费，记录已暂存待审批")
+				Msg("[TeamSkillEvolutionRail] signal consumed, records staged pending approval")
 			r.emitProgress("approval_required",
 				fmt.Sprintf("'%s' 的经验记录已就绪，等待审批", skillName),
 				WithSkillName(skillName),

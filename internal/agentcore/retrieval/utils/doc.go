@@ -8,9 +8,7 @@
 //	utils/
 //	├── doc.go              # 包文档
 //	├── api_requests.go     # HTTP 重试请求工具
-//	├── fusion.go           # RRFFusion 倒数秩融合算法
-//	├── fusion_test.go      # RRF 融合测试
-//	├── api_requests_test.go # HTTP 重试测试
+//	└── fusion.go           # RRFFusion 倒数秩融合算法
 //
 // 对应 Python 代码：
 //

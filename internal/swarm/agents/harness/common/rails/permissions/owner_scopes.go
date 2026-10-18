@@ -192,7 +192,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 	if strings.TrimSpace(principalUserID) == "" {
 		logger.Info(logComponent).
 			Str("tool_name", toolName).
-			Msg("[check_avatar_permission] principalUserID 为空，返回 deny")
+			Msg("[check_avatar_permission] principalUserID empty, returning deny")
 		return "deny", nil
 	}
 
@@ -220,13 +220,13 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 			}
 			return nil
 		}()).
-		Msg("[check_avatar_permission] 开始检查")
+		Msg("[check_avatar_permission] starting check")
 
 	// Python: if not isinstance(owner_scopes, dict) or not owner_scopes: return "allow"
 	if len(ownerScopes) == 0 {
 		logger.Info(logComponent).
 			Str("tool_name", toolName).
-			Msg("[check_avatar_permission] owner_scopes 为空，返回 allow")
+			Msg("[check_avatar_permission] owner_scopes empty, returning allow")
 		return "allow", nil
 	}
 
@@ -238,7 +238,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 		Str("channel_id", cid).
 		Str("principal_user_id", uid).
 		Bool("scope_cfg_found", scopeCfg != nil).
-		Msg("[check_avatar_permission] lookup 完成")
+		Msg("[check_avatar_permission] lookup completed")
 
 	// Python: level = _resolve_owner_scope_level(scope_cfg, tool_name, tool_args)
 	level := ResolveOwnerScopeLevel(scopeCfg, toolName, toolArgs)
@@ -246,7 +246,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 	logger.Info(logComponent).
 		Str("tool_name", toolName).
 		Str("resolved_level", level).
-		Msg("[check_avatar_permission] owner_scope 级别已解析")
+		Msg("[check_avatar_permission] owner_scope level resolved")
 
 	// Python: engine.evaluate_global_policy_directly(tool_name, tool_args, include_external_directory=True)
 	var globalLevelStr string
@@ -256,7 +256,7 @@ func CheckAvatarPermission(permCfg map[string]any, toolName string, toolArgs map
 				logger.Warn(logComponent).
 					Str("tool_name", toolName).
 					Any("recover", rec).
-					Msg("[check_avatar_permission] evaluate_global_policy_directly 失败")
+					Msg("[check_avatar_permission] evaluate_global_policy_directly failed")
 			}
 		}()
 		workspaceRoot := workspace.WorkspaceDir()
@@ -351,7 +351,7 @@ func PersistToOwnerScope(toolName string, pattern string, channelID string, user
 	if err := writeYAMLData(data); err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("persistToOwnerScope 写盘失败")
+			Msg("persistToOwnerScope write failed")
 		return false
 	}
 
@@ -359,7 +359,7 @@ func PersistToOwnerScope(toolName string, pattern string, channelID string, user
 		Str("tool_name", toolName).
 		Str("channel_id", channelID).
 		Str("user_id", userID).
-		Msg("persistToOwnerScope 写盘成功")
+		Msg("persistToOwnerScope write succeeded")
 	return true
 }
 

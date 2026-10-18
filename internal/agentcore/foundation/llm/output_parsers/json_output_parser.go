@@ -72,7 +72,7 @@ func (p *JsonOutputParser) Parse(input any) (any, error) {
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("model_name", modelName).
 			Err(err).
-			Msg("JSON 解析失败")
+			Msg("failed to parse JSON")
 		return nil, fmt.Errorf("从 LLM 输出解码 JSON 失败: %w", err)
 	}
 
@@ -116,7 +116,7 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.S
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("model_name", modelName).
 					Str("chunk_type", fmt.Sprintf("%T", chunk)).
-					Msg("不支持的 chunk 类型，已跳过")
+					Msg("unsupported chunk type, skipped")
 				continue
 			}
 
@@ -144,7 +144,7 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.S
 						Str("event_type", "LLM_CALL_ERROR").
 						Str("model_name", modelName).
 						Err(err).
-						Msg("流式 JSON 解析失败（代码块）")
+						Msg("streaming JSON parse failed (code block)")
 				}
 				continue
 			}
@@ -162,7 +162,7 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.S
 						Str("event_type", "LLM_CALL_ERROR").
 						Str("model_name", modelName).
 						Err(err).
-						Msg("流式 JSON 解析失败（直接）")
+						Msg("streaming JSON parse failed (direct)")
 					buffer = ""
 				}
 			}
@@ -187,7 +187,7 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.S
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("model_name", modelName).
 					Err(err).
-					Msg("残余 buffer JSON 解析失败")
+					Msg("failed to parse residual buffer JSON")
 			}
 		}
 	}()

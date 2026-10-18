@@ -35,10 +35,10 @@ type LLMAsJudgeMetric struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// metricLogComponent 日志组件标识
-	metricLogComponent = logger.ComponentAgentCore
-)
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
+
+const ()
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -95,25 +95,25 @@ func (m *LLMAsJudgeMetric) Compute(ctx context.Context, prediction, label any, o
 		"model_answer":    formatValue(prediction),
 	})
 	if err != nil {
-		logger.Warn(metricLogComponent).Err(err).Msg("格式化 LLM 评估模板失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to format LLM evaluation template")
 		return MetricResult{"llm_as_judge": 0.0}, nil
 	}
 
 	// 转为消息列表
 	messages, err := formatted.ToMessages()
 	if err != nil {
-		logger.Warn(metricLogComponent).Err(err).Msg("转换评估模板为消息列表失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to convert evaluation template to message list")
 		return MetricResult{"llm_as_judge": 0.0}, nil
 	}
 
 	// 调用 LLM
 	response, err := m.model.Invoke(ctx, model_clients.NewMessagesParam(messages...))
 	if err != nil {
-		logger.Warn(metricLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "LLMAsJudgeMetric.Compute").
 			Err(err).
-			Msg("LLM 调用失败")
+			Msg("LLM call failed")
 		return MetricResult{"llm_as_judge": 0.0}, nil
 	}
 
@@ -149,11 +149,11 @@ func (m *LLMAsJudgeMetric) parseResult(response *llmschema.AssistantMessage) Met
 
 	parsed, err := m.parser.Parse(text)
 	if err != nil {
-		logger.Warn(metricLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "LLMAsJudgeMetric.parseResult").
 			Err(err).
-			Msg("解析 LLM 评估结果失败")
+			Msg("failed to parse LLM evaluation result")
 		return MetricResult{"llm_as_judge": 0.0}
 	}
 

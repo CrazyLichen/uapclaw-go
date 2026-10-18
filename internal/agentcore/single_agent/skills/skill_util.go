@@ -159,5 +159,5 @@ func loggerWarnSkillPrompt(err error) {
 	logger.Warn(logComponent).
 		Str("event_type", "skill_prompt_format_error").
 		Err(err).
-		Msg("技能提示词格式化失败")
+		Msg("skill prompt formatting failed")
 }

@@ -26,13 +26,13 @@ func (m *TeamManager) EnsureTeamSharedSkillsInitialized(spec *atschema.TeamAgent
 	// 对齐 Python: TeamManager._copy_global_skills_to_team_shared_dir(spec)
 	// TODO(#9.72): 实现 skill 目录复制逻辑
 	logger.Debug(logComponent).Str("team_name", spec.TeamName).
-		Msg("EnsureTeamSharedSkillsInitialized: 全局技能复制（待文件系统实现）")
+		Msg("EnsureTeamSharedSkillsInitialized: global skill copy (pending filesystem implementation)")
 
 	// 步骤 2: 同步团队共享技能到 Agent 全局
 	// 对齐 Python: TeamManager._sync_team_shared_skills_to_agent_global(spec)
 	// TODO(#9.72): 实现 skill 目录同步逻辑
 	logger.Debug(logComponent).Str("team_name", spec.TeamName).
-		Msg("EnsureTeamSharedSkillsInitialized: 技能同步（待文件系统实现）")
+		Msg("EnsureTeamSharedSkillsInitialized: skill sync (pending filesystem implementation)")
 }
 
 // SyncTeamSkills 同步指定 session 的技能（从 workspace 到 global）。
@@ -46,7 +46,7 @@ func (m *TeamManager) EnsureTeamSharedSkillsInitialized(spec *atschema.TeamAgent
 func (m *TeamManager) SyncTeamSkills(sessionID string) {
 	syncTarget, ok := m.teamSkillSyncTargets[sessionID]
 	if !ok {
-		logger.Debug(logComponent).Str("session_id", sessionID).Msg("无技能同步目标")
+		logger.Debug(logComponent).Str("session_id", sessionID).Msg("no skillsynctarget")
 		return
 	}
 	// ⤵️(#9.72) _sync_skills_dir — 待 shutil / Path 等效实现回填
@@ -54,7 +54,7 @@ func (m *TeamManager) SyncTeamSkills(sessionID string) {
 		Str("session_id", sessionID).
 		Str("source", syncTarget.Source).
 		Str("target", syncTarget.Target).
-		Msg("同步 team 技能（待回填）")
+		Msg("syncing team skills (pending backfill)")
 }
 
 // RegisterTeamSkillRail 注册 TeamSkillEvolutionRail 实例。
@@ -247,13 +247,13 @@ func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
 		//   mount_skill_evolution_rail=False)
 		logger.Info(logComponent).
 			Str("session_id", sessionID).
-			Msg("updateEvolutionConfig: session 缺少 skill create rail，待 _build_and_mount 回填")
+			Msg("updateEvolutionConfig: session missing skill create rail, pending _build_and_mount backfill")
 	}
 
 	logger.Info(logComponent).
 		Bool("auto_scan_enabled", autoScanEnabled).
 		Bool("skill_create_enabled", skillCreateEnabled).
-		Msg("更新 evolution 配置完成")
+		Msg("evolution config update completed")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

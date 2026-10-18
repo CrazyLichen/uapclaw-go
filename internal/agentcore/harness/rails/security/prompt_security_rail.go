@@ -91,9 +91,9 @@ func (r *SafetyPromptRail) runSecurityCheck(_ context.Context, _ *SecurityCheckC
 	section := sections.BuildSafetySection()
 	r.systemPromptBuilder.AddSection(section)
 
-	logger.Debug(securityLogComponent).
+	logger.Debug(logComponent).
 		Str("section", sections.SectionSafety).
-		Msg("已注入安全提示词 section")
+		Msg("safety prompt section injected")
 
 	return r.Allow(nil), nil
 }

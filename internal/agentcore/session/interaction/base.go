@@ -121,7 +121,7 @@ func (b *BaseInteraction) initInteractiveInputs() {
 				logger.Error(logComponent).
 					Err(err).
 					Str("action", "init_interactive_inputs").
-					Msg("更新交互输入到 session state 失败")
+					Msg("failed to update interactive inputs to session state")
 			}
 			b.latestInteractiveInput = b.interactiveInputs[len(b.interactiveInputs)-1]
 		}
@@ -142,7 +142,7 @@ func (b *BaseInteraction) initInteractiveInputs() {
 			logger.Error(logComponent).
 				Err(err).
 				Str("action", "init_interactive_inputs").
-				Msg("写回交互输入到 session state 失败")
+				Msg("failed to write back interactive inputs to session state")
 		}
 		b.latestInteractiveInput = b.interactiveInputs[len(b.interactiveInputs)-1]
 	}
@@ -157,7 +157,7 @@ func (b *BaseInteraction) getNextInteractiveInput() any {
 		logger.Info(logComponent).
 			Str("action", "interaction_resume").
 			Int("index", b.idx).
-			Msg("交互恢复：从队列获取到用户输入")
+			Msg("interaction resume: got user input from queue")
 		return res
 	}
 	return nil
@@ -179,7 +179,7 @@ func writeInteractionOutput(session interfaces.InnerSession, outputType string, 
 		logger.Warn(logComponent).
 			Err(err).
 			Str("output_type", outputType).
-			Msg("交互输出写入流失败")
+			Msg("failed to write interaction output to stream")
 	}
 	return err
 }
@@ -197,7 +197,7 @@ func commitCMP(session interfaces.InnerSession) {
 	logger.Error(logComponent).
 		Str("action", "commit_cmp").
 		Str("state_type", fmt.Sprintf("%T", st)).
-		Msg("当前状态不支持 CommitCmp，对齐 Python AttributeError")
+		Msg("current state does not support CommitCmp, aligning with Python AttributeError")
 	panic(fmt.Sprintf("当前状态 %T 不支持 CommitCmp（未实现 WorkflowState 接口），对齐 Python AttributeError", st))
 }
 
@@ -211,6 +211,6 @@ func getExecutableID(session interfaces.InnerSession) string {
 	logger.Warn(logComponent).
 		Str("action", "get_executable_id").
 		Str("session_type", fmt.Sprintf("%T", session)).
-		Msg("session 不满足 ExecutableIDProvider 接口，返回空字符串")
+		Msg("session does not satisfy ExecutableIDProvider interface, returning empty string")
 	return ""
 }

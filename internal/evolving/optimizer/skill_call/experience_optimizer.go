@@ -309,7 +309,7 @@ func (o *SkillExperienceOptimizer) backward(ctx context.Context, signals []*sign
 				Str("method", "backward").
 				Str("skill_name", skillName).
 				Err(err).
-				Msg("[SkillExperienceOptimizer] 上下文构建失败，跳过")
+				Msg("[SkillExperienceOptimizer] context build failed, skipped")
 			continue
 		}
 
@@ -319,7 +319,7 @@ func (o *SkillExperienceOptimizer) backward(ctx context.Context, signals []*sign
 				Str("method", "backward").
 				Str("skill_name", skillName).
 				Err(err).
-				Msg("[SkillExperienceOptimizer] GenerateRecords 失败")
+				Msg("[SkillExperienceOptimizer] GenerateRecords failed")
 			continue
 		}
 		if len(records) == 0 {

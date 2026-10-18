@@ -77,7 +77,7 @@ func InProcessSpawn(
 		// Python: set_session_id(session_id)
 		// Go: sessionID 通过参数传递，无需 contextvars
 
-		logger.Info(inprocessLogComponent).
+		logger.Info(logComponent).
 			Str("member_name", runtimeCtx.MemberName).
 			Msg("[inprocess] teammate started")
 
@@ -87,19 +87,19 @@ func InProcessSpawn(
 			if runFn, ok := runTeamMemberFunc.(func(context.Context, any, any, any) (map[string]any, error)); ok {
 				_, _ = runFn(runCtx, teammate, inputs, sessionID)
 			} else {
-				logger.Error(inprocessLogComponent).
+				logger.Error(logComponent).
 					Str("member_name", runtimeCtx.MemberName).
 					Any("func_type", fmt.Sprintf("%T", runTeamMemberFunc)).
-					Msg("[inprocess] runTeamMemberFunc 类型断言失败，teammate 无法执行")
+					Msg("[inprocess] runTeamMemberFunc type assertion failed, teammate cannot execute")
 			}
 		} else {
-			logger.Error(inprocessLogComponent).
+			logger.Error(logComponent).
 				Str("member_name", runtimeCtx.MemberName).
-				Msg("[inprocess] runTeamMemberFunc 为 nil，teammate 无法执行")
+				Msg("[inprocess] runTeamMemberFunc is nil, teammate cannot execute")
 		}
 		_ = query // 同上
 
-		logger.Info(inprocessLogComponent).
+		logger.Info(logComponent).
 			Str("member_name", runtimeCtx.MemberName).
 			Msg("[inprocess] teammate exited")
 	}()
@@ -112,7 +112,7 @@ func InProcessSpawn(
 		agentRef:  teammate,
 	}
 
-	logger.Info(inprocessLogComponent).
+	logger.Info(logComponent).
 		Str("member_name", runtimeCtx.MemberName).
 		Str("process_id", handle.processID).
 		Msg("[inprocess] spawned teammate")

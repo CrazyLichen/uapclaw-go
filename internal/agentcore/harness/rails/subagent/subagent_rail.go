@@ -101,7 +101,7 @@ func (r *SubagentRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 
 	deepCfg := deepAgent.DeepConfig()
 	if deepCfg == nil || len(deepCfg.Subagents) == 0 {
-		logger.Info(logComponent).Msg("[SubagentRail] 无子代理配置，跳过")
+		logger.Info(logComponent).Msg("[SubagentRail] nosubagentconfig， skipped")
 		return nil
 	}
 
@@ -128,7 +128,7 @@ func (r *SubagentRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 		logger.Info(logComponent).
 			Bool("enable_async_subagent", true).
 			Int("subagent_count", len(deepCfg.Subagents)).
-			Msg("[SubagentRail] 异步模式暂未实现")
+			Msg("[SubagentRail] async mode not yet implemented")
 	} else {
 		// 同步模式：注册 TaskTool
 		// Python: self.tools = create_task_tool(parent_agent=agent, available_agents=..., language=..., agent_id=...)
@@ -149,7 +149,7 @@ func (r *SubagentRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 	logger.Info(logComponent).
 		Str("mode", mode).
 		Int("subagent_count", len(deepCfg.Subagents)).
-		Msg("[SubagentRail] 已初始化")
+		Msg("[SubagentRail] initialized")
 
 	return nil
 }

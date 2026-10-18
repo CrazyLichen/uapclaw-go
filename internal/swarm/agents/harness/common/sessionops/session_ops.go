@@ -187,7 +187,7 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 	if _, err := os.Stat(sourceHistory); err == nil {
 		// 复制 history.json
 		if err := copyFile(sourceHistory, targetHistory); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("fork: 复制 history.json 失败")
+			logger.Warn(logComponent).Err(err).Msg("fork: failed to copy history.json")
 		} else {
 			// Python: 添加 forked_from 元数据到每条记录
 			data, err := os.ReadFile(targetHistory)
@@ -203,7 +203,7 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 					// Python: json.dumps(data, ensure_ascii=False, indent=2)
 					if updated, err := json.MarshalIndent(records, "", "  "); err == nil {
 						if writeErr := os.WriteFile(targetHistory, updated, 0o644); writeErr != nil {
-							logger.Warn(logComponent).Str("file", targetHistory).Err(writeErr).Msg("fork_session: 写入历史文件失败")
+							logger.Warn(logComponent).Str("file", targetHistory).Err(writeErr).Msg("fork_session: failed to write history file")
 						}
 					}
 				}
@@ -356,7 +356,7 @@ func ListSessionTurns(sessionID string) *ListSessionTurnsResult {
 
 	data, err := os.ReadFile(historyPath)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("list_session_turns: 读取 history.json 失败")
+		logger.Warn(logComponent).Err(err).Msg("list_session_turns: failed to read history.json")
 		return &ListSessionTurnsResult{Turns: nil, Total: 0}
 	}
 
@@ -467,11 +467,11 @@ func RestoreSessionFiles(sessionID string, turnIndex int) *RestoreSessionFilesRe
 				dir := filepath.Dir(filePath)
 				if mkdirErr := os.MkdirAll(dir, 0o755); mkdirErr != nil {
 					result.Errors = append(result.Errors, FileRestoreError{File: dir, Error: mkdirErr.Error()})
-					logger.Warn(logComponent).Str("dir", dir).Err(mkdirErr).Msg("restore_session_files: 创建目录失败")
+					logger.Warn(logComponent).Str("dir", dir).Err(mkdirErr).Msg("restore_session_files: failed to create directory")
 				}
 				if err := os.WriteFile(filePath, []byte(*info.RestoreContent), 0o644); err != nil {
 					result.Errors = append(result.Errors, FileRestoreError{File: filePath, Error: err.Error()})
-					logger.Warn(logComponent).Str("file", filePath).Err(err).Msg("restore_session_files: 写回文件失败")
+					logger.Warn(logComponent).Str("file", filePath).Err(err).Msg("restore_session_files: failed to write file back")
 				} else {
 					result.RestoredFiles = append(result.RestoredFiles, filePath)
 				}
@@ -481,7 +481,7 @@ func RestoreSessionFiles(sessionID string, turnIndex int) *RestoreSessionFilesRe
 			if _, err := os.Stat(filePath); err == nil {
 				if err := os.Remove(filePath); err != nil {
 					result.Errors = append(result.Errors, FileRestoreError{File: filePath, Error: err.Error()})
-					logger.Warn(logComponent).Str("file", filePath).Err(err).Msg("restore_session_files: 删除文件失败")
+					logger.Warn(logComponent).Str("file", filePath).Err(err).Msg("restore_session_files: failed to delete file")
 				} else {
 					result.DeletedFiles = append(result.DeletedFiles, filePath)
 				}
@@ -495,7 +495,7 @@ func RestoreSessionFiles(sessionID string, turnIndex int) *RestoreSessionFilesRe
 		Int("restored", len(result.RestoredFiles)).
 		Int("deleted", len(result.DeletedFiles)).
 		Int("errors", len(result.Errors)).
-		Msg("restore_session_files 完成")
+		Msg("restore_session_files completed")
 
 	return result
 }
@@ -504,12 +504,12 @@ func RestoreSessionFiles(sessionID string, turnIndex int) *RestoreSessionFilesRe
 // Python: rewind_session_context(*, deep_agent, session_id, turn_index)
 func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, sessionID string, turnIndex int) bool {
 	if deepAgent == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: 无 deep_agent")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: no deep_agent")
 		return false
 	}
 	reactAgent := deepAgent.ReactAgent()
 	if reactAgent == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: 无 react_agent")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: no react_agent")
 		return false
 	}
 
@@ -517,24 +517,24 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 	sessionsDir := workspace.AgentSessionsDir()
 	historyPath := filepath.Join(sessionsDir, sessionID, "history.json")
 	if _, err := os.Stat(historyPath); os.IsNotExist(err) {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: history.json 不存在")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: history.json not found")
 		return false
 	}
 
 	data, err := os.ReadFile(historyPath)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: 读取 history.json 失败")
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: failed to read history.json")
 		return false
 	}
 
 	var historyRecords []map[string]any
 	if err := json.Unmarshal(data, &historyRecords); err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: 解析 history.json 失败")
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: failed to parse history.json")
 		return false
 	}
 
 	if len(historyRecords) == 0 {
-		logger.Info(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: 空历史记录")
+		logger.Info(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: empty history")
 		return true
 	}
 
@@ -591,7 +591,7 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 	}
 
 	if len(contextMessages) == 0 {
-		logger.Info(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: 无可转换消息")
+		logger.Info(logComponent).Str("session_id", sessionID).Msg("rewind_session_context: no convertible messages")
 		return true
 	}
 
@@ -604,11 +604,11 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 		logger.Info(logComponent).
 			Str("session_id", sessionID).
 			Int("messages", modelCtx.Len()).
-			Msg("rewind_session_context: 清空旧上下文")
+			Msg("rewind_session_context: clearing old context")
 	}
 	// 勘误 E1: WithSessionID 而非 WithClearSessionID
 	if err := contextEngine.ClearContext(ctx, ceinterface.WithSessionID(sessionID)); err != nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("rewind_session_context: 清空上下文失败")
+		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("rewind_session_context: failed to clear context")
 	}
 
 	// --- 4. 构建新上下文 ---
@@ -616,7 +616,7 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 	card := deepAgent.Card()
 	sess := agentsession.CreateAgentSession(sessionID, card, nil)
 	if err := sess.PreRun(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: PreRun 失败")
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: PreRun failed")
 		return false
 	}
 
@@ -628,7 +628,7 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 	_, err = contextEngine.CreateContext(ctx, "default_context_id", sess,
 		ceinterface.WithHistoryMessages(contextMessages))
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: CreateContext 失败")
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: CreateContext failed")
 		return false
 	}
 
@@ -637,13 +637,13 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 	// Python: await context_engine.save_contexts(session)
 	saved, err := contextEngine.SaveContexts(ctx, sess, []string{"default_context_id"})
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: SaveContexts 失败")
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("rewind_session_context: SaveContexts failed")
 	} else {
 		// Python: deep_agent.save_state(session)
 		deepAgent.SaveState(sess, deepAgent.LoadState(sess))
 		// Python: await session.post_run()
 		if postErr := sess.PostRun(ctx); postErr != nil {
-			logger.Warn(logComponent).Err(postErr).Str("session_id", sessionID).Msg("rewind_session_context: PostRun 失败")
+			logger.Warn(logComponent).Err(postErr).Str("session_id", sessionID).Msg("rewind_session_context: PostRun failed")
 		}
 		persistOK = saved != nil
 	}
@@ -653,7 +653,7 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 		Int("turn_index", turnIndex).
 		Int("messages", len(contextMessages)).
 		Bool("persist", persistOK).
-		Msg("rewind_session_context: 上下文重建完成")
+		Msg("rewind_session_context: context rebuild completed")
 
 	return true
 }
@@ -676,34 +676,34 @@ func CopySessionState(ctx context.Context, sourceSessionID, targetSessionID stri
 	// Python: 读源 state
 	sourceSess := agentsession.CreateAgentSession(sourceSessionID, card, nil)
 	if err := sourceSess.PreRun(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Str("source", sourceSessionID).Msg("copy_session_state: 源 session PreRun 失败")
+		logger.Warn(logComponent).Err(err).Str("source", sourceSessionID).Msg("copy_session_state: source session PreRun failed")
 		return false
 	}
 
 	// 勘误 E7: GetState 返回 (any, error)，需要处理 error
 	sourceStateRaw, stateErr := sourceSess.GetState(state.StringKey(agentschema.SessionStateKey))
 	if stateErr != nil {
-		logger.Warn(logComponent).Err(stateErr).Str("source", sourceSessionID).Msg("copy_session_state: 读取源 state 失败")
+		logger.Warn(logComponent).Err(stateErr).Str("source", sourceSessionID).Msg("copy_session_state: failed to read source state")
 		if postErr := sourceSess.PostRun(ctx); postErr != nil {
-			logger.Warn(logComponent).Err(postErr).Str("source", sourceSessionID).Msg("copy_session_state: 源 session PostRun 失败")
+			logger.Warn(logComponent).Err(postErr).Str("source", sourceSessionID).Msg("copy_session_state: source session PostRun failed")
 		}
 		return false
 	}
 
 	// Python: finally: source_session.post_run()
 	if postErr := sourceSess.PostRun(ctx); postErr != nil {
-		logger.Warn(logComponent).Err(postErr).Str("source", sourceSessionID).Msg("copy_session_state: 源 session PostRun 失败")
+		logger.Warn(logComponent).Err(postErr).Str("source", sourceSessionID).Msg("copy_session_state: source session PostRun failed")
 	}
 
 	if sourceStateRaw == nil {
-		logger.Info(logComponent).Str("source", sourceSessionID).Msg("copy_session_state: 源无 DeepAgentState，跳过")
+		logger.Info(logComponent).Str("source", sourceSessionID).Msg("copy_session_state: no DeepAgentState in source, skipping")
 		return false
 	}
 
 	// Python: 深拷贝并变换
 	sourceStateDict, ok := sourceStateRaw.(map[string]any)
 	if !ok {
-		logger.Warn(logComponent).Str("source", sourceSessionID).Msg("copy_session_state: state 类型非 map")
+		logger.Warn(logComponent).Str("source", sourceSessionID).Msg("copy_session_state: state type is not map")
 		return false
 	}
 
@@ -728,7 +728,7 @@ func CopySessionState(ctx context.Context, sourceSessionID, targetSessionID stri
 					logger.Info(logComponent).
 						Str("old_slug", oldSlug).
 						Str("new_slug", newSlug).
-						Msg("copy_session_state: plan 文件已复制")
+						Msg("copy_session_state: plan file copied")
 				}
 			}
 		}
@@ -737,18 +737,18 @@ func CopySessionState(ctx context.Context, sourceSessionID, targetSessionID stri
 	// Python: 写目标 state
 	targetSess := agentsession.CreateAgentSession(targetSessionID, card, nil)
 	if err := targetSess.PreRun(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Str("target", targetSessionID).Msg("copy_session_state: 目标 session PreRun 失败")
+		logger.Warn(logComponent).Err(err).Str("target", targetSessionID).Msg("copy_session_state: target session PreRun failed")
 		return false
 	}
 	targetSess.UpdateState(map[string]any{agentschema.SessionStateKey: modifiedState})
 	if postErr := targetSess.PostRun(ctx); postErr != nil {
-		logger.Warn(logComponent).Err(postErr).Str("target", targetSessionID).Msg("copy_session_state: 目标 session PostRun 失败")
+		logger.Warn(logComponent).Err(postErr).Str("target", targetSessionID).Msg("copy_session_state: target session PostRun failed")
 	}
 
 	logger.Info(logComponent).
 		Str("source", sourceSessionID).
 		Str("target", targetSessionID).
-		Msg("copy_session_state: DeepAgentState 已复制")
+		Msg("copy_session_state: DeepAgentState copied")
 
 	return true
 }
@@ -757,25 +757,25 @@ func CopySessionState(ctx context.Context, sourceSessionID, targetSessionID stri
 // Python: copy_session_context(deep_agent, source_session_id, target_session_id)
 func CopySessionContext(ctx context.Context, deepAgent *harness.DeepAgent, sourceSessionID, targetSessionID string) bool {
 	if deepAgent == nil {
-		logger.Warn(logComponent).Str("source", sourceSessionID).Msg("copy_session_context: deepAgent 为 nil")
+		logger.Warn(logComponent).Str("source", sourceSessionID).Msg("copy_session_context: deepAgent is nil")
 		return false
 	}
 	// Python: messages = deep_agent.get_current_context(session_id=source_session_id)
 	messages, err := deepAgent.GetCurrentContext(ctx, sourceSessionID, "default_context_id")
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("source", sourceSessionID).Msg("copy_session_context: 读取源上下文失败")
+		logger.Warn(logComponent).Err(err).Str("source", sourceSessionID).Msg("copy_session_context: failed to read source context")
 		return false
 	}
 
 	if len(messages) == 0 {
-		logger.Info(logComponent).Str("source", sourceSessionID).Msg("copy_session_context: 源无消息，跳过")
+		logger.Info(logComponent).Str("source", sourceSessionID).Msg("copy_session_context: no messages in source, skipping")
 		return false
 	}
 
 	// Python: await deep_agent.create_new_context_engine(session_id=target_session_id, messages=messages)
 	_, err = deepAgent.CreateNewContextEngine(ctx, targetSessionID, messages)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("target", targetSessionID).Msg("copy_session_context: 创建目标上下文失败")
+		logger.Warn(logComponent).Err(err).Str("target", targetSessionID).Msg("copy_session_context: failed to create target context")
 		return false
 	}
 
@@ -783,7 +783,7 @@ func CopySessionContext(ctx context.Context, deepAgent *harness.DeepAgent, sourc
 		Int("messages", len(messages)).
 		Str("source", sourceSessionID).
 		Str("target", targetSessionID).
-		Msg("copy_session_context: 上下文已复制")
+		Msg("copy_session_context: context copied")
 
 	return true
 }
@@ -883,7 +883,7 @@ func deepCopyMap(m map[string]any) map[string]any {
 	data, _ := json.Marshal(m)
 	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("deepCopyMap: JSON 反序列化失败")
+		logger.Warn(logComponent).Err(err).Msg("deepCopyMap: JSON deserialization failed")
 		return make(map[string]any)
 	}
 	return result

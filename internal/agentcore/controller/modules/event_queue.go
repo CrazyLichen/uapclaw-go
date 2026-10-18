@@ -75,7 +75,7 @@ func (eq *EventQueue) Start() {
 	eq.queue.Start()
 	logger.Info(logComponent).
 		Str("event_type", "event_queue_started").
-		Msg("事件队列已启动")
+		Msg("event queue started")
 }
 
 // Stop 停止事件队列。
@@ -87,14 +87,14 @@ func (eq *EventQueue) Stop(ctx context.Context) error {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Err(err).
-			Msg("事件队列停止失败")
+			Msg("failed to stop event queue")
 		return exception.NewBaseError(exception.StatusAgentControllerEventQueueError,
-			exception.WithMsg(fmt.Sprintf("事件队列停止失败: %v", err)),
+			exception.WithMsg(fmt.Sprintf("failed to stop event queue: %v", err)),
 			exception.WithCause(err))
 	}
 	logger.Info(logComponent).
 		Str("event_type", "event_queue_stopped").
-		Msg("事件队列已停止")
+		Msg("event queue stopped")
 	return nil
 }
 
@@ -104,12 +104,12 @@ func (eq *EventQueue) Stop(ctx context.Context) error {
 // 为 5 种 EventType 创建 topic，每个订阅绑定对应 EventHandler 方法并激活。
 func (eq *EventQueue) Subscribe(ctx context.Context, agentID, sessionID string) error {
 	if eq.eventHandler == nil {
-		err := fmt.Errorf("事件处理器未设置，无法订阅: agent_id=%s, session_id=%s", agentID, sessionID)
+		err := fmt.Errorf("event handler not set, cannot subscribe: agent_id=%s, session_id=%s", agentID, sessionID)
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("agent_id", agentID).
 			Str("session_id", sessionID).
-			Msg("事件处理器未设置，无法订阅")
+			Msg("event handler not set, cannot subscribe")
 		return exception.NewBaseError(exception.StatusAgentControllerEventQueueError,
 			exception.WithMsg(err.Error()))
 	}
@@ -132,9 +132,9 @@ func (eq *EventQueue) Subscribe(ctx context.Context, agentID, sessionID string) 
 				Str("agent_id", agentID).
 				Str("session_id", sessionID).
 				Err(err).
-				Msg("创建事件订阅失败")
+				Msg("failed to create event subscription")
 			return exception.NewBaseError(exception.StatusAgentControllerEventQueueError,
-				exception.WithMsg(fmt.Sprintf("创建事件订阅失败: topic=%s, err=%v", topic, err)),
+				exception.WithMsg(fmt.Sprintf("failed to create event subscription: topic=%s, err=%v", topic, err)),
 				exception.WithCause(err))
 		}
 
@@ -149,7 +149,7 @@ func (eq *EventQueue) Subscribe(ctx context.Context, agentID, sessionID string) 
 			Str("agent_id", agentID).
 			Str("session_id", sessionID).
 			Str("event_type_name", string(eventType)).
-			Msg("事件订阅已创建并激活")
+			Msg("event subscription created and activated")
 	}
 
 	return nil
@@ -177,9 +177,9 @@ func (eq *EventQueue) Unsubscribe(ctx context.Context, agentID, sessionID string
 				Str("agent_id", agentID).
 				Str("session_id", sessionID).
 				Err(err).
-				Msg("取消事件订阅失败")
+				Msg("failed to unsubscribe event")
 			return exception.NewBaseError(exception.StatusAgentControllerEventQueueError,
-				exception.WithMsg(fmt.Sprintf("取消事件订阅失败: topic=%s, err=%v", topic, err)),
+				exception.WithMsg(fmt.Sprintf("failed to unsubscribe event: topic=%s, err=%v", topic, err)),
 				exception.WithCause(err))
 		}
 		logger.Info(logComponent).
@@ -187,7 +187,7 @@ func (eq *EventQueue) Unsubscribe(ctx context.Context, agentID, sessionID string
 			Str("topic", topic).
 			Str("agent_id", agentID).
 			Str("session_id", sessionID).
-			Msg("事件订阅已取消")
+			Msg("event subscription canceled")
 	}
 
 	return nil
@@ -216,9 +216,9 @@ func (eq *EventQueue) PublishEvent(ctx context.Context, agentID string, sess ses
 			Str("session_id", sessionID).
 			Str("event_type_name", string(eventType)).
 			Err(err).
-			Msg("同步发布事件失败")
+			Msg("failed to publish event synchronously")
 		return exception.NewBaseError(exception.StatusAgentControllerEventQueueError,
-			exception.WithMsg(fmt.Sprintf("同步发布事件失败: topic=%s, err=%v", topic, err)),
+			exception.WithMsg(fmt.Sprintf("failed to publish event synchronously: topic=%s, err=%v", topic, err)),
 			exception.WithCause(err))
 	}
 
@@ -231,9 +231,9 @@ func (eq *EventQueue) PublishEvent(ctx context.Context, agentID string, sess ses
 			Str("agent_id", agentID).
 			Str("session_id", sessionID).
 			Err(err).
-			Msg("同步事件处理失败")
+			Msg("synchronous event handling failed")
 		return exception.NewBaseError(exception.StatusAgentControllerEventQueueError,
-			exception.WithMsg(fmt.Sprintf("同步事件处理失败: topic=%s, err=%v", topic, err)),
+			exception.WithMsg(fmt.Sprintf("failed to process event synchronously: topic=%s, err=%v", topic, err)),
 			exception.WithCause(err))
 	}
 
@@ -243,7 +243,7 @@ func (eq *EventQueue) PublishEvent(ctx context.Context, agentID string, sess ses
 		Str("agent_id", agentID).
 		Str("session_id", sessionID).
 		Str("event_type_name", string(eventType)).
-		Msg("同步事件发布并处理完成")
+		Msg("event published and handled synchronously")
 	return nil
 }
 
@@ -269,9 +269,9 @@ func (eq *EventQueue) PublishEventAsync(ctx context.Context, agentID string, ses
 			Str("session_id", sessionID).
 			Str("event_type_name", string(eventType)).
 			Err(err).
-			Msg("火忘发布事件失败")
+			Msg("failed to publish event fire-and-forget")
 		return exception.NewBaseError(exception.StatusAgentControllerEventQueueError,
-			exception.WithMsg(fmt.Sprintf("火忘发布事件失败: topic=%s, err=%v", topic, err)),
+			exception.WithMsg(fmt.Sprintf("failed to publish event asynchronously: topic=%s, err=%v", topic, err)),
 			exception.WithCause(err))
 	}
 
@@ -281,7 +281,7 @@ func (eq *EventQueue) PublishEventAsync(ctx context.Context, agentID string, ses
 		Str("agent_id", agentID).
 		Str("session_id", sessionID).
 		Str("event_type_name", string(eventType)).
-		Msg("火忘事件已发布")
+		Msg("event published fire-and-forget")
 	return nil
 }
 
@@ -333,11 +333,11 @@ func (eq *EventQueue) makeEventHandler(eventType schema.EventType) func(ctx cont
 		case schema.EventFollowUp:
 			return handler.HandleFollowUp(ctx, input)
 		default:
-			err := fmt.Errorf("未知事件类型: %s", eventType)
+			err := fmt.Errorf("unknown event type: %s", eventType)
 			logger.Error(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("event_type_name", string(eventType)).
-				Msg("未知事件类型")
+				Msg("unknown event type")
 			return nil, err
 		}
 	}

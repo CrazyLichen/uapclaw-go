@@ -30,7 +30,6 @@ type LocalCodeOperation struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	codeLogComponent = logger.ComponentAgentCore
 	// windowsCmdLimit Windows 命令行长度限制。
 	// Python: _WINDOWS_CMD_LIMIT = 8000。
 	windowsCmdLimit = 8000
@@ -60,11 +59,11 @@ func (c *LocalCodeOperation) ExecuteCode(ctx context.Context, code string, opts 
 
 	startTime := time.Now()
 	// Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
-	logger.Info(codeLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
 		Str("method_params", fmt.Sprintf("language=%s", o.Language)).
-		Msg("开始执行代码")
+		Msg("starting code execution")
 
 	if code == "" {
 		return &result.ExecuteCodeResult{
@@ -149,12 +148,12 @@ func (c *LocalCodeOperation) ExecuteCode(ctx context.Context, code string, opts 
 	}
 
 	// Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
-	logger.Info(codeLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
 		Str("method_result", fmt.Sprintf("exit_code=%d, stdout_length=%d", successResult.Data.ExitCode, len(successResult.Data.Stdout))).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
-		Msg("代码执行完成")
+		Msg("code execution completed")
 
 	return successResult, nil
 }

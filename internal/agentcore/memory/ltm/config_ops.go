@@ -131,7 +131,7 @@ func (m *LongTermMemory) SetConfig(cfg *config.MemoryEngineConfig) error {
 	if cfg.DefaultModelCfg != nil && cfg.DefaultModelClientCfg != nil {
 		llmInstance, llmErr := getLLMFromConfig(cfg.DefaultModelCfg, cfg.DefaultModelClientCfg)
 		if llmErr != nil {
-			logger.Error(logComponent).Err(llmErr).Msg("初始化默认 LLM 失败")
+			logger.Error(logComponent).Err(llmErr).Msg("initializationdefault LLM failed")
 		} else {
 			m.baseLLM = llmInstance
 		}
@@ -278,7 +278,7 @@ func deepCopyScopeConfig(cfg *config.MemoryScopeConfig) *config.MemoryScopeConfi
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		// M-01: fallback 补充所有字段 + Warn 日志
-		logger.Warn(logComponent).Err(err).Msg("deepCopyScopeConfig JSON 序列化失败，使用浅拷贝 fallback")
+		logger.Warn(logComponent).Err(err).Msg("deepCopyScopeConfig JSON serialization failed, using shallow copy fallback")
 		return &config.MemoryScopeConfig{
 			UserProfileDefinition:    cfg.UserProfileDefinition,
 			SemanticMemoryDefinition: cfg.SemanticMemoryDefinition,
@@ -290,7 +290,7 @@ func deepCopyScopeConfig(cfg *config.MemoryScopeConfig) *config.MemoryScopeConfi
 	}
 	copyCfg := &config.MemoryScopeConfig{}
 	if err := json.Unmarshal(data, copyCfg); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("deepCopyScopeConfig JSON 反序列化失败，使用浅拷贝 fallback")
+		logger.Warn(logComponent).Err(err).Msg("deepCopyScopeConfig JSON deserialization failed, using shallow copy fallback")
 		return &config.MemoryScopeConfig{
 			UserProfileDefinition:    cfg.UserProfileDefinition,
 			SemanticMemoryDefinition: cfg.SemanticMemoryDefinition,

@@ -274,7 +274,7 @@ func (o *OpenAIEmbedding) Dimension() int {
 				Str("model_provider", "openai").
 				Str("model_name", o.config.ModelName).
 				Err(err).
-				Msg("探测嵌入向量维度失败")
+				Msg("failed to detect embedding dimension")
 			return
 		}
 
@@ -284,7 +284,7 @@ func (o *OpenAIEmbedding) Dimension() int {
 		logger.Debug(logComponent).
 			Int("dimension", len(vec)).
 			Bool("matryoshka", o.matryoshkaDimension).
-			Msg("探测到嵌入向量维度")
+			Msg("embedding dimension detected")
 	})
 	return o.dimension
 }
@@ -306,7 +306,7 @@ func (o *OpenAIEmbedding) DimensionWithContext(ctx context.Context) (int, error)
 				Str("model_provider", "openai").
 				Str("model_name", o.config.ModelName).
 				Err(err).
-				Msg("探测嵌入向量维度失败")
+				Msg("failed to detect embedding dimension")
 			return
 		}
 
@@ -316,7 +316,7 @@ func (o *OpenAIEmbedding) DimensionWithContext(ctx context.Context) (int, error)
 		logger.Debug(logComponent).
 			Int("dimension", len(vec)).
 			Bool("matryoshka", o.matryoshkaDimension).
-			Msg("探测到嵌入向量维度")
+			Msg("embedding dimension detected")
 	})
 	if o.dimension == 0 {
 		return 0, fmt.Errorf("探测嵌入向量维度失败")
@@ -356,7 +356,7 @@ func (o *OpenAIEmbedding) callAPI(ctx context.Context, texts []string) ([][]floa
 				Int("attempt", attempt+1).
 				Int("max_retries", o.maxRetries).
 				Err(err).
-				Msg("OpenAI 嵌入请求失败")
+				Msg("OpenAI embedding request failed")
 			return nil, err
 		}
 
@@ -374,7 +374,7 @@ func (o *OpenAIEmbedding) callAPI(ctx context.Context, texts []string) ([][]floa
 				o.dimension = len(embeddings[0])
 				logger.Debug(logComponent).
 					Int("dimension", o.dimension).
-					Msg("探测到嵌入向量维度")
+					Msg("embedding dimension detected")
 			}
 		}
 

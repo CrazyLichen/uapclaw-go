@@ -242,7 +242,7 @@ func (o *ReflectOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) e
 	trajectories, _ := cecontext.GetTyped[[]string](rc, "trajectories")
 	playbook, playbookOK := rc.Get("playbook").(*Playbook)
 	if !playbookOK && rc.Get("playbook") != nil {
-		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+		logger.Warn(logComponent).Msg("Playbook type assertion failed, playbook in runtime_context is not *Playbook")
 	}
 	if playbook == nil {
 		playbook = NewPlaybook()
@@ -324,7 +324,7 @@ func (o *ParallelReflectOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 	trajectories, _ := cecontext.GetTyped[[]string](rc, "trajectories")
 	playbook, playbookOK := rc.Get("playbook").(*Playbook)
 	if !playbookOK && rc.Get("playbook") != nil {
-		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+		logger.Warn(logComponent).Msg("Playbook type assertion failed, playbook in runtime_context is not *Playbook")
 	}
 	if playbook == nil {
 		playbook = NewPlaybook()
@@ -418,7 +418,7 @@ func (o *CurateOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext) er
 	reflection, _ := rc.Get("reflection").(map[string]any)
 	playbook, playbookOK := rc.Get("playbook").(*Playbook)
 	if !playbookOK && rc.Get("playbook") != nil {
-		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+		logger.Warn(logComponent).Msg("Playbook type assertion failed, playbook in runtime_context is not *Playbook")
 	}
 	if playbook == nil {
 		playbook = NewPlaybook()
@@ -499,7 +499,7 @@ func (o *ParallelCurateOp) Execute(ctx context.Context, rc *cecontext.RuntimeCon
 	reflection, _ := rc.Get("reflection").(map[string]any)
 	playbook, playbookOK := rc.Get("playbook").(*Playbook)
 	if !playbookOK && rc.Get("playbook") != nil {
-		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+		logger.Warn(logComponent).Msg("Playbook type assertion failed, playbook in runtime_context is not *Playbook")
 	}
 	if playbook == nil {
 		playbook = NewPlaybook()
@@ -577,7 +577,7 @@ func (o *ApplyDeltaOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext
 	delta, _ := rc.Get("delta").(*DeltaBatch)
 	playbook, playbookOK := rc.Get("playbook").(*Playbook)
 	if !playbookOK && rc.Get("playbook") != nil {
-		logger.Warn(logComponent).Msg("Playbook 类型断言失败，runtime_context 中的 playbook 不是 *Playbook 类型")
+		logger.Warn(logComponent).Msg("Playbook type assertion failed, playbook in runtime_context is not *Playbook")
 	}
 	if playbook == nil {
 		playbook = NewPlaybook()

@@ -101,7 +101,7 @@ func BuildUserPrompt(content string, files map[string]any, channel string, langu
 	// 5. 序列化并返回
 	contextJSON, err := json.Marshal(userMessageContext)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("BuildUserPrompt 序列化失败")
+		logger.Error(logComponent).Err(err).Msg("BuildUserPrompt serialization failed")
 		return content
 	}
 
@@ -112,7 +112,7 @@ func BuildUserPrompt(content string, files map[string]any, channel string, langu
 		logger.Info(logComponent).
 			Str("event_type", "build_user_prompt_debug").
 			Str("final_prompt", finalPrompt).
-			Msg("[build_user_prompt][DEBUG] interaction_context 存在，最终 prompt")
+			Msg("[build_user_prompt][DEBUG] interaction_context present, final prompt")
 	}
 
 	return finalPrompt
@@ -138,6 +138,6 @@ func handleSkillsUseSlashCommand(query string) (skillsToUse []string, newQuery s
 		}
 	}
 
-	logger.Warn(logComponent).Str("query", stripped).Msg("无法解析 /skills use 命令")
+	logger.Warn(logComponent).Str("query", stripped).Msg("failed to parse /skills use command")
 	return nil, ""
 }

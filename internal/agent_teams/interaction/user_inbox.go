@@ -29,11 +29,6 @@ type UserInbox struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// inboxLogComponent 日志组件
-	inboxLogComponent = logger.ComponentChannel
-)
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -52,10 +47,10 @@ func NewUserInbox(messageManager *tools.TeamMessageManager) *UserInbox {
 //  2. if msg_id is None: return DeliverResult.failure(f"send_failed:{target}")
 //  3. return DeliverResult.success(msg_id)
 func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
-	logger.Debug(inboxLogComponent).Str("target", target).
+	logger.Debug(logComponent).Str("target", target).
 		Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("UserInbox: 点对点发送")
+		Msg("UserInbox: point-to-point send")
 	// Python 步骤 1-3
 	ctx := context.Background()
 	msgID, err := u.messageManager.SendMessage(ctx, body, target, agentteams.UserPseudoMemberName)
@@ -74,9 +69,9 @@ func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 //  2. if msg_id is None: return DeliverResult.failure("broadcast_failed")
 //  3. return DeliverResult.success(msg_id)
 func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
-	logger.Debug(inboxLogComponent).Str("from", agentteams.UserPseudoMemberName).
+	logger.Debug(logComponent).Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("UserInbox: 广播")
+		Msg("UserInbox: broadcast")
 	// Python 步骤 1-3
 	ctx := context.Background()
 	msgID, err := u.messageManager.BroadcastMessage(ctx, body, agentteams.UserPseudoMemberName)
@@ -98,8 +93,8 @@ func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 // 此通道不产生 bus message ID，成功时 MessageID 为 nil。
 func DeliverToLeader(deliverInput func(ctx context.Context, content string) error, body string) *DeliverResult {
 	// Python 步骤 1
-	logger.Debug(inboxLogComponent).Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("向 Leader 投递")
+	logger.Debug(logComponent).Str("body_len", fmt.Sprintf("%d", len(body))).
+		Msg("delivering to leader")
 
 	if deliverInput == nil {
 		reason := "deliver_to_leader_failed:no_deliver_fn"

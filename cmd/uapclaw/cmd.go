@@ -194,7 +194,7 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	envFile := workspace.EnvFile()
 	if _, err := os.Stat(envFile); err == nil {
 		if err := dotenv.Load(envFile); err != nil {
-			logger.Error(logComponentGateway).Err(err).Str("env_file", envFile).Msg("加载 .env 文件失败")
+			logger.Error(logComponentGateway).Err(err).Str("env_file", envFile).Msg("failed to load .env file")
 			return fmt.Errorf("加载 .env 文件失败: %w", err)
 		}
 	}
@@ -202,11 +202,11 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	// 5. 完整配置加载（等价 Python: get_config()）
 	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("创建配置失败")
+		logger.Error(logComponentGateway).Err(err).Msg("failed to create config")
 		return fmt.Errorf("创建配置失败: %w", err)
 	}
 	if _, err := cfg.Load(); err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("加载配置文件失败")
+		logger.Error(logComponentGateway).Err(err).Msg("failed to load config file")
 		return fmt.Errorf("加载配置文件失败: %w", err)
 	}
 
@@ -219,7 +219,7 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	fw := callback.GetCallbackFramework()
 	extRegistry, err := extensions.CreateInstance(fw, map[string]any{}, nil)
 	if err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("ExtensionRegistry 初始化失败")
+		logger.Error(logComponentGateway).Err(err).Msg("failed to initialize ExtensionRegistry")
 	}
 	_ = extRegistry
 	// ⤵️ 10.5.8: extManager := extensions.NewExtensionManager(extRegistry)
@@ -237,34 +237,34 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	// 创建 GatewayServer（AgentClient 会等待 AgentServer 就绪后发送 connection.ack）
 	gs, err := gateway.NewGatewayServer(cfg, agentClient)
 	if err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("创建 GatewayServer 失败")
+		logger.Error(logComponentGateway).Err(err).Msg("failed to create GatewayServer")
 		return fmt.Errorf("创建 GatewayServer 失败: %w", err)
 	}
 
 	logger.Info(logComponentGateway).
 		Str("version", version.Version).
-		Msg("uapclaw app 启动中")
+		Msg("uapclaw app starting")
 
 	// 启动 AgentServer（非阻塞，内部起 goroutine 运行主循环）
 	if err := agentServer.Start(ctx); err != nil {
-		logger.Error(logComponentAgentServer).Err(err).Msg("启动 AgentServer 失败")
+		logger.Error(logComponentAgentServer).Err(err).Msg("failed to start AgentServer")
 		return fmt.Errorf("启动 AgentServer 失败: %w", err)
 	}
 
 	// 启动 GatewayServer（HTTP + WebSocket）
 	// WebChannel.HandleWebSocket 会等待 AgentServer.WaitServerReady 后再发 connection.ack
 	if err := gs.Start(ctx); err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("启动 GatewayServer 失败")
+		logger.Error(logComponentGateway).Err(err).Msg("failed to start GatewayServer")
 		return fmt.Errorf("启动 GatewayServer 失败: %w", err)
 	}
 
 	// 等待退出信号
 	<-ctx.Done()
-	logger.Info(logComponentGateway).Msg("收到退出信号，正在关闭...")
+	logger.Info(logComponentGateway).Msg("received exit signal, shutting down...")
 
 	// 停止顺序：AgentServer（取消任务 + 清理 + 等主循环退出）→ GatewayServer（HTTP 优雅关闭）
 	if err := agentServer.Stop(); err != nil {
-		logger.Error(logComponentAgentServer).Err(err).Msg("AgentServer 停止失败")
+		logger.Error(logComponentAgentServer).Err(err).Msg("failed to stop AgentServer")
 	}
 	return gs.Stop()
 }

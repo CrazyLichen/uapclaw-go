@@ -179,7 +179,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 				Int("iteration", i).
 				Str("stage", "example").
 				Err(err).
-				Msg("示例阶段失败")
+				Msg("example phase failed")
 			// Python: optimize_tool 没有 try/except，失败时异常直接传播中断循环
 			return nil, err
 		}
@@ -188,7 +188,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 		logger.Info(logComponent).
 			Str("method", "OptimizeTool").
 			Int("iteration", i).
-			Msg("=== 示例阶段完成 ===")
+			Msg("=== example phase completed ===")
 
 		// Python: Stage 2 - Description
 		resultDesc, err := CustomizedPipeline(ctx, "description", tool, b.configDesc, toolCallable, b.model)
@@ -198,7 +198,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 				Int("iteration", i).
 				Str("stage", "description").
 				Err(err).
-				Msg("描述阶段失败")
+				Msg("description phase failed")
 			// Python: optimize_tool 没有 try/except，失败时异常直接传播中断循环
 			return nil, err
 		}
@@ -236,7 +236,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 		logger.Error(logComponent).
 			Str("method", "OptimizeTool").
 			Err(err).
-			Msg("描述审查失败")
+			Msg("description review failed")
 		return nil, err
 	}
 
@@ -249,7 +249,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 		logger.Error(logComponent).
 			Str("method", "OptimizeTool").
 			Err(err).
-			Msg("描述格式化失败")
+			Msg("description formatting failed")
 		return nil, err
 	}
 

@@ -128,7 +128,7 @@ func NewTeamRuntime(config RuntimeConfig) *TeamRuntime {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TEAM_RUNTIME_INIT_ERROR").
 				Str("team_id", config.TeamID).
-				Msg("创建 MessageBus 失败")
+				Msg("failed to create MessageBus")
 		} else {
 			tr.messageBus = bus
 		}
@@ -157,7 +157,7 @@ func (tr *TeamRuntime) Start(ctx context.Context) error {
 	logger.Info(logComponent).
 		Str("event_type", "TEAM_RUNTIME_STARTED").
 		Str("team_id", tr.teamID).
-		Msg("团队运行时已启动")
+		Msg("team runtime started")
 
 	return nil
 }
@@ -178,7 +178,7 @@ func (tr *TeamRuntime) Stop(ctx context.Context) error {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TEAM_RUNTIME_STOP_ERROR").
 				Str("team_id", tr.teamID).
-				Msg("团队运行时停止失败")
+				Msg("failed to stop team runtime")
 			return err
 		}
 	}
@@ -186,7 +186,7 @@ func (tr *TeamRuntime) Stop(ctx context.Context) error {
 	logger.Info(logComponent).
 		Str("event_type", "TEAM_RUNTIME_STOPPED").
 		Str("team_id", tr.teamID).
-		Msg("团队运行时已停止")
+		Msg("team runtime stopped")
 
 	return nil
 }
@@ -223,12 +223,12 @@ func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.Agen
 				logger.Debug(logComponent).Err(err).
 					Str("event_type", "AGENT_REGISTER_TO_RESOURCEMGR_EXISTS").
 					Str("agent_id", agentID).
-					Msg("Agent 已存在于 ResourceMgr，复用")
+					Msg("agent already exists in ResourceMgr, reusing")
 			} else {
 				logger.Error(logComponent).Err(err).
 					Str("event_type", "AGENT_REGISTER_TO_RESOURCEMGR_ERROR").
 					Str("agent_id", agentID).
-					Msg("注册 Agent 到 ResourceMgr 失败")
+					Msg("failed to register agent to ResourceMgr")
 				return exception.BuildError(exception.StatusAgentTeamAddRuntimeError,
 					exception.WithCause(err),
 					exception.WithParam("error_msg", fmt.Sprintf("注册 Agent '%s' 到 ResourceMgr 失败: %s", agentID, err.Error())),
@@ -241,7 +241,7 @@ func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.Agen
 		Str("event_type", "AGENT_REGISTERED").
 		Str("agent_id", agentID).
 		Str("team_id", tr.teamID).
-		Msg("Agent 已注册到团队运行时")
+		Msg("agent registered to team runtime")
 
 	return nil
 }
@@ -266,7 +266,7 @@ func (tr *TeamRuntime) UnregisterAgent(ctx context.Context, agentID string) (*ag
 		Str("event_type", "AGENT_UNREGISTERED").
 		Str("agent_id", agentID).
 		Str("team_id", tr.teamID).
-		Msg("Agent 已从团队运行时注销")
+		Msg("agent unregistered from team runtime")
 
 	return card, nil
 }
@@ -520,12 +520,12 @@ func (tr *TeamRuntime) wrapProvider(provider resources_manager.AgentProvider, ag
 				Str("event_type", "RUNTIME_BINDABLE_AUTO_BOUND").
 				Str("agent_id", agentID).
 				Str("team_id", tr.teamID).
-				Msg("自动绑定 CommunicableAgent")
+				Msg("auto-binding CommunicableAgent")
 		} else {
 			logger.Warn(logComponent).
 				Str("event_type", "RUNTIME_BINDABLE_NOT_IMPLEMENTED").
 				Str("agent_id", agentID).
-				Msg("Agent 未实现 RuntimeBindable，通信方法不可用")
+				Msg("agent does not implement RuntimeBindable, communication methods unavailable")
 		}
 		return agent, nil
 	}

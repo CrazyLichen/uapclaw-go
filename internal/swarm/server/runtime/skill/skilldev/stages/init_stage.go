@@ -34,7 +34,7 @@ func (h *InitStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevCon
 	logger.Info(logComponent).
 		Str("task_id", sctx.TaskID).
 		Str("mode", string(sctx.State.Mode)).
-		Msg("[InitStage] 任务模式判断完成")
+		Msg("[InitStage] task mode determination completed")
 
 	// 工作区已由 Pipeline 的 ensureLocal 创建，此处直接使用
 	resourcesDir := filepath.Join(sctx.Workspace, "resources")
@@ -87,7 +87,7 @@ func (h *InitStageHandler) extractResources(resources []any, destDir string) []s
 			logger.Warn(logComponent).
 				Str("name", name).
 				Err(err).
-				Msg("[InitStage] 资源文件 base64 解码失败")
+				Msg("[InitStage] resource file base64 decode failed")
 			continue
 		}
 		filePath := filepath.Join(destDir, name)
@@ -95,14 +95,14 @@ func (h *InitStageHandler) extractResources(resources []any, destDir string) []s
 			logger.Warn(logComponent).
 				Str("name", name).
 				Err(err).
-				Msg("[InitStage] 创建资源目录失败")
+				Msg("[InitStage] failed to create resource directory")
 			continue
 		}
 		if err := os.WriteFile(filePath, raw, 0o644); err != nil {
 			logger.Warn(logComponent).
 				Str("name", name).
 				Err(err).
-				Msg("[InitStage] 写入资源文件失败")
+				Msg("[InitStage] failed to write resource file")
 			continue
 		}
 		text := parseFileToText(filePath)
@@ -122,7 +122,7 @@ func (h *InitStageHandler) extractExistingSkill(_ map[string]any, _ string) *str
 	// ...
 	// 用 archive/zip 解压到 destDir
 	// 读取 SKILL.md 内容
-	logger.Warn(logComponent).Msg("[InitStage] extractExistingSkill 尚未实现")
+	logger.Warn(logComponent).Msg("[InitStage] extractExistingSkill not implemented")
 	return nil
 }
 
@@ -145,6 +145,6 @@ func parseFileToText(filePath string) string {
 	// 待实现: 其他格式
 	logger.Warn(logComponent).
 		Str("suffix", suffix).
-		Msg("[InitStage] 暂不支持的文件格式")
+		Msg("[InitStage] unsupported file format for now")
 	return ""
 }

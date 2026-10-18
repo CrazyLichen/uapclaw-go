@@ -63,24 +63,24 @@ func ensureJSONArguments(arguments string) string {
 	if repairErr == nil && repaired != "" {
 		if isJSONObjectMap(repaired) {
 			if repaired != text {
-				logger.Info(logComponent).Str("stage", "json_repair").Str("outcome", "success").Msg("ensureJSONArguments 阶段2修复成功")
+				logger.Info(logComponent).Str("stage", "json_repair").Str("outcome", "success").Msg("ensureJSONArguments phase 2 fix succeeded")
 			}
 			return repaired
 		}
 	}
-	logger.Warn(logComponent).Str("stage", "json_repair").Str("outcome", "failed").Msg("ensureJSONArguments 阶段2修复失败")
+	logger.Warn(logComponent).Str("stage", "json_repair").Str("outcome", "failed").Msg("ensureJSONArguments stage 2 repair failed")
 
 	// 阶段 3: 规则修复，对齐 Python: _fix_missing_quotes
 	fixed := fixMissingQuotes(text)
 	if fixed != text {
 		if isJSONObjectMap(fixed) {
-			logger.Info(logComponent).Str("stage", "rule_fix").Str("outcome", "success").Msg("ensureJSONArguments 阶段3修复成功")
+			logger.Info(logComponent).Str("stage", "rule_fix").Str("outcome", "success").Msg("ensureJSONArguments phase 3 fix succeeded")
 			return fixed
 		}
 	}
-	logger.Warn(logComponent).Str("stage", "rule_fix").Str("outcome", "failed").Msg("ensureJSONArguments 阶段3修复失败")
+	logger.Warn(logComponent).Str("stage", "rule_fix").Str("outcome", "failed").Msg("ensureJSONArguments stage 3 repair failed")
 
-	logger.Warn(logComponent).Str("outcome", "failed_all_stages").Msg("ensureJSONArguments 所有阶段修复失败")
+	logger.Warn(logComponent).Str("outcome", "failed_all_stages").Msg("ensureJSONArguments all stages repair failed")
 	return "{}"
 }
 
@@ -179,7 +179,7 @@ func fixIncompleteToolContext(ctx context.Context, modelCtx ceinterface.ModelCon
 				// 有未匹配的 tool_call → 插入占位 ToolMessage，对齐 Python: logger.info("Fixed incomplete tool context with placeholder messages")
 				insertPlaceholderToolMessages(ctx, modelCtx, toolIDCache, toolMessageCache, getPromptLanguage)
 				toolIDCache = nil
-				logger.Info(logComponent).Msg("修复不完整工具上下文：已插入占位 ToolMessage")
+				logger.Info(logComponent).Msg("fixing incomplete tool context: placeholder ToolMessage inserted")
 			}
 
 			// 记录新的 tool_calls，对齐 Python: tool_id_cache.append({"tool_call_id": ..., "tool_name": ...})
@@ -226,8 +226,7 @@ func fixIncompleteToolContext(ctx context.Context, modelCtx ceinterface.ModelCon
 		default:
 			if len(toolIDCache) > 0 {
 				insertPlaceholderToolMessages(ctx, modelCtx, toolIDCache, toolMessageCache, getPromptLanguage)
-				toolIDCache = nil
-				logger.Info(logComponent).Msg("修复不完整工具上下文：已插入占位 ToolMessage")
+				logger.Info(logComponent).Msg("fixing incomplete tool context: placeholder ToolMessage inserted")
 			}
 			_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{msg})
 		}
@@ -236,7 +235,7 @@ func fixIncompleteToolContext(ctx context.Context, modelCtx ceinterface.ModelCon
 	// 遍历结束后仍有未匹配的 tool_call
 	if len(toolIDCache) > 0 {
 		insertPlaceholderToolMessages(ctx, modelCtx, toolIDCache, toolMessageCache, getPromptLanguage)
-		logger.Info(logComponent).Msg("修复不完整工具上下文：尾部已插入占位 ToolMessage")
+		logger.Info(logComponent).Msg("fixing incomplete tool context: trailing placeholder ToolMessage inserted")
 	}
 
 	return nil

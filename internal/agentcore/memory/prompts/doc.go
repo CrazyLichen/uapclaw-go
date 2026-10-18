@@ -8,6 +8,7 @@
 //
 //	prompts/
 //	├── doc.go                      # 包文档
+//	├── embed.go                    # go:embed 嵌入的模板文件
 //	├── prompt_applier.go           # PromptApplier 单例（运行时读文件 + 缓存）
 //	├── fragment_memory_prompt.md   # 碎片记忆提取提示词
 //	├── memory_analysis_prompt.md   # 记忆分析提示词

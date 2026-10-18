@@ -46,7 +46,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 				Str("agent_id", a.card.ID).
 				Str("expected", "map[string]any").
 				Str("actual", fmt.Sprintf("%T", transformed)).
-				Msg("TransformIO 返回类型不匹配，使用原始输入")
+				Msg("TransformIO returned mismatched type, using original input")
 		}
 	}
 
@@ -72,7 +72,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 		logger.Error(logComponent).
 			Str("agent_id", a.card.ID).
 			Err(err).
-			Msg("Agent invoke 错误")
+			Msg("Agent invoke error")
 		return nil, exception.NewBaseError(exception.StatusAgentControllerRuntimeError,
 			exception.WithParam("error_msg", err.Error()),
 			exception.WithCause(err),
@@ -89,7 +89,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 				Str("agent_id", a.card.ID).
 				Str("expected", "map[string]any").
 				Str("actual", fmt.Sprintf("%T", transformed)).
-				Msg("TransformIO 返回类型不匹配，使用原始输出")
+				Msg("TransformIO returned mismatched type, using original output")
 		}
 	}
 
@@ -122,7 +122,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 				Str("agent_id", a.card.ID).
 				Str("expected", "map[string]any").
 				Str("actual", fmt.Sprintf("%T", transformed)).
-				Msg("TransformIO 返回类型不匹配，使用原始输入")
+				Msg("TransformIO returned mismatched type, using original input")
 		}
 	}
 
@@ -144,7 +144,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 		logger.Error(logComponent).
 			Str("agent_id", a.card.ID).
 			Err(err).
-			Msg("Agent stream 错误")
+			Msg("Agent stream error")
 		return nil, exception.NewBaseError(exception.StatusAgentControllerRuntimeError,
 			exception.WithParam("error_msg", err.Error()),
 			exception.WithCause(err),
@@ -166,7 +166,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 						Str("agent_id", a.card.ID).
 						Str("expected", "stream.Schema").
 						Str("actual", fmt.Sprintf("%T", transformed)).
-						Msg("TransformIO 返回类型不匹配，使用原始输出")
+						Msg("TransformIO returned mismatched type, using original output")
 				}
 			}
 			// ④ 发射后置事件 (逐项)
@@ -539,7 +539,7 @@ func (a *ReActAgent) innerStream(
 		// 捕获 panic 防止 goroutine 崩溃
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Error(logComponent).Any("panic", r).Msg("streamProcess 发生 panic")
+				logger.Error(logComponent).Any("panic", r).Msg("streamProcess panic occurred")
 				a.WriteInvokeResultToStream(ctx, map[string]any{
 					"output":      fmt.Sprintf("panic: %v", r),
 					"result_type": "error",
@@ -551,7 +551,7 @@ func (a *ReActAgent) innerStream(
 		result, err := a.Invoke(ctx, inputs, opts...)
 		if err != nil {
 			// 错误结果写入流
-			logger.Error(logComponent).Err(err).Str("event_type", "LLM_CALL_ERROR").Msg("streamProcess invoke 错误")
+			logger.Error(logComponent).Err(err).Str("event_type", "LLM_CALL_ERROR").Msg("streamProcess invoke error")
 			a.WriteInvokeResultToStream(ctx, map[string]any{
 				"output":      err.Error(),
 				"result_type": "error",
@@ -609,7 +609,7 @@ func (a *ReActAgent) reactLoop(
 		logger.Info(logComponent).
 			Int("iteration", iteration+1).
 			Int("max_iterations", maxIter).
-			Msg("ReAct 迭代")
+			Msg("ReAct iteration")
 
 		// steering 注入
 		if steeringMsgs := cbc.DrainSteering(); len(steeringMsgs) > 0 && modelCtx != nil {
@@ -652,7 +652,7 @@ func (a *ReActAgent) reactLoop(
 		// 执行工具（对齐 Python: 整体错误时终止循环）
 		results, err := a.executeToolCalls(ctx, cbc, aiMsg.ToolCalls, sess, modelCtx)
 		if err != nil {
-			logger.Error(logComponent).Str("event_type", "tool_execution_error").Int("iteration", iteration).Err(err).Msg("工具执行失败")
+			logger.Error(logComponent).Str("event_type", "tool_execution_error").Int("iteration", iteration).Err(err).Msg("toolexecution failed")
 			return nil, fmt.Errorf("工具执行失败: %w", err)
 		}
 
@@ -722,7 +722,7 @@ func (a *ReActAgent) executeToolCalls(
 			Str("event_type", "tool_call").
 			Str("tool_name", tc.Name).
 			Str("args_preview", argsPreview).
-			Msg("执行工具调用")
+			Msg("executing tool call")
 	}
 
 	am := a.getAbilityManager()

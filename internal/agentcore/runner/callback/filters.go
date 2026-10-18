@@ -256,7 +256,7 @@ func (f *CircuitBreakerFilter) RecordFailure(event string, callbackName string) 
 			Str("event", event).
 			Str("callback_name", callbackName).
 			Str("key", key).
-			Msg("断路器已打开")
+			Msg("circuit breaker opened")
 	}
 }
 
@@ -317,7 +317,7 @@ func (f *LoggingFilter) Filter(_ context.Context, event string, callbackName str
 		Str("event", event).
 		Str("callback_name", callbackName).
 		Any("data", data).
-		Msg("事件过滤日志")
+		Msg("event filter log")
 	return FilterResult{Action: FilterActionContinue}
 }
 

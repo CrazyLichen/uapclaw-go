@@ -101,7 +101,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 				Str("ability_name", a.Name).
 				Str("existing_id", existing.ID).
 				Str("new_id", a.ID).
-				Msg("检测到重复工具能力，保留已有能力，跳过新增")
+				Msg("duplicate tool ability detected, keeping existing, skipping add")
 			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_tool"}
 		}
 		am.tools[a.Name] = a
@@ -114,7 +114,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 				Str("ability_name", a.Name).
 				Str("existing_id", existing.ID).
 				Str("new_id", a.ID).
-				Msg("检测到重复工作流能力，保留已有能力，跳过新增")
+				Msg("duplicate workflow ability detected, keeping existing, skipping add")
 			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_workflow"}
 		}
 		am.workflows[a.Name] = a
@@ -127,7 +127,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 				Str("ability_name", a.Name).
 				Str("existing_id", existing.ID).
 				Str("new_id", a.ID).
-				Msg("检测到重复Agent能力，保留已有能力，跳过新增")
+				Msg("duplicate Agent ability detected, keeping existing, skipping add")
 			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_agent"}
 		}
 		am.agents[a.Name] = a
@@ -140,7 +140,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 				Str("ability_name", a.ServerName).
 				Str("existing_id", existing.ServerID).
 				Str("new_id", a.ServerID).
-				Msg("检测到重复MCP服务器能力，保留已有能力，跳过新增")
+				Msg("duplicate MCP server ability detected, keeping existing, skipping add")
 			return agentschema.AddAbilityResult{Name: a.ServerName, Added: false, Reason: "duplicate_mcp_server"}
 		}
 		am.mcpServers[a.ServerName] = a
@@ -153,7 +153,7 @@ func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResu
 		}
 		logger.Warn(logComponent).
 			Str("ability_type", fmt.Sprintf("%T", a)).
-			Msg("未知能力类型")
+			Msg("unknown ability type")
 		return agentschema.AddAbilityResult{Name: name, Added: false, Reason: "unknown_ability_type"}
 	}
 }
@@ -361,7 +361,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 					Str("server_name", mcpServerName).
 					Str("server_id", mcpServerID).
 					Err(mcpErr).
-					Msg("获取 MCP 工具信息失败")
+					Msg("failed to get MCP tool info")
 				continue
 			}
 			for _, mcpToolInfo := range mcpToolInfos {
@@ -596,7 +596,7 @@ func (am *AbilityManager) executeSingleToolCall(
 		logger.Error(logComponent).
 			Str("tool_name", toolName).
 			Err(err).
-			Msg("工具收到畸形参数")
+			Msg("tool received malformed parameters")
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityMalformedArguments,
 			toolCall.ID,
@@ -624,7 +624,7 @@ func (am *AbilityManager) executeSingleToolCall(
 		logger.Warn(logComponent).
 			Str("event_type", "mcp_tool_direct_server_name_call").
 			Str("tool_name", toolName).
-			Msg("MCP 工具调用使用了 server_name 而非 mcp_ 前缀工具名，尝试 fallback")
+			Msg("MCP tool invoke used server_name instead of mcp_ prefixed tool name, trying fallback")
 		return am.executeFallbackTool(ctx, toolCall, toolName, toolArgs, sess, tag)
 	}
 
@@ -689,7 +689,7 @@ func (am *AbilityManager) executeTool(
 		logger.Error(logComponent).
 			Str("tool_name", toolName).
 			Err(err).
-			Msg("工具执行错误")
+			Msg("tool execution error")
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityExecutionError,
 			toolCall.ID,
@@ -784,7 +784,7 @@ func (am *AbilityManager) executeWorkflow(
 		logger.Error(logComponent).
 			Str("workflow_name", toolName).
 			Err(err).
-			Msg("工作流执行错误")
+			Msg("workflow execution error")
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityExecutionError,
 			toolCall.ID,
@@ -900,7 +900,7 @@ func (am *AbilityManager) executeAgent(
 		logger.Error(logComponent).
 			Str("agent_name", toolName).
 			Err(err).
-			Msg("Agent 执行错误")
+			Msg("Agent execution error")
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityExecutionError,
 			toolCall.ID,
@@ -968,7 +968,7 @@ func (am *AbilityManager) executeFallbackTool(
 		logger.Error(logComponent).
 			Str("tool_name", toolName).
 			Err(invokeErr).
-			Msg("工具执行错误")
+			Msg("tool execution error")
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityExecutionError,
 			toolCall.ID,

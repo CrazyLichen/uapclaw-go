@@ -163,7 +163,7 @@ func (re *RailExecutor) Execute(
 				logger.Error(logComponent).
 					Str("event", string(re.OnException)).
 					Err(cbErr).
-					Msg("on_exception 回调出错")
+					Msg("on_exception callback errored")
 			}
 		}
 
@@ -242,7 +242,7 @@ func (re *RailExecutor) fireAfter(ctx context.Context, cbc *interfaces.AgentCall
 			logger.Error(logComponent).
 				Str("event", string(re.After)).
 				Err(afterErr).
-				Msg("after 回调出错，掩盖原始异常")
+				Msg("after callback errored, masking original exception")
 			return origErr
 		}
 		// after 回调出错且无原始异常 → 返回 after 错误

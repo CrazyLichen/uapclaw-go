@@ -164,7 +164,7 @@ func (mb *MessageBus) Start(ctx context.Context) error {
 		logger.Warn(logComponent).
 			Str("event_type", "MESSAGE_BUS_ALREADY_RUNNING").
 			Str("team_id", mb.teamID).
-			Msg("消息总线已在运行中")
+			Msg("message bus already running")
 		return nil
 	}
 
@@ -174,7 +174,7 @@ func (mb *MessageBus) Start(ctx context.Context) error {
 	logger.Info(logComponent).
 		Str("event_type", "MESSAGE_BUS_STARTED").
 		Str("team_id", mb.teamID).
-		Msg("消息总线已启动")
+		Msg("message bus started")
 
 	return nil
 }
@@ -204,7 +204,7 @@ func (mb *MessageBus) Stop(ctx context.Context) error {
 		logger.Error(logComponent).Err(err).
 			Str("event_type", "MESSAGE_BUS_STOP_ERROR").
 			Str("team_id", mb.teamID).
-			Msg("消息总线停止失败")
+			Msg("failed to stop message bus")
 		return exception.BuildError(
 			exception.StatusMessageQueueInitiationError,
 			exception.WithCause(err),
@@ -216,7 +216,7 @@ func (mb *MessageBus) Stop(ctx context.Context) error {
 	logger.Info(logComponent).
 		Str("event_type", "MESSAGE_BUS_STOPPED").
 		Str("team_id", mb.teamID).
-		Msg("消息总线已停止")
+		Msg("message bus stopped")
 
 	return nil
 }
@@ -240,7 +240,7 @@ func (mb *MessageBus) CleanupSession(ctx context.Context, sessionID string) erro
 					Str("event_type", "MESSAGE_BUS_CLEANUP_ERROR").
 					Str("topic", topic).
 					Str("session_id", sessionID).
-					Msg("清理会话订阅失败")
+					Msg("failed to clean up session subscriptions")
 			}
 		}
 	}
@@ -248,7 +248,7 @@ func (mb *MessageBus) CleanupSession(ctx context.Context, sessionID string) erro
 	logger.Info(logComponent).
 		Str("event_type", "MESSAGE_BUS_SESSION_CLEANED").
 		Str("session_id", sessionID).
-		Msg("消息总会话清理完成")
+		Msg("message bus total session cleanup completed")
 
 	return nil
 }
@@ -295,7 +295,7 @@ func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, s
 			Str("sender", sender).
 			Str("recipient", recipient).
 			Str("message_id", envelope.MessageID).
-			Msg("P2P 消息发送失败")
+			Msg("P2P message send failed")
 		return nil, exception.BuildError(
 			exception.StatusMessageQueueTopicMessageProductionError,
 			exception.WithCause(err),
@@ -319,7 +319,7 @@ func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, s
 			Str("sender", sender).
 			Str("recipient", recipient).
 			Str("message_id", envelope.MessageID).
-			Msg("P2P 消息响应等待失败")
+			Msg("P2P message response wait failed")
 		return nil, exception.BuildError(
 			exception.StatusMessageQueueMessageProcessExecutionError,
 			exception.WithCause(err),
@@ -332,7 +332,7 @@ func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, s
 		Str("sender", sender).
 		Str("recipient", recipient).
 		Str("message_id", envelope.MessageID).
-		Msg("P2P 消息发送并收到响应")
+		Msg("P2P message sent and response received")
 
 	return result, nil
 }
@@ -379,7 +379,7 @@ func (mb *MessageBus) Publish(ctx context.Context, message any, topicID string, 
 			Str("sender", sender).
 			Str("topic_id", topicID).
 			Str("message_id", envelope.MessageID).
-			Msg("Pub-Sub 消息发布失败")
+			Msg("Pub-Sub message publish failed")
 		return exception.BuildError(
 			exception.StatusMessageQueueTopicMessageProductionError,
 			exception.WithCause(err),
@@ -394,7 +394,7 @@ func (mb *MessageBus) Publish(ctx context.Context, message any, topicID string, 
 		Str("sender", sender).
 		Str("topic_id", topicID).
 		Str("message_id", envelope.MessageID).
-		Msg("Pub-Sub 消息发布成功")
+		Msg("Pub-Sub message published")
 
 	return nil
 }
@@ -512,7 +512,7 @@ func (mb *MessageBus) ensureSubscription(ctx context.Context, topic string) erro
 	logger.Info(logComponent).
 		Str("event_type", "MESSAGE_BUS_SUBSCRIPTION_ENSURED").
 		Str("topic", topic).
-		Msg("消息总线订阅已确保激活")
+		Msg("message bus subscription ensured active")
 
 	return nil
 }
@@ -527,7 +527,7 @@ func (mb *MessageBus) handleP2PMessage(ctx context.Context, payload map[string]a
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("event_type", "P2P_HANDLE_ERROR").
-			Msg("提取 P2P 消息信封失败")
+			Msg("failed to extract P2P message envelope")
 		return nil, exception.BuildError(
 			exception.StatusMessageQueueMessageProcessExecutionError,
 			exception.WithCause(err),
@@ -548,7 +548,7 @@ func (mb *MessageBus) handlePubsubMessage(ctx context.Context, payload map[strin
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("event_type", "PUBSUB_HANDLE_ERROR").
-			Msg("提取 Pub-Sub 消息信封失败")
+			Msg("failed to extract Pub-Sub message envelope")
 		// 火忘语义：只记日志，吞掉错误
 		return nil, nil
 	}
@@ -558,7 +558,7 @@ func (mb *MessageBus) handlePubsubMessage(ctx context.Context, payload map[strin
 			Str("event_type", "PUBSUB_ROUTE_ERROR").
 			Str("topic_id", envelope.TopicID).
 			Str("message_id", envelope.MessageID).
-			Msg("Pub-Sub 消息路由失败")
+			Msg("Pub-Sub message routing failed")
 		// 火忘语义：只记日志，吞掉错误
 		return nil, nil
 	}

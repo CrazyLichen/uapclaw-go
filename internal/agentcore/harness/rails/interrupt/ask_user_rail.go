@@ -56,8 +56,6 @@ type AskUserRail struct {
 // _ 编译时验证 AskUserRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*AskUserRail)(nil)
 
-var askUserRailLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAskUserRail 创建 AskUserRail 实例。
@@ -97,10 +95,10 @@ func (r *AskUserRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) e
 	// 从 ask_user 子包创建空壳工具（对齐 Python AskUserTool.__init__）
 	askUserTool, err := askuser.NewAskUserTool(language, agentID)
 	if err != nil {
-		logger.Warn(askUserRailLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "ask_user_rail_init").
 			Err(err).
-			Msg("创建 AskUserTool 失败")
+			Msg("failed to create AskUserTool")
 		return fmt.Errorf("创建 AskUserTool 失败: %w", err)
 	}
 	r.tools = []tool.Tool{askUserTool}
@@ -117,9 +115,9 @@ func (r *AskUserRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) e
 		}
 	}
 
-	logger.Info(askUserRailLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "ask_user_rail_init").
-		Msg("AskUserRail 已注册 ask_user 工具")
+		Msg("AskUserRail registered ask_user tool")
 
 	return nil
 }
@@ -138,10 +136,10 @@ func (r *AskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		func(t tool.Tool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(askUserRailLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "ask_user_rail_uninit").
 						Str("tool_name", t.Card().Name).
-						Msgf("注销工具失败: %v", rec)
+						Msgf("failed to unregister tool: %v", rec)
 				}
 			}()
 			if am != nil {
@@ -154,9 +152,9 @@ func (r *AskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	}
 	r.tools = nil
 
-	logger.Info(askUserRailLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "ask_user_rail_uninit").
-		Msg("AskUserRail 注销完成")
+		Msg("AskUserRail unregistered")
 
 	return nil
 }
@@ -219,9 +217,9 @@ func (r *AskUserRail) resolveAskUserInterrupt(
 	// Python: try/except Exception：异常时回退到 interrupt
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(askUserRailLogComponent).
+			logger.Warn(logComponent).
 				Str("event_type", "ask_user_rail_resolve_interrupt").
-				Msgf("解析用户输入异常，回退到 interrupt: %v", rec)
+				Msgf("failed to parse user input, falling back to interrupt: %v", rec)
 			decision = r.Interrupt(r.BuildAskRequest(toolCall))
 		}
 	}()

@@ -35,9 +35,6 @@ type TenantAgentPool struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// tapLogComponent 日志组件
-const tapLogComponent = logger.ComponentAgentServer
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // tenantAgentPoolSingleton 全局 TenantAgentPool 单例持有器。
@@ -50,7 +47,7 @@ var tenantAgentPoolSingleton utils.Singleton[TenantAgentPool]
 // Python: TenantAgentPool.get_instance()
 func GetInstance() *TenantAgentPool {
 	return tenantAgentPoolSingleton.Get(func() *TenantAgentPool {
-		logger.Info(tapLogComponent).Msg("[TenantAgentPool] 已创建单例实例")
+		logger.Info(logComponent).Msg("[TenantAgentPool] singleton instance created")
 		return &TenantAgentPool{
 			agentManager: NewAgentManager(),
 		}
@@ -60,22 +57,22 @@ func GetInstance() *TenantAgentPool {
 // ResetInstance 重置单例（仅用于测试）。
 // Python: TenantAgentPool.reset_instance()
 func ResetInstance() {
-	logger.Info(tapLogComponent).
-		Msg("[TenantAgentPool] 正在重置单例实例")
+	logger.Info(logComponent).
+		Msg("[TenantAgentPool] resetting singleton instance")
 	tenantAgentPoolSingleton.Reset()
 }
 
 // ProcessMessage 处理非流式请求（简单分发到 AgentManager）。
 // Python: TenantAgentPool.process_message(request)
 func (p *TenantAgentPool) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	logger.Info(tapLogComponent).
+	logger.Info(logComponent).
 		Str("request_id", request.RequestID).
 		Str("channel_id", request.ChannelID).
 		Msg("[TenantAgentPool] process_message called")
 
 	resp, err := p.agentManager.ProcessMessage(ctx, request)
 	if err != nil {
-		logger.Error(tapLogComponent).
+		logger.Error(logComponent).
 			Err(err).
 			Str("request_id", request.RequestID).
 			Str("channel_id", request.ChannelID).
@@ -88,14 +85,14 @@ func (p *TenantAgentPool) ProcessMessage(ctx context.Context, request *schema.Ag
 // ProcessMessageStream 处理流式请求（简单分发到 AgentManager）。
 // Python: TenantAgentPool.process_message_stream(request)
 func (p *TenantAgentPool) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
-	logger.Info(tapLogComponent).
+	logger.Info(logComponent).
 		Str("request_id", request.RequestID).
 		Str("channel_id", request.ChannelID).
 		Msg("[TenantAgentPool] process_message_stream called")
 
 	ch, err := p.agentManager.ProcessMessageStream(ctx, request)
 	if err != nil {
-		logger.Error(tapLogComponent).
+		logger.Error(logComponent).
 			Err(err).
 			Str("request_id", request.RequestID).
 			Str("channel_id", request.ChannelID).
@@ -109,13 +106,13 @@ func (p *TenantAgentPool) ProcessMessageStream(ctx context.Context, request *sch
 // Python: TenantAgentPool.cleanup()
 // 同时实现 utils.resettable 接口，供 Singleton.Reset 时自动调用。
 func (p *TenantAgentPool) Cleanup() error {
-	logger.Info(tapLogComponent).Msg("[TenantAgentPool] 正在清理...")
+	logger.Info(logComponent).Msg("[TenantAgentPool] cleaning up...")
 	err := p.agentManager.Cleanup()
 	if err != nil {
-		logger.Error(tapLogComponent).Err(err).Msg("[TenantAgentPool] 清理失败")
+		logger.Error(logComponent).Err(err).Msg("[TenantAgentPool] cleanup failed")
 		return err
 	}
-	logger.Info(tapLogComponent).Msg("[TenantAgentPool] 清理完成")
+	logger.Info(logComponent).Msg("[TenantAgentPool] cleanup completed")
 	return nil
 }
 

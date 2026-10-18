@@ -10,7 +10,6 @@ import (
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -469,6 +468,3 @@ func renderRole(role any) string {
 	}
 	return fmt.Sprintf("%v", role)
 }
-
-// 确保 logComponent 被引用
-var _ = logger.ComponentChannel

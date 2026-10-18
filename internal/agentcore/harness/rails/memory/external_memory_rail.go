@@ -107,8 +107,6 @@ const (
 // _ 编译时验证 ExternalMemoryRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*ExternalMemoryRail)(nil)
 
-var extMemoryLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewExternalMemoryRail 创建 ExternalMemoryRail 实例。
@@ -180,10 +178,10 @@ func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			func(name string) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(extMemoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "external_memory_rail_uninit").
 							Str("tool_name", name).
-							Msgf("从 ability_manager 移除工具失败: %v", rec)
+							Msgf("failed to remove tool from ability_manager: %v", rec)
 					}
 				}()
 				am.Remove(name)
@@ -199,10 +197,10 @@ func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			func(toolID string) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(extMemoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "external_memory_rail_uninit").
 							Str("tool_id", toolID).
-							Msgf("从 resource_mgr 移除工具失败: %v", rec)
+							Msgf("failed to remove tool from resource_mgr: %v", rec)
 					}
 				}()
 				_, _ = resourceMgr.RemoveTool([]string{toolID})
@@ -228,10 +226,10 @@ func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	if r.provider != nil {
 		sessionEndCtx, cancel := context.WithTimeout(context.Background(), externalMemoryShutdownTimeout)
 		if err := r.provider.OnSessionEnd(sessionEndCtx, nil); err != nil {
-			logger.Warn(extMemoryLogComponent).
+			logger.Warn(logComponent).
 				Str("event_type", "external_memory_rail_uninit").
 				Err(err).
-				Msg("Provider on_session_end 失败")
+				Msg("provider on_session_end failed")
 		}
 		cancel()
 	}
@@ -240,15 +238,15 @@ func (r *ExternalMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), externalMemoryShutdownTimeout)
 	defer cancel()
 	if err := r.provider.Shutdown(shutdownCtx); err != nil {
-		logger.Warn(extMemoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "external_memory_rail_uninit").
 			Err(err).
-			Msg("Provider shutdown 失败")
+			Msg("provider shutdown failed")
 	}
 
 	// 7. 调用基类 MemoryRail.Uninit 清理通用记忆工具
 	if err := r.MemoryRail.Uninit(agent); err != nil {
-		logger.Error(extMemoryLogComponent).Err(err).Msg("MemoryRail.Uninit 失败")
+		logger.Error(logComponent).Err(err).Msg("MemoryRail.Uninit failed")
 	}
 
 	return nil
@@ -270,18 +268,18 @@ func (r *ExternalMemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterfa
 			ext.WithScopeID(r.scopeID),
 			ext.WithSessionID(r.sessionID),
 		); err != nil {
-			logger.Error(extMemoryLogComponent).
+			logger.Error(logComponent).
 				Str("event_type", "external_memory_rail_before_invoke").
 				Str("provider", r.provider.Name()).
 				Err(err).
-				Msg("Provider 初始化失败")
+				Msg("provider initialization failed")
 			return nil // 不阻断，降级运行
 		}
 		r.initialized = true
-		logger.Info(extMemoryLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "external_memory_rail_before_invoke").
 			Str("provider", r.provider.Name()).
-			Msg("Provider 初始化成功")
+			Msg("provider initialized")
 	}
 
 	return nil
@@ -330,16 +328,16 @@ func (r *ExternalMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinte
 	if err != nil {
 		if ctx.Err() == nil && prefetchCtx.Err() != nil {
 			// prefetch 自身超时
-			logger.Warn(extMemoryLogComponent).
+			logger.Warn(logComponent).
 				Str("event_type", "external_memory_rail_prefetch_timeout").
 				Str("provider", r.provider.Name()).
-				Msg("Prefetch 超时")
+				Msg("prefetch timed out")
 		} else {
-			logger.Error(extMemoryLogComponent).
+			logger.Error(logComponent).
 				Str("event_type", "external_memory_rail_prefetch_failed").
 				Str("provider", r.provider.Name()).
 				Err(err).
-				Msg("Prefetch 失败")
+				Msg("prefetch failed")
 		}
 		return nil
 	}
@@ -397,9 +395,9 @@ func (r *ExternalMemoryRail) AfterInvoke(ctx context.Context, cbc *agentinterfac
 	case <-r.syncDone:
 		// 上一次已完成
 	case <-time.After(externalMemorySyncWaitTimeout):
-		logger.Warn(extMemoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "external_memory_rail_sync_wait_timeout").
-			Msg("等待上一次 SyncTurn 超时 5s，继续执行")
+			Msg("timed out waiting for previous SyncTurn (5s), continuing")
 	}
 
 	// 启动新的 sync goroutine
@@ -414,7 +412,7 @@ func (r *ExternalMemoryRail) AfterInvoke(ctx context.Context, cbc *agentinterfac
 		rail := r
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Warn(extMemoryLogComponent).
+				logger.Warn(logComponent).
 					Any("recover", rec).
 					Str("event_type", "external_memory_rail_sync_panic").
 					Msg("AfterInvoke sync goroutine panic recovered")
@@ -440,18 +438,18 @@ func (r *ExternalMemoryRail) AfterInvoke(ctx context.Context, cbc *agentinterfac
 			r.syncConsecutiveFailures++
 			if r.syncConsecutiveFailures >= externalMemorySyncBreakerThreshold {
 				r.syncBreakerUntil = time.Now().Add(externalMemorySyncBreakerCooldown)
-				logger.Warn(extMemoryLogComponent).
+				logger.Warn(logComponent).
 					Str("event_type", "external_memory_rail_sync_breaker_open").
 					Int("consecutive_failures", r.syncConsecutiveFailures).
 					Dur("cooldown", externalMemorySyncBreakerCooldown).
 					Err(err).
-					Msg("SyncTurn 熔断器开启")
+					Msg("SyncTurn circuit breaker open")
 			} else {
-				logger.Warn(extMemoryLogComponent).
+				logger.Warn(logComponent).
 					Str("event_type", "external_memory_rail_sync_failed").
 					Int("consecutive_failures", r.syncConsecutiveFailures).
 					Err(err).
-					Msg("SyncTurn 失败")
+					Msg("SyncTurn failed")
 			}
 			r.syncMu.Unlock()
 		} else {
@@ -590,9 +588,9 @@ func paramTypeFromString(s string) cschema.ParamType {
 func (r *ExternalMemoryRail) registerProviderTools(agent agentinterfaces.BaseAgent) {
 	am := agent.AbilityManager()
 	if am == nil {
-		logger.Warn(extMemoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "external_memory_rail_register_tools").
-			Msg("Agent 无 ability_manager，跳过工具注册")
+			Msg("agent has no ability_manager, skipping tool registration")
 		return
 	}
 
@@ -616,26 +614,26 @@ func (r *ExternalMemoryRail) registerProviderTools(agent agentinterfaces.BaseAge
 			func(pt *providerTool) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(extMemoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "external_memory_rail_register_tools").
 							Str("tool_id", pt.Card().ID).
-							Msgf("注册工具到 resource_mgr 失败: %v", rec)
+							Msgf("failed to register tool to resource_mgr: %v", rec)
 					}
 				}()
 				existing, err := resourceMgr.GetTool([]string{pt.Card().ID})
 				if err != nil {
-					logger.Warn(extMemoryLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "external_memory_rail_register_tools").
 						Str("tool_id", pt.Card().ID).
 						Err(err).
-						Msg("查询 resource_mgr 已有工具失败，跳过注册")
+						Msg("failed to query existing tools in resource_mgr, skipping registration")
 				} else if len(existing) == 0 {
 					if addErr := resourceMgr.AddTool(pt); addErr != nil {
-						logger.Warn(extMemoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "external_memory_rail_register_tools").
 							Str("tool_id", pt.Card().ID).
 							Err(addErr).
-							Msg("注册工具到 resource_mgr 失败")
+							Msg("failed to register tool with resource_mgr")
 					} else {
 						r.ownedToolIDs[pt.Card().ID] = struct{}{}
 					}
@@ -649,19 +647,19 @@ func (r *ExternalMemoryRail) registerProviderTools(agent agentinterfaces.BaseAge
 		func(pt *providerTool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(extMemoryLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "external_memory_rail_register_tools").
 						Str("tool_name", pt.Card().Name).
-						Msgf("注册工具到 ability_manager 失败: %v", rec)
+						Msgf("failed to register tool to ability_manager: %v", rec)
 				}
 			}()
 			result := am.Add(pt.Card())
 			if result.Added {
 				r.ownedToolNames[pt.Card().Name] = struct{}{}
-				logger.Info(extMemoryLogComponent).
+				logger.Info(logComponent).
 					Str("event_type", "external_memory_rail_register_tools").
 					Str("tool_name", pt.Card().Name).
-					Msg("注册工具成功")
+					Msg("tool registered")
 			}
 		}(pt)
 	}
@@ -722,10 +720,10 @@ func resolveUserTextForMemory(cbc *agentinterfaces.AgentCallbackContext) string 
 	}
 
 	// Python: logger.warning("[ExternalMemoryRail] Cannot resolve user text for memory. ...")
-	logger.Warn(extMemoryLogComponent).
+	logger.Warn(logComponent).
 		Str("event_type", "external_memory_rail_resolve_user_text").
 		Str("input_kind", inputs.EventKind()).
-		Msg("无法从回调上下文解析用户文本")
+		Msg("failed to resolve user text from callback context")
 
 	return ""
 }

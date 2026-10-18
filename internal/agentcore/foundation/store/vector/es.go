@@ -82,9 +82,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// esLogComponent ES 日志组件
-var esLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithESIndexPrefix 设置 ES 索引名前缀
@@ -130,7 +127,7 @@ func (s *ESVectorStore) Close() {
 	}
 	// 清空元数据缓存（对齐 Python 实现）
 	s.metadataCache = make(map[string]map[string]any)
-	logger.Info(esLogComponent).Str("action", "close").Msg("ES 客户端连接已关闭")
+	logger.Info(logComponent).Str("action", "close").Msg("ES client connection closed")
 }
 
 // CreateCollection 创建集合（ES 索引）。
@@ -160,10 +157,10 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 		return fmt.Errorf("CreateCollection: %w", err)
 	}
 	if exists {
-		logger.Info(esLogComponent).
+		logger.Info(logComponent).
 			Str("collection_name", collectionName).
 			Str("index_name", indexName).
-			Msg("集合已存在，跳过创建")
+			Msg("collection already exists, skipping creation")
 		return nil
 	}
 
@@ -192,10 +189,10 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 	}
 	resp, err := c.Do(ctx, &req)
 	if err != nil {
-		logger.Error(esLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "STORE_CREATE_ERROR").
-			Msg("创建集合失败")
+			Msg("failed to create collection")
 		return fmt.Errorf("CreateCollection: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -204,18 +201,18 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 		body, _ := io.ReadAll(resp.Body)
 		// 并发创建时可能因索引已存在返回 resource_already_exists_exception，静默返回（对齐 Python 实现）
 		if strings.Contains(string(body), "resource_already_exists_exception") {
-			logger.Warn(esLogComponent).
+			logger.Warn(logComponent).
 				Str("collection_name", collectionName).
 				Str("status", resp.Status()).
-				Msg("集合已存在（并发创建），跳过")
+				Msg("collection already exists (concurrent creation), skipping")
 			return nil
 		}
-		logger.Error(esLogComponent).
+		logger.Error(logComponent).
 			Str("collection_name", collectionName).
 			Str("event_type", "STORE_CREATE_ERROR").
 			Str("status", resp.Status()).
 			Str("response", string(body)).
-			Msg("创建集合失败")
+			Msg("failed to create collection")
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("ES 创建索引失败: %s", string(body))),
 		)
@@ -239,20 +236,20 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 		metadata["es_index_config"] = vectorFieldConfig
 	}
 	if err := esStoreMetadata(ctx, c, indexName, metadata); err != nil {
-		logger.Warn(esLogComponent).Err(err).
+		logger.Warn(logComponent).Err(err).
 			Str("collection_name", collectionName).
-			Msg("存储集合元数据失败，非致命错误")
+			Msg("failed to store collection metadata, non-fatal")
 	}
 	// 写入缓存（对齐 Python 实现）
 	s.mu.Lock()
 	s.metadataCache[indexName] = metadata
 	s.mu.Unlock()
 
-	logger.Info(esLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Str("index_name", indexName).
 		Str("distance_metric", distanceMetric).
-		Msg("创建集合成功")
+		Msg("collection created successfully")
 
 	return nil
 }
@@ -275,31 +272,31 @@ func (s *ESVectorStore) DeleteCollection(ctx context.Context, collectionName str
 		return fmt.Errorf("DeleteCollection: %w", err)
 	}
 	if !exists {
-		logger.Warn(esLogComponent).
+		logger.Warn(logComponent).
 			Str("collection_name", collectionName).
-			Msg("集合不存在，跳过删除")
+			Msg("collection does not exist, skipping deletion")
 		return nil
 	}
 
 	req := esapi.IndicesDeleteRequest{Index: []string{indexName}}
 	resp, err := c.Do(ctx, &req)
 	if err != nil {
-		logger.Error(esLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "STORE_DELETE_ERROR").
-			Msg("删除集合失败")
+			Msg("failed to delete collection")
 		return fmt.Errorf("DeleteCollection: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.IsError() {
 		body, _ := io.ReadAll(resp.Body)
-		logger.Error(esLogComponent).
+		logger.Error(logComponent).
 			Str("collection_name", collectionName).
 			Str("event_type", "STORE_DELETE_ERROR").
 			Str("status", resp.Status()).
 			Str("response", string(body)).
-			Msg("删除集合失败")
+			Msg("failed to delete collection")
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("ES 删除索引失败: %s", string(body))),
 		)
@@ -310,10 +307,10 @@ func (s *ESVectorStore) DeleteCollection(ctx context.Context, collectionName str
 	delete(s.metadataCache, indexName)
 	s.mu.Unlock()
 
-	logger.Info(esLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Str("index_name", indexName).
-		Msg("删除集合成功")
+		Msg("collection deleted successfully")
 
 	return nil
 }
@@ -404,36 +401,36 @@ func (s *ESVectorStore) AddDocs(ctx context.Context, collectionName string, docs
 		req := esapi.BulkRequest{Body: body}
 		respBody, err := esDoRequest(ctx, c, &req)
 		if err != nil {
-			logger.Error(esLogComponent).Err(err).
+			logger.Error(logComponent).Err(err).
 				Str("collection_name", collectionName).
 				Int("doc_count", len(docs)).
 				Int("batch_size", batchSize).
 				Str("event_type", "STORE_WRITE_ERROR").
-				Msg("插入文档失败")
+				Msg("failed to insert documents")
 			return fmt.Errorf("AddDocs: %w", err)
 		}
 
 		// 检查 bulk 响应中的错误
 		if errs, ok := respBody["errors"].(bool); ok && errs {
-			logger.Warn(esLogComponent).
+			logger.Warn(logComponent).
 				Str("collection_name", collectionName).
 				Interface("response", respBody).
-				Msg("批量插入部分文档失败")
+				Msg("batch insert partially failed")
 		}
 	}
 
 	// 刷新索引使文档可搜索
 	if err := s.esIndicesRefresh(ctx, c, indexName); err != nil {
-		logger.Warn(esLogComponent).Err(err).
+		logger.Warn(logComponent).Err(err).
 			Str("collection_name", collectionName).
-			Msg("刷新索引失败，非致命错误")
+			Msg("failed to refresh index, non-fatal")
 	}
 
-	logger.Info(esLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Int("doc_count", len(docs)).
 		Int("batch_size", batchSize).
-		Msg("插入文档成功")
+		Msg("documents inserted successfully")
 
 	return nil
 }
@@ -530,10 +527,10 @@ func (s *ESVectorStore) Search(ctx context.Context, collectionName string, query
 
 	respBody, err := esDoRequest(ctx, c, &req)
 	if err != nil {
-		logger.Error(esLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "STORE_SEARCH_ERROR").
-			Msg("搜索失败")
+			Msg("search failed")
 		return nil, fmt.Errorf("Search: %w", err)
 	}
 
@@ -580,12 +577,12 @@ func (s *ESVectorStore) Search(ctx context.Context, collectionName string, query
 		})
 	}
 
-	logger.Info(esLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Int("top_k", topK).
 		Str("distance_metric", distanceMetric).
 		Int("result_count", len(results)).
-		Msg("搜索完成")
+		Msg("search completed")
 
 	return results, nil
 }
@@ -628,36 +625,36 @@ func (s *ESVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName stri
 		req := esapi.BulkRequest{Body: body}
 		respBody, err := esDoRequest(ctx, c, &req)
 		if err != nil {
-			logger.Error(esLogComponent).Err(err).
+			logger.Error(logComponent).Err(err).
 				Str("collection_name", collectionName).
 				Int("batch_start", i).
 				Int("batch_size", len(batch)).
 				Str("event_type", "STORE_DELETE_ERROR").
-				Msg("按 ID 删除文档批次失败")
+				Msg("failed to delete document batch by ID")
 			return fmt.Errorf("DeleteDocsByIDs batch %d-%d: %w", i, end, err)
 		}
 
 		if errs, ok := respBody["errors"].(bool); ok && errs {
-			logger.Warn(esLogComponent).
+			logger.Warn(logComponent).
 				Str("collection_name", collectionName).
 				Int("batch_start", i).
 				Interface("response", respBody).
-				Msg("批量删除部分文档失败")
+				Msg("batch delete partially failed")
 		}
 	}
 
 	// 刷新索引
 	if err := s.esIndicesRefresh(ctx, c, indexName); err != nil {
-		logger.Warn(esLogComponent).Err(err).
+		logger.Warn(logComponent).Err(err).
 			Str("collection_name", collectionName).
-			Msg("刷新索引失败，非致命错误")
+			Msg("failed to refresh index, non-fatal")
 	}
 
-	logger.Info(esLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Int("id_count", len(ids)).
 		Int("batch_size", batchSize).
-		Msg("按 ID 删除文档成功")
+		Msg("documents deleted by ID successfully")
 
 	return nil
 }
@@ -700,17 +697,17 @@ func (s *ESVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName 
 
 	_, err = esDoRequest(ctx, c, &req)
 	if err != nil {
-		logger.Error(esLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "STORE_DELETE_ERROR").
-			Msg("按过滤条件删除文档失败")
+			Msg("failed to delete documents by filter")
 		return fmt.Errorf("DeleteDocsByFilters: %w", err)
 	}
 
-	logger.Info(esLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Int("filter_count", len(filters)).
-		Msg("按过滤条件删除文档成功")
+		Msg("documents deleted by filter successfully")
 
 	return nil
 }
@@ -755,7 +752,7 @@ func (s *ESVectorStore) UpdateSchema(ctx context.Context, collectionName string,
 	newSchema, err := ComputeNewSchema(oldSchema, operations)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("计算新 Schema 失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to compute new schema")
 		return err
 	}
 
@@ -817,10 +814,10 @@ func (s *ESVectorStore) UpdateCollectionMetadata(ctx context.Context, collection
 	}
 
 	if err := esStoreMetadata(ctx, c, indexName, existing); err != nil {
-		logger.Error(esLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "STORE_UPDATE_ERROR").
-			Msg("更新集合元数据失败")
+			Msg("failed to update collection metadata")
 		return fmt.Errorf("UpdateCollectionMetadata: %w", err)
 	}
 
@@ -829,9 +826,9 @@ func (s *ESVectorStore) UpdateCollectionMetadata(ctx context.Context, collection
 	s.metadataCache[indexName] = existing
 	s.mu.Unlock()
 
-	logger.Info(esLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
-		Msg("更新集合元数据成功")
+		Msg("collection metadata updated successfully")
 
 	return nil
 }
@@ -900,7 +897,7 @@ func (s *ESVectorStore) executeESMigration(
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("temp_collection_name", tempCollectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("开始 ES schema 迁移")
+		Msg("starting ES schema migration")
 
 	c, err := s.getClient()
 	if err != nil {
@@ -910,7 +907,7 @@ func (s *ESVectorStore) executeESMigration(
 	// 1. 创建临时索引（新 schema）
 	if err := s.CreateCollection(ctx, tempCollectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
 		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Str("event_type", "STORE_UPDATE").Msg("创建临时索引失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to create temporary index")
 		return err
 	}
 
@@ -919,7 +916,7 @@ func (s *ESVectorStore) executeESMigration(
 	oldDocs, err := s.esSearchAllDocs(ctx, c, collectionName)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("搜索旧索引文档失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to search old index documents")
 		s.cleanupESTempCollection(ctx, tempCollectionName)
 		return err
 	}
@@ -930,7 +927,7 @@ func (s *ESVectorStore) executeESMigration(
 			transformedDoc, err := transformFunc(doc)
 			if err != nil {
 				logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-					Str("event_type", "STORE_UPDATE").Msg("文档变换失败")
+					Str("event_type", "STORE_UPDATE").Msg("document transform failed")
 				s.cleanupESTempCollection(ctx, tempCollectionName)
 				return err
 			}
@@ -938,7 +935,7 @@ func (s *ESVectorStore) executeESMigration(
 		}
 		if err := s.AddDocs(ctx, tempCollectionName, transformedDocs); err != nil {
 			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-				Str("event_type", "STORE_UPDATE").Msg("写入临时索引失败")
+				Str("event_type", "STORE_UPDATE").Msg("failed to write temporary index")
 			s.cleanupESTempCollection(ctx, tempCollectionName)
 			return err
 		}
@@ -947,7 +944,7 @@ func (s *ESVectorStore) executeESMigration(
 	// 3. 删除旧索引
 	if err := s.DeleteCollection(ctx, collectionName); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("删除旧索引失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to delete old index")
 		s.cleanupESTempCollection(ctx, tempCollectionName)
 		return err
 	}
@@ -955,7 +952,7 @@ func (s *ESVectorStore) executeESMigration(
 	// 4. 用原名创建新索引
 	if err := s.CreateCollection(ctx, collectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("用原名创建新索引失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to create new index with original name")
 		return err
 	}
 
@@ -964,14 +961,14 @@ func (s *ESVectorStore) executeESMigration(
 	tempDocs, err := s.esSearchAllDocs(ctx, c, tempCollectionName)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Str("event_type", "STORE_UPDATE").Msg("搜索临时索引文档失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to search temporary index documents")
 		return err
 	}
 
 	if len(tempDocs) > 0 {
 		if err := s.AddDocs(ctx, collectionName, tempDocs); err != nil {
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-				Str("event_type", "STORE_UPDATE").Msg("写入新索引失败")
+				Str("event_type", "STORE_UPDATE").Msg("failed to write new index")
 			return err
 		}
 	}
@@ -979,12 +976,12 @@ func (s *ESVectorStore) executeESMigration(
 	// 6. 删除临时索引
 	if err := s.DeleteCollection(ctx, tempCollectionName); err != nil {
 		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Msg("删除临时索引失败，非致命错误")
+			Msg("failed to delete temporary index, non-fatal")
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("ES schema 迁移完成")
+		Msg("ES schema migration completed")
 
 	return nil
 }
@@ -1086,16 +1083,16 @@ func (s *ESVectorStore) cleanupESTempCollection(ctx context.Context, tempCollect
 	exists, err := s.CollectionExists(ctx, tempCollectionName)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Msg("检查临时索引是否存在失败")
+			Msg("failed to check if temporary index exists")
 		return
 	}
 	if exists {
 		if delErr := s.DeleteCollection(ctx, tempCollectionName); delErr != nil {
 			logger.Warn(logComponent).Err(delErr).Str("temp_collection_name", tempCollectionName).
-				Msg("清理临时索引失败")
+				Msg("failed to cleanup temporary index")
 		} else {
 			logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
-				Msg("成功清理临时索引")
+				Msg("temporary index cleaned up successfully")
 		}
 	}
 }
@@ -1118,17 +1115,17 @@ func (s *ESVectorStore) getClient() (esClient, error) {
 
 	c, err := s.createClient(s.addresses, s.username, s.password)
 	if err != nil {
-		logger.Error(esLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Strs("addresses", s.addresses).
-			Msg("创建 ES 客户端失败")
+			Msg("failed to create ES client")
 		return nil, exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("创建 ES 客户端失败: %v", err)),
 		)
 	}
 	s.client = c
-	logger.Info(esLogComponent).
+	logger.Info(logComponent).
 		Strs("addresses", s.addresses).
-		Msg("成功连接 ES")
+		Msg("connected to ES successfully")
 	return s.client, nil
 }
 
@@ -1559,10 +1556,10 @@ func (s *ESVectorStore) esBuildSchemaFromMapping(ctx context.Context, c esClient
 	req := esapi.IndicesGetMappingRequest{Index: []string{indexName}}
 	respBody, err := esDoRequest(ctx, c, &req)
 	if err != nil {
-		logger.Error(esLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("index_name", indexName).
 			Str("event_type", "STORE_SEARCH_ERROR").
-			Msg("获取 ES mapping 失败")
+			Msg("failed to get ES mapping")
 		return nil, fmt.Errorf("esBuildSchemaFromMapping: %w", err)
 	}
 
@@ -1622,10 +1619,10 @@ func (s *ESVectorStore) esBuildSchemaFromMapping(ctx context.Context, c esClient
 
 		f, err := NewFieldSchema(fieldName, ourType, fieldOpts...)
 		if err != nil {
-			logger.Warn(esLogComponent).Err(err).
+			logger.Warn(logComponent).Err(err).
 				Str("field_name", fieldName).
 				Str("es_type", esType).
-				Msg("从 mapping 构建字段失败，跳过")
+				Msg("failed to build field from mapping, skipping")
 			continue
 		}
 		// 标记主键字段（Python 通过 primary_key_field 参数标记，Go 默认 "id"）
@@ -1633,9 +1630,9 @@ func (s *ESVectorStore) esBuildSchemaFromMapping(ctx context.Context, c esClient
 			f.IsPrimary = true
 		}
 		if _, err := schema.AddField(f); err != nil {
-			logger.Warn(esLogComponent).Err(err).
+			logger.Warn(logComponent).Err(err).
 				Str("field_name", fieldName).
-				Msg("添加字段到 schema 失败，跳过")
+				Msg("failed to add field to schema, skipping")
 			continue
 		}
 	}

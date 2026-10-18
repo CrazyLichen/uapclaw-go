@@ -107,7 +107,7 @@ func (ac *AgentClient) Connect(ctx context.Context) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "agent_client_connecting").
-		Msg("AgentClient 正在连接")
+		Msg("AgentClient connecting")
 
 	// 启动 receiverLoop
 	loopCtx, cancel := context.WithCancel(ctx)
@@ -120,19 +120,19 @@ func (ac *AgentClient) Connect(ctx context.Context) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "agent_client_loop_started").
-		Msg("AgentClient 接收循环已启动，等待 connection.ack")
+		Msg("AgentClient receive loop started, waiting for connection.ack")
 
 	// 等待 serverReady 或 5s 超时（对齐 Python timeout=5.0，超时不报错仅 warn）
 	select {
 	case <-ac.serverReadyCh:
 		logger.Info(logComponent).
 			Str("event_type", "agent_client_connected").
-			Msg("AgentClient 已连接，AgentServer 已就绪")
+			Msg("AgentClient connected, AgentServer ready")
 	case <-time.After(connectionAckTimeoutSeconds * time.Second):
 		logger.Warn(logComponent).
 			Str("event_type", "agent_client_ack_timeout").
 			Int("timeout_seconds", connectionAckTimeoutSeconds).
-			Msg("等待 connection.ack 超时（5s），继续运行")
+			Msg("timed out waiting for connection.ack (5s), continuing")
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -175,7 +175,7 @@ func (ac *AgentClient) Disconnect() {
 
 	logger.Info(logComponent).
 		Str("event_type", "agent_client_disconnected").
-		Msg("AgentClient 已断开")
+		Msg("AgentClient disconnected")
 }
 
 // ServerReady 检查 AgentServer 是否已发送 connection.ack 确认就绪。
@@ -235,14 +235,14 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 		Str("channel", envelope.Channel).
 		Str("method", envelope.Method).
 		Bool("is_stream", envelope.IsStream).
-		Msg("发送非流式请求")
+		Msg("sending non-streaming request")
 
 	// Python: logger.debug("发送请求(非流式) E2A: %s", _to_json(envelope.to_dict()))
 	logger.Debug(logComponent).
 		Str("event_type", "E2A_OUT_NOSTREAM").
 		Str("request_id", rid).
 		Str("method", envelope.Method).
-		Msg("发送请求(非流式) E2A 详情")
+		Msg("sending request (non-streaming) E2A details")
 
 	// 检查 duplicate in-flight（对齐 Python rid in self._message_queues）
 	ac.messageQueuesMu.Lock()
@@ -273,7 +273,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 		Str("event_type", "E2A_OUT_NOSTREAM").
 		Str("request_id", rid).
 		Int("payload_bytes", len(data)).
-		Msg("发送请求(非流式) payload 已发送")
+		Msg("sending request (non-streaming) payload sent")
 
 	// 等待响应（对齐 Python asyncio.wait_for(queue.get(), timeout=600)）
 	select {
@@ -287,7 +287,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("request_id", rid).
 			Int("timeout_seconds", unaryRequestTimeoutSeconds).
-			Msg("AgentServer 非流式请求超时")
+			Msg("AgentServer non-streaming request timed out")
 		return nil, fmt.Errorf("AgentServer 非流式请求超时 (request_id=%s, timeout=%ds)", rid, unaryRequestTimeoutSeconds)
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -312,14 +312,14 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 		Str("channel", envelope.Channel).
 		Str("method", envelope.Method).
 		Bool("is_stream", envelope.IsStream).
-		Msg("发送流式请求")
+		Msg("sending streaming request")
 
 	// Python: logger.debug("发送请求(流式) E2A: %s", _to_json(envelope.to_dict()))
 	logger.Debug(logComponent).
 		Str("event_type", "E2A_OUT_STREAM").
 		Str("request_id", rid).
 		Str("method", envelope.Method).
-		Msg("发送请求(流式) E2A 详情")
+		Msg("sending request (streaming) E2A details")
 
 	// 检查 duplicate in-flight
 	ac.messageQueuesMu.Lock()
@@ -350,7 +350,7 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 		Str("event_type", "E2A_OUT_STREAM").
 		Str("request_id", rid).
 		Int("payload_bytes", len(data)).
-		Msg("发送请求(流式) payload 已发送")
+		Msg("sending request (streaming) payload sent")
 
 	// 启动 goroutine 从 queue 读取并写入 chunkCh
 	chunkCh := make(chan *schema.AgentResponseChunk, messageQueueBufferSize)
@@ -387,7 +387,7 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Err(err).
-			Msg("获取接收通道失败")
+			Msg("failed to get receive channel")
 		return
 	}
 
@@ -396,13 +396,13 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 		case <-ctx.Done():
 			logger.Info(logComponent).
 				Str("event_type", "agent_client_receiver_stopped").
-				Msg("接收循环已停止")
+				Msg("receive loop stopped")
 			return
 		case data, ok := <-recvCh:
 			if !ok {
 				logger.Info(logComponent).
 					Str("event_type", "agent_client_recv_channel_closed").
-					Msg("接收通道已关闭")
+					Msg("receive channel closed")
 				return
 			}
 			// JSON 字节 → map（对齐 Python json.loads(raw)）
@@ -412,7 +412,7 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 					Str("event_type", "LLM_CALL_ERROR").
 					Err(err).
 					Int("bytes", len(data)).
-					Msg("接收消息 JSON 解码失败")
+					Msg("failed to decode received message JSON")
 				// Python: await asyncio.sleep(0.1) 避免快速循环
 				time.Sleep(100 * time.Millisecond)
 				continue
@@ -433,7 +433,7 @@ func (ac *AgentClient) receiverLoop(ctx context.Context) {
 						logger.Warn(logComponent).
 							Str("event_type", "agent_client_server_push_no_handler").
 							Str("request_id", fmt.Sprintf("%v", msg["request_id"])).
-							Msg("收到 server_push 但未注册 handler，已丢弃")
+							Msg("received server_push but no handler registered, discarded")
 					}
 					continue
 				}
@@ -462,12 +462,12 @@ func (ac *AgentClient) handleEventFrame(msg map[string]any) {
 		}
 		logger.Info(logComponent).
 			Str("event_type", "agent_client_connection_ack").
-			Msg("收到 connection.ack，AgentServer 已就绪")
+			Msg("received connection.ack, AgentServer ready")
 	} else {
 		logger.Warn(logComponent).
 			Str("event_type", "agent_client_unknown_event").
 			Str("event", event).
-			Msg("收到未知事件帧")
+			Msg("received unknown event frame")
 	}
 }
 
@@ -484,7 +484,7 @@ func (ac *AgentClient) routeToQueue(msg map[string]any) {
 		logger.Debug(logComponent).
 			Str("event_type", "agent_client_cancelled_message_discarded").
 			Str("request_id", rid).
-			Msg("收到已取消请求的残余消息，已丢弃")
+			Msg("received residual message for cancelled request, discarded")
 		return
 	}
 
@@ -496,13 +496,13 @@ func (ac *AgentClient) routeToQueue(msg map[string]any) {
 				logger.Warn(logComponent).
 					Str("event_type", "agent_client_queue_full").
 					Str("request_id", rid).
-					Msg("消息队列已满，丢弃消息")
+					Msg("message queue full, discarding message")
 			}
 		} else {
 			logger.Debug(logComponent).
 				Str("event_type", "agent_client_no_target_queue").
 				Str("request_id", rid).
-				Msg("收到无目标队列的消息")
+				Msg("received message with no target queue")
 		}
 	}
 	ac.messageQueuesMu.Unlock()
@@ -539,7 +539,7 @@ done:
 		Str("event_type", "agent_client_queue_drained").
 		Str("request_id", rid).
 		Int("drained_count", drainedCount).
-		Msg("队列已清空并移除")
+		Msg("queue drained and removed")
 
 	// 4. 异步延迟清理已取消标记（对齐 Python asyncio.create_task(_delayed_cleanup_cancelled_request_id)）
 	go ac.delayedCleanupCancelledRequestID(rid)
@@ -557,7 +557,7 @@ func (ac *AgentClient) delayedCleanupCancelledRequestID(rid string) {
 	logger.Debug(logComponent).
 		Str("event_type", "agent_client_cancelled_id_cleaned").
 		Str("request_id", rid).
-		Msg("已取消标记已清理")
+		Msg("cancelled flags cleaned up")
 }
 
 // ensureConnected 检查是否已连接。
@@ -626,7 +626,7 @@ func (ac *AgentClient) streamReceiver(ctx context.Context, rid string, queue cha
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("request_id", rid).
 				Err(err).
-				Msg("解析流式 chunk 失败")
+				Msg("failed to parse streaming chunk")
 			continue
 		}
 
@@ -646,7 +646,7 @@ func (ac *AgentClient) streamReceiver(ctx context.Context, rid string, queue cha
 		Str("event_type", "agent_client_stream_complete").
 		Str("request_id", rid).
 		Int("chunk_count", chunkCount).
-		Msg("流式响应结束")
+		Msg("streaming response ended")
 }
 
 // parseAgentServerWireUnary 从 wire map 解析非流式响应。

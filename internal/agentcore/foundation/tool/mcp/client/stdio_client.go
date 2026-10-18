@@ -84,7 +84,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 		Strs("args", args).
 		Int("env_count", len(env)).
 		Str("cwd", cwd).
-		Msg("正在创建 Stdio MCP 客户端")
+		Msg("creating Stdio MCP client")
 
 	// 统一使用 NewStdioMCPClientWithOptions 创建客户端
 	// 如果指定了 cwd，通过 WithCommandFunc 设置子进程工作目录
@@ -106,7 +106,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 			Err(err).
 			Str("command", command).
 			Str("server_name", c.serverName).
-			Msg("Stdio 客户端创建失败")
+			Msg("failed to create Stdio client")
 		return exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "Connect"),
@@ -120,7 +120,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
-			Msg("Stdio 客户端启动失败")
+			Msg("Stdio client failed to start")
 		return exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "Connect"),
@@ -143,7 +143,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
-			Msg("Stdio 客户端初始化会话失败")
+			Msg("Stdio client failed to initialize session")
 		// 初始化失败时关闭连接
 		_ = client.Close()
 		return exception.BuildError(
@@ -159,7 +159,7 @@ func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) 
 
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
-		Msg("Stdio 客户端连接成功")
+		Msg("Stdio client connected")
 
 	return nil
 }
@@ -174,7 +174,7 @@ func (c *StdioClient) Disconnect(_ context.Context) error {
 			logger.Error(logComponent).
 				Err(err).
 				Str("server_name", c.serverName).
-				Msg("Stdio 客户端断开连接失败")
+				Msg("Stdio client failed to disconnect")
 			return err
 		}
 	}
@@ -182,7 +182,7 @@ func (c *StdioClient) Disconnect(_ context.Context) error {
 	c.mcpClient = nil
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
-		Msg("Stdio 客户端已断开连接")
+		Msg("Stdio client disconnected")
 	return nil
 }
 
@@ -200,7 +200,7 @@ func (c *StdioClient) ListTools(ctx context.Context) ([]*types.McpToolCard, erro
 		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
-			Msg("Stdio 客户端列出工具失败")
+			Msg("Stdio client failed to list tools")
 		return nil, exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "ListTools"),
@@ -224,7 +224,7 @@ func (c *StdioClient) ListTools(ctx context.Context) ([]*types.McpToolCard, erro
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Int("tool_count", len(tools)).
-		Msg("Stdio 客户端列出工具成功")
+		Msg("Stdio client tool list retrieved")
 
 	return tools, nil
 }
@@ -249,7 +249,7 @@ func (c *StdioClient) CallTool(ctx context.Context, toolName string, arguments m
 			Err(err).
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
-			Msg("Stdio 客户端调用工具失败")
+			Msg("Stdio client failed to call tool")
 		return nil, exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "CallTool"),
@@ -303,7 +303,7 @@ func (c *StdioClient) ListResources(ctx context.Context) ([]map[string]any, erro
 		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
-			Msg("Stdio 客户端列出资源失败")
+			Msg("Stdio client failed to list resources")
 		return nil, exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "ListResources"),
@@ -338,7 +338,7 @@ func (c *StdioClient) ReadResource(ctx context.Context, uri string) ([]map[strin
 			Err(err).
 			Str("server_name", c.serverName).
 			Str("uri", uri).
-			Msg("Stdio 客户端读取资源失败")
+			Msg("Stdio client failed to read resource")
 		return nil, exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "ReadResource"),

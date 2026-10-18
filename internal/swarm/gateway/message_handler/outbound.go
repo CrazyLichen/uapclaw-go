@@ -30,7 +30,7 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 	if e2aResp == nil {
 		logger.Warn(logComponent).
 			Str("event_type", "push_parse_error").
-			Msg("push 消息解析为 E2AResponse 失败")
+			Msg("failed to parse push message as E2AResponse")
 		return
 	}
 
@@ -40,7 +40,7 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 		logger.Warn(logComponent).
 			Str("event_type", "push_chunk_parse_error").
 			Err(err).
-			Msg("push chunk 解析失败")
+			Msg("failed to parse push chunk")
 		return
 	}
 
@@ -89,7 +89,7 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 		logger.Debug(logComponent).
 			Str("event_type", "push_terminal_chunk").
 			Str("request_id", rid).
-			Msg("忽略 server_push 终止 chunk")
+			Msg("ignoring server_push terminal chunk")
 		return
 	}
 
@@ -104,7 +104,7 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 		Str("event_type", "server_push_processed").
 		Str("request_id", rid).
 		Str("channel_id", chunk.ChannelID).
-		Msg("server_push 已写入 robot_messages")
+		Msg("server_push written to robot_messages")
 }
 
 // handleCronPushPayload 处理 cron 推送消息。
@@ -115,6 +115,6 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 func (mh *MessageHandler) handleCronPushPayload(payload map[string]any) {
 	logger.Debug(logComponent).
 		Str("event_type", "cron_push_received").
-		Msg("cron push 消息已接收（当前为 stub）")
+		Msg("cron push message received (currently a stub)")
 	// 后续对接 CronController（11.10）
 }

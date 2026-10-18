@@ -86,7 +86,7 @@ func NewTiktokenCounter(model string) *TiktokenCounter {
 		logger.Warn(logComponent).Str("model", model).
 			Str("encoding", string(encName)).
 			Err(err).
-			Msg("Tiktoken 编码器初始化失败（按映射表），使用 len(text)//4 降级计算")
+			Msg("Tiktoken encoder init failed (by mapping table), falling back to len(text)//4 counting")
 		return tc
 	}
 
@@ -103,14 +103,14 @@ func NewTiktokenCounter(model string) *TiktokenCounter {
 		tc.enc = enc
 		logger.Warn(logComponent).Str("model", model).
 			Err(err).
-			Msg("模型不在映射表中且 ForModel 失败，降级使用 cl100k_base 编码")
+			Msg("model not in mapping table and ForModel failed, falling back to cl100k_base encoding")
 		return tc
 	}
 
 	// 全部失败，enc 为 nil，后续使用 len(text)//4
 	logger.Warn(logComponent).Str("model", model).
 		Err(fallbackErr).
-		Msg("Tiktoken 初始化完全失败，使用 len(text)//4 降级计算")
+		Msg("Tiktoken init completely failed, falling back to len(text)//4 counting")
 	return tc
 }
 
@@ -133,7 +133,7 @@ func (tc *TiktokenCounter) Count(text string, model string) (int, error) {
 			Int("text_len", len(text)).
 			Int("fallback_count", fallback).
 			Err(err).
-			Msg("Tiktoken 编码失败，降级为 len//4 计算")
+			Msg("Tiktoken encoding failed, falling back to len//4 counting")
 		return fallback, nil
 	}
 	return count, nil
@@ -220,7 +220,7 @@ func (tc *TiktokenCounter) fallbackCount(text string) int {
 	if !tc.fallbackWarned {
 		tc.fallbackWarned = true
 		logger.Warn(logComponent).Str("model", tc.model).
-			Msg("Tiktoken 初始化失败，使用 len(text)//4 降级计算")
+			Msg("Tiktoken init failed, falling back to len(text)//4 counting")
 	}
 	tc.mu.Unlock()
 	return len(text) / 4

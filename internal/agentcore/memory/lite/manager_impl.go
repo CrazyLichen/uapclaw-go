@@ -148,11 +148,11 @@ func (m *memoryIndexManager) Initialize(ctx context.Context) error {
 	if err := m.loadVectorExtension(); err != nil {
 		m.vectorAvailable = false
 		m.vectorError = err.Error()
-		logger.Warn(logComponent).Err(err).Msg("加载 vec0 扩展失败，将使用内存余弦 fallback")
+		logger.Warn(logComponent).Err(err).Msg("failed to load vec0 extension, falling back to in-memory cosine")
 	}
 
 	if err := m.Sync(ctx, "initial", false); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("初始同步失败")
+		logger.Warn(logComponent).Err(err).Msg("initial sync failed")
 	}
 
 	// 文件监听
@@ -163,7 +163,7 @@ func (m *memoryIndexManager) Initialize(ctx context.Context) error {
 	// 定时同步
 	m.ensureIntervalSync()
 
-	logger.Info(logComponent).Str("agent_id", m.agentID).Msg("记忆管理器初始化完成")
+	logger.Info(logComponent).Str("agent_id", m.agentID).Msg("memorymanagerinitialization completed")
 	return nil
 }
 
@@ -179,11 +179,11 @@ func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool
 	needsFullReindex := force || m.shouldFullReindex()
 
 	if needsFullReindex {
-		logger.Info(logComponent).Str("reason", reason).Msg("执行全量重建索引")
+		logger.Info(logComponent).Str("reason", reason).Msg("performing full index rebuild")
 		return m.runReindex(ctx)
 	}
 
-	logger.Debug(logComponent).Str("reason", reason).Msg("增量同步")
+	logger.Debug(logComponent).Str("reason", reason).Msg("incremental sync")
 
 	if containsSource(m.settings.Sources, "memory") && m.dirty {
 		if err := m.syncMemoryFiles(ctx); err != nil {
@@ -207,7 +207,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts Sear
 	onSearch := m.settings.Sync.OnSearch
 	if onSearch && m.dirty {
 		if err := m.Sync(ctx, "search", false); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("搜索前同步失败")
+			logger.Warn(logComponent).Err(err).Msg("pre-search sync failed")
 		}
 	}
 
@@ -251,7 +251,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts Sear
 		var err error
 		keywordResults, err = m.searchKeyword(ctx, cleaned, candidates)
 		if err != nil {
-			logger.Debug(logComponent).Err(err).Msg("关键词搜索失败")
+			logger.Debug(logComponent).Err(err).Msg("keyword search failed")
 		}
 	}
 
@@ -262,9 +262,9 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts Sear
 	embedCancel()
 	if embedErr != nil {
 		if embedCtx.Err() == context.DeadlineExceeded {
-			logger.Warn(logComponent).Err(embedErr).Msg("Embedding 查询超时")
+			logger.Warn(logComponent).Err(embedErr).Msg("embedding query timed out")
 		} else {
-			logger.Error(logComponent).Err(embedErr).Msg("Embedding 查询失败")
+			logger.Error(logComponent).Err(embedErr).Msg("embedding query failed")
 		}
 		queryVec = nil
 	}
@@ -282,7 +282,7 @@ func (m *memoryIndexManager) Search(ctx context.Context, query string, opts Sear
 		var err error
 		vectorResults, err = m.searchVector(ctx, queryVec, candidates)
 		if err != nil {
-			logger.Debug(logComponent).Err(err).Msg("向量搜索失败")
+			logger.Debug(logComponent).Err(err).Msg("vector search failed")
 		}
 	}
 
@@ -491,7 +491,7 @@ func (m *memoryIndexManager) Close() error {
 	cacheKey := fmt.Sprintf("%s:%s:%s", m.agentID, m.nodeName, m.memoryDir)
 	indexCache.Delete(cacheKey)
 
-	logger.Info(logComponent).Str("agent_id", m.agentID).Msg("记忆管理器已关闭")
+	logger.Info(logComponent).Str("agent_id", m.agentID).Msg("memorymanager closed")
 	return nil
 }
 
@@ -576,7 +576,7 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 	}
 
 	if err := mgr.Initialize(context.Background()); err != nil {
-		logger.Error(logComponent).Err(err).Msg("初始化记忆管理器失败")
+		logger.Error(logComponent).Err(err).Msg("initializationmemorymanager failed")
 		return nil, err
 	}
 
@@ -646,7 +646,7 @@ func (m *memoryIndexManager) ensureSchema() error {
 		if err != nil {
 			m.ftsAvailable = false
 			m.ftsError = err.Error()
-			logger.Warn(logComponent).Err(err).Msg("建 FTS5 表失败")
+			logger.Warn(logComponent).Err(err).Msg("failed to create FTS5 table")
 		} else {
 			m.ftsAvailable = true
 		}
@@ -668,7 +668,7 @@ func (m *memoryIndexManager) initializeProvider(ctx context.Context) error {
 	m.provider = provider
 	// Python: self.provider_key = f"{self.provider.id}:{self.provider.model}"
 	m.providerKey = fmt.Sprintf("%s:%s", m.provider.ID(), m.provider.Model())
-	logger.Info(logComponent).Str("provider", m.settings.Provider).Str("model", m.settings.Model).Msg("嵌入提供者初始化完成")
+	logger.Info(logComponent).Str("provider", m.settings.Provider).Str("model", m.settings.Model).Msg("embedding provider initialized")
 	return nil
 }
 
@@ -702,7 +702,7 @@ func (m *memoryIndexManager) loadVectorExtension() error {
 	}
 
 	m.vectorAvailable = true
-	logger.Info(logComponent).Str("vec_path", vecPath).Msg("vec0 扩展加载成功")
+	logger.Info(logComponent).Str("vec_path", vecPath).Msg("vec0 extension loaded")
 	return nil
 }
 
@@ -761,7 +761,7 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 	// Python: files = list_memory_files(self.workspace, node_name=self.node_name)
 	files := ListMemoryFiles(m.workspace, m.settings.ExtraPaths, m.nodeName)
 
-	logger.Debug(logComponent).Int("file_count", len(files)).Msg("同步记忆文件")
+	logger.Debug(logComponent).Int("file_count", len(files)).Msg("syncing memory files")
 
 	activePaths := make(map[string]bool)
 	for _, fp := range files {
@@ -779,7 +779,7 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 			continue
 		}
 		if err := m.indexFile(ctx, entry, "memory"); err != nil {
-			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("索引文件失败")
+			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("indexfile failed")
 		}
 	}
 
@@ -821,7 +821,7 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 		return nil
 	})
 
-	logger.Debug(logComponent).Int("file_count", len(sessionFiles)).Msg("同步 session 文件")
+	logger.Debug(logComponent).Int("file_count", len(sessionFiles)).Msg("syncing session files")
 
 	activePaths := make(map[string]bool)
 	for _, sessionFile := range sessionFiles {
@@ -837,7 +837,7 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 			continue
 		}
 		if err := m.indexFile(ctx, entry, "sessions"); err != nil {
-			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("索引 session 文件失败")
+			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("index session file failed")
 		}
 	}
 
@@ -899,7 +899,7 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 
 	for _, chunk := range chunks {
 		if err := m.indexChunk(ctx, entry.Path, source, chunk); err != nil {
-			logger.Warn(logComponent).Err(err).Str("path", entry.Path).Msg("索引 chunk 失败")
+			logger.Warn(logComponent).Err(err).Str("path", entry.Path).Msg("index chunk failed")
 		}
 	}
 
@@ -943,7 +943,7 @@ func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor
 		_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, id, path, source, text) VALUES (?, ?, ?, ?, ?)", ftsTable),
 			rowid, chunkID, filePath, source, chunk.Text)
 		if err != nil {
-			logger.Debug(logComponent).Err(err).Msg("插入 FTS5 失败")
+			logger.Debug(logComponent).Err(err).Msg("failed to insert FTS5")
 		}
 	}
 
@@ -953,7 +953,7 @@ func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor
 			_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, embedding) VALUES (?, vec_f32(?))", vectorTable),
 				rowid, embBlob)
 			if err != nil {
-				logger.Debug(logComponent).Err(err).Msg("插入 vec0 失败")
+				logger.Debug(logComponent).Err(err).Msg("failed to insert vec0")
 			}
 		}
 	}
@@ -965,7 +965,7 @@ func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor
 func (m *memoryIndexManager) removeFileFromIndex(ctx context.Context, filePath string) {
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("removeFileFromIndex 开启事务失败")
+		logger.Warn(logComponent).Err(err).Msg("removeFileFromIndex failed to begin transaction")
 		return
 	}
 
@@ -997,7 +997,7 @@ func (m *memoryIndexManager) removeFileFromIndex(ctx context.Context, filePath s
 	_, _ = tx.Exec("DELETE FROM files WHERE path = ?", filePath)
 
 	if err := tx.Commit(); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("removeFileFromIndex 提交事务失败")
+		logger.Warn(logComponent).Err(err).Msg("removeFileFromIndex failed to commit transaction")
 	}
 }
 
@@ -1065,7 +1065,7 @@ func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]f
 	}
 
 	if err := tx.Commit(); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("getEmbedding 提交事务失败")
+		logger.Warn(logComponent).Err(err).Msg("getEmbedding failed to commit transaction")
 	}
 	return emb, nil
 }
@@ -1088,7 +1088,7 @@ func (m *memoryIndexManager) ensureVectorTable(dims int) bool {
 		return false
 	}
 	m.vectorDims = &dims
-	logger.Info(logComponent).Int("dims", dims).Msg("vec0 虚拟表创建成功")
+	logger.Info(logComponent).Int("dims", dims).Msg("vec0 virtual table created")
 	return true
 }
 
@@ -1255,7 +1255,7 @@ func (m *memoryIndexManager) searchKeyword(ctx context.Context, query string, li
 
 	ftsRows, err := m.db.Query(fmt.Sprintf("SELECT rowid, rank FROM %s WHERE %s MATCH ? ORDER BY rank LIMIT ?", ftsTable, ftsTable), ftsQuery, limit)
 	if err != nil {
-		logger.Debug(logComponent).Err(err).Msg("FTS5 查询失败")
+		logger.Debug(logComponent).Err(err).Msg("FTS5 query failed")
 		return nil, nil
 	}
 	defer func() { _ = ftsRows.Close() }()
@@ -1336,7 +1336,7 @@ func mergeHybridResults(vectorResults, keywordResults []SearchResult, vectorWeig
 func (m *memoryIndexManager) setupFileWatcher() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("创建文件监听器失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to create file watcher")
 		return
 	}
 	m.watcher = watcher
@@ -1375,7 +1375,7 @@ func (m *memoryIndexManager) setupFileWatcher() {
 
 	for p := range watchPaths {
 		if err := watcher.Add(p); err != nil {
-			logger.Warn(logComponent).Err(err).Str("path", p).Msg("添加监听路径失败")
+			logger.Warn(logComponent).Err(err).Str("path", p).Msg("failed to add watch path")
 		}
 	}
 
@@ -1385,7 +1385,7 @@ func (m *memoryIndexManager) setupFileWatcher() {
 	// 延迟 1 秒后标记为已初始化，避免初始扫描触发
 	time.AfterFunc(1*time.Second, func() {
 		m.watcherInitialized = true
-		logger.Debug(logComponent).Int("watch_paths", len(watchPaths)).Msg("文件监听器已初始化")
+		logger.Debug(logComponent).Int("watch_paths", len(watchPaths)).Msg("file watcher initialized")
 	})
 }
 
@@ -1427,7 +1427,7 @@ func (m *memoryIndexManager) scheduleWatchSync() {
 			return
 		}
 		if err := m.Sync(context.Background(), "watch", false); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("文件监听同步失败")
+			logger.Warn(logComponent).Err(err).Msg("file watcher sync failed")
 		}
 	})
 }
@@ -1455,13 +1455,13 @@ func (m *memoryIndexManager) ensureIntervalSync() {
 					return
 				}
 				if err := m.Sync(ctx, "interval", false); err != nil {
-					logger.Warn(logComponent).Err(err).Msg("定时同步失败")
+					logger.Warn(logComponent).Err(err).Msg("periodic sync failed")
 				}
 			}
 		}
 	}()
 
-	logger.Info(logComponent).Int("interval_minutes", minutes).Msg("定时同步已启用")
+	logger.Info(logComponent).Int("interval_minutes", minutes).Msg("periodic sync enabled")
 }
 
 // writeMeta 写入元数据。对齐 Python _write_meta

@@ -183,7 +183,7 @@ func (mh *MessageHandler) finishEvolutionApprovalIfCurrent(sessionID, answeredRe
 			Str("session_id", sessionID).
 			Str("answered_rid", answeredRequestID).
 			Str("current_rid", currentRequestID).
-			Msg("过时的 evolution 审批已解决，保留当前 pending")
+			Msg("stale evolution approval already resolved, keeping current pending")
 		return nil
 	}
 
@@ -259,14 +259,14 @@ func (mh *MessageHandler) handleEvolutionChunk(chunk *schema.AgentResponseChunk,
 				Str("event_type", "evolution_status_start").
 				Str("session_id", sessionID).
 				Str("request_id", chunk.RequestID).
-				Msg("演进状态开始")
+				Msg("evolution state started")
 		case "end":
 			mh.clearSessionEvolutionInProgress(sessionID)
 			logger.Info(logComponent).
 				Str("event_type", "evolution_status_end").
 				Str("session_id", sessionID).
 				Str("request_id", chunk.RequestID).
-				Msg("演进状态结束")
+				Msg("evolution state ended")
 		}
 	}
 
@@ -279,7 +279,7 @@ func (mh *MessageHandler) handleEvolutionChunk(chunk *schema.AgentResponseChunk,
 			Str("event_type", "evolution_approval_detected").
 			Str("session_id", sessionID).
 			Str("request_id", approvalRequestID).
-			Msg("检测到演进审批")
+			Msg("evolution approval detected")
 	}
 }
 
@@ -333,5 +333,5 @@ func (mh *MessageHandler) maybeAutoAcceptReplacedEvolutionApproval(sessionID, in
 		Str("session_id", sessionID).
 		Str("old_request_id", previousRequestID).
 		Str("new_request_id", incomingRequestID).
-		Msg("自动接受被替换的 evolution 审批")
+		Msg("auto-accepting replaced evolution approval")
 }

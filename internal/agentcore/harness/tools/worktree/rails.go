@@ -228,7 +228,7 @@ func (r *WorktreeRail) Uninit(agent interfaces.BaseAgent) error {
 						logger.Warn(logComponent).
 							Str("event_type", "worktree_rail_uninit").
 							Str("tool_name", t.Card().Name).
-							Msgf("注销工具失败: %v", rec)
+							Msgf("failed to unregister tool: %v", rec)
 					}
 				}()
 				toolID := t.Card().ID

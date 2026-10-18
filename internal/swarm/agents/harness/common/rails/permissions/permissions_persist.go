@@ -23,9 +23,6 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// persistLogComponent 日志组件
-var persistLogComponent = logger.ComponentPermissions
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PersistPermissionAllowRule 用户选择「总是允许」时，将 allow 规则写入 config.yaml 的 permissions 段。
@@ -40,7 +37,7 @@ func PersistPermissionAllowRule(toolName string, toolArgs map[string]any) bool {
 	data := readYAMLData()
 	permissions, _ := data["permissions"].(map[string]any)
 	if permissions == nil {
-		logger.Warn(persistLogComponent).
+		logger.Warn(logComponent).
 			Str("tool_name", toolName).
 			Msg("[PermissionPersist] persist_permission_allow_rule.abort reason=no_permissions_section")
 		return false

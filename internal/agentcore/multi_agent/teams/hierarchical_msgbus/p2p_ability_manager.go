@@ -150,7 +150,7 @@ func (m *P2PAbilityManager) Execute(
 		Int("agent_calls", len(agentIndices)).
 		Int("other_calls", len(otherIndices)).
 		Int("max_parallel", m.maxParallel).
-		Msg("并行派发完成")
+		Msg("parallel dispatch completed")
 
 	return results
 }
@@ -201,7 +201,7 @@ func (m *P2PAbilityManager) executeSingleP2P(
 			Str("action", "parse_tool_arguments").
 			Str("tool_name", toolName).
 			Err(err).
-			Msg("P2P 工具参数解析失败")
+			Msg("failed to parse P2P tool params")
 		return agentschema.ExecuteResult{}, exception.BuildError(exception.StatusAbilityMalformedArguments,
 			exception.WithParam("error_msg", fmt.Sprintf("P2P 工具 '%s' 参数解析失败: %v", toolName, err)),
 		)
@@ -238,7 +238,7 @@ func (m *P2PAbilityManager) executeSingleP2P(
 		Str("agent_id", agentCard.ID).
 		Str("session_id", sessionID).
 		Float64("timeout", timeout).
-		Msg("P2P 派发")
+		Msg("P2P dispatch")
 
 	// P2P 派发
 	result, err := m.supervisor.Send(ctx, toolArgs, agentCard.ID,
@@ -250,7 +250,7 @@ func (m *P2PAbilityManager) executeSingleP2P(
 			Str("action", "p2p_dispatch_failed").
 			Str("tool_name", toolName).
 			Err(err).
-			Msg("P2P 派发失败")
+			Msg("P2P dispatch failed")
 		return agentschema.ExecuteResult{}, fmt.Errorf("P2P 派发到 '%s' 失败: %w", toolName, err)
 	}
 

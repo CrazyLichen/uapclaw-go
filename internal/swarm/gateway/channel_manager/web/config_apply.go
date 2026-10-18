@@ -131,7 +131,7 @@ func ApplyConfigPayload(params map[string]any, crypto CryptoProvider) (envUpdate
 		if err := replaceTeamsInConfig(params); err != nil {
 			logger.Warn(logComponentConfigApply).
 				Err(err).
-				Msg("写回 modes.team 失败")
+				Msg("failed to write back modes.team")
 			return nil, nil, &ConfigInternalError{Message: "failed to update modes.team"}
 		}
 		yamlUpdated = append(yamlUpdated, "modes.team")
@@ -139,7 +139,7 @@ func ApplyConfigPayload(params map[string]any, crypto CryptoProvider) (envUpdate
 		if err := replaceTeamsInConfig(params); err != nil {
 			logger.Warn(logComponentConfigApply).
 				Err(err).
-				Msg("写回 modes.team 失败")
+				Msg("failed to write back modes.team")
 			return nil, nil, &ConfigInternalError{Message: "failed to update modes.team"}
 		}
 		yamlUpdated = append(yamlUpdated, "modes.team")
@@ -155,7 +155,7 @@ func ApplyConfigPayload(params map[string]any, crypto CryptoProvider) (envUpdate
 			logger.Warn(logComponentConfigApply).
 				Str("key", paramKey).
 				Err(err).
-				Msg("写回 config.yaml 失败")
+				Msg("failed to write back config.yaml")
 		} else {
 			yamlUpdated = append(yamlUpdated, paramKey)
 		}
@@ -169,17 +169,17 @@ func ApplyConfigPayload(params map[string]any, crypto CryptoProvider) (envUpdate
 		if err := persistEnvUpdates(envUpdates); err != nil {
 			logger.Warn(logComponentConfigApply).
 				Err(err).
-				Msg("持久化 .env 文件失败")
+				Msg("failed to persist .env file")
 		} else {
 			logger.Info(logComponentConfigApply).
 				Strs("keys", sortedKeys(envUpdates)).
-				Msg("已更新 .env")
+				Msg(".env updated")
 		}
 	}
 	if len(yamlUpdated) > 0 {
 		logger.Info(logComponentConfigApply).
 			Strs("keys", yamlUpdated).
-			Msg("已更新 config.yaml")
+			Msg("config.yaml updated")
 	}
 
 	return envUpdates, yamlUpdated, nil
@@ -198,7 +198,7 @@ func NotifyConfigSavedOnce(
 	}
 	if onConfigSaved == nil {
 		// ⤵️ 对齐 Python: _clear_agent_config_cache(agent_client)
-		logger.Debug(logComponentConfigApply).Msg("onConfigSaved 为 nil，待实现 clearAgentConfigCache")
+		logger.Debug(logComponentConfigApply).Msg("onConfigSaved is nil, clearAgentConfigCache pending implementation")
 		return
 	}
 
@@ -231,7 +231,7 @@ func NotifyConfigSavedOnce(
 	if err := onConfigSaved(updatedKeys, envUpdatesAny, configPayload); err != nil {
 		logger.Warn(logComponentConfigApply).
 			Err(err).
-			Msg("onConfigSaved 回调失败")
+			Msg("onConfigSaved callback failed")
 	}
 }
 
@@ -278,12 +278,12 @@ func ProcessFiles(ctx context.Context, params map[string]any) map[string]any {
 				logger.Warn(logComponentConfigApply).
 					Str("url", fileURL).
 					Err(err).
-					Msg("文件下载失败")
+					Msg("file download failed")
 			} else if fileContent != nil {
 				if err := os.MkdirAll(workspaceDir, 0o755); err == nil {
 					filePath := filepath.Join(workspaceDir, fileName)
 					if err := os.WriteFile(filePath, fileContent, 0o644); err != nil {
-						logger.Warn(logComponentConfigApply).Err(err).Msg("文件保存失败")
+						logger.Warn(logComponentConfigApply).Err(err).Msg("file save failed")
 					} else {
 						fileInfo["path"] = filePath
 					}
@@ -421,7 +421,7 @@ func replaceTeamsInConfig(params map[string]any) error {
 					if err := cfg.Save(data); err != nil {
 						return fmt.Errorf("保存配置失败（删除 modes.team）: %w", err)
 					}
-					logger.Info(logComponentConfigApply).Msg("modes.team 空数组，已删除配置节点")
+					logger.Info(logComponentConfigApply).Msg("modes.team empty array, config node deleted")
 				}
 			}
 			return nil

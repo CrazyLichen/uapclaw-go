@@ -159,7 +159,7 @@ func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.Model
 			Str("processor_type", mo.ProcessorType()).
 			Int("message_size", messageSize).
 			Int("threshold", *cfg.MessagesThreshold).
-			Msg("上下文消息数超过阈值，触发卸载")
+			Msg("context message count exceeded threshold, triggering offload")
 		return true, nil
 	}
 
@@ -178,7 +178,7 @@ func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.Model
 				Str("processor_type", mo.ProcessorType()).
 				Int("tokens", tokens).
 				Int("threshold", cfg.TokensThreshold).
-				Msg("上下文 Token 数超过阈值，触发卸载")
+				Msg("context tokens exceeded threshold, triggering offload")
 			return true, nil
 		}
 	}
@@ -263,7 +263,7 @@ func (mo *MessageOffloader) offloadLargeMessages(ctx context.Context, messages [
 				Str("processor_type", mo.ProcessorType()).
 				Int("message_idx", idx).
 				Err(err).
-				Msg("卸载消息失败，跳过")
+				Msg("failed to offload messages, skipping")
 			continue
 		}
 		if offloadMsg == nil {

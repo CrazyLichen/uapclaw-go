@@ -27,7 +27,8 @@ type MemoryForbiddenConfig struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var forbiddenLogComponent = logger.ComponentAgentServer
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -76,13 +77,13 @@ func getMemoryForbiddenConfigSafe() (*MemoryForbiddenConfig, error) {
 	cfg, err := config.New("")
 	if err != nil {
 		// 对齐 Python: logger.warning("[forbidden] Failed to load memory forbidden config: %s", e)
-		logger.Warn(forbiddenLogComponent).Err(err).Msg("加载禁止记忆配置失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to load forbidden memory config")
 		return &MemoryForbiddenConfig{Enabled: false}, fmt.Errorf("加载配置失败: %w", err)
 	}
 	configBase, err := cfg.Load()
 	if err != nil {
 		// 对齐 Python: logger.warning("[forbidden] Failed to load memory forbidden config: %s", e)
-		logger.Warn(forbiddenLogComponent).Err(err).Msg("读取禁止记忆配置失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to read forbidden memory config")
 		return &MemoryForbiddenConfig{Enabled: false}, fmt.Errorf("读取配置失败: %w", err)
 	}
 

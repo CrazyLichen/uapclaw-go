@@ -263,7 +263,7 @@ func (ci *ChromaIndexer) BuildIndex(
 	logger.Info(logComponent).
 		Str("index_name", collectionName).
 		Int("chunk_count", len(chunks)).
-		Msg("成功构建索引")
+		Msg("index built successfully")
 
 	return true, nil
 }
@@ -287,7 +287,7 @@ func (ci *ChromaIndexer) UpdateIndex(
 			Str("doc_id", docID).
 			Str("index_name", config.IndexName).
 			Err(err).
-			Msg("更新索引-删除旧数据失败")
+			Msg("update index: failed to delete old data")
 		return false, err
 	}
 
@@ -328,7 +328,7 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 			Str("event_type", "INDEXING_ERROR").
 			Str("doc_id", docID).
 			Err(err).
-			Msg("删除索引-查询失败")
+			Msg("delete index: query failed")
 		return false, err
 	}
 
@@ -337,7 +337,7 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 	if len(ids) == 0 {
 		logger.Info(logComponent).
 			Str("doc_id", docID).
-			Msg("未找到匹配的文档条目")
+			Msg("no matching document entries found")
 		return false, nil
 	}
 
@@ -350,7 +350,7 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 			Str("event_type", "INDEXING_ERROR").
 			Str("doc_id", docID).
 			Err(err).
-			Msg("删除索引条目失败")
+			Msg("failed to delete index entries")
 		return false, err
 	}
 
@@ -359,7 +359,7 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 	logger.Info(logComponent).
 		Str("doc_id", docID).
 		Int("delete_count", deleteCount).
-		Msg("成功删除文档条目")
+		Msg("document entries deleted successfully")
 
 	return deleteCount > 0, nil
 }
@@ -396,7 +396,7 @@ func (ci *ChromaIndexer) GetIndexInfo(ctx context.Context, indexName string) (ma
 			Str("event_type", "INDEXING_ERROR").
 			Str("index_name", indexName).
 			Err(err).
-			Msg("获取索引信息失败")
+			Msg("failed to get index info")
 		return map[string]any{"exists": false, "error": err.Error()}, nil
 	}
 

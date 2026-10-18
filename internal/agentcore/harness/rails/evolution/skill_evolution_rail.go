@@ -986,7 +986,7 @@ func (r *SkillEvolutionRail) ApproveRecord(ctx context.Context, requestID string
 			Str("skill", pending.SkillName).
 			Str("request_id", requestID).
 			Bool("is_shared", isShared).
-			Msg("[SkillEvolutionRail] 用户已批准记录")
+			Msg("[SkillEvolutionRail] user approved records")
 	}
 
 	// 非共享记录审批后触发 sharing 上传
@@ -1015,7 +1015,7 @@ func (r *SkillEvolutionRail) RejectRecord(ctx context.Context, requestID string)
 			Int("rejected_count", result.RejectedCount).
 			Str("skill", pending.SkillName).
 			Str("request_id", requestID).
-			Msg("[SkillEvolutionRail] 用户已拒绝记录")
+			Msg("[SkillEvolutionRail] user rejected records")
 	}
 	return nil
 }
@@ -1132,7 +1132,7 @@ func (r *SkillEvolutionRail) buildExperienceSharer() (sharer *sharing.Experience
 	defer func() {
 		if rec := recover(); rec != nil {
 			logger.Warn(logComponent).Any("exception", rec).
-				Msg("[SkillEvolutionRail] 构建 ExperienceSharer 失败，共享功能已禁用")
+				Msg("[SkillEvolutionRail] failed to build ExperienceSharer, sharing disabled")
 			sharer = nil
 		}
 	}()
@@ -1309,7 +1309,7 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 		defer func() {
 			if rec := recover(); rec != nil {
 				logger.Warn(logComponent).Any("exception", rec).
-					Msg("[SkillEvolutionRail] 关键词提取异常，降级返回空结果")
+					Msg("[SkillEvolutionRail] keyword extraction exception, degrading to empty result")
 				query = sharing.QueryKeywords{}
 			}
 		}()
@@ -1317,7 +1317,7 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 		query, kwErr = r.keywordExtractor.ExtractQueryKeywords(ctx, excerpt)
 		if kwErr != nil {
 			logger.Warn(logComponent).Err(kwErr).
-				Msg("[SkillEvolutionRail] 关键词提取失败，降级返回空结果")
+				Msg("[SkillEvolutionRail] keyword extraction failed, degrading to empty result")
 			query = sharing.QueryKeywords{}
 		}
 	}()
@@ -1332,7 +1332,7 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 				if rec := recover(); rec != nil {
 					// Python: except Exception as exc: logger.warning("...download_relevant failed...: %s", exc); continue
 					logger.Warn(logComponent).Str("skill", skillName).Any("exception", rec).
-						Msg("[SkillEvolutionRail] download_shared_experiences 单技能异常，跳过")
+						Msg("[SkillEvolutionRail] download_shared_experiences exception for single skill, skipping")
 				}
 			}()
 			if r.experienceSharer == nil {
@@ -1341,7 +1341,7 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 			skillID, resolveErr := r.experienceSharer.ResolveSkillID(ctx, skillName)
 			if resolveErr != nil {
 				logger.Warn(logComponent).Str("skill", skillName).Err(resolveErr).
-					Msg("[SkillEvolutionRail] resolve_skill_id 失败，跳过共享下载")
+					Msg("[SkillEvolutionRail] resolve_skill_id failed, skipping shared download")
 				return
 			}
 			if skillID == "" {
@@ -1351,7 +1351,7 @@ func (r *SkillEvolutionRail) downloadSharedExperiences(
 			bundles, dlErr := r.experienceSharer.DownloadRelevant(ctx, skillID, query, r.sharingDownloadTopK, skillName)
 			if dlErr != nil {
 				logger.Warn(logComponent).Str("skill", skillName).Str("skill_id", skillID).Err(dlErr).
-					Msg("[SkillEvolutionRail] download_shared_experiences 失败，跳过")
+					Msg("[SkillEvolutionRail] download_shared_experiences failed, skipping")
 				return
 			}
 
@@ -1465,7 +1465,7 @@ func (r *SkillEvolutionRail) stageRecordsForShare(
 	defer func() {
 		if rec := recover(); rec != nil {
 			logger.Warn(logComponent).Str("skill", skillName).Any("exception", rec).
-				Msg("[SkillEvolutionRail] 共享暂存异常，降级返回 nil")
+				Msg("[SkillEvolutionRail] share staging exception, degrading to nil")
 			result = nil
 		}
 	}()
@@ -1473,7 +1473,7 @@ func (r *SkillEvolutionRail) stageRecordsForShare(
 	result, stageErr = r.shareStager.ScreenAndStage(ctx, skillName, records, messages)
 	if stageErr != nil {
 		logger.Warn(logComponent).Str("skill", skillName).Err(stageErr).
-			Msg("[SkillEvolutionRail] 共享暂存失败，降级返回 nil")
+			Msg("[SkillEvolutionRail] share staging failed, degrading to nil")
 		result = nil
 	}
 	return result
@@ -1494,13 +1494,13 @@ func (r *SkillEvolutionRail) flushShareUploads(ctx context.Context, skillName st
 		if rec := recover(); rec != nil {
 			// Python: except Exception as exc: logger.warning("..."); return
 			logger.Warn(logComponent).Str("skill", skillName).Any("exception", rec).
-				Msg("[SkillEvolutionRail] 刷新待上传异常，降级跳过")
+				Msg("[SkillEvolutionRail] flush pending uploads exception, degrading and skipping")
 		}
 	}()
 	result, flushErr := r.experienceSharer.FlushPendingUploads(ctx, skillName)
 	if flushErr != nil {
 		logger.Warn(logComponent).Str("skill", skillName).Err(flushErr).
-			Msg("[SkillEvolutionRail] 刷新待上传失败，降级跳过")
+			Msg("[SkillEvolutionRail] flush pending uploads failed, degrading and skipping")
 		return
 	}
 	if !result.OK && result.Reason != "" {
@@ -1522,7 +1522,7 @@ func (r *SkillEvolutionRail) uploadApprovedRecordsForSharing(ctx context.Context
 		if rec := recover(); rec != nil {
 			// Python: except Exception as exc: logger.warning("...approve share staging failed for skill=%s (request=%s): %s", ...)
 			logger.Warn(logComponent).Str("skill", skillName).Any("exception", rec).
-				Msg("[SkillEvolutionRail] 审批共享暂存异常，降级跳过")
+				Msg("[SkillEvolutionRail] approval share staging exception, degrading and skipping")
 		}
 	}()
 	r.stageRecordsForShare(ctx, skillName, messages, records)
@@ -1880,7 +1880,7 @@ func (r *SkillEvolutionRail) emitGeneratedRecords(cbc *agentinterfaces.AgentCall
 			Str("request_id", approvalRequest.RequestID).
 			Int("record_count", approvalRequest.Proposal.RecordCount()).
 			Str("skill", skillName).
-			Msg("[SkillEvolutionRail] 审批请求已缓存")
+			Msg("[SkillEvolutionRail] approval request cached")
 	}
 }
 
@@ -1931,7 +1931,7 @@ func (r *SkillEvolutionRail) detectActiveRequestSignals(
 		defer func() {
 			if rec := recover(); rec != nil {
 				logger.Warn(logComponent).Any("exception", rec).
-					Msg("[SkillEvolutionRail] active request trajectory detection 异常，降级跳过")
+					Msg("[SkillEvolutionRail] active request trajectory detection exception, degrading and skipping")
 			}
 		}()
 		detected = append(detected, detector.DetectTrajectorySignals(traj, messages)...)

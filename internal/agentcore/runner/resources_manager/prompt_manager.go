@@ -55,7 +55,7 @@ func (m *PromptMgr) AddPrompt(templateID string, template *prompt.PromptTemplate
 	logger.Info(logComponent).
 		Str("event_type", "PROMPT_ADD_SUCCESS").
 		Str("template_id", templateID).
-		Msg("添加 Prompt 模板成功")
+		Msg("prompt template added")
 	return nil
 }
 
@@ -68,14 +68,14 @@ func (m *PromptMgr) AddPrompts(templates []PromptEntry) {
 			logger.Error(logComponent).
 				Str("event_type", "PROMPT_ADD_ERROR").
 				Str("template_id", entry.ID).
-				Msg("批量添加 Prompt 跳过无效条目")
+				Msg("batch add prompts skipped invalid entry")
 			continue
 		}
 		m.repo.Set(entry.ID, entry.Template)
 		logger.Info(logComponent).
 			Str("event_type", "PROMPT_ADD_SUCCESS").
 			Str("template_id", entry.ID).
-			Msg("批量添加 Prompt 模板成功")
+			Msg("prompt templates batch added")
 	}
 }
 
@@ -99,7 +99,7 @@ func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, err
 	logger.Info(logComponent).
 		Str("event_type", "PROMPT_REMOVE_SUCCESS").
 		Str("template_id", templateID).
-		Msg("移除 Prompt 模板成功")
+		Msg("prompt template removed")
 	return template, nil
 }
 

@@ -214,7 +214,7 @@ func (c *ContainerAgent) Invoke(ctx context.Context, inputs map[string]any, opts
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "ContainerAgent.Invoke").
 			Str("agent_id", c.targetCard.ID).
-			Msg("获取目标 Agent 失败")
+			Msg("failed to get target agent")
 		coordinator.Error(err)
 		return map[string]any{}, nil
 	}
@@ -233,7 +233,7 @@ func (c *ContainerAgent) Invoke(ctx context.Context, inputs map[string]any, opts
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("method", "ContainerAgent.Invoke").
 					Str("agent_id", c.targetCard.ID).
-					Msg("目标 Agent 执行错误")
+					Msg("target agent execution error")
 				coordinator.Error(err)
 				return map[string]any{}, nil
 			}
@@ -251,7 +251,7 @@ func (c *ContainerAgent) Invoke(ctx context.Context, inputs map[string]any, opts
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("method", "ContainerAgent.Invoke").
 					Str("agent_id", c.targetCard.ID).
-					Msg("目标 Agent 执行错误")
+					Msg("target agent execution error")
 				coordinator.Error(err)
 				return map[string]any{}, nil
 			}
@@ -372,7 +372,7 @@ func (c *ContainerAgent) getTargetAgent(ctx context.Context) (agentinterfaces.Ba
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "ContainerAgent.getTargetAgent").
 			Str("agent_id", c.targetCard.ID).
-			Msg("目标 Agent 提供者调用失败")
+			Msg("target agent provider call failed")
 		return nil, err
 	}
 	c.targetInstance = agent
@@ -380,7 +380,7 @@ func (c *ContainerAgent) getTargetAgent(ctx context.Context) (agentinterfaces.Ba
 	logger.Info(logComponent).
 		Str("action", "get_target_agent").
 		Str("agent_id", c.targetCard.ID).
-		Msg("懒初始化目标 Agent")
+		Msg("lazily initializing target agent")
 
 	return c.targetInstance, nil
 }
@@ -433,7 +433,7 @@ func (c *ContainerAgent) injectToolsOnce(_ context.Context, targetAgent agentint
 					Str("action", "inject_tools_once").
 					Str("target_id", targetID).
 					Str("agent_id", targetAgent.Card().ID).
-					Msg("注入 HandoffTool 到 ResourceMgr 失败")
+					Msg("failed to inject HandoffTool to ResourceMgr")
 			}
 		}
 	}
@@ -442,7 +442,7 @@ func (c *ContainerAgent) injectToolsOnce(_ context.Context, targetAgent agentint
 		Str("action", "inject_tools_once").
 		Str("agent_id", targetAgent.Card().ID).
 		Int("injected_count", len(sortedTargets)).
-		Msg("交接工具注入完成")
+		Msg("handoff tools injected")
 }
 
 // buildAgentInput 构建目标 Agent 的输入，合并交接历史。
@@ -569,7 +569,7 @@ func (c *ContainerAgent) saveAgentContext(ctx context.Context, targetAgent agent
 		logger.Warn(logComponent).Err(err).
 			Str("action", "save_agent_context").
 			Str("agent_id", targetAgent.Card().ID).
-			Msg("保存 Agent 上下文失败")
+			Msg("failed to save agent context")
 	}
 }
 
@@ -720,7 +720,7 @@ func (c *ContainerAgent) publishHandoff(
 			Str("action", "publish_handoff").
 			Str("target_id", signal.Target).
 			Str("session_id", sessionID).
-			Msg("CommunicableAgent 未绑定运行时，无法发布交接消息")
+			Msg("CommunicableAgent not bound to runtime, cannot publish handoff message")
 		return
 	}
 
@@ -733,7 +733,7 @@ func (c *ContainerAgent) publishHandoff(
 			Str("target_id", signal.Target).
 			Str("topic_id", topicID).
 			Str("session_id", sessionID).
-			Msg("发布交接请求失败")
+			Msg("failed to publish handoff request")
 	}
 
 	logger.Info(logComponent).
@@ -741,7 +741,7 @@ func (c *ContainerAgent) publishHandoff(
 		Str("target_id", signal.Target).
 		Str("reason", signal.Reason).
 		Str("session_id", sessionID).
-		Msg("发布交接消息到下一个 ContainerAgent")
+		Msg("publishing handoff message to next ContainerAgent")
 }
 
 // msgKey 生成消息的去重键，基于 role + content + tool_calls + tool_call_id。

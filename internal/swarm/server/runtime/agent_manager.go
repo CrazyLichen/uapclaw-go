@@ -85,9 +85,6 @@ type AgentFactory func(config map[string]any, mode, subMode string) (*UapClaw, e
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// amLogComponent 日志组件标识
-const amLogComponent = logger.ComponentAgentServer
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -242,10 +239,10 @@ func (am *AgentManager) CreateSession(channelID, sessionID string) (string, erro
 	// Python: L207-210: 有显式 sessionID → 直接返回
 	explicitID := strings.TrimSpace(sessionID)
 	if explicitID != "" {
-		logger.Info(amLogComponent).
+		logger.Info(logComponent).
 			Str("channel_id", channelID).
 			Str("session_id", explicitID).
-			Msg("[AgentManager] 会话已确保")
+			Msg("[AgentManager] session ensured")
 		return explicitID, nil
 	}
 	// Python: L211-215: ACP 通道 → acp_{uuid[:8]}
@@ -284,11 +281,11 @@ func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.Agen
 	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, "")
 	if err != nil {
 		// Python: L454-456: logger.error + raise
-		logger.Error(amLogComponent).
+		logger.Error(logComponent).
 			Err(err).
 			Str("channel_id", channelID).
 			Str("mode", mode).
-			Msg("[AgentManager] process_message 错误：无可用 Agent")
+			Msg("[AgentManager] process_message error: no available Agent")
 		return nil, fmt.Errorf("[AgentManager] 渠道 %s 无可用 Agent: %w", channelID, err)
 	}
 
@@ -307,11 +304,11 @@ func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schem
 
 	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, "")
 	if err != nil {
-		logger.Error(amLogComponent).
+		logger.Error(logComponent).
 			Err(err).
 			Str("channel_id", channelID).
 			Str("mode", mode).
-			Msg("[AgentManager] process_message_stream 错误：无可用 Agent")
+			Msg("[AgentManager] process_message_stream error: no available Agent")
 		return nil, fmt.Errorf("[AgentManager] 渠道 %s 无可用 Agent: %w", channelID, err)
 	}
 
@@ -357,11 +354,11 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 			envAny := stringMapToAny(envOverrides)
 			if err := entry.agent.ReloadAgentConfig(configPayload, envAny); err != nil {
 				// Python: 不中断，仅 warn
-				logger.Warn(amLogComponent).
+				logger.Warn(logComponent).
 					Err(err).
 					Str("channel_id", chKey).
 					Str("cache_key", entry.cacheKey).
-					Msg("[AgentManager] Agent reload_agent_config 失败")
+					Msg("[AgentManager] agent reload_agent_config failed")
 			}
 		}
 
@@ -371,9 +368,9 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 		//   对应 Python: await get_team_manager(channel_id).update_evolution_config(team_config)
 
 		// Python: L340: logger.info(f"channel {channel_id} reload agent config success.")
-		logger.Info(amLogComponent).
+		logger.Info(logComponent).
 			Str("channel_id", chKey).
-			Msg("[AgentManager] 渠道重载 Agent 配置成功")
+			Msg("[AgentManager] channel reloaded agent config successfully")
 	}
 
 	return nil
@@ -390,9 +387,9 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 	if !ok || len(channelAgents) == 0 {
 		am.mu.Unlock()
 		// Python: L362-367: no active agent → return []
-		logger.Info(amLogComponent).
+		logger.Info(logComponent).
 			Str("channel_key", channelKey).
-			Msg("[AgentManager] recreate_agent: 渠道无活跃 Agent")
+			Msg("[AgentManager] recreate_agent: no active Agent in channel")
 		return nil, nil
 	}
 
@@ -418,9 +415,9 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 	// Python: L380-397: 2. cleanup + 删除（失败时 warn 日志，对齐 Python try/except）
 	for _, entry := range channelAgents {
 		if err := entry.agent.Cleanup(); err != nil {
-			logger.Warn(amLogComponent).Err(err).
+			logger.Warn(logComponent).Err(err).
 				Str("cache_key", entry.cacheKey).
-				Msg("[AgentManager] recreate cleanup 失败")
+				Msg("[AgentManager] recreate cleanup failed")
 		}
 	}
 	delete(am.agents, channelKey)
@@ -428,16 +425,16 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 	am.mu.Unlock()
 
 	// Python: L393-397
-	logger.Info(amLogComponent).
+	logger.Info(logComponent).
 		Str("channel_key", channelKey).
 		Strs("modes", existingModes).
-		Msg("[AgentManager] recreate_agent: Agent 已丢弃")
+		Msg("[AgentManager] recreate_agent: Agent discarded")
 
 	// Python: L399-404: immediate=False → 不重建
 	if !immediate {
-		logger.Info(amLogComponent).
+		logger.Info(logComponent).
 			Str("channel_key", channelKey).
-			Msg("[AgentManager] recreate_agent: 下次 get_agent() 时重建")
+			Msg("[AgentManager] recreate_agent: will rebuild on next get_agent()")
 		return existingModes, nil
 	}
 
@@ -446,18 +443,18 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 		_, err := am.createAgent(ctx, channelKey, params.mode, copyMap(params.config), params.subMode, cacheKey)
 		if err != nil {
 			// Python: L416-421: rebuild failed → error log but continue
-			logger.Error(amLogComponent).
+			logger.Error(logComponent).
 				Err(err).
 				Str("cache_key", cacheKey).
-				Msg("[AgentManager] recreate_agent: 重建失败")
+				Msg("[AgentManager] recreate_agent: rebuild failed")
 		}
 	}
 
 	// Python: L422-426
-	logger.Info(amLogComponent).
+	logger.Info(logComponent).
 		Str("channel_key", channelKey).
 		Strs("modes", existingModes).
-		Msg("[AgentManager] recreate_agent: 已重建")
+		Msg("[AgentManager] recreate_agent: rebuilt")
 
 	return existingModes, nil
 }
@@ -478,8 +475,8 @@ func (am *AgentManager) CancelAllInflightWork(ctx context.Context, reason string
 	// Python: try/except + logger.exception
 	for _, agent := range agentsCopy {
 		if err := agent.CancelInflightWork(reason); err != nil {
-			logger.Warn(amLogComponent).Err(err).
-				Msg("[AgentManager] cancel_inflight_work 失败")
+			logger.Warn(logComponent).Err(err).
+				Msg("[AgentManager] cancel_inflight_work failed")
 		}
 	}
 	return nil
@@ -496,8 +493,8 @@ func (am *AgentManager) Cleanup() error {
 		for _, entry := range chAgents {
 			// Python: L493-497: cleanup 失败时 warn 日志
 			if err := entry.agent.Cleanup(); err != nil {
-				logger.Warn(amLogComponent).Err(err).
-					Msg("[AgentManager] Agent cleanup 失败")
+				logger.Warn(logComponent).Err(err).
+					Msg("[AgentManager] agent cleanup failed")
 			}
 		}
 		delete(am.agents, chKey)
@@ -506,7 +503,7 @@ func (am *AgentManager) Cleanup() error {
 	am.agentCreateParams = make(map[string]map[string]*agentCreateParamsEntry)
 	am.clientCapabilitiesByChannel = make(map[string]map[string]any)
 
-	logger.Info(amLogComponent).Msg("[AgentManager] 所有 Agent 已清理")
+	logger.Info(logComponent).Msg("[AgentManager] all agents cleaned up")
 	return nil
 }
 
@@ -559,12 +556,12 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 	}
 
 	// Python: L122-128
-	logger.Info(amLogComponent).
+	logger.Info(logComponent).
 		Str("channel_key", channelKey).
 		Str("mode", modeKey).
 		Str("sub_mode", subModeKey).
 		Str("project_dir", projectDir).
-		Msg("[AgentManager] 正在创建 Agent")
+		Msg("[AgentManager] creating Agent")
 
 	// Python: L129-130: 3. 创建 UapClaw + CreateInstance（通过工厂函数）
 	am.mu.RLock()
@@ -604,10 +601,10 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 	am.mu.Unlock()
 
 	// Python: L143
-	logger.Info(amLogComponent).
+	logger.Info(logComponent).
 		Str("channel_key", channelKey).
 		Str("cache_key", cacheKey).
-		Msg("[AgentManager] Agent 已创建")
+		Msg("[AgentManager] Agent created")
 
 	return agent, nil
 }

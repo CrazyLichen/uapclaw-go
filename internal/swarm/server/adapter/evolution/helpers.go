@@ -21,17 +21,6 @@ type EvolutionPushContext struct {
 	SessionID string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent 日志组件
-const logComponent = logger.ComponentAgentServer
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BuildPushMessageFunc 构建 server_push 消息的函数类型。
 // Python: build_server_push_message 回调参数（关键字参数，位置无关）。
 // 参数顺序与 session.BuildServerPushMessage 一致，可直接赋值。
@@ -45,7 +34,16 @@ type ParseStreamChunkFunc func(evt map[string]any) map[string]any
 // Python: broadcast_event 回调参数
 type BroadcastEventFunc func(channelID *string, sessionID string, parsed map[string]any)
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件
+const logComponent = logger.ComponentAgentServer
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // PushEvolutionStatus 推送状态。
 // Python: push_evolution_status()

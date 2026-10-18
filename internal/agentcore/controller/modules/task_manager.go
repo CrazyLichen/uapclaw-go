@@ -110,12 +110,12 @@ const (
 func (s *TaskManagerState) ToMap() map[string]any {
 	data, err := json.Marshal(s)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("TaskManagerState 序列化失败")
+		logger.Error(logComponent).Err(err).Msg("TaskManagerState serialization failed")
 		return nil
 	}
 	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
-		logger.Error(logComponent).Err(err).Msg("TaskManagerState 反序列化到 map 失败")
+		logger.Error(logComponent).Err(err).Msg("TaskManagerState deserialize to map failed")
 		return nil
 	}
 	return result
@@ -186,7 +186,7 @@ func (tm *TaskManager) AddTask(_ context.Context, task *schema.Task) error {
 		logger.Error(logComponent).
 			Str("task_id", task.TaskID).
 			Str("event_type", "TASK_ADD_ERROR").
-			Msg("任务ID已存在，添加失败")
+			Msg("task ID already exists, add failed")
 		return exception.NewBaseError(exception.StatusAgentControllerTaskParamError,
 			exception.WithMsg(fmt.Sprintf("任务ID已存在: %s", task.TaskID)),
 		)
@@ -216,7 +216,7 @@ func (tm *TaskManager) AddTask(_ context.Context, task *schema.Task) error {
 		Str("session_id", task.SessionID).
 		Int("priority", task.Priority).
 		Str("status", string(task.Status)).
-		Msg("任务添加成功")
+		Msg("task added successfully")
 
 	// 收集需要通知的任务
 	if task.Status == schema.TaskSubmitted {
@@ -250,9 +250,9 @@ func (tm *TaskManager) GetTask(_ context.Context, filter *TaskFilter) ([]*schema
 	if p, ok := filter.Priority.(string); ok && p == "highest" {
 		logger.Error(logComponent).
 			Str("event_type", "TASK_GET_ERROR").
-			Msg("GetTask 不支持 priority=highest，请使用 PopTask")
+			Msg("GetTask does not support priority=highest, use PopTask instead")
 		return nil, exception.NewBaseError(exception.StatusAgentControllerTaskParamError,
-			exception.WithMsg("GetTask 不支持 priority=highest，请使用 PopTask"),
+			exception.WithMsg("GetTask does not support priority=highest, use PopTask instead"),
 		)
 	}
 
@@ -282,7 +282,7 @@ func (tm *TaskManager) GetTask(_ context.Context, filter *TaskFilter) ([]*schema
 
 	logger.Info(logComponent).
 		Int("matched_count", len(result)).
-		Msg("任务查询完成")
+		Msg("task query completed")
 
 	return result, nil
 }
@@ -293,9 +293,9 @@ func (tm *TaskManager) PopTask(ctx context.Context, filter *TaskFilter) ([]*sche
 	if filter == nil {
 		logger.Error(logComponent).
 			Str("event_type", "TASK_POP_ERROR").
-			Msg("PopTask 的 filter 不能为 nil")
+			Msg("PopTask filter cannot be nil")
 		return nil, exception.NewBaseError(exception.StatusAgentControllerTaskParamError,
-			exception.WithMsg("PopTask 的 filter 不能为 nil"),
+			exception.WithMsg("PopTask filter cannot be nil"),
 		)
 	}
 
@@ -316,7 +316,7 @@ func (tm *TaskManager) PopTask(ctx context.Context, filter *TaskFilter) ([]*sche
 		}
 		logger.Info(logComponent).
 			Int("highest_priority", maxPriority).
-			Msg("PopTask 使用最高优先级")
+			Msg("PopTask using highest priority")
 	}
 
 	// 先查询
@@ -335,7 +335,7 @@ func (tm *TaskManager) PopTask(ctx context.Context, filter *TaskFilter) ([]*sche
 
 	logger.Info(logComponent).
 		Int("popped_count", len(tasks)).
-		Msg("任务弹出完成")
+		Msg("task pop completed")
 
 	return tasks, nil
 }
@@ -350,7 +350,7 @@ func (tm *TaskManager) UpdateTask(_ context.Context, task *schema.Task) bool {
 	if !exists {
 		logger.Warn(logComponent).
 			Str("task_id", task.TaskID).
-			Msg("更新任务失败：任务不存在")
+			Msg("failed to update task: task not found")
 		return false
 	}
 
@@ -395,7 +395,7 @@ func (tm *TaskManager) UpdateTask(_ context.Context, task *schema.Task) bool {
 		Str("task_id", task.TaskID).
 		Int("new_priority", task.Priority).
 		Str("new_status", string(task.Status)).
-		Msg("任务更新成功")
+		Msg("task updated successfully")
 
 	return true
 }
@@ -419,7 +419,7 @@ func (tm *TaskManager) RemoveTask(ctx context.Context, filter *TaskFilter) error
 
 	logger.Info(logComponent).
 		Int("removed_count", len(tasks)).
-		Msg("任务删除完成")
+		Msg("task removal completed")
 
 	return nil
 }
@@ -443,7 +443,7 @@ func (tm *TaskManager) UpdateTaskStatus(_ context.Context, taskID string, newSta
 		logger.Error(logComponent).
 			Str("task_id", taskID).
 			Str("event_type", "TASK_STATUS_UPDATE_ERROR").
-			Msg("更新状态失败：任务不存在")
+			Msg("failed to update status: task not found")
 		return exception.NewBaseError(exception.StatusAgentControllerTaskParamError,
 			exception.WithMsg(fmt.Sprintf("任务不存在: %s", taskID)),
 		)
@@ -462,7 +462,7 @@ func (tm *TaskManager) UpdateTaskStatus(_ context.Context, taskID string, newSta
 		Str("task_id", taskID).
 		Str("old_status", string(oldStatus)).
 		Str("new_status", string(newStatus)).
-		Msg("任务状态更新")
+		Msg("task status updated")
 
 	// 更新子任务
 	if cfg.withChildren {
@@ -476,7 +476,7 @@ func (tm *TaskManager) UpdateTaskStatus(_ context.Context, taskID string, newSta
 				logger.Info(logComponent).
 					Str("task_id", childID).
 					Str("new_status", string(newStatus)).
-					Msg("子任务状态更新")
+					Msg("child task status updated")
 			}
 		}
 	}
@@ -494,7 +494,7 @@ func (tm *TaskManager) UpdateTaskStatus(_ context.Context, taskID string, newSta
 				logger.Info(logComponent).
 					Str("task_id", childID).
 					Str("new_status", string(newStatus)).
-					Msg("递归子任务状态更新")
+					Msg("recursive child task status updated")
 			}
 		}
 	}
@@ -529,7 +529,7 @@ func (tm *TaskManager) SetPriority(_ context.Context, taskID string, newPriority
 		logger.Error(logComponent).
 			Str("task_id", taskID).
 			Str("event_type", "TASK_PRIORITY_UPDATE_ERROR").
-			Msg("设置优先级失败：任务不存在")
+			Msg("failed to set priority: task not found")
 		return exception.NewBaseError(exception.StatusAgentControllerTaskParamError,
 			exception.WithMsg(fmt.Sprintf("任务不存在: %s", taskID)),
 		)
@@ -545,7 +545,7 @@ func (tm *TaskManager) SetPriority(_ context.Context, taskID string, newPriority
 		Str("task_id", taskID).
 		Int("old_priority", oldPriority).
 		Int("new_priority", newPriority).
-		Msg("任务优先级更新")
+		Msg("task priority updated")
 
 	// 更新直接子任务优先级
 	if cfg.withChildren {
@@ -558,7 +558,7 @@ func (tm *TaskManager) SetPriority(_ context.Context, taskID string, newPriority
 				logger.Info(logComponent).
 					Str("task_id", childID).
 					Int("new_priority", newPriority).
-					Msg("子任务优先级更新")
+					Msg("child task priority updated")
 			}
 		}
 	}
@@ -575,7 +575,7 @@ func (tm *TaskManager) SetPriority(_ context.Context, taskID string, newPriority
 				logger.Info(logComponent).
 					Str("task_id", childID).
 					Int("new_priority", newPriority).
-					Msg("递归子任务优先级更新")
+					Msg("recursive child task priority updated")
 			}
 		}
 	}
@@ -593,7 +593,7 @@ func (tm *TaskManager) GetChildTask(_ context.Context, taskID string, isRecursiv
 		logger.Error(logComponent).
 			Str("task_id", taskID).
 			Str("event_type", "TASK_GET_CHILD_ERROR").
-			Msg("获取子任务失败：任务不存在")
+			Msg("failed to get child tasks: task not found")
 		return nil, exception.NewBaseError(exception.StatusAgentControllerTaskParamError,
 			exception.WithMsg(fmt.Sprintf("任务不存在: %s", taskID)),
 		)
@@ -621,7 +621,7 @@ func (tm *TaskManager) GetChildTask(_ context.Context, taskID string, isRecursiv
 		Str("task_id", taskID).
 		Bool("is_recursive", isRecursive).
 		Int("child_count", len(result)).
-		Msg("获取子任务完成")
+		Msg("child task query completed")
 
 	return result, nil
 }
@@ -670,7 +670,7 @@ func (tm *TaskManager) GetState(_ context.Context) (*TaskManagerState, error) {
 
 	logger.Info(logComponent).
 		Int("task_count", len(tasksCopy)).
-		Msg("获取状态快照完成")
+		Msg("state snapshot completed")
 
 	return &TaskManagerState{
 		Tasks:            tasksCopy,
@@ -690,7 +690,7 @@ func (tm *TaskManager) LoadState(_ context.Context, state *TaskManagerState) err
 	if state == nil {
 		logger.Error(logComponent).
 			Str("event_type", "TASK_LOAD_STATE_ERROR").
-			Msg("加载状态失败：state 为 nil")
+			Msg("failed to load state: state is nil")
 		return exception.NewBaseError(exception.StatusAgentControllerTaskParamError,
 			exception.WithMsg("state 不能为 nil"),
 		)
@@ -734,7 +734,7 @@ func (tm *TaskManager) LoadState(_ context.Context, state *TaskManagerState) err
 
 	logger.Info(logComponent).
 		Int("task_count", len(tm.tasks)).
-		Msg("加载状态快照完成")
+		Msg("state snapshot loaded")
 
 	return nil
 }
@@ -751,7 +751,7 @@ func (tm *TaskManager) ClearState(_ context.Context) error {
 	tm.childToParent = make(map[string]string)
 	tm.rootTasks = make(map[string]struct{})
 
-	logger.Info(logComponent).Msg("状态已清空")
+	logger.Info(logComponent).Msg("state cleared")
 
 	return nil
 }
@@ -792,7 +792,7 @@ func (tm *TaskManager) notifyIfSubmitted(tasks []*schema.Task) {
 			if callback != nil {
 				logger.Info(logComponent).
 					Str("task_id", task.TaskID).
-					Msg("触发 SUBMITTED 通知回调")
+					Msg("SUBMITTED notification callback triggered")
 				callback()
 			}
 			return
@@ -925,7 +925,7 @@ func (tm *TaskManager) removeTaskLocked(taskID string) {
 
 	logger.Info(logComponent).
 		Str("task_id", taskID).
-		Msg("任务已移除")
+		Msg("task removed")
 }
 
 // removeFromPriorityIndex 从优先级索引中移除指定任务ID。
@@ -1001,7 +1001,7 @@ func (tm *TaskManager) deepCopyTask(task *schema.Task) *schema.Task {
 			Err(err).
 			Str("task_id", task.TaskID).
 			Str("event_type", "TASK_DEEP_COPY_ERROR").
-			Msg("深拷贝任务失败，返回原引用")
+			Msg("failed to deep copy task, returning original reference")
 		return task
 	}
 	var copy schema.Task
@@ -1010,7 +1010,7 @@ func (tm *TaskManager) deepCopyTask(task *schema.Task) *schema.Task {
 			Err(err).
 			Str("task_id", task.TaskID).
 			Str("event_type", "TASK_DEEP_COPY_ERROR").
-			Msg("深拷贝任务反序列化失败，返回原引用")
+			Msg("failed to deserialize deep copy of task, returning original reference")
 		return task
 	}
 	return &copy

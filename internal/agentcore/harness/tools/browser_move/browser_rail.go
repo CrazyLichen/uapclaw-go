@@ -97,7 +97,7 @@ func (r *BrowserRuntimeRail) BeforeInvoke(ctx context.Context, cbc *sainterfaces
 		logger.Warn(logComponent).
 			Str("event_type", "browser_rail_before_invoke_error").
 			Err(err).
-			Msg("确保运行时就绪失败")
+			Msg("failed to ensure runtime ready")
 		return nil
 	}
 

@@ -81,7 +81,7 @@ func NewSwitchModeTool(agent hinterfaces.DeepAgentInterface, language, agentID s
 		logger.Info(logComponent).
 			Str("event_type", "switch_mode").
 			Str("mode", currentMode).
-			Msg("AgentModeRail 已切换模式")
+			Msg("AgentModeRail switched mode")
 
 		return map[string]any{
 			"current_mode": currentMode,

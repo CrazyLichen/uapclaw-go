@@ -47,7 +47,7 @@ func (h *ValidateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 	if !valid {
 		logger.Warn(logComponent).
 			Str("message", message).
-			Msg("[ValidateStage] 校验失败，回退到 GENERATE")
+			Msg("[ValidateStage] validation failed, falling back to GENERATE")
 		return &skilldev.StageResult{NextStage: skilldev.SkillDevStageGenerate}, nil
 	}
 

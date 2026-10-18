@@ -103,7 +103,7 @@ func NewAgentTeamSession(opts ...AgentTeamSessionOption) *AgentTeamSession {
 		Str("action", "new_agent_team_session").
 		Str("session_id", s.sessionID).
 		Str("team_id", s.teamID).
-		Msg("创建公开层 AgentTeamSession")
+		Msg("created public layer AgentTeamSession")
 
 	return s
 }
@@ -248,7 +248,7 @@ func (s *AgentTeamSession) ClearSession(ctx context.Context) {
 		Str("action", "agent_team_session_clear").
 		Str("session_id", s.sessionID).
 		Str("team_id", s.teamID).
-		Msg("AgentTeamSession 已清空")
+		Msg("AgentTeamSession cleared")
 }
 
 // Interact 团队会话不支持交互，始终返回错误。
@@ -278,7 +278,7 @@ func (s *AgentTeamSession) PreRun(ctx context.Context, inputs ...map[string]any)
 				Str("action", "agent_team_pre_run").
 				Str("session_id", s.GetSessionID()).
 				Str("team_id", s.GetTeamID()).
-				Msg("AgentTeamSession PreRun 检查点失败")
+				Msg("AgentTeamSession PreRun checkpoint failed")
 			return err
 		}
 	}
@@ -288,7 +288,7 @@ func (s *AgentTeamSession) PreRun(ctx context.Context, inputs ...map[string]any)
 		Str("action", "agent_team_pre_run").
 		Str("session_id", s.GetSessionID()).
 		Str("team_id", s.GetTeamID()).
-		Msg("AgentTeamSession PreRun 完成")
+		Msg("AgentTeamSession PreRun completed")
 
 	return nil
 }
@@ -313,7 +313,7 @@ func (s *AgentTeamSession) PostRun(ctx context.Context) error {
 			Str("action", "agent_team_post_run").
 			Str("session_id", s.GetSessionID()).
 			Str("team_id", s.GetTeamID()).
-			Msg("AgentTeamSession PostRun Commit 失败")
+			Msg("AgentTeamSession PostRun Commit failed")
 		return err
 	}
 
@@ -322,7 +322,7 @@ func (s *AgentTeamSession) PostRun(ctx context.Context) error {
 		Str("action", "agent_team_post_run").
 		Str("session_id", s.GetSessionID()).
 		Str("team_id", s.GetTeamID()).
-		Msg("AgentTeamSession PostRun 完成")
+		Msg("AgentTeamSession PostRun completed")
 
 	return nil
 }

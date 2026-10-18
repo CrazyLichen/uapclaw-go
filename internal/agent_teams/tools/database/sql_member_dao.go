@@ -46,7 +46,7 @@ func (d *SQLMemberDao) CreateMember(ctx context.Context, memberName, teamName, d
 	}
 	result := d.db.WithContext(ctx).Create(member)
 	if result.Error != nil {
-		logger.Error(logComponent).Str("member_name", memberName).Str("team_name", teamName).Err(result.Error).Msg("成员已存在")
+		logger.Error(logComponent).Str("member_name", memberName).Str("team_name", teamName).Err(result.Error).Msg("member already exists")
 		return false
 	}
 	return true
@@ -98,7 +98,7 @@ func (d *SQLMemberDao) UpdateMemberStatus(ctx context.Context, memberName, teamN
 			Str("member_name", memberName).
 			Str("from", member.Status).
 			Str("to", status).
-			Msg("成员状态转换不合法")
+			Msg("invalid member status transition")
 		return false
 	}
 	d.db.WithContext(ctx).Table("team_member").
@@ -163,7 +163,7 @@ func (d *SQLMemberDao) UpdateMemberExecutionStatus(ctx context.Context, memberNa
 			Str("member_name", memberName).
 			Str("from", member.ExecutionStatus).
 			Str("to", executionStatus).
-			Msg("执行状态转换不合法")
+			Msg("invalid execution status transition")
 		return false
 	}
 	d.db.WithContext(ctx).Table("team_member").

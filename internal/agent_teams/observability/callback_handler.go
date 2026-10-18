@@ -41,7 +41,7 @@ const (
 	// Python: _GEN_AI_SYSTEM_VALUE = "openjiuwen"
 	genAISystemValue = "openjiuwen"
 	// logComponent 日志组件
-	logComponent = logger.ComponentAgentCore
+	logComponent = logger.ComponentTeam
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -447,7 +447,7 @@ func (h *OtelCallbackHandler) maybeRecordResponseAttrs(state *LlmSpanState, resp
 // Python: except Exception as exc: team_logger.warning("otel: xxx failed: {}", exc)
 func recoverCallback(methodName string) {
 	if r := recover(); r != nil {
-		logger.Warn(logComponent).Any("error", r).Str("method", methodName).Msg("OTel 回调异常")
+		logger.Warn(logComponent).Any("error", r).Str("method", methodName).Msg("OTel callbackexception")
 	}
 }
 

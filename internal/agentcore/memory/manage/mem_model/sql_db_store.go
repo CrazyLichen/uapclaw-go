@@ -69,7 +69,7 @@ func (s *SqlDbStore) Write(ctx context.Context, table string, data map[string]an
 			Str("event_type", "MEMORY_STORE").
 			Str("table_name", table).
 			Err(err).
-			Msg("写入数据失败")
+			Msg("failed to write data")
 		return exception.BuildError(exception.StatusStoreMessageAddExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("write failed for table %s: %s", table, err.Error())),
 		)
@@ -118,7 +118,7 @@ func (s *SqlDbStore) ConditionGet(ctx context.Context, table string, conditions 
 			Str("event_type", "MEMORY_RETRIEVE").
 			Str("table_name", table).
 			Err(err).
-			Msg("条件查询失败")
+			Msg("condition query failed")
 		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("condition_get failed for table %s: %s", table, err.Error())),
 		)
@@ -180,7 +180,7 @@ func (s *SqlDbStore) GetWithSort(ctx context.Context, table string, filters map[
 			Str("event_type", "MEMORY_RETRIEVE").
 			Str("table_name", table).
 			Err(err).
-			Msg("排序查询失败")
+			Msg("sorted query failed")
 		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("get_with_sort failed for table %s: %s", table, err.Error())),
 		)
@@ -208,7 +208,7 @@ func (s *SqlDbStore) Update(ctx context.Context, table string, conditions map[st
 			Str("event_type", "MEMORY_UPDATE").
 			Str("table_name", table).
 			Err(err).
-			Msg("更新数据失败")
+			Msg("failed to update data")
 		return exception.BuildError(exception.StatusStoreMessageUpdateExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("update failed for table %s: %s", table, err.Error())),
 		)
@@ -236,7 +236,7 @@ func (s *SqlDbStore) Delete(ctx context.Context, table string, conditions map[st
 			Str("event_type", "MEMORY_DELETE").
 			Str("table_name", table).
 			Err(err).
-			Msg("删除数据失败")
+			Msg("failed to delete data")
 		return exception.BuildError(exception.StatusStoreMessageDeleteExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("delete failed for table %s: %s", table, err.Error())),
 		)
@@ -289,7 +289,7 @@ func (s *SqlDbStore) Count(ctx context.Context, table string, conditions map[str
 			Str("event_type", "MEMORY_RETRIEVE").
 			Str("table_name", table).
 			Err(err).
-			Msg("计数查询失败")
+			Msg("count query failed")
 		return 0, exception.BuildError(exception.StatusStoreMessageCountExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("count failed for table %s: %s", table, err.Error())),
 		)
@@ -327,7 +327,7 @@ func (s *SqlDbStore) CountWithTimeRange(ctx context.Context, table string, condi
 			Str("event_type", "MEMORY_RETRIEVE").
 			Str("table_name", table).
 			Err(err).
-			Msg("带时间范围的计数查询失败")
+			Msg("count query with time range failed")
 		return 0, exception.BuildError(exception.StatusStoreMessageCountExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("count_with_time_range failed for table %s: %s", table, err.Error())),
 		)
@@ -384,7 +384,7 @@ func (s *SqlDbStore) GetWithSortAndTimeRange(ctx context.Context, table string, 
 			Str("event_type", "MEMORY_RETRIEVE").
 			Str("table_name", table).
 			Err(err).
-			Msg("时间范围排序查询失败")
+			Msg("sorted query with time range failed")
 		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("get_with_sort_and_time_range failed for table %s: %s", table, err.Error())),
 		)
@@ -407,7 +407,7 @@ func (s *SqlDbStore) CreateBatch(ctx context.Context, table string, rows []map[s
 			Str("table_name", table).
 			Int("row_count", len(rows)).
 			Err(err).
-			Msg("批量写入数据失败")
+			Msg("failed to batch write data")
 		return exception.BuildError(exception.StatusStoreMessageAddExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("create_batch failed for table %s: %s", table, err.Error())),
 		)
@@ -494,7 +494,7 @@ func (s *SqlDbStore) BatchGet(ctx context.Context, table string, conditionsList 
 			Str("event_type", "MEMORY_RETRIEVE").
 			Str("table_name", table).
 			Err(err).
-			Msg("批量条件查询失败")
+			Msg("batch condition query failed")
 		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("batch_get failed for table %s: %s", table, err.Error())),
 		)
@@ -527,7 +527,7 @@ func (s *SqlDbStore) Get(ctx context.Context, table string, recordID string, col
 			Str("event_type", "MEMORY_RETRIEVE").
 			Str("table_name", table).
 			Err(err).
-			Msg("单条查询失败")
+			Msg("single record query failed")
 		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("get failed for table %s: %s", table, err.Error())),
 		)
@@ -548,7 +548,7 @@ func (s *SqlDbStore) DeleteTable(ctx context.Context, tableName string) error {
 			Str("event_type", "MEMORY_DELETE").
 			Str("table_name", tableName).
 			Err(err).
-			Msg("删除表失败")
+			Msg("failed to drop table")
 		return exception.BuildError(exception.StatusStoreMessageDeleteExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("delete_table failed for %s: %s", tableName, err.Error())),
 		)

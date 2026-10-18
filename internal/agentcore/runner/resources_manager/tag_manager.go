@@ -103,7 +103,7 @@ func (m *TagMgr) TagResource(resourceID string, tags []Tag) []Tag {
 		logger.Info(logComponent).
 			Str("resource_id", resourceID).
 			Strs("old_tags", oldTags).
-			Msg("已为资源添加 GLOBAL 标签，变更为 [GLOBAL]")
+			Msg("GLOBAL tag added to resource, changed to [GLOBAL]")
 		return []Tag{TagGlobal}
 	}
 
@@ -114,7 +114,7 @@ func (m *TagMgr) TagResource(resourceID string, tags []Tag) []Tag {
 		Str("resource_id", resourceID).
 		Strs("added_tags", tagSetToSortedSlice(tagsToAdd)).
 		Strs("current_tags", currentTags).
-		Msg("已为资源添加标签")
+		Msg("tag added to resource")
 	return currentTags
 }
 
@@ -134,7 +134,7 @@ func (m *TagMgr) RemoveResource(resourceID string) []Tag {
 	logger.Info(logComponent).
 		Str("resource_id", resourceID).
 		Strs("removed_tags", removedTags).
-		Msg("已移除资源")
+		Msg("resource removed")
 	return removedTags
 }
 
@@ -181,7 +181,7 @@ func (m *TagMgr) RemoveResourceTags(resourceID string, tags []Tag, skipIfNotExis
 		Str("resource_id", resourceID).
 		Strs("removed_tags", tagSetToSortedSlice(tagsToRemove)).
 		Strs("remaining_tags", remainingTags).
-		Msg("已从资源移除标签")
+		Msg("tag removed from resource")
 	return remainingTags, nil
 }
 
@@ -210,7 +210,7 @@ func (m *TagMgr) UpdateResourceTags(resourceID string, tags []Tag, strategy TagU
 			Str("resource_id", resourceID).
 			Str("strategy", strategy.String()).
 			Strs("old_tags", oldTags).
-			Msg("已将资源更新为 GLOBAL")
+			Msg("resource updated to GLOBAL")
 		return []Tag{TagGlobal}, nil
 	}
 
@@ -221,7 +221,7 @@ func (m *TagMgr) UpdateResourceTags(resourceID string, tags []Tag, strategy TagU
 		logger.Info(logComponent).
 			Str("resource_id", resourceID).
 			Strs("new_tags", tagSetToSortedSlice(newTags)).
-			Msg("已替换资源标签")
+			Msg("resource tags replaced")
 		return currentTags, nil
 	case TagUpdateMerge:
 		currentTags := m.addResourceTags(resourceID, newTags)
@@ -229,7 +229,7 @@ func (m *TagMgr) UpdateResourceTags(resourceID string, tags []Tag, strategy TagU
 			Str("resource_id", resourceID).
 			Strs("added_tags", tagSetToSortedSlice(newTags)).
 			Strs("current_tags", currentTags).
-			Msg("已合并资源标签")
+			Msg("resource tags merged")
 		return currentTags, nil
 	default:
 		return nil, exception.BuildError(exception.StatusResourceTagReplaceResourceTagError,
@@ -263,7 +263,7 @@ func (m *TagMgr) RemoveTag(tag Tag, skipIfNotExists bool) ([]string, error) {
 	logger.Info(logComponent).
 		Str("tag", tag).
 		Strs("affected_resources", affectedResources).
-		Msg("已移除标签")
+		Msg("tag removed")
 	return affectedResources, nil
 }
 
@@ -424,7 +424,7 @@ func (m *TagMgr) Display(enableLog bool) string {
 	if enableLog {
 		logger.Info(logComponent).
 			Str("msg", msg).
-			Msg("---- 标签管理器状态 ----")
+			Msg("---- tag manager state ----")
 	}
 
 	return msg

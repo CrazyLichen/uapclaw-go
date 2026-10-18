@@ -84,7 +84,7 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 		// 一比一复刻 Python: if not query → ToolOutput(success=True, data={"skills": ..., "mode": "all"})
 		logger.Info(logComponent).
 			Str("mode", "all").
-			Msg("ListSkillTool 无 query，返回全部技能")
+			Msg("ListSkillTool no query, returning all skills")
 		return map[string]any{
 			"success": true,
 			"data": map[string]any{
@@ -99,7 +99,7 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 		logger.Info(logComponent).
 			Str("query", query).
 			Str("mode", "all_fallback").
-			Msg("ListSkillTool 无模型配置，回退返回全部技能")
+			Msg("ListSkillTool no model configured, falling back to return all skills")
 		return map[string]any{
 			"success": true,
 			"data": map[string]any{
@@ -116,7 +116,7 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 		logger.Error(logComponent).
 			Str("query", query).
 			Err(routeErr).
-			Msg("ListSkillTool 路由技能失败")
+			Msg("ListSkillTool failed to route skills")
 		return map[string]any{
 			"success": false,
 			"error":   routeErr.Error(),
@@ -129,7 +129,7 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 		Str("query", query).
 		Str("mode", "filtered").
 		Int("selected_count", len(selectedSkills)).
-		Msg("ListSkillTool 路由筛选技能成功")
+		Msg("ListSkillTool routed and filtered skills successfully")
 
 	// 一比一复刻 Python: selected_skill_names = [skill.name for skill in selected_skills]
 	selectedNamesResult := make([]string, 0, len(selectedSkills))
@@ -202,7 +202,7 @@ func (t *ListSkillTool) routeSkills(ctx context.Context, query string) ([]string
 		logger.Error(logComponent).
 			Str("query", query).
 			Err(jsonErr).
-			Msg("ListSkillTool 序列化技能列表失败")
+			Msg("ListSkillTool failed to serialize skill list")
 		return nil, fmt.Errorf("序列化技能列表失败: %w", jsonErr)
 	}
 
@@ -226,7 +226,7 @@ func (t *ListSkillTool) routeSkills(ctx context.Context, query string) ([]string
 		logger.Error(logComponent).
 			Str("query", query).
 			Err(invokeErr).
-			Msg("ListSkillTool LLM 路由调用失败")
+			Msg("ListSkillTool LLM routing call failed")
 		return nil, fmt.Errorf("LLM 路由调用失败: %w", invokeErr)
 	}
 
@@ -268,7 +268,7 @@ func parseSelectedSkillNames(content string) []string {
 		logger.Warn(logComponent).
 			Str("raw_content", content).
 			Err(unmarshalErr).
-			Msg("ListSkillTool JSON 解析失败")
+			Msg("ListSkillTool JSON parse failed")
 		return []string{}
 	}
 

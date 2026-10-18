@@ -73,7 +73,7 @@ func NewKVMigrator(kvStore kv.BaseKVStore, kvRegistry *operation.OperationRegist
 func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operations []operation.Operation) error {
 	if entityKey != KVEntityKey {
 		logger.Error(logComponent).Str("entity_key", entityKey).Str("expected_key", KVEntityKey).
-			Msg("不支持的 entity_key")
+			Msg("unsupported entity_key")
 		return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 			exception.WithParam("entity_key", entityKey),
 			exception.WithParam("error_msg", fmt.Sprintf("不支持的 entity_key: '%s', 期望: '%s'", entityKey, KVEntityKey)),
@@ -85,7 +85,7 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 	}
 
 	if !validateOperationsOrder(operations) {
-		logger.Error(logComponent).Msg("操作的 schema_version 不是升序排列")
+		logger.Error(logComponent).Msg("schema_version not in ascending order")
 		return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 			exception.WithParam("error_msg", "操作的 schema_version 不是升序排列"),
 		)
@@ -99,7 +99,7 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 	lastOpVersion := operations[len(operations)-1].SchemaVersion()
 	if currentVersion != nil && *currentVersion >= lastOpVersion {
 		logger.Info(logComponent).Int("current_version", *currentVersion).Int("last_op_version", lastOpVersion).
-			Msg("当前版本已 >= 最新操作版本，无需迁移")
+			Msg("current version >= latest operation version, no migration needed")
 		return nil
 	}
 
@@ -108,11 +108,11 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 		return nil
 	}
 
-	logger.Info(logComponent).Int("pending_count", len(pendingOps)).Msg("发现待执行操作")
+	logger.Info(logComponent).Int("pending_count", len(pendingOps)).Msg("found pending operations")
 
 	backupKey, err := m.createBackup(ctx, currentVersion)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("创建 KV 备份失败")
+		logger.Error(logComponent).Err(err).Msg("failed to create KV backup")
 		return err
 	}
 
@@ -120,15 +120,15 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 	for idx, op := range pendingOps {
 		logger.Info(logComponent).Int("idx", idx+1).Int("total", len(pendingOps)).
 			Str("op_type", op.TypeName()).Int("schema_version", op.SchemaVersion()).
-			Msg("执行操作")
+			Msg("executing operation")
 
 		if err := m.executeOperation(ctx, op); err != nil {
 			logger.Error(logComponent).Err(err).Str("op_type", op.TypeName()).
-				Int("schema_version", op.SchemaVersion()).Msg("操作执行失败")
+				Int("schema_version", op.SchemaVersion()).Msg("operation execution failed")
 
 			if restoreErr := m.restoreFromBackup(ctx, backupKey); restoreErr != nil {
 				logger.Error(logComponent).Err(restoreErr).Str("backup_key", backupKey).
-					Msg("从备份恢复失败")
+					Msg("failed to restore from backup")
 			}
 			return err
 		}
@@ -136,7 +136,7 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 		v := op.SchemaVersion()
 		lastVersion = &v
 		logger.Info(logComponent).Str("op_type", op.TypeName()).Int("schema_version", op.SchemaVersion()).
-			Msg("操作执行成功")
+			Msg("operation executed successfully")
 	}
 
 	if lastVersion != nil && (currentVersion == nil || *lastVersion != *currentVersion) {
@@ -145,7 +145,7 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 		}
 		logger.Info(logComponent).
 			Int("new_version", *lastVersion).
-			Msg("KV schema 版本已更新")
+			Msg("KV schema version updated")
 	}
 
 	m.cleanupBackup(ctx, backupKey)
@@ -190,7 +190,7 @@ func (m *KVMigrator) getCurrentVersion(ctx context.Context) (*int, error) {
 	version, err := strconv.Atoi(versionStr)
 	if err != nil {
 		logger.Error(logComponent).Str("version_value", versionStr).
-			Msg("KV_SCHEMA_VERSION 格式无效，期望数字字符串")
+			Msg("invalid KV_SCHEMA_VERSION format, expected numeric string")
 		return nil, exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf("无效的 SCHEMA_VERSION 格式: '%s'", versionStr)),
 		)
@@ -221,7 +221,7 @@ func (m *KVMigrator) hasMemoryModuleData(ctx context.Context) (bool, error) {
 // Python: KVMigrator._update_version
 func (m *KVMigrator) updateVersion(ctx context.Context, version int) error {
 	if err := m.kvStore.Set(ctx, KVSchemaVersionKey, []byte(strconv.Itoa(version))); err != nil {
-		logger.Error(logComponent).Err(err).Int("version", version).Msg("更新 KV 版本失败")
+		logger.Error(logComponent).Err(err).Int("version", version).Msg("failed to update KV version")
 		return err
 	}
 	return nil
@@ -280,7 +280,7 @@ func (m *KVMigrator) createBackup(ctx context.Context, currentVersion *int) (str
 		}
 	}
 
-	logger.Info(logComponent).Str("backup_key", backupKey).Msg("已创建 KV 备份")
+	logger.Info(logComponent).Str("backup_key", backupKey).Msg("KV backup created")
 	return backupKey, nil
 }
 
@@ -293,13 +293,13 @@ func (m *KVMigrator) restoreFromBackup(ctx context.Context, backupKey string) er
 		return err
 	}
 	if backupJSON == nil {
-		logger.Error(logComponent).Str("backup_key", backupKey).Msg("备份不存在")
+		logger.Error(logComponent).Str("backup_key", backupKey).Msg("backup does not exist")
 		return nil
 	}
 
 	var backupData map[string]string
 	if err := json.Unmarshal(backupJSON, &backupData); err != nil {
-		logger.Error(logComponent).Err(err).Msg("反序列化备份数据失败")
+		logger.Error(logComponent).Err(err).Msg("failed to deserialize backup data")
 		return err
 	}
 
@@ -316,7 +316,7 @@ func (m *KVMigrator) restoreFromBackup(ctx context.Context, backupKey string) er
 		}
 	}
 
-	logger.Info(logComponent).Int("key_count", len(backupData)).Msg("已从备份恢复 KV 数据")
+	logger.Info(logComponent).Int("key_count", len(backupData)).Msg("KV data restored from backup")
 	return nil
 }
 
@@ -325,9 +325,9 @@ func (m *KVMigrator) restoreFromBackup(ctx context.Context, backupKey string) er
 // Python: KVMigrator._cleanup_backup
 func (m *KVMigrator) cleanupBackup(ctx context.Context, backupKey string) {
 	if err := m.kvStore.Delete(ctx, backupKey); err != nil {
-		logger.Warn(logComponent).Err(err).Str("backup_key", backupKey).Msg("清理 KV 备份失败")
+		logger.Warn(logComponent).Err(err).Str("backup_key", backupKey).Msg("failed to cleanup KV backup")
 	} else {
-		logger.Info(logComponent).Str("backup_key", backupKey).Msg("已清理 KV 备份")
+		logger.Info(logComponent).Str("backup_key", backupKey).Msg("KV backup cleaned up")
 	}
 }
 

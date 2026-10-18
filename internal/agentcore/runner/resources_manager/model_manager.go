@@ -62,7 +62,7 @@ func (m *ModelMgr) AddModel(modelID string, provider ModelProvider) error {
 			Str("event_type", "MODEL_ADD_ERROR").
 			Str("model_id", modelID).
 			Err(err).
-			Msg("添加模型失败")
+			Msg("failed to add model")
 		return exception.BuildError(exception.StatusResourceAddError,
 			exception.WithParam("card", modelID),
 			exception.WithParam("reason", err.Error()),
@@ -72,7 +72,7 @@ func (m *ModelMgr) AddModel(modelID string, provider ModelProvider) error {
 	logger.Info(logComponent).
 		Str("event_type", "MODEL_ADD_SUCCESS").
 		Str("model_id", modelID).
-		Msg("添加模型成功")
+		Msg("model added")
 	return nil
 }
 
@@ -86,7 +86,7 @@ func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
 			Str("event_type", "MODEL_REMOVE_ERROR").
 			Str("model_id", modelID).
 			Err(err).
-			Msg("移除模型失败")
+			Msg("failed to remove model")
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", modelID),
 			exception.WithParam("resource_type", "model"),
@@ -102,7 +102,7 @@ func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
 	logger.Info(logComponent).
 		Str("event_type", "MODEL_REMOVE_SUCCESS").
 		Str("model_id", modelID).
-		Msg("移除模型成功")
+		Msg("model removed")
 	return provider, nil
 }
 
@@ -118,7 +118,7 @@ func (m *ModelMgr) GetModel(ctx context.Context, modelID string, session decorat
 			Str("event_type", "MODEL_GET_ERROR").
 			Str("model_id", modelID).
 			Err(err).
-			Msg("获取模型失败")
+			Msg("failed to get model")
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", modelID),
 			exception.WithParam("resource_type", "model"),

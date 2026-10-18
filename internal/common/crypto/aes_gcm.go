@@ -57,21 +57,21 @@ func (c *AesGcmCrypt) Encrypt(key []byte, plaintext string) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", exception.NewBaseError(exception.StatusCommonEncryptionError,
-			exception.WithMsg(fmt.Sprintf("创建 AES cipher 失败: %s", err.Error())))
+			exception.WithMsg(fmt.Sprintf("failed to create AES cipher: %s", err.Error())))
 	}
 
 	// 创建 GCM mode（指定 tag 长度为 16 字节，与 Python 一致）
 	gcm, err := cipher.NewGCMWithTagSize(block, TagLength)
 	if err != nil {
 		return "", exception.NewBaseError(exception.StatusCommonEncryptionError,
-			exception.WithMsg(fmt.Sprintf("创建 GCM mode 失败: %s", err.Error())))
+			exception.WithMsg(fmt.Sprintf("failed to create GCM mode: %s", err.Error())))
 	}
 
 	// 随机生成 nonce
 	nonce := make([]byte, NonceLength)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", exception.NewBaseError(exception.StatusCommonEncryptionError,
-			exception.WithMsg(fmt.Sprintf("生成 nonce 失败: %s", err.Error())))
+			exception.WithMsg(fmt.Sprintf("failed to generate nonce: %s", err.Error())))
 	}
 
 	// GCM Seal 返回 ciphertext + tag（tag 在末尾）
@@ -106,7 +106,7 @@ func (c *AesGcmCrypt) Decrypt(key []byte, ciphertext string) (string, error) {
 
 	if len(ciphertext) < minLen {
 		return "", exception.NewBaseError(exception.StatusCommonDecryptionError,
-			exception.WithMsg(fmt.Sprintf("密文过短: 期望至少 %d 字符，实际 %d 字符", minLen, len(ciphertext))))
+			exception.WithMsg(fmt.Sprintf("ciphertext too short: expected at least %d chars, got %d", minLen, len(ciphertext))))
 	}
 
 	// 拆分各部分
@@ -118,41 +118,41 @@ func (c *AesGcmCrypt) Decrypt(key []byte, ciphertext string) (string, error) {
 	nonceBytes, err := hex.DecodeString(nonceHex)
 	if err != nil {
 		return "", exception.NewBaseError(exception.StatusCommonDecryptionError,
-			exception.WithMsg(fmt.Sprintf("nonce hex 解码失败: %s", err.Error())))
+			exception.WithMsg(fmt.Sprintf("nonce hex decode failed: %s", err.Error())))
 	}
 	tagBytes, err := hex.DecodeString(tagHex)
 	if err != nil {
 		return "", exception.NewBaseError(exception.StatusCommonDecryptionError,
-			exception.WithMsg(fmt.Sprintf("tag hex 解码失败: %s", err.Error())))
+			exception.WithMsg(fmt.Sprintf("tag hex decode failed: %s", err.Error())))
 	}
 	ciphertextBytes, err := hex.DecodeString(ciphertextHex)
 	if err != nil {
 		return "", exception.NewBaseError(exception.StatusCommonDecryptionError,
-			exception.WithMsg(fmt.Sprintf("ciphertext hex 解码失败: %s", err.Error())))
+			exception.WithMsg(fmt.Sprintf("ciphertext hex decode failed: %s", err.Error())))
 	}
 
 	// 校验 nonce 和 tag 长度
 	if len(nonceBytes) != NonceLength {
 		return "", exception.NewBaseError(exception.StatusCommonDecryptionError,
-			exception.WithMsg(fmt.Sprintf("nonce 长度错误: %d 字节，期望 %d 字节", len(nonceBytes), NonceLength)))
+			exception.WithMsg(fmt.Sprintf("nonce length error: %d bytes, expected %d bytes", len(nonceBytes), NonceLength)))
 	}
 	if len(tagBytes) != TagLength {
 		return "", exception.NewBaseError(exception.StatusCommonDecryptionError,
-			exception.WithMsg(fmt.Sprintf("tag 长度错误: %d 字节，期望 %d 字节", len(tagBytes), TagLength)))
+			exception.WithMsg(fmt.Sprintf("tag length error: %d bytes, expected %d bytes", len(tagBytes), TagLength)))
 	}
 
 	// 创建 AES cipher block
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", exception.NewBaseError(exception.StatusCommonDecryptionError,
-			exception.WithMsg(fmt.Sprintf("创建 AES cipher 失败: %s", err.Error())))
+			exception.WithMsg(fmt.Sprintf("failed to create AES cipher: %s", err.Error())))
 	}
 
 	// 创建 GCM mode
 	gcm, err := cipher.NewGCMWithTagSize(block, TagLength)
 	if err != nil {
 		return "", exception.NewBaseError(exception.StatusCommonDecryptionError,
-			exception.WithMsg(fmt.Sprintf("创建 GCM mode 失败: %s", err.Error())))
+			exception.WithMsg(fmt.Sprintf("failed to create GCM mode: %s", err.Error())))
 	}
 
 	// 拼接 ciphertext + tag（Go GCM Open 期望格式：ciphertext||tag）
@@ -162,7 +162,7 @@ func (c *AesGcmCrypt) Decrypt(key []byte, ciphertext string) (string, error) {
 	plaintext, err := gcm.Open(nil, nonceBytes, combined, nil)
 	if err != nil {
 		return "", exception.NewBaseError(exception.StatusCommonDecryptionError,
-			exception.WithMsg(fmt.Sprintf("解密失败（密文可能被篡改）: %s", err.Error())))
+			exception.WithMsg(fmt.Sprintf("decryption failed (ciphertext may be tampered): %s", err.Error())))
 	}
 
 	return string(plaintext), nil
@@ -174,7 +174,7 @@ func (c *AesGcmCrypt) Decrypt(key []byte, ciphertext string) (string, error) {
 func validateKey(key []byte) error {
 	if len(key) != KeyLength {
 		return exception.NewBaseError(exception.StatusCommonEncryptionError,
-			exception.WithMsg(fmt.Sprintf("密钥长度必须为 %d 字节，实际 %d 字节", KeyLength, len(key))))
+			exception.WithMsg(fmt.Sprintf("key length must be %d bytes, got %d", KeyLength, len(key))))
 	}
 	return nil
 }

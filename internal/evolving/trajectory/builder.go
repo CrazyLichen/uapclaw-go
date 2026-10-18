@@ -110,7 +110,7 @@ func WithMaxSteps(maxSteps int) TrajectoryBuilderOption {
 		if maxSteps >= 1 {
 			b.maxSteps = &maxSteps
 		} else {
-			logger.Warn(logComponent).Int("max_steps", maxSteps).Msg("WithMaxSteps: maxSteps < 1 被忽略，对齐 Python ValueError")
+			logger.Warn(logComponent).Int("max_steps", maxSteps).Msg("WithMaxSteps: maxSteps < 1 ignored, aligned with Python ValueError")
 		}
 	}
 }

@@ -93,7 +93,7 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 		Str("event_type", "channel_control_handled").
 		Int("action", int(parsed.Action)).
 		Str("channel_id", msg.ChannelID).
-		Msg("slash 命令已处理")
+		Msg("slash command processed")
 	return true
 }
 
@@ -262,7 +262,7 @@ func (mh *MessageHandler) skillsSlashNotice(msg *schema.Message) {
 		logger.Error(logComponent).
 			Str("event_type", "skills_slash_error").
 			Err(err).
-			Msg("/skills list 请求失败")
+			Msg("/skills list request failed")
 		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("获取技能列表失败：%v", err)})
 		return
 	}
@@ -336,7 +336,7 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 		logger.Error(logComponent).
 			Str("event_type", "branch_slash_error").
 			Err(err).
-			Msg("/branch 请求失败")
+			Msg("/branch request failed")
 		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("分叉失败：%v", err)})
 		return
 	}
@@ -430,7 +430,7 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 		logger.Warn(logComponent).
 			Str("event_type", "rewind_e2a_error").
 			Err(err).
-			Msg("/rewind E2A 请求失败")
+			Msg("/rewind E2A request failed")
 		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("回退失败：%v", err)})
 		return
 	}

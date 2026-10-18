@@ -217,7 +217,7 @@ func (bs *BeamSearch) Search(ctx context.Context, tool map[string]any) ([][]map[
 				Float64("elapsed_seconds", time.Since(startTime).Seconds()).
 				Float64("timeout", bs.timeout).
 				Int("depth", depth).
-				Msg("Beam Search 超时，返回当前最优结果")
+				Msg("Beam Search timed out, returning current best result")
 			nodesSorted := bs.sortAndTakeTopK(bestNodes, bs.topK)
 			return historiesFromNodes(nodesSorted), nil
 		}
@@ -226,7 +226,7 @@ func (bs *BeamSearch) Search(ctx context.Context, tool map[string]any) ([][]map[
 		if bs.earlyStop && bs.checkEarlyStop(beamList, bs.maxScore, bs.topK) {
 			logger.Info(logComponent).
 				Int("depth", depth).
-				Msg("Beam Search 早停触发")
+				Msg("Beam Search early stop triggered")
 			break
 		}
 
@@ -275,14 +275,14 @@ func (bs *BeamSearch) generateRoot(ctx context.Context, tool map[string]any, exa
 	for i := 0; i < bs.numRetry; i++ {
 		output, data, score, err := bs.method.Step(ctx, tool, examples, nil, 0)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Int("retry", i).Msg("根节点 Step 调用失败")
+			logger.Error(logComponent).Err(err).Int("retry", i).Msg("root node Step call failed")
 			continue
 		}
 		if bs.checkValid && score == -1 {
 			logger.Warn(logComponent).
 				Float64("score", score).
 				Int("retry", i).
-				Msg("根节点校验无效，重试")
+				Msg("root node validation invalid, retrying")
 			continue
 		}
 		root := newTreeNode(data, score, output, nil)
@@ -310,7 +310,7 @@ func (bs *BeamSearch) expandSerial(ctx context.Context, beamList []*TreeNode, to
 				logger.Error(logComponent).Err(err).
 					Int("depth", depth).
 					Int("expand_index", j).
-					Msg("串行扩展单步失败")
+					Msg("serial expand single step failed")
 				continue
 			}
 			node.Children = append(node.Children, newNode)
@@ -348,7 +348,7 @@ func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, 
 					logger.Error(logComponent).Err(err).
 						Int("depth", depth).
 						Int("expand_index", expandIdx).
-						Msg("并行扩展单步失败")
+						Msg("parallel expand single step failed")
 				}
 				ch <- expandResult{parent: n, node: newNode, err: err}
 			}(node, j)

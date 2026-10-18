@@ -396,7 +396,7 @@ func (u *SessionMemoryDirectUpdater) Invoke(ctx context.Context, opts SessionMem
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "SessionMemoryDirectUpdater.Invoke").
-			Msg("模型配置缺失，无法创建模型实例")
+			Msg("model config missing, cannot create model instance")
 		return fmt.Errorf("模型配置缺失: Model=%v, ModelClient=%v", u.config.Model, u.config.ModelClient)
 	}
 
@@ -409,7 +409,7 @@ func (u *SessionMemoryDirectUpdater) Invoke(ctx context.Context, opts SessionMem
 				Str("method", "SessionMemoryDirectUpdater.Invoke").
 				Str("model_provider", providerName(u.config.ModelClient)).
 				Err(err).
-				Msg("创建模型实例失败")
+				Msg("failed to create model instance")
 			return fmt.Errorf("创建模型实例失败: %w", err)
 		}
 		u.model = model
@@ -448,7 +448,7 @@ func (u *SessionMemoryDirectUpdater) Invoke(ctx context.Context, opts SessionMem
 					Int("attempt", attempt).
 					Int("max_attempts", attempts).
 					Err(err).
-					Msg("direct_replace 模型调用失败，正在重试")
+					Msg("direct_replace model call failed, retrying")
 				continue
 			}
 			logger.Error(logComponent).
@@ -456,7 +456,7 @@ func (u *SessionMemoryDirectUpdater) Invoke(ctx context.Context, opts SessionMem
 				Str("method", "SessionMemoryDirectUpdater.Invoke").
 				Str("model_provider", providerName(u.config.ModelClient)).
 				Err(err).
-				Msg("direct_replace 模型调用失败，重试耗尽")
+				Msg("direct_replace model call failed, retries exhausted")
 			return fmt.Errorf("direct_replace 模型调用失败（重试 %d 次）: %w", attempts, err)
 		}
 
@@ -472,7 +472,7 @@ func (u *SessionMemoryDirectUpdater) Invoke(ctx context.Context, opts SessionMem
 				Str("event_type", "SESSION_MEMORY_WRITE_ERROR").
 				Str("notes_path", opts.NotesPath).
 				Err(err).
-				Msg("写入会话记忆文件失败")
+				Msg("failed to write session memory file")
 			return fmt.Errorf("写入会话记忆文件失败: %w", err)
 		}
 
@@ -557,7 +557,7 @@ func (u *SessionMemoryAgentUpdater) Invoke(ctx context.Context, opts SessionMemo
 			Str("event_type", "SESSION_MEMORY_AGENT_EDIT_ERROR").
 			Str("tool_namespace", u.toolNamespace).
 			Err(err).
-			Msg("agent_edit 模式执行失败")
+			Msg("agent_edit mode failed")
 		return fmt.Errorf("agent_edit 模式执行失败: %w", err)
 	}
 
@@ -615,7 +615,7 @@ func (m *SessionMemoryManager) MaybeScheduleUpdate(
 		logger.Info(logComponent).
 			Str("event_type", "SESSION_MEMORY_SKIP").
 			Str("session_id", sessionID).
-			Msg("跳过调度：已有运行中的任务")
+			Msg("skip scheduling: task already running")
 		return
 	}
 
@@ -638,7 +638,7 @@ func (m *SessionMemoryManager) MaybeScheduleUpdate(
 		logger.Info(logComponent).
 			Str("event_type", "SESSION_MEMORY_SKIP").
 			Str("session_id", sessionID).
-			Msg("跳过调度：should_update 返回 false")
+			Msg("skip scheduling: should_update returned false")
 		m.mu.Unlock()
 		return
 	}
@@ -659,7 +659,7 @@ func (m *SessionMemoryManager) MaybeScheduleUpdate(
 		Str("session_id", sessionID).
 		Str("notes_path", notesPath).
 		Int("message_count", len(completedContextWindow.ContextMessages)).
-		Msg("调度会话记忆更新")
+		Msg("scheduling session memory update")
 
 	go func() {
 		var panicked any
@@ -706,7 +706,7 @@ func (m *SessionMemoryManager) ShouldUpdate(
 			Bool("session_exists", sess != nil).
 			Bool("context_exists", mc != nil).
 			Int("message_count", len(messages)).
-			Msg("跳过更新判断：条件不满足")
+			Msg("skip update check: conditions not met")
 		return false
 	}
 
@@ -720,7 +720,7 @@ func (m *SessionMemoryManager) ShouldUpdate(
 				Str("event_type", "SESSION_MEMORY_TRIGGER").
 				Int("current_tokens", currentTokens).
 				Int("threshold", m.config.TriggerTokens).
-				Msg("首次触发更新")
+				Msg("first trigger of update")
 			runtime["initialized"] = true
 			setRuntimeState(sess, runtime)
 			return true
@@ -729,7 +729,7 @@ func (m *SessionMemoryManager) ShouldUpdate(
 			Str("event_type", "SESSION_MEMORY_SKIP").
 			Int("current_tokens", currentTokens).
 			Int("threshold", m.config.TriggerTokens).
-			Msg("未达到首次触发阈值")
+			Msg("first trigger threshold not reached")
 		return false
 	}
 
@@ -745,7 +745,7 @@ func (m *SessionMemoryManager) ShouldUpdate(
 			Str("event_type", "SESSION_MEMORY_BASELINE_RESET").
 			Int("current_tokens", currentTokens).
 			Int("previous_tokens", tokensAtLastUpdate).
-			Msg("token 基线重置：上下文收缩")
+			Msg("token baseline reset: context shrank")
 		runtime["tokens_at_last_update"] = 0
 		baselineReset = true
 	}
@@ -754,7 +754,7 @@ func (m *SessionMemoryManager) ShouldUpdate(
 			Str("event_type", "SESSION_MEMORY_BASELINE_RESET").
 			Int("current_tool_calls", totalToolCalls).
 			Int("previous_tool_calls", toolCallsAtLastUpdate).
-			Msg("tool-call 基线重置：上下文收缩")
+			Msg("tool-call baseline reset: context shrank")
 		runtime["tool_calls_at_last_update"] = 0
 		baselineReset = true
 	}
@@ -768,7 +768,7 @@ func (m *SessionMemoryManager) ShouldUpdate(
 			Str("event_type", "SESSION_MEMORY_SKIP").
 			Int("delta_tokens", tokensSinceLast).
 			Int("threshold", m.config.TriggerAddTokens).
-			Msg("未达到增量 token 阈值")
+			Msg("incremental token threshold not reached")
 		return false
 	}
 
@@ -778,7 +778,7 @@ func (m *SessionMemoryManager) ShouldUpdate(
 			Str("event_type", "SESSION_MEMORY_SKIP").
 			Int("delta_tool_calls", toolCallsSinceLast).
 			Int("threshold", m.config.ToolMin).
-			Msg("未达到增量 tool_call 阈值")
+			Msg("incremental tool_call threshold not reached")
 		return false
 	}
 
@@ -834,7 +834,7 @@ func GetSessionMemoryRuntime(sess sessioninterfaces.SessionFacade) map[string]an
 	if sess == nil {
 		logger.Info(logComponent).
 			Str("event_type", "SESSION_MEMORY_RUNTIME").
-			Msg("会话记忆运行时状态为空：session 为 nil")
+			Msg("session memory runtime state empty: session is nil")
 		return buildSessionMemoryRuntime()
 	}
 	val, _ := sess.GetState(state.StringKey(sessionMemoryStateKey))
@@ -845,7 +845,7 @@ func GetSessionMemoryRuntime(sess sessioninterfaces.SessionFacade) map[string]an
 	if !ok {
 		logger.Info(logComponent).
 			Str("event_type", "SESSION_MEMORY_RUNTIME").
-			Msg("会话记忆运行时状态非 dict，返回初始状态")
+			Msg("session memory runtime state is not a dict, returning initial state")
 		return buildSessionMemoryRuntime()
 	}
 	return maps.Clone(stateMap)
@@ -922,7 +922,7 @@ func updateSessionMemoryRuntime(sess sessioninterfaces.SessionFacade, st map[str
 		Int("tool_calls_at_last_update", getIntFromMap(merged, "tool_calls_at_last_update")).
 		Int("last_summarized_message_count", getIntFromMap(merged, "last_summarized_message_count")).
 		Str("notes_upto_message_id", getStringFromMap(merged, "notes_upto_message_id")).
-		Msg("更新会话记忆运行时状态")
+		Msg("updating session memory runtime state")
 
 	sess.UpdateState(map[string]any{sessionMemoryStateKey: merged})
 }
@@ -953,7 +953,7 @@ func readOrInitSessionMemory(path string) string {
 			Str("event_type", "SESSION_MEMORY_INIT").
 			Str("path", path).
 			Err(err).
-			Msg("创建会话记忆目录失败")
+			Msg("failed to create session memory directory")
 		return defaultSessionMemoryTemplate
 	}
 
@@ -961,14 +961,14 @@ func readOrInitSessionMemory(path string) string {
 	templatePath := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(path))), "session_memory.md")
 	if tmplData, err := os.ReadFile(templatePath); err == nil {
 		if writeErr := os.WriteFile(path, tmplData, 0644); writeErr != nil {
-			logger.Error(logComponent).Err(writeErr).Str("path", path).Msg("写入会话记忆模板失败")
+			logger.Error(logComponent).Err(writeErr).Str("path", path).Msg("failed to write session memory template")
 		}
 		return string(tmplData)
 	}
 
 	// 写入默认模板
 	if writeErr := os.WriteFile(path, []byte(defaultSessionMemoryTemplate), 0644); writeErr != nil {
-		logger.Error(logComponent).Err(writeErr).Str("path", path).Msg("写入默认会话记忆模板失败")
+		logger.Error(logComponent).Err(writeErr).Str("path", path).Msg("failed to write default session memory template")
 	}
 	return defaultSessionMemoryTemplate
 }
@@ -1097,7 +1097,7 @@ func countTokens(mc iface.ModelContext, window *iface.ContextWindow) int {
 		logger.Debug(logComponent).
 			Str("event_type", "SESSION_MEMORY_TOKEN_COUNT").
 			Err(err).
-			Msg("token 计数器统计失败，使用估算")
+			Msg("token counter failed, using estimation")
 	}
 
 	total := 0
@@ -1169,7 +1169,7 @@ func (m *SessionMemoryManager) updateBackground(
 		Str("notes_path", notesPath).
 		Str("pending_notes_path", pendingNotesPath).
 		Int("message_count", len(messages)).
-		Msg("后台更新开始")
+		Msg("background update started")
 
 	err := m.updater.Invoke(ctx, SessionMemoryUpdateOptions{
 		FullContextMessages: contextWindow.GetMessages(),
@@ -1184,7 +1184,7 @@ func (m *SessionMemoryManager) updateBackground(
 			Str("notes_path", notesPath).
 			Str("pending_notes_path", pendingNotesPath).
 			Err(err).
-			Msg("后台更新失败")
+			Msg("background update failed")
 	} else {
 		// 提交 pending 文件
 		if commitErr := commitPendingSessionMemory(pendingNotesPath, notesPath); commitErr != nil {
@@ -1192,7 +1192,7 @@ func (m *SessionMemoryManager) updateBackground(
 				Str("event_type", "SESSION_MEMORY_COMMIT_FAILED").
 				Str("session_id", sessionID).
 				Err(commitErr).
-				Msg("提交 pending 文件失败")
+				Msg("failed to commit pending file")
 		}
 
 		// 更新运行时状态
@@ -1214,7 +1214,7 @@ func (m *SessionMemoryManager) updateBackground(
 			Int("last_summarized_message_count", getIntFromMap(runtime, "last_summarized_message_count")).
 			Int("tokens_at_last_update", getIntFromMap(runtime, "tokens_at_last_update")).
 			Int("tool_calls_at_last_update", getIntFromMap(runtime, "tool_calls_at_last_update")).
-			Msg("后台更新完成")
+			Msg("background update completed")
 	}
 
 	// 无论成功失败，重置提取标记
@@ -1232,21 +1232,21 @@ func preparePendingSessionMemory(activePath, pendingPath, currentNotes string) {
 			Str("event_type", "SESSION_MEMORY_PREPARE").
 			Str("pending_path", pendingPath).
 			Err(err).
-			Msg("创建 pending 目录失败")
+			Msg("failed to create pending directory")
 		return
 	}
 
 	// 如果 active 文件存在，复制到 pending
 	if data, err := os.ReadFile(activePath); err == nil {
 		if writeErr := os.WriteFile(pendingPath, data, 0644); writeErr != nil {
-			logger.Error(logComponent).Err(writeErr).Str("pending_path", pendingPath).Msg("写入 pending 会话记忆失败")
+			logger.Error(logComponent).Err(writeErr).Str("pending_path", pendingPath).Msg("write pending sessionmemory failed")
 		}
 		return
 	}
 
 	// 否则写入当前笔记内容
 	if writeErr := os.WriteFile(pendingPath, []byte(currentNotes), 0644); writeErr != nil {
-		logger.Error(logComponent).Err(writeErr).Str("pending_path", pendingPath).Msg("写入当前笔记到 pending 失败")
+		logger.Error(logComponent).Err(writeErr).Str("pending_path", pendingPath).Msg("failed to write current notes to pending")
 	}
 }
 

@@ -145,7 +145,7 @@ func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pre
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "DefaultEvaluator.Evaluate").
 			Err(err).
-			Msg("LLM 调用失败")
+			Msg("LLM call failed")
 		ec.Reason = "因模型错误导致评估样本失败"
 		return ec, nil
 	}
@@ -215,7 +215,7 @@ func (m *MetricEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pred
 			logger.Warn(logComponent).
 				Str("metric_name", metric.Name()).
 				Err(err).
-				Msg("指标计算失败")
+				Msg("metric calculation failed")
 			continue
 		}
 		for k, v := range result {
@@ -283,7 +283,7 @@ func (d *DefaultEvaluator) extractEvaluateResult(ctx context.Context, response s
 	logger.Warn(logComponent).
 		Str("event_type", "LLM_CALL_ERROR").
 		Str("method", "DefaultEvaluator.extractEvaluateResult").
-		Msg("首次解析评估结果失败，尝试重试模板")
+		Msg("first parse of evaluation result failed, trying retry template")
 
 	retryFormatted, err := metrics.LLMMetricRetryTemplate.Format(map[string]any{
 		"question":                     formatValue(case_.Inputs),
@@ -306,7 +306,7 @@ func (d *DefaultEvaluator) extractEvaluateResult(ctx context.Context, response s
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "DefaultEvaluator.extractEvaluateResult").
 			Err(err).
-			Msg("重试 LLM 调用失败")
+			Msg("retry LLM call failed")
 		return nil
 	}
 
@@ -363,7 +363,7 @@ func safeConvert(num float64) float64 {
 	if math.IsNaN(num) || math.IsInf(num, 0) {
 		logger.Warn(logComponent).
 			Float64("value", num).
-			Msg("metric 值为 NaN 或 Inf，已转换为 0.0")
+			Msg("metric value is NaN or Inf, converted to 0.0")
 		return 0.0
 	}
 	return num

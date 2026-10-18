@@ -174,7 +174,7 @@ func NewVideoUnderstandingTool(
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").Str("tool_name", "video_understanding").
-				Msg("VideoUnderstandingTool 调用失败")
+				Msg("VideoUnderstandingTool call failed")
 			return nil, exception.NewBaseError(
 				exception.StatusToolMultimodalVideoInvokeFailed,
 				exception.WithMsg(fmt.Sprintf("video understanding failed: %s", err.Error())),

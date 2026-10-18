@@ -47,19 +47,19 @@ func (s *StateStore) SaveState(taskID string, state *SkillDevState) error {
 	stateFile := s.stateFile(taskID)
 
 	if err := os.MkdirAll(filepath.Dir(stateFile), 0o755); err != nil {
-		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] 创建状态目录失败")
+		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] createstatedirectory failed")
 		return err
 	}
 
 	data := state.ToCheckpointDict()
 	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] 序列化状态失败")
+		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] serializationstate failed")
 		return err
 	}
 
 	if err := os.WriteFile(stateFile, bytes, 0o644); err != nil {
-		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] 写入状态文件失败")
+		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] writestatefile failed")
 		return err
 	}
 
@@ -78,16 +78,16 @@ func (s *StateStore) LoadState(taskID string) (*SkillDevState, error) {
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logger.Warn(logComponent).Str("task_id", taskID).Msg("[StateStore] 状态未找到")
+			logger.Warn(logComponent).Str("task_id", taskID).Msg("[StateStore] statenot found")
 			return nil, nil
 		}
-		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] 读取状态文件失败")
+		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] readstatefile failed")
 		return nil, err
 	}
 
 	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
-		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] 解析状态文件失败")
+		logger.Error(logComponent).Str("task_id", taskID).Err(err).Msg("[StateStore] parsestatefile failed")
 		return nil, err
 	}
 
@@ -107,7 +107,7 @@ func (s *StateStore) ListTasks() ([]string, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		logger.Error(logComponent).Err(err).Msg("[StateStore] 读取工作区目录失败")
+		logger.Error(logComponent).Err(err).Msg("[StateStore] readworkspacedirectory failed")
 		return nil, err
 	}
 

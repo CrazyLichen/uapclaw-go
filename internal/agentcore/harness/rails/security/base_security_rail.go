@@ -115,10 +115,10 @@ type BaseSecurityRail struct {
 	securityCheckFn SecurityCheckFunc
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // SecurityRailOption BaseSecurityRail 配置选项
 type SecurityRailOption func(*BaseSecurityRail)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // SecurityAlertLevel 告警级别枚举。
 //
@@ -138,6 +138,9 @@ const (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
+
 const (
 	// baseSecurityRailPriority BaseSecurityRail 默认优先级
 	// Python: BaseSecurityRail.priority = 90
@@ -148,8 +151,6 @@ const (
 
 // _ 编译时验证 BaseSecurityRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*BaseSecurityRail)(nil)
-
-var securityLogComponent = logger.ComponentAgentCore
 
 // modelEvents 模型调用事件集合
 // Python: _MODEL_EVENTS (base_security_rail.py L30-33)
@@ -548,19 +549,19 @@ func (r *BaseSecurityRail) runAndApply(
 
 	decision, err := r.securityCheckFn(ctx, securityCtx)
 	if err != nil {
-		logger.Error(securityLogComponent).
+		logger.Error(logComponent).
 			Str("event", string(event)).
 			Err(err).
-			Msg("安全检查执行失败")
+			Msg("security check execution failed")
 		return err
 	}
 
 	// Python: Interrupt + MODEL事件 → 自动转为 Reject
 	// (base_security_rail.py L241-249)
 	if _, ok := decision.(*SecurityInterrupt); ok && modelEvents[event] {
-		logger.Warn(securityLogComponent).
+		logger.Warn(logComponent).
 			Str("event", string(event)).
-			Msg("SecurityInterrupt 不支持 MODEL 事件，自动转为 Reject")
+			Msg("SecurityInterrupt does not support MODEL event, auto converting to Reject")
 		interrupt := decision.(*SecurityInterrupt)
 		msg := interrupt.Request.GetMessage()
 		if msg == "" {
@@ -691,9 +692,9 @@ func (r *BaseSecurityRail) applyInterrupt(securityCtx *SecurityCheckContext, dec
 
 	if modelEvents[event] {
 		// Python: MODEL 事件不应到达此处
-		logger.Warn(securityLogComponent).
+		logger.Warn(logComponent).
 			Str("event", string(event)).
-			Msg("SecurityInterrupt 在 MODEL 事件中不应到达此处")
+			Msg("SecurityInterrupt should not reach here for MODEL event")
 		return
 	}
 
@@ -716,20 +717,20 @@ func (r *BaseSecurityRail) applyInterrupt(securityCtx *SecurityCheckContext, dec
 func (r *BaseSecurityRail) applyAlert(securityCtx *SecurityCheckContext, decision *SecurityAlert) {
 	// Python: log_method = getattr(logger, decision.level.value, logger.warning)
 	// Python: log_method("[SecurityAlert] rail=%s message=%s ...", self.__class__.__name__, ...)
-	logMsg := fmt.Sprintf("[安全告警] rail=%s 消息=%s 告警类型=%s 级别=%s 显示模式=%s",
+	logMsg := fmt.Sprintf("[SecurityAlert] rail=%s message=%s alert_type=%s level=%s display_mode=%s",
 		r.TypeName(), decision.Message, decision.AlertType, decision.Level.String(), decision.DisplayMode)
 
 	switch decision.Level {
 	case SecurityAlertLevelInfo:
-		logger.Info(securityLogComponent).Msg(logMsg)
+		logger.Info(logComponent).Msg(logMsg)
 	case SecurityAlertLevelWarning:
-		logger.Warn(securityLogComponent).Msg(logMsg)
+		logger.Warn(logComponent).Msg(logMsg)
 	case SecurityAlertLevelError:
-		logger.Error(securityLogComponent).Msg(logMsg)
+		logger.Error(logComponent).Msg(logMsg)
 	case SecurityAlertLevelCritical:
-		logger.Error(securityLogComponent).Msg(logMsg)
+		logger.Error(logComponent).Msg(logMsg)
 	default:
-		logger.Warn(securityLogComponent).Msg(logMsg)
+		logger.Warn(logComponent).Msg(logMsg)
 	}
 
 	// Python: stream OutputSchema to frontend
@@ -897,9 +898,9 @@ func (r *BaseSecurityRail) storeAutoConfirm(cbc *agentinterfaces.AgentCallbackCo
 		saschema.InterruptAutoConfirmKey: config,
 	})
 
-	logger.Info(securityLogComponent).
+	logger.Info(logComponent).
 		Str("auto_confirm_key", autoConfirmKey).
-		Msg("自动确认存储")
+		Msg("auto confirm stored")
 }
 
 // resolveSubjectID 解析 subject_id（用于中断恢复匹配）。
@@ -925,10 +926,10 @@ func (r *BaseSecurityRail) getUserInput(cbc *agentinterfaces.AgentCallbackContex
 	}
 
 	// Python: logger.info
-	logger.Info(securityLogComponent).
+	logger.Info(logComponent).
 		Str("subject_id", subjectID).
 		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
-		Msg("获取用户输入")
+		Msg("getting user input")
 
 	// Python: isinstance(raw_input, InteractiveInput)
 	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {

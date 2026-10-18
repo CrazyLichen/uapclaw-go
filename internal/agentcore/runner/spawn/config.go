@@ -55,13 +55,14 @@ type SpawnConfig struct {
 	HealthCheckTimeout time.Duration
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // SpawnAgentKind Agent 启动方式枚举。
 // Python: SpawnAgentKind (agent_config.py)
 type SpawnAgentKind string
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// SpawnAgentKindClassAgent 类 Agent 启动（通过 ResourceMgr 注册表查找）
 	SpawnAgentKindClassAgent SpawnAgentKind = "class_agent"

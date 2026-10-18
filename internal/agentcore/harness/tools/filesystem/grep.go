@@ -221,7 +221,7 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 			logger.Error(logComponent).
 				Str("command", cmd).
 				Err(execErr).
-				Msg("GrepTool ExecuteCmd 调用失败")
+				Msg("GrepTool ExecuteCmd call failed")
 			return map[string]any{
 				"success": false,
 				"error":   execErr.Error(),
@@ -231,7 +231,7 @@ func NewGrepTool(op sys_operation.SysOperation, language, agentID string) tool.T
 			logger.Error(logComponent).
 				Str("command", cmd).
 				Str("message", res.Message).
-				Msg("GrepTool ExecuteCmd 返回失败")
+				Msg("GrepTool ExecuteCmd returned failure")
 			return map[string]any{
 				"success": false,
 				"error":   res.Message,

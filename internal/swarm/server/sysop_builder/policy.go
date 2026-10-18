@@ -267,7 +267,7 @@ func collectIntrinsicTargets() (rwFiles, rwDirs, roFiles []string) {
 	} else {
 		logger.Info(logComponent).
 			Str("path", dailyMemoryPath).
-			Msg("daily_memory 不存在于 host，跳过沙箱 bind 列表")
+			Msg("daily_memory not present on host, skipping sandbox bind list")
 	}
 
 	// 固有 ro 文件（config.yaml）
@@ -281,13 +281,13 @@ func collectIntrinsicTargets() (rwFiles, rwDirs, roFiles []string) {
 			logger.Debug(logComponent).
 				Str("path", raw).
 				Err(err).
-				Msg("固有 ro 文件路径解析失败，跳过")
+				Msg("built-in ro file path resolution failed, skipping")
 			continue
 		}
 		if _, statErr := os.Stat(resolved); statErr != nil {
 			logger.Debug(logComponent).
 				Str("path", resolved).
-				Msg("固有 ro 文件不存在于 host，跳过沙箱 bind 列表")
+				Msg("built-in ro file not present on host, skipping sandbox bind list")
 			continue
 		}
 		roFiles = append(roFiles, resolved)
@@ -318,21 +318,21 @@ func resolveProjectDir(override string) string {
 			logger.Debug(logComponent).
 				Str("candidate", cand).
 				Err(err).
-				Msg("project_dir 候选路径解析失败")
+				Msg("project_dir candidate path resolution failed")
 			continue
 		}
 		info, statErr := os.Stat(resolved)
 		if statErr != nil || !info.IsDir() {
 			logger.Debug(logComponent).
 				Str("candidate", resolved).
-				Msg("project_dir 候选不是目录，跳过")
+				Msg("project_dir candidate is not a directory, skipping")
 			continue
 		}
 		// 拒绝文件系统根
 		if resolved == "/" || resolved == filepath.VolumeName(resolved)+string(os.PathSeparator) {
 			logger.Warn(logComponent).
 				Str("candidate", resolved).
-				Msg("拒绝将文件系统根作为 rw project 目录")
+				Msg("refusing filesystem root as rw project directory")
 			return ""
 		}
 		return resolved
@@ -352,14 +352,14 @@ func resolveAgentSkillsDir() string {
 		logger.Debug(logComponent).
 			Str("path", raw).
 			Err(err).
-			Msg("内置技能目录路径解析失败")
+			Msg("built-in skill directory path resolution failed")
 		return ""
 	}
 	info, statErr := os.Stat(resolved)
 	if statErr != nil || !info.IsDir() {
 		logger.Debug(logComponent).
 			Str("path", resolved).
-			Msg("内置技能目录不存在，跳过")
+			Msg("built-in skill directory not present, skipping")
 		return ""
 	}
 	return resolved
@@ -377,7 +377,7 @@ func ensureIntrinsicFile(path string) bool {
 		logger.Warn(logComponent).
 			Str("path", path).
 			Err(err).
-			Msg("确保固有文件失败：创建父目录失败")
+			Msg("ensure built-in file failed: failed to create parent directory")
 		return false
 	}
 	// touch 空文件
@@ -386,13 +386,13 @@ func ensureIntrinsicFile(path string) bool {
 		logger.Warn(logComponent).
 			Str("path", path).
 			Err(err).
-			Msg("确保固有文件失败：创建文件失败")
+			Msg("ensure built-in file failed: failed to create file")
 		return false
 	}
 	_ = f.Close()
 	logger.Info(logComponent).
 		Str("path", path).
-		Msg("创建空固有文件")
+		Msg("created empty built-in file")
 	return true
 }
 

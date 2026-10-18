@@ -61,7 +61,7 @@ func Analyze(
 		logger.Warn(logComponent).
 			Str("event_type", "MEMORY_PROCESS").
 			Int("messages_len", len(messages)).
-			Msg("没有消息可供分析")
+			Msg("no messages to analyze")
 		return nil, nil
 	}
 
@@ -159,7 +159,7 @@ func Analyze(
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
 				Str("exception", "JSON解析结果为nil").
-				Msg("记忆分析模型输出格式错误")
+				Msg("memory analysis model output format error")
 			return &MemoryAnalyzerResult{}, nil
 		}
 
@@ -171,7 +171,7 @@ func Analyze(
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
 				Str("exception", fmt.Sprintf("JSON解析结果类型非map[string]any，实际: %T", parsedResult)).
-				Msg("记忆分析模型输出格式错误")
+				Msg("memory analysis model output format error")
 			return &MemoryAnalyzerResult{}, nil
 		}
 
@@ -185,7 +185,7 @@ func Analyze(
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
 				Str("exception", parseErr.Error()).
-				Msg("记忆分析模型输出格式错误")
+				Msg("memory analysis model output format error")
 			return &MemoryAnalyzerResult{}, nil
 		}
 

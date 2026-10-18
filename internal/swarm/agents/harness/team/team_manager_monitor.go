@@ -85,7 +85,7 @@ func (m *TeamManager) CancelAllStreamTasks(reason string) {
 		logger.Info(logComponent).
 			Str("reason", reason).
 			Str("session_id", sessionID).
-			Msg("取消流任务")
+			Msg("cancelling stream task")
 		entry.cancel()
 	}
 
@@ -94,7 +94,7 @@ func (m *TeamManager) CancelAllStreamTasks(reason string) {
 		if entry != nil && entry.wg != nil {
 			entry.wg.Wait()
 			logger.Debug(logComponent).Str("session_id", sessionID).
-				Msg("流任务 goroutine 已退出")
+				Msg("stream task goroutine exited")
 		}
 	}
 
@@ -184,7 +184,7 @@ func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamA
 	mon, err := monitor.CreateMonitor(teamAgent, db, teamName, sessionID, hideDM)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Str("team_name", teamName).
-			Msg("创建 TeamMonitor 失败")
+			Msg("failed to create TeamMonitor")
 		return fmt.Errorf("创建 TeamMonitor 失败: %w", err)
 	}
 
@@ -194,14 +194,14 @@ func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamA
 	// Python 步骤 6: 启动 handler
 	if err := handler.Start(ctx); err != nil {
 		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
-			Msg("TeamMonitorHandler 启动失败")
+			Msg("TeamMonitorHandler start failed")
 		return fmt.Errorf("TeamMonitorHandler 启动失败: %w", err)
 	}
 
 	// Python 步骤 7: 注册到 teamMonitors
 	m.RegisterMonitor(sessionID, handler)
 	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-		Msg("TeamMonitorHandler 启动成功")
+		Msg("TeamMonitorHandler started successfully")
 
 	// Python 步骤 8: 启动事件消费 goroutine
 	if handler.IsRunning() {
@@ -250,7 +250,7 @@ func (m *TeamManager) cleanupRuntimeLocals(ctx context.Context, sessionID string
 	if cancel, ok := m.teamEvolutionWatchers[sessionID]; ok && cancel != nil {
 		cancel()
 		delete(m.teamEvolutionWatchers, sessionID)
-		logger.Info(logComponent).Str("session_id", sessionID).Msg("演进监控已取消")
+		logger.Info(logComponent).Str("session_id", sessionID).Msg("evolution monitor cancelled")
 	}
 
 	// 步骤 2: 取消流任务
@@ -263,7 +263,7 @@ func (m *TeamManager) cleanupRuntimeLocals(ctx context.Context, sessionID string
 			entry.wg.Wait()
 		}
 		delete(m.streamTasks, sessionID)
-		logger.Info(logComponent).Str("session_id", sessionID).Msg("流任务已取消")
+		logger.Info(logComponent).Str("session_id", sessionID).Msg("stream task cancelled")
 	}
 
 	// 步骤 3: 停止监控 handler
@@ -271,10 +271,10 @@ func (m *TeamManager) cleanupRuntimeLocals(ctx context.Context, sessionID string
 	// S-03: 使用传入的 ctx 替代 context.Background()
 	if handler, ok := m.teamMonitors[sessionID]; ok {
 		if err := handler.Stop(ctx); err != nil {
-			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("停止监控 handler 失败")
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("failed to stop monitor handler")
 		}
 		delete(m.teamMonitors, sessionID)
-		logger.Info(logComponent).Str("session_id", sessionID).Msg("监控 handler 已停止并移除")
+		logger.Info(logComponent).Str("session_id", sessionID).Msg("monitor handler stopped and removed")
 	}
 
 	// 步骤 4: 清理 Rail 注册
@@ -305,8 +305,8 @@ func (m *TeamManager) clearTeamRailRegistries(sessionID string) {
 // Go 差异：Python 通过 _broadcast_event 查找 _pending_waiters 并放入每个 waiter 的 queue。
 // Go 端通过 onEventBroadcast 回调实现，由 adapter 层在初始化时注入。
 func (m *TeamManager) consumeMonitorEvents(ctx context.Context, sessionID string, handler TeamMonitorHandler) {
-	defer logger.Info(logComponent).Str("session_id", sessionID).Msg("监控事件消费 goroutine 退出")
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("监控事件消费 goroutine 启动")
+	defer logger.Info(logComponent).Str("session_id", sessionID).Msg("monitor event consumer goroutine exited")
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("monitor event consumer goroutine started")
 
 	for evt := range handler.Events() {
 		select {
@@ -322,7 +322,7 @@ func (m *TeamManager) consumeMonitorEvents(ctx context.Context, sessionID string
 				logger.Debug(logComponent).
 					Any("event_type", evt["event_type"]).
 					Str("session_id", sessionID).
-					Msg("监控事件（无广播回调，仅记录）")
+					Msg("monitor event (no broadcast callback, log only)")
 			}
 		}
 	}
@@ -343,7 +343,7 @@ func (m *TeamManager) autoStartEvolutionWatcher(ctx context.Context, sessionID s
 	// 检查是否已有 watcher
 	if existing := m.GetTeamEvolutionWatcher(sessionID); existing != nil {
 		logger.Debug(logComponent).Str("session_id", sessionID).
-			Msg("evolution watcher 已存在，跳过自动启动")
+			Msg("evolution watcher already exists, skipping auto-start")
 		return
 	}
 
@@ -351,15 +351,15 @@ func (m *TeamManager) autoStartEvolutionWatcher(ctx context.Context, sessionID s
 	m.RegisterTeamEvolutionWatcher(sessionID, cancel)
 
 	go func() {
-		defer logger.Info(logComponent).Str("session_id", sessionID).Msg("evolution watcher 退出")
+		defer logger.Info(logComponent).Str("session_id", sessionID).Msg("evolution watcher exited")
 		logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-			Msg("evolution watcher 启动")
+			Msg("evolution watcher started")
 
 		// 获取监控 handler
 		handler, ok := m.teamMonitors[sessionID]
 		if !ok {
 			logger.Warn(logComponent).Str("session_id", sessionID).
-				Msg("autoStartEvolutionWatcher: 无监控 handler")
+				Msg("autoStartEvolutionWatcher: no monitor handler")
 			return
 		}
 
@@ -379,12 +379,12 @@ func (m *TeamManager) autoStartEvolutionWatcher(ctx context.Context, sessionID s
 				} else {
 					logger.Debug(logComponent).Str("session_id", sessionID).
 						Any("event_type", evt["event_type"]).
-						Msg("evolution watcher 事件（无广播回调，仅记录）")
+						Msg("evolution watcher event (no broadcast callback, log only)")
 				}
 			}
 		}
 	}()
 
 	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-		Msg("自动启动 evolution watcher")
+		Msg("auto-starting evolution watcher")
 }

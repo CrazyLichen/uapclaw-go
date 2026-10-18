@@ -131,7 +131,7 @@ func NewContextEvolutionRail(
 	if r.memoryService == nil {
 		svc, err := ceservice.NewTaskMemoryService()
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("user_id", r.userID).Msg("ContextEvolutionRail 无法创建默认 TaskMemoryService，跳过记忆功能")
+			logger.Warn(logComponent).Err(err).Str("user_id", r.userID).Msg("ContextEvolutionRail cannot create default TaskMemoryService, skipping memory feature")
 		} else {
 			r.memoryService = svc
 		}
@@ -140,7 +140,7 @@ func NewContextEvolutionRail(
 	// 加载已有记忆（对齐 Python __init__ 末尾调用 load_memories）
 	if r.memoryService != nil {
 		if err := r.memoryService.LoadMemories(ctx, r.userID); err != nil {
-			logger.Warn(logComponent).Err(err).Str("user_id", r.userID).Msg("ContextEvolutionRail 加载记忆失败")
+			logger.Warn(logComponent).Err(err).Str("user_id", r.userID).Msg("ContextEvolutionRail load memory failed")
 		}
 	}
 
@@ -148,7 +148,7 @@ func NewContextEvolutionRail(
 		Str("user_id", userID).
 		Bool("inject", r.injectMemoriesInContext).
 		Bool("auto_summarize", r.autoSummarize).
-		Msg("ContextEvolutionRail 初始化完成")
+		Msg("ContextEvolutionRail initialized")
 
 	return r
 }
@@ -268,11 +268,11 @@ func (r *ContextEvolutionRail) beforeTaskIteration(ctx context.Context, cbcRaw a
 	// 对齐 Python: 缓存键使用 retrieval_query（self.last_retrieved_query == retrieval_query）
 	if r.lastRetrievedQuery == retrievalQuery && r.lastRetrievalResult != nil {
 		memoryResult = r.lastRetrievalResult
-		logger.Info(logComponent).Msg("复用缓存的记忆检索结果")
+		logger.Info(logComponent).Msg("reusing cached memory retrieval results")
 	} else {
 		result, err := r.memoryService.Retrieve(ctx, r.userID, retrievalQuery)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("检索记忆失败")
+			logger.Error(logComponent).Err(err).Msg("memory retrieval failed")
 			return nil // 不中断 Agent（对齐 Python: except → return）
 		}
 		memoryResult = result
@@ -282,7 +282,7 @@ func (r *ContextEvolutionRail) beforeTaskIteration(ctx context.Context, cbcRaw a
 
 	memoryString := strings.TrimSpace(memoryResult.MemoryString)
 	r.memoriesUsed = len(memoryResult.RetrievedMemory)
-	logger.Info(logComponent).Int("memories_used", r.memoriesUsed).Msg("检索到记忆")
+	logger.Info(logComponent).Int("memories_used", r.memoriesUsed).Msg("memories retrieved")
 
 	// 6. 记忆注入（对齐 Python: if not (self.memories_used > 0 and memory_string and self.inject_memories_in_context): return）
 	if r.memoriesUsed <= 0 || memoryString == "" || !r.injectMemoriesInContext {
@@ -292,20 +292,20 @@ func (r *ContextEvolutionRail) beforeTaskIteration(ctx context.Context, cbcRaw a
 	// type-assert: BaseAgent → DeepAgentInterface（对齐 Python: inner_agent = getattr(agent, "react_agent", agent)）
 	deepAgent, ok := cbc.Agent().(hinterfaces.DeepAgentInterface)
 	if !ok {
-		logger.Warn(logComponent).Msg("Agent 非 DeepAgentInterface，跳过记忆注入")
+		logger.Warn(logComponent).Msg("agent is not DeepAgentInterface, skipping memory injection")
 		return nil
 	}
 
 	reactAgent := deepAgent.ReactAgent()
 	if reactAgent == nil {
-		logger.Warn(logComponent).Msg("ReactAgent 为 nil，跳过记忆注入")
+		logger.Warn(logComponent).Msg("ReactAgent is nil, skipped")
 		return nil
 	}
 
 	agentCfg := reactAgent.Config()
 	reactCfg, ok := agentCfg.(*saconfig.ReActAgentConfig)
 	if !ok {
-		logger.Warn(logComponent).Msg("Agent config 非 ReActAgentConfig，跳过记忆注入")
+		logger.Warn(logComponent).Msg("agent config is not ReActAgentConfig, skipping memory injection")
 		return nil
 	}
 
@@ -333,12 +333,12 @@ func (r *ContextEvolutionRail) beforeTaskIteration(ctx context.Context, cbcRaw a
 	newReactCfg := *reactCfg
 	newReactCfg.PromptTemplate = newTemplate
 	if err := reactAgent.Configure(ctx, &newReactCfg); err != nil {
-		logger.Error(logComponent).Err(err).Msg("注入记忆到 PromptTemplate 失败")
+		logger.Error(logComponent).Err(err).Msg("failed to inject memories into PromptTemplate")
 		r.originalPromptTemplate = nil
 		return nil
 	}
 
-	logger.Debug(logComponent).Msg("已注入记忆上下文到 Agent 系统提示词")
+	logger.Debug(logComponent).Msg("injected memory context into agent system prompt")
 	return nil
 }
 
@@ -371,7 +371,7 @@ func (r *ContextEvolutionRail) afterTaskIteration(ctx context.Context, cbcRaw an
 			}
 		}
 		r.originalPromptTemplate = nil
-		logger.Debug(logComponent).Msg("已恢复原始 Agent 系统提示词")
+		logger.Debug(logComponent).Msg("restored original agent system prompt")
 	}
 
 	// 2. 标注 memoriesUsed（对齐 Python: result = getattr(ctx.inputs, "result", None); result["memories_used"] = self.memories_used）
@@ -390,7 +390,7 @@ func (r *ContextEvolutionRail) afterTaskIteration(ctx context.Context, cbcRaw an
 		if trajectory != "" {
 			// 对齐 Python: feedback, score = _evaluate_trial(self._current_query, trajectory)
 			feedback, score := ceservice.EvaluateTrial(r.currentQuery, trajectory, "")
-			logger.Info(logComponent).Msg("正在为当前轨迹运行自动总结")
+			logger.Info(logComponent).Msg("running auto-summary for current trajectory in progress")
 			// 对齐 Python: await _summarize_trajectories(self.memory_service, self.user_id, SummarizeTrajectoriesInput(...))
 			_, err := ceservice.SummarizeTrajectories(ctx, r.memoryService, r.userID, ceservice.SummarizeTrajectoriesInput{
 				Query:      r.currentQuery,
@@ -400,7 +400,7 @@ func (r *ContextEvolutionRail) afterTaskIteration(ctx context.Context, cbcRaw an
 				Score:      []int{score},
 			})
 			if err != nil {
-				logger.Error(logComponent).Err(err).Msg("afterTaskIteration 自动总结失败")
+				logger.Error(logComponent).Err(err).Msg("afterTaskIteration auto summary failed")
 			}
 		}
 	}
@@ -422,7 +422,7 @@ func (r *ContextEvolutionRail) afterTaskIteration(ctx context.Context, cbcRaw an
 func (r *ContextEvolutionRail) extractTrajectory(cbc *agentinterfaces.AgentCallbackContext) string {
 	defer func() {
 		if err := recover(); err != nil {
-			logger.Warn(logComponent).Any("panic", err).Msg("提取轨迹时发生 panic")
+			logger.Warn(logComponent).Any("panic", err).Msg("panic occurred while extracting trajectory")
 		}
 	}()
 
@@ -456,7 +456,7 @@ func (r *ContextEvolutionRail) extractTrajectory(cbc *agentinterfaces.AgentCallb
 	// 对齐 Python: context.get_messages()
 	messages, err := mc.GetMessages(0, true)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("获取对话消息失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to get conversation messages")
 		return ""
 	}
 

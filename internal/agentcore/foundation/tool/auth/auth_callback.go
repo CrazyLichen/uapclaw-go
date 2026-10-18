@@ -99,7 +99,7 @@ func RegisterAuthCallback(fw *callback.CallbackFramework) {
 			logger.Warn(logComponent).
 				Str("tool_name", data.ToolName).
 				Str("tool_id", data.ToolID).
-				Msg("auth_config 未找到或类型不匹配，跳过认证处理")
+				Msg("auth_config not found or type mismatch, skipping auth handling")
 			return &ToolAuthResult{
 				Success:  false,
 				AuthData: map[string]any{},
@@ -146,7 +146,7 @@ func (s *SSLAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthCo
 			Err(err).
 			Str("auth_type", AuthTypeSSL).
 			Str("tool_type", authConfig.ToolType).
-			Msg("SSL 认证配置获取失败")
+			Msg("failed to get SSL auth config")
 		return nil, err
 	}
 
@@ -158,7 +158,7 @@ func (s *SSLAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthCo
 				Err(err).
 				Str("auth_type", AuthTypeSSL).
 				Str("tool_type", authConfig.ToolType).
-				Msg("创建严格 TLS 配置失败")
+				Msg("failed to create strict TLS config")
 			return nil, err
 		}
 	} else {
@@ -184,7 +184,7 @@ func (s *HeaderQueryAuthStrategy) Authenticate(_ context.Context, authConfig *To
 		logger.Info(logComponent).
 			Str("auth_type", AuthTypeHeaderAndQuery).
 			Str("tool_type", authConfig.ToolType).
-			Msg("使用自定义 header 和 query 认证")
+			Msg("using custom header and query auth")
 	}
 	return &ToolAuthResult{
 		Success:  true,
@@ -206,7 +206,7 @@ func (r *AuthStrategyRegistry) ExecuteAuth(ctx context.Context, authConfig *Tool
 	if !ok {
 		logger.Warn(logComponent).
 			Str("auth_type", authConfig.AuthType).
-			Msg("不支持的认证类型")
+			Msg("unsupported auth type")
 		return &ToolAuthResult{
 			Success:  false,
 			AuthData: map[string]any{},

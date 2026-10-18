@@ -75,7 +75,7 @@ func NewWebFreeSearchTool(language, agentID string) tool.Tool {
 		// Python: L1048-1053 — search_free
 		engineUsed, rows, err := searchFree(query, maxResults, timeoutSeconds)
 		if err != nil {
-			logger.Error(logComponent).Str("query", query).Err(err).Msg("免费搜索失败")
+			logger.Error(logComponent).Str("query", query).Err(err).Msg("free search failed")
 			return map[string]any{"result": fmt.Sprintf("[ERROR]: free search failed: %s", err)}, nil
 		}
 

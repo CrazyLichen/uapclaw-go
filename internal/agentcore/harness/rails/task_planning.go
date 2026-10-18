@@ -81,8 +81,6 @@ const (
 // _ 编译时验证 TaskPlanningRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 
-var taskPlanLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithEnableProgressRepeat 设置是否注入周期性进度提醒
@@ -209,9 +207,9 @@ func (r *TaskPlanningRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 	// 创建 todo 工具集（共享 TodoTool 基类实例）
 	fsOp := r.SysOperation()
 	if fsOp == nil || workspaceDir == "" {
-		logger.Warn(taskPlanLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "task_planning_init_skip").
-			Msg("sysOperation 或 workspaceDir 为空，跳过 todo 工具注册")
+			Msg("sysOperation or workspaceDir is empty, skipping todo tool registration")
 		return nil
 	}
 
@@ -241,10 +239,10 @@ func (r *TaskPlanningRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 	}
 	r.tools = registeredTools
 
-	logger.Debug(taskPlanLogComponent).
+	logger.Debug(logComponent).
 		Str("event_type", "task_planning_init").
 		Int("tool_count", len(registeredTools)).
-		Msg("TaskPlanningRail 已注册 todo 工具")
+		Msg("TaskPlanningRail registered todo tool")
 	return nil
 }
 
@@ -263,7 +261,7 @@ func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			func(t tool.Tool) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(taskPlanLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "task_planning_uninit").
 							Str("tool_name", func() string {
 								if t != nil && t.Card() != nil {
@@ -271,7 +269,7 @@ func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 								}
 								return ""
 							}()).
-							Msgf("注销工具失败: %v", rec)
+							Msgf("failed to unregister tool: %v", rec)
 					}
 				}()
 				if t != nil && t.Card() != nil {
@@ -315,10 +313,10 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 	// Python: L170-171: 首次调用时捕获 defaultLLM
 	switcher, ok := cbc.Agent().(modelSwitcher)
 	if !ok {
-		logger.Warn(taskPlanLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "task_planning_before_model_call_skip").
 			Str("agent_type", fmt.Sprintf("%T", cbc.Agent())).
-			Msg("agent 未实现 modelSwitcher 接口，跳过模型切换")
+			Msg("agent does not implement modelSwitcher interface, skipping model switch")
 		return nil
 	}
 
@@ -346,10 +344,10 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 	// Python: L180-185: 切换模型
 	if targetModel != nil {
 		switcher.SetLLM(targetModel)
-		logger.Debug(taskPlanLogComponent).
+		logger.Debug(logComponent).
 			Str("event_type", "task_planning_model_switched").
 			Str("selected_model_id", selectedModelID).
-			Msg("TaskPlanningRail 已切换模型")
+			Msg("TaskPlanningRail switched model")
 	}
 
 	return nil
@@ -369,9 +367,9 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 			sessionID := sess.GetSessionID()
 			todos, err := r.todoTool.LoadTodos(ctx, sessionID)
 			if err != nil {
-				logger.Debug(taskPlanLogComponent).
+				logger.Debug(logComponent).
 					Str("event_type", "task_planning_after_tool_call_refresh_failed").
-					Msg("刷新 todos 缓存失败")
+					Msg("failed to refresh todos cache")
 			} else {
 				r.todosCache[sessionID] = todos
 			}
@@ -398,9 +396,9 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 	// Python: L225-229: 加载当前 todos
 	todos, err := r.todoTool.LoadTodos(ctx, sessionID)
 	if err != nil {
-		logger.Debug(taskPlanLogComponent).
+		logger.Debug(logComponent).
 			Str("event_type", "task_planning_after_tool_call_load_failed").
-			Msg("加载 todos 失败，跳过进度提醒")
+			Msg("failed to load todos, skipping progress reminder")
 		return nil
 	}
 	if len(todos) == 0 {
@@ -479,12 +477,12 @@ func (r *TaskPlanningRail) AfterTaskIteration(ctx context.Context, cbc *agentint
 func (r *TaskPlanningRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// Python: L266-269: 日志汇总 token 使用量
 	for modelID, record := range r.usageRecords {
-		logger.Info(taskPlanLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "task_planning_token_usage").
 			Str("model_id", modelID).
 			Int("input_tokens", record.InputTokens).
 			Int("output_tokens", record.OutputTokens).
-			Msg("TaskPlanningRail token 使用量")
+			Msg("TaskPlanningRail token usage")
 	}
 	r.usageRecords = make(map[string]*hschema.ModelUsageRecord)
 
@@ -587,10 +585,10 @@ func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinte
 	// Python: L330-331: 获取 TaskPlan
 	loader, ok := cbc.Agent().(deepStateLoader)
 	if !ok {
-		logger.Debug(taskPlanLogComponent).
+		logger.Debug(logComponent).
 			Str("event_type", "task_planning_sync_todos_skip").
 			Str("agent_type", fmt.Sprintf("%T", cbc.Agent())).
-			Msg("agent 未实现 deepStateLoader 接口，跳过同步")
+			Msg("agent does not implement deepStateLoader interface, skipping sync")
 		return
 	}
 	state := loader.LoadState(sess)
@@ -606,9 +604,9 @@ func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinte
 	// Python: L341-345: 加载当前 todos
 	todos, err := r.todoTool.LoadTodos(ctx, sessionID)
 	if err != nil {
-		logger.Debug(taskPlanLogComponent).
+		logger.Debug(logComponent).
 			Str("event_type", "task_planning_sync_todo_no_todos").
-			Msg("无 todos 可同步")
+			Msg("no todos to sync")
 		return
 	}
 	if len(todos) == 0 {
@@ -639,17 +637,17 @@ func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinte
 
 	// Python: L367-371: 保存更新后的 todos
 	if err := r.todoTool.SaveTodos(ctx, sessionID, todos); err != nil {
-		logger.Warn(taskPlanLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "task_planning_sync_todo_save_failed").
 			Err(err).
-			Msg("同步 todos 保存失败")
+			Msg("failed to save synced todos")
 		return
 	}
 
-	logger.Info(taskPlanLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "task_planning_sync_todos_from_plan").
 		Int("todo_count", len(todos)).
-		Msg("TaskPlanningRail 已从 TaskPlan 同步 todos")
+		Msg("TaskPlanningRail synced todos from TaskPlan")
 }
 
 func (r *TaskPlanningRail) buildModelSelectionString() string {

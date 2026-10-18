@@ -45,7 +45,7 @@ func MakeTeamSession(card maschema.TeamCardInterface, message map[string]any) *s
 		Str("action", "make_team_session").
 		Str("session_id", sid).
 		Str("team_id", card.GetID()).
-		Msg("创建团队会话")
+		Msg("creating team session")
 
 	return teamSession
 }
@@ -78,7 +78,7 @@ func StandaloneInvokeContext(
 				Str("action", "standalone_invoke_context").
 				Str("session_id", teamSession.GetSessionID()).
 				Str("team_id", card.GetID()).
-				Msg("PreRun 失败")
+				Msg("PreRun failed")
 			return nil, err
 		}
 		runtime.BindTeamSession(teamSession)
@@ -90,7 +90,7 @@ func StandaloneInvokeContext(
 		Str("action", "standalone_invoke_context").
 		Str("session_id", sid).
 		Bool("caller_owns", callerOwns).
-		Msg("进入独立调用上下文")
+		Msg("entering standalone invoke context")
 
 	// Python: try/finally：即使 fn panic 也保证清理代码执行
 	var result map[string]any
@@ -103,7 +103,7 @@ func StandaloneInvokeContext(
 					Str("action", "standalone_invoke_context").
 					Str("session_id", sid).
 					Any("panic", r).
-					Msg("业务逻辑发生 panic")
+					Msg("business logic panicked")
 			}
 		}()
 		result, err = fn(teamSession, sid)
@@ -113,7 +113,7 @@ func StandaloneInvokeContext(
 		logger.Error(logComponent).Err(err).
 			Str("action", "standalone_invoke_context").
 			Str("session_id", sid).
-			Msg("业务逻辑执行失败")
+			Msg("business logic execution failed")
 	}
 
 	if !callerOwns {
@@ -122,25 +122,25 @@ func StandaloneInvokeContext(
 			logger.Warn(logComponent).Err(cleanupErr).
 				Str("action", "standalone_invoke_context").
 				Str("session_id", sid).
-				Msg("CleanupSession 失败")
+				Msg("CleanupSession failed")
 		}
 		if closeErr := teamSession.CloseStream(); closeErr != nil {
 			logger.Warn(logComponent).Err(closeErr).
 				Str("action", "standalone_invoke_context").
 				Str("session_id", sid).
-				Msg("CloseStream 失败")
+				Msg("CloseStream failed")
 		}
 		if commitErr := teamSession.Commit(ctx); commitErr != nil {
 			logger.Warn(logComponent).Err(commitErr).
 				Str("action", "standalone_invoke_context").
 				Str("session_id", sid).
-				Msg("Commit 失败")
+				Msg("Commit failed")
 		}
 
 		logger.Info(logComponent).
 			Str("action", "standalone_invoke_context").
 			Str("session_id", sid).
-			Msg("独立调用上下文已清理")
+			Msg("standalone invoke context cleaned up")
 	}
 
 	return result, err
@@ -183,7 +183,7 @@ func StandaloneStreamContext(
 				Str("action", "standalone_stream_context").
 				Str("session_id", teamSession.GetSessionID()).
 				Str("team_id", card.GetID()).
-				Msg("PreRun 失败")
+				Msg("PreRun failed")
 			return nil, err
 		}
 		runtime.BindTeamSession(teamSession)
@@ -195,7 +195,7 @@ func StandaloneStreamContext(
 		Str("action", "standalone_stream_context").
 		Str("session_id", sid).
 		Bool("caller_owns", callerOwns).
-		Msg("进入独立流式上下文")
+		Msg("entering standalone streaming context")
 
 	// Python: 返回 team_session.stream_iterator()，
 	// 消费者从此 channel 读取 runFn 通过 WriteStream 写入的流数据
@@ -213,7 +213,7 @@ func StandaloneStreamContext(
 						Str("action", "standalone_stream_context").
 						Str("session_id", sid).
 						Any("panic", r).
-						Msg("流式业务逻辑发生 panic")
+						Msg("streaming business logic panicked")
 				}
 			}()
 			runErr = runFn(teamSession, sid)
@@ -223,7 +223,7 @@ func StandaloneStreamContext(
 			logger.Error(logComponent).Err(runErr).
 				Str("action", "standalone_stream_context").
 				Str("session_id", sid).
-				Msg("流式业务逻辑执行失败")
+				Msg("streaming business logic execution failed")
 		}
 
 		if !callerOwns {
@@ -232,25 +232,25 @@ func StandaloneStreamContext(
 				logger.Warn(logComponent).Err(cleanupErr).
 					Str("action", "standalone_stream_context").
 					Str("session_id", sid).
-					Msg("CleanupSession 失败")
+					Msg("CleanupSession failed")
 			}
 			if closeErr := teamSession.CloseStream(); closeErr != nil {
 				logger.Warn(logComponent).Err(closeErr).
 					Str("action", "standalone_stream_context").
 					Str("session_id", sid).
-					Msg("CloseStream 失败")
+					Msg("CloseStream failed")
 			}
 			if commitErr := teamSession.Commit(ctx); commitErr != nil {
 				logger.Warn(logComponent).Err(commitErr).
 					Str("action", "standalone_stream_context").
 					Str("session_id", sid).
-					Msg("Commit 失败")
+					Msg("Commit failed")
 			}
 
 			logger.Info(logComponent).
 				Str("action", "standalone_stream_context").
 				Str("session_id", sid).
-				Msg("独立流式上下文已清理")
+				Msg("standalone streaming context cleaned up")
 		} else {
 			// Runner 拥有生命周期；仅发信号关闭流
 			// Python: _bg 的 finally 中 caller_owns 时 await team_session.close_stream()
@@ -258,7 +258,7 @@ func StandaloneStreamContext(
 				logger.Warn(logComponent).Err(closeErr).
 					Str("action", "standalone_stream_context").
 					Str("session_id", sid).
-					Msg("CloseStream 失败")
+					Msg("CloseStream failed")
 			}
 		}
 	}()

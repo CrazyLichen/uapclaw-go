@@ -404,7 +404,7 @@ func FlushMetadataQueue() {
 	select {
 	case <-flushDone:
 	case <-time.After(5 * time.Second):
-		logger.Warn(logComponent).Msg("FlushMetadataQueue 超时")
+		logger.Warn(logComponent).Msg("FlushMetadataQueue timed out")
 	}
 }
 
@@ -423,7 +423,7 @@ func ReadSessionMetadata(sessionsDir, sessionID string) map[string]any {
 		logger.Warn(logComponent).
 			Err(err).
 			Str("session_id", sessionID).
-			Msg("读取 metadata.json 失败")
+			Msg("failed to read metadata.json")
 		return nil
 	}
 	return meta
@@ -505,7 +505,7 @@ func EnqueueMetadataWrite(sessionID string, metadata map[string]any) {
 		// 队列满，退化为同步写入
 		logger.Warn(logComponent).
 			Str("session_id", sessionID).
-			Msg("metadata 写入队列已满，退化为同步写入")
+			Msg("metadata write queue full, degrading to synchronous write")
 		_ = WriteSessionMetadata(GetSessionsDir(), sessionID, metadata)
 	}
 }
@@ -536,7 +536,7 @@ func metadataWriteWorker() {
 			logger.Warn(logComponent).
 				Str("session_id", item.sessionID).
 				Err(err).
-				Msg("metadata 异步写入失败")
+				Msg("metadata async write failed")
 		}
 	}
 }

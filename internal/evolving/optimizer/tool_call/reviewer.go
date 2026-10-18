@@ -169,7 +169,7 @@ Input:
 		logger.Error(logComponent).
 			Str("method", "Format").
 			Err(err).
-			Msg("Format 调用 LLM 失败")
+			Msg("Format LLM call failed")
 		return nil, fmt.Errorf("Format 调用 LLM 失败: %w", err)
 	}
 
@@ -180,7 +180,7 @@ Input:
 	logger.Error(logComponent).
 		Str("method", "Format").
 		Str("response_type", fmt.Sprintf("%T", response)).
-		Msg("Format 返回结果类型不是 map[string]any")
+		Msg("Format returned result type is not map[string]any")
 	return nil, fmt.Errorf("Format 返回结果类型不是 map[string]any: %T", response)
 }
 
@@ -245,7 +245,7 @@ Input JSON:
 		logger.Error(logComponent).
 			Str("method", "CleanAndDeduplicate").
 			Err(err).
-			Msg("CleanAndDeduplicate 调用 LLM 失败")
+			Msg("CleanAndDeduplicate LLM call failed")
 		return nil, fmt.Errorf("CleanAndDeduplicate 调用 LLM 失败: %w", err)
 	}
 
@@ -300,7 +300,7 @@ func (r *ToolDescriptionReviewer) CrossCheck(
 		logger.Error(logComponent).
 			Str("method", "CrossCheck").
 			Err(err).
-			Msg("CrossCheck 调用 LLM 失败")
+			Msg("CrossCheck LLM call failed")
 		return nil, fmt.Errorf("CrossCheck 调用 LLM 失败: %w", err)
 	}
 
@@ -358,7 +358,7 @@ Input JSON:
 		logger.Error(logComponent).
 			Str("method", "TranslateToChinese").
 			Err(err).
-			Msg("TranslateToChinese 调用 LLM 失败")
+			Msg("TranslateToChinese LLM call failed")
 		return nil, fmt.Errorf("TranslateToChinese 调用 LLM 失败: %w", err)
 	}
 

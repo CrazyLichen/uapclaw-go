@@ -88,13 +88,13 @@ func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 	if handlerType == "" {
 		logger.Error(logComponent).
 			Str("handler_type", handlerType).
-			Msg("注册处理器失败，handler_type 无效")
+			Msg("failed to register handler, invalid handler_type")
 		return
 	}
 	if handler == nil {
 		logger.Error(logComponent).
 			Str("handler_type", handlerType).
-			Msg("注册处理器失败，handler 为 nil")
+			Msg("failed to register handler, handler is nil")
 		return
 	}
 	m.mu.Lock()
@@ -103,7 +103,7 @@ func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 	logger.Info(logComponent).
 		Str("handler_type", handlerType).
 		Str("handler", fmt.Sprintf("%T", handler)).
-		Msg("注册处理器成功")
+		Msg("handler registered")
 }
 
 // RegisterDefaultHandler 注册默认表单处理器。
@@ -114,7 +114,7 @@ func (m *FormHandlerManager) Register(handlerType string, handler FormHandler) {
 func (m *FormHandlerManager) RegisterDefaultHandler(handler FormHandler) {
 	if handler == nil {
 		logger.Error(logComponent).
-			Msg("注册默认处理器失败，handler 为 nil")
+			Msg("failed to register default handler, handler is nil")
 		return
 	}
 	m.mu.Lock()
@@ -122,7 +122,7 @@ func (m *FormHandlerManager) RegisterDefaultHandler(handler FormHandler) {
 	m.mu.Unlock()
 	logger.Info(logComponent).
 		Str("handler", fmt.Sprintf("%T", handler)).
-		Msg("注册默认处理器成功")
+		Msg("default handler registered")
 }
 
 // GetHandler 获取表单处理器。

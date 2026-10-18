@@ -94,7 +94,7 @@ func (c *DashScopeModelClient) GenerateImage(
 			Str("model_provider", "DashScope").
 			Str("method", "generate_image").
 			Err(err).
-			Msg("DashScope 图片生成参数验证失败")
+			Msg("DashScope image generation params validation failed")
 		return nil, err
 	}
 
@@ -184,7 +184,7 @@ func (c *DashScopeModelClient) GenerateSpeech(
 			Str("model_provider", "DashScope").
 			Str("method", "generate_speech").
 			Err(err).
-			Msg("DashScope 语音生成参数验证失败")
+			Msg("DashScope audio generation params validation failed")
 		return nil, err
 	}
 
@@ -296,7 +296,7 @@ func (c *DashScopeModelClient) GenerateVideo(
 			Str("model_provider", "DashScope").
 			Str("method", "generate_video").
 			Err(err).
-			Msg("DashScope 视频生成参数验证失败")
+			Msg("DashScope video generation params validation failed")
 		return nil, err
 	}
 
@@ -479,7 +479,7 @@ func init() {
 	dashScopeFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewDashScopeModelClient(mc, cc)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("创建 DashScope 客户端失败")
+			logger.Error(logComponent).Err(err).Msg("create DashScope client failed")
 			return nil, err
 		}
 		return client, nil

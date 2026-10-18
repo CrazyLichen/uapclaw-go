@@ -51,7 +51,7 @@ func (mh *MessageHandler) CancelAgentSessionsOnDisconnect(ctx context.Context, s
 			Str("event_type", "session_cancelled_on_disconnect").
 			Str("channel_id", channelID).
 			Str("session_id", sid).
-			Msg("断连取消 session 任务")
+			Msg("cancelling session tasks on disconnect")
 	}
 }
 

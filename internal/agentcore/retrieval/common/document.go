@@ -78,10 +78,6 @@ type TextChunk struct {
 // ModalityKind 内容模态类型。
 type ModalityKind string
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent 日志组件标识
-const logComponent = logger.ComponentAgentCore
 const (
 	// ModalityText 文本模态
 	ModalityText ModalityKind = "text"
@@ -92,6 +88,11 @@ const (
 	// ModalityVideo 视频模态
 	ModalityVideo ModalityKind = "video"
 )
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (
@@ -188,7 +189,7 @@ func (d *MultimodalDocument) Content() []map[string]any {
 					logger.Warn(logComponent).
 						Str("modality", "audio").
 						Str("data_prefix", truncatePrefix(f.Data, 50)).
-						Msg("音频字段不匹配 base64 格式，已跳过")
+						Msg("audio field does not match base64 format, skipped")
 					continue
 				}
 				content = append(content, map[string]any{

@@ -341,7 +341,7 @@ func NewWorkspace(rootPath string, language string) *Workspace {
 			logger.Info(logComponent).
 				Str("name", name).
 				Str("path", pathStr).
-				Msg("Workspace: 补充缺失的默认目录")
+				Msg("Workspace: filling in missing default directories")
 		}
 	}
 
@@ -700,14 +700,14 @@ func (w *Workspace) createLink(subdir, name, targetPath string) error {
 			Str("link_path", linkPath).
 			Str("target_path", targetPath).
 			Err(err).
-			Msg("Workspace: 创建目录链接失败")
+			Msg("Workspace: failed to create directory link")
 		return err
 	}
 
 	logger.Info(logComponent).
 		Str("link_path", linkPath).
 		Str("target_path", targetPath).
-		Msg("Workspace: 已创建目录链接")
+		Msg("Workspace: directory link created")
 	return nil
 }
 
@@ -718,7 +718,7 @@ func (w *Workspace) removeLink(subdir, name string) error {
 	if !isDirectoryLink(linkPath) {
 		logger.Warn(logComponent).
 			Str("link_path", linkPath).
-			Msg("Workspace: 链接不存在或不是符号链接")
+			Msg("Workspace: link does not exist or is not a symlink")
 		return nil
 	}
 
@@ -726,13 +726,13 @@ func (w *Workspace) removeLink(subdir, name string) error {
 		logger.Error(logComponent).
 			Str("link_path", linkPath).
 			Err(err).
-			Msg("Workspace: 移除目录链接失败")
+			Msg("Workspace: failed to remove directory link")
 		return err
 	}
 
 	logger.Info(logComponent).
 		Str("link_path", linkPath).
-		Msg("Workspace: 已移除目录链接")
+		Msg("Workspace: directory link removed")
 	return nil
 }
 

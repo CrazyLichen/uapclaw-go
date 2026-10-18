@@ -147,7 +147,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Int("count", len(addDocs)).
-			Msg("添加记忆")
+			Msg("adding memories")
 		if err := m.memoryIndex.AddMemories(ctx, userID, scopeID, addDocs); err != nil {
 			return nil, m.wrapException(err, exception.StatusMemoryAddMemoryExecutionError, m.memType)
 		}
@@ -168,7 +168,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 	logger.Info(logComponent).
 		Int("action_count", len(actionItems)).
 		Str("event_type", "MEMORY_PROCESS").
-		Msg("记忆冲突检查完成")
+		Msg("memory conflict check completed")
 
 	// 步骤 4：执行添加/删除操作
 	var addUnitList []*mem_model.FragmentMemoryUnit
@@ -199,7 +199,7 @@ func (m *FragmentMemoryManager) AddMemories(ctx context.Context, userID string, 
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Int("count", len(addDocs)).
-			Msg("添加记忆")
+			Msg("adding memories")
 		if err := m.memoryIndex.AddMemories(ctx, userID, scopeID, addDocs); err != nil {
 			return nil, m.wrapException(err, exception.StatusMemoryAddMemoryExecutionError, m.memType)
 		}
@@ -301,7 +301,7 @@ func (m *FragmentMemoryManager) Delete(ctx context.Context, userID string, scope
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Str("event_type", "MEMORY_STORE").
-			Msg("删除记忆失败，记忆不存在")
+			Msg("failed to delete memory, memory not found")
 		return false, nil
 	}
 	if err := m.memoryIndex.DeleteMemories(ctx, userID, scopeID, []string{memID}); err != nil {
@@ -344,7 +344,7 @@ func (m *FragmentMemoryManager) ListFragmentMemories(ctx context.Context, userID
 				Str("user_id", userID).
 				Str("scope_id", scopeID).
 				Str("event_type", "MEMORY_STORE").
-				Msg("非法碎片记忆类型")
+				Msg("invalid fragment memory type")
 			return nil, nil
 		}
 		memTypes = []string{memType}
@@ -404,7 +404,7 @@ func (m *FragmentMemoryManager) getNewMemUnitsAndUpdateMemories(
 						logger.Warn(logComponent).
 							Str("memory_id", unit.MemID).
 							Str("event_type", "MEMORY_STORE").
-							Msg("更新记忆重复，旧值将被覆盖")
+							Msg("duplicate update memory, old value will be overwritten")
 					}
 					updateMemUnits[unit.MemID] = unit
 				}
@@ -540,7 +540,7 @@ func appendMemUnitListToDict(dict map[string]*mem_model.FragmentMemoryUnit, list
 			logger.Warn(logComponent).
 				Str("memory_id", unit.MemID).
 				Str("event_type", "MEMORY_STORE").
-				Msg("记忆重复，旧值将被覆盖")
+				Msg("duplicate memory, old value will be overwritten")
 		}
 		dict[unit.MemID] = unit
 	}

@@ -53,14 +53,14 @@ var (
 func NewAesGcmProvider(key []byte) (*AesGcmProvider, error) {
 	if len(key) != KeyLength {
 		return nil, exception.NewBaseError(exception.StatusCommonEncryptionError,
-			exception.WithMsg(fmt.Sprintf("密钥长度必须为 %d 字节，实际 %d 字节", KeyLength, len(key))))
+			exception.WithMsg(fmt.Sprintf("key length must be %d bytes, got %d", KeyLength, len(key))))
 	}
 
 	// 从全局注册表获取 AES-GCM 算法
 	crypt, ok := Get(AesGcmName)
 	if !ok {
 		return nil, exception.NewBaseError(exception.StatusCommonEncryptionError,
-			exception.WithMsg("AES-GCM 算法未注册，请确认 crypto 包已正确初始化"))
+			exception.WithMsg("AES-GCM algorithm not registered, ensure crypto package is properly initialized"))
 	}
 
 	// 复制密钥，避免外部修改影响内部状态

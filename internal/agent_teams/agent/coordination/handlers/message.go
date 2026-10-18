@@ -90,7 +90,7 @@ func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.C
 	logger.Debug(logComponent).
 		Str("event_type", em.EventType).
 		Str("role", string(role)).
-		Msg("on_message_or_broadcast: 已处理消息/广播事件")
+		Msg("on_message_or_broadcast: message/broadcast event processed")
 }
 
 // OnPollMailbox 周期邮箱轮询：排空未读消息。
@@ -131,7 +131,7 @@ func (h *MessageHandler) OnMemberShutdownDrain(ctx context.Context, event types.
 	h.processUnreadMessagesWithSteer(ctx, memberName, true)
 	logger.Info(logComponent).
 		Str("member_name", memberName).
-		Msg("on_member_shutdown_drain: 已排空邮箱")
+		Msg("on_member_shutdown_drain: mailbox drained")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -160,7 +160,7 @@ func (h *MessageHandler) processUnreadMessagesWithSteer(ctx context.Context, mem
 	logger.Debug(logComponent).
 		Str("member_name", memberName).
 		Bool("use_steer", useSteer).
-		Msg("processUnreadMessagesWithSteer: TODO 等消息管理器就绪")
+		Msg("processUnreadMessagesWithSteer: TODO waiting for message manager")
 }
 
 // ackUserBoundMessage Leader 自动确认 teammate→user 的直接消息。

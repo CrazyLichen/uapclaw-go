@@ -163,7 +163,7 @@ func (m *WorktreeManager) Enter(ctx context.Context, slug, memberName, teamName 
 			}
 			return "created"
 		}()).Float64("duration_ms", durationMs).
-		Msg("已进入 worktree")
+		Msg("entered worktree")
 
 	if m.eventHandler != nil {
 		_ = m.eventHandler(ctx, &WorktreeCreatedEvent{
@@ -382,7 +382,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 	policy := m.resolvePolicy()
 	if policy == WorktreeLifecyclePolicyDurable && !force {
 		logger.Info(logComponent).Str("slug_prefix", slugPrefix).
-			Msg("跳过 worktree 清理：持久策略已激活")
+			Msg("skipping worktree cleanup: persistent policy active")
 		return nil, nil
 	}
 
@@ -394,7 +394,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 	workspace := cwd.GetWorkspace(ctx)
 	if workspace == "" {
 		logger.Info(logComponent).Str("slug_prefix", slugPrefix).
-			Msg("跳过 worktree 清理：Agent 工作区未设置")
+			Msg("skipping worktree cleanup: agent workspace not set")
 		return nil, nil
 	}
 
@@ -416,7 +416,7 @@ func (m *WorktreeManager) CleanupWorktreesByPrefix(ctx context.Context, slugPref
 			summary := m.checkChanges(ctx, wtPath)
 			if summary != nil && (summary.ChangedFiles > 0 || summary.Commits > 0) {
 				logger.Warn(logComponent).Str("slug", slug).
-					Msg("跳过 worktree：存在未提交变更")
+					Msg("skipping worktree: uncommitted changes exist")
 				continue
 			}
 		}

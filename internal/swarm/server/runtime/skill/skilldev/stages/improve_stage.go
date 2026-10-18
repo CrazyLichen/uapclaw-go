@@ -118,7 +118,7 @@ func (h *ImproveStageHandler) runImproveAgent(_ *skilldev.SkillDevContext, _ map
 	// 待实现：读取技能文件 skillContent := readSkillFiles(filepath.Join(sctx.Workspace, "skill"))
 	// 待实现：创建改进Agent agent, err := sctx.CreateStageAgent("improve", ImproveSystemPrompt.format(...), []string{"file_read", "file_write"}, 25)
 	// await Runner.run_agent(agent, {"task": "根据反馈改进 Skill"})
-	logger.Warn(logComponent).Msg("[ImproveStage] runImproveAgent 尚未实现，跳过改进")
+	logger.Warn(logComponent).Msg("[ImproveStage] runImproveAgent not implemented, skipping improvement")
 }
 
 // readSkillFiles 读取当前 skill 目录下所有文件内容。

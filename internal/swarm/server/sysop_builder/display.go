@@ -90,7 +90,7 @@ func ListAutoManagedSandboxPaths(
 			logger.Debug(logComponent).
 				Str("path", raw).
 				Err(err).
-				Msg("auto view: 固有 ro 路径解析失败")
+				Msg("auto view: built-in ro path resolution failed")
 			continue
 		}
 		deny = appendUnique(deny, map[string]string{
@@ -253,7 +253,7 @@ func resolveDisplayPath(raw string) string {
 		logger.Debug(logComponent).
 			Str("path", text).
 			Err(err).
-			Msg("路径解析失败，无法用于展示")
+			Msg("path resolution failed, cannot be used for display")
 		return ""
 	}
 	return resolved

@@ -55,7 +55,7 @@ func (c *OpenAIModelClient) TranscribeAudio(
 	if err != nil {
 		logger.Error(logComponent).Str("audio_path", audioPath).Err(err).
 			Str("event_type", "LLM_CALL_ERROR").Str("method", "TranscribeAudio").
-			Msg("打开音频文件失败")
+			Msg("failed to open audio file")
 		return nil, exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(fmt.Sprintf("打开音频文件失败: %s", audioPath)),
@@ -147,14 +147,14 @@ func (c *OpenAIModelClient) TranscribeAudio(
 		Str("method", "TranscribeAudio").
 		Str("audio_path", audioPath).
 		Str("model_provider", c.ClientConfig.ClientProvider).
-		Msg("音频转写请求已就绪")
+		Msg("audio transcription request ready")
 
 	// 8. 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "TranscribeAudio").Str("model_name", model).Err(err).
-			Msg("音频转写 HTTP 请求失败")
+			Msg("audio transcription HTTP request failed")
 		return nil, exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(fmt.Sprintf("音频转写 HTTP 请求失败: %s", err.Error())),
@@ -172,7 +172,7 @@ func (c *OpenAIModelClient) TranscribeAudio(
 	if err := json.NewDecoder(resp.Body).Decode(&transcriptionResp); err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "TranscribeAudio").Str("model_name", model).Err(err).
-			Msg("音频转写响应解析失败")
+			Msg("failed to parse audio transcription response")
 		return nil, exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(fmt.Sprintf("音频转写响应解析失败: %s", err.Error())),
@@ -193,7 +193,7 @@ func (c *OpenAIModelClient) TranscribeAudio(
 		Str("model_name", model).
 		Str("method", "TranscribeAudio").
 		Int("text_length", len(transcriptionResp.Text)).
-		Msg("音频转写完成")
+		Msg("audio transcription completed")
 
 	return &transcriptionResp, nil
 }

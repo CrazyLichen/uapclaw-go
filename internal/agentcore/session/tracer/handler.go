@@ -432,7 +432,7 @@ func (h *TraceAgentHandler) EmitStreamWriter(ctx context.Context, span *Span) er
 		Type:    data["type"].(string),
 		Payload: data["payload"],
 	}); writeErr != nil {
-		logger.Error(logComponent).Err(writeErr).Msg("追踪数据写入流失败")
+		logger.Error(logComponent).Err(writeErr).Msg("failed to trace data write stream")
 		return writeErr
 	}
 	return nil
@@ -448,7 +448,7 @@ func (h *TraceWorkflowHandler) EmitStreamWriter(ctx context.Context, span *Span)
 		Type:    data["type"].(string),
 		Payload: data["payload"],
 	}); writeErr != nil {
-		logger.Error(logComponent).Err(writeErr).Msg("追踪数据写入流失败")
+		logger.Error(logComponent).Err(writeErr).Msg("failed to trace data write stream")
 		return writeErr
 	}
 	return nil
@@ -494,7 +494,7 @@ func (h *TraceAgentHandler) updateStartTraceData(span *TraceAgentSpan, invokeTyp
 			Str("event_type", "SYSTEM_ERROR").
 			Str("error", err.Error()).
 			Any("instance_info", instanceInfo).
-			Msg("元数据处理失败")
+			Msg("failed to process metadata")
 		return err
 	}
 	var metaDataMap map[string]any
@@ -643,7 +643,7 @@ func (h *TraceWorkflowHandler) sendData(span *TraceWorkflowSpan, exclude map[str
 		Type:    data["type"].(string),
 		Payload: data["payload"],
 	}); writeErr != nil {
-		logger.Error(logComponent).Err(writeErr).Msg("追踪数据写入流失败")
+		logger.Error(logComponent).Err(writeErr).Msg("failed to trace data write stream")
 		return writeErr
 	}
 	return nil

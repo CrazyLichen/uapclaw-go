@@ -100,7 +100,7 @@ func (c *SkillDevContext) Emit(eventType SkillDevEventType, payload map[string]a
 		logger.Warn(logComponent).
 			Str("task_id", c.TaskID).
 			Str("event_type", string(eventType)).
-			Msg("[SkillDevContext] 事件队列已满，丢弃事件")
+			Msg("[SkillDevContext] event queue full, dropping event")
 	}
 }
 

@@ -267,7 +267,7 @@ func (ds *DashscopeEmbedding) Dimension() int {
 	logger.Debug(logComponent).
 		Int("dimension", len(vec)).
 		Bool("matryoshka", ds.matryoshkaDimension).
-		Msg("探测到嵌入向量维度")
+		Msg("embedding dimension detected")
 	return len(vec)
 }
 
@@ -295,7 +295,7 @@ func (ds *DashscopeEmbedding) DimensionWithContext(ctx context.Context) (int, er
 	logger.Debug(logComponent).
 		Int("dimension", dim).
 		Bool("matryoshka", ds.matryoshkaDimension).
-		Msg("探测到嵌入向量维度")
+		Msg("embedding dimension detected")
 	return dim, nil
 }
 
@@ -377,7 +377,7 @@ func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input any, mode dashs
 				Int("attempt", attempt+1).
 				Int("max_retries", ds.maxRetries).
 				Err(err).
-				Msg("DashScope 嵌入请求失败")
+				Msg("DashScope embedding request failed")
 			return nil, err
 		}
 		defer func() { _ = resp.Body.Close() }()
@@ -420,7 +420,7 @@ func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input any, mode dashs
 				ds.dimension = len(embeddings[0])
 				logger.Debug(logComponent).
 					Int("dimension", ds.dimension).
-					Msg("探测到嵌入向量维度")
+					Msg("embedding dimension detected")
 			}
 			ds.dimMu.Unlock()
 		}
@@ -449,7 +449,7 @@ func (ds *DashscopeEmbedding) handleDashscopeAPIResp(body []byte, attempt int) (
 			Int("attempt", attempt+1).
 			Int("max_retries", ds.maxRetries).
 			Str("error_msg", errMsg).
-			Msg("DashScope 嵌入请求失败")
+			Msg("DashScope embedding request failed")
 		// 返回可重试错误，让 RetryWithBackoff 正确重试
 		// Python: 所有 DashScope API 错误都可重试
 		err := exception.BuildError(

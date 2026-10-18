@@ -399,12 +399,12 @@ func (a *TeamAgent) UpdateStatus(ctx context.Context, status atschema.MemberStat
 	backend := a.TeamBackend()
 	if backend == nil {
 		logger.Debug(logComponent).Str("member_name", a.MemberName()).
-			Str("member_status", string(status)).Msg("更新状态（无 TeamBackend，跳过）")
+			Str("member_status", string(status)).Msg("updatestate（no TeamBackend, skipped")
 		return nil
 	}
 	backend.DB().Member().UpdateMemberStatus(ctx, a.MemberName(), backend.TeamName(), string(status))
 	logger.Debug(logComponent).Str("member_name", a.MemberName()).
-		Str("member_status", string(status)).Msg("更新状态")
+		Str("member_status", string(status)).Msg("updatestate")
 	return nil
 }
 
@@ -528,7 +528,7 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 	a.registerTeamCompletionCallbacks()
 
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
-		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent 配置")
+		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent config")
 	return a
 }
 
@@ -539,11 +539,11 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
-		Str("role", string(a.Role())).Msg("TeamAgent Invoke 开始")
+		Str("role", string(a.Role())).Msg("TeamAgent Invoke started")
 
 	// 未配置时直接返回（对齐 Python：未 configure 的 TeamAgent 无法执行 invoke）
 	if a.configurator == nil || a.configurator.Blueprint() == nil {
-		logger.Warn(logComponent).Msg("TeamAgent Invoke: 未配置，跳过执行")
+		logger.Warn(logComponent).Msg("TeamAgent Invoke: not configured, skipped")
 		return nil, nil
 	}
 
@@ -602,11 +602,11 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
-		Str("role", string(a.Role())).Msg("TeamAgent Stream 开始")
+		Str("role", string(a.Role())).Msg("TeamAgent Stream started")
 
 	// 未配置时直接返回空流（对齐 Python：未 configure 的 TeamAgent 无法执行 stream）
 	if a.configurator == nil || a.configurator.Blueprint() == nil {
-		logger.Warn(logComponent).Msg("TeamAgent Stream: 未配置，跳过执行")
+		logger.Warn(logComponent).Msg("TeamAgent Stream: not configured, skipped")
 		return nil, nil
 	}
 
@@ -767,7 +767,7 @@ func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
 // Python: TeamAgent.cancel_agent()
 func (a *TeamAgent) CancelAgent(ctx context.Context) error {
 	memberName := a.MemberName()
-	logger.Debug(logComponent).Str("member_name", memberName).Msg("TeamAgent.CancelAgent 已请求")
+	logger.Debug(logComponent).Str("member_name", memberName).Msg("TeamAgent.CancelAgent requested")
 	if a.streamController != nil {
 		return a.streamController.CancelAgent(ctx)
 	}
@@ -804,7 +804,7 @@ func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput *interaction.
 // Python: TeamAgent.shutdown_self()
 func (a *TeamAgent) ShutdownSelf(ctx context.Context) error {
 	memberName := a.MemberName()
-	logger.Info(logComponent).Str("member_name", memberName).Msg("TeamAgent.ShutdownSelf 已请求")
+	logger.Info(logComponent).Str("member_name", memberName).Msg("TeamAgent.ShutdownSelf requested")
 	// Python: streamController.cooperative_cancel()
 	if a.streamController != nil {
 		_ = a.streamController.CooperativeCancel(ctx)
@@ -823,7 +823,7 @@ func (a *TeamAgent) ConcludeCompletedRound(ctx context.Context, memberCount, tas
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Int("member_count", memberCount).Int("task_count", taskCount).
-		Msg("TeamAgent: 完成轮次")
+		Msg("TeamAgent: round completed")
 	if a.streamController != nil {
 		a.streamController.EmitCompletionAndClose(memberCount, taskCount)
 	}
@@ -900,7 +900,7 @@ func (a *TeamAgent) AutoStartMember(ctx context.Context, memberName string) bool
 		return a.onTeammateCreated(ctx, name)
 	})
 	if err != nil {
-		logger.Error(logComponent).Str("member_name", memberName).Err(err).Msg("AutoStartMember 失败")
+		logger.Error(logComponent).Str("member_name", memberName).Err(err).Msg("AutoStartMember failed")
 		return false
 	}
 	return started
@@ -917,7 +917,7 @@ func (a *TeamAgent) AutoStartAll(ctx context.Context) []string {
 		return a.onTeammateCreated(ctx, name)
 	})
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("AutoStartAll 失败")
+		logger.Error(logComponent).Err(err).Msg("AutoStartAll failed")
 		return nil
 	}
 	return started
@@ -1088,7 +1088,7 @@ func (a *TeamAgent) PersistSessionManifest(session any) {
 		if sf, ok := session.(sessinterfaces.SessionFacade); ok {
 			a.recoveryManager.PersistLeaderConfig(sf)
 		} else {
-			logger.Warn(logComponent).Msg("PersistSessionManifest: session 未实现 SessionFacade，跳过持久化")
+			logger.Warn(logComponent).Msg("PersistSessionManifest: session does not implement SessionFacade, skipping persistence")
 		}
 	}
 }
@@ -1108,7 +1108,7 @@ func (a *TeamAgent) UpdateModelPool(newPool []models.ModelPoolEntry) {
 		if sf, ok := a.sessionManager.TeamSession().(sessinterfaces.SessionFacade); ok {
 			a.recoveryManager.PersistLeaderConfig(sf)
 		} else if a.sessionManager.TeamSession() != nil {
-			logger.Warn(logComponent).Msg("UpdateModelPool: TeamSession 未实现 SessionFacade，跳过持久化")
+			logger.Warn(logComponent).Msg("UpdateModelPool: TeamSession does not implement SessionFacade, skipping persistence")
 		}
 	}
 }
@@ -1161,7 +1161,7 @@ func (a *TeamAgent) updateExecution(ctx context.Context, status atschema.Executi
 		return err
 	}
 	logger.Debug(logComponent).Str("member_name", a.MemberName()).
-		Str("execution_status", string(status)).Msg("更新执行状态（无 TeamMember 句柄）")
+		Str("execution_status", string(status)).Msg("updating execution status (no TeamMember handle)")
 	return nil
 }
 
@@ -1184,7 +1184,7 @@ func (a *TeamAgent) registerTeamCompletionCallbacks() {
 		reflect.TypeOf((*evolution.TeamSkillCreateRail)(nil)),
 	} {
 		for _, railAny := range harness.FindRails(railType) {
-			// TeamSkillEvolutionRail.NotifyTeamCompleted(ctx context.Context) (bool, error)
+			// TeamSkillEvolutionRail 的完成回调签名为 NotifyTeamCompleted(ctx) (bool, error)，此处包装成仅返回 error 的回调
 			if evoRail, ok := railAny.(*evolution.TeamSkillEvolutionRail); ok {
 				cb := func(ctx context.Context) error {
 					_, err := evoRail.NotifyTeamCompleted(ctx)
@@ -1193,7 +1193,7 @@ func (a *TeamAgent) registerTeamCompletionCallbacks() {
 				teamCompletion.RegisterCompletionCallback(cb)
 				continue
 			}
-			// TeamSkillCreateRail.NotifyTeamCompleted(cbc *AgentCallbackContext) bool
+			// TeamSkillCreateRail 的完成回调签名为 NotifyTeamCompleted(cbc *AgentCallbackContext) bool，无返回错误，包装为恒返回 nil 的回调
 			if createRail, ok := railAny.(*evolution.TeamSkillCreateRail); ok {
 				cb := func(ctx context.Context) error {
 					createRail.NotifyTeamCompleted(nil)
@@ -1205,7 +1205,7 @@ func (a *TeamAgent) registerTeamCompletionCallbacks() {
 		}
 	}
 	logger.Debug(logComponent).Str("member_name", a.MemberName()).
-		Msg("registerTeamCompletionCallbacks 完成")
+		Msg("registerTeamCompletionCallbacks completed")
 }
 
 // ── KernelHost 接口适配方法 ──

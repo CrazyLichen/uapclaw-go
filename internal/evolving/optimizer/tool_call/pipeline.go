@@ -125,7 +125,7 @@ func CustomizedPipeline(
 				Str("method", "CustomizedPipeline").
 				Str("save_dir", saveDir).
 				Err(mkdirErr).
-				Msg("创建保存目录失败")
+				Msg("failed to create save directory")
 		} else {
 			// Python: if Path(save_path).exists(): merge old results
 			mergedResult := result
@@ -144,13 +144,13 @@ func CustomizedPipeline(
 					Str("method", "CustomizedPipeline").
 					Str("save_path", savePath).
 					Err(jsonErr).
-					Msg("序列化结果失败")
+					Msg("failed to serialize result")
 			} else if writeErr := os.WriteFile(savePath, data, 0o644); writeErr != nil {
 				logger.Warn(logComponent).
 					Str("method", "CustomizedPipeline").
 					Str("save_path", savePath).
 					Err(writeErr).
-					Msg("保存结果失败")
+					Msg("failed to save result")
 			}
 		}
 	}

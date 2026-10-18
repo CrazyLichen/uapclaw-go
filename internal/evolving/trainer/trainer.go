@@ -133,7 +133,7 @@ func (t *Trainer) Train(
 
 	operators := GetOperatorRegistry(agent)
 	if t.BindUpdater(operators, config) == 0 {
-		logger.Error(logComponent).Msg("[Trainer] 无 Operator 匹配 Updater 目标，软退出不训练")
+		logger.Error(logComponent).Msg("[Trainer] no Operator matches Updater target, soft exit without training")
 		return agent, nil
 	}
 
@@ -175,7 +175,7 @@ func (t *Trainer) Train(
 				logger.Warn(logComponent).
 					Int("epoch", progress.CurrentEpoch).
 					Err(err).
-					Msg("Train Forward 失败，跳过当前 epoch")
+					Msg("Train Forward failed, skipping current epoch")
 				continue
 			}
 			progress.CurrentEpochScore = forwardScore
@@ -192,7 +192,7 @@ func (t *Trainer) Train(
 			logger.Warn(logComponent).
 				Int("epoch", progress.CurrentEpoch).
 				Err(updateErr).
-				Msg("Train Updater.Update 失败")
+				Msg("Train Updater.Update failed")
 			continue
 		}
 
@@ -282,7 +282,7 @@ func (t *Trainer) Forward(
 	logger.Info(logComponent).
 		Float64("score", score).
 		Int("evaluated_count", len(evaluated)).
-		Msg("Forward 完成")
+		Msg("Forward completed")
 
 	return score, evaluated, trajectories, sessions, nil
 }
@@ -449,14 +449,14 @@ func (t *Trainer) SelectBestCandidateOnVal(
 			logger.Warn(logComponent).
 				Int("candidate_idx", idx).
 				Err(err).
-				Msg("候选评估失败")
+				Msg("candidate evaluation failed")
 			continue
 		}
 
 		logger.Info(logComponent).
 			Int("candidate_idx", idx).
 			Float64("val_score", candScore).
-			Msg("候选评估完成")
+			Msg("candidate evaluation completed")
 
 		if candScore > bestScore {
 			bestScore = candScore
@@ -613,7 +613,7 @@ func (t *Trainer) ResumeIfNeeded(_ context.Context, agent evolving.TrainableAgen
 			}
 			return 0
 		}()).
-		Msg("[Trainer] 恢复检查点")
+		Msg("[Trainer] restoring checkpoint")
 	return nil
 }
 
@@ -644,7 +644,7 @@ func (t *Trainer) SaveCheckpointIfNeeded(agent evolving.TrainableAgent, progress
 	logger.Info(logComponent).
 		Int("epoch", progress.CurrentEpoch).
 		Bool("improved", improved).
-		Msg("[Trainer] 保存检查点")
+		Msg("[Trainer] saving checkpoint")
 	return nil
 }
 

@@ -125,7 +125,7 @@ func (h *MemberHandler) handleTeammateMemberEvent(ctx context.Context, event typ
 			logger.Error(logComponent).
 				Err(err).
 				Str("event_type", em.EventType).
-				Msg("handleTeammateMemberEvent: cancel_agent 失败")
+				Msg("handleTeammateMemberEvent: cancel_agent failed")
 		}
 	case events.TeamEventMemberShutdown:
 		role := h.blueprint.Role()
@@ -145,7 +145,7 @@ func (h *MemberHandler) shutdownHumanAgent(ctx context.Context, event types.Coor
 		if err := h.lifecycle.ShutdownSelf(ctx); err != nil {
 			logger.Error(logComponent).
 				Err(err).
-				Msg("shutdownHumanAgent: shutdown_self 失败")
+				Msg("shutdownHumanAgent: shutdown_self failed")
 		}
 	}
 }
@@ -194,5 +194,5 @@ func (h *MemberHandler) nudgeIdleMemberWithStaleClaims(targetID, oldStatus, newS
 		Str("target_id", targetID).
 		Str("new_status", newStatus).
 		Float64("stale_threshold", staleClaimSeconds).
-		Msg("nudgeIdleMemberWithStaleClaims: 检查过期认领")
+		Msg("nudgeIdleMemberWithStaleClaims: checking stale claims")
 }

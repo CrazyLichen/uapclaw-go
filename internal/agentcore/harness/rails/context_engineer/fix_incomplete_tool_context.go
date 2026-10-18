@@ -36,7 +36,7 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 			logger.Warn(logComponent).
 				Str("event_type", "fix_incomplete_tool_context_error").
 				Str("error", fmt.Sprintf("%v", r)).
-				Msg("修复不完整工具上下文时发生异常")
+				Msg("exception while fixing incomplete tool context")
 		}
 	}()
 

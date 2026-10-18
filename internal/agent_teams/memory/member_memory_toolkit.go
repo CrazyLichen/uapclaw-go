@@ -55,9 +55,6 @@ type MemberMemoryToolkit struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// memberMemoryLogComponent 日志组件标识
-var memberMemoryLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemberMemoryToolkit 创建成员记忆工具集
@@ -84,7 +81,7 @@ func (t *MemberMemoryToolkit) Initialize(ctx context.Context) (bool, error) {
 
 	// 检查 isMemoryEnabled
 	if !lite.IsMemoryEnabled() {
-		logger.Info(memberMemoryLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "member_memory_toolkit_init").
 			Msg("Memory system is disabled")
 		return false, nil
@@ -120,11 +117,11 @@ func (t *MemberMemoryToolkit) Initialize(ctx context.Context) (bool, error) {
 	}
 	mgr, err := lite.GetMemoryIndexManager(params)
 	if err != nil {
-		logger.Error(memberMemoryLogComponent).
+		logger.Error(logComponent).
 			Str("event_type", "member_memory_toolkit_init").
 			Str("agent_id", agentID).
 			Err(err).
-			Msg("获取记忆管理器失败")
+			Msg("failed to get memory manager")
 		return false, fmt.Errorf("初始化记忆管理器失败: %w", err)
 	}
 	if mgr == nil {
@@ -158,12 +155,12 @@ func (t *MemberMemoryToolkit) Initialize(ctx context.Context) (bool, error) {
 
 	t.initialized = true
 
-	logger.Info(memberMemoryLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "member_memory_toolkit_init").
 		Str("agent_id", agentID).
 		Str("scenario", string(t.scenario)).
 		Int("tool_count", len(t.tools)).
-		Msg("MemberMemoryToolkit 初始化完成")
+		Msg("MemberMemoryToolkit initialized")
 
 	return true, nil
 }
@@ -186,9 +183,9 @@ func (t *MemberMemoryToolkit) Close(_ context.Context) error {
 		func() {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(memberMemoryLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "member_memory_toolkit_close").
-						Msgf("关闭管理器失败: %v", rec)
+						Msgf("failed to close manager: %v", rec)
 				}
 			}()
 			_ = t.manager.Close()

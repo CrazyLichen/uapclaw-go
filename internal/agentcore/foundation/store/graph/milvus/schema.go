@@ -59,7 +59,7 @@ func EnsureCollections(ctx context.Context, client milvusClient, storageCfg *gra
 			return fmt.Errorf("检查集合 %s 是否存在失败: %w", coll.name, err)
 		}
 		if has {
-			logger.Info(logComponent).Str("collection", coll.name).Msg("集合已存在，跳过创建")
+			logger.Info(logComponent).Str("collection", coll.name).Msg("collection already exists, skipping creation")
 			continue
 		}
 
@@ -83,7 +83,7 @@ func EnsureCollections(ctx context.Context, client milvusClient, storageCfg *gra
 			return fmt.Errorf("创建集合 %s 失败: %w", coll.name, err)
 		}
 
-		logger.Info(logComponent).Str("collection", coll.name).Msg("成功创建集合")
+		logger.Info(logComponent).Str("collection", coll.name).Msg("createcollection succeeded")
 	}
 
 	return nil

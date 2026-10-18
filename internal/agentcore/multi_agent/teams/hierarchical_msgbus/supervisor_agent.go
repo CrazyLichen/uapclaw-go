@@ -145,7 +145,7 @@ func NewSupervisorAgentCard(
 			logger.Debug(p2pLogComponent).
 				Str("action", "supervisor_create").
 				Str("sub_agent_id", card.ID).
-				Msg("注册子 Agent 卡片")
+				Msg("registering child agent card")
 		}
 
 		logger.Info(p2pLogComponent).
@@ -153,7 +153,7 @@ func NewSupervisorAgentCard(
 			Str("supervisor_id", agentCard.ID).
 			Int("sub_agent_count", len(agentsList)).
 			Int("max_parallel", maxParallelSubAgents).
-			Msg("SupervisorAgent 创建完成")
+			Msg("SupervisorAgent created")
 
 		return supervisor, nil
 	}
@@ -174,7 +174,7 @@ func (s *SupervisorAgent) RegisterSubAgentCard(card *agentschema.AgentCard) {
 		Str("action", "register_sub_agent_card").
 		Str("card_name", card.Name).
 		Str("card_id", card.ID).
-		Msg("注册子 Agent 卡片为 LLM 工具")
+		Msg("registering child agent card as LLM tool")
 }
 
 // Configure 配置 SupervisorAgent。

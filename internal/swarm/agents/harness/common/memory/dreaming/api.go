@@ -24,9 +24,6 @@ var (
 	orchestrators   = make(map[string]*dreaming.DreamingOrchestrator)
 )
 
-// apiLogComponent 日志组件标识
-var apiLogComponent = logger.ComponentAgentServer
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetDreamingOrchestrator 获取指定 mode 的 Orchestrator 实例。
@@ -55,7 +52,7 @@ func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode, language s
 	cfg := LoadDreamingConfig(mode)
 	if !cfg.Enabled {
 		// Python: logger.info("[dreaming] %s mode enabled=false, not started", mode)
-		logger.Info(apiLogComponent).Str("mode", mode).Msg("[dreaming] enabled=false, not started")
+		logger.Info(logComponent).Str("mode", mode).Msg("[dreaming] enabled=false, not started")
 		return nil, nil
 	}
 
@@ -63,7 +60,7 @@ func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode, language s
 	sweeper := NewSweeper(sessionsDir, outputDir, mode, language)
 	// Python: sweeper.init()
 	if err := sweeper.Init(); err != nil {
-		logger.Error(apiLogComponent).Str("mode", mode).Err(err).Msg("[dreaming] sweeper init failed")
+		logger.Error(logComponent).Str("mode", mode).Err(err).Msg("[dreaming] sweeper init failed")
 		return nil, err
 	}
 
@@ -87,13 +84,13 @@ func StartDreaming(ctx context.Context, sessionsDir, outputDir, mode, language s
 
 	// Python: await orch.start()
 	if err := orch.Start(ctx); err != nil {
-		logger.Error(apiLogComponent).Str("mode", mode).Err(err).Msg("[dreaming] orchestrator start failed")
+		logger.Error(logComponent).Str("mode", mode).Err(err).Msg("[dreaming] orchestrator start failed")
 		return nil, err
 	}
 
 	// Python: _orchestrators[mode] = orch
 	orchestrators[mode] = orch
-	logger.Info(apiLogComponent).Str("mode", mode).Msg("[dreaming] started")
+	logger.Info(logComponent).Str("mode", mode).Msg("[dreaming] started")
 	return orch, nil
 }
 
@@ -114,7 +111,7 @@ func StopDreaming(ctx context.Context, mode string) {
 		if ok {
 			if err := orch.Stop(ctx); err != nil {
 				// Python: logger.warning("[dreaming] stop(%s) exception: %s", mode, exc)
-				logger.Warn(apiLogComponent).Str("mode", mode).Err(err).Msg("[dreaming] stop exception")
+				logger.Warn(logComponent).Str("mode", mode).Err(err).Msg("[dreaming] stop exception")
 			}
 		}
 		return
@@ -131,7 +128,7 @@ func StopDreaming(ctx context.Context, mode string) {
 
 	for m, orch := range snapshot {
 		if err := orch.Stop(ctx); err != nil {
-			logger.Warn(apiLogComponent).Str("mode", m).Err(err).Msg("[dreaming] stop exception")
+			logger.Warn(logComponent).Str("mode", m).Err(err).Msg("[dreaming] stop exception")
 		}
 	}
 }

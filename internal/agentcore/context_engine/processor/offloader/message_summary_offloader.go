@@ -331,7 +331,7 @@ func (mso *MessageSummaryOffloader) OnAddMessages(ctx context.Context, mc iface.
 				Str("processor_type", mso.ProcessorType()).
 				Int("message_idx", baseIndex+index).
 				Err(err).
-				Msg("自适应摘要卸载失败，跳过")
+				Msg("adaptive summary offload failed, skipping")
 			continue
 		}
 		if offloadedMsg == nil {
@@ -550,7 +550,7 @@ func (mso *MessageSummaryOffloader) offloadMessageAdaptive(ctx context.Context, 
 			logger.Warn(logComponent).
 				Str("processor_type", mso.ProcessorType()).
 				Err(err).
-				Msg("精确任务提取失败，回退到默认方式")
+				Msg("precise task extraction failed, falling back to default")
 			step = mso.getStepFromChainDefault(contextMessages)
 		}
 		if step == "" {

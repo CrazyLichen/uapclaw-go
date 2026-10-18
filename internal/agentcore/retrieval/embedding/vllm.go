@@ -134,7 +134,7 @@ func (v *VLLMEmbedding) callWithMessages(ctx context.Context, messages []map[str
 				Int("attempt", attempt+1).
 				Int("max_retries", v.openAI.maxRetries).
 				Err(err).
-				Msg("vLLM 嵌入请求失败")
+				Msg("vLLM embedding request failed")
 			return nil, err
 		}
 
@@ -192,7 +192,7 @@ func retryVLLMWithBackoff(ctx context.Context, maxRetries int, fn func(attempt i
 				Int("attempt", attempt+1).
 				Int("max_retries", maxRetries).
 				Err(err).
-				Msg("vLLM 嵌入请求失败，准备重试")
+				Msg("vLLM embedding request failed, preparing to retry")
 		}
 	}
 

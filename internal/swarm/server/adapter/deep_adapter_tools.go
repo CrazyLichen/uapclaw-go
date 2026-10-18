@@ -641,8 +641,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       Python: self._image_gen_tool_registered = True
 	if d.imageGenToolRegistered {
 		// ⤵️ 10.6.24: generate_image 工具实例尚未实现
-		// 待实现：注册图像生成工具 _ = rm.AddTool(generateImage)
-		// toolCards = append(toolCards, generateImage.Card())
+		// 待实现：注册图像生成工具并将卡片追加到 toolCards
 		logger.Info(logComponent).Msg("getToolCards: image gen config ready, pending 10.6.24 backfill for generate_image")
 	}
 
@@ -656,22 +655,9 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//           Python: tool_cards.append(xt.card)
 	//       Python: self._xiaoyi_phone_tools_registered = True
 	// ⤵️ 10.6.24: 小艺手机端工具类 (28个) 尚未实现
-	// 待实现：检查小艺手机端工具是否启用 xiaoyiEnabled := false
-	// if channels, ok := configBase["channels"].(map[string]any); ok {
-	//     if xiaoyi, ok := channels["xiaoyi"].(map[string]any); ok {
-	//         if v, ok := xiaoyi["phone_tools_enabled"].(bool); ok {
-	//             xiaoyiEnabled = v
-	//         }
-	//     }
-	// }
-	// 如果 xiaoyi 已启用但尚未注册 xiaoyi 手机工具
-	//     xiaoyiTools := []tool.Tool{getUserLocation, createNote, searchNotes, ...}
-	//     for _, xt := range xiaoyiTools {
-	//         _ = rm.AddTool(xt)
-	//         toolCards = append(toolCards, xt.Card())
-	//     }
-	//     d.xiaoyiPhoneToolsRegistered = true
-	// }
+	// 待实现：从 configBase["channels"]["xiaoyi"]["phone_tools_enabled"] 读取开关，
+	// 若启用且未注册则构造小艺工具列表（getUserLocation、createNote、searchNotes 等），
+	// 逐个注册到 ResourceMgr 并追加卡片，最后置 d.xiaoyiPhoneToolsRegistered = true。
 
 	// ── 步骤 9: SkillToolkit ──
 	// Python:

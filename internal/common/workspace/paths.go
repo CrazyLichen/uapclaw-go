@@ -192,7 +192,7 @@ func logFallbackIfNeeded() {
 	configDir := path.ConfigDir()
 	userConfigDir := filepath.Join(path.WorkspaceDir(), "config")
 	if configDir != userConfigDir {
-		logger.Info(logComponent).Str("config_dir", configDir).Msg("工作区未初始化，回退到 resources 目录")
+		logger.Info(logComponent).Str("config_dir", configDir).Msg("workspace not initialized, falling back")
 		fallbackLogged = true
 	}
 }

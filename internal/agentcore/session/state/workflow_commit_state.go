@@ -37,7 +37,7 @@ func NewWorkflowCommitState(ioState, globalState, compState, workflowState Commi
 		Str("parent_id", parentID).
 		Str("node_id", nodeID).
 		Bool("workflow_only", workflowOnly).
-		Msg("创建工作流可提交状态")
+		Msg("created workflow committable state")
 	return &WorkflowCommitState{
 		WorkflowStateCollection: *NewWorkflowStateCollection(ioState, globalState, compState, workflowState, traceState, parentID, nodeID),
 		workflowOnly:            workflowOnly,
@@ -59,7 +59,7 @@ func (s *WorkflowCommitState) UpdateAndCommitWorkflowState(data map[string]any) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.workflowState.UpdateByID(DefaultWorkflowID, data); err != nil {
-		logger.Error(logComponent).Err(err).Str("action", "update_and_commit_workflow_state").Str("node_id", DefaultWorkflowID).Msg("UpdateByID 失败")
+		logger.Error(logComponent).Err(err).Str("action", "update_and_commit_workflow_state").Str("node_id", DefaultWorkflowID).Msg("UpdateByID failed")
 		return
 	}
 	s.workflowState.Commit()
@@ -74,7 +74,7 @@ func (s *WorkflowCommitState) SetOutputs(data map[string]any) {
 		return
 	}
 	if err := s.ioState.UpdateByID(s.nodeID, map[string]any{s.nodeID: data}); err != nil {
-		logger.Error(logComponent).Err(err).Str("action", "set_outputs").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+		logger.Error(logComponent).Err(err).Str("action", "set_outputs").Str("node_id", s.nodeID).Msg("UpdateByID failed")
 	}
 }
 
@@ -127,15 +127,15 @@ func (s *WorkflowCommitState) CommitUserInputs(inputs map[string]any) {
 	}
 	if s.nodeID != DefaultNodeID {
 		if err := s.ioState.UpdateByID(s.nodeID, map[string]any{s.nodeID: inputs}); err != nil {
-			logger.Error(logComponent).Err(err).Str("action", "commit_user_inputs_io").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+			logger.Error(logComponent).Err(err).Str("action", "commit_user_inputs_io").Str("node_id", s.nodeID).Msg("UpdateByID failed")
 		}
 	} else {
 		if err := s.ioState.UpdateByID(s.nodeID, inputs); err != nil {
-			logger.Error(logComponent).Err(err).Str("action", "commit_user_inputs_io").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+			logger.Error(logComponent).Err(err).Str("action", "commit_user_inputs_io").Str("node_id", s.nodeID).Msg("UpdateByID failed")
 		}
 	}
 	if err := s.globalState.UpdateByID(s.nodeID, inputs); err != nil {
-		logger.Error(logComponent).Err(err).Str("action", "commit_user_inputs_global").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+		logger.Error(logComponent).Err(err).Str("action", "commit_user_inputs_global").Str("node_id", s.nodeID).Msg("UpdateByID failed")
 	}
 	// 直接调用子状态 Commit，避免通过 s.Commit() 再次获取锁导致死锁
 	s.ioState.Commit()
@@ -180,7 +180,7 @@ func (s *WorkflowCommitState) CreateNodeState(nodeID, parentID string) SessionSt
 		Str("action", "create_node_state").
 		Str("node_id", nodeID).
 		Str("parent_id", parentID).
-		Msg("创建节点专属状态视图")
+		Msg("created node-specific state view")
 	return NewWorkflowCommitState(
 		s.ioState,
 		s.globalState,

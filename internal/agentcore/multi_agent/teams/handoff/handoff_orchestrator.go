@@ -101,7 +101,7 @@ func NewHandoffOrchestrator(startAgentID string, registeredAgents []string, conf
 		Str("start_agent_id", startAgentID).
 		Int("max_handoffs", maxHandoffs).
 		Int("registered_agents_count", len(registeredAgents)).
-		Msg("创建交接协调器")
+		Msg("creating handoff orchestrator")
 
 	return coord
 }
@@ -141,7 +141,7 @@ func BuildRouteGraph(agents []string, routes []HandoffRoute) map[string]map[stri
 		Str("action", "build_route_graph").
 		Int("agents_count", len(agents)).
 		Int("routes_count", len(routes)).
-		Msg("构建路由邻接表")
+		Msg("building routing adjacency table")
 
 	return graph
 }
@@ -162,7 +162,7 @@ func (o *HandoffOrchestrator) RequestHandoff(targetID string, reason string) boo
 			Str("target_id", targetID).
 			Int("handoff_count", o.handoffCount).
 			Int("max_handoffs", o.maxHandoffs).
-			Msg("交接请求被拒绝：超过最大交接次数")
+			Msg("handoff request rejected: max handoff count exceeded")
 		return false
 	}
 
@@ -174,7 +174,7 @@ func (o *HandoffOrchestrator) RequestHandoff(targetID string, reason string) boo
 				Str("reason", "termination_condition_met").
 				Str("current_agent_id", o.currentAgentID).
 				Str("target_id", targetID).
-				Msg("交接请求被拒绝：终止条件已满足")
+				Msg("handoff request rejected: termination condition satisfied")
 			return false
 		}
 	}
@@ -187,7 +187,7 @@ func (o *HandoffOrchestrator) RequestHandoff(targetID string, reason string) boo
 			Str("reason", "source_not_in_route_graph").
 			Str("current_agent_id", o.currentAgentID).
 			Str("target_id", targetID).
-			Msg("交接请求被拒绝：源 Agent 不在路由图中")
+			Msg("handoff request rejected: source agent not in routing graph")
 		return false
 	}
 	if _, ok := allowed[targetID]; !ok {
@@ -196,7 +196,7 @@ func (o *HandoffOrchestrator) RequestHandoff(targetID string, reason string) boo
 			Str("reason", "route_not_allowed").
 			Str("current_agent_id", o.currentAgentID).
 			Str("target_id", targetID).
-			Msg("交接请求被拒绝：路由不允许")
+			Msg("handoff request rejected: routing not allowed")
 		return false
 	}
 
@@ -209,7 +209,7 @@ func (o *HandoffOrchestrator) RequestHandoff(targetID string, reason string) boo
 		Str("target_id", targetID).
 		Str("reason", reason).
 		Int("handoff_count", o.handoffCount).
-		Msg("交接请求已批准")
+		Msg("handoff request approved")
 
 	return true
 }
@@ -225,7 +225,7 @@ func (o *HandoffOrchestrator) Complete(result map[string]any) {
 		close(o.doneCh)
 		logger.Info(logComponent).
 			Str("action", "handoff_orchestrator_complete").
-			Msg("交接编排完成，结果已发送到 doneCh")
+			Msg("handoff orchestration completed, result sent to doneCh")
 	})
 }
 
@@ -241,7 +241,7 @@ func (o *HandoffOrchestrator) Error(err error) {
 		close(o.doneCh)
 		logger.Error(logComponent).Err(err).
 			Str("action", "handoff_orchestrator_error").
-			Msg("交接编排发生错误，错误已发送到 doneCh")
+			Msg("handoff orchestration error, error sent to doneCh")
 	})
 }
 
@@ -284,7 +284,7 @@ func (o *HandoffOrchestrator) SaveToSession(sess *session.AgentTeamSession) {
 		Str("action", "save_to_session").
 		Str("current_agent_id", o.currentAgentID).
 		Int("handoff_count", o.handoffCount).
-		Msg("协调器状态已持久化到会话")
+		Msg("orchestrator state persisted to session")
 }
 
 // RestoreFromSession 从会话恢复协调器状态。
@@ -302,13 +302,13 @@ func RestoreFromSession(
 	if err != nil {
 		logger.Warn(logComponent).Err(err).
 			Str("action", "restore_from_session").
-			Msg("获取协调器状态失败，使用默认值")
+			Msg("failed to get orchestrator state, using default")
 		return coord
 	}
 	if snapshot == nil {
 		logger.Info(logComponent).
 			Str("action", "restore_from_session").
-			Msg("无协调器状态快照，使用默认值")
+			Msg("no orchestrator state snapshot, using default")
 		return coord
 	}
 
@@ -316,7 +316,7 @@ func RestoreFromSession(
 	if !ok {
 		logger.Warn(logComponent).
 			Str("action", "restore_from_session").
-			Msg("协调器状态快照类型异常，使用默认值")
+			Msg("orchestrator state snapshot type invalid, using default")
 		return coord
 	}
 
@@ -333,7 +333,7 @@ func RestoreFromSession(
 		Str("action", "restore_from_session").
 		Str("current_agent_id", coord.currentAgentID).
 		Int("handoff_count", coord.handoffCount).
-		Msg("从会话恢复协调器状态")
+		Msg("restoring orchestrator state from session")
 
 	return coord
 }

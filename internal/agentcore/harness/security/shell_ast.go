@@ -128,9 +128,6 @@ var (
 // Python: _collect_operator_markers (shell_ast.py L181-186)
 var operatorMarkers = []string{"&&", "||", ";", "|", ">>", ">", "<", "$(", "`", "<(", ">(", "<<", "<<<"}
 
-// shellAstLogComponent ShellAST 日志组件
-var shellAstLogComponent = logger.ComponentAgentCore
-
 // treeSitterReady tree-sitter 后端可用状态（nil=未检测, true=可用, false=不可用）
 var treeSitterReady *bool
 
@@ -168,10 +165,10 @@ func ParseShellForPermission(command string) *ShellAstParseResult {
 			return result
 		}
 		// tree-sitter 解析失败，记录日志后降级
-		logger.Warn(shellAstLogComponent).
+		logger.Warn(logComponent).
 			Str("backend", "tree-sitter").
 			Err(err).
-			Msg("tree-sitter 解析失败，降级到保守扫描")
+			Msg("tree-sitter parse failed, degrading to conservative scan")
 	}
 
 	// 降级到保守扫描
@@ -206,7 +203,7 @@ func getTreeSitterBashParser() *tree_sitter.Parser {
 			parser.Close()
 			falseVal := false
 			treeSitterReady = &falseVal
-			logger.Info(shellAstLogComponent).Msg("tree-sitter bash 后端不可用，使用保守扫描")
+			logger.Info(logComponent).Msg("tree-sitter bash backend unavailable, using conservative scan")
 			return
 		}
 		trueVal := true

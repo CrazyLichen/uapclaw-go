@@ -172,7 +172,7 @@ func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any
 			logger.Error(logComponent).
 				Str("task_id", taskID).
 				Err(pipeline.runErr).
-				Msg("[SkillDevService] skilldev 请求处理失败")
+				Msg("[SkillDevService] skilldev request processing failed")
 			chunkCh <- errorChunk(requestID, channelID, pipeline.runErr.Error())
 			return
 		}
@@ -237,7 +237,7 @@ func (s *SkillDevService) handleRespond(ctx context.Context, params map[string]a
 			logger.Error(logComponent).
 				Str("task_id", taskID).
 				Err(pipeline.runErr).
-				Msg("[SkillDevService] skilldev 请求处理失败")
+				Msg("[SkillDevService] skilldev request processing failed")
 			chunkCh <- errorChunk(requestID, channelID, pipeline.runErr.Error())
 			return
 		}
@@ -364,7 +364,7 @@ func (s *SkillDevService) handleCancel(_ context.Context, params map[string]any,
 	// 待实现: 实现取消逻辑（中断正在运行的 Pipeline）
 	logger.Warn(logComponent).
 		Str("task_id", taskID).
-		Msg("[SkillDevService] cancel 尚未实现")
+		Msg("[SkillDevService] cancel not yet implemented")
 	return singleChunkChannel(schema.NewAgentResponseChunk(requestID, channelID, map[string]any{
 		"ok":      true,
 		"message": "取消请求已接收（实现待完善）",

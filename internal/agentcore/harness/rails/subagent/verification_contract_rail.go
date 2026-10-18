@@ -150,7 +150,7 @@ func (r *VerificationContractRail) Init(_ context.Context, agent agentinterfaces
 	}
 	r.section = &section
 
-	logger.Info(logComponent).Msg("[VerificationContractRail] 已初始化")
+	logger.Info(logComponent).Msg("[VerificationContractRail] initialized")
 	return nil
 }
 
@@ -171,7 +171,7 @@ func (r *VerificationContractRail) BeforeModelCall(ctx context.Context, cbc *age
 	r.promptBuilder.RemoveSection(hsections.SectionVerificationContract)
 	r.promptBuilder.AddSection(*r.section)
 
-	logger.Debug(logComponent).Msg("[VerificationContractRail] 已注入验证契约 section")
+	logger.Debug(logComponent).Msg("[VerificationContractRail] verification contract section injected")
 	return nil
 }
 

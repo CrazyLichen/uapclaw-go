@@ -153,7 +153,7 @@ func (s *AgentServer) handleHistoryGet(_ context.Context, request *schema.AgentR
 			logger.Warn(logComponent).
 				Err(err).
 				Str("request_id", request.RequestID).
-				Msg("history.get 参数解析失败")
+				Msg("history.get failed to parse params")
 		}
 	}
 
@@ -195,7 +195,7 @@ func (s *AgentServer) handleHistoryGetStream(_ context.Context, request *schema.
 			logger.Warn(logComponent).
 				Err(err).
 				Str("request_id", request.RequestID).
-				Msg("history.get stream 参数解析失败")
+				Msg("history.get stream failed to parse params")
 		}
 	}
 

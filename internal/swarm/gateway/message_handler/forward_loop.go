@@ -39,7 +39,7 @@ func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 		logger.Warn(logComponent).
 			Str("event_type", "outbound_queue_full").
 			Str("msg_id", msg.ID).
-			Msg("出站消息队列已满，丢弃消息")
+			Msg("outbound message queue full, dropping message")
 	}
 }
 
@@ -61,8 +61,8 @@ func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 //	步骤10: handleChatSend(ctx, msg)
 //	步骤11: 异常 → buildErrorOutMessage → publishRobotMessages
 func (mh *MessageHandler) forwardLoop(ctx context.Context) {
-	logger.Info(logComponent).Msg("入站转发循环已启动")
-	defer logger.Info(logComponent).Msg("入站转发循环已退出")
+	logger.Info(logComponent).Msg("inbound forward loop started")
+	defer logger.Info(logComponent).Msg("inbound forward loop exited")
 
 	for {
 		select {
@@ -80,7 +80,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 						logger.Error(logComponent).
 							Any("panic", r).
 							Str("msg_id", msg.ID).
-							Msg("forwardLoop panic 已恢复")
+							Msg("forwardLoop panic recovered")
 						errMsg := mh.buildErrorOutMessage(msg, fmt.Errorf("内部错误: %v", r))
 						mh.PublishRobotMessages(errMsg)
 					}
@@ -144,7 +144,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 		logger.Warn(logComponent).
 			Str("event_type", "forward_no_agent_client").
 			Str("msg_id", msg.ID).
-			Msg("AgentClient 未连接，无法转发")
+			Msg("AgentClient not connected, cannot forward")
 		return
 	}
 
@@ -174,7 +174,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 						Any("panic", r).
 						Str("msg_id", msg.ID).
 						Str("request_id", streamRid).
-						Msg("processStream goroutine panic 已恢复")
+						Msg("processStream goroutine panic recovered")
 					errMsg := mh.buildErrorOutMessage(msg, fmt.Errorf("内部错误: %v", r))
 					mh.PublishRobotMessages(errMsg)
 				}
@@ -186,7 +186,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 			Str("request_id", streamRid).
 			Str("channel_id", msg.ChannelID).
 			Int("concurrent_tasks", len(mh.streamTasks)).
-			Msg("Stream 任务已启动（后台运行）")
+			Msg("stream task started (background)")
 	} else if mh.nonStreamRPCMayRunParallel(env) {
 		// 非流式并行
 		go func() {
@@ -196,7 +196,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 						Any("panic", r).
 						Str("msg_id", msg.ID).
 						Str("request_id", streamRid).
-						Msg("nonStream goroutine panic 已恢复")
+						Msg("nonStream goroutine panic recovered")
 					errMsg := mh.buildErrorOutMessage(msg, fmt.Errorf("内部错误: %v", r))
 					mh.PublishRobotMessages(errMsg)
 				}
@@ -207,7 +207,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 			Str("event_type", "non_stream_parallel").
 			Str("request_id", streamRid).
 			Str("method", env.Method).
-			Msg("非流式 RPC 已后台执行")
+			Msg("non-stream RPC running in background")
 	} else {
 		// 非流式串行
 		if _, err := mh.processNonStreamRequest(ctx, msg, env); err != nil {
@@ -229,7 +229,7 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 		logger.Warn(logComponent).
 			Str("event_type", "chat_answer_no_agent_client").
 			Str("msg_id", msg.ID).
-			Msg("AgentClient 未连接，无法处理 chat.answer")
+			Msg("AgentClient not connected, cannot handle chat.answer")
 		return
 	}
 
@@ -243,7 +243,7 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 			Str("event_type", "chat_answer_process_failed").
 			Str("msg_id", msg.ID).
 			Err(err).
-			Msg("processNonStreamRequest 失败，跳过 evolution 审批")
+			Msg("processNonStreamRequest failed, skipping evolution approval")
 		return
 	}
 
@@ -300,7 +300,7 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 					Str("event_type", "evolution_approval_dispatched").
 					Str("id", queuedMsg.ID).
 					Str("session_id", msg.SessionID).
-					Msg("演进审批已回复（已解决），补充输入已入队")
+					Msg("evolution approval replied (resolved), supplemental input enqueued")
 			}
 		} else {
 			logger.Info(logComponent).
@@ -308,7 +308,7 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 				Str("id", msg.ID).
 				Str("session_id", msg.SessionID).
 				Str("request_id", answerRequestID).
-				Msg("演进审批已回复但未解决")
+				Msg("evolution approval replied but not resolved")
 		}
 	}
 }
@@ -322,7 +322,7 @@ func (mh *MessageHandler) handleChatCancel(ctx context.Context, msg *schema.Mess
 		Str("event_type", "interrupt_request").
 		Str("id", msg.ID).
 		Str("channel_id", msg.ChannelID).
-		Msg("收到中断请求")
+		Msg("interrupt request received")
 
 	// 解析参数
 	var paramsMap map[string]any
@@ -393,7 +393,7 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 		logger.Info(logComponent).
 			Str("event_type", "supplement_queued_evolution").
 			Str("session_id", sessionID).
-			Msg("演进阶段挂起，补充输入入队")
+			Msg("evolution phase pending, supplemental input enqueued")
 		mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, sessionID, "supplement", "已加入队列，等待演进完成", true, false)
 		return
 	}
@@ -406,7 +406,7 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 			Str("event_type", "supplement_cancel_stream").
 			Str("request_id", reqID).
 			Str("session_id", sessionID).
-			Msg("supplement: 取消流式任务")
+			Msg("supplement: cancelling stream task")
 	}
 
 	// 2. 通知前端 supplement
@@ -479,7 +479,7 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 		Str("event_type", "supplement_new_task_enqueued").
 		Str("id", queuedMsg.ID).
 		Str("session_id", sessionID).
-		Msg("supplement: 旧任务已取消，新任务已入队")
+		Msg("supplement: old task cancelled, new task enqueued")
 }
 
 // handlePauseResume 处理 pause/resume 分支。
@@ -591,7 +591,7 @@ func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
 		logger.Info(logComponent).
 			Str("event_type", "agent_mentions_detected").
 			Strs("mentions", agentMentions).
-			Msg("检测到 Agent 提及")
+			Msg("agent mention detected")
 	}
 
 	// 如果内容被修改，回写 params
@@ -606,7 +606,7 @@ func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
 		logger.Info(logComponent).
 			Str("event_type", "inbound_references_resolved").
 			Str("id", msg.ID).
-			Msg("chat.send 中已解析附件/Agent 提及")
+			Msg("attachments/agent mentions resolved in chat.send")
 	}
 }
 
@@ -649,7 +649,7 @@ func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCan
 			Str("event_type", "stream_error").
 			Err(err).
 			Str("request_id", requestID).
-			Msg("流式请求失败")
+			Msg("stream request failed")
 		return
 	}
 
@@ -666,7 +666,7 @@ func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCan
 				logger.Info(logComponent).
 					Str("event_type", "stream_completed").
 					Str("request_id", requestID).
-					Msg("Stream 正常完成")
+					Msg("stream completed normally")
 				return
 			}
 			if chunk == nil {
@@ -678,7 +678,7 @@ func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCan
 				logger.Debug(logComponent).
 					Str("event_type", "stream_terminal_chunk").
 					Str("request_id", chunk.RequestID).
-					Msg("跳过终止 chunk")
+					Msg("skipping terminal chunk")
 				continue
 			}
 
@@ -735,7 +735,7 @@ func (mh *MessageHandler) streamFinalCleanup(requestID, sessionID string, emitPr
 			logger.Info(logComponent).
 				Str("event_type", "processing_status_false").
 				Str("session_id", sessionID).
-				Msg("该 session 流式任务已完成，已发送 is_processing=false")
+				Msg("session stream tasks completed, sent is_processing=false")
 		}
 	}
 }
@@ -754,7 +754,7 @@ func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *sche
 			Str("event_type", "non_stream_error").
 			Err(err).
 			Str("request_id", requestID).
-			Msg("非流式请求失败")
+			Msg("non-stream request failed")
 		errMsg := mh.buildErrorOutMessage(msg, err)
 		mh.PublishRobotMessages(errMsg)
 		return nil, err
@@ -768,7 +768,7 @@ func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *sche
 		Str("event_type", "non_stream_response").
 		Str("request_id", resp.RequestID).
 		Str("channel_id", resp.ChannelID).
-		Msg("Agent 响应已写入 robot_messages")
+		Msg("agent response written to robot_messages")
 
 	return resp, nil
 }

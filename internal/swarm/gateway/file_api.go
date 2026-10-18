@@ -30,9 +30,6 @@ type fileEntry struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponentFileAPI 本文件日志组件
-const logComponentFileAPI = logger.ComponentGateway
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // wsDebugConfig WS 调试配置（内存存储）
@@ -273,7 +270,7 @@ func HandleWsDebugConfigPost(w http.ResponseWriter, r *http.Request) {
 //
 // 重建 Agent 数据（stub 实现）。
 func HandleRebuildAgentData(w http.ResponseWriter, _ *http.Request) {
-	logger.Info(logComponentFileAPI).Msg("rebuild-agent-data: stub 实现")
+	logger.Info(logComponent).Msg("rebuild-agent-data: stub implementation")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "rebuild_stub"})
 }
 
@@ -308,9 +305,9 @@ func writeJSON(w http.ResponseWriter, statusCode int, data any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		logger.Error(logComponentFileAPI).
+		logger.Error(logComponent).
 			Err(err).
-			Msg("JSON 编码响应失败")
+			Msg("failed to encode response as JSON")
 	}
 }
 

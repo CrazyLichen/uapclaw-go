@@ -160,7 +160,7 @@ func (p *ToolResultBudgetProcessor) TriggerAddMessages(_ context.Context, mc ifa
 	if len(exceededRounds) > 0 {
 		logger.Info(logComponent).
 			Str("processor_type", p.ProcessorType()).
-			Msg("存在轮次工具结果超过预算，触发卸载")
+			Msg("round tool results exceed budget, triggering offload")
 		return true, nil
 	}
 	return false, nil
@@ -349,7 +349,7 @@ func (p *ToolResultBudgetProcessor) shrinkRoundToBudget(ctx context.Context, mes
 				Str("processor_type", p.ProcessorType()).
 				Int("message_idx", targetIdx).
 				Err(err).
-				Msg("卸载工具消息失败，跳过当前候选继续尝试")
+				Msg("failed to offload tool messages, skipping current candidate and continuing")
 			// Python: 卸载失败时 continue 而非 break，继续尝试下一个候选
 			continue
 		}
@@ -361,7 +361,7 @@ func (p *ToolResultBudgetProcessor) shrinkRoundToBudget(ctx context.Context, mes
 			logger.Warn(logComponent).
 				Str("processor_type", p.ProcessorType()).
 				Int("message_idx", targetIdx).
-				Msg("卸载返回空消息，跳过当前候选继续尝试")
+				Msg("offload returned empty messages, skipping current candidate and continuing")
 			continue
 		}
 	}
@@ -528,7 +528,7 @@ func (p *ToolResultBudgetProcessor) offloadToolMessage(ctx context.Context, mess
 		Str("tool_call_id", toolCallID).
 		Int("original_size", len(content)).
 		Int("trim_size", p.config.TrimSize).
-		Msg("工具结果已卸载")
+		Msg("tool results offloaded")
 
 	return offloadMsg, nil
 }

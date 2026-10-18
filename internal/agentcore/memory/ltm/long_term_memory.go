@@ -214,7 +214,7 @@ func (m *LongTermMemory) getHistoryMessages(ctx context.Context, userID string, 
 	msgAndMetas, err := m.messageManager.Get(ctx, userID, scopeID, sessionID, historyWindowSize)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("user_id", userID).
-			Str("scope_id", scopeID).Msg("获取历史消息失败")
+			Str("scope_id", scopeID).Msg("failed to get history messages")
 		return nil, err
 	}
 	inputMsgMaxLen := config.DefaultMemoryEngineConfig().InputMsgMaxLen

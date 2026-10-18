@@ -328,7 +328,7 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 			Str("file_path", filePath).
 			Int("replacements", replaced).
 			Bool("replace_all", replaceAll).
-			Msg("EditFileTool 编辑成功")
+			Msg("EditFileTool edit succeeded")
 
 		// 追加文件操作历史（编辑已有文件）
 		// Python: _session = get_current_session(); if _session: _append_op_history(...)

@@ -379,7 +379,7 @@ func (m *ExperienceManager) RequestSimplify(
 		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Err(err).
-			Msg("[ExperienceManager] request_simplify: read_skill_content 失败")
+			Msg("[ExperienceManager] request_simplify: read_skill_content failed")
 		return "", nil
 	}
 

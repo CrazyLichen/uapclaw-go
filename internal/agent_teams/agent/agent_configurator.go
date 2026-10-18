@@ -204,7 +204,7 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 			if msgr, err := messager.CreateMessager(*messagerConfig); err == nil {
 				c.SetMessager(msgr)
 			} else {
-				logger.Warn(logComponent).Err(err).Msg("CreateMessager 失败，继续无 Messager 模式")
+				logger.Warn(logComponent).Err(err).Msg("CreateMessager failed, continuing without Messager")
 			}
 		}
 	}
@@ -470,7 +470,7 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 		}
 		if db == nil {
 			logger.Info(logComponent).Str("team_name", teamName).
-				Msg("SetupTeamBackend: 使用内存数据库（sharedDB 不可用）")
+				Msg("SetupTeamBackend: using in-memory database (sharedDB unavailable)")
 			db = database.NewInMemoryTeamDatabase()
 		}
 	}

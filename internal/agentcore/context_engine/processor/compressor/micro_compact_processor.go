@@ -185,7 +185,7 @@ func (mcp *MicroCompactProcessor) OnAddMessages(_ context.Context, mc iface.Mode
 		Int("cleared_count", len(modifiedIndices)).
 		Strs("tools", toolNames).
 		Bool("force", force).
-		Msg("微压缩处理器清除了旧工具结果内容")
+		Msg("micro compact processor cleared old tool result content")
 
 	return &iface.ContextEvent{
 		EventType:        mcp.ProcessorType(),

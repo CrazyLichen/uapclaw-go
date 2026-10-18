@@ -429,7 +429,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 			evt = evt.Any("stop", stop)
 		}
 		evt.Any("extra_params", extraParams).
-			Msg("请求聊天模型前，LLM 请求参数已就绪。")
+			Msg("LLM request params ready before calling chat model")
 	} else {
 		// 非敏感模式：记录 messages/tools
 		evt := logger.Info(logComponent).
@@ -453,7 +453,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 			evt = evt.Any("stop", stop)
 		}
 		evt.Any("extra_params", extraParams).
-			Msg("请求聊天模型前，LLM 请求参数已就绪。")
+			Msg("LLM request params ready before calling chat model")
 	}
 
 	return reqParams, nil

@@ -176,7 +176,7 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 	// 顶层 panic 恢复（对齐 Python: except Exception）
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponent).Any("panic", r).Msg("search_skill 发生 panic")
+			logger.Error(logComponent).Any("panic", r).Msg("search_skill panic occurred")
 			result = map[string]any{"success": false, "source": toString(inputs["source"]), "items": []any{}, "detail": fmt.Sprintf("internal error: %v", r)}
 			err = nil
 		}
@@ -193,7 +193,7 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 		Str("query", query).
 		Str("source", source).
 		Int("limit", limit).
-		Msg("SkillToolkit: search_skill 调用")
+		Msg("SkillToolkit: search_skill called")
 
 	normalizedSource, err := normalizeSource(source)
 	if err != nil {
@@ -252,7 +252,7 @@ func (tk *SkillToolkit) SearchSkill(ctx context.Context, inputs map[string]any) 
 		logger.Info(logComponent).
 			Str("source", currentSource).
 			Interface("summary", summary).
-			Msg("SkillToolkit: 搜索结果摘要")
+			Msg("SkillToolkit: search results summary")
 
 		if !toBool(payload["success"]) {
 			detail := strings.TrimSpace(toString(payload["detail"]))
@@ -312,7 +312,7 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 	// 顶层 panic 恢复（对齐 Python: except Exception）
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponent).Any("panic", r).Msg("install_skill 发生 panic")
+			logger.Error(logComponent).Any("panic", r).Msg("install_skill panic occurred")
 			result = map[string]any{"success": false, "source": toString(inputs["source"]), "installed": false, "detail": fmt.Sprintf("internal error: %v", r)}
 			err = nil
 		}
@@ -326,7 +326,7 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 		Str("identifier", identifier).
 		Str("source", source).
 		Int("timeout_sec", timeoutSec).
-		Msg("SkillToolkit: install_skill 调用")
+		Msg("SkillToolkit: install_skill called")
 
 	if identifier == "" {
 		return map[string]any{
@@ -424,7 +424,7 @@ func (tk *SkillToolkit) InstallSkill(ctx context.Context, inputs map[string]any)
 		Str("name", installedItem.Name).
 		Str("source", normalizedSource).
 		Str("skill_dir", installedItem.SkillDir).
-		Msg("SkillToolkit: install_skill 成功")
+		Msg("SkillToolkit: install_skill succeeded")
 
 	return map[string]any{
 		"success":     true,
@@ -444,7 +444,7 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 	// 顶层 panic 恢复（对齐 Python: except Exception）
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponent).Any("panic", r).Msg("uninstall_skill 发生 panic")
+			logger.Error(logComponent).Any("panic", r).Msg("uninstall_skill panic occurred")
 			result = map[string]any{"success": false, "removed": false, "name": toString(inputs["name"]), "detail": fmt.Sprintf("internal error: %v", r)}
 			err = nil
 		}
@@ -454,7 +454,7 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 
 	logger.Info(logComponent).
 		Str("name", skillName).
-		Msg("SkillToolkit: uninstall_skill 调用")
+		Msg("SkillToolkit: uninstall_skill called")
 
 	if skillName == "" {
 		return map[string]any{
@@ -497,7 +497,7 @@ func (tk *SkillToolkit) UninstallSkill(ctx context.Context, inputs map[string]an
 	// 执行卸载
 	payload, err := tk.manager.HandleSkillsUninstall(ctx, map[string]any{"name": skillName})
 	if err != nil {
-		logger.Error(logComponent).Str("name", skillName).Err(err).Msg("uninstall_skill 失败")
+		logger.Error(logComponent).Str("name", skillName).Err(err).Msg("uninstall_skill failed")
 		return map[string]any{
 			"success": false, "removed": false, "name": skillName,
 			"detail": err.Error(),
@@ -774,7 +774,7 @@ func summarizeSearchPayload(source, query string, payload map[string]any) map[st
 // listInstalledSkills 列出已安装技能，供 toolkit 内部逻辑复用。
 // Python: SkillToolkit._list_installed_skills()
 func (tk *SkillToolkit) listInstalledSkills(ctx context.Context) *ListInstalledResult {
-	logger.Info(logComponent).Msg("SkillToolkit: list_installed_skills 调用")
+	logger.Info(logComponent).Msg("SkillToolkit: list_installed_skills called")
 
 	payload, _ := tk.manager.HandleSkillsInstalled(ctx, map[string]any{})
 

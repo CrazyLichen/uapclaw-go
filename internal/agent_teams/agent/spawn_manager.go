@@ -51,8 +51,6 @@ type SpawnManager struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// spawnLogComponent 日志组件
-	spawnLogComponent = logger.ComponentAgentCore
 	// defaultMaxRetries 默认最大重启重试次数
 	// Python: restart_teammate(max_retries=3)
 	defaultMaxRetries = 3
@@ -94,10 +92,10 @@ func (m *SpawnManager) SpawnTeammate(
 		spawnMode = m.configurator.Spec().SpawnMode
 	}
 
-	logger.Info(spawnLogComponent).
+	logger.Info(logComponent).
 		Str("member_name", memberName).
 		Str("spawn_mode", spawnMode).
-		Msg("生成 teammate")
+		Msg("spawning teammate")
 
 	var handle spawn.SpawnHandle
 	var err error
@@ -215,9 +213,9 @@ func (m *SpawnManager) CleanupTeammate(ctx context.Context, memberName string) {
 		_ = handle.ForceKill()
 	}
 
-	logger.Info(spawnLogComponent).
+	logger.Info(logComponent).
 		Str("member_name", memberName).
-		Msg("已清理 teammate")
+		Msg("teammate cleaned up")
 }
 
 // RestartTeammate 重启 teammate，指数退避重试。
@@ -257,8 +255,8 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 		if memberErr == nil && teammate != nil {
 			initialMessage = teammate.Prompt
 		} else if memberErr != nil {
-			logger.Warn(spawnLogComponent).Err(memberErr).Str("member_name", memberName).
-				Msg("获取 teammate prompt 失败，使用空 initialMessage")
+			logger.Warn(logComponent).Err(memberErr).Str("member_name", memberName).
+				Msg("failed to get teammate prompt, using empty initialMessage")
 		}
 	}
 	// 从上下文获取 sessionID（对齐 Python: session = get_session_id() or None）
@@ -268,19 +266,19 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 		err := m.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)
 		if err == nil {
 			m.PublishRestartEvent(ctx, memberName, attempt)
-			logger.Info(spawnLogComponent).
+			logger.Info(logComponent).
 				Str("member_name", memberName).
 				Int("attempt", attempt).
-				Msg("重启 teammate 成功")
+				Msg("teammate restart succeeded")
 			return nil
 		}
 
-		logger.Warn(spawnLogComponent).
+		logger.Warn(logComponent).
 			Str("member_name", memberName).
 			Int("attempt", attempt).
 			Int("max_retries", maxRetries).
 			Err(err).
-			Msg("重启 teammate 失败")
+			Msg("teammate restart failed")
 
 		if attempt < maxRetries {
 			backoff := time.Duration(1<<uint(attempt)) * time.Second
@@ -298,10 +296,10 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 // OnTeammateUnhealthy 不健康回调，标记 RESTARTING 并尝试重启。
 // Python: SpawnManager.on_teammate_unhealthy(member_name)
 func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
-	logger.Warn(spawnLogComponent).
+	logger.Warn(logComponent).
 		Str("event_type", "TEAM_RESTART").
 		Str("member_name", memberName).
-		Msg("teammate 不健康，尝试重启")
+		Msg("teammate unhealthy, attempting restart")
 
 	// Python: await self.cleanup_teammate(member_name)
 	m.CleanupTeammate(m.baseCtx, memberName)
@@ -325,10 +323,10 @@ func (m *SpawnManager) OnTeammateUnhealthy(memberName string) {
 		defer m.recoveryWg.Done()
 		defer cancel()
 		if err := m.RestartTeammate(recoverCtx, memberName, defaultMaxRetries); err != nil {
-			logger.Error(spawnLogComponent).
+			logger.Error(logComponent).
 				Str("member_name", memberName).
 				Err(err).
-				Msg("重启 teammate 最终失败")
+				Msg("teammate restart ultimately failed")
 			// 更新 DB 状态为 ERROR
 			backend := m.configurator.TeamBackend()
 			if backend != nil {
@@ -350,8 +348,8 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 
 	teammate, err := teamBackend.GetMember(ctx, memberName)
 	if err != nil || teammate == nil {
-		logger.Error(spawnLogComponent).Str("member_name", memberName).Err(err).
-			Msg("BuildContextFromDB: 成员不存在")
+		logger.Error(logComponent).Str("member_name", memberName).Err(err).
+			Msg("BuildContextFromDB: member does not exist")
 		return atschema.TeamRuntimeContext{}, fmt.Errorf("成员 %s 不存在", memberName)
 	}
 
@@ -396,15 +394,15 @@ func (m *SpawnManager) PublishRestartEvent(ctx context.Context, memberName strin
 	if m.configurator != nil && m.configurator.Messager() != nil {
 		// 对齐 Python: publish MemberRestartedEvent via Messager
 		// ⤵️ 9.65: 完整事件构造待 Messager 事件协议回填
-		logger.Debug(spawnLogComponent).
+		logger.Debug(logComponent).
 			Str("member_name", memberName).
 			Int("restart_count", restartCount).
-			Msg("PublishRestartEvent: Messager 发布待回填")
+			Msg("PublishRestartEvent: Messager publish pending")
 	}
-	logger.Debug(spawnLogComponent).
+	logger.Debug(logComponent).
 		Str("member_name", memberName).
 		Int("restart_count", restartCount).
-		Msg("PublishRestartEvent 已记录")
+		Msg("PublishRestartEvent logged")
 }
 
 // ShutdownAllHandles 关闭所有已生成的句柄。
@@ -562,9 +560,9 @@ func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHan
 			case leaderSC.streamQueue <- chunk:
 			default:
 				// G20: 对齐 Python QueueFull 异常的可观测性，记录丢弃日志
-				logger.Warn(spawnLogComponent).
+				logger.Warn(logComponent).
 					Str("member_name", m.getTeamAgent().MemberName()).
-					Msg("chunk 转发队列已满，丢弃 chunk")
+					Msg("chunk forward queue full, dropping chunk")
 			}
 		}
 		return nil
@@ -572,7 +570,7 @@ func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHan
 	teammateSC.AddChunkObserver(forwardCb)
 	handle.SetChunkForward(forwardCb)
 	// T11: 对齐 Python observer 注册日志，记录 Info 级别（对齐 Python logger.info）
-	logger.Info(spawnLogComponent).
+	logger.Info(logComponent).
 		Str("member_name", m.getTeamAgent().MemberName()).
-		Msg("已注册 chunk forward observer")
+		Msg("chunk forward observer registered")
 }

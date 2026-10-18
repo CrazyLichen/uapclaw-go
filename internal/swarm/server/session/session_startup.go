@@ -34,7 +34,7 @@ func RemoveTeamModeSessionDirsAtStartup() {
 		if os.IsNotExist(err) {
 			return
 		}
-		logger.Warn(logComponent).Err(err).Msg("扫描会话目录失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to scan session directory")
 		return
 	}
 
@@ -55,7 +55,7 @@ func RemoveTeamModeSessionDirsAtStartup() {
 
 		sessionDirPath := sessionsDir + "/" + sessionID
 		if err := os.RemoveAll(sessionDirPath); err != nil {
-			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("删除 team 会话目录失败")
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("delete team sessiondirectory failed")
 			continue
 		}
 		RemoveSessionMetadataCache(sessionID)
@@ -63,7 +63,7 @@ func RemoveTeamModeSessionDirsAtStartup() {
 	}
 
 	if removed > 0 {
-		logger.Info(logComponent).Int("removed", removed).Msg("启动清理：已删除 team 模式会话目录")
+		logger.Info(logComponent).Int("removed", removed).Msg("startup cleanup: removed team mode session directories")
 	}
 }
 

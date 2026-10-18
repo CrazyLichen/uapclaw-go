@@ -190,7 +190,7 @@ func (h *GenerateStageHandler) generateAllFiles(_ *skilldev.SkillDevContext, ski
 	//     })
 	// }
 
-	logger.Warn(logComponent).Msg("[GenerateStage] generateAllFiles 尚未实现，创建占位文件")
+	logger.Warn(logComponent).Msg("[GenerateStage] generateAllFiles not implemented, creating placeholder file")
 	generated := make([]string, 0, len(generationOrder))
 	for _, item := range generationOrder {
 		fullPath := filepath.Join(skillDir, item.FilePath)

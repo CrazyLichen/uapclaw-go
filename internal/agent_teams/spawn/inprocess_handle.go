@@ -44,8 +44,6 @@ type InProcessSpawnHandle struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// inprocessLogComponent 日志组件
-	inprocessLogComponent = logger.ComponentChannel
 	// defaultShutdownTimeout 默认关闭超时
 	defaultShutdownTimeout = 10 * time.Second
 )
@@ -139,15 +137,15 @@ func (h *InProcessSpawnHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 
 	select {
 	case <-h.done:
-		logger.Info(inprocessLogComponent).
+		logger.Info(logComponent).
 			Str("process_id", h.processID).
-			Msg("进程内任务正常关闭")
+			Msg("inprocess task shutdown normally")
 		return true, nil
 	case <-timer.C:
-		logger.Warn(inprocessLogComponent).
+		logger.Warn(logComponent).
 			Str("process_id", h.processID).
 			Dur("timeout", shutdownTimeout).
-			Msg("进程内任务关闭超时")
+			Msg("inprocess task shutdown timed out")
 		return false, fmt.Errorf("关闭超时: %s", h.processID)
 	}
 }
@@ -168,9 +166,9 @@ func (h *InProcessSpawnHandle) ForceKill() error {
 		<-h.done
 	}
 
-	logger.Info(inprocessLogComponent).
+	logger.Info(logComponent).
 		Str("process_id", h.processID).
-		Msg("强制终止进程内任务")
+		Msg("force killing inprocess task")
 	return nil
 }
 

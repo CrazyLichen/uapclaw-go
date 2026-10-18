@@ -114,7 +114,7 @@ type WorkflowSessionOption func(*WorkflowSession)
 func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 	logger.Info(logComponent).
 		Str("action", "new_workflow_session").
-		Msg("创建内部 WorkflowSession")
+		Msg("created internal WorkflowSession")
 
 	s := &WorkflowSession{
 		st: state.NewInMemoryWorkflowState(),
@@ -185,7 +185,7 @@ func NewNodeSession(parent interfaces.InnerSession, nodeID, nodeType string, ski
 		Str("action", "new_node_session").
 		Str("node_id", nodeID).
 		Str("node_type", nodeType).
-		Msg("创建节点级会话")
+		Msg("created node-level session")
 
 	parentID := createParentID(parent)
 	executableID := createExecutableID(nodeID, parentID)
@@ -197,7 +197,7 @@ func NewNodeSession(parent interfaces.InnerSession, nodeID, nodeType string, ski
 		logger.Error(logComponent).
 			Str("action", "create_node_session").
 			Str("state_type", fmt.Sprintf("%T", parent.State())).
-			Msg("当前状态不支持 CreateNodeState，对齐 Python AttributeError")
+			Msg("current state does not support CreateNodeState, aligning with Python AttributeError")
 		panic(fmt.Sprintf("当前状态 %T 不支持 CreateNodeState（未实现 WorkflowState 接口），对齐 Python AttributeError", parent.State()))
 	}
 	nodeState = ws.CreateNodeState(executableID, parentID)
@@ -226,7 +226,7 @@ func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorMan
 	logger.Info(logComponent).
 		Str("action", "new_sub_workflow_session").
 		Str("workflow_id", workflowID).
-		Msg("创建子工作流会话")
+		Msg("created sub-workflow session")
 
 	// 使用传入 NodeSession 的 parent() 作为父级
 	parentSession := nodeSession.Parent()
@@ -240,7 +240,7 @@ func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorMan
 		logger.Error(logComponent).
 			Str("action", "create_sub_workflow_session").
 			Str("state_type", fmt.Sprintf("%T", parentSession.State())).
-			Msg("当前状态不支持 CreateNodeState，对齐 Python AttributeError")
+			Msg("current state does not support CreateNodeState, aligning with Python AttributeError")
 		panic(fmt.Sprintf("当前状态 %T 不支持 CreateNodeState（未实现 WorkflowState 接口），对齐 Python AttributeError", parentSession.State()))
 	}
 	nodeState = ws.CreateNodeState(executableID, parentID)

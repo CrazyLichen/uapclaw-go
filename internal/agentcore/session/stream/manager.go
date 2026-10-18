@@ -218,7 +218,7 @@ func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan Sc
 				logger.Debug(logComponent).
 					Str("event_type", "SESSION_STREAM_CHUNK").
 					Str("status", "queue_closed").
-					Msg("流输出队列已关闭")
+					Msg("stream output queue closed")
 				cancel()
 				return
 			}
@@ -229,13 +229,13 @@ func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan Sc
 				logger.Debug(logComponent).
 					Str("event_type", "SESSION_STREAM_CHUNK").
 					Str("data_type", fmt.Sprintf("%T", data)).
-					Msg("流数据接收成功")
+					Msg("stream data received successfully")
 				out <- data
 			} else {
 				logger.Debug(logComponent).
 					Str("event_type", "SESSION_STREAM_CHUNK").
 					Str("status", "waiting").
-					Msg("未收到流数据，继续等待")
+					Msg("no stream data received, keep waiting")
 			}
 		}
 	}()

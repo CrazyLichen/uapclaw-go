@@ -118,7 +118,7 @@ func (m *VariableManager) AddMemories(ctx context.Context, userID string, scopeI
 					Str("memory_type", m.memType).
 					Str("user_id", userID).
 					Str("scope_id", scopeID).
-					Msg("mem_unit 不是 VariableUnit 类型，跳过")
+					Msg("mem_unit is not a VariableUnit, skipping")
 				continue
 			}
 			if m.kvStore == nil {
@@ -128,7 +128,7 @@ func (m *VariableManager) AddMemories(ctx context.Context, userID string, scopeI
 					Str("memory_type", m.memType).
 					Str("user_id", userID).
 					Str("scope_id", scopeID).
-					Msg("kv_store 不能为 nil")
+					Msg("kv_store cannot be nil")
 				return nil, nil
 			}
 			// Python: key, value = self._make_variable_pairs(user_id, False, scope_id, unit.variable_name, None, unit.variable_mem, None)
@@ -140,7 +140,7 @@ func (m *VariableManager) AddMemories(ctx context.Context, userID string, scopeI
 					Str("memory_type", m.memType).
 					Str("user_id", userID).
 					Str("scope_id", scopeID).
-					Msg("写入变量失败")
+					Msg("failed to write variable")
 				return nil, err
 			}
 		}
@@ -164,7 +164,7 @@ func (m *VariableManager) Update(_ context.Context, userID string, scopeID strin
 		Strs("memory_id", []string{memID}).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
-		Msg("未实现方法 update")
+		Msg("update method not implemented")
 	return false, nil
 }
 
@@ -178,7 +178,7 @@ func (m *VariableManager) Search(_ context.Context, userID string, scopeID strin
 		Str("query", query).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
-		Msg("未实现方法 search")
+		Msg("search method not implemented")
 	return nil, nil
 }
 
@@ -192,7 +192,7 @@ func (m *VariableManager) Get(_ context.Context, userID string, scopeID string, 
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
 		Str("event_type", "MEMORY_STORE").
-		Msg("未实现方法 get")
+		Msg("get method not implemented")
 	return nil, nil
 }
 
@@ -206,7 +206,7 @@ func (m *VariableManager) Delete(_ context.Context, userID string, scopeID strin
 		Str("memory_type", m.memType).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
-		Msg("未实现方法 delete")
+		Msg("delete method not implemented")
 	return false, nil
 }
 
@@ -223,7 +223,7 @@ func (m *VariableManager) DeleteByUserID(ctx context.Context, userID string, sco
 			Str("memory_type", m.memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
-			Msg("kv_store 不能为 nil")
+			Msg("kv_store cannot be nil")
 		return false, nil
 	}
 
@@ -241,7 +241,7 @@ func (m *VariableManager) DeleteByUserID(ctx context.Context, userID string, sco
 			Str("memory_type", m.memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
-			Msg("按前缀删除用户变量失败")
+			Msg("failed to delete user variables by prefix")
 		return false, err
 	}
 	// Python: await self.kv_store.delete_by_prefix(session_prefix)
@@ -252,7 +252,7 @@ func (m *VariableManager) DeleteByUserID(ctx context.Context, userID string, sco
 			Str("memory_type", m.memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
-			Msg("按前缀删除会话变量失败")
+			Msg("failed to delete session variables by prefix")
 		return false, err
 	}
 	return true, nil
@@ -271,7 +271,7 @@ func (m *VariableManager) UpdateUserVariable(ctx context.Context, userID string,
 			Str("memory_type", m.memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
-			Msg("kv_store 不能为 nil")
+			Msg("kv_store cannot be nil")
 		return nil
 	}
 
@@ -300,7 +300,7 @@ func (m *VariableManager) DeleteUserVariable(ctx context.Context, userID string,
 			Str("memory_type", m.memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
-			Msg("kv_store 不能为 nil")
+			Msg("kv_store cannot be nil")
 		return nil
 	}
 
@@ -407,7 +407,7 @@ func (m *VariableManager) checkUserAndScopeID(userID string, scopeID string, con
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Str("context", context).
-			Msg("校验用户和 scope 失败，user ID 为空")
+			Msg("user and scope check failed, user ID is empty")
 	}
 	if scopeID == "" || strings.TrimSpace(scopeID) == "" {
 		// Python: memory_logger.error("Check user and scope id operation failed, scope ID is empty", ...)
@@ -417,7 +417,7 @@ func (m *VariableManager) checkUserAndScopeID(userID string, scopeID string, con
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Str("context", context).
-			Msg("校验用户和 scope 失败，scope ID 为空")
+			Msg("user and scope check failed, scope ID is empty")
 	}
 }
 

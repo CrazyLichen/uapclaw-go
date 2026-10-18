@@ -92,7 +92,7 @@ func (h *OtelTeamMonitorHandler) HandleEvent(ctx context.Context, event *events.
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).Any("error", r).Str("event_type", event.EventType).
-				Msg("OTel 监控处理器异常")
+				Msg("OTel monitor handler error")
 		}
 	}()
 

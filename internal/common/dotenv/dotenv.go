@@ -75,7 +75,7 @@ func Load(path string) error {
 	kvs := Parse(string(data))
 	for k, v := range kvs {
 		if err := os.Setenv(k, v); err != nil {
-			logger.Error(logComponent).Str("key", k).Err(err).Msg("设置环境变量失败")
+			logger.Error(logComponent).Str("key", k).Err(err).Msg("failed to set env var")
 			return fmt.Errorf("设置环境变量 %s 失败: %w", k, err)
 		}
 	}

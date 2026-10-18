@@ -133,7 +133,7 @@ func (t *WorkspaceMetaTool) Invoke(ctx context.Context, inputs map[string]any, _
 		logger.Warn(logComponent).
 			Str("event_type", "workspace_meta_unknown_action").
 			Str("action", action).
-			Msg("未知工作空间元数据操作")
+			Msg("unknown workspace metadata operation")
 		return map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("未知操作 '%s'", action),
@@ -164,7 +164,7 @@ func (t *WorkspaceMetaTool) handleLock(ctx context.Context, path string) map[str
 			Str("event_type", "workspace_meta_lock_error").
 			Str("file_path", path).
 			Err(err).
-			Msg("获取锁失败")
+			Msg("acquire lock failed")
 		return map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("获取锁失败: %v", err),
@@ -204,7 +204,7 @@ func (t *WorkspaceMetaTool) handleUnlock(ctx context.Context, path string) map[s
 			Str("event_type", "workspace_meta_unlock_error").
 			Str("file_path", path).
 			Err(err).
-			Msg("释放锁失败")
+			Msg("release lock failed")
 		return map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("释放锁失败: %v", err),
@@ -228,7 +228,7 @@ func (t *WorkspaceMetaTool) handleLocks() map[string]any {
 				Str("event_type", "workspace_meta_locks_serialize_error").
 				Str("file_path", lock.FilePath).
 				Err(err).
-				Msg("锁条目序列化失败")
+				Msg("lock entry serialization failed")
 			continue
 		}
 		lockMaps = append(lockMaps, m)
@@ -255,7 +255,7 @@ func (t *WorkspaceMetaTool) handleHistory(ctx context.Context, path string) map[
 			Str("event_type", "workspace_meta_history_error").
 			Str("file_path", path).
 			Err(err).
-			Msg("获取版本历史失败")
+			Msg("failed to get version history")
 		return map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("获取版本历史失败: %v", err),
@@ -270,7 +270,7 @@ func (t *WorkspaceMetaTool) handleHistory(ctx context.Context, path string) map[
 				Str("event_type", "workspace_meta_history_serialize_error").
 				Str("commit", entry.Commit).
 				Err(err).
-				Msg("历史条目序列化失败")
+				Msg("history entry serialization failed")
 			continue
 		}
 		historyMaps = append(historyMaps, m)

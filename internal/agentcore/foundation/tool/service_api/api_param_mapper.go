@@ -213,7 +213,7 @@ func parseAPIParamLocation(s string) (APIParamLocation, error) {
 	default:
 		logger.Warn(logComponent).
 			Str("location", s).
-			Msg("未知的参数位置类型，fallback 到 body")
+			Msg("unknown param location type, falling back to body")
 		return APIParamLocationBody, nil // 未知值 fallback 到 body
 	}
 }

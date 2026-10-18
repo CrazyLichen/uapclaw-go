@@ -154,6 +154,7 @@ type EventType string
 type eventSlice []Event
 
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// EventInput 用户输入事件
 	EventInput EventType = "input"

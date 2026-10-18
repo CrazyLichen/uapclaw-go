@@ -92,14 +92,14 @@ func (l *DistributedLock) Release(ctx context.Context) error {
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("event_type", logEventMemoryStore).
-			Msg("释放锁失败")
+			Msg("failed to release lock")
 		return nil
 	}
 	if string(val) == l.lockValue {
 		if delErr := l.store.Delete(ctx, l.lockKey); delErr != nil {
 			logger.Error(logComponent).Err(delErr).
 				Str("event_type", logEventMemoryStore).
-				Msg("释放锁失败")
+				Msg("failed to release lock")
 		}
 	}
 	return nil

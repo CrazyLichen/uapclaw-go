@@ -107,10 +107,10 @@ func Init(opt InitOption) (*InitResult, error) {
 				fmt.Println("[uapclaw-init] 非交互模式：继续重新初始化。")
 			}
 			if err := os.RemoveAll(targetDir); err != nil {
-				logger.Error(logComponent).Str("dir", targetDir).Err(err).Msg("删除工作区失败")
+				logger.Error(logComponent).Str("dir", targetDir).Err(err).Msg("deleteworkspace failed")
 				return nil, fmt.Errorf("删除工作区失败: %w", err)
 			}
-			logger.Info(logComponent).Str("dir", targetDir).Msg("已删除工作区目录")
+			logger.Info(logComponent).Str("dir", targetDir).Msg("workspace directory deleted")
 			fmt.Printf("[uapclaw-init] 已删除工作区目录: %s\n", targetDir)
 		} else {
 			fmt.Println("[uapclaw-init] 增量初始化：只添加缺失文件，不覆盖已有文件")
@@ -136,7 +136,7 @@ func Init(opt InitOption) (*InitResult, error) {
 			return &InitResult{Cancelled: true}, nil
 		}
 	}
-	logger.Info(logComponent).Str("language", lang).Msg("使用语言")
+	logger.Info(logComponent).Str("language", lang).Msg("using language")
 	fmt.Printf("[uapclaw-init] 使用语言 / Language: %s\n", lang)
 
 	// 5. 调用 Prepare
@@ -173,14 +173,14 @@ func Init(opt InitOption) (*InitResult, error) {
 			return nil, fmt.Errorf("创建 bootstrap .env 失败: %w", err)
 		}
 
-		logger.Info(logComponent).Str("instance", opt.InstanceName).Str("dir", targetDir).Msg("实例初始化成功")
+		logger.Info(logComponent).Str("instance", opt.InstanceName).Str("dir", targetDir).Msg("instance initialized successfully")
 		fmt.Printf("[uapclaw-init] 实例 '%s' 初始化成功。\n", opt.InstanceName)
 	}
 
 	// 打印差异摘要
 	diff.PrintSummary(opt.Overwrite)
 
-	logger.Info(logComponent).Str("dir", targetDir).Bool("overwrite", opt.Overwrite).Int("added_files", len(diff.AddedFiles)).Int("overwritten_files", len(diff.OverwrittenFiles)).Msg("工作区初始化完成")
+	logger.Info(logComponent).Str("dir", targetDir).Bool("overwrite", opt.Overwrite).Int("added_files", len(diff.AddedFiles)).Int("overwritten_files", len(diff.OverwrittenFiles)).Msg("workspaceinitialization completed")
 
 	return &InitResult{
 		WorkspaceDir: targetDir,
@@ -213,7 +213,7 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 		return nil, fmt.Errorf("找不到资源目录: %w", err)
 	}
 
-	logger.Info(logComponent).Str("workspace", workspaceDir).Str("resources", resDir).Bool("overwrite", opt.Overwrite).Msg("开始准备工作区")
+	logger.Info(logComponent).Str("workspace", workspaceDir).Str("resources", resDir).Bool("overwrite", opt.Overwrite).Msg("preparing workspace")
 
 	// 确保工作区根目录存在
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
@@ -417,7 +417,7 @@ func resolvePreferredLanguage(explicit string, workspaceDir string) string {
 			}
 		}
 	} else {
-		logger.Debug(logComponent).Str("path", configPath).Err(err).Msg("读取 config.yaml 获取语言偏好失败，使用默认值")
+		logger.Debug(logComponent).Str("path", configPath).Err(err).Msg("failed to read config.yaml for language preference, using defaults")
 	}
 
 	return "zh"

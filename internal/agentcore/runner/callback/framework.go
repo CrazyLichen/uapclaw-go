@@ -128,14 +128,14 @@ type ContextCallbackFunc func(ctx context.Context, data *ContextCallEventData) a
 
 type triggerStrategy int
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// strategyCollect 收集所有返回值，不中断（观测型）
 	strategyCollect triggerStrategy = iota
 	// strategyAbortOnError 遇 error 中断（控制型）
 	strategyAbortOnError
 )
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// maxEventHistory 事件历史记录最大条数

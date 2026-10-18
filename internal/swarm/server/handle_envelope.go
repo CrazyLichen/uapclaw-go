@@ -51,7 +51,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		logger.Error(logComponent).
 			Err(err).
 			Str("request_id", envelope.RequestID).
-			Msg("E2AEnvelope 转换 AgentRequest 失败")
+			Msg("E2AEnvelope to AgentRequest conversion failed")
 		s.writeErrorResponse(envelope.RequestID, envelope.Channel, err.Error(), "E2A_CONVERT_ERROR")
 		return
 	}
@@ -244,7 +244,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 			Err(err).
 			Str("request_id", request.RequestID).
 			Str("method", string(request.ReqMethod)).
-			Msg("handler 返回错误")
+			Msg("handler returned error")
 		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "HANDLER_ERROR")
 		return
 	}
@@ -310,7 +310,7 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 			Str("request_id", request.RequestID).
 			Str("channel_id", request.ChannelID).
 			Str("mode", mode).
-			Msg("获取 Agent 失败")
+			Msg("failed to get Agent")
 		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "GET_AGENT_ERROR")
 		return
 	}
@@ -331,7 +331,7 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 			Err(err).
 			Str("request_id", request.RequestID).
 			Str("mode", mode).
-			Msg("Agent 处理请求失败")
+			Msg("agent failed to process request")
 		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_PROCESS_ERROR")
 		return
 	}
@@ -372,7 +372,7 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 			Str("request_id", request.RequestID).
 			Str("channel_id", request.ChannelID).
 			Str("mode", mode).
-			Msg("流式请求获取 Agent 失败")
+			Msg("failed to get Agent for stream request")
 		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "GET_AGENT_ERROR")
 		return
 	}
@@ -398,7 +398,7 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 			Err(err).
 			Str("request_id", request.RequestID).
 			Str("mode", mode).
-			Msg("Agent 流式处理失败")
+			Msg("agent stream processing failed")
 		close(heartbeatTrigger)
 		<-heartbeatDone
 		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_STREAM_ERROR")
@@ -423,7 +423,7 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 	logger.Debug(logComponent).
 		Str("request_id", request.RequestID).
 		Int("chunk_count", chunkCount).
-		Msg("流式处理完成")
+		Msg("stream processing completed")
 }
 
 // handleCancel 处理取消/中断请求，对齐 Python _handle_cancel。
@@ -473,7 +473,7 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 			Str("request_id", request.RequestID).
 			Str("channel_id", request.ChannelID).
 			Str("mode", mode).
-			Msg("cancel: 按 mode 未找到已有 agent，尝试不限 mode 查找")
+			Msg("cancel: no existing agent by mode, trying without mode filter")
 	}
 
 	// 第3级：fallback 创建（阻塞），对齐 Python _apply_resolved_mode_to_request 兜底
@@ -482,7 +482,7 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 		logger.Warn(logComponent).
 			Str("request_id", request.RequestID).
 			Str("channel_id", request.ChannelID).
-			Msg("cancel: 未找到已有 agent，fallback 创建")
+			Msg("cancel: no existing agent found, fallback creation")
 		mode, subMode = applyResolvedModeToRequest(request)
 		var err error
 		agent, err = s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
@@ -490,7 +490,7 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 			logger.Error(logComponent).
 				Err(err).
 				Str("request_id", request.RequestID).
-				Msg("cancel: fallback 创建 agent 失败")
+				Msg("cancel: fallback agent creation failed")
 			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_GET_ERROR")
 			return
 		}
@@ -502,7 +502,7 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 		logger.Error(logComponent).
 			Err(err).
 			Str("request_id", request.RequestID).
-			Msg("Agent 中断处理失败")
+			Msg("agent interrupt processing failed")
 		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_INTERRUPT_ERROR")
 		return
 	}
@@ -514,7 +514,7 @@ func (s *AgentServer) writeResponse(requestID, channelID string, resp *schema.Ag
 	wire := e2a.EncodeAgentResponseForWire(resp, requestID, 0)
 	data, err := json.Marshal(wire)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("响应 JSON 编码失败")
+		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("response JSON coding failed")
 		return
 	}
 	s.sendToGateway(data)
@@ -525,7 +525,7 @@ func (s *AgentServer) writeChunk(requestID, channelID string, chunk *schema.Agen
 	wire := e2a.EncodeAgentChunkForWire(chunk, requestID, sequence, isStream)
 	data, err := json.Marshal(wire)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("request_id", requestID).Int("sequence", sequence).Msg("流式块 JSON 编码失败")
+		logger.Error(logComponent).Err(err).Str("request_id", requestID).Int("sequence", sequence).Msg("streaming chunk JSON encode failed")
 		return
 	}
 	s.sendToGateway(data)
@@ -541,7 +541,7 @@ func (s *AgentServer) sendKeepalive(requestID, channelID string) {
 	wire := e2a.EncodeAgentChunkForWire(chunk, requestID, -1, true)
 	data, err := json.Marshal(wire)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("keepalive JSON 编码失败")
+		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("keepalive JSON coding failed")
 		return
 	}
 	s.sendToGateway(data)

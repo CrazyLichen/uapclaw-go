@@ -68,7 +68,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	if reactAgent == nil {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
-			Msg("ReActAgent 为 nil，关闭输出 channel")
+			Msg("ReActAgent is nil, closing output channel")
 		close(ch)
 		return ch, nil
 	}
@@ -80,14 +80,14 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			Err(err).
 			Str("task_id", taskID).
 			Str("event_type", "LLM_CALL_ERROR").
-			Msg("查询任务失败")
+			Msg("failed to query task")
 		close(ch)
 		return ch, err
 	}
 	if len(tasks) == 0 {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
-			Msg("未找到任务")
+			Msg("task not found")
 		close(ch)
 		return ch, nil
 	}
@@ -146,7 +146,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			Str("task_id", taskID).
 			Int("iteration", iteration).
 			Bool("is_follow_up", isFollowUp).
-			Msg("开始执行任务迭代（敏感模式，隐藏查询内容）")
+			Msg("starting task iteration (sensitive mode, hiding query content)")
 	} else {
 		queryPreview := query
 		if len(queryPreview) > 120 {
@@ -157,7 +157,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			Int("iteration", iteration).
 			Bool("is_follow_up", isFollowUp).
 			Str("query_preview", queryPreview).
-			Msg("开始执行任务迭代")
+			Msg("starting task iteration")
 	}
 
 	// 步骤 9：构建 loopEvent
@@ -178,7 +178,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	if ba, ok := e.provider.(agentinterfaces.BaseAgent); ok {
 		baseAgent = ba
 	} else {
-		logger.Warn(logComponent).Msg("provider 不满足 BaseAgent 接口，回调将不触发")
+		logger.Warn(logComponent).Msg("provider does not satisfy BaseAgent interface, callbacks will not fire")
 	}
 	cbCtx := agentinterfaces.NewAgentCallbackContext(baseAgent, iterInputs, sess)
 
@@ -188,7 +188,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			logger.Warn(logComponent).
 				Err(markErr).
 				Str("task_id", taskID).
-				Msg("标记任务为进行中失败")
+				Msg("failed to mark task as in progress")
 		}
 	}
 
@@ -197,7 +197,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		logger.Warn(logComponent).
 			Err(fireErr).
 			Str("event_type", "before_task_iteration").
-			Msg("触发前置回调失败")
+			Msg("failed to trigger pre-callback")
 	}
 
 	// 步骤 13：确定有效查询
@@ -263,7 +263,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 				Str("task_id", taskID).
 				Int("iteration", iteration).
 				Str("event_type", "LLM_CALL_ERROR").
-				Msg("任务执行失败")
+				Msg("task execution failed")
 
 			if e.getPlanTask(state, taskID) != nil {
 				if state != nil && state.TaskPlan != nil {
@@ -317,7 +317,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			logger.Warn(logComponent).
 				Err(fireErr).
 				Str("event_type", "after_task_iteration").
-				Msg("触发后置回调失败")
+				Msg("failed to trigger post-callback")
 		}
 
 		// 完成日志（敏感/非敏感双模式）
@@ -325,7 +325,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			logger.Info(logComponent).
 				Int("iteration", iteration).
 				Str("task_id", taskID).
-				Msg("外层循环迭代完成")
+				Msg("outer loop iteration completed")
 		} else {
 			outputPreview := ""
 			if output, ok := resultMap["output"]; ok {
@@ -339,7 +339,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 				Int("iteration", iteration).
 				Str("task_id", taskID).
 				Str("output", outputPreview).
-				Msg("外层循环迭代完成")
+				Msg("outer loop iteration completed")
 		}
 
 		ch <- &stream.OutputSchema{

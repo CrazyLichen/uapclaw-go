@@ -53,21 +53,21 @@ func (m *TeamManager) CommitRuntimeReady(sessionID string, teamName string) {
 // 此方法不在 CommitRuntimeReady 内部调用，避免死锁。
 func (m *TeamManager) OnRuntimeReady(ctx context.Context, sessionID string, teamAgent *agent.TeamAgent, hideDM bool) {
 	if teamAgent == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("OnRuntimeReady: teamAgent 为 nil，跳过监控启动")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("OnRuntimeReady: teamAgent is nil, skipping monitor start")
 		return
 	}
 
 	// 对齐 Python: ensure_monitor_for_active_runtime(channel_id, session_id, team_name, hide_dm)
 	if err := m.EnsureMonitor(ctx, sessionID, teamAgent, hideDM); err != nil {
 		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
-			Msg("OnRuntimeReady: EnsureMonitor 失败")
+			Msg("OnRuntimeReady: EnsureMonitor failed")
 	}
 
 	// 自动启动 evolution watcher — ⤵️ 待回填
 	// Python: 当 runtime_ready 事件触发时，start_team_evolution_watcher 自动启动
 	// Go 差异：event bus 完整实现后，由 runtime_ready 事件自动触发
 	logger.Debug(logComponent).Str("session_id", sessionID).
-		Msg("OnRuntimeReady: evolution watcher 自动启动待回填")
+		Msg("OnRuntimeReady: evolution watcher auto-start pending backfill")
 }
 
 // ClearPendingRuntime 清除指定 session 的 pending 状态。
@@ -171,7 +171,7 @@ func (m *TeamManager) CreateTeam(
 	deepAgent interfaces.DeepAgentInterface,
 	spec *atschema.TeamAgentSpec,
 ) (*agent.TeamAgent, error) {
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("创建 TeamAgent（应用层）")
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("creating TeamAgent (application layer)")
 
 	// 步骤 2: _ensure_postgresql_for_leader — ⤵️(#9.72) 待回填
 	// Python: await self._ensure_postgresql_for_leader(config_base)
@@ -199,7 +199,7 @@ func (m *TeamManager) CreateTeam(
 		agentschema.WithAgentDescription(spec.Leader.Persona),
 	)
 
-	// NewTeamAgent + Configure
+	// 创建 TeamAgent 并执行 Configure 配置团队 Agent
 	teamAgent := agent.NewTeamAgent(card)
 	runtimeCtx := atschema.TeamRuntimeContext{
 		MemberName: spec.Leader.MemberName,
@@ -217,7 +217,7 @@ func (m *TeamManager) CreateTeam(
 	// 步骤 9: attach distributed hooks — ⤵️(#9.72) 待回填
 
 	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", spec.TeamName).
-		Msg("Team 已创建")
+		Msg("team created")
 	return teamAgent, nil
 }
 
@@ -276,7 +276,7 @@ func (m *TeamManager) CleanupAll(ctx context.Context) {
 	for _, sid := range sessionIDs {
 		m.destroyTeam(ctx, sid) //nolint:errcheck // 清理操作，错误不可操作
 	}
-	logger.Info(logComponent).Msg("所有 team 已清理")
+	logger.Info(logComponent).Msg("all teams cleaned")
 }
 
 // TerminateSessionRuntime 终结指定 session 的运行时。
@@ -301,7 +301,7 @@ func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID str
 		return false, nil
 	}
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
-		Msg("终结 team session 运行时")
+		Msg("terminating team session runtime")
 
 	// 解析 team_name
 	teamName := m.resolveSessionTeamName(sessionID)
@@ -313,10 +313,10 @@ func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID str
 		// Python: await Runner.stop_agent_team(team_name=team_name, session_id=session_id)
 		if stopped, err := runner.StopAgentTeam(ctx, teamName, sessionID); err != nil {
 			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(err).Msg("停止 Runner-owned runtime 失败")
+				Err(err).Msg("failed to stop Runner-owned runtime")
 		} else {
 			logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Bool("stopped", stopped).Msg("已停止 Runner-owned runtime")
+				Bool("stopped", stopped).Msg("stopped Runner-owned runtime")
 		}
 	}
 
@@ -330,7 +330,7 @@ func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID str
 	m.ClearPendingRuntime(sessionID)
 
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
-		Bool("cleaned", cleaned).Msg("team session 已终结")
+		Bool("cleaned", cleaned).Msg("team session terminated")
 	return true, nil
 }
 
@@ -355,7 +355,7 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 		return false, nil
 	}
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
-		Msg("取消 team session 运行时")
+		Msg("cancelling team session runtime")
 
 	teamName := m.resolveSessionTeamName(sessionID)
 	m.mu.Unlock()
@@ -366,7 +366,7 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 		// Python: await Runner.stop_agent_team(team_name=team_name, session_id=session_id)
 		if stopped, err := runner.StopAgentTeam(ctx, teamName, sessionID); err != nil {
 			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(err).Msg("停止 Runner-owned runtime 失败")
+				Err(err).Msg("failed to stop Runner-owned runtime")
 		} else {
 			runnerStopped = stopped
 		}
@@ -377,7 +377,7 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 	m.ClearPendingRuntime(sessionID)
 
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
-		Bool("runner_stopped", runnerStopped).Msg("team session 已取消")
+		Bool("runner_stopped", runnerStopped).Msg("team session cancelled")
 	return true, nil
 }
 
@@ -406,7 +406,7 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 	}
 
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
-		Msg("停止 team session 运行时")
+		Msg("stopping team session runtime")
 
 	var teamAgent *agent.TeamAgent
 	if hasLocalTeamRuntime {
@@ -427,7 +427,7 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 		// Python: await Runner.stop_agent_team(team_name=team_name, session_id=session_id)
 		if _, err := runner.StopAgentTeam(ctx, teamName, sessionID); err != nil {
 			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(err).Msg("停止 Runner-owned runtime 失败")
+				Err(err).Msg("failed to stop Runner-owned runtime")
 		}
 	}
 
@@ -442,7 +442,7 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 	m.ClearPendingRuntime(sessionID)
 
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
-		Bool("stopped", stopped).Msg("team session 已停止")
+		Bool("stopped", stopped).Msg("team session stopped")
 	return true, nil
 }
 
@@ -468,7 +468,7 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 	}
 
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
-		Msg("暂停 team session 运行时")
+		Msg("pausing team session runtime")
 
 	teamName := m.resolveSessionTeamName(sessionID)
 	m.mu.Unlock()
@@ -478,7 +478,7 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 		// Python: await Runner.pause_agent_team(team_name=team_name, session_id=session_id)
 		if paused, err := runner.PauseAgentTeam(ctx, teamName, sessionID); err != nil {
 			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(err).Msg("暂停 Runner-owned runtime 失败")
+				Err(err).Msg("failed to pause Runner-owned runtime")
 		} else {
 			runnerPaused = paused
 		}
@@ -489,7 +489,7 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 	m.ClearPendingRuntime(sessionID)
 
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
-		Bool("runner_paused", runnerPaused).Msg("team session 已暂停")
+		Bool("runner_paused", runnerPaused).Msg("team session paused")
 	return true, nil
 }
 
@@ -510,20 +510,20 @@ func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string
 		// Python: await Runner.delete_agent_team(team_name=team_name, session_ids=[session_id], force=True)
 		if _, err := runner.DeleteAgentTeam(ctx, teamName, []string{sessionID}, true); err != nil {
 			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(err).Msg("删除 Runner-owned team 失败")
+				Err(err).Msg("failed to delete Runner-owned team")
 		}
 	} else {
 		logger.Warn(logComponent).Str("session_id", sessionID).
-			Msg("无法解析 team_name，回退到 session release")
+			Msg("failed to resolve team_name, falling back to session release")
 		// Python: await Runner.release(session_id)
 		if err := runner.Release(ctx, sessionID, false); err != nil {
 			logger.Warn(logComponent).Str("session_id", sessionID).Err(err).
-				Msg("回退 session release 失败")
+				Msg("fallback session release failed")
 		}
 	}
 
 	logger.Info(logComponent).Str("reason", reason).Str("session_id", sessionID).
-		Str("team_name", teamName).Msg("team session 已删除")
+		Str("team_name", teamName).Msg("team session deleted")
 	return true, nil
 }
 
@@ -553,7 +553,7 @@ func (m *TeamManager) resolveSessionTeamName(sessionID string) string {
 		}
 	}
 	logger.Warn(logComponent).Str("session_id", sessionID).
-		Msg("无法从 active/pending/metadata 解析 team_name")
+		Msg("failed to resolve team_name from active/pending/metadata")
 	return ""
 }
 
@@ -572,7 +572,7 @@ func (m *TeamManager) resolveDeleteSessionTeamName(sessionID string) string {
 		}
 	}
 	logger.Warn(logComponent).Str("session_id", sessionID).
-		Msg("无法从 metadata 解析 delete team_name")
+		Msg("failed to resolve delete team_name from metadata")
 	return ""
 }
 
@@ -615,7 +615,7 @@ func (m *TeamManager) destroyTeam(ctx context.Context, sessionID string) (bool, 
 	m.mu.Unlock()
 
 	if !ok || teamAgent == nil {
-		logger.Info(logComponent).Str("session_id", sessionID).Msg("内存中无 team 实例")
+		logger.Info(logComponent).Str("session_id", sessionID).Msg("no team instance in memory")
 		return false, nil
 	}
 
@@ -629,7 +629,7 @@ func (m *TeamManager) destroyTeam(ctx context.Context, sessionID string) (bool, 
 		destroyCtx := sessionctx.WithSessionState(ctx, ss)
 		c, err := teamAgent.DestroyTeam(destroyCtx, true)
 		if err != nil {
-			logger.Error(logComponent).Str("session_id", sessionID).Err(err).Msg("DestroyTeam 失败")
+			logger.Error(logComponent).Str("session_id", sessionID).Err(err).Msg("DestroyTeam failed")
 		}
 		cleaned = c
 	}
@@ -638,7 +638,7 @@ func (m *TeamManager) destroyTeam(ctx context.Context, sessionID string) (bool, 
 	// ⤵️(#9.72) 待回填
 
 	logger.Info(logComponent).Str("session_id", sessionID).Bool("cleaned", cleaned).
-		Msg("team 已通过核心 API 清理")
+		Msg("team cleaned up via core API")
 	return cleaned, nil
 }
 
@@ -650,7 +650,7 @@ func (m *TeamManager) stopLocalTeamRuntime(ctx context.Context, sessionID string
 	// Python: if callable(stop_coordination): await stop_coordination(); stopped = True
 	if teamAgent != nil {
 		if err := teamAgent.StopCoordination(ctx); err != nil {
-			logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("StopCoordination 失败")
+			logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("StopCoordination failed")
 		} else {
 			stopped = true
 		}
@@ -661,7 +661,7 @@ func (m *TeamManager) stopLocalTeamRuntime(ctx context.Context, sessionID string
 	// ⤵️(#9.72) 待回填
 
 	logger.Info(logComponent).Str("session_id", sessionID).Bool("stopped", stopped).
-		Msg("停止本地 team runtime")
+		Msg("stopping local team runtime")
 	return stopped
 }
 

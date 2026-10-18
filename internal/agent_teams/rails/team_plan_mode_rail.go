@@ -44,9 +44,6 @@ type TeamPlanModeRailOption func(*TeamPlanModeRail)
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// planModeLogComponent 日志组件标识
-	planModeLogComponent = logger.ComponentTeam
-
 	// modeInstructionsSectionName MODE_INSTRUCTIONS Section 名称
 	// Python: SectionName.MODE_INSTRUCTIONS (harness/prompts/sections.py)
 	modeInstructionsSectionName = "MODE_INSTRUCTIONS"
@@ -208,6 +205,6 @@ func (r *TeamPlanModeRail) specializePlanAgent() {
 	language := r.resolveLanguage()
 	applied := prompts.ApplyTeamPlanAgentPrompt(deepConfig.Subagents, language)
 	if applied {
-		logger.Debug(planModeLogComponent).Str("language", language).Msg("已特化 plan_agent 系统提示词")
+		logger.Debug(logComponent).Str("language", language).Msg("plan_agent system prompt specialized")
 	}
 }

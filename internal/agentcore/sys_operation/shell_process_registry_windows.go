@@ -53,9 +53,9 @@ func waitProcessWithTimeout(proc *os.Process, timeout time.Duration) bool {
 func terminateShellProcessWindows(proc *os.Process) bool {
 	// 阶段 1：发送 os.Interrupt（等价于 Python 的 proc.terminate()）
 	if err := proc.Signal(os.Interrupt); err != nil {
-		logger.Warn(logComponent).Int("pid", proc.Pid).Err(err).Msg("Windows Interrupt 失败，尝试直接 Kill")
+		logger.Warn(logComponent).Int("pid", proc.Pid).Err(err).Msg("Windows Interrupt failed, trying direct Kill")
 		if killErr := proc.Kill(); killErr != nil {
-			logger.Warn(logComponent).Int("pid", proc.Pid).Err(killErr).Msg("Windows Kill 失败")
+			logger.Warn(logComponent).Int("pid", proc.Pid).Err(killErr).Msg("Windows Kill failed")
 			return false
 		}
 		waitProcessWithTimeout(proc, forceKillWait)
@@ -69,7 +69,7 @@ func terminateShellProcessWindows(proc *os.Process) bool {
 
 	// 阶段 2：超时，强制 Kill
 	if err := proc.Kill(); err != nil {
-		logger.Warn(logComponent).Int("pid", proc.Pid).Err(err).Msg("Windows 强制 Kill 失败")
+		logger.Warn(logComponent).Int("pid", proc.Pid).Err(err).Msg("Windows force Kill failed")
 		return false
 	}
 	waitProcessWithTimeout(proc, forceKillWait)

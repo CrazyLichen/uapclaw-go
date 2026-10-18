@@ -14,8 +14,6 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var factoryLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildPermissionInterruptRail 若 permissions.enabled 为真则创建护栏，否则返回 nil。
@@ -43,7 +41,7 @@ func BuildPermissionInterruptRail(
 		}
 	}
 	if !enabled {
-		logger.Debug(factoryLogComponent).Msg("build_permission_interrupt_rail: permissions.enabled=false，跳过创建")
+		logger.Debug(logComponent).Msg("build_permission_interrupt_rail: permissions.enabled=false, skipping creation")
 		return nil
 	}
 

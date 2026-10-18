@@ -386,7 +386,7 @@ func (sm *SessionManager) handleTaskFailure(sessionID string, taskErr error) {
 		Str("session_id", sessionID).
 		Str("event_type", "TASK_FAILED").
 		Err(taskErr).
-		Msg("Session 任务失败，需上游处理状态更新和事件发布")
+		Msg("session task failed, upstream should handle status update and event publishing")
 }
 
 // cleanupSession 清理 session 相关的所有 map 条目。

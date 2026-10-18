@@ -54,8 +54,6 @@ const (
 // _ 编译时验证 TaskCompletionRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*TaskCompletionRail)(nil)
 
-var taskCompLogComponent = logger.ComponentAgentCore
-
 var promiseTagPattern = regexp.MustCompile(`(?i)(?s)<promise>\s*(.*?)\s*</promise>`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -147,10 +145,10 @@ func (r *TaskCompletionRail) BeforeModelCall(_ context.Context, cbc *agentinterf
 	section := sections.BuildCompletionSignalSection(r.completionPromise, lang)
 	builder.AddSection(section)
 
-	logger.Debug(taskCompLogComponent).
+	logger.Debug(logComponent).
 		Str("event_type", "task_completion_before_model_call").
 		Str("completion_promise", r.completionPromise).
-		Msg("已注入完成信号提示词节")
+		Msg("completion signal prompt section injected")
 	return nil
 }
 
@@ -174,9 +172,9 @@ func (r *TaskCompletionRail) BeforeTaskIteration(_ context.Context, cbc *agentin
 	// Python: inputs.query = self.task_instruction.format(query=query)
 	inputs.Query = strings.ReplaceAll(r.taskInstruction, "{query}", inputs.Query)
 
-	logger.Debug(taskCompLogComponent).
+	logger.Debug(logComponent).
 		Str("event_type", "task_completion_before_task_iteration").
-		Msg("已格式化首轮任务指令")
+		Msg("first round task instruction formatted")
 	return nil
 }
 
@@ -209,10 +207,10 @@ func (r *TaskCompletionRail) AfterTaskIteration(_ context.Context, cbc *agentint
 		matched = expected
 	}
 
-	logger.Info(taskCompLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "task_completion_promise_fulfilled").
 		Str("matched", matched).
-		Msg("任务完成承诺已满足")
+		Msg("task completion promise satisfied")
 
 	notifyEvaluator(cbc, matched)
 	return nil
@@ -308,25 +306,25 @@ func notifyEvaluator(cbc *agentinterfaces.AgentCallbackContext, text string) {
 	// 通过 DeepAgentInterface 获取 LoopCoordinator
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if !ok {
-		logger.Warn(taskCompLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "task_completion_notify_evaluator_skip").
 			Str("agent_type", fmt.Sprintf("%T", agent)).
-			Msg("agent 未实现 DeepAgentInterface，无法通知 CompletionPromiseEvaluator")
+			Msg("agent does not implement DeepAgentInterface, cannot notify CompletionPromiseEvaluator")
 		return
 	}
 	coord := deepAgent.LoopCoordinator()
 	if coord == nil {
-		logger.Warn(taskCompLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "task_completion_notify_evaluator_skip").
-			Msg("LoopCoordinator 为 nil，无法通知 CompletionPromiseEvaluator")
+			Msg("LoopCoordinator is nil, cannot notify CompletionPromiseEvaluator")
 		return
 	}
 
 	ev := coord.GetCompletionPromiseEvaluator()
 	if ev == nil {
-		logger.Warn(taskCompLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "task_completion_notify_evaluator_skip").
-			Msg("CompletionPromiseEvaluator 为 nil，无法通知")
+			Msg("CompletionPromiseEvaluator is nil, cannot notify")
 		return
 	}
 	ev.NotifyFulfilled(text)

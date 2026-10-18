@@ -50,7 +50,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 			logger.Error(logComponent).
 				Str("path", path).
 				Err(filesErr).
-				Msg("ListDirTool ListFiles 调用失败")
+				Msg("ListDirTool ListFiles call failed")
 			return map[string]any{
 				"success": false,
 				"error":   "列出文件失败: " + filesErr.Error(),
@@ -60,7 +60,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 			logger.Error(logComponent).
 				Str("path", path).
 				Err(dirsErr).
-				Msg("ListDirTool ListDirectories 调用失败")
+				Msg("ListDirTool ListDirectories call failed")
 			return map[string]any{
 				"success": false,
 				"error":   "列出目录失败: " + dirsErr.Error(),
@@ -73,7 +73,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 			logger.Error(logComponent).
 				Str("path", path).
 				Str("message", filesRes.Message).
-				Msg("ListDirTool ListFiles 返回失败")
+				Msg("ListDirTool ListFiles returned failure")
 			return map[string]any{
 				"success": false,
 				"error":   "列出文件失败: " + filesRes.Message,
@@ -83,7 +83,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 			logger.Error(logComponent).
 				Str("path", path).
 				Str("message", dirsRes.Message).
-				Msg("ListDirTool ListDirectories 返回失败")
+				Msg("ListDirTool ListDirectories returned failure")
 			return map[string]any{
 				"success": false,
 				"error":   "列出目录失败: " + dirsRes.Message,
@@ -134,7 +134,7 @@ func NewListDirTool(op sys_operation.SysOperation, language, agentID string) too
 			Str("path", path).
 			Int("file_count", len(files)).
 			Int("dir_count", len(dirs)).
-			Msg("ListDirTool 列出目录成功")
+			Msg("ListDirTool listed directory")
 
 		// Python: L1522-1528
 		return map[string]any{

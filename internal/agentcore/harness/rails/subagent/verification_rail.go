@@ -155,7 +155,7 @@ func (r *VerificationRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 	r.promptBuilder = agent.SystemPromptBuilder()
 	logger.Info(logComponent).
 		Int("allowed_tools_count", len(r.allowedTools)).
-		Msg("[VerificationRail] 已初始化")
+		Msg("[VerificationRail] initialized")
 	return nil
 }
 
@@ -190,7 +190,7 @@ func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 
 	logger.Debug(logComponent).
 		Str("language", r.promptBuilder.Language()).
-		Msg("[VerificationRail] 已注入约束提醒 section")
+		Msg("[VerificationRail] constraint reminder section injected")
 
 	return nil
 }
@@ -237,7 +237,7 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 		)
 		logger.Info(logComponent).
 			Str("tool_name", toolName).
-			Msg("[VerificationRail] 已拦截工具")
+			Msg("[VerificationRail] tool intercepted")
 
 		r.rejectTool(cbc, toolCallInputs, errorMsg)
 		return nil
@@ -286,7 +286,7 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 				Str("raw_path", rawPath).
 				Str("tool_name", toolName).
 				Str("workspace_root", root).
-				Msg("[VerificationRail] 已拦截超出工作空间范围的路径")
+				Msg("[VerificationRail] intercepted path outside workspace scope")
 
 			r.rejectTool(cbc, toolCallInputs, errorMsg)
 		}

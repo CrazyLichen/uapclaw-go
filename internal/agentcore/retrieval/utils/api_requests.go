@@ -35,15 +35,19 @@ type RetryConfig struct {
 // Python: Literal["Reranker", "Embedding"]
 type TaskName string
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent 日志组件标识
-const logComponent = logger.ComponentAgentCore
 const (
 	// TaskReranker 重排序任务
 	TaskReranker TaskName = "Reranker"
 	// TaskEmbedding 嵌入任务
 	TaskEmbedding TaskName = "Embedding"
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
+
+const (
 	// defaultMaxRetries 默认最大重试次数
 	defaultMaxRetries = 3
 	// defaultRetryWait 默认重试等待基数
@@ -215,7 +219,7 @@ func handleResponseByStatus(resp *http.Response, body []byte, task TaskName) (ma
 			Str("event_type", "api_request_error").
 			Str("task", string(task)).
 			Str("response", string(body)).
-			Msg("API 请求错误")
+			Msg("API request error")
 
 		// 检测审查内容关键词，对齐 Python
 		var respJSON map[string]any
@@ -232,7 +236,7 @@ func handleResponseByStatus(resp *http.Response, body []byte, task TaskName) (ma
 					logger.Warn(logComponent).
 						Str("event_type", "censored_content").
 						Str("task", string(task)).
-						Msg("请求可能包含被审查的内容")
+						Msg("request may contain moderated content")
 					break
 				}
 			}
@@ -271,7 +275,7 @@ func raiseErrors(task TaskName, maxRetries int, respStr string, resp *http.Respo
 		Str("task", string(task)).
 		Int("max_retries", maxRetries).
 		Str("response", respStr).
-		Msg("API 请求重试耗尽")
+		Msg("API request retries exhausted")
 
 	if resp != nil {
 		// 有 HTTP 响应 → RequestCallFailed

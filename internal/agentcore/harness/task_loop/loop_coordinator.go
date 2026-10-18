@@ -86,7 +86,7 @@ func (lc *LoopCoordinator) ShouldContinue() bool {
 						Str("evaluator", ev.Name()).
 						Any("panic", r).
 						Str("stack", string(buf[:n])).
-						Msg("评估器 panic，跳过")
+						Msg("evaluator panicked, skipping")
 				}
 			}()
 			stopped = ev.ShouldStop(ctx)
@@ -95,7 +95,7 @@ func (lc *LoopCoordinator) ShouldContinue() bool {
 			lc.stopReason = ev.Name()
 			logger.Info(logComponent).
 				Str("stop_condition", ev.Name()).
-				Msg("满足停止条件")
+				Msg("stop condition satisfied")
 			return false
 		}
 	}

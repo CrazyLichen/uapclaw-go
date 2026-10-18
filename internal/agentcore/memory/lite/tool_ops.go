@@ -89,7 +89,7 @@ func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, qu
 	}
 	results, err := toolCtx.Manager.Search(ctx, query, opts)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("记忆搜索失败")
+		logger.Error(logComponent).Err(err).Msg("memory search failed")
 		return &MemorySearchResult{Disabled: true, Error: err.Error()}
 	}
 	// 添加 citation 字段。对齐 Python: r["citation"] = f"{r['path']}#L{r['start_line']}"
@@ -131,7 +131,7 @@ func MemoryGetWithContext(ctx context.Context, toolCtx *MemoryToolContext, path 
 	}
 	rf, err := toolCtx.Manager.ReadFile(ctx, resolvedPath, fromLine, lines)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("记忆获取失败")
+		logger.Error(logComponent).Err(err).Msg("memory get failed")
 		return &MemoryGetResult{Path: resolvedPath, Disabled: true, Error: err.Error()}
 	}
 	return &MemoryGetResult{
@@ -154,7 +154,7 @@ func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	fullPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logComponent).Msg("读取记忆失败，无可用的系统操作接口")
+		logger.Error(logComponent).Msg("memory read failed, no available sys_operation interface")
 		return &ReadMemoryResult{Success: false, Path: path, Error: "读取失败，无可用的系统操作接口"}
 	}
 	// Python: 使用 line_range 读取
@@ -200,7 +200,7 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 	resolvedPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logComponent).Msg("记忆写入失败，无可用的系统操作接口")
+		logger.Error(logComponent).Msg("memory write failed, no available sys_operation interface")
 		return &WriteMemoryResult{Success: false, Path: path, Error: "记忆写入失败，无可用的系统操作接口"}
 	}
 	fsOpts := []sysop.FsOption{
@@ -213,7 +213,7 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 	}
 	writeResult, err := sysOp.Fs().WriteFile(ctx, resolvedPath, content, fsOpts...)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("写入失败")
+		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("write failed")
 		return &WriteMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
 	fileExisted := writeResult != nil && writeResult.Data != nil && writeResult.Data.Size > 0
@@ -221,7 +221,7 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 	if appendMode {
 		action = "追加到"
 	}
-	logger.Info(logComponent).Str("action", action).Str("path", resolvedPath).Msg("记忆文件已写入")
+	logger.Info(logComponent).Str("action", action).Str("path", resolvedPath).Msg("memory file written")
 	return &WriteMemoryResult{
 		Success:     true,
 		Path:        resolvedPath,
@@ -244,7 +244,7 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	resolvedPath := result
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logComponent).Msg("编辑失败，无可用的系统操作接口")
+		logger.Error(logComponent).Msg("edit failed, no available sys_operation interface")
 		return &EditMemoryResult{Success: false, Path: path, Error: "编辑失败，无可用的系统操作接口"}
 	}
 	readResult, err := sysOp.Fs().ReadFile(ctx, resolvedPath)
@@ -274,10 +274,10 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 		sysop.WithFsAppendNewline(false),
 	)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("编辑写入失败")
+		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("edit write failed")
 		return &EditMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
-	logger.Info(logComponent).Str("path", resolvedPath).Msg("文件已编辑")
+	logger.Info(logComponent).Str("path", resolvedPath).Msg("file edited")
 	return &EditMemoryResult{
 		Success:  true,
 		Path:     resolvedPath,

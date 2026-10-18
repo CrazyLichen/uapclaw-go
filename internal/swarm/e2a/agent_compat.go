@@ -61,7 +61,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 			logger.Error(logComponent).
 				Str("method", methodStr).
 				Str("request_id", env.RequestID).
-				Msg("未知 E2A 方法")
+				Msg("unknown E2A method")
 			return nil, fmt.Errorf("未知 E2A 方法 %q: %w", methodStr, err)
 		}
 		reqMethod = rm

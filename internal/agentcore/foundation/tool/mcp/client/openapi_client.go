@@ -113,7 +113,7 @@ func (c *OpenApiClient) Connect(_ context.Context, _ ...types.ConnectOption) err
 				Str("server_name", c.serverName).
 				Str("file_path", filePath).
 				Err(err).
-				Msg("OpenAPI 规格文件加载失败")
+				Msg("failed to load OpenAPI spec file")
 			return exception.BuildError(
 				exception.StatusToolOpenapiClientExecutionError,
 				exception.WithParam("reason", fmt.Sprintf("加载 OpenAPI 文件失败: %v", err)),
@@ -157,7 +157,7 @@ func (c *OpenApiClient) Connect(_ context.Context, _ ...types.ConnectOption) err
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Int("tool_count", len(c.tools)).
-		Msg("OpenAPI 客户端连接成功")
+		Msg("OpenAPI client connected")
 	return nil
 }
 
@@ -172,7 +172,7 @@ func (c *OpenApiClient) Disconnect(_ context.Context) error {
 	c.toolCards = nil
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
-		Msg("OpenAPI 客户端已断开连接")
+		Msg("OpenAPI client disconnected")
 	return nil
 }
 
@@ -209,7 +209,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 		Str("tool_name", toolName).
 		Str("method", info.method).
 		Str("path", info.path).
-		Msg("OpenAPI 调用工具")
+		Msg("OpenAPI calling tool")
 
 	// 使用 Schema 驱动的请求构建
 	req, err := buildRequestFromSchema(info.method, c.baseURL, info.path, info.parameters, info.requestBody, arguments)
@@ -219,7 +219,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
 			Err(err).
-			Msg("OpenAPI 请求构建失败")
+			Msg("OpenAPI failed to build request")
 		return nil, exception.BuildError(
 			exception.StatusToolOpenapiClientExecutionError,
 			exception.WithParam("reason", fmt.Sprintf("构建请求失败: %v", err)),
@@ -234,7 +234,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
 			Err(err).
-			Msg("OpenAPI HTTP 请求失败")
+			Msg("OpenAPI HTTP request failed")
 		return nil, exception.BuildError(
 			exception.StatusToolOpenapiClientExecutionError,
 			exception.WithParam("reason", fmt.Sprintf("HTTP 请求失败: %v", err)),
@@ -250,7 +250,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
 			Err(err).
-			Msg("OpenAPI 读取响应失败")
+			Msg("OpenAPI failed to read response")
 		return nil, exception.BuildError(
 			exception.StatusToolOpenapiClientExecutionError,
 			exception.WithParam("reason", fmt.Sprintf("读取响应失败: %v", err)),
@@ -261,7 +261,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
 		Int("status_code", resp.StatusCode).
-		Msg("OpenAPI 工具调用完成")
+		Msg("OpenAPI tool call completed")
 
 	// HTTP 错误处理：4xx/5xx 返回结构化错误
 	if resp.StatusCode >= 400 {
@@ -484,7 +484,7 @@ func (c *OpenApiClient) getUniqueName(name string) string {
 	logger.Debug(logComponent).
 		Str("original_name", name).
 		Str("new_name", newName).
-		Msg("OpenAPI 工具名称冲突，已重命名")
+		Msg("OpenAPI tool name conflict, renamed")
 	return newName
 }
 
@@ -1305,7 +1305,7 @@ func loadOpenAPISpec(filePath string) (*openapi3.T, error) {
 		logger.Warn(logComponent).
 			Str("file_path", filePath).
 			Err(err).
-			Msg("OpenAPI 规格验证有警告，继续使用")
+			Msg("OpenAPI spec validation warnings, continuing")
 	}
 
 	return spec, nil

@@ -130,7 +130,7 @@ func NewSessionModelContext(
 			Str("context_id", contextID).
 			Str("session_id", sessionID).
 			Err(err).
-			Msg("历史消息校验失败")
+			Msg("history messages validation failed")
 	}
 	// 2. 确保消息 ID
 	EnsureContextMessageIDs(historyMessages)
@@ -189,7 +189,7 @@ func NewSessionModelContext(
 		Int("processor_count", len(processors)).
 		Bool("enable_reload", mc.enableReload).
 		Bool("enable_kv_cache_release", mc.kvCacheManager != nil).
-		Msg("SessionModelContext 已创建")
+		Msg("SessionModelContext created")
 
 	return mc
 }
@@ -221,7 +221,7 @@ func (mc *SessionModelContext) SetMessages(messages []llm_schema.BaseMessage, wi
 			Str("event_type", "CONTEXT_SET_MESSAGES_VALIDATE_ERROR").
 			Str("context_id", mc.contextID).
 			Err(err).
-			Msg("设置消息校验失败")
+			Msg("set messages validation failed")
 		return
 	}
 	EnsureContextMessageIDs(messages)
@@ -238,7 +238,7 @@ func (mc *SessionModelContext) PopMessages(size int, withHistory bool) []llm_sch
 			Str("event_type", "CONTEXT_POP_MESSAGES_INVALID_SIZE").
 			Str("context_id", mc.contextID).
 			Int("size", size).
-			Msg("PopMessages size 不能为负数")
+			Msg("PopMessages size cannot be negative")
 		return nil
 	}
 	return mc.messageBuffer.PopBack(size, withHistory)
@@ -275,7 +275,7 @@ func (mc *SessionModelContext) ClearMessages(ctx context.Context, withHistory bo
 		Str("context_id", mc.contextID).
 		Str("session_id", mc.sessionID).
 		Int("cleared_count", totalSize).
-		Msg("上下文消息已清空")
+		Msg("context messages cleared")
 
 	return nil
 }
@@ -300,7 +300,7 @@ func (mc *SessionModelContext) AddMessages(ctx context.Context, messages []llm_s
 				Str("event_type", "CONTEXT_ADD_MESSAGES_FAST_PATH").
 				Str("context_id", mc.contextID).
 				Int("message_count", len(messages)).
-				Msg("主动压缩进行中，消息仅入队")
+				Msg("active compression in progress, messages enqueued only")
 		} else {
 			locked = true
 		}
@@ -414,7 +414,7 @@ func (mc *SessionModelContext) GetContextWindow(
 				Str("processor", proc.ProcessorType()).
 				Str("context_id", mc.contextID).
 				Err(err).
-				Msg("处理器触发判断失败")
+				Msg("processor trigger check failed")
 			continue
 		}
 		if !triggered {
@@ -449,7 +449,7 @@ func (mc *SessionModelContext) GetContextWindow(
 				Str("processor", proc.ProcessorType()).
 				Str("context_id", mc.contextID).
 				Err(err).
-				Msg("处理器执行失败")
+				Msg("processor execution failed")
 
 			// ② 发射 failed 状态
 			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
@@ -518,7 +518,7 @@ func (mc *SessionModelContext) GetContextWindow(
 				Str("event_type", "KV_CACHE_RELEASE_ERROR").
 				Str("context_id", mc.contextID).
 				Err(err).
-				Msg("KV 缓存释放失败")
+				Msg("failed to release KV cache")
 		}
 	}
 
@@ -584,7 +584,7 @@ func (mc *SessionModelContext) ReloaderTool() tool.Tool {
 		logger.Error(logComponent).
 			Str("event_type", "RELOADER_TOOL_CREATE_ERROR").
 			Err(err).
-			Msg("创建 reloader tool 失败")
+			Msg("failed to create reloader tool")
 		return nil
 	}
 
@@ -665,7 +665,7 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 					Str("event_type", "CONTEXT_LOAD_STATE_VALIDATE_ERROR").
 					Str("context_id", mc.contextID).
 					Err(err).
-					Msg("恢复消息校验失败")
+					Msg("restore messages validation failed")
 				return
 			}
 			EnsureContextMessageIDs(messages)
@@ -708,7 +708,7 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 	logger.Info(logComponent).
 		Str("event_type", "CONTEXT_LOAD_STATE").
 		Str("context_id", mc.contextID).
-		Msg("上下文状态已恢复")
+		Msg("context state restored")
 }
 
 // CompressContext 主动压缩上下文。
@@ -725,7 +725,7 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 		logger.Warn(logComponent).
 			Str("event_type", "CONTEXT_COMPRESS_BUSY").
 			Str("context_id", mc.contextID).
-			Msg("上下文压缩忙，跳过")
+			Msg("context compression busy, skipped")
 
 		// 发射 skipped 状态，对齐 Python: status="skipped", reason="busy"
 		mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
@@ -775,7 +775,7 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 		logger.Info(logComponent).
 			Str("event_type", "CONTEXT_COMPRESS_NOOP").
 			Str("context_id", mc.contextID).
-			Msg("无压缩处理器，跳过主动压缩")
+			Msg("no compression processors, skipping active compression")
 		return mc.buildActiveCompressionResult("noop", historyStart, opts...), nil
 	}
 
@@ -794,7 +794,7 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 			Err(err).
 			Str("event_type", "CONTEXT_COMPRESS_ERROR").
 			Str("context_id", mc.contextID).
-			Msg("主动压缩执行处理器失败")
+			Msg("active compression failed to run processors")
 		return &iface.CompressContextResult{Result: "error"}, err
 	}
 
@@ -811,7 +811,7 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 		Str("event_type", "CONTEXT_COMPRESS_DONE").
 		Str("context_id", mc.contextID).
 		Str("result", resultStatus).
-		Msg("主动压缩完成")
+		Msg("active compression completed")
 
 	return mc.buildActiveCompressionResult(resultStatus, historyStart, opts...), nil
 }
@@ -855,7 +855,7 @@ func (mc *SessionModelContext) runAddProcessors(
 					Str("processor", proc.ProcessorType()).
 					Str("context_id", mc.contextID).
 					Err(err).
-					Msg("处理器触发判断失败")
+					Msg("processor trigger check failed")
 				continue
 			}
 		}
@@ -892,7 +892,7 @@ func (mc *SessionModelContext) runAddProcessors(
 				Str("processor", proc.ProcessorType()).
 				Str("context_id", mc.contextID).
 				Err(err).
-				Msg("处理器执行失败")
+				Msg("processor execution failed")
 
 			// 构建失败状态
 			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
@@ -1251,5 +1251,5 @@ func (r *ProcessorStateRecorder) recordFromEvent(event *iface.ContextEvent) {
 		Str("event_type", event.EventType).
 		Int("messages_to_modify_count", len(event.MessagesToModify)).
 		Str("compact_summary", event.CompactSummary).
-		Msg("处理器事件")
+		Msg("processor event")
 }

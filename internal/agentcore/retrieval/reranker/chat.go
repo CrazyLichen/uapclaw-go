@@ -59,7 +59,7 @@ func NewChatReranker(config reranker.RerankerConfig, opts ...StandardRerankerOpt
 	logger.Warn(logComponent).
 		Str("event_type", "chat_reranker_experimental").
 		Str("version", version.Version).
-		Msg("ChatReranker 支持处于实验阶段，请注意")
+		Msg("ChatReranker support is experimental, please be aware")
 
 	// 校验 YesNoIDs
 	if config.YesNoIDs == [2]int{} {
@@ -93,7 +93,7 @@ func (c *ChatReranker) TestCompatibility(ctx context.Context) (bool, error) {
 		logger.Error(logComponent).
 			Str("event_type", "chat_reranker_compatibility_error").
 			Err(err).
-			Msg("所选服务不支持基于 chat completion 的重排序")
+			Msg("selected service does not support chat completion based reranking")
 		return false, err
 	}
 	return true, nil
@@ -225,7 +225,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 		logger.Warn(logComponent).
 			Str("event_type", "chat_reranker_parse_degrade").
 			Str("reason", "响应中无 choices").
-			Msg("parseResponse 降级：返回默认分数")
+			Msg("parseResponse fallback: returning default scores")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 	choice, ok := choices[0].(map[string]any)
@@ -233,7 +233,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 		logger.Warn(logComponent).
 			Str("event_type", "chat_reranker_parse_degrade").
 			Str("reason", "choices[0] 类型断言失败").
-			Msg("parseResponse 降级：返回默认分数")
+			Msg("parseResponse fallback: returning default scores")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 
@@ -245,7 +245,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 			Str("event_type", "llm_call_error").
 			Str("method", "ChatReranker.parseResponse").
 			Str("model_provider", c.config.ModelName).
-			Msg("服务不支持 logprobs，ChatReranker 无法工作")
+			Msg("service does not support logprobs, ChatReranker cannot work")
 		return nil, exception.BuildError(
 			exception.StatusRetrievalRerankerRequestCallFailed,
 			exception.WithParam("error_msg", "服务不支持 logprobs，ChatReranker 无法工作"),
@@ -258,7 +258,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 		logger.Warn(logComponent).
 			Str("event_type", "chat_reranker_parse_degrade").
 			Str("reason", "logprobs 中无 content").
-			Msg("parseResponse 降级：返回默认分数")
+			Msg("parseResponse fallback: returning default scores")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 
@@ -268,7 +268,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 		logger.Warn(logComponent).
 			Str("event_type", "chat_reranker_parse_degrade").
 			Str("reason", "content[0] 类型断言失败").
-			Msg("parseResponse 降级：返回默认分数")
+			Msg("parseResponse fallback: returning default scores")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 	topLogprobsList, ok := topLogprobs["top_logprobs"].([]any)
@@ -276,7 +276,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 		logger.Warn(logComponent).
 			Str("event_type", "chat_reranker_parse_degrade").
 			Str("reason", "无 top_logprobs").
-			Msg("parseResponse 降级：返回默认分数")
+			Msg("parseResponse fallback: returning default scores")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 
@@ -307,7 +307,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 		logger.Warn(logComponent).
 			Str("event_type", "chat_reranker_parse_degrade").
 			Str("reason", "yes/no 概率均为零").
-			Msg("parseResponse 降级：返回默认分数")
+			Msg("parseResponse fallback: returning default scores")
 		return map[string]float64{docID: 0.0}, nil
 	}
 
@@ -337,7 +337,7 @@ func (c *ChatReranker) doRerank(ctx context.Context, query string, docs []any, o
 			Str("method", "ChatRerank").
 			Str("model_provider", c.config.ModelName).
 			Err(err).
-			Msg("ChatReranker 请求失败")
+			Msg("ChatReranker request failed")
 		return nil, err
 	}
 
@@ -367,7 +367,7 @@ func (c *ChatReranker) doRerankSync(ctx context.Context, query string, docs []an
 			Str("method", "ChatRerankSync").
 			Str("model_provider", c.config.ModelName).
 			Err(err).
-			Msg("ChatReranker 同步请求失败")
+			Msg("ChatReranker sync request failed")
 		return nil, err
 	}
 

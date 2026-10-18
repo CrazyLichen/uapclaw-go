@@ -26,7 +26,7 @@ import (
 // RuntimePromptRail 运行时提示词护栏 — 在 before_model_call 中注入时间及运行时状态。
 //
 // 在每次 LLM 调用前动态注入 7 个 PromptSection：
-// time/runtime/language_output/env/git_status/browser_tool_policy/trusted_dirs_policy
+// 包含 time/runtime/language_output/env/git_status/browser_tool_policy/trusted_dirs_policy 节
 // （即时间、运行时、语言输出、环境、Git 状态、浏览器工具策略、信任目录策略），
 // 确保 LLM 无需工具调用即可感知当前运行时环境。
 //
@@ -96,9 +96,6 @@ var modeDisplayMap = map[string]map[string]string{
 	"agent.fast": {"cn": "性能模式", "en": "Performance Mode"},
 	"team":       {"cn": "集群模式", "en": "Cluster Mode"},
 }
-
-// runtimeLogComponent 日志组件标识
-var runtimeLogComponent = logger.ComponentAgentServer
 
 // _ 编译时验证 RuntimePromptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*RuntimePromptRail)(nil)
@@ -292,8 +289,8 @@ func WriteRuntimeStateYAML(ctx context.Context, modelName, mode, language, chann
 		"channel":  channel,
 		"agent":    agentName,
 		// 对齐 Python: "platform": f"{platform.system()} {platform.machine()}"
-		// Python platform.system() → runtime.GOOS 首字母大写
-		// Python platform.machine() → runtime.GOARCH
+		// 对齐 Python platform.system()：runtime.GOOS 首字母大写
+		// 对齐 Python platform.machine()：runtime.GOARCH
 		"platform":           fmt.Sprintf("%s %s", capitalizeOS(runtime.GOOS), runtime.GOARCH),
 		"go_version":         runtime.Version(),
 		"git_branch":         gitBranch,
@@ -305,14 +302,14 @@ func WriteRuntimeStateYAML(ctx context.Context, modelName, mode, language, chann
 
 	yamlData, err := yaml.Marshal(state)
 	if err != nil {
-		logger.Debug(runtimeLogComponent).Err(err).Msg("Failed to serialize runtime_state.yaml")
+		logger.Debug(logComponent).Err(err).Msg("Failed to serialize runtime_state.yaml")
 		return
 	}
 
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
 	if err := os.WriteFile(yamlPath, yamlData, 0644); err != nil {
-		logger.Debug(runtimeLogComponent).Err(err).Msg("Failed to write runtime_state.yaml")
+		logger.Debug(logComponent).Err(err).Msg("Failed to write runtime_state.yaml")
 	}
 }
 
@@ -647,7 +644,7 @@ func (r *RuntimePromptRail) injectTrustedDirsPolicySection(builder saprompt.Syst
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // capitalizeOS 将 runtime.GOOS 首字母大写，对齐 Python platform.system()。
-// "linux" → "Linux", "darwin" → "Darwin", "windows" → "Windows"
+// 示例："linux" → "Linux", "darwin" → "Darwin", "windows" → "Windows"
 func capitalizeOS(osName string) string {
 	if len(osName) > 0 {
 		return strings.ToUpper(osName[:1]) + osName[1:]
@@ -702,13 +699,13 @@ func readRuntimeStateYAML() map[string]string {
 	data, err := os.ReadFile(yamlPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logger.Warn(runtimeLogComponent).Err(err).Msg("Failed to read runtime_state.yaml")
+			logger.Warn(logComponent).Err(err).Msg("Failed to read runtime_state.yaml")
 		}
 		return make(map[string]string)
 	}
 	var raw map[string]any
 	if err := yaml.Unmarshal(data, &raw); err != nil {
-		logger.Warn(runtimeLogComponent).Err(err).Msg("Failed to parse runtime_state.yaml")
+		logger.Warn(logComponent).Err(err).Msg("Failed to parse runtime_state.yaml")
 		return make(map[string]string)
 	}
 	result := make(map[string]string, len(raw))

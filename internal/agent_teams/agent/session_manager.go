@@ -44,11 +44,6 @@ type SessionManager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// sessionMgrLogComponent 日志组件
-	sessionMgrLogComponent = logger.ComponentAgentCore
-)
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -124,9 +119,9 @@ func (m *SessionManager) BindSession(
 	// Python: if team_backend: await team_backend.db.create_cur_session_tables()
 	if teamBackend := m.configurator.TeamBackend(); teamBackend != nil {
 		if err := teamBackend.DB().CreateCurSessionTables(ctx); err != nil {
-			logger.Warn(sessionMgrLogComponent).Err(err).
+			logger.Warn(logComponent).Err(err).
 				Str("session_id", sessionID).
-				Msg("创建会话表失败")
+				Msg("failed to create session tables")
 		}
 	}
 
@@ -136,11 +131,11 @@ func (m *SessionManager) BindSession(
 		if sf, ok := session.(interfaces.SessionFacade); ok {
 			m.recoveryManager.PersistLeaderConfig(sf)
 		} else {
-			logger.Warn(sessionMgrLogComponent).Msg("BindSession: session 未实现 SessionFacade，跳过持久化 Leader 配置")
+			logger.Warn(logComponent).Msg("BindSession: session does not implement SessionFacade, skipping Leader config persistence")
 		}
 	}
 
-	logger.Info(sessionMgrLogComponent).
+	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Msg("SessionManager.BindSession")
 
@@ -168,7 +163,7 @@ func (m *SessionManager) ReleaseSession(ctx context.Context) error {
 	// Python: state.team_session = None
 	m.state.TeamSession = nil
 
-	logger.Info(sessionMgrLogComponent).
+	logger.Info(logComponent).
 		Msg("SessionManager.ReleaseSession")
 	return nil
 }

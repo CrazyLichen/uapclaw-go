@@ -79,9 +79,6 @@ const (
 // _ 编译时验证 BaseInterruptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*BaseInterruptRail)(nil)
 
-// interruptLogComponent 日志组件
-var interruptLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseInterruptRail 创建中断拦截基础 Rail 实例。
@@ -278,10 +275,10 @@ func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackConte
 	}
 
 	// Python: logger.info：提取用户输入日志
-	logger.Info(interruptLogComponent).
+	logger.Info(logComponent).
 		Str("tool_call_id", toolCallID).
 		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
-		Msg("提取用户输入")
+		Msg("extracting user input")
 
 	// InteractiveInput 格式
 	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {
@@ -290,7 +287,7 @@ func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackConte
 		for k := range interactive.UserInputs {
 			keys = append(keys, k)
 		}
-		logger.Info(interruptLogComponent).
+		logger.Info(logComponent).
 			Str("tool_call_id", toolCallID).
 			Strs("keys", keys).
 			Msg("InteractiveInput.user_inputs")
@@ -301,16 +298,16 @@ func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackConte
 			if len(valRepr) > 200 {
 				valRepr = valRepr[:200]
 			}
-			logger.Info(interruptLogComponent).
+			logger.Info(logComponent).
 				Str("tool_call_id", toolCallID).
 				Str("value", valRepr).
-				Msg("InteractiveInput 匹配成功")
+				Msg("InteractiveInput matched")
 			return val
 		}
-		logger.Warn(interruptLogComponent).
+		logger.Warn(logComponent).
 			Str("tool_call_id", toolCallID).
 			Strs("keys", keys).
-			Msg("InteractiveInput 中未找到匹配的 tool_call_id")
+			Msg("no matching tool_call_id found in InteractiveInput")
 		return nil
 	}
 

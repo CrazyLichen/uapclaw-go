@@ -39,13 +39,13 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 	if name == "" || !validNameRe.MatchString(name) {
 		logger.Error(logComponent).
 			Str("name", name).
-			Msg("[EvolutionStore] create_skill: 无效名称")
+			Msg("[EvolutionStore] create_skill: invalid name")
 		return "", nil
 	}
 	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
 		logger.Error(logComponent).
 			Str("name", name).
-			Msg("[EvolutionStore] create_skill: 路径遍历尝试")
+			Msg("[EvolutionStore] create_skill: path traversal attempt")
 		return "", nil
 	}
 
@@ -53,7 +53,7 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 	if skillDir == "" {
 		logger.Error(logComponent).
 			Str("name", name).
-			Msg("[EvolutionStore] create_skill: 无法解析技能目录")
+			Msg("[EvolutionStore] create_skill: cannot resolve skill directory")
 		return "", nil
 	}
 
@@ -61,7 +61,7 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 		logger.Error(logComponent).
 			Str("name", name).
 			Str("skill_dir", skillDir).
-			Msg("[EvolutionStore] create_skill: 技能已存在")
+			Msg("[EvolutionStore] create_skill: skill already exists")
 		return "", nil
 	}
 
@@ -93,7 +93,7 @@ func (h *StoreArchiveHelper) CreateSkill(ctx context.Context, name string, descr
 	logger.Info(logComponent).
 		Str("name", name).
 		Str("skill_dir", skillDir).
-		Msg("[EvolutionStore] 创建新技能")
+		Msg("[EvolutionStore] creating new skill")
 	return skillDir, nil
 }
 
@@ -121,7 +121,7 @@ func (h *StoreArchiveHelper) ArchiveSkillBody(ctx context.Context, name string) 
 	logger.Info(logComponent).
 		Str("src", filepath.Base(mdPath)).
 		Str("dest", filepath.Base(dest)).
-		Msg("[EvolutionStore] 归档 SKILL.md")
+		Msg("[EvolutionStore] archiving SKILL.md")
 	return filepath.Base(dest), nil
 }
 
@@ -148,7 +148,7 @@ func (h *StoreArchiveHelper) ArchiveEvolutions(ctx context.Context, name string)
 	}
 	logger.Info(logComponent).
 		Str("dest", filepath.Base(dest)).
-		Msg("[EvolutionStore] 归档演进数据")
+		Msg("[EvolutionStore] archiving evolution data")
 	return filepath.Base(dest), nil
 }
 
@@ -164,7 +164,7 @@ func (h *StoreArchiveHelper) ClearEvolutions(ctx context.Context, name string) e
 	}
 	logger.Info(logComponent).
 		Str("skill", name).
-		Msg("[EvolutionStore] 清空演进数据")
+		Msg("[EvolutionStore] clearing evolution data")
 	return nil
 }
 

@@ -625,7 +625,7 @@ func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[s
 		providerConfig := buildOpenJiuwenProviderConfig(cfg, d.configCache)
 		provider := ext.NewOpenJiuwenProvider(providerConfig)
 		if !provider.IsAvailable() {
-			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenJiuwenProvider 不可用")
+			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenJiuwenProvider unavailable")
 			return nil
 		}
 		return provider
@@ -1258,7 +1258,7 @@ func (d *DeepAdapter) requestPermissionConfirmation(req harnesssecurity.Permissi
 			Action: harnesssecurity.ConfirmActionInterrupt,
 		}, nil
 	}
-	// ⤵️ ACP: ACP output manager not implemented, falling back to ConfirmActionInterrupt
+	// ⤵️ ACP：ACP 输出管理器未实现，回退到 ConfirmActionInterrupt
 	toolName := ""
 	if req.ToolCall != nil {
 		toolName = req.ToolCall.Name
@@ -1430,7 +1430,7 @@ func resolveModeMemory(mode string, config map[string]any) map[string]any {
 	var node map[string]any
 
 	if strings.Contains(token, ".") {
-		// "agent.plan" / "agent.fast" -> modes.agent.plan / modes.agent.fast
+		// 含点号的模式（如 "agent.plan" / "agent.fast"）→ modes.agent.plan / modes.agent.fast
 		parts := strings.SplitN(token, ".", 2)
 		top, _ := modesCfg[parts[0]].(map[string]any)
 		if top == nil {
@@ -1440,7 +1440,7 @@ func resolveModeMemory(mode string, config map[string]any) map[string]any {
 	} else if token == "code" {
 		node, _ = modesCfg["code"].(map[string]any)
 	} else {
-		// "plan" / "fast" -> modes.agent.<plan|fast>
+		// 不含点号的模式（如 "plan" / "fast"）→ modes.agent.<plan|fast>
 		agentNode, _ := modesCfg["agent"].(map[string]any)
 		if agentNode == nil {
 			return map[string]any{}
@@ -1617,7 +1617,7 @@ func buildOpenJiuwenProviderConfig(cfg map[string]any, configCache map[string]an
 		embeddingConfig["base_url"] = baseURL
 		embeddingConfig["api_key"] = apiKey
 		if modelName == "" {
-			logger.Warn(logComponent).Msg("buildOpenJiuwenProviderConfig: Embedding 未配置 — LTM 将跳过向量搜索")
+			logger.Warn(logComponent).Msg("buildOpenJiuwenProviderConfig: Embedding not configured — LTM will skip vector search")
 		}
 	}
 

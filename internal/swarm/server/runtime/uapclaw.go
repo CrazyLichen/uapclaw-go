@@ -84,8 +84,6 @@ const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var ()
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithCreateInstanceConfig 设置 CreateInstance 配置。
@@ -131,7 +129,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 		Str("request_id", request.RequestID).
 		Str("channel_id", request.ChannelID).
 		Str("session_id", sessionIDForLog).
-		Msg("处理非流式请求")
+		Msg("processing non-stream request")
 
 	// 1. CANCEL 分支 → 委托 ProcessInterrupt
 	if request.ReqMethod == schema.ReqMethodChatCancel {
@@ -287,7 +285,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		Str("request_id", request.RequestID).
 		Str("channel_id", request.ChannelID).
 		Str("session_id", sessionIDForLog).
-		Msg("处理流式请求")
+		Msg("processing stream request")
 
 	// 1. SkillDev 流式分支
 	if skill.IsSkillDevMethod(request.ReqMethod) {
@@ -332,7 +330,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 			logger.Info(logComponent).
 				Str("event_type", "team_raw_query").
 				Str("raw_query", truncateStr(rawQuery, 100)).
-				Msg("Team 模式使用原始 query")
+				Msg("team mode using original query")
 		}
 	}
 
@@ -513,7 +511,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		logger.Info(logComponent).
 			Str("request_id", request.RequestID).
 			Str("session_id", sessionID).
-			Msg("Auto-Harness resume 请求")
+			Msg("auto-harness resume request")
 	} else {
 		// ⤵️ 10.6.19-23: Team 后续请求绕过 Session 队列（等待 TeamManager）
 		// S09: 缺少 is_team_first_request 判断逻辑，Team 模式下后续请求会错误排队
@@ -637,7 +635,7 @@ func (uc *UapClaw) CreateInstance(opts ...CreateInstanceOption) error {
 		Str("sdk", adapter.ResolveSDKChoice()).
 		Str("mode", cfg.mode).
 		Str("sub_mode", cfg.subMode).
-		Msg("UapClaw Agent 实例已创建")
+		Msg("UapClaw Agent instance created")
 	// 启动 dreaming 后台任务（对齐 Python: interface.py:319-322）
 	if dreamer, ok := a.(adapter.DreamingController); ok {
 		go func() {
@@ -695,7 +693,7 @@ func (uc *UapClaw) CancelInflightWork(reason string) error {
 		if err := aborter.AbortOnGatewayDisconnect(context.Background()); err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "GATEWAY_DISCONNECT_ABORT_FAILED").
-				Msg("adapter.AbortOnGatewayDisconnect 失败")
+				Msg("adapter.AbortOnGatewayDisconnect failed")
 		}
 	}
 	return nil
@@ -849,7 +847,7 @@ func (uc *UapClaw) cancelTeamWorkForSession(sessionID string, channelID string, 
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Str("channel_id", channelID).
-		Msg("cancelTeamWorkForSession 等待 TeamManager 回填（10.6.19-23）")
+		Msg("cancelTeamWorkForSession awaiting TeamManager backfill (10.6.19-23)")
 	return false
 }
 
@@ -882,7 +880,7 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	logger.Info(logComponent).
 		Str("sdk", adapter.ResolveSDKChoice()).
 		Str("mode", mode).
-		Msg("UapClaw adapter 已初始化")
+		Msg("UapClaw adapter initialized")
 	return a, nil
 }
 
@@ -900,7 +898,7 @@ func (uc *UapClaw) ensureSkillDevService() (*skilldev.SkillDevService, error) {
 	svc := skilldev.NewSkillDevService(deps)
 	uc.skilldevService = svc
 	logger.Info(logComponent).
-		Msg("UapClaw SkillDevService 已懒初始化")
+		Msg("UapClaw SkillDevService lazily initialized")
 	return svc, nil
 }
 

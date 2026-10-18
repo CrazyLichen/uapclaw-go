@@ -50,13 +50,13 @@ func (c *PlaywrightClient) Connect(ctx context.Context, opts ...types.ConnectOpt
 		logger.Info(logComponent).
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
-			Msg("Playwright 选择 SSE 传输")
+			Msg("Playwright selected SSE transport")
 		c.delegate = NewSseClient(c.config)
 	} else {
 		logger.Warn(logComponent).
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
-			Msg("ServerPath 不是 HTTP URL，将回退使用 Stdio 传输")
+			Msg("ServerPath is not an HTTP URL, falling back to Stdio transport")
 		c.delegate = NewStdioClient(c.config)
 	}
 
@@ -64,13 +64,13 @@ func (c *PlaywrightClient) Connect(ctx context.Context, opts ...types.ConnectOpt
 		logger.Error(logComponent).
 			Str("server_name", c.serverName).
 			Err(err).
-			Msg("Playwright 连接失败")
+			Msg("Playwright connection failed")
 		return err
 	}
 
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
-		Msg("Playwright 客户端连接成功")
+		Msg("Playwright client connected")
 	return nil
 }
 
@@ -83,12 +83,12 @@ func (c *PlaywrightClient) Disconnect(ctx context.Context) error {
 		logger.Error(logComponent).
 			Str("server_name", c.serverName).
 			Err(err).
-			Msg("Playwright 断开连接失败")
+			Msg("Playwright failed to disconnect")
 		return err
 	}
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
-		Msg("Playwright 客户端已断开连接")
+		Msg("Playwright client disconnected")
 	return nil
 }
 

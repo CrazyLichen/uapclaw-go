@@ -163,7 +163,7 @@ func (s *SqlTeamDatabase) CreateCurSessionTables(ctx context.Context) error {
 	sessionID := sessionctx.GetSessionID(ctx)
 	if sessionID == "" {
 		// Python: team_logger.warning("No session_id in context, cannot create session tables")
-		logger.Warn(logComponent).Msg("上下文中无 session_id，无法创建会话表")
+		logger.Warn(logComponent).Msg("no session_id in context, cannot create session tables")
 		return nil
 	}
 	suffix := SanitizeSessionIDForTable(sessionID)
@@ -171,7 +171,7 @@ func (s *SqlTeamDatabase) CreateCurSessionTables(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("会话动态表已就绪")
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("session dynamic tables ready")
 	return nil
 }
 
@@ -183,12 +183,12 @@ func (s *SqlTeamDatabase) DropCurSessionTables(ctx context.Context) error {
 	}
 	sessionID := sessionctx.GetSessionID(ctx)
 	if sessionID == "" {
-		logger.Warn(logComponent).Msg("上下文中无 session_id，无法删除会话表")
+		logger.Warn(logComponent).Msg("no session_id in context, cannot drop session tables")
 		return nil
 	}
 	suffix := SanitizeSessionIDForTable(sessionID)
 	dropSessionTablesDDL(s.db, suffix)
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("已删除会话动态表")
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("session dynamic tables dropped")
 	return nil
 }
 
@@ -212,7 +212,7 @@ func (s *SqlTeamDatabase) CleanupAllRuntimeState(ctx context.Context) ([]string,
 	for _, name := range tableNames {
 		if isDynamicTable(name) {
 			if dropErr := s.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteTableName(name))).Error; dropErr != nil {
-				logger.Warn(logComponent).Str("table", name).Err(dropErr).Msg("删除动态表失败")
+				logger.Warn(logComponent).Str("table", name).Err(dropErr).Msg("failed to drop dynamic table")
 			} else {
 				droppedTables = append(droppedTables, name)
 			}
@@ -223,7 +223,7 @@ func (s *SqlTeamDatabase) CleanupAllRuntimeState(ctx context.Context) ([]string,
 	for _, name := range TeamStaticTablesToClear {
 		if containsString(tableNames, name) {
 			if clearErr := s.db.Exec(fmt.Sprintf("DELETE FROM %s", quoteTableName(name))).Error; clearErr != nil {
-				logger.Warn(logComponent).Str("table", name).Err(clearErr).Msg("清空静态表失败")
+				logger.Warn(logComponent).Str("table", name).Err(clearErr).Msg("failed to clear static table")
 			} else {
 				clearedTables = append(clearedTables, name)
 			}
@@ -233,7 +233,7 @@ func (s *SqlTeamDatabase) CleanupAllRuntimeState(ctx context.Context) ([]string,
 	logger.Info(logComponent).
 		Strs("deleted_dynamic_tables", droppedTables).
 		Strs("cleared_static_tables", clearedTables).
-		Msg("清理团队运行时状态完成")
+		Msg("team runtime state cleanup completed")
 	return droppedTables, clearedTables, nil
 }
 
@@ -252,7 +252,7 @@ func (s *SqlTeamDatabase) DropSessionTablesByID(ctx context.Context, sessionID s
 		expectedTable := prefix + suffix
 		if containsString(tableNames, expectedTable) {
 			if dropErr := s.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteTableName(expectedTable))).Error; dropErr != nil {
-				logger.Warn(logComponent).Str("table", expectedTable).Err(dropErr).Msg("删除会话表失败")
+				logger.Warn(logComponent).Str("table", expectedTable).Err(dropErr).Msg("failed to drop session table")
 			} else {
 				dropped = append(dropped, expectedTable)
 			}
@@ -260,7 +260,7 @@ func (s *SqlTeamDatabase) DropSessionTablesByID(ctx context.Context, sessionID s
 	}
 
 	if len(dropped) > 0 {
-		logger.Info(logComponent).Str("session_id", sessionID).Strs("dropped", dropped).Msg("按 ID 删除会话动态表完成")
+		logger.Info(logComponent).Str("session_id", sessionID).Strs("dropped", dropped).Msg("session dynamic tables dropped by ID")
 	}
 	return dropped, nil
 }
@@ -279,11 +279,11 @@ func (s *SqlTeamDatabase) ForceDeleteTeamSession(ctx context.Context, teamName s
 
 	// Python: try: await _drop_cur_session_tables(self.engine)
 	if err := s.DropCurSessionTables(ctx); err != nil {
-		logger.Error(logComponent).Str("team_name", teamName).Err(err).Msg("强制删除团队会话动态表失败")
+		logger.Error(logComponent).Str("team_name", teamName).Err(err).Msg("failed to force delete team session dynamic tables")
 		return false
 	}
 
-	logger.Info(logComponent).Str("team_name", teamName).Msg("强制删除团队会话数据完成")
+	logger.Info(logComponent).Str("team_name", teamName).Msg("force delete team session data completed")
 	return true
 }
 
@@ -301,7 +301,7 @@ func (s *SqlTeamDatabase) Close() error {
 		s.memberDao = nil
 		s.taskDao = nil
 		s.messageDao = nil
-		logger.Info(logComponent).Msg("SQL 数据库引擎已关闭")
+		logger.Info(logComponent).Msg("SQL database engine closed")
 	}
 	return nil
 }
@@ -404,7 +404,7 @@ func (s *SqlTeamDatabase) newGormDB(_ context.Context) (*gorm.DB, error) {
 	// Python: await conn.run_sync(_ensure_team_member_role_column) — 迁移补 role 列
 	ensureTeamMemberRoleColumn(db)
 
-	logger.Info(logComponent).Str("db_type", string(s.config.DBType)).Msg("SQL 数据库引擎初始化完成")
+	logger.Info(logComponent).Str("db_type", string(s.config.DBType)).Msg("SQL database engine initialized")
 	return db, nil
 }
 
@@ -424,7 +424,7 @@ func ensureTeamMemberRoleColumn(db *gorm.DB) {
 	}
 	// 补列：对齐 Python ALTER TABLE team_member ADD COLUMN role TEXT NOT NULL DEFAULT 'teammate'
 	db.Exec("ALTER TABLE team_member ADD COLUMN role TEXT NOT NULL DEFAULT 'teammate'")
-	logger.Info(logComponent).Msg("迁移 team_member 表：补充 role 列，默认值 teammate")
+	logger.Info(logComponent).Msg("migrating team_member table: adding role column with default 'teammate'")
 }
 
 // createSessionTablesDDL 用手写 DDL 创建4张动态表并建立索引。
@@ -473,7 +473,7 @@ func dropSessionTablesDDL(db *gorm.DB, suffix string) {
 	}
 	for _, t := range tables {
 		if dbErr := db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", quoteTableName(t))).Error; dbErr != nil {
-			logger.Warn(logComponent).Str("table", t).Err(dbErr).Msg("删除动态表失败")
+			logger.Warn(logComponent).Str("table", t).Err(dbErr).Msg("failed to drop dynamic table")
 		}
 	}
 }

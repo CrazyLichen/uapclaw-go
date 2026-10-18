@@ -263,7 +263,7 @@ collectEvents:
 
 	logger.Debug(logComponent).
 		Int("drained_count", len(drainedList)).
-		Msg("DrainPendingHostEvents 完成")
+		Msg("DrainPendingHostEvents completed")
 
 	return drainedList
 }
@@ -332,7 +332,7 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 	if r.builder != nil && r.builder.SessionID() == sessionID {
 		logger.Debug(logComponent).
 			Str("session_id", sessionID).
-			Msg("复用已有轨迹构造器")
+			Msg("reusing existing trajectory builder")
 		return r.ext.OnBeforeInvoke(ctx, cbc)
 	}
 
@@ -364,7 +364,7 @@ func (r *EvolutionRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.A
 		Str("session_id", sessionID).
 		Str("member_id", memberID).
 		Str("member_role", r.memberRole).
-		Msg("创建新轨迹构造器")
+		Msg("creating new trajectory builder")
 
 	return r.ext.OnBeforeInvoke(ctx, cbc)
 }

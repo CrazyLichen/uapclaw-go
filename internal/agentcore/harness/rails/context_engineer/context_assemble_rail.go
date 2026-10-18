@@ -75,7 +75,7 @@ func (r *ContextAssembleRail) Init(_ context.Context, agent sainterfaces.BaseAge
 
 	logger.Info(logComponent).
 		Str("event_type", "context_assemble_rail_init").
-		Msg("ContextAssembleRail 初始化完成")
+		Msg("ContextAssembleRail initialized")
 
 	return nil
 }
@@ -92,7 +92,7 @@ func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "context_assemble_rail_uninit").
-		Msg("ContextAssembleRail 注销完成")
+		Msg("ContextAssembleRail unregistered")
 
 	return nil
 }

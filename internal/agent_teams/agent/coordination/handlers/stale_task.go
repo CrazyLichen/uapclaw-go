@@ -99,7 +99,7 @@ func (h *StaleTaskHandler) checkStaleClaimedTasks(ctx context.Context) {
 		Str("role", string(role)).
 		Str("member_name", memberName).
 		Float64("stale_threshold", staleClaimSec).
-		Msg("checkStaleClaimedTasks: TODO 等任务后端就绪")
+		Msg("checkStaleClaimedTasks: TODO waiting for task backend")
 
 	_ = ctx
 	_ = now
@@ -121,7 +121,7 @@ func (h *StaleTaskHandler) checkStalePendingTasks(ctx context.Context) {
 	}
 	logger.Debug(logComponent).
 		Float64("stale_threshold", stalePendingSec).
-		Msg("checkStalePendingTasks: leader TODO 等任务后端就绪")
+		Msg("checkStalePendingTasks: leader TODO waiting for task backend")
 
 	_ = ctx
 	// 对齐 Python 步骤：

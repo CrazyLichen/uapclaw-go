@@ -78,8 +78,6 @@ const (
 // _ 编译时验证 ProgressiveToolRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*ProgressiveToolRail)(nil)
 
-var progressiveLogComponent = logger.ComponentAgentCore
-
 // navigationBaselineTools 导航中始终包含的基础工具名集合
 var navigationBaselineTools = map[string]struct{}{
 	"code": {}, "read_file": {}, "bash": {}, "list_skill": {}, "pdf": {}, "xlsx": {},
@@ -160,21 +158,21 @@ func (r *ProgressiveToolRail) Init(_ context.Context, agent agentinterfaces.Base
 		func(t tool.Tool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(progressiveLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "progressive_rail_init").
 						Str("tool_id", t.Card().ID).
 						Str("tool_name", t.Card().Name).
-						Msgf("注册工具到 resource_mgr 失败: %v", rec)
+						Msgf("failed to register tool to resource_mgr: %v", rec)
 				}
 			}()
 			existing, err := resourceMgr.GetTool([]string{t.Card().ID})
 			if err != nil || len(existing) == 0 {
 				if addErr := resourceMgr.AddTool(t); addErr != nil {
-					logger.Warn(progressiveLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "progressive_rail_init").
 						Str("tool_id", t.Card().ID).
 						Err(addErr).
-						Msg("注册工具到 resource_mgr 失败")
+						Msg("failed to register tool to resource_mgr")
 				} else {
 					r.ownedToolIDs[t.Card().ID] = struct{}{}
 				}
@@ -189,10 +187,10 @@ func (r *ProgressiveToolRail) Init(_ context.Context, agent agentinterfaces.Base
 			func(t tool.Tool) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(progressiveLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "progressive_rail_init").
 							Str("tool_name", t.Card().Name).
-							Msgf("注册工具到 ability_manager 失败: %v", rec)
+							Msgf("failed to register tool to ability_manager: %v", rec)
 					}
 				}()
 				result := am.Add(t.Card())
@@ -203,10 +201,10 @@ func (r *ProgressiveToolRail) Init(_ context.Context, agent agentinterfaces.Base
 		}
 	}
 
-	logger.Info(progressiveLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "progressive_rail_init").
 		Strs("meta_tool_names", setToSortedSlice(r.metaToolNames)).
-		Msg("ProgressiveToolRail 初始化完成")
+		Msg("ProgressiveToolRail initialized")
 
 	return nil
 }
@@ -221,10 +219,10 @@ func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			func(name string) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(progressiveLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "progressive_rail_uninit").
 							Str("tool_name", name).
-							Msgf("从 ability_manager 移除工具失败: %v", rec)
+							Msgf("failed to remove tool from ability_manager: %v", rec)
 					}
 				}()
 				am.Remove(name)
@@ -239,10 +237,10 @@ func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			func(toolID string) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(progressiveLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "progressive_rail_uninit").
 							Str("tool_id", toolID).
-							Msgf("从 resource_mgr 移除工具失败: %v", rec)
+							Msgf("failed to remove tool from resource_mgr: %v", rec)
 					}
 				}()
 				_, _ = resourceMgr.RemoveTool([]string{toolID})
@@ -255,9 +253,9 @@ func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	r.metaToolNames = make(map[string]struct{})
 	r.cachedAllTools = nil
 
-	logger.Info(progressiveLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "progressive_rail_uninit").
-		Msg("ProgressiveToolRail 注销完成")
+		Msg("ProgressiveToolRail unregistered")
 
 	return nil
 }
@@ -269,10 +267,10 @@ func (r *ProgressiveToolRail) BeforeInvoke(ctx context.Context, cbc *agentinterf
 	// 步骤 1：缓存全量工具清单
 	infos, err := r.listToolInfos(ctx, cbc.Agent())
 	if err != nil {
-		logger.Warn(progressiveLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "progressive_before_invoke").
 			Err(err).
-			Msg("获取全量工具清单失败")
+			Msg("failed to get full tool inventory")
 	}
 	r.cachedAllTools = infos
 
@@ -280,10 +278,10 @@ func (r *ProgressiveToolRail) BeforeInvoke(ctx context.Context, cbc *agentinterf
 	sess := cbc.Session()
 	r.initVisibleTools(sess, r.defaultVisible)
 
-	logger.Info(progressiveLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "progressive_before_invoke").
 		Int("total_tools", len(infos)).
-		Msg("ProgressiveToolRail BeforeInvoke 完成")
+		Msg("ProgressiveToolRail BeforeInvoke completed")
 
 	return nil
 }
@@ -307,18 +305,18 @@ func (r *ProgressiveToolRail) BeforeModelCall(ctx context.Context, cbc *agentint
 	inputs := cbc.Inputs()
 	modelInputs, ok := inputs.(*agentinterfaces.ModelCallInputs)
 	if !ok {
-		logger.Info(progressiveLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "progressive_before_model_call").
 			Str("inputs_kind", inputs.EventKind()).
-			Msg("inputs 不是 ModelCallInputs，跳过工具过滤")
+			Msg("inputs is not ModelCallInputs, skipping tool filtering")
 		return nil
 	}
 
 	tools := modelInputs.Tools
 	if tools == nil {
-		logger.Info(progressiveLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "progressive_before_model_call").
-			Msg("inputs.Tools 为 nil，跳过过滤")
+			Msg("inputs.Tools is nil, skipping filtering")
 		return nil
 	}
 
@@ -348,11 +346,11 @@ func (r *ProgressiveToolRail) BeforeModelCall(ctx context.Context, cbc *agentint
 		}
 	}
 
-	logger.Info(progressiveLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "progressive_before_model_call").
 		Int("before_count", len(tools)).
 		Int("after_count", len(filtered)).
-		Msg("ProgressiveToolRail BeforeModelCall 工具过滤完成")
+		Msg("ProgressiveToolRail BeforeModelCall tool filtering completed")
 
 	modelInputs.Tools = filtered
 	return nil
@@ -553,10 +551,10 @@ func (r *ProgressiveToolRail) listToolInfos(ctx context.Context, agent agentinte
 	}
 	infos, err := am.ListToolInfo(ctx, nil)
 	if err != nil {
-		logger.Warn(progressiveLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "progressive_list_tool_infos").
 			Err(err).
-			Msg("获取工具信息列表失败")
+			Msg("failed to get tool info list")
 		return nil, err
 	}
 	return infos, nil
@@ -836,16 +834,16 @@ func (r *ProgressiveToolRail) appendTrace(sess sessioninterfaces.SessionFacade, 
 func (r *ProgressiveToolRail) getPromptBuilder(cbc *agentinterfaces.AgentCallbackContext) saprompt.SystemPromptBuilderInterface {
 	agent := cbc.Agent()
 	if agent == nil {
-		logger.Error(progressiveLogComponent).
+		logger.Error(logComponent).
 			Str("event_type", "progressive_get_prompt_builder").
-			Msg("ProgressiveToolRail 要求 cbc.Agent() 不为 nil")
+			Msg("ProgressiveToolRail requires cbc.Agent() to be non-nil")
 		panic("ProgressiveToolRail requires ctx.agent to exist")
 	}
 	builder := agent.SystemPromptBuilder()
 	if builder == nil {
-		logger.Error(progressiveLogComponent).
+		logger.Error(logComponent).
 			Str("event_type", "progressive_get_prompt_builder").
-			Msg("ProgressiveToolRail 要求 agent.SystemPromptBuilder() 不为 nil")
+			Msg("ProgressiveToolRail requires agent.SystemPromptBuilder() to be non-nil")
 		panic("ProgressiveToolRail requires agent.SystemPromptBuilder() to exist")
 	}
 	return builder

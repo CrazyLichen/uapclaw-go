@@ -474,7 +474,7 @@ func init() {
 	inferenceAffinityFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewInferenceAffinityModelClient(mc, cc)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("创建 InferenceAffinity 客户端失败")
+			logger.Error(logComponent).Err(err).Msg("create InferenceAffinity client failed")
 			return nil, err
 		}
 		return client, nil

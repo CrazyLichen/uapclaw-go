@@ -190,7 +190,7 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 			Str("file_path", path).
 			Str("operation_type", operationType).
 			Int("content_bytes", contentBytes).
-			Msg("WriteFileTool 写入成功")
+			Msg("WriteFileTool write succeeded")
 
 		// 追加文件操作历史
 		// Python: _session = get_current_session(); if _session: _append_op_history(...)

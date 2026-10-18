@@ -46,11 +46,11 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
+
 // _ 编译时验证 HeartbeatRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*HeartbeatRail)(nil)
-
-// heartbeatLogComponent 日志组件
-var heartbeatLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -73,9 +73,9 @@ func (r *HeartbeatRail) Init(_ context.Context, agent agentinterfaces.BaseAgent)
 	// Python: L28-29: if not agent.deep_config → log + return
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if !ok || deepAgent.DeepConfig() == nil {
-		logger.Info(heartbeatLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "heartbeat_no_deep_config").
-			Msg("deepConfig 未配置")
+			Msg("deepConfig not configured")
 		return nil
 	}
 
@@ -134,18 +134,18 @@ func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterface
 
 	// Python: L48-50: if not self.sys_operation → warning + return
 	if r.SysOperation() == nil {
-		logger.Warn(heartbeatLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "heartbeat_no_sys_operation").
-			Msg("sysOperation 未配置")
+			Msg("sysOperation not configured")
 		return nil
 	}
 
 	// Python: L52-57: fs.read_file(heartbeat_dir, mode="text")
 	fsOp := r.SysOperation().Fs()
 	if fsOp == nil {
-		logger.Warn(heartbeatLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "heartbeat_no_fs_operation").
-			Msg("FsOperation 为 nil")
+			Msg("FsOperation is nil")
 		return nil
 	}
 
@@ -158,11 +158,11 @@ func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterface
 		}
 	} else {
 		// Python: L56: logger.warning("HeartbeatRail: failed to read HEARTBEAT.md")
-		logger.Warn(heartbeatLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "heartbeat_read_failed").
 			Str("path", r.heartbeatDir).
 			Err(err).
-			Msg("读取 HEARTBEAT.md 失败")
+			Msg("failed to read HEARTBEAT.md")
 	}
 
 	// Python: L58-64: build_heartbeat_section + add_section/remove_section

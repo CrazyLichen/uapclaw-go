@@ -39,7 +39,7 @@ const logComponent = logger.ComponentAgentCore
 func (q *LocalMessageQueue) Start() {
 	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_started").
-		Msg("本地消息队列已启动（no-op）")
+		Msg("local message queue started (no-op)")
 }
 
 // Stop 停止本地消息队列（no-op，返回 nil 表示成功）。
@@ -48,7 +48,7 @@ func (q *LocalMessageQueue) Start() {
 func (q *LocalMessageQueue) Stop(_ context.Context) error {
 	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_stopped").
-		Msg("本地消息队列已停止（no-op）")
+		Msg("local message queue stopped (no-op)")
 	return nil
 }
 
@@ -59,7 +59,7 @@ func (q *LocalMessageQueue) Subscribe(topic string) (SubscriptionBase, error) {
 	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_subscribed").
 		Str("topic", topic).
-		Msg("本地消息队列订阅已创建（no-op）")
+		Msg("local message queue subscription created (no-op)")
 	return &LocalSubscription{}, nil
 }
 
@@ -70,7 +70,7 @@ func (q *LocalMessageQueue) Unsubscribe(_ context.Context, topic string) error {
 	logger.Info(logComponent).
 		Str("event_type", "local_message_queue_unsubscribed").
 		Str("topic", topic).
-		Msg("本地消息队列订阅已取消（no-op）")
+		Msg("local message queue subscription cancelled (no-op)")
 	return nil
 }
 
@@ -82,7 +82,7 @@ func (q *LocalMessageQueue) Produce(_ context.Context, topic string, _ QueueMess
 	logger.Debug(logComponent).
 		Str("event_type", "local_message_queue_produce").
 		Str("topic", topic).
-		Msg("本地消息队列发布消息（no-op，消息丢弃）")
+		Msg("local message queue publishing message (no-op, message discarded)")
 	return nil
 }
 

@@ -156,7 +156,7 @@ func LoadHooksConfig(configBase map[string]any) *HooksConfig {
 		if !ok {
 			logger.Warn(logComponent).
 				Str("event", eventName).
-				Msg("hooks 配置：event 段期望 []any 类型")
+				Msg("hooks config: event section expects []any type")
 			continue
 		}
 		var matchers []HookMatcher
@@ -165,7 +165,7 @@ func LoadHooksConfig(configBase map[string]any) *HooksConfig {
 			if !ok {
 				logger.Warn(logComponent).
 					Str("event", eventName).
-					Msg("hooks 配置：entry 期望 map[string]any 类型")
+					Msg("hooks config: entry expects map[string]any type")
 				continue
 			}
 			matcherStr := "*"

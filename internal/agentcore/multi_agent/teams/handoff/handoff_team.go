@@ -118,7 +118,7 @@ func NewHandoffTeam(card maschema.TeamCardInterface, config *HandoffTeamConfig, 
 	logger.Info(logComponent).
 		Str("action", "new_handoff_team").
 		Str("team_id", teamID).
-		Msg("创建 HandoffTeam")
+		Msg("creating HandoffTeam")
 
 	return team
 }
@@ -173,7 +173,7 @@ func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard,
 			Str("action", "add_agent_skip").
 			Str("agent_id", card.ID).
 			Str("team_id", t.card.GetID()).
-			Msg("Agent 已存在，跳过注册")
+			Msg("agent already exists, skipping registration")
 		return nil
 	}
 
@@ -193,7 +193,7 @@ func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard,
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "HandoffTeam.AddAgent").
 			Str("agent_id", card.ID).
-			Msg("注册 Agent 到运行时失败")
+			Msg("failed to register agent to runtime")
 		return err
 	}
 
@@ -212,7 +212,7 @@ func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard,
 		Str("action", "add_agent").
 		Str("agent_id", card.ID).
 		Str("team_id", t.card.GetID()).
-		Msg("Agent 已注册到 HandoffTeam")
+		Msg("agent registered to HandoffTeam")
 
 	return nil
 }
@@ -227,7 +227,7 @@ func (t *HandoffTeam) RemoveAgent(ctx context.Context, agentID string) error {
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "HandoffTeam.RemoveAgent").
 			Str("agent_id", agentID).
-			Msg("注销 Agent 失败")
+			Msg("failed to unregister agent")
 		return err
 	}
 
@@ -246,7 +246,7 @@ func (t *HandoffTeam) RemoveAgent(ctx context.Context, agentID string) error {
 		Str("action", "remove_agent").
 		Str("agent_id", agentID).
 		Str("team_id", t.card.GetID()).
-		Msg("Agent 已从 HandoffTeam 注销")
+		Msg("agent unregistered from HandoffTeam")
 
 	return nil
 }
@@ -287,7 +287,7 @@ func (t *HandoffTeam) Configure(_ context.Context, config maschema.TeamConfig) e
 	logger.Info(logComponent).
 		Str("action", "configure").
 		Str("team_id", t.card.GetID()).
-		Msg("HandoffTeam 配置已更新")
+		Msg("HandoffTeam config updated")
 	return nil
 }
 
@@ -407,7 +407,7 @@ func (t *HandoffTeam) initInternalAgents(ctx context.Context) error {
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("method", "HandoffTeam.ensureInternalAgents").
 				Str("agent_id", agentID).
-				Msg("获取 Agent 卡片失败")
+				Msg("failed to get agent card")
 			return fmt.Errorf("获取 Agent 卡片失败: %w", err)
 		}
 
@@ -435,7 +435,7 @@ func (t *HandoffTeam) initInternalAgents(ctx context.Context) error {
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("method", "HandoffTeam.ensureInternalAgents").
 				Str("endpoint_id", endpointID).
-				Msg("注册端点 Agent 失败")
+				Msg("failed to register endpoint agent")
 			return fmt.Errorf("注册端点 Agent 失败: %w", err)
 		}
 
@@ -447,7 +447,7 @@ func (t *HandoffTeam) initInternalAgents(ctx context.Context) error {
 				Str("method", "HandoffTeam.ensureInternalAgents").
 				Str("endpoint_id", endpointID).
 				Str("topic", topic).
-				Msg("订阅容器主题失败")
+				Msg("failed to subscribe to container topic")
 			return fmt.Errorf("订阅容器主题失败: %w", err)
 		}
 	}
@@ -456,7 +456,7 @@ func (t *HandoffTeam) initInternalAgents(ctx context.Context) error {
 		Str("action", "ensure_internal_agents").
 		Str("team_id", teamID).
 		Int("agent_count", len(agentIDs)).
-		Msg("内部 Agent 端点初始化完成")
+		Msg("internal agent endpoints initialized")
 
 	return nil
 }
@@ -573,7 +573,7 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 		Str("session_id", sessionID).
 		Str("current_agent_id", currentAgentID).
 		Str("topic", topic).
-		Msg("发布交接请求到容器主题")
+		Msg("publishing handoff request to container topic")
 
 	if err := t.runtime.Publish(ctx, handoffReq, topic, t.card.GetID(),
 		maschema.WithTeamSessionID(sessionID),
@@ -589,7 +589,7 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 			Str("method", "HandoffTeam.runChain").
 			Str("team_id", t.card.GetID()).
 			Str("session_id", sessionID).
-			Msg("发布交接请求失败")
+			Msg("failed to publish handoff request")
 		return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
 			exception.WithCause(err),
 			exception.WithParam("error_msg", fmt.Sprintf("发布交接请求失败: %s", err.Error())),
@@ -617,7 +617,7 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 				Str("team_id", t.card.GetID()).
 				Str("session_id", sessionID).
 				Float64("timeout", timeout).
-				Msg("交接编排超时")
+				Msg("handoff orchestration timed out")
 			return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
 				exception.WithParam("error_msg", fmt.Sprintf("交接编排超时 (%.1fs)", timeout)),
 			)
@@ -656,7 +656,7 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 			Str("method", "HandoffTeam.runChain").
 			Str("team_id", t.card.GetID()).
 			Str("session_id", sessionID).
-			Msg("交接编排发生错误")
+			Msg("handoff orchestration error")
 		return nil, coordErr
 	}
 
@@ -664,7 +664,7 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 		Str("action", "run_chain_complete").
 		Str("team_id", t.card.GetID()).
 		Str("session_id", sessionID).
-		Msg("交接链路执行完成")
+		Msg("handoff chain executed")
 
 	return result, nil
 }

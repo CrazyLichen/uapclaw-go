@@ -261,14 +261,14 @@ func LoadExecutionDisabledSkills() []string {
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logger.Warn(logComponent).Str("error", err.Error()).Msg("加载禁用技能列表失败")
+			logger.Warn(logComponent).Str("error", err.Error()).Msg("loaddisabledskilllist failed")
 		}
 		return nil
 	}
 
 	var state map[string]any
 	if err := json.Unmarshal(data, &state); err != nil {
-		logger.Warn(logComponent).Str("error", err.Error()).Msg("解析技能状态文件失败")
+		logger.Warn(logComponent).Str("error", err.Error()).Msg("parseskillstatefile failed")
 		return nil
 	}
 

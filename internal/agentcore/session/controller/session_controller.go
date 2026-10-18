@@ -64,7 +64,7 @@ func NewSessionController(agentID string, basePath string, dataContainerType ...
 			Str("agent_id", agentID).
 			Str("base_path", sc.BasePath).
 			Err(err).
-			Msg("创建会话目录失败")
+			Msg("failed to create session directory")
 	}
 	return sc
 }
@@ -87,7 +87,7 @@ func (sc *SessionController) Flush() error {
 					Str("agent_id", sc.AgentID).
 					Str("session_id", s.SessionID).
 					Err(err).
-					Msg("刷写会话失败")
+					Msg("failed to flush session")
 				return err
 			}
 			return nil
@@ -176,7 +176,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 				Str("action", "session_controller_load").
 				Str("scope_key", scopeKeyStr).
 				Err(err).
-				Msg("解析 SessionScopeKey 失败")
+				Msg("failed to parse SessionScopeKey")
 			continue
 		}
 
@@ -188,7 +188,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 				Str("action", "session_controller_load").
 				Str("scope_key", scopeKeyStr).
 				Err(err).
-				Msg("解析 ScopeSessionsMeta 失败")
+				Msg("failed to parse ScopeSessionsMeta")
 			continue
 		}
 
@@ -202,7 +202,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 						Str("action", "session_controller_load").
 						Str("session_id", scopeMeta.ActiveSession).
 						Err(err).
-						Msg("加载活跃会话失败，跳过")
+						Msg("failed to load active session, skipping")
 				}
 			}
 		} else {
@@ -212,7 +212,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 						Str("action", "session_controller_load").
 						Str("session_id", sm.SessionID).
 						Err(err).
-						Msg("加载会话失败，跳过")
+						Msg("failed to load session, skipping")
 				}
 			}
 		}
@@ -223,7 +223,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 		Str("agent_id", sc.AgentID).
 		Int("scopes", len(sc.MetaMap)).
 		Int("cache_size", len(sc.SessionCache)).
-		Msg("会话控制器加载完成")
+		Msg("session controller loaded")
 
 	return nil
 }
@@ -271,7 +271,7 @@ func (sc *SessionController) LoadScope(sessionScope SessionScope, loadActiveOnly
 						Str("action", "load_scope").
 						Str("session_id", scopeMeta.ActiveSession).
 						Err(err).
-						Msg("加载活跃会话失败，跳过")
+						Msg("failed to load active session, skipping")
 				}
 			}
 		} else {
@@ -281,7 +281,7 @@ func (sc *SessionController) LoadScope(sessionScope SessionScope, loadActiveOnly
 						Str("action", "load_scope").
 						Str("session_id", sm.SessionID).
 						Err(err).
-						Msg("加载会话失败，跳过")
+						Msg("failed to load session, skipping")
 				}
 			}
 		}
@@ -363,7 +363,7 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 			Str("agent_id", sc.AgentID).
 			Str("session_id", sessionID).
 			Err(err).
-			Msg("创建会话后刷写失败")
+			Msg("failed to flush after session creation")
 		return false, nil, fmt.Errorf("创建会话后刷写失败: %w", err)
 	}
 	if err := sc.writeMetaFile(); err != nil {
@@ -371,7 +371,7 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 			Str("action", "create_if_not_exists_write_meta").
 			Str("agent_id", sc.AgentID).
 			Err(err).
-			Msg("创建会话后写入元数据失败")
+			Msg("failed to write metadata after session creation")
 		return false, nil, fmt.Errorf("创建会话后写入元数据失败: %w", err)
 	}
 
@@ -381,7 +381,7 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 		Str("session_id", sessionID).
 		Str("scope", sessionScope.String()).
 		Str("container_type", sc.dataContainerType).
-		Msg("创建新会话")
+		Msg("created new session")
 
 	return true, session, nil
 }
@@ -403,7 +403,7 @@ func (sc *SessionController) GetScopeActiveSession(sessionScope SessionScope) *C
 				Str("action", "get_scope_active_session").
 				Str("session_id", scopeMeta.ActiveSession).
 				Err(err).
-				Msg("加载活跃会话失败")
+				Msg("failed to load active session")
 			return nil
 		}
 		session = sc.SessionCache[scopeMeta.ActiveSession]
@@ -461,7 +461,7 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 						Str("action", "activate_session").
 						Str("session_id", sessionID).
 						Err(err).
-						Msg("加载会话失败")
+						Msg("failed to load session")
 				}
 				session = sc.SessionCache[sessionID]
 				break
@@ -483,7 +483,7 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 				Str("agent_id", sc.AgentID).
 				Str("session_id", sessionID).
 				Err(err).
-				Msg("激活会话后刷写失败")
+				Msg("failed to flush after session activation")
 			return fmt.Errorf("激活会话后刷写失败: %w", err)
 		}
 		if err := sc.writeMetaFile(); err != nil {
@@ -491,7 +491,7 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 				Str("action", "activate_session_write_meta").
 				Str("agent_id", sc.AgentID).
 				Err(err).
-				Msg("激活会话后写入元数据失败")
+				Msg("failed to write metadata after session activation")
 			return fmt.Errorf("激活会话后写入元数据失败: %w", err)
 		}
 
@@ -499,7 +499,7 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 			Str("action", "session_activated").
 			Str("agent_id", sc.AgentID).
 			Str("session_id", sessionID).
-			Msg("会话已激活")
+			Msg("session activated")
 	}
 
 	return nil
@@ -562,7 +562,7 @@ func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionSc
 				Str("agent_id", sc.AgentID).
 				Str("session_id", sm.SessionID).
 				Err(err).
-				Msg("删除非活跃会话目录失败")
+				Msg("failed to remove inactive session directory")
 		}
 
 		// 从元数据移除
@@ -576,7 +576,7 @@ func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionSc
 				Str("action", "cleanup_inactive_write_meta").
 				Str("agent_id", sc.AgentID).
 				Err(err).
-				Msg("清理非活跃会话后写入元数据失败")
+				Msg("failed to write metadata after cleaning inactive sessions")
 			return nil, fmt.Errorf("清理非活跃会话后写入元数据失败: %w", err)
 		}
 	}
@@ -586,7 +586,7 @@ func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionSc
 		Str("agent_id", sc.AgentID).
 		Str("scope", sessionScope.String()).
 		Int("cleaned", len(cleaned)).
-		Msg("清理非活跃会话")
+		Msg("cleaned inactive sessions")
 
 	return []CleanupResult{{SessionScope: sessionScope, Sessions: cleaned}}, nil
 }
@@ -632,7 +632,7 @@ func (sc *SessionController) RemoveSession(sessionID string, sessionScope *Sessi
 				Str("agent_id", sc.AgentID).
 				Str("session_id", sessionID).
 				Err(err).
-				Msg("删除会话目录失败")
+				Msg("failed to remove session directory")
 		}
 
 		// 从元数据移除
@@ -648,7 +648,7 @@ func (sc *SessionController) RemoveSession(sessionID string, sessionScope *Sessi
 				Str("action", "remove_session_write_meta").
 				Str("agent_id", sc.AgentID).
 				Err(err).
-				Msg("删除会话后写入元数据失败")
+				Msg("failed to write metadata after session removal")
 		}
 	}
 
@@ -675,7 +675,7 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 				Str("agent_id", sc.AgentID).
 				Str("session_id", sm.SessionID).
 				Err(err).
-				Msg("删除作用域会话目录失败")
+				Msg("failed to remove scope session directory")
 		}
 		removed = append(removed, sm)
 	}
@@ -689,7 +689,7 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 			Str("action", "remove_scope_sessions_write_meta").
 			Str("agent_id", sc.AgentID).
 			Err(err).
-			Msg("删除作用域会话后写入元数据失败")
+			Msg("failed to write metadata after removing scope sessions")
 	}
 
 	logger.Info(logComponent).
@@ -697,7 +697,7 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 		Str("agent_id", sc.AgentID).
 		Str("scope", sessionScope.String()).
 		Int("count", len(removed)).
-		Msg("删除作用域下所有会话")
+		Msg("removed all sessions in scope")
 
 	return removed
 }
@@ -715,13 +715,13 @@ func (sc *SessionController) RemoveAll() {
 			Str("agent_id", sc.AgentID).
 			Str("base_path", sc.BasePath).
 			Err(err).
-			Msg("删除所有会话数据失败")
+			Msg("failed to remove all session data")
 	}
 
 	logger.Info(logComponent).
 		Str("action", "remove_all").
 		Str("agent_id", sc.AgentID).
-		Msg("删除所有会话数据")
+		Msg("removed all session data")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -748,7 +748,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 			Str("action", "load_session").
 			Str("session_id", sessionID).
 			Err(err).
-			Msg("加载数据容器失败")
+			Msg("failed to load data container")
 		return fmt.Errorf("加载数据容器失败: %w", err)
 	}
 
@@ -759,7 +759,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 			Str("action", "load_session").
 			Str("session_id", sessionID).
 			Err(err).
-			Msg("加载会话失败")
+			Msg("failed to load session")
 		return fmt.Errorf("加载会话失败: %w", err)
 	}
 
@@ -769,7 +769,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 		Str("action", "load_session").
 		Str("session_id", sessionID).
 		Str("container_type", dct).
-		Msg("加载会话到缓存")
+		Msg("loaded session into cache")
 	return nil
 }
 

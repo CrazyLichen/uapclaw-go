@@ -74,9 +74,6 @@ var writeLikeTools = map[string]struct{}{
 	"rename_file":     {},
 }
 
-// pmrLogComponent 日志组件标识
-var pmrLogComponent = logger.ComponentAgentServer
-
 // _ 编译时验证 ProjectMemoryRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*ProjectMemoryRail)(nil)
 
@@ -112,16 +109,16 @@ func (r *ProjectMemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAg
 		r.systemPromptBuilder = agent.SystemPromptBuilder()
 	}
 	if r.systemPromptBuilder == nil {
-		logger.Warn(pmrLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "ProjectMemoryRail_init_no_builder").
-			Msg("agent 没有 system_prompt_builder；ProjectMemoryRail 禁用")
+			Msg("agent has no system_prompt_builder; ProjectMemoryRail disabled")
 		return nil
 	}
-	logger.Info(pmrLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "ProjectMemoryRail_init").
 		Str("workspace", r.ResolveWorkspacePath()).
 		Str("language", r.language).
-		Msg("ProjectMemoryRail 初始化完成")
+		Msg("ProjectMemoryRail initialized")
 	return nil
 }
 
@@ -137,11 +134,11 @@ func (r *ProjectMemoryRail) Uninit(_ agentinterfaces.BaseAgent) error {
 		func() {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(pmrLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "ProjectMemoryRail_uninit_remove_section_failed").
 						Str("section", project_memory.SectionName).
 						Any("recover", rec).
-						Msg("uninit 时 remove_section 失败")
+						Msg("remove_section failed during uninit")
 				}
 			}()
 			r.systemPromptBuilder.RemoveSection(project_memory.SectionName)
@@ -234,11 +231,11 @@ func (r *ProjectMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinter
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Error(pmrLogComponent).
+				logger.Error(logComponent).
 					Str("event_type", "ProjectMemoryRail_discovery_failed").
 					Str("workspace", workspacePath).
 					Any("recover", rec).
-					Msg("DiscoverAndLoadMemoryFiles panic，降级为空文件列表")
+					Msg("DiscoverAndLoadMemoryFiles panicked, falling back to empty file list")
 			}
 		}()
 		files, discErr = project_memory.DiscoverAndLoadMemoryFiles(
@@ -249,11 +246,11 @@ func (r *ProjectMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinter
 		)
 	}()
 	if discErr != nil {
-		logger.Warn(pmrLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "ProjectMemoryRail_discovery_error").
 			Str("workspace", workspacePath).
 			Err(discErr).
-			Msg("DiscoverAndLoadMemoryFiles 返回错误，降级为空文件列表")
+			Msg("DiscoverAndLoadMemoryFiles returned error, falling back to empty file list")
 	}
 
 	merged := project_memory.MergeMemoryContent(files, r.maxChars)
@@ -262,11 +259,11 @@ func (r *ProjectMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinter
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Warn(pmrLogComponent).
+				logger.Warn(logComponent).
 					Str("event_type", "ProjectMemoryRail_remove_section_failed").
 					Str("section", project_memory.SectionName).
 					Any("recover", rec).
-					Msg("remove_section 失败（继续）")
+					Msg("remove_section failed (continuing)")
 			}
 		}()
 		r.systemPromptBuilder.RemoveSection(project_memory.SectionName)

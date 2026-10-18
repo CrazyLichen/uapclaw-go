@@ -54,7 +54,7 @@ func dispatchCronAction(
 	logger.Debug(logComponent).
 		Str("action", actionName).
 		Str("job_id", targetJobID).
-		Msg("dispatchCronAction 入口")
+		Msg("dispatchCronAction entry")
 
 	// 4. 构建 excluded_keys 集合
 	// Python: excluded_keys (cron.py L152-165)
@@ -189,7 +189,7 @@ func dispatchCronAction(
 		// Python: L201: raise ValueError("unsupported cron action")
 		logger.Warn(logComponent).
 			Str("action", actionName).
-			Msg("不支持的 cron action")
+			Msg("unsupported cron action")
 		return nil, fmt.Errorf("不支持的 cron action: %s", actionName)
 	}
 }

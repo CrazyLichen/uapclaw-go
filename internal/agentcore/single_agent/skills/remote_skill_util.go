@@ -191,7 +191,7 @@ func (r *RemoteSkillUtil) SearchGitHubForSkills(tree *GitHubTree, token string) 
 	if truncated {
 		logger.Warn(logComponent).
 			Str("event_type", "github_tree_truncated").
-			Msg("GitHub 文件列表被截断，结果可能不完整")
+			Msg("GitHub file list truncated, results may be incomplete")
 	}
 
 	var fileList []gitHubFileItem
@@ -282,7 +282,7 @@ func (r *RemoteSkillUtil) UploadSkillFromGitHub(tree *GitHubTree, skillsDir stri
 		logger.Info(logComponent).
 			Str("event_type", "skill_file_upload").
 			Str("relative_path", relativePath).
-			Msg("上传技能文件")
+			Msg("uploading skill file")
 
 		fullPath := filepath.Join(skillsDir, relativePath)
 		if err := r.fsProvider.WriteFile(fullPath, data); err != nil {

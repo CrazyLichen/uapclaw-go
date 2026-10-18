@@ -76,7 +76,7 @@ func SetCurrentSession(ctx context.Context, session *WorktreeSession) {
 	} else {
 		logger.Warn(logComponent).
 			Str("event_type", "set_current_session_no_state").
-			Msg("ctx 中缺少 WorktreeSessionState，SetCurrentSession 无效")
+			Msg("WorktreeSessionState missing in ctx, SetCurrentSession has no effect")
 	}
 }
 

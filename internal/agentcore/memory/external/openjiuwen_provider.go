@@ -84,8 +84,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// ojLogComponent 日志组件标识
-	ojLogComponent = logger.ComponentAgentCore
 
 	// ltmSearchSchema ltm_search 工具 Schema
 	// 对齐 Python: LTM_SEARCH_SCHEMA
@@ -281,7 +279,7 @@ func (p *OpenJiuwenProvider) Initialize(ctx context.Context, opts ...ProviderOpt
 	if p.kvStore == nil || p.vectorStore == nil || p.dbStore == nil {
 		// 对齐 Python L114-116: logger.error("[OpenJiuwenMemoryProvider] Store creation failed")
 		// Go 差异：Python 是 void 返回，Go 签名返回 error，应返回 error 让调用方感知失败
-		logger.Error(ojLogComponent).Msg("Store 创建失败")
+		logger.Error(logComponent).Msg("failed to create Store")
 		return fmt.Errorf("store creation failed: kv=%v vector=%v db=%v",
 			p.kvStore != nil, p.vectorStore != nil, p.dbStore != nil)
 	}
@@ -297,7 +295,7 @@ func (p *OpenJiuwenProvider) Initialize(ctx context.Context, opts ...ProviderOpt
 			ltm.WithEmbeddingModel(p.embeddingModel),
 		}
 		if err := ltmInstance.RegisterStore(ctx, p.kvStore, registerOpts...); err != nil {
-			logger.Error(ojLogComponent).Err(err).Msg("LTM RegisterStore 失败")
+			logger.Error(logComponent).Err(err).Msg("LTM RegisterStore failed")
 			return err
 		}
 	}
@@ -306,7 +304,7 @@ func (p *OpenJiuwenProvider) Initialize(ctx context.Context, opts ...ProviderOpt
 	// 注意：scopeConfig 在构造时已解析（对齐 Python L79），此处仅使用
 	if p.scopeConfig != nil {
 		if err := ltmInstance.SetScopeConfig(ctx, p.scopeID, p.scopeConfig); err != nil {
-			logger.Warn(ojLogComponent).Err(err).Str("scope_id", p.scopeID).Msg("SetScopeConfig 失败")
+			logger.Warn(logComponent).Err(err).Str("scope_id", p.scopeID).Msg("SetScopeConfig failed")
 		}
 	}
 
@@ -382,7 +380,7 @@ func (p *OpenJiuwenProvider) Prefetch(ctx context.Context, query string, opts ..
 		defer func() {
 			if r := recover(); r != nil {
 				// 对齐 Python L185-186: except Exception as e: logger.warning(f"prefetch search_user_mem failed: {e}")
-				logger.Warn(ojLogComponent).Any("panic", r).Msg("prefetch search_user_mem 失败")
+				logger.Warn(logComponent).Any("panic", r).Msg("prefetch search_user_mem failed")
 			}
 		}()
 		results, err := ltmInstance.SearchUserMem(ctx, query, defaultRecallUserMemNum,
@@ -392,7 +390,7 @@ func (p *OpenJiuwenProvider) Prefetch(ctx context.Context, query string, opts ..
 		)
 		if err != nil {
 			// 对齐 Python L185-186: logger.warning(f"prefetch search_user_mem failed: {e}")
-			logger.Warn(ojLogComponent).Err(err).Msg("prefetch search_user_mem 失败")
+			logger.Warn(logComponent).Err(err).Msg("prefetch search_user_mem failed")
 			return
 		}
 		if len(results) > 0 {
@@ -419,7 +417,7 @@ func (p *OpenJiuwenProvider) Prefetch(ctx context.Context, query string, opts ..
 		defer func() {
 			if r := recover(); r != nil {
 				// 对齐 Python L199-200: except Exception as e: logger.warning(f"prefetch search_user_history_summary failed: {e}")
-				logger.Warn(ojLogComponent).Any("panic", r).Msg("prefetch search_user_history_summary 失败")
+				logger.Warn(logComponent).Any("panic", r).Msg("prefetch search_user_history_summary failed")
 			}
 		}()
 		results, err := ltmInstance.SearchUserHistorySummary(ctx, query, defaultRecallHistoryMemNum,
@@ -428,7 +426,7 @@ func (p *OpenJiuwenProvider) Prefetch(ctx context.Context, query string, opts ..
 			ltm.SearchWithThreshold(0.3),
 		)
 		if err != nil {
-			logger.Warn(ojLogComponent).Err(err).Msg("prefetch search_user_history_summary 失败")
+			logger.Warn(logComponent).Err(err).Msg("prefetch search_user_history_summary failed")
 			return
 		}
 		if len(results) > 0 {
@@ -500,7 +498,7 @@ func (p *OpenJiuwenProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 		defer func() {
 			if r := recover(); r != nil {
 				// 对齐 Python L224-225: except Exception as e: logger.warning(f"sync_turn add_messages failed: {e}")
-				logger.Warn(ojLogComponent).Any("panic", r).Msg("sync_turn add_messages 失败")
+				logger.Warn(logComponent).Any("panic", r).Msg("sync_turn add_messages failed")
 				syncErr = fmt.Errorf("sync_turn add_messages panic: %v", r)
 			}
 		}()
@@ -512,7 +510,7 @@ func (p *OpenJiuwenProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 		)
 		if err != nil {
 			// 对齐 Python L224-225: logger.warning(f"sync_turn add_messages failed: {e}")
-			logger.Warn(ojLogComponent).Err(err).Msg("sync_turn add_messages 失败")
+			logger.Warn(logComponent).Err(err).Msg("sync_turn add_messages failed")
 			syncErr = err
 		}
 	}()
@@ -654,7 +652,7 @@ func (p *OpenJiuwenProvider) createKVStore() kv.BaseKVStore {
 		store, err := kv.NewFileKVStore(path)
 		if err != nil {
 			// 对齐 Python L256-257: logger.error("[OpenJiuwenMemoryProvider] KV store creation failed ({backend}): {e}")
-			logger.Error(ojLogComponent).Str("backend", backend).Err(err).Msg("KV store 创建失败")
+			logger.Error(logComponent).Str("backend", backend).Err(err).Msg("failed to create KV store")
 			return nil
 		}
 		return store
@@ -667,12 +665,12 @@ func (p *OpenJiuwenProvider) createKVStore() kv.BaseKVStore {
 		dsn := fmt.Sprintf("file:%s?cache=shared&_journal_mode=WAL", path)
 		gormDB, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 		if err != nil {
-			logger.Error(ojLogComponent).Str("backend", backend).Err(err).Msg("KV store 创建失败")
+			logger.Error(logComponent).Str("backend", backend).Err(err).Msg("failed to create KV store")
 			return nil
 		}
 		return kv.NewDbBasedKVStore(gormDB)
 	default:
-		logger.Error(ojLogComponent).Str("backend", backend).Msg("不支持的 KV 后端类型")
+		logger.Error(logComponent).Str("backend", backend).Msg("unsupported KV backend type")
 		return nil
 	}
 }
@@ -699,7 +697,7 @@ func (p *OpenJiuwenProvider) createVectorStore() vector.BaseVectorStore {
 		return vector.NewChromaVectorStore(persistDir)
 	default:
 		// 对齐 Python L268-269: logger.error("[OpenJiuwenMemoryProvider] Vector store creation failed ({backend}): {e}")
-		logger.Error(ojLogComponent).Str("backend", backend).Msg("不支持的 vector 后端类型")
+		logger.Error(logComponent).Str("backend", backend).Msg("unsupported vector backend type")
 		return nil
 	}
 }
@@ -727,12 +725,12 @@ func (p *OpenJiuwenProvider) createDBStore(ctx context.Context) db.BaseDbStore {
 		gormDB, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 		if err != nil {
 			// 对齐 Python L282-283: logger.error("[OpenJiuwenMemoryProvider] DB store creation failed ({backend}): {e}")
-			logger.Error(ojLogComponent).Str("backend", backend).Err(err).Msg("DB store 创建失败")
+			logger.Error(logComponent).Str("backend", backend).Err(err).Msg("failed to create DB store")
 			return nil
 		}
 		return db.NewDefaultDbStore(gormDB)
 	default:
-		logger.Error(ojLogComponent).Str("backend", backend).Msg("不支持的 DB 后端类型")
+		logger.Error(logComponent).Str("backend", backend).Msg("unsupported DB backend type")
 		return nil
 	}
 }
@@ -760,7 +758,7 @@ func (p *OpenJiuwenProvider) createEmbedding() embedding.BaseEmbedding {
 	emb := apiembedding.NewAPIEmbedding(cfg)
 	if emb == nil {
 		// 对齐 Python L298-299: logger.error("[OpenJiuwenMemoryProvider] Embedding creation failed: {e}")
-		logger.Error(ojLogComponent).Msg("Embedding 创建失败")
+		logger.Error(logComponent).Msg("failed to create Embedding")
 		return nil
 	}
 	return emb
@@ -776,12 +774,12 @@ func (p *OpenJiuwenProvider) parseScopeConfig() *memconfig.MemoryScopeConfig {
 	data, err := json.Marshal(scopeCfg)
 	if err != nil {
 		// 对齐 Python L237: logger.warning("[OpenJiuwenMemoryProvider] Failed to parse scope_config: {e}")
-		logger.Warn(ojLogComponent).Err(err).Msg("解析 scope_config 失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to parse scope_config")
 		return nil
 	}
 	cfg := &memconfig.MemoryScopeConfig{}
 	if err := json.Unmarshal(data, cfg); err != nil {
-		logger.Warn(ojLogComponent).Err(err).Msg("解析 scope_config 失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to parse scope_config")
 		return nil
 	}
 	return cfg

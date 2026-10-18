@@ -121,7 +121,7 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 				logger.Info(logComponent).
 					Str("event_type", "build_inputs_debug").
 					Str("query", truncated).
-					Msg("[_build_inputs][DEBUG] interaction_context 存在")
+					Msg("[_build_inputs][DEBUG] interaction_context present")
 			}
 		}
 	}

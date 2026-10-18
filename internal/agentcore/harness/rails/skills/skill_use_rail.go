@@ -286,14 +286,14 @@ func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 					logger.Warn(logger.ComponentAgentCore).
 						Str("tool_id", toolID).
 						Err(removeErr).
-						Msg("从 ResourceMgr 移除旧工具失败")
+						Msg("failed to remove old tool from ResourceMgr")
 				}
 			}
 			if err := resourceMgr.AddTool(t); err != nil {
 				logger.Warn(logger.ComponentAgentCore).
 					Str("tool_id", toolID).
 					Err(err).
-					Msg("添加工具资源到 resource_mgr 失败")
+					Msg("failed to add tool resource to resource_mgr")
 			}
 			r.ownedToolIDs[toolID] = struct{}{}
 		}
@@ -309,7 +309,7 @@ func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 			} else {
 				logger.Warn(logger.ComponentAgentCore).
 					Str("tool_name", t.Card().Name).
-					Msg("添加工具卡片到 ability_manager 失败")
+					Msg("failed to add tool card to ability_manager")
 			}
 		}
 	}
@@ -333,7 +333,7 @@ func (r *SkillUseRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			if removed == nil {
 				logger.Warn(logger.ComponentAgentCore).
 					Str("tool_name", toolName).
-					Msg("从 AbilityManager 注销工具失败，工具不存在")
+					Msg("failed to unregister tool from AbilityManager, tool not found")
 			}
 		}
 	}
@@ -403,14 +403,14 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 		if _, err := os.Stat(root); os.IsNotExist(err) {
 			logger.Debug(logger.ComponentAgentCore).
 				Str("skills_dir", root).
-				Msg("skills_dir 目录不存在，跳过")
+				Msg("skills_dir does not exist, skipping")
 			continue
 		}
 		info, err := os.Stat(root)
 		if err != nil || !info.IsDir() {
 			logger.Debug(logger.ComponentAgentCore).
 				Str("skills_dir", root).
-				Msg("skills_dir 不是目录，跳过")
+				Msg("skills_dir is not a directory, skipping")
 			continue
 		}
 
@@ -445,7 +445,7 @@ func LoadSkillsFromDir(ctx context.Context, skillsDir []string) ([]*skillpkg.Ski
 					Str("skill_name", skill.Name).
 					Str("keep_dir", prevDir).
 					Str("skip_dir", skill.Directory).
-					Msg("检测到重复技能名")
+					Msg("duplicate skill name detected")
 				continue
 			}
 			skillMap[skill.Name] = skill
@@ -499,14 +499,14 @@ func (r *SkillUseRail) refreshSkillsIncrementally(ctx context.Context) error {
 		if _, err := os.Stat(root); os.IsNotExist(err) {
 			logger.Debug(logger.ComponentAgentCore).
 				Str("skills_dir", root).
-				Msg("skills_dir 目录不存在，跳过")
+				Msg("skills_dir does not exist, skipping")
 			continue
 		}
 		info, err := os.Stat(root)
 		if err != nil || !info.IsDir() {
 			logger.Debug(logger.ComponentAgentCore).
 				Str("skills_dir", root).
-				Msg("skills_dir 不是目录，跳过")
+				Msg("skills_dir is not a directory, skipping")
 			continue
 		}
 
@@ -582,7 +582,7 @@ func (r *SkillUseRail) loadSkill(ctx context.Context, dir string, modTime time.T
 		logger.Warn(logger.ComponentAgentCore).
 			Str("path", skillMDPath).
 			Err(err).
-			Msg("加载描述失败")
+			Msg("failed to load description")
 	} else {
 		description = desc
 	}
@@ -677,7 +677,7 @@ func (r *SkillUseRail) collectSkillsInOrder() []*skillpkg.Skill {
 			logger.Warn(logger.ComponentAgentCore).
 				Str("skill_name", skill.Name).
 				Str("directory", skill.Directory).
-				Msg("检测到重复技能名，保留首个加载的技能")
+				Msg("duplicate skill name detected, keeping first loaded skill")
 			continue
 		}
 		seenNames[skill.Name] = struct{}{}

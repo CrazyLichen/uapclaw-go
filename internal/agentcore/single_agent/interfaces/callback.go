@@ -480,7 +480,7 @@ func (c *AgentCallbackContext) PushSteering(msg string) error {
 		logger.Warn(logComponent).
 			Str("event_type", "steering_queue_full").
 			Str("msg", msg).
-			Msg("steering 队列已满")
+			Msg("steering queue is full")
 		return ErrSteeringQueueFull
 	}
 }
@@ -559,7 +559,7 @@ func (c *AgentCallbackContext) FireLifecycle(
 			logger.Error(logComponent).
 				Str("event", string(after)).
 				Err(afterErr).
-				Msg("after 回调出错，掩盖原始异常")
+				Msg("after callback errored, masking original exception")
 			return origErr
 		}
 		// after 回调出错且无原始异常 → 返回 after 错误
@@ -672,7 +672,7 @@ func (m *AgentCallbackManager) RegisterRail(ctx context.Context, r AgentRail, op
 			Str("event_type", "rail_register_callback").
 			Str("event", string(event)).
 			Int("priority", r.Priority()).
-			Msg("Rail 钩子注册到回调框架")
+			Msg("Rail hook registered to callback framework")
 	}
 	return nil
 }
@@ -687,7 +687,7 @@ func (m *AgentCallbackManager) UnregisterRail(_ context.Context, r AgentRail) er
 		logger.Debug(logComponent).
 			Str("event_type", "rail_unregister_callback").
 			Str("event", string(event)).
-			Msg("Rail 钩子从回调框架注销")
+			Msg("Rail hook unregistered from callback framework")
 	}
 	return nil
 }

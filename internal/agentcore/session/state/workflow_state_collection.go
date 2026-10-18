@@ -48,7 +48,7 @@ func NewWorkflowStateCollection(ioState, globalState, compState, workflowState C
 		Str("action", "new_workflow_state_collection").
 		Str("parent_id", parentID).
 		Str("node_id", nodeID).
-		Msg("创建工作流状态集合")
+		Msg("created workflow state collection")
 	if traceState == nil {
 		traceState = make(map[string]any)
 	}
@@ -92,7 +92,7 @@ func (s *WorkflowStateCollection) UpdateGlobal(data map[string]any) {
 		return
 	}
 	if err := s.globalState.UpdateByID(s.nodeID, data); err != nil {
-		logger.Error(logComponent).Err(err).Str("action", "update_global").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+		logger.Error(logComponent).Err(err).Str("action", "update_global").Str("node_id", s.nodeID).Msg("UpdateByID failed")
 	}
 }
 

@@ -81,8 +81,6 @@ const (
 // Python: _TIERED_PATH_MATCHER = PathMatcher() (tiered_policy.py L26)
 var tieredPathMatcher = &PathMatcher{pm: PatternMatcher{}}
 
-var patternsLogComponent = logger.ComponentAgentCore
-
 // shellApprovalTools Shell 审批工具集合
 // Python: _SHELL_APPROVAL_TOOLS (patterns.py L92)
 var shellApprovalTools = map[string]bool{
@@ -156,7 +154,7 @@ func MatchWildcard(pattern, value string) bool {
 // BuildCommandAllowPattern 构建匹配完整命令的通配符模式。
 //
 // Python: build_command_allow_pattern(cmd) (patterns.py L253-261)
-// "start chrome" → "start chrome *"
+// 示例："start chrome" → "start chrome *"
 func BuildCommandAllowPattern(cmd string) string {
 	return strings.TrimSpace(cmd) + " *"
 }
@@ -195,7 +193,7 @@ func ContainsPath(parent, child string) bool {
 func WritePermissionsSectionToAgentConfigYAML(configYAMLPath string, permissions map[string]any) bool {
 	cfgPath := resolveAgentConfigYAMLPath(configYAMLPath)
 	if cfgPath == "" {
-		logger.Warn(patternsLogComponent).Msg("权限写入YAML: 中止，无配置YAML路径")
+		logger.Warn(logComponent).Msg("permission persist yaml: aborted, no config yaml path")
 		return false
 	}
 
@@ -287,7 +285,7 @@ func MergeExternalDirectoryAllowIntoPermissions(permissions map[string]any, path
 		if !exists || existing != "allow" {
 			extCfg[key] = "allow"
 			wrote = true
-			logger.Info(patternsLogComponent).
+			logger.Info(logComponent).
 				Str("path", key).
 				Msg("permission.merge.external: action=allow")
 		}
@@ -304,7 +302,7 @@ func MergePermissionAllowRuleIntoPermissions(permissions map[string]any, toolNam
 
 	currentPermission, _ := EvaluateTieredPolicy(perms, toolName, toolArgs)
 	if currentPermission != PermissionLevelAsk {
-		logger.Warn(patternsLogComponent).
+		logger.Warn(logComponent).
 			Str("tool", toolName).
 			Str("current", currentPermission.String()).
 			Msg("permission.merge.skip: current_permission_not_ask")
@@ -322,18 +320,18 @@ func MergePermissionAllowRuleIntoPermissions(permissions map[string]any, toolNam
 	if !persistTieredApprovalOverrideSuggestions(perms, suggestions) {
 		if !shellApprovalTools[toolName] && !pathApprovalTools[toolName] {
 			if persistTieredToolAllow(perms, toolName) {
-				logger.Info(patternsLogComponent).
+				logger.Info(logComponent).
 					Str("tool", toolName).
 					Msg("permission.merge.ok: target=tools")
 				return perms, true
 			}
 		}
-		logger.Warn(patternsLogComponent).
+		logger.Warn(logComponent).
 			Str("tool", toolName).
 			Msg("permission.merge.skip: no_safe_suggestion")
 		return perms, false
 	}
-	logger.Info(patternsLogComponent).
+	logger.Info(logComponent).
 		Str("tool", toolName).
 		Msg("permission.merge.ok: target=approval_overrides")
 	return perms, true
@@ -370,7 +368,7 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 	}
 	if data == nil {
 		if len(bootstrapPermissions) == 0 {
-			logger.Warn(patternsLogComponent).Str("path", cfgPath).Msg("权限持久化: 中止，新YAML需要回退权限")
+			logger.Warn(logComponent).Str("path", cfgPath).Msg("permission persist: aborted, new YAML needs bootstrap permissions")
 			return map[string]any{"ok": false, "error": "cannot bootstrap yaml (missing file; pass bootstrap_permissions with non-empty permissions dict)"}
 		}
 		data = map[string]any{"permissions": utils.DeepCopyMap(bootstrapPermissions)}
@@ -388,7 +386,7 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 		permissions["external_directory"] = extCfg
 	}
 	extCfg[dirNorm] = "allow"
-	logger.Info(patternsLogComponent).
+	logger.Info(logComponent).
 		Str("path", dirNorm).
 		Msg("permission.persist.cli_add_dir.external.write: action=allow")
 
@@ -418,7 +416,7 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 			"action":     "allow",
 		})
 		permissions["approval_overrides"] = overrides
-		logger.Info(patternsLogComponent).
+		logger.Info(logComponent).
 			Str("id", pathOverrideID).
 			Msg("permission.persist.cli_add_dir.override.write: target=path")
 	}
@@ -433,18 +431,18 @@ func PersistCliTrustedDirectory(rawPath string, configYAMLPath string, bootstrap
 			"action":     "allow",
 		})
 		permissions["approval_overrides"] = overrides
-		logger.Info(patternsLogComponent).
+		logger.Info(logComponent).
 			Str("id", shellOverrideID).
 			Msg("permission.persist.cli_add_dir.override.write: target=shell")
 	}
 
 	out, err := yaml.Marshal(data)
 	if err != nil {
-		logger.Error(patternsLogComponent).Err(err).Msg("权限持久化: CLI添加目录失败，序列化错误")
+		logger.Error(logComponent).Err(err).Msg("permission persist cli_add_dir: CLI add dir failed, serialize error")
 		return map[string]any{"ok": false, "error": err.Error()}
 	}
 	if err := os.WriteFile(cfgPath, out, 0644); err != nil {
-		logger.Error(patternsLogComponent).Err(err).Msg("权限持久化: CLI添加目录失败，写入错误")
+		logger.Error(logComponent).Err(err).Msg("permission persist cli_add_dir: CLI add dir failed, write error")
 		return map[string]any{"ok": false, "error": err.Error()}
 	}
 
@@ -707,7 +705,7 @@ func ensureSingleAllowOverride(overrides *[]any, toolName, matchType, pattern, a
 			ExistingAction:    existingAction,
 		}
 		if isSameAllowOverride(sig) {
-			logger.Info(patternsLogComponent).
+			logger.Info(logComponent).
 				Str("tool", toolName).
 				Str("match_type", matchType).
 				Str("pattern", pattern).

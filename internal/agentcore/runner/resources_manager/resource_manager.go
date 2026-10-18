@@ -157,7 +157,7 @@ func NewResourceMgr() *ResourceMgr {
 
 	logger.Info(logComponent).
 		Str("event_type", "RESOURCE_MGR_INIT").
-		Msg("资源管理器初始化完成")
+		Msg("resource manager initialized")
 
 	return mgr
 }
@@ -261,7 +261,7 @@ func (m *ResourceMgr) AddAgents(agents []AgentEntry, opts ...ResourceOption) []R
 				Str("event_type", "RESOURCE_MGR_ADD_AGENTS_ERROR").
 				Str("agent_id", entry.Card.ID).
 				Err(err).
-				Msg("批量添加 Agent 失败")
+				Msg("failed to batch add agents")
 			results = append(results, Result{Err: err})
 		} else {
 			results = append(results, Result{Value: entry.Card.ID})
@@ -339,7 +339,7 @@ func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOp
 				Str("event_type", "RESOURCE_MGR_ADD_WORKFLOWS_ERROR").
 				Str("workflow_id", entry.ID).
 				Err(err).
-				Msg("批量添加 Workflow 失败")
+				Msg("failed to batch add workflows")
 			results = append(results, Result{Err: err})
 		} else {
 			results = append(results, Result{Value: entry.ID})
@@ -480,7 +480,7 @@ func (m *ResourceMgr) AddModels(models []ModelEntry, opts ...ResourceOption) []R
 				Str("event_type", "RESOURCE_MGR_ADD_MODELS_ERROR").
 				Str("model_id", entry.ID).
 				Err(err).
-				Msg("批量添加 Model 失败")
+				Msg("failed to batch add models")
 			results = append(results, Result{Err: err})
 		} else {
 			results = append(results, Result{Value: entry.ID})
@@ -553,7 +553,7 @@ func (m *ResourceMgr) AddPrompts(prompts []PromptEntry, opts ...ResourceOption) 
 				Str("event_type", "RESOURCE_MGR_ADD_PROMPTS_ERROR").
 				Str("prompt_id", entry.ID).
 				Err(err).
-				Msg("批量添加 Prompt 失败")
+				Msg("failed to batch add prompts")
 			results = append(results, Result{Err: err})
 		} else {
 			results = append(results, Result{Value: entry.ID})
@@ -642,7 +642,7 @@ func (m *ResourceMgr) RemoveSysOperation(sysOperationIDs []string, opts ...Resou
 			logger.Error(logComponent).
 				Str("event_type", "RESOURCE_MGR_REMOVE_SYS_OP_TOOLS_ERROR").
 				Err(rmErr).
-				Msg("移除系统操作关联工具失败")
+				Msg("failed to remove tools associated with system operation")
 		}
 	}
 	_ = results
@@ -761,7 +761,7 @@ func (m *ResourceMgr) AddMcpServer(ctx context.Context, serverConfig *mcptypes.M
 		Str("server_id", serverConfig.ServerID).
 		Str("server_name", serverConfig.ServerName).
 		Int("tool_count", len(cards)).
-		Msg("ResourceManager 添加 MCP 服务器成功")
+		Msg("ResourceManager added MCP server")
 	return cards, nil
 }
 
@@ -910,7 +910,7 @@ func (m *ResourceMgr) RemoveTag(tag Tag, opts ...TagOption) ([]string, error) {
 		Str("event_type", "RESOURCE_MGR_REMOVE_TAG").
 		Str("tag", string(tag)).
 		Strs("removal_resource_ids", removedResourceIDs).
-		Msg("移除标签及关联资源成功")
+		Msg("tag and associated resources removed")
 
 	return removedResourceIDs, nil
 }
@@ -1007,7 +1007,7 @@ func (m *ResourceMgr) Release(ctx context.Context) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "RESOURCE_MGR_RELEASE").
-		Msg("ResourceManager 已释放并重建")
+		Msg("ResourceManager released and rebuilt")
 
 	return err
 }
@@ -1094,7 +1094,7 @@ func (m *ResourceMgr) registerSysOperationTools(sysOperationID string, instance 
 				Str("event_type", "RESOURCE_MGR_REGISTER_SYS_OP_TOOL_ERROR").
 				Str("tool_id", entry.ToolID).
 				Err(addErr).
-				Msg("注册系统操作工具失败")
+				Msg("failed to register system operation tools")
 			continue
 		}
 		toolIDs = append(toolIDs, entry.ToolID)
@@ -1420,7 +1420,7 @@ func (m *ResourceMgr) innerAddResource(resourceID, resourceType string, resource
 		Str("resource_type", resourceType).
 		Str("tag", effectiveTag).
 		Str("card", resourceCardStr(resourceCard, resourceID)).
-		Msg("添加资源成功")
+		Msg("resource added")
 
 	return nil
 }
@@ -1470,7 +1470,7 @@ func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType st
 				Str("tag", tag).
 				Str("card", resourceCardStr(removedCard, removeID)).
 				Err(rmErr).
-				Msg("移除资源失败")
+				Msg("failed to remove resource")
 			// S9 修复：容错继续，将失败结果加入列表而非直接返回
 			results = append(results, Result{Err: rmErr})
 			continue
@@ -1491,7 +1491,7 @@ func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType st
 			Str("resource_type", resourceType).
 			Str("tag", tag).
 			Str("card", resourceCardStr(removedCard, removeID)).
-			Msg("移除资源成功")
+			Msg("resource removed")
 	}
 
 	return results, nil
@@ -1522,7 +1522,7 @@ func (m *ResourceMgr) innerGetResources(ctx context.Context, resourceIDs []strin
 				Str("resource_id", id).
 				Str("resource_type", resourceType).
 				Err(getErr).
-				Msg("获取资源失败")
+				Msg("failed to get resource")
 			continue
 		}
 		if resource != nil {

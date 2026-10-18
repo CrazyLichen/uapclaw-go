@@ -111,7 +111,7 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 						Err(err).
 						Str("action", "commit").
 						Str("node_id", key).
-						Msg("提交更新到底层 state 失败")
+						Msg("failed to commit updates to underlying state")
 				}
 			}
 		}
@@ -129,7 +129,7 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 						Err(err).
 						Str("action", "commit").
 						Str("node_id", id).
-						Msg("提交更新到底层 state 失败")
+						Msg("failed to commit updates to underlying state")
 				}
 			}
 			s.updates[id] = make([]map[string]any, 0)

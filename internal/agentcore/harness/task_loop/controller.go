@@ -67,7 +67,7 @@ func (tc *TaskLoopController) SubmitRound(
 ) error {
 	handler := tc.EventHandler()
 	if handler == nil {
-		logger.Error(logComponent).Msg("SubmitRound: EventHandler 为 nil")
+		logger.Error(logComponent).Msg("SubmitRound: EventHandler is nil")
 		return nil
 	}
 
@@ -75,7 +75,7 @@ func (tc *TaskLoopController) SubmitRound(
 
 	event, err := schema.FromUserInput(query)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("query", query).Msg("SubmitRound: 构建 InputEvent 失败")
+		logger.Error(logComponent).Err(err).Str("query", query).Msg("SubmitRound: failed to build InputEvent")
 		return err
 	}
 
@@ -104,7 +104,7 @@ func (tc *TaskLoopController) SubmitRound(
 		Bool("is_follow_up", isFollowUp).
 		Bool("is_streaming", isStreaming).
 		Str("run_kind", string(runKind)).
-		Msg("提交任务轮次")
+		Msg("submitting task round")
 
 	return tc.PublishEventAsync(ctx, sess, event)
 }
@@ -115,7 +115,7 @@ func (tc *TaskLoopController) SubmitRound(
 func (tc *TaskLoopController) WaitRoundCompletion(ctx context.Context, timeout *float64) map[string]any {
 	handler := tc.EventHandler()
 	if handler == nil {
-		logger.Warn(logComponent).Msg("WaitRoundCompletion: EventHandler 为 nil，返回空结果")
+		logger.Warn(logComponent).Msg("WaitRoundCompletion: EventHandler is nil, returning empty result")
 		return nil
 	}
 
@@ -145,7 +145,7 @@ func (tc *TaskLoopController) EnqueueFollowUp(msg string) {
 		queues.PushFollowUp(msg)
 		return
 	}
-	logger.Warn(logComponent).Str("msg", msg).Msg("EnqueueFollowUp: 无 InteractionQueues，消息丢弃")
+	logger.Warn(logComponent).Str("msg", msg).Msg("EnqueueFollowUp: no InteractionQueues, message discarded")
 }
 
 // HasFollowUp 检查是否有待处理的 follow-up 消息。

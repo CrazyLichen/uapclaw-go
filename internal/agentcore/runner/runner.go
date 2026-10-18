@@ -94,7 +94,7 @@ func Start(ctx context.Context) error {
 	logger.Info(logComponent).
 		Str("event_type", "runner_start").
 		Str("runner_id", r.runnerID).
-		Msg("开始启动 Runner")
+		Msg("starting runner")
 
 	// 步骤 1：初始化 TaskManager（对齐 Python L271: await self._ensure_root_task_group()）
 	// Go 不需要 TaskGroup 作用域：TaskManager 是全局单例（GetTaskManager()），
@@ -110,7 +110,7 @@ func Start(ctx context.Context) error {
 					Str("event_type", "runner_start_failed").
 					Str("runner_id", r.runnerID).
 					Int("cancelled_tasks", count).
-					Msg("Runner 启动失败，取消运行中任务")
+					Msg("runner start failed, cancelling running tasks")
 			}
 		}
 	}()
@@ -122,7 +122,7 @@ func Start(ctx context.Context) error {
 			Str("event_type", "runner_start").
 			Str("runner_id", r.runnerID).
 			Str("checkpointer_type", cfg.CheckpointerConfig.Type).
-			Msg("开始初始化 Checkpointer")
+			Msg("initializing checkpointer")
 		cp, err := checkpointer.CreateCheckpointer(ctx, *cfg.CheckpointerConfig)
 		if err != nil {
 			logger.Error(logComponent).
@@ -130,7 +130,7 @@ func Start(ctx context.Context) error {
 				Str("runner_id", r.runnerID).
 				Str("checkpointer_type", cfg.CheckpointerConfig.Type).
 				Err(err).
-				Msg("Checkpointer 初始化失败")
+				Msg("checkpointer initialization failed")
 			return fmt.Errorf("checkpointer 初始化失败: %w", err)
 		}
 		checkpointer.SetDefaultCheckpointer(cp)
@@ -138,7 +138,7 @@ func Start(ctx context.Context) error {
 			Str("event_type", "runner_start").
 			Str("runner_id", r.runnerID).
 			Str("checkpointer_type", cfg.CheckpointerConfig.Type).
-			Msg("Checkpointer 初始化成功")
+			Msg("checkpointer initialized")
 	}
 
 	// 步骤 3：启动分布式消息队列（对齐 Python L304-312）
@@ -154,7 +154,7 @@ func Start(ctx context.Context) error {
 	logger.Info(logComponent).
 		Str("event_type", "runner_start").
 		Str("runner_id", r.runnerID).
-		Msg("Runner 启动成功")
+		Msg("runner started")
 	return nil
 }
 
@@ -166,7 +166,7 @@ func Stop(ctx context.Context) error {
 	logger.Info(logComponent).
 		Str("event_type", "runner_stop").
 		Str("runner_id", r.runnerID).
-		Msg("开始停止 Runner")
+		Msg("starting runner stop")
 
 	var firstErr error
 
@@ -179,7 +179,7 @@ func Stop(ctx context.Context) error {
 				Str("event_type", "runner_stop").
 				Str("runner_id", r.runnerID).
 				Int("cancelled_tasks", count).
-				Msg("取消运行中任务")
+				Msg("cancelling running tasks")
 		}
 
 		// 步骤 4：释放资源管理器（对齐 Python L347: await self._resource_manager.release()）
@@ -190,7 +190,7 @@ func Stop(ctx context.Context) error {
 					Str("event_type", "runner_stop").
 					Str("runner_id", r.runnerID).
 					Err(err).
-					Msg("资源管理器释放失败")
+					Msg("resource manager release failed")
 			}
 		}
 	}()
@@ -204,7 +204,7 @@ func Stop(ctx context.Context) error {
 			Str("event_type", "runner_stop").
 			Str("runner_id", r.runnerID).
 			Err(err).
-			Msg("消息队列停止失败")
+			Msg("message queue stop failed")
 		firstErr = err
 	}
 
@@ -213,14 +213,14 @@ func Stop(ctx context.Context) error {
 			Str("event_type", "runner_stop").
 			Str("runner_id", r.runnerID).
 			Err(firstErr).
-			Msg("Runner 停止过程中遇到错误")
+			Msg("runner stop encountered errors")
 		return firstErr
 	}
 
 	logger.Info(logComponent).
 		Str("event_type", "runner_stop").
 		Str("runner_id", r.runnerID).
-		Msg("Runner 停止成功")
+		Msg("runner stopped")
 	return nil
 }
 
@@ -265,7 +265,7 @@ func RunAgent(
 				logger.Warn(logComponent).
 					Str("event_type", "runner_run_agent").
 					Err(postErr).
-					Msg("Agent PostRun 失败")
+					Msg("agent PostRun failed")
 				return result, postErr
 			}
 		}
@@ -320,7 +320,7 @@ func RunAgentStreaming(
 					logger.Warn(logComponent).
 						Str("event_type", "runner_run_agent_streaming").
 						Err(postErr).
-						Msg("Agent PostRun 失败")
+						Msg("agent PostRun failed")
 				}
 			}
 		}
@@ -444,7 +444,7 @@ func SpawnAgent(
 			logger.Warn(logComponent).
 				Str("event_type", "spawn_agent").
 				Err(hcErr).
-				Msg("健康检查启动失败")
+				Msg("health check start failed")
 		}
 	}
 
@@ -496,7 +496,7 @@ func SpawnAgentStreaming(
 			logger.Warn(logComponent).
 				Str("event_type", "spawn_agent_streaming").
 				Err(hcErr).
-				Msg("健康检查启动失败")
+				Msg("health check start failed")
 		}
 	}
 
@@ -545,7 +545,7 @@ func Release(ctx context.Context, sessionID string, force bool) error {
 	logger.Warn(logComponent).
 		Str("event_type", "runner_release").
 		Str("session_id", sessionID).
-		Msg("Checkpointer 为 nil，Release 被跳过")
+		Msg("checkpointer is nil, Release skipped")
 	return nil
 }
 
@@ -612,7 +612,7 @@ func SetConfig(cfg *config.RunnerConfig) {
 		Str("event_type", "runner_set_config").
 		Str("runner_id", r.runnerID).
 		Bool("distributed_mode", cfg != nil && cfg.DistributedMode).
-		Msg("设置 Runner 配置")
+		Msg("setting runner config")
 	config.SetRunnerConfig(cfg)
 }
 

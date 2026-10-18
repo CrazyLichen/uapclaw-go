@@ -53,10 +53,8 @@ type InteractGate struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var (
-	// gateLogComponent 日志组件
-	gateLogComponent = logger.ComponentChannel
-)
+// logComponent 日志组件
+var logComponent = logger.ComponentTeam
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -180,8 +178,8 @@ func (g *InteractGate) CloseAndDrain(ctx context.Context) error {
 	case <-drainedCh:
 		return nil
 	case <-ctx.Done():
-		logger.Warn(gateLogComponent).Err(ctx.Err()).
-			Msg("CloseAndDrain 在等待飞行中载荷排空时被取消")
+		logger.Warn(logComponent).Err(ctx.Err()).
+			Msg("CloseAndDrain cancelled while waiting for in-flight payloads to drain")
 		return ctx.Err()
 	}
 }

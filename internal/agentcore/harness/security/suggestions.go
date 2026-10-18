@@ -4,8 +4,6 @@ import (
 	"strings"
 
 	"github.com/anmitsu/go-shlex"
-
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -56,8 +54,6 @@ var pathSuggestionKeys = []string{
 	"path", "file_path", "target_file", "file", "old_path", "new_path",
 	"source_path", "dest_path", "directory", "dir",
 }
-
-var suggestionsLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

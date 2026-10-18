@@ -94,9 +94,9 @@ func UserHomeDir() string {
 // Python: Path.expanduser()
 //
 // 支持：
-//   - "~" → UserHomeDir()
-//   - "~/foo" → UserHomeDir()/foo
-//   - "~/" → UserHomeDir()/
+//   - "~" → 展开为 UserHomeDir()
+//   - "~/foo" → 展开为 UserHomeDir()/foo
+//   - "~/" → 展开为 UserHomeDir()/
 //   - 其他路径原样返回
 func ExpandHome(path string) string {
 	if len(path) == 0 || path[0] != '~' {

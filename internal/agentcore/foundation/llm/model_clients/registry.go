@@ -71,7 +71,7 @@ func (r *ClientRegistry) Register(name, clientType string, factory ClientFactory
 	if _, exists := r.factories[fullName]; exists {
 		logger.Warn(logComponent).
 			Str("full_name", fullName).
-			Msg("客户端类型已注册，跳过")
+			Msg("client type already registered, skipping")
 		return
 	}
 

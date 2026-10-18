@@ -23,8 +23,7 @@
 //	├── helpers.go        # 3 结构体 + 3 函数类型 + 4 导出推送函数
 //	└── logic/            # 纯逻辑子包（无 gateway_push 依赖）
 //	    ├── doc.go        # 子包文档
-//	    ├── helpers.go    # 3 结构体 + 常量/变量 + 18 导出函数 + 5 非导出函数
-//	    └── helpers_test.go
+//	    └── helpers.go    # 3 结构体 + 常量/变量 + 18 导出函数 + 5 非导出函数
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/agent_adapter/evolution_helpers.py
 package evolution

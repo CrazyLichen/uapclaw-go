@@ -62,7 +62,7 @@ func SetRunnerConfig(cfg *RunnerConfig) {
 		Bool("distributed_mode", cfg.DistributedMode).
 		Bool("enable_session_controller", cfg.EnableSessionController).
 		Bool("enable_a2a", cfg.EnableA2A).
-		Msg("Runner 全局配置已设置")
+		Msg("runner global config set")
 }
 
 // GetRunnerConfig 获取全局 Runner 配置。
