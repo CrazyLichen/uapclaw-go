@@ -1,6 +1,7 @@
 package memoryrpc
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -208,4 +209,82 @@ func TestRelativePath_等于根(t *testing.T) {
 	setupIsolatedHome(t)
 	assert.Equal(t, ".", relativePath("/proj", "/ws", "/proj"))
 	assert.Equal(t, ".", relativePath("/ws", "/ws", ""))
+}
+
+// ──────────────────────────── safeStat / countLines ────────────────────────────
+
+// TestSafeStat_正常与异常 测试 stat 与 OSError 路径
+func TestSafeStat_正常与异常(t *testing.T) {
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "a.md")
+	assert.NoError(t, os.WriteFile(p, []byte("hello"), 0o644))
+	st := safeStat(p)
+	assert.Equal(t, int64(5), st["size"])
+	assert.NotZero(t, st["mtime"])
+
+	st2 := safeStat(filepath.Join(tmp, "missing.md"))
+	assert.Equal(t, int64(0), st2["size"])
+	assert.Equal(t, int64(0), st2["mtime"])
+}
+
+// TestCountLines_行数统计 测试正常与 OSError 与空文件
+func TestCountLines_行数统计(t *testing.T) {
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "a.md")
+	assert.NoError(t, os.WriteFile(p, []byte("l1\nl2\nl3"), 0o644))
+	assert.Equal(t, 3, countLines(p)) // 尾无换行 3 行（对齐 Python 逐行迭代）
+	assert.Equal(t, 0, countLines(filepath.Join(tmp, "missing.md")))
+
+	empty := filepath.Join(tmp, "empty.md")
+	assert.NoError(t, os.WriteFile(empty, []byte(""), 0o644))
+	assert.Equal(t, 0, countLines(empty)) // 空文件 0 行（对齐 Python sum=0）
+}
+
+// TestCountLines_带尾换行 测试尾换行语义
+func TestCountLines_带尾换行(t *testing.T) {
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "a.md")
+	assert.NoError(t, os.WriteFile(p, []byte("l1\nl2\n"), 0o644))
+	// Python 逐行迭代 "l1\nl2\n" → 2 行
+	assert.Equal(t, 2, countLines(p))
+}
+
+// ──────────────────────────── scanMDFiles ────────────────────────────
+
+// TestScanMDFiles_基本扫描 测试仅 .md + 排序 + 字段
+func TestScanMDFiles_基本扫描(t *testing.T) {
+	tmp := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "b.md"), []byte("x\ny"), 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "a.md"), []byte("z"), 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "c.txt"), []byte("ignore"), 0o644)) // 非 md
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "sub"), 0o755))                     // 子目录忽略
+
+	files := scanMDFiles(tmp, "auto", "/ws", "")
+	assert.Len(t, files, 2)
+	assert.Equal(t, "a.md", filepath.Base(files[0]["path"].(string))) // 按名排序
+	assert.Equal(t, "auto", files[0]["kind"].(string))
+	assert.Equal(t, true, files[0]["exists"].(bool))
+	assert.Equal(t, 1, files[0]["lines"].(int)) // "z" → 1 行
+	// relative_path：tmp 不在 /ws 下 → 原绝对路径（对齐 Python 兜底）
+	assert.Equal(t, filepath.Join(tmp, "a.md"), files[0]["relative_path"].(string))
+
+	// b.md 行数："x\ny" → 2 行
+	assert.Equal(t, 2, files[1]["lines"].(int))
+}
+
+// TestScanMDFiles_目录不存在 测试空结果
+func TestScanMDFiles_目录不存在(t *testing.T) {
+	files := scanMDFiles("/nonexistent/dir", "auto", "/ws", "")
+	assert.Empty(t, files)
+}
+
+// ──────────────────────────── isCodeMode ────────────────────────────
+
+// TestIsCodeMode_前缀判定 测试 code 前缀（对齐 Python mode.startswith("code")）
+func TestIsCodeMode_前缀判定(t *testing.T) {
+	assert.True(t, isCodeMode("code"))
+	assert.True(t, isCodeMode("code-x"))
+	assert.False(t, isCodeMode("plan"))
+	assert.False(t, isCodeMode("agent"))
+	assert.False(t, isCodeMode(""))
 }

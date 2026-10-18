@@ -3,6 +3,7 @@
 package memoryrpc
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -245,4 +246,68 @@ func absoluteJoin(base, rel string) string {
 		}
 	}
 	return joined
+}
+
+// safeStat 安全取文件 stat，失败返回 {size:0, mtime:0}。
+// Python: _safe_stat (L159-164)
+func safeStat(path string) map[string]any {
+	if s, err := os.Stat(path); err == nil {
+		// Python: {"size": s.st_size, "mtime": s.st_mtime}
+		return map[string]any{"size": s.Size(), "mtime": s.ModTime().UnixMilli()}
+	}
+	return map[string]any{"size": int64(0), "mtime": int64(0)}
+}
+
+// countLines 统计文件行数（utf-8 容错读），失败或空文件返回 0。
+// Python: _count_lines (L167-172)：逐行迭代计数（"l1\nl2\n"→2，"l1\nl2\nl3"→3，""→0）
+func countLines(path string) int {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer func() { _ = f.Close() }()
+	count := 0
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		count++
+	}
+	return count
+}
+
+// scanMDFiles 扫描目录下 .md 文件（按文件名排序）。
+// Python: _scan_md_files (L175-191)：os.scandir + sorted(key=name)
+func scanMDFiles(dir, kind, workspace string, projectDir string) []map[string]any {
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		// Python: if not os.path.isdir(directory): return []
+		return nil
+	}
+	entries, err := os.ReadDir(dir) // ReadDir 天然按 name 排序
+	if err != nil {
+		return nil
+	}
+	var results []map[string]any
+	for _, entry := range entries {
+		// Python: if entry.is_file() and entry.name.endswith(".md")
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		full := filepath.Join(dir, entry.Name())
+		stat := safeStat(full)
+		results = append(results, map[string]any{
+			"path":          full,
+			"relative_path": relativePath(full, workspace, projectDir),
+			"kind":          kind,
+			"exists":        true,
+			"size":          stat["size"],
+			"mtime":         stat["mtime"],
+			"lines":         countLines(full),
+		})
+	}
+	return results
+}
+
+// isCodeMode 判断是否 code 模式（status 特判用）。
+// Python: _is_code_mode (L194-195)：mode.startswith("code")
+func isCodeMode(mode string) bool {
+	return strings.HasPrefix(mode, "code")
 }
