@@ -4,6 +4,25 @@ import "strings"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ExternalMemoryConfig memory.external 配置段（含默认值填充）。
+// 对齐 Python get_external_memory_config 返回的 dict (L52-70)。
+type ExternalMemoryConfig struct {
+	// Provider 提供者名称（openjiuwen/mem0/openviking/插件名），空串=禁用
+	Provider string
+	// UserID 用户标识，默认 __default__
+	UserID string
+	// ScopeID 作用域标识，默认 __default__
+	ScopeID string
+	// AllowedPlugins 允许加载的插件列表
+	AllowedPlugins []string
+	// OpenJiuwen openjiuwen provider 子段配置
+	OpenJiuwen map[string]any
+	// Mem0 mem0 provider 子段配置
+	Mem0 map[string]any
+	// OpenViking openviking provider 子段配置
+	OpenViking map[string]any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -64,4 +83,75 @@ func IsExternalMemoryAllowed(cfg map[string]any) bool {
 	return engine == "external" || engine == "both"
 }
 
+// GetExternalMemoryConfig 返回带默认值填充的 memory.external 配置段。
+// 对齐 Python get_external_memory_config (L52-70)。
+func GetExternalMemoryConfig(cfg map[string]any) ExternalMemoryConfig {
+	// Python: cfg = config if config is not None else _load_config()
+	if cfg == nil {
+		cfg = loadConfig()
+	}
+	var ext map[string]any
+	if memCfg, ok := cfg["memory"].(map[string]any); ok {
+		ext, _ = memCfg["external"].(map[string]any)
+	}
+	if ext == nil {
+		ext = map[string]any{}
+	}
+
+	strVal := func(key string) string {
+		s, _ := ext[key].(string)
+		return s
+	}
+	sub := func(key string) map[string]any {
+		m, _ := ext[key].(map[string]any)
+		if m == nil {
+			m = map[string]any{}
+		}
+		return m
+	}
+
+	// Python: "allowed_plugins": ext.get("allowed_plugins") or []
+	var plugins []string
+	if arr, ok := ext["allowed_plugins"].([]any); ok {
+		plugins = make([]string, 0, len(arr))
+		for _, item := range arr {
+			if s, ok := item.(string); ok {
+				plugins = append(plugins, s)
+			}
+		}
+	}
+
+	return ExternalMemoryConfig{
+		// Python: "provider": (ext.get("provider") or "").strip()
+		Provider: strings.TrimSpace(strVal("provider")),
+		// Python: "user_id": ext.get("user_id") or _DEFAULT_USER
+		UserID: strValDefaultExternal(strVal("user_id")),
+		// Python: "scope_id": ext.get("scope_id") or _DEFAULT_SCOPE
+		ScopeID: strValDefaultExternal(strVal("scope_id")),
+		AllowedPlugins: plugins,
+		OpenJiuwen:     sub("openjiuwen"),
+		Mem0:           sub("mem0"),
+		OpenViking:     sub("openviking"),
+	}
+}
+
+// IsExternalMemoryEnabled 外接记忆是否启用：引擎放行且配置了 provider。
+// 对齐 Python is_external_memory_enabled (L73-77)。
+func IsExternalMemoryEnabled(cfg map[string]any) bool {
+	if !IsExternalMemoryAllowed(cfg) {
+		return false
+	}
+	return GetExternalMemoryConfig(cfg).Provider != ""
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// strValDefaultExternal 空串回落外接记忆默认值。
+// 对齐 Python: ext.get(key) or _DEFAULT_USER/_DEFAULT_SCOPE
+// （两个默认常量值同为 __default__，语义等价）
+func strValDefaultExternal(s string) string {
+	if s != "" {
+		return s
+	}
+	return defaultExternalUser
+}
