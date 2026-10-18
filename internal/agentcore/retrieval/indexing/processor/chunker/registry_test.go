@@ -60,6 +60,7 @@ func TestGetChunker_未知名报错含注册列表(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Unknown chunker: no_such_chunker")
 	assert.Contains(t, err.Error(), "hybrid") // 内置 hybrid 已注册
+	assert.Contains(t, err.Error(), "char")  // 13.6 后内置 char 也已注册
 }
 
 // TestGetChunker_工厂透传参数 kwargs 透传到工厂
@@ -75,11 +76,12 @@ func TestGetChunker_工厂透传参数(t *testing.T) {
 	assert.Equal(t, 20, bc.ChunkOverlap)
 }
 
-// TestHybridFactory_inner缺省时13_6前占位报错 ⤴️ 13.6 落地默认 CharChunker
-func TestHybridFactory_inner缺省时13_6前占位报错(t *testing.T) {
-	_, err := GetChunker("hybrid") // 无 inner → 需默认 CharChunker（13.6 前占位）
+// TestHybridFactory_inner缺省时13_8前占位报错 ⤴️ 13.6 已回填默认 CharChunker 构造校验
+func TestHybridFactory_inner缺省时13_8前占位报错(t *testing.T) {
+	// 无 inner → 默认 CharChunker(512/50) 构造成功 → 落到 13.8 占位
+	_, err := GetChunker("hybrid")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented until 13.6")
+	assert.Contains(t, err.Error(), "not implemented until 13.8")
 }
 
 // TestHybridFactory_inner注入时13_8前占位报错 ⤴️ 13.8 落地 HybridChunker
@@ -100,11 +102,12 @@ func TestHybridFactory_多余参数报错(t *testing.T) {
 	assert.Contains(t, err.Error(), "Unknown kwargs for 'hybrid' chunker")
 }
 
-// TestHybridFactory_inner非Chunker报错 对齐 Python TypeError（nil 在 Go 侧即"非实例"）
-func TestHybridFactory_inner非Chunker报错(t *testing.T) {
+// TestHybridFactory_inner显式nil走缺省分支 WithInnerChunker(nil) 等价未设置，
+// 走默认 CharChunker（inner 类型由 Chunker 接口静态保证，无需运行时断言）
+func TestHybridFactory_inner显式nil走缺省分支(t *testing.T) {
 	_, err := GetChunker("hybrid", WithInnerChunker(nil))
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented until 13.6")
+	assert.Contains(t, err.Error(), "not implemented until 13.8")
 }
 
 // TestNewChunkerOptions_默认值512和50 对齐 Python 默认 chunk_size/chunk_overlap

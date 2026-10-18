@@ -114,3 +114,39 @@ func TestCharChunker_Process_等价ChunkDocuments(t *testing.T) {
 		assert.Equal(t, viaDocs[i].Metadata["total_chunks"], viaProcess[i].Metadata["total_chunks"])
 	}
 }
+
+// TestGetChunker_char按名获取 对齐 Python register_chunker("char", CharChunker)
+func TestGetChunker_char按名获取(t *testing.T) {
+	c, err := GetChunker("char")
+	assert.NoError(t, err)
+	cc, ok := c.(*CharChunker)
+	assert.True(t, ok)
+	assert.Equal(t, 512, cc.ChunkSize)
+	assert.Equal(t, 50, cc.ChunkOverlap)
+
+	c2, err := GetChunker("char", WithChunkSize(64), WithChunkOverlap(8))
+	assert.NoError(t, err)
+	cc2, ok := c2.(*CharChunker)
+	assert.True(t, ok)
+	assert.Equal(t, 64, cc2.ChunkSize)
+	assert.Equal(t, 8, cc2.ChunkOverlap)
+}
+
+// TestGetChunker_char忽略Extra 对齐 Python **kwargs 透传后吞掉
+func TestGetChunker_char忽略Extra(t *testing.T) {
+	c, err := GetChunker("char", WithExtra("foo", "bar"))
+	assert.NoError(t, err)
+	assert.NotNil(t, c)
+}
+
+// TestHybridFactory_inner缺省走CharChunker参数校验穿透 ⤴️ 13.6 回填验证：
+// 非法参数经默认 CharChunker 构造校验报 155100/155101
+func TestHybridFactory_inner缺省走CharChunker参数校验穿透(t *testing.T) {
+	_, err := GetChunker("hybrid", WithChunkSize(0))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "155100")
+
+	_, err = GetChunker("hybrid", WithChunkSize(10), WithChunkOverlap(10))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "155101")
+}

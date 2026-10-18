@@ -152,26 +152,32 @@ func GetChunker(name string, opts ...ChunkerOption) (Chunker, error) {
 
 // init 内置注册。对齐 Python __init__.py 尾部的 register_chunker 调用。
 func init() {
-	// "char" 注册随 13.6 CharChunker 落地 ⤴️
+	// 对齐 Python register_chunker("char", CharChunker)：类作工厂，kwargs 透传构造
+	_ = RegisterChunker("char", func(opts ...ChunkerOption) (Chunker, error) {
+		return NewCharChunker(opts...)
+	}, false)
 	_ = RegisterChunker("hybrid", hybridFactory, false)
 }
 
 // hybridFactory hybrid 分块器工厂。
 //
 // 对齐 Python _hybrid_factory：
-//   - inner 缺省：由 chunk_size/chunk_overlap 构造默认 CharChunker
-//     （13.6 前占位报错 ⤴️），多余参数透传给 CharChunker（前向兼容）
-//   - inner 已给：多余 kwargs 报错（TypeError 语义）；inner 必须实现 Chunker
-//   - HybridChunker 实体在 13.8 回填 ⤴️，当前 inner 分支为占位
+//   - inner 缺省：由 chunk_size/chunk_overlap 构造默认 CharChunker（13.6 已回填），
+//     参数经其构造校验（155100/155101），多余 Extra 随选项透传给 CharChunker 后
+//     吞掉（对齐 Python **params 前向兼容）
+//   - inner 已给：多余 kwargs 报错（TypeError 语义）；inner 类型由 Chunker
+//     接口静态保证（Go 无运行时 isinstance 需求）
+//   - HybridChunker 实体在 13.8 回填 ⤴️，当前返回占位错误
 //
 // Python: chunker/__init__.py _hybrid_factory
 func hybridFactory(opts ...ChunkerOption) (Chunker, error) {
 	o := NewChunkerOptions(opts...)
 	if o.InnerChunker == nil {
-		// ⤴️ 13.6：替换为 CharChunker 构造（多余 Extra 透传）
-		return nil, fmt.Errorf("default inner chunker (char) not implemented until 13.6")
-	}
-	if len(o.Extra) > 0 {
+		// ⤴️ 13.6 回填：inner 缺省时默认 inner 为 CharChunker，先过其构造校验
+		if _, err := NewCharChunker(opts...); err != nil {
+			return nil, err
+		}
+	} else if len(o.Extra) > 0 {
 		keys := make([]string, 0, len(o.Extra))
 		for k := range o.Extra {
 			keys = append(keys, k)
