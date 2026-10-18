@@ -78,6 +78,10 @@ func (h *teamMonitorHandlerImpl) Start(ctx context.Context) error {
 			Msg("TeamMonitorHandler start failed: monitor.Start failed")
 		return err
 	}
+	// M-05: Stop 时 eventQueue 已被 close 并置 nil，重启时重建
+	if h.eventQueue == nil {
+		h.eventQueue = make(chan map[string]any, monitorHandlerEventQueueSize)
+	}
 	h.running = true
 
 	// 启动事件收集 goroutine
@@ -97,6 +101,10 @@ func (h *teamMonitorHandlerImpl) Start(ctx context.Context) error {
 //  2. if self._event_task: cancel + await + set None
 //  3. if self._monitor: try monitor.stop(); self._monitor = None
 //  4. logger.info("Monitor 已停止")
+//
+// M-05: monitor.Stop 会 close eventCh → collectEvents 的 range 正常退出；
+// 此处再 close eventQueue（发送方关闭），使 consumeMonitorEvents 的 range 也能正常退出，
+// 不再依赖 ctx cancel（_monitor 后缀的 streamTask 在 cleanup 路径上未被 cancel，会泄漏）。
 func (h *teamMonitorHandlerImpl) Stop(ctx context.Context) error {
 	h.mu.Lock()
 	h.running = false
@@ -116,6 +124,11 @@ func (h *teamMonitorHandlerImpl) Stop(ctx context.Context) error {
 				Msg("TeamMonitorHandler failed to stop monitor")
 		}
 		h.monitor = nil
+	}
+	// M-05: 关闭 eventQueue，终止消费者 range（只 close 一次）
+	if h.eventQueue != nil {
+		close(h.eventQueue)
+		h.eventQueue = nil
 	}
 	h.mu.Unlock()
 
@@ -148,7 +161,13 @@ func (h *teamMonitorHandlerImpl) TeamID() string {
 //
 // Go 差异：Python 用 asyncio.wait_for(queue.get(), timeout=0.1) 轮询，
 // Go 直接返回 channel，消费者 range 遍历。
+// M-05: Stop 后 channel 被关闭置 nil，返回已关闭的 dummy channel 保持 range 语义。
 func (h *teamMonitorHandlerImpl) Events() <-chan map[string]any {
+	if h.eventQueue == nil {
+		ch := make(chan map[string]any)
+		close(ch)
+		return ch
+	}
 	return h.eventQueue
 }
 
@@ -180,7 +199,13 @@ func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[strin
 	}
 
 	// 过滤掉 leader
-	teamInfo, _ := mon.GetTeamInfo(ctx)
+	// M-04: 对齐 Python try 块语义——GetTeamInfo 失败时整体快照失败（返回 error + 日志）
+	teamInfo, err := mon.GetTeamInfo(ctx)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", h.sessionID).
+			Msg("GetTeamSnapshot failed to get team info")
+		return nil, fmt.Errorf("GetTeamSnapshot 获取团队信息失败: %w", err)
+	}
 	leaderName := ""
 	if teamInfo != nil {
 		leaderName = teamInfo.LeaderMemberName
@@ -343,8 +368,6 @@ func (h *teamMonitorHandlerImpl) convertEventToDict(ctx context.Context, event *
 		h.handleMemberRestarted(eventData, event)
 	case monitor.MonitorEventTypeMemberShutdown:
 		h.handleMemberShutdown(eventData, event)
-	case monitor.MonitorEventTypeMemberCanceled:
-		h.handleMemberCanceled(eventData, event)
 	case monitor.MonitorEventTypeTaskCreated:
 		h.handleTaskCreated(eventData, event)
 	case monitor.MonitorEventTypeTaskClaimed:
@@ -420,15 +443,6 @@ func (h *teamMonitorHandlerImpl) handleMemberShutdown(base map[string]any, event
 	if event.Force != nil {
 		base["force"] = *event.Force
 	}
-}
-
-// handleMemberCanceled 处理成员取消事件。
-// 对齐 Python: TeamMonitorHandler._handle_member_canceled(base, event)
-func (h *teamMonitorHandlerImpl) handleMemberCanceled(base map[string]any, event *monitor.MonitorEvent) {
-	if event.MemberName != nil {
-		base["member_id"] = *event.MemberName
-	}
-	base["reason"] = ptrStrVal(event.Reason)
 }
 
 // handleTaskCreated 处理任务创建事件。

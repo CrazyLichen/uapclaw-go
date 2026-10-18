@@ -37,8 +37,6 @@ const (
 	TeamEventMemberRestarted TeamEventType = "team.member.restarted"
 	// TeamEventMemberShutdown 成员已关闭
 	TeamEventMemberShutdown TeamEventType = "team.member.shutdown"
-	// TeamEventMemberCanceled 成员已取消
-	TeamEventMemberCanceled TeamEventType = "team.member.canceled"
 
 	// ── 任务事件 ──
 	// TeamEventTaskCreated 任务已创建
@@ -65,14 +63,13 @@ const (
 
 var (
 	// eventTypeToCategory TeamEventType → TeamEventCategory 映射。
-	// 对齐 Python: EVENT_TYPE_TO_CATEGORY
+	// 对齐 Python: EVENT_TYPE_TO_CATEGORY（M-01: 无 MEMBER_CANCELED 条目）
 	eventTypeToCategory = map[TeamEventType]TeamEventCategory{
 		TeamEventMemberSpawned:          EventCategoryMember,
 		TeamEventMemberStatusChanged:    EventCategoryMember,
 		TeamEventMemberExecutionChanged: EventCategoryMember,
 		TeamEventMemberRestarted:        EventCategoryMember,
 		TeamEventMemberShutdown:         EventCategoryMember,
-		TeamEventMemberCanceled:         EventCategoryMember,
 		TeamEventTaskCreated:            EventCategoryTask,
 		TeamEventTaskClaimed:            EventCategoryTask,
 		TeamEventTaskCompleted:          EventCategoryTask,
@@ -85,14 +82,13 @@ var (
 	// sdkToTeamEventMap SDK MonitorEventType → 前端 TeamEventType 映射。
 	// 对齐 Python: SDK_TO_TEAM_EVENT_MAP
 	// 未包含的 SDK 类型（TEAM_CREATED/MEMBER_CANCELED/TASK_PLAN_*/TASK_UPDATED 等）
-	// 在转换时返回零值，静默丢弃。
+	// 在转换时返回零值，静默丢弃（M-01: MEMBER_CANCELED 与 Python 一致不透出）。
 	sdkToTeamEventMap = map[monitor.MonitorEventType]TeamEventType{
 		monitor.MonitorEventTypeMemberSpawned:          TeamEventMemberSpawned,
 		monitor.MonitorEventTypeMemberStatusChanged:    TeamEventMemberStatusChanged,
 		monitor.MonitorEventTypeMemberExecutionChanged: TeamEventMemberExecutionChanged,
 		monitor.MonitorEventTypeMemberRestarted:        TeamEventMemberRestarted,
 		monitor.MonitorEventTypeMemberShutdown:         TeamEventMemberShutdown,
-		monitor.MonitorEventTypeMemberCanceled:         TeamEventMemberCanceled,
 		monitor.MonitorEventTypeTaskCreated:            TeamEventTaskCreated,
 		monitor.MonitorEventTypeTaskClaimed:            TeamEventTaskClaimed,
 		monitor.MonitorEventTypeTaskCompleted:          TeamEventTaskCompleted,

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -149,7 +150,9 @@ const (
 	maxCompressRecurse = 5
 
 	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentServer
+	// T-01: 与同一 dreaming pipeline 的 orchestrator（agentcore/memory/dreaming）
+	// 统一使用 ComponentAgentCore，避免日志关联分析被组件差异干扰
+	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -693,6 +696,26 @@ func ParseDreamingEntries(text string) []DreamingEntry {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// truncateString 按 rune 数截取前 maxChars 个字符。
+// S-01: 对齐 Python content[:2000] 的字符切片语义，避免 CJK 截断产生无效 UTF-8。
+func truncateString(s string, maxChars int) string {
+	runes := []rune(s)
+	if len(runes) > maxChars {
+		return string(runes[:maxChars])
+	}
+	return s
+}
+
+// truncateStringTail 按 rune 数保留末尾 maxChars 个字符。
+// S-01: 对齐 Python result[-max_chars:] 的字符切片语义。
+func truncateStringTail(s string, maxChars int) string {
+	runes := []rune(s)
+	if len(runes) > maxChars {
+		return string(runes[len(runes)-maxChars:])
+	}
+	return s
+}
+
 // matchSessionMode 按 metadata.json 过滤 mode。
 // Python: Sweeper._match_session_mode(session_id)
 func (s *Sweeper) matchSessionMode(sessionID string) bool {
@@ -723,25 +746,20 @@ func (s *Sweeper) compress(events []HistoryEvent, depth int) string {
 	for _, e := range events {
 		if e.Role == "user" {
 			// Python: parts.append(f"[User]: {content[:2000]}")
-			content := e.Content
-			if len(content) > 2000 {
-				content = content[:2000]
-			}
-			parts = append(parts, "[User]: "+content)
+			// S-01: 按 rune 截断对齐 Python 字符切片语义，避免 CJK 截断产生无效 UTF-8
+			parts = append(parts, "[User]: "+truncateString(e.Content, 2000))
 		} else if !isCode && e.Role == "assistant" && strings.TrimSpace(e.Content) != "" {
 			// Python: parts.append(f"[Assistant]: {content[:3000]}")
-			content := e.Content
-			if len(content) > 3000 {
-				content = content[:3000]
-			}
-			parts = append(parts, "[Assistant]: "+content)
+			// S-01: 同上，按 rune 截断
+			parts = append(parts, "[Assistant]: "+truncateString(e.Content, 3000))
 		}
 	}
 
 	result := strings.Join(parts, "\n\n")
 
 	// Python: est_tokens = len(result) // 2
-	estTokens := len(result) / 2
+	// S-01: Python len() 按 Unicode 字符计数，Go 用 RuneCountInString 对齐（byte 长度对 CJK 有 ~3x 偏差）
+	estTokens := utf8.RuneCountInString(result) / 2
 	if estTokens > maxCompressTokens {
 		if depth < maxCompressRecurse {
 			rounds := DetectRounds(events)
@@ -755,9 +773,10 @@ func (s *Sweeper) compress(events []HistoryEvent, depth int) string {
 			}
 		}
 		// Python: result = _UI_TEXT[self._language]["truncate_hard"] + result[-max_chars:]
+		// S-01: 按 rune 从尾部保留 maxChars 个字符
 		ui := getUIText(s.language)
 		maxChars := maxCompressTokens * 2
-		result = ui.TruncateHard + result[len(result)-maxChars:]
+		result = ui.TruncateHard + truncateStringTail(result, maxChars)
 	}
 
 	return result
@@ -813,7 +832,10 @@ func (s *Sweeper) extractViaLLM(ctx context.Context, compressedText, existingSum
 
 	model, err := llm.NewModel(&clientConfig, modelConfig)
 	if err != nil {
-		return nil, fmt.Errorf("构造 Model 失败: %w", err)
+		// S-02: 对齐 Python except Exception → logger.warning + return []，
+		// 保证 session 仍进入 succeeded_ids、checkpoint 正常更新，避免同一 session 反复重扫
+		logger.Warn(logComponent).Err(err).Msg("[Sweeper] LLM call failed")
+		return nil, nil
 	}
 
 	// 选择提示词模板和系统消息
@@ -836,7 +858,9 @@ func (s *Sweeper) extractViaLLM(ctx context.Context, compressedText, existingSum
 	// Python: response = await model.invoke([...])
 	response, err := model.Invoke(ctx, messages)
 	if err != nil {
-		return nil, fmt.Errorf("LLM 调用失败: %w", err)
+		// S-02: 对齐 Python except Exception → logger.warning + return []
+		logger.Warn(logComponent).Err(err).Msg("[Sweeper] LLM call failed")
+		return nil, nil
 	}
 
 	// Python: content = self._extract_content_str(response.content)

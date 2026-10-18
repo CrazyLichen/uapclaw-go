@@ -31,4 +31,16 @@ func NewInteractInput(raw any) *InteractInput {
 	return &InteractInput{Raw: raw}
 }
 
+// NewInteractInputFromString 从字符串创建 InteractInput。
+// T-01: 类型化便捷构造函数，Raw 为 string（最常见形态：普通用户消息）。
+func NewInteractInputFromString(text string) *InteractInput {
+	return &InteractInput{Raw: text}
+}
+
+// NewInteractInputFromDict 从字典创建 InteractInput。
+// T-01: 类型化便捷构造函数，Raw 为 map[string]any（结构化输入形态）。
+func NewInteractInputFromDict(dict map[string]any) *InteractInput {
+	return &InteractInput{Raw: dict}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

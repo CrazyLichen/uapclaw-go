@@ -21,15 +21,19 @@ import (
 //  4. if not success: logger.warning("interact failed against runner runtime")
 //  5. return success
 //
+// S-07: 对齐 Python 永不抛异常——所有 error/panic 均吞掉并返回 false。
+//
 // Go 差异：Python 委托 Runner.interact_agent_team → TeamRuntimeManager.interact，
 // Go 直接调 TeamRuntimeManager.Interact（省略 Runner 桥接层）。
 // Python user_input 类型为 Any；Go 端统一为 *InteractInput，外层自行包装。
-func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput *interaction.InteractInput) (bool, error) {
-	// S-01: 对齐 Python 的 try/except 兜底，防止 panic 传播到上层
+func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput *interaction.InteractInput) (success bool) {
+	// S-07: 对齐 Python except Exception → return False 的兜底语义
+	success = false
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).Any("panic", r).Str("session_id", sessionID).
 				Msg("Interact panic recovered")
+			success = false
 		}
 	}()
 
@@ -37,11 +41,11 @@ func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput 
 	if m.activeSessionID == "" || m.activeSessionID != sessionID || m.activeTeamName == "" {
 		logger.Warn(logComponent).
 			Str("session_id", sessionID).
-			Str("active_session_id", ptrToStr(m.activeSessionID)).
-			Str("active_team_name", ptrToStr(m.activeTeamName)).
+			Str("active_session_id", displayStr(m.activeSessionID)).
+			Str("active_team_name", displayStr(m.activeTeamName)).
 			Msg("interact ignored: not an active team session")
 		m.mu.Unlock()
-		return false, nil
+		return false
 	}
 	teamName := m.activeTeamName
 	m.mu.Unlock()
@@ -54,20 +58,21 @@ func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput 
 	}
 	result, err := mgr.Interact(ctx, rawPayload, teamName, sessionID)
 	if err != nil {
+		// S-07: 对齐 Python except Exception as exc: logger.error(...); return False
 		logger.Error(logComponent).Err(err).
 			Str("session_id", sessionID).
 			Str("team_name", teamName).
 			Msg("interact failed")
-		return false, err
+		return false
 	}
 	if result != nil && !result.IsOK() {
 		logger.Warn(logComponent).
 			Str("session_id", sessionID).
 			Str("team_name", teamName).
 			Msg("interact failed on runner runtime")
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

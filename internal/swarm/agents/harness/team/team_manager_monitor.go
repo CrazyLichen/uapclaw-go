@@ -328,17 +328,21 @@ func (m *TeamManager) consumeMonitorEvents(ctx context.Context, sessionID string
 	}
 }
 
-// autoStartEvolutionWatcher 自动启动 evolution watcher。
+// autoStartEvolutionWatcher 自动启动 evolution watcher 的占位入口。
 // 对齐 Python: start_team_evolution_watcher(channel_id, session_id, team_name)
 //
 // Python 步骤：
 //  1. 检查是否已有 watcher 在运行
-//  2. 创建 asyncio task 运行 evolution watcher 循环
+//  2. 创建 asyncio task 运行 evolution watcher 循环（_watch_team_evolution_and_push）
 //  3. 注册到 _team_evolution_watchers
 //
-// Go 差异：Python 的 evolution watcher 是一个 async task，
-// Go 侧使用 goroutine + context.CancelFunc 模拟。
-// 当前实现为占位，待 evolution watcher 完整实现后回填。
+// M-06: Python 的 evolution watcher 消费的是 TeamSkillEvolutionRail 的审批事件
+// （drain_pending_approval_events），不是 monitor 的事件流。Go 端完整实现在
+// adapter 层 ensureTeamEvolutionWatcher（watchTeamEvolutionAndPushTeam 每轮
+// rail.DrainPendingApprovalEvents），此处不再重复消费 handler.Events()——
+// Go channel 单事件只投递给一个消费者，双消费会与 consumeMonitorEvents 竞争，
+// 各自只能看到一半事件。
+// 本方法保留为日志入口 + watcher 注册占位，实际 watch 由 adapter 层驱动。
 func (m *TeamManager) autoStartEvolutionWatcher(ctx context.Context, sessionID string, teamName string) {
 	// 检查是否已有 watcher
 	if existing := m.GetTeamEvolutionWatcher(sessionID); existing != nil {
@@ -347,44 +351,6 @@ func (m *TeamManager) autoStartEvolutionWatcher(ctx context.Context, sessionID s
 		return
 	}
 
-	watcherCtx, cancel := context.WithCancel(ctx)
-	m.RegisterTeamEvolutionWatcher(sessionID, cancel)
-
-	go func() {
-		defer logger.Info(logComponent).Str("session_id", sessionID).Msg("evolution watcher exited")
-		logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-			Msg("evolution watcher started")
-
-		// 获取监控 handler
-		handler, ok := m.teamMonitors[sessionID]
-		if !ok {
-			logger.Warn(logComponent).Str("session_id", sessionID).
-				Msg("autoStartEvolutionWatcher: no monitor handler")
-			return
-		}
-
-		// 订阅事件流
-		for evt := range handler.Events() {
-			select {
-			case <-watcherCtx.Done():
-				return
-			default:
-			}
-
-			// 对齐 Python: server_push(channel_id, session_id, event) + _broadcast_event
-			if evt != nil {
-				// 广播到 channel waiters（通过注入的回调）
-				if m.onEventBroadcast != nil {
-					m.onEventBroadcast(m.channelID, sessionID, evt)
-				} else {
-					logger.Debug(logComponent).Str("session_id", sessionID).
-						Any("event_type", evt["event_type"]).
-						Msg("evolution watcher event (no broadcast callback, log only)")
-				}
-			}
-		}
-	}()
-
 	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-		Msg("auto-starting evolution watcher")
+		Msg("auto-starting evolution watcher (delegated to adapter layer)")
 }

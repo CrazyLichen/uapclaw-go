@@ -123,6 +123,10 @@ func BroadcastEvolutionProgress(
 
 // PushEvolutionProgress 推送进度。
 // Python: push_evolution_progress()
+//
+// M-06: 对齐 Python per-event try/except——单个事件 panic 只影响该事件，
+// 后续事件继续处理（原实现整个循环共享一个 defer recover，一个 panic 导致
+// 所有后续事件被跳过）。
 func PushEvolutionProgress(
 	ctx context.Context,
 	pushCtx *EvolutionPushContext,
@@ -131,19 +135,24 @@ func PushEvolutionProgress(
 	parseChunk ParseStreamChunkFunc,
 	buildMsgFn BuildPushMessageFunc,
 ) error {
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Warn(logComponent).
-				Str("event_type", "EVOLUTION_PUSH_RECOVERED").
-				Any("recover", r).
-				Msg("PushEvolutionProgress panic recovered")
-		}
-	}()
 	for _, evt := range events {
 		if evolutionlogic.IsEvolutionApprovalEvent(evt) || evolutionlogic.IsEvolutionOutcomeEvent(evt) || evolutionlogic.TeamEvolutionTerminalProgress(evt) != nil {
 			continue
 		}
-		parsed := parseChunk(evt)
+		// per-event recover：单事件 panic 不影响后续事件
+		parsed := func() (result map[string]any) {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Warn(logComponent).
+						Str("event_type", "EVOLUTION_PUSH_RECOVERED").
+						Any("recover", r).
+						Str("request_id", requestID).
+						Msg("PushEvolutionProgress: single event parse panicked, skipped")
+					result = nil
+				}
+			}()
+			return parseChunk(evt)
+		}()
 		if parsed == nil {
 			continue
 		}

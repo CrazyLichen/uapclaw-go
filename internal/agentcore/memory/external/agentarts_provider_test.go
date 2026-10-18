@@ -138,11 +138,13 @@ func TestAgentArtsProvider_Initialize_正常(t *testing.T) {
 func TestAgentArtsProvider_Initialize_无sessionID(t *testing.T) {
 	p := NewAgentArtsProvider("", "key", "space", "", "", nil)
 	err := p.Initialize(context.Background(), WithUserID("user1"))
-	if err != nil {
-		t.Fatalf("Initialize() error = %v", err)
+	// S-01: 对齐 Python——session_id 为 None 时 _ensure_memory_session 抛 RuntimeError，
+	// Go 端 sessionID 为空时 Initialize 必定失败
+	if err == nil {
+		t.Fatal("Initialize() 无 sessionID 时应返回 error（对齐 Python RuntimeError）")
 	}
-	if !p.IsInitialized() {
-		t.Error("Initialize() 后 IsInitialized() 应为 true")
+	if p.IsInitialized() {
+		t.Error("Initialize() 失败后 IsInitialized() 应为 false")
 	}
 }
 

@@ -2,8 +2,10 @@ package common
 
 import (
 	"encoding/json"
+	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -246,6 +248,69 @@ func TestMultimodalDocument_AddField_文件路径和DataID组合(t *testing.T) {
 	doc, err := NewMultimodalDocument().AddField(ModalityText, "", FieldFilePath(txtFile))
 	assert.NoError(t, err)
 	assert.Equal(t, "内容", doc.Fields()[0].Data)
+}
+
+// ──── S-01/S-03/S-04 修复回归测试 ────
+
+// S-01: AddField 后缓存失效，Content()/DashscopeInput() 反映新字段
+func TestMultimodalDocument_AddField_缓存失效重算(t *testing.T) {
+	doc, err := NewMultimodalDocument().AddField(ModalityText, "第一段")
+	assert.NoError(t, err)
+	// 首次计算并缓存
+	content := doc.Content()
+	assert.Len(t, content, 1)
+	assert.Equal(t, "第一段", content[0]["text"])
+
+	// 再次 AddField → 缓存失效 → 重新计算
+	doc, err = doc.AddField(ModalityText, "第二段")
+	assert.NoError(t, err)
+	content = doc.Content()
+	assert.Len(t, content, 2)
+	assert.Equal(t, "第一段", content[0]["text"])
+	assert.Equal(t, "第二段", content[1]["text"])
+}
+
+// S-01: DashscopeInput 缓存失效重算
+func TestMultimodalDocument_DashscopeInput_缓存失效重算(t *testing.T) {
+	doc, err := NewMultimodalDocument().AddField(ModalityText, "描述")
+	assert.NoError(t, err)
+	input, err := doc.DashscopeInput()
+	assert.NoError(t, err)
+	assert.Equal(t, "描述", input["text"])
+
+	doc, err = doc.AddField(ModalityImage, "https://example.com/img.png")
+	assert.NoError(t, err)
+	input, err = doc.DashscopeInput()
+	assert.NoError(t, err)
+	assert.Equal(t, "描述", input["text"])
+	assert.Equal(t, "https://example.com/img.png", input["image"])
+}
+
+// S-01: 缓存命中——重复调用不重算（结果一致）
+func TestMultimodalDocument_Content_缓存命中(t *testing.T) {
+	doc, err := NewMultimodalDocument().AddField(ModalityText, "文本")
+	assert.NoError(t, err)
+	c1 := doc.Content()
+	c2 := doc.Content()
+	assert.Equal(t, c1, c2)
+}
+
+// S-03: MIME type kind-override——.svg 返回 image/svg+xml，kind 为 image 时保持不变
+func TestLoadFromFile_MIMEKindOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	// .svg 的 MIME 是 image/svg+xml，以 image 开头，不触发 override
+	svgFile := filepath.Join(tmpDir, "test.svg")
+	err := os.WriteFile(svgFile, []byte("<svg></svg>"), 0644)
+	assert.NoError(t, err)
+	doc, err := NewMultimodalDocument().AddField(ModalityImage, "", FieldFilePath(svgFile))
+	assert.NoError(t, err)
+	assert.True(t, strings.HasPrefix(doc.Fields()[0].Data, "data:image/svg+xml;base64,"))
+}
+
+// S-04: .jfif 扩展名注册为 image/jpeg
+func TestLoadFromFile_JFIFMIME注册(t *testing.T) {
+	mimeType := mime.TypeByExtension(".jfif")
+	assert.Equal(t, "image/jpeg", mimeType)
 }
 
 // ──── TextChunk 测试 ────

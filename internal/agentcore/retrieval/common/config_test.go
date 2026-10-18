@@ -135,6 +135,17 @@ func TestVectorStoreConfig_Validate_距离度量无效(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// M-01: 对齐 Python Field(default="cosine")——空距离度量视为默认 cosine，零值构造可通过校验
+func TestVectorStoreConfig_Validate_距离度量为空时默认cosine(t *testing.T) {
+	cfg := &VectorStoreConfig{
+		StoreProvider:  StoreTypeChroma,
+		CollectionName: "my-collection",
+		DistanceMetric: "", // 零值，未设置
+	}
+	err := cfg.Validate()
+	assert.NoError(t, err)
+}
+
 // ──── 枚举常量测试 ────
 
 func TestIndexTypeKind_常量值(t *testing.T) {

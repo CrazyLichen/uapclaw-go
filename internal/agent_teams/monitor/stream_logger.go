@@ -3,12 +3,14 @@ package monitor
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
@@ -106,7 +108,8 @@ var (
 // NewTeamStreamLogger 创建 TeamStreamLogger。
 // 对齐 Python: TeamStreamLogger.__init__(file_path)
 func NewTeamStreamLogger(filePath string) (*TeamStreamLogger, error) {
-	if err := os.MkdirAll(filePath[:strings.LastIndex(filePath, "/")], 0o755); err != nil {
+	// S-04: filepath.Dir 跨平台解析父目录，替代硬编码 Unix "/" 的手动切割
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		return nil, fmt.Errorf("创建目录失败: %w", err)
 	}
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
@@ -288,8 +291,10 @@ func (l *TeamStreamLogger) emit(category, member, role, content string) {
 
 // safeWrite 安全写入文件行。
 // M-02: 对齐 Python _safe_write，统一添加本地时区时间戳。
-// M-03: 对齐 Python _safe_write，写入后立即 flush。
 // M-04: 时间戳从 emit 移到 safeWrite，统一管理。
+// T-02: Python flush() 只刷新用户态缓冲（非 fsync）；Go 端等价物为 Sync() 刷磁盘，
+// 每写一行 fsync 严重影响性能。改为依赖 Go runtime 缓冲 + Flush 关闭时落盘，
+// 与 Python 的持久性语义一致（进程崩溃可能丢尾部缓冲，两端口径相同）。
 func (l *TeamStreamLogger) safeWrite(body string) {
 	if l.file == nil {
 		return
@@ -297,8 +302,6 @@ func (l *TeamStreamLogger) safeWrite(body string) {
 	// M-02: 使用本地时区格式化，对齐 Python datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000 MST")
 	_, _ = fmt.Fprintf(l.file, "%s %s\n", timestamp, body)
-	// M-03: 对齐 Python self._file.flush()，写入后立即刷新
-	_ = l.file.Sync()
 }
 
 // discreteSummary 离散型块摘要。
@@ -330,7 +333,12 @@ func toolCallSummary(payload any) string {
 		return capStr(fmt.Sprintf("%v", payload), genericCap)
 	}
 	name, _ := m["tool_name"].(string)
-	argsRaw := fmt.Sprintf("%v", m["tool_args"])
+	// T-01: 对齐 Python payload.get("tool_args", "")——key 缺失时默认空串，
+	// 避免 fmt.Sprintf("%v", nil) 输出 "<nil>" 导致回退逻辑永不触发
+	argsRaw := ""
+	if v, ok := m["tool_args"]; ok {
+		argsRaw = fmt.Sprintf("%v", v)
+	}
 	if name == "" && argsRaw == "" {
 		return capStr(fmt.Sprintf("%v", payload), genericCap)
 	}
@@ -346,8 +354,15 @@ func toolResultSummary(payload any) string {
 		return capStr(fmt.Sprintf("%v", payload), genericCap)
 	}
 	name, _ := m["tool_name"].(string)
-	argsRaw := fmt.Sprintf("%v", m["tool_args"])
-	resultRaw := fmt.Sprintf("%v", m["tool_result"])
+	// T-01: 同 toolCallSummary，key 缺失时默认空串
+	argsRaw := ""
+	if v, ok := m["tool_args"]; ok {
+		argsRaw = fmt.Sprintf("%v", v)
+	}
+	resultRaw := ""
+	if v, ok := m["tool_result"]; ok {
+		resultRaw = fmt.Sprintf("%v", v)
+	}
 	if name == "" && argsRaw == "" && resultRaw == "" {
 		return capStr(fmt.Sprintf("%v", payload), genericCap)
 	}
@@ -412,12 +427,16 @@ func runtimeReadySummary(payload any) string {
 
 // interactionSummary 交互摘要。
 // 对齐 Python: _interaction_summary(payload)
+// M-03: 补齐对象形态分支，对齐 Python getattr(payload, "id", "unknown")
 func interactionSummary(payload any) string {
 	iid := "unknown"
 	if m, ok := payload.(map[string]any); ok {
 		if v, ok := m["interaction_id"].(string); ok {
 			iid = v
 		}
+	} else if io, ok := payload.(*interaction.InteractionOutput); ok {
+		// Python: getattr(payload, "id", "unknown") — Go 端 __interaction__ payload 常态是 InteractionOutput 结构体
+		iid = io.ID
 	}
 	return fmt.Sprintf("interaction_id=%s\n%s", iid, capStr(fmt.Sprintf("%v", payload), genericCap))
 }
@@ -461,10 +480,18 @@ func capStr(text string, limit int) string {
 }
 
 // renderRole 渲染角色值。
-// 对齐 Python: _render_role(role)
+// 对齐 Python: _render_role(role) → role.value
+// S-05: 对 *TeamRole 指针做类型断言取字符串值，避免 fmt.Sprintf("%v") 输出指针地址
 func renderRole(role any) string {
 	if role == nil {
 		return ""
+	}
+	// Python: role.value → Go 端 TeamRole 底层即 string
+	if tr, ok := role.(*atschema.TeamRole); ok {
+		return string(*tr)
+	}
+	if s, ok := role.(string); ok {
+		return s
 	}
 	return fmt.Sprintf("%v", role)
 }

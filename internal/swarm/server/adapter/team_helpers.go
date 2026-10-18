@@ -182,10 +182,17 @@ func HandleTeamEvolveListCommand(ctx context.Context, channelID, sessionID, quer
 	lines := []string{
 		fmt.Sprintf("📊 Skill \"%s\" — 经验库摘要\n", skillName),
 		fmt.Sprintf("共 %d 条经验 | 平均分：%.2f\n", len(records), avgScore),
-		"| # | Score | Section | Content (preview) |",
-		"|---|---:|---|---|",
+		"| # | Score | Used | Effect | Section | Content (preview) |",
+		"|---|---:|---|---|---|---|",
 	}
 	for i, record := range records {
+		// Python: stats = record.usage_stats — Used/Effect 列取使用统计
+		usedStr := "0/0"
+		effectStr := "+0/-0"
+		if record.UsageStats != nil {
+			usedStr = fmt.Sprintf("%d/%d", record.UsageStats.TimesUsed, record.UsageStats.TimesPresented)
+			effectStr = fmt.Sprintf("+%d/-%d", record.UsageStats.TimesPositive, record.UsageStats.TimesNegative)
+		}
 		section := strings.ReplaceAll(record.Change.Section, "|", "\\|")
 		preview := record.Change.Content
 		if idx := strings.Index(preview, "\n"); idx >= 0 {
@@ -195,7 +202,8 @@ func HandleTeamEvolveListCommand(ctx context.Context, channelID, sessionID, quer
 			preview = preview[:40]
 		}
 		preview = strings.ReplaceAll(preview, "|", "\\|")
-		lines = append(lines, fmt.Sprintf("| %d | %.2f | %s | %s |", i+1, record.Score, section, preview))
+		lines = append(lines, fmt.Sprintf("| %d | %.2f | %s | %s | %s | %s |",
+			i+1, record.Score, usedStr, effectStr, section, preview))
 	}
 	lines = append(lines, fmt.Sprintf("\n提示：使用 /evolve_simplify %s 执行智能整理", skillName))
 
@@ -327,10 +335,21 @@ func HandleTeamSlashCommand(ctx context.Context, channelID, sessionID, query str
 		}
 	}
 
+	// Python: items=list(getattr(evolve_result, "records", []) or [])
+	// S-06: 传 records 而非 nil — 有 records 无审批事件时返回 invalid（而非误判为 no_changes）
+	items := make([]map[string]any, 0, len(evolveResult.Records))
+	for _, rec := range evolveResult.Records {
+		items = append(items, map[string]any{
+			"id":      rec.ID,
+			"source":  rec.Source,
+			"score":   rec.Score,
+			"applied": rec.Applied,
+		})
+	}
 	return approvalResultFromEventOrItems(
 		skillName,
 		evolveResult.ApprovalEvent,
-		nil, // Python: items=list(getattr(evolve_result, "records", []) or [])
+		items,
 		fmt.Sprintf("Skill '%s' 未生成新的团队技能演进经验。", skillName),
 		fmt.Sprintf("Skill '%s' 已生成团队技能演进经验，但审批事件为空或格式无效。", skillName),
 	)
@@ -676,6 +695,12 @@ func groupTeamEvolutionApprovals(sessionID string, events []map[string]any) (map
 
 // onTeamWatcherDone evolution 观察任务完成回调。
 // 对齐 Python: _on_team_watcher_done(task) (line 1086-1098)
-func onTeamWatcherDone(sessionID string) {
+//
+// Python 中 pop_team_evolution_watcher 在 done callback 内执行；
+// Go 对应实现：先从 TeamManager 移除 watcher（幂等），再记录完成日志。
+func onTeamWatcherDone(channelID, sessionID string) {
+	// Python: get_team_manager(channel_id).pop_team_evolution_watcher(session_id)
+	tm := team.GetTeamManager(channelID)
+	tm.PopTeamEvolutionWatcher(sessionID)
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("onTeamWatcherDone: team evolution watcher done")
 }

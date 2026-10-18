@@ -80,6 +80,8 @@ func (f *fakeBaseAgentTeam) RegisterCallback(_ context.Context, _ agentinterface
 func (f *fakeBaseAgentTeam) RegisterRail(_ context.Context, _ agentinterfaces.AgentRail, _ ...cb.CallbackOption) error {
 	return nil
 }
+func (f *fakeBaseAgentTeam) AddRail(_ agentinterfaces.AgentRail) {} // M-02: 接口新增 AddRail 的测试桩
+
 func (f *fakeBaseAgentTeam) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
 	return nil
 }

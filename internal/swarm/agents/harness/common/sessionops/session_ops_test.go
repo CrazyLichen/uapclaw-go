@@ -253,7 +253,10 @@ func TestDeepCopyMap_深拷贝(t *testing.T) {
 		"slice": []any{1, 2, 3},
 	}
 
-	copied := deepCopyMap(original)
+	copied, err := deepCopyMap(original)
+	if err != nil {
+		t.Fatalf("deepCopyMap 不应返回错误: %v", err)
+	}
 
 	// 修改拷贝不影响原始
 	copied["key1"] = "modified"
@@ -270,7 +273,10 @@ func TestDeepCopyMap_深拷贝(t *testing.T) {
 
 // TestDeepCopyMap_nil 验证 nil map 不会 panic。
 func TestDeepCopyMap_nil(t *testing.T) {
-	result := deepCopyMap(nil)
+	result, err := deepCopyMap(nil)
+	if err != nil {
+		t.Fatalf("deepCopyMap(nil) 不应返回错误: %v", err)
+	}
 	// json.Marshal(nil) → "null"，json.Unmarshal("null", &result) → nil
 	if result != nil {
 		t.Errorf("期望 nil, 实际 %v", result)

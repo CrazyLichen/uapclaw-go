@@ -345,8 +345,10 @@ func (m *TeamManager) GetTeamAgent(sessionID string) *agent.TeamAgent {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// ptrToStr 将 string 转为日志字符串（空字符串时返回 "<nil>"）
-func ptrToStr(s string) string {
+// displayStr 将 string 转为日志展示字符串（空字符串时返回 "<nil>"）。
+// T-02: 原名 ptrToStr 误导（参数是 string 而非 *string），重命名以准确反映语义。
+// 对齐 Python 日志 %s 输出 None 时的 "<nil>" 观感。
+func displayStr(s string) string {
 	if s == "" {
 		return "<nil>"
 	}

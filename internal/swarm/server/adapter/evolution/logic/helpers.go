@@ -499,7 +499,9 @@ func GroupEvolutionApprovals(sessionID string, events []map[string]any, warnMiss
 		grouped[*requestID] = append(grouped[*requestID], evt)
 	}
 
-	return grouped, nil
+	// T-01: 对齐 Python return grouped, []——返回空切片而非 nil，
+	// 避免 JSON 序列化时输出 null（Python 输出 []）
+	return grouped, []string{}
 }
 
 // MakeTeamEvolutionCycleRequestID 生成 request_id。

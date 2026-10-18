@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
@@ -21,6 +22,15 @@ type EventListenerRegistrar interface {
 	AddEventListener(handler messager.MessagerHandler) *messager.EventListenerHandle
 	// RemoveEventListener 移除事件监听器。
 	RemoveEventListener(handle *messager.EventListenerHandle)
+}
+
+// TeamRoleProvider 角色提供者可选接口。
+// T-04: 对齐 Python create_monitor 的 leader 校验。
+// *agent.TeamAgent 已实现（Role() TeamRole）；monitor 包无法直接依赖
+// agent 包（循环依赖），通过可选接口断言获取角色。
+type TeamRoleProvider interface {
+	// Role 返回团队角色
+	Role() atschema.TeamRole
 }
 
 // TeamMonitor 观察一个 leader TeamAgent，用于状态查询和实时事件。
@@ -91,11 +101,18 @@ func NewTeamMonitor(teamName, sessionID string, db database.TeamDatabase, teamAg
 //  4. return TeamMonitor(team_name=backend.team_name, session_id=get_session_id(), db=backend.db, ...)
 //
 // Go 差异：Python create_monitor 从 team_agent 提取 team_name/session_id/db，
-// Go 端调用者需显式传入这些参数（因为 Go 的 TeamAgent 角色查询方法尚未稳定）。
-// 校验 teamAgent 非 nil。
+// Go 端调用者需显式传入这些参数。
+// T-04: 通过可选接口 TeamRoleProvider 校验 leader 角色（对齐 Python ValueError）；
+// 未实现该接口的注册器（测试 fake 等）跳过校验。
 func CreateMonitor(teamAgent EventListenerRegistrar, db database.TeamDatabase, teamName, sessionID string, hideDM bool) (*TeamMonitor, error) {
 	if teamAgent == nil {
 		return nil, fmt.Errorf("team_agent 不能为 nil")
+	}
+	// Python: if team_agent.role != TeamRole.LEADER: raise ValueError
+	if rp, ok := teamAgent.(TeamRoleProvider); ok {
+		if rp.Role() != atschema.TeamRoleLeader {
+			return nil, fmt.Errorf("TeamMonitor 只能绑定到 leader TeamAgent（当前角色: %s）", rp.Role())
+		}
 	}
 	return NewTeamMonitor(teamName, sessionID, db, teamAgent, hideDM), nil
 }
@@ -343,18 +360,16 @@ func (m *TeamMonitor) onEvent(ctx context.Context, msg *events.EventMessage) err
 //  3. finally: if token: reset_session_id(token)
 //
 // Go 差异：Python 用 contextvar 在 async 调用链中隐式传播 session_id，
-// Go 用 context.Value 显式传播。本方法创建/更新 SessionState 注入到 ctx 中。
+// Go 用 context.Value 显式传播。
+// T-06: 对齐 Python token 的恢复语义——已有 SessionState 时复制新实例
+// 再设置 sessionID（不原地修改调用者 ctx 中的共享状态，查询结束后
+// 调用者的 session_id 保持原值）。
 func (m *TeamMonitor) boundSession(ctx context.Context) context.Context {
 	if m.sessionID == "" {
 		return ctx
 	}
-	state := sessionctx.SessionStateFromCtx(ctx)
-	if state != nil {
-		// 已有 SessionState，直接设置 sessionID
-		state.SetSessionID(m.sessionID)
-		return ctx
-	}
-	// 无 SessionState，创建新的并注入 context
+	// 创建新的 SessionState 并设置 sessionID，不修改调用者 ctx 中的共享状态，
+	// 对齐 Python: token = set_session_id(...); finally: reset_session_id(token)
 	newState := sessionctx.InitSessionState()
 	newState.SetSessionID(m.sessionID)
 	return sessionctx.WithSessionState(ctx, newState)

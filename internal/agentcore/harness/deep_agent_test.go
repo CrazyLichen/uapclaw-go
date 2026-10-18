@@ -443,14 +443,16 @@ func TestDeepAgent_RegisterCallback_正确类型(t *testing.T) {
 }
 
 // TestDeepAgent_AddRail 排队一个 Rail 以便延迟注册
+// M-02: AddRail 加入 DeepAgentInterface，返回值改为无（对齐接口面）
 func TestDeepAgent_AddRail(t *testing.T) {
 	d := newTestDeepAgent()
 	fr := &fakeAgentRail{}
 
-	// AddRail 返回 self 支持链式调用
-	result := d.AddRail(fr)
-	if result != d {
-		t.Error("AddRail 应返回自身以支持链式调用")
+	d.AddRail(fr)
+	// 验证 rail 已排队
+	rails := d.FindRailsByType(reflect.TypeOf(fr))
+	if len(rails) == 0 {
+		t.Error("AddRail 后 FindRailsByType 应能找到该 rail")
 	}
 }
 

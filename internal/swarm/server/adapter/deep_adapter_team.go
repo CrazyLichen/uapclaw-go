@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"time"
 
+	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
+	teammonitor "github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
 	ateamruntime "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -201,8 +205,9 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 	}
 
 	// 步骤 1: 从 req 获取元信息（对齐 Python: request.session_id / request.request_id / request.channel_id）
-	sessionID := ""
-	if req.SessionID != nil {
+	// Python: session_id = request.session_id or "default" (team_helpers.py L616)
+	sessionID := "default"
+	if req.SessionID != nil && *req.SessionID != "" {
 		sessionID = *req.SessionID
 	}
 	channelID := "default"
@@ -432,23 +437,14 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
 			Msg("processTeamMessageStream: follow-up team request")
 
-		query := paramsString(inputs, "query", "")
-		if query != "" {
-			ok, err := teamManager.Interact(ctx, sessionID, interaction.NewInteractInput(query))
-			if err != nil {
-				logger.Error(logComponent).Err(err).Str("session_id", sessionID).
-					Msg("processTeamMessageStream: Interact failed")
-				ch <- &agentschema.AgentResponseChunk{
-					RequestID: req.RequestID, ChannelID: channelID,
-					Payload:    map[string]any{"event_type": "chat.error", "error": "interact failed"},
-					IsComplete: false,
-				}
-				ch <- &agentschema.AgentResponseChunk{RequestID: req.RequestID, ChannelID: channelID, IsComplete: true}
-				return
-			}
-			if !ok {
+		// M-02: 对齐 Python 后续请求使用 directive 清洗后的 query 变量（上文 queryText），
+		// 不再重新读取原始 inputs["query"]
+		if queryText != "" {
+		// S-07: Interact 只返回 bool（对齐 Python 永不抛异常语义）
+		// T-01: 使用类型化构造函数 NewInteractInputFromString（普通用户消息形态）
+		if !teamManager.Interact(ctx, sessionID, interaction.NewInteractInputFromString(queryText)) {
 				logger.Warn(logComponent).Str("session_id", sessionID).
-					Msg("processTeamMessageStream: Interact returned false (inactive session)")
+					Msg("processTeamMessageStream: Interact returned false")
 				ch <- &agentschema.AgentResponseChunk{
 					RequestID: req.RequestID, ChannelID: channelID,
 					Payload:    map[string]any{"event_type": "chat.error", "error": "interact failed"},
@@ -564,9 +560,8 @@ func (d *DeepAdapter) ensureTeamEvolutionWatcher(ctx context.Context, channelID,
 	go func() {
 		defer logger.Info(logComponent).Str("session_id", sessionID).Msg("ensureTeamEvolutionWatcher: evolution watcher goroutine exited")
 		d.watchTeamEvolutionAndPushTeam(watcherCtx, channelID, sessionID, rail)
-		// goroutine 退出后，从 TeamManager 中移除 watcher
-		tm.PopTeamEvolutionWatcher(sessionID)
-		onTeamWatcherDone(sessionID)
+		// M-02: Pop 移入 onTeamWatcherDone（对齐 Python done callback 内 pop）
+		onTeamWatcherDone(channelID, sessionID)
 	}()
 }
 
@@ -623,12 +618,23 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 			streamTraceEnabled = true
 		}
 	}
-	_ = streamTraceEnabled // TODO: TeamStreamLogger 对齐
+	// T-01 遗留点 B（已回填）：trace 开启时创建 TeamStreamLogger，
+	// 对齐 Python: lg = TeamStreamLogger(file_path=str(traces_dir / f"dump-team-{session_id}.txt"))
+	var lg *teammonitor.TeamStreamLogger
+	if streamTraceEnabled {
+		tracesDir := filepath.Join(agentteams.GetAgentTeamsHome(), "traces")
+		if l, err := teammonitor.NewTeamStreamLogger(filepath.Join(tracesDir, fmt.Sprintf("dump-team-%s.txt", sessionID))); err != nil {
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+				Msg("consumeStreamWithQuery: failed to create TeamStreamLogger")
+		} else {
+			lg = l
+		}
+	}
 
 	// Python 步骤 2: 调用 Runner.run_agent_team_streaming
 	// Go 差异：Python 通过 Runner.run_agent_team_streaming(agent_team=team_spec, inputs=..., session=..., envs=..., stream_logger=lg)
 	// Go 端使用 ateamruntime.RunAgentTeamStreaming 直接调用
-	streamCh, err := ateamruntime.RunAgentTeamStreaming(ctx, teamSpec, map[string]any{"query": initialQuery}, false, false, sessionID, nil)
+	streamCh, err := ateamruntime.RunAgentTeamStreaming(ctx, teamSpec, map[string]any{"query": initialQuery}, false, false, sessionID, lg)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("session_id", sessionID).
 			Msg("consumeStreamWithQuery: RunAgentTeamStreaming failed")
@@ -789,7 +795,8 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 	// Python: push_context = EvolutionPushContext(transport=WebSocketGatewayPushTransport(), channel_id=, session_id=)
 	// Go 差异：因 adapter→evolution→gateway_push→server→adapter 循环依赖，
 	// 无法直接导入 adapter/evolution 包。此处将 push 逻辑内联到当前包。
-	// 当前 Go 端 server_push 传输层尚未完全集成，使用日志记录替代推送。
+	// T-01 遗留点 A（已回填）：通过 d.getSendPushFunc() 真实推送到前端，
+	// 与个人 watcher（deep_adapter_evolution.go）共用同一套 sendPushFunc 注入机制。
 
 	seenRequestIDs := make(map[string]bool)
 	closedRequestIDs := make(map[string]bool)
@@ -802,15 +809,29 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 	}
 
 	// 内部推送 evolution status 函数（内联对齐 Python: push_evolution_status）
+	// Python 团队路径 include_payload_request_id=True（默认），payload 含 request_id
 	pushEvolutionStatus := func(requestID, status, stage string, message string) {
-		logger.Info(logComponent).
-			Str("session_id", sessionID).
-			Str("request_id", requestID).
-			Str("status", status).
-			Str("stage", stage).
-			Str("message", message).
-			Msg("pushEvolutionStatus: evolution status pushed")
-		// TODO(#9.85): 待 gateway_push 集成完善后，通过 transport.SendPush 推送到前端
+		sendPush := d.getSendPushFunc()
+		if sendPush == nil {
+			logger.Warn(logComponent).Str("session_id", sessionID).
+				Msg("watchTeamEvolutionAndPushTeam: sendPushFunc not injected")
+			return
+		}
+		update := evolutionlogic.BuildEvolutionStatusUpdate(requestID, status, stage, message)
+		payload := map[string]any{
+			"event_type": "chat.evolution_status",
+			"status":     update.Status,
+			"stage":      update.Stage,
+			"message":    update.Message,
+			"request_id": update.RequestID,
+		}
+		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, payload, channelID)
+		if err := sendPush(ctx, msg); err != nil {
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+				Str("request_id", requestID).
+				Str("status", status).Str("stage", stage).
+				Msg("watchTeamEvolutionAndPushTeam: failed to push evolution status")
+		}
 	}
 
 	// 内部推送 cycle start 函数
@@ -831,6 +852,12 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 
 	// 内部推送 evolution event 函数（内联对齐 Python: push_evolution_event）
 	pushEvolutionEvent := func(requestID string, evt map[string]any) error {
+		sendPush := d.getSendPushFunc()
+		if sendPush == nil {
+			logger.Warn(logComponent).Str("session_id", sessionID).
+				Msg("watchTeamEvolutionAndPushTeam: sendPushFunc not injected")
+			return fmt.Errorf("sendPushFunc not injected")
+		}
 		payload := evolutionlogic.EventPayloadDict(evt)
 		evtType := evolutionlogic.EventType(evt)
 		if evtType != "" {
@@ -841,13 +868,13 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 		if _, ok := payload["request_id"]; !ok {
 			payload["request_id"] = requestID
 		}
-		logger.Info(logComponent).
-			Str("session_id", sessionID).
-			Str("request_id", requestID).
-			Str("event_type", evtType).
-			Msg("pushEvolutionEvent: evolution event pushed")
-		// TODO(#9.85): 待 gateway_push 集成完善后，通过 transport.SendPush 推送到前端
-		_ = payload
+		msg := sessionmd.BuildServerPushMessage(sessionID, requestID, payload, channelID)
+		if err := sendPush(ctx, msg); err != nil {
+			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+				Str("request_id", requestID).Str("event_type", evtType).
+				Msg("watchTeamEvolutionAndPushTeam: failed to push evolution event")
+			return err
+		}
 		return nil
 	}
 
@@ -1106,7 +1133,38 @@ func chunkToMap(chunk any) map[string]any {
 	if m, ok := chunk.(map[string]any); ok {
 		return m
 	}
-	// 处理 stream.OutputSchema 结构体
+	// 处理 *stream.OutputSchema / stream.OutputSchema（公开字段，无 getter 方法）
+	// T-01 遗留点 C：原实现只断言带 GetType/GetPayload 方法的接口，OutputSchema 实际是公开字段，
+	// 三段断言全部失败返回 nil，导致 watcher 和 consumeStream 循环丢失全部事件。
+	switch os := chunk.(type) {
+	case *stream.OutputSchema:
+		if os == nil || os.Payload == nil {
+			return nil
+		}
+		if m, ok := os.Payload.(map[string]any); ok {
+			result := make(map[string]any, len(m)+1)
+			for k, v := range m {
+				result[k] = v
+			}
+			result["type"] = os.Type
+			return result
+		}
+		return nil
+	case stream.OutputSchema:
+		if os.Payload == nil {
+			return nil
+		}
+		if m, ok := os.Payload.(map[string]any); ok {
+			result := make(map[string]any, len(m)+1)
+			for k, v := range m {
+				result[k] = v
+			}
+			result["type"] = os.Type
+			return result
+		}
+		return nil
+	}
+	// 处理带 getter 方法的输出结构
 	type outputSchemaLike interface {
 		GetType() string
 		GetPayload() any
@@ -1124,17 +1182,6 @@ func chunkToMap(chunk any) map[string]any {
 			}
 			result["type"] = os.GetType()
 			return result
-		}
-	}
-	// 处理 stream.Schema 接口 — 尝试通过类型断言获取 Payload
-	type payloadGetter interface {
-		Payload() any
-	}
-	if pg, ok := chunk.(payloadGetter); ok {
-		if payload := pg.Payload(); payload != nil {
-			if m, ok := payload.(map[string]any); ok {
-				return m
-			}
 		}
 	}
 	return nil
@@ -1174,7 +1221,18 @@ func evolutionOutputSchemasToMaps(events any) []map[string]any {
 		return nil
 	}
 	// rail.DrainPendingApprovalEvents 返回 []*stream.OutputSchema
-	// 每个 OutputSchema 有 Payload 字段
+	if schemas, ok := events.([]*stream.OutputSchema); ok {
+		result := make([]map[string]any, 0, len(schemas))
+		for _, s := range schemas {
+			if s == nil {
+				continue
+			}
+			if m := chunkToMap(s); m != nil {
+				result = append(result, m)
+			}
+		}
+		return result
+	}
 	if slice, ok := events.([]any); ok {
 		result := make([]map[string]any, 0, len(slice))
 		for _, item := range slice {

@@ -224,7 +224,36 @@ func TestDreamingOrchestrator_Tick_CancelledError传播(t *testing.T) {
 	)
 	orch.running = true
 	// 不 panic 即可，CancelledError 在 tick 中 return
-	orch.tick(context.Background())
+	err := orch.tick(context.Background())
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+// TestDreamingOrchestrator_Tick_DeadlineExceeded传播 测试 context.DeadlineExceeded 传播。
+// M-03: DeadlineExceeded 与 Canceled 同等对待，作为取消信号传播给 loop。
+func TestDreamingOrchestrator_Tick_DeadlineExceeded传播(t *testing.T) {
+	orch := NewDreamingOrchestrator(
+		func(_ context.Context) error { return context.DeadlineExceeded },
+		60*time.Second,
+	)
+	orch.running = true
+	err := orch.tick(context.Background())
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+// TestDreamingOrchestrator_Tick_意外错误被吞掉 测试非取消错误在 tick 内部消化。
+// M-02 前置语义：对齐 Python _tick 的 except Exception → logger.exception，不向上传播，
+// loop 的"意外错误终止"分支（对齐 Python _loop 的 except Exception）因此保持纯防御性。
+func TestDreamingOrchestrator_Tick_意外错误被吞掉(t *testing.T) {
+	var sweepCount atomic.Int32
+	orch := NewDreamingOrchestrator(func(_ context.Context) error {
+		sweepCount.Add(1)
+		return errors.New("unexpected crash")
+	}, 60*time.Second)
+	orch.running = true
+	// tick 内部记录 "sweep exception" 日志后返回 nil
+	err := orch.tick(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), sweepCount.Load())
 }
 
 // ---------------------------------------------------------------------------

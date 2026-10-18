@@ -36,14 +36,14 @@ type MultimodalDocument struct {
 	Text string
 	// fields 有序模态字段列表
 	fields []ModalityField
-	// contentCache Content() 方法的缓存结果，对齐 Python @cached_property
+	// mu 保护 fields 与两个缓存的并发访问
+	mu sync.Mutex
+	// contentCache Content() 方法的缓存结果，对齐 Python _content_cache
+	// （Python 用 list truthiness 判断是否已缓存，空列表视为未缓存）
 	contentCache []map[string]any
-	// contentOnce 保证 Content() 只计算一次
-	contentOnce sync.Once
-	// dashscopeCache DashscopeInput() 方法的缓存结果，对齐 Python @cached_property
+	// dashscopeCache DashscopeInput() 方法的缓存结果，对齐 Python _dashscope_cache
+	// （Python 用 dict truthiness 判断是否已缓存，空字典视为未缓存）
 	dashscopeCache map[string]any
-	// dashscopeOnce 保证 DashscopeInput() 只计算一次
-	dashscopeOnce sync.Once
 }
 
 // addFieldOptions AddField 的可选参数
@@ -159,108 +159,62 @@ func (d *MultimodalDocument) AddField(kind ModalityKind, data string, opts ...Ad
 			dataID = strings.ReplaceAll(uuid.NewString(), "-", "")
 		}
 	}
+	// S-01: 对齐 Python add_field 中的 _content_cache.clear()/_dashscope_cache.clear()，
+	// 后续 AddField 会使缓存失效，Content()/DashscopeInput() 重新计算
+	d.mu.Lock()
 	d.fields = append(d.fields, ModalityField{Kind: k, Data: resolvedData, ID: dataID})
+	d.contentCache = nil
+	d.dashscopeCache = nil
+	d.mu.Unlock()
 	return d, nil
 }
 
 // Content 返回 OpenAI/vLLM 格式的结构化内容列表。
-// 使用 sync.Once 缓存结果，避免重复计算，对齐 Python @cached_property。
+// 使用 mutex + 空值检查缓存结果，对齐 Python content property 的 truthiness 语义
+// （Python 侧 `if self._content_cache:` 空列表视为未缓存，重新计算）。
 //
 // Python: MultimodalDocument.content
 func (d *MultimodalDocument) Content() []map[string]any {
-	d.contentOnce.Do(func() {
-		var content []map[string]any
-		for _, f := range d.fields {
-			switch f.Kind {
-			case ModalityText:
-				content = append(content, map[string]any{
-					"type": "text",
-					"text": f.Data,
-				})
-			case ModalityImage, ModalityVideo:
-				content = append(content, map[string]any{
-					"type":                        fmt.Sprintf("%s_url", f.Kind),
-					fmt.Sprintf("%s_url", f.Kind): map[string]any{"url": f.Data},
-				})
-			case ModalityAudio:
-				matches := audioBase64Pattern.FindStringSubmatch(f.Data)
-				if len(matches) < 2 {
-					// 音频字段格式不匹配时记录警告，对齐 T-27 修复
-					logger.Warn(logComponent).
-						Str("modality", "audio").
-						Str("data_prefix", truncatePrefix(f.Data, 50)).
-						Msg("audio field does not match base64 format, skipped")
-					continue
-				}
-				content = append(content, map[string]any{
-					"type":        "input_audio",
-					"input_audio": map[string]any{"data": f.Data, "format": matches[1]},
-				})
-			}
-			if f.ID != "" && len(content) > 0 {
-				content[len(content)-1]["uuid"] = f.ID
-			}
-		}
-		d.contentCache = content
-	})
-	return d.contentCache
+	d.mu.Lock()
+	if len(d.contentCache) > 0 {
+		result := d.contentCache
+		d.mu.Unlock()
+		return result
+	}
+	d.mu.Unlock()
+
+	content := d.computeContent()
+
+	d.mu.Lock()
+	d.contentCache = content
+	d.mu.Unlock()
+	return content
 }
 
 // DashscopeInput 返回 DashScope 格式的输入字典。
-// 使用 sync.Once 缓存结果，避免重复计算，对齐 Python @cached_property。
+// 使用 mutex + 空值检查缓存结果，对齐 Python dashscope_input property 的 truthiness 语义
+// （Python 侧 `if self._dashscope_cache:` 空字典视为未缓存，重新计算）。
 //
 // Python: MultimodalDocument.dashscope_input
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
 func (d *MultimodalDocument) DashscopeInput() (map[string]any, error) {
-	var cacheErr error
-	d.dashscopeOnce.Do(func() {
-		content := make(map[string]any)
-		var images []string
-		hasField := make(map[ModalityKind]bool)
+	d.mu.Lock()
+	if len(d.dashscopeCache) > 0 {
+		result := d.dashscopeCache
+		d.mu.Unlock()
+		return result, nil
+	}
+	d.mu.Unlock()
 
-		for _, f := range d.fields {
-			if hasField[f.Kind] {
-				cacheErr = exception.BuildError(
-					exception.StatusRetrievalEmbeddingInputInvalid,
-					exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持多个相同模态字段: %s", f.Kind)),
-				)
-				return
-			}
+	content, err := d.computeDashscopeInput()
+	if err != nil {
+		return nil, err
+	}
 
-			switch f.Kind {
-			case ModalityText:
-				hasField[f.Kind] = true
-				content["text"] = f.Data
-			case ModalityImage:
-				images = append(images, f.Data)
-			case ModalityVideo:
-				if strings.HasPrefix(f.Data, "data:video/") {
-					cacheErr = exception.BuildError(
-						exception.StatusRetrievalEmbeddingInputInvalid,
-						exception.WithParam("error_msg", "Dashscope 格式不支持 base64 视频输入，仅支持 URL"),
-					)
-					return
-				}
-				hasField[f.Kind] = true
-				content["video"] = f.Data
-			default:
-				cacheErr = exception.BuildError(
-					exception.StatusRetrievalEmbeddingInputInvalid,
-					exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持模态类型: %s", f.Kind)),
-				)
-				return
-			}
-		}
-
-		if len(images) == 1 {
-			content["image"] = images[0]
-		} else if len(images) > 1 {
-			content["multi_images"] = images
-		}
-
-		d.dashscopeCache = content
-	})
-	return d.dashscopeCache, cacheErr
+	d.mu.Lock()
+	d.dashscopeCache = content
+	d.mu.Unlock()
+	return content, nil
 }
 
 // Strip 兼容 Python 的 strip() 语义，无字段时返回 nil。
@@ -301,6 +255,98 @@ func NewTextChunkFromDocument(doc *reranker.Document, chunkText string, id strin
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// computeContent 计算 OpenAI/vLLM 格式的结构化内容列表（无缓存版本）。
+// 对齐 Python MultimodalDocument.content property 的计算逻辑。
+func (d *MultimodalDocument) computeContent() []map[string]any {
+	var content []map[string]any
+	for _, f := range d.fields {
+		switch f.Kind {
+		case ModalityText:
+			content = append(content, map[string]any{
+				"type": "text",
+				"text": f.Data,
+			})
+		case ModalityImage, ModalityVideo:
+			content = append(content, map[string]any{
+				"type":                        fmt.Sprintf("%s_url", f.Kind),
+				fmt.Sprintf("%s_url", f.Kind): map[string]any{"url": f.Data},
+			})
+		case ModalityAudio:
+			matches := audioBase64Pattern.FindStringSubmatch(f.Data)
+			if len(matches) < 2 {
+				// 音频字段格式不匹配时记录警告，对齐 T-27 修复
+				logger.Warn(logComponent).
+					Str("modality", "audio").
+					Str("data_prefix", truncatePrefix(f.Data, 50)).
+					Msg("audio field does not match base64 format, skipped")
+				continue
+			}
+			content = append(content, map[string]any{
+				"type":        "input_audio",
+				"input_audio": map[string]any{"data": f.Data, "format": matches[1]},
+			})
+		}
+		if f.ID != "" && len(content) > 0 {
+			content[len(content)-1]["uuid"] = f.ID
+		}
+	}
+	return content
+}
+
+// computeDashscopeInput 计算 DashScope 格式的输入字典（无缓存版本）。
+// 对齐 Python MultimodalDocument.dashscope_input property 的计算逻辑。
+func (d *MultimodalDocument) computeDashscopeInput() (map[string]any, error) {
+	content := make(map[string]any)
+	var images []string
+	hasField := make(map[ModalityKind]bool)
+
+	for _, f := range d.fields {
+		if hasField[f.Kind] {
+			return nil, exception.BuildError(
+				exception.StatusRetrievalEmbeddingInputInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持多个相同模态字段: %s", f.Kind)),
+			)
+		}
+
+		switch f.Kind {
+		case ModalityText:
+			hasField[f.Kind] = true
+			content["text"] = f.Data
+		case ModalityImage:
+			images = append(images, f.Data)
+		case ModalityVideo:
+			if strings.HasPrefix(f.Data, "data:video/") {
+				return nil, exception.BuildError(
+					exception.StatusRetrievalEmbeddingInputInvalid,
+					exception.WithParam("error_msg", "Dashscope 格式不支持 base64 视频输入，仅支持 URL"),
+				)
+			}
+			hasField[f.Kind] = true
+			content["video"] = f.Data
+		default:
+			return nil, exception.BuildError(
+				exception.StatusRetrievalEmbeddingInputInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持模态类型: %s", f.Kind)),
+			)
+		}
+	}
+
+	if len(images) == 1 {
+		content["image"] = images[0]
+	} else if len(images) > 1 {
+		content["multi_images"] = images
+	}
+
+	return content, nil
+}
+
+// init 注册 Python 端补充的 MIME 类型映射。
+// 对齐 Python mimetypes.add_type("image/jpeg", ".jfif", strict=True)——
+// Go 标准库 mime 包默认不识别 .jfif 扩展名，需显式注册。
+func init() {
+	mime.AddExtensionType(".jfif", "image/jpeg")
+}
 
 // defaultAddFieldOptions 返回默认的 AddField 选项
 func defaultAddFieldOptions() addFieldOptions {
@@ -393,6 +439,14 @@ func loadFromFile(kind ModalityKind, path string) (ModalityKind, string, error) 
 			exception.StatusRetrievalEmbeddingInputInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("无法确定 %s 文件的 MIME 类型: %s", kind, path)),
 		)
+	}
+	// S-03: 对齐 Python kind-override 逻辑——MIME type 不以 kind 开头时改写主类型，
+	// 例如 .svg 返回 image/svg+xml 但 kind 为 image 时保持兼容
+	if !strings.HasPrefix(mimeType, string(kind)) {
+		parts := strings.SplitN(mimeType, "/", 2)
+		if len(parts) == 2 {
+			mimeType = string(kind) + "/" + parts[1]
+		}
 	}
 
 	raw, err := os.ReadFile(path)

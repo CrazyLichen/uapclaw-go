@@ -792,7 +792,11 @@ func (d *DeepAgent) IsInitialized() bool {
 
 // AddRail 同步排队一个 Rail 以便延迟注册。
 // Python: DeepAgent.add_rail(rail) (line 1139)
-func (d *DeepAgent) AddRail(r agentinterfaces.AgentRail) *DeepAgent {
+//
+// M-02: 加入 DeepAgentInterface（对齐 Python add_rail 接口面）。
+// 返回值从链式 *DeepAgent 改为无返回值——Python 链式返回 self 在 Go 接口无意义，
+// 且全项目调用方均为语句形式无链式使用。
+func (d *DeepAgent) AddRail(r agentinterfaces.AgentRail) {
 	d.railsMu.Lock()
 	defer d.railsMu.Unlock()
 
@@ -801,7 +805,6 @@ func (d *DeepAgent) AddRail(r agentinterfaces.AgentRail) *DeepAgent {
 		d.pendingRails = filterRailsNotType(d.pendingRails, isTaskCompletionRail)
 	}
 	d.pendingRails = append(d.pendingRails, r)
-	return d
 }
 
 // FindRailsByType 返回排队和已注册中匹配指定类型的 Rail。

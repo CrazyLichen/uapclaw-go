@@ -65,6 +65,10 @@ type DeepAgentInterface interface {
 	// FindRailsByType 返回排队和已注册中匹配指定类型的 Rail。
 	// Python: DeepAgent.find_rails_by_type(rail_types)
 	FindRailsByType(railTypes ...reflect.Type) []agentinterfaces.AgentRail
+	// AddRail 同步排队一个 Rail 以便延迟注册。
+	// Python: DeepAgent.add_rail(rail)
+	// M-02: 补齐接口面（customizer 回填后 team 层需通过接口调用 agent.add_rail）
+	AddRail(r agentinterfaces.AgentRail)
 	// UnregisterRail 注销 Rail。
 	// Python: DeepAgent.unregister_rail(rail)
 	UnregisterRail(ctx context.Context, r agentinterfaces.AgentRail) error

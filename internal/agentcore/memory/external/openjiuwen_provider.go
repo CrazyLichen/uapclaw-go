@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -16,7 +15,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/ltm"
 	apiembedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -58,6 +56,33 @@ type OpenJiuwenProvider struct {
 
 // OpenJiuwenProviderOption OpenJiuwenProvider 的可选参数。
 type OpenJiuwenProviderOption func(*OpenJiuwenProvider)
+
+// SearchResultItem ltm_search 工具结果条目。
+// T-01: 提升为包级类型（原为 handleSearch 方法内局部类型），
+// 使外部调用方可通过具体类型反序列化结果。
+// 对齐 Python L310-324 的 results 列表元素结构。
+type SearchResultItem struct {
+	// ID 记忆条目标识
+	ID string `json:"id"`
+	// Content 记忆内容
+	Content string `json:"content"`
+	// Type 记忆类型标签
+	Type string `json:"type"`
+	// Score 相关性得分
+	Score float64 `json:"score"`
+}
+
+// SummaryResultItem ltm_search_summary 工具结果条目。
+// T-01: 提升为包级类型（原为 handleSearchSummary 方法内局部类型）。
+// 对齐 Python L333-346 的 results 列表元素结构。
+type SummaryResultItem struct {
+	// ID 记忆条目标识
+	ID string `json:"id"`
+	// Content 记忆内容
+	Content string `json:"content"`
+	// Score 相关性得分
+	Score float64 `json:"score"`
+}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -201,6 +226,10 @@ func (p *OpenJiuwenProvider) IsAvailable() bool {
 
 // IsInitialized 返回 Provider 是否已初始化。
 // Python: @property is_initialized -> self._is_initialized
+// T-02: 不加锁说明——initialized 仅在 Initialize/Shutdown 中写入，
+// 契约上这两个方法在 Provider 生命周期内不并发调用（Python asyncio 单线程
+// 协程同样无锁）。AgentArtsProvider 加锁是因为其 mu 还保护其他并发字段；
+// 本 Provider 其余字段均为构造后只读，故不加锁与 Python 语义一致。
 func (p *OpenJiuwenProvider) IsInitialized() bool {
 	return p.initialized
 }
@@ -328,20 +357,12 @@ func (p *OpenJiuwenProvider) HandleToolCall(ctx context.Context, toolName string
 	}
 
 	// 对齐 Python L156-164: try: if/elif/else except Exception as e: return json.dumps({"error": str(e), "results": []})
-	// M-04: 拆分 ltm_search 和 ltm_search_summary 为独立 case，提升可维护性
+	// M-02: 两个已知工具 case 的 error 处理完全一致，合并为单一 case
 	switch toolName {
-	case "ltm_search":
+	case "ltm_search", "ltm_search_summary":
 		result, err := p.dispatchToolCall(ctx, toolName, args)
 		if err != nil {
 			// 对齐 Python L163-164: except Exception as e: return json.dumps({"error": str(e), "results": []})
-			b, _ := json.Marshal(map[string]any{"error": err.Error(), "results": []any{}})
-			return string(b), nil
-		}
-		b, _ := json.Marshal(result)
-		return string(b), nil
-	case "ltm_search_summary":
-		result, err := p.dispatchToolCall(ctx, toolName, args)
-		if err != nil {
 			b, _ := json.Marshal(map[string]any{"error": err.Error(), "results": []any{}})
 			return string(b), nil
 		}
@@ -430,9 +451,10 @@ func (p *OpenJiuwenProvider) Prefetch(ctx context.Context, query string, opts ..
 			return
 		}
 		if len(results) > 0 {
-			// 对齐 Python L196: parts.append("## Related History Summaries")
-			// M-03: 移除前导 "\n"，由 strings.Join 统一处理分隔符
-			parts = append(parts, "## Related History Summaries")
+			// 对齐 Python L196: parts.append("\n## Related History Summaries")
+			// S-03: 保留前导 "\n"——strings.Join 只在元素间插入 \n，
+			// 前导 \n 使此标题与上一节之间形成双换行（对齐 Python 拼接效果）
+			parts = append(parts, "\n## Related History Summaries")
 			for _, r := range results {
 				content := ""
 				if r.MemInfo != nil {
@@ -491,15 +513,15 @@ func (p *OpenJiuwenProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 		return nil
 	}
 
-	// S-03: 对齐 Python L216-224: try: await self._ltm.add_messages(...) except Exception as e: logger.warning(...)
-	// Go 差异：Python 是 void 返回可吞错，Go 签名返回 error，应传播错误
-	var syncErr error
+	// T-05: 对齐 Python L216-225: try: await self._ltm.add_messages(...) except Exception as e: logger.warning(...)
+	// Python sync_turn 返回 None（吞错），Go 签名保留 error 但此处对齐语义吞掉错误。
+	// mem0/viking/agentarts 三个 provider 均已吞错，此处保持四者一致；
+	// rail 层 AfterInvoke 同样吞错（只做熔断计数 + Warn 日志），错误不会向上传播。
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
 				// 对齐 Python L224-225: except Exception as e: logger.warning(f"sync_turn add_messages failed: {e}")
 				logger.Warn(logComponent).Any("panic", r).Msg("sync_turn add_messages failed")
-				syncErr = fmt.Errorf("sync_turn add_messages panic: %v", r)
 			}
 		}()
 		// 对齐 Python L217-223: await self._ltm.add_messages(messages, self._agent_memory_config, user_id=user_id, scope_id=scope_id, session_id=session_id)
@@ -511,11 +533,10 @@ func (p *OpenJiuwenProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 		if err != nil {
 			// 对齐 Python L224-225: logger.warning(f"sync_turn add_messages failed: {e}")
 			logger.Warn(logComponent).Err(err).Msg("sync_turn add_messages failed")
-			syncErr = err
 		}
 	}()
 
-	return syncErr
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -562,13 +583,9 @@ func (p *OpenJiuwenProvider) handleSearch(ctx context.Context, args map[string]a
 	}
 
 	// 对齐 Python L310-324: 构建 results 列表
-	type searchResult struct {
-		ID      string  `json:"id"`
-		Content string  `json:"content"`
-		Type    string  `json:"type"`
-		Score   float64 `json:"score"`
-	}
-	out := make([]searchResult, 0, len(results))
+	// T-01: 使用包级类型 SearchResultItem（原为方法内局部类型，
+	// 外部无法通过具体类型反序列化结果）
+	out := make([]SearchResultItem, 0, len(results))
 	for _, r := range results {
 		typeStr := "unknown"
 		memID := ""
@@ -580,9 +597,9 @@ func (p *OpenJiuwenProvider) handleSearch(ctx context.Context, args map[string]a
 			memID = r.MemInfo.MemID
 			content = r.MemInfo.Content
 		}
-		out = append(out, searchResult{
-			ID: memID, Content: content, Type: typeStr, Score: score,
-		})
+	out = append(out, SearchResultItem{
+		ID: memID, Content: content, Type: typeStr, Score: score,
+	})
 	}
 	return map[string]any{"results": out, "count": len(out)}, nil
 }
@@ -608,12 +625,8 @@ func (p *OpenJiuwenProvider) handleSearchSummary(ctx context.Context, args map[s
 	}
 
 	// 对齐 Python L333-346: 构建 results 列表
-	type summaryResult struct {
-		ID      string  `json:"id"`
-		Content string  `json:"content"`
-		Score   float64 `json:"score"`
-	}
-	out := make([]summaryResult, 0, len(results))
+	// T-01: 使用包级类型 SummaryResultItem（原因同 SearchResultItem）
+	out := make([]SummaryResultItem, 0, len(results))
 	for _, r := range results {
 		memID := ""
 		content := ""
@@ -622,7 +635,7 @@ func (p *OpenJiuwenProvider) handleSearchSummary(ctx context.Context, args map[s
 			memID = r.MemInfo.MemID
 			content = r.MemInfo.Content
 		}
-		out = append(out, summaryResult{ID: memID, Content: content, Score: score})
+		out = append(out, SummaryResultItem{ID: memID, Content: content, Score: score})
 	}
 	return map[string]any{"results": out, "count": len(out)}, nil
 }
@@ -645,9 +658,10 @@ func (p *OpenJiuwenProvider) createKVStore() kv.BaseKVStore {
 		return kv.NewInMemoryKVStore()
 	case "shelve":
 		// 对齐 Python L253-254: ShelveStore(db_path=kv_cfg.get("path", "memory_kv"))
+		// M-04: 默认路径对齐 Python 相对路径 "memory_kv"（落在进程 CWD）
 		path, _ := kvCfg["path"].(string)
 		if path == "" {
-			path = resolveLTMDir() + "/kv"
+			path = "memory_kv"
 		}
 		store, err := kv.NewFileKVStore(path)
 		if err != nil {
@@ -658,9 +672,10 @@ func (p *OpenJiuwenProvider) createKVStore() kv.BaseKVStore {
 		return store
 	case "sqlite":
 		// 对齐 Python L247-251: DbBasedKVStore(engine)
+		// M-04: 默认路径对齐 Python 相对路径 "memory_kv.db"
 		path, _ := kvCfg["path"].(string)
 		if path == "" {
-			path = resolveLTMDir() + "/memory_kv.db"
+			path = "memory_kv.db"
 		}
 		dsn := fmt.Sprintf("file:%s?cache=shared&_journal_mode=WAL", path)
 		gormDB, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
@@ -690,10 +705,9 @@ func (p *OpenJiuwenProvider) createVectorStore() vector.BaseVectorStore {
 	switch backend {
 	case "chroma":
 		// 对齐 Python L264-266: create_vector_store(backend, **{k: v for k, v in vec_cfg.items() if k != "backend"})
+		// M-04: Python chroma 默认 persist_directory=None（内存模式），
+		// 对齐为空字符串语义（NewChromaVectorStore 内部处理为内存模式）
 		persistDir, _ := vecCfg["persist_directory"].(string)
-		if persistDir == "" {
-			persistDir = resolveLTMDir() + "/chroma"
-		}
 		return vector.NewChromaVectorStore(persistDir)
 	default:
 		// 对齐 Python L268-269: logger.error("[OpenJiuwenMemoryProvider] Vector store creation failed ({backend}): {e}")
@@ -717,9 +731,10 @@ func (p *OpenJiuwenProvider) createDBStore(ctx context.Context) db.BaseDbStore {
 	switch backend {
 	case "sqlite":
 		// 对齐 Python L276-280: DefaultDbStore(engine)
+		// M-05: 默认文件名对齐 Python "memory.db"（相对路径，落在进程 CWD）
 		path, _ := dbCfg["path"].(string)
 		if path == "" {
-			path = resolveLTMDir() + "/ltm.db"
+			path = "memory.db"
 		}
 		dsn := fmt.Sprintf("file:%s?cache=shared&_journal_mode=WAL", path)
 		gormDB, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
@@ -783,10 +798,4 @@ func (p *OpenJiuwenProvider) parseScopeConfig() *memconfig.MemoryScopeConfig {
 		return nil
 	}
 	return cfg
-}
-
-// resolveLTMDir 解析 LTM 数据目录。
-// 对齐 Python: _resolve_ltm_dir() → {workspace_dir}/memory/ltm
-func resolveLTMDir() string {
-	return filepath.Join(workspace.WorkspaceDir(), "memory", "ltm")
 }

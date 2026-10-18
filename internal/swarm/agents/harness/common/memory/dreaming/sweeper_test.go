@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -171,6 +173,55 @@ func TestCompress_code模式不含assistant(t *testing.T) {
 	result := s.compress(events, 0)
 	assert.Contains(t, result, "[User]: fix bug")
 	assert.NotContains(t, result, "[Assistant]")
+}
+
+// TestTruncateString_CJK截断 测试按 rune 截断不产生无效 UTF-8。
+// S-01: 对齐 Python content[:2000] 字符切片语义。
+func TestTruncateString_CJK截断(t *testing.T) {
+	// 3 个 CJK 字符 = 9 字节
+	cjk := "你好世界"
+	assert.Equal(t, 12, len("你好世界"))
+
+	// 截 2 个字符
+	got := truncateString(cjk, 2)
+	assert.Equal(t, "你好", got)
+	assert.True(t, utf8.ValidString(got))
+
+	// 不超过阈值时原样返回
+	assert.Equal(t, cjk, truncateString(cjk, 10))
+
+	// 空串
+	assert.Equal(t, "", truncateString("", 5))
+}
+
+// TestTruncateStringTail_CJK截断 测试尾部保留按 rune 计数。
+// S-01: 对齐 Python result[-max_chars:] 字符切片语义。
+func TestTruncateStringTail_CJK截断(t *testing.T) {
+	cjk := "你好世界"
+
+	// 保留末尾 2 个字符
+	got := truncateStringTail(cjk, 2)
+	assert.Equal(t, "世界", got)
+	assert.True(t, utf8.ValidString(got))
+
+	// 不超过阈值时原样返回
+	assert.Equal(t, cjk, truncateStringTail(cjk, 10))
+}
+
+// TestCompress_CJK长内容按字符截断 测试压缩时 CJK 内容按 rune 截断（2000 字符阈值）。
+// S-01: 旧实现按 byte 截断会在 CJK 中间切断产生乱码。
+func TestCompress_CJK长内容按字符截断(t *testing.T) {
+	s := NewSweeper("", "", "agent", "zh")
+	// 构造 2500 个 CJK 字符（7500 字节 > 2000 字节阈值）
+	long := strings.Repeat("好", 2500)
+	events := []HistoryEvent{
+		{Role: "user", Content: long},
+	}
+	result := s.compress(events, 0)
+	// 截断后应恰好 2000 个字符 = 6000 字节
+	assert.Contains(t, result, "[User]: "+strings.Repeat("好", 2000))
+	assert.NotContains(t, result, strings.Repeat("好", 2001))
+	assert.True(t, utf8.ValidString(result))
 }
 
 // ---------------------------------------------------------------------------

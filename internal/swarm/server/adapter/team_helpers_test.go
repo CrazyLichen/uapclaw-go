@@ -398,7 +398,7 @@ func TestSyncTeamIdentityMetadata_创建类型(t *testing.T) {
 
 func TestOnTeamWatcherDone(t *testing.T) {
 	// 仅验证无 panic
-	onTeamWatcherDone("session-1")
+	onTeamWatcherDone("channel-1", "session-1")
 }
 
 // ──────────────────────────── HandleTeamEvolveListCommand 测试 ────────────────────────────

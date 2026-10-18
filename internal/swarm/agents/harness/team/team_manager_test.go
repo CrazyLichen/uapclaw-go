@@ -160,16 +160,13 @@ func TestPrepareRuntimeActivation(t *testing.T) {
 }
 
 // TestInteract_非活跃Session拒绝 测试 interact 对非活跃 session 的拒绝
+// S-07: Interact 只返回 bool（对齐 Python 永不抛异常语义）
 func TestInteract_非活跃Session拒绝(t *testing.T) {
 	mgr := NewTeamManager()
 	ctx := context.Background()
 
 	// 无活跃 session
-	ok, err := mgr.Interact(ctx, "sess-1", interaction.NewInteractInput("hello"))
-	if err != nil {
-		t.Fatalf("Interact 不应返回错误: %v", err)
-	}
-	if ok {
+	if ok := mgr.Interact(ctx, "sess-1", interaction.NewInteractInput("hello")); ok {
 		t.Error("无活跃 session 时 Interact 应返回 false")
 	}
 
@@ -178,11 +175,7 @@ func TestInteract_非活跃Session拒绝(t *testing.T) {
 	mgr.activeSessionID = sid
 	tn := "team-active"
 	mgr.activeTeamName = tn
-	ok, err = mgr.Interact(ctx, "sess-wrong", interaction.NewInteractInput("hello"))
-	if err != nil {
-		t.Fatalf("Interact 不应返回错误: %v", err)
-	}
-	if ok {
+	if ok := mgr.Interact(ctx, "sess-wrong", interaction.NewInteractInput("hello")); ok {
 		t.Error("session 不匹配时 Interact 应返回 false")
 	}
 }

@@ -75,6 +75,9 @@ type MemoryProvider interface {
 
 	// SyncTurn 同步一轮对话到外部记忆。
 	// Python: async def sync_turn(self, user_msg: str, assistant_msg: str, **kwargs) -> None
+	// 语义约定（T-05）：Python 原文四个 provider 均在内部吞错（except → logger.warning → return None），
+	// Go 保留 error 签名但所有实现均返回 nil（错误已在实现内部记录日志）。
+	// 调用方（rail 层 AfterInvoke）同样吞错——只做熔断计数 + Warn 日志，不上抛。
 	SyncTurn(ctx context.Context, userMsg, assistantMsg string, opts ...ProviderOption) error
 
 	// SystemPromptBlock 返回 Provider 的系统提示词引导块。

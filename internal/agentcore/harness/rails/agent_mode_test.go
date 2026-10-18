@@ -73,6 +73,8 @@ func (f *fakeDeepAgentForAgentMode) SaveState(_ sessioninterfaces.SessionFacade,
 func (f *fakeDeepAgentForAgentMode) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
 	return nil
 }
+func (f *fakeDeepAgentForAgentMode) AddRail(_ agentinterfaces.AgentRail) {} // M-02: 接口新增 AddRail 的测试桩
+
 func (f *fakeDeepAgentForAgentMode) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
 	return nil
 }

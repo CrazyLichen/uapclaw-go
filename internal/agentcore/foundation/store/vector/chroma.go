@@ -996,10 +996,14 @@ func (s *ChromaVectorStore) cleanupChromaTempCollection(ctx context.Context, tem
 }
 
 // defaultChromaCreateClient 默认的客户端创建函数，使用 chroma-go PersistentClient。
+// persistPath 为空时不传 WithPersistentPath 选项，使用 chroma-go 内置默认临时目录，
+// 对齐 Python persist_directory=None 的内存模式语义（chroma-go v2 空路径会直接报错）。
 func defaultChromaCreateClient(persistPath string) (chromav2.Client, error) {
 	opts := []chromav2.PersistentClientOption{
-		chromav2.WithPersistentPath(persistPath),
 		chromav2.WithPersistentLibraryAutoDownload(true),
+	}
+	if persistPath != "" {
+		opts = append(opts, chromav2.WithPersistentPath(persistPath))
 	}
 	return chromav2.NewPersistentClient(opts...)
 }

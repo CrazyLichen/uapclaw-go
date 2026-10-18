@@ -17,7 +17,6 @@ func TestGetTeamEventType_已映射(t *testing.T) {
 		{monitor.MonitorEventTypeMemberExecutionChanged, TeamEventMemberExecutionChanged},
 		{monitor.MonitorEventTypeMemberRestarted, TeamEventMemberRestarted},
 		{monitor.MonitorEventTypeMemberShutdown, TeamEventMemberShutdown},
-		{monitor.MonitorEventTypeMemberCanceled, TeamEventMemberCanceled},
 		{monitor.MonitorEventTypeTaskCreated, TeamEventTaskCreated},
 		{monitor.MonitorEventTypeTaskClaimed, TeamEventTaskClaimed},
 		{monitor.MonitorEventTypeTaskCompleted, TeamEventTaskCompleted},
@@ -35,11 +34,13 @@ func TestGetTeamEventType_已映射(t *testing.T) {
 }
 
 // TestGetTeamEventType_未映射 验证未映射的 SDK 类型返回零值
+// M-01: MEMBER_CANCELED 对齐 Python 不透出，归入未映射集合
 func TestGetTeamEventType_未映射(t *testing.T) {
 	unmapped := []monitor.MonitorEventType{
 		monitor.MonitorEventTypeTeamCreated,
 		monitor.MonitorEventTypeTeamCleaned,
 		monitor.MonitorEventTypeTeamStandby,
+		monitor.MonitorEventTypeMemberCanceled,
 		monitor.MonitorEventTypeTaskPlanRequest,
 		monitor.MonitorEventTypeTaskPlanResponse,
 		monitor.MonitorEventTypeTaskUpdated,
@@ -61,7 +62,6 @@ func TestGetEventCategory(t *testing.T) {
 		{TeamEventMemberSpawned, EventCategoryMember},
 		{TeamEventMemberStatusChanged, EventCategoryMember},
 		{TeamEventMemberShutdown, EventCategoryMember},
-		{TeamEventMemberCanceled, EventCategoryMember},
 		{TeamEventTaskCreated, EventCategoryTask},
 		{TeamEventTaskCompleted, EventCategoryTask},
 		{TeamEventTaskUnblocked, EventCategoryTask},

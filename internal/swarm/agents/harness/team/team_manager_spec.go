@@ -7,20 +7,20 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentCustomizer Agent 定制器函数类型。
-// 对齐 Python: build_agent_customizer 返回的 customizer(agent, member_name, role) 闭包
-type AgentCustomizer func(ctx context.Context, agent interfaces.DeepAgentInterface, memberName string, role string) error
+// S-01: 全项目唯一类型定义在 agent_teams/schema 包（依赖最底层），
+// 此处保留类型别名供 team 包内使用，签名一致：ctx + error + memberName string。
+type AgentCustomizer = atschema.AgentCustomizer
 
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetEnrichedTeamSpec 获取增强的 TeamAgentSpec。
-// 对齐 Python: TeamManager.get_enriched_team_spec(session_id, deep_agent, ...)
+// 对齐 Python: TeamManager.get_enriched_team_spec(session_id, deep_agent, ...) (team_manager.py L354-381)
 //
 // Python 步骤：
 //  1. config_base = get_config()
@@ -29,7 +29,10 @@ type AgentCustomizer func(ctx context.Context, agent interfaces.DeepAgentInterfa
 //  4. self._apply_session_scoped_team_name(spec, session_id=session_id)
 //  5. self.apply_team_plan_mode(spec, request_metadata=)
 //  6. spec.agent_customizer = self.build_agent_customizer(...)
-//  7. return spec
+//
+// S-03: 对齐 Python——get_enriched_team_spec 不调用 sync_team_identity_metadata；
+// 身份同步仅在 runtime_ready 处理路径（adapter 层 SyncTeamIdentityMetadata，
+// 含 activationKind 守卫）执行，原此处的无守卫调用已删除。
 func (m *TeamManager) GetEnrichedTeamSpec(
 	ctx context.Context,
 	sessionID string,
@@ -58,9 +61,6 @@ func (m *TeamManager) GetEnrichedTeamSpec(
 		spec.AgentCustomizer = customizer
 	}
 
-	// 步骤 6: 同步 team identity metadata
-	m.SyncTeamIdentityMetadata(ctx, sessionID, spec.TeamName)
-
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Str("team_name", spec.TeamName).
@@ -87,21 +87,6 @@ func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMet
 		spec.EnableTeamPlan = true
 		logger.Info(logComponent).Msg("ApplyTeamPlanMode: enabling team.plan mode")
 	}
-}
-
-// SyncTeamIdentityMetadata 将 team_name 写入 session metadata。
-// 对齐 Python: TeamManager.sync_team_identity_metadata(session_id, team_name)
-func (m *TeamManager) SyncTeamIdentityMetadata(ctx context.Context, sessionID string, teamName string) {
-	if sessionID == "" || teamName == "" {
-		return
-	}
-	teamNamePtr := &teamName
-	session.UpdateSessionMetadata(session.SessionMetadataUpdate{
-		SessionID: sessionID,
-		TeamName:  teamNamePtr,
-	})
-	logger.Debug(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-		Msg("syncing team identity metadata")
 }
 
 // BuildAgentCustomizer 构建 agent customizer 闭包。

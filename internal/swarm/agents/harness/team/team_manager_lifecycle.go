@@ -41,8 +41,8 @@ func (m *TeamManager) CommitRuntimeReady(sessionID string, teamName string) {
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Str("team_name", teamName).
-		Str("active_session_id", ptrToStr(m.activeSessionID)).
-		Str("pending_session_id", ptrToStr(m.pendingSessionID)).
+		Str("active_session_id", displayStr(m.activeSessionID)).
+		Str("pending_session_id", displayStr(m.pendingSessionID)).
 		Msg("commit_runtime_ready")
 }
 
@@ -129,8 +129,8 @@ func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID 
 	logger.Info(logComponent).
 		Str("reason", reason).
 		Str("target_session_id", targetSessionID).
-		Str("active_session_id", ptrToStr(m.activeSessionID)).
-		Str("pending_session_id", ptrToStr(m.pendingSessionID)).
+		Str("active_session_id", displayStr(m.activeSessionID)).
+		Str("pending_session_id", displayStr(m.pendingSessionID)).
 		Strs("stale_sessions", staleSessions).
 		Msg("prepare_session_switch")
 	m.mu.Unlock()

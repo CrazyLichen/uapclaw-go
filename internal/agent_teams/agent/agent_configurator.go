@@ -423,10 +423,11 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 17. 自定义配置器
 	// ⤴️ 9.68 回填完成：运行自定义配置器
+	// S-01: AgentCustomizer 已统一为具体类型，无需类型断言（原 any + 断言失败静默反模式已消除）
+	// Python run_agent_customizer 为同步无 ctx 调用；Go 统一签名含 ctx，
+	// 构建期无请求级 context，使用 context.Background()（customizer 内部如需取消语义由后续回填演进）
 	if spec.AgentCustomizer != nil {
-		if customizer, ok := spec.AgentCustomizer.(agentteams.AgentCustomizer); ok {
-			harness.RunAgentCustomizer(customizer)
-		}
+		harness.RunAgentCustomizer(context.Background(), spec.AgentCustomizer)
 	}
 
 	return harness

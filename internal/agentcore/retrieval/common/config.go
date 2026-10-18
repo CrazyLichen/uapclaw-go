@@ -227,7 +227,13 @@ func (c *VectorStoreConfig) Validate() error {
 	if err := validateDatabaseName(c.DatabaseName); err != nil {
 		return err
 	}
-	return validateDistanceMetricKind(c.DistanceMetric)
+	// M-01: 对齐 Python Field(default="cosine")——空值视为默认 cosine，
+	// 避免零值构造的 config 因 DistanceMetric="" 校验失败
+	dm := c.DistanceMetric
+	if dm == "" {
+		dm = DistanceMetricCosine
+	}
+	return validateDistanceMetricKind(dm)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

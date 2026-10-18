@@ -170,13 +170,11 @@ func (p *AgentArtsProvider) Initialize(ctx context.Context, opts ...ProviderOpti
 	po := applyOptions(opts...)
 
 	// 对齐 Python: self._actor_id = kwargs.get("user_id")
-	if po.UserID != "" {
-		p.actorID = po.UserID
-	}
+	// S-02: 始终覆盖（对齐 Python None 语义——传入空值时清空旧值）
+	p.actorID = po.UserID
 	// 对齐 Python: self._assistant_id = kwargs.get("assistant_id") or kwargs.get("scope_id")
-	if po.ScopeID != "" {
-		p.assistantID = po.ScopeID
-	}
+	// S-02: 同上，始终覆盖
+	p.assistantID = po.ScopeID
 	sessionID := po.SessionID
 
 	// 对齐 Python: logger.info("[AgentArtsMemoryProvider] initializing with params: %s", json.dumps(kwargs))
@@ -189,11 +187,14 @@ func (p *AgentArtsProvider) Initialize(ctx context.Context, opts ...ProviderOpti
 
 	// 对齐 Python: await self._ensure_memory_session(session_id, actor_id=..., assistant_id=...)
 	// Python 无 try/except，异常直接传播
-	if sessionID != "" {
-		if _, err := p.ensureMemorySession(ctx, sessionID, p.actorID, p.assistantID); err != nil {
-			// 对齐 Python: 异常传播，initialized 不设为 true
-			return fmt.Errorf("ensureMemorySession 失败: %w", err)
-		}
+	// S-01: 对齐 Python "始终调用 + session_id 为 None 时 RuntimeError" 语义——
+	// sessionID 为空时直接失败（Python 的 _ensure_memory_session 抛 RuntimeError）
+	if sessionID == "" {
+		return fmt.Errorf("[AgentArtsMemoryProvider] session_id is required for initialize")
+	}
+	if _, err := p.ensureMemorySession(ctx, sessionID, p.actorID, p.assistantID); err != nil {
+		// 对齐 Python: 异常传播，initialized 不设为 true
+		return fmt.Errorf("ensureMemorySession 失败: %w", err)
 	}
 
 	p.mu.Lock()
@@ -458,10 +459,8 @@ func (p *AgentArtsProvider) search(ctx context.Context, query string, args map[s
 	}
 
 	// 对齐 Python: actor_id = self._runtime_actor_id(args)
-	actorID := p.runtimeActorID(args)
-	if actorID != "" {
-		filter.ActorID = actorID
-	}
+	// M-03: 移除空值守卫——Python 空 actor_id 也设进 filter（始终序列化）
+	filter.ActorID = p.runtimeActorID(args)
 
 	// 对齐 Python: top_k = args.get("top_k"); if top_k is None: top_k = _DEFAULT_TOP_K
 	topK := defaultTopK

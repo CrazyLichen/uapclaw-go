@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
@@ -194,12 +195,14 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 			if err == nil {
 				var records []map[string]any
 				if err := json.Unmarshal(data, &records); err == nil {
-					for _, record := range records {
-						record["forked_from"] = map[string]any{
-							"session_id":  params.SourceSessionID,
-							"original_id": record["id"],
-						}
+				for _, record := range records {
+					// T-01: 对齐 Python record.get("id", "") — 缺失时默认空串而非 nil
+					originalID, _ := record["id"].(string)
+					record["forked_from"] = map[string]any{
+						"session_id":  params.SourceSessionID,
+						"original_id": originalID,
 					}
+				}
 					// Python: json.dumps(data, ensure_ascii=False, indent=2)
 					if updated, err := json.MarshalIndent(records, "", "  "); err == nil {
 						if writeErr := os.WriteFile(targetHistory, updated, 0o644); writeErr != nil {
@@ -233,17 +236,25 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 	}
 
 	finalTitle := getUniqueForkName(baseName, existingTitles)
+	// S-02: 对齐 Python source_mode = source_meta.get("mode", "code.normal")
 	sourceMode, _ := sourceMeta["mode"].(string)
+	if sourceMode == "" {
+		sourceMode = "code.normal"
+	}
 
 	// Python: 写入目标会话元数据
+	// S-01: 对齐 Python source_meta.get(key, default) — 全字段类型断言 + 零值兜底
+	userID, _ := sourceMeta["user_id"].(string)
+	lastMessageAt, _ := sourceMeta["last_message_at"].(float64)
+	messageCount, _ := sourceMeta["message_count"].(float64)
 	metadata := map[string]any{
 		"session_id":      params.TargetSessionID,
 		"channel_id":      params.ChannelID,
-		"user_id":         sourceMeta["user_id"],
+		"user_id":         userID,
 		"created_at":      session.CurrentTimestamp(),
-		"last_message_at": sourceMeta["last_message_at"],
+		"last_message_at": lastMessageAt,
 		"title":           finalTitle,
-		"message_count":   sourceMeta["message_count"],
+		"message_count":   messageCount,
 		"mode":            sourceMode,
 		"forked_from":     params.SourceSessionID,
 	}
@@ -475,6 +486,11 @@ func RestoreSessionFiles(sessionID string, turnIndex int) *RestoreSessionFilesRe
 				} else {
 					result.RestoredFiles = append(result.RestoredFiles, filePath)
 				}
+			} else {
+				// T-03: RestoreContent 为 nil 时记录 warn（diff 记录可能损坏），不再静默跳过
+				logger.Warn(logComponent).
+					Str("file", filePath).Int("turn_index", turnIndex).
+					Msg("restore_session_files: write action with nil RestoreContent, skipped")
 			}
 		case "delete":
 			// 文件由 agent 在目标 turn 后创建，删除
@@ -707,12 +723,19 @@ func CopySessionState(ctx context.Context, sourceSessionID, targetSessionID stri
 		return false
 	}
 
-	modifiedState := deepCopyMap(sourceStateDict)
+	// T-04: 深拷贝失败时跳过 state 复制（宁可不复制，也不把空 map 写入目标会话）
+	modifiedState, err := deepCopyMap(sourceStateDict)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("source", sourceSessionID).
+			Msg("copy_session_state: deep copy failed, skipping state copy")
+		return false
+	}
 	modifiedState["iteration"] = 0
 	modifiedState["stop_condition_state"] = nil
 	modifiedState["pending_follow_ups"] = []any{}
 
 	// Python: 生成新 plan slug + 复制 plan 文件
+	// M-01: 对齐 Python (L583-608) — plan_slug 无条件更新（复制失败也更新，仅 debug 日志）
 	planMode, _ := modifiedState["plan_mode"].(map[string]any)
 	if planMode != nil {
 		oldSlug, _ := planMode["plan_slug"].(string)
@@ -722,15 +745,21 @@ func CopySessionState(ctx context.Context, sourceSessionID, targetSessionID stri
 			oldPlanPath := agentmode.ResolvePlanFilePath(workspaceRoot, oldSlug)
 			newPlanPath := agentmode.ResolvePlanFilePath(workspaceRoot, newSlug)
 			if _, err := os.Stat(oldPlanPath); err == nil {
-				if err := copyFile(oldPlanPath, newPlanPath); err == nil {
-					planMode["plan_slug"] = newSlug
-					modifiedState["plan_mode"] = planMode
+				// M-04: 复制失败对齐 Python debug 日志（非关键路径）
+				if err := copyFile(oldPlanPath, newPlanPath); err != nil {
+					logger.Debug(logComponent).Err(err).
+						Str("old_slug", oldSlug).Str("new_slug", newSlug).
+						Msg("copy_session_state: plan file copy failed (non-critical)")
+				} else {
 					logger.Info(logComponent).
 						Str("old_slug", oldSlug).
 						Str("new_slug", newSlug).
 						Msg("copy_session_state: plan file copied")
 				}
 			}
+			// Python: plan_mode["plan_slug"] = new_slug — 无条件更新
+			planMode["plan_slug"] = newSlug
+			modifiedState["plan_mode"] = planMode
 		}
 	}
 
@@ -817,10 +846,9 @@ func getUniqueForkName(baseName string, existingTitles map[string]bool) string {
 	for title := range existingTitles {
 		m := pattern.FindStringSubmatch(title)
 		if m != nil {
+			// S-03: 对齐 Python num = int(m.group(1)) if m.group(1) else 1
 			if m[1] != "" {
-				if num, err := fmt.Sscanf(m[1], "%d", new(int)); err == nil && num == 1 {
-					var n int
-					fmt.Sscanf(m[1], "%d", &n)
+				if n, err := strconv.Atoi(m[1]); err == nil {
 					usedNumbers[n] = true
 				}
 			} else {
@@ -878,15 +906,18 @@ func copyFile(src, dst string) error {
 	return os.Chmod(dst, srcInfo.Mode())
 }
 
-// deepCopyMap 深拷贝 map[string]any（通过 JSON 序列化/反序列化）
-func deepCopyMap(m map[string]any) map[string]any {
-	data, _ := json.Marshal(m)
+// deepCopyMap 深拷贝 map[string]any（通过 JSON 序列化/反序列化）。
+// T-04: 返回 error — 失败时调用方应跳过后续修改，避免把空 map 当深拷贝结果写入。
+func deepCopyMap(m map[string]any) (map[string]any, error) {
+	data, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
 	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("deepCopyMap: JSON deserialization failed")
-		return make(map[string]any)
+		return nil, err
 	}
-	return result
+	return result, nil
 }
 
 // flushSourceState 将运行时状态刷入 Checkpointer。

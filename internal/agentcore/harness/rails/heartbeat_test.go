@@ -68,6 +68,8 @@ func (f *fakeDeepAgentForHeartbeat) SaveState(_ sessioninterfaces.SessionFacade,
 func (f *fakeDeepAgentForHeartbeat) FindRailsByType(_ ...reflect.Type) []agentinterfaces.AgentRail {
 	return nil
 }
+func (f *fakeDeepAgentForHeartbeat) AddRail(_ agentinterfaces.AgentRail) {} // M-02: 接口新增 AddRail 的测试桩
+
 func (f *fakeDeepAgentForHeartbeat) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
 	return nil
 }

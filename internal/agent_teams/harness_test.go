@@ -2,6 +2,7 @@ package agent_teams_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,34 +52,60 @@ func TestTeamHarness_Rails(t *testing.T) {
 }
 
 // TestTeamHarness_RunAgentCustomizer 测试自定义钩子调用
+// S-01: 统一签名 ctx + error
 func TestTeamHarness_RunAgentCustomizer(t *testing.T) {
 	var capturedAgent hinterfaces.DeepAgentInterface
 	var capturedName string
 	var capturedRole string
 	called := false
 
-	customizer := func(deepAgent hinterfaces.DeepAgentInterface, memberName string, roleValue string) {
+	customizer := func(ctx context.Context, deepAgent hinterfaces.DeepAgentInterface, memberName string, roleValue string) error {
 		called = true
 		capturedAgent = deepAgent
 		capturedName = memberName
 		capturedRole = roleValue
+		return nil
 	}
 
-	var agent hinterfaces.DeepAgentInterface
+	agent := &mockDeepAgent{}
 	h := agent_teams.NewTeamHarness(agent, nil, string(atschema.TeamRoleLeader), "leader_1", false)
-	h.RunAgentCustomizer(customizer)
+	h.RunAgentCustomizer(context.Background(), customizer)
 
 	assert.True(t, called)
-	assert.Nil(t, capturedAgent)
+	assert.NotNil(t, capturedAgent)
 	assert.Equal(t, "leader_1", capturedName)
 	assert.Equal(t, "leader", capturedRole)
+}
+
+// TestTeamHarness_RunAgentCustomizer_NilAgent 测试 deepAgent 为 nil 时跳过钩子（S-06 守卫）
+func TestTeamHarness_RunAgentCustomizer_NilAgent(t *testing.T) {
+	called := false
+	customizer := func(ctx context.Context, deepAgent hinterfaces.DeepAgentInterface, memberName string, roleValue string) error {
+		called = true
+		return nil
+	}
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	h.RunAgentCustomizer(context.Background(), customizer)
+	assert.False(t, called) // nil agent → 跳过
+}
+
+// TestTeamHarness_RunAgentCustomizer_Error吞掉 测试 customizer 返回 error 时只记日志不 panic
+func TestTeamHarness_RunAgentCustomizer_Error吞掉(t *testing.T) {
+	customizer := func(ctx context.Context, deepAgent hinterfaces.DeepAgentInterface, memberName string, roleValue string) error {
+		return errors.New("customizer failed")
+	}
+	agent := &mockDeepAgent{}
+	h := agent_teams.NewTeamHarness(agent, nil, string(atschema.TeamRoleLeader), "leader_1", false)
+	assert.NotPanics(t, func() {
+		h.RunAgentCustomizer(context.Background(), customizer)
+	})
 }
 
 // TestTeamHarness_RunAgentCustomizer_Nil 测试 nil 自定义器不 panic
 func TestTeamHarness_RunAgentCustomizer_Nil(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NotPanics(t, func() {
-		h.RunAgentCustomizer(nil)
+		h.RunAgentCustomizer(context.Background(), nil)
 	})
 }
 

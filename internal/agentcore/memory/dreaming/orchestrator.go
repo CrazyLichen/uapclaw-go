@@ -204,10 +204,20 @@ func (o *DreamingOrchestrator) loop(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			if err := o.tick(ctx); err != nil {
-				// M-02: tick 返回 context.Canceled 时退出 loop，对齐 Python raise
-				if errors.Is(err, context.Canceled) {
+				// M-03: Canceled 与 DeadlineExceeded 均视为取消信号退出 loop，
+				// 对齐 Python: except asyncio.CancelledError → raise
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return
 				}
+				// M-02: 非取消错误 → 意外错误，终止 loop（running 由 defer 清除），
+				// 对齐 Python: except Exception → logger.exception("loop terminated by
+				// unexpected error (running=%s, interval=%.0fs)"); self._running = False
+				logger.Error(logComponent).Err(err).
+					Str("name", o.name).
+					Bool("running", false).
+					Float64("interval_seconds", o.interval.Seconds()).
+					Msg("loop terminated by unexpected error")
+				return
 			}
 		case <-ctx.Done():
 			return
@@ -248,10 +258,11 @@ func (o *DreamingOrchestrator) tick(ctx context.Context) error {
 	// 执行 sweep（对齐 Python: await self._sweep_fn()）
 	logger.Info(logComponent).Str("name", o.name).Msg("start sweep")
 	if err := o.sweepFn(ctx); err != nil {
-		if errors.Is(err, context.Canceled) {
-			// 对齐 Python: CancelledError → raise（由 loop 外层处理）
-			logger.Info(logComponent).Str("name", o.name).Msg("sweep cancelled")
-			return err // M-02: 传播 Canceled 给 loop，让 loop 退出
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			// 对齐 Python: CancelledError → logger.exception("sweep cancelled") + raise
+			// M-04: Python logger.exception 为 ERROR 级别，Go 同级对齐（含 Err 详情）
+			logger.Error(logComponent).Err(err).Str("name", o.name).Msg("sweep cancelled")
+			return err // M-02: 传播取消信号给 loop，让 loop 退出
 		}
 		// 对齐 Python: except Exception → logger.exception("sweep exception: %s", exc)
 		logger.Error(logComponent).Err(err).Str("name", o.name).Msg("sweep exception")

@@ -9,9 +9,12 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -46,10 +49,11 @@ type MountedRails struct {
 }
 
 // AgentCustomizer 用户自定义钩子签名。
+// S-01: 全项目唯一类型定义在 agent_teams/schema 包，此处保留类型别名。
 // Python: AgentCustomizer = Callable[[DeepAgent, Optional[str], str], None]
 //
-// 参数：deepAgent, memberName, roleValue
-type AgentCustomizer func(deepAgent hinterfaces.DeepAgentInterface, memberName string, roleValue string)
+// 参数：ctx, deepAgent, memberName, roleValue；memberName/role 空串等价 Python None。
+type AgentCustomizer = atschema.AgentCustomizer
 
 // TeamHarness TeamAgent 与底层 DeepAgent 之间的唯一适配器。
 // Python: TeamHarness (openjiuwen/agent_teams/harness.py)
@@ -109,6 +113,9 @@ func NewTeamHarness(
 // BuildTeamHarness 从 AgentSpec 物化 DeepAgent 并挂载所有团队 Rails。
 // Python: TeamHarness.build(...)
 //
+// S-06: 对齐 Python deep_agent = agent_spec.build()——从 spec 构建 DeepAgent
+// 实例传入 harness，RunAgentCustomizer 不再面对 nil agent。
+//
 // 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并
 // 急切初始化，以便 LLM 看到的能力快照与测试观察到的一致。
 //
@@ -125,10 +132,49 @@ func BuildTeamHarness(
 	teamPlanModeRail *rails.TeamPlanModeRail,
 	initialPlanMode bool,
 ) *TeamHarness {
-	// ⤴️ 9.68: Rail 挂载需要 deepAgent 实例，此处先组装到 MountedRails，
-	// 后续由调用方在创建 deepAgent 后统一注册这 6 个 Rail：
-	// TeamToolRail、TeamPolicyRail、FirstIterationGate、
-	// TeamWorkspaceRail、TeamToolApprovalRail、TeamPlanModeRail。
+	// S-06: 对齐 Python deep_agent = agent_spec.build()——物化 DeepAgent
+	deepAgent := buildDeepAgentFromSpec(agentSpec)
+
+	// S-06: 对齐 Python build() 的 Rail 挂载顺序（L118-140）：
+	// deep_agent.add_rail(team_tool_rail) + 急切初始化（set_sys_operation/
+	// set_workspace/init），随后 team_policy、first_iter_gate、team_workspace、
+	// tool_approval、team_plan_mode 依次挂载。
+	// 挂载顺序有语义：TeamToolRail 必须在 TeamPolicyRail 之前挂载并急切初始化，
+	// 以便 LLM 看到的能力快照与测试观察到的一致（Init 幂等，延迟注册变为 no-op）。
+	if deepAgent != nil {
+		if teamToolRail != nil {
+			deepAgent.AddRail(teamToolRail)
+			// 急切初始化：rail 的延迟 init 在首次 invoke 时运行，
+			// 但在那之前获取的工具快照会遗漏团队工具
+			if dc := deepAgent.DeepConfig(); dc != nil {
+				teamToolRail.SetSysOperation(dc.SysOperation)
+				teamToolRail.SetWorkspace(dc.Workspace)
+			}
+			if baseAgent, ok := deepAgent.(agentinterfaces.BaseAgent); ok {
+				if err := teamToolRail.Init(context.Background(), baseAgent); err != nil {
+					logger.Warn(logComponent).Err(err).
+						Str("member_name", memberName).
+						Msg("BuildTeamHarness: TeamToolRail eager init failed")
+				}
+			}
+		}
+		if teamPolicyRail != nil {
+			deepAgent.AddRail(teamPolicyRail)
+		}
+		if firstIterGate != nil {
+			deepAgent.AddRail(firstIterGate)
+		}
+		if teamWorkspaceRail != nil {
+			deepAgent.AddRail(teamWorkspaceRail)
+		}
+		if toolApprovalRail != nil {
+			deepAgent.AddRail(toolApprovalRail)
+		}
+		if teamPlanModeRail != nil {
+			deepAgent.AddRail(teamPlanModeRail)
+		}
+	}
+
 	rails := &MountedRails{
 		TeamTool:      teamToolRail,
 		TeamPolicy:    teamPolicyRail,
@@ -137,7 +183,7 @@ func BuildTeamHarness(
 		ToolApproval:  toolApprovalRail,
 		TeamPlanMode:  teamPlanModeRail,
 	}
-	return NewTeamHarness(nil, rails, role, memberName, initialPlanMode)
+	return NewTeamHarness(deepAgent, rails, role, memberName, initialPlanMode)
 }
 
 // RunAgentCustomizer 调用用户自定义钩子。
@@ -146,11 +192,11 @@ func BuildTeamHarness(
 // 在 Rail 挂载和依赖绑定（memory_manager 等）之后调用，
 // 使自定义器看到完整准备的环境。吞掉异常以保持团队启动不被破坏；
 // 失败记录到日志。
-func (h *TeamHarness) RunAgentCustomizer(customizer AgentCustomizer) {
+func (h *TeamHarness) RunAgentCustomizer(ctx context.Context, customizer AgentCustomizer) {
 	if customizer == nil {
 		return
 	}
-	// Python: try/except Exception — 吞掉 customizer 的 panic
+	// Python: try/except Exception — 吞掉 customizer 的 panic 和 error
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).
@@ -159,7 +205,18 @@ func (h *TeamHarness) RunAgentCustomizer(customizer AgentCustomizer) {
 				Msg("agent_customizer failed")
 		}
 	}()
-	customizer(h.deepAgent, h.memberName, h.role)
+	if h.deepAgent == nil {
+		logger.Warn(logComponent).
+			Str("member_name", h.memberName).
+			Msg("RunAgentCustomizer: deepAgent is nil, skipping customizer")
+		return
+	}
+	if err := customizer(ctx, h.deepAgent, h.memberName, h.role); err != nil {
+		logger.Warn(logComponent).
+			Str("member_name", h.memberName).
+			Err(err).
+			Msg("agent_customizer failed")
+	}
 }
 
 // Rails 返回已挂载的团队侧 Rails 句柄。
@@ -346,3 +403,102 @@ func (h *TeamHarness) InjectMemberMemory(ctx context.Context, memoryManager *mem
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildDeepAgentFromSpec 从 DeepAgentSpec 物化 DeepAgent 实例。
+// S-06: 对齐 Python DeepAgentSpec.build() (deep_agent_spec.py L461-515)
+//
+// Python 步骤：
+//  1. llm_model = self.model.build()（TeamModelConfig → Model）
+//  2. language = resolve_language(self.language)
+//  3. vision_config / audio_config / workspace / rails / subagents / sys_operation 逐项 build
+//  4. create_deep_agent(...)
+//
+// Go 差异：团队 Rails（TeamToolRail 等 6 个）由调用方（AgentConfigurator）先构建、
+// 经 BuildTeamHarness 参数传入后挂载（挂载顺序有语义），不在此处从 RailSpec 构建；
+// subagents/sys_operation 等字段由 CreateDeepAgent 内部处理。
+// 构建失败时记日志并返回 nil（对齐 Python 异常向上传播由调用方兜底的容错语义，
+// 避免团队启动因单个成员物化失败而中断）。
+func buildDeepAgentFromSpec(spec atschema.DeepAgentSpec) hinterfaces.DeepAgentInterface {
+	// Python: llm_model = self.model.build() if self.model else None
+	var llmModel *llm.Model
+	if spec.Model != nil {
+		cfg := spec.Model.ModelClientConfig
+		m, err := llm.NewModel(&cfg, spec.Model.ModelRequestConfig)
+		if err != nil {
+			logger.Warn(logComponent).Err(err).
+				Str("member_card", spec.Card.GetName()).
+				Msg("buildDeepAgentFromSpec: model build failed, agent will have no model")
+		} else {
+			llmModel = m
+		}
+	}
+
+	// Python: workspace = self.workspace.build() if self.workspace else None
+	// Go 差异：WorkspaceSpec → workspace.Workspace 由 CreateDeepAgent 内部
+	// buildWorkspace 处理（harness_config.Params.Workspace 为 *Workspace），
+	// 此处传入 nil 让 factory 走默认构建。
+
+	params := hconfig.CreateDeepAgentParams{
+		Model:                  llmModel,
+		Card:                   spec.Card,
+		SystemPrompt:           spec.SystemPrompt,
+		ToolCards:              spec.ToolCards,
+		Mcps:                   spec.Mcps,
+		EnableTaskLoop:         true, // Python: enable_task_loop=True（build 中硬编码）
+		EnableAsyncSubagent:    spec.EnableAsyncSubagent,
+		AddGeneralPurposeAgent: spec.AddGeneralPurposeAgent,
+		MaxIterations:          spec.MaxIterations,
+		Skills:                 spec.Skills,
+		EnableSkillDiscovery:   spec.EnableSkillDiscovery,
+		Language:               spec.Language,
+		AutoCreateWorkspace:    spec.AutoCreateWorkspace,
+	}
+
+	// Python: vision_config = self.vision_model.build() if self.vision_model else None
+	if spec.VisionModel != nil {
+		params.VisionModelConfig = &hschema.VisionModelConfig{
+			APIKey:     spec.VisionModel.APIKey,
+			BaseURL:    spec.VisionModel.BaseURL,
+			Model:      spec.VisionModel.Model,
+			MaxRetries: spec.VisionModel.MaxRetries,
+		}
+	}
+	// Python: audio_config = self.audio_model.build() if self.audio_model else None
+	if spec.AudioModel != nil {
+		params.AudioModelConfig = &hschema.AudioModelConfig{
+			APIKey:             spec.AudioModel.APIKey,
+			BaseURL:            spec.AudioModel.BaseURL,
+			TranscriptionModel: spec.AudioModel.TranscriptionModel,
+			QAModel:            spec.AudioModel.QAModel,
+			MaxRetries:         spec.AudioModel.MaxRetries,
+		}
+	}
+	// Python: completion_timeout=self.completion_timeout
+	if spec.CompletionTimeout > 0 {
+		params.CompletionTimeout = spec.CompletionTimeout
+	}
+	// Python: enable_task_planning=self.enable_task_planning
+	params.EnableTaskPlanning = spec.EnableTaskPlanning
+	// Python: restrict_to_work_dir=self.restrict_to_sandbox（*bool，非零时设置）
+	if spec.RestrictToSandbox {
+		restrict := true
+		params.RestrictToWorkDir = &restrict
+	}
+	// Python: prompt_mode=self.prompt_mode（字符串解析，失败保持默认 Full）
+	if spec.PromptMode != "" {
+		if pm, err := hschema.ParsePromptMode(spec.PromptMode); err == nil {
+			params.PromptMode = pm
+		} else {
+			logger.Warn(logComponent).Err(err).Str("prompt_mode", spec.PromptMode).
+				Msg("buildDeepAgentFromSpec: invalid prompt_mode, using default")
+		}
+	}
+
+	agent, err := harness.CreateDeepAgent(context.Background(), params)
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Msg("buildDeepAgentFromSpec: CreateDeepAgent failed")
+		return nil
+	}
+	return agent
+}

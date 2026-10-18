@@ -26,13 +26,15 @@ type agentartsClient struct {
 
 // memorySearchFilter 记忆搜索过滤条件。
 // 对齐 Python: MemorySearchFilter (agentarts/sdk/memory/inner/config.py)
+// M-03: ActorID/AssistantID 去掉 omitempty——Python 空字符串也设进 filter_kwargs
+// （服务端收到 actor_id=""），Go 对齐始终序列化
 type memorySearchFilter struct {
 	Query        string  `json:"query"`
 	TopK         int     `json:"top_k,omitempty"`
 	MinScore     float64 `json:"min_score,omitempty"`
 	StrategyType string  `json:"strategy_type,omitempty"`
-	ActorID      string  `json:"actor_id,omitempty"`
-	AssistantID  string  `json:"assistant_id,omitempty"`
+	ActorID      string  `json:"actor_id"`
+	AssistantID  string  `json:"assistant_id"`
 }
 
 // memorySearchResponse 记忆搜索响应。
