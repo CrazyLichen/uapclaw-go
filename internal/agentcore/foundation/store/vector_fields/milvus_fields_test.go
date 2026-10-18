@@ -9,8 +9,8 @@ func TestMilvusAUTO(t *testing.T) {
 	if f.DatabaseType != DatabaseTypeMilvus {
 		t.Errorf("DatabaseType = %v, want %v", f.DatabaseType, DatabaseTypeMilvus)
 	}
-	if f.IndexType != IndexTypeAUTO {
-		t.Errorf("IndexType = %v, want %v", f.IndexType, IndexTypeAUTO)
+	if f.IndexType() != IndexTypeAUTO {
+		t.Errorf("IndexType = %v, want %v", f.IndexType(), IndexTypeAUTO)
 	}
 	if f.VectorFieldName != "embedding" {
 		t.Errorf("VectorFieldName = %v, want embedding", f.VectorFieldName)
@@ -31,8 +31,8 @@ func TestMilvusAUTO(t *testing.T) {
 
 func TestMilvusFLAT(t *testing.T) {
 	f := NewMilvusFLAT("embedding")
-	if f.IndexType != IndexTypeFLAT {
-		t.Errorf("IndexType = %v, want %v", f.IndexType, IndexTypeFLAT)
+	if f.IndexType() != IndexTypeFLAT {
+		t.Errorf("IndexType = %v, want %v", f.IndexType(), IndexTypeFLAT)
 	}
 	if err := f.Validate(); err != nil {
 		t.Errorf("Validate() = %v, want nil", err)
@@ -41,8 +41,8 @@ func TestMilvusFLAT(t *testing.T) {
 
 func TestMilvusHNSW(t *testing.T) {
 	f := NewMilvusHNSW("embedding", 30, 360, 2.0)
-	if f.IndexType != IndexTypeHNSW {
-		t.Errorf("IndexType = %v, want %v", f.IndexType, IndexTypeHNSW)
+	if f.IndexType() != IndexTypeHNSW {
+		t.Errorf("IndexType = %v, want %v", f.IndexType(), IndexTypeHNSW)
 	}
 	if err := f.Validate(); err != nil {
 		t.Errorf("Validate() = %v, want nil", err)
@@ -91,8 +91,8 @@ func TestMilvusHNSW_校验失败(t *testing.T) {
 
 func TestMilvusIVF(t *testing.T) {
 	f := NewMilvusIVF("embedding", 128, 8)
-	if f.IndexType != IndexTypeIVF {
-		t.Errorf("IndexType = %v, want %v", f.IndexType, IndexTypeIVF)
+	if f.IndexType() != IndexTypeIVF {
+		t.Errorf("IndexType = %v, want %v", f.IndexType(), IndexTypeIVF)
 	}
 	if err := f.Validate(); err != nil {
 		t.Errorf("Validate() = %v, want nil", err)
@@ -136,8 +136,8 @@ func TestMilvusIVF_校验失败(t *testing.T) {
 
 func TestMilvusSCANN(t *testing.T) {
 	f := NewMilvusSCANN("embedding", 128, 8, true, 200)
-	if f.IndexType != IndexTypeSCANN {
-		t.Errorf("IndexType = %v, want %v", f.IndexType, IndexTypeSCANN)
+	if f.IndexType() != IndexTypeSCANN {
+		t.Errorf("IndexType = %v, want %v", f.IndexType(), IndexTypeSCANN)
 	}
 	if err := f.Validate(); err != nil {
 		t.Errorf("Validate() = %v, want nil", err)
