@@ -915,3 +915,59 @@ func TestValidateEditPath_项目根特例(t *testing.T) {
 	assert.True(t, ok3)
 	assert.Equal(t, "/proj/sub/UAPCLAWSWARM.md", resolved3)
 }
+
+// TestHandleMemoryEdit_恰好20行尾换行 测试 splitlines 语义：恰好 20 行+尾换行无截断标记
+// Python: "l\n"*20.splitlines() → 20 行，len==20 不追加 "... (truncated)"
+func TestHandleMemoryEdit_恰好20行尾换行(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "memory"), 0o755))
+	p := filepath.Join(tmp, "memory", "a.md")
+	assert.NoError(t, os.WriteFile(p, []byte(strings.Repeat("l\n", 20)), 0o644))
+
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": p})
+	preview, _ := res["content_preview"].(string)
+	assert.NotContains(t, preview, "truncated", "恰好 20 行不应有截断标记")
+	assert.Equal(t, 20, len(strings.Split(preview, "\n")))
+}
+
+// TestHandleMemoryEdit_crlf行尾 测试 \r\n 行界处理（对齐 Python splitlines 不残留 \r）
+func TestHandleMemoryEdit_crlf行尾(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "memory"), 0o755))
+	p := filepath.Join(tmp, "memory", "crlf.md")
+	assert.NoError(t, os.WriteFile(p, []byte("l1\r\nl2\r\nl3"), 0o644))
+
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": p})
+	preview, _ := res["content_preview"].(string)
+	assert.Equal(t, "l1\nl2\nl3", preview)
+}
+
+// TestHandleMemoryEdit_空文件预览 测试空文件 preview 为空串
+func TestHandleMemoryEdit_空文件预览(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "memory"), 0o755))
+	p := filepath.Join(tmp, "memory", "empty.md")
+	assert.NoError(t, os.WriteFile(p, []byte(""), 0o644))
+
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": p})
+	preview, _ := res["content_preview"].(string)
+	// Python: "".splitlines() → [] → "\n".join([]) → ""
+	assert.Equal(t, "", preview)
+}
+
+// TestHandleMemoryEdit_只有尾换行 测试仅 "\n" 的文件 preview 为空串
+func TestHandleMemoryEdit_只有尾换行(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "memory"), 0o755))
+	p := filepath.Join(tmp, "memory", "nl.md")
+	assert.NoError(t, os.WriteFile(p, []byte("\n"), 0o644))
+
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": p})
+	preview, _ := res["content_preview"].(string)
+	// Python: "\n".splitlines() → [""] → join → ""
+	assert.Equal(t, "", preview)
+}

@@ -52,7 +52,11 @@ func HandleMemoryEdit(ctx context.Context, workspace string, params map[string]a
 		// Python: 读全文 splitlines 取前 20 行；超 20 行追加 "\n... (truncated)"
 		contentPreview := ""
 		if text, err := os.ReadFile(resolved); err == nil {
-			lines := strings.Split(string(text), "\n")
+			// 对齐 Python splitlines 语义：\r\n 是行界（不保留 \r）、尾换行不产生末尾空行。
+			// 孤立 \r 与 Unicode 行界（\v\f\u2028 等）不在此处理（md 记忆文件极罕见）
+			normalized := strings.ReplaceAll(string(text), "\r\n", "\n")
+			normalized = strings.TrimSuffix(normalized, "\n")
+			lines := strings.Split(normalized, "\n")
 			if len(lines) > 20 {
 				contentPreview = strings.Join(lines[:20], "\n") + "\n... (truncated)"
 			} else {
