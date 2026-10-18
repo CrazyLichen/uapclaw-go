@@ -38,6 +38,14 @@ const (
 	defaultChunkOverlap = 50
 )
 
+// ChunkerFactory 分块器工厂签名。返回 error 承载构造校验失败
+//（对齐 Python 工厂内构造抛 ValueError）。
+//
+// 错误风格说明：Python registry 系错误（ValueError/KeyError/TypeError）
+// 是原生异常非 StatusCode，Go 侧按项目先例（retrieval/embedding/utils.go 等）
+// 统一用 fmt.Errorf。
+type ChunkerFactory func(opts ...ChunkerOption) (Chunker, error)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -49,14 +57,6 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// ChunkerFactory 分块器工厂签名。返回 error 承载构造校验失败
-//（对齐 Python 工厂内构造抛 ValueError）。
-//
-// 错误风格说明：Python registry 系错误（ValueError/KeyError/TypeError）
-// 是原生异常非 StatusCode，Go 侧按项目先例（retrieval/embedding/utils.go 等）
-// 统一用 fmt.Errorf。
-type ChunkerFactory func(opts ...ChunkerOption) (Chunker, error)
 
 // NewChunkerOptions 构建带默认值的选项并应用可变参数。
 func NewChunkerOptions(opts ...ChunkerOption) *ChunkerOptions {
