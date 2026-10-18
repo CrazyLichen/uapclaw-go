@@ -112,7 +112,10 @@ jobs:
         continue-on-error: true
 
       - name: 运行单元测试（带覆盖率）
-        run: go test -mod=mod -tags=test -race -coverprofile=coverage.out ./...
+        env:
+          # mattn/go-sqlite3 为 CGO 驱动，FTS5 扩展需 sqlite_fts5 构建标签启用
+          CGO_ENABLED: 1
+        run: go test -mod=mod -tags "sqlite_fts5 test" -race -coverprofile=coverage.out ./...
 
       - name: 检查覆盖率阈值（≥ 72.0%）
         run: |

@@ -49,6 +49,12 @@ linters:
       - linters:
           - staticcheck
         text: "QF1008"
+      # ST1005 要求 error 字符串小写开头且不以标点结尾；本项目大量错误消息
+      # 一比一复刻 Python 原文（如 "Unknown chunker: ..."、"File not found: ..."），
+      # Python 消息以大写开头/句点结尾是常态，为保持两端一致排除此规则
+      - linters:
+          - staticcheck
+        text: "ST1005"
 
 issues:
   # 不限制每类 linter 报告的问题数量
