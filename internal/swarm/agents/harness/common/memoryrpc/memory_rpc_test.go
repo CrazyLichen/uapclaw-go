@@ -402,3 +402,141 @@ func TestHandleMemoryOpen_coding目录存在(t *testing.T) {
 	res := HandleMemoryOpen(context.Background(), tmp, map[string]any{"project_dir": "/proj"})
 	assert.Equal(t, coding, res["coding_memory_dir"])
 }
+
+// ──────────────────────────── HandleMemoryList ────────────────────────────
+
+// TestHandleMemoryList_三路合并 测试 project + auto + coding 三路
+func TestHandleMemoryList_三路合并(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	// project 层需要 root marker（对齐 Python find_project_root 语义）
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, ".uapclaw"), 0o755))
+	// project 层：UAPCLAWSWARM.md 在 workspace 根
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "UAPCLAWSWARM.md"), []byte("p\n"), 0o644))
+	// auto 层：workspace/memory
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "memory"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "memory", "a.md"), []byte("m1\nm2"), 0o644))
+	// coding 层：workspace/coding_memory/default（不传 project_dir）
+	coding := getCodingMemoryDir(tmp, "")
+	assert.NoError(t, os.MkdirAll(coding, 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(coding, "c.md"), []byte("c"), 0o644))
+
+	// project 层发现不传 project_dir（Python L211：project_dir or workspace，
+	// 传 project_dir 后发现目标变为 project_dir；本场景针对 workspace 自身）
+	res := HandleMemoryList(context.Background(), tmp, "plan", map[string]any{})
+	files := res["files"].([]map[string]any)
+
+	byPath := map[string]map[string]any{}
+	for _, f := range files {
+		byPath[f["path"].(string)] = f
+	}
+	assert.Len(t, byPath, 3)
+	assert.Equal(t, "project", byPath[filepath.Join(tmp, "UAPCLAWSWARM.md")]["kind"])
+	// project 文件行数：content 口径（frontmatter 剥离后 "p"）→ "p".count("\n")+1 = 1
+	assert.Equal(t, 1, byPath[filepath.Join(tmp, "UAPCLAWSWARM.md")]["lines"])
+	auto := byPath[filepath.Join(tmp, "memory", "a.md")]
+	assert.Equal(t, "auto", auto["kind"])
+	// auto 文件行数：countLines 口径 "m1\nm2" → 2
+	assert.Equal(t, 2, auto["lines"])
+	// coding 层：不传 project_dir → coding_memory/default
+	codingDefault := getCodingMemoryDir(tmp, "")
+	codingFile := byPath[filepath.Join(codingDefault, "c.md")]
+	assert.Equal(t, "coding", codingFile["kind"])
+	assert.Equal(t, 1, codingFile["lines"])
+}
+
+// TestHandleMemoryList_空内容文件被丢弃 测试空 UAPCLAWSWARM.md 不进列表
+// （对齐 Python project_memory _load_path L553-555：body_stripped 为空即 return；
+// memory_rpc L226 的 else 0 分支为防御性写法，实际空文件在发现层已被丢弃）
+func TestHandleMemoryList_空内容文件被丢弃(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, ".uapclaw"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "UAPCLAWSWARM.md"), []byte(""), 0o644))
+
+	res := HandleMemoryList(context.Background(), tmp, "plan", map[string]any{})
+	files := res["files"].([]map[string]any)
+	assert.Empty(t, files) // 空内容在发现层被丢弃
+}
+
+// TestHandleMemoryList_无marker无project层 测试无 root marker 时 project 层跳过（对齐 Python find_project_root）
+func TestHandleMemoryList_无marker无project层(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "UAPCLAWSWARM.md"), []byte("p"), 0o644))
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "memory"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "memory", "a.md"), []byte("m"), 0o644))
+
+	res := HandleMemoryList(context.Background(), tmp, "plan", map[string]any{})
+	files := res["files"].([]map[string]any)
+	// 无 marker：UAPCLAWSWARM.md 不被发现，仅 auto 层 1 个文件
+	assert.Len(t, files, 1)
+	assert.Equal(t, "auto", files[0]["kind"])
+}
+
+// TestHandleMemoryList_去重 测试同 path 只保留首份（project 优先于 auto）
+func TestHandleMemoryList_去重(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "memory"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "memory", "dup.md"), []byte("x"), 0o644))
+
+	// project 发现（workspace 根扫描）与 memory 目录扫描都覆盖 memory/dup.md？
+	// Python 语义：project_files 来自 discover_and_load_memory_files（不含 memory/ 子目录扫描），
+	// auto 扫描补 memory/ 下文件，seen_paths 保证跨路去重
+	res := HandleMemoryList(context.Background(), tmp, "plan", map[string]any{})
+	files := res["files"].([]map[string]any)
+	dupCount := 0
+	for _, f := range files {
+		if strings.HasSuffix(f["path"].(string), "dup.md") {
+			dupCount++
+		}
+	}
+	assert.Equal(t, 1, dupCount)
+}
+
+// TestHandleMemoryList_不含项目 测试 include_project=false
+func TestHandleMemoryList_不含项目(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "UAPCLAWSWARM.md"), []byte("p"), 0o644))
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "memory"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "memory", "a.md"), []byte("m"), 0o644))
+
+	res := HandleMemoryList(context.Background(), tmp, "plan", map[string]any{"include_project": false})
+	files := res["files"].([]map[string]any)
+	for _, f := range files {
+		assert.NotContains(t, f["path"], "UAPCLAWSWARM.md")
+	}
+	assert.Len(t, files, 1)
+}
+
+// TestHandleMemoryList_空结果 测试无任何记忆文件时 files 为空数组
+func TestHandleMemoryList_空结果(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	res := HandleMemoryList(context.Background(), tmp, "plan", map[string]any{})
+	files := res["files"].([]map[string]any)
+	assert.NotNil(t, files)
+	assert.Empty(t, files)
+}
+
+// TestHandleMemoryList_额外目录参数 测试 additional_directories 透传
+func TestHandleMemoryList_额外目录参数(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	extra := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(extra, "UAPCLAWSWARM.md"), []byte("extra"), 0o644))
+
+	res := HandleMemoryList(context.Background(), tmp, "plan", map[string]any{
+		"additional_directories": []any{extra},
+	})
+	files := res["files"].([]map[string]any)
+	found := false
+	for _, f := range files {
+		if f["path"] == filepath.Join(extra, "UAPCLAWSWARM.md") {
+			found = true
+		}
+	}
+	assert.True(t, found, "additional_directories 应被发现")
+}

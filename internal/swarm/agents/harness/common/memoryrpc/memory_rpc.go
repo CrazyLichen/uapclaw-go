@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utilpath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
+	projectmemory "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/project_memory"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -105,6 +106,78 @@ func HandleMemoryOpen(ctx context.Context, workspace string, params map[string]a
 		result["coding_memory_dir"] = codingDir
 	}
 	return result
+}
+
+// HandleMemoryList 列出所有记忆文件。
+// Python: handle_memory_list (memory_rpc.py L198-242)
+func HandleMemoryList(ctx context.Context, workspace, mode string, params map[string]any) map[string]any {
+	// Python: include_project = params.get("include_project", True)
+	includeProject := true
+	if v, ok := params["include_project"].(bool); ok {
+		includeProject = v
+	}
+	// Python: additional_dirs = params.get("additional_directories")
+	var additionalDirs []string
+	if dirs, ok := params["additional_directories"].([]any); ok {
+		for _, d := range dirs {
+			if s, ok := d.(string); ok {
+				additionalDirs = append(additionalDirs, s)
+			}
+		}
+	}
+	projectDir, _ := params["project_dir"].(string)
+
+	files := []map[string]any{}
+	seenPaths := map[string]bool{}
+
+	// Python L210-228：project 层发现（project 优先，占位去重集合）
+	if includeProject {
+		// Python: discover_workspace = project_dir or workspace
+		discoverWorkspace := workspace
+		if projectDir != "" {
+			discoverWorkspace = projectDir
+		}
+		projectFiles, _ := projectmemory.DiscoverAndLoadMemoryFiles(ctx, discoverWorkspace, discoverWorkspace, additionalDirs)
+		for _, f := range projectFiles {
+			stat := safeStat(f.Path)
+			// Python: "lines": f.content.count("\n") + 1 if f.content else 0
+			lines := 0
+			if f.Content != "" {
+				lines = strings.Count(f.Content, "\n") + 1
+			}
+			files = append(files, map[string]any{
+				"path":          f.Path,
+				"relative_path": relativePath(f.Path, workspace, projectDir),
+				"kind":          f.Kind,
+				"exists":        true,
+				"size":          stat["size"],
+				"mtime":         stat["mtime"],
+				"lines":         lines,
+			})
+			seenPaths[f.Path] = true
+		}
+	}
+
+	// Python L230-234：auto 层（workspace/memory 扫描）
+	memoryDir := filepath.Join(workspace, "memory")
+	for _, item := range scanMDFiles(memoryDir, "auto", workspace, projectDir) {
+		if p := item["path"].(string); !seenPaths[p] {
+			files = append(files, item)
+			seenPaths[p] = true
+		}
+	}
+
+	// Python L236-240：coding 层（coding_memory 扫描）
+	codingDir := getCodingMemoryDir(workspace, projectDir)
+	for _, item := range scanMDFiles(codingDir, "coding", workspace, projectDir) {
+		if p := item["path"].(string); !seenPaths[p] {
+			files = append(files, item)
+			seenPaths[p] = true
+		}
+	}
+
+	// Python: return {"files": files, "mode": mode}
+	return map[string]any{"files": files, "mode": mode}
 }
 
 // HandleMemoryToggle 切换记忆开关并写回 config。
