@@ -788,11 +788,11 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 13.3 | ✅ | MilvusIndexer | `MilvusIndexer(ensureCollection含BM25 Function+dense索引+INVERTED标量索引+dimension三级推断 / BuildIndex五步:ensure→query查重→嵌入→转换→Add / UpdateIndex先删flush后建 / DeleteIndex按doc_id过滤+异常返False / IndexExists / GetIndexInfo stats+describe) + retrieval层MilvusVectorStore(MilvusClient接口+适配器+Add/SparseSearch/HybridSearch原生RRF+RRF降级/Delete/TableExists/CheckVectorField含milvusConstructKeyMap键名映射) + vector_fields.MilvusVectorFieldConfig统一接口 + CreateMilvusAlias/Deduplicate` | `openjiuwen/core/retrieval/indexing/indexer/milvus_indexer.py + vector_store/milvus_store.py + utils/common.py` |
 | 13.4 | ✅ | ComputeChunkEmbeddings | ComputeChunkEmbeddings + isImageChunk（接口断言检测 MultimodalEmbedder + 纯文本/图片/文本三条路径 + os.Stat 三级防御 + 透传 EmbedOption + 原地修改 Embedding）；附带修复 document.go mime.TypeByExtension 传完整路径的 bug（改用 filepath.Ext） | `openjiuwen/core/retrieval/indexing/indexer/embed_chunks.py` |
 | **13.x Chunker 层** | — | | | |
-| 13.5 | ☐ | Chunker 抽象接口 | `Chunk` 方法 | `openjiuwen/core/retrieval/indexing/processor/chunker/base.py` |
-| 13.6 | ☐ | CharChunker | 字符级分块（chunk_size+chunk_overlap） | `openjiuwen/core/retrieval/indexing/processor/chunker/char_chunker.py` |
-| 13.7 | ☐ | TokenizerChunker | Tokenizer 分块（tiktoken 兼容） | `openjiuwen/core/retrieval/indexing/processor/chunker/tokenizer_chunker.py` |
-| 13.8 | ☐ | HybridChunker | 混合分块（递归文本分割+语义感知） | `openjiuwen/core/retrieval/indexing/processor/chunker/hybrid_chunker.py` |
-| 13.9 | ☐ | 分块工具 | chunking 函数 + text_preprocessor + text_splitter | `openjiuwen/core/retrieval/indexing/processor/chunker/` |
+| 13.5 | ☐ | Chunker 抽象接口 + registry | `Chunker 接口(ChunkText/ChunkDocuments/Process 三方法，对齐 Python chunk_text/chunk_documents/process) + BaseChunker 默认适配器(嵌入获得 ChunkDocuments 默认实现：uuid+metadata 合并 chunk_index/total_chunks/chunk_id，Process=ChunkDocuments 的 ctx 透传) + NewBaseChunker 构造校验(size≤0→155100 / overlap<0→155101 / overlap≥size→155101) + registry(chunkerRegistry+RegisterChunker 空名/重名校验+GetChunker 未知名含注册名列表+hybridFactory 对齐 _hybrid_factory：inner 缺省造 CharChunker/多余 kwargs 报错/inner 类型校验)` | `openjiuwen/core/retrieval/indexing/processor/chunker/base.py + __init__.py` |
+| 13.6 | ☐ | CharChunker | 字符级分块（chunk_size+chunk_overlap）；注册 "char" 到 registry。⚠️ 实施时一并带出依赖文件 text_splitter.go 的 CharSplitter 部分（现 13.9 归属，编号不变） | `openjiuwen/core/retrieval/indexing/processor/chunker/char_chunker.py` |
+| 13.7 | ☐ | TokenizerChunker | Tokenizer 分块（tiktoken 兼容）。⚠️ 实施时一并带出依赖：text_splitter.go 的 IndexSentenceSplitter + splitter 包 SentenceSplitter（现 13.18 归属，编号不变） | `openjiuwen/core/retrieval/indexing/processor/chunker/tokenizer_chunker.py` |
+| 13.8 | ☐ | HybridChunker | 混合分块（no_split_when 谓词 + inner chunker 委托，表格行/列默认单块）；回填 13.5 hybridFactory 完整体（⤴️ 来源 13.5） | `openjiuwen/core/retrieval/indexing/processor/chunker/hybrid_chunker.py` |
+| 13.9 | ☐ | 分块工具 | chunking 函数 + text_preprocessor + text_splitter。⚠️ 13.6/13.7 已先行带出 text_splitter/splitter 依赖部分，本步骤补全剩余（chunking.py TextChunker + text_preprocessor.py + text_splitter 收尾） | `openjiuwen/core/retrieval/indexing/processor/chunker/` |
 | **13.x Parser 层** | — | | | |
 | 13.10 | ☐ | Parser 抽象接口 | `Parse` 方法 | `openjiuwen/core/retrieval/indexing/processor/parser/base.py` |
 | 13.11 | ☐ | AutoParser 路由 | 文件/链接自动识别分发 | `openjiuwen/core/retrieval/indexing/processor/parser/auto_*.py` |
@@ -803,7 +803,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 13.16 | ☐ | JSON/TxtMd Parser | JSON / 文本 / Markdown 解析 | `openjiuwen/core/retrieval/indexing/processor/parser/` |
 | **13.x Extractor/Splitter 层** | — | | | |
 | 13.17 | ☐ | TripleExtractor | 三元组抽取（LLM 调用） | `openjiuwen/core/retrieval/indexing/processor/extractor/triple_extractor.py` |
-| 13.18 | ☐ | Splitter | 语义分割 | `openjiuwen/core/retrieval/indexing/processor/splitter/splitter.py` |
+| 13.18 | ☐ | Splitter | 语义分割（SentenceSplitter，句级切分+长句子窗）。⤴️ SentenceSplitter 部分由 13.7 前置带出（编号不变），本步骤补全 splitter 包剩余（base.go 等） | `openjiuwen/core/retrieval/indexing/processor/splitter/splitter.py` |
 
 **验证点**：✅ 外部文档可被解析、分块、嵌入、索引，并支持增删改查
 | 12.13 | ☐ | 自动更新器 | 版本检测与升级 | `jiuwenswarm/common/updater.py` · `upgrade_executor.py` |
