@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
@@ -45,23 +46,17 @@ const (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// findTeamSkillRail 查找 TeamSkillEvolutionRail。
-// Python: _find_team_skill_rail() (line 3651-3670)
-func (d *DeepAdapter) findTeamSkillRail() *coreevolution.TeamSkillEvolutionRail {
-	if d.teamSkillEvolutionRail != nil {
-		return d.teamSkillEvolutionRail
+// findTeamSkillRail 查找拥有指定 pending request_id 的 TeamSkillEvolutionRail。
+// S-41: 对齐 Python find_team_skill_rail(request_id, channel_id)——
+// 两级查找：先本 channel 的 TeamManager 精确匹配，失败再跨所有 TeamManager 兜底。
+// 删除原「缓存字段 + reflect.Type 全局查找」的错误语义（不按 request_id 匹配，
+// 且缓存可能命中其他 session 的 rail）。
+func (d *DeepAdapter) findTeamSkillRail(requestID, channelID string) *coreevolution.TeamSkillEvolutionRail {
+	rail := team.GetTeamManager(channelID).FindTeamSkillRailForRequest(requestID)
+	if rail != nil {
+		return rail
 	}
-	// 在 instance 的已注册 rails 中查找
-	if d.instance != nil {
-		found := d.instance.FindRailsByType(reflect.TypeOf(&coreevolution.TeamSkillEvolutionRail{}))
-		if len(found) > 0 {
-			if r, ok := found[0].(*coreevolution.TeamSkillEvolutionRail); ok {
-				d.teamSkillEvolutionRail = r
-				return r
-			}
-		}
-	}
-	return nil
+	return team.FindTeamSkillRailAcrossManagers(requestID)
 }
 
 // findSkillCreateRail 查找 TeamSkillCreateRail。
@@ -91,7 +86,8 @@ func (d *DeepAdapter) findSkillCreateRail() *coreevolution.TeamSkillCreateRail {
 //	(3) 调用 rail.ApproveRecord 或 rail.RejectRecord
 //	(4) 推送解决状态
 func (d *DeepAdapter) handleTeamSkillEvolveApproval(ctx context.Context, requestID string, answers any, sessionID string, channelID string) bool {
-	rail := d.findTeamSkillRail()
+	// S-41: 两级查找（本 channel → 跨 manager），对齐 Python find_team_skill_rail(request_id, channel_id)
+	rail := d.findTeamSkillRail(requestID, channelID)
 	if rail == nil {
 		logger.Warn(logComponent).
 			Str("request_id", requestID).
@@ -99,56 +95,110 @@ func (d *DeepAdapter) handleTeamSkillEvolveApproval(ctx context.Context, request
 		return false
 	}
 
-	// 解析 answers 为 approve/reject
+	// S-42: 对齐 Python _option_matches(answers, ("accept", "接收", "接受"))——
+	// 读 selected_options 字段，strip().lower() 大小写不敏感匹配
 	parsedAnswers := parseApprovalAnswersFromAny(answers)
-	approved := parseApprovalAnswers(parsedAnswers)
+	accepted := optionMatchesLabels(parsedAnswers, "accept", "接收", "接受")
 
-	if approved {
-		err := rail.ApproveRecord(ctx, requestID)
-		if err != nil {
+	logger.Info(logComponent).
+		Str("request_id", requestID).
+		Any("answers", answers).
+		Bool("accepted", accepted).
+		Msg("team skill evolve approval")
+
+	if accepted {
+		if err := rail.ApproveRecord(ctx, requestID); err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("request_id", requestID).
 				Msg("handleTeamSkillEvolveApproval: ApproveRecord failed")
 			return false
 		}
+		// S-42: 对齐 Python——审批成功后同步工作区技能到全局 team_skills 目录
+		// （同步失败仅 Warn，不影响审批结果，对齐 Python except 只打日志）
+		if sessionID != "" {
+			if !team.SyncTeamSkillsAcrossManagers(sessionID) {
+				logger.Warn(logComponent).
+					Str("session_id", sessionID).
+					Msg("team skill sync after patch failed")
+			}
+		}
 		logger.Info(logComponent).
 			Str("request_id", requestID).
-			Msg("handleTeamSkillEvolveApproval: approved")
-
-		// 推送解决状态
-		_ = d.pushTeamSkillEvolveResolutionStatus(ctx, requestID, "approved")
-		return true
-	}
-
-	err := rail.RejectRecord(ctx, requestID)
-	if err != nil {
-		logger.Error(logComponent).Err(err).
+			Msg("team skill evolve accepted")
+	} else {
+		if err := rail.RejectRecord(ctx, requestID); err != nil {
+			logger.Error(logComponent).Err(err).
+				Str("request_id", requestID).
+				Msg("handleTeamSkillEvolveApproval: RejectRecord failed")
+			return false
+		}
+		logger.Info(logComponent).
 			Str("request_id", requestID).
-			Msg("handleTeamSkillEvolveApproval: RejectRecord failed")
-		return false
+			Msg("team skill evolve rejected")
 	}
-	logger.Info(logComponent).
-		Str("request_id", requestID).
-		Msg("handleTeamSkillEvolveApproval: rejected")
 
-	// 推送解决状态
-	_ = d.pushTeamSkillEvolveResolutionStatus(ctx, requestID, "rejected")
+	// 推送解决状态（对齐 Python：approve/reject 后统一推送关闭前端演进状态）
+	_ = d.pushTeamSkillEvolveResolutionStatus(ctx, requestID, sessionID, channelID, accepted)
 	return true
 }
 
-// pushTeamSkillEvolveResolutionStatus 推送 team skill 演进解决状态。
-//
-// 对齐 Python: _push_team_skill_evolve_resolution_status(request_id, status)
-//
-//	将审批结果通过 stream 事件推送给前端
-func (d *DeepAdapter) pushTeamSkillEvolveResolutionStatus(ctx context.Context, requestID string, status string) error {
-	logger.Info(logComponent).
-		Str("request_id", requestID).
-		Str("status", status).
-		Msg("pushTeamSkillEvolveResolutionStatus: approval result pushed")
-	// Python: 通过 stream event 推送，当前 Go 端仅记录日志
-	// 完整的 stream 推送需要 d.instance 的 stream 支持
+// pushTeamSkillEvolveResolutionStatus 推送 team skill 演进解决状态，关闭前端演进状态。
+// S-42: 实装（原为空壳只记日志）。
+// 对齐 Python _push_team_skill_evolve_resolution_status——
+// session_id 为空直接返回；stage=completed/hidden；status=end；
+// 推送失败仅 Warn（对齐 Python except 只打日志）。
+func (d *DeepAdapter) pushTeamSkillEvolveResolutionStatus(ctx context.Context, requestID, sessionID, channelID string, accepted bool) error {
+	// 对齐 Python: if not session_id: return
+	if sessionID == "" {
+		return nil
+	}
+	stage := "hidden"
+	message := "Team skill evolution rejected"
+	if accepted {
+		stage = "completed"
+		message = "Team skill evolution accepted"
+	}
+	sendPush := d.getSendPushFunc()
+	if sendPush == nil {
+		logger.Warn(logComponent).
+			Str("session_id", sessionID).
+			Msg("pushTeamSkillEvolveResolutionStatus: sendPushFunc not injected")
+		return nil
+	}
+	update := evolutionlogic.BuildEvolutionStatusUpdate(requestID, "end", stage, message)
+	payload := map[string]any{
+		"event_type": "chat.evolution_status",
+		"status":     update.Status,
+		"stage":      update.Stage,
+		"message":    update.Message,
+		"request_id": update.RequestID,
+	}
+	msg := sessionmd.BuildServerPushMessage(sessionID, requestID, payload, channelID)
+	if err := sendPush(ctx, msg); err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("session_id", sessionID).
+			Str("request_id", requestID).
+			Msg("team skill evolve status push failed")
+	}
 	return nil
+}
+
+// optionMatchesLabels 检查任一 answer 的 selected_options 是否匹配接受标签。
+// S-42: 参数化版本，对齐 Python _option_matches(answers, accept_labels)——
+// strip().lower() 大小写不敏感，容忍中英文标签（agent-core 中性英文 + UI 本地化中文）。
+func optionMatchesLabels(answers []ApprovalAnswer, labels ...string) bool {
+	normalizedAccept := make(map[string]bool, len(labels))
+	for _, s := range labels {
+		normalizedAccept[strings.ToLower(strings.TrimSpace(s))] = true
+	}
+	for _, ans := range answers {
+		for _, opt := range ans.SelectedOptions {
+			if normalizedAccept[strings.ToLower(strings.TrimSpace(opt))] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // optionMatches 检查选项是否匹配用户选择。
@@ -228,6 +278,34 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 
 	go func() {
 		defer close(ch)
+
+		// S-45: panic recovery——Go panic 展开时 defer 照常执行，recover 后 close(ch)
+		// 正常关闭，消费方不阻塞。panic 时推送 chat.error + IsComplete 终止 chunk
+		// （对齐 Python except L853-865 + fall-through L867-872）。
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error(logComponent).
+					Str("session_id", sessionID).Str("channel_id", channelID).
+					Any("panic", r).
+					Msg("processTeamMessageStream: stream goroutine panic recovered")
+				ch <- &agentschema.AgentResponseChunk{
+					RequestID:  req.RequestID,
+					ChannelID:  channelID,
+					Payload:    map[string]any{"event_type": "chat.error", "error": fmt.Sprintf("%v", r)},
+					IsComplete: false,
+				}
+				ch <- &agentschema.AgentResponseChunk{RequestID: req.RequestID, ChannelID: channelID, IsComplete: true}
+			}
+		}()
+
+		// S-45: waiter 清理 defer 化——正常结束与 panic 两条路径都执行
+		// （对齐 Python finally 的 `if request_queue is not None` 判断）。
+		waiterRegistered := false
+		defer func() {
+			if waiterRegistered {
+				unregisterWaiter(channelID, sessionID, req.RequestID)
+			}
+		}()
 
 		// 步骤 4: 提取 query directives（对齐 Python: _extract_query_directives）
 		// Python: if is_first_request: query, hide_dm, debug = _extract_query_directives(str(query or ""))
@@ -363,6 +441,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			// Python: _pending_waiters[waiter_key].append((rid, request_queue))
 			requestQueue := make(chan map[string]any, 256)
 			registerWaiter(channelID, sessionID, req.RequestID, requestQueue)
+			waiterRegistered = true // S-45: defer 清理标记
 			logger.Info(logComponent).
 				Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
 				Msg("processTeamMessageStream: first team request, waiter registered")
@@ -426,8 +505,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 		streamDone:
 			ch <- &agentschema.AgentResponseChunk{RequestID: req.RequestID, ChannelID: channelID, IsComplete: true}
 
-			// 清理 waiter
-			unregisterWaiter(channelID, sessionID, req.RequestID)
+			// S-45: waiter 清理由 defer 统一处理（panic/正常两路径）
 			return
 		}
 
@@ -559,6 +637,16 @@ func (d *DeepAdapter) ensureTeamEvolutionWatcher(ctx context.Context, channelID,
 
 	go func() {
 		defer logger.Info(logComponent).Str("session_id", sessionID).Msg("ensureTeamEvolutionWatcher: evolution watcher goroutine exited")
+		// S-43: goroutine 层兜底 recover——函数级 recover 注册前的 panic 也不会击穿进程，
+		// 且保证 onTeamWatcherDone 仍执行（对齐 Python task done callback 语义）
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error(logComponent).
+					Str("session_id", sessionID).
+					Any("panic", r).
+					Msg("ensureTeamEvolutionWatcher: watcher goroutine panic recovered")
+			}
+		}()
 		d.watchTeamEvolutionAndPushTeam(watcherCtx, channelID, sessionID, rail)
 		// M-02: Pop 移入 onTeamWatcherDone（对齐 Python done callback 内 pop）
 		onTeamWatcherDone(channelID, sessionID)
@@ -594,6 +682,25 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 		tm := team.GetTeamManager(channelID)
 		tm.ClearPendingRuntime(sessionID)
 		tm.PopStreamTask(sessionID)
+	}()
+
+	// S-44: 对齐 Python consume_stream_with_query 的 except Exception 块——
+	// panic 时广播 team.error（含 error/session_id），前端能感知流失败。
+	// defer LIFO：本 defer 后注册先执行，recover 后再走上方清理 defer，
+	// 天然对齐 Python except → finally 顺序。
+	// CancelledError 分支无需移植（Go ctx 取消走正常 return 路径不 panic）。
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).
+				Str("session_id", sessionID).Int("round_id", roundID).
+				Any("panic", r).
+				Msg("consumeStreamWithQuery: stream failed")
+			broadcastEvent(channelID, sessionID, map[string]any{
+				"event_type": "team.error",
+				"error":      fmt.Sprintf("%v", r),
+				"session_id": sessionID,
+			})
+		}
 	}()
 
 	logger.Info(logComponent).
@@ -880,6 +987,23 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 
 	lastEventAt := time.Now()
 	eventTimeoutSec := resolveEvolutionEventTimeoutSec(rail, teamEvolutionEventTimeoutSec)
+
+	// S-43: 对齐 Python watch_team_evolution_and_push_team 的 except Exception 块——
+	// panic 时推送真实失败消息（含 active request_id），不调 cleanupEvolutionRail
+	// （Python except 不含 cleanup，仅 auto_scan 关闭分支调用）。
+	// goroutine 层 onTeamWatcherDone 仍正常执行（函数 return 后外层代码继续跑）。
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).
+				Str("session_id", sessionID).
+				Any("panic", r).
+				Msg("watchTeamEvolutionAndPushTeam: evolution monitor failed")
+			if activeCycleRequestID != "" {
+				pushEvolutionStatus(activeCycleRequestID, "end", evolutionlogic.TeamEvolutionHiddenStage,
+					fmt.Sprintf("Team skill evolution analysis failed: %v", r))
+			}
+		}
+	}()
 
 	for {
 		select {

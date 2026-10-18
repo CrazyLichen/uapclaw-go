@@ -8,19 +8,21 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
-// fakeDispatcherInfra M-01: 测试用 DispatcherInfra 实现
+// fakeDispatcherInfra S-32: 测试用 DispatcherInfra 实现（对齐 *TeamInfra 具体类型签名）
 type fakeDispatcherInfra struct{}
 
-func (f *fakeDispatcherInfra) TaskManager() types.DispTaskManager       { return nil }
-func (f *fakeDispatcherInfra) MessageManager() types.DispMessageManager { return nil }
-func (f *fakeDispatcherInfra) TeamBackend() types.DispTeamBackend       { return nil }
-func (f *fakeDispatcherInfra) Messager() types.DispMessager             { return nil }
+func (f *fakeDispatcherInfra) TaskManager() *tools.TeamTaskManager       { return nil }
+func (f *fakeDispatcherInfra) MessageManager() *tools.TeamMessageManager { return nil }
+func (f *fakeDispatcherInfra) TeamBackend() *tools.TeamBackend           { return nil }
+func (f *fakeDispatcherInfra) Messager() messager.Messager               { return nil }
 
 // fakeKernelHost 实现 KernelHost 用于测试
 type fakeKernelHost struct {
@@ -58,6 +60,7 @@ func (f *fakeKernelHost) SessionController() types.SessionController            
 func (f *fakeKernelHost) TeamBackendAccessor() types.TeamBackendAccessor            { return nil }
 func (f *fakeKernelHost) WorkspaceManager() types.WorkspaceAccessor                 { return nil }
 func (f *fakeKernelHost) SetWorkspaceInitialized()                                  {}
+func (f *fakeKernelHost) IsWorkspaceInitialized() bool                              { return false }
 func (f *fakeKernelHost) MemoryManager() *memory.TeamMemoryManager                  { return nil }
 func (f *fakeKernelHost) HarnessAccessor() types.HarnessAccessor                    { return nil }
 func (f *fakeKernelHost) SpecAny() any                                              { return nil }
@@ -237,7 +240,7 @@ func TestCoordinationKernel_WakeMailboxIfInterruptCleared(t *testing.T) {
 		mu.Unlock()
 	})
 
-	k.WakeMailboxIfInterruptCleared()
+	k.WakeMailboxIfInterruptCleared(context.Background())
 	time.Sleep(50 * time.Millisecond)
 
 	mu.Lock()
@@ -262,7 +265,7 @@ func TestCoordinationKernel_WakeMailbox_Leader跳过(t *testing.T) {
 		mu.Unlock()
 	})
 
-	k.WakeMailboxIfInterruptCleared()
+	k.WakeMailboxIfInterruptCleared(context.Background())
 
 	mu.Lock()
 	r := received
@@ -286,7 +289,7 @@ func TestCoordinationKernel_WakeMailbox_有中断跳过(t *testing.T) {
 		mu.Unlock()
 	})
 
-	k.WakeMailboxIfInterruptCleared()
+	k.WakeMailboxIfInterruptCleared(context.Background())
 
 	mu.Lock()
 	r := received

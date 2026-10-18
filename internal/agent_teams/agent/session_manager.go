@@ -261,6 +261,11 @@ func extractSessionID(session any) string {
 	if session == nil {
 		return ""
 	}
+	// S-39: string 直通分支——kernel.Start(ctx, sessionID) 直接传字符串 ID，
+	// 对齐 Python start(session) 接受 str session_id 的调用形态
+	if s, ok := session.(string); ok {
+		return s
+	}
 	// 尝试类型断言到含 GetSessionID() 方法的接口
 	type sessionIDer interface {
 		GetSessionID() string

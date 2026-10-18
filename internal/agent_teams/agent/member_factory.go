@@ -31,18 +31,19 @@ func CreateMemberHandle(
 	infra *TeamInfra,
 	agentCard *agentschema.AgentCard,
 ) *TeamMember {
-	if infra.TeamBackend == nil {
+	if infra.TeamBackend() == nil {
 		return nil
 	}
 	return &TeamMember{
 		MemberName:  memberName,
-		TeamName:    infra.TeamBackend.TeamName(),
+		TeamName:    infra.TeamBackend().TeamName(),
 		DisplayName: memberName,
 		AgentCard:   agentCard,
-		DB:          infra.TeamBackend.DB(),
-		// Messager 通过 AgentConfigurator.Messager() 单独注入，
-		// TeamBackend 未暴露 messager.Messager 接口
-		Desc: blueprint.Ctx.Persona,
+		DB:          infra.TeamBackend().DB(),
+		// S-34: 注入 Messager 用于发布 MemberStatusChanged/ExecutionChanged 事件
+		// （对齐 Python member.py：构造时由 infra 传入 messager）
+		Messager: infra.Messager(),
+		Desc:     blueprint.Ctx.Persona,
 	}
 }
 

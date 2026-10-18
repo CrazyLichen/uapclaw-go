@@ -2,10 +2,15 @@ package handlers
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"time"
 
+	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -113,7 +118,7 @@ func (h *MemberHandler) OnMemberEvent(ctx context.Context, event types.Coordinat
 func (h *MemberHandler) handleTeammateMemberEvent(ctx context.Context, event types.CoordinationEvent) {
 	em := event.Transport
 	targetMember, _ := em.Payload["member_name"].(string)
-	memberName := h.blueprint.MemberName()
+	memberName := h.blueprint.DispatcherMemberName()
 	// 对齐 Python: 只关心自己的事件
 	if targetMember != "" && targetMember != memberName {
 		return
@@ -152,7 +157,7 @@ func (h *MemberHandler) shutdownHumanAgent(ctx context.Context, event types.Coor
 
 // handleLeaderMemberEvent Leader 处理成员事件：记录日志 + 过期认领提醒。
 // Python: MemberHandler._handle_leader_member_event
-func (h *MemberHandler) handleLeaderMemberEvent(_ context.Context, event types.CoordinationEvent) {
+func (h *MemberHandler) handleLeaderMemberEvent(ctx context.Context, event types.CoordinationEvent) {
 	em := event.Transport
 	// 对齐 Python: 记录每个成员生命周期转换
 	logger.Info(logComponent).
@@ -168,14 +173,15 @@ func (h *MemberHandler) handleLeaderMemberEvent(_ context.Context, event types.C
 		memberName, _ := em.Payload["member_name"].(string)
 		oldStatus, _ := em.Payload["old_status"].(string)
 		newStatus, _ := em.Payload["new_status"].(string)
-		h.nudgeIdleMemberWithStaleClaims(memberName, oldStatus, newStatus)
+		h.nudgeIdleMemberWithStaleClaims(ctx, memberName, oldStatus, newStatus)
 	}
 }
 
 // nudgeIdleMemberWithStaleClaims 当成员进入空闲状态时检查过期认领。
-// 对齐 Python: MemberHandler._nudge_idle_member_with_stale_claims
-// TODO(#9.63): 等消息管理器和任务后端接口就绪后补充完整提醒逻辑
-func (h *MemberHandler) nudgeIdleMemberWithStaleClaims(targetID, oldStatus, newStatus string) {
+// 查询该成员名下 CLAIMED 状态、updated_at 超过阈值且未在节流窗口内的任务，
+// 汇总为一条消息发送给该成员。
+// S-32: 对齐 Python MemberHandler._nudge_idle_member_with_stale_claims
+func (h *MemberHandler) nudgeIdleMemberWithStaleClaims(ctx context.Context, targetID, oldStatus, newStatus string) {
 	// 对齐 Python: if not target_id: return
 	if targetID == "" {
 		return
@@ -188,11 +194,67 @@ func (h *MemberHandler) nudgeIdleMemberWithStaleClaims(targetID, oldStatus, newS
 	if !idleNudgeStatuses[newStatus] {
 		return
 	}
-	_ = oldStatus // 预留：Python 会根据 old_status 判断是否需要提醒
-	_ = targetID  // 预留：向目标成员发送过期认领提醒
-	logger.Debug(logComponent).
+	// h.infra 接口本身可能为 nil（测试注入 nil），先判空再访问
+	if h.infra == nil {
+		return
+	}
+	taskMgr := h.infra.TaskManager()
+	msgMgr := h.infra.MessageManager()
+	if taskMgr == nil || msgMgr == nil {
+		return
+	}
+	claimed, err := taskMgr.GetTasksByAssignee(ctx, targetID, string(schema.TaskStatusClaimed))
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("target_id", targetID).
+			Msg("nudgeIdleMemberWithStaleClaims: get tasks by assignee failed")
+		return
+	}
+	if len(claimed) == 0 {
+		return
+	}
+	nowMS := float64(time.Now().UnixMilli())
+	thresholdMS := staleClaimSeconds * 1000
+	stale := make([]*database.TeamTaskBase, 0)
+	for _, task := range claimed {
+		if task.UpdatedAt == 0 {
+			continue
+		}
+		if nowMS-float64(task.UpdatedAt) < thresholdMS {
+			continue
+		}
+		lastNudge := h.staleClaimThrottle[task.TaskID]
+		if nowMS/1000-lastNudge < staleClaimSeconds {
+			continue
+		}
+		stale = append(stale, task)
+	}
+	if len(stale) == 0 {
+		return
+	}
+	for _, task := range stale {
+		h.staleClaimThrottle[task.TaskID] = nowMS / 1000
+	}
+	// 对齐 Python: lines = [t("dispatcher.stale_claim_header", count=len(stale))] + 任务列表
+	header, err := agentteams.T("dispatcher.stale_claim_header", map[string]any{
+		"count": len(stale),
+	})
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("nudgeIdleMemberWithStaleClaims: i18n lookup failed")
+		return
+	}
+	lines := []string{header}
+	for _, task := range stale {
+		lines = append(lines, fmt.Sprintf("- [%s] %s: %s", task.TaskID, task.Title, task.Content))
+	}
+	if _, err := msgMgr.SendMessage(ctx, strings.Join(lines, "\n"), targetID, h.blueprint.DispatcherMemberName()); err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("target_id", targetID).
+			Msg("nudgeIdleMemberWithStaleClaims: send_message failed")
+	}
+	logger.Info(logComponent).
 		Str("target_id", targetID).
+		Int("stale_count", len(stale)).
 		Str("new_status", newStatus).
-		Float64("stale_threshold", staleClaimSeconds).
-		Msg("nudgeIdleMemberWithStaleClaims: checking stale claims")
+		Msg("leader nudged member about stale claimed tasks")
 }

@@ -424,8 +424,10 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			}
 		}
 
-		// 调用 ReAct 循环（initContext 和 UserMessage 已在上方完成）
-		if curInputs.Result == nil {
+	// 调用 ReAct 循环（initContext 和 UserMessage 已在上方完成）
+	// S-55: 对齐 Python L1353——守卫读原始 invoke_inputs（rail 替换前对象），
+	// 结构上消灭 (nil, nil)：守卫 true → reactLoop 成功恒非 nil；守卫 false → 原始对象 Result 非 nil
+	if invokeInputs.Result == nil {
 			result, loopErr = a.reactLoop(ctx, cbc, sess, modelCtx, startIteration)
 		}
 		return loopErr
@@ -601,7 +603,15 @@ func (a *ReActAgent) reactLoop(
 		maxIter = a.config.MaxIterations
 	}
 
-	tools, _ := a.getTools(ctx)
+	// S-54: 对齐 Python react_agent.py L1328——get_tools 异常直接传播导致 invoke 失败
+	//（fail-fast，不降级为空工具列表继续执行）
+	tools, err := a.getTools(ctx)
+	if err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Msg("获取工具列表失败")
+		return nil, fmt.Errorf("获取工具列表失败: %w", err)
+	}
 
 	var iterResult map[string]any
 	for iteration := startIteration; iteration < maxIter; iteration++ {

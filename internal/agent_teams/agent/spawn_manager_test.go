@@ -39,7 +39,7 @@ func TestNewSpawnManager_基本创建(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	configurator := NewAgentConfigurator(card)
 
-	sm := NewSpawnManager(state, configurator, nil)
+	sm := NewSpawnManager(context.Background(), state, configurator, nil)
 	assert.NotNil(t, sm)
 	assert.NotNil(t, sm.spawnedHandles)
 	assert.NotNil(t, sm.recoveryCancel)
@@ -50,9 +50,9 @@ func TestNewSpawnManager_带TeamAgentGetter(t *testing.T) {
 	state := NewTeamAgentState()
 	card := agentschema.NewAgentCard()
 	configurator := NewAgentConfigurator(card)
-	ta := NewTeamAgent(card)
+	ta := NewTeamAgent(context.Background(), card)
 
-	sm := NewSpawnManager(state, configurator, func() *TeamAgent { return ta })
+	sm := NewSpawnManager(context.Background(), state, configurator, func() *TeamAgent { return ta })
 	assert.NotNil(t, sm)
 	assert.Equal(t, ta, sm.getTeamAgent())
 }
@@ -99,7 +99,7 @@ func TestSpawnManager_LookupInprocessAgent_inprocess句柄返回agent(t *testing
 		"inproc-alice",
 		func() {},
 		make(chan struct{}),
-		NewTeamAgent(agentCard),
+		NewTeamAgent(context.Background(), agentCard),
 	)
 	sm.spawnedHandles["alice"] = inprocHandle
 
@@ -125,7 +125,7 @@ func TestSpawnManager_CleanupTeammate_inprocess句柄(t *testing.T) {
 		"inproc-alice",
 		func() {},
 		done,
-		NewTeamAgent(agentschema.NewAgentCard()),
+		NewTeamAgent(context.Background(), agentschema.NewAgentCard()),
 	)
 	sm.spawnedHandles["alice"] = inprocHandle
 
@@ -184,11 +184,11 @@ func TestSpawnManager_ShutdownAllHandles_有句柄(t *testing.T) {
 
 	sm.spawnedHandles["alice"] = spawn.NewInProcessSpawnHandle(
 		"inproc-alice", func() {}, done1,
-		NewTeamAgent(agentschema.NewAgentCard()),
+		NewTeamAgent(context.Background(), agentschema.NewAgentCard()),
 	)
 	sm.spawnedHandles["bob"] = spawn.NewInProcessSpawnHandle(
 		"inproc-bob", func() {}, done2,
-		NewTeamAgent(agentschema.NewAgentCard()),
+		NewTeamAgent(context.Background(), agentschema.NewAgentCard()),
 	)
 
 	// ForceKill 会等待 done 关闭，先异步关闭 done
@@ -264,7 +264,7 @@ func newTestSpawnManager(t *testing.T) *SpawnManager {
 	state := NewTeamAgentState()
 	card := agentschema.NewAgentCard()
 	configurator := NewAgentConfigurator(card)
-	return NewSpawnManager(state, configurator, nil)
+	return NewSpawnManager(context.Background(), state, configurator, nil)
 }
 
 // ---------------------------------------------------------------------------

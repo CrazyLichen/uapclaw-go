@@ -213,6 +213,10 @@ func TestExtractSessionID_有GetSessionID(t *testing.T) {
 }
 
 // TestExtractSessionID_无GetSessionID 测试不含 GetSessionID 方法的对象
+// S-39: string 入参直通返回（kernel.Start 传字符串 sessionID 的场景），
+// 非 string 且无 GetSessionID 方法的对象返回空串
 func TestExtractSessionID_无GetSessionID(t *testing.T) {
-	assert.Equal(t, "", extractSessionID("not-a-session"))
+	assert.Equal(t, "not-a-session", extractSessionID("not-a-session"))
+	assert.Equal(t, "", extractSessionID(12345))
+	assert.Equal(t, "", extractSessionID(nil))
 }

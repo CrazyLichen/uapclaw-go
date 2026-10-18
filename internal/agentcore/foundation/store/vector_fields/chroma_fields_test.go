@@ -72,17 +72,17 @@ func TestChromaVectorField_Validate_参数无效(t *testing.T) {
 func TestChromaVectorField_ToDict_construct(t *testing.T) {
 	c := NewChromaVectorField("embedding", 16, 100, 10.0)
 	dict := ToDict(c, StageConstruct)
-	if v, ok := dict["MaxNeighbors"]; !ok {
+	if v, ok := dict["max_neighbors"]; !ok {
 		t.Error("construct 阶段应包含 MaxNeighbors")
 	} else if v != 16 {
 		t.Errorf("MaxNeighbors = %v, want 16", v)
 	}
-	if v, ok := dict["EfConstruction"]; !ok {
+	if v, ok := dict["ef_construction"]; !ok {
 		t.Error("construct 阶段应包含 EfConstruction")
 	} else if v != 100 {
 		t.Errorf("EfConstruction = %v, want 100", v)
 	}
-	if v, ok := dict["EfSearch"]; !ok {
+	if v, ok := dict["ef_search"]; !ok {
 		t.Error("construct 阶段应包含 EfSearch")
 	} else if v != 10.0 {
 		t.Errorf("EfSearch = %v, want 10.0", v)
@@ -148,9 +148,9 @@ func TestChromaVectorField_ToConstructDict(t *testing.T) {
 	assert.NotContains(t, result, "VectorFieldName")
 
 	// stage:"construct" 的字段应保留
-	assert.Equal(t, 16, result["MaxNeighbors"])
-	assert.Equal(t, 100, result["EfConstruction"])
-	assert.Equal(t, 100.0, result["EfSearch"])
+	assert.Equal(t, 16, result["max_neighbors"])
+	assert.Equal(t, 100, result["ef_construction"])
+	assert.Equal(t, 100.0, result["ef_search"])
 
 	// stage:"search" 的字段应被移除
 	assert.NotContains(t, result, "ExtraSearch")
@@ -178,8 +178,8 @@ func TestChromaVectorField_ToSearchDict_有额外参数(t *testing.T) {
 	assert.Equal(t, 4, result["num_threads"])
 
 	// construct 阶段字段不应出现
-	assert.NotContains(t, result, "MaxNeighbors")
-	assert.NotContains(t, result, "EfConstruction")
+	assert.NotContains(t, result, "max_neighbors")
+	assert.NotContains(t, result, "ef_construction")
 }
 
 // TestChromaVectorField_ValidateExtraSearch_合法 测试合法的 ExtraSearch

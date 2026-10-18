@@ -747,51 +747,51 @@ func (c *AgentConfigurator) Blueprint() *TeamAgentBlueprint { return c.blueprint
 
 // Messager 返回消息总线。
 // Python: AgentConfigurator.messager property
-func (c *AgentConfigurator) Messager() messager.Messager { return c.infra.Messager }
+func (c *AgentConfigurator) Messager() messager.Messager { return c.infra.Messager() }
 
 // SetMessager 设置消息总线。
-func (c *AgentConfigurator) SetMessager(v messager.Messager) { c.infra.Messager = v }
+func (c *AgentConfigurator) SetMessager(v messager.Messager) { c.infra.SetMessager(v) }
 
 // TeamBackend 返回团队后端。
 // Python: AgentConfigurator.team_backend property
-func (c *AgentConfigurator) TeamBackend() *tools.TeamBackend { return c.infra.TeamBackend }
+func (c *AgentConfigurator) TeamBackend() *tools.TeamBackend { return c.infra.TeamBackend() }
 
 // SetTeamBackend 设置团队后端。
-func (c *AgentConfigurator) SetTeamBackend(v *tools.TeamBackend) { c.infra.TeamBackend = v }
+func (c *AgentConfigurator) SetTeamBackend(v *tools.TeamBackend) { c.infra.SetTeamBackend(v) }
 
 // WorkspaceManager 返回工作空间管理器。
 // Python: AgentConfigurator.workspace_manager property
 // ⤴️ 9.66 回填完成
 func (c *AgentConfigurator) WorkspaceManager() *team_workspace.TeamWorkspaceManager {
-	return c.infra.WorkspaceManager
+	return c.infra.WorkspaceManager()
 }
 
 // SetWorkspaceManager 设置工作空间管理器。
 // ⤴️ 9.66 回填完成
 func (c *AgentConfigurator) SetWorkspaceManager(v *team_workspace.TeamWorkspaceManager) {
-	c.infra.WorkspaceManager = v
+	c.infra.SetWorkspaceManager(v)
 }
 
 // WorkspaceInitialized 返回工作空间是否已初始化。
-func (c *AgentConfigurator) WorkspaceInitialized() bool { return c.infra.WorkspaceInitialized }
+func (c *AgentConfigurator) WorkspaceInitialized() bool { return c.infra.WorkspaceInitialized() }
 
 // SetWorkspaceInitialized 设置工作空间初始化状态。
-func (c *AgentConfigurator) SetWorkspaceInitialized(v bool) { c.infra.WorkspaceInitialized = v }
+func (c *AgentConfigurator) SetWorkspaceInitialized(v bool) { c.infra.SetWorkspaceInitialized(v) }
 
 // TaskManager 返回任务管理器。
 // Python: AgentConfigurator.task_manager property
-func (c *AgentConfigurator) TaskManager() *tools.TeamTaskManager { return c.infra.TaskManager }
+func (c *AgentConfigurator) TaskManager() *tools.TeamTaskManager { return c.infra.TaskManager() }
 
 // SetTaskManager 设置任务管理器。
-func (c *AgentConfigurator) SetTaskManager(v *tools.TeamTaskManager) { c.infra.TaskManager = v }
+func (c *AgentConfigurator) SetTaskManager(v *tools.TeamTaskManager) { c.infra.SetTaskManager(v) }
 
 // MessageManager 返回消息管理器。
 // Python: AgentConfigurator.message_manager property
-func (c *AgentConfigurator) MessageManager() *tools.TeamMessageManager { return c.infra.MessageManager }
+func (c *AgentConfigurator) MessageManager() *tools.TeamMessageManager { return c.infra.MessageManager() }
 
 // SetMessageManager 设置消息管理器。
 func (c *AgentConfigurator) SetMessageManager(v *tools.TeamMessageManager) {
-	c.infra.MessageManager = v
+	c.infra.SetMessageManager(v)
 }
 
 // Harness 返回 TeamHarness。

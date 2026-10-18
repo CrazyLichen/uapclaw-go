@@ -26,7 +26,7 @@ func newTestTeamBackendForRuntime() *tools.TeamBackend {
 
 // newTestAgent 创建测试用的 TeamAgent（设置 TeamBackend）。
 func newTestAgent(backend *tools.TeamBackend) *agent.TeamAgent {
-	a := agent.NewTeamAgent(&agentschema.AgentCard{})
+	a := agent.NewTeamAgent(context.Background(), &agentschema.AgentCard{})
 	a.SetTeamBackend(backend)
 	return a
 }

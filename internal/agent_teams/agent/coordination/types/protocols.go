@@ -3,6 +3,8 @@ package types
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
@@ -56,109 +58,31 @@ type DispatcherHost interface {
 }
 
 // DispatcherBlueprint Dispatcher 构造所需的 blueprint 接口。
-// 从 TeamAgentBlueprint 中提取 dispatcher 实际需要的窄接口。
+// S-32: 签名对齐 *TeamAgentBlueprint 具体类型——Role() 直接匹配；
+// 成员名在具体类型上是 MemberName() *string（nil 表示未设置），
+// 接口方法命名为 DispatcherMemberName() string 以便具体类型直接满足
+// （Go 无方法重载，不能同名共存）。
 type DispatcherBlueprint interface {
 	// Role 返回团队角色
 	Role() schema.TeamRole
-	// MemberName 返回成员名
-	MemberName() string
+	// DispatcherMemberName 返回成员名（空串表示未设置）
+	DispatcherMemberName() string
 }
 
 // DispatcherInfra Dispatcher 构造所需的 infra 接口。
-// 从 TeamInfra 中提取 dispatcher 实际需要的窄接口。
+// S-32: 签名对齐 *TeamInfra 具体类型的真实方法——TaskManager/MessageManager/
+// TeamBackend/Messager 直接返回具体类型（*tools.TeamTaskManager 等），
+// 不再使用 Disp* 窄接口（具体类型本就按 Python 一比一移植）。
 // 对齐 Python: EventDispatcher.__init__(infra: TeamInfra)
 type DispatcherInfra interface {
 	// TaskManager 返回任务管理器（可能为 nil）
-	TaskManager() DispTaskManager
+	TaskManager() *tools.TeamTaskManager
 	// MessageManager 返回消息管理器（可能为 nil）
-	MessageManager() DispMessageManager
+	MessageManager() *tools.TeamMessageManager
 	// TeamBackend 返回团队后端（可能为 nil）
-	TeamBackend() DispTeamBackend
+	TeamBackend() *tools.TeamBackend
 	// Messager 返回消息总线（可能为 nil）
-	Messager() DispMessager
-}
-
-// DispTaskManager Dispatcher 级任务管理器窄接口。
-// 与 lifecycle_accessors.go 中的 TeamBackendAccessor 区分：
-// DispTaskManager 用于 EventDispatcher handler，TeamBackendAccessor 用于 KernelHost 生命周期。
-type DispTaskManager interface {
-	// ListTasks 列出所有任务
-	ListTasks(ctx context.Context) ([]TaskBrief, error)
-	// Get 获取指定 ID 的任务
-	Get(ctx context.Context, taskID string) (TaskDetail, error)
-}
-
-// DispMessageManager Dispatcher 级消息管理器窄接口。
-type DispMessageManager interface {
-	// MarkMessageRead 标记消息已读
-	MarkMessageRead(ctx context.Context, messageID, memberName string) error
-	// SendMessage 发送消息给指定成员
-	SendMessage(ctx context.Context, content any, recipient string) error
-	// ListUnread 列出未读消息
-	ListUnread(ctx context.Context, memberName string) ([]UnreadMessage, error)
-}
-
-// DispTeamBackend Dispatcher 级团队后端窄接口。
-// 注意：与 lifecycle_accessors.go 中的 TeamBackendAccessor 不同，此处仅包含 handler 所需方法。
-type DispTeamBackend interface {
-	// IsTeamCompleted 检查团队是否已完成
-	IsTeamCompleted(ctx context.Context) (*TeamCompletionSnapshot, error)
-	// IsHumanAgent 检查指定成员是否为 human-agent
-	IsHumanAgent(memberName string) bool
-	// TeamName 返回团队名称
-	TeamName() string
-}
-
-// DispMessager Dispatcher 级消息总线窄接口。
-type DispMessager interface {
-	// PublishEvent 发布团队事件
-	PublishEvent(ctx context.Context, eventType string, payload map[string]any) error
-}
-
-// TaskBrief 任务简要信息。
-type TaskBrief struct {
-	// ID 任务标识
-	ID string
-	// Title 任务标题
-	Title string
-	// Assignee 任务分配对象
-	Assignee string
-	// Status 任务状态
-	Status string
-}
-
-// TaskDetail 任务详情。
-type TaskDetail struct {
-	// ID 任务标识
-	ID string
-	// Title 任务标题
-	Title string
-	// Assignee 任务分配对象
-	Assignee string
-	// Status 任务状态
-	Status string
-	// ClaimedAt 任务认领时间
-	ClaimedAt int64
-	// CreatedAt 任务创建时间
-	CreatedAt int64
-}
-
-// UnreadMessage 未读消息。
-type UnreadMessage struct {
-	// MessageID 消息标识
-	MessageID string
-	// Sender 发送者
-	Sender string
-	// Content 消息内容
-	Content string
-}
-
-// TeamCompletionSnapshot 团队完成快照。
-type TeamCompletionSnapshot struct {
-	// MemberCount 成员数
-	MemberCount int
-	// TaskCount 任务数
-	TaskCount int
+	Messager() messager.Messager
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

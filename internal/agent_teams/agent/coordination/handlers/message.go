@@ -63,7 +63,7 @@ func (h *MessageHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 // Python: MessageHandler.on_message_or_broadcast
 func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.CoordinationEvent) {
 	// 对齐 Python: if not member_name or self._infra.message_manager is None: return
-	memberName := h.blueprint.MemberName()
+	memberName := h.blueprint.DispatcherMemberName()
 	if memberName == "" {
 		return
 	}
@@ -85,7 +85,7 @@ func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.C
 
 	// 所有成员：恢复轮询 + 排空未读邮箱
 	h.poll.ResumePolls(ctx)
-	h.processUnreadMessages(ctx, h.blueprint.MemberName())
+	h.processUnreadMessages(ctx, h.blueprint.DispatcherMemberName())
 
 	logger.Debug(logComponent).
 		Str("event_type", em.EventType).
@@ -97,7 +97,7 @@ func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.C
 // Python: MessageHandler.on_poll_mailbox
 func (h *MessageHandler) OnPollMailbox(ctx context.Context, _ types.CoordinationEvent) {
 	// 对齐 Python: if member_name and self._infra.message_manager
-	memberName := h.blueprint.MemberName()
+	memberName := h.blueprint.DispatcherMemberName()
 	if memberName == "" {
 		return
 	}
@@ -112,7 +112,7 @@ func (h *MessageHandler) OnMemberShutdownDrain(ctx context.Context, event types.
 		return
 	}
 	em := event.Transport
-	memberName := h.blueprint.MemberName()
+	memberName := h.blueprint.DispatcherMemberName()
 
 	// 对齐 Python: 只关心自己的 shutdown 事件
 	targetMember, _ := em.Payload["member_name"].(string)

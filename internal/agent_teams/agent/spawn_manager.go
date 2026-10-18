@@ -62,16 +62,22 @@ const (
 
 // NewSpawnManager 创建新的 SpawnManager。
 // Python: SpawnManager.__init__(state, configurator, team_agent_getter)
+// S-37: ctx 作为 baseCtx 传播链根（恢复操作随调用方 ctx 取消而停止，
+// 替代原 context.Background() 造成的取消链断裂）
 func NewSpawnManager(
+	ctx context.Context,
 	state *TeamAgentState,
 	configurator *AgentConfigurator,
 	teamAgentGetter func() *TeamAgent,
 ) *SpawnManager {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return &SpawnManager{
 		state:          state,
 		configurator:   configurator,
 		getTeamAgent:   teamAgentGetter,
-		baseCtx:        context.Background(),
+		baseCtx:        ctx,
 		spawnedHandles: make(map[string]spawn.SpawnHandle),
 		recoveryCancel: make(map[string]context.CancelFunc),
 	}
@@ -478,7 +484,8 @@ func (m *SpawnManager) spawnInprocess(
 		}
 
 		// Python: teammate = _TeamAgent(card)
-		teammate := NewTeamAgent(card)
+		// S-37: 传外层 spawn ctx——teammate 恢复任务随 Leader ctx 取消而停止
+		teammate := NewTeamAgent(ctx, card)
 
 		// Python: teammate.configure(spec, ctx)
 		// 修复 M-04：使用外层 ctx（context.Context）而非 context.Background()

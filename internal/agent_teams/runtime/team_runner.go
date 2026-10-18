@@ -189,13 +189,22 @@ func RunBaseTeamStreaming(
 	mergedCh := make(chan stream.Schema, 64)
 	go func() {
 		defer close(mergedCh)
+		// S-58: 清理代码 defer 化——消费者停止读取（ctx 取消）与正常结束两路径
+		// 都执行，对齐 Python generator finally 双路径语义（team_runner.py L264-275）
+		defer func() {
+			if teamRuntime != nil {
+				teamRuntime.UnbindTeamSession(teamSession.GetSessionID())
+			}
+			_ = teamSession.PostRun(ctx)
+		}()
 		for chunk := range agentCh {
-			mergedCh <- chunk
+			// S-58: select+ctx.Done 保护——消费者停止读取时 goroutine 不永久阻塞
+			select {
+			case mergedCh <- chunk:
+			case <-ctx.Done():
+				return
+			}
 		}
-		if teamRuntime != nil {
-			teamRuntime.UnbindTeamSession(teamSession.GetSessionID())
-		}
-		_ = teamSession.PostRun(ctx)
 	}()
 
 	return mergedCh, nil
@@ -283,14 +292,23 @@ func RunTeamMemberStreaming(
 	mergedCh := make(chan stream.Schema, 64)
 	go func() {
 		defer close(mergedCh)
+		// S-58: 清理代码 defer 化——两路径都执行
+		// （对齐 Python generator finally 双路径语义，team_runner.py L334-337）
+		defer func() {
+			_ = FinalizeMember(ctx, ag)
+			if teamRuntime != nil {
+				teamRuntime.UnbindTeamSession(teamSession.GetSessionID())
+			}
+			_ = teamSession.PostRun(ctx)
+		}()
 		for chunk := range agentCh {
-			mergedCh <- chunk
+			// S-58: select+ctx.Done 保护
+			select {
+			case mergedCh <- chunk:
+			case <-ctx.Done():
+				return
+			}
 		}
-		_ = FinalizeMember(ctx, ag)
-		if teamRuntime != nil {
-			teamRuntime.UnbindTeamSession(teamSession.GetSessionID())
-		}
-		_ = teamSession.PostRun(ctx)
 	}()
 
 	return mergedCh, nil
@@ -450,11 +468,19 @@ func runAgentTeamStreaming(
 		return nil, nil
 	}
 
+	// S-62: 对齐 Python L248 blueprint.member_name——成员标识而非显示名。
+	// 原先 AgentCard().Name 是显示名，填入 TeamOutputSchema.source_member 会导致
+	// readyChunk 成员归属错乱；configure 前 Blueprint() 为 nil 兜底空串+默认角色。
 	var leaderMemberName string
-	if bp := activation.Agent.AgentCard(); bp != nil {
-		leaderMemberName = bp.Name
+	if bp := activation.Agent.Blueprint(); bp != nil {
+		if mn := bp.MemberName(); mn != nil {
+			leaderMemberName = *mn
+		}
 	}
 	leaderRole := atschema.TeamRoleLeader
+	if bp := activation.Agent.Blueprint(); bp != nil {
+		leaderRole = bp.Role()
+	}
 
 	readyChunk := buildTeamRuntimeReadyChunk(
 		spec.TeamName,
@@ -475,22 +501,36 @@ func runAgentTeamStreaming(
 	mergedCh := make(chan stream.Schema, 64)
 	go func() {
 		defer close(mergedCh)
+		// S-58: 清理代码 defer 化——两路径都执行
+		// （对齐 Python generator finally 双路径语义，team_runner.py L384-388）
+		defer func() {
+			if streamLogger != nil {
+				streamLogger.Flush()
+			}
+			_ = GetTeamRuntimeManager().Finalize(ctx, spec.TeamName, activation.Session.GetSessionID())
+			closeTeamInteractGate(spec.TeamName, activation.Session.GetSessionID())
+			_ = activation.Session.PostRun(ctx)
+		}()
 		if streamLogger != nil {
 			streamLogger.Feed(readyChunk)
 		}
-		mergedCh <- readyChunk
+		// S-58: readyChunk 发送同样防御性 select 化
+		select {
+		case mergedCh <- readyChunk:
+		case <-ctx.Done():
+			return
+		}
 		for chunk := range agentCh {
 			if streamLogger != nil {
 				streamLogger.Feed(chunk)
 			}
-			mergedCh <- chunk
+			// S-58: select+ctx.Done 保护
+			select {
+			case mergedCh <- chunk:
+			case <-ctx.Done():
+				return
+			}
 		}
-		if streamLogger != nil {
-			streamLogger.Flush()
-		}
-		_ = GetTeamRuntimeManager().Finalize(ctx, spec.TeamName, activation.Session.GetSessionID())
-		closeTeamInteractGate(spec.TeamName, activation.Session.GetSessionID())
-		_ = activation.Session.PostRun(ctx)
 	}()
 
 	return mergedCh, nil

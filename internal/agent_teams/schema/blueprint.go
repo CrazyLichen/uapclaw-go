@@ -173,23 +173,23 @@ func RegisterStorage(name string, builder StorageBuilder) {
 // NewTeamAgentSpecFromDict 从 map[string]any 字典构建 TeamAgentSpec。
 // 对齐 Python: TeamAgentSpec(**spec_dict)
 // Go 差异：Python 直接用 **dict 展开，Go 使用 JSON 序列化/反序列化桥接。
+// S-61: 解析失败（nil 入参/marshal/unmarshal）返回 nil，不再回退默认 spec——
+// 对齐 Python team_runner.py L648-657 model_validate 失败 → warning → None，
+// 调用方（runner/swarm 路径）以 nil 守卫走降级分支。
 func NewTeamAgentSpecFromDict(specDict map[string]any) *TeamAgentSpec {
 	if specDict == nil {
-		spec := NewTeamAgentSpec()
-		return &spec
+		return nil
 	}
 	// JSON 桥接：dict → JSON → TeamAgentSpec
 	data, err := json.Marshal(specDict)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("NewTeamAgentSpecFromDict: JSON marshal failed, using defaults")
-		spec := NewTeamAgentSpec()
-		return &spec
+		logger.Warn(logComponent).Err(err).Msg("NewTeamAgentSpecFromDict: JSON marshal failed")
+		return nil
 	}
 	var spec TeamAgentSpec
 	if err := json.Unmarshal(data, &spec); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("NewTeamAgentSpecFromDict: JSON unmarshal failed, using defaults")
-		spec := NewTeamAgentSpec()
-		return &spec
+		logger.Warn(logComponent).Err(err).Msg("NewTeamAgentSpecFromDict: JSON unmarshal failed")
+		return nil
 	}
 	// 确保 Agents map 不为 nil
 	if spec.Agents == nil {

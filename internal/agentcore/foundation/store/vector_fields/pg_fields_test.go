@@ -119,17 +119,17 @@ func TestPGVectorField_Validate_IVFFlat参数无效(t *testing.T) {
 func TestPGVectorField_ToDict_HNSW_construct(t *testing.T) {
 	p := NewPGVectorFieldHNSW("embedding", 16, 64, 40)
 	dict := ToDict(p, StageConstruct)
-	if v, ok := dict["M"]; !ok {
+	if v, ok := dict["m"]; !ok {
 		t.Error("construct 阶段应包含 M")
 	} else if v != 16 {
 		t.Errorf("M = %v, want 16", v)
 	}
-	if v, ok := dict["EfConstruction"]; !ok {
+	if v, ok := dict["ef_construction"]; !ok {
 		t.Error("construct 阶段应包含 EfConstruction")
 	} else if v != 64 {
 		t.Errorf("EfConstruction = %v, want 64", v)
 	}
-	if v, ok := dict["EfSearch"]; !ok {
+	if v, ok := dict["ef_search"]; !ok {
 		t.Error("construct 阶段应包含 EfSearch")
 	} else if v != 40 {
 		t.Errorf("EfSearch = %v, want 40", v)
@@ -148,12 +148,12 @@ func TestPGVectorField_ToDict_HNSW_search(t *testing.T) {
 func TestPGVectorField_ToDict_IVFFlat_construct(t *testing.T) {
 	p := NewPGVectorFieldIVFFlat("embedding", 100, 10)
 	dict := ToDict(p, StageConstruct)
-	if v, ok := dict["Lists"]; !ok {
+	if v, ok := dict["lists"]; !ok {
 		t.Error("construct 阶段应包含 Lists")
 	} else if v != 100 {
 		t.Errorf("Lists = %v, want 100", v)
 	}
-	if v, ok := dict["Probes"]; !ok {
+	if v, ok := dict["probes"]; !ok {
 		t.Error("construct 阶段应包含 Probes")
 	} else if v != 10 {
 		t.Errorf("Probes = %v, want 10", v)

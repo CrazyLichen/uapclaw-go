@@ -80,7 +80,9 @@ func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelConte
 		offloadPath = p.GenerateOffloadPath("", sessionID, offloadHandle)
 	}
 
-	writeSuccess := p.writeOffloadToFile(sessionID, offloadHandle, offloadPath, messages, po.SysOperation)
+	// S-56: 传入调用方 ctx，对齐 Python offload_messages/base.py 全链 async——
+	// ctx 取消时 WriteFile 可中断（替代不可取消的 context.Background()）
+	writeSuccess := p.writeOffloadToFile(ctx, sessionID, offloadHandle, offloadPath, messages, po.SysOperation)
 	if !writeSuccess {
 		// fallback 到内存模式
 		return p.offloadMessagesToMemory(mc, role, content, offloadHandle, po.ToolCallID, messages, msgOpts)
@@ -141,7 +143,8 @@ func (p *BaseProcessor) offloadMessagesToFilesystem(role string, content string,
 //
 // 当 sysOperation 不为 nil 且其 Fs() 不为 nil 时，优先使用 SysOperation 的 Fs().WriteFile 写入；
 // 失败时 fallback 到 os 直接写文件。
-func (p *BaseProcessor) writeOffloadToFile(sessionID string, offloadHandle string, offloadPath string, messages []llm_schema.BaseMessage, sysOperation sysop.SysOperation) bool {
+// S-56: 加 ctx 首参，WriteFile 随调用方 ctx 取消而中断。
+func (p *BaseProcessor) writeOffloadToFile(ctx context.Context, sessionID string, offloadHandle string, offloadPath string, messages []llm_schema.BaseMessage, sysOperation sysop.SysOperation) bool {
 	messageData := map[string]any{
 		"offload_handle": offloadHandle,
 		"messages":       serializeMessages(messages),
@@ -153,7 +156,7 @@ func (p *BaseProcessor) writeOffloadToFile(sessionID string, offloadHandle strin
 
 	// 优先使用 SysOperation 写文件
 	if sysOperation != nil && sysOperation.Fs() != nil {
-		result, err := sysOperation.Fs().WriteFile(context.Background(), offloadPath, string(contentJSON))
+		result, err := sysOperation.Fs().WriteFile(ctx, offloadPath, string(contentJSON))
 		if err == nil && result != nil && result.Code == 0 {
 			return true
 		}

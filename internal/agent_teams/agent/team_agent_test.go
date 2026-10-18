@@ -16,7 +16,7 @@ import (
 // TestNewTeamAgent_配置器 测试 NewTeamAgent 构造时创建 AgentConfigurator
 func TestNewTeamAgent_配置器(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	assert.NotNil(t, a)
 	assert.NotNil(t, a.configurator, "configurator 应在构造时创建")
@@ -26,7 +26,7 @@ func TestNewTeamAgent_配置器(t *testing.T) {
 // TestTeamAgent_Blueprint_配置前 测试配置前 Blueprint 为 nil
 func TestTeamAgent_Blueprint_配置前(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	assert.Nil(t, a.Blueprint())
 }
@@ -34,7 +34,7 @@ func TestTeamAgent_Blueprint_配置前(t *testing.T) {
 // TestTeamAgent_属性代理_配置前 测试配置前属性代理返回初始零值
 func TestTeamAgent_属性代理_配置前(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// Infra / Resources 由 NewAgentConfigurator 构造，非 nil 但内部字段为零值
 	assert.NotNil(t, a.Infra())
@@ -56,7 +56,7 @@ func TestTeamAgent_属性代理_配置前(t *testing.T) {
 // TestTeamAgent_Configure 测试 Configure 调用 SetupInfra + SetupAgent
 func TestTeamAgent_Configure(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{
@@ -83,7 +83,7 @@ func TestTeamAgent_Configure(t *testing.T) {
 // TestTeamAgent_Configure_无成员名 测试 Configure 时 MemberName 为空不创建 TeamMember
 func TestTeamAgent_Configure_无成员名(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{
@@ -98,7 +98,7 @@ func TestTeamAgent_Configure_无成员名(t *testing.T) {
 // TestTeamAgent_Configure_有成员名 测试 Configure 时有 MemberName 但无 TeamBackend
 func TestTeamAgent_Configure_有成员名(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{
@@ -114,7 +114,7 @@ func TestTeamAgent_Configure_有成员名(t *testing.T) {
 // TestTeamAgent_BuildSpawnPayload 测试代理到 configurator
 func TestTeamAgent_BuildSpawnPayload(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// 配置前
 	assert.Nil(t, a.BuildSpawnPayload(atschema.TeamRuntimeContext{}, ""))
@@ -133,7 +133,7 @@ func TestTeamAgent_BuildSpawnPayload(t *testing.T) {
 // TestTeamAgent_BuildMemberContext 测试代理到 configurator
 func TestTeamAgent_BuildMemberContext(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// 配置前
 	result := a.BuildMemberContext(atschema.TeamMemberSpec{})
@@ -156,7 +156,7 @@ func TestTeamAgent_BuildMemberContext(t *testing.T) {
 // TestTeamAgent_BuildSpawnConfig 测试代理到 configurator
 func TestTeamAgent_BuildSpawnConfig(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// 配置前：返回零值 SpawnAgentConfig
 	cfg := a.BuildSpawnConfig(atschema.TeamRuntimeContext{})
@@ -174,7 +174,7 @@ func TestTeamAgent_BuildSpawnConfig(t *testing.T) {
 // TestTeamAgent_AttachModelAllocator 测试代理到 configurator
 func TestTeamAgent_AttachModelAllocator(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// 传 nil 不 panic
 	a.AttachModelAllocator(nil, nil)
@@ -183,7 +183,7 @@ func TestTeamAgent_AttachModelAllocator(t *testing.T) {
 // TestTeamAgent_RestoreAllocatorState 测试代理到 configurator
 func TestTeamAgent_RestoreAllocatorState(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// 不 panic 即可
 	a.RestoreAllocatorState(map[string]any{"key": "value"})
@@ -192,7 +192,7 @@ func TestTeamAgent_RestoreAllocatorState(t *testing.T) {
 // TestTeamAgent_UpdateModelPool 测试代理到 configurator
 func TestTeamAgent_UpdateModelPool(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// 传 nil 不 panic
 	a.UpdateModelPool(nil)
@@ -201,7 +201,7 @@ func TestTeamAgent_UpdateModelPool(t *testing.T) {
 // TestTeamAgent_RegisterRail 测试代理到 harness
 func TestTeamAgent_RegisterRail(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// 配置前：configurator.Harness() 为 nil，传 nil rail 不 panic
 	result, err := a.RegisterRail(context.Background(), nil)
@@ -212,7 +212,7 @@ func TestTeamAgent_RegisterRail(t *testing.T) {
 // TestTeamAgent_UnregisterRail 测试代理到 harness
 func TestTeamAgent_UnregisterRail(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	result, err := a.UnregisterRail(context.Background(), nil)
 	assert.Equal(t, a, result)
@@ -222,63 +222,63 @@ func TestTeamAgent_UnregisterRail(t *testing.T) {
 // TestTeamAgent_AgentCard 测试返回 AgentCard
 func TestTeamAgent_AgentCard(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.Equal(t, card, a.AgentCard())
 }
 
 // TestTeamAgent_State 测试返回 State
 func TestTeamAgent_State(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.NotNil(t, a.State())
 }
 
 // TestTeamAgent_Coordination 测试返回 CoordinationKernel（9.55: NewTeamAgent 自动创建）
 func TestTeamAgent_Coordination(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.NotNil(t, a.Coordination())
 }
 
 // TestTeamAgent_CoordinationLoop 测试返回 nil
 func TestTeamAgent_CoordinationLoop(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.Nil(t, a.CoordinationLoop())
 }
 
 // TestTeamAgent_SessionManager 测试返回 SessionManager
 func TestTeamAgent_SessionManager(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.NotNil(t, a.SessionManager())
 }
 
 // TestTeamAgent_RecoveryManager 测试返回 RecoveryManager 实例
 func TestTeamAgent_RecoveryManager(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.NotNil(t, a.RecoveryManager())
 }
 
 // TestTeamAgent_SpawnManager 测试返回 SpawnManager
 func TestTeamAgent_SpawnManager(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.NotNil(t, a.SpawnManager())
 }
 
 // TestTeamAgent_StreamController 测试返回 StreamController
 func TestTeamAgent_StreamController(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.NotNil(t, a.InternalStreamController())
 }
 
 // TestTeamAgent_EventListeners 测试返回事件监听器
 func TestTeamAgent_EventListeners(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.NotNil(t, a.EventListeners())
 	assert.Empty(t, a.EventListeners())
 }
@@ -286,14 +286,14 @@ func TestTeamAgent_EventListeners(t *testing.T) {
 // TestTeamAgent_PendingUserQuery 测试返回待处理查询
 func TestTeamAgent_PendingUserQuery(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.Equal(t, "", a.PendingUserQuery())
 }
 
 // TestTeamAgent_AddEventListener 测试添加事件监听器
 func TestTeamAgent_AddEventListener(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	var handler messager.MessagerHandler = func(_ context.Context, _ *events.EventMessage) error {
 		return nil
@@ -306,7 +306,7 @@ func TestTeamAgent_AddEventListener(t *testing.T) {
 // TestTeamAgent_RemoveEventListener 测试移除事件监听器
 func TestTeamAgent_RemoveEventListener(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	var handler1 messager.MessagerHandler = func(_ context.Context, _ *events.EventMessage) error {
 		return nil
@@ -326,35 +326,35 @@ func TestTeamAgent_RemoveEventListener(t *testing.T) {
 // TestTeamAgent_IsAgentRunning 测试返回 false
 func TestTeamAgent_IsAgentRunning(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.False(t, a.IsAgentRunning())
 }
 
 // TestTeamAgent_HasInFlightRound 测试返回 false
 func TestTeamAgent_HasInFlightRound(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.False(t, a.HasInFlightRound())
 }
 
 // TestTeamAgent_HasPendingInterrupt 测试返回 false
 func TestTeamAgent_HasPendingInterrupt(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	assert.False(t, a.HasPendingInterrupt())
 }
 
 // TestTeamAgent_PersistAllocatorState 测试空操作
 func TestTeamAgent_PersistAllocatorState(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	a.PersistAllocatorState()
 }
 
 // TestTeamAgent_Interact 测试空操作
 func TestTeamAgent_Interact(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.Interact(context.Background(), "hello")
 	assert.NoError(t, err)
 }
@@ -362,7 +362,7 @@ func TestTeamAgent_Interact(t *testing.T) {
 // TestTeamAgent_Broadcast 测试无 MessageManager 时返回失败结果
 func TestTeamAgent_Broadcast(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result, err := a.Broadcast(context.Background(), "announcement")
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -372,7 +372,7 @@ func TestTeamAgent_Broadcast(t *testing.T) {
 // TestTeamAgent_HumanAgentSay 测试无 TeamBackend 时返回失败结果
 func TestTeamAgent_HumanAgentSay(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result, err := a.HumanAgentSay(context.Background(), "hello", "to", "sender")
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -382,7 +382,7 @@ func TestTeamAgent_HumanAgentSay(t *testing.T) {
 // TestTeamAgent_StartCoordination 测试空操作
 func TestTeamAgent_StartCoordination(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.StartCoordination(context.Background(), "")
 	assert.NoError(t, err)
 }
@@ -390,7 +390,7 @@ func TestTeamAgent_StartCoordination(t *testing.T) {
 // TestTeamAgent_PauseCoordination 测试空操作
 func TestTeamAgent_PauseCoordination(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.PauseCoordination(context.Background())
 	assert.NoError(t, err)
 }
@@ -398,7 +398,7 @@ func TestTeamAgent_PauseCoordination(t *testing.T) {
 // TestTeamAgent_StopCoordination 测试空操作
 func TestTeamAgent_StopCoordination(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.StopCoordination(context.Background())
 	assert.NoError(t, err)
 }
@@ -406,7 +406,7 @@ func TestTeamAgent_StopCoordination(t *testing.T) {
 // TestTeamAgent_AutoStartMember 测试返回 false
 func TestTeamAgent_AutoStartMember(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result := a.AutoStartMember(context.Background(), "t1")
 	assert.False(t, result)
 }
@@ -414,7 +414,7 @@ func TestTeamAgent_AutoStartMember(t *testing.T) {
 // TestTeamAgent_AutoStartAll 测试返回 nil
 func TestTeamAgent_AutoStartAll(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result := a.AutoStartAll(context.Background())
 	assert.Nil(t, result)
 }
@@ -429,7 +429,7 @@ func TestTeamAgent_FromSpawnPayload(t *testing.T) {
 // TestTeamAgent_RecoverTeam 测试无 TeamBackend 时返回空列表
 func TestTeamAgent_RecoverTeam(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result, err := a.RecoverTeam(context.Background())
 	assert.Empty(t, result)
 	assert.NoError(t, err)
@@ -445,14 +445,14 @@ func TestTeamAgent_RecoverFromSession(t *testing.T) {
 // TestTeamAgent_PersistSessionManifest 测试空操作
 func TestTeamAgent_PersistSessionManifest(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	a.PersistSessionManifest(nil)
 }
 
 // TestTeamAgent_DestroyTeam 测试销毁团队
 func TestTeamAgent_DestroyTeam(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result, err := a.DestroyTeam(context.Background(), true)
 	assert.False(t, result)
 	assert.NoError(t, err)
@@ -461,7 +461,7 @@ func TestTeamAgent_DestroyTeam(t *testing.T) {
 // TestTeamAgent_StartAgent 测试启动 Agent
 func TestTeamAgent_StartAgent(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.StartAgent(context.Background(), "hello")
 	assert.NoError(t, err)
 }
@@ -469,7 +469,7 @@ func TestTeamAgent_StartAgent(t *testing.T) {
 // TestTeamAgent_FollowUp 测试追加输入
 func TestTeamAgent_FollowUp(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.FollowUp(context.Background(), "more input")
 	assert.NoError(t, err)
 }
@@ -477,7 +477,7 @@ func TestTeamAgent_FollowUp(t *testing.T) {
 // TestTeamAgent_CancelAgent 测试取消 Agent
 func TestTeamAgent_CancelAgent(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.CancelAgent(context.Background())
 	assert.NoError(t, err)
 }
@@ -485,7 +485,7 @@ func TestTeamAgent_CancelAgent(t *testing.T) {
 // TestTeamAgent_Steer 测试转向输入
 func TestTeamAgent_Steer(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.Steer(context.Background(), "steer input")
 	assert.NoError(t, err)
 }
@@ -493,7 +493,7 @@ func TestTeamAgent_Steer(t *testing.T) {
 // TestTeamAgent_DeliverInput 测试投递输入
 func TestTeamAgent_DeliverInput(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.DeliverInput(context.Background(), "input", true)
 	assert.NoError(t, err)
 }
@@ -501,7 +501,7 @@ func TestTeamAgent_DeliverInput(t *testing.T) {
 // TestTeamAgent_ResumeInterrupt 测试恢复中断
 func TestTeamAgent_ResumeInterrupt(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	ii, _ := interaction.NewInteractiveInput("input")
 	err := a.ResumeInterrupt(context.Background(), ii)
 	assert.NoError(t, err)
@@ -510,7 +510,7 @@ func TestTeamAgent_ResumeInterrupt(t *testing.T) {
 // TestTeamAgent_ShutdownSelf 测试请求自身关闭
 func TestTeamAgent_ShutdownSelf(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.ShutdownSelf(context.Background())
 	assert.NoError(t, err)
 }
@@ -518,7 +518,7 @@ func TestTeamAgent_ShutdownSelf(t *testing.T) {
 // TestTeamAgent_ConcludeCompletedRound 测试完成轮次
 func TestTeamAgent_ConcludeCompletedRound(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.ConcludeCompletedRound(context.Background(), 3, 2)
 	assert.NoError(t, err)
 }
@@ -526,7 +526,7 @@ func TestTeamAgent_ConcludeCompletedRound(t *testing.T) {
 // TestTeamAgent_SpawnTeammate 测试生成 Teammate
 func TestTeamAgent_SpawnTeammate(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.SpawnTeammate(context.Background(), atschema.TeamRuntimeContext{}, "msg", "sid", nil)
 	assert.NoError(t, err)
 }
@@ -534,7 +534,7 @@ func TestTeamAgent_SpawnTeammate(t *testing.T) {
 // TestTeamAgent_LookupHumanAgentRuntime 测试查找人类代理
 func TestTeamAgent_LookupHumanAgentRuntime(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result := a.LookupHumanAgentRuntime("nonexistent")
 	assert.Nil(t, result)
 }
@@ -542,7 +542,7 @@ func TestTeamAgent_LookupHumanAgentRuntime(t *testing.T) {
 // TestTeamAgent_IsShutdownRequested 测试关闭请求检查
 func TestTeamAgent_IsShutdownRequested(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result, err := a.IsShutdownRequested(context.Background())
 	assert.False(t, result)
 	assert.NoError(t, err)
@@ -551,7 +551,7 @@ func TestTeamAgent_IsShutdownRequested(t *testing.T) {
 // TestTeamAgent_UpdateStatus 测试更新状态
 func TestTeamAgent_UpdateStatus(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	err := a.UpdateStatus(context.Background(), atschema.MemberStatusReady)
 	assert.NoError(t, err)
 }
@@ -559,7 +559,7 @@ func TestTeamAgent_UpdateStatus(t *testing.T) {
 // TestTeamAgent_SessionID 测试返回空会话 ID
 func TestTeamAgent_SessionID(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	sid := a.SessionID(context.Background())
 	assert.Equal(t, "", sid)
 }
@@ -567,7 +567,7 @@ func TestTeamAgent_SessionID(t *testing.T) {
 // TestTeamAgent_ResumeForNewSession 测试恢复新会话
 func TestTeamAgent_ResumeForNewSession(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	ctx, err := a.ResumeForNewSession(context.Background(), nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, ctx)
@@ -576,7 +576,7 @@ func TestTeamAgent_ResumeForNewSession(t *testing.T) {
 // TestTeamAgent_RecoverForExistingSession 测试恢复已有会话
 func TestTeamAgent_RecoverForExistingSession(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	ctx, err := a.RecoverForExistingSession(context.Background(), nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, ctx)
@@ -585,7 +585,7 @@ func TestTeamAgent_RecoverForExistingSession(t *testing.T) {
 // TestTeamAgent_Invoke 测试非流式调用
 func TestTeamAgent_Invoke(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result, err := a.Invoke(context.Background(), map[string]any{"input": "hello"})
 	assert.Nil(t, result)
 	assert.NoError(t, err)
@@ -594,7 +594,7 @@ func TestTeamAgent_Invoke(t *testing.T) {
 // TestTeamAgent_Stream 测试流式调用
 func TestTeamAgent_Stream(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	result, err := a.Stream(context.Background(), map[string]any{"input": "hello"})
 	assert.Nil(t, result)
 	assert.NoError(t, err)
@@ -603,7 +603,7 @@ func TestTeamAgent_Stream(t *testing.T) {
 // TestTeamAgent_属性代理_configurator为nil 测试 configurator 为 nil 时返回零值
 func TestTeamAgent_属性代理_configurator为nil(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	a.configurator = nil
 
 	assert.Nil(t, a.Blueprint())
@@ -625,7 +625,7 @@ func TestTeamAgent_属性代理_configurator为nil(t *testing.T) {
 // TestTeamAgent_属性代理_配置后 测试配置后属性代理返回正确值
 func TestTeamAgent_属性代理_配置后(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{
@@ -652,7 +652,7 @@ func TestTeamAgent_属性代理_配置后(t *testing.T) {
 // TestTeamAgent_SetTeamBackend 测试 SetTeamBackend 方法
 func TestTeamAgent_SetTeamBackend(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	// configurator 为 nil 时不 panic
 	a.SetTeamBackend(nil)
 }
@@ -660,7 +660,7 @@ func TestTeamAgent_SetTeamBackend(t *testing.T) {
 // TestTeamAgent_Configure后TeamBackend设置 测试 Configure 后 TeamBackend 状态
 func TestTeamAgent_Configure后TeamBackend设置(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{
@@ -678,7 +678,7 @@ func TestTeamAgent_Configure后TeamBackend设置(t *testing.T) {
 // TestTeamAgent_Configure后Messager设置 测试 Configure 后 Messager 状态
 func TestTeamAgent_Configure后Messager设置(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{
@@ -697,7 +697,7 @@ func TestTeamAgent_Configure后Messager设置(t *testing.T) {
 // TestTeamAgent_Configure后TeamName设置 测试 Configure 后 TeamName 正确返回
 func TestTeamAgent_Configure后TeamName设置(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{
@@ -726,7 +726,7 @@ func TestTaskFailedError_Error(t *testing.T) {
 // TestTeamAgent_markTeamCleaned 测试 markTeamCleaned 设置 TeamCleaned 标志
 func TestTeamAgent_markTeamCleaned(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	assert.False(t, a.state.TeamCleaned, "初始 TeamCleaned 应为 false")
 	err := a.markTeamCleaned(context.Background())
@@ -737,7 +737,7 @@ func TestTeamAgent_markTeamCleaned(t *testing.T) {
 // TestTeamAgent_markTeamBuilt 测试 markTeamBuilt 不 panic
 func TestTeamAgent_markTeamBuilt(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// sessionManager.TeamSession() 返回 nil → persistTeamDbState 提前返回
 	err := a.markTeamBuilt(context.Background())
@@ -747,7 +747,7 @@ func TestTeamAgent_markTeamBuilt(t *testing.T) {
 // TestTeamAgent_persistTeamDbState_无会话 测试无会话时不 panic
 func TestTeamAgent_persistTeamDbState_无会话(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// TeamSession 为 nil，应提前返回
 	a.persistTeamDbState(context.Background(), "created")
@@ -756,7 +756,7 @@ func TestTeamAgent_persistTeamDbState_无会话(t *testing.T) {
 // TestTeamAgent_persistTeamDbState_无TeamName 测试无 TeamName 时不 panic
 func TestTeamAgent_persistTeamDbState_无TeamName(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 	a.state.TeamSession = &mockSessionForPersist{}
 
 	// TeamName 为空（未 Configure），应提前返回
@@ -766,7 +766,7 @@ func TestTeamAgent_persistTeamDbState_无TeamName(t *testing.T) {
 // TestTeamAgent_MarkLiveTeammates 测试无 TeamBackend 时返回 nil
 func TestTeamAgent_MarkLiveTeammates(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	err := a.MarkLiveTeammates(context.Background(), "ready")
 	assert.NoError(t, err, "无 TeamBackend 时 MarkLiveTeammates 应返回 nil")
@@ -775,7 +775,7 @@ func TestTeamAgent_MarkLiveTeammates(t *testing.T) {
 // TestTeamAgent_SetMemberID 测试设置成员 ID 上下文
 func TestTeamAgent_SetMemberID(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	// 传入非空名称
 	ctx := a.SetMemberID(context.Background(), "teammate_1")
@@ -792,7 +792,7 @@ type mockSessionForPersist struct{}
 // TestTeamAgent_Configure后markTeamCleaned 测试 Configure 后 markTeamCleaned 设置状态
 func TestTeamAgent_Configure后markTeamCleaned(t *testing.T) {
 	card := agentschema.NewAgentCard()
-	a := NewTeamAgent(card)
+	a := NewTeamAgent(context.Background(), card)
 
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{

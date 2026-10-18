@@ -200,7 +200,7 @@ func (m *TeamManager) CreateTeam(
 	)
 
 	// 创建 TeamAgent 并执行 Configure 配置团队 Agent
-	teamAgent := agent.NewTeamAgent(card)
+	teamAgent := agent.NewTeamAgent(ctx, card)
 	runtimeCtx := atschema.TeamRuntimeContext{
 		MemberName: spec.Leader.MemberName,
 		Persona:    spec.Leader.Persona,

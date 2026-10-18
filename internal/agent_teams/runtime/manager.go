@@ -297,19 +297,25 @@ func (m *TeamRuntimeManager) Finalize(ctx context.Context, teamName string, sess
 			Bool("shutdown_requested", shutdownRequested).
 			Str("lifecycle", ag.Lifecycle()).
 			Msg("finalize: stopping team")
+		// S-59: 对齐 Python try/except 语义——stop_coordination 抛异常时
+		// pool.remove 不执行（Go: 成功才 Remove，失败仅 Warn 条目留 pool
+		// 供下次 finalize/stop_team 重试）
 		if stopErr := ag.StopCoordination(ctx); stopErr != nil {
 			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(stopErr).Msg("finalize: StopCoordination failed")
+				Err(stopErr).Msg("finalize: StopCoordination failed, keeping pool entry for retry")
+		} else {
+			m.pool.Remove(teamName)
 		}
-		m.pool.Remove(teamName)
 	} else {
 		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
 			Msg("finalize: pausing persistent team")
+		// S-59: pause_coordination 抛异常时 state 不写 PAUSED（成功才写）
 		if pauseErr := ag.PauseCoordination(ctx); pauseErr != nil {
 			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(pauseErr).Msg("finalize: PauseCoordination failed")
+				Err(pauseErr).Msg("finalize: PauseCoordination failed, state unchanged")
+		} else {
+			entry.State = RuntimeStatePaused
 		}
-		entry.State = RuntimeStatePaused
 	}
 	return nil
 }
@@ -829,12 +835,14 @@ func (m *TeamRuntimeManager) inspectSession(
 		sessionExists, _ = cp.SessionExists(ctx, teamSession.GetSessionID())
 	}
 
-	// Python: L824
+	// Python: L839 裸调用 pre_run——异常直接上抛致 activate 失败
+	// S-60: PreRun 失败改为通过 err 通道传播（inspectSession 签名已有 err 返回值，
+	// Activate L247-250 已处理 err→return），不再吞掉继续执行
 	if preErr := teamSession.PreRun(ctx); preErr != nil {
-		// Python 中 pre_run 失败不影响后续流程，Go 中记录警告
 		logger.Warn(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
 			Msg("inspectSession: PreRun failed")
+		return false, false, "", fmt.Errorf("inspectSession: PreRun failed: %w", preErr)
 	}
 
 	// Python: L825-830
@@ -1109,7 +1117,7 @@ func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.T
 	)
 
 	// Python: L438 — agent = _TeamAgent(leader_card)
-	ag := agent.NewTeamAgent(leaderCard)
+	ag := agent.NewTeamAgent(ctx, leaderCard)
 
 	// Python: L444 — agent.attach_model_allocator(model_allocator, leader_allocation=leader_allocation)
 	if modelAllocator != nil {

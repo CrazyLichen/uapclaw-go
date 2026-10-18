@@ -54,11 +54,12 @@ type MilvusFLAT struct {
 type MilvusHNSW struct {
 	VectorField
 	// M 图中每个节点的最大边数，越高精度越高但内存和构建时间增加
-	M int `vf:"construct"`
+	// S-47: name= 对齐 Python to_dict 输出键（Python 字段名即 M/efConstruction/efSearchFactor）
+	M int `vf:"construct,name=M"`
 	// EfConstruction 构建索引时考虑的候选邻居数，越高图质量越好但构建越慢
-	EfConstruction int `vf:"construct"`
+	EfConstruction int `vf:"construct,name=efConstruction"`
 	// EfSearchFactor 搜索广度乘数，top_k * EfSearchFactor = Milvus 中的 ef
-	EfSearchFactor float64 `vf:"search"`
+	EfSearchFactor float64 `vf:"search,name=efSearchFactor"`
 }
 
 // MilvusIVF Milvus IVF 索引配置。
@@ -79,9 +80,9 @@ type MilvusIVF struct {
 type MilvusSCANN struct {
 	baseIVF
 	// WithRawData 是否存储原始向量，True 提高精度但增加存储
-	WithRawData bool `vf:"construct,keepzero"`
+	WithRawData bool `vf:"construct,keepzero,name=with_raw_data"`
 	// ReorderK 搜索时使用高精度向量重排序的结果数，仅 WithRawData=True 时有效
-	ReorderK int `vf:"search"`
+	ReorderK int `vf:"search,name=reorder_k"`
 }
 
 // baseIVF IVF 系列索引的公共基类（非导出）。
@@ -91,9 +92,9 @@ type MilvusSCANN struct {
 type baseIVF struct {
 	VectorField
 	// Nlist 构建索引时创建的簇数
-	Nlist int `vf:"construct"`
+	Nlist int `vf:"construct,name=nlist"`
 	// Nprobe 搜索时查询的簇数，必须 <= Nlist
-	Nprobe int `vf:"search"`
+	Nprobe int `vf:"search,name=nprobe"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

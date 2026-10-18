@@ -53,14 +53,14 @@ func TestMilvusHNSW(t *testing.T) {
 	if constructDict["M"] != 30 {
 		t.Errorf("construct M = %v, want 30", constructDict["M"])
 	}
-	if constructDict["EfConstruction"] != 360 {
-		t.Errorf("construct EfConstruction = %v, want 360", constructDict["EfConstruction"])
+	if constructDict["efConstruction"] != 360 {
+		t.Errorf("construct EfConstruction = %v, want 360", constructDict["efConstruction"])
 	}
 
 	// search 阶段应输出 EfSearchFactor
 	searchDict := ToDict(f, StageSearch)
-	if searchDict["EfSearchFactor"] != 2.0 {
-		t.Errorf("search EfSearchFactor = %v, want 2.0", searchDict["EfSearchFactor"])
+	if searchDict["efSearchFactor"] != 2.0 {
+		t.Errorf("search EfSearchFactor = %v, want 2.0", searchDict["efSearchFactor"])
 	}
 }
 
@@ -100,14 +100,14 @@ func TestMilvusIVF(t *testing.T) {
 
 	// construct 阶段应输出 Nlist
 	constructDict := ToDict(f, StageConstruct)
-	if constructDict["Nlist"] != 128 {
-		t.Errorf("construct Nlist = %v, want 128", constructDict["Nlist"])
+	if constructDict["nlist"] != 128 {
+		t.Errorf("construct Nlist = %v, want 128", constructDict["nlist"])
 	}
 
 	// search 阶段应输出 Nprobe
 	searchDict := ToDict(f, StageSearch)
-	if searchDict["Nprobe"] != 8 {
-		t.Errorf("search Nprobe = %v, want 8", searchDict["Nprobe"])
+	if searchDict["nprobe"] != 8 {
+		t.Errorf("search Nprobe = %v, want 8", searchDict["nprobe"])
 	}
 }
 
@@ -145,20 +145,20 @@ func TestMilvusSCANN(t *testing.T) {
 
 	// construct 阶段应输出 Nlist 和 WithRawData
 	constructDict := ToDict(f, StageConstruct)
-	if constructDict["Nlist"] != 128 {
-		t.Errorf("construct Nlist = %v, want 128", constructDict["Nlist"])
+	if constructDict["nlist"] != 128 {
+		t.Errorf("construct Nlist = %v, want 128", constructDict["nlist"])
 	}
-	if constructDict["WithRawData"] != true {
-		t.Errorf("construct WithRawData = %v, want true", constructDict["WithRawData"])
+	if constructDict["with_raw_data"] != true {
+		t.Errorf("construct WithRawData = %v, want true", constructDict["with_raw_data"])
 	}
 
 	// search 阶段应输出 Nprobe 和 ReorderK
 	searchDict := ToDict(f, StageSearch)
-	if searchDict["Nprobe"] != 8 {
-		t.Errorf("search Nprobe = %v, want 8", searchDict["Nprobe"])
+	if searchDict["nprobe"] != 8 {
+		t.Errorf("search Nprobe = %v, want 8", searchDict["nprobe"])
 	}
-	if searchDict["ReorderK"] != 200 {
-		t.Errorf("search ReorderK = %v, want 200", searchDict["ReorderK"])
+	if searchDict["reorder_k"] != 200 {
+		t.Errorf("search ReorderK = %v, want 200", searchDict["reorder_k"])
 	}
 }
 

@@ -26,6 +26,9 @@ type InProcessSpawnHandle struct {
 	cancelCtx context.CancelFunc
 	// done 协程完成通知 chan，close 表示完成
 	done chan struct{}
+	// resultCh S-38: 执行结果通道，携带 runFn 的 result/err
+	// 对齐 Python asyncio task 的 result/exception（wait_for_completion 消费）
+	resultCh chan inProcessResult
 	// agentRef 进程内 Agent 引用（对齐 Python agent_ref: Any）
 	agentRef SpawnableAgent
 	// chunkForward chunk 转发观察者引用，cleanup 时可确定性断开
@@ -176,11 +179,25 @@ func (h *InProcessSpawnHandle) ForceKill() error {
 // Python: InProcessSpawnHandle.wait_for_completion
 //
 // 返回 0=成功，-1=异常或未启动。
+// S-38: 消费 resultCh 携带的错误——对齐 Python `await task` 抛异常 →
+// except → return -1 语义；取消引发的错误同样按 -1 处理。
 func (h *InProcessSpawnHandle) WaitForCompletion() (int, error) {
 	if h.done == nil {
 		return -1, nil
 	}
 	<-h.done
+	// S-38: 消费结果通道（缓冲 1，goroutine 结束时必定写入）
+	if h.resultCh != nil {
+		select {
+		case r, ok := <-h.resultCh:
+			if ok && r.err != nil {
+				// 对齐 Python: except Exception → return -1
+				return -1, r.err
+			}
+		default:
+			// 无结果（工厂未执行 runFn 场景），按成功处理
+		}
+	}
 	return 0, nil
 }
 

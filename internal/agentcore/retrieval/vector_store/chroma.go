@@ -166,10 +166,41 @@ func NewChromaVectorStore(
 	// 对齐 Python: self._search_config = self.vector_field.to_dict(stage="search")
 	s.searchConfig = s.vectorField.ToSearchDict()
 
-	// 创建 ChromaDB 客户端
+	// S-50: 实装 databaseName（原为死字段）。
+	// 对齐 Python chroma_store.py L119-129 create_client——非默认 dbName 时
+	// 先经 AdminClient 检查/创建数据库，再以指定数据库创建主客户端；
+	// 默认/空 dbName 归一化为 DefaultDatabase（对齐 Python else 分支）。
+	dbName := strings.TrimSpace(config.DatabaseName)
+	if dbName == "" {
+		dbName = chromav2.DefaultDatabase
+	}
 	clientOpts := []chromav2.PersistentClientOption{
 		chromav2.WithPersistentPath(chromaPath),
 		chromav2.WithPersistentLibraryAutoDownload(true),
+	}
+	if dbName != chromav2.DefaultDatabase {
+		// 对齐 Python: admin_client = chromadb.AdminClient(...);
+		//   if database_name not in {db.get("name") for db in admin_client.list_databases()}:
+		//     admin_client.create_database(database_name)
+		adminOpts := []chromav2.PersistentClientOption{
+			chromav2.WithPersistentPath(chromaPath),
+			chromav2.WithPersistentLibraryAutoDownload(true),
+		}
+		adminClient, err := chromav2.NewPersistentClient(adminOpts...)
+		if err != nil {
+			return nil, exception.BuildError(
+				exception.StatusRetrievalVectorStoreProviderInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("创建 ChromaDB AdminClient 失败: %s", err)),
+				exception.WithCause(err),
+			)
+		}
+		if err := ensureChromaDatabase(context.Background(), adminClient, dbName); err != nil {
+			return nil, err
+		}
+		_ = adminClient.Close()
+		clientOpts = append(clientOpts, chromav2.WithPersistentClientOptions(
+			chromav2.WithDatabaseAndTenant(dbName, chromav2.DefaultTenant),
+		))
 	}
 	client, err := chromav2.NewPersistentClient(clientOpts...)
 	if err != nil {
@@ -183,8 +214,11 @@ func NewChromaVectorStore(
 
 	// 对齐 Python: self._collection = self._client.get_or_create_collection(
 	//   name=self.collection_name, configuration={"hnsw": self._construct_config | self._search_config})
+	// S-48: 传完整 HNSW 配置（原仅传 distance metric）。
+	// Python construct_config 含 ef_search（chroma_fields.py L60-67 标 IS_CONSTRUCT），
+	// 合并 constructConfig|searchConfig 后 ef_search 由 construct 侧提供。
 	collection, err := s.client.GetOrCreateCollection(context.Background(), s.collectionName,
-		chromav2.WithHNSWSpaceCreate(mapToChromaDistanceMetric(s.distanceMetric)),
+		buildChromaHNSWCreateOptions(s.distanceMetric, s.constructConfig, s.searchConfig)...,
 	)
 	if err != nil {
 		return nil, exception.BuildError(
@@ -213,11 +247,48 @@ func (s *ChromaVectorStore) ConstructConfig() map[string]any { return s.construc
 // SearchConfig 返回搜索阶段配置
 func (s *ChromaVectorStore) SearchConfig() map[string]any { return s.searchConfig }
 
-// CreateClient 创建 ChromaDB 客户端。
-// 对齐 Python ChromaVectorStore.create_client。
 // CheckVectorField 校验向量字段配置是否一致。
+// S-49: 从集合读取真实 HNSW 配置作 actual（原传空 map 校验形同虚设）。
+// 对齐 Python: self._check_configs_matching(self._construct_config,
+//
+//	self.collection.configuration.get("hnsw", {}))
+//
+// Go SDK 差异补偿：chroma-go 老 metadata 路径键名为 hnsw:M/hnsw:construction_ef 等，
+// Python chromadb 1.5.4 configuration 属性走 configuration_json 天然 snake_case 键，
+// 故读回时需做一层还原映射（Go SDK 强加，Python 本身无此转换）。
 func (s *ChromaVectorStore) CheckVectorField() error {
-	return CheckConfigsMatching(s.constructConfig, map[string]any{})
+	collection, err := s.getCollection(context.Background())
+	if err != nil {
+		return err
+	}
+	actual := map[string]any{}
+	if collection != nil && collection.Configuration() != nil {
+		cfg := collection.Configuration()
+		if rawHN, ok := cfg.GetRaw("hnsw"); ok {
+			if hnMap, ok := rawHN.(map[string]any); ok {
+				for k, v := range hnMap {
+					actual[k] = v
+				}
+			}
+		} else {
+			// Go SDK 老 metadata 路径：配置平铺在 raw 顶层，键名 hnsw:M 等，
+			// 需去掉 "hnsw:" 前缀并还原为 Python 键名。
+			// 接口仅暴露 GetRaw，按已知 HNSW 常量集探测。
+			for _, sdkKey := range []string{
+				chromav2.HNSWM, chromav2.HNSWConstructionEF, chromav2.HNSWSearchEF,
+				chromav2.HNSWSpace, chromav2.HNSWNumThreads, chromav2.HNSWBatchSize,
+				chromav2.HNSWSyncThreshold, chromav2.HNSWResizeFactor,
+			} {
+				if v, ok := cfg.GetRaw(sdkKey); ok {
+					pyKey := chromaMetadataKeyToPython(sdkKey)
+					if pyKey != "" {
+						actual[pyKey] = v
+					}
+				}
+			}
+		}
+	}
+	return CheckConfigsMatching(s.constructConfig, actual)
 }
 
 // Add 添加向量数据。
@@ -489,6 +560,95 @@ func (s *ChromaVectorStore) Close() {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ensureChromaDatabase 确保指定数据库存在，不存在则创建。
+// S-50: 对齐 Python chroma_store.py L119-129 AdminClient 语义。
+func ensureChromaDatabase(ctx context.Context, adminClient chromav2.Client, dbName string) error {
+	dbs, err := adminClient.ListDatabases(ctx, chromav2.NewDefaultTenant())
+	if err != nil {
+		return exception.BuildError(
+			exception.StatusRetrievalVectorStoreProviderInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("ChromaDB ListDatabases 失败: %s", err)),
+			exception.WithCause(err),
+		)
+	}
+	for _, db := range dbs {
+		if db != nil && db.Name() == dbName {
+			return nil
+		}
+	}
+	if _, err := adminClient.CreateDatabase(ctx, chromav2.NewDatabase(dbName, chromav2.NewDefaultTenant())); err != nil {
+		return exception.BuildError(
+			exception.StatusRetrievalVectorStoreProviderInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("ChromaDB CreateDatabase %s 失败: %s", dbName, err)),
+			exception.WithCause(err),
+		)
+	}
+	return nil
+}
+
+// buildChromaHNSWCreateOptions 根据 construct/search 配置构建完整 HNSW 创建选项。
+// S-48: 对齐 Python configuration={"hnsw": self._construct_config | self._search_config}——
+// max_neighbors/ef_construction/ef_search 从合并配置读取，
+// resize_factor/num_threads/batch_size/sync_threshold 从 extra（searchConfig）读取。
+func buildChromaHNSWCreateOptions(distanceMetric string, constructConfig, searchConfig map[string]any) []chromav2.CreateCollectionOption {
+	opts := []chromav2.CreateCollectionOption{
+		chromav2.WithHNSWSpaceCreate(mapToChromaDistanceMetric(distanceMetric)),
+	}
+	// 合并配置（对齐 Python | 合并语义：search 键不覆盖 construct 已有键）
+	merged := make(map[string]any, len(constructConfig)+len(searchConfig))
+	for k, v := range searchConfig {
+		merged[k] = v
+	}
+	for k, v := range constructConfig {
+		merged[k] = v
+	}
+	if v, ok := merged["max_neighbors"].(int); ok && v > 0 {
+		opts = append(opts, chromav2.WithHNSWMCreate(v))
+	}
+	if v, ok := merged["ef_construction"].(int); ok && v > 0 {
+		opts = append(opts, chromav2.WithHNSWConstructionEfCreate(v))
+	}
+	// ef_search 在 Python chroma_fields.py 中标 IS_CONSTRUCT，合并在 constructConfig 侧
+	if v, ok := merged["ef_search"].(float64); ok && v > 0 {
+		opts = append(opts, chromav2.WithHNSWSearchEfCreate(int(v)))
+	} else if v, ok := merged["ef_search"].(int); ok && v > 0 {
+		opts = append(opts, chromav2.WithHNSWSearchEfCreate(v))
+	}
+	if v, ok := merged["batch_size"].(int); ok && v > 0 {
+		opts = append(opts, chromav2.WithHNSWBatchSizeCreate(v))
+	}
+	if v, ok := merged["sync_threshold"].(int); ok && v > 0 {
+		opts = append(opts, chromav2.WithHNSWSyncThresholdCreate(v))
+	}
+	// num_threads/resize_factor SDK v0.4.1 无对应 Create 选项，创建后由 SDK 默认值处理
+	return opts
+}
+
+// chromaMetadataKeyToPython 将 Go SDK 老 metadata 键名还原为 Python configuration 键名。
+// S-49: Go SDK 强加的补偿层（Python chromadb 1.5.4 configuration_json 键天然一致无需转换）。
+func chromaMetadataKeyToPython(sdkKey string) string {
+	switch sdkKey {
+	case chromav2.HNSWM:
+		return "max_neighbors"
+	case chromav2.HNSWConstructionEF:
+		return "ef_construction"
+	case chromav2.HNSWSearchEF:
+		return "ef_search"
+	case chromav2.HNSWSpace:
+		return "space"
+	case chromav2.HNSWNumThreads:
+		return "num_threads"
+	case chromav2.HNSWBatchSize:
+		return "batch_size"
+	case chromav2.HNSWSyncThreshold:
+		return "sync_threshold"
+	case chromav2.HNSWResizeFactor:
+		return "resize_factor"
+	default:
+		return ""
+	}
+}
 
 // addBatch 批量添加数据到 ChromaDB。
 // 对齐 Python _add_batch。

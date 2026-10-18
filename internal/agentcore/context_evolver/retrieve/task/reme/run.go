@@ -102,6 +102,11 @@ func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 	// 从 RuntimeContext 获取 query 和 user_id
 	query, _ := cecontext.GetTyped[string](rc, "query")
 	userID, _ := cecontext.GetTyped[string](rc, "user_id")
+	// S-51: 对齐 Python context.get("user_id", "default")——
+	// user_id 未设置时兜底 "default"，保证 workspace_id 过滤始终存在
+	if userID == "" {
+		userID = "default"
+	}
 
 	// 生成 query 的 embedding
 	embedding, err := embeddingModel.Embed(ctx, query)
@@ -114,9 +119,10 @@ func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 	}
 
 	// 构建元数据过滤条件，对齐 Python: metadata_filter={"workspace_id": user_id, "type": "reme_memory"}
-	metadataFilter := map[string]any{"type": "reme_memory"}
-	if userID != "" {
-		metadataFilter["workspace_id"] = userID
+	// S-51: userID 兜底后非空，workspace_id 无条件注入（对齐 Python L61）
+	metadataFilter := map[string]any{
+		"workspace_id": userID,
+		"type":         "reme_memory",
 	}
 
 	// 向量相似度搜索
@@ -133,11 +139,13 @@ func (o *RecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeConte
 	// Go 中 []ConcreteType 不能断言为 []Interface，因此存入 []MemoryItem 统一类型
 	items := make([]ceschema.MemoryItem, 0, len(nodes))
 	for _, node := range nodes {
-		whenToUse, _ := node.Metadata["when_to_use"].(string)
-		content, _ := node.Metadata["content"].(string)
+		// S-52: 对齐 Python ReMeMemory.from_vector_node(node) 两步转换——
+		// 先转完整 ReMeMemory，再取 WhenToUse/Content 构建 ReMeRetrievedMemory
+		// （与 ace/run.go、rb/run.go 兄弟任务结构一致）
+		memory := ceschema.NewReMeMemoryFromVectorNode(node)
 		items = append(items, ceschema.ReMeRetrievedMemory{
-			WhenToUse: whenToUse,
-			Content:   content,
+			WhenToUse: memory.WhenToUse,
+			Content:   memory.Content,
 		})
 	}
 

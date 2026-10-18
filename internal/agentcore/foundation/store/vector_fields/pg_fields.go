@@ -11,15 +11,16 @@ import "fmt"
 type PGVectorField struct {
 	VectorField
 	// M HNSW 每层最大连接数
-	M int `vf:"construct"`
+	// S-47: name= 对齐 Python to_dict 输出键 m/ef_construction/ef_search/lists/probes
+	M int `vf:"construct,name=m"`
 	// EfConstruction 索引构建时考虑的候选邻居数（HNSW）
-	EfConstruction int `vf:"construct"`
-	// EfSearch 搜索时探索的候选数（HNSW）
-	EfSearch int `vf:"construct"`
+	EfConstruction int `vf:"construct,name=ef_construction"`
+	// EfSearch 搜索时探索的候选数（HNSW，Python 标记为 construct 阶段）
+	EfSearch int `vf:"construct,name=ef_search"`
 	// Lists IVFFlat 列表数
-	Lists int `vf:"construct"`
+	Lists int `vf:"construct,name=lists"`
 	// Probes IVFFlat 探测数
-	Probes int `vf:"construct"`
+	Probes int `vf:"construct,name=probes"`
 	// ExtraSearch 额外搜索参数
 	ExtraSearch map[string]any `vf:"search"`
 }

@@ -353,7 +353,7 @@ func TestWriteOffloadToFile_相对路径失败(t *testing.T) {
 	p := NewBaseProcessor(c)
 	msgs := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
 
-	result := p.writeOffloadToFile("session1", "handle1", "relative/path.json", msgs, nil)
+	result := p.writeOffloadToFile(context.Background(), "session1", "handle1", "relative/path.json", msgs, nil)
 	assert.False(t, result)
 }
 
@@ -365,7 +365,7 @@ func TestWriteOffloadToFile_绝对路径成功(t *testing.T) {
 	tmpDir := t.TempDir()
 	offloadPath := filepath.Join(tmpDir, "test.json")
 
-	result := p.writeOffloadToFile("session1", "handle1", offloadPath, msgs, nil)
+	result := p.writeOffloadToFile(context.Background(), "session1", "handle1", offloadPath, msgs, nil)
 	assert.True(t, result)
 
 	// 验证文件已写入

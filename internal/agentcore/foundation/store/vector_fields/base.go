@@ -130,18 +130,26 @@ func ToDict(v any, stage string) map[string]any {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-func parseVFTag(tag string) (stage string, keepZero bool) {
+// parseVFTag 解析 vf 标签。
+// S-47: 支持 name= 选项指定输出键名（`vf:"construct,name=max_neighbors"`），
+// 对齐 Python to_dict 以 pydantic 字段名（snake_case）为键的输出语义。
+// 其余选项：keepzero（保留零值）。
+func parseVFTag(tag string) (stage string, keepZero bool, name string) {
 	if tag == "" {
-		return "", false
+		return "", false, ""
 	}
 	parts := strings.Split(tag, ",")
 	stage = parts[0]
 	for _, p := range parts[1:] {
-		if strings.TrimSpace(p) == "keepzero" {
+		p = strings.TrimSpace(p)
+		if p == "keepzero" {
 			keepZero = true
 		}
+		if strings.HasPrefix(p, "name=") {
+			name = strings.TrimPrefix(p, "name=")
+		}
 	}
-	return stage, keepZero
+	return stage, keepZero, name
 }
 
 func collectFields(v reflect.Value, stage string, result map[string]any) {
@@ -161,11 +169,16 @@ func collectFields(v reflect.Value, stage string, result map[string]any) {
 		if !ok {
 			continue // 无 vf 标签，当作内部字段跳过
 		}
-		fieldStage, keepZero := parseVFTag(tagStr)
+		fieldStage, keepZero, name := parseVFTag(tagStr)
 
 		// 过滤内部字段和阶段不匹配的字段
 		if fieldStage == "-" || fieldStage != stage {
 			continue
+		}
+
+		// 输出键名：name= 选项优先，缺省用字段名
+		if name == "" {
+			name = field.Name
 		}
 
 		// Extra 字段合并逻辑：字段名以 Extra 开头且类型为 map[string]any
@@ -185,6 +198,6 @@ func collectFields(v reflect.Value, stage string, result map[string]any) {
 			continue
 		}
 
-		result[field.Name] = fieldValue.Interface()
+		result[name] = fieldValue.Interface()
 	}
 }

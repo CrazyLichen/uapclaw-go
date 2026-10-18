@@ -364,6 +364,11 @@ func (o *SelfContrastMemoryOp) Execute(ctx context.Context, rc *cecontext.Runtim
 
 	query, _ := cecontext.GetTyped[string](rc, "query")
 	userID, _ := cecontext.GetTyped[string](rc, "user_id")
+	// S-51 连带修复: 对齐 Python context.get("user_id", "default")——
+	// 避免 L479 WorkspaceID: userID 注入空 workspace_id 造成记忆污染
+	if userID == "" {
+		userID = "default"
+	}
 
 	llm := o.LLM()
 	if llm == nil {

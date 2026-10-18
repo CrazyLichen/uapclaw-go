@@ -53,7 +53,7 @@ type fakeBP struct {
 }
 
 func (f *fakeBP) Role() schema.TeamRole { return f.role }
-func (f *fakeBP) MemberName() string    { return f.memberName }
+func (f *fakeBP) DispatcherMemberName() string { return f.memberName }
 
 // fakePollCtrl 实现 types.PollController 用于测试
 type fakePollCtrl struct {

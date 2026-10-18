@@ -1235,13 +1235,15 @@ func TestDeepAdapter_Team占位函数(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
 
-	if d.findTeamSkillRail() != nil {
+	// S-41: findTeamSkillRail 两级查找（无 manager 时返回 nil）
+	if d.findTeamSkillRail("req1", "ch1") != nil {
 		t.Error("findTeamSkillRail 占位应返回 nil")
 	}
 	if d.handleTeamSkillEvolveApproval(ctx, "req1", nil, "s1", "ch1") != false {
 		t.Error("handleTeamSkillEvolveApproval 占位应返回 false")
 	}
-	if err := d.pushTeamSkillEvolveResolutionStatus(ctx, "req1", "approved"); err != nil {
+	// S-42: 新签名 (ctx, requestID, sessionID, channelID, accepted)
+	if err := d.pushTeamSkillEvolveResolutionStatus(ctx, "req1", "s1", "ch1", true); err != nil {
 		t.Errorf("pushTeamSkillEvolveResolutionStatus error: %v", err)
 	}
 	if _, err := d.processTeamMessageStream(ctx, nil, nil); err != nil {

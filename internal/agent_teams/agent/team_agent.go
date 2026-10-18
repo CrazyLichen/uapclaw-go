@@ -42,6 +42,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
@@ -115,14 +116,16 @@ var (
 
 // NewTeamAgent 创建新的 TeamAgent 实例。
 // Python: TeamAgent.__init__(card)
-func NewTeamAgent(card *agentschema.AgentCard) *TeamAgent {
+// S-37: ctx 作为后续 SpawnManager.baseCtx 的传播链根，
+// 恢复任务（OnTeammateUnhealthy 等）随 Leader ctx 取消而停止
+func NewTeamAgent(ctx context.Context, card *agentschema.AgentCard) *TeamAgent {
 	a := &TeamAgent{
 		card:         card,
 		state:        NewTeamAgentState(),
 		configurator: NewAgentConfigurator(card),
 	}
 	// 构建 SpawnManager
-	a.spawnManager = NewSpawnManager(a.state, a.configurator, func() *TeamAgent { return a })
+	a.spawnManager = NewSpawnManager(ctx, a.state, a.configurator, func() *TeamAgent { return a })
 	a.recoveryManager = NewRecoveryManager(a.configurator, a.spawnManager)
 	a.sessionManager = NewSessionManager(a.state, a.configurator, a.recoveryManager)
 	a.streamController = NewStreamController(
@@ -131,7 +134,9 @@ func NewTeamAgent(card *agentschema.AgentCard) *TeamAgent {
 		a.configurator.Resources(),
 		a.UpdateStatus,
 		a.updateExecution,
-		// ✅(#9.62): WithWakeMailbox / WithRequestCompletionPoll 已在 CoordinationKernel.WakeMailboxIfInterruptCleared 实现
+		// S-33: 对齐 Python team_agent.py L83-91，注入协调内核回调
+		WithWakeMailbox(a.coordination.WakeMailboxIfInterruptCleared),
+		WithRequestCompletionPoll(a.requestCompletionPoll),
 	)
 	// 9.55: 构建 CoordinationKernel(self)，TeamAgent 通过适配器实现 KernelHost
 	a.coordination = coordination.NewCoordinationKernel(a)
@@ -520,8 +525,9 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 	}
 
 	// 9.55: 设置协调角色 + 注册团队完成回调
-	// 9.55: Blueprint/Infra 参数通过 KernelHost 子接口可达，传 nil 占位
-	a.coordination.Setup(runtimeCtx.Role, nil, nil)
+	// S-32: 对齐 Python kernel.setup(role)——从 host 获取 blueprint/infra，
+	// configure 后 Blueprint()/Infra() 已就绪，直接传真实值
+	a.coordination.Setup(runtimeCtx.Role, a.configurator.Blueprint(), a.configurator.Infra())
 
 	// 修复 S-04: 对齐 Python _register_team_completion_callbacks()
 	// 在 DeepAgent 完全构建后、dispatcher 存在时注册 TeamSkillRail 的完成回调
@@ -647,12 +653,22 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 				if chunk == nil {
 					break
 				}
-				outCh <- chunk
+				// S-31 顺手修: select+ctx.Done 保护，消费者停止读取且取消 ctx 时 goroutine 不泄漏
+				select {
+				case outCh <- chunk:
+				case <-ctx.Done():
+					// Python: 消费者放弃读取触发 GeneratorExit → finally
+					a.finalizeRoundDetached(ctx)
+					return
+				}
 			}
 			// Python: finally: await self._coordination.finalize_round()
-			a.coordination.FinalizeRound(ctx)
+			// S-30: finally 语义不受调用方取消影响，用 WithoutCancel 派生
+			a.finalizeRoundDetached(ctx)
 		}()
 	} else {
+		// S-31: 空 streamQueue 路径也要执行 FinalizeRound（对齐 Python finally 双路径语义）
+		a.finalizeRoundDetached(ctx)
 		close(outCh)
 	}
 
@@ -974,7 +990,7 @@ func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, 
 	)
 
 	// 步骤 3: NewTeamAgent + Configure
-	agent := NewTeamAgent(card)
+	agent := NewTeamAgent(ctx, card)
 	agent.Configure(ctx, spec, runtimeCtx)
 
 	// 步骤 4: RefreshHumanAgentRoster
@@ -1062,7 +1078,7 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 	)
 
 	// 步骤 6: NewTeamAgent + Configure
-	agent := NewTeamAgent(card)
+	agent := NewTeamAgent(ctx, card)
 	agent.Configure(ctx, spec, runtimeCtx)
 
 	// 步骤 7: 恢复 allocator state
@@ -1152,6 +1168,32 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail interfaces.AgentRai
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// finalizeRoundDetached 执行轮次收尾清理，不受调用方 ctx 取消影响。
+// S-30: 对齐 Python finally 块不受 cancellation 影响的语义——
+// 用 context.WithoutCancel 派生清理 ctx，并加 30s 超时防止清理逻辑挂死。
+// S-31: 统一 Invoke（defer）/Stream（goroutine 结束 + 空 queue 路径）两处调用。
+func (a *TeamAgent) finalizeRoundDetached(ctx context.Context) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	a.coordination.FinalizeRound(cleanupCtx)
+}
+
+// requestCompletionPoll 轮次干净结束时请求立即完成轮询。
+// S-33: 对齐 Python team_agent.py L660-676 _request_completion_poll——
+// Leader + persistent 专属守卫，enqueue POLL_TASK 让上升沿完成检查立即触发，
+// best-effort（事件总线缺失/停止时静默丢弃）。
+func (a *TeamAgent) requestCompletionPoll(ctx context.Context) error {
+	if a.Role() != atschema.TeamRoleLeader || a.Lifecycle() != "persistent" {
+		return nil
+	}
+	a.coordination.Enqueue(types.CoordinationEvent{
+		Inner: &types.InnerEventMessage{
+			EventType: types.InnerEventTypePollTask,
+		},
+	})
+	return nil
+}
 
 // updateExecution 更新执行状态。
 // Python: TeamAgent._update_execution(status)
@@ -1243,6 +1285,16 @@ func (a *TeamAgent) SetWorkspaceInitialized() {
 	if a.configurator != nil {
 		a.configurator.SetWorkspaceInitialized(true)
 	}
+}
+
+// IsWorkspaceInitialized 工作空间是否已初始化。
+// 满足 types.InfraAccessor 接口。
+// S-36: 对齐 Python kernel.py L147 `infra.workspace_initialized` 守卫检查。
+func (a *TeamAgent) IsWorkspaceInitialized() bool {
+	if a.configurator != nil {
+		return a.configurator.WorkspaceInitialized()
+	}
+	return false
 }
 
 // MemoryManager 返回记忆管理器。

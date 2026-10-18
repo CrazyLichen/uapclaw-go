@@ -85,7 +85,7 @@ func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event types.Coo
 // OnStandby 收到 TEAM_STANDBY 事件时暂停周期轮询。
 // Python: AgentLifecycleHandler.on_standby
 func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ types.CoordinationEvent) {
-	memberName := h.blueprint.MemberName()
+	memberName := h.blueprint.DispatcherMemberName()
 	// 对齐 Python: team_logger.info("[{}] received TEAM_STANDBY, pausing polls", member_name)
 	logger.Info(logComponent).Str("member_name", memberName).Msg("received TEAM_STANDBY, pausing polls")
 	h.poll.PausePolls()
@@ -97,14 +97,14 @@ func (h *AgentLifecycleHandler) OnStandby(_ context.Context, _ types.Coordinatio
 func (h *AgentLifecycleHandler) OnCleaned(ctx context.Context, event types.CoordinationEvent) {
 	if h.blueprint.Role() == schema.TeamRoleLeader {
 		// 对齐 Python: team_logger.debug("[{}] ignoring TEAM_CLEANED on leader path", member_name)
-		logger.Debug(logComponent).Str("member_name", h.blueprint.MemberName()).Msg("ignoring TEAM_CLEANED on leader path")
+		logger.Debug(logComponent).Str("member_name", h.blueprint.DispatcherMemberName()).Msg("ignoring TEAM_CLEANED on leader path")
 		return
 	}
 	// 对齐 Python: team_logger.info("[{}] received TEAM_CLEANED, shutting down coordination", member_name)
-	logger.Info(logComponent).Str("member_name", h.blueprint.MemberName()).Msg("received TEAM_CLEANED, shutting down coordination")
+	logger.Info(logComponent).Str("member_name", h.blueprint.DispatcherMemberName()).Msg("received TEAM_CLEANED, shutting down coordination")
 	if err := h.lifecycle.ShutdownSelf(ctx); err != nil {
 		logger.Error(logComponent).
-			Str("member_name", h.blueprint.MemberName()).
+			Str("member_name", h.blueprint.DispatcherMemberName()).
 			Err(err).
 			Msg("on_cleaned: shutdown_self failed")
 	}
@@ -118,7 +118,7 @@ func (h *AgentLifecycleHandler) OnToolApprovalResult(ctx context.Context, event 
 		return
 	}
 	// 对齐 Python: 仅处理目标为自己的事件
-	memberName := h.blueprint.MemberName()
+	memberName := h.blueprint.DispatcherMemberName()
 	em := event.Transport
 	targetMember, _ := em.Payload["member_name"].(string)
 	if targetMember != "" && targetMember != memberName {
@@ -157,7 +157,7 @@ func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event ty
 	if event.IsInner() {
 		return
 	}
-	memberName := h.blueprint.MemberName()
+	memberName := h.blueprint.DispatcherMemberName()
 	em := event.Transport
 	targetMember, _ := em.Payload["member_name"].(string)
 	if targetMember != "" && targetMember != memberName {

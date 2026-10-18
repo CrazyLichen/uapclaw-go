@@ -15,11 +15,12 @@ import (
 type ChromaVectorField struct {
 	VectorField
 	// MaxNeighbors HNSW 图中每个节点的最大边数
-	MaxNeighbors int `vf:"construct"`
+	// S-47: name= 对齐 Python to_dict 输出键 max_neighbors
+	MaxNeighbors int `vf:"construct,name=max_neighbors"`
 	// EfConstruction 索引构建时考虑的候选邻居数
-	EfConstruction int `vf:"construct"`
-	// EfSearch 搜索时探索的候选数
-	EfSearch float64 `vf:"construct"`
+	EfConstruction int `vf:"construct,name=ef_construction"`
+	// EfSearch 搜索时探索的候选数（Python 标记为 construct 阶段，chroma_fields.py L60-67）
+	EfSearch float64 `vf:"construct,name=ef_search"`
 	// ExtraSearch 额外搜索参数，支持 resize_factor/num_threads/batch_size/sync_threshold
 	ExtraSearch map[string]any `vf:"search"`
 }

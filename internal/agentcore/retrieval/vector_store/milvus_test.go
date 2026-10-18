@@ -225,7 +225,7 @@ func TestNewMilvusVectorStore_constructConfig(t *testing.T) {
 		"content", hnsw, "sparse_vector", "metadata", "document_id")
 	require.NoError(t, err)
 	assert.Equal(t, 30, s2.constructConfig["M"])
-	assert.Equal(t, 360, s2.constructConfig["EfConstruction"])
+	assert.Equal(t, 360, s2.constructConfig["efConstruction"]) // S-47: Python 键名
 	assert.Equal(t, "COSINE", s2.constructConfig["metric_type"])
 }
 
@@ -240,7 +240,7 @@ func TestNewMilvusVectorStore_HNSW搜索配置(t *testing.T) {
 	s, err := NewMilvusVectorStore(config, "http://localhost:19530", "",
 		"content", hnsw, "sparse_vector", "metadata", "document_id")
 	require.NoError(t, err)
-	assert.Equal(t, 2.0, s.searchConfig["EfSearchFactor"])
+	assert.Equal(t, 2.0, s.searchConfig["efSearchFactor"]) // S-47: Python 键名
 }
 
 // TestNewMilvusVectorStore_vectorField为nil 对齐 Python: raise VECTOR_FIELD_INVALID
@@ -751,7 +751,7 @@ func TestMilvusVectorStore_getSearchParams(t *testing.T) {
 	params := s.getSearchParams(10)
 	// 对齐 Python: ef = round(top_k * efSearchFactor) = round(10 * 2.0) = 20
 	assert.Equal(t, float64(20), params["ef"])
-	assert.NotContains(t, params, "EfSearchFactor") // pop 掉
+	assert.NotContains(t, params, "efSearchFactor") // pop 掉（S-47: Python 键名）
 }
 
 // fakeIndexDesc 模拟 IndexDescription 的 index.Index 行为（fake 不能直接构造 SDK 内部类型）

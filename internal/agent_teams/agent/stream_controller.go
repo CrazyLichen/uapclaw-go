@@ -563,12 +563,12 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 				} else {
 					_ = sc.wakeMailboxIfInterruptCleared(ctx)
 					// Python: if team_member and await team_member.status() == MemberStatus.SHUTDOWN_REQUESTED: close_stream()
-					// ⤵️ 待 #9.65 TeamMember.Status() 实现后替换为真实状态检查
-					// 当前 TeamMember.Status() 是 stub（始终返回 READY），以下逻辑暂时不会触发
+					// S-34: Status() 已是真实 DB 读取；未注册/读失败时兜底 READY（对齐 Python None 短路语义）
 					memberStatus := atschema.MemberStatusReady
 					if sc.state != nil && sc.state.TeamMember != nil {
-						status, _ := sc.state.TeamMember.Status(ctx)
-						memberStatus = status
+						if status, err := sc.state.TeamMember.Status(ctx); err == nil {
+							memberStatus = status
+						}
 					}
 					if memberStatus == atschema.MemberStatusShutdownRequested {
 						sc.CloseStream()
@@ -590,12 +590,12 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 		sc.executeRound(ctx, message)
 		// Python: if team_member is None or await team_member.status() != MemberStatus.SHUTDOWN_REQUESTED:
 		//     await self._update_status(MemberStatus.READY)
-		// ⤵️ 待 #9.65 TeamMember.Status() 实现后替换为真实状态检查
-		// 当前 TeamMember.Status() 是 stub（始终返回 READY），以下逻辑暂时始终走 true 分支
+		// S-34: Status() 已是真实 DB 读取；未注册/读失败时兜底 READY（对齐 Python None 短路语义）
 		memberStatus := atschema.MemberStatusReady
 		if sc.state != nil && sc.state.TeamMember != nil {
-			status, _ := sc.state.TeamMember.Status(ctx)
-			memberStatus = status
+			if status, err := sc.state.TeamMember.Status(ctx); err == nil {
+				memberStatus = status
+			}
 		}
 		if memberStatus != atschema.MemberStatusShutdownRequested {
 			_ = sc.updateStatus(ctx, atschema.MemberStatusReady)

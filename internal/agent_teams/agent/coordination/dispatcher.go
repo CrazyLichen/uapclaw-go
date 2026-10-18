@@ -148,7 +148,7 @@ func (d *EventDispatcher) Dispatch(ctx context.Context, event types.Coordination
 	}
 
 	// ── Transport 事件（跨进程 EventMessage）──
-	if d.blueprint.MemberName() == "" {
+	if d.blueprint.DispatcherMemberName() == "" {
 		logger.Debug(logComponent).Msg("no member_name, skipping transport event")
 		return
 	}

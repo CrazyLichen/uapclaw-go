@@ -46,6 +46,13 @@ func (b *TeamAgentBlueprint) MemberName() *string {
 	return &b.Ctx.MemberName
 }
 
+// DispatcherMemberName 返回成员名（空串表示未设置）。
+// S-32: 满足 types.DispatcherBlueprint 窄接口（接口要求 MemberName() string，
+// 与既有 *string 方法签名不同，故新增派生方法而非改签名）。
+func (b *TeamAgentBlueprint) DispatcherMemberName() string {
+	return b.Ctx.MemberName
+}
+
 // Lifecycle 返回生命周期模式。
 // Python: TeamAgentBlueprint.lifecycle property
 func (b *TeamAgentBlueprint) Lifecycle() atschema.TeamLifecycle {

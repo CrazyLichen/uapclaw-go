@@ -114,23 +114,30 @@ func TestParseVFTag_各格式(t *testing.T) {
 		tag          string
 		wantStage    string
 		wantKeepZero bool
+		wantName     string
 	}{
-		{"construct", "construct", "construct", false},
-		{"search", "search", "search", false},
-		{"dash", "-", "-", false},
-		{"construct_keepzero", "construct,keepzero", "construct", true},
-		{"search_keepzero", "search,keepzero", "search", true},
-		{"空字符串", "", "", false},
-		{"unknown", "unknown", "unknown", false},
+		{"construct", "construct", "construct", false, ""},
+		{"search", "search", "search", false, ""},
+		{"dash", "-", "-", false, ""},
+		{"construct_keepzero", "construct,keepzero", "construct", true, ""},
+		{"search_keepzero", "search,keepzero", "search", true, ""},
+		{"空字符串", "", "", false, ""},
+		{"unknown", "unknown", "unknown", false, ""},
+		// S-47: name= 选项指定输出键名
+		{"construct_name", "construct,name=max_neighbors", "construct", false, "max_neighbors"},
+		{"construct_keepzero_name", "construct,keepzero,name=with_raw_data", "construct", true, "with_raw_data"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stage, keepZero := parseVFTag(tt.tag)
+			stage, keepZero, name := parseVFTag(tt.tag)
 			if stage != tt.wantStage {
 				t.Errorf("stage = %q, 期望 %q", stage, tt.wantStage)
 			}
 			if keepZero != tt.wantKeepZero {
 				t.Errorf("keepZero = %v, 期望 %v", keepZero, tt.wantKeepZero)
+			}
+			if name != tt.wantName {
+				t.Errorf("name = %q, 期望 %q", name, tt.wantName)
 			}
 		})
 	}

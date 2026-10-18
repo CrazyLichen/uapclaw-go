@@ -211,8 +211,9 @@ func (k *CoordinationKernel) Start(ctx context.Context, sessionID string) {
 	}
 
 	// 步骤 5: Workspace 初始化
+	// S-36: 对齐 Python kernel.py L147-151 `if infra.workspace_manager and not infra.workspace_initialized`
 	wsMgr := k.host.WorkspaceManager()
-	if wsMgr != nil {
+	if wsMgr != nil && !k.host.IsWorkspaceInitialized() {
 		var remoteURL string
 		specAccessor := k.host.(types.BlueprintAccessor)
 		if specAccessor != nil && specAccessor.SpecAny() != nil {
@@ -251,7 +252,10 @@ func (k *CoordinationKernel) Start(ctx context.Context, sessionID string) {
 	}
 
 	// 步骤 9: Subscribe transport
-	_ = k.host.SubscribeTransport(ctx, k.host.TeamName())
+	// S-35: 对齐 Python kernel.py L174-177 `if team_name and not self._subscribed_topics`
+	if teamName := k.host.TeamName(); teamName != "" && len(k.subscribedTopics) == 0 {
+		_ = k.host.SubscribeTransport(ctx, teamName)
+	}
 
 	// 步骤 10: TeamCompletion rearmed
 	if k.dispatcher != nil && k.dispatcher.TeamCompletion != nil {
@@ -413,21 +417,23 @@ func (k *CoordinationKernel) Enqueue(event types.CoordinationEvent) {
 
 // WakeMailboxIfInterruptCleared Teammate 专有：无 pending interrupt 时唤醒邮箱轮询。
 // 对齐 Python: CoordinationKernel.wake_mailbox_if_interrupt_cleared
-func (k *CoordinationKernel) WakeMailboxIfInterruptCleared() {
+// S-33: 签名对齐 StreamController 回调类型 func(ctx) error，便于直接作为方法值注入
+func (k *CoordinationKernel) WakeMailboxIfInterruptCleared(ctx context.Context) error {
 	if k.host.Role() != schema.TeamRoleTeammate {
-		return
+		return nil
 	}
 	if k.host.HasPendingInterrupt() {
-		return
+		return nil
 	}
 	if k.eventBus == nil {
-		return
+		return nil
 	}
 	k.eventBus.Enqueue(types.CoordinationEvent{
 		Inner: &types.InnerEventMessage{
 			EventType: types.InnerEventTypePollMailbox,
 		},
 	})
+	return nil
 }
 
 // EnqueueMailboxAfterFirstIteration 等待首轮迭代门控后投递 POLL_MAILBOX 事件。

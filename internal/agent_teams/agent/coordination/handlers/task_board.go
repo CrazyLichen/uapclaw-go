@@ -70,7 +70,7 @@ func (h *TaskBoardHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 // Python: TaskBoardHandler.on_task_claimed
 func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.CoordinationEvent) {
 	// 对齐 Python: if not member_name or self._infra.task_manager is None: return
-	memberName := h.blueprint.MemberName()
+	memberName := h.blueprint.DispatcherMemberName()
 	if memberName == "" {
 		return
 	}
@@ -112,7 +112,7 @@ func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.Coordi
 // Python: TaskBoardHandler.on_task_plan_decision
 func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event types.CoordinationEvent) {
 	// 对齐 Python: if not member_name or self._infra.task_manager is None: return
-	if h.blueprint.MemberName() == "" {
+	if h.blueprint.DispatcherMemberName() == "" {
 		return
 	}
 
@@ -132,7 +132,7 @@ func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event types.C
 
 	// 对齐 Python: 非目标成员（审批结果不是给自己的）转发到 on_task_board_event
 	payloadMember, _ := em.Payload["member_name"].(string)
-	memberName := h.blueprint.MemberName()
+	memberName := h.blueprint.DispatcherMemberName()
 	if payloadMember != "" && payloadMember != memberName {
 		h.OnTaskBoardEvent(ctx, event)
 		return
@@ -152,7 +152,7 @@ func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event types.C
 // Python: TaskBoardHandler.on_task_board_event
 func (h *TaskBoardHandler) OnTaskBoardEvent(ctx context.Context, event types.CoordinationEvent) {
 	// 对齐 Python: if not member_name or self._infra.task_manager is None: return
-	if h.blueprint.MemberName() == "" {
+	if h.blueprint.DispatcherMemberName() == "" {
 		return
 	}
 
@@ -167,7 +167,7 @@ func (h *TaskBoardHandler) OnTaskBoardEvent(ctx context.Context, event types.Coo
 	// 提醒空闲 agent 查看任务板
 	memberName, _ := em.Payload["member_name"].(string)
 	if memberName == "" {
-		memberName = h.blueprint.MemberName()
+		memberName = h.blueprint.DispatcherMemberName()
 	}
 	h.nudgeIdleAgent(ctx, memberName, false)
 }

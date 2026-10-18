@@ -133,17 +133,9 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// milvusConstructKeyMap Go ToDict 键（结构体字段名）→ Milvus 服务器键映射。
-//
-// Python 的 Pydantic 字段名与 Milvus 服务器参数键天然一致（如 efConstruction/nlist），
-// Go 的导出字段名（EfConstruction/Nlist）与服务器键存在大小写/命名差异，
-// 对齐 Python check_vector_field 的 _check_configs_matching 对比前需先做此映射。
-var milvusConstructKeyMap = map[string]string{
-	"M":              "M",
-	"EfConstruction": "efConstruction",
-	"Nlist":          "nlist",
-	"WithRawData":    "with_raw_data",
-}
+// S-47: milvusConstructKeyMap 已删除——vf tag name= 根源修复后
+// constructConfig 键名（M/efConstruction/nlist/with_raw_data）与
+// Milvus 服务器参数键天然一致，无需对比前映射。
 
 // 编译期接口断言：MilvusVectorStore 实现 VectorStore 接口
 var _ VectorStore = (*MilvusVectorStore)(nil)
@@ -676,21 +668,13 @@ func (s *MilvusVectorStore) CheckVectorField() error {
 	}
 
 	// 对齐 Python: self._check_configs_matching(self._construct_config, actual)
-	// Python Pydantic 字段名与服务器键一致；Go ToDict 键为结构体字段名，
-	// 需先经 milvusConstructKeyMap 映射为服务器键再对比。
-	normalized := make(map[string]any, len(s.constructConfig))
-	for k, v := range s.constructConfig {
-		if mapped, ok := milvusConstructKeyMap[k]; ok {
-			normalized[mapped] = v
-		} else {
-			normalized[k] = v
-		}
-	}
+	// S-47: vf tag name= 修复后 constructConfig 键名与 Milvus 服务器键天然一致，
+	// 删除原 milvusConstructKeyMap 归一化循环，直接对比。
 	actualParamsAny := make(map[string]any, len(actualParams))
 	for k, v := range actualParams {
 		actualParamsAny[k] = v
 	}
-	return CheckConfigsMatching(normalized, actualParamsAny)
+	return CheckConfigsMatching(s.constructConfig, actualParamsAny)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -1270,7 +1254,7 @@ func (s *MilvusVectorStore) milvusResultToSearchResults(rs milvusclient.ResultSe
 //
 // 对齐 Python MilvusVectorStore.get_search_params：
 // efSearchFactor 存在时转为 ef = round(top_k * efSearchFactor)。
-// 注意 Go ToDict 键名为结构体字段名 EfSearchFactor（对齐 Python 字段名 efSearchFactor 的语义）。
+// S-47: vf tag name= 修复后 searchConfig 键名为 efSearchFactor（与 Python 一致）。
 func (s *MilvusVectorStore) getSearchParams(topK int) map[string]any {
 	// 对齐 Python: search_params = self._search_config（复制，不修改原配置）
 	searchParams := make(map[string]any)
@@ -1278,8 +1262,8 @@ func (s *MilvusVectorStore) getSearchParams(topK int) map[string]any {
 		searchParams[k] = v
 	}
 	// 对齐 Python: if "efSearchFactor" in search_params: ef = round(top_k * pop("efSearchFactor"))
-	if factor, ok := searchParams["EfSearchFactor"]; ok {
-		delete(searchParams, "EfSearchFactor")
+	if factor, ok := searchParams["efSearchFactor"]; ok {
+		delete(searchParams, "efSearchFactor")
 		if f, ok := factor.(float64); ok {
 			searchParams["ef"] = float64(math.Round(float64(topK) * f))
 		}

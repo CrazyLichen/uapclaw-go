@@ -45,7 +45,7 @@ func TestESVectorField_ToDict_construct(t *testing.T) {
 func TestESVectorField_ToDict_search(t *testing.T) {
 	e := NewESVectorField("embedding")
 	dict := ToDict(e, StageSearch)
-	if v, ok := dict["NumCandidates"]; !ok {
+	if v, ok := dict["num_candidates"]; !ok {
 		t.Error("search 阶段应包含 NumCandidates")
 	} else if v != 100 {
 		t.Errorf("NumCandidates = %v, want 100", v)

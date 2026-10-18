@@ -11,17 +11,18 @@ import "fmt"
 type GaussDiskANN struct {
 	VectorField
 	// EnablePQ 是否启用产品量化
-	EnablePQ bool `vf:"construct,keepzero"`
+	// S-47: name= 对齐 Python gauss_vector_store.py SQL WITH 子句键名
+	EnablePQ bool `vf:"construct,keepzero,name=enable_pq"`
 	// PGNseg 产品量化段数
-	PGNseg int `vf:"construct,keepzero"`
+	PGNseg int `vf:"construct,keepzero,name=pg_nseg"`
 	// PGNclus 产品量化聚类数
-	PGNclus int `vf:"construct,keepzero"`
+	PGNclus int `vf:"construct,keepzero,name=pg_nclus"`
 	// NumParallels 并行度
-	NumParallels int `vf:"construct,keepzero"`
+	NumParallels int `vf:"construct,keepzero,name=num_parallels"`
 	// QuantizationType 量化类型（lvq/pq）
-	QuantizationType string `vf:"construct"`
+	QuantizationType string `vf:"construct,name=quantization_type"`
 	// SubgraphCount 子图数量
-	SubgraphCount int `vf:"construct,keepzero"`
+	SubgraphCount int `vf:"construct,keepzero,name=subgraph_count"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

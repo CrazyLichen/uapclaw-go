@@ -157,13 +157,21 @@ func (r *ProcessorStateRecorder) Emit(ctx context.Context, state *schema.Context
 	})
 
 	// 4. 推送流式数据
+	// S-57: 使用 Emit 的 ctx（原先 context.Background() 丢弃了已有 ctx）；
+	// 写入失败对齐 Python except 分支补 Warn 日志，不上抛
 	sessionRef := r.getSessionRef()
 	if sessionRef != nil {
 		stateMap := r.stateToMap(state)
-		_ = sessionRef.WriteStream(context.Background(), stream.OutputSchema{
+		if err := sessionRef.WriteStream(ctx, stream.OutputSchema{
 			Type:    schema.ContextCompressionStateType,
 			Payload: stateMap,
-		})
+		}); err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Str("session_id", r.sessionID).
+				Str("context_id", r.contextID).
+				Msg("failed to write compression state to stream")
+		}
 	}
 }
 

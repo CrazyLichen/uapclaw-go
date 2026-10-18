@@ -132,7 +132,12 @@ func (a *ReActAgent) getTools(ctx context.Context) ([]cschema.ToolInfoInterface,
 	if am == nil {
 		return nil, nil
 	}
-	tools, _ := am.ListToolInfo(ctx, nil)
+	// S-54: 对齐 Python react_agent.py L1328 异常传播——
+	// 工具列表获取失败时向调用方报错（fail-fast），不吞错继续空列表
+	tools, err := am.ListToolInfo(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("获取工具列表失败: %w", err)
+	}
 	return tools, nil
 }
 

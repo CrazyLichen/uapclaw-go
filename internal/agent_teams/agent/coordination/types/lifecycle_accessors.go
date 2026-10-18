@@ -38,6 +38,9 @@ type InfraAccessor interface {
 	WorkspaceManager() WorkspaceAccessor
 	// SetWorkspaceInitialized 标记工作空间已初始化
 	SetWorkspaceInitialized()
+	// IsWorkspaceInitialized 工作空间是否已初始化
+	// S-36: 对齐 Python kernel.py L147 `infra.workspace_initialized` 检查
+	IsWorkspaceInitialized() bool
 }
 
 // TeamBackendAccessor TeamBackend 的窄接口。

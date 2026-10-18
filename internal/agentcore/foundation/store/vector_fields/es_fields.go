@@ -11,7 +11,8 @@ import "fmt"
 type ESVectorField struct {
 	VectorField
 	// NumCandidates k-NN 搜索候选集大小（search 阶段）
-	NumCandidates int `vf:"search"`
+	// S-47: name= 对齐 Python es_vector_store.py L399/L406 键名 num_candidates
+	NumCandidates int `vf:"search,name=num_candidates"`
 	// ExtraConstruct 构建阶段额外参数
 	ExtraConstruct map[string]any `vf:"construct"`
 	// ExtraSearch 搜索阶段额外参数

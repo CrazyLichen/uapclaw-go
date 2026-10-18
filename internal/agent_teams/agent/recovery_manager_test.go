@@ -66,7 +66,7 @@ func newTestConfigurator() *agent.AgentConfigurator {
 // Python: RecoveryManager.__init__(configurator, spawn_manager)
 func TestNewRecoveryManager(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	assert.NotNil(t, rm)
 }
@@ -75,7 +75,7 @@ func TestNewRecoveryManager(t *testing.T) {
 // Python: if not team_backend: return []
 func TestRecoverTeam_teamBackend为nil(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	result := rm.RecoverTeam(context.Background())
 	assert.Empty(t, result)
@@ -85,7 +85,7 @@ func TestRecoverTeam_teamBackend为nil(t *testing.T) {
 // Python: if spec is None or ctx is None or team_name is None: return
 func TestPersistLeaderConfig_spec为nil时跳过(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	sess := newFakeSessionFacade()
 	rm.PersistLeaderConfig(sess)
@@ -97,7 +97,7 @@ func TestPersistLeaderConfig_spec为nil时跳过(t *testing.T) {
 // Python: if not team_backend: return False
 func TestMarkTeammateRestarting_无teamBackend返回false(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	result := rm.MarkTeammateRestartingForSessionSwitch(
 		context.Background(), "member1", atschema.MemberStatusRestarting,
@@ -109,7 +109,7 @@ func TestMarkTeammateRestarting_无teamBackend返回false(t *testing.T) {
 // Python: if team_name is None: return False
 func TestMarkTeammateRestarting_teamName为空返回false(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	// teamBackend 为 nil，所以这个测试间接验证了
 	result := rm.MarkTeammateRestartingForSessionSwitch(
@@ -122,7 +122,7 @@ func TestMarkTeammateRestarting_teamName为空返回false(t *testing.T) {
 // Python: if self._configurator.role != TeamRole.LEADER or not team_backend: return []
 func TestCollectLiveTeammates_非Leader返回空(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	result := rm.CollectLiveTeammatesForSessionSwitch(context.Background())
 	assert.Empty(t, result)
@@ -132,7 +132,7 @@ func TestCollectLiveTeammates_非Leader返回空(t *testing.T) {
 // Python: restart_for_session_switch(self, recoverable_members, *, cleanup_first) 空列表无操作
 func TestRestartForSessionSwitch_空列表无操作(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	// 空列表不应 panic
 	rm.RestartForSessionSwitch(context.Background(), nil, true)
@@ -142,7 +142,7 @@ func TestRestartForSessionSwitch_空列表无操作(t *testing.T) {
 // Python: if team_session is None or allocator is None or team_name is None: return
 func TestPersistAllocatorState_allocator为nil时跳过(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	sess := newFakeSessionFacade()
 	rm.PersistAllocatorState(sess)
@@ -154,7 +154,7 @@ func TestPersistAllocatorState_allocator为nil时跳过(t *testing.T) {
 // Python: if team_session is None: return
 func TestPersistAllocatorState_session为nil时跳过(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	rm.PersistAllocatorState(nil)
 	// 不应 panic
@@ -164,7 +164,7 @@ func TestPersistAllocatorState_session为nil时跳过(t *testing.T) {
 // Python: if current_status == MemberStatus.RESTARTING: return True
 func TestMarkTeammateRestarting_已是Restarting(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	// 无 teamBackend，但即使有，RESTARTING 也应直接返回 true
 	// 当前无 backend 返回 false，验证 guard 行为
@@ -178,7 +178,7 @@ func TestMarkTeammateRestarting_已是Restarting(t *testing.T) {
 // Python: restart_for_session_switch(self, recoverable_members, *, cleanup_first=True)
 func TestRestartForSessionSwitch_非空列表cleanupFirst(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 
 	members := []agent.LiveTeammate{
@@ -194,7 +194,7 @@ func TestRestartForSessionSwitch_非空列表cleanupFirst(t *testing.T) {
 // Python: restart_for_session_switch(self, recoverable_members, *, cleanup_first=False)
 func TestRestartForSessionSwitch_非空列表不清理(t *testing.T) {
 	cfg := newTestConfigurator()
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 
 	members := []agent.LiveTeammate{
@@ -217,7 +217,7 @@ func TestPersistLeaderConfig_正常持久化(t *testing.T) {
 	cfg.SetupInfra(spec, runtimeCtx)
 	cfg.SetupAgent(spec, runtimeCtx)
 
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	sess := newFakeSessionFacade()
 
@@ -244,7 +244,7 @@ func TestPersistLeaderConfig_已有dbState(t *testing.T) {
 	cfg.SetupInfra(spec, runtimeCtx)
 	cfg.SetupAgent(spec, runtimeCtx)
 
-	sm := agent.NewSpawnManager(agent.NewTeamAgentState(), cfg, nil)
+	sm := agent.NewSpawnManager(context.Background(), agent.NewTeamAgentState(), cfg, nil)
 	rm := agent.NewRecoveryManager(cfg, sm)
 	sess := newFakeSessionFacade()
 

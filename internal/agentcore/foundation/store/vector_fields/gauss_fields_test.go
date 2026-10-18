@@ -83,13 +83,13 @@ func TestGaussDiskANN_Validate_SubgraphCount无效(t *testing.T) {
 func TestGaussDiskANN_ToDict_construct(t *testing.T) {
 	g := NewGaussDiskANN("embedding")
 	dict := ToDict(g, StageConstruct)
-	if _, ok := dict["EnablePQ"]; !ok {
+	if _, ok := dict["enable_pq"]; !ok {
 		t.Error("construct 阶段应包含 EnablePQ")
 	}
-	if _, ok := dict["PGNseg"]; !ok {
+	if _, ok := dict["pg_nseg"]; !ok {
 		t.Error("construct 阶段应包含 PGNseg")
 	}
-	if _, ok := dict["QuantizationType"]; !ok {
+	if _, ok := dict["quantization_type"]; !ok {
 		t.Error("construct 阶段应包含 QuantizationType")
 	}
 }
