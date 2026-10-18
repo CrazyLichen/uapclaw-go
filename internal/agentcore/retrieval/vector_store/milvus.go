@@ -136,6 +136,21 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// milvusConstructKeyMap Go ToDict 键（结构体字段名）→ Milvus 服务器键映射。
+//
+// Python 的 Pydantic 字段名与 Milvus 服务器参数键天然一致（如 efConstruction/nlist），
+// Go 的导出字段名（EfConstruction/Nlist）与服务器键存在大小写/命名差异，
+// 对齐 Python check_vector_field 的 _check_configs_matching 对比前需先做此映射。
+var milvusConstructKeyMap = map[string]string{
+	"M":              "M",
+	"EfConstruction": "efConstruction",
+	"Nlist":          "nlist",
+	"WithRawData":    "with_raw_data",
+}
+
+// 编译期接口断言：MilvusVectorStore 实现 VectorStore 接口
+var _ VectorStore = (*MilvusVectorStore)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMilvusVectorStore 创建 retrieval 层 MilvusVectorStore。
@@ -591,6 +606,94 @@ func WithMilvusClientOption(c MilvusClient) MilvusStoreOption {
 // WithMilvusCreateClient 注入客户端创建函数。
 func WithMilvusCreateClient(f func(ctx context.Context, databaseName, uri, token string) (MilvusClient, error)) MilvusStoreOption {
 	return func(s *MilvusVectorStore) { s.createClientFunc = f }
+}
+
+// CheckVectorField 校验向量字段配置是否与实际数据库一致。
+//
+// 对齐 Python MilvusVectorStore.check_vector_field：
+//   - 集合不存在时直接返回
+//   - describe_index 为空时：列出集合中的向量字段并抛 KB_DATABASE_CONFIG_INVALID
+//   - index_type 非 auto 时校验前缀匹配
+//   - 最后 _check_configs_matching 校验构造参数
+func (s *MilvusVectorStore) CheckVectorField() error {
+	c, err := s.getClient(context.Background())
+	if err != nil {
+		return err
+	}
+	// 对齐 Python: if not self._client.has_collection(self.collection_name): return
+	has, err := c.HasCollection(context.Background(), milvusclient.NewHasCollectionOption(s.collectionName))
+	if err != nil || !has {
+		return err
+	}
+
+	// 对齐 Python: actual = self._client.describe_index(collection_name, field_name) or {}
+	indexType := s.vectorField.IndexType()
+	fieldName := s.vectorField.VectorFieldName()
+	actual, idxErr := c.DescribeIndex(context.Background(), milvusclient.NewDescribeIndexOption(s.collectionName, fieldName))
+	// SDK 出错时 actual.Index（内嵌接口）为 nil，必须先判空再取 Params，避免空指针
+	var actualParams map[string]string
+	if idxErr == nil && actual.Index != nil {
+		actualParams = actual.Params()
+	}
+	if idxErr != nil || actual.Index == nil || len(actualParams) == 0 {
+		// 对齐 Python: 索引不存在时列出向量字段并报错
+		coll, collErr := c.DescribeCollection(context.Background(), milvusclient.NewDescribeCollectionOption(s.collectionName))
+		var vFieldsList string
+		if collErr == nil && coll != nil && coll.Schema != nil {
+			for _, v := range coll.Schema.Fields {
+				if v.DataType == entity.FieldTypeFloatVector {
+					vFieldsList += fmt.Sprintf("- [%d] %s: %v\n", v.ID, v.Name, v.TypeParams)
+				}
+			}
+		}
+		return exception.BuildError(
+			exception.StatusRetrievalKbDatabaseConfigInvalid,
+			exception.WithParam("error_msg",
+				fmt.Sprintf("MilvusVectorStore has vector_field at %s while actual database has "+
+					"vector field(s) at:\n%sYou may want to call delete_collection method on "+
+					"collection %q", fieldName, vFieldsList, s.collectionName)),
+		)
+	}
+
+	// 对齐 Python: if index_type != "auto": 校验 returned_type 前缀匹配
+	if indexType != vector_fields.IndexTypeAUTO {
+		returnedType := actualParams["index_type"]
+		if returnedType == "" {
+			returnedType = string(actual.IndexType())
+		}
+		// 对齐 Python: actual.get("index_type", "unknown") 的最终回退
+		if returnedType == "" {
+			returnedType = "unknown"
+		}
+		// TODO(#通用): Python 还有 variant 后缀检查 returned_type.endswith(variant)，
+		// Go vector_fields 尚无 variant 字段，待补充后回填。
+		if !strings.HasPrefix(returnedType, strings.ToUpper(indexType.String())) {
+			return exception.BuildError(
+				exception.StatusRetrievalKbDatabaseConfigInvalid,
+				exception.WithParam("error_msg",
+					fmt.Sprintf("MilvusVectorStore has index_type of %s while actual database has "+
+						"index_type of %s, do not change index_type after Knowledge Base is constructed.",
+						indexType.String(), returnedType)),
+			)
+		}
+	}
+
+	// 对齐 Python: self._check_configs_matching(self._construct_config, actual)
+	// Python Pydantic 字段名与服务器键一致；Go ToDict 键为结构体字段名，
+	// 需先经 milvusConstructKeyMap 映射为服务器键再对比。
+	normalized := make(map[string]any, len(s.constructConfig))
+	for k, v := range s.constructConfig {
+		if mapped, ok := milvusConstructKeyMap[k]; ok {
+			normalized[mapped] = v
+		} else {
+			normalized[k] = v
+		}
+	}
+	actualParamsAny := make(map[string]any, len(actualParams))
+	for k, v := range actualParams {
+		actualParamsAny[k] = v
+	}
+	return CheckConfigsMatching(normalized, actualParamsAny)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

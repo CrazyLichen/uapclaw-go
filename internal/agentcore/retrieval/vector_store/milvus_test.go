@@ -8,6 +8,7 @@ import (
 
 	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
+	"github.com/milvus-io/milvus/client/v2/index"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,6 +38,7 @@ type fakeRetrievalMilvusClient struct {
 	searchErr              error
 	hybridErr              error
 	describeIndexErr       error
+	describeIndexParams    map[string]string
 	describeCollectionResp *entity.Collection
 }
 
@@ -108,6 +110,12 @@ func (f *fakeRetrievalMilvusClient) Query(ctx context.Context, option milvusclie
 func (f *fakeRetrievalMilvusClient) DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...any) (milvusclient.IndexDescription, error) {
 	if f.describeIndexErr != nil {
 		return milvusclient.IndexDescription{}, f.describeIndexErr
+	}
+	// 对齐 Python describe_index 返回 dict：params 中含 index_type/metric_type 等
+	if f.describeIndexParams != nil {
+		return milvusclient.IndexDescription{
+			Index: index.NewGenericIndex("fake_index", f.describeIndexParams),
+		}, nil
 	}
 	return milvusclient.IndexDescription{}, nil
 }
@@ -730,4 +738,99 @@ func TestMilvusVectorStore_getSearchParams(t *testing.T) {
 	// 对齐 Python: ef = round(top_k * efSearchFactor) = round(10 * 2.0) = 20
 	assert.Equal(t, float64(20), params["ef"])
 	assert.NotContains(t, params, "EfSearchFactor") // pop 掉
+}
+
+// fakeIndexDesc 模拟 IndexDescription 的 index.Index 行为（fake 不能直接构造 SDK 内部类型）
+type fakeIndexDesc struct {
+	indexType string
+	params    map[string]string
+}
+
+// TestMilvusVectorStore_CheckVectorField_集合不存在 对齐 Python: not has_collection → return
+func TestMilvusVectorStore_CheckVectorField_集合不存在(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.hasCollectionDefault = false
+	s := newTestStoreWithFake(t, fake)
+
+	err := s.CheckVectorField()
+	assert.NoError(t, err)
+}
+
+// TestMilvusVectorStore_CheckVectorField_索引不存在 对齐 Python: actual 为空时抛 KB_DATABASE_CONFIG_INVALID
+func TestMilvusVectorStore_CheckVectorField_索引不存在(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.describeIndexErr = fmt.Errorf("index not found")
+	s := newTestStoreWithFake(t, fake)
+
+	err := s.CheckVectorField()
+	assert.Error(t, err) // 对齐 Python: 提示 collection 中无向量字段
+}
+
+// TestMilvusVectorStore_CheckVectorField_AUTO跳过类型检查 对齐 Python: auto 时跳过 index_type 校验
+func TestMilvusVectorStore_CheckVectorField_AUTO跳过类型检查(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.describeIndexParams = map[string]string{"metric_type": "COSINE", "index_type": "AUTOINDEX"}
+	s := newTestStoreWithFake(t, fake)
+
+	err := s.CheckVectorField()
+	assert.NoError(t, err)
+}
+
+// TestMilvusVectorStore_CheckVectorField_索引类型不匹配 对齐 Python: index_type 前缀不匹配报错
+func TestMilvusVectorStore_CheckVectorField_索引类型不匹配(t *testing.T) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeMilvus,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+	fake := newFakeRetrievalMilvusClient()
+	fake.describeIndexParams = map[string]string{"metric_type": "COSINE", "index_type": "HNSW"}
+	// 配置为 FLAT，实际为 HNSW → 不匹配
+	s, err := NewMilvusVectorStore(config, "http://localhost:19530", "",
+		"content", vector_fields.NewMilvusFLAT("embedding"), "sparse_vector", "metadata", "document_id",
+		WithMilvusClientOption(fake))
+	require.NoError(t, err)
+
+	err = s.CheckVectorField()
+	assert.Error(t, err)
+}
+
+// TestMilvusVectorStore_CheckVectorField_配置参数不匹配 对齐 Python: _check_configs_matching 报错
+func TestMilvusVectorStore_CheckVectorField_配置参数不匹配(t *testing.T) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeMilvus,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+	fake := newFakeRetrievalMilvusClient()
+	// HNSW 配置 M=30，实际 M=16 → 不匹配
+	fake.describeIndexParams = map[string]string{"metric_type": "COSINE", "M": "16"}
+	s, err := NewMilvusVectorStore(config, "http://localhost:19530", "",
+		"content", vector_fields.NewMilvusHNSW("embedding", 30, 360, 2.0), "sparse_vector", "metadata", "document_id",
+		WithMilvusClientOption(fake))
+	require.NoError(t, err)
+
+	err = s.CheckVectorField()
+	assert.Error(t, err)
+}
+
+// TestMilvusVectorStore_CheckVectorField_HNSW匹配 对齐 Python: index_type 前缀匹配 + 参数一致通过
+func TestMilvusVectorStore_CheckVectorField_HNSW匹配(t *testing.T) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeMilvus,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+	fake := newFakeRetrievalMilvusClient()
+	// 真实 Milvus describe_index 的 params 含 index_type/metric_type 及构造参数（对齐 hnswIndex.Params()）
+	fake.describeIndexParams = map[string]string{
+		"index_type": "HNSW", "metric_type": "COSINE", "M": "30", "efConstruction": "360",
+	}
+	s, err := NewMilvusVectorStore(config, "http://localhost:19530", "",
+		"content", vector_fields.NewMilvusHNSW("embedding", 30, 360, 2.0), "sparse_vector", "metadata", "document_id",
+		WithMilvusClientOption(fake))
+	require.NoError(t, err)
+
+	err = s.CheckVectorField()
+	assert.NoError(t, err) // CheckConfigsMatching 数值容差内 + metric_type 一致
 }
