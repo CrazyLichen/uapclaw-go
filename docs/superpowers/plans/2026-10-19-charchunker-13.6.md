@@ -34,7 +34,7 @@
 - Create: `internal/agentcore/retrieval/indexing/processor/chunker/text_splitter.go`
 - Test: `internal/agentcore/retrieval/indexing/processor/chunker/text_splitter_test.go`
 
-- [ ] **Step 1.1: 写失败测试**
+- [x] **Step 1.1: 写失败测试**
 
 创建 `internal/agentcore/retrieval/indexing/processor/chunker/text_splitter_test.go`：
 
@@ -206,7 +206,7 @@ func TestCharSplitter_Split_nilMetadata转空map(t *testing.T) {
 }
 ```
 
-- [ ] **Step 1.2: 运行测试验证失败**
+- [x] **Step 1.2: 运行测试验证失败**
 
 ```bash
 cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run 'TestNewCharSplitter|TestCharSplitter' -v
@@ -214,7 +214,7 @@ cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/retrieval/in
 
 预期：**编译失败**，`undefined: NewCharSplitter` / `undefined: TextSplitter`（红阶段）。
 
-- [ ] **Step 1.3: 实现 text_splitter.go**
+- [x] **Step 1.3: 实现 text_splitter.go**
 
 创建 `internal/agentcore/retrieval/indexing/processor/chunker/text_splitter.go`：
 
@@ -342,7 +342,7 @@ func (s *CharSplitter) Split(doc *reranker.Document) ([]common.TextChunk, error)
 // ──────────────────────────── 非导出函数 ────────────────────────────
 ```
 
-- [ ] **Step 1.4: 运行测试验证通过**
+- [x] **Step 1.4: 运行测试验证通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run 'TestNewCharSplitter|TestCharSplitter' -v
@@ -350,7 +350,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run 'TestNew
 
 预期：全部 PASS（16 个测试）。若 `TestCharSplitter_Split_长文本多块` 断言块数不符，先复查文本长度（65 字符）与 step 计算，**不要改测试期望值凑绿**。
 
-- [ ] **Step 1.5: 提交**
+- [x] **Step 1.5: 提交**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/chunker/text_splitter.go internal/agentcore/retrieval/indexing/processor/chunker/text_splitter_test.go
@@ -367,7 +367,7 @@ git commit -m "feat(chunker): 13.6 TextSplitter 接口 + CharSplitter 滑窗分�
 
 注意：本任务测试**不含** `GetChunker("char")` 相关（注册在 Task 3）。
 
-- [ ] **Step 2.1: 写失败测试**
+- [x] **Step 2.1: 写失败测试**
 
 创建 `internal/agentcore/retrieval/indexing/processor/chunker/char_chunker_test.go`：
 
@@ -490,7 +490,7 @@ func TestCharChunker_Process_等价ChunkDocuments(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2.2: 运行测试验证失败**
+- [x] **Step 2.2: 运行测试验证失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run 'TestNewCharChunker|TestCharChunker' -v
@@ -498,7 +498,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run 'TestNew
 
 预期：**编译失败**，`undefined: NewCharChunker`。
 
-- [ ] **Step 2.3: 实现 char_chunker.go**
+- [x] **Step 2.3: 实现 char_chunker.go**
 
 创建 `internal/agentcore/retrieval/indexing/processor/chunker/char_chunker.go`：
 
@@ -587,7 +587,7 @@ func (c *CharChunker) ChunkText(text string) ([]string, error) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 ```
 
-- [ ] **Step 2.4: 运行测试验证通过**
+- [x] **Step 2.4: 运行测试验证通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run 'TestNewCharChunker|TestCharChunker' -v
@@ -595,7 +595,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run 'TestNew
 
 预期：全部 PASS（8 个测试）。
 
-- [ ] **Step 2.5: 提交**
+- [x] **Step 2.5: 提交**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/chunker/char_chunker.go internal/agentcore/retrieval/indexing/processor/chunker/char_chunker_test.go
@@ -611,7 +611,7 @@ git commit -m "feat(chunker): 13.6 CharChunker 字符级分块器（嵌入 BaseC
 - Modify: `internal/agentcore/retrieval/indexing/processor/chunker/registry_test.go`（两处 13.6 占位断言改写 + 未知名断言增强）
 - Modify: `internal/agentcore/retrieval/indexing/processor/chunker/char_chunker_test.go`（追加 GetChunker 相关测试）
 
-- [ ] **Step 3.1: 改写 registry_test.go 两处 13.6 占位断言**
+- [x] **Step 3.1: 改写 registry_test.go 两处 13.6 占位断言**
 
 在 `internal/agentcore/retrieval/indexing/processor/chunker/registry_test.go` 中：
 
@@ -667,7 +667,7 @@ func TestHybridFactory_inner显式nil走缺省分支(t *testing.T) {
 	assert.Contains(t, err.Error(), "char") // 13.6 后内置 char 也已注册
 ```
 
-- [ ] **Step 3.2: 追加 GetChunker("char") 失败测试到 char_chunker_test.go**
+- [x] **Step 3.2: 追加 GetChunker("char") 失败测试到 char_chunker_test.go**
 
 在 `char_chunker_test.go` 文件末尾追加：
 
@@ -709,7 +709,7 @@ func TestHybridFactory_inner缺省走CharChunker参数校验穿透(t *testing.T)
 }
 ```
 
-- [ ] **Step 3.3: 运行测试验证失败**
+- [x] **Step 3.3: 运行测试验证失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run 'TestHybridFactory|TestGetChunker' -v
@@ -717,7 +717,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run 'TestHyb
 
 预期：`TestGetChunker_char按名获取` FAIL（`Unknown chunker: char`）；改写后的 hybrid 用例 FAIL（仍报 `not implemented until 13.6`）。
 
-- [ ] **Step 3.4: 修改 registry.go**
+- [x] **Step 3.4: 修改 registry.go**
 
 **改动一**：init 函数（原 153-157 行）替换为：
 
@@ -767,7 +767,7 @@ func hybridFactory(opts ...ChunkerOption) (Chunker, error) {
 }
 ```
 
-- [ ] **Step 3.5: 运行全包测试验证通过**
+- [x] **Step 3.5: 运行全包测试验证通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -v
@@ -775,7 +775,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -v
 
 预期：全部 PASS（含 13.5 既有测试 + 本计划新增测试；`TestHybridFactory_多余参数报错`、`TestHybridFactory_inner注入时13_8前占位报错` 行为不变仍 PASS）。
 
-- [ ] **Step 3.6: 提交**
+- [x] **Step 3.6: 提交**
 
 ```bash
 git add internal/agentcore/retrieval/indexing/processor/chunker/registry.go internal/agentcore/retrieval/indexing/processor/chunker/registry_test.go internal/agentcore/retrieval/indexing/processor/chunker/char_chunker_test.go
@@ -791,7 +791,7 @@ git commit -m "feat(chunker): 13.6 注册 char 到 registry + hybridFactory 默�
 - Modify: `IMPLEMENTATION_PLAN.md`（13.6 行状态符号）
 - Modify: `docs/superpowers/plans/2026-10-19-charchunker-13.6.md`（勾选本计划 checkbox）
 
-- [ ] **Step 4.1: 更新 doc.go 文件目录**
+- [x] **Step 4.1: 更新 doc.go 文件目录**
 
 在 `internal/agentcore/retrieval/indexing/processor/chunker/doc.go` 中，将文件目录段：
 
@@ -815,7 +815,7 @@ git commit -m "feat(chunker): 13.6 注册 char 到 registry + hybridFactory 默�
 
 （doc.go 使用 tab 缩进对齐；新增行注释末尾标注 13.7 归属，呼应 13.9 收尾）
 
-- [ ] **Step 4.2: 回填 IMPLEMENTATION_PLAN.md 13.6 状态**
+- [x] **Step 4.2: 回填 IMPLEMENTATION_PLAN.md 13.6 状态**
 
 `IMPLEMENTATION_PLAN.md` 13.6 行（约 792 行），**仅改状态符号 `☐` → `✅`，行内其余内容一字不动**：
 
@@ -825,7 +825,7 @@ git commit -m "feat(chunker): 13.6 注册 char 到 registry + hybridFactory 默�
 
 同时将 13.7 行状态 `☐` → `🔄`（下一章 13.7 TokenizerChunker 即将开始；若本次会话不继续 13.7 则跳过此步）。
 
-- [ ] **Step 4.3: 覆盖率确认**
+- [x] **Step 4.3: 覆盖率确认**
 
 ```bash
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -cover
@@ -833,7 +833,7 @@ go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -cover
 
 预期：`ok` 且 coverage **≥ 85%**（规范 3 硬性要求）。若不达标，用 `go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -coverprofile=/tmp/c.out && go tool cover -func=/tmp/c.out` 定位未覆盖分支补测试（优先补：NewCharSplitter 钳制边界、Split 空/nil 分支）。
 
-- [ ] **Step 4.4: 全仓编译安全检查**
+- [x] **Step 4.4: 全仓编译安全检查**
 
 ```bash
 go build ./...
@@ -841,7 +841,7 @@ go build ./...
 
 预期：无输出（编译通过）。确认无未用 import 等问题殃及其他包。
 
-- [ ] **Step 4.5: 勾选本计划 checkbox 并提交**
+- [x] **Step 4.5: 勾选本计划 checkbox 并提交**
 
 将本计划文档中所有 `- [ ]` 改为 `- [x]`，然后：
 
