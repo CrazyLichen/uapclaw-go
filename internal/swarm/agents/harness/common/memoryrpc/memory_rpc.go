@@ -4,6 +4,7 @@ package memoryrpc
 
 import (
 	"bufio"
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,6 +18,92 @@ import (
 
 // logComponent 日志组件标识（对齐 memory 包既有约定）
 var logComponent = logger.ComponentAgentServer
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// HandleMemoryEdit 编辑（或创建）记忆文件。
+// Python: handle_memory_edit (memory_rpc.py L245-286)
+func HandleMemoryEdit(ctx context.Context, workspace string, params map[string]any) map[string]any {
+	// Python: raw_path = params.get("path", ""); project_dir = params.get("project_dir")
+	rawPath, _ := params["path"].(string)
+	projectDir, _ := params["project_dir"].(string)
+	isValid, resolved := validateEditPath(rawPath, workspace, projectDir)
+
+	if !isValid {
+		// Python L253-260：返回原始 raw_path + editable=False
+		return map[string]any{
+			"path":            rawPath,
+			"exists":          false,
+			"content_preview": "",
+			"kind":            "unknown",
+			"editable":        false,
+		}
+	}
+
+	// Python: exists = Path(resolved).is_file()
+	info, statErr := os.Stat(resolved)
+	exists := statErr == nil && !info.IsDir()
+	kind := classifyMemoryFile(resolved, workspace)
+
+	if exists {
+		// Python: 读全文 splitlines 取前 20 行；超 20 行追加 "\n... (truncated)"
+		contentPreview := ""
+		if text, err := os.ReadFile(resolved); err == nil {
+			lines := strings.Split(string(text), "\n")
+			if len(lines) > 20 {
+				contentPreview = strings.Join(lines[:20], "\n") + "\n... (truncated)"
+			} else {
+				contentPreview = strings.Join(lines, "\n")
+			}
+		}
+		return map[string]any{
+			"path":            resolved,
+			"exists":          true,
+			"content_preview": contentPreview,
+			"kind":            kind,
+			"editable":        true,
+		}
+	}
+
+	// Python L276-278：不存在 → parent.mkdir(parents=True, exist_ok=True) + touch
+	parent := filepath.Dir(resolved)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		logger.Error(logComponent).Err(err).Str("path", resolved).Msg("memory.edit mkdir failed")
+	}
+	if f, err := os.OpenFile(resolved, os.O_CREATE|os.O_WRONLY, 0o644); err != nil {
+		logger.Error(logComponent).Err(err).Str("path", resolved).Msg("memory.edit touch failed")
+	} else {
+		_ = f.Close()
+	}
+
+	return map[string]any{
+		"path":            resolved,
+		"exists":          false,
+		"content_preview": "",
+		"kind":            kind,
+		"editable":        true,
+	}
+}
+
+// HandleMemoryOpen 返回各记忆目录路径。
+// Python: handle_memory_open (L459-473)
+func HandleMemoryOpen(ctx context.Context, workspace string, params map[string]any) map[string]any {
+	projectDir, _ := params["project_dir"].(string)
+	// Python: {"memory_dir": os.path.join(workspace, "memory"), "project_memory_dir": workspace}
+	result := map[string]any{
+		"memory_dir":         filepath.Join(workspace, "memory"),
+		"project_memory_dir": workspace,
+	}
+	if projectDir != "" {
+		result["project_dir"] = projectDir
+	}
+	// Python: if os.path.isdir(coding_dir): result["coding_memory_dir"] = coding_dir
+	codingDir := getCodingMemoryDir(workspace, projectDir)
+	if info, err := os.Stat(codingDir); err == nil && info.IsDir() {
+		result["coding_memory_dir"] = codingDir
+	}
+	return result
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

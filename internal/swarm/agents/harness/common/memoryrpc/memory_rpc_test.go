@@ -1,8 +1,10 @@
 package memoryrpc
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -287,4 +289,116 @@ func TestIsCodeMode_前缀判定(t *testing.T) {
 	assert.False(t, isCodeMode("plan"))
 	assert.False(t, isCodeMode("agent"))
 	assert.False(t, isCodeMode(""))
+}
+
+// ──────────────────────────── HandleMemoryEdit ────────────────────────────
+
+// TestHandleMemoryEdit_读已有文件 测试 20 行预览截断
+func TestHandleMemoryEdit_读已有文件(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "memory", "a.md")
+	assert.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
+	content := ""
+	for i := 0; i < 25; i++ {
+		content += "line\n"
+	}
+	assert.NoError(t, os.WriteFile(target, []byte(content), 0o644))
+
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": target})
+	assert.Equal(t, true, res["editable"].(bool))
+	assert.Equal(t, true, res["exists"].(bool))
+	assert.Equal(t, "auto", res["kind"].(string))
+	preview := res["content_preview"].(string)
+	// 对齐 Python：lines[:20] join + "\n... (truncated)"
+	assert.True(t, strings.HasSuffix(preview, "\n... (truncated)"))
+	body := strings.TrimSuffix(preview, "\n... (truncated)")
+	assert.Equal(t, 20, len(strings.Split(body, "\n")))
+}
+
+// TestHandleMemoryEdit_短文件全量预览 测试不超 20 行无截断标记
+func TestHandleMemoryEdit_短文件全量预览(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "memory", "b.md")
+	assert.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
+	assert.NoError(t, os.WriteFile(target, []byte("l1\nl2\nl3"), 0o644))
+
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": target})
+	preview := res["content_preview"].(string)
+	assert.Equal(t, "l1\nl2\nl3", preview) // 3 行无截断
+}
+
+// TestHandleMemoryEdit_创建新文件 测试 mkdir+touch
+func TestHandleMemoryEdit_创建新文件(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "memory", "new.md")
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": target})
+	assert.Equal(t, true, res["editable"].(bool))
+	assert.Equal(t, false, res["exists"].(bool))
+	assert.Equal(t, "", res["content_preview"].(string))
+	assert.FileExists(t, target) // touch 创建
+}
+
+// TestHandleMemoryEdit_相对路径 测试相对路径解析后创建
+func TestHandleMemoryEdit_相对路径(t *testing.T) {
+	tmp := t.TempDir()
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": "memory/rel.md"})
+	assert.Equal(t, true, res["editable"].(bool))
+	assert.Equal(t, filepath.Join(tmp, "memory", "rel.md"), res["path"])
+}
+
+// TestHandleMemoryEdit_白名单拒绝 测试越权路径 editable=false
+func TestHandleMemoryEdit_白名单拒绝(t *testing.T) {
+	setupIsolatedHome(t)
+	res := HandleMemoryEdit(context.Background(), "/ws", map[string]any{"path": "/etc/passwd"})
+	assert.Equal(t, false, res["editable"].(bool))
+	assert.Equal(t, false, res["exists"].(bool))
+	assert.Equal(t, "unknown", res["kind"].(string))
+	assert.Equal(t, "", res["content_preview"].(string))
+	// 拒绝时 path 返回原始 raw_path（对齐 Python L255）
+	assert.Equal(t, "/etc/passwd", res["path"])
+}
+
+// TestHandleMemoryEdit_项目目录参数 测试 project_dir 透传
+func TestHandleMemoryEdit_项目目录参数(t *testing.T) {
+	tmp := t.TempDir()
+	proj := filepath.Join(tmp, "proj")
+	assert.NoError(t, os.MkdirAll(proj, 0o755))
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{
+		"path":        "notes.md",
+		"project_dir": proj,
+	})
+	assert.Equal(t, true, res["editable"].(bool))
+	assert.Equal(t, filepath.Join(proj, "notes.md"), res["path"])
+}
+
+// ──────────────────────────── HandleMemoryOpen ────────────────────────────
+
+// TestHandleMemoryOpen_基本 测试路径返回与 coding 目录条件包含
+func TestHandleMemoryOpen_基本(t *testing.T) {
+	tmp := t.TempDir()
+	res := HandleMemoryOpen(context.Background(), tmp, map[string]any{"project_dir": "/proj"})
+	assert.Equal(t, filepath.Join(tmp, "memory"), res["memory_dir"])
+	assert.Equal(t, tmp, res["project_memory_dir"])
+	assert.Equal(t, "/proj", res["project_dir"])
+	_, hasCoding := res["coding_memory_dir"] // 目录不存在时不含
+	assert.False(t, hasCoding)
+}
+
+// TestHandleMemoryOpen_无项目目录 测试 project_dir 缺省
+func TestHandleMemoryOpen_无项目目录(t *testing.T) {
+	tmp := t.TempDir()
+	res := HandleMemoryOpen(context.Background(), tmp, map[string]any{})
+	assert.Equal(t, filepath.Join(tmp, "memory"), res["memory_dir"])
+	assert.Equal(t, tmp, res["project_memory_dir"])
+	_, hasProj := res["project_dir"]
+	assert.False(t, hasProj)
+}
+
+// TestHandleMemoryOpen_coding目录存在 测试 isdir 时包含
+func TestHandleMemoryOpen_coding目录存在(t *testing.T) {
+	tmp := t.TempDir()
+	coding := getCodingMemoryDir(tmp, "/proj")
+	assert.NoError(t, os.MkdirAll(coding, 0o755))
+	res := HandleMemoryOpen(context.Background(), tmp, map[string]any{"project_dir": "/proj"})
+	assert.Equal(t, coding, res["coding_memory_dir"])
 }
