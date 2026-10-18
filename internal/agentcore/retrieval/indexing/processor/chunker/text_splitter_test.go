@@ -1,6 +1,8 @@
 package chunker
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -161,5 +163,145 @@ func TestCharSplitter_Split_nilMetadata转空map(t *testing.T) {
 	for _, chunk := range chunks {
 		assert.NotNil(t, chunk.Metadata)
 		assert.Empty(t, chunk.Metadata)
+	}
+}
+
+// ──────────────────────────── 13.7 Tokenizer 接口三态 ────────────────────────────
+
+// fakeTokEncOnly 只实现 Encode（对齐 Python tokenize-only 分支②）
+type fakeTokEncOnly struct{}
+
+// Encode 按 rune 计数编码
+func (f *fakeTokEncOnly) Encode(text string) ([]int, error) {
+	return make([]int, len([]rune(text))), nil
+}
+
+// fakeTokFull 实现 Encode+Decode+MaxLength（对齐分支①+HF max_length）
+type fakeTokFull struct{ maxLen int }
+
+// Encode 按 rune 计数编码
+func (f *fakeTokFull) Encode(text string) ([]int, error) {
+	return make([]int, len([]rune(text))), nil
+}
+
+// Decode 解码为重复字符
+func (f *fakeTokFull) Decode(ids []int) (string, error) {
+	return strings.Repeat("a", len(ids)), nil
+}
+
+// MaxLength 返回最大序列长度
+func (f *fakeTokFull) MaxLength() int { return f.maxLen }
+
+// fakeTokEncFail Encode/Decode 恒失败（验证上抛）
+type fakeTokEncFail struct{}
+
+// Encode 恒失败
+func (f *fakeTokEncFail) Encode(text string) ([]int, error) {
+	return nil, fmt.Errorf("encode boom")
+}
+
+// Decode 恒失败
+func (f *fakeTokEncFail) Decode(ids []int) (string, error) {
+	return "", fmt.Errorf("decode boom")
+}
+
+func mustEnc(t *testing.T, enc func(string) ([]int, error), text string) []int {
+	t.Helper()
+	ids, err := enc(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ids
+}
+
+func TestResolveTokenizers_完整实现(t *testing.T) {
+	ft := &fakeTokFull{maxLen: 1024}
+	enc, dec, maxLen := resolveTokenizers(ft)
+	if maxLen != 1024 {
+		t.Fatalf("maxLen 应为 1024, got %d", maxLen)
+	}
+	if enc == nil || dec == nil {
+		t.Fatal("完整实现 enc/dec 都应有")
+	}
+	if got := len(mustEnc(t, enc, "你好")); got != 2 {
+		t.Fatalf("enc 应按 rune 计数, got %d", got)
+	}
+}
+
+func TestResolveTokenizers_空白文本返回空(t *testing.T) {
+	ft := &fakeTokFull{}
+	enc, _, _ := resolveTokenizers(ft)
+	ids, err := enc("   \n ")
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("空白文本应返回空切片: %v %v", ids, err)
+	}
+}
+
+func TestResolveTokenizers_仅Encode(t *testing.T) {
+	enc, dec, maxLen := resolveTokenizers(&fakeTokEncOnly{})
+	if enc == nil {
+		t.Fatal("enc 应有")
+	}
+	if dec != nil {
+		t.Fatal("encode-only 实现 dec 应为 nil")
+	}
+	if maxLen != 0 {
+		t.Fatalf("无 MaxLengthProvider maxLen 应为 0, got %d", maxLen)
+	}
+}
+
+func TestResolveTokenizers_nil走tiktoken(t *testing.T) {
+	enc, dec, maxLen := resolveTokenizers(nil)
+	if enc == nil || dec == nil {
+		t.Fatal("nil 应 fallback tiktoken（enc+dec）")
+	}
+	if maxLen != 0 {
+		t.Fatalf("偏差1：maxLen 应为 0（max_token_value 不模拟）, got %d", maxLen)
+	}
+	// 真实 cl100k_base 编解码往返
+	text := "你好世界 hello"
+	ids, err := enc(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) == 0 {
+		t.Fatal("真实 tiktoken 编码应有结果")
+	}
+	back, err := dec(ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back != text {
+		t.Fatalf("tiktoken 往返不一致: %q != %q", back, text)
+	}
+}
+
+func TestResolveTokenizers_encode失败上抛(t *testing.T) {
+	enc, _, _ := resolveTokenizers(&fakeTokEncFail{})
+	_, err := enc("anything")
+	if err == nil {
+		t.Fatal("encode 失败应上抛（决策 2b）")
+	}
+}
+
+func TestResolveChunkSize(t *testing.T) {
+	tests := []struct {
+		name      string
+		chunkSize int
+		maxLen    int
+		want      int
+	}{
+		{"未设+有max", 0, 1024, 1024},
+		{"都设取min", 512, 256, 256},
+		{"chunkSize小max大", 100, 200, 100},
+		{"都无默认200", 0, 0, 200},
+		{"仅显式", 300, 0, 300},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveChunkSize(tt.chunkSize, tt.maxLen); got != tt.want {
+				t.Fatalf("resolveChunkSize(%d, %d) = %d, want %d", tt.chunkSize, tt.maxLen, got, tt.want)
+			}
+		})
 	}
 }
