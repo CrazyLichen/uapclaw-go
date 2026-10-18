@@ -9,7 +9,8 @@
 //	├── doc.go            # 包文档
 //	├── base.go           # Indexer 接口定义 + IndexOptions
 //	├── embed_chunks.go   # ComputeChunkEmbeddings 共享嵌入逻辑 + ChunkEmbedOptions
-//	└── chroma.go         # ChromaIndexer ChromaDB 文档索引实现
+//	├── chroma.go         # ChromaIndexer ChromaDB 文档索引实现
+//	└── milvus.go         # MilvusIndexer Milvus 文档索引实现
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/indexer/
 //
@@ -19,4 +20,5 @@
 //	ComputeChunkEmbeddings — 分块嵌入计算共享函数
 //	ChunkEmbedOptions    — ComputeChunkEmbeddings 选项结构
 //	ChromaIndexer        — ChromaDB 文档索引实现
+//	MilvusIndexer        — Milvus 文档索引实现（ensureCollection/BuildIndex/UpdateIndex）
 package indexer
