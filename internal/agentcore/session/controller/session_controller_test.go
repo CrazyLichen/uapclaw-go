@@ -204,7 +204,7 @@ func TestSessionController_FlushAndLoad(t *testing.T) {
 	_, _, err := sc.CreateIfNotExists(scope, "s1")
 	require.NoError(t, err, "CreateIfNotExists 应成功")
 
-	// Flush
+	// Flush 刷新
 	if err := sc.Flush(); err != nil {
 		t.Fatalf("Flush() 返回错误: %v", err)
 	}

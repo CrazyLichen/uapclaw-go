@@ -163,7 +163,7 @@ func (s *EvolutionRailSuite) TestEvolutionRail_同Session复用Builder() {
 		evolution.WithAsyncEvolution(false),
 	)
 
-	// Round 1
+	// 第 1 轮
 	cbc := newCBC(nil, &agentinterfaces.InvokeInputs{ConversationID: "conv_multi"}, nil)
 	s.Require().NoError(rail.BeforeInvoke(s.Ctx, cbc))
 

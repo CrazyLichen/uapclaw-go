@@ -38,7 +38,7 @@ type fakeDispatcherBlueprint struct {
 	memberName string
 }
 
-func (f *fakeDispatcherBlueprint) Role() schema.TeamRole { return f.role }
+func (f *fakeDispatcherBlueprint) Role() schema.TeamRole        { return f.role }
 func (f *fakeDispatcherBlueprint) DispatcherMemberName() string { return f.memberName }
 
 // fakePollCtrl 实现 types.PollController 用于测试

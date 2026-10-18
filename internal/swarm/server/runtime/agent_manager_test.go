@@ -14,7 +14,7 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// --- NewAgentManager ---
+// --- NewAgentManager 构造 ---
 
 func TestNewAgentManager(t *testing.T) {
 	am := NewAgentManager()
@@ -25,7 +25,7 @@ func TestNewAgentManager(t *testing.T) {
 	assert.NotNil(t, am.latestEnvOverrides)
 }
 
-// --- normalize 辅助函数 ---
+// --- normalize 系列辅助函数 ---
 
 func TestNormalizeChannelID(t *testing.T) {
 	assert.Equal(t, "default", normalizeChannelID(""))
@@ -76,7 +76,7 @@ func TestMakeAgentCacheKey(t *testing.T) {
 	assert.Contains(t, key3, "agent::")
 }
 
-// --- GetAgent ---
+// --- GetAgent 获取 Agent ---
 
 func TestAgentManager_GetAgent(t *testing.T) {
 	am := NewAgentManager()
@@ -104,7 +104,7 @@ func TestAgentManager_GetAgent_不同mode创建不同实例(t *testing.T) {
 	assert.NotSame(t, agent1, agent2)
 }
 
-// --- GetAgentNoWait ---
+// --- GetAgentNoWait 无等待获取 ---
 
 func TestAgentManager_GetAgentNoWait(t *testing.T) {
 	am := NewAgentManager()
@@ -158,7 +158,7 @@ func TestAgentManager_GetAgentNoWait_空channel返回nil(t *testing.T) {
 	assert.Nil(t, agent)
 }
 
-// --- Initialize ---
+// --- Initialize 初始化 ---
 
 func TestAgentManager_Initialize(t *testing.T) {
 	am := NewAgentManager()
@@ -168,7 +168,7 @@ func TestAgentManager_Initialize(t *testing.T) {
 	assert.Nil(t, caps)
 }
 
-// --- CreateSession ---
+// --- CreateSession 创建会话 ---
 
 func TestAgentManager_CreateSession(t *testing.T) {
 	am := NewAgentManager()
@@ -192,7 +192,7 @@ func TestAgentManager_CreateSession_带空格的ID(t *testing.T) {
 	assert.Equal(t, "my-session", sessionID)
 }
 
-// --- GetClientCapabilities ---
+// --- GetClientCapabilities 客户端能力 ---
 
 func TestAgentManager_GetClientCapabilities(t *testing.T) {
 	am := NewAgentManager()
@@ -212,7 +212,7 @@ func TestAgentManager_GetClientCapabilities_有数据时返回拷贝(t *testing.
 	assert.Equal(t, "value", caps["key"])
 }
 
-// --- ProcessMessage ---
+// --- ProcessMessage 消息处理 ---
 // 注意：ProcessMessage/Stream 会调用 UapClaw.ProcessMessage/Stream，
 // 而 UapClaw.CreateInstance 会创建真实的 DeepAgent → LLM 调用。
 // 因此这里仅验证 GetAgent 委托逻辑（即 GetAgent 能正确解析 mode 并创建 agent），
@@ -242,7 +242,7 @@ func TestAgentManager_ProcessMessage_GetAgent委托(t *testing.T) {
 	assert.Same(t, agent, agent2)
 }
 
-// --- ProcessMessageStream ---
+// --- ProcessMessageStream 流式消息处理 ---
 
 func TestAgentManager_ProcessMessageStream_GetAgent委托(t *testing.T) {
 	am := NewAgentManager()
@@ -268,7 +268,7 @@ func TestAgentManager_ProcessMessageStream_GetAgent委托(t *testing.T) {
 	assert.Same(t, agent, agent2)
 }
 
-// --- ReloadAgentsConfig ---
+// --- ReloadAgentsConfig 重载配置 ---
 
 func TestAgentManager_ReloadAgentsConfig(t *testing.T) {
 	am := NewAgentManager()
@@ -372,7 +372,7 @@ func TestReloadAgentsConfig_nil值时清空latestEnvOverrides(t *testing.T) {
 	_ = os.Unsetenv("TEST_KEY_A")
 }
 
-// --- RecreateAgent ---
+// --- RecreateAgent 重建 Agent ---
 
 func TestAgentManager_RecreateAgent(t *testing.T) {
 	am := NewAgentManager()
@@ -420,7 +420,7 @@ func TestAgentManager_RecreateAgent_immediateFalse(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// --- CancelAllInflightWork ---
+// --- CancelAllInflightWork 取消在途任务 ---
 
 func TestAgentManager_CancelAllInflightWork(t *testing.T) {
 	am := NewAgentManager()
@@ -437,7 +437,7 @@ func TestAgentManager_CancelAllInflightWork_有agent时(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// --- Cleanup ---
+// --- Cleanup 清理 ---
 
 func TestAgentManager_Cleanup(t *testing.T) {
 	am := NewAgentManager()
@@ -457,7 +457,7 @@ func TestAgentManager_Cleanup(t *testing.T) {
 	assert.Empty(t, am.clientCapabilitiesByChannel)
 }
 
-// --- resolveModeFromRequest ---
+// --- resolveModeFromRequest 请求模式解析 ---
 
 func TestResolveModeFromRequest(t *testing.T) {
 	tests := []struct {
@@ -489,7 +489,7 @@ func TestResolveModeFromRequest(t *testing.T) {
 	}
 }
 
-// --- resolveWorkspaceDirFromRequest ---
+// --- resolveWorkspaceDirFromRequest 工作区解析 ---
 
 func TestResolveWorkspaceDirFromRequest(t *testing.T) {
 	req := &schema.AgentRequest{Params: []byte(`{"workspace_dir": "/home/user/proj"}`)}
@@ -499,7 +499,7 @@ func TestResolveWorkspaceDirFromRequest(t *testing.T) {
 	assert.Equal(t, "", resolveWorkspaceDirFromRequest(req2))
 }
 
-// --- copyMap ---
+// --- copyMap 拷贝工具 ---
 
 func TestCopyMap(t *testing.T) {
 	original := map[string]any{"key": "value", "num": 42}
@@ -514,7 +514,7 @@ func TestCopyMap(t *testing.T) {
 	assert.Nil(t, copyMap(nil))
 }
 
-// --- makeAgentCacheKey 与 GetAgent 的集成测试 ---
+// --- makeAgentCacheKey 与 GetAgent 集成测试 ---
 
 func TestAgentManager_GetAgent_cacheKey隔离(t *testing.T) {
 	am := NewAgentManager()
@@ -532,7 +532,7 @@ func TestAgentManager_GetAgent_cacheKey隔离(t *testing.T) {
 	assert.Same(t, agent1, agent3)
 }
 
-// --- normalizeProjectDir 额外边界测试 ---
+// --- normalizeProjectDir 边界场景补充 ---
 
 func TestNormalizeProjectDir_仅空格(t *testing.T) {
 	assert.Equal(t, "", normalizeProjectDir("   "))

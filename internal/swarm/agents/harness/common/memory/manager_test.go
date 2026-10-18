@@ -71,10 +71,10 @@ func TestResolveDBPath(t *testing.T) {
 	cases := []struct {
 		storePath, want string
 	}{
-		{"/abs/path/memory.db", "/abs/path/memory.db"},        // 绝对路径
-		{"myproj/memory.db", "/ws/myproj/memory/memory.db"},    // 前缀去重后补 memory/
-		{"memory.db", "/ws/myproj/memory/memory.db"},           // 补 memory/
-		{"memory/custom.db", "/ws/myproj/memory/custom.db"},    // 已含 memory/ 不重复
+		{"/abs/path/memory.db", "/abs/path/memory.db"},      // 绝对路径
+		{"myproj/memory.db", "/ws/myproj/memory/memory.db"}, // 前缀去重后补 memory/
+		{"memory.db", "/ws/myproj/memory/memory.db"},        // 补 memory/
+		{"memory/custom.db", "/ws/myproj/memory/custom.db"}, // 已含 memory/ 不重复
 	}
 	for _, c := range cases {
 		m.Settings = &MemorySettings{Store: StoreConfig{Path: c.storePath}}
@@ -430,6 +430,7 @@ func TestIsRecentSessionFile(t *testing.T) {
 		t.Errorf("昨天应为 true")
 	}
 }
+
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
 // fakeEmbeddingProvider 可编程 EmbeddingProvider 测试替身

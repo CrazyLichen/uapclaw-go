@@ -78,19 +78,19 @@ func (s *MockLLME2ESuite) TestClientRegistry_注册和获取() {
 // TestCreateHelpers_辅助函数 测试 CreateTextResponse/CreateToolCallResponse/CreateJSONResponse
 // 对齐 Python: create_text_response / create_tool_call_response / create_json_response
 func (s *MockLLME2ESuite) TestCreateHelpers_辅助函数() {
-	// CreateTextResponse
+	// CreateTextResponse 创建文本响应
 	resp := mockllm.CreateTextResponse("测试文本")
 	s.Equal("测试文本", resp.Text)
 	s.Empty(resp.ToolCalls)
 	s.Nil(resp.Err)
 
-	// CreateToolCallResponse
+	// CreateToolCallResponse 创建工具调用响应
 	resp2 := mockllm.CreateToolCallResponse("my_tool", `{"key": "value"}`)
 	s.Empty(resp2.Text)
 	s.Len(resp2.ToolCalls, 1)
 	s.Equal("my_tool", resp2.ToolCalls[0].Name)
 
-	// CreateJSONResponse
+	// CreateJSONResponse 创建 JSON 响应
 	resp3 := mockllm.CreateJSONResponse(map[string]any{"status": "ok"})
 	s.Contains(resp3.Text, `"status"`)
 	s.Contains(resp3.Text, `"ok"`)

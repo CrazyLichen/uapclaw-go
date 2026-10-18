@@ -104,17 +104,17 @@ func TestInferToolResultError(t *testing.T) {
 	got = inferToolResultError(map[string]any{"exit_code": 0})
 	assertBoolPtr(t, got, false)
 
-	// nested data
+	// 嵌套 data 字段
 	got = inferToolResultError(map[string]any{"data": map[string]any{"success": false}})
 	assertBoolPtr(t, got, true)
 
-	// normal string
+	// 纯字符串
 	got = inferToolResultError("some result")
 	if got != nil {
 		t.Errorf("expected nil for plain string, got %v", got)
 	}
 
-	// [ERROR] prefix
+	// [ERROR] 前缀
 	got = inferToolResultError("[ERROR] something failed")
 	assertBoolPtr(t, got, true)
 
@@ -153,7 +153,7 @@ func TestParseToolCallArguments(t *testing.T) {
 		t.Errorf("expected empty map for invalid JSON, got %v", got)
 	}
 
-	// nil tool call
+	// tool call 为 nil
 	got = parseToolCallArguments(nil)
 	if len(got) != 0 {
 		t.Errorf("expected empty map for nil, got %v", got)
@@ -167,21 +167,21 @@ func TestParseToolCallArguments(t *testing.T) {
 }
 
 func TestExtractToolInterrupt(t *testing.T) {
-	// ToolInterruptException
+	// ToolInterruptException 工具中断异常
 	exc := &saschema.ToolInterruptException{Request: testInterruptRequest{msg: "test"}}
 	got := extractToolInterrupt(exc)
 	if got == nil {
 		t.Error("expected non-nil for ToolInterruptException")
 	}
 
-	// nested cause via Unwrap
+	// 通过 Unwrap 嵌套的错误
 	wrapper := &testError{cause: exc}
 	got = extractToolInterrupt(wrapper)
 	if got == nil {
 		t.Error("expected non-nil for nested ToolInterruptException")
 	}
 
-	// no interrupt
+	// 无中断异常
 	got = extractToolInterrupt(fmt.Errorf("plain error"))
 	if got != nil {
 		t.Error("expected nil for plain error")

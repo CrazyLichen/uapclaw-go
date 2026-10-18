@@ -104,7 +104,7 @@ func TestAgentTeamSession_GetSessionID(t *testing.T) {
 func TestAgentTeamSession_UpdateState_GetState_DumpState(t *testing.T) {
 	s := NewAgentTeamSession()
 
-	// UpdateState + GetState
+	// UpdateState 写入 + GetState 读取
 	s.UpdateState(map[string]any{"key": "value"})
 	result, err := s.GetState(state.StringKey("key"))
 	if err != nil {
@@ -114,7 +114,7 @@ func TestAgentTeamSession_UpdateState_GetState_DumpState(t *testing.T) {
 		t.Errorf("期望 value，实际 %v", result)
 	}
 
-	// DumpState
+	// DumpState 导出状态
 	dump := s.DumpState()
 	if dump == nil {
 		t.Fatal("DumpState 不应返回 nil")
@@ -125,13 +125,13 @@ func TestAgentTeamSession_UpdateState_GetState_DumpState(t *testing.T) {
 func TestAgentTeamSession_WriteStream_WriteCustomStream(t *testing.T) {
 	s := NewAgentTeamSession(WithAgentTeamSessionID("team-sw-test"))
 
-	// WriteStream
+	// WriteStream 写入流
 	err := s.WriteStream(context.Background(), map[string]any{"text": "hello"})
 	if err != nil {
 		t.Errorf("WriteStream 不应返回错误：%v", err)
 	}
 
-	// WriteCustomStream
+	// WriteCustomStream 写入自定义流
 	err = s.WriteCustomStream(context.Background(), map[string]any{"key": "value"})
 	if err != nil {
 		t.Errorf("WriteCustomStream 不应返回错误：%v", err)
@@ -184,7 +184,7 @@ func TestAgentTeamSession_WriteCustomStream_触发CustomCallback(t *testing.T) {
 func TestAgentTeamSession_GetEnv_GetEnvs(t *testing.T) {
 	s := NewAgentTeamSession(WithAgentTeamEnvs(map[string]any{"my_key": "my_val"}))
 
-	// GetEnv
+	// GetEnv 读取环境变量
 	if s.GetEnv("my_key") != "my_val" {
 		t.Errorf("GetEnv('my_key') 期望 my_val，实际 %v", s.GetEnv("my_key"))
 	}
@@ -198,7 +198,7 @@ func TestAgentTeamSession_GetEnv_GetEnvs(t *testing.T) {
 		t.Errorf("GetEnv 默认值期望 'default'，实际 %v", defaultVal)
 	}
 
-	// GetEnvs
+	// GetEnvs 读取全部环境变量
 	envs := s.GetEnvs()
 	if envs == nil {
 		t.Error("GetEnvs 不应返回 nil")
@@ -226,7 +226,7 @@ func TestAgentTeamSession_GetTeamID(t *testing.T) {
 func TestAgentTeamSession_PreRun_PostRun_Commit(t *testing.T) {
 	s := NewAgentTeamSession(WithAgentTeamCheckpointer(&noOpTeamCheckpointer{}))
 
-	// PreRun
+	// PreRun 运行前钩子
 	err := s.PreRun(context.Background())
 	if err != nil {
 		t.Errorf("PreRun 不应返回错误：%v", err)
@@ -238,13 +238,13 @@ func TestAgentTeamSession_PreRun_PostRun_Commit(t *testing.T) {
 		t.Errorf("幂等 PreRun 不应返回错误：%v", err)
 	}
 
-	// Commit
+	// Commit 提交
 	err = s.Commit(context.Background())
 	if err != nil {
 		t.Errorf("Commit 不应返回错误：%v", err)
 	}
 
-	// PostRun
+	// PostRun 运行后钩子
 	err = s.PostRun(context.Background())
 	if err != nil {
 		t.Errorf("PostRun 不应返回错误：%v", err)

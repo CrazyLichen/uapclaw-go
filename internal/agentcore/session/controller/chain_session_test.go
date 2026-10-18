@@ -240,7 +240,7 @@ func TestChainSession_FlushAndLoad(t *testing.T) {
 	cs.UpdateFromMeta(meta)
 	cs.AddDownstream("a2", "s2", SharingPolicy{Permission: PermissionRead})
 
-	// Flush
+	// Flush 刷新
 	if err := cs.Flush(); err != nil {
 		t.Fatalf("Flush() 返回错误: %v", err)
 	}

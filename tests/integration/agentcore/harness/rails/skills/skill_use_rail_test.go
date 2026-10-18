@@ -135,7 +135,7 @@ func (s *SkillUseRailSuite) TestSkillUseRail_Uninit清理() {
 
 	_, _ = agent.Invoke(s.Ctx, map[string]any{"query": "测试"})
 
-	// Uninit
+	// Uninit 反初始化
 	s.NotPanics(func() {
 		rail.Uninit(agent)
 	}, "Uninit 不应 panic")

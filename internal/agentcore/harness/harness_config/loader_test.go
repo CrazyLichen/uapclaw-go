@@ -265,16 +265,16 @@ resources:
 	assert.Equal(t, "builtin", resolved.Config.Resources.Tools[0].Type)
 	assert.Equal(t, []string{"filesystem", "shell"}, resolved.Config.Resources.Tools[0].Names)
 
-	// Rails
+	// Rails 轨道配置
 	require.Len(t, resolved.Config.Resources.Rails, 1)
 	assert.Equal(t, "builtin", resolved.Config.Resources.Rails[0].Type)
 
-	// MCPs
+	// MCPs 服务器配置
 	require.Len(t, resolved.Config.Resources.Mcps, 1)
 	assert.Equal(t, "stdio", resolved.Config.Resources.Mcps[0].Type)
 	assert.Equal(t, "npx", resolved.Config.Resources.Mcps[0].Command)
 
-	// Skills
+	// Skills 技能配置
 	require.NotNil(t, resolved.Config.Resources.Skills)
 	assert.Equal(t, []string{"./skills"}, resolved.Config.Resources.Skills.Dirs)
 	assert.Equal(t, "all", resolved.Config.Resources.Skills.Mode)

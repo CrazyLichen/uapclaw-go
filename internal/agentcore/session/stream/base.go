@@ -18,6 +18,10 @@ type Schema interface {
 	// Validate 校验 Schema 字段合法性，对应 Python model_validate。
 	// 校验失败时返回 STREAM_WRITER_WRITE_STREAM_VALIDATION_ERROR 错误。
 	Validate() error
+	// ToMap 将 Schema 转换为 map，对应 Python pydantic model_dump()。
+	// 非流式消费路径（如 TeamAgent.Invoke 的 lastResult）依赖此方法
+	// 将最后一个 chunk 转换为 dict 形态返回。
+	ToMap() map[string]any
 }
 
 // OutputSchema 标准输出流数据，对应 Python OutputSchema。
@@ -92,6 +96,38 @@ func (s TraceSchema) SchemaType() string { return s.Type }
 
 // SchemaType 实现 Schema 接口
 func (s CustomSchema) SchemaType() string { return s.Type }
+
+// ToMap 将 OutputSchema 转换为 map，对应 Python pydantic model_dump()。
+// 输出键：type/index/payload；IsLastSchema 为 Go 端扩展字段
+// （对齐 Python ControllerOutputChunk.last_chunk，不属于 OutputSchema），不输出。
+func (s OutputSchema) ToMap() map[string]any {
+	return map[string]any{
+		"type":    s.Type,
+		"index":   s.Index,
+		"payload": s.Payload,
+	}
+}
+
+// ToMap 将 TraceSchema 转换为 map，对应 Python pydantic model_dump()。
+// 输出键：type/payload。
+func (s TraceSchema) ToMap() map[string]any {
+	return map[string]any{
+		"type":    s.Type,
+		"payload": s.Payload,
+	}
+}
+
+// ToMap 将 CustomSchema 转换为 map，对应 Python pydantic model_dump()。
+// 输出键：type + Data 中所有自定义键值（pydantic extra="allow" 语义，
+// model_dump 会把 extra 字段与显式字段合并输出；Go 端 Data 即全部字段载体）。
+func (s CustomSchema) ToMap() map[string]any {
+	m := make(map[string]any, len(s.Data)+1)
+	m["type"] = s.Type
+	for k, v := range s.Data {
+		m[k] = v
+	}
+	return m
+}
 
 // Validate 校验 OutputSchema 字段合法性，对应 Python OutputSchema.model_validate()。
 // 校验规则（对齐 Pydantic 必填约束）：type 非空、index >= 0。

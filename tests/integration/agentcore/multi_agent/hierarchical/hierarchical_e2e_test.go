@@ -367,13 +367,13 @@ func (s *HierarchicalE2ESuite) TestToolsTeam_配置更新() {
 // TestHierarchicalConfig_默认值 验证两种 Config 的默认值
 // 对齐 Python: test_hierarchical_config.py
 func (s *HierarchicalE2ESuite) TestHierarchicalConfig_默认值() {
-	// msgbus config
+	// msgbus 消息总线配置
 	msgbusCfg := hierarchical_msgbus.NewHierarchicalTeamConfig()
 	s.Equal(1800.0, msgbusCfg.Timeout, "默认 Timeout 应为 1800.0")
 	s.Equal(10, msgbusCfg.TeamConfig.MaxAgents)
 	s.Nil(msgbusCfg.SupervisorAgent)
 
-	// tools config
+	// tools 工具配置
 	toolsCfg := hierarchical_tools.NewHierarchicalToolsTeamConfig()
 	s.Nil(toolsCfg.RootAgent, "默认 RootAgent 应为 nil")
 	// 注意：NewHierarchicalToolsTeamConfig 不初始化 TeamConfig，零值 MaxAgents=0

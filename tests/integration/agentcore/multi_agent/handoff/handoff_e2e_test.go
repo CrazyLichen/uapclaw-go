@@ -373,10 +373,10 @@ func (s *HandoffE2ESuite) TestHandoffTeam_订阅和发布() {
 	}
 	s.Require().NoError(team.AddAgent(ctx, agentCard, provider))
 
-	// Subscribe
+	// Subscribe 订阅
 	s.Require().NoError(team.Subscribe(ctx, "listener-1", "topic/events"))
 
-	// Publish
+	// Publish 发布
 	err := team.Publish(ctx, map[string]any{"event": "task_done"}, "topic/events", "sender")
 	s.Require().NoError(err)
 }

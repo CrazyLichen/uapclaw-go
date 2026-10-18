@@ -172,7 +172,7 @@ func TestCodingMemoryRail_GetCallbacks(t *testing.T) {
 func TestCodingMemoryRail_BuildDateTag(t *testing.T) {
 	rail := NewCodingMemoryRail("", nil, "cn")
 
-	// nil frontmatter
+	// frontmatter 为 nil
 	if tag := rail.buildDateTag(nil); tag != "" {
 		t.Errorf("nil frontmatter 应返回空字符串，得到 %q", tag)
 	}

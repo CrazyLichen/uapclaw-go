@@ -547,15 +547,15 @@ func (s *TeamRuntimeE2ESuite) TestCommunicableAgent_绑定与通信() {
 
 	ctx := context.Background()
 
-	// Send
+	// Send 发送
 	result, err := ca.Send(ctx, map[string]any{"action": "query"}, "agent-b")
 	s.Require().NoError(err)
 	s.NotNil(result)
 
-	// Subscribe
+	// Subscribe 订阅
 	s.Require().NoError(ca.Subscribe(ctx, "topic/data"))
 
-	// Publish
+	// Publish 发布
 	err = ca.Publish(ctx, map[string]any{"data": "payload"}, "topic/data")
 	s.Require().NoError(err)
 }
@@ -642,7 +642,7 @@ func (s *TeamRuntimeE2ESuite) TestTeamCard_构建验证() {
 		agentschema.WithAgentName("Analyst"),
 	)
 
-	// TeamCard
+	// TeamCard 团队卡片
 	tc := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team-1"),
 		maschema.WithTeamCardName("AlphaTeam"),
@@ -660,7 +660,7 @@ func (s *TeamRuntimeE2ESuite) TestTeamCard_构建验证() {
 	s.Len(tc.GetAgentCards(), 2)
 	s.Nil(tc.GetSubscriptions(), "TeamCard.GetSubscriptions 应返回 nil")
 
-	// EventDrivenTeamCard
+	// EventDrivenTeamCard 事件驱动团队卡片
 	edc := maschema.NewEventDrivenTeamCard(
 		maschema.WithEventDrivenID("team-ed-1"),
 		maschema.WithEventDrivenName("EventTeam"),
@@ -691,7 +691,7 @@ func (s *TeamRuntimeE2ESuite) TestTeamConfig_链式配置() {
 	s.Equal(60.0, tc.MessageTimeout)
 	s.Equal(200, tc.MaxConcurrentMessages)
 
-	// Extra
+	// Extra 额外字段
 	tc.SetExtra("custom_key", "custom_value")
 	v, ok := tc.GetExtra("custom_key")
 	s.True(ok)

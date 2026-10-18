@@ -424,10 +424,10 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			}
 		}
 
-	// 调用 ReAct 循环（initContext 和 UserMessage 已在上方完成）
-	// S-55: 对齐 Python L1353——守卫读原始 invoke_inputs（rail 替换前对象），
-	// 结构上消灭 (nil, nil)：守卫 true → reactLoop 成功恒非 nil；守卫 false → 原始对象 Result 非 nil
-	if invokeInputs.Result == nil {
+		// 调用 ReAct 循环（initContext 和 UserMessage 已在上方完成）
+		// S-55: 对齐 Python L1353——守卫读原始 invoke_inputs（rail 替换前对象），
+		// 结构上消灭 (nil, nil)：守卫 true → reactLoop 成功恒非 nil；守卫 false → 原始对象 Result 非 nil
+		if invokeInputs.Result == nil {
 			result, loopErr = a.reactLoop(ctx, cbc, sess, modelCtx, startIteration)
 		}
 		return loopErr

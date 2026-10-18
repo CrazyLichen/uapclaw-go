@@ -1184,19 +1184,19 @@ func TestMapToChromaDistanceMetric(t *testing.T) {
 
 // TestGetScoreConverter 测试分数转换函数获取
 func TestGetScoreConverter(t *testing.T) {
-	// COSINE
+	// COSINE 余弦相似度
 	converter := getScoreConverter("COSINE")
 	if converter == nil {
 		t.Error("getScoreConverter(COSINE) 不应返回 nil")
 	}
 
-	// L2
+	// L2 欧氏距离
 	converter = getScoreConverter("L2")
 	if converter == nil {
 		t.Error("getScoreConverter(L2) 不应返回 nil")
 	}
 
-	// IP
+	// IP 内积
 	converter = getScoreConverter("IP")
 	if converter == nil {
 		t.Error("getScoreConverter(IP) 不应返回 nil")

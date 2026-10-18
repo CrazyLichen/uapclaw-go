@@ -399,7 +399,7 @@ func (s *SessionControllerE2ESuite) TestSession_创建AgentSession() {
 func (s *SessionControllerE2ESuite) TestSession_PreRunPostRun() {
 	sess := session.CreateAgentSession("sess-lifecycle", nil, nil)
 
-	// PreRun
+	// PreRun 运行前钩子
 	err := sess.PreRun(s.ctx)
 	s.NoError(err)
 

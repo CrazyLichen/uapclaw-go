@@ -559,6 +559,45 @@ func (s *ChromaVectorStore) Close() {
 	}
 }
 
+// BuildChromaWhereFilter 构建 ChromaDB where 过滤器。
+// 返回 chromav2.WhereFilter 接口，可跨包使用（如 indexer 包调用）。
+// filters 为 nil 或空 map 时返回 nil。
+func BuildChromaWhereFilter(filters map[string]any) chromav2.WhereFilter {
+	if filters == nil {
+		return nil
+	}
+
+	f := filters
+
+	var clauses []chromav2.WhereClause
+	for key, value := range f {
+		switch v := value.(type) {
+		case string:
+			clauses = append(clauses, chromav2.EqString(key, v))
+		case int:
+			clauses = append(clauses, chromav2.EqInt(key, v))
+		case int64:
+			clauses = append(clauses, chromav2.EqInt(key, int(v)))
+		case float32:
+			clauses = append(clauses, chromav2.EqFloat(key, v))
+		case float64:
+			clauses = append(clauses, chromav2.EqFloat(key, float32(v)))
+		case bool:
+			clauses = append(clauses, chromav2.EqBool(key, v))
+		default:
+			clauses = append(clauses, chromav2.EqString(key, fmt.Sprintf("%v", v)))
+		}
+	}
+
+	if len(clauses) == 0 {
+		return nil
+	}
+	if len(clauses) == 1 {
+		return &chromaWhereFilter{clause: clauses[0]}
+	}
+	return &chromaWhereFilter{clause: chromav2.And(clauses...)}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureChromaDatabase 确保指定数据库存在，不存在则创建。
@@ -877,45 +916,6 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 	}
 
 	return searchResults
-}
-
-// BuildChromaWhereFilter 构建 ChromaDB where 过滤器。
-// 返回 chromav2.WhereFilter 接口，可跨包使用（如 indexer 包调用）。
-// filters 为 nil 或空 map 时返回 nil。
-func BuildChromaWhereFilter(filters map[string]any) chromav2.WhereFilter {
-	if filters == nil {
-		return nil
-	}
-
-	f := filters
-
-	var clauses []chromav2.WhereClause
-	for key, value := range f {
-		switch v := value.(type) {
-		case string:
-			clauses = append(clauses, chromav2.EqString(key, v))
-		case int:
-			clauses = append(clauses, chromav2.EqInt(key, v))
-		case int64:
-			clauses = append(clauses, chromav2.EqInt(key, int(v)))
-		case float32:
-			clauses = append(clauses, chromav2.EqFloat(key, v))
-		case float64:
-			clauses = append(clauses, chromav2.EqFloat(key, float32(v)))
-		case bool:
-			clauses = append(clauses, chromav2.EqBool(key, v))
-		default:
-			clauses = append(clauses, chromav2.EqString(key, fmt.Sprintf("%v", v)))
-		}
-	}
-
-	if len(clauses) == 0 {
-		return nil
-	}
-	if len(clauses) == 1 {
-		return &chromaWhereFilter{clause: clauses[0]}
-	}
-	return &chromaWhereFilter{clause: chromav2.And(clauses...)}
 }
 
 // mapToChromaDistanceMetric 将距离度量字符串转为 ChromaDB 距离函数。

@@ -184,14 +184,14 @@ func (s *MonitorE2ESuite) TestTeamMonitor_生命周期() {
 	s.Require().NoError(err, "CreateMonitor 不应返回错误")
 	s.Require().NotNil(m)
 
-	// Start
+	// Start 启动
 	err = m.Start(ctx)
 	s.Require().NoError(err, "Start 不应返回错误")
 
 	// 验证 Start 后 registrar 有监听器注册
 	s.Equal(1, registrar.addListenerCount, "Start 后应注册一个监听器")
 
-	// Stop
+	// Stop 停止
 	err = m.Stop(ctx)
 	s.Require().NoError(err, "Stop 不应返回错误")
 

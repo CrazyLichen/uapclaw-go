@@ -55,7 +55,7 @@ func TestExtractInterruptSignal_无中断(t *testing.T) {
 	sig := ExtractInterruptSignal(map[string]any{"result_type": "normal"}, nil)
 	assert.Nil(t, sig)
 
-	// nil result + nil err
+	// result 和 err 均为 nil
 	sig = ExtractInterruptSignal(nil, nil)
 	assert.Nil(t, sig)
 

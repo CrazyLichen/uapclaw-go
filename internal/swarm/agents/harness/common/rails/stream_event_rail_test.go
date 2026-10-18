@@ -469,7 +469,7 @@ func TestPauseCond_初始未暂停(t *testing.T) {
 	}()
 	select {
 	case <-done:
-		// OK
+		// 正常分支
 	case <-time.After(100 * time.Millisecond):
 		t.Error("初始未暂停时 Wait 应立即返回")
 	}
@@ -490,7 +490,7 @@ func TestPauseCond_PauseResume(t *testing.T) {
 
 	select {
 	case <-done:
-		// OK
+		// 正常分支
 	case <-time.After(200 * time.Millisecond):
 		t.Error("Resume 后 Wait 应返回")
 	}

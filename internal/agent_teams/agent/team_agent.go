@@ -590,10 +590,9 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 				if !ok || chunk == nil {
 					return lastResult, nil
 				}
-				// 将 stream.Schema 转换为 map[string]any
-				if m, ok := chunk.(interface{ ToMap() map[string]any }); ok {
-					lastResult = m.ToMap()
-				}
+				// Python last_result = chunk 保留最后一个 chunk 对象；
+				// Go 接口返回 map[string]any，经 ToMap()（pydantic model_dump 等价）转换
+				lastResult = chunk.ToMap()
 			case <-ctx.Done():
 				return lastResult, nil
 			}

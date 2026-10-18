@@ -141,7 +141,7 @@ func (s *SessionReuseSuite) TestSessionReuse_不同Session隔离() {
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 
-	// Session A
+	// 会话 A
 	sessA := s.NewTestSession("session-a")
 	s.Require().NoError(sessA.PreRun(ctx), "Session A PreRun 失败")
 

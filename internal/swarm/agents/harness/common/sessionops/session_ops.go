@@ -195,14 +195,14 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 			if err == nil {
 				var records []map[string]any
 				if err := json.Unmarshal(data, &records); err == nil {
-				for _, record := range records {
-					// T-01: 对齐 Python record.get("id", "") — 缺失时默认空串而非 nil
-					originalID, _ := record["id"].(string)
-					record["forked_from"] = map[string]any{
-						"session_id":  params.SourceSessionID,
-						"original_id": originalID,
+					for _, record := range records {
+						// T-01: 对齐 Python record.get("id", "") — 缺失时默认空串而非 nil
+						originalID, _ := record["id"].(string)
+						record["forked_from"] = map[string]any{
+							"session_id":  params.SourceSessionID,
+							"original_id": originalID,
+						}
 					}
-				}
 					// Python: json.dumps(data, ensure_ascii=False, indent=2)
 					if updated, err := json.MarshalIndent(records, "", "  "); err == nil {
 						if writeErr := os.WriteFile(targetHistory, updated, 0o644); writeErr != nil {

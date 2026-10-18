@@ -558,7 +558,7 @@ func TestExtractFilePath(t *testing.T) {
 	filePath2 := r.extractFilePath(cbc2)
 	assert.Equal(t, "", filePath2)
 
-	// nil ToolArgs
+	// ToolArgs 为 nil
 	inputs3 := &agentinterfaces.ToolCallInputs{ToolArgs: nil}
 	cbc3 := agentinterfaces.NewAgentCallbackContext(agent, inputs3, nil)
 
@@ -587,7 +587,7 @@ func TestExtractBashCommand(t *testing.T) {
 	cmd2 := r.extractBashCommand(cbc2)
 	assert.Equal(t, "", cmd2)
 
-	// nil ToolArgs
+	// ToolArgs 为 nil
 	inputs3 := &agentinterfaces.ToolCallInputs{ToolArgs: nil}
 	cbc3 := agentinterfaces.NewAgentCallbackContext(agent, inputs3, nil)
 
@@ -1074,7 +1074,7 @@ func TestAgentModeRail_GetCallbacks_完整调用(t *testing.T) {
 	r := NewAgentModeRail(nil)
 	callbacks := r.GetCallbacks()
 
-	// BeforeModelCall
+	// BeforeModelCall 回调（模型调用前）
 	fn, ok := callbacks[agentinterfaces.CallbackBeforeModelCall]
 	require.True(t, ok)
 	agent := newFakeDeepAgentForAgentMode()
@@ -1086,7 +1086,7 @@ func TestAgentModeRail_GetCallbacks_完整调用(t *testing.T) {
 	err := fn(context.Background(), cbc)
 	require.NoError(t, err)
 
-	// BeforeToolCall
+	// BeforeToolCall 回调（工具调用前）
 	fn2, ok := callbacks[agentinterfaces.CallbackBeforeToolCall]
 	require.True(t, ok)
 	inputs2 := &agentinterfaces.ToolCallInputs{ToolName: "bash"}
@@ -1094,7 +1094,7 @@ func TestAgentModeRail_GetCallbacks_完整调用(t *testing.T) {
 	err = fn2(context.Background(), cbc2)
 	require.NoError(t, err)
 
-	// AfterToolCall
+	// AfterToolCall 回调（工具调用后）
 	fn3, ok := callbacks[agentinterfaces.CallbackAfterToolCall]
 	require.True(t, ok)
 	inputs3 := &agentinterfaces.ToolCallInputs{ToolName: "bash"}

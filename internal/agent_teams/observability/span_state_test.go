@@ -37,7 +37,7 @@ func TestLlmSpanStack_PushPop(t *testing.T) {
 	state.PushLlmSpanState(span1)
 	state.PushLlmSpanState(span2)
 
-	// Pop LIFO
+	// Pop 后进先出（LIFO）
 	popped := state.PopLlmSpanState(false)
 	require.NotNil(t, popped)
 	assert.Equal(t, int64(2), popped.StartNs)

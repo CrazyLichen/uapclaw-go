@@ -54,4 +54,23 @@ func (s *TeamOutputSchema) SchemaType() string { return s.Type }
 // Validate 实现 stream.Schema 接口。
 func (s *TeamOutputSchema) Validate() error { return s.OutputSchema.Validate() }
 
+// ToMap 实现 stream.Schema 接口，对应 Python pydantic model_dump()。
+// 继承 OutputSchema 的 type/index/payload 三个字段，
+// 再附加 source_member/role；None 对应 nil（pydantic 默认包含 None 值字段）。
+// Python TeamRole 为 str 枚举，model_dump 输出字符串值。
+func (s *TeamOutputSchema) ToMap() map[string]any {
+	m := s.OutputSchema.ToMap()
+	if s.SourceMember != nil {
+		m["source_member"] = *s.SourceMember
+	} else {
+		m["source_member"] = nil
+	}
+	if s.Role != nil {
+		m["role"] = string(*s.Role)
+	} else {
+		m["role"] = nil
+	}
+	return m
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

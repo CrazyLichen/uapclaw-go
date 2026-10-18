@@ -39,7 +39,7 @@ func TestFindProjectRoot_多个marker(t *testing.T) {
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// go.mod marker
+	// 写入 go.mod 作为项目根标记
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module test"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -561,7 +561,7 @@ func TestDiscoverAndLoadMemoryFiles_额外目录(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// parseFrontmatterBlock
+// parseFrontmatterBlock 前置元数据块解析
 // ---------------------------------------------------------------------------
 
 // TestParseFrontmatterBlock_全破折号列表 测试全部以 - 开头的行解析为列表。

@@ -116,7 +116,7 @@ func TestBrowserProfileStore_完整流程(t *testing.T) {
 		t.Error("初始选中配置应为 nil")
 	}
 
-	// Upsert
+	// Upsert 插入或更新
 	p1 := &BrowserProfile{Name: "beta", DriverType: "local", Host: "0.0.0.0"}
 	if _, err := store.UpsertProfile(p1, false); err != nil {
 		t.Fatalf("UpsertProfile 失败: %v", err)
@@ -143,7 +143,7 @@ func TestBrowserProfileStore_完整流程(t *testing.T) {
 		t.Error("SelectedProfile 应为 alpha")
 	}
 
-	// GetProfile
+	// GetProfile 查询配置
 	if gp := store.GetProfile("beta"); gp == nil || gp.DriverType != "local" {
 		t.Error("GetProfile(beta) 应返回 DriverType=local")
 	}
@@ -154,7 +154,7 @@ func TestBrowserProfileStore_完整流程(t *testing.T) {
 		t.Error("GetProfile('') 应返回 nil")
 	}
 
-	// SelectProfile
+	// SelectProfile 选择配置
 	if _, err := store.SelectProfile("beta"); err != nil {
 		t.Fatalf("SelectProfile 失败: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestBrowserProfileStore_完整流程(t *testing.T) {
 		t.Error("SelectProfile 不存在时应返回错误")
 	}
 
-	// RemoveProfile
+	// RemoveProfile 删除配置
 	if !store.RemoveProfile("beta") {
 		t.Error("RemoveProfile(beta) 应返回 true")
 	}

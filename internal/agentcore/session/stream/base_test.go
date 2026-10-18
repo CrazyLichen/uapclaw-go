@@ -199,3 +199,92 @@ func TestCustomSchema_Validate(t *testing.T) {
 		})
 	}
 }
+
+// ──────────────────────────── ToMap 转换测试 ────────────────────────────
+
+// TestOutputSchema_ToMap 测试 OutputSchema 转换为 map（对齐 pydantic model_dump）。
+// IsLastSchema 为 Go 端扩展字段，不参与输出。
+func TestOutputSchema_ToMap(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema OutputSchema
+		want   map[string]any
+	}{
+		{
+			name:   "完整字段",
+			schema: OutputSchema{Type: "message", Index: 2, Payload: "hello"},
+			want:   map[string]any{"type": "message", "index": 2, "payload": "hello"},
+		},
+		{
+			name:   "Payload为nil",
+			schema: OutputSchema{Type: "message", Index: 0, Payload: nil},
+			want:   map[string]any{"type": "message", "index": 0, "payload": nil},
+		},
+		{
+			name:   "IsLastSchema不输出",
+			schema: OutputSchema{Type: "message", Index: 1, Payload: "x", IsLastSchema: true},
+			want:   map[string]any{"type": "message", "index": 1, "payload": "x"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.schema.ToMap()
+			if len(got) != len(tt.want) {
+				t.Errorf("ToMap() 键数 = %d, 期望 %d（%v）", len(got), len(tt.want), got)
+			}
+			for k, wantV := range tt.want {
+				gotV, ok := got[k]
+				if !ok {
+					t.Errorf("ToMap() 缺少键 %q", k)
+					continue
+				}
+				if gotV != wantV {
+					t.Errorf("ToMap()[%q] = %v, 期望 %v", k, gotV, wantV)
+				}
+			}
+		})
+	}
+}
+
+// TestTraceSchema_ToMap 测试 TraceSchema 转换为 map（对齐 pydantic model_dump）。
+func TestTraceSchema_ToMap(t *testing.T) {
+	s := TraceSchema{Type: "step", Payload: map[string]any{"node": "plan"}}
+	got := s.ToMap()
+	if got["type"] != "step" {
+		t.Errorf("ToMap()[type] = %v, 期望 step", got["type"])
+	}
+	payload, ok := got["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("ToMap()[payload] 类型断言失败: %T", got["payload"])
+	}
+	if payload["node"] != "plan" {
+		t.Errorf("ToMap()[payload][node] = %v, 期望 plan", payload["node"])
+	}
+	if len(got) != 2 {
+		t.Errorf("ToMap() 键数 = %d, 期望 2", len(got))
+	}
+}
+
+// TestCustomSchema_ToMap 测试 CustomSchema 转换为 map（type + Data 全部键值合并）。
+func TestCustomSchema_ToMap(t *testing.T) {
+	s := CustomSchema{Type: "event", Data: map[string]any{"k1": "v1", "k2": 42}}
+	got := s.ToMap()
+	if got["type"] != "event" {
+		t.Errorf("ToMap()[type] = %v, 期望 event", got["type"])
+	}
+	if got["k1"] != "v1" {
+		t.Errorf("ToMap()[k1] = %v, 期望 v1", got["k1"])
+	}
+	if got["k2"] != 42 {
+		t.Errorf("ToMap()[k2] = %v, 期望 42", got["k2"])
+	}
+	if len(got) != 3 {
+		t.Errorf("ToMap() 键数 = %d, 期望 3", len(got))
+	}
+
+	// Data 为 nil 时仅输出 type
+	empty := CustomSchema{Type: "event"}.ToMap()
+	if len(empty) != 1 || empty["type"] != "event" {
+		t.Errorf("空 Data ToMap() = %v, 期望仅含 type", empty)
+	}
+}

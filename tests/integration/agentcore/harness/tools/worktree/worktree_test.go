@@ -114,7 +114,7 @@ func (s *WorktreeManagerSuite) TestWorktreeManager_ExitKeep保留() {
 
 	wtPath := session.WorktreePath
 
-	// Exit with keep
+	// Exit 保留 worktree 退出
 	result, err := mgr.Exit(ctx, "keep", false)
 	s.Require().NoError(err)
 	s.Equal("keep", result["action"])
@@ -243,7 +243,7 @@ func (s *WorktreeManagerSuite) TestGitBackend_创建和移除() {
 
 	targetPath := worktree.WorktreePathFor(repoRoot, "backend-test")
 
-	// Create
+	// Create 创建
 	result, err := backend.Create(ctx, "backend-test", repoRoot, targetPath)
 	s.Require().NoError(err)
 	s.Require().NotNil(result)
@@ -258,7 +258,7 @@ func (s *WorktreeManagerSuite) TestGitBackend_创建和移除() {
 	_, err = os.Stat(filepath.Join(targetPath, ".git"))
 	s.NoError(err, ".git 文件应存在")
 
-	// Remove
+	// Remove 删除
 	removed := backend.Remove(ctx, targetPath, repoRoot)
 	s.True(removed, "Remove 应返回 true")
 

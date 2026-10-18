@@ -108,14 +108,14 @@ func TestShutdownMemberToolMapResult(t *testing.T) {
 func TestApprovePlanToolMapResult(t *testing.T) {
 	tool := &ApprovePlanTool{}
 
-	// approved
+	// approved 批准场景
 	result := tool.MapResult(map[string]any{
 		"success": true,
 		"data":    map[string]any{"approved": true, "plan_id": "p1"},
 	})
 	assert.Contains(t, result, "approved")
 
-	// rejected
+	// rejected 拒绝场景
 	result = tool.MapResult(map[string]any{
 		"success": true,
 		"data":    map[string]any{"approved": false, "plan_id": "p2"},
@@ -380,14 +380,14 @@ func TestMemberCompleteTaskToolMapResult(t *testing.T) {
 func TestSendMessageToolMapResult(t *testing.T) {
 	tool := &SendMessageTool{}
 
-	// broadcast
+	// broadcast 广播场景
 	result := tool.MapResult(map[string]any{
 		"success": true,
 		"data":    map[string]any{"type": "broadcast", "from": "leader"},
 	})
 	assert.Contains(t, result, "Broadcast sent")
 
-	// multicast
+	// multicast 群发场景
 	result = tool.MapResult(map[string]any{
 		"success": true,
 		"data": map[string]any{

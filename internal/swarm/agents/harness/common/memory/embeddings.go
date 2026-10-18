@@ -337,5 +337,5 @@ func (m *MockEmbeddingProvider) Dims() int { return m.dims }
 var (
 	_ EmbeddingProvider = (*OpenAICompatibleEmbeddingProvider)(nil)
 	_ EmbeddingProvider = (*MockEmbeddingProvider)(nil)
-	_ = math.Abs
+	_                   = math.Abs
 )

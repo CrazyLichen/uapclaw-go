@@ -345,7 +345,8 @@ func (d *MultimodalDocument) computeDashscopeInput() (map[string]any, error) {
 // 对齐 Python mimetypes.add_type("image/jpeg", ".jfif", strict=True)——
 // Go 标准库 mime 包默认不识别 .jfif 扩展名，需显式注册。
 func init() {
-	mime.AddExtensionType(".jfif", "image/jpeg")
+	// Python mimetypes.add_type 无返回值；注册失败仅影响该扩展名识别，不阻断启动
+	_ = mime.AddExtensionType(".jfif", "image/jpeg")
 }
 
 // defaultAddFieldOptions 返回默认的 AddField 选项

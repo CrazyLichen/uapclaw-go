@@ -87,7 +87,7 @@ func (s *AskUserSuite) TestAskUserRail_Uninit注销工具() {
 	s.Require().NotNil(am, "AbilityManager 不应为 nil")
 	s.NotNil(am.Get("ask_user"), "Init 后 ask_user 工具应存在")
 
-	// Uninit
+	// Uninit 反初始化
 	err = rail.Uninit(agent)
 	s.Require().NoError(err, "Uninit 失败")
 

@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 

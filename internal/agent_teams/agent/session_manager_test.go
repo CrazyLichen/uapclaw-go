@@ -146,7 +146,7 @@ func TestSessionManager_三态转换(t *testing.T) {
 	configurator := NewAgentConfigurator(nil)
 	m := NewSessionManager(state, configurator, nil)
 
-	// Unbound: sessionID="" teamSession=nil
+	// Unbound 未绑定态：sessionID="" 且 teamSession=nil
 	assert.Equal(t, "", m.sessionState.GetSessionID())
 	assert.Nil(t, state.TeamSession)
 

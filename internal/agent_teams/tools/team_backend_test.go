@@ -942,21 +942,21 @@ func TestCancelMember_Busy(t *testing.T) {
 
 // TestWithForce_WithApproved_WithFeedback 测试 Option 构造函数
 func TestWithForce_WithApproved_WithFeedback(t *testing.T) {
-	// WithForce
+	// WithForce 强制模式
 	shutdownCfg := &shutdownConfig{}
 	WithForce(true)(shutdownCfg)
 	if !shutdownCfg.force {
 		t.Error("WithForce(true) 应设置 force=true")
 	}
 
-	// WithApproved
+	// WithApproved 已批准
 	approveCfg := &approvePlanConfig{}
 	WithApproved(false)(approveCfg)
 	if approveCfg.approved {
 		t.Error("WithApproved(false) 应设置 approved=false")
 	}
 
-	// WithFeedback
+	// WithFeedback 带反馈
 	feedbackCfg := &approvePlanConfig{}
 	WithFeedback("needs revision")(feedbackCfg)
 	if feedbackCfg.feedback != "needs revision" {

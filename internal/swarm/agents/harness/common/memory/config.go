@@ -194,14 +194,14 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 		if v := strSlice(memoryCfg["extraPaths"]); v != nil {
 			s.ExtraPaths = v
 		}
-	if v, ok := memoryCfg["chunking"].(map[string]any); ok {
-		if t, ok := numVal(v["tokens"]); ok {
-			s.Chunking.Tokens = int(t)
+		if v, ok := memoryCfg["chunking"].(map[string]any); ok {
+			if t, ok := numVal(v["tokens"]); ok {
+				s.Chunking.Tokens = int(t)
+			}
+			if o, ok := numVal(v["overlap"]); ok {
+				s.Chunking.Overlap = int(o)
+			}
 		}
-		if o, ok := numVal(v["overlap"]); ok {
-			s.Chunking.Overlap = int(o)
-		}
-	}
 		if v, ok := memoryCfg["query"].(map[string]any); ok {
 			applyQueryOverrides(s, v)
 		}

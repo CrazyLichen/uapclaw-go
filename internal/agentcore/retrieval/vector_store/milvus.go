@@ -142,6 +142,48 @@ var _ VectorStore = (*MilvusVectorStore)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// DefaultMilvusCreateClient 默认客户端创建函数。
+//
+// 对齐 Python MilvusVectorStore.create_client：
+// 创建 client → database_name 非空且非 default 时检查库是否存在，不存在则创建。
+// 切库语义由 ClientConfig.DBName 等价覆盖（SDK 通过 grpc metadata header
+// 将 currentDB 附加到每个请求，等价 Python use_database），无需显式调用。
+// 仅在集成测试中覆盖（需要真实 Milvus 服务）。
+func DefaultMilvusCreateClient(ctx context.Context, databaseName, uri, token string) (MilvusClient, error) {
+	c, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
+		Address: uri,
+		APIKey:  token,
+		DBName:  databaseName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	adapter := &milvusClientAdapter{client: c}
+	// 对齐 Python: if database_name and database_name != "default":
+	//   if database_name not in client.list_databases(): client.create_database(database_name)
+	if databaseName != "" && databaseName != "default" {
+		dbs, err := adapter.ListDatabase(ctx, milvusclient.NewListDatabaseOption())
+		if err != nil {
+			_ = adapter.Close(ctx)
+			return nil, err
+		}
+		exists := false
+		for _, db := range dbs {
+			if db == databaseName {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			if err := adapter.CreateDatabase(ctx, milvusclient.NewCreateDatabaseOption(databaseName)); err != nil {
+				_ = adapter.Close(ctx)
+				return nil, err
+			}
+		}
+	}
+	return adapter, nil
+}
+
 // NewMilvusVectorStore 创建 retrieval 层 MilvusVectorStore。
 //
 // 对齐 Python MilvusVectorStore.__init__。
@@ -678,48 +720,6 @@ func (s *MilvusVectorStore) CheckVectorField() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// DefaultMilvusCreateClient 默认客户端创建函数。
-//
-// 对齐 Python MilvusVectorStore.create_client：
-// 创建 client → database_name 非空且非 default 时检查库是否存在，不存在则创建。
-// 切库语义由 ClientConfig.DBName 等价覆盖（SDK 通过 grpc metadata header
-// 将 currentDB 附加到每个请求，等价 Python use_database），无需显式调用。
-// 仅在集成测试中覆盖（需要真实 Milvus 服务）。
-func DefaultMilvusCreateClient(ctx context.Context, databaseName, uri, token string) (MilvusClient, error) {
-	c, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
-		Address: uri,
-		APIKey:  token,
-		DBName:  databaseName,
-	})
-	if err != nil {
-		return nil, err
-	}
-	adapter := &milvusClientAdapter{client: c}
-	// 对齐 Python: if database_name and database_name != "default":
-	//   if database_name not in client.list_databases(): client.create_database(database_name)
-	if databaseName != "" && databaseName != "default" {
-		dbs, err := adapter.ListDatabase(ctx, milvusclient.NewListDatabaseOption())
-		if err != nil {
-			_ = adapter.Close(ctx)
-			return nil, err
-		}
-		exists := false
-		for _, db := range dbs {
-			if db == databaseName {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			if err := adapter.CreateDatabase(ctx, milvusclient.NewCreateDatabaseOption(databaseName)); err != nil {
-				_ = adapter.Close(ctx)
-				return nil, err
-			}
-		}
-	}
-	return adapter, nil
-}
 
 // CreateCollection 创建集合。
 func (a *milvusClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...grpc.CallOption) error {

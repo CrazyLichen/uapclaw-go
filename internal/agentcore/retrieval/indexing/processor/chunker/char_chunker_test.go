@@ -50,7 +50,7 @@ func TestCharChunker_ChunkText_真实分块(t *testing.T) {
 }
 
 // TestCharChunker_ChunkText_空文本 对齐 Python test_chunk_text_empty + test_chunk_text_none
-//（Go 无法表达 None，两用例并入空串）
+// （Go 无法表达 None，两用例并入空串）
 func TestCharChunker_ChunkText_空文本(t *testing.T) {
 	c, err := NewCharChunker()
 	assert.NoError(t, err)

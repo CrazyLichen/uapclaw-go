@@ -8,8 +8,8 @@ import (
 
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"gopkg.in/yaml.v3"
@@ -461,8 +461,8 @@ func TestBuildConfiguredSubagents_browserAgent注册(t *testing.T) {
 	d.model = &llm.Model{}
 
 	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "true")
-	t.Setenv("BROWSER_DRIVER", "")            // 触发 managed 默认值注入
-	t.Setenv("BROWSER_MANAGED_BINARY", "")    // 触发 chrome_path 解析
+	t.Setenv("BROWSER_DRIVER", "")         // 触发 managed 默认值注入
+	t.Setenv("BROWSER_MANAGED_BINARY", "") // 触发 chrome_path 解析
 
 	config := map[string]any{
 		"subagents": map[string]any{

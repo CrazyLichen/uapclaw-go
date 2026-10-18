@@ -86,7 +86,7 @@ func TestGetIDsInRange_越界(t *testing.T) {
 	if len(ids) != 1 {
 		t.Errorf("getIDsInRange(0,10) 返回 %d 项, want 1", len(ids))
 	}
-	// startIdx > endIdx
+	// startIdx > endIdx 起始大于结束
 	ids = getIDsInRange(dataList, 5, 1)
 	if len(ids) != 0 {
 		t.Errorf("getIDsInRange(5,1) 返回 %d 项, want 0", len(ids))

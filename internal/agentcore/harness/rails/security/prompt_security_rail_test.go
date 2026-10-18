@@ -62,7 +62,7 @@ func TestSafetyPromptRail_InitUninit(t *testing.T) {
 	r.systemPromptBuilder = builder
 	assert.NotNil(t, r.systemPromptBuilder)
 
-	// Uninit
+	// Uninit 反初始化
 	r.Uninit(nil)
 	assert.Nil(t, r.systemPromptBuilder)
 }

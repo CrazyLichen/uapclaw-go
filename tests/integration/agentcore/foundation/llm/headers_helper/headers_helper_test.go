@@ -39,7 +39,7 @@ func TestHeadersHelperSuite(t *testing.T) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ---------------------------------------------------------------------------
-// BuildBaseHeaders（对齐 Python: build_base_headers）
+// BuildBaseHeaders 基础请求头（对齐 Python: build_base_headers）
 // ---------------------------------------------------------------------------
 
 // TestBuildBaseHeaders_正常输入 测试正常自定义头部构建。
@@ -100,7 +100,7 @@ func (s *HeadersHelperSuite) TestBuildBaseHeaders_空输入() {
 }
 
 // ---------------------------------------------------------------------------
-// MergeHeadersCaseInsensitive（对齐 Python: merge_headers_case_insensitive）
+// MergeHeadersCaseInsensitive 大小写不敏感合并（对齐 Python: merge_headers_case_insensitive）
 // ---------------------------------------------------------------------------
 
 // TestMergeHeadersCaseInsensitive_请求级覆盖配置级 测试请求级头部覆盖配置级。
@@ -156,7 +156,7 @@ func (s *HeadersHelperSuite) TestMergeHeadersCaseInsensitive_两者均为空() {
 }
 
 // ---------------------------------------------------------------------------
-// MergeRequestHeaders（对齐 Python: merge_request_headers）
+// MergeRequestHeaders 请求头合并（对齐 Python: merge_request_headers）
 // ---------------------------------------------------------------------------
 
 // TestMergeRequestHeaders_配置级和请求级 测试配置级和请求级合并。
@@ -241,7 +241,7 @@ func (s *HeadersHelperSuite) TestMergeRequestHeaders_两者均为空() {
 }
 
 // ---------------------------------------------------------------------------
-// SanitizeHeaders（对齐 Python: sanitize_headers）
+// SanitizeHeaders 请求头清洗（对齐 Python: sanitize_headers）
 // ---------------------------------------------------------------------------
 
 // TestSanitizeHeaders_受保护头部被过滤 测试受保护头部被过滤。
@@ -318,7 +318,7 @@ func (s *HeadersHelperSuite) TestSanitizeHeaders_键首尾空白被去除() {
 }
 
 // ---------------------------------------------------------------------------
-// IsProtectedHeader & ProtectedHeaders
+// IsProtectedHeader 与 ProtectedHeaders 保护头判断
 // ---------------------------------------------------------------------------
 
 // TestIsProtectedHeader_受保护头部 测试受保护头部（大小写不敏感）。

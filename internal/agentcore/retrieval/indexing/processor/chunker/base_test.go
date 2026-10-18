@@ -168,7 +168,7 @@ func TestBaseChunker_Length默认按字符计数(t *testing.T) {
 }
 
 // TestBaseChunker_未注入self时ChunkDocuments报错 standalone 防御路径
-//（Python 基类 chunk_text 返回 None 无人消费，Go 侧返回显式错误）
+// （Python 基类 chunk_text 返回 None 无人消费，Go 侧返回显式错误）
 func TestBaseChunker_未注入self时ChunkDocuments报错(t *testing.T) {
 	bc, _ := NewBaseChunker(100, 10)
 	chunks, err := bc.ChunkDocuments(context.Background(), []reranker.Document{{ID: "d", Text: "x"}})

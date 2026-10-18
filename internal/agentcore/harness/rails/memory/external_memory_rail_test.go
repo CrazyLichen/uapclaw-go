@@ -777,7 +777,7 @@ func TestExternalMemoryRail_Uninit_注销工具和关闭Provider(t *testing.T) {
 	_ = rail.Init(context.Background(), agent)
 	rail.initialized = true
 
-	// Uninit
+	// Uninit 反初始化
 	err := rail.Uninit(agent)
 	if err != nil {
 		t.Fatalf("Uninit = %v", err)

@@ -204,7 +204,7 @@ func TestUnpackAgentInputs(t *testing.T) {
 	assert.Equal(t, "leader", role)
 	assert.Equal(t, "hello", query)
 
-	// fallbackAgentID
+	// fallbackAgentID 回退标识
 	agentID, _, _ = unpackAgentInputs(nil, "fallback-id")
 	assert.Equal(t, "fallback-id", agentID)
 
@@ -307,7 +307,7 @@ func TestExtractUsageMetadata(t *testing.T) {
 		assert.Equal(t, 50, result.OutputTokens)
 	}
 
-	// nil meta
+	// meta 为 nil
 	result = extractUsageMetadata(nil)
 	assert.Nil(t, result)
 }

@@ -995,7 +995,7 @@ func TestNewTodoModifyTool_Invoke(t *testing.T) {
 		t.Fatal("期望 message 字段存在且为字符串")
 	}
 
-	// cancel
+	// cancel 取消操作
 	result, err = modifyTool.Invoke(context.Background(), map[string]any{
 		"action": "cancel",
 		"ids":    []any{"t2"},
@@ -1018,7 +1018,7 @@ func TestNewTodoModifyTool_Invoke(t *testing.T) {
 	}
 	_ = result
 
-	// append
+	// append 追加操作
 	result, err = modifyTool.Invoke(context.Background(), map[string]any{
 		"action": "append",
 		"todos":  []any{map[string]any{"id": "t4", "content": "追加任务", "activeForm": "执行追加", "description": "追加描述", "status": "pending"}},
@@ -1047,7 +1047,7 @@ func TestNewTodoModifyTool_InsertActions(t *testing.T) {
 
 	modifyTool := NewTodoModifyTool(todoTool, "cn", "agent1")
 
-	// insert_after
+	// insert_after 后插操作
 	result, err := modifyTool.Invoke(context.Background(), map[string]any{
 		"action": "insert_after",
 		"todo_data": map[string]any{
@@ -1060,7 +1060,7 @@ func TestNewTodoModifyTool_InsertActions(t *testing.T) {
 	}
 	_ = result
 
-	// insert_before
+	// insert_before 前插操作
 	result, err = modifyTool.Invoke(context.Background(), map[string]any{
 		"action": "insert_before",
 		"todo_data": map[string]any{

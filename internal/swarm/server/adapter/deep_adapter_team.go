@@ -518,9 +518,9 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 		// M-02: 对齐 Python 后续请求使用 directive 清洗后的 query 变量（上文 queryText），
 		// 不再重新读取原始 inputs["query"]
 		if queryText != "" {
-		// S-07: Interact 只返回 bool（对齐 Python 永不抛异常语义）
-		// T-01: 使用类型化构造函数 NewInteractInputFromString（普通用户消息形态）
-		if !teamManager.Interact(ctx, sessionID, interaction.NewInteractInputFromString(queryText)) {
+			// S-07: Interact 只返回 bool（对齐 Python 永不抛异常语义）
+			// T-01: 使用类型化构造函数 NewInteractInputFromString（普通用户消息形态）
+			if !teamManager.Interact(ctx, sessionID, interaction.NewInteractInputFromString(queryText)) {
 				logger.Warn(logComponent).Str("session_id", sessionID).
 					Msg("processTeamMessageStream: Interact returned false")
 				ch <- &agentschema.AgentResponseChunk{

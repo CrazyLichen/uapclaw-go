@@ -60,7 +60,7 @@ func TestGetChunker_未知名报错含注册列表(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Unknown chunker: no_such_chunker")
 	assert.Contains(t, err.Error(), "hybrid") // 内置 hybrid 已注册
-	assert.Contains(t, err.Error(), "char")  // 13.6 后内置 char 也已注册
+	assert.Contains(t, err.Error(), "char")   // 13.6 后内置 char 也已注册
 }
 
 // TestGetChunker_工厂透传参数 kwargs 透传到工厂

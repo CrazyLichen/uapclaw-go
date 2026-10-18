@@ -150,7 +150,7 @@ func TestSystemPromptHookContext_ToMap(t *testing.T) {
 	// nil *string 存入 map[string]any 后为 typed nil，需用反射判断
 	homeDirVal := m["home_dir"]
 	if homeDirVal != nil {
-		// typed nil: *string(nil) != nil in interface comparison
+		// typed nil：接口比较中 *string(nil) != nil
 		// 使用 stringPtr 检查
 		if ptr, ok := homeDirVal.(*string); ok && ptr != nil {
 			t.Errorf("ToMap()[home_dir] = %v, want nil", homeDirVal)

@@ -408,7 +408,7 @@ func TestFullCompactProcessor_IsSyntheticMarkerMessage(t *testing.T) {
 func TestFullCompactProcessor_SerializeMessage(t *testing.T) {
 	fcp := newTestFCP(nil)
 
-	// UserMessage
+	// UserMessage 用户消息
 	userMsg := llm_schema.NewUserMessage("你好世界")
 	result := fcp._serializeMessage(userMsg)
 	if !strings.Contains(result, "role=user") {
@@ -435,7 +435,7 @@ func TestFullCompactProcessor_SerializeMessage(t *testing.T) {
 		t.Error("应包含工具名称")
 	}
 
-	// ToolMessage
+	// ToolMessage 工具消息
 	toolMsg := llm_schema.NewToolMessage("call_1", "晴天")
 	result = fcp._serializeMessage(toolMsg)
 	if !strings.Contains(result, "tool_call_id=call_1") {

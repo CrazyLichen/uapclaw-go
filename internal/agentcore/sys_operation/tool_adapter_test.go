@@ -199,17 +199,17 @@ func TestDispatchOperationMethod(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// shell - execute_cmd
+	// shell 类型 - execute_cmd 方法
 	result, err := dispatchOperationMethod(instance, "shell", "execute_cmd", ctx, map[string]any{"command": "ls"})
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// fs - read_file
+	// fs 类型 - read_file 方法
 	result, err = dispatchOperationMethod(instance, "fs", "read_file", ctx, map[string]any{"path": "/tmp/test"})
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// code - execute_code
+	// code 类型 - execute_code 方法
 	result, err = dispatchOperationMethod(instance, "code", "execute_code", ctx, map[string]any{"code": "print('hello')"})
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -228,7 +228,7 @@ func TestDispatchShellMethod(t *testing.T) {
 	shellOp := &mockShellOperation{}
 	ctx := context.Background()
 
-	// execute_cmd
+	// execute_cmd 方法
 	res, err := dispatchShellMethod(shellOp, ctx, "execute_cmd", map[string]any{"command": "echo hello"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
@@ -272,37 +272,37 @@ func TestDispatchFsMethod(t *testing.T) {
 	fsOp := &mockFsOperation{}
 	ctx := context.Background()
 
-	// read_file
+	// read_file 方法
 	res, err := dispatchFsMethod(fsOp, ctx, "read_file", map[string]any{"path": "/tmp/test"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// write_file
+	// write_file 方法
 	res, err = dispatchFsMethod(fsOp, ctx, "write_file", map[string]any{"path": "/tmp/test", "content": "hello"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// list_files
+	// list_files 方法
 	res, err = dispatchFsMethod(fsOp, ctx, "list_files", map[string]any{"path": "/tmp"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// list_directories
+	// list_directories 方法
 	res, err = dispatchFsMethod(fsOp, ctx, "list_directories", map[string]any{"path": "/tmp"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// search_files
+	// search_files 方法
 	res, err = dispatchFsMethod(fsOp, ctx, "search_files", map[string]any{"path": "/tmp", "pattern": "*.go"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// upload_file
+	// upload_file 方法
 	res, err = dispatchFsMethod(fsOp, ctx, "upload_file", map[string]any{"local_path": "/tmp/a", "target_path": "/tmp/b"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// download_file
+	// download_file 方法
 	res, err = dispatchFsMethod(fsOp, ctx, "download_file", map[string]any{"source_path": "/tmp/a", "local_path": "/tmp/b"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
@@ -336,7 +336,7 @@ func TestDispatchCodeMethod(t *testing.T) {
 	codeOp := &mockCodeOperation{}
 	ctx := context.Background()
 
-	// execute_code
+	// execute_code 方法
 	res, err := dispatchCodeMethod(codeOp, ctx, "execute_code", map[string]any{"code": "print('hello')"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)

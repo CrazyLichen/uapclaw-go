@@ -427,25 +427,25 @@ func TestBuildIndexParams(t *testing.T) {
 		t.Error("buildIndexParams() 不应返回 nil")
 	}
 
-	// MilvusAUTO
+	// MilvusAUTO 自动索引
 	autoIdx := s.buildIndexParamsHelper("embedding", "COSINE", Options{VectorField: vector_fields.NewMilvusAUTO("embedding")})
 	if autoIdx == nil {
 		t.Error("buildIndexParams(AUTO) 不应返回 nil")
 	}
 
-	// MilvusHNSW
+	// MilvusHNSW HNSW 索引
 	hnswIdx := s.buildIndexParamsHelper("embedding", "COSINE", Options{VectorField: vector_fields.NewMilvusHNSW("embedding", 30, 360, 2.0)})
 	if hnswIdx == nil {
 		t.Error("buildIndexParams(HNSW) 不应返回 nil")
 	}
 
-	// MilvusIVF
+	// MilvusIVF IVF 索引
 	ivfIdx := s.buildIndexParamsHelper("embedding", "IP", Options{VectorField: vector_fields.NewMilvusIVF("embedding", 128, 8)})
 	if ivfIdx == nil {
 		t.Error("buildIndexParams(IVF) 不应返回 nil")
 	}
 
-	// MilvusSCANN
+	// MilvusSCANN SCANN 索引
 	scannIdx := s.buildIndexParamsHelper("embedding", "COSINE", Options{VectorField: vector_fields.NewMilvusSCANN("embedding", 128, 8, true, 200)})
 	if scannIdx == nil {
 		t.Error("buildIndexParams(SCANN) 不应返回 nil")

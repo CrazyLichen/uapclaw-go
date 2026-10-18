@@ -651,7 +651,7 @@ func TestGetAudioDuration_WAV文件(t *testing.T) {
 	// 构造一个简单的 WAV 文件
 	tmpDir := t.TempDir()
 	wavFile := filepath.Join(tmpDir, "test.wav")
-	// WAV header + fmt chunk + data chunk
+	// 构造 WAV 头 + fmt 块 + data 块
 	wavData := constructSimpleWAV(44100, 16, 1, 44100) // 1 second of audio at 44100Hz
 	_ = os.WriteFile(wavFile, wavData, 0644)
 

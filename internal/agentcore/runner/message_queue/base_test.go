@@ -98,7 +98,7 @@ func TestQueueMessage_字段完整性(t *testing.T) {
 
 // TestQueueMessageBase_接口getter 测试 QueueMessageBase 接口的 getter/setter 方法。
 func TestQueueMessageBase_接口getter(t *testing.T) {
-	// QueueMessage
+	// QueueMessage 入队消息
 	qm := NewQueueMessage(map[string]any{"key": "value"})
 	assert.Equal(t, "", qm.GetMessageID())
 	qm.SetMessageID("msg-1")
@@ -111,13 +111,13 @@ func TestQueueMessageBase_接口getter(t *testing.T) {
 	qm.SetErrorMsg("error")
 	assert.Equal(t, "error", qm.GetErrorMsg())
 
-	// InvokeQueueMessage
+	// InvokeQueueMessage 入队非流式消息
 	im := NewInvokeQueueMessage(map[string]any{"key": "invoke"})
 	im.SetMessageID("msg-2")
 	assert.Equal(t, "msg-2", im.GetMessageID())
 	assert.Equal(t, map[string]any{"key": "invoke"}, im.GetPayload())
 
-	// StreamQueueMessage
+	// StreamQueueMessage 入队流式消息
 	sm := NewStreamQueueMessage(map[string]any{"key": "stream"})
 	sm.SetMessageID("msg-3")
 	assert.Equal(t, "msg-3", sm.GetMessageID())

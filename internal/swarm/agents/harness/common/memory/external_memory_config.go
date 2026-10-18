@@ -134,7 +134,7 @@ func GetExternalMemoryConfig(cfg map[string]any) ExternalMemoryConfig {
 		// Python: "user_id": ext.get("user_id") or _DEFAULT_USER
 		UserID: strValDefaultExternal(strVal("user_id"), defaultExternalUser),
 		// Python: "scope_id": ext.get("scope_id") or _DEFAULT_SCOPE
-		ScopeID: strValDefaultExternal(strVal("scope_id"), defaultExternalScope),
+		ScopeID:        strValDefaultExternal(strVal("scope_id"), defaultExternalScope),
 		AllowedPlugins: plugins,
 		OpenJiuwen:     sub("openjiuwen"),
 		Mem0:           sub("mem0"),

@@ -268,7 +268,7 @@ func newTestSpawnManager(t *testing.T) *SpawnManager {
 }
 
 // ---------------------------------------------------------------------------
-// SpawnedHandles / SpawnedHandleNames
+// SpawnedHandles / SpawnedHandleNames 句柄查询
 // ---------------------------------------------------------------------------
 
 // TestSpawnManager_SpawnedHandles_空 测试无句柄时返回空 map。

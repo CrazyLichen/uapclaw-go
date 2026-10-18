@@ -248,6 +248,7 @@ func TestConfigCache_缓存与清理(t *testing.T) {
 		t.Fatalf("清缓存后应重新加载，got %s", got)
 	}
 }
+
 // ──────────────────────────── apply*Overrides 字段级测试 ────────────────────────────
 
 // TestApplyQueryOverrides_全字段 对齐 Python memory 段 query 覆盖：
@@ -387,9 +388,9 @@ func TestApplyOverrides_顶层字段(t *testing.T) {
 func TestApplyOverrides_类型不匹配保持默认(t *testing.T) {
 	injectTestConfigLoader(t, "")
 	s := CreateMemorySettings(".", map[string]any{
-		"provider": 123,           // 非 string 忽略
-		"chunking": "not-a-map",   // 非 map 忽略
-		"sources":  []any{1, 2},   // 非字符串元素忽略 → 空结果不覆盖
+		"provider": 123,         // 非 string 忽略
+		"chunking": "not-a-map", // 非 map 忽略
+		"sources":  []any{1, 2}, // 非字符串元素忽略 → 空结果不覆盖
 	})
 	if s.Provider != "openai_compatible" {
 		t.Errorf("非 string provider 应保持默认: %s", s.Provider)

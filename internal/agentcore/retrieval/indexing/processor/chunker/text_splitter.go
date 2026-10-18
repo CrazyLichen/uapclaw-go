@@ -91,7 +91,7 @@ func NewCharSplitter(chunkSize, chunkOverlap int) *CharSplitter {
 //
 // step = size-overlap（size≤overlap 时退化 step=size——钳制后不可达，
 // 保留对齐 Python 源码）；每块生成 uuid，携带 doc_id 与 metadata
-//（共享引用，对齐 Python）；rune 切片保证多字节字符（中文）不被截断。
+// （共享引用，对齐 Python）；rune 切片保证多字节字符（中文）不被截断。
 //
 // Python: text_splitter.py CharSplitter.split
 func (s *CharSplitter) Split(doc *reranker.Document) ([]common.TextChunk, error) {

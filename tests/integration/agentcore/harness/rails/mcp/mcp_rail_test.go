@@ -104,7 +104,7 @@ func (s *McpRailSuite) TestMcpRail_Uninit清理() {
 	// 执行一次 Invoke 确保 Init 完成
 	_, _ = agent.Invoke(s.Ctx, map[string]any{"query": "清理前"})
 
-	// Uninit
+	// Uninit 反初始化
 	rail.Uninit(agent)
 
 	// 验证工具已移除

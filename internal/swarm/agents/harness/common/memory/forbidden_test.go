@@ -117,6 +117,7 @@ func TestBuildForbiddenPromptCN_空描述(t *testing.T) {
 		t.Error("应有 patterns")
 	}
 }
+
 // isolateForbiddenConfig 隔离全局配置路径到临时目录（forbidden 走 config.New("") 全局路径）。
 // 返回 config.yaml 完整路径。
 func isolateForbiddenConfig(t *testing.T) string {

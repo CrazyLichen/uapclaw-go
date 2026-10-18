@@ -592,7 +592,7 @@ func (c *countingExtension) SnapshotForEvolution(_ context.Context, traj *trajec
 }
 
 // ---------------------------------------------------------------------------
-// formatTimeoutSecs
+// formatTimeoutSecs 超时格式化
 // ---------------------------------------------------------------------------
 
 // TestFormatTimeoutSecs_整数 测试整数秒格式化。
@@ -621,7 +621,7 @@ func TestFormatTimeoutSecs_去除尾点(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// containsTeamSkillKind
+// containsTeamSkillKind 技能类型匹配
 // ---------------------------------------------------------------------------
 
 // TestContainsTeamSkillKind_团队技能 测试 kind=team-skill 返回 true。

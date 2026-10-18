@@ -99,7 +99,7 @@ func (h *mockS3Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		parts := strings.SplitN(strings.Trim(r.URL.Path, "/"), "/", 2)
 		bucket := parts[0]
 		if len(parts) == 1 || parts[1] == "" {
-			// ListObjects
+			// ListObjects 列出对象
 			prefix := r.URL.Query().Get("prefix")
 			result := listBucketResult{
 				IsTruncated: false,
@@ -117,7 +117,7 @@ func (h *mockS3Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/xml")
 			_ = xml.NewEncoder(w).Encode(result)
 		} else {
-			// GetObject
+			// GetObject 读取对象
 			key := parts[1]
 			content, ok := h.objects[bucket][key]
 			if !ok {

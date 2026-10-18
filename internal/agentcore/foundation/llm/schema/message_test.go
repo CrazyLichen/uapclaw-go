@@ -368,7 +368,7 @@ func TestMessageContent_String(t *testing.T) {
 func TestDefaultMessage_GettersSetters(t *testing.T) {
 	msg := NewDefaultMessage(RoleTypeUser, "hello")
 
-	// GetRole / SetRole
+	// GetRole / SetRole 角色读写
 	if msg.GetRole() != RoleTypeUser {
 		t.Errorf("GetRole() = %v, want %v", msg.GetRole(), RoleTypeUser)
 	}
@@ -377,7 +377,7 @@ func TestDefaultMessage_GettersSetters(t *testing.T) {
 		t.Errorf("SetRole 后 GetRole() = %v, want %v", msg.GetRole(), RoleTypeSystem)
 	}
 
-	// GetContent / SetContent
+	// GetContent / SetContent 内容读写
 	if msg.GetContent().Text() != "hello" {
 		t.Errorf("GetContent().Text() = %q, want %q", msg.GetContent().Text(), "hello")
 	}
@@ -386,7 +386,7 @@ func TestDefaultMessage_GettersSetters(t *testing.T) {
 		t.Errorf("SetContent 后 GetContent().Text() = %q, want %q", msg.GetContent().Text(), "world")
 	}
 
-	// GetName / SetName
+	// GetName / SetName 名称读写
 	if msg.GetName() != "" {
 		t.Errorf("GetName() = %q, want 空", msg.GetName())
 	}
@@ -395,7 +395,7 @@ func TestDefaultMessage_GettersSetters(t *testing.T) {
 		t.Errorf("SetName 后 GetName() = %q, want %q", msg.GetName(), "alice")
 	}
 
-	// GetMetadata / SetMetadata
+	// GetMetadata / SetMetadata 元数据读写
 	if msg.GetMetadata() != nil {
 		t.Errorf("GetMetadata() = %v, want nil", msg.GetMetadata())
 	}

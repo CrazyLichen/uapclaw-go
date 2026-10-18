@@ -285,7 +285,7 @@ func TestMessageReadStatusBase_JSON(t *testing.T) {
 		t.Errorf("ReadAt = %v, want *5000", got.ReadAt)
 	}
 
-	// nil ReadAt
+	// ReadAt 为 nil
 	rs2 := MessageReadStatusBase{MemberName: "bob", TeamName: "team1"}
 	data2, _ := json.Marshal(rs2)
 	var got2 MessageReadStatusBase

@@ -374,16 +374,16 @@ func (m *MemoryIndexManager) Status() map[string]any {
 	}
 
 	return map[string]any{
-		"available":     true,
-		"provider":      provider,
-		"model":         model,
-		"files":         fileCount,
-		"chunks":        chunkCount,
-		"sourceCounts":  sourceCounts,
-		"dirty":         m.dirty,
-		"fts":           map[string]any{"enabled": m.ftsEnabled, "available": m.ftsAvailable, "error": m.ftsError},
-		"vector":        map[string]any{"enabled": m.vectorEnabled, "available": m.vectorAvailable, "error": m.vectorError, "dims": m.vectorDims},
-		"cache":         map[string]any{"enabled": m.cacheEnabled, "entries": m.cacheEntryCount()},
+		"available":    true,
+		"provider":     provider,
+		"model":        model,
+		"files":        fileCount,
+		"chunks":       chunkCount,
+		"sourceCounts": sourceCounts,
+		"dirty":        m.dirty,
+		"fts":          map[string]any{"enabled": m.ftsEnabled, "available": m.ftsAvailable, "error": m.ftsError},
+		"vector":       map[string]any{"enabled": m.vectorEnabled, "available": m.vectorAvailable, "error": m.vectorError, "dims": m.vectorDims},
+		"cache":        map[string]any{"enabled": m.cacheEnabled, "entries": m.cacheEntryCount()},
 	}
 }
 
@@ -886,10 +886,7 @@ func (m *MemoryIndexManager) shouldFullReindex() bool {
 	}
 	// Python: meta.get("chunkTokens") != self.settings.chunking.get("tokens")
 	metaTokens, _ := numVal(meta["chunkTokens"])
-	if int(metaTokens) != m.Settings.Chunking.Tokens {
-		return true
-	}
-	return false
+	return int(metaTokens) != m.Settings.Chunking.Tokens
 }
 
 // runReindex 全量重建。对齐 Python _run_reindex（manager.py L524-543）：
@@ -911,10 +908,10 @@ func (m *MemoryIndexManager) runReindex(ctx context.Context) error {
 	}
 
 	meta := map[string]any{
-		"provider":    m.provider.ID(),
-		"model":       m.provider.Model(),
-		"providerKey": m.providerKey,
-		"chunkTokens": m.Settings.Chunking.Tokens,
+		"provider":     m.provider.ID(),
+		"model":        m.provider.Model(),
+		"providerKey":  m.providerKey,
+		"chunkTokens":  m.Settings.Chunking.Tokens,
 		"chunkOverlap": m.Settings.Chunking.Overlap,
 	}
 	// Python: if self.vector_available and self.vector_dims: meta["vectorDims"] = self.vector_dims

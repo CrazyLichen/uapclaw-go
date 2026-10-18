@@ -153,13 +153,13 @@ func TestHandleListMarkdown(t *testing.T) {
 }
 
 func TestHandleWsDebugConfig(t *testing.T) {
-	// GET
+	// GET 请求
 	req := httptest.NewRequest(http.MethodGet, "/file-api/ws-debug-config", nil)
 	w := httptest.NewRecorder()
 	HandleWsDebugConfigGet(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// POST
+	// POST 请求
 	body := map[string]any{"port": float64(8080)}
 	bodyJSON, _ := json.Marshal(body)
 	req = httptest.NewRequest(http.MethodPost, "/file-api/ws-debug-config", bytes.NewReader(bodyJSON))

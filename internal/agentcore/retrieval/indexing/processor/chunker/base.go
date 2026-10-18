@@ -154,7 +154,7 @@ func (b *BaseChunker) Length(text string) int {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // chunkTextOf 路由到子类覆写的 ChunkText；未注入 self 时返回错误
-//（BaseChunker 单独不构成完整 Chunker，无法猜测分块算法）。
+// （BaseChunker 单独不构成完整 Chunker，无法猜测分块算法）。
 // Python 基类 chunk_text 返回 None（无人消费），Go 侧该防御路径返回显式错误。
 func (b *BaseChunker) chunkTextOf(text string) ([]string, error) {
 	if b.self != nil {

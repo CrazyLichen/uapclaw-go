@@ -115,7 +115,7 @@ func TestActivePendingState(t *testing.T) {
 		t.Error("PendingSessionID 应为 sess-1")
 	}
 
-	// CommitRuntimeReady
+	// CommitRuntimeReady 提交运行时就绪
 	mgr.CommitRuntimeReady(sid1, tn1)
 	if mgr.ActiveSessionID() != "sess-1" {
 		t.Error("CommitRuntimeReady 后 ActiveSessionID 应为 sess-1")
@@ -124,7 +124,7 @@ func TestActivePendingState(t *testing.T) {
 		t.Error("CommitRuntimeReady 后 PendingSessionID 应为空")
 	}
 
-	// ClearActiveRuntime
+	// ClearActiveRuntime 清除活跃运行时
 	mgr.ClearActiveRuntime(sid1)
 	if mgr.ActiveSessionID() != "" {
 		t.Error("ClearActiveRuntime 后 ActiveSessionID 应为空")
@@ -229,21 +229,21 @@ func TestCancelAllStreamTasks(t *testing.T) {
 func TestSkillRegistration(t *testing.T) {
 	mgr := NewTeamManager()
 
-	// TeamSkillRail
+	// TeamSkillRail 团队技能轨道
 	skillRail := &evolution.TeamSkillEvolutionRail{}
 	mgr.RegisterTeamSkillRail("sess-1", skillRail)
 	if mgr.GetTeamSkillRail("sess-1") != skillRail {
 		t.Error("GetTeamSkillRail 应返回注册的 rail")
 	}
 
-	// TeamSkillCreateRail
+	// TeamSkillCreateRail 团队技能创建轨道
 	createRail := &evolution.TeamSkillCreateRail{}
 	mgr.RegisterTeamSkillCreateRail("sess-1", createRail)
 	if mgr.GetTeamSkillCreateRail("sess-1") != createRail {
 		t.Error("GetTeamSkillCreateRail 应返回注册的 rail")
 	}
 
-	// SkillSyncTarget
+	// SkillSyncTarget 技能同步目标
 	mgr.RegisterTeamSkillSyncTarget("sess-1", "/source", "/target")
 	if !mgr.HasTeamSkillSyncTarget("sess-1") {
 		t.Error("HasTeamSkillSyncTarget 应为 true")
@@ -252,7 +252,7 @@ func TestSkillRegistration(t *testing.T) {
 		t.Error("未注册的 session 应返回 false")
 	}
 
-	// TeamMemberSkillEvolutionRail
+	// TeamMemberSkillEvolutionRail 成员技能演化轨道
 	memberRail1 := &evolution.SkillEvolutionRail{}
 	memberRail2 := &evolution.SkillEvolutionRail{}
 	mgr.RegisterTeamMemberSkillEvolutionRail("sess-1", memberRail1)

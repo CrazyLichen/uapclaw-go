@@ -24,7 +24,7 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ---------------------------------------------------------------------------
-// 构造 & Health（对齐 Python: TestDreamingOrchestratorInit）
+// 构造 & 健康检查（对齐 Python: TestDreamingOrchestratorInit）
 // ---------------------------------------------------------------------------
 
 // TestNewDreamingOrchestrator_默认值 测试构造函数默认值。
@@ -130,7 +130,7 @@ func TestDreamingOrchestrator_Stop_从未启动(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// tick — busy backoff & error handling（对齐 Python: TestDreamingOrchestratorTick）
+// tick — 忙等退避与错误处理（对齐 Python: TestDreamingOrchestratorTick）
 // ---------------------------------------------------------------------------
 
 // TestDreamingOrchestrator_Tick_无busyChecker时执行sweep 测试无 busyChecker 时执行 sweep。
@@ -257,7 +257,7 @@ func TestDreamingOrchestrator_Tick_意外错误被吞掉(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// loop 调度（对齐 Python: TestDreamingOrchestratorLoop）
+// loop 循环调度（对齐 Python: TestDreamingOrchestratorLoop）
 // ---------------------------------------------------------------------------
 
 // TestDreamingOrchestrator_Loop_尊重cancel 测试 loop 尊重 cancel。

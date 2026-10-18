@@ -142,16 +142,16 @@ func TestPlaywrightClient_SSE传输完整流程(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = client.Disconnect(context.Background()) }()
 
-	// CallTool
+	// CallTool 调用工具
 	result, err := client.CallTool(context.Background(), "echo", map[string]any{"text": "hello"})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// ListResources
+	// ListResources 列出资源
 	_, err = client.ListResources(context.Background())
 	_ = err
 
-	// ReadResource
+	// ReadResource 读取资源
 	_, err = client.ReadResource(context.Background(), "test://resource")
 	_ = err
 }

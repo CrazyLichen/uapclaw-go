@@ -468,7 +468,7 @@ func TestTracer_TriggerWorkflow_所有Workflow事件(t *testing.T) {
 	ctx := context.Background()
 	invokeID := "invoke-all-wf"
 
-	// OnCallStart
+	// OnCallStart 调用开始
 	tracer.TriggerWorkflow(ctx, TraceWFCallStart, "", &TriggerParams{
 		InvokeID: invokeID,
 		Metadata: map[string]any{
@@ -479,7 +479,7 @@ func TestTracer_TriggerWorkflow_所有Workflow事件(t *testing.T) {
 		SourceIDs: []string{"src-1"},
 	})
 
-	// OnPreInvoke
+	// OnPreInvoke 非流式调用前
 	tracer.TriggerWorkflow(ctx, TraceWFPreInvoke, "", &TriggerParams{
 		InvokeID:          invokeID,
 		Inputs:            "pre-invoke-input",
@@ -487,7 +487,7 @@ func TestTracer_TriggerWorkflow_所有Workflow事件(t *testing.T) {
 		NeedSend:          false,
 	})
 
-	// OnPreStream
+	// OnPreStream 流式调用前
 	tracer.TriggerWorkflow(ctx, TraceWFPreStream, "", &TriggerParams{
 		InvokeID: invokeID,
 		Chunk:    map[string]any{"data": "chunk1"},
@@ -500,25 +500,25 @@ func TestTracer_TriggerWorkflow_所有Workflow事件(t *testing.T) {
 		OnInvokeData: map[string]any{"step": "processing"},
 	})
 
-	// OnPostStream
+	// OnPostStream 流式调用后
 	tracer.TriggerWorkflow(ctx, TraceWFPostStream, "", &TriggerParams{
 		InvokeID: invokeID,
 		Chunk:    "stream-chunk",
 	})
 
-	// OnPostInvoke
+	// OnPostInvoke 非流式调用后
 	tracer.TriggerWorkflow(ctx, TraceWFPostInvoke, "", &TriggerParams{
 		InvokeID: invokeID,
 		Outputs:  "post-invoke-output",
 	})
 
-	// OnCallDone
+	// OnCallDone 调用完成
 	tracer.TriggerWorkflow(ctx, TraceWFCallDone, "", &TriggerParams{
 		InvokeID: invokeID,
 		Outputs:  "done-output",
 	})
 
-	// OnInteract
+	// OnInteract 交互事件
 	invokeID2 := "invoke-interact"
 	tracer.TriggerWorkflow(ctx, TraceWFCallStart, "", &TriggerParams{
 		InvokeID: invokeID2,

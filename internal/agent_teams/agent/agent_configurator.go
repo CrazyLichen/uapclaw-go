@@ -787,7 +787,9 @@ func (c *AgentConfigurator) SetTaskManager(v *tools.TeamTaskManager) { c.infra.S
 
 // MessageManager 返回消息管理器。
 // Python: AgentConfigurator.message_manager property
-func (c *AgentConfigurator) MessageManager() *tools.TeamMessageManager { return c.infra.MessageManager() }
+func (c *AgentConfigurator) MessageManager() *tools.TeamMessageManager {
+	return c.infra.MessageManager()
+}
 
 // SetMessageManager 设置消息管理器。
 func (c *AgentConfigurator) SetMessageManager(v *tools.TeamMessageManager) {

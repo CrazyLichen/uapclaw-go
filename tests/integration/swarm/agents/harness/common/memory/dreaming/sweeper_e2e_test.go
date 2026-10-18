@@ -156,7 +156,7 @@ func (s *SweeperE2ESuite) TestScanNewSessions_heartbeat目录跳过() {
 }
 
 // ---------------------------------------------------------------------------
-// ParseHistory + DetectRounds 管线
+// ParseHistory + DetectRounds 解析与轮次检测管线
 // ---------------------------------------------------------------------------
 
 // TestParseHistory_真实JSON 测试 ParseHistory 解析真实 history.json。
@@ -353,7 +353,7 @@ func (s *SweeperE2ESuite) TestCheckpoint_持久化与恢复() {
 }
 
 // ---------------------------------------------------------------------------
-// LoadExistingSummary
+// LoadExistingSummary 已有摘要加载
 // ---------------------------------------------------------------------------
 
 // TestLoadExistingSummary_Agent模式 测试 agent 模式读取 DREAMING.md。
@@ -416,7 +416,7 @@ func (s *SweeperE2ESuite) TestDreamingConfig_环境变量覆盖() {
 }
 
 // ---------------------------------------------------------------------------
-// StartDreaming / StopDreaming API
+// StartDreaming / StopDreaming 启停 API
 // ---------------------------------------------------------------------------
 
 // TestStartDreaming_禁用配置 测试 disabled 配置不启动。
@@ -458,7 +458,7 @@ func (s *SweeperE2ESuite) TestGetDreamingOrchestrator_不存在() {
 }
 
 // ---------------------------------------------------------------------------
-// ParseDreamingEntries
+// ParseDreamingEntries 条目解析
 // ---------------------------------------------------------------------------
 
 // TestParseDreamingEntries_标准格式 测试解析标准 DREAMING.md 格式。
@@ -538,7 +538,7 @@ func (s *SweeperE2ESuite) TestOrchestrator_Health集成() {
 }
 
 // ---------------------------------------------------------------------------
-// GetPrompt / GetSysMsg
+// GetPrompt / GetSysMsg 提示词获取
 // ---------------------------------------------------------------------------
 
 // TestGetPrompt_所有模式 测试所有模式和语言的 prompt 模板。

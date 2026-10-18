@@ -238,7 +238,7 @@ func (s *CodingMemoryRailDeepSuite) TestInit_Uninit后BeforeModelCall不再注�
 	s.Require().NotNil(spb)
 	s.True(spb.HasSection(hsections.SectionMemory), "Init 后应存在 SectionMemory 节")
 
-	// Uninit
+	// Uninit 反初始化
 	rail.Uninit(agent)
 
 	// 验证 SectionMemory 已移除

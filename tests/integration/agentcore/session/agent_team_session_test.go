@@ -99,14 +99,14 @@ func (s *AgentTeamSessionE2ESuite) TestAgentTeamSession_状态读写() {
 	// 需要先 PreRun 以确保状态系统初始化
 	s.Require().NoError(sess.PreRun(ctx))
 
-	// UpdateState
+	// UpdateState 更新状态
 	sess.UpdateState(map[string]any{
 		"task_status": "running",
 		"iteration":   3,
 		"last_agent":  "agent-b",
 	})
 
-	// GetState
+	// GetState 读取状态
 	val, err := sess.GetState(state.StringKey("task_status"))
 	s.Require().NoError(err)
 	s.Equal("running", val)
@@ -120,7 +120,7 @@ func (s *AgentTeamSessionE2ESuite) TestAgentTeamSession_状态读写() {
 	s.Require().NoError(err)
 	s.Nil(val, "不存在的 key 应返回 nil")
 
-	// DumpState
+	// DumpState 导出状态
 	dump := sess.DumpState()
 	s.NotEmpty(dump)
 }
@@ -151,10 +151,10 @@ func (s *AgentTeamSessionE2ESuite) TestAgentTeamSession_ClearSession() {
 	// 设置状态
 	sess.UpdateState(map[string]any{"key": "value"})
 
-	// PreRun
+	// PreRun 运行前钩子
 	s.Require().NoError(sess.PreRun(ctx))
 
-	// ClearSession
+	// ClearSession 清空会话
 	sess.ClearSession(ctx)
 
 	// 状态应清空

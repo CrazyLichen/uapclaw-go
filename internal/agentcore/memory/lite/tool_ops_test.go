@@ -115,7 +115,7 @@ func TestLineRangeToFsRead(t *testing.T) {
 	if result != nil {
 		t.Errorf("Expected nil, got %v", result)
 	}
-	// offset + limit
+	// offset + limit 组合
 	offset := 5
 	limit := 10
 	result = lineRangeToFsRead(&offset, &limit)
@@ -143,7 +143,7 @@ func TestViewLines(t *testing.T) {
 	if total != 5 || text != "a\nb\nc\nd\ne" || truncated {
 		t.Errorf("Unexpected: text=%q total=%d start=%d end=%d truncated=%v", text, total, start, end, truncated)
 	}
-	// offset + limit
+	// offset + limit 组合
 	offset := 2
 	limit := 2
 	text, _, start, end, truncated = viewLines(lines, &offset, &limit)

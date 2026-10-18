@@ -177,7 +177,8 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 		// Python: if not str(os.getenv("BROWSER_DRIVER") or "").strip():
 		//   os.environ["BROWSER_DRIVER"] = "managed"
 		if strings.TrimSpace(os.Getenv("BROWSER_DRIVER")) == "" {
-			os.Setenv("BROWSER_DRIVER", "managed")
+			// Python os.environ 赋值无错误返回；Setenv 失败仅影响默认值兜底，不阻断
+			_ = os.Setenv("BROWSER_DRIVER", "managed")
 			logger.Info(logComponent).
 				Msg("browser subagent enabled without BROWSER_DRIVER; defaulting to managed mode")
 		}
@@ -186,7 +187,8 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 		//   if chrome_path: os.environ["BROWSER_MANAGED_BINARY"] = chrome_path
 		if strings.TrimSpace(os.Getenv("BROWSER_MANAGED_BINARY")) == "" {
 			if chromePath := d.resolveManagedBrowserBinaryFromConfig(configBase); chromePath != "" {
-				os.Setenv("BROWSER_MANAGED_BINARY", chromePath)
+				// Python os.environ 赋值无错误返回；Setenv 失败仅影响默认值兜底，不阻断
+				_ = os.Setenv("BROWSER_MANAGED_BINARY", chromePath)
 				logger.Info(logComponent).
 					Str("binary", chromePath).
 					Msg("using browser.chrome_path for managed browser")

@@ -597,9 +597,9 @@ func (p *OpenJiuwenProvider) handleSearch(ctx context.Context, args map[string]a
 			memID = r.MemInfo.MemID
 			content = r.MemInfo.Content
 		}
-	out = append(out, SearchResultItem{
-		ID: memID, Content: content, Type: typeStr, Score: score,
-	})
+		out = append(out, SearchResultItem{
+			ID: memID, Content: content, Type: typeStr, Score: score,
+		})
 	}
 	return map[string]any{"results": out, "count": len(out)}, nil
 }

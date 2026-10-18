@@ -25,14 +25,14 @@ func TestOtelTeamMonitorHandler_TeamCreated_Cleaned(t *testing.T) {
 	handler, tp, recorder := newTestMonitorHandler()
 	defer tp.Shutdown(context.Background())
 
-	// team_created
+	// team_created 事件
 	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventCreated,
 		Payload:   map[string]any{"team_name": "my-team", "display_name": "My Team"},
 	})
 	assert.Contains(t, handler.teamSpans, "my-team")
 
-	// team_cleaned
+	// team_cleaned 事件
 	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventCleaned,
 		Payload:   map[string]any{"team_name": "my-team"},
@@ -54,14 +54,14 @@ func TestOtelTeamMonitorHandler_TaskCreated_Completed(t *testing.T) {
 		Payload:   map[string]any{"team_name": "my-team"},
 	})
 
-	// task_created
+	// task_created 事件
 	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventTaskCreated,
 		Payload:   map[string]any{"team_name": "my-team", "task_id": "task-1", "status": "pending"},
 	})
 	assert.Contains(t, handler.taskSpans, "task-1")
 
-	// task_completed
+	// task_completed 事件
 	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventTaskCompleted,
 		Payload:   map[string]any{"task_id": "task-1"},
@@ -79,7 +79,7 @@ func TestOtelTeamMonitorHandler_Task中间事件(t *testing.T) {
 		Payload:   map[string]any{"team_name": "my-team"},
 	})
 
-	// task_created
+	// task_created 事件
 	handler.HandleEvent(context.Background(), &events.EventMessage{
 		EventType: events.TeamEventTaskCreated,
 		Payload:   map[string]any{"team_name": "my-team", "task_id": "task-2", "status": "pending"},

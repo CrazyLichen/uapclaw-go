@@ -292,13 +292,13 @@ func TestResourceMgr_Tag操作(t *testing.T) {
 		t.Fatalf("不匹配 Tag 期望 0 个 Agent，实际 %d", len(agents))
 	}
 
-	// GetResourceByTag
+	// GetResourceByTag 按标签查询资源
 	cards := mgr.GetResourceByTag("custom-tag")
 	if len(cards) != 1 {
 		t.Fatalf("GetResourceByTag 期望 1 个，实际 %d", len(cards))
 	}
 
-	// ListTags
+	// ListTags 列出标签
 	tags := mgr.ListTags()
 	found := false
 	for _, tag := range tags {
@@ -310,12 +310,12 @@ func TestResourceMgr_Tag操作(t *testing.T) {
 		t.Fatal("ListTags 应包含 custom-tag")
 	}
 
-	// HasTag
+	// HasTag 判断标签存在
 	if !mgr.HasTag("custom-tag") {
 		t.Fatal("HasTag 应返回 true")
 	}
 
-	// GetResourceTag
+	// GetResourceTag 读取资源标签
 	resourceTags := mgr.GetResourceTag("agent-tag-1")
 	tagFound := false
 	for _, tag := range resourceTags {
@@ -327,7 +327,7 @@ func TestResourceMgr_Tag操作(t *testing.T) {
 		t.Fatal("GetResourceTag 应包含 custom-tag")
 	}
 
-	// ResourceHasTag
+	// ResourceHasTag 判断资源标签
 	if !mgr.ResourceHasTag("agent-tag-1", "custom-tag") {
 		t.Fatal("ResourceHasTag 应返回 true")
 	}
@@ -450,7 +450,7 @@ func TestResourceMgr_获取不存在返回空(t *testing.T) {
 
 // TestResourceMgr_FunctionalOptions 测试函数选项模式
 func TestResourceMgr_FunctionalOptions(t *testing.T) {
-	// ResourceOption
+	// ResourceOption 资源选项
 	o := applyResourceOptions(
 		WithTag("test-tag"),
 		WithTagMatchStrategy(TagMatchAll),
@@ -474,7 +474,7 @@ func TestResourceMgr_FunctionalOptions(t *testing.T) {
 		t.Fatalf("InterfaceURL 期望 http://test，实际 %s", o.InterfaceURL)
 	}
 
-	// McpOption
+	// McpOption MCP 选项
 	mo := applyMcpOptions(
 		WithMcpServerName("test-server"),
 		WithMcpTag("mcp-tag"),
@@ -498,7 +498,7 @@ func TestResourceMgr_FunctionalOptions(t *testing.T) {
 		t.Fatal("Force 期望 true")
 	}
 
-	// TagOption
+	// TagOption 标签选项
 	to := applyTagOptions(WithTagSkipIfNotExists())
 	if !to.SkipIfNotExists {
 		t.Fatal("SkipIfNotExists 期望 true")
@@ -648,7 +648,7 @@ func TestResourceMgr_Tag增删改(t *testing.T) {
 	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent-tag-mgmt"), agentschema.WithAgentName("标签管理Agent"))
 	_ = mgr.AddAgent(card, stubAgentProvider(), WithTag("tag-a"))
 
-	// AddResourceTag
+	// AddResourceTag 添加资源标签
 	tags, err := mgr.AddResourceTag("agent-tag-mgmt", []Tag{"tag-b"})
 	if err != nil {
 		t.Fatalf("AddResourceTag 失败: %v", err)
@@ -657,7 +657,7 @@ func TestResourceMgr_Tag增删改(t *testing.T) {
 		t.Fatalf("AddResourceTag 后应有至少 2 个标签，实际 %d", len(tags))
 	}
 
-	// UpdateResourceTag
+	// UpdateResourceTag 更新资源标签
 	tags, err = mgr.UpdateResourceTag("agent-tag-mgmt", []Tag{"tag-c"})
 	if err != nil {
 		t.Fatalf("UpdateResourceTag 失败: %v", err)
@@ -666,7 +666,7 @@ func TestResourceMgr_Tag增删改(t *testing.T) {
 		t.Fatalf("UpdateResourceTag 后应只有 tag-c，实际 %v", tags)
 	}
 
-	// RemoveResourceTag
+	// RemoveResourceTag 删除资源标签
 	tags, err = mgr.RemoveResourceTag("agent-tag-mgmt", []Tag{"tag-c"})
 	if err != nil {
 		t.Fatalf("RemoveResourceTag 失败: %v", err)
@@ -675,7 +675,7 @@ func TestResourceMgr_Tag增删改(t *testing.T) {
 		t.Fatalf("RemoveResourceTag 后应无标签，实际 %d", len(tags))
 	}
 
-	// RemoveTag
+	// RemoveTag 删除标签
 	_ = mgr.AddAgent(
 		agentschema.NewAgentCard(agentschema.WithAgentID("agent-tag-rm"), agentschema.WithAgentName("标签移除Agent")),
 		stubAgentProvider(),
@@ -1331,7 +1331,7 @@ func TestResourceMgr_AddWorkflows_批量(t *testing.T) {
 func TestDispatchAdd_各资源类型(t *testing.T) {
 	mgr := newTestResourceMgr()
 
-	// workflow
+	// workflow 工作流资源
 	wfProvider := stubWorkflowProvider()
 	if err := mgr.dispatchAdd("workflow", "da-wf-1", wfProvider, ""); err != nil {
 		t.Fatalf("dispatchAdd workflow 失败: %v", err)
@@ -1356,7 +1356,7 @@ func TestDispatchAdd_各资源类型(t *testing.T) {
 		t.Fatalf("dispatchAdd tool 失败: %v", err)
 	}
 
-	// prompt
+	// prompt 提示词资源
 	tmpl := prompt.NewPromptTemplate("分派模板", "hello")
 	if err := mgr.dispatchAdd("prompt", "da-prompt-1", tmpl, ""); err != nil {
 		t.Fatalf("dispatchAdd prompt 失败: %v", err)

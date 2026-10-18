@@ -227,7 +227,7 @@ func TestSession_CloseStreamOnPostRun(t *testing.T) {
 func TestSession_tagStreamPayload_OutputSchema(t *testing.T) {
 	s := NewSession(WithSourceMetadata(map[string]any{"source": "team-1"}))
 
-	// OutputSchema + map payload
+	// OutputSchema + map 载荷
 	os1 := stream.OutputSchema{Type: "message", Index: 0, Payload: map[string]any{"text": "hello"}}
 	result1 := s.tagStreamPayload(os1).(stream.OutputSchema)
 	payload1 := result1.Payload.(map[string]any)

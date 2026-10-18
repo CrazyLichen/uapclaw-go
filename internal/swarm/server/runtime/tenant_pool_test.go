@@ -11,7 +11,7 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// --- GetInstance / ResetInstance ---
+// --- GetInstance / ResetInstance 单例获取与重置 ---
 
 func TestGetInstance_单例(t *testing.T) {
 	// 重置确保干净状态
@@ -59,7 +59,7 @@ func TestResetInstance_Cleanup被调用(t *testing.T) {
 	ResetInstance()
 }
 
-// --- ProcessMessage ---
+// --- ProcessMessage 消息处理 ---
 
 func TestTenantAgentPool_ProcessMessage_透传(t *testing.T) {
 	ResetInstance()
@@ -104,7 +104,7 @@ func TestTenantAgentPool_ProcessMessage_请求字段日志(t *testing.T) {
 	assert.Equal(t, "normal", subMode)
 }
 
-// --- ProcessMessageStream ---
+// --- ProcessMessageStream 流式消息处理 ---
 
 func TestTenantAgentPool_ProcessMessageStream_透传(t *testing.T) {
 	ResetInstance()
@@ -130,7 +130,7 @@ func TestTenantAgentPool_ProcessMessageStream_透传(t *testing.T) {
 	// 端到端透传测试由集成测试覆盖
 }
 
-// --- Cleanup ---
+// --- Cleanup 清理 ---
 
 func TestTenantAgentPool_Cleanup(t *testing.T) {
 	ResetInstance()

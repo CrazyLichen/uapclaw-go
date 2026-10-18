@@ -62,21 +62,21 @@ func TestNewAgentCallbackContext(t *testing.T) {
 func TestAgentCallbackContext_GetterSetter(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, &InvokeInputs{}, nil)
 
-	// Event
+	// Event 事件
 	ctx.SetEvent(CallbackBeforeInvoke)
 	assert.Equal(t, CallbackBeforeInvoke, ctx.Event())
 
-	// Inputs
+	// Inputs 输入
 	inputs := &ModelCallInputs{}
 	ctx.SetInputs(inputs)
 	assert.Equal(t, inputs, ctx.Inputs())
 
-	// Exception
+	// Exception 异常
 	err := assert.AnError
 	ctx.SetException(err)
 	assert.Equal(t, err, ctx.Exception())
 
-	// RetryAttempt
+	// RetryAttempt 重试次数
 	ctx.SetRetryAttempt(3)
 	assert.Equal(t, 3, ctx.RetryAttempt())
 
@@ -394,7 +394,7 @@ func TestAgentCallbackContext_Config_SetConfig(t *testing.T) {
 	// 默认 nil
 	assert.Nil(t, ctx.Config())
 
-	// SetConfig
+	// SetConfig 设置配置
 	ctx.SetConfig("some_config")
 	assert.Equal(t, "some_config", ctx.Config())
 }

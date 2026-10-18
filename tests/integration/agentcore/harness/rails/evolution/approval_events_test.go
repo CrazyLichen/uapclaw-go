@@ -163,7 +163,7 @@ func (s *ApprovalEventsSuite) TestBuildSkillApprovalEvent_中文() {
 	s.Equal("skill-a", meta["skill_name"])
 	s.Equal("skill_evolve_1234", meta["request_id"])
 
-	// questions
+	// questions 问题列表
 	questions, ok := payload["questions"].([]map[string]any)
 	s.Require().True(ok)
 	s.Len(questions, 2)

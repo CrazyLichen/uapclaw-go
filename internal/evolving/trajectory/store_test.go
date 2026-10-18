@@ -190,10 +190,10 @@ func TestFileTrajectoryStore_保存和加载(t *testing.T) {
 	toolDetail, ok := loaded.Steps[1].Detail.(*ToolCallDetail)
 	require.True(t, ok)
 	assert.Equal(t, "search", toolDetail.ToolName)
-	// Cost
+	// Cost 成本信息
 	assert.NotNil(t, loaded.Cost)
 	assert.Equal(t, 100, loaded.Cost["input_tokens"])
-	// Meta
+	// Meta 元数据
 	assert.Equal(t, "m1", loaded.Meta["member_id"])
 }
 
@@ -601,10 +601,10 @@ func TestRoundTrip(t *testing.T) {
 	assert.Equal(t, "search", toolDetail.ToolName)
 	assert.Equal(t, "call-1", toolDetail.ToolCallID)
 
-	// Cost
+	// Cost 成本信息
 	assert.NotNil(t, loaded.Cost)
 	assert.Equal(t, 100, loaded.Cost["input_tokens"])
 
-	// Meta
+	// Meta 元数据
 	assert.Equal(t, "m1", loaded.Meta["member_id"])
 }

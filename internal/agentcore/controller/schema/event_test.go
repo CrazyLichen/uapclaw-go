@@ -164,13 +164,13 @@ func TestEvent_JSON序列化_多态切片(t *testing.T) {
 
 	events := []Event{inputEvt, failedEvt, followEvt}
 
-	// MarshalEvents
+	// MarshalEvents 序列化事件
 	data, err := MarshalEvents(events)
 	if err != nil {
 		t.Fatalf("MarshalEvents 失败: %v", err)
 	}
 
-	// UnmarshalEvents round-trip
+	// UnmarshalEvents 序列化-反序列化往返
 	got, err := UnmarshalEvents(data)
 	if err != nil {
 		t.Fatalf("UnmarshalEvents 失败: %v", err)

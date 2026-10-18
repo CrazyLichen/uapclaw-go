@@ -302,13 +302,13 @@ func TestStubHandler(t *testing.T) {
 }
 
 func TestChatMethods_Ack响应(t *testing.T) {
-	// chat.send
+	// chat.send 方法
 	result, err := handleChatSend()(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "sess_1", result["session_id"])
 
-	// chat.resume
+	// chat.resume 方法
 	result, err = handleChatResume()(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
@@ -325,7 +325,7 @@ func TestChatMethods_Ack响应(t *testing.T) {
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "cancel", result["intent"])
 
-	// chat.user_answer
+	// chat.user_answer 方法
 	result, err = handleChatUserAnswer()(context.Background(), map[string]any{"request_id": "req_1"}, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))

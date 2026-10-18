@@ -142,7 +142,7 @@ func TestConfirmInterruptRail_getAutoConfirmKey(t *testing.T) {
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	assert.Equal(t, "write_file", r.getAutoConfirmKey(toolCall))
 
-	// nil ToolCall
+	// ToolCall 为 nil
 	assert.Equal(t, "", r.getAutoConfirmKey(nil))
 }
 
@@ -227,7 +227,7 @@ func TestConfirmPayloadSchema(t *testing.T) {
 	assert.Equal(t, "Auto Confirm", autoConfirm["title"])
 	assert.Equal(t, false, autoConfirm["default"])
 
-	// required
+	// required 必填字段
 	required, ok := schema["required"].([]string)
 	assert.True(t, ok)
 	assert.Equal(t, []string{"approved"}, required)

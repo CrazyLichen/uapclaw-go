@@ -163,7 +163,7 @@ func TestIsMemoryPath_swarm语义(t *testing.T) {
 		path string
 		want bool
 	}{
-		{"memory/MEMORY.md", true},  // basename memory.md（小写化）
+		{"memory/MEMORY.md", true},   // basename memory.md（小写化）
 		{"MEMORY.md", true},          // basename 为 memory（无扩展名场景）
 		{"notes/memory/x.txt", true}, // 路径段含 memory
 		{"a/b/c.md", false},          // 不含 memory 段

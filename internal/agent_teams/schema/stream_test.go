@@ -85,3 +85,58 @@ func TestTeamOutputSchema_Validate(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestTeamOutputSchema_ToMap 测试 ToMap 方法（对齐 pydantic model_dump：
+// 继承 type/index/payload + source_member/role，None 输出为 nil）。
+func TestTeamOutputSchema_ToMap(t *testing.T) {
+	member := "teammate-1"
+	role := TeamRoleTeammate
+	s := &TeamOutputSchema{
+		OutputSchema: stream.OutputSchema{Type: "message", Index: 3, Payload: "content"},
+		SourceMember: &member,
+		Role:         &role,
+	}
+	got := s.ToMap()
+
+	if got["type"] != "message" {
+		t.Errorf("ToMap()[type] = %v, 期望 message", got["type"])
+	}
+	if got["index"] != 3 {
+		t.Errorf("ToMap()[index] = %v, 期望 3", got["index"])
+	}
+	if got["payload"] != "content" {
+		t.Errorf("ToMap()[payload] = %v, 期望 content", got["payload"])
+	}
+	if got["source_member"] != "teammate-1" {
+		t.Errorf("ToMap()[source_member] = %v, 期望 teammate-1", got["source_member"])
+	}
+	if got["role"] != "teammate" {
+		t.Errorf("ToMap()[role] = %v, 期望 teammate（字符串枚举值）", got["role"])
+	}
+	if len(got) != 5 {
+		t.Errorf("ToMap() 键数 = %d, 期望 5（%v）", len(got), got)
+	}
+}
+
+// TestTeamOutputSchema_ToMap_无标签 测试 SourceMember/Role 为 nil 时输出 nil（pydantic 包含 None 字段）。
+func TestTeamOutputSchema_ToMap_无标签(t *testing.T) {
+	s := &TeamOutputSchema{
+		OutputSchema: stream.OutputSchema{Type: "message", Index: 0, Payload: nil},
+	}
+	got := s.ToMap()
+
+	v, ok := got["source_member"]
+	if !ok {
+		t.Fatal("ToMap() 缺少 source_member 键")
+	}
+	if v != nil {
+		t.Errorf("ToMap()[source_member] = %v, 期望 nil", v)
+	}
+	r, ok := got["role"]
+	if !ok {
+		t.Fatal("ToMap() 缺少 role 键")
+	}
+	if r != nil {
+		t.Errorf("ToMap()[role] = %v, 期望 nil", r)
+	}
+}

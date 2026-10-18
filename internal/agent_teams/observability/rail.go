@@ -132,36 +132,22 @@ func (r *ObservabilityRail) tracer() trace.Tracer {
 }
 
 // extractIteration 从 inputs 中提取 iteration 数值。
+// Python: int(getattr(inputs, "iteration", 0) or 0) —— 鸭子类型直读属性，
+// 仅 TaskIterationInputs 携带 iteration 属性，其余事件类型（含 dict）
+// 一律返回默认值 0。
 func extractIteration(inputs agentinterfaces.EventInputs) int {
-	type iterGetter interface{ GetIteration() int }
-	if ig, ok := inputs.(iterGetter); ok {
-		return ig.GetIteration()
-	}
-	// 尝试从 map 类型取值
-	type mapLike interface{ ToMap() map[string]any }
-	if ml, ok := inputs.(mapLike); ok {
-		if v, ok := ml.ToMap()["iteration"]; ok {
-			if n, ok := v.(int); ok {
-				return n
-			}
-		}
+	if ti, ok := inputs.(*agentinterfaces.TaskIterationInputs); ok && ti != nil {
+		return ti.Iteration
 	}
 	return 0
 }
 
 // extractIsFollowUp 从 inputs 中提取 is_follow_up 布尔值。
+// Python: bool(getattr(inputs, "is_follow_up", False)) —— 仅 TaskIterationInputs
+// 携带 is_follow_up 属性，其余事件类型一律返回默认值 false。
 func extractIsFollowUp(inputs agentinterfaces.EventInputs) bool {
-	type followUpGetter interface{ GetIsFollowUp() bool }
-	if fg, ok := inputs.(followUpGetter); ok {
-		return fg.GetIsFollowUp()
-	}
-	type mapLike interface{ ToMap() map[string]any }
-	if ml, ok := inputs.(mapLike); ok {
-		if v, ok := ml.ToMap()["is_follow_up"]; ok {
-			if b, ok := v.(bool); ok {
-				return b
-			}
-		}
+	if ti, ok := inputs.(*agentinterfaces.TaskIterationInputs); ok && ti != nil {
+		return ti.IsFollowUp
 	}
 	return false
 }

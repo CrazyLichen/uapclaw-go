@@ -673,19 +673,19 @@ func TestStep_通过MockRits(t *testing.T) {
 		// 交替返回不同的响应
 		switch {
 		case strings.Contains(prompt, "example API call"):
-			// GenerateAPICallFromDescription
+			// GenerateAPICallFromDescription 从描述生成 API 调用
 			return verifyFn(`{"name":"search","arguments":{"q":"x"}}`)
 		case strings.Contains(prompt, "analyze the response"):
-			// CritiqueAPICall
+			// CritiqueAPICall 批判 API 调用
 			return verifyFn(`{"analysis":"","err_code":0}`)
 		case strings.Contains(prompt, "generate a user instruction"):
-			// GenerateInstructionFromAPICall
+			// GenerateInstructionFromAPICall 从 API 调用生成指令
 			return verifyFn(`{"instruction":"I need to search for something"}`)
 		case strings.Contains(prompt, "give a `score`"):
-			// CritiqueInstruction
+			// CritiqueInstruction 批判指令
 			return verifyFn(`{"analysis":"good","score":3}`)
 		case strings.Contains(prompt, "identify and contrast"):
-			// BatchReflectionWithScores
+			// BatchReflectionWithScores 批量反思打分
 			return verifyFn("reflection text")
 		default:
 			// ProduceAnswerFromAPICall 的 verifyFn

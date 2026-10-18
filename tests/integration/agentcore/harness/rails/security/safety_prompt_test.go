@@ -117,7 +117,7 @@ func (s *SafetyPromptRailSuite) TestSafetyPromptRail_Uninit移除安全节() {
 	// 执行一次 Invoke
 	_, _ = agent.Invoke(s.Ctx, map[string]any{"query": "测试"})
 
-	// Uninit SafetyPromptRail
+	// Uninit 反初始化 SafetyPromptRail
 	customRail.Uninit(agent)
 
 	// 验证 SectionSafety 已从 SystemPromptBuilder 移除

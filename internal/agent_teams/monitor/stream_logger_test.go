@@ -490,43 +490,43 @@ func TestGenericSummary_其他类型(t *testing.T) {
 
 // TestDiscreteSummary_各分类 校验 discreteSummary 分派到对应摘要函数
 func TestDiscreteSummary_各分类(t *testing.T) {
-	// tool_call
+	// tool_call 分类
 	toolCallResult := discreteSummary("tool_call", map[string]any{"tool_name": "t1", "tool_args": "a1"})
 	if !strings.Contains(toolCallResult, "tool_name=t1") {
 		t.Errorf("tool_call 分类错误，实际: %s", toolCallResult)
 	}
 
-	// tool_result
+	// tool_result 分类
 	toolResultResult := discreteSummary("tool_result", map[string]any{"tool_name": "t2", "tool_result": "r2"})
 	if !strings.Contains(toolResultResult, "tool_name=t2") {
 		t.Errorf("tool_result 分类错误，实际: %s", toolResultResult)
 	}
 
-	// tool_update
+	// tool_update 分类
 	toolUpdateResult := discreteSummary("tool_update", map[string]any{"tool_update": map[string]any{"tool_name": "t3", "status": "done"}})
 	if !strings.Contains(toolUpdateResult, "tool_name=t3") {
 		t.Errorf("tool_update 分类错误，实际: %s", toolUpdateResult)
 	}
 
-	// controller_output
+	// controller_output 分类
 	ctrlResult := discreteSummary("controller_output", map[string]any{"type": "other"})
 	if ctrlResult == "" {
 		t.Error("controller_output 分类不应返回空串")
 	}
 
-	// runtime_ready
+	// runtime_ready 分类
 	rrResult := discreteSummary("runtime_ready", map[string]any{"team_name": "team1"})
 	if !strings.Contains(rrResult, "team=team1") {
 		t.Errorf("runtime_ready 分类错误，实际: %s", rrResult)
 	}
 
-	// interaction
+	// interaction 分类
 	interResult := discreteSummary("interaction", map[string]any{"interaction_id": "i1"})
 	if !strings.Contains(interResult, "interaction_id=i1") {
 		t.Errorf("interaction 分类错误，实际: %s", interResult)
 	}
 
-	// default (other category)
+	// default 分支（其他类别）
 	otherResult := discreteSummary("other", "some text")
 	if otherResult != "some text" {
 		t.Errorf("other 分类错误，实际: %s", otherResult)

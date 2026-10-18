@@ -79,42 +79,42 @@ func TestAgentTeamSession_InnerSession接口(t *testing.T) {
 	// 验证 InnerSession 接口满足
 	var _ interfaces.InnerSession = s
 
-	// Config
+	// Config 配置
 	if s.Config() != nil {
 		t.Error("默认 Config 应为 nil")
 	}
 
-	// State
+	// State 状态
 	if s.State() == nil {
 		t.Error("State 不应为 nil")
 	}
 
-	// Tracer
+	// Tracer 追踪器
 	if s.Tracer() == nil {
 		t.Error("Tracer 不应为 nil")
 	}
 
-	// StreamWriterManager
+	// StreamWriterManager 流写入管理器
 	if s.StreamWriterManager() == nil {
 		t.Error("StreamWriterManager 不应为 nil")
 	}
 
-	// SessionID
+	// SessionID 会话标识
 	if s.SessionID() != "test-session-id" {
 		t.Errorf("SessionID 期望 test-session-id，实际 %s", s.SessionID())
 	}
 
-	// Checkpointer
+	// Checkpointer 检查点存储
 	if s.Checkpointer() == nil {
 		t.Error("Checkpointer 不应为 nil")
 	}
 
-	// ActorManager
+	// ActorManager 成员管理器
 	if s.ActorManager() != nil {
 		t.Error("ActorManager 应为 nil")
 	}
 
-	// Close
+	// Close 关闭会话
 	if err := s.Close(); err != nil {
 		t.Errorf("Close 应返回 nil，实际 %v", err)
 	}
@@ -152,42 +152,42 @@ func TestAgentTeamSession_TeamSpan(t *testing.T) {
 
 // TestAgentTeamSession_构造选项 测试选项覆盖默认值
 func TestAgentTeamSession_构造选项(t *testing.T) {
-	// WithTeamConfig
+	// WithTeamConfig 注入配置
 	cfg := config.NewSessionConfig(context.Background())
 	s1 := NewAgentTeamSession("sid", "tid", WithTeamConfig(cfg))
 	if s1.Config() != cfg {
 		t.Error("WithTeamConfig 未生效")
 	}
 
-	// WithTeamState
+	// WithTeamState 注入状态
 	customState := state.NewInMemoryStateLike()
 	s2 := NewAgentTeamSession("sid", "tid", WithTeamState(customState))
 	if s2.State() != customState {
 		t.Error("WithTeamState 未生效")
 	}
 
-	// WithTeamTracer
+	// WithTeamTracer 注入追踪器
 	customTracer := tracer.NewTracer()
 	s3 := NewAgentTeamSession("sid", "tid", WithTeamTracer(customTracer))
 	if s3.Tracer() != customTracer {
 		t.Error("WithTeamTracer 未生效")
 	}
 
-	// WithTeamStreamWriterManager
+	// WithTeamStreamWriterManager 注入流写入管理器
 	swm := stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	s4 := NewAgentTeamSession("sid", "tid", WithTeamStreamWriterManager(swm))
 	if s4.StreamWriterManager() != swm {
 		t.Error("WithTeamStreamWriterManager 未生效")
 	}
 
-	// WithTeamCheckpointer
+	// WithTeamCheckpointer 注入检查点存储
 	mockCP := &testMockCP{}
 	s5 := NewAgentTeamSession("sid", "tid", WithTeamCheckpointer(mockCP))
 	if s5.Checkpointer() != mockCP {
 		t.Error("WithTeamCheckpointer 未生效")
 	}
 
-	// WithTeamSpan
+	// WithTeamSpan 注入 Span
 	customSpan := customTracer.AgentSpanManager.CreateAgentSpan()
 	s6 := NewAgentTeamSession("sid", "tid", WithTeamSpan(customSpan))
 	if s6.TeamSpan() != customSpan {

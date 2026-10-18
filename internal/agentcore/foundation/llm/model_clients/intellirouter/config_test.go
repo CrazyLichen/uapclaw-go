@@ -95,7 +95,7 @@ func TestFromModelClientConfig_WithDeployments(t *testing.T) {
 		t.Errorf("HealthCheckInterval = %f, 期望 120.0", config.HealthCheckInterval)
 	}
 
-	// Deployments
+	// Deployments 部署列表
 	if len(config.Deployments) != 1 {
 		t.Fatalf("Deployments 长度 = %d, 期望 1", len(config.Deployments))
 	}
@@ -125,7 +125,7 @@ func TestFromModelClientConfig_WithDeployments(t *testing.T) {
 		t.Errorf("Timeout = %f, 期望 60.0", dep.Timeout)
 	}
 
-	// StrategyKwargs
+	// StrategyKwargs 策略参数
 	if config.StrategyKwargs["exploration_ratio"] != 0.15 {
 		t.Errorf("StrategyKwargs.exploration_ratio = %v, 期望 0.15", config.StrategyKwargs["exploration_ratio"])
 	}
