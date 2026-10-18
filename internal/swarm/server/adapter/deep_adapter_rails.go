@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -17,12 +16,10 @@ import (
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
-	ext "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/external"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
@@ -567,118 +564,10 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 }
 
 // buildExternalMemoryRail 构建外接记忆护栏。
-// 对齐 Python: _build_external_memory_rail() — 根据 memory.external.provider 配置构建
+// 对齐 Python: _build_external_memory_rail() — 委托 swarm memory 包 builder
+// （user_id/scope_id 默认 __default__ 由 builder 处理，偏差 #4 修正后不再回退 agentName）
 func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
-	providerName, providerCfg := getExternalMemoryProviderConfig(d.configCache)
-	if providerName == "" {
-		logger.Debug(logComponent).Msg("buildExternalMemoryRail: no external memory provider config")
-		return nil
-	}
-
-	provider := d.buildExternalMemoryProvider(providerName, providerCfg)
-	if provider == nil {
-		logger.Warn(logComponent).Str("provider", providerName).Msg("buildExternalMemoryRail: failed to build provider")
-		return nil
-	}
-
-	// 对齐 Python: ExternalMemoryRail(provider, user_id, scope_id, session_id)
-	userID := d.resolveExternalMemoryUserID()
-	scopeID := d.resolveExternalMemoryScopeID()
-
-	rail := memrail.NewExternalMemoryRail(provider, userID, scopeID, "")
-	logger.Info(logComponent).
-		Str("provider", providerName).
-		Str("user_id", userID).
-		Str("scope_id", scopeID).
-		Msg("ExternalMemoryRail created")
-	return rail
-}
-
-// buildExternalMemoryProvider 按 provider 名称分发构建 MemoryProvider。
-// 对齐 Python: build_external_memory_provider(config, workspace_dir)
-func (d *DeepAdapter) buildExternalMemoryProvider(providerName string, cfg map[string]any) ext.MemoryProvider {
-	switch providerName {
-	case "mem0":
-		apiKey := utils.StrVal(cfg["api_key"])
-		userID := utils.StrVal(cfg["user_id"])
-		agentID := utils.StrVal(cfg["agent_id"])
-		rerank := boolVal(cfg["rerank"])
-		provider := ext.NewMem0Provider(apiKey, userID, agentID, rerank)
-		if !provider.IsAvailable() {
-			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: Mem0Provider unavailable (missing api_key)")
-			return nil
-		}
-		return provider
-	case "openviking":
-		endpoint := utils.StrVal(cfg["endpoint"])
-		apiKey := utils.StrVal(cfg["api_key"])
-		account := utils.StrVal(cfg["account"])
-		user := utils.StrVal(cfg["user"])
-		agent := utils.StrVal(cfg["agent"])
-		provider := ext.NewOpenVikingProvider(endpoint, apiKey, account, user, agent)
-		if !provider.IsAvailable() {
-			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenVikingProvider unavailable")
-			return nil
-		}
-		return provider
-	case "openjiuwen":
-		// 对齐 Python: openjiuwen provider 分支
-		providerConfig := buildOpenJiuwenProviderConfig(cfg, d.configCache)
-		provider := ext.NewOpenJiuwenProvider(providerConfig)
-		if !provider.IsAvailable() {
-			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: OpenJiuwenProvider unavailable")
-			return nil
-		}
-		return provider
-	case "agentarts":
-		// 对齐 Python: agentarts provider 分支
-		baseURL := utils.StrVal(cfg["base_url"])
-		apiKey := utils.StrVal(cfg["api_key"])
-		spaceID := utils.StrVal(cfg["space_id"])
-		actorID := utils.StrVal(cfg["actor_id"])
-		assistantID := utils.StrVal(cfg["assistant_id"])
-		provider := ext.NewAgentArtsProvider(baseURL, apiKey, spaceID, actorID, assistantID, nil)
-		if !provider.IsAvailable() {
-			logger.Warn(logComponent).Msg("buildExternalMemoryProvider: AgentArtsProvider unavailable")
-			return nil
-		}
-		return provider
-	default:
-		logger.Warn(logComponent).Str("provider", providerName).Msg("buildExternalMemoryProvider: unsupported provider type")
-		return nil
-	}
-}
-
-// resolveExternalMemoryUserID 解析外接记忆的 user_id。
-func (d *DeepAdapter) resolveExternalMemoryUserID() string {
-	_, cfg := getExternalMemoryProviderConfig(d.configCache)
-	if cfg != nil {
-		if uid := utils.StrVal(cfg["user_id"]); uid != "" {
-			return uid
-		}
-	}
-	// 回退到 agentName
-	return d.agentName
-}
-
-// resolveExternalMemoryScopeID 解析外接记忆的 scope_id。
-func (d *DeepAdapter) resolveExternalMemoryScopeID() string {
-	memCfg, _ := d.configCache["memory"].(map[string]any)
-	if memCfg != nil {
-		extCfg, _ := memCfg["external"].(map[string]any)
-		if extCfg != nil {
-			if sid := utils.StrVal(extCfg["scope_id"]); sid != "" {
-				return sid
-			}
-		}
-	}
-	return d.agentName
-}
-
-// boolVal 从 map[string]any 中安全提取布尔值。
-func boolVal(v any) bool {
-	b, _ := v.(bool)
-	return b
+	return commmem.BuildExternalMemoryRail(d.configCache, d.workspaceDir)
 }
 
 // handleMemoryRailByConfig 按配置注册/注销 MemoryRail。
@@ -690,7 +579,7 @@ func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string)
 	// Python: if get_memory_mode(config) == "local":
 	if commmem.GetMemoryMode(d.configCache) == "local" {
 		// Python: builtin_on = is_builtin_memory_allowed(config) and is_memory_enabled(mode, config)
-		builtinOn := isBuiltinMemoryAllowed(d.configCache) && commmem.IsMemoryEnabled(mode, d.configCache)
+		builtinOn := commmem.IsBuiltinMemoryAllowed(d.configCache) && commmem.IsMemoryEnabled(mode, d.configCache)
 
 		if builtinOn {
 			// 开启记忆
@@ -739,7 +628,7 @@ func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string)
 // 对齐 Python: _handle_external_memory_rail_by_config()
 // engine 为 "external" 或 "both" 时注册，否则注销。
 func (d *DeepAdapter) handleExternalMemoryRailByConfig(ctx context.Context) {
-	if isExternalMemoryEnabled(d.configCache) {
+	if commmem.IsExternalMemoryEnabled(d.configCache) {
 		if !d.externalMemoryRailRegistered {
 			rail := d.buildExternalMemoryRail()
 			if rail != nil {
@@ -1418,56 +1307,10 @@ func extractModelName(configBase map[string]any) string {
 // resolveModeMemory/getMemoryMode/isMemoryEnabled/isProactiveMemory 四函数
 // 已迁移至 swarm 侧记忆包导出版：commmem.ResolveModeMemory/GetMemoryMode/IsMemoryEnabled/IsProactiveMemory
 // （对齐 Python：这些函数定义在 jiuwenswarm/agents/harness/common/memory/config.py）
-
-// isBuiltinMemoryAllowed 引擎门禁：memory.engine 是否放行内置 MemoryRail。
-// Python: is_builtin_memory_allowed(config) (external_memory_config.py L42-44)
-func isBuiltinMemoryAllowed(config map[string]any) bool {
-	engine := getMemoryEngine(config)
-	return engine == "builtin" || engine == "both"
-}
-
-// getMemoryEngine 读取 memory.engine 配置，默认 "builtin"。
-// Python: get_memory_engine(config) (external_memory_config.py)
-func getMemoryEngine(config map[string]any) string {
-	memCfg, _ := config["memory"].(map[string]any)
-	if memCfg == nil {
-		return "builtin"
-	}
-	engine, _ := memCfg["engine"].(string)
-	engine = strings.ToLower(strings.TrimSpace(engine))
-	if engine == "" {
-		return "builtin"
-	}
-	return engine
-}
-
-// isExternalMemoryEnabled 检查 memory.engine 是否允许外接记忆。
-// 对齐 Python: engine in ("external", "both")
-func isExternalMemoryEnabled(config map[string]any) bool {
-	engine := getMemoryEngine(config)
-	return engine == "external" || engine == "both"
-}
-
-// getExternalMemoryProviderConfig 读取 memory.external 配置段。
-// 返回 provider 名称和对应配置 map。
-func getExternalMemoryProviderConfig(config map[string]any) (providerName string, providerCfg map[string]any) {
-	memCfg, _ := config["memory"].(map[string]any)
-	if memCfg == nil {
-		return "", nil
-	}
-	extCfg, _ := memCfg["external"].(map[string]any)
-	if extCfg == nil {
-		return "", nil
-	}
-	name, _ := extCfg["provider"].(string)
-	name = strings.ToLower(strings.TrimSpace(name))
-	if name == "" {
-		return "", nil
-	}
-	// 读取 provider 子段：memory.external.mem0 / memory.external.openviking
-	subCfg, _ := extCfg[name].(map[string]any)
-	return name, subCfg
-}
+//
+// isBuiltinMemoryAllowed/getMemoryEngine/isExternalMemoryEnabled/getExternalMemoryConfig/
+// buildOpenJiuwenProviderConfig/BuildExternalMemoryRail 六函数亦已迁移至 commmem 包
+// （对齐 Python：external_memory_config.py / external_memory_builder.py）
 
 // boolStr 将 bool 转为 "true"/"false" 字符串（用于日志）。
 func boolStr(b bool) string {
@@ -1509,52 +1352,5 @@ func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]
 		logger.Warn(logComponent).Str("method", methodName).
 			Msg("unknown dynamic Rail builder method name")
 		return nil
-	}
-}
-
-// buildOpenJiuwenProviderConfig 将 memory.external.openjiuwen 配置映射为 OpenJiuwenProvider 预期的 config dict。
-// 对齐 Python: build_openjiuwen_provider_config(ext_cfg) (external_memory_config.py L87-126)
-func buildOpenJiuwenProviderConfig(cfg map[string]any, configCache map[string]any) map[string]any {
-	ojCfg, _ := cfg["openjiuwen"].(map[string]any)
-	if ojCfg == nil {
-		ojCfg = make(map[string]any)
-	}
-	ltmDir := filepath.Join(workspace.WorkspaceDir(), "memory", "ltm")
-
-	// KV 配置 — 对齐 Python: _DEFAULT_KV_BACKEND = "memory"
-	kvBackend := strOr(utils.StrVal(ojCfg["kv_type"]), "memory")
-	kvBackend = strings.ToLower(strings.TrimSpace(kvBackend))
-	kvPath := strOr(utils.StrVal(ojCfg["kv_path"]), filepath.Join(ltmDir, "kv"))
-
-	// Vector 配置
-	vectorBackend := strOr(utils.StrVal(ojCfg["vector_type"]), "chroma")
-	vectorBackend = strings.ToLower(strings.TrimSpace(vectorBackend))
-	vectorDir := strOr(utils.StrVal(ojCfg["vector_persist_dir"]), filepath.Join(ltmDir, "chroma"))
-
-	// DB 配置
-	dbBackend := strOr(utils.StrVal(ojCfg["db_type"]), "sqlite")
-	dbBackend = strings.ToLower(strings.TrimSpace(dbBackend))
-	dbPath := strOr(utils.StrVal(ojCfg["db_path"]), filepath.Join(ltmDir, "ltm.db"))
-
-	// Embedding 配置 — 从顶层 embed 配置获取
-	embedCfg, _ := configCache["embed"].(map[string]any)
-	embeddingConfig := map[string]any{}
-	if embedCfg != nil {
-		modelName := strOr(utils.StrVal(embedCfg["embed_model"]), os.Getenv("EMBED_MODEL"))
-		baseURL := strOr(utils.StrVal(embedCfg["embed_api_base"]), os.Getenv("EMBED_BASE_URL"))
-		apiKey := strOr(utils.StrVal(embedCfg["embed_api_key"]), os.Getenv("EMBED_API_KEY"))
-		embeddingConfig["model_name"] = modelName
-		embeddingConfig["base_url"] = baseURL
-		embeddingConfig["api_key"] = apiKey
-		if modelName == "" {
-			logger.Warn(logComponent).Msg("buildOpenJiuwenProviderConfig: Embedding not configured — LTM will skip vector search")
-		}
-	}
-
-	return map[string]any{
-		"kv":        map[string]any{"backend": kvBackend, "path": kvPath},
-		"vector":    map[string]any{"backend": vectorBackend, "persist_directory": vectorDir},
-		"db":        map[string]any{"backend": dbBackend, "path": dbPath},
-		"embedding": embeddingConfig,
 	}
 }
