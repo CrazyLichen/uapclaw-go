@@ -708,7 +708,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.6.3-10 | ✅ | Swarm Rails | AskUser✅/Avatar✅/Permissions✅/Interrupt✅/ProjectMemory✅/ResponsePrompt✅/RuntimePrompt✅/StreamEvent✅ | `jiuwenswarm/agents/harness/common/rails/` |
 | 10.6.11 | ☐ | AutoHarness | 自动化调度 | `jiuwenswarm/agents/harness/common/auto_harness/` |
 | 10.6.12 | ✅ | SessionOps | 会话操作 | `jiuwenswarm/agents/harness/common/session_ops_service.py` |
-| 10.6.13-18 | 🔄 | Swarm Memory | Config✅(swarm版config.go+包内缓存+ClearConfigCache回填)/Dreaming✅/Embeddings✅(Provider接口+OpenAICompatible+Mock+工厂，含manager/internal/types依赖链补齐)/External✅(config+builder 迁入 swarm memory 包：engine 门禁+external 段解析+openjiuwen 映射+四路分发 builder；偏差修复：kv 默认 shelve/键名 embed_base_url/ltm mkdir/mem0+openviking env 回退/品牌默认 uapclawswarm/IsExternalMemoryEnabled 双条件/agentarts 移除；adapter 瘦身薄调用，agentName 回退删除)/Forbidden✅/RPC | `jiuwenswarm/agents/harness/common/memory/` |
+| 10.6.13-18 | ✅ | Swarm Memory | Config✅(swarm版config.go+包内缓存+ClearConfigCache回填)/Dreaming✅/Embeddings✅(Provider接口+OpenAICompatible+Mock+工厂，含manager/internal/types依赖链补齐)/External✅(config+builder 迁入 swarm memory 包：engine 门禁+external 段解析+openjiuwen 映射+四路分发 builder；偏差修复：kv 默认 shelve/键名 embed_base_url/ltm mkdir/mem0+openviking env 回退/品牌默认 uapclawswarm/IsExternalMemoryEnabled 双条件/agentarts 移除；adapter 瘦身薄调用，agentName 回退删除)/Forbidden✅/RPC✅(独立子包 common/memoryrpc：5 handler 纯函数层 List/Edit/Status/Toggle/Open+12 私有函数；白名单校验/UAPCLAWSWARM.md 根特例/品牌映射 jiuwen→uapclaw；Toggle 写回 Load+Set 点路径(D3)对齐 11.14 先例；Status 六块统计含 detailed 分支 external_memory(engine external/both)；写回失败 D6 new_value=old_value；覆盖率 91.4%；⤵️ TUI 面板注册(11.15)) | `jiuwenswarm/agents/harness/common/memory/` |
 | 10.6.19-23 | ☐ | Swarm Team | TeamManager/Bootstrap/DistributedRuntime/A2X/TeamRails | `jiuwenswarm/agents/harness/team/` |
 | 10.6.24 | ☐ | Swarm 内置工具集 | 浏览器/MCP/搜索/视频/发文件/TODO/Cron/小艺电话 | `jiuwenswarm/agents/harness/common/tools/` |
 
@@ -738,7 +738,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 11.13 | ☐ | Gateway Hook | 钩子处理 | `jiuwenswarm/gateway/hooks/` |
 | **11.x IM 渠道** | — | | | |
 | 11.14 | ✅ | Web 通道 | WebSocket + HTTP RPC | `jiuwenswarm/gateway/channel_manager/web/` |
-| 11.15 | ☐ | TUI 通道 | 终端 UI 交互 | `jiuwenswarm/gateway/channel_manager/tui/` |
+| 11.15 | ☐ | TUI 通道 | 终端 UI 交互（⤴️ 需回填来源：10.6.18 memory_rpc 5 个 local handler 注册进 TUI 记忆管理面板） | `jiuwenswarm/gateway/channel_manager/tui/` |
 | 11.16 | ☐ | 飞书通道 | 事件回调，企业多机器人 | `jiuwenswarm/gateway/channel_manager/im_platforms/feishu/` |
 | 11.17 | ☐ | 钉钉通道 | DingTalk Stream 协议 | `jiuwenswarm/gateway/channel_manager/im_platforms/dingtalk/` |
 | 11.18 | ☐ | Telegram 通道 | Telegram Bot API | `jiuwenswarm/gateway/channel_manager/im_platforms/telegram/` |
