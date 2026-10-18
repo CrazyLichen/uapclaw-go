@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
 	"github.com/milvus-io/milvus/client/v2/entity"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	vector_store "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/vector_store"
@@ -37,13 +39,16 @@ type fakeIndexerMilvusClient struct {
 	flushCount int
 	// createdCollections CreateCollection 创建的集合名
 	createdCollections []string
+	// createdSchemas CreateCollection 创建的 schema（按集合名记录）
+	createdSchemas map[string]*entity.Schema
 	// createCollErr CreateCollection 返回的错误
 	createCollErr error
 }
 
 func newFakeIndexerMilvusClient() *fakeIndexerMilvusClient {
 	return &fakeIndexerMilvusClient{
-		collections: map[string]bool{},
+		collections:     map[string]bool{},
+		createdSchemas:  map[string]*entity.Schema{},
 	}
 }
 
@@ -51,7 +56,16 @@ func (f *fakeIndexerMilvusClient) CreateCollection(ctx context.Context, option m
 	if f.createCollErr != nil {
 		return f.createCollErr
 	}
-	f.createdCollections = append(f.createdCollections, option.Request().GetCollectionName())
+	req := option.Request()
+	f.createdCollections = append(f.createdCollections, req.GetCollectionName())
+	f.collections[req.GetCollectionName()] = true
+	// Schema 在 Request() 中被序列化为 bytes（schemapb.CollectionSchema），反序列化还原
+	if schemaBytes := req.GetSchema(); len(schemaBytes) > 0 {
+		schemaProto := &schemapb.CollectionSchema{}
+		if err := proto.Unmarshal(schemaBytes, schemaProto); err == nil {
+			f.createdSchemas[req.GetCollectionName()] = entity.NewSchema().ReadProto(schemaProto)
+		}
+	}
 	return nil
 }
 func (f *fakeIndexerMilvusClient) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...any) error {
@@ -288,4 +302,88 @@ func TestMilvusIndexer_Close(t *testing.T) {
 	fake := newFakeIndexerMilvusClient()
 	idx := newTestMilvusIndexer(t, fake)
 	assert.NotPanics(t, func() { idx.Close() })
+}
+
+// TestMilvusIndexer_ensureCollection_已存在 对齐 Python: index_exists → return
+func TestMilvusIndexer_ensureCollection_已存在(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	fake.collections["existing_coll"] = true
+	idx := newTestMilvusIndexer(t, fake)
+
+	err := idx.ensureCollection(context.Background(), "existing_coll",
+		common.IndexConfig{IndexName: "existing_coll", IndexType: common.IndexTypeVector}, nil)
+	require.NoError(t, err)
+	assert.Empty(t, fake.createdCollections) // 未创建新集合
+}
+
+// TestMilvusIndexer_ensureCollection_BM25 对齐 Python: bm25 类型含 analyzer+sparse+BM25函数
+func TestMilvusIndexer_ensureCollection_BM25(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	idx := newTestMilvusIndexer(t, fake)
+
+	err := idx.ensureCollection(context.Background(), "bm25_coll",
+		common.IndexConfig{IndexName: "bm25_coll", IndexType: common.IndexTypeBM25}, nil)
+	require.NoError(t, err)
+
+	schema := fake.createdSchemas["bm25_coll"]
+	require.NotNil(t, schema)
+	// 断言字段
+	fieldNames := map[string]bool{}
+	for _, f := range schema.Fields {
+		fieldNames[f.Name] = true
+	}
+	assert.True(t, fieldNames["document_id"])
+	assert.True(t, fieldNames["pk"])
+	assert.True(t, fieldNames["chunk_id"])
+	assert.True(t, fieldNames["content"])
+	assert.True(t, fieldNames["sparse_vector"])
+	assert.True(t, fieldNames["metadata"])
+	assert.False(t, fieldNames["embedding"]) // bm25 不含 dense 向量
+
+	// 断言 BM25 Function
+	require.Len(t, schema.Functions, 1)
+	assert.Equal(t, "text_bm25_emb", schema.Functions[0].Name)
+	assert.Equal(t, entity.FunctionTypeBM25, schema.Functions[0].Type)
+	assert.Equal(t, []string{"content"}, schema.Functions[0].InputFieldNames)
+	assert.Equal(t, []string{"sparse_vector"}, schema.Functions[0].OutputFieldNames)
+
+	// 断言 content 字段启用 analyzer（jieba）
+	for _, f := range schema.Fields {
+		if f.Name == "content" {
+			assert.Equal(t, "true", f.TypeParams["enable_analyzer"])
+			assert.Contains(t, f.TypeParams["analyzer_params"], "jieba")
+		}
+	}
+}
+
+// TestMilvusIndexer_ensureCollection_Vector 对齐 Python: vector 类型含 dense 向量
+func TestMilvusIndexer_ensureCollection_Vector(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	idx := newTestMilvusIndexer(t, fake)
+
+	err := idx.ensureCollection(context.Background(), "vec_coll",
+		common.IndexConfig{IndexName: "vec_coll", IndexType: common.IndexTypeVector}, nil)
+	require.Error(t, err) // 无 embedModel 时 dimension 无法推断 → 报错
+	assert.Empty(t, fake.createdCollections) // 创建失败
+}
+
+// TestMilvusIndexer_ensureCollection_Hybrid 对齐 Python: hybrid 类型同时含 sparse + dense
+func TestMilvusIndexer_ensureCollection_Hybrid(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	idx := newTestMilvusIndexer(t, fake)
+
+	err := idx.ensureCollection(context.Background(), "hybrid_coll",
+		common.IndexConfig{IndexName: "hybrid_coll", IndexType: common.IndexTypeHybrid}, nil)
+	require.Error(t, err) // 同样需要 embedModel 提供 dimension
+}
+
+// TestMilvusIndexer_ensureCollection_创建失败 对齐 Python: create_collection 异常
+func TestMilvusIndexer_ensureCollection_创建失败(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	fake.createCollErr = fmt.Errorf("create failed")
+	idx := newTestMilvusIndexer(t, fake)
+
+	err := idx.ensureCollection(context.Background(), "bm25_coll",
+		common.IndexConfig{IndexName: "bm25_coll", IndexType: common.IndexTypeBM25}, nil)
+	require.Error(t, err)
 }

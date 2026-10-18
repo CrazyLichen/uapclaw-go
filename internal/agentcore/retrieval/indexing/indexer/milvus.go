@@ -6,8 +6,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/milvus-io/milvus/client/v2/entity"
+	"github.com/milvus-io/milvus/client/v2/index"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/utils"
@@ -305,5 +308,184 @@ func (mi *MilvusIndexer) Close() {
 	if err := mi.client.Close(context.Background()); err != nil {
 		// 对齐 Python: logger.warning(f"Failed to close Milvus client: {e}")
 		logger.Warn(logComponent).Err(err).Msg("关闭 Milvus 客户端失败")
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ensureCollection 确保集合存在，不存在则创建。
+//
+// 对齐 Python MilvusIndexer._ensure_collection：
+//   - 已存在直接返回
+//   - schema：document_id(VARCHAR 256+INVERTED) + pk(INT64 PK auto_id) + chunk_id(VARCHAR 256+INVERTED)
+//     + content(VARCHAR 65535, BM25 时 enable_analyzer+jieba)
+//     + BM25/hybrid：sparse_vector(SPARSE_FLOAT_VECTOR) + BM25 Function + SPARSE_INVERTED_INDEX
+//     + vector/hybrid：embedding(FLOAT_VECTOR dim) + dense 索引
+//     + metadata(JSON)
+//   - dimension 推断：embedModel.Dimension → EmbedQuery("X") → 报错
+func (mi *MilvusIndexer) ensureCollection(ctx context.Context, collectionName string, config common.IndexConfig, embedModel embedding.BaseEmbedding) error {
+	exists, err := mi.IndexExists(ctx, collectionName)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	// 对齐 Python: schema = self._client.create_schema(auto_id=True, enable_dynamic_field=False)
+	schema := entity.NewSchema().WithAutoID(true).WithDynamicFieldEnabled(false)
+
+	var indexOpts []milvusclient.CreateIndexOption
+
+	// 对齐 Python: document_id 字段 + INVERTED 索引（加速按文档删除/过滤）
+	schema = schema.WithField(
+		entity.NewField().WithName(mi.docIDField).
+			WithDataType(entity.FieldTypeVarChar).
+			WithMaxLength(256),
+	)
+	indexOpts = append(indexOpts, milvusclient.NewCreateIndexOption(collectionName, mi.docIDField, index.NewInvertedIndex()))
+
+	// 对齐 Python: pk 主键字段（INT64, is_primary=True, auto_id=True）
+	schema = schema.WithField(
+		entity.NewField().WithName("pk").
+			WithDataType(entity.FieldTypeInt64).
+			WithIsPrimaryKey(true).
+			WithIsAutoID(true),
+	)
+
+	// 对齐 Python: chunk_id 字段 + INVERTED 索引
+	schema = schema.WithField(
+		entity.NewField().WithName("chunk_id").
+			WithDataType(entity.FieldTypeVarChar).
+			WithMaxLength(256),
+	)
+	indexOpts = append(indexOpts, milvusclient.NewCreateIndexOption(collectionName, "chunk_id", index.NewInvertedIndex()))
+
+	// 对齐 Python: enable_bm25 = config.index_type in ("bm25", "hybrid")
+	enableBM25 := config.IndexType == common.IndexTypeBM25 || config.IndexType == common.IndexTypeHybrid
+
+	// 对齐 Python: content 字段（BM25 时 enable_analyzer + jieba 分词器）
+	contentField := entity.NewField().WithName(mi.textField).
+		WithDataType(entity.FieldTypeVarChar).
+		WithMaxLength(65535)
+	if enableBM25 {
+		contentField = contentField.WithEnableAnalyzer(true).
+			WithAnalyzerParams(map[string]any{"tokenizer": "jieba"})
+	}
+	schema = schema.WithField(contentField)
+
+	// 对齐 Python: BM25 稀疏向量字段 + Function + SPARSE_INVERTED_INDEX(metric_type=BM25)
+	if enableBM25 {
+		schema = schema.WithField(
+			entity.NewField().WithName(mi.sparseVectorField).
+				WithDataType(entity.FieldTypeSparseVector),
+		)
+		schema = schema.WithFunction(
+			entity.NewFunction().WithName(milvusBM25FunctionName).
+				WithType(entity.FunctionTypeBM25).
+				WithInputFields(mi.textField).
+				WithOutputFields(mi.sparseVectorField),
+		)
+		// 对齐 Python: index_type="SPARSE_INVERTED_INDEX", metric_type="BM25"
+		indexOpts = append(indexOpts, milvusclient.NewCreateIndexOption(collectionName, mi.sparseVectorField, index.NewSparseInvertedIndex(entity.BM25, 0)))
+	}
+
+	// 对齐 Python: vector/hybrid 时 embedding 字段 + dense 索引
+	if config.IndexType == common.IndexTypeVector || config.IndexType == common.IndexTypeHybrid {
+		// 对齐 Python: dimension 推断三级防御
+		dimension := 0
+		if embedModel != nil {
+			dimension = embedModel.Dimension()
+		}
+		if dimension == 0 && embedModel != nil {
+			// 对齐 Python: test_embedding = await embed_model.embed_query("X")
+			if testEmb, embErr := embedModel.EmbedQuery(ctx, "X"); embErr == nil {
+				dimension = len(testEmb)
+				// 对齐 Python: logger.debug(f"Got dimension through API call: {dimension}")
+				logger.Debug(logComponent).Int("dimension", dimension).Msg("通过 API 调用获取维度")
+			} else {
+				// 对齐 Python: logger.warning(f"Unable to get dimension through API call: {e}")
+				logger.Warn(logComponent).Err(embErr).Msg("无法通过 API 调用获取维度")
+			}
+		}
+		if dimension == 0 {
+			return exception.BuildError(
+				exception.StatusRetrievalIndexingDimensionNotFound,
+				exception.WithParam("error_msg", "dimension is required for vector/hybrid index type"),
+			)
+		}
+
+		schema = schema.WithField(
+			entity.NewField().WithName(mi.vectorField.VectorFieldName()).
+				WithDataType(entity.FieldTypeFloatVector).
+				WithDim(int64(dimension)),
+		)
+
+		// 对齐 Python: index_type = "AUTOINDEX" if auto else index_type.upper() (+variant)
+		denseIndex, err := mi.buildDenseIndex()
+		if err != nil {
+			return err
+		}
+		indexOpts = append(indexOpts, milvusclient.NewCreateIndexOption(collectionName, mi.vectorField.VectorFieldName(), denseIndex))
+	}
+
+	// 对齐 Python: metadata 字段（JSON）
+	schema = schema.WithField(
+		entity.NewField().WithName(mi.metadataField).
+			WithDataType(entity.FieldTypeJSON),
+	)
+
+	// 对齐 Python: create_collection(collection_name, schema, index_params)
+	createOpt := milvusclient.NewCreateCollectionOption(collectionName, schema).
+		WithIndexOptions(indexOpts...)
+	if err := mi.client.CreateCollection(ctx, createOpt); err != nil {
+		logger.Error(logComponent).
+			Str("collection_name", collectionName).
+			Err(err).
+			Msg("创建集合失败")
+		return err
+	}
+
+	// 对齐 Python: logger.info(f"Created collection: {collection_name}")
+	logger.Info(logComponent).
+		Str("collection_name", collectionName).
+		Msg("集合创建成功")
+	return nil
+}
+
+// buildDenseIndex 根据向量字段配置构建 dense 索引。
+//
+// 对齐 Python _ensure_collection 中的 index_type 计算：
+// auto → AUTOINDEX；其他 → 具体索引构造（参数来自 vectorField 字段）。
+func (mi *MilvusIndexer) buildDenseIndex() (index.Index, error) {
+	metricType := mapMilvusMetricType(mi.distanceMetric)
+
+	switch vf := mi.vectorField.(type) {
+	case *vector_fields.MilvusAUTO:
+		return index.NewAutoIndex(metricType), nil
+	case *vector_fields.MilvusFLAT:
+		// 对齐 foundation 层：FLAT 等价 nlist=1 的 IVF_FLAT
+		return index.NewIvfFlatIndex(metricType, 1), nil
+	case *vector_fields.MilvusHNSW:
+		return index.NewHNSWIndex(metricType, vf.M, vf.EfConstruction), nil
+	case *vector_fields.MilvusIVF:
+		return index.NewIvfFlatIndex(metricType, vf.Nlist), nil
+	case *vector_fields.MilvusSCANN:
+		// 新 SDK 暂无 SCANN 构造器，用 IVF_PQ 近似（对齐 foundation 层做法）
+		return index.NewIvfPQIndex(metricType, vf.Nlist, 8, 8), nil
+	default:
+		return index.NewAutoIndex(metricType), nil
+	}
+}
+
+// mapMilvusMetricType 距离度量字符串转 SDK MetricType。
+func mapMilvusMetricType(metric string) entity.MetricType {
+	switch strings.ToUpper(metric) {
+	case "L2":
+		return entity.L2
+	case "IP":
+		return entity.IP
+	default:
+		return entity.COSINE
 	}
 }
