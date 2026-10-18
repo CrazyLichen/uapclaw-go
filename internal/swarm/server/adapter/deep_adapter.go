@@ -24,7 +24,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
@@ -37,6 +36,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -650,9 +650,10 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	}
 
 	// Python: clear_config_cache() + clear_memory_manager_cache()
-	// Go 无全局 config 缓存（Config.Load 每次从磁盘读取），无需 clear_config_cache
-	// ✅ 已回填：ClearMemoryManagerCache（对齐 Python: clear_memory_manager_cache()）
-	lite.ClearMemoryManagerCache()
+	// （interface_deep.py import 源为 jiuwenswarm...memory，即 swarm 版记忆包）
+	// ✅ 已回填：ClearConfigCache + ClearMemoryManagerCache（指向 swarm 侧 commmem，对齐 Python 双清缓存）
+	commmem.ClearConfigCache()
+	commmem.ClearMemoryManagerCache()
 
 	// 步骤 1: configBase 或 get_config()
 	// Python: if config_base is None: config_base = get_config()

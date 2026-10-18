@@ -24,6 +24,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	permowner "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -687,15 +688,15 @@ func boolVal(v any) bool {
 func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string) {
 
 	// Python: if get_memory_mode(config) == "local":
-	if getMemoryMode(d.configCache) == "local" {
+	if commmem.GetMemoryMode(d.configCache) == "local" {
 		// Python: builtin_on = is_builtin_memory_allowed(config) and is_memory_enabled(mode, config)
-		builtinOn := isBuiltinMemoryAllowed(d.configCache) && isMemoryEnabled(mode, d.configCache)
+		builtinOn := isBuiltinMemoryAllowed(d.configCache) && commmem.IsMemoryEnabled(mode, d.configCache)
 
 		if builtinOn {
 			// 开启记忆
 			if d.memoryRail != nil {
 				// Python: cur_memory_type = is_proactive_memory(mode, config)
-				curProactive := isProactiveMemory(mode, d.configCache)
+				curProactive := commmem.IsProactiveMemory(mode, d.configCache)
 				if d.isProactiveMemory != nil && *d.isProactiveMemory != curProactive {
 					// 当前记忆类型（主动/被动）和之前注册的不一致，注销后重建
 					if d.instance != nil {
@@ -802,7 +803,7 @@ func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRai
 		}
 		modelName, _ := embedConfig["embed_model"].(string)
 
-		isProactive := isProactiveMemory(mode, d.configCache)
+		isProactive := commmem.IsProactiveMemory(mode, d.configCache)
 		d.isProactiveMemory = &isProactive
 
 		ec := &embedding.EmbeddingConfig{
@@ -1414,64 +1415,9 @@ func extractModelName(configBase map[string]any) string {
 	return modelName
 }
 
-// resolveModeMemory 定位 modes 配置下指定 mode 的 memory 块。
-// Python: _resolve_mode_memory(mode, config) (config.py L193-223)
-func resolveModeMemory(mode string, config map[string]any) map[string]any {
-	modesCfg, _ := config["modes"].(map[string]any)
-	if modesCfg == nil {
-		return map[string]any{}
-	}
-
-	token := strings.TrimSpace(mode)
-	if token == "" {
-		return map[string]any{}
-	}
-
-	var node map[string]any
-
-	if strings.Contains(token, ".") {
-		// 含点号的模式（如 "agent.plan" / "agent.fast"）→ modes.agent.plan / modes.agent.fast
-		parts := strings.SplitN(token, ".", 2)
-		top, _ := modesCfg[parts[0]].(map[string]any)
-		if top == nil {
-			return map[string]any{}
-		}
-		node, _ = top[parts[1]].(map[string]any)
-	} else if token == "code" {
-		node, _ = modesCfg["code"].(map[string]any)
-	} else {
-		// 不含点号的模式（如 "plan" / "fast"）→ modes.agent.<plan|fast>
-		agentNode, _ := modesCfg["agent"].(map[string]any)
-		if agentNode == nil {
-			return map[string]any{}
-		}
-		node, _ = agentNode[token].(map[string]any)
-	}
-
-	if node == nil {
-		return map[string]any{}
-	}
-	mem, _ := node["memory"].(map[string]any)
-	if mem == nil {
-		return map[string]any{}
-	}
-	return mem
-}
-
-// getMemoryMode 读取 memory.mode：cloud 或 local（默认）。
-// Python: get_memory_mode(config) (config.py L255-259)
-func getMemoryMode(config map[string]any) string {
-	memCfg, _ := config["memory"].(map[string]any)
-	if memCfg == nil {
-		return "local"
-	}
-	mode, _ := memCfg["mode"].(string)
-	mode = strings.ToLower(strings.TrimSpace(mode))
-	if mode == "cloud" {
-		return "cloud"
-	}
-	return "local"
-}
+// resolveModeMemory/getMemoryMode/isMemoryEnabled/isProactiveMemory 四函数
+// 已迁移至 swarm 侧记忆包导出版：commmem.ResolveModeMemory/GetMemoryMode/IsMemoryEnabled/IsProactiveMemory
+// （对齐 Python：这些函数定义在 jiuwenswarm/agents/harness/common/memory/config.py）
 
 // isBuiltinMemoryAllowed 引擎门禁：memory.engine 是否放行内置 MemoryRail。
 // Python: is_builtin_memory_allowed(config) (external_memory_config.py L42-44)
@@ -1521,22 +1467,6 @@ func getExternalMemoryProviderConfig(config map[string]any) (providerName string
 	// 读取 provider 子段：memory.external.mem0 / memory.external.openviking
 	subCfg, _ := extCfg[name].(map[string]any)
 	return name, subCfg
-}
-
-// isMemoryEnabled 检查指定 mode 下内置记忆是否启用。
-// Python: is_memory_enabled(mode, config) (config.py L226-239)
-func isMemoryEnabled(mode string, config map[string]any) bool {
-	mem := resolveModeMemory(mode, config)
-	enabled, _ := mem["enabled"].(bool)
-	return enabled
-}
-
-// isProactiveMemory 检查指定 mode 下是否为主动记忆模式。
-// Python: is_proactive_memory(mode, config) (config.py L242-252)
-func isProactiveMemory(mode string, config map[string]any) bool {
-	mem := resolveModeMemory(mode, config)
-	proactive, _ := mem["is_proactive"].(bool)
-	return proactive
 }
 
 // boolStr 将 bool 转为 "true"/"false" 字符串（用于日志）。

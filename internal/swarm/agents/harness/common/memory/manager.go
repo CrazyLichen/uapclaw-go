@@ -739,10 +739,13 @@ func (m *MemoryIndexManager) setupFileWatcher() {
 		m.watcherPaths[watchPath] = struct{}{}
 	}
 
+	// Python: self._event_loop.call_later(1.0, self._set_watcher_initialized)
+	// 注意：必须在 go watchLoop() 之前置 false，否则 watchLoop 并发读到零值窗口
+	m.watchMu.Lock()
+	m.watcherInitialized = false
+	m.watchMu.Unlock()
 	go m.watchLoop()
 
-	// Python: self._event_loop.call_later(1.0, self._set_watcher_initialized)
-	m.watcherInitialized = false
 	time.AfterFunc(1*time.Second, func() {
 		// 对齐 Python: _set_watcher_initialized → logger.debug("File watcher initialized")
 		m.watchMu.Lock()
