@@ -723,6 +723,10 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	// Python: rails_list = self._get_current_agent_rails(config, config_base)
 	railsList := d.getCurrentAgentRails(config, configBase)
 
+	// 步骤 8.4: 加载用户自定义的 Rail 扩展
+	// Python: await self.load_user_rails()
+	d.loadUserRails()
+
 	// 步骤 8.5: 工具同步
 	// Python: self._sync_multimodal_tools_for_runtime() + self._sync_paid_search_tool_for_runtime()
 	d.syncMultimodalToolsForRuntime(ctx)

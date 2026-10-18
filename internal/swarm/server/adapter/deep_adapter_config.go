@@ -3,6 +3,9 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"os"
+	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -166,12 +169,38 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 
 	// ── browser_agent: 由 browser_runtime_enabled 控制 ──
-	// TODO(#browser): 对齐 Python _browser_runtime_enabled() 检查
-	if d.isSubagentExplicitlyEnabled(subagentsCfg, "browser_agent") {
-		// ⤵️ browser_agent: BuildBrowserAgentConfig 签名已变更，需要 SubagentCreateParams
-		// 暂时跳过，等 browser 功能实现时回填
-		// Python: cfg := subagents.BuildBrowserAgentConfig(d.model, &hschema.SubagentCreateParams{})
-		_ = subagents.BuildBrowserAgentConfig
+	// 对齐 Python _build_configured_subagents browser 分支：
+	// browser_enabled → BROWSER_DRIVER 默认值注入 + chrome_path 解析 + 注册 subagent；
+	// 未启用但配置了 browser_agent → 跳过并记录日志
+	browserAgentCfg, _ := subagentsCfg["browser_agent"].(map[string]any)
+	if d.browserRuntimeEnabled() {
+		// Python: if not str(os.getenv("BROWSER_DRIVER") or "").strip():
+		//   os.environ["BROWSER_DRIVER"] = "managed"
+		if strings.TrimSpace(os.Getenv("BROWSER_DRIVER")) == "" {
+			os.Setenv("BROWSER_DRIVER", "managed")
+			logger.Info(logComponent).
+				Msg("browser subagent enabled without BROWSER_DRIVER; defaulting to managed mode")
+		}
+		// Python: if not str(os.getenv("BROWSER_MANAGED_BINARY") or "").strip():
+		//   chrome_path = self._resolve_managed_browser_binary_from_config()
+		//   if chrome_path: os.environ["BROWSER_MANAGED_BINARY"] = chrome_path
+		if strings.TrimSpace(os.Getenv("BROWSER_MANAGED_BINARY")) == "" {
+			if chromePath := d.resolveManagedBrowserBinaryFromConfig(configBase); chromePath != "" {
+				os.Setenv("BROWSER_MANAGED_BINARY", chromePath)
+				logger.Info(logComponent).
+					Str("binary", chromePath).
+					Msg("using browser.chrome_path for managed browser")
+			}
+		}
+		params := d.buildBrowserSubagentParams(config, browserAgentCfg)
+		cfg := subagents.BuildBrowserAgentConfig(d.model, params)
+		if cfg != nil {
+			specs = append(specs, cfg)
+		}
+	} else if subagentsCfg != nil && len(browserAgentCfg) > 0 {
+		// Python: logger.info("browser_agent config detected but browser runtime is not enabled; skipping")
+		logger.Info(logComponent).
+			Msg("browser_agent config detected but browser runtime is not enabled; skipping browser subagent registration")
 	}
 
 	// ── 自定义 agent: 对齐 Python _load_custom_subagents ──
@@ -599,4 +628,132 @@ func (d *DeepAdapter) buildResearchSubagentParams(config map[string]any, configB
 		// DeepAdapter.workspaceDir 在初始化时已解析，默认为 workspace.AgentRootDir()
 		Workspace: hworkspace.NewWorkspace(d.workspaceDir, resolvedLanguage),
 	}
+}
+
+// browserRuntimeEnabled 判断 browser runtime 是否启用。
+//
+// 对齐 Python _browser_runtime_enabled()：PLAYWRIGHT_RUNTIME_MCP_ENABLED 优先，
+// 回退 BROWSER_RUNTIME_MCP_ENABLED；值 strip+lower 后 ∈ {1,true,yes,on} 才启用。
+//
+// Python: interface_deep.py _browser_runtime_enabled
+func (d *DeepAdapter) browserRuntimeEnabled() bool {
+	value := strings.ToLower(strings.TrimSpace(
+		firstNonEmptyStr(
+			os.Getenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED"),
+			os.Getenv("BROWSER_RUNTIME_MCP_ENABLED"),
+		),
+	))
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// resolveManagedBrowserBinaryFromConfig 从配置解析 managed browser 二进制路径。
+//
+// 对齐 Python _resolve_managed_browser_binary_from_config()：
+//   - browser.chrome_path 为字符串 → strip 后直接返回
+//   - 为 dict → 按 runtime.GOOS 映射平台键（darwin→macos 等），
+//     依序尝试平台键与 "default"
+//   - 其余情况返回空串
+//
+// Python: interface_deep.py _resolve_managed_browser_binary_from_config
+func (d *DeepAdapter) resolveManagedBrowserBinaryFromConfig(configBase map[string]any) string {
+	if configBase == nil {
+		return ""
+	}
+	browserCfg, _ := configBase["browser"].(map[string]any)
+	if browserCfg == nil {
+		return ""
+	}
+	chromePath, ok := browserCfg["chrome_path"]
+	if !ok {
+		return ""
+	}
+	// 字符串形式：strip 后直取
+	if s, ok := chromePath.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	// 平台 map 形式：win32/cygwin→windows、darwin→macos、linux/linux2→linux
+	pathMap, ok := chromePath.(map[string]any)
+	if !ok {
+		return ""
+	}
+	osKey := "default"
+	switch runtime.GOOS {
+	case "windows":
+		osKey = "windows"
+	case "darwin":
+		osKey = "macos"
+	case "linux":
+		osKey = "linux"
+	}
+	for _, key := range []string{osKey, "default"} {
+		if v, ok := pathMap[key].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+// buildBrowserSubagentParams 从配置构建 browser 子代理的 SubagentCreateParams。
+//
+// 对齐 Python _build_configured_subagents 中对 build_browser_agent_config 的调用：
+// max_iterations=parse_int(browser_agent_cfg.get("max_iterations"), react_cfg.get("max_iterations", 15))。
+//
+// Python: interface_deep.py _build_configured_subagents
+func (d *DeepAdapter) buildBrowserSubagentParams(config map[string]any, browserAgentCfg map[string]any) *hschema.SubagentCreateParams {
+	resolvedLanguage := d.resolveRuntimeLanguage()
+
+	// Python: parse_int(browser_agent_cfg.get("max_iterations"), react_cfg.get("max_iterations", 15))
+	maxIterations := 0
+	if browserAgentCfg != nil {
+		maxIterations = parseIntAny(browserAgentCfg["max_iterations"], 0)
+	}
+	if maxIterations == 0 {
+		maxIterations = parseIntAny(config["max_iterations"], 0)
+	}
+	if maxIterations == 0 {
+		maxIterations = 15
+	}
+
+	return &hschema.SubagentCreateParams{
+		Language:      resolvedLanguage,
+		MaxIterations: maxIterations,
+		// Python: workspace=self._workspace_dir or "./"
+		Workspace: hworkspace.NewWorkspace(d.workspaceDir, resolvedLanguage),
+	}
+}
+
+// firstNonEmptyStr 返回第一个非空字符串（对齐 Python 的 `a or b` 短路语义）。
+func firstNonEmptyStr(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// parseIntAny 安全解析整数（对齐 Python parse_int：None/空串/非法值返回 default）。
+func parseIntAny(value any, def int) int {
+	switch n := value.(type) {
+	case nil:
+		return def
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case string:
+		if n == "" {
+			return def
+		}
+		if i, err := strconv.Atoi(strings.TrimSpace(n)); err == nil {
+			return i
+		}
+	}
+	return def
 }

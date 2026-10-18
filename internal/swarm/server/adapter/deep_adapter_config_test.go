@@ -9,6 +9,8 @@ import (
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -408,4 +410,189 @@ func TestBuildConfiguredSubagents_无配置(t *testing.T) {
 	}
 	// subagents 可能为空或包含默认子 Agent（explore/plan）
 	_ = subagents
+}
+
+// ──────────────────────────── browser_agent（AH-M-12 回填） ────────────────────────────
+
+// TestBrowserRuntimeEnabled_环境变量开关 对齐 Python _browser_runtime_enabled()：
+// PLAYWRIGHT_RUNTIME_MCP_ENABLED / BROWSER_RUNTIME_MCP_ENABLED，值 ∈ {1,true,yes,on}
+func TestBrowserRuntimeEnabled_环境变量开关(t *testing.T) {
+	d := NewDeepAdapter()
+
+	// 两变量均未设置 → false
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "")
+	t.Setenv("BROWSER_RUNTIME_MCP_ENABLED", "")
+	if d.browserRuntimeEnabled() {
+		t.Error("环境变量为空时应返回 false")
+	}
+
+	// PLAYWRIGHT 优先
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "true")
+	t.Setenv("BROWSER_RUNTIME_MCP_ENABLED", "")
+	if !d.browserRuntimeEnabled() {
+		t.Error("PLAYWRIGHT_RUNTIME_MCP_ENABLED=true 应返回 true")
+	}
+
+	// 回退 BROWSER_RUNTIME_MCP_ENABLED
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "")
+	t.Setenv("BROWSER_RUNTIME_MCP_ENABLED", "1")
+	if !d.browserRuntimeEnabled() {
+		t.Error("BROWSER_RUNTIME_MCP_ENABLED=1 应返回 true")
+	}
+
+	// 大小写与空白容忍（对齐 Python .strip().lower()）
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", " ON ")
+	if !d.browserRuntimeEnabled() {
+		t.Error("' ON ' strip+lower 后应视为 true")
+	}
+
+	// 非法值
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "0")
+	if d.browserRuntimeEnabled() {
+		t.Error("'0' 应返回 false")
+	}
+}
+
+// TestBuildConfiguredSubagents_browserAgent注册 对齐 Python _build_configured_subagents：
+// browser_runtime_enabled 且配置了 browser_agent 时注册 subagent；
+// 未启用 runtime 但配置了 browser_agent 时跳过（对齐 Python 的 else 分支日志）
+func TestBuildConfiguredSubagents_browserAgent注册(t *testing.T) {
+	d := NewDeepAdapter()
+	d.model = &llm.Model{}
+
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "true")
+	t.Setenv("BROWSER_DRIVER", "")            // 触发 managed 默认值注入
+	t.Setenv("BROWSER_MANAGED_BINARY", "")    // 触发 chrome_path 解析
+
+	config := map[string]any{
+		"subagents": map[string]any{
+			"browser_agent": map[string]any{"enabled": true, "max_iterations": 7},
+		},
+		"max_iterations": 20,
+	}
+	specs, _ := d.buildConfiguredSubagents(config, nil)
+	found := false
+	for _, s := range specs {
+		if cfg, ok := s.(*hschema.SubAgentConfig); ok && cfg.FactoryName == "browser_agent" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("browser runtime 启用时 buildConfiguredSubagents 应注册 browser_agent")
+	}
+
+	// BROWSER_DRIVER 默认值注入（对齐 Python: os.environ["BROWSER_DRIVER"] = "managed"）
+	if got := os.Getenv("BROWSER_DRIVER"); got != "managed" {
+		t.Errorf("BROWSER_DRIVER 应被默认注入为 managed，实际 %q", got)
+	}
+}
+
+// TestBuildConfiguredSubagents_browserAgent未启用runtime时跳过 对齐 Python：
+// browser_agent 配置存在但 browser runtime 未启用 → 跳过注册（不 panic、不注册）
+func TestBuildConfiguredSubagents_browserAgent未启用runtime时跳过(t *testing.T) {
+	d := NewDeepAdapter()
+	d.model = &llm.Model{}
+
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "")
+	t.Setenv("BROWSER_RUNTIME_MCP_ENABLED", "")
+
+	config := map[string]any{
+		"subagents": map[string]any{
+			"browser_agent": map[string]any{"enabled": true},
+		},
+	}
+	specs, _ := d.buildConfiguredSubagents(config, nil)
+	for _, s := range specs {
+		if cfg, ok := s.(*hschema.SubAgentConfig); ok && cfg.FactoryName == "browser_agent" {
+			t.Error("browser runtime 未启用时不应注册 browser_agent")
+		}
+	}
+}
+
+// TestBuildConfiguredSubagents_browserAgentMaxIterations回退 对齐 Python parse_int 语义：
+// browser_agent.max_iterations 优先，回退 react.max_iterations，再回退 15
+func TestBuildConfiguredSubagents_browserAgentMaxIterations回退(t *testing.T) {
+	d := NewDeepAdapter()
+	d.model = &llm.Model{}
+
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "true")
+
+	// 显式 max_iterations=7
+	config := map[string]any{
+		"subagents": map[string]any{
+			"browser_agent": map[string]any{"enabled": true, "max_iterations": 7},
+		},
+		"max_iterations": 20,
+	}
+	specs, _ := d.buildConfiguredSubagents(config, nil)
+	for _, s := range specs {
+		if cfg, ok := s.(*hschema.SubAgentConfig); ok && cfg.FactoryName == "browser_agent" {
+			if cfg.MaxIterations != 7 {
+				t.Errorf("MaxIterations = %d, want 7（browser_agent 显式值优先）", cfg.MaxIterations)
+			}
+		}
+	}
+
+	// 未配置 → 回退 react.max_iterations=20
+	config2 := map[string]any{
+		"subagents": map[string]any{
+			"browser_agent": map[string]any{"enabled": true},
+		},
+		"max_iterations": 20,
+	}
+	specs2, _ := d.buildConfiguredSubagents(config2, nil)
+	for _, s := range specs2 {
+		if cfg, ok := s.(*hschema.SubAgentConfig); ok && cfg.FactoryName == "browser_agent" {
+			if cfg.MaxIterations != 20 {
+				t.Errorf("MaxIterations = %d, want 20（回退 react.max_iterations）", cfg.MaxIterations)
+			}
+		}
+	}
+
+	// 都未配置 → 默认 15
+	config3 := map[string]any{
+		"subagents": map[string]any{
+			"browser_agent": map[string]any{"enabled": true},
+		},
+	}
+	specs3, _ := d.buildConfiguredSubagents(config3, nil)
+	for _, s := range specs3 {
+		if cfg, ok := s.(*hschema.SubAgentConfig); ok && cfg.FactoryName == "browser_agent" {
+			if cfg.MaxIterations != 15 {
+				t.Errorf("MaxIterations = %d, want 15（默认值）", cfg.MaxIterations)
+			}
+		}
+	}
+}
+
+// TestResolveManagedBrowserBinaryFromConfig_chromePath 对齐 Python
+// _resolve_managed_browser_binary_from_config()：字符串直取 / 平台 map / default 回退
+func TestResolveManagedBrowserBinaryFromConfig_chromePath(t *testing.T) {
+	d := NewDeepAdapter()
+
+	// 字符串形式直取
+	if got := d.resolveManagedBrowserBinaryFromConfig(map[string]any{
+		"browser": map[string]any{"chrome_path": " /usr/bin/chrome "},
+	}); got != "/usr/bin/chrome" {
+		t.Errorf("字符串 chrome_path 应 strip 后返回，实际 %q", got)
+	}
+
+	// 平台 map 形式：linux 键优先
+	platformMap := map[string]any{
+		"browser": map[string]any{
+			"chrome_path": map[string]any{
+				"linux":   "/usr/bin/chromium",
+				"default": "/usr/bin/default-chrome",
+			},
+		},
+	}
+	got := d.resolveManagedBrowserBinaryFromConfig(platformMap)
+	if got == "" {
+		t.Error("平台 map 形式应解析出非空路径")
+	}
+
+	// 无 browser 配置 → 空串
+	if got := d.resolveManagedBrowserBinaryFromConfig(map[string]any{}); got != "" {
+		t.Errorf("无 browser 配置应返回空串，实际 %q", got)
+	}
 }

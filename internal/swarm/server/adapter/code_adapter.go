@@ -62,7 +62,7 @@ type CodeAdapter struct {
 	// ─── Code 模式专有 Rails ───
 
 	// lspRail LSP 护栏
-	// ⤵️ 10.6.3-10: LspRail
+	// ⤵️ 9.17: LspRail（依赖 openjiuwen/harness/lsp/ 子系统）
 	lspRail sainterfaces.AgentRail
 	// projectMemoryRail 项目记忆护栏
 	// ⤴️ 10.6.7: ProjectMemoryRail 回填实现
@@ -939,7 +939,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	}
 
 	// 5: LspRail（LSP 护栏）
-	// ⤵️ 10.6.3-10: LspRail 尚未实现
+	// ⤵️ 9.17: LspRail 尚未实现（依赖 openjiuwen/harness/lsp/ 子系统）
 	if lsp := c.buildLspRail(); lsp != nil {
 		c.lspRail = lsp
 		railsList = append(railsList, lsp)
@@ -1109,9 +1109,9 @@ func (c *CodeAdapter) buildCodeAgentRail() *CodeAgentRail {
 
 // buildLspRail 构建 LSP 护栏。
 // Python: JiuwenClawCodeAdapter._build_lsp_rail_via_config() (interface_code.py)
-// ⤵️ 10.6.3-10: LspRail 尚未实现
+// ⤵️ 9.17: LspRail 尚未实现（依赖 openjiuwen/harness/lsp/ 子系统，21 文件约 2500 行）
 func (c *CodeAdapter) buildLspRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 LspRail
+	// ⤵️ 9.17: 实现 LspRail
 	return nil
 }
 
