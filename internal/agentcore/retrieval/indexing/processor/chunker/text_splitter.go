@@ -7,6 +7,7 @@ import (
 	"github.com/tiktoken-go/tokenizer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/indexing/processor/splitter"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -88,6 +89,17 @@ type TiktokenTokenizer struct {
 	codec tokenizer.Codec
 }
 
+// IndexSentenceSplitter 句子级分割器，SentenceSplitter 的包装层。
+//
+// 负责策略解析：Tokenizer 接口三态 → enc/dec 函数对 → 构造
+// splitter.SentenceSplitter（chunker → splitter 单向依赖）。
+//
+// Python: text_splitter.py (IndexSentenceSplitter)
+type IndexSentenceSplitter struct {
+	// splitter 内部句级分割器
+	splitter *splitter.SentenceSplitter
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -116,6 +128,8 @@ const (
 var (
 	// 编译期断言 CharSplitter 实现 TextSplitter
 	_ TextSplitter = (*CharSplitter)(nil)
+	// 编译期断言 IndexSentenceSplitter 实现 TextSplitter
+	_ TextSplitter = (*IndexSentenceSplitter)(nil)
 	// 编译期引用 defaultCharChunkOverlap：Go 无 None 语义该默认值不参与运行时
 	// 构造（overlap 0 为合法显式值），保留常量作为 Python 对齐锚点供文档引用
 	_ = defaultCharChunkOverlap
@@ -162,6 +176,39 @@ func NewTiktokenTokenizer() (*TiktokenTokenizer, error) {
 	return &TiktokenTokenizer{codec: codec}, nil
 }
 
+// NewIndexSentenceSplitter 构造句子级分割器。
+//
+// 执行顺序严格对齐 Python IndexSentenceSplitter.__init__：
+//  1. splitterConfig 非 map 归一化 {"paragraph_separator": "\n"} 后丢弃
+//     （偏差 3a：Python 死参数，归一化结果无消费者，签名保留）
+//  2. resolveTokenizers 解析接口三态
+//  3. resolveChunkSize 决定最终 chunkSize
+//  4. 构造 SentenceSplitter（overlap==0 → chunkSize/5，Python or 语义——
+//     与 CharSplitter 的"0 是合法显式值"相反是有意的，Python 源码即如此）
+//
+// Python: text_splitter.py IndexSentenceSplitter.__init__
+func NewIndexSentenceSplitter(tokenizer Tokenizer, chunkSize, chunkOverlap int, splitterConfig map[string]any, language string) (*IndexSentenceSplitter, error) {
+	if splitterConfig == nil {
+		splitterConfig = map[string]any{"paragraph_separator": "\n"}
+	}
+	_ = splitterConfig // 归一化后无消费者（对齐 Python 死参数，偏差 3a）
+
+	enc, dec, maxLen := resolveTokenizers(tokenizer)
+	finalChunkSize := resolveChunkSize(chunkSize, maxLen)
+
+	overlap := chunkOverlap
+	if overlap == 0 {
+		overlap = finalChunkSize / 5 // Python `chunk_overlap or chunk_size // 5`
+	}
+
+	bs, err := splitter.NewBaseSplitter(finalChunkSize, overlap, enc, dec)
+	if err != nil {
+		return nil, err
+	}
+	ss := splitter.NewSentenceSplitter(bs, language)
+	return &IndexSentenceSplitter{splitter: ss}, nil
+}
+
 // Encode 编码文本（[]uint→[]int 转换 + 薄转发）。
 func (t *TiktokenTokenizer) Encode(text string) ([]int, error) {
 	ids, _, err := t.codec.Encode(text)
@@ -182,6 +229,16 @@ func (t *TiktokenTokenizer) Decode(ids []int) (string, error) {
 		uints[i] = uint(id)
 	}
 	return t.codec.Decode(uints)
+}
+
+// Split 实现 TextSplitter 接口：委托 GetNodesFromDocuments。
+//
+// Python 的 TextChunk|Document 联合入参在 Go 侧收窄为 *Document
+//（13.6 决策），isinstance 转换分支消失——Go 入参恒为 Document。
+//
+// Python: text_splitter.py IndexSentenceSplitter.split
+func (s *IndexSentenceSplitter) Split(doc *reranker.Document) ([]common.TextChunk, error) {
+	return s.splitter.GetNodesFromDocuments([]reranker.Document{*doc})
 }
 
 // Split 按滑窗切分文档。

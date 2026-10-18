@@ -13,11 +13,13 @@
 // 文件目录：
 //
 //	chunker/
-//	├── doc.go            # 包文档
-//	├── base.go           # Chunker 接口 + BaseChunker 默认适配器 + 构造校验
-//	├── registry.go       # 分块器注册表 + GetChunker/RegisterChunker + hybridFactory
-//	├── text_splitter.go  # TextSplitter 接口 + CharSplitter 滑窗分割（IndexSentenceSplitter 13.7）
-//	└── char_chunker.go   # CharChunker 字符级分块器（"char" 注册项）
+//	├── doc.go               # 包文档
+//	├── base.go              # Chunker 接口 + BaseChunker 默认适配器 + 构造校验
+//	├── registry.go          # 分块器注册表 + GetChunker/RegisterChunker + hybridFactory
+//	├── text_splitter.go     # TextSplitter 接口 + CharSplitter + Tokenizer 三态接口
+//	│                        #   + TiktokenTokenizer + IndexSentenceSplitter（13.7）
+//	├── char_chunker.go      # CharChunker 字符级分块器（"char" 注册项）
+//	└── tokenizer_chunker.go # TokenizerChunker token 预算分块器（"tokenizer" 注册项）
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/processor/chunker/
 package chunker
