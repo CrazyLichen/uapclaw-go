@@ -409,7 +409,13 @@ func (mi *MilvusIndexer) BuildIndex(
 
 	// ─── 步骤 4：转换 TextChunk → Milvus 字段 ───
 	// 对齐 Python: 避免写入 schema 未定义的 id_ 字段
-	databaseName, _ := indexOpts.Extra["database_name"].(string)
+	databaseName, ok := indexOpts.Extra["database_name"].(string)
+	if !ok {
+		// 防御性日志：Python kwargs.pop 传错类型时同样静默退化，此处补 warn 便于排查
+		logger.Warn(logComponent).Str("method", "BuildIndex").
+			Str("database_name_type", fmt.Sprintf("%T", indexOpts.Extra["database_name"])).
+			Msg("Extra[database_name] is not a string, fallback to empty")
+	}
 	data := make([]map[string]any, 0, len(chunks))
 	for _, chunk := range chunks {
 		meta := chunk.Metadata
@@ -509,10 +515,10 @@ func (mi *MilvusIndexer) UpdateIndex(
 // 对齐 Python MilvusIndexer._ensure_collection：
 //   - 已存在直接返回
 //   - schema：document_id(VARCHAR 256+INVERTED) + pk(INT64 PK auto_id) + chunk_id(VARCHAR 256+INVERTED)
-//     + content(VARCHAR 65535, BM25 时 enable_analyzer+jieba)
-//     + BM25/hybrid：sparse_vector(SPARSE_FLOAT_VECTOR) + BM25 Function + SPARSE_INVERTED_INDEX
-//     + vector/hybrid：embedding(FLOAT_VECTOR dim) + dense 索引
-//     + metadata(JSON)
+//   - content(VARCHAR 65535, BM25 时 enable_analyzer+jieba)
+//   - BM25/hybrid：sparse_vector(SPARSE_FLOAT_VECTOR) + BM25 Function + SPARSE_INVERTED_INDEX
+//   - vector/hybrid：embedding(FLOAT_VECTOR dim) + dense 索引
+//   - metadata(JSON)
 //   - dimension 推断：embedModel.Dimension → EmbedQuery("X") → 报错
 func (mi *MilvusIndexer) ensureCollection(ctx context.Context, collectionName string, config common.IndexConfig, embedModel embedding.BaseEmbedding) error {
 	exists, err := mi.IndexExists(ctx, collectionName)
@@ -662,7 +668,8 @@ func (mi *MilvusIndexer) buildDenseIndex() (index.Index, error) {
 	case *vector_fields.MilvusIVF:
 		return index.NewIvfFlatIndex(metricType, vf.Nlist), nil
 	case *vector_fields.MilvusSCANN:
-		// 新 SDK 暂无 SCANN 构造器，用 IVF_PQ 近似（对齐 foundation 层做法）
+		// TODO(#通用): 新 SDK 暂无 SCANN 构造器，用 IVF_PQ 近似（对齐 foundation 层做法）；
+		// SDK 补充 SCANN 构造器后回填真实实现（与 foundation/store/vector_fields 的 SCANN TODO 联动）
 		return index.NewIvfPQIndex(metricType, vf.Nlist, 8, 8), nil
 	default:
 		return index.NewAutoIndex(metricType), nil

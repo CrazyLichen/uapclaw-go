@@ -11,6 +11,7 @@ import (
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
@@ -58,12 +59,12 @@ type fakeIndexerMilvusClient struct {
 
 func newFakeIndexerMilvusClient() *fakeIndexerMilvusClient {
 	return &fakeIndexerMilvusClient{
-		collections:     map[string]bool{},
-		createdSchemas:  map[string]*entity.Schema{},
+		collections:    map[string]bool{},
+		createdSchemas: map[string]*entity.Schema{},
 	}
 }
 
-func (f *fakeIndexerMilvusClient) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error {
+func (f *fakeIndexerMilvusClient) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...grpc.CallOption) error {
 	if f.createCollErr != nil {
 		return f.createCollErr
 	}
@@ -79,18 +80,18 @@ func (f *fakeIndexerMilvusClient) CreateCollection(ctx context.Context, option m
 	}
 	return nil
 }
-func (f *fakeIndexerMilvusClient) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...any) error {
+func (f *fakeIndexerMilvusClient) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...grpc.CallOption) error {
 	delete(f.collections, option.Request().GetCollectionName())
 	return nil
 }
-func (f *fakeIndexerMilvusClient) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error) {
+func (f *fakeIndexerMilvusClient) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...grpc.CallOption) (bool, error) {
 	if f.hasCollectionErr != nil {
 		return false, f.hasCollectionErr
 	}
 	name := option.Request().GetCollectionName()
 	return f.collections[name], nil
 }
-func (f *fakeIndexerMilvusClient) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error) {
+func (f *fakeIndexerMilvusClient) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...grpc.CallOption) (*entity.Collection, error) {
 	if f.describeCollErr != nil {
 		return nil, f.describeCollErr
 	}
@@ -99,20 +100,13 @@ func (f *fakeIndexerMilvusClient) DescribeCollection(ctx context.Context, option
 	}
 	return &entity.Collection{}, nil
 }
-func (f *fakeIndexerMilvusClient) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...any) ([]string, error) {
-	names := make([]string, 0, len(f.collections))
-	for name := range f.collections {
-		names = append(names, name)
-	}
-	return names, nil
-}
-func (f *fakeIndexerMilvusClient) GetCollectionStats(ctx context.Context, option milvusclient.GetCollectionOption, callOptions ...any) (map[string]string, error) {
+func (f *fakeIndexerMilvusClient) GetCollectionStats(ctx context.Context, option milvusclient.GetCollectionOption, callOptions ...grpc.CallOption) (map[string]string, error) {
 	if f.statsErr != nil {
 		return nil, f.statsErr
 	}
 	return map[string]string{"row_count": f.statsRowCount}, nil
 }
-func (f *fakeIndexerMilvusClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error) {
+func (f *fakeIndexerMilvusClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...grpc.CallOption) (milvusclient.InsertResult, error) {
 	f.insertCount++
 	if f.insertErr != nil {
 		return milvusclient.InsertResult{}, f.insertErr
@@ -157,23 +151,23 @@ func fakeMilvusInsertSchema() *entity.Schema {
 		WithField(entity.NewField().WithName("embedding").WithDataType(entity.FieldTypeFloatVector).WithDim(3)).
 		WithField(entity.NewField().WithName("metadata").WithDataType(entity.FieldTypeJSON))
 }
-func (f *fakeIndexerMilvusClient) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error) {
+func (f *fakeIndexerMilvusClient) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...grpc.CallOption) (milvusclient.DeleteResult, error) {
 	if f.deleteErr != nil {
 		return milvusclient.DeleteResult{}, f.deleteErr
 	}
 	return milvusclient.DeleteResult{DeleteCount: f.deleteCount}, nil
 }
-func (f *fakeIndexerMilvusClient) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error {
+func (f *fakeIndexerMilvusClient) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...grpc.CallOption) error {
 	f.flushCount++
 	return nil
 }
-func (f *fakeIndexerMilvusClient) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
+func (f *fakeIndexerMilvusClient) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...grpc.CallOption) ([]milvusclient.ResultSet, error) {
 	return nil, nil
 }
-func (f *fakeIndexerMilvusClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
+func (f *fakeIndexerMilvusClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...grpc.CallOption) ([]milvusclient.ResultSet, error) {
 	return nil, nil
 }
-func (f *fakeIndexerMilvusClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error) {
+func (f *fakeIndexerMilvusClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...grpc.CallOption) (milvusclient.ResultSet, error) {
 	if f.queryErr != nil {
 		return milvusclient.ResultSet{}, f.queryErr
 	}
@@ -186,25 +180,22 @@ func (f *fakeIndexerMilvusClient) Query(ctx context.Context, option milvusclient
 		Fields:      milvusclient.DataSet{col},
 	}, nil
 }
-func (f *fakeIndexerMilvusClient) DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...any) (milvusclient.IndexDescription, error) {
+func (f *fakeIndexerMilvusClient) DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...grpc.CallOption) (milvusclient.IndexDescription, error) {
 	return milvusclient.IndexDescription{}, nil
 }
-func (f *fakeIndexerMilvusClient) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error {
+func (f *fakeIndexerMilvusClient) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...grpc.CallOption) error {
 	return nil
 }
-func (f *fakeIndexerMilvusClient) GetLoadState(ctx context.Context, option milvusclient.GetLoadStateOption, callOptions ...any) (entity.LoadState, error) {
+func (f *fakeIndexerMilvusClient) GetLoadState(ctx context.Context, option milvusclient.GetLoadStateOption, callOptions ...grpc.CallOption) (entity.LoadState, error) {
 	return entity.LoadState{State: entity.LoadStateLoaded}, nil
 }
-func (f *fakeIndexerMilvusClient) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error {
+func (f *fakeIndexerMilvusClient) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...grpc.CallOption) error {
 	return nil
 }
-func (f *fakeIndexerMilvusClient) ListDatabase(ctx context.Context, option milvusclient.ListDatabaseOption, callOptions ...any) ([]string, error) {
+func (f *fakeIndexerMilvusClient) ListDatabase(ctx context.Context, option milvusclient.ListDatabaseOption, callOptions ...grpc.CallOption) ([]string, error) {
 	return []string{"default"}, nil
 }
-func (f *fakeIndexerMilvusClient) CreateDatabase(ctx context.Context, option milvusclient.CreateDatabaseOption, callOptions ...any) error {
-	return nil
-}
-func (f *fakeIndexerMilvusClient) UseDatabase(ctx context.Context, option milvusclient.UseDatabaseOption, callOptions ...any) error {
+func (f *fakeIndexerMilvusClient) CreateDatabase(ctx context.Context, option milvusclient.CreateDatabaseOption, callOptions ...grpc.CallOption) error {
 	return nil
 }
 func (f *fakeIndexerMilvusClient) Close(ctx context.Context) error {
@@ -426,7 +417,7 @@ func TestMilvusIndexer_ensureCollection_Vector(t *testing.T) {
 
 	err := idx.ensureCollection(context.Background(), "vec_coll",
 		common.IndexConfig{IndexName: "vec_coll", IndexType: common.IndexTypeVector}, nil)
-	require.Error(t, err) // 无 embedModel 时 dimension 无法推断 → 报错
+	require.Error(t, err)                    // 无 embedModel 时 dimension 无法推断 → 报错
 	assert.Empty(t, fake.createdCollections) // 创建失败
 }
 
@@ -475,7 +466,7 @@ func TestMilvusIndexer_BuildIndex_完整流程(t *testing.T) {
 // TestMilvusIndexer_BuildIndex_重复docID 对齐 Python: query 查重 → ADD_DOC_RUNTIME_ERROR
 func TestMilvusIndexer_BuildIndex_重复docID(t *testing.T) {
 	fake := newFakeIndexerMilvusClient()
-	fake.collections["coll1"] = true                 // 集合已存在，跳过建表
+	fake.collections["coll1"] = true                  // 集合已存在，跳过建表
 	fake.queryReturnDocIDs = []string{"doc1", "doc1"} // query 返回已有 doc1
 	idx := newTestMilvusIndexer(t, fake)
 

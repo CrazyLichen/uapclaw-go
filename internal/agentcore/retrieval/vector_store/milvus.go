@@ -12,6 +12,7 @@ import (
 	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
+	"google.golang.org/grpc"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
@@ -31,43 +32,39 @@ import (
 // 通过依赖注入支持单元测试 mock。
 type MilvusClient interface {
 	// CreateCollection 创建集合
-	CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error
+	CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...grpc.CallOption) error
 	// DropCollection 删除集合
-	DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...any) error
+	DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...grpc.CallOption) error
 	// HasCollection 检查集合是否存在
-	HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error)
+	HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...grpc.CallOption) (bool, error)
 	// DescribeCollection 获取集合描述
-	DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error)
-	// ListCollections 列出集合名称
-	ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...any) ([]string, error)
+	DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...grpc.CallOption) (*entity.Collection, error)
 	// GetCollectionStats 获取集合统计信息（row_count）
-	GetCollectionStats(ctx context.Context, option milvusclient.GetCollectionOption, callOptions ...any) (map[string]string, error)
+	GetCollectionStats(ctx context.Context, option milvusclient.GetCollectionOption, callOptions ...grpc.CallOption) (map[string]string, error)
 	// Insert 插入数据
-	Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error)
+	Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...grpc.CallOption) (milvusclient.InsertResult, error)
 	// Delete 删除数据
-	Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error)
+	Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...grpc.CallOption) (milvusclient.DeleteResult, error)
 	// Flush 刷写数据
-	Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error
+	Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...grpc.CallOption) error
 	// Search 向量搜索
-	Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error)
+	Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...grpc.CallOption) ([]milvusclient.ResultSet, error)
 	// HybridSearch 混合搜索
-	HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...any) ([]milvusclient.ResultSet, error)
+	HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...grpc.CallOption) ([]milvusclient.ResultSet, error)
 	// Query 按表达式查询
-	Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error)
+	Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...grpc.CallOption) (milvusclient.ResultSet, error)
 	// DescribeIndex 获取索引描述
-	DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...any) (milvusclient.IndexDescription, error)
+	DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...grpc.CallOption) (milvusclient.IndexDescription, error)
 	// LoadCollection 加载集合
-	LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error
+	LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...grpc.CallOption) error
 	// GetLoadState 获取加载状态
-	GetLoadState(ctx context.Context, option milvusclient.GetLoadStateOption, callOptions ...any) (entity.LoadState, error)
+	GetLoadState(ctx context.Context, option milvusclient.GetLoadStateOption, callOptions ...grpc.CallOption) (entity.LoadState, error)
 	// ReleaseCollection 释放集合
-	ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error
-	// ListDatabase 列出数据库
-	ListDatabase(ctx context.Context, option milvusclient.ListDatabaseOption, callOptions ...any) ([]string, error)
-	// CreateDatabase 创建数据库
-	CreateDatabase(ctx context.Context, option milvusclient.CreateDatabaseOption, callOptions ...any) error
-	// UseDatabase 切换数据库
-	UseDatabase(ctx context.Context, option milvusclient.UseDatabaseOption, callOptions ...any) error
+	ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...grpc.CallOption) error
+	// ListDatabase 列出数据库（供 DefaultMilvusCreateClient 建库前检查）
+	ListDatabase(ctx context.Context, option milvusclient.ListDatabaseOption, callOptions ...grpc.CallOption) ([]string, error)
+	// CreateDatabase 创建数据库（供 DefaultMilvusCreateClient 自动建库）
+	CreateDatabase(ctx context.Context, option milvusclient.CreateDatabaseOption, callOptions ...grpc.CallOption) error
 	// Close 关闭连接
 	Close(ctx context.Context) error
 }
@@ -701,7 +698,9 @@ func (s *MilvusVectorStore) CheckVectorField() error {
 // DefaultMilvusCreateClient 默认客户端创建函数。
 //
 // 对齐 Python MilvusVectorStore.create_client：
-// 创建 client → database_name 非空且非 default 时确保数据库存在并切换。
+// 创建 client → database_name 非空且非 default 时检查库是否存在，不存在则创建。
+// 切库语义由 ClientConfig.DBName 等价覆盖（SDK 通过 grpc metadata header
+// 将 currentDB 附加到每个请求，等价 Python use_database），无需显式调用。
 // 仅在集成测试中覆盖（需要真实 Milvus 服务）。
 func DefaultMilvusCreateClient(ctx context.Context, databaseName, uri, token string) (MilvusClient, error) {
 	c, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
@@ -712,52 +711,70 @@ func DefaultMilvusCreateClient(ctx context.Context, databaseName, uri, token str
 	if err != nil {
 		return nil, err
 	}
-	return &milvusClientAdapter{client: c}, nil
+	adapter := &milvusClientAdapter{client: c}
+	// 对齐 Python: if database_name and database_name != "default":
+	//   if database_name not in client.list_databases(): client.create_database(database_name)
+	if databaseName != "" && databaseName != "default" {
+		dbs, err := adapter.ListDatabase(ctx, milvusclient.NewListDatabaseOption())
+		if err != nil {
+			_ = adapter.Close(ctx)
+			return nil, err
+		}
+		exists := false
+		for _, db := range dbs {
+			if db == databaseName {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			if err := adapter.CreateDatabase(ctx, milvusclient.NewCreateDatabaseOption(databaseName)); err != nil {
+				_ = adapter.Close(ctx)
+				return nil, err
+			}
+		}
+	}
+	return adapter, nil
 }
 
 // CreateCollection 创建集合。
-func (a *milvusClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error {
-	return a.client.CreateCollection(ctx, option)
+func (a *milvusClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...grpc.CallOption) error {
+	return a.client.CreateCollection(ctx, option, callOptions...)
 }
 
 // DropCollection 删除集合。
-func (a *milvusClientAdapter) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...any) error {
-	return a.client.DropCollection(ctx, option)
+func (a *milvusClientAdapter) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...grpc.CallOption) error {
+	return a.client.DropCollection(ctx, option, callOptions...)
 }
 
 // HasCollection 检查集合是否存在。
-func (a *milvusClientAdapter) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error) {
-	return a.client.HasCollection(ctx, option)
+func (a *milvusClientAdapter) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...grpc.CallOption) (bool, error) {
+	return a.client.HasCollection(ctx, option, callOptions...)
 }
 
 // DescribeCollection 获取集合描述。
-func (a *milvusClientAdapter) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error) {
-	return a.client.DescribeCollection(ctx, option)
-}
-
-// ListCollections 列出集合名称。
-func (a *milvusClientAdapter) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...any) ([]string, error) {
-	return a.client.ListCollections(ctx, option)
+func (a *milvusClientAdapter) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...grpc.CallOption) (*entity.Collection, error) {
+	return a.client.DescribeCollection(ctx, option, callOptions...)
 }
 
 // GetCollectionStats 获取集合统计信息。
-func (a *milvusClientAdapter) GetCollectionStats(ctx context.Context, option milvusclient.GetCollectionOption, callOptions ...any) (map[string]string, error) {
+func (a *milvusClientAdapter) GetCollectionStats(ctx context.Context, option milvusclient.GetCollectionOption, callOptions ...grpc.CallOption) (map[string]string, error) {
 	return a.client.GetCollectionStats(ctx, option)
 }
 
 // Insert 插入数据。
-func (a *milvusClientAdapter) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error) {
-	return a.client.Insert(ctx, option)
+func (a *milvusClientAdapter) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...grpc.CallOption) (milvusclient.InsertResult, error) {
+	return a.client.Insert(ctx, option, callOptions...)
 }
 
 // Delete 删除数据。
-func (a *milvusClientAdapter) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error) {
-	return a.client.Delete(ctx, option)
+func (a *milvusClientAdapter) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...grpc.CallOption) (milvusclient.DeleteResult, error) {
+	return a.client.Delete(ctx, option, callOptions...)
 }
 
 // Flush 刷写数据（异步 Task 转同步）。
-func (a *milvusClientAdapter) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error {
-	task, err := a.client.Flush(ctx, option)
+func (a *milvusClientAdapter) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...grpc.CallOption) error {
+	task, err := a.client.Flush(ctx, option, callOptions...)
 	if err != nil {
 		return err
 	}
@@ -768,28 +785,28 @@ func (a *milvusClientAdapter) Flush(ctx context.Context, option milvusclient.Flu
 }
 
 // Search 向量搜索。
-func (a *milvusClientAdapter) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
-	return a.client.Search(ctx, option)
+func (a *milvusClientAdapter) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...grpc.CallOption) ([]milvusclient.ResultSet, error) {
+	return a.client.Search(ctx, option, callOptions...)
 }
 
 // HybridSearch 混合搜索。
-func (a *milvusClientAdapter) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
-	return a.client.HybridSearch(ctx, option)
+func (a *milvusClientAdapter) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...grpc.CallOption) ([]milvusclient.ResultSet, error) {
+	return a.client.HybridSearch(ctx, option, callOptions...)
 }
 
 // Query 按表达式查询。
-func (a *milvusClientAdapter) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error) {
-	return a.client.Query(ctx, option)
+func (a *milvusClientAdapter) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...grpc.CallOption) (milvusclient.ResultSet, error) {
+	return a.client.Query(ctx, option, callOptions...)
 }
 
 // DescribeIndex 获取索引描述。
-func (a *milvusClientAdapter) DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...any) (milvusclient.IndexDescription, error) {
-	return a.client.DescribeIndex(ctx, option)
+func (a *milvusClientAdapter) DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...grpc.CallOption) (milvusclient.IndexDescription, error) {
+	return a.client.DescribeIndex(ctx, option, callOptions...)
 }
 
 // LoadCollection 加载集合（异步 Task 转同步）。
-func (a *milvusClientAdapter) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error {
-	task, err := a.client.LoadCollection(ctx, option)
+func (a *milvusClientAdapter) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...grpc.CallOption) error {
+	task, err := a.client.LoadCollection(ctx, option, callOptions...)
 	if err != nil {
 		return err
 	}
@@ -797,28 +814,23 @@ func (a *milvusClientAdapter) LoadCollection(ctx context.Context, option milvusc
 }
 
 // GetLoadState 获取加载状态。
-func (a *milvusClientAdapter) GetLoadState(ctx context.Context, option milvusclient.GetLoadStateOption, callOptions ...any) (entity.LoadState, error) {
-	return a.client.GetLoadState(ctx, option)
+func (a *milvusClientAdapter) GetLoadState(ctx context.Context, option milvusclient.GetLoadStateOption, callOptions ...grpc.CallOption) (entity.LoadState, error) {
+	return a.client.GetLoadState(ctx, option, callOptions...)
 }
 
 // ReleaseCollection 释放集合。
-func (a *milvusClientAdapter) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error {
-	return a.client.ReleaseCollection(ctx, option)
+func (a *milvusClientAdapter) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...grpc.CallOption) error {
+	return a.client.ReleaseCollection(ctx, option, callOptions...)
 }
 
 // ListDatabase 列出数据库。
-func (a *milvusClientAdapter) ListDatabase(ctx context.Context, option milvusclient.ListDatabaseOption, callOptions ...any) ([]string, error) {
-	return a.client.ListDatabase(ctx, option)
+func (a *milvusClientAdapter) ListDatabase(ctx context.Context, option milvusclient.ListDatabaseOption, callOptions ...grpc.CallOption) ([]string, error) {
+	return a.client.ListDatabase(ctx, option, callOptions...)
 }
 
 // CreateDatabase 创建数据库。
-func (a *milvusClientAdapter) CreateDatabase(ctx context.Context, option milvusclient.CreateDatabaseOption, callOptions ...any) error {
-	return a.client.CreateDatabase(ctx, option)
-}
-
-// UseDatabase 切换数据库。
-func (a *milvusClientAdapter) UseDatabase(ctx context.Context, option milvusclient.UseDatabaseOption, callOptions ...any) error {
-	return a.client.UseDatabase(ctx, option)
+func (a *milvusClientAdapter) CreateDatabase(ctx context.Context, option milvusclient.CreateDatabaseOption, callOptions ...grpc.CallOption) error {
+	return a.client.CreateDatabase(ctx, option, callOptions...)
 }
 
 // Close 关闭连接。
@@ -1051,6 +1063,10 @@ func (s *MilvusVectorStore) hybridSearchFallback(ctx context.Context, queryText 
 	}()
 
 	var resultsList [][]common.RetrievalResult
+	// idMapping text → ID 映射，供融合后回填（Go RRFFusion 入参无 ID 字段的必要补偿，
+	// 模式对齐 chroma.go hybridSearch 与 Python chroma_store.hybrid_search 的 id_mapping）
+	idMapping := make(map[string]string)
+
 	for i := 0; i < 2; i++ {
 		out := <-outCh
 		if out.err != nil || len(out.results) == 0 {
@@ -1058,12 +1074,19 @@ func (s *MilvusVectorStore) hybridSearchFallback(ctx context.Context, queryText 
 		}
 		var retrievalResults []common.RetrievalResult
 		for _, sr := range out.results {
+			idMapping[sr.Text] = sr.ID
+			// 拷贝 metadata 后写入 id（避免污染原始 map，供融合后恢复）
+			metadata := make(map[string]any, len(sr.Metadata)+1)
+			for k, v := range sr.Metadata {
+				metadata[k] = v
+			}
+			metadata["id"] = sr.ID
 			docID, _ := sr.Metadata["doc_id"].(string)
 			chunkID, _ := sr.Metadata["chunk_id"].(string)
 			retrievalResults = append(retrievalResults, common.RetrievalResult{
 				Text:     sr.Text,
 				Score:    sr.Score,
-				Metadata: sr.Metadata,
+				Metadata: metadata,
 				DocID:    docID,
 				ChunkID:  chunkID,
 			})
@@ -1084,12 +1107,23 @@ func (s *MilvusVectorStore) hybridSearchFallback(ctx context.Context, queryText 
 		if i >= topK {
 			break
 		}
+		// 融合后从 metadata（或 idMapping 兜底）恢复 ID
 		resultID, _ := rr.Metadata["id"].(string)
+		if resultID == "" {
+			resultID = idMapping[rr.Text]
+		}
+		// 移除临时写入的 id 字段，避免污染下游 metadata
+		fusedMetadata := make(map[string]any, len(rr.Metadata))
+		for k, v := range rr.Metadata {
+			if k != "id" {
+				fusedMetadata[k] = v
+			}
+		}
 		fusedResults = append(fusedResults, common.SearchResult{
 			ID:       resultID,
 			Text:     rr.Text,
 			Score:    rr.Score,
-			Metadata: rr.Metadata,
+			Metadata: fusedMetadata,
 		})
 	}
 	return fusedResults, nil

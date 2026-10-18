@@ -12,6 +12,7 @@ import (
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
@@ -49,65 +50,62 @@ func newFakeRetrievalMilvusClient() *fakeRetrievalMilvusClient {
 	}
 }
 
-func (f *fakeRetrievalMilvusClient) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...any) error {
+func (f *fakeRetrievalMilvusClient) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...grpc.CallOption) error {
 	return nil
 }
-func (f *fakeRetrievalMilvusClient) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...any) error {
+func (f *fakeRetrievalMilvusClient) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...grpc.CallOption) error {
 	return nil
 }
-func (f *fakeRetrievalMilvusClient) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...any) (bool, error) {
+func (f *fakeRetrievalMilvusClient) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...grpc.CallOption) (bool, error) {
 	name := option.Request().GetCollectionName()
 	if has, ok := f.collections[name]; ok {
 		return has, nil
 	}
 	return f.hasCollectionDefault, nil
 }
-func (f *fakeRetrievalMilvusClient) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...any) (*entity.Collection, error) {
+func (f *fakeRetrievalMilvusClient) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...grpc.CallOption) (*entity.Collection, error) {
 	if f.describeCollectionResp != nil {
 		return f.describeCollectionResp, nil
 	}
 	return &entity.Collection{}, nil
 }
-func (f *fakeRetrievalMilvusClient) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...any) ([]string, error) {
-	return []string{}, nil
-}
-func (f *fakeRetrievalMilvusClient) GetCollectionStats(ctx context.Context, option milvusclient.GetCollectionOption, callOptions ...any) (map[string]string, error) {
+func (f *fakeRetrievalMilvusClient) GetCollectionStats(ctx context.Context, option milvusclient.GetCollectionOption, callOptions ...grpc.CallOption) (map[string]string, error) {
 	return map[string]string{"row_count": "10"}, nil
 }
-func (f *fakeRetrievalMilvusClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error) {
+func (f *fakeRetrievalMilvusClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...grpc.CallOption) (milvusclient.InsertResult, error) {
 	if f.insertErr != nil {
 		return milvusclient.InsertResult{}, f.insertErr
 	}
 	f.insertCallCount++
 	return milvusclient.InsertResult{}, nil
 }
-func (f *fakeRetrievalMilvusClient) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error) {
+func (f *fakeRetrievalMilvusClient) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...grpc.CallOption) (milvusclient.DeleteResult, error) {
 	if f.deleteErr != nil {
 		return milvusclient.DeleteResult{DeleteCount: 0}, f.deleteErr
 	}
 	return milvusclient.DeleteResult{DeleteCount: f.deleteCount}, nil
 }
-func (f *fakeRetrievalMilvusClient) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...any) error {
+func (f *fakeRetrievalMilvusClient) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...grpc.CallOption) error {
 	f.flushCalled = true
 	f.flushCount++
 	return nil
 }
-func (f *fakeRetrievalMilvusClient) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
+func (f *fakeRetrievalMilvusClient) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...grpc.CallOption) ([]milvusclient.ResultSet, error) {
 	if f.searchErr != nil {
 		return nil, f.searchErr
 	}
 	return f.searchResults, nil
 }
-func (f *fakeRetrievalMilvusClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...any) ([]milvusclient.ResultSet, error) {
+func (f *fakeRetrievalMilvusClient) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...grpc.CallOption) ([]milvusclient.ResultSet, error) {
 	if f.hybridErr != nil {
 		return nil, f.hybridErr
 	}
 	return f.hybridResults, nil
 }
-func (f *fakeRetrievalMilvusClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error) {
+func (f *fakeRetrievalMilvusClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...grpc.CallOption) (milvusclient.ResultSet, error) {
 	return milvusclient.ResultSet{}, f.queryErr
 }
-func (f *fakeRetrievalMilvusClient) DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...any) (milvusclient.IndexDescription, error) {
+func (f *fakeRetrievalMilvusClient) DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...grpc.CallOption) (milvusclient.IndexDescription, error) {
 	if f.describeIndexErr != nil {
 		return milvusclient.IndexDescription{}, f.describeIndexErr
 	}
@@ -119,24 +117,21 @@ func (f *fakeRetrievalMilvusClient) DescribeIndex(ctx context.Context, option mi
 	}
 	return milvusclient.IndexDescription{}, nil
 }
-func (f *fakeRetrievalMilvusClient) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...any) error {
+func (f *fakeRetrievalMilvusClient) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...grpc.CallOption) error {
 	f.loadCount++
 	return nil
 }
-func (f *fakeRetrievalMilvusClient) GetLoadState(ctx context.Context, option milvusclient.GetLoadStateOption, callOptions ...any) (entity.LoadState, error) {
+func (f *fakeRetrievalMilvusClient) GetLoadState(ctx context.Context, option milvusclient.GetLoadStateOption, callOptions ...grpc.CallOption) (entity.LoadState, error) {
 	return entity.LoadState{State: entity.LoadStateLoaded}, nil
 }
-func (f *fakeRetrievalMilvusClient) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...any) error {
+func (f *fakeRetrievalMilvusClient) ReleaseCollection(ctx context.Context, option milvusclient.ReleaseCollectionOption, callOptions ...grpc.CallOption) error {
 	f.releaseCount++
 	return nil
 }
-func (f *fakeRetrievalMilvusClient) ListDatabase(ctx context.Context, option milvusclient.ListDatabaseOption, callOptions ...any) ([]string, error) {
+func (f *fakeRetrievalMilvusClient) ListDatabase(ctx context.Context, option milvusclient.ListDatabaseOption, callOptions ...grpc.CallOption) ([]string, error) {
 	return []string{"default"}, nil
 }
-func (f *fakeRetrievalMilvusClient) CreateDatabase(ctx context.Context, option milvusclient.CreateDatabaseOption, callOptions ...any) error {
-	return nil
-}
-func (f *fakeRetrievalMilvusClient) UseDatabase(ctx context.Context, option milvusclient.UseDatabaseOption, callOptions ...any) error {
+func (f *fakeRetrievalMilvusClient) CreateDatabase(ctx context.Context, option milvusclient.CreateDatabaseOption, callOptions ...grpc.CallOption) error {
 	return nil
 }
 func (f *fakeRetrievalMilvusClient) Close(ctx context.Context) error {
@@ -498,11 +493,25 @@ func buildTestResultSet(fieldValues map[string][]any, scores []float32) milvuscl
 			fields = append(fields, column.NewColumnJSONBytes(name, jsonVals))
 		}
 	}
-	return milvusclient.ResultSet{
+	rs := milvusclient.ResultSet{
 		ResultCount: len(scores),
 		Fields:      fields,
 		Scores:      scores,
 	}
+	// 从字段数据恢复主键 IDs 列（供 milvusResultToSearchResults 提取 result_id）
+	if ids, ok := fieldValues["pk"]; ok && len(ids) > 0 {
+		intIDs := make([]int64, len(ids))
+		for i, v := range ids {
+			switch n := v.(type) {
+			case int64:
+				intIDs[i] = n
+			case int:
+				intIDs[i] = int64(n)
+			}
+		}
+		rs.IDs = column.NewColumnInt64("pk", intIDs)
+	}
+	return rs
 }
 
 // TestMilvusVectorStore_Search 对齐 Python search：向量搜索+分数归一化
@@ -649,16 +658,21 @@ func TestMilvusVectorStore_HybridSearch(t *testing.T) {
 }
 
 // TestMilvusVectorStore_HybridSearch_降级 对齐 Python: 失败 fallback 到分别搜索
+// ID 补偿验证：融合后 ID 从 metadata/idMapping 恢复（Go RRFFusion 入参无 ID 字段的必要补偿）
 func TestMilvusVectorStore_HybridSearch_降级(t *testing.T) {
 	fake := newFakeRetrievalMilvusClient()
 	fake.hybridErr = fmt.Errorf("hybrid failed")
 	fake.searchResults = []milvusclient.ResultSet{buildTestResultSet(
-		map[string][]any{"content": {"dense result"}}, []float32{0.9})}
+		map[string][]any{"content": {"dense result"}, "pk": {int64(42)}}, []float32{0.9})}
 	s := newTestStoreWithFake(t, fake)
 
 	results, err := s.HybridSearch(context.Background(), "query", []float64{0.1, 0.2}, 5, 0.5, nil)
 	require.NoError(t, err)
-	assert.NotEmpty(t, results) // fallback 生效：至少有 dense 结果
+	assert.NotEmpty(t, results)          // fallback 生效：至少有 dense 结果
+	assert.Equal(t, "42", results[0].ID) // pk 列经补偿链路恢复到 SearchResult.ID
+	// 临时写入的 metadata["id"] 已移除，不污染下游
+	_, hasID := results[0].Metadata["id"]
+	assert.False(t, hasID)
 }
 
 // TestMilvusVectorStore_HybridSearch_无向量 对齐 Python: query_vector 为 None 时只用 sparse
