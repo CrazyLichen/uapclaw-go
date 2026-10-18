@@ -157,6 +157,42 @@ func init() {
 		return NewCharChunker(opts...)
 	}, false)
 	_ = RegisterChunker("hybrid", hybridFactory, false)
+	// 主动增强：Python 不注册 TokenizerChunker（SDK 直接实例化），
+	// Go 侧注册使 GetChunker("tokenizer") 可用（设计文档偏差 5）
+	_ = RegisterChunker("tokenizer", tokenizerFactory, false)
+}
+
+// tokenizerFactory "tokenizer" 注册项工厂（主动增强，Python 无此注册）。
+//
+// Extra 约定：tokenizer（Tokenizer 接口，缺省 nil→tiktoken fallback）、
+// language（string，缺省 "auto"）、splitter_config（map[string]any，缺省 nil）。
+func tokenizerFactory(opts ...ChunkerOption) (Chunker, error) {
+	o := NewChunkerOptions(opts...)
+	tk := Tokenizer(nil)
+	if v, ok := o.Extra["tokenizer"]; ok && v != nil {
+		t, ok := v.(Tokenizer)
+		if !ok {
+			return nil, fmt.Errorf("extra 'tokenizer' must implement Tokenizer interface")
+		}
+		tk = t
+	}
+	language := "auto"
+	if v, ok := o.Extra["language"]; ok && v != nil {
+		lang, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("extra 'language' must be string")
+		}
+		language = lang
+	}
+	var splitterConfig map[string]any
+	if v, ok := o.Extra["splitter_config"]; ok && v != nil {
+		sc, ok := v.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("extra 'splitter_config' must be map[string]any")
+		}
+		splitterConfig = sc
+	}
+	return NewTokenizerChunker(o.ChunkSize, o.ChunkOverlap, tk, language, splitterConfig)
 }
 
 // hybridFactory hybrid 分块器工厂。

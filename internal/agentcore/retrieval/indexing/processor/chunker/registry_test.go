@@ -126,6 +126,58 @@ func TestWithExtra_累积设置(t *testing.T) {
 	assert.Equal(t, map[string]any{"a": 1, "b": 2}, o.Extra)
 }
 
+// TestGetChunker_tokenizer注册 主动增强：Python 不注册 TokenizerChunker（SDK 直接
+// 实例化），Go 侧注册使 GetChunker("tokenizer") 可用（设计文档偏差 5）
+func TestGetChunker_tokenizer注册(t *testing.T) {
+	c, err := GetChunker("tokenizer",
+		WithChunkSize(20), WithChunkOverlap(4),
+		WithExtra("tokenizer", &tokByRune{}),
+		WithExtra("language", "auto"),
+	)
+	assert.NoError(t, err)
+	got, err := c.ChunkText("一二三。四五。六七。八九。")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, got)
+}
+
+// TestGetChunker_tokenizer_extra类型错误 tokenizer Extra 必须实现 Tokenizer 接口
+func TestGetChunker_tokenizer_extra类型错误(t *testing.T) {
+	_, err := GetChunker("tokenizer",
+		WithChunkSize(20), WithChunkOverlap(4),
+		WithExtra("tokenizer", "not-a-tokenizer"),
+	)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must implement Tokenizer")
+}
+
+// TestGetChunker_tokenizer_extra缺省走nil 不传 tokenizer → nil → tiktoken fallback
+func TestGetChunker_tokenizer_extra缺省走nil(t *testing.T) {
+	c, err := GetChunker("tokenizer", WithChunkSize(512), WithChunkOverlap(50))
+	assert.NoError(t, err)
+	_, err = c.ChunkText("这是测试文本。")
+	assert.NoError(t, err, "tiktoken fallback 分块应成功")
+}
+
+// TestGetChunker_tokenizer_language类型错误 language Extra 必须是 string
+func TestGetChunker_tokenizer_language类型错误(t *testing.T) {
+	_, err := GetChunker("tokenizer",
+		WithChunkSize(20), WithChunkOverlap(4),
+		WithExtra("language", 123),
+	)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must be string")
+}
+
+// TestGetChunker_tokenizer_splitterConfig类型错误 splitter_config Extra 必须是 map
+func TestGetChunker_tokenizer_splitterConfig类型错误(t *testing.T) {
+	_, err := GetChunker("tokenizer",
+		WithChunkSize(20), WithChunkOverlap(4),
+		WithExtra("splitter_config", "not-a-map"),
+	)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must be map[string]any")
+}
+
 // unregisterForTest 测试后清理注册项（避免污染全局 registry）
 func unregisterForTest(name string) {
 	registryMu.Lock()
