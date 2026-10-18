@@ -540,3 +540,125 @@ func TestHandleMemoryList_额外目录参数(t *testing.T) {
 	}
 	assert.True(t, found, "additional_directories 应被发现")
 }
+
+// ──────────────────────────── HandleMemoryStatus ────────────────────────────
+
+// TestHandleMemoryStatus_基本块 测试非 detailed 返回
+func TestHandleMemoryStatus_基本块(t *testing.T) {
+	setupToggleEnv(t, "memory:\n  mode: sqlite\n")
+	res := HandleMemoryStatus(context.Background(), "/ws", "plan", map[string]any{})
+	assert.Equal(t, "plan", res["current_mode"])
+	assert.Equal(t, "sqlite", res["storage_mode"])
+	assert.Equal(t, "builtin", res["engine"])  // 默认 engine（空/非法回落 builtin）
+	assert.Equal(t, false, res["enabled"])     // 空配置 IsMemoryEnabled → false（对齐 Python 缺省）
+	assert.Equal(t, false, res["proactive"])
+	assert.Equal(t, false, res["forbidden_enabled"])
+	_, hasIndex := res["index"]
+	assert.False(t, hasIndex) // 非 detailed 无 index
+}
+
+// TestHandleMemoryStatus_配置驱动基本块 测试配置各字段生效
+func TestHandleMemoryStatus_配置驱动基本块(t *testing.T) {
+	setupToggleEnv(t, "modes:\n  agent:\n    plan:\n      memory:\n        enabled: true\n        is_proactive: true\nmemory:\n  forbidden_memory_definition:\n    enabled: true\n")
+	res := HandleMemoryStatus(context.Background(), "/ws", "plan", map[string]any{})
+	assert.Equal(t, true, res["enabled"])
+	assert.Equal(t, true, res["proactive"])
+	assert.Equal(t, true, res["forbidden_enabled"])
+	assert.Equal(t, "local", res["storage_mode"]) // memory 段无 mode → local
+}
+
+// TestHandleMemoryStatus_code模式特判 测试 enabled=true/proactive=false 硬编码
+func TestHandleMemoryStatus_code模式特判(t *testing.T) {
+	setupToggleEnv(t, "")
+	res := HandleMemoryStatus(context.Background(), "/ws", "code", map[string]any{})
+	assert.Equal(t, true, res["enabled"])
+	assert.Equal(t, false, res["proactive"])
+}
+
+// TestHandleMemoryStatus_detailed六块 测试 detailed 全字段
+func TestHandleMemoryStatus_detailed六块(t *testing.T) {
+	envDir := setupToggleEnv(t, "")
+	ws := filepath.Join(envDir, "ws")
+	assert.NoError(t, os.MkdirAll(filepath.Join(ws, "memory"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(ws, "memory", "a.md"), []byte("hello"), 0o644))
+
+	res := HandleMemoryStatus(context.Background(), ws, "plan", map[string]any{"detailed": true, "project_dir": "/proj"})
+
+	// 块 1：index（GetMemoryManager nil settings 创建真实 manager）
+	idx, hasIdx := res["index"].(map[string]any)
+	assert.True(t, hasIdx)
+	assert.Contains(t, idx, "available")
+	assert.Contains(t, idx, "provider")
+	assert.Contains(t, idx, "files_count")
+	assert.Contains(t, idx, "chunks_count")
+
+	// 块 2：project_memory（/proj 不存在 → 0 文件）
+	pm, hasPm := res["project_memory"].(map[string]any)
+	assert.True(t, hasPm)
+	assert.Equal(t, 0, pm["files_count"])
+	assert.Equal(t, 60000, pm["max_chars"])
+	assert.Equal(t, 40000, pm["threshold"])
+	assert.Equal(t, "/proj", pm["project_dir"])
+
+	// 块 3：large_files 键存在（可为空数组）
+	assert.Contains(t, res, "large_files")
+
+	// 块 4：coding_memory（不存在 → files_count 0，dir 空串）
+	cm, hasCm := res["coding_memory"].(map[string]any)
+	assert.True(t, hasCm)
+	assert.Equal(t, 0, cm["files_count"])
+	assert.Equal(t, "", cm["dir"])
+
+	// 块 5：auto_memory（1 文件 5 字符）
+	am, hasAm := res["auto_memory"].(map[string]any)
+	assert.True(t, hasAm)
+	assert.Equal(t, 1, am["files_count"])
+	assert.Equal(t, 5, am["total_chars"])
+	assert.NotEmpty(t, am["dir"])
+
+	// 块 6：external_memory：engine=builtin 时不含
+	_, hasExt := res["external_memory"]
+	assert.False(t, hasExt)
+}
+
+// TestHandleMemoryStatus_detailed大文件 测试 large_files 超阈值上报
+func TestHandleMemoryStatus_detailed大文件(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, ".uapclaw"), 0o755))
+	// 41000 字符 > 40000 阈值
+	big := strings.Repeat("x", 41000)
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "UAPCLAWSWARM.md"), []byte(big), 0o644))
+
+	res := HandleMemoryStatus(context.Background(), tmp, "plan", map[string]any{"detailed": true})
+	large, ok := res["large_files"].([]map[string]any)
+	assert.True(t, ok)
+	if assert.Len(t, large, 1) {
+		assert.Equal(t, 41000, large[0]["char_count"])
+	}
+}
+
+// TestHandleMemoryStatus_external块 测试 engine=external 时含 external_memory
+// Python L381-387：external_memory 块在 if detailed: 分支内，必须传 detailed=true
+func TestHandleMemoryStatus_external块(t *testing.T) {
+	envDir := setupToggleEnv(t, "memory:\n  mode: local\n  engine: external\n  external:\n    provider: mem0\n    mem0:\n      api_key: test\n")
+	ws := filepath.Join(envDir, "ws")
+	assert.NoError(t, os.MkdirAll(ws, 0o755))
+	res := HandleMemoryStatus(context.Background(), ws, "plan", map[string]any{"detailed": true})
+	ext, ok := res["external_memory"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "mem0", ext["provider"]) // provider 原样返回（对齐 Python .get 不触发默认）
+	assert.Equal(t, true, ext["enabled"])
+}
+
+// TestHandleMemoryStatus_engineBoth 测试 engine=both 时含 external_memory
+func TestHandleMemoryStatus_engineBoth(t *testing.T) {
+	envDir := setupToggleEnv(t, "memory:\n  engine: both\n  external:\n    provider: openjiuwen\n")
+	ws := filepath.Join(envDir, "ws")
+	assert.NoError(t, os.MkdirAll(ws, 0o755))
+	res := HandleMemoryStatus(context.Background(), ws, "plan", map[string]any{"detailed": true})
+	ext, ok := res["external_memory"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "openjiuwen", ext["provider"])
+	assert.Equal(t, true, ext["enabled"])
+}

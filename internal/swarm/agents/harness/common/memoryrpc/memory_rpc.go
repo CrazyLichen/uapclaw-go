@@ -180,6 +180,151 @@ func HandleMemoryList(ctx context.Context, workspace, mode string, params map[st
 	return map[string]any{"files": files, "mode": mode}
 }
 
+// HandleMemoryStatus 返回记忆系统总状态。
+// Python: handle_memory_status (memory_rpc.py L289-389)
+func HandleMemoryStatus(ctx context.Context, workspace, mode string, params map[string]any) map[string]any {
+	// Python: detailed = params.get("detailed", False); config = get_config()
+	detailed := false
+	if v, ok := params["detailed"].(bool); ok {
+		detailed = v
+	}
+	cfg := loadConfigMap()
+
+	// Python L297-299：code 模式硬编码 true/false，非 code 模式查配置
+	codeMode := isCodeMode(mode)
+	enabled := true
+	proactive := false
+	if !codeMode {
+		enabled = commmem.IsMemoryEnabled(mode, cfg)
+		proactive = commmem.IsProactiveMemory(mode, cfg)
+	}
+
+	// Python L303: storage_mode = config.get("memory", {}).get("mode", "local")
+	storageMode := "local"
+	if memCfg, ok := cfg["memory"].(map[string]any); ok {
+		if m, ok := memCfg["mode"].(string); ok {
+			storageMode = m
+		}
+	}
+
+	// Python L301-308：基本块
+	result := map[string]any{
+		"current_mode":      mode,
+		"storage_mode":      storageMode,
+		"engine":            commmem.GetMemoryEngine(cfg),
+		"enabled":           enabled,
+		"proactive":         proactive,
+		"forbidden_enabled": isForbiddenEnabled(cfg),
+	}
+
+	if !detailed {
+		return result
+	}
+
+	// 块 1 Python L310-324：index（管理器状态，.get 默认值语义）
+	if manager, err := commmem.GetMemoryManager(ctx, "default", workspace, nil); err == nil && manager != nil {
+		status := manager.Status()
+		index := map[string]any{
+			"available":    anyOr(status["available"], false),
+			"provider":     anyOr(status["provider"], nil),
+			"model":        anyOr(status["model"], nil),
+			"files_count":  anyOr(status["files"], 0),
+			"chunks_count": anyOr(status["chunks"], 0),
+			"dirty":        anyOr(status["dirty"], false),
+			"fts":          anyOr(status["fts"], map[string]any{}),
+			"vector":       anyOr(status["vector"], map[string]any{}),
+			"cache":        anyOr(status["cache"], map[string]any{}),
+		}
+		result["index"] = index
+	}
+
+	// 块 2 Python L326-340：project_memory 统计 + 日志
+	projectDir, _ := params["project_dir"].(string)
+	// Python: discover_workspace = project_dir or workspace
+	discoverWorkspace := workspace
+	if projectDir != "" {
+		discoverWorkspace = projectDir
+	}
+	projectmemory.ClearProjectMemoryCache(discoverWorkspace)
+	projectFiles, _ := projectmemory.DiscoverAndLoadMemoryFiles(ctx, discoverWorkspace, discoverWorkspace, nil)
+	totalChars := 0
+	for _, f := range projectFiles {
+		totalChars += len(f.Content)
+	}
+	largeFiles := projectmemory.GetLargeMemoryFiles(projectFiles, projectmemory.MaxMemoryCharCount)
+	// Python logger.info（规则 3 日志同步：5 字段）
+	logger.Info(logComponent).
+		Str("workspace", workspace).
+		Str("project_dir", projectDir).
+		Str("discover_workspace", discoverWorkspace).
+		Int("files", len(projectFiles)).
+		Int("large_files", len(largeFiles)).
+		Msg("[memory_rpc] memory.status detailed")
+	projectMemory := map[string]any{
+		"files_count": len(projectFiles),
+		"total_chars": totalChars,
+		"max_chars":   projectmemory.DefaultMaxChars,
+		"threshold":   projectmemory.MaxMemoryCharCount,
+	}
+	// Python L348-349: if project_dir: result["project_memory"]["project_dir"]
+	if projectDir != "" {
+		projectMemory["project_dir"] = projectDir
+	}
+	result["project_memory"] = projectMemory
+
+	// 块 3 Python L347: result["large_files"] = large_files
+	if largeFiles == nil {
+		largeFiles = []map[string]any{}
+	}
+	result["large_files"] = largeFiles
+
+	// 块 4 Python L351-364：coding_memory 统计（逐文件读字符数）
+	codingDir := getCodingMemoryDir(workspace, projectDir)
+	codingFiles := scanMDFiles(codingDir, "coding", workspace, "")
+	codingTotalChars := 0
+	for _, cf := range codingFiles {
+		if data, err := os.ReadFile(cf["path"].(string)); err == nil {
+			codingTotalChars += len(data)
+		}
+	}
+	result["coding_memory"] = map[string]any{
+		"files_count": len(codingFiles),
+		"total_chars": codingTotalChars,
+		// Python: "dir": coding_dir if os.path.isdir(coding_dir) else ""
+		"dir": dirOrEmpty(codingDir),
+	}
+
+	// 块 5 Python L366-379：auto_memory 统计
+	memoryDir := filepath.Join(workspace, "memory")
+	autoFiles := scanMDFiles(memoryDir, "auto", workspace, "")
+	autoTotalChars := 0
+	for _, af := range autoFiles {
+		if data, err := os.ReadFile(af["path"].(string)); err == nil {
+			autoTotalChars += len(data)
+		}
+	}
+	result["auto_memory"] = map[string]any{
+		"files_count": len(autoFiles),
+		"total_chars": autoTotalChars,
+		"dir":         dirOrEmpty(memoryDir),
+	}
+
+	// 块 6 Python L381-387：external_memory（engine external/both）
+	engine := commmem.GetMemoryEngine(cfg)
+	if engine == "external" || engine == "both" {
+		extCfg := commmem.GetExternalMemoryConfig(cfg)
+		// Python: "provider": ext_cfg.get("provider", "unknown") if ext_cfg else "unknown"
+		// Go GetExternalMemoryConfig 恒返回非 nil（等价 Python 恒非空 dict），
+		// provider 原样返回（键存在时空串不触发 "unknown" 默认）
+		result["external_memory"] = map[string]any{
+			"provider": extCfg.Provider,
+			"enabled":  commmem.IsExternalMemoryAllowed(cfg),
+		}
+	}
+
+	return result
+}
+
 // HandleMemoryToggle 切换记忆开关并写回 config。
 // Python: handle_memory_toggle (memory_rpc.py L392-444)
 func HandleMemoryToggle(ctx context.Context, workspace, mode string, params map[string]any) map[string]any {
@@ -585,4 +730,20 @@ func updateMemoryForbiddenEnabledInConfig(value bool) error {
 		return err
 	}
 	return cfg.Set("memory.forbidden_memory_definition.enabled", value)
+}
+
+// dirOrEmpty 目录存在返回原路径，否则空串（对齐 Python os.path.isdir 三元）
+func dirOrEmpty(dir string) string {
+	if info, err := os.Stat(dir); err == nil && info.IsDir() {
+		return dir
+	}
+	return ""
+}
+
+// anyOr 取 map 值，键缺失或 nil 时返回默认值（对齐 Python dict.get(key, default)）
+func anyOr(v any, def any) any {
+	if v == nil {
+		return def
+	}
+	return v
 }
