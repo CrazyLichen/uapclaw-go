@@ -2,14 +2,17 @@ package vector_store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
+	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 )
@@ -461,4 +464,270 @@ func TestBuildMilvusFilterExpr(t *testing.T) {
 	assert.Equal(t, "count == 5", buildMilvusFilterExpr(map[string]any{"count": 5}))
 	// 多条件按 key 排序连接
 	assert.Equal(t, `a == "1" && b == 2`, buildMilvusFilterExpr(map[string]any{"b": 2, "a": "1"}))
+}
+
+// buildTestResultSet 构建测试用搜索结果集
+func buildTestResultSet(fieldValues map[string][]any, scores []float32) milvusclient.ResultSet {
+	// 通过真实 column 构造 Fields
+	var fields milvusclient.DataSet
+	for name, values := range fieldValues {
+		if len(values) == 0 {
+			continue
+		}
+		switch values[0].(type) {
+		case string:
+			strs := make([]string, len(values))
+			for i, v := range values {
+				strs[i], _ = v.(string)
+			}
+			fields = append(fields, column.NewColumnVarChar(name, strs))
+		case map[string]any:
+			jsonVals := make([][]byte, len(values))
+			for i, v := range values {
+				bs, _ := json.Marshal(v)
+				jsonVals[i] = bs
+			}
+			fields = append(fields, column.NewColumnJSONBytes(name, jsonVals))
+		}
+	}
+	return milvusclient.ResultSet{
+		ResultCount: len(scores),
+		Fields:      fields,
+		Scores:      scores,
+	}
+}
+
+// TestMilvusVectorStore_Search 对齐 Python search：向量搜索+分数归一化
+func TestMilvusVectorStore_Search(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.searchResults = []milvusclient.ResultSet{buildTestResultSet(
+		map[string][]any{
+			"content":     {"hello"},
+			"metadata":    {map[string]any{"k": "v"}},
+			"document_id": {"d1"},
+			"chunk_id":    {"c1"},
+		},
+		[]float32{0.9},
+	)}
+	s := newTestStoreWithFake(t, fake)
+
+	results, err := s.Search(context.Background(), []float64{0.1, 0.2}, 5, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "hello", results[0].Text)
+	assert.Equal(t, "d1", results[0].Metadata["doc_id"]) // 对齐 Python: doc_id 回填到 metadata
+}
+
+// TestMilvusVectorStore_Search_带过滤 对齐 Python: filters 构建 filter expr
+func TestMilvusVectorStore_Search_带过滤(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.searchResults = []milvusclient.ResultSet{buildTestResultSet(
+		map[string][]any{"content": {"hello"}}, []float32{0.9})}
+	s := newTestStoreWithFake(t, fake)
+
+	results, err := s.Search(context.Background(), []float64{0.1}, 5, map[string]any{"document_id": "d1"})
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+}
+
+// TestMilvusVectorStore_Search_空结果 对齐 Python: results 为空返回 []
+func TestMilvusVectorStore_Search_空结果(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	s := newTestStoreWithFake(t, fake)
+
+	results, err := s.Search(context.Background(), []float64{0.1}, 5, nil)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+// TestMilvusVectorStore_Search_L2分数 对齐 Python: convert_l2_squared
+func TestMilvusVectorStore_Search_L2分数(t *testing.T) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeMilvus,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricEuclidean,
+	}
+	fake := newFakeRetrievalMilvusClient()
+	fake.searchResults = []milvusclient.ResultSet{buildTestResultSet(
+		map[string][]any{"content": {"hello"}}, []float32{0.5})}
+	s, err := NewMilvusVectorStore(config, "http://localhost:19530", "",
+		"content", vector_fields.NewMilvusAUTO("embedding"), "sparse_vector", "metadata", "document_id",
+		WithMilvusClientOption(fake))
+	require.NoError(t, err)
+
+	results, err := s.Search(context.Background(), []float64{0.1}, 5, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	// L2: convert_l2_squared(0.5)（foundation utils 默认 maxDist）
+	expected := vector.ConvertL2Squared(0.5, 4.0)
+	assert.InDelta(t, expected, results[0].Score, 1e-6)
+	assert.InDelta(t, 0.5, results[0].Metadata["raw_score"].(float64), 1e-6) // 对齐 Python: raw_score 写入 metadata
+}
+
+// TestMilvusVectorStore_Search_COSINE分数 对齐 Python: convert_cosine_similarity
+func TestMilvusVectorStore_Search_COSINE分数(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.searchResults = []milvusclient.ResultSet{buildTestResultSet(
+		map[string][]any{"content": {"hello"}}, []float32{0.8})}
+	s := newTestStoreWithFake(t, fake) // COSINE
+
+	results, err := s.Search(context.Background(), []float64{0.1}, 5, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	expected := vector.ConvertCosineSimilarity(0.8)
+	assert.InDelta(t, expected, results[0].Score, 1e-6)
+	assert.InDelta(t, expected, results[0].Metadata["raw_score_scaled"].(float64), 1e-6)
+}
+
+// TestMilvusVectorStore_Search_IP分数 对齐 Python: convert_ip_similarity
+func TestMilvusVectorStore_Search_IP分数(t *testing.T) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeMilvus,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricDot,
+	}
+	fake := newFakeRetrievalMilvusClient()
+	fake.searchResults = []milvusclient.ResultSet{buildTestResultSet(
+		map[string][]any{"content": {"hello"}}, []float32{1.5})}
+	s, err := NewMilvusVectorStore(config, "http://localhost:19530", "",
+		"content", vector_fields.NewMilvusAUTO("embedding"), "sparse_vector", "metadata", "document_id",
+		WithMilvusClientOption(fake))
+	require.NoError(t, err)
+
+	results, err := s.Search(context.Background(), []float64{0.1}, 5, nil)
+	require.NoError(t, err)
+	expected := vector.ConvertIPSimilarity(1.5)
+	assert.InDelta(t, expected, results[0].Score, 1e-6)
+}
+
+// TestMilvusVectorStore_SparseSearch 对齐 Python sparse_search（BM25）
+func TestMilvusVectorStore_SparseSearch(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.searchResults = []milvusclient.ResultSet{buildTestResultSet(
+		map[string][]any{"content": {"hello"}, "document_id": {"d1"}},
+		[]float32{2.5})}
+	s := newTestStoreWithFake(t, fake)
+
+	results, err := s.SparseSearch(context.Background(), "query text", 5, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.InDelta(t, 2.5, results[0].Score, 1e-6) // sparse: final_score = raw_score
+}
+
+// TestMilvusVectorStore_SparseSearch_失败返回空 对齐 Python: except → warning + return []
+func TestMilvusVectorStore_SparseSearch_失败返回空(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.searchErr = fmt.Errorf("bm25 failed")
+	s := newTestStoreWithFake(t, fake)
+
+	results, err := s.SparseSearch(context.Background(), "query", 5, nil)
+	require.NoError(t, err) // 对齐 Python: 失败不抛错
+	assert.Empty(t, results)
+}
+
+// TestMilvusVectorStore_HybridSearch 对齐 Python hybrid_search：原生 HybridSearch + RRF
+func TestMilvusVectorStore_HybridSearch(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.hybridResults = []milvusclient.ResultSet{buildTestResultSet(
+		map[string][]any{"content": {"hello"}, "document_id": {"d1"}},
+		[]float32{0.8})}
+	s := newTestStoreWithFake(t, fake)
+
+	results, err := s.HybridSearch(context.Background(), "query", []float64{0.1, 0.2}, 5, 0.5, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "hello", results[0].Text)
+	assert.InDelta(t, 0.8, results[0].Score, 1e-6) // hybrid: final_score = raw_score
+}
+
+// TestMilvusVectorStore_HybridSearch_降级 对齐 Python: 失败 fallback 到分别搜索
+func TestMilvusVectorStore_HybridSearch_降级(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.hybridErr = fmt.Errorf("hybrid failed")
+	fake.searchResults = []milvusclient.ResultSet{buildTestResultSet(
+		map[string][]any{"content": {"dense result"}}, []float32{0.9})}
+	s := newTestStoreWithFake(t, fake)
+
+	results, err := s.HybridSearch(context.Background(), "query", []float64{0.1, 0.2}, 5, 0.5, nil)
+	require.NoError(t, err)
+	assert.NotEmpty(t, results) // fallback 生效：至少有 dense 结果
+}
+
+// TestMilvusVectorStore_HybridSearch_无向量 对齐 Python: query_vector 为 None 时只用 sparse
+func TestMilvusVectorStore_HybridSearch_无向量(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.hybridResults = []milvusclient.ResultSet{buildTestResultSet(
+		map[string][]any{"content": {"sparse result"}}, []float32{0.7})}
+	s := newTestStoreWithFake(t, fake)
+
+	results, err := s.HybridSearch(context.Background(), "query", nil, 5, 0.5, nil)
+	require.NoError(t, err)
+	assert.NotEmpty(t, results)
+}
+
+// TestMilvusVectorStore_HybridSearch_降级两路都失败 对齐 Python: rrf_fusion 空输入
+func TestMilvusVectorStore_HybridSearch_降级两路都失败(t *testing.T) {
+	fake := newFakeRetrievalMilvusClient()
+	fake.hybridErr = fmt.Errorf("hybrid failed")
+	fake.searchErr = fmt.Errorf("search failed") // sparse 也失败 → 两路都空
+	s := newTestStoreWithFake(t, fake)
+
+	results, err := s.HybridSearch(context.Background(), "query", []float64{0.1}, 5, 0.5, nil)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+// TestMilvusVectorStore_milvusResultToSearchResults 对齐 Python _milvus_result_to_search_results
+func TestMilvusVectorStore_milvusResultToSearchResults(t *testing.T) {
+	s := newTestMilvusStore(t)
+	rs := buildTestResultSet(
+		map[string][]any{
+			"content":     {"text1", "text2"},
+			"metadata":    {map[string]any{"k": "v1"}, map[string]any{"k": "v2"}},
+			"document_id": {"d1", "d2"},
+			"chunk_id":    {"c1", "c2"},
+		},
+		[]float32{0.9, 0.8},
+	)
+	results := s.milvusResultToSearchResults(rs, "vector")
+	require.Len(t, results, 2)
+	assert.Equal(t, "d1", results[0].Metadata["doc_id"])
+	assert.Equal(t, "c1", results[0].Metadata["chunk_id"]) // 对齐 Python: chunk_id 写入 metadata
+	assert.InDelta(t, 0.9, results[0].Metadata["raw_score"].(float64), 1e-6)
+}
+
+// TestMilvusVectorStore_milvusResultToSearchResults_metadata字符串 对齐 Python: metadata 为 str 时 json.loads
+func TestMilvusVectorStore_milvusResultToSearchResults_metadata字符串(t *testing.T) {
+	s := newTestMilvusStore(t)
+	// metadata 列用 JSON bytes 模拟（Get 返回的可能被序列化为字符串）
+	rs := milvusclient.ResultSet{
+		ResultCount: 1,
+		Fields: milvusclient.DataSet{
+			column.NewColumnVarChar("content", []string{"text"}),
+			column.NewColumnVarChar("metadata", []string{`{"k":"v"}`}), // 字符串形态的 metadata
+			column.NewColumnVarChar("document_id", []string{"d1"}),
+		},
+		Scores: []float32{0.9},
+	}
+	results := s.milvusResultToSearchResults(rs, "sparse")
+	require.Len(t, results, 1)
+	assert.Equal(t, "v", results[0].Metadata["k"])
+}
+
+// TestMilvusVectorStore_getSearchParams 对齐 Python get_search_params：efSearchFactor → ef
+func TestMilvusVectorStore_getSearchParams(t *testing.T) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeMilvus,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+	hnsw := vector_fields.NewMilvusHNSW("embedding", 30, 360, 2.0)
+	s, err := NewMilvusVectorStore(config, "http://localhost:19530", "",
+		"content", hnsw, "sparse_vector", "metadata", "document_id")
+	require.NoError(t, err)
+
+	params := s.getSearchParams(10)
+	// 对齐 Python: ef = round(top_k * efSearchFactor) = round(10 * 2.0) = 20
+	assert.Equal(t, float64(20), params["ef"])
+	assert.NotContains(t, params, "EfSearchFactor") // pop 掉
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -13,8 +14,10 @@ import (
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -221,6 +224,186 @@ func (s *MilvusVectorStore) Client(ctx context.Context) (MilvusClient, error) {
 // DistanceMetric 返回归一化距离度量（IP/L2/COSINE）。
 // 对齐 Python distance_metric property。
 func (s *MilvusVectorStore) DistanceMetric() string { return s.distanceMetric }
+
+// Search 向量搜索。
+//
+// 对齐 Python MilvusVectorStore.search：
+//   - _ensure_loaded
+//   - 构建 filter 表达式（dict → 等值过滤）
+//   - client.search（anns_field + search_params 含 metric_type）
+//   - 结果转 SearchResult（vector 模式分数归一化）
+func (s *MilvusVectorStore) Search(ctx context.Context, queryVector []float64, topK int, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
+	if err := s.ensureLoaded(ctx); err != nil {
+		return nil, err
+	}
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 对齐 Python: output_fields = [text_field, metadata_field, doc_id_field, "chunk_id"]
+	outputFields := []string{s.textField, s.metadataField, s.docIDField, "chunk_id"}
+
+	// 对齐 Python: filter_expr 构建（dict → 等值过滤）
+	filterExpr := buildMilvusFilterExpr(filters)
+
+	// 构建查询向量
+	f32 := make([]float32, len(queryVector))
+	for i, v := range queryVector {
+		f32[i] = float32(v)
+	}
+	vectors := []entity.Vector{entity.FloatVector(f32)}
+
+	// 对齐 Python: search_params={"metric_type": self._distance_metric, "params": self.get_search_params(top_k)}
+	searchOpt := milvusclient.NewSearchOption(s.collectionName, topK, vectors).
+		WithANNSField(s.vectorField.VectorFieldName()).
+		WithSearchParam("metric_type", s.distanceMetric).
+		WithOutputFields(outputFields...)
+	for k, v := range s.getSearchParams(topK) {
+		searchOpt = searchOpt.WithSearchParam(k, fmt.Sprintf("%v", v))
+	}
+	if filterExpr != "" {
+		searchOpt = searchOpt.WithFilter(filterExpr)
+	}
+
+	resultSets, err := c.Search(ctx, searchOpt)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "Search").
+			Str("collection_name", s.collectionName).
+			Err(err).
+			Msg("向量搜索失败")
+		return nil, err
+	}
+
+	// 对齐 Python: if results and len(results) > 0: return self._milvus_result_to_search_results(results[0], mode="vector")
+	if len(resultSets) > 0 {
+		return s.milvusResultToSearchResults(resultSets[0], "vector"), nil
+	}
+	return nil, nil
+}
+
+// SparseSearch 稀疏搜索（BM25）。
+//
+// 对齐 Python MilvusVectorStore.sparse_search：
+// 传递查询文本（BM25 Function 自动分词），失败时 warning + 返回空。
+func (s *MilvusVectorStore) SparseSearch(ctx context.Context, queryText string, topK int, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
+	if err := s.ensureLoaded(ctx); err != nil {
+		return nil, err
+	}
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 对齐 Python: output_fields = [text_field, metadata_field, doc_id_field]
+	outputFields := []string{s.textField, s.metadataField, s.docIDField}
+	filterExpr := buildMilvusFilterExpr(filters)
+
+	// 对齐 Python: data=[query_text] 直接传文本，BM25 function 处理分词
+	vectors := []entity.Vector{entity.Text(queryText)}
+	searchOpt := milvusclient.NewSearchOption(s.collectionName, topK, vectors).
+		WithANNSField(s.sparseVectorField).
+		WithSearchParam("metric_type", "BM25").
+		WithOutputFields(outputFields...)
+	if filterExpr != "" {
+		searchOpt = searchOpt.WithFilter(filterExpr)
+	}
+
+	resultSets, err := c.Search(ctx, searchOpt)
+	if err != nil {
+		// 对齐 Python: except Exception as e: logger.warning(f"BM25 text search failed: {e}"); return []
+		logger.Warn(logComponent).
+			Str("method", "SparseSearch").
+			Str("query_text", truncateText(queryText, 100)).
+			Err(err).
+			Msg("BM25 文本搜索失败")
+		return nil, nil
+	}
+
+	// 对齐 Python: if results and len(results) > 0: ... mode="sparse"
+	if len(resultSets) > 0 {
+		return s.milvusResultToSearchResults(resultSets[0], "sparse"), nil
+	}
+	return nil, nil
+}
+
+// HybridSearch 混合搜索（原生 HybridSearch + RRF）。
+//
+// 对齐 Python MilvusVectorStore.hybrid_search：
+//   - query_vector 非 nil 时构建 dense AnnRequest
+//   - 始终构建 sparse BM25 AnnRequest
+//   - 原生 hybrid_search + RRFRanker(k=60)
+//   - 失败时降级到分别搜索后 RRF 融合
+func (s *MilvusVectorStore) HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
+	if err := s.ensureLoaded(ctx); err != nil {
+		return nil, err
+	}
+	c, err := s.getClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 对齐 Python: output_fields = [text_field, metadata_field, doc_id_field]
+	outputFields := []string{s.textField, s.metadataField, s.docIDField}
+	filterExpr := buildMilvusFilterExpr(filters)
+
+	var annRequests []*milvusclient.AnnRequest
+
+	// 对齐 Python: if query_vector is not None: dense_req = AnnSearchRequest(...)
+	if queryVector != nil {
+		f32 := make([]float32, len(queryVector))
+		for i, v := range queryVector {
+			f32[i] = float32(v)
+		}
+		denseReq := milvusclient.NewAnnRequest(s.vectorField.VectorFieldName(), topK, entity.FloatVector(f32)).
+			WithSearchParam("metric_type", s.distanceMetric)
+		for k, v := range s.getSearchParams(topK) {
+			denseReq = denseReq.WithSearchParam(k, fmt.Sprintf("%v", v))
+		}
+		if filterExpr != "" {
+			denseReq = denseReq.WithFilter(filterExpr)
+		}
+		annRequests = append(annRequests, denseReq)
+	}
+
+	// 对齐 Python: sparse_req = AnnSearchRequest(data=[query_text], anns_field=sparse_vector_field, param={"metric_type": "BM25"}, ...)
+	sparseReq := milvusclient.NewAnnRequest(s.sparseVectorField, topK, entity.Text(queryText)).
+		WithSearchParam("metric_type", "BM25")
+	if filterExpr != "" {
+		sparseReq = sparseReq.WithFilter(filterExpr)
+	}
+	annRequests = append(annRequests, sparseReq)
+
+	// 对齐 Python: if not search_requests: return []
+	if len(annRequests) == 0 {
+		return nil, nil
+	}
+
+	// 对齐 Python: ranker=RRFRanker(k=60)
+	reranker := milvusclient.NewRRFReranker().WithK(60)
+	searchOpt := milvusclient.NewHybridSearchOption(s.collectionName, topK, annRequests...).
+		WithOutputFields(outputFields...).
+		WithReranker(reranker)
+
+	resultSets, err := c.HybridSearch(ctx, searchOpt)
+	if err != nil {
+		// 对齐 Python: logger.warning(f"Hybrid search failed, falling back to separate searches: {e}")
+		logger.Warn(logComponent).
+			Str("method", "HybridSearch").
+			Str("collection_name", s.collectionName).
+			Err(err).
+			Msg("混合搜索失败，降级到分别搜索")
+		return s.hybridSearchFallback(ctx, queryText, queryVector, topK, filters)
+	}
+
+	// 对齐 Python: if results and len(results) > 0: ... mode="hybrid"
+	if len(resultSets) > 0 {
+		return s.milvusResultToSearchResults(resultSets[0], "hybrid"), nil
+	}
+	return nil, nil
+}
 
 // Add 添加向量数据。
 //
@@ -734,4 +917,235 @@ func buildMilvusFilterExpr(filters map[string]any) string {
 		}
 	}
 	return strings.Join(parts, " && ")
+}
+
+// hybridSearchFallback 降级混合搜索：分别执行向量搜索和 BM25 搜索后 RRF 融合。
+//
+// 对齐 Python MilvusVectorStore._hybrid_search_fallback：
+// 并发两路搜索（vector + text）→ rrf_fusion([results_vector, results_text], k=60) → 截断 top_k。
+func (s *MilvusVectorStore) hybridSearchFallback(ctx context.Context, queryText string, queryVector []float64, topK int, filters map[string]any) ([]common.SearchResult, error) {
+	// 对齐 Python: asyncio.create_task 并发两路搜索
+	type searchOut struct {
+		results []common.SearchResult
+		err     error
+	}
+	outCh := make(chan searchOut, 2)
+
+	go func() {
+		if queryVector != nil {
+			// 对齐 Python: self.search(query_vector, top_k, None)
+			results, err := s.Search(ctx, queryVector, topK, nil)
+			outCh <- searchOut{results: results, err: err}
+		} else {
+			// 对齐 Python: asyncio.sleep(0, result=[]) → 空结果
+			outCh <- searchOut{}
+		}
+	}()
+	go func() {
+		// 对齐 Python: self.sparse_search(query_text, top_k, None)
+		results, err := s.SparseSearch(ctx, queryText, topK, nil)
+		outCh <- searchOut{results: results, err: err}
+	}()
+
+	var resultsList [][]common.RetrievalResult
+	for i := 0; i < 2; i++ {
+		out := <-outCh
+		if out.err != nil || len(out.results) == 0 {
+			continue
+		}
+		var retrievalResults []common.RetrievalResult
+		for _, sr := range out.results {
+			docID, _ := sr.Metadata["doc_id"].(string)
+			chunkID, _ := sr.Metadata["chunk_id"].(string)
+			retrievalResults = append(retrievalResults, common.RetrievalResult{
+				Text:     sr.Text,
+				Score:    sr.Score,
+				Metadata: sr.Metadata,
+				DocID:    docID,
+				ChunkID:  chunkID,
+			})
+		}
+		resultsList = append(resultsList, retrievalResults)
+	}
+
+	if len(resultsList) == 0 {
+		return nil, nil
+	}
+
+	// 对齐 Python: fused_results = rrf_fusion([results_vector, results_text], k=60)
+	fusedRetrievalResults := utils.RRFFusion(resultsList, 60)
+
+	// 对齐 Python: return fused_results[:top_k]
+	var fusedResults []common.SearchResult
+	for i, rr := range fusedRetrievalResults {
+		if i >= topK {
+			break
+		}
+		resultID, _ := rr.Metadata["id"].(string)
+		fusedResults = append(fusedResults, common.SearchResult{
+			ID:       resultID,
+			Text:     rr.Text,
+			Score:    rr.Score,
+			Metadata: rr.Metadata,
+		})
+	}
+	return fusedResults, nil
+}
+
+// milvusResultToSearchResults 将 Milvus 搜索结果转为 SearchResult 列表。
+//
+// 对齐 Python MilvusVectorStore._milvus_result_to_search_results：
+//   - 提取 text/metadata/doc_id/chunk_id
+//   - doc_id 回填到 metadata（避免重复）
+//   - chunk_id 写入 metadata（供上层关联）
+//   - vector 模式按距离度量归一化分数；sparse/hybrid 直接用原始分数
+//   - raw_score / raw_score_scaled 写入 metadata
+func (s *MilvusVectorStore) milvusResultToSearchResults(rs milvusclient.ResultSet, mode string) []common.SearchResult {
+	rowCount := rs.ResultCount
+	if rowCount == 0 {
+		return nil
+	}
+
+	// 收集列数据
+	colData := make(map[string][]any)
+	for _, col := range rs.Fields {
+		name := col.Name()
+		values := make([]any, rowCount)
+		for j := 0; j < rowCount; j++ {
+			v, err := col.Get(j)
+			if err != nil {
+				continue
+			}
+			values[j] = v
+		}
+		colData[name] = values
+	}
+
+	var searchResults []common.SearchResult
+	for j := 0; j < rowCount; j++ {
+		// 对齐 Python: result_id = str(item.get("id", item.get("pk", "")))
+		resultID := ""
+		if ids := rs.IDs; ids != nil {
+			if v, err := ids.Get(j); err == nil {
+				resultID = fmt.Sprintf("%v", v)
+			}
+		}
+
+		// 对齐 Python: text = item.get(self.text_field, "")
+		text := ""
+		if vals := colData[s.textField]; j < len(vals) {
+			if str, ok := vals[j].(string); ok {
+				text = str
+			}
+		}
+
+		// 对齐 Python: metadata = item.get(self.metadata_field, {})；str 时 json.loads
+		metadata := make(map[string]any)
+		if vals := colData[s.metadataField]; j < len(vals) {
+			switch m := vals[j].(type) {
+			case map[string]any:
+				for k, v := range m {
+					metadata[k] = v
+				}
+			case string:
+				var parsed map[string]any
+				if err := json.Unmarshal([]byte(m), &parsed); err == nil {
+					for k, v := range parsed {
+						metadata[k] = v
+					}
+				}
+			case []byte:
+				var parsed map[string]any
+				if err := json.Unmarshal(m, &parsed); err == nil {
+					for k, v := range parsed {
+						metadata[k] = v
+					}
+				}
+			}
+		}
+
+		// 对齐 Python: if "doc_id" not in metadata: metadata["doc_id"] = item.pop(doc_id_field, None)
+		if _, ok := metadata["doc_id"]; !ok {
+			if vals := colData[s.docIDField]; j < len(vals) {
+				if str, ok := vals[j].(string); ok {
+					metadata["doc_id"] = str
+				}
+			}
+		}
+
+		// 对齐 Python: if item.get("chunk_id") is not None: metadata.setdefault("chunk_id", ...)
+		if vals := colData["chunk_id"]; j < len(vals) {
+			if str, ok := vals[j].(string); ok && str != "" {
+				metadata["chunk_id"] = str
+			}
+		}
+
+		// 对齐 Python: raw_score = item.get("score", item.get("distance", None))
+		var rawScoreVal *float64
+		if j < len(rs.Scores) {
+			v := float64(rs.Scores[j])
+			rawScoreVal = &v
+		}
+
+		var finalScore float64
+		var rawScoreScaled *float64
+
+		if mode == "vector" && rawScoreVal != nil {
+			// 对齐 Python: L2/COSINE/IP 三种归一化
+			switch s.distanceMetric {
+			case "L2":
+				scaled := vector.ConvertL2Squared(*rawScoreVal, 4.0)
+				rawScoreScaled = &scaled
+				finalScore = scaled
+			case "COSINE":
+				scaled := vector.ConvertCosineSimilarity(*rawScoreVal)
+				rawScoreScaled = &scaled
+				finalScore = scaled
+			default: // IP
+				scaled := vector.ConvertIPSimilarity(*rawScoreVal)
+				rawScoreScaled = &scaled
+				finalScore = scaled
+			}
+		} else if rawScoreVal != nil {
+			// 对齐 Python: sparse/hybrid: final_score = raw_score
+			finalScore = *rawScoreVal
+		}
+
+		// 对齐 Python: metadata.setdefault("raw_score", raw_score_val)
+		if rawScoreVal != nil {
+			metadata["raw_score"] = *rawScoreVal
+		}
+		if rawScoreScaled != nil {
+			metadata["raw_score_scaled"] = *rawScoreScaled
+		}
+
+		searchResults = append(searchResults, common.SearchResult{
+			ID:       resultID,
+			Text:     text,
+			Score:    finalScore,
+			Metadata: metadata,
+		})
+	}
+	return searchResults
+}
+
+// getSearchParams 获取搜索参数。
+//
+// 对齐 Python MilvusVectorStore.get_search_params：
+// efSearchFactor 存在时转为 ef = round(top_k * efSearchFactor)。
+// 注意 Go ToDict 键名为结构体字段名 EfSearchFactor（对齐 Python 字段名 efSearchFactor 的语义）。
+func (s *MilvusVectorStore) getSearchParams(topK int) map[string]any {
+	// 对齐 Python: search_params = self._search_config（复制，不修改原配置）
+	searchParams := make(map[string]any)
+	for k, v := range s.searchConfig {
+		searchParams[k] = v
+	}
+	// 对齐 Python: if "efSearchFactor" in search_params: ef = round(top_k * pop("efSearchFactor"))
+	if factor, ok := searchParams["EfSearchFactor"]; ok {
+		delete(searchParams, "EfSearchFactor")
+		if f, ok := factor.(float64); ok {
+			searchParams["ef"] = float64(math.Round(float64(topK) * f))
+		}
+	}
+	return searchParams
 }
