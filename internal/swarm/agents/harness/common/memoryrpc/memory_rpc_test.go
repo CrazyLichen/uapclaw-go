@@ -259,7 +259,7 @@ func TestScanMDFiles_基本扫描(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "b.md"), []byte("x\ny"), 0o644))
 	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "a.md"), []byte("z"), 0o644))
 	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "c.txt"), []byte("ignore"), 0o644)) // 非 md
-	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "sub"), 0o755))                     // 子目录忽略
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "sub"), 0o755))                      // 子目录忽略
 
 	files := scanMDFiles(tmp, "auto", "/ws", "")
 	assert.Len(t, files, 2)
@@ -549,8 +549,8 @@ func TestHandleMemoryStatus_基本块(t *testing.T) {
 	res := HandleMemoryStatus(context.Background(), "/ws", "plan", map[string]any{})
 	assert.Equal(t, "plan", res["current_mode"])
 	assert.Equal(t, "sqlite", res["storage_mode"])
-	assert.Equal(t, "builtin", res["engine"])  // 默认 engine（空/非法回落 builtin）
-	assert.Equal(t, false, res["enabled"])     // 空配置 IsMemoryEnabled → false（对齐 Python 缺省）
+	assert.Equal(t, "builtin", res["engine"]) // 默认 engine（空/非法回落 builtin）
+	assert.Equal(t, false, res["enabled"])    // 空配置 IsMemoryEnabled → false（对齐 Python 缺省）
 	assert.Equal(t, false, res["proactive"])
 	assert.Equal(t, false, res["forbidden_enabled"])
 	_, hasIndex := res["index"]
@@ -661,4 +661,257 @@ func TestHandleMemoryStatus_engineBoth(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "openjiuwen", ext["provider"])
 	assert.Equal(t, true, ext["enabled"])
+}
+
+// ──────────────────────────── 覆盖率补漏 ────────────────────────────
+
+// TestHandleMemoryEdit_不存在文件创建 测试 mkdir+touch 创建路径
+func TestHandleMemoryEdit_不存在文件创建(t *testing.T) {
+	home := setupIsolatedHome(t)
+	// ~/ .uapclaw 深层路径：touch 时 parent 不存在 → mkdir -p + touch
+	p := filepath.Join(home, ".uapclaw", "deep", "nested", "note.md")
+	res := HandleMemoryEdit(context.Background(), "/ws", map[string]any{"path": p})
+	assert.Equal(t, p, res["path"])
+	assert.Equal(t, false, res["exists"])
+	assert.Equal(t, true, res["editable"])
+	_, statErr := os.Stat(p)
+	assert.NoError(t, statErr, "touch 应创建文件")
+}
+
+// TestHandleMemoryEdit_超20行截断 测试 content_preview 截断分支
+func TestHandleMemoryEdit_超20行截断(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	// workspace/memory 在白名单内
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, "memory"), 0o755))
+	p := filepath.Join(tmp, "memory", "a.md")
+	var sb strings.Builder
+	for i := 0; i < 25; i++ {
+		sb.WriteString("line\n")
+	}
+	assert.NoError(t, os.WriteFile(p, []byte(sb.String()), 0o644))
+
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": p})
+	assert.Equal(t, true, res["exists"])
+	preview, _ := res["content_preview"].(string)
+	assert.True(t, strings.HasSuffix(preview, "\n... (truncated)"),
+		"超 20 行应截断，got %d chars: %q", len(preview), preview)
+}
+
+// TestHandleMemoryEdit_编辑目录 测试 path 是目录时 exists=false
+func TestHandleMemoryEdit_编辑目录(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	// memory 目录在白名单内但它是目录 → exists=false，进入 touch 分支（目录已存在创建失败不 panic）
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": filepath.Join(tmp, "memory")})
+	assert.Equal(t, false, res["exists"])
+	assert.Equal(t, true, res["editable"]) // 路径合法仍可编辑
+}
+
+// TestHandleMemoryList_包含项目目录 测试 project_dir 改变发现根
+func TestHandleMemoryList_包含项目目录(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	assert.NoError(t, os.MkdirAll(filepath.Join(tmp, ".uapclaw"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "UAPCLAWSWARM.md"), []byte("p"), 0o644))
+
+	res := HandleMemoryList(context.Background(), tmp, "plan", map[string]any{"project_dir": tmp})
+	files, _ := res["files"].([]map[string]any)
+	assert.NotEmpty(t, files, "project_dir 指向自身时应发现 UAPCLAWSWARM.md")
+}
+
+// TestExpandUser_分支覆盖 测试 ~ 与 ~/ 前缀之外的分支
+func TestExpandUser_分支覆盖(t *testing.T) {
+	setupIsolatedHome(t)
+	assert.Equal(t, "/abs/path", expandUser("/abs/path"))
+	assert.Equal(t, "plain", expandUser("plain"))
+	assert.Equal(t, "a~b", expandUser("a~b")) // 非前缀 ~ 不展开
+}
+
+// TestAnyOr_默认值 测试 anyOr nil/非 nil 分支
+func TestAnyOr_默认值(t *testing.T) {
+	assert.Equal(t, "fallback", anyOr(nil, "fallback"))
+	assert.Equal(t, "value", anyOr("value", "fallback"))
+}
+
+// TestDirOrEmpty_分支覆盖 测试目录存在/不存在
+func TestDirOrEmpty_分支覆盖(t *testing.T) {
+	tmp := t.TempDir()
+	assert.Equal(t, tmp, dirOrEmpty(tmp))
+	assert.Equal(t, "", dirOrEmpty(filepath.Join(tmp, "missing")))
+	// 文件（非目录）也应返回空串
+	p := filepath.Join(tmp, "file.md")
+	assert.NoError(t, os.WriteFile(p, []byte("x"), 0o644))
+	assert.Equal(t, "", dirOrEmpty(p))
+}
+
+// TestLoadConfigMap_读取失败 测试 YAML 损坏时返回空 map
+func TestLoadConfigMap_读取失败(t *testing.T) {
+	tmp := t.TempDir()
+	cfgDir := filepath.Join(tmp, "config")
+	assert.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	// 非法 YAML（未闭合的 flow sequence）
+	assert.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("memory: [unclosed"), 0o644))
+	t.Setenv("UAPCLAW_DATA_DIR", tmp)
+	t.Setenv("UAPCLAW_HOME", filepath.Join(tmp, "home"))
+	pathutil.ResetCache()
+	t.Cleanup(pathutil.ResetCache)
+
+	assert.Equal(t, map[string]any{}, loadConfigMap())
+}
+
+// TestUpdateModeMemoryConfig_Load失败 测试 YAML 损坏时返回 error
+func TestUpdateModeMemoryConfig_Load失败(t *testing.T) {
+	tmp := t.TempDir()
+	cfgDir := filepath.Join(tmp, "config")
+	assert.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("modes: {unclosed"), 0o644))
+	t.Setenv("UAPCLAW_DATA_DIR", tmp)
+	t.Setenv("UAPCLAW_HOME", filepath.Join(tmp, "home"))
+	pathutil.ResetCache()
+	t.Cleanup(pathutil.ResetCache)
+
+	assert.Error(t, updateModeMemoryConfig("plan", "enabled", true))
+	assert.Error(t, updateMemoryForbiddenEnabledInConfig(true))
+}
+
+// TestUpdateModeMemoryConfig_写回失败 测试 Set 失败路径（目录替换文件导致写回失败）
+func TestUpdateModeMemoryConfig_写回失败(t *testing.T) {
+	tmp := t.TempDir()
+	cfgDir := filepath.Join(tmp, "config")
+	assert.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("modes:\n  agent:\n    plan:\n      memory:\n        enabled: true\n"), 0o644))
+	t.Setenv("UAPCLAW_DATA_DIR", tmp)
+	t.Setenv("UAPCLAW_HOME", filepath.Join(tmp, "home"))
+	pathutil.ResetCache()
+	t.Cleanup(pathutil.ResetCache)
+
+	// config.yaml 所在目录被替换为同名目录（写回时 MkdirAll 失败）
+	assert.NoError(t, os.Remove(filepath.Join(cfgDir, "config.yaml")))
+	assert.NoError(t, os.MkdirAll(filepath.Join(cfgDir, "config.yaml"), 0o755))
+
+	assert.Error(t, updateModeMemoryConfig("plan", "enabled", false))
+}
+
+// TestHandleMemoryToggle_写回失败global 测试 D6 决策：写回失败时 new_value 置 old_value
+func TestHandleMemoryToggle_写回失败global(t *testing.T) {
+	tmp := t.TempDir()
+	cfgDir := filepath.Join(tmp, "config")
+	assert.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("memory:\n  forbidden_memory_definition:\n    enabled: true\n"), 0o644))
+	t.Setenv("UAPCLAW_DATA_DIR", tmp)
+	t.Setenv("UAPCLAW_HOME", filepath.Join(tmp, "home"))
+	pathutil.ResetCache()
+	t.Cleanup(pathutil.ResetCache)
+
+	// config.yaml 被同名目录替换 → 写回失败
+	assert.NoError(t, os.Remove(filepath.Join(cfgDir, "config.yaml")))
+	assert.NoError(t, os.MkdirAll(filepath.Join(cfgDir, "config.yaml"), 0o755))
+
+	res := HandleMemoryToggle(context.Background(), "/ws", "plan", map[string]any{"key": "memory_forbidden_enabled"})
+	assert.Equal(t, "global", res["mode_affected"])
+	assert.Equal(t, true, res["needs_restart"])
+	assert.Equal(t, res["old_value"], res["new_value"]) // D6：写回失败如实上报未变更
+}
+
+// TestHandleMemoryToggle_写回失败mode 测试模式级开关写回失败分支
+func TestHandleMemoryToggle_写回失败mode(t *testing.T) {
+	tmp := t.TempDir()
+	cfgDir := filepath.Join(tmp, "config")
+	assert.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte(""), 0o644))
+	t.Setenv("UAPCLAW_DATA_DIR", tmp)
+	t.Setenv("UAPCLAW_HOME", filepath.Join(tmp, "home"))
+	pathutil.ResetCache()
+	t.Cleanup(pathutil.ResetCache)
+
+	assert.NoError(t, os.Remove(filepath.Join(cfgDir, "config.yaml")))
+	assert.NoError(t, os.MkdirAll(filepath.Join(cfgDir, "config.yaml"), 0o755))
+
+	// memory_enabled / memory_proactive 两分支（写回失败 → new=old）
+	res1 := HandleMemoryToggle(context.Background(), "/ws", "plan", map[string]any{"key": "memory_enabled"})
+	assert.Equal(t, "plan", res1["mode_affected"])
+	assert.Equal(t, res1["old_value"], res1["new_value"])
+
+	res2 := HandleMemoryToggle(context.Background(), "/ws", "plan", map[string]any{"key": "memory_proactive"})
+	assert.Equal(t, "plan", res2["mode_affected"])
+	assert.Equal(t, res2["old_value"], res2["new_value"])
+}
+
+// TestHandleMemoryStatus_detailedCoding统计 测试 coding_memory 逐文件字符统计分支
+func TestHandleMemoryStatus_detailedCoding统计(t *testing.T) {
+	envDir := setupToggleEnv(t, "")
+	ws := filepath.Join(envDir, "ws")
+	// coding_memory/default 目录 + 1 个 .md 文件（5 字符）
+	assert.NoError(t, os.MkdirAll(filepath.Join(ws, "coding_memory", "default"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(ws, "coding_memory", "default", "c1.md"), []byte("hello"), 0o644))
+
+	res := HandleMemoryStatus(context.Background(), ws, "plan", map[string]any{"detailed": true})
+	cm, ok := res["coding_memory"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, 1, cm["files_count"])
+	assert.Equal(t, 5, cm["total_chars"])
+	assert.NotEmpty(t, cm["dir"]) // 目录存在返回原路径
+}
+
+// TestExpandUser_波浪号 测试单独 ~ 展开为 HOME
+func TestExpandUser_波浪号(t *testing.T) {
+	home := setupIsolatedHome(t)
+	assert.Equal(t, home, expandUser("~"))
+}
+
+// TestAbsoluteJoin_相对基路径 测试 base 相对路径时补 cwd（对齐 os.path.abspath）
+func TestAbsoluteJoin_相对基路径(t *testing.T) {
+	joined := absoluteJoin("relbase", "sub/a.md")
+	abs, err := filepath.Abs("relbase/sub/a.md")
+	assert.NoError(t, err)
+	assert.Equal(t, abs, joined)
+}
+
+// TestScanMDFiles_目录变文件 测试 dir 状态竞争：Stat 时是目录、ReadDir 时失败
+func TestScanMDFiles_目录变文件(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	// 先建目录并通过白名单判定，再替换为文件：ReadDir 返回 ENOTDIR → nil
+	dir := filepath.Join(tmp, "memory")
+	assert.NoError(t, os.MkdirAll(dir, 0o755))
+	assert.NoError(t, os.RemoveAll(dir))
+	assert.NoError(t, os.WriteFile(dir, []byte("now a file"), 0o644))
+	// Stat 成功但非目录 → 走 isdir=false 分支
+	assert.Nil(t, scanMDFiles(dir, "auto", tmp, ""))
+}
+
+// TestHandleMemoryEdit_创建失败 测试 mkdir/touch 失败分支（parent 路径上有同名文件）
+func TestHandleMemoryEdit_创建失败(t *testing.T) {
+	setupIsolatedHome(t)
+	tmp := t.TempDir()
+	// memory 是文件（非目录）：tmp/memory/deep/a.md 前缀匹配白名单（字符串判定），
+	// 但 MkdirAll(tmp/memory/deep) 与 OpenFile(tmp/memory/deep/a.md) 均失败 → 双 Error 分支
+	assert.NoError(t, os.WriteFile(filepath.Join(tmp, "memory"), []byte("blocker"), 0o644))
+	p := filepath.Join(tmp, "memory", "deep", "a.md")
+
+	res := HandleMemoryEdit(context.Background(), tmp, map[string]any{"path": p})
+	assert.Equal(t, p, res["path"])
+	assert.Equal(t, false, res["exists"])
+	assert.Equal(t, true, res["editable"]) // 路径在白名单内仍报 editable（对齐 Python 不回滚 editable）
+}
+
+// TestValidateEditPath_项目根特例 测试 UAPCLAWSWARM.md 在 project_dir 根的判定路径
+func TestValidateEditPath_项目根特例(t *testing.T) {
+	setupIsolatedHome(t)
+	// 有 project_dir 时 /proj 本身在白名单内（_get_allowed_dirs L48-49），
+	// /proj/UAPCLAWSWARM.md 经前缀匹配直接放行（走不到 basename 特例分支）
+	ok, resolved := validateEditPath("/proj/UAPCLAWSWARM.md", "/ws", "/proj")
+	assert.True(t, ok)
+	assert.Equal(t, "/proj/UAPCLAWSWARM.md", resolved)
+
+	// UAPCLAWSWARM.local.md 同理（白名单前缀匹配）
+	ok2, resolved2 := validateEditPath("/proj/UAPCLAWSWARM.local.md", "/ws", "/proj")
+	assert.True(t, ok2)
+	assert.Equal(t, "/proj/UAPCLAWSWARM.local.md", resolved2)
+
+	// /proj 深层路径同样经白名单前缀匹配放行（project_dir 全子树可编辑）
+	ok3, resolved3 := validateEditPath("/proj/sub/UAPCLAWSWARM.md", "/ws", "/proj")
+	assert.True(t, ok3)
+	assert.Equal(t, "/proj/sub/UAPCLAWSWARM.md", resolved3)
 }
