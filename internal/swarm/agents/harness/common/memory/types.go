@@ -2,7 +2,8 @@ package memory
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// MemorySearchResult 记忆搜索结果。对齐 Python MemorySearchResult（types.py）
+// MemorySearchResult 记忆搜索结果。对齐 Python MemorySearchResult（types.py）；
+// Search 返回列表元素（citation 由下游 memory_search 工具填充，manager 层恒为 nil）
 type MemorySearchResult struct {
 	// ID chunk 标识
 	ID string `json:"id"`
@@ -18,8 +19,19 @@ type MemorySearchResult struct {
 	Snippet string `json:"snippet"`
 	// Score 相关度分数
 	Score float64 `json:"score"`
-	// Citation 引用标注
+	// Citation 引用标注（下游 memory_search 填充为 path#L{start}[-L{end}]）
 	Citation *string `json:"citation,omitempty"`
+}
+
+// SearchOpts 搜索选项。对齐 Python search(query, opts: Dict) 实际读取的键：
+// 仅 minScore/maxResults 两键生效（hybrid 取自 settings.query.hybrid；
+// Python 调用方传入的 sessionKey 在 manager.py 中从未被读取）。
+// 指针字段保真 Python "minScore" in opts 判定——显式 0.0 与未提供可区分
+type SearchOpts struct {
+	// MinScore 最小相关度分数（nil 时回退 settings.query.minScore）
+	MinScore *float64
+	// MaxResults 最大结果数（nil 时回退 settings.query.maxResults）
+	MaxResults *int
 }
 
 // MemoryProviderStatus 嵌入提供者状态。对齐 Python MemoryProviderStatus（types.py）

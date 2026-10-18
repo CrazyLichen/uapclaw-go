@@ -10,6 +10,17 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// EmbedConfig 嵌入配置。对齐 Python get_embed_config() 返回的 dict
+// （config.py L75-83：embed 段三键 embed_api_key/embed_base_url/embed_model，缺失为空串）
+type EmbedConfig struct {
+	// APIKey 嵌入服务密钥（embed.embed_api_key）
+	APIKey string
+	// BaseURL 嵌入服务地址（embed.embed_base_url）
+	BaseURL string
+	// Model 嵌入模型名（embed.embed_model）
+	Model string
+}
+
 // ChunkingConfig 分块配置。对齐 Python MemorySettings.chunking（config.py dataclass 默认 {"tokens": 256, "overlap": 32}）
 type ChunkingConfig struct {
 	// Tokens 目标 token 数，默认 256
@@ -125,16 +136,16 @@ func ClearConfigCache() {
 
 // GetEmbedConfig 获取嵌入配置。对齐 Python get_embed_config（config.py L75-83）：
 // 读 embed 段三键（embed_api_key/embed_base_url/embed_model），缺失返回空串
-func GetEmbedConfig() map[string]string {
+func GetEmbedConfig() EmbedConfig {
 	cfg := loadConfig()
 	embedCfg, _ := cfg["embed"].(map[string]any)
 	if embedCfg == nil {
 		embedCfg = map[string]any{}
 	}
-	return map[string]string{
-		"api_key":  strVal(embedCfg["embed_api_key"]),
-		"base_url": strVal(embedCfg["embed_base_url"]),
-		"model":    strVal(embedCfg["embed_model"]),
+	return EmbedConfig{
+		APIKey:  strVal(embedCfg["embed_api_key"]),
+		BaseURL: strVal(embedCfg["embed_base_url"]),
+		Model:   strVal(embedCfg["embed_model"]),
 	}
 }
 
@@ -165,8 +176,8 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 	}
 
 	// Python: settings.model = embed_config.get("model", settings.model)
-	if embedCfg["model"] != "" {
-		s.Model = embedCfg["model"]
+	if embedCfg.Model != "" {
+		s.Model = embedCfg.Model
 	}
 
 	// Python: if memory_config: 逐字段覆盖

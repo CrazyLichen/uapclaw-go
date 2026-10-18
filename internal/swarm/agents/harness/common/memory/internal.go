@@ -129,15 +129,13 @@ func BuildFileEntry(absPath, workspaceDir string) (*FileEntry, error) {
 // 逐行累加 tokens，超限切块（endLine=i-1）；尾部回溯构造 overlap。
 // 注意：Python enumerate(lines, 1) 行号从 1 起，Go range 从 0 起，
 // 故 Go 的 i 对应 Python 的 i-1（endLine 直接用 i）。
-func ChunkMarkdown(content string, settings map[string]any) []MemoryChunk {
-	targetTokens := 256
-	overlap := 32
-	if v, ok := settings["tokens"].(int); ok {
-		targetTokens = v
-	}
-	if v, ok := settings["overlap"].(int); ok {
-		overlap = v
-	}
+// 默认值职责划分：Python 在函数内 settings.get("overlap", 32) 补缺键，
+// Go 侧 CreateMemorySettings 已按键合并到带默认值的 ChunkingConfig（语义等价），
+// 本函数直用传入值——显式 0（如 overlap: 0 表示无重叠）必须原样生效，
+// 不做零值回退（回退会吞掉显式 0，违背 Python "键存在值为 0" 语义）
+func ChunkMarkdown(content string, cfg ChunkingConfig) []MemoryChunk {
+	targetTokens := cfg.Tokens
+	overlap := cfg.Overlap
 
 	lines := strings.Split(content, "\n")
 	var chunks []MemoryChunk

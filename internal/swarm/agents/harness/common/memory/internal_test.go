@@ -63,7 +63,7 @@ func TestListMemoryFiles_extraPaths(t *testing.T) {
 func TestChunkMarkdown_基本分块(t *testing.T) {
 	// 每行 8 字符 = 2 token；tokens=4 → 2 行/块（对齐 Python len//4 估算）
 	content := "12345678\n12345678\n12345678\n12345678"
-	chunks := ChunkMarkdown(content, map[string]any{"tokens": 4, "overlap": 0})
+	chunks := ChunkMarkdown(content, ChunkingConfig{Tokens: 4, Overlap: 0})
 	if len(chunks) != 2 {
 		t.Fatalf("4 行 2行/块应切 2 块，got %d", len(chunks))
 	}
@@ -76,7 +76,7 @@ func TestChunkMarkdown_基本分块(t *testing.T) {
 func TestChunkMarkdown_行号语义(t *testing.T) {
 	// 每行 6 字符 = 1 token（6//4=1）；tokens=4 → 4 行一块；无尾换行（len(lines)=8）
 	content := "aaaaaa\nbbbbbb\ncccccc\ndddddd\neeeeee\nffffff\ngggggg\nhhhhhh"
-	chunks := ChunkMarkdown(content, map[string]any{"tokens": 4, "overlap": 0})
+	chunks := ChunkMarkdown(content, ChunkingConfig{Tokens: 4, Overlap: 0})
 	if len(chunks) != 2 {
 		t.Fatalf("8 行 4行/块应切 2 块，got %d", len(chunks))
 	}
@@ -90,20 +90,22 @@ func TestChunkMarkdown_行号语义(t *testing.T) {
 
 // TestChunkMarkdown_空内容 边界：空串分块（无内容不产生 chunk）
 func TestChunkMarkdown_空内容(t *testing.T) {
-	chunks := ChunkMarkdown("", map[string]any{"tokens": 4, "overlap": 0})
+	chunks := ChunkMarkdown("", ChunkingConfig{Tokens: 4, Overlap: 0})
 	// Python: "".split("\n") = [""]，单空行 current_chunk=[""]，产出 1 个 chunk
 	if len(chunks) != 1 {
 		t.Fatalf("空串按 Python 语义应产出 1 个空块，got %d", len(chunks))
 	}
 }
 
-// TestChunkMarkdown_默认参数 对齐 Python settings.get("tokens", 256)
-func TestChunkMarkdown_默认参数(t *testing.T) {
-	// 1500 字符单行 = 375 token > 256 → 应分块
+// TestChunkMarkdown_零值直传 默认值职责在 settings 层（CreateMemorySettings
+// 已按键合并默认 256/32），本函数直用传入值——零值 cfg 不回退（与 Python
+// "键存在值为 0" 语义一致：0 token 恒不切行，单行不可再分仍产 1 块）
+func TestChunkMarkdown_零值直传(t *testing.T) {
+	// 1500 字符单行；零值 cfg（tokens=0）恒不触发切块
 	long := strings.Repeat("a", 1500)
-	chunks := ChunkMarkdown(long, nil)
+	chunks := ChunkMarkdown(long, ChunkingConfig{})
 	if len(chunks) != 1 {
-		t.Fatalf("单行超长也只产出 1 块（单行不可再分），got %d", len(chunks))
+		t.Fatalf("单行不可再分也只产出 1 块，got %d", len(chunks))
 	}
 }
 

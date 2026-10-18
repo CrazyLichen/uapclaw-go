@@ -12,9 +12,9 @@
 //
 //	memory/
 //	├── doc.go          # 包文档
-//	├── types.go        # 记忆数据类型（MemorySearchResult/FileEntry/MemoryChunk 等）
+//	├── types.go        # 记忆数据类型（MemorySearchResult/SearchOpts/FileEntry/MemoryChunk 等）
 //	├── internal.go     # 纯函数（递归 ListMemoryFiles/ChunkMarkdown/FTS 构建等，swarm 语义）
-//	├── config.go       # 配置（GetEmbedConfig/MemorySettings/mode 解析 + 包内缓存）
+//	├── config.go       # 配置（EmbedConfig/MemorySettings/mode 解析 + 包内缓存）
 //	├── embeddings.go   # EmbeddingProvider 接口 + OpenAICompatible + Mock + 工厂（10.6.15）
 //	├── manager.go      # MemoryIndexManager（sync/混合检索/文件监听/嵌入缓存）
 //	├── forbidden.go    # 记忆禁止配置与提示词生成

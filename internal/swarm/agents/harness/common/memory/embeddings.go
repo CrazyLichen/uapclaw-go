@@ -93,7 +93,7 @@ func NewOpenAICompatibleEmbeddingProvider(apiKey, model, baseURL string) *OpenAI
 		apiKey = os.Getenv("EMBED_API_KEY")
 	}
 	if apiKey == "" {
-		apiKey = embedConfig["api_key"]
+		apiKey = embedConfig.APIKey
 	}
 	// Python: model or os.getenv("EMBED_MODEL") or os.getenv("EMBEDDING_MODEL") or embed_config.get("model", "")
 	if model == "" {
@@ -103,7 +103,7 @@ func NewOpenAICompatibleEmbeddingProvider(apiKey, model, baseURL string) *OpenAI
 		model = os.Getenv("EMBEDDING_MODEL")
 	}
 	if model == "" {
-		model = embedConfig["model"]
+		model = embedConfig.Model
 	}
 	// Python: base_url or os.getenv("EMBED_BASE") or os.getenv("EMBED_BASE_URL") or embed_config.get("base_url", "")
 	if baseURL == "" {
@@ -113,7 +113,7 @@ func NewOpenAICompatibleEmbeddingProvider(apiKey, model, baseURL string) *OpenAI
 		baseURL = os.Getenv("EMBED_BASE_URL")
 	}
 	if baseURL == "" {
-		baseURL = embedConfig["base_url"]
+		baseURL = embedConfig.BaseURL
 	}
 
 	// Python: if self.base_url and self.base_url.endswith("/embeddings"): rsplit("/embeddings", 1)[0]
@@ -157,7 +157,7 @@ func CreateEmbeddingProvider(provider, model, fallback string) (EmbeddingProvide
 		embedKey = os.Getenv("EMBED_API_KEY")
 	}
 	if embedKey == "" {
-		embedKey = embedConfig["api_key"]
+		embedKey = embedConfig.APIKey
 	}
 
 	if embedKey != "" {
@@ -171,14 +171,14 @@ func CreateEmbeddingProvider(provider, model, fallback string) (EmbeddingProvide
 			m = os.Getenv("EMBEDDING_MODEL")
 		}
 		if m == "" {
-			m = embedConfig["model"]
+			m = embedConfig.Model
 		}
 		b := os.Getenv("EMBED_BASE")
 		if b == "" {
 			b = os.Getenv("EMBED_BASE_URL")
 		}
 		if b == "" {
-			b = embedConfig["base_url"]
+			b = embedConfig.BaseURL
 		}
 		return NewOpenAICompatibleEmbeddingProvider(embedKey, m, b), nil
 	}

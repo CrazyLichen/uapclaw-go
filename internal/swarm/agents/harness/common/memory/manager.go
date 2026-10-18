@@ -202,8 +202,10 @@ func (m *MemoryIndexManager) Sync(ctx context.Context, reason string, force bool
 // Search 混合搜索。对齐 Python search（manager.py L781-840）。
 // 注意：Python 代码内 get("minScore", 0.7) 的 0.7 是永不生效的死默认值——
 // opts 未提供时实际取 settings.query.minScore（默认 0.3）。
-// 返回 []map[string]any：对齐 Python dict（下游 memory_search 会追加 citation 字段）
-func (m *MemoryIndexManager) Search(ctx context.Context, query string, opts map[string]any) ([]map[string]any, error) {
+// 返回 []MemorySearchResult：对齐 Python MemorySearchResult dataclass
+// （Python manager 实际返回 dict 列表，Go 侧落地为结构体，字段一一对应；
+// citation 由下游 memory_search 填充）
+func (m *MemoryIndexManager) Search(ctx context.Context, query string, opts *SearchOpts) ([]MemorySearchResult, error) {
 	// Python: if self.settings.sync.get("onSearch", True) and self.dirty
 	m.mu.Lock()
 	dirty := m.dirty
@@ -218,18 +220,18 @@ func (m *MemoryIndexManager) Search(ctx context.Context, query string, opts map[
 	// Python: cleaned = query.strip(); if not cleaned: return []
 	cleaned := strings.TrimSpace(query)
 	if cleaned == "" {
-		return []map[string]any{}, nil
+		return []MemorySearchResult{}, nil
 	}
 
 	// Python: min_score = opts.get("minScore") if ... else self.settings.query.get("minScore", 0.7)
 	// （0.7 为死默认值，实际生效 settings 默认 0.3）
 	minScore := m.Settings.Query.MinScore
-	if v, ok := opts["minScore"].(float64); ok {
-		minScore = v
+	if opts != nil && opts.MinScore != nil {
+		minScore = *opts.MinScore
 	}
 	maxResults := m.Settings.Query.MaxResults
-	if v, ok := numVal(opts["maxResults"]); ok {
-		maxResults = int(v)
+	if opts != nil && opts.MaxResults != nil {
+		maxResults = *opts.MaxResults
 	}
 	// Python: hybrid = self.settings.query.get("hybrid") or {}
 	hybridEnabled := m.Settings.Query.Hybrid.Enabled
@@ -239,7 +241,7 @@ func (m *MemoryIndexManager) Search(ctx context.Context, query string, opts map[
 	candidates := int(math.Min(200, math.Max(1, float64(maxResults)*candidateMultiplier)))
 
 	// Python: keyword_results = [] if hybrid.get("enabled", True) and self.fts_available
-	var keywordResults []map[string]any
+	var keywordResults []MemorySearchResult
 	if hybridEnabled && m.ftsAvailable {
 		keywordResults = m.searchKeyword(cleaned, candidates)
 	}
@@ -254,16 +256,16 @@ func (m *MemoryIndexManager) Search(ctx context.Context, query string, opts map[
 		}
 	}
 
-	var vectorResults []map[string]any
+	var vectorResults []MemorySearchResult
 	if hasVector {
 		vectorResults = m.searchVector(ctx, queryVec, candidates)
 	}
 
 	// Python: if not hybrid.get("enabled", True): return [r for r in vector_results if r["score"] >= min_score][:max_results]
 	if !hybridEnabled {
-		out := make([]map[string]any, 0, len(vectorResults))
+		out := make([]MemorySearchResult, 0, len(vectorResults))
 		for _, r := range vectorResults {
-			if r["score"].(float64) >= minScore {
+			if r.Score >= minScore {
 				out = append(out, r)
 			}
 		}
@@ -277,9 +279,9 @@ func (m *MemoryIndexManager) Search(ctx context.Context, query string, opts map[
 	merged := mergeHybridResults(vectorResults, keywordResults,
 		m.Settings.Query.Hybrid.VectorWeight, m.Settings.Query.Hybrid.TextWeight)
 
-	out := make([]map[string]any, 0, len(merged))
+	out := make([]MemorySearchResult, 0, len(merged))
 	for _, r := range merged {
-		if r["score"].(float64) >= minScore {
+		if r.Score >= minScore {
 			out = append(out, r)
 		}
 	}
@@ -1070,10 +1072,7 @@ func (m *MemoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 		return err
 	}
 
-	chunks := ChunkMarkdown(string(content), map[string]any{
-		"tokens":   m.Settings.Chunking.Tokens,
-		"overlap":  m.Settings.Chunking.Overlap,
-	})
+	chunks := ChunkMarkdown(string(content), m.Settings.Chunking)
 
 	// Python: self.db.execute("DELETE FROM chunks WHERE path = ?")（隐式开启事务，最终 commit/rollback）
 	tx, err := m.db.Begin()
@@ -1253,7 +1252,7 @@ func (m *MemoryIndexManager) getEmbedding(ctx context.Context, tx *sql.Tx, text 
 
 // searchVector 向量检索。对齐 Python _search_vector（manager.py L842-912）：
 // vec_distance_cosine + score=max(0,1-d/2)；不可用或失败时降级内存余弦
-func (m *MemoryIndexManager) searchVector(ctx context.Context, queryVec []float64, limit int) []map[string]any {
+func (m *MemoryIndexManager) searchVector(ctx context.Context, queryVec []float64, limit int) []MemorySearchResult {
 	// Python: if not self.vector_enabled: return await self._search_vector_fallback(...)
 	if !m.vectorEnabled {
 		return m.searchVectorFallback(queryVec, limit)
@@ -1285,7 +1284,7 @@ func (m *MemoryIndexManager) searchVector(ctx context.Context, queryVec []float6
 
 // searchVectorWithVec0 sqlite-vec 路径检索。对齐 Python _search_vector 主体（manager.py L860-908）：
 // chunk_map + vec_distance_cosine 排序 + score=max(0,1-d/2)
-func (m *MemoryIndexManager) searchVectorWithVec0(queryVec []float64, limit int) ([]map[string]any, error) {
+func (m *MemoryIndexManager) searchVectorWithVec0(queryVec []float64, limit int) ([]MemorySearchResult, error) {
 	queryBlob := vectorToBlob(queryVec)
 	sourceFilter := m.buildSourceFilter()
 
@@ -1296,26 +1295,28 @@ func (m *MemoryIndexManager) searchVectorWithVec0(queryVec []float64, limit int)
 	if err != nil {
 		return nil, err
 	}
-	chunkMap := make(map[int64]map[string]any)
+	type chunkBase struct {
+		id        string
+		path      string
+		source    string
+		startLine int
+		endLine   int
+		snippet   string
+	}
+	chunkMap := make(map[int64]chunkBase)
 	for chunkRows.Next() {
 		var rowid int64
-		var id, path, source, text string
-		var startLine, endLine int
-		if err := chunkRows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err == nil {
-			chunkMap[rowid] = map[string]any{
-				"id":        id,
-				"path":      path,
-				"source":    source,
-				"startLine": startLine,
-				"endLine":   endLine,
-				"snippet":   snippetOf(text),
-			}
+		var b chunkBase
+		var text string
+		if err := chunkRows.Scan(&rowid, &b.id, &b.path, &b.source, &b.startLine, &b.endLine, &text); err == nil {
+			b.snippet = snippetOf(text)
+			chunkMap[rowid] = b
 		}
 	}
 	_ = chunkRows.Close()
 
 	if len(chunkMap) == 0 {
-		return []map[string]any{}, nil
+		return []MemorySearchResult{}, nil
 	}
 
 	// Python: SELECT rowid, vec_distance_cosine(embedding, vec_f32(?)) as distance FROM VECTOR_TABLE
@@ -1337,7 +1338,7 @@ func (m *MemoryIndexManager) searchVectorWithVec0(queryVec []float64, limit int)
 	}
 	defer func() { _ = vecRows.Close() }()
 
-	results := make([]map[string]any, 0)
+	results := make([]MemorySearchResult, 0)
 	for vecRows.Next() {
 		var rowid int64
 		var distance float64
@@ -1345,9 +1346,11 @@ func (m *MemoryIndexManager) searchVectorWithVec0(queryVec []float64, limit int)
 			if base, ok := chunkMap[rowid]; ok {
 				// Python: score = max(0, 1 - distance / 2)
 				score := math.Max(0, 1-distance/2)
-				r := mapsClone(base)
-				r["score"] = score
-				results = append(results, r)
+				results = append(results, MemorySearchResult{
+					ID: base.id, Path: base.path, Source: base.source,
+					StartLine: base.startLine, EndLine: base.endLine,
+					Snippet: base.snippet, Score: score,
+				})
 			}
 		}
 	}
@@ -1356,7 +1359,7 @@ func (m *MemoryIndexManager) searchVectorWithVec0(queryVec []float64, limit int)
 
 // searchVectorFallback 内存余弦降级检索。对齐 Python _search_vector_fallback（manager.py L914-962）：
 // 查询向量归一化 → 逐行 blob 解包余弦 → 排序截断
-func (m *MemoryIndexManager) searchVectorFallback(queryVec []float64, limit int) []map[string]any {
+func (m *MemoryIndexManager) searchVectorFallback(queryVec []float64, limit int) []MemorySearchResult {
 	// Python: query_norm = math.sqrt(sum(x*x)); if query_norm < 1e-10: return []
 	var qn float64
 	for _, x := range queryVec {
@@ -1364,7 +1367,7 @@ func (m *MemoryIndexManager) searchVectorFallback(queryVec []float64, limit int)
 	}
 	queryNorm := math.Sqrt(qn)
 	if queryNorm < 1e-10 {
-		return []map[string]any{}
+		return []MemorySearchResult{}
 	}
 	normalized := make([]float64, len(queryVec))
 	for i, x := range queryVec {
@@ -1377,11 +1380,11 @@ func (m *MemoryIndexManager) searchVectorFallback(queryVec []float64, limit int)
 		sourceFilter,
 	))
 	if err != nil {
-		return []map[string]any{}
+		return []MemorySearchResult{}
 	}
 	defer func() { _ = rows.Close() }()
 
-	results := make([]map[string]any, 0)
+	results := make([]MemorySearchResult, 0)
 	for rows.Next() {
 		var id, path, source, text string
 		var startLine, endLine int
@@ -1406,20 +1409,17 @@ func (m *MemoryIndexManager) searchVectorFallback(queryVec []float64, limit int)
 			continue
 		}
 
-		results = append(results, map[string]any{
-			"id":        id,
-			"path":      path,
-			"source":    source,
-			"startLine": startLine,
-			"endLine":   endLine,
-			"snippet":   snippetOf(text),
-			"score":     math.Max(0, dot/vecNorm),
+		results = append(results, MemorySearchResult{
+			ID: id, Path: path, Source: source,
+			StartLine: startLine, EndLine: endLine,
+			Snippet: snippetOf(text),
+			Score:   math.Max(0, dot/vecNorm),
 		})
 	}
 
 	// Python: results.sort(key=lambda x: x["score"], reverse=True); return results[:limit]
 	sort.SliceStable(results, func(i, j int) bool {
-		return results[i]["score"].(float64) > results[j]["score"].(float64)
+		return results[i].Score > results[j].Score
 	})
 	if len(results) > limit {
 		results = results[:limit]
@@ -1429,14 +1429,14 @@ func (m *MemoryIndexManager) searchVectorFallback(queryVec []float64, limit int)
 
 // searchKeyword FTS5 关键词检索。对齐 Python _search_keyword（manager.py L964-1024）：
 // build_fts_query → MATCH → bm25_rank_to_score；异常返回空
-func (m *MemoryIndexManager) searchKeyword(query string, limit int) []map[string]any {
+func (m *MemoryIndexManager) searchKeyword(query string, limit int) []MemorySearchResult {
 	if !m.ftsAvailable {
-		return []map[string]any{}
+		return []MemorySearchResult{}
 	}
 
 	ftsQuery := BuildFTSQuery(query)
 	if ftsQuery == "" {
-		return []map[string]any{}
+		return []MemorySearchResult{}
 	}
 
 	sourceFilter := m.buildSourceFilter()
@@ -1447,28 +1447,30 @@ func (m *MemoryIndexManager) searchKeyword(query string, limit int) []map[string
 	if err != nil {
 		// 对齐 Python: except → logger.debug + return []
 		logger.Debug(logComponent).Err(err).Msg("Keyword search failed")
-		return []map[string]any{}
+		return []MemorySearchResult{}
 	}
-	chunkMap := make(map[int64]map[string]any)
+	type chunkBase struct {
+		id        string
+		path      string
+		source    string
+		startLine int
+		endLine   int
+		snippet   string
+	}
+	chunkMap := make(map[int64]chunkBase)
 	for chunkRows.Next() {
 		var rowid int64
-		var id, path, source, text string
-		var startLine, endLine int
-		if err := chunkRows.Scan(&rowid, &id, &path, &source, &startLine, &endLine, &text); err == nil {
-			chunkMap[rowid] = map[string]any{
-				"id":        id,
-				"path":      path,
-				"source":    source,
-				"startLine": startLine,
-				"endLine":   endLine,
-				"snippet":   snippetOf(text),
-			}
+		var b chunkBase
+		var text string
+		if err := chunkRows.Scan(&rowid, &b.id, &b.path, &b.source, &b.startLine, &b.endLine, &text); err == nil {
+			b.snippet = snippetOf(text)
+			chunkMap[rowid] = b
 		}
 	}
 	_ = chunkRows.Close()
 
 	if len(chunkMap) == 0 {
-		return []map[string]any{}
+		return []MemorySearchResult{}
 	}
 
 	// Python: SELECT rowid, rank FROM FTS_TABLE WHERE FTS_TABLE MATCH ? ORDER BY rank LIMIT ?
@@ -1477,20 +1479,23 @@ func (m *MemoryIndexManager) searchKeyword(query string, limit int) []map[string
 	), ftsQuery, limit)
 	if err != nil {
 		logger.Debug(logComponent).Err(err).Msg("Keyword search failed")
-		return []map[string]any{}
+		return []MemorySearchResult{}
 	}
 	defer func() { _ = ftsRows.Close() }()
 
-	results := make([]map[string]any, 0)
+	results := make([]MemorySearchResult, 0)
 	for ftsRows.Next() {
 		var rowid int64
 		var rank float64
 		if err := ftsRows.Scan(&rowid, &rank); err == nil {
 			if base, ok := chunkMap[rowid]; ok {
 				// Python: score = bm25_rank_to_score(float(row["rank"]))
-				r := mapsClone(base)
-				r["score"] = Bm25RankToScore(rank)
-				results = append(results, r)
+				results = append(results, MemorySearchResult{
+					ID: base.id, Path: base.path, Source: base.source,
+					StartLine: base.startLine, EndLine: base.endLine,
+					Snippet: base.snippet,
+					Score:   Bm25RankToScore(rank),
+				})
 			}
 		}
 	}
@@ -1516,38 +1521,39 @@ func (m *MemoryIndexManager) buildSourceFilter() string {
 
 // mergeHybridResults 合并混合检索结果。对齐 Python _merge_hybrid_results（manager.py L1037-1068）：
 // by_id 合并，score = vw*vector + tw*text，按 score 降序
-func mergeHybridResults(vectorResults, keywordResults []map[string]any, vectorWeight, textWeight float64) []map[string]any {
+func mergeHybridResults(vectorResults, keywordResults []MemorySearchResult, vectorWeight, textWeight float64) []MemorySearchResult {
 	byID := make(map[string]*hybridEntry)
 
 	for _, r := range vectorResults {
-		byID[strVal(r["id"])] = &hybridEntry{result: r, vectorScore: r["score"].(float64), textScore: 0}
+		e := r
+		byID[r.ID] = &hybridEntry{result: &e, vectorScore: r.Score, textScore: 0}
 	}
 	for _, r := range keywordResults {
-		id := strVal(r["id"])
-		if existing, ok := byID[id]; ok {
-			existing.textScore = r["score"].(float64)
+		if existing, ok := byID[r.ID]; ok {
+			existing.textScore = r.Score
 		} else {
-			byID[id] = &hybridEntry{result: r, vectorScore: 0, textScore: r["score"].(float64)}
+			e := r
+			byID[r.ID] = &hybridEntry{result: &e, vectorScore: 0, textScore: r.Score}
 		}
 	}
 
-	results := make([]map[string]any, 0, len(byID))
+	results := make([]MemorySearchResult, 0, len(byID))
 	for _, e := range byID {
 		// Python: r["score"] = vector_weight * r["_vector_score"] + text_weight * r["_text_score"]
-		e.result["score"] = vectorWeight*e.vectorScore + textWeight*e.textScore
-		results = append(results, e.result)
+		e.result.Score = vectorWeight*e.vectorScore + textWeight*e.textScore
+		results = append(results, *e.result)
 	}
 
 	// Python: results.sort(key=lambda x: x["score"], reverse=True)
 	sort.SliceStable(results, func(i, j int) bool {
-		return results[i]["score"].(float64) > results[j]["score"].(float64)
+		return results[i].Score > results[j].Score
 	})
 	return results
 }
 
 // hybridEntry 混合合并中间结构（对齐 Python _vector_score/_text_score 临时字段）
 type hybridEntry struct {
-	result      map[string]any
+	result      *MemorySearchResult
 	vectorScore float64
 	textScore   float64
 }
