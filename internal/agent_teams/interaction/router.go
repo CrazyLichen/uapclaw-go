@@ -41,8 +41,8 @@ var (
 	// BroadcastTargets 广播目标集合
 	// Python: BROADCAST_TARGETS = frozenset({"all", "*"})
 	BroadcastTargets = map[string]bool{"all": true, "*": true}
-	// routerLogComponent 日志组件
-	routerLogComponent = logger.ComponentChannel
+	// logComponent 日志组件
+	logComponent = logger.ComponentTeam
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -249,9 +249,9 @@ func DeliverDirect(ctx context.Context, body string, sender string, target strin
 		}
 		return NewDeliverResultFailure(reason), nil
 	}
-	logger.Debug(routerLogComponent).Str("sender", sender).Str("target", target).
+	logger.Debug(logComponent).Str("sender", sender).Str("target", target).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
-		Msg("点对点投递")
+		Msg("point-to-point delivery")
 	return NewDeliverResultSuccess(&msgID), nil
 }
 

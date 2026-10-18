@@ -38,9 +38,7 @@ type LocalFsOperation struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	fsLogComponent = logger.ComponentAgentCore
-)
+const ()
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -95,11 +93,11 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 
 	startTime := time.Now()
 	// Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
-	logger.Info(fsLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
 		Str("method_params", fmt.Sprintf("path=%s, mode=%s", path, o.Mode)).
-		Msg("开始读取文件")
+		Msg("starting file read")
 
 	resolvedPath, err := f.resolvePath(path, false)
 	if err != nil {
@@ -172,12 +170,12 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 	}
 
 	// Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
-	logger.Info(fsLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
 		Str("method_result", fmt.Sprintf("path=%s, content_length=%d, mode=%s", resolvedPath, len(textContent), o.Mode)).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
-		Msg("读取文件完成")
+		Msg("file read completed")
 
 	return successResult, nil
 }
@@ -242,11 +240,11 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 	methodName := "write_file"
 
 	startTime := time.Now()
-	logger.Info(fsLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
 		Str("method_params", fmt.Sprintf("path=%s", path)).
-		Msg("开始写入文件")
+		Msg("starting file write")
 
 	resolvedPath, err := f.resolvePath(path, true)
 	if err != nil {
@@ -305,9 +303,9 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 				dataBytes = encodedBytes
 			} else {
 				// 不支持的编码，fallback 到 UTF-8
-				logger.Warn(fsLogComponent).
+				logger.Warn(logComponent).
 					Str("encoding", enc).
-					Msg("不支持的编码，fallback 到 UTF-8")
+					Msg("unsupported encoding, falling back to UTF-8")
 				dataBytes = []byte(txt)
 			}
 		}
@@ -361,12 +359,12 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 		},
 	}
 
-	logger.Info(fsLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
 		Str("method_result", fmt.Sprintf("path=%s, size=%d, mode=%s", resolvedPath, len(dataBytes), o.Mode)).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
-		Msg("写入文件完成")
+		Msg("file write completed")
 
 	return successResult, nil
 }
@@ -670,11 +668,11 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 	methodName := "search_files"
 	startTime := time.Now()
 	// Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
-	logger.Info(fsLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
 		Str("method_params", fmt.Sprintf("path=%s, pattern=%s", path, pattern)).
-		Msg("开始搜索文件")
+		Msg("starting file search")
 
 	resolvedPath, err := f.resolvePath(path, false)
 	if err != nil {
@@ -737,12 +735,12 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 	}
 
 	// Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
-	logger.Info(fsLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
 		Str("method_result", fmt.Sprintf("path=%s, pattern=%s, total_matches=%d", resolvedPath, pattern, len(matched))).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
-		Msg("搜索文件完成")
+		Msg("file search completed")
 
 	return &result.SearchFilesResult{
 		BaseResult: result.BaseResult{Code: 0, Message: "success"},
@@ -1061,11 +1059,11 @@ func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly 
 	}
 	startTime := time.Now()
 	// Python: sys_operation_logger.info(event_type=SYS_OP_START, method_name, method_params)
-	logger.Info(fsLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
 		Str("method_params", fmt.Sprintf("path=%s", path)).
-		Msg("开始列出文件/目录")
+		Msg("starting file/directory listing")
 
 	resolvedPath, err := f.resolvePath(path, false)
 	if err != nil {
@@ -1075,12 +1073,12 @@ func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly 
 	items := f.walkDir(resolvedPath, dirsOnly, o, 1)
 
 	// Python: sys_operation_logger.info(event_type=SYS_OP_END, method_name, method_result, method_exec_time_ms)
-	logger.Info(fsLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
 		Str("method_result", fmt.Sprintf("path=%s, total_count=%d", resolvedPath, len(items))).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
-		Msg("列出文件/目录完成")
+		Msg("file/directory listing completed")
 
 	return &result.ListFilesResult{
 		BaseResult: result.BaseResult{Code: 0, Message: "success"},
@@ -1192,12 +1190,12 @@ func (f *LocalFsOperation) sortItems(items []result.FileSystemItem, sortBy strin
 // createErrorResult 创建错误结果
 func (f *LocalFsOperation) createErrorResult(methodName string, errMsg string, startTime time.Time) *result.ReadFileResult {
 	// Python: sys_operation_logger.error(event_type=SYS_OP_ERROR, method_name, method_params, method_exec_time_ms)
-	logger.Error(fsLogComponent).
+	logger.Error(logComponent).
 		Str("event_type", "SYS_OP_ERROR").
 		Str("method_name", methodName).
 		Str("method_params", fmt.Sprintf("error_msg=%s", errMsg)).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
-		Msg("文件操作失败")
+		Msg("file operation failed")
 	return &result.ReadFileResult{
 		BaseResult: result.BuildOperationErrorResult(
 			exception.StatusSysOperationFsExecutionError.Code(),
@@ -1243,7 +1241,7 @@ func applyPermissions(path string, perm string) {
 	}
 	mode := parsePermissions(perm)
 	if err := os.Chmod(path, mode); err != nil {
-		logger.Warn(fsLogComponent).Str("path", path).Err(err).Msg("设置文件权限失败")
+		logger.Warn(logComponent).Str("path", path).Err(err).Msg("failed to set file permission")
 	}
 }
 
@@ -1257,7 +1255,7 @@ func copyPermissions(src, dst string) {
 		return
 	}
 	if err := os.Chmod(dst, info.Mode()); err != nil {
-		logger.Warn(fsLogComponent).Str("dst", dst).Err(err).Msg("复制文件权限失败")
+		logger.Warn(logComponent).Str("dst", dst).Err(err).Msg("failed to copy file permission")
 	}
 }
 

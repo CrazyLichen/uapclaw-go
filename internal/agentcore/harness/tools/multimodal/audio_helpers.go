@@ -109,7 +109,7 @@ func GetAudioDuration(audioPath string) (float64, error) {
 
 	// 3. 全部失败 → 返回 0（不返回错误，对齐 Python 行为但更友好）
 	logger.Warn(logComponent).Str("audio_path", audioPath).
-		Msg("无法获取音频时长，将返回 0")
+		Msg("cannot get audio duration, returning 0")
 	return 0, nil
 }
 
@@ -218,7 +218,7 @@ func InvokeACRMetadata(
 	if err != nil {
 		logger.Error(logComponent).Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "InvokeACRMetadata").Err(err).
-			Msg("ACRCloud HTTP 请求失败")
+			Msg("ACRCloud HTTP request failed")
 		return nil, exception.NewBaseError(
 			exception.StatusToolMultimodalAudioInvokeFailed,
 			exception.WithMsg(fmt.Sprintf("ACRCloud HTTP 请求失败: %s", err.Error())),
@@ -404,7 +404,7 @@ func downloadAudioToTemp(
 		Str("audio_url", audioURL).
 		Str("temp_path", tmpFile.Name()).
 		Int("bytes_written", bytesWritten).
-		Msg("音频下载到临时文件完成")
+		Msg("audio downloaded to temp file")
 
 	return tmpFile.Name(), nil
 }

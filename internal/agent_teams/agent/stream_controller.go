@@ -107,8 +107,6 @@ var (
 	// errorCodePattern 错误码正则
 	// Python: _ERROR_CODE_PATTERN = re.compile(r"^\[(\d+)\]")
 	errorCodePattern = regexp.MustCompile(`^\[(\d+)\]`)
-	// scLogComponent StreamController 日志组件
-	scLogComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -231,7 +229,7 @@ func (sc *StreamController) StartRound(ctx context.Context, content any) error {
 			preview = s
 		}
 	}
-	logger.Info(scLogComponent).Str("member_name", sc.memberName()).
+	logger.Info(logComponent).Str("member_name", sc.memberName()).
 		Str("preview", preview).Msg("Agent started")
 
 	sc.startRound(ctx, content)
@@ -339,7 +337,7 @@ func (sc *StreamController) CooperativeCancel(ctx context.Context) error {
 	harness := sc.resources.Harness
 	if harness != nil {
 		if err := harness.Abort(ctx); err != nil {
-			logger.Debug(scLogComponent).Str("member_name", sc.memberName()).
+			logger.Debug(logComponent).Str("member_name", sc.memberName()).
 				Err(err).Msg("harness.Abort failed")
 		}
 	}
@@ -459,18 +457,18 @@ func (sc *StreamController) fanOutToObservers(ctx context.Context, tagged stream
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					logger.Error(scLogComponent).
+					logger.Error(logComponent).
 						Str("member_name", sc.memberName()).
 						Any("panic", r).
-						Msg("chunk 观察者 panic; 已分离")
+						Msg("chunk observer panic; detached")
 					sc.RemoveChunkObserver(ob)
 				}
 			}()
 			if err := ob(ctx, tagged); err != nil {
-				logger.Error(scLogComponent).
+				logger.Error(logComponent).
 					Str("member_name", sc.memberName()).
 					Err(err).
-					Msg("chunk 观察者异常; 已分离")
+					Msg("chunk observer error; detached")
 				sc.RemoveChunkObserver(ob)
 			}
 		}()
@@ -498,7 +496,7 @@ func (sc *StreamController) startRound(ctx context.Context, content any) {
 // Python: StreamController._log_agent_task_exception(task)
 func (sc *StreamController) logRoundPanic() {
 	if r := recover(); r != nil {
-		logger.Error(scLogComponent).Str("member_name", sc.memberName()).
+		logger.Error(logComponent).Str("member_name", sc.memberName()).
 			Any("panic", r).Msg("_run_one_round goroutine panic")
 	}
 }
@@ -510,7 +508,7 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 	savedCtx := ctx
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(scLogComponent).Str("member_name", sc.memberName()).
+			logger.Error(logComponent).Str("member_name", sc.memberName()).
 				Any("panic", r).Msg("runOneRound panic; setting ERROR status")
 			_ = sc.updateStatus(savedCtx, atschema.MemberStatusError)
 		}
@@ -538,8 +536,8 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 
 			// Python: if self._state.team_cleaned: close_stream()
 			if sc.state.TeamCleaned {
-				logger.Info(scLogComponent).Str("member_name", sc.memberName()).
-					Msg("team_cleaned 已设置；轮次结束后关闭流")
+				logger.Info(logComponent).Str("member_name", sc.memberName()).
+					Msg("team_cleaned set; closing stream after round")
 				sc.CloseStream()
 				return
 			}
@@ -634,15 +632,15 @@ func (sc *StreamController) executeRound(ctx context.Context, message any) {
 	sc.mu.Unlock()
 
 	if isTimedOut {
-		logger.Warn(scLogComponent).Str("member_name", sc.memberName()).
-			Msg("DeepAgent 循环超时，设 TIMED_OUT 状态")
+		logger.Warn(logComponent).Str("member_name", sc.memberName()).
+			Msg("DeepAgent loop timed out, setting TIMED_OUT status")
 		_ = sc.updateExecution(ctx, atschema.ExecutionStatusTimedOut)
 	} else if err != nil {
 		if isCancelRequested {
 			_ = sc.updateExecution(ctx, atschema.ExecutionStatusCancelled)
 		} else {
-			logger.Error(scLogComponent).Err(err).Str("member_name", sc.memberName()).
-				Msg("DeepAgent 循环错误")
+			logger.Error(logComponent).Err(err).Str("member_name", sc.memberName()).
+				Msg("DeepAgent loop error")
 			_ = sc.updateExecution(ctx, atschema.ExecutionStatusFailed)
 		}
 	} else {
@@ -737,15 +735,15 @@ func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery 
 		text := taskErr.Text()
 		if isRetryableErrorCode(code) && attempt < maxRetryAttempts {
 			attempt++
-			logger.Warn(scLogComponent).Int("error_code", code).
+			logger.Warn(logComponent).Int("error_code", code).
 				Int("attempt", attempt).Int("max_attempts", maxRetryAttempts).
 				Str("error_text", text).Msg("DeepAgent loop transient error")
 			currentQuery = retryQuery
 			continue
 		}
-		logger.Error(scLogComponent).Int("error_code", code).
+		logger.Error(logComponent).Int("error_code", code).
 			Int("attempts", attempt).Str("error_text", text).
-			Msg("DeepAgent 循环失败")
+			Msg("DeepAgent loop failed")
 		return fmt.Errorf("流式任务在 %d 次重试后失败，最后错误码=%d: %s",
 			attempt, code, text)
 	}
@@ -836,10 +834,10 @@ func detectTaskFailed(chunk streambase.Schema) error {
 		}
 	}
 	// 记录日志，对齐 Python 的错误信息
-	logger.Debug(scLogComponent).
+	logger.Debug(logComponent).
 		Int("error_code", code).
 		Str("error_text", text).
-		Msg("检测到 task_failed")
+		Msg("task_failed detected")
 
 	return &taskFailedError{code: code, text: text}
 }

@@ -45,7 +45,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 HierarchicalTeam 满足 BaseTeam 接口
 // _ 编译时验证 HierarchicalTeam 满足 BaseTeam 接口
 var _ maschema.BaseTeam = (*HierarchicalTeam)(nil)
 
@@ -101,7 +100,7 @@ func NewHierarchicalTeam(card maschema.TeamCardInterface, config *HierarchicalTe
 		Str("action", "new_hierarchical_team").
 		Str("team_id", teamID).
 		Str("supervisor_id", supervisorID).
-		Msg("创建 HierarchicalTeam")
+		Msg("creating HierarchicalTeam")
 
 	return team
 }
@@ -127,7 +126,7 @@ func (t *HierarchicalTeam) Invoke(ctx context.Context, inputs map[string]any, op
 				Str("action", "hierarchical_invoke").
 				Str("session_id", sessionID).
 				Str("supervisor_id", t.supervisorID).
-				Msg("开始 invoke")
+				Msg("invoke started")
 
 			res, sendErr := t.runtime.Send(ctx, inputs, t.supervisorID, t.card.GetID(),
 				maschema.WithTeamSessionID(sessionID),
@@ -138,14 +137,14 @@ func (t *HierarchicalTeam) Invoke(ctx context.Context, inputs map[string]any, op
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("method", "HierarchicalTeam.Invoke").
 					Str("supervisor_id", t.supervisorID).
-					Msg("Send 到 supervisor 失败")
+					Msg("Send to supervisor failed")
 				return nil, sendErr
 			}
 
 			logger.Debug(teamLogComponent).
 				Str("action", "hierarchical_invoke_end").
 				Str("session_id", sessionID).
-				Msg("invoke 结束")
+				Msg("invoke finished")
 
 			resultMap, ok := res.(map[string]any)
 			if !ok {
@@ -176,7 +175,7 @@ func (t *HierarchicalTeam) Stream(ctx context.Context, inputs map[string]any, op
 	logger.Debug(teamLogComponent).
 		Str("action", "hierarchical_stream").
 		Str("supervisor_id", t.supervisorID).
-		Msg("开始 stream")
+		Msg("stream started")
 
 	return teams.StandaloneStreamContext(ctx, t.runtime, t.card, inputs, sess,
 		func(teamSession *session.AgentTeamSession, sessionID string) error {
@@ -189,7 +188,7 @@ func (t *HierarchicalTeam) Stream(ctx context.Context, inputs map[string]any, op
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("method", "HierarchicalTeam.Stream").
 					Str("supervisor_id", t.supervisorID).
-					Msg("Send 到 supervisor 失败")
+					Msg("Send to supervisor failed")
 				return sendErr
 			}
 
@@ -201,14 +200,14 @@ func (t *HierarchicalTeam) Stream(ctx context.Context, inputs map[string]any, op
 				if writeErr := teamSession.WriteStream(ctx, resultMap); writeErr != nil {
 					logger.Warn(teamLogComponent).Err(writeErr).
 						Str("action", "hierarchical_stream_write").
-						Msg("写入流失败")
+						Msg("failed to write stream")
 				}
 			}
 
 			logger.Debug(teamLogComponent).
 				Str("action", "hierarchical_stream_end").
 				Str("session_id", sessionID).
-				Msg("stream 结束")
+				Msg("stream finished")
 			return nil
 		},
 	)
@@ -226,7 +225,7 @@ func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.Agent
 			Str("action", "add_agent_skip").
 			Str("agent_id", card.ID).
 			Str("team_id", t.card.GetID()).
-			Msg("Agent 已存在，跳过注册")
+			Msg("agent already exists, skipping registration")
 		return nil
 	}
 
@@ -246,7 +245,7 @@ func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.Agent
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "HierarchicalTeam.AddAgent").
 			Str("agent_id", card.ID).
-			Msg("注册 Agent 到运行时失败")
+			Msg("failed to register agent to runtime")
 		return err
 	}
 
@@ -259,7 +258,7 @@ func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.Agent
 			Str("action", "add_agent_supervisor").
 			Str("supervisor_id", card.ID).
 			Str("team_id", t.card.GetID()).
-			Msg("注册 supervisor 到 HierarchicalTeam")
+			Msg("registering supervisor to HierarchicalTeam")
 		t.runtime.SetP2PTimeout(t.config.Timeout)
 	}
 
@@ -267,7 +266,7 @@ func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.Agent
 		Str("action", "add_agent").
 		Str("agent_id", card.ID).
 		Str("team_id", t.card.GetID()).
-		Msg("Agent 已注册到 HierarchicalTeam")
+		Msg("agent registered to HierarchicalTeam")
 
 	return nil
 }
@@ -282,7 +281,7 @@ func (t *HierarchicalTeam) RemoveAgent(ctx context.Context, agentID string) erro
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "HierarchicalTeam.RemoveAgent").
 			Str("agent_id", agentID).
-			Msg("注销 Agent 失败")
+			Msg("failed to unregister agent")
 		return err
 	}
 
@@ -293,7 +292,7 @@ func (t *HierarchicalTeam) RemoveAgent(ctx context.Context, agentID string) erro
 		Str("action", "remove_agent").
 		Str("agent_id", agentID).
 		Str("team_id", t.card.GetID()).
-		Msg("Agent 已从 HierarchicalTeam 注销")
+		Msg("agent unregistered from HierarchicalTeam")
 
 	return nil
 }
@@ -334,7 +333,7 @@ func (t *HierarchicalTeam) Configure(_ context.Context, config maschema.TeamConf
 	logger.Info(teamLogComponent).
 		Str("action", "configure").
 		Str("team_id", t.card.GetID()).
-		Msg("HierarchicalTeam 配置已更新")
+		Msg("HierarchicalTeam config updated")
 	return nil
 }
 

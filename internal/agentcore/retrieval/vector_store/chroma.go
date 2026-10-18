@@ -249,7 +249,7 @@ func (s *ChromaVectorStore) Add(ctx context.Context, data []map[string]any, opts
 					Int("processed", processed).
 					Int("total", total).
 					Str("collection_name", s.collectionName).
-					Msg("写入进度")
+					Msg("write progress")
 			}
 		}
 	}
@@ -266,7 +266,7 @@ func (s *ChromaVectorStore) Add(ctx context.Context, data []map[string]any, opts
 		Int("processed", processed).
 		Int("total", total).
 		Str("collection_name", s.collectionName).
-		Msg("写入完成")
+		Msg("write completed")
 
 	return nil
 }
@@ -295,7 +295,7 @@ func (s *ChromaVectorStore) Search(ctx context.Context, queryVector []float64, t
 			Str("event_type", "SEARCH_ERROR").
 			Str("method", "Search").
 			Err(err).
-			Msg("向量搜索失败")
+			Msg("vector search failed")
 		return nil, err
 	}
 
@@ -326,7 +326,7 @@ func (s *ChromaVectorStore) SparseSearch(ctx context.Context, queryText string, 
 			Str("method", "SparseSearch").
 			Str("query_text", truncateText(queryText, 100)).
 			Err(err).
-			Msg("文本搜索失败")
+			Msg("text search failed")
 		return nil, nil
 	}
 
@@ -365,7 +365,7 @@ func (s *ChromaVectorStore) HybridSearch(ctx context.Context, queryText string, 
 	for i := 0; i < 2; i++ {
 		sr := <-resultCh
 		if sr.err != nil {
-			logger.Warn(logComponent).Str("mode", sr.mode).Err(sr.err).Msg("hybrid search 部分路径失败")
+			logger.Warn(logComponent).Str("mode", sr.mode).Err(sr.err).Msg("hybrid search partial path failed")
 			continue
 		}
 		if len(sr.results) == 0 {
@@ -440,7 +440,7 @@ func (s *ChromaVectorStore) Delete(ctx context.Context, ids []string, filterExpr
 			chromaIDs[i] = chromav2.DocumentID(id)
 		}
 		if err := collection.Delete(ctx, chromav2.WithIDs(chromaIDs...)); err != nil {
-			logger.Error(logComponent).Str("event_type", "DELETE_ERROR").Err(err).Msg("删除向量失败")
+			logger.Error(logComponent).Str("event_type", "DELETE_ERROR").Err(err).Msg("failed to delete vector")
 			return false, err
 		}
 		return true, nil
@@ -449,7 +449,7 @@ func (s *ChromaVectorStore) Delete(ctx context.Context, ids []string, filterExpr
 	if filterExpr != nil {
 		if wf := BuildChromaWhereFilter(filterExpr); wf != nil {
 			if err := collection.Delete(ctx, chromav2.WithWhere(wf)); err != nil {
-				logger.Error(logComponent).Str("event_type", "DELETE_ERROR").Err(err).Msg("删除向量失败")
+				logger.Error(logComponent).Str("event_type", "DELETE_ERROR").Err(err).Msg("failed to delete vector")
 				return false, err
 			}
 			return true, nil
@@ -504,7 +504,7 @@ func (s *ChromaVectorStore) addBatch(ctx context.Context, nodes []map[string]any
 		if len(embedding) == 0 {
 			// 对齐 Python: logger.warning(f"Node has no embedding, skipping: ...")
 			nodeID, _ := node["id"].(string)
-			logger.Warn(logComponent).Str("node_id", nodeID).Msg("节点无嵌入向量，跳过")
+			logger.Warn(logComponent).Str("node_id", nodeID).Msg("node has no embedding, skipping")
 			continue
 		}
 
@@ -671,7 +671,8 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 		var finalScore float64
 		var rawScoreScaled *float64
 
-		if mode == "vector" {
+		switch mode {
+		case "vector":
 			if rawScoreVal != nil {
 				switch s.distanceMetric {
 				case "l2":
@@ -688,7 +689,7 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 					finalScore = scaled
 				}
 			}
-		} else if mode == "sparse" {
+		case "sparse":
 			if rawScoreVal != nil {
 				if *rawScoreVal <= 1.0 {
 					finalScore = 1.0 - *rawScoreVal

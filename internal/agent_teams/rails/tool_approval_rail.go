@@ -42,13 +42,6 @@ type TeamToolApprovalRail struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// approvalLogComponent 日志组件标识
-	approvalLogComponent = logger.ComponentTeam
-)
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -103,9 +96,9 @@ func (r *TeamToolApprovalRail) resolveInterrupt(
 	if toolCall != nil {
 		toolName = toolCall.Name
 	} else {
-		logger.Error(approvalLogComponent).
+		logger.Error(logComponent).
 			Str("member_name", r.memberName).
-			Msg("tool_call 未提供")
+			Msg("tool_call not provided")
 		return r.Reject("Invalid tool call")
 	}
 
@@ -114,10 +107,10 @@ func (r *TeamToolApprovalRail) resolveInterrupt(
 		// Python: 检查 auto_confirm
 		autoConfirmKey := r.getAutoConfirmKey(toolCall)
 		if interrupt.IsTruthyValue(autoConfirmConfig[autoConfirmKey]) {
-			logger.Debug(approvalLogComponent).
+			logger.Debug(logComponent).
 				Str("tool_name", toolName).
 				Str("member_name", r.memberName).
-				Msg("工具自动批准")
+				Msg("tool auto-approved")
 			return r.Approve(nil)
 		}
 
@@ -138,18 +131,18 @@ func (r *TeamToolApprovalRail) resolveInterrupt(
 		)
 
 		// Python: 发送消息给 leader
-		logger.Info(approvalLogComponent).
+		logger.Info(logComponent).
 			Str("tool_name", toolName).
 			Str("tool_call_id", toolCallID).
-			Msg("发送工具审批请求给 Leader")
+			Msg("sending tool approval request to leader")
 
 		if r.messageManager != nil {
 			messageID, err := r.messageManager.SendMessage(ctx, message, r.leaderMemberName, "")
 			if err != nil || messageID == "" {
-				logger.Error(approvalLogComponent).
+				logger.Error(logComponent).
 					Str("tool_name", toolName).
 					Err(err).
-					Msg("发送审批请求失败")
+					Msg("failed to send approval request")
 				return r.Reject("Failed to send approval request to leader")
 			}
 		}
@@ -175,10 +168,10 @@ func (r *TeamToolApprovalRail) resolveInterrupt(
 
 	// Python: if payload.approved
 	if payload.Approved {
-		logger.Info(approvalLogComponent).
+		logger.Info(logComponent).
 			Str("tool_name", toolName).
 			Str("member_name", r.memberName).
-			Msg("工具已被 Leader 批准")
+			Msg("tool approved by leader")
 		return r.Approve(nil)
 	}
 
@@ -187,11 +180,11 @@ func (r *TeamToolApprovalRail) resolveInterrupt(
 	if feedback == "" {
 		feedback = "Tool call rejected by leader"
 	}
-	logger.Info(approvalLogComponent).
+	logger.Info(logComponent).
 		Str("tool_name", toolName).
 		Str("member_name", r.memberName).
 		Str("feedback", feedback).
-		Msg("工具已被 Leader 拒绝")
+		Msg("tool rejected by leader")
 	return r.Reject(feedback)
 }
 

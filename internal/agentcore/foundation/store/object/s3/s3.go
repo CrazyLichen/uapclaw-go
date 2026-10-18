@@ -136,7 +136,7 @@ func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 		Str("server", cfg.Server).
 		Str("region", cfg.RegionName).
 		Bool("payload_signing_enabled", cfg.PayloadSigningEnabled).
-		Msg("S3 客户端初始化成功")
+		Msg("S3 client initialized successfully")
 
 	return &S3Client{client: client, uploader: uploader}, nil
 }
@@ -163,7 +163,7 @@ func (c *S3Client) CreateBucket(ctx context.Context, bucketName string, location
 			Str("method", "CreateBucket").
 			Str("bucket_name", bucketName).
 			Str("location", location).
-			Msg("桶创建失败")
+			Msg("failed to create bucket")
 		return exception.BuildError(exception.StatusStoreObjectBucketCreateFailed,
 			exception.WithParam("bucket_name", bucketName),
 			exception.WithParam("error_msg", err.Error()))
@@ -172,7 +172,7 @@ func (c *S3Client) CreateBucket(ctx context.Context, bucketName string, location
 	logger.Info(logComponent).
 		Str("bucket_name", bucketName).
 		Str("location", location).
-		Msg("桶创建成功")
+		Msg("bucket created successfully")
 	return nil
 }
 
@@ -189,7 +189,7 @@ func (c *S3Client) DeleteBucket(ctx context.Context, bucketName string) error {
 			Str("event_type", "OBJECT_STORE_ERROR").
 			Str("method", "DeleteBucket").
 			Str("bucket_name", bucketName).
-			Msg("桶删除失败")
+			Msg("failed to delete bucket")
 		return exception.BuildError(exception.StatusStoreObjectBucketDeleteFailed,
 			exception.WithParam("bucket_name", bucketName),
 			exception.WithParam("error_msg", err.Error()))
@@ -197,7 +197,7 @@ func (c *S3Client) DeleteBucket(ctx context.Context, bucketName string) error {
 
 	logger.Info(logComponent).
 		Str("bucket_name", bucketName).
-		Msg("桶删除成功")
+		Msg("bucket deleted successfully")
 	return nil
 }
 
@@ -216,7 +216,7 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 			Str("object_name", objectName).
 			Str("bucket_name", bucketName).
 			Str("file_path", filePath).
-			Msg("上传文件打开失败")
+			Msg("failed to open upload file")
 		return exception.BuildError(exception.StatusStoreObjectUploadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
@@ -234,7 +234,7 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 			Str("object_name", objectName).
 			Str("bucket_name", bucketName).
 			Str("file_path", filePath).
-			Msg("获取文件信息失败")
+			Msg("failed to get file info")
 		return exception.BuildError(exception.StatusStoreObjectUploadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
@@ -256,7 +256,7 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 			Str("object_name", objectName).
 			Str("bucket_name", bucketName).
 			Str("file_path", filePath).
-			Msg("文件上传失败")
+			Msg("failed to upload file")
 		return exception.BuildError(exception.StatusStoreObjectUploadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
@@ -268,7 +268,7 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 		Str("file_path", filePath).
 		Str("bucket_name", bucketName).
 		Int64("file_size", fileInfo.Size()).
-		Msg("文件上传成功")
+		Msg("file uploaded successfully")
 	return nil
 }
 
@@ -287,7 +287,7 @@ func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectNa
 			Str("method", "DownloadFile").
 			Str("object_name", objectName).
 			Str("bucket_name", bucketName).
-			Msg("文件下载失败")
+			Msg("failed to download file")
 		return exception.BuildError(exception.StatusStoreObjectDownloadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
@@ -304,7 +304,7 @@ func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectNa
 			Str("object_name", objectName).
 			Str("bucket_name", bucketName).
 			Str("file_path", filePath).
-			Msg("下载文件创建失败")
+			Msg("failed to create download file")
 		return exception.BuildError(exception.StatusStoreObjectDownloadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
@@ -322,7 +322,7 @@ func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectNa
 			Str("object_name", objectName).
 			Str("bucket_name", bucketName).
 			Str("file_path", filePath).
-			Msg("下载文件写入失败")
+			Msg("failed to write download file")
 		return exception.BuildError(exception.StatusStoreObjectDownloadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
@@ -333,7 +333,7 @@ func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectNa
 		Str("object_name", objectName).
 		Str("bucket_name", bucketName).
 		Str("file_path", filePath).
-		Msg("文件下载成功")
+		Msg("file downloaded successfully")
 	return nil
 }
 
@@ -352,7 +352,7 @@ func (c *S3Client) DeleteObject(ctx context.Context, bucketName string, objectNa
 			Str("method", "DeleteObject").
 			Str("object_name", objectName).
 			Str("bucket_name", bucketName).
-			Msg("对象删除失败")
+			Msg("failed to delete object")
 		return exception.BuildError(exception.StatusStoreObjectDeleteFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
@@ -362,7 +362,7 @@ func (c *S3Client) DeleteObject(ctx context.Context, bucketName string, objectNa
 	logger.Info(logComponent).
 		Str("object_name", objectName).
 		Str("bucket_name", bucketName).
-		Msg("对象删除成功")
+		Msg("object deleted successfully")
 	return nil
 }
 
@@ -384,7 +384,7 @@ func (c *S3Client) ListObjects(ctx context.Context, bucketName string, objectPre
 			Str("event_type", "OBJECT_STORE_ERROR").
 			Str("method", "ListObjects").
 			Str("bucket_name", bucketName).
-			Msg("列出对象失败")
+			Msg("failed to list objects")
 		return nil, exception.BuildError(exception.StatusStoreObjectListFailed,
 			exception.WithParam("bucket_name", bucketName),
 			exception.WithParam("error_msg", err.Error()))
@@ -405,13 +405,13 @@ func (c *S3Client) ListObjects(ctx context.Context, bucketName string, objectPre
 			Str("bucket_name", bucketName).
 			Str("key", aws.ToString(obj.Key)).
 			Int64("size", aws.ToInt64(obj.Size)).
-			Msg("列出对象")
+			Msg("list object")
 	}
 
 	logger.Info(logComponent).
 		Str("bucket_name", bucketName).
 		Int("object_count", len(objects)).
-		Msg("列出对象成功")
+		Msg("objects listed successfully")
 	return objects, nil
 }
 

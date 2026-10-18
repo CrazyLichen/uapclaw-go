@@ -166,7 +166,7 @@ func (e *SimpleEval) Eval(
 					Str("method", "Eval").
 					Int("example_id", i).
 					Err(err).
-					Msg("评估单个示例失败，中断评估")
+					Msg("failed to evaluate single example, aborting evaluation")
 				return nil
 			}
 			allResults = append(allResults, result)
@@ -322,7 +322,7 @@ func (e *SimpleEval) evaluateSingleExample(
 			Str("method", "evaluateSingleExample").
 			Int("example_id", exampleID).
 			Err(err).
-			Msg("生成函数调用出错")
+			Msg("error generating function call")
 		// Python: generateFunctionCall 失败时返回 error
 		return EvalItemResult{}, fmt.Errorf("生成函数调用出错: %w", err)
 	}
@@ -361,7 +361,7 @@ func (e *SimpleEval) evaluateSingleExample(
 		// Python: raise ValueError("Missing required input: api_wrapper")
 		logger.Error(logComponent).
 			Str("method", "evaluateSingleExample").
-			Msg("缺少必需输入: api_wrapper")
+			Msg("missing required input: api_wrapper")
 		return EvalItemResult{}, fmt.Errorf("缺少必需输入: api_wrapper")
 	}
 
@@ -513,7 +513,7 @@ Respond with only a number between 0 and 100. Do not include explainations.
 		logger.Error(logComponent).
 			Str("method", "evaluateOutputEffectiveness").
 			Err(err).
-			Msg("评估输出有效性出错")
+			Msg("error evaluating output validity")
 		return e.simpleOutputComparison(executionResult, expectedAnswer)
 	}
 

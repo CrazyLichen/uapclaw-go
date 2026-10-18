@@ -76,7 +76,7 @@ func NewWorkflowInteraction(session interfaces.InnerSession) *WorkflowInteractio
 		logger.Error(logComponent).
 			Str("action", "new_workflow_interaction").
 			Str("state_type", fmt.Sprintf("%T", session.State())).
-			Msg("当前状态不支持 Workflow 操作，对齐 Python AttributeError")
+			Msg("current state does not support Workflow operations, aligning with Python AttributeError")
 		panic(fmt.Sprintf("当前状态 %T 不支持 Workflow 操作（未实现 WorkflowState 接口），对齐 Python AttributeError", session.State()))
 	}
 
@@ -132,7 +132,7 @@ func (w *WorkflowInteraction) WaitUserInputs(ctx context.Context, value any) (an
 		Str("action", "workflow_interaction_interrupt").
 		Str("node_id", nodeID).
 		Int("index", w.idx).
-		Msg("工作流交互中断：等待用户输入")
+		Msg("workflow interaction interrupted: waiting for user input")
 
 	PanicGraphInterrupt(Interrupt{
 		Value: InteractionOutputSchema{
@@ -164,7 +164,7 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 		Str("action", "workflow_latest_input_interrupt").
 		Str("node_id", nodeID).
 		Int("index", w.idx).
-		Msg("工作流最新输入中断：等待用户输入")
+		Msg("workflow latest input interrupted: waiting for user input")
 
 	PanicGraphInterrupt(Interrupt{
 		Value: InteractionOutputSchema{
@@ -193,7 +193,7 @@ func (s *SimpleAgentInteraction) WaitUserInputs(ctx context.Context, message any
 	logger.Info(logComponent).
 		Str("action", "simple_agent_interaction_interrupt").
 		Str("message", fmt.Sprintf("%v", message)).
-		Msg("简单 Agent 交互中断")
+		Msg("simple agent interaction interrupted")
 
 	PanicAgentInterrupt(message)
 	return nil // 不可达
@@ -226,7 +226,7 @@ func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, 
 		Str("action", "agent_interaction_interrupt").
 		Str("executable_id", nodeID).
 		Int("index", a.idx).
-		Msg("Agent 交互中断：等待用户输入")
+		Msg("agent interaction interrupted: waiting for user input")
 
 	PanicAgentInterrupt(nil)
 	return nil, nil // 不可达

@@ -65,7 +65,7 @@ func RegisterDatabaseQueryLanguage(name string, def QueryLanguageDefinition, for
 
 	logger.Info(logComponent).
 		Str("database", name).
-		Msg("注册查询表达式支持")
+		Msg("registered query expression support")
 	return nil
 }
 

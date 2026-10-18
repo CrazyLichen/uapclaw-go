@@ -119,7 +119,7 @@ func (cm *ChannelManager) RegisterChannel(ch BaseChannel) {
 	logger.Info(logComponent).
 		Str("channel_id", cid).
 		Int("total", len(cm.channels)).
-		Msg("已注册 Channel")
+		Msg("Channel registered")
 }
 
 // RegisterChannelWithInbound 注册 Channel 并使用自定义入站回调。
@@ -138,7 +138,7 @@ func (cm *ChannelManager) RegisterChannelWithInbound(ch BaseChannel, onMessage f
 	logger.Info(logComponent).
 		Str("channel_id", ch.ChannelID()).
 		Int("total", len(cm.channels)).
-		Msg("已注册 Channel（自定义入站）")
+		Msg("Channel registered (custom inbound)")
 }
 
 // DeliverToMessageHandler 将消息直接交给 MessageHandler。
@@ -148,7 +148,7 @@ func (cm *ChannelManager) RegisterChannelWithInbound(ch BaseChannel, onMessage f
 // Python: ChannelManager.deliver_to_message_handler()
 func (cm *ChannelManager) DeliverToMessageHandler(msg *schema.Message) {
 	if cm.messageHandler == nil {
-		logger.Warn(logComponent).Str("msg_id", msg.ID).Msg("messageHandler 为空，无法转发消息")
+		logger.Warn(logComponent).Str("msg_id", msg.ID).Msg("messageHandler is nil, cannot forward message")
 		return
 	}
 	cm.messageHandler.HandleMessage(msg)
@@ -165,7 +165,7 @@ func (cm *ChannelManager) UnregisterChannel(channelID string) {
 
 	logger.Info(logComponent).
 		Str("channel_id", channelID).
-		Msg("已注销 Channel")
+		Msg("Channel unregistered")
 }
 
 // GetChannel 根据 channelID 获取 Channel，不存在返回 nil。
@@ -296,7 +296,7 @@ func (cm *ChannelManager) StartDispatch(ctx context.Context) error {
 	dispatchCtx, cancel := context.WithCancel(ctx)
 	cm.dispatchCancel = cancel
 	go cm.dispatchRobotMessages(dispatchCtx)
-	logger.Info(logComponent).Msg("出站派发循环已启动 (robot_messages -> Channel.send)")
+	logger.Info(logComponent).Msg("outbound dispatch loop started (robot_messages -> Channel.send)")
 	return nil
 }
 
@@ -313,7 +313,7 @@ func (cm *ChannelManager) StopDispatch() error {
 	// 不调用 cancel()，让 dispatchRobotMessages 循环自然退出
 	// 当前迭代中的 channel.Send 会完整执行后再退出
 	cm.dispatchCancel = nil
-	logger.Info(logComponent).Msg("出站派发循环已停止")
+	logger.Info(logComponent).Msg("outbound dispatch loop stopped")
 	return nil
 }
 
@@ -327,7 +327,7 @@ func (cm *ChannelManager) onChannelMessage(msg *schema.Message) bool {
 	logger.Info(logComponent).
 		Str("msg_id", msg.ID).
 		Str("channel_id", msg.ChannelID).
-		Msg("Channel 消息 -> MessageHandler")
+		Msg("Channel message -> MessageHandler")
 
 	// 存活检查：Channel 已注销则丢弃
 	cm.mu.RLock()
@@ -337,12 +337,12 @@ func (cm *ChannelManager) onChannelMessage(msg *schema.Message) bool {
 	if !exists {
 		logger.Info(logComponent).
 			Str("channel_id", msg.ChannelID).
-			Msg("Channel 已关闭，丢弃此消息")
+			Msg("Channel closed, dropping message")
 		return false
 	}
 
 	if cm.messageHandler == nil {
-		logger.Warn(logComponent).Str("msg_id", msg.ID).Msg("messageHandler 为空，无法转发消息")
+		logger.Warn(logComponent).Str("msg_id", msg.ID).Msg("messageHandler is nil, cannot forward message")
 		return false
 	}
 	cm.messageHandler.HandleMessage(msg)
@@ -354,7 +354,7 @@ func (cm *ChannelManager) onChannelMessage(msg *schema.Message) bool {
 // Python: ChannelManager._dispatch_robot_messages()
 func (cm *ChannelManager) dispatchRobotMessages(ctx context.Context) {
 	if cm.messageHandler == nil {
-		logger.Warn(logComponent).Msg("messageHandler 为空，出站派发跳过")
+		logger.Warn(logComponent).Msg("messageHandler is nil, outbound dispatch skipped")
 		return
 	}
 	for cm.running.Load() {
@@ -371,7 +371,7 @@ func (cm *ChannelManager) dispatchRobotMessages(ctx context.Context) {
 				logger.Error(logComponent).
 					Str("channel_id", msg.ChannelID).
 					Err(err).
-					Msg("投递消息到 Channel 失败")
+					Msg("failed to deliver message to Channel")
 				// cron 投递失败通知
 				if strings.HasPrefix(msg.ID, "cron-push-") {
 					cm.notifyCronDeliveryError(msg, err)
@@ -381,7 +381,7 @@ func (cm *ChannelManager) dispatchRobotMessages(ctx context.Context) {
 			logger.Warn(logComponent).
 				Str("channel_id", msg.ChannelID).
 				Str("msg_id", msg.ID).
-				Msg("未找到 Channel，丢弃 robot_messages")
+				Msg("Channel not found, dropping robot_messages")
 		}
 	}
 }
@@ -418,7 +418,7 @@ func (cm *ChannelManager) notifyCronDeliveryError(originalMsg *schema.Message, d
 
 	if exists {
 		if err := webChannel.Send(context.Background(), errMsg); err != nil {
-			logger.Warn(logComponent).Msg("发送 cron 推送失败通知到 web 也失败了")
+			logger.Warn(logComponent).Msg("failed to send cron push failure notification to web")
 		}
 	}
 }

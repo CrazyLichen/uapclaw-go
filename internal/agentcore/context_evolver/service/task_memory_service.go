@@ -468,7 +468,7 @@ func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req Ad
 // LoadMemories 从持久化后端加载记忆。对齐 Python TaskMemoryService.load_memories(user_id)。
 func (s *TaskMemoryService) LoadMemories(ctx context.Context, userID string) error {
 	if s.persistenceHelper == nil {
-		return nil // no-op
+		return nil // 无持久化后端，直接返回
 	}
 
 	algoName := algoToPersistName(s.summaryAlgorithm)

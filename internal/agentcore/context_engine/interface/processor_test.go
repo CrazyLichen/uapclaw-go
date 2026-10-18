@@ -121,3 +121,11 @@ func (m *mockBaseModelClient) Release(_ context.Context, _ ...model_clients.Rele
 func (m *mockBaseModelClient) SupportsKVCacheRelease() bool {
 	return false
 }
+
+// TestWithWindowSize 验证 WithWindowSize 选项。
+func TestWithWindowSize(t *testing.T) {
+	opt := WithWindowSize(4096)
+	o := &ProcessorOption{}
+	opt(o)
+	assert.Equal(t, 4096, o.WindowSize)
+}

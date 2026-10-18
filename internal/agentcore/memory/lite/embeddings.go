@@ -144,14 +144,12 @@ func CreateEmbeddingProvider(provider, model, fallback string, embeddingConfig *
 	// fallback 到 mock
 	// Python: logger.warning("Embedding API key not found, using mock provider")
 	if fallback == "mock" || fallback == "" {
-		logger.Warn(logComponent).Msg("未找到 Embedding API 密钥，使用模拟提供者")
+		logger.Warn(logComponent).Msg("Embedding API key not found, using mock provider")
 		return NewMockEmbeddingProvider(), nil
 	}
 
 	return nil, fmt.Errorf("嵌入提供者未配置: provider=%s, model=%s", provider, model)
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // EmbedQuery baseEmbeddingAdapter 的 EmbedQuery 实现，委托给 base。
 func (a *baseEmbeddingAdapter) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
@@ -171,3 +169,5 @@ func (a *baseEmbeddingAdapter) Model() string { return a.model }
 
 // Dims 返回嵌入向量维度。
 func (a *baseEmbeddingAdapter) Dims() int { return a.dims }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

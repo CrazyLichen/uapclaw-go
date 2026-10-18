@@ -171,7 +171,7 @@ func (p *SkillDevPipeline) Run(ctx context.Context) (<-chan SkillDevEvent, error
 					Str("task_id", p.TaskID).
 					Str("stage", string(p.State.Stage)).
 					Err(execErr).
-					Msg("[Pipeline] 阶段执行失败")
+					Msg("[Pipeline] stage execution failed")
 				p.State.Stage = SkillDevStageError
 				errMsg := execErr.Error()
 				p.State.Error = &errMsg
@@ -242,14 +242,14 @@ func (p *SkillDevPipeline) checkpoint() error {
 		logger.Error(logComponent).
 			Str("task_id", p.TaskID).
 			Err(err).
-			Msg("[Pipeline] 持久化状态失败")
+			Msg("[Pipeline] failed to persist state")
 		return err
 	}
 	if err := p.deps.WorkspaceProvider.SyncToRemote(p.TaskID); err != nil {
 		logger.Error(logComponent).
 			Str("task_id", p.TaskID).
 			Err(err).
-			Msg("[Pipeline] 同步工作区失败")
+			Msg("[Pipeline] failed to sync workspace")
 		return err
 	}
 	logger.Debug(logComponent).

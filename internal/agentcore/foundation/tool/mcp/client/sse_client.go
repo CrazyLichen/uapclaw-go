@@ -126,7 +126,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 		logger.Warn(logComponent).
 			Str("server_name", c.serverName).
 			Int("auth_fail_count", authFailCount).
-			Msg("SSE 客户端所有认证结果均失败，将以无认证模式连接")
+			Msg("SSE client all auth attempts failed, connecting without auth")
 	}
 
 	// 判断是否需要构建自定义 HTTP 客户端（TLS 配置和超时合并到同一个客户端）
@@ -192,7 +192,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 		logger.Debug(logComponent).
 			Str("server_name", c.serverName).
 			Int("query_param_count", len(mergedQueryParams)).
-			Msg("SSE 客户端注入认证查询参数")
+			Msg("SSE client injecting auth query params")
 	}
 
 	// 创建 SSE 客户端
@@ -202,7 +202,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 			Err(err).
 			Str("server_path", c.config.ServerPath).
 			Str("server_name", c.serverName).
-			Msg("SSE 客户端创建失败")
+			Msg("failed to create SSE client")
 		return exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "Connect"),
@@ -217,7 +217,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 			Err(err).
 			Str("server_path", c.config.ServerPath).
 			Str("server_name", c.serverName).
-			Msg("SSE 客户端启动失败")
+			Msg("SSE client failed to start")
 		// 启动失败时关闭底层连接，防止资源泄漏
 		_ = client.Close()
 		return exception.BuildError(
@@ -243,7 +243,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 			Err(err).
 			Str("server_path", c.config.ServerPath).
 			Str("server_name", c.serverName).
-			Msg("SSE 客户端初始化会话失败")
+			Msg("SSE client failed to initialize session")
 		// 初始化失败时关闭连接
 		_ = client.Close()
 		return exception.BuildError(
@@ -260,7 +260,7 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 	logger.Info(logComponent).
 		Str("server_path", c.config.ServerPath).
 		Str("server_name", c.serverName).
-		Msg("SSE 客户端连接成功")
+		Msg("SSE client connected")
 
 	return nil
 }
@@ -275,7 +275,7 @@ func (c *SseClient) Disconnect(_ context.Context) error {
 			logger.Error(logComponent).
 				Err(err).
 				Str("server_name", c.serverName).
-				Msg("SSE 客户端断开连接失败")
+				Msg("SSE client failed to disconnect")
 			return err
 		}
 	}
@@ -283,7 +283,7 @@ func (c *SseClient) Disconnect(_ context.Context) error {
 	c.mcpClient = nil
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
-		Msg("SSE 客户端已断开连接")
+		Msg("SSE client disconnected")
 	return nil
 }
 
@@ -301,7 +301,7 @@ func (c *SseClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error)
 		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
-			Msg("SSE 客户端列出工具失败")
+			Msg("SSE client failed to list tools")
 		return nil, exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "ListTools"),
@@ -343,7 +343,7 @@ func (c *SseClient) CallTool(ctx context.Context, toolName string, arguments map
 			Err(err).
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
-			Msg("SSE 客户端调用工具失败")
+			Msg("SSE client failed to call tool")
 		return nil, exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "CallTool"),
@@ -397,7 +397,7 @@ func (c *SseClient) ListResources(ctx context.Context) ([]map[string]any, error)
 		logger.Error(logComponent).
 			Err(err).
 			Str("server_name", c.serverName).
-			Msg("SSE 客户端列出资源失败")
+			Msg("SSE client failed to list resources")
 		return nil, exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "ListResources"),
@@ -432,7 +432,7 @@ func (c *SseClient) ReadResource(ctx context.Context, uri string) ([]map[string]
 			Err(err).
 			Str("server_name", c.serverName).
 			Str("uri", uri).
-			Msg("SSE 客户端读取资源失败")
+			Msg("SSE client failed to read resource")
 		return nil, exception.BuildError(
 			exception.StatusToolMcpExecutionError,
 			exception.WithParam("method", "ReadResource"),

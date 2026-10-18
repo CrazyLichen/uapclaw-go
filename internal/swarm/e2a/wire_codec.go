@@ -65,7 +65,7 @@ func ParseAgentServerWireUnary(data map[string]any) (*schema.AgentResponse, erro
 					Str("request_id", rid).
 					Str("response_id", e2a.ResponseID).
 					Str("legacy_key", E2AWireLegacyAgentResponseKey).
-					Msg("入站解码走 legacy 兜底")
+					Msg("inbound decode falling back to legacy")
 				return rawDictToAgentResponse(legacyMap), nil
 			}
 		}
@@ -76,7 +76,7 @@ func ParseAgentServerWireUnary(data map[string]any) (*schema.AgentResponse, erro
 				Err(err).
 				Str("request_id", rid).
 				Str("stage", "inverse").
-				Msg("入站解码失败")
+				Msg("inbound decode failed")
 
 			legacyInv, hasInv := meta[E2AWireLegacyAgentResponseKey]
 			if hasInv {
@@ -85,7 +85,7 @@ func ParseAgentServerWireUnary(data map[string]any) (*schema.AgentResponse, erro
 						Str("request_id", rid).
 						Str("response_id", e2a.ResponseID).
 						Str("legacy_key", E2AWireLegacyAgentResponseKey).
-						Msg("入站解码走 legacy 兜底")
+						Msg("inbound decode falling back to legacy")
 					return rawDictToAgentResponse(legacyMap), nil
 				}
 			}
@@ -95,7 +95,7 @@ func ParseAgentServerWireUnary(data map[string]any) (*schema.AgentResponse, erro
 		logger.Debug(logComponent).
 			Str("request_id", rid).
 			Str("response_kind", e2a.ResponseKind).
-			Msg("入站解码成功")
+			Msg("inbound decode succeeded")
 
 		return out, nil
 	}
@@ -124,7 +124,7 @@ func ParseAgentServerWireChunk(data map[string]any) (*schema.AgentResponseChunk,
 					Str("request_id", rid).
 					Str("response_id", e2a.ResponseID).
 					Str("legacy_key", E2AWireLegacyAgentChunkKey).
-					Msg("入站解码走 legacy 兜底")
+					Msg("inbound decode falling back to legacy")
 				return rawDictToAgentChunk(legacyMap), nil
 			}
 		}
@@ -135,7 +135,7 @@ func ParseAgentServerWireChunk(data map[string]any) (*schema.AgentResponseChunk,
 				Err(err).
 				Str("request_id", rid).
 				Str("stage", "inverse").
-				Msg("入站解码失败")
+				Msg("inbound decode failed")
 
 			legacyInv, hasInv := meta[E2AWireLegacyAgentChunkKey]
 			if hasInv {
@@ -144,7 +144,7 @@ func ParseAgentServerWireChunk(data map[string]any) (*schema.AgentResponseChunk,
 						Str("request_id", rid).
 						Str("response_id", e2a.ResponseID).
 						Str("legacy_key", E2AWireLegacyAgentChunkKey).
-						Msg("入站解码走 legacy 兜底")
+						Msg("inbound decode falling back to legacy")
 					return rawDictToAgentChunk(legacyMap), nil
 				}
 			}
@@ -154,7 +154,7 @@ func ParseAgentServerWireChunk(data map[string]any) (*schema.AgentResponseChunk,
 		logger.Debug(logComponent).
 			Str("request_id", rid).
 			Str("response_kind", e2a.ResponseKind).
-			Msg("入站解码成功")
+			Msg("inbound decode succeeded")
 
 		return out, nil
 	}
@@ -177,7 +177,7 @@ func EncodeAgentResponseForWire(resp *schema.AgentResponse, responseID string, s
 			Str("request_id", rid).
 			Str("stage", "to_dict").
 			Bool("legacy_stashed", true).
-			Msg("出站编码失败")
+			Msg("outbound encode failed")
 		return fallbackWireUnaryFromLegacy(agentResponseToMap(resp), responseID, sequence, exc)
 	}
 
@@ -185,7 +185,7 @@ func EncodeAgentResponseForWire(resp *schema.AgentResponse, responseID string, s
 		Str("request_id", rid).
 		Str("response_id", responseID).
 		Str("response_kind", e2a.ResponseKind).
-		Msg("出站编码成功")
+		Msg("outbound encode succeeded")
 
 	return wire
 }
@@ -205,7 +205,7 @@ func EncodeAgentChunkForWire(chunk *schema.AgentResponseChunk, responseID string
 			Str("request_id", rid).
 			Str("stage", "to_dict").
 			Bool("legacy_stashed", true).
-			Msg("出站编码失败")
+			Msg("outbound encode failed")
 		return fallbackWireChunkFromLegacy(agentChunkToMap(chunk), responseID, sequence, exc, isStream)
 	}
 

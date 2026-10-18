@@ -104,7 +104,7 @@ func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string
 			}
 			defer func() {
 				if closeErr := f.Close(); closeErr != nil {
-					logger.Warn(logComponent).Err(closeErr).Str("file", resolved).Msg("关闭文件失败")
+					logger.Warn(logComponent).Err(closeErr).Str("file", resolved).Msg("failed to close file")
 				}
 			}()
 

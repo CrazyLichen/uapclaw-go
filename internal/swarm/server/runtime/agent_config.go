@@ -312,7 +312,7 @@ func (s *AgentConfigService) CreateAgent(params *CreateAgentParams) (*types.Agen
 	logger.Info(logComponent).
 		Str("agent_name", name).
 		Str("file_path", filePath).
-		Msg("已创建 Agent")
+		Msg("Agent created")
 
 	return def, nil
 }
@@ -349,7 +349,7 @@ func (s *AgentConfigService) UpdateAgent(name string, params *UpdateAgentParams)
 	logger.Info(logComponent).
 		Str("agent_name", name).
 		Str("file_path", agent.FilePath).
-		Msg("已更新 Agent")
+		Msg("Agent updated")
 
 	return agent, nil
 }
@@ -378,7 +378,7 @@ func (s *AgentConfigService) DeleteAgent(name string) (bool, error) {
 		logger.Info(logComponent).
 			Str("agent_name", name).
 			Str("file_path", agent.FilePath).
-			Msg("已删除 Agent")
+			Msg("Agent deleted")
 	}
 	return true, nil
 }
@@ -527,7 +527,7 @@ func (s *AgentConfigService) loadFromDir(dirPath string, source string) []*types
 			logger.Warn(logComponent).
 				Str("file_path", filePath).
 				Err(err).
-				Msg("解析 agent 文件失败")
+				Msg("failed to parse agent file")
 			continue
 		}
 		if agent != nil {
@@ -544,12 +544,12 @@ func (s *AgentConfigService) loadSubagentStates() map[string]bool {
 	cfg, err := config.New("")
 	if err != nil {
 		// Python: except Exception as e: logger.debug("Failed to load subagent states from config: %s", e)
-		logger.Debug(logComponent).Err(err).Msg("创建配置管理器失败")
+		logger.Debug(logComponent).Err(err).Msg("createconfigmanager failed")
 		return states
 	}
 	data, err := cfg.Load()
 	if err != nil {
-		logger.Debug(logComponent).Err(err).Msg("加载配置失败")
+		logger.Debug(logComponent).Err(err).Msg("loadconfig failed")
 		return states
 	}
 	react, _ := data["react"].(map[string]any)

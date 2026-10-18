@@ -113,7 +113,7 @@ func (q *MessageQueueInMemory) Start() {
 	q.running.Store(true)
 	logger.Info(logComponent).
 		Str("event_type", "message_queue_started").
-		Msg("消息队列已启动")
+		Msg("message queue started")
 }
 
 // Stop 停止消息队列，取消所有订阅和消费 goroutine。实现 MessageQueueBase 接口。
@@ -136,7 +136,7 @@ func (q *MessageQueueInMemory) Stop(ctx context.Context) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "message_queue_stopped").
-		Msg("消息队列已停止")
+		Msg("message queue stopped")
 	return nil
 }
 
@@ -186,7 +186,7 @@ func (q *MessageQueueInMemory) Unsubscribe(ctx context.Context, topic string) er
 	logger.Info(logComponent).
 		Str("event_type", "message_queue_unsubscribed").
 		Str("topic", topic).
-		Msg("topic 订阅已取消")
+		Msg("topic subscription cancelled")
 	return nil
 }
 
@@ -271,7 +271,7 @@ func (ts *topicSubscription) activate() {
 	logger.Info(logComponent).
 		Str("event_type", "subscription_activated").
 		Str("topic", ts.topic).
-		Msg("topic 订阅已激活")
+		Msg("topic subscription activated")
 }
 
 // deactivate 停止消费 goroutine。
@@ -290,7 +290,7 @@ func (ts *topicSubscription) deactivate() {
 	logger.Info(logComponent).
 		Str("event_type", "subscription_deactivated").
 		Str("topic", ts.topic).
-		Msg("topic 订阅已停用")
+		Msg("topic subscription deactivated")
 }
 
 // consume 消费 goroutine 主循环。
@@ -323,7 +323,7 @@ func (ts *topicSubscription) handleMessage(ctx context.Context, im *internalMess
 		logger.Warn(logComponent).
 			Str("event_type", "message_handler_not_set").
 			Str("topic", ts.topic).
-			Msg("消息处理回调未设置，丢弃消息")
+			Msg("message handler callback not set, discarding message")
 		if im.invoke != nil {
 			im.invoke.CompleteResponse(nil, ErrHandlerNotSet)
 		}

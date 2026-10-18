@@ -94,7 +94,7 @@ func (h *TaskLoopEventHandler) PrepareRound() int {
 
 	logger.Info(logComponent).
 		Int("round_id", h.roundID).
-		Msg("准备新轮次")
+		Msg("preparing new round")
 
 	return h.roundID
 }
@@ -108,7 +108,7 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 
 	// Python: if self._current_future is None: return {"error": "no active round"}
 	if ch == nil {
-		logger.Warn(logComponent).Msg("等待轮次完成：无活跃轮次")
+		logger.Warn(logComponent).Msg("waiting for round completion: no active rounds")
 		return map[string]any{"error": "no active round"}
 	}
 
@@ -131,12 +131,12 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 		case <-ctx.Done():
 			logger.Warn(logComponent).
 				Err(ctx.Err()).
-				Msg("等待轮次完成：上下文取消")
+				Msg("wait for round completion: context cancelled")
 			return map[string]any{"error": "cancelled"}
 		case <-timer.C:
 			logger.Warn(logComponent).
 				Str("timeout", timeout.String()).
-				Msg("等待轮次完成：超时")
+				Msg("wait for round completion: timeout")
 			return map[string]any{"error": "completion_timeout"}
 		}
 	}
@@ -158,7 +158,7 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 	case <-ctx.Done():
 		logger.Warn(logComponent).
 			Err(ctx.Err()).
-			Msg("等待轮次完成：上下文取消")
+			Msg("wait for round completion: context cancelled")
 		return map[string]any{"error": "cancelled"}
 	}
 }
@@ -200,7 +200,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 		logger.Warn(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "HandleInput").
-			Msg("LoopCoordinator 为 nil，无法执行任务")
+			Msg("LoopCoordinator is nil, cannot execute task")
 		h.resolveRound(map[string]any{"error": "coordinator is nil"}, currentRound)
 		return map[string]any{"status": "failed", "error": "coordinator is nil"}, nil
 	}
@@ -260,7 +260,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 		Str("task_type", hschema.DeepTaskType).
 		Int("round_id", currentRound).
 		Bool("is_follow_up", isFollowUp).
-		Msg("提交深层 Agent 任务")
+		Msg("submitting DeepAgent task")
 
 	// 添加任务到管理器
 	// Python: if self._task_manager is not None: add_task else: resolve + return failed
@@ -268,7 +268,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 		logger.Warn(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "HandleInput").
-			Msg("TaskManager 为 nil，无法添加任务")
+			Msg("TaskManager is nil, cannot add task")
 		h.resolveRound(map[string]any{"error": "task_manager is nil"}, currentRound)
 		return map[string]any{"status": "failed", "error": "task_manager is nil"}, nil
 	}
@@ -278,7 +278,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 			Str("task_id", taskID).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "HandleInput").
-			Msg("添加任务失败")
+			Msg("failed to add task")
 		h.resolveRound(map[string]any{"error": err.Error()}, currentRound)
 		return map[string]any{"status": "failed", "error": err.Error()}, fmt.Errorf("添加任务失败: %w", err)
 	}
@@ -318,7 +318,7 @@ func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input 
 	}
 	logger.Info(logComponent).
 		Str("steer_text", steerPreview).
-		Msg("引导指令注入")
+		Msg("bootstrap instruction injected")
 
 	return map[string]any{"status": "steer_injected", "msg": steerText}, nil
 }
@@ -372,7 +372,7 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 
 	logger.Info(logComponent).
 		Int("round_id", roundID).
-		Msg("任务完成，解析轮次")
+		Msg("task completed, parsing rounds")
 
 	h.resolveRound(result, roundID)
 	return map[string]any{"status": "completed", "task_id": taskID}, nil
@@ -416,7 +416,7 @@ func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modu
 		Int("round_id", roundID).
 		Str("event_type", "LLM_CALL_ERROR").
 		Str("method", "HandleTaskFailed").
-		Msg("任务失败")
+		Msg("task failed")
 
 	// Python: return {"status": "failed", "task_id": task_id, "error": str(error_msg)}
 	result := map[string]any{
@@ -457,7 +457,7 @@ func (h *TaskLoopEventHandler) HandleFollowUp(ctx context.Context, input *module
 	}
 	logger.Info(logComponent).
 		Str("follow_up_text", followUpPreview).
-		Msg("跟进消息入队")
+		Msg("follow-up message enqueued")
 
 	return map[string]any{"status": "follow_up_queued", "msg": followUpText}, nil
 }
@@ -471,7 +471,7 @@ func (h *TaskLoopEventHandler) OnAbort() {
 
 	logger.Warn(logComponent).
 		Int("round_id", rid).
-		Msg("任务循环中止")
+		Msg("task loop aborted")
 
 	h.resolveRound(map[string]any{"error": "aborted"}, rid)
 }
@@ -528,7 +528,7 @@ func (h *TaskLoopEventHandler) resolveRound(result map[string]any, roundID int) 
 		logger.Warn(logComponent).
 			Int("expected_round_id", h.roundID).
 			Int("got_round_id", roundID).
-			Msg("轮次编号不匹配，丢弃过期结果")
+			Msg("round id mismatch, discarding stale result")
 		return
 	}
 
@@ -541,7 +541,7 @@ func (h *TaskLoopEventHandler) resolveRound(result map[string]any, roundID int) 
 		default:
 			logger.Warn(logComponent).
 				Int("round_id", h.roundID).
-				Msg("当前轮次 channel 已满，丢弃重复结果")
+				Msg("current round channel full, discarding duplicate result")
 		}
 	}
 }
@@ -600,7 +600,7 @@ func (h *TaskLoopEventHandler) completeSessionSpawn(ctx context.Context, taskID 
 		}
 		logger.Info(logComponent).
 			Str("task_id", taskID).
-			Msg("SessionSpawn 完成，steer pushed（活跃 invoke）")
+			Msg("SessionSpawn completed, steer pushed (active invoke)")
 	} else {
 		// 路径 2：无活跃 invoke → 调度延迟 auto-invoke
 		if !h.provider.IsAutoInvokeScheduled() {
@@ -610,12 +610,12 @@ func (h *TaskLoopEventHandler) completeSessionSpawn(ctx context.Context, taskID 
 					Err(schedErr).
 					Str("task_id", taskID).
 					Str("event_type", "LLM_CALL_ERROR").
-					Msg("调度 auto-invoke 失败")
+					Msg("failed to schedule auto-invoke")
 			}
 		}
 		logger.Info(logComponent).
 			Str("task_id", taskID).
-			Msg("SessionSpawn 完成，auto-invoke 调度")
+			Msg("SessionSpawn completed, auto-invoke scheduled")
 	}
 }
 

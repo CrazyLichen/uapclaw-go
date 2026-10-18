@@ -51,3 +51,7 @@ const (
 		"# Worklog\n" +
 		"_Step by step, what was attempted and completed? Keep each step terse, but useful for resuming work quickly._\n"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────

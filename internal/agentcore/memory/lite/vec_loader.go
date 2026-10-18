@@ -47,3 +47,5 @@ func LoadVec0Extension(conn *sqlite3.SQLiteConn, vecPath string) error {
 	}
 	return conn.LoadExtension(vecPath, vec0InitFuncName)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

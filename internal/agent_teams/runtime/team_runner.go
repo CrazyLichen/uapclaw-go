@@ -42,14 +42,11 @@ type RuntimeGetter interface {
 	GetRuntime() *team_runtime.TeamRuntime
 }
 
-// ──────────────────────────── 枚 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// teamRunnerLogComponent 日志组件
-	teamRunnerLogComponent = logger.ComponentChannel
-)
+const ()
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -115,9 +112,9 @@ func RunBaseTeam(
 	teamSession := createAgentTeamSession(baseTeam, sess)
 	inputsDict, _ := inputs.(map[string]any)
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
-		logger.Warn(teamRunnerLogComponent).Err(preErr).
+		logger.Warn(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
-			Msg("RunBaseTeam: PreRun 失败")
+			Msg("RunBaseTeam: PreRun failed")
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime
@@ -167,9 +164,9 @@ func RunBaseTeamStreaming(
 	teamSession := createAgentTeamSession(baseTeam, sess)
 	inputsDict, _ := inputs.(map[string]any)
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
-		logger.Warn(teamRunnerLogComponent).Err(preErr).
+		logger.Warn(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
-			Msg("RunBaseTeamStreaming: PreRun 失败")
+			Msg("RunBaseTeamStreaming: PreRun failed")
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime
@@ -220,9 +217,9 @@ func RunTeamMember(
 	teamSession := createAgentTeamSession(agentTeam, sess)
 	inputsDict, _ := inputs.(map[string]any)
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
-		logger.Warn(teamRunnerLogComponent).Err(preErr).
+		logger.Warn(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
-			Msg("RunTeamMember: PreRun 失败")
+			Msg("RunTeamMember: PreRun failed")
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime
@@ -260,9 +257,9 @@ func RunTeamMemberStreaming(
 	teamSession := createAgentTeamSession(agentTeam, sess)
 	inputsDict, _ := inputs.(map[string]any)
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
-		logger.Warn(teamRunnerLogComponent).Err(preErr).
+		logger.Warn(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
-			Msg("RunTeamMemberStreaming: PreRun 失败")
+			Msg("RunTeamMemberStreaming: PreRun failed")
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime
@@ -405,7 +402,7 @@ func runAgentTeam(
 
 	action := activation.Action
 	if IsTeamRejectKind(action.Kind) {
-		logger.Warn(teamRunnerLogComponent).
+		logger.Warn(logComponent).
 			Str("team_name", spec.TeamName).
 			Str("session_id", activation.Session.GetSessionID()).
 			Str("kind", string(action.Kind)).
@@ -444,7 +441,7 @@ func runAgentTeamStreaming(
 
 	action := activation.Action
 	if IsTeamRejectKind(action.Kind) {
-		logger.Warn(teamRunnerLogComponent).
+		logger.Warn(logComponent).
 			Str("team_name", spec.TeamName).
 			Str("session_id", activation.Session.GetSessionID()).
 			Str("kind", string(action.Kind)).
@@ -505,9 +502,9 @@ func resolveSpecFromSessionBucket(ctx context.Context, teamName string, sess any
 	teamSession := createAgentTeamSession(nil, sess)
 
 	if preErr := teamSession.PreRun(ctx); preErr != nil {
-		logger.Warn(teamRunnerLogComponent).Err(preErr).
+		logger.Warn(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
-			Msg("resolveSpecFromSessionBucket: PreRun 失败")
+			Msg("resolveSpecFromSessionBucket: PreRun failed")
 		return nil
 	}
 
@@ -523,18 +520,18 @@ func resolveSpecFromSessionBucket(ctx context.Context, teamName string, sess any
 
 	specMap, ok := specData.(map[string]any)
 	if !ok {
-		logger.Warn(teamRunnerLogComponent).
+		logger.Warn(logComponent).
 			Str("team_name", teamName).
 			Str("session_id", teamSession.GetSessionID()).
-			Msg("resolveSpecFromSessionBucket: spec 数据类型非 map[string]any")
+			Msg("resolveSpecFromSessionBucket: spec data type is not map[string]any")
 		return nil
 	}
 	spec := atschema.NewTeamAgentSpecFromDict(specMap)
 	if spec == nil {
-		logger.Warn(teamRunnerLogComponent).
+		logger.Warn(logComponent).
 			Str("team_name", teamName).
 			Str("session_id", teamSession.GetSessionID()).
-			Msg("resolveSpecFromSessionBucket: spec 反序列化失败")
+			Msg("resolveSpecFromSessionBucket: spec deserialization failed")
 		return nil
 	}
 	return spec
@@ -574,7 +571,7 @@ func closeTeamInteractGate(teamName string, sessionID string) {
 	if entry == nil || entry.SessionID != sessionID {
 		return
 	}
-	entry.InteractGate.CloseAndDrain(context.Background())
+	_ = entry.InteractGate.CloseAndDrain(context.Background())
 }
 
 // buildTeamRuntimeReadyChunk 构建团队运行时就绪首帧。

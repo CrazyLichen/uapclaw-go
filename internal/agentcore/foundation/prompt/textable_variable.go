@@ -200,7 +200,7 @@ func formatValue(placeholderName string, value any, kwargs map[string]any) strin
 			Str("placeholder", placeholderName).
 			Str("input_data", fmt.Sprintf("%v", value)).
 			Str("output_data", outputData).
-			Msg("使用 str() 转换非字符串值，请检查格式是否正确。")
+			Msg("converted non-string value using str(), check the format")
 		return outputData
 	}
 }

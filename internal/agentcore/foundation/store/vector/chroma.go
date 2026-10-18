@@ -140,7 +140,7 @@ func (s *ChromaVectorStore) Close() {
 	if s.client != nil {
 		_ = s.client.Close()
 		s.client = nil
-		logger.Info(logComponent).Str("action", "close").Msg("ChromaDB 客户端连接已关闭")
+		logger.Info(logComponent).Str("action", "close").Msg("ChromaDB client connection closed")
 	}
 }
 
@@ -226,7 +226,7 @@ func (s *ChromaVectorStore) CreateCollection(ctx context.Context, collectionName
 		chromav2.WithHNSWSpaceCreate(chromaMetric),
 	)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("创建 ChromaDB 集合失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("create ChromaDB collection failed")
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("failed to create collection: %v", err)),
 		)
@@ -241,7 +241,7 @@ func (s *ChromaVectorStore) CreateCollection(ctx context.Context, collectionName
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("distance_metric", distanceMetric).
 		Str("vector_field", vectorField.Name).
-		Msg("成功创建 ChromaDB 集合")
+		Msg("ChromaDB collection created successfully")
 	return nil
 }
 
@@ -255,7 +255,7 @@ func (s *ChromaVectorStore) DeleteCollection(ctx context.Context, collectionName
 	}
 
 	if err := c.DeleteCollection(ctx, collectionName); err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("删除 ChromaDB 集合失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("delete ChromaDB collection failed")
 		return err
 	}
 
@@ -265,7 +265,7 @@ func (s *ChromaVectorStore) DeleteCollection(ctx context.Context, collectionName
 	delete(s.fieldMappingCache, collectionName)
 	s.mu.Unlock()
 
-	logger.Info(logComponent).Str("collection_name", collectionName).Msg("成功删除 ChromaDB 集合")
+	logger.Info(logComponent).Str("collection_name", collectionName).Msg("delete ChromaDB collection succeeded")
 	return nil
 }
 
@@ -405,7 +405,7 @@ func (s *ChromaVectorStore) AddDocs(ctx context.Context, collectionName string, 
 			docMeta, err := chromav2.NewDocumentMetadataFromMap(metaMap)
 			if err != nil {
 				logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).
-					Msg("转换文档 metadata 失败，使用空 metadata")
+					Msg("failed to convert document metadata, using empty metadata")
 				docMeta = chromav2.NewDocumentMetadata()
 			}
 			metas = append(metas, docMeta)
@@ -427,7 +427,7 @@ func (s *ChromaVectorStore) AddDocs(ctx context.Context, collectionName string, 
 
 		if err := collection.Add(ctx, addOpts...); err != nil {
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-				Int("batch_start", i).Int("batch_size", len(batch)).Msg("插入文档批次失败")
+				Int("batch_start", i).Int("batch_size", len(batch)).Msg("failed to insert document batch")
 			return exception.BuildError(exception.StatusStoreVectorDocInvalid,
 				exception.WithParam("error_msg", fmt.Sprintf("failed to add docs: %v", err)),
 			)
@@ -435,7 +435,7 @@ func (s *ChromaVectorStore) AddDocs(ctx context.Context, collectionName string, 
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Int("total", total).Msg("成功添加文档到 ChromaDB 集合")
+		Int("total", total).Msg("added documents to ChromaDB collection succeeded")
 	return nil
 }
 
@@ -483,7 +483,7 @@ func (s *ChromaVectorStore) Search(ctx context.Context, collectionName string, q
 
 	result, err := collection.Query(ctx, queryOpts...)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("ChromaDB 向量搜索失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("ChromaDB vector search failed")
 		return nil, err
 	}
 
@@ -566,7 +566,7 @@ func (s *ChromaVectorStore) Search(ctx context.Context, collectionName string, q
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Int("result_count", len(searchResults)).Msg("ChromaDB 向量搜索完成")
+		Int("result_count", len(searchResults)).Msg("ChromaDB vector search completed")
 	return searchResults, nil
 }
 
@@ -590,12 +590,12 @@ func (s *ChromaVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName 
 
 	if err := collection.Delete(ctx, chromav2.WithIDs(chromaIDs...)); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Int("id_count", len(ids)).Msg("按 ID 删除文档失败")
+			Int("id_count", len(ids)).Msg("failed to delete documents by ID")
 		return err
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Int("id_count", len(ids)).Msg("成功按 ID 删除文档")
+		Int("id_count", len(ids)).Msg("documents deleted by ID successfully")
 	return nil
 }
 
@@ -619,12 +619,12 @@ func (s *ChromaVectorStore) DeleteDocsByFilters(ctx context.Context, collectionN
 
 	if err := collection.Delete(ctx, chromav2.WithWhere(whereClause)); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Interface("filters", filters).Msg("按过滤条件删除文档失败")
+			Interface("filters", filters).Msg("failed to delete documents by filter")
 		return err
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Interface("filters", filters).Msg("成功按过滤条件删除文档")
+		Interface("filters", filters).Msg("documents deleted by filter successfully")
 	return nil
 }
 
@@ -671,7 +671,7 @@ func (s *ChromaVectorStore) UpdateSchema(ctx context.Context, collectionName str
 	newSchema, err := ComputeNewSchema(oldSchema, operations)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("计算新 Schema 失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to compute new schema")
 		return err
 	}
 
@@ -732,7 +732,7 @@ func (s *ChromaVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 	newCollectionMeta := chromav2.NewMetadataFromMap(newMetaMap)
 
 	if err := collection.ModifyMetadata(ctx, newCollectionMeta); err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("更新集合元数据失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("failed to update collection metadata")
 		return err
 	}
 
@@ -748,7 +748,7 @@ func (s *ChromaVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Interface("metadata", metadata).Msg("成功更新集合元数据")
+		Interface("metadata", metadata).Msg("update collection metadata succeeded")
 	return nil
 }
 
@@ -802,7 +802,7 @@ func (s *ChromaVectorStore) GetAllDocuments(ctx context.Context, collectionName 
 		chromav2.WithInclude(chromav2.IncludeDocuments, chromav2.IncludeMetadatas, chromav2.IncludeEmbeddings),
 	)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("获取所有文档失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("getalldocument failed")
 		return nil, err
 	}
 
@@ -886,13 +886,13 @@ func (s *ChromaVectorStore) executeChromaMigration(
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("temp_collection_name", tempCollectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("开始 ChromaDB schema 迁移")
+		Msg("starting ChromaDB schema migration")
 
 	// 1. 创建临时集合（新 schema）
 	// Python: await self.create_collection(temp_collection_name, new_schema, distance_metric=...)
 	if err := s.CreateCollection(ctx, tempCollectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
 		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Str("event_type", "STORE_UPDATE").Msg("创建临时集合失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to create temp collection")
 		return err
 	}
 
@@ -901,7 +901,7 @@ func (s *ChromaVectorStore) executeChromaMigration(
 	oldDocs, err := s.GetAllDocuments(ctx, collectionName)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("获取旧集合文档失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to get old collection documents")
 		s.cleanupChromaTempCollection(ctx, tempCollectionName)
 		return err
 	}
@@ -912,7 +912,7 @@ func (s *ChromaVectorStore) executeChromaMigration(
 			transformedDoc, err := transformFunc(doc)
 			if err != nil {
 				logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-					Str("event_type", "STORE_UPDATE").Msg("文档变换失败")
+					Str("event_type", "STORE_UPDATE").Msg("document transform failed")
 				s.cleanupChromaTempCollection(ctx, tempCollectionName)
 				return err
 			}
@@ -921,7 +921,7 @@ func (s *ChromaVectorStore) executeChromaMigration(
 		// Python: await self.add_docs(temp_collection_name, transformed_docs)
 		if err := s.AddDocs(ctx, tempCollectionName, transformedDocs); err != nil {
 			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-				Str("event_type", "STORE_UPDATE").Msg("写入临时集合失败")
+				Str("event_type", "STORE_UPDATE").Msg("failed to write to temp collection")
 			s.cleanupChromaTempCollection(ctx, tempCollectionName)
 			return err
 		}
@@ -931,7 +931,7 @@ func (s *ChromaVectorStore) executeChromaMigration(
 	// Python: await self.delete_collection(collection_name)
 	if err := s.DeleteCollection(ctx, collectionName); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("删除旧集合失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to delete old collection")
 		s.cleanupChromaTempCollection(ctx, tempCollectionName)
 		return err
 	}
@@ -940,7 +940,7 @@ func (s *ChromaVectorStore) executeChromaMigration(
 	// Python: await self.create_collection(collection_name, new_schema, distance_metric=...)
 	if err := s.CreateCollection(ctx, collectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("用原名创建新集合失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to create new collection with original name")
 		// 注意：旧集合已被删除，此处不可恢复
 		return err
 	}
@@ -950,14 +950,14 @@ func (s *ChromaVectorStore) executeChromaMigration(
 	tempDocs, err := s.GetAllDocuments(ctx, tempCollectionName)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Str("event_type", "STORE_UPDATE").Msg("获取临时集合文档失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to get temporary collection documents")
 		return err
 	}
 
 	if len(tempDocs) > 0 {
 		if err := s.AddDocs(ctx, collectionName, tempDocs); err != nil {
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-				Str("event_type", "STORE_UPDATE").Msg("写入新集合失败")
+				Str("event_type", "STORE_UPDATE").Msg("failed to write new collection")
 			return err
 		}
 	}
@@ -966,12 +966,12 @@ func (s *ChromaVectorStore) executeChromaMigration(
 	// Python: await self.delete_collection(temp_collection_name)
 	if err := s.DeleteCollection(ctx, tempCollectionName); err != nil {
 		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Msg("删除临时集合失败，非致命错误")
+			Msg("failed to delete temporary collection, non-fatal")
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("ChromaDB schema 迁移完成")
+		Msg("ChromaDB schema migration completed")
 
 	return nil
 }
@@ -981,16 +981,16 @@ func (s *ChromaVectorStore) cleanupChromaTempCollection(ctx context.Context, tem
 	exists, err := s.CollectionExists(ctx, tempCollectionName)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Msg("检查临时集合是否存在失败")
+			Msg("failed to check if temporary collection exists")
 		return
 	}
 	if exists {
 		if delErr := s.DeleteCollection(ctx, tempCollectionName); delErr != nil {
 			logger.Warn(logComponent).Err(delErr).Str("temp_collection_name", tempCollectionName).
-				Msg("清理临时集合失败")
+				Msg("failed to cleanup temporary collection")
 		} else {
 			logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
-				Msg("成功清理临时集合")
+				Msg("temporary collection cleaned up successfully")
 		}
 	}
 }
@@ -1022,13 +1022,13 @@ func (s *ChromaVectorStore) getClient() (chromav2.Client, error) {
 
 	c, err := s.createClient(s.persistPath)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("persist_path", s.persistPath).Msg("连接 ChromaDB 失败")
+		logger.Error(logComponent).Err(err).Str("persist_path", s.persistPath).Msg("connection ChromaDB failed")
 		return nil, exception.BuildError(exception.StatusStoreVectorCollectionNotFound,
 			exception.WithParam("error_msg", fmt.Sprintf("failed to connect to ChromaDB: %v", err)),
 		)
 	}
 	s.client = c
-	logger.Info(logComponent).Str("persist_path", s.persistPath).Msg("成功连接 ChromaDB")
+	logger.Info(logComponent).Str("persist_path", s.persistPath).Msg("connection ChromaDB succeeded")
 	return s.client, nil
 }
 
@@ -1048,7 +1048,7 @@ func (s *ChromaVectorStore) getCollection(ctx context.Context, collectionName st
 
 	collection, err := c.GetCollection(ctx, collectionName)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("获取 ChromaDB 集合失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("get ChromaDB collection failed")
 		return nil, exception.BuildError(exception.StatusStoreVectorCollectionNotFound,
 			exception.WithParam("collection_name", collectionName),
 		)

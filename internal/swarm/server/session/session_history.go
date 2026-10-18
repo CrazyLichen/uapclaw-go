@@ -81,7 +81,7 @@ func FlushHistoryQueue() {
 	select {
 	case <-flushDone:
 	case <-time.After(5 * time.Second):
-		logger.Warn(logComponent).Msg("FlushHistoryQueue 超时")
+		logger.Warn(logComponent).Msg("FlushHistoryQueue timed out")
 	}
 }
 
@@ -160,7 +160,7 @@ func AppendHistoryRecord(sessionID, requestID, channelID, role, content string,
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Warn(logComponent).Any("recover", r).Msg("会话元数据联动 panic 恢复")
+				logger.Warn(logComponent).Any("recover", r).Msg("session metadata linkage panic recovered")
 			}
 		}()
 		userContent := contentText
@@ -335,7 +335,7 @@ func ReadTeamHistoryRecords(sessionID string) ([]map[string]any, error) {
 					logger.Info(logComponent).
 						Int("attempt", attempt).
 						Str("session_id", sid).
-						Msg("ReadTeamHistoryRecords 重试成功")
+						Msg("ReadTeamHistoryRecords retry succeeded")
 					break
 				}
 			}
@@ -347,7 +347,7 @@ func ReadTeamHistoryRecords(sessionID string) ([]map[string]any, error) {
 				logger.Warn(logComponent).
 					Str("session_id", sid).
 					Int64("file_size", fileSize).
-					Msg("ReadTeamHistoryRecords 重试耗尽，文件可能为空")
+					Msg("ReadTeamHistoryRecords retries exhausted, file may be empty")
 			}
 		}
 	}
@@ -397,7 +397,7 @@ func writeHistoryItem(sessionID string, record map[string]any) {
 	records = append(records, record)
 
 	if err := writeHistoryFile(fpath, records); err != nil {
-		logger.Error(logComponent).Err(err).Str("session_id", sessionID).Msg("history 写入失败")
+		logger.Error(logComponent).Err(err).Str("session_id", sessionID).Msg("history  write failed")
 	}
 }
 
@@ -424,7 +424,7 @@ func readHistoryFile(fpath string) ([]map[string]any, error) {
 	var records []map[string]any
 	if err := json.Unmarshal(data, &records); err != nil {
 		// Python: _read_history: 读取失败时 Warn 日志 + 返回空列表，不阻断主流程
-		logger.Warn(logComponent).Err(err).Str("path", fpath).Msg("读取 history.json 失败，已忽略并重建")
+		logger.Warn(logComponent).Err(err).Str("path", fpath).Msg("failed to read history.json, ignored and rebuilt")
 		return []map[string]any{}, nil
 	}
 	return records, nil

@@ -105,3 +105,5 @@ func (m *MemoryMetaManager) DeleteByTableName(ctx context.Context, tableName str
 	return m.db.Delete(ctx, m.metaTable,
 		map[string]any{"table_name": tableName})
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

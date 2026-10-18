@@ -49,11 +49,8 @@ type StructuredAskUserRail struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 StructuredAskUserRail 满足 AgentRail 接口
 // _ 编译时验证 StructuredAskUserRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*StructuredAskUserRail)(nil)
-
-var structuredAskUserRailLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -97,10 +94,10 @@ func (r *StructuredAskUserRail) Init(_ context.Context, agent agentinterfaces.Ba
 	// 创建 StructuredAskUserTool（对齐 Python: StructuredAskUserTool(language=language, agent_id=agent_id)）
 	askUserTool, err := NewStructuredAskUserTool(language, agentID)
 	if err != nil {
-		logger.Warn(structuredAskUserRailLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "structured_ask_user_rail_init").
 			Err(err).
-			Msg("创建 StructuredAskUserTool 失败")
+			Msg("failed to create StructuredAskUserTool")
 		return fmt.Errorf("创建 StructuredAskUserTool 失败: %w", err)
 	}
 	r.structuredTools = []tool.Tool{askUserTool}
@@ -117,10 +114,10 @@ func (r *StructuredAskUserRail) Init(_ context.Context, agent agentinterfaces.Ba
 		}
 	}
 
-	logger.Info(structuredAskUserRailLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "structured_ask_user_rail_init").
 		Str("language", language).
-		Msg("StructuredAskUserRail 已注册 structured ask_user 工具")
+		Msg("StructuredAskUserRail registered structured ask_user tool")
 
 	return nil
 }
@@ -139,10 +136,10 @@ func (r *StructuredAskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		func(t tool.Tool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(structuredAskUserRailLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "structured_ask_user_rail_uninit").
 						Str("tool_name", t.Card().Name).
-						Msgf("注销工具失败: %v", rec)
+						Msgf("failed to unregister tool: %v", rec)
 				}
 			}()
 			if am != nil {
@@ -155,9 +152,9 @@ func (r *StructuredAskUserRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	}
 	r.structuredTools = nil
 
-	logger.Info(structuredAskUserRailLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "structured_ask_user_rail_uninit").
-		Msg("StructuredAskUserRail 注销完成")
+		Msg("StructuredAskUserRail unregistered")
 
 	return nil
 }
@@ -213,9 +210,9 @@ func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 	// Python: try/except Exception：异常时回退到 interrupt
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(structuredAskUserRailLogComponent).
+			logger.Warn(logComponent).
 				Str("event_type", "structured_ask_user_rail_resolve").
-				Msgf("解析结构化输入异常，回退到 interrupt: %v", rec)
+				Msgf("failed to parse structured input, falling back to interrupt: %v", rec)
 			decision = r.AskUserRail.Interrupt(r.AskUserRail.BuildAskRequest(toolCall))
 		}
 	}()
@@ -248,7 +245,7 @@ func (r *StructuredAskUserRail) resolveStructuredInterrupt(
 		answerText := strings.Join(answerParts, "\n")
 
 		// Python: logger.info("[StructuredAskUserRail] Resolved structured answer: %s", answer_text)
-		logger.Info(structuredAskUserRailLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "structured_ask_user_rail_resolve").
 			Str("answer_text", answerText).
 			Msg("Resolved structured answer")

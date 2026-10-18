@@ -189,7 +189,7 @@ func (r *DashScopeReranker) doRerank(ctx context.Context, query string, docs []a
 			Str("method", "DashScopeRerank").
 			Str("model_provider", r.config.ModelName).
 			Err(err).
-			Msg("DashScopeReranker 请求失败")
+			Msg("DashScopeReranker request failed")
 		return nil, err
 	}
 
@@ -216,7 +216,7 @@ func (r *DashScopeReranker) doRerankSync(ctx context.Context, query string, docs
 			Str("method", "DashScopeRerankSync").
 			Str("model_provider", r.config.ModelName).
 			Err(err).
-			Msg("DashScopeReranker 同步请求失败")
+			Msg("DashScopeReranker sync request failed")
 		return nil, err
 	}
 

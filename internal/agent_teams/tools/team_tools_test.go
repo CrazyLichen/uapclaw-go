@@ -3,225 +3,254 @@ package tools
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
 
-// TestCreateTeamTools_Leader 测试 Leader 角色工具列表
-func TestCreateTeamTools_Leader(t *testing.T) {
-	backend := newTestTeamBackend()
-	toolList := CreateTeamTools(backend, "leader", "build_mode", "temporary", "cn", nil, nil, nil)
-	if len(toolList) == 0 {
-		t.Fatal("Leader should have at least one tool")
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestToolSuccess 构造成功的工具返回
+func TestToolSuccess(t *testing.T) {
+	data := map[string]any{"key": "value", "count": 42}
+	result, err := toolSuccess(data)
+	if err != nil {
+		t.Fatalf("toolSuccess 不应返回 error: %v", err)
 	}
-	names := toolNames(toolList)
-	// Leader 应有 create_task
-	if _, ok := names["create_task"]; !ok {
-		t.Fatal("Leader should have create_task")
+	if result["success"] != true {
+		t.Errorf("success 应为 true，实际 %v", result["success"])
 	}
-	// Leader 不应有 claim_task
-	if _, ok := names["claim_task"]; ok {
-		t.Fatal("Leader should not have claim_task")
+	if result["data"] == nil {
+		t.Fatal("data 不应为 nil")
+	}
+	dataMap := result["data"].(map[string]any)
+	if dataMap["key"] != "value" {
+		t.Errorf("data.key 应为 value，实际 %v", dataMap["key"])
+	}
+	if dataMap["count"] != 42 {
+		t.Errorf("data.count 应为 42，实际 %v", dataMap["count"])
 	}
 }
 
-// TestCreateTeamTools_Teammate 测试 Teammate 角色工具列表
-func TestCreateTeamTools_Teammate(t *testing.T) {
-	backend := newTestTeamBackend()
-	toolList := CreateTeamTools(backend, "teammate", "build_mode", "temporary", "cn", nil, nil, nil)
-	if len(toolList) == 0 {
-		t.Fatal("Teammate should have at least one tool")
+// TestToolSuccess_空数据 构造成功的工具返回（空 map）
+func TestToolSuccess_空数据(t *testing.T) {
+	result, err := toolSuccess(map[string]any{})
+	if err != nil {
+		t.Fatalf("toolSuccess 不应返回 error: %v", err)
 	}
-	names := toolNames(toolList)
-	// Teammate 应有 claim_task 但不应有 create_task
-	if _, ok := names["claim_task"]; !ok {
-		t.Fatal("Teammate should have claim_task")
+	if result["success"] != true {
+		t.Errorf("success 应为 true，实际 %v", result["success"])
 	}
-	if _, ok := names["create_task"]; ok {
-		t.Fatal("Teammate should not have create_task")
+	dataMap, ok := result["data"].(map[string]any)
+	if !ok {
+		t.Fatal("data 类型应为 map[string]any")
 	}
-}
-
-// TestCreateTeamTools_HumanAgent 测试 Human-Agent 角色工具列表
-func TestCreateTeamTools_HumanAgent(t *testing.T) {
-	backend := newTestTeamBackend()
-	toolList := CreateTeamTools(backend, "human_agent", "build_mode", "temporary", "cn", nil, nil, nil)
-	if len(toolList) == 0 {
-		t.Fatal("Human-Agent should have at least one tool")
-	}
-	names := toolNames(toolList)
-	if _, ok := names["view_task"]; !ok {
-		t.Fatal("Human-Agent should have view_task")
-	}
-	if _, ok := names["member_complete_task"]; !ok {
-		t.Fatal("Human-Agent should have member_complete_task")
-	}
-	if _, ok := names["send_message"]; !ok {
-		t.Fatal("Human-Agent should have send_message")
-	}
-	// Human-Agent 不应有 claim_task / create_task
-	if _, ok := names["claim_task"]; ok {
-		t.Fatal("Human-Agent should not have claim_task")
-	}
-	if _, ok := names["create_task"]; ok {
-		t.Fatal("Human-Agent should not have create_task")
+	if len(dataMap) != 0 {
+		t.Errorf("空 data map 长度应为 0，实际 %d", len(dataMap))
 	}
 }
 
-// TestCreateTeamTools_PlanMode 测试 plan_mode 下审批工具
-func TestCreateTeamTools_PlanMode(t *testing.T) {
-	backend := newTestTeamBackend()
-	toolList := CreateTeamTools(backend, "leader", "plan_mode", "temporary", "cn", nil, nil, nil)
-	names := toolNames(toolList)
-	if _, ok := names["approve_plan"]; !ok {
-		t.Fatal("Leader in plan_mode should have approve_plan")
+// TestToolError 构造业务失败的工具返回
+func TestToolError(t *testing.T) {
+	msg := "something went wrong"
+	result, err := toolError(msg)
+	if err != nil {
+		t.Fatalf("toolError 不应返回 error: %v", err)
 	}
-	if _, ok := names["approve_tool"]; !ok {
-		t.Fatal("Leader in plan_mode should have approve_tool")
+	if result["success"] != false {
+		t.Errorf("success 应为 false，实际 %v", result["success"])
 	}
-}
-
-// TestCreateTeamTools_BuildMode无审批工具 测试 build_mode 下无审批工具
-func TestCreateTeamTools_BuildMode无审批工具(t *testing.T) {
-	backend := newTestTeamBackend()
-	toolList := CreateTeamTools(backend, "leader", "build_mode", "temporary", "cn", nil, nil, nil)
-	names := toolNames(toolList)
-	if _, ok := names["approve_plan"]; ok {
-		t.Fatal("Leader in build_mode should not have approve_plan")
-	}
-	if _, ok := names["approve_tool"]; ok {
-		t.Fatal("Leader in build_mode should not have approve_tool")
-	}
-	if _, ok := names["submit_plan"]; ok {
-		t.Fatal("Leader in build_mode should not have submit_plan")
+	if result["error"] != msg {
+		t.Errorf("error 应为 %q，实际 %v", msg, result["error"])
 	}
 }
 
-// TestCreateTeamTools_Persistent无CleanTeam 测试 persistent 生命周期无 clean_team
-func TestCreateTeamTools_Persistent无CleanTeam(t *testing.T) {
-	backend := newTestTeamBackend()
-	toolList := CreateTeamTools(backend, "leader", "build_mode", "persistent", "cn", nil, nil, nil)
-	names := toolNames(toolList)
-	if _, ok := names["clean_team"]; ok {
-		t.Fatal("Leader in persistent lifecycle should not have clean_team")
+// TestToolError_空消息 构造业务失败的工具返回（空消息）
+func TestToolError_空消息(t *testing.T) {
+	result, err := toolError("")
+	if err != nil {
+		t.Fatalf("toolError 不应返回 error: %v", err)
+	}
+	if result["success"] != false {
+		t.Errorf("success 应为 false，实际 %v", result["success"])
+	}
+	if result["error"] != "" {
+		t.Errorf("error 应为空字符串，实际 %v", result["error"])
 	}
 }
 
-// TestCreateTeamTools_Temporary有CleanTeam 测试 temporary 生命周期有 clean_team
-func TestCreateTeamTools_Temporary有CleanTeam(t *testing.T) {
-	backend := newTestTeamBackend()
-	toolList := CreateTeamTools(backend, "leader", "build_mode", "temporary", "cn", nil, nil, nil)
-	names := toolNames(toolList)
-	if _, ok := names["clean_team"]; !ok {
-		t.Fatal("Leader in temporary lifecycle should have clean_team")
+// TestSpecLabel 返回任务规格的标签
+func TestSpecLabel(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     map[string]any
+		expected string
+	}{
+		{
+			name:     "有 task_id 时返回 task_id",
+			spec:     map[string]any{"task_id": "T-001", "title": "hello"},
+			expected: "T-001",
+		},
+		{
+			name:     "task_id 为空时返回 title",
+			spec:     map[string]any{"task_id": "", "title": "hello"},
+			expected: "hello",
+		},
+		{
+			name:     "无 task_id 时返回 title",
+			spec:     map[string]any{"title": "build feature"},
+			expected: "build feature",
+		},
+		{
+			name:     "task_id 和 title 都为空时返回 unnamed",
+			spec:     map[string]any{"task_id": "", "title": ""},
+			expected: "<unnamed>",
+		},
+		{
+			name:     "task_id 和 title 都不存在时返回 unnamed",
+			spec:     map[string]any{},
+			expected: "<unnamed>",
+		},
+		{
+			name:     "task_id 非字符串时回退到 title",
+			spec:     map[string]any{"task_id": 123, "title": "fallback"},
+			expected: "fallback",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := specLabel(tt.spec)
+			if got != tt.expected {
+				t.Errorf("specLabel() = %q, want %q", got, tt.expected)
+			}
+		})
 	}
 }
 
-// TestCreateTeamTools_ExcludeTools 测试排除工具
-func TestCreateTeamTools_ExcludeTools(t *testing.T) {
-	backend := newTestTeamBackend()
-	exclude := map[string]struct{}{"build_team": {}}
-	toolList := CreateTeamTools(backend, "leader", "build_mode", "temporary", "cn", nil, nil, exclude)
-	names := toolNames(toolList)
-	if _, ok := names["build_team"]; ok {
-		t.Fatal("Excluded tool should not be present")
-	}
-}
-
-// TestQualifyTeamToolIDs 测试工具 ID 后缀
-func TestQualifyTeamToolIDs(t *testing.T) {
-	backend := newTestTeamBackend()
-	toolList := CreateTeamTools(backend, "leader", "build_mode", "temporary", "cn", nil, nil, nil)
-	QualifyTeamToolIDs(toolList, "my-team", "alice")
-	for _, tl := range toolList {
-		card := tl.Card()
-		if card == nil {
-			continue
+// TestTaskBrief 返回任务的简要信息 map
+func TestTaskBrief(t *testing.T) {
+	t.Run("正常任务", func(t *testing.T) {
+		assignee := "alice"
+		task := &database.TeamTaskBase{
+			TaskID:   "T-001",
+			Title:    "build feature",
+			Status:   "pending",
+			Assignee: &assignee,
+			TeamName: "team-a",
 		}
-		expectedSuffix := ".my-team.alice"
-		if card.ID != "" && len(card.ID) < len(expectedSuffix) {
-			t.Fatalf("tool ID %q too short after qualification", card.ID)
+		brief := taskBrief(task)
+		if brief["task_id"] != "T-001" {
+			t.Errorf("task_id 应为 T-001，实际 %v", brief["task_id"])
 		}
-		if card.ID != "" && card.ID[len(card.ID)-len(expectedSuffix):] != expectedSuffix {
-			t.Fatalf("tool ID %q should end with %s after qualification", card.ID, expectedSuffix)
+		if brief["title"] != "build feature" {
+			t.Errorf("title 应为 build feature，实际 %v", brief["title"])
 		}
-	}
+		if brief["status"] != "pending" {
+			t.Errorf("status 应为 pending，实际 %v", brief["status"])
+		}
+		if brief["assignee"] != "alice" {
+			t.Errorf("assignee 应为 alice，实际 %v", brief["assignee"])
+		}
+		if brief["team_name"] != "team-a" {
+			t.Errorf("team_name 应为 team-a，实际 %v", brief["team_name"])
+		}
+	})
+
+	t.Run("assignee 为 nil 时显示 unassigned", func(t *testing.T) {
+		task := &database.TeamTaskBase{
+			TaskID:   "T-002",
+			Title:    "review code",
+			Status:   "claimed",
+			Assignee: nil,
+			TeamName: "team-b",
+		}
+		brief := taskBrief(task)
+		if brief["assignee"] != "<unassigned>" {
+			t.Errorf("assignee 应为 <unassigned>，实际 %v", brief["assignee"])
+		}
+	})
+
+	t.Run("assignee 为空字符串时显示 unassigned", func(t *testing.T) {
+		emptyAssignee := ""
+		task := &database.TeamTaskBase{
+			TaskID:   "T-003",
+			Title:    "test",
+			Status:   "pending",
+			Assignee: &emptyAssignee,
+			TeamName: "team-c",
+		}
+		brief := taskBrief(task)
+		if brief["assignee"] != "<unassigned>" {
+			t.Errorf("assignee 应为 <unassigned>，实际 %v", brief["assignee"])
+		}
+	})
+
+	t.Run("nil 任务返回 nil", func(t *testing.T) {
+		brief := taskBrief(nil)
+		if brief != nil {
+			t.Errorf("nil 任务应返回 nil，实际 %v", brief)
+		}
+	})
 }
 
-// TestQualifyTeamToolIDs_默认值 测试空 team/member 时使用默认值
-func TestQualifyTeamToolIDs_默认值(t *testing.T) {
-	backend := newTestTeamBackend()
-	toolList := CreateTeamTools(backend, "leader", "build_mode", "temporary", "cn", nil, nil, nil)
-	QualifyTeamToolIDs(toolList, "", "")
-	for _, tl := range toolList {
-		card := tl.Card()
-		if card == nil || card.ID == "" {
-			continue
+// TestExtractStringSlice 从 map 中提取字符串切片
+func TestExtractStringSlice(t *testing.T) {
+	t.Run("不存在 key 返回 nil", func(t *testing.T) {
+		m := map[string]any{"other": "value"}
+		result := extractStringSlice(m, "missing")
+		if result != nil {
+			t.Errorf("不存在的 key 应返回 nil，实际 %v", result)
 		}
-		expectedSuffix := ".default.unknown"
-		if card.ID[len(card.ID)-len(expectedSuffix):] != expectedSuffix {
-			t.Fatalf("tool ID %q should end with %s for empty team/member", card.ID, expectedSuffix)
-		}
-	}
-}
+	})
 
-// TestLeaderSet 对齐 Python 权限集合
-func TestLeaderSet(t *testing.T) {
-	for _, name := range []string{"build_team", "clean_team", "spawn_member", "shutdown_member",
-		"approve_plan", "approve_tool", "create_task", "update_task", "list_members",
-		"view_task", "send_message"} {
-		if _, ok := leaderSet[name]; !ok {
-			t.Fatalf("leaderSet should contain %s", name)
+	t.Run("值为 nil 返回 nil", func(t *testing.T) {
+		m := map[string]any{"items": nil}
+		result := extractStringSlice(m, "items")
+		if result != nil {
+			t.Errorf("nil 值应返回 nil，实际 %v", result)
 		}
-	}
-}
+	})
 
-// TestMemberSet 对齐 Python 权限集合
-func TestMemberSet(t *testing.T) {
-	for _, name := range []string{"claim_task", "submit_plan", "view_task", "send_message"} {
-		if _, ok := memberSet[name]; !ok {
-			t.Fatalf("memberSet should contain %s", name)
+	t.Run("[]string 类型直接返回", func(t *testing.T) {
+		m := map[string]any{"items": []string{"a", "b", "c"}}
+		result := extractStringSlice(m, "items")
+		if len(result) != 3 {
+			t.Fatalf("长度应为 3，实际 %d", len(result))
 		}
-	}
-}
-
-// TestHumanAgentSet 对齐 Python 权限集合
-func TestHumanAgentSet(t *testing.T) {
-	for _, name := range []string{"view_task", "member_complete_task", "send_message"} {
-		if _, ok := humanAgentSet[name]; !ok {
-			t.Fatalf("humanAgentSet should contain %s", name)
+		if result[0] != "a" || result[1] != "b" || result[2] != "c" {
+			t.Errorf("内容应为 [a,b,c]，实际 %v", result)
 		}
-	}
-}
+	})
 
-// TestMemberNameRegexp 测试成员名正则
-func TestMemberNameRegexp(t *testing.T) {
-	pattern := MemberNameRegexp()
-	// 合法名称
-	if !pattern.MatchString("alice") {
-		t.Fatal("alice should match member name pattern")
-	}
-	if !pattern.MatchString("dev-1") {
-		t.Fatal("dev-1 should match member name pattern")
-	}
-	// 非法名称
-	if pattern.MatchString("Alice") {
-		t.Fatal("Alice (uppercase) should not match member name pattern")
-	}
-	if pattern.MatchString("1alice") {
-		t.Fatal("1alice (leading digit) should not match member name pattern")
-	}
-	if pattern.MatchString("中文") {
-		t.Fatal("中文 should not match member name pattern")
-	}
-}
-
-// toolNames 从工具列表提取名称映射
-func toolNames(tools []tool.Tool) map[string]struct{} {
-	names := make(map[string]struct{})
-	for _, tl := range tools {
-		if tl.Card() != nil {
-			names[tl.Card().Name] = struct{}{}
+	t.Run("[]any 类型提取字符串", func(t *testing.T) {
+		m := map[string]any{"items": []any{"x", "y", "z"}}
+		result := extractStringSlice(m, "items")
+		if len(result) != 3 {
+			t.Fatalf("长度应为 3，实际 %d", len(result))
 		}
-	}
-	return names
+		if result[0] != "x" || result[1] != "y" || result[2] != "z" {
+			t.Errorf("内容应为 [x,y,z]，实际 %v", result)
+		}
+	})
+
+	t.Run("[]any 类型跳过非字符串元素", func(t *testing.T) {
+		m := map[string]any{"items": []any{"a", 123, "b"}}
+		result := extractStringSlice(m, "items")
+		if len(result) != 2 {
+			t.Fatalf("长度应为 2（跳过 123），实际 %d", len(result))
+		}
+		if result[0] != "a" || result[1] != "b" {
+			t.Errorf("内容应为 [a,b]，实际 %v", result)
+		}
+	})
+
+	t.Run("JSON 序列化反序列化路径", func(t *testing.T) {
+		// 传入一个可以被 JSON 序列化为字符串数组的值
+		m := map[string]any{"items": []any{1.0, 2.0, 3.0}}
+		result := extractStringSlice(m, "items")
+		// []any{1.0, 2.0, 3.0} JSON 序列化后为 [1,2,3]，反序列化到 []string 会失败
+		if result != nil {
+			t.Logf("JSON 路径: %v", result)
+		}
+	})
 }

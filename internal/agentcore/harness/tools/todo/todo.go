@@ -164,7 +164,7 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 		logger.Warn(logComponent).
 			Str("file_path", filePath).
 			Err(err).
-			Msg("LoadTodos 读取文件失败")
+			Msg("LoadTodos failed to read file")
 		return nil, exception.BuildError(
 			exception.StatusToolTodosLoadFailed,
 			exception.WithParam("reason", fmt.Sprintf("待办文件未找到: %s", filePath)),
@@ -183,7 +183,7 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 		logger.Error(logComponent).
 			Str("file_path", filePath).
 			Err(err).
-			Msg("LoadTodos JSON 解码失败")
+			Msg("LoadTodos JSON decode failed")
 		return nil, exception.BuildError(
 			exception.StatusToolTodosLoadFailed,
 			exception.WithParam("reason", fmt.Sprintf("加载待办列表失败，read_file 读取失败: %s", err.Error())),
@@ -197,7 +197,7 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Int("item_count", len(items)).
-		Msg("LoadTodos 加载待办事项成功")
+		Msg("LoadTodos loaded todos successfully")
 	return items, nil
 }
 
@@ -214,7 +214,7 @@ func (t *TodoTool) SaveTodos(ctx context.Context, sessionID string, todos []hsch
 		logger.Error(logComponent).
 			Str("file_path", filePath).
 			Err(err).
-			Msg("SaveTodos JSON 编码失败")
+			Msg("SaveTodos JSON encode failed")
 		return exception.BuildError(
 			exception.StatusToolTodosSaveFailed,
 			exception.WithParam("reason", fmt.Sprintf("保存待办列表失败，JSON 编码失败: %s", err.Error())),
@@ -226,7 +226,7 @@ func (t *TodoTool) SaveTodos(ctx context.Context, sessionID string, todos []hsch
 		logger.Error(logComponent).
 			Str("file_path", filePath).
 			Err(err).
-			Msg("SaveTodos 写入文件失败")
+			Msg("SaveTodos failed to write file")
 		return exception.BuildError(
 			exception.StatusToolTodosSaveFailed,
 			exception.WithParam("reason", fmt.Sprintf("保存待办列表失败，write_file 写入失败: %s", err.Error())),
@@ -235,7 +235,7 @@ func (t *TodoTool) SaveTodos(ctx context.Context, sessionID string, todos []hsch
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Int("item_count", len(todos)).
-		Msg("SaveTodos 保存待办事项成功")
+		Msg("SaveTodos saved todos successfully")
 	return nil
 }
 
@@ -330,7 +330,7 @@ func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			logger.Info(logComponent).
 				Str("session_id", sessionID).
 				Int("task_count", len(todoItems)).
-				Msg("TodoCreateTool 创建待办事项成功")
+				Msg("TodoCreateTool created todo successfully")
 
 			// 格式化结果字符串
 			// Python: TodoCreateTool._format_create_result L250-266
@@ -564,7 +564,7 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 				Str("session_id", sessionID).
 				Str("action", input.Action).
 				Int("task_count", len(updatedTodos)).
-				Msg("TodoModifyTool 修改待办事项成功")
+				Msg("TodoModifyTool modified todo successfully")
 
 			return map[string]any{
 				"message": msg,

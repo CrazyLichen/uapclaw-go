@@ -133,7 +133,7 @@ func (h *SpawnedProcessHandle) SendMessage(ctx context.Context, msg Message) err
 	logger.Debug(logComponent).
 		Str("message_type", msg.Type.String()).
 		Str("process_id", h.processID).
-		Msg("向子进程发送消息")
+		Msg("sending message to child process")
 	return WriteMessage(h.stdin, msg)
 }
 
@@ -147,7 +147,7 @@ func (h *SpawnedProcessHandle) ReceiveMessage(ctx context.Context) (Message, err
 	logger.Debug(logComponent).
 		Str("message_type", msg.Type.String()).
 		Str("process_id", h.processID).
-		Msg("从子进程接收消息")
+		Msg("received message from child process")
 	return msg, nil
 }
 
@@ -169,7 +169,7 @@ func (h *SpawnedProcessHandle) StartHealthCheck(ctx context.Context, interval ..
 	logger.Info(logComponent).
 		Str("process_id", h.processID).
 		Dur("interval", checkInterval).
-		Msg("启动健康检查")
+		Msg("starting health check")
 
 	h.healthCheckTask = utils.NewBackgroundTask(
 		fmt.Sprintf("health-check-%s", h.processID),
@@ -206,7 +206,7 @@ func (h *SpawnedProcessHandle) StopHealthCheck() error {
 
 	logger.Info(logComponent).
 		Str("process_id", h.processID).
-		Msg("停止健康检查")
+		Msg("stopping health check")
 
 	return task.Stop(5 * time.Second)
 }
@@ -239,7 +239,7 @@ func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 		logger.Warn(logComponent).
 			Str("process_id", h.processID).
 			Err(err).
-			Msg("发送 SHUTDOWN 消息失败，尝试强制终止")
+			Msg("failed to send SHUTDOWN message, trying force termination")
 		killed, terminateErr := h.forceTerminate()
 		return killed, terminateErr
 	}
@@ -254,12 +254,12 @@ func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 	if ackReceived {
 		logger.Info(logComponent).
 			Str("process_id", h.processID).
-			Msg("收到 SHUTDOWN_ACK，等待进程退出")
+			Msg("SHUTDOWN_ACK received, waiting for process exit")
 	} else {
 		logger.Warn(logComponent).
 			Str("process_id", h.processID).
 			Dur("timeout", shutdownTimeout).
-			Msg("等待 SHUTDOWN_ACK 超时")
+			Msg("timed out waiting for SHUTDOWN_ACK")
 	}
 
 	// 等待进程退出（宽限期）
@@ -277,7 +277,7 @@ func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 			// 宽限期超时，强制终止
 			logger.Warn(logComponent).
 				Str("process_id", h.processID).
-				Msg("进程未在宽限期内退出，执行强制终止")
+				Msg("process did not exit within grace period, forcing termination")
 			return h.forceTerminate()
 		}
 	}
@@ -306,14 +306,14 @@ func (h *SpawnedProcessHandle) ForceKill() error {
 
 	logger.Info(logComponent).
 		Str("process_id", h.processID).
-		Msg("强制终止子进程（SIGKILL）")
+		Msg("force terminating child process (SIGKILL)")
 
 	err := h.cmd.Process.Kill()
 	if err != nil {
 		logger.Warn(logComponent).
 			Str("process_id", h.processID).
 			Err(err).
-			Msg("SIGKILL 失败（进程可能已退出）")
+			Msg("SIGKILL failed (process may have exited)")
 		return err
 	}
 
@@ -322,7 +322,7 @@ func (h *SpawnedProcessHandle) ForceKill() error {
 
 	logger.Info(logComponent).
 		Str("process_id", h.processID).
-		Msg("子进程已强制终止")
+		Msg("child process force terminated")
 	return nil
 }
 
@@ -366,7 +366,7 @@ func (h *SpawnedProcessHandle) performHealthCheck(ctx context.Context) {
 		logger.Error(logComponent).
 			Str("process_id", h.processID).
 			Err(err).
-			Msg("发送健康检查消息失败")
+			Msg("failed to send health check message")
 		h.recordHealthFailure()
 		return
 	}
@@ -385,7 +385,7 @@ func (h *SpawnedProcessHandle) performHealthCheck(ctx context.Context) {
 		logger.Warn(logComponent).
 			Str("process_id", h.processID).
 			Dur("timeout", checkTimeout).
-			Msg("健康检查响应超时")
+			Msg("health check response timed out")
 		h.recordHealthFailure()
 		return
 	}
@@ -393,7 +393,7 @@ func (h *SpawnedProcessHandle) performHealthCheck(ctx context.Context) {
 	if resp.Type == MessageTypeHealthCheckResponse {
 		logger.Debug(logComponent).
 			Str("process_id", h.processID).
-			Msg("健康检查通过")
+			Msg("health check passed")
 		h.mu.Lock()
 		h.isHealthy = true
 		h.consecutiveFails = 0
@@ -403,7 +403,7 @@ func (h *SpawnedProcessHandle) performHealthCheck(ctx context.Context) {
 		logger.Error(logComponent).
 			Str("process_id", h.processID).
 			Str("response_type", resp.Type.String()).
-			Msg("健康检查响应类型不正确")
+			Msg("health check response type mismatch")
 		h.recordHealthFailure()
 	}
 }
@@ -455,7 +455,7 @@ func (h *SpawnedProcessHandle) waitForHealthCheckResponse(ctx context.Context, m
 			logger.Debug(logComponent).
 				Str("process_id", h.processID).
 				Str("message_type", msg.Type.String()).
-				Msg("健康检查等待期间收到非目标消息，跳过")
+				Msg("non-target message received while waiting for health check, skipping")
 			continue
 
 		case err := <-errCh:
@@ -506,14 +506,14 @@ func (h *SpawnedProcessHandle) waitForShutdownAck(ctx context.Context) bool {
 				// Agent 自然完成也视为可正常退出
 				logger.Info(logComponent).
 					Str("process_id", h.processID).
-					Msg("等待 SHUTDOWN_ACK 期间收到 DONE，视为正常退出")
+					Msg("DONE received while waiting for SHUTDOWN_ACK, treating as normal exit")
 				return true
 			}
 			// 跳过其他消息，继续读
 			logger.Debug(logComponent).
 				Str("process_id", h.processID).
 				Str("message_type", msg.Type.String()).
-				Msg("等待 SHUTDOWN_ACK 期间收到非目标消息，跳过")
+				Msg("non-target message received while waiting for SHUTDOWN_ACK, skipping")
 			continue
 
 		case <-errCh:
@@ -544,7 +544,7 @@ func (h *SpawnedProcessHandle) forceTerminate() (bool, error) {
 
 	logger.Info(logComponent).
 		Str("process_id", h.processID).
-		Msg("发送 SIGTERM 终止子进程")
+		Msg("sending SIGTERM to terminate child process")
 
 	// Unix: SIGTERM → 等3s → SIGKILL
 	if !h.isWindows() {
@@ -560,12 +560,12 @@ func (h *SpawnedProcessHandle) forceTerminate() (bool, error) {
 		case <-waitCh:
 			logger.Info(logComponent).
 				Str("process_id", h.processID).
-				Msg("子进程在 SIGTERM 后正常退出")
+				Msg("child process exited normally after SIGTERM")
 			return false, nil
 		case <-time.After(ForceTerminateGracePeriod):
 			logger.Warn(logComponent).
 				Str("process_id", h.processID).
-				Msg("子进程未在宽限期内退出，执行 SIGKILL")
+				Msg("child process did not exit within grace period, executing SIGKILL")
 			killErr := h.cmd.Process.Kill()
 			if killErr != nil {
 				return false, fmt.Errorf("SIGKILL 子进程 %s 失败: %w", h.processID, killErr)

@@ -154,6 +154,7 @@ type EventType string
 type eventSlice []Event
 
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// EventInput 用户输入事件
 	EventInput EventType = "input"
@@ -341,8 +342,6 @@ func (e *FollowUpEvent) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // MarshalJSON 实现 json.Marshaler，遍历每个 Event 按具体类型序列化。
 func (es eventSlice) MarshalJSON() ([]byte, error) {
 	items := make([]json.RawMessage, len(es))
@@ -407,3 +406,5 @@ func (es *eventSlice) UnmarshalJSON(data []byte) error {
 	*es = result
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

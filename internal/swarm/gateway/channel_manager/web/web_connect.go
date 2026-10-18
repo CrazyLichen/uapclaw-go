@@ -140,7 +140,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
-			Msg("WebSocket 升级失败")
+			Msg("WebSocket upgrade failed")
 		return
 	}
 
@@ -156,7 +156,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Str("event_type", "ws_connected").
 		Str("remote_addr", conn.RemoteAddr().String()).
 		Int("total_clients", wc.clientCount()).
-		Msg("WebSocket 客户端已连接")
+		Msg("WebSocket client connected")
 
 	// 触发 onConnect 钩子（对齐 Python _connection_handler 中 _connect_hooks 遍历）
 	wc.connectHooksMu.RLock()
@@ -167,7 +167,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		if err := hook(conn); err != nil {
 			logger.Warn(logComponent).
 				Err(err).
-				Msg("onConnect 钩子执行失败")
+				Msg("onConnect hook execution failed")
 		}
 	}
 
@@ -186,7 +186,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Str("event_type", "ws_disconnected").
 			Str("remote_addr", conn.RemoteAddr().String()).
 			Int("total_clients", wc.clientCount()).
-			Msg("WebSocket 客户端已断开")
+			Msg("WebSocket client disconnected")
 	}()
 
 	for {
@@ -195,7 +195,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
 				logger.Warn(logComponent).
 					Err(err).
-					Msg("WebSocket 读取异常")
+					Msg("WebSocket read error")
 			}
 			return
 		}
@@ -269,7 +269,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			logger.Error(logComponent).
 				Err(err).
 				Str("method", req.Method).
-				Msg("写入响应失败")
+				Msg("failed to write response")
 		}
 	}
 }
@@ -301,7 +301,7 @@ func (wc *WebChannel) Start(_ context.Context) error {
 		Str("host", wc.config.Host).
 		Int("port", wc.config.Port).
 		Str("path", wc.config.Path).
-		Msg("WebChannel 已启动")
+		Msg("WebChannel started")
 	return nil
 }
 
@@ -453,7 +453,7 @@ func (wc *WebChannel) broadcastEvent(event string, payload map[string]any) {
 		logger.Error(logComponent).
 			Str("event", event).
 			Err(err).
-			Msg("编码事件帧失败")
+			Msg("failed to encode event frame")
 		return
 	}
 
@@ -469,7 +469,7 @@ func (wc *WebChannel) broadcastRaw(data []byte) {
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			logger.Warn(logComponent).
 				Err(err).
-				Msg("广播原始帧到客户端失败")
+				Msg("failed to broadcast raw frame to client")
 		}
 	}
 }
@@ -481,7 +481,7 @@ func (wc *WebChannel) writeError(conn *websocket.Conn, reqID, errMsg, code strin
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		logger.Error(logComponent).
 			Err(err).
-			Msg("写入错误响应失败")
+			Msg("failed to write error response")
 	}
 }
 

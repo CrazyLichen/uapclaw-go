@@ -120,7 +120,7 @@ func (s *graphSearcher) searchAll(ctx context.Context, query string, o graph.Opt
 	// 收集结果：搜索失败的集合初始化空切片，对齐 Python: output_dict[col] = []
 	for sr := range resultCh {
 		if sr.err != nil {
-			logger.Warn(logComponent).Err(sr.err).Str("collection", sr.collection).Str("query", query).Msg("搜索集合失败")
+			logger.Warn(logComponent).Err(sr.err).Str("collection", sr.collection).Str("query", query).Msg("searchcollection failed")
 			results[sr.collection] = []map[string]any{}
 		} else {
 			results[sr.collection] = sr.result
@@ -188,7 +188,7 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 		// 执行搜索
 		res, err := s.rawHybridSearch(ctx, query, collection, k, searchOpts)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Int("bfs_round", i+1).Msg("BFS 搜索失败")
+			logger.Warn(logComponent).Err(err).Int("bfs_round", i+1).Msg("BFS search failed")
 			break
 		}
 
@@ -214,7 +214,7 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 				expanded, err = s.expandRelations(ctx, newUUIDs, newResults, o.FilterExpr)
 			}
 			if err != nil {
-				logger.Warn(logComponent).Err(err).Int("bfs_round", i+1).Msg("BFS 扩展失败")
+				logger.Warn(logComponent).Err(err).Int("bfs_round", i+1).Msg("BFS expansion failed")
 				break
 			}
 
@@ -280,7 +280,7 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 		}
 		scoreMap, err := o.Reranker.Rerank(ctx, query, documents)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("BFS 最终重排序失败，使用距离排序")
+			logger.Warn(logComponent).Err(err).Msg("BFS final rerank failed, using distance sort")
 			return candidates, nil
 		}
 		minScore := o.MinScore
@@ -386,7 +386,7 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 	// 执行搜索
 	resultSets, err := s.client.HybridSearch(ctx, searchOpt)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("collection", collection).Msg("混合搜索失败")
+		logger.Error(logComponent).Err(err).Str("collection", collection).Msg("hybrid search failed")
 		return nil, fmt.Errorf("搜索集合 %s 失败: %w", collection, err)
 	}
 
@@ -714,7 +714,7 @@ func (s *graphSearcher) combinedRerank(ctx context.Context, query string, result
 
 	scoreMap, err := o.Reranker.Rerank(ctx, query, documents)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("collection", CollectionEntity).Msg("重排序失败，使用原始顺序")
+		logger.Warn(logComponent).Err(err).Str("collection", CollectionEntity).Msg("rerank failed, using original order")
 	} else {
 		// 按 reranker 分数排序并过滤
 		minScore := o.MinScore

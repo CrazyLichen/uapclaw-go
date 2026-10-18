@@ -90,7 +90,7 @@ func SpawnProcess(
 		Str("event_type", "SPAWN_PROCESS_START").
 		Str("process_id", processID).
 		Str("command", commandStr).
-		Msg("启动子进程")
+		Msg("starting child process")
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("启动子进程失败: %w", err)
@@ -112,7 +112,7 @@ func SpawnProcess(
 		Str("event_type", "SPAWN_PROCESS_SUCCESS").
 		Str("process_id", processID).
 		Int("pid", cmd.Process.Pid).
-		Msg("子进程启动成功")
+		Msg("child process started")
 
 	return handle, nil
 }
@@ -131,6 +131,6 @@ func drainStderr(stderrPipe io.Reader) {
 		logger.Debug(logComponent).
 			Str("event_type", "SPAWN_CHILD_STDERR").
 			Str("line", scanner.Text()).
-			Msg("子进程 stderr")
+			Msg("child process stderr")
 	}
 }

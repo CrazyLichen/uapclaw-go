@@ -43,7 +43,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 ChannelPushTransport 满足 GatewayPushTransport 接口
+// _ 编译时验证 ChannelPushTransport 满足 GatewayPushTransport 接口
 var _ GatewayPushTransport = (*ChannelPushTransport)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -57,7 +57,7 @@ func NewChannelPushTransport() *ChannelPushTransport {
 func (t *ChannelPushTransport) SendPush(ctx context.Context, msg map[string]any) error {
 	s := server.GetInstance()
 	if s == nil {
-		logger.Warn(logComponent).Msg("ChannelPushTransport: AgentServer 单例未初始化")
+		logger.Warn(logComponent).Msg("ChannelPushTransport: AgentServer singleton not initialized")
 		return fmt.Errorf("AgentServer 单例未初始化")
 	}
 	return s.SendPush(ctx, msg)

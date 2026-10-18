@@ -183,7 +183,7 @@ func (b *SkillExperienceOptimizerBase) Bind(operators map[string]operator.Operat
 // Python: SkillExperienceOptimizer.update_llm(llm, model)
 func (b *SkillExperienceOptimizerBase) UpdateLLM(newLLM *llm.Model, newModel string) {
 	if newLLM == nil {
-		logger.Warn(logComponent).Msg("[SkillExperienceOptimizer] UpdateLLM: llm 为 nil，拒绝更新")
+		logger.Warn(logComponent).Msg("[SkillExperienceOptimizer] UpdateLLM: llm is nil, rejecting update")
 		return
 	}
 	b.llm = newLLM

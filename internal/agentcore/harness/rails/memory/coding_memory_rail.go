@@ -85,11 +85,8 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 CodingMemoryRail 满足 AgentRail 接口
 // _ 编译时验证 CodingMemoryRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*CodingMemoryRail)(nil)
-
-var codingMemoryLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -139,10 +136,10 @@ func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			func(name string) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(codingMemoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "coding_memory_rail_uninit").
 							Str("tool_name", name).
-							Msgf("从 ability_manager 移除工具失败: %v", rec)
+							Msgf("failed to remove tool from ability_manager: %v", rec)
 					}
 				}()
 				am.Remove(name)
@@ -157,10 +154,10 @@ func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			func(toolID string) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(codingMemoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "coding_memory_rail_uninit").
 							Str("tool_id", toolID).
-							Msgf("从 resource_mgr 移除工具失败: %v", rec)
+							Msgf("failed to remove tool from resource_mgr: %v", rec)
 					}
 				}()
 				_, _ = resourceMgr.RemoveTool([]string{toolID})
@@ -181,9 +178,9 @@ func (r *CodingMemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		r.systemPromptBuilder = nil
 	}
 
-	logger.Info(codingMemoryLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "coding_memory_rail_uninit").
-		Msg("CodingMemoryRail 注销完成")
+		Msg("CodingMemoryRail unregistered")
 
 	return nil
 }
@@ -224,11 +221,11 @@ func (r *CodingMemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterface
 		r.recallDone <- struct{}{}
 	}
 
-	logger.Info(codingMemoryLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "coding_memory_rail_before_invoke").
 		Bool("read_only", readOnly).
 		Bool("has_manager", r.manager != nil).
-		Msg("CodingMemoryRail BeforeInvoke 完成")
+		Msg("CodingMemoryRail BeforeInvoke completed")
 
 	return nil
 }
@@ -315,10 +312,10 @@ func (r *CodingMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 
 	r.systemPromptBuilder.AddSection(section)
 
-	logger.Info(codingMemoryLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "coding_memory_rail_before_model_call").
 		Bool("has_recall", r.recallResult != nil && r.recallResult.content != "").
-		Msg("CodingMemoryRail BeforeModelCall 完成")
+		Msg("CodingMemoryRail BeforeModelCall completed")
 
 	return nil
 }
@@ -348,9 +345,9 @@ func (r *CodingMemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseAgent) {
 	am := agent.AbilityManager()
 	if am == nil {
-		logger.Warn(codingMemoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "coding_memory_rail_register_tools").
-			Msg("Agent 无 ability_manager，跳过工具注册")
+			Msg("agent has no ability_manager, skipping tool registration")
 		return
 	}
 
@@ -399,7 +396,7 @@ func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseA
 	for _, t := range memoryTools {
 		toolCard := t.Card()
 		if toolCard == nil {
-			logger.Warn(codingMemoryLogComponent).
+			logger.Warn(logComponent).
 				Str("event_type", "coding_memory_rail_register_tools").
 				Msg("tool has no card, skipping registration")
 			continue
@@ -410,20 +407,20 @@ func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseA
 			func(t tool.Tool) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(codingMemoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "coding_memory_rail_register_tools").
 							Str("tool_id", t.Card().ID).
-							Msgf("注册工具到 resource_mgr 失败: %v", rec)
+							Msgf("failed to register tool to resource_mgr: %v", rec)
 					}
 				}()
 				existing, err := resourceMgr.GetTool([]string{t.Card().ID})
 				if err != nil || len(existing) == 0 {
 					if addErr := resourceMgr.AddTool(t); addErr != nil {
-						logger.Warn(codingMemoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "coding_memory_rail_register_tools").
 							Str("tool_id", t.Card().ID).
 							Err(addErr).
-							Msg("注册工具到 resource_mgr 失败")
+							Msg("failed to register tool to resource_mgr")
 					} else {
 						r.ownedToolIDs[t.Card().ID] = struct{}{}
 					}
@@ -435,27 +432,27 @@ func (r *CodingMemoryRail) registerCodingMemoryTools(agent agentinterfaces.BaseA
 		func(t tool.Tool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(codingMemoryLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "coding_memory_rail_register_tools").
 						Str("tool_name", t.Card().Name).
-						Msgf("注册工具到 ability_manager 失败: %v", rec)
+						Msgf("failed to register tool to ability_manager: %v", rec)
 				}
 			}()
 			result := am.Add(t.Card())
 			if result.Added {
 				r.ownedToolNames[t.Card().Name] = struct{}{}
-				logger.Info(codingMemoryLogComponent).
+				logger.Info(logComponent).
 					Str("event_type", "coding_memory_rail_register_tools").
 					Str("tool_name", t.Card().Name).
-					Msg("注册工具成功")
+					Msg("tool registered successfully")
 			}
 		}(t)
 	}
 
-	logger.Info(codingMemoryLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "coding_memory_rail_register_tools").
 		Strs("tool_names", memorySetToSortedSlice(r.ownedToolNames)).
-		Msg("CodingMemoryRail 工具注册完成")
+		Msg("CodingMemoryRail tool registration completed")
 }
 
 // initCodingMemoryManager 初始化 Coding Memory Index Manager。
@@ -469,9 +466,9 @@ func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 
 	// 无 workspace 时无法初始化
 	if r.Workspace() == nil {
-		logger.Warn(codingMemoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "coding_memory_rail_init_manager").
-			Msg("Workspace 为 nil，跳过管理器初始化")
+			Msg("Workspace is nil, skipping manager initialization")
 		return
 	}
 
@@ -484,11 +481,11 @@ func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 		nil, // LLM 实例暂未注入，runChecker 在 LLM() == nil 时跳过冲突检查
 	)
 	if err != nil {
-		logger.Error(codingMemoryLogComponent).
+		logger.Error(logComponent).
 			Str("event_type", "coding_memory_rail_init_manager").
 			Str("agent_id", agentID).
 			Err(err).
-			Msg("初始化 Coding Memory 管理器失败")
+			Msg("failed to initialize Coding Memory manager")
 		return
 	}
 
@@ -498,15 +495,15 @@ func (r *CodingMemoryRail) initCodingMemoryManager(ctx context.Context) {
 		if r.toolCtx != nil {
 			r.toolCtx.Manager = mgr
 		}
-		logger.Info(codingMemoryLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "coding_memory_rail_init_manager").
 			Str("agent_id", agentID).
 			Str("dir", r.codingMemoryDir).
-			Msg("Coding Memory 管理器初始化成功")
+			Msg("Coding Memory manager initialized")
 	} else {
-		logger.Warn(codingMemoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "coding_memory_rail_init_manager").
-			Msg("Coding Memory 管理器初始化返回 nil")
+			Msg("Coding Memory manager initialization returned nil")
 	}
 }
 
@@ -533,10 +530,10 @@ func (r *CodingMemoryRail) autoRecall(ctx context.Context, query string) {
 	opts := lite.SearchOpts{MaxResults: maxRecallResults}
 	results, err := r.manager.Search(ctx, query, opts)
 	if err != nil {
-		logger.Warn(codingMemoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "coding_memory_rail_auto_recall").
 			Err(err).
-			Msg("搜索记忆失败")
+			Msg("failed to search memory")
 		return
 	}
 

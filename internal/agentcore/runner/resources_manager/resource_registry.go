@@ -50,7 +50,7 @@ func NewResourceRegistry() *ResourceRegistry {
 
 	logger.Info(logComponent).
 		Str("event_type", "RESOURCE_REGISTRY_INIT").
-		Msg("资源注册表初始化完成")
+		Msg("resource registry initialized")
 
 	return registry
 }

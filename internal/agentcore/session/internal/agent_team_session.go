@@ -70,7 +70,7 @@ func NewAgentTeamSession(sessionID, teamID string, opts ...AgentTeamSessionOptio
 		Str("action", "new_agent_team_session").
 		Str("session_id", sessionID).
 		Str("team_id", teamID).
-		Msg("创建内部 AgentTeamSession")
+		Msg("created internal AgentTeamSession")
 
 	s := &AgentTeamSession{
 		sessionID: sessionID,

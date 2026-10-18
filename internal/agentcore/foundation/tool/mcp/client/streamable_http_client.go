@@ -116,7 +116,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 		logger.Warn(logComponent).
 			Str("server_name", c.serverName).
 			Int("auth_fail_count", authFailCount).
-			Msg("StreamableHTTP 客户端所有认证结果均失败，将以无认证模式连接")
+			Msg("StreamableHTTP client all auth attempts failed, connecting without auth")
 	}
 
 	// 如果有 TLS 配置，构建自定义 HTTP 客户端
@@ -170,7 +170,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 		logger.Debug(logComponent).
 			Str("server_name", c.serverName).
 			Int("query_param_count", len(mergedQueryParams)).
-			Msg("StreamableHTTP 客户端注入认证查询参数")
+			Msg("StreamableHTTP client injecting auth query params")
 	}
 
 	// 创建 Streamable HTTP 客户端
@@ -181,7 +181,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
 			Err(err).
-			Msg("StreamableHTTP 客户端创建失败")
+			Msg("failed to create StreamableHTTP client")
 		return exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
@@ -195,7 +195,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
 			Err(err).
-			Msg("StreamableHTTP 启动连接失败")
+			Msg("StreamableHTTP failed to start connection")
 		// 启动失败时关闭底层连接，防止资源泄漏
 		_ = mcpCli.Close()
 		return exception.BuildError(
@@ -221,7 +221,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
 			Err(err).
-			Msg("StreamableHTTP 初始化会话失败")
+			Msg("StreamableHTTP failed to initialize session")
 		_ = mcpCli.Close()
 		return exception.BuildError(
 			exception.StatusToolMcpNotConnected,
@@ -234,7 +234,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("server_path", c.config.ServerPath).
-		Msg("StreamableHTTP 客户端连接成功")
+		Msg("StreamableHTTP client connected")
 	return nil
 }
 
@@ -248,7 +248,7 @@ func (c *StreamableHttpClient) Disconnect(_ context.Context) error {
 			logger.Error(logComponent).
 				Str("server_name", c.serverName).
 				Err(err).
-				Msg("StreamableHTTP 断开连接失败")
+				Msg("StreamableHTTP failed to disconnect")
 			return err
 		}
 		c.client = nil
@@ -256,7 +256,7 @@ func (c *StreamableHttpClient) Disconnect(_ context.Context) error {
 	c.isConnected = false
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
-		Msg("StreamableHTTP 客户端已断开连接")
+		Msg("StreamableHTTP client disconnected")
 	return nil
 }
 
@@ -275,7 +275,7 @@ func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolC
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Err(err).
-			Msg("StreamableHTTP 列出工具失败")
+			Msg("StreamableHTTP failed to list tools")
 		return nil, err
 	}
 
@@ -294,7 +294,7 @@ func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolC
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Int("tool_count", len(cards)).
-		Msg("StreamableHTTP 获取工具列表成功")
+		Msg("StreamableHTTP tool list retrieved")
 	return cards, nil
 }
 
@@ -310,7 +310,7 @@ func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, ar
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
-		Msg("StreamableHTTP 调用工具")
+		Msg("StreamableHTTP calling tool")
 
 	result, err := c.client.CallTool(ctx, mcpcore.CallToolRequest{
 		Params: mcpcore.CallToolParams{
@@ -324,14 +324,14 @@ func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, ar
 			Str("server_name", c.serverName).
 			Str("tool_name", toolName).
 			Err(err).
-			Msg("StreamableHTTP 调用工具失败")
+			Msg("StreamableHTTP failed to call tool")
 		return nil, err
 	}
 
 	logger.Info(logComponent).
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
-		Msg("StreamableHTTP 工具调用完成")
+		Msg("StreamableHTTP tool call completed")
 	return callToolResultToMap(result), nil
 }
 
@@ -352,14 +352,14 @@ func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string)
 			logger.Debug(logComponent).
 				Str("server_name", c.serverName).
 				Str("tool_name", toolName).
-				Msg("StreamableHTTP 找到工具信息")
+				Msg("StreamableHTTP tool info found")
 			return card, nil
 		}
 	}
 	logger.Warn(logComponent).
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
-		Msg("StreamableHTTP 未找到工具")
+		Msg("StreamableHTTP tool not found")
 	return nil, exception.BuildError(
 		exception.StatusToolMcpExecutionError,
 		exception.WithParam("method", "GetToolInfo"),
@@ -383,7 +383,7 @@ func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]map[string]
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("server_name", c.serverName).
 			Err(err).
-			Msg("StreamableHTTP 列出资源失败")
+			Msg("StreamableHTTP failed to list resources")
 		return nil, err
 	}
 
@@ -414,7 +414,7 @@ func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) ([]
 			Str("server_name", c.serverName).
 			Str("uri", uri).
 			Err(err).
-			Msg("StreamableHTTP 读取资源失败")
+			Msg("StreamableHTTP failed to read resource")
 		return nil, err
 	}
 	return readResourceResultToMap(result), nil

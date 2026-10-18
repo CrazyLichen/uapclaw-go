@@ -332,3 +332,11 @@ func (f *fakeReranker) RerankSync(ctx context.Context, query string, docs []stri
 func (f *fakeReranker) RerankDocsSync(ctx context.Context, query string, docs []*reranker.Document, opts ...reranker.RerankOption) (map[string]float64, error) {
 	return nil, nil
 }
+
+// TestWithSkipCompact 验证 WithSkipCompact 选项。
+func TestWithSkipCompact(t *testing.T) {
+	opts := newOptions(WithSkipCompact(true))
+	if opts.SkipCompact == nil || !*opts.SkipCompact {
+		t.Error("SkipCompact 应为 *true")
+	}
+}

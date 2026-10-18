@@ -262,7 +262,7 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 			Str("task_id", taskID).
 			Str("sub_session_id", subSessionID).
 			Str("subagent_type", input.SubagentType).
-			Msg("SessionsSpawnTool 提交异步子任务")
+			Msg("SessionsSpawnTool submitting async subtask")
 
 		// 步骤 7：返回结果（嵌套结构，对齐 Python: ToolOutput(success=True, data={...})）
 		var message string
@@ -355,7 +355,7 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 		// 步骤 5：日志
 		logger.Info(logComponent).
 			Str("task_id", input.TaskID).
-			Msg("SessionsCancelTool 取消任务成功")
+			Msg("SessionsCancelTool task cancelled")
 
 		// 步骤 6：返回结果（嵌套结构，对齐 Python: ToolOutput(success=True, data={...})）
 		var msg string

@@ -324,7 +324,7 @@ func CountMessagesTokens(tokenCounter token.TokenCounter, messages []llm_schema.
 		logger.Warn(logComponent).
 			Str("processor_type", processorType).
 			Err(err).
-			Msg(prefix + "token_counter 返回错误，降级为字符估算")
+			Msg(prefix + "token_counter returned error, falling back to character estimation")
 	}
 	total := 0
 	for _, msg := range messages {

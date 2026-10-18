@@ -135,7 +135,7 @@ func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataC
 				Str("action", "load_agent_session_container").
 				Str("session_id", sessionID).
 				Err(err).
-				Msg("PreRun 失败")
+				Msg("PreRun failed")
 			return nil, fmt.Errorf("PreRun 失败: %w", err)
 		}
 	}

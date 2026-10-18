@@ -281,7 +281,7 @@ func (m *BaseOptimizerMixin) ValidateParameters() {
 	if len(m.parameters) == 0 {
 		panic(exception.NewBaseError(
 			exception.NewStatusCode("TOOLCHAIN_AGENT_PARAM_ERROR", 170000, ""),
-			exception.WithMsg("无法优化空参数"),
+			exception.WithMsg("cannot optimize empty parameters"),
 		))
 	}
 }

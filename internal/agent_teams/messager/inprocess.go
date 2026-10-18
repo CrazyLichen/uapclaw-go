@@ -118,7 +118,7 @@ func (m *InProcessMessager) Publish(ctx context.Context, topicID string, message
 		if err := handler(ctx, message); err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("agent_id", aid).Str("topic", topicID).
-				Msg("InProcess Publish 处理失败")
+				Msg("InProcess Publish handler failed")
 		}
 	}
 	return nil
@@ -170,7 +170,7 @@ func (m *InProcessMessager) Send(ctx context.Context, agentID string, message *e
 	b.mu.Unlock()
 	if !ok {
 		logger.Warn(logComponent).Str("agent_id", agentID).
-			Msg("InProcess Send: 无 P2P handler")
+			Msg("InProcess Send: no P2P handler")
 		return nil
 	}
 	return handler(ctx, message)

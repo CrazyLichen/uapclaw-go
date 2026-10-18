@@ -82,7 +82,7 @@ func importSkillFromRemoteArchive(ctx context.Context, sm *SkillManager, downloa
 
 	logger.Info(logComponent).
 		Str("download_url", downloadURL).
-		Msg("开始下载远程技能归档")
+		Msg("starting remote skill archive download")
 
 	// 下载归档文件
 	archivePath, err := downloadArchive(ctx, downloadURL, tmpDir)
@@ -91,7 +91,7 @@ func importSkillFromRemoteArchive(ctx context.Context, sm *SkillManager, downloa
 			Err(err).
 			Str("download_url", downloadURL).
 			Str("event_type", "REMOTE_IMPORT_ERROR").
-			Msg("下载远程归档失败")
+			Msg("failed to download remote archive")
 		return map[string]any{"success": false, "detail": "下载失败: " + err.Error()}, nil
 	}
 
@@ -102,13 +102,13 @@ func importSkillFromRemoteArchive(ctx context.Context, sm *SkillManager, downloa
 				Err(err).
 				Str("download_url", downloadURL).
 				Str("event_type", "REMOTE_IMPORT_ERROR").
-				Msg("SHA256 校验失败")
+				Msg("SHA256 verification failed")
 			return map[string]any{"success": false, "detail": "SHA256 校验失败: " + err.Error()}, nil
 		}
 		logger.Info(logComponent).
 			Str("download_url", downloadURL).
 			Str("checksum_sha256", checksumSHA256).
-			Msg("SHA256 校验通过")
+			Msg("SHA256 verification passed")
 	}
 
 	// 解压归档
@@ -122,7 +122,7 @@ func importSkillFromRemoteArchive(ctx context.Context, sm *SkillManager, downloa
 			Err(err).
 			Str("archive_path", archivePath).
 			Str("event_type", "REMOTE_IMPORT_ERROR").
-			Msg("解压归档失败")
+			Msg("failed to extract archive")
 		return map[string]any{"success": false, "detail": "解压失败: " + err.Error()}, nil
 	}
 
@@ -202,7 +202,7 @@ func downloadArchive(ctx context.Context, downloadURL, destDir string) (string, 
 		Str("download_url", downloadURL).
 		Int64("bytes_written", written).
 		Str("dest_path", destPath).
-		Msg("归档下载完成")
+		Msg("archive download completed")
 
 	return destPath, nil
 }

@@ -21,6 +21,7 @@ type ACERecallMemoryOp struct {
 	op.OpBase
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -28,6 +29,7 @@ const (
 	logComponent = logger.ComponentAgentCore
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewACERecallMemoryOp 创建 ACE 记忆检索操作。
@@ -111,3 +113,5 @@ func (o *ACERecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

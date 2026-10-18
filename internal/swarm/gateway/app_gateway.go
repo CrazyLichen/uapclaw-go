@@ -49,8 +49,8 @@ type GatewayServer struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponentAppGateway 本文件日志组件
-const logComponentAppGateway = logger.ComponentGateway
+// logComponent 日志组件标识
+const logComponent = logger.ComponentGateway
 
 // shutdownTimeout 优雅关闭超时时间
 const shutdownTimeout = 5 * time.Second
@@ -94,9 +94,9 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 	// 监听 config.yaml 变更，触发 onConfigSavedImpl
 	if cfg != nil {
 		if reloader, err := config.NewReloader(cfg); err != nil {
-			logger.Warn(logComponentAppGateway).
+			logger.Warn(logComponent).
 				Err(err).
-				Msg("创建配置热重载器失败，fsnotify 触发路径不可用")
+				Msg("failed to create config hot-reloader, fsnotify trigger path unavailable")
 		} else {
 			s.reloader = reloader
 		}
@@ -168,9 +168,9 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 			}
 		}
 		if err := connectWithRetry(ctx, s.agentClient, maxRetries, retryInterval); err != nil {
-			logger.Error(logComponentAppGateway).
+			logger.Error(logComponent).
 				Err(err).
-				Msg("连接 AgentServer 失败")
+				Msg("failed to connect to AgentServer")
 			return err
 		}
 	}
@@ -178,18 +178,18 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 	// 启动 MessageHandler 转发循环
 	if s.msgHandler != nil {
 		if err := s.msgHandler.StartForwarding(ctx); err != nil {
-			logger.Error(logComponentAppGateway).
+			logger.Error(logComponent).
 				Err(err).
-				Msg("启动 MessageHandler 转发循环失败")
+				Msg("failed to start MessageHandler forward loop")
 		}
 	}
 
 	// 启动出站派发循环（对齐 Python channel_manager.start_dispatch()）
 	if s.channelMgr != nil {
 		if err := s.channelMgr.StartDispatch(ctx); err != nil {
-			logger.Error(logComponentAppGateway).
+			logger.Error(logComponent).
 				Err(err).
-				Msg("启动 ChannelManager 出站派发循环失败")
+				Msg("failed to start ChannelManager outbound dispatch loop")
 		}
 	}
 
@@ -204,11 +204,11 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 			_ = s.onConfigSavedImpl(nil, BuildEnvMap(), configData)
 		})
 		if err := s.reloader.Start(); err != nil {
-			logger.Warn(logComponentAppGateway).
+			logger.Warn(logComponent).
 				Err(err).
-				Msg("启动配置热重载监听失败")
+				Msg("failed to start config hot-reload listener")
 		} else {
-			logger.Info(logComponentAppGateway).Msg("配置热重载监听已启动")
+			logger.Info(logComponent).Msg("config hot-reload listener started")
 		}
 	}
 
@@ -219,9 +219,9 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 		Handler: s.router,
 	}
 
-	logger.Info(logComponentAppGateway).
+	logger.Info(logComponent).
 		Str("addr", addr).
-		Msg("GatewayServer HTTP 服务启动中")
+		Msg("GatewayServer HTTP starting")
 
 	// 在 goroutine 中启动 HTTP 服务
 	errCh := make(chan error, 1)
@@ -240,9 +240,9 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 		return ctx.Err()
 	case <-time.After(100 * time.Millisecond):
 		// HTTP 服务器已启动（无立即错误）
-		logger.Info(logComponentAppGateway).
+		logger.Info(logComponent).
 			Str("addr", addr).
-			Msg("GatewayServer 已启动")
+			Msg("GatewayServer started")
 		return nil
 	}
 }
@@ -256,26 +256,26 @@ func (s *GatewayServer) Stop() error {
 
 	// 关闭 WebChannel
 	if err := s.webChannel.Stop(ctx); err != nil {
-		logger.Error(logComponentAppGateway).
+		logger.Error(logComponent).
 			Err(err).
-			Msg("关闭 WebChannel 失败")
+			Msg("failed to close WebChannel")
 	}
 
 	// 停止出站派发循环（对齐 Python channel_manager.stop_dispatch()）
 	if s.channelMgr != nil {
 		if err := s.channelMgr.StopDispatch(); err != nil {
-			logger.Warn(logComponentAppGateway).
+			logger.Warn(logComponent).
 				Err(err).
-				Msg("停止 ChannelManager 出站派发循环失败")
+				Msg("failed to stop ChannelManager outbound dispatch loop")
 		}
 	}
 
 	// 停止 MessageHandler
 	if s.msgHandler != nil {
 		if err := s.msgHandler.StopForwarding(); err != nil {
-			logger.Error(logComponentAppGateway).
+			logger.Error(logComponent).
 				Err(err).
-				Msg("停止 MessageHandler 失败")
+				Msg("failed to stop MessageHandler")
 		}
 	}
 
@@ -287,23 +287,23 @@ func (s *GatewayServer) Stop() error {
 	// 停止配置热重载监听
 	if s.reloader != nil {
 		if err := s.reloader.Stop(); err != nil {
-			logger.Warn(logComponentAppGateway).
+			logger.Warn(logComponent).
 				Err(err).
-				Msg("停止配置热重载监听失败")
+				Msg("failed to stop config hot-reload listener")
 		}
 	}
 
 	// 关闭 HTTP 服务器
 	if s.httpServer != nil {
 		if err := s.httpServer.Shutdown(ctx); err != nil {
-			logger.Error(logComponentAppGateway).
+			logger.Error(logComponent).
 				Err(err).
-				Msg("关闭 HTTP 服务器失败")
+				Msg("failed to shutdown HTTP server")
 			return err
 		}
 	}
 
-	logger.Info(logComponentAppGateway).Msg("GatewayServer 已停止")
+	logger.Info(logComponent).Msg("GatewayServer stopped")
 	return nil
 }
 
@@ -384,12 +384,12 @@ func zerologMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(ww, r)
 
 		duration := time.Since(start)
-		logger.Info(logComponentAppGateway).
+		logger.Info(logComponent).
 			Str("method", r.Method).
 			Str("path", r.URL.Path).
 			Int("status", ww.Status()).
 			Dur("duration", duration).
-			Msg("HTTP 请求")
+			Msg("HTTP request")
 	})
 }
 
@@ -405,25 +405,25 @@ func connectWithRetry(ctx context.Context, client *routing.AgentClient, maxRetri
 		if err := client.Connect(ctx); err != nil {
 			lastErr = err
 			if attempt >= maxRetries {
-				logger.Error(logComponentAppGateway).
+				logger.Error(logComponent).
 					Err(err).
 					Int("attempt", attempt).
 					Int("max_retries", maxRetries).
-					Msg("连接 AgentServer 失败，已达最大重试次数")
+					Msg("failed to connect to AgentServer, max retries reached")
 				return lastErr
 			}
-			logger.Warn(logComponentAppGateway).
+			logger.Warn(logComponent).
 				Err(err).
 				Int("attempt", attempt).
 				Int("max_retries", maxRetries).
 				Dur("retry_interval", retryInterval).
-				Msg("连接 AgentServer 失败，即将重试")
+				Msg("failed to connect to AgentServer, retrying")
 			time.Sleep(retryInterval)
 			continue
 		}
-		logger.Info(logComponentAppGateway).
+		logger.Info(logComponent).
 			Int("attempt", attempt).
-			Msg("已连接 AgentServer")
+			Msg("connected to AgentServer")
 		return nil
 	}
 	return lastErr

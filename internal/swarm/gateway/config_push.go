@@ -72,9 +72,9 @@ func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[s
 	resp, err := s.agentClient.SendRequest(reloadCtx, envelope)
 	if err != nil {
 		// 步骤5（异常兜底）：发送失败，调度进程重启
-		logger.Warn(logComponentAppGateway).
+		logger.Warn(logComponent).
 			Err(err).
-			Msg("agent.reload_config 发送失败")
+			Msg("agent.reload_config send failed")
 		scheduleRestart("agent.reload_config 发送失败")
 		return err
 	}
@@ -92,21 +92,21 @@ func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[s
 			errStr = fmt.Sprintf("%v", errMsg)
 		}
 		if isValidationError(errStr) {
-			logger.Warn(logComponentAppGateway).
+			logger.Warn(logComponent).
 				Str("error", errStr).
 				Msg("agent.reload_config validation error (non-fatal)")
 			return nil
 		}
-		logger.Warn(logComponentAppGateway).
+		logger.Warn(logComponent).
 			Bool("ok", resp.OK).
 			Interface("payload", errPayload).
-			Msg("agent.reload_config 响应非 OK")
+			Msg("agent.reload_config response not OK")
 		// 非 ValidationError 的拒绝，调度进程重启
 		scheduleRestart(fmt.Sprintf("AgentServer 拒绝配置重载: %v", errPayload))
 		return fmt.Errorf("AgentServer 拒绝配置重载: %v", errPayload)
 	}
 
-	logger.Info(logComponentAppGateway).Msg("配置热重载成功，已通知 AgentServer")
+	logger.Info(logComponent).Msg("config hot-reload succeeded, AgentServer notified")
 
 	// 步骤4：条件发 browser.runtime_restart（对齐 Python browser_runtime_keys）
 	if ShouldBrowserRestart(updatedKeys) {
@@ -115,11 +115,11 @@ func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[s
 			e2a.WithFieldReqMethod(string(schema.ReqMethodBrowserRuntimeRestart)),
 		)
 		if _, err := s.agentClient.SendRequest(reloadCtx, restartEnvelope); err != nil {
-			logger.Warn(logComponentAppGateway).
+			logger.Warn(logComponent).
 				Err(err).
-				Msg("browser.runtime_restart 发送失败")
+				Msg("browser.runtime_restart send failed")
 		} else {
-			logger.Info(logComponentAppGateway).Msg("browser.runtime_restart 已发送")
+			logger.Info(logComponent).Msg("browser.runtime_restart sent")
 		}
 	}
 
@@ -139,9 +139,9 @@ func isValidationError(errStr string) bool {
 // 当配置重载发送失败或 AgentServer 拒绝（非 ValidationError）时，
 // 记录原因并退出进程，由外部 supervisor（systemd/docker）重启。
 func scheduleRestart(reason string) {
-	logger.Warn(logComponentAppGateway).
+	logger.Warn(logComponent).
 		Str("reason", reason).
 		Int("pid", os.Getpid()).
-		Msg("调度进程重启，退出进程")
+		Msg("scheduling process restart, exiting process")
 	os.Exit(1)
 }

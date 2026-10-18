@@ -186,7 +186,7 @@ func (g *Generator) GenAllMemory(
 			Str("event_type", "MEMORY_PROCESS").
 			Str("user_id", params.UserID).
 			Str("scope_id", params.ScopeID).
-			Msg("未启用长期记忆")
+			Msg("long-term memory not enabled")
 		return allMemoryResults, nil
 	}
 
@@ -221,7 +221,7 @@ func (g *Generator) GenAllMemory(
 			Str("user_id", params.UserID).
 			Str("scope_id", params.ScopeID).
 			Str("exception", err.Error()).
-			Msg("获取冲突信息时发生异常")
+			Msg("error occurred while getting conflict information")
 		return allMemoryResults, nil
 	}
 
@@ -240,7 +240,7 @@ func (g *Generator) GenAllMemory(
 		Str("event_type", "MEMORY_PROCESS").
 		Str("user_id", params.UserID).
 		Str("scope_id", params.ScopeID).
-		Msg("记忆单元生成成功")
+		Msg("memory units generated successfully")
 
 	return allMemoryResults, nil
 }
@@ -494,7 +494,7 @@ func (g *Generator) semanticValidation(
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
 				Str("exception", err.Error()).
-				Msg("语义校验提示词加载失败")
+				Msg("failed to load semantic validation prompt")
 			continue
 		}
 
@@ -504,7 +504,7 @@ func (g *Generator) semanticValidation(
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
 				Str("exception", err.Error()).
-				Msg("语义校验消息构造失败")
+				Msg("failed to build semantic validation messages")
 			continue
 		}
 		msgsParam := model_clients.NewMessagesParam(modelMessages...)
@@ -514,7 +514,7 @@ func (g *Generator) semanticValidation(
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
 				Str("exception", invokeErr.Error()).
-				Msg("语义校验 LLM 调用失败")
+				Msg("semantic validation LLM call failed")
 			continue
 		}
 
@@ -526,7 +526,7 @@ func (g *Generator) semanticValidation(
 				Str("old_mem", oldMem).
 				Str("obtained_mem", obtainedMemContent).
 				Str("result", "CORRECT").
-				Msg("语义校验结果")
+				Msg("semantic validation result")
 			retIDs = append(retIDs, semanticValidationMatch{
 				ID:  obtainedMemID,
 				Mem: obtainedMemContent,
@@ -537,7 +537,7 @@ func (g *Generator) semanticValidation(
 				Str("old_mem", oldMem).
 				Str("obtained_mem", obtainedMemContent).
 				Str("result", "WRONG").
-				Msg("语义校验结果")
+				Msg("semantic validation result")
 		}
 	}
 
@@ -602,7 +602,7 @@ func (g *Generator) processMemoryOperations(
 	if g.searchManager == nil {
 		logger.Warn(logComponent).
 			Str("event_type", "MEMORY_PROCESS").
-			Msg("searchManager 为 nil，跳过记忆操作处理")
+			Msg("searchManager is nil, skipping memory operation processing")
 		return retMemories
 	}
 
@@ -632,7 +632,7 @@ func (g *Generator) processMemoryOperations(
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
 				Str("exception", err.Error()).
-				Msg("搜索旧记忆失败")
+				Msg("failed to search old memories")
 			continue
 		}
 

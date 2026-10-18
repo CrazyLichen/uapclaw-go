@@ -151,12 +151,12 @@ func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 			Str("msg_id", msg.ID).
 			Str("channel_id", msg.ChannelID).
 			Str("session_id", msg.SessionID).
-			Msg("入站消息已入队")
+			Msg("inbound message enqueued")
 	default:
 		logger.Warn(logComponent).
 			Str("event_type", "handle_inbound_dropped").
 			Str("msg_id", msg.ID).
-			Msg("入站消息队列已满，丢弃消息")
+			Msg("inbound message queue full, dropping message")
 	}
 }
 
@@ -198,7 +198,7 @@ func (mh *MessageHandler) PublishUserMessagesNowait(msg *schema.Message) {
 		logger.Warn(logComponent).
 			Str("event_type", "inbound_queue_full").
 			Str("msg_id", msg.ID).
-			Msg("入站消息队列已满，丢弃消息")
+			Msg("inbound message queue full, dropping message")
 	}
 }
 
@@ -209,7 +209,7 @@ func (mh *MessageHandler) PublishUserMessagesNowait(msg *schema.Message) {
 // 出站派发循环由 ChannelManager.StartDispatch 启动。
 func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
 	if mh.running.Load() {
-		logger.Warn(logComponent).Msg("MessageHandler 已在运行")
+		logger.Warn(logComponent).Msg("MessageHandler already running")
 		return nil
 	}
 
@@ -229,7 +229,7 @@ func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "message_handler_started").
-		Msg("MessageHandler 转发循环已启动")
+		Msg("MessageHandler forwarding loop started")
 	return nil
 }
 
@@ -252,7 +252,7 @@ func (mh *MessageHandler) StopForwarding() error {
 	mh.running.Store(false)
 	logger.Info(logComponent).
 		Str("event_type", "message_handler_stopped").
-		Msg("MessageHandler 转发循环已停止")
+		Msg("MessageHandler forwarding loop stopped")
 	return nil
 }
 
@@ -273,7 +273,7 @@ func (mh *MessageHandler) cancelAllStreamTasks() {
 		logger.Debug(logComponent).
 			Str("event_type", "stream_task_cancelled").
 			Str("request_id", reqID).
-			Msg("流式任务已取消")
+			Msg("streaming task cancelled")
 	}
 	mh.streamTasks = make(map[string]*streamTaskEntry)
 	mh.streamSessions = make(map[string]string)

@@ -48,10 +48,12 @@ func NewMcpClient(config *types.McpServerConfig) (types.McpClient, error) {
 	default:
 		logger.Error(logComponent).
 			Str("client_type", config.ClientType).
-			Msg("未知的 MCP 客户端类型")
+			Msg("unknown MCP client type")
 		return nil, exception.BuildError(
 			exception.StatusToolMcpClientTypeUnknown,
 			exception.WithParam("client_type", config.ClientType),
 		)
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

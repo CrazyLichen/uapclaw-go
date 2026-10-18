@@ -74,7 +74,7 @@ func NewExitPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID
 			Str("event_type", "exit_plan_mode").
 			Str("plan_path", planPath).
 			Int("plan_length", len(planText)).
-			Msg("AgentModeRail 已退出 plan 模式")
+			Msg("AgentModeRail exited plan mode")
 
 		return map[string]any{
 			"plan_path": planPath,
@@ -85,3 +85,5 @@ func NewExitPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
 	return invokeFn
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

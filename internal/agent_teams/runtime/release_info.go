@@ -50,8 +50,8 @@ func ResolveTeamSessionReleaseInfo(sessionID string) (*TeamSessionReleaseInfo, e
 	// Python: session = create_agent_team_session(session_id=session_id)
 	sess := session.CreateAgentTeamSession(sessionID, nil, "")
 	if err := sess.PreRun(context.Background()); err != nil {
-		logger.Warn(mgrLogComponent).Str("session_id", sessionID).Err(err).
-			Msg("resolve_team_session_release_info: 恢复 session 状态失败")
+		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).
+			Msg("resolve_team_session_release_info: failed to restore session state")
 		return nil, nil
 	}
 
@@ -115,8 +115,8 @@ func resolveAnyTeamSessionReleaseInfo(sessionIDs []string) *TeamSessionReleaseIn
 	for _, sid := range sessionIDs {
 		info, err := ResolveTeamSessionReleaseInfo(sid)
 		if err != nil {
-			logger.Warn(mgrLogComponent).Str("session_id", sid).Err(err).
-				Msg("resolve_any: 跳过 session")
+			logger.Warn(logComponent).Str("session_id", sid).Err(err).
+				Msg("resolve_any: skipping session")
 			continue
 		}
 		if info != nil {
@@ -171,11 +171,11 @@ func removeTeamDir(teamName string) {
 		return
 	}
 	if err := os.RemoveAll(teamDir); err != nil {
-		logger.Warn(mgrLogComponent).Str("team_dir", teamDir).Err(err).
-			Msg("delete_team: 删除团队目录失败")
+		logger.Warn(logComponent).Str("team_dir", teamDir).Err(err).
+			Msg("delete_team: failed to delete team directory")
 	} else {
-		logger.Info(mgrLogComponent).Str("team_dir", teamDir).
-			Msg("delete_team: 已删除团队目录")
+		logger.Info(logComponent).Str("team_dir", teamDir).
+			Msg("delete_team: team directory deleted")
 	}
 }
 
@@ -214,8 +214,8 @@ func deleteTeamDB(ctx context.Context, dbConfig database.DatabaseConfig, teamNam
 		return false
 	}
 	if err := db.Initialize(ctx); err != nil {
-		logger.Error(mgrLogComponent).Err(err).Str("team_name", teamName).
-			Msg("deleteTeamDB: 数据库初始化失败")
+		logger.Error(logComponent).Err(err).Str("team_name", teamName).
+			Msg("deleteTeamDB: database initialization failed")
 		return false
 	}
 	return db.Team().DeleteTeam(ctx, teamName)

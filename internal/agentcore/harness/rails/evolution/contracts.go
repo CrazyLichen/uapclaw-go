@@ -12,8 +12,8 @@ import (
 // ApprovalManager 审批管理器窄接口。
 //
 // ExperienceManager 隐式满足此接口：
-//   - ApproveRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) ✅
-//   - RejectRequest(ctx context.Context, requestID string) (ExperienceApplyResult, error) ✅
+//   - ApproveRequest(ctx, requestID) → (ExperienceApplyResult, error) ✅
+//   - RejectRequest(ctx, requestID) → (ExperienceApplyResult, error) ✅
 type ApprovalManager interface {
 	// ApproveRequest 持久化或应用一个暂存的审批请求。
 	ApproveRequest(ctx context.Context, requestID string) (experience.ExperienceApplyResult, error)
@@ -50,13 +50,13 @@ type EvolutionSnapshot struct {
 	// SkillName 技能名称（可选）
 	SkillName *string
 	// PresentedEntries 评估状态条目（可选，用于异步演进后消费）
-	// Python: snapshot["presented_entries"]
+	// 对齐 Python: snapshot["presented_entries"]
 	PresentedEntries []experience.PresentedRecordEntry
 	// SessionID 会话标识（可选）
-	// Python: snapshot["session_id"]
+	// 对齐 Python: snapshot["session_id"]
 	SessionID string
 	// IncrementalMessages 增量消息（可选，用于 sharing download）
-	// Python: snapshot["incremental_messages"]
+	// 对齐 Python: snapshot["incremental_messages"]
 	IncrementalMessages []map[string]any
 }
 

@@ -106,12 +106,12 @@ func (s *RedisStore) Set(ctx context.Context, key string, value []byte) error {
 		logger.Error(logComponent).
 			Str("key", key).
 			Err(err).
-			Msg("设置 key 失败")
+			Msg("failed to set key")
 		return err
 	}
 	logger.Debug(logComponent).
 		Str("key", key).
-		Msg("成功设置 key")
+		Msg("key set successfully")
 	return nil
 }
 
@@ -129,14 +129,14 @@ func (s *RedisStore) ExclusiveSet(ctx context.Context, key string, value []byte,
 		logger.Error(logComponent).
 			Str("key", key).
 			Err(err).
-			Msg("排他设置 key 失败")
+			Msg("failed to exclusive set key")
 		return false, err
 	}
 	logger.Debug(logComponent).
 		Str("key", key).
 		Bool("result", ok).
 		Int("expiry", expiry).
-		Msg("排他设置 key")
+		Msg("exclusive set key")
 	return ok, nil
 }
 
@@ -147,19 +147,19 @@ func (s *RedisStore) Get(ctx context.Context, key string) ([]byte, error) {
 	if err == redis.Nil {
 		logger.Debug(logComponent).
 			Str("key", key).
-			Msg("key 不存在")
+			Msg("key does not exist")
 		return nil, nil
 	}
 	if err != nil {
 		logger.Error(logComponent).
 			Str("key", key).
 			Err(err).
-			Msg("获取 key 失败")
+			Msg("failed to get key")
 		return nil, err
 	}
 	logger.Debug(logComponent).
 		Str("key", key).
-		Msg("成功获取 key")
+		Msg("key retrieved successfully")
 	return val, nil
 }
 
@@ -171,7 +171,7 @@ func (s *RedisStore) Exists(ctx context.Context, key string) (bool, error) {
 		logger.Error(logComponent).
 			Str("key", key).
 			Err(err).
-			Msg("检查 key 存在失败")
+			Msg("failed to check key existence")
 		return false, err
 	}
 	return n > 0, nil
@@ -185,13 +185,13 @@ func (s *RedisStore) Delete(ctx context.Context, key string) error {
 		logger.Error(logComponent).
 			Str("key", key).
 			Err(err).
-			Msg("删除 key 失败")
+			Msg("failed to delete key")
 		return err
 	}
 	logger.Debug(logComponent).
 		Str("key", key).
 		Int64("deleted", n).
-		Msg("删除 key")
+		Msg("delete key")
 	return nil
 }
 
@@ -233,7 +233,7 @@ func (s *RedisStore) MGet(ctx context.Context, keys []string) ([][]byte, error) 
 		logger.Warn(logComponent).
 			Err(err).
 			Int("key_count", len(keys)).
-			Msg("MGET 失败，回退到逐个 GET")
+			Msg("MGET failed, falling back to individual GETs")
 		return s.mGetFallback(ctx, keys)
 	}
 
@@ -255,7 +255,7 @@ func (s *RedisStore) MGet(ctx context.Context, keys []string) ([][]byte, error) 
 	logger.Debug(logComponent).
 		Int("key_count", len(keys)).
 		Int("found_count", foundCount).
-		Msg("批量获取 keys")
+		Msg("batch get keys")
 	return result, nil
 }
 
@@ -272,13 +272,13 @@ func (s *RedisStore) BatchDelete(ctx context.Context, keys []string, batchSize i
 			logger.Error(logComponent).
 				Int("key_count", len(keys)).
 				Err(err).
-				Msg("批量删除失败")
+				Msg("batch delete failed")
 			return 0, err
 		}
 		logger.Debug(logComponent).
 			Int("key_count", len(keys)).
 			Int64("deleted", n).
-			Msg("批量删除 keys")
+			Msg("batch delete keys")
 		return int(n), nil
 	}
 	totalDeleted := 0
@@ -292,7 +292,7 @@ func (s *RedisStore) BatchDelete(ctx context.Context, keys []string, batchSize i
 			logger.Error(logComponent).
 				Int("batch", i/batchSize+1).
 				Err(err).
-				Msg("分批删除失败")
+				Msg("batched delete failed")
 			return totalDeleted, err
 		}
 		totalDeleted += int(n)
@@ -300,12 +300,12 @@ func (s *RedisStore) BatchDelete(ctx context.Context, keys []string, batchSize i
 			Int("batch", i/batchSize+1).
 			Int("batch_size", end-i).
 			Int64("deleted_in_batch", n).
-			Msg("分批删除进度")
+			Msg("batched delete progress")
 	}
 	logger.Debug(logComponent).
 		Int("key_count", len(keys)).
 		Int("deleted", totalDeleted).
-		Msg("分批删除 keys")
+		Msg("batched delete keys")
 	return totalDeleted, nil
 }
 
@@ -343,13 +343,13 @@ func (s *RedisStore) RefreshTTL(ctx context.Context, keys []string, ttlSeconds i
 			Int("key_count", len(keys)).
 			Int("ttl_seconds", ttlSeconds).
 			Err(err).
-			Msg("刷新 TTL 失败，静默忽略")
+			Msg("failed to refresh TTL, silently ignored")
 		return nil
 	}
 	logger.Debug(logComponent).
 		Int("key_count", len(keys)).
 		Int("ttl_seconds", ttlSeconds).
-		Msg("成功刷新 TTL")
+		Msg("TTL refreshed successfully")
 	return nil
 }
 
@@ -463,7 +463,7 @@ func (s *RedisStore) getByPrefixStandalone(ctx context.Context, prefix string) (
 	logger.Debug(logComponent).
 		Str("prefix", prefix).
 		Int("count", len(result)).
-		Msg("按前缀获取键值对")
+		Msg("get key-value pairs by prefix")
 	return result, nil
 }
 
@@ -498,13 +498,13 @@ func (s *RedisStore) getByPrefixCluster(ctx context.Context, prefix string) (map
 		logger.Error(logComponent).
 			Str("prefix", prefix).
 			Err(err).
-			Msg("Cluster 模式按前缀获取键值对失败")
+			Msg("cluster mode: failed to get key-value pairs by prefix")
 		return nil, err
 	}
 	logger.Debug(logComponent).
 		Str("prefix", prefix).
 		Int("count", len(result)).
-		Msg("Cluster 模式按前缀获取键值对")
+		Msg("cluster mode: get key-value pairs by prefix")
 	return result, nil
 }
 
@@ -546,7 +546,7 @@ func (s *RedisStore) deleteByPrefixStandalone(ctx context.Context, prefix string
 		logger.Debug(logComponent).
 			Str("prefix", prefix).
 			Int("count", totalDeleted).
-			Msg("按前缀删除键值对")
+			Msg("delete key-value pairs by prefix")
 	}
 	return nil
 }
@@ -588,12 +588,12 @@ func (s *RedisStore) deleteByPrefixCluster(ctx context.Context, prefix string, b
 		logger.Error(logComponent).
 			Str("prefix", prefix).
 			Err(err).
-			Msg("Cluster 模式按前缀删除失败")
+			Msg("cluster mode: failed to delete by prefix")
 		return err
 	}
 	logger.Debug(logComponent).
 		Str("prefix", prefix).
-		Msg("Cluster 模式按前缀删除键值对")
+		Msg("cluster mode: delete key-value pairs by prefix")
 	return nil
 }
 

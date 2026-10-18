@@ -10,9 +10,7 @@
 //	├── config.go        # 索引/知识库/检索/向量存储配置类型
 //	├── document.go      # MultimodalDocument + TextChunk 文档数据模型
 //	├── callbacks.go     # DocIndexCallback 类型别名 + NoOpDocIndexCallback + LoggingDocIndexCallback
-//	├── callbacks_test.go # 回调测试
-//	├── result.go        # SearchResult + RetrievalResult 数据模型
-//	└── result_test.go   # 结果模型测试
+//	└── result.go        # SearchResult + RetrievalResult 数据模型
 //
 // 对应 Python 代码：
 //

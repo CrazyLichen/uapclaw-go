@@ -163,7 +163,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-var ()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -212,7 +211,7 @@ func (b *MemoryIndexBase) RestoreBackup(_ context.Context, backupID string) erro
 		logger.Error(logComponent).
 			Str("backup_id", backupID).
 			Str("event_type", "MEMORY_BACKUP_ERROR").
-			Msg("备份不存在，恢复失败")
+			Msg("backup not found, restore failed")
 		return exception.BuildError(exception.StatusMemoryBackupNotFound,
 			exception.WithParam("backup_id", backupID),
 		)

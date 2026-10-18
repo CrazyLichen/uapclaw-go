@@ -68,3 +68,5 @@ func (op *BaseOperation) Description() string {
 func (op *BaseOperation) TypeName() string {
 	return "BaseOperation"
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

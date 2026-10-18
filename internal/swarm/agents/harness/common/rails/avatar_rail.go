@@ -60,10 +60,6 @@ var memoryAllTools = map[string]struct{}{
 	"memory_get":    {},
 }
 
-// avatarLogComponent 日志组件标识
-var avatarLogComponent = logger.ComponentAgentServer
-
-// 编译时验证 AvatarPromptRail 满足 AgentRail 接口
 // _ 编译时验证 AvatarPromptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*AvatarPromptRail)(nil)
 
@@ -233,7 +229,7 @@ func (r *AvatarPromptRail) injectForbiddenMemory(builder saprompt.SystemPromptBu
 	// Python: try/except 包裹 get_forbidden_memory_prompt，失败时不中断
 	forbidden, err := commmem.GetForbiddenMemoryPrompt(language)
 	if err != nil {
-		logger.Debug(avatarLogComponent).Err(err).Str("language", language).Msg("获取禁止记忆提示词失败，跳过注入")
+		logger.Debug(logComponent).Err(err).Str("language", language).Msg("failed to get forbidden memory prompt, skipped")
 		return
 	}
 	if forbidden == "" {
@@ -257,10 +253,10 @@ func (r *AvatarPromptRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext,
 	cbc.Extra()["_skip_tool"] = true
 	toolInputs.ToolResult = message // 对齐 Python: ctx.inputs.tool_result = message（字符串）
 	toolInputs.ToolMsg = llmschema.NewToolMessage(toolCallID, message)
-	logger.Info(avatarLogComponent).
+	logger.Info(logComponent).
 		Str("tool_name", toolInputs.ToolName).
 		Str("message", message).
-		Msg("AvatarPromptRail 拦截工具")
+		Msg("AvatarPromptRail intercepted tool")
 }
 
 // buildAvatarPrompt 构建数字分身身份提示词。

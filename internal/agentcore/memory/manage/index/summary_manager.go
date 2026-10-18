@@ -81,7 +81,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 					Str("memory_type", m.memType).
 					Str("user_id", userID).
 					Str("scope_id", scopeID).
-					Msg("mem_unit 不是 SummaryUnit 类型，跳过")
+					Msg("mem_unit is not a SummaryUnit, skipping")
 				continue
 			}
 			summaryUnits = append(summaryUnits, summary)
@@ -95,7 +95,7 @@ func (m *SummaryManager) AddMemories(ctx context.Context, userID string, scopeID
 			Str("memory_type", m.memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
-			Msg("无有效摘要文档可添加")
+			Msg("no valid summary documents to add")
 		return []mem_model.MemoryUnit{}, nil
 	}
 

@@ -63,7 +63,7 @@ func terminateShellProcessPOSIX(proc *os.Process) bool {
 	// 阶段 1：SIGTERM 整个进程组
 	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
 		// 进程组 SIGTERM 失败，尝试单进程 Signal
-		logger.Warn(logComponent).Int("pid", pid).Err(err).Msg("进程组 SIGTERM 失败，尝试单进程终止")
+		logger.Warn(logComponent).Int("pid", pid).Err(err).Msg("process group SIGTERM failed, trying single process termination")
 		if sigErr := proc.Signal(syscall.SIGTERM); sigErr != nil {
 			// 单进程也失败，尝试 SIGKILL
 			return forceKillPOSIX(proc)
@@ -83,9 +83,9 @@ func terminateShellProcessPOSIX(proc *os.Process) bool {
 func forceKillPOSIX(proc *os.Process) bool {
 	pid := proc.Pid
 	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
-		logger.Warn(logComponent).Int("pid", pid).Err(err).Msg("进程组 SIGKILL 失败，尝试单进程 Kill")
+		logger.Warn(logComponent).Int("pid", pid).Err(err).Msg("process group SIGKILL failed, trying single process kill")
 		if killErr := proc.Kill(); killErr != nil {
-			logger.Warn(logComponent).Int("pid", pid).Err(killErr).Msg("单进程 Kill 也失败")
+			logger.Warn(logComponent).Int("pid", pid).Err(killErr).Msg("single process kill also failed")
 			return false
 		}
 	}

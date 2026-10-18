@@ -160,3 +160,5 @@ func (e DeepLoopEvent) Less(other DeepLoopEvent) bool {
 	}
 	return e.Seq < other.Seq
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

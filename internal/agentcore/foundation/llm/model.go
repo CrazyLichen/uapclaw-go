@@ -133,7 +133,7 @@ func (m *Model) Invoke(
 				Str("event", "TransformLLMIOInput").
 				Str("expected", "MessagesParam").
 				Str("actual", fmt.Sprintf("%T", transformed)).
-				Msg("TransformIO 返回类型不匹配，使用原始输入")
+				Msg("TransformIO return type mismatch, using original input")
 		}
 	}
 
@@ -178,7 +178,7 @@ func (m *Model) Invoke(
 				Str("event", "TransformLLMIOOutput").
 				Str("expected", "*AssistantMessage").
 				Str("actual", fmt.Sprintf("%T", transformed)).
-				Msg("TransformIO 返回类型不匹配，使用原始输出")
+				Msg("TransformIO return type mismatch, using original output")
 		}
 	}
 
@@ -231,7 +231,7 @@ func (m *Model) Stream(
 				Str("event", "TransformLLMIOInput").
 				Str("expected", "MessagesParam").
 				Str("actual", fmt.Sprintf("%T", transformed)).
-				Msg("TransformIO 返回类型不匹配，使用原始输入")
+				Msg("TransformIO return type mismatch, using original input")
 		}
 	}
 
@@ -281,7 +281,7 @@ func (m *Model) Stream(
 						Str("event", "TransformLLMIOOutput").
 						Str("expected", "*AssistantMessageChunk").
 						Str("actual", fmt.Sprintf("%T", transformed)).
-						Msg("TransformIO 返回类型不匹配，使用原始输出")
+						Msg("TransformIO return type mismatch, using original output")
 				}
 			}
 

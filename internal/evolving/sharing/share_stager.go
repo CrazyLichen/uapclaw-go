@@ -99,7 +99,7 @@ func (s *ShareStager) ScreenAndStage(
 				Str("record_id", record.ID).
 				Str("reason", dropReason).
 				Str("skill", skillName).
-				Msg("[ShareStager] 共享 QC 丢弃记录")
+				Msg("[ShareStager] sharing QC discarded record")
 			continue
 		}
 		wrapped := s.wrap(record, keywords, summary, skillName)

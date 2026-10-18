@@ -103,7 +103,7 @@ func (h *TestDesignStageHandler) readSkillFiles(skillDir string) string {
 			logger.Warn(logComponent).
 				Str("file", entry).
 				Err(err).
-				Msg("[TestDesignStage] 读取文件失败")
+				Msg("[TestDesignStage] failed to read file")
 			continue
 		}
 		rel, _ := filepath.Rel(skillDir, entry)
@@ -121,7 +121,7 @@ func (h *TestDesignStageHandler) designEvals(sctx *skilldev.SkillDevContext, _ s
 	// 待实现：运行Agent result := await Runner.run_agent(agent, {"skill_content": skillContent})
 	// 待实现：解析输出结果 return json.loads(result["output"])
 
-	logger.Warn(logComponent).Msg("[TestDesignStage] designEvals 尚未实现，返回占位测试用例")
+	logger.Warn(logComponent).Msg("[TestDesignStage] designEvals not implemented, returning placeholder test cases")
 	skillName := "skill"
 	if sctx.State.Plan != nil {
 		if sn, ok := sctx.State.Plan["skill_name"].(string); ok {

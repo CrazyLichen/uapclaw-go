@@ -126,7 +126,7 @@ func BuildImageContent(imagePathOrURL string) (llmschema.ContentPart, error) {
 		Str("image_path", imagePath).
 		Str("mime_type", mimeType).
 		Int("image_size", len(imageBytes)).
-		Msg("本地图片已编码为 data URI")
+		Msg("local image encoded as data URI")
 
 	return llmschema.ContentPart{
 		Type:     "image_url",
@@ -178,7 +178,7 @@ func CallVisionModel(
 				Int("max_retries", maxRetries).
 				Bool("is_retryable", isRetryable).
 				Err(err).
-				Msg("视觉模型调用失败，尝试重试")
+				Msg("vision model call failed, retrying")
 
 			if isRetryable && attempt < maxRetries {
 				wait := time.Duration(math.Pow(2, float64(attempt-1))) * time.Second
@@ -204,7 +204,7 @@ func CallVisionModel(
 			Str("event_type", "VISION_MODEL_SUCCESS").
 			Str("model_name", config.Model).
 			Int("text_length", len(text)).
-			Msg("视觉模型调用成功")
+			Msg("vision model call succeeded")
 
 		return text, config.Model, nil
 	}

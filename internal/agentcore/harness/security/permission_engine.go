@@ -38,8 +38,6 @@ type PermissionEngine struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var engineLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPermissionEngine 创建权限引擎。
@@ -119,14 +117,14 @@ func (e *PermissionEngine) SetSceneHook(fn PermissionSceneHookFn) {
 //
 // Python: PermissionEngine.check_permission(tool_name, tool_args) (core.py L128-221)
 func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string, toolArgs map[string]any) *PermissionResult {
-	logger.Info(engineLogComponent).
+	logger.Info(logComponent).
 		Str("tool", toolName).
 		Bool("enabled", e.enabled).
-		Msg("权限检查: 开始")
+		Msg("permission check: started")
 
 	// 未启用 → 允许
 	if !e.enabled {
-		logger.Info(engineLogComponent).Msg("权限检查: 跳过，原因=系统已禁用 决定=允许")
+		logger.Info(logComponent).Msg("permission check: skipped, reason=system disabled, decision=allow")
 		return &PermissionResult{
 			Permission: PermissionLevelAllow,
 			Reason:     "权限系统已禁用",
@@ -135,7 +133,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 
 	// 宿主说不要校验 → 允许
 	if e.permissionChecksActive != nil && !e.permissionChecksActive() {
-		logger.Info(engineLogComponent).Msg("权限检查: 跳过，原因=权限检查未激活 决定=允许")
+		logger.Info(logComponent).Msg("permission check: skipped, reason=permission check not activated, decision=allow")
 		return &PermissionResult{
 			Permission: PermissionLevelAllow,
 			Reason:     "当前上下文未启用工具权限检查",
@@ -155,14 +153,14 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 			GoCtx:              ctx,
 		})
 		if err != nil {
-			logger.Warn(engineLogComponent).
+			logger.Warn(logComponent).
 				Str("tool", toolName).
 				Err(err).
 				Msg("permission.scene_hook.failed")
 		} else if len(sceneOut) > 0 {
 			switch sceneOut[0] {
 			case "approve":
-				logger.Info(engineLogComponent).
+				logger.Info(logComponent).
 					Str("tool", toolName).
 					Str("decision", "allow").
 					Msg("permission.scene_hook.short_circuit")
@@ -176,7 +174,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 				if len(sceneOut) > 1 {
 					msg = sceneOut[1]
 				}
-				logger.Info(engineLogComponent).
+				logger.Info(logComponent).
 					Str("tool", toolName).
 					Str("decision", "deny").
 					Msg("permission.scene_hook.short_circuit")
@@ -194,7 +192,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 	permission, matchedRule, evalErr := e.EvaluateGlobalPolicyDirectly(toolName, toolArgs, false)
 	if evalErr != nil {
 		// 对齐 Python except 行为：error 时将 globalLevel 视为 PermissionLevelNone（不参与后续比较）
-		logger.Warn(engineLogComponent).
+		logger.Warn(logComponent).
 			Str("tool", toolName).
 			Err(evalErr).
 			Msg("permission.evaluate_global_policy.failed")
@@ -206,7 +204,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 		permission = PermissionLevelAsk
 		matchedRule = "default"
 	}
-	logger.Info(engineLogComponent).
+	logger.Info(logComponent).
 		Str("tool", toolName).
 		Str("permission", permission.String()).
 		Str("matched_rule", matchedRule).
@@ -215,14 +213,14 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 	// 2. 外部路径：与当前决策取更严（不放宽）
 	extResult := e.externalChecker.CheckExternalPaths(toolName, toolArgs)
 	if extResult != nil {
-		logger.Info(engineLogComponent).
+		logger.Info(logComponent).
 			Str("tool", toolName).
 			Bool("checked", true).
 			Str("ext_permission", extResult.Permission.String()).
 			Str("matched_rule", extResult.MatchedRule).
 			Strs("external_paths", extResult.ExternalPaths).
 			Str("merged_with", permission.String()).
-			Msg("外部目录权限: 检查结果")
+			Msg("external directory permission: check result")
 		permission = Strictest(permission, extResult.Permission)
 		if matchedRule != "" {
 			matchedRule = matchedRule + "|" + extResult.MatchedRule
@@ -234,13 +232,13 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 		}
 	} else {
 		// Python: else 分支日志 — ext_result is None 时也记录
-		logger.Info(engineLogComponent).
+		logger.Info(logComponent).
 			Str("tool", toolName).
 			Bool("checked", true).
 			Str("permission", "none").
 			Str("matched_rule", "none").
 			Strs("external_paths", []string{}).
-			Msg("外部目录权限: 检查结果")
+			Msg("external directory permission: check result")
 	}
 
 	result := &PermissionResult{
@@ -250,7 +248,7 @@ func (e *PermissionEngine) CheckPermission(ctx context.Context, toolName string,
 		ExternalPaths: externalPaths,
 	}
 
-	logger.Info(engineLogComponent).
+	logger.Info(logComponent).
 		Str("tool", toolName).
 		Str("permission", permission.String()).
 		Str("matched_rule", matchedRule).

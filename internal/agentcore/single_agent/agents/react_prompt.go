@@ -146,7 +146,7 @@ func (a *ReActAgent) UnregisterRail(ctx context.Context, r interfaces.AgentRail)
 			logger.Error(logComponent).
 				Str("event_type", "rail_uninit_error").
 				Err(uninitErr).
-				Msg("Rail Uninit 返回错误")
+				Msg("Rail Uninit returned error")
 		}
 		return err
 	}
@@ -209,7 +209,7 @@ func (a *ReActAgent) warnMissingSkillReadFileTool(ctx context.Context) {
 		logger.Warn(logComponent).
 			Str("event_type", "list_tool_info_error").
 			Err(err).
-			Msg("获取工具列表失败，跳过 read_file 检查")
+			Msg("failed to get tool list, skipping read_file check")
 		return
 	}
 

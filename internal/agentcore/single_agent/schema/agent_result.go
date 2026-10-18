@@ -144,3 +144,5 @@ func (r *RawBytes) UnmarshalJSON(data []byte) error {
 	*r = []byte(s)
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

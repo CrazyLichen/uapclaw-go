@@ -48,9 +48,6 @@ var ruleMutableKeys = map[string]bool{
 	"match_type":  true,
 }
 
-// permRpcLogComponent 日志组件
-var permRpcLogComponent = logger.ComponentPermissions
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // DispatchPermissionsConfigRequest 执行一条权限配置 RPC。
@@ -62,10 +59,10 @@ var permRpcLogComponent = logger.ComponentPermissions
 func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (ok bool, payload map[string]any) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Error(permRpcLogComponent).
+			logger.Error(logComponent).
 				Any("recover", rec).
 				Str("req_method", reqMethod).
-				Msg("[permissions_config_rpc] dispatch 异常恢复")
+				Msg("[permissions_config_rpc] dispatch panic recovery")
 			ok = false
 			payload = map[string]any{
 				"error": fmt.Sprintf("internal error: %v", rec),
@@ -115,11 +112,11 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		}
 		ok, err := DeletePermissionsToolInConfig(toolName)
 		if err != nil {
-			logger.Error(permRpcLogComponent).
+			logger.Error(logComponent).
 				Err(err).
 				Str("req_method", "permissions.tools.delete").
 				Str("tool_name", toolName).
-				Msg("[permissions_config_rpc] 删除工具失败")
+				Msg("[permissions_config_rpc] failed to delete tool")
 			return false, errPayload(err.Error(), "BAD_REQUEST")
 		}
 		if !ok {
@@ -166,11 +163,11 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		rid := utils.StrVal(params["id"])
 		ok, err := DeletePermissionsRuleInConfig(rid)
 		if err != nil {
-			logger.Error(permRpcLogComponent).
+			logger.Error(logComponent).
 				Err(err).
 				Str("req_method", "permissions.rules.delete").
 				Str("rule_id", rid).
-				Msg("[permissions_config_rpc] 删除规则失败")
+				Msg("[permissions_config_rpc] failed to delete rule")
 			return false, errPayload(err.Error(), "BAD_REQUEST")
 		}
 		if !ok {
@@ -188,11 +185,11 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		oid := utils.StrVal(params["id"])
 		ok, err := DeletePermissionsApprovalOverrideInConfig(oid)
 		if err != nil {
-			logger.Error(permRpcLogComponent).
+			logger.Error(logComponent).
 				Err(err).
 				Str("req_method", "permissions.approval_overrides.delete").
 				Str("override_id", oid).
-				Msg("[permissions_config_rpc] 删除 approval_override 失败")
+				Msg("[permissions_config_rpc] failed to delete approval_override")
 			return false, errPayload(err.Error(), "BAD_REQUEST")
 		}
 		if !ok {

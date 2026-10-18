@@ -117,7 +117,7 @@ func ComputeChunkEmbeddings(
 			Bool("multimodal_supported", multimodalOK).
 			Bool("use_caption_for_images", useCaptionForImages).
 			Int("total_chunk_count", len(chunks)).
-			Msg("使用纯文本嵌入路径")
+			Msg("using text-only embedding path")
 
 		// 对齐 Python: texts = [chunk.text for chunk in chunks]
 		texts := make([]string, len(chunks))
@@ -134,7 +134,7 @@ func ComputeChunkEmbeddings(
 				Str("method", "EmbedDocuments").
 				Int("chunk_count", len(chunks)).
 				Err(err).
-				Msg("纯文本嵌入失败")
+				Msg("text-only embedding failed")
 			return err
 		}
 
@@ -173,7 +173,7 @@ func ComputeChunkEmbeddings(
 		Int("image_chunk_count", len(imageIndices)).
 		Int("text_chunk_count", len(textOnly)).
 		Int("total_chunk_count", len(chunks)).
-		Msg("使用混合嵌入路径")
+		Msg("using hybrid embedding path")
 
 	// 对齐 Python: # multimodal embeddings for image chunks
 	// 对齐 Python: for idx in image_indices:
@@ -205,7 +205,7 @@ func ComputeChunkEmbeddings(
 				Int("chunk_index", idx).
 				Str("image_path", imgPath).
 				Err(err).
-				Msg("多模态嵌入失败")
+				Msg("multimodal embedding failed")
 			return err
 		}
 		chunk.Embedding = vec
@@ -231,7 +231,7 @@ func ComputeChunkEmbeddings(
 				Str("method", "EmbedDocuments").
 				Int("chunk_count", len(textOnly)).
 				Err(err).
-				Msg("文本分块嵌入失败")
+				Msg("failed to embed text chunks")
 			return err
 		}
 

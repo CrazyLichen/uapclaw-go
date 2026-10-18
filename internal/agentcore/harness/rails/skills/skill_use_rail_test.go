@@ -9,7 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -911,4 +914,27 @@ func TestValidSkillModes(t *testing.T) {
 	if _, ok := ValidSkillModes["invalid"]; ok {
 		t.Error("ValidSkillModes 不应包含 'invalid'")
 	}
+}
+
+// TestWithListSkillModel 验证 WithListSkillModel 选项。
+func TestWithListSkillModel(t *testing.T) {
+	r := &SkillUseRail{}
+	m := &llm.Model{}
+	WithListSkillModel(m)(r)
+	assert.Equal(t, m, r.listSkillModel)
+}
+
+// TestWithEvolutionStore 验证 WithEvolutionStore 选项。
+func TestWithEvolutionStore(t *testing.T) {
+	r := &SkillUseRail{}
+	WithEvolutionStore(nil)(r)
+	assert.Nil(t, r.evolutionStore)
+}
+
+// TestWithEnableImageMultimodal 验证 WithEnableImageMultimodal 选项。
+func TestWithEnableImageMultimodal(t *testing.T) {
+	r := &SkillUseRail{}
+	WithEnableImageMultimodal(true)(r)
+	assert.NotNil(t, r.enableImageMultimodal)
+	assert.True(t, *r.enableImageMultimodal)
 }

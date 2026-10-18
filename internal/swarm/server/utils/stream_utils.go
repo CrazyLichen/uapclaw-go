@@ -544,7 +544,7 @@ func ExtractIntFromPayload(payload map[string]any, key string) int {
 		logger.Warn(logComponent).
 			Str("key", key).
 			Str("actual_type", fmt.Sprintf("%T", v)).
-			Msg("ExtractIntFromPayload 类型断言失败，使用默认值 0")
+			Msg("ExtractIntFromPayload type assertion failed, using default 0")
 		return 0
 	}
 }
@@ -564,7 +564,7 @@ func ExtractFloatFromPayload(payload map[string]any, key string) float64 {
 		logger.Warn(logComponent).
 			Str("key", key).
 			Str("actual_type", fmt.Sprintf("%T", v)).
-			Msg("ExtractFloatFromPayload 类型断言失败，使用默认值 0")
+			Msg("ExtractFloatFromPayload type assertion failed, using default 0")
 		return 0
 	}
 }

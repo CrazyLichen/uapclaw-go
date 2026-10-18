@@ -16,6 +16,7 @@ import (
 // 对齐 Python: build_agent_customizer 返回的 customizer(agent, member_name, role) 闭包
 type AgentCustomizer func(ctx context.Context, agent interfaces.DeepAgentInterface, memberName string, role string) error
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetEnrichedTeamSpec 获取增强的 TeamAgentSpec。
@@ -40,7 +41,7 @@ func (m *TeamManager) GetEnrichedTeamSpec(
 	// 步骤 1-2: 加载 spec（Go 差异：configBase 由 loadTeamSpec 内部获取或调用方注入）
 	spec := loadTeamSpec(sessionID)
 	if spec == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("loadTeamSpec 返回 nil，使用默认 spec")
+		logger.Warn(logComponent).Str("session_id", sessionID).Msg("loadTeamSpec returned nil, using default spec")
 		s := atschema.NewTeamAgentSpec()
 		spec = &s
 	}
@@ -64,7 +65,7 @@ func (m *TeamManager) GetEnrichedTeamSpec(
 		Str("session_id", sessionID).
 		Str("team_name", spec.TeamName).
 		Bool("has_customizer", spec.AgentCustomizer != nil).
-		Msg("GetEnrichedTeamSpec 完成")
+		Msg("GetEnrichedTeamSpec completed")
 
 	return spec
 }
@@ -84,7 +85,7 @@ func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMet
 	}
 	if strings.EqualFold(mode, "team.plan") {
 		spec.EnableTeamPlan = true
-		logger.Info(logComponent).Msg("ApplyTeamPlanMode: 启用 team.plan 模式")
+		logger.Info(logComponent).Msg("ApplyTeamPlanMode: enabling team.plan mode")
 	}
 }
 
@@ -100,7 +101,7 @@ func (m *TeamManager) SyncTeamIdentityMetadata(ctx context.Context, sessionID st
 		TeamName:  teamNamePtr,
 	})
 	logger.Debug(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
-		Msg("同步 team identity metadata")
+		Msg("syncing team identity metadata")
 }
 
 // BuildAgentCustomizer 构建 agent customizer 闭包。
@@ -161,7 +162,7 @@ func (m *TeamManager) BuildAgentCustomizer(
 			Str("session_id", capturedSessionID).
 			Str("member_name", memberName).
 			Str("role", role).
-			Msg("AgentCustomizer 闭包执行（骨架，内部步骤待回填）")
+			Msg("AgentCustomizer closure executed (skeleton, internal steps pending backfill)")
 
 		return nil
 	}
@@ -198,6 +199,7 @@ func (m *TeamManager) ParsePort(value any, defaultPort int, fieldName string) in
 	return defaultPort
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildSessionScopedTeamName 构建 session 作用域的 team name。
@@ -280,7 +282,7 @@ func loadTeamSpec(sessionID string, configBase ...map[string]any) *atschema.Team
 	if cb == nil {
 		// Go 差异：无 configBase 时返回默认 spec
 		logger.Warn(logComponent).Str("session_id", sessionID).
-			Msg("loadTeamSpec: configBase 为 nil，使用默认 spec")
+			Msg("loadTeamSpec: configBase is nil, using default spec")
 		s := atschema.NewTeamAgentSpec()
 		return &s
 	}
@@ -299,7 +301,7 @@ func loadTeamSpec(sessionID string, configBase ...map[string]any) *atschema.Team
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Str("team_name", spec.TeamName).
-		Msg("loadTeamSpec 完成")
+		Msg("loadTeamSpec completed")
 
 	return spec
 }
@@ -316,7 +318,9 @@ func (m *TeamManager) applySessionScopedTeamName(spec *atschema.TeamAgentSpec, s
 			Str("session_id", sessionID).
 			Str("original_name", spec.TeamName).
 			Str("scoped_name", scopedName).
-			Msg("应用 session 作用域 team name")
+			Msg("applying session-scoped team name")
 		spec.TeamName = scopedName
 	}
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────

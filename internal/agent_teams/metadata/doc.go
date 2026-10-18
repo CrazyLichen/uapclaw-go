@@ -19,8 +19,7 @@
 //
 //	metadata/
 //	├── doc.go           # 包文档
-//	├── metadata.go      # Team Namespace 读写函数
-//	└── metadata_test.go # 单元测试
+//	└── metadata.go      # Team Namespace 读写函数
 //
 // 对应 Python 代码：openjiuwen/agent_teams/runtime/metadata.py
 package metadata

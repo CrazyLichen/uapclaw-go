@@ -73,7 +73,7 @@ func LoadTeamSpecDict(configBase map[string]any) map[string]any {
 
 	logger.Debug(logComponent).
 		Str("team_name", strField(teamCfg, "team_name")).
-		Msg("LoadTeamSpecDict 完成")
+		Msg("LoadTeamSpecDict completed")
 
 	return teamCfg
 }
@@ -104,22 +104,22 @@ func ResolveTeamSqliteDbPath(configBase map[string]any) string {
 func selectFirstModesTeam(configBase map[string]any) map[string]any {
 	modes, ok := configBase["modes"].(map[string]any)
 	if !ok {
-		logger.Debug(logComponent).Msg("config_base 中无 modes 配置，使用空 team 配置")
+		logger.Debug(logComponent).Msg("no modes config in config_base, using empty team config")
 		return make(map[string]any)
 	}
 	teamList, ok := modes["team"].([]any)
 	if !ok || len(teamList) == 0 {
-		logger.Debug(logComponent).Msg("modes.team 为空或非列表，使用空 team 配置")
+		logger.Debug(logComponent).Msg("modes.team is empty or non-list, using empty team config")
 		return make(map[string]any)
 	}
 	first, ok := teamList[0].(map[string]any)
 	if !ok {
-		logger.Warn(logComponent).Msg("modes.team[0] 不是 map，使用空 team 配置")
+		logger.Warn(logComponent).Msg("modes.team[0] is not map, using empty team config")
 		return make(map[string]any)
 	}
 	logger.Debug(logComponent).
 		Str("team_name", strField(first, "team_name")).
-		Msg("选中第一个 modes.team 配置")
+		Msg("selected first modes.team config")
 	return first
 }
 
@@ -169,7 +169,7 @@ func buildDefaultModelDict(configBase map[string]any) map[string]any {
 		result["model_request_config"] = make(map[string]any)
 	}
 
-	logger.Debug(logComponent).Msg("构建默认模型配置完成")
+	logger.Debug(logComponent).Msg("builddefaultmodelconfig completed")
 	return result
 }
 
@@ -201,7 +201,7 @@ func resolveStorageConfig(storageRaw map[string]any) map[string]any {
 		result["connection_string"] = defaultPath
 		logger.Debug(logComponent).
 			Str("connection_string", defaultPath).
-			Msg("SQLite 连接字符串为空，使用默认路径")
+			Msg("SQLite connection string is empty, using default path")
 	}
 
 	return result
@@ -284,19 +284,19 @@ func buildAgentsConfig(teamRaw map[string]any, configBase map[string]any) map[st
 						logger.Debug(logComponent).
 							Str("agent_name", name).
 							Str("ref", ref).
-							Msg("解析 $ref 引用成功")
+							Msg("$ref reference resolved successfully")
 					} else {
 						logger.Warn(logComponent).
 							Str("agent_name", name).
 							Str("ref", ref).
-							Msg("$ref 引用在 config_base.models.agents 中未找到")
+							Msg("$ref reference not found in config_base.models.agents")
 						agentConfig = make(map[string]any)
 					}
 				} else {
 					logger.Warn(logComponent).
 						Str("agent_name", name).
 						Str("ref", ref).
-						Msg("$ref 引用但 config_base.models.agents 不存在")
+						Msg("$ref reference but config_base.models.agents does not exist")
 					agentConfig = make(map[string]any)
 				}
 			} else {
@@ -313,7 +313,7 @@ func buildAgentsConfig(teamRaw map[string]any, configBase map[string]any) map[st
 	// 确保 "leader" 键存在
 	if _, hasLeader := agents["leader"]; !hasLeader {
 		agents["leader"] = buildAgentSpecDict(make(map[string]any), defaultModel, defaultWorkspace, maxIter, timeout)
-		logger.Debug(logComponent).Msg("agents 中无 leader 配置，使用默认值")
+		logger.Debug(logComponent).Msg("no leader config in agents, using default")
 	}
 
 	return agents
@@ -363,7 +363,7 @@ func buildPredefinedMembers(teamRaw map[string]any) []map[string]any {
 		} else {
 			logger.Warn(logComponent).
 				Int("index", i).
-				Msg("predefined_members 项不是 map，跳过")
+				Msg("predefined_members item is not map, skipping")
 		}
 	}
 	return result
@@ -409,13 +409,13 @@ func normalizeNameFields(m map[string]any, context string) {
 		logger.Debug(logComponent).
 			Str("context", context).
 			Str("name", displayName).
-			Msg("display_name 有值但 name 为空，设 name = display_name")
+			Msg("display_name set but name empty, setting name = display_name")
 	} else if name != "" && displayName == "" {
 		m["display_name"] = name
 		logger.Debug(logComponent).
 			Str("context", context).
 			Str("display_name", name).
-			Msg("name 有值但 display_name 为空，设 display_name = name")
+			Msg("name set but display_name empty, setting display_name = name")
 	}
 }
 

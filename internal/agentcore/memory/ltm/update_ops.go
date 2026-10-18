@@ -73,7 +73,7 @@ func (m *LongTermMemory) UpdateVariables(
 		for name, value := range variables {
 			if err := m.variableManager.UpdateUserVariable(ctx, p.UserID, p.ScopeID, name, value); err != nil {
 				logger.Error(logComponent).Err(err).Str("name", name).
-					Msg("更新变量失败")
+					Msg("failed to update variable")
 				return err
 			}
 		}

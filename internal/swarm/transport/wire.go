@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -14,9 +13,6 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-
-// logComponentWire wire 编码日志组件
-const logComponentWire = logger.ComponentAgentServer
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

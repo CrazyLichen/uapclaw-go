@@ -95,7 +95,7 @@ const (
 func NewInMemoryCheckpointer() *InMemoryCheckpointer {
 	logger.Info(logComponent).
 		Str("action", "new_inmemory_checkpointer").
-		Msg("创建内存检查点器")
+		Msg("created inmemory checkpointer")
 	return &InMemoryCheckpointer{
 		agentStores:          make(map[string]*AgentStorage),
 		agentTeamStores:      make(map[string]*AgentTeamStorage),
@@ -130,7 +130,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 			Str("session_id", sessionID).
 			Str("workflow_id", workflowID).
 			Str("storage_type", "inmemory").
-			Msg("创建新的工作流检查点存储")
+			Msg("created new workflow checkpoint storage")
 	}
 
 	// 判断 inputs 是否为交互输入（非 nil 且非空 map）
@@ -143,7 +143,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 			Str("session_id", sessionID).
 			Str("workflow_id", workflowID).
 			Str("storage_type", "inmemory").
-			Msg("开始恢复工作流会话")
+			Msg("starting to recover workflow session")
 
 		if err := workflowStore.Recover(ctx, session, inputs); err != nil {
 			logger.Error(logComponent).
@@ -151,7 +151,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 				Str("action", "pre_workflow_execute").
 				Str("session_id", sessionID).
 				Str("workflow_id", workflowID).
-				Msg("恢复工作流会话失败")
+				Msg("failed to recover workflow session")
 			return err
 		}
 
@@ -161,7 +161,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 			Str("session_id", sessionID).
 			Str("workflow_id", workflowID).
 			Str("storage_type", "inmemory").
-			Msg("成功恢复工作流会话")
+			Msg("workflow session recovered successfully")
 	} else {
 		exists, err := workflowStore.Exists(ctx, session)
 		if err != nil {
@@ -179,7 +179,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 					Str("session_id", sessionID).
 					Str("workflow_id", workflowID).
 					Str("storage_type", "inmemory").
-					Msg("强制清除当前工作流所有检查点")
+					Msg("force clearing all checkpoints of current workflow")
 
 				// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
 				func() {
@@ -232,7 +232,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 			logger.Error(logComponent).Err(err).
 				Str("session_id", sessionID).
 				Str("workflow_id", workflowID).
-				Msg("清除工作流会话失败")
+				Msg("failed to clear workflow session")
 		}
 
 		// 如果没有父会话，移除 workflow store
@@ -251,7 +251,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 				Str("session_id", sessionID).
 				Str("workflow_id", workflowID).
 				Str("storage_type", "inmemory").
-				Msg("移除工作流检查点存储")
+				Msg("workflow checkpoint storage removed")
 		}
 		cp.mu.Unlock()
 	} else {
@@ -288,7 +288,7 @@ func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session int
 			Str("session_id", sessionID).
 			Str("agent_id", agentID).
 			Str("storage_type", "inmemory").
-			Msg("创建新的 Agent 检查点存储")
+			Msg("created new Agent checkpoint storage")
 	}
 
 	logger.Info(logComponent).
@@ -297,13 +297,13 @@ func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session int
 		Str("session_id", sessionID).
 		Str("agent_id", agentID).
 		Str("storage_type", "inmemory").
-		Msg("开始恢复 Agent 会话")
+		Msg("starting to recover Agent session")
 
 	if err := agentStore.Recover(ctx, session, nil); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("session_id", sessionID).
 			Str("agent_id", agentID).
-			Msg("恢复 Agent 会话失败")
+			Msg("failed to recover Agent session")
 		return err
 	}
 
@@ -313,7 +313,7 @@ func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session int
 		Str("session_id", sessionID).
 		Str("agent_id", agentID).
 		Str("storage_type", "inmemory").
-		Msg("成功恢复 Agent 会话")
+		Msg("Agent session recovered successfully")
 
 	// 如果有交互输入，设置到 session state
 	if inputs != nil {
@@ -321,7 +321,7 @@ func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session int
 			if err := st.Update(map[string]any{constants.InteractiveInputKey: []any{inputs}}); err != nil {
 				logger.Warn(logComponent).Err(err).
 					Str("session_id", session.SessionID()).
-					Msg("设置交互输入到 session state 失败")
+					Msg("failed to set interactive input to session state")
 			}
 		}
 	}
@@ -350,7 +350,7 @@ func (cp *InMemoryCheckpointer) PreAgentTeamExecute(ctx context.Context, session
 			Str("session_id", sessionID).
 			Str("workflow_id", teamID).
 			Str("storage_type", "inmemory").
-			Msg("创建新的 AgentTeam 检查点存储")
+			Msg("created new AgentTeam checkpoint storage")
 	}
 
 	logger.Info(logComponent).
@@ -359,13 +359,13 @@ func (cp *InMemoryCheckpointer) PreAgentTeamExecute(ctx context.Context, session
 		Str("session_id", sessionID).
 		Str("workflow_id", teamID).
 		Str("storage_type", "inmemory").
-		Msg("开始恢复 AgentTeam 会话")
+		Msg("starting to recover AgentTeam session")
 
 	if err := teamStore.Recover(ctx, session, nil); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("session_id", sessionID).
 			Str("workflow_id", teamID).
-			Msg("恢复 AgentTeam 会话失败")
+			Msg("failed to recover AgentTeam session")
 		return err
 	}
 
@@ -375,7 +375,7 @@ func (cp *InMemoryCheckpointer) PreAgentTeamExecute(ctx context.Context, session
 		Str("session_id", sessionID).
 		Str("workflow_id", teamID).
 		Str("storage_type", "inmemory").
-		Msg("成功恢复 AgentTeam 会话")
+		Msg("AgentTeam session recovered successfully")
 
 	// 如果有交互输入，更新全局状态
 	if inputs != nil {
@@ -406,7 +406,7 @@ func (cp *InMemoryCheckpointer) InterruptAgentExecute(ctx context.Context, sessi
 		Str("session_id", sessionID).
 		Str("agent_id", agentID).
 		Str("storage_type", "inmemory").
-		Msg("Agent 中断时开始保存检查点")
+		Msg("starting to save checkpoint on Agent interruption")
 
 	if err := agentStore.Save(ctx, session); err != nil {
 		logger.Error(logComponent).Err(err).
@@ -415,7 +415,7 @@ func (cp *InMemoryCheckpointer) InterruptAgentExecute(ctx context.Context, sessi
 			Str("session_id", sessionID).
 			Str("agent_id", agentID).
 			Str("storage_type", "inmemory").
-			Msg("Agent 中断时保存检查点失败")
+			Msg("failed to save checkpoint on Agent interruption")
 		return err
 	}
 
@@ -425,7 +425,7 @@ func (cp *InMemoryCheckpointer) InterruptAgentExecute(ctx context.Context, sessi
 		Str("session_id", sessionID).
 		Str("agent_id", agentID).
 		Str("storage_type", "inmemory").
-		Msg("Agent 中断时成功保存检查点")
+		Msg("checkpoint saved successfully on Agent interruption")
 	return nil
 }
 
@@ -449,7 +449,7 @@ func (cp *InMemoryCheckpointer) PostAgentExecute(ctx context.Context, session in
 		Str("session_id", sessionID).
 		Str("agent_id", agentID).
 		Str("storage_type", "inmemory").
-		Msg("Agent 执行完成后开始保存检查点")
+		Msg("starting to save checkpoint after Agent execution")
 
 	if err := agentStore.Save(ctx, session); err != nil {
 		logger.Error(logComponent).Err(err).
@@ -458,7 +458,7 @@ func (cp *InMemoryCheckpointer) PostAgentExecute(ctx context.Context, session in
 			Str("session_id", sessionID).
 			Str("agent_id", agentID).
 			Str("storage_type", "inmemory").
-			Msg("Agent 执行完成后保存检查点失败")
+			Msg("failed to save checkpoint after Agent execution")
 		return err
 	}
 
@@ -468,7 +468,7 @@ func (cp *InMemoryCheckpointer) PostAgentExecute(ctx context.Context, session in
 		Str("session_id", sessionID).
 		Str("agent_id", agentID).
 		Str("storage_type", "inmemory").
-		Msg("Agent 执行完成后成功保存检查点")
+		Msg("checkpoint saved successfully after Agent execution")
 	return nil
 }
 
@@ -492,7 +492,7 @@ func (cp *InMemoryCheckpointer) PostAgentTeamExecute(ctx context.Context, sessio
 		Str("session_id", sessionID).
 		Str("workflow_id", teamID).
 		Str("storage_type", "inmemory").
-		Msg("AgentTeam 执行完成后开始保存检查点")
+		Msg("starting to save checkpoint after AgentTeam execution")
 
 	if err := teamStore.Save(ctx, session); err != nil {
 		logger.Error(logComponent).Err(err).
@@ -501,7 +501,7 @@ func (cp *InMemoryCheckpointer) PostAgentTeamExecute(ctx context.Context, sessio
 			Str("session_id", sessionID).
 			Str("workflow_id", teamID).
 			Str("storage_type", "inmemory").
-			Msg("AgentTeam 执行完成后保存检查点失败")
+			Msg("failed to save checkpoint after AgentTeam execution")
 		return err
 	}
 
@@ -511,7 +511,7 @@ func (cp *InMemoryCheckpointer) PostAgentTeamExecute(ctx context.Context, sessio
 		Str("session_id", sessionID).
 		Str("workflow_id", teamID).
 		Str("storage_type", "inmemory").
-		Msg("AgentTeam 执行完成后成功保存检查点")
+		Msg("checkpoint saved successfully after AgentTeam execution")
 	return nil
 }
 
@@ -538,7 +538,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 			Str("session_id", sessionID).
 			Str("storage_type", "inmemory").
 			Strs("agent_ids", agentID).
-			Msg("开始清除指定 Agent 的检查点")
+			Msg("starting to clear checkpoints of specified Agents")
 		cp.mu.RLock()
 		agentStore, ok := cp.agentStores[sessionID]
 		cp.mu.RUnlock()
@@ -564,7 +564,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 		Str("session_id", sessionID).
 		Str("workflow_ids", fmt.Sprintf("%v", workflowIDs)).
 		Str("storage_type", "inmemory").
-		Msg("开始清除会话的所有工作流检查点")
+		Msg("starting to clear all workflow checkpoints of session")
 
 	// 清除 workflow 相关的 graph store 和 workflow store
 	for wid := range workflowIDs {
@@ -578,7 +578,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 		Str("event_type", "checkpoint_clear").
 		Str("session_id", sessionID).
 		Str("storage_type", "inmemory").
-		Msg("成功清除会话的所有工作流检查点")
+		Msg("all workflow checkpoints of session cleared successfully")
 
 	// 移除 workflow store
 	if _, exists := cp.workflowStores[sessionID]; exists {
@@ -588,7 +588,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 			Str("event_type", "checkpointer_store_remove").
 			Str("session_id", sessionID).
 			Str("storage_type", "inmemory").
-			Msg("移除工作流检查点存储")
+			Msg("workflow checkpoint storage removed")
 	}
 
 	// 移除匹配的 agent store（前缀匹配，对齐 Python sid.startswith(session_id)）
@@ -600,7 +600,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 				Str("event_type", "checkpointer_store_remove").
 				Str("session_id", sid).
 				Str("storage_type", "inmemory").
-				Msg("移除 Agent 检查点存储")
+				Msg("Agent checkpoint storage removed")
 		}
 	}
 
@@ -612,7 +612,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 			Str("event_type", "checkpointer_store_remove").
 			Str("session_id", sessionID).
 			Str("storage_type", "inmemory").
-			Msg("移除 AgentTeam 检查点存储")
+			Msg("AgentTeam checkpoint storage removed")
 	}
 
 	return nil
@@ -892,13 +892,13 @@ func (cp *InMemoryCheckpointer) innerSaveWorkflowCheckpoint(ctx context.Context,
 		Str("workflow_id", workflowID).
 		Str("reason", reason).
 		Str("storage_type", "inmemory").
-		Msg("开始保存工作流检查点")
+		Msg("starting to save workflow checkpoint")
 
 	if err := workflowStore.Save(ctx, session); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("session_id", sessionID).
 			Str("workflow_id", workflowID).
-			Msg("保存工作流检查点失败")
+			Msg("failed to save workflow checkpoint")
 		return err
 	}
 
@@ -916,7 +916,7 @@ func (cp *InMemoryCheckpointer) innerSaveWorkflowCheckpoint(ctx context.Context,
 		Str("workflow_id", workflowID).
 		Str("reason", reason).
 		Str("storage_type", "inmemory").
-		Msg("成功保存工作流检查点")
+		Msg("workflow checkpoint saved successfully")
 	return nil
 }
 
@@ -935,7 +935,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, w
 		Str("workflow_id", workflowID).
 		Str("reason", reason).
 		Str("storage_type", "inmemory").
-		Msg("开始清除工作流所有检查点")
+		Msg("starting to clear all workflow checkpoints")
 
 	isSucceed := false
 
@@ -959,7 +959,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, w
 					Str("session_id", sessionID).
 					Str("workflow_id", workflowID).
 					Str("storage_type", "inmemory").
-					Msg("清除工作流检查点失败")
+					Msg("failed to clear workflow checkpoints")
 			}
 			return err
 		}
@@ -973,7 +973,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, w
 			Str("workflow_id", workflowID).
 			Str("reason", reason).
 			Str("storage_type", "inmemory").
-			Msg("成功清除工作流所有检查点")
+			Msg("all workflow checkpoints cleared successfully")
 	}
 	return nil
 }
@@ -991,7 +991,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSessionLocked(ctx context.Cont
 		Str("workflow_id", workflowID).
 		Str("reason", reason).
 		Str("storage_type", "inmemory").
-		Msg("开始清除工作流所有检查点")
+		Msg("starting to clear all workflow checkpoints")
 
 	isSucceed := false
 
@@ -1012,7 +1012,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSessionLocked(ctx context.Cont
 					Str("session_id", sessionID).
 					Str("workflow_id", workflowID).
 					Str("storage_type", "inmemory").
-					Msg("清除工作流检查点失败")
+					Msg("failed to clear workflow checkpoints")
 			}
 			return err
 		}
@@ -1026,7 +1026,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSessionLocked(ctx context.Cont
 			Str("workflow_id", workflowID).
 			Str("reason", reason).
 			Str("storage_type", "inmemory").
-			Msg("成功清除工作流所有检查点")
+			Msg("all workflow checkpoints cleared successfully")
 	}
 	return nil
 }

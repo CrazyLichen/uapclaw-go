@@ -71,7 +71,7 @@ func (w *SimpleAPIWrapperFromCallable) Call(tool map[string]any, toolInput map[s
 			Str("method", "Call").
 			Str("tool_name", toolName).
 			Str("fn_call_name", w.fnCallName).
-			Msg("请求无效，未找到函数")
+			Msg("invalid request, function not found")
 		result, _ := json.Marshal(map[string]string{
 			"error":    fmt.Sprintf("请求无效，未找到函数 '%s'", toolName),
 			"response": "",

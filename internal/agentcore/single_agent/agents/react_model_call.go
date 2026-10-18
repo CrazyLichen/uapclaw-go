@@ -105,7 +105,7 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 	if enableKVRelease && !supportsKVRelease && !a.kvReleaseWarningLogged {
 		logger.Warn(logComponent).
 			Str("event_type", "kv_cache_release_not_supported").
-			Msg("enable_kv_cache_release 已启用但当前 LLM 不支持 KV Cache 释放")
+			Msg("enable_kv_cache_release enabled but current LLM does not support KV Cache release")
 		a.kvReleaseWarningLogged = true
 	}
 
@@ -152,7 +152,10 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 		}
 	}
 
-	isStreaming, _ := cbc.Extra()["_streaming"].(bool)
+	isStreaming := false
+	if val, ok := cbc.GetExtra("_streaming"); ok {
+		isStreaming, _ = val.(bool)
+	}
 	modelName := ""
 	if a.config != nil {
 		modelName = a.config.ModelNameVal

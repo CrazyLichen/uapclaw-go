@@ -33,6 +33,7 @@ const (
 	TaskUnknown TaskStatus = "unknown"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsTerminal 判断是否为终态（completed/failed/canceled）。
@@ -46,3 +47,5 @@ func (s TaskStatus) IsTerminal() bool {
 func (s TaskStatus) IsInputRequired() bool {
 	return s == TaskInputRequired
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

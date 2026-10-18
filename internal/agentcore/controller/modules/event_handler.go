@@ -93,3 +93,5 @@ func (b *EventHandlerBase) WaitCompletion(_ context.Context, _ time.Duration) ma
 // OnAbort 默认实现：空操作。
 // Python: EventHandler.OnAbort 默认实现。
 func (b *EventHandlerBase) OnAbort() {}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

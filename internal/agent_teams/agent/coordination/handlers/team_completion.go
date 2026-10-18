@@ -133,7 +133,7 @@ func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ types.Coordina
 	logger.Debug(logComponent).
 		Str("role", string(role)).
 		Bool("emitted", h.teamCompletedEmitted).
-		Msg("onPollTask: 等待任务后端就绪，跳过完成检查")
+		Msg("onPollTask: waiting for task backend, skipping completion check")
 }
 
 // OnTaskListDrained 记录任务列表清空事件并触发所有注册的完成回调。
@@ -152,7 +152,7 @@ func (h *TeamCompletionHandler) OnTaskListDrained(ctx context.Context, event typ
 		Str("team_name", teamName).
 		Int("task_count", taskCount).
 		Int("callbacks", len(h.completionCallbacks)).
-		Msg("onTaskListDrained: 任务列表已清空")
+		Msg("onTaskListDrained: task list drained")
 
 	// 对齐 Python: 隔离执行每个回调
 	for i, cb := range h.completionCallbacks {
@@ -160,7 +160,7 @@ func (h *TeamCompletionHandler) OnTaskListDrained(ctx context.Context, event typ
 			logger.Error(logComponent).
 				Err(err).
 				Int("callback_index", i).
-				Msg("onTaskListDrained: 回调执行失败，继续执行其余")
+				Msg("onTaskListDrained: callback failed, continuing with remaining")
 		}
 	}
 }
@@ -184,7 +184,7 @@ func (h *TeamCompletionHandler) OnTeamCompleted(_ context.Context, event types.C
 		}()).
 		Int("member_count", memberCount).
 		Int("task_count", taskCount).
-		Msg("onTeamCompleted: 团队已完成")
+		Msg("onTeamCompleted: team completed")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

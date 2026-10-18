@@ -103,6 +103,9 @@ type StorageBuilder func(params map[string]any) (any, error)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponent 日志组件
+const logComponent = logger.ComponentTeam
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -166,13 +169,13 @@ func NewTeamAgentSpecFromDict(specDict map[string]any) *TeamAgentSpec {
 	// JSON 桥接：dict → JSON → TeamAgentSpec
 	data, err := json.Marshal(specDict)
 	if err != nil {
-		logger.Warn(logger.ComponentAgentCore).Err(err).Msg("NewTeamAgentSpecFromDict: JSON marshal 失败，使用默认值")
+		logger.Warn(logComponent).Err(err).Msg("NewTeamAgentSpecFromDict: JSON marshal failed, using defaults")
 		spec := NewTeamAgentSpec()
 		return &spec
 	}
 	var spec TeamAgentSpec
 	if err := json.Unmarshal(data, &spec); err != nil {
-		logger.Warn(logger.ComponentAgentCore).Err(err).Msg("NewTeamAgentSpecFromDict: JSON unmarshal 失败，使用默认值")
+		logger.Warn(logComponent).Err(err).Msg("NewTeamAgentSpecFromDict: JSON unmarshal failed, using defaults")
 		spec := NewTeamAgentSpec()
 		return &spec
 	}

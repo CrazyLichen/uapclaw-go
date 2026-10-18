@@ -17,6 +17,11 @@ import (
 // TeamSkillCreateRailOption 构造选项函数。
 type TeamSkillCreateRailOption func(*TeamSkillCreateRail)
 
+// loopController LoopController 接口子集。
+type loopController interface {
+	EnqueueFollowUp(prompt string)
+}
+
 // TeamSkillCreateRail 团队技能创建护栏，在检测到多 Agent 协作模式后
 // 提议用户创建团队技能。
 //
@@ -127,20 +132,20 @@ func (r *TeamSkillCreateRail) Priority() int { return teamSkillCreatePriority }
 // 对齐 Python: TeamSkillCreateRail.notify_team_completed()
 func (r *TeamSkillCreateRail) NotifyTeamCompleted(cbc *agentinterfaces.AgentCallbackContext) bool {
 	if !r.autoTrigger {
-		logger.Info(logComponent).Msg("TeamSkillCreateRail notify_team_completed 已忽略：autoTrigger 关闭")
+		logger.Info(logComponent).Msg("TeamSkillCreateRail notify_team_completed ignored: autoTrigger off")
 		return false
 	}
 
 	builder := r.Builder()
 	if builder == nil {
-		logger.Warn(logComponent).Msg("TeamSkillCreateRail notify_team_completed: 无轨迹 builder")
+		logger.Warn(logComponent).Msg("TeamSkillCreateRail notify_team_completed: no trajectory builder")
 		return false
 	}
 
 	r.completedSessionID = builder.SessionID()
 	logger.Debug(logComponent).
 		Str("session_id", r.completedSessionID).
-		Msg("TeamSkillCreateRail 标记团队完成")
+		Msg("TeamSkillCreateRail marked team completed")
 	return true
 }
 
@@ -237,7 +242,7 @@ func (r *TeamSkillCreateRail) maybeEnqueueCreationFollowUp(cbc *agentinterfaces.
 	// LoopController 通过类型断言获取
 	controller := getLoopController(cbc.Agent())
 	if controller == nil {
-		logger.Warn(logComponent).Msg("TeamSkillCreateRail 无法获取 LoopController，跳过提议")
+		logger.Warn(logComponent).Msg("TeamSkillCreateRail cannot get LoopController, skipping proposal")
 		return
 	}
 
@@ -246,14 +251,14 @@ func (r *TeamSkillCreateRail) maybeEnqueueCreationFollowUp(cbc *agentinterfaces.
 		Str("language", r.language).
 		Str("skills_dir", r.skillsDir).
 		Int("prompt_length", len(prompt)).
-		Msg("TeamSkillCreateRail 检测到多 Agent 协作模式，提议创建团队技能")
+		Msg("TeamSkillCreateRail detected multi-agent collaboration pattern, proposing team skill creation")
 
 	controller.EnqueueFollowUp(prompt)
 	r.proposedSpawnCounts[sessionID] = spawnCount
 	if r.completedSessionID == sessionID {
 		r.completedSessionID = ""
 	}
-	logger.Info(logComponent).Msg("TeamSkillCreateRail follow_up 已入队")
+	logger.Info(logComponent).Msg("TeamSkillCreateRail follow_up enqueued")
 }
 
 // canEnqueueCreationFollowUp 检查是否满足提议条件。
@@ -269,14 +274,14 @@ func (r *TeamSkillCreateRail) canEnqueueCreationFollowUp(sessionID string, spawn
 		logger.Debug(logComponent).
 			Int("spawn_count", spawnCount).
 			Int("threshold", r.minTeamMembers).
-			Msg("TeamSkillCreateRail spawn_member 低于阈值，跳过")
+			Msg("TeamSkillCreateRail spawn_member below threshold, skipping")
 		return false
 	}
 	// 对齐 Python: if self._detect_used_team_skill() is not None: return False
 	if used := r.detectUsedTeamSkill(); used != "" {
 		logger.Info(logComponent).
 			Str("used_skill", used).
-			Msg("TeamSkillCreateRail 已有团队技能，跳过创建提议")
+			Msg("TeamSkillCreateRail team skill already exists, skipping creation proposal")
 		return false
 	}
 	return true
@@ -322,7 +327,7 @@ func (r *TeamSkillCreateRail) detectUsedTeamSkill() string {
 	if usedSkill != "" {
 		logger.Info(logComponent).
 			Str("used_skill", usedSkill).
-			Msg("TeamSkillCreateRail 检测到已使用团队技能，跳过创建提议")
+			Msg("TeamSkillCreateRail detected team skill in use, skipping creation proposal")
 	}
 	return usedSkill
 }
@@ -395,11 +400,6 @@ func containsTeamSkillKind(content string) bool {
 	kind := frontmatter["kind"]
 	_, ok := teamSkillKinds[kind]
 	return ok
-}
-
-// loopController LoopController 接口子集。
-type loopController interface {
-	EnqueueFollowUp(prompt string)
 }
 
 // getLoopController 从 Agent 获取 LoopController。

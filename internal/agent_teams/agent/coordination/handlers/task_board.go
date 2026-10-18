@@ -102,7 +102,7 @@ func (h *TaskBoardHandler) OnTaskClaimed(ctx context.Context, event types.Coordi
 		logger.Error(logComponent).
 			Err(err).
 			Str("event_type", em.EventType).
-			Msg("onTaskClaimed: deliver_input 失败")
+			Msg("onTaskClaimed: deliver_input failed")
 	}
 }
 
@@ -145,7 +145,7 @@ func (h *TaskBoardHandler) OnTaskPlanDecision(ctx context.Context, event types.C
 	logger.Debug(logComponent).
 		Str("event_type", em.EventType).
 		Bool("approved", approved).
-		Msg("onTaskPlanDecision: TODO 等格式化模板就绪")
+		Msg("onTaskPlanDecision: TODO pending formatted template")
 }
 
 // OnTaskBoardEvent 通用任务板事件处理：恢复轮询 + 提醒空闲 agent。
@@ -187,12 +187,12 @@ func (h *TaskBoardHandler) nudgeIdleAgent(ctx context.Context, memberName string
 		logger.Debug(logComponent).
 			Str("member_name", memberName).
 			Bool("from_poll", fromPoll).
-			Msg("nudgeIdleAgent: leader TODO 等任务后端就绪")
+			Msg("nudgeIdleAgent: leader TODO pending task backend")
 	} else {
 		// Teammate: 审查可认领任务 + 所有未完成任务
 		logger.Debug(logComponent).
 			Str("member_name", memberName).
-			Msg("nudgeIdleAgent: teammate TODO 等任务后端就绪")
+			Msg("nudgeIdleAgent: teammate TODO pending task backend")
 	}
 }
 

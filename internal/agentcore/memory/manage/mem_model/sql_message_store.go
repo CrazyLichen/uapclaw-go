@@ -240,7 +240,7 @@ func (s *SqlMessageStore) GetMessages(ctx context.Context, filter *storedb.Messa
 				Str("event_type", "STORE_MESSAGE_ERROR").
 				Str("method", "GetMessages").
 				Err(err).
-				Msg("解析消息行失败，跳过")
+				Msg("failed to parse message row, skipping")
 			continue
 		}
 		result = append(result, &storedb.MessageAndMeta{
@@ -457,7 +457,7 @@ func (s *SqlMessageStore) rowToMessageAndMeta(row map[string]any) (schema.BaseMe
 	if parseErr != nil {
 		logger.Warn(logComponent).Err(parseErr).
 			Str("timestamp_str", timestampStr).
-			Msg("解析 timestamp 失败，使用零值")
+			Msg("failed to parse timestamp, using zero value")
 	}
 
 	// 解析其他字段

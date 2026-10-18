@@ -173,11 +173,6 @@ type TeamTaskManager struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// taskLogComponent 日志组件标识（包内 logComponent 已被 message_manager 使用）
-const taskLogComponent = logger.ComponentChannel
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -318,7 +313,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 	for _, spec := range specs {
 		// Python: if not title or not content → skip
 		if spec.Title == "" || spec.Content == "" {
-			logger.Warn(taskLogComponent).Str("spec", fmt.Sprintf("%+v", spec)).Msg("Batch create skipping invalid spec")
+			logger.Warn(logComponent).Str("spec", fmt.Sprintf("%+v", spec)).Msg("Batch create skipping invalid spec")
 			results = append(results, &TaskCreateResult{Reason: "无效规格：缺少标题或内容"})
 			continue
 		}
@@ -328,7 +323,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 		)
 		if err != nil {
 			// Python: if not result.ok → warning + skip
-			logger.Warn(taskLogComponent).Err(err).Str("title", spec.Title).Msg("Batch create skipping failed task")
+			logger.Warn(logComponent).Err(err).Str("title", spec.Title).Msg("Batch create skipping failed task")
 			results = append(results, &TaskCreateResult{Reason: err.Error()})
 			continue
 		}
@@ -341,7 +336,7 @@ func (tm *TeamTaskManager) AddBatch(ctx context.Context, specs []TaskCreateSpec)
 			created++
 		}
 	}
-	logger.Info(taskLogComponent).Int("count", created).Int("total", len(results)).Msg("Batch create completed")
+	logger.Info(logComponent).Int("count", created).Int("total", len(results)).Msg("Batch create completed")
 	return results, nil
 }
 
@@ -545,7 +540,7 @@ func (tm *TeamTaskManager) Complete(ctx context.Context, taskID string) (schema.
 					UpdatedAt:   nowISO,
 				}
 				if err := tm.writePlanIndex(planRecord); err != nil {
-					logger.Warn(taskLogComponent).Err(err).Str("task_id", taskID).Msg("PLAN_MODE completed: failed to update plan index")
+					logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("PLAN_MODE completed: failed to update plan index")
 				}
 			}
 		}
@@ -1005,11 +1000,11 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanRecord, planFilePath string, toolCallID string) string {
 	leaderName := tm.resolveLeaderMemberName(ctx)
 	if leaderName == "" {
-		logger.Warn(taskLogComponent).
+		logger.Warn(logComponent).
 			Str("team", tm.teamName).
 			Str("task_id", record.TaskID).
 			Str("plan_id", record.PlanID).
-			Msg("notifyLeaderOfPlan: 无法通知 leader，leader_member_name 为空")
+			Msg("notifyLeaderOfPlan: cannot notify leader, leader_member_name is empty")
 		return ""
 	}
 	// Python: leader_member_name == self.member_name → 跳过
@@ -1025,20 +1020,20 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 	if tm.messageManager != nil {
 		messageID, err := tm.messageManager.SendMessage(ctx, content, leaderName, tm.memberName)
 		if err != nil {
-			logger.Error(taskLogComponent).
+			logger.Error(logComponent).
 				Str("leader", leaderName).
 				Str("task_id", record.TaskID).
 				Str("plan_id", record.PlanID).
 				Err(err).
-				Msg("notifyLeaderOfPlan: SendMessage 失败")
+				Msg("notifyLeaderOfPlan: SendMessage failed")
 			return ""
 		}
-		logger.Info(taskLogComponent).
+		logger.Info(logComponent).
 			Str("leader", leaderName).
 			Str("task_id", record.TaskID).
 			Str("plan_id", record.PlanID).
 			Str("message_id", messageID).
-			Msg("notifyLeaderOfPlan: 已通知 leader 审批计划")
+			Msg("notifyLeaderOfPlan: leader notified to review plan")
 		return messageID
 	}
 
@@ -1046,7 +1041,7 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 	if tm.messager == nil {
 		return ""
 	}
-	logger.Warn(taskLogComponent).Msg("notifyLeaderOfPlan: messageManager unavailable, falling back to messager.Send")
+	logger.Warn(logComponent).Msg("notifyLeaderOfPlan: messageManager unavailable, falling back to messager.Send")
 	msg := events.EventMessageFromEvent(events.MessageEvent{
 		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName},
 		MessageID:        fmt.Sprintf("plan_notify_%s_%d", record.PlanID, time.Now().UnixMilli()),
@@ -1058,10 +1053,10 @@ func (tm *TeamTaskManager) notifyLeaderOfPlan(ctx context.Context, record *PlanR
 	}
 	msg.Payload["content"] = content
 	if err := tm.messager.Send(ctx, leaderName, msg); err != nil {
-		logger.Warn(taskLogComponent).
+		logger.Warn(logComponent).
 			Str("leader", leaderName).
 			Err(err).
-			Msg("notifyLeaderOfPlan: messager.Send 失败")
+			Msg("notifyLeaderOfPlan: messager.Send failed")
 	}
 	return ""
 }
@@ -1170,10 +1165,10 @@ func copyFileWithMeta(src, dst string) error {
 	// 恢复修改时间（对齐 Python: shutil.copystat → os.utime）
 	if err := os.Chtimes(dst, info.ModTime(), info.ModTime()); err != nil {
 		// 修改时间恢复失败不阻断流程，仅记录日志
-		logger.Warn(taskLogComponent).
+		logger.Warn(logComponent).
 			Str("dst", dst).
 			Err(err).
-			Msg("copyFileWithMeta: 恢复修改时间失败")
+			Msg("copyFileWithMeta: failed to restore modification time")
 	}
 
 	return nil
@@ -1189,9 +1184,9 @@ func (tm *TeamTaskManager) publishTaskEvent(ctx context.Context, event events.Ty
 	msg := events.EventMessageFromEvent(event)
 	topicID := events.TeamTopicTask.Build(schema.GetSessionID(ctx), tm.teamName)
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
-		logger.Error(taskLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("event_type", event.EventTypeName()).
-			Msg("发布任务事件失败")
+			Msg("failed to publish task event")
 	}
 }
 

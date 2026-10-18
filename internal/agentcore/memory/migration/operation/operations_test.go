@@ -27,6 +27,73 @@ func TestOperation_接口满足(t *testing.T) {
 	var _ Operation = (*RemoveMemoryDocFieldOperation)(nil)
 }
 
+// TestTypeName_所有操作 测试所有操作类型的 TypeName 返回值
+func TestTypeName_所有操作(t *testing.T) {
+	tests := []struct {
+		op  Operation
+		typ string
+	}{
+		{&AddColumnOperation{}, "AddColumnOperation"},
+		{&RenameColumnOperation{}, "RenameColumnOperation"},
+		{&UpdateColumnTypeOperation{}, "UpdateColumnTypeOperation"},
+		{&AddScalarFieldOperation{}, "AddScalarFieldOperation"},
+		{&RenameScalarFieldOperation{}, "RenameScalarFieldOperation"},
+		{&UpdateScalarFieldTypeOperation{}, "UpdateScalarFieldTypeOperation"},
+		{&UpdateEmbeddingDimensionOperation{}, "UpdateEmbeddingDimensionOperation"},
+		{&UpdateKVOperation{}, "UpdateKVOperation"},
+		{&UpdateMessageOperation{}, "UpdateMessageOperation"},
+		{&RenameMemoryDocFieldOperation{}, "RenameMemoryDocFieldOperation"},
+		{&TransformMemoryDocFieldOperation{}, "TransformMemoryDocFieldOperation"},
+		{&AddMemoryDocFieldOperation{}, "AddMemoryDocFieldOperation"},
+		{&RemoveMemoryDocFieldOperation{}, "RemoveMemoryDocFieldOperation"},
+	}
+	for _, tt := range tests {
+		if got := tt.op.TypeName(); got != tt.typ {
+			t.Errorf("TypeName() = %q, want %q", got, tt.typ)
+		}
+	}
+}
+
+// TestNewAddColumnOperation 测试 NewAddColumnOperation 构造函数
+func TestNewAddColumnOperation(t *testing.T) {
+	op := NewAddColumnOperation(2, "user_messages", "score", "FLOAT")
+	if op.SchemaVersion() != 2 {
+		t.Errorf("SchemaVersion = %d, want 2", op.SchemaVersion())
+	}
+	if op.Table != "user_messages" {
+		t.Errorf("Table = %q, want %q", op.Table, "user_messages")
+	}
+	if op.ColumnName != "score" {
+		t.Errorf("ColumnName = %q, want %q", op.ColumnName, "score")
+	}
+	if op.ColumnType != "FLOAT" {
+		t.Errorf("ColumnType = %q, want %q", op.ColumnType, "FLOAT")
+	}
+	if !op.Nullable {
+		t.Error("Nullable 应为 true（对齐 Python 默认值）")
+	}
+}
+
+// TestNewUpdateEmbeddingDimensionOperation 测试 NewUpdateEmbeddingDimensionOperation 构造函数
+func TestNewUpdateEmbeddingDimensionOperation(t *testing.T) {
+	op := NewUpdateEmbeddingDimensionOperation(3, "vector_summary", "embedding", 1024)
+	if op.SchemaVersion() != 3 {
+		t.Errorf("SchemaVersion = %d, want 3", op.SchemaVersion())
+	}
+	if op.DataType != "vector_summary" {
+		t.Errorf("DataType = %q, want %q", op.DataType, "vector_summary")
+	}
+	if op.FieldName != "embedding" {
+		t.Errorf("FieldName = %q, want %q", op.FieldName, "embedding")
+	}
+	if op.NewDimension != 1024 {
+		t.Errorf("NewDimension = %d, want 1024", op.NewDimension)
+	}
+	if op.BatchSize != 1000 {
+		t.Errorf("BatchSize = %d, want 1000（对齐 Python 默认值）", op.BatchSize)
+	}
+}
+
 // ──────────────────────────── SQL Operations ────────────────────────────
 
 // TestAddColumnOperation_字段 测试 AddColumnOperation 字段

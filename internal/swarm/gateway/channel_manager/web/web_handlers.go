@@ -437,7 +437,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 		ch.OnConnect(func(_ *websocket.Conn) error {
 			// AgentClient 未就绪时跳过 ack（对齐 Python: 仅 debug 日志，不断开连接）
 			if ac == nil || !ac.ServerReady() {
-				logger.Debug(logComponent).Msg("AgentClient 未就绪，跳过 connection.ack")
+				logger.Debug(logComponent).Msg("AgentClient not ready, skipping connection.ack")
 				return nil
 			}
 			// 构造 connection.ack 消息（对齐 Python _on_connect）
@@ -460,12 +460,12 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 			// Python: L592-596: 优先用 mh.publish_robot_messages，否则 fallback channel.send
 			if mh != nil {
 				if err := mh.PublishRobotMessages(context.Background(), ackMsg); err != nil {
-					logger.Warn(logComponent).Err(err).Msg("MessageHandler.PublishRobotMessages 发送 connection.ack 失败，fallback channel.Send")
+					logger.Warn(logComponent).Err(err).Msg("MessageHandler.PublishRobotMessages failed to send connection.ack, fallback channel.Send")
 					_ = ch.Send(context.Background(), ackMsg)
 				}
 			} else {
 				if err := ch.Send(context.Background(), ackMsg); err != nil {
-					logger.Warn(logComponent).Err(err).Msg("发送 connection.ack 失败")
+					logger.Warn(logComponent).Err(err).Msg("failed to send connection.ack")
 				}
 			}
 			return nil
@@ -490,7 +490,7 @@ func (d *RPCDispatcher) Register(method string, handler RPCHandlerFunc) {
 	d.handlers[method] = handler
 	logger.Debug(logComponent).
 		Str("method", method).
-		Msg("已注册 RPC 方法")
+		Msg("RPC method registered")
 }
 
 // Dispatch 分发 RPC 请求到对应处理函数。
@@ -505,7 +505,7 @@ func (d *RPCDispatcher) Dispatch(method string, params map[string]any, sessionID
 	if !ok {
 		logger.Warn(logComponent).
 			Str("method", method).
-			Msg("RPC 方法未找到")
+			Msg("RPC method not found")
 		return nil, fmt.Errorf("方法 %q 未找到", method)
 	}
 
@@ -515,7 +515,7 @@ func (d *RPCDispatcher) Dispatch(method string, params map[string]any, sessionID
 		logger.Error(logComponent).
 			Str("method", method).
 			Err(err).
-			Msg("RPC 方法处理失败")
+			Msg("RPC method handling failed")
 	}
 	return result, err
 }
@@ -558,7 +558,7 @@ func handleMemoryForbiddenGet() RPCHandlerFunc {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		cfg, err := loadAppConfig()
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("memory.forbidden.get 加载配置失败")
+			logger.Warn(logComponent).Err(err).Msg("memory.forbidden.get load config failed")
 			return map[string]any{}, nil
 		}
 		// Python: cfg.get("memory", {}).get("forbidden_memory_definition", {})
@@ -580,7 +580,7 @@ func handleMemoryForbiddenSet() RPCHandlerFunc {
 			return map[string]any{"ok": false, "error": "params 必须是对象", "code": WsErrBadRequest}, nil
 		}
 		if err := updateMemoryForbiddenInConfig(params); err != nil {
-			logger.Error(logComponent).Err(err).Msg("memory.forbidden.set 写回配置失败")
+			logger.Error(logComponent).Err(err).Msg("memory.forbidden.set write back config failed")
 			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
 		}
 		return map[string]any{"ok": true}, nil
@@ -623,7 +623,7 @@ func handleConfigGet(crypto CryptoProvider) RPCHandlerFunc {
 		if err != nil {
 			logger.Warn(logComponent).
 				Err(err).
-				Msg("config.get 加载 config.yaml 失败，使用默认值")
+				Msg("config.get failed to load config.yaml, using defaults")
 		}
 
 		if err != nil {
@@ -818,7 +818,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc,
 			if err := updateDefaultModelsInConfig(newModels); err != nil {
 				logger.Warn(logComponent).
 					Err(err).
-					Msg("写入 models.defaults 失败")
+					Msg("failed to write models.defaults")
 				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
 			}
 			yamlUpdated = append(yamlUpdated, "models.defaults")
@@ -859,7 +859,7 @@ func handleModelsList(crypto CryptoProvider) RPCHandlerFunc {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		cfg, err := loadAppConfig()
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("models.list 加载配置失败")
+			logger.Warn(logComponent).Err(err).Msg("models.list loadconfig failed")
 			return map[string]any{"models": []any{}}, nil
 		}
 
@@ -1133,7 +1133,7 @@ func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 					return map[string]any{"ok": false, "error": errMsg, "code": code}, nil
 				}
 				// 转发异常：fallback 本地删除（对齐 Python L1337-1338）
-				logger.Warn(logComponent).Err(err).Msg("session.delete 转发 AgentServer 失败，fallback 本地删除")
+				logger.Warn(logComponent).Err(err).Msg("session.delete forward to AgentServer failed, fallback to local delete")
 			}
 		}
 
@@ -1195,7 +1195,7 @@ func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv CryptoPr
 
 		// 写入 config: models.defaults
 		if err := updateDefaultModelsInConfig(newModels); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("写入 models.defaults 失败")
+			logger.Warn(logComponent).Err(err).Msg("write models.defaults failed")
 			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
 		}
 
@@ -1272,7 +1272,7 @@ func handleModelsValidate() RPCHandlerFunc {
 
 		modelInst, err := llm.NewModel(clientConfig, modelConfig)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("model_provider", modelProvider).Msg("models.validate 创建模型失败")
+			logger.Warn(logComponent).Err(err).Str("model_provider", modelProvider).Msg("models.validate createmodel failed")
 			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrLLMError}, nil
 		}
 
@@ -1721,12 +1721,12 @@ func handlePermissionsOwnerScopesGet() RPCHandlerFunc {
 		cfgPath := workspace.ConfigFile()
 		cfg, err := config.New(cfgPath)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get 加载配置失败")
+			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get load config failed")
 			return nil, fmt.Errorf("读取 owner_scopes 配置失败: %w", err)
 		}
 		raw, err := cfg.Raw()
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get 读取配置失败")
+			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get read config failed")
 			return nil, fmt.Errorf("读取 owner_scopes 配置失败: %w", err)
 		}
 		permCfg, _ := raw["permissions"].(map[string]any)
@@ -1776,7 +1776,7 @@ func handlePermissionsForwardToAgent(ac *routing.AgentClient, method string) RPC
 			)
 			resp, err := ac.SendRequest(ctx, env)
 			if err != nil {
-				logger.Error(logComponent).Err(err).Str("method", method).Msg("权限 RPC 转发到 AgentServer 失败")
+				logger.Error(logComponent).Err(err).Str("method", method).Msg("permission RPC forwarding to AgentServer failed")
 				// 转发失败，回退到本地 dispatch
 			} else if resp != nil {
 				if resp.OK {

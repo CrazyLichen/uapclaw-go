@@ -38,7 +38,7 @@ const logComponent = logger.ComponentAgentCore
 
 // NewAgentStateCollection 创建 Agent 状态集合实例。
 func NewAgentStateCollection() *AgentStateCollection {
-	logger.Info(logComponent).Str("action", "new_agent_state_collection").Msg("创建 Agent 状态集合")
+	logger.Info(logComponent).Str("action", "new_agent_state_collection").Msg("create Agent statecollection")
 	return &AgentStateCollection{
 		globalState: NewInMemoryStateLike(),
 		agentState:  NewInMemoryStateLike(),

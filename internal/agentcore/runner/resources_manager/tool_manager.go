@@ -238,7 +238,7 @@ func (m *ToolMgr) AddToolServer(ctx context.Context, serverConfig *mcptypes.McpS
 			Str("server_id", serverID).
 			Str("server_name", serverConfig.ServerName).
 			Err(err).
-			Msg("创建 MCP 客户端失败")
+			Msg("failed to create MCP client")
 		return nil, exception.BuildError(
 			exception.StatusResourceMCPServerAddError,
 			exception.WithParam("server_id", serverID),
@@ -255,7 +255,7 @@ func (m *ToolMgr) AddToolServer(ctx context.Context, serverConfig *mcptypes.McpS
 			Str("server_id", serverID).
 			Str("server_name", serverConfig.ServerName).
 			Err(err).
-			Msg("MCP 服务器连接失败")
+			Msg("MCP server connection failed")
 		return nil, exception.BuildError(
 			exception.StatusResourceMCPServerConnectionError,
 			exception.WithParam("server_id", serverID),
@@ -272,7 +272,7 @@ func (m *ToolMgr) AddToolServer(ctx context.Context, serverConfig *mcptypes.McpS
 			Str("server_id", serverID).
 			Str("server_name", serverConfig.ServerName).
 			Err(err).
-			Msg("刷新 MCP 工具失败")
+			Msg("failed to refresh MCP tools")
 		return nil, exception.BuildError(
 			exception.StatusResourceMCPServerAddError,
 			exception.WithParam("server_id", serverID),
@@ -295,7 +295,7 @@ func (m *ToolMgr) AddToolServer(ctx context.Context, serverConfig *mcptypes.McpS
 		Str("server_id", serverID).
 		Str("server_name", serverConfig.ServerName).
 		Int("tool_count", len(results)).
-		Msg("添加 MCP 工具服务器成功")
+		Msg("MCP tool server added")
 
 	return results, nil
 }
@@ -329,7 +329,7 @@ func (m *ToolMgr) RemoveToolServer(ctx context.Context, serverID string, ignoreN
 			Str("event_type", "TOOL_SERVER_DISCONNECT_WARN").
 			Str("server_id", serverID).
 			Err(err).
-			Msg("移除工具服务器断开连接异常")
+			Msg("error disconnecting removed tool server")
 	}
 
 	// 移除工具
@@ -355,7 +355,7 @@ func (m *ToolMgr) RemoveToolServer(ctx context.Context, serverID string, ignoreN
 		Str("event_type", "TOOL_SERVER_REMOVE_SUCCESS").
 		Str("server_id", serverID).
 		Int("tool_count", len(resource.ToolIDs)).
-		Msg("移除 MCP 工具服务器成功")
+		Msg("MCP tool server removed")
 
 	return resource.ToolIDs, nil
 }
@@ -440,7 +440,7 @@ func (m *ToolMgr) RefreshToolServer(ctx context.Context, serverID string, skipNo
 				Str("event_type", "TOOL_SERVER_REFRESH_ERROR").
 				Str("server_id", serverID).
 				Err(err).
-				Msg("刷新 MCP 工具服务器失败")
+				Msg("failed to refresh MCP tool server")
 			return nil, exception.BuildError(
 				exception.StatusResourceMCPServerRefreshError,
 				exception.WithParam("server_id", serverID),
@@ -567,7 +567,7 @@ func (m *ToolMgr) Release(ctx context.Context) error {
 				Str("event_type", "TOOL_SERVER_RELEASE_WARN").
 				Str("server_id", res.Config.ServerID).
 				Err(err).
-				Msg("释放 MCP 服务器连接异常")
+				Msg("error releasing MCP server connection")
 			continue
 		}
 	}
@@ -609,7 +609,7 @@ func (m *ToolMgr) innerRefreshMcpTools(ctx context.Context, client mcptypes.McpC
 				Str("tool_id", card.ID).
 				Str("tool_name", card.Name).
 				Err(createErr).
-				Msg("创建 MCPTool 失败")
+				Msg("failed to create MCPTool")
 			continue
 		}
 		addErr := m.AddTool(card.ID, mcpTool)
@@ -617,7 +617,7 @@ func (m *ToolMgr) innerRefreshMcpTools(ctx context.Context, client mcptypes.McpC
 			logger.Warn(logComponent).
 				Str("event_type", "TOOL_ADD_DUPLICATE_WARN").
 				Str("tool_id", card.ID).
-				Msg("工具已存在，跳过添加")
+				Msg("tool already exists, skipping add")
 		}
 	}
 

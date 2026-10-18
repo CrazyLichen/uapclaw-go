@@ -164,7 +164,7 @@ func (r *TeamWorkspaceRail) AfterToolCall(ctx context.Context, cbc *interfaces.A
 				Str("event_type", "workspace_auto_commit_failed").
 				Str("file_path", realPath).
 				Err(err).
-				Msg("工作空间自动提交失败")
+				Msg("workspace auto-commit failed")
 		}
 		if sha != "" {
 			commitSHA = sha
@@ -215,6 +215,6 @@ func (r *TeamWorkspaceRail) maybePull(ctx context.Context) {
 	if _, err := r.ws.Pull(ctx); err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("工作空间拉取失败")
+			Msg("workspace pull failed")
 	}
 }

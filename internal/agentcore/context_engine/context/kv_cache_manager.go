@@ -107,7 +107,7 @@ func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.Conte
 			Str("event_type", "KV_CACHE_RELEASE_ERROR").
 			Str("session_id", m.sessionID).
 			Err(err).
-			Msg("KV 缓存释放失败")
+			Msg("failed to release KV cache")
 		return fmt.Errorf("KV 缓存释放失败: %w", err)
 	}
 
@@ -124,7 +124,7 @@ func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.Conte
 	if toolIdx >= 0 {
 		evt = evt.Int("tools_released_index", toolIdx)
 	}
-	evt.Msg("KV 缓存已释放")
+	evt.Msg("KV cache released")
 
 	return nil
 }

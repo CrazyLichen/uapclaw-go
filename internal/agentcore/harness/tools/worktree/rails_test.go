@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestWorktreeRail_New 测试创建
@@ -105,4 +107,22 @@ func TestDiffSummaryRail_Remove(t *testing.T) {
 	if result != nil {
 		t.Errorf("action=remove 时应返回 nil，实际: %v", result)
 	}
+}
+
+// TestWithWorktreeRailLifecycleRails 验证 WithWorktreeRailLifecycleRails 选项。
+func TestWithWorktreeRailLifecycleRails(t *testing.T) {
+	rail1 := &DiffSummaryRail{}
+	rail2 := &DiffSummaryRail{}
+	opt := WithWorktreeRailLifecycleRails(rail1, rail2)
+	cfg := &worktreeRailOptions{}
+	opt(cfg)
+	assert.Len(t, cfg.lifecycleRails, 2)
+}
+
+// TestWithCommands 验证 WithCommands 选项。
+func TestWithCommands(t *testing.T) {
+	opt := WithCommands("npm install", "npm run build")
+	r := &AutoSetupRail{}
+	opt(r)
+	assert.Equal(t, []string{"npm install", "npm run build"}, r.commands)
 }

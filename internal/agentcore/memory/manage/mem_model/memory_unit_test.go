@@ -163,3 +163,33 @@ func TestAllSupportMemoryTypeValues(t *testing.T) {
 		t.Errorf("AllSupportMemoryTypeValues() 返回 %d 项, want 2", len(vals))
 	}
 }
+
+// TestGetMemType 测试 BaseMemoryUnit.GetMemType 返回记忆类型
+func TestGetMemType(t *testing.T) {
+	u := &BaseMemoryUnit{MemType: MemoryTypeUserProfile, MemID: "test-id"}
+	if got := u.GetMemType(); got != MemoryTypeUserProfile {
+		t.Errorf("GetMemType() = %d, want %d", got, MemoryTypeUserProfile)
+	}
+}
+
+// TestGetMemID 测试 BaseMemoryUnit.GetMemID 返回记忆 ID
+func TestGetMemID(t *testing.T) {
+	u := &BaseMemoryUnit{MemType: MemoryTypeSemanticMemory, MemID: "mem-123"}
+	if got := u.GetMemID(); got != "mem-123" {
+		t.Errorf("GetMemID() = %q, want %q", got, "mem-123")
+	}
+}
+
+// TestAllMemoryTypeValues 测试 AllMemoryTypeValues 返回所有记忆类型字符串
+func TestAllMemoryTypeValues(t *testing.T) {
+	vals := AllMemoryTypeValues()
+	if len(vals) != 5 {
+		t.Errorf("AllMemoryTypeValues() 返回 %d 项, want 5", len(vals))
+	}
+	expected := []string{"user_profile", "semantic_memory", "episodic_memory", "variable", "summary"}
+	for i, exp := range expected {
+		if vals[i] != exp {
+			t.Errorf("AllMemoryTypeValues()[%d] = %q, want %q", i, vals[i], exp)
+		}
+	}
+}

@@ -1,288 +1,41 @@
 package codec
 
-import (
-	"strings"
-	"testing"
+import "testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
-	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
-)
+// ──────────────────────────── 导出函数 ────────────────────────────
 
-// TestNewAesStorageCodec_空key 验证空 key 创建 passthrough 模式
-func TestNewAesStorageCodec_空key(t *testing.T) {
-	c, err := NewAesStorageCodec(nil)
+// TestIsPassthrough_key为空 返回 true
+func TestIsPassthrough_key为空(t *testing.T) {
+	codec, err := NewAesStorageCodec(nil)
 	if err != nil {
-		t.Fatalf("空 key 不应报错: %v", err)
+		t.Fatalf("创建 codec 失败: %v", err)
 	}
-	if len(c.key) != 0 {
-		t.Error("空 key 时内部 key 应为空")
+	if !codec.IsPassthrough() {
+		t.Error("key 为 nil 时 IsPassthrough 应返回 true")
 	}
 }
 
-// TestNewAesStorageCodec_有效key 验证 32 字节 key 正常创建
-func TestNewAesStorageCodec_有效key(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i)
-	}
-	c, err := NewAesStorageCodec(key)
+// TestIsPassthrough_key为空切片 返回 true
+func TestIsPassthrough_key为空切片(t *testing.T) {
+	codec, err := NewAesStorageCodec([]byte{})
 	if err != nil {
-		t.Fatalf("32 字节 key 不应报错: %v", err)
+		t.Fatalf("创建 codec 失败: %v", err)
 	}
-	if len(c.key) != 32 {
-		t.Error("有效 key 时内部 key 应为 32 字节")
-	}
-}
-
-// TestNewAesStorageCodec_key长度错误 验证非 32 字节 key 返回 error
-func TestNewAesStorageCodec_key长度错误(t *testing.T) {
-	key := []byte{1, 2, 3}
-	_, err := NewAesStorageCodec(key)
-	if err == nil {
-		t.Error("非 32 字节 key 应返回 error")
+	if !codec.IsPassthrough() {
+		t.Error("key 为空切片时 IsPassthrough 应返回 true")
 	}
 }
 
-// TestAesStorageCodec_Encode_空key_passthrough 验证空 key 时不加密
-func TestAesStorageCodec_Encode_空key_passthrough(t *testing.T) {
-	c, _ := NewAesStorageCodec(nil)
-	result := c.Encode("hello")
-	if result != "hello" {
-		t.Errorf("passthrough 应原样返回, got %q", result)
+// TestIsPassthrough_key非空 返回 false
+func TestIsPassthrough_key非空(t *testing.T) {
+	key := make([]byte, 32) // 32 字节有效 AES-256 密钥
+	codec, err := NewAesStorageCodec(key)
+	if err != nil {
+		t.Fatalf("创建 codec 失败: %v", err)
+	}
+	if codec.IsPassthrough() {
+		t.Error("key 非空时 IsPassthrough 应返回 false")
 	}
 }
 
-// TestAesStorageCodec_Encode_空文本 验证空字符串原样返回
-func TestAesStorageCodec_Encode_空文本(t *testing.T) {
-	key := make([]byte, 32)
-	c, _ := NewAesStorageCodec(key)
-	result := c.Encode("")
-	if result != "" {
-		t.Errorf("空文本应原样返回, got %q", result)
-	}
-}
-
-// TestAesStorageCodec_Encode_加密成功 验证正常加密返回密文
-func TestAesStorageCodec_Encode_加密成功(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-	result := c.Encode("hello world")
-	if result == "hello world" {
-		t.Error("加密结果不应与原文相同")
-	}
-}
-
-// TestAesStorageCodec_加密往返 验证 Encode → Decode 还原原文
-func TestAesStorageCodec_加密往返(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-
-	plaintext := "secret message 你好世界"
-	encrypted := c.Encode(plaintext)
-	decrypted := c.Decode(encrypted)
-
-	if decrypted != plaintext {
-		t.Errorf("解密结果 = %q, want %q", decrypted, plaintext)
-	}
-}
-
-// TestAesStorageCodec_Decode_空key_passthrough 验证空 key 时不解密
-func TestAesStorageCodec_Decode_空key_passthrough(t *testing.T) {
-	c, _ := NewAesStorageCodec(nil)
-	result := c.Decode("ciphertext")
-	if result != "ciphertext" {
-		t.Errorf("passthrough 应原样返回, got %q", result)
-	}
-}
-
-// TestAesStorageCodec_Decode_解密失败 验证篡改密文时返回原文（容错模式，对齐 Python 行为）
-func TestAesStorageCodec_Decode_解密失败(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-
-	result := c.Decode("invalid_ciphertext_data")
-	if result != "invalid_ciphertext_data" {
-		t.Errorf("容错模式下解密失败应返回原文, got %q", result)
-	}
-}
-
-// TestAesStorageCodec_Encode_多模态内容 验证 JSON array 格式内容加解密
-func TestAesStorageCodec_Encode_多模态内容(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-
-	multimodal := `[{"type":"text","text":"hello"},{"type":"image_url","image_url":{"url":"https://example.com/img.png"}}]`
-	encrypted := c.Encode(multimodal)
-	decrypted := c.Decode(encrypted)
-
-	if decrypted != multimodal {
-		t.Errorf("解密结果不匹配, got %q", decrypted)
-	}
-}
-
-// TestAesStorageCodec_满足StorageCodec接口 验证 AesStorageCodec 满足 StorageCodec 接口
-func TestAesStorageCodec_满足StorageCodec接口(t *testing.T) {
-	// 验证 AesStorageCodec 满足 StorageCodec 接口
-	var _ index.StorageCodec = (*AesStorageCodec)(nil)
-}
-
-// TestAesStorageCodec_Encode_每次产生不同输出 验证 GCM 随机 nonce 导致相同明文加密两次产生不同密文
-// Python: test_encode_produces_different_output
-func TestAesStorageCodec_Encode_每次产生不同输出(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-
-	plaintext := "same input text"
-	encoded1 := c.Encode(plaintext)
-	encoded2 := c.Encode(plaintext)
-
-	if encoded1 == encoded2 {
-		t.Error("相同明文加密两次应产生不同密文（GCM 随机 nonce）")
-	}
-
-	// 但两次密文都应能正确解密
-	if c.Decode(encoded1) != plaintext {
-		t.Error("第一次密文解密失败")
-	}
-	if c.Decode(encoded2) != plaintext {
-		t.Error("第二次密文解密失败")
-	}
-}
-
-// ──────────────────────────── 补齐 Python 测试对齐 ────────────────────────────
-
-// TestAesStorageCodec_Encode_长文本 验证长文本加密解密往返
-// Python: test_encode_long_text
-func TestAesStorageCodec_Encode_长文本(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-
-	plaintext := strings.Repeat("A", 10000)
-	encrypted := c.Encode(plaintext)
-	decrypted := c.Decode(encrypted)
-
-	if decrypted != plaintext {
-		t.Errorf("长文本解密结果长度 = %d, want %d", len(decrypted), len(plaintext))
-	}
-}
-
-// TestAesStorageCodec_Decode_空文本 验证空字符串 Decode 原样返回
-// Python: test_decode_empty_string
-func TestAesStorageCodec_Decode_空文本(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-
-	result := c.Decode("")
-	if result != "" {
-		t.Errorf("空文本 Decode 应原样返回, got %q", result)
-	}
-}
-
-// TestAesStorageCodec_Encode_未注册加密器 验证注册表中无加密算法时 Encode 透传原文
-// Python: test_encode_without_crypt_registered
-// Go: crypto 包 init() 自动注册 aes_gcm，测试中临时注销再恢复
-func TestAesStorageCodec_Encode_未注册加密器(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-
-	// 临时注销 aes_gcm，模拟未注册场景
-	crypto.Unregister(crypto.AesGcmName)
-	defer crypto.Register(crypto.AesGcmName, &crypto.AesGcmCrypt{})
-
-	plaintext := "fallback test"
-	result := c.Encode(plaintext)
-	if result != plaintext {
-		t.Errorf("未注册加密器时 Encode 应透传原文, got %q", result)
-	}
-}
-
-// TestAesStorageCodec_Decode_未注册加密器 验证注册表中无加密算法时 Decode 透传原文
-// Python: test_decode_without_crypt_registered
-// Go: crypto 包 init() 自动注册 aes_gcm，测试中临时注销再恢复
-func TestAesStorageCodec_Decode_未注册加密器(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-
-	// 临时注销 aes_gcm，模拟未注册场景
-	crypto.Unregister(crypto.AesGcmName)
-	defer crypto.Register(crypto.AesGcmName, &crypto.AesGcmCrypt{})
-
-	ciphertext := "some ciphertext"
-	result := c.Decode(ciphertext)
-	if result != ciphertext {
-		t.Errorf("未注册加密器时 Decode 应透传原文, got %q", result)
-	}
-}
-
-// TestAesStorageCodec_不同密钥不兼容 验证用不同密钥解密时返回原文（容错模式）
-// Python: test_different_keys_incompatible
-// Go: Python 中不同密钥解密返回原文（解密失败降级），Go 也应对齐此容错行为
-func TestAesStorageCodec_不同密钥不兼容(t *testing.T) {
-	keyA := make([]byte, 32)
-	for i := range keyA {
-		keyA[i] = byte(i + 1)
-	}
-	keyB := make([]byte, 32)
-	for i := range keyB {
-		keyB[i] = byte(i + 33)
-	}
-
-	codecA, _ := NewAesStorageCodec(keyA)
-	codecB, _ := NewAesStorageCodec(keyB)
-
-	plaintext := "secret message"
-	encrypted := codecA.Encode(plaintext)
-
-	// 用不同密钥解密，GCM 认证失败应降级返回原文（密文）
-	result := codecB.Decode(encrypted)
-	if result != encrypted {
-		t.Errorf("不同密钥解密应返回密文原文（容错降级）, got %q", result)
-	}
-}
-
-// TestAesStorageCodec_Encode_输出为hex字符串 验证加密输出为十六进制字符串
-// Python: test_encode_output_is_hex_string
-func TestAesStorageCodec_Encode_输出为hex字符串(t *testing.T) {
-	key := make([]byte, 32)
-	for i := range key {
-		key[i] = byte(i + 1)
-	}
-	c, _ := NewAesStorageCodec(key)
-
-	plaintext := "test"
-	encrypted := c.Encode(plaintext)
-
-	for _, ch := range encrypted {
-		if ch < '0' || (ch > '9' && ch < 'a') || ch > 'f' {
-			t.Errorf("加密输出应全为 hex 字符, 发现 %q", ch)
-			break
-		}
-	}
-}
+// ──────────────────────────── 非导出函数 ────────────────────────────

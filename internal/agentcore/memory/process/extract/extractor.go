@@ -128,7 +128,7 @@ func ExtractLongTermMemory(
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
 				Str("exception", "JSON解析结果为nil").
-				Msg("长期记忆提取模型输出格式错误")
+				Msg("long-term memory extraction model output format error")
 			return map[string]any{}, nil
 		}
 
@@ -140,7 +140,7 @@ func ExtractLongTermMemory(
 			logger.Error(logComponent).
 				Str("event_type", "MEMORY_PROCESS").
 				Str("exception", fmt.Sprintf("JSON解析结果类型非map[string]any，实际: %T", parsedResult)).
-				Msg("长期记忆提取模型输出格式错误")
+				Msg("long-term memory extraction model output format error")
 			return map[string]any{}, nil
 		}
 

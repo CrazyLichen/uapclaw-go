@@ -77,7 +77,7 @@ func (q *StreamQueue) Send(ctx context.Context, data Schema, attemptTimeout ...t
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).
 				Str("event_type", "SESSION_STREAM_ERROR").
-				Msg("Send 检测到 channel 已关闭，返回 ErrQueueClosed")
+				Msg("Send detected closed channel, returning ErrQueueClosed")
 			err = ErrQueueClosed
 		}
 	}()
@@ -91,7 +91,7 @@ func (q *StreamQueue) Send(ctx context.Context, data Schema, attemptTimeout ...t
 	if q.closed.Load() {
 		logger.Error(logComponent).
 			Str("event_type", "SESSION_STREAM_ERROR").
-			Msg("StreamQueue 已关闭，无法发送数据")
+			Msg("StreamQueue closed, cannot send data")
 		return ErrQueueClosed
 	}
 
@@ -104,7 +104,7 @@ func (q *StreamQueue) Send(ctx context.Context, data Schema, attemptTimeout ...t
 				Str("event_type", "SESSION_STREAM_CHUNK").
 				Dur("timeout", timeout).
 				Int("attempt", attempt).
-				Msg("流数据发送成功")
+				Msg("stream data sent successfully")
 			return nil
 		case <-sendCtx.Done():
 			cancel()
@@ -112,7 +112,7 @@ func (q *StreamQueue) Send(ctx context.Context, data Schema, attemptTimeout ...t
 				Str("event_type", "SESSION_STREAM_ERROR").
 				Dur("timeout", timeout).
 				Int("attempt", attempt).
-				Msg("流数据发送超时")
+				Msg("stream data send timed out")
 			continue
 		}
 	}
@@ -121,7 +121,7 @@ func (q *StreamQueue) Send(ctx context.Context, data Schema, attemptTimeout ...t
 		Str("event_type", "SESSION_STREAM_ERROR").
 		Int("max_retries", maxRetries).
 		Dur("timeout", timeout).
-		Msg("流数据发送重试耗尽")
+		Msg("stream data send retries exhausted")
 	return ErrQueueSendRetryExhausted
 }
 
@@ -151,7 +151,7 @@ func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (Sc
 		}
 		logger.Debug(logComponent).
 			Str("event_type", "SESSION_STREAM_CHUNK").
-			Msg("流数据接收成功")
+			Msg("stream data received successfully")
 		return data, nil
 	case <-recvCtx.Done():
 		// 超时：区分 closed 和正常超时

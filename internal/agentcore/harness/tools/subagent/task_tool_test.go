@@ -52,3 +52,14 @@ func TestBuildSubSessionID_随机后缀不重复(t *testing.T) {
 		t.Errorf("50 次生成仅有 %d 个不同值", len(seen))
 	}
 }
+
+// ──────────────────────────── NewTaskTool 测试 ────────────────────────────
+
+// TestNewTaskTool 测试创建 TaskTool 实例
+func TestNewTaskTool(t *testing.T) {
+	agent := &fakeDeepAgentProvider{}
+	tool := NewTaskTool(agent, "explore", "cn", "test-agent-id")
+	if tool == nil {
+		t.Error("NewTaskTool 不应返回 nil")
+	}
+}

@@ -37,18 +37,19 @@ const (
 	defaultSendBufferSize = 64
 	// defaultRecvBufferSize 响应通道默认缓冲大小
 	defaultRecvBufferSize = 128
-	// logComponentCh 日志组件
-	logComponentCh = logger.ComponentChannel
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// logComponent 日志组件
+var logComponent = logger.ComponentAgentServer
 
 var (
 	// ErrTransportClosed 传输通道已关闭
 	ErrTransportClosed = errors.New("传输通道已关闭")
 )
 
-// 编译时验证 ChannelTransport 满足 AgentTransport 接口
+// _ 编译时验证 ChannelTransport 满足 AgentTransport 接口
 var _ AgentTransport = (*ChannelTransport)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -70,11 +71,11 @@ func NewChannelTransportWithBuffer(sendBuf, recvBuf int) *ChannelTransport {
 		sendCh: make(chan []byte, sendBuf),
 		recvCh: make(chan []byte, recvBuf),
 	}
-	logger.Info(logComponentCh).
+	logger.Info(logComponent).
 		Str("event_type", "channel_transport_created").
 		Int("send_buf", sendBuf).
 		Int("recv_buf", recvBuf).
-		Msg("ChannelTransport 已创建")
+		Msg("ChannelTransport created")
 	return t
 }
 
@@ -83,25 +84,25 @@ func (t *ChannelTransport) Send(ctx context.Context, data []byte) error {
 	t.mu.Lock()
 	if t.closed {
 		t.mu.Unlock()
-		logger.Warn(logComponentCh).
+		logger.Warn(logComponent).
 			Str("event_type", "channel_transport_send_closed").
-			Msg("发送失败：传输已关闭")
+			Msg("send failed: transport closed")
 		return ErrTransportClosed
 	}
 	t.mu.Unlock()
 
 	select {
 	case t.sendCh <- data:
-		logger.Debug(logComponentCh).
+		logger.Debug(logComponent).
 			Str("event_type", "channel_transport_send").
 			Int("bytes", len(data)).
-			Msg("JSON 字节已发送")
+			Msg("JSON bytes sent")
 		return nil
 	case <-ctx.Done():
-		logger.Warn(logComponentCh).
+		logger.Warn(logComponent).
 			Str("event_type", "channel_transport_send_cancelled").
 			Err(ctx.Err()).
-			Msg("发送失败：上下文已取消")
+			Msg("send failed: context cancelled")
 		return ctx.Err()
 	}
 }
@@ -111,9 +112,9 @@ func (t *ChannelTransport) Recv() (<-chan []byte, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.closed {
-		logger.Warn(logComponentCh).
+		logger.Warn(logComponent).
 			Str("event_type", "channel_transport_recv_closed").
-			Msg("接收失败：传输已关闭")
+			Msg("receive failed: transport closed")
 		return nil, ErrTransportClosed
 	}
 	return t.recvCh, nil
@@ -129,9 +130,9 @@ func (t *ChannelTransport) Close() error {
 	t.closed = true
 	close(t.sendCh)
 	close(t.recvCh)
-	logger.Info(logComponentCh).
+	logger.Info(logComponent).
 		Str("event_type", "channel_transport_closed").
-		Msg("ChannelTransport 已关闭")
+		Msg("ChannelTransport closed")
 	return nil
 }
 

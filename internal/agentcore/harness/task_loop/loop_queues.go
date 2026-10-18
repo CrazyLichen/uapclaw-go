@@ -51,7 +51,7 @@ func (q *LoopQueues) PushSteer(msg string) {
 		logger.Warn(logComponent).
 			Str("queue", "steering").
 			Str("msg", msg).
-			Msg("队列已满，丢弃引导指令")
+			Msg("queue full, discarding bootstrap instruction")
 	}
 }
 
@@ -65,7 +65,7 @@ func (q *LoopQueues) PushFollowUp(msg string) {
 		logger.Warn(logComponent).
 			Str("queue", "follow_up").
 			Str("msg", msg).
-			Msg("队列已满，丢弃后续消息")
+			Msg("queue full, discarding follow-up message")
 	}
 }
 

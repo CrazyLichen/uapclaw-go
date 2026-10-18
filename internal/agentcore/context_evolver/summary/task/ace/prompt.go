@@ -69,6 +69,7 @@ type ACEPrompt struct {
 	ACECuratorScalingPrompt *template.Template
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // aceReflectorPrompt 反思 prompt（含 Ground Truth）。
@@ -634,3 +635,5 @@ func NewACEPrompt() *ACEPrompt {
 		ACECuratorScalingPrompt:       template.Must(template.New("ace_curator_scaling").Parse(aceCuratorScalingPrompt)),
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

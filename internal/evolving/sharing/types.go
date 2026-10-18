@@ -370,7 +370,7 @@ func FromDictSharedSkillBundle(data map[string]any) (*SharedSkillBundle, error) 
 			if err != nil {
 				logger.Warn(logComponent).
 					Err(err).
-					Msg("[FromDictSharedSkillBundle] 解析 experience 失败，跳过")
+					Msg("[FromDictSharedSkillBundle] failed to parse experience, skipped")
 				continue
 			}
 			experiences = append(experiences, *exp)

@@ -100,7 +100,7 @@ func (c *SkillDevContext) Emit(eventType SkillDevEventType, payload map[string]a
 		logger.Warn(logComponent).
 			Str("task_id", c.TaskID).
 			Str("event_type", string(eventType)).
-			Msg("[SkillDevContext] 事件队列已满，丢弃事件")
+			Msg("[SkillDevContext] event queue full, dropping event")
 	}
 }
 
@@ -137,3 +137,5 @@ func (c *SkillDevContext) CreateStageAgent(
 func (c *SkillDevContext) RegisterTools(_ *agents.ReActAgent, _ []string) error {
 	return fmt.Errorf("_register_tools 尚未实现")
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

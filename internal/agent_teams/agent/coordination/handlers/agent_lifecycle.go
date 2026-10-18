@@ -78,7 +78,7 @@ func (h *AgentLifecycleHandler) OnUserInput(ctx context.Context, event types.Coo
 		logger.Error(logComponent).
 			Err(err).
 			Str("event_type", string(event.Inner.EventType)).
-			Msg("on_user_input: deliver_input 失败")
+			Msg("on_user_input: deliver_input failed")
 	}
 }
 
@@ -106,7 +106,7 @@ func (h *AgentLifecycleHandler) OnCleaned(ctx context.Context, event types.Coord
 		logger.Error(logComponent).
 			Str("member_name", h.blueprint.MemberName()).
 			Err(err).
-			Msg("on_cleaned: shutdown_self 失败")
+			Msg("on_cleaned: shutdown_self failed")
 	}
 }
 
@@ -129,7 +129,7 @@ func (h *AgentLifecycleHandler) OnToolApprovalResult(ctx context.Context, event 
 	// 对齐 Python: InteractiveInput(tool_call_id=..., approved=..., feedback=..., auto_confirm=...)
 	input := buildInteractiveInput(em.Payload)
 	if input == nil {
-		logger.Debug(logComponent).Msg("on_tool_approval_result: 无法构建 InteractiveInput，跳过")
+		logger.Debug(logComponent).Msg("on_tool_approval_result: cannot build InteractiveInput, skipped")
 		return
 	}
 
@@ -146,7 +146,7 @@ func (h *AgentLifecycleHandler) OnToolApprovalResult(ctx context.Context, event 
 		logger.Error(logComponent).
 			Err(err).
 			Str("event_type", em.EventType).
-			Msg("on_tool_approval_result: resume_interrupt 失败")
+			Msg("on_tool_approval_result: resume_interrupt failed")
 	}
 }
 
@@ -174,7 +174,7 @@ func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event ty
 	planID, _ := em.Payload["plan_id"].(string)
 	inputPlan, errPlan := interaction.NewInteractiveInput()
 	if errPlan != nil {
-		logger.Debug(logComponent).Msg("on_task_plan_response: 无法创建 InteractiveInput，跳过")
+		logger.Debug(logComponent).Msg("on_task_plan_response: cannot create InteractiveInput, skipped")
 		return
 	}
 	valuePlan := map[string]any{
@@ -183,7 +183,7 @@ func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event ty
 		"plan_id":  planID,
 	}
 	if errPlan = inputPlan.Update(toolCallIDPlan, valuePlan); errPlan != nil {
-		logger.Debug(logComponent).Err(errPlan).Msg("on_task_plan_response: InteractiveInput.Update 失败，跳过")
+		logger.Debug(logComponent).Err(errPlan).Msg("on_task_plan_response: InteractiveInput.Update failed, skipped")
 		return
 	}
 	input := inputPlan
@@ -199,7 +199,7 @@ func (h *AgentLifecycleHandler) OnTaskPlanResponse(ctx context.Context, event ty
 		logger.Error(logComponent).
 			Err(err).
 			Str("event_type", em.EventType).
-			Msg("on_task_plan_response: resume_interrupt 失败")
+			Msg("on_task_plan_response: resume_interrupt failed")
 	}
 }
 
@@ -227,7 +227,7 @@ func buildInteractiveInput(payload map[string]any) *interaction.InteractiveInput
 		"auto_confirm": autoConfirm,
 	}
 	if err := input.Update(toolCallID, value); err != nil {
-		logger.Debug(logComponent).Err(err).Str("tool_call_id", toolCallID).Msg("buildInteractiveInput: Update 失败")
+		logger.Debug(logComponent).Err(err).Str("tool_call_id", toolCallID).Msg("buildInteractiveInput: Update failed")
 		return nil
 	}
 	return input

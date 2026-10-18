@@ -133,3 +133,33 @@ func TestMemoryProvider_接口满足(t *testing.T) {
 	// 编译时验证 testProvider 满足 MemoryProvider 接口
 	var _ MemoryProvider = (*testProvider)(nil)
 }
+
+// TestWithAPIKey 验证 WithAPIKey 选项。
+func TestWithAPIKey(t *testing.T) {
+	opt := WithAPIKey("test-key")
+	opts := &ProviderOptions{}
+	opt(opts)
+	if opts.APIKey != "test-key" {
+		t.Errorf("APIKey = %q, want %q", opts.APIKey, "test-key")
+	}
+}
+
+// TestWithRerank 验证 WithRerank 选项。
+func TestWithRerank(t *testing.T) {
+	opt := WithRerank(true)
+	opts := &ProviderOptions{}
+	opt(opts)
+	if opts.Rerank == nil || !*opts.Rerank {
+		t.Error("Rerank 应为 *true")
+	}
+}
+
+// TestWithTopK 验证 WithTopK 选项。
+func TestWithTopK(t *testing.T) {
+	opt := WithTopK(10)
+	opts := &ProviderOptions{}
+	opt(opts)
+	if opts.TopK != 10 {
+		t.Errorf("TopK = %d, want 10", opts.TopK)
+	}
+}

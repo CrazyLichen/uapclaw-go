@@ -131,7 +131,7 @@ func (h *PackageStageHandler) zipSkillDir(skillDir, zipPath string) error {
 		logger.Info(logComponent).
 			Str("zip_path", zipPath).
 			Int64("size", info.Size()).
-			Msg("[PackageStage] 打包完成")
+			Msg("[PackageStage] packaging completed")
 	}
 	return nil
 }

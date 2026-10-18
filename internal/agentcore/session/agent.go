@@ -126,7 +126,7 @@ func NewSession(opts ...SessionOption) *Session {
 	logger.Info(logComponent).
 		Str("action", "new_session").
 		Str("session_id", s.sessionID).
-		Msg("创建公开层 Session")
+		Msg("created public layer Session")
 
 	return s
 }
@@ -345,7 +345,7 @@ func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 	logger.Info(logComponent).
 		Str("action", "session_pre_run").
 		Str("session_id", s.GetSessionID()).
-		Msg("Session PreRun 完成")
+		Msg("Session PreRun completed")
 
 	return nil
 }
@@ -371,7 +371,7 @@ func (s *Session) PostRun(ctx context.Context) error {
 		logger.Error(logComponent).Err(err).
 			Str("action", "session_post_run").
 			Str("session_id", s.GetSessionID()).
-			Msg("Session PostRun Commit 失败")
+			Msg("Session PostRun Commit failed")
 		return err
 	}
 
@@ -379,7 +379,7 @@ func (s *Session) PostRun(ctx context.Context) error {
 	logger.Info(logComponent).
 		Str("action", "session_post_run").
 		Str("session_id", s.GetSessionID()).
-		Msg("Session PostRun 完成")
+		Msg("Session PostRun completed")
 
 	return nil
 }
@@ -425,7 +425,7 @@ func (s *Session) ClearSession(ctx context.Context) {
 	logger.Info(logComponent).
 		Str("action", "session_clear").
 		Str("session_id", s.sessionID).
-		Msg("Session 已清空")
+		Msg("Session cleared")
 }
 
 // Interact 请求用户输入。

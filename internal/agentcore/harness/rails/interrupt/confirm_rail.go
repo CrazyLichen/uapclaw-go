@@ -62,7 +62,6 @@ type ConfirmInterruptRail struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 ConfirmInterruptRail 满足 AgentRail 接口
 // _ 编译时验证 ConfirmInterruptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*ConfirmInterruptRail)(nil)
 
@@ -120,6 +119,34 @@ func WithConfirmMessage(msg string) ConfirmInterruptRailOption {
 	return func(r *ConfirmInterruptRail) {
 		r.request.Message = msg
 	}
+}
+
+// IsTruthyValue 判断任意值是否为 truthy。
+// Python: bool(value) — True/1/"yes"/"true"/非空字符串视为 truthy，False/0/""/"false"/"no" 为 falsy。
+// 对齐 Python ConfirmInterruptRail._is_auto_confirmed 的宽松真值判断逻辑。
+func IsTruthyValue(val any) bool {
+	if val == nil {
+		return false
+	}
+	// 先尝试 bool 类型断言
+	if b, ok := val.(bool); ok {
+		return b
+	}
+	// 尝试数字类型：非零视为 truthy
+	switch n := val.(type) {
+	case int:
+		return n != 0
+	case int64:
+		return n != 0
+	case float64:
+		return n != 0
+	}
+	// 尝试字符串类型："yes"/"true"/非空字符串视为 truthy（"false"/"no"/"0"/空字符串为 falsy）
+	if s, ok := val.(string); ok {
+		s = strings.TrimSpace(strings.ToLower(s))
+		return s != "" && s != "false" && s != "no" && s != "0"
+	}
+	return false
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -219,34 +246,6 @@ func (r *ConfirmInterruptRail) parseConfirmInput(userInput any) (*ConfirmPayload
 	default:
 		return nil, false
 	}
-}
-
-// IsTruthyValue 判断任意值是否为 truthy。
-// Python: bool(value) — True/1/"yes"/"true"/非空字符串视为 truthy，False/0/""/"false"/"no" 为 falsy。
-// 对齐 Python ConfirmInterruptRail._is_auto_confirmed 的宽松真值判断逻辑。
-func IsTruthyValue(val any) bool {
-	if val == nil {
-		return false
-	}
-	// 先尝试 bool 类型断言
-	if b, ok := val.(bool); ok {
-		return b
-	}
-	// 尝试数字类型：非零视为 truthy
-	switch n := val.(type) {
-	case int:
-		return n != 0
-	case int64:
-		return n != 0
-	case float64:
-		return n != 0
-	}
-	// 尝试字符串类型："yes"/"true"/非空字符串视为 truthy（"false"/"no"/"0"/空字符串为 falsy）
-	if s, ok := val.(string); ok {
-		s = strings.TrimSpace(strings.ToLower(s))
-		return s != "" && s != "false" && s != "no" && s != "0"
-	}
-	return false
 }
 
 // isAutoConfirmed 检查 auto_confirm 配置中指定 key 是否为 truthy。

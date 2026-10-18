@@ -60,7 +60,7 @@ func (m *IndexVersionMigrator) TryMigrate(ctx context.Context, idx index.BaseMem
 	// 创建备份
 	backupID, err := idx.CreateBackup(ctx)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("创建索引备份失败")
+		logger.Error(logComponent).Err(err).Msg("failed to create index backup")
 		return err
 	}
 
@@ -69,13 +69,13 @@ func (m *IndexVersionMigrator) TryMigrate(ctx context.Context, idx index.BaseMem
 		if err := m.applyOperation(ctx, idx, op); err != nil {
 			// 迁移失败，恢复备份
 			logger.Error(logComponent).Err(err).Str("op_type", op.TypeName()).
-				Int("schema_version", op.SchemaVersion()).Msg("索引迁移操作失败")
+				Int("schema_version", op.SchemaVersion()).Msg("index migration operation failed")
 
 			if restoreErr := idx.RestoreBackup(ctx, backupID); restoreErr != nil {
-				logger.Error(logComponent).Err(restoreErr).Str("backup_id", backupID).Msg("恢复索引备份失败")
+				logger.Error(logComponent).Err(restoreErr).Str("backup_id", backupID).Msg("failed to restore index backup")
 			}
 			if cleanupErr := idx.CleanupBackup(ctx, backupID); cleanupErr != nil {
-				logger.Warn(logComponent).Err(cleanupErr).Str("backup_id", backupID).Msg("清理索引备份失败")
+				logger.Warn(logComponent).Err(cleanupErr).Str("backup_id", backupID).Msg("failed to cleanup index backup")
 			}
 			idx.UpdateSchemaVersion(currentVersion)
 
@@ -87,7 +87,7 @@ func (m *IndexVersionMigrator) TryMigrate(ctx context.Context, idx index.BaseMem
 
 	// 清理备份
 	if err := idx.CleanupBackup(ctx, backupID); err != nil {
-		logger.Warn(logComponent).Err(err).Str("backup_id", backupID).Msg("清理索引备份失败")
+		logger.Warn(logComponent).Err(err).Str("backup_id", backupID).Msg("failed to cleanup index backup")
 	}
 
 	return nil

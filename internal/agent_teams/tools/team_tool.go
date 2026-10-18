@@ -42,9 +42,6 @@ type loggedTeamTool struct {
 // BuildToolMessageContent 检测到此键时，优先返回其值作为 LLM 友好文本。
 const MappedContentKey = "__mapped_content"
 
-// teamToolLogComponent 日志组件标识
-const teamToolLogComponent = logger.ComponentChannel
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -110,15 +107,15 @@ func WrapInvokeWithLogging(t tool.Tool) tool.Tool {
 
 // Invoke 包装原始 Invoke，添加日志和 map_result 逻辑。
 func (l *loggedTeamTool) Invoke(ctx context.Context, args map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
-	logger.Debug(teamToolLogComponent).Str("tool_name", l.toolName).Msg("invoke start")
+	logger.Debug(logComponent).Str("tool_name", l.toolName).Msg("invoke start")
 
 	result, err := l.Tool.Invoke(ctx, args, opts...)
 	if err != nil {
-		logger.Debug(teamToolLogComponent).Str("tool_name", l.toolName).Err(err).Msg("invoke error")
+		logger.Debug(logComponent).Str("tool_name", l.toolName).Err(err).Msg("invoke error")
 		return result, err
 	}
 
-	logger.Debug(teamToolLogComponent).Str("tool_name", l.toolName).Msg("invoke end")
+	logger.Debug(logComponent).Str("tool_name", l.toolName).Msg("invoke end")
 
 	// 对齐 Python: if is_team_tool: mapped = tool.map_result(result); return MappedToolOutput.from_output(result, mapped)
 	if l.isTeamTool && l.teamToolImpl != nil && result != nil {

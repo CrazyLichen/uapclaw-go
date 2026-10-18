@@ -141,7 +141,8 @@ func CreateErrorResponse(err error) MockResponse {
 
 // Invoke 实现 BaseModelClient.Invoke，按序消费预设响应队列。
 // 对齐 Python: MockLLMModel.invoke(messages, ...)
-func (m *MockModelClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+// 增强：当 InvokeOption 中包含 OutputParser 时，自动解析 JSON 并填充 ParserContent。
+func (m *MockModelClient) Invoke(_ context.Context, _ model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -153,7 +154,21 @@ func (m *MockModelClient) Invoke(_ context.Context, _ model_clients.MessagesPara
 	if resp.Err != nil {
 		return nil, resp.Err
 	}
-	return m.buildAssistantMessage(resp), nil
+
+	result := m.buildAssistantMessage(resp)
+
+	// 如果传入 OutputParser，自动解析并填充 ParserContent
+	// 对齐 Python: LTM 的 GenAllMemory 通过 WithInvokeOutputParser(parser) 传入解析器，
+	// 真实 LLM 客户端在响应解析时自动调用 parser.Parse()。Mock 客户端需等价处理。
+	params := model_clients.NewInvokeParams(opts...)
+	if params.OutputParser != nil {
+		parsed, parseErr := params.OutputParser.Parse(result.Content.Text())
+		if parseErr == nil && parsed != nil {
+			result.ParserContent = parsed
+		}
+	}
+
+	return result, nil
 }
 
 // Stream 实现 BaseModelClient.Stream，将预设响应作为单个 chunk 发出。

@@ -146,7 +146,7 @@ func (r *ProcessorStateRecorder) Emit(ctx context.Context, state *schema.Context
 		Str("processor", state.Processor).
 		Str("model", state.Model).
 		Str("summary", state.Summary).
-		Msg("上下文压缩状态")
+		Msg("context compression state")
 
 	// 3. 触发回调
 	callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{

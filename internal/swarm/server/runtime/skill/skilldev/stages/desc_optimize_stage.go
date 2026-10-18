@@ -200,7 +200,7 @@ func (h *DescOptimizeStageHandler) generateTriggerQueries(_ *skilldev.SkillDevCo
 	// 待实现：解析输出 parsed := json.loads(output)
 	// 待实现：返回结果 return parsed
 
-	logger.Warn(logComponent).Msg("[DescOptimize] generateTriggerQueries 待接入 Agent")
+	logger.Warn(logComponent).Msg("[DescOptimize] generateTriggerQueries pending Agent integration")
 	return []skilldev.TriggerEvalQuery{
 		{Query: fmt.Sprintf("帮我用 %s 完成一个任务", skillName), ShouldTrigger: true},
 		{Query: "帮我写一个排序算法", ShouldTrigger: false},
@@ -289,7 +289,7 @@ func (h *DescOptimizeStageHandler) optimizationLoop(sctx *skilldev.SkillDevConte
 // 待实现: 接入 create_stage_agent 实际评估
 func (h *DescOptimizeStageHandler) evalDescription(_ *skilldev.SkillDevContext, _ string, queries []skilldev.TriggerEvalQuery) []map[string]any {
 	// 待实现: 接入 create_stage_agent 实际评估
-	logger.Warn(logComponent).Msg("[DescOptimize] evalDescription 待接入 Agent")
+	logger.Warn(logComponent).Msg("[DescOptimize] evalDescription pending Agent integration")
 	results := make([]map[string]any, 0, len(queries))
 	for _, q := range queries {
 		results = append(results, map[string]any{
@@ -307,7 +307,7 @@ func (h *DescOptimizeStageHandler) evalDescription(_ *skilldev.SkillDevContext, 
 // 待实现: 接入 create_stage_agent
 func (h *DescOptimizeStageHandler) improveDescription(_ *skilldev.SkillDevContext, input improveDescriptionInput) string {
 	// 待实现: 实际调用 Agent
-	logger.Warn(logComponent).Msg("[DescOptimize] improveDescription 待接入 Agent")
+	logger.Warn(logComponent).Msg("[DescOptimize] improveDescription pending Agent integration")
 	return input.CurrentDesc
 }
 

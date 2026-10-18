@@ -45,9 +45,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// searchLogComponent 日志组件标识
-var searchLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSearchToolsTool 创建搜索候选工具元工具。
@@ -73,13 +70,13 @@ func NewSearchToolsTool(
 		// 调用搜索回调
 		matches, err := searchFn(ctx, input.Query, limit, input.DetailLevel)
 		if err != nil {
-			logger.Warn(searchLogComponent).
+			logger.Warn(logComponent).
 				Str("tool_name", "search_tools").
 				Str("query", input.Query).
 				Int("limit", limit).
 				Int("detail_level", input.DetailLevel).
 				Err(err).
-				Msg("SearchToolsTool 搜索失败")
+				Msg("SearchToolsTool search failed")
 			return map[string]any{"success": false, "error": err.Error()}, nil
 		}
 
@@ -96,14 +93,14 @@ func NewSearchToolsTool(
 		}
 
 		// 日志，对齐 Python: matched 字段列出名称列表
-		logger.Info(searchLogComponent).
+		logger.Info(logComponent).
 			Str("tool_name", "search_tools").
 			Str("query", input.Query).
 			Int("limit", limit).
 			Int("detail_level", input.DetailLevel).
 			Int("match_count", len(matches)).
 			Str("matched", formatMatches(matches)).
-			Msg("SearchToolsTool 搜索完成")
+			Msg("SearchToolsTool search completed")
 
 		// 返回结果
 		return map[string]any{

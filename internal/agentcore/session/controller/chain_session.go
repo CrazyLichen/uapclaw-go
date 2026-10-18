@@ -81,7 +81,7 @@ func (cs *ChainSession) Load() error {
 		Str("action", "chain_session_load").
 		Str("session_id", cs.SessionID).
 		Str("session_dir", cs.sessionDir).
-		Msg("加载链式会话")
+		Msg("loading chain session")
 
 	// 加载 state.data
 	stateFile := SessionPaths{}.StateFile(cs.sessionDir)
@@ -119,7 +119,7 @@ func (cs *ChainSession) Load() error {
 				Str("action", "chain_session_load").
 				Str("session_id", cs.SessionID).
 				Err(err).
-				Msg("加载数据容器失败，使用空容器")
+				Msg("failed to load data container, using empty container")
 		} else {
 			cs.DataContainer = container
 		}
@@ -134,7 +134,7 @@ func (cs *ChainSession) Load() error {
 			logger.Debug(logComponent).
 				Str("action", "chain_session_load").
 				Str("session_id", cs.SessionID).
-				Msg("下游目录不存在，跳过下游加载")
+				Msg("downstreams directory not found, skipping downstream loading")
 			return nil
 		}
 		return err
@@ -195,7 +195,7 @@ func (cs *ChainSession) Load() error {
 			Str("session_id", cs.SessionID).
 			Str("target_agent", targetAgent).
 			Str("target_session", targetSession).
-			Msg("加载下游关系")
+			Msg("loaded downstream relation")
 	}
 
 	logger.Info(logComponent).
@@ -203,7 +203,7 @@ func (cs *ChainSession) Load() error {
 		Str("session_id", cs.SessionID).
 		Int("downstreams", len(cs.downstreamPolicies)).
 		Bool("active", cs.isActive).
-		Msg("链式会话加载完成")
+		Msg("chain session loaded")
 
 	return nil
 }
@@ -221,7 +221,7 @@ func (cs *ChainSession) Flush() error {
 	logger.Debug(logComponent).
 		Str("action", "chain_session_flush").
 		Str("session_id", cs.SessionID).
-		Msg("刷写链式会话")
+		Msg("flushing chain session")
 
 	// 准备数据
 	stateData := map[string]any{
@@ -325,7 +325,7 @@ func (cs *ChainSession) Flush() error {
 		Str("session_id", cs.SessionID).
 		Int("version", cs.version).
 		Int("downstreams", len(cs.downstreamPolicies)).
-		Msg("链式会话刷写完成")
+		Msg("chain session flushed")
 
 	return nil
 }
@@ -342,7 +342,7 @@ func (cs *ChainSession) AddDownstream(targetAgent, targetSession string, policy 
 		Str("session_id", cs.SessionID).
 		Str("target_agent", targetAgent).
 		Str("target_session", targetSession).
-		Msg("添加下游关系")
+		Msg("added downstream relation")
 }
 
 // RemoveDownstream 移除指定的下游关系
@@ -357,7 +357,7 @@ func (cs *ChainSession) RemoveDownstream(targetAgent, targetSession string) {
 		Str("session_id", cs.SessionID).
 		Str("target_agent", targetAgent).
 		Str("target_session", targetSession).
-		Msg("移除下游关系")
+		Msg("removed downstream relation")
 }
 
 // HasDownstream 检查指定的下游关系是否存在
@@ -395,7 +395,7 @@ func (cs *ChainSession) RemoveAllDownstreams() {
 	logger.Debug(logComponent).
 		Str("action", "remove_all_downstreams").
 		Str("session_id", cs.SessionID).
-		Msg("清空所有下游关系")
+		Msg("cleared all downstream relations")
 }
 
 // GetData 获取当前会话的完整数据

@@ -78,7 +78,7 @@ func FlushTeamSession(ctx context.Context, sess *session.AgentTeamSession) error
 			Err(err).
 			Str("action", "flush_team_session").
 			Str("session_id", sess.GetSessionID()).
-			Msg("FlushTeamSession CloseStream 失败")
+			Msg("FlushTeamSession CloseStream failed")
 	}
 
 	// 提交检查点
@@ -87,9 +87,11 @@ func FlushTeamSession(ctx context.Context, sess *session.AgentTeamSession) error
 			Err(err).
 			Str("action", "flush_team_session").
 			Str("session_id", sess.GetSessionID()).
-			Msg("FlushTeamSession Commit 失败")
+			Msg("FlushTeamSession Commit failed")
 		// 不返回错误，与 Python 行为一致
 	}
 
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

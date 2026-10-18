@@ -17,8 +17,8 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// helpersLogComponent 日志组件标识
-var helpersLogComponent = logger.ComponentAgentCore
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

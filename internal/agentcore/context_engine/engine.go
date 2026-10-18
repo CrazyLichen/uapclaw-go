@@ -57,7 +57,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-var ()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -252,7 +251,7 @@ func (ce *contextEngine) ClearContext(ctx context.Context, opts ...iface.ClearCo
 			ce.mu.Unlock()
 			logger.Warn(logComponent).
 				Str("session_id", opt.SessionID).
-				Msg("删除上下文失败，会话不存在")
+				Msg("failed to delete context, session not found")
 			return nil
 		}
 		for _, cid := range deleteContextIDs {
@@ -279,7 +278,7 @@ func (ce *contextEngine) ClearContext(ctx context.Context, opts ...iface.ClearCo
 		ce.mu.Unlock()
 		logger.Warn(logComponent).
 			Str("session_id", opt.SessionID).
-			Msg("删除上下文失败，上下文不存在")
+			Msg("failed to delete context, context not found")
 		return nil
 	}
 	delete(ce.contextPool, fullContextID)
@@ -302,7 +301,7 @@ func (ce *contextEngine) ClearContext(ctx context.Context, opts ...iface.ClearCo
 func (ce *contextEngine) SaveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade, contextIDs []string) (map[string]any, error) {
 	if sess == nil {
 		logger.Warn(logComponent).
-			Msg("保存上下文失败，会话不能为 nil")
+			Msg("failed to save context, session cannot be nil")
 		return nil, nil
 	}
 

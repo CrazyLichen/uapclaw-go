@@ -112,7 +112,7 @@ func NewSkillManager(workspaceDir string) *SkillManager {
 
 	// 确保技能目录存在
 	if err := os.MkdirAll(sm.skillsDir, 0o755); err != nil {
-		logger.Warn(logComponent).Err(err).Str("path", sm.skillsDir).Msg("创建技能目录失败")
+		logger.Warn(logComponent).Err(err).Str("path", sm.skillsDir).Msg("failed to create skill directory")
 	}
 
 	sm.state = sm.loadState()
@@ -147,7 +147,7 @@ func (sm *SkillManager) HandleSkillsList(ctx context.Context, params map[string]
 	refreshMarketplaces := toBool(params["refresh_marketplaces"])
 	if refreshMarketplaces {
 		if err := sm.syncMarketplaceRepos(ctx); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("同步 marketplace 仓库失败")
+			logger.Warn(logComponent).Err(err).Msg("failed to sync marketplace repository")
 		}
 	}
 
@@ -327,7 +327,7 @@ func (sm *SkillManager) HandleSkillsEvolutionGet(ctx context.Context, params map
 
 	data, err := os.ReadFile(evoPath)
 	if err != nil {
-		logger.Warn(logComponent).Str("skill", safeName).Err(err).Msg("读取 evolutions.json 失败")
+		logger.Warn(logComponent).Str("skill", safeName).Err(err).Msg("failed to read evolutions.json")
 		return map[string]any{
 			"name":       safeName,
 			"exists":     true,
@@ -342,7 +342,7 @@ func (sm *SkillManager) HandleSkillsEvolutionGet(ctx context.Context, params map
 
 	var evoData map[string]any
 	if err := json.Unmarshal(data, &evoData); err != nil {
-		logger.Warn(logComponent).Str("skill", safeName).Err(err).Msg("解析 evolutions.json 失败")
+		logger.Warn(logComponent).Str("skill", safeName).Err(err).Msg("failed to parse evolutions.json")
 		return map[string]any{
 			"name":       safeName,
 			"exists":     true,
@@ -586,7 +586,7 @@ func (sm *SkillManager) HandleSkillsInstall(ctx context.Context, params map[stri
 			return map[string]any{"success": false, "detail": fmt.Sprintf("skill %s 已存在", safePlugin)}, nil
 		}
 		if err := safeRmtree(dest); err != nil {
-			logger.Warn(logComponent).Err(err).Str("path", dest).Msg("移除已存在技能目录失败")
+			logger.Warn(logComponent).Err(err).Str("path", dest).Msg("failed to remove existing skill directory")
 		}
 	}
 	if err := copyDir(pluginSrc, dest); err != nil {
@@ -642,7 +642,7 @@ func (sm *SkillManager) HandleSkillsInstallBuiltin(ctx context.Context, params m
 	}
 
 	if err := copyDir(src, dest); err != nil {
-		logger.Error(logComponent).Err(err).Msg("安装内置技能失败")
+		logger.Error(logComponent).Err(err).Msg("failed to install built-in skill")
 		return map[string]any{"success": false, "detail": fmt.Sprintf("安装失败: %s", err)}, nil
 	}
 
@@ -765,7 +765,7 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 				return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", safeSkillName)}, nil
 			}
 			if err := safeRmtree(dest); err != nil {
-				logger.Warn(logComponent).Err(err).Str("path", dest).Msg("移除已存在技能目录失败")
+				logger.Warn(logComponent).Err(err).Str("path", dest).Msg("failed to remove existing skill directory")
 			}
 		}
 		// 创建目标目录并复制文件
@@ -823,7 +823,7 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 			return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", safeSkillName)}, nil
 		}
 		if err := safeRmtree(dest); err != nil {
-			logger.Warn(logComponent).Err(err).Str("path", dest).Msg("移除已存在技能目录失败")
+			logger.Warn(logComponent).Err(err).Str("path", dest).Msg("failed to remove existing skill directory")
 		}
 	}
 
@@ -2408,7 +2408,7 @@ func (sm *SkillManager) loadState() map[string]any {
 	}
 	var state map[string]any
 	if err := json.Unmarshal(data, &state); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("解析技能状态文件失败，使用空状态")
+		logger.Warn(logComponent).Err(err).Msg("failed to parse skill state file, using empty state")
 		return make(map[string]any)
 	}
 	return state
@@ -2419,15 +2419,15 @@ func (sm *SkillManager) loadState() map[string]any {
 func (sm *SkillManager) saveState() {
 	data, err := json.MarshalIndent(sm.state, "", "  ")
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("序列化技能状态失败")
+		logger.Error(logComponent).Err(err).Msg("failed to serialize skill state")
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(sm.stateFile), 0o755); err != nil {
-		logger.Error(logComponent).Err(err).Msg("创建技能状态目录失败")
+		logger.Error(logComponent).Err(err).Msg("failed to create skill state directory")
 		return
 	}
 	if err := os.WriteFile(sm.stateFile, data, 0o644); err != nil {
-		logger.Error(logComponent).Err(err).Msg("保存技能状态文件失败")
+		logger.Error(logComponent).Err(err).Msg("failed to save skill state file")
 	}
 }
 
@@ -2841,7 +2841,7 @@ func (sm *SkillManager) syncMarketplaceRepos(ctx context.Context) error {
 			sm.gitPull(ctx, repoDir)
 		} else {
 			if err := sm.gitClone(ctx, url, repoDir); err != nil {
-				logger.Warn(logComponent).Err(err).Str("url", url).Str("dir", repoDir).Msg("同步 marketplace 仓库 git clone 失败")
+				logger.Warn(logComponent).Err(err).Str("url", url).Str("dir", repoDir).Msg("failed to sync marketplace repository git clone")
 			}
 		}
 	}
@@ -2891,7 +2891,7 @@ func logRejectedName(operation, label string, value any, exc error) {
 		Str("label", label).
 		Str("value", toString(value)).
 		Err(exc).
-		Msg("拒绝了无效名称")
+		Msg("rejected invalid name")
 }
 
 // getBuiltinSkillsDir 获取内置技能目录

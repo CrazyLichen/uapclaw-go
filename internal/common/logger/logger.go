@@ -150,7 +150,7 @@ func Setup(opts ...Option) error {
 			home, err := os.UserHomeDir()
 			if err != nil {
 				setupErr = exception.NewBaseError(exception.StatusCommonLogPathInitFailed,
-					exception.WithMsg(fmt.Sprintf("获取用户主目录失败: %v", err)))
+					exception.WithMsg(fmt.Sprintf("failed to get user home directory: %v", err)))
 				return
 			}
 			l.outputDir = filepath.Join(home, ".uapclaw", "agent", ".logs")
@@ -159,7 +159,7 @@ func Setup(opts ...Option) error {
 		// 确保输出目录存在
 		if err := os.MkdirAll(l.outputDir, 0o755); err != nil {
 			setupErr = exception.NewBaseError(exception.StatusCommonLogPathInitFailed,
-				exception.WithMsg(fmt.Sprintf("创建日志目录失败: %v", err)))
+				exception.WithMsg(fmt.Sprintf("failed to create log directory: %v", err)))
 			return
 		}
 
@@ -197,31 +197,31 @@ func Setup(opts ...Option) error {
 // 组件级日志函数
 
 // Info 输出 Info 级别日志。
-// 使用方式：logger.Info(logger.ComponentCommon).Str("key", "val").Msg("消息")
+// 使用方式：logger.Info(logger.ComponentCommon).Str("key", "val").Msg("message")
 func Info(component Component) *zerolog.Event {
 	return getLogger(component).Info()
 }
 
 // Warn 输出 Warn 级别日志。
-// 使用方式：logger.Warn(logger.ComponentGateway).Err(err).Msg("警告")
+// 使用方式：logger.Warn(logger.ComponentGateway).Err(err).Msg("warning")
 func Warn(component Component) *zerolog.Event {
 	return getLogger(component).Warn()
 }
 
 // Error 输出 Error 级别日志。
-// 使用方式：logger.Error(logger.ComponentChannel).Err(err).Msg("失败")
+// 使用方式：logger.Error(logger.ComponentChannel).Err(err).Msg("failed")
 func Error(component Component) *zerolog.Event {
 	return getLogger(component).Error()
 }
 
 // Debug 输出 Debug 级别日志。
-// 使用方式：logger.Debug(logger.ComponentCommon).Str("key", "val").Msg("调试")
+// 使用方式：logger.Debug(logger.ComponentCommon).Str("key", "val").Msg("debug")
 func Debug(component Component) *zerolog.Event {
 	return getLogger(component).Debug()
 }
 
 // Fatal 输出 Fatal 级别日志并调用 os.Exit(1)。
-// 使用方式：logger.Fatal(logger.ComponentCommon).Err(err).Msg("致命错误")
+// 使用方式：logger.Fatal(logger.ComponentCommon).Err(err).Msg("fatal error")
 func Fatal(component Component) *zerolog.Event {
 	return getLogger(component).Fatal()
 }
@@ -254,7 +254,7 @@ func Close() error {
 
 	if len(errs) > 0 {
 		return exception.NewBaseError(exception.StatusCommonLogExecutionRuntimeError,
-			exception.WithMsg(fmt.Sprintf("关闭日志 writer 失败: %v", errs)))
+			exception.WithMsg(fmt.Sprintf("failed to close log writer: %v", errs)))
 	}
 
 	global = nil
@@ -275,7 +275,7 @@ func Reconfigure(opts ...Option) error {
 
 	if global == nil {
 		return exception.NewBaseError(exception.StatusCommonLogExecutionRuntimeError,
-			exception.WithMsg("日志系统未初始化，无法重新配置"))
+			exception.WithMsg("logger not initialized, cannot reconfigure"))
 	}
 
 	// 应用选项（仅更新 levels 生效，outputDir/rotationCfg 等忽略）

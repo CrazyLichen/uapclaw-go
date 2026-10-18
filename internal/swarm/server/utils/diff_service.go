@@ -478,7 +478,7 @@ func (ds *DiffService) readAgentHistory(sessionID string, projectDir string) map
 			logger.Warn(logComponent).
 				Str("history_file", historyFile).
 				Err(err).
-				Msg("读取 agent history 文件失败")
+				Msg("failed to read agent history file")
 			continue
 		}
 

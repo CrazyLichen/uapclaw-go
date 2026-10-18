@@ -122,7 +122,7 @@ func writeStream(emitter *StreamEmitter, ctx context.Context, schema Schema) err
 		logger.Warn(logComponent).
 			Str("event_type", "SESSION_STREAM_CHUNK").
 			Str("data_type", schema.SchemaType()).
-			Msg("流消息已丢弃，emitter 已关闭")
+			Msg("stream message dropped, emitter closed")
 		return nil
 	}
 

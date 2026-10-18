@@ -65,13 +65,13 @@ func (h *StoreRecordsHelper) PersistScript(ctx context.Context, skillDir string,
 			Str("filename", filename).
 			Str("record_id", record.ID).
 			Err(err).
-			Msg("[EvolutionStore] 持久化脚本写入失败")
+			Msg("[EvolutionStore] persist script write failed")
 		return err
 	}
 	logger.Info(logComponent).
 		Str("filename", filename).
 		Str("record_id", record.ID).
-		Msg("[EvolutionStore] 持久化脚本")
+		Msg("[EvolutionStore] persisting script")
 
 	record.Change.ScriptFilename = &filename
 	scriptLang := "unknown"
@@ -109,7 +109,7 @@ func (h *StoreRecordsHelper) LoadFullEvolutionLog(ctx context.Context, name stri
 	}
 	var data map[string]any
 	if err := json.Unmarshal([]byte(fileContent), &data); err != nil {
-		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("解析演进日志失败，返回空日志")
+		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("failed to parse evolution log, returning empty log")
 		return EmptyEvolutionLog(name), nil
 	}
 	evoLog, err := FromDictEvolutionLog(data)
@@ -133,7 +133,7 @@ func (h *StoreRecordsHelper) SaveEvolutionLog(ctx context.Context, name string, 
 	evoPath := filepath.Join(targetDir, evolutionFilename)
 	data, err := json.Marshal(evoLog.ToDict())
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("[EvolutionStore] 序列化演进日志失败")
+		logger.Error(logComponent).Err(err).Msg("[EvolutionStore] failed to serialize evolution log")
 		return err
 	}
 	return h.store.WriteFileText(ctx, evoPath, string(data))
@@ -173,7 +173,7 @@ func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string
 		logger.Info(logComponent).
 			Int("updated_count", updatedCount).
 			Str("skill", name).
-			Msg("[EvolutionStore] 更新记录分数")
+			Msg("[EvolutionStore] updating record score")
 	}
 	return updatedCount, nil
 }
@@ -183,7 +183,7 @@ func (h *StoreRecordsHelper) UpdateRecordScores(ctx context.Context, name string
 func (h *StoreRecordsHelper) GetRecordsByScore(ctx context.Context, name string, minScore *float64) []EvolutionRecord {
 	evoLog, err := h.LoadFullEvolutionLog(ctx, name)
 	if err != nil {
-		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[EvolutionStore] get_records_by_score: 加载失败")
+		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[EvolutionStore] get_records_by_score:  load failed")
 		return nil
 	}
 	records := evoLog.Entries
@@ -234,7 +234,7 @@ func (h *StoreRecordsHelper) DeleteRecords(ctx context.Context, name string, rec
 		logger.Info(logComponent).
 			Int("deleted_count", deletedCount).
 			Str("skill", name).
-			Msg("[EvolutionStore] 删除记录")
+			Msg("[EvolutionStore] deleting record")
 	}
 	return deletedCount, nil
 }
@@ -269,7 +269,7 @@ func (h *StoreRecordsHelper) MarkRecordsApplied(ctx context.Context, name string
 		logger.Info(logComponent).
 			Int("updated_count", updatedCount).
 			Str("skill", name).
-			Msg("[EvolutionStore] 标记记录已应用")
+			Msg("[EvolutionStore] marking record as applied")
 	}
 	return updatedCount, nil
 }
@@ -305,7 +305,7 @@ func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, prim
 	if primaryRecord == nil {
 		logger.Warn(logComponent).
 			Str("primary_id", primaryID).
-			Msg("[EvolutionStore] merge_records: 主记录未找到")
+			Msg("[EvolutionStore] merge_records: primary record not found")
 		return nil, nil
 	}
 
@@ -341,7 +341,7 @@ func (h *StoreRecordsHelper) MergeRecords(ctx context.Context, name string, prim
 		Int("removed_count", len(recordsToRemove)).
 		Str("primary_id", primaryID).
 		Str("skill", name).
-		Msg("[EvolutionStore] 合并记录")
+		Msg("[EvolutionStore] merging records")
 	return primaryRecord, nil
 }
 
@@ -364,7 +364,7 @@ func (h *StoreRecordsHelper) UpdateRecordContent(ctx context.Context, name strin
 	if targetRecord == nil {
 		logger.Warn(logComponent).
 			Str("record_id", recordID).
-			Msg("[EvolutionStore] update_record_content: 记录未找到")
+			Msg("[EvolutionStore] update_record_content: record not found")
 		return nil, nil
 	}
 
@@ -384,7 +384,7 @@ func (h *StoreRecordsHelper) UpdateRecordContent(ctx context.Context, name strin
 	logger.Info(logComponent).
 		Str("record_id", recordID).
 		Str("skill", name).
-		Msg("[EvolutionStore] 更新记录内容")
+		Msg("[EvolutionStore] updating record content")
 	return targetRecord, nil
 }
 

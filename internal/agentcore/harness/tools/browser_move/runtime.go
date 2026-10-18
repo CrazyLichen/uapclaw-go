@@ -124,7 +124,7 @@ func (r *BrowserAgentRuntime) CancelRun(ctx context.Context, sessionID, requestI
 			Str("session_id", sessionID).
 			Str("request_id", requestID).
 			Err(err).
-			Msg("取消浏览器执行失败")
+			Msg("failed to cancel browser execution")
 	}
 	return map[string]any{
 		"ok":         true,
@@ -144,7 +144,7 @@ func (r *BrowserAgentRuntime) ClearCancel(ctx context.Context, sessionID, reques
 			Str("session_id", sessionID).
 			Str("request_id", requestID).
 			Err(err).
-			Msg("清除取消标记失败")
+			Msg("failed to clear cancel flag")
 	}
 	return map[string]any{
 		"ok":         true,
@@ -176,7 +176,7 @@ func (r *BrowserAgentRuntime) EnsureRuntimeReady(ctx context.Context) error {
 
 	logger.Debug(logComponent).
 		Str("event_type", "browser_runtime_ready").
-		Msg("浏览器运行时就绪（code executor 待回填）")
+		Msg("browser runtime ready (code executor to be backfilled)")
 
 	return nil
 }
@@ -224,7 +224,7 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 
 	logger.Debug(logComponent).
 		Str("event_type", "browser_runtime_started").
-		Msg("浏览器运行时已启动（runtime tools 已注册，register_runtime_tool 待回填）")
+		Msg("browser runtime started (runtime tools registered, register_runtime_tool to be backfilled)")
 
 	return nil
 }

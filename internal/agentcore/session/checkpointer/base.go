@@ -117,7 +117,7 @@ func processInteractiveInputs(session interfaces.InnerSession, inputs *interacti
 	if !ok || wfState == nil {
 		logger.Warn(logComponent).
 			Str("session_id", session.SessionID()).
-			Msg("session.State() 不是 WorkflowState，跳过 user_inputs 处理")
+			Msg("session.State() is not WorkflowState, skipping user_inputs handling")
 		return
 	}
 

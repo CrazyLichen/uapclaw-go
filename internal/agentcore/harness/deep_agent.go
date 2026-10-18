@@ -1839,7 +1839,7 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 			if !mcpConfigEqual(existingConfig, mcpConfig) {
 				logger.Error(logComponent).
 					Str("server_id", mcpConfig.ServerID).
-					Msg("MCP 服务器已存在但配置不同，跳过")
+					Msg("MCP server already exists with different config, skipping")
 				continue
 			}
 
@@ -2046,7 +2046,7 @@ func (d *DeepAgent) registerRailSelective(ctx context.Context, r agentinterfaces
 		// 未知事件注册到外层
 		logger.Warn(logComponent).
 			Str("event", string(event)).
-			Msg("未知 Rail 事件，注册到外层 DeepAgent")
+			Msg("unknown rail event, registering to outer DeepAgent")
 		d.callbackManager.RegisterCallback(ctx, event, callback)
 	}
 }
@@ -2903,14 +2903,14 @@ func permissionsSectionToMap(perm *hsecurity.PermissionsSection) map[string]any 
 	if err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("permissionsSectionToMap 序列化失败，返回空配置")
+			Msg("permissionsSectionToMap serialization failed, returning empty config")
 		return make(map[string]any)
 	}
 	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("permissionsSectionToMap 反序列化失败，返回空配置")
+			Msg("permissionsSectionToMap deserialization failed, returning empty config")
 		return make(map[string]any)
 	}
 	return result

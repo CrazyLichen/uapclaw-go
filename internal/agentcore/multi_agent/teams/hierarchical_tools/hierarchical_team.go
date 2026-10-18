@@ -44,14 +44,13 @@ type HierarchicalToolsTeam struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// toolsLogComponent 日志组件标识
-	toolsLogComponent = logger.ComponentChannel
-)
+// logComponent 日志组件标识
+const logComponent = logger.ComponentChannel
+
+const ()
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 HierarchicalToolsTeam 满足 BaseTeam 接口
 // _ 编译时验证 HierarchicalToolsTeam 满足 BaseTeam 接口
 var _ maschema.BaseTeam = (*HierarchicalToolsTeam)(nil)
 
@@ -100,11 +99,11 @@ func NewHierarchicalToolsTeam(card maschema.TeamCardInterface, config *Hierarchi
 		pendingChildren: make(map[string][]*agentschema.AgentCard),
 	}
 
-	logger.Info(toolsLogComponent).
+	logger.Info(logComponent).
 		Str("action", "new_hierarchical_tools_team").
 		Str("team_id", teamID).
 		Str("root_agent_id", rootAgentID).
-		Msg("创建 HierarchicalToolsTeam")
+		Msg("creating HierarchicalToolsTeam")
 
 	return team
 }
@@ -127,29 +126,29 @@ func (t *HierarchicalToolsTeam) Invoke(ctx context.Context, inputs map[string]an
 
 	result, err := teams.StandaloneInvokeContext(ctx, t.runtime, t.card, inputs, sess,
 		func(teamSession *session.AgentTeamSession, sessionID string) (map[string]any, error) {
-			logger.Debug(toolsLogComponent).
+			logger.Debug(logComponent).
 				Str("action", "hierarchical_tools_invoke").
 				Str("session_id", sessionID).
 				Str("root_agent_id", t.rootAgentID).
-				Msg("开始 invoke")
+				Msg("invoke started")
 
 			res, sendErr := t.runtime.Send(ctx, inputs, t.rootAgentID, t.card.GetID(),
 				maschema.WithTeamSessionID(sessionID),
 				maschema.WithTeamTimeout(timeout),
 			)
 			if sendErr != nil {
-				logger.Error(toolsLogComponent).Err(sendErr).
+				logger.Error(logComponent).Err(sendErr).
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("method", "HierarchicalToolsTeam.Invoke").
 					Str("root_agent_id", t.rootAgentID).
-					Msg("Send 到 root_agent 失败")
+					Msg("Send to root_agent failed")
 				return nil, sendErr
 			}
 
-			logger.Debug(toolsLogComponent).
+			logger.Debug(logComponent).
 				Str("action", "hierarchical_tools_invoke_end").
 				Str("session_id", sessionID).
-				Msg("invoke 结束")
+				Msg("invoke finished")
 
 			resultMap, ok := res.(map[string]any)
 			if !ok {
@@ -188,10 +187,10 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 		defer cancel()
 	}
 
-	logger.Debug(toolsLogComponent).
+	logger.Debug(logComponent).
 		Str("action", "hierarchical_tools_stream").
 		Str("root_agent_id", t.rootAgentID).
-		Msg("开始 stream")
+		Msg("stream started")
 
 	return teams.StandaloneStreamContext(ctx, t.runtime, t.card, inputs, sess,
 		func(teamSession *session.AgentTeamSession, sessionID string) error {
@@ -205,11 +204,11 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 
 			agents, err := resourceMgr.GetAgent(ctx, []string{t.rootAgentID})
 			if err != nil || len(agents) == 0 {
-				logger.Error(toolsLogComponent).Err(err).
+				logger.Error(logComponent).Err(err).
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("method", "HierarchicalToolsTeam.Stream").
 					Str("root_agent_id", t.rootAgentID).
-					Msg("获取 root_agent 实例失败")
+					Msg("failed to get root_agent instance")
 				return exception.BuildError(exception.StatusAgentTeamAgentNotFound,
 					exception.WithParam("error_msg", fmt.Sprintf("root_agent '%s' 实例未找到", t.rootAgentID)),
 				)
@@ -228,11 +227,11 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 			// 直接调用 agent.Stream() 逐 chunk 转发
 			ch, streamErr := agent.Stream(ctx, inputsWithSID)
 			if streamErr != nil {
-				logger.Error(toolsLogComponent).Err(streamErr).
+				logger.Error(logComponent).Err(streamErr).
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("method", "HierarchicalToolsTeam.Stream").
 					Str("root_agent_id", t.rootAgentID).
-					Msg("root_agent.Stream() 调用失败")
+					Msg("root_agent.Stream() call failed")
 				// Python: error_result = {"output": str(e), "result_type": "error"}
 				errorResult := map[string]any{
 					"output":      streamErr.Error(),
@@ -244,16 +243,16 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 
 			for chunk := range ch {
 				if writeErr := teamSession.WriteStream(ctx, chunk); writeErr != nil {
-					logger.Warn(toolsLogComponent).Err(writeErr).
+					logger.Warn(logComponent).Err(writeErr).
 						Str("action", "hierarchical_tools_stream_write").
-						Msg("写入流失败")
+						Msg("failed to write stream")
 				}
 			}
 
-			logger.Debug(toolsLogComponent).
+			logger.Debug(logComponent).
 				Str("action", "hierarchical_tools_stream_end").
 				Str("session_id", sessionID).
-				Msg("stream 结束")
+				Msg("stream finished")
 			return nil
 		},
 	)
@@ -267,11 +266,11 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 // Python: HierarchicalTeam.add_agent(card, provider, parent_agent_id=None)
 func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, opts ...maschema.TeamOption) error {
 	if t.runtime.HasAgent(card.ID) {
-		logger.Warn(toolsLogComponent).
+		logger.Warn(logComponent).
 			Str("action", "add_agent_skip").
 			Str("agent_id", card.ID).
 			Str("team_id", t.card.GetID()).
-			Msg("Agent 已存在，跳过注册")
+			Msg("agent already exists, skipping registration")
 		return nil
 	}
 
@@ -287,11 +286,11 @@ func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.
 	// 注册到运行时（包装为 resources_manager.AgentProvider）
 	wrappedProvider := resources_manager.AgentProvider(provider)
 	if err := t.runtime.RegisterAgent(ctx, card, wrappedProvider); err != nil {
-		logger.Error(toolsLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "HierarchicalToolsTeam.AddAgent").
 			Str("agent_id", card.ID).
-			Msg("注册 Agent 到运行时失败")
+			Msg("failed to register agent to runtime")
 		return err
 	}
 
@@ -300,29 +299,29 @@ func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.
 
 	// 识别 rootAgent
 	if card.ID == t.rootAgentID {
-		logger.Info(toolsLogComponent).
+		logger.Info(logComponent).
 			Str("action", "add_agent_root").
 			Str("root_agent_id", card.ID).
 			Str("team_id", t.card.GetID()).
-			Msg("注册 root_agent 到 HierarchicalToolsTeam")
+			Msg("registering root_agent to HierarchicalToolsTeam")
 	}
 
 	// Python: if parent_agent_id: self._pending_children.setdefault(parent_agent_id, []).append(card)
 	teamOpts := maschema.NewTeamOptions(opts...)
 	if teamOpts.ParentAgentID != "" {
 		t.pendingChildren[teamOpts.ParentAgentID] = append(t.pendingChildren[teamOpts.ParentAgentID], card)
-		logger.Debug(toolsLogComponent).
+		logger.Debug(logComponent).
 			Str("action", "add_agent_with_parent").
 			Str("child_id", card.ID).
 			Str("parent_id", teamOpts.ParentAgentID).
-			Msg("记录父子关系到 pendingChildren")
+			Msg("recording parent-child relation to pendingChildren")
 	}
 
-	logger.Info(toolsLogComponent).
+	logger.Info(logComponent).
 		Str("action", "add_agent").
 		Str("agent_id", card.ID).
 		Str("team_id", t.card.GetID()).
-		Msg("Agent 已注册到 HierarchicalToolsTeam")
+		Msg("agent registered to HierarchicalToolsTeam")
 
 	return nil
 }
@@ -333,22 +332,22 @@ func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.
 func (t *HierarchicalToolsTeam) RemoveAgent(ctx context.Context, agentID string) error {
 	_, err := t.runtime.UnregisterAgent(ctx, agentID)
 	if err != nil {
-		logger.Error(toolsLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "HierarchicalToolsTeam.RemoveAgent").
 			Str("agent_id", agentID).
-			Msg("注销 Agent 失败")
+			Msg("failed to unregister agent")
 		return err
 	}
 
 	// Python: self.card.agent_cards = [c for c in self.card.agent_cards if c.id != removed_card.id]
 	t.card.RemoveAgentCard(agentID)
 
-	logger.Info(toolsLogComponent).
+	logger.Info(logComponent).
 		Str("action", "remove_agent").
 		Str("agent_id", agentID).
 		Str("team_id", t.card.GetID()).
-		Msg("Agent 已从 HierarchicalToolsTeam 注销")
+		Msg("agent unregistered from HierarchicalToolsTeam")
 
 	return nil
 }
@@ -386,10 +385,10 @@ func (t *HierarchicalToolsTeam) Unsubscribe(ctx context.Context, agentID string,
 // Python: BaseTeam.configure(config) -> self
 func (t *HierarchicalToolsTeam) Configure(_ context.Context, config maschema.TeamConfig) error {
 	t.config.TeamConfig = config
-	logger.Info(toolsLogComponent).
+	logger.Info(logComponent).
 		Str("action", "configure").
 		Str("team_id", t.card.GetID()).
-		Msg("HierarchicalToolsTeam 配置已更新")
+		Msg("HierarchicalToolsTeam config updated")
 	return nil
 }
 
@@ -481,11 +480,11 @@ func (t *HierarchicalToolsTeam) setupHierarchy(ctx context.Context) error {
 		// 获取父 Agent 实例
 		parentAgents, err := resourceMgr.GetAgent(ctx, []string{parentID})
 		if err != nil || len(parentAgents) == 0 {
-			logger.Error(toolsLogComponent).Err(err).
+			logger.Error(logComponent).Err(err).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("method", "HierarchicalToolsTeam.setupHierarchy").
 				Str("parent_id", parentID).
-				Msg("获取父 Agent 实例失败")
+				Msg("failed to get parent agent instance")
 			return exception.BuildError(exception.StatusAgentTeamAgentNotFound,
 				exception.WithParam("error_msg", fmt.Sprintf("父 Agent '%s' 实例未找到", parentID)),
 			)
@@ -494,20 +493,20 @@ func (t *HierarchicalToolsTeam) setupHierarchy(ctx context.Context) error {
 		parentAgent := parentAgents[0]
 		am := parentAgent.AbilityManager()
 		if am == nil {
-			logger.Warn(toolsLogComponent).
+			logger.Warn(logComponent).
 				Str("action", "setup_hierarchy").
 				Str("parent_id", parentID).
-				Msg("父 Agent 无 AbilityManager，跳过子 Agent 注册")
+				Msg("parent agent has no AbilityManager, skipping child agent registration")
 			continue
 		}
 
 		for _, childCard := range childCards {
 			am.Add(childCard)
-			logger.Debug(toolsLogComponent).
+			logger.Debug(logComponent).
 				Str("action", "setup_hierarchy_register").
 				Str("child_id", childCard.ID).
 				Str("parent_id", parentID).
-				Msg("子 Agent 已注册到父 Agent 的 ability_manager")
+				Msg("child agent registered to parent agent's ability_manager")
 		}
 	}
 

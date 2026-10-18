@@ -22,8 +22,6 @@ type BaseOp interface {
 	Execute(ctx context.Context, rc *cecontext.RuntimeContext) error
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // OpBase 操作基类，提供对 ServiceContext 中服务的统一访问。
 //
 // 对齐 Python BaseOp._service_context 属性及其 llm/embedding_model/vector_store 属性。
@@ -34,6 +32,12 @@ type OpBase struct {
 	// sc 服务上下文引用，构造时注入
 	sc *cecontext.ServiceContext
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -93,3 +97,5 @@ func (b *OpBase) AgentFlow() cecontext.AgentFlowService {
 	}
 	return b.sc.AgentFlow()
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

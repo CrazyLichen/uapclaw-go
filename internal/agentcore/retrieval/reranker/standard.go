@@ -220,7 +220,7 @@ func (r *StandardReranker) doRerank(ctx context.Context, query string, docs []an
 			Str("method", "Rerank").
 			Str("model_provider", r.config.ModelName).
 			Err(err).
-			Msg("StandardReranker 请求失败")
+			Msg("StandardReranker request failed")
 		return nil, err
 	}
 
@@ -250,7 +250,7 @@ func (r *StandardReranker) doRerankSync(ctx context.Context, query string, docs 
 			Str("method", "RerankSync").
 			Str("model_provider", r.config.ModelName).
 			Err(err).
-			Msg("StandardReranker 同步请求失败")
+			Msg("StandardReranker sync request failed")
 		return nil, err
 	}
 
@@ -267,7 +267,7 @@ func validateStandardConfig(docs []any) error {
 			// 多模态文档不支持重排序，记录 warning 日志
 			logger.Warn(logComponent).
 				Str("event_type", "reranker_multimodal_unsupported").
-				Msg("Reranker 收到多模态重排序请求，不支持")
+				Msg("Reranker received multimodal rerank request, not supported")
 		default:
 			return exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
 				exception.WithParam("error_msg", "reranker 的输入必须是 []string 或 []Document"),

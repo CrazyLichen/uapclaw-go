@@ -118,7 +118,7 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 				Str("event_type", "memory_store").
 				Str("scope_id", scopeID).
 				Str("collection", col).
-				Msg("嵌入模型未初始化")
+				Msg("embedding model not initialized")
 			return exception.BuildError(exception.StatusMemoryAddMemoryExecutionError,
 				exception.WithParam("memory_type", "vector store"),
 				exception.WithParam("error_msg", "vector store failed: embedding model not initialized"),
@@ -133,7 +133,7 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 				Str("method", "EmbedDocuments").
 				Str("collection", col).
 				Err(err).
-				Msg("嵌入文档失败")
+				Msg("failed to embed document")
 			return fmt.Errorf("嵌入文档失败: %w", err)
 		}
 
@@ -156,7 +156,7 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 			logger.Error(logComponent).
 				Str("collection", col).
 				Err(err).
-				Msg("写入向量存储失败")
+				Msg("failed to write vector store")
 			return fmt.Errorf("写入向量存储失败: %w", err)
 		}
 
@@ -177,7 +177,7 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 				logger.Error(logComponent).
 					Str("kv_key", kvKey).
 					Err(err).
-					Msg("写入 KV 存储失败")
+					Msg("failed to write KV store")
 				return fmt.Errorf("写入 KV 存储失败: %w", err)
 			}
 			if err := s.addIDToTracking(ctx, userID, scopeID, doc.ID, memType); err != nil {
@@ -185,7 +185,7 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 					Str("mem_id", doc.ID).
 					Str("mem_type", memType).
 					Err(err).
-					Msg("添加 ID 追踪失败")
+					Msg("failed to add ID tracking")
 				return err
 			}
 		}
@@ -201,7 +201,7 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 		logger.Error(logComponent).
 			Str("event_type", "memory_retrieve").
 			Str("scope_id", scopeID).
-			Msg("嵌入模型未初始化")
+			Msg("embedding model not initialized")
 		return []*MemorySearchResult{}, nil
 	}
 
@@ -221,7 +221,7 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 			Str("event_type", "llm_call_error").
 			Str("method", "EmbedQuery").
 			Err(err).
-			Msg("嵌入查询失败")
+			Msg("failed to embed query")
 		return nil, fmt.Errorf("嵌入查询失败: %w", err)
 	}
 
@@ -248,7 +248,7 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 		col := getCollectionName(userID, scopeID, mt)
 		exists, err := s.vectorStore.CollectionExists(ctx, col)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Str("collection", col).Msg("检查集合是否存在失败")
+			logger.Error(logComponent).Err(err).Str("collection", col).Msg("failed to check if collection exists")
 			continue
 		}
 		if !exists {
@@ -260,7 +260,7 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 			logger.Error(logComponent).
 				Str("collection", col).
 				Err(err).
-				Msg("向量搜索失败")
+				Msg("vector search failed")
 			continue
 		}
 
@@ -284,7 +284,7 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 		}
 		values, err := s.kvStore.MGet(ctx, keys)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Str("collection", col).Msg("批量获取 KV 数据失败")
+			logger.Error(logComponent).Err(err).Str("collection", col).Msg("failed to batch get KV data")
 			continue
 		}
 
@@ -299,7 +299,7 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 				logger.Warn(logComponent).
 					Err(err).
 					Str("memory_id", mid).
-					Msg("JSON 解码记忆数据失败，跳过")
+					Msg("failed to JSON decode memory data, skipping")
 				continue
 			}
 			if codec != nil {
@@ -353,7 +353,7 @@ func (s *SimpleMemoryIndex) DeleteMemories(ctx context.Context, userID string, s
 		kvKey := kvMemKey(userID, scopeID, mid)
 		raw, err := s.kvStore.Get(ctx, kvKey)
 		if err != nil {
-			logger.Error(logComponent).Str("kv_key", kvKey).Err(err).Msg("获取 KV 数据失败")
+			logger.Error(logComponent).Str("kv_key", kvKey).Err(err).Msg("failed to get KV data")
 			return fmt.Errorf("获取 KV 数据失败: %w", err)
 		}
 
@@ -369,7 +369,7 @@ func (s *SimpleMemoryIndex) DeleteMemories(ctx context.Context, userID string, s
 			return fmt.Errorf("删除 KV 数据失败: %w", err)
 		}
 		if err := s.removeIDFromTracking(ctx, userID, scopeID, mid, memType); err != nil {
-			logger.Error(logComponent).Str("mem_id", mid).Err(err).Msg("移除 ID 追踪失败")
+			logger.Error(logComponent).Str("mem_id", mid).Err(err).Msg("failed to remove ID tracking")
 			return err
 		}
 	}
@@ -381,7 +381,7 @@ func (s *SimpleMemoryIndex) DeleteMemories(ctx context.Context, userID string, s
 	}
 	for _, col := range cols {
 		if err := s.vectorStore.DeleteDocsByIDs(ctx, col, ids); err != nil {
-			logger.Error(logComponent).Str("collection", col).Err(err).Msg("从向量存储删除文档失败")
+			logger.Error(logComponent).Str("collection", col).Err(err).Msg("failed to delete document from vector store")
 			return fmt.Errorf("从向量存储删除文档失败: %w", err)
 		}
 	}
@@ -407,7 +407,7 @@ func (s *SimpleMemoryIndex) DeleteByUser(ctx context.Context, userID string) err
 	for _, col := range allCols {
 		if strings.HasPrefix(col, marker) {
 			if err := s.vectorStore.DeleteCollection(ctx, col); err != nil {
-				logger.Error(logComponent).Str("collection", col).Err(err).Msg("删除向量集合失败")
+				logger.Error(logComponent).Str("collection", col).Err(err).Msg("failed to delete vector collection")
 				return fmt.Errorf("删除向量集合失败: %w", err)
 			}
 			s.mu.Lock()
@@ -450,7 +450,7 @@ func (s *SimpleMemoryIndex) DeleteByScope(ctx context.Context, scopeID string) e
 	for _, col := range allCols {
 		if strings.HasPrefix(col, "uid_") && strings.Contains(col, scopeMarker) {
 			if err := s.vectorStore.DeleteCollection(ctx, col); err != nil {
-				logger.Error(logComponent).Str("collection", col).Err(err).Msg("删除向量集合失败")
+				logger.Error(logComponent).Str("collection", col).Err(err).Msg("failed to delete vector collection")
 				return fmt.Errorf("删除向量集合失败: %w", err)
 			}
 			s.mu.Lock()
@@ -478,7 +478,7 @@ func (s *SimpleMemoryIndex) DeleteByUserAndScope(ctx context.Context, userID str
 	}
 	for _, col := range cols {
 		if err := s.vectorStore.DeleteCollection(ctx, col); err != nil {
-			logger.Error(logComponent).Str("collection", col).Err(err).Msg("删除向量集合失败")
+			logger.Error(logComponent).Str("collection", col).Err(err).Msg("failed to delete vector collection")
 			return fmt.Errorf("删除向量集合失败: %w", err)
 		}
 		s.mu.Lock()
@@ -563,7 +563,7 @@ func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, sco
 			logger.Warn(logComponent).
 				Err(err).
 				Str("memory_id", mid).
-				Msg("JSON 解码记忆数据失败，跳过")
+				Msg("failed to JSON decode memory data, skipping")
 			continue
 		}
 		if codec != nil {
@@ -929,7 +929,7 @@ func (s *SimpleMemoryIndex) ensureCollection(ctx context.Context, name string, d
 
 	exists, err := s.vectorStore.CollectionExists(ctx, name)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("collection", name).Msg("检查集合是否存在失败")
+		logger.Error(logComponent).Err(err).Str("collection", name).Msg("failed to check if collection exists")
 		return fmt.Errorf("检查集合是否存在失败: %w", err)
 	}
 	if exists {
@@ -960,7 +960,7 @@ func (s *SimpleMemoryIndex) ensureCollection(ctx context.Context, name string, d
 	}
 
 	if err := s.vectorStore.CreateCollection(ctx, name, schema); err != nil {
-		logger.Error(logComponent).Err(err).Str("collection", name).Msg("创建向量集合失败")
+		logger.Error(logComponent).Err(err).Str("collection", name).Msg("failed to create vector collection")
 		return fmt.Errorf("创建向量集合失败: %w", err)
 	}
 

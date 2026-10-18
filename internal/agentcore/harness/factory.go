@@ -174,7 +174,7 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 			tag = card.GetName()
 		}
 		if regErr := registerToolInstances(toolInstances, tag); regErr != nil {
-			logger.Warn(logComponent).Err(regErr).Msg("注册工具实例失败")
+			logger.Warn(logComponent).Err(regErr).Msg("failed to register tool instance")
 		}
 	}
 	for _, tc := range normalizedCards {
@@ -230,7 +230,7 @@ func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (norm
 	// 纯 ToolCard 直接加入 normalizedCards
 	for _, tc := range toolCards {
 		if isDisabledFreeSearchTool(tc) {
-			logger.Debug(logComponent).Str("tool_name", tc.GetName()).Msg("跳过被禁用的 free_search 工具")
+			logger.Debug(logComponent).Str("tool_name", tc.GetName()).Msg("skipping disabled free_search tool")
 			continue
 		}
 		normalizedCards = append(normalizedCards, tc)
@@ -239,7 +239,7 @@ func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (norm
 	for _, t := range toolInstances {
 		card := t.Card()
 		if isDisabledFreeSearchTool(card) {
-			logger.Debug(logComponent).Str("tool_name", card.GetName()).Msg("跳过被禁用的 free_search 工具")
+			logger.Debug(logComponent).Str("tool_name", card.GetName()).Msg("skipping disabled free_search tool")
 			continue
 		}
 		normalizedCards = append(normalizedCards, card)
@@ -297,7 +297,7 @@ func registerToolInstances(toolInstances []tool.Tool, tag string) error {
 			// 同 ID 已注册，仅追加 tag
 			_, tagErr := rm.AddResourceTag(toolID, []resourcesmanager.Tag{tag})
 			if tagErr != nil {
-				logger.Warn(logComponent).Str("tool_id", toolID).Err(tagErr).Msg("添加资源标签失败")
+				logger.Warn(logComponent).Str("tool_id", toolID).Err(tagErr).Msg("failed to add resource tag")
 			}
 			continue
 		}
@@ -310,7 +310,7 @@ func registerToolInstances(toolInstances []tool.Tool, tag string) error {
 		logger.Info(logComponent).
 			Str("tool_id", toolID).
 			Str("tag", tag).
-			Msg("工具实例已注册到资源管理器")
+			Msg("tool instance registered to resource manager")
 	}
 	return nil
 }
@@ -348,7 +348,7 @@ func injectGeneralPurposeSubagent(
 		}
 	}
 	if hasGP {
-		logger.Debug(logComponent).Msg("general-purpose 子 Agent 已存在，跳过注入")
+		logger.Debug(logComponent).Msg("general-purpose sub-agent already exists, skipping injection")
 		return effectiveSubagents
 	}
 
@@ -395,7 +395,7 @@ func injectGeneralPurposeSubagent(
 	}
 
 	effectiveSubagents = append([]hschema.SubagentSpec{&gpConfig}, effectiveSubagents...)
-	logger.Info(logComponent).Str("language", resolvedLanguage).Msg("已注入 general-purpose 子 Agent")
+	logger.Info(logComponent).Str("language", resolvedLanguage).Msg("injected general-purpose sub-agent")
 	return effectiveSubagents
 }
 
@@ -447,7 +447,7 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 		Str("sysop_id", sysopID).
 		Str("mode", sysop.OperationModeLocal.String()).
 		Bool("restrict_to_work_dir", restrictVal).
-		Msg("已创建默认 SysOperationCard")
+		Msg("default SysOperationCard created")
 
 	// 注册到全局资源管理器
 	// Python: Runner.resource_mgr.add_sys_operation(sysop_card)
@@ -460,14 +460,14 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 				Str("event_type", "SYS_OPERATION_REGISTER_ERROR").
 				Str("sysop_id", sysopID).
 				Err(addErr).
-				Msg("add_sys_operation 失败")
+				Msg("add_sys_operation failed")
 		} else {
 			logger.Info(logComponent).
 				Str("sysop_id", sysopID).
-				Msg("SysOperation 已注册到资源管理器")
+				Msg("SysOperation registered to resource manager")
 		}
 	} else {
-		logger.Warn(logComponent).Msg("全局资源管理器未初始化，跳过 SysOperation 注册")
+		logger.Warn(logComponent).Msg("global resource manager not initialized, skipping SysOperation registration")
 	}
 
 	return localSysOp, nil
@@ -505,7 +505,7 @@ func collectDisabledSkillsFromState(skillsDirs []string) []string {
 		}
 		var parsed map[string]any
 		if err := json.Unmarshal(data, &parsed); err != nil {
-			logger.Warn(logComponent).Str("path", statePath).Err(err).Msg("解析 skills_state.json 失败")
+			logger.Warn(logComponent).Str("path", statePath).Err(err).Msg("failed to parse skills_state.json")
 			continue
 		}
 		configs, ok := parsed["skill_configs"].(map[string]any)
@@ -554,13 +554,13 @@ func addDefaultRails(
 	// ⤴️ 9.19-23 回填：SafetyPromptRail 具体实例化
 	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&securityrail.SafetyPromptRail{})) {
 		agent.AddRail(securityrail.NewSafetyPromptRail())
-		logger.Debug(logComponent).Msg("已添加 SafetyPromptRail（SecurityRail）")
+		logger.Debug(logComponent).Msg("SafetyPromptRail added (SecurityRail)")
 	}
 
 	// AskUserRail — 始终添加（拦截 ask_user 工具，实现 HITL 用户交互）
 	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&interrupt.AskUserRail{})) {
 		agent.AddRail(interrupt.NewAskUserRail())
-		logger.Debug(logComponent).Msg("已添加 AskUserRail")
+		logger.Debug(logComponent).Msg("AskUserRail added")
 	}
 
 	// ConfirmInterruptRail — 不自动添加（需指定拦截的工具名列表）
@@ -573,7 +573,7 @@ func addDefaultRails(
 	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&rails.SysOperationRail{})) {
 		sysOpRail := rails.NewSysOperationRail()
 		agent.AddRail(sysOpRail)
-		logger.Debug(logComponent).Msg("已添加 SysOperationRail")
+		logger.Debug(logComponent).Msg("SysOperationRail added")
 	}
 
 	// TaskPlanningRail — 仅当 enable_task_planning=True 时添加
@@ -591,7 +591,7 @@ func addDefaultRails(
 		agent.AddRail(taskPlanningRail)
 		logger.Debug(logComponent).
 			Int("model_selection_count", len(modelSelMap)).
-			Msg("已添加 TaskPlanningRail")
+			Msg("TaskPlanningRail added")
 	}
 
 	// SkillUseRail — 仅当有 skills 或启用了 skill_discovery 时添加
@@ -604,7 +604,7 @@ func addDefaultRails(
 		logger.Debug(logComponent).
 			Int("skills_count", len(params.Skills)).
 			Int("disabled_count", len(disabledSkills)).
-			Msg("已添加默认 SkillUseRail 占位，⤵️ 9.8-9.24 回填")
+			Msg("default SkillUseRail placeholder added, backfill 9.8-9.24")
 	}
 
 	// SubagentRail — 仅当有 subagents 时添加
@@ -616,14 +616,14 @@ func addDefaultRails(
 		logger.Debug(logComponent).
 			Bool("enable_async_subagent", params.EnableAsyncSubagent).
 			Int("subagent_count", len(effectiveSubagents)).
-			Msg("已添加 SubagentRail")
+			Msg("SubagentRail added")
 	}
 
 	// VerificationContractRail — 仅当配置了 verification_agent 时注入到父 Agent
 	// Python: create_deep_agent 中动态添加 VerificationContractRail
 	if hasVerificationAgent(effectiveSubagents) && !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&subagent.VerificationContractRail{})) {
 		agent.AddRail(subagent.NewVerificationContractRail())
-		logger.Debug(logComponent).Msg("已添加 VerificationContractRail（检测到 verification_agent）")
+		logger.Debug(logComponent).Msg("VerificationContractRail added (verification_agent detected)")
 	}
 }
 

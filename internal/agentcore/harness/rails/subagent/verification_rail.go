@@ -155,7 +155,7 @@ func (r *VerificationRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 	r.promptBuilder = agent.SystemPromptBuilder()
 	logger.Info(logComponent).
 		Int("allowed_tools_count", len(r.allowedTools)).
-		Msg("[VerificationRail] 已初始化")
+		Msg("[VerificationRail] initialized")
 	return nil
 }
 
@@ -190,7 +190,7 @@ func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 
 	logger.Debug(logComponent).
 		Str("language", r.promptBuilder.Language()).
-		Msg("[VerificationRail] 已注入约束提醒 section")
+		Msg("[VerificationRail] constraint reminder section injected")
 
 	return nil
 }
@@ -207,7 +207,7 @@ func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 // Python: L165-233
 func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// Python: L179-180: if ctx.extra.get("_skip_tool"): return
-	if _, skip := cbc.Extra()["_skip_tool"]; skip {
+	if _, skip := cbc.GetExtra("_skip_tool"); skip {
 		return nil
 	}
 
@@ -237,7 +237,7 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 		)
 		logger.Info(logComponent).
 			Str("tool_name", toolName).
-			Msg("[VerificationRail] 已拦截工具")
+			Msg("[VerificationRail] tool intercepted")
 
 		r.rejectTool(cbc, toolCallInputs, errorMsg)
 		return nil
@@ -286,7 +286,7 @@ func (r *VerificationRail) BeforeToolCall(ctx context.Context, cbc *agentinterfa
 				Str("raw_path", rawPath).
 				Str("tool_name", toolName).
 				Str("workspace_root", root).
-				Msg("[VerificationRail] 已拦截超出工作空间范围的路径")
+				Msg("[VerificationRail] intercepted path outside workspace scope")
 
 			r.rejectTool(cbc, toolCallInputs, errorMsg)
 		}
@@ -331,7 +331,7 @@ func (r *VerificationRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext,
 	//   Python: ctx.extra["_skip_tool"] = True
 	//   Python: ctx.inputs.tool_result = {"error": error_msg}
 	//   Python: ctx.inputs.tool_msg = msg
-	cbc.Extra()["_skip_tool"] = true
+	cbc.SetExtra("_skip_tool", true)
 	inputs.ToolResult = map[string]any{"error": errorMsg}
 	inputs.ToolMsg = msg
 }

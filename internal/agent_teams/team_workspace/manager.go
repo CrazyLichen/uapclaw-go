@@ -136,7 +136,7 @@ func (m *TeamWorkspaceManager) Initialize(ctx context.Context, remoteURL ...stri
 	if !m.config.VersionControl {
 		logger.Info(logComponent).
 			Str("workspace_path", m.workspacePath).
-			Msg("工作空间初始化为普通共享目录（版本控制已禁用）")
+			Msg("workspace initialized as plain shared directory (version control disabled)")
 		return nil
 	}
 
@@ -144,7 +144,7 @@ func (m *TeamWorkspaceManager) Initialize(ctx context.Context, remoteURL ...stri
 	if info, err := os.Stat(gitDir); err == nil && info.IsDir() {
 		logger.Debug(logComponent).
 			Str("workspace_path", m.workspacePath).
-			Msg("工作空间已初始化")
+			Msg("workspace already initialized")
 		return nil
 	}
 
@@ -163,7 +163,7 @@ func (m *TeamWorkspaceManager) Initialize(ctx context.Context, remoteURL ...stri
 		}
 		logger.Info(logComponent).
 			Str("remote_url", remote).
-			Msg("已从远程克隆工作空间仓库")
+			Msg("cloned workspace repository from remote")
 	} else {
 		// Leader 或 LOCAL：初始化新仓库
 		r := runGit(ctx, []string{"init"}, m.workspacePath)
@@ -176,7 +176,7 @@ func (m *TeamWorkspaceManager) Initialize(ctx context.Context, remoteURL ...stri
 		}
 		logger.Info(logComponent).
 			Str("workspace_path", m.workspacePath).
-			Msg("已初始化工作空间 git 仓库")
+			Msg("initialized workspace git repository")
 	}
 
 	// DISTRIBUTED Leader：设置 remote origin
@@ -189,7 +189,7 @@ func (m *TeamWorkspaceManager) Initialize(ctx context.Context, remoteURL ...stri
 			}
 			logger.Info(logComponent).
 				Str("remote_url", remote).
-				Msg("已添加 remote origin")
+				Msg("added remote origin")
 		}
 	}
 
@@ -211,7 +211,7 @@ func (m *TeamWorkspaceManager) MountIntoWorkspace(workspaceRoot string) error {
 		logger.Debug(logComponent).
 			Str("team_name", m.teamName).
 			Str("link_path", linkPath).
-			Msg("已挂载团队工作空间")
+			Msg("mounted team workspace")
 	}
 	return nil
 }
@@ -233,7 +233,7 @@ func (m *TeamWorkspaceManager) MountWorktree(slug, worktreePath string) error {
 		} else {
 			logger.Warn(logComponent).
 				Str("link_path", linkPath).
-				Msg("Worktree 挂载路径存在且不是符号链接，跳过")
+				Msg("Worktree mount path exists and is not a symlink, skipping")
 			return nil
 		}
 	}
@@ -244,7 +244,7 @@ func (m *TeamWorkspaceManager) MountWorktree(slug, worktreePath string) error {
 	logger.Debug(logComponent).
 		Str("slug", slug).
 		Str("link_path", linkPath).
-		Msg("已挂载 worktree")
+		Msg("mounted worktree")
 	return nil
 }
 
@@ -263,7 +263,7 @@ func (m *TeamWorkspaceManager) UnmountWorktree(slug string) error {
 		logger.Debug(logComponent).
 			Str("slug", slug).
 			Str("link_path", linkPath).
-			Msg("已卸载 worktree")
+			Msg("unmounted worktree")
 	}
 	return nil
 }
@@ -355,7 +355,7 @@ func (m *TeamWorkspaceManager) AutoCommit(ctx context.Context, relativePath, mem
 			if !retry {
 				logger.Error(logComponent).
 					Str("relative_path", relativePath).
-					Msg("工作空间推送重试后仍失败")
+					Msg("workspace push still failed after retry")
 			}
 		}
 	}
@@ -538,7 +538,7 @@ func (m *TeamWorkspaceManager) Push(ctx context.Context) (bool, error) {
 	if !r.OK {
 		logger.Warn(logComponent).
 			Str("stderr", r.Stderr).
-			Msg("工作空间推送失败，将在下次写入时重试")
+			Msg("workspace push failed, will retry on next write")
 		return false, nil
 	}
 	return true, nil
@@ -633,7 +633,7 @@ func mountDirectory(targetPath, linkPath string) error {
 			logger.Info(logComponent).
 				Str("target", targetPath).
 				Str("link", linkPath).
-				Msg("Windows 符号链接权限不足，已使用 junction 挂载")
+				Msg("Windows symlink privilege not held, using junction mount")
 			return nil
 		}
 	}
@@ -691,7 +691,7 @@ func (m *TeamWorkspaceManager) prepareMountPath(linkPath string) bool {
 	logger.Warn(logComponent).
 		Str("link_path", linkPath).
 		Str("backup_path", backupPath).
-		Msg("已替换旧的团队工作空间挂载路径，之前的内容已移至备份")
+		Msg("replaced old team workspace mount path, previous contents moved to backup")
 	return true
 }
 

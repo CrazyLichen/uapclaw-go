@@ -122,7 +122,7 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 		Str("event_type", "context_processor_rail_init").
 		Int("processors_count", len(allProcessors)).
 		Bool("preset", r.preset).
-		Msg("ContextProcessorRail 初始化完成")
+		Msg("ContextProcessorRail initialized")
 
 	return nil
 }
@@ -148,7 +148,7 @@ func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "context_processor_rail_uninit").
-		Msg("ContextProcessorRail 注销完成")
+		Msg("ContextProcessorRail unregistered")
 
 	return nil
 }

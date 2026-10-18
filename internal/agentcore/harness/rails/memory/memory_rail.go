@@ -61,11 +61,11 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 MemoryRail 满足 AgentRail 接口
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
+
 // _ 编译时验证 MemoryRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*MemoryRail)(nil)
-
-var memoryLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -108,10 +108,10 @@ func (r *MemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			func(name string) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(memoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "memory_rail_uninit").
 							Str("tool_name", name).
-							Msgf("从 ability_manager 移除工具失败: %v", rec)
+							Msgf("failed to remove tool from ability_manager: %v", rec)
 					}
 				}()
 				am.Remove(name)
@@ -126,10 +126,10 @@ func (r *MemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 			func(toolID string) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(memoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "memory_rail_uninit").
 							Str("tool_id", toolID).
-							Msgf("从 resource_mgr 移除工具失败: %v", rec)
+							Msgf("failed to remove tool from resource_mgr: %v", rec)
 					}
 				}()
 				_, _ = resourceMgr.RemoveTool([]string{toolID})
@@ -150,9 +150,9 @@ func (r *MemoryRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		r.systemPromptBuilder = nil
 	}
 
-	logger.Info(memoryLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "memory_rail_uninit").
-		Msg("MemoryRail 注销完成")
+		Msg("MemoryRail unregistered")
 
 	return nil
 }
@@ -174,10 +174,10 @@ func (r *MemoryRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.Agen
 		r.isReadOnly = invokeInputs.IsCron() || invokeInputs.IsHeartbeat()
 	}
 
-	logger.Info(memoryLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "memory_rail_before_invoke").
 		Bool("read_only", r.isReadOnly).
-		Msg("MemoryRail BeforeInvoke 完成")
+		Msg("MemoryRail BeforeInvoke completed")
 
 	return nil
 }
@@ -212,10 +212,10 @@ func (r *MemoryRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.Agent
 	memorySection := sections.BuildMemorySection(mode, todayDate, lang)
 	r.systemPromptBuilder.AddSection(memorySection)
 
-	logger.Info(memoryLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "memory_rail_before_model_call").
 		Str("mode", mode).
-		Msg("MemoryRail BeforeModelCall 完成")
+		Msg("MemoryRail BeforeModelCall completed")
 
 	return nil
 }
@@ -244,9 +244,9 @@ func (r *MemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.Pe
 func (r *MemoryRail) registerMemoryTools(agent agentinterfaces.BaseAgent) {
 	am := agent.AbilityManager()
 	if am == nil {
-		logger.Warn(memoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "memory_rail_register_tools").
-			Msg("Agent 无 ability_manager，跳过工具注册")
+			Msg("agent has no ability_manager, skipping tool registration")
 		return
 	}
 
@@ -291,9 +291,9 @@ func (r *MemoryRail) registerMemoryTools(agent agentinterfaces.BaseAgent) {
 	for _, t := range memoryTools {
 		toolCard := t.Card()
 		if toolCard == nil {
-			logger.Warn(memoryLogComponent).
+			logger.Warn(logComponent).
 				Str("event_type", "memory_rail_register_tools").
-				Msg("工具无 card，跳过注册")
+				Msg("tool has no card, skipping registration")
 			continue
 		}
 
@@ -302,20 +302,20 @@ func (r *MemoryRail) registerMemoryTools(agent agentinterfaces.BaseAgent) {
 			func(t tool.Tool) {
 				defer func() {
 					if rec := recover(); rec != nil {
-						logger.Warn(memoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "memory_rail_register_tools").
 							Str("tool_id", t.Card().ID).
-							Msgf("注册工具到 resource_mgr 失败: %v", rec)
+							Msgf("failed to register tool to resource_mgr: %v", rec)
 					}
 				}()
 				existing, err := resourceMgr.GetTool([]string{t.Card().ID})
 				if err != nil || len(existing) == 0 {
 					if addErr := resourceMgr.AddTool(t); addErr != nil {
-						logger.Warn(memoryLogComponent).
+						logger.Warn(logComponent).
 							Str("event_type", "memory_rail_register_tools").
 							Str("tool_id", t.Card().ID).
 							Err(addErr).
-							Msg("注册工具到 resource_mgr 失败")
+							Msg("failed to register tool to resource_mgr")
 					} else {
 						r.ownedToolIDs[t.Card().ID] = struct{}{}
 					}
@@ -327,27 +327,27 @@ func (r *MemoryRail) registerMemoryTools(agent agentinterfaces.BaseAgent) {
 		func(t tool.Tool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(memoryLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "memory_rail_register_tools").
 						Str("tool_name", t.Card().Name).
-						Msgf("注册工具到 ability_manager 失败: %v", rec)
+						Msgf("failed to register tool to ability_manager: %v", rec)
 				}
 			}()
 			result := am.Add(t.Card())
 			if result.Added {
 				r.ownedToolNames[t.Card().Name] = struct{}{}
-				logger.Info(memoryLogComponent).
+				logger.Info(logComponent).
 					Str("event_type", "memory_rail_register_tools").
 					Str("tool_name", t.Card().Name).
-					Msg("注册工具成功")
+					Msg("tool registered successfully")
 			}
 		}(t)
 	}
 
-	logger.Info(memoryLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "memory_rail_register_tools").
 		Strs("tool_names", memorySetToSortedSlice(r.ownedToolNames)).
-		Msg("MemoryRail 工具注册完成")
+		Msg("MemoryRail tool registration completed")
 }
 
 // initMemoryManager 初始化记忆索引管理器。
@@ -364,9 +364,9 @@ func (r *MemoryRail) initMemoryManager(ctx context.Context) {
 
 	// 无 workspace 时无法初始化
 	if r.Workspace() == nil {
-		logger.Warn(memoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "memory_rail_init_manager").
-			Msg("Workspace 为 nil，跳过管理器初始化")
+			Msg("Workspace is nil, skipping manager initialization")
 		return
 	}
 
@@ -378,11 +378,11 @@ func (r *MemoryRail) initMemoryManager(ctx context.Context) {
 		r.SysOperation(),
 	)
 	if err != nil {
-		logger.Error(memoryLogComponent).
+		logger.Error(logComponent).
 			Str("event_type", "memory_rail_init_manager").
 			Str("agent_id", agentID).
 			Err(err).
-			Msg("初始化记忆管理器失败")
+			Msg("failed to initialize memory manager")
 		return
 	}
 
@@ -391,14 +391,14 @@ func (r *MemoryRail) initMemoryManager(ctx context.Context) {
 		if r.toolCtx != nil {
 			r.toolCtx.Manager = mgr
 		}
-		logger.Info(memoryLogComponent).
+		logger.Info(logComponent).
 			Str("event_type", "memory_rail_init_manager").
 			Str("agent_id", agentID).
-			Msg("记忆管理器初始化成功")
+			Msg("memory manager initialized")
 	} else {
-		logger.Warn(memoryLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "memory_rail_init_manager").
-			Msg("记忆管理器初始化返回 nil")
+			Msg("memory manager initialization returned nil")
 	}
 }
 

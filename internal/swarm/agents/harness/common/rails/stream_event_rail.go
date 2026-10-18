@@ -65,6 +65,12 @@ type pauseCond struct {
 	paused bool // true = 已暂停（等待中）
 }
 
+// inflightToolCallInfo 跟踪执行中的工具调用，对齐 Python: _inflight_tool_calls value
+type inflightToolCallInfo struct {
+	toolCall  *llmschema.ToolCall // 工具调用引用
+	sessionID string              // 关联的会话 ID
+}
+
 // newPauseCond 创建暂停条件变量，初始为未暂停状态（对齐 Python: asyncio.Event 初始 set）
 func newPauseCond() *pauseCond {
 	pc := &pauseCond{paused: false}
@@ -125,12 +131,7 @@ func (pc *pauseCond) Resume() {
 	pc.cond.Broadcast()
 }
 
-// inflightToolCallInfo 跟踪执行中的工具调用，对齐 Python: _inflight_tool_calls value
-type inflightToolCallInfo struct {
-	toolCall  *llmschema.ToolCall // 工具调用引用
-	sessionID string              // 关联的会话 ID
-}
-
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -472,7 +473,7 @@ func (r *JiuClawStreamEventRail) lazyLoadTodoTool(agent sainterfaces.BaseAgent) 
 	for _, ability := range am.List() {
 		if loader, ok := ability.(todoToolLoader); ok {
 			r.todoTool = loader
-			logger.Debug(logComponent).Str("ability_name", ability.AbilityName()).Msg("懒加载 TodoTool 成功")
+			logger.Debug(logComponent).Str("ability_name", ability.AbilityName()).Msg("lazy loaded TodoTool successfully")
 			return
 		}
 	}

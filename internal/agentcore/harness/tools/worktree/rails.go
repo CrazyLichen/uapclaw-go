@@ -66,8 +66,6 @@ type WorktreeRailOption func(*worktreeRailOptions)
 // AutoSetupRailOption AutoSetupRail 构造选项
 type AutoSetupRailOption func(*AutoSetupRail)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // sessionStateKey Session state 持久化 key。
@@ -230,7 +228,7 @@ func (r *WorktreeRail) Uninit(agent interfaces.BaseAgent) error {
 						logger.Warn(logComponent).
 							Str("event_type", "worktree_rail_uninit").
 							Str("tool_name", t.Card().Name).
-							Msgf("注销工具失败: %v", rec)
+							Msgf("failed to unregister tool: %v", rec)
 					}
 				}()
 				toolID := t.Card().ID

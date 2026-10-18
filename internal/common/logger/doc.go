@@ -21,8 +21,8 @@
 //	  const logComponent = logger.ComponentCommon
 //
 //	调用日志函数：
-//	  logger.Info(logComponent).Str("key", "val").Msg("消息")
-//	  logger.Error(logComponent).Err(err).Msg("失败")
+//	  logger.Info(logComponent).Str("key", "val").Msg("message")
+//	  logger.Error(logComponent).Err(err).Msg("failed")
 //
 // 文件目录：
 //

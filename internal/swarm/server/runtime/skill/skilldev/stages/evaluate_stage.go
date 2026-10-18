@@ -340,7 +340,7 @@ func (h *EvaluateStageHandler) analyzePatterns(_ *skilldev.SkillDevContext, _ *s
 	// 待实现：调用Agent分析 notes := await agent.analyze(json.dumps(benchmark.ToDict()))
 	// 待实现：解析结果 return json.loads(notes)
 
-	logger.Warn(logComponent).Msg("[EvaluateStage] analyzePatterns 待接入 Agent")
+	logger.Warn(logComponent).Msg("[EvaluateStage] analyzePatterns pending Agent integration")
 	return []string{"评测分析 Agent 尚未接入"}
 }
 

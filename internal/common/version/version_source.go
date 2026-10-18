@@ -107,7 +107,7 @@ func WithTimeout(timeout time.Duration) GitHubSourceOption {
 func (s *GitHubReleasesSource) FetchLatest(ctx context.Context) (*ReleaseInfo, error) {
 	data, err := s.fetchJSON(ctx)
 	if err != nil {
-		logger.Warn(logComponent).Str("owner", s.owner).Str("repo", s.repo).Err(err).Msg("获取 GitHub 发布信息失败")
+		logger.Warn(logComponent).Str("owner", s.owner).Str("repo", s.repo).Err(err).Msg("failed to fetch GitHub release info")
 		return nil, fmt.Errorf("获取 GitHub 发布信息失败: %w", err)
 	}
 
@@ -147,7 +147,7 @@ func (s *GitHubReleasesSource) fetchJSON(ctx context.Context) (map[string]any, e
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		logger.Warn(logComponent).Int("status", resp.StatusCode).Str("url", s.apiURL).Msg("GitHub API 返回非 200 状态码")
+		logger.Warn(logComponent).Int("status", resp.StatusCode).Str("url", s.apiURL).Msg("GitHub API returned non-200 status code")
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 

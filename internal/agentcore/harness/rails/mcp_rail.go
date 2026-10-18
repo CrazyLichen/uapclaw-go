@@ -41,11 +41,8 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 McpRail 满足 AgentRail 接口
 // _ 编译时验证 McpRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*McpRail)(nil)
-
-var mcpRailLogComponent = logger.ComponentAgentCore
 
 // init 确保编译时引用 hinterfaces 包（McpRail 不直接使用但子类可能需要）
 var _ hinterfaces.DeepAgentInterface
@@ -101,9 +98,9 @@ func (r *McpRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error
 		}
 	}
 
-	logger.Info(mcpRailLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "mcp_rail_init").
-		Msg("McpRail 已注册 ListMcpResources/ReadMcpResource 工具")
+		Msg("McpRail registered ListMcpResources/ReadMcpResource tools")
 
 	return nil
 }
@@ -125,10 +122,10 @@ func (r *McpRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		func(t tool.Tool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(mcpRailLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "mcp_rail_uninit").
 						Str("tool_name", t.Card().Name).
-						Msgf("注销工具失败: %v", rec)
+						Msgf("failed to unregister tool: %v", rec)
 				}
 			}()
 			if am != nil {
@@ -141,9 +138,9 @@ func (r *McpRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	}
 	r.tools = nil
 
-	logger.Info(mcpRailLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "mcp_rail_uninit").
-		Msg("McpRail 注销完成")
+		Msg("McpRail unregistered")
 
 	return nil
 }

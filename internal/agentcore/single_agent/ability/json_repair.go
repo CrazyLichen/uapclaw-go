@@ -116,10 +116,12 @@ func ParseToolArguments(arguments string) (map[string]any, error) {
 	if repaired != nil && *repaired != arguments {
 		if err := json.Unmarshal([]byte(*repaired), &result); err == nil {
 			logger.Warn(logComponent).
-				Msg("通过补全闭合括号修复了畸形的工具参数")
+				Msg("repaired malformed tool arguments by completing closing brackets")
 			return result, nil
 		}
 	}
 
 	return nil, fmt.Errorf("无效的工具调用参数 JSON: 原始参数: %q", arguments)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

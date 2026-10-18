@@ -58,6 +58,7 @@ type OrchestratorHealth struct {
 // OrchestratorOption 编排器可选参数函数。
 type OrchestratorOption func(*DreamingOrchestrator)
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 枚 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────

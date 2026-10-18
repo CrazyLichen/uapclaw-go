@@ -551,7 +551,7 @@ func init() {
 	openAIFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewOpenAIModelClient(mc, cc)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("创建 OpenAI 客户端失败")
+			logger.Error(logComponent).Err(err).Msg("create OpenAI client failed")
 			return nil, err
 		}
 		return client, nil

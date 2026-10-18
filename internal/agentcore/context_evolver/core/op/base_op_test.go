@@ -83,6 +83,17 @@ func (m *mockVectorStore) GetAll(_ map[string]any) []*schema.VectorNode {
 	return result
 }
 
+func TestOpBase_ServiceContext(t *testing.T) {
+	sc := cecontext.NewServiceContext()
+	b := NewOpBase(sc)
+	assert.Equal(t, sc, b.ServiceContext())
+}
+
+func TestOpBase_ServiceContext_nil(t *testing.T) {
+	b := NewOpBase(nil)
+	assert.Nil(t, b.ServiceContext())
+}
+
 func TestNewOpBase(t *testing.T) {
 	sc := cecontext.NewServiceContext()
 	b := NewOpBase(sc)

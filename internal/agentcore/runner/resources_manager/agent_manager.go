@@ -76,7 +76,7 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 			Str("event_type", "AGENT_ADD_ERROR").
 			Str("agent_id", agentID).
 			Err(err).
-			Msg("添加 Agent 失败")
+			Msg("failed to add agent")
 		return exception.BuildError(exception.StatusResourceAddError,
 			exception.WithParam("card", agentID),
 			exception.WithParam("reason", err.Error()),
@@ -86,7 +86,7 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 	logger.Info(logComponent).
 		Str("event_type", "AGENT_ADD_SUCCESS").
 		Str("agent_id", agentID).
-		Msg("添加 Agent 成功")
+		Msg("agent added")
 	return nil
 }
 
@@ -102,7 +102,7 @@ func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 			Str("event_type", "AGENT_REMOVE_ERROR").
 			Str("agent_id", agentID).
 			Err(err).
-			Msg("移除 Agent 失败")
+			Msg("failed to remove agent")
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", agentID),
 			exception.WithParam("resource_type", "agent"),
@@ -118,7 +118,7 @@ func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 	logger.Info(logComponent).
 		Str("event_type", "AGENT_REMOVE_SUCCESS").
 		Str("agent_id", agentID).
-		Msg("移除 Agent 成功")
+		Msg("agent removed")
 	return provider, nil
 }
 
@@ -136,7 +136,7 @@ func (m *AgentMgr) GetAgent(ctx context.Context, agentID string) (interfaces.Bas
 			Str("event_type", "AGENT_GET_ERROR").
 			Str("agent_id", agentID).
 			Err(err).
-			Msg("获取 Agent 失败")
+			Msg("failed to get agent")
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", agentID),
 			exception.WithParam("resource_type", "agent"),

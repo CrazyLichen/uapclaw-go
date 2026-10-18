@@ -63,7 +63,7 @@ func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider maschema.AgentT
 			Str("event_type", "AGENT_TEAM_ADD_ERROR").
 			Str("agent_team_id", agentTeamID).
 			Err(err).
-			Msg("添加 Agent 团队失败")
+			Msg("failed to add agent team")
 		return exception.BuildError(exception.StatusResourceAddError,
 			exception.WithParam("card", agentTeamID),
 			exception.WithParam("reason", err.Error()),
@@ -73,7 +73,7 @@ func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider maschema.AgentT
 	logger.Info(logComponent).
 		Str("event_type", "AGENT_TEAM_ADD_SUCCESS").
 		Str("agent_team_id", agentTeamID).
-		Msg("添加 Agent 团队成功")
+		Msg("agent team added")
 	return nil
 }
 
@@ -87,7 +87,7 @@ func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (maschema.AgentTeamPr
 			Str("event_type", "AGENT_TEAM_REMOVE_ERROR").
 			Str("agent_team_id", agentTeamID).
 			Err(err).
-			Msg("移除 Agent 团队失败")
+			Msg("failed to remove agent team")
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", agentTeamID),
 			exception.WithParam("resource_type", "team"),
@@ -103,7 +103,7 @@ func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (maschema.AgentTeamPr
 	logger.Info(logComponent).
 		Str("event_type", "AGENT_TEAM_REMOVE_SUCCESS").
 		Str("agent_team_id", agentTeamID).
-		Msg("移除 Agent 团队成功")
+		Msg("agent team removed")
 	return provider, nil
 }
 
@@ -118,7 +118,7 @@ func (m *AgentTeamMgr) GetAgentTeam(ctx context.Context, agentTeamID string) (ma
 			Str("event_type", "AGENT_TEAM_GET_ERROR").
 			Str("agent_team_id", agentTeamID).
 			Err(err).
-			Msg("获取 Agent 团队失败")
+			Msg("failed to get agent team")
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", agentTeamID),
 			exception.WithParam("resource_type", "team"),

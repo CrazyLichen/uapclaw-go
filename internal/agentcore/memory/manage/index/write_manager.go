@@ -27,9 +27,6 @@ type WriteManager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// writeLogComponent 日志组件标识
-const writeLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -54,9 +51,9 @@ func (w *WriteManager) AddMemories(ctx context.Context, userID string, scopeID s
 	memories map[string][]mem_model.MemoryUnit, opts ...MemoryOption) ([]mem_model.MemoryUnit, error) {
 
 	if len(memories) == 0 {
-		logger.Debug(writeLogComponent).
+		logger.Debug(logComponent).
 			Str("event_type", "MEMORY_STORE").
-			Msg("无记忆单元需要添加")
+			Msg("no memory units to add")
 		return nil, nil
 	}
 
@@ -72,11 +69,11 @@ func (w *WriteManager) AddMemories(ctx context.Context, userID string, scopeID s
 		// 透传 opts（对齐 Python: **kwargs 透传）
 		memUnits, err := manager.AddMemories(ctx, userID, scopeID, memories, opts...)
 		if err != nil {
-			logger.Error(writeLogComponent).
+			logger.Error(logComponent).
 				Str("memory_type", w.getManagerMemType(manager)).
 				Err(err).
 				Str("event_type", "MEMORY_STORE").
-				Msg("添加记忆失败")
+				Msg("failed to add memories")
 			return nil, err
 		}
 		result = append(result, memUnits...)
@@ -96,21 +93,21 @@ func (w *WriteManager) UpdateMemByID(ctx context.Context, userID string, scopeID
 		return err
 	}
 	if memType == "" {
-		logger.Warn(writeLogComponent).
+		logger.Warn(logComponent).
 			Str("memory_id", memID).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Str("event_type", "MEMORY_STORE").
-			Msg("记忆类型未知，跳过本次更新")
+			Msg("unknown memory type, skipping this update")
 		return nil
 	}
 	manager, ok := w.managers[memType]
 	if !ok {
-		logger.Warn(writeLogComponent).
+		logger.Warn(logComponent).
 			Str("memory_id", memID).
 			Str("memory_type", memType).
 			Str("event_type", "MEMORY_STORE").
-			Msg("不支持的记忆类型")
+			Msg("unsupported memory type")
 		return nil
 	}
 	_, err = manager.Update(ctx, userID, scopeID, memID, newMemory, opts...)
@@ -129,21 +126,21 @@ func (w *WriteManager) DeleteMemByID(ctx context.Context, userID string, scopeID
 		return err
 	}
 	if memType == "" {
-		logger.Warn(writeLogComponent).
+		logger.Warn(logComponent).
 			Str("memory_id", memID).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Str("event_type", "MEMORY_STORE").
-			Msg("记忆类型未知，跳过本次删除")
+			Msg("unknown memory type, skipping this deletion")
 		return nil
 	}
 	manager, ok := w.managers[memType]
 	if !ok {
-		logger.Warn(writeLogComponent).
+		logger.Warn(logComponent).
 			Str("memory_id", memID).
 			Str("memory_type", memType).
 			Str("event_type", "MEMORY_STORE").
-			Msg("不支持的记忆类型")
+			Msg("unsupported memory type")
 		return nil
 	}
 	_, err = manager.Delete(ctx, userID, scopeID, memID, opts...)
@@ -185,21 +182,21 @@ func (w *WriteManager) getMemTypeFromIndex(ctx context.Context, userID string, s
 		if _, ok := w.managers[memType]; ok {
 			return memType, nil
 		}
-		logger.Warn(writeLogComponent).
+		logger.Warn(logComponent).
 			Str("memory_id", memID).
 			Str("memory_type", memType).
 			Str("user_id", userID).
 			Str("scope_id", scopeID).
 			Str("event_type", "MEMORY_STORE").
-			Msg("不支持的记忆类型")
+			Msg("unsupported memory type")
 	}
 
-	logger.Warn(writeLogComponent).
+	logger.Warn(logComponent).
 		Str("memory_id", memID).
 		Str("user_id", userID).
 		Str("scope_id", scopeID).
 		Str("event_type", "MEMORY_STORE").
-		Msg("记忆不存在或记忆类型未知")
+		Msg("memory not found or memory type unknown")
 	return "", nil
 }
 

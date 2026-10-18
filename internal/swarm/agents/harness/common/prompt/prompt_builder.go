@@ -132,13 +132,13 @@ func readWorkspaceFile(filePath string) string {
 			// T10.6.1: 添加 Debug 日志（对齐 Python: logger.debug 文件不存在）
 			logger.Debug(logComponent).
 				Str("file_path", filePath).
-				Msg("文件不存在")
+				Msg("file does not exist")
 		} else {
 			logger.Error(logComponent).
 				Str("event_type", "read_workspace_file_error").
 				Str("file_path", filePath).
 				Err(err).
-				Msg("读取工作空间文件失败")
+				Msg("failed to read workspace file")
 		}
 		return ""
 	}

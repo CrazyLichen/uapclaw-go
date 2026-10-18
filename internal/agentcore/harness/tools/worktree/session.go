@@ -76,7 +76,7 @@ func SetCurrentSession(ctx context.Context, session *WorktreeSession) {
 	} else {
 		logger.Warn(logComponent).
 			Str("event_type", "set_current_session_no_state").
-			Msg("ctx 中缺少 WorktreeSessionState，SetCurrentSession 无效")
+			Msg("WorktreeSessionState missing in ctx, SetCurrentSession has no effect")
 	}
 }
 
@@ -107,8 +107,6 @@ func RequireCurrentSession(ctx context.Context) (*WorktreeSession, error) {
 	return session, nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // GetCurrentSession 获取当前 worktree 会话。
 func (s *WorktreeSessionState) GetCurrentSession() *WorktreeSession {
 	s.mu.RLock()
@@ -136,3 +134,5 @@ func (s *WorktreeSessionState) SetDefaultWorktreeName(name string) {
 	defer s.mu.Unlock()
 	s.defaultWorktreeName = name
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

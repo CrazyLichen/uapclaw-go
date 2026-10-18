@@ -109,7 +109,7 @@ func NewIntentRecognizer(
 func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, sess sessioninterfaces.SessionFacade) ([]*schema.Intent, error) {
 	// Step 0: 校验 ModelProvider
 	if r.modelProvider == nil {
-		logger.Warn(logComponentIntent).Msg("IntentRecognizer.Recognize: ModelProvider 未设置，跳过意图识别")
+		logger.Warn(logComponentIntent).Msg("IntentRecognizer.Recognize: ModelProvider not set, skipping intent recognition")
 		return nil, nil
 	}
 
@@ -214,7 +214,7 @@ func (r *IntentRecognizer) Recognize(ctx context.Context, event schema.Event, se
 		for _, toolCall := range response.ToolCalls {
 			intent, result, invokeErr := r.invokeToolkitMethod(toolkits, toolCall.Name, toolCall.Arguments)
 			if invokeErr != nil {
-				logger.Warn(logComponentIntent).Err(invokeErr).Str("tool_name", toolCall.Name).Msg("调用工具方法失败")
+				logger.Warn(logComponentIntent).Err(invokeErr).Str("tool_name", toolCall.Name).Msg("failed to invoke tool method")
 			}
 			if intent != nil {
 				intents = append(intents, intent)
@@ -559,7 +559,7 @@ func (h *EventHandlerWithIntentRecognition) processModifyTaskIntent(ctx context.
 	oldTaskID := intent.TargetTaskID
 
 	if _, err := h.TaskScheduler.CancelTask(ctx, oldTaskID); err != nil {
-		logger.Warn(logComponentIntent).Err(err).Str("task_id", oldTaskID).Msg("取消旧任务失败，继续修改")
+		logger.Warn(logComponentIntent).Err(err).Str("task_id", oldTaskID).Msg("failed to cancel old task, continuing modification")
 	}
 
 	tasks, err := h.TaskManager.GetTask(ctx, &TaskFilter{TaskID: oldTaskID})

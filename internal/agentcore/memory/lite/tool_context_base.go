@@ -106,7 +106,7 @@ func (b *LiteMemoryToolContextBase) EnsureManager() bool {
 		logger.Error(logComponent).
 			Str("node_name", b.NodeName).
 			Err(err).
-			Msg("初始化记忆管理器失败")
+			Msg("failed to initialize memory manager")
 		return false
 	}
 	b.Manager = mgr

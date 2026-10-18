@@ -78,7 +78,7 @@ var dynamicSectionNames = []string{
 	string(prompts.SectionMembers),
 }
 
-// 编译时验证：确保 TeamPolicyRail 满足 DeepAgentRailProvider 接口
+// _ 编译时验证：确保 TeamPolicyRail 满足 DeepAgentRailProvider 接口
 var _ harnessrails.DeepAgentRailProvider = (*TeamPolicyRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────

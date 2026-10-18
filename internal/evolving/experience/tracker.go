@@ -52,11 +52,11 @@ type RecordScoreUpdate struct {
 
 // sessionPresentedRecords 包级并发安全 map，sessionID → 展示记录条目列表。
 // Python: session._experience_tracker_presented_records
-var sessionPresentedRecords sync.Map // key: string, value: []PresentedRecordEntry
+var sessionPresentedRecords sync.Map // 键: string，值: []PresentedRecordEntry
 
 // sessionEvalCounter 包级并发安全 map，sessionID → 评估计数器。
 // Python: session._experience_tracker_eval_counter
-var sessionEvalCounter sync.Map // key: string, value: int
+var sessionEvalCounter sync.Map // 键: string，值: int
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -83,7 +83,7 @@ func (t *ExperienceTracker) RecordPresented(
 ) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Any("recover", rec).Msg("[ExperienceTracker] RecordPresented panic 降级")
+			logger.Warn(logComponent).Any("recover", rec).Msg("[ExperienceTracker] RecordPresented panic degraded")
 		}
 	}()
 
@@ -128,7 +128,7 @@ func (t *ExperienceTracker) RecordPresented(
 		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Err(err).
-			Msg("[ExperienceTracker] update_record_scores 失败")
+			Msg("[ExperienceTracker] update_record_scores failed")
 		return
 	}
 
@@ -166,7 +166,7 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 ) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Any("recover", rec).Msg("[ExperienceTracker] RecordPresentedRecords panic 降级")
+			logger.Warn(logComponent).Any("recover", rec).Msg("[ExperienceTracker] RecordPresentedRecords panic degraded")
 		}
 	}()
 
@@ -179,7 +179,7 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Err(err).
-			Msg("[ExperienceTracker] load evolution log for record_presented_records 失败")
+			Msg("[ExperienceTracker] load evolution log for record_presented_records failed")
 		return
 	}
 	requestedIDs := map[string]bool{}
@@ -222,7 +222,7 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Err(err).
-			Msg("[ExperienceTracker] update_record_scores 失败")
+			Msg("[ExperienceTracker] update_record_scores failed")
 		return
 	}
 
@@ -273,7 +273,7 @@ func (t *ExperienceTracker) EvaluatePresented(
 ) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Any("recover", rec).Msg("[ExperienceTracker] EvaluatePresented panic 降级")
+			logger.Warn(logComponent).Any("recover", rec).Msg("[ExperienceTracker] EvaluatePresented panic degraded")
 		}
 	}()
 
@@ -325,7 +325,7 @@ func (t *ExperienceTracker) EvaluatePresented(
 					logger.Warn(logComponent).
 						Str("skill", skillName).
 						Err(err).
-						Msg("[ExperienceTracker] evaluate_presented: update_record_scores 失败")
+						Msg("[ExperienceTracker] evaluate_presented: update_record_scores failed")
 					continue
 				}
 				logger.Info(logComponent).

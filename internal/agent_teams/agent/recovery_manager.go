@@ -37,11 +37,6 @@ type RecoveryManager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// rmLogComponent 日志组件
-	rmLogComponent = logger.ComponentAgentCore
-)
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -69,7 +64,7 @@ func (m *RecoveryManager) RecoverTeam(ctx context.Context) []string {
 		memberName = "?"
 	}
 	// Python: team_logger.info("[{}] recovering team", member_name or "?")
-	logger.Info(rmLogComponent).
+	logger.Info(logComponent).
 		Str("member_name", memberName).
 		Msg("recovering team")
 
@@ -82,7 +77,7 @@ func (m *RecoveryManager) RecoverTeam(ctx context.Context) []string {
 	// Python: all_members = await team_backend.list_members()
 	allMembers, err := teamBackend.ListMembers(ctx)
 	if err != nil {
-		logger.Error(rmLogComponent).Err(err).Msg("recover_team: list_members 失败")
+		logger.Error(logComponent).Err(err).Msg("recover_team: list_members failed")
 		return []string{}
 	}
 
@@ -202,7 +197,7 @@ func (m *RecoveryManager) MarkTeammateRestartingForSessionSwitch(
 		)
 		if !updated {
 			// Python: team_logger.warning("Failed to move teammate {} from {} to ERROR before session rebind", ...)
-			logger.Warn(rmLogComponent).
+			logger.Warn(logComponent).
 				Str("member_name", memberName).
 				Str("current_status", string(currentStatus)).
 				Msg("Failed to move teammate from current_status to ERROR before session rebind")
@@ -222,7 +217,7 @@ func (m *RecoveryManager) MarkTeammateRestartingForSessionSwitch(
 	)
 	if !updated {
 		// Python: team_logger.warning("Failed to move teammate {} into RESTARTING during session rebind", member_name)
-		logger.Warn(rmLogComponent).
+		logger.Warn(logComponent).
 			Str("member_name", memberName).
 			Msg("Failed to move teammate into RESTARTING during session rebind")
 		return false
@@ -243,7 +238,7 @@ func (m *RecoveryManager) CollectLiveTeammatesForSessionSwitch(ctx context.Conte
 	// Python: members = await team_backend.list_members()
 	members, err := teamBackend.ListMembers(ctx)
 	if err != nil {
-		logger.Error(rmLogComponent).Err(err).Msg("collect_live_teammates: list_members 失败")
+		logger.Error(logComponent).Err(err).Msg("collect_live_teammates: list_members failed")
 		return nil
 	}
 
@@ -332,7 +327,7 @@ func (m *RecoveryManager) PersistAllocatorState(sess interfaces.SessionFacade) {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Error(rmLogComponent).
+				logger.Error(logComponent).
 					Str("member_name", memberName).
 					Str("error", fmt.Sprintf("%v", r)).
 					Msg("failed to persist allocator state")

@@ -72,7 +72,7 @@ func NewMessageMigrator(messageStore db.BaseMessageStore) *MessageMigrator {
 func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, operations []operation.Operation) error {
 	if entityKey != MessageEntityKey {
 		logger.Error(logComponent).Str("entity_key", entityKey).Str("expected_key", MessageEntityKey).
-			Msg("不支持的 entity_key")
+			Msg("unsupported entity_key")
 		return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 			exception.WithParam("entity_key", entityKey),
 			exception.WithParam("error_msg", fmt.Sprintf("不支持的 entity_key: '%s', 期望: '%s'", entityKey, MessageEntityKey)),
@@ -84,7 +84,7 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 	}
 
 	if !validateOperationsOrder(operations) {
-		logger.Error(logComponent).Msg("操作的 schema_version 不是升序排列")
+		logger.Error(logComponent).Msg("schema_version is not in ascending order")
 		return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 			exception.WithParam("error_msg", "操作的 schema_version 不是升序排列"),
 		)
@@ -105,7 +105,7 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 	lastOpVersion := operations[len(operations)-1].SchemaVersion()
 	if currentVersionPtr != nil && *currentVersionPtr >= lastOpVersion {
 		logger.Info(logComponent).Int("current_version", *currentVersionPtr).Int("last_op_version", lastOpVersion).
-			Msg("当前版本已 >= 最新操作版本，无需迁移")
+			Msg("current version >= latest operation version, no migration needed")
 		return nil
 	}
 
@@ -114,11 +114,11 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 		return nil
 	}
 
-	logger.Info(logComponent).Int("pending_count", len(pendingOps)).Msg("发现待执行操作")
+	logger.Info(logComponent).Int("pending_count", len(pendingOps)).Msg("found pending operations")
 
 	backupData, err := m.createBackup(ctx)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("创建消息备份失败")
+		logger.Error(logComponent).Err(err).Msg("failed to create message backup")
 		return err
 	}
 
@@ -126,14 +126,14 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 	for idx, op := range pendingOps {
 		logger.Info(logComponent).Int("idx", idx+1).Int("total", len(pendingOps)).
 			Str("op_type", op.TypeName()).Int("schema_version", op.SchemaVersion()).
-			Msg("执行操作")
+			Msg("executing operation")
 
 		if err := m.executeOperation(ctx, op); err != nil {
 			logger.Error(logComponent).Err(err).Str("op_type", op.TypeName()).
-				Int("schema_version", op.SchemaVersion()).Msg("操作执行失败")
+				Int("schema_version", op.SchemaVersion()).Msg("operation execution failed")
 
 			if restoreErr := m.restoreFromBackup(ctx, backupData, currentVersionPtr); restoreErr != nil {
-				logger.Error(logComponent).Err(restoreErr).Msg("从备份恢复失败")
+				logger.Error(logComponent).Err(restoreErr).Msg("failed to restore from backup")
 			}
 			return err
 		}
@@ -141,14 +141,14 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 		v := op.SchemaVersion()
 		lastVersion = &v
 		logger.Info(logComponent).Str("op_type", op.TypeName()).Int("schema_version", op.SchemaVersion()).
-			Msg("操作执行成功")
+			Msg("operation executed successfully")
 	}
 
 	if lastVersion != nil && (currentVersionPtr == nil || *lastVersion != *currentVersionPtr) {
 		if err := m.messageStore.SetSchemaVersion(ctx, int32(*lastVersion)); err != nil {
 			return err
 		}
-		logger.Info(logComponent).Int("new_version", *lastVersion).Msg("消息 schema 版本已更新")
+		logger.Info(logComponent).Int("new_version", *lastVersion).Msg("message schema version updated")
 	}
 
 	return nil
@@ -230,7 +230,7 @@ func (m *MessageMigrator) createBackup(ctx context.Context) ([]messageBackupReco
 		}
 	}
 
-	logger.Info(logComponent).Int("record_count", len(backupData)).Msg("已创建消息备份")
+	logger.Info(logComponent).Int("record_count", len(backupData)).Msg("message backup created")
 	return backupData, nil
 }
 
@@ -240,7 +240,7 @@ func (m *MessageMigrator) createBackup(ctx context.Context) ([]messageBackupReco
 func (m *MessageMigrator) restoreFromBackup(ctx context.Context, backupData []messageBackupRecord, preMigrationVersion *int) error {
 	// 删除所有消息
 	if _, err := m.messageStore.DeleteMessages(ctx, nil); err != nil {
-		logger.Error(logComponent).Err(err).Msg("删除消息失败")
+		logger.Error(logComponent).Err(err).Msg("failed to delete messages")
 		return err
 	}
 
@@ -273,21 +273,21 @@ func (m *MessageMigrator) restoreFromBackup(ctx context.Context, backupData []me
 			}
 		}
 		if _, err := m.messageStore.AddMessage(ctx, msgAdd); err != nil {
-			logger.Error(logComponent).Err(err).Msg("恢复消息失败")
+			logger.Error(logComponent).Err(err).Msg("failed to restore message")
 			return err
 		}
 	}
 
-	logger.Info(logComponent).Int("record_count", len(backupData)).Msg("已从备份恢复消息")
+	logger.Info(logComponent).Int("record_count", len(backupData)).Msg("messages restored from backup")
 
 	// 重置 schema 版本（M-05: 对齐 Python，版本重置失败只记录日志，不影响恢复流程）
 	if preMigrationVersion != nil {
 		if err := m.messageStore.SetSchemaVersion(ctx, int32(*preMigrationVersion)); err != nil {
 			logger.Error(logComponent).Err(err).Int("version", *preMigrationVersion).
-				Msg("重置 schema 版本失败")
+				Msg("failed to reset schema version")
 			// 对齐 Python: except 后只记录日志，不返回错误
 		} else {
-			logger.Info(logComponent).Int("version", *preMigrationVersion).Msg("已重置 schema 版本")
+			logger.Info(logComponent).Int("version", *preMigrationVersion).Msg("schema version reset")
 		}
 	}
 

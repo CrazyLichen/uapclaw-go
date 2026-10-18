@@ -41,3 +41,5 @@ func GorillaCheckOriginWithChecker(checker *OriginChecker) func(r *http.Request)
 		return checker.IsAllowed(origin)
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

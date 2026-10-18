@@ -32,7 +32,7 @@ type TeamMessageManager struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponent 日志组件标识
+// logComponent 日志组件
 const logComponent = logger.ComponentTeam
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -76,7 +76,7 @@ func (tm *TeamMessageManager) SendMessage(ctx context.Context, content string, t
 	}
 	if !tm.db.Message().CreateMessage(ctx, msg) {
 		logger.Error(logComponent).Str("message_id", messageID).
-			Msg("创建消息失败")
+			Msg("failed to create message")
 		return "", fmt.Errorf("创建消息失败: message_id 冲突 %s", messageID)
 	}
 
@@ -111,7 +111,7 @@ func (tm *TeamMessageManager) BroadcastMessage(ctx context.Context, content stri
 	}
 	if !tm.db.Message().CreateMessage(ctx, msg) {
 		logger.Error(logComponent).Str("message_id", messageID).
-			Msg("创建广播消息失败")
+			Msg("failed to create broadcast message")
 		return "", fmt.Errorf("创建广播消息失败: message_id 冲突 %s", messageID)
 	}
 
@@ -155,10 +155,10 @@ func (tm *TeamMessageManager) MarkMessageRead(ctx context.Context, messageID, me
 	success := tm.db.Message().MarkMessageRead(ctx, messageID, memberName)
 	if success {
 		logger.Debug(logComponent).Str("message_id", messageID).Str("member_name", memberName).
-			Msg("消息已标记已读")
+			Msg("message marked as read")
 	} else {
 		logger.Error(logComponent).Str("message_id", messageID).Str("member_name", memberName).
-			Msg("标记消息已读失败")
+			Msg("failed to mark message as read")
 	}
 	return success
 }
@@ -176,6 +176,6 @@ func (tm *TeamMessageManager) publishMessageEvent(ctx context.Context, event eve
 	if err := tm.messager.Publish(ctx, topicID, msg); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("event_type", event.EventTypeName()).
-			Msg("发布消息事件失败")
+			Msg("failed to publish message event")
 	}
 }

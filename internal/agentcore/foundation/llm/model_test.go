@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -800,4 +801,12 @@ func TestModel_BuildKVCacheInvokeKwargs_仅Session(t *testing.T) {
 	if _, ok := kwargs["enable_cache_sharing"]; ok {
 		t.Error("不启用 cache 时不应有 enable_cache_sharing 键")
 	}
+}
+
+// TestWithClient 验证 WithClient 选项。
+func TestWithClient(t *testing.T) {
+	client := &mockModelClient{}
+	m := &Model{}
+	WithClient(client)(m)
+	assert.Equal(t, client, m.client)
 }

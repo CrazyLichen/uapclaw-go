@@ -26,8 +26,8 @@ type LoadToolsInput struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// loadLogComponent 日志组件标识
-var loadLogComponent = logger.ComponentAgentCore
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -48,22 +48,22 @@ func NewLoadToolsTool(
 		// 调用加载回调
 		result, err := loadFn(ctx, session, input.ToolNames, input.Replace)
 		if err != nil {
-			logger.Warn(loadLogComponent).
+			logger.Warn(logComponent).
 				Str("tool_name", "load_tools").
 				Strs("tool_names", input.ToolNames).
 				Bool("replace", input.Replace).
 				Err(err).
-				Msg("LoadToolsTool 加载失败")
+				Msg("LoadToolsTool failed to load")
 			return map[string]any{"success": false, "error": err.Error()}, nil
 		}
 
 		// 日志，对齐 Python: result 字段
-		logger.Info(loadLogComponent).
+		logger.Info(logComponent).
 			Str("tool_name", "load_tools").
 			Strs("tool_names", input.ToolNames).
 			Bool("replace", input.Replace).
 			Any("result", result).
-			Msg("LoadToolsTool 加载完成")
+			Msg("LoadToolsTool loaded")
 
 		return result, nil
 	}
@@ -71,3 +71,5 @@ func NewLoadToolsTool(
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card))
 	return invokeFn
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -272,7 +272,7 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 			Str("event_type", "DialogueCompressor_triggered").
 			Int("message_size", messageSize).
 			Int("threshold", dc.messageNumThreshold).
-			Msg("上下文消息数超过阈值")
+			Msg("context message count exceeded threshold")
 		return true, nil
 	}
 
@@ -287,7 +287,7 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 			Str("event_type", "DialogueCompressor_triggered").
 			Int("tokens", tokens).
 			Int("threshold", dc.tokenThreshold).
-			Msg("上下文 Token 数超过阈值")
+			Msg("context tokens exceeded threshold")
 		return true, nil
 	}
 
@@ -319,7 +319,7 @@ func (dc *DialogueCompressor) OnAddMessages(ctx context.Context, mc iface.ModelC
 			logger.Warn(logComponent).
 				Str("processor_type", dc.ProcessorType()).
 				Err(err).
-				Msg("压缩模型调用失败，跳过当前处理器")
+				Msg("compression model call failed, skipping current processor")
 			return nil, messagesToAdd, nil
 		}
 		return nil, messagesToAdd, err

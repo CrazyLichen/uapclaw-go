@@ -9,7 +9,7 @@
 //	├── doc.go              # 包文档
 //	├── api_requests.go     # HTTP 重试请求工具
 //	├── fusion.go           # RRFFusion 倒数秩融合算法
-//	├── common.go           # Milvus 连接别名生成 + 泛型去重工具
+//	└── common.go           # Milvus 连接别名生成 + 泛型去重工具
 //
 // 对应 Python 代码：
 //

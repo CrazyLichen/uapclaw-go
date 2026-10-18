@@ -94,3 +94,26 @@ func Test父改子可见(t *testing.T) {
 	state.SetSessionID("second")
 	assert.Equal(t, "second", GetSessionID(ctx))
 }
+
+// ──────────────────────────── WithMemberID / MemberIDFromCtx 测试 ────────────────────────────
+
+// TestWithMemberID 测试注入成员 ID 到 context
+func TestWithMemberID(t *testing.T) {
+	ctx := WithMemberID(context.Background(), "worker1")
+	got := MemberIDFromCtx(ctx)
+	assert.Equal(t, "worker1", got)
+}
+
+// TestMemberIDFromCtx_无成员ID 测试未绑定成员 ID 的 context
+func TestMemberIDFromCtx_无成员ID(t *testing.T) {
+	got := MemberIDFromCtx(context.Background())
+	assert.Equal(t, "", got)
+}
+
+// TestWithMemberID_覆盖 测试多次注入成员 ID
+func TestWithMemberID_覆盖(t *testing.T) {
+	ctx := WithMemberID(context.Background(), "member1")
+	ctx = WithMemberID(ctx, "member2")
+	got := MemberIDFromCtx(ctx)
+	assert.Equal(t, "member2", got)
+}

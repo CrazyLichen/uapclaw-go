@@ -78,7 +78,7 @@ func (s *AgentServer) handleSessionRename(_ context.Context, request *schema.Age
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			logger.Error(logComponent).
 				Err(err).
-				Msg("session.rename 解析参数失败")
+				Msg("session.rename failed to parse params")
 			return nil, fmt.Errorf("解析参数失败: %w", err)
 		}
 	}
@@ -105,7 +105,7 @@ func (s *AgentServer) handleSessionRename(_ context.Context, request *schema.Age
 		logger.Error(logComponent).
 			Err(err).
 			Str("session_id", target).
-			Msg("session.rename 失败")
+			Msg("session.rename failed")
 		return nil, err
 	}
 
@@ -130,7 +130,7 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			logger.Error(logComponent).
 				Err(err).
-				Msg("session.delete 解析参数失败")
+				Msg("session.delete failed to parse params")
 			return nil, fmt.Errorf("解析参数失败: %w", err)
 		}
 	}
@@ -152,7 +152,7 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 		logger.Error(logComponent).
 			Err(err).
 			Str("session_id", params.SessionID).
-			Msg("删除会话目录失败")
+			Msg("failed to delete session directory")
 		return nil, fmt.Errorf("删除会话目录失败: %w", err)
 	}
 
@@ -161,7 +161,7 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 
 	logger.Info(logComponent).
 		Str("session_id", params.SessionID).
-		Msg("会话已删除")
+		Msg("session deleted")
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{"session_id": params.SessionID}),
@@ -329,7 +329,7 @@ func (s *AgentServer) handleSessionCreate(_ context.Context, request *schema.Age
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			logger.Error(logComponent).
 				Err(err).
-				Msg("session.create 解析参数失败")
+				Msg("session.create failed to parse params")
 			return nil, fmt.Errorf("解析参数失败: %w", err)
 		}
 	}
@@ -344,7 +344,7 @@ func (s *AgentServer) handleSessionCreate(_ context.Context, request *schema.Age
 
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
-		Msg("会话已创建")
+		Msg("session created")
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{"session_id": sessionID}),

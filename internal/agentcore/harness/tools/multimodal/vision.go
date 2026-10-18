@@ -81,7 +81,7 @@ func NewImageOCRTool(
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").Str("tool_name", "image_ocr").
-				Msg("ImageOCRTool 调用失败")
+				Msg("ImageOCRTool call failed")
 			return nil, exception.NewBaseError(
 				exception.StatusToolMultimodalVisionInvokeFailed,
 				exception.WithMsg(err.Error()),
@@ -133,7 +133,7 @@ func NewVisualQuestionAnsweringTool(
 					logger.Warn(logComponent).Err(err).
 						Str("event_type", "OCR_FAILED").
 						Str("tool_name", "visual_question_answering").
-						Msg("OCR 步骤失败，继续 VQA")
+						Msg("OCR step failed, continuing VQA")
 					ocrText = ""
 				}
 			}
@@ -159,7 +159,7 @@ func NewVisualQuestionAnsweringTool(
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").Str("tool_name", "visual_question_answering").
-				Msg("VQATool 调用失败")
+				Msg("VQATool call failed")
 			return nil, exception.NewBaseError(
 				exception.StatusToolMultimodalVisionInvokeFailed,
 				exception.WithMsg(err.Error()),

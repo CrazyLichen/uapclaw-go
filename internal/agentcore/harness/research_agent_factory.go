@@ -99,3 +99,5 @@ func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreatePara
 		Subagents:          subagentSpecs,
 	})
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

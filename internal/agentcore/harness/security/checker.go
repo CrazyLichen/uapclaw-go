@@ -30,6 +30,9 @@ type ExternalDirectoryChecker struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
+
 // shellOperatorsRE Shell 操作符正则：检测命令链/注入元字符。
 // 如果命令匹配 allow 模式但同时包含这些操作符，权限从 ALLOW → ASK 作为安全网。
 //
@@ -56,8 +59,6 @@ var pathAwareCommands = map[string]bool{
 	"vim": true, "nano": true, "gedit": true, "notepad": true,
 }
 
-var checkerLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewExternalDirectoryChecker 创建外部目录检查器。
@@ -76,12 +77,12 @@ func NewExternalDirectoryChecker(config map[string]any, workspaceRoot string) *E
 func (c *ExternalDirectoryChecker) CheckExternalPaths(toolName string, toolArgs map[string]any) *PermissionResult {
 	workspace := c.workspaceRoot
 	if workspace == "" {
-		logger.Debug(checkerLogComponent).Msg("外部目录权限: workspace 缺失，跳过 external_directory 检查")
+		logger.Debug(logComponent).Msg("external directory permission: workspace missing, skipping external_directory check")
 		return nil
 	}
-	logger.Debug(checkerLogComponent).
+	logger.Debug(logComponent).
 		Str("workspace", workspace).
-		Msg("外部目录权限: workspace 来源=config")
+		Msg("external directory permission: workspace from config")
 
 	var externalPaths []string
 
@@ -92,11 +93,11 @@ func (c *ExternalDirectoryChecker) CheckExternalPaths(toolName string, toolArgs 
 		workdirResolved = filepath.Clean(workdirResolved)
 		cmd := commandText(toolArgs)
 
-		logger.Debug(checkerLogComponent).
+		logger.Debug(logComponent).
 			Str("tool", toolName).
 			Str("cmd", cmd).
 			Str("workdir", workdirResolved).
-			Msg("外部目录权限: shell 输入")
+			Msg("external directory permission: shell input")
 
 		paths := extractPathsFromCommand(cmd, workdirResolved)
 		for _, p := range paths {
@@ -121,9 +122,9 @@ func (c *ExternalDirectoryChecker) CheckExternalPaths(toolName string, toolArgs 
 				externalPaths = append(externalPaths, filepath.ToSlash(p))
 			}
 		}
-		logger.Debug(checkerLogComponent).
+		logger.Debug(logComponent).
 			Str("tool", toolName).
-			Msg("外部目录权限: 路径输入")
+			Msg("external directory permission: path input")
 	} else {
 		return nil
 	}
@@ -214,11 +215,11 @@ func extractPathsFromCommand(command, workdir string) []string {
 	}
 
 	cmd := strings.ToLower(tokens[0])
-	logger.Debug(checkerLogComponent).
+	logger.Debug(logComponent).
 		Str("tool_command", command).
 		Str("cmd", cmd).
 		Bool("path_aware", pathAwareCommands[cmd]).
-		Msg("外部目录权限: 解析命令")
+		Msg("external directory permission: parsing command")
 
 	if !pathAwareCommands[cmd] {
 		return nil
@@ -229,7 +230,7 @@ func extractPathsFromCommand(command, workdir string) []string {
 		base, _ = os.Getwd()
 	}
 	base = filepath.Clean(base)
-	logger.Debug(checkerLogComponent).Str("base", base).Msg("外部目录权限: 解析基准路径")
+	logger.Debug(logComponent).Str("base", base).Msg("external directory permission: resolving base path")
 
 	var paths []string
 	for _, tok := range tokens[1:] {
@@ -248,9 +249,9 @@ func extractPathsFromCommand(command, workdir string) []string {
 		p = filepath.Clean(p)
 		paths = append(paths, p)
 	}
-	logger.Debug(checkerLogComponent).
+	logger.Debug(logComponent).
 		Strs("extracted_paths", paths).
-		Msg("外部目录权限: 解析路径列表")
+		Msg("external directory permission: parsing path list")
 	return paths
 }
 

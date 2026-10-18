@@ -722,3 +722,87 @@ func TestTaskFailedError_Error(t *testing.T) {
 	e2 := &taskFailedError{code: 0, text: "simple error"}
 	assert.Equal(t, "simple error", e2.Error())
 }
+
+// TestTeamAgent_markTeamCleaned 测试 markTeamCleaned 设置 TeamCleaned 标志
+func TestTeamAgent_markTeamCleaned(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+
+	assert.False(t, a.state.TeamCleaned, "初始 TeamCleaned 应为 false")
+	err := a.markTeamCleaned(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, a.state.TeamCleaned, "markTeamCleaned 后 TeamCleaned 应为 true")
+}
+
+// TestTeamAgent_markTeamBuilt 测试 markTeamBuilt 不 panic
+func TestTeamAgent_markTeamBuilt(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+
+	// sessionManager.TeamSession() 返回 nil → persistTeamDbState 提前返回
+	err := a.markTeamBuilt(context.Background())
+	assert.NoError(t, err)
+}
+
+// TestTeamAgent_persistTeamDbState_无会话 测试无会话时不 panic
+func TestTeamAgent_persistTeamDbState_无会话(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+
+	// TeamSession 为 nil，应提前返回
+	a.persistTeamDbState(context.Background(), "created")
+}
+
+// TestTeamAgent_persistTeamDbState_无TeamName 测试无 TeamName 时不 panic
+func TestTeamAgent_persistTeamDbState_无TeamName(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+	a.state.TeamSession = &mockSessionForPersist{}
+
+	// TeamName 为空（未 Configure），应提前返回
+	a.persistTeamDbState(context.Background(), "cleaned")
+}
+
+// TestTeamAgent_MarkLiveTeammates 测试无 TeamBackend 时返回 nil
+func TestTeamAgent_MarkLiveTeammates(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+
+	err := a.MarkLiveTeammates(context.Background(), "ready")
+	assert.NoError(t, err, "无 TeamBackend 时 MarkLiveTeammates 应返回 nil")
+}
+
+// TestTeamAgent_SetMemberID 测试设置成员 ID 上下文
+func TestTeamAgent_SetMemberID(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+
+	// 传入非空名称
+	ctx := a.SetMemberID(context.Background(), "teammate_1")
+	assert.NotNil(t, ctx)
+
+	// 传入空名称，应使用 a.MemberName()（配置前为空字符串）
+	ctx2 := a.SetMemberID(context.Background(), "")
+	assert.NotNil(t, ctx2)
+}
+
+// mockSessionForPersist 测试用 mock，不实现 SessionFacade
+type mockSessionForPersist struct{}
+
+// TestTeamAgent_Configure后markTeamCleaned 测试 Configure 后 markTeamCleaned 设置状态
+func TestTeamAgent_Configure后markTeamCleaned(t *testing.T) {
+	card := agentschema.NewAgentCard()
+	a := NewTeamAgent(card)
+
+	spec := atschema.NewTeamAgentSpec()
+	ctx := atschema.TeamRuntimeContext{
+		Role:       atschema.TeamRoleLeader,
+		MemberName: "leader_1",
+		TeamSpec:   &atschema.TeamSpec{TeamName: "test_team"},
+	}
+	a.Configure(context.Background(), spec, ctx)
+
+	err := a.markTeamCleaned(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, a.state.TeamCleaned)
+}

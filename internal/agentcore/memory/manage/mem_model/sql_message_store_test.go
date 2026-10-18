@@ -577,6 +577,47 @@ func TestSqlMessageStore_多模态消息存储(t *testing.T) {
 	}
 }
 
+// TestSqlMessageStore_SetStorageCodec 测试 SetStorageCodec 替换编解码器
+func TestSqlMessageStore_SetStorageCodec(t *testing.T) {
+	store, _, _ := newTestSqlMessageStore(t)
+
+	// 获取初始 codec
+	origCodec := store.GetStorageCodec()
+	if origCodec == nil {
+		t.Fatal("初始 codec 不应为 nil")
+	}
+
+	// 替换为 fakeCodec
+	fake := &passthroughCodec{}
+	store.SetStorageCodec(fake)
+	if store.GetStorageCodec() != fake {
+		t.Error("SetStorageCodec 后 GetStorageCodec 应返回新 codec")
+	}
+}
+
+// TestSqlMessageStore_GetStorageCodec 测试 GetStorageCodec 返回当前编解码器
+func TestSqlMessageStore_GetStorageCodec(t *testing.T) {
+	store, _, _ := newTestSqlMessageStore(t)
+
+	codec := store.GetStorageCodec()
+	if codec == nil {
+		t.Error("GetStorageCodec 不应返回 nil")
+	}
+	// passthrough 模式：Encode("hello") == "hello"
+	if codec.Encode("hello") != "hello" {
+		t.Errorf("passthrough codec Encode(\"hello\") = %q, want %q", codec.Encode("hello"), "hello")
+	}
+	if codec.Decode("hello") != "hello" {
+		t.Errorf("passthrough codec Decode(\"hello\") = %q, want %q", codec.Decode("hello"), "hello")
+	}
+}
+
+// passthroughCodec 透传编解码器，用于测试 SetStorageCodec/GetStorageCodec
+type passthroughCodec struct{}
+
+func (p *passthroughCodec) Encode(text string) string { return text }
+func (p *passthroughCodec) Decode(data string) string { return data }
+
 // TestSqlMessageStore_多模态消息更新 验证 UpdateMessage 更新多模态内容
 func TestSqlMessageStore_多模态消息更新(t *testing.T) {
 	store, _, _ := newTestSqlMessageStore(t)

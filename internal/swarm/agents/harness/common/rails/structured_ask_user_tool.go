@@ -18,8 +18,8 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentCore
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentServer
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -63,14 +63,14 @@ func NewStructuredAskUserTool(language, agentID string) (tool.Tool, error) {
 		logger.Warn(logComponent).
 			Str("event_type", "structured_ask_user_tool_create").
 			Err(err).
-			Msg("创建 StructuredAskUserTool 失败")
+			Msg("failed to create StructuredAskUserTool")
 		return nil, fmt.Errorf("创建 StructuredAskUserTool 失败: %w", err)
 	}
 
 	logger.Info(logComponent).
 		Str("event_type", "structured_ask_user_tool_create").
 		Str("tool_id", card.ID).
-		Msg("StructuredAskUserTool 创建成功")
+		Msg("StructuredAskUserTool created")
 
 	return askUserTool, nil
 }

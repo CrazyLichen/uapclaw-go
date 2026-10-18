@@ -116,7 +116,7 @@ func (r *EvolutionApprovalRuntime) FinalizeStagedEvolutionRequest(
 		if emitApprovalRequest != nil {
 			if err := emitApprovalRequest(request); err != nil {
 				logger.Warn(logComponent).Err(err).
-					Msg("[EvolutionApprovalRuntime] emitApprovalRequest 失败，仍返回 request")
+					Msg("[EvolutionApprovalRuntime] emitApprovalRequest failed, still returning request")
 			}
 		}
 		return nil
@@ -126,7 +126,7 @@ func (r *EvolutionApprovalRuntime) FinalizeStagedEvolutionRequest(
 	if onAutoApproved != nil {
 		if err := onAutoApproved(request); err != nil {
 			logger.Warn(logComponent).Err(err).
-				Msg("[EvolutionApprovalRuntime] onAutoApproved 失败，仍返回 request")
+				Msg("[EvolutionApprovalRuntime] onAutoApproved failed, still returning request")
 		}
 	}
 	return nil

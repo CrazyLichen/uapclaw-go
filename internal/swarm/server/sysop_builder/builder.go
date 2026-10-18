@@ -42,7 +42,7 @@ func CreateLocalSysOpCard() *sysop.SysOperationCard {
 		}),
 	)
 
-	logger.Info(logComponent).Str("mode", "LOCAL").Msg("本地 SysOperationCard 已创建")
+	logger.Info(logComponent).Str("mode", "LOCAL").Msg("local SysOperationCard created")
 
 	return card
 }
@@ -69,7 +69,7 @@ func CreateSandboxSysOpCard(
 	if err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("BuildFilesystemPolicy 失败，无法创建沙箱 SysOperationCard")
+			Msg("BuildFilesystemPolicy failed, cannot create sandbox SysOperationCard")
 		return nil
 	}
 
@@ -172,7 +172,7 @@ func CreateSandboxSysOpCard(
 		}()).
 		Int("preserve_files_upload", len(uploadList)).
 		Str("policy_mode", "append").
-		Msg("沙箱 SysOperationCard 已创建")
+		Msg("sandbox SysOperationCard created")
 
 	return card
 }
@@ -190,7 +190,7 @@ func CreateSysOperationFromCard(card *sysop.SysOperationCard) sysop.SysOperation
 	if err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("NewSysOperation 创建失败")
+			Msg("failed to create NewSysOperation")
 		return nil
 	}
 
@@ -201,7 +201,7 @@ func CreateSysOperationFromCard(card *sysop.SysOperationCard) sysop.SysOperation
 		if existing != nil {
 			logger.Info(logComponent).
 				Str("isolation_key", isolationKey).
-				Msg("复用已注册 SysOperation")
+				Msg("reusing registered SysOperation")
 			return existing
 		}
 	}
@@ -216,20 +216,20 @@ func CreateSysOperationFromCard(card *sysop.SysOperationCard) sysop.SysOperation
 				if existing != nil {
 					logger.Info(logComponent).
 						Str("isolation_key", isolationKey).
-						Msg("注册失败后复用已注册 SysOperation")
+						Msg("reusing registered SysOperation after registration failure")
 					return existing
 				}
 			}
 			logger.Warn(logComponent).
 				Err(addErr).
-				Msg("SysOperation 注册失败")
+				Msg("SysOperation registration failed")
 			return nil
 		}
 		logger.Info(logComponent).
 			Str("card_id", card.ID).
-			Msg("SysOperation 已注册到资源管理器")
+			Msg("SysOperation registered to resource manager")
 	} else {
-		logger.Warn(logComponent).Msg("全局资源管理器未初始化，跳过 SysOperation 注册")
+		logger.Warn(logComponent).Msg("global resource manager not initialized, skipping SysOperation registration")
 	}
 
 	return instance

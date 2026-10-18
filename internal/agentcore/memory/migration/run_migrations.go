@@ -96,7 +96,7 @@ func RunIndexVersionMigrations(ctx context.Context, idx index.BaseMemoryIndex) e
 
 	if len(registryMap) == 0 {
 		logger.Info(logComponent).Str("event_type", "MEMORY_INIT").
-			Str("sub_component", "run_migrations").Msg("无已注册的 index version 迁移，跳过")
+			Str("sub_component", "run_migrations").Msg("no registered index version migrations, skipped")
 		return nil
 	}
 
@@ -106,7 +106,7 @@ func RunIndexVersionMigrations(ctx context.Context, idx index.BaseMemoryIndex) e
 			logger.Error(logComponent).Str("event_type", "MEMORY_INIT").Err(err).
 				Str("sub_component", "run_migrations").
 				Str("store_name", "index version").Str("entity_key", entityKey).
-				Msg("index version 迁移失败")
+				Msg("index version migration failed")
 			return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 				exception.WithCause(err),
 				exception.WithParam("store_name", "index version"),
@@ -135,7 +135,7 @@ func runMigrationsWithRegistry(
 
 	if len(registryMap) == 0 {
 		logger.Info(logComponent).Str("event_type", "MEMORY_INIT").
-			Str("sub_component", "run_migrations").Str("store_name", storeName).Msg("无已注册的迁移，跳过")
+			Str("sub_component", "run_migrations").Str("store_name", storeName).Msg("no registered migrations, skipped")
 		return nil
 	}
 
@@ -143,7 +143,7 @@ func runMigrationsWithRegistry(
 		if err := m.TryMigrate(ctx, entityKey, operations); err != nil {
 			logger.Error(logComponent).Str("event_type", "MEMORY_INIT").Err(err).
 				Str("sub_component", "run_migrations").
-				Str("store_name", storeName).Str("entity_key", entityKey).Msg("迁移失败")
+				Str("store_name", storeName).Str("entity_key", entityKey).Msg("migration failed")
 			return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 				exception.WithCause(err),
 				exception.WithParam("entity_key", entityKey),

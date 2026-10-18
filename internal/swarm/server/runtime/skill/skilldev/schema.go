@@ -772,7 +772,7 @@ func (sc *SuspensionConfig) GetNextStage(data map[string]any) SkillDevStage {
 		logger.Warn(logComponent).
 			Str("event_type", "suspension_config_conflict").
 			Str("next_stage", string(sc.NextStage)).
-			Msg("SuspensionConfig 同时设置了 NextStage 和 NextStageFunc，优先使用 NextStageFunc")
+			Msg("SuspensionConfig has both NextStage and NextStageFunc set, preferring NextStageFunc")
 	}
 	if sc.NextStageFunc != nil {
 		return sc.NextStageFunc(data)

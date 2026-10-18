@@ -226,7 +226,7 @@ func safeEnvChoice(name, defaultVal string, allowed map[string]bool) string {
 		Str("env", name).
 		Str("value", raw).
 		Str("default", defaultVal).
-		Msg("环境变量值不在允许列表中，使用默认值")
+		Msg("env value not in allow list, using default")
 	return defaultVal
 }
 

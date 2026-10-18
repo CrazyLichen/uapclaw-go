@@ -14,6 +14,7 @@ import (
 // 对齐 Python MemoryItemParser (summary/task/reasoning_bank/update.py)。
 type MemoryItemParser struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -29,6 +30,7 @@ var (
 	sectionHeaderRegex = regexp.MustCompile(`^##\s*|#\s*Memory\s+Item\s+\d+`)
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemoryItemParser 创建记忆项解析器。

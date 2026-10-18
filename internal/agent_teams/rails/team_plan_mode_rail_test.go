@@ -2,6 +2,8 @@ package rails
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -82,5 +84,36 @@ func TestTeamPlanModeRail_BeforeModelCall_无Agent(t *testing.T) {
 	err := r.BeforeModelCall(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("BeforeModelCall should not fail without agent: %v", err)
+	}
+}
+
+// TestFileExists_文件存在 测试存在的文件返回 true
+func TestFileExists_文件存在(t *testing.T) {
+	f, err := os.CreateTemp("", "test_file_exists_*")
+	if err != nil {
+		t.Fatalf("创建临时文件失败: %v", err)
+	}
+	path := f.Name()
+	f.Close()
+	defer os.Remove(path)
+
+	if !fileExists(path) {
+		t.Errorf("fileExists(%q) = false, want true", path)
+	}
+}
+
+// TestFileExists_文件不存在 测试不存在的文件返回 false
+func TestFileExists_文件不存在(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "nonexistent_file_12345")
+	if fileExists(path) {
+		t.Errorf("fileExists(%q) = true, want false", path)
+	}
+}
+
+// TestFileExists_目录存在 测试目录存在时返回 true
+func TestFileExists_目录存在(t *testing.T) {
+	dir := t.TempDir()
+	if !fileExists(dir) {
+		t.Errorf("fileExists(目录 %q) = false, want true", dir)
 	}
 }

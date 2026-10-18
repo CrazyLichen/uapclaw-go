@@ -7,16 +7,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 类型别名 ────────────────────────────
-
-// DocIndexCallback 文档索引进度回调接口。
-//
-// 用于追踪嵌入批次的处理进度。对齐 Python BaseCallback。
-// 类型别名指向 foundation 层 embedding.Callback，保持编译期类型安全。
-//
-// Python: retrieval/common/callbacks.py (BaseCallback)
-type DocIndexCallback = embedding.Callback
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // NoOpDocIndexCallback 空操作回调，默认使用。
@@ -45,6 +35,15 @@ type LoggingDocIndexCallback struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// DocIndexCallback 文档索引进度回调接口。
+//
+// 用于追踪嵌入批次的处理进度。对齐 Python BaseCallback。
+// 类型别名指向 foundation 层 embedding.Callback，保持编译期类型安全。
+// 按规范"类型别名归类到枚举区块"，置于枚举区块。
+//
+// Python: retrieval/common/callbacks.py (BaseCallback)
+type DocIndexCallback = embedding.Callback
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -81,7 +80,7 @@ func (c *LoggingDocIndexCallback) OnBatchComplete(startIdx, endIdx int, _ []stri
 		logger.Info(logComponent).
 			Int("processed", endIdx).
 			Int("total", c.total).
-			Msg("嵌入进度")
+			Msg("embedding progress")
 	}
 }
 

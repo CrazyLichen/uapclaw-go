@@ -43,11 +43,11 @@ func (d *SQLTeamDao) CreateTeam(ctx context.Context, teamName, displayName, lead
 	result := d.db.WithContext(ctx).Create(team)
 	if result.Error != nil {
 		// Python: except IntegrityError → False
-		logger.Error(logComponent).Str("team_name", teamName).Err(result.Error).Msg("团队已存在")
+		logger.Error(logComponent).Str("team_name", teamName).Err(result.Error).Msg("team already exists")
 		return false
 	}
 	// Python: team_logger.info("Team %s created", team_name)
-	logger.Info(logComponent).Str("team_name", teamName).Msg("团队创建成功")
+	logger.Info(logComponent).Str("team_name", teamName).Msg("team created successfully")
 	return true
 }
 

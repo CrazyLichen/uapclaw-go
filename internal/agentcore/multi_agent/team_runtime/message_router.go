@@ -89,7 +89,7 @@ func (r *MessageRouter) RouteP2PMessage(ctx context.Context, envelope *MessageEn
 		Str("sender", envelope.Sender).
 		Str("recipient", envelope.Recipient).
 		Str("message_id", envelope.MessageID).
-		Msg("P2P 消息路由成功")
+		Msg("P2P message routed")
 
 	return result, nil
 }
@@ -109,7 +109,7 @@ func (r *MessageRouter) RoutePubsubMessage(ctx context.Context, envelope *Messag
 			Str("event_type", "PUBSUB_NO_SUBSCRIBERS").
 			Str("topic_id", envelope.TopicID).
 			Str("sender", envelope.Sender).
-			Msg("Pub-Sub 消息无订阅者")
+			Msg("Pub-Sub message has no subscribers")
 		return nil
 	}
 
@@ -118,7 +118,7 @@ func (r *MessageRouter) RoutePubsubMessage(ctx context.Context, envelope *Messag
 		Str("topic_id", envelope.TopicID).
 		Str("sender", envelope.Sender).
 		Int("subscriber_count", len(subscribers)).
-		Msg("开始路由 Pub-Sub 消息到订阅者")
+		Msg("routing Pub-Sub message to subscribers")
 
 	// 并发执行各订阅者，WaitGroup 等待所有完成
 	// Python: asyncio.gather(*tasks, return_exceptions=True)
@@ -135,7 +135,7 @@ func (r *MessageRouter) RoutePubsubMessage(ctx context.Context, envelope *Messag
 					Str("event_type", "PUBSUB_SUBSCRIBER_CANCELLED").
 					Str("agent_id", id).
 					Str("topic_id", envelope.TopicID).
-					Msg("Pub-Sub 订阅者因 context 取消而退出")
+					Msg("Pub-Sub subscriber exited due to context cancellation")
 				return
 			default:
 			}
@@ -168,7 +168,7 @@ func (r *MessageRouter) RoutePubsubMessage(ctx context.Context, envelope *Messag
 					Str("agent_id", id).
 					Str("topic_id", envelope.TopicID).
 					Str("message_id", envelope.MessageID).
-					Msg("Pub-Sub 订阅者执行失败")
+					Msg("Pub-Sub subscriber execution failed")
 				return
 			}
 
@@ -176,7 +176,7 @@ func (r *MessageRouter) RoutePubsubMessage(ctx context.Context, envelope *Messag
 				Str("event_type", "PUBSUB_SUBSCRIBER_SUCCESS").
 				Str("agent_id", id).
 				Str("topic_id", envelope.TopicID).
-				Msg("Pub-Sub 订阅者执行成功")
+				Msg("Pub-Sub subscriber executed")
 		}(agentID)
 	}
 	wg.Wait()
@@ -185,7 +185,7 @@ func (r *MessageRouter) RoutePubsubMessage(ctx context.Context, envelope *Messag
 		Str("event_type", "PUBSUB_ROUTE_COMPLETE").
 		Str("topic_id", envelope.TopicID).
 		Int("subscriber_count", len(subscribers)).
-		Msg("Pub-Sub 消息路由完成")
+		Msg("Pub-Sub message routing completed")
 
 	return nil
 }
@@ -211,7 +211,7 @@ func (r *MessageRouter) buildAgentSession(sessionID, agentID string) *session.Se
 		logger.Warn(logComponent).Err(err).
 			Str("event_type", "BUILD_AGENT_SESSION_NO_CARD").
 			Str("agent_id", agentID).
-			Msg("构建 Agent 会话时获取 AgentCard 失败")
+			Msg("failed to get AgentCard while building agent session")
 		return nil
 	}
 	return teamSession.CreateAgentSession(card, agentID, true)

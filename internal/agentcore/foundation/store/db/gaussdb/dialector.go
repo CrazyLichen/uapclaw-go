@@ -39,12 +39,12 @@ type GaussDialector struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-const (
-	// gaussLogComponent 日志组件
-	gaussLogComponent = logger.ComponentAgentCore
-)
+const ()
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -77,7 +77,7 @@ func (dialector GaussDialector) Name() string {
 func (dialector GaussDialector) Initialize(db *gorm.DB) error {
 	// 第 1 步：委托 postgres 初始化（连接池、回调注册等）
 	if err := dialector.Dialector.Initialize(db); err != nil {
-		logger.Error(gaussLogComponent).Err(err).Msg("GaussDB 方言初始化失败")
+		logger.Error(logComponent).Err(err).Msg("GaussDB dialect initialization failed")
 		return err
 	}
 
@@ -93,7 +93,7 @@ func (dialector GaussDialector) Initialize(db *gorm.DB) error {
 	schema.RegisterSerializer("gauss_string", gaussStringSerializer{})
 
 	// 第 4 步：日志记录
-	logger.Info(gaussLogComponent).Str("dialect", "gaussdb").Msg("GaussDB 方言初始化完成")
+	logger.Info(logComponent).Str("dialect", "gaussdb").Msg("GaussDB dialect initialized")
 
 	return nil
 }

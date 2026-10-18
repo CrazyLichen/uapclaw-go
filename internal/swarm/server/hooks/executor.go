@@ -314,7 +314,7 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 
 	// 判断是否超时：context 超时且进程被 kill
 	if timeoutCtx.Err() == context.DeadlineExceeded {
-		logger.Debug(logComponent).Int("timeout", timeout).Str("command", command).Msg("hook 子进程超时，已 kill")
+		logger.Debug(logComponent).Int("timeout", timeout).Str("command", command).Msg("hook subprocess timeout, killed")
 		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("hook timeout after %ds", timeout)}
 	}
 

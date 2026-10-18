@@ -309,7 +309,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			teamSpec := teamManager.GetEnrichedTeamSpec(ctx, sessionID, d.instance, req.RequestID, channelID, requestMetadata)
 			if teamSpec == nil {
 				logger.Error(logComponent).Str("session_id", sessionID).
-					Msg("processTeamMessageStream: GetEnrichedTeamSpec 返回 nil")
+					Msg("processTeamMessageStream: GetEnrichedTeamSpec returned nil")
 				ch <- &agentschema.AgentResponseChunk{
 					RequestID: req.RequestID, ChannelID: channelID,
 					Payload:    map[string]any{"event_type": "chat.error", "error": "TeamAgent 创建失败：无法获取 team spec"},
@@ -342,7 +342,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			teamManager.EnsureTeamSharedSkillsInitialized(teamSpec)
 			if err := teamManager.PrepareRuntimeActivation(ctx, sessionID, teamName); err != nil {
 				logger.Error(logComponent).Err(err).Str("session_id", sessionID).
-					Msg("processTeamMessageStream: PrepareRuntimeActivation 失败")
+					Msg("processTeamMessageStream: PrepareRuntimeActivation failed")
 				ch <- &agentschema.AgentResponseChunk{
 					RequestID: req.RequestID, ChannelID: channelID,
 					Payload:    map[string]any{"event_type": "chat.error", "error": err.Error()},
@@ -388,7 +388,7 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			// 对齐 Python: while team_manager.has_stream_task(session_id):
 			//   event = await asyncio.wait_for(request_queue.get(), timeout=0.1)
 			//   yield AgentResponseChunk(...)
-				for teamManager.HasStreamTask(sessionID) {
+			for teamManager.HasStreamTask(sessionID) {
 				var event map[string]any
 				select {
 				case event = <-requestQueue:
@@ -491,20 +491,20 @@ func (d *DeepAdapter) ensureMonitorForActiveRuntime(ctx context.Context, channel
 	if teamAgent == nil {
 		logger.Warn(logComponent).
 			Str("session_id", sessionID).Str("team_name", teamName).
-			Msg("ensureMonitorForActiveRuntime: 无 TeamAgent，无法启动 monitor")
+			Msg("ensureMonitorForActiveRuntime: no TeamAgent, cannot start monitor")
 		return
 	}
 
 	if err := tm.EnsureMonitor(ctx, sessionID, teamAgent, hideDM); err != nil {
 		logger.Warn(logComponent).Err(err).
 			Str("session_id", sessionID).Str("team_name", teamName).
-			Msg("ensureMonitorForActiveRuntime: EnsureMonitor 失败")
+			Msg("ensureMonitorForActiveRuntime: EnsureMonitor failed")
 		return
 	}
 
 	logger.Info(logComponent).
 		Str("session_id", sessionID).Str("team_name", teamName).
-		Msg("ensureMonitorForActiveRuntime: monitor 已启动")
+		Msg("ensureMonitorForActiveRuntime: monitor started")
 }
 
 // ensureTeamEvolutionWatcher 启动 team evolution 监控。
@@ -520,6 +520,7 @@ func (d *DeepAdapter) ensureMonitorForActiveRuntime(ctx context.Context, channel
 //  7. task = asyncio.create_task(_watch_team_evolution_and_push(channel_id, session_id, rail))
 //  8. setattr(task, "_team_channel_id", channel_id)
 //  9. setattr(task, "_team_session_id", session_id)
+//
 // 10. task.add_done_callback(_on_team_watcher_done)
 // 11. tm.register_team_evolution_watcher(session_id, task)
 func (d *DeepAdapter) ensureTeamEvolutionWatcher(ctx context.Context, channelID, sessionID, source string) {
@@ -683,12 +684,9 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 				activationKind = v
 			}
 
-			// 对齐 Python 步骤：
-			// sync_team_identity_metadata(...)
-			// tm.commit_runtime_ready(session_id, ready_team_name)
-			// await tm.attach_distributed_hooks_for_runner_runtime(...)
-			// await ensure_monitor_for_active_runtime(...)
-			// ensure_team_evolution_watcher(...)
+			// 对齐 Python 步骤（Go 等价实现依次如下）：
+			// 同步团队身份元数据 → 提交 runtime_ready → 附加分布式 hooks →
+			// 确保活跃 runtime 的监控 → 注册团队进化 watcher
 			SyncTeamIdentityMetadata(ctx, channelID, sessionID, "team", readyTeamName, activationKind)
 
 			tm := team.GetTeamManager(channelID)
@@ -750,7 +748,7 @@ func (d *DeepAdapter) consumeMonitorEvents(ctx context.Context, channelID, sessi
 	handler := tm.GetMonitor(sessionID)
 	if handler == nil {
 		logger.Warn(logComponent).Str("session_id", sessionID).
-			Msg("consumeMonitorEvents: 无 TeamMonitorHandler")
+			Msg("consumeMonitorEvents: no TeamMonitorHandler")
 		return
 	}
 
@@ -800,7 +798,7 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 
 	// 内部清理函数
 	cleanupEvolutionRail := func() {
-		rail.CleanupBackgroundTasks()
+		_ = rail.CleanupBackgroundTasks()
 	}
 
 	// 内部推送 evolution status 函数（内联对齐 Python: push_evolution_status）

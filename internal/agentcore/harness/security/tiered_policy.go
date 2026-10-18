@@ -102,9 +102,6 @@ var pathArgKeys = map[string]bool{
 	"directory": true, "dir": true,
 }
 
-// tieredPolicyLogComponent 日志组件
-var tieredPolicyLogComponent = logger.ComponentAgentCore
-
 // builtinRulesCache 内置规则缓存
 // Python: _BUILTIN_RULES_CACHE (tiered_policy.py L47)
 // 三元组: (路径字符串, mtime, 规则列表)
@@ -228,7 +225,7 @@ func SeverityToDecision(severity, permissionMode string) PermissionLevel {
 		}
 		return PermissionLevelAsk
 	default:
-		logger.Warn(tieredPolicyLogComponent).
+		logger.Warn(logComponent).
 			Str("severity", severity).
 			Msg("permission.tiered_policy.unknown_severity")
 		return PermissionLevelAsk
@@ -303,7 +300,7 @@ func GetBuiltinSecurityRules() []map[string]any {
 		// mtime 变化或首次加载：从文件系统读取
 		parsed, err := resources.ParseBuiltinRulesFromFile(yamlPath)
 		if err != nil {
-			logger.Warn(tieredPolicyLogComponent).
+			logger.Warn(logComponent).
 				Str("path", yamlPath).
 				Err(err).
 				Msg("permission.tiered_policy.builtin_rules_file_read_failed")
@@ -324,7 +321,7 @@ func GetBuiltinSecurityRules() []map[string]any {
 
 	parsed, err := resources.ParseBuiltinRules()
 	if err != nil {
-		logger.Warn(tieredPolicyLogComponent).
+		logger.Warn(logComponent).
 			Err(err).
 			Msg("permission.tiered_policy.builtin_rules_missing")
 		builtinRulesCache.loaded = true
@@ -430,7 +427,7 @@ func baselineLevel(toolsCfg map[string]any, toolName string) (PermissionLevel, s
 	case string:
 		level, err := ParsePermissionLevel(v)
 		if err != nil {
-			logger.Warn(tieredPolicyLogComponent).
+			logger.Warn(logComponent).
 				Str("tool", toolName).
 				Str("value", v).
 				Msg("permission.tiered_policy.invalid_tool_level")
@@ -441,7 +438,7 @@ func baselineLevel(toolsCfg map[string]any, toolName string) (PermissionLevel, s
 		// dict 类型，取 * 键
 		asterisk, ok := v["*"].(string)
 		if !ok {
-			logger.Warn(tieredPolicyLogComponent).
+			logger.Warn(logComponent).
 				Str("tool", toolName).
 				Msg("permission.tiered_policy.tools_dict_non_scalar: using=asterisk_only")
 			return PermissionLevelAllow, ""
@@ -452,7 +449,7 @@ func baselineLevel(toolsCfg map[string]any, toolName string) (PermissionLevel, s
 		}
 		return level, fmt.Sprintf("tools.%s.*", toolName)
 	default:
-		logger.Warn(tieredPolicyLogComponent).
+		logger.Warn(logComponent).
 			Str("tool", toolName).
 			Msg("permission.tiered_policy.invalid_tool_baseline: reason=non_scalar_level")
 		return PermissionLevelAllow, ""
@@ -506,7 +503,7 @@ func shellPatternMatches(pattern, command string) bool {
 					}
 				}
 			}
-			logger.Warn(tieredPolicyLogComponent).
+			logger.Warn(logComponent).
 				Str("expr", expr).
 				Msg("permission.tiered_policy.invalid_shell_regex")
 			return false
@@ -546,7 +543,7 @@ func pathPatternMatches(pattern, value string) bool {
 		expr := strings.TrimSpace(p[3:])
 		re, err := regexp.Compile(regexFlags + expr)
 		if err != nil {
-			logger.Warn(tieredPolicyLogComponent).
+			logger.Warn(logComponent).
 				Str("expr", expr).
 				Msg("permission.tiered_policy.invalid_path_regex")
 			return false
@@ -573,7 +570,7 @@ func collectParamRuleHits(rules []map[string]any, toolName string, toolArgs map[
 			}
 		}
 		if !RuleToolsCategoryConsistent(rToolsStr) {
-			logger.Warn(tieredPolicyLogComponent).
+			logger.Warn(logComponent).
 				Str("id", utils.StrVal(rule["id"])).
 				Strs("tools", rToolsStr).
 				Msg("permission.tiered_policy.rule_skipped: reason=inconsistent_tool_category")
@@ -636,7 +633,7 @@ func collectApprovalOverrideHits(rules []map[string]any, toolName string, toolAr
 			}
 		}
 		if !RuleToolsCategoryConsistent(rToolsStr) {
-			logger.Warn(tieredPolicyLogComponent).
+			logger.Warn(logComponent).
 				Str("id", utils.StrVal(rule["id"])).
 				Strs("tools", rToolsStr).
 				Msg("permission.tiered_policy.override_skipped: reason=inconsistent_tool_category")

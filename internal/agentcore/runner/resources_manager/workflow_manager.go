@@ -63,7 +63,7 @@ func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) 
 			Str("event_type", "WORKFLOW_ADD_ERROR").
 			Str("workflow_id", workflowID).
 			Err(err).
-			Msg("添加工作流失败")
+			Msg("failed to add workflow")
 		return exception.BuildError(exception.StatusResourceAddError,
 			exception.WithParam("card", workflowID),
 			exception.WithParam("reason", err.Error()),
@@ -73,7 +73,7 @@ func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) 
 	logger.Info(logComponent).
 		Str("event_type", "WORKFLOW_ADD_SUCCESS").
 		Str("workflow_id", workflowID).
-		Msg("添加工作流成功")
+		Msg("workflow added")
 	return nil
 }
 
@@ -86,7 +86,7 @@ func (m *WorkflowMgr) AddWorkflows(workflows []WorkflowEntry) {
 			logger.Error(logComponent).
 				Str("event_type", "WORKFLOW_ADD_ERROR").
 				Str("workflow_id", entry.ID).
-				Msg("批量添加工作流跳过无效条目")
+				Msg("batch add workflows skipped invalid entry")
 			continue
 		}
 		if err := m.AddWorkflow(entry.ID, entry.Provider); err != nil {
@@ -94,7 +94,7 @@ func (m *WorkflowMgr) AddWorkflows(workflows []WorkflowEntry) {
 				Str("event_type", "WORKFLOW_ADD_ERROR").
 				Str("workflow_id", entry.ID).
 				Err(err).
-				Msg("批量添加工作流失败")
+				Msg("failed to batch add workflows")
 		}
 	}
 }
@@ -109,7 +109,7 @@ func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error
 			Str("event_type", "WORKFLOW_REMOVE_ERROR").
 			Str("workflow_id", workflowID).
 			Err(err).
-			Msg("移除工作流失败")
+			Msg("failed to remove workflow")
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", workflowID),
 			exception.WithParam("resource_type", "workflow"),
@@ -125,7 +125,7 @@ func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error
 	logger.Info(logComponent).
 		Str("event_type", "WORKFLOW_REMOVE_SUCCESS").
 		Str("workflow_id", workflowID).
-		Msg("移除工作流成功")
+		Msg("workflow removed")
 	return provider, nil
 }
 
@@ -141,7 +141,7 @@ func (m *WorkflowMgr) GetWorkflow(ctx context.Context, workflowID string, sessio
 			Str("event_type", "WORKFLOW_GET_ERROR").
 			Str("workflow_id", workflowID).
 			Err(err).
-			Msg("获取工作流失败")
+			Msg("failed to get workflow")
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", workflowID),
 			exception.WithParam("resource_type", "workflow"),
@@ -161,3 +161,5 @@ func (m *WorkflowMgr) GetWorkflow(ctx context.Context, workflowID string, sessio
 
 	return w, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -161,8 +161,6 @@ type Options struct {
 	NumCandidates int
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // FieldOption FieldSchema 构造选项
 type FieldOption func(*FieldSchema)
 
@@ -171,6 +169,8 @@ type CollectionOption func(*CollectionSchema)
 
 // Option 向量存储操作的通用可选参数
 type Option func(*Options)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // VectorDataType 向量存储支持的字段数据类型。
 //
@@ -685,6 +685,6 @@ func vectorDataTypeFromString(s string) VectorDataType {
 	logger.Warn(logComponent).
 		Str("type", s).
 		Str("fallback", "VARCHAR").
-		Msg("未知的向量字段类型，回退为 VARCHAR")
+		Msg("unknown vector field type, falling back to VARCHAR")
 	return VectorDataTypeVarchar
 }

@@ -38,10 +38,10 @@ func NewGaussDbStore(dsn string, opts ...gorm.Option) (*GaussDbStore, error) {
 	dialector := GaussOpen(dsn)
 	db, err := gorm.Open(dialector, opts...)
 	if err != nil {
-		logger.Error(gaussLogComponent).Err(err).Str("dsn", dsn).Msg("GaussDB 连接创建失败")
+		logger.Error(logComponent).Err(err).Str("dsn", dsn).Msg("GaussDB connection creation failed")
 		return nil, fmt.Errorf("GaussDB 连接创建失败: %w", err)
 	}
-	logger.Info(gaussLogComponent).Str("dialect", "gaussdb").Msg("GaussDB 数据库存储创建成功")
+	logger.Info(logComponent).Str("dialect", "gaussdb").Msg("GaussDB database store created")
 	return &GaussDbStore{db: db}, nil
 }
 
@@ -65,14 +65,14 @@ func (s *GaussDbStore) Close() error {
 	}
 	sqlDB, err := s.db.DB()
 	if err != nil {
-		logger.Error(gaussLogComponent).Err(err).Msg("获取底层数据库连接失败")
+		logger.Error(logComponent).Err(err).Msg("failed to get underlying database connection")
 		return fmt.Errorf("获取底层数据库连接失败: %w", err)
 	}
 	if err := sqlDB.Close(); err != nil {
-		logger.Error(gaussLogComponent).Err(err).Msg("关闭 GaussDB 连接失败")
+		logger.Error(logComponent).Err(err).Msg("failed to close GaussDB connection")
 		return fmt.Errorf("关闭 GaussDB 连接失败: %w", err)
 	}
-	logger.Info(gaussLogComponent).Msg("GaussDB 数据库连接已关闭")
+	logger.Info(logComponent).Msg("GaussDB databaseconnection closed")
 	return nil
 }
 

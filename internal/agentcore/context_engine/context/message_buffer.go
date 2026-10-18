@@ -237,13 +237,13 @@ func (b *OffloadMessageBuffer) Offload(offloadHandle string, offloadType string,
 			Str("offload_handle", offloadHandle).
 			Str("offload_type", offloadType).
 			Int("message_count", len(messages)).
-			Msg("消息已卸载到内存")
+			Msg("messages offloaded to memory")
 	} else {
 		logger.Info(logComponent).
 			Str("offload_handle", offloadHandle).
 			Str("offload_type", offloadType).
 			Int("message_count", len(messages)).
-			Msg("非内存卸载类型暂不处理")
+			Msg("non-memory offload type not supported yet")
 	}
 }
 
@@ -259,13 +259,13 @@ func (b *OffloadMessageBuffer) Reload(offloadHandle string, offloadType string) 
 		if !ok {
 			logger.Warn(logComponent).
 				Str("offload_handle", offloadHandle).
-				Msg("内存中未找到卸载消息")
+				Msg("offloaded messages not found in memory")
 			return nil
 		}
 		logger.Info(logComponent).
 			Str("offload_handle", offloadHandle).
 			Int("message_count", len(messages)).
-			Msg("从内存重新加载消息")
+			Msg("messages reloaded from memory")
 		return messages
 	}
 
@@ -276,7 +276,7 @@ func (b *OffloadMessageBuffer) Reload(offloadHandle string, offloadType string) 
 	logger.Warn(logComponent).
 		Str("offload_handle", offloadHandle).
 		Str("offload_type", offloadType).
-		Msg("不支持的卸载类型")
+		Msg("unsupported offload type")
 	return nil
 }
 
@@ -292,7 +292,7 @@ func (b *OffloadMessageBuffer) Clear(offloadHandle string, offloadType string) {
 		logger.Info(logComponent).
 			Str("offload_handle", offloadHandle).
 			Str("offload_type", offloadType).
-			Msg("已清除卸载消息")
+			Msg("offloaded messages cleared")
 	}
 }
 
@@ -371,7 +371,7 @@ func (b *ContextMessageBuffer) ifNeedResize() {
 			Int("max_buffer_size", b.maxBufferSize).
 			Int("dropped_count", dropCount).
 			Int("remaining_count", len(b.contextMessages)).
-			Msg("缓冲区自动裁剪")
+			Msg("buffer auto-trimmed")
 	}
 }
 
@@ -393,7 +393,7 @@ func (b *OffloadMessageBuffer) reloadFromFilesystem(offloadHandle string) []llm_
 			logger.Warn(logComponent).
 				Str("path", path).
 				Err(err).
-				Msg("卸载消息文件 JSON 解析失败")
+				Msg("failed to parse offloaded messages JSON file")
 			continue
 		}
 
@@ -405,7 +405,7 @@ func (b *OffloadMessageBuffer) reloadFromFilesystem(offloadHandle string) []llm_
 					Str("path", path).
 					Int("index", i).
 					Err(err).
-					Msg("卸载消息反序列化失败")
+					Msg("failed to deserialize offloaded message")
 				continue
 			}
 			messages = append(messages, msg)
@@ -415,7 +415,7 @@ func (b *OffloadMessageBuffer) reloadFromFilesystem(offloadHandle string) []llm_
 			logger.Info(logComponent).
 				Str("path", path).
 				Int("message_count", len(messages)).
-				Msg("从文件系统重新加载消息")
+				Msg("messages reloaded from filesystem")
 			return messages
 		}
 	}
@@ -423,7 +423,7 @@ func (b *OffloadMessageBuffer) reloadFromFilesystem(offloadHandle string) []llm_
 	logger.Warn(logComponent).
 		Str("offload_handle", offloadHandle).
 		Strs("candidate_paths", candidatePaths).
-		Msg("未找到可用的卸载消息文件")
+		Msg("no usable offloaded messages file found")
 	return nil
 }
 
@@ -447,7 +447,7 @@ func (b *OffloadMessageBuffer) filesystemReloadPaths(offloadHandle string) []str
 		logger.Warn(logComponent).
 			Str("pattern", globPattern).
 			Err(err).
-			Msg("glob 匹配失败")
+			Msg("glob match failed")
 		return []string{precisePath}
 	}
 

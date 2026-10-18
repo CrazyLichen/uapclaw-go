@@ -65,14 +65,14 @@ func (d *SQLMessageDao) CreateMessage(ctx context.Context, msg *TeamMessageBase)
 		}
 		// Python: IntegrityError → 立即返回 False
 		if isIntegrityError(err) {
-			logger.Error(logComponent).Str("message_id", msg.MessageID).Err(err).Msg("创建消息失败，主键冲突")
+			logger.Error(logComponent).Str("message_id", msg.MessageID).Err(err).Msg("failed to create message, primary key conflict")
 			return false
 		}
 		// Python: delay = _DB_RETRY_BASE_DELAY * (2**attempt)
 		delay := dbRetryBaseDelay * time.Duration(1<<uint(attempt))
 		logger.Warn(logComponent).Str("message_id", msg.MessageID).
 			Int("attempt", attempt+1).Dur("delay", delay).Err(err).
-			Msg("数据库锁定，指数退避重试")
+			Msg("database locked, exponential backoff retry")
 		time.Sleep(delay)
 	}
 	return false
@@ -240,7 +240,7 @@ func (d *SQLMessageDao) MarkMessageRead(ctx context.Context, messageID, memberNa
 			logger.Error(logComponent).
 				Str("message_id", messageID).
 				Str("member_name", memberName).
-				Msg("'user' 伪成员不能标记广播消息已读")
+				Msg("'user' pseudo-member cannot mark broadcast message as read")
 			return false
 		}
 		// 直发消息：设 is_read=true
@@ -257,7 +257,7 @@ func (d *SQLMessageDao) MarkMessageRead(ctx context.Context, messageID, memberNa
 				Str("message_id", messageID).
 				Str("member_name", memberName).
 				Str("team_name", msg.TeamName).
-				Msg("成员不存在，无法标记已读")
+				Msg("member does not exist, cannot mark as read")
 			return false
 		}
 

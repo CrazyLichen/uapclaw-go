@@ -13,8 +13,7 @@
 //
 //	config/
 //	├── doc.go           # 包文档
-//	├── config.go        # 懒加载全局单例 + Get/Load/Set
-//	└── config_test.go   # 单元测试
+//	└── config.go        # 懒加载全局单例 + Get/Load/Set
 //
 // 对应 Python 代码：openjiuwen/extensions/context_evolver/core/config.py
 package config

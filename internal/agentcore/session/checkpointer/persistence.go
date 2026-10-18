@@ -130,7 +130,7 @@ func NewPersistenceCheckpointer(kvStore kv.BaseKVStore) *PersistenceCheckpointer
 	logger.Info(logComponent).
 		Str("action", "new_persistence_checkpointer").
 		Str("storage_type", "persistence").
-		Msg("创建持久化检查点器")
+		Msg("created persistence checkpointer")
 	return &PersistenceCheckpointer{
 		kvStore:          kvStore,
 		agentStorage:     newPersistenceAgentStorage(kvStore),
@@ -212,7 +212,7 @@ func (s *basePersistenceStorage) Save(ctx context.Context, session interfaces.In
 			Str(s.entityLogExtraKey(), entityID).
 			Str("metadata_operation", "serialize").
 			Str("storage_type", "persistence").
-			Msgf("序列化 %s 状态失败", s.entityLabel)
+			Msgf("failed to serialize %s state", s.entityLabel)
 		return nil
 	}
 
@@ -228,7 +228,7 @@ func (s *basePersistenceStorage) Save(ctx context.Context, session interfaces.In
 			Str(s.entityLogExtraKey(), entityID).
 			Str("metadata_operation", "save").
 			Str("storage_type", "persistence").
-			Msgf("保存 %s 状态失败", s.entityLabel)
+			Msgf("failed to save %s state", s.entityLabel)
 		return err
 	}
 	logger.Debug(logComponent).
@@ -236,7 +236,7 @@ func (s *basePersistenceStorage) Save(ctx context.Context, session interfaces.In
 		Str("session_id", sessionID).
 		Str(s.entityLogExtraKey(), entityID).
 		Str("storage_type", "persistence").
-		Msgf("%s 状态保存成功", s.entityTitleLabel())
+		Msgf("%s statesavesuccess", s.entityTitleLabel())
 	return nil
 }
 
@@ -262,7 +262,7 @@ func (s *basePersistenceStorage) Recover(ctx context.Context, session interfaces
 			Str(s.entityLogExtraKey(), entityID).
 			Int("expected_keys", keyNums).
 			Int("actual_keys", len(results)).
-			Msgf("恢复 %s 状态时 key 数量异常", s.entityLabel)
+			Msgf("unexpected key count when restoring %s state", s.entityLabel)
 		return nil
 	}
 
@@ -275,7 +275,7 @@ func (s *basePersistenceStorage) Recover(ctx context.Context, session interfaces
 			Str("session_id", sessionID).
 			Str(s.entityLogExtraKey(), entityID).
 			Str("storage_type", "persistence").
-			Msgf("未找到 %s 状态", s.entityLabel)
+			Msgf("not found %s state", s.entityLabel)
 		return nil
 	}
 
@@ -286,7 +286,7 @@ func (s *basePersistenceStorage) Recover(ctx context.Context, session interfaces
 			Str("session_id", sessionID).
 			Str(s.entityLogExtraKey(), entityID).
 			Str("storage_type", "persistence").
-			Msgf("设置 %s 状态失败", s.entityLabel)
+			Msgf("failed to set %s state", s.entityLabel)
 		return err
 	}
 	logger.Debug(logComponent).
@@ -294,7 +294,7 @@ func (s *basePersistenceStorage) Recover(ctx context.Context, session interfaces
 		Str("session_id", sessionID).
 		Str(s.entityLogExtraKey(), entityID).
 		Str("storage_type", "persistence").
-		Msgf("%s 状态恢复成功", s.entityTitleLabel())
+		Msgf("%s stateresumedsuccess", s.entityTitleLabel())
 	return nil
 }
 
@@ -312,7 +312,7 @@ func (s *basePersistenceStorage) Clear(ctx context.Context, entityID, sessionID 
 		Str(s.entityLogExtraKey(), entityID).
 		Str("storage_type", "persistence").
 		Int("deleted_keys", deletedCount).
-		Msgf("%s 检查点已清除", s.entityLabel)
+		Msgf("%s checkpoint cleared", s.entityLabel)
 	return nil
 }
 
@@ -368,7 +368,7 @@ func (ws *PersistenceWorkflowStorage) Save(ctx context.Context, session interfac
 				Str("session_id", sessionID).
 				Str("workflow_id", workflowID).
 				Str("metadata_operation", "serialize").
-				Msg("序列化工作流状态失败")
+				Msg("failed to serialize workflow state")
 		}
 	}
 
@@ -395,7 +395,7 @@ func (ws *PersistenceWorkflowStorage) Save(ctx context.Context, session interfac
 				Str("workflow_id", workflowID).
 				Str("metadata_operation", "save").
 				Str("storage_type", "persistence").
-				Msg("保存工作流状态失败")
+				Msg("failed to save workflow state")
 			return err
 		}
 		logger.Debug(logComponent).
@@ -403,7 +403,7 @@ func (ws *PersistenceWorkflowStorage) Save(ctx context.Context, session interfac
 			Str("session_id", sessionID).
 			Str("workflow_id", workflowID).
 			Str("storage_type", "persistence").
-			Msg("工作流状态保存成功")
+			Msg("workflow state saved successfully")
 	}
 	return nil
 }
@@ -435,7 +435,7 @@ func (ws *PersistenceWorkflowStorage) Recover(ctx context.Context, session inter
 			Str("workflow_id", workflowID).
 			Int("expected_keys", wfKeyNums).
 			Int("actual_keys", len(results)).
-			Msg("恢复工作流状态时 key 数量异常")
+			Msg("unexpected key count when restoring workflow state")
 		return nil
 	}
 
@@ -451,7 +451,7 @@ func (ws *PersistenceWorkflowStorage) Recover(ctx context.Context, session inter
 				Str("session_id", sessionID).
 				Str("workflow_id", workflowID).
 				Str("metadata_operation", "deserialize_state").
-				Msg("反序列化工作流状态失败")
+				Msg("failed to deserialize workflow state")
 		} else if loadedState != nil {
 			if st, ok := loadedState.(map[string]any); ok && session.State() != nil {
 				session.State().SetState(st)
@@ -478,7 +478,7 @@ func (ws *PersistenceWorkflowStorage) Recover(ctx context.Context, session inter
 					Str("session_id", sessionID).
 					Str("workflow_id", workflowID).
 					Str("metadata_operation", "deserialize_updates").
-					Msg("反序列化工作流更新失败")
+					Msg("failed to deserialize workflow updates")
 			} else if updates != nil {
 				if u, ok := updates.(map[string]any); ok {
 					commitState.SetUpdates(u)
@@ -507,7 +507,7 @@ func (ws *PersistenceWorkflowStorage) Clear(ctx context.Context, workflowID, ses
 		Str("workflow_id", workflowID).
 		Str("storage_type", "persistence").
 		Int("deleted_keys", deletedCount).
-		Msg("工作流检查点已清除")
+		Msg("workflow checkpoint cleared")
 	return nil
 }
 
@@ -552,13 +552,13 @@ func (cp *PersistenceCheckpointer) PreAgentExecute(ctx context.Context, session 
 		Str("session_id", sessionID).
 		Str("agent_id", agentID).
 		Str("storage_type", "persistence").
-		Msg("开始恢复 Agent 会话")
+		Msg("starting to recover Agent session")
 
 	if err := cp.agentStorage.Recover(ctx, session, nil); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("session_id", sessionID).
 			Str("agent_id", agentID).
-			Msg("恢复 Agent 会话失败")
+			Msg("failed to recover Agent session")
 		return err
 	}
 
@@ -568,7 +568,7 @@ func (cp *PersistenceCheckpointer) PreAgentExecute(ctx context.Context, session 
 			if err := st.Update(map[string]any{constants.InteractiveInputKey: []any{inputs}}); err != nil {
 				logger.Warn(logComponent).Err(err).
 					Str("session_id", session.SessionID()).
-					Msg("设置交互输入到 session state 失败")
+					Msg("failed to set interactive input to session state")
 			}
 		}
 	}
@@ -587,13 +587,13 @@ func (cp *PersistenceCheckpointer) PreAgentTeamExecute(ctx context.Context, sess
 		Str("session_id", sessionID).
 		Str("workflow_id", teamID).
 		Str("storage_type", "persistence").
-		Msg("开始恢复 AgentTeam 会话")
+		Msg("starting to recover AgentTeam session")
 
 	if err := cp.agentTeamStorage.Recover(ctx, session, nil); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("session_id", sessionID).
 			Str("workflow_id", teamID).
-			Msg("恢复 AgentTeam 会话失败")
+			Msg("failed to recover AgentTeam session")
 		return err
 	}
 
@@ -619,7 +619,7 @@ func (cp *PersistenceCheckpointer) InterruptAgentExecute(ctx context.Context, se
 		Str("agent_id", agentID).
 		Str("reason", "interaction_required").
 		Str("storage_type", "persistence").
-		Msg("Agent 中断时开始保存检查点")
+		Msg("starting to save checkpoint on Agent interruption")
 
 	if err := cp.agentStorage.Save(ctx, session); err != nil {
 		logger.Error(logComponent).Err(err).
@@ -628,7 +628,7 @@ func (cp *PersistenceCheckpointer) InterruptAgentExecute(ctx context.Context, se
 			Str("session_id", sessionID).
 			Str("agent_id", agentID).
 			Str("storage_type", "persistence").
-			Msg("Agent 中断时保存检查点失败")
+			Msg("failed to save checkpoint on Agent interruption")
 		return err
 	}
 	return nil
@@ -647,7 +647,7 @@ func (cp *PersistenceCheckpointer) PostAgentExecute(ctx context.Context, session
 		Str("agent_id", agentID).
 		Str("reason", "agent_finished").
 		Str("storage_type", "persistence").
-		Msg("Agent 执行完成后开始保存检查点")
+		Msg("starting to save checkpoint after Agent execution")
 
 	if err := cp.agentStorage.Save(ctx, session); err != nil {
 		logger.Error(logComponent).Err(err).
@@ -656,7 +656,7 @@ func (cp *PersistenceCheckpointer) PostAgentExecute(ctx context.Context, session
 			Str("session_id", sessionID).
 			Str("agent_id", agentID).
 			Str("storage_type", "persistence").
-			Msg("Agent 执行完成后保存检查点失败")
+			Msg("failed to save checkpoint after Agent execution")
 		return err
 	}
 	return nil
@@ -675,7 +675,7 @@ func (cp *PersistenceCheckpointer) PostAgentTeamExecute(ctx context.Context, ses
 		Str("workflow_id", teamID).
 		Str("reason", "team_finished").
 		Str("storage_type", "persistence").
-		Msg("AgentTeam 执行完成后开始保存检查点")
+		Msg("starting to save checkpoint after AgentTeam execution")
 
 	if err := cp.agentTeamStorage.Save(ctx, session); err != nil {
 		logger.Error(logComponent).Err(err).
@@ -684,7 +684,7 @@ func (cp *PersistenceCheckpointer) PostAgentTeamExecute(ctx context.Context, ses
 			Str("session_id", sessionID).
 			Str("workflow_id", teamID).
 			Str("storage_type", "persistence").
-			Msg("AgentTeam 执行完成后保存检查点失败")
+			Msg("failed to save checkpoint after AgentTeam execution")
 		return err
 	}
 	return nil
@@ -702,14 +702,14 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 		Str("session_id", sessionID).
 		Str("workflow_id", workflowID).
 		Str("storage_type", "persistence").
-		Msg("开始处理工作流执行前检查点")
+		Msg("starting to process pre-workflow-execute checkpoint")
 
 	if isInteractiveInput(inputs) {
 		if err := cp.workflowStorage.Recover(ctx, session, inputs); err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("session_id", sessionID).
 				Str("workflow_id", workflowID).
-				Msg("恢复工作流会话失败")
+				Msg("failed to recover workflow session")
 			return err
 		}
 	} else {
@@ -730,7 +730,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 					Str("session_id", sessionID).
 					Str("workflow_id", workflowID).
 					Str("storage_type", "persistence").
-					Msg("强制清除当前工作流所有检查点")
+					Msg("force clearing all checkpoints of current workflow")
 
 				// Python: if workflow_id is None: logger.warning(...) return
 				if workflowID == "" {
@@ -738,7 +738,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 						Str("event_type", "checkpoint_error").
 						Str("session_id", sessionID).
 						Str("storage_type", "persistence").
-						Msg("Workflow ID 为空，跳过状态清理")
+						Msg("Workflow ID is empty, skipping state cleanup")
 					return nil
 				}
 
@@ -770,7 +770,7 @@ func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, sess
 			Str("workflow_id", workflowID).
 			Str("reason", "exception").
 			Str("storage_type", "persistence").
-			Msg("工作流异常时保存检查点")
+			Msg("saving checkpoint on workflow exception")
 		if err := cp.workflowStorage.Save(ctx, session); err != nil {
 			return err
 		}
@@ -789,7 +789,7 @@ func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, sess
 			Str("workflow_id", workflowID).
 			Str("reason", "workflow_completed").
 			Str("storage_type", "persistence").
-			Msg("工作流正常完成，清除检查点")
+			Msg("workflow completed normally, clearing checkpoint")
 
 		// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
 
@@ -805,7 +805,7 @@ func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, sess
 			Str("workflow_id", workflowID).
 			Str("reason", "interaction_required").
 			Str("storage_type", "persistence").
-			Msg("工作流中断时保存检查点")
+			Msg("saving checkpoint on workflow interruption")
 		if err := cp.workflowStorage.Save(ctx, session); err != nil {
 			return err
 		}
@@ -840,7 +840,7 @@ func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string
 			Str("session_id", sessionID).
 			Str("storage_type", "persistence").
 			Strs("agent_ids", agentID).
-			Msg("开始清除指定 Agent 的检查点")
+			Msg("starting to clear checkpoints of specified Agents")
 		var firstErr error
 		for _, aid := range agentID {
 			if err := cp.agentStorage.Clear(ctx, aid, sessionID); err != nil && firstErr == nil {
@@ -854,7 +854,7 @@ func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string
 			Str("event_type", "checkpoint_error").
 			Str("session_id", sessionID).
 			Str("metadata_operation", "release").
-			Msg("KV store 为 nil，无法释放资源")
+			Msg("KV store is nil, cannot release resources")
 		return nil
 	}
 
@@ -863,7 +863,7 @@ func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string
 		Str("event_type", "checkpoint_clear").
 		Str("session_id", sessionID).
 		Str("storage_type", "persistence").
-		Msg("开始清除会话的所有检查点")
+		Msg("starting to clear all checkpoints of session")
 
 	prefix := sessionID + ":"
 	if err := cp.kvStore.DeleteByPrefix(ctx, prefix, 0); err != nil {
@@ -875,7 +875,7 @@ func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string
 		Str("event_type", "checkpoint_clear").
 		Str("session_id", sessionID).
 		Str("storage_type", "persistence").
-		Msg("所有会话资源已释放")
+		Msg("all session resources released")
 	return nil
 }
 
@@ -913,7 +913,7 @@ func (p *persistenceProvider) Create(ctx context.Context, conf map[string]any) (
 				Str("action", "persistence_provider_create").
 				Str("db_type", dbType).
 				Bool("db_client_provided", true).
-				Msg("使用预配置的数据库客户端创建检查点器")
+				Msg("creating checkpointer with pre-configured database client")
 			kvStore := kv.NewDbBasedKVStore(db)
 			return NewPersistenceCheckpointer(kvStore), nil
 		}
@@ -976,7 +976,7 @@ func (p *persistenceProvider) Create(ctx context.Context, conf map[string]any) (
 		Str("db_path", dbPath).
 		Int("db_timeout", dbTimeout).
 		Bool("db_enable_wal", dbEnableWAL).
-		Msg("创建持久化检查点器")
+		Msg("created persistence checkpointer")
 
 	kvStore := kv.NewDbBasedKVStore(db)
 	return NewPersistenceCheckpointer(kvStore), nil
@@ -1071,7 +1071,7 @@ func (s *basePersistenceStorage) deserializeState(dumpTypeBytes []byte, blob []b
 		logger.Error(logComponent).Err(err).
 			Str("event_type", "checkpoint_error").
 			Str("metadata_operation", "deserialize").
-			Msg("反序列化状态失败")
+			Msg("failed to deserialize state")
 		return nil
 	}
 	return st

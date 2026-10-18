@@ -196,7 +196,7 @@ func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 	case <-time.After(30 * time.Second):
 		logger.Warn(logComponent).
 			Str("event_type", "INVOKE_COLLECT_TIMEOUT").
-			Msg("等待输出收集超时 30 秒")
+			Msg("timed out waiting 30s for output collection")
 	}
 
 	data := &InvokeData{
@@ -352,7 +352,7 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 					logger.Warn(logComponent).
 						Str("event_type", "STREAM_TIMEOUT").
 						Int("overall_timeout", h.overallTimeout).
-						Msg("流式执行超时")
+						Msg("streaming execution timed out")
 					h.killProcessTree()
 					ch <- StreamEvent{
 						Type:      StreamEventTypeError,
@@ -365,7 +365,7 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 			case <-ctx.Done():
 				logger.Warn(logComponent).
 					Str("event_type", "STREAM_CANCELLED").
-					Msg("流式执行被取消")
+					Msg("streaming execution cancelled")
 				h.killProcessTree()
 				ch <- StreamEvent{
 					Type:      StreamEventTypeError,
@@ -419,14 +419,14 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 						Str("event_type", "BACKGROUND_EARLY_EXIT").
 						Int("pid", pid).
 						Int("exit_code", exitErr.ExitCode()).
-						Msg("后台进程在 grace 内以非零退出码退出")
+						Msg("background process exited with non-zero code within grace")
 					return pid, fmt.Errorf("进程提前退出，退出码 %d", exitErr.ExitCode())
 				}
 				// 退出码 0 也视为成功
 				logger.Info(logComponent).
 					Str("event_type", "BACKGROUND_EARLY_EXIT_SUCCESS").
 					Int("pid", pid).
-					Msg("后台进程在 grace 内正常退出")
+					Msg("background process exited normally within grace")
 				return pid, nil
 			}
 			return pid, nil
@@ -436,7 +436,7 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 				Str("event_type", "BACKGROUND_GRACE_TIMEOUT").
 				Int("pid", pid).
 				Float64("grace", grace).
-				Msg("后台进程 grace 检测超时，进程仍在运行")
+				Msg("background process grace check timed out, process still running")
 			return pid, nil
 		}
 	}

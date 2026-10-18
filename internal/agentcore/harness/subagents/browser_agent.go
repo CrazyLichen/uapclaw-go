@@ -179,3 +179,5 @@ func DefaultBrowserAgentDescription(language string) string {
 	}
 	return defaultBrowserAgentDescription["cn"]
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

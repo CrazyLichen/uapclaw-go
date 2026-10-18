@@ -80,7 +80,7 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 				Str("language", lang).
 				Int("timeout", timeout).
 				Err(execErr).
-				Msg("CodeTool ExecuteCode 调用失败")
+				Msg("CodeTool ExecuteCode call failed")
 			return map[string]any{
 				"success": false,
 				"error":   execErr.Error(),
@@ -93,7 +93,7 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 			logger.Error(logComponent).
 				Str("language", lang).
 				Str("message", res.Message).
-				Msg("CodeTool ExecuteCode 返回失败")
+				Msg("CodeTool ExecuteCode returned failure")
 			return map[string]any{
 				"success": false,
 				"error":   res.Message,
@@ -118,7 +118,7 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 				Str("language", lang).
 				Int("exit_code", exitCode).
 				Bool("success", success).
-				Msg("CodeTool 执行完成")
+				Msg("CodeTool execution completed")
 
 			return map[string]any{
 				"success": success,
@@ -134,7 +134,7 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		// data 为空
 		logger.Warn(logComponent).
 			Str("language", lang).
-			Msg("CodeTool ExecuteCode 返回空 data")
+			Msg("CodeTool ExecuteCode returned empty data")
 
 		return map[string]any{
 			"success": false,

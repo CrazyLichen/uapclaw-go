@@ -43,7 +43,7 @@ func NewAskUserTool(language, agentID string) (tool.Tool, error) {
 		logger.Warn(logComponent).
 			Str("event_type", "ask_user_tool_create").
 			Err(err).
-			Msg("构建 ask_user ToolCard 失败")
+			Msg("failed to build ask_user ToolCard")
 		return nil, fmt.Errorf("构建 ask_user ToolCard 失败: %w", err)
 	}
 
@@ -62,7 +62,7 @@ func NewAskUserTool(language, agentID string) (tool.Tool, error) {
 	logger.Info(logComponent).
 		Str("event_type", "ask_user_tool_create").
 		Str("tool_id", card.ID).
-		Msg("AskUserTool 创建成功")
+		Msg("AskUserTool created")
 
 	return askUserTool, nil
 }

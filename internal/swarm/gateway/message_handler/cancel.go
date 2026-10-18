@@ -58,7 +58,7 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 				Str("event_type", "cancel_send_error").
 				Err(respErr).
 				Str("session_id", oldSessionID).
-				Msg("AgentServer 中断请求失败")
+				Msg("AgentServer interrupt request failed")
 
 			// Python: SendRequest 异常时发送 success=false 并返回
 			if publishInterruptResult {
@@ -92,7 +92,7 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 			logger.Debug(logComponent).
 				Str("event_type", "cancel_silent").
 				Str("session_id", oldSessionID).
-				Msg("取消完成，静默模式不发布 interrupt_result")
+				Msg("cancel completed, silent mode does not publish interrupt_result")
 		} else {
 			// 非预期响应，发送失败通知
 			// Python: 从 payload 中提取 error 或 message 字段
@@ -160,7 +160,7 @@ func (mh *MessageHandler) cancelStreamTask(requestID string) {
 		logger.Debug(logComponent).
 			Str("event_type", "stream_task_cancelled").
 			Str("request_id", requestID).
-			Msg("流式任务已取消并等待退出")
+			Msg("streaming task cancelled, waiting for exit")
 	}
 }
 
@@ -241,14 +241,14 @@ func (mh *MessageHandler) sendInterruptToAgent(ctx context.Context, msg *schema.
 			Str("event_type", "cancel_send_error").
 			Err(err).
 			Str("session_id", msg.SessionID).
-			Msg("AgentServer 中断请求失败(忽略)")
+			Msg("AgentServer interrupt request failed (ignored)")
 		return
 	}
 	logger.Info(logComponent).
 		Str("event_type", "cancel_response_discarded").
 		Str("request_id", resp.RequestID).
 		Bool("ok", resp.OK).
-		Msg("AgentServer 中断响应(已丢弃)")
+		Msg("AgentServer interrupt response (dropped)")
 }
 
 // sendInterruptToAgentWithEnvelope 使用预构建的 E2A 信封发送中断请求。
@@ -267,14 +267,14 @@ func (mh *MessageHandler) sendInterruptToAgentWithEnvelope(ctx context.Context, 
 			Str("event_type", "cancel_send_error").
 			Err(err).
 			Str("session_id", envelope.SessionID).
-			Msg("AgentServer 中断请求失败(忽略)")
+			Msg("AgentServer interrupt request failed (ignored)")
 		return
 	}
 	logger.Info(logComponent).
 		Str("event_type", "cancel_response_discarded").
 		Str("request_id", resp.RequestID).
 		Bool("ok", resp.OK).
-		Msg("AgentServer 中断响应(已丢弃)")
+		Msg("AgentServer interrupt response (dropped)")
 }
 
 // sendInterruptResultNotification 发送 interrupt_result 事件通知。

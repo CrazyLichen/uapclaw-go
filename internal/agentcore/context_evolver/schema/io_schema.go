@@ -288,6 +288,7 @@ func (r *ReMeRetrieveRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // FormatMemoryString 对齐 Python ACE 的记忆格式化。
@@ -308,3 +309,7 @@ func (m ReasoningBankRetrievedMemory) FormatMemoryString() string {
 func (m ReMeRetrievedMemory) FormatMemoryString() string {
 	return fmt.Sprintf("When to use: %s\nContent: %s", m.WhenToUse, m.Content)
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────

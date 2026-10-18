@@ -129,7 +129,7 @@ func (s *MilvusVectorStore) Close() {
 	if s.client != nil {
 		_ = s.client.Close(context.Background())
 		s.client = nil
-		logger.Info(logComponent).Str("action", "close").Msg("Milvus 客户端连接已关闭")
+		logger.Info(logComponent).Str("action", "close").Msg("Milvus client connection closed")
 	}
 }
 
@@ -150,7 +150,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 		return err
 	}
 	if has {
-		logger.Info(logComponent).Str("collection_name", collectionName).Msg("集合已存在，跳过创建")
+		logger.Info(logComponent).Str("collection_name", collectionName).Msg("collection already exists, skipping creation")
 		return nil
 	}
 
@@ -227,7 +227,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 	}
 
 	if err := c.CreateCollection(ctx, createOpt); err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("创建集合失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("failed to create collection")
 		return err
 	}
 
@@ -243,14 +243,14 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 			createIdxOpt := milvusclient.NewCreateIndexOption(collectionName, field.Name, invertedIdx)
 			if err := c.CreateIndex(ctx, createIdxOpt); err != nil {
 				logger.Warn(logComponent).Err(err).Str("field", field.Name).
-					Msg("创建 INVERTED 索引失败，非致命错误")
+					Msg("failed to create INVERTED index, non-fatal")
 			}
 		}
 	}
 
 	// 加载集合
 	if err := c.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(collectionName)); err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("加载集合失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("failed to load collection")
 		return err
 	}
 
@@ -272,7 +272,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Int("field_count", len(schema.Fields())).
-		Msg("成功创建集合并加载")
+		Msg("collection created and loaded")
 	return nil
 }
 
@@ -290,12 +290,12 @@ func (s *MilvusVectorStore) DeleteCollection(ctx context.Context, collectionName
 		return err
 	}
 	if !has {
-		logger.Warn(logComponent).Str("collection_name", collectionName).Msg("集合不存在，跳过删除")
+		logger.Warn(logComponent).Str("collection_name", collectionName).Msg("collection does not exist, skipping deletion")
 		return nil
 	}
 
 	if err := c.DropCollection(ctx, milvusclient.NewDropCollectionOption(collectionName)); err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("删除集合失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("failed to delete collection")
 		return err
 	}
 
@@ -305,7 +305,7 @@ func (s *MilvusVectorStore) DeleteCollection(ctx context.Context, collectionName
 	delete(s.collectionsLoaded, collectionName)
 	s.mu.Unlock()
 
-	logger.Info(logComponent).Str("collection_name", collectionName).Msg("成功删除集合")
+	logger.Info(logComponent).Str("collection_name", collectionName).Msg("collection deleted successfully")
 	return nil
 }
 
@@ -341,7 +341,7 @@ func (s *MilvusVectorStore) GetSchema(ctx context.Context, collectionName string
 
 	collInfo, err := c.DescribeCollection(ctx, milvusclient.NewDescribeCollectionOption(collectionName))
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("获取集合 Schema 失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("failed to get collection schema")
 		return nil, err
 	}
 
@@ -430,22 +430,22 @@ func (s *MilvusVectorStore) AddDocs(ctx context.Context, collectionName string, 
 		_, err = c.Insert(ctx, insertOpt)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-				Int("batch_start", i).Int("batch_size", len(batch)).Msg("插入文档批次失败")
+				Int("batch_start", i).Int("batch_size", len(batch)).Msg("failed to insert document batch")
 			return err
 		}
 		// Python: logger.debug(f"Added {processed}/{total} documents")
 		logger.Debug(logComponent).Str("collection_name", collectionName).
 			Int("added", end).Int("total", total).
-			Msg("添加文档进度")
+			Msg("document insertion progress")
 	}
 
 	// 刷新确保持久化
 	if err := c.Flush(ctx, milvusclient.NewFlushOption(collectionName)); err != nil {
-		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).Msg("Flush 失败")
+		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).Msg("flush failed")
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Int("total", total).Msg("成功添加文档到集合")
+		Int("total", total).Msg("documents added to collection successfully")
 	return nil
 }
 
@@ -514,7 +514,7 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 
 	resultSets, err := c.Search(ctx, searchOpt)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("向量搜索失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("vector search failed")
 		return nil, err
 	}
 
@@ -522,7 +522,7 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 	searchResults := make([]VectorSearchResult, 0)
 	for _, rs := range resultSets {
 		if rs.Err != nil {
-			logger.Warn(logComponent).Err(rs.Err).Msg("搜索结果包含错误")
+			logger.Warn(logComponent).Err(rs.Err).Msg("search results contain errors")
 			continue
 		}
 		for j := 0; j < rs.ResultCount; j++ {
@@ -536,7 +536,7 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 				if err != nil {
 					logger.Warn(logComponent).Err(err).
 						Str("field", col.Name()).Int("row", j).
-						Msg("提取搜索结果字段值失败")
+						Msg("failed to extract search result field value")
 					continue
 				}
 				fields[col.Name()] = val
@@ -550,7 +550,7 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Int("result_count", len(searchResults)).Msg("向量搜索完成")
+		Int("result_count", len(searchResults)).Msg("vector search completed")
 	return searchResults, nil
 }
 
@@ -559,7 +559,7 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 // Python: MilvusVectorStore.delete_docs_by_ids(collection_name, ids)
 func (s *MilvusVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error {
 	if len(ids) == 0 {
-		logger.Warn(logComponent).Str("collection_name", collectionName).Msg("未提供删除 ID")
+		logger.Warn(logComponent).Str("collection_name", collectionName).Msg("no delete IDs provided")
 		return nil
 	}
 
@@ -591,16 +591,16 @@ func (s *MilvusVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName 
 
 	if _, err := c.Delete(ctx, deleteOpt); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Int("id_count", len(ids)).Msg("按 ID 删除文档失败")
+			Int("id_count", len(ids)).Msg("failed to delete documents by ID")
 		return err
 	}
 
 	if err := c.Flush(ctx, milvusclient.NewFlushOption(collectionName)); err != nil {
-		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).Msg("Flush 失败")
+		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).Msg("flush failed")
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Int("id_count", len(ids)).Msg("成功按 ID 删除文档")
+		Int("id_count", len(ids)).Msg("documents deleted by ID successfully")
 	return nil
 }
 
@@ -609,7 +609,7 @@ func (s *MilvusVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName 
 // Python: MilvusVectorStore.delete_docs_by_filters(collection_name, filters)
 func (s *MilvusVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName string, filters map[string]any, opts ...Option) error {
 	if len(filters) == 0 {
-		logger.Warn(logComponent).Str("collection_name", collectionName).Msg("未提供过滤条件")
+		logger.Warn(logComponent).Str("collection_name", collectionName).Msg("no filter expression provided")
 		return nil
 	}
 
@@ -630,16 +630,16 @@ func (s *MilvusVectorStore) DeleteDocsByFilters(ctx context.Context, collectionN
 	deleteOpt := milvusclient.NewDeleteOption(collectionName).WithExpr(expr)
 	if _, err := c.Delete(ctx, deleteOpt); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("filter_expr", expr).Msg("按过滤条件删除文档失败")
+			Str("filter_expr", expr).Msg("failed to delete documents by filter")
 		return err
 	}
 
 	if err := c.Flush(ctx, milvusclient.NewFlushOption(collectionName)); err != nil {
-		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).Msg("Flush 失败")
+		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).Msg("flush failed")
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Str("filter_expr", expr).Msg("成功按过滤条件删除文档")
+		Str("filter_expr", expr).Msg("documents deleted by filter successfully")
 	return nil
 }
 
@@ -680,7 +680,7 @@ func (s *MilvusVectorStore) UpdateSchema(ctx context.Context, collectionName str
 	newSchema, err := ComputeNewSchema(oldSchema, operations)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("计算新 Schema 失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to compute new schema")
 		return err
 	}
 
@@ -771,7 +771,7 @@ func (s *MilvusVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 	// 自定义属性（如 schema_version）目前无法通过 SDK 写入 Milvus，仅更新本地缓存
 	// 但通过 DescribeCollection.Properties 可以读取 Milvus 中已有的 schema_version
 	logger.Info(logComponent).Str("collection_name", collectionName).
-		Interface("metadata", metadata).Msg("更新集合元数据（仅本地缓存）")
+		Interface("metadata", metadata).Msg("update collection metadata (local cache only)")
 
 	// 更新本地缓存
 	s.mu.Lock()
@@ -810,7 +810,7 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 
 	// 缓存未命中，从 Milvus 获取
 	// Python: logger.debug(f"Cache miss for '{collection_name}' metadata")
-	logger.Debug(logComponent).Str("collection_name", collectionName).Msg("集合元数据缓存未命中")
+	logger.Debug(logComponent).Str("collection_name", collectionName).Msg("collection metadata cache miss")
 	c, err := s.getClient(ctx)
 	if err != nil {
 		return nil, err
@@ -819,7 +819,7 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 	collInfo, err := c.DescribeCollection(ctx, milvusclient.NewDescribeCollectionOption(collectionName))
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).
-			Msg("获取集合描述失败，回退默认值")
+			Msg("failed to get collection description, falling back to defaults")
 		return map[string]any{
 			"distance_metric": defaultDistanceMetric,
 			"schema_version":  "0",
@@ -912,7 +912,7 @@ func (s *MilvusVectorStore) executeMigration(
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("temp_collection_name", tempCollectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("开始 schema 迁移")
+		Msg("starting schema migration")
 
 	c, err := s.getClient(ctx)
 	if err != nil {
@@ -929,7 +929,7 @@ func (s *MilvusVectorStore) executeMigration(
 	// Python: await self.create_collection(temp_collection_name, new_schema, **new_collection_kwargs)
 	if err := s.CreateCollection(ctx, tempCollectionName, newSchema, createOpts...); err != nil {
 		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Str("event_type", "STORE_UPDATE").Msg("创建临时集合失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to create temporary collection")
 		return err
 	}
 
@@ -938,7 +938,7 @@ func (s *MilvusVectorStore) executeMigration(
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("temp_collection_name", tempCollectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("开始数据复制")
+		Msg("starting data copy")
 
 	// 确保旧集合已加载
 	if err := s.ensureLoaded(ctx, collectionName); err != nil {
@@ -955,7 +955,7 @@ func (s *MilvusVectorStore) executeMigration(
 	iter, err := c.QueryIterator(ctx, queryIterOpt)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("创建查询迭代器失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to create query iterator")
 		s.cleanupTempCollection(ctx, tempCollectionName)
 		return err
 	}
@@ -970,7 +970,7 @@ func (s *MilvusVectorStore) executeMigration(
 				break
 			}
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-				Str("event_type", "STORE_UPDATE").Msg("查询迭代器读取失败")
+				Str("event_type", "STORE_UPDATE").Msg("failed to read from query iterator")
 			s.cleanupTempCollection(ctx, tempCollectionName)
 			return err
 		}
@@ -984,7 +984,7 @@ func (s *MilvusVectorStore) executeMigration(
 			transformedDoc, err := transformFunc(doc)
 			if err != nil {
 				logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-					Str("event_type", "STORE_UPDATE").Msg("文档变换失败")
+					Str("event_type", "STORE_UPDATE").Msg("failed to transform document")
 				s.cleanupTempCollection(ctx, tempCollectionName)
 				return err
 			}
@@ -993,14 +993,14 @@ func (s *MilvusVectorStore) executeMigration(
 			if len(batch) >= migrationBatchSize {
 				if err := s.AddDocs(ctx, tempCollectionName, batch); err != nil {
 					logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-						Str("event_type", "STORE_UPDATE").Msg("写入临时集合失败")
+						Str("event_type", "STORE_UPDATE").Msg("failed to write to temporary collection")
 					s.cleanupTempCollection(ctx, tempCollectionName)
 					return err
 				}
 				totalDocs += len(batch)
 				logger.Debug(logComponent).Str("temp_collection_name", tempCollectionName).
 					Int("migrated", totalDocs).
-					Str("event_type", "STORE_UPDATE").Msg("迁移进度")
+					Str("event_type", "STORE_UPDATE").Msg("migration progress")
 				batch = batch[:0]
 			}
 		}
@@ -1010,7 +1010,7 @@ func (s *MilvusVectorStore) executeMigration(
 	if len(batch) > 0 {
 		if err := s.AddDocs(ctx, tempCollectionName, batch); err != nil {
 			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-				Str("event_type", "STORE_UPDATE").Msg("写入临时集合最后批次失败")
+				Str("event_type", "STORE_UPDATE").Msg("failed to write last batch to temporary collection")
 			s.cleanupTempCollection(ctx, tempCollectionName)
 			return err
 		}
@@ -1020,13 +1020,13 @@ func (s *MilvusVectorStore) executeMigration(
 	logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
 		Int("total_docs", totalDocs).
 		Str("event_type", "STORE_UPDATE").
-		Msg("数据复制完成")
+		Msg("data copy completed")
 
 	// 释放旧集合内存
 	// Python: client.release_collection(collection_name)
 	if err := c.ReleaseCollection(ctx, milvusclient.NewReleaseCollectionOption(collectionName)); err != nil {
 		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).
-			Msg("释放旧集合失败，非致命错误")
+			Msg("failed to release old collection, non-fatal")
 	}
 	// 清除旧集合的加载缓存
 	s.mu.Lock()
@@ -1037,10 +1037,10 @@ func (s *MilvusVectorStore) executeMigration(
 	// Python: await self.delete_collection(collection_name)
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("event_type", "STORE_DELETE").
-		Msg("删除旧集合")
+		Msg("deleting old collection")
 	if err := s.DeleteCollection(ctx, collectionName); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("删除旧集合失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to delete old collection")
 		return err
 	}
 
@@ -1049,11 +1049,11 @@ func (s *MilvusVectorStore) executeMigration(
 	logger.Info(logComponent).Str("old_name", tempCollectionName).
 		Str("new_name", collectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("重命名临时集合")
+		Msg("renaming temporary collection")
 	if err := c.RenameCollection(ctx, milvusclient.NewRenameCollectionOption(tempCollectionName, collectionName)); err != nil {
 		logger.Error(logComponent).Err(err).Str("old_name", tempCollectionName).
 			Str("new_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("重命名集合失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to rename collection")
 		return err
 	}
 
@@ -1065,7 +1065,7 @@ func (s *MilvusVectorStore) executeMigration(
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("schema 迁移完成")
+		Msg("schema migration completed")
 
 	return nil
 }
@@ -1076,16 +1076,16 @@ func (s *MilvusVectorStore) cleanupTempCollection(ctx context.Context, tempColle
 	exists, err := s.CollectionExists(ctx, tempCollectionName)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Msg("检查临时集合是否存在失败")
+			Msg("failed to check temporary collection existence")
 		return
 	}
 	if exists {
 		if delErr := s.DeleteCollection(ctx, tempCollectionName); delErr != nil {
 			logger.Warn(logComponent).Err(delErr).Str("temp_collection_name", tempCollectionName).
-				Msg("清理临时集合失败")
+				Msg("failed to clean up temporary collection")
 		} else {
 			logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
-				Msg("成功清理临时集合")
+				Msg("temporary collection cleaned up")
 		}
 	}
 }
@@ -1122,13 +1122,13 @@ func (s *MilvusVectorStore) getClient(ctx context.Context) (milvusClient, error)
 
 	c, err := s.createClient(ctx, s.milvusURI, s.milvusToken, s.dbName)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("milvus_uri", s.milvusURI).Msg("连接 Milvus 失败")
+		logger.Error(logComponent).Err(err).Str("milvus_uri", s.milvusURI).Msg("failed to connect to Milvus")
 		return nil, exception.BuildError(exception.StatusStoreVectorCollectionNotFound,
 			exception.WithParam("error_msg", fmt.Sprintf("failed to connect to Milvus: %v", err)),
 		)
 	}
 	s.client = c
-	logger.Info(logComponent).Str("milvus_uri", s.milvusURI).Msg("成功连接 Milvus")
+	logger.Info(logComponent).Str("milvus_uri", s.milvusURI).Msg("connected to Milvus successfully")
 	return s.client, nil
 }
 
@@ -1156,9 +1156,9 @@ func (s *MilvusVectorStore) ensureLoaded(ctx context.Context, collectionName str
 		return nil
 	}
 
-	logger.Info(logComponent).Str("collection_name", collectionName).Msg("正在加载集合")
+	logger.Info(logComponent).Str("collection_name", collectionName).Msg("loading collection")
 	if err := c.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(collectionName)); err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("加载集合失败")
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("failed to load collection")
 		return err
 	}
 
@@ -1166,7 +1166,7 @@ func (s *MilvusVectorStore) ensureLoaded(ctx context.Context, collectionName str
 	s.collectionsLoaded[collectionName] = true
 	s.mu.Unlock()
 
-	logger.Info(logComponent).Str("collection_name", collectionName).Msg("集合加载完成")
+	logger.Info(logComponent).Str("collection_name", collectionName).Msg("collection loaded")
 	return nil
 }
 
@@ -1280,7 +1280,7 @@ func mapMilvusTypeToOurType(milvusType entity.FieldType) VectorDataType {
 	}
 	ourType, ok := mapping[milvusType]
 	if !ok {
-		logger.Warn(logComponent).Str("milvus_type", milvusType.String()).Msg("不支持的 Milvus 类型，回退为 VARCHAR")
+		logger.Warn(logComponent).Str("milvus_type", milvusType.String()).Msg("unsupported Milvus type, falling back to VARCHAR")
 		return VectorDataTypeVarchar
 	}
 	return ourType

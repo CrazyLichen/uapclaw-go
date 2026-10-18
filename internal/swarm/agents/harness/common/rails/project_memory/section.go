@@ -14,6 +14,7 @@ const (
 	SectionName = "project_memory"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildProjectMemorySection 构建 project_memory PromptSection。
@@ -39,3 +40,5 @@ func BuildProjectMemorySection(content string, priority int) *saprompt.PromptSec
 	}
 	return &section
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -177,3 +177,25 @@ func TestStreamWriterManager_InteractionOutputWriter(t *testing.T) {
 		t.Errorf("交互输出数据 = %v, want OutputSchema{Type:__interaction__}", data)
 	}
 }
+
+// TestWithFirstFrameTimeout 验证 WithFirstFrameTimeout 选项。
+func TestWithFirstFrameTimeout(t *testing.T) {
+	d := 5 * time.Second
+	opt := WithFirstFrameTimeout(d)
+	cfg := &streamOutputConfig{}
+	opt(cfg)
+	if cfg.firstFrameTimeout != d {
+		t.Errorf("firstFrameTimeout = %v, want %v", cfg.firstFrameTimeout, d)
+	}
+}
+
+// TestWithFrameTimeout 验证 WithFrameTimeout 选项。
+func TestWithFrameTimeout(t *testing.T) {
+	d := 30 * time.Second
+	opt := WithFrameTimeout(d)
+	cfg := &streamOutputConfig{}
+	opt(cfg)
+	if cfg.timeout != d {
+		t.Errorf("timeout = %v, want %v", cfg.timeout, d)
+	}
+}

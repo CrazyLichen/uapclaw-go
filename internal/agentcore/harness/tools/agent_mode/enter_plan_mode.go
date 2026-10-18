@@ -78,7 +78,7 @@ func NewEnterPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentI
 			Str("event_type", "enter_plan_mode").
 			Str("plan_slug", slug).
 			Str("plan_path", planPath).
-			Msg("AgentModeRail 已创建 plan 文件")
+			Msg("AgentModeRail created plan file")
 
 		return map[string]any{"plan_path": planPath, "message": msg}, nil
 	}
@@ -86,3 +86,5 @@ func NewEnterPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentI
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
 	return invokeFn
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

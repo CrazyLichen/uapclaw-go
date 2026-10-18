@@ -70,11 +70,11 @@ func (w *WorkspaceProvider) EnsureLocal(taskID string) (string, error) {
 				Str("task_id", taskID).
 				Str("dir", dir).
 				Err(err).
-				Msg("[WorkspaceProvider] 创建子目录失败")
+				Msg("[WorkspaceProvider] failed to create subdirectory")
 			return "", err
 		}
 	}
-	logger.Debug(logComponent).Str("workspace", workspace).Msg("[WorkspaceProvider] workspace 已就绪")
+	logger.Debug(logComponent).Str("workspace", workspace).Msg("[WorkspaceProvider] workspace ready")
 	return workspace, nil
 }
 

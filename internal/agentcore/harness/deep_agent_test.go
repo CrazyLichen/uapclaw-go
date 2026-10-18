@@ -25,6 +25,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -3585,4 +3586,294 @@ func TestDeepAgent_SpecName(t *testing.T) {
 	agent.card = &agentschema.AgentCard{}
 	agent.card.Name = "test-agent"
 	assert.Equal(t, "test-agent", agent.SpecName())
+}
+
+// ──────────────────────────── Uapswarm Getter/Setter 测试 ────────────────────────────
+
+// TestDeepAgent_UapswarmProjectDir 设置和获取项目目录
+func TestDeepAgent_UapswarmProjectDir(t *testing.T) {
+	d := newTestDeepAgent()
+
+	// 初始为空
+	if d.UapswarmProjectDir() != "" {
+		t.Errorf("初始 UapswarmProjectDir=%q，期望空串", d.UapswarmProjectDir())
+	}
+
+	// 设置后获取
+	d.SetUapswarmProjectDir("/tmp/project")
+	if d.UapswarmProjectDir() != "/tmp/project" {
+		t.Errorf("UapswarmProjectDir=%q，期望 /tmp/project", d.UapswarmProjectDir())
+	}
+
+	// 覆盖
+	d.SetUapswarmProjectDir("/tmp/project2")
+	if d.UapswarmProjectDir() != "/tmp/project2" {
+		t.Errorf("UapswarmProjectDir=%q，期望 /tmp/project2", d.UapswarmProjectDir())
+	}
+}
+
+// TestDeepAgent_UapswarmCodeProjectDir 设置和获取代码项目目录
+func TestDeepAgent_UapswarmCodeProjectDir(t *testing.T) {
+	d := newTestDeepAgent()
+
+	// 初始为空
+	if d.UapswarmCodeProjectDir() != "" {
+		t.Errorf("初始 UapswarmCodeProjectDir=%q，期望空串", d.UapswarmCodeProjectDir())
+	}
+
+	// 设置后获取
+	d.SetUapswarmCodeProjectDir("/tmp/code_project")
+	if d.UapswarmCodeProjectDir() != "/tmp/code_project" {
+		t.Errorf("UapswarmCodeProjectDir=%q，期望 /tmp/code_project", d.UapswarmCodeProjectDir())
+	}
+
+	// 覆盖
+	d.SetUapswarmCodeProjectDir("/tmp/code_project2")
+	if d.UapswarmCodeProjectDir() != "/tmp/code_project2" {
+		t.Errorf("UapswarmCodeProjectDir=%q，期望 /tmp/code_project2", d.UapswarmCodeProjectDir())
+	}
+}
+
+// TestDeepAgent_UapswarmAdapterMode 设置和获取适配器模式
+func TestDeepAgent_UapswarmAdapterMode(t *testing.T) {
+	d := newTestDeepAgent()
+
+	// 初始为空
+	if d.UapswarmAdapterMode() != "" {
+		t.Errorf("初始 UapswarmAdapterMode=%q，期望空串", d.UapswarmAdapterMode())
+	}
+
+	// 设置后获取
+	d.SetUapswarmAdapterMode("code")
+	if d.UapswarmAdapterMode() != "code" {
+		t.Errorf("UapswarmAdapterMode=%q，期望 code", d.UapswarmAdapterMode())
+	}
+
+	// 覆盖
+	d.SetUapswarmAdapterMode("browser")
+	if d.UapswarmAdapterMode() != "browser" {
+		t.Errorf("UapswarmAdapterMode=%q，期望 browser", d.UapswarmAdapterMode())
+	}
+}
+
+// TestDeepAgent_UapswarmCodeTeamMember 设置和获取 code team 成员标记
+func TestDeepAgent_UapswarmCodeTeamMember(t *testing.T) {
+	d := newTestDeepAgent()
+
+	// 初始为 false
+	if d.UapswarmCodeTeamMember() {
+		t.Error("初始 UapswarmCodeTeamMember 应为 false")
+	}
+
+	// 设置 true
+	d.SetUapswarmCodeTeamMember(true)
+	if !d.UapswarmCodeTeamMember() {
+		t.Error("设置 true 后 UapswarmCodeTeamMember 应为 true")
+	}
+
+	// 设置 false
+	d.SetUapswarmCodeTeamMember(false)
+	if d.UapswarmCodeTeamMember() {
+		t.Error("设置 false 后 UapswarmCodeTeamMember 应为 false")
+	}
+}
+
+// TestDeepAgent_SetInnerInvokeOverride 设置内层 invoke 覆写函数
+func TestDeepAgent_SetInnerInvokeOverride(t *testing.T) {
+	d := newTestDeepAgent()
+
+	// 初始为 nil
+	if d.InnerInvokeOverride() != nil {
+		t.Error("初始 InnerInvokeOverride 应为 nil")
+	}
+
+	// 设置覆写函数
+	called := false
+	fn := func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
+		called = true
+		return map[string]any{"result": "override"}, nil
+	}
+	d.SetInnerInvokeOverride(fn)
+
+	// 验证可获取
+	override := d.InnerInvokeOverride()
+	if override == nil {
+		t.Fatal("设置后 InnerInvokeOverride 应为非 nil")
+	}
+
+	// 验证可调用
+	result, err := override(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("覆写函数调用失败: %v", err)
+	}
+	if !called {
+		t.Error("覆写函数未被调用")
+	}
+	if result["result"] != "override" {
+		t.Errorf("覆写函数结果=%v，期望 override", result["result"])
+	}
+
+	// 设置 nil 清除
+	d.SetInnerInvokeOverride(nil)
+	if d.InnerInvokeOverride() != nil {
+		t.Error("设置 nil 后 InnerInvokeOverride 应为 nil")
+	}
+}
+
+// TestDeepAgent_SetInnerStreamOverride 设置内层 stream 覆写函数
+func TestDeepAgent_SetInnerStreamOverride(t *testing.T) {
+	d := newTestDeepAgent()
+
+	// 初始为 nil（通过 configMu 读取）
+	d.configMu.RLock()
+	initialStream := d.innerStreamOverride
+	d.configMu.RUnlock()
+	if initialStream != nil {
+		t.Error("初始 innerStreamOverride 应为 nil")
+	}
+
+	// 设置覆写函数
+	fn := func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
+		ch := make(chan stream.Schema, 1)
+		close(ch)
+		return ch, nil
+	}
+	d.SetInnerStreamOverride(fn)
+
+	// 验证可获取
+	d.configMu.RLock()
+	override := d.innerStreamOverride
+	d.configMu.RUnlock()
+	if override == nil {
+		t.Fatal("设置后 innerStreamOverride 应为非 nil")
+	}
+
+	// 验证可调用
+	ch, err := override(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("覆写函数调用失败: %v", err)
+	}
+	// 消费 channel（立即关闭）
+	for range ch {
+	}
+
+	// 设置 nil 清除
+	d.SetInnerStreamOverride(nil)
+	d.configMu.RLock()
+	cleared := d.innerStreamOverride
+	d.configMu.RUnlock()
+	if cleared != nil {
+		t.Error("设置 nil 后 innerStreamOverride 应为 nil")
+	}
+}
+
+// ──────────────────────────── resolveContextWindowTokens 测试 ────────────────────────────
+
+// TestDeepAgent_resolveContextWindowTokens_未配置 未配置时返回默认值
+func TestDeepAgent_resolveContextWindowTokens_未配置(t *testing.T) {
+	d := newTestDeepAgent()
+
+	result := d.resolveContextWindowTokens()
+	// 未配置时 fallbackTokens=0，无 modelName，应返回 DefaultContextMaxTokens=200000
+	if result != 200000 {
+		t.Errorf("未配置时 resolveContextWindowTokens=%d，期望 200000", result)
+	}
+}
+
+// TestDeepAgent_resolveContextWindowTokens_有配置 有 DeepAgentConfig 时解析
+func TestDeepAgent_resolveContextWindowTokens_有配置(t *testing.T) {
+	card := makeTestCard("deep-rcwt", "test-deep-rcwt")
+	agent := NewDeepAgent(card)
+
+	cfg := schema.NewDeepAgentConfig()
+	cfg.ContextEngineConfig = &ceschema.ContextEngineConfig{
+		ContextWindowTokens: 8000,
+	}
+	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
+
+	result := agent.resolveContextWindowTokens()
+	// fallbackTokens=8000 优先级最高
+	if result != 8000 {
+		t.Errorf("有配置时 resolveContextWindowTokens=%d，期望 8000", result)
+	}
+}
+
+// TestDeepAgent_resolveContextWindowTokens_有ModelName 有模型名称时查找映射
+func TestDeepAgent_resolveContextWindowTokens_有ModelName(t *testing.T) {
+	card := makeTestCard("deep-rcwt-mn", "test-deep-rcwt-mn")
+	agent := NewDeepAgent(card)
+
+	cfg := schema.NewDeepAgentConfig()
+	cfg.ContextEngineConfig = &ceschema.ContextEngineConfig{}
+	cfg.Model = &llm.Model{
+		ClientConfig: &llmschema.ModelClientConfig{},
+		ModelConfig: &llmschema.ModelRequestConfig{
+			ModelName: "gpt-4o",
+		},
+	}
+	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
+
+	result := agent.resolveContextWindowTokens()
+	// 无 fallback，modelName="gpt-4o" 在内置映射中对应 128000
+	if result != 128000 {
+		t.Errorf("有 ModelName 时 resolveContextWindowTokens=%d，期望 128000", result)
+	}
+}
+
+// TestDeepAgent_resolveContextWindowTokens_自定义映射 有自定义模型映射时优先使用
+func TestDeepAgent_resolveContextWindowTokens_自定义映射(t *testing.T) {
+	card := makeTestCard("deep-rcwt-cm", "test-deep-rcwt-cm")
+	agent := NewDeepAgent(card)
+
+	cfg := schema.NewDeepAgentConfig()
+	cfg.ContextEngineConfig = &ceschema.ContextEngineConfig{
+		ModelContextWindowTokens: map[string]int{"my-model": 64000},
+	}
+	cfg.Model = &llm.Model{
+		ClientConfig: &llmschema.ModelClientConfig{},
+		ModelConfig: &llmschema.ModelRequestConfig{
+			ModelName: "my-model",
+		},
+	}
+	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
+
+	result := agent.resolveContextWindowTokens()
+	// 无 fallback，自定义映射 my-model=64000 优先于内置映射
+	if result != 64000 {
+		t.Errorf("自定义映射时 resolveContextWindowTokens=%d，期望 64000", result)
+	}
+}
+
+// ──────────────────────────── normalizeContextMessages 测试 ────────────────────────────
+
+// TestNormalizeContextMessages_nil nil 输入返回 nil
+func TestNormalizeContextMessages_nil(t *testing.T) {
+	result := normalizeContextMessages(nil)
+	if result != nil {
+		t.Errorf("nil 输入应返回 nil，实际: %v", result)
+	}
+}
+
+// TestNormalizeContextMessages_空切片 空切片返回空切片
+func TestNormalizeContextMessages_空切片(t *testing.T) {
+	msgs := []llmschema.BaseMessage{}
+	result := normalizeContextMessages(msgs)
+	if len(result) != 0 {
+		t.Errorf("空切片应返回空切片，实际长度: %d", len(result))
+	}
+}
+
+// TestNormalizeContextMessages_非空 非空切片原样返回
+func TestNormalizeContextMessages_非空(t *testing.T) {
+	msgs := []llmschema.BaseMessage{
+		llmschema.NewUserMessage("hello"),
+		llmschema.NewUserMessage("world"),
+	}
+	result := normalizeContextMessages(msgs)
+	if len(result) != 2 {
+		t.Fatalf("非空切片应原样返回，实际长度: %d", len(result))
+	}
+	if result[0].GetContent().Text() != "hello" || result[1].GetContent().Text() != "world" {
+		t.Errorf("消息内容不匹配，实际: %v, %v", result[0].GetContent().Text(), result[1].GetContent().Text())
+	}
 }

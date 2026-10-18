@@ -50,6 +50,13 @@ type spanStateKeyType struct{}
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+var (
+	// spanStateRegistry 全局 OtelSpanState 注册表，用于 ShutdownObservability 时批量重置
+	// 对齐 Python: reset_all() 重置所有 ContextVars
+	spanStateRegistry   = make(map[*OtelSpanState]struct{})
+	spanStateRegistryMu sync.Mutex
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NextChunkSeq 递增并返回下一个 chunk 序号。
@@ -194,17 +201,6 @@ func WithSpanStateAndTimeout(ctx context.Context, state *OtelSpanState, timeout 
 	return context.WithTimeout(ctx, timeout)
 }
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-var (
-	// spanStateRegistry 全局 OtelSpanState 注册表，用于 ShutdownObservability 时批量重置
-	// 对齐 Python: reset_all() 重置所有 ContextVars
-	spanStateRegistry   = make(map[*OtelSpanState]struct{})
-	spanStateRegistryMu sync.Mutex
-)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // ResetAllSpanStates 重置所有已注册的 OtelSpanState 实例。
 // 对齐 Python: reset_all() — 在 ShutdownObservability 中调用，确保测试隔离。
 func ResetAllSpanStates() {
@@ -215,3 +211,5 @@ func ResetAllSpanStates() {
 	}
 	spanStateRegistry = make(map[*OtelSpanState]struct{})
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

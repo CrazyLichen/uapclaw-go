@@ -136,6 +136,7 @@ type HarnessConfig struct {
 	CompletionTimeout *float64 `yaml:"completion_timeout" json:"completion_timeout,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -155,6 +156,7 @@ const (
 	DefaultSectionPriority = 30
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ValidateHarnessConfig 校验 HarnessConfig 的 schema_version 字段

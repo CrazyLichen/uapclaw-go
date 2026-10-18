@@ -83,8 +83,8 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// mgrLogComponent 日志组件
-	mgrLogComponent = logger.ComponentAgentCore
+	// logComponent 日志组件
+	logComponent = logger.ComponentTeam
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -122,8 +122,8 @@ func NewTeamMemoryManager(params TeamMemoryManagerParams) *TeamMemoryManager {
 	if params.TeamMemoryDir != nil && *params.TeamMemoryDir != "" {
 		mgr.sharedManager = NewSharedMemoryManager(*params.TeamMemoryDir, params.SysOperation)
 		if err := mgr.sharedManager.EnsureDir(); err != nil {
-			logger.Warn(mgrLogComponent).Err(err).Str("team_memory_dir", *params.TeamMemoryDir).
-				Msg("SharedMemoryManager EnsureDir 失败")
+			logger.Warn(logComponent).Err(err).Str("team_memory_dir", *params.TeamMemoryDir).
+				Msg("SharedMemoryManager EnsureDir failed")
 		}
 	}
 	return mgr
@@ -165,3 +165,5 @@ func (m *TeamMemoryManager) TeamName() string { return m.teamName }
 
 // Role 返回角色
 func (m *TeamMemoryManager) Role() TeamRole { return m.role }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

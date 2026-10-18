@@ -83,7 +83,7 @@ func (m *ToolDescriptionMethod) Step(
 		}
 		logger.Info(logComponent).
 			Str("output", fmt.Sprintf("%v", outputMap)).
-			Msg("当前描述——原始描述")
+			Msg("current description - original description")
 	} else {
 		// Python: 用负例改进描述
 		// Python: neg_examples = self.get_negative_examples(function_name)
@@ -96,7 +96,7 @@ func (m *ToolDescriptionMethod) Step(
 		outputMap = m.Generate(ctx, tool, examplesObtained, prevOutputs, it)
 		logger.Info(logComponent).
 			Str("output", fmt.Sprintf("%v", outputMap)).
-			Msg("当前描述——生成的描述")
+			Msg("current description - generated description")
 	}
 
 	// Python: 用正例评估
@@ -122,9 +122,9 @@ func (m *ToolDescriptionMethod) Generate(
 	prevOutputs []map[string]any,
 	it int,
 ) map[string]any {
-	logger.Info(logComponent).Msg("正在生成描述")
+	logger.Info(logComponent).Msg("generating description")
 	output := m.GenerateDescriptionFromDocumentation(ctx, tool, examplesObtained, prevOutputs)
-	logger.Info(logComponent).Msg("描述生成完成")
+	logger.Info(logComponent).Msg("description generation completed")
 	output["iteration"] = it
 	return output
 }
@@ -567,7 +567,7 @@ func (m *ToolDescriptionMethod) LoadExamples(examplesDir, functionName string, m
 	examplesPath := examplesDir + "/" + functionName + ".json"
 	logger.Info(logComponent).
 		Str("examples_path", examplesPath).
-		Msg("正在尝试加载示例")
+		Msg("attempting to load examples")
 
 	data, err := os.ReadFile(examplesPath)
 	if err != nil {
@@ -601,38 +601,38 @@ func (m *ToolDescriptionMethod) GetNegativeExamples(functionName string) []Examp
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("examples_path", examplesPath).
-				Msg("读取负例文件失败")
+				Msg("failed to read negative examples file")
 			return nil
 		}
 		if err := json.Unmarshal(data, &allOutputs); err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("examples_path", examplesPath).
-				Msg("解析负例文件失败")
+				Msg("failed to parse negative examples file")
 			return nil
 		}
 	} else {
 		// Python: 如果未找到，回退到从自对弈示例加载
 		logger.Warn(logComponent).
 			Str("examples_path", examplesPath).
-			Msg("未找到负例文件，回退到加载生成的示例")
+			Msg("negative examples file not found, falling back to generated examples")
 		examplesPath = getConfigString(m.config, "examples_dir") + "/" + functionName + ".json"
 		data, err := os.ReadFile(examplesPath)
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("examples_path", examplesPath).
-				Msg("回退读取示例文件失败")
+				Msg("fallback read examples file failed")
 			return nil
 		}
 		if err := json.Unmarshal(data, &allOutputs); err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("examples_path", examplesPath).
-				Msg("回退解析示例文件失败")
+				Msg("fallback parse examples file failed")
 			return nil
 		}
 	}
 
 	if allOutputs == nil {
-		logger.Error(logComponent).Msg("负例文件内容为空")
+		logger.Error(logComponent).Msg("negative examples file content is empty")
 		return nil
 	}
 
@@ -670,7 +670,7 @@ func (m *ToolDescriptionMethod) GetExamples(ctx context.Context, tool map[string
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("function_name", functionName).
-				Msg("加载示例失败")
+				Msg("failed to load examples")
 		} else {
 			examples = loaded
 		}
@@ -679,7 +679,7 @@ func (m *ToolDescriptionMethod) GetExamples(ctx context.Context, tool map[string
 		Int("example_count", len(examples)).
 		Str("function_name", functionName).
 		Interface("examples", examples).
-		Msg("工具示例已加载")
+		Msg("tool examples loaded")
 	return examples
 }
 

@@ -43,7 +43,9 @@ func ExtractText(input any) (string, string) {
 		logger.Warn(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("input_type", fmt.Sprintf("%T", input)).
-			Msg("不支持的 Parse 输入类型")
+			Msg("unsupported Parse input type")
 		return "", ""
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

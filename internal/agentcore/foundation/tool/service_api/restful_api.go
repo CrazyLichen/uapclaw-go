@@ -476,7 +476,7 @@ func (r *RestfulApi) doRequest(
 		Str("url", reqURL).
 		Bool("proxy_enabled", proxyEnabled).
 		Bool("tls_custom_config", tlsConfig != nil).
-		Msg("RestfulApi 发送请求")
+		Msg("RestfulApi sending request")
 
 	// 发送请求
 	resp, err := client.Do(req)
@@ -776,7 +776,7 @@ func prepareHeadersForFormData(headers map[string]string) map[string]string {
 		if strings.ToLower(key) == "content-type" {
 			logger.Debug(logComponent).
 				Str("content_type", value).
-				Msg("multipart/form-data 请求移除手动设置的 Content-Type，将自动设置含 boundary 的正确值")
+				Msg("multipart/form-data request removed manually set Content-Type, correct value with boundary will be set automatically")
 			continue
 		}
 		processed[key] = value

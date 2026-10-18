@@ -68,15 +68,15 @@ type TeamToolRailOption func(*TeamToolRail)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// toolRailLogComponent 日志组件标识
-const toolRailLogComponent = logger.ComponentChannel
+// logComponent 日志组件
+const logComponent = logger.ComponentTeam
 
 // teamToolRailPriority TeamToolRail 优先级，对齐 Python priority=90
 const teamToolRailPriority = 90
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证：确保 TeamToolRail 满足 DeepAgentRailProvider 接口
+// _ 编译时验证：确保 TeamToolRail 满足 DeepAgentRailProvider 接口
 var _ harnessrails.DeepAgentRailProvider = (*TeamToolRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -131,13 +131,13 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 	if r.worktreeManager != nil {
 		enterTool, err := worktree.NewEnterWorktreeTool(r.worktreeManager, r.language, "")
 		if err != nil {
-			logger.Warn(toolRailLogComponent).Err(err).Msg("创建 EnterWorktreeTool 失败")
+			logger.Warn(logComponent).Err(err).Msg("failed to create EnterWorktreeTool")
 		} else {
 			toolList = append(toolList, enterTool)
 		}
 		exitTool, err := worktree.NewExitWorktreeTool(r.worktreeManager, r.language, "")
 		if err != nil {
-			logger.Warn(toolRailLogComponent).Err(err).Msg("创建 ExitWorktreeTool 失败")
+			logger.Warn(logComponent).Err(err).Msg("failed to create ExitWorktreeTool")
 		} else {
 			toolList = append(toolList, exitTool)
 		}
@@ -154,14 +154,14 @@ func (r *TeamToolRail) Init(ctx context.Context, agent agentinterfaces.BaseAgent
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Debug(toolRailLogComponent).Any("recover", r).Msg("Runner.resource_mgr 不可用，跳过工具注册")
+				logger.Debug(logComponent).Any("recover", r).Msg("Runner.resource_mgr unavailable, skipping tool registration")
 			}
 		}()
 		rm := runner.GetResourceMgr()
 		if rm != nil {
 			for _, t := range toolList {
 				if err := rm.AddTool(t, resources_manager.WithRefresh()); err != nil {
-					logger.Debug(toolRailLogComponent).Err(err).Msg("resource_mgr.add_tool 失败")
+					logger.Debug(logComponent).Err(err).Msg("resource_mgr.add_tool failed")
 				}
 			}
 		}
@@ -209,13 +209,13 @@ func (r *TeamToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		func() {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Debug(toolRailLogComponent).Any("recover", rec).Msg("Runner.resource_mgr 不可用，跳过工具移除")
+					logger.Debug(logComponent).Any("recover", rec).Msg("Runner.resource_mgr unavailable, skipping tool removal")
 				}
 			}()
 			rm := runner.GetResourceMgr()
 			if rm != nil {
 				if _, err := rm.RemoveTool(toolIDs); err != nil {
-					logger.Debug(toolRailLogComponent).Err(err).Msg("resource_mgr.remove_tool 失败")
+					logger.Debug(logComponent).Err(err).Msg("resource_mgr.remove_tool failed")
 				}
 			}
 		}()

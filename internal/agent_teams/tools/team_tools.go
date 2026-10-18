@@ -158,9 +158,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ttLogComponent 工具包日志组件标识
-var ttLogComponent = logger.ComponentTeam
-
 // memberNamePattern 成员名正则，对齐 Python _MEMBER_NAME_PATTERN。
 // Python: _MEMBER_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 var memberNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -607,7 +604,7 @@ func (t *CleanTeamTool) Invoke(ctx context.Context, _ map[string]any, _ ...tool.
 	teamName := t.team.TeamName()
 	success, err := t.team.CleanTeam(ctx)
 	if err != nil {
-		logger.Error(ttLogComponent).Err(err).Msg("clean_team 失败")
+		logger.Error(logComponent).Err(err).Msg("clean_team failed")
 		return toolError(fmt.Sprintf("Internal error: %s", err))
 	}
 	if !success {
@@ -1034,7 +1031,7 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 	// 内容更新（title 和/或 content）
 	if title != "" || content != "" {
 		if err := cancelMemberIfClaimed(ctx, t.agentTeam, taskID); err != nil {
-			logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("cancelMemberIfClaimed 失败")
+			logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("cancelMemberIfClaimed failed")
 		}
 		if err := t.agentTeam.TaskManager().UpdateTask(ctx, taskID, title, content); err != nil {
 			return toolError(err.Error())
@@ -1055,11 +1052,11 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 				return toolError(fmt.Sprintf("Task '%s' is held by a human-agent member and cannot be reassigned", taskID))
 			}
 			if result := t.agentTeam.CancelMember(ctx, *assigneePtr); !result.OK {
-				logger.Warn(logComponent).Str("member", *assigneePtr).Str("reason", result.Reason).Msg("CancelMember 失败")
+				logger.Warn(logComponent).Str("member", *assigneePtr).Str("reason", result.Reason).Msg("CancelMember failed")
 			}
 			resetResult, err := t.agentTeam.TaskManager().Reset(ctx, taskID)
 			if err != nil {
-				logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("Reset 失败")
+				logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("Reset failed")
 				return toolError(fmt.Sprintf("Failed to reset task before reassigning from %s to %s: %s", *assigneePtr, assignee, err))
 			}
 			if !resetResult.OK {
@@ -1068,7 +1065,7 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 		}
 		assignResult, err := t.agentTeam.TaskManager().Assign(ctx, taskID, assignee)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("task_id", taskID).Str("assignee", assignee).Msg("Assign 失败")
+			logger.Warn(logComponent).Err(err).Str("task_id", taskID).Str("assignee", assignee).Msg("Assign failed")
 			return toolError(fmt.Sprintf("Failed to assign task: %s", err))
 		}
 		if !assignResult.OK {
@@ -1081,7 +1078,7 @@ func (t *UpdateTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ..
 	if len(addBlockedBy) > 0 {
 		depsResult, depsErr := t.agentTeam.TaskManager().AddDependencies(ctx, taskID, addBlockedBy)
 		if depsErr != nil {
-			logger.Warn(logComponent).Err(depsErr).Str("task_id", taskID).Strs("add_blocked_by", addBlockedBy).Msg("AddDependencies 失败")
+			logger.Warn(logComponent).Err(depsErr).Str("task_id", taskID).Strs("add_blocked_by", addBlockedBy).Msg("AddDependencies failed")
 			return toolError(fmt.Sprintf("Failed to add dependencies: %s", depsErr))
 		}
 		if !depsResult.OK {
@@ -1105,7 +1102,7 @@ func isHumanAgentLocked(team *TeamBackend, task *database.TeamTaskBase) bool {
 func cancelMemberIfClaimed(ctx context.Context, team *TeamBackend, taskID string) error {
 	task, err := team.TaskManager().Get(ctx, taskID)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("cancelMemberIfClaimed: Get 失败")
+		logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("cancelMemberIfClaimed: Get failed")
 		return err
 	}
 	if task == nil || task.Status != "claimed" || task.Assignee == nil {
@@ -1123,7 +1120,7 @@ func cancelMemberIfClaimed(ctx context.Context, team *TeamBackend, taskID string
 func (t *UpdateTaskTool) cancelClaimedMembers(ctx context.Context) error {
 	claimedTasks, err := t.agentTeam.TaskManager().ListTasks(ctx, "claimed")
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("cancelClaimedMembers: ListTasks 失败")
+		logger.Warn(logComponent).Err(err).Msg("cancelClaimedMembers: ListTasks failed")
 		return err
 	}
 	cancelled := make(map[string]struct{})
@@ -1140,7 +1137,7 @@ func (t *UpdateTaskTool) cancelClaimedMembers(ctx context.Context) error {
 			continue
 		}
 		if result := t.agentTeam.CancelMember(ctx, assignee); !result.OK {
-			logger.Warn(logComponent).Str("member", assignee).Str("reason", result.Reason).Msg("CancelMember 失败")
+			logger.Warn(logComponent).Str("member", assignee).Str("reason", result.Reason).Msg("CancelMember failed")
 			if firstErr == nil {
 				firstErr = fmt.Errorf("CancelMember(%s) 失败: %s", assignee, result.Reason)
 			}
@@ -1199,7 +1196,7 @@ func (t *ClaimTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...
 	case "claimed":
 		result, err := t.taskManager.Claim(ctx, taskID)
 		if err != nil {
-			logger.Warn(ttLogComponent).Err(err).Str("task_id", taskID).Msg("Claim 失败")
+			logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("Claim failed")
 			return toolError(fmt.Sprintf("Failed to claim task: %s", err))
 		}
 		if !result.OK {
@@ -1209,7 +1206,7 @@ func (t *ClaimTaskTool) Invoke(ctx context.Context, inputs map[string]any, _ ...
 	case "completed":
 		result, err := t.taskManager.Complete(ctx, taskID)
 		if err != nil {
-			logger.Warn(ttLogComponent).Err(err).Str("task_id", taskID).Msg("Complete 失败")
+			logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("Complete failed")
 			return toolError(fmt.Sprintf("Failed to complete task: %s", err))
 		}
 		if !result.OK {
@@ -1240,7 +1237,7 @@ func (t *MemberCompleteTaskTool) Invoke(ctx context.Context, inputs map[string]a
 
 	task, err := t.taskManager.Get(ctx, taskID)
 	if err != nil {
-		logger.Error(ttLogComponent).Err(err).Str("task_id", taskID).Msg("member_complete_task: get 失败")
+		logger.Error(logComponent).Err(err).Str("task_id", taskID).Msg("member_complete_task: get failed")
 		return toolError(fmt.Sprintf("Internal error: %s", err))
 	}
 	if task == nil {
@@ -1260,7 +1257,7 @@ func (t *MemberCompleteTaskTool) Invoke(ctx context.Context, inputs map[string]a
 
 	result, err := t.taskManager.Complete(ctx, taskID)
 	if err != nil {
-		logger.Warn(ttLogComponent).Err(err).Str("task_id", taskID).Msg("Complete 失败")
+		logger.Warn(logComponent).Err(err).Str("task_id", taskID).Msg("Complete failed")
 		return toolError(fmt.Sprintf("Failed to complete task: %s", err))
 	}
 	if !result.OK {
@@ -1451,10 +1448,10 @@ func (t *SendMessageTool) autoStartMembers(ctx context.Context) {
 	}
 	started, err := t.team.Startup(ctx, t.onTeammateCreated)
 	if err != nil {
-		logger.Warn(ttLogComponent).Err(err).Msg("auto_start_members 失败")
+		logger.Warn(logComponent).Err(err).Msg("auto_start_members failed")
 	}
 	if len(started) > 0 {
-		logger.Info(ttLogComponent).Strs("started", started).Msg("Auto-started members")
+		logger.Info(logComponent).Strs("started", started).Msg("Auto-started members")
 	}
 }
 

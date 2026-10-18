@@ -508,40 +508,6 @@ func MakeTeamEvolutionCycleRequestID(sessionID string, cycleIndex int) string {
 	return "team_evolve_" + sessionID + "_" + strconv.Itoa(cycleIndex)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// noopStageFromMessage 从消息内容推断 noop 阶段。
-// Python: _noop_stage_from_message()
-func noopStageFromMessage(messageLower string) *string {
-	if containsAnyMarker(messageLower, TeamEvolutionNoSkillMarkers) {
-		result := TeamEvolutionNoopNoSkillStage
-		return &result
-	}
-	if containsAnyMarker(messageLower, TeamEvolutionNoSignalMarkers) {
-		result := TeamEvolutionNoopNoSignalStage
-		return &result
-	}
-	if strings.Contains(messageLower, "no evolution records generated") {
-		result := TeamEvolutionNoopNoRecordsStage
-		return &result
-	}
-	if containsAnyMarker(messageLower, TeamEvolutionNoopMarkers) {
-		result := TeamEvolutionNoopStage
-		return &result
-	}
-	return nil
-}
-
-// containsAnyMarker 检查消息是否包含任一标记。
-func containsAnyMarker(messageLower string, markers []string) bool {
-	for _, marker := range markers {
-		if strings.Contains(messageLower, marker) {
-			return true
-		}
-	}
-	return false
-}
-
 // StrFromAny 从多个 any 值中获取第一个非空字符串。
 func StrFromAny(values ...any) string {
 	for _, v := range values {
@@ -578,6 +544,40 @@ func ToFloat64(v any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// noopStageFromMessage 从消息内容推断 noop 阶段。
+// Python: _noop_stage_from_message()
+func noopStageFromMessage(messageLower string) *string {
+	if containsAnyMarker(messageLower, TeamEvolutionNoSkillMarkers) {
+		result := TeamEvolutionNoopNoSkillStage
+		return &result
+	}
+	if containsAnyMarker(messageLower, TeamEvolutionNoSignalMarkers) {
+		result := TeamEvolutionNoopNoSignalStage
+		return &result
+	}
+	if strings.Contains(messageLower, "no evolution records generated") {
+		result := TeamEvolutionNoopNoRecordsStage
+		return &result
+	}
+	if containsAnyMarker(messageLower, TeamEvolutionNoopMarkers) {
+		result := TeamEvolutionNoopStage
+		return &result
+	}
+	return nil
+}
+
+// containsAnyMarker 检查消息是否包含任一标记。
+func containsAnyMarker(messageLower string, markers []string) bool {
+	for _, marker := range markers {
+		if strings.Contains(messageLower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // cloneMap 浅拷贝 map（替代被移除的 maps.Clone，避免引入 maps 包依赖）。

@@ -214,3 +214,15 @@ func TestGenerateOption(t *testing.T) {
 	WithMaxTokens(100)(c)
 	assert.Equal(t, 100, c.MaxTokens)
 }
+
+func TestAgentFlowOption_WithRetrievalQuery(t *testing.T) {
+	cfg := &AgentFlowConfig{}
+	WithRetrievalQuery("test query")(cfg)
+	assert.Equal(t, "test query", cfg.RetrievalQuery)
+}
+
+func TestAgentFlowOption_WithLLMTemperature(t *testing.T) {
+	cfg := &AgentFlowConfig{}
+	WithLLMTemperature(0.8)(cfg)
+	assert.Equal(t, 0.8, cfg.LLMTemperature)
+}

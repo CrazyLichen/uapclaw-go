@@ -476,7 +476,7 @@ func (s *DbBasedKVStore) ensureTable() {
 	}
 	s.tableOnce.Do(func() {
 		if err := s.db.AutoMigrate(&KVStoreRow{}); err != nil {
-			logger.Error(logComponent).Err(err).Msg("建表失败")
+			logger.Error(logComponent).Err(err).Msg("failed to create table")
 			s.tableErr = err
 			close(s.tableReady)
 			return

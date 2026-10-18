@@ -40,10 +40,10 @@ type baseErrorBuilder struct {
 	params  map[string]any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ErrorOption BaseError 构造选项函数。
 type ErrorOption func(*baseErrorBuilder)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ErrorCategory 错误类别枚举，表达控制流语义。
 //
@@ -307,3 +307,5 @@ func Terminate(status StatusCode, opts ...ErrorOption) *BaseError {
 	err.category = ErrorCategoryTermination
 	return err
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

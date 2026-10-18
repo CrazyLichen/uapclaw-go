@@ -76,7 +76,7 @@ func (e *StreamEmitter) Close(ctx context.Context) error {
 	if err := e.queue.Close(ctx); err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("StreamEmitter 关闭队列失败")
+			Msg("StreamEmitter failed to close queue")
 	}
 	return nil
 }

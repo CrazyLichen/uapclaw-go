@@ -327,7 +327,7 @@ func (rlc *RoundLevelCompressor) TriggerAddMessages(ctx context.Context, mc ifac
 			Str("event_type", "RoundLevelCompressor_triggered").
 			Int("total_tokens", totalTokens).
 			Int("trigger_total_tokens", rlc.triggerTotalTokens).
-			Msg("上下文 Token 数超过触发阈值")
+			Msg("context tokens exceeded trigger threshold")
 		return true, nil
 	}
 	return false, nil
@@ -348,7 +348,7 @@ func (rlc *RoundLevelCompressor) OnAddMessages(ctx context.Context, mc iface.Mod
 			logger.Warn(logComponent).
 				Str("processor_type", rlc.ProcessorType()).
 				Err(err).
-				Msg("压缩模型调用失败，跳过当前处理器")
+				Msg("compression model call failed, skipping current processor")
 			return nil, messagesToAdd, nil
 		}
 		return nil, messagesToAdd, exception.NewBaseError(
@@ -596,7 +596,7 @@ func (rlc *RoundLevelCompressor) applyLLMPhase(
 		logger.Warn(logComponent).
 			Str("event_type", "RoundLevelCompressor_phase_skipped").
 			Str("phase", phaseName).
-			Msg("压缩调用预算不足，跳过阶段")
+			Msg("compression call budget insufficient, skipping phase")
 		return nil, nil
 	}
 
@@ -625,7 +625,7 @@ func (rlc *RoundLevelCompressor) applyLLMPhase(
 		logger.Warn(logComponent).
 			Str("event_type", "RoundLevelCompressor_no_replacements").
 			Str("phase", phaseName).
-			Msg("压缩阶段未产生有效替换")
+			Msg("compression phase produced no valid replacements")
 		return nil, nil
 	}
 
@@ -635,7 +635,7 @@ func (rlc *RoundLevelCompressor) applyLLMPhase(
 		Str("phase", phaseName).
 		Int("before_tokens", rlc.countContextWindowTokens(systemMessages, messages, tools, mc)).
 		Int("after_tokens", rlc.countContextWindowTokens(systemMessages, updatedMessages, tools, mc)).
-		Msg("压缩阶段完成")
+		Msg("compression phase completed")
 	return updatedMessages, nil
 }
 
@@ -1516,13 +1516,13 @@ func (rlc *RoundLevelCompressor) countContextWindowTokens(
 			logger.Warn(logComponent).
 				Str("processor_type", rlc.ProcessorType()).
 				Err(toolErr).
-				Msg("token_counter CountTools 返回错误，降级为字符估算")
+				Msg("token_counter CountTools returned error, falling back to char estimation")
 		} else {
 			// CountMessages 失败
 			logger.Warn(logComponent).
 				Str("processor_type", rlc.ProcessorType()).
 				Err(msgErr).
-				Msg("token_counter CountMessages 返回错误，降级为字符估算")
+				Msg("token_counter CountMessages returned error, falling back to char estimation")
 		}
 	}
 
@@ -1567,7 +1567,7 @@ func (rlc *RoundLevelCompressor) countCompressionCallTokens(systemPrompt string,
 		logger.Warn(logComponent).
 			Str("processor_type", rlc.ProcessorType()).
 			Err(err).
-			Msg("压缩 token 计数降级")
+			Msg("compression token count fallback")
 	}
 
 	total := 0
@@ -1592,7 +1592,7 @@ func (rlc *RoundLevelCompressor) countMessageTokens(messages []llm_schema.BaseMe
 		logger.Warn(logComponent).
 			Str("processor_type", rlc.ProcessorType()).
 			Err(err).
-			Msg("token_counter 返回错误，降级为字符估算")
+			Msg("token_counter returned error, falling back to char estimation")
 	}
 
 	total := 0

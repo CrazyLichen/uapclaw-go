@@ -79,7 +79,7 @@ func CommitPendingChange(
 				Str("skill", pending.SkillName).
 				Str("record_id", record.ID).
 				Err(err).
-				Msg("[experience.common] commit_pending_change: AppendRecord 失败")
+				Msg("[experience.common] commit_pending_change: AppendRecord failed")
 			break
 		}
 		appliedCount++
@@ -133,7 +133,7 @@ func ExecuteSimplifyActions(
 					Str("record_id", recordID).
 					Str("skill", skillName).
 					Err(err).
-					Msg("[experience.common] execute_simplify_actions 失败")
+					Msg("[experience.common] execute_simplify_actions failed")
 				counts["errors"]++
 			} else if deleted > 0 {
 				counts["deleted"]++
@@ -151,7 +151,7 @@ func ExecuteSimplifyActions(
 					Str("record_id", recordID).
 					Str("skill", skillName).
 					Err(err).
-					Msg("[experience.common] execute_simplify_actions 失败")
+					Msg("[experience.common] execute_simplify_actions failed")
 				counts["errors"]++
 			} else if result != nil {
 				counts["merged"]++
@@ -169,7 +169,7 @@ func ExecuteSimplifyActions(
 					Str("record_id", recordID).
 					Str("skill", skillName).
 					Err(err).
-					Msg("[experience.common] execute_simplify_actions 失败")
+					Msg("[experience.common] execute_simplify_actions failed")
 				counts["errors"]++
 			} else if result != nil {
 				counts["refined"]++
@@ -183,7 +183,7 @@ func ExecuteSimplifyActions(
 		default:
 			logger.Warn(logComponent).
 				Str("action_type", actionType).
-				Msg("[experience.common] 未知 action_type")
+				Msg("[experience.common] unknown action_type")
 			counts["errors"]++
 		}
 	}
@@ -195,7 +195,7 @@ func ExecuteSimplifyActions(
 		Int("refined", counts["refined"]).
 		Int("kept", counts["kept"]).
 		Int("errors", counts["errors"]).
-		Msg("[experience.common] execute_simplify_actions 完成")
+		Msg("[experience.common] execute_simplify_actions completed")
 
 	return counts
 }
@@ -228,7 +228,7 @@ func RequestRebuildContext(
 		logger.Warn(logComponent).
 			Str("skill", request.SkillName).
 			Err(err).
-			Msg("[experience.common] archive_evolutions 失败")
+			Msg("[experience.common] archive_evolutions failed")
 	} else {
 		evoArchive = evoArchiveResult
 	}
@@ -264,7 +264,7 @@ func RequestRebuildContext(
 			logger.Warn(logComponent).
 				Str("skill", request.SkillName).
 				Err(err).
-				Msg("[experience.common] clear_evolutions 失败")
+				Msg("[experience.common] clear_evolutions failed")
 		}
 	}
 

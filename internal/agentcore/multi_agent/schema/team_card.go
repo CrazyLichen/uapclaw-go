@@ -109,18 +109,15 @@ type EventDrivenTeamCardOption func(*EventDrivenTeamCard)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 TeamCard 满足 TeamCardInterface。
 // _ 编译时验证 TeamCard 满足 TeamCardInterface 接口
 var _ TeamCardInterface = (*TeamCard)(nil)
 
 // _ 编译时验证 EventDrivenTeamCard 满足 TeamCardInterface 接口
 var _ TeamCardInterface = (*EventDrivenTeamCard)(nil)
 
-// 编译时验证 TeamCard 满足 schema.CardInterface。
 // _ 编译时验证 TeamCard 满足 CardInterface 接口
 var _ schema.CardInterface = (*TeamCard)(nil)
 
-// 编译时验证 EventDrivenTeamCard 满足 schema.CardInterface。
 // _ 编译时验证 EventDrivenTeamCard 满足 CardInterface 接口
 var _ schema.CardInterface = (*EventDrivenTeamCard)(nil)
 
@@ -305,3 +302,5 @@ func (c *EventDrivenTeamCard) String() string {
 	return fmt.Sprintf("id=%s,name=%s,topic=%s,version=%s,subscriptions=%d",
 		c.ID, c.Name, c.Topic, c.Version, len(c.Subscriptions))
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

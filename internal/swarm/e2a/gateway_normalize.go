@@ -106,7 +106,7 @@ func MessageToE2A(msg *schema.Message) (*E2AEnvelope, error) {
 	params := map[string]any{}
 	if msg.Params != nil {
 		if err := json.Unmarshal(msg.Params, &params); err != nil {
-			logger.Warn(logComponent).Str("request_id", msg.ID).Err(err).Msg("params 反序列化失败")
+			logger.Warn(logComponent).Str("request_id", msg.ID).Err(err).Msg("params deserialization failed")
 			params = map[string]any{}
 		}
 	}

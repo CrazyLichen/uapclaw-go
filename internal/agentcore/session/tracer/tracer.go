@@ -116,7 +116,7 @@ func (t *Tracer) TriggerAgent(ctx context.Context, event TraceEvent, params *Tri
 	if !ok {
 		logger.Warn(logComponent).
 			Str("event", string(event)).
-			Msg("追踪事件未找到处理器")
+			Msg("trace event handler not found")
 		return
 	}
 	handler(ctx, params)
@@ -132,7 +132,7 @@ func (t *Tracer) TriggerWorkflow(ctx context.Context, event TraceEvent, parentNo
 		logger.Warn(logComponent).
 			Str("event", string(event)).
 			Str("parent_node_id", parentNodeID).
-			Msg("追踪事件未找到处理器")
+			Msg("trace event handler not found")
 		return
 	}
 	handler, ok := dispatch[event]
@@ -140,7 +140,7 @@ func (t *Tracer) TriggerWorkflow(ctx context.Context, event TraceEvent, parentNo
 		logger.Warn(logComponent).
 			Str("event", string(event)).
 			Str("parent_node_id", parentNodeID).
-			Msg("追踪事件未找到处理器")
+			Msg("trace event handler not found")
 		return
 	}
 	handler(ctx, params)

@@ -56,7 +56,7 @@ func NewCryptRegistry() *CryptRegistry {
 func (r *CryptRegistry) Register(name string, crypt BaseCrypt) error {
 	if crypt == nil {
 		return exception.NewBaseError(exception.StatusCommonEncryptionError,
-			exception.WithMsg(fmt.Sprintf("注册的加密算法不能为 nil，名称: %s", name)))
+			exception.WithMsg(fmt.Sprintf("registered crypto algorithm cannot be nil, name: %s", name)))
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

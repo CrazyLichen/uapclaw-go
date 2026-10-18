@@ -614,7 +614,7 @@ func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc if
 			Str("event_type", "CurrentRoundCompressor_triggered").
 			Int("tokens", tokens).
 			Int("threshold", crc.tokenThreshold).
-			Msg("上下文 Token 数超过阈值")
+			Msg("context tokens exceeded threshold")
 		return true, nil
 	}
 	return false, nil
@@ -695,7 +695,7 @@ func (crc *CurrentRoundCompressor) GetCompressIdx(messages []llm_schema.BaseMess
 		Str("event_type", "compress_idx_found").
 		Int("compress_idx", compressedIdx).
 		Int("keep_start_idx", keepIndex).
-		Msg("找到可压缩索引")
+		Msg("compressible index found")
 	return compressedIdx
 }
 
@@ -781,7 +781,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 			Str("event_type", "compress_skipped").
 			Int("input_tokens", inputTokens).
 			Int("min_selected_tokens", crc.minSelectedTokens).
-			Msg("选定跨度 Token 数低于最小阈值，跳过压缩")
+			Msg("selected span tokens below minimum threshold, skipping compression")
 		return nil, nil
 	}
 
@@ -817,7 +817,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 		logger.Warn(logComponent).
 			Str("processor_type", crc.ProcessorType()).
 			Err(err).
-			Msg("压缩模型调用失败，跳过当前轮次压缩")
+			Msg("compression model call failed, skipping current round compression")
 		return nil, nil
 	}
 	crc.RecordCompressionUsage(response)
@@ -830,7 +830,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 				Str("event_type", "compress_no_benefit").
 				Int("compressed_tokens", compressedTokens).
 				Int("input_tokens", inputTokens).
-				Msg("压缩后 Token 数未减少，跳过")
+				Msg("tokens not reduced after compression, skipping")
 			return nil, nil
 		}
 		logger.Info(logComponent).
@@ -838,7 +838,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 			Int("original_tokens", inputTokens).
 			Int("compressed_tokens", compressedTokens).
 			Int("saved_tokens", inputTokens-compressedTokens).
-			Msg("当轮压缩成功")
+			Msg("current round compression succeeded")
 	}
 
 	return llm_schema.NewUserMessage(crc.WrapCurrentRoundMemoryBlock(summary)), nil
@@ -857,7 +857,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 			Str("event_type", "merge_skipped").
 			Int("total_tokens", totalTokens).
 			Int("limit", crc.accumulatedSummaryTokenLimit).
-			Msg("累积摘要 Token 数未超限，跳过合并")
+			Msg("accumulated summary tokens within limit, skipping merge")
 		return nil, nil
 	}
 
@@ -882,7 +882,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 		logger.Warn(logComponent).
 			Str("processor_type", crc.ProcessorType()).
 			Err(err).
-			Msg("摘要合并模型调用失败，跳过合并")
+			Msg("summary merge model call failed, skipping merge")
 		return nil, nil
 	}
 	crc.RecordCompressionUsage(response)
@@ -895,7 +895,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 			Int("block_count", len(oldCompressMessages)).
 			Int("original_tokens", totalTokens).
 			Int("merged_tokens", mergedTokens).
-			Msg("历史记忆块合并成功")
+			Msg("historical memory blocks merged")
 		return llm_schema.NewUserMessage(crc.WrapCurrentRoundMemoryBlock(summaryText)), nil
 	}
 
@@ -903,7 +903,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 		Str("event_type", "merge_failed").
 		Int("block_count", len(oldCompressMessages)).
 		Int("original_tokens", totalTokens).
-		Msg("历史记忆块合并失败，LLM 返回空内容")
+		Msg("historical memory blocks merge failed, LLM returned empty content")
 	return nil, nil
 }
 

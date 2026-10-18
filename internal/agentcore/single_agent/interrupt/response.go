@@ -21,3 +21,5 @@ import (
 func NewToolCallInterruptRequest(request saschema.InterruptRequester, toolCall *llmschema.ToolCall) *saschema.ToolCallInterruptRequest {
 	return saschema.NewToolCallInterruptRequest(request, toolCall)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

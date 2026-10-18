@@ -10,6 +10,7 @@
 //
 //	memory/
 //	├── doc.go                          # 包文档
+//	├── ltm_e2e_test.go                 # LongTermMemory E2E 集成测试（14 测试）
 //	├── lite/
 //	│   ├── doc.go                      # CodingMemory 集成测试包文档
 //	│   └── coding_memory_test.go       # CodingMemory 集成测试（5 测试）

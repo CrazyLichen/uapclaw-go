@@ -105,7 +105,7 @@ func AppendOpHistory(historyPath, filePath, action string, oldContent, newConten
 		logger.Warn(logComponent).
 			Str("history_path", historyPath).
 			Err(err).
-			Msg("创建历史目录失败")
+			Msg("failed to create history directory")
 		return
 	}
 
@@ -115,21 +115,21 @@ func AppendOpHistory(historyPath, filePath, action string, oldContent, newConten
 		logger.Warn(logComponent).
 			Str("history_path", historyPath).
 			Err(err).
-			Msg("序列化历史数据失败")
+			Msg("failed to serialize history data")
 		return
 	}
 	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
 		logger.Warn(logComponent).
 			Str("history_path", historyPath).
 			Err(err).
-			Msg("写入临时历史文件失败")
+			Msg("failed to write temporary history file")
 		return
 	}
 	if err := os.Rename(tmpPath, historyPath); err != nil {
 		logger.Warn(logComponent).
 			Str("history_path", historyPath).
 			Err(err).
-			Msg("替换历史文件失败")
+			Msg("failed to replace history file")
 	}
 }
 
@@ -195,7 +195,7 @@ func DetectAndRecordDeletions(historyPath string) {
 		logger.Warn(logComponent).
 			Str("history_path", historyPath).
 			Err(err).
-			Msg("创建历史目录失败")
+			Msg("failed to create history directory")
 		return
 	}
 
@@ -205,21 +205,21 @@ func DetectAndRecordDeletions(historyPath string) {
 		logger.Warn(logComponent).
 			Str("history_path", historyPath).
 			Err(err).
-			Msg("序列化历史数据失败")
+			Msg("failed to serialize history data")
 		return
 	}
 	if err := os.WriteFile(tmpPath, outData, 0o644); err != nil {
 		logger.Warn(logComponent).
 			Str("history_path", historyPath).
 			Err(err).
-			Msg("写入临时历史文件失败")
+			Msg("failed to write temporary history file")
 		return
 	}
 	if err := os.Rename(tmpPath, historyPath); err != nil {
 		logger.Warn(logComponent).
 			Str("history_path", historyPath).
 			Err(err).
-			Msg("替换历史文件失败")
+			Msg("failed to replace history file")
 	}
 }
 

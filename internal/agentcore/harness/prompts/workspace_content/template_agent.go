@@ -49,3 +49,7 @@ const (
 		"## Make It Yours\n" +
 		"This is a starting point. Add your own conventions, style, and rules as you figure out what works.\n"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────

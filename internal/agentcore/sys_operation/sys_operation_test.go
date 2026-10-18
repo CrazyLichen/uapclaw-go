@@ -509,3 +509,16 @@ func TestWithCodeOptions_Map(t *testing.T) {
 	opts := NewCodeOptions(WithCodeOptions(m))
 	assert.Equal(t, m, opts.Options)
 }
+
+// TestWithShellOptions 验证 WithShellOptions 选项。
+func TestWithShellOptions(t *testing.T) {
+	m := map[string]any{"key": "val"}
+	opts := NewShellOptions(WithShellOptions(m))
+	assert.Equal(t, m, opts.Options)
+}
+
+// TestWithShellGrace 验证 WithShellGrace 选项。
+func TestWithShellGrace(t *testing.T) {
+	opts := NewShellOptions(WithShellGrace(5.0))
+	assert.Equal(t, 5.0, opts.Grace)
+}

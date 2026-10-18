@@ -214,7 +214,7 @@ func (s *EvolutionStore) ReadFileText(ctx context.Context, path string) (string,
 				logger.Warn(logComponent).
 					Str("path", path).
 					Err(err).
-					Msg("[EvolutionStore] sys_operation 读文件失败")
+					Msg("[EvolutionStore] sys_operation read file failed")
 				return "", nil
 			}
 			if result.Data != nil && result.Data.Content != "" {
@@ -246,7 +246,7 @@ func (s *EvolutionStore) WriteFileText(ctx context.Context, path string, content
 				logger.Warn(logComponent).
 					Str("path", path).
 					Err(err).
-					Msg("[EvolutionStore] sys_operation 写文件失败")
+					Msg("[EvolutionStore] sys_operation write file failed")
 				return fmt.Errorf("sys_operation 写文件失败: %w", err)
 			}
 			if result != nil && result.Code != 0 {
@@ -254,7 +254,7 @@ func (s *EvolutionStore) WriteFileText(ctx context.Context, path string, content
 				logger.Warn(logComponent).
 					Str("path", path).
 					Str("message", result.Message).
-					Msg("[EvolutionStore] sys_operation 写文件返回非零状态码")
+					Msg("[EvolutionStore] sys_operation write file returned non-zero status code")
 				return fmt.Errorf("sys_operation 写文件返回非零状态码: %s", result.Message)
 			}
 			return nil
@@ -328,7 +328,7 @@ func (s *EvolutionStore) EnsureSkillID(ctx context.Context, name string) (string
 		logger.Info(logComponent).
 			Str("skill_id", skillID).
 			Str("skill", name).
-			Msg("[EvolutionStore] 分配 skill_id")
+			Msg("[EvolutionStore] assigned skill_id")
 	}
 	return skillID, nil
 }
@@ -370,7 +370,7 @@ func (s *EvolutionStore) InstallSkillPackage(ctx context.Context, packageBytes [
 		resolvedName = inferSkillNameFromPackage(packageBytes)
 	}
 	if resolvedName == "" {
-		logger.Warn(logComponent).Msg("[EvolutionStore] install_skill_package: 无法推断技能名")
+		logger.Warn(logComponent).Msg("[EvolutionStore] install_skill_package: cannot infer skill name")
 		return "", nil
 	}
 
@@ -381,7 +381,7 @@ func (s *EvolutionStore) InstallSkillPackage(ctx context.Context, packageBytes [
 	if isDir(destDir) && hasFiles(destDir) {
 		logger.Warn(logComponent).
 			Str("dest_dir", destDir).
-			Msg("[EvolutionStore] install_skill_package: 技能目录已存在")
+			Msg("[EvolutionStore] install_skill_package: skill directory already exists")
 		return "", nil
 	}
 
@@ -390,7 +390,7 @@ func (s *EvolutionStore) InstallSkillPackage(ctx context.Context, packageBytes [
 	}
 	logger.Info(logComponent).
 		Str("dest_dir", destDir).
-		Msg("[EvolutionStore] 安装技能包")
+		Msg("[EvolutionStore] installing skill package")
 	return destDir, nil
 }
 
@@ -400,7 +400,7 @@ func (s *EvolutionStore) WriteSkillContent(ctx context.Context, name string, con
 	if skillDir == "" {
 		logger.Warn(logComponent).
 			Str("skill", name).
-			Msg("[EvolutionStore] write_skill_content: 技能未找到")
+			Msg("[EvolutionStore] write_skill_content: skill not found")
 		return false, nil
 	}
 	mdPath := s.FindSkillMD(ctx, skillDir)
@@ -411,12 +411,12 @@ func (s *EvolutionStore) WriteSkillContent(ctx context.Context, name string, con
 		logger.Error(logComponent).
 			Str("skill", name).
 			Err(err).
-			Msg("[EvolutionStore] write_skill_content 失败")
+			Msg("[EvolutionStore] write_skill_content failed")
 		return false, err
 	}
 	logger.Info(logComponent).
 		Str("skill", name).
-		Msg("[EvolutionStore] 写入 SKILL.md")
+		Msg("[EvolutionStore] writing SKILL.md")
 	return true, nil
 }
 
@@ -424,7 +424,7 @@ func (s *EvolutionStore) WriteSkillContent(ctx context.Context, name string, con
 func (s *EvolutionStore) LoadEvolutionLog(ctx context.Context, name string, target *signal.EvolutionTarget) *EvolutionLog {
 	evoLog, err := s.LoadFullEvolutionLog(ctx, name)
 	if err != nil {
-		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[EvolutionStore] load_evolution_log 失败")
+		logger.Warn(logComponent).Str("skill", name).Err(err).Msg("[EvolutionStore] load_evolution_log failed")
 		return EmptyEvolutionLog(name)
 	}
 	if target != nil {
@@ -459,7 +459,7 @@ func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record E
 	if record.Change.Target == signal.EvolutionTargetScript {
 		if err := s.records.PersistScript(ctx, skillDir, &record); err != nil {
 			logger.Warn(logComponent).Err(err).Str("record_id", record.ID).
-				Msg("[EvolutionStore] 持久化脚本失败")
+				Msg("[EvolutionStore] persist script failed")
 		}
 	}
 
@@ -477,7 +477,7 @@ func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record E
 				logger.Info(logComponent).
 					Str("record_id", record.ID).
 					Str("merge_target", *mergeTarget).
-					Msg("[EvolutionStore] 合并记录替换")
+					Msg("[EvolutionStore] merge record replaced")
 				break
 			}
 		}
@@ -498,14 +498,14 @@ func (s *EvolutionStore) AppendRecord(ctx context.Context, name string, record E
 		Str("file", evolutionFilename).
 		Str("record_id", record.ID).
 		Str("target", string(record.Change.Target)).
-		Msg("[EvolutionStore] 写入演进记录")
+		Msg("[EvolutionStore] evolution record written")
 
 	total := len(evoLog.Entries)
 	if total >= totalWarningThreshold {
 		logger.Warn(logComponent).
 			Str("skill", name).
 			Int("total", total).
-			Msg("[EvolutionStore] 演进经验过多，建议 /evolve_simplify")
+			Msg("[EvolutionStore] too many evolution records, consider /evolve_simplify")
 	}
 
 	_ = s.RenderEvolutionMarkdown(ctx, name)

@@ -87,3 +87,5 @@ func (b *BaseCodeOperation) ExecuteCodeStream(_ context.Context, _ string, _ ...
 }
 
 func (b *BaseCodeOperation) ListTools() []*tool.ToolCard { return nil }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

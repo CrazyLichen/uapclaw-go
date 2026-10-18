@@ -36,7 +36,6 @@ type AgentCardOption func(*AgentCard)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 AgentCard 满足 schema.CardInterface。
 // _ 编译时验证 AgentCard 满足 CardInterface 接口
 var _ schema.CardInterface = (*AgentCard)(nil)
 
@@ -135,3 +134,5 @@ func (c *AgentCard) AbilityID() string { return c.ID }
 
 // AbilityKind 实现 Ability 接口。
 func (c *AgentCard) AbilityKind() schema.AbilityKind { return schema.AbilityKindAgent }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

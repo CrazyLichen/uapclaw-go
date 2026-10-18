@@ -35,7 +35,7 @@ type gaussStringSerializer struct{}
 
 // Value 实现 schema.SerializerInterface，将 Go 值转换为数据库值。
 // 对标 Python GaussString.bind_processor().process(value)：
-//   - string → 直接返回
+//   - string → 原值返回
 //   - time.Time → "2006-01-02 15:04:05.000000"
 //   - nil → nil
 //   - 其他 → fmt.Sprintf("%v", v)

@@ -73,8 +73,6 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// agentartsLogComponent 日志组件标识
-	agentartsLogComponent = logger.ComponentAgentCore
 
 	// externalMemorySearchSchema external_memory_search 工具 Schema
 	// 对齐 Python: EXTERNAL_MEMORY_SEARCH_SCHEMA（提示词从 Python 源码直接复制）
@@ -182,7 +180,7 @@ func (p *AgentArtsProvider) Initialize(ctx context.Context, opts ...ProviderOpti
 	sessionID := po.SessionID
 
 	// 对齐 Python: logger.info("[AgentArtsMemoryProvider] initializing with params: %s", json.dumps(kwargs))
-	logger.Info(agentartsLogComponent).
+	logger.Info(logComponent).
 		Str("provider", "agentarts").
 		Str("user_id", p.actorID).
 		Str("assistant_id", p.assistantID).
@@ -217,7 +215,7 @@ func (p *AgentArtsProvider) Prefetch(ctx context.Context, query string, _ ...Pro
 	if err != nil {
 		p.recordFailure()
 		// 对齐 Python: logger.debug("[AgentArtsMemoryProvider] prefetch failed: %s", exc)
-		logger.Debug(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] prefetch failed")
+		logger.Debug(logComponent).Err(err).Msg("[AgentArtsMemoryProvider] prefetch failed")
 		return "", nil
 	}
 
@@ -261,7 +259,7 @@ func (p *AgentArtsProvider) HandleToolCall(ctx context.Context, toolName string,
 	if err != nil {
 		p.recordFailure()
 		// 对齐 Python: logger.warning("[AgentArtsMemoryProvider] failed to search relevant memories", exc)
-		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] failed to search relevant memories")
+		logger.Warn(logComponent).Err(err).Msg("[AgentArtsMemoryProvider] failed to search relevant memories")
 		b, _ := json.Marshal(map[string]string{"error": err.Error()})
 		return string(b), nil
 	}
@@ -316,7 +314,7 @@ func (p *AgentArtsProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg 
 	}
 
 	// 对齐 Python: logger.info("[AgentArtsMemoryProvider] sync_turn with params: %s", json.dumps(kwargs))
-	logger.Info(agentartsLogComponent).
+	logger.Info(logComponent).
 		Str("user_id", actorID).
 		Str("assistant_id", assistantID).
 		Str("session_id", sessionID).
@@ -327,7 +325,7 @@ func (p *AgentArtsProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg 
 	if err != nil {
 		p.recordFailure()
 		// 对齐 Python: 吞掉错误
-		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] SyncTurn ensureMemorySession 失败")
+		logger.Warn(logComponent).Err(err).Msg("[AgentArtsMemoryProvider] SyncTurn ensureMemorySession failed")
 		return nil
 	}
 
@@ -340,7 +338,7 @@ func (p *AgentArtsProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg 
 	if err := client.addMessages(ctx, p.spaceID, memorySessionID, msgs); err != nil {
 		p.recordFailure()
 		// 对齐 Python: logger.warning("AgentArts sync failed: %s", exc)
-		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] AgentArts sync failed")
+		logger.Warn(logComponent).Err(err).Msg("[AgentArtsMemoryProvider] AgentArts sync failed")
 		return nil // 对齐 Python: 吞掉错误
 	}
 
@@ -408,12 +406,12 @@ func (p *AgentArtsProvider) ensureMemorySession(ctx context.Context, sessionID, 
 	// 对齐 Python: memory_session_id = self._normalize_memory_session_id(...)
 	existing, err := p.sessionMappingStore.Get(ctx, mappingKey)
 	if err != nil {
-		logger.Debug(agentartsLogComponent).Err(err).Str("key", mappingKey).Msg("[AgentArtsMemoryProvider] 读取 session 映射失败")
+		logger.Debug(logComponent).Err(err).Str("key", mappingKey).Msg("[AgentArtsMemoryProvider] read session mapping failed")
 	}
 	if len(existing) > 0 {
 		memorySessionID := string(existing)
 		// 对齐 Python: logger.info("[AgentArtsMemoryProvider] use exist session mapping entry: %s -> %s", ...)
-		logger.Info(agentartsLogComponent).
+		logger.Info(logComponent).
 			Str("session_id", sessionID).
 			Str("memory_session_id", memorySessionID).
 			Msg("[AgentArtsMemoryProvider] use exist session mapping entry")
@@ -436,14 +434,14 @@ func (p *AgentArtsProvider) ensureMemorySession(ctx context.Context, sessionID, 
 	}
 
 	// 对齐 Python: logger.info("[AgentArtsMemoryProvider] add session mapping entry: %s -> %s", ...)
-	logger.Info(agentartsLogComponent).
+	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Str("memory_session_id", info.ID).
 		Msg("[AgentArtsMemoryProvider] add session mapping entry")
 
 	// 对齐 Python: await self._session_mapping_store.set(mapping_key, memory_session_id)
 	if err := p.sessionMappingStore.Set(ctx, mappingKey, []byte(info.ID)); err != nil {
-		logger.Warn(agentartsLogComponent).Err(err).Msg("[AgentArtsMemoryProvider] 存储 session 映射失败")
+		logger.Warn(logComponent).Err(err).Msg("[AgentArtsMemoryProvider] store session mapping failed")
 	}
 
 	return info.ID, nil
@@ -499,7 +497,7 @@ func (p *AgentArtsProvider) search(ctx context.Context, query string, args map[s
 	}
 
 	// 对齐 Python: logger.info("[AgentArtsMemoryProvider] search agentarts memory space [%s] with filters: %s", ...)
-	logger.Info(agentartsLogComponent).
+	logger.Info(logComponent).
 		Str("space_id", p.spaceID).
 		Str("query", query).
 		Int("top_k", topK).
@@ -513,7 +511,7 @@ func (p *AgentArtsProvider) search(ctx context.Context, query string, args map[s
 	}
 
 	// 对齐 Python: logger.info("[AgentArtsMemoryProvider] found %d relevant memory records", len(items))
-	logger.Info(agentartsLogComponent).
+	logger.Info(logComponent).
 		Int("count", len(items)).
 		Msg("[AgentArtsMemoryProvider] found relevant memory records")
 

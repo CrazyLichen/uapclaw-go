@@ -98,7 +98,7 @@ func (m *TemplateManager) init() {
 	for _, lang := range languageDirs {
 		count, err := m.registerInBulk(lang)
 		if err != nil {
-			logger.Error(logger.ComponentAgentCore).Err(err).Str("lang", lang).Msg("加载提示词模板失败")
+			logger.Error(logger.ComponentAgentCore).Err(err).Str("lang", lang).Msg("failed to load prompt template")
 			continue
 		}
 		totalLoaded += count
@@ -106,7 +106,7 @@ func (m *TemplateManager) init() {
 
 	logger.Info(logger.ComponentAgentCore).
 		Int("count", totalLoaded).
-		Msg("已加载全部提示词模板")
+		Msg("all prompt templates loaded")
 }
 
 // registerInBulk 批量注册某目录下的 .pr.md 文件
@@ -143,14 +143,14 @@ func (m *TemplateManager) registerInBulk(lang string) (int, error) {
 		// 读取文件内容
 		data, err := promptFiles.ReadFile(tPath)
 		if err != nil {
-			logger.Error(logger.ComponentAgentCore).Str("path", tPath).Err(err).Msg("读取提示词模板文件失败")
+			logger.Error(logger.ComponentAgentCore).Str("path", tPath).Err(err).Msg("failed to read prompt template file")
 			continue
 		}
 
 		// 解析为消息列表
 		messages := ParsePRContent(string(data))
 		if len(messages) == 0 {
-			logger.Warn(logger.ComponentAgentCore).Str("path", tPath).Msg("提示词模板内容为空或解析失败")
+			logger.Warn(logger.ComponentAgentCore).Str("path", tPath).Msg("prompt template empty or parse failed")
 			continue
 		}
 
@@ -162,7 +162,7 @@ func (m *TemplateManager) registerInBulk(lang string) (int, error) {
 	logger.Info(logger.ComponentAgentCore).
 		Int("count", len(paths)).
 		Str("name", lang).
-		Msg("已加载提示词模板")
+		Msg("prompt templates loaded")
 
 	return len(paths), nil
 }

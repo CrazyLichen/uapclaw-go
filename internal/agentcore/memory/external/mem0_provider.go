@@ -78,9 +78,10 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
+
 var (
-	// mem0LogComponent 日志组件标识
-	mem0LogComponent = logger.ComponentAgentCore
 
 	// mem0ProfileSchema mem0_profile 工具 Schema
 	// 对齐 Python: PROFILE_SCHEMA
@@ -234,7 +235,7 @@ func (p *Mem0Provider) Prefetch(ctx context.Context, query string, opts ...Provi
 	response, err := client.search(ctx, query, p.readFilters(), rerank, topK)
 	if err != nil {
 		p.recordFailure()
-		logger.Debug(mem0LogComponent).Err(err).Msg("Mem0 prefetch 失败")
+		logger.Debug(logComponent).Err(err).Msg("Mem0 prefetch failed")
 		return "", nil
 	}
 
@@ -301,7 +302,7 @@ func (p *Mem0Provider) QueuePrefetch(ctx context.Context, query string, opts ...
 				return
 			}
 			p.recordFailure()
-			logger.Debug(mem0LogComponent).Err(err).Msg("Mem0 queue_prefetch 失败")
+			logger.Debug(logComponent).Err(err).Msg("Mem0 queue_prefetch failed")
 			return
 		}
 		p.recordSuccess()
@@ -324,7 +325,7 @@ func (p *Mem0Provider) SyncTurn(ctx context.Context, userMsg, assistantMsg strin
 	err := client.add(ctx, messages, p.writeFilters(), nil)
 	if err != nil {
 		p.recordFailure()
-		logger.Warn(mem0LogComponent).Err(err).Msg("Mem0 sync_turn 失败")
+		logger.Warn(logComponent).Err(err).Msg("Mem0 sync_turn failed")
 		// 对齐 Python: 静默吞错，不中断主流程
 		return nil
 	}
@@ -456,7 +457,7 @@ func (p *Mem0Provider) recordFailure() {
 	p.consecutiveFailures++
 	if p.consecutiveFailures >= mem0BreakerThreshold {
 		p.breakerOpenUntil = time.Now().Add(time.Duration(mem0BreakerCooldownSecs) * time.Second)
-		logger.Warn(mem0LogComponent).
+		logger.Warn(logComponent).
 			Int("consecutive_failures", p.consecutiveFailures).
 			Int("cooldown_secs", mem0BreakerCooldownSecs).
 			Msg("[Mem0Provider] Circuit breaker opened")

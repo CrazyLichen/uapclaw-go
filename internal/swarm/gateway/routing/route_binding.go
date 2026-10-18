@@ -46,3 +46,5 @@ func NewWebRouteBinding() *RouteBinding {
 		ChannelID: "web",
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

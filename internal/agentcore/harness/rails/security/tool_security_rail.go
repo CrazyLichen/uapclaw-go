@@ -58,7 +58,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 PermissionInterruptRail 满足 AgentRail 接口
 // _ 编译时验证 PermissionInterruptRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*PermissionInterruptRail)(nil)
 
@@ -70,8 +69,6 @@ var toolNameAliases = map[string]string{
 	"fetch_webpage": "mcp_fetch_webpage",
 	"exec_command":  "mcp_exec_command",
 }
-
-var permRailLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -108,7 +105,7 @@ func NewPermissionInterruptRail(
 			if ws, err := func() (string, error) { return r.host.ResolveWorkspaceDir(), nil }(); err == nil {
 				workspaceRoot = ws
 			} else {
-				logger.Debug(permRailLogComponent).
+				logger.Debug(logComponent).
 					Err(err).
 					Msg("permission.rail.workspace_resolve_failed")
 			}
@@ -145,7 +142,7 @@ func NewPermissionInterruptRail(
 	sort.Strings(sortedToolTags)
 	sort.Strings(toolsKeys)
 
-	logger.Info(permRailLogComponent).
+	logger.Info(logComponent).
 		Strs("optional_tool_tags", sortedToolTags).
 		Strs("tools_keys", toolsKeys).
 		Msg("permission.rail.init intercept=all_tools")
@@ -167,7 +164,7 @@ func (r *PermissionInterruptRail) BeforeToolCall(ctx context.Context, cbc *agent
 	toolName := toolInputs.ToolName
 	normalizedName := r.normalizeToolName(toolName)
 
-	logger.Info(permRailLogComponent).
+	logger.Info(logComponent).
 		Str("tool", toolName).
 		Str("normalized", normalizedName).
 		Interface("optional_tool_tags", r.GetTools()).
@@ -187,7 +184,7 @@ func (r *PermissionInterruptRail) BeforeToolCall(ctx context.Context, cbc *agent
 	}
 
 	decision := r.ResolveInterruptFn(ctx, cbc, toolInputs.ToolCall, userInput, autoConfirmConfig)
-	cbc.Extra()["_interrupt_decision"] = decision
+	cbc.SetExtra("_interrupt_decision", decision)
 	r.applyDecision(cbc, toolInputs, decision)
 
 	return nil
@@ -231,7 +228,7 @@ func (r *PermissionInterruptRail) UpdateConfig(config map[string]any, toolNames 
 	}
 	sortedTags := r.GetTools()
 	sort.Strings(sortedTags)
-	logger.Info(permRailLogComponent).
+	logger.Info(logComponent).
 		Strs("optional_tool_tags", sortedTags).
 		Msg("permission.rail.config_updated intercept=all_tools")
 }
@@ -332,7 +329,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 	toolArgs := parseToolArgs(toolCall)
 	autoConfirmKey := r.getAutoConfirmKey(toolCall)
 
-	logger.Info(permRailLogComponent).
+	logger.Info(logComponent).
 		Str("tool", toolName).
 		Str("normalized", normalizedName).
 		Interface("tool_args", toolArgs).
@@ -352,7 +349,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 			Engine:             r.engine,
 		})
 		if err != nil {
-			logger.Warn(permRailLogComponent).
+			logger.Warn(logComponent).
 				Err(err).
 				Msg("permission.scene_hook.failed")
 		} else if len(sceneOut) > 0 {
@@ -371,7 +368,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 
 	// ── 2. 首次检查（userInput == nil） ──
 	if userInput == nil {
-		logger.Info(permRailLogComponent).
+		logger.Info(logComponent).
 			Str("tool", toolName).
 			Str("normalized", normalizedName).
 			Msg("permission.rail.first_check")
@@ -390,7 +387,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 
 		// ALLOW → 放行
 		if result.Permission == harnesssecurity.PermissionLevelAllow {
-			logger.Info(permRailLogComponent).
+			logger.Info(logComponent).
 				Str("tool", toolName).
 				Str("matched_rule", result.MatchedRule).
 				Msg("permission.rail.result decision=allow")
@@ -399,7 +396,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 
 		// DENY → 拒绝
 		if result.Permission == harnesssecurity.PermissionLevelDeny {
-			logger.Warn(permRailLogComponent).
+			logger.Warn(logComponent).
 				Str("tool", toolName).
 				Str("matched_rule", result.MatchedRule).
 				Msg("permission.rail.result decision=deny")
@@ -412,7 +409,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 
 		// ASK → 检查 auto_confirm session 状态
 		if isPermissionAutoConfirmed(autoConfirmConfig, autoConfirmKey) {
-			logger.Info(permRailLogComponent).
+			logger.Info(logComponent).
 				Str("tool", toolName).
 				Str("key", autoConfirmKey).
 				Msg("permission.auto_confirm.hit")
@@ -429,7 +426,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				AutoConfirmKey: autoConfirmKey,
 			})
 			if err != nil {
-				logger.Warn(permRailLogComponent).
+				logger.Warn(logComponent).
 					Err(err).
 					Msg("permission.hosted_confirm.error")
 				extOut = nil
@@ -445,7 +442,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 
 			// Python: if ext_out == "interrupt" → 回退到标准 interrupt 流程
 			if extOut.Action == harnesssecurity.ConfirmActionInterrupt {
-				logger.Info(permRailLogComponent).
+				logger.Info(logComponent).
 					Str("tool", toolName).
 					Msg("permission.hosted_confirm.fallback_interrupt")
 				// 跳过 hosted 处理，走下面的标准 interrupt 流程
@@ -455,7 +452,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 				if extOut.Approved && extOut.AutoConfirm {
 					persisted = r.persistAllowAlways(normalizedName, toolArgs)
 				}
-				logger.Info(permRailLogComponent).
+				logger.Info(logComponent).
 					Str("tool", toolName).
 					Str("confirm_path", "hosted").
 					Bool("persisted", persisted).
@@ -471,7 +468,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 					if extOut.AutoConfirm {
 						decision = "allow_always"
 					}
-					logger.Info(permRailLogComponent).
+					logger.Info(logComponent).
 						Str("tool", toolName).
 						Str("confirm_path", "hosted").
 						Str("decision", decision).
@@ -480,7 +477,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 					return r.Approve(nil)
 				}
 
-				logger.Info(permRailLogComponent).
+				logger.Info(logComponent).
 					Str("tool", toolName).
 					Str("confirm_path", "hosted").
 					Msg("permission.user.decision decision=deny")
@@ -493,7 +490,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 		}
 
 		// ASK → 标准 interrupt 流程
-		logger.Info(permRailLogComponent).
+		logger.Info(logComponent).
 			Str("tool", toolName).
 			Str("matched_rule", result.MatchedRule).
 			Msg("permission.interrupt.ask")
@@ -506,7 +503,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 	}
 
 	// ── 3. 恢复调用（userInput != nil） ──
-	logger.Info(permRailLogComponent).
+	logger.Info(logComponent).
 		Str("tool", toolName).
 		Msg("permission.rail.user_response")
 
@@ -527,7 +524,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 	persisted := false
 	if payload.Approved && payload.AutoConfirm {
 		persisted = r.persistAllowAlways(normalizedName, toolArgs)
-		logger.Info(permRailLogComponent).
+		logger.Info(logComponent).
 			Str("tool", toolName).
 			Str("confirm_path", r.confirmPathLabel()).
 			Bool("persisted", persisted).
@@ -544,7 +541,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 		if payload.AutoConfirm {
 			decision = "allow_always"
 		}
-		logger.Info(permRailLogComponent).
+		logger.Info(logComponent).
 			Str("tool", toolName).
 			Str("confirm_path", r.confirmPathLabel()).
 			Str("decision", decision).
@@ -553,7 +550,7 @@ func (r *PermissionInterruptRail) resolvePermissionInterrupt(
 		return r.Approve(nil)
 	}
 
-	logger.Info(permRailLogComponent).
+	logger.Info(logComponent).
 		Str("tool", toolName).
 		Str("confirm_path", r.confirmPathLabel()).
 		Msg("permission.user.decision decision=deny")
@@ -671,7 +668,7 @@ func (r *PermissionInterruptRail) storeAutoConfirm(cbc *agentinterfaces.AgentCal
 		saschema.InterruptAutoConfirmKey: config,
 	})
 
-	logger.Info(permRailLogComponent).
+	logger.Info(logComponent).
 		Str("key", autoConfirmKey).
 		Msg("permission.auto_confirm.store")
 }
@@ -703,7 +700,7 @@ func (r *PermissionInterruptRail) collectExternalDirectoryPersistPaths(
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Debug(permRailLogComponent).
+				logger.Debug(logComponent).
 					Interface("recover", rec).
 					Msg("permission.persist.external.workspace_resolve_failed")
 			}
@@ -752,7 +749,7 @@ func (r *PermissionInterruptRail) persistAllowAlways(normalizedName string, tool
 		persisted := func() bool {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(permRailLogComponent).
+					logger.Warn(logComponent).
 						Interface("recover", rec).
 						Msg("permission.persist.host_failed")
 				}
@@ -915,7 +912,7 @@ func (r *PermissionInterruptRail) skipPermissionTool(
 	reject *interrupt.RejectResult,
 ) {
 	toolCallID := r.resolveToolCallID(toolInputs.ToolCall)
-	cbc.Extra()["_skip_tool"] = true
+	cbc.SetExtra("_skip_tool", true)
 	toolInputs.ToolResult = reject.ToolResult
 	if reject.ToolMessage != nil {
 		toolInputs.ToolMsg = reject.ToolMessage
@@ -951,19 +948,19 @@ func (r *PermissionInterruptRail) resolveToolCallID(toolCall *llmschema.ToolCall
 // getUserInput 从回调上下文中提取用户输入。
 // Python: BaseInterruptRail._get_user_input
 func (r *PermissionInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackContext, toolCallID string) any {
-	rawInput, exists := cbc.Extra()[saschema.ResumeUserInputKey]
+	rawInput, exists := cbc.GetExtra(saschema.ResumeUserInputKey)
 	// Python: logger.info("[_get_user_input] tool_call_id=%r raw_input_type=%s", ...)
 	if !exists || rawInput == nil {
-		logger.Info(permRailLogComponent).
+		logger.Info(logComponent).
 			Str("tool_call_id", toolCallID).
 			Str("raw_input_type", "None").
-			Msg("提取用户输入")
+			Msg("extracting user input")
 		return nil
 	}
-	logger.Info(permRailLogComponent).
+	logger.Info(logComponent).
 		Str("tool_call_id", toolCallID).
 		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
-		Msg("提取用户输入")
+		Msg("extracting user input")
 
 	// InteractiveInput 格式
 	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {
@@ -972,7 +969,7 @@ func (r *PermissionInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbac
 		for k := range interactive.UserInputs {
 			keys = append(keys, k)
 		}
-		logger.Info(permRailLogComponent).
+		logger.Info(logComponent).
 			Str("tool_call_id", toolCallID).
 			Strs("keys", keys).
 			Msg("InteractiveInput.user_inputs")
@@ -983,17 +980,17 @@ func (r *PermissionInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbac
 			if len(valRepr) > 200 {
 				valRepr = valRepr[:200]
 			}
-			logger.Info(permRailLogComponent).
+			logger.Info(logComponent).
 				Str("tool_call_id", toolCallID).
 				Str("value", valRepr).
-				Msg("InteractiveInput 匹配成功")
+				Msg("InteractiveInput matched")
 			return val
 		}
 		// Python: logger.warning("[_get_user_input] NO MATCH! tool_call_id=%r not in keys=%r", ...)
-		logger.Warn(permRailLogComponent).
+		logger.Warn(logComponent).
 			Str("tool_call_id", toolCallID).
 			Strs("keys", keys).
-			Msg("InteractiveInput 中未找到匹配的 tool_call_id")
+			Msg("no matching tool_call_id found in InteractiveInput")
 		return nil
 	}
 

@@ -15,12 +15,12 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// sharedLogComponent 日志组件
-	sharedLogComponent = logger.ComponentChannel
-)
+const ()
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// logComponent 日志组件
+var logComponent = logger.ComponentTeam
 
 var (
 	// sharedRuntime 进程级 TeamRuntime 单例
@@ -43,7 +43,7 @@ func GetSharedRuntime() *teamruntime.TeamRuntime {
 	defer resourcesMu.Unlock()
 
 	if sharedRuntime == nil {
-		logger.Info(sharedLogComponent).Msg("创建共享 TeamRuntime 单例")
+		logger.Info(logComponent).Msg("creating shared TeamRuntime singleton")
 		// Python: _runtime = TeamRuntime()
 		sharedRuntime = teamruntime.NewTeamRuntime(teamruntime.RuntimeConfig{
 			TeamID: "default",
@@ -62,7 +62,7 @@ func GetSharedDB(config database.DBConfigProvider) database.TeamDatabase {
 	defer resourcesMu.Unlock()
 
 	if config == nil {
-		logger.Warn(sharedLogComponent).Msg("GetSharedDB: config 为 nil，返回 nil")
+		logger.Warn(logComponent).Msg("GetSharedDB: config is nil, returning nil")
 		return nil
 	}
 
@@ -97,10 +97,9 @@ func CleanupSharedResources() {
 	sharedMemoryDB = nil
 	sharedDBInstances = make(map[string]database.TeamDatabase)
 
-	// ⤵️ 预留：Messager（9.65）实现后回填
-	// cleanupInprocessBus()
+	// ⤵️ 预留：Messager（9.65）实现后回填进程内消息总线清理逻辑
 
-	logger.Debug(sharedLogComponent).Msg("已清理共享资源")
+	logger.Debug(logComponent).Msg("cleaned upshared resources")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -58,8 +58,6 @@ type LocalShellOperation struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// shellLogComponent 日志组件
-	shellLogComponent = logger.ComponentAgentCore
 	// defaultExecCmdTimeout 默认命令执行超时
 	defaultExecCmdTimeout = 300
 	// defaultShellEncoding 默认 Shell 编码
@@ -68,7 +66,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 LocalShellOperation 满足 ShellOperation 接口
 // _ 编译时验证 LocalShellOperation 满足 ShellOperation 接口
 var _ sysop.ShellOperation = (*LocalShellOperation)(nil)
 
@@ -101,11 +98,11 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 	methodName := "execute_cmd"
 
 	startTime := time.Now()
-	logger.Info(shellLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_START").
 		Str("method_name", methodName).
 		Str("command", truncate(command, 200)).
-		Msg("开始执行命令")
+		Msg("starting command execution")
 
 	createErrResult := func(errMsg string, data *result.ExecuteCmdData) *result.ExecuteCmdResult {
 		if data != nil && data.ExitCode == nil {
@@ -119,12 +116,12 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 			),
 			Data: data,
 		}
-		logger.Error(shellLogComponent).
+		logger.Error(logComponent).
 			Str("event_type", "SYS_OP_ERROR").
 			Str("method_name", methodName).
 			Str("error_msg", errMsg).
 			Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
-			Msg("执行命令失败")
+			Msg("failed to execute command")
 		return errResult
 	}
 
@@ -169,7 +166,7 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 	// TUI 检测
 	isTUI, tuiWarning := s.detectAndMitigateTUI(command, execEnv)
 	if isTUI && tuiWarning != "" {
-		logger.Warn(shellLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "SYS_OP_ERROR").
 			Str("command", truncate(command, 200)).
 			Msg(tuiWarning)
@@ -251,12 +248,12 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 		},
 	}
 
-	logger.Info(shellLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
 		Str("shell_name", shellName).
 		Float64("method_exec_time_ms", float64(time.Since(startTime).Milliseconds())).
-		Msg("命令执行完成")
+		Msg("command execution completed")
 
 	return successResult, nil
 }
@@ -333,7 +330,7 @@ func (s *LocalShellOperation) ExecuteCmdStream(ctx context.Context, command stri
 	// TUI 检测
 	isTUI, tuiWarning := s.detectAndMitigateTUI(command, execEnv)
 	if isTUI && tuiWarning != "" {
-		logger.Warn(shellLogComponent).
+		logger.Warn(logComponent).
 			Str("event_type", "SYS_OP_ERROR").
 			Str("command", truncate(command, 200)).
 			Msg(tuiWarning)
@@ -524,12 +521,12 @@ func (s *LocalShellOperation) ExecuteCmdBackground(ctx context.Context, command 
 		trackSid = trackShellProcess(ctx, handler.cmd.Process)
 	}
 
-	logger.Info(shellLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "SYS_OP_END").
 		Str("method_name", methodName).
 		Int("pid", pid).
 		Str("session_id", trackSid).
-		Msg("后台命令启动成功")
+		Msg("background command started")
 
 	return &result.ExecuteCmdBackgroundResult{
 		BaseResult: result.BaseResult{Code: 0, Message: "Background command started successfully"},
@@ -605,10 +602,10 @@ func (s *LocalShellOperation) WriteStdin(ctx context.Context, sessionID string, 
 	// Python: 查找 stdin pipe 写入
 	written, firstErr := sysop.DefaultRegistry.WriteStdinForSession(sessionID, []byte(data))
 	if firstErr != nil {
-		logger.Warn(shellLogComponent).
+		logger.Warn(logComponent).
 			Str("session_id", sessionID).
 			Err(firstErr).
-			Msg("写入 stdin 部分失败")
+			Msg("partial write to stdin failed")
 	}
 
 	if written == 0 {
@@ -732,10 +729,10 @@ func (s *LocalShellOperation) initCustomDangerousPatterns() {
 	for _, rawPattern := range s.runConfig.DangerousPatterns {
 		re, err := regexp.Compile("(?i)" + rawPattern)
 		if err != nil {
-			logger.Warn(shellLogComponent).
+			logger.Warn(logComponent).
 				Str("pattern", rawPattern).
 				Err(err).
-				Msg("自定义危险模式编译失败，跳过")
+				Msg("failed to compile custom danger pattern, skipping")
 			continue
 		}
 		s.dangerousPatterns = append(s.dangerousPatterns, DangerousPattern{Pattern: re, Label: rawPattern})

@@ -82,7 +82,7 @@ func (m *LongTermMemory) RegisterStore(
 	// 步骤 4：create_tables
 	if m.dbStore != nil {
 		if err := mem_model.CreateTables(m.dbStore.GetDB(ctx)); err != nil {
-			logger.Error(logComponent).Err(err).Msg("CreateTables 失败")
+			logger.Error(logComponent).Err(err).Msg("CreateTables failed")
 			return exception.BuildError(exception.StatusMemoryRegisterStoreExecutionError,
 				exception.WithParam("store_type", "db store"),
 				exception.WithMsg(fmt.Sprintf("create_tables failed: %v", err)),
@@ -99,7 +99,7 @@ func (m *LongTermMemory) RegisterStore(
 		}
 		sqlMsgStore, err := mem_model.NewSqlMessageStore(nil, m.sqlDbStore, "")
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("创建 SqlMessageStore 失败")
+			logger.Error(logComponent).Err(err).Msg("create SqlMessageStore failed")
 			return exception.BuildError(exception.StatusMemoryRegisterStoreExecutionError,
 				exception.WithParam("store_type", "message store"),
 				exception.WithMsg(fmt.Sprintf("create SqlMessageStore failed: %v", err)),
@@ -183,10 +183,10 @@ func (m *LongTermMemory) RegisterPlugin(name string, memoryIndex storeindex.Base
 	if m.memoryIndex == nil {
 		m.memoryIndex = memoryIndex
 		logger.Info(logComponent).Str("plugin_name", name).
-			Msg("RegisterPlugin: 已注册索引插件")
+			Msg("RegisterPlugin: index plugin registered")
 	} else {
 		logger.Warn(logComponent).Str("plugin_name", name).
-			Msg("RegisterPlugin: 已有索引插件，跳过注册")
+			Msg("RegisterPlugin: index plugin already exists, skipping registration")
 	}
 }
 

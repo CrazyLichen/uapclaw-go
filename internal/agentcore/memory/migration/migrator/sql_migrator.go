@@ -27,6 +27,15 @@ type SQLMigrator struct {
 	allowedTables map[string]bool
 }
 
+// BatchMigrationItem 批量迁移的单项。
+// 对齐 Python: batch_migrate 参数列表中的单个 dict，含 table_name 和 operations。
+type BatchMigrationItem struct {
+	// TableName 表名
+	TableName string
+	// Operations 迁移操作列表
+	Operations []operation.Operation
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -44,13 +53,6 @@ var (
 	// memoryTablesSet S-01: 支持迁移的表名集合（从 memoryTablesConfig 解析）
 	memoryTablesSet map[string]bool
 )
-
-func init() {
-	memoryTablesSet = make(map[string]bool)
-	for _, name := range strings.Split(memoryTablesConfig, ",") {
-		memoryTablesSet[strings.TrimSpace(name)] = true
-	}
-}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -85,19 +87,10 @@ func (m *SQLMigrator) BatchMigrate(ctx context.Context, migrations []BatchMigrat
 		results[mg.TableName] = err == nil
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("table_name", mg.TableName).
-				Msg("BatchMigrate: 表迁移失败")
+				Msg("BatchMigrate: table migration failed")
 		}
 	}
 	return results
-}
-
-// BatchMigrationItem 批量迁移的单项。
-// 对齐 Python: batch_migrate 参数列表中的单个 dict，含 table_name 和 operations。
-type BatchMigrationItem struct {
-	// TableName 表名
-	TableName string
-	// Operations 迁移操作列表
-	Operations []operation.Operation
 }
 
 // TryMigrate 尝试执行 SQL 表迁移。
@@ -129,24 +122,24 @@ func (m *SQLMigrator) TryMigrate(ctx context.Context, entityKey string, operatio
 	}
 
 	logger.Info(logComponent).Str("table_name", tableName).
-		Int("pending_count", len(pendingOps)).Msg("开始 SQL 表迁移")
+		Int("pending_count", len(pendingOps)).Msg("starting SQL table migration")
 
 	// 在事务内执行迁移
 	err = m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, op := range pendingOps {
 			if err := m.executeOperation(tx, tableName, op); err != nil {
 				logger.Error(logComponent).Err(err).Str("op_type", op.TypeName()).
-					Int("schema_version", op.SchemaVersion()).Msg("SQL 操作执行失败")
+					Int("schema_version", op.SchemaVersion()).Msg("SQL operation execution failed")
 				return err
 			}
 			logger.Info(logComponent).Str("op_type", op.TypeName()).
-				Int("schema_version", op.SchemaVersion()).Msg("SQL 操作执行成功")
+				Int("schema_version", op.SchemaVersion()).Msg("SQL operation executed successfully")
 		}
 		return nil
 	})
 
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("table_name", tableName).Msg("SQL 表迁移失败")
+		logger.Error(logComponent).Err(err).Str("table_name", tableName).Msg("SQL table migration failed")
 		return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
 			exception.WithParam("table_name", tableName),
 			exception.WithParam("error_msg", fmt.Sprintf("SQL 表迁移失败: %v", err)),
@@ -160,7 +153,7 @@ func (m *SQLMigrator) TryMigrate(ctx context.Context, entityKey string, operatio
 	}
 
 	logger.Info(logComponent).Str("table_name", tableName).
-		Int("new_version", lastVersion).Msg("SQL 表迁移完成")
+		Int("new_version", lastVersion).Msg("SQL table migration completed")
 	return nil
 }
 
@@ -201,14 +194,14 @@ func (m *SQLMigrator) updateVersion(ctx context.Context, tableName string, versi
 		Update("schema_version", versionStr)
 	if result.Error != nil {
 		logger.Error(logComponent).Err(result.Error).Str("table_name", tableName).
-			Int("version", version).Msg("更新 schema 版本失败")
+			Int("version", version).Msg("failed to update schema version")
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
 		// 不存在记录，插入新行
 		if err := m.metaManager.Add(ctx, tableName, versionStr); err != nil {
 			logger.Error(logComponent).Err(err).Str("table_name", tableName).
-				Int("version", version).Msg("插入 schema 版本失败")
+				Int("version", version).Msg("failed to insert schema version")
 			return err
 		}
 	}
@@ -270,12 +263,12 @@ func (m *SQLMigrator) migrateAddColumn(tx *gorm.DB, op *operation.AddColumnOpera
 		// SQLite 的 ALTER TABLE ADD COLUMN 不支持 NOT NULL 无 DEFAULT
 		// 回退到 GORM Migrator
 		logger.Warn(logComponent).Err(err).Str("table", tableName).Str("column", columnName).
-			Msg("原生 SQL 添加列失败，尝试 GORM Migrator")
+			Msg("native SQL add column failed, trying GORM Migrator")
 		return tx.Migrator().AddColumn(tableName, columnName)
 	}
 
 	logger.Info(logComponent).Str("table", tableName).Str("column", columnName).
-		Str("column_type", columnType).Bool("nullable", op.Nullable).Msg("已添加列")
+		Str("column_type", columnType).Bool("nullable", op.Nullable).Msg("column added")
 	return nil
 }
 
@@ -288,13 +281,13 @@ func (m *SQLMigrator) migrateRenameColumn(tx *gorm.DB, op *operation.RenameColum
 	if err := tx.Migrator().RenameColumn(tableName, op.OldColumnName, op.NewColumnName); err != nil {
 		logger.Error(logComponent).Err(err).Str("table", tableName).
 			Str("old_column", op.OldColumnName).Str("new_column", op.NewColumnName).
-			Msg("重命名列失败")
+			Msg("failed to rename column")
 		return err
 	}
 
 	logger.Info(logComponent).Str("table", tableName).
 		Str("old_column", op.OldColumnName).Str("new_column", op.NewColumnName).
-		Msg("已重命名列")
+		Msg("column renamed")
 	return nil
 }
 
@@ -323,7 +316,7 @@ func (m *SQLMigrator) migrateUpdateColumnType(tx *gorm.DB, op *operation.UpdateC
 		if err := tx.Migrator().AlterColumn(tableName, columnName); err != nil {
 			logger.Error(logComponent).Err(err).Str("table", tableName).
 				Str("column", columnName).Str("new_type", newColumnType).
-				Msg("SQLite 修改列类型失败")
+				Msg("failed to modify column type in SQLite")
 			return err
 		}
 	} else {
@@ -338,7 +331,7 @@ func (m *SQLMigrator) migrateUpdateColumnType(tx *gorm.DB, op *operation.UpdateC
 		if err := tx.Exec(sql).Error; err != nil {
 			// 回退到 GORM Migrator
 			logger.Warn(logComponent).Err(err).Str("table", tableName).Str("column", columnName).
-				Msg("原生 SQL 修改列类型失败，尝试 GORM Migrator")
+				Msg("raw SQL failed to modify column type, trying GORM Migrator")
 			if alterErr := tx.Migrator().AlterColumn(tableName, columnName); alterErr != nil {
 				return alterErr
 			}
@@ -347,7 +340,7 @@ func (m *SQLMigrator) migrateUpdateColumnType(tx *gorm.DB, op *operation.UpdateC
 
 	logger.Info(logComponent).Str("table", tableName).
 		Str("column", columnName).Str("new_type", newColumnType).
-		Msg("已修改列类型")
+		Msg("column type modified")
 	return nil
 }
 
@@ -424,4 +417,12 @@ func (m *SQLMigrator) validateTableName(tableName string) bool {
 		allowed = memoryTablesSet
 	}
 	return allowed[tableName]
+}
+
+// init 解析表名白名单常量到集合。
+func init() {
+	memoryTablesSet = make(map[string]bool)
+	for _, name := range strings.Split(memoryTablesConfig, ",") {
+		memoryTablesSet[strings.TrimSpace(name)] = true
+	}
 }

@@ -634,7 +634,7 @@ func (o *TeamSkillExperienceOptimizer) backward(ctx context.Context, signals []*
 				Str("method", "backward").
 				Str("skill_name", skillName).
 				Err(err).
-				Msg("[TeamSkillOptimizer] 上下文构建失败")
+				Msg("[TeamSkillOptimizer] context build failed")
 			continue
 		}
 
@@ -644,7 +644,7 @@ func (o *TeamSkillExperienceOptimizer) backward(ctx context.Context, signals []*
 				Str("method", "backward").
 				Str("skill_name", skillName).
 				Err(err).
-				Msg("[TeamSkillOptimizer] GenerateRecords 失败")
+				Msg("[TeamSkillOptimizer] GenerateRecords failed")
 			continue
 		}
 		if len(generated) == 0 {
@@ -702,7 +702,7 @@ func (o *TeamSkillExperienceOptimizer) loadSkillContent(
 		logger.Warn(logComponent).
 			Str("skill_name", skillName).
 			Err(err).
-			Msg("[TeamSkillOptimizer] loadSkillContent 失败，使用 fallback")
+			Msg("[TeamSkillOptimizer] loadSkillContent failed, using fallback")
 		return langDefault("无", "N/A", o.language)
 	}
 	if strings.TrimSpace(content) == "" {
@@ -725,7 +725,7 @@ func (o *TeamSkillExperienceOptimizer) loadExistingEvolutionsSummary(
 		logger.Warn(logComponent).
 			Str("skill_name", skillName).
 			Err(err).
-			Msg("[TeamSkillOptimizer] loadExistingEvolutionsSummary 失败，使用 fallback")
+			Msg("[TeamSkillOptimizer] loadExistingEvolutionsSummary failed, using fallback")
 		return langDefault("无已有演进经验", "No existing evolution records", o.language)
 	}
 	if evoLog == nil {
@@ -972,14 +972,14 @@ func (o *TeamSkillExperienceOptimizer) dumpRaw(tag string, raw string) {
 	}
 	// Python: _dump_raw: 写文件到 debug_dir
 	if err := os.MkdirAll(o.debugDir, 0o755); err != nil {
-		logger.Warn(logComponent).Err(err).Str("dir", o.debugDir).Msg("创建 debug 目录失败")
+		logger.Warn(logComponent).Err(err).Str("dir", o.debugDir).Msg("create debug directory failed")
 		return
 	}
 	ts := time.Now().UTC().Format("20060102_150405")
 	shortUUID := uuid.New().String()[:8]
 	path := filepath.Join(o.debugDir, fmt.Sprintf("llm_raw_%s_%s_%s.txt", tag, ts, shortUUID))
 	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
-		logger.Warn(logComponent).Err(err).Str("path", path).Msg("写入 dump raw 文件失败")
+		logger.Warn(logComponent).Err(err).Str("path", path).Msg("write dump raw file failed")
 		return
 	}
 	logger.Info(logComponent).Str("path", path).Msg("[TeamSkillOptimizer] raw response dumped")

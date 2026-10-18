@@ -64,8 +64,6 @@ type AgentFlowService interface {
 	Execute(ctx context.Context, query string, sessionID string, opts ...AgentFlowOption) (*TrajectoryResult, error)
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // AgentFlowConfig Agent 执行选项配置。
 type AgentFlowConfig struct {
 	// RetrievalQuery 记忆检索使用的查询；空字符串时默认使用 query。
@@ -114,6 +112,12 @@ type GenerateOption func(*GenerateConfig)
 type ServiceContext struct {
 	services map[string]any
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -240,3 +244,5 @@ func (sc *ServiceContext) String() string {
 	}
 	return fmt.Sprintf("ServiceContext(services=%v)", names)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

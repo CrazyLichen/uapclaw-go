@@ -333,14 +333,14 @@ func BuildModelAllocatorForPool(pool []ModelPoolEntry, strategy string, teamName
 		if err != nil {
 			logger.Info(logComponent).Str("team_name", teamName).
 				Str("strategy", strategy).Err(err).
-				Msg("RouterAllocator 构造失败")
+				Msg("RouterAllocator construction failed")
 			return nil
 		}
 		return alloc
 	default:
 		logger.Info(logComponent).Str("team_name", teamName).
 			Str("strategy", strategy).Int("pool_size", len(pool)).
-			Msg("未知 model_pool_strategy，回退为 nil")
+			Msg("unknown model_pool_strategy, falling back to nil")
 		return nil
 	}
 }

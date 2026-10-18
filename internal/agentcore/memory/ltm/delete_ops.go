@@ -91,7 +91,7 @@ func (m *LongTermMemory) DeleteMemByScope(ctx context.Context, scopeID string) e
 				logger.Warn(logComponent).Str("event_type", "MEMORY_DELETE").
 					Str("scope_id", scopeID).
 					Interface("user_id", uid).
-					Msg("DeleteMemByScope: user_id 类型断言失败，跳过该条目")
+					Msg("DeleteMemByScope: user_id type assertion failed, skipping entry")
 			}
 		}
 	}

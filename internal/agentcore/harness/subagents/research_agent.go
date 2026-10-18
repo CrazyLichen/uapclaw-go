@@ -119,3 +119,5 @@ func DefaultResearchAgentDescription(language string) string {
 	}
 	return defaultResearchAgentDescription["cn"]
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

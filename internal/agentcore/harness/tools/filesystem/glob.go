@@ -83,7 +83,7 @@ func NewGlobTool(op sys_operation.SysOperation, language, agentID string) tool.T
 					Str("search_path", searchPath).
 					Str("pattern", pat).
 					Err(searchErr).
-					Msg("GlobTool SearchFiles 调用失败")
+					Msg("GlobTool SearchFiles call failed")
 				return map[string]any{
 					"success": false,
 					"error":   searchErr.Error(),
@@ -94,7 +94,7 @@ func NewGlobTool(op sys_operation.SysOperation, language, agentID string) tool.T
 					Str("search_path", searchPath).
 					Str("pattern", pat).
 					Str("message", res.Message).
-					Msg("GlobTool SearchFiles 返回失败")
+					Msg("GlobTool SearchFiles returned failure")
 				return map[string]any{
 					"success": false,
 					"error":   res.Message,
@@ -130,7 +130,7 @@ func NewGlobTool(op sys_operation.SysOperation, language, agentID string) tool.T
 			Int("num_files", len(filenames)).
 			Bool("truncated", truncated).
 			Int("duration_ms", durationMs).
-			Msg("GlobTool 搜索完成")
+			Msg("GlobTool search completed")
 
 		// Python: L1477-1487
 		return map[string]any{

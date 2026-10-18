@@ -143,25 +143,6 @@ type asyncTask struct {
 	cached asyncResult
 }
 
-// newAsyncTask 创建新的异步任务
-func newAsyncTask() *asyncTask {
-	return &asyncTask{ch: make(chan asyncResult, 1)}
-}
-
-// Wait 阻塞等待异步任务完成，返回结果
-// 对齐 Python: await future（可多次调用，结果缓存后立即返回）
-func (t *asyncTask) Wait() (string, error) {
-	t.once.Do(func() {
-		t.cached = <-t.ch
-	})
-	return t.cached.Content, t.cached.Err
-}
-
-// Send 向任务发送结果（goroutine 内部调用）
-func (t *asyncTask) Send(content string, err error) {
-	t.ch <- asyncResult{Content: content, Err: err}
-}
-
 // embedResult 实体名称嵌入结果
 type embedResult struct {
 	// Embeddings 嵌入向量列表（对齐 Python: embedder.embed_documents 返回值）
@@ -173,13 +154,6 @@ type embedResult struct {
 // embedTask 实体名称嵌入任务，通过 channel 传递结果
 // 对齐 Python: asyncio.create_task(self.embedder.embed_documents(...)) 返回的 Future
 type embedTask chan embedResult
-
-// Wait 阻塞等待嵌入任务完成，返回结果
-// 对齐 Python: await embed_task
-func (t embedTask) Wait() ([][]float64, error) {
-	result := <-t
-	return result.Embeddings, result.Err
-}
 
 // pendingMergeTask 待合并的阻塞任务
 //
@@ -275,6 +249,27 @@ type GraphMemState struct {
 	Content string
 	// History 历史上下文
 	History string
+}
+
+// Wait 阻塞等待异步任务完成，返回结果
+// 对齐 Python: await future（可多次调用，结果缓存后立即返回）
+func (t *asyncTask) Wait() (string, error) {
+	t.once.Do(func() {
+		t.cached = <-t.ch
+	})
+	return t.cached.Content, t.cached.Err
+}
+
+// Send 向任务发送结果（goroutine 内部调用）
+func (t *asyncTask) Send(content string, err error) {
+	t.ch <- asyncResult{Content: content, Err: err}
+}
+
+// Wait 阻塞等待嵌入任务完成，返回结果
+// 对齐 Python: await embed_task
+func (t embedTask) Wait() ([][]float64, error) {
+	result := <-t
+	return result.Embeddings, result.Err
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -715,6 +710,11 @@ func BlockKeyboardInterrupt(ctx context.Context) context.CancelFunc {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newAsyncTask 创建新的异步任务
+func newAsyncTask() *asyncTask {
+	return &asyncTask{ch: make(chan asyncResult, 1)}
+}
 
 // newGraphMemPrompting 创建提示词 Schema 配置（对齐 Python GraphMemPrompting 默认值）
 func newGraphMemPrompting() *GraphMemPrompting {

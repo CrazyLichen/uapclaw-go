@@ -291,28 +291,6 @@ func DeclareEntities(entityDecls []extraction.EntityDeclaration, entityTypes []r
 	return result
 }
 
-// declareSingleEntity 将单个 EntityDeclaration 转为 Entity。
-// 提取自 DeclareEntities 的循环体，供 ParseAllRelations 处理混合列表时复用。
-func declareSingleEntity(decl extraction.EntityDeclaration, entityTypes []registry.EntityDef, createdAt int64, userID string) *graph.Entity {
-	typeIDMax := len(entityTypes) - 1
-	e := graph.NewEntity()
-	e.Name = decl.Name
-	e.Content = ""
-	e.CreatedAt = createdAt
-	e.UserID = userID
-	if typeIDMax >= 0 {
-		typeIdx := decl.EntityTypeID
-		if typeIdx > typeIDMax {
-			typeIdx = typeIDMax
-		}
-		if typeIdx < 0 {
-			typeIdx = 0
-		}
-		e.ObjType = entityTypes[typeIdx].Name
-	}
-	return e
-}
-
 // ResolveEntities 实体去重/合并解析
 //
 // 返回 (已解析的实体列表, 合并对列表, 待删除的UUID集合)。
@@ -338,8 +316,8 @@ func ResolveEntities(candidates []extraction.EntityDeclaration, existing []*grap
 	numExisting := len(existing)
 	numEntities := len(candidates) + numExisting
 
-	mergeMap := make(map[string]map[string]struct{}) // target_uuid -> set of source_uuids
-	isTarget := make(map[string]string)              // entity_uuid -> its target's uuid
+	mergeMap := make(map[string]map[string]struct{}) // 目标 UUID → 源 UUID 集合
+	isTarget := make(map[string]string)              // 实体 UUID → 其合并目标的 UUID
 
 	for _, dup := range duplication {
 		var tgtEntity *graph.Entity
@@ -435,6 +413,28 @@ func ParseRelationMerging(response map[string]any, relation *graph.Relation, exi
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// declareSingleEntity 将单个 EntityDeclaration 转为 Entity。
+// 提取自 DeclareEntities 的循环体，供 ParseAllRelations 处理混合列表时复用。
+func declareSingleEntity(decl extraction.EntityDeclaration, entityTypes []registry.EntityDef, createdAt int64, userID string) *graph.Entity {
+	typeIDMax := len(entityTypes) - 1
+	e := graph.NewEntity()
+	e.Name = decl.Name
+	e.Content = ""
+	e.CreatedAt = createdAt
+	e.UserID = userID
+	if typeIDMax >= 0 {
+		typeIdx := decl.EntityTypeID
+		if typeIdx > typeIDMax {
+			typeIdx = typeIDMax
+		}
+		if typeIdx < 0 {
+			typeIdx = 0
+		}
+		e.ObjType = entityTypes[typeIdx].Name
+	}
+	return e
+}
 
 // parseEntityMerging 解析单个实体合并请求
 //

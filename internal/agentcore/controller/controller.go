@@ -100,7 +100,7 @@ func (c *Controller) Init(
 	// 接线：TaskManager 的 onTaskSubmitted 回调 → TaskScheduler.NotifyTaskSubmitted
 	c.taskManager.SetOnTaskSubmitted(c.taskScheduler.NotifyTaskSubmitted)
 
-	logger.Info(logComponent).Msg("Controller 初始化完成")
+	logger.Info(logComponent).Msg("controller initialization completed")
 }
 
 // Start 启动控制器（EventQueue + TaskScheduler）。
@@ -116,7 +116,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		return err
 	}
 	c.started.Store(true)
-	logger.Info(logComponent).Msg("Controller 已启动")
+	logger.Info(logComponent).Msg("controller started")
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (c *Controller) Stop(ctx context.Context) error {
 		return err
 	}
 	c.started.Store(false)
-	logger.Info(logComponent).Msg("Controller 已停止")
+	logger.Info(logComponent).Msg("controller stopped")
 	return nil
 }
 
@@ -197,7 +197,7 @@ func (c *Controller) BindSession(ctx context.Context, sess *session.Session) err
 	if err := c.eventQueue.Subscribe(ctx, c.card.ID, sessionID); err != nil {
 		return err
 	}
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("session 已绑定")
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("session bound")
 	return nil
 }
 
@@ -211,7 +211,7 @@ func (c *Controller) UnbindSession(ctx context.Context, sess *session.Session) e
 		return err
 	}
 	c.taskScheduler.RemoveSession(sessionID)
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("session 已解绑")
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("session unbound")
 	return nil
 }
 
@@ -271,7 +271,7 @@ func (c *Controller) Stream(
 
 		// 0. 懒启动
 		if err := c.ensureStarted(ctx); err != nil {
-			logger.Error(logComponent).Err(err).Msg("Stream ensureStarted 失败")
+			logger.Error(logComponent).Err(err).Msg("Stream ensureStarted failed")
 			sendStreamError(errCh, err)
 			return
 		}
@@ -282,7 +282,7 @@ func (c *Controller) Stream(
 		// 1. 恢复 TaskManager 状态
 		stateRestored := c.restoreTaskManagerState(ctx, sessioninterfaces.SessionFacade(sess))
 		if !stateRestored {
-			logger.Info(logComponent).Str("session_id", sessionID).Msg("以全新 TaskManager 状态启动")
+			logger.Info(logComponent).Str("session_id", sessionID).Msg("started with fresh TaskManager state")
 		}
 
 		// 2. 注册 session
@@ -298,19 +298,19 @@ func (c *Controller) Stream(
 			c.taskScheduler.RemoveSession(sessionID)
 			logger.Info(logComponent).Str("session_id", sessionID).
 				Int("active_sessions", len(c.taskScheduler.Sessions())).
-				Msg("session 完成")
+				Msg("session completed")
 		}()
 
 		// 3. 订阅事件
 		if err := c.eventQueue.Subscribe(ctx, agentID, sessionID); err != nil {
-			logger.Error(logComponent).Err(err).Str("session_id", sessionID).Msg("Stream Subscribe 失败")
+			logger.Error(logComponent).Err(err).Str("session_id", sessionID).Msg("Stream Subscribe failed")
 			sendStreamError(errCh, err)
 			return
 		}
 
 		// 4. 发布输入事件（同步，等待 handler 处理完）
 		if err := c.eventQueue.PublishEvent(ctx, agentID, sess, inputs); err != nil {
-			logger.Error(logComponent).Err(err).Str("session_id", sessionID).Msg("Stream PublishEvent 失败")
+			logger.Error(logComponent).Err(err).Str("session_id", sessionID).Msg("Stream PublishEvent failed")
 			sendStreamError(errCh, err)
 			return
 		}
@@ -349,11 +349,11 @@ func (c *Controller) Stream(
 				}
 			}
 		case <-time.After(time.Duration(firstFrameTimeout * float64(time.Second))):
-			logger.Error(logComponent).Float64("timeout", firstFrameTimeout).Str("session_id", sessionID).Msg("首帧超时")
-			sendStreamError(errCh, fmt.Errorf("Stream 首帧超时 (%.1fs)", firstFrameTimeout))
+			logger.Error(logComponent).Float64("timeout", firstFrameTimeout).Str("session_id", sessionID).Msg("first frame timeout")
+			sendStreamError(errCh, fmt.Errorf("Stream first frame timeout (%.1fs)", firstFrameTimeout))
 			return
 		case <-ctx.Done():
-			logger.Error(logComponent).Err(ctx.Err()).Str("session_id", sessionID).Msg("Stream 上下文取消")
+			logger.Error(logComponent).Err(ctx.Err()).Str("session_id", sessionID).Msg("stream context canceled")
 			sendStreamError(errCh, ctx.Err())
 			return
 		}
@@ -376,7 +376,7 @@ func (c *Controller) Stream(
 				continue
 			}
 			if c.isCompletionSignal(chunk) {
-				logger.Info(logComponent).Str("session_id", sessionID).Msg("所有任务已处理完毕，停止流")
+				logger.Info(logComponent).Str("session_id", sessionID).Msg("all tasks processed, stopping stream")
 				break
 			}
 			out <- chunk
@@ -488,44 +488,44 @@ func (c *Controller) restoreTaskManagerState(ctx context.Context, sess sessionin
 	controllerState, err := sess.GetState(state.StringKey("controller"))
 	if err != nil || controllerState == nil {
 		// 无保存状态，清空 TaskManager
-		logger.Info(logComponent).Str("session_id", sess.GetSessionID()).Msg("无保存状态，清空 TaskManager")
+		logger.Info(logComponent).Str("session_id", sess.GetSessionID()).Msg("no saved state, clearing TaskManager")
 		_ = c.taskManager.ClearState(ctx)
 		return false
 	}
 
 	stateMap, ok := controllerState.(map[string]any)
 	if !ok {
-		logger.Info(logComponent).Str("session_id", sess.GetSessionID()).Msg("状态类型不匹配，清空 TaskManager")
+		logger.Info(logComponent).Str("session_id", sess.GetSessionID()).Msg("state type mismatch, clearing TaskManager")
 		_ = c.taskManager.ClearState(ctx)
 		return false
 	}
 
 	tmStateData, exists := stateMap["task_manager_state"]
 	if !exists {
-		logger.Info(logComponent).Str("session_id", sess.GetSessionID()).Msg("无 task_manager_state，清空 TaskManager")
+		logger.Info(logComponent).Str("session_id", sess.GetSessionID()).Msg("no task_manager_state, clearing TaskManager")
 		_ = c.taskManager.ClearState(ctx)
 		return false
 	}
 
-	logger.Info(logComponent).Str("session_id", sess.GetSessionID()).Msg("恢复 TaskManager 状态")
+	logger.Info(logComponent).Str("session_id", sess.GetSessionID()).Msg("restoring TaskManager state")
 
 	// 反序列化 TaskManagerState
 	tmStateMap, ok := tmStateData.(map[string]any)
 	if !ok {
-		logger.Error(logComponent).Str("session_id", sess.GetSessionID()).Msg("task_manager_state 类型不匹配，清空 TaskManager")
+		logger.Error(logComponent).Str("session_id", sess.GetSessionID()).Msg("task_manager_state type mismatch, clearing TaskManager")
 		_ = c.taskManager.ClearState(ctx)
 		return false
 	}
 
 	tmState, err := modules.TaskManagerStateFromMap(tmStateMap)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("session_id", sess.GetSessionID()).Msg("反序列化 TaskManagerState 失败，清空 TaskManager")
+		logger.Error(logComponent).Err(err).Str("session_id", sess.GetSessionID()).Msg("failed to deserialize TaskManagerState, clearing TaskManager")
 		_ = c.taskManager.ClearState(ctx)
 		return false
 	}
 
 	if err := c.taskManager.LoadState(ctx, tmState); err != nil {
-		logger.Error(logComponent).Err(err).Str("session_id", sess.GetSessionID()).Msg("加载 TaskManagerState 失败，清空 TaskManager")
+		logger.Error(logComponent).Err(err).Str("session_id", sess.GetSessionID()).Msg("failed to load TaskManagerState, clearing TaskManager")
 		_ = c.taskManager.ClearState(ctx)
 		return false
 	}
@@ -534,7 +534,7 @@ func (c *Controller) restoreTaskManagerState(ctx context.Context, sess sessionin
 		Str("session_id", sess.GetSessionID()).
 		Int("task_count", len(tmState.Tasks)).
 		Int("root_task_count", len(tmState.RootTasks)).
-		Msg("成功恢复 TaskManager 状态")
+		Msg("TaskManager state restored successfully")
 	return true
 }
 
@@ -542,13 +542,13 @@ func (c *Controller) restoreTaskManagerState(ctx context.Context, sess sessionin
 // Python: Controller._save_task_manager_state(session)
 func (c *Controller) saveTaskManagerState(ctx context.Context, sess sessioninterfaces.SessionFacade) error {
 	if !c.config.EnableTaskPersistence {
-		logger.Info(logComponent).Msg("任务持久化已禁用，跳过保存 TaskManager 状态")
+		logger.Info(logComponent).Msg("task persistence disabled, skipping save TaskManager state")
 		return nil
 	}
 
 	tmState, err := c.taskManager.GetState(ctx)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("session_id", sess.GetSessionID()).Msg("获取 TaskManagerState 失败")
+		logger.Error(logComponent).Err(err).Str("session_id", sess.GetSessionID()).Msg("get TaskManagerState failed")
 		return err
 	}
 
@@ -564,7 +564,7 @@ func (c *Controller) saveTaskManagerState(ctx context.Context, sess sessioninter
 		Str("session_id", sess.GetSessionID()).
 		Int("task_count", len(tmState.Tasks)).
 		Int("root_task_count", len(tmState.RootTasks)).
-		Msg("保存 TaskManager 状态")
+		Msg("TaskManager state saved")
 	return nil
 }
 

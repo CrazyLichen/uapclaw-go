@@ -108,6 +108,9 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentServer
+
 var (
 	// projectRootMarkers 项目根目录标记文件。
 	// Python: PROJECT_ROOT_MARKERS (files.py L48-57)
@@ -166,9 +169,6 @@ var (
 	// cacheMu 缓存互斥锁
 	// Python: _CACHE_LOCK (files.py L134)
 	cacheMu sync.RWMutex
-
-	// pmLogComponent 日志组件
-	pmLogComponent = logger.ComponentAgentServer
 
 	// frontmatterRe 匹配 YAML frontmatter 块。
 	// Python: _FRONTMATTER_RE (files.py L101)
@@ -333,10 +333,10 @@ func DiscoverAndLoadMemoryFiles(ctx context.Context, workspace string, targetPat
 	discoveryCache[ck] = &cacheEntry{files: files, snapshot: snapshot}
 	cacheMu.Unlock()
 
-	logger.Debug(pmLogComponent).
+	logger.Debug(logComponent).
 		Str("workspace", workspaceKey).
 		Int("file_count", len(files)).
-		Msg("[project_memory] 发现记忆文件完成")
+		Msg("[project_memory] memory file discovery completed")
 
 	return append([]LoadedMemoryFile(nil), files...), nil
 }
@@ -368,10 +368,10 @@ func MergeMemoryContent(files []LoadedMemoryFile, maxChars int) string {
 	merged := strings.TrimSpace(strings.Join(parts, "\n"))
 	if truncatedAt != "" {
 		// Python: logger.warning("[project_memory] merged content exceeded max_chars=%d; truncated at %s", ...)
-		logger.Warn(pmLogComponent).
+		logger.Warn(logComponent).
 			Int("max_chars", maxChars).
 			Str("truncated_at", truncatedAt).
-			Msg("[project_memory] 合并内容超出字符上限，已截断")
+			Msg("[project_memory] merged content exceeded character limit, truncated")
 		// Python: merged += "\n\n<!-- project memory truncated (> max_chars) -->"
 		merged += "\n\n<!-- project memory truncated (> max_chars) -->"
 	}
@@ -446,9 +446,9 @@ func detectGitWorktree(ctx context.Context, cwd string) *GitWorktreeInfo {
 	// Python: git_exe = _git_executable()
 	gitExe, err := exec.LookPath("git")
 	if err != nil {
-		logger.Debug(pmLogComponent).
+		logger.Debug(logComponent).
 			Str("cwd", cwd).
-			Msg("[project_memory] git 可执行文件未找到")
+			Msg("[project_memory] git executable not found")
 		return nil
 	}
 
@@ -481,11 +481,11 @@ func gitPath(ctx context.Context, cwd string, gitExe string, args ...string) str
 	cmd := exec.CommandContext(childCtx, gitExe, append([]string{"-C", cwd}, args...)...)
 	out, err := cmd.Output()
 	if err != nil {
-		logger.Debug(pmLogComponent).
+		logger.Debug(logComponent).
 			Str("cwd", cwd).
 			Strs("args", args).
 			Err(err).
-			Msg("[project_memory] git 命令执行失败")
+			Msg("[project_memory] git command execution failed")
 		return ""
 	}
 	result := strings.TrimSpace(string(out))
@@ -701,10 +701,10 @@ func loadPath(
 	rawBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		// Python: logger.warning("[project_memory] failed to read %s: %s", resolved, exc)
-		logger.Warn(pmLogComponent).
+		logger.Warn(logComponent).
 			Str("path", resolved).
 			Err(err).
-			Msg("[project_memory] 读取文件失败")
+			Msg("[project_memory] failed to read file")
 		return
 	}
 	raw := string(rawBytes)

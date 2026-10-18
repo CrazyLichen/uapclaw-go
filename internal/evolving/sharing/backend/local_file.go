@@ -806,7 +806,7 @@ func (b *LocalFileBackend) writeGlobalIndex(entries []map[string]any) {
 		logger.Error(logComponent).
 			Str("path", b.indexDir).
 			Err(err).
-			Msg("[LocalFileBackend] writeGlobalIndex MkdirAll 失败")
+			Msg("[LocalFileBackend] writeGlobalIndex MkdirAll failed")
 		return
 	}
 	var lines []string
@@ -822,7 +822,7 @@ func (b *LocalFileBackend) writeGlobalIndex(entries []map[string]any) {
 		logger.Error(logComponent).
 			Str("path", b.globalIndexPath()).
 			Err(err).
-			Msg("[LocalFileBackend] writeGlobalIndex WriteFile 失败")
+			Msg("[LocalFileBackend] writeGlobalIndex WriteFile failed")
 	}
 }
 

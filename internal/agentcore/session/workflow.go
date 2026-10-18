@@ -41,7 +41,7 @@ type WorkflowSessionOption func(*WorkflowSession)
 func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 	logger.Info(logComponent).
 		Str("action", "new_workflow_session_facade").
-		Msg("创建公开层 WorkflowSession")
+		Msg("created public layer WorkflowSession")
 
 	ws := &WorkflowSession{
 		envs: make(map[string]any),

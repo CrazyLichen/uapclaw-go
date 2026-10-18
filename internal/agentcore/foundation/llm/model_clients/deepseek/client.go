@@ -192,7 +192,7 @@ func init() {
 	deepSeekFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
 		client, err := NewDeepSeekModelClient(mc, cc)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("创建 DeepSeek 客户端失败")
+			logger.Error(logComponent).Err(err).Msg("create DeepSeek client failed")
 			return nil, err
 		}
 		return client, nil

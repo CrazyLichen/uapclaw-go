@@ -73,3 +73,5 @@ func (c *ChildRunnerImpl) RunAgentStreaming(ctx context.Context, agent interface
 	}
 	return RunAgentStreaming(ctx, agentRef, inputs, sessionRef, nil, streamModes, nil)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -81,7 +81,7 @@ func (m *SubscriptionManager) Subscribe(agentID, topicPattern string) {
 	logger.Debug(logComponent).
 		Str("agent_id", agentID).
 		Str("topic_pattern", topicPattern).
-		Msg("Agent 订阅主题")
+		Msg("agent subscribing to topic")
 }
 
 // Unsubscribe 将 Agent 从主题模式取消订阅，清理双向索引，空集合自动删除。
@@ -108,7 +108,7 @@ func (m *SubscriptionManager) Unsubscribe(agentID, topicPattern string) {
 	logger.Debug(logComponent).
 		Str("agent_id", agentID).
 		Str("topic_pattern", topicPattern).
-		Msg("Agent 取消订阅主题")
+		Msg("agent unsubscribing from topic")
 }
 
 // UnsubscribeAll 移除 Agent 的所有订阅。
@@ -136,7 +136,7 @@ func (m *SubscriptionManager) UnsubscribeAll(agentID string) {
 
 	logger.Debug(logComponent).
 		Str("agent_id", agentID).
-		Msg("移除 Agent 的所有订阅")
+		Msg("removing all subscriptions of agent")
 }
 
 // GetSubscribers 获取匹配指定主题的所有订阅者 Agent ID。
@@ -165,7 +165,7 @@ func (m *SubscriptionManager) GetSubscribers(topicID string) []string {
 	logger.Debug(logComponent).
 		Str("topic_id", topicID).
 		Int("subscriber_count", len(result)).
-		Msg("查找主题订阅者")
+		Msg("finding topic subscribers")
 
 	return result
 }

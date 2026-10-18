@@ -42,7 +42,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newTeamMonitorHandlerImpl 创建 TeamMonitorHandler 实现。
 // 对齐 Python: TeamMonitorHandler(monitor, session_id)
@@ -75,7 +75,7 @@ func (h *teamMonitorHandlerImpl) Start(ctx context.Context) error {
 	}
 	if err := h.monitor.Start(ctx); err != nil {
 		logger.Error(logComponent).Err(err).Str("session_id", h.sessionID).
-			Msg("TeamMonitorHandler 启动失败：monitor.Start 失败")
+			Msg("TeamMonitorHandler start failed: monitor.Start failed")
 		return err
 	}
 	h.running = true
@@ -85,7 +85,7 @@ func (h *teamMonitorHandlerImpl) Start(ctx context.Context) error {
 	h.cancel = cancel
 	go h.collectEvents(collectCtx)
 
-	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("TeamMonitorHandler 启动成功")
+	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("TeamMonitorHandler started successfully")
 	return nil
 }
 
@@ -113,13 +113,13 @@ func (h *teamMonitorHandlerImpl) Stop(ctx context.Context) error {
 	if h.monitor != nil {
 		if err := h.monitor.Stop(ctx); err != nil {
 			logger.Warn(logComponent).Err(err).Str("session_id", h.sessionID).
-				Msg("TeamMonitorHandler 停止 monitor 失败")
+				Msg("TeamMonitorHandler failed to stop monitor")
 		}
 		h.monitor = nil
 	}
 	h.mu.Unlock()
 
-	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("TeamMonitorHandler 已停止")
+	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("TeamMonitorHandler stopped")
 	return nil
 }
 
@@ -174,7 +174,7 @@ func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[strin
 	members, err := mon.GetMembers(ctx, "")
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("session_id", h.sessionID).
-			Msg("GetTeamSnapshot 获取成员失败")
+			Msg("GetTeamSnapshot failed to get members")
 		// M-05: 对齐 Python except 返回 None，Go 返回 error 让调用方区分失败
 		return nil, fmt.Errorf("GetTeamSnapshot 获取成员失败: %w", err)
 	}
@@ -196,7 +196,7 @@ func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[strin
 	tasks, err := mon.GetTasks(ctx, "")
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("session_id", h.sessionID).
-			Msg("GetTeamSnapshot 获取任务失败")
+			Msg("GetTeamSnapshot failed to get tasks")
 		tasks = nil
 	}
 	if tasks == nil {
@@ -244,8 +244,6 @@ func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[strin
 	}, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // collectEvents 后台 goroutine：收集 Monitor 事件。
 // 对齐 Python: TeamMonitorHandler._collect_events()
 //
@@ -256,8 +254,8 @@ func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[strin
 //  4. event_dict = await self._convert_event_to_dict(event)
 //  5. if event_dict: await self._event_queue.put(event_dict)
 func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context) {
-	defer logger.Info(logComponent).Str("session_id", h.sessionID).Msg("事件收集 goroutine 退出")
-	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("事件收集 goroutine 启动")
+	defer logger.Info(logComponent).Str("session_id", h.sessionID).Msg("event collector goroutine exited")
+	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("event collector goroutine started")
 
 	// Python 步骤 1: if self._monitor is None: return
 	h.mu.Lock()
@@ -292,7 +290,7 @@ func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context) {
 			case h.eventQueue <- eventDict:
 			default:
 				logger.Warn(logComponent).Str("session_id", h.sessionID).
-					Msg("事件队列已满，丢弃事件")
+					Msg("event queue full, dropping event")
 			}
 		}
 	}
@@ -522,7 +520,7 @@ func (h *teamMonitorHandlerImpl) getMessageContent(ctx context.Context, messageI
 	msgs, err := mon.GetMessages(ctx, "", "")
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("message_id", *messageID).
-			Msg("查询消息内容失败")
+			Msg("failed to query message content")
 		return ""
 	}
 	for _, msg := range msgs {

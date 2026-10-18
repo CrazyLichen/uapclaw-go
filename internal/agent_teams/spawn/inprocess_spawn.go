@@ -10,12 +10,12 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // AgentFactory 创建并配置 Agent 的工厂函数。
 // Python: _TeamAgent(card) + teammate.configure(spec, ctx)
 // 由 SpawnManager 注入具体实现，封装 spec 解析 / card 构建 / 配置全流程。
 type AgentFactory func(runtimeCtx atschema.TeamRuntimeContext) (SpawnableAgent, error)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -33,11 +33,12 @@ var (
 	runTeamMemberFunc any
 )
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // SetRunTeamMemberFunc 设置团队成员执行函数（由 runtime 包注入）。
 func SetRunTeamMemberFunc(fn any) {
 	runTeamMemberFunc = fn
 }
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // InProcessSpawn 以进程内 goroutine 方式生成 teammate。
 // Python: inprocess_spawn(team_agent, ctx, initial_message, session_id)
@@ -76,7 +77,7 @@ func InProcessSpawn(
 		// Python: set_session_id(session_id)
 		// Go: sessionID 通过参数传递，无需 contextvars
 
-		logger.Info(inprocessLogComponent).
+		logger.Info(logComponent).
 			Str("member_name", runtimeCtx.MemberName).
 			Msg("[inprocess] teammate started")
 
@@ -86,19 +87,19 @@ func InProcessSpawn(
 			if runFn, ok := runTeamMemberFunc.(func(context.Context, any, any, any) (map[string]any, error)); ok {
 				_, _ = runFn(runCtx, teammate, inputs, sessionID)
 			} else {
-				logger.Error(inprocessLogComponent).
+				logger.Error(logComponent).
 					Str("member_name", runtimeCtx.MemberName).
 					Any("func_type", fmt.Sprintf("%T", runTeamMemberFunc)).
-					Msg("[inprocess] runTeamMemberFunc 类型断言失败，teammate 无法执行")
+					Msg("[inprocess] runTeamMemberFunc type assertion failed, teammate cannot execute")
 			}
 		} else {
-			logger.Error(inprocessLogComponent).
+			logger.Error(logComponent).
 				Str("member_name", runtimeCtx.MemberName).
-				Msg("[inprocess] runTeamMemberFunc 为 nil，teammate 无法执行")
+				Msg("[inprocess] runTeamMemberFunc is nil, teammate cannot execute")
 		}
 		_ = query // 同上
 
-		logger.Info(inprocessLogComponent).
+		logger.Info(logComponent).
 			Str("member_name", runtimeCtx.MemberName).
 			Msg("[inprocess] teammate exited")
 	}()
@@ -111,10 +112,12 @@ func InProcessSpawn(
 		agentRef:  teammate,
 	}
 
-	logger.Info(inprocessLogComponent).
+	logger.Info(logComponent).
 		Str("member_name", runtimeCtx.MemberName).
 		Str("process_id", handle.processID).
 		Msg("[inprocess] spawned teammate")
 
 	return handle, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

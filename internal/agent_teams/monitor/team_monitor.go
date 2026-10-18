@@ -60,8 +60,8 @@ type TeamMonitor struct {
 const (
 	// monitorEventChSize 事件 channel 缓冲大小
 	monitorEventChSize = 256
-	// logComponentMon 日志组件
-	logComponentMon = logger.ComponentChannel
+	// logComponent 日志组件
+	logComponent = logger.ComponentTeam
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -133,7 +133,7 @@ func (m *TeamMonitor) Start(ctx context.Context) error {
 	handle := m.teamAgent.AddEventListener(m.onEvent)
 	m.listenerHandle = handle
 	m.started = true
-	logger.Info(logComponentMon).Str("team_name", m.teamName).Msg("TeamMonitor 已启动")
+	logger.Info(logComponent).Str("team_name", m.teamName).Msg("TeamMonitor started")
 	return nil
 }
 
@@ -144,7 +144,7 @@ func (m *TeamMonitor) Start(ctx context.Context) error {
 //  1. if not self._started: return
 //  2. self._team_agent.remove_event_listener(self._on_event)
 //  3. self._started = False
-//  4. self._event_queue.put_nowait(None)  // sentinel
+//  4. self._event_queue.put_nowait(None)  // 哨兵值
 //  5. team_logger.info("TeamMonitor stopped for team {}", self._team_name)
 func (m *TeamMonitor) Stop(ctx context.Context) error {
 	m.eventMu.Lock()
@@ -167,7 +167,7 @@ func (m *TeamMonitor) Stop(ctx context.Context) error {
 	close(m.eventCh)
 	// S-01: 置 nil，Start 时可重新创建
 	m.eventCh = nil
-	logger.Info(logComponentMon).Str("team_name", m.teamName).Msg("TeamMonitor 已停止")
+	logger.Info(logComponent).Str("team_name", m.teamName).Msg("TeamMonitor stopped")
 	return nil
 }
 
@@ -327,8 +327,8 @@ func (m *TeamMonitor) onEvent(ctx context.Context, msg *events.EventMessage) err
 	case m.eventCh <- monitorEvent:
 	default:
 		// channel 满时丢弃事件（避免阻塞 Messager 事件分发管线）
-		logger.Warn(logComponentMon).Str("event_type", string(monitorEvent.EventType)).
-			Msg("事件 channel 已满，丢弃事件")
+		logger.Warn(logComponent).Str("event_type", string(monitorEvent.EventType)).
+			Msg("event channel full, dropping event")
 	}
 	return nil
 }

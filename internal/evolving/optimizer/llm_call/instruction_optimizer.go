@@ -181,7 +181,7 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 				Str("method", "backward").
 				Str("operator_id", opID).
 				Err(err).
-				Msg("[optimizer] 生成文本梯度失败")
+				Msg("[optimizer] failed to generate text gradients")
 			continue
 		}
 
@@ -212,7 +212,7 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 					Str("method", "backward").
 					Str("operator_id", opID).
 					Err(err).
-					Msg("[optimizer] 联合优化失败")
+					Msg("[optimizer] joint optimization failed")
 				continue
 			}
 			if sysVal != "" {
@@ -229,7 +229,7 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 					Str("method", "backward").
 					Str("operator_id", opID).
 					Err(err).
-					Msg("[optimizer] 单独优化 system_prompt 失败")
+					Msg("[optimizer] standalone system_prompt optimization failed")
 				continue
 			}
 			if val != "" {
@@ -243,7 +243,7 @@ func (o *InstructionOptimizer) backward(ctx context.Context, signals []*signal.E
 					Str("method", "backward").
 					Str("operator_id", opID).
 					Err(err).
-					Msg("[optimizer] 单独优化 user_prompt 失败")
+					Msg("[optimizer] standalone user_prompt optimization failed")
 				continue
 			}
 			if val != "" {
@@ -391,7 +391,7 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 			logger.Warn(logComponent).
 				Str("method", "optimizeBoth").
 				Err(err).
-				Msg("[optimizer] 恢复 system_prompt 占位符失败")
+				Msg("[optimizer] failed to restore system_prompt placeholders")
 		}
 	}
 
@@ -401,7 +401,7 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 			logger.Warn(logComponent).
 				Str("method", "optimizeBoth").
 				Err(err).
-				Msg("[optimizer] 恢复 user_prompt 占位符失败")
+				Msg("[optimizer] failed to restore user_prompt placeholders")
 		}
 	}
 
@@ -466,7 +466,7 @@ func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.O
 			Str("method", "optimizeSingle").
 			Str("prompt_type", promptType).
 			Err(err).
-			Msg("[optimizer] 恢复占位符失败")
+			Msg("[optimizer] failed to restore placeholders")
 	}
 	return optimized, nil
 }

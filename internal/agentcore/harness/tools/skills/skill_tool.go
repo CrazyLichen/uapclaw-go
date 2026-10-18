@@ -99,7 +99,7 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	if skill == nil {
 		logger.Warn(logComponent).
 			Str("skill_name", skillName).
-			Msg("SkillTool 技能未找到")
+			Msg("SkillTool skill not found")
 		return map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("Skill not found: %s", skillName),
@@ -114,7 +114,7 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 			Str("skill_name", skillName).
 			Str("file_path", filePath).
 			Err(readErr).
-			Msg("SkillTool 读取文件异常")
+			Msg("SkillTool error reading file")
 		return map[string]any{
 			"success": false,
 			"error":   readErr.Error(),
@@ -126,7 +126,7 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 			Str("skill_name", skillName).
 			Str("file_path", filePath).
 			Str("message", readFileResult.Message).
-			Msg("SkillTool 读取文件失败")
+			Msg("SkillTool failed to read file")
 		return map[string]any{
 			"success": false,
 			"error":   readFileResult.Message,
@@ -141,7 +141,7 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	logger.Info(logComponent).
 		Str("skill_name", skillName).
 		Str("file_path", filePath).
-		Msg("SkillTool 读取技能文件成功")
+		Msg("SkillTool read skill file")
 
 	return map[string]any{
 		"success": true,

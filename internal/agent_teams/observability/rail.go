@@ -58,7 +58,7 @@ func NewObservabilityRail(tracer trace.Tracer) *ObservabilityRail {
 func (r *ObservabilityRail) BeforeTaskIteration(ctx context.Context, railCtx *agentinterfaces.AgentCallbackContext) error {
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Any("error", rec).Msg("otel rail before_task_iteration 异常")
+			logger.Warn(logComponent).Any("error", rec).Msg("otel rail before_task_iteration error")
 		}
 	}()
 
@@ -92,7 +92,7 @@ func (r *ObservabilityRail) BeforeTaskIteration(ctx context.Context, railCtx *ag
 func (r *ObservabilityRail) AfterTaskIteration(_ context.Context, railCtx *agentinterfaces.AgentCallbackContext) error {
 	defer func() {
 		if rec := recover(); rec != nil {
-			logger.Warn(logComponent).Any("error", rec).Msg("otel rail after_task_iteration 异常")
+			logger.Warn(logComponent).Any("error", rec).Msg("otel rail after_task_iteration error")
 		}
 	}()
 

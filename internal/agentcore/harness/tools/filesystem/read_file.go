@@ -458,7 +458,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 				Str("file_path", filePath).
 				Int("page_no", pageNo).
 				Err(err).
-				Msg("ReadFileTool PDF 页面文本提取失败")
+				Msg("ReadFileTool failed to extract PDF page text")
 			pageText = ""
 		}
 
@@ -474,7 +474,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 		Int("total_pages", totalPages).
 		Int("start_page", startPg).
 		Int("end_page", endPg).
-		Msg("ReadFileTool PDF 读取完成")
+		Msg("ReadFileTool PDF read completed")
 
 	return map[string]any{"content": content}, nil
 }
@@ -519,7 +519,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 		logger.Debug(logComponent).
 			Str("file_path", filePath).
 			Err(decodeErr).
-			Msg("ReadFileTool 图片解码失败，使用原始字节")
+			Msg("ReadFileTool failed to decode image, using raw bytes")
 	} else {
 		// 检测原始格式并优先使用
 		if detectedFmt != "" {
@@ -591,7 +591,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 		Int("size_bytes", len(raw)).
 		Int("transmitted_size_bytes", len(resized)).
 		Str("dimensions", dimensions).
-		Msg("ReadFileTool 图片读取完成")
+		Msg("ReadFileTool image read completed")
 
 	return map[string]any{
 		"content": strings.Join(parts, "\n"),
@@ -857,7 +857,7 @@ func compressImageBytes(raw []byte, maxW, maxH, quality int) []byte {
 	if err != nil {
 		logger.Debug(logComponent).
 			Err(err).
-			Msg("compressImageBytes 解码失败")
+			Msg("compressImageBytes failed to decode")
 		return nil
 	}
 
@@ -877,7 +877,7 @@ func compressImageBytes(raw []byte, maxW, maxH, quality int) []byte {
 	if err := jpeg.Encode(&buf, thumb, &jpeg.Options{Quality: quality}); err != nil {
 		logger.Debug(logComponent).
 			Err(err).
-			Msg("compressImageBytes JPEG 编码失败")
+			Msg("compressImageBytes failed to encode JPEG")
 		return nil
 	}
 

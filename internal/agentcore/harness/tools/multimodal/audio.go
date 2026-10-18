@@ -104,7 +104,7 @@ func NewAudioTranscriptionTool(
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").Str("tool_name", "audio_transcription").
-				Msg("AudioTranscriptionTool 调用失败")
+				Msg("AudioTranscriptionTool call failed")
 			return nil, exception.NewBaseError(
 				exception.StatusToolMultimodalAudioInvokeFailed,
 				exception.WithMsg(err.Error()),
@@ -200,7 +200,7 @@ func NewAudioQATool(
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").Str("tool_name", "audio_question_answering").
-				Msg("AudioQATool 调用失败")
+				Msg("AudioQATool call failed")
 			return nil, exception.NewBaseError(
 				exception.StatusToolMultimodalAudioInvokeFailed,
 				exception.WithMsg(err.Error()),
@@ -298,7 +298,7 @@ func NewAudioMetadataTool(
 		if err != nil {
 			logger.Error(logComponent).Err(err).
 				Str("event_type", "TOOL_CALL_ERROR").Str("tool_name", "audio_metadata").
-				Msg("AudioMetadataTool 调用失败")
+				Msg("AudioMetadataTool call failed")
 			return nil, exception.NewBaseError(
 				exception.StatusToolMultimodalAudioInvokeFailed,
 				exception.WithMsg(err.Error()),

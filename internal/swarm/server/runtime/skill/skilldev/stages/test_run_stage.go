@@ -72,7 +72,7 @@ func (h *TestRunStageHandler) runAllEvals(sctx *skilldev.SkillDevContext, evalCa
 	// 待实现：并行执行 results := await asyncio.gather(*tasks, return_exceptions=True)
 	// 待实现：返回结果 return results
 
-	logger.Warn(logComponent).Msg("[TestRunStage] runAllEvals 尚未实现，写入占位结果")
+	logger.Warn(logComponent).Msg("[TestRunStage] runAllEvals not implemented, writing placeholder results")
 	results := make([]map[string]any, 0)
 	timingPlaceholder := map[string]any{
 		"total_tokens":           0,

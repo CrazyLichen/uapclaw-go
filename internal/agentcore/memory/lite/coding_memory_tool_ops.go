@@ -73,25 +73,25 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	// Python: try/except 顶层异常保护
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryReadWithContext 发生 panic")
+			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryReadWithContext panic occurred")
 			result = &CodingReadResult{Success: false, Path: path, Error: fmt.Sprintf("内部错误: %v", r)}
 		}
 	}()
 
 	ws := toolCtx.Workspace
 	if ws == nil {
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryReadWithContext: Workspace 未初始化")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryReadWithContext: Workspace not initialized")
 		return &CodingReadResult{Success: false, Path: path, Error: "Workspace 未初始化"}
 	}
 	isValid, resolvedPath := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
-		logger.Warn(logComponent).Str("path", path).Str("reason", resolvedPath).Msg("CodingMemoryReadWithContext: 路径校验失败")
+		logger.Warn(logComponent).Str("path", path).Str("reason", resolvedPath).Msg("CodingMemoryReadWithContext: path validation failed")
 		return &CodingReadResult{Success: false, Path: path, Error: resolvedPath}
 	}
 	fullPath := resolvedPath
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logComponent).Msg("读取记忆失败，无可用 sys_operation")
+		logger.Error(logComponent).Msg("memory read failed, no available sys_operation")
 		return &CodingReadResult{Success: false, Path: path, Error: "读取失败，无可用 sys_operation"}
 	}
 	// Python: 使用 line_range 读取
@@ -105,7 +105,7 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	}
 	readResult, err := sysOp.Fs().ReadFile(ctx, fullPath, fsOpts...)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("path", path).Msg("CodingMemoryReadWithContext: 读取文件失败")
+		logger.Warn(logComponent).Err(err).Str("path", path).Msg("CodingMemoryReadWithContext: failed to read file")
 		return &CodingReadResult{Success: false, Path: path, Error: err.Error()}
 	}
 	var content string
@@ -158,33 +158,33 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	// Python: try/except 顶层异常保护
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryWriteWithContext 发生 panic")
+			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryWriteWithContext panic occurred")
 			result = map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": fmt.Sprintf("内部错误: %v", r)}
 		}
 	}()
 
 	if toolCtx == nil {
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: toolCtx 为 nil")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: toolCtx is nil")
 		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": "Workspace 未初始化"}
 	}
 	ws := toolCtx.Workspace
 	if ws == nil {
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: Workspace 未初始化")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: Workspace not initialized")
 		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": "Workspace 未初始化"}
 	}
 	isValid, resolved := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
-		logger.Warn(logComponent).Str("path", path).Str("reason", resolved).Msg("CodingMemoryWriteWithContext: 路径校验失败")
+		logger.Warn(logComponent).Str("path", path).Str("reason", resolved).Msg("CodingMemoryWriteWithContext: path validation failed")
 		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": resolved}
 	}
 	// Python: step 2: frontmatter 解析验证
 	fm := ParseFrontmatter(content)
 	if fm == nil {
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: frontmatter 解析失败")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: frontmatter parse failed")
 		return map[string]any{"success": false, "path": path, "mode": "", "type": "", "error": "必须包含 frontmatter(name/description/type)"}
 	}
 	if ok, err := ValidateFrontmatter(fm); !ok {
-		logger.Warn(logComponent).Str("path", path).Str("error", err).Msg("CodingMemoryWriteWithContext: frontmatter 校验失败")
+		logger.Warn(logComponent).Str("path", path).Str("error", err).Msg("CodingMemoryWriteWithContext: frontmatter validation failed")
 		return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": err}
 	}
 	// Python: step 3-4: 丰富 frontmatter 并重建内容
@@ -193,7 +193,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	// Python: step 5: 提取 body
 	body := ExtractBody(content)
 	if body == "" {
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: 无内容体")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryWriteWithContext: no content body")
 		return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": "无内容体"}
 	}
 
@@ -271,7 +271,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			// Python: 快照过期，并发写入产生了新文件，重试冲突检测
 			logger.Info(logComponent).
 				Int("attempt", attempt+1).
-				Msg("快照过期，重试冲突检测")
+				Msg("snapshot expired, retrying conflict detection")
 			snapshotStale = true
 		} else {
 			// Python: step 10: 实际写入
@@ -323,7 +323,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 		Int("max_retries", maxConflictRetries).
 		Bool("conflict_detected", conflict.ConflictDetected).
 		Interface("conflicting_files", conflict.ConflictingFiles).
-		Msg("超过最大冲突重试次数，跳过快照验证直接写入")
+		Msg("max conflict retries exceeded, skipping snapshot verification and writing directly")
 
 	fileLock := getFileLock(resolved)
 	fileLock.Lock()
@@ -334,7 +334,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 		if !fileExistsNow {
 			// T07: 对齐 Python — 降级写入时也检查错误
 			if _, err := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true)); err != nil {
-				logger.Error(logComponent).Err(err).Str("path", resolved).Msg("降级写入失败")
+				logger.Error(logComponent).Err(err).Str("path", resolved).Msg("degraded write failed")
 				return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": err.Error()}
 			}
 		} else {
@@ -366,33 +366,33 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	// Python: try/except 顶层异常保护
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryEditWithContext 发生 panic")
+			logger.Error(logComponent).Any("panic", r).Str("path", path).Msg("CodingMemoryEditWithContext panic occurred")
 			result = &CodingEditResult{Error: fmt.Sprintf("内部错误: %v", r)}
 		}
 	}()
 
 	if oldText == "" {
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: old_text 为空")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: old_text is empty")
 		return &CodingEditResult{Error: "old_text 不能为空"}
 	}
 	if toolCtx == nil {
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: toolCtx 为 nil")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: toolCtx is nil")
 		return &CodingEditResult{Error: "Workspace 未初始化"}
 	}
 	ws := toolCtx.Workspace
 	if ws == nil {
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: Workspace 未初始化")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: Workspace not initialized")
 		return &CodingEditResult{Error: "Workspace 未初始化"}
 	}
 	isValid, resolved := ValidateCodingMemoryPath(path, ws)
 	if !isValid {
-		logger.Warn(logComponent).Str("path", path).Str("reason", resolved).Msg("CodingMemoryEditWithContext: 路径校验失败")
+		logger.Warn(logComponent).Str("path", path).Str("reason", resolved).Msg("CodingMemoryEditWithContext: path validation failed")
 		return &CodingEditResult{Error: resolved}
 	}
 	memoryDir := resolveMemoryDir(toolCtx, resolved)
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: 无可用 sys_operation")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: no sys_operation available")
 		return &CodingEditResult{Error: "无可用 sys_operation"}
 	}
 
@@ -402,26 +402,26 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 	readResult, err := sysOp.Fs().ReadFile(ctx, resolved)
 	if err != nil || readResult == nil || readResult.Data == nil {
 		fileLock.Unlock()
-		logger.Warn(logComponent).Err(err).Str("path", path).Msg("CodingMemoryEditWithContext: 读取文件失败")
+		logger.Warn(logComponent).Err(err).Str("path", path).Msg("CodingMemoryEditWithContext: failed to read file")
 		return &CodingEditResult{Error: fmt.Sprintf("读取文件失败: %s", path)}
 	}
 	content := readResult.Data.Content
 	occurrences := strings.Count(content, oldText)
 	if occurrences == 0 {
 		fileLock.Unlock()
-		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: old_text 未找到")
+		logger.Warn(logComponent).Str("path", path).Msg("CodingMemoryEditWithContext: old_text not found")
 		return &CodingEditResult{Error: "old_text 在文件中未找到"}
 	}
 	if occurrences > 1 {
 		fileLock.Unlock()
-		logger.Warn(logComponent).Str("path", path).Int("occurrences", occurrences).Msg("CodingMemoryEditWithContext: old_text 出现多次")
+		logger.Warn(logComponent).Str("path", path).Int("occurrences", occurrences).Msg("CodingMemoryEditWithContext: old_text appears multiple times")
 		return &CodingEditResult{Error: fmt.Sprintf("old_text 出现 %d 次，请更精确地指定", occurrences)}
 	}
 	newContent := strings.Replace(content, oldText, newText, 1)
 	_, err = sysOp.Fs().WriteFile(ctx, resolved, newContent, sysop.WithFsCreateIfNotExist(true))
 	fileLock.Unlock()
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("coding_memory_edit 编辑失败")
+		logger.Error(logComponent).Err(err).Msg("coding_memory_edit edit failed")
 		return &CodingEditResult{Error: err.Error()}
 	}
 
@@ -493,7 +493,7 @@ func runChecker(ctx context.Context, model *llm.Model, newID string, newBody str
 	checker := &update.MemUpdateChecker{}
 	items, err := checker.Check(ctx, newMemOrdered, oldMemories, update.WithModel(model))
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("new_id", newID).Msg("runChecker 冲突检查失败")
+		logger.Warn(logComponent).Err(err).Str("new_id", newID).Msg("runChecker conflict check failed")
 		return []*update.MemoryActionItem{}
 	}
 	return items
@@ -645,7 +645,7 @@ func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, me
 		return
 	}
 	if fm["name"] == "" || fm["description"] == "" {
-		logger.Debug(logComponent).Str("path", filename).Msg("upsertMemoryIndex: name 或 description 为空，跳过索引更新")
+		logger.Debug(logComponent).Str("path", filename).Msg("upsertMemoryIndex: name or description is empty, skipping index update")
 		return
 	}
 
@@ -658,7 +658,7 @@ func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, me
 		lines = strings.Split(readResult.Data.Content, "\n")
 	} else if err != nil {
 		// Python: Failed to read memory index 时记录 warning
-		logger.Warn(logComponent).Err(err).Str("path", indexPath).Msg("upsertMemoryIndex: 读取 MEMORY.md 索引失败")
+		logger.Warn(logComponent).Err(err).Str("path", indexPath).Msg("upsertMemoryIndex: read MEMORY.md index failed")
 	}
 
 	// Python: 如果文件名已存在则更新条目，否则在头部插入新条目
@@ -686,7 +686,7 @@ func upsertMemoryIndex(ctx context.Context, toolCtx *CodingMemoryToolContext, me
 func appendToExistingFile(ctx context.Context, toolCtx *CodingMemoryToolContext, resolved string, body string, fm map[string]string) {
 	sysOp := toolCtx.SysOperation
 	if sysOp == nil {
-		logger.Error(logComponent).Msg("appendToExistingFile: sys_operation 为 nil")
+		logger.Error(logComponent).Msg("appendToExistingFile: sys_operation is nil")
 		return
 	}
 
@@ -696,7 +696,7 @@ func appendToExistingFile(ctx context.Context, toolCtx *CodingMemoryToolContext,
 		sysop.WithFsCreateIfNotExist(false),
 	)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("path", resolved).Msg("追加内容失败")
+		logger.Error(logComponent).Err(err).Str("path", resolved).Msg("failed to append content")
 		return
 	}
 

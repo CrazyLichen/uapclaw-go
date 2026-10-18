@@ -66,14 +66,14 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 			Str("task_id", taskID).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "SessionSpawnExecutor.ExecuteAbility").
-			Msg("查询任务失败")
+			Msg("failed to query task")
 		close(ch)
 		return nil, err
 	}
 	if len(tasks) == 0 {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
-			Msg("未找到任务")
+			Msg("task not found")
 		// Python: 通过 channel 发送 TaskFailed，而非返回 error
 		ch <- e.buildErrorChunk(taskID, fmt.Sprintf("task %s not found", taskID))
 		close(ch)
@@ -99,7 +99,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 		Str("task_id", taskID).
 		Str("subagent_type", subagentType).
 		Str("sub_session_id", cid).
-		Msg("开始执行 SessionSpawn 任务")
+		Msg("starting SessionSpawn task")
 
 	// 步骤 4-8：异步执行子 Agent
 	go func() {
@@ -113,7 +113,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 				Str("task_id", taskID).
 				Str("subagent_type", subagentType).
 				Str("event_type", "LLM_CALL_ERROR").
-				Msg("创建子 Agent 失败")
+				Msg("failed to create child agent")
 			ch <- e.buildErrorChunk(taskID, createErr.Error())
 			return
 		}
@@ -134,7 +134,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 				Err(invokeErr).
 				Str("task_id", taskID).
 				Str("event_type", "LLM_CALL_ERROR").
-				Msg("SessionSpawn 任务执行失败")
+				Msg("SessionSpawn task execution failed")
 			ch <- e.buildErrorChunk(taskID, invokeErr.Error())
 			return
 		}
@@ -151,7 +151,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 		logger.Info(logComponent).
 			Str("task_id", taskID).
 			Int("output_len", len(payload)).
-			Msg("SessionSpawn 任务执行完成")
+			Msg("SessionSpawn task execution completed")
 
 		// 步骤 8：发送完成事件
 		ch <- &stream.OutputSchema{
@@ -194,7 +194,7 @@ func (e *SessionSpawnExecutor) CanCancel(_ context.Context, _ string, _ sessioni
 func (e *SessionSpawnExecutor) Cancel(_ context.Context, taskID string, _ sessioninterfaces.SessionFacade) (bool, error) {
 	logger.Info(logComponent).
 		Str("task_id", taskID).
-		Msg("取消 SessionSpawn 任务")
+		Msg("cancelling SessionSpawn task")
 	return true, nil
 }
 

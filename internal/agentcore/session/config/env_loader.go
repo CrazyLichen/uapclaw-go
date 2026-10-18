@@ -67,7 +67,7 @@ func trySetFloat(envs map[string]any, configKey, envKey string, value any) {
 				Str("env_key", envKey).
 				Str("value", v).
 				Str("expected_type", "float").
-				Msg("环境变量 float 转换失败，使用默认值")
+				Msg("env float conversion failed, using default value")
 			return
 		}
 		envs[configKey] = f
@@ -76,7 +76,7 @@ func trySetFloat(envs map[string]any, configKey, envKey string, value any) {
 			Str("env_key", envKey).
 			Str("value_type", fmt.Sprintf("%T", value)).
 			Str("expected_type", "float").
-			Msg("环境变量 float 转换失败，使用默认值")
+			Msg("env float conversion failed, using default value")
 	}
 }
 
@@ -92,7 +92,7 @@ func trySetInt(envs map[string]any, configKey, envKey string, value any) {
 				Str("env_key", envKey).
 				Str("value", v).
 				Str("expected_type", "int").
-				Msg("环境变量 int 转换失败，使用默认值")
+				Msg("env int conversion failed, using default value")
 			return
 		}
 		envs[configKey] = i
@@ -101,7 +101,7 @@ func trySetInt(envs map[string]any, configKey, envKey string, value any) {
 			Str("env_key", envKey).
 			Str("value_type", fmt.Sprintf("%T", value)).
 			Str("expected_type", "int").
-			Msg("环境变量 int 转换失败，使用默认值")
+			Msg("env int conversion failed, using default value")
 	}
 }
 
@@ -117,7 +117,7 @@ func trySetBool(envs map[string]any, configKey, envKey string, value any) {
 				Str("env_key", envKey).
 				Str("value", v).
 				Str("expected_type", "bool").
-				Msg("环境变量 bool 转换失败，使用默认值")
+				Msg("env bool conversion failed, using default value")
 			return
 		}
 		envs[configKey] = lower == "true"
@@ -126,7 +126,7 @@ func trySetBool(envs map[string]any, configKey, envKey string, value any) {
 			Str("env_key", envKey).
 			Str("value_type", fmt.Sprintf("%T", value)).
 			Str("expected_type", "bool").
-			Msg("环境变量 bool 转换失败，使用默认值")
+			Msg("env bool conversion failed, using default value")
 	}
 }
 

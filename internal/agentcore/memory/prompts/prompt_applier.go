@@ -56,7 +56,7 @@ var (
 func DefaultApplier() *PromptApplier {
 	defaultApplierOnce.Do(func() {
 		defaultApplierInstance = &PromptApplier{useEmbed: true}
-		logger.Info(logComponent).Msg("PromptApplier 单例初始化（embed 模式）")
+		logger.Info(logComponent).Msg("PromptApplier singleton initialized (embed mode)")
 	})
 	return defaultApplierInstance
 }
@@ -91,7 +91,7 @@ func (a *PromptApplier) Apply(filePrefix string, variables map[string]any) (stri
 	if !ok {
 		return "", fmt.Errorf("提示词模板 %q 格式化后内容类型不是 string", filePrefix)
 	}
-	logger.Debug(logComponent).Str("file_prefix", filePrefix).Msg("已应用提示词模板")
+	logger.Debug(logComponent).Str("file_prefix", filePrefix).Msg("prompt template applied")
 	return content, nil
 }
 
@@ -100,7 +100,7 @@ func (a *PromptApplier) Apply(filePrefix string, variables map[string]any) (stri
 // Python: PromptApplier.get_template(file_prefix)
 func (a *PromptApplier) GetTemplate(filePrefix string) (*prompt.PromptTemplate, error) {
 	if cached, ok := a.cache.Load(filePrefix); ok {
-		logger.Debug(logComponent).Str("file_prefix", filePrefix).Msg("使用缓存的提示词模板")
+		logger.Debug(logComponent).Str("file_prefix", filePrefix).Msg("using cached prompt template")
 		return cached.(*prompt.PromptTemplate), nil
 	}
 
@@ -125,7 +125,7 @@ func (a *PromptApplier) GetTemplate(filePrefix string) (*prompt.PromptTemplate, 
 
 	tmpl := prompt.NewPromptTemplate(filePrefix, string(content))
 	a.cache.Store(filePrefix, tmpl)
-	logger.Info(logComponent).Str("file_prefix", filePrefix).Msg("加载并缓存提示词模板")
+	logger.Info(logComponent).Str("file_prefix", filePrefix).Msg("loaded and cached prompt template")
 	return tmpl, nil
 }
 
@@ -136,11 +136,11 @@ func (a *PromptApplier) GetTemplate(filePrefix string) (*prompt.PromptTemplate, 
 func (a *PromptApplier) ClearCache(filePrefix ...string) {
 	if len(filePrefix) == 0 {
 		a.cache = sync.Map{}
-		logger.Info(logComponent).Msg("清除所有提示词模板缓存")
+		logger.Info(logComponent).Msg("cleared all prompt template cache")
 	} else {
 		for _, prefix := range filePrefix {
 			a.cache.Delete(prefix)
-			logger.Info(logComponent).Str("file_prefix", prefix).Msg("清除提示词模板缓存")
+			logger.Info(logComponent).Str("file_prefix", prefix).Msg("cleared prompt template cache")
 		}
 	}
 }

@@ -532,7 +532,7 @@ func (d *SQLTaskDao) CancelAllTasks(ctx context.Context, teamName string, skipAs
 			Str("team_name", teamName).
 			Int("cancelled", len(result.Cancelled)).
 			Int("unblocked", len(result.Unblocked)).
-			Msg("批量取消任务完成")
+			Msg("batch cancel tasks completed")
 		return nil
 	})
 	return result, err

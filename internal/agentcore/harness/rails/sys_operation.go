@@ -54,11 +54,8 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 SysOperationRail 满足 AgentRail 接口
 // _ 编译时验证 SysOperationRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*SysOperationRail)(nil)
-
-var sysOpRailLogComponent = logger.ComponentAgentCore
 
 // 确保编译时引用 hinterfaces 包（SysOperationRail 需要 DeepAgentInterface 类型断言）
 var _ hinterfaces.DeepAgentInterface
@@ -211,12 +208,12 @@ func (r *SysOperationRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 		}
 	}
 
-	logger.Info(sysOpRailLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "sys_operation_rail_init").
 		Int("tool_count", len(r.tools)).
 		Bool("read_only", r.readOnly).
 		Bool("with_code_tool", r.withCodeTool).
-		Msg("SysOperationRail 已注册工具")
+		Msg("SysOperationRail registered tools")
 
 	return nil
 }
@@ -236,10 +233,10 @@ func (r *SysOperationRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		func(t tool.Tool) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					logger.Warn(sysOpRailLogComponent).
+					logger.Warn(logComponent).
 						Str("event_type", "sys_operation_rail_uninit").
 						Str("tool_name", t.Card().Name).
-						Msgf("注销工具失败: %v", rec)
+						Msgf("failed to unregister tool: %v", rec)
 				}
 			}()
 			// 从 AbilityManager 移除
@@ -256,9 +253,9 @@ func (r *SysOperationRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	}
 	r.tools = nil
 
-	logger.Info(sysOpRailLogComponent).
+	logger.Info(logComponent).
 		Str("event_type", "sys_operation_rail_uninit").
-		Msg("SysOperationRail 注销完成")
+		Msg("SysOperationRail unregistered")
 
 	return nil
 }
@@ -272,3 +269,5 @@ func (r *SysOperationRail) BeforeInvoke(_ context.Context, _ *agentinterfaces.Ag
 func (r *SysOperationRail) AfterInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

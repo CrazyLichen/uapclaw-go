@@ -37,11 +37,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var (
-	// sharedLogComponent 日志组件
-	sharedLogComponent = logger.ComponentAgentCore
-)
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSharedMemoryManager 创建共享记忆管理器
@@ -107,16 +102,16 @@ func (m *SharedMemoryManager) WriteTeamSummary(ctx context.Context, content stri
 				return nil
 			}
 			// Python: sys_operation 写入失败时 warning 并回退到本地写入
-			logger.Warn(sharedLogComponent).Err(err).Str("path", target).
-				Msg("sysOperation 写入失败，回退到本地原子写入")
+			logger.Warn(logComponent).Err(err).Str("path", target).
+				Msg("sysOperation write failed, falling back to local atomic write")
 		}
 	}
 
 	// 本地原子写入回退
 	tmpFile, err := os.CreateTemp(m.dir, "team_memory_*.tmp")
 	if err != nil {
-		logger.Error(sharedLogComponent).Err(err).Str("path", target).
-			Msg("WriteTeamSummary 创建临时文件失败")
+		logger.Error(logComponent).Err(err).Str("path", target).
+			Msg("WriteTeamSummary failed to create temp file")
 		return err
 	}
 	tmpPath := tmpFile.Name()
@@ -127,8 +122,8 @@ func (m *SharedMemoryManager) WriteTeamSummary(ctx context.Context, content stri
 	}
 	_ = tmpFile.Close()
 	if err := os.Rename(tmpPath, target); err != nil {
-		logger.Error(sharedLogComponent).Err(err).Str("tmp", tmpPath).Str("target", target).
-			Msg("WriteTeamSummary 原子替换失败")
+		logger.Error(logComponent).Err(err).Str("tmp", tmpPath).Str("target", target).
+			Msg("WriteTeamSummary atomic replace failed")
 		_ = os.Remove(tmpPath)
 		return err
 	}
@@ -148,3 +143,5 @@ func (m *SharedMemoryManager) AppendEntry(ctx context.Context, entry string) err
 	}
 	return m.WriteTeamSummary(ctx, newContent)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -715,7 +715,7 @@ func (c *BrowserSelectorCache) save(data map[string]any) {
 			Str("event_type", "selector_cache_save_error").
 			Str("path", c.path).
 			Err(err).
-			Msg("创建缓存目录失败")
+			Msg("failed to create cache directory")
 		return
 	}
 
@@ -724,7 +724,7 @@ func (c *BrowserSelectorCache) save(data map[string]any) {
 		logger.Warn(logComponent).
 			Str("event_type", "selector_cache_save_error").
 			Err(err).
-			Msg("序列化缓存数据失败")
+			Msg("failed to marshal cache data")
 		return
 	}
 
@@ -734,7 +734,7 @@ func (c *BrowserSelectorCache) save(data map[string]any) {
 			Str("event_type", "selector_cache_save_error").
 			Str("path", tmpPath).
 			Err(err).
-			Msg("写入临时缓存文件失败")
+			Msg("failed to write temp cache file")
 		return
 	}
 
@@ -742,7 +742,7 @@ func (c *BrowserSelectorCache) save(data map[string]any) {
 		logger.Warn(logComponent).
 			Str("event_type", "selector_cache_save_error").
 			Err(err).
-			Msg("重命名缓存文件失败")
+			Msg("failed to rename cache file")
 	}
 }
 

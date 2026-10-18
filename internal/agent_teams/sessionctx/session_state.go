@@ -99,3 +99,5 @@ func MemberIDFromCtx(ctx context.Context) string {
 	}
 	return ""
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

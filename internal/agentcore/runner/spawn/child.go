@@ -59,12 +59,12 @@ var (
 	TeamRunnerFunc any
 )
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // SetTeamRunnerFunc 设置团队执行函数（由 runtime 包注入）。
 func SetTeamRunnerFunc(fn any) {
 	TeamRunnerFunc = fn
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // RunSpawnedProcess 子进程主入口。
 // Python: run_spawned_process()
@@ -86,7 +86,7 @@ func RunSpawnedProcess(
 
 	logger.Info(logComponent).
 		Str("event_type", "SPAWN_CHILD_START").
-		Msg("子进程启动")
+		Msg("child process started")
 
 	// 准备 Agent 配置
 	spawnAgentConfig := prepareSpawnAgentConfig(agentConfig)
@@ -102,7 +102,7 @@ func RunSpawnedProcess(
 			logger.Error(logComponent).
 				Str("event_type", "SPAWN_RUNNER_CONFIG_ERROR").
 				Err(err).
-				Msg("设置 Runner 配置失败")
+				Msg("failed to set runner config")
 		}
 	}
 
@@ -111,7 +111,7 @@ func RunSpawnedProcess(
 			logger.Error(logComponent).
 				Str("event_type", "SPAWN_RUNNER_START_ERROR").
 				Err(err).
-				Msg("runner 启动失败")
+				Msg("runner start failed")
 			return fmt.Errorf("runner 启动失败: %w", err)
 		}
 		defer func() {
@@ -119,7 +119,7 @@ func RunSpawnedProcess(
 				logger.Error(logComponent).
 					Str("event_type", "SPAWN_RUNNER_STOP_ERROR").
 					Err(stopErr).
-					Msg("Runner 停止失败")
+					Msg("runner stop failed")
 			}
 		}()
 	}
@@ -134,13 +134,13 @@ func RunSpawnedProcess(
 		logger.Error(logComponent).
 			Str("event_type", "SPAWN_CHILD_ERROR").
 			Err(err).
-			Msg("子进程消息循环错误")
+			Msg("child process message loop error")
 		return err
 	}
 
 	logger.Info(logComponent).
 		Str("event_type", "SPAWN_CHILD_EXIT").
-		Msg("子进程退出")
+		Msg("child process exited")
 	return nil
 }
 
@@ -181,7 +181,7 @@ func ProcessMessageLoop(
 					logger.Error(logComponent).
 						Str("event_type", "SPAWN_HEALTH_CHECK_ERROR").
 						Err(err).
-						Msg("健康检查处理错误")
+						Msg("health check handling error")
 				}
 			case MessageTypeShutdown:
 				if agentCancel != nil {
@@ -191,7 +191,7 @@ func ProcessMessageLoop(
 					logger.Error(logComponent).
 						Str("event_type", "SPAWN_SHUTDOWN_ERROR").
 						Err(err).
-						Msg("关闭处理错误")
+						Msg("shutdown handling error")
 				}
 				shutdownRequested = true
 			case MessageTypeInput:
@@ -239,7 +239,7 @@ func ProcessMessageLoop(
 				logger.Warn(logComponent).
 					Str("event_type", "SPAWN_UNKNOWN_MESSAGE").
 					Str("message_type", msg.Type.String()).
-					Msg("未知消息类型")
+					Msg("unknown message type")
 			}
 
 		case <-agentDoneCh:
@@ -254,7 +254,7 @@ func ProcessMessageLoop(
 			if err == io.EOF {
 				logger.Info(logComponent).
 					Str("event_type", "SPAWN_STDIN_CLOSED").
-					Msg("stdin 关闭，退出消息循环")
+					Msg("stdin closed, exiting message loop")
 				if agentCancel != nil {
 					agentCancel()
 				}
@@ -263,7 +263,7 @@ func ProcessMessageLoop(
 			logger.Error(logComponent).
 				Str("event_type", "SPAWN_STDIN_ERROR").
 				Err(err).
-				Msg("stdin 读取错误")
+				Msg("stdin read error")
 			if agentCancel != nil {
 				agentCancel()
 			}
@@ -295,7 +295,7 @@ func HandleHealthCheck(ctx context.Context, msg Message, stdout io.Writer) error
 	}
 	logger.Debug(logComponent).
 		Str("event_type", "SPAWN_HEALTH_CHECK_RESPONSE").
-		Msg("回复健康检查")
+		Msg("replying to health check")
 	return nil
 }
 
@@ -304,7 +304,7 @@ func HandleHealthCheck(ctx context.Context, msg Message, stdout io.Writer) error
 func HandleShutdown(ctx context.Context, msg Message, stdout io.Writer) error {
 	logger.Info(logComponent).
 		Str("event_type", "SPAWN_SHUTDOWN_RECEIVED").
-		Msg("收到关闭请求")
+		Msg("shutdown request received")
 	ack := NewMessage(MessageTypeShutdownAck, map[string]any{
 		"status": "acknowledged",
 	})
@@ -372,7 +372,7 @@ func prepareSpawnAgentConfig(agentConfig map[string]any) *SpawnAgentConfig {
 		logger.Error(logComponent).
 			Str("event_type", "SPAWN_CONFIG_PARSE_ERROR").
 			Err(err).
-			Msg("解析 Agent 配置失败")
+			Msg("failed to parse agent config")
 		return nil
 	}
 
@@ -408,7 +408,7 @@ func runAgentTask(
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Err(err).
-			Msg("Agent 执行错误")
+			Msg("agent execution error")
 		errMsg := NewMessage(MessageTypeError, map[string]any{
 			"error":      err.Error(),
 			"error_type": fmt.Sprintf("%T", err),
@@ -423,7 +423,7 @@ func runAgentTask(
 	_ = WriteMessage(stdout, doneMsg)
 	logger.Info(logComponent).
 		Str("event_type", "SPAWN_AGENT_DONE").
-		Msg("Agent 执行完成")
+		Msg("agent execution completed")
 }
 
 // executeChildAgent 在子进程中执行 Agent。
@@ -484,7 +484,7 @@ func executeChildAgent(
 		Str("event_type", "SPAWN_CHILD_AGENT").
 		Str("agent_type", agentType).
 		Bool("streaming", streaming).
-		Msg("CHILD_AGENT 已创建实例，开始执行")
+		Msg("CHILD_AGENT instance created, starting execution")
 
 	// 执行 Agent
 	if childRunner == nil {
@@ -511,7 +511,7 @@ func executeChildAgent(
 				logger.Error(logComponent).
 					Str("event_type", "SPAWN_STREAM_WRITE_ERROR").
 					Err(writeErr).
-					Msg("写入 STREAM_CHUNK 失败")
+					Msg("failed to write STREAM_CHUNK")
 			}
 			resultChunks = append(resultChunks, chunk)
 		}
@@ -550,7 +550,7 @@ func applyLoggingConfigFromEnv() {
 		logger.Warn(logComponent).
 			Str("event_type", "SPAWN_LOGGING_CONFIG_PARSE_ERROR").
 			Err(err).
-			Msg("解析日志配置环境变量失败，使用默认配置")
+			Msg("failed to parse log config env vars, using default config")
 		return
 	}
 
@@ -580,7 +580,7 @@ func applyLoggingConfigMap(loggingConfig map[string]any) {
 	logger.Info(logComponent).
 		Str("event_type", "SPAWN_LOGGING_CONFIG_APPLIED").
 		Str("level", levelStr).
-		Msg("已应用日志配置")
+		Msg("log config applied")
 }
 
 // resolveLogLevelFromConfig 从日志配置 map 中提取日志级别字符串。

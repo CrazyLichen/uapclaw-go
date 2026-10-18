@@ -787,7 +787,7 @@ func (s *Sweeper) extractViaLLM(ctx context.Context, compressedText, existingSum
 	var clientConfig llmschema.ModelClientConfig
 	if mccData, err := json.Marshal(mcc); err == nil {
 		if err := json.Unmarshal(mccData, &clientConfig); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("[Sweeper] ModelClientConfig 反序列化失败，使用默认值")
+			logger.Warn(logComponent).Err(err).Msg("[Sweeper] ModelClientConfig deserialization failed, using defaults")
 		}
 	}
 	// 回退默认值

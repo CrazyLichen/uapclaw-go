@@ -343,7 +343,7 @@ func NewEmbeddingHTTPClient(apiURL string, timeout ...time.Duration) *http.Clien
 			logger.Warn(logComponent).
 				Str("cert_path", certPath).
 				Err(err).
-				Msg("加载 SSL 证书失败，使用默认 TLS 配置")
+				Msg("failed to load SSL certificate, using default TLS config")
 			return &http.Client{Timeout: reqTimeout}
 		}
 		return &http.Client{
@@ -426,7 +426,7 @@ func retryWithBackoffGeneric(
 				Int("max_retries", maxRetries).
 				Str("error_msg", err.Error()).
 				Err(err).
-				Msg("嵌入请求失败，准备重试")
+				Msg("embedding request failed, preparing to retry")
 
 			// 指数退避：100ms, 200ms, 400ms...
 			backoff := time.Duration(math.Pow(2, float64(attempt))) * 100 * time.Millisecond

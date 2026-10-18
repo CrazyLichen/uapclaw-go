@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/prompts"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
@@ -190,4 +191,33 @@ func TestTeamPolicyRail_BeforeModelCall_无Builder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BeforeModelCall should not fail with nil builder: %v", err)
 	}
+}
+
+// TestWithPolicyTeamWorkspaceMount 验证 WithPolicyTeamWorkspaceMount 选项。
+func TestWithPolicyTeamWorkspaceMount(t *testing.T) {
+	r := &TeamPolicyRail{}
+	WithPolicyTeamWorkspaceMount("/mnt/ws")(r)
+	assert.Equal(t, "/mnt/ws", r.teamWorkspaceMount)
+}
+
+// TestWithPolicyTeamWorkspacePath 验证 WithPolicyTeamWorkspacePath 选项。
+func TestWithPolicyTeamWorkspacePath(t *testing.T) {
+	r := &TeamPolicyRail{}
+	WithPolicyTeamWorkspacePath("/tmp/team-ws")(r)
+	assert.Equal(t, "/tmp/team-ws", r.teamWorkspacePath)
+}
+
+// TestWithPolicyTeamBackend 验证 WithPolicyTeamBackend 选项。
+func TestWithPolicyTeamBackend(t *testing.T) {
+	tb := newRailsTestTeamBackend()
+	r := &TeamPolicyRail{}
+	WithPolicyTeamBackend(tb)(r)
+	assert.Equal(t, tb, r.teamBackend)
+}
+
+// TestWithPolicyExposeHumanAgents 验证 WithPolicyExposeHumanAgents 选项。
+func TestWithPolicyExposeHumanAgents(t *testing.T) {
+	r := &TeamPolicyRail{}
+	WithPolicyExposeHumanAgents(true)(r)
+	assert.True(t, r.exposeHumanAgentsToTeammates)
 }

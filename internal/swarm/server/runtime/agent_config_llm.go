@@ -76,11 +76,11 @@ var jsonBlockPattern = regexp.MustCompile(`\{[\s\S]*\}`)
 func GenerateAgentWithLLM(ctx context.Context, model *llm.Model, name string, description string) *LLMGenerationResult {
 	// 步骤 1: 校验参数
 	if model == nil {
-		logger.Warn(logComponent).Msg("[agents.create] 无可用模型进行 LLM 生成")
+		logger.Warn(logComponent).Msg("[agents.create] no model available for LLM generation")
 		return nil
 	}
 	if name == "" || description == "" {
-		logger.Warn(logComponent).Msg("[agents.create] 名称或描述为空")
+		logger.Warn(logComponent).Msg("[agents.create] name or description is empty")
 		return nil
 	}
 
@@ -104,7 +104,7 @@ func GenerateAgentWithLLM(ctx context.Context, model *llm.Model, name string, de
 		model_clients.WithInvokeTemperature(0.3),
 	)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("[agents.create] LLM 生成失败")
+		logger.Error(logComponent).Err(err).Msg("[agents.create] LLM generation failed")
 		return nil
 	}
 
@@ -115,7 +115,7 @@ func GenerateAgentWithLLM(ctx context.Context, model *llm.Model, name string, de
 		text = result.Content.Text()
 	}
 	if text == "" {
-		logger.Warn(logComponent).Msg("[agents.create] LLM 返回空响应")
+		logger.Warn(logComponent).Msg("[agents.create] LLM returned empty response")
 		return nil
 	}
 
@@ -137,11 +137,11 @@ func parseLLMGenerationResponse(text string) *LLMGenerationResult {
 		// 步骤 2: 尝试从文本中提取 JSON 块
 		match := jsonBlockPattern.FindString(text)
 		if match == "" {
-			logger.Warn(logComponent).Str("response", truncate(text, 200)).Msg("[agents.create] LLM 响应中未找到 JSON")
+			logger.Warn(logComponent).Str("response", truncate(text, 200)).Msg("[agents.create] JSON not found in LLM response")
 			return nil
 		}
 		if err := json.Unmarshal([]byte(match), &data); err != nil {
-			logger.Warn(logComponent).Str("response", truncate(text, 200)).Msg("[agents.create] JSON 解析失败")
+			logger.Warn(logComponent).Str("response", truncate(text, 200)).Msg("[agents.create] JSON parse failed")
 			return nil
 		}
 	}
@@ -155,7 +155,7 @@ func parseLLMGenerationResponse(text string) *LLMGenerationResult {
 
 	// 步骤 4: 校验完整性
 	if whenToUse == "" || systemPrompt == "" {
-		logger.Warn(logComponent).Any("data", data).Msg("[agents.create] LLM 响应不完整")
+		logger.Warn(logComponent).Any("data", data).Msg("[agents.create] LLM response incomplete")
 		return nil
 	}
 

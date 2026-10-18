@@ -1571,8 +1571,6 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 		Msg("configured team member with code config")
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // mergeToolCards 将 tool_cards 合并到 agent 的 AbilityManager（去重）。
 // Python: _merge_tool_cards() (interface_code.py)
 func mergeToolCards(agent *harness.DeepAgent, toolCards []*tool.ToolCard) int {

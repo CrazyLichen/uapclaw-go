@@ -39,7 +39,7 @@ func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput 
 			Str("session_id", sessionID).
 			Str("active_session_id", ptrToStr(m.activeSessionID)).
 			Str("active_team_name", ptrToStr(m.activeTeamName)).
-			Msg("interact 被忽略：非活跃 team session")
+			Msg("interact ignored: not an active team session")
 		m.mu.Unlock()
 		return false, nil
 	}
@@ -57,15 +57,17 @@ func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput 
 		logger.Error(logComponent).Err(err).
 			Str("session_id", sessionID).
 			Str("team_name", teamName).
-			Msg("interact 失败")
+			Msg("interact failed")
 		return false, err
 	}
 	if result != nil && !result.IsOK() {
 		logger.Warn(logComponent).
 			Str("session_id", sessionID).
 			Str("team_name", teamName).
-			Msg("interact 对 runner runtime 失败")
+			Msg("interact failed on runner runtime")
 		return false, nil
 	}
 	return true, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

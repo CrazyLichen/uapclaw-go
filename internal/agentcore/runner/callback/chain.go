@@ -154,7 +154,7 @@ func (c *CallbackChain) Execute(ctx context.Context, cctx *ChainContext) *ChainR
 				if execCtx.Err() == context.DeadlineExceeded {
 					logger.Error(logComponent).
 						Str("callback_name", "callback").
-						Msg("回调执行超时")
+						Msg("callback execution timed out")
 
 					if attempt < info.MaxRetries {
 						time.Sleep(time.Duration(info.RetryDelay * float64(time.Second)))
@@ -204,7 +204,7 @@ func (c *CallbackChain) Execute(ctx context.Context, cctx *ChainContext) *ChainR
 					}
 					logger.Error(logComponent).
 						Err(handlerErr).
-						Msg("错误处理器执行失败")
+						Msg("error handler execution failed")
 				}
 
 				// 重试
@@ -212,7 +212,7 @@ func (c *CallbackChain) Execute(ctx context.Context, cctx *ChainContext) *ChainR
 					logger.Info(logComponent).
 						Str("callback_name", "callback").
 						Int("attempt", attempt+1).
-						Msg("重试回调")
+						Msg("retrying callback")
 					time.Sleep(time.Duration(info.RetryDelay * float64(time.Second)))
 					continue
 				}
@@ -300,7 +300,7 @@ func (c *CallbackChain) rollback(ctx context.Context, cctx *ChainContext, execut
 			if err := handler(ctx, cctx); err != nil {
 				logger.Error(logComponent).
 					Err(err).
-					Msg("回滚处理器执行失败")
+					Msg("rollback handler execution failed")
 			}
 		}
 	}

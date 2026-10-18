@@ -2,6 +2,8 @@ package interfaces
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -430,6 +432,68 @@ func TestAllBaseCallbackEvents(t *testing.T) {
 	// 不应包含 task-iteration 事件
 	assert.False(t, seen[CallbackBeforeTaskIteration])
 	assert.False(t, seen[CallbackAfterTaskIteration])
+}
+
+// TestAgentCallbackContext_GetExtra_SetExtra_DeleteExtra 验证线程安全的 Extra 操作方法
+func TestAgentCallbackContext_GetExtra_SetExtra_DeleteExtra(t *testing.T) {
+	ctx := NewAgentCallbackContext(nil, nil, nil)
+
+	// 初始状态：GetExtra 返回零值
+	val, ok := ctx.GetExtra("key1")
+	assert.False(t, ok)
+	assert.Nil(t, val)
+
+	// SetExtra 设置值
+	ctx.SetExtra("key1", "value1")
+	val, ok = ctx.GetExtra("key1")
+	assert.True(t, ok)
+	assert.Equal(t, "value1", val)
+
+	// DeleteExtra 删除并返回值
+	deleted, ok := ctx.DeleteExtra("key1")
+	assert.True(t, ok)
+	assert.Equal(t, "value1", deleted)
+
+	// 删除后再 GetExtra 返回零值
+	val, ok = ctx.GetExtra("key1")
+	assert.False(t, ok)
+	assert.Nil(t, val)
+
+	// DeleteExtra 对不存在的 key 返回零值
+	deleted, ok = ctx.DeleteExtra("nonexistent")
+	assert.False(t, ok)
+	assert.Nil(t, deleted)
+}
+
+// TestAgentCallbackContext_ExtraConcurrent 验证 Extra 操作的并发安全性
+func TestAgentCallbackContext_ExtraConcurrent(t *testing.T) {
+	ctx := NewAgentCallbackContext(nil, nil, nil)
+	const goroutines = 100
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 3)
+
+	// 并发写
+	for i := 0; i < goroutines; i++ {
+		go func(i int) {
+			defer wg.Done()
+			ctx.SetExtra(fmt.Sprintf("key_%d", i), i)
+		}(i)
+	}
+	// 并发读
+	for i := 0; i < goroutines; i++ {
+		go func(i int) {
+			defer wg.Done()
+			ctx.GetExtra(fmt.Sprintf("key_%d", i))
+		}(i)
+	}
+	// 并发删除
+	for i := 0; i < goroutines; i++ {
+		go func(i int) {
+			defer wg.Done()
+			ctx.DeleteExtra(fmt.Sprintf("key_%d", i))
+		}(i)
+	}
+	wg.Wait()
 }
 
 // TestAllDeepCallbackEvents 验证 AllDeepCallbackEvents 返回 2 个 Deep 扩展事件

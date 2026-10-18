@@ -167,7 +167,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 			Str("skill", skillName).
 			Str("request_id", requestID).
 			Err(err).
-			Msg("[OnlineEvolutionOrchestrator] auto-approve 失败")
+			Msg("[OnlineEvolutionOrchestrator] auto-approve failed")
 		return &OnlineEvolutionResult{
 			SkillName: skillName,
 			Status:    OnlineEvolutionStatusAutoApproved,
@@ -180,7 +180,7 @@ func (o *OnlineEvolutionOrchestrator) Evolve(
 			Str("skill", skillName).
 			Int("applied_count", result.AppliedCount).
 			Int("pending_count", result.PendingCount).
-			Msg("[OnlineEvolutionOrchestrator] auto-approve 完成")
+			Msg("[OnlineEvolutionOrchestrator] auto-approve completed")
 	}
 
 	return &OnlineEvolutionResult{
@@ -281,7 +281,7 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 		logger.Warn(logComponent).
 			Str("skill", onlineContext.SkillName).
 			Err(err).
-			Msg("[OnlineEvolutionOrchestrator] updater.Process 失败")
+			Msg("[OnlineEvolutionOrchestrator] updater.Process failed")
 		return nil, err
 	}
 
@@ -291,7 +291,7 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 	if len(updates) == 0 {
 		logger.Warn(logComponent).
 			Str("skill", onlineContext.SkillName).
-			Msg("[OnlineEvolutionOrchestrator] updater.Process 返回空更新，跳过 apply")
+			Msg("[OnlineEvolutionOrchestrator] updater.Process returned empty update, skipping apply")
 		preview, _ := BuildLocalApplyPreview(onlineContext.SkillName, nil)
 		return &preview, nil
 	}

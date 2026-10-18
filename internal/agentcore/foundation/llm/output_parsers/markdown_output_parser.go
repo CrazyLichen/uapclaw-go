@@ -24,9 +24,6 @@ type MarkdownOutputParser struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// mdLogComponent markdown output_parser 包日志组件标识（AgentCore 层）。
-const mdLogComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -80,11 +77,11 @@ func (p *MarkdownOutputParser) Parse(input any) (result any, err error) {
 	// 类型断言或正则匹配异常导致 panic
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Error(mdLogComponent).
+			logger.Error(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("model_name", modelName).
 				Any("panic", r).
-				Msg("Markdown 解析过程中发生异常")
+				Msg("error during Markdown parsing")
 			result = nil
 			err = fmt.Errorf("markdown 解析过程中发生意外错误: %v", r)
 		}
@@ -140,11 +137,11 @@ func (p *MarkdownOutputParser) StreamParse(chunks <-chan any) <-chan model_clien
 			case string:
 				content = v
 			default:
-				logger.Warn(mdLogComponent).
+				logger.Warn(logComponent).
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("model_name", modelName).
 					Str("chunk_type", fmt.Sprintf("%T", chunk)).
-					Msg("不支持的 chunk 类型，已跳过")
+					Msg("unsupported chunk type, skipped")
 				continue
 			}
 
@@ -168,11 +165,11 @@ func (p *MarkdownOutputParser) StreamParse(chunks <-chan any) <-chan model_clien
 				func() {
 					defer func() {
 						if r := recover(); r != nil {
-							logger.Error(mdLogComponent).
+							logger.Error(logComponent).
 								Str("event_type", "LLM_CALL_ERROR").
 								Str("model_name", modelName).
 								Any("panic", r).
-								Msg("流式 Markdown 解析过程中发生异常，跳过当前 chunk")
+								Msg("error during streaming Markdown parsing, skipping current chunk")
 						}
 					}()
 					p.extractAllElements(buffer, mdContent)
@@ -200,11 +197,11 @@ func (p *MarkdownOutputParser) StreamParse(chunks <-chan any) <-chan model_clien
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
-						logger.Error(mdLogComponent).
+						logger.Error(logComponent).
 							Str("event_type", "LLM_CALL_ERROR").
 							Str("model_name", modelName).
 							Any("panic", r).
-							Msg("最终流式 Markdown 解析过程中发生异常，跳过残余 buffer")
+							Msg("error during final streaming Markdown parsing, skipping residual buffer")
 					}
 				}()
 				p.extractAllElements(buffer, mdContent)

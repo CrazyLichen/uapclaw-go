@@ -419,7 +419,7 @@ func (s *ExperienceScorer) Evaluate(
 		logger.Error(logComponent).
 			Str("method", "ExperienceScorer.Evaluate").
 			Err(err).
-			Msg("[ExperienceScorer] evaluate LLM 调用失败")
+			Msg("[ExperienceScorer] evaluate LLM call failed")
 		return nil, nil
 	}
 
@@ -427,7 +427,7 @@ func (s *ExperienceScorer) Evaluate(
 	if results == nil {
 		logger.Warn(logComponent).
 			Str("method", "ExperienceScorer.Evaluate").
-			Msg("[ExperienceScorer] evaluate: 无法解析 LLM 响应")
+			Msg("[ExperienceScorer] evaluate: cannot parse LLM response")
 		return nil, nil
 	}
 
@@ -458,7 +458,7 @@ func (s *ExperienceScorer) Simplify(
 	if len(records) == 0 {
 		logger.Info(logComponent).
 			Str("skill_name", skillName).
-			Msg("[ExperienceScorer] simplify 跳过: 无记录")
+			Msg("[ExperienceScorer] simplify skipped: no records")
 		return nil, nil
 	}
 
@@ -486,7 +486,7 @@ func (s *ExperienceScorer) Simplify(
 		Float64("attempt_timeout", s.simplifyPolicy.AttemptTimeoutSecs).
 		Float64("total_budget", s.simplifyPolicy.TotalBudgetSecs).
 		Int("max_attempts", s.simplifyPolicy.MaxAttempts).
-		Msg("[ExperienceScorer] simplify LLM 调用开始")
+		Msg("[ExperienceScorer] simplify LLM call started")
 
 	startedAt := time.Now()
 
@@ -504,7 +504,7 @@ func (s *ExperienceScorer) Simplify(
 			Int("records", len(records)).
 			Int("prompt_chars", len(prompt)).
 			Err(err).
-			Msg("[ExperienceScorer] simplify LLM 调用失败")
+			Msg("[ExperienceScorer] simplify LLM call failed")
 		return nil, nil
 	}
 
@@ -513,21 +513,21 @@ func (s *ExperienceScorer) Simplify(
 		Float64("elapsed", elapsed).
 		Str("skill", skillName).
 		Int("response_chars", len(raw)).
-		Msg("[ExperienceScorer] simplify LLM 调用完成")
+		Msg("[ExperienceScorer] simplify LLM call completed")
 
 	actions := convertSliceToMapSlice(parseLLMJSON(raw))
 	if actions == nil {
 		logger.Warn(logComponent).
 			Str("skill", skillName).
 			Int("response_chars", len(raw)).
-			Msg("[ExperienceScorer] simplify: 无法解析 LLM 响应")
+			Msg("[ExperienceScorer] simplify: cannot parse LLM response")
 		return nil, nil
 	}
 
 	logger.Info(logComponent).
 		Str("skill", skillName).
 		Int("actions_count", len(actions)).
-		Msg("[ExperienceScorer] simplify 解析完成")
+		Msg("[ExperienceScorer] simplify parsing completed")
 
 	return actions, nil
 }

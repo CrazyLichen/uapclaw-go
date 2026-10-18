@@ -122,7 +122,7 @@ func (h *PlanStageHandler) generatePlan(sctx *skilldev.SkillDevContext) (map[str
 	// 待实现：设置差量 plan["diff_analysis"] = "待实现: 差量分析"
 	// 待实现：返回计划 return plan
 
-	logger.Warn(logComponent).Msg("[PlanStage] generatePlan 尚未实现，返回占位 plan")
+	logger.Warn(logComponent).Msg("[PlanStage] generatePlan not implemented, returning placeholder plan")
 	query := ""
 	if q, ok := sctx.State.Input["query"].(string); ok {
 		query = q

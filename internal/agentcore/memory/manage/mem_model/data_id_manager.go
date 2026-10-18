@@ -64,3 +64,5 @@ func (m *DataIdManager) GenerateNextID(userID string) string {
 
 	return fmt.Sprintf("%x", raw)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

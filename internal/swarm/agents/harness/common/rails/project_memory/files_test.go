@@ -559,3 +559,77 @@ func TestDiscoverAndLoadMemoryFiles_额外目录(t *testing.T) {
 		t.Fatal("expected content from additional directory")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// parseFrontmatterBlock
+// ---------------------------------------------------------------------------
+
+// TestParseFrontmatterBlock_全破折号列表 测试全部以 - 开头的行解析为列表。
+func TestParseFrontmatterBlock_全破折号列表(t *testing.T) {
+	lines := []string{"- item1", "- item2", "- item3"}
+	result := parseFrontmatterBlock(lines)
+	list, ok := result.([]string)
+	if !ok {
+		t.Fatalf("expected []string, got %T", result)
+	}
+	if len(list) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(list))
+	}
+	if list[0] != "item1" || list[1] != "item2" || list[2] != "item3" {
+		t.Fatalf("unexpected items: %v", list)
+	}
+}
+
+// TestParseFrontmatterBlock_空输入 测试空行列表返回空切片。
+func TestParseFrontmatterBlock_空输入(t *testing.T) {
+	result := parseFrontmatterBlock(nil)
+	list, ok := result.([]string)
+	if !ok {
+		t.Fatalf("expected []string, got %T", result)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected empty, got %d", len(list))
+	}
+}
+
+// TestParseFrontmatterBlock_非破折号行 测试非破折号行也返回列表。
+func TestParseFrontmatterBlock_非破折号行(t *testing.T) {
+	lines := []string{"plain1", "plain2"}
+	result := parseFrontmatterBlock(lines)
+	list, ok := result.([]string)
+	if !ok {
+		t.Fatalf("expected []string, got %T", result)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(list))
+	}
+	if list[0] != "plain1" || list[1] != "plain2" {
+		t.Fatalf("unexpected items: %v", list)
+	}
+}
+
+// TestParseFrontmatterBlock_破折号行去引号 测试 - 开头行的引号剥离。
+func TestParseFrontmatterBlock_破折号行去引号(t *testing.T) {
+	lines := []string{`- "quoted"`, `- 'single'`}
+	result := parseFrontmatterBlock(lines)
+	list, ok := result.([]string)
+	if !ok {
+		t.Fatalf("expected []string, got %T", result)
+	}
+	if list[0] != "quoted" || list[1] != "single" {
+		t.Fatalf("unexpected items: %v", list)
+	}
+}
+
+// TestParseFrontmatterBlock_空行跳过 测试空行和空白项被跳过。
+func TestParseFrontmatterBlock_空行跳过(t *testing.T) {
+	lines := []string{"- item1", "- item2"}
+	result := parseFrontmatterBlock(lines)
+	list, ok := result.([]string)
+	if !ok {
+		t.Fatalf("expected []string, got %T", result)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(list))
+	}
+}

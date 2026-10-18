@@ -291,7 +291,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 		Str("session_id", orEmpty(sid)).
 		Str("request_id", orEmpty(rid)).
 		Str("param_keys", orEmpty(paramKeys)).
-		Msg("开始")
+		Msg("started")
 
 	// 检查递归调用
 	if IsBrowserWorkerAction(ctx) && recursiveBrowserActions[actionName] {
@@ -303,7 +303,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 			Str("session_id", orEmpty(sid)).
 			Str("request_id", orEmpty(rid)).
 			Str("error", error).
-			Msg("已阻塞")
+			Msg("blocked")
 		return ActionResult{
 			"ok":         false,
 			"action":     actionName,
@@ -323,7 +323,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 			Str("action", actionName).
 			Str("session_id", orEmpty(sid)).
 			Str("request_id", orEmpty(rid)).
-			Msg("未知操作")
+			Msg("unknown action")
 		return ActionResult{
 			"ok":         false,
 			"action":     actionName,
@@ -378,7 +378,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 		Str("session_id", orEmpty(sid)).
 		Str("request_id", orEmpty(rid)).
 		Bool("ok", _ok).
-		Msg("结束")
+		Msg("finished")
 
 	return result
 }

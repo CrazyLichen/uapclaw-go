@@ -50,6 +50,7 @@ type PersistMemoryOp struct {
 	helper *cepersistence.MemoryPersistenceHelper
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSummarizeMemoryOp 创建单轨迹推理策略提取操作。
@@ -327,7 +328,7 @@ func (o *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 		}
 	} else {
 		// 对齐 Python: helper 为 nil 时持久化被跳过，记录 Warn 日志便于排查
-		logger.Warn(logComponent).Str("user_id", userID).Msg("PersistMemoryOp: helper 为 nil，跳过持久化")
+		logger.Warn(logComponent).Str("user_id", userID).Msg("PersistMemoryOp: helper is nil, skipping persistence")
 	}
 
 	rc.Set("persist_count", len(nodesDict))
@@ -341,6 +342,7 @@ func (o *PersistMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCont
 	return nil
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // persistType 获取持久化助手的类型描述。
@@ -350,3 +352,5 @@ func (o *PersistMemoryOp) persistType() string {
 	}
 	return "none"
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────

@@ -102,7 +102,7 @@ func NewWebFetchWebpageTool(language, agentID string) tool.Tool {
 		// Python: L1614-1617 — 抓取网页
 		data, err := fetchWebpage(rawURL, timeoutSeconds)
 		if err != nil {
-			logger.Error(logComponent).Str("url", rawURL).Err(err).Msg("获取网页失败")
+			logger.Error(logComponent).Str("url", rawURL).Err(err).Msg("failed to fetch webpage")
 			return map[string]any{"result": fmt.Sprintf("[ERROR]: failed to fetch webpage: %s", err)}, nil
 		}
 

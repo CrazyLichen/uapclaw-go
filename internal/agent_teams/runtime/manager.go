@@ -16,11 +16,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -51,10 +51,7 @@ type TeamRuntimeActivation struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// mgrLogComponent 日志组件
-	mgrLogComponent = logger.ComponentChannel
-)
+const ()
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -237,11 +234,11 @@ func (m *TeamRuntimeManager) Activate(
 	// Python: L130-137 — 任何不同 session 的池条目在 dispatch 前被拆除，
 	// 折叠旧的 WARM_RECOVER / NEW_TEAM_IN_SESSION_WARM 路径为 stop+remove+cold-rebuild。
 	if poolEntry != nil && poolEntry.SessionID != targetSessionID {
-		logger.Info(mgrLogComponent).
+		logger.Info(logComponent).
 			Str("team_name", teamName).
 			Str("old_session_id", poolEntry.SessionID).
 			Str("new_session_id", targetSessionID).
-			Msg("activate: 池条目 session 不匹配，stop+remove 后重建")
+			Msg("activate: pool entry session mismatch, stop+remove then rebuild")
 		_, _ = m.StopTeam(ctx, teamName, poolEntry.SessionID)
 		poolEntry = nil
 	}
@@ -261,7 +258,7 @@ func (m *TeamRuntimeManager) Activate(
 	)
 
 	// Python: L152-158 — 日志记录调度结果
-	logger.Info(mgrLogComponent).
+	logger.Info(logComponent).
 		Str("team_name", teamName).
 		Str("session_id", targetSessionID).
 		Str("action_kind", string(action.Kind)).
@@ -269,7 +266,7 @@ func (m *TeamRuntimeManager) Activate(
 		Bool("in_session", teamInSession).
 		Str("db_state", teamDBState).
 		Bool("pooled", poolEntry != nil).
-		Msg("activate: 调度决策完成")
+		Msg("activate: scheduling decision completed")
 
 	// Python 步骤 6: _apply_action(action, spec, team_session, pool_entry, inputs)
 	return m.applyAction(ctx, action, spec, teamSession, poolEntry, inputs)
@@ -285,32 +282,32 @@ func (m *TeamRuntimeManager) Activate(
 func (m *TeamRuntimeManager) Finalize(ctx context.Context, teamName string, sessionID string) error {
 	entry := m.resolveEntry(teamName, sessionID)
 	if entry == nil {
-		logger.Debug(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Msg("finalize: 无池条目，无操作")
+		logger.Debug(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Msg("finalize: no pool entry, no-op")
 		return nil
 	}
 	ag := entry.Agent
 	shutdownRequested, err := ag.IsShutdownRequested(ctx)
 	if err != nil {
-		logger.Warn(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Err(err).Msg("finalize: 检查 shutdown_requested 失败，默认暂停")
+		logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Err(err).Msg("finalize: shutdown_requested check failed, defaulting to pause")
 	}
 	if shutdownRequested || ag.Lifecycle() != "persistent" {
-		logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
+		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
 			Bool("shutdown_requested", shutdownRequested).
 			Str("lifecycle", ag.Lifecycle()).
-			Msg("finalize: 停止团队")
+			Msg("finalize: stopping team")
 		if stopErr := ag.StopCoordination(ctx); stopErr != nil {
-			logger.Warn(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(stopErr).Msg("finalize: StopCoordination 失败")
+			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Err(stopErr).Msg("finalize: StopCoordination failed")
 		}
 		m.pool.Remove(teamName)
 	} else {
-		logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Msg("finalize: 暂停持久化团队")
+		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Msg("finalize: pausing persistent team")
 		if pauseErr := ag.PauseCoordination(ctx); pauseErr != nil {
-			logger.Warn(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(pauseErr).Msg("finalize: PauseCoordination 失败")
+			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+				Err(pauseErr).Msg("finalize: PauseCoordination failed")
 		}
 		entry.State = RuntimeStatePaused
 	}
@@ -324,16 +321,16 @@ func (m *TeamRuntimeManager) Finalize(ctx context.Context, teamName string, sess
 func (m *TeamRuntimeManager) Pause(ctx context.Context, teamName string, sessionID string) (bool, error) {
 	entry := m.resolveEntry(teamName, sessionID)
 	if entry == nil {
-		logger.Debug(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Msg("pause: 无池条目，无操作")
+		logger.Debug(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Msg("pause: no pool entry, no-op")
 		return false, nil
 	}
 	if err := entry.Agent.PauseCoordination(ctx); err != nil {
 		return false, err
 	}
 	entry.State = RuntimeStatePaused
-	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("pause: 团队已暂停")
+	logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+		Msg("pause: team paused")
 	return true, nil
 }
 
@@ -344,18 +341,18 @@ func (m *TeamRuntimeManager) Pause(ctx context.Context, teamName string, session
 func (m *TeamRuntimeManager) StopTeam(ctx context.Context, teamName string, sessionID string) (bool, error) {
 	entry := m.resolveEntry(teamName, sessionID)
 	if entry == nil {
-		logger.Debug(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Msg("stop_team: 无池条目，无操作")
+		logger.Debug(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Msg("stop_team: no pool entry, no-op")
 		return false, nil
 	}
 	// Python: try: await entry.agent.stop_coordination() except: logger.warning(...)
 	if err := entry.Agent.StopCoordination(ctx); err != nil {
-		logger.Warn(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Err(err).Msg("stop_team: 停止协调失败，继续从池移除")
+		logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+			Err(err).Msg("stop_team: coordination stop failed, continuing pool removal")
 	}
 	m.pool.Remove(teamName)
-	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Msg("stop_team: 团队已停止并从池移除")
+	logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+		Msg("stop_team: team stopped and removed from pool")
 	return true, nil
 }
 
@@ -381,8 +378,8 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 		if !force {
 			return false, fmt.Errorf("team %s has an active runtime on session %s; stop_team before delete_team or pass force=true", teamName, activeSession)
 		}
-		logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", activeSession).
-			Msg("delete_team(force=true): 先停止活跃运行时")
+		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", activeSession).
+			Msg("delete_team(force=true): stopping active runtime first")
 		if entry != nil {
 			_, _ = m.StopTeam(ctx, teamName, activeSession)
 		}
@@ -398,8 +395,8 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 			}
 		}
 		if len(existingSessionIDs) == 0 {
-			logger.Info(mgrLogComponent).Str("team_name", teamName).Strs("session_ids", sessionIDs).
-				Msg("delete_team: 提供的 session 均已释放，直接返回")
+			logger.Info(logComponent).Str("team_name", teamName).Strs("session_ids", sessionIDs).
+				Msg("delete_team: all provided sessions released, returning")
 			return true, nil
 		}
 	}
@@ -423,13 +420,13 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 		db := spawn.GetSharedDB(*dbConfig)
 		if db != nil {
 			if initErr := db.Initialize(ctx); initErr != nil {
-				logger.Warn(mgrLogComponent).Err(initErr).Str("team_name", teamName).
-					Msg("delete_team: 数据库初始化失败")
+				logger.Warn(logComponent).Err(initErr).Str("team_name", teamName).
+					Msg("delete_team: database initialization failed")
 			} else {
 				for _, sid := range sessionIDs {
 					if _, dropErr := db.DropSessionTablesByID(ctx, sid); dropErr != nil {
-						logger.Warn(mgrLogComponent).Str("session_id", sid).Err(dropErr).
-							Msg("delete_team: 删除会话动态表失败")
+						logger.Warn(logComponent).Str("session_id", sid).Err(dropErr).
+							Msg("delete_team: failed to drop session dynamic tables")
 					}
 				}
 			}
@@ -440,8 +437,8 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 	if cp != nil {
 		for _, sid := range sessionIDs {
 			if relErr := cp.Release(ctx, sid); relErr != nil {
-				logger.Warn(mgrLogComponent).Str("session_id", sid).Err(relErr).
-					Msg("delete_team: 释放 checkpoint 失败")
+				logger.Warn(logComponent).Str("session_id", sid).Err(relErr).
+					Msg("delete_team: checkpoint release failed")
 			}
 		}
 	}
@@ -455,8 +452,8 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 	// 步骤 7: Remove team_home 目录
 	removeTeamDir(teamName)
 
-	logger.Info(mgrLogComponent).Str("team_name", teamName).Bool("deleted", deleted).
-		Msg("delete_team: 完成")
+	logger.Info(logComponent).Str("team_name", teamName).Bool("deleted", deleted).
+		Msg("delete_team: completed")
 	return deleted, nil
 }
 
@@ -481,8 +478,8 @@ func (m *TeamRuntimeManager) ReleaseSession(ctx context.Context, sessionID strin
 			return fmt.Errorf("team(s) [%s] active on session %s; stop_team or pass force=true", strings.Join(blockedNames, ", "), sessionID)
 		}
 		for _, team := range activeTeams {
-			logger.Info(mgrLogComponent).Str("team_name", team.TeamName).Str("session_id", sessionID).
-				Msg("release_session(force=true): 停止活跃团队")
+			logger.Info(logComponent).Str("team_name", team.TeamName).Str("session_id", sessionID).
+				Msg("release_session(force=true): stopping active team")
 			_, _ = m.StopTeam(ctx, team.TeamName, sessionID)
 		}
 	}
@@ -526,10 +523,10 @@ func FinalizeMember(ctx context.Context, ag *agent.TeamAgent) error {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Debug(mgrLogComponent).
+				logger.Debug(logComponent).
 					Str("member_name", memberName).
 					Any("recover", r).
-					Msg("finalize_member: 读取状态异常")
+					Msg("finalize_member: status read panic")
 			}
 		}()
 
@@ -543,28 +540,28 @@ func FinalizeMember(ctx context.Context, ag *agent.TeamAgent) error {
 				hasStatus = true
 			} else {
 				// Python: L272-274 — logger.debug("Failed to read...")
-				logger.Debug(mgrLogComponent).
+				logger.Debug(logComponent).
 					Str("member_name", memberName).
 					Err(err).
-					Msg("finalize_member: 读取 member 状态失败")
+					Msg("finalize_member: failed to read member status")
 			}
 		}
 
 		// Python: L275-277 — already_finalized
 		if hasStatus && memberFinalizedStatuses[currentStatus] {
-			logger.Info(mgrLogComponent).
+			logger.Info(logComponent).
 				Str("member_name", memberName).
 				Str("status", string(currentStatus)).
-				Msg("finalize_member: 已终结，仅关闭 kernel")
+				Msg("finalize_member: already finalized, closing kernel only")
 			_ = ag.StopCoordination(ctx)
 			return
 		}
 
 		// Python: L282-286 — SHUTDOWN_REQUESTED
 		if hasStatus && currentStatus == atschema.MemberStatusShutdownRequested {
-			logger.Info(mgrLogComponent).
+			logger.Info(logComponent).
 				Str("member_name", memberName).
-				Msg("finalize_member: 按请求关闭")
+				Msg("finalize_member: shutting down as requested")
 			_ = ag.StopCoordination(ctx)
 			if member != nil {
 				_, _ = member.UpdateStatus(ctx, atschema.MemberStatusShutdown)
@@ -573,9 +570,9 @@ func FinalizeMember(ctx context.Context, ag *agent.TeamAgent) error {
 		}
 
 		// Python: L287-291 — 默认 pause + mark READY
-		logger.Info(mgrLogComponent).
+		logger.Info(logComponent).
 			Str("member_name", memberName).
-			Msg("finalize_member: 暂停并标记 READY")
+			Msg("finalize_member: pausing and marking READY")
 		_ = ag.PauseCoordination(ctx)
 		if member != nil {
 			_, _ = member.UpdateStatus(ctx, atschema.MemberStatusReady)
@@ -619,8 +616,8 @@ func (m *TeamRuntimeManager) ListActiveTeams() []ActiveTeamInfo {
 // RegisterHumanAgentInbound 注册团队→用户通知回调。
 // Python: team_backend.register_human_agent_inbound(member_name, callback)
 func (m *TeamRuntimeManager) RegisterHumanAgentInbound(ctx context.Context, teamName string, sessionID string, memberName string, callback any) (bool, error) {
-	logger.Info(mgrLogComponent).Str("team_name", teamName).Str("session_id", sessionID).
-		Str("member_name", memberName).Msg("注册 HumanAgent 入站")
+	logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
+		Str("member_name", memberName).Msg("registering HumanAgent inbound")
 	entry := m.resolveEntry(teamName, sessionID)
 	if entry == nil {
 		return false, nil
@@ -633,11 +630,11 @@ func (m *TeamRuntimeManager) RegisterHumanAgentInbound(ctx context.Context, team
 	// 将 callback 转换为 OnInbound 类型
 	onInbound, ok := callback.(tools.OnInbound)
 	if !ok {
-		logger.Warn(mgrLogComponent).Str("member_name", memberName).Msg("callback 类型不匹配 tools.OnInbound")
+		logger.Warn(logComponent).Str("member_name", memberName).Msg("callback type mismatch: tools.OnInbound")
 		return false, nil
 	}
 	if err := backend.RegisterHumanAgentInbound(ctx, memberName, onInbound); err != nil {
-		logger.Warn(mgrLogComponent).Str("member_name", memberName).Err(err).Msg("注册 HumanAgent 入站失败")
+		logger.Warn(logComponent).Str("member_name", memberName).Err(err).Msg("registering HumanAgent inbound failed")
 		return false, err
 	}
 	return true, nil
@@ -835,9 +832,9 @@ func (m *TeamRuntimeManager) inspectSession(
 	// Python: L824
 	if preErr := teamSession.PreRun(ctx); preErr != nil {
 		// Python 中 pre_run 失败不影响后续流程，Go 中记录警告
-		logger.Warn(mgrLogComponent).Err(preErr).
+		logger.Warn(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
-			Msg("inspectSession: PreRun 失败")
+			Msg("inspectSession: PreRun failed")
 	}
 
 	// Python: L825-830
@@ -856,17 +853,17 @@ func (m *TeamRuntimeManager) inspectSession(
 	dbCfgAny := spec.ResolveDBConfig()
 	dbCfgProvider, ok := dbCfgAny.(database.DBConfigProvider)
 	if !ok && dbCfgAny != nil {
-		logger.Warn(mgrLogComponent).
+		logger.Warn(logComponent).
 			Str("team_name", teamName).
 			Any("db_config_type", fmt.Sprintf("%T", dbCfgAny)).
-			Msg("inspectSession: ResolveDBConfig 返回类型非 DBConfigProvider")
+			Msg("inspectSession: ResolveDBConfig returned non-DBConfigProvider type")
 	}
 	db := spawn.GetSharedDB(dbCfgProvider)
 	if db != nil {
 		if initErr := db.Initialize(ctx); initErr != nil {
-			logger.Warn(mgrLogComponent).Err(initErr).
+			logger.Warn(logComponent).Err(initErr).
 				Str("team_name", teamName).
-				Msg("inspectSession: 数据库初始化失败")
+				Msg("inspectSession: database initialization failed")
 		} else {
 			// Python: L834: team_in_db = await db.team.team_exists(team_name)
 			teamInDB = db.Team().TeamExists(ctx, teamName)
@@ -896,7 +893,7 @@ func (m *TeamRuntimeManager) applyAction(
 		if poolEntry != nil {
 			ag = poolEntry.Agent
 		}
-		logger.Warn(mgrLogComponent).
+		logger.Warn(logComponent).
 			Str("team_name", teamName).
 			Str("session_id", sessionID).
 			Str("reason", action.Reason).
@@ -1067,10 +1064,10 @@ func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.T
 	dbCfgAny := spec.ResolveDBConfig()
 	dbCfgProvider, ok := dbCfgAny.(database.DBConfigProvider)
 	if !ok && dbCfgAny != nil {
-		logger.Warn(mgrLogComponent).
+		logger.Warn(logComponent).
 			Str("team_name", spec.TeamName).
 			Any("db_config_type", fmt.Sprintf("%T", dbCfgAny)).
-			Msg("buildTeamAgent: ResolveDBConfig 返回类型非 DBConfigProvider")
+			Msg("buildTeamAgent: ResolveDBConfig returned non-DBConfigProvider type")
 	}
 
 	// Python: L419-425 — build model allocator + leader allocation
@@ -1094,13 +1091,13 @@ func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.T
 
 	// Python: L428-436 — 构建 TeamRuntimeContext
 	runtimeCtx := atschema.TeamRuntimeContext{
-		Role:          atschema.TeamRoleLeader,
-		MemberName:    spec.Leader.MemberName,
-		Persona:       spec.Leader.Persona,
-		TeamSpec:      teamSpec,
+		Role:           atschema.TeamRoleLeader,
+		MemberName:     spec.Leader.MemberName,
+		Persona:        spec.Leader.Persona,
+		TeamSpec:       teamSpec,
 		MessagerConfig: messagerConfig,
-		DBConfig:      dbCfgProvider,
-		MemberModel:   leaderMemberModel,
+		DBConfig:       dbCfgProvider,
+		MemberModel:    leaderMemberModel,
 	}
 
 	// Python: L405-410 — 构建 leader_card

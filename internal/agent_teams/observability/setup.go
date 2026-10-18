@@ -92,13 +92,13 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 
 	// Python: if not config.enabled: return
 	if !config.Enabled {
-		logger.Info(logComponent).Msg("可观测性已禁用")
+		logger.Info(logComponent).Msg("observabilitydisabled")
 		return nil
 	}
 
 	// Python: if _provider is not None: warning; return
 	if provider != nil {
-		logger.Warn(logComponent).Msg("可观测性已初始化，跳过重复初始化")
+		logger.Warn(logComponent).Msg("observability initialized, skipped")
 		return nil
 	}
 
@@ -108,7 +108,7 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 		resource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceNameKey.String(config.ServiceName)),
 	)
 	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("创建 OTel 资源失败，使用默认")
+		logger.Warn(logComponent).Err(err).Msg("failed to create OTel resource, using defaults")
 		res = resource.Default()
 	}
 
@@ -153,7 +153,7 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 	logger.Info(logComponent).Str("service_name", config.ServiceName).
 		Str("exporter", config.Exporter).
 		Float64("sample_rate", config.SampleRate).
-		Msg("可观测性初始化完成")
+		Msg("observability initialized")
 
 	return nil
 }
@@ -172,7 +172,7 @@ func ShutdownObservability() {
 	// Python: if _provider is not None: _provider.shutdown()
 	if tp, ok := provider.(*sdktrace.TracerProvider); ok && tp != nil {
 		if err := tp.Shutdown(context.Background()); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("OTel provider 关闭失败")
+			logger.Warn(logComponent).Err(err).Msg("OTel provider  close failed")
 		}
 	}
 
@@ -184,7 +184,7 @@ func ShutdownObservability() {
 	monitorHandler = nil
 	monitorHandle = nil
 
-	logger.Info(logComponent).Msg("可观测性已关闭")
+	logger.Info(logComponent).Msg("observability closed")
 }
 
 // GetTracer 返回绑定到当前可观测性 provider 的 tracer。
@@ -202,14 +202,14 @@ func GetTracer(name string) trace.Tracer {
 // Python: attach_to_team_agent(team_agent)
 func AttachToTeamAgent(teamAgent EventListenerRegistrar) {
 	if monitorHandler == nil {
-		logger.Warn(logComponent).Msg("attach_to_team_agent 在 init_observability 之前调用")
+		logger.Warn(logComponent).Msg("attach_to_team_agent called before init_observability")
 		return
 	}
 	// Python: team_agent.add_event_listener(_monitor_handler)
 	// OtelTeamMonitorHandler.HandleEvent 签名与 MessagerHandler 兼容
 	handler := messager.MessagerHandler(monitorHandler.HandleEvent)
 	monitorHandle = teamAgent.AddEventListener(handler)
-	logger.Info(logComponent).Msg("attach_to_team_agent 已注册 monitor handler")
+	logger.Info(logComponent).Msg("attach_to_team_agent registered monitor handler")
 }
 
 // DetachFromTeamAgent 反向操作 attach_to_team_agent。
@@ -222,9 +222,9 @@ func DetachFromTeamAgent(teamAgent EventListenerRegistrar) {
 	if monitorHandle != nil {
 		teamAgent.RemoveEventListener(monitorHandle)
 		monitorHandle = nil
-		logger.Info(logComponent).Msg("detach_from_team_agent 已移除 monitor handler")
+		logger.Info(logComponent).Msg("detach_from_team_agent removed monitor handler")
 	} else {
-		logger.Warn(logComponent).Msg("detach_from_team_agent: 无已注册的 monitor handle")
+		logger.Warn(logComponent).Msg("detach_from_team_agent: no registered monitor handle")
 	}
 }
 
@@ -235,7 +235,7 @@ func DetachFromTeamAgent(teamAgent EventListenerRegistrar) {
 func wireCallbackHandlers(handler *OtelCallbackHandler) {
 	fw := getCallbackFramework()
 	if fw == nil {
-		logger.Warn(logComponent).Msg("CallbackFramework 不可用，跳过回调注册")
+		logger.Warn(logComponent).Msg("CallbackFramework unavailable, skipping callback registration")
 		return
 	}
 	ns := cb.WithNamespace(namespace)

@@ -36,9 +36,10 @@ const (
 	// contextAssembleRailPriority ContextAssembleRail 优先级
 	// Python: ContextAssembleRail.priority = 85
 	contextAssembleRailPriority = 85
-)
 
-const logComponent = logger.ComponentAgentCore
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -74,7 +75,7 @@ func (r *ContextAssembleRail) Init(_ context.Context, agent sainterfaces.BaseAge
 
 	logger.Info(logComponent).
 		Str("event_type", "context_assemble_rail_init").
-		Msg("ContextAssembleRail 初始化完成")
+		Msg("ContextAssembleRail initialized")
 
 	return nil
 }
@@ -91,7 +92,7 @@ func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
 
 	logger.Info(logComponent).
 		Str("event_type", "context_assemble_rail_uninit").
-		Msg("ContextAssembleRail 注销完成")
+		Msg("ContextAssembleRail unregistered")
 
 	return nil
 }
@@ -152,9 +153,11 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 	// Python: context_section = await _build_context(self.sys_operation, workspace, lang, include_daily_memory=not is_heartbeat)
 	// Python: ctx.extra.get("run_kind") == RunKind.HEARTBEAT
 	isHeartbeat := false
-	if cbc != nil && cbc.Extra() != nil {
-		if runKind, ok := cbc.Extra()["run_kind"].(string); ok {
-			isHeartbeat = runKind == string(sainterfaces.RunKindHeartbeat)
+	if cbc != nil {
+		if val, ok := cbc.GetExtra("run_kind"); ok {
+			if runKind, ok := val.(string); ok {
+				isHeartbeat = runKind == string(sainterfaces.RunKindHeartbeat)
+			}
 		}
 	}
 

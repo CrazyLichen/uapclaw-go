@@ -68,7 +68,7 @@ func NewAgentSession(sessionID string, opts ...AgentSessionOption) *AgentSession
 	logger.Info(logComponent).
 		Str("action", "new_agent_session").
 		Str("session_id", sessionID).
-		Msg("创建内部 AgentSession")
+		Msg("created internal AgentSession")
 
 	s := &AgentSession{
 		sessionID: sessionID,

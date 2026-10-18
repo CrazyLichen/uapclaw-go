@@ -173,7 +173,7 @@ func (b *memoryManagerBase) encryptMemoryIfNeeded(key []byte, plaintext string) 
 	if err != nil {
 		logger.Warn(logComponent).Err(err).
 			Str("event_type", "MEMORY_PROCESS").
-			Msg("创建编解码器失败，返回原文")
+			Msg("failed to create codec, returning original text")
 		return plaintext
 	}
 	return c.Encode(plaintext)
@@ -190,7 +190,7 @@ func (b *memoryManagerBase) decryptMemoryIfNeeded(key []byte, ciphertext string)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).
 			Str("event_type", "MEMORY_PROCESS").
-			Msg("创建编解码器失败，返回原文")
+			Msg("failed to create codec, returning original text")
 		return ciphertext
 	}
 	return c.Decode(ciphertext)

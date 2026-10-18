@@ -66,6 +66,7 @@ type GaussVectorStore struct {
 type gaussDistanceMetric string
 
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	gaussMetricCosine gaussDistanceMetric = "cosine"
 	gaussMetricL2     gaussDistanceMetric = "l2"
@@ -81,9 +82,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// gaussLogComponent 日志组件
-var gaussLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -126,9 +124,9 @@ func (s *GaussVectorStore) CreateCollection(ctx context.Context, collectionName 
 		return fmt.Errorf("CreateCollection: %w", err)
 	}
 	if exists {
-		logger.Info(gaussLogComponent).
+		logger.Info(logComponent).
 			Str("collection_name", collectionName).
-			Msg("集合已存在，跳过创建")
+			Msg("collection already exists, skipping creation")
 		return nil
 	}
 
@@ -164,10 +162,10 @@ func (s *GaussVectorStore) CreateCollection(ctx context.Context, collectionName 
 
 	// 执行建表
 	if _, err := pool.Exec(ctx, createSQL); err != nil {
-		logger.Error(gaussLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "LLM_CALL_ERROR").
-			Msg("创建集合失败")
+			Msg("failed to create collection")
 		return fmt.Errorf("CreateCollection: %w", err)
 	}
 
@@ -176,10 +174,10 @@ func (s *GaussVectorStore) CreateCollection(ctx context.Context, collectionName 
 	indexSQL := gaussBuildCreateIndexSQL(indexName, collectionName, vf.Name, pgMetric, diskann)
 
 	if _, err := pool.Exec(ctx, indexSQL); err != nil {
-		logger.Error(gaussLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "LLM_CALL_ERROR").
-			Msg("创建 DiskANN 索引失败")
+			Msg("failed to create DiskANN index")
 		return fmt.Errorf("CreateCollection: %w", err)
 	}
 
@@ -193,11 +191,11 @@ func (s *GaussVectorStore) CreateCollection(ctx context.Context, collectionName 
 	}
 	s.mu.Unlock()
 
-	logger.Info(gaussLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Str("vector_field", vf.Name).
 		Str("distance_metric", distanceMetric).
-		Msg("创建集合成功")
+		Msg("collection created successfully")
 
 	return nil
 }
@@ -215,10 +213,10 @@ func (s *GaussVectorStore) DeleteCollection(ctx context.Context, collectionName 
 	sql := fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)
 
 	if _, err := pool.Exec(ctx, sql); err != nil {
-		logger.Error(gaussLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "LLM_CALL_ERROR").
-			Msg("删除集合失败")
+			Msg("failed to delete collection")
 		return fmt.Errorf("DeleteCollection: %w", err)
 	}
 
@@ -227,9 +225,9 @@ func (s *GaussVectorStore) DeleteCollection(ctx context.Context, collectionName 
 	delete(s.collectionMetadata, collectionName)
 	s.mu.Unlock()
 
-	logger.Info(gaussLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
-		Msg("删除集合成功")
+		Msg("collection deleted successfully")
 
 	return nil
 }
@@ -268,9 +266,9 @@ func (s *GaussVectorStore) GetSchema(ctx context.Context, collectionName string,
 		collectionName,
 	)
 	if err != nil {
-		logger.Error(gaussLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
-			Msg("获取 Schema 失败")
+			Msg("failed to get schema")
 		return nil, fmt.Errorf("GetSchema: %w", err)
 	}
 	defer rows.Close()
@@ -360,21 +358,21 @@ func (s *GaussVectorStore) AddDocs(ctx context.Context, collectionName string, d
 		batch := docs[i:end]
 
 		if err := gaussInsertBatch(ctx, pool, tableName, batch); err != nil {
-			logger.Error(gaussLogComponent).Err(err).
+			logger.Error(logComponent).Err(err).
 				Str("collection_name", collectionName).
 				Int("doc_count", len(docs)).
 				Int("batch_size", batchSize).
 				Str("event_type", "LLM_CALL_ERROR").
-				Msg("插入文档失败")
+				Msg("failed to insert documents")
 			return fmt.Errorf("AddDocs: %w", err)
 		}
 	}
 
-	logger.Info(gaussLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Int("doc_count", len(docs)).
 		Int("batch_size", batchSize).
-		Msg("插入文档成功")
+		Msg("documents inserted successfully")
 
 	return nil
 }
@@ -422,10 +420,10 @@ func (s *GaussVectorStore) Search(ctx context.Context, collectionName string, qu
 
 	rows, err := pool.Query(ctx, sql, args...)
 	if err != nil {
-		logger.Error(gaussLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "LLM_CALL_ERROR").
-			Msg("搜索失败")
+			Msg("search failed")
 		return nil, fmt.Errorf("Search: %w", err)
 	}
 	defer rows.Close()
@@ -474,12 +472,12 @@ func (s *GaussVectorStore) Search(ctx context.Context, collectionName string, qu
 	}
 
 	resultCount := len(results)
-	logger.Info(gaussLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Int("top_k", topK).
 		Str("distance_metric", distanceMetric).
 		Int("result_count", resultCount).
-		Msg("搜索完成")
+		Msg("search completed")
 
 	return results, nil
 }
@@ -503,17 +501,17 @@ func (s *GaussVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName s
 
 	sql := fmt.Sprintf("DELETE FROM %s WHERE %s = ANY($1)", tableName, pkCol)
 	if _, err := pool.Exec(ctx, sql, ids); err != nil {
-		logger.Error(gaussLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "LLM_CALL_ERROR").
-			Msg("按 ID 删除文档失败")
+			Msg("failed to delete documents by ID")
 		return fmt.Errorf("DeleteDocsByIDs: %w", err)
 	}
 
-	logger.Info(gaussLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Int("id_count", len(ids)).
-		Msg("按 ID 删除文档成功")
+		Msg("documents deleted by ID successfully")
 
 	return nil
 }
@@ -536,17 +534,17 @@ func (s *GaussVectorStore) DeleteDocsByFilters(ctx context.Context, collectionNa
 
 	sql := fmt.Sprintf("DELETE FROM %s WHERE %s", tableName, whereClause)
 	if _, err := pool.Exec(ctx, sql, args...); err != nil {
-		logger.Error(gaussLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
 			Str("event_type", "LLM_CALL_ERROR").
-			Msg("按过滤条件删除文档失败")
+			Msg("failed to delete documents by filter")
 		return fmt.Errorf("DeleteDocsByFilters: %w", err)
 	}
 
-	logger.Info(gaussLogComponent).
+	logger.Info(logComponent).
 		Str("collection_name", collectionName).
 		Int("filter_count", len(filters)).
-		Msg("按过滤条件删除文档成功")
+		Msg("documents deleted by filter successfully")
 
 	return nil
 }
@@ -604,7 +602,7 @@ func (s *GaussVectorStore) UpdateSchema(ctx context.Context, collectionName stri
 	newSchema, err := ComputeNewSchema(oldSchema, operations)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("计算新 Schema 失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to compute new schema")
 		return err
 	}
 
@@ -693,9 +691,9 @@ func (s *GaussVectorStore) GetCollectionMetadata(ctx context.Context, collection
 		collectionName,
 	).Scan(&colName, &dataType)
 	if err != nil {
-		logger.Error(gaussLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("collection_name", collectionName).
-			Msg("获取集合元数据失败")
+			Msg("failed to get collection metadata")
 		return nil, fmt.Errorf("GetCollectionMetadata: %w", err)
 	}
 
@@ -735,7 +733,7 @@ func (s *GaussVectorStore) executeGaussMigration(
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("temp_collection_name", tempCollectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("开始 GaussDB schema 迁移")
+		Msg("starting GaussDB schema migration")
 
 	c, err := s.getClient(ctx)
 	if err != nil {
@@ -745,7 +743,7 @@ func (s *GaussVectorStore) executeGaussMigration(
 	// 1. 创建临时集合（新 schema）
 	if err := s.CreateCollection(ctx, tempCollectionName, newSchema, WithDistanceMetric(distanceMetric)); err != nil {
 		logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Str("event_type", "STORE_UPDATE").Msg("创建临时集合失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to create temp collection")
 		return err
 	}
 
@@ -754,12 +752,12 @@ func (s *GaussVectorStore) executeGaussMigration(
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("temp_collection_name", tempCollectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("开始数据复制")
+		Msg("starting data copy")
 
 	rows, err := c.Query(ctx, fmt.Sprintf("SELECT * FROM %s", collectionName))
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("查询旧集合数据失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to query old collection data")
 		s.cleanupGaussTempCollection(ctx, tempCollectionName)
 		return err
 	}
@@ -781,7 +779,7 @@ func (s *GaussVectorStore) executeGaussMigration(
 		values, err := rows.Values()
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-				Str("event_type", "STORE_UPDATE").Msg("读取行数据失败")
+				Str("event_type", "STORE_UPDATE").Msg("failed to read row data")
 			s.cleanupGaussTempCollection(ctx, tempCollectionName)
 			return err
 		}
@@ -796,7 +794,7 @@ func (s *GaussVectorStore) executeGaussMigration(
 		transformedDoc, err := transformFunc(doc)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-				Str("event_type", "STORE_UPDATE").Msg("文档变换失败")
+				Str("event_type", "STORE_UPDATE").Msg("document transform failed")
 			s.cleanupGaussTempCollection(ctx, tempCollectionName)
 			return err
 		}
@@ -805,21 +803,21 @@ func (s *GaussVectorStore) executeGaussMigration(
 		if len(batch) >= gaussMigrationBatchSize {
 			if err := s.AddDocs(ctx, tempCollectionName, batch); err != nil {
 				logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-					Str("event_type", "STORE_UPDATE").Msg("写入临时集合失败")
+					Str("event_type", "STORE_UPDATE").Msg("failed to write to temp collection")
 				s.cleanupGaussTempCollection(ctx, tempCollectionName)
 				return err
 			}
 			totalDocs += len(batch)
 			logger.Debug(logComponent).Str("temp_collection_name", tempCollectionName).
 				Int("migrated", totalDocs).
-				Str("event_type", "STORE_UPDATE").Msg("迁移进度")
+				Str("event_type", "STORE_UPDATE").Msg("migration progress")
 			batch = batch[:0]
 		}
 	}
 
 	if err := rows.Err(); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("遍历行数据失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to iterate row data")
 		s.cleanupGaussTempCollection(ctx, tempCollectionName)
 		return err
 	}
@@ -828,7 +826,7 @@ func (s *GaussVectorStore) executeGaussMigration(
 	if len(batch) > 0 {
 		if err := s.AddDocs(ctx, tempCollectionName, batch); err != nil {
 			logger.Error(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-				Str("event_type", "STORE_UPDATE").Msg("写入临时集合最后批次失败")
+				Str("event_type", "STORE_UPDATE").Msg("failed to write last batch to temp collection")
 			s.cleanupGaussTempCollection(ctx, tempCollectionName)
 			return err
 		}
@@ -838,13 +836,13 @@ func (s *GaussVectorStore) executeGaussMigration(
 	logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
 		Int("total_docs", totalDocs).
 		Str("event_type", "STORE_UPDATE").
-		Msg("数据复制完成")
+		Msg("data copy completed")
 
 	// 3. 删除旧集合
 	// Python: await self.delete_collection(collection_name)
 	if err := s.DeleteCollection(ctx, collectionName); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("删除旧集合失败")
+			Str("event_type", "STORE_UPDATE").Msg("failed to delete old collection")
 		s.cleanupGaussTempCollection(ctx, tempCollectionName)
 		return err
 	}
@@ -854,7 +852,7 @@ func (s *GaussVectorStore) executeGaussMigration(
 	if _, err := c.Exec(ctx, fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tempCollectionName, collectionName)); err != nil {
 		logger.Error(logComponent).Err(err).Str("old_name", tempCollectionName).
 			Str("new_name", collectionName).
-			Str("event_type", "STORE_UPDATE").Msg("ALTER TABLE RENAME 失败")
+			Str("event_type", "STORE_UPDATE").Msg("ALTER TABLE RENAME failed")
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("ALTER TABLE RENAME 失败: %v", err)),
 		)
@@ -868,7 +866,7 @@ func (s *GaussVectorStore) executeGaussMigration(
 
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Str("event_type", "STORE_UPDATE").
-		Msg("GaussDB schema 迁移完成")
+		Msg("GaussDB schema migration completed")
 
 	return nil
 }
@@ -878,16 +876,16 @@ func (s *GaussVectorStore) cleanupGaussTempCollection(ctx context.Context, tempC
 	exists, err := s.CollectionExists(ctx, tempCollectionName)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("temp_collection_name", tempCollectionName).
-			Msg("检查临时集合是否存在失败")
+			Msg("failed to check if temporary collection exists")
 		return
 	}
 	if exists {
 		if delErr := s.DeleteCollection(ctx, tempCollectionName); delErr != nil {
 			logger.Warn(logComponent).Err(delErr).Str("temp_collection_name", tempCollectionName).
-				Msg("清理临时集合失败")
+				Msg("failed to cleanup temporary collection")
 		} else {
 			logger.Info(logComponent).Str("temp_collection_name", tempCollectionName).
-				Msg("成功清理临时集合")
+				Msg("temporary collection cleaned up successfully")
 		}
 	}
 }
@@ -927,8 +925,8 @@ func (s *GaussVectorStore) getClient(ctx context.Context) (dbClient, error) {
 
 	pool, err := s.createPool(ctx, s.connConfig)
 	if err != nil {
-		logger.Error(gaussLogComponent).Err(err).
-			Msg("创建连接池失败")
+		logger.Error(logComponent).Err(err).
+			Msg("failed to create connection pool")
 		return nil, err
 	}
 	s.pool = pool

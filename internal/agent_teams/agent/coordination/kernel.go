@@ -102,7 +102,7 @@ func (k *CoordinationKernel) Setup(role schema.TeamRole, bp types.DispatcherBlue
 		logger.Error(logComponent).
 			Bool("blueprint_nil", bp == nil).
 			Bool("infra_nil", inf == nil).
-			Msg("Setup 收到 nil blueprint/infra，对齐 Python RuntimeError，无法继续")
+			Msg("Setup received nil blueprint/infra, aligned with Python RuntimeError, cannot continue")
 		return
 	}
 	// 应用选项
@@ -126,7 +126,7 @@ func (k *CoordinationKernel) Setup(role schema.TeamRole, bp types.DispatcherBlue
 
 	logger.Info(logComponent).
 		Str("role", string(role)).
-		Msg("CoordinationKernel setup 完成")
+		Msg("CoordinationKernel setup completed")
 }
 
 // EventBus 返回事件总线实例（setup 前为 nil）。
@@ -447,7 +447,7 @@ func (k *CoordinationKernel) EnqueueMailboxAfterFirstIteration(ctx context.Conte
 	}
 	// Python: await gate.wait()
 	if err := gate.Wait(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("enqueueMailboxAfterFirstIteration: gate wait 被取消")
+		logger.Warn(logComponent).Err(err).Msg("enqueueMailboxAfterFirstIteration: gate wait canceled")
 		return
 	}
 	// Python: await self._event_bus.enqueue(InnerEventMessage(event_type=InnerEventType.POLL_MAILBOX))
@@ -470,7 +470,7 @@ func (k *CoordinationKernel) FinalizeRound(ctx context.Context) {
 	memMgr := k.host.MemoryManager()
 	if memMgr != nil {
 		if err := memMgr.ExtractAfterRound(ctx); err != nil {
-			logger.Error(logComponent).Err(err).Msg("finalizeRound: extract_after_round 失败")
+			logger.Error(logComponent).Err(err).Msg("finalizeRound: extract_after_round failed")
 		}
 	}
 	// Python: host.stream_controller.stream_queue = None
@@ -504,7 +504,7 @@ func (k *CoordinationKernel) persistTeamLifecycle(ctx context.Context, lifecycle
 		UpdateState(map[string]any)
 	})
 	if !ok {
-		logger.Warn(logComponent).Str("team_name", teamName).Msg("persistTeamLifecycle: session 不支持 UpdateState")
+		logger.Warn(logComponent).Str("team_name", teamName).Msg("persistTeamLifecycle: session does not support UpdateState")
 		return
 	}
 	// 对齐 Python metadata.merge_team_namespace
@@ -528,7 +528,7 @@ func (k *CoordinationKernel) persistTeamLifecycle(ctx context.Context, lifecycle
 		sf.UpdateState(state)
 	}
 	logger.Debug(logComponent).Str("team_name", teamName).Str("lifecycle", lifecycle).
-		Msg("persistTeamLifecycle 完成")
+		Msg("persistTeamLifecycle completed")
 }
 
 // publishTeamStandby 发布 TEAM_STANDBY 事件。
@@ -540,7 +540,7 @@ func (k *CoordinationKernel) publishTeamStandby(ctx context.Context) {
 	}
 	// 对齐 Python: await messager.publish(topic_id, EventMessage.from_event(TeamStandbyEvent(team_name=team_name)))
 	if err := k.host.PublishTeamEvent(ctx, "team_standby", map[string]any{"team_name": teamName}); err != nil {
-		logger.Error(logComponent).Err(err).Str("team_name", teamName).Msg("publishTeamStandby: 发布 TEAM_STANDBY 失败")
+		logger.Error(logComponent).Err(err).Str("team_name", teamName).Msg("publishTeamStandby: publish TEAM_STANDBY failed")
 	}
 }
 

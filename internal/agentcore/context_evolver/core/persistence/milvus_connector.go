@@ -76,6 +76,8 @@ type MilvusConnectorImpl struct {
 // MilvusConnectorOption 构造选项函数。
 type MilvusConnectorOption func(*MilvusConnectorImpl)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -107,9 +109,6 @@ const (
 	milvusDefaultAlias = "default"
 	// milvusDefaultMetricType 默认距离度量
 	milvusDefaultMetricType = "COSINE"
-
-	// milvusLogComponent 日志组件标识
-	milvusLogComponent = logger.ComponentCommon
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -133,10 +132,10 @@ func NewMilvusConnectorImpl(opts ...MilvusConnectorOption) *MilvusConnectorImpl 
 	for _, opt := range opts {
 		opt(m)
 	}
-	logger.Info(milvusLogComponent).
+	logger.Info(logComponent).
 		Str("host", m.host).Int("port", m.port).
 		Str("collection", m.collectionName).Int("dim", m.dim).
-		Msg("MilvusConnectorImpl 初始化完成（客户端惰性创建）")
+		Msg("MilvusConnectorImpl initialized (client lazily created)")
 	return m
 }
 
@@ -151,7 +150,7 @@ func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, da
 		return err
 	}
 	if len(data) == 0 {
-		logger.Info(milvusLogComponent).Msg("save_to_db: 空 data，跳过")
+		logger.Info(logComponent).Msg("save_to_db: empty data, skipped")
 		return nil
 	}
 
@@ -174,7 +173,7 @@ func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, da
 	}
 
 	if dim <= 0 {
-		logger.Warn(milvusLogComponent).Msg("save_to_db: 无法确定嵌入维度，跳过保存")
+		logger.Warn(logComponent).Msg("save_to_db: cannot determine embedding dimensions, skipping save")
 		return nil
 	}
 
@@ -213,13 +212,13 @@ func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, da
 	}
 
 	if skipped > 0 {
-		logger.Warn(milvusLogComponent).
+		logger.Warn(logComponent).
 			Int("skipped", skipped).Str("namespace", namespace).
-			Msg("save_to_db: 跳过无 embedding 的节点")
+			Msg("save_to_db: skipping node without embedding")
 	}
 
 	if len(ids) == 0 {
-		logger.Warn(milvusLogComponent).Msg("save_to_db: 无可嵌入节点，跳过保存")
+		logger.Warn(logComponent).Msg("save_to_db: no embeddable nodes, skipping save")
 		return nil
 	}
 
@@ -253,16 +252,16 @@ func (m *MilvusConnectorImpl) SaveToDB(ctx context.Context, namespace string, da
 	insertOpt := milvusclient.NewColumnBasedInsertOption(m.collectionName, insertColumns...)
 
 	if _, err := c.Insert(ctx, insertOpt); err != nil {
-		logger.Error(milvusLogComponent).Err(err).Str("namespace", namespace).Msg("save_to_db: 插入失败")
-		return fmt.Errorf("save_to_db: 插入失败: %w", err)
+		logger.Error(logComponent).Err(err).Str("namespace", namespace).Msg("save_to_db: insert failed")
+		return fmt.Errorf("save_to_db: insert failed: %w", err)
 	}
 
 	// Flush 刷新持久化
 	_ = c.Flush(ctx, milvusclient.NewFlushOption(m.collectionName))
 
-	logger.Info(milvusLogComponent).
+	logger.Info(logComponent).
 		Int("count", len(ids)).Str("namespace", namespace).Str("collection", m.collectionName).
-		Msg("save_to_db: 保存节点完成")
+		Msg("save_to_db: nodes saved")
 
 	return nil
 }
@@ -284,7 +283,7 @@ func (m *MilvusConnectorImpl) LoadFromDB(ctx context.Context, namespace string) 
 		WithFilter(expr).
 		WithOutputFields(fieldID, fieldNS, fieldContent, fieldEmbedding, fieldMetadata))
 	if err != nil {
-		logger.Error(milvusLogComponent).Err(err).Str("namespace", namespace).Msg("load_from_db: 查询失败")
+		logger.Error(logComponent).Err(err).Str("namespace", namespace).Msg("load_from_db: query failed")
 		return nil, fmt.Errorf("load_from_db: 查询失败: %w", err)
 	}
 
@@ -304,9 +303,9 @@ func (m *MilvusConnectorImpl) LoadFromDB(ctx context.Context, namespace string) 
 		}
 	}
 
-	logger.Info(milvusLogComponent).
+	logger.Info(logComponent).
 		Int("count", len(data)).Str("namespace", namespace).
-		Msg("load_from_db: 加载节点完成")
+		Msg("load_from_db: nodes loaded")
 
 	return data, nil
 }
@@ -329,7 +328,7 @@ func (m *MilvusConnectorImpl) Exists(ctx context.Context, namespace string) bool
 		WithOutputFields(fieldID).
 		WithLimit(1))
 	if err != nil {
-		logger.Error(milvusLogComponent).Err(err).Str("namespace", namespace).Msg("exists: 查询失败")
+		logger.Error(logComponent).Err(err).Str("namespace", namespace).Msg("exists: query failed")
 		return false
 	}
 
@@ -353,12 +352,12 @@ func (m *MilvusConnectorImpl) Delete(ctx context.Context, namespace string) bool
 		WithFilter(expr).
 		WithOutputFields(fieldID))
 	if err != nil {
-		logger.Error(milvusLogComponent).Err(err).Str("namespace", namespace).Msg("delete: 查询失败")
+		logger.Error(logComponent).Err(err).Str("namespace", namespace).Msg("delete: query failed")
 		return false
 	}
 
 	if resultSet.ResultCount == 0 {
-		logger.Info(milvusLogComponent).Str("namespace", namespace).Msg("delete: 命名空间为空")
+		logger.Info(logComponent).Str("namespace", namespace).Msg("delete: namespace is empty")
 		return false
 	}
 
@@ -373,15 +372,15 @@ func (m *MilvusConnectorImpl) Delete(ctx context.Context, namespace string) bool
 	if len(ids) > 0 {
 		_, err = c.Delete(ctx, milvusclient.NewDeleteOption(m.collectionName).WithExpr(IDsExpr(ids)))
 		if err != nil {
-			logger.Error(milvusLogComponent).Err(err).Str("namespace", namespace).Msg("delete: 删除失败")
+			logger.Error(logComponent).Err(err).Str("namespace", namespace).Msg("delete: delete failed")
 			return false
 		}
 		_ = c.Flush(ctx, milvusclient.NewFlushOption(m.collectionName))
 	}
 
-	logger.Info(milvusLogComponent).
+	logger.Info(logComponent).
 		Int("count", len(ids)).Str("namespace", namespace).
-		Msg("delete: 删除节点完成")
+		Msg("delete: nodes deleted")
 	return true
 }
 
@@ -390,13 +389,13 @@ func (m *MilvusConnectorImpl) Delete(ctx context.Context, namespace string) bool
 func (m *MilvusConnectorImpl) Ping(ctx context.Context) bool {
 	c, err := m.getClient(ctx, 0)
 	if err != nil {
-		logger.Warn(milvusLogComponent).Err(err).Msg("ping: 获取客户端失败")
+		logger.Warn(logComponent).Err(err).Msg("ping: failed to get client")
 		return false
 	}
 	// HasCollection 会建立 gRPC 连接，如果 Milvus 不可达会返回错误
 	_, err = c.HasCollection(ctx, milvusclient.NewHasCollectionOption(m.collectionName))
 	if err != nil {
-		logger.Warn(milvusLogComponent).Err(err).Msg("ping: Milvus 不可达")
+		logger.Warn(logComponent).Err(err).Msg("ping: Milvus unreachable")
 		return false
 	}
 	return true
@@ -433,9 +432,9 @@ func (m *MilvusConnectorImpl) Search(ctx context.Context, namespace string, embe
 		}
 	}
 	if requestedMetric != milvusMetric {
-		logger.Warn(milvusLogComponent).
+		logger.Warn(logComponent).
 			Str("requested", requestedMetric).Str("index_metric", milvusMetric).
-			Msg("search: 请求 metric 与索引不一致，回退到索引 metric")
+			Msg("search: request metric inconsistent with index, falling back to index metric")
 	}
 
 	vectors := []entity.Vector{entity.FloatVector(embedding)}
@@ -457,7 +456,7 @@ func (m *MilvusConnectorImpl) Search(ctx context.Context, namespace string, embe
 
 	resultSets, err := c.Search(ctx, searchOpt)
 	if err != nil {
-		logger.Error(milvusLogComponent).Err(err).Str("namespace", namespace).Msg("search: 搜索失败")
+		logger.Error(logComponent).Err(err).Str("namespace", namespace).Msg("search: search failed")
 		return nil, fmt.Errorf("search: 搜索失败: %w", err)
 	}
 
@@ -479,9 +478,9 @@ func (m *MilvusConnectorImpl) Search(ctx context.Context, namespace string, embe
 		}
 	}
 
-	logger.Debug(milvusLogComponent).
+	logger.Debug(logComponent).
 		Int("count", len(results)).Str("namespace", namespace).
-		Msg("search: 搜索完成")
+		Msg("search: search completed")
 
 	return results, nil
 }
@@ -501,15 +500,15 @@ func (m *MilvusConnectorImpl) DeleteNodes(ctx context.Context, namespace string,
 
 	_, err = c.Delete(ctx, milvusclient.NewDeleteOption(m.collectionName).WithExpr(IDsExpr(nodeIDs)))
 	if err != nil {
-		logger.Error(milvusLogComponent).Err(err).Str("namespace", namespace).Msg("delete_nodes: 删除失败")
+		logger.Error(logComponent).Err(err).Str("namespace", namespace).Msg("delete_nodes: delete failed")
 		return false
 	}
 
 	_ = c.Flush(ctx, milvusclient.NewFlushOption(m.collectionName))
 
-	logger.Info(milvusLogComponent).
+	logger.Info(logComponent).
 		Int("count", len(nodeIDs)).Str("namespace", namespace).
-		Msg("delete_nodes: 删除节点完成")
+		Msg("delete_nodes: nodes deleted")
 	return true
 }
 
@@ -526,7 +525,7 @@ func (m *MilvusConnectorImpl) ListNamespaces(ctx context.Context) []string {
 		WithFilter(fmt.Sprintf(`%s != ""`, fieldID)).
 		WithOutputFields(fieldNS))
 	if err != nil {
-		logger.Error(milvusLogComponent).Err(err).Msg("list_namespaces: 查询失败")
+		logger.Error(logComponent).Err(err).Msg("list_namespaces: query failed")
 		return nil
 	}
 
@@ -560,7 +559,7 @@ func (m *MilvusConnectorImpl) Count(ctx context.Context, namespace string) int {
 			WithFilter(expr).
 			WithOutputFields(fieldID))
 		if err != nil {
-			logger.Error(milvusLogComponent).Err(err).Msg("count: 查询失败")
+			logger.Error(logComponent).Err(err).Msg("count: query failed")
 			return 0
 		}
 		return resultSet.ResultCount
@@ -571,7 +570,7 @@ func (m *MilvusConnectorImpl) Count(ctx context.Context, namespace string) int {
 		WithFilter(fmt.Sprintf(`%s != ""`, fieldID)).
 		WithOutputFields(fieldID))
 	if err != nil {
-		logger.Error(milvusLogComponent).Err(err).Msg("count: 全局查询失败")
+		logger.Error(logComponent).Err(err).Msg("count: global query failed")
 		return 0
 	}
 	return resultSet.ResultCount
@@ -587,7 +586,7 @@ func (m *MilvusConnectorImpl) Flush(ctx context.Context) {
 
 	if c != nil {
 		_ = c.Flush(ctx, milvusclient.NewFlushOption(m.collectionName))
-		logger.Debug(milvusLogComponent).Str("collection", m.collectionName).Msg("Flush 完成")
+		logger.Debug(logComponent).Str("collection", m.collectionName).Msg("flush completed")
 	}
 }
 
@@ -601,9 +600,9 @@ func (m *MilvusConnectorImpl) Close(ctx context.Context) {
 	if m.client != nil {
 		_ = m.client.Close(ctx)
 		m.client = nil
-		logger.Info(milvusLogComponent).
+		logger.Info(logComponent).
 			Str("host", m.host).Int("port", m.port).
-			Msg("MilvusConnectorImpl 连接已关闭")
+			Msg("MilvusConnectorImpl connection closed")
 	}
 }
 
@@ -730,9 +729,9 @@ func (m *MilvusConnectorImpl) getClient(ctx context.Context, dim int) (milvusCli
 	// 连接 Milvus
 	c, err := m.createClient(ctx, m.host, m.port, m.alias)
 	if err != nil {
-		logger.Error(milvusLogComponent).Err(err).
+		logger.Error(logComponent).Err(err).
 			Str("host", m.host).Int("port", m.port).
-			Msg("连接 Milvus 失败")
+			Msg("failed to connect to Milvus")
 		return nil, fmt.Errorf("连接 Milvus 失败: %w", err)
 	}
 
@@ -746,13 +745,13 @@ func (m *MilvusConnectorImpl) getClient(ctx context.Context, dim int) (milvusCli
 		}
 		if err := m.initCollection(ctx, effectiveDim); err != nil {
 			// 初始化失败不阻断客户端，后续操作会再尝试
-			logger.Warn(milvusLogComponent).Err(err).Int("dim", effectiveDim).Msg("初始化集合失败，非致命")
+			logger.Warn(logComponent).Err(err).Int("dim", effectiveDim).Msg("collection init failed, non-fatal")
 		}
 	}
 
-	logger.Info(milvusLogComponent).
+	logger.Info(logComponent).
 		Str("host", m.host).Int("port", m.port).
-		Msg("连接 Milvus 成功")
+		Msg("connected to Milvus")
 
 	return m.client, nil
 }
@@ -772,7 +771,7 @@ func (m *MilvusConnectorImpl) initCollection(ctx context.Context, dim int) error
 	}
 
 	if has {
-		logger.Info(milvusLogComponent).Str("collection", m.collectionName).Msg("集合已存在，复用")
+		logger.Info(logComponent).Str("collection", m.collectionName).Msg("collection already exists, reusing")
 		// 加载集合
 		_ = c.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(m.collectionName))
 		return nil
@@ -813,9 +812,9 @@ func (m *MilvusConnectorImpl) initCollection(ctx context.Context, dim int) error
 	_ = c.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(m.collectionName))
 
 	m.dim = dim
-	logger.Info(milvusLogComponent).
+	logger.Info(logComponent).
 		Str("collection", m.collectionName).Int("dim", dim).
-		Msg("创建集合并加载完成")
+		Msg("collection created and loaded")
 
 	return nil
 }
@@ -897,7 +896,7 @@ func mapsToJSONBytes(maps []map[string]any) [][]byte {
 	for i, m := range maps {
 		b, err := json.Marshal(m)
 		if err != nil {
-			logger.Warn(milvusLogComponent).Err(err).Int("index", i).Msg("序列化 metadata 失败，使用空 JSON")
+			logger.Warn(logComponent).Err(err).Int("index", i).Msg("metadata serialization failed, using empty JSON")
 			b = []byte("{}")
 		}
 		result[i] = b
@@ -914,8 +913,6 @@ func findColumn(ds milvusclient.DataSet, name string) column.Column {
 	}
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // CreateCollection 实现 milvusClient 接口。
 func (a *persistenceClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption) error {
