@@ -103,11 +103,56 @@ func TestBuildMem0Provider_品牌默认值(t *testing.T) {
 	}
 }
 
+// TestBuildMem0Provider_rerank配置 对齐 L96：bool(mem0_cfg.get("rerank", True))
+func TestBuildMem0Provider_rerank配置(t *testing.T) {
+	t.Setenv("MEM0_API_KEY", "k")
+	// 显式 false 覆盖默认 true
+	p := buildMem0Provider(ExternalMemoryConfig{
+		Mem0: map[string]any{"api_key": "k", "rerank": false},
+	})
+	if p == nil {
+		t.Fatal("有 api_key 应构建成功")
+	}
+	// 非 bool 类型（如字符串 "yes"）回落默认 true
+	p2 := buildMem0Provider(ExternalMemoryConfig{
+		Mem0: map[string]any{"api_key": "k", "rerank": "yes"},
+	})
+	if p2 == nil {
+		t.Fatal("非 bool rerank 不影响构建")
+	}
+}
+
 // TestBuildOpenVikingProvider_无endpoint返回nil 对齐 L127-129
 func TestBuildOpenVikingProvider_无endpoint返回nil(t *testing.T) {
 	t.Setenv("OPENVIKING_ENDPOINT", "") // 防 CI 环境泄漏
 	if p := buildOpenVikingProvider(ExternalMemoryConfig{}); p != nil {
 		t.Error("无 endpoint 应返回 nil")
+	}
+}
+
+// TestBuildOpenVikingProvider_account环境变量回退 对齐 L118：
+// account = cfg or OPENVIKING_ACCOUNT env or "root"
+func TestBuildOpenVikingProvider_account环境变量回退(t *testing.T) {
+	t.Setenv("OPENVIKING_ACCOUNT", "env-acct")
+
+	p := buildOpenVikingProvider(ExternalMemoryConfig{
+		OpenViking: map[string]any{"endpoint": "http://vk"},
+	})
+	if p == nil {
+		t.Fatal("有 endpoint 应构建成功")
+	}
+	// account=env-acct 经断言途径有限（跨包私有），
+	// 此处仅验证 env 非空时不落 root 的构建路径不报错
+
+	// OPENVIKING_USER 同理由 provider 内部处理
+	p2 := buildOpenVikingProvider(ExternalMemoryConfig{
+		OpenViking: map[string]any{
+			"endpoint": "http://vk",
+			"account":  "cfg-acct", // cfg 优先于 env
+		},
+	})
+	if p2 == nil {
+		t.Fatal("cfg account 优先时应构建成功")
 	}
 }
 
@@ -176,6 +221,45 @@ func TestBuildExternalMemoryRail_成功路径(t *testing.T) {
 	}
 	// user_id/scope_id 默认值填充已在 TestGetExternalMemoryConfig_默认值填充 覆盖，
 	// 此处断言 rail 类型 + 可用 provider 即可
+}
+
+// TestBuildExternalMemoryRail_openjiuwen分支 对齐 L54-56：四路分发 case "openjiuwen"
+func TestBuildExternalMemoryRail_openjiuwen分支(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	// WorkspaceDir 有 sync.Once 缓存，Setenv 后必须重置才能生效
+	workspace.SetUserHome(workspace.UserHomeDir())
+	defer workspace.SetUserHome(workspace.UserHomeDir())
+
+	cfg := map[string]any{"memory": map[string]any{
+		"engine":   "both",
+		"external": map[string]any{"provider": "openjiuwen"},
+	}}
+	rail := BuildExternalMemoryRail(cfg, ".")
+	if rail == nil {
+		t.Fatal("openjiuwen 分支应构建成功")
+	}
+	if _, ok := rail.(*memrail.ExternalMemoryRail); !ok {
+		t.Fatalf("类型 = %T", rail)
+	}
+}
+
+// TestBuildExternalMemoryRail_openviking分支 对齐 L54-57：四路分发 case "openviking"
+func TestBuildExternalMemoryRail_openviking分支(t *testing.T) {
+	cfg := map[string]any{"memory": map[string]any{
+		"engine": "both",
+		"external": map[string]any{
+			"provider":   "openviking",
+			"openviking": map[string]any{"endpoint": "http://vk"},
+		},
+	}}
+	rail := BuildExternalMemoryRail(cfg, ".")
+	if rail == nil {
+		t.Fatal("openviking 分支应构建成功")
+	}
+	if _, ok := rail.(*memrail.ExternalMemoryRail); !ok {
+		t.Fatalf("类型 = %T", rail)
+	}
 }
 
 // TestLoadPluginProvider 对齐 L133-142：插件机制不可用恒 nil

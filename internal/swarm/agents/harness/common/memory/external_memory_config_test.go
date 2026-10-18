@@ -294,3 +294,54 @@ embed:
 		t.Errorf("api_key = %v, want cfg-key", embedding["api_key"])
 	}
 }
+
+// TestBuildOpenJiuwenProviderConfig_显式cfg读取embed段
+// 调用方持有配置缓存时（cfg 非 nil）直接读 cfg["embed"]，不走包内 loadConfig
+func TestBuildOpenJiuwenProviderConfig_显式cfg读取embed段(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	workspace.SetUserHome(workspace.UserHomeDir())
+	defer workspace.SetUserHome(workspace.UserHomeDir())
+	t.Setenv("EMBED_MODEL", "env-model-should-lose")
+
+	cfg := map[string]any{"embed": map[string]any{
+		"embed_model":    "cache-model",
+		"embed_base_url": "http://cache-base",
+		"embed_api_key":  "cache-key",
+	}}
+	got, err := BuildOpenJiuwenProviderConfig(ExternalMemoryConfig{}, cfg)
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	embedding := got["embedding"].(map[string]any)
+	if embedding["model_name"] != "cache-model" {
+		t.Errorf("model_name = %v, want cache-model（cfg embed 段优先于 env）", embedding["model_name"])
+	}
+	if embedding["base_url"] != "http://cache-base" {
+		t.Errorf("base_url = %v, want http://cache-base", embedding["base_url"])
+	}
+	if embedding["api_key"] != "cache-key" {
+		t.Errorf("api_key = %v, want cache-key", embedding["api_key"])
+	}
+}
+
+// TestBuildOpenJiuwenProviderConfig_显式cfg无embed段回落env
+func TestBuildOpenJiuwenProviderConfig_显式cfg无embed段回落env(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	workspace.SetUserHome(workspace.UserHomeDir())
+	defer workspace.SetUserHome(workspace.UserHomeDir())
+	t.Setenv("EMBED_MODEL", "")
+	t.Setenv("EMBED_BASE_URL", "")
+	t.Setenv("EMBED_API_KEY", "")
+
+	// 显式 cfg 无 embed 段 + env 全空 → 走 warn 分支，embedding 全空串
+	got, err := BuildOpenJiuwenProviderConfig(ExternalMemoryConfig{}, map[string]any{})
+	if err != nil {
+		t.Fatalf("失败: %v", err)
+	}
+	embedding := got["embedding"].(map[string]any)
+	if embedding["model_name"] != "" || embedding["base_url"] != "" || embedding["api_key"] != "" {
+		t.Errorf("embedding = %v, want 全空串（触发 warn 分支）", embedding)
+	}
+}
