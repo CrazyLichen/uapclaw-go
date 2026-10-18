@@ -12,8 +12,8 @@ func TestMilvusAUTO(t *testing.T) {
 	if f.IndexType() != IndexTypeAUTO {
 		t.Errorf("IndexType = %v, want %v", f.IndexType(), IndexTypeAUTO)
 	}
-	if f.VectorFieldName != "embedding" {
-		t.Errorf("VectorFieldName = %v, want embedding", f.VectorFieldName)
+	if f.VectorFieldName() != "embedding" {
+		t.Errorf("VectorFieldName = %v, want embedding", f.VectorFieldName())
 	}
 	if err := f.Validate(); err != nil {
 		t.Errorf("Validate() = %v, want nil", err)
