@@ -132,9 +132,9 @@ func GetExternalMemoryConfig(cfg map[string]any) ExternalMemoryConfig {
 		// Python: "provider": (ext.get("provider") or "").strip()
 		Provider: strings.TrimSpace(strVal("provider")),
 		// Python: "user_id": ext.get("user_id") or _DEFAULT_USER
-		UserID: strValDefaultExternal(strVal("user_id")),
+		UserID: strValDefaultExternal(strVal("user_id"), defaultExternalUser),
 		// Python: "scope_id": ext.get("scope_id") or _DEFAULT_SCOPE
-		ScopeID: strValDefaultExternal(strVal("scope_id")),
+		ScopeID: strValDefaultExternal(strVal("scope_id"), defaultExternalScope),
 		AllowedPlugins: plugins,
 		OpenJiuwen:     sub("openjiuwen"),
 		Mem0:           sub("mem0"),
@@ -250,14 +250,14 @@ func BuildOpenJiuwenProviderConfig(extCfg ExternalMemoryConfig, cfg map[string]a
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// strValDefaultExternal 空串回落外接记忆默认值。
-// 对齐 Python: ext.get(key) or _DEFAULT_USER/_DEFAULT_SCOPE
-// （两个默认常量值同为 __default__，语义等价）
-func strValDefaultExternal(s string) string {
+// strValDefaultExternal 空串回落指定外接记忆默认值。
+// 对齐 Python: ext.get("user_id") or _DEFAULT_USER / ext.get("scope_id") or _DEFAULT_SCOPE
+// （两个常量各自服务一个键，值恰好同为 __default__）
+func strValDefaultExternal(s, def string) string {
 	if s != "" {
 		return s
 	}
-	return defaultExternalUser
+	return def
 }
 
 // strOrEnv 空串回落环境变量。

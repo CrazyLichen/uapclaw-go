@@ -53,8 +53,7 @@ func TestHandleExternalMemoryRailByConfig_启用但构建失败不注册(t *test
 // instance 为 nil 时（RegisterRail 跳过）构建成功的 rail 仍应存储到字段
 func TestHandleExternalMemoryRailByConfig_构建成功存字段(t *testing.T) {
 	d := NewDeepAdapter()
-	t.Setenv("MEM0_API_KEY", "test-key")
-	defer t.Setenv("MEM0_API_KEY", "")
+	t.Setenv("MEM0_API_KEY", "test-key") // t.Setenv 测试结束自动恢复原值
 	d.configCache = map[string]any{"memory": map[string]any{
 		"engine":   "both",
 		"external": map[string]any{"provider": "mem0"},
@@ -83,7 +82,6 @@ func TestHandleExternalMemoryRailByConfig_构建成功存字段(t *testing.T) {
 func TestHandleExternalMemoryRailByConfig_热重载注销(t *testing.T) {
 	d := NewDeepAdapter()
 	t.Setenv("MEM0_API_KEY", "test-key")
-	defer t.Setenv("MEM0_API_KEY", "")
 
 	// 第一阶段：构建 rail 存字段
 	d.configCache = map[string]any{"memory": map[string]any{
@@ -118,7 +116,6 @@ func TestHandleExternalMemoryRailByConfig_热重载注销(t *testing.T) {
 func TestHandleExternalMemoryRailByConfig_engine切换builtin注销(t *testing.T) {
 	d := NewDeepAdapter()
 	t.Setenv("MEM0_API_KEY", "test-key")
-	defer t.Setenv("MEM0_API_KEY", "")
 
 	d.configCache = map[string]any{"memory": map[string]any{
 		"engine":   "both",
