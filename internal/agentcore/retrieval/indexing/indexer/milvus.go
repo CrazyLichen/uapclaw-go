@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -75,8 +76,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期接口断言：MilvusIndexer 实现 Indexer 接口
-// TODO(#13.3-Task8): BuildIndex/UpdateIndex 实现后恢复
-// var _ Indexer = (*MilvusIndexer)(nil)
+var _ Indexer = (*MilvusIndexer)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -309,6 +309,197 @@ func (mi *MilvusIndexer) Close() {
 		// 对齐 Python: logger.warning(f"Failed to close Milvus client: {e}")
 		logger.Warn(logComponent).Err(err).Msg("关闭 Milvus 客户端失败")
 	}
+}
+
+// BuildIndex 构建索引。ensureCollection → 查重 → 嵌入 → 转换 → 写入。
+//
+// 对齐 Python MilvusIndexer.build_index。
+// 5 步流程：
+//  1. _ensure_collection 确保集合存在（自动建表）
+//  2. query 检查 doc_id 重复（重复抛 ADD_DOC_RUNTIME_ERROR）
+//  3. vector/hybrid 类型计算 embedding
+//  4. 转换 TextChunk → Milvus 字段（chunk_id/doc_id/content/metadata/embedding）
+//  5. MilvusVectorStore.add 写入
+func (mi *MilvusIndexer) BuildIndex(
+	ctx context.Context,
+	chunks []common.TextChunk,
+	config common.IndexConfig,
+	embedModel embedding.BaseEmbedding,
+	opts ...IndexOption,
+) (bool, error) {
+	indexOpts := NewIndexOptions(opts...)
+	collectionName := config.IndexName
+
+	// ─── 步骤 1：确保集合存在 ───
+	// 对齐 Python: await self._ensure_collection(collection_name=..., config=..., embed_model=...)
+	if err := mi.ensureCollection(ctx, collectionName, config, embedModel); err != nil {
+		return false, err
+	}
+
+	// ─── 步骤 2：查重 doc_id ───
+	// 对齐 Python: all_doc_ids = '["' + '","'.join({chunk.doc_id for chunk in chunks}) + '"]'
+	docIDSet := make(map[string]struct{})
+	for _, chunk := range chunks {
+		if chunk.DocID != "" {
+			docIDSet[chunk.DocID] = struct{}{}
+		}
+	}
+	if len(docIDSet) > 0 {
+		quoted := make([]string, 0, len(docIDSet))
+		for docID := range docIDSet {
+			quoted = append(quoted, fmt.Sprintf("%q", docID))
+		}
+		filterExpr := fmt.Sprintf("%s in [%s]", mi.docIDField, strings.Join(quoted, ","))
+		// 对齐 Python: results = self._client.query(collection_name, filter=..., output_fields=[doc_id_field])
+		resultSet, err := mi.client.Query(ctx, milvusclient.NewQueryOption(collectionName).
+			WithFilter(filterExpr).
+			WithOutputFields(mi.docIDField))
+		if err != nil {
+			return false, exception.BuildError(
+				exception.StatusRetrievalIndexingAddDocRuntimeError,
+				exception.WithParam("error_msg", err.Error()),
+				exception.WithCause(err),
+			)
+		}
+		// 对齐 Python: duplicate_doc_ids = sorted({result.get(doc_id_field) for result in results} - {None, ""})
+		dupSet := make(map[string]struct{})
+		if col := resultSet.GetColumn(mi.docIDField); col != nil {
+			for j := 0; j < resultSet.ResultCount; j++ {
+				if v, getErr := col.GetAsString(j); getErr == nil && v != "" {
+					dupSet[v] = struct{}{}
+				}
+			}
+		}
+		if len(dupSet) > 0 {
+			duplicateDocIDs := make([]string, 0, len(dupSet))
+			for docID := range dupSet {
+				duplicateDocIDs = append(duplicateDocIDs, docID)
+			}
+			sort.Strings(duplicateDocIDs)
+			return false, exception.BuildError(
+				exception.StatusRetrievalIndexingAddDocRuntimeError,
+				exception.WithParam("error_msg",
+					fmt.Sprintf("some documents with same doc_id already exist, if they are the same documents, "+
+						"please consider updating instead of adding. duplicate_doc_ids=%v", duplicateDocIDs)),
+			)
+		}
+	}
+
+	// ─── 步骤 3：嵌入 ───
+	// 对齐 Python: if config.index_type in ("vector", "hybrid"):
+	if config.IndexType == common.IndexTypeVector || config.IndexType == common.IndexTypeHybrid {
+		if embedModel == nil {
+			// 对齐 Python: EMBED_MODEL_NOT_FOUND
+			return false, exception.BuildError(
+				exception.StatusRetrievalIndexingEmbedModelNotFound,
+				exception.WithParam("error_msg", "embed_model is required for vector/hybrid index type"),
+			)
+		}
+		embedOpts := []ChunkEmbedOption{
+			WithUseCaptionForImages(config.UseCaptionForImages),
+		}
+		if mi.docIndexCallback != nil {
+			embedOpts = append(embedOpts, WithDocIndexCallback(mi.docIndexCallback))
+		}
+		// 对齐 Python: await compute_chunk_embeddings(chunks, embed_model, doc_index_callback=..., use_caption_for_images=...)
+		if err := ComputeChunkEmbeddings(ctx, chunks, embedModel, embedOpts...); err != nil {
+			return false, err
+		}
+	}
+
+	// ─── 步骤 4：转换 TextChunk → Milvus 字段 ───
+	// 对齐 Python: 避免写入 schema 未定义的 id_ 字段
+	databaseName, _ := indexOpts.Extra["database_name"].(string)
+	data := make([]map[string]any, 0, len(chunks))
+	for _, chunk := range chunks {
+		meta := chunk.Metadata
+		if meta == nil {
+			meta = make(map[string]any)
+		}
+		// 对齐 Python: chunk_id = meta.get("chunk_id", chunk.id_)
+		chunkID := chunk.ID
+		if cid, ok := meta["chunk_id"].(string); ok && cid != "" {
+			chunkID = cid
+		}
+		item := map[string]any{
+			"chunk_id":       chunkID,
+			mi.docIDField:    chunk.DocID,
+			mi.textField:     chunk.Text,
+			mi.metadataField: meta,
+		}
+		if chunk.Embedding != nil {
+			item[mi.vectorField.VectorFieldName()] = chunk.Embedding
+		}
+		data = append(data, item)
+	}
+
+	// ─── 步骤 5：写入 ───
+	// 对齐 Python: vector_store = MilvusVectorStore(config=..., milvus_uri=..., milvus_token=..., milvus_alias=vs_alias)
+	vectorStoreConfig := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeMilvus,
+		CollectionName: collectionName,
+		DatabaseName:   databaseName,
+	}
+	// 对齐 Python: vs_alias = f"{self.milvus_alias}_{collection_name}" if self.milvus_alias else None
+	// （alias 仅用于 Python pymilvus 连接复用；Go 复用 indexer 持有的 client，语义等价）
+	vectorStore, err := vector_store.NewMilvusVectorStore(vectorStoreConfig, mi.milvusURI, mi.milvusToken,
+		mi.textField, mi.vectorField, mi.sparseVectorField, mi.metadataField, mi.docIDField,
+		vector_store.WithMilvusClientOption(mi.client))
+	if err != nil {
+		return false, err
+	}
+
+	// 对齐 Python: await vector_store.add(data=data)
+	if err := vectorStore.Add(ctx, data); err != nil {
+		return false, err
+	}
+
+	// 对齐 Python: logger.info(f"Successfully built index {collection_name} with {len(chunks)} chunks")
+	logger.Info(logComponent).
+		Str("index_name", collectionName).
+		Int("chunk_count", len(chunks)).
+		Msg("成功构建索引")
+
+	return true, nil
+}
+
+// UpdateIndex 更新索引。先删后 flush 后重建。
+//
+// 对齐 Python MilvusIndexer.update_index：
+// delete_index → flush（Milvus 最终一致性，使删除可见）→ build_index。
+// 异常时 logger.error 后返回 False（对齐 Python except 分支）。
+func (mi *MilvusIndexer) UpdateIndex(
+	ctx context.Context,
+	chunks []common.TextChunk,
+	docID string,
+	config common.IndexConfig,
+	embedModel embedding.BaseEmbedding,
+	opts ...IndexOption,
+) (bool, error) {
+	// 对齐 Python: await self.delete_index(doc_id, config.index_name)
+	if _, err := mi.DeleteIndex(ctx, docID, config.IndexName); err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "INDEXING_ERROR").
+			Str("doc_id", docID).
+			Str("index_name", config.IndexName).
+			Err(err).
+			Msg("更新索引失败")
+		return false, err
+	}
+
+	// 对齐 Python: self._client.flush(collection_name=config.index_name)
+	if err := mi.client.Flush(ctx, milvusclient.NewFlushOption(config.IndexName)); err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "INDEXING_ERROR").
+			Str("doc_id", docID).
+			Str("index_name", config.IndexName).
+			Err(err).
+			Msg("更新索引-flush失败")
+		return false, err
+	}
+
+	// 对齐 Python: return await self.build_index(chunks, config, embed_model, **kwargs)
+	return mi.BuildIndex(ctx, chunks, config, embedModel, opts...)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

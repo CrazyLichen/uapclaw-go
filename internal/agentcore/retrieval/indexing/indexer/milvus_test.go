@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
+	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,16 @@ type fakeIndexerMilvusClient struct {
 	createdSchemas map[string]*entity.Schema
 	// createCollErr CreateCollection 返回的错误
 	createCollErr error
+	// queryReturnDocIDs Query 返回的 document_id 列（模拟查重命中）
+	queryReturnDocIDs []string
+	// queryErr Query 返回的错误
+	queryErr error
+	// insertCount Insert 调用次数
+	insertCount int
+	// insertErr Insert 返回的错误
+	insertErr error
+	// lastInsertData 最近一次 Insert 的行数据（按列名记录）
+	lastInsertData map[string][]any
 }
 
 func newFakeIndexerMilvusClient() *fakeIndexerMilvusClient {
@@ -102,7 +113,49 @@ func (f *fakeIndexerMilvusClient) GetCollectionStats(ctx context.Context, option
 	return map[string]string{"row_count": f.statsRowCount}, nil
 }
 func (f *fakeIndexerMilvusClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...any) (milvusclient.InsertResult, error) {
+	f.insertCount++
+	if f.insertErr != nil {
+		return milvusclient.InsertResult{}, f.insertErr
+	}
+	// InsertRequest 会校验列必须在 collection schema 中且类型匹配；
+	// fake 用内置的 Milvus 标准字段 schema（对齐 ensureCollection 建表结构）
+	coll := &entity.Collection{Schema: fakeMilvusInsertSchema()}
+	if f.describeCollResult != nil && f.describeCollResult.Schema != nil {
+		coll = f.describeCollResult
+	}
+	// 记录插入的列数据供断言
+	f.lastInsertData = map[string][]any{}
+	if req, err := option.InsertRequest(coll); err == nil && req != nil {
+		for _, fieldData := range req.GetFieldsData() {
+			name := fieldData.GetFieldName()
+			var vals []any
+			if d, ok := fieldData.Field.(*schemapb.FieldData_Scalars); ok {
+				if sd, ok := d.Scalars.Data.(*schemapb.ScalarField_StringData); ok {
+					vals = make([]any, len(sd.StringData.Data))
+					for i, s := range sd.StringData.Data {
+						vals[i] = s
+					}
+				}
+			}
+			if len(vals) > 0 {
+				f.lastInsertData[name] = vals
+			}
+		}
+	}
 	return milvusclient.InsertResult{}, nil
+}
+
+// fakeMilvusInsertSchema 构造 InsertRequest 校验所需的集合 schema，
+// 字段与 ensureCollection 建表结构一致（document_id/pk/chunk_id/content/sparse_vector/embedding/metadata）。
+func fakeMilvusInsertSchema() *entity.Schema {
+	return entity.NewSchema().
+		WithField(entity.NewField().WithName("document_id").WithDataType(entity.FieldTypeVarChar).WithMaxLength(256)).
+		WithField(entity.NewField().WithName("pk").WithDataType(entity.FieldTypeInt64).WithIsPrimaryKey(true).WithIsAutoID(true)).
+		WithField(entity.NewField().WithName("chunk_id").WithDataType(entity.FieldTypeVarChar).WithMaxLength(256)).
+		WithField(entity.NewField().WithName("content").WithDataType(entity.FieldTypeVarChar).WithMaxLength(65535)).
+		WithField(entity.NewField().WithName("sparse_vector").WithDataType(entity.FieldTypeSparseVector)).
+		WithField(entity.NewField().WithName("embedding").WithDataType(entity.FieldTypeFloatVector).WithDim(3)).
+		WithField(entity.NewField().WithName("metadata").WithDataType(entity.FieldTypeJSON))
 }
 func (f *fakeIndexerMilvusClient) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...any) (milvusclient.DeleteResult, error) {
 	if f.deleteErr != nil {
@@ -121,7 +174,17 @@ func (f *fakeIndexerMilvusClient) HybridSearch(ctx context.Context, option milvu
 	return nil, nil
 }
 func (f *fakeIndexerMilvusClient) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...any) (milvusclient.ResultSet, error) {
-	return milvusclient.ResultSet{}, nil
+	if f.queryErr != nil {
+		return milvusclient.ResultSet{}, f.queryErr
+	}
+	if len(f.queryReturnDocIDs) == 0 {
+		return milvusclient.ResultSet{}, nil
+	}
+	col := column.NewColumnVarChar("document_id", f.queryReturnDocIDs)
+	return milvusclient.ResultSet{
+		ResultCount: len(f.queryReturnDocIDs),
+		Fields:      milvusclient.DataSet{col},
+	}, nil
 }
 func (f *fakeIndexerMilvusClient) DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...any) (milvusclient.IndexDescription, error) {
 	return milvusclient.IndexDescription{}, nil
@@ -386,4 +449,76 @@ func TestMilvusIndexer_ensureCollection_创建失败(t *testing.T) {
 	err := idx.ensureCollection(context.Background(), "bm25_coll",
 		common.IndexConfig{IndexName: "bm25_coll", IndexType: common.IndexTypeBM25}, nil)
 	require.Error(t, err)
+}
+
+// TestMilvusIndexer_BuildIndex_完整流程 对齐 Python build_index: ensure→查重→嵌入→写入
+func TestMilvusIndexer_BuildIndex_完整流程(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	idx := newTestMilvusIndexer(t, fake)
+
+	chunks := []common.TextChunk{
+		{ID: "c1", Text: "hello world", DocID: "doc1", Metadata: map[string]any{"chunk_id": "c1"}},
+	}
+	config := common.IndexConfig{IndexName: "coll1", IndexType: common.IndexTypeVector}
+	embedModel := &fakeBaseEmbedding{embedDocsResult: [][]float64{{0.1, 0.2, 0.3}}}
+
+	ok, err := idx.BuildIndex(context.Background(), chunks, config, embedModel)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, 1, fake.insertCount) // vector_store.Add 分批写入
+	// 断言写入的列
+	require.Contains(t, fake.lastInsertData, "chunk_id")
+	require.Contains(t, fake.lastInsertData, "document_id")
+	require.Contains(t, fake.lastInsertData, "content")
+}
+
+// TestMilvusIndexer_BuildIndex_重复docID 对齐 Python: query 查重 → ADD_DOC_RUNTIME_ERROR
+func TestMilvusIndexer_BuildIndex_重复docID(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	fake.collections["coll1"] = true                 // 集合已存在，跳过建表
+	fake.queryReturnDocIDs = []string{"doc1", "doc1"} // query 返回已有 doc1
+	idx := newTestMilvusIndexer(t, fake)
+
+	chunks := []common.TextChunk{
+		{ID: "c1", Text: "text", DocID: "doc1", Metadata: map[string]any{}},
+	}
+	config := common.IndexConfig{IndexName: "coll1", IndexType: common.IndexTypeBM25}
+
+	ok, err := idx.BuildIndex(context.Background(), chunks, config, nil)
+	require.Error(t, err)
+	assert.False(t, ok)
+	assert.Equal(t, 0, fake.insertCount) // 未写入
+}
+
+// TestMilvusIndexer_BuildIndex_缺嵌入模型 对齐 Python: EMBED_MODEL_NOT_FOUND
+func TestMilvusIndexer_BuildIndex_缺嵌入模型(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	fake.collections["coll1"] = true // 集合已存在
+	idx := newTestMilvusIndexer(t, fake)
+
+	chunks := []common.TextChunk{{ID: "c1", Text: "t", DocID: "d1"}}
+	config := common.IndexConfig{IndexName: "coll1", IndexType: common.IndexTypeVector}
+
+	ok, err := idx.BuildIndex(context.Background(), chunks, config, nil)
+	require.Error(t, err)
+	assert.False(t, ok)
+}
+
+// TestMilvusIndexer_UpdateIndex 对齐 Python update_index: delete → flush → build
+func TestMilvusIndexer_UpdateIndex(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	fake.deleteCount = 2
+	idx := newTestMilvusIndexer(t, fake)
+
+	chunks := []common.TextChunk{
+		{ID: "c1", Text: "updated", DocID: "doc1", Metadata: map[string]any{"chunk_id": "c1"}},
+	}
+	config := common.IndexConfig{IndexName: "coll1", IndexType: common.IndexTypeBM25}
+
+	ok, err := idx.UpdateIndex(context.Background(), chunks, "doc1", config, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	// 对齐 Python: delete 后 flush（update_index 显式 1 次 + add 尾部 1 次 = 2）
+	assert.Equal(t, 2, fake.flushCount)
+	assert.Equal(t, 1, fake.insertCount)
 }
