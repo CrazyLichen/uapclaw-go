@@ -22,6 +22,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -604,5 +605,33 @@ func TestApplySessionScopedTeamName_会话作用域(t *testing.T) {
 	mgr.applySessionScopedTeamName(spec, "abc123")
 	if spec.TeamName != "my-team_abc123" {
 		t.Fatalf("scoped name should be idempotent, got %q", spec.TeamName)
+	}
+}
+
+// TestConfigPreferredLanguage_env隔离读config config.yaml 存在时读取 preferred_language，缺失回退 zh。
+func TestConfigPreferredLanguage_env隔离读config(t *testing.T) {
+	// 独立 workspace：UAPCLAW_DATA_DIR → 临时目录 + config/config.yaml
+	wsDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", wsDir)
+	upath.ResetCache()
+	t.Cleanup(upath.ResetCache)
+
+	// 无 config.yaml（config 目录也未创建）→ Load 返回空 map → 回退 "zh"
+	if got := configPreferredLanguage(); got != "zh" {
+		t.Fatalf("missing config should default zh, got %q", got)
+	}
+
+	// 写入 preferred_language: en → 命中
+	cfgDir := filepath.Join(wsDir, "config")
+	mkdir(t, cfgDir)
+	writeFile(t, filepath.Join(cfgDir, "config.yaml"), "preferred_language: en\n")
+	if got := configPreferredLanguage(); got != "en" {
+		t.Fatalf("config preferred_language should be read, got %q", got)
+	}
+
+	// preferred_language 为空串 → 回退 zh
+	writeFile(t, filepath.Join(cfgDir, "config.yaml"), "preferred_language: \"\"\n")
+	if got := configPreferredLanguage(); got != "zh" {
+		t.Fatalf("empty preferred_language should default zh, got %q", got)
 	}
 }
