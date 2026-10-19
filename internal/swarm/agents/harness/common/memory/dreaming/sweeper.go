@@ -786,7 +786,7 @@ func (s *Sweeper) compress(events []HistoryEvent, depth int) string {
 // Python: Sweeper._extract_via_llm(compressed_text, existing_summary)
 func (s *Sweeper) extractViaLLM(ctx context.Context, compressedText, existingSummary string) ([]KnowledgeItem, error) {
 	// Python: from jiuwenswarm.common.config import get_default_models
-	entries := getDefaultModels()
+	entries := config.GetDefaultModels(nil)
 	if len(entries) == 0 {
 		logger.Warn(logComponent).Msg("[Sweeper] No default models configured")
 		return nil, nil
@@ -1027,38 +1027,6 @@ func (s *Sweeper) saveCheckpoint() {
 	if err := os.WriteFile(path, encoded, 0o644); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("[Sweeper] checkpoint save failed")
 	}
-}
-
-// getDefaultModels 内部获取默认模型列表。
-// 对齐 Python: from jiuwenswarm.common.config import get_default_models
-func getDefaultModels() []map[string]any {
-	cfg, err := config.New("")
-	if err != nil {
-		return nil
-	}
-	cfgData, err := cfg.Load()
-	if err != nil {
-		return nil
-	}
-	modelsSection, _ := cfgData["models"].(map[string]any)
-	if modelsSection == nil {
-		return nil
-	}
-
-	// 优先级：models.defaults（列表） > models.default（单对象）
-	if defaults, ok := modelsSection["defaults"].([]any); ok && len(defaults) > 0 {
-		result := make([]map[string]any, 0, len(defaults))
-		for _, entry := range defaults {
-			if m, ok := entry.(map[string]any); ok {
-				result = append(result, m)
-			}
-		}
-		return result
-	}
-	if defaultEntry, ok := modelsSection["default"].(map[string]any); ok {
-		return []map[string]any{defaultEntry}
-	}
-	return nil
 }
 
 // getUIText 获取指定语言的 i18n 文本，回退到 zh。

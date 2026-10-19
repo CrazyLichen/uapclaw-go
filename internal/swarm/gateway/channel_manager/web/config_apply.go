@@ -297,34 +297,6 @@ func ProcessFiles(ctx context.Context, params map[string]any) map[string]any {
 	return params
 }
 
-// GetDefaultModels 从 config.yaml 读取 models.defaults 并返回解析环境变量后的列表。
-// Python: cfg.load()["models"]["defaults"]（含环境变量展开）。
-func GetDefaultModels() []map[string]any {
-	cfg, err := config.New("")
-	if err != nil {
-		return nil
-	}
-	cfgData, err := cfg.Load()
-	if err != nil {
-		return nil
-	}
-	rawVal := getConfigAny(cfgData, "models.defaults", nil)
-	if rawVal == nil {
-		return nil
-	}
-	rawList, ok := rawVal.([]any)
-	if !ok {
-		return nil
-	}
-	result := make([]map[string]any, 0, len(rawList))
-	for _, item := range rawList {
-		if m, ok := item.(map[string]any); ok {
-			result = append(result, m)
-		}
-	}
-	return result
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isAvailableProvider 检查 provider 是否在可用列表中。
@@ -650,7 +622,7 @@ func buildModelsDefaultsFromFrontend(rawModels any, crypto CryptoProvider) ([]ma
 
 	// 合并原始 YAML 条目（对齐 Python _merge_models_for_replace_all）
 	rawDefaults := loadRawModelsDefaults()
-	resolvedDefaults := GetDefaultModels()
+	resolvedDefaults := config.GetDefaultModels(nil)
 	merged := mergeModelsForReplaceAll(parsed, rawDefaults, resolvedDefaults, crypto)
 
 	// 推断 is_default（对齐 Python _infer_is_default）

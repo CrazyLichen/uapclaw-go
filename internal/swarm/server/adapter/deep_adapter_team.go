@@ -272,6 +272,9 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 	// 确保事件广播回调已注入（幂等操作）
 	EnsureEventBroadcastInjected(channelID)
 
+	// 确保 code member 配置回调已注入（幂等操作）
+	EnsureTeamDependenciesInjected(channelID)
+
 	// 步骤 3: 判断是否首次请求
 	// 对齐 Python: if not team_manager.has_stream_task(session_id)
 	isFirstRequest := !teamManager.HasStreamTask(sessionID)

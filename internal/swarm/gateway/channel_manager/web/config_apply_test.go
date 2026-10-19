@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	utils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
@@ -427,9 +428,9 @@ func TestLoadRawModelsDefaults(t *testing.T) {
 }
 
 func TestGetDefaultModels(t *testing.T) {
-	// 无配置文件时返回 nil 或空列表
-	result := GetDefaultModels()
-	// 不会 panic
+	// 收敛到 config.GetDefaultModels 权威实现（10.6.19 Task15）——冒烟验证
+	result := config.GetDefaultModels(nil)
+	// 不会 panic（环境无 config.yaml 时可能返回 env 回退条目或空列表）
 	_ = result
 }
 

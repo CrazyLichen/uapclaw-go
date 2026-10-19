@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -60,6 +62,8 @@ var (
 	pendingWaiters = make(map[[2]string][]pendingWaiter)
 	// eventBroadcastInitialized 标记是否已向 TeamManager 注入事件广播回调
 	eventBroadcastInitialized bool
+	// teamDepsInjected 标记是否已向 TeamManager 注入 code member 配置回调
+	teamDepsInjected bool
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -77,6 +81,51 @@ func EnsureEventBroadcastInjected(channelID string) {
 		broadcastEvent(chID, sessID, event)
 	})
 	eventBroadcastInitialized = true
+}
+
+// EnsureTeamDependenciesInjected 确保 TeamManager 的依赖回调已注入。
+// 对齐 Python: customizer 内 from interface_code import configure_code_team_member_agent
+// （模块级函数每次调用新建 JiuwenClawCodeAdapter 实例）。
+// 此函数幂等，多次调用无副作用。
+func EnsureTeamDependenciesInjected(channelID string) {
+	if teamDepsInjected {
+		return
+	}
+	tm := team.GetTeamManager(channelID)
+	tm.SetCodeMemberConfigurer(func(
+		ctx context.Context,
+		agent hinterfaces.DeepAgentInterface,
+		parentAgent hinterfaces.DeepAgentInterface,
+		skillManager *skillruntime.SkillManager,
+		memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
+		forceEnglishRuntimePrompt bool,
+	) {
+		// 接口 → 具体类型断言（对齐 Python：configure 接收 DeepAgent 实例；
+		// 断言失败 warning 跳过，等价 Python except）
+		agentImpl, ok := agent.(*harness.DeepAgent)
+		if !ok {
+			logger.Warn(logComponent).
+				Str("member_name", memberName).
+				Str("role", role).
+				Msg("code member configurer: agent is not *harness.DeepAgent, skipping")
+			return
+		}
+		parentImpl, ok := parentAgent.(*harness.DeepAgent)
+		if !ok {
+			logger.Warn(logComponent).
+				Str("member_name", memberName).
+				Str("role", role).
+				Msg("code member configurer: parentAgent is not *harness.DeepAgent, skipping")
+			return
+		}
+		// Python: adapter = JiuwenClawCodeAdapter()（每次调用新建实例）
+		NewCodeAdapter().ConfigureTeamMemberAgent(
+			ctx, agentImpl, parentImpl, skillManager,
+			memberName, role, sessionID, channelID, projectDir, runtimeLanguage,
+			forceEnglishRuntimePrompt,
+		)
+	})
+	teamDepsInjected = true
 }
 
 // SyncTeamIdentityMetadata 持久化 team 身份元数据（仅新创建的 team 会话）。

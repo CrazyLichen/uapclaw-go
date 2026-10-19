@@ -1955,7 +1955,7 @@ func (d *DeepAdapter) buildModelCacheFromDefaults(configBase map[string]any) {
 	d.modelNameToKeys = make(map[string][]string)
 	nameCounter := make(map[string]int)
 
-	defaults := getDefaultModels(configBase)
+	defaults := config.GetDefaultModels(configBase)
 	for _, entry := range defaults {
 		mcc, _ := entry["model_client_config"].(map[string]any)
 		if mcc == nil {
@@ -2286,36 +2286,6 @@ func copyMap(m map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
-}
-
-// getDefaultModels 从配置获取默认模型列表。
-//
-// Python: common/config.py get_default_models() (line 697+)
-//
-// 优先级：models.defaults（列表） > models.default（单对象）
-func getDefaultModels(configBase map[string]any) []map[string]any {
-	modelsSection, _ := configBase["models"].(map[string]any)
-	if modelsSection == nil {
-		return nil
-	}
-
-	// 新格式：defaults 列表
-	if defaults, ok := modelsSection["defaults"].([]any); ok && len(defaults) > 0 {
-		result := make([]map[string]any, 0, len(defaults))
-		for _, entry := range defaults {
-			if m, ok := entry.(map[string]any); ok {
-				result = append(result, m)
-			}
-		}
-		return result
-	}
-
-	// 旧格式：单个 default 对象 → 包装为列表
-	if defaultEntry, ok := modelsSection["default"].(map[string]any); ok {
-		return []map[string]any{defaultEntry}
-	}
-
-	return nil
 }
 
 // paramsInt 从 params 中取整数值，支持默认值。

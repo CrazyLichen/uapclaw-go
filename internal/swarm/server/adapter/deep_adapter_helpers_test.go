@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
@@ -309,6 +310,7 @@ func TestResolveModelForRequest_精确匹配(t *testing.T) {
 }
 
 // TestGetDefaultModels_defaults列表 测试新格式 defaults 列表。
+// 10.6.19 Task15 收敛：委托 config.GetDefaultModels 权威实现。
 func TestGetDefaultModels_defaults列表(t *testing.T) {
 	configBase := map[string]any{
 		"models": map[string]any{
@@ -318,9 +320,9 @@ func TestGetDefaultModels_defaults列表(t *testing.T) {
 			},
 		},
 	}
-	result := getDefaultModels(configBase)
+	result := config.GetDefaultModels(configBase)
 	if len(result) != 2 {
-		t.Errorf("getDefaultModels 返回 %d 条，want 2", len(result))
+		t.Errorf("GetDefaultModels 返回 %d 条，want 2", len(result))
 	}
 }
 
@@ -331,17 +333,17 @@ func TestGetDefaultModels_default对象(t *testing.T) {
 			"default": map[string]any{"model_client_config": map[string]any{"model_name": "qwen"}},
 		},
 	}
-	result := getDefaultModels(configBase)
+	result := config.GetDefaultModels(configBase)
 	if len(result) != 1 {
-		t.Errorf("getDefaultModels 返回 %d 条，want 1", len(result))
+		t.Errorf("GetDefaultModels 返回 %d 条，want 1", len(result))
 	}
 }
 
-// TestGetDefaultModels_无models段 测试无 models 段。
+// TestGetDefaultModels_无models段 无 models 段时走 env 回退（恒 1 条 env 条目）。
 func TestGetDefaultModels_无models段(t *testing.T) {
-	result := getDefaultModels(map[string]any{})
-	if result != nil {
-		t.Errorf("无 models 段应返回 nil，got %v", result)
+	result := config.GetDefaultModels(map[string]any{})
+	if len(result) != 1 {
+		t.Errorf("无 models 段应返回 env 回退 1 条，got %d", len(result))
 	}
 }
 
