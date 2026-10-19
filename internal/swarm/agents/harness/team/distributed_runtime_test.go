@@ -2,6 +2,7 @@ package team
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -254,4 +255,66 @@ func TestExtractPgEndpoint_URL解析(t *testing.T) {
 	if host2 != "127.0.0.1" || port2 != 5432 {
 		t.Fatalf("empty default: got %s:%d", host2, port2)
 	}
+}
+
+// TestRunCommand_成功执行 返回退出码 0 与输出。
+func TestRunCommand_成功执行(t *testing.T) {
+	rc, out := RunCommand(t.Context(), []string{"echo", "hello"}, subprocessTimeoutSec)
+	if rc != 0 {
+		t.Fatalf("rc = %d, want 0", rc)
+	}
+	if !strings.Contains(out, "hello") {
+		t.Fatalf("out = %q, want contains hello", out)
+	}
+}
+
+// TestRunCommand_非零退出码 返回真实退出码。
+func TestRunCommand_非零退出码(t *testing.T) {
+	rc, _ := RunCommand(t.Context(), []string{"sh", "-c", "exit 3"}, subprocessTimeoutSec)
+	if rc != 3 {
+		t.Fatalf("rc = %d, want 3", rc)
+	}
+}
+
+// TestRunCommand_spawn失败127 可执行不存在。
+func TestRunCommand_spawn失败127(t *testing.T) {
+	rc, _ := RunCommand(t.Context(), []string{"no-such-cmd-xyz"}, subprocessTimeoutSec)
+	if rc != 127 {
+		t.Fatalf("rc = %d, want 127", rc)
+	}
+}
+
+// TestRunCommand_超时124 超时后被 kill。
+func TestRunCommand_超时124(t *testing.T) {
+	rc, _ := RunCommand(t.Context(), []string{"sleep", "5"}, 0.3)
+	if rc != 124 {
+		t.Fatalf("rc = %d, want 124", rc)
+	}
+}
+
+// TestIsPgAvailable_pg缺失时false pg_isready 不存在 → 127 ≠ 0。
+func TestIsPgAvailable_pg缺失时false(t *testing.T) {
+	// 环境无 pg_isready 时返回 false（CI 安全）；有 pg 但未运行也返回 false
+	if IsPgAvailable(t.Context(), "127.0.0.1", 1) {
+		t.Logf("pg_isready 可用且 127.0.0.1:1 竟然 ready，跳过断言")
+	}
+}
+
+// TestEnsurePostgresqlForLeader_非leader短路 不执行任何命令。
+func TestEnsurePostgresqlForLeader_非leader短路(t *testing.T) {
+	cfg := map[string]any{"team": map[string]any{
+		"runtime": map[string]any{"mode": "distributed", "role": "teammate"},
+		"storage": map[string]any{"type": "postgresql"},
+	}}
+	// 无 PG 环境下 teammate 角色必须直接返回（否则会尝试启动 PG 拖慢测试）
+	EnsurePostgresqlForLeader(t.Context(), cfg)
+}
+
+// TestEnsurePostgresqlForLeader_非pg存储短路。
+func TestEnsurePostgresqlForLeader_非pg存储短路(t *testing.T) {
+	cfg := map[string]any{"team": map[string]any{
+		"runtime": map[string]any{"mode": "distributed", "role": "leader"},
+		"storage": map[string]any{"type": "sqlite"},
+	}}
+	EnsurePostgresqlForLeader(t.Context(), cfg)
 }

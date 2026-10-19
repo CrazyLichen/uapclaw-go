@@ -1,9 +1,14 @@
 package team
 
 import (
+	"context"
+	"errors"
+	"math"
 	"net/url"
+	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
@@ -383,4 +388,165 @@ func anyToStr(v any) string {
 		return s
 	}
 	return ""
+}
+
+// RunCommand 执行外部命令并返回退出码与合并输出（stdout+stderr）。
+// 对齐 Python: run_command (distributed_runtime.py L238-279)
+//
+// 退出码约定：spawn 失败 127 / 超时 124 / 成功或非零退出返回真实退出码。
+// Python 的 communicate 失败 126 在 Go 中无直接对应（CombinedOutput 管道错误
+// 极罕见），并入 127 路径。
+func RunCommand(ctx context.Context, args []string, timeoutSec float64) (int, string) {
+	if len(args) == 0 {
+		return 127, ""
+	}
+	cmdStr := strings.Join(args, " ")
+	cctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec*float64(time.Second)))
+	defer cancel()
+
+	cmd := exec.CommandContext(cctx, args[0], args[1:]...)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return cmd.ProcessState.ExitCode(), string(out)
+	}
+	// 超时（Python: 124）
+	if cctx.Err() == context.DeadlineExceeded {
+		logger.Warn(logComponent).Str("cmd", cmdStr).Float64("timeout_sec", timeoutSec).
+			Msg("[TeamManager] subprocess timed out")
+		return 124, ""
+	}
+	// 普通非零退出，返回真实退出码（对齐 Python 返回 returncode）
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode(), string(out)
+	}
+	// spawn 失败（Python OSError → 127）
+	logger.Warn(logComponent).Str("cmd", cmdStr).Err(err).
+		Msg("[TeamManager] subprocess spawn failed")
+	return 127, ""
+}
+
+// IsPgAvailable 探测 PG 端点是否可接受连接。
+// 对齐 Python: is_pg_available (L282-291)
+//
+// pg_isready -h host -p port，rc==0 视为可用。
+func IsPgAvailable(ctx context.Context, host string, port int) bool {
+	rc, _ := RunCommand(ctx, []string{"pg_isready", "-h", host, "-p", strconv.Itoa(port)}, subprocessTimeoutSec)
+	return rc == 0
+}
+
+// TryStartPgCluster 尝试启动本机 PG 集群。
+// 对齐 Python: try_start_pg_cluster (L294-316)
+//
+// pg_lsclusters --no-header 解析首行 → pg_ctlcluster <ver> <name> start → 启动成功返回 true。
+func TryStartPgCluster(ctx context.Context) bool {
+	rc, out := RunCommand(ctx, []string{"pg_lsclusters", "--no-header"}, subprocessTimeoutSec)
+	if rc != 0 {
+		return false
+	}
+	firstLine := ""
+	for _, line := range strings.Split(out, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			firstLine = trimmed
+			break
+		}
+	}
+	if firstLine == "" {
+		return false
+	}
+	parts := strings.Fields(firstLine)
+	if len(parts) < 2 {
+		return false
+	}
+	version, cluster := parts[0], parts[1]
+	startRc, _ := RunCommand(ctx, []string{"pg_ctlcluster", version, cluster, "start"}, subprocessTimeoutSec)
+	return startRc == 0
+}
+
+// EnsurePostgresqlForLeader 确保 leader 的 PostgreSQL 可用。
+// 对齐 Python: ensure_postgresql_for_leader (L319-413)
+//
+// 组合流程：非 leader 或非 pg 存储短路 → ExtractPgEndpoint → IsPgAvailable
+// 失败则 TryStartPgCluster → 回退 systemctl/service start → 启动后指数退避等待
+// 就绪（init 0.4s / max 2.0s / backoff 1.45 / max 30s / 每 5s 日志）。
+func EnsurePostgresqlForLeader(ctx context.Context, configBase map[string]any) {
+	if RuntimeRole(configBase) != "leader" {
+		return
+	}
+	teamCfg, _ := configBase["team"].(map[string]any)
+	if teamCfg == nil {
+		teamCfg = map[string]any{}
+	}
+	if !IsPostgresqlStorage(teamCfg) {
+		return
+	}
+
+	host, port := ExtractPgEndpoint(teamCfg)
+	if IsPgAvailable(ctx, host, port) {
+		return
+	}
+
+	logger.Warn(logComponent).Str("host", host).Int("port", port).
+		Msg("[TeamManager] PostgreSQL not reachable, attempting auto-start as leader")
+
+	started := TryStartPgCluster(ctx)
+	if !started {
+		for _, cmd := range [][]string{
+			{"systemctl", "start", "postgresql"},
+			{"service", "postgresql", "start"},
+		} {
+			if rc, _ := RunCommand(ctx, cmd, subprocessTimeoutSec); rc == 0 {
+				started = true
+				break
+			}
+		}
+	}
+	if !started {
+		logger.Warn(logComponent).
+			Msg("[TeamManager] PostgreSQL auto-start command failed, will continue and rely on DB connect error")
+		return
+	}
+
+	logger.Info(logComponent).Str("host", host).Int("port", port).
+		Float64("max_sec", pgPostStartReadyMaxSec).
+		Msg("[TeamManager] start command returned OK; waiting for connections")
+
+	deadline := time.Now().Add(time.Duration(pgPostStartReadyMaxSec * float64(time.Second)))
+	sleepFor := pgPostStartReadyInitSleep
+	waitStart := time.Now()
+	lastLog := waitStart
+	for time.Now().Before(deadline) {
+		if IsPgAvailable(ctx, host, port) {
+			logger.Info(logComponent).Str("host", host).Int("port", port).
+				Float64("waited_sec", time.Since(waitStart).Seconds()).
+				Msg("[TeamManager] PostgreSQL is ready")
+			return
+		}
+		now := time.Now()
+		if now.Sub(lastLog).Seconds() >= pgPostStartLogEverySec {
+			logger.Info(logComponent).Str("host", host).Int("port", port).
+				Float64("elapsed_sec", now.Sub(waitStart).Seconds()).
+				Float64("max_sec", pgPostStartReadyMaxSec).
+				Msg("[TeamManager] still waiting for PostgreSQL")
+			lastLog = now
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		sleep := time.Duration(sleepFor * float64(time.Second))
+		if sleep > remaining {
+			sleep = remaining
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(sleep):
+		}
+		sleepFor = math.Min(sleepFor*pgPostStartReadyBackoff, pgPostStartReadyMaxSleep)
+	}
+
+	logger.Warn(logComponent).Str("host", host).Int("port", port).
+		Float64("max_sec", pgPostStartReadyMaxSec).
+		Msg("[TeamManager] PostgreSQL start attempted but endpoint still not ready")
 }
