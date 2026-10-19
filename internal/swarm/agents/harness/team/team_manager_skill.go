@@ -2,8 +2,6 @@ package team
 
 import (
 	"context"
-	"os"
-	"strings"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
@@ -220,8 +218,8 @@ func (m *TeamManager) DrainTeamSkillEvents(sessionID string) []map[string]any {
 //     mount_team_skill_rail=False, mount_team_skill_create_rail=True,
 //     mount_skill_evolution_rail=False)
 func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
-	autoScanEnabled := getEvolutionAutoScanEnabled(config)
-	skillCreateEnabled := getSkillCreateEnabled(config)
+	autoScanEnabled := GetEvolutionAutoScanEnabled(config)
+	skillCreateEnabled := GetSkillCreateEnabled(config)
 
 	// 步骤 3: 更新所有成员 SkillEvolutionRail 的 autoScan
 	for _, rails := range m.teamMemberSkillEvoRails {
@@ -265,75 +263,6 @@ func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// getEvolutionAutoScanEnabled 从 config 读取 auto_scan 开关。
-// M-04: 完整对齐 Python get_evolution_auto_scan_enabled (team_runtime_inheritance.py L381-385)
-//
-// Python 步骤：
-//  1. env_auto_scan = _get_bool_env(os.getenv("EVOLUTION_AUTO_SCAN"))——环境变量优先
-//  2. if env_auto_scan is not None: return env_auto_scan
-//  3. return _get_evolution_config(config).get("auto_scan", False)——嵌套路径 + 默认 False
-func getEvolutionAutoScanEnabled(config map[string]any) bool {
-	// Python: env_auto_scan = _get_bool_env(os.getenv("EVOLUTION_AUTO_SCAN"))
-	if envVal, ok := getBoolEnv("EVOLUTION_AUTO_SCAN"); ok {
-		return envVal
-	}
-	// Python: _get_evolution_config(config).get("auto_scan", False)
-	return getEvolutionConfigField(config, "auto_scan")
-}
-
-// getSkillCreateEnabled 从 config 读取 skill_create 开关。
-// M-04: 完整对齐 Python get_skill_create_enabled (team_runtime_inheritance.py L388-392)
-func getSkillCreateEnabled(config map[string]any) bool {
-	// Python: env_skill_create = _get_bool_env(os.getenv("SKILL_CREATE"))
-	if envVal, ok := getBoolEnv("SKILL_CREATE"); ok {
-		return envVal
-	}
-	// Python: _get_evolution_config(config).get("skill_create", False)
-	return getEvolutionConfigField(config, "skill_create")
-}
-
-// getEvolutionConfigField 从嵌套路径读取 evolution 配置字段（bool）。
-// 对齐 Python _get_evolution_config (L369-378)：
-// 优先 config["react"]["evolution"]，回退 config["evolution"]，均无则空 dict → 默认 False
-func getEvolutionConfigField(config map[string]any, field string) bool {
-	evolutionConfig := getEvolutionConfig(config)
-	if b, ok := evolutionConfig[field].(bool); ok {
-		return b
-	}
-	return false
-}
-
-// getEvolutionConfig 解析嵌套的 evolution 配置段。
-// 对齐 Python _get_evolution_config (L369-378)：
-//  1. react_config = config.get("react")；若 react.evolution 为 dict 则返回之
-//  2. 回退 config.get("evolution")；若为 dict 则返回之
-//  3. 均无则返回空 map
-func getEvolutionConfig(config map[string]any) map[string]any {
-	if config == nil {
-		return nil
-	}
-	if reactConfig, ok := config["react"].(map[string]any); ok {
-		if evolutionConfig, ok := reactConfig["evolution"].(map[string]any); ok {
-			return evolutionConfig
-		}
-	}
-	if evolutionConfig, ok := config["evolution"].(map[string]any); ok {
-		return evolutionConfig
-	}
-	return nil
-}
-
-// getBoolEnv 读取布尔环境变量。
-// 对齐 Python _get_bool_env (L363-366)：
-// 值为 true/1/yes（不区分大小写）→ true；设置但非真值 → false；未设置 → (false, false) 不覆盖
-func getBoolEnv(key string) (value bool, ok bool) {
-	raw, exists := os.LookupEnv(key)
-	if !exists {
-		return false, false
-	}
-	return strings.EqualFold(raw, "true") || raw == "1" || strings.EqualFold(raw, "yes"), true
-}
 
 // isLeaderRole 检查 TeamRailMountContext 中的 member_info 是否为 leader 角色。
 // 对齐 Python: getattr(context.member_info, "role", None) == "leader"
