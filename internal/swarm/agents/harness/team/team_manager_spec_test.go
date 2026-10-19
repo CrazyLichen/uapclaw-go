@@ -2,6 +2,8 @@ package team
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -314,4 +316,293 @@ func TestCustomizer_能力卡继承(t *testing.T) {
 	}
 	// 隔离 UAPCLAW_DATA_DIR 防止技能同步写真实 ~/.uapclaw
 	// （customizer 步骤 b 会向 memberWs/skills 写文件，team_ws 指向 TeamHome 也可能写入）
+}
+
+// ──────────────────────────── Task 16：六步函数覆盖补齐 ────────────────────────────
+
+// TestCustomizer_六步全流程 leader 角色触发 stepD/stepE 注册路径。
+func TestCustomizer_六步全流程(t *testing.T) {
+	wsDir, _ := setupSkillTestEnv(t)
+	globalSkills := filepath.Join(wsDir, "agent", "workspace", "skills")
+	mkdir(t, filepath.Join(globalSkills, "shared-a"))
+	writeFile(t, filepath.Join(globalSkills, "shared-a", "SKILL.md"), "a")
+
+	mgr := NewTeamManager()
+	// spec 配置 leader 成员 + selected skills（触发 copyMemberConfiguredSkills）
+	leaderRole := "leader"
+	memberSpec := atschema.DeepAgentSpec{}
+	memberSpec.Skills = []string{"shared-a"}
+	spec := &atschema.TeamAgentSpec{
+		TeamName: "six-step-team",
+		Agents:   map[string]atschema.DeepAgentSpec{"member-1": memberSpec},
+	}
+
+	parent := newCustomizerFakeAgent("parent")
+	member := newCustomizerFakeAgent("member")
+	memberWs := filepath.Join(t.TempDir(), "member-ws")
+	member.deepConfig = &hschema.DeepAgentConfig{
+		Workspace: &workspace.Workspace{RootPath: memberWs},
+	}
+	parent.projectDir = "/tmp/parent-project"
+
+	customizer := mgr.BuildAgentCustomizer(spec, parent, "sess-6", "req-6", "web", map[string]any{"mode": "team.plan"})
+	if customizer == nil {
+		t.Fatalf("customizer should not be nil")
+	}
+	if err := customizer(context.Background(), member, "member-1", leaderRole); err != nil {
+		t.Fatalf("customizer failed: %v", err)
+	}
+
+	// 步骤 a+skill 同步后：成员 skills 目录应有 shared-a（copyMemberConfiguredSkills 路径）
+	if _, err := os.Stat(filepath.Join(memberWs, "skills", "shared-a", "SKILL.md")); err != nil {
+		t.Fatalf("member skills dir should contain shared-a: %v", err)
+	}
+	// skills_state.json 应存在（writeMemberSkillState 路径）
+	if _, err := os.Stat(filepath.Join(memberWs, "skills", "skills_state.json")); err != nil {
+		t.Fatalf("member skills_state.json should exist: %v", err)
+	}
+	// 步骤 d：member rails 应含白名单 rail（TeamWorkspaceReportPath/ContextProcessor 等）
+	if len(member.rails) == 0 {
+		t.Fatalf("member rails should be added via stepD")
+	}
+	// parent project dir 传递
+	if member.setProjectDirOK != "/tmp/parent-project" {
+		t.Fatalf("parent project dir should propagate, got %q", member.setProjectDirOK)
+	}
+	// leader 注册 TeamRailContext——stepD/stepE 内部经 GetTeamManager(resolvedChannel)
+	// 获取全局实例（channel="web"），断言需从同一全局实例读取
+	if GetTeamManager("web").GetTeamRailContext("sess-6") == nil {
+		t.Fatalf("leader should register TeamRailContext")
+	}
+}
+
+// TestCustomizer_code模式注入回调 stepC configurer 被调用。
+func TestCustomizer_code模式注入回调(t *testing.T) {
+	_, _ = setupSkillTestEnv(t)
+	mgr := NewTeamManager()
+	configured := false
+	var gotMemberName, gotRole, gotLang string
+	var gotForceEnglish bool
+	mgr.SetCodeMemberConfigurer(func(ctx context.Context, agent, parent hinterfaces.DeepAgentInterface,
+		skillManager *skillruntime.SkillManager, memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
+		forceEnglishRuntimePrompt bool) {
+		configured = true
+		gotMemberName = memberName
+		gotRole = role
+		gotLang = runtimeLanguage
+		gotForceEnglish = forceEnglishRuntimePrompt
+	})
+
+	teammateRole := "teammate"
+	spec := &atschema.TeamAgentSpec{TeamName: "code-team"}
+	spec.Agents = map[string]atschema.DeepAgentSpec{}
+
+	parent := newCustomizerFakeAgent("parent")
+	parent.adapterMode = "code" // 触发步骤 c
+	member := newCustomizerFakeAgent("member")
+	memberWs := filepath.Join(t.TempDir(), "member-ws")
+	member.deepConfig = &hschema.DeepAgentConfig{
+		Workspace: &workspace.Workspace{RootPath: memberWs},
+	}
+
+	customizer := mgr.BuildAgentCustomizer(spec, parent, "sess-c", "req-c", "web", nil)
+	if err := customizer(context.Background(), member, "coder-1", teammateRole); err != nil {
+		t.Fatalf("customizer failed: %v", err)
+	}
+	if !configured {
+		t.Fatalf("code member configurer should be invoked for adapter mode code")
+	}
+	if gotMemberName != "coder-1" || gotRole != teammateRole {
+		t.Fatalf("configurer member/role mismatch: %q/%q", gotMemberName, gotRole)
+	}
+	// teammate 非 leader → forceEnglishRuntimePrompt = true（非 team-plan leader 恒 true）
+	if !gotForceEnglish {
+		t.Fatalf("non-leader should force english runtime prompt")
+	}
+	_ = gotLang
+}
+
+// TestCustomizer_code模式leader_teamPlan 语言解析。
+func TestCustomizer_code模式leader_teamPlan语言(t *testing.T) {
+	_, _ = setupSkillTestEnv(t)
+	mgr := NewTeamManager()
+	var gotLang string
+	var gotForceEnglish bool
+	mgr.SetCodeMemberConfigurer(func(ctx context.Context, agent, parent hinterfaces.DeepAgentInterface,
+		skillManager *skillruntime.SkillManager, memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
+		forceEnglishRuntimePrompt bool) {
+		gotLang = runtimeLanguage
+		gotForceEnglish = forceEnglishRuntimePrompt
+	})
+
+	leaderRole := "leader"
+	spec := &atschema.TeamAgentSpec{TeamName: "lang-team", Language: "en"}
+	spec.Agents = map[string]atschema.DeepAgentSpec{}
+
+	parent := newCustomizerFakeAgent("parent")
+	parent.adapterMode = "code"
+	member := newCustomizerFakeAgent("member")
+	member.deepConfig = &hschema.DeepAgentConfig{
+		Workspace: &workspace.Workspace{RootPath: filepath.Join(t.TempDir(), "mw")},
+	}
+
+	customizer := mgr.BuildAgentCustomizer(spec, parent, "sess-l", "req-l", "web", map[string]any{"mode": "team.plan"})
+	if err := customizer(context.Background(), member, "leader-1", leaderRole); err != nil {
+		t.Fatalf("customizer failed: %v", err)
+	}
+	// team.plan + leader → runtimeLanguage = spec.Language = "en"；forceEnglish = false
+	if gotLang != "en" {
+		t.Fatalf("team-plan leader language = %q, want en", gotLang)
+	}
+	if gotForceEnglish {
+		t.Fatalf("team-plan leader should not force english")
+	}
+}
+
+// TestResolveMemberSkills_三种查找路径。
+func TestResolveMemberSkills_三种查找路径(t *testing.T) {
+	byName := atschema.DeepAgentSpec{}
+	byName.Skills = []string{"s1"}
+	byRole := atschema.DeepAgentSpec{}
+	byRole.Skills = []string{"s2"}
+	leaderSpec := atschema.DeepAgentSpec{}
+	leaderSpec.Skills = []string{"s3"}
+	spec := &atschema.TeamAgentSpec{Agents: map[string]atschema.DeepAgentSpec{
+		"alice": byName, "worker": byRole, "leader": leaderSpec,
+	}}
+
+	// member_name 命中
+	ok, skills := resolveMemberSkills(spec, "alice", "")
+	if !ok || len(skills) != 1 || skills[0] != "s1" {
+		t.Fatalf("by-name lookup failed: %v %v", ok, skills)
+	}
+	// role 命中（member_name 不存在）
+	ok, skills = resolveMemberSkills(spec, "nobody", "worker")
+	if !ok || len(skills) != 1 || skills[0] != "s2" {
+		t.Fatalf("by-role lookup failed: %v %v", ok, skills)
+	}
+	// leader 回退
+	ok, skills = resolveMemberSkills(spec, "nobody", "nobody")
+	if !ok || len(skills) != 1 || skills[0] != "s3" {
+		t.Fatalf("leader fallback failed: %v %v", ok, skills)
+	}
+	// 无 Agents → false
+	ok, _ = resolveMemberSkills(&atschema.TeamAgentSpec{}, "x", "y")
+	if ok {
+		t.Fatalf("empty agents should return false")
+	}
+}
+
+// TestCopyMemberConfiguredSkills_缺失技能warning。
+func TestCopyMemberConfiguredSkills_缺失技能warning(t *testing.T) {
+	source := t.TempDir()
+	target := t.TempDir()
+	// global 有 skill-x；selected 含 skill-x + skill-missing
+	mkdir(t, filepath.Join(source, "skill-x"))
+	writeFile(t, filepath.Join(source, "skill-x", "SKILL.md"), "x")
+
+	copyMemberConfiguredSkills(target, []string{"skill-x", "skill-missing"}, source)
+
+	if _, err := os.Stat(filepath.Join(target, "skill-x", "SKILL.md")); err != nil {
+		t.Fatalf("skill-x should be copied: %v", err)
+	}
+	// skill-missing 不存在（missing warning 路径，不 panic 即通过）
+}
+
+// TestBuildMemberSkillState_补全project条目。
+func TestBuildMemberSkillState_补全project条目(t *testing.T) {
+	globalState := t.TempDir()
+	statePath := filepath.Join(globalState, "skills_state.json")
+	// global state 有 installed_plugins（含 name=extra 不在 member 目录 → 过滤掉）
+	writeFile(t, statePath, `{"marketplaces":[],"installed_plugins":[{"name":"extra"}],"local_skills":[]}`)
+
+	memberDir := t.TempDir()
+	mkdir(t, filepath.Join(memberDir, "real-skill"))
+	writeFile(t, filepath.Join(memberDir, "real-skill", "SKILL.md"), "r")
+
+	state := buildMemberSkillState(memberDir, statePath)
+	plugins, _ := state["installed_plugins"].([]any)
+	if len(plugins) != 1 {
+		t.Fatalf("installed_plugins should contain only real-skill, got %v", plugins)
+	}
+	plugin := plugins[0].(map[string]any)
+	if plugin["name"] != "real-skill" || plugin["source"] != "project" {
+		t.Fatalf("project entry mismatch: %v", plugin)
+	}
+	locals, _ := state["local_skills"].([]any)
+	if len(locals) != 1 || locals[0].(map[string]any)["name"] != "real-skill" {
+		t.Fatalf("local_skills project entry missing: %v", locals)
+	}
+}
+
+// TestCustomizer_无workspace跳过技能同步。
+func TestCustomizer_无workspace跳过技能同步(t *testing.T) {
+	_, _ = setupSkillTestEnv(t)
+	mgr := NewTeamManager()
+	spec := &atschema.TeamAgentSpec{TeamName: "no-ws-team"}
+	spec.Agents = map[string]atschema.DeepAgentSpec{}
+
+	parent := newCustomizerFakeAgent("parent")
+	member := newCustomizerFakeAgent("member")
+	// member.deepConfig 为 nil → agentWsRootPath 空 → 步骤 b 跳过
+
+	customizer := mgr.BuildAgentCustomizer(spec, parent, "sess-n", "", "", nil)
+	if err := customizer(context.Background(), member, "m", "teammate"); err != nil {
+		t.Fatalf("customizer failed: %v", err)
+	}
+	// 不 panic 即通过（warning 路径）
+}
+
+// TestGetEnrichedTeamSpec_装配链 覆盖 spec 加载+plan mode+customizer 装配。
+func TestGetEnrichedTeamSpec_装配链(t *testing.T) {
+	_, _ = setupSkillTestEnv(t)
+	mgr := NewTeamManager()
+
+	parent := newCustomizerFakeAgent("parent")
+	// configBase 无 team 段 → loadTeamSpec 走默认配置路径（内部 teamLoadConfig）
+	spec := mgr.GetEnrichedTeamSpec(context.Background(), "sess-ge", parent, "req-ge", "web", map[string]any{"mode": "team.plan"})
+	if spec == nil {
+		t.Fatalf("spec should not be nil")
+	}
+	// team.plan → EnableTeamPlan
+	if !spec.EnableTeamPlan {
+		t.Fatalf("team.plan mode should enable team plan")
+	}
+	// deepAgent 非 nil → customizer 应已装配
+	if spec.AgentCustomizer == nil {
+		t.Fatalf("agent customizer should be set")
+	}
+}
+
+// TestApplyTeamPlanMode_显式teamPlan。
+func TestApplyTeamPlanMode_显式teamPlan(t *testing.T) {
+	mgr := NewTeamManager()
+	spec := &atschema.TeamAgentSpec{}
+	mgr.ApplyTeamPlanMode(spec, map[string]any{"mode": "  TEAM.PLAN  "})
+	if !spec.EnableTeamPlan {
+		t.Fatalf("TEAM.PLAN (case+space) should enable team plan")
+	}
+	// 非 team.plan 不启用
+	spec2 := &atschema.TeamAgentSpec{}
+	mgr.ApplyTeamPlanMode(spec2, map[string]any{"mode": "normal"})
+	if spec2.EnableTeamPlan {
+		t.Fatalf("normal mode should not enable team plan")
+	}
+	// nil metadata 不 panic
+	mgr.ApplyTeamPlanMode(spec2, nil)
+}
+
+// TestApplySessionScopedTeamName_会话作用域。
+func TestApplySessionScopedTeamName_会话作用域(t *testing.T) {
+	mgr := NewTeamManager()
+	spec := &atschema.TeamAgentSpec{TeamName: "my-team"}
+	mgr.applySessionScopedTeamName(spec, "abc123")
+	if spec.TeamName != "my-team_abc123" {
+		t.Fatalf("scoped name = %q", spec.TeamName)
+	}
+	// 幂等：再次应用不叠加
+	mgr.applySessionScopedTeamName(spec, "abc123")
+	if spec.TeamName != "my-team_abc123" {
+		t.Fatalf("scoped name should be idempotent, got %q", spec.TeamName)
+	}
 }
