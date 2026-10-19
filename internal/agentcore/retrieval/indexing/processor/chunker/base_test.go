@@ -176,3 +176,26 @@ func TestBaseChunker_未注入self时ChunkDocuments报错(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "call SetSelf before ChunkDocuments")
 }
+
+// TestDimsProvider_接口满足性 嵌入 BaseChunker 的实现自动满足 DimsProvider
+// （方法提升），对齐 Python getattr(inner, "chunk_size", 512) 能取到属性
+func TestDimsProvider_接口满足性(t *testing.T) {
+	fc := newFakeChunker(t, 2048, 100, nil)
+	var c Chunker = fc // 断言需接口语境（具体类型无断言语义）
+	p, ok := c.(DimsProvider)
+	assert.True(t, ok, "嵌入 BaseChunker 的实现必须满足 DimsProvider")
+	size, overlap := p.ChunkDims()
+	assert.Equal(t, 2048, size)
+	assert.Equal(t, 100, overlap)
+}
+
+// TestChunkDims_返回构造值 纯 BaseChunker 直接调用也满足（防御路径）
+func TestChunkDims_返回构造值(t *testing.T) {
+	bc, err := NewBaseChunker(300, 30)
+	assert.NoError(t, err)
+	assert.Equal(t, 300, bc.ChunkSize)
+	assert.Equal(t, 30, bc.ChunkOverlap)
+	size, overlap := bc.ChunkDims()
+	assert.Equal(t, 300, size)
+	assert.Equal(t, 30, overlap)
+}

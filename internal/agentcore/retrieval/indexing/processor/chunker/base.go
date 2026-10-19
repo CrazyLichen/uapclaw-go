@@ -31,6 +31,16 @@ type Chunker interface {
 	Process(ctx context.Context, docs []reranker.Document) ([]common.TextChunk, error)
 }
 
+// DimsProvider 可选尺寸提供者。
+//
+// 嵌入 BaseChunker 的分块器自动满足本接口（方法提升），未嵌入的纯接口
+// 实现不满足——对齐 Python getattr(inner, "chunk_size", 512) 取不到属性
+// 时走默认值的语义（hybrid 构造时断言探测，13.8）。
+type DimsProvider interface {
+	// ChunkDims 返回 (chunkSize, chunkOverlap)。
+	ChunkDims() (int, int)
+}
+
 // BaseChunker 分块器默认适配器。
 //
 // 对齐 Python Chunker 基类的可复用部分：chunk_size/chunk_overlap 构造校验与
@@ -149,6 +159,13 @@ func (b *BaseChunker) Length(text string) int {
 		return b.lengthFunction(text)
 	}
 	return utf8.RuneCountInString(text)
+}
+
+// ChunkDims 返回 (ChunkSize, ChunkOverlap)，使嵌入方满足 DimsProvider。
+//
+// Python: base.py Chunker 的 chunk_size/chunk_overlap 属性（getattr 读取点）
+func (b *BaseChunker) ChunkDims() (int, int) {
+	return b.ChunkSize, b.ChunkOverlap
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
