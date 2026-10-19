@@ -785,9 +785,11 @@ preview = cleaned.strip()[:80]  # Python 按字符截断，CJK 安全
 
 ### M-25 TeamManager: updateEvolutionConfig 中 _build_and_mount_member_rails_for_context 未实现
 
-**Go 问题：** `team_manager_skill.go:240-250` — `TODO(#9.72): _build_and_mount_member_rails_for_context 待回填`
+**Go 问题：** `team_manager_skill.go:240-250` — `_build_and_mount_member_rails_for_context 待回填`
 
 **修复方案：** 对齐 Python 实现 skill create rail 挂载逻辑。
+
+**状态更新（2026-10-14）：** 标记已从 `TODO(#9.72)` 改为 `⤵️(#10.6.22)`（A2X RegistryRuntime 章节），实现延后至该章节统一回填。
 
 ---
 

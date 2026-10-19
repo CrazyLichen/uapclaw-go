@@ -230,12 +230,12 @@ func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
 	}
 
 	// 步骤 6: 若 skill_create 启用，为缺少 skill create rail 的 session 挂载
-	// TODO(#9.72): _build_and_mount_member_rails_for_context 待回填
+	// ⤵️(#10.6.22): _build_and_mount_member_rails_for_context 待回填
 	for sessionID := range m.teamRailContexts {
 		if _, ok := m.teamSkillCreateRails[sessionID]; ok {
 			continue
 		}
-		// TODO(#9.72): 调用 _build_and_mount_member_rails_for_context(sessionID, context,
+		// ⤵️(#10.6.22): 调用 _build_and_mount_member_rails_for_context(sessionID, context,
 		//   mount_team_skill_rail=False, mount_team_skill_create_rail=True,
 		//   mount_skill_evolution_rail=False)
 		logger.Info(logComponent).
