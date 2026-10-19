@@ -121,13 +121,7 @@ func (b *BaseChunker) ChunkDocuments(ctx context.Context, docs []reranker.Docume
 		}
 		for i, text := range texts {
 			uid := uuid.NewString()
-			meta := make(map[string]any, len(doc.Metadata)+3)
-			for k, v := range doc.Metadata {
-				meta[k] = v
-			}
-			meta["chunk_index"] = i
-			meta["total_chunks"] = len(texts)
-			meta["chunk_id"] = uid
+			meta := mergeChunkMetadata(doc.Metadata, i, len(texts), uid)
 			chunks = append(chunks, common.TextChunk{
 				ID:       uid,
 				Text:     text,
@@ -178,4 +172,20 @@ func (b *BaseChunker) chunkTextOf(text string) ([]string, error) {
 		return b.self.ChunkText(text)
 	}
 	return nil, fmt.Errorf("BaseChunker used standalone: call SetSelf before ChunkDocuments")
+}
+
+// mergeChunkMetadata 合并溯源元数据：复制 doc.Metadata 后叠加
+// chunk_index/total_chunks/chunk_id 三键。
+//
+// Python: base.py chunk_documents 与 hybrid_chunker.py chunk_documents
+// 两处同型的 {**doc.metadata, ...} 字典展开
+func mergeChunkMetadata(docMeta map[string]any, chunkIndex, totalChunks int, chunkID string) map[string]any {
+	meta := make(map[string]any, len(docMeta)+3)
+	for k, v := range docMeta {
+		meta[k] = v
+	}
+	meta["chunk_index"] = chunkIndex
+	meta["total_chunks"] = totalChunks
+	meta["chunk_id"] = chunkID
+	return meta
 }
