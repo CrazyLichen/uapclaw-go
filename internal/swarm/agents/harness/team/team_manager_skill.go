@@ -230,17 +230,12 @@ func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
 	}
 
 	// 步骤 6: 若 skill_create 启用，为缺少 skill create rail 的 session 挂载
-	// ⤵️(#10.6.22): _build_and_mount_member_rails_for_context 待回填
-	for sessionID := range m.teamRailContexts {
+	for sessionID, context := range m.teamRailContexts {
 		if _, ok := m.teamSkillCreateRails[sessionID]; ok {
 			continue
 		}
-		// ⤵️(#10.6.22): 调用 _build_and_mount_member_rails_for_context(sessionID, context,
-		//   mount_team_skill_rail=False, mount_team_skill_create_rail=True,
-		//   mount_skill_evolution_rail=False)
-		logger.Info(logComponent).
-			Str("session_id", sessionID).
-			Msg("updateEvolutionConfig: session missing skill create rail, pending _build_and_mount backfill")
+		m.buildAndMountMemberRailsForContext(sessionID, context,
+			false /* mountTeamSkillRail */, true /* mountTeamSkillCreateRail */, false /* mountSkillEvolutionRail */)
 	}
 
 	logger.Info(logComponent).
@@ -262,6 +257,70 @@ func isLeaderRole(ctx *TeamRailMountContext) bool {
 	}
 	// S-26: 对齐 Python，Role 为 nil 时返回 false（Python: getattr(ctx.member_info, "role", None) == "leader" → False）
 	return false
+}
+
+// buildAndMountMemberRailsForContext 用已存储的挂载上下文重建 team rails。
+// 对齐 Python: TeamManager._build_and_mount_member_rails_for_context (team_manager.py L1285-1327)
+//
+// Python 步骤：
+//  1. latest_config = get_config(); context.team_workspace.config = latest_config
+//  2. member_rails = build_member_rails(member_info, runtime, team_workspace)
+//  3. 遍历 rails，按 mount 开关挂载：
+//     - TeamSkillEvolutionRail + mount_team_skill_rail → agent.add_rail + register_team_live_rail
+//     - SkillEvolutionRail + mount_skill_evolution_rail → agent.add_rail + register_team_member_skill_evolution_rail
+//     - TeamSkillCreateRail + mount_team_skill_create_rail → agent.add_rail + register_team_live_rail
+//  4. team_skill_rail 非 nil → register_team_skill_rail；
+//     skills_dir 非空 → register_team_skill_sync_target(skills_dir, get_agent_skills_dir())
+//  5. team_skill_create_rail 非 nil → register_team_skill_create_rail
+func (m *TeamManager) buildAndMountMemberRailsForContext(
+	sessionID string,
+	ctx *TeamRailMountContext,
+	mountTeamSkillRail bool,
+	mountTeamSkillCreateRail bool,
+	mountSkillEvolutionRail bool,
+) (*evolution.TeamSkillEvolutionRail, *evolution.TeamSkillCreateRail) {
+	// Python: get_config() 加载失败时抛异常中断；Go 侧对齐语义：
+	// 加载失败记日志后返回 nil（不中断调用方热更新循环）。
+	latestConfig, err := teamLoadConfig()
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("session_id", sessionID).
+			Msg("[TeamManager] load config failed for rail rebuild")
+		return nil, nil
+	}
+	if ctx.TeamWorkspace != nil {
+		ctx.TeamWorkspace.Config = latestConfig
+	}
+
+	memberRails := BuildMemberRails(ctx.MemberInfo, ctx.Runtime, ctx.TeamWorkspace)
+
+	var teamSkillRail *evolution.TeamSkillEvolutionRail
+	var teamSkillCreateRail *evolution.TeamSkillCreateRail
+	for _, rail := range memberRails {
+		if tsr, ok := rail.(*evolution.TeamSkillEvolutionRail); ok && mountTeamSkillRail {
+			ctx.Agent.AddRail(tsr)
+			m.RegisterTeamLiveRail(sessionID, ctx.Agent, tsr)
+			teamSkillRail = tsr
+		} else if ser, ok := rail.(*evolution.SkillEvolutionRail); ok && mountSkillEvolutionRail {
+			ctx.Agent.AddRail(ser)
+			m.RegisterTeamMemberSkillEvolutionRail(sessionID, ser)
+		} else if scr, ok := rail.(*evolution.TeamSkillCreateRail); ok && mountTeamSkillCreateRail {
+			ctx.Agent.AddRail(scr)
+			m.RegisterTeamLiveRail(sessionID, ctx.Agent, scr)
+			teamSkillCreateRail = scr
+		}
+	}
+
+	if teamSkillRail != nil {
+		m.RegisterTeamSkillRail(sessionID, teamSkillRail)
+		if ctx.TeamWorkspace != nil && ctx.TeamWorkspace.SkillsDir != nil && *ctx.TeamWorkspace.SkillsDir != "" {
+			m.RegisterTeamSkillSyncTarget(sessionID, *ctx.TeamWorkspace.SkillsDir, workspace.AgentSkillsDir())
+		}
+	}
+	if teamSkillCreateRail != nil {
+		m.RegisterTeamSkillCreateRail(sessionID, teamSkillCreateRail)
+	}
+	return teamSkillRail, teamSkillCreateRail
 }
 
 // unregisterLiveRail 从 live rails 中移除并反注册指定 rail。

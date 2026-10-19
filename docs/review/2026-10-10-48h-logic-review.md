@@ -789,7 +789,7 @@ preview = cleaned.strip()[:80]  # Python 按字符截断，CJK 安全
 
 **修复方案：** 对齐 Python 实现 skill create rail 挂载逻辑。
 
-**状态更新（2026-10-14）：** 标记已从 `TODO(#9.72)` 改为 `⤵️(#10.6.22)`（A2X RegistryRuntime 章节），实现延后至该章节统一回填。
+**状态更新（2026-10-14）：已修复。** `buildAndMountMemberRailsForContext` 已真实实现（对齐 Python team_manager.py L1285-1327）：teamLoadConfig 刷新 workspace.Config → BuildMemberRails → 三分支类型断言挂载（TeamSkillEvolutionRail/SkillEvolutionRail/TeamSkillCreateRail）→ 注册各 manager 表。updateEvolutionConfig 步骤 6 已接通，覆盖率 92.9%。
 
 ---
 
