@@ -1,6 +1,7 @@
 package team
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -9,12 +10,16 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	ce "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
+	swarmrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -157,47 +162,6 @@ func GetContextEngineEnabled(config map[string]any) bool {
 		}
 	}
 	return true
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// getEvolutionConfigField 从嵌套路径读取 evolution 配置字段（bool）。
-// 对齐 Python _get_evolution_config (L369-378)：
-// 优先 config["react"]["evolution"]，回退 config["evolution"]，均无则空 → 默认 false
-func getEvolutionConfigField(config map[string]any, field string) bool {
-	evolutionConfig := getEvolutionConfig(config)
-	if b, ok := evolutionConfig[field].(bool); ok {
-		return b
-	}
-	return false
-}
-
-// getEvolutionConfig 解析嵌套的 evolution 配置段。
-// 对齐 Python _get_evolution_config (L369-378)
-func getEvolutionConfig(config map[string]any) map[string]any {
-	if config == nil {
-		return nil
-	}
-	if reactConfig, ok := config["react"].(map[string]any); ok {
-		if evolutionConfig, ok := reactConfig["evolution"].(map[string]any); ok {
-			return evolutionConfig
-		}
-	}
-	if evolutionConfig, ok := config["evolution"].(map[string]any); ok {
-		return evolutionConfig
-	}
-	return nil
-}
-
-// getBoolEnv 读取布尔环境变量。
-// 对齐 Python _get_bool_env (L363-366)：
-// 值为 true/1/yes（不区分大小写）→ true；设置但非真值 → false；未设置 → (false, false)
-func getBoolEnv(key string) (value bool, ok bool) {
-	raw, exists := os.LookupEnv(key)
-	if !exists {
-		return false, false
-	}
-	return strings.EqualFold(raw, "true") || raw == "1" || strings.EqualFold(raw, "yes"), true
 }
 
 // GetDefaultModelName 从配置获取默认 model_name。
@@ -353,79 +317,6 @@ func BuildEvolutionLLM(config map[string]any) (*llm.Model, string) {
 	return model, modelName
 }
 
-// ──────────────────────────── 非导出函数（模型解析辅助） ────────────────────────────
-
-// teamLoadConfig 加载默认 config.yaml。
-// 对齐 Python: get_config()
-func teamLoadConfig() (map[string]any, error) {
-	c, err := config.New("")
-	if err != nil {
-		return nil, err
-	}
-	return c.Load()
-}
-
-// copyMapShallow 浅拷贝 map[string]any（对齐 Python dict.copy()）。
-// 非 map 输入返回空 map（对齐 Python (x or {}).copy() 的 None 容错）。
-func copyMapShallow(v any) map[string]any {
-	m, ok := v.(map[string]any)
-	if !ok || m == nil {
-		return map[string]any{}
-	}
-	result := make(map[string]any, len(m))
-	for k, val := range m {
-		result[k] = val
-	}
-	return result
-}
-
-// mapStrField 从 map 提取字符串字段（非 string 或缺失返回空串）。
-func mapStrField(m map[string]any, key string) string {
-	if m == nil {
-		return ""
-	}
-	if s, ok := m[key].(string); ok {
-		return s
-	}
-	return ""
-}
-
-// customHeadersToStringMap 将 custom_headers 配置转为 map[string]string。
-//
-// 输入可能是 JSON 字符串或 map[string]any（config 已解析路径），
-// 对齐 Python ModelClientConfig(custom_headers=...) 的 dict 语义。
-func customHeadersToStringMap(v any) map[string]string {
-	if v == nil {
-		return nil
-	}
-	if m, ok := v.(map[string]any); ok {
-		result := make(map[string]string, len(m))
-		for k, val := range m {
-			if s, ok := val.(string); ok {
-				result[k] = s
-			}
-		}
-		if len(result) == 0 && len(m) > 0 {
-			return nil
-		}
-		return result
-	}
-	if s, ok := v.(string); ok && s != "" {
-		parsed := config.ParseCustomHeaders(s)
-		if parsed == nil {
-			return nil
-		}
-		result := make(map[string]string, len(parsed))
-		for k, val := range parsed {
-			if sv, ok := val.(string); ok {
-				result[k] = sv
-			}
-		}
-		return result
-	}
-	return nil
-}
-
 // FilterInheritableAbilityCards 从主 agent 获取可继承的 ToolCard 白名单。
 // 对齐 Python: filter_inheritable_ability_cards (team_runtime_inheritance.py L307-332)
 func FilterInheritableAbilityCards(mainAgent interfaces.DeepAgentInterface) []*tool.ToolCard {
@@ -536,4 +427,335 @@ func BuildSkillEvolutionRail(skillsDir string, config map[string]any, teamTrajec
 		Bool("team_trajectory_sink", teamTrajectorySink != nil && teamID != "").
 		Msg("[TeamRuntime] SkillEvolutionRail created")
 	return rail
+}
+
+// BuildMemberRails 为 Team 成员创建 rails 列表。
+// 对齐 Python: build_member_rails (team_runtime_inheritance.py L129-304)
+//
+// 13 步逐 rail 构造，每步独立 panic 恢复 + warning 日志（对齐 Python 每步 try/except），
+// 单步失败不阻断后续。返回成功构造的 rail 列表。
+//
+// 顺序：RuntimePrompt → ResponsePrompt → SysOperation → JiuClawStreamEvent →
+// TaskPlanning → Security → Heartbeat → AvatarPrompt →（team_ws_root）TeamWorkspaceReportPath →
+// （leader+skills_dir）TeamSkillEvolution →（leader+skills_dir+开关）TeamSkillCreate →
+// （非 leader+skills_dir）SkillEvolution →（开关）ContextProcessor
+func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspace *TeamWorkspaceInfo) []agentinterfaces.AgentRail {
+	if memberInfo == nil {
+		// Python dataclass 默认：agent_name="team_member", model_name="gpt-4"（本函数未消费这两字段）
+		memberInfo = &MemberInfo{}
+	}
+	if runtime == nil {
+		// Python dataclass 默认：channel="default", language="cn"
+		runtime = &RuntimeInfo{Channel: "default", Language: "cn"}
+	}
+	if teamWorkspace == nil {
+		teamWorkspace = &TeamWorkspaceInfo{}
+	}
+
+	// 从结构体提取参数（对齐 Python dataclass 解包）
+	language := runtime.Language
+	channel := runtime.Channel
+	teamWsRoot := strPtrValue(teamWorkspace.RootDir)
+	teamWsSkillsDir := strPtrValue(teamWorkspace.SkillsDir)
+	teamID := strPtrValue(teamWorkspace.TeamID)
+	config := teamWorkspace.Config
+	teamTrajectoryRegistry := teamWorkspace.TrajectoryRegistry
+
+	railsList := make([]agentinterfaces.AgentRail, 0, 13)
+
+	appendRail := func(step func() (agentinterfaces.AgentRail, error), railName string) {
+		rail, err := buildRailStep(step)
+		if err != nil {
+			logger.Warn(logComponent).Str("rail", railName).Err(err).
+				Msg("[TeamRuntime] rail creation failed")
+			return
+		}
+		railsList = append(railsList, rail)
+	}
+
+	// 1. RuntimePromptRail
+	appendRail(func() (agentinterfaces.AgentRail, error) {
+		rail := swarmrails.NewRuntimePromptRail(language, channel)
+		logger.Info(logComponent).Str("channel", channel).
+			Msg("[TeamRuntime] RuntimePromptRail created")
+		return rail, nil
+	}, "RuntimePromptRail")
+
+	// 2. ResponsePromptRail
+	appendRail(func() (agentinterfaces.AgentRail, error) {
+		rail := swarmrails.NewResponsePromptRail()
+		logger.Info(logComponent).Msg("[TeamRuntime] ResponsePromptRail created")
+		return rail, nil
+	}, "ResponsePromptRail")
+
+	// 3. SysOperationRail（Python 日志名为 FileSystemRail，对齐 Python 日志字符串）
+	appendRail(func() (agentinterfaces.AgentRail, error) {
+		rail := rails.NewSysOperationRail()
+		logger.Info(logComponent).Msg("[TeamRuntime] FileSystemRail created")
+		return rail, nil
+	}, "SysOperationRail")
+
+	// 4. JiuClawStreamEventRail
+	appendRail(func() (agentinterfaces.AgentRail, error) {
+		rail := swarmrails.NewJiuClawStreamEventRail()
+		logger.Info(logComponent).Msg("[TeamRuntime] JiuClawStreamEventRail created")
+		return rail, nil
+	}, "JiuClawStreamEventRail")
+
+	// 5. TaskPlanningRail
+	appendRail(func() (agentinterfaces.AgentRail, error) {
+		rail := rails.NewTaskPlanningRail()
+		logger.Info(logComponent).Msg("[TeamRuntime] TaskPlanningRail created")
+		return rail, nil
+	}, "TaskPlanningRail")
+
+	// 6. SecurityRail（Go 实际类型 SafetyPromptRail，别名 SecurityRail）
+	appendRail(func() (agentinterfaces.AgentRail, error) {
+		rail := secrail.NewSafetyPromptRail()
+		logger.Info(logComponent).Msg("[TeamRuntime] SecurityRail created")
+		return rail, nil
+	}, "SecurityRail")
+
+	// 7. HeartbeatRail
+	appendRail(func() (agentinterfaces.AgentRail, error) {
+		rail := rails.NewHeartbeatRail()
+		logger.Info(logComponent).Msg("[TeamRuntime] HeartbeatRail created")
+		return rail, nil
+	}, "HeartbeatRail")
+
+	// 8. AvatarPromptRail
+	appendRail(func() (agentinterfaces.AgentRail, error) {
+		rail := swarmrails.NewAvatarPromptRail()
+		logger.Info(logComponent).Msg("[TeamRuntime] AvatarPromptRail created")
+		return rail, nil
+	}, "AvatarPromptRail")
+
+	// 9. team_ws_root 非空 → TeamWorkspaceReportPathRail
+	if teamWsRoot != "" {
+		appendRail(func() (agentinterfaces.AgentRail, error) {
+			rail := NewTeamWorkspaceReportPathRail(teamWsRoot, teamID, language)
+			logger.Info(logComponent).Str("root_dir", teamWsRoot).
+				Msg("[TeamRuntime] TeamWorkspaceReportPathRail created")
+			return rail, nil
+		}, "TeamWorkspaceReportPathRail")
+	}
+
+	// 10. Leader-only: TeamSkillEvolutionRail（团队技能演进）
+	if roleStr(memberInfo.Role) == "leader" && teamWsSkillsDir != "" {
+		appendRail(func() (agentinterfaces.AgentRail, error) {
+			if err := os.MkdirAll(teamWsSkillsDir, 0o755); err != nil {
+				return nil, fmt.Errorf("mkdir skills_dir: %w", err)
+			}
+			llmModel, actualModelName := BuildEvolutionLLM(config)
+			if llmModel == nil {
+				return nil, fmt.Errorf("evolution LLM 构建失败（config 无有效模型）")
+			}
+			evolutionAutoScan := GetEvolutionAutoScanEnabled(config)
+			// team_id 为空时不绑定 registry（对齐 Python bound_team_trajectory_registry = ... if team_id else None）
+			var boundRegistry trajectory.TrajectorySource
+			var opts []evolution.TeamSkillEvolutionRailOption
+			if teamID != "" && teamTrajectoryRegistry != nil {
+				boundRegistry = teamTrajectoryRegistry
+				opts = append(opts,
+					evolution.WithTeamSkillTrajectorySource(boundRegistry),
+					evolution.WithTeamSkillTeamID(teamID),
+				)
+				if sink, ok := teamTrajectoryRegistry.(trajectory.TrajectorySink); ok {
+					opts = append(opts, evolution.WithTeamSkillTrajectorySink(sink, teamID, "leader"))
+				}
+			}
+			opts = append(opts,
+				evolution.WithTeamSkillAutoScan(evolutionAutoScan),
+				evolution.WithTeamSkillAutoSave(false),
+				evolution.WithTeamSkillDisabledSkills(skillruntime.LoadExecutionDisabledSkills()),
+			)
+			rail := evolution.NewTeamSkillEvolutionRail(
+				[]string{teamWsSkillsDir}, llmModel, actualModelName, language, opts...,
+			)
+			logger.Info(logComponent).
+				Str("skills_dir", teamWsSkillsDir).
+				Str("model", actualModelName).
+				Bool("auto_scan", evolutionAutoScan).
+				Bool("team_trajectory_registry", boundRegistry != nil).
+				Msg("[TeamRuntime] TeamSkillEvolutionRail created")
+			return rail, nil
+		}, "TeamSkillEvolutionRail")
+	}
+
+	// 11. Leader-only: TeamSkillCreateRail（需 skill_create 配置启用；env SKILL_CREATE 优先）
+	if roleStr(memberInfo.Role) == "leader" && teamWsSkillsDir != "" && GetSkillCreateEnabled(config) {
+		appendRail(func() (agentinterfaces.AgentRail, error) {
+			rail := evolution.NewTeamSkillCreateRail(
+				teamWsSkillsDir,
+				evolution.WithTeamSkillCreateAutoTrigger(true),
+				evolution.WithTeamSkillCreateLanguage(language),
+			)
+			logger.Info(logComponent).Str("skills_dir", teamWsSkillsDir).
+				Msg("[TeamRuntime] TeamSkillCreateRail created")
+			return rail, nil
+		}, "TeamSkillCreateRail")
+	}
+
+	// 12. Non-leader: SkillEvolutionRail（成员技能自演化）
+	if roleStr(memberInfo.Role) != "leader" && teamWsSkillsDir != "" {
+		// Python 直接调 build_skill_evolution_rail（内部自带 try/except 返回 None）
+		var teamSink trajectory.TrajectorySink
+		if teamTrajectoryRegistry != nil {
+			if sink, ok := teamTrajectoryRegistry.(trajectory.TrajectorySink); ok {
+				teamSink = sink
+			}
+		}
+		if rail := BuildSkillEvolutionRail(teamWsSkillsDir, config, teamSink, teamID); rail != nil {
+			railsList = append(railsList, rail)
+		}
+	}
+
+	// 13. ContextProcessorRail（leader + teammate 均可，需开关启用，默认 true）
+	if GetContextEngineEnabled(config) {
+		if rail := BuildContextProcessorRail(config); rail != nil {
+			railsList = append(railsList, rail)
+		}
+	}
+
+	logger.Info(logComponent).Int("total", len(railsList)).
+		Msg("[TeamRuntime] Total rails built")
+	return railsList
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getEvolutionConfigField 从嵌套路径读取 evolution 配置字段（bool）。
+// 对齐 Python _get_evolution_config (L369-378)：
+// 优先 config["react"]["evolution"]，回退 config["evolution"]，均无则空 → 默认 false
+func getEvolutionConfigField(config map[string]any, field string) bool {
+	evolutionConfig := getEvolutionConfig(config)
+	if b, ok := evolutionConfig[field].(bool); ok {
+		return b
+	}
+	return false
+}
+
+// getEvolutionConfig 解析嵌套的 evolution 配置段。
+// 对齐 Python _get_evolution_config (L369-378)
+func getEvolutionConfig(config map[string]any) map[string]any {
+	if config == nil {
+		return nil
+	}
+	if reactConfig, ok := config["react"].(map[string]any); ok {
+		if evolutionConfig, ok := reactConfig["evolution"].(map[string]any); ok {
+			return evolutionConfig
+		}
+	}
+	if evolutionConfig, ok := config["evolution"].(map[string]any); ok {
+		return evolutionConfig
+	}
+	return nil
+}
+
+// getBoolEnv 读取布尔环境变量。
+// 对齐 Python _get_bool_env (L363-366)：
+// 值为 true/1/yes（不区分大小写）→ true；设置但非真值 → false；未设置 → (false, false)
+func getBoolEnv(key string) (value bool, ok bool) {
+	raw, exists := os.LookupEnv(key)
+	if !exists {
+		return false, false
+	}
+	return strings.EqualFold(raw, "true") || raw == "1" || strings.EqualFold(raw, "yes"), true
+}
+
+// teamLoadConfig 加载默认 config.yaml。
+// 对齐 Python: get_config()
+func teamLoadConfig() (map[string]any, error) {
+	c, err := config.New("")
+	if err != nil {
+		return nil, err
+	}
+	return c.Load()
+}
+
+// copyMapShallow 浅拷贝 map[string]any（对齐 Python dict.copy()）。
+// 非 map 输入返回空 map（对齐 Python (x or {}).copy() 的 None 容错）。
+func copyMapShallow(v any) map[string]any {
+	m, ok := v.(map[string]any)
+	if !ok || m == nil {
+		return map[string]any{}
+	}
+	result := make(map[string]any, len(m))
+	for k, val := range m {
+		result[k] = val
+	}
+	return result
+}
+
+// mapStrField 从 map 提取字符串字段（非 string 或缺失返回空串）。
+func mapStrField(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	if s, ok := m[key].(string); ok {
+		return s
+	}
+	return ""
+}
+
+// customHeadersToStringMap 将 custom_headers 配置转为 map[string]string。
+//
+// 输入可能是 JSON 字符串或 map[string]any（config 已解析路径），
+// 对齐 Python ModelClientConfig(custom_headers=...) 的 dict 语义。
+func customHeadersToStringMap(v any) map[string]string {
+	if v == nil {
+		return nil
+	}
+	if m, ok := v.(map[string]any); ok {
+		result := make(map[string]string, len(m))
+		for k, val := range m {
+			if s, ok := val.(string); ok {
+				result[k] = s
+			}
+		}
+		if len(result) == 0 && len(m) > 0 {
+			return nil
+		}
+		return result
+	}
+	if s, ok := v.(string); ok && s != "" {
+		parsed := config.ParseCustomHeaders(s)
+		if parsed == nil {
+			return nil
+		}
+		result := make(map[string]string, len(parsed))
+		for k, val := range parsed {
+			if sv, ok := val.(string); ok {
+				result[k] = sv
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+// buildRailStep 执行单个 rail 构造步骤，panic 恢复为 error（对齐 Python try/except）。
+func buildRailStep(step func() (agentinterfaces.AgentRail, error)) (rail agentinterfaces.AgentRail, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("rail 构造 panic: %v", r)
+		}
+	}()
+	return step()
+}
+
+// strPtrValue 解引用 *string（nil 返回空串）。
+func strPtrValue(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// roleStr 解析角色（nil → 空串，对齐 Python role=None）。
+func roleStr(role *string) string {
+	if role == nil {
+		return ""
+	}
+	return *role
 }

@@ -460,3 +460,107 @@ func TestBuildSkillEvolutionRail_合法配置(t *testing.T) {
 		t.Fatalf("valid config should build rail")
 	}
 }
+
+// TestBuildMemberRails_默认路径 8 个基础 rail 全部构造成功。
+func TestBuildMemberRails_默认路径(t *testing.T) {
+	// 无 team_ws_root/skills_dir/config：仅 8 个基础 rail + ContextProcessorRail（默认 enabled）
+	rails := BuildMemberRails(nil, nil, nil)
+	// 8 基础 + 1 ContextProcessor（GetContextEngineEnabled(nil)=true）
+	if len(rails) != 9 {
+		names := railTypeNames(rails)
+		t.Fatalf("rails count = %d, want 9, got %v", len(rails), names)
+	}
+}
+
+// TestBuildMemberRails_带workspace_leader 全量 rail。
+func TestBuildMemberRails_带workspace_leader(t *testing.T) {
+	// leader + team_ws_root + skills_dir：8 基础 + WorkspaceReportPath + ContextProcessor
+	root := "/tmp/team-ws"
+	skills := "/tmp/team-ws/skills"
+	teamID := "t1"
+	memberRole := "leader"
+	rails := BuildMemberRails(
+		&MemberInfo{AgentName: "leader-agent", Role: &memberRole},
+		&RuntimeInfo{Channel: "web", Language: "cn"},
+		&TeamWorkspaceInfo{
+			RootDir:   &root,
+			SkillsDir: &skills,
+			TeamID:    &teamID,
+			Config:    map[string]any{},
+		},
+	)
+	names := railTypeNames(rails)
+	// TeamSkillEvolutionRail 依赖 BuildEvolutionLLM（config 无 models 段 → gpt-4 回退
+	// 无 api_key → nil → 该 rail 跳过）；skill_create 默认 false → TeamSkillCreateRail 跳过
+	hasWorkspace := false
+	hasContext := false
+	for _, n := range names {
+		if n == "TeamWorkspaceReportPathRail" {
+			hasWorkspace = true
+		}
+		if n == "ContextProcessorRail" {
+			hasContext = true
+		}
+	}
+	if !hasWorkspace {
+		t.Fatalf("TeamWorkspaceReportPathRail missing: %v", names)
+	}
+	if !hasContext {
+		t.Fatalf("ContextProcessorRail missing: %v", names)
+	}
+}
+
+// TestBuildMemberRails_非leader挂SkillEvolution。
+func TestBuildMemberRails_非leader挂SkillEvolution(t *testing.T) {
+	// BuildSkillEvolutionRail 依赖合法 LLM config，否则跳过——此处仅验证不 panic
+	skills := "/tmp/team-ws/skills"
+	memberRole := "teammate"
+	rails := BuildMemberRails(
+		&MemberInfo{AgentName: "m1", Role: &memberRole},
+		&RuntimeInfo{Channel: "web"},
+		&TeamWorkspaceInfo{SkillsDir: &skills, Config: map[string]any{}},
+	)
+	if len(rails) == 0 {
+		t.Fatalf("should have base rails")
+	}
+}
+
+// TestBuildMemberRails_合法LLM时leader挂TeamSkillEvolution。
+func TestBuildMemberRails_合法LLM时leader挂TeamSkillEvolution(t *testing.T) {
+	cfg := map[string]any{"models": map[string]any{
+		"default": map[string]any{
+			"model_client_config": map[string]any{
+				"model_name": "m", "api_key": "k", "api_base": "https://x",
+				"client_provider": "OpenAI", "verify_ssl": false,
+			},
+		},
+	}}
+	root := t.TempDir()
+	skills := root + "/skills"
+	teamID := "t1"
+	memberRole := "leader"
+	rails := BuildMemberRails(
+		&MemberInfo{AgentName: "leader-agent", Role: &memberRole},
+		&RuntimeInfo{Channel: "web", Language: "cn"},
+		&TeamWorkspaceInfo{RootDir: &root, SkillsDir: &skills, TeamID: &teamID, Config: cfg},
+	)
+	names := railTypeNames(rails)
+	found := false
+	for _, n := range names {
+		if n == "TeamSkillEvolutionRail" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("TeamSkillEvolutionRail missing with valid LLM config: %v", names)
+	}
+}
+
+// railTypeNames 提取 rail 类型名列表。
+func railTypeNames(rails []agentinterfaces.AgentRail) []string {
+	names := make([]string, 0, len(rails))
+	for _, r := range rails {
+		names = append(names, reflect.TypeOf(r).Elem().Name())
+	}
+	return names
+}
