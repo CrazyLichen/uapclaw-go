@@ -25,6 +25,9 @@ type TeamWorkspaceReportPathRail struct {
 	language string
 }
 
+// 编译时验证 AgentRail 接口实现
+var _ agentinterfaces.AgentRail = (*TeamWorkspaceReportPathRail)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamWorkspaceReportPathRail 创建 TeamWorkspaceReportPathRail 实例。
@@ -88,6 +91,3 @@ func (r *TeamWorkspaceReportPathRail) BeforeModelCall(ctx context.Context, cbc *
 	))
 	return nil
 }
-
-// 编译时验证 AgentRail 接口实现
-var _ agentinterfaces.AgentRail = (*TeamWorkspaceReportPathRail)(nil)

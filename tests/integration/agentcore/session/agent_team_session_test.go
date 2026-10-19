@@ -257,7 +257,7 @@ func (s *AgentTeamSessionE2ESuite) TestAgentTeamSession_完整生命周期E2E() 
 	)
 	ctx := context.Background()
 
-	// 1. PreRun
+	// 1. PreRun 预运行
 	s.Require().NoError(sess.PreRun(ctx))
 
 	// 2. 更新状态

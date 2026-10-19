@@ -509,12 +509,12 @@ func TestProjectMemoryRail_完整生命周期(t *testing.T) {
 	agent := &fakeBaseAgentForPMR{sb: builder}
 	r := NewProjectMemoryRail(tmpDir, "cn", 60000, []string{})
 
-	// 1. Init
+	// 1. Init 初始化
 	if err := r.Init(context.Background(), agent); err != nil {
 		t.Fatalf("Init 失败: %v", err)
 	}
 
-	// 2. BeforeModelCall
+	// 2. BeforeModelCall 模型调用前
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, &agentinterfaces.ModelCallInputs{}, nil)
 	if err := r.BeforeModelCall(context.Background(), cbc); err != nil {
 		t.Fatalf("BeforeModelCall 失败: %v", err)
@@ -539,7 +539,7 @@ func TestProjectMemoryRail_完整生命周期(t *testing.T) {
 		t.Error("第二次 BeforeModelCall 后应存在 project_memory section")
 	}
 
-	// 5. Uninit
+	// 5. Uninit 反初始化
 	if err := r.Uninit(nil); err != nil {
 		t.Fatalf("Uninit 失败: %v", err)
 	}

@@ -19,7 +19,7 @@ import (
 // MemberHandler 处理成员生命周期事件：spawned、restarted、status_changed、
 // execution_changed、shutdown、canceled。
 //
-// EVENT_METHOD_MAP:
+// EVENT_METHOD_MAP 事件到方法映射：
 //   - member_spawned          → onMemberEvent
 //   - member_restarted        → onMemberEvent
 //   - member_status_changed   → onMemberEvent

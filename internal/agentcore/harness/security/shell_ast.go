@@ -46,23 +46,6 @@ type ShellStructureFlags struct {
 	Operators []string
 }
 
-// HasRiskyStructure 判断是否为风险结构。
-// 风险结构包括：复合操作符、管道、子 shell、命令组、命令替换、进程替换、参数展开、heredoc、输入/输出重定向。
-//
-// Python: ShellStructureFlags.has_risky_structure() (shell_ast.py L49-61)
-func (f *ShellStructureFlags) HasRiskyStructure() bool {
-	return f.CompoundOperators ||
-		f.Pipeline ||
-		f.Subshell ||
-		f.CommandGroup ||
-		f.CommandSubstitution ||
-		f.ProcessSubstitution ||
-		f.ParameterExpansion ||
-		f.Heredoc ||
-		f.InputRedirection ||
-		f.OutputRedirection
-}
-
 // ShellSubcommand Shell 子命令。
 //
 // Python: ShellSubcommand (shell_ast.py L64-70)
@@ -139,6 +122,23 @@ var treeSitterOnce sync.Once
 
 // treeSitterMu 保护 Parser 并发访问（tree-sitter Parser 不是并发安全的）
 var treeSitterMu sync.Mutex
+
+// HasRiskyStructure 判断是否为风险结构。
+// 风险结构包括：复合操作符、管道、子 shell、命令组、命令替换、进程替换、参数展开、heredoc、输入/输出重定向。
+//
+// Python: ShellStructureFlags.has_risky_structure() (shell_ast.py L49-61)
+func (f *ShellStructureFlags) HasRiskyStructure() bool {
+	return f.CompoundOperators ||
+		f.Pipeline ||
+		f.Subshell ||
+		f.CommandGroup ||
+		f.CommandSubstitution ||
+		f.ProcessSubstitution ||
+		f.ParameterExpansion ||
+		f.Heredoc ||
+		f.InputRedirection ||
+		f.OutputRedirection
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

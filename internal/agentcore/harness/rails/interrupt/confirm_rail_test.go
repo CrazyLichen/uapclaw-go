@@ -195,7 +195,7 @@ func TestConfirmInterruptRail_parseConfirmInput_ConfirmPayload(t *testing.T) {
 	assert.Equal(t, original, payload)
 }
 
-// ──────────────────────────── ConfirmPayload Schema ────────────────────────────
+// ──────────────────────────── ConfirmPayload JSON Schema 校验 ────────────────────────────
 
 // TestConfirmPayloadSchema 验证 ConfirmPayload 的 JSON Schema
 // 严格对齐 Python Pydantic ConfirmPayload.model_json_schema() 输出

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// ──────────────────────────── ACE Request/Response ────────────────────────────
+// ──────────────────────────── ACE Request/Response 请求与响应结构 ────────────────────────────
 
 func TestACESummarizeRequest_JSON往返(t *testing.T) {
 	gt := "expected output"
@@ -138,7 +138,7 @@ func TestACERetrievedMemory_JSON往返(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ReasoningBank Request/Response ────────────────────────────
+// ──────────────────────────── ReasoningBank Request/Response 请求与响应结构 ────────────────────────────
 
 func TestReasoningBankSummarizeRequest_JSON往返(t *testing.T) {
 	l1, l2 := true, false
@@ -253,7 +253,7 @@ func TestReasoningBankRetrievedMemory_JSON往返(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ReMe Request/Response ────────────────────────────
+// ──────────────────────────── ReMe Request/Response 请求与响应结构 ────────────────────────────
 
 func TestReMeSummarizeRequest_JSON往返(t *testing.T) {
 	original := ReMeSummarizeRequest{

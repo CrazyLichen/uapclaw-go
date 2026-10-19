@@ -16,11 +16,11 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -190,7 +190,7 @@ func (f *fakeAbilityMgrForCustomizer) Execute(
 	return nil
 }
 func (f *fakeAbilityMgrForCustomizer) SetContextEngine(ce ceinterface.ContextEngine) {}
-func (f *fakeAbilityMgrForCustomizer) ReorderTools(orderedNames []string)             {}
+func (f *fakeAbilityMgrForCustomizer) ReorderTools(orderedNames []string)            {}
 
 // has 检查能力名是否存在（测试辅助）。
 func (f *fakeAbilityMgrForCustomizer) has(name string) bool {
@@ -220,7 +220,7 @@ func (f *fakeDeepAgentForCustomizer) AbilityManager() agentinterfaces.AbilityMan
 	return f.abilityMgr
 }
 func (f *fakeDeepAgentForCustomizer) ReactAgent() *agents.ReActAgent { return nil }
-func (f *fakeDeepAgentForCustomizer) Card() *agentschema.AgentCard    { return f.card }
+func (f *fakeDeepAgentForCustomizer) Card() *agentschema.AgentCard   { return f.card }
 func (f *fakeDeepAgentForCustomizer) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
 	return nil
 }
@@ -249,19 +249,24 @@ func (f *fakeDeepAgentForCustomizer) Invoke(context.Context, map[string]any, ...
 }
 func (f *fakeDeepAgentForCustomizer) SwitchMode(sessioninterfaces.SessionFacade, string)       {}
 func (f *fakeDeepAgentForCustomizer) RestoreModeAfterPlanExit(sessioninterfaces.SessionFacade) {}
-func (f *fakeDeepAgentForCustomizer) GetPlanFilePath(sessioninterfaces.SessionFacade) string   { return "" }
-func (f *fakeDeepAgentForCustomizer) SaveState(sessioninterfaces.SessionFacade, *hschema.DeepAgentState) {}
+func (f *fakeDeepAgentForCustomizer) GetPlanFilePath(sessioninterfaces.SessionFacade) string {
+	return ""
+}
+func (f *fakeDeepAgentForCustomizer) SaveState(sessioninterfaces.SessionFacade, *hschema.DeepAgentState) {
+}
 func (f *fakeDeepAgentForCustomizer) FindRailsByType(...reflect.Type) []agentinterfaces.AgentRail {
 	return nil
 }
-func (f *fakeDeepAgentForCustomizer) AddRail(r agentinterfaces.AgentRail) { f.rails = append(f.rails, r) }
+func (f *fakeDeepAgentForCustomizer) AddRail(r agentinterfaces.AgentRail) {
+	f.rails = append(f.rails, r)
+}
 func (f *fakeDeepAgentForCustomizer) UnregisterRail(context.Context, agentinterfaces.AgentRail) error {
 	return nil
 }
 func (f *fakeDeepAgentForCustomizer) InnerInvokeOverride() func(context.Context, map[string]any, ...agentinterfaces.AgentOption) (map[string]any, error) {
 	return nil
 }
-func (f *fakeDeepAgentForCustomizer) UapswarmProjectDir() string   { return f.projectDir }
+func (f *fakeDeepAgentForCustomizer) UapswarmProjectDir() string { return f.projectDir }
 func (f *fakeDeepAgentForCustomizer) SetUapswarmProjectDir(d string) {
 	f.setProjectDirOK = d
 	f.projectDir = d

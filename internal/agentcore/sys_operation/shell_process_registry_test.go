@@ -22,7 +22,7 @@ func TestNewShellProcessRegistry(t *testing.T) {
 	assert.Empty(t, r.cancelledSessions)
 }
 
-// ──────────────────────────── Register / Unregister ────────────────────────────
+// ──────────────────────────── Register 注册 / Unregister 注销 ────────────────────────────
 
 // TestShellProcessRegistry_Register 测试注册进程
 func TestShellProcessRegistry_Register(t *testing.T) {

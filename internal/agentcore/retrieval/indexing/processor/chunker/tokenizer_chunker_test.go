@@ -1,6 +1,7 @@
 package chunker
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -72,7 +73,7 @@ func TestTokenizerChunker_ChunkText_分块(t *testing.T) {
 func TestTokenizerChunker_ChunkDocuments_带元数据(t *testing.T) {
 	c, _ := NewTokenizerChunker(12, 0, &tokByRune{}, "auto", nil)
 	docs := []reranker.Document{{ID: "doc1", Text: "一二三。四五。六七。", Metadata: map[string]any{"src": "test"}}}
-	chunks, err := c.ChunkDocuments(nil, docs)
+	chunks, err := c.ChunkDocuments(context.TODO(), docs)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -163,7 +163,7 @@ func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_ResolveWorkspacePath_Work
 	s.Equal(s.tmpDir, s.rail.ResolveWorkspacePath(), "Workspace RootPath 为空时应回退到构造期路径")
 }
 
-// ──────────────────────────── Init / Uninit ────────────────────────────
+// ──────────────────────────── Init / Uninit 生命周期 ────────────────────────────
 
 // TestProjectMemoryRail_Init 验证 Init 捕获 agent 的 SystemPromptBuilder
 func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_Init() {
@@ -312,10 +312,10 @@ func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_完整生命周期() {
 	agent := &fakeBaseAgentForIntegration{sb: s.builder}
 	r := rails.NewProjectMemoryRail(s.tmpDir, "cn", 60000, []string{})
 
-	// 1. Init
+	// 1. Init 初始化
 	s.Require().NoError(r.Init(s.Ctx, agent), "Init 不应返回错误")
 
-	// 2. BeforeModelCall
+	// 2. BeforeModelCall 模型调用前
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, &agentinterfaces.ModelCallInputs{}, nil)
 	s.Require().NoError(r.BeforeModelCall(s.Ctx, cbc), "BeforeModelCall 不应返回错误")
 	s.True(s.builder.HasSection(project_memory.SectionName), "BeforeModelCall 后应存在 section")
@@ -330,7 +330,7 @@ func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_完整生命周期() {
 	s.Require().NoError(r.BeforeModelCall(s.Ctx, cbc), "第二次 BeforeModelCall 不应返回错误")
 	s.True(s.builder.HasSection(project_memory.SectionName), "第二次 BeforeModelCall 后应存在 section")
 
-	// 5. Uninit
+	// 5. Uninit 反初始化
 	s.Require().NoError(r.Uninit(nil), "Uninit 不应返回错误")
 	s.False(s.builder.HasSection(project_memory.SectionName), "Uninit 后 section 应被移除")
 }

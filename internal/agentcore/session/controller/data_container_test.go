@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
-// ──────────────────────────── mock StateAccessor ────────────────────────────
+// ──────────────────────────── mock StateAccessor 模拟状态访问器 ────────────────────────────
 
 // fakeStateAccessor 测试用的 StateAccessor 实现
 type fakeStateAccessor struct {

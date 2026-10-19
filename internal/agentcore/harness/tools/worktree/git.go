@@ -44,6 +44,14 @@ const gitCommandTimeout = 30 * time.Second
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// OK 检查 GitResult 是否成功。
+func (r GitResult) OK() bool { return r.ReturnCode == 0 }
+
+// Error 返回 GitError 的错误描述。
+func (e *GitError) Error() string {
+	return fmt.Sprintf("git %s 失败 (rc=%d): %s", e.Command, e.ReturnCode, e.Stderr)
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -302,14 +310,6 @@ func readWorktreeHeadSHA(wtPath string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(sha)), nil
-}
-
-// OK 检查 GitResult 是否成功。
-func (r GitResult) OK() bool { return r.ReturnCode == 0 }
-
-// Error 返回 GitError 的错误描述。
-func (e *GitError) Error() string {
-	return fmt.Sprintf("git %s 失败 (rc=%d): %s", e.Command, e.ReturnCode, e.Stderr)
 }
 
 // runGit 核心 Git 命令执行器。

@@ -116,6 +116,9 @@ func (r *MemberSkillToolkitRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	return nil
 }
 
+// 编译时验证 AgentRail 接口实现
+var _ agentinterfaces.AgentRail = (*MemberSkillToolkitRail)(nil)
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // qualifyToolID 为工具 ID 追加 agent 后缀（成员作用域隔离）。
@@ -123,6 +126,3 @@ func (r *MemberSkillToolkitRail) Uninit(agent agentinterfaces.BaseAgent) error {
 func qualifyToolID(toolID string, agentID string) string {
 	return toolID + "_" + agentID
 }
-
-// 编译时验证 AgentRail 接口实现
-var _ agentinterfaces.AgentRail = (*MemberSkillToolkitRail)(nil)

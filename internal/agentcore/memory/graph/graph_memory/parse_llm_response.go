@@ -23,30 +23,6 @@ type EntityOrDeclaration struct {
 	Entity *graph.Entity
 }
 
-// IsEntity 是否为已存在实体
-func (e EntityOrDeclaration) IsEntity() bool {
-	return e.Entity != nil
-}
-
-// Name 获取实体名称
-func (e EntityOrDeclaration) Name() string {
-	if e.Entity != nil {
-		return e.Entity.Name
-	}
-	if e.Decl != nil {
-		return e.Decl.Name
-	}
-	return ""
-}
-
-// EntityTypeID 获取实体类型 ID
-func (e EntityOrDeclaration) EntityTypeID() int {
-	if e.Decl != nil {
-		return e.Decl.EntityTypeID
-	}
-	return 0
-}
-
 // MergePair 实体合并对（目标实体 + 待合并的源实体列表）
 //
 // Python: tuple[Entity, list[Entity]] (resolve_entities 返回值)
@@ -71,6 +47,30 @@ var (
 		`([0-9]{1,4})-([0-9]{1,2})-([0-9]{1,2})T([0-9]{1,2}):([0-9]{1,2}):([0-9]{1,2})(?:Z|\+([0-9]{1,2}):([0-9]{1,2}))?`,
 	)
 )
+
+// IsEntity 是否为已存在实体
+func (e EntityOrDeclaration) IsEntity() bool {
+	return e.Entity != nil
+}
+
+// Name 获取实体名称
+func (e EntityOrDeclaration) Name() string {
+	if e.Entity != nil {
+		return e.Entity.Name
+	}
+	if e.Decl != nil {
+		return e.Decl.Name
+	}
+	return ""
+}
+
+// EntityTypeID 获取实体类型 ID
+func (e EntityOrDeclaration) EntityTypeID() int {
+	if e.Decl != nil {
+		return e.Decl.EntityTypeID
+	}
+	return 0
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

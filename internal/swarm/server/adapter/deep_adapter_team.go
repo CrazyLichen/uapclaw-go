@@ -609,8 +609,8 @@ func (d *DeepAdapter) ensureMonitorForActiveRuntime(ctx context.Context, channel
 //  8. setattr(task, "_team_channel_id", channel_id)
 //  9. setattr(task, "_team_session_id", session_id)
 //
-// 10. task.add_done_callback(_on_team_watcher_done)
-// 11. tm.register_team_evolution_watcher(session_id, task)
+// 10. task.add_done_callback 注册完成回调（_on_team_watcher_done）
+// 11. tm.register_team_evolution_watcher 注册 watcher（session_id, task）
 func (d *DeepAdapter) ensureTeamEvolutionWatcher(ctx context.Context, channelID, sessionID, source string) {
 	tm := team.GetTeamManager(channelID)
 

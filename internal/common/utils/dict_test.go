@@ -62,7 +62,7 @@ func TestCreateNestedDict(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── FlattenDict / ExtractLeafNodes ────────────────────────────
+// ──────────────────────────── FlattenDict 扁平化 / ExtractLeafNodes 提取叶子节点 ────────────────────────────
 
 func TestExtractLeafNodes(t *testing.T) {
 	tests := []struct {

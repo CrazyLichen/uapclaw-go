@@ -847,7 +847,7 @@ func (s *GaussVectorStore) executeGaussMigration(
 		return err
 	}
 
-	// 4. ALTER TABLE RENAME
+	// 4. 执行 ALTER TABLE RENAME 表改名
 	// Python: cursor.execute(f"ALTER TABLE {temp_collection_name} RENAME TO {collection_name};")
 	if _, err := c.Exec(ctx, fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tempCollectionName, collectionName)); err != nil {
 		logger.Error(logComponent).Err(err).Str("old_name", tempCollectionName).

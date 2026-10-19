@@ -222,6 +222,43 @@ func (ds *DiffService) GetFilesToRestore(sessionID string, turnIndex int, projec
 	return filesToRestore
 }
 
+// GetProjectDirFromMetadata 从 session metadata.json 中读取项目目录。
+// Python: _get_project_dir_from_metadata (line 159-181)
+func (ds *DiffService) GetProjectDirFromMetadata(sessionID string) string {
+	sessionsDir := workspace.AgentSessionsDir()
+	metadataFile := filepath.Join(sessionsDir, sessionID, "metadata.json")
+
+	data, err := os.ReadFile(metadataFile)
+	if err != nil {
+		return ""
+	}
+
+	var metadata map[string]any
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return ""
+	}
+
+	// 从 channel_metadata.cwd 或 delivery_context.route_metadata.cwd 获取
+	channelMeta, ok := metadata["channel_metadata"].(map[string]any)
+	if ok {
+		if cwd, ok := channelMeta["cwd"].(string); ok && cwd != "" {
+			return strings.TrimSpace(cwd)
+		}
+	}
+
+	deliveryCtx, ok := metadata["delivery_context"].(map[string]any)
+	if ok {
+		routeMeta, ok := deliveryCtx["route_metadata"].(map[string]any)
+		if ok {
+			if cwd, ok := routeMeta["cwd"].(string); ok && cwd != "" {
+				return strings.TrimSpace(cwd)
+			}
+		}
+	}
+
+	return ""
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // splitLines 对齐 Python str.splitlines()（不带 keepends）。
@@ -556,43 +593,6 @@ func (ds *DiffService) isValidFileOpsFile(name string, sessionID string, require
 		return sessionID != "" && strings.Contains(name, sessionID)
 	}
 	return sessionID == "" || strings.Contains(name, sessionID)
-}
-
-// GetProjectDirFromMetadata 从 session metadata.json 中读取项目目录。
-// Python: _get_project_dir_from_metadata (line 159-181)
-func (ds *DiffService) GetProjectDirFromMetadata(sessionID string) string {
-	sessionsDir := workspace.AgentSessionsDir()
-	metadataFile := filepath.Join(sessionsDir, sessionID, "metadata.json")
-
-	data, err := os.ReadFile(metadataFile)
-	if err != nil {
-		return ""
-	}
-
-	var metadata map[string]any
-	if err := json.Unmarshal(data, &metadata); err != nil {
-		return ""
-	}
-
-	// 从 channel_metadata.cwd 或 delivery_context.route_metadata.cwd 获取
-	channelMeta, ok := metadata["channel_metadata"].(map[string]any)
-	if ok {
-		if cwd, ok := channelMeta["cwd"].(string); ok && cwd != "" {
-			return strings.TrimSpace(cwd)
-		}
-	}
-
-	deliveryCtx, ok := metadata["delivery_context"].(map[string]any)
-	if ok {
-		routeMeta, ok := deliveryCtx["route_metadata"].(map[string]any)
-		if ok {
-			if cwd, ok := routeMeta["cwd"].(string); ok && cwd != "" {
-				return strings.TrimSpace(cwd)
-			}
-		}
-	}
-
-	return ""
 }
 
 // computeHunks 计算结构化 diff hunks（line-level）。

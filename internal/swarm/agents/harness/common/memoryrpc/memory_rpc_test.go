@@ -213,7 +213,7 @@ func TestRelativePath_等于根(t *testing.T) {
 	assert.Equal(t, ".", relativePath("/ws", "/ws", ""))
 }
 
-// ──────────────────────────── safeStat / countLines ────────────────────────────
+// ──────────────────────────── safeStat 安全取属性 / countLines 统计行数 ────────────────────────────
 
 // TestSafeStat_正常与异常 测试 stat 与 OSError 路径
 func TestSafeStat_正常与异常(t *testing.T) {

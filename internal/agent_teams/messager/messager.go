@@ -23,16 +23,6 @@ type EventListenerHandle struct {
 	handler MessagerHandler
 }
 
-// Handler 返回底层回调函数。
-func (h *EventListenerHandle) Handler() MessagerHandler {
-	return h.handler
-}
-
-// ID 返回句柄的唯一标识，用于跨包比较。
-func (h *EventListenerHandle) ID() uint64 {
-	return h.id
-}
-
 // Messager 团队事件消息通信接口。
 // Python: Messager (openjiuwen/agent_teams/messager/messager.py)
 // 解耦工具层与消息传输实现，使 TaskManager 和 MessageManager 能通过接口发布团队事件。
@@ -65,6 +55,16 @@ var (
 	// eventListenerSeq 全局监听器 ID 序列
 	eventListenerSeq uint64
 )
+
+// Handler 返回底层回调函数。
+func (h *EventListenerHandle) Handler() MessagerHandler {
+	return h.handler
+}
+
+// ID 返回句柄的唯一标识，用于跨包比较。
+func (h *EventListenerHandle) ID() uint64 {
+	return h.id
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

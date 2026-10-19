@@ -124,8 +124,8 @@ var builtinRulesCacheMu sync.Mutex
 // 2. Shell 工具: ParseShellForPermission → shellAstFloor
 // 3. Shell "simple" 含子命令: 逐个 evaluateSingleInvocation → aggregateSubcommandResults
 // 4. evaluateSingleInvocation: builtin-param-rules(DENY短路) → user-param-rules(DENY短路) → approval-overrides(ALLOW) → builtin-hits → user-hits → baseline → defaults → fallback-ASK
-// 5. applyShellAstFloor
-// 6. MaybeEscalateShellOperators
+// 5. applyShellAstFloor 应用 Shell AST 权限下限
+// 6. MaybeEscalateShellOperators 可能升级 Shell 操作符判定
 //
 // Python: evaluate_tiered_policy(permission_config, tool_name, tool_args) (tiered_policy.py L508-581)
 func EvaluateTieredPolicy(permissionConfig map[string]any, toolName string, toolArgs map[string]any) (PermissionLevel, string) {
@@ -716,7 +716,7 @@ func evaluateSingleInvocation(toolName string, toolArgs map[string]any, ctx *tie
 		}
 	}
 
-	// 8. Fallback
+	// 8. Fallback 兜底回退
 	return subcommandResult{Permission: PermissionLevelAsk, MatchedRule: mr + ":fallback(no_config)"}
 }
 

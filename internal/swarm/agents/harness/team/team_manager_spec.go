@@ -130,12 +130,13 @@ func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMet
 // 对齐 Python: TeamManager.build_agent_customizer(spec, deep_agent, session_id, ...) (L557-967)
 //
 // 闭包六步（各步骤独立 panic 恢复 + warning，对齐 Python 各步骤独立 try/except）：
-//  a. 继承能力卡
-//  b. 技能同步（copy member skills + sync team skills + write skills_state）
-//  c. code adapter 配置（parent adapter mode == "code" 时注入回调）
-//  d. build_member_rails + 白名单 AddRail + 三类 rail 注册
-//  e. 注册 TeamRailContext（leader）
-//  f. 注册 member runtime tools（cron/SendFile ⤵️(10.6.24/11.10) 保留日志骨架）
+//
+//	a. 继承能力卡
+//	b. 技能同步（copy member skills + sync team skills + write skills_state）
+//	c. code adapter 配置（parent adapter mode == "code" 时注入回调）
+//	d. build_member_rails + 白名单 AddRail + 三类 rail 注册
+//	e. 注册 TeamRailContext（leader）
+//	f. 注册 member runtime tools（cron/SendFile ⤵️(10.6.24/11.10) 保留日志骨架）
 //
 // 差异说明：Python L948-959 的 rail_manager 扩展 rail 循环，Go 无 get_rail_manager
 // 对应物（扩展 rail 加载机制属 10.5.7 ExtensionLoader 延后），空操作。
@@ -588,7 +589,7 @@ func stepERegisterRailContext(mgr *TeamManager, agent interfaces.DeepAgentInterf
 			ModelName: resolvedModelName,
 			Role:      &role,
 		},
-		Runtime:      &RuntimeInfo{Channel: resolvedChannel},
+		Runtime:       &RuntimeInfo{Channel: resolvedChannel},
 		TeamWorkspace: teamWorkspace,
 	})
 }

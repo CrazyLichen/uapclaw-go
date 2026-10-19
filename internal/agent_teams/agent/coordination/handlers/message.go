@@ -15,7 +15,7 @@ import (
 // MessageHandler 处理消息与邮箱事件：MESSAGE、BROADCAST、POLL_MAILBOX、
 // 以及 MEMBER_SHUTDOWN 时的邮箱排空。
 //
-// EVENT_METHOD_MAP:
+// EVENT_METHOD_MAP 事件到方法映射：
 //   - message                → onMessageOrBroadcast
 //   - broadcast              → onMessageOrBroadcast
 //   - coordination_poll_mailbox → onPollMailbox

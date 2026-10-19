@@ -14,7 +14,7 @@ import (
 // TaskBoardHandler 处理任务板事件：CLAIMED、CREATED、PLAN_REQUEST、
 // PLAN_RESPONSE、UPDATED、COMPLETED、CANCELLED、UNBLOCKED。
 //
-// EVENT_METHOD_MAP:
+// EVENT_METHOD_MAP 事件到方法映射：
 //   - task_claimed       → onTaskClaimed
 //   - task_created       → onTaskBoardEvent
 //   - task_plan_request  → onTaskBoardEvent

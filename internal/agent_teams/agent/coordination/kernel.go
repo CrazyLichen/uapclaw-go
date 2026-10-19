@@ -477,8 +477,8 @@ func (k *CoordinationKernel) EnqueueMailboxAfterFirstIteration(ctx context.Conte
 // 对齐 Python: CoordinationKernel.finalize_round (kernel.py:421-434)
 //
 // 纯 round-end hook，仅做两件事：
-// 1. memory_manager.extract_after_round()
-// 2. stream_controller.stream_queue = None
+// 1. 记忆管理器执行轮次后提取（extract_after_round）
+// 2. 释放流控制器队列（stream_queue = None）
 // 不做 pause/stop/lifecycle 决策（由 Runner 层负责）。
 func (k *CoordinationKernel) FinalizeRound(ctx context.Context) {
 	// Python: memory_manager = host.resources.memory_manager

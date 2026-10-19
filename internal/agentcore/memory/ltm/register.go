@@ -44,7 +44,7 @@ type registerStoreParams struct {
 // 1. kv_store 必填校验
 // 2. 赋值各存储
 // 3. vector_store + kv_store → 自动注册 SimpleMemoryIndex
-// 4. db_store → create_tables
+// 4. 有 db_store → 调用 create_tables 建表
 // 5. 无 message_store + 有 db_store → 自动创建 SqlMessageStore
 // 6. 调用 SetConfig 初始化所有 manager
 // 7. 执行 4 类 migration

@@ -172,22 +172,22 @@ func NewCodeAdapter() *CodeAdapter {
 //	Python: 9. self._workspace_dir = self._project_dir or config.get("workspace_dir") or get_agent_workspace_dir()
 //	Python: 10. self._agent_workspace_dir = str(get_agent_workspace_dir())
 //	Python: 11. self._dreaming_mode = "code"
-//	12. model = self._create_model(config_base)
+//	Python: 12. model = self._create_model(config_base)
 //	13. ⤵️ A2X / 11.10: _try_init_a2x_client — code 模式不初始化
-//	14. agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
-//	15. tool_cards = await self._get_tool_cards(agent_card.id)
-//	16. rails_list = self._build_agent_rails(config, config_base, mode="code")
-//	17. sys_operation = self._create_sys_operation()
-//	18. configured_subagents = self._build_configured_subagents(model, config, config_base)
-//	19. self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
-//	20. await self._instance.ensure_initialized()
-//	21. self._seed_runtime_cwd(self._project_dir or self._workspace_dir)
+//	Python: 14. agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
+//	Python: 15. tool_cards = await self._get_tool_cards(agent_card.id)
+//	Python: 16. rails_list = self._build_agent_rails(config, config_base, mode="code")
+//	Python: 17. sys_operation = self._create_sys_operation()
+//	Python: 18. configured_subagents = self._build_configured_subagents(model, config, config_base)
+//	Python: 19. self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
+//	Python: 20. await self._instance.ensure_initialized()
+//	Python: 21. self._seed_runtime_cwd(self._project_dir or self._workspace_dir)
 //	   Python: 21.1 setattr(self._instance, "_jiuwenswarm_adapter_mode", "code")
 //	   Python: 21.2 coding_memory workspace set_directory
 //	   21.3 agent_history 写入路径修正
-//	22. self._registered_mcp_server_ids.clear()
-//	23. await self._register_mcp_servers_from_config(config_base, tag="code")
-//	24. await self.load_user_rails()
+//	Python: 22. self._registered_mcp_server_ids.clear()
+//	Python: 23. await self._register_mcp_servers_from_config(config_base, tag="code")
+//	Python: 24. await self.load_user_rails()
 func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any, mode string, subMode string) error {
 	// 步骤 11: dreaming_mode = "code"（Python 中在步骤 11，此处提前设置，其余步骤仍按 Python 编号）
 	c.deep.dreamingMode = "code"
@@ -1297,15 +1297,6 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *l
 }
 
 // buildWorktreeRail 构建工作树护栏。
-// Python: JiuwenClawCodeAdapter._build_worktree_rail_via_config() (interface_code.py)
-// ⤴️ 9.66a 回填完成：构造 WorktreeRail
-func (c *CodeAdapter) buildWorktreeRail() sainterfaces.AgentRail {
-	cfg := worktree.NewWorktreeConfig()
-	cfg.Enabled = true
-	rail := worktree.NewWorktreeRail(worktree.WithWorktreeRailConfig(cfg))
-	return rail
-}
-
 // MergeMemberMcpConfigs 将启用的 code 模式 MCP 配置合并到团队成员 Agent。
 // Python: JiuwenClawCodeAdapter.merge_member_mcp_configs() (interface_code.py L1045-1072)
 func (c *CodeAdapter) MergeMemberMcpConfigs(agent *harness.DeepAgent, configBase map[string]any) int {
@@ -1569,6 +1560,15 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 		Int("mcps", addedMcps).
 		Str("project_dir", c.deep.projectDir).
 		Msg("configured team member with code config")
+}
+
+// Python: JiuwenClawCodeAdapter._build_worktree_rail_via_config() (interface_code.py)
+// ⤴️ 9.66a 回填完成：构造 WorktreeRail
+func (c *CodeAdapter) buildWorktreeRail() sainterfaces.AgentRail {
+	cfg := worktree.NewWorktreeConfig()
+	cfg.Enabled = true
+	rail := worktree.NewWorktreeRail(worktree.WithWorktreeRailConfig(cfg))
+	return rail
 }
 
 // mergeToolCards 将 tool_cards 合并到 agent 的 AbilityManager（去重）。

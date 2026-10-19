@@ -299,14 +299,6 @@ func (d *DeepAdapter) SetSendPushFunc(fn func(ctx context.Context, msg map[strin
 	d.sendPushFunc = fn
 }
 
-// getSendPushFunc 获取推送函数。优先使用实例级 sendPushFunc，回退到 defaultSendPushFunc。
-func (d *DeepAdapter) getSendPushFunc() func(ctx context.Context, msg map[string]any) error {
-	if d.sendPushFunc != nil {
-		return d.sendPushFunc
-	}
-	return defaultSendPushFunc
-}
-
 // SetConfigLister 设置自定义 agent 配置列表接口。
 // Python: AgentConfigService 依赖注入
 func (d *DeepAdapter) SetConfigLister(lister AgentConfigLister) {
@@ -610,14 +602,6 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		Str("sub_mode", subMode).
 		Msg("DeepAdapter CreateInstance completed")
 	return nil
-}
-
-// loadUserRails 动态加载用户自定义的 Rail 扩展。
-// 对齐 Python: load_user_rails() — 从配置中加载用户自定义 Rail 并注册到 harness。
-// Go 不支持 Python 的动态导入机制，当前为占位实现（仅记录日志）。
-// TODO(#9.63): 等用户自定义 Rail 扩展机制设计完成后实现
-func (d *DeepAdapter) loadUserRails() {
-	logger.Debug(logComponent).Msg("loadUserRails: Go does not support dynamic import, user custom Rail extensions pending design")
 }
 
 // ReloadAgentConfig 热重载配置，不重启进程。
@@ -1714,6 +1698,22 @@ func EnsurePersistentCheckpointer() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getSendPushFunc 获取推送函数。优先使用实例级 sendPushFunc，回退到 defaultSendPushFunc。
+func (d *DeepAdapter) getSendPushFunc() func(ctx context.Context, msg map[string]any) error {
+	if d.sendPushFunc != nil {
+		return d.sendPushFunc
+	}
+	return defaultSendPushFunc
+}
+
+// loadUserRails 动态加载用户自定义的 Rail 扩展。
+// 对齐 Python: load_user_rails() — 从配置中加载用户自定义 Rail 并注册到 harness。
+// Go 不支持 Python 的动态导入机制，当前为占位实现（仅记录日志）。
+// TODO(#9.63): 等用户自定义 Rail 扩展机制设计完成后实现
+func (d *DeepAdapter) loadUserRails() {
+	logger.Debug(logComponent).Msg("loadUserRails: Go does not support dynamic import, user custom Rail extensions pending design")
+}
 
 // parseApprovalAnswersFromAny 从 any 类型解析为 []ApprovalAnswer。
 // answers 来自 req.Params 的 JSON 反序列化，可能是 []any 或 []map[string]any。

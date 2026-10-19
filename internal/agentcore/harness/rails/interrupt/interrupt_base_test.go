@@ -33,7 +33,7 @@ func TestNewBaseInterruptRail_无工具名(t *testing.T) {
 	assert.Empty(t, r.toolNames)
 }
 
-// ──────────────────────────── AddTool/AddTools/GetTools ────────────────────────────
+// ──────────────────────────── AddTool/AddTools/GetTools 工具增删查 ────────────────────────────
 
 // TestBaseInterruptRail_AddTool 验证单个工具名注册
 func TestBaseInterruptRail_AddTool(t *testing.T) {

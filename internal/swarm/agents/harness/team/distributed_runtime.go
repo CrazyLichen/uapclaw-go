@@ -311,24 +311,22 @@ func FallbackDistributedToLocal(configBase map[string]any) map[string]any {
 	modesCfg, _ := normalized["modes"].(map[string]any)
 	if modesCfg != nil {
 		modeTeam, _ := modesCfg["team"].(map[string]any)
-		if modeTeam != nil {
-			for _, candidate := range modeTeam {
-				cand, ok := candidate.(map[string]any)
-				if !ok {
-					continue
-				}
-				transportCfg, _ := cand["transport"].(map[string]any)
-				if transportCfg == nil {
-					transportCfg = map[string]any{}
-				}
-				transportCfg["type"] = "inprocess"
-				delete(transportCfg, "params")
-				cand["transport"] = transportCfg
-				if IsPostgresqlStorage(cand) {
-					cand["storage"] = map[string]any{
-						"type":   "sqlite",
-						"params": map[string]any{"connection_string": "team.db"},
-					}
+		for _, candidate := range modeTeam {
+			cand, ok := candidate.(map[string]any)
+			if !ok {
+				continue
+			}
+			transportCfg, _ := cand["transport"].(map[string]any)
+			if transportCfg == nil {
+				transportCfg = map[string]any{}
+			}
+			transportCfg["type"] = "inprocess"
+			delete(transportCfg, "params")
+			cand["transport"] = transportCfg
+			if IsPostgresqlStorage(cand) {
+				cand["storage"] = map[string]any{
+					"type":   "sqlite",
+					"params": map[string]any{"connection_string": "team.db"},
 				}
 			}
 		}
@@ -377,19 +375,6 @@ func ExtractPgEndpoint(teamCfg map[string]any) (string, int) {
 	return host, port
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// anyToStr 从 any 提取字符串（非 string 返回空串）。
-//
-// Python str() 会把非字符串值转为不匹配 "distributed" 等的字面量，
-// Go 返回空串同样不匹配，语义等价。
-func anyToStr(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
-}
-
 // RunCommand 执行外部命令并返回退出码与合并输出（stdout+stderr）。
 // 对齐 Python: run_command (distributed_runtime.py L238-279)
 //
@@ -424,6 +409,19 @@ func RunCommand(ctx context.Context, args []string, timeoutSec float64) (int, st
 	logger.Warn(logComponent).Str("cmd", cmdStr).Err(err).
 		Msg("[TeamManager] subprocess spawn failed")
 	return 127, ""
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// anyToStr 从 any 提取字符串（非 string 返回空串）。
+//
+// Python str() 会把非字符串值转为不匹配 "distributed" 等的字面量，
+// Go 返回空串同样不匹配，语义等价。
+func anyToStr(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // IsPgAvailable 探测 PG 端点是否可接受连接。

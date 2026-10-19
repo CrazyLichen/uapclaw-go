@@ -94,7 +94,7 @@ func TestNewUpdateEmbeddingDimensionOperation(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── SQL Operations ────────────────────────────
+// ──────────────────────────── SQL Operations SQL 操作 ────────────────────────────
 
 // TestAddColumnOperation_字段 测试 AddColumnOperation 字段
 func TestAddColumnOperation_字段(t *testing.T) {
@@ -163,7 +163,7 @@ func TestUpdateColumnTypeOperation_字段(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Vector Operations ────────────────────────────
+// ──────────────────────────── Vector Operations 向量操作 ────────────────────────────
 
 // TestAddScalarFieldOperation_字段 测试 AddScalarFieldOperation 字段
 func TestAddScalarFieldOperation_字段(t *testing.T) {
@@ -281,7 +281,7 @@ func TestUpdateKVOperation_回调(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Message Operations ────────────────────────────
+// ──────────────────────────── Message Operations 消息操作 ────────────────────────────
 
 // TestUpdateMessageOperation_回调 测试 UpdateMessageOperation 回调函数
 func TestUpdateMessageOperation_回调(t *testing.T) {
@@ -303,7 +303,7 @@ func TestUpdateMessageOperation_回调(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Index Operations ────────────────────────────
+// ──────────────────────────── Index Operations 索引操作 ────────────────────────────
 
 // TestRenameMemoryDocFieldOperation_字段 测试 RenameMemoryDocFieldOperation 字段
 func TestRenameMemoryDocFieldOperation_字段(t *testing.T) {

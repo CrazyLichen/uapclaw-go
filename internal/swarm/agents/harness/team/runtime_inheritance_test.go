@@ -13,11 +13,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -324,7 +324,7 @@ func (f *fakeAbilityMgrForFilter) Execute(
 	return nil
 }
 func (f *fakeAbilityMgrForFilter) SetContextEngine(ce ceinterface.ContextEngine) {}
-func (f *fakeAbilityMgrForFilter) ReorderTools(orderedNames []string)             {}
+func (f *fakeAbilityMgrForFilter) ReorderTools(orderedNames []string)            {}
 
 // fakeDeepAgentForInheritance 最小 DeepAgentInterface（仅 AbilityManager 路径真实，其余空桩）。
 type fakeDeepAgentForInheritance struct {
@@ -349,7 +349,7 @@ func (f *fakeDeepAgentForInheritance) AbilityManager() agentinterfaces.AbilityMa
 
 // 其余 DeepAgentInterface 空桩（仅 AbilityManager 路径真实）
 func (f *fakeDeepAgentForInheritance) ReactAgent() *agents.ReActAgent { return nil }
-func (f *fakeDeepAgentForInheritance) Card() *agentschema.AgentCard    { return nil }
+func (f *fakeDeepAgentForInheritance) Card() *agentschema.AgentCard   { return nil }
 func (f *fakeDeepAgentForInheritance) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
 	return nil
 }
@@ -376,9 +376,11 @@ func (f *fakeDeepAgentForInheritance) CreateSubagent(context.Context, string, st
 func (f *fakeDeepAgentForInheritance) Invoke(context.Context, map[string]any, ...agentinterfaces.AgentOption) (map[string]any, error) {
 	return nil, nil
 }
-func (f *fakeDeepAgentForInheritance) SwitchMode(sessioninterfaces.SessionFacade, string)     {}
+func (f *fakeDeepAgentForInheritance) SwitchMode(sessioninterfaces.SessionFacade, string)       {}
 func (f *fakeDeepAgentForInheritance) RestoreModeAfterPlanExit(sessioninterfaces.SessionFacade) {}
-func (f *fakeDeepAgentForInheritance) GetPlanFilePath(sessioninterfaces.SessionFacade) string { return "" }
+func (f *fakeDeepAgentForInheritance) GetPlanFilePath(sessioninterfaces.SessionFacade) string {
+	return ""
+}
 func (f *fakeDeepAgentForInheritance) SaveState(sessioninterfaces.SessionFacade, *hschema.DeepAgentState) {
 }
 func (f *fakeDeepAgentForInheritance) FindRailsByType(...reflect.Type) []agentinterfaces.AgentRail {

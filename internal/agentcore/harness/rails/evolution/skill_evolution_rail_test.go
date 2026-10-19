@@ -402,7 +402,7 @@ func TestShouldHintSimplifyOrRebuild_走Store(t *testing.T) {
 	t.Log("ShouldHintSimplifyOrRebuild 应走 EvolutionStore.LoadFullEvolutionLog")
 }
 
-// ──────────────────────────── S-02: filterDuplicateSharedRecords / parseDuplicateCheckResponse ────────────────────────────
+// ──────────────────────────── S-02: filterDuplicateSharedRecords 过滤重复共享记录 / parseDuplicateCheckResponse 解析查重响应 ────────────────────────────
 
 func TestParseDuplicateCheckResponse_正常去重(t *testing.T) {
 	shared := []checkpointing.EvolutionRecord{
@@ -550,7 +550,7 @@ func TestUploadApprovedRecordsForSharing_启用但无记录(t *testing.T) {
 	r.uploadApprovedRecordsForSharing(context.Background(), "test_skill", nil, []checkpointing.EvolutionRecord{})
 }
 
-// ──────────────────────────── G5: getExcerptOffsetByKey / setExcerptOffsetByKey ────────────────────────────
+// ──────────────────────────── G5: getExcerptOffsetByKey 读 / setExcerptOffsetByKey 写摘录偏移 ────────────────────────────
 
 func TestGetExcerptOffsetByKey(t *testing.T) {
 	r := &SkillEvolutionRail{excerptOffsets: map[string]int{"sess1": 5, "sess2": 10}}

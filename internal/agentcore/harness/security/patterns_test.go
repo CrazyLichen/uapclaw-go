@@ -394,7 +394,7 @@ func TestSortStrings_已排序(t *testing.T) {
 	assert.Equal(t, []string{"a", "b", "c"}, s)
 }
 
-// ──────────────────────────── sortedPathTools / sortedShellTools ────────────────────────────
+// ──────────────────────────── sortedPathTools 路径工具排序 / sortedShellTools Shell 工具排序 ────────────────────────────
 
 func TestSortedPathTools(t *testing.T) {
 	tools := sortedPathTools()
@@ -638,7 +638,7 @@ func TestPersistTieredToolAllow_已有allow(t *testing.T) {
 	assert.False(t, result) // 已有 allow，不再写入
 }
 
-// ──────────────────────────── ReadAgentConfigYAML / WriteAgentConfigYAML ────────────────────────────
+// ──────────────────────────── ReadAgentConfigYAML 读 / WriteAgentConfigYAML 写配置 ────────────────────────────
 
 func TestReadAgentConfigYAML_文件不存在(t *testing.T) {
 	result := ReadAgentConfigYAML("/nonexistent/path/agent.yaml")
@@ -697,7 +697,7 @@ func TestMergeExternalDirectoryAllowIntoPermissions_已有allow不写入(t *test
 	assert.False(t, wrote)
 }
 
-// ──────────────────────────── PatternMatcher.MatchAny ────────────────────────────
+// ──────────────────────────── PatternMatcher.MatchAny 任意模式匹配 ────────────────────────────
 
 func TestPatternMatcher_MatchAny(t *testing.T) {
 	pm := PatternMatcher{}

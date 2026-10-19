@@ -76,6 +76,13 @@ type MockEmbeddingProvider struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// 编译时验证接口满足
+var (
+	_ EmbeddingProvider = (*OpenAICompatibleEmbeddingProvider)(nil)
+	_ EmbeddingProvider = (*MockEmbeddingProvider)(nil)
+	_                   = math.Abs
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewOpenAICompatibleEmbeddingProvider 构造 OpenAI 兼容提供者。
@@ -332,10 +339,3 @@ func (m *MockEmbeddingProvider) Model() string { return m.model }
 func (m *MockEmbeddingProvider) Dims() int { return m.dims }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// 编译时验证接口满足
-var (
-	_ EmbeddingProvider = (*OpenAICompatibleEmbeddingProvider)(nil)
-	_ EmbeddingProvider = (*MockEmbeddingProvider)(nil)
-	_                   = math.Abs
-)

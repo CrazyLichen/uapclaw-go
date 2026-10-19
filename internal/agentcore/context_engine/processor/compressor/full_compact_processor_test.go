@@ -1344,7 +1344,7 @@ func TestFullCompactProcessor_GroupMessagesByAPIRound(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── fake LLM Model ────────────────────────────
+// ──────────────────────────── fake LLM Model 模拟模型客户端 ────────────────────────────
 
 // fcpFakeBaseModelClient 测试用 BaseModelClient 模拟
 type fcpFakeBaseModelClient struct {

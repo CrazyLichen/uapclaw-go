@@ -662,7 +662,7 @@ func TestResolveEvolutionEventTimeoutSec_默认rail值(t *testing.T) {
 // TestSplitMaxN_表驱动 验证 Python str.split(maxsplit=n) 语义。
 func TestSplitMaxN_表驱动(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		input string
 		n     int
 		want  []string

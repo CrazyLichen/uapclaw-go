@@ -232,12 +232,12 @@ func (s *StructuredAskUserRailSuite) TestStructuredAskUserRail_Uninit_无工具(
 
 // TestStructuredAskUserRail_完整生命周期 验证 Init → ExtractQuestions → Uninit 完整流程
 func (s *StructuredAskUserRailSuite) TestStructuredAskUserRail_完整生命周期() {
-	// 1. Init
+	// 1. Init 初始化
 	err := s.rail.Init(s.Ctx, s.agent)
 	s.Require().NoError(err, "Init 不应返回错误")
 	s.Len(s.rail.GetStructuredTools(), 1, "Init 后应有 1 个工具")
 
-	// 2. ExtractQuestions
+	// 2. ExtractQuestions 提取问题
 	toolCall := &llmschema.ToolCall{
 		ID:        "tc_lifecycle",
 		Name:      "ask_user",
@@ -248,7 +248,7 @@ func (s *StructuredAskUserRailSuite) TestStructuredAskUserRail_完整生命周�
 	s.Equal("部署方式", questions[0]["question"], "问题文本应正确")
 	s.Equal("方式", questions[0]["header"], "header 应正确")
 
-	// 3. Uninit
+	// 3. Uninit 反初始化
 	err = s.rail.Uninit(s.agent)
 	s.Require().NoError(err, "Uninit 不应返回错误")
 	s.Nil(s.rail.GetStructuredTools(), "Uninit 后 structuredTools 应为 nil")

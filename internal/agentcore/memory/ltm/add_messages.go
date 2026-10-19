@@ -54,20 +54,20 @@ func (m *LongTermMemory) AddMessages(
 // addMessagesImpl AddMessages 的核心实现。
 //
 // 完整流程对齐 Python add_messages：
-// 1. validateID(scopeID)
-// 2. getScopeLLM(scopeID)
-// 3. getScopeConfig(scopeID)
-// 4. applyScopeEmbedding(scopeID)
-// 5. DistributedLock(kvStore, "user/{userID}")
+// 1. 校验 scopeID（validateID）
+// 2. 获取作用域 LLM（getScopeLLM）
+// 3. 获取作用域配置（getScopeConfig）
+// 4. 应用作用域嵌入模型（applyScopeEmbedding）
+// 5. 获取用户级分布式锁（DistributedLock）
 // 6. LLM 为空返回错误
-// 7. getHistoryMessages(userID, scopeID, sessionID, historyWindowSize)
-// 8. scopeUserMappingManager.Add(userID, scopeID)
+// 7. 获取历史消息（getHistoryMessages）
+// 8. 记录用户-作用域映射（scopeUserMappingManager.Add）
 // 9. timestamp 为 nil 时 time.Now()
 // 10. 遍历 messages 调 messageManager.Add()
 // 11. genMem=false → 返回空 AddMemResult
 // 12. checkMessages → 无 human 消息返回空 AddMemResult
-// 13. generator.GenAllMemory(ctx, params)
-// 14. writeManager.AddMemories(ctx, userID, scopeID, allMemory, llm)
+// 13. 生成全部记忆（GenAllMemory）
+// 14. 写入记忆（AddMemories）
 // 15. 按 MemoryType 分类填充 AddMemResult
 func (m *LongTermMemory) addMessagesImpl(ctx context.Context, p *addMessagesParams) (*AddMemResult, error) {
 	// 步骤 1：validateID

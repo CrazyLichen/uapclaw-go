@@ -21,7 +21,7 @@ package team
 //     - attach_remote_bootstrap_ack_listener
 //     - attach_remote_teammate_bootstrap_listener
 //
-// 10. return True
+// 10. 返回 True
 func (m *TeamManager) AttachDistributedHooksForRunnerRuntime(
 	teamName string,
 	sessionID string,

@@ -524,7 +524,7 @@ func TestBeforeInvoke_非InvokeInputs跳过(t *testing.T) {
 	// builder 不会被创建（因为 sessionID 为空时回退为空）
 }
 
-// ──────────────────────────── AfterModelCall with model name from Config ────────────────────────────
+// ──────────────────────────── AfterModelCall 从 Config 获取模型名 ────────────────────────────
 
 func TestAfterModelCall_从Config获取ModelName(t *testing.T) {
 	rail := NewEvolutionRail(noOpExtension{})

@@ -123,13 +123,8 @@ func (f *fakeDeepAgentForTest) InnerInvokeOverride() func(ctx context.Context, i
 	return nil
 }
 
-// 10.6.19 接口面扩展桩（AbilityManager/SystemPromptBuilder/Uapswarm 访问器）
-func (f *fakeDeepAgentForTest) AbilityManager() agentinterfaces.AbilityManagerInterface {
-	return nil
-}
-func (f *fakeDeepAgentForTest) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
-	return nil
-}
+// 10.6.19 接口面扩展桩（Uapswarm 访问器）
+// 注：AbilityManager/SystemPromptBuilder 由内嵌 fakeBaseAgentForTest 提供实现，此处不再遮蔽
 func (f *fakeDeepAgentForTest) UapswarmProjectDir() string       { return "" }
 func (f *fakeDeepAgentForTest) SetUapswarmProjectDir(string)     {}
 func (f *fakeDeepAgentForTest) UapswarmCodeProjectDir() string   { return "" }

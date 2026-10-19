@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // mockBaseTeam 测试用 BaseTeam mock。
@@ -68,8 +68,8 @@ func (m *mockBaseTeam) GetAgentCard(agentID string) (*agentschema.AgentCard, err
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockBaseTeam) GetAgentCount() int      { return 0 }
-func (m *mockBaseTeam) ListAgents() []string    { return nil }
+func (m *mockBaseTeam) GetAgentCount() int               { return 0 }
+func (m *mockBaseTeam) ListAgents() []string             { return nil }
 func (m *mockBaseTeam) Card() maschema.TeamCardInterface { return nil }
 func (m *mockBaseTeam) Config() *maschema.TeamConfig     { return nil }
 

@@ -990,7 +990,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_RejectRecord_�
 	s.Require().NoError(err)
 }
 
-// ─── RequestSimplify / RequestRebuild ───
+// ─── RequestSimplify 请求简化 / RequestRebuild 请求重建 ───
 
 // TestTeamSkillEvolutionRail_RequestSimplify_无经验 测试无经验时 RequestSimplify 返回空结果。
 //

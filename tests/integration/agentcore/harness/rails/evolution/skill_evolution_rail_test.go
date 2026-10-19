@@ -982,7 +982,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_RunEvolution_空消息s
 	s.Require().NoError(err)
 }
 
-// ─── EvolutionRequestResult / SimplifyRequestResult ───
+// ─── EvolutionRequestResult 进化请求结果 / SimplifyRequestResult 简化请求结果 ───
 
 // TestSkillEvolutionRail_EvolutionRequestResult_HasChanges 测试 HasChanges 判断。
 func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_EvolutionRequestResult_HasChanges() {

@@ -122,7 +122,7 @@ func TestNotifyHumanAgentInbound_直发消息(t *testing.T) {
 	event := types.CoordinationEvent{Transport: &events.EventMessage{
 		EventType: events.TeamEventMessage,
 		Payload: map[string]any{
-			"message_id":      msgID,
+			"message_id":       msgID,
 			"from_member_name": "bob",
 			"to_member_name":   "alice",
 		},
@@ -212,7 +212,7 @@ func TestNotifyHumanAgentInbound_消息不存在(t *testing.T) {
 	event := types.CoordinationEvent{Transport: &events.EventMessage{
 		EventType: events.TeamEventMessage,
 		Payload: map[string]any{
-			"message_id":      "no-such-message",
+			"message_id":       "no-such-message",
 			"from_member_name": "bob",
 			"to_member_name":   "alice",
 		},

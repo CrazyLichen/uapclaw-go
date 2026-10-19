@@ -257,7 +257,7 @@ func TestFire_正常触发(t *testing.T) {
 	assert.True(t, called)
 }
 
-// ──────────────────────────── Retry / ForceFinish ────────────────────────────
+// ──────────────────────────── Retry 重试 / ForceFinish 强制结束 ────────────────────────────
 
 // TestRequestRetry_设置请求 验证 RequestRetry 设置 retryRequest
 func TestRequestRetry_设置请求(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// ──────────────────────────── IsE2AResponseWireDict ────────────────────────────
+// ──────────────────────────── IsE2AResponseWireDict 线上格式判定 ────────────────────────────
 
 // TestIsE2AResponseWireDict_E2A格式 验证合法 E2A 响应格式
 func TestIsE2AResponseWireDict_E2A格式(t *testing.T) {

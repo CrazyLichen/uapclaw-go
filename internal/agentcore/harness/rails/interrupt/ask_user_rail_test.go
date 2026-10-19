@@ -260,7 +260,7 @@ func TestAskUserRail_BuildAskRequest(t *testing.T) {
 	assert.NotNil(t, request.PayloadSchema)
 }
 
-// ──────────────────────────── AskUserPayload Schema ────────────────────────────
+// ──────────────────────────── AskUserPayload JSON Schema 校验 ────────────────────────────
 
 // TestAskUserPayloadSchema 验证 AskUserPayload 的 JSON Schema
 // 严格对齐 Python Pydantic AskUserPayload.model_json_schema() 输出

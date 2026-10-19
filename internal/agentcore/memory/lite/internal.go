@@ -173,14 +173,14 @@ func ListMemoryFiles(ws *workspace.Workspace, extraPaths []string, nodeName stri
 		}
 	}
 
-	// 3. USER.md
+	// 3. 收集 USER.md
 	if userPath := ws.GetNodePath("USER.md"); userPath != nil {
 		if _, err := os.Stat(*userPath); err == nil {
 			files = append(files, *userPath)
 		}
 	}
 
-	// 4. extra_paths
+	// 4. 收集 extra_paths 额外路径
 	for _, extra := range extraPaths {
 		fullPath := extra
 		if memoryDir != "" && !filepath.IsAbs(extra) {

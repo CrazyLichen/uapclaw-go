@@ -116,7 +116,7 @@ func TestSessionNew_重复注册幂等(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RequestCancel / ClearCancel / IsCancelled ────────────────────────────
+// ──────────────────────────── RequestCancel / ClearCancel / IsCancelled 取消控制 ────────────────────────────
 
 // TestRequestCancel_IsCancelled 测试取消请求和检查
 func TestRequestCancel_IsCancelled(t *testing.T) {
@@ -327,7 +327,7 @@ func TestRecordWorkerProgress_无status字段推断(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GetProgressState / SetProgressState / ClearProgressState ────────────────────────────
+// ──────────────────────────── GetProgressState / SetProgressState / ClearProgressState 进度状态管理 ────────────────────────────
 
 // TestGetProgressState_不存在返回nil
 func TestGetProgressState_不存在返回nil(t *testing.T) {

@@ -111,17 +111,17 @@ func CheckConfigsMatching(configured, actual map[string]any) error {
 		// 对齐 Python: if not is_valid and isinstance(val, (int, float)) and actual_val_str.replace(".", "").isnumeric()
 		if !isValid {
 			if isNumeric(val) && isNumericString(actualValStr) {
-			// 对齐 Python: isclose(float(actual_val_str), float(val), rel_tol=1e-2, abs_tol=1e-3)
-			// M-47: math.isclose 语义是 abs(a-b) <= max(rel_tol*max(abs(a),abs(b)), abs_tol)——
-			// 取最大而非相加，基准是 max(abs(a),abs(b)) 而非单侧 abs(val)
-			valFloat := toFloat(val)
-			actualFloat := toFloat(actualVal)
-			if !math.IsNaN(valFloat) && !math.IsNaN(actualFloat) {
-				isValid = math.Abs(actualFloat-valFloat) <= math.Max(
-					1e-2*math.Max(math.Abs(actualFloat), math.Abs(valFloat)),
-					1e-3,
-				)
-			}
+				// 对齐 Python: isclose(float(actual_val_str), float(val), rel_tol=1e-2, abs_tol=1e-3)
+				// M-47: math.isclose 语义是 abs(a-b) <= max(rel_tol*max(abs(a),abs(b)), abs_tol)——
+				// 取最大而非相加，基准是 max(abs(a),abs(b)) 而非单侧 abs(val)
+				valFloat := toFloat(val)
+				actualFloat := toFloat(actualVal)
+				if !math.IsNaN(valFloat) && !math.IsNaN(actualFloat) {
+					isValid = math.Abs(actualFloat-valFloat) <= math.Max(
+						1e-2*math.Max(math.Abs(actualFloat), math.Abs(valFloat)),
+						1e-3,
+					)
+				}
 			}
 		}
 

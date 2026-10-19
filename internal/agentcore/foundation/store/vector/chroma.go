@@ -221,9 +221,14 @@ func (s *ChromaVectorStore) CreateCollection(ctx context.Context, collectionName
 	chromaMetric := mapToChromaDistanceMetric(distanceMetric)
 
 	// 创建或获取集合
+	// 注：显式传入 consistent_hash 轻量 EF，阻止 chroma-go v2 在
+	// embeddingFunction==nil 时强制构建 ONNX 默认 EF（运行时下载
+	// onnxruntime 原生库与 MiniLM 模型）。本层所有向量均由上层预计算后
+	// 显式传入，默认 EF 从未被真正使用。
 	collection, err := c.GetOrCreateCollection(ctx, collectionName,
 		chromav2.WithCollectionMetadataCreate(collectionMetadata),
 		chromav2.WithHNSWSpaceCreate(chromaMetric),
+		chromav2.WithEmbeddingFunctionCreate(embeddings.NewConsistentHashEmbeddingFunction()),
 	)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("create ChromaDB collection failed")

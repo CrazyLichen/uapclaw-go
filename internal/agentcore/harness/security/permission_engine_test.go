@@ -57,7 +57,7 @@ func TestPermissionEngine_ChecksInactive(t *testing.T) {
 	assert.Contains(t, result.Reason, "未启用")
 }
 
-// TestPermissionEngine_TieredPolicyDeny TieredPolicy DENY → DENY
+// TestPermissionEngine_TieredPolicyDeny 分层策略 DENY 规则 → DENY 判定
 func TestPermissionEngine_TieredPolicyDeny(t *testing.T) {
 	config := map[string]any{
 		"enabled": true,
@@ -72,7 +72,7 @@ func TestPermissionEngine_TieredPolicyDeny(t *testing.T) {
 	assert.Equal(t, PermissionLevelDeny, result.Permission)
 }
 
-// TestPermissionEngine_DefaultsAllow defaults.* → ALLOW
+// TestPermissionEngine_DefaultsAllow defaults.* 通配规则 → ALLOW 判定
 func TestPermissionEngine_DefaultsAllow(t *testing.T) {
 	config := map[string]any{
 		"enabled": true,

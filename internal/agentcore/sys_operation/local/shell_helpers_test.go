@@ -105,7 +105,7 @@ func TestLooksLikePosix(t *testing.T) {
 	assert.False(t, LooksLikePosix(""))
 }
 
-// ──────────────────────────── stripMatchingQuotes / StripMatchingQuotes ────────────────────────────
+// ──────────────────────────── stripMatchingQuotes / StripMatchingQuotes 去除成对引号 ────────────────────────────
 
 // TestStripMatchingQuotes 测试去除匹配引号
 func TestStripMatchingQuotes(t *testing.T) {

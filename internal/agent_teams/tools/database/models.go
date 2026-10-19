@@ -22,9 +22,6 @@ type Team struct {
 	UpdatedAt int64 `json:"updated_at,omitempty"`
 }
 
-// TableName 指定 Team 对应的数据库表名
-func (Team) TableName() string { return "team_info" }
-
 // TeamMember 团队成员模型。
 // Python: TeamMember (openjiuwen/agent_teams/tools/models.py)
 // 静态表 team_member 的行模型，复合主键 (member_name, team_name)。
@@ -54,9 +51,6 @@ type TeamMember struct {
 	// UpdatedAt 更新时间（毫秒时间戳，仅 roster 变更时 bump，status 变更不 bump）
 	UpdatedAt int64 `json:"updated_at,omitempty"`
 }
-
-// TableName 指定 TeamMember 对应的数据库表名
-func (TeamMember) TableName() string { return "team_member" }
 
 // TeamTaskBase 任务行模型。
 // Python: TeamTaskBase (openjiuwen/agent_teams/tools/database/task_dao.py)
@@ -195,6 +189,12 @@ var (
 		"team_member",
 	}
 )
+
+// TableName 指定 Team 对应的数据库表名
+func (Team) TableName() string { return "team_info" }
+
+// TableName 指定 TeamMember 对应的数据库表名
+func (TeamMember) TableName() string { return "team_member" }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

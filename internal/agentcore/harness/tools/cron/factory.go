@@ -214,7 +214,7 @@ func CreateCronTools(
 // Python 逻辑：
 // 1. build_tool_card(name, f"{name}_{scope}", language, agent_id=agent_id) 获取 ToolCard
 // 2. 如果 target_schema 非空，获取 input_params 字典，替换 targets 属性，重建 ToolCard
-// 3. LocalFunction(card=card, func=func)
+// 3. 用 LocalFunction 包装工具卡与函数
 func makeLegacyTool[I any](
 	name string,
 	scope string,

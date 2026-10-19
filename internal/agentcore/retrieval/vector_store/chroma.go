@@ -180,8 +180,17 @@ func NewChromaVectorStore(
 	// S-48: 传完整 HNSW 配置（原仅传 distance metric）。
 	// Python construct_config 含 ef_search（chroma_fields.py L60-67 标 IS_CONSTRUCT），
 	// 合并 constructConfig|searchConfig 后 ef_search 由 construct 侧提供。
+	//
+	// 注：chroma-go v2 CreateCollectionOp 在 embeddingFunction==nil 时强制构建
+	// ONNX 默认 EF（运行时下载 onnxruntime 原生库与 MiniLM 模型）。本项目所有向量
+	// 均由 embedModel 预计算后显式传入，默认 EF 从未被真正使用，因此显式传入
+	// chroma-go 自带的 consistent_hash 轻量 EF（纯 SHA-256，无原生库依赖）阻止
+	// ONNX 下载——CI 冷缓存环境下曾因该下载触发 racefini SIGSEGV。
 	collection, err := s.client.GetOrCreateCollection(context.Background(), s.collectionName,
-		buildChromaHNSWCreateOptions(s.distanceMetric, s.constructConfig, s.searchConfig)...,
+		append(
+			buildChromaHNSWCreateOptions(s.distanceMetric, s.constructConfig, s.searchConfig),
+			chromav2.WithEmbeddingFunctionCreate(embeddings.NewConsistentHashEmbeddingFunction()),
+		)...,
 	)
 	if err != nil {
 		return nil, exception.BuildError(

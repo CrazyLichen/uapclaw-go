@@ -10,8 +10,8 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
-	databasetools "github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	teamstools "github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	databasetools "github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 

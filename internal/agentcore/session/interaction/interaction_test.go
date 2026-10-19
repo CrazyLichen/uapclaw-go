@@ -10,7 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
-// ──────────────────────────── fake checkpointer ────────────────────────────
+// ──────────────────────────── fake checkpointer 模拟检查点存储 ────────────────────────────
 
 // fakeCheckpointer 测试用检查点器
 type fakeCheckpointer struct {

@@ -369,9 +369,9 @@ func BuildContextProcessorRail(config map[string]any) *ce.ContextProcessorRail {
 		{"round_level_compressor_config", "RoundLevelCompressor"},
 	}
 	for _, spec := range processorSpecs {
-		if cfgMap, _ := ctxCfg[spec.configKey].(map[string]any); cfgMap != nil && len(cfgMap) > 0 {
+		if cfgMap, _ := ctxCfg[spec.configKey].(map[string]any); len(cfgMap) > 0 {
 			userProcessors = append(userProcessors, ceiface.ProcessorSpec{
-				Type:           spec.typeName,
+				Type:            spec.typeName,
 				ConfigOverrides: utils.DeepCopyMap(cfgMap),
 			})
 		}
@@ -473,7 +473,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 		railsList = append(railsList, rail)
 	}
 
-	// 1. RuntimePromptRail
+	// 1. RuntimePromptRail 运行时提示
 	appendRail(func() (agentinterfaces.AgentRail, error) {
 		rail := swarmrails.NewRuntimePromptRail(language, channel)
 		logger.Info(logComponent).Str("channel", channel).
@@ -481,7 +481,7 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 		return rail, nil
 	}, "RuntimePromptRail")
 
-	// 2. ResponsePromptRail
+	// 2. ResponsePromptRail 响应提示
 	appendRail(func() (agentinterfaces.AgentRail, error) {
 		rail := swarmrails.NewResponsePromptRail()
 		logger.Info(logComponent).Msg("[TeamRuntime] ResponsePromptRail created")
@@ -495,14 +495,14 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 		return rail, nil
 	}, "SysOperationRail")
 
-	// 4. JiuClawStreamEventRail
+	// 4. JiuClawStreamEventRail 流事件
 	appendRail(func() (agentinterfaces.AgentRail, error) {
 		rail := swarmrails.NewJiuClawStreamEventRail()
 		logger.Info(logComponent).Msg("[TeamRuntime] JiuClawStreamEventRail created")
 		return rail, nil
 	}, "JiuClawStreamEventRail")
 
-	// 5. TaskPlanningRail
+	// 5. TaskPlanningRail 任务规划
 	appendRail(func() (agentinterfaces.AgentRail, error) {
 		rail := rails.NewTaskPlanningRail()
 		logger.Info(logComponent).Msg("[TeamRuntime] TaskPlanningRail created")
@@ -516,14 +516,14 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 		return rail, nil
 	}, "SecurityRail")
 
-	// 7. HeartbeatRail
+	// 7. HeartbeatRail 心跳
 	appendRail(func() (agentinterfaces.AgentRail, error) {
 		rail := rails.NewHeartbeatRail()
 		logger.Info(logComponent).Msg("[TeamRuntime] HeartbeatRail created")
 		return rail, nil
 	}, "HeartbeatRail")
 
-	// 8. AvatarPromptRail
+	// 8. AvatarPromptRail 头像提示
 	appendRail(func() (agentinterfaces.AgentRail, error) {
 		rail := swarmrails.NewAvatarPromptRail()
 		logger.Info(logComponent).Msg("[TeamRuntime] AvatarPromptRail created")

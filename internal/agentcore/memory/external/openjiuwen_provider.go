@@ -275,7 +275,7 @@ func (p *OpenJiuwenProvider) Shutdown(_ context.Context) error {
 // 3. 获取 LTM 全局单例
 // 4. LTM.KVStore 为 nil → RegisterStore
 // 5. scopeConfig 不为 nil → LTM.SetScopeConfig
-// 6. p.initialized = true
+// 6. 标记 initialized 为 true
 func (p *OpenJiuwenProvider) Initialize(ctx context.Context, opts ...ProviderOption) error {
 	po := applyOptions(opts...)
 
