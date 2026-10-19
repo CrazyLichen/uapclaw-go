@@ -4,8 +4,10 @@ import (
 	"context"
 	"strings"
 
+	agentteamsmodels "github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -172,16 +174,18 @@ func (m *TeamManager) RegisterMemberRuntimeTools(
 
 // NormalizeDistributedTransportFields 公共包装：分布式传输字段标准化。
 // 对齐 Python: TeamManager.normalize_distributed_transport_fields(config_base, team_cfg)
+//
+// 委托 distributed_runtime.go 纯函数实现。
 func (m *TeamManager) NormalizeDistributedTransportFields(configBase map[string]any, teamCfg map[string]any) map[string]any {
-	// ⤵️(#9.72) 完整实现 — 待 distributed_runtime 回填
-	return teamCfg
+	return NormalizeDistributedTransportFields(configBase, teamCfg)
 }
 
 // ParsePort 解析并验证端口值。
 // 对齐 Python: TeamManager.parse_port(value, default, field_name)
+//
+// 委托 distributed_runtime.go 纯函数实现。
 func (m *TeamManager) ParsePort(value any, defaultPort int, fieldName string) int {
-	// ⤵️(#9.72) 完整实现 — 待 distributed_runtime.parse_port 回填
-	return defaultPort
+	return ParsePort(value, defaultPort, fieldName)
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -247,15 +251,31 @@ func trimDotsUnderscores(s string) string {
 	return s[start:end]
 }
 
+// poolEntryToMap 将 ModelPoolEntry 转为 map（JSON 桥接）。
+// 对齐 Python: pool_entry.model_dump()
+func poolEntryToMap(entry *agentteamsmodels.ModelPoolEntry) map[string]any {
+	return map[string]any{
+		"model_name":   entry.ModelName,
+		"api_key":      entry.APIKey,
+		"api_base_url": entry.APIBaseURL,
+		"api_provider": entry.APIProvider,
+		"description":  entry.Description,
+		"model_id":     entry.ModelID,
+		"metadata":     entry.Metadata,
+	}
+}
+
 // loadTeamSpec 加载团队配置并构建 TeamAgentSpec。
-// 对齐 Python: TeamManager._load_team_spec(session_id)
+// 对齐 Python: TeamManager._load_team_spec(session_id) (L291-352)
 //
 // Python 步骤：
 //  1. config_base = get_config()
-//  2. spec_dict = load_team_spec_dict(config_base)
-//  3. spec_dict = normalize_team_identity_fields(spec_dict)
-//  4. 分布式模式标准化 — ⤵️ 待回填
-//  5. return TeamAgentSpec(**spec_dict)
+//  2. 分布式依赖检查（缺依赖回退 local）
+//  3. spec_dict = load_team_spec_dict(config_base)
+//  4. spec_dict = normalize_team_identity_fields(spec_dict)
+//  5. 分布式传输字段标准化
+//  6. models.defaults > 1 条时注入 model_pool + model_pool_strategy
+//  7. return TeamAgentSpec(**spec_dict)
 //
 // Go 差异：Python 使用全局 get_config()，Go 通过参数注入 configBase。
 // 当 configBase 为 nil 时，返回默认 spec。
@@ -272,15 +292,90 @@ func loadTeamSpec(sessionID string, configBase ...map[string]any) *atschema.Team
 		return &s
 	}
 
-	// 步骤 2: 构建 spec 字典
+	// 步骤 2: 分布式模式依赖检查（缺依赖回退 local）
+	// 对齐 Python: TeamManager._load_team_spec L296-318
+	if IsDistributedMode(cb) {
+		missing := MissingDistributedDependencies(cb)
+		if len(missing) > 0 {
+			missingList := strings.Join(missing, ", ")
+			logger.Warn(logComponent).Str("missing", missingList).
+				Msg("[TeamManager][MISSING_DISTRIBUTE_DEPS]")
+			logger.Error(logComponent).
+				Msg("[TeamManager][FALLBACK_TO_LOCAL] distributed runtime is not available; downgraded to local mode for current process")
+			logger.Warn(logComponent).
+				Msg("[TeamManager][ACTION] install via: pip install -e \".[distribute]\" or uv sync --extra distribute")
+			cb = FallbackDistributedToLocal(cb)
+		}
+	}
+
+	// 步骤 3: 构建 spec 字典
 	specDict := LoadTeamSpecDict(cb)
 
-	// 步骤 3: 标准化身份字段
+	// 步骤 4: 标准化身份字段
 	specDict = normalizeTeamIdentityFields(specDict)
 
-	// 步骤 4: 分布式模式标准化 — ⤵️ 待回填
+	// 步骤 5: 分布式传输字段标准化（对齐 Python L317-318）
+	if IsDistributedMode(cb) {
+		specDict = NormalizeDistributedTransportFields(cb, specDict)
+	}
 
-	// 步骤 5: 从 dict 构建 TeamAgentSpec
+	// 步骤 6: model_pool 注入
+	// 对齐 Python: TeamManager._load_team_spec L320-350
+	// models.defaults 多于一条时填充 model_pool 并设置 model_pool_strategy，
+	// 使团队成员可从池中分配不同模型端点。
+	defaultModels := config.GetDefaultModels(cb)
+	if len(defaultModels) > 1 {
+		poolEntries := make([]any, 0, len(defaultModels))
+		for _, entry := range defaultModels {
+			mcc, _ := entry["model_client_config"].(map[string]any)
+			if mcc == nil {
+				continue
+			}
+			modelName, _ := mcc["model_name"].(string)
+			if modelName == "" {
+				continue
+			}
+			apiKey, _ := mcc["api_key"].(string)
+			apiBase, _ := mcc["api_base"].(string)
+			apiProvider, _ := mcc["client_provider"].(string)
+
+			// metadata.client = mcc 排除四键且值非 nil；metadata.request = mco 浅拷贝（恒非 nil）
+			clientMeta := map[string]any{}
+			excluded := map[string]bool{
+				"model_name": true, "api_key": true, "api_base": true, "client_provider": true,
+			}
+			for k, v := range mcc {
+				if excluded[k] || v == nil {
+					continue
+				}
+				clientMeta[k] = v
+			}
+			mco, _ := entry["model_config_obj"].(map[string]any)
+			if mco == nil {
+				mco = map[string]any{}
+			}
+			requestMeta := make(map[string]any, len(mco))
+			for k, v := range mco {
+				requestMeta[k] = v
+			}
+
+			poolEntry := agentteamsmodels.NewModelPoolEntry(
+				modelName, apiKey, apiBase, apiProvider,
+				agentteamsmodels.WithMetadata(map[string]any{
+					"client":  clientMeta,
+					"request": requestMeta,
+				}),
+			)
+			// JSON 桥接：ModelPoolEntry → map（specDict 经 NewTeamAgentSpecFromDict 反序列化）
+			poolEntries = append(poolEntries, poolEntryToMap(poolEntry))
+		}
+		if len(poolEntries) > 0 {
+			specDict["model_pool"] = poolEntries
+			specDict["model_pool_strategy"] = "by_model_name"
+		}
+	}
+
+	// 步骤 7: 从 dict 构建 TeamAgentSpec
 	spec := atschema.NewTeamAgentSpecFromDict(specDict)
 
 	logger.Info(logComponent).
