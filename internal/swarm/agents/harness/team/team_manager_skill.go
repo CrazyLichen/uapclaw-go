@@ -2,37 +2,29 @@ package team
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 
+	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // EnsureTeamSharedSkillsInitialized 确保 team 共享技能已初始化。
-// 对齐 Python: TeamManager.ensure_team_shared_skills_initialized(spec)
-//
-// Python 步骤：
-//  1. TeamManager._copy_global_skills_to_team_shared_dir(spec)
-//  2. TeamManager._sync_team_shared_skills_to_agent_global(spec)
+// 对齐 Python: TeamManager.ensure_team_shared_skills_initialized(spec) (L1043-1047)
 func (m *TeamManager) EnsureTeamSharedSkillsInitialized(spec *atschema.TeamAgentSpec) {
 	if spec == nil {
 		return
 	}
-	// 步骤 1: 复制全局技能到团队共享目录
-	// 对齐 Python: TeamManager._copy_global_skills_to_team_shared_dir(spec)
-	// TODO(#9.72): 实现 skill 目录复制逻辑
-	logger.Debug(logComponent).Str("team_name", spec.TeamName).
-		Msg("EnsureTeamSharedSkillsInitialized: global skill copy (pending filesystem implementation)")
-
-	// 步骤 2: 同步团队共享技能到 Agent 全局
-	// 对齐 Python: TeamManager._sync_team_shared_skills_to_agent_global(spec)
-	// TODO(#9.72): 实现 skill 目录同步逻辑
-	logger.Debug(logComponent).Str("team_name", spec.TeamName).
-		Msg("EnsureTeamSharedSkillsInitialized: skill sync (pending filesystem implementation)")
+	m.copyGlobalSkillsToTeamSharedDir(spec)
+	m.syncTeamSharedSkillsToAgentGlobal(spec)
 }
 
 // SyncTeamSkills 同步指定 session 的技能（从 workspace 到 global）。
@@ -49,12 +41,7 @@ func (m *TeamManager) SyncTeamSkills(sessionID string) {
 		logger.Debug(logComponent).Str("session_id", sessionID).Msg("no skillsynctarget")
 		return
 	}
-	// ⤵️(#9.72) _sync_skills_dir — 待 shutil / Path 等效实现回填
-	logger.Info(logComponent).
-		Str("session_id", sessionID).
-		Str("source", syncTarget.Source).
-		Str("target", syncTarget.Target).
-		Msg("syncing team skills (pending backfill)")
+	syncSkillsDir(syncTarget.Source, syncTarget.Target)
 }
 
 // RegisterTeamSkillRail 注册 TeamSkillEvolutionRail 实例。
@@ -300,4 +287,149 @@ func (m *TeamManager) unregisterLiveRail(sessionID string, rail agentinterfaces.
 	} else {
 		delete(m.teamLiveRails, sessionID)
 	}
+}
+
+// copyGlobalSkillsToTeamSharedDir 复制全局技能到团队共享目录（team build 后执行一次）。
+// 对齐 Python: TeamManager._copy_global_skills_to_team_shared_dir(spec) (L998-1026)
+//
+// marker 文件 .team_skills_copied 幂等：存在即跳过。
+func (m *TeamManager) copyGlobalSkillsToTeamSharedDir(spec *atschema.TeamAgentSpec) {
+	globalSkillsDir := workspace.AgentSkillsDir()
+	if info, err := os.Stat(globalSkillsDir); err != nil || !info.IsDir() {
+		logger.Warn(logComponent).Str("global_skills_dir", globalSkillsDir).
+			Msg("[TeamManager] global_skills_dir does not exist")
+		return
+	}
+
+	teamSharedSkillsDir := resolveTeamSharedSkillsDir(spec)
+
+	// marker 幂等检查
+	copiedMarker := filepath.Join(teamSharedSkillsDir, ".team_skills_copied")
+	if _, err := os.Stat(copiedMarker); err == nil {
+		logger.Info(logComponent).Msg("[TeamManager] Team shared skills already copied, skipping")
+		return
+	}
+
+	// 复制整个技能目录（含 skills_state.json），目标存在则合并覆盖（dirs_exist_ok=True 等效）
+	if err := copyTreeMerge(globalSkillsDir, teamSharedSkillsDir); err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("global_skills_dir", globalSkillsDir).
+			Str("team_shared_skills_dir", teamSharedSkillsDir).
+			Msg("[TeamManager] copy global skills to team shared failed")
+		return
+	}
+
+	// 写 marker 文件
+	if err := os.WriteFile(copiedMarker, []byte(""), 0o644); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[TeamManager] write team_skills_copied marker failed")
+		return
+	}
+	logger.Info(logComponent).Str("team_shared_skills_dir", teamSharedSkillsDir).
+		Msg("[TeamManager] Copied global skills dir to team shared")
+}
+
+// resolveTeamSharedSkillsDir 解析团队共享技能目录。
+// 对齐 Python: TeamManager._resolve_team_shared_skills_dir(spec) (L1028-1034)
+//
+// spec.Workspace.RootPath 优先，回退 TeamHome(teamName)/team-workspace。
+func resolveTeamSharedSkillsDir(spec *atschema.TeamAgentSpec) string {
+	wsPath := ""
+	if spec.Workspace != nil && spec.Workspace.RootPath != "" {
+		wsPath = spec.Workspace.RootPath
+	}
+	if wsPath == "" {
+		wsPath = filepath.Join(agentteams.TeamHome(spec.TeamName), "team-workspace")
+	}
+	return filepath.Join(wsPath, "skills")
+}
+
+// syncTeamSharedSkillsToAgentGlobal 将团队共享技能镜像到本地 agent skills 目录（供 SkillUseRail）。
+// 对齐 Python: TeamManager._sync_team_shared_skills_to_agent_global(spec) (L1036-1041)
+func (m *TeamManager) syncTeamSharedSkillsToAgentGlobal(spec *atschema.TeamAgentSpec) {
+	teamSharedSkillsDir := resolveTeamSharedSkillsDir(spec)
+	globalSkillsDir := workspace.AgentSkillsDir()
+	syncSkillsDir(teamSharedSkillsDir, globalSkillsDir)
+}
+
+// syncSkillsDir 将 source 中每个有效技能目录复制到 target（最新版本胜出）。
+// 对齐 Python: _sync_skills_dir(source, target) (L87-107)
+//
+// 有效技能 = 含 SKILL.md 的子目录；target 已有同名目录先删除再复制（rmtree+copytree）。
+// source 非目录直接返回。synced>0 时输出 info 日志。
+func syncSkillsDir(source string, target string) {
+	info, err := os.Stat(source)
+	if err != nil || !info.IsDir() {
+		return
+	}
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		logger.Warn(logComponent).Err(err).Str("target", target).
+			Msg("[TeamManager] syncSkillsDir mkdir failed")
+		return
+	}
+	entries, err := os.ReadDir(source)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("source", source).
+			Msg("[TeamManager] syncSkillsDir readdir failed")
+		return
+	}
+	synced := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skillMD := filepath.Join(source, entry.Name(), "SKILL.md")
+		if _, err := os.Stat(skillMD); err != nil {
+			continue
+		}
+		dest := filepath.Join(target, entry.Name())
+		if _, err := os.Stat(dest); err == nil {
+			if err := os.RemoveAll(dest); err != nil {
+				logger.Warn(logComponent).Err(err).Str("dest", dest).
+					Msg("[TeamManager] syncSkillsDir rmtree failed")
+				continue
+			}
+		}
+		if err := copyTreeMerge(filepath.Join(source, entry.Name()), dest); err != nil {
+			logger.Warn(logComponent).Err(err).Str("dest", dest).
+				Msg("[TeamManager] syncSkillsDir copytree failed")
+			continue
+		}
+		synced++
+	}
+	if synced > 0 {
+		logger.Info(logComponent).
+			Int("count", synced).
+			Str("source", source).
+			Str("target", target).
+			Msg("[TeamManager] synced skills")
+	}
+}
+
+// copyTreeMerge 递归复制目录树，目标存在则逐项合并覆盖（shutil.copytree(dirs_exist_ok=True) 等效）。
+func copyTreeMerge(source string, target string) error {
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		return fmt.Errorf("mkdir target: %w", err)
+	}
+	entries, err := os.ReadDir(source)
+	if err != nil {
+		return fmt.Errorf("readdir source: %w", err)
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(source, entry.Name())
+		dstPath := filepath.Join(target, entry.Name())
+		if entry.IsDir() {
+			if err := copyTreeMerge(srcPath, dstPath); err != nil {
+				return err
+			}
+			continue
+		}
+		data, err := os.ReadFile(srcPath)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", srcPath, err)
+		}
+		if err := os.WriteFile(dstPath, data, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", dstPath, err)
+		}
+	}
+	return nil
 }
