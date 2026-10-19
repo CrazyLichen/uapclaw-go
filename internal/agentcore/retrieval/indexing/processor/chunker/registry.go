@@ -198,21 +198,22 @@ func tokenizerFactory(opts ...ChunkerOption) (Chunker, error) {
 // hybridFactory hybrid 分块器工厂。
 //
 // 对齐 Python _hybrid_factory：
-//   - inner 缺省：由 chunk_size/chunk_overlap 构造默认 CharChunker（13.6 已回填），
-//     参数经其构造校验（155100/155101），多余 Extra 随选项透传给 CharChunker 后
-//     吞掉（对齐 Python **params 前向兼容）
+//   - inner 缺省：由 chunk_size/chunk_overlap 构造默认 CharChunker（13.8
+//     起构造并保留，设计决策 4），参数经其构造校验（155100/155101），Extra
+//     随 opts 透传给 CharChunker 后吞掉（对齐 Python **params 前向兼容）
 //   - inner 已给：多余 kwargs 报错（TypeError 语义）；inner 类型由 Chunker
 //     接口静态保证（Go 无运行时 isinstance 需求）
-//   - HybridChunker 实体在 13.8 回填 ⤴️，当前返回占位错误
 //
 // Python: chunker/__init__.py _hybrid_factory
 func hybridFactory(opts ...ChunkerOption) (Chunker, error) {
 	o := NewChunkerOptions(opts...)
+	var inner Chunker
 	if o.InnerChunker == nil {
-		// ⤴️ 13.6 回填：inner 缺省时默认 inner 为 CharChunker，先过其构造校验
-		if _, err := NewCharChunker(opts...); err != nil {
+		c, err := NewCharChunker(opts...)
+		if err != nil {
 			return nil, err
 		}
+		inner = c
 	} else if len(o.Extra) > 0 {
 		keys := make([]string, 0, len(o.Extra))
 		for k := range o.Extra {
@@ -220,8 +221,8 @@ func hybridFactory(opts ...ChunkerOption) (Chunker, error) {
 		}
 		sort.Strings(keys)
 		return nil, fmt.Errorf("Unknown kwargs for 'hybrid' chunker: %s", strings.Join(keys, ", "))
+	} else {
+		inner = o.InnerChunker
 	}
-	// ⤴️ 13.8：替换为 HybridChunker(inner, noSplitWhen) 构造
-	_ = o.NoSplitWhen
-	return nil, fmt.Errorf("HybridChunker not implemented until 13.8")
+	return NewHybridChunker(inner, o.NoSplitWhen)
 }

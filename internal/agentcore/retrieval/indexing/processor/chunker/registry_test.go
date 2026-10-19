@@ -1,9 +1,11 @@
 package chunker
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 )
 
 // fakeEntryChunker registry 测试用最小 Chunker
@@ -76,21 +78,37 @@ func TestGetChunker_工厂透传参数(t *testing.T) {
 	assert.Equal(t, 20, bc.ChunkOverlap)
 }
 
-// TestHybridFactory_inner缺省时13_8前占位报错 ⤴️ 13.6 已回填默认 CharChunker 构造校验
-func TestHybridFactory_inner缺省时13_8前占位报错(t *testing.T) {
-	// 无 inner → 默认 CharChunker(512/50) 构造成功 → 落到 13.8 占位
-	_, err := GetChunker("hybrid")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented until 13.8")
+// TestHybridFactory_inner缺省构造默认CharChunker ⤴️ 13.8 回填：
+// 构造并保留（决策 4），默认谓词生效
+func TestHybridFactory_inner缺省构造默认CharChunker(t *testing.T) {
+	c, err := GetChunker("hybrid")
+	assert.NoError(t, err)
+	h, ok := c.(*HybridChunker)
+	assert.True(t, ok)
+	assert.Equal(t, 512, h.ChunkSize)
+	assert.Equal(t, 50, h.ChunkOverlap)
+
+	// 默认谓词生效（source_type=row 单块）
+	docs := []reranker.Document{{
+		ID:       "r",
+		Text:     "姓名: 张三",
+		Metadata: map[string]any{"source_type": "row"},
+	}}
+	chunks, err := h.ChunkDocuments(context.Background(), docs)
+	assert.NoError(t, err)
+	assert.Len(t, chunks, 1)
 }
 
-// TestHybridFactory_inner注入时13_8前占位报错 ⤴️ 13.8 落地 HybridChunker
-func TestHybridFactory_inner注入时13_8前占位报错(t *testing.T) {
-	inner, err := newFakeEntryChunkerFake()
+// TestHybridFactory_inner注入构造成功 ⤴️ 13.8 回填：尺寸从 inner 断言提取
+func TestHybridFactory_inner注入构造成功(t *testing.T) {
+	inner, err := newFakeEntryChunkerFake(WithChunkSize(2048), WithChunkOverlap(64))
 	assert.NoError(t, err)
-	_, err = GetChunker("hybrid", WithInnerChunker(inner))
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented until 13.8")
+	c, err := GetChunker("hybrid", WithInnerChunker(inner))
+	assert.NoError(t, err)
+	h, ok := c.(*HybridChunker)
+	assert.True(t, ok)
+	assert.Equal(t, 2048, h.ChunkSize, "尺寸从 inner 断言提取")
+	assert.Equal(t, 64, h.ChunkOverlap)
 }
 
 // TestHybridFactory_多余参数报错 对齐 Python TypeError("Unknown kwargs for 'hybrid' chunker")
@@ -105,9 +123,11 @@ func TestHybridFactory_多余参数报错(t *testing.T) {
 // TestHybridFactory_inner显式nil走缺省分支 WithInnerChunker(nil) 等价未设置，
 // 走默认 CharChunker（inner 类型由 Chunker 接口静态保证，无需运行时断言）
 func TestHybridFactory_inner显式nil走缺省分支(t *testing.T) {
-	_, err := GetChunker("hybrid", WithInnerChunker(nil))
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not implemented until 13.8")
+	c, err := GetChunker("hybrid", WithInnerChunker(nil))
+	assert.NoError(t, err)
+	h, ok := c.(*HybridChunker)
+	assert.True(t, ok)
+	assert.Equal(t, 512, h.ChunkSize, "显式 nil 与未设置等价 → 默认 512/50")
 }
 
 // TestNewChunkerOptions_默认值512和50 对齐 Python 默认 chunk_size/chunk_overlap

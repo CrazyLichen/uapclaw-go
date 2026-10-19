@@ -321,3 +321,37 @@ func TestHybridChunker_自定义谓词覆盖(t *testing.T) {
 	assert.Equal(t, 1, chunks[0].Metadata["total_chunks"])
 	assert.Equal(t, "excel", chunks[1].DocID)
 }
+
+// TestGetChunker_hybrid全参路径 工厂全参数集成：尺寸穿透 + 谓词透传
+func TestGetChunker_hybrid全参路径(t *testing.T) {
+	inner, _ := NewCharChunker(WithChunkSize(64), WithChunkOverlap(8))
+	c, err := GetChunker("hybrid", WithInnerChunker(inner), WithNoSplitWhen(func(doc *reranker.Document) bool {
+		return doc.Metadata["keep"] == true
+	}))
+	assert.NoError(t, err)
+	h, ok := c.(*HybridChunker)
+	assert.True(t, ok)
+	assert.Equal(t, 64, h.ChunkSize)
+	assert.Equal(t, 8, h.ChunkOverlap)
+
+	docs := []reranker.Document{
+		{ID: "keep-doc", Text: "  keep whole  ", Metadata: map[string]any{"keep": true}},
+		{ID: "split-doc", Text: "normal paragraph"},
+	}
+	chunks, err := h.ChunkDocuments(context.Background(), docs)
+	assert.NoError(t, err)
+	// keep-doc 自定义谓词命中单块（strip）；split-doc 走 inner(size=64) 1 块
+	assert.Len(t, chunks, 2)
+	assert.Equal(t, "keep whole", chunks[0].Text)
+	assert.Equal(t, "keep-doc", chunks[0].DocID)
+}
+
+// TestGetChunker_hybrid尺寸穿透 无 inner 时 chunk_size/chunk_overlap 决定默认 CharChunker
+func TestGetChunker_hybrid尺寸穿透(t *testing.T) {
+	c, err := GetChunker("hybrid", WithChunkSize(300), WithChunkOverlap(30))
+	assert.NoError(t, err)
+	h, ok := c.(*HybridChunker)
+	assert.True(t, ok)
+	assert.Equal(t, 300, h.ChunkSize, "尺寸穿透到默认 CharChunker 再断言提取回 hybrid")
+	assert.Equal(t, 30, h.ChunkOverlap)
+}
