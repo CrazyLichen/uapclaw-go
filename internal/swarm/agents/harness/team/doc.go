@@ -25,15 +25,20 @@
 //	team/
 //	├── doc.go                        # 包文档
 //	├── config_loader.go              # Team 配置加载与规格构建
+//	├── distributed_runtime.go        # 分布式运行时纯函数（模式判定/传输标准化/PG 编排）
 //	├── event_types.go                # TeamEventCategory / TeamEventType 前端事件类型枚举
+//	├── exceptions.go                 # Team 异常类型（TeamError + 7 子类）
+//	├── member_skill_toolkit_rail.go  # 成员技能工具 rail
 //	├── monitor_handler.go            # TeamMonitorHandler 事件收集、转换和广播
+//	├── runtime_inheritance.go        # 成员运行时继承（rails 构造/能力过滤/模型解析）
 //	├── team_manager.go               # TeamManager 结构体 + 全局索引 + 访问器
+//	├── team_manager_distributed.go   # 分布式 hooks
 //	├── team_manager_lifecycle.go     # 生命周期方法
 //	├── team_manager_interact.go      # interact 路由
-//	├── team_manager_spec.go          # Spec 构建
-//	├── team_manager_skill.go         # 技能管理
 //	├── team_manager_monitor.go       # 监控/流
-//	└── team_manager_distributed.go   # 分布式 hooks
+//	├── team_manager_skill.go         # 技能管理
+//	├── team_manager_spec.go          # Spec 构建
+//	└── workspace_report_path_rail.go # 工作区产物路径提示 rail
 //
 // 对应 Python 代码：jiwenswarm/agents/harness/team/team_manager.py
 package team

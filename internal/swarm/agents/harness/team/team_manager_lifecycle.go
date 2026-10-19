@@ -63,7 +63,7 @@ func (m *TeamManager) OnRuntimeReady(ctx context.Context, sessionID string, team
 			Msg("OnRuntimeReady: EnsureMonitor failed")
 	}
 
-	// 自动启动 evolution watcher — ⤵️ 待回填
+	// 自动启动 evolution watcher — ⤵️(#10.6.22) 待回填
 	// Python: 当 runtime_ready 事件触发时，start_team_evolution_watcher 自动启动
 	// Go 差异：event bus 完整实现后，由 runtime_ready 事件自动触发
 	logger.Debug(logComponent).Str("session_id", sessionID).
@@ -173,11 +173,13 @@ func (m *TeamManager) CreateTeam(
 ) (*agent.TeamAgent, error) {
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("creating TeamAgent (application layer)")
 
-	// 步骤 2: _ensure_postgresql_for_leader — ⤵️(#9.72) 待回填
-	// Python: await self._ensure_postgresql_for_leader(config_base)
+	// 步骤 2: _ensure_postgresql_for_leader
+	// 对齐 Python: await self._ensure_postgresql_for_leader(config_base)
 	// 仅分布式部署（PostgreSQL 模式）时需要启动 PG，
-	// 本地环境（SQLite）不需要启动 PG，因此本地环境跳过此步骤。
-	// TODO: 分布式部署时需实现 _ensure_postgresql_for_leader
+	// 本地环境（SQLite）不需要启动 PG，EnsurePostgresqlForLeader 内部短路跳过。
+	if cfgMap, err := teamLoadConfig(); err == nil {
+		EnsurePostgresqlForLeader(ctx, cfgMap)
+	}
 
 	// 步骤 3-4: 加载 spec + session 作用域 team_name — 由调用方提前完成
 	// 步骤 5: agent_customizer — 由调用方提前完成
@@ -213,8 +215,12 @@ func (m *TeamManager) CreateTeam(
 	m.teamAgents[sessionID] = teamAgent
 	m.mu.Unlock()
 
-	// 步骤 8: ensure_team_shared_skills_initialized — ⤵️(#9.72) 待回填
-	// 步骤 9: attach distributed hooks — ⤵️(#9.72) 待回填
+	// 步骤 8: ensure_team_shared_skills_initialized
+	// 对齐 Python: self.ensure_team_shared_skills_initialized(spec)（marker 幂等，
+	// deep_adapter_team.go:425 调用方已有调用，双重调用由 marker 保证单次执行）
+	m.EnsureTeamSharedSkillsInitialized(spec)
+
+	// 步骤 9: attach distributed hooks — ⤵️(#10.6.20) 待回填
 
 	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", spec.TeamName).
 		Msg("team created")
@@ -432,7 +438,7 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 	}
 
 	if !hasLocalTeamRuntime {
-		// 释放 A2X 资源 + 停止 Runner transport — ⤵️(#9.72) 待回填
+		// 释放 A2X 资源 + 停止 Runner transport — ⤵️(#10.6.22) 待回填
 		m.mu.Lock()
 		delete(m.runnerTeamAgents, sessionID)
 		m.mu.Unlock()
@@ -635,7 +641,7 @@ func (m *TeamManager) destroyTeam(ctx context.Context, sessionID string) (bool, 
 	}
 
 	// Python: await release_a2x_reservations_for_session + await _stop_team_messager
-	// ⤵️(#9.72) 待回填
+	// ⤵️(#10.6.22) 待回填
 
 	logger.Info(logComponent).Str("session_id", sessionID).Bool("cleaned", cleaned).
 		Msg("team cleaned up via core API")
@@ -658,7 +664,7 @@ func (m *TeamManager) stopLocalTeamRuntime(ctx context.Context, sessionID string
 
 	// Python: await release_a2x_reservations_for_session(session_id, team_agent=)
 	// Python: await _stop_team_messager(team_agent, session_id=session_id)
-	// ⤵️(#9.72) 待回填
+	// ⤵️(#10.6.22) 待回填
 
 	logger.Info(logComponent).Str("session_id", sessionID).Bool("stopped", stopped).
 		Msg("stopping local team runtime")

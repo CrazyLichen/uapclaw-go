@@ -69,7 +69,16 @@ func (m *TeamManager) GetEnrichedTeamSpec(
 	channelID string,
 	requestMetadata map[string]any,
 ) *atschema.TeamAgentSpec {
-	// 步骤 1-2: 加载 spec（Go 差异：configBase 由 loadTeamSpec 内部获取或调用方注入）
+	// 步骤 1-2: 加载 spec + PG 编排
+	// Go 差异：configBase 由 loadTeamSpec 内部获取或调用方注入
+	// 步骤 2: _ensure_postgresql_for_leader
+	// 对齐 Python: config_base = get_config(); await self._ensure_postgresql_for_leader(config_base)
+	if cfgMap, err := teamLoadConfig(); err == nil {
+		EnsurePostgresqlForLeader(ctx, cfgMap)
+	} else {
+		logger.Warn(logComponent).Err(err).
+			Msg("GetEnrichedTeamSpec: load config for PG check failed")
+	}
 	spec := loadTeamSpec(sessionID)
 	if spec == nil {
 		logger.Warn(logComponent).Str("session_id", sessionID).Msg("loadTeamSpec returned nil, using default spec")

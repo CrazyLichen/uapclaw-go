@@ -805,7 +805,7 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 			tm := team.GetTeamManager(channelID)
 			tm.CommitRuntimeReady(sessionID, readyTeamName)
 
-			// 分布式 hooks — ⤵️(#9.72) 待回填
+			// 分布式 hooks — ⤵️(#10.6.20) 待回填
 			tm.AttachDistributedHooksForRunnerRuntime(readyTeamName, sessionID, nil)
 
 			d.ensureMonitorForActiveRuntime(ctx, channelID, sessionID, readyTeamName, hideDM)
