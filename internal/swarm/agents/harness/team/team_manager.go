@@ -103,6 +103,10 @@ type TeamManager struct {
 	// 事件广播回调，由 adapter 层注入（将事件广播到 channel waiters）
 	// 对齐 Python: _broadcast_event(channel_id, session_id, event)
 	onEventBroadcast func(channelID, sessionID string, event map[string]any)
+
+	// code member 配置回调，由 adapter 层注入（code 模式 team member 配置）
+	// 对齐 Python: customizer 内 from interface_code import configure_code_team_member_agent（延迟 import）
+	codeMemberConfigurer CodeMemberConfigurer
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -148,6 +152,14 @@ func NewTeamManager() *TeamManager {
 // 对齐 Python: _broadcast_event(channel_id, session_id, event)
 func (m *TeamManager) SetOnEventBroadcast(fn func(channelID, sessionID string, event map[string]any)) {
 	m.onEventBroadcast = fn
+}
+
+// SetCodeMemberConfigurer 设置 code member 配置回调（由 adapter 层注入）。
+// 对齐 Python: build_agent_customizer 内延迟 import configure_code_team_member_agent——
+// Go 因循环依赖（team → adapter → team）改为注入回调，回调 nil 时 warning 跳过
+// （对齐 Python import 失败 except 跳过语义）。
+func (m *TeamManager) SetCodeMemberConfigurer(fn CodeMemberConfigurer) {
+	m.codeMemberConfigurer = fn
 }
 
 // GetTeamManager 获取指定 channel 的 TeamManager 实例（懒创建）。
