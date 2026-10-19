@@ -1,8 +1,24 @@
 package team
 
 import (
+	"context"
 	"os"
+	"reflect"
 	"testing"
+
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // TestToolWhitelist_39项 逐项对齐 Python TOOL_WHITELIST。
@@ -250,5 +266,173 @@ func TestBuildEvolutionLLM_缺apiKey返回nil(t *testing.T) {
 	}
 	if name != "m" {
 		t.Fatalf("model_name should still be returned, got %q", name)
+	}
+}
+
+// ──────────────────────────── Task 8 测试辅助 ────────────────────────────
+
+// fakeAbilityMgrForFilter 测试用 AbilityManager。
+type fakeAbilityMgrForFilter struct {
+	abilities []cschema.Ability
+}
+
+func (f *fakeAbilityMgrForFilter) Add(a cschema.Ability) agentschema.AddAbilityResult {
+	f.abilities = append(f.abilities, a)
+	return agentschema.AddAbilityResult{Added: true}
+}
+func (f *fakeAbilityMgrForFilter) AddMany(a []cschema.Ability) []agentschema.AddAbilityResult {
+	return nil
+}
+func (f *fakeAbilityMgrForFilter) Remove(name string) cschema.Ability    { return nil }
+func (f *fakeAbilityMgrForFilter) RemoveMany(names []string) []cschema.Ability { return nil }
+func (f *fakeAbilityMgrForFilter) Get(name string) cschema.Ability       { return nil }
+func (f *fakeAbilityMgrForFilter) List() []cschema.Ability               { return f.abilities }
+func (f *fakeAbilityMgrForFilter) ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]cschema.ToolInfoInterface, error) {
+	return nil, nil
+}
+func (f *fakeAbilityMgrForFilter) Execute(
+	ctx context.Context,
+	cbc *agentinterfaces.AgentCallbackContext,
+	toolCalls []*llmschema.ToolCall,
+	sess sessioninterfaces.SessionFacade,
+	tag string,
+) []agentschema.ExecuteResult {
+	return nil
+}
+func (f *fakeAbilityMgrForFilter) SetContextEngine(ce ceinterface.ContextEngine) {}
+func (f *fakeAbilityMgrForFilter) ReorderTools(orderedNames []string)             {}
+
+// fakeDeepAgentForInheritance 最小 DeepAgentInterface（仅 AbilityManager 路径真实，其余空桩）。
+type fakeDeepAgentForInheritance struct {
+	abilityMgr *fakeAbilityMgrForFilter
+}
+
+func newFakeDeepAgentForInheritance() *fakeDeepAgentForInheritance {
+	whiteListed := &tool.ToolCard{}
+	whiteListed.Name = "vision"
+	whiteListed.ID = "v1"
+	outside := &tool.ToolCard{}
+	outside.Name = "my_custom_tool"
+	outside.ID = "c1"
+	return &fakeDeepAgentForInheritance{
+		abilityMgr: &fakeAbilityMgrForFilter{abilities: []cschema.Ability{whiteListed, outside}},
+	}
+}
+
+func (f *fakeDeepAgentForInheritance) AbilityManager() agentinterfaces.AbilityManagerInterface {
+	return f.abilityMgr
+}
+
+// 其余 DeepAgentInterface 空桩（仅 AbilityManager 路径真实）
+func (f *fakeDeepAgentForInheritance) ReactAgent() *agents.ReActAgent { return nil }
+func (f *fakeDeepAgentForInheritance) Card() *agentschema.AgentCard    { return nil }
+func (f *fakeDeepAgentForInheritance) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return nil
+}
+func (f *fakeDeepAgentForInheritance) LoopCoordinator() hinterfaces.LoopCoordinatorInterface {
+	return nil
+}
+func (f *fakeDeepAgentForInheritance) LoopController() controller.ControllerInterface {
+	return nil
+}
+func (f *fakeDeepAgentForInheritance) EventHandler() modules.EventHandler { return nil }
+func (f *fakeDeepAgentForInheritance) LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
+	return &hschema.DeepAgentState{}
+}
+func (f *fakeDeepAgentForInheritance) DeepConfig() *hschema.DeepAgentConfig { return nil }
+func (f *fakeDeepAgentForInheritance) IsInvokeActive() bool                 { return false }
+func (f *fakeDeepAgentForInheritance) IsAutoInvokeScheduled() bool          { return false }
+func (f *fakeDeepAgentForInheritance) SetAutoInvokeScheduled(bool)          {}
+func (f *fakeDeepAgentForInheritance) ScheduleAutoInvokeOnSpawnDone(context.Context, string, float64) error {
+	return nil
+}
+func (f *fakeDeepAgentForInheritance) CreateSubagent(context.Context, string, string) (hinterfaces.DeepAgentInterface, error) {
+	return nil, nil
+}
+func (f *fakeDeepAgentForInheritance) Invoke(context.Context, map[string]any, ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+func (f *fakeDeepAgentForInheritance) SwitchMode(sessioninterfaces.SessionFacade, string)     {}
+func (f *fakeDeepAgentForInheritance) RestoreModeAfterPlanExit(sessioninterfaces.SessionFacade) {}
+func (f *fakeDeepAgentForInheritance) GetPlanFilePath(sessioninterfaces.SessionFacade) string { return "" }
+func (f *fakeDeepAgentForInheritance) SaveState(sessioninterfaces.SessionFacade, *hschema.DeepAgentState) {
+}
+func (f *fakeDeepAgentForInheritance) FindRailsByType(...reflect.Type) []agentinterfaces.AgentRail {
+	return nil
+}
+func (f *fakeDeepAgentForInheritance) AddRail(agentinterfaces.AgentRail) {}
+func (f *fakeDeepAgentForInheritance) UnregisterRail(context.Context, agentinterfaces.AgentRail) error {
+	return nil
+}
+func (f *fakeDeepAgentForInheritance) InnerInvokeOverride() func(context.Context, map[string]any, ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil
+}
+func (f *fakeDeepAgentForInheritance) UapswarmProjectDir() string       { return "" }
+func (f *fakeDeepAgentForInheritance) SetUapswarmProjectDir(string)     {}
+func (f *fakeDeepAgentForInheritance) UapswarmCodeProjectDir() string   { return "" }
+func (f *fakeDeepAgentForInheritance) SetUapswarmCodeProjectDir(string) {}
+func (f *fakeDeepAgentForInheritance) UapswarmAdapterMode() string      { return "" }
+func (f *fakeDeepAgentForInheritance) SetUapswarmAdapterMode(string)    {}
+
+// 编译时验证
+var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForInheritance)(nil)
+
+// TestFilterInheritableAbilityCards_白名单过滤。
+func TestFilterInheritableAbilityCards_白名单过滤(t *testing.T) {
+	agent := newFakeDeepAgentForInheritance()
+	inherited := FilterInheritableAbilityCards(agent)
+	names := make([]string, 0)
+	for _, card := range inherited {
+		names = append(names, card.Name)
+	}
+	// fake 中 vision（白名单内）+ my_custom_tool（白名单外）
+	if len(inherited) != 1 || inherited[0].Name != "vision" {
+		t.Fatalf("filtered = %v, want [vision]", names)
+	}
+}
+
+// TestBuildContextProcessorRail_四段配置 按序构造 ProcessorSpec。
+func TestBuildContextProcessorRail_四段配置(t *testing.T) {
+	cfg := map[string]any{"react": map[string]any{"context_engine_config": map[string]any{
+		"message_summary_offloader_config": map[string]any{"threshold": 10},
+		"dialogue_compressor_config":       map[string]any{"max_tokens": 100},
+	}}}
+	rail := BuildContextProcessorRail(cfg)
+	if rail == nil {
+		t.Fatalf("rail should not be nil")
+	}
+	// 内部 userProcessors 无法直接断言，通过日志路径覆盖；此处验证不 panic 且返回实例
+}
+
+// TestBuildContextProcessorRail_空配置 preset 实例。
+func TestBuildContextProcessorRail_空配置(t *testing.T) {
+	rail := BuildContextProcessorRail(nil)
+	if rail == nil {
+		t.Fatalf("rail should not be nil for nil config")
+	}
+}
+
+// TestBuildSkillEvolutionRail_失败返回nil。
+func TestBuildSkillEvolutionRail_失败返回nil(t *testing.T) {
+	// 缺 api_key 的 config → BuildEvolutionLLM 失败 → 返回 nil
+	rail := BuildSkillEvolutionRail("/tmp/x", map[string]any{}, nil, "")
+	if rail != nil {
+		t.Fatalf("invalid config should return nil rail")
+	}
+}
+
+// TestBuildSkillEvolutionRail_合法配置 不绑 sink（teamID 空）。
+func TestBuildSkillEvolutionRail_合法配置(t *testing.T) {
+	cfg := map[string]any{"models": map[string]any{
+		"default": map[string]any{
+			"model_client_config": map[string]any{
+				"model_name": "m", "api_key": "k", "api_base": "https://x",
+				"client_provider": "OpenAI", "verify_ssl": false,
+			},
+		},
+	}}
+	rail := BuildSkillEvolutionRail("/tmp/skills", cfg, nil, "")
+	if rail == nil {
+		t.Fatalf("valid config should build rail")
 	}
 }

@@ -4,12 +4,18 @@ import (
 	"os"
 	"strings"
 
+	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	ce "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
+	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -418,4 +424,116 @@ func customHeadersToStringMap(v any) map[string]string {
 		return result
 	}
 	return nil
+}
+
+// FilterInheritableAbilityCards 从主 agent 获取可继承的 ToolCard 白名单。
+// 对齐 Python: filter_inheritable_ability_cards (team_runtime_inheritance.py L307-332)
+func FilterInheritableAbilityCards(mainAgent interfaces.DeepAgentInterface) []*tool.ToolCard {
+	result := make([]*tool.ToolCard, 0)
+	if mainAgent == nil {
+		return result
+	}
+	abilities := mainAgent.AbilityManager().List()
+	for _, ability := range abilities {
+		card, ok := ability.(*tool.ToolCard)
+		if !ok {
+			logger.Debug(logComponent).Str("ability", ability.AbilityName()).
+				Msg("[TeamRuntime] Skipping non-ToolCard ability")
+			continue
+		}
+		if toolWhitelist[card.Name] {
+			result = append(result, card)
+		} else {
+			logger.Debug(logComponent).Str("tool", card.Name).
+				Msg("[TeamRuntime] Tool not in whitelist, skipped")
+		}
+	}
+	return result
+}
+
+// BuildContextProcessorRail 为团队成员构造 preset ContextProcessorRail。
+// 对齐 Python: _build_context_processor_rail (L540-587)
+//
+// 读取 react.context_engine_config 下四段处理器配置，
+// 转 []ceiface.ProcessorSpec{Type, ConfigOverrides}（Python (name, dict) pairs）。
+func BuildContextProcessorRail(config map[string]any) *ce.ContextProcessorRail {
+	userProcessors := make([]ceiface.ProcessorSpec, 0, 4)
+	ctxCfg := map[string]any{}
+	if config != nil {
+		if react, _ := config["react"].(map[string]any); react != nil {
+			if c, _ := react["context_engine_config"].(map[string]any); c != nil {
+				ctxCfg = c
+			}
+		}
+	}
+
+	// 四段配置按 Python 顺序追加 (name, dict) pairs
+	processorSpecs := []struct {
+		configKey string
+		typeName  string
+	}{
+		{"message_summary_offloader_config", "MessageSummaryOffloader"},
+		{"dialogue_compressor_config", "DialogueCompressor"},
+		{"current_round_compressor_config", "CurrentRoundCompressor"},
+		{"round_level_compressor_config", "RoundLevelCompressor"},
+	}
+	for _, spec := range processorSpecs {
+		if cfgMap, _ := ctxCfg[spec.configKey].(map[string]any); cfgMap != nil && len(cfgMap) > 0 {
+			userProcessors = append(userProcessors, ceiface.ProcessorSpec{
+				Type:           spec.typeName,
+				ConfigOverrides: utils.DeepCopyMap(cfgMap),
+			})
+		}
+	}
+
+	rail := ce.NewContextProcessorRail(
+		ce.WithPreset(true),
+		ce.WithUserProcessors(userProcessors),
+	)
+	names := make([]string, 0, len(userProcessors))
+	for _, p := range userProcessors {
+		names = append(names, p.Type)
+	}
+	logger.Info(logComponent).Strs("user_processors", names).
+		Msg("[TeamRuntime] ContextProcessorRail created (preset=True)")
+	return rail
+}
+
+// BuildSkillEvolutionRail 为 Team member 构造 SkillEvolutionRail。
+// 对齐 Python: build_skill_evolution_rail (L479-522)
+//
+// auto_save=true（成员自演化跳过审批）；LLM 构造失败返回 nil（对齐 Python
+// except 返回 None）。teamTrajectorySink 非 nil 且 teamID 非空时绑定
+// SetTrajectorySink(sink, teamID, "teammate")。
+func BuildSkillEvolutionRail(skillsDir string, config map[string]any, teamTrajectorySink trajectory.TrajectorySink, teamID string) *evolution.SkillEvolutionRail {
+	llmModel, modelName := BuildEvolutionLLM(config)
+	if llmModel == nil {
+		return nil
+	}
+	evolutionAutoScan := GetEvolutionAutoScanEnabled(config)
+
+	// Python 未显式传 language，使用默认 "cn"
+	rail := evolution.NewSkillEvolutionRail(
+		[]string{skillsDir},
+		llmModel,
+		modelName,
+		"cn",
+		evolution.WithAutoScan(evolutionAutoScan),
+		evolution.WithAutoSave(true),
+		evolution.WithDisabledSkillsSet(skillruntime.LoadExecutionDisabledSkills()),
+	)
+
+	if teamTrajectorySink != nil && teamID != "" {
+		if err := rail.SetTrajectorySink(teamTrajectorySink, teamID, "teammate"); err != nil {
+			logger.Warn(logComponent).Err(err).Str("team_id", teamID).
+				Msg("[TeamRuntime] SkillEvolutionRail set_trajectory_sink failed")
+		}
+	}
+
+	logger.Info(logComponent).
+		Str("model", modelName).
+		Bool("auto_scan", evolutionAutoScan).
+		Bool("team_trajectory_sink", teamTrajectorySink != nil && teamID != "").
+		Msg("[TeamRuntime] SkillEvolutionRail created")
+	return rail
 }
