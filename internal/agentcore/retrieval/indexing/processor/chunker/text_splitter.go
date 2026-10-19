@@ -234,7 +234,7 @@ func (t *TiktokenTokenizer) Decode(ids []int) (string, error) {
 // Split 实现 TextSplitter 接口：委托 GetNodesFromDocuments。
 //
 // Python 的 TextChunk|Document 联合入参在 Go 侧收窄为 *Document
-//（13.6 决策），isinstance 转换分支消失——Go 入参恒为 Document。
+// （13.6 决策），isinstance 转换分支消失——Go 入参恒为 Document。
 //
 // Python: text_splitter.py IndexSentenceSplitter.split
 func (s *IndexSentenceSplitter) Split(doc *reranker.Document) ([]common.TextChunk, error) {

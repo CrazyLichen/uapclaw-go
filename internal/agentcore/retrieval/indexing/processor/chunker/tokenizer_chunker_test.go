@@ -55,7 +55,7 @@ func TestTokenizerChunker_ChunkText_空文本(t *testing.T) {
 
 func TestTokenizerChunker_ChunkText_分块(t *testing.T) {
 	c, _ := NewTokenizerChunker(12, 0, &tokByRune{}, "auto", nil) // 12 token 预算
-	text := "一二三。四五。六七。八九。十。" // 每句4token，共20 token
+	text := "一二三。四五。六七。八九。十。"                                     // 每句4token，共20 token
 	got, err := c.ChunkText(text)
 	if err != nil {
 		t.Fatal(err)

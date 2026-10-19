@@ -33,7 +33,7 @@ var _ Chunker = (*TokenizerChunker)(nil)
 //
 // 构造链（对齐 Python __init__ 的 super().__init__ + splitter 构造）：
 // NewBaseChunker（155100/155101 校验）→ NewIndexSentenceSplitter
-//（tokenizer 三态解析 + chunkSize 决策）→ SetSelf 注入。
+// （tokenizer 三态解析 + chunkSize 决策）→ SetSelf 注入。
 //
 // Python: tokenizer_chunker.py TokenizerChunker.__init__
 func NewTokenizerChunker(chunkSize, chunkOverlap int, tokenizer Tokenizer, language string, splitterConfig map[string]any) (*TokenizerChunker, error) {
