@@ -19,6 +19,7 @@
 //	├── sections.go       # 专用分段方法：Server/Logging/Workspace
 //	├── reloader.go       # fsnotify 热重载：Reloader/OnReload/Start/Stop
 //	├── merge.go          # 配置迁移：DeepMerge/MigrateFromTemplate
+//	├── default_models.go # 默认模型列表：GetDefaultModels/InferIsDefault
 //	├── doc.go            # 包文档
 //	└── testdata/         # 测试数据
 //	    ├── config.yaml       # 示例配置
