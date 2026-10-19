@@ -14,11 +14,12 @@
 //
 //	chunker/
 //	├── doc.go               # 包文档
-//	├── base.go              # Chunker 接口 + BaseChunker 默认适配器 + 构造校验
+//	├── base.go              # Chunker 接口 + DimsProvider + BaseChunker 默认适配器 + 构造校验
 //	├── registry.go          # 分块器注册表 + GetChunker/RegisterChunker + hybridFactory
 //	├── text_splitter.go     # TextSplitter 接口 + CharSplitter + Tokenizer 三态接口
 //	│                        #   + TiktokenTokenizer + IndexSentenceSplitter（13.7）
 //	├── char_chunker.go      # CharChunker 字符级分块器（"char" 注册项）
+//	├── hybrid_chunker.go    # HybridChunker 混合分块器（"hybrid" 注册项，13.8）
 //	└── tokenizer_chunker.go # TokenizerChunker token 预算分块器（"tokenizer" 注册项）
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/processor/chunker/
