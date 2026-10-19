@@ -23,6 +23,7 @@
 //	VectorStore      — 检索层向量存储抽象接口
 //	StoreOptions     — 向量存储操作选项
 //	CheckConfigsMatching — 校验配置一致性静态方法
+//	CreateChromaClient — ChromaDB 持久客户端创建函数（含建库逻辑，供 Indexer 复用）
 //	MilvusClient     — Milvus 客户端接口（依赖注入，供 Indexer 复用）
 //	MilvusVectorStore — Milvus 向量存储实现（搜索/稀疏/混合/校验）
 //	DefaultMilvusCreateClient — 默认客户端创建函数

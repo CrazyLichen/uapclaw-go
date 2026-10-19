@@ -19,6 +19,6 @@
 //	Indexer              — 文档索引抽象接口
 //	ComputeChunkEmbeddings — 分块嵌入计算共享函数
 //	ChunkEmbedOptions    — ComputeChunkEmbeddings 选项结构
-//	ChromaIndexer        — ChromaDB 文档索引实现
+//	ChromaIndexer        — ChromaDB 文档索引实现（持久 client + Close）
 //	MilvusIndexer        — Milvus 文档索引实现（ensureCollection/BuildIndex/UpdateIndex）
 package indexer

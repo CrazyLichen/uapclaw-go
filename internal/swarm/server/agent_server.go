@@ -377,16 +377,15 @@ func (s *AgentServer) cancelAllStreamTasks() {
 // Python: AgentWebSocketServer 中 ws.send(json_str) 写响应。
 //
 // 同 startConsumeLoop，AgentServer 需要反方向使用通道：
-//   - 写入响应：向 recvCh 写入（通过 ChannelTransport.RecvCh()）
+//   - 写入响应：向 recvCh 写入（通过 ChannelTransport.TrySendToRecvCh）
+//
+// M-42: 改调 TrySendToRecvCh（持锁 + closed 检查 + 非阻塞丢弃语义）——
+// 原先裸 `ct.RecvCh() <- data` 绕过锁保护，Close 后 send on closed channel panic。
 //
 // TODO(Transport): AgentTransport 接口增加服务端方法后消除类型断言。
 func (s *AgentServer) sendToGateway(data []byte) {
 	if ct, ok := s.transport.(*transport.ChannelTransport); ok {
-		select {
-		case ct.RecvCh() <- data:
-		default:
-			logger.Warn(logComponent).Msg("RecvCh full, data discarded")
-		}
+		ct.TrySendToRecvCh(data)
 		return
 	}
 	// 将来 WebSocketTransport 走 Send 路径

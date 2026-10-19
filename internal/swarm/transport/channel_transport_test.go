@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 )
@@ -228,5 +229,96 @@ func TestChannelTransport_完整收发流程(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatalf("Gateway 超时：未收到第 %d 个响应", i)
 		}
+	}
+}
+
+// ──────────────────────────── M-42 并发安全 ────────────────────────────
+
+// TestChannelTransport_Send并发Close无Panic 测试 M-42：N 个 goroutine Send
+// 与并发 Close 交错，持锁化后不应出现 send on closed channel panic。
+// 运行方式: go test -race ./internal/swarm/transport/ -run Send并发Close
+func TestChannelTransport_Send并发Close无Panic(t *testing.T) {
+	for round := 0; round < 50; round++ {
+		ct := NewChannelTransportWithBuffer(1, 1)
+		var wg sync.WaitGroup
+		// 8 个发送者 + 1 个关闭者
+		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				// ctx 超时保证 goroutine 终会退出（缓冲满卡住时 Close 在等锁）
+				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				defer cancel()
+				_ = ct.Send(ctx, []byte(`{"r":1}`))
+			}()
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ct.Close()
+		}()
+		wg.Wait()
+		// 二次 Close 幂等
+		if err := ct.Close(); err != nil {
+			t.Fatalf("重复 Close 应返回 nil: %v", err)
+		}
+	}
+}
+
+// TestChannelTransport_TrySendToRecvCh 测试 M-42：TrySendToRecvCh 正常写入。
+func TestChannelTransport_TrySendToRecvCh(t *testing.T) {
+	ct := NewChannelTransport()
+	if !ct.TrySendToRecvCh([]byte(`{"resp":1}`)) {
+		t.Fatal("未关闭且缓冲未满时应返回 true")
+	}
+	// 同包测试直接读 recvCh（RecvCh() 返回 send-only 类型不可接收）
+	select {
+	case got := <-ct.recvCh:
+		if string(got) != `{"resp":1}` {
+			t.Fatalf("收到数据不符: %s", string(got))
+		}
+	default:
+		t.Fatal("recvCh 中应有数据")
+	}
+}
+
+// TestChannelTransport_TrySendToRecvCh_关闭后返回false 测试 M-42：Close 后不 panic 且返回 false。
+func TestChannelTransport_TrySendToRecvCh_关闭后返回false(t *testing.T) {
+	ct := NewChannelTransport()
+	ct.Close()
+	if ct.TrySendToRecvCh([]byte(`{"resp":1}`)) {
+		t.Fatal("关闭后应返回 false")
+	}
+}
+
+// TestChannelTransport_TrySendToRecvCh_缓冲满丢弃 测试 M-42：缓冲满时非阻塞丢弃。
+func TestChannelTransport_TrySendToRecvCh_缓冲满丢弃(t *testing.T) {
+	ct := NewChannelTransportWithBuffer(1, 1)
+	if !ct.TrySendToRecvCh([]byte("first")) {
+		t.Fatal("第一条应写入")
+	}
+	if ct.TrySendToRecvCh([]byte("second")) {
+		t.Fatal("缓冲 1 已满，第二条应丢弃返回 false")
+	}
+}
+
+// TestChannelTransport_TrySendToRecvCh_并发Close无Panic 测试 M-42：TrySend 与 Close 并发安全。
+func TestChannelTransport_TrySendToRecvCh_并发Close无Panic(t *testing.T) {
+	for round := 0; round < 100; round++ {
+		ct := NewChannelTransportWithBuffer(1, 1)
+		var wg sync.WaitGroup
+		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				ct.TrySendToRecvCh([]byte(`{"r":1}`))
+			}()
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ct.Close()
+		}()
+		wg.Wait()
 	}
 }

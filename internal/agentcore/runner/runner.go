@@ -699,8 +699,9 @@ func maybeReleaseTeamSession(ctx context.Context, sessionID string, force bool) 
 		return false, nil
 	}
 	// 检查是否为团队会话
+	// M-58: IsTeamSession 加 ctx（PreRun DB 读取链路可取消）
 	checker, ok := mgr.(registry.TeamSessionChecker)
-	if !ok || !checker.IsTeamSession(sessionID) {
+	if !ok || !checker.IsTeamSession(ctx, sessionID) {
 		return false, nil
 	}
 	// 是团队会话：先释放动态表，再释放 checkpoint

@@ -181,9 +181,11 @@ func (r *RemoteSkillUtil) SetFsProvider(provider FsProvider) {
 // 返回 (fileList, skillPaths, error)：fileList 为带相对路径的文件列表，
 // skillPaths 为技能目录名列表。
 //
+// M-50: 全链路加 ctx 参数（对齐 Python async 语义的隐式可取消）。
+//
 // Python: RemoteSkillUtil.search_github_for_skills(tree, token)
-func (r *RemoteSkillUtil) SearchGitHubForSkills(tree *GitHubTree, token string) ([]gitHubFileItem, []string, error) {
-	files, truncated, err := r.listGitHubFiles(tree, token)
+func (r *RemoteSkillUtil) SearchGitHubForSkills(ctx context.Context, tree *GitHubTree, token string) ([]gitHubFileItem, []string, error) {
+	files, truncated, err := r.listGitHubFiles(ctx, tree, token)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -265,15 +267,17 @@ func (r *RemoteSkillUtil) SearchGitHubForSkills(tree *GitHubTree, token string) 
 
 // UploadSkillFromGitHub 从 GitHub 下载技能文件并写入文件系统。
 //
+// M-50: 全链路加 ctx 参数（对齐 Python async 语义的隐式可取消）。
+//
 // Python: RemoteSkillUtil.upload_skill_from_github(tree, skills_dir, token)
-func (r *RemoteSkillUtil) UploadSkillFromGitHub(tree *GitHubTree, skillsDir string, token string) ([]string, error) {
-	fileList, skillPaths, err := r.SearchGitHubForSkills(tree, token)
+func (r *RemoteSkillUtil) UploadSkillFromGitHub(ctx context.Context, tree *GitHubTree, skillsDir string, token string) ([]string, error) {
+	fileList, skillPaths, err := r.SearchGitHubForSkills(ctx, tree, token)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, file := range fileList {
-		data, err := DownloadFileFromGitHub(tree, file.Path, token)
+		data, err := DownloadFileFromGitHub(ctx, tree, file.Path, token)
 		if err != nil {
 			return nil, fmt.Errorf("下载 GitHub 文件失败 %s: %w", file.Path, err)
 		}
@@ -297,11 +301,13 @@ func (r *RemoteSkillUtil) UploadSkillFromGitHub(tree *GitHubTree, skillsDir stri
 //
 // 静态方法，使用 GitHub Contents API（Accept: application/vnd.github.raw）。
 //
+// M-50: 加 ctx 参数，替换 context.Background()（对齐 Python async 语义）。
+//
 // Python: RemoteSkillUtil.download_file_from_github(tree, file_path, token)
-func DownloadFileFromGitHub(tree *GitHubTree, filePath string, token string) ([]byte, error) {
+func DownloadFileFromGitHub(ctx context.Context, tree *GitHubTree, filePath string, token string) ([]byte, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s", githubAPI, tree.RepoOwner, tree.RepoName, filePath)
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -344,14 +350,14 @@ func DownloadFileFromGitHub(tree *GitHubTree, filePath string, token string) ([]
 // 找匹配 directory 第一段的子树（type == "tree"），用其 sha 作为新的 tree_ref 继续递归。
 //
 // Python: RemoteSkillUtil._recursively_list_github_files(tree, current_directory, token)
-func (r *RemoteSkillUtil) recursivelyListGitHubFiles(tree *GitHubTree, currentDirectory string, token string) ([]gitHubTreeItem, bool, error) {
+func (r *RemoteSkillUtil) recursivelyListGitHubFiles(ctx context.Context, tree *GitHubTree, currentDirectory string, token string) ([]gitHubTreeItem, bool, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/git/trees/%s", githubAPI, tree.RepoOwner, tree.RepoName, tree.TreeRef)
 
 	relativeDirectory := tree.Directory
 
 	if relativeDirectory == "" || relativeDirectory == "." {
 		// 获取整棵树 — 使用 recursive 参数
-		respData, err := r.fetchGitHubTree(url, token, true)
+		respData, err := r.fetchGitHubTree(ctx, url, token, true)
 		if err != nil {
 			return nil, false, err
 		}
@@ -374,7 +380,7 @@ func (r *RemoteSkillUtil) recursivelyListGitHubFiles(tree *GitHubTree, currentDi
 	}
 
 	// 非递归获取当前层的 tree
-	respData, err := r.fetchGitHubTree(url, token, false)
+	respData, err := r.fetchGitHubTree(ctx, url, token, false)
 	if err != nil {
 		return nil, false, err
 	}
@@ -401,7 +407,7 @@ func (r *RemoteSkillUtil) recursivelyListGitHubFiles(tree *GitHubTree, currentDi
 			if currentDirectory != "" && currentDirectory != "." {
 				newCurrentDir = currentDirectory + "/" + nextDirectory
 			}
-			return r.recursivelyListGitHubFiles(newTree, newCurrentDir, token)
+			return r.recursivelyListGitHubFiles(ctx, newTree, newCurrentDir, token)
 		}
 	}
 
@@ -413,7 +419,7 @@ func (r *RemoteSkillUtil) recursivelyListGitHubFiles(tree *GitHubTree, currentDi
 // 如果 directory 是绝对路径，去掉根前缀。
 //
 // Python: RemoteSkillUtil._list_github_files(tree, token)
-func (r *RemoteSkillUtil) listGitHubFiles(tree *GitHubTree, token string) ([]gitHubTreeItem, bool, error) {
+func (r *RemoteSkillUtil) listGitHubFiles(ctx context.Context, tree *GitHubTree, token string) ([]gitHubTreeItem, bool, error) {
 	// 处理绝对路径：去掉根前缀
 	dir := tree.Directory
 	if filepath.IsAbs(dir) {
@@ -422,12 +428,12 @@ func (r *RemoteSkillUtil) listGitHubFiles(tree *GitHubTree, token string) ([]git
 	}
 	clone := tree.Clone()
 	clone.Directory = dir
-	return r.recursivelyListGitHubFiles(clone, "", token)
+	return r.recursivelyListGitHubFiles(ctx, clone, "", token)
 }
 
 // fetchGitHubFiles 发送 GitHub Tree API GET 请求并解析 JSON 响应。
-func (r *RemoteSkillUtil) fetchGitHubTree(url string, token string, recursive bool) (*gitHubTreeResponse, error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+func (r *RemoteSkillUtil) fetchGitHubTree(ctx context.Context, url string, token string, recursive bool) (*gitHubTreeResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -486,8 +492,8 @@ func isRelativeTo(path, baseDir string) bool {
 }
 
 // fetchGitHubRaw 发送 GitHub API GET 请求并返回原始响应体。
-func fetchGitHubRaw(url string, token string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+func fetchGitHubRaw(ctx context.Context, url string, token string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}

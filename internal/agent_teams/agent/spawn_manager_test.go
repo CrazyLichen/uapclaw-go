@@ -6,8 +6,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
+	databasetools "github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	teamstools "github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -237,11 +241,67 @@ func TestSpawnManager_BuildContextFromDB_占位(t *testing.T) {
 	assert.Equal(t, atschema.TeamRuntimeContext{}, ctx)
 }
 
-// TestSpawnManager_PublishRestartEvent_占位 测试发布重启事件（当前占位）。
-func TestSpawnManager_PublishRestartEvent_占位(t *testing.T) {
+// TestSpawnManager_PublishRestartEvent_完整发布 测试 M-31 完整实现。
+//
+// configurator 注入 InProcessMessager + TeamBackend → Subscribe 捕获事件，
+// 断言 topicID/eventType/member_name/restart_count。
+func TestSpawnManager_PublishRestartEvent_完整发布(t *testing.T) {
+	state := NewTeamAgentState()
+	card := agentschema.NewAgentCard()
+	configurator := NewAgentConfigurator(card)
+
+	// 注入 InProcessMessager + TeamBackend
+	msgr := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
+	configurator.SetMessager(msgr)
+	db := databasetools.NewInMemoryTeamDatabase()
+	backend := teamstools.NewTeamBackend("t-restart", "leader", true, db, nil)
+	configurator.SetTeamBackend(backend)
+
+	sm := NewSpawnManager(context.Background(), state, configurator, nil)
+
+	// Subscribe 团队 topic 捕获事件
+	type captured struct {
+		topicID string
+		msg     *events.EventMessage
+	}
+	got := make(chan captured, 1)
+	topicID := events.TeamTopicTeam.Build("", "t-restart")
+	err := msgr.Subscribe(context.Background(), topicID, func(ctx context.Context, msg *events.EventMessage) error {
+		got <- captured{topicID: topicID, msg: msg}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Subscribe 失败: %v", err)
+	}
+
+	sm.PublishRestartEvent(context.Background(), "alice", 3)
+
+	select {
+	case c := <-got:
+		if c.msg.EventType != events.TeamEventMemberRestarted {
+			t.Errorf("EventType = %q, want %q", c.msg.EventType, events.TeamEventMemberRestarted)
+		}
+		if c.msg.Payload["member_name"] != "alice" {
+			t.Errorf("member_name = %v, want alice", c.msg.Payload["member_name"])
+		}
+		if c.msg.Payload["restart_count"] != 3 {
+			t.Errorf("restart_count = %v, want 3", c.msg.Payload["restart_count"])
+		}
+		// Python publish_restart_event 不传 reason——payload 中 reason 为零值空串
+		// （Go ToPayload 固定含 reason 键，零值语义等价 Python None）
+		if c.msg.Payload["reason"] != "" {
+			t.Errorf("reason = %v, want 空串（对齐 Python 不传 reason）", c.msg.Payload["reason"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("2s 内未捕获到 MemberRestartedEvent")
+	}
+}
+
+// TestSpawnManager_PublishRestartEvent_nil配置不panic 测试降级路径
+func TestSpawnManager_PublishRestartEvent_nil配置不panic(t *testing.T) {
 	sm := newTestSpawnManager(t)
 
-	// 当前为 no-op（TODO #9.65），不应 panic
+	// configurator 无 messager/teamBackend → 静默返回，不 panic
 	sm.PublishRestartEvent(context.Background(), "alice", 1)
 }
 

@@ -443,3 +443,146 @@ func TestGlobalFunctions(t *testing.T) {
 
 	ResetTeamManager("")
 }
+
+// ──────────────────────────── loadTeamSpec model_pool（M-38）测试 ────────────────────────────
+
+// TestLoadTeamSpec_多模型构建modelPool 测试 M-38 model_pool 构建。
+//
+// models.defaults 两条目（都有 model_name）→ spec.ModelPool 长度 2 +
+// strategy="by_model_name"；entry 字段（model_name/api_key/api_base/client_provider/
+// metadata.client/metadata.request）正确。
+func TestLoadTeamSpec_多模型构建modelPool(t *testing.T) {
+	configBase := map[string]any{
+		"models": map[string]any{
+			"defaults": []any{
+				map[string]any{
+					"model_client_config": map[string]any{
+						"model_name":      "model-a",
+						"api_key":         "key-a",
+						"api_base":        "http://a",
+						"client_provider": "openai",
+						"temperature":     0.7,
+						"timeout_ms":      nil, // nil 值应被排除
+					},
+					"model_config_obj": map[string]any{"max_tokens": 4096},
+				},
+				map[string]any{
+					"model_client_config": map[string]any{
+						"model_name": "model-b",
+					},
+				},
+			},
+		},
+	}
+
+	spec := loadTeamSpec("sess-m38", configBase)
+	if spec == nil {
+		t.Fatal("loadTeamSpec 应返回非 nil")
+	}
+	if len(spec.ModelPool) != 2 {
+		t.Fatalf("ModelPool 长度 = %d, want 2", len(spec.ModelPool))
+	}
+	if spec.ModelPoolStrategy != "by_model_name" {
+		t.Errorf("ModelPoolStrategy = %q, want by_model_name", spec.ModelPoolStrategy)
+	}
+
+	// 第一个 entry 字段断言
+	e0 := spec.ModelPool[0]
+	if e0.ModelName != "model-a" {
+		t.Errorf("entry[0].ModelName = %q, want model-a", e0.ModelName)
+	}
+	if e0.APIKey != "key-a" || e0.APIBaseURL != "http://a" || e0.APIProvider != "openai" {
+		t.Errorf("entry[0] 连接字段错误: %+v", e0)
+	}
+	if e0.Metadata == nil {
+		t.Fatal("entry[0].Metadata 不应为 nil")
+	}
+	clientMeta, _ := e0.Metadata["client"].(map[string]any)
+	if clientMeta == nil {
+		t.Fatal("metadata.client 不应为 nil")
+	}
+	// 身份四键应被排除，temperature 保留，timeout_ms（nil）排除
+	if _, exists := clientMeta["model_name"]; exists {
+		t.Error("metadata.client 不应包含 model_name")
+	}
+	if clientMeta["temperature"] != 0.7 {
+		t.Errorf("metadata.client[temperature] = %v, want 0.7", clientMeta["temperature"])
+	}
+	if _, exists := clientMeta["timeout_ms"]; exists {
+		t.Error("metadata.client 不应包含 nil 值键 timeout_ms")
+	}
+	reqMeta, _ := e0.Metadata["request"].(map[string]any)
+	if reqMeta == nil || reqMeta["max_tokens"] != float64(4096) {
+		t.Errorf("metadata.request = %v, want {max_tokens: 4096}", reqMeta)
+	}
+
+	// 第二个 entry（仅 model_name，其余零值）
+	e1 := spec.ModelPool[1]
+	if e1.ModelName != "model-b" {
+		t.Errorf("entry[1].ModelName = %q, want model-b", e1.ModelName)
+	}
+}
+
+// TestLoadTeamSpec_单模型无pool 测试单条目不构建 pool。
+func TestLoadTeamSpec_单模型无pool(t *testing.T) {
+	configBase := map[string]any{
+		"models": map[string]any{
+			"default": map[string]any{
+				"model_client_config": map[string]any{"model_name": "only-one"},
+			},
+		},
+	}
+
+	spec := loadTeamSpec("sess-m38-single", configBase)
+	if spec == nil {
+		t.Fatal("loadTeamSpec 应返回非 nil")
+	}
+	if len(spec.ModelPool) != 0 {
+		t.Errorf("单模型不应构建 ModelPool，实际 %d 条", len(spec.ModelPool))
+	}
+}
+
+// TestLoadTeamSpec_缺modelName跳过 测试 mcc 无 model_name 的 entry 被跳过。
+func TestLoadTeamSpec_缺modelName跳过(t *testing.T) {
+	configBase := map[string]any{
+		"models": map[string]any{
+			"defaults": []any{
+				map[string]any{
+					"model_client_config": map[string]any{
+						"model_name": "real-model",
+					},
+				},
+				map[string]any{
+					"model_client_config": map[string]any{
+						"api_key": "no-name-here",
+					},
+				},
+			},
+		},
+	}
+
+	spec := loadTeamSpec("sess-m38-skip", configBase)
+	if spec == nil {
+		t.Fatal("loadTeamSpec 应返回非 nil")
+	}
+	// 缺 model_name 的 entry 跳过后 pool 只剩 1 条——但单条也写入（len(defaultModels)=2 触发构建，
+	// 跳过后 poolEntries=1 仍非空）
+	if len(spec.ModelPool) != 1 {
+		t.Fatalf("ModelPool 长度 = %d, want 1（缺名跳过）", len(spec.ModelPool))
+	}
+	if spec.ModelPool[0].ModelName != "real-model" {
+		t.Errorf("唯一 entry 应为 real-model，实际 %q", spec.ModelPool[0].ModelName)
+	}
+}
+
+// TestLoadTeamSpec_显式nil默认spec 测试显式传 nil configBase 时默认 spec（测试可控性保留）。
+func TestLoadTeamSpec_显式nil默认spec(t *testing.T) {
+	spec := loadTeamSpec("sess-m38-nil", nil)
+	if spec == nil {
+		t.Fatal("应返回非 nil")
+	}
+	if spec.TeamName == "" && spec.Leader.MemberName == "" {
+		// 默认 spec 的具体字段不强断言，非 nil + 不 panic 即可
+		t.Log("默认 spec 返回")
+	}
+}

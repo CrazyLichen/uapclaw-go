@@ -233,7 +233,16 @@ func (k *CoordinationKernel) Start(ctx context.Context, sessionID string) {
 			if memMgr.ExtractionModel() == nil {
 				memMgr.SetExtractionModel(harnessAccessor.Model())
 			}
-			_ = harnessAccessor.InjectMemberMemory(ctx, memMgr, "")
+			// M-30: 对齐 Python host.state.pending_user_query——
+			// 记忆注入带上当前用户查询（Invoke/Stream 先设值再调 Start，时序已就绪）。
+			// 错误处理保持吞错模式（对齐既有 `_ = k.host.UpdateStatus` 吞错模式），
+			// 补 Error 日志保留排查线索。
+			if err := harnessAccessor.InjectMemberMemory(ctx, memMgr, k.host.PendingUserQuery()); err != nil {
+				logger.Error(logComponent).
+					Err(err).
+					Str("member_name", k.host.MemberName()).
+					Msg("kernel start: inject member memory failed")
+			}
 		}
 	}
 

@@ -167,10 +167,46 @@ func NewChromaVectorStore(
 	s.searchConfig = s.vectorField.ToSearchDict()
 
 	// S-50: 实装 databaseName（原为死字段）。
-	// 对齐 Python chroma_store.py L119-129 create_client——非默认 dbName 时
-	// 先经 AdminClient 检查/创建数据库，再以指定数据库创建主客户端；
-	// 默认/空 dbName 归一化为 DefaultDatabase（对齐 Python else 分支）。
-	dbName := strings.TrimSpace(config.DatabaseName)
+	// M-44: 建库逻辑抽取到 CreateChromaClient，供 indexer 等上层组件复用，
+	// 对齐 Python ChromaVectorStore.create_client 静态方法。
+	client, err := CreateChromaClient(config.DatabaseName, chromaPath)
+	if err != nil {
+		return nil, err
+	}
+	s.client = client
+
+	// 对齐 Python: self._collection = self._client.get_or_create_collection(
+	//   name=self.collection_name, configuration={"hnsw": self._construct_config | self._search_config})
+	// S-48: 传完整 HNSW 配置（原仅传 distance metric）。
+	// Python construct_config 含 ef_search（chroma_fields.py L60-67 标 IS_CONSTRUCT），
+	// 合并 constructConfig|searchConfig 后 ef_search 由 construct 侧提供。
+	collection, err := s.client.GetOrCreateCollection(context.Background(), s.collectionName,
+		buildChromaHNSWCreateOptions(s.distanceMetric, s.constructConfig, s.searchConfig)...,
+	)
+	if err != nil {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalVectorStoreProviderInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("创建/获取 ChromaDB 集合失败: %s", err)),
+			exception.WithCause(err),
+		)
+	}
+	s.collection = collection
+
+	return s, nil
+}
+
+// Client 返回 ChromaDB 客户端
+func (s *ChromaVectorStore) Client() chromav2.Client { return s.client }
+
+// CreateChromaClient 创建 ChromaDB 持久化客户端并确保指定数据库存在。
+//
+// M-44: 对齐 Python ChromaVectorStore.create_client 静态方法
+// （chroma_store.py L119-129）——非默认 dbName 时先经 AdminClient
+// 检查/创建数据库，再以指定数据库创建主客户端；
+// 默认/空 dbName 归一化为 DefaultDatabase（对齐 Python else 分支）。
+// 供 indexer 等上层组件复用，避免每次操作重建 PersistentClient。
+func CreateChromaClient(databaseName, chromaPath string) (chromav2.Client, error) {
+	dbName := strings.TrimSpace(databaseName)
 	if dbName == "" {
 		dbName = chromav2.DefaultDatabase
 	}
@@ -210,30 +246,8 @@ func NewChromaVectorStore(
 			exception.WithCause(err),
 		)
 	}
-	s.client = client
-
-	// 对齐 Python: self._collection = self._client.get_or_create_collection(
-	//   name=self.collection_name, configuration={"hnsw": self._construct_config | self._search_config})
-	// S-48: 传完整 HNSW 配置（原仅传 distance metric）。
-	// Python construct_config 含 ef_search（chroma_fields.py L60-67 标 IS_CONSTRUCT），
-	// 合并 constructConfig|searchConfig 后 ef_search 由 construct 侧提供。
-	collection, err := s.client.GetOrCreateCollection(context.Background(), s.collectionName,
-		buildChromaHNSWCreateOptions(s.distanceMetric, s.constructConfig, s.searchConfig)...,
-	)
-	if err != nil {
-		return nil, exception.BuildError(
-			exception.StatusRetrievalVectorStoreProviderInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("创建/获取 ChromaDB 集合失败: %s", err)),
-			exception.WithCause(err),
-		)
-	}
-	s.collection = collection
-
-	return s, nil
+	return client, nil
 }
-
-// Client 返回 ChromaDB 客户端
-func (s *ChromaVectorStore) Client() chromav2.Client { return s.client }
 
 // Collection 返回 ChromaDB 集合
 func (s *ChromaVectorStore) Collection() chromav2.Collection { return s.collection }

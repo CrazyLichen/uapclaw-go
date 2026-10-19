@@ -39,6 +39,36 @@ func TestCheckConfigsMatching_忽略efSearchFactor(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestCheckConfigsMatching_边界恰超1个百分点 测试 M-47 修正后的 isclose 边界语义。
+// actual=31.68 / val=32：diff=1.28，rel_tol*max(31.68,32)=0.32，abs_tol=1e-3，
+// max(0.32, 0.001)=0.32 < 1.28 → Python math.isclose=False，Go 应同样不匹配。
+// 修正前（+ 叠加公式）1.28 <= 0.32+0.001 为 False，但
+// actual=126.72/val=128 时 diff=1.28，旧公式 0.01*128+0.001=1.281 >= 1.28 误放行。
+func TestCheckConfigsMatching_边界恰超1个百分点(t *testing.T) {
+	configured := map[string]any{"nlist": 128}
+	actual := map[string]any{"nlist": 126.72}
+	err := CheckConfigsMatching(configured, actual)
+	assert.Error(t, err, "diff=1.28 恰超 rel_tol*max=1.28 边界外，应判定不匹配")
+}
+
+// TestCheckConfigsMatching_边界1个百分点内匹配 测试 M-47 修正后边界内侧匹配。
+// actual=127.36 / val=128：diff=0.64，rel_tol*max(127.36,128)=1.28 → 匹配。
+func TestCheckConfigsMatching_边界1个百分点内匹配(t *testing.T) {
+	configured := map[string]any{"nlist": 128}
+	actual := map[string]any{"nlist": 127.36}
+	err := CheckConfigsMatching(configured, actual)
+	assert.NoError(t, err)
+}
+
+// TestCheckConfigsMatching_零值absTol兜底 测试 val=0 时 abs_tol 兜底。
+// actual=0.0005 / val=0：diff=0.0005，rel_tol*max=0，abs_tol=1e-3=0.001 → 0.0005 <= 0.001 匹配。
+func TestCheckConfigsMatching_零值absTol兜底(t *testing.T) {
+	configured := map[string]any{"param": 0}
+	actual := map[string]any{"param": 0.0005}
+	err := CheckConfigsMatching(configured, actual)
+	assert.NoError(t, err)
+}
+
 // TestIsNumericString 测试 isNumericString 的各种场景
 func TestIsNumericString(t *testing.T) {
 	tests := []struct {

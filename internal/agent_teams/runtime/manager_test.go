@@ -323,7 +323,7 @@ func TestTeamRuntimeManager_ReleaseSession_空session(t *testing.T) {
 
 func TestTeamRuntimeManager_IsTeamSession_空session(t *testing.T) {
 	m := NewTeamRuntimeManager()
-	if m.IsTeamSession("") {
+	if m.IsTeamSession(context.Background(), "") {
 		t.Error("IsTeamSession 空 sessionID 应返回 false")
 	}
 }

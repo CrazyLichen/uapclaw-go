@@ -522,3 +522,78 @@ func TestWithShellGrace(t *testing.T) {
 	opts := NewShellOptions(WithShellGrace(5.0))
 	assert.Equal(t, 5.0, opts.Grace)
 }
+
+// ──────────────────────────── OperationRegistry M-52 覆盖语义 ────────────────────────────
+
+// TestOperationRegistry_Register_同定义跳过 测试 M-52：工厂+描述全等时幂等跳过。
+func TestOperationRegistry_Register_同定义跳过(t *testing.T) {
+	r := NewOperationRegistry()
+	factory := func(any) SysSubOperation { return &mockFsOperation{} }
+	def := OperationDef{
+		Name:        "fs",
+		Mode:        OperationModeLocal,
+		Description: "FS 操作",
+		NewFunc:     factory,
+	}
+	require.NoError(t, r.Register(def))
+	// 同一函数值 + 同描述再注册 → 跳过
+	require.NoError(t, r.Register(def))
+	names := r.GetSupportedOperations(OperationModeLocal)
+	assert.Equal(t, []string{"fs"}, names)
+}
+
+// TestOperationRegistry_Register_不同定义覆盖 测试 M-52：
+// 不同工厂函数 → 覆盖（对齐 Python override built-in 设计特性）。
+func TestOperationRegistry_Register_不同定义覆盖(t *testing.T) {
+	r := NewOperationRegistry()
+	require.NoError(t, r.Register(OperationDef{
+		Name:        "fs",
+		Mode:        OperationModeLocal,
+		Description: "内置 FS",
+		NewFunc:     func(any) SysSubOperation { return &mockFsOperation{} },
+	}))
+	// 用户自定义覆盖（不同工厂函数）
+	override := OperationDef{
+		Name:        "fs",
+		Mode:        OperationModeLocal,
+		Description: "自定义 FS",
+		NewFunc:     func(any) SysSubOperation { return &mockShellOperation{} },
+	}
+	require.NoError(t, r.Register(override))
+
+	info, ok := r.GetOperationInfo("fs", OperationModeLocal)
+	require.True(t, ok)
+	assert.Equal(t, "自定义 FS", info.Description)
+	// 工厂返回类型确实是覆盖后的
+	inst := info.NewFunc(nil)
+	_, isShell := inst.(*mockShellOperation)
+	assert.True(t, isShell, "覆盖后工厂应返回新类型实例")
+}
+
+// TestOperationRegistry_Register_同工厂不同描述覆盖 测试 M-52：仅描述不同也触发覆盖。
+func TestOperationRegistry_Register_同工厂不同描述覆盖(t *testing.T) {
+	r := NewOperationRegistry()
+	factory := func(any) SysSubOperation { return &mockFsOperation{} }
+	require.NoError(t, r.Register(OperationDef{
+		Name: "fs", Mode: OperationModeLocal, Description: "v1", NewFunc: factory,
+	}))
+	require.NoError(t, r.Register(OperationDef{
+		Name: "fs", Mode: OperationModeLocal, Description: "v2", NewFunc: factory,
+	}))
+	info, ok := r.GetOperationInfo("fs", OperationModeLocal)
+	require.True(t, ok)
+	assert.Equal(t, "v2", info.Description)
+}
+
+// TestOperationRegistry_GetSupportedOperations_排序 测试 M-51：sort.Strings 升序。
+func TestOperationRegistry_GetSupportedOperations_排序(t *testing.T) {
+	r := NewOperationRegistry()
+	for _, name := range []string{"code", "fs", "shell", "app", "zoo"} {
+		require.NoError(t, r.Register(OperationDef{
+			Name: name, Mode: OperationModeLocal,
+			Description: name, NewFunc: func(any) SysSubOperation { return &mockFsOperation{} },
+		}))
+	}
+	names := r.GetSupportedOperations(OperationModeLocal)
+	assert.Equal(t, []string{"app", "code", "fs", "shell", "zoo"}, names)
+}

@@ -169,16 +169,25 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 						Msg("TransformIO returned mismatched type, using original output")
 				}
 			}
-			// ④ 发射后置事件 (逐项)
-			fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
-				Event:     callback.GlobalAgentStreamOutput,
-				AgentID:   a.card.ID,
-				AgentName: a.card.Name,
-				Result:    item,
-			})
-			out <- item
+		// ④ 发射后置事件 (逐项)
+		fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
+			Event:     callback.GlobalAgentStreamOutput,
+			AgentID:   a.card.ID,
+			AgentName: a.card.Name,
+			Result:    item,
+		})
+		// M-49: select+ctx.Done 保护——消费者放弃读取 out 且取消 ctx 时
+		// goroutine 不永久阻塞；drain ch 是替卡在 innerStream 发送侧的消费到底，
+		// 让它跑到自己的 defer close(outCh) 责任点（等价 Python generator aclose 语义）
+		select {
+		case out <- item:
+		case <-ctx.Done():
+			for range ch {
+			}
+			return
 		}
-	}()
+	}
+}()
 
 	return out, nil
 }
@@ -570,7 +579,16 @@ func (a *ReActAgent) innerStream(
 		go streamProcess()
 
 		for chunk := range agentSess.StreamIterator() {
-			outCh <- chunk
+			// M-49: select+ctx.Done 保护——outCh（缓冲 64）满且消费者放弃时
+			// 不永久阻塞；drain StreamIterator 让 streamProcess 侧与
+			// defer close(outCh)（streamImpl）正常收敛（等价 Python generator aclose 语义）
+			select {
+			case outCh <- chunk:
+			case <-ctx.Done():
+				for range agentSess.StreamIterator() {
+				}
+				return
+			}
 		}
 	} else {
 		// 工作流会话：直接执行 streamProcess

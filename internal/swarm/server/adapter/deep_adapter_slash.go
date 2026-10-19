@@ -103,14 +103,22 @@ func (d *DeepAdapter) handleEvolveCommand(ctx context.Context, query string, ses
 	}
 
 	// 解析命令：/evolve [skill_name] [query]
-	parts := strings.Fields(strings.TrimPrefix(query, "/evolve"))
+	// M-37: 对齐 Python L3794+L3812 两级 split(maxsplit=1)——
+	// query.split(1) 取 skill_arg，skill_arg.split(1) 取 skill_name/user_query，
+	// user_query 保留内部连续空白且 strip
+	parts := splitMaxN(query, 1)
+	skillArg := ""
+	if len(parts) > 1 {
+		skillArg = strings.TrimSpace(parts[1])
+	}
+	skillParts := splitMaxN(skillArg, 1)
 	skillName := ""
 	userIntent := ""
-	if len(parts) >= 1 {
-		skillName = parts[0]
+	if len(skillParts) >= 1 {
+		skillName = strings.TrimSpace(skillParts[0])
 	}
-	if len(parts) >= 2 {
-		userIntent = strings.Join(parts[1:], " ")
+	if len(skillParts) >= 2 {
+		userIntent = strings.TrimSpace(skillParts[1])
 	}
 
 	if skillName == "" {
@@ -181,14 +189,16 @@ func (d *DeepAdapter) handleEvolveSimplifyCommand(ctx context.Context, query str
 	}
 
 	// 解析命令：/evolve_simplify skill_name [user_intent]
-	parts := strings.Fields(strings.TrimPrefix(query, "/evolve_simplify"))
-	if len(parts) == 0 {
+	// M-37: 对齐 Python L4088 parts = query.split(maxsplit=2)——
+	// parts[0]=命令、parts[1]=skill、parts[2]=intent（保留内部空白）
+	parts := splitMaxN(query, 2)
+	if len(parts) < 2 {
 		return map[string]any{"status": "failed", "error": "missing skill_name"}, nil
 	}
-	skillName := parts[0]
+	skillName := parts[1]
 	var userIntent *string
-	if len(parts) >= 2 {
-		intent := strings.Join(parts[1:], " ")
+	if len(parts) >= 3 {
+		intent := parts[2]
 		userIntent = &intent
 	}
 
@@ -228,14 +238,15 @@ func (d *DeepAdapter) handleEvolveRebuildCommand(ctx context.Context, query stri
 	}
 
 	// 解析命令：/evolve_rebuild skill_name [user_intent]
-	parts := strings.Fields(strings.TrimPrefix(query, "/evolve_rebuild"))
-	if len(parts) == 0 {
+	// M-37: 对齐 Python L4123 parts = query.split(maxsplit=2)
+	parts := splitMaxN(query, 2)
+	if len(parts) < 2 {
 		return map[string]any{"status": "failed", "error": "missing skill_name"}, nil
 	}
-	skillName := parts[0]
+	skillName := parts[1]
 	var userIntent *string
-	if len(parts) >= 2 {
-		intent := strings.Join(parts[1:], " ")
+	if len(parts) >= 3 {
+		intent := parts[2]
 		userIntent = &intent
 	}
 
@@ -269,14 +280,15 @@ func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query str
 	}
 
 	// 解析命令：/evolve_rollback skill_name [version]
-	parts := strings.Fields(strings.TrimPrefix(query, "/evolve_rollback"))
-	if len(parts) == 0 {
+	// M-37: 对齐 Python L4165 parts = query.split(maxsplit=2)，version strip
+	parts := splitMaxN(query, 2)
+	if len(parts) < 2 {
 		return map[string]any{"status": "failed", "error": "missing skill_name"}, nil
 	}
-	skillName := parts[0]
+	skillName := parts[1]
 	var version *string
-	if len(parts) >= 2 {
-		v := parts[1]
+	if len(parts) >= 3 {
+		v := strings.TrimSpace(parts[2])
 		version = &v
 	}
 

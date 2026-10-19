@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -140,7 +141,7 @@ func TestRemoteSkillUtil_listGitHubFiles_递归(t *testing.T) {
 	r.httpClient = server.Client()
 
 	// 直接调用 fetchGitHubTree 测试
-	data, err := r.fetchGitHubTree(server.URL, "", true)
+	data, err := r.fetchGitHubTree(context.Background(), server.URL, "", true)
 	if err != nil {
 		t.Fatalf("fetchGitHubTree 失败: %v", err)
 	}
@@ -163,7 +164,7 @@ func TestRemoteSkillUtil_fetchGitHubTree_错误响应(t *testing.T) {
 	r := NewRemoteSkillUtil("op-123")
 	r.httpClient = server.Client()
 
-	data, err := r.fetchGitHubTree(server.URL, "", false)
+	data, err := r.fetchGitHubTree(context.Background(), server.URL, "", false)
 	if err != nil {
 		t.Fatalf("fetchGitHubTree 应返回数据而非错误: %v", err)
 	}
@@ -185,7 +186,7 @@ func TestRemoteSkillUtil_fetchGitHubTree_带Token(t *testing.T) {
 	r := NewRemoteSkillUtil("op-123")
 	r.httpClient = server.Client()
 
-	_, err := r.fetchGitHubTree(server.URL, "test-token", false)
+	_, err := r.fetchGitHubTree(context.Background(), server.URL, "test-token", false)
 	if err != nil {
 		t.Fatalf("fetchGitHubTree 失败: %v", err)
 	}
@@ -215,7 +216,7 @@ func TestRemoteSkillUtil_SearchGitHubForSkills(t *testing.T) {
 	r.httpClient = server.Client()
 
 	// 直接用 fetchGitHubTree 覆盖搜索逻辑的输入
-	data, err := r.fetchGitHubTree(server.URL, "", true)
+	data, err := r.fetchGitHubTree(context.Background(), server.URL, "", true)
 	if err != nil {
 		t.Fatalf("fetchGitHubTree 失败: %v", err)
 	}
@@ -254,7 +255,7 @@ func TestRemoteSkillUtil_UploadSkillFromGitHub_空列表(t *testing.T) {
 	tree := NewGitHubTree("owner", "repo", "HEAD", "")
 	// 替换 githubAPI 不容易，通过直接测试 search 逻辑来覆盖
 	// 这里用空 tree 的 fetchGitHubTree 验证
-	data, err := r.fetchGitHubTree(server.URL, "", true)
+	data, err := r.fetchGitHubTree(context.Background(), server.URL, "", true)
 	if err != nil {
 		t.Fatalf("fetchGitHubTree 失败: %v", err)
 	}
@@ -279,7 +280,7 @@ func TestRemoteSkillUtil_fetchGitHubTree_截断(t *testing.T) {
 	r := NewRemoteSkillUtil("op-123")
 	r.httpClient = server.Client()
 
-	data, err := r.fetchGitHubTree(server.URL, "", true)
+	data, err := r.fetchGitHubTree(context.Background(), server.URL, "", true)
 	if err != nil {
 		t.Fatalf("fetchGitHubTree 失败: %v", err)
 	}

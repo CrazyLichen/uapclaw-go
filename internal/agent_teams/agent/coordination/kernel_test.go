@@ -81,6 +81,9 @@ func (f *fakeKernelHost) PublishTeamEvent(_ context.Context, _ string, _ map[str
 	return nil
 }
 
+// PendingUserQuery M-30: KernelHost 接口新增方法的测试 stub
+func (f *fakeKernelHost) PendingUserQuery() string { return "" }
+
 // ──────────────────────────── CoordinationKernel 测试 ────────────────────────────
 
 func TestNewCoordinationKernel(t *testing.T) {

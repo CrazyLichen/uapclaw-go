@@ -2,7 +2,9 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -29,12 +31,6 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// teamEvolutionIdleSleepSec evolution watcher 空闲轮询间隔（秒）。
-	// 对齐 Python: TEAM_EVOLUTION_IDLE_SLEEP_SEC = 0.5 (evolution_helpers.py)
-	teamEvolutionIdleSleepSec = 500 // 毫秒
-	// teamEvolutionEventTimeoutSec evolution watcher 事件超时（秒）。
-	// 对齐 Python: TEAM_EVOLUTION_EVENT_TIMEOUT_SEC = 60.0 (evolution_helpers.py)
-	teamEvolutionEventTimeoutSec = 60.0
 	// teamEventQueueTimeout team 事件队列读取超时。
 	// 对齐 Python: asyncio.wait_for(request_queue.get(), timeout=0.1)
 	teamEventQueueTimeout = 100 * time.Millisecond
@@ -390,6 +386,21 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 				requestMetadata = make(map[string]any, len(req.Metadata))
 				for k, v := range req.Metadata {
 					requestMetadata[k] = v
+				}
+			}
+			// M-34: 对齐 Python L703-704——params 是 dict 时 setdefault "mode"
+			// （mode=="team.plan" 是 ApplyTeamPlanMode 的唯一入口，Metadata 优先级高于 Params）。
+			// req.Params 为 json.RawMessage 延迟解析：数组/字符串 → Unmarshal 失败跳过
+			// （= Python isinstance 非 dict）；null → paramsMap==nil 跳过（= Python params None）。
+			if len(req.Params) > 0 {
+				var paramsMap map[string]any
+				if err := json.Unmarshal(req.Params, &paramsMap); err == nil && paramsMap != nil {
+					if _, exists := requestMetadata["mode"]; !exists {
+						if requestMetadata == nil {
+							requestMetadata = make(map[string]any, 1)
+						}
+						requestMetadata["mode"] = paramsMap["mode"]
+					}
 				}
 			}
 			teamSpec := teamManager.GetEnrichedTeamSpec(ctx, sessionID, d.instance, req.RequestID, channelID, requestMetadata)
@@ -989,7 +1000,8 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 	}
 
 	lastEventAt := time.Now()
-	eventTimeoutSec := resolveEvolutionEventTimeoutSec(rail, teamEvolutionEventTimeoutSec)
+	// M-35: fallback 用 logic 常量 900.0（原本地错误常量 60.0 已删）
+	eventTimeoutSec := resolveEvolutionEventTimeoutSec(rail, evolutionlogic.TeamEvolutionEventTimeoutSec)
 
 	// S-43: 对齐 Python watch_team_evolution_and_push_team 的 except Exception 块——
 	// panic 时推送真实失败消息（含 active request_id），不调 cleanupEvolutionRail
@@ -1043,7 +1055,8 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 				}
 			}
 			// Python: await asyncio.sleep(TEAM_EVOLUTION_IDLE_SLEEP_SEC)
-			time.Sleep(time.Duration(teamEvolutionIdleSleepSec) * time.Millisecond)
+			// M-35: 改用 logic 常量 1.0s（原本地 500ms 且注释错误声称 Python=0.5，实际 Python=1.0）
+			time.Sleep(time.Duration(evolutionlogic.TeamEvolutionIdleSleepSec * float64(time.Second)))
 			continue
 		}
 		lastEventAt = time.Now()
@@ -1384,16 +1397,19 @@ func utilsParseStreamChunk(chunk map[string]any) map[string]any {
 }
 
 // resolveEvolutionEventTimeoutSec 从 TeamSkillEvolutionRail 解析事件超时秒数。
-// 对齐 Python: resolve_evolution_event_timeout_sec(rail, fallback_sec=TEAM_EVOLUTION_EVENT_TIMEOUT_SEC)
-//
-// Go 差异：Python 的 resolve_evolution_event_timeout_sec 接受 dict[string]any rail，
-// Go 端 rail 是结构体，通过反射读取 evolution_total_timeout_secs 字段。
+// 对齐 Python: resolve_evolution_event_timeout_sec(rail, fallback_sec, grace_sec)
+// （evolution_helpers.py L114-138）——rail 的 SDK 后台演进超时 + 宽限，
+// 非法值（Inf/NaN/<=0）回退 fallback。比兄弟实现 deep_adapter_evolution.go
+// 的 isfinite 检查更完整（同时挡 NaN 和 <=0）。
 func resolveEvolutionEventTimeoutSec(rail *coreevolution.TeamSkillEvolutionRail, fallback float64) float64 {
 	if rail == nil {
 		return fallback
 	}
-	// 尝试通过 rail 的配置获取超时值
-	// 对齐 Python: sdk_timeout = rail.get("evolution_total_timeout_secs")
-	// Go 端 TeamSkillEvolutionRail 结构体可能没有此字段，使用默认超时
-	return fallback
+	sdkTimeout := rail.GetEvolutionTotalTimeoutSecs()
+	// 对齐 Python: if not math.isfinite(parsed_timeout) or parsed_timeout <= 0: return fallback
+	if math.IsInf(sdkTimeout, 0) || math.IsNaN(sdkTimeout) || sdkTimeout <= 0 {
+		return fallback
+	}
+	// 对齐 Python: return parsed_timeout + max(grace, 0.0)
+	return sdkTimeout + math.Max(evolutionlogic.TeamEvolutionEventTimeoutGraceSec, 0.0)
 }

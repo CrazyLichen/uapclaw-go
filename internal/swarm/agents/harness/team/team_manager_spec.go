@@ -915,18 +915,31 @@ func agentCardName(agent interfaces.DeepAgentInterface, fallback string) string 
 //  7. return TeamAgentSpec(**spec_dict)
 //
 // Go 差异：Python 使用全局 get_config()，Go 通过参数注入 configBase。
-// 当 configBase 为 nil 时，返回默认 spec。
+// M-38: 无参调用时 config.New("").Load() 兜底（对齐 Python get_config()，
+// harness 邻包已有三处同款 sweeper.go/memoryrpc）；加载失败才回退默认 spec
+// （测试可控）。model_pool 注入对齐 Python L320-350。
 func loadTeamSpec(sessionID string, configBase ...map[string]any) *atschema.TeamAgentSpec {
 	var cb map[string]any
 	if len(configBase) > 0 {
 		cb = configBase[0]
 	}
 	if cb == nil {
-		// Go 差异：无 configBase 时返回默认 spec
-		logger.Warn(logComponent).Str("session_id", sessionID).
-			Msg("loadTeamSpec: configBase is nil, using default spec")
-		s := atschema.NewTeamAgentSpec()
-		return &s
+		// M-38: 对齐 Python config_base = get_config()——无参调用走全局配置加载
+		cfg, cfgErr := config.New("")
+		if cfgErr != nil {
+			logger.Warn(logComponent).Str("session_id", sessionID).Err(cfgErr).
+				Msg("loadTeamSpec: config init failed, using default spec")
+			s := atschema.NewTeamAgentSpec()
+			return &s
+		}
+		cfgData, loadErr := cfg.Load()
+		if loadErr != nil || cfgData == nil {
+			logger.Warn(logComponent).Str("session_id", sessionID).Err(loadErr).
+				Msg("loadTeamSpec: config load failed, using default spec")
+			s := atschema.NewTeamAgentSpec()
+			return &s
+		}
+		cb = cfgData
 	}
 
 	// 步骤 2: 分布式模式依赖检查（缺依赖回退 local）

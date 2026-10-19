@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
@@ -239,7 +240,12 @@ func HandleTeamEvolveListCommand(ctx context.Context, channelID, sessionID, quer
 		usedStr := "0/0"
 		effectStr := "+0/-0"
 		if record.UsageStats != nil {
-			usedStr = fmt.Sprintf("%d/%d", record.UsageStats.TimesUsed, record.UsageStats.TimesPresented)
+			// M-32: 对齐 Python L472-474 真值语义——times_presented==0 时
+			// 强制 "0/0"（防御展示 0 次却记了使用次数的数据异常，
+			// Python: used_str = f"{used}/{presented}" if stats.times_presented else "0/0"）
+			if record.UsageStats.TimesPresented > 0 {
+				usedStr = fmt.Sprintf("%d/%d", record.UsageStats.TimesUsed, record.UsageStats.TimesPresented)
+			}
 			effectStr = fmt.Sprintf("+%d/-%d", record.UsageStats.TimesPositive, record.UsageStats.TimesNegative)
 		}
 		section := strings.ReplaceAll(record.Change.Section, "|", "\\|")
@@ -293,14 +299,16 @@ func HandleTeamSlashCommand(ctx context.Context, channelID, sessionID, query str
 
 	// Python 步骤 3: /evolve_simplify (line 522-559)
 	if strings.HasPrefix(stripped, "/evolve_simplify") {
-		parts := strings.Fields(stripped)
+		// M-37: 对齐 Python parts = stripped.split(maxsplit=2)——
+		// user_intent 段保留内部连续空白（Fields 会归一化为单空格）
+		parts := splitMaxN(stripped, 2)
 		skillName := ""
 		if len(parts) > 1 {
 			skillName = parts[1]
 		}
 		var userIntent *string
 		if len(parts) > 2 {
-			intent := strings.Join(parts[2:], " ")
+			intent := parts[2]
 			userIntent = &intent
 		}
 
@@ -343,17 +351,19 @@ func HandleTeamSlashCommand(ctx context.Context, channelID, sessionID, query str
 	}
 
 	// Python 步骤 4: /evolve (line 561-608)
-	parts := strings.Fields(stripped)
+	// M-37: 对齐 Python parts = stripped.split(maxsplit=2)——
+	// skill_name 不 strip（Python parts[1] 原样），user_query strip
+	parts := splitMaxN(stripped, 2)
 	if len(parts) < 2 {
 		return map[string]any{
 			"output":      "请补充演进意图：`/evolve <skill_name> <user_query>`",
 			"result_type": "error",
 		}
 	}
-	skillName := strings.TrimSpace(parts[1])
+	skillName := parts[1]
 	userQuery := ""
 	if len(parts) > 2 {
-		userQuery = strings.TrimSpace(strings.Join(parts[2:], " "))
+		userQuery = strings.TrimSpace(parts[2])
 	}
 
 	if !store.SkillExists(ctx, skillName) {
@@ -419,14 +429,15 @@ func ResolveTeamRebuildFollowup(ctx context.Context, channelID, sessionID, query
 	}
 
 	store := rail.EvolutionStore()
-	parts := strings.Fields(stripped)
+	// M-37: 对齐 Python parts = stripped.split(maxsplit=2)
+	parts := splitMaxN(stripped, 2)
 	skillName := ""
 	if len(parts) > 1 {
 		skillName = parts[1]
 	}
 	var userIntent *string
 	if len(parts) > 2 {
-		intent := strings.Join(parts[2:], " ")
+		intent := parts[2]
 		userIntent = &intent
 	}
 
@@ -752,4 +763,42 @@ func onTeamWatcherDone(channelID, sessionID string) {
 	tm := team.GetTeamManager(channelID)
 	tm.PopTeamEvolutionWatcher(sessionID)
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("onTeamWatcherDone: team evolution watcher done")
+}
+
+// splitMaxN 模拟 Python str.split(maxsplit=n) 语义。
+//
+// Python "a  b".split(maxsplit=1) → ["a", "b"]——按任意空白分割且
+// 消耗连续空白（区别于 strings.SplitN(s, " ", n) 会产生空元素）。
+// 前 n 段逐段切割（消耗前导空白），第 n+1 段保留原文（含内部空白）。
+// M-37: 用于 /evolve* 命令解析，对齐 Python maxsplit 调用点。
+func splitMaxN(s string, n int) []string {
+	if n < 1 {
+		n = 1
+	}
+	var parts []string
+	rest := s
+	for i := 0; i < n; i++ {
+		// 消耗前导空白
+		rest = strings.TrimLeftFunc(rest, unicode.IsSpace)
+		if rest == "" {
+			break
+		}
+		// 找下一段的结束位置（第一个空白字符）
+		idx := strings.IndexFunc(rest, unicode.IsSpace)
+		if idx < 0 {
+			parts = append(parts, rest)
+			rest = ""
+			break
+		}
+		parts = append(parts, rest[:idx])
+		rest = rest[idx:] // 保留空白，下一轮 TrimLeft 消耗
+	}
+	// 第 n+1 段：剩余原文（可能含内部空白）
+	if rest != "" || len(parts) == n {
+		trimmed := strings.TrimLeftFunc(rest, unicode.IsSpace)
+		if trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	return parts
 }

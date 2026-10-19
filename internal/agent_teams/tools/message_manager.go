@@ -163,6 +163,13 @@ func (tm *TeamMessageManager) MarkMessageRead(ctx context.Context, messageID, me
 	return success
 }
 
+// MessageDao 返回消息 DAO（暴露 db.Message() 供 handler 层查消息体）。
+// M-29: Python handler 直接 mm.db.message.get_message(message_id)，
+// Go 端 db 为私有字段，经此访问器暴露（参照 Python 属性访问模式）。
+func (tm *TeamMessageManager) MessageDao() database.MessageDao {
+	return tm.db.Message()
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // publishMessageEvent 发布消息事件到 TeamTopic。

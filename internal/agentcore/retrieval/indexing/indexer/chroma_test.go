@@ -168,3 +168,136 @@ func TestChromaIndexer_实现Indexer接口(t *testing.T) {
 	// ChromaIndexer 必须实现 Indexer 接口
 	var _ Indexer = (*ChromaIndexer)(nil)
 }
+
+// TestChromaIndexer_持久client复用 测试构造时创建的 client 被所有操作复用
+//
+// M-44: 对齐 Python __init__ 中创建一次 self._client 的语义。
+// 每次操作后 client 指针不变，证明没有重建 PersistentClient。
+func TestChromaIndexer_持久client复用(t *testing.T) {
+	dir := t.TempDir()
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+
+	indexer, err := NewChromaIndexer(config, dir)
+	require.NoError(t, err)
+	defer indexer.Close()
+
+	clientBefore := indexer.Client()
+	require.NotNil(t, clientBefore, "构造后应持有持久 client")
+
+	// 多次操作后 client 指针不变
+	_, _ = indexer.IndexExists(t.Context(), "nonexistent-index")
+	assert.Equal(t, clientBefore, indexer.Client(), "IndexExists 不应重建 client")
+
+	_, _ = indexer.DeleteIndex(t.Context(), "doc-1", "nonexistent-index")
+	assert.Equal(t, clientBefore, indexer.Client(), "DeleteIndex 不应重建 client")
+
+	_, _ = indexer.GetIndexInfo(t.Context(), "nonexistent-index")
+	assert.Equal(t, clientBefore, indexer.Client(), "GetIndexInfo 不应重建 client")
+}
+
+// TestChromaIndexer_IndexExists_真实语义 测试不存在的索引返回 false
+//
+// M-44: 原实现 NewChromaVectorStore 内部 GetOrCreateCollection 永不失败，
+// 导致 IndexExists 恒返回 true（S-63/S-64/S-15 历史问题）。
+// 现改为持久 client.GetCollection 真实语义：不存在 → false。
+func TestChromaIndexer_IndexExists_真实语义(t *testing.T) {
+	dir := t.TempDir()
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+
+	indexer, err := NewChromaIndexer(config, dir)
+	require.NoError(t, err)
+	defer indexer.Close()
+
+	// 不存在的索引 → false（原实现恒 true 的 bug 已修）
+	exists, err := indexer.IndexExists(t.Context(), "definitely-not-exists")
+	require.NoError(t, err)
+	assert.False(t, exists, "不存在的索引应返回 false")
+
+	// DeleteIndex 对不存在的集合：GetCollection 失败 → 对齐 Python 返回 false
+	deleted, err := indexer.DeleteIndex(t.Context(), "doc-1", "definitely-not-exists")
+	require.NoError(t, err)
+	assert.False(t, deleted, "不存在的集合删除应返回 false")
+
+	// GetIndexInfo 对不存在的索引 → exists=false
+	info, err := indexer.GetIndexInfo(t.Context(), "definitely-not-exists")
+	require.NoError(t, err)
+	assert.Equal(t, false, info["exists"], "不存在的索引 info 应为 exists=false")
+}
+
+// TestChromaIndexer_IndexExists_BuildIndex后为True 测试真实建库后存在性翻转
+//
+// 使用 BM25 类型跳过嵌入（无需 embedModel），验证 BuildIndex 后
+// IndexExists 从 false 变 true——证明存在性检查真实生效。
+func TestChromaIndexer_IndexExists_BuildIndex后为True(t *testing.T) {
+	dir := t.TempDir()
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+
+	indexer, err := NewChromaIndexer(config, dir)
+	require.NoError(t, err)
+	defer indexer.Close()
+
+	indexName := "real-index-test"
+	// BM25 类型跳过嵌入计算，但预填 Embedding 保证 addBatch 不跳过该节点
+	// （对齐 Python: add 中 node.get(vector_field, []) 为空时 warning + skip）
+	chunks := []common.TextChunk{
+		{ID: "chunk-1", Text: "hello world", DocID: "doc-1", Embedding: []float64{0.1, 0.2, 0.3}},
+	}
+	indexConfig := common.IndexConfig{
+		IndexName: indexName,
+		IndexType: common.IndexTypeBM25,
+	}
+
+	// 建库前不存在
+	exists, err := indexer.IndexExists(t.Context(), indexName)
+	require.NoError(t, err)
+	assert.False(t, exists)
+
+	// BM25 类型跳过嵌入，直接写入
+	ok, err := indexer.BuildIndex(t.Context(), chunks, indexConfig, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	// 建库后存在——真实语义验证
+	exists, err = indexer.IndexExists(t.Context(), indexName)
+	require.NoError(t, err)
+	assert.True(t, exists, "BuildIndex 后 IndexExists 应返回 true")
+
+	// GetIndexInfo 返回真实元信息
+	info, err := indexer.GetIndexInfo(t.Context(), indexName)
+	require.NoError(t, err)
+	assert.Equal(t, true, info["exists"])
+	assert.Equal(t, indexName, info["collection_name"])
+	assert.Equal(t, 1, info["count"], "应写入 1 条记录")
+}
+
+// TestChromaIndexer_Close 测试关闭持久客户端
+//
+// M-44: 对齐 Python ChromaIndexer.close()。
+func TestChromaIndexer_Close(t *testing.T) {
+	dir := t.TempDir()
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+
+	indexer, err := NewChromaIndexer(config, dir)
+	require.NoError(t, err)
+	require.NotNil(t, indexer.Client())
+
+	// Close 不应 panic；对已关闭 client 的操作错误被各方法正确处理
+	indexer.Close()
+	indexer.Close() // 幂等性验证
+}

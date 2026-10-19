@@ -45,6 +45,12 @@ type ChromaIndexer struct {
 	searchConfig map[string]any
 	// docIndexCallback 嵌入进度回调
 	docIndexCallback common.DocIndexCallback
+	// databaseName 数据库名称
+	// M-44: 对齐 Python self.database_name = config.database_name
+	databaseName string
+	// client ChromaDB 持久客户端，构造时创建一次，所有操作复用
+	// M-44: 对齐 Python __init__ 中 self._client = ChromaVectorStore.create_client(...)
+	client chromav2.Client
 }
 
 // ChromaIndexerOption ChromaIndexer 的可选参数函数。
@@ -101,6 +107,20 @@ func NewChromaIndexer(
 	// 对齐 Python: self._search_config = self.vector_field.to_dict(stage="search")
 	ci.searchConfig = ci.vectorField.ToSearchDict()
 
+	// M-44: 对齐 Python self.database_name = config.database_name
+	ci.databaseName = config.DatabaseName
+
+	// M-44: 对齐 Python __init__ L90-93:
+	//   self._client = ChromaVectorStore.create_client(
+	//     database_name=self.database_name, path_or_uri=chroma_path)
+	// 构造时创建一次持久 client，后续 DeleteIndex/IndexExists/GetIndexInfo 复用，
+	// 不再每次操作新建 PersistentClient（资源浪费 + 历史上的 IndexExists 恒真问题）。
+	client, err := vector_store.CreateChromaClient(ci.databaseName, chromaPath)
+	if err != nil {
+		return nil, err
+	}
+	ci.client = client
+
 	return ci, nil
 }
 
@@ -137,6 +157,25 @@ func WithChromaDocIndexCallback(cb common.DocIndexCallback) ChromaIndexerOption 
 // DistanceMetric 返回归一化距离度量。
 func (ci *ChromaIndexer) DistanceMetric() string { return ci.distanceMetric }
 
+// Client 返回 ChromaDB 持久客户端。
+//
+// M-44: 对齐 Python @property client -> self._client。
+func (ci *ChromaIndexer) Client() chromav2.Client { return ci.client }
+
+// Close 关闭索引管理器，释放持久客户端。
+//
+// M-44: 对齐 Python ChromaIndexer.close()。
+func (ci *ChromaIndexer) Close() {
+	if ci.client != nil {
+		if err := ci.client.Close(); err != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "INDEXING_WARN").
+				Err(err).
+				Msg("failed to close ChromaDB client")
+		}
+	}
+}
+
 // BuildIndex 构建索引。将 chunks 去重→嵌入→写入向量库。
 //
 // 对齐 Python ChromaIndexer.build_index。
@@ -172,6 +211,10 @@ func (ci *ChromaIndexer) BuildIndex(
 	if err != nil {
 		return false, err
 	}
+	// M-45: 补资源释放（对齐 DeleteIndex/GetIndexInfo 的 Close 模式）。
+	// Python build_index 每次也新建 vector_store，此行为保留；
+	// Go 端 PersistentClient 持有底层资源，必须显式释放。
+	defer vectorStore.Close()
 
 	collection := vectorStore.Collection()
 
@@ -298,23 +341,20 @@ func (ci *ChromaIndexer) UpdateIndex(
 // DeleteIndex 删除索引。ChromaDB 不支持复杂过滤删除，需先查后删。
 //
 // 对齐 Python ChromaIndexer.delete_index。
+// M-44: 复用构造时创建的持久 client（对齐 Python self._client.get_collection）。
 func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexName string) (bool, error) {
-	vectorStoreConfig := common.VectorStoreConfig{
-		StoreProvider:  common.StoreTypeChroma,
-		CollectionName: indexName,
-	}
-
-	vectorStore, err := vector_store.NewChromaVectorStore(
-		vectorStoreConfig, ci.chromaPath,
-		ci.textField, ci.vectorField,
-		ci.sparseVectorField, ci.metadataField, ci.docIDField,
-	)
+	// 对齐 Python: collection = await asyncio.to_thread(self._client.get_collection, name=index_name)
+	collection, err := ci.client.GetCollection(ctx, indexName)
 	if err != nil {
-		return false, err
+		// 对齐 Python: except Exception as e: logger.error(...); return False
+		logger.Error(logComponent).
+			Str("event_type", "INDEXING_ERROR").
+			Str("doc_id", docID).
+			Str("index_name", indexName).
+			Err(err).
+			Msg("failed to delete index entries")
+		return false, nil
 	}
-	defer vectorStore.Close()
-
-	collection := vectorStore.Collection()
 
 	// 对齐 Python: results = collection.get(where={self.doc_id_field: doc_id})
 	whereFilter := vector_store.BuildChromaWhereFilter(map[string]any{ci.docIDField: docID})
@@ -367,28 +407,22 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 // IndexExists 检查索引是否存在。
 //
 // 对齐 Python ChromaIndexer.index_exists。
+// M-44: 复用持久 client + 真实 get_collection 语义。
+// 原实现 NewChromaVectorStore 内部 GetOrCreateCollection 永不失败，
+// 导致恒返回 true（S-63/S-64/S-15 历史问题），本修复一并解决。
 func (ci *ChromaIndexer) IndexExists(ctx context.Context, indexName string) (bool, error) {
-	vectorStoreConfig := common.VectorStoreConfig{
-		StoreProvider:  common.StoreTypeChroma,
-		CollectionName: indexName,
-	}
-
-	vectorStore, err := vector_store.NewChromaVectorStore(
-		vectorStoreConfig, ci.chromaPath,
-		ci.textField, ci.vectorField,
-		ci.sparseVectorField, ci.metadataField, ci.docIDField,
-	)
+	// 对齐 Python: try: get_collection(name=index_name); return True; except Exception: return False
+	_, err := ci.client.GetCollection(ctx, indexName)
 	if err != nil {
-		// 对齐 Python: try: get_collection; return True; except: return False
 		return false, nil
 	}
-	vectorStore.Close()
 	return true, nil
 }
 
 // GetIndexInfo 获取索引元信息。
 //
 // 对齐 Python ChromaIndexer.get_index_info。
+// M-44: 复用构造时创建的持久 client（对齐 Python self._client.get_collection）。
 func (ci *ChromaIndexer) GetIndexInfo(ctx context.Context, indexName string) (map[string]any, error) {
 	exists, err := ci.IndexExists(ctx, indexName)
 	if err != nil {
@@ -404,22 +438,11 @@ func (ci *ChromaIndexer) GetIndexInfo(ctx context.Context, indexName string) (ma
 		return map[string]any{"exists": false}, nil
 	}
 
-	vectorStoreConfig := common.VectorStoreConfig{
-		StoreProvider:  common.StoreTypeChroma,
-		CollectionName: indexName,
-	}
-
-	vectorStore, err := vector_store.NewChromaVectorStore(
-		vectorStoreConfig, ci.chromaPath,
-		ci.textField, ci.vectorField,
-		ci.sparseVectorField, ci.metadataField, ci.docIDField,
-	)
+	// 对齐 Python: collection = await asyncio.to_thread(self._client.get_collection, name=index_name)
+	collection, err := ci.client.GetCollection(ctx, indexName)
 	if err != nil {
 		return map[string]any{"exists": false, "error": err.Error()}, nil
 	}
-	defer vectorStore.Close()
-
-	collection := vectorStore.Collection()
 	count, err := collection.Count(ctx)
 	if err != nil {
 		count = 0

@@ -80,16 +80,19 @@ func NewChannelTransportWithBuffer(sendBuf, recvBuf int) *ChannelTransport {
 }
 
 // Send 发送 JSON 字节到 AgentServer（对齐 Python ws.send）。
+// M-42: 全程持锁（closed 检查 + channel 发送同一临界区），
+// 对齐 Python send_request 的 `async with self._lock: await self._ws.send(...)` 持锁发送语义。
+// Close 同样需要拿锁——Send 卡在缓冲满时 Close 阻塞等锁，
+// 但 Send 有 ctx.Done 出口终会释放锁，无死锁。
 func (t *ChannelTransport) Send(ctx context.Context, data []byte) error {
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	if t.closed {
-		t.mu.Unlock()
 		logger.Warn(logComponent).
 			Str("event_type", "channel_transport_send_closed").
 			Msg("send failed: transport closed")
 		return ErrTransportClosed
 	}
-	t.mu.Unlock()
 
 	select {
 	case t.sendCh <- data:
@@ -104,6 +107,28 @@ func (t *ChannelTransport) Send(ctx context.Context, data []byte) error {
 			Err(ctx.Err()).
 			Msg("send failed: context cancelled")
 		return ctx.Err()
+	}
+}
+
+// TrySendToRecvCh 非阻塞发送到响应通道（AgentServer → Gateway 方向）。
+// M-42: 供 agent_server sendToGateway 使用——原先裸 `ct.RecvCh() <- data`
+// 绕过 Send 的锁保护，Close 后 send on closed channel panic。
+// 持锁 + closed 检查 + select default，保持原非阻塞丢弃语义（缓冲满时丢弃返回 false）。
+func (t *ChannelTransport) TrySendToRecvCh(data []byte) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return false
+	}
+	select {
+	case t.recvCh <- data:
+		return true
+	default:
+		logger.Warn(logComponent).
+			Str("event_type", "channel_transport_recv_dropped").
+			Int("bytes", len(data)).
+			Msg("recv channel buffer full, message dropped")
+		return false
 	}
 }
 

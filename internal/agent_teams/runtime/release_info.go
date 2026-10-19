@@ -40,16 +40,18 @@ type TeamSessionReleaseInfo struct {
 // ResolveTeamSessionReleaseInfo 从 session checkpoint 解析团队释放信息。
 // Python: TeamRuntimeManager.resolve_team_session_release_info(session_id)
 //
+// M-58: 加 ctx——PreRun 内部走 checkpointer 恢复 session 状态（含 DB 读取），
+// Background 使该链路完全不可取消（Python 是协程方法，事件循环可取消）。
 // 返回 nil 表示 session 无团队 bucket。
 // 返回 error 表示 bucket 存在但无法解析出有效的 db_config。
-func ResolveTeamSessionReleaseInfo(sessionID string) (*TeamSessionReleaseInfo, error) {
+func ResolveTeamSessionReleaseInfo(ctx context.Context, sessionID string) (*TeamSessionReleaseInfo, error) {
 	if sessionID == "" {
 		return nil, nil
 	}
 
 	// Python: session = create_agent_team_session(session_id=session_id)
 	sess := session.CreateAgentTeamSession(sessionID, nil, "")
-	if err := sess.PreRun(context.Background()); err != nil {
+	if err := sess.PreRun(ctx); err != nil {
 		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).
 			Msg("resolve_team_session_release_info: failed to restore session state")
 		return nil, nil
@@ -108,12 +110,13 @@ func ResolveTeamSessionReleaseInfo(sessionID string) (*TeamSessionReleaseInfo, e
 
 // resolveAnyTeamSessionReleaseInfo 从多个 sessionID 中取第一个可解析的 release info。
 // Python: TeamRuntimeManager._resolve_any_team_session_release_info(session_ids)
-func resolveAnyTeamSessionReleaseInfo(sessionIDs []string) *TeamSessionReleaseInfo {
+// M-58: 加 ctx（对齐 ResolveTeamSessionReleaseInfo 签名变化）。
+func resolveAnyTeamSessionReleaseInfo(ctx context.Context, sessionIDs []string) *TeamSessionReleaseInfo {
 	if len(sessionIDs) == 0 {
 		return nil
 	}
 	for _, sid := range sessionIDs {
-		info, err := ResolveTeamSessionReleaseInfo(sid)
+		info, err := ResolveTeamSessionReleaseInfo(ctx, sid)
 		if err != nil {
 			logger.Warn(logComponent).Str("session_id", sid).Err(err).
 				Msg("resolve_any: skipping session")

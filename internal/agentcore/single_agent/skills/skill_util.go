@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -103,9 +104,11 @@ func (su *SkillUtil) RegisterSkills(skillPaths []string, overwrite bool) error {
 
 // RegisterRemoteSkills 从 GitHub 下载并注册远程技能。
 //
+// M-50: 全链路加 ctx 参数（对齐 Python async 语义的隐式可取消）。
+//
 // Python: SkillUtil.register_remote_skills(skills_dir, github_tree, token)
-func (su *SkillUtil) RegisterRemoteSkills(skillsDir string, tree *GitHubTree, token string) ([]string, error) {
-	return su.remoteSkillUtil.UploadSkillFromGitHub(tree, skillsDir, token)
+func (su *SkillUtil) RegisterRemoteSkills(ctx context.Context, skillsDir string, tree *GitHubTree, token string) ([]string, error) {
+	return su.remoteSkillUtil.UploadSkillFromGitHub(ctx, tree, skillsDir, token)
 }
 
 // HasSkill 检查是否有已注册技能。

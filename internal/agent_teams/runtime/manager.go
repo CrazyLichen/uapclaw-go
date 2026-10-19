@@ -410,7 +410,8 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 	// 步骤 3: 解析 db_config
 	var dbConfig *database.DatabaseConfig
 	if len(existingSessionIDs) > 0 {
-		releaseInfo := resolveAnyTeamSessionReleaseInfo(existingSessionIDs)
+		// M-58: 传入 ctx
+		releaseInfo := resolveAnyTeamSessionReleaseInfo(ctx, existingSessionIDs)
 		if releaseInfo == nil {
 			return false, fmt.Errorf("cannot resolve team session release info for any supplied sessions: %v, aborting delete_team", existingSessionIDs)
 		}
@@ -426,14 +427,19 @@ func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, se
 		db := spawn.GetSharedDB(*dbConfig)
 		if db != nil {
 			if initErr := db.Initialize(ctx); initErr != nil {
-				logger.Warn(logComponent).Err(initErr).Str("team_name", teamName).
-					Msg("delete_team: database initialization failed")
-			} else {
-				for _, sid := range sessionIDs {
-					if _, dropErr := db.DropSessionTablesByID(ctx, sid); dropErr != nil {
-						logger.Warn(logComponent).Str("session_id", sid).Err(dropErr).
-							Msg("delete_team: failed to drop session dynamic tables")
-					}
+				// M-57: 对齐 Python L647 异常中止语义——初始化失败时
+				// 后续步骤（checkpoint 释放/DB 行删除/目录删除）全不执行。
+				// 原 Warn 后继续执行会导致：checkpoint 被释放后
+				// resolveAnyTeamSessionReleaseInfo 无法再解析 db_config，
+				// team 从此删不干净（目录已删但 DB 行残留）。
+				logger.Error(logComponent).Err(initErr).Str("team_name", teamName).
+					Msg("delete_team: database initialization failed, aborting")
+				return false, initErr
+			}
+			for _, sid := range sessionIDs {
+				if _, dropErr := db.DropSessionTablesByID(ctx, sid); dropErr != nil {
+					logger.Warn(logComponent).Str("session_id", sid).Err(dropErr).
+						Msg("delete_team: failed to drop session dynamic tables")
 				}
 			}
 		}
@@ -491,7 +497,8 @@ func (m *TeamRuntimeManager) ReleaseSession(ctx context.Context, sessionID strin
 	}
 
 	// 解析 db_config
-	releaseInfo, err := ResolveTeamSessionReleaseInfo(sessionID)
+	// M-58: 传入 ctx（原 Background 使 PreRun 的 DB 读取链路不可取消）
+	releaseInfo, err := ResolveTeamSessionReleaseInfo(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("cannot resolve team session release info for %s: %w", sessionID, err)
 	}
@@ -506,8 +513,9 @@ func (m *TeamRuntimeManager) ReleaseSession(ctx context.Context, sessionID strin
 // IsTeamSession 判断指定 session 是否为团队会话（包含持久化的团队 bucket）。
 // Python: TeamRuntimeManager.resolve_team_session_release_info(session_id) is not None
 // 实现 registry.TeamSessionChecker 接口，供 runner 包调用。
-func (m *TeamRuntimeManager) IsTeamSession(sessionID string) bool {
-	info, err := ResolveTeamSessionReleaseInfo(sessionID)
+// M-58: 加 ctx——TeamSessionChecker 接口签名连带改（runner 调用点同步）。
+func (m *TeamRuntimeManager) IsTeamSession(ctx context.Context, sessionID string) bool {
+	info, err := ResolveTeamSessionReleaseInfo(ctx, sessionID)
 	if err != nil {
 		return false
 	}

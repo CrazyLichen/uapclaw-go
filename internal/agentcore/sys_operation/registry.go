@@ -2,7 +2,11 @@ package sys_operation
 
 import (
 	"fmt"
+	"reflect"
+	"sort"
 	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -49,7 +53,10 @@ func NewOperationRegistry() *OperationRegistry {
 }
 
 // Register 注册操作定义。
-// Python: OperationRegistry.register：幂等性检查（相同定义跳过）。
+// M-52: 对齐 Python OperationRegistry.register 完整语义——同定义跳过（幂等），
+// 不同定义覆盖（OVERRIDE，docstring 明文记载用户可覆盖内置操作是设计特性）。
+// Python dataclass __eq__ 全字段比较；Go 用 NewFunc（函数值 == 指针比较，
+// 对齐 Python cls 身份比较）+ Description 全等判断同定义。
 func (r *OperationRegistry) Register(def OperationDef) error {
 	if def.Name == "" {
 		return fmt.Errorf("操作名称不能为空")
@@ -62,9 +69,20 @@ func (r *OperationRegistry) Register(def OperationDef) error {
 		r.repository[def.Mode] = make(map[string]OperationDef)
 	}
 
-	// 幂等性检查：相同名称+模式跳过
-	if _, ok := r.repository[def.Mode][def.Name]; ok {
-		return nil
+	// 幂等性检查：完全相同的定义（工厂+描述）跳过。
+	// Go 函数值不可 == 比较（只能与 nil 比），用 reflect.ValueOf(...).Pointer()
+	// 比较函数代码指针——对齐 Python dataclass __eq__ 的 cls 身份比较语义
+	// （同一函数定义的两个闭包实例指针不同，视为不同定义，符合 Python 语义）。
+	if existing, ok := r.repository[def.Mode][def.Name]; ok {
+		if reflect.ValueOf(existing.NewFunc).Pointer() == reflect.ValueOf(def.NewFunc).Pointer() &&
+			existing.Description == def.Description {
+			return nil
+		}
+		// 不同定义 → 覆盖 + Warn 日志（对齐 Python 无条件 store 的 override 语义）
+		logger.Warn(logComponent).
+			Str("name", def.Name).
+			Str("mode", def.Mode.String()).
+			Msg("operation definition overridden by new registration")
 	}
 
 	r.repository[def.Mode][def.Name] = def
@@ -99,14 +117,8 @@ func (r *OperationRegistry) GetSupportedOperations(mode OperationMode) []string 
 	for name := range modeMap {
 		names = append(names, name)
 	}
-	// 排序保证确定性
-	for i := 0; i < len(names); i++ {
-		for j := i + 1; j < len(names); j++ {
-			if names[i] > names[j] {
-				names[i], names[j] = names[j], names[i]
-			}
-		}
-	}
+	// M-51: 对齐 Python sorted(...)，sort.Strings 语义完全一致（升序字符串）
+	sort.Strings(names)
 	return names
 }
 

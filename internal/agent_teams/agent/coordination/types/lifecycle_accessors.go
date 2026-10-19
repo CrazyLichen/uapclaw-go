@@ -179,6 +179,10 @@ type KernelHost interface {
 	UpdateStatus(ctx context.Context, status schema.MemberStatus) error
 	// TeamName 返回团队名
 	TeamName() string
+	// PendingUserQuery 返回当前待处理的用户查询（空字符串表示无）。
+	// M-30: 对齐 Python host.state.pending_user_query——kernel 启动时
+	// 注入成员记忆用（memory lookup 的 query 种子）。
+	PendingUserQuery() string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

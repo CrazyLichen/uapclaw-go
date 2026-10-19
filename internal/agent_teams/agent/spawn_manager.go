@@ -8,6 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -396,19 +397,41 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 
 // PublishRestartEvent 发布重启事件。
 // Python: SpawnManager.publish_restart_event(member_name, restart_count)
+// M-31: 完整实现（原占位仅日志）——经 Messager 发布 MemberRestartedEvent
+// 到团队 topic。对齐 Python publish_restart_event：不传 reason（空）。
 func (m *SpawnManager) PublishRestartEvent(ctx context.Context, memberName string, restartCount int) {
-	if m.configurator != nil && m.configurator.Messager() != nil {
-		// 对齐 Python: publish MemberRestartedEvent via Messager
-		// ⤵️ 9.65: 完整事件构造待 Messager 事件协议回填
-		logger.Debug(logComponent).
+	if m.configurator == nil {
+		return
+	}
+	messagerRef := m.configurator.Messager()
+	teamBackend := m.configurator.TeamBackend()
+	if messagerRef == nil || teamBackend == nil {
+		return
+	}
+
+	// 对齐 Python: event = MemberRestartedEvent(team_name=..., member_name=member_name)
+	// （Reason 不设置——Python publish_restart_event 不传 reason）
+	event := &events.MemberRestartedEvent{
+		BaseEventMessage: events.BaseEventMessage{
+			TeamName:   teamBackend.TeamName(),
+			MemberName: memberName,
+		},
+		RestartCount: restartCount,
+	}
+
+	// 对齐 Python: topic_id = TeamTopic.TEAM.build(get_session_id(), team_name)
+	topicID := events.TeamTopicTeam.Build(atschema.GetSessionID(ctx), teamBackend.TeamName())
+	msg := events.EventMessageFromEvent(event)
+
+	// 对齐 Python: await self._configurator.messager.publish(topic_id, msg)
+	// except → error 日志吞掉（Python except 语义）
+	if err := messagerRef.Publish(ctx, topicID, msg); err != nil {
+		logger.Error(logComponent).
 			Str("member_name", memberName).
 			Int("restart_count", restartCount).
-			Msg("PublishRestartEvent: Messager publish pending")
+			Err(err).
+			Msg("PublishRestartEvent: failed to publish MemberRestartedEvent")
 	}
-	logger.Debug(logComponent).
-		Str("member_name", memberName).
-		Int("restart_count", restartCount).
-		Msg("PublishRestartEvent logged")
 }
 
 // ShutdownAllHandles 关闭所有已生成的句柄。

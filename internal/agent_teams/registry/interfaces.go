@@ -28,7 +28,8 @@ type SessionReleaser interface {
 // Python 对应：TeamRuntimeManager.resolve_team_session_release_info(session_id) is not None
 type TeamSessionChecker interface {
 	// IsTeamSession 判断指定 session 是否为团队会话（包含持久化的团队 bucket）。
-	IsTeamSession(sessionID string) bool
+	// M-58: 加 ctx——内部 PreRun 走 checkpointer DB 读取，需可取消。
+	IsTeamSession(ctx context.Context, sessionID string) bool
 }
 
 // PoolReader 运行时池最小读取+移除接口。

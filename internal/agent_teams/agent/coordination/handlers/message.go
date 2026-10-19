@@ -3,7 +3,8 @@ package handlers
 import (
 	"context"
 
-	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -67,6 +68,9 @@ func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.C
 	if memberName == "" {
 		return
 	}
+	if h.infra == nil || h.infra.MessageManager() == nil {
+		return
+	}
 
 	if event.IsInner() {
 		return
@@ -78,9 +82,9 @@ func (h *MessageHandler) OnMessageOrBroadcast(ctx context.Context, event types.C
 	// 对齐 Python: 只有 MESSAGE 时调用 _ack_user_bound_message，BROADCAST 不调用
 	if role == schema.TeamRoleLeader {
 		if em != nil && em.EventType == events.TeamEventMessage {
-			h.ackUserBoundMessage(event)
+			h.ackUserBoundMessage(ctx, event)
 		}
-		h.notifyHumanAgentInbound(event)
+		h.notifyHumanAgentInbound(ctx, event)
 	}
 
 	// 所有成员：恢复轮询 + 排空未读邮箱
@@ -164,17 +168,122 @@ func (h *MessageHandler) processUnreadMessagesWithSteer(ctx context.Context, mem
 }
 
 // ackUserBoundMessage Leader 自动确认 teammate→user 的直接消息。
-// 对齐 Python: MessageHandler._ack_user_bound_message
-// TODO(#9.63): 等消息管理器接口就绪后补充
-func (h *MessageHandler) ackUserBoundMessage(_ types.CoordinationEvent) {
-	// Leader 标记 teammate→user 直接消息为已读
-	// Python: 对 user 伪成员没有轮询 agent，leader 代为确认
+//
+// 对齐 Python: MessageHandler._ack_user_bound_message。
+// user 伪成员没有轮询 agent，leader 代为确认——不标记则 unread 累积
+// 反复唤醒 dispatcher。M-29: 完整实现（原空壳 TODO(#9.63)）。
+func (h *MessageHandler) ackUserBoundMessage(ctx context.Context, event types.CoordinationEvent) {
+	// M-29: h.infra nil 守卫（测试/降级构造可能传 nil）
+	if h.infra == nil {
+		return
+	}
+	// Python: payload: MessageEvent = event.get_payload()
+	em := event.Transport
+	if em == nil {
+		return
+	}
+	// Python: if payload.to_member_name != "user": return
+	toMemberName, _ := em.Payload["to_member_name"].(string)
+	if toMemberName != "user" {
+		return
+	}
+	mm := h.infra.MessageManager()
+	if mm == nil {
+		return
+	}
+	// Python: await mm.mark_message_read(payload.message_id, "user")
+	messageID, _ := em.Payload["message_id"].(string)
+	mm.MarkMessageRead(ctx, messageID, "user")
+	fromMemberName, _ := em.Payload["from_member_name"].(string)
+	logger.Debug(logComponent).
+		Str("message_id", messageID).
+		Str("from_member_name", fromMemberName).
+		Msg("leader auto-acked user-bound message")
 }
 
 // notifyHumanAgentInbound 转发团队侧消息到 SDK human-agent 入站回调。
-// 对齐 Python: MessageHandler._notify_human_agent_inbound
-// TODO(#9.63): 等交互层接口就绪后补充
-func (h *MessageHandler) notifyHumanAgentInbound(_ types.CoordinationEvent) {
-	// 对于广播：触发所有已注册回调（排除发送者）
-	// 对于直接消息：仅在接收方为 human-agent 时触发
+//
+// 对齐 Python: MessageHandler._notify_human_agent_inbound。
+// Leader 观察团队 topic 上的每个 MESSAGE/BROADCAST 事件：
+// 直发消息接收方为 human-agent 时触发其回调；广播触发所有已注册回调
+// （排除发送者——human-agent 不回显自己的广播）。消息体加载失败时
+// 记 Warn 吞掉，通知故障不打断 dispatch 循环。
+// M-29: 完整实现（原空壳 TODO(#9.63)）。
+func (h *MessageHandler) notifyHumanAgentInbound(ctx context.Context, event types.CoordinationEvent) {
+	// M-29: h.infra nil 守卫（测试/降级构造可能传 nil）
+	if h.infra == nil {
+		return
+	}
+	// Python: backend = self._infra.team_backend; mm = self._infra.message_manager
+	backend := h.infra.TeamBackend()
+	mm := h.infra.MessageManager()
+	if backend == nil || mm == nil {
+		return
+	}
+
+	em := event.Transport
+	if em == nil {
+		return
+	}
+
+	// Python: message_id = payload.message_id; sender = payload.from_member_name
+	messageID, _ := em.Payload["message_id"].(string)
+	sender, _ := em.Payload["from_member_name"].(string)
+	isBroadcast := em.EventType == events.TeamEventBroadcast
+
+	// Python: row = await mm.db.message.get_message(message_id)
+	row, err := mm.MessageDao().GetMessage(ctx, messageID)
+	if err != nil {
+		// Python: except → warning + return（吞掉）
+		logger.Warn(logComponent).
+			Str("message_id", messageID).
+			Err(err).
+			Msg("human_agent on_inbound: failed to load message")
+		return
+	}
+	if row == nil {
+		return
+	}
+
+	// Python: body = row.content; ts = row.timestamp
+	body := row.Content
+	ts := row.Timestamp
+
+	// Python: 广播→所有 human-agent（排除 sender）；直发→仅接收方为 human-agent 时
+	var recipients []string
+	if isBroadcast {
+		for _, name := range backend.HumanAgentNames() {
+			if name != sender {
+				recipients = append(recipients, name)
+			}
+		}
+	} else {
+		target, _ := em.Payload["to_member_name"].(string)
+		if !backend.IsHumanAgent(target) {
+			return
+		}
+		recipients = []string{target}
+	}
+
+	// Python: 逐 recipient 取回调并触发，回调异常 Warn 吞掉
+	for _, recipient := range recipients {
+		callback := backend.GetHumanAgentInbound(recipient)
+		if callback == nil {
+			continue
+		}
+		evt := &interaction.HumanAgentInboundEvent{
+			MemberName: recipient,
+			Sender:     sender,
+			Body:       body,
+			Broadcast:  isBroadcast,
+			MessageID:  messageID,
+			Timestamp:  ts,
+		}
+		if err := callback(ctx, recipient, evt); err != nil {
+			logger.Warn(logComponent).
+				Str("recipient", recipient).
+				Err(err).
+				Msg("human_agent on_inbound callback raised")
+		}
+	}
 }
