@@ -283,10 +283,34 @@ func (f *fakeAbilityMgrForFilter) Add(a cschema.Ability) agentschema.AddAbilityR
 func (f *fakeAbilityMgrForFilter) AddMany(a []cschema.Ability) []agentschema.AddAbilityResult {
 	return nil
 }
-func (f *fakeAbilityMgrForFilter) Remove(name string) cschema.Ability    { return nil }
-func (f *fakeAbilityMgrForFilter) RemoveMany(names []string) []cschema.Ability { return nil }
-func (f *fakeAbilityMgrForFilter) Get(name string) cschema.Ability       { return nil }
-func (f *fakeAbilityMgrForFilter) List() []cschema.Ability               { return f.abilities }
+func (f *fakeAbilityMgrForFilter) Remove(name string) cschema.Ability {
+	for i, a := range f.abilities {
+		if a.AbilityName() == name {
+			removed := f.abilities[i]
+			f.abilities = append(f.abilities[:i], f.abilities[i+1:]...)
+			return removed
+		}
+	}
+	return nil
+}
+func (f *fakeAbilityMgrForFilter) RemoveMany(names []string) []cschema.Ability {
+	var removed []cschema.Ability
+	for _, n := range names {
+		if r := f.Remove(n); r != nil {
+			removed = append(removed, r)
+		}
+	}
+	return removed
+}
+func (f *fakeAbilityMgrForFilter) Get(name string) cschema.Ability {
+	for _, a := range f.abilities {
+		if a.AbilityName() == name {
+			return a
+		}
+	}
+	return nil
+}
+func (f *fakeAbilityMgrForFilter) List() []cschema.Ability { return f.abilities }
 func (f *fakeAbilityMgrForFilter) ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]cschema.ToolInfoInterface, error) {
 	return nil, nil
 }
