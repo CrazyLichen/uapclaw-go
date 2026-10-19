@@ -110,3 +110,145 @@ func TestGetContextEngineEnabled_默认true(t *testing.T) {
 		t.Fatalf("explicit false should disable")
 	}
 }
+
+// TestGetDefaultModelName_读取modelsDefault。
+func TestGetDefaultModelName_读取modelsDefault(t *testing.T) {
+	cfg := map[string]any{"models": map[string]any{
+		"default": map[string]any{"model_client_config": map[string]any{"model_name": "qwen-max"}},
+	}}
+	if got := GetDefaultModelName(cfg); got != "qwen-max" {
+		t.Fatalf("got %q, want qwen-max", got)
+	}
+	if got := GetDefaultModelName(map[string]any{}); got != "gpt-4" {
+		t.Fatalf("default fallback = %q, want gpt-4", got)
+	}
+}
+
+// TestResolveModelConfig_defaults列表isDefault优先。
+func TestResolveModelConfig_defaults列表isDefault优先(t *testing.T) {
+	cfg := map[string]any{"models": map[string]any{
+		"defaults": []any{
+			map[string]any{"model_client_config": map[string]any{"model_name": "first"}},
+			map[string]any{"is_default": true, "model_client_config": map[string]any{"model_name": "second", "api_key": "k"}},
+		},
+	}}
+	mcc, mco, name := ResolveModelConfig(cfg)
+	if name != "second" {
+		t.Fatalf("is_default entry should win, got %q", name)
+	}
+	if mcc["api_key"] != "k" {
+		t.Fatalf("mcc mismatch: %v", mcc)
+	}
+	_ = mco
+}
+
+// TestResolveModelConfig_无isDefault取第一个。
+func TestResolveModelConfig_无isDefault取第一个(t *testing.T) {
+	cfg := map[string]any{"models": map[string]any{
+		"defaults": []any{
+			map[string]any{"model_client_config": map[string]any{"model_name": "first"}},
+			map[string]any{"model_client_config": map[string]any{"model_name": "second"}},
+		},
+	}}
+	_, _, name := ResolveModelConfig(cfg)
+	if name != "first" {
+		t.Fatalf("first entry fallback = %q, want first", name)
+	}
+}
+
+// TestResolveModelConfig_旧格式default与react回退。
+func TestResolveModelConfig_旧格式default与react回退(t *testing.T) {
+	cfg := map[string]any{
+		"models": map[string]any{"default": map[string]any{
+			"model_client_config": map[string]any{"model_name": "from-default"},
+		}},
+		"react": map[string]any{"model_name": "from-react"},
+	}
+	_, _, name := ResolveModelConfig(cfg)
+	if name != "from-default" {
+		t.Fatalf("models.default should win over react, got %q", name)
+	}
+
+	cfg2 := map[string]any{
+		"react": map[string]any{
+			"model_name":          "from-react",
+			"model_client_config": map[string]any{"api_key": "rk"},
+			"model_config_obj":    map[string]any{"temperature": 0.5},
+		},
+	}
+	mcc, mco, name2 := ResolveModelConfig(cfg2)
+	if name2 != "from-react" {
+		t.Fatalf("react fallback = %q", name2)
+	}
+	if mcc["api_key"] != "rk" || mco["temperature"] != 0.5 {
+		t.Fatalf("react fallback mcc/mco mismatch: %v %v", mcc, mco)
+	}
+}
+
+// TestResolveModelConfig_最终回退gpt4。
+func TestResolveModelConfig_最终回退gpt4(t *testing.T) {
+	_, _, name := ResolveModelConfig(map[string]any{})
+	if name != "gpt-4" {
+		t.Fatalf("final fallback = %q, want gpt-4", name)
+	}
+}
+
+// TestBuildEvolutionLLM_合法配置 temperature 默认 0.95 + 显式覆盖。
+func TestBuildEvolutionLLM_合法配置(t *testing.T) {
+	cfg := map[string]any{"models": map[string]any{
+		"default": map[string]any{
+			"model_client_config": map[string]any{
+				"model_name": "test-model", "api_key": "k", "api_base": "https://x", "verify_ssl": false,
+				"client_provider": "OpenAI",
+			},
+			"model_config_obj": map[string]any{"temperature": 0.5},
+		},
+	}}
+	model, name := BuildEvolutionLLM(cfg)
+	if model == nil {
+		t.Fatalf("model should be created")
+	}
+	if name != "test-model" {
+		t.Fatalf("name = %q", name)
+	}
+	if model.ModelConfig.Temperature != 0.5 {
+		t.Fatalf("temperature = %v, want 0.5", model.ModelConfig.Temperature)
+	}
+}
+
+// TestBuildEvolutionLLM_默认temperature095。
+func TestBuildEvolutionLLM_默认temperature095(t *testing.T) {
+	cfg := map[string]any{"models": map[string]any{
+		"default": map[string]any{
+			"model_client_config": map[string]any{
+				"model_name": "m", "api_key": "k", "api_base": "https://x", "verify_ssl": false,
+				"client_provider": "OpenAI",
+			},
+		},
+	}}
+	model, _ := BuildEvolutionLLM(cfg)
+	if model == nil {
+		t.Fatalf("model should be created")
+	}
+	if model.ModelConfig.Temperature != 0.95 {
+		t.Fatalf("default temperature = %v, want 0.95", model.ModelConfig.Temperature)
+	}
+}
+
+// TestBuildEvolutionLLM_缺apiKey返回nil。
+func TestBuildEvolutionLLM_缺apiKey返回nil(t *testing.T) {
+	cfg := map[string]any{"models": map[string]any{
+		"default": map[string]any{
+			"model_client_config": map[string]any{
+				"model_name": "m", "api_base": "https://x", "client_provider": "OpenAI",
+			},
+		},
+	}}
+	model, name := BuildEvolutionLLM(cfg)
+	if model != nil {
+		t.Fatalf("invalid config should return nil model")
+	}
+	if name != "m" {
+		t.Fatalf("model_name should still be returned, got %q", name)
+	}
+}

@@ -4,7 +4,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
@@ -188,4 +192,230 @@ func getBoolEnv(key string) (value bool, ok bool) {
 		return false, false
 	}
 	return strings.EqualFold(raw, "true") || raw == "1" || strings.EqualFold(raw, "yes"), true
+}
+
+// GetDefaultModelName 从配置获取默认 model_name。
+// 对齐 Python: get_default_model_name (team_runtime_inheritance.py L335-360)
+//
+// 读取 models.default.model_client_config.model_name（注意：Python 读旧格式
+// default 单对象而非 defaults 列表），失败回退 "gpt-4"。
+func GetDefaultModelName(cfgMap map[string]any) string {
+	cfg := cfgMap
+	if cfg == nil {
+		loaded, err := teamLoadConfig()
+		if err != nil {
+			logger.Warn(logComponent).Err(err).
+				Msg("[TeamRuntime] Failed to load config for default model")
+			return "gpt-4"
+		}
+		cfg = loaded
+	}
+	models, _ := cfg["models"].(map[string]any)
+	if models != nil {
+		defaultEntry, _ := models["default"].(map[string]any)
+		if defaultEntry != nil {
+			if mcc, _ := defaultEntry["model_client_config"].(map[string]any); mcc != nil {
+				if name, ok := mcc["model_name"].(string); ok && name != "" {
+					return name
+				}
+			}
+		}
+	}
+	return "gpt-4"
+}
+
+// ResolveModelConfig 从配置字典解析 model 相关参数。
+// 对齐 Python: resolve_model_config (L395-448)
+//
+// 优先 models.defaults 列表 is_default=true 条目 → 第一个条目 →
+// models.default 单对象 → react 段回退。返回浅拷贝（对齐 Python .copy()）。
+func ResolveModelConfig(config map[string]any) (mcc map[string]any, mco map[string]any, modelName string) {
+	if config == nil {
+		return map[string]any{}, map[string]any{}, "gpt-4"
+	}
+	models, _ := config["models"].(map[string]any)
+	if models == nil {
+		models = map[string]any{}
+	}
+
+	// 优先从 models.defaults 列表取 is_default=true 的条目
+	if defaults, ok := models["defaults"].([]any); ok && len(defaults) > 0 {
+		for _, item := range defaults {
+			entry, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if b, ok := entry["is_default"].(bool); ok && b {
+				mcc = copyMapShallow(entry["model_client_config"])
+				mco = copyMapShallow(entry["model_config_obj"])
+				if name := mapStrField(mcc, "model_name"); name != "" {
+					return mcc, mco, name
+				}
+			}
+		}
+		// 无 is_default=true 时取第一个
+		if first, ok := defaults[0].(map[string]any); ok {
+			mcc = copyMapShallow(first["model_client_config"])
+			mco = copyMapShallow(first["model_config_obj"])
+			if name := mapStrField(mcc, "model_name"); name != "" {
+				return mcc, mco, name
+			}
+		}
+	}
+
+	// 回退到旧格式：models.default + react 段
+	defaultModelConfig, _ := models["default"].(map[string]any)
+	if defaultModelConfig == nil {
+		defaultModelConfig = map[string]any{}
+	}
+	reactConfig, _ := config["react"].(map[string]any)
+	if reactConfig == nil {
+		reactConfig = map[string]any{}
+	}
+
+	modelClientConfig, _ := defaultModelConfig["model_client_config"].(map[string]any)
+	if modelClientConfig == nil {
+		modelClientConfig, _ = reactConfig["model_client_config"].(map[string]any)
+	}
+	if modelClientConfig == nil {
+		modelClientConfig = map[string]any{}
+	}
+
+	modelName = mapStrField(modelClientConfig, "model_name")
+	if modelName == "" {
+		modelName = mapStrField(reactConfig, "model_name")
+	}
+	if modelName == "" {
+		modelName = "gpt-4"
+	}
+
+	modelConfigObj, _ := defaultModelConfig["model_config_obj"].(map[string]any)
+	if modelConfigObj == nil {
+		modelConfigObj, _ = reactConfig["model_config_obj"].(map[string]any)
+	}
+	if modelConfigObj == nil {
+		modelConfigObj = map[string]any{}
+	}
+
+	return modelClientConfig, modelConfigObj, modelName
+}
+
+// BuildEvolutionLLM 从配置构造 evolution 使用的 LLM Model 实例。
+// 对齐 Python: build_evolution_llm (L451-476)
+//
+// temperature 取 model_config_obj.temperature，默认 0.95。
+// 构造失败（provider/api_key/api_base 缺失或 Model 创建失败）返回 (nil, model_name)，
+// 调用方按 Python try/except 语义跳过该 rail。
+func BuildEvolutionLLM(config map[string]any) (*llm.Model, string) {
+	mcc, mco, modelName := ResolveModelConfig(config)
+	temperature := 0.95
+	if t, ok := mco["temperature"].(float64); ok {
+		temperature = t
+	}
+	requestConfig := llmschema.NewModelRequestConfig(
+		llmschema.WithModelName(modelName),
+		llmschema.WithTemperature(temperature),
+	)
+
+	provider := mapStrField(mcc, "client_provider")
+	apiKey := mapStrField(mcc, "api_key")
+	apiBase := mapStrField(mcc, "api_base")
+
+	var clientConfigOpts []llmschema.ModelClientConfigOption
+	if t, ok := mcc["timeout"].(float64); ok {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(t))
+	}
+	if v, ok := mcc["verify_ssl"].(bool); ok {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithVerifySSL(v))
+	}
+	if headers := customHeadersToStringMap(mcc["custom_headers"]); headers != nil {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithCustomHeaders(headers))
+	}
+
+	clientConfig, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, clientConfigOpts...)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("model_name", modelName).
+			Msg("[TeamRuntime] evolution LLM client config invalid")
+		return nil, modelName
+	}
+	model, err := llm.NewModel(clientConfig, requestConfig)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("model_name", modelName).
+			Msg("[TeamRuntime] evolution LLM creation failed")
+		return nil, modelName
+	}
+	return model, modelName
+}
+
+// ──────────────────────────── 非导出函数（模型解析辅助） ────────────────────────────
+
+// teamLoadConfig 加载默认 config.yaml。
+// 对齐 Python: get_config()
+func teamLoadConfig() (map[string]any, error) {
+	c, err := config.New("")
+	if err != nil {
+		return nil, err
+	}
+	return c.Load()
+}
+
+// copyMapShallow 浅拷贝 map[string]any（对齐 Python dict.copy()）。
+// 非 map 输入返回空 map（对齐 Python (x or {}).copy() 的 None 容错）。
+func copyMapShallow(v any) map[string]any {
+	m, ok := v.(map[string]any)
+	if !ok || m == nil {
+		return map[string]any{}
+	}
+	result := make(map[string]any, len(m))
+	for k, val := range m {
+		result[k] = val
+	}
+	return result
+}
+
+// mapStrField 从 map 提取字符串字段（非 string 或缺失返回空串）。
+func mapStrField(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	if s, ok := m[key].(string); ok {
+		return s
+	}
+	return ""
+}
+
+// customHeadersToStringMap 将 custom_headers 配置转为 map[string]string。
+//
+// 输入可能是 JSON 字符串或 map[string]any（config 已解析路径），
+// 对齐 Python ModelClientConfig(custom_headers=...) 的 dict 语义。
+func customHeadersToStringMap(v any) map[string]string {
+	if v == nil {
+		return nil
+	}
+	if m, ok := v.(map[string]any); ok {
+		result := make(map[string]string, len(m))
+		for k, val := range m {
+			if s, ok := val.(string); ok {
+				result[k] = s
+			}
+		}
+		if len(result) == 0 && len(m) > 0 {
+			return nil
+		}
+		return result
+	}
+	if s, ok := v.(string); ok && s != "" {
+		parsed := config.ParseCustomHeaders(s)
+		if parsed == nil {
+			return nil
+		}
+		result := make(map[string]string, len(parsed))
+		for k, val := range parsed {
+			if sv, ok := val.(string); ok {
+				result[k] = sv
+			}
+		}
+		return result
+	}
+	return nil
 }
