@@ -82,6 +82,20 @@ func (f *fakeDeepAgentForAgentMode) InnerInvokeOverride() func(ctx context.Conte
 	return nil
 }
 
+// 10.6.19 接口面扩展桩（AbilityManager/SystemPromptBuilder/Uapswarm 访问器）
+func (f *fakeDeepAgentForAgentMode) AbilityManager() agentinterfaces.AbilityManagerInterface {
+	return nil
+}
+func (f *fakeDeepAgentForAgentMode) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return nil
+}
+func (f *fakeDeepAgentForAgentMode) UapswarmProjectDir() string          { return "" }
+func (f *fakeDeepAgentForAgentMode) SetUapswarmProjectDir(string)        {}
+func (f *fakeDeepAgentForAgentMode) UapswarmCodeProjectDir() string      { return "" }
+func (f *fakeDeepAgentForAgentMode) SetUapswarmCodeProjectDir(string)    {}
+func (f *fakeDeepAgentForAgentMode) UapswarmAdapterMode() string         { return "" }
+func (f *fakeDeepAgentForAgentMode) SetUapswarmAdapterMode(string)       {}
+
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForAgentMode)(nil)
 var _ agentinterfaces.BaseAgent = (*fakeDeepAgentForAgentMode)(nil)

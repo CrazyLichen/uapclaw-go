@@ -12,6 +12,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -68,6 +69,20 @@ func (f *fakeDeepAgentForConstructor) UnregisterRail(_ context.Context, _ agenti
 func (f *fakeDeepAgentForConstructor) InnerInvokeOverride() func(context.Context, map[string]any, ...agentinterfaces.AgentOption) (map[string]any, error) {
 	return nil
 }
+
+// 10.6.19 接口面扩展桩（AbilityManager/SystemPromptBuilder/Uapswarm 访问器）
+func (f *fakeDeepAgentForConstructor) AbilityManager() agentinterfaces.AbilityManagerInterface {
+	return nil
+}
+func (f *fakeDeepAgentForConstructor) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return nil
+}
+func (f *fakeDeepAgentForConstructor) UapswarmProjectDir() string       { return "" }
+func (f *fakeDeepAgentForConstructor) SetUapswarmProjectDir(string)     {}
+func (f *fakeDeepAgentForConstructor) UapswarmCodeProjectDir() string   { return "" }
+func (f *fakeDeepAgentForConstructor) SetUapswarmCodeProjectDir(string) {}
+func (f *fakeDeepAgentForConstructor) UapswarmAdapterMode() string      { return "" }
+func (f *fakeDeepAgentForConstructor) SetUapswarmAdapterMode(string)    {}
 
 // ──────────────────────────── 构造函数测试 ────────────────────────────
 

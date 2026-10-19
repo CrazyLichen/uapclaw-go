@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -25,6 +26,30 @@ type DeepAgentInterface interface {
 	// Card 返回 Agent 身份卡片。
 	// Python: DeepAgent.card 属性
 	Card() *agentschema.AgentCard
+	// AbilityManager 返回能力管理器。
+	// Python: DeepAgent.ability_manager 属性（BaseAgent 扩展）
+	AbilityManager() agentinterfaces.AbilityManagerInterface
+	// SystemPromptBuilder 返回系统提示词构建器。
+	// Python: DeepAgent.system_prompt_builder 属性（harness 层扩展）
+	SystemPromptBuilder() saprompt.SystemPromptBuilderInterface
+	// UapswarmProjectDir 返回项目目录。
+	// Python: DeepAgent._jiuwenswarm_project_dir
+	UapswarmProjectDir() string
+	// SetUapswarmProjectDir 设置项目目录。
+	// Python: setattr(instance, "_jiuwenswarm_project_dir", value)
+	SetUapswarmProjectDir(dir string)
+	// UapswarmCodeProjectDir 返回代码项目目录。
+	// Python: DeepAgent._jiuwenswarm_code_project_dir
+	UapswarmCodeProjectDir() string
+	// SetUapswarmCodeProjectDir 设置代码项目目录。
+	// Python: setattr(instance, "_jiuwenswarm_code_project_dir", value)
+	SetUapswarmCodeProjectDir(dir string)
+	// UapswarmAdapterMode 返回适配器模式。
+	// Python: DeepAgent._jiuwenswarm_adapter_mode
+	UapswarmAdapterMode() string
+	// SetUapswarmAdapterMode 设置适配器模式。
+	// Python: setattr(instance, "_jiuwenswarm_adapter_mode", value)
+	SetUapswarmAdapterMode(mode string)
 	// LoopCoordinator 返回循环协调器（可能为 nil）
 	LoopCoordinator() LoopCoordinatorInterface
 	// LoopController 返回任务循环控制器（对齐 Python: DeepAgent.loop_controller）

@@ -694,5 +694,13 @@ func (f *fakeBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.Agen
 	return nil
 }
 
+// 10.6.19 接口面扩展桩（Uapswarm 访问器；AbilityManager/SystemPromptBuilder 已有实现）
+func (f *fakeBaseAgent) UapswarmProjectDir() string       { return "" }
+func (f *fakeBaseAgent) SetUapswarmProjectDir(string)     {}
+func (f *fakeBaseAgent) UapswarmCodeProjectDir() string   { return "" }
+func (f *fakeBaseAgent) SetUapswarmCodeProjectDir(string) {}
+func (f *fakeBaseAgent) UapswarmAdapterMode() string      { return "" }
+func (f *fakeBaseAgent) SetUapswarmAdapterMode(string)    {}
+
 // 编译时验证
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgent)(nil)

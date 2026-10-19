@@ -115,6 +115,14 @@ func (f *fakeBaseAgentTeam) InnerInvokeOverride() func(ctx context.Context, inpu
 	return nil
 }
 
+// 10.6.19 接口面扩展桩（Uapswarm 访问器；AbilityManager/SystemPromptBuilder 已有真实实现）
+func (f *fakeBaseAgentTeam) UapswarmProjectDir() string       { return "" }
+func (f *fakeBaseAgentTeam) SetUapswarmProjectDir(string)     {}
+func (f *fakeBaseAgentTeam) UapswarmCodeProjectDir() string   { return "" }
+func (f *fakeBaseAgentTeam) SetUapswarmCodeProjectDir(string) {}
+func (f *fakeBaseAgentTeam) UapswarmAdapterMode() string      { return "" }
+func (f *fakeBaseAgentTeam) SetUapswarmAdapterMode(string)    {}
+
 // 编译时验证
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgentTeam)(nil)
 var _ harnessinterfaces.DeepAgentInterface = (*fakeBaseAgentTeam)(nil)

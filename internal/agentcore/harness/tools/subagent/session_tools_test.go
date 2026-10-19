@@ -20,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -590,6 +591,20 @@ func (f *fakeDeepAgentProvider) UnregisterRail(_ context.Context, _ agentinterfa
 func (f *fakeDeepAgentProvider) InnerInvokeOverride() func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
 	return nil
 }
+
+// 10.6.19 接口面扩展桩（AbilityManager/SystemPromptBuilder/Uapswarm 访问器）
+func (f *fakeDeepAgentProvider) AbilityManager() agentinterfaces.AbilityManagerInterface {
+	return nil
+}
+func (f *fakeDeepAgentProvider) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return nil
+}
+func (f *fakeDeepAgentProvider) UapswarmProjectDir() string       { return "" }
+func (f *fakeDeepAgentProvider) SetUapswarmProjectDir(string)     {}
+func (f *fakeDeepAgentProvider) UapswarmCodeProjectDir() string   { return "" }
+func (f *fakeDeepAgentProvider) SetUapswarmCodeProjectDir(string) {}
+func (f *fakeDeepAgentProvider) UapswarmAdapterMode() string      { return "" }
+func (f *fakeDeepAgentProvider) SetUapswarmAdapterMode(string)    {}
 
 // Iteration 实现 LoopCoordinatorInterface 接口
 func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }
