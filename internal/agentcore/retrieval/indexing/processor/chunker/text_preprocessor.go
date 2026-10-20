@@ -244,8 +244,8 @@ func (p *PreprocessingPipeline) Len() int {
 // unicode.IsSpace 与 Python \s 在 \x1c-\x1f 上不同（Go 不含、Python 含），
 // 显式补齐后两者集合一致。
 func isPySpaceRune(r rune) bool {
-	switch {
-	case r == 0x1c || r == 0x1d || r == 0x1e || r == 0x1f:
+	switch r {
+	case 0x1c, 0x1d, 0x1e, 0x1f:
 		return true // 补偿集：unicode.IsSpace 缺文件分隔符组
 	default:
 		return unicode.IsSpace(r)
