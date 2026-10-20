@@ -25,7 +25,7 @@ type TokenizerProvider interface {
 // TextChunker 分块工具门面：预处理管线 + 单位路由组合的一站式分块器。
 //
 // 嵌入 BaseChunker 获得尺寸字段与校验；ChunkText 不被本类型支持
-//（返回显式错误，A1 决策）；ChunkDocuments 完全覆写（预处理内嵌）；
+// （返回显式错误，A1 决策）；ChunkDocuments 完全覆写（预处理内嵌）；
 // Process 局部覆写转发（13.8 决策 3 同款）。
 //
 // Python: openjiuwen/core/retrieval/indexing/processor/chunker/chunking.py (TextChunker)
@@ -41,7 +41,7 @@ type TextChunker struct {
 // PreprocessOptions 预处理开关。
 //
 // 对齐 Python preprocess_options dict 的 2 个已知键
-//（normalize_whitespace/remove_url_email）；未知键 Python 静默忽略，
+// （normalize_whitespace/remove_url_email）；未知键 Python 静默忽略，
 // 结构体天然收窄（偏差 2）。
 type PreprocessOptions struct {
 	// NormalizeWhitespace 启用空白归一化（组装序：先）

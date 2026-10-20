@@ -319,7 +319,7 @@ func TestNewTextChunker_token路径size不超限不下调(t *testing.T) {
 
 // TestNewTextChunker_token路径真实分块 Go 专项（决策 10：真实 tiktoken 端到端）
 // cl100k_base 词表本地计算不联网。文本经 Python tiktoken 实测 151 token
-//（单句 15 token × 10 次重复），chunk_size=50 → 必然多块
+// （单句 15 token × 10 次重复），chunk_size=50 → 必然多块
 func TestNewTextChunker_token路径真实分块(t *testing.T) {
 	c, err := NewTextChunker(50, 10, WithChunkUnit("token"))
 	assert.NoError(t, err)
