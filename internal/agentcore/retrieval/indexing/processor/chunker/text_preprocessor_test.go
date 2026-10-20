@@ -147,3 +147,161 @@ func TestURLEmailRemover_URL加邮箱混合(t *testing.T) {
 	r := URLEmailRemover{RemoveURLs: true, RemoveEmails: true}
 	assert.Equal(t, "Visit  and email  now", r.Process("Visit https://example.com and email a@b.com now"))
 }
+
+// ──────────────────────────── SpecialCharacterNormalizer ────────────────────────────
+
+// TestSpecialCharacterNormalizer_构造默认值 对齐 Python test_init_defaults
+func TestSpecialCharacterNormalizer_构造默认值(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "", n.CharsToRemove)
+	assert.Empty(t, n.CharsToReplace)
+}
+
+// TestSpecialCharacterNormalizer_移除控制字符 对齐 Python test_remove_control_characters
+// Python 基准: 'Test\x00text\x1fwith\x7fcontrol' → 'Testtextwithcontrol'
+func TestSpecialCharacterNormalizer_移除控制字符(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "Testtextwithcontrol", n.Process("Test\x00text\x1fwith\x7fcontrol"))
+}
+
+// TestSpecialCharacterNormalizer_替换字符 对齐 Python test_replace_characters
+// Python 基准: 'Tom & Jerry @ home' + {'&':'and','@':'at'} → 'Tom and Jerry at home'
+// 注意：& 和 @ 均为单字符，REDUNDANT {2,} 不触发（Python 行为）
+func TestSpecialCharacterNormalizer_替换字符(t *testing.T) {
+	n := SpecialCharacterNormalizer{CharsToReplace: []CharReplacement{{Old: "&", New: "and"}, {Old: "@", New: "at"}}}
+	assert.Equal(t, "Tom and Jerry at home", n.Process("Tom & Jerry @ home"))
+}
+
+// TestSpecialCharacterNormalizer_移除指定字符 对齐 Python test_remove_specified_characters
+// Python 基准: 'Test!text@with#special' + '!@#' → 'Testtextwithspecial'
+func TestSpecialCharacterNormalizer_移除指定字符(t *testing.T) {
+	n := SpecialCharacterNormalizer{CharsToRemove: "!@#"}
+	assert.Equal(t, "Testtextwithspecial", n.Process("Test!text@with#special"))
+}
+
+// TestSpecialCharacterNormalizer_空文本 对齐 Python test_process_empty_string + test_process_none（并入）
+func TestSpecialCharacterNormalizer_空文本(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "", n.Process(""))
+}
+
+// TestSpecialCharacterNormalizer_冗余符号删除 Go 专项（对拍基准，Python \w 语义验证）
+// Python 基准: 'hello!!!world' → 'helloworld'（!!! 连续 3 个非词非空白符号 → 删）
+func TestSpecialCharacterNormalizer_冗余符号删除(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "helloworld", n.Process("hello!!!world"))
+}
+
+// TestSpecialCharacterNormalizer_CJK保护字符不动 Go 专项（对拍基准）
+// Python 基准: '中文。。。句子' → 不变（。在 protected 集，双前瞻命中跳过）
+func TestSpecialCharacterNormalizer_CJK保护字符不动(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "中文。。。句子", n.Process("中文。。。句子"))
+}
+
+// TestSpecialCharacterNormalizer_双标记符不动 Go 专项（对拍基准）
+// Python 基准: '###标题###' → 不变（(?![#*\-_]{2,}) 前瞻命中跳过）
+func TestSpecialCharacterNormalizer_双标记符不动(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "###标题###", n.Process("###标题###"))
+}
+
+// TestSpecialCharacterNormalizer_货币符号删除 Go 专项（对拍基准）
+// Python 基准: '￥￥￥三个' → '三个'（￥ 连续 3 个非词符号 → 删）
+func TestSpecialCharacterNormalizer_货币符号删除(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "三个", n.Process("￥￥￥三个"))
+}
+
+// TestSpecialCharacterNormalizer_单符号不动 Go 专项（对拍基准）
+// Python 基准: '单一&符号' → 不变（{2,} 需连续 2+）
+func TestSpecialCharacterNormalizer_单符号不动(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "单一&符号", n.Process("单一&符号"))
+}
+
+// TestSpecialCharacterNormalizer_带圈数字保留 Go 专项（D1' 显式 \w 集回归，对拍基准）
+// Python 基准: '①②③序号' → 不变（①②③ 是 Python \w 词字符；regexp2 原生 \w 缺 No 类会误删）
+func TestSpecialCharacterNormalizer_带圈数字保留(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "①②③序号", n.Process("①②③序号"))
+}
+
+// TestSpecialCharacterNormalizer_连字符不动 Go 专项（对拍基准）
+// Python 基准: 'a-b-c正常' → 不变（- 在字符类白名单内）
+func TestSpecialCharacterNormalizer_连字符不动(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "a-b-c正常", n.Process("a-b-c正常"))
+}
+
+// TestSpecialCharacterNormalizer_邮箱符号不动 Go 专项（对拍基准）
+// Python 基准: 'a@b@c' → 不变（@ 单字符不触发 {2,}）
+func TestSpecialCharacterNormalizer_邮箱符号不动(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "a@b@c", n.Process("a@b@c"))
+}
+
+// TestSpecialCharacterNormalizer_中英混合不动 Go 专项（对拍基准）
+func TestSpecialCharacterNormalizer_中英混合不动(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "mixed中English文", n.Process("mixed中English文"))
+}
+
+// TestSpecialCharacterNormalizer_链式替换插入序 Go 专项（F 决策回归，对拍基准）
+// Python 基准: '链式a→b→c' + {'a':'b','b':'c'} → '链式c→c→c'
+// （dict 插入序 a→b 先执行，b→c 后执行，a 经两步变 c）
+func TestSpecialCharacterNormalizer_链式替换插入序(t *testing.T) {
+	n := SpecialCharacterNormalizer{CharsToReplace: []CharReplacement{{Old: "a", New: "b"}, {Old: "b", New: "c"}}}
+	assert.Equal(t, "链式c→c→c", n.Process("链式a→b→c"))
+}
+
+// TestSpecialCharacterNormalizer_组合记号不动 Go 专项（对拍基准，Mn 类回归）
+// Python 基准: 'á组合记号' → 不变（组合尖音符后 REDUNDANT 段不足 2 字符）
+func TestSpecialCharacterNormalizer_组合记号不动(t *testing.T) {
+	n := SpecialCharacterNormalizer{}
+	assert.Equal(t, "á组合记号", n.Process("á组合记号"))
+}
+
+// ──────────────────────────── PreprocessingPipeline ────────────────────────────
+
+// TestPreprocessingPipeline_空管线 对齐 Python test_init_empty
+func TestPreprocessingPipeline_空管线(t *testing.T) {
+	p := NewPreprocessingPipeline()
+	assert.Equal(t, 0, p.Len())
+}
+
+// TestPreprocessingPipeline_带预处理器构造 对齐 Python test_init_with_preprocessors
+func TestPreprocessingPipeline_带预处理器构造(t *testing.T) {
+	p := NewPreprocessingPipeline(WhitespaceNormalizer{}, URLEmailRemover{RemoveURLs: true, RemoveEmails: true})
+	assert.Equal(t, 2, p.Len())
+}
+
+// TestPreprocessingPipeline_追加预处理器 对齐 Python test_add_preprocessor
+func TestPreprocessingPipeline_追加预处理器(t *testing.T) {
+	p := NewPreprocessingPipeline()
+	p.AddPreprocessor(WhitespaceNormalizer{})
+	assert.Equal(t, 1, p.Len())
+}
+
+// TestPreprocessingPipeline_单预处理器 对齐 Python test_process_single_preprocessor
+func TestPreprocessingPipeline_单预处理器(t *testing.T) {
+	p := NewPreprocessingPipeline(WhitespaceNormalizer{})
+	assert.Equal(t, "This is a test", p.Process("This   is   a   test"))
+}
+
+// TestPreprocessingPipeline_顺序应用 Go 专项（对拍基准）
+// TextChunker 组装序：whitespace 先、url 后
+// Python 基准: 'Visit https://example.com and email a@b.com now' → 'Visit  and email  now'
+func TestPreprocessingPipeline_顺序应用(t *testing.T) {
+	p := NewPreprocessingPipeline(
+		WhitespaceNormalizer{},
+		URLEmailRemover{RemoveURLs: true, RemoveEmails: true},
+	)
+	assert.Equal(t, "Visit  and email  now", p.Process("Visit https://example.com and email a@b.com now"))
+}
+
+// TestPreprocessingPipeline_空文本 对齐 Python test_process_empty_string
+func TestPreprocessingPipeline_空文本(t *testing.T) {
+	p := NewPreprocessingPipeline(WhitespaceNormalizer{})
+	assert.Equal(t, "", p.Process(""))
+}

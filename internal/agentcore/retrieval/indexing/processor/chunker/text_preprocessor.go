@@ -122,6 +122,20 @@ var (
 	emailPattern = regexp2.MustCompile(
 		`\b[`+wCore+`\.-]+@[`+wCore+`\.-]+\.[`+wCore+`]+\b`,
 		regexp2.None)
+	// controlCharPattern Python CONTROL_CHAR_PATTERN r"[\x00-\x1F\x7F]"。
+	//
+	// Python: text_preprocessor.py SpecialCharacterNormalizer.CONTROL_CHAR_PATTERN L112
+	controlCharPattern = regexp2.MustCompile(`[\x00-\x1F\x7F]`, regexp2.None)
+	// redundantSymbolsPattern Python REDUNDANT_SYMBOLS_PATTERN
+	// r"(?![\u4e00-\u9fa5，。！？；：“”‘’（）【】《》、…·])(?![#*\-_]{2,})([^\w\s#*_\-\|]){2,}"
+	//
+	// 双负向前瞻 regexp2 原生支持；[^\w\s#*_\-\|] 内的 \w/\s
+	// → 显式语义集（wCore+sCore，D1' 决策——①②③ 保留的根因）。
+	//
+	// Python: text_preprocessor.py SpecialCharacterNormalizer.REDUNDANT_SYMBOLS_PATTERN L113-115
+	redundantSymbolsPattern = regexp2.MustCompile(
+		`(?![\x{4e00}-\x{9fa5}，。！？；：“”‘’（）【】《》、…·])(?![#*\-_]{2,})([^`+wCore+sCore+`#*_\-\|]){2,}`,
+		regexp2.None)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -166,6 +180,62 @@ func (r URLEmailRemover) Process(text string) string {
 	return text
 }
 
+// Process 归一化特殊字符：控制字符删除 → 冗余符号段删除 →
+// 有序替换 → 指定字符删除。
+//
+// 对齐 Python 执行序 L128-154：if not text → 原样；
+// CONTROL.sub("") → REDUNDANT.sub("") → chars_to_replace 依插入序
+// str.replace → chars_to_remove 构造字符类 sub("")。
+//
+// Python: text_preprocessor.py SpecialCharacterNormalizer.process
+func (n SpecialCharacterNormalizer) Process(text string) string {
+	if text == "" {
+		return text
+	}
+	text = replaceAll(controlCharPattern, text, "")
+	text = replaceAll(redundantSymbolsPattern, text, "")
+	for _, cr := range n.CharsToReplace {
+		text = strings.ReplaceAll(text, cr.Old, cr.New)
+	}
+	if n.CharsToRemove != "" {
+		text = removeChars(text, n.CharsToRemove)
+	}
+	return text
+}
+
+// NewPreprocessingPipeline 构造预处理管线。
+//
+// preprocessors 可为空（空管线 Process 直通）。
+//
+// Python: text_preprocessor.py PreprocessingPipeline.__init__
+func NewPreprocessingPipeline(preprocessors ...TextPreprocessor) *PreprocessingPipeline {
+	return &PreprocessingPipeline{preprocessors: preprocessors}
+}
+
+// AddPreprocessor 追加预处理器到管线尾部。
+//
+// Python: text_preprocessor.py PreprocessingPipeline.add_preprocessor
+func (p *PreprocessingPipeline) AddPreprocessor(pre TextPreprocessor) {
+	p.preprocessors = append(p.preprocessors, pre)
+}
+
+// Process 顺序应用全部预处理器。
+//
+// Python: text_preprocessor.py PreprocessingPipeline.process
+func (p *PreprocessingPipeline) Process(text string) string {
+	for _, pre := range p.preprocessors {
+		text = pre.Process(text)
+	}
+	return text
+}
+
+// Len 返回预处理器数量（对齐 Python __len__）。
+//
+// Python: text_preprocessor.py PreprocessingPipeline.__len__
+func (p *PreprocessingPipeline) Len() int {
+	return len(p.preprocessors)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isPySpaceRune 判定 rune 是否属于 Python \s 集合（regexp2 \s + \x1c-\x1f）。
@@ -190,4 +260,23 @@ func replaceAll(re *regexp2.Regexp, text, replacement string) string {
 		return text
 	}
 	return out
+}
+
+// removeChars 删除文本中出现的指定字符集字符。
+//
+// 对齐 Python re.sub("[" + re.escape(chars) + "]", "", text)：
+// 逐 rune 判定是否属于 chars，直接扫描无需正则（语义等价且无转义陷阱）。
+func removeChars(text, chars string) string {
+	charSet := make(map[rune]struct{}, len(chars))
+	for _, r := range chars {
+		charSet[r] = struct{}{}
+	}
+	var b strings.Builder
+	b.Grow(len(text))
+	for _, r := range text {
+		if _, ok := charSet[r]; !ok {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
