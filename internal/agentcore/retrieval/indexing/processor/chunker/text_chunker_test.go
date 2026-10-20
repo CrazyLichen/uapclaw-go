@@ -2,6 +2,7 @@ package chunker
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -211,6 +212,136 @@ func TestTextChunker_Process_路由到覆写版ChunkDocuments(t *testing.T) {
 	assert.NoError(t, err)
 	docs := []reranker.Document{{ID: "doc_1", Text: "This   is   document   1"}}
 	chunks, err := c.Process(context.Background(), docs)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, chunks)
+	for _, chunk := range chunks {
+		assert.NotContains(t, chunk.Text, "   ")
+	}
+}
+
+// ──────────────────────────── fake 类型 ────────────────────────────
+
+// fakeEmbedModelWithTokenizer 实现 TokenizerProvider 的嵌入模型 fake
+type fakeEmbedModelWithTokenizer struct {
+	// tk 携带的 tokenizer
+	tk Tokenizer
+}
+
+// Tokenizer 返回携带的 tokenizer
+func (f *fakeEmbedModelWithTokenizer) Tokenizer() Tokenizer { return f.tk }
+
+// fakeEmbedModelPlain 无 tokenizer 属性的嵌入模型 fake（不实现 TokenizerProvider）
+type fakeEmbedModelPlain struct{}
+
+// fakeTokenizerWithMaxLength 实现 MaxLengthProvider 的 fake tokenizer
+type fakeTokenizerWithMaxLength struct {
+	// maxLen MaxLength() 返回值（0=未提供）
+	maxLen int
+}
+
+// Encode 空实现（token 路由测试不触发编码）
+func (f *fakeTokenizerWithMaxLength) Encode(text string) ([]int, error) {
+	return []int{}, nil
+}
+
+// MaxLength 返回预设上限
+func (f *fakeTokenizerWithMaxLength) MaxLength() int { return f.maxLen }
+
+// fakeTokenizerPlain 仅实现 Tokenizer 接口的 fake
+type fakeTokenizerPlain struct{}
+
+// Encode 空实现
+func (f *fakeTokenizerPlain) Encode(text string) ([]int, error) {
+	return []int{}, nil
+}
+
+// ──────────────────────────── token 路径 ────────────────────────────
+
+// TestNewTextChunker_token路径无embedModel 对齐 Python get_chunker token 分支：
+// 无 embedModel → tiktoken fallback（真实 tiktoken，决策 10）
+func TestNewTextChunker_token路径无embedModel(t *testing.T) {
+	c, err := NewTextChunker(512, 50, WithChunkUnit("token"))
+	assert.NoError(t, err)
+	_, ok := c.inner.(*TokenizerChunker)
+	assert.True(t, ok)
+}
+
+// TestNewTextChunker_token路径embedModel带tokenizer 对齐 Python 分支①：
+// getattr(embed_model, "tokenizer") 提取成功
+func TestNewTextChunker_token路径embedModel带tokenizer(t *testing.T) {
+	c, err := NewTextChunker(512, 50,
+		WithChunkUnit("token"),
+		WithEmbedModel(&fakeEmbedModelWithTokenizer{tk: &fakeTokenizerPlain{}}),
+	)
+	assert.NoError(t, err)
+	_, ok := c.inner.(*TokenizerChunker)
+	assert.True(t, ok)
+}
+
+// TestNewTextChunker_token路径embedModel无tokenizer 对齐 Python：
+// embed_model 无 tokenizer 属性 → tiktoken fallback
+func TestNewTextChunker_token路径embedModel无tokenizer(t *testing.T) {
+	c, err := NewTextChunker(512, 50,
+		WithChunkUnit("token"),
+		WithEmbedModel(fakeEmbedModelPlain{}),
+	)
+	assert.NoError(t, err)
+	_, ok := c.inner.(*TokenizerChunker)
+	assert.True(t, ok)
+}
+
+// TestNewTextChunker_token路径size超限下调 对齐 Python test_get_chunker_token_unit_adjusts_size：
+// tokenizer.model_max_length=256 < chunk_size=512 → 下调至 256
+func TestNewTextChunker_token路径size超限下调(t *testing.T) {
+	c, err := NewTextChunker(512, 50,
+		WithChunkUnit("token"),
+		WithEmbedModel(&fakeEmbedModelWithTokenizer{tk: &fakeTokenizerWithMaxLength{maxLen: 256}}),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, 512, c.ChunkSize) // 外层尺寸不变
+	tc, ok := c.inner.(*TokenizerChunker)
+	assert.True(t, ok)
+	assert.Equal(t, 256, tc.ChunkSize) // inner 已下调
+}
+
+// TestNewTextChunker_token路径size不超限不下调 Go 专项：
+// maxLen=0（未提供）→ 不下调
+func TestNewTextChunker_token路径size不超限不下调(t *testing.T) {
+	c, err := NewTextChunker(512, 50,
+		WithChunkUnit("token"),
+		WithEmbedModel(&fakeEmbedModelWithTokenizer{tk: &fakeTokenizerWithMaxLength{maxLen: 0}}),
+	)
+	assert.NoError(t, err)
+	tc, ok := c.inner.(*TokenizerChunker)
+	assert.True(t, ok)
+	assert.Equal(t, 512, tc.ChunkSize)
+}
+
+// TestNewTextChunker_token路径真实分块 Go 专项（决策 10：真实 tiktoken 端到端）
+// cl100k_base 词表本地计算不联网。文本经 Python tiktoken 实测 151 token
+//（单句 15 token × 10 次重复），chunk_size=50 → 必然多块
+func TestNewTextChunker_token路径真实分块(t *testing.T) {
+	c, err := NewTextChunker(50, 10, WithChunkUnit("token"))
+	assert.NoError(t, err)
+	text := "This is a longer document that should be split into multiple token budget chunks. "
+	docs := []reranker.Document{{ID: "doc_1", Text: strings.Repeat(text, 10)}}
+	chunks, err := c.ChunkDocuments(context.Background(), docs)
+	assert.NoError(t, err)
+	assert.Greater(t, len(chunks), 1)
+	for _, chunk := range chunks {
+		assert.Equal(t, "doc_1", chunk.DocID)
+	}
+}
+
+// TestNewTextChunker_token路径预处理组合 Go 专项：token 路径 + 预处理组合
+func TestNewTextChunker_token路径预处理组合(t *testing.T) {
+	c, err := NewTextChunker(50, 10,
+		WithChunkUnit("token"),
+		WithPreprocessOptions(PreprocessOptions{NormalizeWhitespace: true}),
+	)
+	assert.NoError(t, err)
+	docs := []reranker.Document{{ID: "doc_1", Text: "This   is   document   1"}}
+	chunks, err := c.ChunkDocuments(context.Background(), docs)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, chunks)
 	for _, chunk := range chunks {
