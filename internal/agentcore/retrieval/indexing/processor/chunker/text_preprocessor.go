@@ -96,6 +96,32 @@ var (
 	//
 	// Python: text_preprocessor.py WhitespaceNormalizer.process L53
 	pySpaceSeqPattern = regexp2.MustCompile(pySpaceClassStr+`+`, regexp2.None)
+	// urlPattern Python URL_PATTERN r"https?://\S+|www\.\S+"。
+	//
+	// \S → 非 pySpace 集（D1' 决策：显式语义集替换）。
+	//
+	// Python: text_preprocessor.py URLEmailRemover.URL_PATTERN L66
+	urlPattern = regexp2.MustCompile(`https?://[^\s\x{1c}-\x{1f}]+|www\.[^\s\x{1c}-\x{1f}]+`, regexp2.None)
+	// comPattern Python COM_PATTERN
+	// r"(?:https?://|www\.)?\S+?\.(?:com|net|org|cn)(?:[/?#]\S*)?\b"。
+	//
+	// \S 同上替换；\b 保留 regexp2 原生语义（偏差 4：No/Nl/Mn/Pc 紧贴
+	// 场景与 Python \b 判定分叉，Python 测试不覆盖，设计文档标注）。
+	//
+	// Python: text_preprocessor.py URLEmailRemover.COM_PATTERN L67
+	comPattern = regexp2.MustCompile(
+		`(?:https?://|www\.)?[^\s\x{1c}-\x{1f}]+?\.(?:com|net|org|cn)(?:[/?#][^\s\x{1c}-\x{1f}]*)?\b`,
+		regexp2.None)
+	// emailPattern Python EMAIL_PATTERN r"\b[\w\.-]+@[\w\.-]+\.\w+\b"。
+	//
+	// \w → 显式集（wCore）；\b 原生（偏差 4）。
+	// 实测对拍：`联系①user@example.com` Go/Python 同为吞掉 ①（两侧行为一致）。
+	// 注意尾部 `\.\w+\b` 的 + 量词不可丢（设计期实测踩坑：遗漏致匹配失败）。
+	//
+	// Python: text_preprocessor.py URLEmailRemover.EMAIL_PATTERN L69
+	emailPattern = regexp2.MustCompile(
+		`\b[`+wCore+`\.-]+@[`+wCore+`\.-]+\.[`+wCore+`]+\b`,
+		regexp2.None)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -118,6 +144,28 @@ func (n WhitespaceNormalizer) Process(text string) string {
 	return strings.TrimFunc(out, isPySpaceRune)
 }
 
+// Process 移除 URL 和/或邮箱地址。
+//
+// 对齐 Python 执行序：if not text → 原样；remove_urls → URL_PATTERN.sub →
+// COM_PATTERN.sub；remove_emails → EMAIL_PATTERN.sub。注意 Python 的
+// Go 零值差异：Python 构造默认 remove_urls=remove_emails=true，Go 结构体
+// 零值为 false——调用方需显式设置（Python 默认语义不重造构造函数）。
+//
+// Python: text_preprocessor.py URLEmailRemover.process L84-104
+func (r URLEmailRemover) Process(text string) string {
+	if text == "" {
+		return text
+	}
+	if r.RemoveURLs {
+		text = replaceAll(urlPattern, text, r.Replacement)
+		text = replaceAll(comPattern, text, r.Replacement)
+	}
+	if r.RemoveEmails {
+		text = replaceAll(emailPattern, text, r.Replacement)
+	}
+	return text
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isPySpaceRune 判定 rune 是否属于 Python \s 集合（regexp2 \s + \x1c-\x1f）。
@@ -132,4 +180,14 @@ func isPySpaceRune(r rune) bool {
 	default:
 		return unicode.IsSpace(r)
 	}
+}
+
+// replaceAll regexp2 版 re.sub（全部替换）。Replace 错误为模式编译
+// 期已校验的防御路径，发生时原样返回输入。
+func replaceAll(re *regexp2.Regexp, text, replacement string) string {
+	out, err := re.Replace(text, replacement, 0, -1)
+	if err != nil {
+		return text
+	}
+	return out
 }
