@@ -143,7 +143,7 @@ func (f *InvokeFunction[I, O]) Invoke(ctx context.Context, inputs map[string]any
 		})
 	}
 
-	// 2. map → struct
+	// 2. map 转 struct（json 序列化中转）
 	jsonBytes, err := json.Marshal(inputs)
 	if err != nil {
 		return nil, exception.BuildError(
@@ -171,7 +171,7 @@ func (f *InvokeFunction[I, O]) Invoke(ctx context.Context, inputs map[string]any
 		)
 	}
 
-	// 4. struct → map
+	// 4. struct 转 map（输出序列化）
 	result, err := structToMap(output)
 	if err != nil {
 		return nil, exception.BuildError(

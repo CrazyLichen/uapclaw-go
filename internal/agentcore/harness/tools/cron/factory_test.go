@@ -74,7 +74,7 @@ func TestCreateCronTools_遗留工具调用(t *testing.T) {
 	cronCtx := &CronToolContext{ChannelID: "wechat", SessionID: "sess_1"}
 	tools := CreateCronTools(backend, cronCtx, "cn", nil, "", true, "agent_1")
 
-	// cron_list_jobs (index 1)
+	// cron_list_jobs 工具调用（index 1）
 	result, err := tools[1].Invoke(context.Background(), map[string]any{})
 	if err != nil {
 		t.Fatalf("cron_list_jobs invoke error: %v", err)
@@ -83,7 +83,7 @@ func TestCreateCronTools_遗留工具调用(t *testing.T) {
 		t.Errorf("cron_list_jobs result missing 'jobs' key")
 	}
 
-	// cron_get_job (index 2)
+	// cron_get_job 工具调用（index 2）
 	result, err = tools[2].Invoke(context.Background(), map[string]any{"job_id": "job1"})
 	if err != nil {
 		t.Fatalf("cron_get_job invoke error: %v", err)
@@ -92,7 +92,7 @@ func TestCreateCronTools_遗留工具调用(t *testing.T) {
 		t.Errorf("cron_get_job result missing 'job' key")
 	}
 
-	// cron_create_job (index 3)
+	// cron_create_job 工具调用（index 3）
 	_, err = tools[3].Invoke(context.Background(), map[string]any{
 		"name": "测试任务", "cron_expr": "0 0 9 * * ? *", "timezone": "Asia/Shanghai",
 		"description": "每天9点提醒",
@@ -104,7 +104,7 @@ func TestCreateCronTools_遗留工具调用(t *testing.T) {
 		t.Errorf("expected at least 1 created job")
 	}
 
-	// cron_update_job (index 4)
+	// cron_update_job 工具调用（index 4）
 	_, err = tools[4].Invoke(context.Background(), map[string]any{
 		"job_id": "job1", "patch": map[string]any{"enabled": false},
 	})
@@ -112,7 +112,7 @@ func TestCreateCronTools_遗留工具调用(t *testing.T) {
 		t.Fatalf("cron_update_job invoke error: %v", err)
 	}
 
-	// cron_delete_job (index 5)
+	// cron_delete_job 工具调用（index 5）
 	result, err = tools[5].Invoke(context.Background(), map[string]any{"job_id": "job1"})
 	if err != nil {
 		t.Fatalf("cron_delete_job invoke error: %v", err)
@@ -128,7 +128,7 @@ func TestCreateCronTools_遗留工具cronToggleJob(t *testing.T) {
 	cronCtx := &CronToolContext{ChannelID: "wechat", SessionID: "sess_1"}
 	tools := CreateCronTools(backend, cronCtx, "cn", nil, "", true, "agent_1")
 
-	// cron_toggle_job (index 6)
+	// cron_toggle_job 工具调用（index 6）
 	_, err := tools[6].Invoke(context.Background(), map[string]any{"job_id": "job1", "enabled": false})
 	if err != nil {
 		t.Fatalf("cron_toggle_job invoke error: %v", err)

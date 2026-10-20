@@ -916,7 +916,7 @@ func TestMilvusVectorStore_Search_有结果(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("Search() 返回 %d 结果, want 2", len(results))
 	}
-	// COSINE: normalizeScore(0.9, COSINE) = ConvertCosineSimilarity(0.9)
+	// COSINE 度量：normalizeScore(0.9, COSINE) 等价 ConvertCosineSimilarity(0.9)
 	if results[0].Score <= 0 {
 		t.Errorf("Search() 分数 %v 应为正值", results[0].Score)
 	}

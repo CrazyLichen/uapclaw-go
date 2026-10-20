@@ -63,7 +63,7 @@ func TestMatchWildcard_中间星号(t *testing.T) {
 	assert.False(t, MatchWildcard("foo * baz", "foo; baz")) // ; 不在 wildcardChars
 }
 
-// ──────────────────────────── PathMatcher ────────────────────────────
+// ──────────────────────────── PathMatcher 路径匹配器 ────────────────────────────
 
 func TestPathMatcher_基本匹配(t *testing.T) {
 	pm := &PathMatcher{pm: PatternMatcher{}}
@@ -106,7 +106,7 @@ func TestPathMatcher_MatchPathAny(t *testing.T) {
 	assert.False(t, pm.MatchPathAny([]string{}, "/home/user/file.txt"))
 }
 
-// ──────────────────────────── URLMatcher ────────────────────────────
+// ──────────────────────────── URLMatcher URL 匹配器 ────────────────────────────
 
 func TestURLMatcher_完整URL匹配(t *testing.T) {
 	um := &URLMatcher{pm: PatternMatcher{}}
@@ -145,7 +145,7 @@ func TestURLMatcher_MatchURLAny(t *testing.T) {
 	assert.False(t, um.MatchURLAny(patterns, "https://evil.com"))
 }
 
-// ──────────────────────────── CommandMatcher ────────────────────────────
+// ──────────────────────────── CommandMatcher 命令匹配器 ────────────────────────────
 
 func TestCommandMatcher_基本匹配(t *testing.T) {
 	cm := &CommandMatcher{pm: PatternMatcher{}}
@@ -174,7 +174,7 @@ func TestCommandMatcher_MatchCommandAny(t *testing.T) {
 	assert.False(t, cm.MatchCommandAny(patterns, "rm -rf /"))
 }
 
-// ──────────────────────────── BuildCommandAllowPattern ────────────────────────────
+// ──────────────────────────── BuildCommandAllowPattern 命令白名单模式构造 ────────────────────────────
 
 func TestBuildCommandAllowPattern(t *testing.T) {
 	assert.Equal(t, "ls *", BuildCommandAllowPattern("ls"))
@@ -187,7 +187,7 @@ func TestBuildCommandAllowPattern_去除尾部空格(t *testing.T) {
 	assert.Equal(t, "git status *", BuildCommandAllowPattern("  git status  "))
 }
 
-// ──────────────────────────── ContainsPath ────────────────────────────
+// ──────────────────────────── ContainsPath 路径包含判定 ────────────────────────────
 
 func TestContainsPath_正常包含(t *testing.T) {
 	assert.True(t, ContainsPath("/home/user", "/home/user/file.txt"))
@@ -209,7 +209,7 @@ func TestContainsPath_相同路径(t *testing.T) {
 	assert.True(t, ContainsPath("/home/user", "/home/user"))
 }
 
-// ──────────────────────────── buildApprovalOverrideID ────────────────────────────
+// ──────────────────────────── buildApprovalOverrideID 审批覆盖 ID 构造 ────────────────────────────
 
 func TestBuildApprovalOverrideID(t *testing.T) {
 	id := buildApprovalOverrideID("bash", "command", "git status *")
@@ -236,7 +236,7 @@ func TestBuildApprovalOverrideID_长度截断(t *testing.T) {
 	assert.LessOrEqual(t, len(id), 120)
 }
 
-// ──────────────────────────── deepCopyMap ────────────────────────────
+// ──────────────────────────── deepCopyMap 深拷贝 map ────────────────────────────
 
 func TestDeepCopyMap_基本拷贝(t *testing.T) {
 	original := map[string]any{
@@ -305,7 +305,7 @@ func TestDeepCopyMap_嵌套slice中的map(t *testing.T) {
 	assert.Equal(t, "allow", original["rules"].([]any)[0].(map[string]any)["action"])
 }
 
-// ──────────────────────────── resolveAgentConfigYAMLPath ────────────────────────────
+// ──────────────────────────── resolveAgentConfigYAMLPath Agent 配置路径解析 ────────────────────────────
 
 func TestResolveAgentConfigYAMLPath_空路径(t *testing.T) {
 	// 空路径时回退到默认配置路径（对齐 Python: CONFIG_YAML_PATH = get_config_file()）
@@ -340,7 +340,7 @@ func TestResolveAgentConfigYAMLPath_路径不存在(t *testing.T) {
 	_ = result
 }
 
-// ──────────────────────────── hasOverrideID ────────────────────────────
+// ──────────────────────────── hasOverrideID 覆盖 ID 存在判定 ────────────────────────────
 
 func TestHasOverrideID_存在(t *testing.T) {
 	overrides := []any{
@@ -368,7 +368,7 @@ func TestHasOverrideID_非map类型(t *testing.T) {
 	assert.False(t, hasOverrideID(overrides, "r1"))
 }
 
-// ──────────────────────────── sortStrings ────────────────────────────
+// ──────────────────────────── sortStrings 字符串排序 ────────────────────────────
 
 func TestSortStrings(t *testing.T) {
 	s := []string{"banana", "apple", "cherry"}
@@ -413,7 +413,7 @@ func TestSortedShellTools(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ruleToolsList ────────────────────────────
+// ──────────────────────────── ruleToolsList 规则工具列表 ────────────────────────────
 
 func TestRuleToolsList_字符串(t *testing.T) {
 	rule := map[string]any{"tools": "bash"}
@@ -451,7 +451,7 @@ func TestRuleToolsList_其他类型(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// ──────────────────────────── strVal ────────────────────────────
+// ──────────────────────────── strVal 字符串取值 ────────────────────────────
 
 // strVal 从 any 值中提取字符串，非字符串或 nil 返回空串
 func strVal(v any) string {
@@ -471,7 +471,7 @@ func TestStrVal(t *testing.T) {
 	assert.Equal(t, "", strVal(nil))
 }
 
-// ──────────────────────────── commandText ────────────────────────────
+// ──────────────────────────── commandText 命令文本 ────────────────────────────
 
 func TestCommandText_从command键(t *testing.T) {
 	result := commandText(map[string]any{"command": "ls -la"})
@@ -498,7 +498,7 @@ func TestCommandText_去除空白(t *testing.T) {
 	assert.Equal(t, "ls -la", result)
 }
 
-// ──────────────────────────── isSameAllowOverride ────────────────────────────
+// ──────────────────────────── isSameAllowOverride 相同白名单覆盖判定 ────────────────────────────
 
 func TestIsSameAllowOverride_匹配(t *testing.T) {
 	sig := approvalOverrideSignature{
@@ -565,7 +565,7 @@ func TestIsSameAllowOverride_action非allow(t *testing.T) {
 	assert.False(t, isSameAllowOverride(sig))
 }
 
-// ──────────────────────────── ensureSingleAllowOverride ────────────────────────────
+// ──────────────────────────── ensureSingleAllowOverride 单一白名单覆盖保证 ────────────────────────────
 
 func TestEnsureSingleAllowOverride_新增条目(t *testing.T) {
 	overrides := []any{}
@@ -594,7 +594,7 @@ func TestEnsureSingleAllowOverride_已有相同条目(t *testing.T) {
 	assert.Len(t, overrides, 1) // 不新增
 }
 
-// ──────────────────────────── persistTieredApprovalOverrideSuggestions ────────────────────────────
+// ──────────────────────────── persistTieredApprovalOverrideSuggestions 分层审批建议持久化 ────────────────────────────
 
 func TestPersistTieredApprovalOverrideSuggestions_空建议(t *testing.T) {
 	perms := map[string]any{}
@@ -614,7 +614,7 @@ func TestPersistTieredApprovalOverrideSuggestions_有效建议(t *testing.T) {
 	assert.NotEmpty(t, overrides)
 }
 
-// ──────────────────────────── persistTieredToolAllow ────────────────────────────
+// ──────────────────────────── persistTieredToolAllow 分层工具白名单持久化 ────────────────────────────
 
 func TestPersistTieredToolAllow_正常(t *testing.T) {
 	perms := map[string]any{}
@@ -670,7 +670,7 @@ func TestReadAgentConfigYAML_空路径(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
-// ──────────────────────────── MergeExternalDirectoryAllowIntoPermissions ────────────────────────────
+// ──────────────────────────── MergeExternalDirectoryAllowIntoPermissions 外部目录白名单合并 ────────────────────────────
 
 func TestMergeExternalDirectoryAllowIntoPermissions_空路径(t *testing.T) {
 	perms := map[string]any{"existing": "data"}
@@ -707,14 +707,14 @@ func TestPatternMatcher_MatchAny(t *testing.T) {
 	assert.False(t, pm.MatchAny([]string{}, "ls"))
 }
 
-// ──────────────────────────── escapeRegexChars ────────────────────────────
+// ──────────────────────────── escapeRegexChars 正则字符转义 ────────────────────────────
 
 func TestEscapeRegexChars(t *testing.T) {
 	result := escapeRegexChars("a.b", ".")
 	assert.Contains(t, result, `\`)
 }
 
-// ──────────────────────────── WritePermissionsSectionToAgentConfigYAML ────────────────────────────
+// ──────────────────────────── WritePermissionsSectionToAgentConfigYAML 权限段落写入 ────────────────────────────
 
 func TestWritePermissionsSectionToAgentConfigYAML_正常写入(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -776,7 +776,7 @@ func TestWritePermissionsSectionToAgentConfigYAML_深拷贝不污染原数据(t 
 	assert.Equal(t, originalTools, permissions["tools"])
 }
 
-// ──────────────────────────── MergePermissionAllowRuleIntoPermissions ────────────────────────────
+// ──────────────────────────── MergePermissionAllowRuleIntoPermissions 权限白名单规则合并 ────────────────────────────
 
 func TestMergePermissionAllowRuleIntoPermissions_非ask跳过(t *testing.T) {
 	// bash 已为 allow，不应被覆盖
@@ -821,7 +821,7 @@ func TestMergePermissionAllowRuleIntoPermissions_非shell非路径工具(t *test
 	// 不应 panic
 }
 
-// ──────────────────────────── PersistCliTrustedDirectory ────────────────────────────
+// ──────────────────────────── PersistCliTrustedDirectory CLI 信任目录持久化 ────────────────────────────
 
 func TestPersistCliTrustedDirectory_空路径(t *testing.T) {
 	result := PersistCliTrustedDirectory("", "", nil)

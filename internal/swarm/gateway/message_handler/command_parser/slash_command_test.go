@@ -190,13 +190,13 @@ func TestParseChannelControlText_Rewind(t *testing.T) {
 		t.Errorf("/rewind abc 应返回 ActionRewindBad，实际：%v", result.Action)
 	}
 
-	// /rewind cancel
+	// /rewind cancel 命令
 	result = ParseChannelControlText("/rewind cancel")
 	if result.Action != ActionRewindCancel {
 		t.Errorf("/rewind cancel 应返回 ActionRewindCancel，实际：%v", result.Action)
 	}
 
-	// /rewind confirm N
+	// /rewind confirm N 命令
 	result = ParseChannelControlText("/rewind confirm 5")
 	if result.Action != ActionRewindConfirm {
 		t.Errorf("/rewind confirm 5 应返回 ActionRewindConfirm，实际：%v", result.Action)

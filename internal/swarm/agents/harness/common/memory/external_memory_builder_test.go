@@ -131,7 +131,7 @@ func TestBuildOpenVikingProvider_无endpoint返回nil(t *testing.T) {
 }
 
 // TestBuildOpenVikingProvider_account环境变量回退 对齐 L118：
-// account = cfg or OPENVIKING_ACCOUNT env or "root"
+// 回退链为 account = cfg，其次 OPENVIKING_ACCOUNT 环境变量，最后 "root"
 func TestBuildOpenVikingProvider_account环境变量回退(t *testing.T) {
 	t.Setenv("OPENVIKING_ACCOUNT", "env-acct")
 

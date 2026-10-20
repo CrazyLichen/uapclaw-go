@@ -686,9 +686,9 @@ func (r *ExternalMemoryRail) injectMemoryContext(rawContext string) {
 // Python: _resolve_user_text_for_memory(ctx)
 //
 // 优先级（对齐 Python 实现）：
-//  1. InvokeInputs.Query.PlainText()
-//  2. ModelCallInputs.Messages 中最后一条 user message content
-//  3. 空字符串（记录 warn 日志）
+//  1. 取 InvokeInputs.Query.PlainText()
+//  2. 取 ModelCallInputs.Messages 中最后一条 user message content
+//  3. 均无则返回空字符串（记录 warn 日志）
 func resolveUserTextForMemory(cbc *agentinterfaces.AgentCallbackContext) string {
 	inputs := cbc.Inputs()
 

@@ -1169,7 +1169,7 @@ func TestWithCompressorModel(t *testing.T) {
 
 // TestSerializeMessagesRange 边界验证
 func TestSerializeMessagesRange_边界(t *testing.T) {
-	// start >= end
+	// start >= end 边界（应返回空）
 	result := serializeMessagesRange(nil, 5, 3)
 	if result != "" {
 		t.Errorf("start >= end 应返回空字符串，实际: %s", result)

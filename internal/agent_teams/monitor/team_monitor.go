@@ -95,10 +95,11 @@ func NewTeamMonitor(teamName, sessionID string, db database.TeamDatabase, teamAg
 // 对齐 Python: create_monitor(team_agent, *, hide_dm=False)
 //
 // Python 步骤：
-//  1. if team_agent.role != TeamRole.LEADER: raise ValueError
-//  2. backend = team_agent.team_backend
-//  3. if backend is None: raise ValueError("TeamAgent has no team_backend configured")
-//  4. return TeamMonitor(team_name=backend.team_name, session_id=get_session_id(), db=backend.db, ...)
+//
+//	Python: 1. if team_agent.role != TeamRole.LEADER: raise ValueError
+//	Python: 2. backend = team_agent.team_backend
+//	Python: 3. if backend is None: raise ValueError("TeamAgent has no team_backend configured")
+//	Python: 4. return TeamMonitor(team_name=backend.team_name, session_id=get_session_id(), db=backend.db, ...)
 //
 // Go 差异：Python create_monitor 从 team_agent 提取 team_name/session_id/db，
 // Go 端调用者需显式传入这些参数。
@@ -133,10 +134,11 @@ func (m *TeamMonitor) SessionID() string {
 // 对齐 Python: TeamMonitor.start()
 //
 // Python 步骤：
-//  1. if self._started: return
-//  2. self._team_agent.add_event_listener(self._on_event)
-//  3. self._started = True
-//  4. team_logger.info("TeamMonitor started for team {}", self._team_name)
+//
+//	Python: 1. if self._started: return
+//	Python: 2. self._team_agent.add_event_listener(self._on_event)
+//	Python: 3. self._started = True
+//	Python: 4. team_logger.info("TeamMonitor started for team {}", self._team_name)
 func (m *TeamMonitor) Start(ctx context.Context) error {
 	m.eventMu.Lock()
 	defer m.eventMu.Unlock()
@@ -158,11 +160,12 @@ func (m *TeamMonitor) Start(ctx context.Context) error {
 // 对齐 Python: TeamMonitor.stop()
 //
 // Python 步骤：
-//  1. if not self._started: return
-//  2. self._team_agent.remove_event_listener(self._on_event)
-//  3. self._started = False
-//  4. self._event_queue.put_nowait(None)  // 哨兵值
-//  5. team_logger.info("TeamMonitor stopped for team {}", self._team_name)
+//
+//	Python: 1. if not self._started: return
+//	Python: 2. self._team_agent.remove_event_listener(self._on_event)
+//	Python: 3. self._started = False
+//	4. self._event_queue.put_nowait(None)  // 哨兵值
+//	Python: 5. team_logger.info("TeamMonitor stopped for team {}", self._team_name)
 func (m *TeamMonitor) Stop(ctx context.Context) error {
 	m.eventMu.Lock()
 	defer m.eventMu.Unlock()
@@ -208,9 +211,10 @@ func (m *TeamMonitor) Events() <-chan *MonitorEvent {
 // 对齐 Python: TeamMonitor.get_team_info() -> TeamInfo | None
 //
 // Python 步骤：
-//  1. with self._bound_session(): team = await self._db.team.get_team(self._team_name)
-//  2. if team is None: return None
-//  3. return TeamInfo.from_internal(team)
+//
+//	Python: 1. with self._bound_session(): team = await self._db.team.get_team(self._team_name)
+//	Python: 2. if team is None: return None
+//	Python: 3. return TeamInfo.from_internal(team)
 func (m *TeamMonitor) GetTeamInfo(ctx context.Context) (*TeamInfo, error) {
 	ctx = m.boundSession(ctx)
 	team, err := m.db.Team().GetTeam(ctx, m.teamName)
@@ -228,8 +232,9 @@ func (m *TeamMonitor) GetTeamInfo(ctx context.Context) (*TeamInfo, error) {
 // 对齐 Python: TeamMonitor.get_members(status=None) -> list[MemberInfo]
 //
 // Python 步骤：
-//  1. with self._bound_session(): members = await self._db.member.get_team_members(self._team_name, status=status)
-//  2. return [MemberInfo.from_internal(m) for m in members]
+//
+//	Python: 1. with self._bound_session(): members = await self._db.member.get_team_members(self._team_name, status=status)
+//	Python: 2. return [MemberInfo.from_internal(m) for m in members]
 func (m *TeamMonitor) GetMembers(ctx context.Context, status string) ([]*MemberInfo, error) {
 	ctx = m.boundSession(ctx)
 	members, err := m.db.Member().GetTeamMembers(ctx, m.teamName, status)
@@ -247,9 +252,10 @@ func (m *TeamMonitor) GetMembers(ctx context.Context, status string) ([]*MemberI
 // 对齐 Python: TeamMonitor.get_member(member_name) -> MemberInfo | None
 //
 // Python 步骤：
-//  1. with self._bound_session(): member = await self._db.member.get_member(member_name, self._team_name)
-//  2. if member is None: return None
-//  3. return MemberInfo.from_internal(member)
+//
+//	Python: 1. with self._bound_session(): member = await self._db.member.get_member(member_name, self._team_name)
+//	Python: 2. if member is None: return None
+//	Python: 3. return MemberInfo.from_internal(member)
 func (m *TeamMonitor) GetMember(ctx context.Context, memberName string) (*MemberInfo, error) {
 	ctx = m.boundSession(ctx)
 	member, err := m.db.Member().GetMember(ctx, memberName, m.teamName)
@@ -267,8 +273,9 @@ func (m *TeamMonitor) GetMember(ctx context.Context, memberName string) (*Member
 // 对齐 Python: TeamMonitor.get_tasks(status=None) -> list[TaskInfo]
 //
 // Python 步骤：
-//  1. with self._bound_session(): tasks = await self._db.task.get_team_tasks(self._team_name, status=status)
-//  2. return [TaskInfo.from_internal(t) for t in tasks]
+//
+//	Python: 1. with self._bound_session(): tasks = await self._db.task.get_team_tasks(self._team_name, status=status)
+//	Python: 2. return [TaskInfo.from_internal(t) for t in tasks]
 func (m *TeamMonitor) GetTasks(ctx context.Context, status string) ([]*TaskInfo, error) {
 	ctx = m.boundSession(ctx)
 	tasks, err := m.db.Task().GetTeamTasks(ctx, m.teamName, status)
@@ -286,11 +293,12 @@ func (m *TeamMonitor) GetTasks(ctx context.Context, status string) ([]*TaskInfo,
 // 对齐 Python: TeamMonitor.get_messages(*, to_member_name=None, from_member_name=None) -> list[MessageInfo]
 //
 // Python 步骤：
-//  1. if self._hide_dm and to_member_name is not None: return []
-//  2. with self._bound_session():
-//     a. if to_member_name is not None: rows = db.message.get_messages(team_name, to_member_name, from_member_name)
-//     b. else: broadcast_filter = True if self._hide_dm else None; rows = db.message.get_team_messages(team_name, broadcast=broadcast_filter)
-//  3. return [MessageInfo.from_internal(r) for r in rows]
+//
+//	Python: 1. if self._hide_dm and to_member_name is not None: return []
+//	Python: 2. with self._bound_session():
+//	   a. if to_member_name is not None: rows = db.message.get_messages(team_name, to_member_name, from_member_name)
+//	   b. else: broadcast_filter = True if self._hide_dm else None; rows = db.message.get_team_messages(team_name, broadcast=broadcast_filter)
+//	Python: 3. return [MessageInfo.from_internal(r) for r in rows]
 func (m *TeamMonitor) GetMessages(ctx context.Context, toMemberName, fromMemberName string) ([]*MessageInfo, error) {
 	// Python 步骤 1: hideDM + toMemberName → 强制返回空列表
 	if m.hideDM && toMemberName != "" {
@@ -326,10 +334,11 @@ func (m *TeamMonitor) GetMessages(ctx context.Context, toMemberName, fromMemberN
 // 对齐 Python: TeamMonitor._on_event(event: EventMessage)
 //
 // Python 步骤：
-//  1. monitor_event = MonitorEvent.from_event_message(event)
-//  2. if monitor_event is None: return
-//  3. if self._hide_dm and monitor_event.event_type == MonitorEventType.MESSAGE: return
-//  4. self._event_queue.put_nowait(monitor_event)
+//
+//	Python: 1. monitor_event = MonitorEvent.from_event_message(event)
+//	Python: 2. if monitor_event is None: return
+//	Python: 3. if self._hide_dm and monitor_event.event_type == MonitorEventType.MESSAGE: return
+//	Python: 4. self._event_queue.put_nowait(monitor_event)
 func (m *TeamMonitor) onEvent(ctx context.Context, msg *events.EventMessage) error {
 	monitorEvent := FromEventMessage(msg)
 	if monitorEvent == nil {
@@ -354,10 +363,11 @@ func (m *TeamMonitor) onEvent(ctx context.Context, msg *events.EventMessage) err
 // 对齐 Python: TeamMonitor._bound_session() context manager
 //
 // Python 步骤：
-//  1. if self._session_id and get_session_id() != self._session_id:
-//     token = set_session_id(self._session_id)
-//  2. yield (执行查询)
-//  3. finally: if token: reset_session_id(token)
+//
+//	Python: 1. if self._session_id and get_session_id() != self._session_id:
+//	   token = set_session_id(self._session_id)
+//	2. yield (执行查询)
+//	Python: 3. finally: if token: reset_session_id(token)
 //
 // Go 差异：Python 用 contextvar 在 async 调用链中隐式传播 session_id，
 // Go 用 context.Value 显式传播。

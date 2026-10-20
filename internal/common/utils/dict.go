@@ -172,7 +172,7 @@ func RebuildDict(pairs []LeafNode) map[string]any {
 // 未填写的零值字段，需要在提交前清理。
 //
 // 移除规则（Go 零值判定）：
-//   - nil
+//   - nil 直接移除
 //   - 空字符串 ""
 //   - 整数 0
 //   - 浮点数 0.0

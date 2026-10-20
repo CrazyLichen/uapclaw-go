@@ -653,7 +653,7 @@ func capitalizeOS(osName string) string {
 }
 
 // getOSVersion 获取操作系统版本字符串，对齐 Python: platform.system() + " " + platform.release()。
-// Linux: "Linux 6.5.0"，macOS: "Darwin 23.1.0"，Windows: "windows 10.0"
+// 各平台返回示例：Linux 形如 "Linux 6.5.0"，macOS 形如 "Darwin 23.1.0"，Windows 形如 "windows 10.0"
 // 注意：此函数用于 env section（显示 OS 版本），与 platform 字段的 system+machine 含义不同。
 func getOSVersion() string {
 	sysName := capitalizeOS(runtime.GOOS)

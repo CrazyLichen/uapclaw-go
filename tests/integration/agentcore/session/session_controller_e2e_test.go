@@ -33,7 +33,7 @@ func (s *SessionControllerE2ESuite) SetupTest() {
 	s.tmpDir = s.T().TempDir()
 }
 
-// ──────────────────────────── SessionController ────────────────────────────
+// ──────────────────────────── SessionController 会话控制器 ────────────────────────────
 
 // TestSessionController_创建 测试创建 SessionController
 func (s *SessionControllerE2ESuite) TestSessionController_创建() {
@@ -302,7 +302,7 @@ func (s *SessionControllerE2ESuite) TestSessionController_FlushScope() {
 	s.NoError(err, "FlushScope 不存在的 scope 应返回 nil")
 }
 
-// ──────────────────────────── GlobalSessionController ────────────────────────────
+// ──────────────────────────── GlobalSessionController 全局会话控制器 ────────────────────────────
 
 // TestGlobalSessionController_获取单例 测试获取单例
 func (s *SessionControllerE2ESuite) TestGlobalSessionController_获取单例() {
@@ -323,7 +323,7 @@ func (s *SessionControllerE2ESuite) TestGlobalSessionController_SetConfig() {
 	gsc.SetConfig(controller.GlobalSessionConfig{BasePath: original})
 }
 
-// ──────────────────────────── SessionScope ────────────────────────────
+// ──────────────────────────── SessionScope 会话作用域 ────────────────────────────
 
 // TestSessionScope_MainScope 测试主作用域字符串
 func (s *SessionControllerE2ESuite) TestSessionScope_MainScope() {
@@ -358,7 +358,7 @@ func (s *SessionControllerE2ESuite) TestSessionScope_GroupUserSubject() {
 	s.Equal("main:group:g1:user:u1", scope.String())
 }
 
-// ──────────────────────────── ChainSession ────────────────────────────
+// ──────────────────────────── ChainSession 链式会话 ────────────────────────────
 
 // TestChainSession_属性 测试 ChainSession 基本属性
 func (s *SessionControllerE2ESuite) TestChainSession_属性() {

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ──────────────────────────── fakeDataContainer ────────────────────────────
+// ──────────────────────────── fakeDataContainer 模拟数据容器 ────────────────────────────
 
 // fakeDataContainer 测试用的 DataContainer 实现
 type fakeDataContainer struct {

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ──────────────────────────── NewShellProcessRegistry ────────────────────────────
+// ──────────────────────────── NewShellProcessRegistry 进程注册表构造 ────────────────────────────
 
 // TestNewShellProcessRegistry 测试创建空注册表
 func TestNewShellProcessRegistry(t *testing.T) {
@@ -141,7 +141,7 @@ func TestShellProcessRegistry_Unregister_不存在的会话(t *testing.T) {
 	r.Unregister("nonexistent", proc)
 }
 
-// ──────────────────────────── KillSession ────────────────────────────
+// ──────────────────────────── KillSession 杀掉会话 ────────────────────────────
 
 // TestShellProcessRegistry_KillSession 测试终止会话所有进程
 func TestShellProcessRegistry_KillSession(t *testing.T) {
@@ -188,7 +188,7 @@ func TestShellProcessRegistry_KillSession_已退出进程(t *testing.T) {
 	assert.Equal(t, 0, killed)
 }
 
-// ──────────────────────────── KillSessionTree ────────────────────────────
+// ──────────────────────────── KillSessionTree 杀掉会话进程树 ────────────────────────────
 
 // TestShellProcessRegistry_KillSessionTree 测试终止会话树（前缀匹配）
 func TestShellProcessRegistry_KillSessionTree(t *testing.T) {
@@ -235,7 +235,7 @@ func TestShellProcessRegistry_KillSessionTree_空SessionID(t *testing.T) {
 	assert.Equal(t, 0, killed)
 }
 
-// ──────────────────────────── ConsumeCancelled ────────────────────────────
+// ──────────────────────────── ConsumeCancelled 消费取消记录 ────────────────────────────
 
 // TestShellProcessRegistry_ConsumeCancelled 测试消费取消标记
 func TestShellProcessRegistry_ConsumeCancelled(t *testing.T) {
@@ -321,7 +321,7 @@ func TestConsumeShellSessionCancelled(t *testing.T) {
 	assert.False(t, ConsumeShellSessionCancelled("session"))
 }
 
-// ──────────────────────────── TerminateShellProcess ────────────────────────────
+// ──────────────────────────── TerminateShellProcess 终止 Shell 进程 ────────────────────────────
 
 // TestTerminateShellProcess_成功终止 测试两阶段终止正在运行的进程
 func TestTerminateShellProcess_成功终止(t *testing.T) {

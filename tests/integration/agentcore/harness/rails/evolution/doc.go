@@ -9,9 +9,9 @@
 //   - TeamSkillEvolutionRail：构造选项、Priority=80、autoScan/autoSave(default=false)、AllowEvolutionTrigger、NotifyTeamCompleted、OnAfterToolCall view_task 检测
 //   - TeamSkillCreateRail：构造选项、Priority=85、spawn_member 阈值检测
 //   - ContextEvolutionRail：记忆注入/恢复、缓存、Priority=50
-//   - EvolutionApprovalRuntime：LookupPendingApprovalSnapshot、ApprovePendingRequest、FinalizeStagedEvolutionRequest
+//   - EvolutionApprovalRuntime：LookupPendingApprovalSnapshot、ApprovePendingRequest 与 FinalizeStagedEvolutionRequest
 //   - Contracts：EvolutionSnapshot、EvolutionHostEventMeta、EvolutionRequestResult 序列化/转换
-//   - ApprovalEvents：BuildSkillApprovalEvent、BuildSimplifyApprovalEvent、BuildEvolutionProgressEvent
+//   - ApprovalEvents：BuildSkillApprovalEvent、BuildSimplifyApprovalEvent 与 BuildEvolutionProgressEvent
 //
 // 对齐 Python: tests/unit_tests/harness/rails/evolution/test_evolution_rail.py,
 // tests/unit_tests/harness/test_team_skill_create_rail.py,

@@ -250,7 +250,7 @@ func TestTeamRuntimeManager_Interact_井号字符串解析(t *testing.T) {
 	}
 	m.Pool().Add(entry)
 
-	// "# hello" → GodViewMessage
+	// 输入 "# hello" → 解析为 GodViewMessage
 	result, err := m.Interact(context.Background(), "# hello", "team-1", "sess-1")
 	if err != nil {
 		t.Fatal(err)

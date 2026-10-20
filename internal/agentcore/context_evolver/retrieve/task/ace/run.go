@@ -56,7 +56,7 @@ func (o *ACERecallMemoryOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 	}
 
 	// 对齐 Python: 用 dummy embedding [0.0]*2560 + top_k=50 搜索
-	// metadata_filter = {"workspace_id": user_id, "type": "ace_memory"}
+	// Python: metadata_filter = {"workspace_id": user_id, "type": "ace_memory"}
 	logger.Debug(logComponent).
 		Str("user_id", userID).
 		Msg("Loading all ACE memories from vector store...")

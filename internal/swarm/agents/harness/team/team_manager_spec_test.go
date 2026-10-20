@@ -459,7 +459,7 @@ func TestCustomizer_code模式leader_teamPlan语言(t *testing.T) {
 	if err := customizer(context.Background(), member, "leader-1", leaderRole); err != nil {
 		t.Fatalf("customizer failed: %v", err)
 	}
-	// team.plan + leader → runtimeLanguage = spec.Language = "en"；forceEnglish = false
+	// team.plan 且 leader：runtimeLanguage 取 spec.Language="en"，forceEnglish=false
 	if gotLang != "en" {
 		t.Fatalf("team-plan leader language = %q, want en", gotLang)
 	}
@@ -573,7 +573,7 @@ func TestGetEnrichedTeamSpec_装配链(t *testing.T) {
 	if spec == nil {
 		t.Fatalf("spec should not be nil")
 	}
-	// team.plan → EnableTeamPlan
+	// team.plan 模式启用 EnableTeamPlan
 	if !spec.EnableTeamPlan {
 		t.Fatalf("team.plan mode should enable team plan")
 	}

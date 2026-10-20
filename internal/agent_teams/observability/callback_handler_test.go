@@ -414,7 +414,7 @@ func TestOtelCallbackHandler_OnAgentInvokeOutput_关闭span(t *testing.T) {
 func TestMessageContent(t *testing.T) {
 	// map 类型
 	assert.Equal(t, "hello", messageContent(map[string]any{"content": "hello"}))
-	// nil
+	// nil 输入
 	assert.Nil(t, messageContent(nil))
 	// 空 map（无 content 键）
 	assert.Nil(t, messageContent(map[string]any{}))
@@ -423,7 +423,7 @@ func TestMessageContent(t *testing.T) {
 func TestExtractReasoningContent(t *testing.T) {
 	// map 类型
 	assert.Equal(t, "thinking...", extractReasoningContent(map[string]any{"reasoning_content": "thinking..."}))
-	// nil
+	// nil 输入
 	assert.Equal(t, "", extractReasoningContent(nil))
 }
 

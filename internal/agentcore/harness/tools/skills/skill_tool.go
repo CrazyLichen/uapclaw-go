@@ -71,12 +71,12 @@ func NewSkillTool(
 // Invoke 执行 skill_tool 工具，查看特定技能内容。
 //
 // 一比一复刻 Python SkillTool.invoke()：
-//  1. 按 skill_name 查找技能 → 未找到返回 success=false, "Skill not found: {name}"
+//  1. 按 skill_name 查找技能，未找到返回 success=false 与 "Skill not found: {name}"
 //  2. 构建文件路径（skill.Directory + relative_file_path），默认 SKILL.md
 //  3. 通过 SysOperation.Fs().ReadFile() 读取文件
-//  4. Code != 0 → success=false, error=readFileResult.Message
-//  5. 成功 → success=true, data={skill_directory, skill_content}
-//  6. 异常 → success=false, error=err.Error()
+//  4. Code != 0 时返回 success=false，error 取 readFileResult.Message
+//  5. 成功时返回 success=true，data 含 skill_directory、skill_content
+//  6. 异常时返回 success=false，error 取 err.Error()
 //
 // Python: SkillTool.invoke(inputs, **kwargs)
 func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {

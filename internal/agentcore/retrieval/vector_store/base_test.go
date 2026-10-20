@@ -40,8 +40,8 @@ func TestCheckConfigsMatching_忽略efSearchFactor(t *testing.T) {
 }
 
 // TestCheckConfigsMatching_边界恰超1个百分点 测试 M-47 修正后的 isclose 边界语义。
-// actual=31.68 / val=32：diff=1.28，rel_tol*max(31.68,32)=0.32，abs_tol=1e-3，
-// max(0.32, 0.001)=0.32 < 1.28 → Python math.isclose=False，Go 应同样不匹配。
+// 输入 actual=31.68 / val=32 时：diff=1.28，rel_tol*max(31.68,32)=0.32，abs_tol=1e-3，
+// 故 max(0.32, 0.001)=0.32 < 1.28，Python math.isclose 判定 False，Go 应同样不匹配。
 // 修正前（+ 叠加公式）1.28 <= 0.32+0.001 为 False，但
 // actual=126.72/val=128 时 diff=1.28，旧公式 0.01*128+0.001=1.281 >= 1.28 误放行。
 func TestCheckConfigsMatching_边界恰超1个百分点(t *testing.T) {
@@ -86,7 +86,7 @@ func TestIsNumericString(t *testing.T) {
 		{"12a", false},   // 包含字母
 		{"1e5", false},   // Python: "1e5".isnumeric() == False（拒绝科学计数法）
 		{".", false},     // 全点串 isnumeric 空串 → False
-		{"１２３", true},  // 全角数字 Python isnumeric 接受
+		{"１２３", true},    // 全角数字 Python isnumeric 接受
 	}
 	for _, tt := range tests {
 		got := isNumericString(tt.input)

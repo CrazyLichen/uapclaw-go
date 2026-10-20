@@ -97,10 +97,10 @@ func BuildResponseSection(language string) saprompt.PromptSection {
 //
 // Python 执行步骤：
 //
-//  1. resolved_language = resolve_language(language)
-//  2. builder = SystemPromptBuilder(language=resolved_language)
-//  3. builder.add_section(_identity_prompt(resolved_language))
-//  4. return builder.build()
+//	Python: 1. resolved_language = resolve_language(language)
+//	Python: 2. builder = SystemPromptBuilder(language=resolved_language)
+//	Python: 3. builder.add_section(_identity_prompt(resolved_language))
+//	Python: 4. return builder.build()
 func BuildAgentIdentityPrompt(language string) string {
 	// 步骤 1: 对齐 Python: resolved_language = resolve_language(language)
 	resolvedLanguage := prompts.ResolveLanguage(language)

@@ -1,7 +1,7 @@
 // Package query 提供查询过滤表达式的构建与转换框架。
 //
 // 本包定义了统一的查询表达式抽象（QueryExpr 接口），支持 9 种表达式类型
-// （Comparison/Range/Arithmetic/Null/JSON/Array/Logical/Match/Custom）
+// （Comparison、Range、Arithmetic、Null、JSON、Array、Logical、Match、Custom）
 // 和便捷的工厂函数（Eq/Gt/Lt 等）及逻辑组合函数（And/Or/Not），
 // 使得上层可以用类型安全的方式组合过滤条件。
 // 通过注册表机制，表达式可按后端名称自动转换为数据库特定格式

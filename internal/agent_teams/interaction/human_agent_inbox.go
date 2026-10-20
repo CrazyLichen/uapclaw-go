@@ -87,11 +87,12 @@ func NewHumanAgentInbox(team *tools.TeamBackend, messageManager *tools.TeamMessa
 // Python: HumanAgentInbox.send(body, to, sender)
 //
 // Python 执行步骤：
-//  1. resolved_sender = self._resolve_sender(sender)
-//  2. team_logger.debug: HumanAgentInbox 发送者、目标、消息体长度
-//  3. if to is None: return await self._drive_agent(body, sender=resolved_sender)
-//  4. if to in BROADCAST_TARGETS: broadcast_message → DeliverResult
-//  5. return await deliver_direct(body, sender=resolved_sender, target=to, ...)
+//
+//	Python: 1. resolved_sender = self._resolve_sender(sender)
+//	2. team_logger.debug: HumanAgentInbox 发送者、目标、消息体长度
+//	Python: 3. if to is None: return await self._drive_agent(body, sender=resolved_sender)
+//	Python: 4. if to in BROADCAST_TARGETS: broadcast_message → DeliverResult
+//	Python: 5. return await deliver_direct(body, sender=resolved_sender, target=to, ...)
 func (h *HumanAgentInbox) Send(ctx context.Context, body string, to *string, sender *string) (*DeliverResult, error) {
 	// Python 步骤 1: resolved_sender = self._resolve_sender(sender)
 	resolvedSender, err := h.resolveSender(sender)
@@ -149,13 +150,14 @@ func (e *HumanAgentNotEnabledError) Error() string {
 // Python: HumanAgentInbox._resolve_sender(sender)
 //
 // Python 执行步骤：
-//  1. names = self._team.human_agent_names()
-//  2. if not names: raise HumanAgentNotEnabledError(...)
-//  3. if sender is None:
-//     a. if HUMAN_AGENT_MEMBER_NAME in names: return HUMAN_AGENT_MEMBER_NAME
-//     b. return sorted(names)[0]
-//  4. if sender not in names: raise UnknownHumanAgentError(...)
-//  5. return sender
+//
+//	Python: 1. names = self._team.human_agent_names()
+//	Python: 2. if not names: raise HumanAgentNotEnabledError(...)
+//	Python: 3. if sender is None:
+//	   a. if HUMAN_AGENT_MEMBER_NAME in names: return HUMAN_AGENT_MEMBER_NAME
+//	   b. return sorted(names)[0]
+//	Python: 4. if sender not in names: raise UnknownHumanAgentError(...)
+//	Python: 5. return sender
 //
 // ✅(#9.55) 已回填: team.HumanAgentNames() 获取已注册成员列表
 func (h *HumanAgentInbox) resolveSender(sender *string) (string, error) {
@@ -195,11 +197,12 @@ func (h *HumanAgentInbox) resolveSender(sender *string) (string, error) {
 // Python: HumanAgentInbox._drive_agent(body, sender)
 //
 // Python 执行步骤：
-//  1. if self._agent_lookup is None: return DeliverResult.failure("agent_unavailable")
-//  2. agent = self._agent_lookup(sender)
-//  3. if agent is None: return DeliverResult.failure("agent_unavailable")
-//  4. await agent.deliver_input(body)
-//  5. return DeliverResult.success(None)
+//
+//	Python: 1. if self._agent_lookup is None: return DeliverResult.failure("agent_unavailable")
+//	Python: 2. agent = self._agent_lookup(sender)
+//	Python: 3. if agent is None: return DeliverResult.failure("agent_unavailable")
+//	Python: 4. await agent.deliver_input(body)
+//	Python: 5. return DeliverResult.success(None)
 func (h *HumanAgentInbox) driveAgent(body string, sender string) (*DeliverResult, error) {
 	// Python 步骤 1
 	if h.agentLookup == nil {

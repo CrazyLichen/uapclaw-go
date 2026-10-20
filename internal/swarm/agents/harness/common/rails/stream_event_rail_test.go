@@ -216,7 +216,7 @@ func TestJiuClawStreamEventRail_ClearCancelledToolResults(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── resolveSID ────────────────────────────
+// ──────────────────────────── resolveSID 会话 ID 解析 ────────────────────────────
 
 func TestJiuClawStreamEventRail_ResolveSID_从Extra(t *testing.T) {
 	rail := NewJiuClawStreamEventRail()
@@ -254,7 +254,7 @@ func TestJiuClawStreamEventRail_ResolveSID_从Session匹配(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── BeforeInvoke ────────────────────────────
+// ──────────────────────────── BeforeInvoke 调用前钩子 ────────────────────────────
 
 func TestJiuClawStreamEventRail_BeforeInvoke(t *testing.T) {
 	rail := NewJiuClawStreamEventRail()
@@ -316,7 +316,7 @@ func TestJiuClawStreamEventRail_BeforeInvoke_NonInvokeInputs(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── BeforeModelCall ────────────────────────────
+// ──────────────────────────── BeforeModelCall 模型调用前钩子 ────────────────────────────
 
 func TestJiuClawStreamEventRail_BeforeModelCall_Abort(t *testing.T) {
 	rail := NewJiuClawStreamEventRail()
@@ -343,7 +343,7 @@ func TestJiuClawStreamEventRail_BeforeModelCall_正常(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── BeforeToolCall ────────────────────────────
+// ──────────────────────────── BeforeToolCall 工具调用前钩子 ────────────────────────────
 
 func TestJiuClawStreamEventRail_BeforeToolCall_正常(t *testing.T) {
 	rail := NewJiuClawStreamEventRail()
@@ -383,7 +383,7 @@ func TestJiuClawStreamEventRail_BeforeToolCall_Abort(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── AfterToolCall ────────────────────────────
+// ──────────────────────────── AfterToolCall 工具调用后钩子 ────────────────────────────
 
 func TestJiuClawStreamEventRail_AfterToolCall_正常(t *testing.T) {
 	rail := NewJiuClawStreamEventRail()
@@ -417,7 +417,7 @@ func TestJiuClawStreamEventRail_AfterToolCall_正常(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GetCallbacks ────────────────────────────
+// ──────────────────────────── GetCallbacks 回调注册 ────────────────────────────
 
 func TestJiuClawStreamEventRail_GetCallbacks(t *testing.T) {
 	rail := NewJiuClawStreamEventRail()
@@ -442,7 +442,7 @@ func TestJiuClawStreamEventRail_GetCallbacks(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── SetTodoTool ────────────────────────────
+// ──────────────────────────── SetTodoTool Todo 工具设置 ────────────────────────────
 
 func TestJiuClawStreamEventRail_SetTodoTool(t *testing.T) {
 	rail := NewJiuClawStreamEventRail()

@@ -149,11 +149,11 @@ var (
 // 对齐 Python: OpenVikingMemoryProvider.__init__(endpoint, api_key, account, user, agent)
 //
 // 参数为空时从环境变量回退：
-//   - endpoint → OPENVIKING_ENDPOINT
-//   - apiKey → OPENVIKING_API_KEY
-//   - account → OPENVIKING_ACCOUNT（默认 "default"）
-//   - user → OPENVIKING_USER（默认 "default"）
-//   - agent → OPENVIKING_AGENT（默认 "hermes"）
+//   - endpoint 回退 OPENVIKING_ENDPOINT
+//   - apiKey 回退 OPENVIKING_API_KEY
+//   - account 回退 OPENVIKING_ACCOUNT（默认 "default"）
+//   - user 回退 OPENVIKING_USER（默认 "default"）
+//   - agent 回退 OPENVIKING_AGENT（默认 "hermes"）
 func NewOpenVikingProvider(endpoint, apiKey, account, user, agent string) *OpenVikingProvider {
 	// 对齐 Python: self._endpoint = endpoint or os.environ.get("OPENVIKING_ENDPOINT", "")
 	if endpoint == "" {

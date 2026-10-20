@@ -19,13 +19,13 @@ import (
 // MemberHandler 处理成员生命周期事件：spawned、restarted、status_changed、
 // execution_changed、shutdown、canceled。
 //
-// EVENT_METHOD_MAP 事件到方法映射：
-//   - member_spawned          → onMemberEvent
-//   - member_restarted        → onMemberEvent
-//   - member_status_changed   → onMemberEvent
-//   - member_execution_changed → onMemberEvent
-//   - member_shutdown          → onMemberEvent
-//   - member_canceled          → onMemberEvent
+// EVENT_METHOD_MAP 事件到方法的映射（箭头右侧为 Go 侧处理方法）：
+//   - member_spawned          映射 onMemberEvent
+//   - member_restarted        映射 onMemberEvent
+//   - member_status_changed   映射 onMemberEvent
+//   - member_execution_changed 映射 onMemberEvent
+//   - member_shutdown          映射 onMemberEvent
+//   - member_canceled          映射 onMemberEvent
 //
 // Python: MemberHandler
 type MemberHandler struct {

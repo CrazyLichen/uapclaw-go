@@ -120,23 +120,24 @@ func (m *TeamRuntimeManager) PoolReader() registry.PoolReader {
 // Python: TeamRuntimeManager.interact(payload, *, team_name, session_id)
 //
 // Python 执行步骤：
-//  1. entry = await self._resolve_entry(team_name=team_name, session_id=session_id)
-//  2. if entry is None: return DeliverResult.failure("not_active")
-//  3. if isinstance(payload, InteractiveInput):
-//     a. if entry.agent.has_pending_interrupt(): await entry.agent.resume_interrupt(payload); return success
-//     b. return DeliverResult.failure("unsupported_interactive_input")
-//  4. if isinstance(payload, str): parsed = parse_interact_str(payload)
-//  5. payloads = parsed or [GodViewMessage(body=payload)]
-//  6. ticket = await entry.interact_gate.admit()
-//  7. if ticket is None: return DeliverResult.failure("gate_closed")
-//  8. try:
-//     a. payloads = await self._resolve_recipients(entry.agent, payloads)
-//     b. last_result = DeliverResult.success(None)
-//     c. for entry_payload in payloads:
-//     - last_result = await self._dispatch_payload(entry.agent, entry_payload)
-//     - if not last_result.ok: return last_result
-//     d. return last_result
-//  9. finally: await entry.interact_gate.consume_done(ticket)
+//
+//	Python: 1. entry = await self._resolve_entry(team_name=team_name, session_id=session_id)
+//	Python: 2. if entry is None: return DeliverResult.failure("not_active")
+//	Python: 3. if isinstance(payload, InteractiveInput):
+//	   a. if entry.agent.has_pending_interrupt(): await entry.agent.resume_interrupt(payload); return success
+//	   b. return DeliverResult.failure("unsupported_interactive_input")
+//	Python: 4. if isinstance(payload, str): parsed = parse_interact_str(payload)
+//	Python: 5. payloads = parsed or [GodViewMessage(body=payload)]
+//	Python: 6. ticket = await entry.interact_gate.admit()
+//	Python: 7. if ticket is None: return DeliverResult.failure("gate_closed")
+//	Python: 8. try:
+//	   a. payloads = await self._resolve_recipients(entry.agent, payloads)
+//	   b. last_result = DeliverResult.success(None)
+//	   c. for entry_payload in payloads:
+//	   - last_result = await self._dispatch_payload(entry.agent, entry_payload)
+//	   - if not last_result.ok: return last_result
+//	   d. return last_result
+//	Python: 9. finally: await entry.interact_gate.consume_done(ticket)
 //
 // 接受三种输入类型：
 //   - *sessioninteraction.InteractiveInput → 恢复中断
@@ -370,7 +371,7 @@ func (m *TeamRuntimeManager) StopTeam(ctx context.Context, teamName string, sess
 //  2. 检查 session checkpoint 是否存在
 //  3. 从 session bucket 解析 db_config
 //  4. Drop session 动态表
-//  5. Release session checkpoint
+//  5. 释放 session checkpoint（Release session checkpoint）
 //  6. Delete team_info 行（级联删 members/tasks/messages）
 //  7. Remove team_home 目录
 func (m *TeamRuntimeManager) DeleteTeam(ctx context.Context, teamName string, sessionIDs []string, force bool) (bool, error) {
@@ -526,9 +527,9 @@ func (m *TeamRuntimeManager) IsTeamSession(ctx context.Context, sessionID string
 // Python: TeamRuntimeManager.finalize_member(agent) (manager.py L244-309)
 //
 // 决策规则（对齐 Python）：
-//   - 已终结（STOPPED/PAUSED/SHUTDOWN）→ 仅关闭 kernel
-//   - SHUTDOWN_REQUESTED → stop + mark SHUTDOWN
-//   - 默认 → pause + mark READY（下次可被分配）
+//   - 已终结（STOPPED/PAUSED/SHUTDOWN）时仅关闭 kernel
+//   - SHUTDOWN_REQUESTED 时执行 stop 并标记 SHUTDOWN
+//   - 默认执行 pause 并标记 READY（下次可被分配）
 func FinalizeMember(ctx context.Context, ag *agent.TeamAgent) error {
 	member := ag.TeamMemberHandle()
 	memberName := ag.MemberName()
@@ -701,10 +702,11 @@ func (m *TeamRuntimeManager) resolveEntry(teamName string, sessionID string) *Ac
 // Python: TeamRuntimeManager.interact() 中的 InteractiveInput 分支
 //
 // Python 步骤：
-//  1. if entry.agent.has_pending_interrupt():
-//  2. await entry.agent.resume_interrupt(payload)
-//  3. return DeliverResult.success(None)
-//  4. return DeliverResult.failure("unsupported_interactive_input")
+//
+//	Python: 1. if entry.agent.has_pending_interrupt():
+//	Python: 2. await entry.agent.resume_interrupt(payload)
+//	Python: 3. return DeliverResult.success(None)
+//	Python: 4. return DeliverResult.failure("unsupported_interactive_input")
 func (m *TeamRuntimeManager) handleInteractiveInput(ctx context.Context, entry *ActiveTeam, input *sessioninteraction.InteractiveInput) (*interaction.DeliverResult, error) {
 	// 防御：Agent 为 nil 时无法处理交互输入
 	if entry.Agent == nil {
@@ -726,10 +728,11 @@ func (m *TeamRuntimeManager) handleInteractiveInput(ctx context.Context, entry *
 // Python: TeamRuntimeManager._resolve_recipients(agent, payloads)
 //
 // Python 步骤：
-//  1. backend = agent.team_backend
-//  2. if backend is None: return payloads
-//  3. async def _member_exists(name): return await backend.get_member(name) is not None
-//  4. return await resolve_targets(payloads, member_exists=_member_exists)
+//
+//	Python: 1. backend = agent.team_backend
+//	Python: 2. if backend is None: return payloads
+//	Python: 3. async def _member_exists(name): return await backend.get_member(name) is not None
+//	Python: 4. return await resolve_targets(payloads, member_exists=_member_exists)
 func (m *TeamRuntimeManager) resolveRecipients(ctx context.Context, entry *ActiveTeam, payloads []interaction.InteractPayload) ([]interaction.InteractPayload, error) {
 	// Python 步骤 1-2: backend = agent.team_backend; if backend is None: return payloads
 	backend := getTeamBackend(entry.Agent)
@@ -749,20 +752,21 @@ func (m *TeamRuntimeManager) resolveRecipients(ctx context.Context, entry *Activ
 // Python: TeamRuntimeManager._dispatch_payload(agent, payload)
 //
 // Python 步骤：
-//  1. backend = agent.team_backend
-//  2. if backend is None and not isinstance(payload, GodViewMessage): return failure("no_team_backend")
-//  3. if isinstance(payload, GodViewMessage):
-//     return await UserInbox.deliver_to_leader(agent.deliver_input, payload.body)
-//  4. if isinstance(payload, OperatorMessage):
-//     a. inbox = UserInbox(backend.message_manager)
-//     b. if payload.target is None: await agent.auto_start_all(); return await inbox.broadcast(payload.body)
-//     c. await agent.auto_start_member(payload.target); return await inbox.direct(payload.target, payload.body)
-//  5. if isinstance(payload, HumanAgentMessage):
-//     a. try: inbox = HumanAgentInbox(backend, backend.message_manager, agent_lookup=agent.lookup_human_agent_runtime)
-//     b. return await inbox.send(payload.body, to=payload.target, sender=payload.sender)
-//     c. except HumanAgentNotEnabledError: return failure("human_agent_not_enabled")
-//     d. except UnknownHumanAgentError: return failure("unknown_human_agent")
-//  6. return failure(f"unknown_payload:{type(payload).__name__}")
+//
+//	Python: 1. backend = agent.team_backend
+//	Python: 2. if backend is None and not isinstance(payload, GodViewMessage): return failure("no_team_backend")
+//	Python: 3. if isinstance(payload, GodViewMessage):
+//	   return await UserInbox.deliver_to_leader(agent.deliver_input, payload.body)
+//	Python: 4. if isinstance(payload, OperatorMessage):
+//	   a. inbox = UserInbox(backend.message_manager)
+//	   b. if payload.target is None: await agent.auto_start_all(); return await inbox.broadcast(payload.body)
+//	   c. await agent.auto_start_member(payload.target); return await inbox.direct(payload.target, payload.body)
+//	Python: 5. if isinstance(payload, HumanAgentMessage):
+//	   a. try: inbox = HumanAgentInbox(backend, backend.message_manager, agent_lookup=agent.lookup_human_agent_runtime)
+//	   b. return await inbox.send(payload.body, to=payload.target, sender=payload.sender)
+//	   c. except HumanAgentNotEnabledError: return failure("human_agent_not_enabled")
+//	   d. except UnknownHumanAgentError: return failure("unknown_human_agent")
+//	Python: 6. return failure(f"unknown_payload:{type(payload).__name__}")
 func (m *TeamRuntimeManager) dispatchPayload(
 	ctx context.Context,
 	entry *ActiveTeam,
@@ -1069,7 +1073,7 @@ func flushTeamManifest(ctx context.Context, ag *agent.TeamAgent, sess *session.A
 //  3. 解析 transport/messager_config
 //  4. 构建 ModelAllocator + 预分配 leader 模型
 //  5. 构建 TeamRuntimeContext
-//  6. NewTeamAgent(card) + AttachModelAllocator + Configure
+//  6. NewTeamAgent(card) 并附加 ModelAllocator 后 Configure
 func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.TeamAgent, error) {
 	// Python: L372-373 — self._validate_reserved_names() / self._validate_hitt_consistency()
 	if _, err := spec.Build(); err != nil {

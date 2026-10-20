@@ -459,7 +459,7 @@ func TestBuildMetric_tokenCounter失败降级(t *testing.T) {
 		OperationID:    "op-fallback",
 		Status:         schema.CompressionStarted,
 		BeforeMessages: []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello world!!!")},
-		// "hello world!!!" = 14 chars → ceil(14/4) = 4
+		// 字符数推导："hello world!!!" = 14 chars → ceil(14/4) = 4
 		StartedAt:  now,
 		EndedAt:    now,
 		ContextMax: 100,
@@ -479,7 +479,7 @@ func TestMeasureMessages_无TokenCounter(t *testing.T) {
 	recorder := newTestRecorder(nil, 10)
 
 	now := time.Now()
-	// "abcdefgh" = 8 chars → ceil(8/4) = 2
+	// 字符数推导："abcdefgh" = 8 chars → ceil(8/4) = 2
 	input := ProcessorStateInput{
 		OperationID:    "op-nocounter",
 		Status:         schema.CompressionStarted,
@@ -570,7 +570,7 @@ func TestBuildSaved_正常计算(t *testing.T) {
 
 // TestBuildSaved_节省百分比计算 测试节省百分比的精度
 func TestBuildSaved_节省百分比计算(t *testing.T) {
-	// before: 200 tokens, after: 50 tokens → saved 150/200 = 75.0%
+	// 节省推导：before 200 tokens → after 50 tokens，saved 150/200 = 75.0%
 	tc := &fakeTokenCounter{msgCount: 200}
 	recorder := newTestRecorder(tc, 10)
 
@@ -859,13 +859,13 @@ func TestContextPercent_负数Tokens(t *testing.T) {
 
 // TestContextPercent_四舍五入 测试百分比四舍五入
 func TestContextPercent_四舍五入(t *testing.T) {
-	// 333/1000 = 33.3% → 33
+	// 四舍五入推导：333/1000 = 33.3% → 33
 	result := contextPercent(333, 1000)
 	if result != 33 {
 		t.Errorf("contextPercent(333, 1000) = %d, 期望 33", result)
 	}
 
-	// 335/1000 = 33.5% → 34
+	// 四舍五入推导：335/1000 = 33.5% → 34
 	result2 := contextPercent(335, 1000)
 	if result2 != 34 {
 		t.Errorf("contextPercent(335, 1000) = %d, 期望 34", result2)

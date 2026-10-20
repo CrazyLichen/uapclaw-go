@@ -261,7 +261,7 @@ func TestMetricEvaluator_多指标聚合_混合分数(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
-	// (1.0 + 0.0) / 2 = 0.5
+	// 得分推导：(1.0 + 0.0) / 2 = 0.5
 	if ec.GetScore() != 0.5 {
 		t.Errorf("期望 Score=0.5, 实际=%f", ec.GetScore())
 	}

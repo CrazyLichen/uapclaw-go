@@ -387,9 +387,9 @@ func (s *AgentConfigService) DeleteAgent(name string) (bool, error) {
 // Python: AgentConfigService.list_available_tools() (agent_config_service.py L351-401)
 //
 // 从 3 个共享数据源动态构建：
-//   - internalToDisplay（internal→display，对齐 Python _TOOL_DISPLAY_NAMES）
-//   - types.ToolGroups（group→display names）
-//   - types.ToolDescriptions（display→description）
+//   - internalToDisplay（internal 到 display 的映射，对齐 Python _TOOL_DISPLAY_NAMES）
+//   - types.ToolGroups（group 到 display names 的映射）
+//   - types.ToolDescriptions（display 到 description 的映射）
 func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 	// 步骤 1: 从 internalToDisplay 构建 internal→display 映射（去重）
 	// Python: internal_to_display = {}; for internal_name, display_name in _TOOL_DISPLAY_NAMES.items()

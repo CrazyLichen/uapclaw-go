@@ -136,7 +136,7 @@ func TestStoreTZOffset(t *testing.T) {
 	if result != 32 {
 		t.Errorf("+08:00 偏移应为 32，实际为 %d", result)
 	}
-	// UTC = 0
+	// UTC 时区偏移 = 0
 	result = storeTZOffset(0)
 	if result != 0 {
 		t.Errorf("UTC 偏移应为 0，实际为 %d", result)

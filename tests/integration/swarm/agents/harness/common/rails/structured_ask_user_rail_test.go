@@ -88,7 +88,7 @@ func (s *StructuredAskUserRailSuite) TestStructuredAskUserRail_满足AgentRail�
 	s.True(true, "编译通过即满足接口")
 }
 
-// ──────────────────────────── Priority ────────────────────────────
+// ──────────────────────────── Priority 优先级 ────────────────────────────
 
 // TestStructuredAskUserRail_Priority 验证继承 BaseInterruptRail 的优先级 90
 func (s *StructuredAskUserRailSuite) TestStructuredAskUserRail_Priority() {

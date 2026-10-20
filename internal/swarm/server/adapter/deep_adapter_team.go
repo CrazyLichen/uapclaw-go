@@ -560,13 +560,14 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 // 对齐 Python: ensure_monitor_for_active_runtime(channel_id, session_id, team_name, hide_dm) (line 133-178)
 //
 // Python 步骤：
-//  1. tm = get_team_manager(channel_id)
-//  2. existing = tm.get_monitor(session_id); if existing and existing.is_running: return
-//  3. monitor = await Runner.get_agent_team_monitor(team_name=, session_id=, hide_dm=)
-//  4. monitor_handler = TeamMonitorHandler(monitor, session_id)
-//  5. await monitor_handler.start()
-//  6. tm.register_monitor(session_id, monitor_handler)
-//  7. if monitor_handler.is_running: asyncio.create_task(_consume_monitor_events(...))
+//
+//	Python: 1. tm = get_team_manager(channel_id)
+//	Python: 2. existing = tm.get_monitor(session_id); if existing and existing.is_running: return
+//	Python: 3. monitor = await Runner.get_agent_team_monitor(team_name=, session_id=, hide_dm=)
+//	Python: 4. monitor_handler = TeamMonitorHandler(monitor, session_id)
+//	Python: 5. await monitor_handler.start()
+//	Python: 6. tm.register_monitor(session_id, monitor_handler)
+//	Python: 7. if monitor_handler.is_running: asyncio.create_task(_consume_monitor_events(...))
 //
 // Go 差异：Go 端直接通过 TeamManager.EnsureMonitor 实现（内部封装了从 TeamAgent 创建
 // TeamMonitor、启动 handler、注册 monitor、启动事件消费、自动启动 evolution watcher
@@ -599,15 +600,16 @@ func (d *DeepAdapter) ensureMonitorForActiveRuntime(ctx context.Context, channel
 // 对齐 Python: ensure_team_evolution_watcher(channel_id, session_id, *, source) (line 331-379)
 //
 // Python 步骤：
-//  1. tm = get_team_manager(channel_id)
-//  2. watcher = tm.get_team_evolution_watcher(session_id)
-//  3. if watcher is not None and not watcher.done(): return
-//  4. rail = tm.get_team_skill_rail(session_id)
-//  5. if rail is None: return
-//  6. if not getattr(rail, "auto_scan", True): return
-//  7. task = asyncio.create_task(_watch_team_evolution_and_push(channel_id, session_id, rail))
-//  8. setattr(task, "_team_channel_id", channel_id)
-//  9. setattr(task, "_team_session_id", session_id)
+//
+//	Python: 1. tm = get_team_manager(channel_id)
+//	Python: 2. watcher = tm.get_team_evolution_watcher(session_id)
+//	Python: 3. if watcher is not None and not watcher.done(): return
+//	Python: 4. rail = tm.get_team_skill_rail(session_id)
+//	Python: 5. if rail is None: return
+//	Python: 6. if not getattr(rail, "auto_scan", True): return
+//	Python: 7. task = asyncio.create_task(_watch_team_evolution_and_push(channel_id, session_id, rail))
+//	Python: 8. setattr(task, "_team_channel_id", channel_id)
+//	Python: 9. setattr(task, "_team_session_id", session_id)
 //
 // 10. task.add_done_callback 注册完成回调（_on_team_watcher_done）
 // 11. tm.register_team_evolution_watcher 注册 watcher（session_id, task）
@@ -671,13 +673,14 @@ func (d *DeepAdapter) ensureTeamEvolutionWatcher(ctx context.Context, channelID,
 // 对齐 Python: _consume_stream_with_query(channel_id, session_id, team_spec, initial_query, *, round_id, envs) (line 889-1048)
 //
 // Python 步骤：
+//
 //  1. 广播 round-start 信号
 //  2. 调用 Runner.run_agent_team_streaming 获取流
 //  3. 遍历 chunk：过滤 leader/teammate → 解析 → 去重 → 广播
 //  4. 处理 runtime_ready 事件（sync metadata + commit + attach hooks + ensure monitor + ensure evolution watcher）
 //  5. 处理 team.completed 事件（广播 round-complete 信号）
 //  6. 流结束：无 chunk → broadcast team.error；有 chunk → 记录日志
-//  7. finally: clear pending + pop stream task
+//  7. finally: 清理 pending 并弹出 stream task（对齐 Python finally: clear pending + pop stream task）
 func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, sessionID string, teamSpec any, initialQuery string, roundID int, envs map[string]any) {
 	_envs := envs
 	if _envs == nil {
@@ -862,11 +865,12 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 // 对齐 Python: _consume_monitor_events(channel_id, session_id, monitor_handler) (line 1050-1083)
 //
 // Python 步骤：
-//  1. logger.info("monitor event loop started")
-//  2. async for event in monitor_handler.events(): _broadcast_event(channel_id, session_id, event)
-//  3. logger.info("monitor event loop ended")
-//  4. except CancelledError: raise
-//  5. except Exception: logger.error
+//
+//	Python: 1. logger.info("monitor event loop started")
+//	Python: 2. async for event in monitor_handler.events(): _broadcast_event(channel_id, session_id, event)
+//	Python: 3. logger.info("monitor event loop ended")
+//	Python: 4. except CancelledError: raise
+//	Python: 5. except Exception: logger.error
 //
 // Go 差异：此方法在 TeamManager.EnsureMonitor 中已有简化实现（team_manager_monitor.go），
 // 此处提供 DeepAdapter 级别的完整实现，支持通过 broadcastEvent 广播到 channel waiters。

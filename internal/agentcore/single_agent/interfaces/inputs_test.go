@@ -51,7 +51,7 @@ func TestInvokeQuery_接口满足(t *testing.T) {
 	var _ InvokeQuery = (*interaction.InteractiveInput)(nil)
 }
 
-// ──────────────────────────── InvokeQuery ────────────────────────────
+// ──────────────────────────── InvokeQuery 调用查询 ────────────────────────────
 
 // TestInvokeQueryString_IsInteractiveInput 验证 InvokeQueryString.IsInteractiveInput() 返回 false
 func TestInvokeQueryString_IsInteractiveInput(t *testing.T) {
@@ -168,7 +168,7 @@ func TestHeartbeatReason_值对齐Python(t *testing.T) {
 	assert.Equal(t, HeartbeatReason("manual"), HeartbeatReasonManual)
 }
 
-// ──────────────────────────── RunContext ────────────────────────────
+// ──────────────────────────── RunContext 运行上下文 ────────────────────────────
 
 // TestNewRunContext 验证 NewRunContext 构造函数
 func TestNewRunContext(t *testing.T) {
@@ -195,7 +195,7 @@ func TestRunContext_字段赋值(t *testing.T) {
 	assert.Equal(t, "value", rc.Extra["key"])
 }
 
-// ──────────────────────────── InvokeInputs ────────────────────────────
+// ──────────────────────────── InvokeInputs 调用输入 ────────────────────────────
 
 // TestInvokeInputs_字段_InvokeQueryString 验证 InvokeInputs 各字段赋值（Query 为 InvokeQueryString）
 func TestInvokeInputs_字段_InvokeQueryString(t *testing.T) {
@@ -291,7 +291,7 @@ func TestInvokeInputs_IsCron(t *testing.T) {
 	assert.False(t, (&InvokeInputs{}).IsCron())
 }
 
-// ──────────────────────────── ModelCallInputs ────────────────────────────
+// ──────────────────────────── ModelCallInputs 模型调用输入 ────────────────────────────
 
 // TestModelCallInputs_字段 验证 ModelCallInputs 各字段赋值
 func TestModelCallInputs_字段(t *testing.T) {
@@ -320,7 +320,7 @@ func TestModelCallInputs_默认零值(t *testing.T) {
 	assert.Nil(t, inputs.Response)
 }
 
-// ──────────────────────────── ToolCallInputs ────────────────────────────
+// ──────────────────────────── ToolCallInputs 工具调用输入 ────────────────────────────
 
 // TestToolCallInputs_字段 验证 ToolCallInputs 各字段赋值
 func TestToolCallInputs_字段(t *testing.T) {
@@ -352,7 +352,7 @@ func TestToolCallInputs_默认零值(t *testing.T) {
 	assert.Nil(t, inputs.ToolMsg)
 }
 
-// ──────────────────────────── TaskIterationInputs ────────────────────────────
+// ──────────────────────────── TaskIterationInputs 任务迭代输入 ────────────────────────────
 
 // TestTaskIterationInputs_字段 验证 TaskIterationInputs 各字段赋值
 func TestTaskIterationInputs_字段(t *testing.T) {
@@ -406,7 +406,7 @@ func TestTaskIterationInputs_RetrievalQuery(t *testing.T) {
 	assert.Equal(t, "", inputs2.RetrievalQuery)
 }
 
-// ──────────────────────────── MapInputs ────────────────────────────
+// ──────────────────────────── MapInputs 映射输入 ────────────────────────────
 
 // TestMapInputs_字段 验证 MapInputs 各字段赋值
 func TestMapInputs_字段(t *testing.T) {

@@ -769,7 +769,7 @@ func TestCalcStats_对齐Python(t *testing.T) {
 	if stats.Max != 5.0 {
 		t.Errorf("期望 max=5.0, 实际=%f", stats.Max)
 	}
-	// mean = 3.0
+	// 均值推导：mean = 3.0
 	if stats.Mean != 3.0 {
 		t.Errorf("期望 mean=3.0, 实际=%f", stats.Mean)
 	}

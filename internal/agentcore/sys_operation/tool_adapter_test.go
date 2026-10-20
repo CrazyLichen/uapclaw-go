@@ -11,7 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 )
 
-// ──────────────────────────── mockSysOperation ────────────────────────────
+// ──────────────────────────── mockSysOperation 系统操作桩 ────────────────────────────
 
 // mockSysOperation 用于测试的 SysOperation 模拟实现
 type mockSysOperation struct {
@@ -233,12 +233,12 @@ func TestDispatchShellMethod(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// execute_cmd_stream
+	// execute_cmd_stream 流式执行
 	res, err = dispatchShellMethod(shellOp, ctx, "execute_cmd_stream", map[string]any{"command": "echo hello"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// execute_cmd_background
+	// execute_cmd_background 后台执行
 	res, err = dispatchShellMethod(shellOp, ctx, "execute_cmd_background", map[string]any{"command": "sleep 1"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
@@ -307,17 +307,17 @@ func TestDispatchFsMethod(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// read_file_stream
+	// read_file_stream 流式读取
 	res, err = dispatchFsMethod(fsOp, ctx, "read_file_stream", map[string]any{"path": "/tmp/test"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// upload_file_stream
+	// upload_file_stream 流式上传
 	res, err = dispatchFsMethod(fsOp, ctx, "upload_file_stream", map[string]any{"local_path": "/tmp/a", "target_path": "/tmp/b"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// download_file_stream
+	// download_file_stream 流式下载
 	res, err = dispatchFsMethod(fsOp, ctx, "download_file_stream", map[string]any{"source_path": "/tmp/a", "local_path": "/tmp/b"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
@@ -341,7 +341,7 @@ func TestDispatchCodeMethod(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 
-	// execute_code_stream
+	// execute_code_stream 流式执行代码
 	res, err = dispatchCodeMethod(codeOp, ctx, "execute_code_stream", map[string]any{"code": "print('hello')"})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
@@ -416,7 +416,7 @@ func TestDispatchCodeMethod_带选项(t *testing.T) {
 	assert.NotNil(t, res)
 }
 
-// ──────────────────────────── GetToolIDPrefix ────────────────────────────
+// ──────────────────────────── GetToolIDPrefix 工具 ID 前缀 ────────────────────────────
 
 // TestGetToolIDPrefix_字符串 测试字符串输入
 func TestGetToolIDPrefix_字符串(t *testing.T) {

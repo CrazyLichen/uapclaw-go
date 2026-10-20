@@ -292,7 +292,7 @@ func (s *PatternsIntegrationSuite) TestMatchWildcard_路径分隔符规范化() 
 
 // TestBuildCommandAllowPattern_基础命令
 func (s *PatternsIntegrationSuite) TestBuildCommandAllowPattern_基础命令() {
-	// "start chrome" → "start chrome *"
+	// 转换结果："start chrome" 扩展为 "start chrome *"
 	s.Equal("start chrome *", security.BuildCommandAllowPattern("start chrome"))
 }
 

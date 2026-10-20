@@ -30,7 +30,7 @@ var embedModelKeyMap = map[string]string{
 // Python: apply_video_model_config_from_yaml(config_base)
 //
 // 配置优先级:
-//  1. models.video.model_config
+//  1. 独立配置（models.video.model_config）
 //  2. embed.video_model + embed.embed_api_key/embed_api_base（strict=false 时回退）
 //  3. 环境变量 VIDEO_API_KEY/VIDEO_API_BASE/VIDEO_MODEL_NAME
 func ApplyVideoModelConfigFromYAML(configBase map[string]any) {
@@ -83,7 +83,7 @@ func ApplyVideoModelConfigFromYAML(configBase map[string]any) {
 // Python: apply_vision_model_config_from_yaml(config_base)
 //
 // 配置优先级:
-//  1. models.vision.model_config
+//  1. 独立配置（models.vision.model_config）
 //  2. embed.vision_model + embed.embed_api_key/embed_api_base（strict=false 时回退）
 //  3. 环境变量 VISION_API_KEY/VISION_API_BASE/VISION_MODEL_NAME
 func ApplyVisionModelConfigFromYAML(configBase map[string]any) {
@@ -132,7 +132,7 @@ func ApplyVisionModelConfigFromYAML(configBase map[string]any) {
 // Python: apply_audio_model_config_from_yaml(config_base)
 //
 // 配置优先级:
-//  1. models.audio.model_config
+//  1. 独立配置（models.audio.model_config）
 //  2. embed.audio_model + embed.embed_api_key/embed_api_base（strict=false 时回退）
 //  3. 环境变量 AUDIO_API_KEY/AUDIO_API_BASE/AUDIO_MODEL_NAME
 func ApplyAudioModelConfigFromYAML(configBase map[string]any) {

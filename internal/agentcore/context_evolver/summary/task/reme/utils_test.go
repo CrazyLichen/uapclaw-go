@@ -95,7 +95,7 @@ func TestCalculateCosineSimilarity_零向量(t *testing.T) {
 func TestCalculateCosineSimilarity_一般情况(t *testing.T) {
 	a := []float64{1.0, 2.0, 3.0}
 	b := []float64{4.0, 5.0, 6.0}
-	// dot=32, normA=sqrt(14), normB=sqrt(77), sim=32/sqrt(14*77)=32/sqrt(1078)
+	// 余弦相似度推导：dot=32, normA=sqrt(14), normB=sqrt(77), sim=32/sqrt(1078)
 	expected := 32.0 / math.Sqrt(14.0*77.0)
 	sim := CalculateCosineSimilarity(a, b)
 	if math.Abs(sim-expected) > 1e-9 {

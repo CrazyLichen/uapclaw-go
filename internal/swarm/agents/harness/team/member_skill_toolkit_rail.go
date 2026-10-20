@@ -69,7 +69,7 @@ func (r *MemberSkillToolkitRail) Init(ctx context.Context, agent agentinterfaces
 		}
 	}
 
-	// Runner.resource_mgr.add_tool(list(tools)) + agent.ability_manager.add(tool.card)
+	// Python: Runner.resource_mgr.add_tool(list(tools)) + agent.ability_manager.add(tool.card)
 	resourceMgr := runner.GetResourceMgr()
 	for _, t := range tools {
 		if err := resourceMgr.AddTool(t); err != nil {

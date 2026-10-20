@@ -16,19 +16,19 @@ func TestSanitizer_KV键值对(t *testing.T) {
 		shouldMatch bool   // 期望是否包含掩码
 		exact       string // 精确匹配（如果提供）
 	}{
-		// password=xxx
+		// password 键值对应被脱敏
 		{"password=abc123", true, "password=" + SensitiveMask},
-		// api_key: xxx
+		// api_key 冒号形式应被脱敏
 		{"api_key: sk-abc123", true, "api_key: " + SensitiveMask},
-		// token=xxx
+		// token 键值对应被脱敏
 		{"token=my_secret_token", true, "token=" + SensitiveMask},
 		// authorization=xxx（Bearer 部分由第三层 Bearer 正则处理）
 		{"authorization = Bearer eyJhbGciOiJIUzI1NiJ9.abc.def", true, ""},
-		// pwd=xxx
+		// pwd 缩写键值对应被脱敏
 		{"pwd=mypass123", true, "pwd=" + SensitiveMask},
 		// 普通字段不应被脱敏
 		{"username=john", false, "username=john"},
-		// host=localhost
+		// host 普通字段不应被脱敏
 		{"host=localhost", false, "host=localhost"},
 	}
 
@@ -56,9 +56,9 @@ func TestSanitizer_命名KV(t *testing.T) {
 		input    string
 		expected string
 	}{
-		// 'TOKEN': 'xxxx'
+		// 单引号 JSON 形式 TOKEN 应被脱敏
 		{`'TOKEN': 'my_secret_value'`, `'TOKEN': '` + SensitiveMask + `'`},
-		// "api_key"="xxx"
+		// 双引号等号形式 api_key 应被脱敏
 		{`"api_key"="sk-abc"`, `"api_key"="` + SensitiveMask + `"`},
 		// 普通字段不应被脱敏
 		{`'name': 'john'`, `'name': 'john'`},

@@ -1343,13 +1343,13 @@ func TestDispatchAdd_各资源类型(t *testing.T) {
 		t.Fatalf("dispatchAdd workflow 后应存在 1 个，实际 %d", len(wfList))
 	}
 
-	// agent
+	// agent 代理资源
 	agentProvider := stubAgentProvider()
 	if err := mgr.dispatchAdd("agent", "da-agent-1", agentProvider, ""); err != nil {
 		t.Fatalf("dispatchAdd agent 失败: %v", err)
 	}
 
-	// tool
+	// tool 工具资源
 	toolCard := tool.NewToolCard("da-tool-1", "分派工具", nil, nil)
 	stubTool := &rmStubTool{card: toolCard}
 	if err := mgr.dispatchAdd("tool", toolCard.ID, stubTool, ""); err != nil {
@@ -1362,7 +1362,7 @@ func TestDispatchAdd_各资源类型(t *testing.T) {
 		t.Fatalf("dispatchAdd prompt 失败: %v", err)
 	}
 
-	// model
+	// model 模型资源
 	modelProvider := stubModelProvider()
 	if err := mgr.dispatchAdd("model", "da-model-1", modelProvider, ""); err != nil {
 		t.Fatalf("dispatchAdd model 失败: %v", err)

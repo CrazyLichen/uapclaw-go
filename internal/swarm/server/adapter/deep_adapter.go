@@ -337,31 +337,32 @@ func NewDeepAdapter() *DeepAdapter {
 // Python: JiuWenClawDeepAdapter.create_instance() (line 2527-2621)
 //
 // Python 执行步骤：
-//  1. await self.set_checkpoint()
-//  2. self._dreaming_mode = mode if mode.startswith("agent") else "agent"
-//  3. self._instance_overrides = dict(config or {})
-//  4. load_dotenv(dotenv_path=get_env_file(), override=True)
-//  5. config_base = get_config()
-//  6. self._refresh_multimodal_configs(config_base)
-//  7. config = config_base.get("react", {}).copy()
-//  8. self._config_cache = config.copy()
-//  9. self._agent_name = overrides.get("agent_name", config.get("agent_name", "main_agent"))
-//  10. self._project_dir = overrides.get("project_dir", config.get("project_dir"))
-//  11. self._workspace_dir = config.get("workspace_dir", str(get_agent_workspace_dir()))
-//  12. model = self._create_model(config_base)
-//  13. await self._try_init_a2x_client(config_base)
-//  14. agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
-//  15. tool_cards = await self._get_tool_cards(agent_card.id)
-//  16. rails_list = self._build_agent_rails(config, config_base, mode=mode)
-//  17. sys_operation = self._create_sys_operation()
-//  18. configured_subagents, should_add_general_agent = self._build_configured_subagents(...)
-//  19. self._instance = create_deep_agent(**common_kwargs)
-//  20. await self._instance.ensure_initialized()
-//  21. self._seed_runtime_cwd(self._project_dir or self._workspace_dir)
-//  22. self._sync_a2x_runtime_state()
-//  23. self._registered_mcp_server_ids.clear()
-//  24. await self._register_mcp_servers_from_config(config_base, tag=f"agent.{mode}")
-//  25. await self.load_user_rails()
+//
+//	Python: 1. await self.set_checkpoint()
+//	Python: 2. self._dreaming_mode = mode if mode.startswith("agent") else "agent"
+//	Python: 3. self._instance_overrides = dict(config or {})
+//	Python: 4. load_dotenv(dotenv_path=get_env_file(), override=True)
+//	Python: 5. config_base = get_config()
+//	Python: 6. self._refresh_multimodal_configs(config_base)
+//	Python: 7. config = config_base.get("react", {}).copy()
+//	Python: 8. self._config_cache = config.copy()
+//	Python: 9. self._agent_name = overrides.get("agent_name", config.get("agent_name", "main_agent"))
+//	Python: 10. self._project_dir = overrides.get("project_dir", config.get("project_dir"))
+//	Python: 11. self._workspace_dir = config.get("workspace_dir", str(get_agent_workspace_dir()))
+//	Python: 12. model = self._create_model(config_base)
+//	Python: 13. await self._try_init_a2x_client(config_base)
+//	Python: 14. agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
+//	Python: 15. tool_cards = await self._get_tool_cards(agent_card.id)
+//	Python: 16. rails_list = self._build_agent_rails(config, config_base, mode=mode)
+//	Python: 17. sys_operation = self._create_sys_operation()
+//	Python: 18. configured_subagents, should_add_general_agent = self._build_configured_subagents(...)
+//	Python: 19. self._instance = create_deep_agent(**common_kwargs)
+//	Python: 20. await self._instance.ensure_initialized()
+//	Python: 21. self._seed_runtime_cwd(self._project_dir or self._workspace_dir)
+//	Python: 22. self._sync_a2x_runtime_state()
+//	Python: 23. self._registered_mcp_server_ids.clear()
+//	Python: 24. await self._register_mcp_servers_from_config(config_base, tag=f"agent.{mode}")
+//	Python: 25. await self.load_user_rails()
 func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]any, mode string, subMode string) error {
 	// 步骤 1: set_checkpoint
 	if err := d.setCheckpoint(); err != nil {
@@ -609,21 +610,22 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 // Python: JiuWenClawDeepAdapter.reload_agent_config() (line 2646-2752)
 //
 // Python 执行步骤：
-//  1. config_base = configBase or get_config()
-//  2. if envOverrides: apply env overrides
-//  3. config = config_base.get("react", {}).copy()
-//  4. self._config_cache = config.copy()
-//  5. self._refresh_multimodal_configs(config_base)
-//  6. model = self._create_model(config_base)
-//  7. self._model = model
-//  8. rails_list = self._get_current_agent_rails(config, config_base)
-//  9. new_tool_cards = await self._get_tool_cards("jiuwenswarm")
-//  10. self._update_permission_rail(config_base)
-//  11. await self._instance.configure(
-//     对应 Python: model=model, tools=new_tool_cards, rails=rails_list,
-//     对应 Python: subagents=subagents, enable_task_loop=..., max_iterations=...)
-//  12. self._registered_mcp_server_ids.clear()
-//  13. await self._register_mcp_servers_from_config(config_base, tag)
+//
+//	Python: 1. config_base = configBase or get_config()
+//	Python: 2. if envOverrides: apply env overrides
+//	Python: 3. config = config_base.get("react", {}).copy()
+//	Python: 4. self._config_cache = config.copy()
+//	Python: 5. self._refresh_multimodal_configs(config_base)
+//	Python: 6. model = self._create_model(config_base)
+//	Python: 7. self._model = model
+//	Python: 8. rails_list = self._get_current_agent_rails(config, config_base)
+//	Python: 9. new_tool_cards = await self._get_tool_cards("jiuwenswarm")
+//	Python: 10. self._update_permission_rail(config_base)
+//	Python: 11. await self._instance.configure(
+//	   对应 Python: model=model, tools=new_tool_cards, rails=rails_list,
+//	   对应 Python: subagents=subagents, enable_task_loop=..., max_iterations=...)
+//	Python: 12. self._registered_mcp_server_ids.clear()
+//	Python: 13. await self._register_mcp_servers_from_config(config_base, tag)
 func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[string]any, envOverrides map[string]any) error {
 	// 步骤 0: 实例 nil 检查
 	if d.instance == nil {
@@ -762,27 +764,28 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 // Python: JiuWenClawDeepAdapter.process_message_impl() (line 4409-4512)
 //
 // Python 执行步骤：
-//  1. if self._instance is None: raise RuntimeError("未初始化")
-//  2. _req_model = request.params.get("model_name", "")
-//  3. if not self._has_valid_model_config(_req_model): return error response
-//  4. session_id = request.session_id or "default"
-//  5. query = request.params.get("query", "")
-//  6. mode = request.params.get("mode", "agent.plan")
-//  7. slash_result = await self._handle_slash_command(query, session_id, mode)
-//  8. if slash_result: handle approval_chunks or content
-//  9. cron_context_tokens = self._bind_runtime_cron_context(...)
-//  10. token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...)
-//  11. token_perm = setup_permission_context(request)
-//  12. resolved_model = self._resolve_model_for_request(request)
-//  13. self._apply_model_to_react_agent(resolved_model)
-//  14. self._mark_session_active(session_id)
-//  15. if self._stream_event_rail: self._stream_event_rail.reset_abort(session_id)
-//  16. try:
-//  17. await self._update_runtime_config(runtimeConfig)
-//  18. result = await Runner.run_agent(agent=self._instance, inputs=inputs)
-//  19. except asyncio.CancelledError: ...
-//  20. finally: 清理（取消标记活跃会话、重置上下文变量）
-//  21. return AgentResponse from result
+//
+//	Python: 1. if self._instance is None: raise RuntimeError("未初始化")
+//	Python: 2. _req_model = request.params.get("model_name", "")
+//	Python: 3. if not self._has_valid_model_config(_req_model): return error response
+//	Python: 4. session_id = request.session_id or "default"
+//	Python: 5. query = request.params.get("query", "")
+//	Python: 6. mode = request.params.get("mode", "agent.plan")
+//	Python: 7. slash_result = await self._handle_slash_command(query, session_id, mode)
+//	Python: 8. if slash_result: handle approval_chunks or content
+//	Python: 9. cron_context_tokens = self._bind_runtime_cron_context(...)
+//	Python: 10. token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...)
+//	Python: 11. token_perm = setup_permission_context(request)
+//	Python: 12. resolved_model = self._resolve_model_for_request(request)
+//	Python: 13. self._apply_model_to_react_agent(resolved_model)
+//	Python: 14. self._mark_session_active(session_id)
+//	Python: 15. if self._stream_event_rail: self._stream_event_rail.reset_abort(session_id)
+//	Python: 16. try:
+//	Python: 17. await self._update_runtime_config(runtimeConfig)
+//	Python: 18. result = await Runner.run_agent(agent=self._instance, inputs=inputs)
+//	Python: 19. except asyncio.CancelledError: ...
+//	Python: 20. finally: 清理（取消标记活跃会话、重置上下文变量）
+//	Python: 21. return AgentResponse from result
 func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (*schema.AgentResponse, error) {
 	// 步骤 1: 实例 nil 检查
 	if d.instance == nil {
@@ -937,27 +940,28 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 // Python: JiuWenClawDeepAdapter.process_message_stream_impl() (line 4514-4750)
 //
 // Python 执行步骤：
-//  1. if self._instance is None: raise RuntimeError("未初始化")
-//  2. _req_model = request.params.get("model_name", "")
-//  3. if not self._has_valid_model_config(_req_model): yield error chunk; return
-//  4. session_id = request.session_id or "default"
-//  5. query = request.params.get("query", "")
-//  6. mode = request.params.get("mode", "agent.plan")
-//  7. if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
-//  8. if mode == "auto_harness": → auto_harness 分流
-//  9. slash_result = await self._handle_slash_command(query, session_id, mode)
-//  10. cron_context_tokens = self._bind_runtime_cron_context(...)
-//  11. token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...)
-//  12. token_perm = setup_permission_context(request)
-//  13. resolved_model = self._resolve_model_for_request(request)
-//  14. self._apply_model_to_react_agent(resolved_model)
-//  15. self._mark_session_active(session_id)
-//  16. try:
-//  17. await self._update_runtime_config(runtimeConfig)
-//  18. async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):
-//  19. yield chunk 产出消息块
-//  20. except asyncio.CancelledError: ...
-//  21. finally: 清理
+//
+//	Python: 1. if self._instance is None: raise RuntimeError("未初始化")
+//	Python: 2. _req_model = request.params.get("model_name", "")
+//	Python: 3. if not self._has_valid_model_config(_req_model): yield error chunk; return
+//	Python: 4. session_id = request.session_id or "default"
+//	Python: 5. query = request.params.get("query", "")
+//	Python: 6. mode = request.params.get("mode", "agent.plan")
+//	Python: 7. if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
+//	Python: 8. if mode == "auto_harness": → auto_harness 分流
+//	Python: 9. slash_result = await self._handle_slash_command(query, session_id, mode)
+//	Python: 10. cron_context_tokens = self._bind_runtime_cron_context(...)
+//	Python: 11. token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...)
+//	Python: 12. token_perm = setup_permission_context(request)
+//	Python: 13. resolved_model = self._resolve_model_for_request(request)
+//	Python: 14. self._apply_model_to_react_agent(resolved_model)
+//	Python: 15. self._mark_session_active(session_id)
+//	Python: 16. try:
+//	Python: 17. await self._update_runtime_config(runtimeConfig)
+//	Python: 18. async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):
+//	Python: 19. yield chunk 产出消息块
+//	Python: 20. except asyncio.CancelledError: ...
+//	Python: 21. finally: 清理
 func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (<-chan *schema.AgentResponseChunk, error) {
 	// 步骤 1: 实例 nil 检查
 	if d.instance == nil {
@@ -1322,17 +1326,18 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 // Python: JiuWenClawDeepAdapter.process_interrupt() (line 3268-3578)
 //
 // Python 执行步骤：
-//  1. intent = request.params.get("intent", "cancel")
-//  2. new_input = request.params.get("new_input")
-//  3. _normalized_sid = request.session_id or "default"
-//  4. _session_is_active = self._is_session_active(_normalized_sid)
-//  5. 如果会话不活跃则记录日志并跳过中断操作
-//  6. if intent == "pause": streamEventRail.pause(session_id)
-//  7. elif intent == "resume": streamEventRail.resume(session_id)
-//  8. elif intent == "supplement": abort + optional instance.abort()
-//  9. elif intent == "cancel": abort + unmark_session_active
-//  10. 清理进化观察器
-//  11. return AgentResponse with interrupt_result
+//
+//	Python: 1. intent = request.params.get("intent", "cancel")
+//	Python: 2. new_input = request.params.get("new_input")
+//	Python: 3. _normalized_sid = request.session_id or "default"
+//	Python: 4. _session_is_active = self._is_session_active(_normalized_sid)
+//	Python: 5. 如果会话不活跃则记录日志并跳过中断操作
+//	Python: 6. if intent == "pause": streamEventRail.pause(session_id)
+//	Python: 7. elif intent == "resume": streamEventRail.resume(session_id)
+//	Python: 8. elif intent == "supplement": abort + optional instance.abort()
+//	Python: 9. elif intent == "cancel": abort + unmark_session_active
+//	Python: 10. 清理进化观察器
+//	Python: 11. return AgentResponse with interrupt_result
 func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// 步骤 1-2: 解析 intent 和 new_input
 	params := parseParams(req.Params)
@@ -1437,14 +1442,15 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 // Python: JiuWenClawDeepAdapter.handle_user_answer() (line 3579-3605)
 //
 // Python 执行步骤：
-//  1. request_id = request.params.get("request_id", "")
-//  2. answers = request.params.get("answers", [])
-//  3. session_id = request.session_id
-//  4. resolved = False
-//  5. if request_id.startswith("team_skill_evolve_"): resolved = handle_team_skill_evolve_approval(...)
-//  6. elif request_id.startswith("evolve_simplify_"): resolved = _handle_governance_approval(...)
-//  7. elif request_id.startswith("skill_evolve_"): resolved = _handle_evolution_approval(...)
-//  8. return AgentResponse(ok=True, payload={"accepted": True, "resolved": resolved})
+//
+//	Python: 1. request_id = request.params.get("request_id", "")
+//	Python: 2. answers = request.params.get("answers", [])
+//	Python: 3. session_id = request.session_id
+//	Python: 4. resolved = False
+//	Python: 5. if request_id.startswith("team_skill_evolve_"): resolved = handle_team_skill_evolve_approval(...)
+//	Python: 6. elif request_id.startswith("evolve_simplify_"): resolved = _handle_governance_approval(...)
+//	Python: 7. elif request_id.startswith("skill_evolve_"): resolved = _handle_evolution_approval(...)
+//	Python: 8. return AgentResponse(ok=True, payload={"accepted": True, "resolved": resolved})
 func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// 步骤 1-2: 解析 request_id 和 answers
 	params := parseParams(req.Params)
@@ -1488,11 +1494,12 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 // Python: JiuWenClawDeepAdapter.handle_heartbeat() (line 3607-3624)
 //
 // Python 执行步骤：
-//  1. sid = str(request.session_id or "")
-//  2. if not sid.startswith("heartbeat"): return None
-//  3. request.params["query"] = "这是一次心跳请求任务..."
-//  4. 记录心跳查询注入
-//  5. return None（继续正常流程，query 已注入）
+//
+//	Python: 1. sid = str(request.session_id or "")
+//	Python: 2. if not sid.startswith("heartbeat"): return None
+//	Python: 3. request.params["query"] = "这是一次心跳请求任务..."
+//	Python: 4. 记录心跳查询注入
+//	Python: 5. return None（继续正常流程，query 已注入）
 //
 // 返回 nil 表示非心跳请求或心跳已处理（query 已注入），上层应继续正常流程。
 func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
@@ -1583,7 +1590,8 @@ func (d *DeepAdapter) Instance() *harness.DeepAgent {
 // Python: JiuWenClawDeepAdapter.cleanup() (line 3245-3248)
 //
 // Python 执行步骤：
-//  1. await self._close_a2x_client()
+//
+//	Python: 1. await self._close_a2x_client()
 func (d *DeepAdapter) Cleanup() error {
 	// 步骤 1: 关闭 a2x 客户端
 	_ = d.closeA2xClient()
@@ -2411,9 +2419,10 @@ func extractReasoningContent(payload map[string]any) string {
 // Python: _update_permission_rail(config_base) (interface_deep.py L2286-2302)
 //
 // Python 执行步骤：
-//  1. permission_config = config_base.get("permissions", {})
-//  2. if self._permission_rail is not None: self._permission_rail.update_config(permission_config)
-//  3. elif permission_config.get("enabled", False): self._permission_rail = build_permission_rail(...)
+//
+//	Python: 1. permission_config = config_base.get("permissions", {})
+//	Python: 2. if self._permission_rail is not None: self._permission_rail.update_config(permission_config)
+//	Python: 3. elif permission_config.get("enabled", False): self._permission_rail = build_permission_rail(...)
 func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 	permissionConfig, _ := configBase["permissions"].(map[string]any)
 

@@ -8,7 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// ──────────────────────────── E2AToAgentRequest ────────────────────────────
+// ──────────────────────────── E2AToAgentRequest E2A 转 Agent 请求 ────────────────────────────
 
 // TestE2AToAgentRequest_正常转换 验证 E2AEnvelope → AgentRequest 正常转换
 func TestE2AToAgentRequest_正常转换(t *testing.T) {
@@ -170,7 +170,7 @@ func TestE2AToAgentRequest_ChannelContext去掉Internal(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── e2aTimestampToFloat ────────────────────────────
+// ──────────────────────────── e2aTimestampToFloat E2A 时间戳转浮点 ────────────────────────────
 
 // TestE2aTimestampToFloat_ISO8601 验证 ISO 8601 格式转换
 func TestE2aTimestampToFloat_ISO8601(t *testing.T) {

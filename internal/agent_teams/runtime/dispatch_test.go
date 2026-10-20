@@ -135,7 +135,7 @@ func TestDecideRunAction_可重建优先于不一致(t *testing.T) {
 	assert.Equal(t, RunActionKindCreate, got.Kind)
 	assert.True(t, got.RequireSpec)
 
-	// teamInDB=false, teamInSession=true, teamDBState="cleaned" → CREATE
+	// teamInDB=false, teamInSession=true, teamDBState="cleaned" → CREATE（cleaned 态重建）
 	got = DecideRunAction(false, true, nil, "sess-1", "team-a", "cleaned")
 	assert.Equal(t, RunActionKindCreate, got.Kind)
 	assert.True(t, got.RequireSpec)

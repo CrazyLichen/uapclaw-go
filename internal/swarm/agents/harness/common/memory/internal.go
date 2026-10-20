@@ -240,7 +240,7 @@ func BuildFTSQuery(query string) string {
 }
 
 // Bm25RankToScore BM25 rank 转相似度分数。对齐 Python bm25_rank_to_score（internal.py）：
-// rank>=0 → 1/(1+rank)；rank<0 → 1/(1-rank)
+// rank>=0 时取 1/(1+rank)；rank<0 时取 1/(1-rank)
 func Bm25RankToScore(rank float64) float64 {
 	if rank >= 0 {
 		return 1.0 / (1.0 + rank)

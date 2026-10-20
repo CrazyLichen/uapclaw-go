@@ -7,7 +7,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── TeamAgentBlueprint ────────────────────────────
+// ──────────────────────────── TeamAgentBlueprint 团队 Agent 蓝图 ────────────────────────────
 
 // TestTeamAgentBlueprint_Role 测试 Role 属性
 func TestTeamAgentBlueprint_Role(t *testing.T) {

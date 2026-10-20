@@ -142,9 +142,9 @@ var (
 // NewCharSplitter 构造并钳制参数（不报错，对齐 Python CharSplitter.__init__）。
 //
 // 钳制规则（执行顺序对齐 Python 源码）：
-//  1. chunkSize==0 → 200（对齐 `chunk_size or DEFAULT` 的 0 值语义；负数保持原值）
-//  2. overlap → clamp [0, size-1]（size 为步骤 1 后的值）
-//  3. size < 1 → 1
+//  1. chunkSize==0 时取默认 200（对齐 `chunk_size or DEFAULT` 的 0 值语义；负数保持原值）
+//  2. overlap 钳制到 [0, size-1]（size 为步骤 1 后的值）
+//  3. size < 1 时取 1
 //
 // Python: text_splitter.py CharSplitter.__init__
 func NewCharSplitter(chunkSize, chunkOverlap int) *CharSplitter {

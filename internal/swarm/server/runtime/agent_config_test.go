@@ -61,16 +61,16 @@ func TestNewAgentConfigService(t *testing.T) {
 func TestAgentConfigService_DirPaths(t *testing.T) {
 	svc := NewAgentConfigService("/workspace")
 
-	// projectAgentsDir: <workspace>/.uapclaw/agents/
+	// 项目级 agents 目录（<workspace>/.uapclaw/agents/）
 	assert.Contains(t, svc.projectAgentsDir(), ".uapclaw")
 	assert.Contains(t, svc.projectAgentsDir(), "agents")
 	assert.Equal(t, filepath.Join("/workspace", ".uapclaw", "agents"), svc.projectAgentsDir())
 
-	// localAgentsDir: <workspace>/.uapclaw/agents-local/
+	// 本地级 agents 目录（<workspace>/.uapclaw/agents-local/）
 	assert.Contains(t, svc.localAgentsDir(), "agents-local")
 	assert.Equal(t, filepath.Join("/workspace", ".uapclaw", "agents-local"), svc.localAgentsDir())
 
-	// userAgentsDir: ~/.uapclaw/agents/
+	// 用户级 agents 目录（~/.uapclaw/agents/）
 	userDir := svc.userAgentsDir()
 	assert.Contains(t, userDir, ".uapclaw")
 	assert.Contains(t, userDir, "agents")
@@ -778,7 +778,7 @@ func TestToStringSlice(t *testing.T) {
 	result = toStringSlice("not a slice")
 	assert.Nil(t, result)
 
-	// nil
+	// nil 输入
 	result = toStringSlice(nil)
 	assert.Nil(t, result)
 }

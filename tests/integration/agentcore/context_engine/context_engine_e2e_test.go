@@ -506,7 +506,7 @@ func (s *ContextEngineE2ESuite) TestContextEngine_处理器注册表() {
 	s.True(factoryMap["MicroCompactProcessor"], "MicroCompactProcessor 应已注册")
 }
 
-// ──────────────────────────── MicroCompactProcessor ────────────────────────────
+// ──────────────────────────── MicroCompactProcessor 微压缩处理器 ────────────────────────────
 
 // TestMicroCompactProcessor_创建和配置 测试创建和配置验证
 func (s *ContextEngineE2ESuite) TestMicroCompactProcessor_创建和配置() {
@@ -615,7 +615,7 @@ func (s *ContextEngineE2ESuite) TestMicroCompactProcessor_SaveLoadState() {
 	mcp.LoadState(map[string]any{"key": "value"}) // 不应 panic
 }
 
-// ──────────────────────────── MessageOffloader ────────────────────────────
+// ──────────────────────────── MessageOffloader 消息卸载器 ────────────────────────────
 
 // TestMessageOffloader_创建和配置 测试创建和配置验证
 func (s *ContextEngineE2ESuite) TestMessageOffloader_创建和配置() {
@@ -734,7 +734,7 @@ func (s *ContextEngineE2ESuite) TestMessageOffloader_SaveLoadState() {
 	mo.LoadState(map[string]any{"key": "value"}) // 不应 panic
 }
 
-// ──────────────────────────── KVCacheManager ────────────────────────────
+// ──────────────────────────── KVCacheManager KV 缓存管理器 ────────────────────────────
 
 // TestKVCacheManager_创建 测试 KVCacheManager 创建
 func (s *ContextEngineE2ESuite) TestKVCacheManager_创建() {
@@ -776,7 +776,7 @@ func (s *ContextEngineE2ESuite) TestKVCacheManager_Release_连续相同窗口不
 	s.NoError(err)
 }
 
-// ──────────────────────────── CompressContext ────────────────────────────
+// ──────────────────────────── CompressContext 上下文压缩 ────────────────────────────
 
 // TestContextEngine_CompressContext_无处理器 测试无处理器时主动压缩返回 noop
 func (s *ContextEngineE2ESuite) TestContextEngine_CompressContext_无处理器() {
@@ -810,7 +810,7 @@ func (s *ContextEngineE2ESuite) TestContextEngine_CompressContext_上下文不�
 	s.Nil(result)
 }
 
-// ──────────────────────────── ProcessorStateRecorder ────────────────────────────
+// ──────────────────────────── ProcessorStateRecorder 处理器状态记录器 ────────────────────────────
 
 // TestProcessorStateRecorder_历史记录 测试压缩历史记录
 func (s *ContextEngineE2ESuite) TestProcessorStateRecorder_历史记录() {

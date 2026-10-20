@@ -57,8 +57,8 @@ type TracerWorkflowUtils struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// loopID 循环节点标识的 state 全局键，对应 Python LOOP_ID = "__sys_loop_id"
-// （openjiuwen/core/common/constants/constant.py）
+// loopID 循环节点标识的 state 全局键，对应 Python 常量 LOOP_ID = "__sys_loop_id"
+// （定义于 openjiuwen/core/common/constants/constant.py）
 // 循环组件（8.20）执行时将 loop_node_id 写入 state.GetGlobal(loopID)，
 // 此处读取以判断当前组件是否处于循环中。
 const loopID = "__sys_loop_id"

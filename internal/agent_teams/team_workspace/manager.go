@@ -769,9 +769,9 @@ func (m *TeamWorkspaceManager) isMountedToWorkspace(linkPath string) bool {
 // resolveWorkspaceRelative 从 .team/ 前缀路径提取工作空间相对路径。
 // Python: TeamWorkspaceRail._resolve_workspace_relative
 //
-// 处理两种布局：
-//   - Hub:   .team/{team_name}/artifacts/report.md → artifacts/report.md
-//   - Legacy: .team/artifacts/report.md             → artifacts/report.md
+// 处理两种布局（箭头右侧为提取结果）：
+//   - Hub 布局：.team/{team_name}/artifacts/report.md 提取为 artifacts/report.md
+//   - Legacy 布局：.team/artifacts/report.md 提取为 artifacts/report.md
 func resolveWorkspaceRelative(path, teamName string) string {
 	const prefix = ".team/"
 	afterPrefix := path[len(prefix):]

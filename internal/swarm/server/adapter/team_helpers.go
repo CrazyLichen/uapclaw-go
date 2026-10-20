@@ -507,12 +507,12 @@ func resolveChannelID(channelID string) string {
 // isLeaderOutput 判断 team OutputSchema chunk 是否应展示给 claw 用户。
 // 对齐 Python: _is_leader_output(chunk) (line 237-257)
 //
-// 规则：
-//   - chunk["type"]=="message" 且 payload 中 event_type 为 "team.runtime_ready"/"team.completed" → true
-//   - chunk["type"]=="team.runtime_ready" → true
-//   - chunk["role"] 为 TeamRole.LEADER → true
-//   - role 为 nil → true（默认视为 leader）
-//   - 其他 → false
+// 规则（判定为应展示时返回 true）：
+//   - chunk["type"]=="message" 且 payload 中 event_type 为 "team.runtime_ready" 或 "team.completed"
+//   - chunk["type"] 为 "team.runtime_ready"
+//   - chunk["role"] 为 TeamRole.LEADER
+//   - role 为 nil（默认视为 leader）
+//   - 其他情况返回 false
 func isLeaderOutput(chunk map[string]any) bool {
 	if chunk == nil {
 		return true

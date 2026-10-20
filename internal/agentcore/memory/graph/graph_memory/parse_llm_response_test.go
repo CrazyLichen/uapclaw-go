@@ -29,7 +29,7 @@ func TestParseISO_有效日期(t *testing.T) {
 	if offset != 0 {
 		t.Fatalf("期望 UTC 偏移为 0，得到 %d", offset)
 	}
-	// 2024-06-15T10:30:00Z → 1718447400
+	// 时间换算：2024-06-15T10:30:00Z → 1718447400
 	expectedTs := int64(1718447400)
 	if ts != expectedTs {
 		t.Fatalf("期望时间戳 %d，得到 %d", expectedTs, ts)

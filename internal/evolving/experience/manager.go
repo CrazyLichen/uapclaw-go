@@ -24,8 +24,8 @@ type PendingGovernance struct {
 	// SkillName 技能名称
 	SkillName string
 	// Actions 整理操作列表（来自 LLM 输出，保持 []map[string]any）。
-	// 每个 dict 约定字段：action (DELETE|MERGE|REFINE|KEEP)、record_id、
-	// merge_remove_ids (MERGE)、new_content (MERGE/REFINE)。
+	// 每个 dict 约定字段：action 为 DELETE|MERGE|REFINE|KEEP、record_id、
+	// merge_remove_ids（仅 MERGE）、new_content（仅 MERGE/REFINE）。
 	// 因 LLM 输出非硬约束，保持 any 而非强类型结构体。
 	Actions []map[string]any
 }

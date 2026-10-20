@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── FeedbackType ────────────────────────────
+// ──────────────────────────── FeedbackType 反馈类型 ────────────────────────────
 
 func TestFeedbackType_String(t *testing.T) {
 	tests := []struct {
@@ -53,7 +53,7 @@ func TestFeedbackType_UnmarshalJSON_无效值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Trajectory ────────────────────────────
+// ──────────────────────────── Trajectory 轨迹 ────────────────────────────
 
 func TestTrajectory_IsSuccess(t *testing.T) {
 	traj := Trajectory{Feedback: FeedbackHelpful}
@@ -191,7 +191,7 @@ func TestTrajectory_JSON往返(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── TrajectoryBatch ────────────────────────────
+// ──────────────────────────── TrajectoryBatch 轨迹批次 ────────────────────────────
 
 func TestTrajectoryBatch_GetSuccessTrajectories(t *testing.T) {
 	batch := TrajectoryBatch{

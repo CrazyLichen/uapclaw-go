@@ -190,7 +190,7 @@ var (
 //	evaluate_llm_policy, simplify_llm_policy, eval_interval,
 //	evolution_total_timeout_secs, disabled_skills
 //
-// )
+//	Python: )
 func NewTeamSkillEvolutionRail(
 	skillsDir []string,
 	llmModel *llm.Model,
@@ -1457,7 +1457,7 @@ func (r *TeamSkillEvolutionRail) emitRecordApprovalEvent(skillName string, reque
 //
 //	skill_name, trajectory, signals, auto_approve, user_query, messages, emit_host_events
 //
-// )
+//	Python: )
 func (r *TeamSkillEvolutionRail) handleEvolutionFromSignals(
 	ctx context.Context,
 	skillName string,

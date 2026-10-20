@@ -32,13 +32,13 @@ var numericPattern = regexp.MustCompile(`\d+`)
 
 // IsPrereleaseVersion 判断版本号是否为预发布版本。
 //
-// 支持的预发布标记：alpha, beta, rc, dev, pre, a, b
-// 示例：
-//   - 0.2.0-beta1  → true
-//   - 0.2.0.alpha  → true
-//   - 0.2.0rc2     → true
-//   - 0.2.0.dev0   → true
-//   - 0.2.0        → false
+// 支持的预发布标记：alpha、beta、rc、dev、pre、a、b。
+// 判定结果示例：
+//   - 0.2.0-beta1  判定为 true
+//   - 0.2.0.alpha  判定为 true
+//   - 0.2.0rc2     判定为 true
+//   - 0.2.0.dev0   判定为 true
+//   - 0.2.0        判定为 false
 func IsPrereleaseVersion(version string) bool {
 	normalized := normalizeVersion(version)
 	return prereleasePattern.MatchString(normalized)
@@ -46,11 +46,11 @@ func IsPrereleaseVersion(version string) bool {
 
 // StripPrereleaseSuffix 去除版本号中的预发布后缀。
 //
-// 示例：
-//   - 0.2.0-beta1  → 0.2.0
-//   - 0.2.0.alpha.1 → 0.2.0
-//   - 0.2.0rc2     → 0.2.0
-//   - 0.2.0        → 0.2.0（无预发布后缀，原样返回）
+// 去除结果示例：
+//   - 0.2.0-beta1  去除后为 0.2.0
+//   - 0.2.0.alpha.1 去除后为 0.2.0
+//   - 0.2.0rc2     去除后为 0.2.0
+//   - 0.2.0        无预发布后缀，原样返回
 func StripPrereleaseSuffix(version string) string {
 	normalized := normalizeVersion(version)
 	m := baseVersionPattern.FindStringSubmatch(normalized)

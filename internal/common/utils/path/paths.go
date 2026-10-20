@@ -72,7 +72,7 @@ var (
 // 优先级（与 Python get_user_home() 对齐）：
 //  1. 缓存值（首次调用后缓存）
 //  2. UAPCLAW_HOME 环境变量
-//  3. os.UserHomeDir()
+//  3. 标准库 os.UserHomeDir()
 func UserHomeDir() string {
 	userHomeOnce.Do(func() {
 		if env := os.Getenv(EnvHome); env != "" {
@@ -149,7 +149,7 @@ func ResetCache() {
 // 优先级：
 //  1. 缓存值
 //  2. UAPCLAW_DATA_DIR 环境变量（用于多实例隔离）
-//  3. UserHomeDir() / ".uapclaw"
+//  3. UserHomeDir() 拼接 ".uapclaw" 子目录
 func WorkspaceDir() string {
 	workspaceOnce.Do(func() {
 		if env := os.Getenv(EnvDataDir); env != "" {

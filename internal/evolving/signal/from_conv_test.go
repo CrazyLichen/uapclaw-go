@@ -104,7 +104,7 @@ func newDetector(skills ...string) *ConversationSignalDetector {
 	return NewConversationSignalDetector(WithExistingSkills(skillsMap))
 }
 
-// ──────────────────────────── NewConversationSignalDetector ────────────────────────────
+// ──────────────────────────── NewConversationSignalDetector 会话信号检测器构造 ────────────────────────────
 
 func TestNewConversationSignalDetector_默认值(t *testing.T) {
 	d := NewConversationSignalDetector()
@@ -138,7 +138,7 @@ func TestSignalDetector_类型别名(t *testing.T) {
 	_ = d
 }
 
-// ──────────────────────────── BindLLM ────────────────────────────
+// ──────────────────────────── BindLLM LLM 绑定 ────────────────────────────
 
 func TestBindLLM_默认语言(t *testing.T) {
 	d := NewConversationSignalDetector()
@@ -162,7 +162,7 @@ func TestBindLLM_英文语言(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Detect ────────────────────────────
+// ──────────────────────────── Detect 信号检测 ────────────────────────────
 
 func TestDetect_从消息检测执行失败(t *testing.T) {
 	d := newDetector()
@@ -189,7 +189,7 @@ func TestDetect_从消息检测执行失败(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── DetectTrajectorySignals ────────────────────────────
+// ──────────────────────────── DetectTrajectorySignals 轨迹信号检测 ────────────────────────────
 
 func TestDetectTrajectorySignals_预转换消息(t *testing.T) {
 	d := newDetector()
@@ -233,7 +233,7 @@ func TestDetectTrajectorySignals_nil轨迹nil消息(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ConvertTrajectoryToMessages ────────────────────────────
+// ──────────────────────────── ConvertTrajectoryToMessages 轨迹转消息列表 ────────────────────────────
 
 func TestConvertTrajectoryToMessages_空轨迹(t *testing.T) {
 	d := newDetector()
@@ -301,7 +301,7 @@ func TestConvertTrajectoryToMessages_工具调用ID映射(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── detectFromMessages ────────────────────────────
+// ──────────────────────────── detectFromMessages 从消息列表检测 ────────────────────────────
 
 func TestDetectFromMessages_脚本产物(t *testing.T) {
 	d := newDetector("my_skill")
@@ -409,7 +409,7 @@ func TestDetectFromMessages_技能检测(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── resolveActiveSkill ────────────────────────────
+// ──────────────────────────── resolveActiveSkill 激活技能解析 ────────────────────────────
 
 func TestResolveActiveSkill_空历史(t *testing.T) {
 	d := newDetector()
@@ -443,7 +443,7 @@ func TestResolveActiveSkill_精确索引(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── detectSkillFromToolCalls ────────────────────────────
+// ──────────────────────────── detectSkillFromToolCalls 从工具调用检测技能 ────────────────────────────
 
 func TestDetectSkillFromToolCalls_SKILLMD路径(t *testing.T) {
 	d := newDetector("my_skill")
@@ -490,7 +490,7 @@ func TestDetectSkillFromToolCalls_空技能集合不过滤(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── isExistingSkill ────────────────────────────
+// ──────────────────────────── isExistingSkill 既有技能判定 ────────────────────────────
 
 func TestIsExistingSkill_空集合(t *testing.T) {
 	d := newDetector()
@@ -513,7 +513,7 @@ func TestIsExistingSkill_不存在(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── isSkillMDReadTool ────────────────────────────
+// ──────────────────────────── isSkillMDReadTool 技能 MD 读取工具判定 ────────────────────────────
 
 func TestIsSkillMDReadTool_空名称(t *testing.T) {
 	d := newDetector()
@@ -543,7 +543,7 @@ func TestIsSkillMDReadTool_不包含(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── inferSkillFromMessages ────────────────────────────
+// ──────────────────────────── inferSkillFromMessages 从消息推断技能 ────────────────────────────
 
 func TestInferSkillFromMessages_有技能(t *testing.T) {
 	d := newDetector("my_skill")
@@ -572,7 +572,7 @@ func TestInferSkillFromMessages_无技能(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── fallbackUserFeedbackSignals ────────────────────────────
+// ──────────────────────────── fallbackUserFeedbackSignals 用户反馈信号回退 ────────────────────────────
 
 func TestFallbackUserFeedbackSignals_有纠正(t *testing.T) {
 	d := newDetector()
@@ -604,7 +604,7 @@ func TestFallbackUserFeedbackSignals_英文纠正(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── makeUserFeedbackSignal ────────────────────────────
+// ──────────────────────────── makeUserFeedbackSignal 用户反馈信号构造 ────────────────────────────
 
 func TestMakeUserFeedbackSignal(t *testing.T) {
 	d := newDetector()
@@ -623,7 +623,7 @@ func TestMakeUserFeedbackSignal(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── extractCodeFromArgs ────────────────────────────
+// ──────────────────────────── extractCodeFromArgs 从参数提取代码 ────────────────────────────
 
 func TestExtractCodeFromArgs_字符串参数(t *testing.T) {
 	d := newDetector()
@@ -674,7 +674,7 @@ func TestExtractCodeFromArgs_nil参数(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── DetectUserIntent ────────────────────────────
+// ──────────────────────────── DetectUserIntent 用户意图检测 ────────────────────────────
 
 func TestDetectUserIntent_无LLM走降级(t *testing.T) {
 	d := newDetector("my_skill")
@@ -747,7 +747,7 @@ func TestDetectUserIntent_从轨迹转换(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── DetectUserMessageFeedback ────────────────────────────
+// ──────────────────────────── DetectUserMessageFeedback 用户消息反馈检测 ────────────────────────────
 
 func TestDetectUserMessageFeedback_降级路径(t *testing.T) {
 	d := newDetector("my_skill")
@@ -769,7 +769,7 @@ func TestDetectUserMessageFeedback_降级路径(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── detectCollaborationSignals ────────────────────────────
+// ──────────────────────────── detectCollaborationSignals 协作信号检测 ────────────────────────────
 
 func TestDetectCollaborationSignals_非团队上下文(t *testing.T) {
 	d := newDetector()
@@ -896,7 +896,7 @@ func TestDetectCollaborationSignals_collaborationFailure(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── isTeamMemberContext ────────────────────────────
+// ──────────────────────────── isTeamMemberContext 团队成员上下文判定 ────────────────────────────
 
 func TestIsTeamMemberContext_无Meta(t *testing.T) {
 	d := newDetector()
@@ -938,7 +938,7 @@ func TestIsTeamMemberContext_parentInvokeID(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── extractToMember ────────────────────────────
+// ──────────────────────────── extractToMember 目标成员提取 ────────────────────────────
 
 func TestExtractToMember_JSON格式(t *testing.T) {
 	d := newDetector()
@@ -982,7 +982,7 @@ func TestExtractToMember_无匹配(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── extractTaskID ────────────────────────────
+// ──────────────────────────── extractTaskID 任务 ID 提取 ────────────────────────────
 
 func TestExtractTaskID_JSON格式(t *testing.T) {
 	d := newDetector()
@@ -1009,7 +1009,7 @@ func TestExtractTaskID_空参数(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── deduplicate ────────────────────────────
+// ──────────────────────────── deduplicate 去重 ────────────────────────────
 
 func TestDeduplicate_去重(t *testing.T) {
 	d := newDetector()
@@ -1041,7 +1041,7 @@ func TestDeduplicate_空列表(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── getField ────────────────────────────
+// ──────────────────────────── getField 字段取值 ────────────────────────────
 
 func TestGetField_存在(t *testing.T) {
 	obj := map[string]any{"key": "value"}
@@ -1066,7 +1066,7 @@ func TestGetField_nil对象(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── getToolCalls ────────────────────────────
+// ──────────────────────────── getToolCalls 工具调用提取 ────────────────────────────
 
 func TestGetToolCalls_nil(t *testing.T) {
 	result := getToolCalls(nil)
@@ -1109,7 +1109,7 @@ func TestGetToolCalls_OtherType(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── extractAroundMatch ────────────────────────────
+// ──────────────────────────── extractAroundMatch 匹配周边提取 ────────────────────────────
 
 func TestExtractAroundMatch_默认范围(t *testing.T) {
 	content := strings.Repeat("x", 200) + "MATCH" + strings.Repeat("y", 200)
@@ -1127,7 +1127,7 @@ func TestExtractAroundMatch_边界截断(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── responseToText ────────────────────────────
+// ──────────────────────────── responseToText 响应转文本 ────────────────────────────
 
 func TestResponseToText_nil(t *testing.T) {
 	result := responseToText(nil)
@@ -1284,7 +1284,7 @@ func TestCollaborationSignalTypes(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── resolveActiveSkillForStep ────────────────────────────
+// ──────────────────────────── resolveActiveSkillForStep 步骤级激活技能解析 ────────────────────────────
 
 func TestResolveActiveSkillForStep_找到步骤(t *testing.T) {
 	d := newDetector()

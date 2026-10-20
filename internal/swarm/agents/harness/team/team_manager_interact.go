@@ -14,12 +14,13 @@ import (
 // 对齐 Python: TeamManager.interact(session_id, user_input)
 //
 // Python 步骤：
-//  1. if session_id != self._active_session_id or not self._active_team_name:
-//     logger.warning("interact ignored for non-active team session"); return False
-//  2. team_name = self._active_team_name
-//  3. success = await Runner.interact_agent_team(user_input, team_name=, session_id=)
-//  4. if not success: logger.warning("interact failed against runner runtime")
-//  5. return success
+//
+//	Python: 1. if session_id != self._active_session_id or not self._active_team_name:
+//	   logger.warning("interact ignored for non-active team session"); return False
+//	Python: 2. team_name = self._active_team_name
+//	Python: 3. success = await Runner.interact_agent_team(user_input, team_name=, session_id=)
+//	Python: 4. if not success: logger.warning("interact failed against runner runtime")
+//	Python: 5. return success
 //
 // S-07: 对齐 Python 永不抛异常——所有 error/panic 均吞掉并返回 false。
 //

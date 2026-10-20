@@ -408,10 +408,11 @@ func (h *TeamHarness) InjectMemberMemory(ctx context.Context, memoryManager *mem
 // S-06: 对齐 Python DeepAgentSpec.build() (deep_agent_spec.py L461-515)
 //
 // Python 步骤：
-//  1. llm_model = self.model.build()（TeamModelConfig → Model）
-//  2. language = resolve_language(self.language)
-//  3. vision_config / audio_config / workspace / rails / subagents / sys_operation 逐项 build
-//  4. create_deep_agent(...)
+//
+//	Python: 1. llm_model = self.model.build()（TeamModelConfig → Model）
+//	Python: 2. language = resolve_language(self.language)
+//	3. vision_config / audio_config / workspace / rails / subagents / sys_operation 逐项 build
+//	Python: 4. create_deep_agent(...)
 //
 // Go 差异：团队 Rails（TeamToolRail 等 6 个）由调用方（AgentConfigurator）先构建、
 // 经 BuildTeamHarness 参数传入后挂载（挂载顺序有语义），不在此处从 RailSpec 构建；

@@ -224,7 +224,7 @@ func ensureLoaded() {
 // Go 中 __file__ 等价于当前源文件路径，core/config/config.go → core/ → context_evolver/。
 func rootDir() string {
 	_, filename, _, _ := runtime.Caller(0)
-	// filename = .../context_evolver/core/config/config.go
+	// 此处 filename 形如 .../context_evolver/core/config/config.go
 	// 向上两级：config/ → core/ → context_evolver/
 	dir := filepath.Dir(filepath.Dir(filepath.Dir(filename)))
 	return dir

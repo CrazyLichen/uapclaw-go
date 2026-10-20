@@ -150,7 +150,7 @@ func TestSessionManager_三态转换(t *testing.T) {
 	assert.Equal(t, "", m.sessionState.GetSessionID())
 	assert.Nil(t, state.TeamSession)
 
-	// → Fully-bound
+	// → 完整绑定（Fully-bound）
 	sess := &mockSession{sessionID: "sess-1"}
 	_, _ = m.BindSession(context.Background(), sess)
 	assert.Equal(t, "sess-1", m.sessionState.GetSessionID())
@@ -161,7 +161,7 @@ func TestSessionManager_三态转换(t *testing.T) {
 	assert.Equal(t, "", m.sessionState.GetSessionID())
 	assert.Nil(t, state.TeamSession)
 
-	// → Fully-bound again
+	// → 再次完整绑定（Fully-bound again）
 	sess2 := &mockSession{sessionID: "sess-2"}
 	_, _ = m.BindSession(context.Background(), sess2)
 	assert.Equal(t, "sess-2", m.sessionState.GetSessionID())

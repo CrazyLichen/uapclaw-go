@@ -1315,7 +1315,7 @@ func TestDeepAgent_CombineRailsByType(t *testing.T) {
 
 	typ := reflect.TypeOf(fr1)
 	removed := d.StripRailsByType(typ)
-	// 1 from pending + 1 from registered (stale)
+	// 计数来源：1 个来自 pending + 1 个来自 registered（stale 残留）
 	if removed != 2 {
 		t.Errorf("StripRailsByType 返回 %d，期望 2", removed)
 	}

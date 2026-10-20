@@ -6,7 +6,7 @@
 // 探测。分句底层依赖 sentencizer（pysbd 启发的 Go 实现，对齐 Python pysbd）。
 //
 // 与 Python 的两处有意偏差（详见 chunker 包设计文档
-// docs/superpowers/specs/2026-10-18-tokenizerchunker-13.7-design.md）：
+// docs/superpowers/specs/2026-10-18-tokenizerchunker-13.7-design.md 所述）：
 //   - find-span 恢复逻辑省略：sentencizer TextSpans 原生产出坐标，
 //     Python 的 text.find 循环 + used_spans 去重 + 失败 warning 不可达
 //   - 两处 Python 日志消失："Failed to get max length"（hasattr 探测在

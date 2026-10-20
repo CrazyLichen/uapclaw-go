@@ -20,11 +20,12 @@ import (
 // 对齐 Python: TeamManager.commit_runtime_ready(session_id, team_name)
 //
 // Python 步骤：
-//  1. self._active_session_id = session_id
-//  2. self._active_team_name = team_name
-//  3. if self._pending_session_id == session_id: clear pending
-//  4. logger.info("[TeamManager] commit_runtime_ready ...")
-//  5. ensure_monitor_for_active_runtime(...) — 自动启动监控
+//
+//	Python: 1. self._active_session_id = session_id
+//	Python: 2. self._active_team_name = team_name
+//	Python: 3. if self._pending_session_id == session_id: clear pending
+//	Python: 4. logger.info("[TeamManager] commit_runtime_ready ...")
+//	5. ensure_monitor_for_active_runtime(...) — 自动启动监控
 //
 // Go 差异：Python 在 commit_runtime_ready 中直接调用 ensure_monitor，
 // Go 侧因持有 mu 锁，不能在锁内调用 EnsureMonitor（可能触发其他锁操作），
@@ -96,8 +97,9 @@ func (m *TeamManager) ClearActiveRuntime(sessionID string) {
 // 对齐 Python: TeamManager.prepare_runtime_activation(session_id, team_name)
 //
 // Python 步骤：
-//  1. await self.prepare_session_switch(session_id, reason="switch runtime: ")
-//  2. async with self._lock: self._pending_session_id = session_id; self._pending_team_name = team_name
+//
+//	Python: 1. await self.prepare_session_switch(session_id, reason="switch runtime: ")
+//	Python: 2. async with self._lock: self._pending_session_id = session_id; self._pending_team_name = team_name
 func (m *TeamManager) PrepareRuntimeActivation(ctx context.Context, sessionID string, teamName string) error {
 	if err := m.PrepareSessionSwitch(ctx, sessionID, "switch runtime: "); err != nil {
 		return err
@@ -113,9 +115,10 @@ func (m *TeamManager) PrepareRuntimeActivation(ctx context.Context, sessionID st
 // 对齐 Python: TeamManager.prepare_session_switch(target_session_id, reason)
 //
 // Python 步骤：
+//
 //  1. async with self._lock: 收集 stale_sessions (active != target, pending != target)
-//  2. logger.info("prepare_session_switch target=%s active=%s pending=%s stale=%s", ...)
-//  3. for stale_session_id in dict.fromkeys(stale_sessions):
+//     Python: 2. logger.info("prepare_session_switch target=%s active=%s pending=%s stale=%s", ...)
+//     Python: 3. for stale_session_id in dict.fromkeys(stale_sessions):
 //     await self.stop_session_runtime(stale_session_id, reason=reason)
 func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID string, reason string) error {
 	m.mu.Lock()
@@ -151,15 +154,16 @@ func (m *TeamManager) PrepareSessionSwitch(ctx context.Context, targetSessionID 
 // 对齐 Python: TeamManager.create_team(session_id, deep_agent, ...)
 //
 // Python 步骤：
-//  1. config_base = get_config()
-//  2. await self._ensure_postgresql_for_leader(config_base)
-//  3. spec = self._load_team_spec(session_id)
-//  4. self._apply_session_scoped_team_name(spec, session_id=session_id)
-//  5. spec.agent_customizer = self.build_agent_customizer(...)
-//  6. token = set_session_id(session_id)
-//  7. try: team_agent = spec.build(); self._team_agents[session_id] = team_agent
-//  8. self.ensure_team_shared_skills_initialized(spec)
-//  9. if distributed: attach distributed hooks
+//
+//	Python: 1. config_base = get_config()
+//	Python: 2. await self._ensure_postgresql_for_leader(config_base)
+//	Python: 3. spec = self._load_team_spec(session_id)
+//	Python: 4. self._apply_session_scoped_team_name(spec, session_id=session_id)
+//	Python: 5. spec.agent_customizer = self.build_agent_customizer(...)
+//	Python: 6. token = set_session_id(session_id)
+//	Python: 7. try: team_agent = spec.build(); self._team_agents[session_id] = team_agent
+//	Python: 8. self.ensure_team_shared_skills_initialized(spec)
+//	Python: 9. if distributed: attach distributed hooks
 //
 // 10. finally: 重置 session_id 上下文（reset_session_id(token)）
 //
@@ -231,11 +235,12 @@ func (m *TeamManager) CreateTeam(
 // 对齐 Python: TeamManager.get_or_create_team(session_id, deep_agent, ...)
 //
 // Python 步骤：
-//  1. async with self._lock:
-//  2. team_agent = self._team_agents.get(session_id)
-//  3. if team_agent is not None: return team_agent
-//  4. await self._destroy_other_sessions(session_id)
-//  5. return await self.create_team(...)
+//
+//	Python: 1. async with self._lock:
+//	Python: 2. team_agent = self._team_agents.get(session_id)
+//	Python: 3. if team_agent is not None: return team_agent
+//	Python: 4. await self._destroy_other_sessions(session_id)
+//	Python: 5. return await self.create_team(...)
 func (m *TeamManager) GetOrCreateTeam(
 	ctx context.Context,
 	sessionID string,
@@ -258,7 +263,8 @@ func (m *TeamManager) GetOrCreateTeam(
 // 对齐 Python: TeamManager.destroy_team(session_id)
 //
 // Python 步骤：
-//  1. async with self._lock: return await self._destroy_team(session_id)
+//
+//	Python: 1. async with self._lock: return await self._destroy_team(session_id)
 //
 // S-05 方案 A: destroyTeam 内部已自行加锁（分段锁），公共包装器不再加锁——
 // sync.Mutex 不可重入，持锁再 Lock 永久阻塞（原实现自死锁）。
@@ -270,8 +276,9 @@ func (m *TeamManager) DestroyTeam(ctx context.Context, sessionID string) (bool, 
 // 对齐 Python: TeamManager.cleanup_all()
 //
 // Python 步骤：
-//  1. async with self._lock: session_ids = list(self._team_agents.keys())
-//  2. for session_id in session_ids: await self._destroy_team(session_id)
+//
+//	Python: 1. async with self._lock: session_ids = list(self._team_agents.keys())
+//	Python: 2. for session_id in session_ids: await self._destroy_team(session_id)
 func (m *TeamManager) CleanupAll(ctx context.Context) {
 	m.mu.Lock()
 	sessionIDs := make([]string, 0, len(m.teamAgents))
@@ -290,12 +297,13 @@ func (m *TeamManager) CleanupAll(ctx context.Context) {
 // 对齐 Python: TeamManager.terminate_session_runtime(session_id, reason)
 //
 // Python 步骤：
+//
 //  1. async with self._lock: 检查 has_stream_task / has_team_runtime
-//  2. team_name = self._resolve_session_team_name(session_id)
-//  3. if team_name: await Runner.stop_agent_team(team_name=, session_id=)
-//  4. if has_local_team_runtime: cleaned = await self._destroy_team(session_id)
-//  5. await self._cleanup_runtime_locals(session_id)
-//  6. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
+//     Python: 2. team_name = self._resolve_session_team_name(session_id)
+//     Python: 3. if team_name: await Runner.stop_agent_team(team_name=, session_id=)
+//     Python: 4. if has_local_team_runtime: cleaned = await self._destroy_team(session_id)
+//     Python: 5. await self._cleanup_runtime_locals(session_id)
+//     Python: 6. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
 func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	m.mu.Lock()
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
@@ -345,11 +353,12 @@ func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID str
 // 对齐 Python: TeamManager.cancel_session_runtime(session_id, reason)
 //
 // Python 步骤：
+//
 //  1. async with self._lock: 检查 has_stream_task / has_team_runtime
-//  2. team_name = self._resolve_session_team_name(session_id)
-//  3. if team_name: runner_stopped = await Runner.stop_agent_team(...)
-//  4. await self._cleanup_runtime_locals(session_id)
-//  5. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
+//     Python: 2. team_name = self._resolve_session_team_name(session_id)
+//     Python: 3. if team_name: runner_stopped = await Runner.stop_agent_team(...)
+//     Python: 4. await self._cleanup_runtime_locals(session_id)
+//     Python: 5. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
 func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	m.mu.Lock()
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
@@ -392,14 +401,15 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 // 对齐 Python: TeamManager.stop_session_runtime(session_id, reason)
 //
 // Python 步骤：
+//
 //  1. async with self._lock: 检查 has_stream_task / has_team_runtime
-//  2. team_agent = self._team_agents.pop(session_id) if has_local else None
-//  3. await self._cleanup_runtime_locals(session_id)
-//  4. if has_local and team_agent: stopped = await self._stop_local_team_runtime(session_id, team_agent)
-//  5. team_name = self._resolve_session_team_name(session_id)
-//  6. if team_name: runner_stopped = await Runner.stop_agent_team(...)
-//  7. if not has_local: release a2x + stop runner transport
-//  8. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
+//     Python: 2. team_agent = self._team_agents.pop(session_id) if has_local else None
+//     Python: 3. await self._cleanup_runtime_locals(session_id)
+//     Python: 4. if has_local and team_agent: stopped = await self._stop_local_team_runtime(session_id, team_agent)
+//     Python: 5. team_name = self._resolve_session_team_name(session_id)
+//     Python: 6. if team_name: runner_stopped = await Runner.stop_agent_team(...)
+//     Python: 7. if not has_local: release a2x + stop runner transport
+//     Python: 8. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
 func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	m.mu.Lock()
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
@@ -457,11 +467,12 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 // 对齐 Python: TeamManager.pause_session_runtime(session_id, reason)
 //
 // Python 步骤：
+//
 //  1. async with self._lock: 检查 has_stream_task / has_team_runtime
-//  2. team_name = self._resolve_session_team_name(session_id)
-//  3. if team_name: runner_paused = await Runner.pause_agent_team(...)
-//  4. await self._cleanup_runtime_locals(session_id)
-//  5. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
+//     Python: 2. team_name = self._resolve_session_team_name(session_id)
+//     Python: 3. if team_name: runner_paused = await Runner.pause_agent_team(...)
+//     Python: 4. await self._cleanup_runtime_locals(session_id)
+//     Python: 5. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
 func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	m.mu.Lock()
 	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
@@ -504,10 +515,11 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 // 对齐 Python: TeamManager.delete_session_runtime(session_id, reason)
 //
 // Python 步骤：
-//  1. team_name = self._resolve_delete_session_team_name(session_id)
-//  2. await self.stop_session_runtime(session_id, reason=reason)
-//  3. if team_name: await Runner.delete_agent_team(team_name=, session_ids=, force=True)
-//  4. else: await Runner.release(session_id)
+//
+//	Python: 1. team_name = self._resolve_delete_session_team_name(session_id)
+//	Python: 2. await self.stop_session_runtime(session_id, reason=reason)
+//	Python: 3. if team_name: await Runner.delete_agent_team(team_name=, session_ids=, force=True)
+//	Python: 4. else: await Runner.release(session_id)
 func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	teamName := m.resolveDeleteSessionTeamName(sessionID)
 
@@ -540,11 +552,12 @@ func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string
 // 对齐 Python: TeamManager._resolve_session_team_name(session_id)
 //
 // Python 步骤：
-//  1. if active_session_id == session_id and active_team_name: return active_team_name
-//  2. if pending_session_id == session_id and pending_team_name: return pending_team_name
-//  3. metadata = get_session_metadata(session_id); team_name = metadata.get("team_name")
-//  4. if team_name: return team_name
-//  5. logger.warning("failed to resolve team_name"); return None
+//
+//	Python: 1. if active_session_id == session_id and active_team_name: return active_team_name
+//	Python: 2. if pending_session_id == session_id and pending_team_name: return pending_team_name
+//	Python: 3. metadata = get_session_metadata(session_id); team_name = metadata.get("team_name")
+//	Python: 4. if team_name: return team_name
+//	Python: 5. logger.warning("failed to resolve team_name"); return None
 func (m *TeamManager) resolveSessionTeamName(sessionID string) string {
 	if m.activeSessionID != "" && m.activeSessionID == sessionID && m.activeTeamName != "" {
 		return m.activeTeamName
@@ -568,10 +581,11 @@ func (m *TeamManager) resolveSessionTeamName(sessionID string) string {
 // 对齐 Python: TeamManager._resolve_delete_session_team_name(session_id)
 //
 // Python 步骤：
-//  1. metadata = get_session_metadata(session_id)
-//  2. team_name = str(metadata.get("team_name") or "").strip()
-//  3. if team_name: return team_name
-//  4. logger.warning("failed to resolve delete team_name"); return None
+//
+//	Python: 1. metadata = get_session_metadata(session_id)
+//	Python: 2. team_name = str(metadata.get("team_name") or "").strip()
+//	Python: 3. if team_name: return team_name
+//	Python: 4. logger.warning("failed to resolve delete team_name"); return None
 func (m *TeamManager) resolveDeleteSessionTeamName(sessionID string) string {
 	if metadata := session.GetSessionMetadata(sessionID); metadata != nil {
 		if teamName, ok := metadata["team_name"].(string); ok && teamName != "" {
@@ -604,13 +618,14 @@ func (m *TeamManager) destroyOtherSessions(ctx context.Context, currentSessionID
 // 对齐 Python: TeamManager._destroy_team(session_id)
 //
 // Python 步骤：
-//  1. await self._cleanup_runtime_locals(session_id)
-//  2. team_agent = self._team_agents.pop(session_id)
-//  3. if team_agent is None: return False
-//  4. cleaned = await team_agent.destroy_team(force=True)
-//  5. await release_a2x_reservations_for_session(session_id, team_agent=)
-//  6. await _stop_team_messager(team_agent, session_id=)
-//  7. return cleaned
+//
+//	Python: 1. await self._cleanup_runtime_locals(session_id)
+//	Python: 2. team_agent = self._team_agents.pop(session_id)
+//	Python: 3. if team_agent is None: return False
+//	Python: 4. cleaned = await team_agent.destroy_team(force=True)
+//	Python: 5. await release_a2x_reservations_for_session(session_id, team_agent=)
+//	Python: 6. await _stop_team_messager(team_agent, session_id=)
+//	Python: 7. return cleaned
 func (m *TeamManager) destroyTeam(ctx context.Context, sessionID string) (bool, error) {
 	m.cleanupRuntimeLocals(ctx, sessionID)
 

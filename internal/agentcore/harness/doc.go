@@ -18,6 +18,6 @@
 //	├── explore_agent_factory.go     # CreateExploreAgent 工厂函数（9.30）
 //	└── registry.go                  # HarnessConfig 注册表、发现机制与 Load 创建
 //
-// 对应 Python 代码：openjiuwen/harness/deep_agent.py, openjiuwen/harness/factory.py,
-// openjiuwen/harness/subagents/research_agent.py, openjiuwen/harness/harness_config/registry.py
+// 对应 Python 代码：openjiuwen/harness/deep_agent.py、openjiuwen/harness/factory.py、
+// openjiuwen/harness/subagents/research_agent.py、openjiuwen/harness/harness_config/registry.py
 package harness

@@ -27,7 +27,7 @@ import (
 //   - IsLastSchema 最后一帧标记
 //   - 多轮工具调用流式
 //   - TaskLoop + Stream 联合
-//   - Stream + Steer/FollowUp
+//   - Stream 与 Steer/FollowUp 联动
 //
 // 对齐 Python: tests/system_tests/harness/test_deep_agent_stream_e2e.py
 type DeepAgentStreamE2ESuite struct {

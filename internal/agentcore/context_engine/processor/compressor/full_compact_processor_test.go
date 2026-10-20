@@ -862,7 +862,7 @@ func TestFullCompactProcessor_TruncateStateText(t *testing.T) {
 
 // TestBuildHeadTailTruncatedText 验证头尾截断
 func TestBuildHeadTailTruncatedText(t *testing.T) {
-	// keptChars = 0
+	// keptChars=0 时全部截断
 	result := _buildHeadTailTruncatedText("hello", 0)
 	if result != "...[TRUNCATED]..." {
 		t.Errorf("keptChars=0 应返回 TRUNCATED 标记，实际: %s", result)
@@ -928,7 +928,7 @@ func TestFullCompactProcessor_SplitMessagesAtCompactionBoundary(t *testing.T) {
 		llm_schema.NewUserMessage("3"),
 	}
 
-	// boundaryIndex = 1
+	// boundaryIndex=1 边界命中
 	prefix, active := fcp._splitMessagesAtCompactionBoundary(messages, 1)
 	if len(prefix) != 1 {
 		t.Errorf("prefix 应有 1 条，实际: %d", len(prefix))
@@ -946,7 +946,7 @@ func TestFullCompactProcessor_SplitMessagesAtCompactionBoundary(t *testing.T) {
 		t.Errorf("无边界时 active 应为全部消息，实际: %d", len(active))
 	}
 
-	// boundaryIndex = 0
+	// boundaryIndex=0 边界未命中
 	prefix, active = fcp._splitMessagesAtCompactionBoundary(messages, 0)
 	if prefix != nil {
 		t.Error("boundaryIndex=0 时 prefix 应为 nil")
@@ -2200,8 +2200,8 @@ func TestNewFullCompactProcessor_有Model配置但创建失败(t *testing.T) {
 func TestBuildHeadTailTruncatedText_只有头(t *testing.T) {
 	text := "abc"
 	result := _buildHeadTailTruncatedText(text, 1)
-	// headChars = 1*20/100 = 0, tailChars = 1-0 = 1
-	// head = text[:0] = "", tail = text[2:] = "c"
+	// 推导：headChars = 1*20/100 = 0，tailChars = 1-0 = 1
+	// 推导：head = text[:0] = ""，tail = text[2:] = "c"
 	// head == "" → 走 "if tail != "" 分支
 	if !strings.Contains(result, "c") {
 		t.Errorf("应包含尾部字符，实际: %s", result)

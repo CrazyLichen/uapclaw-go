@@ -87,7 +87,7 @@ func TestBaseInterruptRail_Interrupt(t *testing.T) {
 	assert.Equal(t, req, decision.Request)
 }
 
-// ──────────────────────────── BeforeToolCall ────────────────────────────
+// ──────────────────────────── BeforeToolCall 工具调用前钩子 ────────────────────────────
 
 // TestBaseInterruptRail_BeforeToolCall_未注册工具 验证未注册工具不拦截
 func TestBaseInterruptRail_BeforeToolCall_未注册工具(t *testing.T) {
@@ -159,7 +159,7 @@ func TestBaseInterruptRail_BeforeToolCall_拒绝(t *testing.T) {
 	assert.Equal(t, "已拒绝", toolInputs.ToolResult)
 }
 
-// ──────────────────────────── GetCallbacks ────────────────────────────
+// ──────────────────────────── GetCallbacks 回调注册 ────────────────────────────
 
 // TestBaseInterruptRail_GetCallbacks 验证回调映射包含 BeforeToolCall
 func TestBaseInterruptRail_GetCallbacks(t *testing.T) {
@@ -169,7 +169,7 @@ func TestBaseInterruptRail_GetCallbacks(t *testing.T) {
 	assert.True(t, hasBeforeToolCall, "应包含 BeforeToolCall 回调")
 }
 
-// ──────────────────────────── getUserInput ────────────────────────────
+// ──────────────────────────── getUserInput 用户输入获取 ────────────────────────────
 
 // TestBaseInterruptRail_getUserInput_InteractiveInput 验证从 InteractiveInput 提取
 func TestBaseInterruptRail_getUserInput_InteractiveInput(t *testing.T) {
@@ -253,7 +253,7 @@ func TestBaseInterruptRail_getUserInput_其他类型(t *testing.T) {
 	assert.Equal(t, "直接字符串", userInput)
 }
 
-// ──────────────────────────── applyDecision ────────────────────────────
+// ──────────────────────────── applyDecision 决策应用 ────────────────────────────
 
 // TestBaseInterruptRail_applyDecision_ApproveResult_修改参数 验证 NewArgs 非空时修改 ToolArgs
 func TestBaseInterruptRail_applyDecision_ApproveResult_修改参数(t *testing.T) {
@@ -330,7 +330,7 @@ func TestInterruptDecision_接口断言(t *testing.T) {
 	assert.NotNil(t, d)
 }
 
-// ──────────────────────────── resolveToolCallID ────────────────────────────
+// ──────────────────────────── resolveToolCallID 工具调用 ID 解析 ────────────────────────────
 
 // TestBaseInterruptRail_resolveToolCallID 验证 nil ToolCall 返回空字符串
 func TestBaseInterruptRail_resolveToolCallID(t *testing.T) {
@@ -339,7 +339,7 @@ func TestBaseInterruptRail_resolveToolCallID(t *testing.T) {
 	assert.Equal(t, "tc1", r.resolveToolCallID(&llmschema.ToolCall{ID: "tc1"}))
 }
 
-// ──────────────────────────── skipTool ────────────────────────────
+// ──────────────────────────── skipTool 跳过工具 ────────────────────────────
 
 // TestBaseInterruptRail_skipTool_自定义ToolMessage 验证拒绝时使用自定义 ToolMessage
 func TestBaseInterruptRail_skipTool_自定义ToolMessage(t *testing.T) {

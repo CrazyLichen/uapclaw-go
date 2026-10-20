@@ -453,7 +453,7 @@ func TestGetLastAssistantUsageTokens_多条AssistantMessage取最后一条(t *te
 func TestCountSingleMessageTokens_nilTokenCounter(t *testing.T) {
 	msg := llm_schema.NewUserMessage("hello world")
 	result := countSingleMessageTokens(msg, nil)
-	// fallback: len("hello world") / 4 = 11 / 4 = 2
+	// 降级推导：len("hello world") / 4 = 11 / 4 = 2
 	if result != 2 {
 		t.Errorf("countSingleMessageTokens() = %d, 期望 2", result)
 	}
@@ -474,7 +474,7 @@ func TestCountSingleMessageTokens_TokenCounter错误(t *testing.T) {
 	msg := llm_schema.NewUserMessage("hello world")
 	tc := &fakeTokenCounter{countErr: fmt.Errorf("count error")}
 	result := countSingleMessageTokens(msg, tc)
-	// fallback: len("hello world") / 4 = 11 / 4 = 2
+	// 降级推导：len("hello world") / 4 = 11 / 4 = 2
 	if result != 2 {
 		t.Errorf("countSingleMessageTokens() = %d, 期望 2（TokenCounter 出错 fallback）", result)
 	}

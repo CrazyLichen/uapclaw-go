@@ -156,7 +156,7 @@ func (h *MessageHandler) processUnreadMessagesWithSteer(ctx context.Context, mem
 	// 3. 对每条消息：
 	//    a. 如果有 pending interrupt，延迟投递
 	//    b. 格式化消息（_format_message）
-	//    c. deliver_input(content, use_steer=useSteer)
+	//    c. 投递输入（deliver_input(content, use_steer=useSteer)）
 	//    d. 标记已读
 	_ = ctx
 	_ = memberName

@@ -397,6 +397,7 @@ func (tb *TeamBackend) GetMembersMaxUpdatedAt(ctx context.Context) int64 {
 // Python: TeamBackend.spawn_member(member_name, display_name, agent_card, role, ...)
 //
 // Python 步骤：
+//
 //  1. 查已有成员 → 若已存在则 fail
 //  2. 序列化 allocation → model_ref_json
 //  3. DB 写入：db.member.create_member(...)
@@ -466,6 +467,7 @@ func (tb *TeamBackend) SpawnMember(ctx context.Context, memberName, displayName 
 // Python: TeamBackend.startup(on_created=...)
 //
 // Python 步骤：
+//
 //  1. 查询所有 UNSTARTED 成员
 //  2. 逐个调用 startup_member(member_name, on_created)
 //  3. 返回已启动的成员名列表
@@ -497,6 +499,7 @@ func (tb *TeamBackend) Startup(
 // Python: TeamBackend.startup_member(member_name, on_created=...)
 //
 // Python 步骤：
+//
 //  1. CAS: UNSTARTED→STARTING（若失败返回 false）
 //  2. 调用 _spawn_and_publish(member_name, on_created)
 //  3. 如果 _spawn_and_publish 失败 → 回滚 STARTING→UNSTARTED + re-raise
@@ -529,6 +532,7 @@ func (tb *TeamBackend) StartupMember(
 // Python: TeamBackend.shutdown_member(member_name)
 //
 // Python 步骤：
+//
 //  1. 查成员
 //  2. 若不存在/已是终态 → fail
 //  3. CAS 操作: current → SHUTDOWN_REQUESTED
@@ -586,6 +590,7 @@ func (tb *TeamBackend) ShutdownMember(ctx context.Context, memberName string, op
 // Python: TeamBackend.cancel_member(member_name)
 //
 // Python 步骤：
+//
 //  1. 查成员
 //  2. 若非 BUSY → 直接返回（不改变状态）
 //  3. 重置该成员的 CLAIMED 任务（通过 task_manager.reset）
@@ -1125,6 +1130,7 @@ func (tb *TeamBackend) PublishEvent(ctx context.Context, event events.TypedEvent
 // Python: _spawn_and_publish(member_name, on_created)
 //
 // Python 步骤：
+//
 //  1. await on_created(member_name) — 调用回调启动 agent 进程
 //  2. try: messager.publish(MemberSpawnedEvent) — 事件发布失败仅记日志不抛异常
 //  3. 日志：Member {member_name} started

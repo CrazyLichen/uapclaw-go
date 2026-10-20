@@ -126,16 +126,18 @@ func (b *ToolOptimizerBase) RequiresForwardData() bool {
 //
 // Python: ToolOptimizerBase.optimize_tool(tool, tool_callable)
 //
-//  1. 保存原始描述 original_desc = tool["description"]
-//  2. for i in range(self.max_turns):
-//     if i > 0: tool["description"] = 最新描述
-//     阶段 1 — 示例生成
-//     result_example = customized_pipeline("example", tool, tool_callable=tool_callable, config=self.config_eg)
-//     阶段 2 — 描述生成
-//     result_desc = customized_pipeline("description", tool, tool_callable=tool_callable, config=self.config_desc)
-//  3. 最终审查：ToolDescriptionReviewer.Process(output_desc, ori_tool, ["clean","cross_check","translate"])
-//  4. 格式化：ToolDescriptionReviewer.Format(schema, processed)
-//  5. 返回 final_desc
+// Python 执行步骤：
+//
+//	Python: 1. 保存原始描述 original_desc = tool["description"]
+//	Python: 2. for i in range(self.max_turns):
+//	Python:    if i > 0: tool["description"] = 最新描述
+//	Python:    阶段 1 — 示例生成
+//	Python:    result_example = customized_pipeline("example", tool, tool_callable=tool_callable, config=self.config_eg)
+//	Python:    阶段 2 — 描述生成
+//	Python:    result_desc = customized_pipeline("description", tool, tool_callable=tool_callable, config=self.config_desc)
+//	Python: 3. 最终审查：ToolDescriptionReviewer.Process(output_desc, ori_tool, ["clean","cross_check","translate"])
+//	Python: 4. 格式化：ToolDescriptionReviewer.Format(schema, processed)
+//	Python: 5. 返回 final_desc
 func (b *ToolOptimizerBase) OptimizeTool(
 	ctx context.Context,
 	tool map[string]any,

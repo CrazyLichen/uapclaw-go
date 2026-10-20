@@ -36,8 +36,8 @@ const logComponent = logger.ComponentAgentCore
 //  4. 调用 buildTimeContext 构建中文周范围
 //  5. 通过 PromptApplier 加载 fragment_memory_prompt 模板
 //  6. 调用 LLM + JsonOutputParser 解析，最多重试 retries 次
-//  7. 返回 map[string]any，预期键：
-//     has_explict_instruct / instruct_memories / user_profile / semantic_memory / episodic_memory
+//  7. 返回 map[string]any，预期键为 has_explict_instruct、
+//     instruct_memories、user_profile、semantic_memory、episodic_memory
 //
 // Python: LongTermMemoryExtractor.extract_long_term_memory
 func ExtractLongTermMemory(

@@ -98,7 +98,7 @@ Extract keywords useful for *cross-user experience retrieval*.
 //	total_budget_secs=4000,
 //	max_attempts=5,
 //
-// )
+//	Python: )
 var QUERY_KEYWORDS_LLM_POLICY = llm_resilience.LLMInvokePolicy{
 	AttemptTimeoutSecs: 1500,
 	TotalBudgetSecs:    4000,

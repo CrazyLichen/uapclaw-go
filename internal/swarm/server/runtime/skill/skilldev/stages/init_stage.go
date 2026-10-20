@@ -117,11 +117,10 @@ func (h *InitStageHandler) extractResources(resources []any, destDir string) []s
 //
 // 待实现: 实现 zip 解压逻辑
 func (h *InitStageHandler) extractExistingSkill(_ map[string]any, _ string) *string {
-	// 待实现:
-	// 待实现：解码已有技能内容 raw, err := base64.StdEncoding.DecodeString(existingSkill["content_base64"].(string))
-	// ...
-	// 用 archive/zip 解压到 destDir
-	// 读取 SKILL.md 内容
+	// 待实现：
+	//   1. 解码已有技能内容 raw, err := base64.StdEncoding.DecodeString(existingSkill["content_base64"].(string))
+	//   2. 用 archive/zip 解压到 destDir
+	//   3. 读取 SKILL.md 内容
 	logger.Warn(logComponent).Msg("[InitStage] extractExistingSkill not implemented")
 	return nil
 }

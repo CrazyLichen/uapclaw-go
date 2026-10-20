@@ -423,18 +423,7 @@ func RunCommand(ctx context.Context, args []string, timeoutSec float64) (int, st
 	return 127, ""
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// anyToStr 从 any 提取字符串（非 string 返回空串）。
-//
-// Python str() 会把非字符串值转为不匹配 "distributed" 等的字面量，
-// Go 返回空串同样不匹配，语义等价。
-func anyToStr(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
-}
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsPgAvailable 探测 PG 端点是否可接受连接。
 // 对齐 Python: is_pg_available (L282-291)
@@ -559,4 +548,17 @@ func EnsurePostgresqlForLeader(ctx context.Context, configBase map[string]any) {
 	logger.Warn(logComponent).Str("host", host).Int("port", port).
 		Float64("max_sec", pgPostStartReadyMaxSec).
 		Msg("[TeamManager] PostgreSQL start attempted but endpoint still not ready")
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// anyToStr 从 any 提取字符串（非 string 返回空串）。
+//
+// Python str() 会把非字符串值转为不匹配 "distributed" 等的字面量，
+// Go 返回空串同样不匹配，语义等价。
+func anyToStr(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }

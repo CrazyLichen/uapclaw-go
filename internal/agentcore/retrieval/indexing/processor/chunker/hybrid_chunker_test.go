@@ -114,8 +114,8 @@ func TestNewHybridChunker_谓词缺省生效(t *testing.T) {
 	assert.Len(t, chunks, 1)
 }
 
-// TestDefaultNoSplit 对齐 Python _default_no_split：
-// (doc.metadata or {}).get("source_type") in ("row", "column")
+// TestDefaultNoSplit 对齐 Python _default_no_split 判定：
+// metadata 取 (doc.metadata or {})，source_type 值为 "row" 或 "column" 时不分块
 func TestDefaultNoSplit(t *testing.T) {
 	cases := []struct {
 		name     string

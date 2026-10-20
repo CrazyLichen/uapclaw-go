@@ -65,7 +65,7 @@ func TestIsE2AResponseWireDict_非E2A格式(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── EncodeAgentResponseForWire ────────────────────────────
+// ──────────────────────────── EncodeAgentResponseForWire Agent 响应线格式编码 ────────────────────────────
 
 // TestEncodeAgentResponseForWire_正常编码 验证正常出站编码
 func TestEncodeAgentResponseForWire_正常编码(t *testing.T) {
@@ -106,7 +106,7 @@ func TestEncodeAgentResponseForWire_失败响应(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── EncodeAgentChunkForWire ────────────────────────────
+// ──────────────────────────── EncodeAgentChunkForWire Agent 块线格式编码 ────────────────────────────
 
 // TestEncodeAgentChunkForWire_正常编码 验证正常出站 chunk 编码
 func TestEncodeAgentChunkForWire_正常编码(t *testing.T) {
@@ -141,7 +141,7 @@ func TestEncodeAgentChunkForWire_终止帧(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ParseAgentServerWireUnary ────────────────────────────
+// ──────────────────────────── ParseAgentServerWireUnary 服务端线格式一元解析 ────────────────────────────
 
 // TestParseAgentServerWireUnary_E2A格式解析 验证 E2A 格式入站解码
 func TestParseAgentServerWireUnary_E2A格式解析(t *testing.T) {
@@ -221,7 +221,7 @@ func TestParseAgentServerWireUnary_非E2A格式(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ParseAgentServerWireChunk ────────────────────────────
+// ──────────────────────────── ParseAgentServerWireChunk 服务端线格式块解析 ────────────────────────────
 
 // TestParseAgentServerWireChunk_E2A格式解析 验证 E2A 格式入站 chunk 解码
 func TestParseAgentServerWireChunk_E2A格式解析(t *testing.T) {
@@ -296,7 +296,7 @@ func TestParseAgentServerWireChunk_非E2A格式(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── EncodeJSONParseErrorWire ────────────────────────────
+// ──────────────────────────── EncodeJSONParseErrorWire JSON 解析错误线格式编码 ────────────────────────────
 
 // TestEncodeJSONParseErrorWire_错误帧结构 验证 JSON 解析错误帧结构
 func TestEncodeJSONParseErrorWire_错误帧结构(t *testing.T) {

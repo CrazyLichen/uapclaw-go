@@ -340,7 +340,7 @@ func TestIsSubagentExplicitlyEnabled_配置中不存在(t *testing.T) {
 // Python: _resolve_runtime_language() 调用 resolve_language() 标准化
 func TestResolveRuntimeLanguage_有配置(t *testing.T) {
 	d := NewDeepAdapter()
-	// preferred_language=en → ResolveLanguage("en") → "en"
+	// 配置 preferred_language=en → resolveRuntimeLanguage 返回 "en"
 	d.configCache = map[string]any{"preferred_language": "en"}
 	if got := d.resolveRuntimeLanguage(); got != "en" {
 		t.Errorf("resolveRuntimeLanguage() = %q, want %q", got, "en")

@@ -10,7 +10,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// ──────────────────────────── exception.go ────────────────────────────
+// ──────────────────────────── exception.go 异常构建 ────────────────────────────
 
 func TestToolInterruptException_Error_有Request(t *testing.T) {
 	e := &ToolInterruptException{Request: &InterruptRequest{Message: "请确认"}}
@@ -54,7 +54,7 @@ func TestToolInterruptException_errors_As识别(t *testing.T) {
 	assert.Equal(t, "test", tie.Request.GetMessage())
 }
 
-// ──────────────────────────── response.go ────────────────────────────
+// ──────────────────────────── response.go 响应构造 ────────────────────────────
 
 func TestInterruptRequester_接口满足(t *testing.T) {
 	// *InterruptRequest 满足 InterruptRequester
@@ -123,7 +123,7 @@ func TestToolCallInterruptRequest_从ToolCall创建(t *testing.T) {
 	assert.Equal(t, 2, tcir.Index)
 }
 
-// ──────────────────────────── state.go ────────────────────────────
+// ──────────────────────────── state.go 状态定义 ────────────────────────────
 
 func TestInterruptKey常量(t *testing.T) {
 	assert.Equal(t, "__react_agent_interruption__", InterruptionKey)

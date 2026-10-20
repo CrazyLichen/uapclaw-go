@@ -25,7 +25,7 @@ import (
 //   - TeamMonitor 生命周期（CreateMonitor/Start/Stop）
 //   - FromEventMessage 事件转换正确性
 //   - MonitorEventType 枚举完整性
-//   - TeamStreamLogger Feed/Flush
+//   - TeamStreamLogger 的 Feed/Flush 行为
 //   - EventMessage 发布到 TeamMonitor 事件消费
 //
 // 对齐 Python: openjiuwen/harness/monitor/team_monitor.py

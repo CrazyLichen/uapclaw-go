@@ -197,7 +197,7 @@ func TestExtractJSONWithError_空字符串(t *testing.T) {
 }
 
 func TestLooksTruncated_截断(t *testing.T) {
-	// opens=3 ({ + { + {), closes=0 → 3 > 0+1 = true
+	// 括号平衡推导：opens=3, closes=0 → 3 > 0+1 = true
 	text := `{"outer": {"inner": {"deep": "conte`
 	assert.True(t, LooksTruncated(text))
 }

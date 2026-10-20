@@ -277,7 +277,7 @@ func TestDeepCopyMap_nil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("deepCopyMap(nil) 不应返回错误: %v", err)
 	}
-	// json.Marshal(nil) → "null"，json.Unmarshal("null", &result) → nil
+	// 序列化行为：json.Marshal(nil) 产出 "null"，json.Unmarshal("null", &result) 还原为 nil
 	if result != nil {
 		t.Errorf("期望 nil, 实际 %v", result)
 	}

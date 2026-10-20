@@ -1334,12 +1334,12 @@ func mustToInt64(v any) int64 {
 
 // TestToStringSlice 测试 toStringSlice
 func TestToStringSlice(t *testing.T) {
-	// []string
+	// []string 输入
 	result, ok := toStringSlice([]string{"a", "b"})
 	assert.True(t, ok)
 	assert.Equal(t, []string{"a", "b"}, result)
 
-	// []any
+	// []any 输入
 	result, ok = toStringSlice([]any{"x", "y"})
 	assert.True(t, ok)
 	assert.Equal(t, []string{"x", "y"}, result)

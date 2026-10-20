@@ -138,14 +138,14 @@ func TestStructSchemaExtractor_slice类型(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Extract 失败: %v", err)
 	}
-	// Tags: Array[String]
+	// Tags 字段类型应为 Array[String]
 	if params[0].Type != schema.ParamTypeArray {
 		t.Errorf("Tags 类型: 期望 Array，实际 %v", params[0].Type)
 	}
 	if params[0].Items == nil || params[0].Items.Type != schema.ParamTypeString {
 		t.Errorf("Tags items 类型: 期望 String，实际 %v", params[0].Items)
 	}
-	// Items: Array[Object]
+	// Items 字段类型应为 Array[Object]
 	if params[1].Type != schema.ParamTypeArray {
 		t.Errorf("Items 类型: 期望 Array，实际 %v", params[1].Type)
 	}
@@ -256,7 +256,7 @@ func TestStructSchemaExtractor_bool默认值(t *testing.T) {
 func TestStructSchemaExtractor_ExtractDescription(t *testing.T) {
 	typ := reflect.TypeOf(basicTypesInput{})
 	desc := StructSchemaExtractor{}.ExtractDescription(typ)
-	// basicTypesInput → humanize → "basic types input"
+	// 描述推导：basicTypesInput 经 humanize 转为 "basic types input"
 	if desc == "" {
 		t.Error("ExtractDescription 应返回 humanize 后的名称，而非空字符串")
 	}

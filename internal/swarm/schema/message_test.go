@@ -581,8 +581,8 @@ func TestNewMessageID(t *testing.T) {
 // TestNowTimestamp 验证 NowTimestamp 返回合理时间戳
 func TestNowTimestamp(t *testing.T) {
 	ts := NowTimestamp()
-	// 2024-01-01 00:00:00 UTC = 1704067200.0
-	// 2030-01-01 00:00:00 UTC = 1893456000.0
+	// 时间换算：2024-01-01 00:00:00 UTC = 1704067200.0
+	// 时间换算：2030-01-01 00:00:00 UTC = 1893456000.0
 	if ts < 1.7e9 || ts > 2.0e9 {
 		t.Errorf("NowTimestamp = %v，不在合理范围内 [1.7e9, 2.0e9]", ts)
 	}

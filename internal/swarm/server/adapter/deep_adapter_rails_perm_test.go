@@ -20,7 +20,7 @@ func TestDeepAdapter_buildPermissionRail_未启用(t *testing.T) {
 		t.Fatal("无 permissions 配置时应返回 nil")
 	}
 
-	// enabled=false
+	// enabled=false 场景
 	rail = d.buildPermissionRail(map[string]any{
 		"permissions": map[string]any{"enabled": false},
 	})

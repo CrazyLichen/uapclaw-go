@@ -617,7 +617,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_OnAfterToolCall_非skil
 	s.Require().NoError(err)
 }
 
-// ─── SnapshotForEvolution ───
+// ─── SnapshotForEvolution 演化快照 ───
 
 // TestSkillEvolutionRail_SnapshotForEvolution_autoScan关闭返回nil 测试 autoScan 关闭时返回 nil。
 //
@@ -673,7 +673,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SnapshotForEvolution_�
 	s.Equal("skill-evolution", *snapshot.SkillName)
 }
 
-// ─── ShouldHintSimplifyOrRebuild ───
+// ─── ShouldHintSimplifyOrRebuild 精简或重建提示判定 ───
 
 // TestSkillEvolutionRail_ShouldHintSimplifyOrRebuild 测试无技能目录时返回 false。
 //
@@ -754,7 +754,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_GetCallbacks() {
 	s.Contains(callbacks, agentinterfaces.CallbackAfterTaskIteration)
 }
 
-// ─── RecordPresentedExperiences ───
+// ─── RecordPresentedExperiences 呈现经验记录 ───
 
 // TestSkillEvolutionRail_RecordPresentedExperiences 测试非 rail 路径呈现经验记录。
 //
@@ -766,7 +766,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_RecordPresentedExperien
 	rail.RecordPresentedExperiences(s.Ctx, "my_skill", "snippet without record IDs", "session_1", nil)
 }
 
-// ─── RollbackSkill ───
+// ─── RollbackSkill 技能回滚 ───
 
 // TestSkillEvolutionRail_RollbackSkill_无归档 测试无归档目录时返回 false。
 //
@@ -892,7 +892,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_OnApprove_OnReject_兼�
 	s.Require().NoError(err)
 }
 
-// ─── RequestSimplify ───
+// ─── RequestSimplify 请求精简 ───
 
 // TestSkillEvolutionRail_RequestSimplify_无经验 测试无经验时 RequestSimplify 返回空结果。
 //
@@ -906,7 +906,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_RequestSimplify_无经�
 	s.Equal("nonexistent_skill", result.SkillName)
 }
 
-// ─── RequestRebuild ───
+// ─── RequestRebuild 请求重建 ───
 
 // TestSkillEvolutionRail_RequestRebuild_无经验 测试无经验时 RequestRebuild 返回空。
 //
@@ -919,7 +919,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_RequestRebuild_无经�
 	s.Empty(result)
 }
 
-// ─── RequestUserEvolution ───
+// ─── RequestUserEvolution 请求用户演化 ───
 
 // TestSkillEvolutionRail_RequestUserEvolution_无轨迹 测试无轨迹时返回基础结果。
 //
@@ -1026,7 +1026,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_SimplifyRequestResult_H
 	s.False(result3.HasChanges())
 }
 
-// ─── EvolutionSnapshot ───
+// ─── EvolutionSnapshot 演化快照结构 ───
 
 // TestSkillEvolutionRail_EvolutionSnapshot_ToLegacyDict 测试快照序列化为 dict。
 //
@@ -1071,7 +1071,7 @@ func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_EvolutionSnapshot_FromL
 	s.NotEmpty(restored.Messages)
 }
 
-// ─── EvolutionHostEventMeta ───
+// ─── EvolutionHostEventMeta 演化宿主事件元数据 ───
 
 // TestSkillEvolutionRail_EvolutionHostEventMeta_ToPayload 测试事件元数据序列化。
 func (s *SkillEvolutionRailSuite) TestSkillEvolutionRail_EvolutionHostEventMeta_ToPayload() {

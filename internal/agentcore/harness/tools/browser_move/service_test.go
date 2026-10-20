@@ -27,7 +27,7 @@ func newTestBrowserService() *BrowserService {
 	)
 }
 
-// ──────────────────────────── NewBrowserService ────────────────────────────
+// ──────────────────────────── NewBrowserService 浏览器服务构造 ────────────────────────────
 
 // TestNewBrowserService 测试 BrowserService 构造
 func TestNewBrowserService(t *testing.T) {
@@ -74,7 +74,7 @@ func TestNewBrowserService_NilCancelStore(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── SessionNew ────────────────────────────
+// ──────────────────────────── SessionNew 会话创建 ────────────────────────────
 
 // TestSessionNew 自动生成会话标识
 func TestSessionNew(t *testing.T) {
@@ -222,7 +222,7 @@ func TestIsCancelled_空会话ID返回false(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RecordToolProgress ────────────────────────────
+// ──────────────────────────── RecordToolProgress 工具进度记录 ────────────────────────────
 
 // TestRecordToolProgress 测试工具进度记录
 func TestRecordToolProgress(t *testing.T) {
@@ -265,7 +265,7 @@ func TestRecordToolProgress_空会话ID忽略(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RecordWorkerProgress ────────────────────────────
+// ──────────────────────────── RecordWorkerProgress 工作器进度记录 ────────────────────────────
 
 // TestRecordWorkerProgress 测试 Worker 进度记录
 func TestRecordWorkerProgress(t *testing.T) {
@@ -307,7 +307,7 @@ func TestRecordWorkerProgress_无status字段推断(t *testing.T) {
 	svc := newTestBrowserService()
 	svc.SessionNew("sess2")
 
-	// ok=true → completed
+	// ok=true 推断为 completed
 	svc.RecordWorkerProgress("sess2", "req1", map[string]any{
 		"ok": true,
 	})
@@ -423,7 +423,7 @@ func TestClearProgressState(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ExportProgressState ────────────────────────────
+// ──────────────────────────── ExportProgressState 进度状态导出 ────────────────────────────
 
 // TestExportProgressState 导出进度状态
 func TestExportProgressState(t *testing.T) {
@@ -488,7 +488,7 @@ func TestExportProgressState_未知状态返回nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── BuildProgressContext ────────────────────────────
+// ──────────────────────────── BuildProgressContext 进度上下文构造 ────────────────────────────
 
 // TestBuildProgressContext_空状态
 func TestBuildProgressContext_空状态(t *testing.T) {
@@ -555,7 +555,7 @@ func TestBuildProgressContext_有数据状态(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── BuildFailureSummary ────────────────────────────
+// ──────────────────────────── BuildFailureSummary 失败摘要构造 ────────────────────────────
 
 // TestBuildFailureSummary 完整摘要
 func TestBuildFailureSummary(t *testing.T) {
@@ -622,7 +622,7 @@ func TestBuildFailureSummary_空页面信息(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ShouldTreatAsCompleted ────────────────────────────
+// ──────────────────────────── ShouldTreatAsCompleted 完成态判定 ────────────────────────────
 
 // TestShouldTreatAsCompleted_已完成有证据
 func TestShouldTreatAsCompleted_已完成有证据(t *testing.T) {
@@ -690,7 +690,7 @@ func TestShouldTreatAsCompleted_task_status字段(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizeProgressStatus ────────────────────────────
+// ──────────────────────────── NormalizeProgressStatus 进度状态规范化 ────────────────────────────
 
 // TestNormalizeProgressStatus 规范化进度状态
 func TestNormalizeProgressStatus(t *testing.T) {
@@ -722,7 +722,7 @@ func TestNormalizeProgressStatus(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsRetryableTransportMessage ────────────────────────────
+// ──────────────────────────── IsRetryableTransportMessage 传输消息可重试判定 ────────────────────────────
 
 // TestIsRetryableTransportMessage 可重试传输错误判断
 func TestIsRetryableTransportMessage(t *testing.T) {
@@ -753,7 +753,7 @@ func TestIsRetryableTransportMessage(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsRetryableRuntimeResult ────────────────────────────
+// ──────────────────────────── IsRetryableRuntimeResult 运行结果可重试判定 ────────────────────────────
 
 // TestIsRetryableRuntimeResult 可重试运行时结果判断
 func TestIsRetryableRuntimeResult(t *testing.T) {
@@ -813,7 +813,7 @@ func TestIsRetryableRuntimeResult(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── NormalizeScreenshotValue ────────────────────────────
+// ──────────────────────────── NormalizeScreenshotValue 截图值规范化 ────────────────────────────
 
 // TestNormalizeScreenshotValue 规范化截图值
 func TestNormalizeScreenshotValue(t *testing.T) {
@@ -840,7 +840,7 @@ func TestNormalizeScreenshotValue(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Shutdown ────────────────────────────
+// ──────────────────────────── Shutdown 关闭 ────────────────────────────
 
 // TestShutdown 关闭服务
 func TestShutdown(t *testing.T) {
@@ -860,7 +860,7 @@ func TestShutdown(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── cancelKey ────────────────────────────
+// ──────────────────────────── cancelKey 取消键 ────────────────────────────
 
 // TestCancelKey 取消键格式
 func TestCancelKey(t *testing.T) {
@@ -877,7 +877,7 @@ func TestCancelKey(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── cleanProgressItems ────────────────────────────
+// ──────────────────────────── cleanProgressItems 进度项清理 ────────────────────────────
 
 // TestCleanProgressItems 清理进度项
 func TestCleanProgressItems(t *testing.T) {
@@ -911,7 +911,7 @@ func TestCleanProgressItems(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── buildResumeTask ────────────────────────────
+// ──────────────────────────── buildResumeTask 恢复任务构造 ────────────────────────────
 
 // TestBuildResumeTask 构建续行任务
 func TestBuildResumeTask(t *testing.T) {
@@ -945,7 +945,7 @@ func TestBuildResumeTask_截断长输出(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── buildTaskWithFailureContext ────────────────────────────
+// ──────────────────────────── buildTaskWithFailureContext 失败上下文任务构造 ────────────────────────────
 
 // TestBuildTaskWithFailureContext 构建带失败上下文的任务
 func TestBuildTaskWithFailureContext(t *testing.T) {
@@ -972,7 +972,7 @@ func TestBuildTaskWithFailureContext_空摘要(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── isMaxIterationResult ────────────────────────────
+// ──────────────────────────── isMaxIterationResult 最大迭代结果判定 ────────────────────────────
 
 // TestIsMaxIterationResult 最大迭代次数判断
 func TestIsMaxIterationResult(t *testing.T) {
@@ -997,7 +997,7 @@ func TestIsMaxIterationResult(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── trimText ────────────────────────────
+// ──────────────────────────── trimText 文本截断 ────────────────────────────
 
 // TestTrimText 文本截断
 func TestTrimText(t *testing.T) {

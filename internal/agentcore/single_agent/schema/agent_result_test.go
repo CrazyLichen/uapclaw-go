@@ -70,7 +70,7 @@ func TestPart_RawBytes_反序列化(t *testing.T) {
 }
 
 func TestPart_RawBytes_null(t *testing.T) {
-	// JSON null → nil RawBytes
+	// JSON null 解析为 nil RawBytes
 	data := []byte("null")
 	var raw RawBytes
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -223,8 +223,8 @@ func TestAgentResult_JSON序列化(t *testing.T) {
 
 func TestAgentResult_对齐Python字段(t *testing.T) {
 	// 验证与 Python AgentResult 字段对齐：
-	// task_id (Optional[str]), sessionId (Optional[str]), status (TaskStatus),
-	// artifacts (List[Artifact]), metadata (Dict[str, Any])
+	// task_id 为 Optional[str]、sessionId 为 Optional[str]、status 为 TaskStatus、
+	// artifacts 为 List[Artifact]、metadata 为 Dict[str, Any]
 	result := &AgentResult{}
 	if result.TaskID != nil {
 		t.Errorf("默认 TaskID 应为 nil，实际 %v", result.TaskID)

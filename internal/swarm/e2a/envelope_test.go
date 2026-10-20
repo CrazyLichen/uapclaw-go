@@ -26,7 +26,7 @@ func TestNewE2AEnvelope_默认值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── EnsureTimestamp ────────────────────────────
+// ──────────────────────────── EnsureTimestamp 时间戳保证 ────────────────────────────
 
 // TestE2AEnvelope_EnsureTimestamp_未设置 验证空串时填充 RFC3339
 func TestE2AEnvelope_EnsureTimestamp_未设置(t *testing.T) {
@@ -53,7 +53,7 @@ func TestE2AEnvelope_EnsureTimestamp_已设置(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ToMap ────────────────────────────
+// ──────────────────────────── ToMap 转 map ────────────────────────────
 
 // TestE2AEnvelope_ToMap_枚举值 验证 IdentityOrigin 输出字符串值
 func TestE2AEnvelope_ToMap_枚举值(t *testing.T) {
@@ -272,7 +272,7 @@ func TestNormalizeTimestampValue_nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── migrateLegacyBinding ────────────────────────────
+// ──────────────────────────── migrateLegacyBinding 旧版绑定迁移 ────────────────────────────
 
 // TestMigrateLegacyBinding_无binding字段 验证无 binding 时不修改
 func TestMigrateLegacyBinding_无binding字段(t *testing.T) {
@@ -304,7 +304,7 @@ func TestMigrateLegacyBinding_binding为dict含value(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── paramsWithOptionalLegacyPayload ────────────────────────────
+// ──────────────────────────── paramsWithOptionalLegacyPayload 可选旧版载荷参数 ────────────────────────────
 
 // TestParamsWithOptionalLegacyPayload_有payload 验证 payload 键合并，不覆盖
 func TestParamsWithOptionalLegacyPayload_有payload(t *testing.T) {
@@ -332,7 +332,7 @@ func TestParamsWithOptionalLegacyPayload_无payload(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── MergeParamsToACPPrompt ────────────────────────────
+// ──────────────────────────── MergeParamsToACPPrompt 参数合并到 ACP 提示 ────────────────────────────
 
 // TestMergeParamsToACPPrompt_非prompt方法 验证 method≠session/prompt 时原样返回
 func TestMergeParamsToACPPrompt_非prompt方法(t *testing.T) {

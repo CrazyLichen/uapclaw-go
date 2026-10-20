@@ -58,12 +58,13 @@ func newTeamMonitorHandlerImpl(monitor *monitor.TeamMonitor, sessionID string) *
 // 对齐 Python: TeamMonitorHandler.start()
 //
 // Python 步骤：
-//  1. if self._running: return
-//  2. if self._monitor is None: raise ValueError
-//  3. await self._monitor.start()
-//  4. self._running = True
-//  5. self._event_task = asyncio.create_task(self._collect_events())
-//  6. logger.info("Monitor 启动成功")
+//
+//	Python: 1. if self._running: return
+//	Python: 2. if self._monitor is None: raise ValueError
+//	Python: 3. await self._monitor.start()
+//	Python: 4. self._running = True
+//	Python: 5. self._event_task = asyncio.create_task(self._collect_events())
+//	6. logger.info("Monitor 启动成功")
 func (h *teamMonitorHandlerImpl) Start(ctx context.Context) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -97,10 +98,11 @@ func (h *teamMonitorHandlerImpl) Start(ctx context.Context) error {
 // 对齐 Python: TeamMonitorHandler.stop()
 //
 // Python 步骤：
-//  1. self._running = False
-//  2. if self._event_task: cancel + await + set None
-//  3. if self._monitor: try monitor.stop(); self._monitor = None
-//  4. logger.info("Monitor 已停止")
+//
+//	Python: 1. self._running = False
+//	Python: 2. if self._event_task: cancel + await + set None
+//	Python: 3. if self._monitor: try monitor.stop(); self._monitor = None
+//	4. logger.info("Monitor 已停止")
 //
 // M-05: monitor.Stop 会 close eventCh → collectEvents 的 range 正常退出；
 // 此处再 close eventQueue（发送方关闭），使 consumeMonitorEvents 的 range 也能正常退出，
@@ -175,12 +177,13 @@ func (h *teamMonitorHandlerImpl) Events() <-chan map[string]any {
 // 对齐 Python: TeamMonitorHandler.get_team_snapshot() -> dict[str, Any] | None
 //
 // Python 步骤：
-//  1. if self._monitor is None: return None
-//  2. members = await self._monitor.get_members()
-//  3. team_info = await self._monitor.get_team_info(); leader_name = team_info.leader_member_name
-//  4. 过滤掉 leader
-//  5. tasks = await self._monitor.get_tasks() or []
-//  6. return {"members": [...], "tasks": [...], "team_id": self._monitor.team_id}
+//
+//	Python: 1. if self._monitor is None: return None
+//	Python: 2. members = await self._monitor.get_members()
+//	Python: 3. team_info = await self._monitor.get_team_info(); leader_name = team_info.leader_member_name
+//	4. 过滤掉 leader
+//	Python: 5. tasks = await self._monitor.get_tasks() or []
+//	Python: 6. return {"members": [...], "tasks": [...], "team_id": self._monitor.team_id}
 func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[string]any, error) {
 	h.mu.Lock()
 	mon := h.monitor
@@ -273,11 +276,12 @@ func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[strin
 // 对齐 Python: TeamMonitorHandler._collect_events()
 //
 // Python 步骤：
-//  1. if self._monitor is None: return
-//  2. async for event in self._monitor.events():
-//  3. if not self._running: break
-//  4. event_dict = await self._convert_event_to_dict(event)
-//  5. if event_dict: await self._event_queue.put(event_dict)
+//
+//	Python: 1. if self._monitor is None: return
+//	Python: 2. async for event in self._monitor.events():
+//	Python: 3. if not self._running: break
+//	Python: 4. event_dict = await self._convert_event_to_dict(event)
+//	Python: 5. if event_dict: await self._event_queue.put(event_dict)
 func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context) {
 	defer logger.Info(logComponent).Str("session_id", h.sessionID).Msg("event collector goroutine exited")
 	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("event collector goroutine started")
@@ -325,12 +329,13 @@ func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context) {
 // 对齐 Python: TeamMonitorHandler._convert_event_to_dict(event) -> dict[str, Any] | None
 //
 // Python 步骤：
-//  1. team_event_type = get_team_event_type(event.event_type); if None: return None
-//  2. event_category = get_event_category(team_event_type)
-//  3. event_data = {"type": team_event_type.value, "team_id": event.team_name}
-//  4. if event.member_name: event_data["member_id"] = event.member_name
-//  5. 按 event.event_type 分派到各 handler
-//  6. return {"event_type": event_category.value, "session_id": self._session_id, "event": event_data}
+//
+//	Python: 1. team_event_type = get_team_event_type(event.event_type); if None: return None
+//	Python: 2. event_category = get_event_category(team_event_type)
+//	Python: 3. event_data = {"type": team_event_type.value, "team_id": event.team_name}
+//	Python: 4. if event.member_name: event_data["member_id"] = event.member_name
+//	5. 按 event.event_type 分派到各 handler
+//	Python: 6. return {"event_type": event_category.value, "session_id": self._session_id, "event": event_data}
 func (h *teamMonitorHandlerImpl) convertEventToDict(ctx context.Context, event *monitor.MonitorEvent) map[string]any {
 	if event == nil {
 		return nil
@@ -480,8 +485,9 @@ func (h *teamMonitorHandlerImpl) handleTaskUnblocked(base map[string]any, event 
 // 对齐 Python: TeamMonitorHandler._handle_message(base, event)
 //
 // Python 步骤：
-//  1. message_content = await self._get_message_content(event.message_id)
-//  2. base.update({"message_id": ..., "from_member": ..., "to_member": ..., "content": ...})
+//
+//	Python: 1. message_content = await self._get_message_content(event.message_id)
+//	Python: 2. base.update({"message_id": ..., "from_member": ..., "to_member": ..., "content": ...})
 //
 // Go 差异：Python 异步查询消息内容，Go 直接调用 monitor 查询。
 func (h *teamMonitorHandlerImpl) handleMessage(ctx context.Context, base map[string]any, event *monitor.MonitorEvent) {
@@ -497,8 +503,9 @@ func (h *teamMonitorHandlerImpl) handleMessage(ctx context.Context, base map[str
 // 对齐 Python: TeamMonitorHandler._handle_broadcast(base, event)
 //
 // Python 步骤：
-//  1. message_content = await self._get_message_content(event.message_id)
-//  2. base.update({"message_id": ..., "from_member": ..., "content": ...})
+//
+//	Python: 1. message_content = await self._get_message_content(event.message_id)
+//	Python: 2. base.update({"message_id": ..., "from_member": ..., "content": ...})
 func (h *teamMonitorHandlerImpl) handleBroadcast(ctx context.Context, base map[string]any, event *monitor.MonitorEvent) {
 	messageContent := h.getMessageContent(ctx, event.MessageID)
 	base["message_id"] = ptrStrVal(event.MessageID)
@@ -510,11 +517,12 @@ func (h *teamMonitorHandlerImpl) handleBroadcast(ctx context.Context, base map[s
 // 对齐 Python: TeamMonitorHandler._get_message_content(message_id) -> str
 //
 // Python 步骤：
-//  1. if not message_id or not self._monitor: return ""
-//  2. token = set_session_id(self._session_id)
-//  3. try: messages = await self._monitor.get_messages(); find by message_id
-//  4. finally: reset_session_id(token)
-//  5. except: return ""
+//
+//	Python: 1. if not message_id or not self._monitor: return ""
+//	Python: 2. token = set_session_id(self._session_id)
+//	Python: 3. try: messages = await self._monitor.get_messages(); find by message_id
+//	Python: 4. finally: reset_session_id(token)
+//	Python: 5. except: return ""
 //
 // Go 差异：Go 端 getMessages 已内置 boundSession，不需要手动设置 contextvar。
 // S-02: 增加 ctx 参数，替代 context.Background()，使 session 上下文可传播。

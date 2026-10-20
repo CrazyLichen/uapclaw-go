@@ -111,8 +111,10 @@ func NewChromaIndexer(
 	ci.databaseName = config.DatabaseName
 
 	// M-44: 对齐 Python __init__ L90-93:
-	//   self._client = ChromaVectorStore.create_client(
-	//     database_name=self.database_name, path_or_uri=chroma_path)
+	//
+	//	Python: self._client = ChromaVectorStore.create_client(
+	//	Python:   database_name=self.database_name, path_or_uri=chroma_path)
+	//
 	// 构造时创建一次持久 client，后续 DeleteIndex/IndexExists/GetIndexInfo 复用，
 	// 不再每次操作新建 PersistentClient（资源浪费 + 历史上的 IndexExists 恒真问题）。
 	client, err := vector_store.CreateChromaClient(ci.databaseName, chromaPath)

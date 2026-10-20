@@ -35,10 +35,10 @@ type gaussStringSerializer struct{}
 
 // Value 实现 schema.SerializerInterface，将 Go 值转换为数据库值。
 // 对标 Python GaussString.bind_processor().process(value)：
-//   - string → 原值返回
-//   - time.Time → "2006-01-02 15:04:05.000000"
-//   - nil → nil
-//   - 其他 → fmt.Sprintf("%v", v)
+//   - string 类型原值返回
+//   - time.Time 格式化为 "2006-01-02 15:04:05.000000"
+//   - nil 保持 nil
+//   - 其他类型用 fmt.Sprintf("%v", v) 兜底
 func (s gaussStringSerializer) Value(_ context.Context, _ *schema.Field, _ reflect.Value, fieldValue any) (any, error) {
 	switch v := fieldValue.(type) {
 	case string:

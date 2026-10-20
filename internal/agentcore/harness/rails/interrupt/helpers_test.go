@@ -340,19 +340,19 @@ func strVal(m map[string]any, key string) string {
 }
 
 func TestToSlice(t *testing.T) {
-	// []any
+	// []any 输入
 	s1, ok1 := toSlice([]any{1, 2, 3})
 	if !ok1 || len(s1) != 3 {
 		t.Errorf("[]any 期望 ok=true, len=3")
 	}
 
-	// []map[string]any
+	// []map[string]any 输入
 	s2, ok2 := toSlice([]map[string]any{{"a": "b"}})
 	if !ok2 || len(s2) != 1 {
 		t.Errorf("[]map 期望 ok=true, len=1")
 	}
 
-	// nil
+	// nil 输入
 	_, ok3 := toSlice(nil)
 	if ok3 {
 		t.Errorf("nil 期望 ok=false")

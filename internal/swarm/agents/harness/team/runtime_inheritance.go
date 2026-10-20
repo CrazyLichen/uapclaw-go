@@ -402,8 +402,8 @@ func BuildContextProcessorRail(config map[string]any) *ce.ContextProcessorRail {
 // 对齐 Python: build_skill_evolution_rail (L479-522)
 //
 // auto_save=true（成员自演化跳过审批）；LLM 构造失败返回 nil（对齐 Python
-// except 返回 None）。teamTrajectorySink 非 nil 且 teamID 非空时绑定
-// SetTrajectorySink(sink, teamID, "teammate")。
+// except 返回 None）。teamTrajectorySink 非 nil 且 teamID 非空时调用
+// SetTrajectorySink 绑定（参数依次为 sink、teamID、"teammate"）。
 func BuildSkillEvolutionRail(skillsDir string, config map[string]any, teamTrajectorySink trajectory.TrajectorySink, teamID string) *evolution.SkillEvolutionRail {
 	llmModel, modelName := BuildEvolutionLLM(config)
 	if llmModel == nil {
@@ -443,8 +443,8 @@ func BuildSkillEvolutionRail(skillsDir string, config map[string]any, teamTrajec
 // 13 步逐 rail 构造，每步独立 panic 恢复 + warning 日志（对齐 Python 每步 try/except），
 // 单步失败不阻断后续。返回成功构造的 rail 列表。
 //
-// 顺序：RuntimePrompt → ResponsePrompt → SysOperation → JiuClawStreamEvent →
-// TaskPlanning → Security → Heartbeat → AvatarPrompt →（team_ws_root）TeamWorkspaceReportPath →
+// 构造顺序（箭头表示先后）：RuntimePrompt → ResponsePrompt → SysOperation → JiuClawStreamEvent →
+// TaskPlanning → Security → Heartbeat → AvatarPrompt →（team_ws_root 存在时）TeamWorkspaceReportPath →
 // （leader+skills_dir）TeamSkillEvolution →（leader+skills_dir+开关）TeamSkillCreate →
 // （非 leader+skills_dir）SkillEvolution →（开关）ContextProcessor
 func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspace *TeamWorkspaceInfo) []agentinterfaces.AgentRail {
@@ -568,11 +568,11 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 					evolution.WithTeamSkillTrajectorySource(boundRegistry),
 					evolution.WithTeamSkillTeamID(teamID),
 				)
-			if sink, ok := teamTrajectoryRegistry.(trajectory.TrajectorySink); ok {
-				// M-03: 对齐 Python member_role=role 传实际变量（原硬编码 "leader"，
-				// 当前守卫已限定 leader 行为等价，但语义上应传 role 防 teammate 复用时静默传错）
-				opts = append(opts, evolution.WithTeamSkillTrajectorySink(sink, teamID, roleStr(memberInfo.Role)))
-			}
+				if sink, ok := teamTrajectoryRegistry.(trajectory.TrajectorySink); ok {
+					// M-03: 对齐 Python member_role=role 传实际变量（原硬编码 "leader"，
+					// 当前守卫已限定 leader 行为等价，但语义上应传 role 防 teammate 复用时静默传错）
+					opts = append(opts, evolution.WithTeamSkillTrajectorySink(sink, teamID, roleStr(memberInfo.Role)))
+				}
 			}
 			opts = append(opts,
 				evolution.WithTeamSkillAutoScan(evolutionAutoScan),

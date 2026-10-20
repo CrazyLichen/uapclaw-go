@@ -13,7 +13,7 @@ import (
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ──────────────────────────── Mock ────────────────────────────
+// ──────────────────────────── Mock 测试桩 ────────────────────────────
 
 // mockSessionFacade SessionFacade 测试用 mock
 //

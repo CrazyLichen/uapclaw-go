@@ -509,13 +509,13 @@ func TestExtractConversationExcerpt_混合ErrorNone与真实错误(t *testing.T)
 	assert.Contains(t, excerpt, "FAILED TOOL EXECUTIONS")
 }
 
-// ──────────────────────────── G6: sharedRecordContextMarker ────────────────────────────
+// ──────────────────────────── G6: sharedRecordContextMarker 共享记录上下文标记 ────────────────────────────
 
 func TestSharedRecordContextMarker(t *testing.T) {
 	assert.Equal(t, "[shared origin=", sharedRecordContextMarker)
 }
 
-// ──────────────────────────── G1: resolveDownloadTopK ────────────────────────────
+// ──────────────────────────── G1: resolveDownloadTopK 下载 TopK 解析 ────────────────────────────
 
 func TestResolveDownloadTopK(t *testing.T) {
 	// 默认值
@@ -536,7 +536,7 @@ func TestResolveDownloadTopK(t *testing.T) {
 	assert.Equal(t, 1, resolveDownloadTopK(map[string]any{"download_top_k": -3}))
 }
 
-// ──────────────────────────── G4: uploadApprovedRecordsForSharing ────────────────────────────
+// ──────────────────────────── G4: uploadApprovedRecordsForSharing 审批记录共享上传 ────────────────────────────
 
 func TestUploadApprovedRecordsForSharing_未启用(t *testing.T) {
 	r := &SkillEvolutionRail{}

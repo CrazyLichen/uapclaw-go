@@ -27,11 +27,11 @@ import (
 // 覆盖：
 //   - Priority 返回值
 //   - NewProjectMemoryRail 默认/自定义构造
-//   - SetLanguage / SetAdditionalDirectories
+//   - SetLanguage 与 SetAdditionalDirectories 设置
 //   - ResolveWorkspacePath 路径解析
-//   - Init 捕获 agent → Uninit 清理
+//   - Init 捕获 agent 后 Uninit 清理
 //   - GetCallbacks 回调注册
-//   - BeforeModelCall / AfterToolCall 回调逻辑
+//   - BeforeModelCall 与 AfterToolCall 回调逻辑
 //   - AgentRail 接口满足
 //
 // 对齐 Python: tests/system_tests/test_project_memory.py
@@ -75,7 +75,7 @@ func (s *ProjectMemoryRailSuite) TearDownTest() {
 	}
 }
 
-// ──────────────────────────── Priority ────────────────────────────
+// ──────────────────────────── Priority 优先级 ────────────────────────────
 
 // TestProjectMemoryRail_Priority 验证 ProjectMemoryRail.Priority() 返回值。
 // 注意：NewProjectMemoryRail 未调用 NewDeepAgentRail() 初始化 BaseRail，
@@ -85,7 +85,7 @@ func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_Priority() {
 	s.Equal(0, s.rail.Priority(), "ProjectMemoryRail 未初始化 BaseRail，Priority 为零值 0")
 }
 
-// ──────────────────────────── NewProjectMemoryRail ────────────────────────────
+// ──────────────────────────── NewProjectMemoryRail 项目记忆 Rail 构造 ────────────────────────────
 
 // TestNewProjectMemoryRail_默认值 验证默认构造参数
 func (s *ProjectMemoryRailSuite) TestNewProjectMemoryRail_默认值() {
@@ -100,7 +100,7 @@ func (s *ProjectMemoryRailSuite) TestNewProjectMemoryRail_自定义值() {
 	s.Equal("en", r.GetLanguage(), "语言应为 en")
 }
 
-// ──────────────────────────── SetLanguage ────────────────────────────
+// ──────────────────────────── SetLanguage 语言设置 ────────────────────────────
 
 // TestProjectMemoryRail_SetLanguage 验证语言更新
 func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_SetLanguage() {
@@ -116,7 +116,7 @@ func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_SetLanguage() {
 	s.Equal("en", s.rail.GetLanguage(), "相同值时语言应保持 en")
 }
 
-// ──────────────────────────── SetAdditionalDirectories ────────────────────────────
+// ──────────────────────────── SetAdditionalDirectories 附加目录设置 ────────────────────────────
 
 // TestProjectMemoryRail_SetAdditionalDirectories_合并 验证额外目录合并去重
 // 由于 additionalDirectories 是私有字段，通过构造 + SetAdditionalDirectories
@@ -140,7 +140,7 @@ func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_SetAdditionalDirectories_
 	s.Equal("cn", r.GetLanguage(), "nil 输入后其他方法应正常")
 }
 
-// ──────────────────────────── ResolveWorkspacePath ────────────────────────────
+// ──────────────────────────── ResolveWorkspacePath 工作区路径解析 ────────────────────────────
 
 // TestProjectMemoryRail_ResolveWorkspacePath_构造期路径 验证使用构造期路径
 func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_ResolveWorkspacePath_构造期路径() {
@@ -205,7 +205,7 @@ func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_Uninit_无Builder() {
 	s.Require().NoError(err, "Uninit（无 builder）不应返回错误")
 }
 
-// ──────────────────────────── GetCallbacks ────────────────────────────
+// ──────────────────────────── GetCallbacks 回调注册 ────────────────────────────
 
 // TestProjectMemoryRail_GetCallbacks 验证 GetCallbacks 返回 before_model_call + after_tool_call
 func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_GetCallbacks() {
@@ -215,7 +215,7 @@ func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_GetCallbacks() {
 	s.Contains(callbacks, agentinterfaces.CallbackAfterToolCall, "应包含 after_tool_call 回调")
 }
 
-// ──────────────────────────── BeforeModelCall ────────────────────────────
+// ──────────────────────────── BeforeModelCall 模型调用前钩子 ────────────────────────────
 
 // TestProjectMemoryRail_BeforeModelCall_有UAPCLAWSWARMMD 验证存在 UAPCLAWSWARM.md 时注入 section
 func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_BeforeModelCall_有UAPCLAWSWARMMD() {
@@ -263,7 +263,7 @@ func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_BeforeModelCall_无Builde
 	s.Require().NoError(err, "无 builder 时 BeforeModelCall 不应返回错误")
 }
 
-// ──────────────────────────── AfterToolCall ────────────────────────────
+// ──────────────────────────── AfterToolCall 工具调用后钩子 ────────────────────────────
 
 // TestProjectMemoryRail_AfterToolCall_写工具 验证写操作工具触发缓存清除
 func (s *ProjectMemoryRailSuite) TestProjectMemoryRail_AfterToolCall_写工具() {

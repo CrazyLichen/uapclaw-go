@@ -71,8 +71,8 @@ const (
 // NewBaseSplitter 构造并校验参数。
 //
 // 校验规则一比一对齐 Python Splitter.__init__：
-//   - chunkSize <= 0 → 155100 RETRIEVAL_INDEXING_CHUNK_SIZE_INVALID
-//   - chunkOverlap < 0 或 >= chunkSize → 155101 RETRIEVAL_INDEXING_CHUNK_OVERLAP_INVALID
+//   - chunkSize <= 0 时返回 155100 RETRIEVAL_INDEXING_CHUNK_SIZE_INVALID
+//   - chunkOverlap < 0 或 >= chunkSize 时返回 155101 RETRIEVAL_INDEXING_CHUNK_OVERLAP_INVALID
 //
 // Python 的 155102 tokenizer 校验（无 encode 且不可 callable）在 Go 侧
 // 不可达省略：enc/dec 是函数类型，静态保证（设计文档偏差 6）。

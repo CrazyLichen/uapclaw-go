@@ -8,7 +8,7 @@ import (
 	coreschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/schema"
 )
 
-// ──────────────────────────── BaseMemory ────────────────────────────
+// ──────────────────────────── BaseMemory 基础记忆 ────────────────────────────
 
 func TestBaseMemory_GetWorkspaceID(t *testing.T) {
 	bm := BaseMemory{WorkspaceID: "user1"}
@@ -24,7 +24,7 @@ func TestBaseMemory_默认值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── MemoryInterface ────────────────────────────
+// ──────────────────────────── MemoryInterface 记忆接口 ────────────────────────────
 
 func TestACEMemory_实现MemoryInterface(t *testing.T) {
 	var _ MemoryInterface = (*ACEMemory)(nil)
@@ -44,7 +44,7 @@ func TestACEMemory_实现MemoryItem接口(t *testing.T) {
 	var _ MemoryItem = (*ACEMemory)(nil)
 }
 
-// ──────────────────────────── FormatMemoryString ────────────────────────────
+// ──────────────────────────── FormatMemoryString 记忆字符串格式化 ────────────────────────────
 
 func TestACEMemory_FormatMemoryString(t *testing.T) {
 	m := ACEMemory{
@@ -72,7 +72,7 @@ func TestACEMemory_FormatMemoryString_零值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ACEMemory ────────────────────────────
+// ──────────────────────────── ACEMemory ACE 记忆 ────────────────────────────
 
 func TestACEMemory_ToVectorNode(t *testing.T) {
 	mem := ACEMemory{
@@ -166,7 +166,7 @@ func TestACEMemory_JSON往返(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ReasoningBankMemory ────────────────────────────
+// ──────────────────────────── ReasoningBankMemory 推理库记忆 ────────────────────────────
 
 func TestReasoningBankMemory_ToVectorNode(t *testing.T) {
 	label := true
@@ -304,7 +304,7 @@ func TestReasoningBankMemoryItem_JSON往返(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ReMeMemory ────────────────────────────
+// ──────────────────────────── ReMeMemory ReMe 记忆 ────────────────────────────
 
 func TestReMeMemory_ToVectorNode(t *testing.T) {
 	mem := ReMeMemory{

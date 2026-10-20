@@ -61,7 +61,7 @@ func (t *fakeTodoLoader) LoadTodos(_ context.Context, _ string) ([]hschema.TodoI
 	return t.todos, t.err
 }
 
-// ──────────────────────────── emitToolCall ────────────────────────────
+// ──────────────────────────── emitToolCall 工具调用事件发射 ────────────────────────────
 
 func TestEmitToolCall_正常发送(t *testing.T) {
 	sess := &fakeSession{}
@@ -113,7 +113,7 @@ func TestEmitToolCall_NilToolCall(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── emitToolResult ────────────────────────────
+// ──────────────────────────── emitToolResult 工具结果事件发射 ────────────────────────────
 
 func TestEmitToolResult_正常结果(t *testing.T) {
 	sess := &fakeSession{}
@@ -171,7 +171,7 @@ func TestEmitToolResult_NilSession(t *testing.T) {
 	emitToolResult(context.Background(), nil, tc, "result")
 }
 
-// ──────────────────────────── emitToolUpdate ────────────────────────────
+// ──────────────────────────── emitToolUpdate 工具更新事件发射 ────────────────────────────
 
 func TestEmitToolUpdate_正常更新(t *testing.T) {
 	sess := &fakeSession{}
@@ -209,7 +209,7 @@ func TestEmitToolUpdate_NilSession(t *testing.T) {
 	emitToolUpdate(context.Background(), nil, tc, "completed")
 }
 
-// ──────────────────────────── emitAskUserQuestionIfInterrupted ────────────────────────────
+// ──────────────────────────── emitAskUserQuestionIfInterrupted 中断时询问问题发射 ────────────────────────────
 
 func TestEmitAskUserQuestionIfInterrupted_非AskUser工具(t *testing.T) {
 	sess := &fakeSession{}
@@ -228,7 +228,7 @@ func TestEmitAskUserQuestionIfInterrupted_NilSession(t *testing.T) {
 	emitAskUserQuestionIfInterrupted(context.Background(), nil, tc, "ask_user", nil, nil)
 }
 
-// ──────────────────────────── emitTodoUpdated ────────────────────────────
+// ──────────────────────────── emitTodoUpdated Todo 更新事件发射 ────────────────────────────
 
 func TestEmitTodoUpdated_正常发送(t *testing.T) {
 	sess := &fakeSession{}
@@ -288,7 +288,7 @@ func TestEmitTodoUpdated_NilLoader(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── emitContextUsage ────────────────────────────
+// ──────────────────────────── emitContextUsage 上下文用量事件发射 ────────────────────────────
 
 func TestEmitContextUsage_NilSession(t *testing.T) {
 	cbCtx := &sainterfaces.AgentCallbackContext{}
@@ -296,7 +296,7 @@ func TestEmitContextUsage_NilSession(t *testing.T) {
 	// 不 panic 即通过
 }
 
-// ──────────────────────────── formatTodosForFrontend ────────────────────────────
+// ──────────────────────────── formatTodosForFrontend 前端 Todo 格式化 ────────────────────────────
 
 func TestFormatTodosForFrontend_状态映射(t *testing.T) {
 	todos := []hschema.TodoItem{

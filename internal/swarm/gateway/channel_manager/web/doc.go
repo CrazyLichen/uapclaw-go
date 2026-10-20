@@ -7,9 +7,9 @@
 //   - 第一层：normAndForward（NormalizeGatewayMessage → DeliverToMessageHandler），返回 false 不短路
 //   - 第二层：本地 method handler（返回 ack 响应给客户端）
 //
-// 配置热重载链路：
-//   - config.set → ApplyConfigPayload → NotifyConfigSavedOnce → onConfigSaved
-//   - config.save_all → ApplyConfigPayload + models + team → NotifyConfigSavedOnce → onConfigSaved
+// 配置热重载链路（箭头表示调用先后）：
+//   - config.set 触发 ApplyConfigPayload → NotifyConfigSavedOnce → onConfigSaved
+//   - config.save_all 触发 ApplyConfigPayload + models + team → NotifyConfigSavedOnce → onConfigSaved
 //
 // 文件目录：
 //

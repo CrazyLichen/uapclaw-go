@@ -97,7 +97,7 @@ func TestChatReranker_Rerank_正常解析(t *testing.T) {
 	}
 
 	// 计算: confidence = exp(-0.1) ≈ 0.905, noScore = exp(-2.3) ≈ 0.100
-	// score = 0.905 / (0.905 + 0.100) ≈ 0.900
+	// 得分推导：score = 0.905 / (0.905 + 0.100) ≈ 0.900
 	yesProb := math.Exp(-0.1)
 	noProb := math.Exp(-2.3)
 	expected := yesProb / (yesProb + noProb)

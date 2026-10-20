@@ -259,7 +259,7 @@ func TestUpdateEmbeddingDimensionOperation_回调(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── KV Operations ────────────────────────────
+// ──────────────────────────── KV Operations KV 操作 ────────────────────────────
 
 // TestUpdateKVOperation_回调 测试 UpdateKVOperation 回调函数
 func TestUpdateKVOperation_回调(t *testing.T) {

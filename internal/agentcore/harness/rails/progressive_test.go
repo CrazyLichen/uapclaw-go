@@ -142,14 +142,14 @@ func TestSearchTools_详情级别(t *testing.T) {
 	assert.NotContains(t, results1[0], "parameter_summary")
 	assert.NotContains(t, results1[0], "parameters")
 
-	// detail_level=2: +parameter_summary
+	// detail_level=2：追加 parameter_summary
 	results2, err := rail.searchTools(context.Background(), "read_file", 1, 2)
 	require.NoError(t, err)
 	require.Len(t, results2, 1)
 	assert.Contains(t, results2[0], "parameter_summary")
 	assert.NotContains(t, results2[0], "parameters")
 
-	// detail_level=3: +parameters
+	// detail_level=3：追加 parameters
 	results3, err := rail.searchTools(context.Background(), "read_file", 1, 3)
 	require.NoError(t, err)
 	require.Len(t, results3, 1)
@@ -249,7 +249,7 @@ func TestInitVisibleTools_已初始化跳过(t *testing.T) {
 	assert.Equal(t, []string{"tool_a"}, result)
 }
 
-// ──────────────────────────── loadTools ────────────────────────────
+// ──────────────────────────── loadTools 工具加载 ────────────────────────────
 
 // TestLoadTools_无会话 验证 session 为 nil 返回错误信息
 func TestLoadTools_无会话(t *testing.T) {
@@ -484,7 +484,7 @@ func TestBuildToolSummary(t *testing.T) {
 	assert.Contains(t, s3, "parameters")
 }
 
-// ──────────────────────────── GetCallbacks ────────────────────────────
+// ──────────────────────────── GetCallbacks 回调注册 ────────────────────────────
 
 // TestProgressiveToolRail_GetCallbacks 验证回调映射包含 BeforeInvoke 和 BeforeModelCall
 func TestProgressiveToolRail_GetCallbacks(t *testing.T) {

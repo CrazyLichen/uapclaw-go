@@ -45,9 +45,9 @@ type ProviderOptions struct {
 // 对齐 Python: MemoryProvider(ABC) (openjiuwen/core/memory/external/provider.py)
 //
 // 所有方法对齐 Python ABC:
-//   - 必须实现: Name, IsAvailable, Initialize, GetToolSchemas,
-//     HandleToolCall, Prefetch, SyncTurn
-//   - 可选覆盖: SystemPromptBlock, Shutdown, OnSessionEnd, IsInitialized
+//   - 必须实现的方法: Name、IsAvailable、Initialize、GetToolSchemas、
+//     HandleToolCall、Prefetch、SyncTurn
+//   - 可选覆盖的方法: SystemPromptBlock、Shutdown、OnSessionEnd、IsInitialized
 type MemoryProvider interface {
 	// Name 返回 Provider 唯一名称。
 	// Python: @property name -> str

@@ -6,20 +6,21 @@ package team
 // 对齐 Python: TeamManager.attach_distributed_hooks_for_runner_runtime(team_name, session_id, ...)
 //
 // Python 步骤：
-//  1. config_base = get_config()
-//  2. if not self._is_distributed_mode(config_base): return False
-//  3. runtime_mgr = _runner_team_runtime_manager(GLOBAL_RUNNER)
-//  4. active_team = await runtime_mgr.pool.get(team_name)
-//  5. if active_team is None: return False
-//  6. team_agent = active_team.agent
-//  7. if team_agent is None: return False
-//  8. self._runner_team_agents[session_id] = team_agent
-//  9. attach 5 个 distributed hooks:
-//     - attach_distributed_local_spawn_guard
-//     - attach_spawn_member_remote_bootstrap_wrapper
-//     - attach_shutdown_member_remote_cleanup_wrapper
-//     - attach_remote_bootstrap_ack_listener
-//     - attach_remote_teammate_bootstrap_listener
+//
+//	Python: 1. config_base = get_config()
+//	Python: 2. if not self._is_distributed_mode(config_base): return False
+//	Python: 3. runtime_mgr = _runner_team_runtime_manager(GLOBAL_RUNNER)
+//	Python: 4. active_team = await runtime_mgr.pool.get(team_name)
+//	Python: 5. if active_team is None: return False
+//	Python: 6. team_agent = active_team.agent
+//	Python: 7. if team_agent is None: return False
+//	Python: 8. self._runner_team_agents[session_id] = team_agent
+//	9. attach 5 个 distributed hooks:
+//	   - attach_distributed_local_spawn_guard
+//	   - attach_spawn_member_remote_bootstrap_wrapper
+//	   - attach_shutdown_member_remote_cleanup_wrapper
+//	   - attach_remote_bootstrap_ack_listener
+//	   - attach_remote_teammate_bootstrap_listener
 //
 // 10. 返回 True
 func (m *TeamManager) AttachDistributedHooksForRunnerRuntime(

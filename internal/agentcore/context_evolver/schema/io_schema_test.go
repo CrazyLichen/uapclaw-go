@@ -522,7 +522,7 @@ func TestMemoryItem_ReMeRetrievedMemory实现接口(t *testing.T) {
 	var _ MemoryItem = (*ReMeRetrievedMemory)(nil)
 }
 
-// ──────────────────────────── FormatMemoryString ────────────────────────────
+// ──────────────────────────── FormatMemoryString 记忆字符串格式化 ────────────────────────────
 
 func TestACERetrievedMemory_FormatMemoryString(t *testing.T) {
 	m := ACERetrievedMemory{

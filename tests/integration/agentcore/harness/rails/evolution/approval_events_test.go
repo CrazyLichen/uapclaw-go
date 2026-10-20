@@ -156,7 +156,7 @@ func (s *ApprovalEventsSuite) TestBuildSkillApprovalEvent_中文() {
 	s.Require().True(ok)
 	s.Equal("skill_evolve_1234", payload["request_id"])
 
-	// _evolution_meta
+	// 校验 _evolution_meta 元数据字段
 	meta, ok := payload["_evolution_meta"].(map[string]string)
 	s.Require().True(ok)
 	s.Equal("approval", meta["event_kind"])

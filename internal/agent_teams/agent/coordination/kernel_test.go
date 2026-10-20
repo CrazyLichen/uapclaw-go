@@ -438,8 +438,8 @@ func TestCoordinationKernel_PersistTeamLifecycle真实写入(t *testing.T) {
 	// 覆盖 fakeKernelHost 的 SessionController 方法
 	// （fakeKernelHost 是值方法集合，此处用包装方式注入）
 	kernel := &CoordinationKernel{host: &kernelHostWithSession{
-		KernelHost:       host,
-		sessionCtrl:      hostSessionCtrl,
+		KernelHost:  host,
+		sessionCtrl: hostSessionCtrl,
 	}}
 
 	kernel.persistTeamLifecycle(context.Background(), "paused")

@@ -938,10 +938,10 @@ func setupTestResources(t *testing.T, resDir string) {
 		_ = os.MkdirAll(d, 0o755)
 	}
 
-	// config.yaml
+	// config.yaml 文件生成
 	_ = os.WriteFile(filepath.Join(resDir, "config.yaml"), []byte("server:\n  host: localhost\n"), 0o644)
 
-	// .env.template
+	// .env.template 文件生成
 	_ = os.WriteFile(filepath.Join(resDir, ".env.template"), []byte("API_KEY=sk-test\n"), 0o644)
 
 	// 多语言文件

@@ -27,7 +27,7 @@ func TestNewE2AResponse_默认值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── EnsureTimestamp ────────────────────────────
+// ──────────────────────────── EnsureTimestamp 时间戳保证 ────────────────────────────
 
 // TestE2AResponse_EnsureTimestamp_未设置 验证空串时填充 RFC3339
 func TestE2AResponse_EnsureTimestamp_未设置(t *testing.T) {
@@ -48,7 +48,7 @@ func TestE2AResponse_EnsureTimestamp_已设置(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ToMap ────────────────────────────
+// ──────────────────────────── ToMap 转 map ────────────────────────────
 
 // TestE2AResponse_ToMap_枚举值 验证 IdentityOrigin 输出字符串值
 func TestE2AResponse_ToMap_枚举值(t *testing.T) {
@@ -95,7 +95,7 @@ func TestE2AResponse_ToMap_全部字段(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ResponseFromMap ────────────────────────────
+// ──────────────────────────── ResponseFromMap 从 map 构造响应 ────────────────────────────
 
 // TestResponseFromMap_完整字段 验证所有字段解析
 func TestResponseFromMap_完整字段(t *testing.T) {

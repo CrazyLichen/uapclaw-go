@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── CreateNestedDict ────────────────────────────
+// ──────────────────────────── CreateNestedDict 嵌套字典构造 ────────────────────────────
 
 func TestCreateNestedDict(t *testing.T) {
 	tests := []struct {
@@ -149,7 +149,7 @@ func TestFlattenDict(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RebuildDict ────────────────────────────
+// ──────────────────────────── RebuildDict 字典重建 ────────────────────────────
 
 func TestRebuildDict(t *testing.T) {
 	pairs := []LeafNode{
@@ -175,7 +175,7 @@ func TestRebuildDict(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RemoveZeroValues ────────────────────────────
+// ──────────────────────────── RemoveZeroValues 零值移除 ────────────────────────────
 
 func TestRemoveZeroValues(t *testing.T) {
 	tests := []struct {
@@ -233,7 +233,7 @@ func TestRemoveZeroValues(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ValidateArgs ────────────────────────────
+// ──────────────────────────── ValidateArgs 参数校验 ────────────────────────────
 
 func TestValidateArgs(t *testing.T) {
 	tests := []struct {

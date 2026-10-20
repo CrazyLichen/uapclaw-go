@@ -321,7 +321,7 @@ func TestSearch_不早停(t *testing.T) {
 		t.Fatalf("Search() error: %v", err)
 	}
 	// 禁用早停，应该遍历到 maxDepth
-	// 1(root) + 1(depth1) + 1(depth2) + 1(depth3) = 4
+	// 节点计数推导：1(root) + 1(depth1) + 1(depth2) + 1(depth3) = 4
 	if callCount != 4 {
 		t.Errorf("callCount = %d, want 4", callCount)
 	}

@@ -477,8 +477,8 @@ func newMemoryIndexManager(agentID, workspaceDir string, settings *MemorySetting
 }
 
 // initialize 初始化管理器。对齐 Python _initialize（manager.py L129-149，顺序不可调换）：
-// resolveDBPath → openDatabase → ensureSchema → initializeProvider →
-// loadVectorExtension → Sync("initial") → setupFileWatcher → ensureIntervalSync
+// 依次执行 resolveDBPath、openDatabase、ensureSchema、initializeProvider、
+// loadVectorExtension、Sync("initial")、setupFileWatcher、ensureIntervalSync
 func (m *MemoryIndexManager) initialize(ctx context.Context) error {
 	m.dbPath = m.resolveDBPath()
 	db, err := m.openDatabase(m.dbPath)

@@ -86,7 +86,7 @@ const logComponent = logger.ComponentAgentCore
 //	max_trajectory_steps=200, evolution_trigger=AFTER_INVOKE,
 //	async_evolution=True, max_concurrent_evolution=1, disabled_skills=None
 //
-// )
+//	Python: )
 func NewEvolutionRail(ext EvolutionExtension, opts ...EvolutionRailOption) *EvolutionRail {
 	r := &EvolutionRail{
 		ext:                ext,

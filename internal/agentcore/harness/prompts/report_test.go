@@ -42,7 +42,7 @@ func TestPromptReport_CN语言Token估算(t *testing.T) {
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"cn": "一二三四五六七八九十一二三四五六七八九十一二三四五"}, 10))
 
 	report := NewPromptReport(builder)
-	// 25 / 2.5 = 10
+	// 平均时长推导：25 / 2.5 = 10
 	if report.EstimatedTokens != 10 {
 		t.Errorf("中文 token 估算期望 10，实际 %d", report.EstimatedTokens)
 	}
@@ -55,7 +55,7 @@ func TestPromptReport_EN语言Token估算(t *testing.T) {
 	builder.AddSection(saprompt.NewPromptSection(sections.SectionIdentity, map[string]string{"en": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, 10))
 
 	report := NewPromptReport(builder)
-	// 40 / 4.0 = 10
+	// 平均耗时推导：40 / 4.0 = 10
 	if report.EstimatedTokens != 10 {
 		t.Errorf("英文 token 估算期望 10，实际 %d", report.EstimatedTokens)
 	}

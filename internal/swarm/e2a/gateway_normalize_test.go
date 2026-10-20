@@ -768,7 +768,7 @@ func TestE2AResponseToAgentChunk_ChunkChatDelta_保留Role(t *testing.T) {
 func Test往返_AgentResponse(t *testing.T) {
 	ts := "2026-01-01T00:00:00Z"
 
-	// ok=true
+	// ok=true 场景
 	resp1 := &schema.AgentResponse{
 		RequestID: "r1",
 		ChannelID: "ch1",
@@ -794,7 +794,7 @@ func Test往返_AgentResponse(t *testing.T) {
 		t.Errorf("Payload.answer 不匹配: %v", roundTrip1.Payload["answer"])
 	}
 
-	// ok=false
+	// ok=false 场景
 	resp2 := &schema.AgentResponse{
 		RequestID: "r2",
 		ChannelID: "ch2",

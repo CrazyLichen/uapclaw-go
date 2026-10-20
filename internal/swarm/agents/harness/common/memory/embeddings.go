@@ -143,7 +143,7 @@ func (p *OpenAICompatibleEmbeddingProvider) APIKey() string { return p.apiKey }
 func (p *OpenAICompatibleEmbeddingProvider) GetBaseURL() string { return p.baseURL }
 
 // NewMockEmbeddingProvider 构造模拟提供者。对齐 Python MockEmbeddingProvider 类属性
-// id="mock", model="mock", dims=128
+// Python: id="mock", model="mock", dims=128
 func NewMockEmbeddingProvider() *MockEmbeddingProvider {
 	return &MockEmbeddingProvider{id: "mock", model: "mock", dims: 128}
 }

@@ -46,9 +46,10 @@ var (
 // 对齐 Python: load_team_spec_dict(config_base) (L300-346)
 //
 // Python 步骤：
+//
 //  1. team_raw = _select_first_modes_team(config_base)；为空时 warning
-//  2. agents = _build_agents_config(team_raw, config_base)
-//  3. spec_dict = deepcopy(team_raw)，pop("enable_team_plan")
+//     Python: 2. agents = _build_agents_config(team_raw, config_base)
+//     Python: 3. spec_dict = deepcopy(team_raw)，pop("enable_team_plan")
 //  4. 顶层字段：team_name/lifecycle/teammate_mode/spawn_mode/enable_hitt/leader/
 //     agents/language（preferred_language 默认 "zh"）
 //  5. workspace_spec 非空时设置；transport 设置
@@ -140,11 +141,12 @@ func LoadTeamSpecDict(configBase map[string]any) map[string]any {
 // 对齐 Python: resolve_team_sqlite_db_path(config_base) (L58-87)
 //
 // Python 步骤：
-//  1. team_raw = _resolve_team_raw_for_storage(config_base)
-//  2. storage_raw = team_raw.get("storage", {})；非 dict 返回 None
-//  3. storage_type = storage_raw.get("type")；非空且非 sqlite 返回 None
-//  4. conn_str = storage_raw.params.connection_string；为空返回 AgentTeamsHome/team.db
-//  5. expanduser；绝对路径直接返回；相对路径以 AgentTeamsHome 为基准
+//
+//	Python: 1. team_raw = _resolve_team_raw_for_storage(config_base)
+//	2. storage_raw = team_raw.get("storage", {})；非 dict 返回 None
+//	3. storage_type = storage_raw.get("type")；非空且非 sqlite 返回 None
+//	4. conn_str = storage_raw.params.connection_string；为空返回 AgentTeamsHome/team.db
+//	5. expanduser；绝对路径直接返回；相对路径以 AgentTeamsHome 为基准
 func ResolveTeamSqliteDbPath(configBase map[string]any) string {
 	if configBase == nil {
 		return ""
@@ -302,7 +304,7 @@ func buildDefaultModelDict(configBase map[string]any) map[string]any {
 		Msg("model config loaded")
 
 	return map[string]any{
-		"model_client_config": mccCopy,
+		"model_client_config":  mccCopy,
 		"model_request_config": mcoCopy,
 	}
 }
@@ -397,6 +399,7 @@ func buildAgentSpecDict(
 // 对齐 Python: _build_agents_config(team_raw, config_base) (L172-225)
 //
 // Python 步骤：
+//
 //  1. agents_raw = team_raw["agents"]；为空时注入 {"leader": {}, "teammate": {}}
 //  2. 顶层 top_agents = config_base["agents"]（查找路径为顶层，非 models.agents）
 //  3. 值为 "$name" 字符串时从 top_agents 解引用；失败 warning + 空配置
@@ -542,7 +545,7 @@ func buildLeaderSpec(teamRaw map[string]any) map[string]any {
 	}
 
 	return map[string]any{
-		"member_name": memberName,
+		"member_name":  memberName,
 		"display_name": displayName,
 		"name":         leaderName,
 		"persona":      persona,

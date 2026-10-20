@@ -73,10 +73,11 @@ func (m *TeamManager) RegisterStreamTask(sessionID string, cancel context.Cancel
 // 对齐 Python: TeamManager.cancel_all_stream_tasks(reason)
 //
 // Python 步骤：
-//  1. async with self._lock: pending = list(self._stream_tasks.items())
-//  2. for session_id, task in pending: if task.done(): continue; task.cancel()
-//  3. for session_id, task in pending: if task.done(): continue; await task (catch CancelledError)
-//  4. async with self._lock: self._stream_tasks.clear()
+//
+//	Python: 1. async with self._lock: pending = list(self._stream_tasks.items())
+//	Python: 2. for session_id, task in pending: if task.done(): continue; task.cancel()
+//	Python: 3. for session_id, task in pending: if task.done(): continue; await task (catch CancelledError)
+//	Python: 4. async with self._lock: self._stream_tasks.clear()
 //
 // M-23: cancel 后等待 goroutine 退出（对齐 Python 的 await task）
 func (m *TeamManager) CancelAllStreamTasks(reason string) {
@@ -185,14 +186,15 @@ func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGrou
 // 对齐 Python: ensure_monitor_for_active_runtime(channel_id, session_id, team_name, hide_dm)
 //
 // Python 步骤：
-//  1. tm = get_team_manager(channel_id)
-//  2. existing = tm.get_monitor(session_id); if existing and existing.is_running: return
-//  3. monitor = await Runner.get_agent_team_monitor(team_name=, session_id=, hide_dm=)
-//  4. if monitor is None: logger.warning; return
-//  5. monitor_handler = TeamMonitorHandler(monitor, session_id)
-//  6. await monitor_handler.start()
-//  7. tm.register_monitor(session_id, monitor_handler)
-//  8. if monitor_handler.is_running: asyncio.create_task(_consume_monitor_events(...))
+//
+//	Python: 1. tm = get_team_manager(channel_id)
+//	Python: 2. existing = tm.get_monitor(session_id); if existing and existing.is_running: return
+//	Python: 3. monitor = await Runner.get_agent_team_monitor(team_name=, session_id=, hide_dm=)
+//	Python: 4. if monitor is None: logger.warning; return
+//	Python: 5. monitor_handler = TeamMonitorHandler(monitor, session_id)
+//	Python: 6. await monitor_handler.start()
+//	Python: 7. tm.register_monitor(session_id, monitor_handler)
+//	Python: 8. if monitor_handler.is_running: asyncio.create_task(_consume_monitor_events(...))
 //
 // Go 差异：Python 通过 Runner.get_agent_team_monitor 获取 TeamMonitor，
 // Go 端直接通过 TeamAgent 创建 TeamMonitor（省略 Runner 桥接层）。
@@ -275,13 +277,14 @@ func (m *TeamManager) hasLocalTeamRuntime(sessionID string) bool {
 // S-03: 增加 ctx 参数，传播 context 到 handler.Stop
 //
 // Python 步骤：
-//  1. watcher_task = self._team_evolution_watchers.pop(session_id)
-//     if watcher_task and not watcher_task.done(): watcher_task.cancel(); await watcher_task
-//  2. stream_task = self._stream_tasks.pop(session_id)
-//     if stream_task and not stream_task.done(): stream_task.cancel(); await stream_task
-//  3. monitor_handler = self._team_monitors.pop(session_id)
-//     if monitor_handler: await monitor_handler.stop()
-//  4. self._clear_team_rail_registries(session_id)
+//
+//	Python: 1. watcher_task = self._team_evolution_watchers.pop(session_id)
+//	   if watcher_task and not watcher_task.done(): watcher_task.cancel(); await watcher_task
+//	Python: 2. stream_task = self._stream_tasks.pop(session_id)
+//	   if stream_task and not stream_task.done(): stream_task.cancel(); await stream_task
+//	Python: 3. monitor_handler = self._team_monitors.pop(session_id)
+//	   if monitor_handler: await monitor_handler.stop()
+//	Python: 4. self._clear_team_rail_registries(session_id)
 func (m *TeamManager) cleanupRuntimeLocals(ctx context.Context, sessionID string) {
 	// 步骤 1: 取消演进监控（锁内 pop，cancel 在锁外调用——对齐 Python pop→cancel 结构）
 	var watcherCancel context.CancelFunc
@@ -354,11 +357,12 @@ func (m *TeamManager) clearTeamRailRegistries(sessionID string) {
 // 对齐 Python: _consume_monitor_events(channel_id, session_id, monitor_handler)
 //
 // Python 步骤：
-//  1. logger.info("monitor event loop started")
-//  2. async for event in monitor_handler.events(): _broadcast_event(channel_id, session_id, event)
-//  3. logger.info("monitor event loop ended")
-//  4. except CancelledError: raise
-//  5. except Exception: logger.error
+//
+//	Python: 1. logger.info("monitor event loop started")
+//	Python: 2. async for event in monitor_handler.events(): _broadcast_event(channel_id, session_id, event)
+//	Python: 3. logger.info("monitor event loop ended")
+//	Python: 4. except CancelledError: raise
+//	Python: 5. except Exception: logger.error
 //
 // Go 差异：Python 通过 _broadcast_event 查找 _pending_waiters 并放入每个 waiter 的 queue。
 // Go 端通过 onEventBroadcast 回调实现，由 adapter 层在初始化时注入。
@@ -390,6 +394,7 @@ func (m *TeamManager) consumeMonitorEvents(ctx context.Context, sessionID string
 // 对齐 Python: start_team_evolution_watcher(channel_id, session_id, team_name)
 //
 // Python 步骤：
+//
 //  1. 检查是否已有 watcher 在运行
 //  2. 创建 asyncio task 运行 evolution watcher 循环（_watch_team_evolution_and_push）
 //  3. 注册到 _team_evolution_watchers

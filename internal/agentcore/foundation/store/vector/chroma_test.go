@@ -1297,19 +1297,19 @@ func TestChromaWhereFilter(t *testing.T) {
 
 // TestToFloat32Slice 测试向量类型转换
 func TestToFloat32Slice(t *testing.T) {
-	// []float32
+	// []float32 输入
 	emb := toFloat32Slice([]float32{0.1, 0.2, 0.3})
 	if emb == nil {
 		t.Error("toFloat32Slice([]float32) 不应返回 nil")
 	}
 
-	// []float64
+	// []float64 输入
 	emb = toFloat32Slice([]float64{0.1, 0.2, 0.3})
 	if emb == nil {
 		t.Error("toFloat32Slice([]float64) 不应返回 nil")
 	}
 
-	// []any
+	// []any 输入
 	emb = toFloat32Slice([]any{float64(0.1), float64(0.2)})
 	if emb == nil {
 		t.Error("toFloat32Slice([]any) 不应返回 nil")

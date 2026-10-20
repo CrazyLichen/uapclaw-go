@@ -32,7 +32,7 @@ func setupToggleEnv(t *testing.T, initialYAML string) string {
 	return tmp
 }
 
-// ──────────────────────────── HandleMemoryToggle ────────────────────────────
+// ──────────────────────────── HandleMemoryToggle 记忆开关处理 ────────────────────────────
 
 // TestHandleMemoryToggle_禁止记忆全局开关 测试 forbidden_enabled 翻转 + 写回
 func TestHandleMemoryToggle_禁止记忆全局开关(t *testing.T) {

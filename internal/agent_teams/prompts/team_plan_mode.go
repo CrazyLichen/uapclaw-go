@@ -51,7 +51,7 @@ func BuildTeamPlanModePrompt(language string, enterPlanModeStatus string, planFi
 // Python: build_team_plan_mode_section(language, agent, session) (openjiuwen/agent_teams/prompts/team_plan_mode.py)
 //
 // 将 BuildTeamPlanModePrompt 的结果包装为 PromptSection，
-// name=SectionModeInstructions, priority=85。
+// 其中 name 取 SectionModeInstructions、priority 取 85。
 // enterPlanModeStatus 和 planFileInfo 由调用方提前计算后传入。
 func BuildTeamPlanModeSection(language string, enterPlanModeStatus string, planFileInfo string) *saprompt.PromptSection {
 	content := BuildTeamPlanModePrompt(language, enterPlanModeStatus, planFileInfo)

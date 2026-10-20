@@ -241,9 +241,9 @@ func (t *ListSkillTool) routeSkills(ctx context.Context, query string) ([]string
 // parseSelectedSkillNames 解析 LLM 输出中的技能名称列表。
 //
 // 一比一复刻 Python: ListSkillTool._parse_selected_skill_names(content):
-//  1. strip → 空 → []
+//  1. strip 后为空则返回空列表
 //  2. 去除 ``` 代码块包裹
-//  3. json.loads → data.get("skills", []) → filter empty strings
+//  3. json.loads 后取 data.get("skills", []) 并过滤空字符串
 func parseSelectedSkillNames(content string) []string {
 	text := trimSpace(content)
 	if text == "" {

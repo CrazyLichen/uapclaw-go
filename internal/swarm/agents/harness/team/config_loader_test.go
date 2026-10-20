@@ -38,7 +38,7 @@ func buildProductionLikeConfig() map[string]any {
 		"agents": map[string]any{
 			// M-01 修复验证：顶层 agents 键（查找路径）+ 字符串引用目标
 			"agent_leader": map[string]any{
-				"workspace":    map[string]any{"stable_base": true},
+				"workspace":      map[string]any{"stable_base": true},
 				"max_iterations": 100,
 			},
 		},
@@ -52,12 +52,12 @@ func buildProductionLikeConfig() map[string]any {
 					"teammate_mode": "build_mode",
 					"spawn_mode":    "inprocess",
 					"leader": map[string]any{
-						"member_name": "team-leader",
+						"member_name":  "team-leader",
 						"display_name": "团队领导",
-						"persona":     "天才项目管理专家，擅长任务分解和团队协调",
+						"persona":      "天才项目管理专家，擅长任务分解和团队协调",
 					},
 					// M-01 修复验证：字符串引用 "$agent_leader"
-					"agents": map[string]any{"leader": "$agent_leader"},
+					"agents":  map[string]any{"leader": "$agent_leader"},
 					"storage": map[string]any{"type": "sqlite"},
 				},
 			},

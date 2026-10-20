@@ -2,13 +2,13 @@
 // 模式匹配、Shell AST 解析、外部目录检查、权限建议构建和权限引擎。
 //
 // 核心组件：
-//   - PermissionEngine: 权限引擎，组合 TieredPolicy + ExternalDirectoryChecker 评估工具权限
-//   - EvaluateTieredPolicy: 分层策略评估（优先级链：tool-deny > builtin-param > user-param >
-//     approval-overrides > baseline > defaults > fallback-ASK）
-//   - ParseShellForPermission: tree-sitter bash 解析 + 保守扫描 fallback
-//   - MatchWildcard: 安全通配符匹配（防 shell 注入）
-//   - ExternalDirectoryChecker: 工作空间外路径检测
-//   - BuildPermissionSuggestions: "始终允许"建议构建
+//   - PermissionEngine：权限引擎，组合 TieredPolicy + ExternalDirectoryChecker 评估工具权限
+//   - EvaluateTieredPolicy：分层策略评估（优先级从高到低依次为 tool-deny、builtin-param、
+//     user-param、approval-overrides、baseline、defaults、fallback-ASK）
+//   - ParseShellForPermission：tree-sitter bash 解析 + 保守扫描 fallback
+//   - MatchWildcard：安全通配符匹配（防 shell 注入）
+//   - ExternalDirectoryChecker：工作空间外路径检测
+//   - BuildPermissionSuggestions："始终允许"建议构建
 //
 // 运行时代码仍以 map[string]any 承载 YAML/JSON 中的 permissions，
 // 本包的结构体用于静态类型检查与文档。

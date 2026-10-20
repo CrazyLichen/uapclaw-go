@@ -186,7 +186,7 @@ func (s *SecurityDecisionFlowSuite) TestDecisionFlow_BeforeModelCallReject_强�
 	s.Require().NoError(err)
 	s.Require().NotNil(result)
 
-	// BeforeModelCall Reject → forceFinish → result_type = "error"
+	// 决策链：BeforeModelCall Reject 触发 forceFinish，result_type 为 "error"
 	resultType, _ := result["result_type"].(string)
 	s.Equal("error", resultType, "BeforeModelCall Reject 应导致 result_type=error")
 
@@ -525,7 +525,7 @@ func (s *SecurityDecisionFlowSuite) TestDecisionFlow_AfterToolCallReject_强制�
 	s.Require().NoError(err)
 	s.Require().NotNil(result)
 
-	// AfterToolCall Reject → forceFinish → result_type=error
+	// 决策链：AfterToolCall Reject 触发 forceFinish，result_type 为 error
 	resultType, _ := result["result_type"].(string)
 	s.Equal("error", resultType, "AfterToolCall Reject 应导致 forceFinish")
 }

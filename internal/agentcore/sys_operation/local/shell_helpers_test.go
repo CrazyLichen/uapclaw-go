@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// ──────────────────────────── LooksLikePowerShell ────────────────────────────
+// ──────────────────────────── LooksLikePowerShell PowerShell 判定 ────────────────────────────
 
 // TestLooksLikePowerShell_令牌匹配 测试 PowerShell 令牌匹配
 func TestLooksLikePowerShell_令牌匹配(t *testing.T) {
@@ -37,7 +37,7 @@ func TestLooksLikePowerShell_非PS(t *testing.T) {
 	assert.False(t, LooksLikePowerShell("   "))
 }
 
-// ──────────────────────────── SplitShellSegments ────────────────────────────
+// ──────────────────────────── SplitShellSegments Shell 段切分 ────────────────────────────
 
 // TestSplitShellSegments 测试基本分隔
 func TestSplitShellSegments(t *testing.T) {
@@ -69,7 +69,7 @@ func TestSplitShellSegments_或运算(t *testing.T) {
 	assert.Equal(t, []string{"cmd1", "cmd2"}, segments)
 }
 
-// ──────────────────────────── SegmentBaseCommand ────────────────────────────
+// ──────────────────────────── SegmentBaseCommand 基础命令分段 ────────────────────────────
 
 // TestSegmentBaseCommand 测试提取基础命令
 func TestSegmentBaseCommand(t *testing.T) {
@@ -94,7 +94,7 @@ func TestSegmentBaseCommand_空(t *testing.T) {
 	assert.Equal(t, "", SegmentBaseCommand("   "))
 }
 
-// ──────────────────────────── LooksLikePosix ────────────────────────────
+// ──────────────────────────── LooksLikePosix POSIX 判定 ────────────────────────────
 
 // TestLooksLikePosix 测试 POSIX 命令检测
 func TestLooksLikePosix(t *testing.T) {
@@ -116,7 +116,7 @@ func TestStripMatchingQuotes(t *testing.T) {
 	assert.Equal(t, "hello", StripMatchingQuotes("hello"))
 }
 
-// ──────────────────────────── UnwrapPowerShellCommand ────────────────────────────
+// ──────────────────────────── UnwrapPowerShellCommand 解包 PowerShell 命令 ────────────────────────────
 
 // TestUnwrapPowerShellCommand 测试解包 PowerShell 命令
 func TestUnwrapPowerShellCommand(t *testing.T) {
@@ -125,7 +125,7 @@ func TestUnwrapPowerShellCommand(t *testing.T) {
 	assert.Equal(t, "", UnwrapPowerShellCommand("echo hello")) // 非 PS 命令
 }
 
-// ──────────────────────────── AvailablePowerShell ────────────────────────────
+// ──────────────────────────── AvailablePowerShell PowerShell 可用性 ────────────────────────────
 
 // TestAvailablePowerShell 测试 PowerShell 查找
 func TestAvailablePowerShell(t *testing.T) {
@@ -134,7 +134,7 @@ func TestAvailablePowerShell(t *testing.T) {
 	assert.NotEmpty(t, result)
 }
 
-// ──────────────────────────── AvailableBash ────────────────────────────
+// ──────────────────────────── AvailableBash Bash 可用性 ────────────────────────────
 
 // TestAvailableBash 测试 Bash 查找
 func TestAvailableBash(t *testing.T) {
@@ -145,7 +145,7 @@ func TestAvailableBash(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── AvailableSh ────────────────────────────
+// ──────────────────────────── AvailableSh Sh 可用性 ────────────────────────────
 
 // TestAvailableSh 测试 sh 查找
 func TestAvailableSh(t *testing.T) {
@@ -156,7 +156,7 @@ func TestAvailableSh(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── IsWSLBashPath ────────────────────────────
+// ──────────────────────────── IsWSLBashPath WSL Bash 路径判定 ────────────────────────────
 
 // TestIsWSLBashPath 测试 WSL Bash 路径检测
 func TestIsWSLBashPath(t *testing.T) {
@@ -167,7 +167,7 @@ func TestIsWSLBashPath(t *testing.T) {
 	assert.False(t, IsWSLBashPath("/usr/bin/bash"))
 }
 
-// ──────────────────────────── NormalizeWindowsPathsForBash ────────────────────────────
+// ──────────────────────────── NormalizeWindowsPathsForBash Windows 路径规范化 ────────────────────────────
 
 // TestNormalizeWindowsPathsForBash 测试 Windows 路径归一化
 func TestNormalizeWindowsPathsForBash(t *testing.T) {
@@ -180,7 +180,7 @@ func TestNormalizeWindowsPathsForBash(t *testing.T) {
 	assert.Contains(t, result, "C:/Users/test/file.txt")
 }
 
-// ──────────────────────────── GitBashCandidates ────────────────────────────
+// ──────────────────────────── GitBashCandidates Git Bash 候选列表 ────────────────────────────
 
 // TestGitBashCandidates 测试 Git Bash 候选列表
 func TestGitBashCandidates(t *testing.T) {
@@ -189,7 +189,7 @@ func TestGitBashCandidates(t *testing.T) {
 	_ = candidates
 }
 
-// ──────────────────────────── AvailableGitBash ────────────────────────────
+// ──────────────────────────── AvailableGitBash Git Bash 可用性 ────────────────────────────
 
 // TestAvailableGitBash 测试 Git Bash 查找
 func TestAvailableGitBash(t *testing.T) {

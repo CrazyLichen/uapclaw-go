@@ -69,7 +69,7 @@ func (f *fakeSystemPromptBuilder) SetLanguage(lang string)                      
 func (f *fakeSystemPromptBuilder) GetSection(name string) *saprompt.PromptSection { return nil }
 func (f *fakeSystemPromptBuilder) HasSection(name string) bool                    { return false }
 
-// ──────────────────────────── NewStructuredAskUserRail ────────────────────────────
+// ──────────────────────────── NewStructuredAskUserRail 结构化询问 Rail 构造 ────────────────────────────
 
 // TestNewStructuredAskUserRail 验证构造函数
 func TestNewStructuredAskUserRail(t *testing.T) {
@@ -89,7 +89,7 @@ func TestNewStructuredAskUserRail_空语言(t *testing.T) {
 	assert.Equal(t, "", r.language)
 }
 
-// ──────────────────────────── ExtractQuestions ────────────────────────────
+// ──────────────────────────── ExtractQuestions 问题提取 ────────────────────────────
 
 // TestExtractQuestions_有questions 验证提取 questions 列表
 func TestExtractQuestions_有questions(t *testing.T) {
@@ -139,7 +139,7 @@ func TestExtractQuestions_空questions(t *testing.T) {
 	assert.Nil(t, questions)
 }
 
-// ──────────────────────────── resolveStructuredInterrupt ────────────────────────────
+// ──────────────────────────── resolveStructuredInterrupt 结构化中断解析 ────────────────────────────
 
 // TestResolveStructuredInterrupt_无输入中断 验证无用户输入返回中断
 func TestResolveStructuredInterrupt_无输入中断(t *testing.T) {
@@ -286,7 +286,7 @@ func TestResolveStructuredInterrupt_AskUserPayload输入(t *testing.T) {
 	assert.Contains(t, rejectResult.ToolResult, "Q1: 回答1")
 }
 
-// ──────────────────────────── parseStructuredInput ────────────────────────────
+// ──────────────────────────── parseStructuredInput 结构化输入解析 ────────────────────────────
 
 // TestParseStructuredInput_StructuredAskUserPayload 验证 StructuredAskUserPayload 输入
 func TestParseStructuredInput_StructuredAskUserPayload(t *testing.T) {
@@ -355,7 +355,7 @@ func TestStructuredAskUserRail_Priority(t *testing.T) {
 	assert.Equal(t, 90, r.Priority())
 }
 
-// ──────────────────────────── StructuredAskUserPayload ────────────────────────────
+// ──────────────────────────── StructuredAskUserPayload 结构化询问载荷 ────────────────────────────
 
 // TestStructuredAskUserPayload_JSON序列化 验证 JSON 序列化
 func TestStructuredAskUserPayload_JSON序列化(t *testing.T) {
@@ -366,7 +366,7 @@ func TestStructuredAskUserPayload_JSON序列化(t *testing.T) {
 	assert.Equal(t, "选项A", payload.Answers["问题1"])
 }
 
-// ──────────────────────────── Init ────────────────────────────
+// ──────────────────────────── Init 初始化 ────────────────────────────
 
 // TestInit_正常注册 验证 Init 注册工具到 AbilityManager
 func TestInit_正常注册(t *testing.T) {
@@ -419,7 +419,7 @@ func TestInit_无AgentID(t *testing.T) {
 	assert.Contains(t, r.structuredTools[0].Card().ID, "ask_user_")
 }
 
-// ──────────────────────────── Uninit ────────────────────────────
+// ──────────────────────────── Uninit 反初始化 ────────────────────────────
 
 // TestUninit_正常注销 验证 Uninit 注销工具
 func TestUninit_正常注销(t *testing.T) {
@@ -446,7 +446,7 @@ func TestUninit_无工具(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// ──────────────────────────── GetStructuredTools ────────────────────────────
+// ──────────────────────────── GetStructuredTools 结构化工具获取 ────────────────────────────
 
 // TestGetStructuredTools_初始化前 验证 Init 前返回 nil
 func TestGetStructuredTools_初始化前(t *testing.T) {

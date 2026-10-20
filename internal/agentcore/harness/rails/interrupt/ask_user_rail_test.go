@@ -28,7 +28,7 @@ func TestNewAskUserRail_自定义工具名(t *testing.T) {
 	assert.NotContains(t, r.toolNames, "ask_user")
 }
 
-// ──────────────────────────── resolveInterrupt ────────────────────────────
+// ──────────────────────────── resolveInterrupt 中断解析 ────────────────────────────
 
 // TestAskUserRail_resolveInterrupt_无输入中断 验证 userInput=nil → InterruptResult
 func TestAskUserRail_resolveInterrupt_无输入中断(t *testing.T) {
@@ -126,7 +126,7 @@ func TestAskUserRail_resolveInterrupt_字符串输入无问题(t *testing.T) {
 	assert.IsType(t, &InterruptResult{}, decision)
 }
 
-// ──────────────────────────── formatToolResult ────────────────────────────
+// ──────────────────────────── formatToolResult 工具结果格式化 ────────────────────────────
 
 // TestAskUserRail_formatToolResult 验证格式化输出
 func TestAskUserRail_formatToolResult(t *testing.T) {
@@ -194,7 +194,7 @@ func TestAskUserRail_resolveInterrupt_Dict输入Answers非Dict(t *testing.T) {
 	assert.IsType(t, &InterruptResult{}, decision)
 }
 
-// ──────────────────────────── ParseToolArgs ────────────────────────────
+// ──────────────────────────── ParseToolArgs 工具参数解析 ────────────────────────────
 
 // TestParseToolArgs 验证 JSON 参数解析
 func TestParseToolArgs(t *testing.T) {
@@ -244,7 +244,7 @@ func TestAskUserRail_parseUserInputDict_单问题answer字段(t *testing.T) {
 	assert.Equal(t, "Alice", payload.Answers["你的名字？"])
 }
 
-// ──────────────────────────── buildAskRequest ────────────────────────────
+// ──────────────────────────── buildAskRequest 询问请求构造 ────────────────────────────
 
 // TestAskUserRail_buildAskRequest 验证请求构建
 func TestAskUserRail_BuildAskRequest(t *testing.T) {

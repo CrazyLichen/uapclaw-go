@@ -412,12 +412,12 @@ func TestLifecycleTool_Stream_事件顺序对齐Python(t *testing.T) {
 	}
 
 	// Python 装饰器链 per-chunk 实际顺序（由内到外执行）：
-	//   _lifecycle_stream(内层): RESULT_RECEIVED(原始数据) → yield chunk
-	//   transform_io(外层): TransformIO_output → yield transformed
-	//   emit_after(最外): STREAM_OUTPUT(变换后数据)
+	//   _lifecycle_stream（内层）：收到 RESULT_RECEIVED(原始数据) 后 yield chunk
+	//   transform_io（外层）：产出 TransformIO_output 变换结果
+	//   emit_after（最外层）：产出 STREAM_OUTPUT(变换后数据)
 	//
-	// 完整顺序：
-	//   TransformIO_input → STREAM_INPUT → STARTED
+	// 完整事件顺序（箭头表示先后）：
+	//   依次为 TransformIO_input → STREAM_INPUT → STARTED
 	//   → RESULT_RECEIVED(val=1) → TransformIO_output → STREAM_OUTPUT(val=1)
 	//   → RESULT_RECEIVED(val=2) → TransformIO_output → STREAM_OUTPUT(val=2)
 	//   → FINISHED（完成）

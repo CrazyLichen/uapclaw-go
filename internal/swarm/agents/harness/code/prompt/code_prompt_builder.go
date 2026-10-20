@@ -60,9 +60,9 @@ var codeSectionGenerators = []func() saprompt.PromptSection{
 //
 // Python 执行步骤：
 //
-//  1. builder = SystemPromptBuilder(language="en")
-//  2. for generator in _CODE_SECTION_GENERATORS: builder.add_section(generator())
-//  3. return builder.build()
+//	Python: 1. builder = SystemPromptBuilder(language="en")
+//	Python: 2. for generator in _CODE_SECTION_GENERATORS: builder.add_section(generator())
+//	Python: 3. return builder.build()
 func BuildCodeSystemPrompt() string {
 	// 步骤 1: 对齐 Python: builder = SystemPromptBuilder(language="en")
 	builder := prompts.NewSystemPromptBuilder("en", hschema.PromptModeFull)

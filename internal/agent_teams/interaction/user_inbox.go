@@ -43,9 +43,10 @@ func NewUserInbox(messageManager *tools.TeamMessageManager) *UserInbox {
 // Python: UserInbox.direct(target, body)
 //
 // Python 执行步骤：
-//  1. msg_id = await self._mm.send_message(content=body, to_member_name=target, from_member_name=USER_PSEUDO_MEMBER_NAME)
-//  2. if msg_id is None: return DeliverResult.failure(f"send_failed:{target}")
-//  3. return DeliverResult.success(msg_id)
+//
+//	Python: 1. msg_id = await self._mm.send_message(content=body, to_member_name=target, from_member_name=USER_PSEUDO_MEMBER_NAME)
+//	Python: 2. if msg_id is None: return DeliverResult.failure(f"send_failed:{target}")
+//	Python: 3. return DeliverResult.success(msg_id)
 func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 	logger.Debug(logComponent).Str("target", target).
 		Str("from", agentteams.UserPseudoMemberName).
@@ -65,9 +66,10 @@ func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 // Python: UserInbox.broadcast(body)
 //
 // Python 执行步骤：
-//  1. msg_id = await self._mm.broadcast_message(content=body, from_member_name=USER_PSEUDO_MEMBER_NAME)
-//  2. if msg_id is None: return DeliverResult.failure("broadcast_failed")
-//  3. return DeliverResult.success(msg_id)
+//
+//	Python: 1. msg_id = await self._mm.broadcast_message(content=body, from_member_name=USER_PSEUDO_MEMBER_NAME)
+//	Python: 2. if msg_id is None: return DeliverResult.failure("broadcast_failed")
+//	Python: 3. return DeliverResult.success(msg_id)
 func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 	logger.Debug(logComponent).Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
@@ -85,10 +87,11 @@ func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 // Python: UserInbox.deliver_to_leader(deliver_input, body) (staticmethod)
 //
 // Python 执行步骤：
+//
 //  1. team_logger.debug: UserInbox 向 Leader DeepAgent 交付输入
-//  2. try: await deliver_input(body)
-//  3. except Exception as e: return DeliverResult.failure(f"deliver_to_leader_failed:{e}")
-//  4. return DeliverResult.success(message_id=None)
+//     Python: 2. try: await deliver_input(body)
+//     Python: 3. except Exception as e: return DeliverResult.failure(f"deliver_to_leader_failed:{e}")
+//     Python: 4. return DeliverResult.success(message_id=None)
 //
 // 此通道不产生 bus message ID，成功时 MessageID 为 nil。
 func DeliverToLeader(deliverInput func(ctx context.Context, content string) error, body string) *DeliverResult {

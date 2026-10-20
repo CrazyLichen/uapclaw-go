@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ──────────────────────────── NewStructuredAskUserTool ────────────────────────────
+// ──────────────────────────── NewStructuredAskUserTool 结构化询问工具构造 ────────────────────────────
 
 // TestNewStructuredAskUserTool_中文 验证中文语言创建
 func TestNewStructuredAskUserTool_中文(t *testing.T) {
@@ -74,7 +74,7 @@ func TestNewStructuredAskUserTool_InputParams(t *testing.T) {
 	assert.True(t, found, "应包含 questions 参数")
 }
 
-// ──────────────────────────── getStructuredDescription ────────────────────────────
+// ──────────────────────────── getStructuredDescription 结构化描述获取 ────────────────────────────
 
 // TestGetStructuredDescription_中文 验证中文描述
 func TestGetStructuredDescription_中文(t *testing.T) {

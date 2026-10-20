@@ -211,7 +211,7 @@ func TestHandleHistoryGet_分页(t *testing.T) {
 	if len(messages) != 20 {
 		t.Errorf("page 1 messages 长度应为 20, 实际: %d", len(messages))
 	}
-	// total_pages = ceil(25/20) = 2
+	// 页数推导：total_pages = ceil(25/20) = 2
 	if totalPages != 2 {
 		t.Errorf("total_pages 应为 2, 实际: %d", totalPages)
 	}
@@ -266,7 +266,7 @@ func TestGetConversationHistory_参数校验(t *testing.T) {
 	if data := getConversationHistory("   ", 1); data != nil {
 		t.Error("仅空白 session_id 应返回 nil")
 	}
-	// page_idx <= 0
+	// page_idx <= 0 边界（无效页码）
 	if data := getConversationHistory("some-session", 0); data != nil {
 		t.Error("page_idx=0 应返回 nil")
 	}

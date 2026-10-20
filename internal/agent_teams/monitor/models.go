@@ -286,9 +286,10 @@ func (MessageInfo) FromInternal(msg *database.TeamMessageBase) *MessageInfo {
 // 对齐 Python: MonitorEvent.from_event_message(event_message) -> MonitorEvent | None
 //
 // Python 步骤：
-//  1. raw_type = event_message.event_type
-//  2. if raw_type not in _MONITOR_EVENT_VALUES: return None
-//  3. return cls.model_validate({**event_message.payload, "event_type": raw_type, "timestamp": int(time*1000)})
+//
+//	Python: 1. raw_type = event_message.event_type
+//	Python: 2. if raw_type not in _MONITOR_EVENT_VALUES: return None
+//	Python: 3. return cls.model_validate({**event_message.payload, "event_type": raw_type, "timestamp": int(time*1000)})
 //
 // Go 差异：合并 payload 字段到 MonitorEvent 扁平字段，用辅助函数提取类型化指针。
 func FromEventMessage(msg *events.EventMessage) *MonitorEvent {

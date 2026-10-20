@@ -79,6 +79,7 @@ func (m *SessionManager) SetTeamSession(session any) {
 // Python: SessionManager.bind_session(session)
 //
 // Python 执行步骤：
+//
 //  1. _reset_session_id_token()        — 重置上一次的 Token
 //  2. _session_id_token = set_session_id(session.get_session_id())  — 设置 session_id 到 contextvar
 //  3. state.team_session = session     — 存储到可变状态
@@ -86,11 +87,11 @@ func (m *SessionManager) SetTeamSession(session any) {
 //  5. recovery_manager.persist_leader_config(session) — Leader 侧持久化
 //
 // Go 对应步骤：
-//  1. 不需要 Token reset — 直接 SetSessionID 覆盖旧值
+//  1. 无需 Token 重置（直接 SetSessionID 覆盖旧值）
 //  2. sessionState.SetSessionID(sessionID) — 原地修改，共享指针立即可见
 //  3. state.TeamSession = session — 存储到可变状态
-//  4. teamBackend.DB().CreateCurSessionTables()
-//  5. recoveryManager.PersistLeaderConfig(session)
+//  4. 创建 DB 会话表（CreateCurSessionTables，幂等）
+//  5. Leader 侧持久化配置（PersistLeaderConfig）
 //
 // 返回新的 context.Context（含 SessionState），调用方必须用于后续传播。
 func (m *SessionManager) BindSession(
@@ -146,6 +147,7 @@ func (m *SessionManager) BindSession(
 // Python: SessionManager.release_session()
 //
 // Python 执行步骤：
+//
 //  1. _reset_session_id_token()        — 重置 contextvar Token
 //  2. state.team_session = None         — 清空会话引用
 //
@@ -172,16 +174,17 @@ func (m *SessionManager) ReleaseSession(ctx context.Context) error {
 // Python: SessionManager.resume_for_new_session(session)
 //
 // Python 执行步骤：
-//  1. recoverable_members = await recovery_manager.collect_live_teammates_for_session_switch()
-//  2. await self.bind_session(session)
-//  3. 如果角色不是 LEADER 或没有 team_backend 则返回
-//  4. await recovery_manager.restart_for_session_switch(recoverable_members, cleanup_first=True)
+//
+//	Python: 1. recoverable_members = await recovery_manager.collect_live_teammates_for_session_switch()
+//	Python: 2. await self.bind_session(session)
+//	3. 如果角色不是 LEADER 或没有 team_backend 则返回
+//	Python: 4. await recovery_manager.restart_for_session_switch(recoverable_members, cleanup_first=True)
 //
 // Go 对应步骤：
-//  1. recoveryManager.CollectLiveTeammatesForSessionSwitch()
+//  1. 收集存活 teammate 快照（CollectLiveTeammatesForSessionSwitch）
 //  2. BindSession — 已实现
 //  3. Leader 判断
-//  4. recoveryManager.RestartForSessionSwitch(recoverableMembers, true)
+//  4. 重启 teammate（RestartForSessionSwitch，cleanupFirst=true）
 //
 // 顺序重要：先快照再 bind，这样新 session_id 通过 spawn 载荷传播到重启的 teammate。
 func (m *SessionManager) ResumeForNewSession(

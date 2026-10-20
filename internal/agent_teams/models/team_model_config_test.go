@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// ──────────────────────────── TeamModelConfig ────────────────────────────
+// ──────────────────────────── TeamModelConfig 团队模型配置 ────────────────────────────
 
 // TestNewTeamModelConfig 测试默认 TeamModelConfig 创建
 func TestNewTeamModelConfig(t *testing.T) {

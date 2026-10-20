@@ -23,7 +23,7 @@ func setupIsolatedHome(t *testing.T) string {
 	return tmp
 }
 
-// ──────────────────────────── isForbiddenEnabled ────────────────────────────
+// ──────────────────────────── isForbiddenEnabled 禁止开关判定 ────────────────────────────
 
 // TestIsForbiddenEnabled_默认关闭 测试无配置时返回 false
 func TestIsForbiddenEnabled_默认关闭(t *testing.T) {
@@ -53,7 +53,7 @@ func TestIsForbiddenEnabled_显式关闭(t *testing.T) {
 	assert.False(t, isForbiddenEnabled(cfg))
 }
 
-// ──────────────────────────── getCodingMemoryDir ────────────────────────────
+// ──────────────────────────── getCodingMemoryDir 编码记忆目录获取 ────────────────────────────
 
 // TestGetCodingMemoryDir_有项目目录 测试 basename 命名
 func TestGetCodingMemoryDir_有项目目录(t *testing.T) {
@@ -67,7 +67,7 @@ func TestGetCodingMemoryDir_无项目目录(t *testing.T) {
 	assert.Equal(t, filepath.Join("/ws", "coding_memory", "default"), got)
 }
 
-// ──────────────────────────── getAllowedDirs ────────────────────────────
+// ──────────────────────────── getAllowedDirs 允许目录列表 ────────────────────────────
 
 // TestGetAllowedDirs_完整白名单 测试六项白名单（隔离 HOME）
 func TestGetAllowedDirs_完整白名单(t *testing.T) {
@@ -89,7 +89,7 @@ func TestGetAllowedDirs_无项目目录(t *testing.T) {
 	assert.Len(t, dirs, 4)
 }
 
-// ──────────────────────────── isInAllowedDirs ────────────────────────────
+// ──────────────────────────── isInAllowedDirs 目录白名单判定 ────────────────────────────
 
 // TestIsInAllowedDirs_前缀判定 测试目录内/外/恰好等于
 func TestIsInAllowedDirs_前缀判定(t *testing.T) {
@@ -107,7 +107,7 @@ func TestIsInAllowedDirs_项目目录白名单(t *testing.T) {
 	assert.True(t, isInAllowedDirs("/proj/notes.md", "/ws", "/proj"))
 }
 
-// ──────────────────────────── validateEditPath ────────────────────────────
+// ──────────────────────────── validateEditPath 编辑路径校验 ────────────────────────────
 
 // TestValidateEditPath_白名单内 测试各合法目录
 func TestValidateEditPath_白名单内(t *testing.T) {
@@ -175,7 +175,7 @@ func TestValidateEditPath_用户目录展开(t *testing.T) {
 	assert.Equal(t, filepath.Join(home, ".uapclaw", "user.md"), resolved)
 }
 
-// ──────────────────────────── classifyMemoryFile ────────────────────────────
+// ──────────────────────────── classifyMemoryFile 记忆文件分类 ────────────────────────────
 
 // TestClassifyMemoryFile_判定链 测试 kind 分类（对齐 Python 判定链顺序）
 func TestClassifyMemoryFile_判定链(t *testing.T) {
@@ -196,7 +196,7 @@ func TestClassifyMemoryFile_coding优先(t *testing.T) {
 	assert.Equal(t, "coding", classifyMemoryFile("/ws/coding_memory/proj/memory/a.md", "/ws"))
 }
 
-// ──────────────────────────── relativePath ────────────────────────────
+// ──────────────────────────── relativePath 相对路径 ────────────────────────────
 
 // TestRelativePath_优先级 测试 project_dir 优先于 workspace
 func TestRelativePath_优先级(t *testing.T) {
@@ -251,7 +251,7 @@ func TestCountLines_带尾换行(t *testing.T) {
 	assert.Equal(t, 2, countLines(p))
 }
 
-// ──────────────────────────── scanMDFiles ────────────────────────────
+// ──────────────────────────── scanMDFiles 扫描 Markdown 文件 ────────────────────────────
 
 // TestScanMDFiles_基本扫描 测试仅 .md + 排序 + 字段
 func TestScanMDFiles_基本扫描(t *testing.T) {
@@ -280,7 +280,7 @@ func TestScanMDFiles_目录不存在(t *testing.T) {
 	assert.Empty(t, files)
 }
 
-// ──────────────────────────── isCodeMode ────────────────────────────
+// ──────────────────────────── isCodeMode Code 模式判定 ────────────────────────────
 
 // TestIsCodeMode_前缀判定 测试 code 前缀（对齐 Python mode.startswith("code")）
 func TestIsCodeMode_前缀判定(t *testing.T) {
@@ -291,7 +291,7 @@ func TestIsCodeMode_前缀判定(t *testing.T) {
 	assert.False(t, isCodeMode(""))
 }
 
-// ──────────────────────────── HandleMemoryEdit ────────────────────────────
+// ──────────────────────────── HandleMemoryEdit 记忆编辑处理 ────────────────────────────
 
 // TestHandleMemoryEdit_读已有文件 测试 20 行预览截断
 func TestHandleMemoryEdit_读已有文件(t *testing.T) {
@@ -371,7 +371,7 @@ func TestHandleMemoryEdit_项目目录参数(t *testing.T) {
 	assert.Equal(t, filepath.Join(proj, "notes.md"), res["path"])
 }
 
-// ──────────────────────────── HandleMemoryOpen ────────────────────────────
+// ──────────────────────────── HandleMemoryOpen 记忆打开处理 ────────────────────────────
 
 // TestHandleMemoryOpen_基本 测试路径返回与 coding 目录条件包含
 func TestHandleMemoryOpen_基本(t *testing.T) {
@@ -403,7 +403,7 @@ func TestHandleMemoryOpen_coding目录存在(t *testing.T) {
 	assert.Equal(t, coding, res["coding_memory_dir"])
 }
 
-// ──────────────────────────── HandleMemoryList ────────────────────────────
+// ──────────────────────────── HandleMemoryList 记忆列表处理 ────────────────────────────
 
 // TestHandleMemoryList_三路合并 测试 project + auto + coding 三路
 func TestHandleMemoryList_三路合并(t *testing.T) {
@@ -541,7 +541,7 @@ func TestHandleMemoryList_额外目录参数(t *testing.T) {
 	assert.True(t, found, "additional_directories 应被发现")
 }
 
-// ──────────────────────────── HandleMemoryStatus ────────────────────────────
+// ──────────────────────────── HandleMemoryStatus 记忆状态处理 ────────────────────────────
 
 // TestHandleMemoryStatus_基本块 测试非 detailed 返回
 func TestHandleMemoryStatus_基本块(t *testing.T) {

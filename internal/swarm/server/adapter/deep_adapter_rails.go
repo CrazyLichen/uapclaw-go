@@ -1308,8 +1308,8 @@ func extractModelName(configBase map[string]any) string {
 // 已迁移至 swarm 侧记忆包导出版：commmem.ResolveModeMemory/GetMemoryMode/IsMemoryEnabled/IsProactiveMemory
 // （对齐 Python：这些函数定义在 jiuwenswarm/agents/harness/common/memory/config.py）
 //
-// isBuiltinMemoryAllowed/getMemoryEngine/isExternalMemoryEnabled/getExternalMemoryConfig/
-// buildOpenJiuwenProviderConfig/BuildExternalMemoryRail 六函数亦已迁移至 commmem 包
+// isBuiltinMemoryAllowed、getMemoryEngine、isExternalMemoryEnabled、getExternalMemoryConfig、
+// buildOpenJiuwenProviderConfig、BuildExternalMemoryRail 六函数亦已迁移至 commmem 包
 // （对齐 Python：external_memory_config.py / external_memory_builder.py）
 
 // boolStr 将 bool 转为 "true"/"false" 字符串（用于日志）。

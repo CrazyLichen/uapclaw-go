@@ -17,8 +17,8 @@ import (
 //
 // 并发说明：Python 依赖 GIL 保证属性读写的原子性；Go 端多工具并行执行时
 // BeforeToolCall 回调会在多个 goroutine 并发进入 UpdateConfig/CheckPermission，
-// 因此用 RWMutex 保护全部可变字段（config/enabled/externalChecker/llm/modelName/
-// permissionChecksActive/workspaceRoot/sceneHook）。
+// 因此用 RWMutex 保护全部可变字段（包括 config、enabled、externalChecker、llm、
+// modelName、permissionChecksActive、workspaceRoot、sceneHook）。
 type PermissionEngine struct {
 	// mu 可变字段读写锁
 	mu sync.RWMutex

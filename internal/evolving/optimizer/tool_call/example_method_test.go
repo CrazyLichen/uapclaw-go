@@ -586,7 +586,7 @@ func TestLastN(t *testing.T) {
 		t.Errorf("期望 ['c', 'd'], 实际 %v", result)
 	}
 
-	// n >= len(slice)
+	// n 超过 slice 长度时返回全部
 	result = lastN(slice, 10)
 	if len(result) != 4 {
 		t.Errorf("期望完整 slice, 实际 %v", result)

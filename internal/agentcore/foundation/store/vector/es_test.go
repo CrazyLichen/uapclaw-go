@@ -1286,7 +1286,7 @@ func TestESVectorStore_Search_OutputFields(t *testing.T) {
 	}
 }
 
-// ─── fakeESClient ───
+// ─── fakeESClient ES 客户端桩 ───
 
 // fakeESClient 基于 httptest.Server 的 ES 客户端 mock。
 // 实现了 esClient 接口，通过 Transport 方式转发请求到 httptest mock 服务器。

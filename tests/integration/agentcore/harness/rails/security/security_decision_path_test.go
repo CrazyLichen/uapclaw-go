@@ -21,7 +21,7 @@ import (
 // SecurityDecisionPathSuite 测试 SecurityDecision 全路径决策流。
 //
 // 覆盖：SecurityAllow（含 NewArgs 替换）、SecurityReject 在不同事件下的行为差异
-// （BeforeToolCall→skipTool、BeforeModelCall→forceFinish）、
+// （BeforeToolCall 映射 skipTool、BeforeModelCall 映射 forceFinish）、
 // SecurityInterrupt 在 MODEL 事件自动转 Reject、
 // SecurityAlert 各级别日志+流推送、决策链优先级。
 //

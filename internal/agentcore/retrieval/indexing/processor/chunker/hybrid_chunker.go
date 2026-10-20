@@ -54,11 +54,11 @@ var _ Chunker = (*HybridChunker)(nil)
 // NewHybridChunker 构造混合分块器。
 //
 // 尺寸提取（对齐 Python __init__ 的 getattr 反射）：inner 满足
-// DimsProvider（嵌入 BaseChunker 的实现）→ 取其真实尺寸；纯接口实现
-// 断言失败 → fallback 512/50。随后过 NewBaseChunker 校验（inner 尺寸
+// DimsProvider（嵌入 BaseChunker 的实现）时取其真实尺寸；纯接口实现
+// 断言失败则回退 512/50。随后过 NewBaseChunker 校验（inner 尺寸
 // 已合法时恒通过，保留为构造结构对称）。
 //
-// noSplitWhen 可变参数空 → nil → defaultNoSplit（对齐 Python
+// noSplitWhen 可变参数为空时为 nil → defaultNoSplit（对齐 Python
 // no_split_when or _default_no_split）。
 //
 // Python: hybrid_chunker.py HybridChunker.__init__

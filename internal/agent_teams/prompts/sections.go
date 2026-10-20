@@ -130,7 +130,7 @@ var labels = map[string]map[string]string{
 // Python: build_team_role_section() (openjiuwen/agent_teams/prompts/sections.py)
 //
 // 参数：
-//   - role: TeamRole（leader/teammate/human_agent）
+//   - role: 角色枚举 TeamRole（leader/teammate/human_agent）
 //   - memberName: 成员名（语义 slug），空字符串表示不显示
 //   - teammateMode: 执行模式 "build_mode" 或 "plan_mode"
 //   - language: 提示词语言 "cn" 或 "en"
@@ -182,8 +182,8 @@ func BuildTeamRoleSection(role atschema.TeamRole, memberName string, teammateMod
 //   - TEAMMATE: 默认匿名变体（不暴露成员名），exposeHumanAgentsToTeammates=true 时使用旧版花名册
 //
 // 参数：
-//   - role: TeamRole
-//   - humanAgentNames: 已注册的 human_agent 成员名列表，nil/空 → 返回 nil
+//   - role: 角色枚举 TeamRole
+//   - humanAgentNames: 已注册的 human_agent 成员名列表，nil/空时返回 nil
 //   - language: "cn" 或 "en"
 //   - selfMemberName: 当前成员的自身名（human_agent 用来区分自己）
 //   - exposeHumanAgentsToTeammates: 是否向 teammate 暴露人类成员名

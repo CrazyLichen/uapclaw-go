@@ -68,9 +68,9 @@ type BaseChunker struct {
 // NewBaseChunker 构造 BaseChunker 并执行参数校验。
 //
 // 校验规则（一比一对齐 Python Chunker.__init__）：
-//   - chunkSize <= 0 → 155100 RETRIEVAL_INDEXING_CHUNK_SIZE_INVALID
-//   - chunkOverlap < 0 → 155101 RETRIEVAL_INDEXING_CHUNK_OVERLAP_INVALID
-//   - chunkOverlap >= chunkSize → 155101 RETRIEVAL_INDEXING_CHUNK_OVERLAP_INVALID
+//   - chunkSize <= 0 时返回 155100 RETRIEVAL_INDEXING_CHUNK_SIZE_INVALID
+//   - chunkOverlap < 0 时返回 155101 RETRIEVAL_INDEXING_CHUNK_OVERLAP_INVALID
+//   - chunkOverlap >= chunkSize 时返回 155101 RETRIEVAL_INDEXING_CHUNK_OVERLAP_INVALID
 //
 // lengthFn 可选，默认按字符计数。
 //
@@ -106,8 +106,8 @@ func NewBaseChunker(chunkSize, chunkOverlap int, lengthFn ...func(string) int) (
 
 // ChunkDocuments 分块文档列表（默认实现，可被嵌入方继承）。
 //
-// 对每个文档调用子类覆写的 ChunkText，为每块生成 uuid 并合并溯源元数据：
-// {**doc.Metadata, "chunk_index": i, "total_chunks": len(texts), "chunk_id": uid}。
+// 对每个文档调用子类覆写的 ChunkText，为每块生成 uuid 并合并溯源元数据，
+// 等价 Python 表达式 {**doc.Metadata, "chunk_index": i, "total_chunks": len(texts), "chunk_id": uid}。
 // 任何文档分块失败即中断返回。
 //
 // Python: base.py Chunker.chunk_documents

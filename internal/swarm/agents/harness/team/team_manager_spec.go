@@ -51,12 +51,13 @@ type CodeMemberConfigurer func(
 // 对齐 Python: TeamManager.get_enriched_team_spec(session_id, deep_agent, ...) (team_manager.py L354-381)
 //
 // Python 步骤：
-//  1. config_base = get_config()
-//  2. await self._ensure_postgresql_for_leader(config_base)
-//  3. spec = self._load_team_spec(session_id)
-//  4. self._apply_session_scoped_team_name(spec, session_id=session_id)
-//  5. self.apply_team_plan_mode(spec, request_metadata=)
-//  6. spec.agent_customizer = self.build_agent_customizer(...)
+//
+//	Python: 1. config_base = get_config()
+//	Python: 2. await self._ensure_postgresql_for_leader(config_base)
+//	Python: 3. spec = self._load_team_spec(session_id)
+//	Python: 4. self._apply_session_scoped_team_name(spec, session_id=session_id)
+//	Python: 5. self.apply_team_plan_mode(spec, request_metadata=)
+//	Python: 6. spec.agent_customizer = self.build_agent_customizer(...)
 //
 // S-03: 对齐 Python——get_enriched_team_spec 不调用 sync_team_identity_metadata；
 // 身份同步仅在 runtime_ready 处理路径（adapter 层 SyncTeamIdentityMetadata，
@@ -117,8 +118,9 @@ func (m *TeamManager) GetEnrichedTeamSpec(
 // 对齐 Python: TeamManager.apply_team_plan_mode(spec, *, request_metadata)
 //
 // Python 步骤：
-//  1. mode = str((request_metadata or {}).get("mode") or "").strip().lower()
-//  2. if mode == "team.plan": spec.enable_team_plan = True
+//
+//	Python: 1. mode = str((request_metadata or {}).get("mode") or "").strip().lower()
+//	Python: 2. if mode == "team.plan": spec.enable_team_plan = True
 func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMetadata map[string]any) {
 	mode := ""
 	if requestMetadata != nil {
@@ -249,6 +251,7 @@ func (m *TeamManager) BuildAgentCustomizer(
 // 对齐 Python: TeamManager.register_member_runtime_tools(agent, *, session_id, ...)
 //
 // Python 步骤：
+//
 //  1. 创建 CronRuntimeBridge → cron_runtime.build_tools → Runner.resource_mgr.add_tool → agent.ability_manager.add
 //  2. 检查 send_file_allowed 配置
 //  3. 创建 SendFileToolkit → 注册到 Runner.resource_mgr + agent.ability_manager
@@ -307,12 +310,13 @@ func (m *TeamManager) ParsePort(value any, defaultPort int, fieldName string) (i
 // 对齐 Python: TeamManager._build_session_scoped_team_name(team_name, session_id)
 //
 // Python 步骤：
-//  1. base_name = str(team_name or "").strip() or "team"
-//  2. session_suffix = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(session_id or "").strip())
-//  3. session_suffix = session_suffix.strip("._-")
-//  4. if not session_suffix: return base_name
-//  5. if base_name.endswith(f"_{session_suffix}"): return base_name
-//  6. return f"{base_name}_{session_suffix}"
+//
+//	Python: 1. base_name = str(team_name or "").strip() or "team"
+//	Python: 2. session_suffix = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(session_id or "").strip())
+//	Python: 3. session_suffix = session_suffix.strip("._-")
+//	Python: 4. if not session_suffix: return base_name
+//	Python: 5. if base_name.endswith(f"_{session_suffix}"): return base_name
+//	Python: 6. return f"{base_name}_{session_suffix}"
 func buildSessionScopedTeamName(teamName string, sessionID string) string {
 	baseName := teamName
 	if baseName == "" {
@@ -421,7 +425,7 @@ func stepBSyncSkills(spec *atschema.TeamAgentSpec, agent interfaces.DeepAgentInt
 	memberWorkspaceRoot := agentWsRootPath
 	memberSkillsDir := filepath.Join(memberWorkspaceRoot, "skills")
 
-	// skills_configured / selected_skills
+	// 解析 skills_configured / selected_skills
 	skillsConfigured, selectedSkills := resolveMemberSkills(spec, memberName, role)
 
 	// 技能复制主流程（对齐 L799-808 try/except）
@@ -915,13 +919,14 @@ func agentCardName(agent interfaces.DeepAgentInterface, fallback string) string 
 // 对齐 Python: TeamManager._load_team_spec(session_id) (L291-352)
 //
 // Python 步骤：
-//  1. config_base = get_config()
-//  2. 分布式依赖检查（缺依赖回退 local）
-//  3. spec_dict = load_team_spec_dict(config_base)
-//  4. spec_dict = normalize_team_identity_fields(spec_dict)
-//  5. 分布式传输字段标准化
-//  6. models.defaults > 1 条时注入 model_pool + model_pool_strategy
-//  7. return TeamAgentSpec(**spec_dict)
+//
+//	Python: 1. config_base = get_config()
+//	2. 分布式依赖检查（缺依赖回退 local）
+//	Python: 3. spec_dict = load_team_spec_dict(config_base)
+//	Python: 4. spec_dict = normalize_team_identity_fields(spec_dict)
+//	5. 分布式传输字段标准化
+//	6. models.defaults > 1 条时注入 model_pool + model_pool_strategy
+//	Python: 7. return TeamAgentSpec(**spec_dict)
 //
 // Go 差异：Python 使用全局 get_config()，Go 通过参数注入 configBase。
 // M-38: 无参调用时 config.New("").Load() 兜底（对齐 Python get_config()，

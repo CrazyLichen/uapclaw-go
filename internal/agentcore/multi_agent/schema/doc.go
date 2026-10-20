@@ -13,7 +13,7 @@
 // Communicable 接口定义在 team_runtime 包中，包含 Send/Publish/Subscribe/Unsubscribe/Runtime 方法。
 //
 // 依赖约束：本包只依赖 common/schema/（BaseCard、CardInterface）、single_agent/schema/（AgentCard）、
-// single_agent/interfaces/（BaseAgent）、session/stream/（StreamMode、Schema），
+// single_agent/interfaces/（BaseAgent）以及 session/stream/（StreamMode、Schema），
 // 不引用 multi_agent 包层的其他文件，避免循环依赖。
 //
 // 文件目录：

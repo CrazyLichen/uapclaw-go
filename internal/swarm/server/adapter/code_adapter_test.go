@@ -21,12 +21,12 @@ func TestNewCodeAdapter(t *testing.T) {
 		t.Error("deep 不应为 nil")
 	}
 
-	// isCodeAgent = true
+	// isCodeAgent = true 场景
 	if !c.deep.isCodeAgent {
 		t.Error("isCodeAgent 应为 true")
 	}
 
-	// forceEnglishRuntimePrompt = true
+	// forceEnglishRuntimePrompt = true 场景
 	if !c.forceEnglishRuntimePrompt {
 		t.Error("forceEnglishRuntimePrompt 应为 true")
 	}

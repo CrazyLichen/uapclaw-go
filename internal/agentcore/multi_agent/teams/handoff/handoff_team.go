@@ -361,12 +361,12 @@ func (t *HandoffTeam) getStartAgentID() string {
 // 流程：
 //  1. sync.Once 保证初始化逻辑只执行一次（并发安全）
 //  2. 构建 routeGraph = BuildRouteGraph(agentIDs, routes)
-//  3. 对每个 agentID：
-//     - endpointID = __handoff_ep_{teamID}_{agentID}
-//     - endpointCard = AgentCard{ID: endpointID, Name: endpointID}
-//     - containerProvider = makeContainerProvider(card, agentID, allowedTargets)
-//     - runtime.RegisterAgent(endpointCard, containerProvider)
-//     - runtime.Subscribe(endpointID, container_{agentID})
+//  3. 对每个 agentID 执行：
+//     - 端点 ID 拼接（endpointID = __handoff_ep_{teamID}_{agentID}）
+//     - 端点卡片构造（endpointCard = AgentCard{ID, Name}）
+//     - 容器提供者构造（containerProvider = makeContainerProvider）
+//     - 注册端点（runtime.RegisterAgent）
+//     - 订阅容器主题（runtime.Subscribe(container_{agentID})）
 //
 // Python: HandoffTeam._ensure_internal_agents()
 func (t *HandoffTeam) ensureInternalAgents(ctx context.Context) error {
@@ -497,11 +497,11 @@ func (t *HandoffTeam) makeContainerProvider(
 // runChain 执行交接链路。
 //
 // 流程：
-//  1. ensureInternalAgents()
-//  2. coordinator = RestoreFromSession(session, startAgentID, agentIDs, config)
+//  1. 调用 ensureInternalAgents() 构建内部端点
+//  2. 从 session 恢复 coordinator（RestoreFromSession）
 //  3. 恢复 history（isResume 时过滤中断项）
-//  4. coordinatorRegistry[sessionID] = coordinator
-//  5. runtime.Publish(HandoffRequest, container_{currentAgentID})
+//  4. 注册 coordinator 到 coordinatorRegistry
+//  5. 发布 HandoffRequest 到当前容器（runtime.Publish）
 //  6. 等待 coordinator.DoneCh()（带超时：select + time.After）
 //  7. 清理：移除 coordinator、CleanupSession
 //

@@ -31,10 +31,11 @@ func (m *TeamManager) EnsureTeamSharedSkillsInitialized(spec *atschema.TeamAgent
 // 对齐 Python: TeamManager.sync_team_skills(session_id)
 //
 // Python 步骤：
-//  1. sync_info = self._team_skill_sync_targets.get(session_id)
-//  2. if sync_info is None: logger.debug("no sync target"); return
-//  3. source, target = sync_info
-//  4. _sync_skills_dir(source, target)
+//
+//	Python: 1. sync_info = self._team_skill_sync_targets.get(session_id)
+//	Python: 2. if sync_info is None: logger.debug("no sync target"); return
+//	Python: 3. source, target = sync_info
+//	Python: 4. _sync_skills_dir(source, target)
 func (m *TeamManager) SyncTeamSkills(sessionID string) {
 	syncTarget, ok := m.teamSkillSyncTargets[sessionID]
 	if !ok {
@@ -142,9 +143,10 @@ func (m *TeamManager) GetTeamSkillCreateRail(sessionID string) *evolution.TeamSk
 // 对齐 Python: TeamManager.find_team_skill_rail_for_request(request_id)
 //
 // Python 步骤：
-//  1. for rail in self._team_skill_rails.values():
-//  2. if request_id in getattr(rail, "_pending_approval_snapshots", {}): return rail
-//  3. return None
+//
+//	Python: 1. for rail in self._team_skill_rails.values():
+//	Python: 2. if request_id in getattr(rail, "_pending_approval_snapshots", {}): return rail
+//	Python: 3. return None
 func (m *TeamManager) FindTeamSkillRailForRequest(requestID string) *evolution.TeamSkillEvolutionRail {
 	for _, rail := range m.teamSkillRails {
 		if rail.HasPendingApprovalSnapshot(requestID) {
@@ -158,9 +160,10 @@ func (m *TeamManager) FindTeamSkillRailForRequest(requestID string) *evolution.T
 // 对齐 Python: TeamManager.drain_team_skill_events(session_id)
 //
 // Python 步骤：
-//  1. rail = self._team_skill_rails.get(session_id)
-//  2. if rail is None: return []
-//  3. return await rail.drain_pending_approval_events()
+//
+//	Python: 1. rail = self._team_skill_rails.get(session_id)
+//	Python: 2. if rail is None: return []
+//	Python: 3. return await rail.drain_pending_approval_events()
 func (m *TeamManager) DrainTeamSkillEvents(sessionID string) []map[string]any {
 	rail, ok := m.teamSkillRails[sessionID]
 	if !ok || rail == nil {
@@ -188,22 +191,23 @@ func (m *TeamManager) DrainTeamSkillEvents(sessionID string) []map[string]any {
 // 对齐 Python: TeamManager.update_evolution_config(config)
 //
 // Python 步骤：
-//  1. auto_scan_enabled = get_evolution_auto_scan_enabled(config)
-//  2. skill_create_enabled = get_skill_create_enabled(config)
-//  3. for rails in self._team_member_skill_evolution_rails.values():
-//     for rail in rails: rail.auto_scan = auto_scan_enabled
-//  4. for rail in self._team_skill_rails.values():
-//     rail.auto_scan = auto_scan_enabled
-//  5. if not skill_create_enabled:
-//     for session_id, rail in self._team_skill_create_rails.items():
-//     await self._unregister_live_rail(session_id, rail)
-//     self._team_skill_create_rails.pop(session_id, None)
-//     return
-//  6. for session_id, context in self._team_rail_contexts.items():
-//     if session_id in self._team_skill_create_rails: continue
-//     self._build_and_mount_member_rails_for_context(session_id, context,
-//     mount_team_skill_rail=False, mount_team_skill_create_rail=True,
-//     mount_skill_evolution_rail=False)
+//
+//	Python: 1. auto_scan_enabled = get_evolution_auto_scan_enabled(config)
+//	Python: 2. skill_create_enabled = get_skill_create_enabled(config)
+//	Python: 3. for rails in self._team_member_skill_evolution_rails.values():
+//	   for rail in rails: rail.auto_scan = auto_scan_enabled
+//	Python: 4. for rail in self._team_skill_rails.values():
+//	   rail.auto_scan = auto_scan_enabled
+//	Python: 5. if not skill_create_enabled:
+//	   for session_id, rail in self._team_skill_create_rails.items():
+//	   await self._unregister_live_rail(session_id, rail)
+//	   self._team_skill_create_rails.pop(session_id, None)
+//	   return
+//	Python: 6. for session_id, context in self._team_rail_contexts.items():
+//	   if session_id in self._team_skill_create_rails: continue
+//	   self._build_and_mount_member_rails_for_context(session_id, context,
+//	   mount_team_skill_rail=False, mount_team_skill_create_rail=True,
+//	   mount_skill_evolution_rail=False)
 func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
 	autoScanEnabled := GetEvolutionAutoScanEnabled(config)
 	skillCreateEnabled := GetSkillCreateEnabled(config)
@@ -263,15 +267,16 @@ func isLeaderRole(ctx *TeamRailMountContext) bool {
 // 对齐 Python: TeamManager._build_and_mount_member_rails_for_context (team_manager.py L1285-1327)
 //
 // Python 步骤：
-//  1. latest_config = get_config(); context.team_workspace.config = latest_config
-//  2. member_rails = build_member_rails(member_info, runtime, team_workspace)
-//  3. 遍历 rails，按 mount 开关挂载：
-//     - TeamSkillEvolutionRail + mount_team_skill_rail → agent.add_rail + register_team_live_rail
-//     - SkillEvolutionRail + mount_skill_evolution_rail → agent.add_rail + register_team_member_skill_evolution_rail
-//     - TeamSkillCreateRail + mount_team_skill_create_rail → agent.add_rail + register_team_live_rail
-//  4. team_skill_rail 非 nil → register_team_skill_rail；
-//     skills_dir 非空 → register_team_skill_sync_target(skills_dir, get_agent_skills_dir())
-//  5. team_skill_create_rail 非 nil → register_team_skill_create_rail
+//
+//	Python: 1. latest_config = get_config(); context.team_workspace.config = latest_config
+//	Python: 2. member_rails = build_member_rails(member_info, runtime, team_workspace)
+//	3. 遍历 rails，按 mount 开关挂载：
+//	   - TeamSkillEvolutionRail + mount_team_skill_rail → agent.add_rail + register_team_live_rail
+//	   - SkillEvolutionRail + mount_skill_evolution_rail → agent.add_rail + register_team_member_skill_evolution_rail
+//	   - TeamSkillCreateRail + mount_team_skill_create_rail → agent.add_rail + register_team_live_rail
+//	4. team_skill_rail 非 nil → register_team_skill_rail；
+//	   skills_dir 非空 → register_team_skill_sync_target(skills_dir, get_agent_skills_dir())
+//	5. team_skill_create_rail 非 nil → register_team_skill_create_rail
 func (m *TeamManager) buildAndMountMemberRailsForContext(
 	sessionID string,
 	ctx *TeamRailMountContext,

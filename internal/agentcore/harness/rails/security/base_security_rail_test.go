@@ -321,7 +321,7 @@ func TestTryGetApproved(t *testing.T) {
 	assert.False(t, ok)
 	assert.False(t, val)
 
-	// nil
+	// nil 输入
 	val, ok = tryGetApproved(nil)
 	assert.False(t, ok)
 	assert.False(t, val)
@@ -340,7 +340,7 @@ func TestTryGetAutoConfirm(t *testing.T) {
 	assert.False(t, ok)
 	assert.False(t, val)
 
-	// nil
+	// nil 输入
 	val, ok = tryGetAutoConfirm(nil)
 	assert.False(t, ok)
 	assert.False(t, val)

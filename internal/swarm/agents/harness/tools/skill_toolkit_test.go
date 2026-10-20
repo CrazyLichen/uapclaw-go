@@ -781,17 +781,17 @@ func TestToString(t *testing.T) {
 
 // TestToSliceOfAny 验证 toSliceOfAny 转换
 func TestToSliceOfAny(t *testing.T) {
-	// []any
+	// []any 输入
 	result, ok := toSliceOfAny([]any{"a", "b"})
 	if !ok || len(result) != 2 {
 		t.Errorf("[]any 转换失败: ok=%v, len=%d", ok, len(result))
 	}
-	// []map[string]any
+	// []map[string]any 输入
 	result, ok = toSliceOfAny([]map[string]any{{"key": "val"}})
 	if !ok || len(result) != 1 {
 		t.Errorf("[]map[string]any 转换失败: ok=%v, len=%d", ok, len(result))
 	}
-	// nil
+	// nil 输入
 	_, ok = toSliceOfAny(nil)
 	if ok {
 		t.Error("nil 应返回 false")

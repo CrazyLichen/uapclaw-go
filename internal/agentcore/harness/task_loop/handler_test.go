@@ -198,7 +198,7 @@ func TestTaskLoopEventHandler_HandleFollowUp_入队(t *testing.T) {
 	}
 }
 
-// TestTaskLoopEventHandler_OnAbort resolveRound with {"error": "aborted"}
+// TestTaskLoopEventHandler_OnAbort 以 {"error": "aborted"} 载荷 resolveRound
 func TestTaskLoopEventHandler_OnAbort(t *testing.T) {
 	provider := &fakeDeepAgentProvider{}
 	h := NewTaskLoopEventHandler(provider)

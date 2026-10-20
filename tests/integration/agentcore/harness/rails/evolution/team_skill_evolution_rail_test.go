@@ -121,7 +121,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_AutoSave默认�
 	s.False(rail.AutoSave())
 }
 
-// ─── EvolutionConfig ───
+// ─── EvolutionConfig 演化配置 ───
 
 // TestTeamSkillEvolutionRail_EvolutionConfig 测试 EvolutionConfig 包含预期键和默认值。
 //
@@ -435,7 +435,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_ApprovalRuntime
 	s.NotNil(rail.ApprovalRuntime())
 }
 
-// ─── AllowEvolutionTrigger ───
+// ─── AllowEvolutionTrigger 演化触发许可 ───
 
 // TestTeamSkillEvolutionRail_AllowEvolutionTrigger_默认不允许 测试默认状态下不允许触发。
 //
@@ -498,7 +498,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_AllowEvolutionT
 	s.True(rail.AllowEvolutionTrigger(evolution.TriggerAfterTaskIteration, nil))
 }
 
-// ─── OnBeforeInvoke ───
+// ─── OnBeforeInvoke 调用前钩子 ───
 
 // TestTeamSkillEvolutionRail_OnBeforeInvoke重置passive 测试 OnBeforeInvoke 重置 passiveEvolutionPending。
 //
@@ -523,7 +523,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_OnBeforeInvoke�
 	s.False(rail.AllowEvolutionTrigger(evolution.TriggerAfterInvoke, nil))
 }
 
-// ─── NotifyTeamCompleted ───
+// ─── NotifyTeamCompleted 团队完成通知 ───
 
 // TestTeamSkillEvolutionRail_NotifyTeamCompleted_autoScan关闭 测试 autoScan 关闭时 NotifyTeamCompleted 返回 false。
 //
@@ -546,7 +546,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_NotifyTeamCompl
 	s.False(ok)
 }
 
-// ─── OnAfterToolCall ───
+// ─── OnAfterToolCall 工具调用后钩子 ───
 
 // TestTeamSkillEvolutionRail_OnAfterToolCall需要有效cbc 测试 OnAfterToolCall 需要有效 cbc。
 // 非 ToolCallInputs 类型时返回 nil 不崩溃。
@@ -756,7 +756,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_OnAfterToolCall
 	s.False(rail.AllowEvolutionTrigger(evolution.TriggerAfterInvoke, nil))
 }
 
-// ─── HasPendingApprovalSnapshot ───
+// ─── HasPendingApprovalSnapshot 待审批快照判定 ───
 
 // TestTeamSkillEvolutionRail_HasPendingApprovalSnapshot_不存在 测试不存在的 requestID 返回 false。
 //
@@ -843,7 +843,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_GetCallbacks() 
 	s.Contains(callbacks, agentinterfaces.CallbackAfterTaskIteration)
 }
 
-// ─── RecordPresentedExperiences ───
+// ─── RecordPresentedExperiences 呈现经验记录 ───
 
 // TestTeamSkillEvolutionRail_RecordPresentedExperiences 测试非 rail 路径呈现经验记录。
 //
@@ -854,7 +854,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_RecordPresented
 	rail.RecordPresentedExperiences(s.Ctx, "team_skill_1", "snippet without record IDs", "session_1", nil)
 }
 
-// ─── SnapshotForEvolution ───
+// ─── SnapshotForEvolution 演化快照 ───
 
 // TestTeamSkillEvolutionRail_SnapshotForEvolution_autoScan关闭返回nil 测试 autoScan 关闭时返回 nil。
 //
@@ -912,7 +912,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_SnapshotForEvol
 	s.Equal("team-skill", *snapshot.SkillName)
 }
 
-// ─── RunEvolution ───
+// ─── RunEvolution 执行演化 ───
 
 // TestTeamSkillEvolutionRail_RunEvolution_autoScan关闭 测试 autoScan 关闭时 RunEvolution 返回 nil。
 //
@@ -1013,7 +1013,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_RequestRebuild_
 	s.Empty(result)
 }
 
-// ─── RequestUserEvolution ───
+// ─── RequestUserEvolution 请求用户演化 ───
 
 // TestTeamSkillEvolutionRail_RequestUserEvolution_无轨迹 测试无轨迹时返回基础结果。
 //
@@ -1117,7 +1117,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillKinds_间接验证() {
 	s.True(rail.AllowEvolutionTrigger(evolution.TriggerAfterInvoke, nil))
 }
 
-// ─── EvolutionRequestResult ───
+// ─── EvolutionRequestResult 演化请求结果 ───
 
 // TestTeamSkillEvolutionRail_EvolutionRequestResult_HasChanges 测试 HasChanges 判断。
 func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_EvolutionRequestResult_HasChanges() {
@@ -1140,7 +1140,7 @@ func (s *TeamSkillEvolutionRailSuite) TestTeamSkillEvolutionRail_EvolutionReques
 	s.False(result3.HasChanges())
 }
 
-// ─── SetTrajectorySource ───
+// ─── SetTrajectorySource 轨迹源设置 ───
 
 // TestTeamSkillEvolutionRail_SetTrajectorySource 测试设置团队轨迹聚合源。
 //

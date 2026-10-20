@@ -138,7 +138,7 @@ func (s *WorktreeManagerSuite) TestWorktreeManager_ExitRemove删除() {
 
 	wtPath := session.WorktreePath
 
-	// Exit with remove + discard_changes
+	// Exit 动作 remove 并丢弃变更（discard_changes）
 	result, err := mgr.Exit(ctx, "remove", true)
 	s.Require().NoError(err)
 	s.Equal("remove", result["action"])

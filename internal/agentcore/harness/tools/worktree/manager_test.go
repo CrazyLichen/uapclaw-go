@@ -80,21 +80,21 @@ func TestOwnerSlug(t *testing.T) {
 
 // TestResolvePolicy 测试生命周期策略解析
 func TestResolvePolicy(t *testing.T) {
-	// AUTO → EPHEMERAL
+	// AUTO 归一化为 EPHEMERAL
 	cfg := NewWorktreeConfig()
 	mgr := NewWorktreeManager(cfg, nil)
 	if mgr.resolvePolicy() != WorktreeLifecyclePolicyEphemeral {
 		t.Errorf("AUTO 应解析为 EPHEMERAL，实际 %s", mgr.resolvePolicy())
 	}
 
-	// DURABLE → DURABLE
+	// DURABLE 保持不变
 	cfg.LifecyclePolicy = WorktreeLifecyclePolicyDurable
 	mgr = NewWorktreeManager(cfg, nil)
 	if mgr.resolvePolicy() != WorktreeLifecyclePolicyDurable {
 		t.Errorf("DURABLE 应保持 DURABLE，实际 %s", mgr.resolvePolicy())
 	}
 
-	// EPHEMERAL → EPHEMERAL
+	// EPHEMERAL 保持不变
 	cfg.LifecyclePolicy = WorktreeLifecyclePolicyEphemeral
 	mgr = NewWorktreeManager(cfg, nil)
 	if mgr.resolvePolicy() != WorktreeLifecyclePolicyEphemeral {

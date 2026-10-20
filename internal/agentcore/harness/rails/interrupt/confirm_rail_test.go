@@ -21,7 +21,7 @@ func TestNewConfirmInterruptRail(t *testing.T) {
 	assert.Equal(t, "请批准或拒绝？", r.request.Message)
 }
 
-// ──────────────────────────── resolveInterrupt ────────────────────────────
+// ──────────────────────────── resolveInterrupt 中断解析 ────────────────────────────
 
 // TestConfirmInterruptRail_resolveInterrupt_无输入无AutoConfirm 验证无输入无auto_confirm → InterruptResult
 func TestConfirmInterruptRail_resolveInterrupt_无输入无AutoConfirm(t *testing.T) {
@@ -112,7 +112,7 @@ func TestConfirmInterruptRail_resolveInterrupt_Dict拒绝(t *testing.T) {
 	assert.Equal(t, "不安全", rejectResult.ToolResult)
 }
 
-// ──────────────────────────── isAutoConfirmed ────────────────────────────
+// ──────────────────────────── isAutoConfirmed 自动确认判定 ────────────────────────────
 
 // TestIsAutoConfirmed 验证 auto_confirm 查找逻辑
 func TestIsAutoConfirmed(t *testing.T) {
@@ -132,7 +132,7 @@ func TestIsAutoConfirmed(t *testing.T) {
 	assert.False(t, isAutoConfirmed(map[string]any{"write_file": false}, "write_file"))
 }
 
-// ──────────────────────────── getAutoConfirmKey ────────────────────────────
+// ──────────────────────────── getAutoConfirmKey 自动确认键 ────────────────────────────
 
 // TestConfirmInterruptRail_getAutoConfirmKey 验证 key 生成
 func TestConfirmInterruptRail_getAutoConfirmKey(t *testing.T) {
@@ -146,7 +146,7 @@ func TestConfirmInterruptRail_getAutoConfirmKey(t *testing.T) {
 	assert.Equal(t, "", r.getAutoConfirmKey(nil))
 }
 
-// ──────────────────────────── parseConfirmInput ────────────────────────────
+// ──────────────────────────── parseConfirmInput 确认输入解析 ────────────────────────────
 
 // TestConfirmInterruptRail_parseConfirmInput_Dict 验证 map 输入解析
 func TestConfirmInterruptRail_parseConfirmInput_Dict(t *testing.T) {
@@ -261,7 +261,7 @@ func TestConfirmInterruptRail_resolveInterrupt_AutoConfirmKeyNilToolCall(t *test
 	r := NewConfirmInterruptRail(WithConfirmToolNames("write_file"))
 	autoConfirmConfig := map[string]any{"": true}
 
-	// nil toolCall → autoConfirmKey="" → config[""]=true → Approve
+	// nil toolCall 场景：autoConfirmKey="" 命中 config[""]=true → Approve
 	decision := r.resolveConfirmInterrupt(context.TODO(), nil, nil, nil, autoConfirmConfig)
 	assert.IsType(t, &ApproveResult{}, decision)
 }

@@ -80,27 +80,27 @@ func TestNonzeroExit(t *testing.T) {
 }
 
 func TestInferToolResultError(t *testing.T) {
-	// success=false
+	// success=false 场景
 	got := inferToolResultError(map[string]any{"success": false})
 	assertBoolPtr(t, got, true)
 
-	// success=true
+	// success=true 场景
 	got = inferToolResultError(map[string]any{"success": true})
 	assertBoolPtr(t, got, false)
 
-	// is_error=true
+	// is_error=true 场景
 	got = inferToolResultError(map[string]any{"is_error": true})
 	assertBoolPtr(t, got, true)
 
-	// status="error"
+	// status="error" 场景
 	got = inferToolResultError(map[string]any{"status": "error"})
 	assertBoolPtr(t, got, true)
 
-	// exit_code != 0
+	// exit_code != 0 场景
 	got = inferToolResultError(map[string]any{"exit_code": 1})
 	assertBoolPtr(t, got, true)
 
-	// exit_code == 0
+	// exit_code == 0 场景
 	got = inferToolResultError(map[string]any{"exit_code": 0})
 	assertBoolPtr(t, got, false)
 
@@ -118,7 +118,7 @@ func TestInferToolResultError(t *testing.T) {
 	got = inferToolResultError("[ERROR] something failed")
 	assertBoolPtr(t, got, true)
 
-	// nil
+	// nil 输入
 	got = inferToolResultError(nil)
 	if got != nil {
 		t.Errorf("expected nil, got %v", got)
@@ -187,7 +187,7 @@ func TestExtractToolInterrupt(t *testing.T) {
 		t.Error("expected nil for plain error")
 	}
 
-	// nil
+	// nil 输入
 	got = extractToolInterrupt(nil)
 	if got != nil {
 		t.Error("expected nil for nil input")

@@ -173,7 +173,7 @@ func NewCodeAdapter() *CodeAdapter {
 //	Python: 10. self._agent_workspace_dir = str(get_agent_workspace_dir())
 //	Python: 11. self._dreaming_mode = "code"
 //	Python: 12. model = self._create_model(config_base)
-//	13. ⤵️ A2X / 11.10: _try_init_a2x_client — code 模式不初始化
+//	13. ⤵️ A2X / 11.10: _try_init_a2x_client（回填点，code 模式不初始化）
 //	Python: 14. agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
 //	Python: 15. tool_cards = await self._get_tool_cards(agent_card.id)
 //	Python: 16. rails_list = self._build_agent_rails(config, config_base, mode="code")
@@ -653,8 +653,8 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	}
 
 	// ⤵️ 待后续章节回填:
-	// - _update_tools_for_mode
-	// - _update_session_tools
+	//   - _update_tools_for_mode（按模式更新工具）
+	//   - _update_session_tools（更新会话工具）
 
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).

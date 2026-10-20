@@ -69,18 +69,18 @@ var commonAbbreviations = map[string]string{
 // Extract 从 Go struct 类型反射提取 []*schema.Param。
 //
 // 读取字段标签：
-//   - json:"name" → Param.Name（也用于判断是否导出：无 json tag 的字段跳过）
-//   - json:"name,omitempty" → Param.Required=false（omitempty 表示非必填）
-//   - jsonschema:"description=搜索关键词" → Param.Description
-//   - jsonschema:"required" → Param.Required=true
-//   - jsonschema:"default=10" → Param.Default
-//   - jsonschema:"enum=a|b|c" → JSON Schema enum（用 | 分隔）
+//   - json:"name" 映射 Param.Name（也用于判断是否导出：无 json tag 的字段跳过）
+//   - json:"name,omitempty" 表示非必填（Param.Required=false）
+//   - jsonschema:"description=搜索关键词" 映射 Param.Description
+//   - jsonschema:"required" 映射 Param.Required=true
+//   - jsonschema:"default=10" 映射 Param.Default
+//   - jsonschema:"enum=a|b|c" 映射 JSON Schema enum（用 | 分隔）
 //
 // 递归处理规则：
-//   - 嵌套 struct → ParamTypeObject，递归提取 Properties
-//   - []T / []*T → ParamTypeArray，递归提取 Items
-//   - *T → 解引用后按 T 处理
-//   - 基本类型 → 直接映射 ParamType
+//   - 嵌套 struct 映射 ParamTypeObject，递归提取 Properties
+//   - []T / []*T 映射 ParamTypeArray，递归提取 Items
+//   - *T 解引用后按 T 处理
+//   - 基本类型直接映射 ParamType
 //
 // Python:
 //   - CallableSchemaExtractor.generate_schema()（可调用模式提取器的 generate_schema 方法）

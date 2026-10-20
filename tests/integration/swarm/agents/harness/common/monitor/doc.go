@@ -6,7 +6,7 @@
 //   - TeamMonitor 生命周期（Start/Stop/IsRunning）
 //   - FromEventMessage 事件转换
 //   - MonitorEvent 类型映射
-//   - TeamStreamLogger Feed/Flush
+//   - TeamStreamLogger 的 Feed/Flush 行为
 //   - MonitorEventType 枚举完整性
 //
 // 对齐 Python: openjiuwen/harness/monitor/team_monitor.py

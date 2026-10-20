@@ -1194,7 +1194,7 @@ func TestFileCheckpointStore_LoadStateDict_Nonexistent(t *testing.T) {
 
 // TestToJSONCompatible_各种类型 测试 toJSONCompatible 递归转换
 func TestToJSONCompatible_各种类型(t *testing.T) {
-	// nil
+	// nil 输入
 	if toJSONCompatible(nil) != nil {
 		t.Errorf("nil 应返回 nil")
 	}
@@ -1224,7 +1224,7 @@ func TestToJSONCompatible_各种类型(t *testing.T) {
 		t.Errorf("key = %v, 期望 val", m2["key"])
 	}
 
-	// slice
+	// slice 输入
 	result = toJSONCompatible([]any{1, "two"})
 	s, ok := result.([]any)
 	if !ok {
@@ -1380,7 +1380,7 @@ func TestEvolutionStore_ResolveSkillDir(t *testing.T) {
 		t.Errorf("不存在的技能应返回空")
 	}
 
-	// create=true
+	// create=true 场景
 	resolved = store.ResolveSkillDir(ctx, "new_skill", true)
 	if resolved == "" {
 		t.Errorf("create=true 应返回路径")
@@ -2207,7 +2207,7 @@ func TestGetIntMapFromAny(t *testing.T) {
 	if result["batch"] != 3 {
 		t.Errorf("batch = %d, 期望 3", result["batch"])
 	}
-	// nil
+	// nil 输入
 	result = getIntMapFromAny(nil)
 	if len(result) != 0 {
 		t.Errorf("nil 应返回空 map")

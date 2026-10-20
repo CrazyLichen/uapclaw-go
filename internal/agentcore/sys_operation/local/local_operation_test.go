@@ -24,7 +24,7 @@ func TestStreamEventType_String(t *testing.T) {
 	assert.Equal(t, "error", StreamEventTypeError.String())
 }
 
-// ──────────────────────────── OperationUtils ────────────────────────────
+// ──────────────────────────── OperationUtils 操作工具函数 ────────────────────────────
 
 // TestOperationUtils_PrepareEnvironment 测试环境准备
 func TestOperationUtils_PrepareEnvironment(t *testing.T) {
@@ -80,7 +80,7 @@ func TestOperationUtils_DeleteTmpFile(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 }
 
-// ──────────────────────────── LocalShellOperation ────────────────────────────
+// ──────────────────────────── LocalShellOperation 本地 Shell 操作 ────────────────────────────
 
 // TestNewLocalShellOperation 测试创建 Shell 操作实例
 func TestNewLocalShellOperation(t *testing.T) {
@@ -211,7 +211,7 @@ done:
 	assert.NotEmpty(t, chunks)
 }
 
-// ──────────────────────────── LocalFsOperation ────────────────────────────
+// ──────────────────────────── LocalFsOperation 本地文件系统操作 ────────────────────────────
 
 // TestNewLocalFsOperation 测试创建 FS 操作实例
 func TestNewLocalFsOperation(t *testing.T) {
@@ -344,7 +344,7 @@ func TestLocalFsOperation_WriteFile_Append(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── LocalCodeOperation ────────────────────────────
+// ──────────────────────────── LocalCodeOperation 本地代码操作 ────────────────────────────
 
 // TestNewLocalCodeOperation 测试创建 Code 操作实例
 func TestNewLocalCodeOperation(t *testing.T) {
@@ -392,7 +392,7 @@ func TestLocalCodeOperation_ExecuteCode_简单Python(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ExpandUser ────────────────────────────
+// ──────────────────────────── ExpandUser 用户目录展开 ────────────────────────────
 
 // TestExpandUser 测试路径展开
 func TestExpandUser(t *testing.T) {

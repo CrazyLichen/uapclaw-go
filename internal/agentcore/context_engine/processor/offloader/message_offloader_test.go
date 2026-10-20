@@ -274,7 +274,7 @@ func TestMessageOffloader_getOffloadRange_MessagesToKeep(t *testing.T) {
 		llm_schema.NewUserMessage("q3"),
 	}
 	offloadRange := mo.getOffloadRange(messages)
-	// len=5, keep=2 → offloadRange = 5-2 = 3
+	// 卸载数量推导：len=5, keep=2 → offloadRange = 5-2 = 3
 	if offloadRange != 3 {
 		t.Fatalf("期望 offloadRange=3（5-2），实际=%d", offloadRange)
 	}

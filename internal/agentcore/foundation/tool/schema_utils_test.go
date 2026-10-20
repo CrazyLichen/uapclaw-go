@@ -274,7 +274,7 @@ func TestSchemaUtils_FormatWithSchema_跳过校验和NoneValues(t *testing.T) {
 		schema.NewStringParam("name", "名称", false),
 	}
 
-	// skipValidate + skipNoneValue
+	// skipValidate + skipNoneValue 组合场景
 	data := map[string]any{"name": nil}
 	result, err := SchemaUtils{}.FormatWithSchema(data, params,
 		WithFormatSkipNoneValue(true),

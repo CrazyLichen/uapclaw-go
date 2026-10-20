@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ──────────────────────────── NewLocalWorkConfig ────────────────────────────
+// ──────────────────────────── NewLocalWorkConfig 本地工作配置构造 ────────────────────────────
 
 // TestNewLocalWorkConfig 测试本地工作目录配置默认值
 // Python: LocalWorkConfig：shell_allowlist 有默认列表，restrict_to_sandbox=False。
@@ -21,7 +21,7 @@ func TestNewLocalWorkConfig(t *testing.T) {
 	assert.Nil(t, cfg.DangerousPatterns)
 }
 
-// ──────────────────────────── NewSandboxGatewayConfig ────────────────────────────
+// ──────────────────────────── NewSandboxGatewayConfig 沙箱网关配置构造 ────────────────────────────
 
 // TestNewSandboxGatewayConfig 测试沙箱网关配置默认值
 // Python: SandboxGatewayConfig：isolation, launcher_config, timeout_seconds。
@@ -34,7 +34,7 @@ func TestNewSandboxGatewayConfig(t *testing.T) {
 	assert.Equal(t, ContainerScopeSession, cfg.Isolation.ContainerScope, "ContainerScope 默认应对齐 Python SESSION")
 }
 
-// ──────────────────────────── NewSysOperationCard ────────────────────────────
+// ──────────────────────────── NewSysOperationCard 系统操作卡构造 ────────────────────────────
 
 // TestNewSysOperationCard 测试系统操作卡片默认值
 func TestNewSysOperationCard(t *testing.T) {
@@ -50,7 +50,7 @@ func TestNewSysOperationCardWithMode(t *testing.T) {
 	assert.Equal(t, OperationModeSandbox, card.Mode)
 }
 
-// ──────────────────────────── SysOperationCardOption ────────────────────────────
+// ──────────────────────────── SysOperationCardOption 系统操作卡选项 ────────────────────────────
 
 // TestWithSysOpMode 测试设置操作模式选项
 func TestWithSysOpMode(t *testing.T) {
@@ -83,7 +83,7 @@ func TestWithSysOpIsolationKeyTemplate(t *testing.T) {
 	assert.Equal(t, "my_template", card.IsolationKeyTemplate())
 }
 
-// ──────────────────────────── GenerateToolID ────────────────────────────
+// ──────────────────────────── GenerateToolID 工具 ID 生成 ────────────────────────────
 
 // TestGenerateToolID 测试生成工具标识格式
 func TestGenerateToolID(t *testing.T) {
@@ -101,7 +101,7 @@ func TestGenerateToolID_不同操作类型(t *testing.T) {
 	assert.Equal(t, "my_card.code.run", card.GenerateToolID("code", "run"))
 }
 
-// ──────────────────────────── IsolationKeyTemplate ────────────────────────────
+// ──────────────────────────── IsolationKeyTemplate 隔离键模板 ────────────────────────────
 
 // TestIsolationKeyTemplate_默认为空 测试隔离键模板默认为空
 func TestIsolationKeyTemplate_默认为空(t *testing.T) {
@@ -116,7 +116,7 @@ func TestSetIsolationKeyTemplate(t *testing.T) {
 	assert.Equal(t, "new_template", card.IsolationKeyTemplate())
 }
 
-// ──────────────────────────── ToolIdProxy ────────────────────────────
+// ──────────────────────────── ToolIdProxy 工具 ID 代理 ────────────────────────────
 
 // TestToolIdProxy_Fs 测试文件系统操作的工具标识代理
 func TestToolIdProxy_Fs(t *testing.T) {
@@ -149,7 +149,7 @@ func TestToolIdProxy_ToolID(t *testing.T) {
 	assert.Equal(t, "myid.fs.read", proxy.ToolID("read"))
 }
 
-// ──────────────────────────── generateIsolationKeyTemplate ────────────────────────────
+// ──────────────────────────── generateIsolationKeyTemplate 隔离键模板生成 ────────────────────────────
 
 // TestGenerateIsolationKeyTemplate_SYSTEM 测试系统级容器生成隔离键模板
 func TestGenerateIsolationKeyTemplate_SYSTEM(t *testing.T) {

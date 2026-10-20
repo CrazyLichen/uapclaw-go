@@ -3,7 +3,7 @@
 // 把传输层来的 EventMessage 与内部 poll 计时器产生的 InnerEventMessage
 // 收成统一的 CoordinationEvent，按粗筛规则放行后由 CallbackFramework
 // 分发到具体的场景 handler。自身不做业务决策——handler 通过三类 narrow
-// protocol（AgentRoundController / TeamLifecycleController / PollController）
+// protocol（AgentRoundController、TeamLifecycleController、PollController）
 // 触发行为，最终驱动 DeepAgent + team tools。
 //
 // 三条铁律：

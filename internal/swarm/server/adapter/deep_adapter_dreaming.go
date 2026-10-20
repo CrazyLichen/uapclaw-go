@@ -24,12 +24,13 @@ import (
 // Python: JiuWenClawDeepAdapter.try_start_dreaming() (line 5935-5954)
 //
 // Python 执行步骤：
-//  1. if self._dreaming_started: return
-//  2. if not self._dreaming_mode: return
-//  3. if busy_checker and busy_checker(): logger.warning("agent busy, skip dreaming"); return
-//  4. try: await self._instance.memory.dreaming.start_dreaming(...)
-//  5. except Exception: logger.warning(...); # _dreaming_started 保持 False
-//  6. self._dreaming_started = orch is not None  # 仅在成功后设置
+//
+//	Python: 1. if self._dreaming_started: return
+//	Python: 2. if not self._dreaming_mode: return
+//	Python: 3. if busy_checker and busy_checker(): logger.warning("agent busy, skip dreaming"); return
+//	Python: 4. try: await self._instance.memory.dreaming.start_dreaming(...)
+//	Python: 5. except Exception: logger.warning(...); # _dreaming_started 保持 False
+//	Python: 6. self._dreaming_started = orch is not None  # 仅在成功后设置
 func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() bool) error {
 	// 步骤 1: 已启动则跳过
 	if d.dreamingStarted {
@@ -108,10 +109,11 @@ func (d *DeepAdapter) TryStartDreaming(ctx context.Context, busyChecker func() b
 // Python: JiuWenClawDeepAdapter.try_stop_dreaming() (line 5956-5965)
 //
 // Python 执行步骤：
-//  1. if not self._dreaming_started: return
-//  2. try: await stop_dreaming(mode=mode)
-//  3. self._dreaming_started = False  # 仅在成功后清除
-//  4. except Exception: logger.warning(...)
+//
+//	Python: 1. if not self._dreaming_started: return
+//	Python: 2. try: await stop_dreaming(mode=mode)
+//	Python: 3. self._dreaming_started = False  # 仅在成功后清除
+//	Python: 4. except Exception: logger.warning(...)
 func (d *DeepAdapter) TryStopDreaming(ctx context.Context) error {
 	// 步骤 1: 未启动则跳过
 	if !d.dreamingStarted {
