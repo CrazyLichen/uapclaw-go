@@ -61,28 +61,31 @@ func TestRuntimeMemberName_回退predefined(t *testing.T) {
 	}
 }
 
-// TestParsePort_边界 nil/空串/非数字/越界均返回默认值。
+// TestParsePort_边界 nil/空串返回默认值，非法值返回 error（M-04 对齐 Python raise）。
 func TestParsePort_边界(t *testing.T) {
-	if got := ParsePort(nil, 18555, "f"); got != 18555 {
-		t.Errorf("nil = %d", got)
+	// nil/空串：返回 default 且无 error（对齐 Python None 守卫）
+	if got, err := ParsePort(nil, 18555, "f"); got != 18555 || err != nil {
+		t.Errorf("nil = %d, err = %v", got, err)
 	}
-	if got := ParsePort("  ", 18555, "f"); got != 18555 {
-		t.Errorf("blank = %d", got)
+	if got, err := ParsePort("  ", 18555, "f"); got != 18555 || err != nil {
+		t.Errorf("blank = %d, err = %v", got, err)
 	}
-	if got := ParsePort("abc", 18555, "f"); got != 18555 {
-		t.Errorf("non-numeric = %d", got)
+	// 非法值：返回 error（对齐 Python raise ValueError）
+	if _, err := ParsePort("abc", 18555, "f"); err == nil {
+		t.Errorf("non-numeric should return error")
 	}
-	if got := ParsePort(0, 18555, "f"); got != 18555 {
-		t.Errorf("zero = %d", got)
+	if _, err := ParsePort(0, 18555, "f"); err == nil {
+		t.Errorf("zero should return error")
 	}
-	if got := ParsePort(65536, 18555, "f"); got != 18555 {
-		t.Errorf("overflow = %d", got)
+	if _, err := ParsePort(65536, 18555, "f"); err == nil {
+		t.Errorf("overflow should return error")
 	}
-	if got := ParsePort("18555", 1, "f"); got != 18555 {
-		t.Errorf("string ok = %d", got)
+	// 合法值
+	if got, err := ParsePort("18555", 1, "f"); got != 18555 || err != nil {
+		t.Errorf("string ok = %d, err = %v", got, err)
 	}
-	if got := ParsePort(18556.0, 1, "f"); got != 18556 {
-		t.Errorf("float ok = %d", got)
+	if got, err := ParsePort(18556.0, 1, "f"); got != 18556 || err != nil {
+		t.Errorf("float ok = %d, err = %v", got, err)
 	}
 }
 
@@ -96,7 +99,10 @@ func TestNormalizeDistributedTransportFields_leader(t *testing.T) {
 		"type":   "pyzmq",
 		"params": map[string]any{"known_peers": []any{"x"}},
 	}}
-	result := NormalizeDistributedTransportFields(configBase, teamCfg)
+	result, err := NormalizeDistributedTransportFields(configBase, teamCfg)
+	if err != nil {
+		t.Fatalf("leader normalize should not fail: %v", err)
+	}
 	transport := result["transport"].(map[string]any)
 	params := transport["params"].(map[string]any)
 	if _, exists := params["known_peers"]; exists {
@@ -132,7 +138,10 @@ func TestNormalizeDistributedTransportFields_teammate(t *testing.T) {
 		"leader":    map[string]any{"member_name": "my_leader"},
 		"transport": map[string]any{"type": "pyzmq", "params": map[string]any{}},
 	}
-	result := NormalizeDistributedTransportFields(configBase, teamCfg)
+	result, err := NormalizeDistributedTransportFields(configBase, teamCfg)
+	if err != nil {
+		t.Fatalf("teammate normalize should not fail: %v", err)
+	}
 	params := result["transport"].(map[string]any)["params"].(map[string]any)
 	peers, ok := params["known_peers"].([]any)
 	if !ok || len(peers) != 1 {
@@ -154,7 +163,10 @@ func TestNormalizeDistributedTransportFields_teammate(t *testing.T) {
 // TestNormalizeDistributedTransportFields_非pyzmq直接返回。
 func TestNormalizeDistributedTransportFields_非pyzmq直接返回(t *testing.T) {
 	teamCfg := map[string]any{"transport": map[string]any{"type": "inprocess"}}
-	result := NormalizeDistributedTransportFields(map[string]any{}, teamCfg)
+	result, err := NormalizeDistributedTransportFields(map[string]any{}, teamCfg)
+	if err != nil {
+		t.Fatalf("non-pyzmq should not fail: %v", err)
+	}
 	if !reflect.DeepEqual(result, teamCfg) {
 		t.Fatalf("non-pyzmq should return as-is")
 	}
@@ -167,7 +179,10 @@ func TestNormalizeDistributedTransportFields_已配置pubsub跳过推导(t *test
 		"type":   "pyzmq",
 		"params": map[string]any{"pubsub_publish_addr": "tcp://1.2.3.4:1", "pubsub_subscribe_addr": "tcp://1.2.3.4:2"},
 	}}
-	result := NormalizeDistributedTransportFields(configBase, teamCfg)
+	result, err := NormalizeDistributedTransportFields(configBase, teamCfg)
+	if err != nil {
+		t.Fatalf("teammate normalize should not fail: %v", err)
+	}
 	params := result["transport"].(map[string]any)["params"].(map[string]any)
 	if params["pubsub_publish_addr"] != "tcp://1.2.3.4:1" {
 		t.Fatalf("pre-filled pubsub should be kept")

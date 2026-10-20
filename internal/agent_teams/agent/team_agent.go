@@ -559,9 +559,11 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	}
 
 	// Python: self._state.pending_user_query = inputs.get("query", "") if isinstance(inputs, dict) else str(inputs)
-	if query, ok := inputs["query"].(string); ok {
-		a.state.PendingUserQuery = query
-	}
+	// S-07: 无条件覆盖（对齐 Python inputs.get("query", "")）——无 key 或非 string 时
+	// 清空，不保留上轮旧值（原实现仅 key 存在才写，跨轮残留过期查询注入 kernel）。
+	// Python else str(inputs) 分支因 Go 签名固定 map[string]any 不可达，无需实现。
+	query, _ := inputs["query"].(string)
+	a.state.PendingUserQuery = query
 
 	// Python: await self._coordination.start(session)
 	a.coordination.Start(ctx, agentteams.GetSessionID(ctx))
@@ -569,10 +571,7 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	// Python: try:
 	//   await self._coordination.enqueue_user_input(inputs)
 	//   await self._coordination.enqueue_mailbox_after_first_iteration()
-	query := ""
-	if q, ok := inputs["query"].(string); ok {
-		query = q
-	}
+	// S-07: query 已在上方无条件覆盖处声明，与 Python inputs.get("query", "") 同源
 	a.coordination.EnqueueUserInput(query)
 	a.coordination.EnqueueMailboxAfterFirstIteration(ctx)
 
@@ -621,9 +620,11 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	}
 
 	// Python: self._state.pending_user_query = inputs.get("query", "") if isinstance(inputs, dict) else str(inputs)
-	if query, ok := inputs["query"].(string); ok {
-		a.state.PendingUserQuery = query
-	}
+	// S-07: 无条件覆盖（对齐 Python inputs.get("query", "")）——无 key 或非 string 时
+	// 清空，不保留上轮旧值（原实现仅 key 存在才写，跨轮残留过期查询注入 kernel）。
+	// Python else str(inputs) 分支因 Go 签名固定 map[string]any 不可达，无需实现。
+	query, _ := inputs["query"].(string)
+	a.state.PendingUserQuery = query
 
 	// Python: await self._coordination.start(session)
 	a.coordination.Start(ctx, agentteams.GetSessionID(ctx))
@@ -631,10 +632,7 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	// Python: try:
 	//   await self._coordination.enqueue_user_input(inputs)
 	//   await self._coordination.enqueue_mailbox_after_first_iteration()
-	query := ""
-	if q, ok := inputs["query"].(string); ok {
-		query = q
-	}
+	// S-07: query 已在上方无条件覆盖处声明，与 Python inputs.get("query", "") 同源
 	a.coordination.EnqueueUserInput(query)
 	a.coordination.EnqueueMailboxAfterFirstIteration(ctx)
 

@@ -84,7 +84,8 @@ type TeamRailMountContext struct {
 // 差异说明：
 //   - Python "SecurityRail" → Go 实际类型名 "SafetyPromptRail"（type SecurityRail = SafetyPromptRail
 //     类型别名，reflect Elem().Name() 返回 SafetyPromptRail）
-//   - "FileSystemRail" 为 Python 侧类型名，Go 无对应类型，保留占位键永不匹配
+//   - T-03: "FileSystemRail" 死键已删除——Go 无对应反射类型名永不匹配；
+//     Python 侧同名键同样是死键（SysOperationRail 构造日志历史命名），两侧对齐删除
 var railWhitelist = map[string]bool{
 	"RuntimePromptRail":           true,
 	"ResponsePromptRail":          true,
@@ -93,7 +94,6 @@ var railWhitelist = map[string]bool{
 	"SafetyPromptRail":            true,
 	"HeartbeatRail":               true,
 	"AvatarPromptRail":            true,
-	"FileSystemRail":              true,
 	"SysOperationRail":            true,
 	"TeamSkillEvolutionRail":      true,
 	"TeamSkillCreateRail":         true,
@@ -300,6 +300,14 @@ func BuildEvolutionLLM(config map[string]any) (*llm.Model, string) {
 	}
 	if headers := customHeadersToStringMap(mcc["custom_headers"]); headers != nil {
 		clientConfigOpts = append(clientConfigOpts, llmschema.WithCustomHeaders(headers))
+	}
+	// S-06: 对齐 Python ModelClientConfig(**model_client_config) 全字段透传——
+	// max_retries / ssl_cert 此前漏映射，配置重试次数与自签 CA 证书语义丢失。
+	if n, ok := mapIntField(mcc, "max_retries"); ok {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithMaxRetries(n))
+	}
+	if cert, ok := mcc["ssl_cert"].(string); ok && cert != "" {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithSSLCert(cert))
 	}
 
 	clientConfig, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, clientConfigOpts...)
@@ -560,9 +568,11 @@ func BuildMemberRails(memberInfo *MemberInfo, runtime *RuntimeInfo, teamWorkspac
 					evolution.WithTeamSkillTrajectorySource(boundRegistry),
 					evolution.WithTeamSkillTeamID(teamID),
 				)
-				if sink, ok := teamTrajectoryRegistry.(trajectory.TrajectorySink); ok {
-					opts = append(opts, evolution.WithTeamSkillTrajectorySink(sink, teamID, "leader"))
-				}
+			if sink, ok := teamTrajectoryRegistry.(trajectory.TrajectorySink); ok {
+				// M-03: 对齐 Python member_role=role 传实际变量（原硬编码 "leader"，
+				// 当前守卫已限定 leader 行为等价，但语义上应传 role 防 teammate 复用时静默传错）
+				opts = append(opts, evolution.WithTeamSkillTrajectorySink(sink, teamID, roleStr(memberInfo.Role)))
+			}
 			}
 			opts = append(opts,
 				evolution.WithTeamSkillAutoScan(evolutionAutoScan),
@@ -696,6 +706,26 @@ func mapStrField(m map[string]any, key string) string {
 		return s
 	}
 	return ""
+}
+
+// mapIntField 从 map 提取整数字段（兼容 YAML 解析的 float64 与直接 int 形态）。
+// S-06: ModelClientConfig 数值字段（max_retries 等）JSON/YAML 反序列化为 float64，
+// 测试注入时可能是 int——双形态兼容对齐 Python int 直接透传语义。
+func mapIntField(m map[string]any, key string) (int, bool) {
+	if m == nil {
+		return 0, false
+	}
+	switch v := m[key].(type) {
+	case int:
+		return v, true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	}
+	return 0, false
 }
 
 // customHeadersToStringMap 将 custom_headers 配置转为 map[string]string。

@@ -34,10 +34,18 @@ func GetDefaultModels(cfg map[string]any) []map[string]any {
 	// 新格式：已有 defaults 列表
 	if defaults, ok := models["defaults"].([]any); ok && len(defaults) > 0 {
 		entries := make([]map[string]any, 0, len(defaults))
+		skipped := 0
 		for _, item := range defaults {
 			if m, ok := item.(map[string]any); ok {
 				entries = append(entries, m)
+			} else {
+				// M-06: 跳过的非 dict 条目记日志（Python 对此场景直接 AttributeError，
+				// Go 宽容回退但需留排查线索）
+				skipped++
 			}
+		}
+		if skipped > 0 {
+			log.Printf("[config] GetDefaultModels: skipped %d non-dict entries in models.defaults", skipped)
 		}
 		if len(entries) > 0 {
 			return decryptModelEntries(entries)

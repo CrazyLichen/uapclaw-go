@@ -33,7 +33,12 @@ type streamTaskEntry struct {
 
 // HasStreamTask 检查指定 session 是否有活跃的流任务。
 // 对齐 Python: TeamManager.has_stream_task(session_id)
+//
+// S-04: Python 依赖 asyncio 单线程 + GIL 无锁安全；Go map 并发读写是 fatal error，
+// 导出访问器统一加锁。lifecycle 持锁路径改用锁内直读（见 terminate/stop/cancel/pause）。
 func (m *TeamManager) HasStreamTask(sessionID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	_, ok := m.streamTasks[sessionID]
 	return ok
 }
@@ -42,6 +47,8 @@ func (m *TeamManager) HasStreamTask(sessionID string) bool {
 // 对齐 Python: TeamManager.pop_stream_task(session_id)
 // Go 差异：Python 返回 asyncio.Task，Go 返回 context.CancelFunc
 func (m *TeamManager) PopStreamTask(sessionID string) context.CancelFunc {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	entry, ok := m.streamTasks[sessionID]
 	if !ok {
 		return nil
@@ -57,6 +64,8 @@ func (m *TeamManager) PopStreamTask(sessionID string) context.CancelFunc {
 // 对齐 Python: TeamManager.register_stream_task(session_id, task)
 // Go 差异：Python 注册 asyncio.Task，Go 注册 context.CancelFunc + WaitGroup
 func (m *TeamManager) RegisterStreamTask(sessionID string, cancel context.CancelFunc) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.streamTasks[sessionID] = &streamTaskEntry{cancel: cancel}
 }
 
@@ -105,33 +114,53 @@ func (m *TeamManager) CancelAllStreamTasks(reason string) {
 
 // GetMonitor 获取指定 session 的监控 handler。
 // 对齐 Python: TeamManager.get_monitor(session_id)
+//
+// S-04: 导出访问器加锁（Go map 并发读写是 fatal error）。
 func (m *TeamManager) GetMonitor(sessionID string) TeamMonitorHandler {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.teamMonitors[sessionID]
 }
 
 // RegisterMonitor 注册监控 handler。
 // 对齐 Python: TeamManager.register_monitor(session_id, handler)
+//
+// S-04: 导出访问器加锁。EnsureMonitor 锁内注册已改为直写避免重入。
 func (m *TeamManager) RegisterMonitor(sessionID string, handler TeamMonitorHandler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.teamMonitors[sessionID] = handler
 }
 
 // GetTeamEvolutionWatcher 获取指定 session 的演进监控 cancel 函数。
 // 对齐 Python: TeamManager.get_team_evolution_watcher(session_id)
 // Go 差异：Python 返回 asyncio.Task，Go 返回 context.CancelFunc
+//
+// S-04: 导出访问器加锁（Go map 并发读写是 fatal error）。
 func (m *TeamManager) GetTeamEvolutionWatcher(sessionID string) context.CancelFunc {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.teamEvolutionWatchers[sessionID]
 }
 
 // RegisterTeamEvolutionWatcher 注册演进监控 cancel 函数。
 // 对齐 Python: TeamManager.register_team_evolution_watcher(session_id, task)
 // Go 差异：Python 注册 asyncio.Task，Go 注册 context.CancelFunc
+//
+// S-04: 导出访问器加锁（Go map 并发读写是 fatal error）。
 func (m *TeamManager) RegisterTeamEvolutionWatcher(sessionID string, cancel context.CancelFunc) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.teamEvolutionWatchers[sessionID] = cancel
 }
 
 // PopTeamEvolutionWatcher 弹出指定 session 的演进监控 cancel 函数。
 // 对齐 Python: TeamManager.pop_team_evolution_watcher(session_id)
+//
+// S-04: 导出访问器加锁（Go map 并发读写是 fatal error）。
 func (m *TeamManager) PopTeamEvolutionWatcher(sessionID string) context.CancelFunc {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	cancel, ok := m.teamEvolutionWatchers[sessionID]
 	if !ok {
 		return nil
@@ -142,7 +171,11 @@ func (m *TeamManager) PopTeamEvolutionWatcher(sessionID string) context.CancelFu
 
 // SetStreamTaskWaitGroup 为指定 session 的流任务设置 WaitGroup。
 // goroutine 启动时调用 wg.Add(1)，退出时调用 wg.Done()。
+//
+// S-04: 该方法读写 streamTasks map，同步加锁（报告未列的第 9 处）。
 func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGroup) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if entry, ok := m.streamTasks[sessionID]; ok && entry != nil {
 		entry.wg = wg
 	}
@@ -199,15 +232,19 @@ func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamA
 	}
 
 	// Python 步骤 7: 注册到 teamMonitors
-	m.RegisterMonitor(sessionID, handler)
+	// S-04: RegisterMonitor 加锁后此处改锁内直写（sync.Mutex 不可重入）
+	m.mu.Lock()
+	m.teamMonitors[sessionID] = handler
+	m.mu.Unlock()
 	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
 		Msg("TeamMonitorHandler started successfully")
 
 	// Python 步骤 8: 启动事件消费 goroutine
+	// M-05 方案 A: 对齐 Python——_consume_monitor_events 是 asyncio.create_task 的
+	// detached 任务，不注册进 _stream_tasks（靠 monitor stop close event queue 自然退出）。
+	// T-08: 消费者生命周期与请求 ctx 解耦（对齐 Python detached 语义），传 Background ctx。
 	if handler.IsRunning() {
-		consumeCtx, cancel := context.WithCancel(context.Background())
-		m.RegisterStreamTask(sessionID+"_monitor", cancel)
-		go m.consumeMonitorEvents(consumeCtx, sessionID, handler)
+		go m.consumeMonitorEvents(context.Background(), sessionID, handler)
 	}
 
 	// 自动启动 evolution watcher
@@ -246,39 +283,60 @@ func (m *TeamManager) hasLocalTeamRuntime(sessionID string) bool {
 //     if monitor_handler: await monitor_handler.stop()
 //  4. self._clear_team_rail_registries(session_id)
 func (m *TeamManager) cleanupRuntimeLocals(ctx context.Context, sessionID string) {
-	// 步骤 1: 取消演进监控
-	if cancel, ok := m.teamEvolutionWatchers[sessionID]; ok && cancel != nil {
-		cancel()
+	// 步骤 1: 取消演进监控（锁内 pop，cancel 在锁外调用——对齐 Python pop→cancel 结构）
+	var watcherCancel context.CancelFunc
+	m.mu.Lock()
+	if cancel, ok := m.teamEvolutionWatchers[sessionID]; ok {
+		watcherCancel = cancel
 		delete(m.teamEvolutionWatchers, sessionID)
+	}
+	m.mu.Unlock()
+	if watcherCancel != nil {
+		watcherCancel()
 		logger.Info(logComponent).Str("session_id", sessionID).Msg("evolution monitor cancelled")
 	}
 
-	// 步骤 2: 取消流任务
+	// 步骤 2: 取消流任务（锁内 pop，cancel/Wait 在锁外——Wait 可能阻塞，
+	// 持锁等待会与消费端访问器互相饥饿）
+	var streamEntry *streamTaskEntry
+	m.mu.Lock()
 	if entry, ok := m.streamTasks[sessionID]; ok {
-		if entry != nil && entry.cancel != nil {
-			entry.cancel()
+		streamEntry = entry
+		delete(m.streamTasks, sessionID)
+	}
+	m.mu.Unlock()
+	if streamEntry != nil {
+		if streamEntry.cancel != nil {
+			streamEntry.cancel()
 		}
 		// M-23: 等待 goroutine 退出
-		if entry != nil && entry.wg != nil {
-			entry.wg.Wait()
+		if streamEntry.wg != nil {
+			streamEntry.wg.Wait()
 		}
-		delete(m.streamTasks, sessionID)
 		logger.Info(logComponent).Str("session_id", sessionID).Msg("stream task cancelled")
 	}
 
-	// 步骤 3: 停止监控 handler
+	// 步骤 3: 停止监控 handler（锁内 pop，Stop 在锁外——对齐 Python pop→await stop）
+	var monitorHandler TeamMonitorHandler
+	m.mu.Lock()
+	if handler, ok := m.teamMonitors[sessionID]; ok {
+		monitorHandler = handler
+		delete(m.teamMonitors, sessionID)
+	}
+	m.mu.Unlock()
 	// Python: await monitor_handler.stop()
 	// S-03: 使用传入的 ctx 替代 context.Background()
-	if handler, ok := m.teamMonitors[sessionID]; ok {
-		if err := handler.Stop(ctx); err != nil {
+	if monitorHandler != nil {
+		if err := monitorHandler.Stop(ctx); err != nil {
 			logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("failed to stop monitor handler")
 		}
-		delete(m.teamMonitors, sessionID)
 		logger.Info(logComponent).Str("session_id", sessionID).Msg("monitor handler stopped and removed")
 	}
 
-	// 步骤 4: 清理 Rail 注册
+	// 步骤 4: 清理 Rail 注册（锁内批量 delete）
+	m.mu.Lock()
 	m.clearTeamRailRegistries(sessionID)
+	m.mu.Unlock()
 }
 
 // clearTeamRailRegistries 清理指定 session 的 Rail 注册。

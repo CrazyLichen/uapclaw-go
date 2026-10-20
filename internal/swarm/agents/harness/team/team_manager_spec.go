@@ -79,7 +79,13 @@ func (m *TeamManager) GetEnrichedTeamSpec(
 		logger.Warn(logComponent).Err(err).
 			Msg("GetEnrichedTeamSpec: load config for PG check failed")
 	}
-	spec := loadTeamSpec(sessionID)
+	spec, specErr := loadTeamSpec(sessionID)
+	if specErr != nil {
+		// M-04: 对齐 Python raise 传播——配置错误（如非法端口）显式暴露给调用方
+		logger.Error(logComponent).Str("session_id", sessionID).Err(specErr).
+			Msg("GetEnrichedTeamSpec: loadTeamSpec failed")
+		return nil
+	}
 	if spec == nil {
 		logger.Warn(logComponent).Str("session_id", sessionID).Msg("loadTeamSpec returned nil, using default spec")
 		s := atschema.NewTeamAgentSpec()
@@ -280,7 +286,8 @@ func (m *TeamManager) RegisterMemberRuntimeTools(
 // 对齐 Python: TeamManager.normalize_distributed_transport_fields(config_base, team_cfg)
 //
 // 委托 distributed_runtime.go 纯函数实现。
-func (m *TeamManager) NormalizeDistributedTransportFields(configBase map[string]any, teamCfg map[string]any) map[string]any {
+// M-04: 签名加 error（对齐 Python parse_port raise 传播）。
+func (m *TeamManager) NormalizeDistributedTransportFields(configBase map[string]any, teamCfg map[string]any) (map[string]any, error) {
 	return NormalizeDistributedTransportFields(configBase, teamCfg)
 }
 
@@ -288,7 +295,8 @@ func (m *TeamManager) NormalizeDistributedTransportFields(configBase map[string]
 // 对齐 Python: TeamManager.parse_port(value, default, field_name)
 //
 // 委托 distributed_runtime.go 纯函数实现。
-func (m *TeamManager) ParsePort(value any, defaultPort int, fieldName string) int {
+// M-04: 签名加 error（对齐 Python raise ValueError）。
+func (m *TeamManager) ParsePort(value any, defaultPort int, fieldName string) (int, error) {
 	return ParsePort(value, defaultPort, fieldName)
 }
 
@@ -919,7 +927,9 @@ func agentCardName(agent interfaces.DeepAgentInterface, fallback string) string 
 // M-38: 无参调用时 config.New("").Load() 兜底（对齐 Python get_config()，
 // harness 邻包已有三处同款 sweeper.go/memoryrpc）；加载失败才回退默认 spec
 // （测试可控）。model_pool 注入对齐 Python L320-350。
-func loadTeamSpec(sessionID string, configBase ...map[string]any) *atschema.TeamAgentSpec {
+// M-04: 端口非法等配置错误返回 error（对齐 Python _load_team_spec 无 try/except，
+// raise 沿调用链传播到 get_enriched_team_spec 调用方）。
+func loadTeamSpec(sessionID string, configBase ...map[string]any) (*atschema.TeamAgentSpec, error) {
 	var cb map[string]any
 	if len(configBase) > 0 {
 		cb = configBase[0]
@@ -931,14 +941,14 @@ func loadTeamSpec(sessionID string, configBase ...map[string]any) *atschema.Team
 			logger.Warn(logComponent).Str("session_id", sessionID).Err(cfgErr).
 				Msg("loadTeamSpec: config init failed, using default spec")
 			s := atschema.NewTeamAgentSpec()
-			return &s
+			return &s, nil
 		}
 		cfgData, loadErr := cfg.Load()
 		if loadErr != nil || cfgData == nil {
 			logger.Warn(logComponent).Str("session_id", sessionID).Err(loadErr).
 				Msg("loadTeamSpec: config load failed, using default spec")
 			s := atschema.NewTeamAgentSpec()
-			return &s
+			return &s, nil
 		}
 		cb = cfgData
 	}
@@ -966,8 +976,15 @@ func loadTeamSpec(sessionID string, configBase ...map[string]any) *atschema.Team
 	specDict = normalizeTeamIdentityFields(specDict)
 
 	// 步骤 5: 分布式传输字段标准化（对齐 Python L317-318）
+	// M-04: 端口非法时 error 上抛（对齐 Python parse_port raise 无 except 传播）
 	if IsDistributedMode(cb) {
-		specDict = NormalizeDistributedTransportFields(cb, specDict)
+		normalized, err := NormalizeDistributedTransportFields(cb, specDict)
+		if err != nil {
+			logger.Error(logComponent).Str("session_id", sessionID).Err(err).
+				Msg("loadTeamSpec: distributed transport fields invalid")
+			return nil, err
+		}
+		specDict = normalized
 	}
 
 	// 步骤 6: model_pool 注入
@@ -1034,7 +1051,7 @@ func loadTeamSpec(sessionID string, configBase ...map[string]any) *atschema.Team
 		Str("team_name", spec.TeamName).
 		Msg("loadTeamSpec completed")
 
-	return spec
+	return spec, nil
 }
 
 // applySessionScopedTeamName 应用 session 作用域的 team name 到 spec。

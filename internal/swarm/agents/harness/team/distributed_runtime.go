@@ -3,6 +3,7 @@ package team
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"net/url"
 	"os/exec"
@@ -111,17 +112,20 @@ func RuntimeMemberName(configBase map[string]any, teamCfg map[string]any) string
 // ParsePort 解析并验证端口值。
 // 对齐 Python: parse_port (L53-71)
 //
-// Python raise ValueError（调用链上层吞掉后使用默认值）→ Go 降级为 warning 日志 + 返回 default。
-// 范围 1..65535，越界或解析失败返回 default。
-func ParsePort(value any, defaultPort int, fieldName string) int {
+// M-04: 恢复 Python raise ValueError 语义——非法端口显式报错传播到调用方
+// （Python 调用链 normalize_distributed_transport_fields/_load_team_spec 无 except，
+// 配置错误显式暴露）。原降级为 warn+default 的注释"上层吞掉后使用默认值"与 Python
+// 事实不符，已修正。value 为 nil/空串时返回 default 不报错（对齐 Python None 守卫）。
+// 范围 1..65535，越界或解析失败返回 error。
+func ParsePort(value any, defaultPort int, fieldName string) (int, error) {
 	if value == nil {
-		return defaultPort
+		return defaultPort, nil
 	}
 	raw := value
 	if s, ok := value.(string); ok {
 		stripped := strings.TrimSpace(s)
 		if stripped == "" {
-			return defaultPort
+			return defaultPort, nil
 		}
 		raw = stripped
 	}
@@ -138,22 +142,16 @@ func ParsePort(value any, defaultPort int, fieldName string) int {
 	case string:
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			logger.Warn(logComponent).Str("field", fieldName).Any("value", value).
-				Msg("invalid port value, using default")
-			return defaultPort
+			return defaultPort, fmt.Errorf("invalid %s: %v, expected an integer in range 1..65535", fieldName, value)
 		}
 		port = n
 	default:
-		logger.Warn(logComponent).Str("field", fieldName).Any("value", value).
-			Msg("invalid port value type, using default")
-		return defaultPort
+		return defaultPort, fmt.Errorf("invalid %s: %v, expected an integer in range 1..65535", fieldName, value)
 	}
 	if port < 1 || port > 65535 {
-		logger.Warn(logComponent).Str("field", fieldName).Int("value", port).
-			Msg("port out of range 1..65535, using default")
-		return defaultPort
+		return defaultPort, fmt.Errorf("invalid %s: %d, expected an integer in range 1..65535", fieldName, port)
 	}
-	return port
+	return port, nil
 }
 
 // NormalizeDistributedTransportFields 标准化分布式传输字段。
@@ -163,21 +161,22 @@ func ParsePort(value any, defaultPort int, fieldName string) int {
 // bootstrap_known_peers（即使 pubsub/direct_addr 已预填）；pubsub 地址未预填时按
 // 默认端口推导（leader direct 18555/pub 18556/sub 18557、teammate direct 18600）；
 // teammate 构造指向 leader 的 known_peers/bootstrap_peers。返回深拷贝，不修改入参。
-func NormalizeDistributedTransportFields(configBase map[string]any, teamCfg map[string]any) map[string]any {
+// M-04: 端口非法时返回 error（对齐 Python parse_port raise 沿调用链传播）。
+func NormalizeDistributedTransportFields(configBase map[string]any, teamCfg map[string]any) (map[string]any, error) {
 	normalizedCfg := utils.DeepCopyMap(teamCfg)
 	if normalizedCfg == nil {
 		normalizedCfg = map[string]any{}
 	}
 	transportCfg, _ := normalizedCfg["transport"].(map[string]any)
 	if transportCfg == nil {
-		return normalizedCfg
+		return normalizedCfg, nil
 	}
 	if !strings.EqualFold(strings.TrimSpace(anyToStr(transportCfg["type"])), "pyzmq") {
-		return normalizedCfg
+		return normalizedCfg, nil
 	}
 	params, _ := transportCfg["params"].(map[string]any)
 	if params == nil {
-		return normalizedCfg
+		return normalizedCfg, nil
 	}
 
 	role := RuntimeRole(configBase)
@@ -191,7 +190,7 @@ func NormalizeDistributedTransportFields(configBase map[string]any, teamCfg map[
 	pubAddr := strings.TrimSpace(anyToStr(params["pubsub_publish_addr"]))
 	subAddr := strings.TrimSpace(anyToStr(params["pubsub_subscribe_addr"]))
 	if pubAddr != "" && subAddr != "" {
-		return normalizedCfg
+		return normalizedCfg, nil
 	}
 
 	leaderCfg, _ := params["leader"].(map[string]any)
@@ -206,9 +205,19 @@ func NormalizeDistributedTransportFields(configBase map[string]any, teamCfg map[
 	if leaderHost == "" {
 		leaderHost = "127.0.0.1"
 	}
-	leaderDirectPort := ParsePort(leaderCfg["direct_port"], 18555, "team.transport.params.leader.direct_port")
-	leaderPubPort := ParsePort(leaderCfg["pub_port"], 18556, "team.transport.params.leader.pub_port")
-	leaderSubPort := ParsePort(leaderCfg["sub_port"], 18557, "team.transport.params.leader.sub_port")
+	// M-04: 端口解析失败显式返回 error（对齐 Python raise ValueError）
+	leaderDirectPort, err := ParsePort(leaderCfg["direct_port"], 18555, "team.transport.params.leader.direct_port")
+	if err != nil {
+		return normalizedCfg, err
+	}
+	leaderPubPort, err := ParsePort(leaderCfg["pub_port"], 18556, "team.transport.params.leader.pub_port")
+	if err != nil {
+		return normalizedCfg, err
+	}
+	leaderSubPort, err := ParsePort(leaderCfg["sub_port"], 18557, "team.transport.params.leader.sub_port")
+	if err != nil {
+		return normalizedCfg, err
+	}
 
 	localDirectAddr := ""
 	pubsubBind := false
@@ -226,7 +235,10 @@ func NormalizeDistributedTransportFields(configBase map[string]any, teamCfg map[
 		if teammateHost == "" {
 			teammateHost = "127.0.0.1"
 		}
-		teammateDirectPort := ParsePort(teammateCfg["direct_port"], 18600, "team.transport.params.teammate.direct_port")
+		teammateDirectPort, err := ParsePort(teammateCfg["direct_port"], 18600, "team.transport.params.teammate.direct_port")
+		if err != nil {
+			return normalizedCfg, err
+		}
 		localDirectAddr = "tcp://0.0.0.0:" + strconv.Itoa(teammateDirectPort)
 		knownPeers := []any{
 			map[string]any{
@@ -248,7 +260,7 @@ func NormalizeDistributedTransportFields(configBase map[string]any, teamCfg map[
 	}
 	metadata["pubsub_bind"] = pubsubBind
 	params["metadata"] = metadata
-	return normalizedCfg
+	return normalizedCfg, nil
 }
 
 // IsPostgresqlStorage 判断是否为 PostgreSQL 存储。

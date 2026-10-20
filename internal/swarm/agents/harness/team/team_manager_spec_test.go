@@ -36,7 +36,7 @@ func TestLoadTeamSpec_分布式normalize(t *testing.T) {
 		"modes":  map[string]any{"team": map[string]any{}},
 		"models": map[string]any{},
 	}
-	spec := loadTeamSpec("sess-1", cfg)
+	spec, _ := loadTeamSpec("sess-1", cfg)
 	if spec == nil {
 		t.Fatalf("spec should not be nil")
 	}
@@ -65,7 +65,7 @@ func TestLoadTeamSpec_modelPool注入(t *testing.T) {
 			},
 		},
 	}
-	spec := loadTeamSpec("sess-2", cfg)
+	spec, _ := loadTeamSpec("sess-2", cfg)
 	if spec == nil {
 		t.Fatalf("spec should not be nil")
 	}
@@ -103,7 +103,7 @@ func TestLoadTeamSpec_单模型不注入pool(t *testing.T) {
 			},
 		},
 	}
-	spec := loadTeamSpec("sess-3", cfg)
+	spec, _ := loadTeamSpec("sess-3", cfg)
 	if spec == nil {
 		t.Fatalf("spec should not be nil")
 	}
@@ -120,7 +120,10 @@ func TestNormalizeDistributedTransportFields_方法包装(t *testing.T) {
 		"transport": map[string]any{"type": "pyzmq"},
 	}}
 	teamCfg := map[string]any{"transport": map[string]any{"type": "pyzmq", "params": map[string]any{}}}
-	result := mgr.NormalizeDistributedTransportFields(configBase, teamCfg)
+	result, err := mgr.NormalizeDistributedTransportFields(configBase, teamCfg)
+	if err != nil {
+		t.Fatalf("method wrapper should not fail: %v", err)
+	}
 	params := result["transport"].(map[string]any)["params"].(map[string]any)
 	if params["direct_addr"] != "tcp://0.0.0.0:18555" {
 		t.Fatalf("method wrapper should delegate to pure function")
@@ -130,8 +133,8 @@ func TestNormalizeDistributedTransportFields_方法包装(t *testing.T) {
 // TestParsePort_方法包装。
 func TestParsePort_方法包装(t *testing.T) {
 	mgr := NewTeamManager()
-	if got := mgr.ParsePort("18600", 1, "f"); got != 18600 {
-		t.Fatalf("ParsePort method = %d", got)
+	if got, err := mgr.ParsePort("18600", 1, "f"); got != 18600 || err != nil {
+		t.Fatalf("ParsePort method = %d, err = %v", got, err)
 	}
 }
 

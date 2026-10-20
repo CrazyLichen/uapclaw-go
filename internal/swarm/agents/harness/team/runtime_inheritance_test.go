@@ -46,14 +46,14 @@ func TestToolWhitelist_39项(t *testing.T) {
 	}
 }
 
-// TestRailWhitelist_14项 对齐 Python RAIL_WHITELIST（Go 实际类型名适配）。
-func TestRailWhitelist_14项(t *testing.T) {
-	// 14 项：Python 名 SecurityRail → Go 实际类型 SafetyPromptRail（类型别名反射名）；
-	// FileSystemRail 为 Python 侧保留名，Go 无对应类型，保留占位键。
+// TestRailWhitelist_13项 对齐 Python RAIL_WHITELIST（Go 实际类型名适配）。
+// T-03: FileSystemRail 死键已删除（Go 无对应反射类型名永不匹配，Python 侧同为死键）。
+func TestRailWhitelist_13项(t *testing.T) {
+	// 13 项：Python 名 SecurityRail → Go 实际类型 SafetyPromptRail（类型别名反射名）。
 	want := []string{
 		"RuntimePromptRail", "ResponsePromptRail", "JiuClawStreamEventRail",
 		"TaskPlanningRail", "SafetyPromptRail", "HeartbeatRail", "AvatarPromptRail",
-		"FileSystemRail", "SysOperationRail", "TeamSkillEvolutionRail",
+		"SysOperationRail", "TeamSkillEvolutionRail",
 		"TeamSkillCreateRail", "SkillEvolutionRail", "TeamWorkspaceReportPathRail",
 		"ContextProcessorRail",
 	}

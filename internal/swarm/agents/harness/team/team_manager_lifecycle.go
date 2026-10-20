@@ -259,9 +259,10 @@ func (m *TeamManager) GetOrCreateTeam(
 //
 // Python 步骤：
 //  1. async with self._lock: return await self._destroy_team(session_id)
+//
+// S-05 方案 A: destroyTeam 内部已自行加锁（分段锁），公共包装器不再加锁——
+// sync.Mutex 不可重入，持锁再 Lock 永久阻塞（原实现自死锁）。
 func (m *TeamManager) DestroyTeam(ctx context.Context, sessionID string) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	return m.destroyTeam(ctx, sessionID)
 }
 
@@ -297,7 +298,7 @@ func (m *TeamManager) CleanupAll(ctx context.Context) {
 //  6. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
 func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	m.mu.Lock()
-	hasStreamTask := m.HasStreamTask(sessionID)
+	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasMonitor(sessionID) ||
 		(m.activeSessionID != "" && m.activeSessionID == sessionID) ||
@@ -351,7 +352,7 @@ func (m *TeamManager) TerminateSessionRuntime(ctx context.Context, sessionID str
 //  5. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
 func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	m.mu.Lock()
-	hasStreamTask := m.HasStreamTask(sessionID)
+	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasMonitor(sessionID) ||
 		(m.activeSessionID != "" && m.activeSessionID == sessionID) ||
@@ -401,7 +402,7 @@ func (m *TeamManager) CancelSessionRuntime(ctx context.Context, sessionID string
 //  8. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
 func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	m.mu.Lock()
-	hasStreamTask := m.HasStreamTask(sessionID)
+	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasRunnerTeamAgent(sessionID) || m.hasMonitor(sessionID) ||
 		(m.activeSessionID != "" && m.activeSessionID == sessionID) ||
@@ -463,7 +464,7 @@ func (m *TeamManager) StopSessionRuntime(ctx context.Context, sessionID string, 
 //  5. self.clear_active_runtime(session_id); self.clear_pending_runtime(session_id)
 func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	m.mu.Lock()
-	hasStreamTask := m.HasStreamTask(sessionID)
+	_, hasStreamTask := m.streamTasks[sessionID] // S-04: 锁内直读（HasStreamTask 加锁后重入会死锁）
 	hasLocalTeamRuntime := m.hasLocalTeamRuntime(sessionID)
 	hasTeamRuntime := hasLocalTeamRuntime || m.hasMonitor(sessionID) ||
 		(m.activeSessionID != "" && m.activeSessionID == sessionID) ||

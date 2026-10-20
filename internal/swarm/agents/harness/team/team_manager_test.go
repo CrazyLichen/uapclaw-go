@@ -475,7 +475,7 @@ func TestLoadTeamSpec_多模型构建modelPool(t *testing.T) {
 		},
 	}
 
-	spec := loadTeamSpec("sess-m38", configBase)
+	spec, _ := loadTeamSpec("sess-m38", configBase)
 	if spec == nil {
 		t.Fatal("loadTeamSpec 应返回非 nil")
 	}
@@ -533,7 +533,7 @@ func TestLoadTeamSpec_单模型无pool(t *testing.T) {
 		},
 	}
 
-	spec := loadTeamSpec("sess-m38-single", configBase)
+	spec, _ := loadTeamSpec("sess-m38-single", configBase)
 	if spec == nil {
 		t.Fatal("loadTeamSpec 应返回非 nil")
 	}
@@ -561,7 +561,7 @@ func TestLoadTeamSpec_缺modelName跳过(t *testing.T) {
 		},
 	}
 
-	spec := loadTeamSpec("sess-m38-skip", configBase)
+	spec, _ := loadTeamSpec("sess-m38-skip", configBase)
 	if spec == nil {
 		t.Fatal("loadTeamSpec 应返回非 nil")
 	}
@@ -577,7 +577,7 @@ func TestLoadTeamSpec_缺modelName跳过(t *testing.T) {
 
 // TestLoadTeamSpec_显式nil默认spec 测试显式传 nil configBase 时默认 spec（测试可控性保留）。
 func TestLoadTeamSpec_显式nil默认spec(t *testing.T) {
-	spec := loadTeamSpec("sess-m38-nil", nil)
+	spec, _ := loadTeamSpec("sess-m38-nil", nil)
 	if spec == nil {
 		t.Fatal("应返回非 nil")
 	}

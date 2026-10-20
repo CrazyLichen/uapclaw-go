@@ -301,7 +301,12 @@ func (m *TeamManager) PendingTeamName() string {
 
 // GetTeamAgent 获取内存中的 TeamAgent 实例。
 // 对齐 Python: TeamManager.get_team_agent(session_id)
+//
+// S-04: Python 依赖 asyncio 单线程 + GIL 无锁安全；Go map 并发读写是 fatal error，
+// 导出访问器统一加锁。
 func (m *TeamManager) GetTeamAgent(sessionID string) *agent.TeamAgent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.teamAgents[sessionID]
 }
 
