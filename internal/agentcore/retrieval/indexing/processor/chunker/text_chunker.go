@@ -1,6 +1,12 @@
 package chunker
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -61,8 +67,8 @@ type TextChunkerOption func(*textChunkerOptions)
 // ──────────────────────────── 常量 ────────────────────────────
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译期断言 TextChunker 实现 Chunker（Task 5 落地三方法后启用）
-// var _ Chunker = (*TextChunker)(nil)
+// 编译期断言 TextChunker 实现 Chunker
+var _ Chunker = (*TextChunker)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -120,9 +126,63 @@ func NewTextChunker(chunkSize, chunkOverlap int, opts ...TextChunkerOption) (*Te
 	}
 
 	c := &TextChunker{BaseChunker: bc, pipeline: pipeline, inner: inner}
-	// SetSelf 注入完整 Chunker 引用（Task 5 落地三方法后启用）
-	// bc.SetSelf(c)
+	bc.SetSelf(c)
 	return c, nil
+}
+
+// ChunkText 返回显式错误。
+//
+// Python 继承基类 chunk_text 返回 None（事实不可用——调用者迭代即崩），
+// Go 无 None 语义，显式错误是最贴近表达（A1 决策；对齐 base.go
+// chunkTextOf 的 standalone 错误先例）。
+//
+// Python: chunking.py TextChunker（未覆写 chunk_text，继承 base.py L79 return None）
+func (c *TextChunker) ChunkText(text string) ([]string, error) {
+	return nil, fmt.Errorf("TextChunker does not support ChunkText; use ChunkDocuments instead")
+}
+
+// ChunkDocuments 分块文档列表（完全覆写：预处理内嵌在循环）。
+//
+// 对齐 Python chunk_documents L97-125 执行序：每文档
+// doc_text = pipeline(doc.text) → self.chunker.chunk_text(doc_text)（注意
+// 调 inner 的 ChunkText，非本类型覆写版）→ 组块（uuid + 溯源三键，
+// mergeChunkMetadata 复用 13.8 提取的 base.go 函数）。
+//
+// Python: chunking.py TextChunker.chunk_documents
+func (c *TextChunker) ChunkDocuments(ctx context.Context, docs []reranker.Document) ([]common.TextChunk, error) {
+	_ = ctx // 对齐 Python 同步签名，当前无 ctx 消费
+	chunks := make([]common.TextChunk, 0)
+	for _, doc := range docs {
+		docText := doc.Text
+		if c.pipeline != nil {
+			docText = c.pipeline.Process(docText)
+		}
+		texts, err := c.inner.ChunkText(docText)
+		if err != nil {
+			return nil, err
+		}
+		for i, text := range texts {
+			uid := uuid.NewString()
+			meta := mergeChunkMetadata(doc.Metadata, i, len(texts), uid)
+			chunks = append(chunks, common.TextChunk{
+				ID:       uid,
+				Text:     text,
+				DocID:    doc.ID,
+				Metadata: meta,
+			})
+		}
+	}
+	return chunks, nil
+}
+
+// Process 处理文档（Processor 契约入口），局部覆写转发到自身 ChunkDocuments。
+//
+// BaseChunker.Process 静态解析无法路由子类覆写的 ChunkDocuments（Go 嵌入
+// 是组合非继承），与 HybridChunker 同款局部覆写（13.8 决策 3 预警的惯例）。
+//
+// Python: chunking.py（继承 base.py process → 动态分发到覆写版 chunk_documents）
+func (c *TextChunker) Process(ctx context.Context, docs []reranker.Document) ([]common.TextChunk, error) {
+	return c.ChunkDocuments(ctx, docs)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
