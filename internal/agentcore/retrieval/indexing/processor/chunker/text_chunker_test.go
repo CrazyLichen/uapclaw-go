@@ -348,3 +348,13 @@ func TestNewTextChunker_token路径预处理组合(t *testing.T) {
 		assert.NotContains(t, chunk.Text, "   ")
 	}
 }
+
+// ──────────────────────────── registry 零注册（E 决策） ────────────────────────────
+
+// TestGetChunker_text未注册 Go 专项（E 决策回归）：Python 只注册 char/hybrid，
+// "text" 不注册（TextChunker 是 SDK 门面非底层策略）
+func TestGetChunker_text未注册(t *testing.T) {
+	_, err := GetChunker("text")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Unknown chunker: text")
+}
