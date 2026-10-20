@@ -46,5 +46,3 @@ func CreateMemberHandle(
 		Desc:     blueprint.Ctx.Persona,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -58,5 +58,3 @@ func EventMessageFromEvent(e TypedEvent) *EventMessage {
 		Payload:   e.ToPayload(),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

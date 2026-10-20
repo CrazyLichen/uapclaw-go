@@ -57,5 +57,3 @@ func BuildReloadSection(lang string) saprompt.PromptSection {
 		Priority: 90,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

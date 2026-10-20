@@ -138,5 +138,3 @@ func (u *SingleDimUpdater) GetState() map[string]any {
 func (u *SingleDimUpdater) LoadState(_ map[string]any) {
 	// 当前 BaseOptimizer 无稳定可恢复状态，no-op
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

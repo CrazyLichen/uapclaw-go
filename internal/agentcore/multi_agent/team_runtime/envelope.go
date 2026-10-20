@@ -114,5 +114,3 @@ func WithMetadata(metadata map[string]any) EnvelopeOption {
 		e.Metadata = metadata
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

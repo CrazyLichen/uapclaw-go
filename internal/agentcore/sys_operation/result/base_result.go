@@ -29,5 +29,3 @@ func BuildOperationErrorResult(errorCode int, errMsg string) BaseResult {
 func (r BaseResult) IsSuccess() bool {
 	return r.Code == 0
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -47,5 +47,3 @@ func (e BroadcastEvent) EventTypeName() string { return TeamEventBroadcast }
 func (e BroadcastEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "message_id": e.MessageID, "from_member_name": e.FromMemberName}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

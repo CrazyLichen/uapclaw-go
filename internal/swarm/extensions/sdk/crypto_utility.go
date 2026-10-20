@@ -40,5 +40,3 @@ func (c *CryptoUtilityStub) Initialize(ctx context.Context, config *extensions.E
 
 // Shutdown 空实现，对齐 Python CryptoUtility.shutdown()
 func (c *CryptoUtilityStub) Shutdown(ctx context.Context) error { return nil }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

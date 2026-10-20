@@ -79,5 +79,3 @@ func (p *BaseProcessor) IsAPIRound(messages []llm_schema.BaseMessage) bool {
 	lastEnd := rounds[len(rounds)-1][1]
 	return lastEnd == len(messages)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

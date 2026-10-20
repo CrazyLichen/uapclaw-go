@@ -39,5 +39,3 @@ func NewBaseProcessor(config iface.ProcessorConfig) *BaseProcessor {
 func (p *BaseProcessor) Config() iface.ProcessorConfig {
 	return p.config
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

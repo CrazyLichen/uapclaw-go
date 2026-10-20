@@ -140,5 +140,3 @@ func TestGatewayServer_OnConfigSaved(t *testing.T) {
 	callback := gs.OnConfigSaved()
 	assert.NotNil(t, callback)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -47,5 +47,3 @@ func (s TaskStatus) IsTerminal() bool {
 func (s TaskStatus) IsInputRequired() bool {
 	return s == TaskInputRequired
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

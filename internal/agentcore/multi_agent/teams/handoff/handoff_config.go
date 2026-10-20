@@ -71,5 +71,3 @@ func NewHandoffTeamConfig() *HandoffTeamConfig {
 		Handoff:    *NewHandoffConfig(),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -204,5 +204,3 @@ func (s *AgentTeamSession) TeamID() string {
 func (s *AgentTeamSession) TeamSpan() *tracer.TraceAgentSpan {
 	return s.teamSpan
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

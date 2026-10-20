@@ -37,5 +37,3 @@ func TestIsPassthrough_key非空(t *testing.T) {
 		t.Error("key 非空时 IsPassthrough 应返回 false")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

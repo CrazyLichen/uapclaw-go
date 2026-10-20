@@ -82,5 +82,3 @@ func TestMemberMemoryToolkit_Close(t *testing.T) {
 	assert.Nil(t, toolkit.GetTools())
 	assert.False(t, toolkit.initialized)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -210,5 +210,3 @@ type DeepAgentSpec struct {
 func NewDeepAgentSpec() DeepAgentSpec {
 	return DeepAgentSpec{MaxIterations: 15, AutoCreateWorkspace: true, CompletionTimeout: 600.0}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

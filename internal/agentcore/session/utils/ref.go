@@ -31,5 +31,3 @@ func ExtractOriginKey(key string) string {
 	}
 	return key
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

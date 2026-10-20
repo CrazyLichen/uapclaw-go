@@ -15,5 +15,3 @@ func (mh *MessageHandler) SetOutboundPipeline(
 	mh.getConfigRaw = getConfigRaw
 	mh.updateChannelInConfig = updateChannelInConfig
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

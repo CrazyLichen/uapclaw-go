@@ -45,5 +45,3 @@ func NewTeamAgentState() *TeamAgentState {
 		EventListeners: make([]*messager.EventListenerHandle, 0),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

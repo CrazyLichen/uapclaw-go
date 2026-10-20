@@ -76,5 +76,3 @@ func (m *ScopeUserMappingManager) GetByScopeID(ctx context.Context, scopeID stri
 	}
 	return results, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

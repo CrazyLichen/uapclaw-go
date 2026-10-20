@@ -277,5 +277,3 @@ func (c *TeamConfig) GetExtra(key string) (any, bool) {
 	val, ok := c.Extra[key]
 	return val, ok
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -118,5 +118,3 @@ func (h *HandoffTool) Stream(ctx context.Context, inputs map[string]any, opts ..
 	close(ch)
 	return ch, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

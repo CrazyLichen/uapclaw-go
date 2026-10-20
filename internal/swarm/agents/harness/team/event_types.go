@@ -123,5 +123,3 @@ func GetEventCategory(et TeamEventType) TeamEventCategory {
 func IsMessageEvent(et TeamEventType) bool {
 	return GetEventCategory(et) == EventCategoryMessage
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

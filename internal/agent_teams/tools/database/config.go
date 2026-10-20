@@ -83,5 +83,3 @@ func (c MemoryDatabaseConfig) GetDBType() DatabaseType { return c.DBType }
 
 // GetConnectionString 返回连接字符串。实现 DBConfigProvider 接口。
 func (c MemoryDatabaseConfig) GetConnectionString() string { return c.ConnectionString }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

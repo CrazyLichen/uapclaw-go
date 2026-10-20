@@ -79,5 +79,3 @@ func NewEmbedOptions(opts ...EmbedOption) EmbedOptions {
 	}
 	return o
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

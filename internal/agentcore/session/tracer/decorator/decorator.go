@@ -393,5 +393,3 @@ func DecorateWorkflowWithTrace(w sainterfaces.Workflow, session TracerSession) s
 		instanceInfo: instanceInfo,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

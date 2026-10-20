@@ -42,5 +42,3 @@ func NewInteractInputFromString(text string) *InteractInput {
 func NewInteractInputFromDict(dict map[string]any) *InteractInput {
 	return &InteractInput{Raw: dict}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

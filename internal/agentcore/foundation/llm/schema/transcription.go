@@ -59,5 +59,3 @@ func WithTranscriptionTimeout(timeout float64) TranscribeAudioOption {
 func WithTranscriptionExtra(extra map[string]any) TranscribeAudioOption {
 	return func(p *TranscriptionParams) { p.Extra = extra }
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

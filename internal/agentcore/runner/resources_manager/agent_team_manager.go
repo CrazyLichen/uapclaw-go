@@ -127,5 +127,3 @@ func (m *AgentTeamMgr) GetAgentTeam(ctx context.Context, agentTeamID string) (ma
 	}
 	return team, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

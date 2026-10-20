@@ -40,5 +40,3 @@ func SanitizeSessionIDForTable(sessionID string) string {
 	}
 	return hex.EncodeToString(buf)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

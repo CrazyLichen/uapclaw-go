@@ -261,5 +261,3 @@ func (m *StreamQueueMessage) CompleteResponse(result any, err error) {
 		// response channel 已有值，忽略重复完成
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

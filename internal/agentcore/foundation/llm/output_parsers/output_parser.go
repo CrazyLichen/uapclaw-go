@@ -47,5 +47,3 @@ func ExtractText(input any) (string, string) {
 		return "", ""
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

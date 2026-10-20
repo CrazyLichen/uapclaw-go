@@ -185,5 +185,3 @@ func IsValidTaskTransition(current, target string) bool {
 func IsTaskTerminal(status string) bool {
 	return status == TaskStatusCompleted || status == TaskStatusCancelled
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

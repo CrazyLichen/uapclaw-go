@@ -136,5 +136,3 @@ func HostFacingExperienceResultRejected(
 		Status:        "rejected",
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

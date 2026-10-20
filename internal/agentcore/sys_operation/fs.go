@@ -285,5 +285,3 @@ func (b *BaseFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ .
 }
 
 func (b *BaseFsOperation) ListTools() []*tool.ToolCard { return nil }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

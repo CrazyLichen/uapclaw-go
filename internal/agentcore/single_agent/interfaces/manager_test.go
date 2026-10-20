@@ -312,5 +312,3 @@ type testRailWithHooks struct {
 func (r *testRailWithHooks) GetCallbacks() map[AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return r.callbacks
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

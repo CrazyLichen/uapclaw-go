@@ -204,5 +204,3 @@ func WithConfidence(c float64) IntentOption {
 func WithClarificationPrompt(prompt string) IntentOption {
 	return func(i *Intent) { i.ClarificationPrompt = prompt }
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

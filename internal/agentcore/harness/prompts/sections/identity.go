@@ -139,5 +139,3 @@ func BuildIdentitySection() saprompt.PromptSection {
 		Priority: 10,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

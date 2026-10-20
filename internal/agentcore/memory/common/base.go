@@ -53,5 +53,3 @@ func ParseMemoryHitInfos(hits []HitInfo) (ids []string, scores map[string]float6
 	}
 	return ids, scores, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -337,5 +337,3 @@ func (m *MockEmbeddingProvider) Model() string { return m.model }
 
 // Dims 向量维度。对齐 Python 类属性 dims = 128
 func (m *MockEmbeddingProvider) Dims() int { return m.dims }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

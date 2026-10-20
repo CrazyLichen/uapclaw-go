@@ -50,5 +50,3 @@ func (SessionPaths) DownstreamsDir(sessionDir string) string {
 func (SessionPaths) LinkFile(sessionDir, targetAgent, targetSession string) string {
 	return filepath.Join(sessionDir, "downstreams", targetAgent+"_"+targetSession+".link")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

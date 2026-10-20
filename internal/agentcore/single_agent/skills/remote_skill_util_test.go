@@ -288,5 +288,3 @@ func TestRemoteSkillUtil_fetchGitHubTree_截断(t *testing.T) {
 		t.Error("期望 Truncated=true")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

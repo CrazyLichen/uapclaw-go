@@ -240,5 +240,3 @@ func NewVideoGenerationResponse(opts ...VideoGenerationResponseOption) *VideoGen
 	}
 	return resp
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

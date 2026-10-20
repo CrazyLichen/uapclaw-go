@@ -173,5 +173,3 @@ func (e TaskListDrainedEvent) EventTypeName() string { return TeamEventTaskListD
 func (e TaskListDrainedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "task_count": e.TaskCount}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -93,5 +93,3 @@ func (e *StreamEmitter) IsClosed() bool {
 func (e *StreamEmitter) StreamQueue() *StreamQueue {
 	return e.queue
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

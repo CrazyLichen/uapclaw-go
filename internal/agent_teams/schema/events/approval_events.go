@@ -47,5 +47,3 @@ func (e ToolApprovalResultEvent) EventTypeName() string { return TeamEventToolAp
 func (e ToolApprovalResultEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "tool_call_id": e.ToolCallID, "approved": e.Approved, "feedback": e.Feedback, "auto_confirm": e.AutoConfirm}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

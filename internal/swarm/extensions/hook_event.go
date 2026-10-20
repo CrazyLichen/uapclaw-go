@@ -65,5 +65,3 @@ func NewAgentServerHookEvents() *AgentServerHookEvents {
 		HookEventBase: &schema.HookEventBase{Scope: "agent_server"},
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

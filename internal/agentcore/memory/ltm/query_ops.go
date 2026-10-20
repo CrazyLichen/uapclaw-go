@@ -181,5 +181,3 @@ func (m *LongTermMemory) GetUserMemByPage(
 	}
 	return memResults, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

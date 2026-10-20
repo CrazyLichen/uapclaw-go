@@ -135,5 +135,3 @@ func (c *OriginChecker) ForbiddenResponse() (code int, headers map[string][]stri
 		"Content-Type": {"text/plain; charset=utf-8"},
 	}, forbiddenBody
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -60,7 +60,3 @@ var (
 	// RelationDefinitionDescription 关系类型定义描述
 	RelationDefinitionDescription = map[string]string{}
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

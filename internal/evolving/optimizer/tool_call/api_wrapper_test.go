@@ -113,5 +113,3 @@ func TestSimpleAPIWrapperFromCallable_Call_无Callable(t *testing.T) {
 		t.Errorf("expected empty response, got %v", parsed["response"])
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

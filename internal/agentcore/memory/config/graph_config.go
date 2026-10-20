@@ -256,5 +256,3 @@ func NewSearchConfig() *SearchConfig {
 	s := DefaultSearchConfig
 	return &s
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

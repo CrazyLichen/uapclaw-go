@@ -424,5 +424,3 @@ func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) ([]
 func (c *StreamableHttpClient) Close() error {
 	return c.Disconnect(context.Background())
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

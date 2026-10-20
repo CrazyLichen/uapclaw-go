@@ -170,9 +170,3 @@ func TestMapToChromaDistanceMetric(t *testing.T) {
 		})
 	}
 }
-
-// TestTruncateText 测试文本截断
-func TestTruncateText(t *testing.T) {
-	assert.Equal(t, "hello", truncateText("hello", 10))
-	assert.Equal(t, "hello00000"+"...", truncateText("hello00000world", 10))
-}

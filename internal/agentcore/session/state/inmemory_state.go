@@ -99,5 +99,3 @@ func (s *InMemoryStateLike) Clear() {
 
 // Dump 导出完整状态，委托 GetState
 func (s *InMemoryStateLike) Dump() map[string]any { return s.GetState() }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

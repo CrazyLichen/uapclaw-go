@@ -699,5 +699,3 @@ func TestResolvePermissionInterrupt_SceneHookReject(t *testing.T) {
 	require.True(t, ok, "期望 RejectResult（SceneHook reject），实际 %T", decision)
 	assert.Equal(t, "custom deny reason", reject.ToolResult)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

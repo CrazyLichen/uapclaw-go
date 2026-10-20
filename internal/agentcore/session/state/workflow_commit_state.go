@@ -329,5 +329,3 @@ func (s *WorkflowCommitState) SetState(st map[string]any) {
 		}
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

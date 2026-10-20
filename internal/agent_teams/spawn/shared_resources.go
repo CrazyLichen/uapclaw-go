@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	teamruntime "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -97,9 +98,8 @@ func CleanupSharedResources() {
 	sharedMemoryDB = nil
 	sharedDBInstances = make(map[string]database.TeamDatabase)
 
-	// ⤵️ 预留：Messager（9.65）实现后回填进程内消息总线清理逻辑
+	// T-17: 对齐 Python cleanup_shared_resources L66-68——回填进程内消息总线清理
+	messager.CleanupInProcessBus()
 
-	logger.Debug(logComponent).Msg("cleaned upshared resources")
+	logger.Debug(logComponent).Msg("cleaned up shared resources")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

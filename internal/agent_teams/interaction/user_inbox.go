@@ -111,5 +111,3 @@ func DeliverToLeader(deliverInput func(ctx context.Context, content string) erro
 	// Python 步骤 4: return DeliverResult.success(message_id=None)
 	return NewDeliverResultSuccess(nil)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

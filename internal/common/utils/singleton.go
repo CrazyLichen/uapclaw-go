@@ -75,5 +75,3 @@ func (s *Singleton[T]) Reset() {
 	s.once = sync.Once{}
 	s.instance = nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

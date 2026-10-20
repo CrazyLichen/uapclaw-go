@@ -261,5 +261,3 @@ func NewPermissionContextFromRequest(channelID string, metadata map[string]any) 
 	}
 	return pc
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

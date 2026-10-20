@@ -162,5 +162,3 @@ func Or(left, right QueryExpr) *LogicalExpr {
 func Not(expr QueryExpr) *LogicalExpr {
 	return &LogicalExpr{Operator: "not", Left: expr, Right: nil}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

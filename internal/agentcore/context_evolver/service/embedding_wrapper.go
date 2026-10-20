@@ -148,5 +148,3 @@ func (w *OpenAIEmbeddingWrapper) EmbedBatch(ctx context.Context, texts []string)
 func (w *OpenAIEmbeddingWrapper) String() string {
 	return fmt.Sprintf("OpenAIEmbeddingWrapper(model=%s)", w.modelName)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

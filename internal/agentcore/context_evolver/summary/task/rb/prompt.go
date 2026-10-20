@@ -146,5 +146,3 @@ func NewReasoningBankSummaryPrompt() *ReasoningBankSummaryPrompt {
 		ParallelScalingUserPrompt:      template.Must(template.New("parallel_scaling_user").Parse(parallelScalingUserPrompt)),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

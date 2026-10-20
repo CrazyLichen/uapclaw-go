@@ -96,6 +96,3 @@ var (
 	// Python: openjiuwen/agent_evolving/evaluator/templates.py LLM_METRIC_RETRY_TEMPLATE
 	LLMMetricRetryTemplate = prompt.NewPromptTemplate("llm_metric_retry", llmMetricRetryTemplateContent)
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-// ──────────────────────────── 非导出函数 ────────────────────────────

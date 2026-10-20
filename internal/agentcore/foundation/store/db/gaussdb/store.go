@@ -75,5 +75,3 @@ func (s *GaussDbStore) Close() error {
 	logger.Info(logComponent).Msg("GaussDB databaseconnection closed")
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

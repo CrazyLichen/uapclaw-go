@@ -115,5 +115,3 @@ func (p *TenantAgentPool) Cleanup() error {
 	logger.Info(logComponent).Msg("[TenantAgentPool] cleanup completed")
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

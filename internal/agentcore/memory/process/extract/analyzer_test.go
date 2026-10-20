@@ -430,5 +430,3 @@ func TestAnalyze_retries为1时仅尝试一次(t *testing.T) {
 	assert.Empty(t, result.Summary)
 	assert.Equal(t, 1, invokeCount, "retries=1 时 LLM 应仅调用一次")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

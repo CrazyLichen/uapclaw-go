@@ -75,5 +75,3 @@ func (e TeamCompletedEvent) EventTypeName() string { return TeamEventTeamComplet
 func (e TeamCompletedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_count": e.MemberCount, "task_count": e.TaskCount}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -70,5 +70,3 @@ func NewWorkflowOptions(opts ...WorkflowOption) *WorkflowOptions {
 	}
 	return o
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

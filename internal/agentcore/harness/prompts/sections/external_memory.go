@@ -26,5 +26,3 @@ func BuildExternalMemorySection(promptBlock string, lang string) *saprompt.Promp
 	}
 	return &section
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

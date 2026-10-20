@@ -179,5 +179,3 @@ func (s *AgentStateCollection) GlobalState() *InMemoryStateLike {
 	defer s.mu.RUnlock()
 	return s.globalState
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

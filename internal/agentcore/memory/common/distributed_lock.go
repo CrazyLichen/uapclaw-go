@@ -121,5 +121,3 @@ func (l *DistributedLock) WithLock(ctx context.Context, fn func(ctx context.Cont
 	defer func() { _ = l.Release(ctx) }()
 	return fn(ctx)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

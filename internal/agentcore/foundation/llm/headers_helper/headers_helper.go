@@ -154,5 +154,3 @@ func MergeRequestHeaders(baseHeaders map[string]string, requestCustomHeaders map
 
 	return result
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

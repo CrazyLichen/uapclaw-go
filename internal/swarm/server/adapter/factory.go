@@ -84,5 +84,3 @@ func CreateAdapter(sdk string, mode string) (AgentAdapter, error) {
 		return nil, fmt.Errorf("未知 SDK %q，支持: harness, pi (预留)", sdkName)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

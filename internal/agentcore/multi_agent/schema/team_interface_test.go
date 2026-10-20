@@ -210,5 +210,3 @@ func TestWithParentAgentID_设置父AgentID(t *testing.T) {
 		t.Errorf("ParentAgentID 期望 parent_123, 实际 %s", opts.ParentAgentID)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

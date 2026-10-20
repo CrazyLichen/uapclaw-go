@@ -118,5 +118,3 @@ func NormalizeSessionID(sessionID string) string {
 func CurrentTimestamp() float64 {
 	return float64(time.Now().UnixMilli()) / 1000.0
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

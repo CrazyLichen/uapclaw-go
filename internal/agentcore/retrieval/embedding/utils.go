@@ -48,5 +48,3 @@ func ParseBase64Embedding(b64Str string) ([]float64, error) {
 
 	return result, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -140,5 +140,3 @@ func TestDecideRunAction_可重建优先于不一致(t *testing.T) {
 	assert.Equal(t, RunActionKindCreate, got.Kind)
 	assert.True(t, got.RequireSpec)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

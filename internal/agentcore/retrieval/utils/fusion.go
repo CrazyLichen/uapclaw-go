@@ -70,5 +70,3 @@ func RRFFusion(resultsList [][]common.RetrievalResult, k int) []common.Retrieval
 	}
 	return fusedResults
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -365,5 +365,3 @@ func formatMemoriesForContext(memories []ceschema.ReMeRetrievedMemory) string {
 	}
 	return strings.Join(formatted, "\n")
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────

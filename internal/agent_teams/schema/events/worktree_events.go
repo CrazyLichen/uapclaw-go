@@ -55,5 +55,3 @@ func (e WorktreeRemovedEvent) EventTypeName() string { return TeamEventWorktreeR
 func (e WorktreeRemovedEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "worktree_name": e.WorktreeName, "worktree_path": e.WorktreePath, "owner_id": e.OwnerID, "tag": e.Tag}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

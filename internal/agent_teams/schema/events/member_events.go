@@ -107,5 +107,3 @@ func (e MemberCanceledEvent) EventTypeName() string { return TeamEventMemberCanc
 func (e MemberCanceledEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

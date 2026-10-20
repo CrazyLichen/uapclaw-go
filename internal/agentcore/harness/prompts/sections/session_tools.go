@@ -71,5 +71,3 @@ func BuildSessionToolsSection(lang string) saprompt.PromptSection {
 		Priority: 85,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

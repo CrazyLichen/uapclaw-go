@@ -194,5 +194,3 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.S
 
 	return out
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

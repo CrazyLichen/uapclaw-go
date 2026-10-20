@@ -123,5 +123,3 @@ func (b *LiteMemoryToolContextBase) IsClosed() bool {
 	}
 	return false
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

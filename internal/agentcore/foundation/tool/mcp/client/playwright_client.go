@@ -151,5 +151,3 @@ func (c *PlaywrightClient) ReadResource(ctx context.Context, uri string) ([]map[
 func (c *PlaywrightClient) Close() error {
 	return c.Disconnect(context.Background())
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

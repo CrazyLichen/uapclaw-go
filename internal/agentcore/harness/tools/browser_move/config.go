@@ -250,5 +250,3 @@ func ResolvePlaywrightMCPCwd() string {
 	}
 	return cwd
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

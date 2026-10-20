@@ -138,5 +138,3 @@ func (noOpExtension) RunEvolution(_ context.Context, _ *trajectory.Trajectory, _
 // GetEvolutionTotalTimeoutSecs 空实现，返回 0 表示不限时。
 // Python: EvolutionRail._get_evolution_total_timeout_secs() -> None
 func (noOpExtension) GetEvolutionTotalTimeoutSecs() float64 { return 0 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

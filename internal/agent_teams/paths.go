@@ -83,5 +83,3 @@ func DefaultTeamMemoryDir(teamName string) string {
 func IndependentMemberWorkspace(memberName string) string {
 	return filepath.Join(GetHome(), memberName+"_workspace")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -145,5 +145,3 @@ func (m *AgentMgr) GetAgent(ctx context.Context, agentID string) (interfaces.Bas
 	}
 	return agent, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

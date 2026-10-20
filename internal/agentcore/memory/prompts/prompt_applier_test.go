@@ -315,5 +315,3 @@ func TestPromptApplier_Apply_部分变量(t *testing.T) {
 		t.Errorf("result = %q, want %q", result, "你好 世界，今天是{{day}}")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

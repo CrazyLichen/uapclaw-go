@@ -32,5 +32,3 @@ func CreateWebTools(language, agentID string, includeFreeSearch, includePaidSear
 	}
 	return tools
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

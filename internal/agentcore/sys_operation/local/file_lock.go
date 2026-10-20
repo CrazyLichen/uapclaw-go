@@ -43,5 +43,3 @@ func AcquireFileLock(filePath string, timeout time.Duration) (*FileLock, error) 
 func ReleaseFileLock(lock *FileLock) error {
 	return releaseFileLockPlatform(lock)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

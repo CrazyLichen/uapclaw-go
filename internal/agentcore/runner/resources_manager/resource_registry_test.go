@@ -127,5 +127,3 @@ func TestResourceRegistry_RemoveByID_不存在(t *testing.T) {
 	// 不存在的 ID 不应 panic 或报错
 	registry.RemoveByID("non-existent-id")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

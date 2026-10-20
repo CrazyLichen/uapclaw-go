@@ -1559,5 +1559,3 @@ func TestInitialize_带RemoteURL(t *testing.T) {
 		t.Errorf(".git 目录应存在: %v", err)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

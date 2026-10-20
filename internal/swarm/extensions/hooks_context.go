@@ -119,5 +119,3 @@ func (c *SystemPromptHookContext) ToMap() map[string]any {
 	}
 	return result
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

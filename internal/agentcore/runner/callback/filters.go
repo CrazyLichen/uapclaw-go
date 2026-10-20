@@ -431,5 +431,3 @@ func NewConditionalFilter(
 		ActionOnFalse: actionOnFalse,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

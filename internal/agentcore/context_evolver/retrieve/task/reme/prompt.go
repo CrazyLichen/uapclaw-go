@@ -95,5 +95,3 @@ func NewReMeRetrievePrompts() *ReMeRetrievePrompts {
 		RewritePrompt: template.Must(template.New("rewrite").Parse(memoryRewritePrompt)),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

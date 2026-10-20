@@ -197,5 +197,3 @@ func NewProcessorOption(opts ...Option) *ProcessorOption {
 	}
 	return po
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

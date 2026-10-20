@@ -643,5 +643,3 @@ func TestTagMatchStrategy_String(t *testing.T) {
 		t.Errorf("TagMatchAny.String() = %s, 期望 ANY", TagMatchAny.String())
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

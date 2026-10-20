@@ -67,5 +67,3 @@ func BuildInfo() string {
 	return fmt.Sprintf("%s %s (commit: %s, built: %s, go%s, %s)",
 		ProjectName, Version, commit, built, goVer, platform)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

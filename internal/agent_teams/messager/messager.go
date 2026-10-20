@@ -77,5 +77,3 @@ func NewEventListenerHandle(handler MessagerHandler) *EventListenerHandle {
 		handler: handler,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

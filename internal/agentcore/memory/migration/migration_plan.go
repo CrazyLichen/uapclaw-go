@@ -27,6 +27,3 @@ var (
 	// Python: index_registry = OperationRegistry()
 	IndexRegistry = operation.NewOperationRegistry()
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-// ──────────────────────────── 非导出函数 ────────────────────────────

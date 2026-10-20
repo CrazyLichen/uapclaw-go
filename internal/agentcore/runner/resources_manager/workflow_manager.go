@@ -161,5 +161,3 @@ func (m *WorkflowMgr) GetWorkflow(ctx context.Context, workflowID string, sessio
 
 	return w, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

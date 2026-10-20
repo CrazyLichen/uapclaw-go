@@ -83,5 +83,3 @@ func (c *LoggingDocIndexCallback) OnBatchComplete(startIdx, endIdx int, _ []stri
 			Msg("embedding progress")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

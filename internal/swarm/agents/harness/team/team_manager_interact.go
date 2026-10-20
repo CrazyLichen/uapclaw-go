@@ -74,5 +74,3 @@ func (m *TeamManager) Interact(ctx context.Context, sessionID string, userInput 
 	}
 	return true
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

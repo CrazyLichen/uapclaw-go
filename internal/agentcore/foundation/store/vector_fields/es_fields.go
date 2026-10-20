@@ -47,5 +47,3 @@ func (e *ESVectorField) Validate() error {
 	}
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

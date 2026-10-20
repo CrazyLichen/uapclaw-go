@@ -198,5 +198,3 @@ func (q *StreamQueue) IsClosed() bool {
 func IsEndOfStream(err error) bool {
 	return errors.Is(err, ErrQueueClosed)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

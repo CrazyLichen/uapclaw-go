@@ -47,5 +47,3 @@ func (e *AgentServerClientExtensionImpl) Initialize(ctx context.Context, config 
 func (e *AgentServerClientExtensionImpl) Shutdown(ctx context.Context) error {
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

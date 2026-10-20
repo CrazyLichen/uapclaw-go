@@ -131,5 +131,3 @@ func (r SessionRef) ID() string {
 func (r SessionRef) Session() sessioninterfaces.SessionFacade {
 	return r.session
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

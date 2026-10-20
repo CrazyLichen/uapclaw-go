@@ -983,5 +983,3 @@ func TestFilterInterruptHistory_resultType非字符串(t *testing.T) {
 	assert.Len(t, filtered, 1)
 	assert.Equal(t, "agent1", filtered[0].AgentID)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

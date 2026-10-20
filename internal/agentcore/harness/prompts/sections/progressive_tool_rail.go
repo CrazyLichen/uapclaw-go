@@ -144,5 +144,3 @@ func BuildNavigationEntry(name string, group string, status string, summary stri
 	}
 	return fmt.Sprintf("- %s [%s, %s]：%s", name, group, status, summary)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

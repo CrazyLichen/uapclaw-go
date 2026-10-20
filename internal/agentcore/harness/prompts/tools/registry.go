@@ -93,5 +93,3 @@ func BuildToolCard(
 	card := tool.NewToolCardWithID(finalID, name, description, inputParams, nil)
 	return card, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

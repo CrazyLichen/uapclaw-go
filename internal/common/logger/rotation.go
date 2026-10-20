@@ -112,5 +112,3 @@ func EnsureLogDir(filePath string) error {
 	dir := filepath.Dir(filePath)
 	return os.MkdirAll(dir, 0o755)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -86,5 +86,3 @@ func (w *WorkspaceProvider) SyncToRemote(_ string) error {
 	// 待实现: 生产环境实现远程同步（S3 / OBS / NFS）
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

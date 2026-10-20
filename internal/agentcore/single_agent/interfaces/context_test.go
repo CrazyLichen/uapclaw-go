@@ -589,5 +589,3 @@ func TestNewWorkflowOptions_空选项(t *testing.T) {
 	assert.Nil(t, opts.Session)
 	assert.Nil(t, opts.Context)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -267,5 +267,3 @@ func (l *PermissionLevel) UnmarshalJSON(data []byte) error {
 	*l = parsed
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

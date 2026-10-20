@@ -167,5 +167,3 @@ func (e *invalidStageError) Error() string {
 func (e *pipelineError) Error() string {
 	return e.msg
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -218,5 +218,3 @@ func TestSetToSortedSlice(t *testing.T) {
 		t.Errorf("result[2] = %q, want %q", result[2], "coding_memory_write")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

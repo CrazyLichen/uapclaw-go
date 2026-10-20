@@ -182,5 +182,3 @@ func (m *ScopeSessionsMeta) IncrementSessionVersion(sessionID string) bool {
 	session.IncrementVersion()
 	return true
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

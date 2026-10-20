@@ -40,5 +40,3 @@ func (l *ExtensionLoader) DiscoverExtensionRoots() []string { return nil }
 func (l *ExtensionLoader) LoadExtension(ctx context.Context, root string) (any, error) {
 	return nil, fmt.Errorf("ExtensionLoader 尚未实现，⤵️ 10.5.7（Go 插件加载机制待定）")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

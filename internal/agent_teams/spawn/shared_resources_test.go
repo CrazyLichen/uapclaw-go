@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 )
 
@@ -46,4 +48,19 @@ func TestCleanupSharedResources_重置Runtime(t *testing.T) {
 	second := spawn.GetSharedRuntime()
 	assert.NotNil(t, second)
 	assert.NotSame(t, first, second, "清理后应创建新 TeamRuntime 实例")
+}
+
+// TestCleanupSharedResources_清理InProcessBus T-17 回归测试。
+// CleanupSharedResources 应连带重置进程全局 InProcess 消息总线（对齐 Python
+// cleanup_shared_resources L66-68 的 cleanup_inprocess_bus 调用）。
+func TestCleanupSharedResources_清理InProcessBus(t *testing.T) {
+	spawn.CleanupSharedResources()
+
+	// 创建 Bus 单例（通过 NewInProcessMessager 触发 getBus）
+	_ = messager.NewInProcessMessager(schema.MessagerTransportConfig{})
+	assert.True(t, messager.GlobalBusActive(), "创建 messager 后全局 Bus 应活跃")
+
+	// CleanupSharedResources 应连带清理 Bus
+	spawn.CleanupSharedResources()
+	assert.False(t, messager.GlobalBusActive(), "CleanupSharedResources 后全局 Bus 应被清理")
 }

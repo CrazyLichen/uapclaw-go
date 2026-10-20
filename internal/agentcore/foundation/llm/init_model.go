@@ -152,5 +152,3 @@ func WithInitCustomHeaders(h map[string]string) InitModelOption {
 func WithInitSSLCert(cert string) InitModelOption {
 	return func(c *initModelConfig) { c.sslCert = cert }
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

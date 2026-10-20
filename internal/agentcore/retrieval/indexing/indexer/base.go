@@ -75,5 +75,3 @@ func WithIndexExtra(key string, value any) IndexOption {
 		o.Extra[key] = value
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

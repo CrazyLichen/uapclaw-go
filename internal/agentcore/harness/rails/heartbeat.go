@@ -187,5 +187,3 @@ func (r *HeartbeatRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb
 
 	return callbacks
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

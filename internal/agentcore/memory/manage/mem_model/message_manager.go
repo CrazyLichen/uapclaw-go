@@ -151,5 +151,3 @@ func (m *MessageManager) DeleteByUserAndScope(ctx context.Context, userID string
 	}
 	return m.store.DeleteMessages(ctx, filter)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

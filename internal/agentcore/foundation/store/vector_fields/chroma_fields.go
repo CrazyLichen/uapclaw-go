@@ -137,5 +137,3 @@ func (c *ChromaVectorField) ValidateExtraSearch() error {
 	}
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

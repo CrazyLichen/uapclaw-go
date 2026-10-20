@@ -2,6 +2,7 @@ package coordination
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -11,7 +12,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -411,4 +414,79 @@ func TestCoordinationKernel_AddSubscribedTopic后追加(t *testing.T) {
 	if len(before) != 1 || len(after) != 2 {
 		t.Errorf("追加后应从 1 变为 2，实际 %d → %d", len(before), len(after))
 	}
+}
+
+// fakeSessionController T-16 测试用 SessionController——持有真实 AgentTeamSession
+type fakeSessionController struct {
+	teamSession any
+}
+
+func (f *fakeSessionController) BindSession(_ context.Context, session any) (context.Context, error) {
+	f.teamSession = session
+	return context.Background(), nil
+}
+func (f *fakeSessionController) ReleaseSession(_ context.Context) error { return nil }
+func (f *fakeSessionController) TeamSession() any                       { return f.teamSession }
+
+// TestCoordinationKernel_PersistTeamLifecycle真实写入 T-16 回归测试。
+// 原匿名断言 GetState() map[string]any 与 AgentTeamSession 真实签名不匹配
+// 导致恒 false，生命周期从未持久化。修复后应通过 SessionFacade 真实写入。
+func TestCoordinationKernel_PersistTeamLifecycle真实写入(t *testing.T) {
+	teamSession := session.NewAgentTeamSession()
+	host := &fakeKernelHost{role: schema.TeamRoleLeader}
+	hostSessionCtrl := &fakeSessionController{teamSession: teamSession}
+	// 覆盖 fakeKernelHost 的 SessionController 方法
+	// （fakeKernelHost 是值方法集合，此处用包装方式注入）
+	kernel := &CoordinationKernel{host: &kernelHostWithSession{
+		KernelHost:       host,
+		sessionCtrl:      hostSessionCtrl,
+	}}
+
+	kernel.persistTeamLifecycle(context.Background(), "paused")
+
+	// 验证写入：teams 命名空间下 team 桶 lifecycle == "paused"
+	if err := verifyLifecyclePersisted(teamSession, "test-team", "paused"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCoordinationKernel_PersistTeamLifecycle非Facade静默跳过 非 SessionFacade 会话静默跳过不 panic
+func TestCoordinationKernel_PersistTeamLifecycle非Facade静默跳过(t *testing.T) {
+	host := &fakeKernelHost{role: schema.TeamRoleLeader}
+	kernel := &CoordinationKernel{host: &kernelHostWithSession{
+		KernelHost:  host,
+		sessionCtrl: &fakeSessionController{teamSession: "not-a-session"},
+	}}
+
+	// 不应 panic
+	kernel.persistTeamLifecycle(context.Background(), "paused")
+}
+
+// kernelHostWithSession 包装 fakeKernelHost 注入 SessionController
+type kernelHostWithSession struct {
+	types.KernelHost
+	sessionCtrl types.SessionController
+}
+
+func (k *kernelHostWithSession) SessionController() types.SessionController { return k.sessionCtrl }
+
+// verifyLifecyclePersisted 校验 AgentTeamSession 的 teams 命名空间中 lifecycle 字段
+func verifyLifecyclePersisted(sess *session.AgentTeamSession, teamName, want string) error {
+	stateRaw, err := sess.GetState(state.StringKey("teams"))
+	if err != nil {
+		return fmt.Errorf("GetState(teams) 失败: %w", err)
+	}
+	teamsMap, ok := stateRaw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("teams 命名空间不存在或类型错误: %T", stateRaw)
+	}
+	bucket, ok := teamsMap[teamName].(map[string]any)
+	if !ok {
+		return fmt.Errorf("team 桶 %q 不存在", teamName)
+	}
+	got, _ := bucket["lifecycle"].(string)
+	if got != want {
+		return fmt.Errorf("lifecycle = %q, want %q", got, want)
+	}
+	return nil
 }

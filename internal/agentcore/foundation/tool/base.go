@@ -239,5 +239,3 @@ func (c *ToolCard) AbilityID() string { return c.ID }
 
 // AbilityKind 实现 schema.Ability 接口。
 func (c *ToolCard) AbilityKind() schema.AbilityKind { return schema.AbilityKindTool }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

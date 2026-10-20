@@ -150,5 +150,3 @@ func (tc *ToolCall) UnmarshalJSON(data []byte) error {
 	*tc = ToolCall(alias)
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -206,5 +206,3 @@ func Int64Ptr(v int64) *int64 { return &v }
 
 // StringPtr 返回 string 的指针。
 func StringPtr(v string) *string { return &v }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

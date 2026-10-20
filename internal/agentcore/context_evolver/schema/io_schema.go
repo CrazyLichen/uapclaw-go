@@ -309,7 +309,3 @@ func (m ReasoningBankRetrievedMemory) FormatMemoryString() string {
 func (m ReMeRetrievedMemory) FormatMemoryString() string {
 	return fmt.Sprintf("When to use: %s\nContent: %s", m.WhenToUse, m.Content)
 }
-
-// ──────────────────────────── 常量 ────────────────────────────
-// ──────────────────────────── 全局变量 ────────────────────────────
-// ──────────────────────────── 导出函数 ────────────────────────────

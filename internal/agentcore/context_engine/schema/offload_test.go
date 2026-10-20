@@ -340,5 +340,3 @@ func TestOffloadInfo_Metadata(t *testing.T) {
 		t.Errorf("Metadata[original_tokens] = %v, want 1500", info.Metadata["original_tokens"])
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

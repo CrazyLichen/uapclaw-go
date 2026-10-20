@@ -86,5 +86,3 @@ func (i *InteractiveInput) Update(nodeID string, value any) error {
 	i.UserInputs[nodeID] = value
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

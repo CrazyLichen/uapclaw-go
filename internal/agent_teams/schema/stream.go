@@ -72,5 +72,3 @@ func (s *TeamOutputSchema) ToMap() map[string]any {
 	}
 	return m
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

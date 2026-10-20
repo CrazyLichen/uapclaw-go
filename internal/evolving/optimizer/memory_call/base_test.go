@@ -231,5 +231,3 @@ func TestMemoryOptimizerBase_Step_绑定后无梯度(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(updates))
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -24,5 +24,3 @@ func ResolveEmbeddingConfig(cfg *schema.TeamMemoryConfig) *embedding.EmbeddingCo
 	}
 	return lite.ResolveEmbeddingConfigFromEnv("", "", "")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -150,5 +150,3 @@ func (DefaultFormHandler) Handle(_ context.Context, writer *multipart.Writer, fo
 	}
 	return writer.WriteField(formName, fmt.Sprintf("%v", value))
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

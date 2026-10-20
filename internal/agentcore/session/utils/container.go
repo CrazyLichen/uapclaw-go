@@ -119,5 +119,3 @@ func ConvertUpdatesFromJSON(raw any) (map[string][]map[string]any, bool) {
 	}
 	return result, true
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

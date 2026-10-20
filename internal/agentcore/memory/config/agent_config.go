@@ -48,5 +48,3 @@ func DefaultAgentMemoryConfig() *AgentMemoryConfig {
 		EnableSummaryMemory:  true,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

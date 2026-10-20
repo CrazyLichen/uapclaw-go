@@ -43,5 +43,3 @@ func BuildSafetySection() saprompt.PromptSection {
 		Priority: 20,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -198,5 +198,3 @@ func (c *McpServerConfig) AbilityID() string { return c.ServerID }
 
 // AbilityKind 实现 schema.Ability 接口。
 func (c *McpServerConfig) AbilityKind() schema.AbilityKind { return schema.AbilityKindMcpServer }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -128,5 +128,3 @@ func NewReadMcpResourceTool(language string, agentID string) tool.Tool {
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card))
 	return invokeFn
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

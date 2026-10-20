@@ -54,5 +54,3 @@ func (mh *MessageHandler) CancelAgentSessionsOnDisconnect(ctx context.Context, s
 			Msg("cancelling session tasks on disconnect")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

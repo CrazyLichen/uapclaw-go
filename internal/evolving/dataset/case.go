@@ -169,5 +169,3 @@ func (ec *EvaluatedCase) UnmarshalJSON(data []byte) error {
 	ec.SetScore(aux.Score) // 通过 SetScore 钳位
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -61,5 +61,3 @@ func SafeJSONLoads(text string) (map[string]any, error) {
 
 	return nil, fmt.Errorf("could not parse valid JSON from response")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

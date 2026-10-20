@@ -54,5 +54,3 @@ type UsageMetadata struct {
 func NewUsageMetadata() *UsageMetadata {
 	return &UsageMetadata{}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

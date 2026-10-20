@@ -39,5 +39,3 @@ func NewTeamModelConfig() TeamModelConfig {
 func (c TeamModelConfig) Build() (any, error) {
 	return nil, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

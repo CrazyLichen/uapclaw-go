@@ -152,5 +152,3 @@ func (GraphMutationResult) GraphSuccess(refreshedTasks ...*database.TeamTaskBase
 func (GraphMutationResult) GraphFail(reason string) GraphMutationResult {
 	return GraphMutationResult{OK: false, Reason: reason}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

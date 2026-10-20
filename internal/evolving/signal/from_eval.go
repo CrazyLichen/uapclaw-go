@@ -73,5 +73,3 @@ func FromEvaluatedCases(cases []*dataset.EvaluatedCase, operatorID string, score
 	}
 	return signals
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

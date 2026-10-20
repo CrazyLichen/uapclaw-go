@@ -29,5 +29,3 @@ func BuildWorktreeNotice(parentCwd, worktreeCwd string) string {
 			"- Your changes stay in this worktree and will not affect the parent",
 		worktreeCwd, parentCwd, parentCwd)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

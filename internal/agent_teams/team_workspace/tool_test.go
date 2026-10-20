@@ -422,5 +422,3 @@ func TestHistoryEntryToMap(t *testing.T) {
 		t.Errorf("message = %v, 期望 initial commit", m["message"])
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

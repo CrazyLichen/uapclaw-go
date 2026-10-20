@@ -416,9 +416,10 @@ func (s *ChromaVectorStore) SparseSearch(ctx context.Context, queryText string, 
 	result, err := collection.Query(ctx, queryOpts...)
 	if err != nil {
 		// 对齐 Python: except: logger.warning(...); return []
+		// T-22: 对齐 Python 删除自加的截断，直接输出完整 query_text
 		logger.Warn(logComponent).
 			Str("method", "SparseSearch").
-			Str("query_text", truncateText(queryText, 100)).
+			Str("query_text", queryText).
 			Err(err).
 			Msg("text search failed")
 		return nil, nil
@@ -953,14 +954,6 @@ func mapToChromaDistanceMetric(metric string) embeddings.DistanceMetric {
 	default:
 		return embeddings.COSINE
 	}
-}
-
-// truncateText 截断文本用于日志输出
-func truncateText(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }
 
 // chromaMetaKeys 获取 DocumentMetadata 的所有键。

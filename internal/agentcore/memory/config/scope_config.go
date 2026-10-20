@@ -71,5 +71,3 @@ func MemoryScopeConfigFromJSON(data string) (*MemoryScopeConfig, error) {
 	}
 	return cfg, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

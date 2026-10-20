@@ -247,5 +247,3 @@ func (m *AssistantMessage) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

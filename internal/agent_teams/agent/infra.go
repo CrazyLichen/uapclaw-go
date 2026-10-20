@@ -79,5 +79,3 @@ func (t *TeamInfra) MessageManager() *tools.TeamMessageManager { return t.messag
 
 // SetMessageManager 设置消息管理器。
 func (t *TeamInfra) SetMessageManager(v *tools.TeamMessageManager) { t.messageManager = v }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

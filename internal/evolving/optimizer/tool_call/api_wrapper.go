@@ -86,5 +86,3 @@ func (w *SimpleAPIWrapperFromCallable) Call(tool map[string]any, toolInput map[s
 	}
 	return output, 0
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -148,5 +148,3 @@ func GetListSkillSystemPrompt(lang string) string {
 	}
 	return skillRailListSkillSystemPromptCN
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

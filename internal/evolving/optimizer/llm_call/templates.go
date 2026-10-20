@@ -202,7 +202,3 @@ Your goals are:
 4. Directly return the prompt with placeholders added, without adding thought process or any other additional content.
 `)
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

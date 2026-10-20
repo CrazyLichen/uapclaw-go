@@ -301,5 +301,3 @@ func CosineSimilarity(vec1, vec2 []float64) float64 {
 	}
 	return dot / (norm1 * norm2)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -41,5 +41,3 @@ func (r *HandoffRequest) SessionID() string {
 	}
 	return ""
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

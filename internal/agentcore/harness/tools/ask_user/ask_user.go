@@ -66,5 +66,3 @@ func NewAskUserTool(language, agentID string) (tool.Tool, error) {
 
 	return askUserTool, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

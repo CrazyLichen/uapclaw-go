@@ -112,5 +112,3 @@ func TestSchemaInfoHeader_值(t *testing.T) {
 		t.Errorf("SchemaInfoHeader = %q, want %q", SchemaInfoHeader, "\n\n---\n")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -54,5 +54,3 @@ func ConvertIPSimilarity(rawScore float64) float64 {
 func ConvertIPDistance(rawScore float64) float64 {
 	return math.Max(0, math.Min(1, (2.0-rawScore)/2.0))
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

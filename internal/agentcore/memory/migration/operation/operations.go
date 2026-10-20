@@ -242,5 +242,3 @@ func NewAddColumnOperation(schemaVersion int, table, columnName, columnType stri
 		Nullable:      true,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

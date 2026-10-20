@@ -157,5 +157,3 @@ func (f *MapFunction) Stream(ctx context.Context, inputs map[string]any, opts ..
 
 	return outCh, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

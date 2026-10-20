@@ -31,5 +31,3 @@ var AllTeamTopics = []TeamTopic{TeamTopicTeam, TeamTopicTask, TeamTopicMessage}
 func (t TeamTopic) Build(sessionID, teamName string) string {
 	return "session:" + sessionID + ":team:" + teamName + ":" + string(t)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

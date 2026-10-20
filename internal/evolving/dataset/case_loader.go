@@ -100,5 +100,3 @@ func (cl *CaseLoader) ShuffledCopy(seed int64) []Case {
 	})
 	return shuffled
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

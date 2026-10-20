@@ -227,5 +227,3 @@ func NewReMeSummaryPrompts() *ReMeSummaryPrompts {
 		MemoryValidationPrompt:     template.Must(template.New("validation").Parse(memoryValidationPrompt)),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

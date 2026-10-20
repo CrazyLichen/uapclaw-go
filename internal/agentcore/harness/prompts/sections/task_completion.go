@@ -53,5 +53,3 @@ func BuildCompletionSignalSection(promise string, lang string) saprompt.PromptSe
 		Priority: completionSignalPriority,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

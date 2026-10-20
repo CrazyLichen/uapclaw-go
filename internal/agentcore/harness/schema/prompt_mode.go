@@ -74,5 +74,3 @@ func (m *PromptMode) UnmarshalJSON(data []byte) error {
 	*m = parsed
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

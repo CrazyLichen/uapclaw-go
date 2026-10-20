@@ -31,5 +31,3 @@ func NewToolMessage(toolCallID, content string, opts ...MessageOption) *ToolMess
 		ToolCallID:     toolCallID,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

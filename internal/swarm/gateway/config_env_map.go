@@ -108,5 +108,3 @@ func ShouldBrowserRestart(updatedKeys []string) bool {
 	}
 	return false
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

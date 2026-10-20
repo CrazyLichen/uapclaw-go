@@ -40,5 +40,3 @@ func NewDefaultDbStore(db *gorm.DB) *DefaultDbStore {
 func (s *DefaultDbStore) GetDB(_ context.Context) *gorm.DB {
 	return s.db
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

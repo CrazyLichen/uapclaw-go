@@ -104,5 +104,3 @@ func SummarizeApplyResults(results []schema.ApplyResult) map[string]int {
 		"failed":  len(results) - applied,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

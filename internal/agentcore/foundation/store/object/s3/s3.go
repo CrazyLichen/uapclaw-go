@@ -414,5 +414,3 @@ func (c *S3Client) ListObjects(ctx context.Context, bucketName string, objectPre
 		Msg("objects listed successfully")
 	return objects, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

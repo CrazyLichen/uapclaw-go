@@ -187,5 +187,3 @@ func (r *VerificationContractRail) GetCallbacks() map[agentinterfaces.AgentCallb
 
 	return callbacks
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

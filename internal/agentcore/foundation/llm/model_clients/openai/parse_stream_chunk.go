@@ -130,5 +130,3 @@ func ParseStreamChunk(
 
 	return llmschema.NewAssistantMessageChunk(content, opts...)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

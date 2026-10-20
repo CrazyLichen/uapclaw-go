@@ -270,5 +270,3 @@ func TestSystemPromptBuilder_Build_过滤钩子为nil(t *testing.T) {
 	result := builder.Build()
 	assert.Equal(t, "AAA\n\nBBB", result)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

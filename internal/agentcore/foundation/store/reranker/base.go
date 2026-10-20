@@ -172,5 +172,3 @@ func ReplacePlaceholder(s, old, new string) string {
 	}
 	return s
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

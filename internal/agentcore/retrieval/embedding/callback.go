@@ -40,5 +40,3 @@ func (c *NoopCallback) CallCounter() int {
 	defer c.mu.Unlock()
 	return c.callCounter
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

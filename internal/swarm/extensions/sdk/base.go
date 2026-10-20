@@ -130,5 +130,3 @@ func (b *BaseExtensionImpl) LoadConfigFromYAML() map[string]any {
 	b.configCache = cfg
 	return cfg
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

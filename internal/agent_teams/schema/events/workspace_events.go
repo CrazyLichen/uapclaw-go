@@ -87,5 +87,3 @@ func (e WorkspaceLockResponseEvent) EventTypeName() string { return TeamEventWor
 func (e WorkspaceLockResponseEvent) ToPayload() map[string]any {
 	return map[string]any{"team_name": e.TeamName, "file_path": e.FilePath, "granted": e.Granted, "holder": e.Holder}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

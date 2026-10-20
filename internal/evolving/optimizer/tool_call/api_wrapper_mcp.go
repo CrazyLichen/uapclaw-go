@@ -122,5 +122,3 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 		return string(result), 0
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

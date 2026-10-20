@@ -68,5 +68,3 @@ func (s *JSONSerializer) LoadsTyped(formatTag string, data []byte) (any, error) 
 	}
 	return result, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -144,5 +144,3 @@ func (r *McpRail) Uninit(agent agentinterfaces.BaseAgent) error {
 
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

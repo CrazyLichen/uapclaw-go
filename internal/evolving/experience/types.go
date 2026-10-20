@@ -176,5 +176,3 @@ func (r *ExperienceApplyResult) ToHostResult(requestID string, changeType string
 	}
 	return HostFacingExperienceResultPersisted(r.SkillName, requestID, changeType, r.AppliedCount, r.PendingCount, r.Errors)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

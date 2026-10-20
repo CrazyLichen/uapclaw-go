@@ -138,5 +138,3 @@ func (m *ModelMgr) GetModel(ctx context.Context, modelID string, session decorat
 
 	return model, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

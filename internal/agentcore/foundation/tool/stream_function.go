@@ -179,5 +179,3 @@ func (f *StreamFunction[I, O]) Stream(ctx context.Context, inputs map[string]any
 
 	return outCh, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

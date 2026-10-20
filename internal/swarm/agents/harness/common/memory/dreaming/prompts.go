@@ -253,5 +253,3 @@ func GetSysMsg(mode, language string) string {
 	}
 	return sysMsgMap[[2]string{"code", "zh"}]
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

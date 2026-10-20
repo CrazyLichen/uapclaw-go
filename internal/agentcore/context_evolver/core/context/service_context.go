@@ -244,5 +244,3 @@ func (sc *ServiceContext) String() string {
 	}
 	return fmt.Sprintf("ServiceContext(services=%v)", names)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

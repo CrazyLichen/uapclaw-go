@@ -228,5 +228,3 @@ func FromLegacyDict(snapshot map[string]any) EvolutionSnapshot {
 		IncrementalMessages: incrementalMessages,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

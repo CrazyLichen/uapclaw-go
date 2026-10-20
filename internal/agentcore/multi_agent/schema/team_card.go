@@ -302,5 +302,3 @@ func (c *EventDrivenTeamCard) String() string {
 	return fmt.Sprintf("id=%s,name=%s,topic=%s,version=%s,subscriptions=%d",
 		c.ID, c.Name, c.Topic, c.Version, len(c.Subscriptions))
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

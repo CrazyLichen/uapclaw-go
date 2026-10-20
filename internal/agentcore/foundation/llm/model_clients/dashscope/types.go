@@ -131,7 +131,3 @@ var DashScopeLanguageTypes = []string{
 	"Chinese", "English", "German", "Italian", "Portuguese",
 	"Spanish", "Japanese", "Korean", "French", "Russian",
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

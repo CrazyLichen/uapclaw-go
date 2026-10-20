@@ -144,5 +144,3 @@ func (a *PromptApplier) ClearCache(filePrefix ...string) {
 		}
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -37,5 +37,3 @@ type TrainableAgent interface {
 	// Python: BaseAgent.get_operators()
 	GetOperators() map[string]operator.Operator
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -38,5 +38,3 @@ func GetContentStringFromTemplate(tpl *prompt.PromptTemplate) string {
 	}
 	return strings.Join(parts, "\n")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

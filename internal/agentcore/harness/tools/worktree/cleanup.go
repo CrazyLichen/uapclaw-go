@@ -128,5 +128,3 @@ func CleanupStaleWorktrees(ctx context.Context, config WorktreeConfig, backend W
 
 	return removed, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -14,7 +14,3 @@ import "embed"
 //
 //go:embed channel_manager/web/frontend/dist
 var frontendDist embed.FS
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -232,5 +232,3 @@ func BuildModelSelectionPrompt(modelSelection string, lang string) string {
 	}
 	return strings.ReplaceAll(template, "{model_list}", modelSelection)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

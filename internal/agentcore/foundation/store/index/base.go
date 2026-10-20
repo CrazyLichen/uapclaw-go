@@ -236,5 +236,3 @@ func (b *MemoryIndexBase) CleanupBackup(_ context.Context, backupID string) erro
 func (b *MemoryIndexBase) ListUserScopes(_ context.Context) ([]UserScope, error) {
 	return nil, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

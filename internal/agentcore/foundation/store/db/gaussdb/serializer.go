@@ -73,5 +73,3 @@ func (s gaussStringSerializer) Scan(ctx context.Context, field *schema.Field, ds
 	}
 	return field.Set(ctx, dst, strVal)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -240,5 +240,3 @@ func TestSimplifyRequestResult_HasChanges_两者均空(t *testing.T) {
 		t.Error("两者均空时 HasChanges 应返回 false")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

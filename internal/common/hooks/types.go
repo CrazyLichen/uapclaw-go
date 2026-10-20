@@ -89,5 +89,3 @@ func IsRailEvent(event string) bool { return AgentRailEvents[event] }
 
 // IsGatewayEvent 判断事件是否属于 Gateway 层，对齐 Python is_gateway_event()
 func IsGatewayEvent(event string) bool { return GatewayEvents[event] }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

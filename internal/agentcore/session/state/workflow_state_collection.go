@@ -186,5 +186,3 @@ func (s *WorkflowStateCollection) Update(data map[string]any) error {
 	}
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

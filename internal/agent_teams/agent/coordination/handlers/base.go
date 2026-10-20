@@ -55,5 +55,3 @@ func NewBaseCoordinationHandler(
 func (h *BaseCoordinationHandler) GetCallbacks() map[string]types.EventCallbackFunc {
 	return map[string]types.EventCallbackFunc{}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

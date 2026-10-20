@@ -34,5 +34,3 @@ func GenerateKey(apiKey, apiBase, modelProvider string) string {
 	hash := sha256.Sum256([]byte(combined))
 	return fmt.Sprintf("%x", hash)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -80,6 +80,15 @@ func CleanupInProcessBus() {
 	busOnce = sync.Once{}
 }
 
+// GlobalBusActive 报告进程全局 Bus 是否已初始化。
+// T-17: 供外部测试观察 CleanupInProcessBus 是否被 CleanupSharedResources 连带触发
+// （对齐 Python cleanup_shared_resources L66-68 的清理链）。
+func GlobalBusActive() bool {
+	busMu.Lock()
+	defer busMu.Unlock()
+	return globalBus != nil
+}
+
 // Start 启动消息传输层（InProcess 无需操作）。
 func (m *InProcessMessager) Start(_ context.Context) error {
 	return nil

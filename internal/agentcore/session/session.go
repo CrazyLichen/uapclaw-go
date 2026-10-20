@@ -84,5 +84,3 @@ func (p *ProxySession) ActorManager() any {
 func (p *ProxySession) Close() error {
 	return p.stub.Close()
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -78,5 +78,3 @@ func NewMessagerTransportConfig() MessagerTransportConfig {
 func (c MessagerTransportConfig) BroadcastTopic() string {
 	return fmt.Sprintf("team:%s:broadcast", c.TeamName)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -17,5 +17,3 @@ func StatContextWindow(window *iface.ContextWindow, tokenCounter token.TokenCoun
 	window.Statistic.StatTools(window.GetTools(), tokenCounter)
 	window.Statistic.TotalDialogues = len(processor.FindAllDialogueRound(window.GetMessages()))
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

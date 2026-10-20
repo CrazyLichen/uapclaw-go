@@ -99,5 +99,3 @@ func (r *TaskExecutorRegistry) GetTaskExecutor(taskType string, deps *TaskExecut
 	}
 	return builder(deps), nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

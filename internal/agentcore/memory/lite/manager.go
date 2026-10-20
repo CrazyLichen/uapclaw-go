@@ -64,5 +64,3 @@ func GetMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 func ClearMemoryManagerCache() {
 	clearMemoryManagerCache()
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

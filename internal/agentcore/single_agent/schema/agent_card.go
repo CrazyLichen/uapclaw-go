@@ -134,5 +134,3 @@ func (c *AgentCard) AbilityID() string { return c.ID }
 
 // AbilityKind 实现 Ability 接口。
 func (c *AgentCard) AbilityKind() schema.AbilityKind { return schema.AbilityKindAgent }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

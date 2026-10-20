@@ -499,5 +499,3 @@ func TestRestoreFromSession_handoffCount为float64(t *testing.T) {
 		t.Errorf("期望恢复后 HandoffCount = 5，实际 = %d", restored.HandoffCount())
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

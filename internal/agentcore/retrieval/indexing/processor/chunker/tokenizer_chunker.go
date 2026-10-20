@@ -75,5 +75,3 @@ func (c *TokenizerChunker) ChunkText(text string) ([]string, error) {
 		Msg("Token chunking completed")
 	return chunks, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

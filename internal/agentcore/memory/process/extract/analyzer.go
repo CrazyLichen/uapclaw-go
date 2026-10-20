@@ -253,5 +253,3 @@ func mapToMemoryAnalyzerResult(m map[string]any) (*MemoryAnalyzerResult, error) 
 
 	return result, nil
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────

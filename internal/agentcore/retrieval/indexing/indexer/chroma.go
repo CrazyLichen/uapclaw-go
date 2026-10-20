@@ -464,5 +464,3 @@ func (ci *ChromaIndexer) GetIndexInfo(ctx context.Context, indexName string) (ma
 		"metadata":        metadata,
 	}, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

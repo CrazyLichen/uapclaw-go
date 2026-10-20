@@ -177,5 +177,3 @@ func SanitizeJSONSchema(schema any) any {
 
 	return cleaned
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

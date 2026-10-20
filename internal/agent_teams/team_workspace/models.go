@@ -116,5 +116,3 @@ func (l WorkspaceFileLock) IsExpired() bool {
 	}
 	return time.Now().UTC().After(acquired.Add(time.Duration(l.TimeoutSeconds) * time.Second))
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -62,5 +62,3 @@ func (t *ChannelPushTransport) SendPush(ctx context.Context, msg map[string]any)
 	}
 	return s.SendPush(ctx, msg)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

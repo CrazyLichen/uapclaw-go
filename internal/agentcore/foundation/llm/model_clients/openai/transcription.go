@@ -197,5 +197,3 @@ func (c *OpenAIModelClient) TranscribeAudio(
 
 	return &transcriptionResp, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

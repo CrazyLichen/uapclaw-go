@@ -307,5 +307,3 @@ func Terminate(status StatusCode, opts ...ErrorOption) *BaseError {
 	err.category = ErrorCategoryTermination
 	return err
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

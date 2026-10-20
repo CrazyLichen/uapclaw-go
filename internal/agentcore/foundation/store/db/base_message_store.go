@@ -149,9 +149,3 @@ const (
 	// DefaultMessageOrderDirection GetMessages 默认排序方向，对齐 Python order_direction="desc"
 	DefaultMessageOrderDirection = "desc"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

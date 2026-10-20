@@ -94,5 +94,3 @@ func (r *SSEReader) ReadEvent() (string, error) {
 	// 正常结束（未收到 [DONE] 但流已关闭）
 	return "", io.EOF
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

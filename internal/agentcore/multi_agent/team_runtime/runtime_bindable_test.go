@@ -32,5 +32,3 @@ func TestRuntimeBindable_绑定(t *testing.T) {
 		t.Errorf("agentID = %q, want %q", bindable.agentID, "agent-1")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

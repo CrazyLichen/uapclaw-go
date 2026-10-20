@@ -39,5 +39,3 @@ func NewHierarchicalTeamConfig() *HierarchicalTeamConfig {
 		Timeout:    defaultP2PTimeout,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -80,5 +80,3 @@ func (g *FirstIterationGate) Reset() {
 	g.once = sync.Once{}
 	g.ch = make(chan struct{})
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

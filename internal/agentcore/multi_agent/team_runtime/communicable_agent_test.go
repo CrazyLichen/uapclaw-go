@@ -242,5 +242,3 @@ func TestCommunicableAgent_接口满足(t *testing.T) {
 	var _ Communicable = (*CommunicableAgent)(nil)
 	var _ RuntimeBindable = (*CommunicableAgent)(nil)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -29,5 +29,3 @@ type HierarchicalToolsTeamConfig struct {
 func NewHierarchicalToolsTeamConfig() *HierarchicalToolsTeamConfig {
 	return &HierarchicalToolsTeamConfig{}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -227,5 +227,3 @@ func (s *AgentSession) AgentID() string {
 func (s *AgentSession) AgentSpan() *tracer.TraceAgentSpan {
 	return s.agentSpan
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -104,5 +104,3 @@ func (r *ResponsePromptRail) GetCallbacks() map[agentinterfaces.AgentCallbackEve
 	}
 	return callbacks
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

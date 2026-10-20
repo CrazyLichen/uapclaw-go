@@ -106,5 +106,3 @@ func DefaultControllerConfig() *ControllerConfig {
 		StreamFirstFrameTimeout:  30.0,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -151,5 +151,3 @@ func (u *MultiDimUpdater) GetState() map[string]any {
 func (u *MultiDimUpdater) LoadState(_ map[string]any) {
 	// 默认 no-op，后续子类重写
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

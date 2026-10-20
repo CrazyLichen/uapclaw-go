@@ -105,5 +105,3 @@ func (s *LocalSubscription) Deactivate() {
 func (s *LocalSubscription) IsActive() bool {
 	return false
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -528,5 +528,3 @@ func parseStringSlice(m map[string]any, key string) []string {
 	}
 	return nil
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────

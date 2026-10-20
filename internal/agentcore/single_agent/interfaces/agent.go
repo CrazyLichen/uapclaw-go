@@ -122,5 +122,3 @@ func NewAgentOptions(opts ...AgentOption) *AgentOptions {
 	}
 	return o
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

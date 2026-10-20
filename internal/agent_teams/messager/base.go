@@ -27,5 +27,3 @@ func CreateMessager(config schema.MessagerTransportConfig) (Messager, error) {
 		return nil, fmt.Errorf("不支持的消息传输后端: %s", config.Backend)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

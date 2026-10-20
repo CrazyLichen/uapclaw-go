@@ -40,5 +40,3 @@ func SanitizeUserContent(content string, maxLen int) string {
 	}
 	return safeText
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

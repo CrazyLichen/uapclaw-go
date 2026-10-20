@@ -332,5 +332,3 @@ func (c *AgentResponseChunk) IsTerminal() bool {
 	}
 	return false
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

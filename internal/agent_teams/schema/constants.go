@@ -33,7 +33,3 @@ var ReservedMemberNames = map[string]bool{
 	UserPseudoMemberName:    true,
 	DefaultLeaderMemberName: true,
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

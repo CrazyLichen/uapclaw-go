@@ -127,5 +127,3 @@ func (ws *WorkflowSession) Close() error {
 func (ws *WorkflowSession) Inner() *internal.WorkflowSession {
 	return ws.inner
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

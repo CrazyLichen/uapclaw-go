@@ -247,5 +247,3 @@ func NewPowerShellStreamTool(op sys_operation.SysOperation, language, agentID st
 	streamFn, _ := tool.NewStreamTool(fn, tool.WithToolCard(card), tool.WithToolInputParams(card.InputParams))
 	return streamFn
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

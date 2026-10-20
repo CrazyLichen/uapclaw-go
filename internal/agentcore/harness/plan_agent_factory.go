@@ -87,5 +87,3 @@ func CreatePlanAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 		RestrictToWorkDir:  &restrictToWorkDir,
 	})
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

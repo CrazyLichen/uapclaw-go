@@ -186,5 +186,3 @@ func NewTeamDatabase(ctx context.Context, config DBConfigProvider) TeamDatabase 
 		return sqlDB
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

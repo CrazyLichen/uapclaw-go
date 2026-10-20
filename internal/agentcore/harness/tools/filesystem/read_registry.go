@@ -52,5 +52,3 @@ func SetFileReadState(path string, state *FileReadState) {
 func DeleteFileReadState(path string) {
 	fileReadRegistry.Delete(path)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

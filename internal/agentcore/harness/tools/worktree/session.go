@@ -134,5 +134,3 @@ func (s *WorktreeSessionState) SetDefaultWorktreeName(name string) {
 	defer s.mu.Unlock()
 	s.defaultWorktreeName = name
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

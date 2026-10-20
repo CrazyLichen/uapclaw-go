@@ -147,5 +147,3 @@ func NewDecryptFunc() func(envName, value string) (string, bool) {
 		return decrypted, true
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

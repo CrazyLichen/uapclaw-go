@@ -382,5 +382,3 @@ func TestHeaderFromToolName(t *testing.T) {
 		t.Errorf("空 toolName 时应返回默认 header")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

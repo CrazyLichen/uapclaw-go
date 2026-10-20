@@ -133,5 +133,3 @@ func (c *CommunicableAgent) Unsubscribe(ctx context.Context, topic string) error
 func (c *CommunicableAgent) Runtime() *TeamRuntime {
 	return c.runtime
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -44,5 +44,3 @@ func (m *ExtensionManager) ShutdownAllExtensions(ctx context.Context) error { re
 // ListExtensions 列出已加载扩展，对齐 Python ExtensionManager.list_extensions()
 // ⤵️ 10.5.8 延后：当前返回空列表
 func (m *ExtensionManager) ListExtensions() []map[string]string { return nil }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

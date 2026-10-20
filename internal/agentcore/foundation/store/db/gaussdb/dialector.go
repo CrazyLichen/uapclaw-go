@@ -130,5 +130,3 @@ func (dialector GaussDialector) Migrator(db *gorm.DB) gorm.Migrator {
 		},
 	}}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

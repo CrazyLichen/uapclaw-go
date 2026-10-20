@@ -269,5 +269,3 @@ func (r *SysOperationRail) BeforeInvoke(_ context.Context, _ *agentinterfaces.Ag
 func (r *SysOperationRail) AfterInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

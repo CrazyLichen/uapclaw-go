@@ -137,5 +137,3 @@ func (r *PromptReport) Summary() string {
 		" chars=" + strconv.Itoa(r.TotalChars) +
 		" est_tokens≈" + strconv.Itoa(r.EstimatedTokens)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

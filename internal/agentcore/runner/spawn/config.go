@@ -149,5 +149,3 @@ func DeserializeRunnerConfig(payload map[string]any) (*config.RunnerConfig, erro
 	}
 	return &cfg, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

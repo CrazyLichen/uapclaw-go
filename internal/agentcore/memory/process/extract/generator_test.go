@@ -728,5 +728,3 @@ func TestSortSearchResultsByScore_空列表(t *testing.T) {
 	sortSearchResultsByScore(results)
 	assert.Empty(t, results)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

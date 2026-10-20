@@ -269,5 +269,3 @@ func (f *NodeSessionFacade) ClearSession(ctx context.Context) {
 		Str("node_id", f.inner.NodeID()).
 		Msg("NodeSession cleared")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

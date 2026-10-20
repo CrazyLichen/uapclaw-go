@@ -83,5 +83,3 @@ func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamN
 func ExtractTeamMemories(ctx context.Context, teamName string, db database.TeamDatabase, taskMgr *tools.TeamTaskManager, teamMemoryDir string, sysOp sysop.SysOperation, model *llm.Model, tzOffsetHours float64) error {
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

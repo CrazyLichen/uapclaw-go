@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"unicode"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -62,7 +63,7 @@ type StoreOption func(*StoreOptions)
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
-// ──────────────────────────── 常数 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -157,35 +158,51 @@ func isNumeric(v any) bool {
 	}
 }
 
-// isNumericString 判断字符串是否为数值（含小数点）
+// isNumericString 判断字符串是否为数值。
+// T-24: 严格对齐 Python `s.replace(".", "").isnumeric()` 语义：
+//   - 跳过所有 '.'（允许多个小数点，"1.5.5" → "155" → True）
+//   - 其余字符须为 Unicode 数字（含全角数字）
+//   - 拒绝负号（"-5".isnumeric() == False，负数配置走字符串比较路径）
+//   - 拒绝 'e'/'E'（科学计数法在 Python isnumeric 下同样不通过）
+//   - 空串/全点串返回 false（isnumeric 对空串为 False）
 func isNumericString(s string) bool {
-	if s == "" {
-		return false
-	}
-	dotCount := 0
+	hasDigit := false
 	for _, c := range s {
 		if c == '.' {
-			dotCount++
-			if dotCount > 1 {
-				return false
-			}
-		} else if c < '0' || c > '9' {
-			// 允许负号开头
-			if c == '-' && len(s) > 1 {
-				continue
-			}
+			continue
+		}
+		if !unicode.IsNumber(c) {
 			return false
 		}
+		hasDigit = true
 	}
-	return true
+	return hasDigit
 }
 
 // toFloat 将任意数值转为 float64
+// T-23: 补全 isNumeric 接受的全部 13 种类型（原仅 4 种，uint 系/int8-32 走
+// default 返回 NaN 导致合法配置被 CheckConfigsMatching 误判不匹配）
 func toFloat(v any) float64 {
 	switch val := v.(type) {
 	case int:
 		return float64(val)
+	case int8:
+		return float64(val)
+	case int16:
+		return float64(val)
+	case int32:
+		return float64(val)
 	case int64:
+		return float64(val)
+	case uint:
+		return float64(val)
+	case uint8:
+		return float64(val)
+	case uint16:
+		return float64(val)
+	case uint32:
+		return float64(val)
+	case uint64:
 		return float64(val)
 	case float32:
 		return float64(val)

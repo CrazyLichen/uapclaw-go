@@ -146,5 +146,3 @@ func (r *RouterSessionFacade) GetNodeConfig() any {
 func (r *RouterSessionFacade) ClearSession(ctx context.Context) {
 	// 路由场景禁止清除会话，静默忽略
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -352,5 +352,3 @@ func (o *PersistMemoryOp) persistType() string {
 	}
 	return "none"
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────

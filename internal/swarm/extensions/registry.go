@@ -182,5 +182,3 @@ func (r *ExtensionRegistry) Trigger(ctx context.Context, event string, data map[
 func (r *ExtensionRegistry) Config() *ExtensionConfig {
 	return r.config
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

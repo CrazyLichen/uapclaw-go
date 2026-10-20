@@ -65,5 +65,3 @@ func (c *MemoryToolContext) WithManager(mgr MemoryIndexManager) *MemoryToolConte
 	c.Manager = mgr
 	return c
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

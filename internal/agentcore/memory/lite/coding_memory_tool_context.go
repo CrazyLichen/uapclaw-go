@@ -73,5 +73,3 @@ func (c *CodingMemoryToolContext) WithCodingMemoryDir(dir string) *CodingMemoryT
 	c.CodingMemoryDir = dir
 	return c
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

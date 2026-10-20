@@ -107,5 +107,3 @@ func (c *ExperienceHubClient) InstallSkill(ctx context.Context, skillID string, 
 		Msg("[ExperienceHubClient] installed skill")
 	return installed, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

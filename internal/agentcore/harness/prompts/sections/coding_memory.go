@@ -180,5 +180,3 @@ func BuildCodingMemorySection(memoryDir string, readOnly bool, lang string) sapr
 		Priority: 85,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

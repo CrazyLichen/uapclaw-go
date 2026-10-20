@@ -338,5 +338,3 @@ func (m *RecoveryManager) PersistAllocatorState(sess interfaces.SessionFacade) {
 		})
 	}()
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

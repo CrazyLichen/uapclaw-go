@@ -61,5 +61,3 @@ func BuildPermissionInterruptRail(
 	// deepcopy 由构造器内部 NewPermissionEngine 处理（PermissionEngine.NewPermissionEngine 会拷贝 config）
 	return ctor(permissions, engine, nil, model, modelName, h)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

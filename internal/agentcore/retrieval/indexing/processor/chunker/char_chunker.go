@@ -78,5 +78,3 @@ func (c *CharChunker) ChunkText(text string) ([]string, error) {
 		Msg("character chunking completed")
 	return chunks, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

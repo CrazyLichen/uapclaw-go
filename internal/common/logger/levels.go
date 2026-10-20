@@ -216,5 +216,3 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 		Full:        full,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

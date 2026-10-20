@@ -231,5 +231,3 @@ func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, 
 	PanicAgentInterrupt(nil)
 	return nil, nil // 不可达
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

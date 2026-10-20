@@ -52,9 +52,3 @@ const (
 	TeamEventWorkspaceLockRequest     = "workspace_lock_request"
 	TeamEventWorkspaceLockResponse    = "workspace_lock_response"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

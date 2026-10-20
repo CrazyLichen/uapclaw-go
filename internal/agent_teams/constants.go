@@ -25,7 +25,3 @@ const DefaultLeaderMemberName = schema.DefaultLeaderMemberName
 // ReservedMemberNames 保留的成员名集合，用户声明成员不得使用。
 // 已迁移到 schema 包，此处保留引用以兼容现有调用方。
 var ReservedMemberNames = schema.ReservedMemberNames
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

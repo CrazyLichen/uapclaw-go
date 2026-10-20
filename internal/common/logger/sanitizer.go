@@ -162,5 +162,3 @@ func (w *sanitizerWriter) Write(p []byte) (n int, err error) {
 	sanitized := w.sanitizer.Sanitize(string(p))
 	return w.underlying.Write([]byte(sanitized))
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -114,5 +114,3 @@ func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) 
 		Payload:   b.BuildSpawnPayload(ctx, ""),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

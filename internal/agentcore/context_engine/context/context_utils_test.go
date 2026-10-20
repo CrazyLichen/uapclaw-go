@@ -399,5 +399,3 @@ func TestFindMessageIndexByContextMessageID_nil元数据(t *testing.T) {
 		t.Errorf("nil 元数据的消息应跳过，返回 -1，实际 %d", idx)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

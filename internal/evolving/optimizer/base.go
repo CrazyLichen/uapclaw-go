@@ -375,5 +375,3 @@ func FilterOperators(operators map[string]operator.Operator, targets []string) m
 	}
 	return out
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

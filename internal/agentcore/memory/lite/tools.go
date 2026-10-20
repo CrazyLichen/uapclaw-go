@@ -77,5 +77,3 @@ func InitCodingMemoryManagerAsync(ctx context.Context, ws *workspace.Workspace, 
 	logger.Info(logComponent).Str("cm_dir", cmDir).Msg("coding memory manager initialized")
 	return mgr, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

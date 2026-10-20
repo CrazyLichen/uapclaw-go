@@ -635,5 +635,3 @@ func NewACEPrompt() *ACEPrompt {
 		ACECuratorScalingPrompt:       template.Must(template.New("ace_curator_scaling").Parse(aceCuratorScalingPrompt)),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -673,5 +673,3 @@ func (d *TaskManagerEventData) String() string {
 	}
 	return fmt.Sprintf("TaskManagerEventData{事件:%s, 任务ID:%s, 状态:%s}", d.Event, d.TaskID, d.Status)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

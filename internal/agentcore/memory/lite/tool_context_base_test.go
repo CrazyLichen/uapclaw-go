@@ -30,5 +30,3 @@ func TestIsClosed_Manager已关闭(t *testing.T) {
 		t.Error("Manager 已关闭时 IsClosed 应返回 true")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

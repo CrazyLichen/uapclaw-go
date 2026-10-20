@@ -448,5 +448,3 @@ func (c *SseClient) ReadResource(ctx context.Context, uri string) ([]map[string]
 func (c *SseClient) Close() error {
 	return c.Disconnect(context.Background())
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

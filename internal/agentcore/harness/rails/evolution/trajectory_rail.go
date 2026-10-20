@@ -37,5 +37,3 @@ func NewTrajectoryRail(opts ...EvolutionRailOption) *TrajectoryRail {
 // Priority 返回优先级 10。
 // Python: TrajectoryRail.priority = 10
 func (r *TrajectoryRail) Priority() int { return 10 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

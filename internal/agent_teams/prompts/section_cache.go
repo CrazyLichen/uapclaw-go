@@ -77,5 +77,3 @@ func (c *MtimeSectionCache) Invalidate() {
 	c.cachedMtime = 0
 	c.initialized = false
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

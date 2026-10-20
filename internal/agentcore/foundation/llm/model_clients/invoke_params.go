@@ -559,5 +559,3 @@ func (p *StreamParams) ToStreamParams() *InvokeParams {
 		TracerRecordData: p.TracerRecordData,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

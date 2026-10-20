@@ -360,9 +360,10 @@ func (s *MilvusVectorStore) SparseSearch(ctx context.Context, queryText string, 
 	resultSets, err := c.Search(ctx, searchOpt)
 	if err != nil {
 		// 对齐 Python: except Exception as e: logger.warning(f"BM25 text search failed: {e}"); return []
+		// T-22: 对齐 Python 删除自加的截断，直接输出完整 query_text
 		logger.Warn(logComponent).
 			Str("method", "SparseSearch").
-			Str("query_text", truncateText(queryText, 100)).
+			Str("query_text", queryText).
 			Err(err).
 			Msg("BM25 文本搜索失败")
 		return nil, nil

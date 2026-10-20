@@ -1053,5 +1053,3 @@ func (m *TeamManager) applySessionScopedTeamName(spec *atschema.TeamAgentSpec, s
 		spec.TeamName = scopedName
 	}
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────

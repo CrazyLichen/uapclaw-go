@@ -189,5 +189,3 @@ func ParseSessionScopeKey(keyStr string) (SessionScopeKey, error) {
 	}
 	return SessionScopeKey{AgentID: agentID, SessionScope: sessionScope}, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

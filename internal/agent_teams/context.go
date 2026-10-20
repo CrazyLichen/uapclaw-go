@@ -43,5 +43,3 @@ func SessionStateFromCtx(ctx context.Context) *SessionState {
 func GetSessionID(ctx context.Context) string {
 	return sessionctx.GetSessionID(ctx)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

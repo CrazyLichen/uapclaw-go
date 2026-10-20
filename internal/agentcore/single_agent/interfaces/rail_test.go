@@ -143,5 +143,3 @@ func TestRailAgent_接口满足(t *testing.T) {
 	// 通过 fakeBaseAgent 验证 BaseAgent 接口可满足
 	_ = &fakeBaseAgent{agentID: "test", cbMgr: nil}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

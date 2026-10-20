@@ -135,5 +135,3 @@ func DefaultCodeAgentDescription(language string) string {
 	}
 	return defaultCodeAgentDescription["cn"]
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

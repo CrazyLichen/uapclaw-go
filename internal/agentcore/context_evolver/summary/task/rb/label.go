@@ -90,5 +90,3 @@ func (d *LabelDeterminator) DetermineLabel(ctx context.Context, query string, tr
 	logger.Warn(logComponent).Str("method", "DetermineLabel").Str("response", resp).Msg("Regex did not match Status, falling back to success keyword check")
 	return strings.Contains(strings.ToLower(resp), "success"), nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

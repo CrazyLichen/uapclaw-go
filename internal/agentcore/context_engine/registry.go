@@ -61,5 +61,3 @@ func ListProcessorFactories() []string {
 	sort.Strings(types)
 	return types
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

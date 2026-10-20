@@ -50,5 +50,3 @@ func NewTeamMemoryConfig() TeamMemoryConfig {
 		TimezoneOffsetHours:    8.0,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

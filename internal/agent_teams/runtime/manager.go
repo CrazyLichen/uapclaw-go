@@ -533,14 +533,17 @@ func FinalizeMember(ctx context.Context, ag *agent.TeamAgent) error {
 	member := ag.TeamMemberHandle()
 	memberName := ag.MemberName()
 
-	// Python: try/except 外层
+	// Python: try/except 外层。
+	// T-28: recover 仅防 panic（Go 无 Python except Exception 的 error 捕获能力）；
+	// 各步骤的 error 失败已逐点记录 Warn 日志（对齐 Python 外层 except 的
+	// "Failed to finalize team member {}" warning 可观测性）。
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Debug(logComponent).
+				logger.Warn(logComponent).
 					Str("member_name", memberName).
 					Any("recover", r).
-					Msg("finalize_member: status read panic")
+					Msg("finalize_member: panic recovered")
 			}
 		}()
 
@@ -567,7 +570,12 @@ func FinalizeMember(ctx context.Context, ag *agent.TeamAgent) error {
 				Str("member_name", memberName).
 				Str("status", string(currentStatus)).
 				Msg("finalize_member: already finalized, closing kernel only")
-			_ = ag.StopCoordination(ctx)
+			if err := ag.StopCoordination(ctx); err != nil {
+				logger.Warn(logComponent).
+					Str("member_name", memberName).
+					Err(err).
+					Msg("finalize_member: stop_coordination failed (already finalized path)")
+			}
 			return
 		}
 
@@ -576,9 +584,19 @@ func FinalizeMember(ctx context.Context, ag *agent.TeamAgent) error {
 			logger.Info(logComponent).
 				Str("member_name", memberName).
 				Msg("finalize_member: shutting down as requested")
-			_ = ag.StopCoordination(ctx)
+			if err := ag.StopCoordination(ctx); err != nil {
+				logger.Warn(logComponent).
+					Str("member_name", memberName).
+					Err(err).
+					Msg("finalize_member: stop_coordination failed (shutdown path)")
+			}
 			if member != nil {
-				_, _ = member.UpdateStatus(ctx, atschema.MemberStatusShutdown)
+				if _, err := member.UpdateStatus(ctx, atschema.MemberStatusShutdown); err != nil {
+					logger.Warn(logComponent).
+						Str("member_name", memberName).
+						Err(err).
+						Msg("finalize_member: update status to SHUTDOWN failed")
+				}
 			}
 			return
 		}
@@ -587,9 +605,19 @@ func FinalizeMember(ctx context.Context, ag *agent.TeamAgent) error {
 		logger.Info(logComponent).
 			Str("member_name", memberName).
 			Msg("finalize_member: pausing and marking READY")
-		_ = ag.PauseCoordination(ctx)
+		if err := ag.PauseCoordination(ctx); err != nil {
+			logger.Warn(logComponent).
+				Str("member_name", memberName).
+				Err(err).
+				Msg("finalize_member: pause_coordination failed")
+		}
 		if member != nil {
-			_, _ = member.UpdateStatus(ctx, atschema.MemberStatusReady)
+			if _, err := member.UpdateStatus(ctx, atschema.MemberStatusReady); err != nil {
+				logger.Warn(logComponent).
+					Str("member_name", memberName).
+					Err(err).
+					Msg("finalize_member: update status to READY failed")
+			}
 		}
 	}()
 

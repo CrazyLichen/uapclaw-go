@@ -66,5 +66,3 @@ func WorktreePathFor(baseDir, slug string) string {
 func WorktreesDir(baseDir string) string {
 	return filepath.Join(baseDir, ".worktrees")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

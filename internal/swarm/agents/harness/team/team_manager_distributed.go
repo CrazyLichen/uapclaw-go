@@ -30,5 +30,3 @@ func (m *TeamManager) AttachDistributedHooksForRunnerRuntime(
 	// ⤵️(#10.6.20-21) 完整实现 — 待 distributed_runtime / remote_member_bootstrap 回填
 	return false
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

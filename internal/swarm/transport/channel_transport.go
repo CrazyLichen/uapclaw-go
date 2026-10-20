@@ -170,5 +170,3 @@ func (t *ChannelTransport) SendCh() <-chan []byte {
 func (t *ChannelTransport) RecvCh() chan<- []byte {
 	return t.recvCh
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

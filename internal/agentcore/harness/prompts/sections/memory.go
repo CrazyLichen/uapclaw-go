@@ -301,5 +301,3 @@ func BuildMemoryDatePrompt(todayDate string, lang string) string {
 	}
 	return strings.ReplaceAll(memoryDatePromptCN, "{today_date}", todayDate)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

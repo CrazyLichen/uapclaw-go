@@ -48,5 +48,3 @@ func (SessionScopeFactory) CreateCustom(scope Scope, subject Subject) SessionSco
 func (SessionScopeFactory) FromString(keyStr string) (SessionScope, error) {
 	return ParseSessionScope(keyStr)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -65,5 +65,3 @@ func (e CoordinationEvent) EventType() string {
 	}
 	return e.Transport.EventType
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

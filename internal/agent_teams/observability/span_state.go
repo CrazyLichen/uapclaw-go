@@ -211,5 +211,3 @@ func ResetAllSpanStates() {
 	}
 	spanStateRegistry = make(map[*OtelSpanState]struct{})
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

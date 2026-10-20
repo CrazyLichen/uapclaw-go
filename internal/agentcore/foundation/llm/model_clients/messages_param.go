@@ -107,5 +107,3 @@ func (p MessagesParam) Messages() []llmschema.BaseMessage {
 func (p MessagesParam) Dicts() []map[string]any {
 	return p.dicts
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

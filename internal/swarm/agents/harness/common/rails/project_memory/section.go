@@ -40,5 +40,3 @@ func BuildProjectMemorySection(content string, priority int) *saprompt.PromptSec
 	}
 	return &section
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

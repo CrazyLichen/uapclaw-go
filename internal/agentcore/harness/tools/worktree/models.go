@@ -110,5 +110,3 @@ func NewWorktreeConfig() WorktreeConfig {
 		LifecyclePolicy:       WorktreeLifecyclePolicyAuto,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

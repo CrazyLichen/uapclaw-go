@@ -121,5 +121,3 @@ func (r *OperationRegistry) GetSupportedOperations(mode OperationMode) []string 
 	sort.Strings(names)
 	return names
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

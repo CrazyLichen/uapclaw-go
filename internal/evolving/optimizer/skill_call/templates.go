@@ -834,7 +834,3 @@ var TeamExperienceGeneratePrompt = map[string]string{
 	"cn": TeamExperienceGeneratePromptCN,
 	"en": TeamExperienceGeneratePromptEN,
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -98,5 +98,3 @@ func NewMcpToolInfo(name, description, serverName string, parameters map[string]
 		ServerName: serverName,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

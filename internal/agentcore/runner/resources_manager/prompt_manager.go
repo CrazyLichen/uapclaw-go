@@ -123,5 +123,3 @@ func (m *PromptMgr) GetPrompt(templateID string) (*prompt.PromptTemplate, error)
 
 	return template, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

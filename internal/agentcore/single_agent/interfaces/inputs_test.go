@@ -431,5 +431,3 @@ func TestNewMapInputs(t *testing.T) {
 	assert.NotNil(t, inputs.Data)
 	assert.Empty(t, inputs.Data)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

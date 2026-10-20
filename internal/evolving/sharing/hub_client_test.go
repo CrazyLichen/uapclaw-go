@@ -297,5 +297,3 @@ func TestExperienceHubClient_InstallSkill_包不存在(t *testing.T) {
 	_, err := client.InstallSkill(ctx, "nonexistent_skill_id", "some_skill")
 	require.Error(t, err)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

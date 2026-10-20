@@ -103,5 +103,3 @@ func (r *KvPrefixRegistry) Unregister(prefix string) {
 	delete(r.allPrefixes, prefix)
 	delete(r.currentPrefixes, prefix)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

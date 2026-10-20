@@ -145,5 +145,3 @@ func NewReasoningBankPrompt() *ReasoningBankPrompt {
 		SequentialFollowUpRefinePrompt: template.Must(template.New("seq_follow_up_refine").Parse(sequentialFollowUpRefinePrompt)),
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

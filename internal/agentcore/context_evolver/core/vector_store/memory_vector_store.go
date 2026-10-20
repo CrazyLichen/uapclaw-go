@@ -219,5 +219,3 @@ func matchesMetadata(metadata, filter map[string]any) bool {
 	}
 	return true
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────

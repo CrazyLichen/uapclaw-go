@@ -70,6 +70,7 @@ func TestCheckConfigsMatching_零值absTol兜底(t *testing.T) {
 }
 
 // TestIsNumericString 测试 isNumericString 的各种场景
+// T-24: 语义对齐 Python s.replace(".", "").isnumeric()
 func TestIsNumericString(t *testing.T) {
 	tests := []struct {
 		input string
@@ -79,10 +80,13 @@ func TestIsNumericString(t *testing.T) {
 		{"12.5", true},
 		{"", false},
 		{"abc", false},
-		{"12.3.4", false}, // 多个小数点
-		{"-5", true},      // 负号开头
-		{"-", false},      // 仅负号
-		{"12a", false},    // 包含字母
+		{"12.3.4", true}, // Python: "12.3.4".replace(".","") == "1234".isnumeric() → True
+		{"-5", false},    // Python: "-5".isnumeric() == False（负数走字符串比较路径）
+		{"-", false},     // 仅负号
+		{"12a", false},   // 包含字母
+		{"1e5", false},   // Python: "1e5".isnumeric() == False（拒绝科学计数法）
+		{".", false},     // 全点串 isnumeric 空串 → False
+		{"１２３", true},  // 全角数字 Python isnumeric 接受
 	}
 	for _, tt := range tests {
 		got := isNumericString(tt.input)
@@ -136,13 +140,32 @@ func TestWithStoreBatchSize(t *testing.T) {
 }
 
 // TestToFloat 测试 toFloat 类型转换
+// T-23: 覆盖 isNumeric 接受的全部 13 种数值类型
 func TestToFloat(t *testing.T) {
 	assert.Equal(t, 1.0, toFloat(1))
 	assert.Equal(t, 2.0, toFloat(int64(2)))
 	assert.Equal(t, 3.5, toFloat(float32(3.5)))
 	assert.Equal(t, 4.25, toFloat(4.25))
+	// T-23 新增分支
+	assert.Equal(t, 5.0, toFloat(int8(5)))
+	assert.Equal(t, 6.0, toFloat(int16(6)))
+	assert.Equal(t, 7.0, toFloat(int32(7)))
+	assert.Equal(t, 8.0, toFloat(uint(8)))
+	assert.Equal(t, 9.0, toFloat(uint8(9)))
+	assert.Equal(t, 10.0, toFloat(uint16(10)))
+	assert.Equal(t, 11.0, toFloat(uint32(11)))
+	assert.Equal(t, 12.0, toFloat(uint64(12)))
 	assert.True(t, math.IsNaN(toFloat("not a number")))
 	assert.True(t, math.IsNaN(toFloat(nil)))
+}
+
+// TestCheckConfigsMatching_uint配置 T-23 回归测试。
+// uint 类型配置值原走 toFloat default 返回 NaN 被误判不匹配，修复后应通过 isclose 比较。
+func TestCheckConfigsMatching_uint配置(t *testing.T) {
+	configured := map[string]any{"max_neighbors": uint(16)}
+	actual := map[string]any{"max_neighbors": "16"}
+	err := CheckConfigsMatching(configured, actual)
+	assert.NoError(t, err)
 }
 
 // TestCheckConfigsMatching_数值不近似匹配 测试数值差距过大时不匹配

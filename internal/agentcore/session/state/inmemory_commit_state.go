@@ -169,5 +169,3 @@ func (s *InMemoryCommitState) SetUpdates(updates map[string][]map[string]any) {
 		s.updates = utils.DeepCopyUpdates(updates)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -28,5 +28,3 @@ func GetCallbackFramework() *CallbackFramework {
 func Trigger(ctx context.Context, event string, data map[string]any) []any {
 	return globalCallbackFramework.TriggerCustom(ctx, event, data)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

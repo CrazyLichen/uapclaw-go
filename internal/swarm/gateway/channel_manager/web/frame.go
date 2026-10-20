@@ -207,5 +207,3 @@ func (f *EventFrame) Encode() ([]byte, error) {
 func (f *ReqFrame) Encode() ([]byte, error) {
 	return json.Marshal(f)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

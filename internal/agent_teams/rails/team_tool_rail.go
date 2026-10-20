@@ -294,5 +294,3 @@ func WithTeamName(name string) TeamToolRailOption {
 func WithMemberName(name string) TeamToolRailOption {
 	return func(r *TeamToolRail) { r.memberName = name }
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

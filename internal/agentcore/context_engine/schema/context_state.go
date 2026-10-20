@@ -138,9 +138,3 @@ const (
 //
 // Python: CONTEXT_COMPRESSION_STATE_TYPE = "context.compression_state"
 const ContextCompressionStateType = "context.compression_state"
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

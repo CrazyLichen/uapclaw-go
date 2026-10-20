@@ -125,5 +125,3 @@ func (r *OperationRegistry) Clear() {
 func (r *OperationRegistry) SetOperations(operations map[string][]Operation) {
 	r.operations = operations
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

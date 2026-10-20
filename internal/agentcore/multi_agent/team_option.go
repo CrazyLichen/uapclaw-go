@@ -40,5 +40,3 @@ func WithTeamStreamModes(modes []stream.StreamMode) schema.TeamOption {
 func NewTeamOptions(opts ...schema.TeamOption) *schema.TeamOptions {
 	return schema.NewTeamOptions(opts...)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

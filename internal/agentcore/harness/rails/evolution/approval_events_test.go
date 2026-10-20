@@ -325,5 +325,3 @@ func TestBuildTeamSkillApprovalEventFromRecords_EN(t *testing.T) {
 		t.Errorf("第一个 option label = %q, want %q", opts[0]["label"], "Accept")
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

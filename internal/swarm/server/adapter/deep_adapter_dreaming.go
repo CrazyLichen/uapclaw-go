@@ -130,5 +130,3 @@ func (d *DeepAdapter) TryStopDreaming(ctx context.Context) error {
 
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

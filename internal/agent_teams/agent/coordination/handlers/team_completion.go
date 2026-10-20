@@ -186,5 +186,3 @@ func (h *TeamCompletionHandler) OnTeamCompleted(_ context.Context, event types.C
 		Int("task_count", taskCount).
 		Msg("onTeamCompleted: team completed")
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

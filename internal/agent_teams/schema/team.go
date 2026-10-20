@@ -131,5 +131,3 @@ func (e *UnknownHumanAgentError) Error() string {
 	return fmt.Sprintf("'%s' is not a registered human-agent member; registered members: %v",
 		e.Sender, sorted)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

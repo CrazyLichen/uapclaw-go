@@ -21,5 +21,3 @@ func (p *BaseProcessor) SaveState() map[string]any {
 func (p *BaseProcessor) LoadState(_ map[string]any) {
 	// 默认空操作
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
