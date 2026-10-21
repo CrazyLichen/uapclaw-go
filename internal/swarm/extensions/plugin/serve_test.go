@@ -266,3 +266,94 @@ func TestMetadataToProto_DependenciesNil(t *testing.T) {
 		t.Errorf("补的空 map 应为空, 实际: %v", pb.GetDependencies())
 	}
 }
+
+// fakeCryptoImpl 用于测试的插件侧 crypto 实现
+type fakeCryptoImpl struct{}
+
+func (f *fakeCryptoImpl) Encrypt(ctx context.Context, plaintext string) (string, error) {
+	return "enc:" + plaintext, nil
+}
+
+func (f *fakeCryptoImpl) Decrypt(ctx context.Context, ciphertext string) (string, error) {
+	return strings.TrimPrefix(ciphertext, "enc:"), nil
+}
+
+// TestCryptoImpl_接口满足 验证 fakeCryptoImpl 满足 CryptoImpl 接口
+func TestCryptoImpl_接口满足(t *testing.T) {
+	var _ CryptoImpl = (*fakeCryptoImpl)(nil)
+}
+
+// TestServeOptions_选项注入 测试 WithCryptoImpl/WithTransportImpl 写入 serveConfig
+func TestServeOptions_选项注入(t *testing.T) {
+	cfg := &serveConfig{}
+	WithCryptoImpl(&fakeCryptoImpl{})(cfg)
+	if cfg.cryptoImpl == nil {
+		t.Error("WithCryptoImpl 未写入 cryptoImpl")
+	}
+	WithTransportImpl(nil)(cfg)
+	if cfg.transportImpl != nil {
+		t.Error("WithTransportImpl(nil) 应保持 nil")
+	}
+}
+
+// TestExtensionServer_Register_Crypto降级 cryptoImpl 缺失时声明降级为 false
+func TestExtensionServer_Register_Crypto降级(t *testing.T) {
+	srv := &extensionServer{impl: &fakeExtension{decls: []Declaration{{
+		Metadata:       Metadata{ID: "ext-c"},
+		ProvidesCrypto: true,
+	}}}}
+	resp, err := srv.Register(context.Background(), &extproto.RegisterRequest{})
+	if err != nil {
+		t.Fatalf("Register 失败: %v", err)
+	}
+	if resp.Decls[0].GetProvidesCrypto() {
+		t.Error("cryptoImpl 缺失时 ProvidesCrypto 应降级为 false")
+	}
+}
+
+// TestExtensionServer_Register_Crypto声明保留 cryptoImpl 就绪时声明保留
+func TestExtensionServer_Register_Crypto声明保留(t *testing.T) {
+	srv := &extensionServer{
+		impl:      &fakeExtension{decls: []Declaration{{Metadata: Metadata{ID: "ext-c"}, ProvidesCrypto: true}}},
+		cryptoImpl: &fakeCryptoImpl{},
+	}
+	resp, err := srv.Register(context.Background(), &extproto.RegisterRequest{})
+	if err != nil {
+		t.Fatalf("Register 失败: %v", err)
+	}
+	if !resp.Decls[0].GetProvidesCrypto() {
+		t.Error("cryptoImpl 就绪时 ProvidesCrypto 应保留")
+	}
+}
+
+// TestExtensionServer_EncryptDecrypt crypto RPC handler 直调往返
+func TestExtensionServer_EncryptDecrypt(t *testing.T) {
+	srv := &extensionServer{impl: &fakeExtension{}, cryptoImpl: &fakeCryptoImpl{}}
+	encResp, err := srv.Encrypt(context.Background(), &extproto.EncryptRequest{Plaintext: "sec"})
+	if err != nil {
+		t.Fatalf("Encrypt 失败: %v", err)
+	}
+	if encResp.GetCiphertext() != "enc:sec" {
+		t.Errorf("Ciphertext = %q, 期望 enc:sec", encResp.GetCiphertext())
+	}
+	decResp, err := srv.Decrypt(context.Background(), &extproto.DecryptRequest{Ciphertext: "enc:sec"})
+	if err != nil {
+		t.Fatalf("Decrypt 失败: %v", err)
+	}
+	if decResp.GetPlaintext() != "sec" {
+		t.Errorf("Plaintext = %q, 期望 sec", decResp.GetPlaintext())
+	}
+}
+
+// TestExtensionServer_Encrypt_未实现 cryptoImpl nil 时返回 ErrNoCrypto
+func TestExtensionServer_Encrypt_未实现(t *testing.T) {
+	srv := &extensionServer{impl: &fakeExtension{}}
+	if _, err := srv.Encrypt(context.Background(), &extproto.EncryptRequest{}); err == nil {
+		t.Error("cryptoImpl 缺失时 Encrypt 应返回错误")
+	} else if !errors.Is(err, ErrNoCrypto) {
+		t.Errorf("错误应为 ErrNoCrypto, 实际 %v", err)
+	}
+	if _, err := srv.Decrypt(context.Background(), &extproto.DecryptRequest{}); err == nil {
+		t.Error("cryptoImpl 缺失时 Decrypt 应返回错误")
+	}
+}

@@ -48,6 +48,8 @@ type Declaration struct {
 	EventSubs []EventSubscription
 	// ProvidesTransport 是否为 transport 提供者（true 时须实现 TransportImpl）
 	ProvidesTransport bool
+	// ProvidesCrypto 是否为 crypto 提供者（true 时须实现 CryptoImpl）
+	ProvidesCrypto bool
 }
 
 // ExtensionImpl 插件实现接口（插件作者实现此接口后调 ServeExtension）
@@ -70,6 +72,26 @@ type TransportImpl interface {
 	Close() error
 }
 
+// CryptoImpl crypto 提供者可选接口（Declaration.ProvidesCrypto=true 时必须实现）。
+// 插件作者的 crypto 入口（10.5.10；对齐 Python CryptoUtility.get_crypto() 生态位）
+type CryptoImpl interface {
+	// Encrypt 加密明文（对齐 crypto.CryptoProvider.Encrypt）
+	Encrypt(ctx context.Context, plaintext string) (string, error)
+	// Decrypt 解密密文（对齐 crypto.CryptoProvider.Decrypt）
+	Decrypt(ctx context.Context, ciphertext string) (string, error)
+}
+
+// serveConfig ServeExtension 选项聚合
+type serveConfig struct {
+	// transportImpl transport 实现（nil 表示无 transport 能力）
+	transportImpl TransportImpl
+	// cryptoImpl crypto 实现（nil 表示无 crypto 能力）
+	cryptoImpl CryptoImpl
+}
+
+// ServeOption 插件服务启动选项（函数式选项，消除能力组合入口笛卡尔积）
+type ServeOption func(*serveConfig)
+
 // extensionServer gRPC 服务端：把 ExtensionImpl 适配到 proto 服务
 type extensionServer struct {
 	extproto.UnimplementedExtensionServer
@@ -77,6 +99,8 @@ type extensionServer struct {
 	impl ExtensionImpl
 	// transportImpl transport 实现（ProvidesTransport 时非 nil）
 	transportImpl TransportImpl
+	// cryptoImpl crypto 实现（ProvidesCrypto 时非 nil）
+	cryptoImpl CryptoImpl
 	// extensionDir 扩展目录（SetExtensionDir RPC 设置）
 	extensionDir string
 }
@@ -113,6 +137,9 @@ const (
 // ErrNoTransport 插件未实现 TransportImpl 却被调用 transport RPC
 var ErrNoTransport = errors.New("扩展未提供 transport 能力")
 
+// ErrNoCrypto 插件未实现 CryptoImpl 却被调用 crypto RPC
+var ErrNoCrypto = errors.New("扩展未提供 crypto 能力")
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ServeExtension 启动插件服务（插件 main.go 的唯一入口）。
@@ -120,19 +147,24 @@ var ErrNoTransport = errors.New("扩展未提供 transport 能力")
 // 用法：
 //
 //	func main() {
-//	    plugin.ServeExtension(&MyExtension{})
+//	    e := &MyExtension{}
+//	    plugin.ServeExtension(e,
+//	        plugin.WithTransportImpl(e), // 可选：transport 能力
+//	        plugin.WithCryptoImpl(e))   // 可选：crypto 能力
 //	}
 //
 // 注意：插件内禁止向 stdout 写任何内容（go-plugin 握手协议独占 stdout），
 // 日志请写文件或 stderr。
-func ServeExtension(impl ExtensionImpl) {
-	ServeExtensionWithTransport(impl, nil)
-}
-
-// ServeExtensionWithTransport 启动带 transport 能力的插件服务。
-// ProvidesTransport=true 的声明要求 impl 同时实现 TransportImpl。
-func ServeExtensionWithTransport(impl ExtensionImpl, transport TransportImpl) {
-	extensionGRPCServer := &extensionServer{impl: impl, transportImpl: transport}
+func ServeExtension(impl ExtensionImpl, opts ...ServeOption) {
+	cfg := &serveConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	extensionGRPCServer := &extensionServer{
+		impl:          impl,
+		transportImpl: cfg.transportImpl,
+		cryptoImpl:    cfg.cryptoImpl,
+	}
 
 	var pluginSet = plugin.PluginSet{
 		"extension": &ExtensionGRPCPlugin{impl: extensionGRPCServer},
@@ -149,6 +181,22 @@ func ServeExtensionWithTransport(impl ExtensionImpl, transport TransportImpl) {
 			return grpc.NewServer(opts...)
 		},
 	})
+}
+
+// WithTransportImpl 注入 transport 实现
+func WithTransportImpl(t TransportImpl) ServeOption {
+	return func(c *serveConfig) { c.transportImpl = t }
+}
+
+// WithCryptoImpl 注入 crypto 实现
+func WithCryptoImpl(c CryptoImpl) ServeOption {
+	return func(cfg *serveConfig) { cfg.cryptoImpl = c }
+}
+
+// ServeExtensionWithTransport 兼容入口：等价 ServeExtension(impl, WithTransportImpl(transport))。
+// ProvidesTransport=true 的声明要求 impl 同时实现 TransportImpl。
+func ServeExtensionWithTransport(impl ExtensionImpl, transport TransportImpl) {
+	ServeExtension(impl, WithTransportImpl(transport))
 }
 
 // Conn 返回底层 gRPC 连接
@@ -178,10 +226,15 @@ func (s *extensionServer) Register(ctx context.Context, _ *extproto.RegisterRequ
 		pb := &extproto.ExtensionDecl{
 			Metadata:          metadataToProto(d.Metadata),
 			ProvidesTransport: d.ProvidesTransport,
+			ProvidesCrypto:    d.ProvidesCrypto,
 		}
 		if s.transportImpl == nil && d.ProvidesTransport {
 			// 声明与实现不符：降级为非 transport（忽略该能力声明）
 			pb.ProvidesTransport = false
+		}
+		if s.cryptoImpl == nil && d.ProvidesCrypto {
+			// 声明与实现不符：降级为非 crypto（忽略该能力声明）
+			pb.ProvidesCrypto = false
 		}
 		for _, sub := range d.EventSubs {
 			pb.EventSubs = append(pb.EventSubs, &extproto.EventSubscription{
@@ -262,6 +315,30 @@ func (s *extensionServer) TransportClose(ctx context.Context, _ *extproto.Transp
 		return nil, ErrNoTransport
 	}
 	return &extproto.TransportCloseResponse{}, s.transportImpl.Close()
+}
+
+// Encrypt 处理加密 RPC
+func (s *extensionServer) Encrypt(ctx context.Context, req *extproto.EncryptRequest) (*extproto.EncryptResponse, error) {
+	if s.cryptoImpl == nil {
+		return nil, ErrNoCrypto
+	}
+	ciphertext, err := s.cryptoImpl.Encrypt(ctx, req.GetPlaintext())
+	if err != nil {
+		return nil, err
+	}
+	return &extproto.EncryptResponse{Ciphertext: ciphertext}, nil
+}
+
+// Decrypt 处理解密 RPC
+func (s *extensionServer) Decrypt(ctx context.Context, req *extproto.DecryptRequest) (*extproto.DecryptResponse, error) {
+	if s.cryptoImpl == nil {
+		return nil, ErrNoCrypto
+	}
+	plaintext, err := s.cryptoImpl.Decrypt(ctx, req.GetCiphertext())
+	if err != nil {
+		return nil, err
+	}
+	return &extproto.DecryptResponse{Plaintext: plaintext}, nil
 }
 
 // metadataToProto Metadata 转 proto
