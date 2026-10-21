@@ -702,7 +702,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.5.7 | ✅ | ExtensionLoader | go-plugin 子进程方案（D）：gRPC 协议（Register/SetExtensionDir/GetMetadata/Shutdown/HandleEvent + Transport 三件套）+ 发现/加载/声明注册编排 + 事件桥 + GRPCPluginTransport；依赖安装删除（Go 静态编译） | `jiuwenswarm/extensions/loader.py` |
 | 10.5.8 | ✅ | ExtensionManager | WithSearchPaths 注入解 config↔extensions 环 + LoadAll（单失败继续）/ShutdownAll/List 对齐 Python | `jiuwenswarm/extensions/manager.py` |
 | 10.5.9 | ⤴️ | CallbackCompat | Go 已有 CallbackFramework，无需额外实现 | `jiuwenswarm/extensions/callback_compat.py` |
-| 10.5.10 | ☐ ⤵️ | CryptoUtility | 延后，CryptoProvider 接口待定义 | `jiuwenswarm/extensions/sdk/crypto_utility.py` |
+| 10.5.10 | ✅ | CryptoUtility | 双路径：宿主内置 AesGcmProvider（密钥文件 ~/.uapclaw/crypto.key 自动生成，0600）+ 插件 provides_crypto 声明（proto 7→9 RPC：Encrypt/Decrypt；loader 注册 + 覆盖全局，最后加载者胜）；registry any→crypto.CryptoProvider 收紧；web/config 消费点接线（error 签名统一 + 失败跳过字段）；sdk stub 删除 | `jiuwenswarm/extensions/sdk/crypto_utility.py` · `jiuwenswarm/common/security/base_crypto.py` |
 | **10.6 Swarm 侧 Harness 集成** | — | | | |
 | 10.6.1-2 | ✅ | Prompt Builder | Agent/Code 模式提示词 | `jiuwenswarm/agents/harness/common/prompt/` · `code/prompt/` |
 | 10.6.3-10 | ✅ | Swarm Rails | AskUser✅/Avatar✅/Permissions✅/Interrupt✅/ProjectMemory✅/ResponsePrompt✅/RuntimePrompt✅/StreamEvent✅ | `jiuwenswarm/agents/harness/common/rails/` |
