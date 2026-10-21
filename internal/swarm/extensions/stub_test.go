@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/plugin"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
@@ -20,7 +21,16 @@ type memPluginClient struct {
 	shutdownCalls []string
 	handledEvents []string
 	transport     transport.AgentTransport
+	// cryptoProv 测试注入的 crypto 提供者（Crypto() 返回值）
+	cryptoProv crypto.CryptoProvider
 }
+
+// fakeCryptoProvider 测试用 crypto 提供者（extensions 包共享，loader/registry 测试均用）
+type fakeCryptoProvider struct{}
+
+func (f *fakeCryptoProvider) Encrypt(plaintext string) (string, error) { return "enc:" + plaintext, nil }
+
+func (f *fakeCryptoProvider) Decrypt(ciphertext string) (string, error) { return "dec:" + ciphertext, nil }
 
 func (m *memPluginClient) SetExtensionDir(ctx context.Context, path string) error {
 	m.setDirCalls = append(m.setDirCalls, path)

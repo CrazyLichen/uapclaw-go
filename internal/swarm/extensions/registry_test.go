@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
@@ -241,7 +242,9 @@ func (e *testAgentServerClientExt) SetExtensionDir(path string)         {}
 func (e *testAgentServerClientExt) GetClient() transport.AgentTransport { return e.client }
 
 // testCryptoUtilityExt 测试用的 CryptoUtilityExtension 实现
-type testCryptoUtilityExt struct{}
+type testCryptoUtilityExt struct {
+	crypto crypto.CryptoProvider
+}
 
 func (e *testCryptoUtilityExt) Initialize(ctx context.Context, config *ExtensionConfig) error {
 	return nil
@@ -249,4 +252,19 @@ func (e *testCryptoUtilityExt) Initialize(ctx context.Context, config *Extension
 func (e *testCryptoUtilityExt) Shutdown(ctx context.Context) error { return nil }
 func (e *testCryptoUtilityExt) Metadata() *ExtensionMetadata       { return nil }
 func (e *testCryptoUtilityExt) SetExtensionDir(path string)        {}
-func (e *testCryptoUtilityExt) GetCrypto() any                     { return nil }
+func (e *testCryptoUtilityExt) GetCrypto() crypto.CryptoProvider   { return e.crypto }
+
+// TestExtensionRegistry_RegisterCryptoUtility_带provider 注册后 GetCryptoProvider 返回 provider
+func TestExtensionRegistry_RegisterCryptoUtility_带provider(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	fake := &fakeCryptoProvider{}
+	reg.RegisterCryptoUtility(&testCryptoUtilityExt{crypto: fake})
+
+	if reg.GetCryptoProvider() != fake {
+		t.Error("GetCryptoProvider 应返回注册的 provider")
+	}
+}

@@ -3,9 +3,11 @@
 // 本包定义扩展注册中心（ExtensionRegistry）、数据类型（ExtensionMetadata/ExtensionConfig）、
 // 钩子事件常量与钩子上下文（含 ToMap/FromMap 双向转换）、扩展加载器与生命周期管理器
 // （ExtensionLoader/ExtensionManager，方案 D：hashicorp go-plugin 子进程），
+// crypto 扩展声明注册（provides_crypto → RegisterCryptoUtility + 全局覆盖）随 10.5.10 落地，
 // 以及事件桥写回辅助函数（TriggerMemoryBeforeChat/TriggerMemoryAfterChat）。
 // 回调机制复用 agentcore/runner/callback.CallbackFramework。
-// 延后部分：CryptoUtility（10.5.10 ⤵️）。CallbackCompat 不需要（10.5.9 ⤴️）。
+// 延后部分：无。CallbackCompat 不需要（10.5.9 ⤴️）。CryptoUtility 已完成（10.5.10 ✅：
+// 宿主密钥文件 + 插件 provides_crypto 双路径）。
 //
 // 文件目录：
 //

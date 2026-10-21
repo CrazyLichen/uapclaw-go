@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
@@ -29,13 +30,14 @@ type AgentServerClientExtension interface {
 
 // CryptoUtilityExtension CryptoUtility 扩展本地接口
 // Python: CryptoUtility（在 sdk 包定义），此处为打破循环依赖的等价接口
-// ⤵️ 10.5.10 延后：GetCrypto 返回类型待定为 CryptoProvider 接口
+// 10.5.10 ✅：GetCrypto 返回 crypto.CryptoProvider（common/crypto 权威接口，带 error 签名）
 type CryptoUtilityExtension interface {
 	Initialize(ctx context.Context, config *ExtensionConfig) error
 	Shutdown(ctx context.Context) error
 	Metadata() *ExtensionMetadata
 	SetExtensionDir(path string)
-	GetCrypto() any
+	// GetCrypto 返回实际执行加解密的提供者，对齐 Python get_crypto()
+	GetCrypto() crypto.CryptoProvider
 }
 
 // ExtensionRegistry 扩展注册中心单例，对齐 Python ExtensionRegistry
@@ -45,7 +47,7 @@ type ExtensionRegistry struct {
 	callbackFramework    *callback.CallbackFramework
 	config               *ExtensionConfig
 	agentServerClientExt AgentServerClientExtension
-	// cryptoUtil 加解密扩展，⤵️ 10.5.10 延后实现
+	// cryptoUtil 加解密扩展（10.5.10 ✅）
 	cryptoUtil CryptoUtilityExtension
 }
 
@@ -111,7 +113,6 @@ func (r *ExtensionRegistry) RegisterAgentServerClient(ext AgentServerClientExten
 }
 
 // RegisterCryptoUtility 注册 CryptoUtility 扩展，对齐 Python register_crypto_utility(ext)
-// ⤵️ 10.5.10 延后：当前 cryptoUtil 字段为 nil
 func (r *ExtensionRegistry) RegisterCryptoUtility(ext CryptoUtilityExtension) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -140,7 +141,6 @@ func (r *ExtensionRegistry) GetAgentServerClient() transport.AgentTransport {
 
 // GetCryptoUtilityExtension 获取 CryptoUtility 扩展实例，
 // Python: get_crypto_utility_extension()
-// ⤵️ 10.5.10 延后：当前始终返回 nil
 func (r *ExtensionRegistry) GetCryptoUtilityExtension() CryptoUtilityExtension {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -148,14 +148,13 @@ func (r *ExtensionRegistry) GetCryptoUtilityExtension() CryptoUtilityExtension {
 }
 
 // GetCryptoProvider 获取 CryptoProvider，对齐 Python get_crypto_provider()
-// ⤵️ 10.5.10 延后：当前始终返回 nil
-func (r *ExtensionRegistry) GetCryptoProvider() any {
+// 10.5.10 ✅：返回 crypto.CryptoProvider；未注册扩展时返回 nil
+func (r *ExtensionRegistry) GetCryptoProvider() crypto.CryptoProvider {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if r.cryptoUtil == nil {
 		return nil
 	}
-	// ⤵️ 10.5.10: 调 cryptoUtil.GetCrypto() 返回 CryptoProvider
 	return r.cryptoUtil.GetCrypto()
 }
 
