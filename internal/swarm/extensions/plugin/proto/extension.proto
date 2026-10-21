@@ -27,6 +27,10 @@ service Extension {
   rpc TransportRecv(TransportRecvRequest) returns (stream TransportRecvResponse);
   // TransportClose 关闭扩展侧 transport（对齐 AgentTransport.Close）
   rpc TransportClose(TransportCloseRequest) returns (TransportCloseResponse);
+  // Encrypt 加密明文（crypto 提供者能力，对齐 crypto.CryptoProvider.Encrypt）
+  rpc Encrypt(EncryptRequest) returns (EncryptResponse);
+  // Decrypt 解密密文（crypto 提供者能力，对齐 crypto.CryptoProvider.Decrypt）
+  rpc Decrypt(DecryptRequest) returns (DecryptResponse);
 }
 
 // ─── Register ───
@@ -41,6 +45,8 @@ message ExtensionDecl {
   repeated EventSubscription event_subs = 2;
   // ProvidesTransport 是否为 transport 提供者（AgentServerClient 能力）
   bool provides_transport = 3;
+  // ProvidesCrypto 是否为 crypto 提供者（加解密能力）
+  bool provides_crypto = 4;
 }
 
 // EventSubscription 事件订阅
@@ -130,3 +136,25 @@ message TransportRecvResponse {
 message TransportCloseRequest {}
 
 message TransportCloseResponse {}
+
+// ─── Crypto 代理 ───
+
+message EncryptRequest {
+  // Plaintext 明文
+  string plaintext = 1;
+}
+
+message EncryptResponse {
+  // Ciphertext 密文
+  string ciphertext = 1;
+}
+
+message DecryptRequest {
+  // Ciphertext 密文
+  string ciphertext = 1;
+}
+
+message DecryptResponse {
+  // Plaintext 明文
+  string plaintext = 1;
+}

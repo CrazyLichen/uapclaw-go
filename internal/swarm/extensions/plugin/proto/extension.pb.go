@@ -67,8 +67,10 @@ type ExtensionDecl struct {
 	EventSubs []*EventSubscription `protobuf:"bytes,2,rep,name=event_subs,json=eventSubs,proto3" json:"event_subs,omitempty"`
 	// ProvidesTransport 是否为 transport 提供者（AgentServerClient 能力）
 	ProvidesTransport bool `protobuf:"varint,3,opt,name=provides_transport,json=providesTransport,proto3" json:"provides_transport,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// ProvidesCrypto 是否为 crypto 提供者（加解密能力）
+	ProvidesCrypto bool `protobuf:"varint,4,opt,name=provides_crypto,json=providesCrypto,proto3" json:"provides_crypto,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ExtensionDecl) Reset() {
@@ -118,6 +120,13 @@ func (x *ExtensionDecl) GetEventSubs() []*EventSubscription {
 func (x *ExtensionDecl) GetProvidesTransport() bool {
 	if x != nil {
 		return x.ProvidesTransport
+	}
+	return false
+}
+
+func (x *ExtensionDecl) GetProvidesCrypto() bool {
+	if x != nil {
+		return x.ProvidesCrypto
 	}
 	return false
 }
@@ -893,17 +902,198 @@ func (*TransportCloseResponse) Descriptor() ([]byte, []int) {
 	return file_internal_swarm_extensions_plugin_proto_extension_proto_rawDescGZIP(), []int{18}
 }
 
+type EncryptRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Plaintext 明文
+	Plaintext     string `protobuf:"bytes,1,opt,name=plaintext,proto3" json:"plaintext,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EncryptRequest) Reset() {
+	*x = EncryptRequest{}
+	mi := &file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EncryptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EncryptRequest) ProtoMessage() {}
+
+func (x *EncryptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EncryptRequest.ProtoReflect.Descriptor instead.
+func (*EncryptRequest) Descriptor() ([]byte, []int) {
+	return file_internal_swarm_extensions_plugin_proto_extension_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *EncryptRequest) GetPlaintext() string {
+	if x != nil {
+		return x.Plaintext
+	}
+	return ""
+}
+
+type EncryptResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Ciphertext 密文
+	Ciphertext    string `protobuf:"bytes,1,opt,name=ciphertext,proto3" json:"ciphertext,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EncryptResponse) Reset() {
+	*x = EncryptResponse{}
+	mi := &file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EncryptResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EncryptResponse) ProtoMessage() {}
+
+func (x *EncryptResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EncryptResponse.ProtoReflect.Descriptor instead.
+func (*EncryptResponse) Descriptor() ([]byte, []int) {
+	return file_internal_swarm_extensions_plugin_proto_extension_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *EncryptResponse) GetCiphertext() string {
+	if x != nil {
+		return x.Ciphertext
+	}
+	return ""
+}
+
+type DecryptRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Ciphertext 密文
+	Ciphertext    string `protobuf:"bytes,1,opt,name=ciphertext,proto3" json:"ciphertext,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecryptRequest) Reset() {
+	*x = DecryptRequest{}
+	mi := &file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecryptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecryptRequest) ProtoMessage() {}
+
+func (x *DecryptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecryptRequest.ProtoReflect.Descriptor instead.
+func (*DecryptRequest) Descriptor() ([]byte, []int) {
+	return file_internal_swarm_extensions_plugin_proto_extension_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *DecryptRequest) GetCiphertext() string {
+	if x != nil {
+		return x.Ciphertext
+	}
+	return ""
+}
+
+type DecryptResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Plaintext 明文
+	Plaintext     string `protobuf:"bytes,1,opt,name=plaintext,proto3" json:"plaintext,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecryptResponse) Reset() {
+	*x = DecryptResponse{}
+	mi := &file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecryptResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecryptResponse) ProtoMessage() {}
+
+func (x *DecryptResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecryptResponse.ProtoReflect.Descriptor instead.
+func (*DecryptResponse) Descriptor() ([]byte, []int) {
+	return file_internal_swarm_extensions_plugin_proto_extension_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *DecryptResponse) GetPlaintext() string {
+	if x != nil {
+		return x.Plaintext
+	}
+	return ""
+}
+
 var File_internal_swarm_extensions_plugin_proto_extension_proto protoreflect.FileDescriptor
 
 const file_internal_swarm_extensions_plugin_proto_extension_proto_rawDesc = "" +
 	"\n" +
 	"6internal/swarm/extensions/plugin/proto/extension.proto\x12\fextension.v1\x1a\x1cgoogle/protobuf/struct.proto\"\x11\n" +
-	"\x0fRegisterRequest\"\xc0\x01\n" +
+	"\x0fRegisterRequest\"\xe9\x01\n" +
 	"\rExtensionDecl\x12@\n" +
 	"\bmetadata\x18\x01 \x01(\v2$.extension.v1.ExtensionMetadataProtoR\bmetadata\x12>\n" +
 	"\n" +
 	"event_subs\x18\x02 \x03(\v2\x1f.extension.v1.EventSubscriptionR\teventSubs\x12-\n" +
-	"\x12provides_transport\x18\x03 \x01(\bR\x11providesTransport\"E\n" +
+	"\x12provides_transport\x18\x03 \x01(\bR\x11providesTransport\x12'\n" +
+	"\x0fprovides_crypto\x18\x04 \x01(\bR\x0eprovidesCrypto\"E\n" +
 	"\x11EventSubscription\x12\x14\n" +
 	"\x05event\x18\x01 \x01(\tR\x05event\x12\x1a\n" +
 	"\bpriority\x18\x02 \x01(\x05R\bpriority\"E\n" +
@@ -941,7 +1131,19 @@ const file_internal_swarm_extensions_plugin_proto_extension_proto_rawDesc = "" +
 	"\x15TransportRecvResponse\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"\x17\n" +
 	"\x15TransportCloseRequest\"\x18\n" +
-	"\x16TransportCloseResponse2\xaa\x05\n" +
+	"\x16TransportCloseResponse\".\n" +
+	"\x0eEncryptRequest\x12\x1c\n" +
+	"\tplaintext\x18\x01 \x01(\tR\tplaintext\"1\n" +
+	"\x0fEncryptResponse\x12\x1e\n" +
+	"\n" +
+	"ciphertext\x18\x01 \x01(\tR\n" +
+	"ciphertext\"0\n" +
+	"\x0eDecryptRequest\x12\x1e\n" +
+	"\n" +
+	"ciphertext\x18\x01 \x01(\tR\n" +
+	"ciphertext\"/\n" +
+	"\x0fDecryptResponse\x12\x1c\n" +
+	"\tplaintext\x18\x01 \x01(\tR\tplaintext2\xba\x06\n" +
 	"\tExtension\x12I\n" +
 	"\bRegister\x12\x1d.extension.v1.RegisterRequest\x1a\x1e.extension.v1.RegisterResponse\x12L\n" +
 	"\x0fSetExtensionDir\x12\x1b.extension.v1.SetDirRequest\x1a\x1c.extension.v1.SetDirResponse\x12R\n" +
@@ -950,7 +1152,9 @@ const file_internal_swarm_extensions_plugin_proto_extension_proto_rawDesc = "" +
 	"\vHandleEvent\x12 .extension.v1.HandleEventRequest\x1a!.extension.v1.HandleEventResponse\x12X\n" +
 	"\rTransportSend\x12\".extension.v1.TransportSendRequest\x1a#.extension.v1.TransportSendResponse\x12Z\n" +
 	"\rTransportRecv\x12\".extension.v1.TransportRecvRequest\x1a#.extension.v1.TransportRecvResponse0\x01\x12[\n" +
-	"\x0eTransportClose\x12#.extension.v1.TransportCloseRequest\x1a$.extension.v1.TransportCloseResponseBOZMgithub.com/uapclaw/uapclaw-go/internal/swarm/extensions/plugin/proto;extprotob\x06proto3"
+	"\x0eTransportClose\x12#.extension.v1.TransportCloseRequest\x1a$.extension.v1.TransportCloseResponse\x12F\n" +
+	"\aEncrypt\x12\x1c.extension.v1.EncryptRequest\x1a\x1d.extension.v1.EncryptResponse\x12F\n" +
+	"\aDecrypt\x12\x1c.extension.v1.DecryptRequest\x1a\x1d.extension.v1.DecryptResponseBOZMgithub.com/uapclaw/uapclaw-go/internal/swarm/extensions/plugin/proto;extprotob\x06proto3"
 
 var (
 	file_internal_swarm_extensions_plugin_proto_extension_proto_rawDescOnce sync.Once
@@ -964,7 +1168,7 @@ func file_internal_swarm_extensions_plugin_proto_extension_proto_rawDescGZIP() [
 	return file_internal_swarm_extensions_plugin_proto_extension_proto_rawDescData
 }
 
-var file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_internal_swarm_extensions_plugin_proto_extension_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_internal_swarm_extensions_plugin_proto_extension_proto_goTypes = []any{
 	(*RegisterRequest)(nil),        // 0: extension.v1.RegisterRequest
 	(*ExtensionDecl)(nil),          // 1: extension.v1.ExtensionDecl
@@ -985,17 +1189,21 @@ var file_internal_swarm_extensions_plugin_proto_extension_proto_goTypes = []any{
 	(*TransportRecvResponse)(nil),  // 16: extension.v1.TransportRecvResponse
 	(*TransportCloseRequest)(nil),  // 17: extension.v1.TransportCloseRequest
 	(*TransportCloseResponse)(nil), // 18: extension.v1.TransportCloseResponse
-	nil,                            // 19: extension.v1.ExtensionMetadataProto.DependenciesEntry
-	(*structpb.Struct)(nil),        // 20: google.protobuf.Struct
+	(*EncryptRequest)(nil),         // 19: extension.v1.EncryptRequest
+	(*EncryptResponse)(nil),        // 20: extension.v1.EncryptResponse
+	(*DecryptRequest)(nil),         // 21: extension.v1.DecryptRequest
+	(*DecryptResponse)(nil),        // 22: extension.v1.DecryptResponse
+	nil,                            // 23: extension.v1.ExtensionMetadataProto.DependenciesEntry
+	(*structpb.Struct)(nil),        // 24: google.protobuf.Struct
 }
 var file_internal_swarm_extensions_plugin_proto_extension_proto_depIdxs = []int32{
 	8,  // 0: extension.v1.ExtensionDecl.metadata:type_name -> extension.v1.ExtensionMetadataProto
 	2,  // 1: extension.v1.ExtensionDecl.event_subs:type_name -> extension.v1.EventSubscription
 	1,  // 2: extension.v1.RegisterResponse.decls:type_name -> extension.v1.ExtensionDecl
 	8,  // 3: extension.v1.GetMetadataResponse.metadata:type_name -> extension.v1.ExtensionMetadataProto
-	19, // 4: extension.v1.ExtensionMetadataProto.dependencies:type_name -> extension.v1.ExtensionMetadataProto.DependenciesEntry
-	20, // 5: extension.v1.HandleEventRequest.context:type_name -> google.protobuf.Struct
-	20, // 6: extension.v1.HandleEventResponse.context:type_name -> google.protobuf.Struct
+	23, // 4: extension.v1.ExtensionMetadataProto.dependencies:type_name -> extension.v1.ExtensionMetadataProto.DependenciesEntry
+	24, // 5: extension.v1.HandleEventRequest.context:type_name -> google.protobuf.Struct
+	24, // 6: extension.v1.HandleEventResponse.context:type_name -> google.protobuf.Struct
 	0,  // 7: extension.v1.Extension.Register:input_type -> extension.v1.RegisterRequest
 	4,  // 8: extension.v1.Extension.SetExtensionDir:input_type -> extension.v1.SetDirRequest
 	6,  // 9: extension.v1.Extension.GetMetadata:input_type -> extension.v1.GetMetadataRequest
@@ -1004,16 +1212,20 @@ var file_internal_swarm_extensions_plugin_proto_extension_proto_depIdxs = []int3
 	13, // 12: extension.v1.Extension.TransportSend:input_type -> extension.v1.TransportSendRequest
 	15, // 13: extension.v1.Extension.TransportRecv:input_type -> extension.v1.TransportRecvRequest
 	17, // 14: extension.v1.Extension.TransportClose:input_type -> extension.v1.TransportCloseRequest
-	3,  // 15: extension.v1.Extension.Register:output_type -> extension.v1.RegisterResponse
-	5,  // 16: extension.v1.Extension.SetExtensionDir:output_type -> extension.v1.SetDirResponse
-	7,  // 17: extension.v1.Extension.GetMetadata:output_type -> extension.v1.GetMetadataResponse
-	10, // 18: extension.v1.Extension.Shutdown:output_type -> extension.v1.ShutdownResponse
-	12, // 19: extension.v1.Extension.HandleEvent:output_type -> extension.v1.HandleEventResponse
-	14, // 20: extension.v1.Extension.TransportSend:output_type -> extension.v1.TransportSendResponse
-	16, // 21: extension.v1.Extension.TransportRecv:output_type -> extension.v1.TransportRecvResponse
-	18, // 22: extension.v1.Extension.TransportClose:output_type -> extension.v1.TransportCloseResponse
-	15, // [15:23] is the sub-list for method output_type
-	7,  // [7:15] is the sub-list for method input_type
+	19, // 15: extension.v1.Extension.Encrypt:input_type -> extension.v1.EncryptRequest
+	21, // 16: extension.v1.Extension.Decrypt:input_type -> extension.v1.DecryptRequest
+	3,  // 17: extension.v1.Extension.Register:output_type -> extension.v1.RegisterResponse
+	5,  // 18: extension.v1.Extension.SetExtensionDir:output_type -> extension.v1.SetDirResponse
+	7,  // 19: extension.v1.Extension.GetMetadata:output_type -> extension.v1.GetMetadataResponse
+	10, // 20: extension.v1.Extension.Shutdown:output_type -> extension.v1.ShutdownResponse
+	12, // 21: extension.v1.Extension.HandleEvent:output_type -> extension.v1.HandleEventResponse
+	14, // 22: extension.v1.Extension.TransportSend:output_type -> extension.v1.TransportSendResponse
+	16, // 23: extension.v1.Extension.TransportRecv:output_type -> extension.v1.TransportRecvResponse
+	18, // 24: extension.v1.Extension.TransportClose:output_type -> extension.v1.TransportCloseResponse
+	20, // 25: extension.v1.Extension.Encrypt:output_type -> extension.v1.EncryptResponse
+	22, // 26: extension.v1.Extension.Decrypt:output_type -> extension.v1.DecryptResponse
+	17, // [17:27] is the sub-list for method output_type
+	7,  // [7:17] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1030,7 +1242,7 @@ func file_internal_swarm_extensions_plugin_proto_extension_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_swarm_extensions_plugin_proto_extension_proto_rawDesc), len(file_internal_swarm_extensions_plugin_proto_extension_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

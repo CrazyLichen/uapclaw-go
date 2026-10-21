@@ -27,6 +27,8 @@ const (
 	Extension_TransportSend_FullMethodName   = "/extension.v1.Extension/TransportSend"
 	Extension_TransportRecv_FullMethodName   = "/extension.v1.Extension/TransportRecv"
 	Extension_TransportClose_FullMethodName  = "/extension.v1.Extension/TransportClose"
+	Extension_Encrypt_FullMethodName         = "/extension.v1.Extension/Encrypt"
+	Extension_Decrypt_FullMethodName         = "/extension.v1.Extension/Decrypt"
 )
 
 // ExtensionClient is the client API for Extension service.
@@ -54,6 +56,10 @@ type ExtensionClient interface {
 	TransportRecv(ctx context.Context, in *TransportRecvRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TransportRecvResponse], error)
 	// TransportClose 关闭扩展侧 transport（对齐 AgentTransport.Close）
 	TransportClose(ctx context.Context, in *TransportCloseRequest, opts ...grpc.CallOption) (*TransportCloseResponse, error)
+	// Encrypt 加密明文（crypto 提供者能力，对齐 crypto.CryptoProvider.Encrypt）
+	Encrypt(ctx context.Context, in *EncryptRequest, opts ...grpc.CallOption) (*EncryptResponse, error)
+	// Decrypt 解密密文（crypto 提供者能力，对齐 crypto.CryptoProvider.Decrypt）
+	Decrypt(ctx context.Context, in *DecryptRequest, opts ...grpc.CallOption) (*DecryptResponse, error)
 }
 
 type extensionClient struct {
@@ -153,6 +159,26 @@ func (c *extensionClient) TransportClose(ctx context.Context, in *TransportClose
 	return out, nil
 }
 
+func (c *extensionClient) Encrypt(ctx context.Context, in *EncryptRequest, opts ...grpc.CallOption) (*EncryptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EncryptResponse)
+	err := c.cc.Invoke(ctx, Extension_Encrypt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *extensionClient) Decrypt(ctx context.Context, in *DecryptRequest, opts ...grpc.CallOption) (*DecryptResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DecryptResponse)
+	err := c.cc.Invoke(ctx, Extension_Decrypt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ExtensionServer is the server API for Extension service.
 // All implementations must embed UnimplementedExtensionServer
 // for forward compatibility.
@@ -178,6 +204,10 @@ type ExtensionServer interface {
 	TransportRecv(*TransportRecvRequest, grpc.ServerStreamingServer[TransportRecvResponse]) error
 	// TransportClose 关闭扩展侧 transport（对齐 AgentTransport.Close）
 	TransportClose(context.Context, *TransportCloseRequest) (*TransportCloseResponse, error)
+	// Encrypt 加密明文（crypto 提供者能力，对齐 crypto.CryptoProvider.Encrypt）
+	Encrypt(context.Context, *EncryptRequest) (*EncryptResponse, error)
+	// Decrypt 解密密文（crypto 提供者能力，对齐 crypto.CryptoProvider.Decrypt）
+	Decrypt(context.Context, *DecryptRequest) (*DecryptResponse, error)
 	mustEmbedUnimplementedExtensionServer()
 }
 
@@ -211,6 +241,12 @@ func (UnimplementedExtensionServer) TransportRecv(*TransportRecvRequest, grpc.Se
 }
 func (UnimplementedExtensionServer) TransportClose(context.Context, *TransportCloseRequest) (*TransportCloseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TransportClose not implemented")
+}
+func (UnimplementedExtensionServer) Encrypt(context.Context, *EncryptRequest) (*EncryptResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Encrypt not implemented")
+}
+func (UnimplementedExtensionServer) Decrypt(context.Context, *DecryptRequest) (*DecryptResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Decrypt not implemented")
 }
 func (UnimplementedExtensionServer) mustEmbedUnimplementedExtensionServer() {}
 func (UnimplementedExtensionServer) testEmbeddedByValue()                   {}
@@ -370,6 +406,42 @@ func _Extension_TransportClose_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Extension_Encrypt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EncryptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExtensionServer).Encrypt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Extension_Encrypt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExtensionServer).Encrypt(ctx, req.(*EncryptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Extension_Decrypt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DecryptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExtensionServer).Decrypt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Extension_Decrypt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExtensionServer).Decrypt(ctx, req.(*DecryptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Extension_ServiceDesc is the grpc.ServiceDesc for Extension service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -404,6 +476,14 @@ var Extension_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TransportClose",
 			Handler:    _Extension_TransportClose_Handler,
+		},
+		{
+			MethodName: "Encrypt",
+			Handler:    _Extension_Encrypt_Handler,
+		},
+		{
+			MethodName: "Decrypt",
+			Handler:    _Extension_Decrypt_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
