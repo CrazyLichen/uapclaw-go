@@ -95,7 +95,7 @@ func (pc *PluginClient) Register(ctx context.Context) ([]Declaration, error) {
 	}
 	decls := make([]Declaration, 0, len(resp.GetDecls()))
 	for _, pb := range resp.GetDecls() {
-		d := Declaration{ProvidesTransport: pb.GetProvidesTransport()}
+		d := Declaration{ProvidesTransport: pb.GetProvidesTransport(), ProvidesCrypto: pb.GetProvidesCrypto()}
 		if md := pb.GetMetadata(); md != nil {
 			d.Metadata = Metadata{
 				ID:             md.GetId(),
@@ -161,6 +161,24 @@ func (pc *PluginClient) HandleEvent(ctx context.Context, event string, data map[
 		return nil, nil
 	}
 	return resp.GetContext().AsMap(), nil
+}
+
+// Encrypt 加密 RPC（crypto 提供者能力，10.5.10）
+func (pc *PluginClient) Encrypt(ctx context.Context, plaintext string) (string, error) {
+	resp, err := pc.protoClient.Encrypt(ctx, &extproto.EncryptRequest{Plaintext: plaintext})
+	if err != nil {
+		return "", err
+	}
+	return resp.GetCiphertext(), nil
+}
+
+// Decrypt 解密 RPC（crypto 提供者能力，10.5.10）
+func (pc *PluginClient) Decrypt(ctx context.Context, ciphertext string) (string, error) {
+	resp, err := pc.protoClient.Decrypt(ctx, &extproto.DecryptRequest{Ciphertext: ciphertext})
+	if err != nil {
+		return "", err
+	}
+	return resp.GetPlaintext(), nil
 }
 
 // RawProtoClient 暴露原始 gRPC 客户端（GRPCPluginTransport 使用）

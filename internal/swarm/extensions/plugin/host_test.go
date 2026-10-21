@@ -325,3 +325,78 @@ func TestPluginClient_Kill空客户端(t *testing.T) {
 	pc := &PluginClient{}
 	pc.Kill() // 不应 panic
 }
+
+// TestPluginClient_CryptoRoundtrip 测试 Encrypt/Decrypt RPC 往返（进程内 gRPC）
+func TestPluginClient_CryptoRoundtrip(t *testing.T) {
+	addr, stop := startTestProtoServer(t, &extensionServer{impl: &fakeExtension{}, cryptoImpl: &fakeCryptoImpl{}})
+	defer stop()
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("连接失败: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	pc := NewPluginClientFromConn(conn)
+	enc, err := pc.Encrypt(context.Background(), "secret")
+	if err != nil {
+		t.Fatalf("Encrypt 失败: %v", err)
+	}
+	if enc != "enc:secret" {
+		t.Errorf("Encrypt = %q, 期望 enc:secret", enc)
+	}
+	dec, err := pc.Decrypt(context.Background(), "enc:secret")
+	if err != nil {
+		t.Fatalf("Decrypt 失败: %v", err)
+	}
+	if dec != "secret" {
+		t.Errorf("Decrypt = %q, 期望 secret", dec)
+	}
+}
+
+// TestPluginClient_Crypto_未实现 测试 cryptoImpl 缺失时 RPC 报错
+func TestPluginClient_Crypto_未实现(t *testing.T) {
+	addr, stop := startTestExtensionServer(t, &fakeExtension{}, nil)
+	defer stop()
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("连接失败: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	pc := NewPluginClientFromConn(conn)
+	if _, err := pc.Encrypt(context.Background(), "x"); err == nil {
+		t.Error("cryptoImpl 缺失时 Encrypt 应报错")
+	}
+	if _, err := pc.Decrypt(context.Background(), "x"); err == nil {
+		t.Error("cryptoImpl 缺失时 Decrypt 应报错")
+	}
+}
+
+// TestPluginClient_Register_含Crypto声明 测试 ProvidesCrypto 声明往返保留
+func TestPluginClient_Register_含Crypto声明(t *testing.T) {
+	addr, stop := startTestProtoServer(t, &extensionServer{
+		impl: &fakeExtension{decls: []Declaration{{
+			Metadata:       Metadata{ID: "ext-crypto", Name: "crypto扩展", Version: "0.1.0"},
+			ProvidesCrypto: true,
+		}}},
+		cryptoImpl: &fakeCryptoImpl{},
+	})
+	defer stop()
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("连接失败: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	pc := NewPluginClientFromConn(conn)
+	decls, err := pc.Register(context.Background())
+	if err != nil {
+		t.Fatalf("Register 失败: %v", err)
+	}
+	if len(decls) != 1 || !decls[0].ProvidesCrypto {
+		t.Errorf("ProvidesCrypto 声明应往返保留: %+v", decls)
+	}
+}
