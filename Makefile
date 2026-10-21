@@ -1,4 +1,4 @@
-.PHONY: build clean test test-integration test-llm test-e2e test-all lint
+.PHONY: build clean test test-integration test-llm test-e2e test-all lint proto-gen
 
 # 项目名称
 BINARY_NAME=uapclaw
@@ -90,3 +90,9 @@ serve:
 # 完整模式
 app:
 	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/ && $(BUILD_DIR)/$(BINARY_NAME) app
+
+# 重新生成扩展插件 gRPC 协议代码（需要 protoc + protoc-gen-go + protoc-gen-go-grpc）
+proto-gen:
+	protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		internal/swarm/extensions/plugin/proto/extension.proto

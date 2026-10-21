@@ -1,0 +1,132 @@
+syntax = "proto3";
+
+package extension.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/uapclaw/uapclaw-go/internal/swarm/extensions/plugin/proto;extproto";
+
+// Extension 扩展插件服务，宿主（uapclaw 主进程）通过 gRPC 调用子进程扩展。
+// 协议设计对齐 Python jiuwenswarm/extensions/loader.py 的加载语义：
+// Register ≈ register_extensions(registry)，SetExtensionDir ≈ set_extension_dir，
+// Shutdown ≈ shutdown。无 Initialize RPC（Python host 从不调用 initialize）。
+service Extension {
+  // Register 注册声明：返回扩展元数据 + 事件订阅 + 能力声明
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  // SetExtensionDir 设置扩展目录（对齐 Python set_extension_dir）
+  rpc SetExtensionDir(SetDirRequest) returns (SetDirResponse);
+  // GetMetadata 元数据查询（对齐 BaseExtension.metadata property）
+  rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse);
+  // Shutdown 关闭扩展（对齐 BaseExtension.shutdown）
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+  // HandleEvent 事件桥：宿主 Trigger → 插件修改 context → 返回完整 map → 宿主写回
+  rpc HandleEvent(HandleEventRequest) returns (HandleEventResponse);
+  // TransportSend 发送 JSON 字节到扩展侧 transport（对齐 AgentTransport.Send）
+  rpc TransportSend(TransportSendRequest) returns (TransportSendResponse);
+  // TransportRecv 服务端流式接收扩展侧 transport 数据（对齐 AgentTransport.Recv）
+  rpc TransportRecv(TransportRecvRequest) returns (stream TransportRecvResponse);
+  // TransportClose 关闭扩展侧 transport（对齐 AgentTransport.Close）
+  rpc TransportClose(TransportCloseRequest) returns (TransportCloseResponse);
+}
+
+// ─── Register ───
+
+message RegisterRequest {}
+
+// ExtensionDecl 单个扩展声明（对齐 register_extensions 返回的单实例）
+message ExtensionDecl {
+  // Metadata 扩展元数据
+  ExtensionMetadataProto metadata = 1;
+  // EventSubs 事件订阅列表
+  repeated EventSubscription event_subs = 2;
+  // ProvidesTransport 是否为 transport 提供者（AgentServerClient 能力）
+  bool provides_transport = 3;
+}
+
+// EventSubscription 事件订阅
+message EventSubscription {
+  // Event 事件名（Go 常量字符串，如 "gateway:before_chat_request"）
+  string event = 1;
+  // Priority 优先级（对齐 Python register(event, handler, priority=100)）
+  int32 priority = 2;
+}
+
+message RegisterResponse {
+  // Decls 声明列表（对齐 register_extensions 返回单实例或列表的统一形态）
+  repeated ExtensionDecl decls = 1;
+}
+
+// ─── SetExtensionDir ───
+
+message SetDirRequest {
+  // Path 扩展根目录绝对路径
+  string path = 1;
+}
+
+message SetDirResponse {}
+
+// ─── GetMetadata ───
+
+message GetMetadataRequest {}
+
+message GetMetadataResponse {
+  // Metadata 扩展元数据
+  ExtensionMetadataProto metadata = 1;
+}
+
+// ─── Metadata 结构 ───
+
+// ExtensionMetadataProto 扩展元数据（对齐 Python ExtensionMetadata dataclass）
+message ExtensionMetadataProto {
+  string id = 1;
+  string name = 2;
+  string version = 3;
+  string description = 4;
+  string author = 5;
+  // MinHostVersion 最小宿主兼容版本（对齐 min_jiuwenswarm_version）
+  string min_host_version = 6;
+  // Dependencies 依赖声明 {包名: 版本约束}
+  map<string, string> dependencies = 7;
+  // ConfigSchema 配置模式（JSON Schema，可选）
+  string config_schema_json = 8;
+}
+
+// ─── Shutdown ───
+
+message ShutdownRequest {}
+
+message ShutdownResponse {}
+
+// ─── HandleEvent ───
+
+message HandleEventRequest {
+  // Event 事件名
+  string event = 1;
+  // Context 钩子上下文（完整 map 往返）
+  google.protobuf.Struct context = 2;
+}
+
+message HandleEventResponse {
+  // Context 插件修改后的完整上下文（宿主原地写回）
+  google.protobuf.Struct context = 1;
+}
+
+// ─── Transport 代理 ───
+
+message TransportSendRequest {
+  // Data JSON 字节
+  bytes data = 1;
+}
+
+message TransportSendResponse {}
+
+message TransportRecvRequest {}
+
+message TransportRecvResponse {
+  // Data JSON 字节帧
+  bytes data = 1;
+}
+
+message TransportCloseRequest {}
+
+message TransportCloseResponse {}
