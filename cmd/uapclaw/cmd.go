@@ -20,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn/factory"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
@@ -178,7 +179,8 @@ Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 //  2. workspace.Prepare → workspace 自动初始化
 //  3. logger.Setup      → 日志初始化（尽早，后续步骤的日志可写文件）
 //  4. dotenv.Load       → 加载主 .env（~/.uapclaw/config/.env）
-//  5. config.New+Load   → 完整配置加载
+//  4.5 宿主密钥初始化    → crypto.key 加载/生成 + SetCryptoProvider（10.5.10）
+//  5. config.New+Load   → 完整配置加载（WithDecrypt 解密 api_key/token）
 //  6. ResetFlags        → 重置免费搜索运行时标志
 func runAppCmd(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
@@ -232,8 +234,29 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	// 4.5 宿主加密密钥初始化（10.5.10 双路径之宿主内置，须在 config.Load 之前）
+	//     密钥文件不存在时自动生成（~/.uapclaw/crypto.key，0600，受 UAPCLAW_DATA_DIR 重定向）；
+	//     失败仅 Warn 不阻断（等价 Python 无扩展时的明文路径，设计偏差表 #4）。
+	cryptoKeyPath := filepath.Join(workspace.WorkspaceDir(), "crypto.key")
+	if key, keyErr := crypto.LoadOrCreateKeyFile(cryptoKeyPath); keyErr != nil {
+		logger.Warn(logComponentGateway).
+			Str("key_path", cryptoKeyPath).
+			Err(keyErr).
+			Msg("宿主加密密钥初始化失败，api_key 加解密路径降级为明文")
+	} else if provider, provErr := crypto.NewAesGcmProvider(key); provErr != nil {
+		logger.Warn(logComponentGateway).
+			Str("key_path", cryptoKeyPath).
+			Err(provErr).
+			Msg("AesGcmProvider 构造失败，api_key 加解密路径降级为明文")
+	} else {
+		crypto.SetCryptoProvider(provider)
+	}
+
 	// 5. 完整配置加载（等价 Python: get_config()）
-	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
+	//    WithDecrypt：api_key/token 环境变量解密钩子（10.5.10，全局 provider 就绪后生效）
+	cfg, err := config.New("",
+		config.WithNormalize(config.NormalizeConfig),
+		config.WithDecrypt(crypto.NewDecryptFunc()))
 	if err != nil {
 		logger.Error(logComponentGateway).Err(err).Msg("failed to create config")
 		return fmt.Errorf("创建配置失败: %w", err)
