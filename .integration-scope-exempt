@@ -1,0 +1,12 @@
+# 集成测试跨子系统豁免目录列表
+# 格式：每行一个 tests/integration 下的相对目录路径
+# 用于确属集成测试性质但仅跨 1 个 internal 二级子系统的目录（如真跨进程测试），
+# 或历史上从单元测试迁移而来、待补充跨子系统断言的过渡目录。
+# 登记时必须注明理由；纯单元测试性质的文件不得登记（应迁回 internal 包的单测）。
+
+# 真跨进程集成测试：spawn 子进程 JSON over stdin/stdout，进程边界即集成边界
+tests/integration/external/spawn
+
+# 过渡豁免：纯函数包测试，对齐 Python test_custom_headers_system.py 迁移而来，
+# 目前无跨子系统断言，后续应补充与 model_clients 的组合断言或迁回单元测试
+tests/integration/agentcore/foundation/llm/headers_helper
