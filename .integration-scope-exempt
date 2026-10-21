@@ -1,12 +1,78 @@
 # 集成测试跨子系统豁免目录列表
 # 格式：每行一个 tests/integration 下的相对目录路径
-# 用于确属集成测试性质但仅跨 1 个 internal 二级子系统的目录（如真跨进程测试），
-# 或历史上从单元测试迁移而来、待补充跨子系统断言的过渡目录。
+# 用于确属集成测试性质但调用跨度/覆盖行数不足新门禁（cmd/integration-audit 两层判定）的目录。
 # 登记时必须注明理由；纯单元测试性质的文件不得登记（应迁回 internal 包的单测）。
+#
+# 豁免分类：
+#   A. 真跨边界（进程/网络/文件系统）：集成边界在 internal 子系统之外，跨度门禁不适用
+#   B. 需真实外部服务：服务不可得时全目录 Skip，覆盖验证无法运行
+#   C. 单模块深度测试：被测子系统单一但测试深度真实（覆盖行数显著），单元测试性质偏强、
+#      保留在 integration 下作为过渡，后续应补跨子系统链路或迁回 internal 单测
 
-# 真跨进程集成测试：spawn 子进程 JSON over stdin/stdout，进程边界即集成边界
+# ── A. 真跨边界 ──────────────────────────────────────────────
+
+# 真跨进程：spawn 子进程 JSON over stdin/stdout，进程边界即集成边界
 tests/integration/external/spawn
 
-# 过渡豁免：纯函数包测试，对齐 Python test_custom_headers_system.py 迁移而来，
+# 真跨进程：CLI 二进制构建 + exec.Command 子进程执行，进程边界即集成边界；
+# import 的 runner/session 仅用于编译期包引用验证
+tests/integration/cmd
+
+# ── B. 需真实外部服务 ────────────────────────────────────────
+
+# 需要真实 ChromaDB 服务/原生库：无服务时全部 Skip，覆盖验证无意义；
+# 有服务时跨 store/vector + runner 双子系统
+tests/integration/external/chromadb
+
+# 需要真实 GaussDB 连接（GAUSS_DB_CONN_STRING）：无连接串时全部 Skip；
+# 有服务时跨 store/vector + runner 双子系统
+tests/integration/external/gaussdb
+
+# 需要真实 OpenAPI/MCP 服务：无服务时全部 Skip；本目录当前无真实测试体，
+# 保留以待补充真实服务测试（勿再新增纯 Skip 空壳）
+tests/integration/external/mcp
+
+# ── C. 单模块深度测试（过渡豁免）────────────────────────────
+
+# SkillManager：原测试依赖内部非导出方法（gitClone/gitPull/saveState 等），
+# 需 export_test.go 桥接或重构为导出 API 后补真实测试；当前仅包引用验证
+tests/integration/swarm/server
+
+# mock LLM 基础设施：mock_client + ClientRegistry 注册链路自测，
+# 供其他集成测试注入使用；链路仅涉 foundation/llm 单子系统
+tests/integration/mockllm
+
+# 纯函数包测试：对齐 Python test_custom_headers_system.py 迁移而来，
 # 目前无跨子系统断言，后续应补充与 model_clients 的组合断言或迁回单元测试
 tests/integration/agentcore/foundation/llm/headers_helper
+
+# DeepSearch E2E：TaskManager/EventQueue/TaskScheduler 深度链路，
+# 但覆盖集中于 agentcore/controller 单子系统（约 300 行）；后续应补
+# session 交互持久化链路断言
+tests/integration/agentcore/controller
+
+# 任务循环核心：LoopCoordinator/LoopQueues 深度测试，
+# 覆盖集中于 agentcore/harness/task_loop（约 130 行）
+tests/integration/agentcore/harness/task_loop
+
+# 安全 Rails 聚合目录：覆盖集中于 agentcore/harness/security（约 540 行）
+tests/integration/agentcore/harness/security
+
+# Dreaming 记忆整理：覆盖集中于 agentcore/memory/dreaming（约 50 行）
+tests/integration/agentcore/memory/dreaming
+
+# 技能生命周期：覆盖集中于 single_agent/skills + foundation（2 子系统）
+tests/integration/agentcore/single_agent/skills
+
+# Workflow 组件测试：覆盖集中于 agentcore/runner 单子系统（约 90 行）
+tests/integration/agentcore/workflow
+
+# Rails 工具聚合测试：覆盖 2 子系统（runner 187 行 + foundation 48 行）
+tests/integration/agentcore/harness/rails/tools
+
+# Swarm 记忆提示词：从真实配置文件读取 + 中文输出验证，
+# 覆盖集中于 swarm/agents 单子系统（约 68 行）
+tests/integration/swarm/memory
+
+# Swarm Dreaming 扫描器：覆盖 2 子系统（swarm/agents 248 行 + agentcore/memory 47 行）
+tests/integration/swarm/agents/harness/common/memory/dreaming

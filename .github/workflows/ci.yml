@@ -289,105 +289,30 @@ jobs:
           go-version: "1.26"
           cache: true
 
-      - name: 验证集成测试合规性
+      - name: 验证集成测试合规性（AST 调用分析 + 断言密度）
         run: |
-          HAS_ERROR=false
-          echo "检查集成测试合规性..."
-          echo ""
-
-          # 读取跨子系统豁免目录列表（格式：每行一个 tests/integration 下的相对目录，# 开头为注释）
-          SCOPE_EXEMPT_DIRS=""
-          if [ -f .integration-scope-exempt ]; then
-            SCOPE_EXEMPT_DIRS=$(grep -v '^#' .integration-scope-exempt | grep -v '^$' || true)
-          fi
-
-          is_scope_exempt() {
-            local dir="$1"
-            if [ -n "$SCOPE_EXEMPT_DIRS" ]; then
-              for exempt_dir in $SCOPE_EXEMPT_DIRS; do
-                if [ "$dir" = "$exempt_dir" ]; then
-                  return 0
-                fi
-              done
-            fi
-            return 1
-          }
-
-          for file in $(find tests/integration -name '*_test.go' | sort); do
-            echo "::group::检查 ${file}"
-            VIOLATIONS=""
-
-            # 规则 1: 必须有 //go:build integration
-            if ! head -1 "$file" | grep -q '//go:build integration'; then
-              VIOLATIONS="${VIOLATIONS}  缺少 //go:build integration 标签\n"
-            fi
-
-            # 规则 2: 必须使用 suite 框架
-            if ! grep -q 'suite.Run(' "$file"; then
-              VIOLATIONS="${VIOLATIONS}  未使用 suite 框架（缺少 suite.Run(）\n"
-            fi
-
-            # 规则 3: 必须至少 import 2 个 internal/ 包（完整路径去重）
-            internal_count=$(grep '"github.com/uapclaw/uapclaw-go/internal/' "$file" | \
-              sed 's|.*"\(github.com/uapclaw/uapclaw-go/internal/[^"]*\)".*|\1|' | \
-              sort -u | wc -l)
-            if [ "$internal_count" -lt 2 ]; then
-              VIOLATIONS="${VIOLATIONS}  仅 import ${internal_count} 个 internal/ 包（要求至少 2 个）\n"
-            fi
-
-            if [ -n "$VIOLATIONS" ]; then
-              echo -e "$VIOLATIONS"
-              echo "::error file=${file}::集成测试合规性检查失败"
-              HAS_ERROR=true
-            else
-              echo "  合规"
-            fi
-
-            echo "::endgroup::"
-          done
-
-          echo ""
-          echo "检查单包测试冒充集成测试（按二级子系统跨度判定）..."
-          echo ""
-
-          # 按测试文件所在目录聚合 import 的 internal 二级子系统（如 agentcore/runner、swarm/server），
-          # 跨度 ≥2 判定为真集成测试；单子系统的属于单元测试性质，必须显式豁免。
-          # 豁免方式：在 .integration-scope-exempt 中登记目录并注明理由（如真跨进程测试）。
-          HAS_SCOPE_ERROR=false
-          for dir in $(find tests/integration -name '*_test.go' -exec dirname {} \; | sort -u); do
-            rel_dir=${dir#./}
-
-            if is_scope_exempt "$rel_dir"; then
-              echo "  ${rel_dir}: 豁免（见 .integration-scope-exempt）"
-              continue
-            fi
-
-            # 统计该目录下所有 .go 文件 import 的 internal 二级子系统（忽略 common/* 纯公共层）
-            subsystems=$(grep -rh '"github.com/uapclaw/uapclaw-go/internal/' "$dir"/*.go 2>/dev/null | \
-              sed 's|.*"\(github.com/uapclaw/uapclaw-go/internal/[^"]*\)".*|\1|' | \
-              sort -u | \
-              sed 's|github.com/uapclaw/uapclaw-go/internal/||' | \
-              awk -F/ '{print $1"/"$2}' | grep -v '^common/' | sort -u)
-            subsystem_count=$(echo "$subsystems" | grep -c . || true)
-
-            if [ "$subsystem_count" -lt 2 ]; then
-              echo "::error file=${rel_dir}::仅跨 ${subsystem_count} 个子系统（$(echo $subsystems | tr '\n' ' ')），疑似单元测试冒充集成测试。若确属集成性质（如真跨进程），请在 .integration-scope-exempt 中登记并注明理由"
-              HAS_SCOPE_ERROR=true
-            else
-              echo "  ${rel_dir}: 跨 ${subsystem_count} 个子系统，合规"
-            fi
-          done
-
-          if [ "$HAS_SCOPE_ERROR" = true ]; then
-            HAS_ERROR=true
-          fi
-
-          echo ""
-          if [ "$HAS_ERROR" = true ]; then
-            echo "::error::存在不合规的集成测试文件，请修复后重试"
+          echo "运行 integration-audit 静态审计..."
+          # 第一层：AST CallExpr 调用跨度 + 有效测试密度（击杀符号引用凑数与空壳目录）
+          # -verify 交给后续"覆盖交叉验证"步骤统一执行（复用已构建的测试二进制缓存）
+          # -defer-span：调用跨度 <3 的目录不在此判罚，标记 PendingCoverage，
+          # 由后续"覆盖交叉验证"步骤逐目录 go test 以真实覆盖裁决
+          go run ./cmd/integration-audit \
+            -min-call-span 3 \
+            -min-assertions 2 \
+            -min-effective-tests 1 \
+            -defer-span \
+            -json > integration-audit-report.json
+          AUDIT_EXIT=$?
+          # 静态层不通过（含空壳目录、缺 build tag 等硬违规）直接失败
+          if [ "$AUDIT_EXIT" -ne 0 ]; then
+            cat integration-audit-report.json
+            echo "::error::集成测试静态审计未通过（详见上方 JSON 报告），处置指引："
+            echo "  1. 符号引用凑数（调用跨度不足）→ 补真实跨子系统调用断言，或迁回 internal 包单元测试"
+            echo "  2. 空壳目录（有效测试不足）→ 补充真实测试或删除"
+            echo "  3. 确属集成性质但跨度不足 → 在 .integration-scope-exempt 登记并注明理由"
             exit 1
           fi
-          echo "所有集成测试文件合规"
+          echo "静态审计通过（调用跨度或已登记豁免的目录合规）"
 
       - name: 运行集成测试（带覆盖率）
         env:
@@ -403,6 +328,19 @@ jobs:
             -coverprofile=integration_coverage.out \
             -coverpkg="${COVER_PKGS}" \
             ./tests/integration/...
+
+      - name: 覆盖交叉验证（灰区目录 → 子系统真实覆盖门禁）
+        env:
+          CGO_ENABLED: 1
+        run: |
+          # 第二层：对静态审计标记的灰区目录（PendingCoverage）逐目录运行 go test，
+          # 按 internal 二级子系统聚合覆盖行数，要求 ≥3 个子系统各 ≥30 行。
+          # 共享 suite 基类 SetupTest 带来的基线污染 ≤24 行，低于 30 行门槛。
+          # -verify 隐含 -defer-span：内部重跑静态审计（快速）标记灰区目录后逐目录验证。
+          go run ./cmd/integration-audit \
+            -min-call-span 3 \
+            -verify \
+            -verify-workdir /tmp/verify-profiles
 
       - name: 检查集成测试总覆盖率（≥ 15.0%）
         run: |
