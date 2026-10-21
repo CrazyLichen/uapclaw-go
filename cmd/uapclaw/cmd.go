@@ -179,7 +179,7 @@ Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 //  2. workspace.Prepare → workspace 自动初始化
 //  3. logger.Setup      → 日志初始化（尽早，后续步骤的日志可写文件）
 //  4. dotenv.Load       → 加载主 .env（~/.uapclaw/config/.env）
-//  4.5 宿主密钥初始化    → crypto.key 加载/生成 + SetCryptoProvider（10.5.10）
+//     4.5 宿主密钥初始化    → crypto.key 加载/生成 + SetCryptoProvider（10.5.10）
 //  5. config.New+Load   → 完整配置加载（WithDecrypt 解密 api_key/token）
 //  6. ResetFlags        → 重置免费搜索运行时标志
 func runAppCmd(cmd *cobra.Command, _ []string) error {

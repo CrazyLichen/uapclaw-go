@@ -314,7 +314,7 @@ func TestExtensionServer_Register_Crypto降级(t *testing.T) {
 // TestExtensionServer_Register_Crypto声明保留 cryptoImpl 就绪时声明保留
 func TestExtensionServer_Register_Crypto声明保留(t *testing.T) {
 	srv := &extensionServer{
-		impl:      &fakeExtension{decls: []Declaration{{Metadata: Metadata{ID: "ext-c"}, ProvidesCrypto: true}}},
+		impl:       &fakeExtension{decls: []Declaration{{Metadata: Metadata{ID: "ext-c"}, ProvidesCrypto: true}}},
 		cryptoImpl: &fakeCryptoImpl{},
 	}
 	resp, err := srv.Register(context.Background(), &extproto.RegisterRequest{})

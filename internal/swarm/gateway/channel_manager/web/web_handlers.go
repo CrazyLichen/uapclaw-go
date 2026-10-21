@@ -916,23 +916,23 @@ func handleModelsList(cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
 				if v, ok := mcc["api_base"].(string); ok {
 					flat["api_base"] = v
 				}
-			if v, ok := mcc["api_key"].(string); ok {
-				// Python: crypto.decrypt(v)（app_web_handlers.py L857-866 语义）
-				// 解密失败保留原值 + Warn
-				if p != nil && v != "" {
-					if dec, decErr := p.Decrypt(v); decErr == nil {
-						flat["api_key"] = dec
+				if v, ok := mcc["api_key"].(string); ok {
+					// Python: crypto.decrypt(v)（app_web_handlers.py L857-866 语义）
+					// 解密失败保留原值 + Warn
+					if p != nil && v != "" {
+						if dec, decErr := p.Decrypt(v); decErr == nil {
+							flat["api_key"] = dec
+						} else {
+							logger.Warn(logComponent).
+								Int("origin_index", idx).
+								Err(decErr).
+								Msg("models.list decrypt failed, keep raw value")
+							flat["api_key"] = v
+						}
 					} else {
-						logger.Warn(logComponent).
-							Int("origin_index", idx).
-							Err(decErr).
-							Msg("models.list decrypt failed, keep raw value")
 						flat["api_key"] = v
 					}
-				} else {
-					flat["api_key"] = v
 				}
-			}
 				if v, ok := mcc["client_provider"].(string); ok {
 					flat["model_provider"] = v
 				}

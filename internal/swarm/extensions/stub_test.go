@@ -28,9 +28,13 @@ type memPluginClient struct {
 // fakeCryptoProvider 测试用 crypto 提供者（extensions 包共享，loader/registry 测试均用）
 type fakeCryptoProvider struct{}
 
-func (f *fakeCryptoProvider) Encrypt(plaintext string) (string, error) { return "enc:" + plaintext, nil }
+func (f *fakeCryptoProvider) Encrypt(plaintext string) (string, error) {
+	return "enc:" + plaintext, nil
+}
 
-func (f *fakeCryptoProvider) Decrypt(ciphertext string) (string, error) { return "dec:" + ciphertext, nil }
+func (f *fakeCryptoProvider) Decrypt(ciphertext string) (string, error) {
+	return "dec:" + ciphertext, nil
+}
 
 func (m *memPluginClient) SetExtensionDir(ctx context.Context, path string) error {
 	m.setDirCalls = append(m.setDirCalls, path)

@@ -851,24 +851,24 @@ func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]
 							resolvedVal = rv
 						}
 					}
-				if !valuesMatch(parsedVal, resolvedVal) {
-					// 前端值与解析值不同，覆写
-					if k == "api_key" {
-						// api_key 特殊处理：加密后写入（失败保留明文 + Warn）
-						if apiKeyStr, ok := parsedVal.(string); ok && apiKeyStr != "" && cryptoProv != nil {
-							if enc, encErr := cryptoProv.Encrypt(apiKeyStr); encErr == nil {
-								mergedMCC[k] = enc
+					if !valuesMatch(parsedVal, resolvedVal) {
+						// 前端值与解析值不同，覆写
+						if k == "api_key" {
+							// api_key 特殊处理：加密后写入（失败保留明文 + Warn）
+							if apiKeyStr, ok := parsedVal.(string); ok && apiKeyStr != "" && cryptoProv != nil {
+								if enc, encErr := cryptoProv.Encrypt(apiKeyStr); encErr == nil {
+									mergedMCC[k] = enc
+								} else {
+									logger.Warn(logComponentConfigApply).Err(encErr).Msg("api_key 加密失败，保留明文")
+									mergedMCC[k] = parsedVal
+								}
 							} else {
-								logger.Warn(logComponentConfigApply).Err(encErr).Msg("api_key 加密失败，保留明文")
 								mergedMCC[k] = parsedVal
 							}
 						} else {
 							mergedMCC[k] = parsedVal
 						}
-					} else {
-						mergedMCC[k] = parsedVal
 					}
-				}
 					// 前端值与解析值相同，保留原始值（含占位符等）
 				}
 			}

@@ -23,9 +23,13 @@ type fakeCryptoHandler struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (f *fakeCryptoHandler) Encrypt(plaintext string) (string, error) { return "enc(" + plaintext + ")", nil }
+func (f *fakeCryptoHandler) Encrypt(plaintext string) (string, error) {
+	return "enc(" + plaintext + ")", nil
+}
 
-func (f *fakeCryptoHandler) Decrypt(ciphertext string) (string, error) { return "dec(" + ciphertext + ")", nil }
+func (f *fakeCryptoHandler) Decrypt(ciphertext string) (string, error) {
+	return "dec(" + ciphertext + ")", nil
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -859,7 +863,9 @@ func TestBuildSessionDeleteEnvelope(t *testing.T) {
 // fakeCryptoFailDecrypt Decrypt 恒失败的 fake（测试解密失败保留原值语义）
 type fakeCryptoFailDecrypt struct{}
 
-func (f *fakeCryptoFailDecrypt) Encrypt(plaintext string) (string, error) { return "enc(" + plaintext + ")", nil }
+func (f *fakeCryptoFailDecrypt) Encrypt(plaintext string) (string, error) {
+	return "enc(" + plaintext + ")", nil
+}
 
 func (f *fakeCryptoFailDecrypt) Decrypt(ciphertext string) (string, error) {
 	return "", errors.New("decrypt boom")

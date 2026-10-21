@@ -23,7 +23,9 @@ type fakeCrypto struct{}
 
 func (f *fakeCrypto) Encrypt(plaintext string) (string, error) { return "enc(" + plaintext + ")", nil }
 
-func (f *fakeCrypto) Decrypt(ciphertext string) (string, error) { return "dec(" + ciphertext + ")", nil }
+func (f *fakeCrypto) Decrypt(ciphertext string) (string, error) {
+	return "dec(" + ciphertext + ")", nil
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
