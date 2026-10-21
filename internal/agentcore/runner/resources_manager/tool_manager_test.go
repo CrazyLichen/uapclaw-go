@@ -716,3 +716,85 @@ func TestToolMgr_GetMcpTools_不存在(t *testing.T) {
 		t.Fatalf("期望 0 个工具，实际 %d", len(tools))
 	}
 }
+
+// TestToolMgr_SetClientFactory_工厂注入生效 测试注入客户端工厂后走完整 AddToolServer 路径
+func TestToolMgr_SetClientFactory_工厂注入生效(t *testing.T) {
+	mgr := NewToolMgr()
+	mockClient := &mockMcpClient{
+		tools: []*types.McpToolCard{
+			mcp.NewMcpToolCard("search", "搜索工具", "test_server", nil, mcp.WithMcpToolCardServerID("srv1")),
+		},
+	}
+
+	factoryCalls := 0
+	mgr.SetClientFactory(func(config *types.McpServerConfig) (types.McpClient, error) {
+		factoryCalls++
+		// 校验工厂收到完整配置
+		if config.ServerName != "test_server" || config.ClientType != "sse" {
+			t.Fatalf("工厂收到意外配置: name=%s type=%s", config.ServerName, config.ClientType)
+		}
+		return mockClient, nil
+	})
+
+	serverConfig := mcp.NewMcpServerConfig("test_server", "http://localhost:8080/sse", "sse", mcp.WithServerID("srv1"))
+	cards, err := mgr.AddToolServer(context.Background(), serverConfig, nil)
+	if err != nil {
+		t.Fatalf("AddToolServer 失败: %v", err)
+	}
+	if factoryCalls != 1 {
+		t.Fatalf("期望工厂被调用 1 次，实际 %d 次", factoryCalls)
+	}
+	if len(cards) != 1 {
+		t.Fatalf("期望 1 个工具卡片，实际 %d", len(cards))
+	}
+	if !mockClient.connected {
+		t.Fatal("期望 mock 客户端已连接（AddToolServer 应调用 Connect）")
+	}
+
+	// 验证完整路径：工具注册 + server 资源 + 名称映射
+	expectedID := mgr.GenerateMcpToolID("srv1", "test_server", "search")
+	if !mgr.tools.Contains(expectedID) {
+		t.Fatalf("工具 %s 未注册", expectedID)
+	}
+	if gotIDs := mgr.GetMcpServerIDs("test_server"); len(gotIDs) != 1 || gotIDs[0] != "srv1" {
+		t.Fatalf("期望名称映射 [srv1]，实际 %v", gotIDs)
+	}
+}
+
+// TestToolMgr_SetClientFactory_未注入走默认路径 测试未注入工厂时使用默认 mcp.NewMcpClient
+func TestToolMgr_SetClientFactory_未注入走默认路径(t *testing.T) {
+	mgr := NewToolMgr()
+
+	// 不注入工厂，使用未知 clientType 触发默认工厂的错误分支，
+	// 证明默认走 mcp.NewMcpClient 而非 nil panic
+	serverConfig := mcp.NewMcpServerConfig("bad_server", "http://localhost:8080/sse", "unknown-type", mcp.WithServerID("srvX"))
+	_, err := mgr.AddToolServer(context.Background(), serverConfig, nil)
+	if err == nil {
+		t.Fatal("未知 clientType 期望报错（证明走了默认 mcp.NewMcpClient 路径）")
+	}
+}
+
+// TestToolMgr_SetClientFactory_工厂返回错误 测试工厂返回错误时 AddToolServer 传播错误
+func TestToolMgr_SetClientFactory_工厂返回错误(t *testing.T) {
+	mgr := NewToolMgr()
+	mgr.SetClientFactory(func(_ *types.McpServerConfig) (types.McpClient, error) {
+		return nil, exception.BuildError(
+			exception.StatusResourceMCPServerAddError,
+			exception.WithParam("reason", "工厂模拟失败"),
+		)
+	})
+
+	serverConfig := mcp.NewMcpServerConfig("test_server", "http://localhost:8080/sse", "sse", mcp.WithServerID("srv1"))
+	_, err := mgr.AddToolServer(context.Background(), serverConfig, nil)
+	if err == nil {
+		t.Fatal("工厂返回错误时期望 AddToolServer 报错")
+	}
+
+	// 验证失败后未留下任何残留状态
+	if gotIDs := mgr.GetMcpServerIDs("test_server"); len(gotIDs) != 0 {
+		t.Fatalf("期望无名称映射残留，实际 %v", gotIDs)
+	}
+	if gotIDs := mgr.GetMcpToolIDs("srv1"); len(gotIDs) != 0 {
+		t.Fatalf("期望无工具 ID 残留，实际 %v", gotIDs)
+	}
+}

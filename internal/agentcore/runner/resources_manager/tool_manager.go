@@ -58,9 +58,18 @@ type ToolMgr struct {
 	sysOpResources map[string]*SysOpToolResource
 	// mcpServerLocks server ID 粒度锁，序列化同一 server_id 的并发 add_tool_server 调用
 	mcpServerLocks map[string]*sync.Mutex
-	// mu 全局读写锁，保护 mcpServerNameToIDs / mcpServerResources / sysOpResources / mcpServerLocks
+	// mu 全局读写锁，保护 mcpServerNameToIDs / mcpServerResources / sysOpResources / mcpServerLocks / clientFactory
 	mu sync.RWMutex
+	// clientFactory MCP 客户端工厂，nil 表示使用默认的 mcp.NewMcpClient（测试可注入 mock 工厂）
+	clientFactory McpClientFactory
 }
+
+// McpClientFactory 创建 MCP 客户端的工厂函数，返回 (McpClient, error)。
+// 生产环境默认使用 mcp.NewMcpClient；测试环境可注入 mock 工厂跳过真实网络连接，
+// 语义对齐 Python 系统测试中对 mcp.client.SseClient 等客户端类的 unittest.mock.patch 类级替换。
+//
+// 先例：swarm/server/runtime.AgentManager.SetAgentFactory 的 AgentFactory 注入模式。
+type McpClientFactory func(config *mcptypes.McpServerConfig) (mcptypes.McpClient, error)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -84,6 +93,17 @@ func NewToolMgr() *ToolMgr {
 		sysOpResources:     make(map[string]*SysOpToolResource),
 		mcpServerLocks:     make(map[string]*sync.Mutex),
 	}
+}
+
+// SetClientFactory 设置 MCP 客户端工厂函数（供测试注入 mock，生产环境不需要调用）。
+//
+// Python 对应做法：tests/system_tests/runner/test_runner.py 中
+// unittest.mock.patch("openjiuwen.core.foundation.tool.mcp.client.SseClient") 类级替换；
+// Go 无类级 patch 机制，改用工厂注入实现等价语义。
+func (m *ToolMgr) SetClientFactory(factory McpClientFactory) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.clientFactory = factory
 }
 
 // AddTool 注册工具，重复添加返回错误。
@@ -576,10 +596,16 @@ func (m *ToolMgr) Release(ctx context.Context) error {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// createClient 调用 mcp.NewMcpClient 创建 MCP 客户端。
+// createClient 调用客户端工厂创建 MCP 客户端；未注入工厂时使用默认的 mcp.NewMcpClient。
 //
 // Python: ToolMgr._create_client(config)
 func (m *ToolMgr) createClient(config *mcptypes.McpServerConfig) (mcptypes.McpClient, error) {
+	m.mu.RLock()
+	factory := m.clientFactory
+	m.mu.RUnlock()
+	if factory != nil {
+		return factory(config)
+	}
 	return mcp.NewMcpClient(config)
 }
 
