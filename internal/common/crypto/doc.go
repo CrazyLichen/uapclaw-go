@@ -12,13 +12,17 @@
 //
 //	hex(nonce_12字节) + hex(tag_16字节) + hex(ciphertext)
 //
+// 注意：本包禁止导入 common/logger（logger→config→crypto 环），
+// 日志用 stdlib log 以 [crypto] 前缀区分。
+//
 // 文件目录：
 //
 //	crypto/
 //	├── doc.go           # 包文档
 //	├── aes_gcm.go       # AES-256-GCM 加解密实现
 //	├── registry.go      # 加密算法注册表（并发安全）
-//	└── crypto.go        # CryptoProvider 接口 + 全局管理 + AesGcmProvider
+//	├── crypto.go        # CryptoProvider 接口 + 全局管理 + AesGcmProvider
+//	└── keyfile.go       # 宿主密钥文件加载/生成（10.5.10 双路径之宿主内置）
 //
 // 对应 Python 代码：
 //   - openjiuwen/core/common/security/crypt_utils.py  (BaseCrypt, AesGcmCrypt, CryptUtils)
