@@ -240,7 +240,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	// ─── 本地实现方法 ───
 	d.Register("config.get", handleConfigGet(cryptoProv))
 	d.Register("config.set", handleConfigSet(sendEvent, onConfigSaved, cryptoProv))
-	d.Register("models.list", handleModelsList(cryptoProv))
+	d.Register("models.list", handleModelsList())
 	d.Register("channel.get", handleChannelGet(channelMgr))
 	d.Register("session.list", handleSessionList)
 	d.Register("session.create", handleSessionCreate)
@@ -874,42 +874,28 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc,
 
 // handleModelsList 处理 models.list 请求。
 //
-// 从 config.yaml 读取 models.defaults 配置，展平为前端格式。
-// Python: _models_list_handler (app_web_handlers.py)。
-// crypto 用于解密 api_key 字段。
-func handleModelsList(cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
+// Python: _models_list (app_web_handlers.py L1023-1055)。
+// 数据流对齐 Python：get_config() → get_default_models(config) → _decrypt_model_entries
+// ——解密发生在 config 层（GetDefaultModels 内部经 decryptModelEntries 查全局 provider），
+// handler 层零解密（对齐 Python handler 不持 crypto）。api_key 解密失败由
+// decryptModelEntries 保留原值（对齐 Python except: pass）。
+func handleModelsList() RPCHandlerFunc {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-		p := resolveCrypto(cryptoProv)
-		cfg, err := loadAppConfig()
-		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("models.list loadconfig failed")
-			return map[string]any{"models": []any{}}, nil
-		}
-
-		// 读取嵌套格式的 models.defaults
-		rawModels := getConfigAny(cfg, "models.defaults", nil)
-		if rawModels == nil {
-			return map[string]any{"models": []any{}}, nil
-		}
-		modelsList, ok := rawModels.([]any)
-		if !ok || len(modelsList) == 0 {
-			return map[string]any{"models": []any{}}, nil
+		// 对齐 Python: config = get_config(); models = get_default_models(config)
+		models := config.GetDefaultModels(nil)
+		if len(models) == 0 {
+			return map[string]any{"models": []any{}, "active_model": ""}, nil
 		}
 
 		// 展平为前端格式：从嵌套的 model_client_config/model_config_obj 提取字段
-		result := make([]map[string]any, 0, len(modelsList))
-		for idx, item := range modelsList {
-			itemMap, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-
+		result := make([]map[string]any, 0, len(models))
+		for idx, entry := range models {
 			flat := map[string]any{
 				"origin_index": idx,
 			}
 
 			// 从 model_client_config 提取
-			if mcc, ok := itemMap["model_client_config"].(map[string]any); ok {
+			if mcc, ok := entry["model_client_config"].(map[string]any); ok {
 				if v, ok := mcc["model_name"].(string); ok {
 					flat["model_name"] = v
 				}
@@ -917,21 +903,8 @@ func handleModelsList(cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
 					flat["api_base"] = v
 				}
 				if v, ok := mcc["api_key"].(string); ok {
-					// Python: crypto.decrypt(v)（app_web_handlers.py L857-866 语义）
-					// 解密失败保留原值 + Warn
-					if p != nil && v != "" {
-						if dec, decErr := p.Decrypt(v); decErr == nil {
-							flat["api_key"] = dec
-						} else {
-							logger.Warn(logComponent).
-								Int("origin_index", idx).
-								Err(decErr).
-								Msg("models.list decrypt failed, keep raw value")
-							flat["api_key"] = v
-						}
-					} else {
-						flat["api_key"] = v
-					}
+					// 已由 decryptModelEntries 解密（全局 provider），此处直接取值
+					flat["api_key"] = v
 				}
 				if v, ok := mcc["client_provider"].(string); ok {
 					flat["model_provider"] = v
@@ -939,7 +912,7 @@ func handleModelsList(cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
 			}
 
 			// 从 model_config_obj 提取
-			if mco, ok := itemMap["model_config_obj"].(map[string]any); ok {
+			if mco, ok := entry["model_config_obj"].(map[string]any); ok {
 				// Python: mco.get("temperature", 0.95)
 				temperature := 0.95
 				if v, ok := mco["temperature"]; ok && v != nil {
@@ -951,10 +924,10 @@ func handleModelsList(cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
 			}
 
 			// 顶层字段
-			if v, ok := itemMap["is_default"]; ok {
+			if v, ok := entry["is_default"]; ok {
 				flat["is_default"] = v
 			}
-			if v, ok := itemMap["alias"].(string); ok {
+			if v, ok := entry["alias"].(string); ok {
 				flat["alias"] = v
 			}
 

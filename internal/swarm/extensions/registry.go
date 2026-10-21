@@ -113,10 +113,20 @@ func (r *ExtensionRegistry) RegisterAgentServerClient(ext AgentServerClientExten
 }
 
 // RegisterCryptoUtility 注册 CryptoUtility 扩展，对齐 Python register_crypto_utility(ext)
+//
+// Go 架构差异（双写全局）：Python 的 set_crypto_provider 全仓零调用（死代码），
+// registry 是唯一权威源；Go 因 config/web 不能 import extensions（会环），
+// 消费方经 common/crypto 全局承接，故注册时同步双写全局，保证两源一致。
+// ext.GetCrypto() 返回 nil 时不覆盖全局（等价 Python 无 crypto 能力路径）。
 func (r *ExtensionRegistry) RegisterCryptoUtility(ext CryptoUtilityExtension) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.cryptoUtil = ext
+	r.mu.Unlock()
+
+	// 双写全局（锁外调用，避免持锁回调死锁）
+	if p := ext.GetCrypto(); p != nil {
+		crypto.SetCryptoProvider(p)
+	}
 }
 
 // GetAgentServerClientExtension 获取 AgentServerClient 扩展实例，

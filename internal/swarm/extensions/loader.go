@@ -240,8 +240,9 @@ func (l *ExtensionLoader) loadAndRegister(ctx context.Context, root string, pc P
 		}
 		if decl.ProvidesCrypto {
 			ext := &pluginCryptoExtension{client: pc, metadata: decl.Metadata}
+			// RegisterCryptoUtility 内部双写全局（registry 与 common/crypto 两源一致）；
+			// 此处显式覆盖再强调"最后加载者胜"编排语义（对齐 Python loader 顺序覆盖）
 			l.registry.RegisterCryptoUtility(ext)
-			// 插件覆盖宿主默认全局（最后加载者胜，对齐 Python loader 顺序覆盖语义）
 			if p := ext.GetCrypto(); p != nil {
 				crypto.SetCryptoProvider(p)
 				logger.Info(logComponent).

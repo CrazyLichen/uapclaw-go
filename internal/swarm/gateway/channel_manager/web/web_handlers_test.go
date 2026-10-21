@@ -385,14 +385,19 @@ func TestHandleConfigSaveAll_models无效类型(t *testing.T) {
 }
 
 func TestHandleModelsList_无配置(t *testing.T) {
-	handler := handleModelsList(nil)
+	handler := handleModelsList()
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "models")
 }
 
 func TestHandleModelsList_有crypto(t *testing.T) {
-	handler := handleModelsList(&fakeCryptoHandler{})
+	// handler 已不收 crypto（config 层解密），保留用例验证全局 provider 路径不炸
+	original := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(original)
+	crypto.SetCryptoProvider(&fakeCryptoHandler{})
+
+	handler := handleModelsList()
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	assert.Contains(t, result, "models")
@@ -912,4 +917,65 @@ func TestHandleConfigGet_全局provider(t *testing.T) {
 	if result["api_key"] != "dec(cipher)" {
 		t.Errorf("api_key = %v, 期望全局 provider 解密 dec(cipher)", result["api_key"])
 	}
+}
+
+// TestHandleModelsList_走config层解密 对齐 Python _models_list：
+// 解密发生在 GetDefaultModels→decryptModelEntries（config 层，全局 provider），
+// handler 层零解密（对齐 Python handler 不持 crypto）。
+func TestHandleModelsList_走config层解密(t *testing.T) {
+	// 重定向 workspace 到临时目录并写入含密文的 config.yaml
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	workspace.SetUserHome(workspace.UserHomeDir())
+
+	// 构造真实密文（AES-GCM）
+	original := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(original)
+	provider, err := crypto.NewAesGcmProvider([]byte("0123456789abcdef0123456789abcdef"))
+	require.NoError(t, err)
+	ciphertext, err := provider.Encrypt("sk-plain")
+	require.NoError(t, err)
+	crypto.SetCryptoProvider(provider)
+
+	cfgDir := workspace.ConfigDir()
+	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	yamlContent := "models:\n  defaults:\n    - model_client_config:\n        model_name: m1\n        api_key: " + ciphertext + "\n      model_config_obj:\n        temperature: 0.7\n"
+	require.NoError(t, os.WriteFile(workspace.ConfigFile(), []byte(yamlContent), 0o644))
+
+	handler := handleModelsList()
+	result, err := handler(context.Background(), nil, "")
+	require.NoError(t, err)
+
+	models, ok := result["models"].([]map[string]any)
+	require.True(t, ok, "models 应为 []map[string]any")
+	require.Len(t, models, 1)
+	require.Equal(t, "sk-plain", models[0]["api_key"], "api_key 应由 config 层（全局 provider）解密")
+	require.Equal(t, "m1", models[0]["model_name"])
+}
+
+// TestHandleModelsList_无provider保持密文 全局 provider 为 nil 时 api_key 保持密文原值
+// （对齐 Python crypto=None 时 _decrypt_model_entries 跳过解密）。
+func TestHandleModelsList_无provider保持密文(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	workspace.SetUserHome(workspace.UserHomeDir())
+
+	original := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(original)
+	crypto.SetCryptoProvider(nil)
+
+	cfgDir := workspace.ConfigDir()
+	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	yamlContent := "models:\n  defaults:\n    - model_client_config:\n        model_name: m1\n        api_key: rawcipher\n"
+	require.NoError(t, os.WriteFile(workspace.ConfigFile(), []byte(yamlContent), 0o644))
+
+	handler := handleModelsList()
+	result, err := handler(context.Background(), nil, "")
+	require.NoError(t, err)
+
+	models := result["models"].([]map[string]any)
+	require.Len(t, models, 1)
+	require.Equal(t, "rawcipher", models[0]["api_key"], "无全局 provider 时保持密文")
 }

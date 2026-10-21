@@ -268,3 +268,33 @@ func TestExtensionRegistry_RegisterCryptoUtility_带provider(t *testing.T) {
 		t.Error("GetCryptoProvider 应返回注册的 provider")
 	}
 }
+
+// TestExtensionRegistry_RegisterCryptoUtility_同步全局 注册即双写：
+// RegisterCryptoUtility 后 common/crypto 全局与 registry 返回一致（消灭双源分叉）。
+// Go 架构说明：Python 的 set_crypto_provider 全仓零调用（死代码），registry 是唯一权威；
+// Go 因 config/web 不能 import extensions（会环）用 common/crypto 全局承接消费方，
+// 故注册点双写保证两源一致。
+func TestExtensionRegistry_RegisterCryptoUtility_同步全局(t *testing.T) {
+	original := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(original)
+	crypto.SetCryptoProvider(nil)
+
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	if crypto.GetCryptoProvider() != nil {
+		t.Fatal("前置失败：全局应为 nil")
+	}
+
+	fake := &fakeCryptoProvider{}
+	reg.RegisterCryptoUtility(&testCryptoUtilityExt{crypto: fake})
+
+	if crypto.GetCryptoProvider() != fake {
+		t.Error("RegisterCryptoUtility 应同步双写全局（GetCryptoProvider() = registry 注册的 provider）")
+	}
+	if reg.GetCryptoProvider() != fake {
+		t.Error("registry 源也应返回注册的 provider")
+	}
+}
