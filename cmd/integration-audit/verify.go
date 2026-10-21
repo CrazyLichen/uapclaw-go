@@ -207,7 +207,10 @@ func parseProfileSubsystemLines(profilePath string) (map[string]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		// 只读文件，Close 失败不影响解析结果，显式忽略
+		_ = f.Close()
+	}()
 
 	result := make(map[string]int)
 	scanner := bufio.NewScanner(f)
