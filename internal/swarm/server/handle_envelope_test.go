@@ -3,11 +3,14 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
@@ -343,5 +346,94 @@ func TestInjectACPCapabilities(t *testing.T) {
 	}
 	if tools, ok := capsMap["tools"]; !ok || tools != true {
 		t.Error("client_capabilities.tools 应为 true")
+	}
+}
+
+// TestHandleEnvelope_BeforeChatHookParams回写 测试扩展修改 params 写回 request.Params
+// （对齐 Python agent_ws_server.py _trigger_before_chat_request_hook：params 非 dict 归一化 + ctx 触发）
+func TestHandleEnvelope_BeforeChatHookParams回写(t *testing.T) {
+	// 注册扩展回调：验证钩子被触发且拿到 params map
+	extensions.ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := extensions.CreateInstance(fw, map[string]any{}, nil)
+	defer extensions.ResetInstance()
+
+	gotParams := make(chan map[string]any, 1)
+	reg.Register(extensions.AgentServerBeforeChatRequest, func(ctx context.Context, data map[string]any) any {
+		if p, ok := data["params"].(map[string]any); ok {
+			p["injected"] = true
+			gotParams <- p
+		}
+		return nil
+	}, 100)
+
+	s, transport := newTestServer()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	env := e2a.NewE2AEnvelope()
+	env.RequestID = "test-req-hook"
+	env.Channel = "web"
+	env.Method = "chat.send"
+	env.IsStream = false
+	env.Params = map[string]any{"query": "原始"}
+	env.EnsureTimestamp()
+
+	recvCh, err := transport.Recv()
+	if err != nil {
+		t.Fatalf("获取接收通道失败: %v", err)
+	}
+
+	go s.handleEnvelope(ctx, env)
+
+	// 钩子应被触发（chat.send 命中门控）
+	select {
+	case p := <-gotParams:
+		if p["injected"] != true || p["query"] != "原始" {
+			t.Errorf("钩子收到的 params 不符: %v", p)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("超时：before_chat_request 钩子未被触发")
+	}
+
+	// 响应正常返回（后续 handleUnary 正常分发）
+	select {
+	case <-recvCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("超时：未收到响应")
+	}
+}
+
+// TestHandleEnvelope_BeforeChatHook_非聊天方法不触发 验证门控（session.list 不触发钩子）
+func TestHandleEnvelope_BeforeChatHook_非聊天方法不触发(t *testing.T) {
+	extensions.ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := extensions.CreateInstance(fw, map[string]any{}, nil)
+	defer extensions.ResetInstance()
+
+	var triggered atomic.Bool
+	reg.Register(extensions.AgentServerBeforeChatRequest, func(ctx context.Context, data map[string]any) any {
+		triggered.Store(true)
+		return nil
+	}, 100)
+
+	s, transport := newTestServer()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	env := makeTestEnvelope("session.list", false)
+	recvCh, err := transport.Recv()
+	if err != nil {
+		t.Fatalf("获取接收通道失败: %v", err)
+	}
+	go s.handleEnvelope(ctx, env)
+	select {
+	case <-recvCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("超时：未收到响应")
+	}
+	// session.list 不在 CHAT_SEND/RESUME/ANSWER 门控内，钩子不应被触发
+	if triggered.Load() {
+		t.Error("session.list 不应触发 before_chat_request 钩子")
 	}
 }

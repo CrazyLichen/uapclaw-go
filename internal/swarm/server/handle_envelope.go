@@ -62,22 +62,34 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 	}
 
 	// 3. before_chat_request 钩子（对齐 Python: agent_ws_server.py _trigger_before_chat_request_hook()）
-	// 当 req_method 为 CHAT_SEND/CHAT_RESUME/CHAT_ANSWER 时触发
-	extReg, extErr := extensions.GetInstanceErr()
-	if extErr == nil && extReg != nil {
-		reqMethodStr := string(request.ReqMethod)
-		var params map[string]any
-		if len(request.Params) > 0 {
-			_ = json.Unmarshal(request.Params, &params) // 延迟解析 params
+	// 当 req_method 为 CHAT_SEND/CHAT_RESUME/CHAT_ANSWER 时触发；
+	// 扩展可修改 params，FromMap 写回后重新序列化进 request.Params
+	if request.ReqMethod == schema.ReqMethodChatSend ||
+		request.ReqMethod == schema.ReqMethodChatResume ||
+		request.ReqMethod == schema.ReqMethodChatAnswer {
+		extReg, extErr := extensions.GetInstanceErr()
+		if extErr == nil && extReg != nil {
+			reqMethodStr := string(request.ReqMethod)
+			var params map[string]any
+			if len(request.Params) > 0 {
+				_ = json.Unmarshal(request.Params, &params) // 延迟解析 params
+			}
+			hookCtx := &extensions.AgentServerChatHookContext{
+				RequestID: request.RequestID,
+				ChannelID: request.ChannelID,
+				SessionID: request.SessionID,
+				ReqMethod: &reqMethodStr,
+				Params:    params,
+			}
+			data := hookCtx.ToMap()
+			extReg.Trigger(ctx, extensions.AgentServerBeforeChatRequest, data)
+			hookCtx.FromMap(data)
+			if hookCtx.Params != nil {
+				if raw, err := json.Marshal(hookCtx.Params); err == nil {
+					request.Params = raw
+				}
+			}
 		}
-		hookCtx := &extensions.AgentServerChatHookContext{
-			RequestID: request.RequestID,
-			ChannelID: request.ChannelID,
-			SessionID: request.SessionID,
-			ReqMethod: &reqMethodStr,
-			Params:    params,
-		}
-		extReg.Trigger(ctx, extensions.AgentServerBeforeChatRequest, hookCtx.ToMap())
 	}
 
 	// 4. 按 request.ReqMethod switch 分发

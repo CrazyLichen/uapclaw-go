@@ -188,28 +188,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 
 	// 云端记忆对话前钩子（对齐 Python: interface.py:834-845 MEMORY_BEFORE_CHAT trigger）
 	if memoryMode == "cloud" {
-		extReg, extErr := extensions.GetInstanceErr()
-		if extErr == nil && extReg != nil {
-			channelID := request.ChannelID
-			sid := ""
-			if request.SessionID != nil {
-				sid = *request.SessionID
-			}
-			memCtx := &extensions.MemoryHookContext{
-				SessionID:    sid,
-				RequestID:    request.RequestID,
-				ChannelID:    &channelID,
-				AgentName:    "main_agent",
-				WorkspaceDir: filepath.Join(workspace.AgentRootDir(), "home"),
-				Extra:        parseRequestParams(request),
-			}
-			extReg.Trigger(ctx, extensions.AgentServerMemoryBeforeChat, memCtx.ToMap())
-			// 从 memCtx.MemoryBlocks 拼接记忆注入 inputs
-			memoryBlock := strings.Join(memCtx.MemoryBlocks, "\n\n")
-			if memoryBlock != "" {
-				inputs["memory_block"] = memoryBlock
-			}
-		}
+		extensions.TriggerMemoryBeforeChat(ctx, request, inputs, filepath.Join(workspace.AgentRootDir(), "home"), parseRequestParams(request))
 	}
 
 	// 提交到 session 队列并等待结果
@@ -247,25 +226,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 
 	// 云端记忆对话后钩子（对齐 Python: interface.py:866-877 MEMORY_AFTER_CHAT trigger）
 	if memoryMode == "cloud" && resp.OK {
-		extReg, extErr := extensions.GetInstanceErr()
-		if extErr == nil && extReg != nil {
-			content := uc.extractResponseContent(resp)
-			channelID := request.ChannelID
-			sid := ""
-			if request.SessionID != nil {
-				sid = *request.SessionID
-			}
-			afterCtx := &extensions.MemoryHookContext{
-				SessionID:        sid,
-				RequestID:        request.RequestID,
-				ChannelID:        &channelID,
-				AgentName:        "main_agent",
-				WorkspaceDir:     filepath.Join(workspace.AgentRootDir(), "home"),
-				AssistantMessage: &content,
-				Extra:            parseRequestParams(request),
-			}
-			extReg.Trigger(ctx, extensions.AgentServerMemoryAfterChat, afterCtx.ToMap())
-		}
+		extensions.TriggerMemoryAfterChat(ctx, request, uc.extractResponseContent(resp), filepath.Join(workspace.AgentRootDir(), "home"), parseRequestParams(request))
 	}
 
 	return resp, nil
@@ -336,28 +297,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 
 	// 云端记忆对话前钩子（对齐 Python: interface.py:951-963 MEMORY_BEFORE_CHAT trigger）
 	if memoryMode == "cloud" {
-		extReg, extErr := extensions.GetInstanceErr()
-		if extErr == nil && extReg != nil {
-			channelID := request.ChannelID
-			sid := ""
-			if request.SessionID != nil {
-				sid = *request.SessionID
-			}
-			memCtx := &extensions.MemoryHookContext{
-				SessionID:    sid,
-				RequestID:    request.RequestID,
-				ChannelID:    &channelID,
-				AgentName:    "main_agent",
-				WorkspaceDir: filepath.Join(workspace.AgentRootDir(), "home"),
-				Extra:        parseRequestParams(request),
-			}
-			extReg.Trigger(ctx, extensions.AgentServerMemoryBeforeChat, memCtx.ToMap())
-			// 从 memCtx.MemoryBlocks 拼接记忆注入 inputs
-			memoryBlock := strings.Join(memCtx.MemoryBlocks, "\n\n")
-			if memoryBlock != "" {
-				inputs["memory_block"] = memoryBlock
-			}
-		}
+		extensions.TriggerMemoryBeforeChat(ctx, request, inputs, filepath.Join(workspace.AgentRootDir(), "home"), parseRequestParams(request))
 	}
 
 	// 6. 创建中转 channel
@@ -477,28 +417,11 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 	streamComplete:
 		// 云端记忆对话后钩子（对齐 Python: interface.py:1134-1146 MEMORY_AFTER_CHAT trigger）
 		if memoryMode == "cloud" {
-			extReg, extErr := extensions.GetInstanceErr()
-			if extErr == nil && extReg != nil {
-				assistantMessage := finalAnswerContent
-				if assistantMessage == "" {
-					assistantMessage = strings.Join(finalAnswerChunks, "")
-				}
-				channelID := request.ChannelID
-				sid := ""
-				if request.SessionID != nil {
-					sid = *request.SessionID
-				}
-				afterCtx := &extensions.MemoryHookContext{
-					SessionID:        sid,
-					RequestID:        request.RequestID,
-					ChannelID:        &channelID,
-					AgentName:        "main_agent",
-					WorkspaceDir:     filepath.Join(workspace.AgentRootDir(), "home"),
-					AssistantMessage: &assistantMessage,
-					Extra:            parseRequestParams(request),
-				}
-				extReg.Trigger(ctx, extensions.AgentServerMemoryAfterChat, afterCtx.ToMap())
+			assistantMessage := finalAnswerContent
+			if assistantMessage == "" {
+				assistantMessage = strings.Join(finalAnswerChunks, "")
 			}
+			extensions.TriggerMemoryAfterChat(ctx, request, assistantMessage, filepath.Join(workspace.AgentRootDir(), "home"), parseRequestParams(request))
 		}
 		resultCh <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
 	}()

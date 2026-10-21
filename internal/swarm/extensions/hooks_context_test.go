@@ -1,7 +1,11 @@
 package extensions
 
 import (
+	"context"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // TestMemoryHookContext_字段完整性 测试 MemoryHookContext 字段赋值
@@ -275,4 +279,87 @@ func TestHookContext_ToMapFromMap_Roundtrip(t *testing.T) {
 	if restored.AssistantMessage == nil || *restored.AssistantMessage != "msg" {
 		t.Errorf("AssistantMessage 往返不符: %v", restored.AssistantMessage)
 	}
+}
+
+// TestTriggerMemoryBeforeChat_写回注入 测试辅助函数：扩展写入 memory_blocks → inputs 注入
+func TestTriggerMemoryBeforeChat_写回注入(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	reg.Register(AgentServerMemoryBeforeChat, func(ctx context.Context, data map[string]any) any {
+		data["memory_blocks"] = []any{"块一", "", "块二"}
+		return nil
+	}, 100)
+
+	sid := "sess-1"
+	request := &schema.AgentRequest{RequestID: "r1", ChannelID: "web", SessionID: &sid}
+	inputs := map[string]any{}
+
+	TriggerMemoryBeforeChat(context.Background(), request, inputs, "/tmp/w", nil)
+
+	// 空块被过滤（对齐 Python join(b for b in blocks if b)），两块拼接
+	if inputs["memory_block"] != "块一\n\n块二" {
+		t.Errorf("memory_block = %v, 期望 %q", inputs["memory_block"], "块一\n\n块二")
+	}
+}
+
+// TestTriggerMemoryBeforeChat_无条件写入 测试无扩展时 memory_block 空串也写入（对齐 Python）
+func TestTriggerMemoryBeforeChat_无条件写入(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	_ = reg // 无扩展回调场景：仅注册中心存在
+	defer ResetInstance()
+
+	sid := "sess-1"
+	request := &schema.AgentRequest{RequestID: "r1", ChannelID: "web", SessionID: &sid}
+	inputs := map[string]any{}
+
+	TriggerMemoryBeforeChat(context.Background(), request, inputs, "/tmp/w", nil)
+
+	v, ok := inputs["memory_block"]
+	if !ok {
+		t.Error("memory_block 应无条件写入（对齐 Python inputs['memory_block'] = memory_block）")
+	} else if v != "" {
+		t.Errorf("memory_block 应为空串, 实际 %v", v)
+	}
+}
+
+// TestTriggerMemoryBeforeChat_进程内原地修改 测试扩展直接改 data map（[]any 形态写回）
+func TestTriggerMemoryBeforeChat_进程内原地修改(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	reg.Register(AgentServerMemoryBeforeChat, func(ctx context.Context, data map[string]any) any {
+		blocks, _ := data["memory_blocks"].([]string)
+		data["memory_blocks"] = append(blocks, "原地追加")
+		return nil
+	}, 100)
+
+	sid := "sess-1"
+	request := &schema.AgentRequest{RequestID: "r1", ChannelID: "web", SessionID: &sid}
+	inputs := map[string]any{}
+
+	TriggerMemoryBeforeChat(context.Background(), request, inputs, "/tmp/w", nil)
+
+	if inputs["memory_block"] != "原地追加" {
+		t.Errorf("memory_block = %v, 期望 %q（原地 []string 修改链路）", inputs["memory_block"], "原地追加")
+	}
+}
+
+// TestTriggerMemoryAfterChat_无异常 测试 after 钩子辅助函数可调用
+func TestTriggerMemoryAfterChat_无异常(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	_ = reg // 仅注册中心存在，无回调场景
+	defer ResetInstance()
+
+	sid := "sess-1"
+	request := &schema.AgentRequest{RequestID: "r1", ChannelID: "web", SessionID: &sid}
+	TriggerMemoryAfterChat(context.Background(), request, "回答内容", "/tmp/w", nil)
 }
