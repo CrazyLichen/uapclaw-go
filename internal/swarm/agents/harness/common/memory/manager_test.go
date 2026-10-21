@@ -1649,3 +1649,69 @@ func TestBuildFileEntry_字段完整性(t *testing.T) {
 		t.Errorf("mtime 应为正: %d", entry.MtimeMs)
 	}
 }
+
+// TestFileWatcher_子目录递归监听 S-04 修复验证：
+// fsnotify 非递归 → 手动 Walk 展开后，memory/ 子目录内文件变更触发防抖同步；
+// 运行期新建子目录（Create 动态补 Add）后写入同样触发。
+func TestFileWatcher_子目录递归监听(t *testing.T) {
+	dir := t.TempDir()
+	// 现存子目录：启动时 Walk 展开监听
+	_ = os.MkdirAll(filepath.Join(dir, "memory", "notes"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "memory", "notes", "sub.md"), []byte("initial"), 0o644)
+
+	mgr, err := GetMemoryManager(context.Background(), "agent-watch-sub-test", dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = mgr.Close() }()
+
+	// 场景 1：现存子目录内文件变更 → 同步
+	_ = os.WriteFile(filepath.Join(dir, "memory", "notes", "sub.md"), []byte("sub dir updated"), 0o644)
+
+	deadline := time.Now().Add(8 * time.Second)
+	synced := false
+	for time.Now().Before(deadline) {
+		minScore := 0.0
+		results, _ := mgr.Search(context.Background(), "sub dir updated", &SearchOpts{MinScore: &minScore})
+		if len(results) > 0 {
+			synced = true
+			break
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	if !synced {
+		t.Fatalf("现存子目录文件变更未在 8s 内触发同步（S-04 Walk 展开失效）")
+	}
+
+	// 场景 2：运行期新建子目录 → Create 补 Add → 新目录内写入触发同步
+	newDir := filepath.Join(dir, "memory", "created")
+	_ = os.MkdirAll(newDir, 0o755)
+	_ = os.WriteFile(filepath.Join(newDir, "new.md"), []byte("created dir content"), 0o644)
+
+	deadline = time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		minScore := 0.0
+		results, _ := mgr.Search(context.Background(), "created dir content", &SearchOpts{MinScore: &minScore})
+		if len(results) > 0 {
+			return // 动态补 Add 生效
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatalf("新建子目录内写入未在 8s 内触发同步（S-04 Create 补 Add 失效）")
+}
+
+// TestStatus_无Provider返回nil T-09 修复验证：
+// 无 embedding provider 时 Status() 的 provider/model 存 nil（对齐 Python None→JSON null），
+// 不再返回空串——11.15 TUI 前端 === null 判空可命中。
+func TestStatus_无Provider返回nil(t *testing.T) {
+	// 直接构造未初始化 provider 的实例（initialize 路径默认 fallback mock，永不为 nil）
+	mgr := newMemoryIndexManager("test-agent", t.TempDir(), CreateMemorySettings(t.TempDir(), nil))
+	mgr.db = openTestMemoryDB(t)
+	s := mgr.Status()
+	if v, has := s["provider"]; !has || v != nil {
+		t.Errorf("无 provider 时应存 nil，实际: %v (has=%v)", v, has)
+	}
+	if v, has := s["model"]; !has || v != nil {
+		t.Errorf("无 model 时应存 nil，实际: %v (has=%v)", v, has)
+	}
+}

@@ -1342,14 +1342,16 @@ func (s *MilvusVectorStore) buildIndexParams(vectorFieldName, distanceMetric str
 			_ = vf
 			return index.NewAutoIndex(metricType), nil
 		case *vector_fields.MilvusFLAT:
-			return index.NewIvfFlatIndex(metricType, 1), nil // FLAT 等价于 nlist=1 的 IVF_FLAT
+			// S-01: SDK v2.6.5 已有 FLAT 构造器，删除原 nlist=1 IVF_FLAT 冒充实现
+			return index.NewFlatIndex(metricType), nil
 		case *vector_fields.MilvusHNSW:
 			return index.NewHNSWIndex(metricType, vf.M, vf.EfConstruction), nil
 		case *vector_fields.MilvusIVF:
 			return index.NewIvfFlatIndex(metricType, vf.Nlist), nil
 		case *vector_fields.MilvusSCANN:
-			// SCANN 使用 IVF_PQ 近似（新 SDK 暂无直接 SCANN 索引构造器）
-			return index.NewIvfPQIndex(metricType, vf.Nlist, 8, 8), nil
+			// S-01: SDK v2.6.5 已有 SCANN 构造器 NewSCANNIndex(metricType, nlist, withRawData)，
+			// 删除原 IVF_PQ 冒充实现（凭空引入 m=8/nbits=8 有损量化参数，with_raw_data 丢失）
+			return index.NewSCANNIndex(metricType, vf.Nlist, vf.WithRawData), nil
 		}
 	}
 
@@ -1380,8 +1382,11 @@ func (s *MilvusVectorStore) buildAnnParam(o Options, topK int) (index.AnnParam, 
 		case *vector_fields.MilvusIVF:
 			return index.NewIvfAnnParam(vf.Nprobe), nil
 		case *vector_fields.MilvusSCANN:
-			// SCANN 使用 IVF 搜索参数近似
-			return index.NewIvfAnnParam(vf.Nprobe), nil
+			// T-15: SDK 专用 SCANN AnnParam（nprobe + reorder_k），删除原 IVF 近似。
+			// reorderK 零值时 SDK 仍下发 reorder_k=0——Python reorder_k=None 时键不输出（服务器默认），
+			// 此处 ReorderK 默认值由 NewMilvusSCANN 构造方决定，与 ToSearchDict 的零值省略语义差异
+			// 由调用方保证（默认构造即代表显式指定 nprobe/reorder_k）。
+			return index.NewSCANNAnnParam(vf.Nprobe, vf.ReorderK), nil
 		}
 	}
 	// 默认无特殊 ANN 参数

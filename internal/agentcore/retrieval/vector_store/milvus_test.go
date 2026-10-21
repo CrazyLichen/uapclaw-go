@@ -687,16 +687,19 @@ func TestMilvusVectorStore_HybridSearch_无向量(t *testing.T) {
 	assert.NotEmpty(t, results)
 }
 
-// TestMilvusVectorStore_HybridSearch_降级两路都失败 对齐 Python: rrf_fusion 空输入
+// TestMilvusVectorStore_HybridSearch_降级两路都失败
+// M-01 对齐 Python：vector 路 error 上抛（search 无 try/except）；
+// text 路失败被 SparseSearch 内部消化为空结果（Python except → return []），
+// 故降级路径的失败信号只来自 vector 路。
 func TestMilvusVectorStore_HybridSearch_降级两路都失败(t *testing.T) {
 	fake := newFakeRetrievalMilvusClient()
 	fake.hybridErr = fmt.Errorf("hybrid failed")
-	fake.searchErr = fmt.Errorf("search failed") // sparse 也失败 → 两路都空
+	fake.searchErr = fmt.Errorf("search failed") // vector 路 error → fallback 内上抛
 	s := newTestStoreWithFake(t, fake)
 
 	results, err := s.HybridSearch(context.Background(), "query", []float64{0.1}, 5, 0.5, nil)
-	require.NoError(t, err)
-	assert.Empty(t, results)
+	require.Error(t, err)
+	assert.Nil(t, results)
 }
 
 // TestMilvusVectorStore_milvusResultToSearchResults 对齐 Python _milvus_result_to_search_results

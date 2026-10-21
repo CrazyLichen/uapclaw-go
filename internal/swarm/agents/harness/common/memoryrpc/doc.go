@@ -7,7 +7,9 @@
 //
 // handler 返回 map[string]any 而非 error：对齐 Python「handler 从不抛异常，
 // 异常由外层 wrapper（tui_connect 的 _memory_list 等）捕获后转 send_response(ok=False)」；
-// Go 侧注册层负责错误响应。写回失败时 new_value 置 old_value 如实上报未变更。
+// Go 侧无 error 通道，等价机制是响应内嵌 result["error"] 字段（M-04），注册层
+// 检测该字段转 ok=False。写回失败时 new_value 置 old_value 如实上报未变更，
+// mkdir/touch 等前置操作失败时 result["error"] 携带原因。
 //
 // 文件目录：
 //

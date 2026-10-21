@@ -8,12 +8,14 @@ import (
 	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
 	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
+	"github.com/milvus-io/milvus/client/v2/index"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	vector_store "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/vector_store"
 )
@@ -512,4 +514,63 @@ func TestMilvusIndexer_UpdateIndex(t *testing.T) {
 	// 对齐 Python: delete 后 flush（update_index 显式 1 次 + add 尾部 1 次 = 2）
 	assert.Equal(t, 2, fake.flushCount)
 	assert.Equal(t, 1, fake.insertCount)
+}
+
+// TestMilvusIndexer_buildDenseIndex_字典透传 S-01/S-02 修复验证：
+// 非AUTO索引以 constructConfig 字典透传（NewGenericIndex），建库参数与
+// CheckConfigsMatching 校验期望同源；index_type 键按 Python 逻辑大写补充。
+func TestMilvusIndexer_buildDenseIndex_字典透传(t *testing.T) {
+	fake := newFakeIndexerMilvusClient()
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeMilvus,
+		CollectionName: "test",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+
+	// SCANN：constructConfig 含 nlist/with_raw_data，透传后 Params 完整下发
+	scannIdx, err := NewMilvusIndexer(config, "http://localhost:19530", "",
+		WithMilvusIndexerClient(fake),
+		WithMilvusIndexerVectorField(vector_fields.NewMilvusSCANN("embedding", 128, 16, true, 200)))
+	require.NoError(t, err)
+	dense, err := scannIdx.buildDenseIndex()
+	require.NoError(t, err)
+	params := dense.Params()
+	assert.Equal(t, "SCANN", params[index.IndexTypeKey])
+	assert.Equal(t, "128", params["nlist"])
+	assert.Equal(t, "true", params["with_raw_data"])
+	assert.Equal(t, "COSINE", params["metric_type"])
+	// 不应再出现 IVF_PQ 冒充时的量化参数
+	assert.NotContains(t, params, "m")
+	assert.NotContains(t, params, "nbits")
+
+	// HNSW：M/efConstruction 经 constructConfig 透传
+	hnswIdx, err := NewMilvusIndexer(config, "http://localhost:19530", "",
+		WithMilvusIndexerClient(fake),
+		WithMilvusIndexerVectorField(vector_fields.NewMilvusHNSW("embedding", 30, 360, 2.0)))
+	require.NoError(t, err)
+	dense, err = hnswIdx.buildDenseIndex()
+	require.NoError(t, err)
+	params = dense.Params()
+	assert.Equal(t, "HNSW", params[index.IndexTypeKey])
+	assert.Equal(t, "30", params["M"])
+	assert.Equal(t, "360", params["efConstruction"])
+
+	// FLAT：无 construct 参数（仅 metric_type），index_type=FLAT 真实下发
+	flatIdx, err := NewMilvusIndexer(config, "http://localhost:19530", "",
+		WithMilvusIndexerClient(fake),
+		WithMilvusIndexerVectorField(vector_fields.NewMilvusFLAT("embedding")))
+	require.NoError(t, err)
+	dense, err = flatIdx.buildDenseIndex()
+	require.NoError(t, err)
+	assert.Equal(t, "FLAT", dense.Params()[index.IndexTypeKey])
+	assert.Equal(t, "COSINE", dense.Params()["metric_type"])
+
+	// AUTO：保持 NewAutoIndex 路径（无字典透传）
+	autoIdx, err := NewMilvusIndexer(config, "http://localhost:19530", "",
+		WithMilvusIndexerClient(fake),
+		WithMilvusIndexerVectorField(vector_fields.NewMilvusAUTO("embedding")))
+	require.NoError(t, err)
+	dense, err = autoIdx.buildDenseIndex()
+	require.NoError(t, err)
+	assert.Equal(t, "AUTOINDEX", dense.Params()[index.IndexTypeKey])
 }

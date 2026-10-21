@@ -506,6 +506,65 @@ func TestBuildAnnParam_HNSW零EfFactor(t *testing.T) {
 	}
 }
 
+// TestBuildIndexParams_SCANN_FLAT真实索引 S-01 修复验证：
+// SCANN 构造真实 SCANN 索引（含 nlist/with_raw_data），FLAT 构造真实 FLAT 索引，
+// 不再用 IVF_PQ/IVF_FLAT 冒充。
+func TestBuildIndexParams_SCANN_FLAT真实索引(t *testing.T) {
+	s := newTestStore()
+
+	// SCANN：index_type=SCANN，nlist 与 with_raw_data 均下发
+	scannIdx := s.buildIndexParamsHelper("embedding", "COSINE",
+		Options{VectorField: vector_fields.NewMilvusSCANN("embedding", 128, 8, true, 200)})
+	if scannIdx == nil {
+		t.Fatal("buildIndexParams(SCANN) 不应返回 nil")
+	}
+	scannParams := scannIdx.Params()
+	if got := scannParams[index.IndexTypeKey]; got != "SCANN" {
+		t.Errorf("SCANN index_type = %q, want SCANN", got)
+	}
+	if got := scannParams["nlist"]; got != "128" {
+		t.Errorf("SCANN nlist = %q, want 128", got)
+	}
+	if got := scannParams["with_raw_data"]; got != "true" {
+		t.Errorf("SCANN with_raw_data = %q, want true", got)
+	}
+	// 不应再出现 IVF_PQ 冒充时的量化参数
+	if _, has := scannParams["m"]; has {
+		t.Error("SCANN 不应包含 IVF_PQ 的 m 参数")
+	}
+
+	// FLAT：index_type=FLAT（非 IVF_FLAT 冒充）
+	flatIdx := s.buildIndexParamsHelper("embedding", "COSINE",
+		Options{VectorField: vector_fields.NewMilvusFLAT("embedding")})
+	if flatIdx == nil {
+		t.Fatal("buildIndexParams(FLAT) 不应返回 nil")
+	}
+	if got := flatIdx.Params()[index.IndexTypeKey]; got != "FLAT" {
+		t.Errorf("FLAT index_type = %q, want FLAT", got)
+	}
+}
+
+// TestBuildAnnParam_SCANN专用参数 T-15 修复验证：
+// SCANN 搜索参数用 NewSCANNAnnParam（nprobe + reorder_k），不再用 IVF 近似。
+func TestBuildAnnParam_SCANN专用参数(t *testing.T) {
+	s := newTestStore()
+	scann := vector_fields.NewMilvusSCANN("embedding", 128, 16, true, 200)
+	ap, err := s.buildAnnParam(Options{VectorField: scann}, 10)
+	if err != nil {
+		t.Fatalf("buildAnnParam(SCANN) error = %v", err)
+	}
+	if ap == nil {
+		t.Fatal("buildAnnParam(SCANN) 不应返回 nil")
+	}
+	params := ap.Params()
+	if got := params["nprobe"]; got != 16 {
+		t.Errorf("SCANN nprobe = %v, want 16", got)
+	}
+	if got := params["reorder_k"]; got != 200 {
+		t.Errorf("SCANN reorder_k = %v, want 200", got)
+	}
+}
+
 func TestGetDistanceMetricType(t *testing.T) {
 	s := newTestStore()
 	s.collectionMetadata["test_coll"] = &collMeta{DistanceMetric: "L2"}

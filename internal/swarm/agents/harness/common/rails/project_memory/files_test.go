@@ -242,6 +242,52 @@ func TestMergeMemoryContent_空列表(t *testing.T) {
 	}
 }
 
+// TestMergeMemoryContent_CJK字符计数 S-03 修复验证：
+// Python len() 是 Unicode 字符数，Go len(string) 是字节数（CJK 3 倍）。
+// 20 个中文 = 20 字符 = 60 字节，maxChars=25 时字符口径下放行（20+头 26>25 才截断）。
+// 旧字节口径会把阈值缩到 1/3，且 chunk[:remaining] 字节切片切出半个字符产生乱码。
+func TestMergeMemoryContent_CJK字符计数(t *testing.T) {
+	// chunk 头 "### project memory -- /a.md\n" = 29 字符；正文 20 个中文
+	files := []LoadedMemoryFile{
+		{Path: "/a.md", Kind: "project", Content: strings.Repeat("中", 20), Priority: 30},
+	}
+	// 头 29 + 正文 20 + 尾 \n = 50 字符（150 字节）。字符口径：50 <= 60 放行不截断
+	merged := MergeMemoryContent(files, 60)
+	if strings.Contains(merged, "truncated") {
+		t.Fatalf("字符口径 50<=60 不应截断，实际: %s", merged)
+	}
+	if !strings.Contains(merged, strings.Repeat("中", 20)) {
+		t.Fatal("完整正文应保留")
+	}
+
+	// 字符口径阈值 40：头 29 + 正文 20 = 49 > 40 → 截断，remaining=40-0=40 > 200? 否 →
+	// remaining=40 不追加部分内容，直接 break + 标记截断
+	merged = MergeMemoryContent(files, 40)
+	if !strings.Contains(merged, "truncated") {
+		t.Fatal("49 字符 > 40 应触发截断标记")
+	}
+
+	// 带正文的截断走 rune 切片：头 28 字符 + 200 个中文 + \n = 229 字符。
+	// maxChars=220 → remaining=220 > 200 → rune[:220]（头 28 + 192 个中文，恰在字符边界）
+	files[0].Content = strings.Repeat("中", 200)
+	merged = MergeMemoryContent(files, 220)
+	if !strings.Contains(merged, "truncated") {
+		t.Fatal("229 字符 > 220 应触发截断标记")
+	}
+	if !strings.Contains(merged, strings.Repeat("中", 192)) {
+		t.Fatal("rune 切片应保留头 28 + 192 个中文 = 220 字符的完整部分")
+	}
+	if strings.Contains(merged, strings.Repeat("中", 193)) {
+		t.Fatal("rune 切片应只保留 192 个中文（220-28），不应多留")
+	}
+	// rune 切片不应切出半字符乱码（字节切片切 3 字节中文中间会变 U+FFFD）
+	for _, r := range merged {
+		if r == 0xFFFD {
+			t.Fatal("rune 切片产生损坏字符（U+FFFD），字节切片未切齐边界")
+		}
+	}
+}
+
 func TestClearProjectMemoryCache(t *testing.T) {
 	tmpDir := t.TempDir()
 	os.Mkdir(filepath.Join(tmpDir, ".git"), 0o755)
