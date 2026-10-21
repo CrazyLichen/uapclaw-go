@@ -75,6 +75,9 @@ func TestE2E_FullLifecycle(t *testing.T) {
 	if !decls[0].ProvidesTransport {
 		t.Error("应声明 ProvidesTransport")
 	}
+	if !decls[0].ProvidesCrypto {
+		t.Error("应声明 ProvidesCrypto")
+	}
 
 	// SetExtensionDir + GetMetadata
 	if err := pc.SetExtensionDir(context.Background(), root); err != nil {
@@ -103,6 +106,22 @@ func TestE2E_FullLifecycle(t *testing.T) {
 	}
 	if p, ok := result2["params"].(map[string]any); !ok || p["echo_touched"] != true {
 		t.Errorf("params = %v, 期望 echo_touched=true", result2["params"])
+	}
+
+	// Crypto RPC 往返（真实子进程 Encrypt/Decrypt）
+	enc, err := pc.Encrypt(context.Background(), "topsecret")
+	if err != nil {
+		t.Fatalf("Encrypt 失败: %v", err)
+	}
+	if enc != "enc(topsecret)" {
+		t.Errorf("Encrypt = %q, 期望 enc(topsecret)", enc)
+	}
+	dec, err := pc.Decrypt(context.Background(), enc)
+	if err != nil {
+		t.Fatalf("Decrypt 失败: %v", err)
+	}
+	if dec != "topsecret" {
+		t.Errorf("Decrypt = %q, 期望 topsecret", dec)
 	}
 
 	// Transport 回环

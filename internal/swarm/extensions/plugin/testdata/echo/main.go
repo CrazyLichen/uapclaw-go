@@ -1,10 +1,11 @@
 // echo 插件：端到端测试用最小扩展。
-// 声明两个事件订阅 + transport 能力；HandleEvent 给 memory_blocks 追加一条；
-// transport 为回环（Send 的数据写进 Recv 通道）。
+// 声明两个事件订阅 + transport + crypto 能力；HandleEvent 给 memory_blocks 追加一条；
+// transport 为回环（Send 的数据写进 Recv 通道）；crypto 为回环（前后缀包裹）。
 package main
 
 import (
 	"context"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/plugin"
 )
@@ -30,6 +31,7 @@ func (e *echoExtension) Register(ctx context.Context) ([]plugin.Declaration, err
 			{Event: "gateway:before_chat_request", Priority: 200},
 		},
 		ProvidesTransport: true,
+		ProvidesCrypto:    true,
 	}}, nil
 }
 
@@ -67,6 +69,19 @@ func (e *echoExtension) Recv() (<-chan []byte, error) { return e.recvCh, nil }
 // Close 关闭
 func (e *echoExtension) Close() error { close(e.recvCh); return nil }
 
+// Encrypt 加密（回环测试用简单前后缀）
+func (e *echoExtension) Encrypt(ctx context.Context, plaintext string) (string, error) {
+	return "enc(" + plaintext + ")", nil
+}
+
+// Decrypt 解密（剥掉前后缀）
+func (e *echoExtension) Decrypt(ctx context.Context, ciphertext string) (string, error) {
+	return strings.TrimSuffix(strings.TrimPrefix(ciphertext, "enc("), ")"), nil
+}
+
 func main() {
-	plugin.ServeExtensionWithTransport(newEchoExtension(), newEchoExtension())
+	e := newEchoExtension()
+	plugin.ServeExtension(e,
+		plugin.WithTransportImpl(e),
+		plugin.WithCryptoImpl(e))
 }
