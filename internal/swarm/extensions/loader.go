@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions/plugin"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
@@ -32,6 +33,7 @@ type LoadedExtension struct {
 // 通过 PluginHostFace 启动插件子进程，Register 声明后代为注册进 Registry：
 //   - 事件订阅 → registry.Register（事件桥闭包）
 //   - provides_transport 声明 → registry.RegisterAgentServerClient（GRPCPluginTransport 代理）
+//   - provides_crypto 声明 → registry.RegisterCryptoUtility + 覆盖全局 provider（最后加载者胜）
 //
 // 与 Python 差异：Python 用 importlib 加载 extension.py 并调 register_extensions(registry)；
 // Go 为静态编译，改用 go-plugin 子进程（协议见 plugin 包），
@@ -63,6 +65,8 @@ type PluginClientFace interface {
 	Kill()
 	// Transport 返回 transport 代理（ProvidesTransport 声明的扩展）
 	Transport() transport.AgentTransport
+	// Crypto 返回 crypto 提供者代理（ProvidesCrypto 声明的扩展；不支持时返回 nil）
+	Crypto() crypto.CryptoProvider
 }
 
 // RegisterCapable 支持声明获取的插件客户端（plugin.PluginClient 满足）
@@ -234,6 +238,18 @@ func (l *ExtensionLoader) loadAndRegister(ctx context.Context, root string, pc P
 				l.registry.RegisterAgentServerClient(&pluginTransportExtension{client: pc, metadata: decl.Metadata})
 			}
 		}
+		if decl.ProvidesCrypto {
+			ext := &pluginCryptoExtension{client: pc, metadata: decl.Metadata}
+			l.registry.RegisterCryptoUtility(ext)
+			// 插件覆盖宿主默认全局（最后加载者胜，对齐 Python loader 顺序覆盖语义）
+			if p := ext.GetCrypto(); p != nil {
+				crypto.SetCryptoProvider(p)
+				logger.Info(logComponent).
+					Str("event_type", "extension_crypto_registered").
+					Str("ext_id", decl.Metadata.ID).
+					Msg("[ExtensionLoader] crypto 插件已接管全局加密提供者")
+			}
+		}
 		loaded = append(loaded, LoadedExtension{Metadata: decl.Metadata, Root: root, client: pc})
 	}
 	return loaded, nil
@@ -295,6 +311,10 @@ func (a *pluginClientAdapter) Transport() transport.AgentTransport {
 	return plugin.NewGRPCPluginTransport(a.pc)
 }
 
+func (a *pluginClientAdapter) Crypto() crypto.CryptoProvider {
+	return plugin.NewGRPCPluginCryptoProvider(a.pc)
+}
+
 func (a *pluginClientAdapter) RegisterDeclarations(ctx context.Context) ([]plugin.Declaration, error) {
 	return a.pc.Register(ctx)
 }
@@ -342,4 +362,46 @@ func (e *pluginTransportExtension) SetExtensionDir(path string) {
 // GetClient 返回 transport 代理（对齐 Python get_client()）
 func (e *pluginTransportExtension) GetClient() transport.AgentTransport {
 	return e.client.Transport()
+}
+
+// pluginCryptoExtension CryptoUtilityExtension 的插件代理实现（registry.RegisterCryptoUtility 入参）。
+// 结构对齐 pluginTransportExtension 先例：生命周期代理到插件 RPC，GetCrypto 返回宿主侧代理。
+type pluginCryptoExtension struct {
+	// client 插件客户端
+	client PluginClientFace
+	// metadata 扩展元数据
+	metadata plugin.Metadata
+}
+
+// Initialize 扩展初始化（对齐 Python 事实：host 从不调用，空实现）
+func (e *pluginCryptoExtension) Initialize(ctx context.Context, config *ExtensionConfig) error {
+	return nil
+}
+
+// Shutdown 代理到插件 Shutdown RPC
+func (e *pluginCryptoExtension) Shutdown(ctx context.Context) error {
+	return e.client.Shutdown(ctx)
+}
+
+// Metadata 返回扩展元数据（Register 声明携带）
+func (e *pluginCryptoExtension) Metadata() *ExtensionMetadata {
+	return &ExtensionMetadata{
+		ID:                    e.metadata.ID,
+		Name:                  e.metadata.Name,
+		Version:               e.metadata.Version,
+		Description:           e.metadata.Description,
+		Author:                e.metadata.Author,
+		MinJiuwenSwarmVersion: e.metadata.MinHostVersion,
+		Dependencies:          e.metadata.Dependencies,
+	}
+}
+
+// SetExtensionDir 代理到插件 SetExtensionDir RPC
+func (e *pluginCryptoExtension) SetExtensionDir(path string) {
+	_ = e.client.SetExtensionDir(context.Background(), path)
+}
+
+// GetCrypto 返回包着 PluginClient 的 GRPCPluginCryptoProvider（对齐 Python get_crypto()）
+func (e *pluginCryptoExtension) GetCrypto() crypto.CryptoProvider {
+	return e.client.Crypto()
 }

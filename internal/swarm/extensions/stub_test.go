@@ -52,6 +52,9 @@ func (m *memPluginClient) Shutdown(ctx context.Context) error {
 
 func (m *memPluginClient) Transport() transport.AgentTransport { return m.transport }
 
+// Crypto 返回测试注入的 crypto 提供者（未注入时 nil）
+func (m *memPluginClient) Crypto() crypto.CryptoProvider { return m.cryptoProv }
+
 func (m *memPluginClient) Kill() {}
 
 func (m *memPluginClient) RegisterDeclarations(ctx context.Context) ([]plugin.Declaration, error) {
@@ -299,4 +302,130 @@ type declPluginClient struct {
 
 func (d *declPluginClient) RegisterDeclarations(ctx context.Context) ([]plugin.Declaration, error) {
 	return d.decls, nil
+}
+
+// TestExtensionLoader_RegisterDeclarations_Crypto 注册 crypto 声明 → registry + 全局覆盖
+func TestExtensionLoader_RegisterDeclarations_Crypto(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+	origGlobal := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(origGlobal)
+
+	fake := &fakeCryptoProvider{}
+	pc := &memPluginClient{cryptoProv: fake}
+	host := &fakeHost{clients: map[string]PluginClientFace{"/tmp/extC": pc}}
+
+	loader := NewExtensionLoader(reg, WithPluginHost(host))
+	decls := []plugin.Declaration{{
+		Metadata:       plugin.Metadata{ID: "extC", Name: "C", Version: "1.0"},
+		ProvidesCrypto: true,
+	}}
+	loaded, err := loader.loadAndRegister(context.Background(), "/tmp/extC", pc, decls)
+	if err != nil {
+		t.Fatalf("loadAndRegister 失败: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("loaded = %d, 期望 1", len(loaded))
+	}
+	if reg.GetCryptoUtilityExtension() == nil {
+		t.Error("ProvidesCrypto 声明应注册 CryptoUtilityExtension")
+	}
+	if reg.GetCryptoProvider() != fake {
+		t.Error("registry.GetCryptoProvider 应返回插件提供的 provider")
+	}
+	if crypto.GetCryptoProvider() != fake {
+		t.Error("全局 provider 应被插件覆盖")
+	}
+}
+
+// TestExtensionLoader_Crypto_覆盖宿主默认 宿主已设默认后被插件覆盖
+func TestExtensionLoader_Crypto_覆盖宿主默认(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	origGlobal := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(origGlobal)
+	hostDefault := &fakeCryptoProvider{}
+	crypto.SetCryptoProvider(hostDefault)
+
+	fake := &fakeCryptoProvider{}
+	pc := &memPluginClient{cryptoProv: fake}
+	host := &fakeHost{clients: map[string]PluginClientFace{"/tmp/extC": pc}}
+
+	loader := NewExtensionLoader(reg, WithPluginHost(host))
+	decls := []plugin.Declaration{{
+		Metadata:       plugin.Metadata{ID: "extC", Name: "C", Version: "1.0"},
+		ProvidesCrypto: true,
+	}}
+	if _, err := loader.loadAndRegister(context.Background(), "/tmp/extC", pc, decls); err != nil {
+		t.Fatalf("loadAndRegister 失败: %v", err)
+	}
+	if crypto.GetCryptoProvider() != fake {
+		t.Error("插件应覆盖宿主默认全局 provider（最后加载者胜）")
+	}
+}
+
+// TestExtensionLoader_Crypto_无声明不动全局 无 ProvidesCrypto 声明时全局与 registry 不变
+func TestExtensionLoader_Crypto_无声明不动全局(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	origGlobal := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(origGlobal)
+	hostDefault := &fakeCryptoProvider{}
+	crypto.SetCryptoProvider(hostDefault)
+
+	pc := &memPluginClient{}
+	host := &fakeHost{clients: map[string]PluginClientFace{"/tmp/extA": pc}}
+
+	loader := NewExtensionLoader(reg, WithPluginHost(host))
+	decls := []plugin.Declaration{{
+		Metadata: plugin.Metadata{ID: "extA", Name: "A", Version: "1.0"},
+	}}
+	if _, err := loader.loadAndRegister(context.Background(), "/tmp/extA", pc, decls); err != nil {
+		t.Fatalf("loadAndRegister 失败: %v", err)
+	}
+	if crypto.GetCryptoProvider() != hostDefault {
+		t.Error("无 crypto 声明时全局 provider 不应变化")
+	}
+	if reg.GetCryptoUtilityExtension() != nil {
+		t.Error("无 crypto 声明时不应注册 CryptoUtilityExtension")
+	}
+}
+
+// TestExtensionLoader_Crypto_代理为nil不覆盖 声明 crypto 但客户端不支持时注册扩展但不覆盖全局
+func TestExtensionLoader_Crypto_代理为nil不覆盖(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	origGlobal := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(origGlobal)
+	hostDefault := &fakeCryptoProvider{}
+	crypto.SetCryptoProvider(hostDefault)
+
+	pc := &memPluginClient{} // Crypto() 返回 nil
+	host := &fakeHost{clients: map[string]PluginClientFace{"/tmp/extC": pc}}
+
+	loader := NewExtensionLoader(reg, WithPluginHost(host))
+	decls := []plugin.Declaration{{
+		Metadata:       plugin.Metadata{ID: "extC", Name: "C", Version: "1.0"},
+		ProvidesCrypto: true,
+	}}
+	if _, err := loader.loadAndRegister(context.Background(), "/tmp/extC", pc, decls); err != nil {
+		t.Fatalf("loadAndRegister 失败: %v", err)
+	}
+	if reg.GetCryptoUtilityExtension() == nil {
+		t.Error("扩展仍应注册进 registry")
+	}
+	if crypto.GetCryptoProvider() != hostDefault {
+		t.Error("GetCrypto 为 nil 时不应覆盖全局")
+	}
 }
