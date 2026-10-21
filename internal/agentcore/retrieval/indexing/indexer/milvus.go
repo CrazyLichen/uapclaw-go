@@ -655,7 +655,9 @@ func (mi *MilvusIndexer) ensureCollection(ctx context.Context, collectionName st
 // buildDenseIndex 根据 constructConfig 构建 dense 索引（S-01/S-02 字典透传方案）。
 //
 // 对齐 Python _ensure_collection：
+//
 //	index_params.add_index(field_name=..., index_type=index_type, **self._construct_config)
+//
 // Python 将 index_type 与 _construct_config 参数字典整体透传给服务器，无类型化构造层。
 // Go 用 SDK NewGenericIndex 等价实现——以 constructConfig 为建库唯一真源：
 // 建库参数与 CheckVectorField 的 CheckConfigsMatching 校验期望天然同源。

@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -550,11 +550,11 @@ func TestUapClaw_ProcessMessage_AfterChat钩子双条件(t *testing.T) {
 	})
 
 	tests := []struct {
-		name       string
-		ok         bool
-		payload    map[string]any
-		wantAfter  bool
-		wantDescr  string
+		name      string
+		ok        bool
+		payload   map[string]any
+		wantAfter bool
+		wantDescr string
 	}{
 		{
 			name:      "OK且有内容_触发",

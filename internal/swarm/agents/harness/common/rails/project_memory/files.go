@@ -350,21 +350,21 @@ func MergeMemoryContent(files []LoadedMemoryFile, maxChars int) string {
 	var truncatedAt string
 	// Python: for f in files:
 	for _, f := range files {
-	// Python: chunk = f"### {f.kind} memory -- {_short(f.path)}\n{f.content}\n"
-	chunk := "### " + f.Kind + " memory -- " + short(f.Path) + "\n" + f.Content + "\n"
-	// Python: if total + len(chunk) > max_chars:（len 是 Unicode 字符数，非字节数）
-	chunkLen := utf8.RuneCountInString(chunk)
-	if total+chunkLen > maxChars {
-		remaining := maxChars - total
-		// Python: if remaining > 200: parts.append(chunk[:remaining])（字符切片，非字节切片）
-		if remaining > 200 {
-			parts = append(parts, string([]rune(chunk)[:remaining]))
+		// Python: chunk = f"### {f.kind} memory -- {_short(f.path)}\n{f.content}\n"
+		chunk := "### " + f.Kind + " memory -- " + short(f.Path) + "\n" + f.Content + "\n"
+		// Python: if total + len(chunk) > max_chars:（len 是 Unicode 字符数，非字节数）
+		chunkLen := utf8.RuneCountInString(chunk)
+		if total+chunkLen > maxChars {
+			remaining := maxChars - total
+			// Python: if remaining > 200: parts.append(chunk[:remaining])（字符切片，非字节切片）
+			if remaining > 200 {
+				parts = append(parts, string([]rune(chunk)[:remaining]))
+			}
+			truncatedAt = f.Path
+			break
 		}
-		truncatedAt = f.Path
-		break
-	}
-	parts = append(parts, chunk)
-	total += chunkLen
+		parts = append(parts, chunk)
+		total += chunkLen
 	}
 	// Python: merged = "\n".join(parts).strip()
 	merged := strings.TrimSpace(strings.Join(parts, "\n"))
