@@ -13,7 +13,10 @@
 //	├── subagent_rail_test.go             # SubagentRail + VerificationRail + VerificationContractRail 基础测试
 //	├── subagent_e2e_test.go              # SubagentRail E2E 测试
 //	├── verification_rail_test.go         # VerificationRail + VerificationContractRail 完整集成测试
-//	└── session_toolkit_cancel_test.go    # SessionToolkit cancel 场景 + SessionsListTool 测试
+//	├── session_toolkit_cancel_test.go    # SessionToolkit cancel 场景 + SessionsListTool 测试
+//	└── session_cancel_e2e_test.go        # 异步子代理端到端取消 6 场景 + fakeSubAgent/steeringObserver 替身
+//	                                     # （对齐 Python 场景 1-6；替身与测试同文件以满足
+//	                                     #  integration-audit 每文件 suite.Run 检查）
 //
 // 对应 Python 代码：openjiuwen/harness/rails/subagent/ + harness/tools/subagent/
 package subagent

@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hsubagent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
@@ -30,6 +31,9 @@ type SubagentRail struct {
 	enableAsyncSubagent bool
 	// tools 已注册的工具实例
 	tools []tool.Tool
+	// toolkit 异步模式的会话任务注册表（仅 async 分支使用）
+	// Python: self._toolkit = None  # only used in async branch
+	toolkit *hsubagent.SessionToolkit
 	// promptBuilder 系统提示词构建器引用
 	promptBuilder saprompt.SystemPromptBuilderInterface
 }
@@ -56,6 +60,15 @@ const logComponent = logger.ComponentAgentCore
 var knownAgentTools = map[string]string{
 	"explore_agent": "bash, glob, grep, list_files, read_file",
 	"plan_agent":    "bash, glob, grep, list_files, read_file",
+}
+
+// sessionToolkitSetter 设置会话工具包的本地等价接口。
+// DeepAgentInterface 无法直接声明 SetSessionToolkit(*SessionToolkit)——
+// interfaces ← hsubagent 存在依赖方向（session_tools.go 使用 interfaces.DeepAgentInterface），
+// 反向导入会形成循环依赖，故在此处用结构化接口断言等价访问。
+// *harness.DeepAgent 通过具体方法签名自动满足本接口。
+type sessionToolkitSetter interface {
+	SetSessionToolkit(toolkit *hsubagent.SessionToolkit)
 }
 
 // 编译时接口检查
@@ -124,11 +137,18 @@ func (r *SubagentRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 	}
 
 	if r.enableAsyncSubagent {
-		// ⤵️ 异步模式待回填：SessionToolkit + build_session_tools
-		logger.Info(logComponent).
-			Bool("enable_async_subagent", true).
-			Int("subagent_count", len(deepCfg.Subagents)).
-			Msg("[SubagentRail] async mode not yet implemented")
+		// 异步模式：SessionToolkit + build_session_tools
+		// Python: self._toolkit = SessionToolkit()
+		// Python: agent.set_session_toolkit(self._toolkit)
+		// Python: self.tools = build_session_tools(parent_agent=agent, toolkit=..., language=..., available_agents=..., agent_id=...)
+		r.toolkit = hsubagent.NewSessionToolkit()
+		// 接口断言而非直接调用：DeepAgentInterface 不能导入 SessionToolkit
+		// （hsubagent → interfaces 已存在，反向导入会形成循环依赖），
+		// 此处用本地接口等价访问，与项目"循环依赖用本地等价接口"惯例一致。
+		if setter, ok := deepAgent.(sessionToolkitSetter); ok {
+			setter.SetSessionToolkit(r.toolkit)
+		}
+		r.tools = hsubagent.BuildSessionTools(deepAgent, r.toolkit, language, availableAgents, agentID)
 	} else {
 		// 同步模式：注册 TaskTool
 		// Python: self.tools = create_task_tool(parent_agent=agent, available_agents=..., language=..., agent_id=...)
@@ -139,8 +159,16 @@ func (r *SubagentRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 
 	// Python: Runner.resource_mgr.add_tool(list(self.tools))
 	// Python: for tool in self.tools: agent.ability_manager.add(tool.card)
-	// 注意：工具注册由 factory.go 的 addToolsToResourceManager 统一处理
-	// 这里仅持有工具引用，供 BeforeModelCall 使用
+	am := agent.AbilityManager()
+	resourceMgr := runner.GetResourceMgr()
+	for _, t := range r.tools {
+		if am != nil {
+			am.Add(t.Card())
+		}
+		if resourceMgr != nil {
+			_ = resourceMgr.AddTool(t)
+		}
+	}
 
 	mode := "sync task"
 	if r.enableAsyncSubagent {
@@ -171,7 +199,69 @@ func (r *SubagentRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces
 		return nil
 	}
 
-	// ⤵️ 异步模式待回填：注入 session_tools prompt section
+	// 异步模式：注入 session_tools prompt section
+	// Python: section = build_session_tools_section(language=self.system_prompt_builder.language)
+	// Go 中 BuildSessionToolsSection 返回值类型（非指针），恒非 nil，
+	// 与同步分支的 Remove+Add 注入模式保持一致。
+	section := hsections.BuildSessionToolsSection(r.promptBuilder.Language())
+	r.promptBuilder.RemoveSection(hsections.SectionSessionTools)
+	r.promptBuilder.AddSection(section)
+	return nil
+}
+
+// Uninit 注销 Rail：移除已注册工具，异步模式清空 session toolkit。
+//
+// Python: SubagentRail.uninit(agent)
+func (r *SubagentRail) Uninit(agent agentinterfaces.BaseAgent) error {
+	// Python: if self.tools and hasattr(agent, "ability_manager")
+	am := agent.AbilityManager()
+	resourceMgr := runner.GetResourceMgr()
+	for _, t := range r.tools {
+		func(t tool.Tool) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Warn(logComponent).
+						Str("event_type", "subagent_rail_uninit").
+						Str("tool_name", func() string {
+							if t != nil && t.Card() != nil {
+								return t.Card().Name
+							}
+							return ""
+						}()).
+						Msgf("failed to unregister tool: %v", rec)
+				}
+			}()
+			if t == nil || t.Card() == nil {
+				return
+			}
+			// Python: name = getattr(tool.card, "name", None) → ability_manager.remove(name)
+			if am != nil {
+				am.Remove(t.Card().Name)
+			}
+			// Python: tool_id = tool.card.id → Runner.resource_mgr.remove_tool(tool_id)
+			if resourceMgr != nil {
+				_, _ = resourceMgr.RemoveTool([]string{t.Card().ID})
+			}
+		}(t)
+	}
+	r.tools = nil
+
+	// Python: if self.enable_async_subagent: agent.set_session_toolkit(None)
+	if r.enableAsyncSubagent {
+		if setter, ok := agent.(sessionToolkitSetter); ok {
+			setter.SetSessionToolkit(nil)
+		}
+		r.toolkit = nil
+	}
+
+	mode := "sync task"
+	if r.enableAsyncSubagent {
+		mode = "async session"
+	}
+	logger.Info(logComponent).
+		Str("mode", mode).
+		Msg("[SubagentRail] Unregistered tools")
+
 	return nil
 }
 

@@ -19,6 +19,7 @@ import (
 
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	hsubagent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
@@ -78,6 +79,8 @@ func (f *fakeBaseAgentForTest) UnregisterRail(_ context.Context, _ agentinterfac
 type fakeDeepAgentForTest struct {
 	fakeBaseAgentForTest
 	deepConfig *hschema.DeepAgentConfig
+	// sessionToolkit 记录 SetSessionToolkit 设置的 toolkit（async 分支断言用）
+	sessionToolkit *hsubagent.SessionToolkit
 }
 
 func newFakeDeepAgentForTest() *fakeDeepAgentForTest {
@@ -131,6 +134,11 @@ func (f *fakeDeepAgentForTest) UapswarmCodeProjectDir() string   { return "" }
 func (f *fakeDeepAgentForTest) SetUapswarmCodeProjectDir(string) {}
 func (f *fakeDeepAgentForTest) UapswarmAdapterMode() string      { return "" }
 func (f *fakeDeepAgentForTest) SetUapswarmAdapterMode(string)    {}
+
+// SetSessionToolkit 实现 sessionToolkitSetter 本地接口，记录 toolkit 供断言。
+func (f *fakeDeepAgentForTest) SetSessionToolkit(toolkit *hsubagent.SessionToolkit) {
+	f.sessionToolkit = toolkit
+}
 
 // 编译时验证
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgentForTest)(nil)
@@ -301,4 +309,108 @@ func TestSubagentRail_BeforeModelCall_无工具跳过(t *testing.T) {
 	err := r.BeforeModelCall(context.Background(), cbc)
 
 	require.NoError(t, err)
+}
+
+// ──────────────────────────── 异步模式（enableAsyncSubagent） ────────────────────────────
+
+// TestSubagentRail_Init_异步模式注册SessionTools 测试异步模式注册 3 个会话工具并设置 toolkit
+// 对齐 Python: SubagentRail.init() enable_async_subagent=True 分支
+func TestSubagentRail_Init_异步模式注册SessionTools(t *testing.T) {
+	r := NewSubagentRail(WithEnableAsyncSubagent(true))
+	agent := newFakeDeepAgentForTest()
+	agent.deepConfig = &hschema.DeepAgentConfig{
+		Subagents: []hschema.SubagentSpec{
+			&hschema.SubAgentConfig{
+				AgentCard: agentschema.NewAgentCard(
+					agentschema.WithAgentName("research_agent"),
+				),
+			},
+		},
+	}
+
+	err := r.Init(context.Background(), agent)
+
+	require.NoError(t, err)
+	// 应注册 3 个会话工具：sessions_list / sessions_spawn / sessions_cancel
+	assert.Len(t, r.tools, 3, "异步模式应注册 3 个 SessionTools")
+	if len(r.tools) == 3 {
+		assert.Equal(t, "sessions_list", r.tools[0].Card().Name)
+		assert.Equal(t, "sessions_spawn", r.tools[1].Card().Name)
+		assert.Equal(t, "sessions_cancel", r.tools[2].Card().Name)
+	}
+	// toolkit 应创建并注入 agent
+	assert.NotNil(t, r.toolkit, "异步模式应创建 SessionToolkit")
+	assert.Equal(t, r.toolkit, agent.sessionToolkit, "toolkit 应通过 SetSessionToolkit 注入 agent")
+}
+
+// TestSubagentRail_BeforeModelCall_异步模式注入SessionToolsSection 测试异步模式注入 session_tools 节
+// 对齐 Python: SubagentRail.before_model_call() enable_async_subagent=True 分支
+func TestSubagentRail_BeforeModelCall_异步模式注入SessionToolsSection(t *testing.T) {
+	r := NewSubagentRail(WithEnableAsyncSubagent(true))
+	agent := newFakeDeepAgentForTest()
+	agent.deepConfig = &hschema.DeepAgentConfig{
+		Subagents: []hschema.SubagentSpec{
+			&hschema.SubAgentConfig{
+				AgentCard: agentschema.NewAgentCard(agentschema.WithAgentName("research_agent")),
+			},
+		},
+	}
+
+	err := r.Init(context.Background(), agent)
+	require.NoError(t, err)
+
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
+	err = r.BeforeModelCall(context.Background(), cbc)
+
+	require.NoError(t, err)
+	assert.True(t, agent.builder.HasSection("session_tools"), "应注入 session_tools section")
+}
+
+// TestSubagentRail_Uninit_异步模式清理 测试异步模式 Uninit 清空 toolkit 与工具
+// 对齐 Python: SubagentRail.uninit() enable_async_subagent=True 分支
+func TestSubagentRail_Uninit_异步模式清理(t *testing.T) {
+	r := NewSubagentRail(WithEnableAsyncSubagent(true))
+	agent := newFakeDeepAgentForTest()
+	agent.deepConfig = &hschema.DeepAgentConfig{
+		Subagents: []hschema.SubagentSpec{
+			&hschema.SubAgentConfig{
+				AgentCard: agentschema.NewAgentCard(agentschema.WithAgentName("research_agent")),
+			},
+		},
+	}
+
+	err := r.Init(context.Background(), agent)
+	require.NoError(t, err)
+	require.Len(t, r.tools, 3)
+	require.NotNil(t, agent.sessionToolkit)
+
+	err = r.Uninit(agent)
+	require.NoError(t, err)
+
+	assert.Empty(t, r.tools, "Uninit 后 tools 应清空")
+	assert.Nil(t, r.toolkit, "Uninit 后 toolkit 应清空")
+	assert.Nil(t, agent.sessionToolkit, "Uninit 后 agent 的 toolkit 应被置 nil")
+}
+
+// TestSubagentRail_Uninit_同步模式不清理toolkit 测试同步模式 Uninit 不触碰 toolkit
+func TestSubagentRail_Uninit_同步模式不清理toolkit(t *testing.T) {
+	r := NewSubagentRail()
+	agent := newFakeDeepAgentForTest()
+	agent.deepConfig = &hschema.DeepAgentConfig{
+		Subagents: []hschema.SubagentSpec{
+			&hschema.SubAgentConfig{
+				AgentCard: agentschema.NewAgentCard(agentschema.WithAgentName("research_agent")),
+			},
+		},
+	}
+
+	err := r.Init(context.Background(), agent)
+	require.NoError(t, err)
+	require.Len(t, r.tools, 1)
+
+	err = r.Uninit(agent)
+	require.NoError(t, err)
+
+	assert.Empty(t, r.tools, "Uninit 后 tools 应清空")
+	assert.Nil(t, agent.sessionToolkit, "同步模式 Uninit 不应设置 toolkit（保持 nil）")
 }

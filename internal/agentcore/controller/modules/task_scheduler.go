@@ -964,17 +964,25 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 		return
 	}
 
-	// Python: 合并 task.metadata 到 event.metadata（用于 _handler_round_id 传播）
+	// Python: 合并 chunk.payload.metadata 与 task.metadata 到 event.metadata
+	// Python: event 构造时 metadata=payload_metadata（含 task_id/task_type，
+	// handler 依赖 task_type 区分 SessionSpawn 完成分支），
+	// 随后 event.metadata.update(task.metadata)（_handler_round_id 等传播）。
+	// Go 此前丢弃 payload.Metadata 导致 handler 收不到 task_type，SessionSpawn
+	// 完成后 toolkit 行不更新——此处对齐 Python 双源合并语义。
+	eventMeta := event.GetMetadata()
+	if eventMeta == nil {
+		eventMeta = make(map[string]any)
+	}
+	for k, v := range payload.Metadata {
+		eventMeta[k] = v
+	}
 	if task.Metadata != nil {
-		eventMeta := event.GetMetadata()
-		if eventMeta == nil {
-			eventMeta = make(map[string]any)
-		}
 		for k, v := range task.Metadata {
 			eventMeta[k] = v
 		}
-		event.SetMetadata(eventMeta)
 	}
+	event.SetMetadata(eventMeta)
 
 	// Python: 同步发布事件，等待 EventHandler 处理完成
 	if err := s.eventQueue.PublishEvent(ctx, agentID, sess, event); err != nil {

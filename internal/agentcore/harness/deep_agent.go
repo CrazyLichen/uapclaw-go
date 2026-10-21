@@ -81,6 +81,14 @@ type DeepAgent struct {
 	innerInvokeOverride func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
 	// innerStreamOverride 内层 stream 覆写函数（仅测试使用）。
 	innerStreamOverride func(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error)
+	// createSubagentOverride 子 Agent 创建覆写函数（仅测试使用）。
+	// 设置后，CreateSubagent 将调用此函数而非工厂分派，
+	// 对齐 Python 测试中 agent.create_subagent = _factory 的替身能力。
+	createSubagentOverride func(ctx context.Context, subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error)
+	// scheduleAutoInvokeOverride 自动 invoke 调度覆写函数（仅测试使用）。
+	// 设置后，ScheduleAutoInvokeOnSpawnDone 将调用此函数而非延迟调度，
+	// 对齐 Python 测试中 agent.schedule_auto_invoke_on_spawn_done = noop 的替身能力。
+	scheduleAutoInvokeOverride func(ctx context.Context, steerText string, delay float64) error
 
 	// deepConfig Harness 编排配置
 	deepConfig *hschema.DeepAgentConfig
@@ -578,6 +586,15 @@ func (d *DeepAgent) SetAutoInvokeScheduled(scheduled bool) {
 func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText string, delay float64) error {
 	d.autoInvokeScheduled.Store(true)
 
+	// 测试覆写钩子：优先使用 scheduleAutoInvokeOverride（仅测试使用）
+	// 对齐 Python 测试 agent.schedule_auto_invoke_on_spawn_done = noop 的直接替换语义
+	d.configMu.RLock()
+	overrideFn := d.scheduleAutoInvokeOverride
+	d.configMu.RUnlock()
+	if overrideFn != nil {
+		return overrideFn(ctx, steerText, delay)
+	}
+
 	go func() {
 		time.Sleep(time.Duration(delay * float64(time.Second)))
 		d.autoInvokeScheduled.Store(false)
@@ -612,6 +629,15 @@ func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText
 // ⤵️ 9.3 / 9.25-9.27 / 9.31 回填：browser/code/research/mobile_gui 工厂待实现
 // Python: DeepAgent.create_subagent(subagent_type, subsession_id) (line 898)
 func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
+	// 测试覆写钩子：优先使用 createSubagentOverride（仅测试使用）
+	// 对齐 Python 测试 agent.create_subagent = _factory 的直接替换语义
+	d.configMu.RLock()
+	overrideFn := d.createSubagentOverride
+	d.configMu.RUnlock()
+	if overrideFn != nil {
+		return overrideFn(ctx, subagentType, subSessionID)
+	}
+
 	spec := d.findSubagentSpec(subagentType)
 	if spec == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentCreateSubagentNotFound,
@@ -680,6 +706,14 @@ func (d *DeepAgent) SetSessionToolkit(toolkit *subagent.SessionToolkit) {
 	d.configMu.Lock()
 	defer d.configMu.Unlock()
 	d.sessionToolkit = toolkit
+}
+
+// GetSessionToolkit 返回会话工具包（可能为 nil）。
+// 对齐 Python 测试 getattr(agent, "_session_toolkit") 的读取路径。
+func (d *DeepAgent) GetSessionToolkit() *subagent.SessionToolkit {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.sessionToolkit
 }
 
 // UapswarmProjectDir 获取项目目录。
@@ -779,6 +813,30 @@ func (d *DeepAgent) SetInnerStreamOverride(fn func(ctx context.Context, inputs m
 	d.configMu.Lock()
 	defer d.configMu.Unlock()
 	d.innerStreamOverride = fn
+}
+
+// SetCreateSubagentOverride 设置子 Agent 创建覆写函数（仅测试使用）。
+// 设置后，CreateSubagent 将调用此函数而非工厂分派。
+// 对齐 Python 测试中 agent.create_subagent = _factory 的替身能力。
+func (d *DeepAgent) SetCreateSubagentOverride(fn func(ctx context.Context, subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error)) {
+	d.configMu.Lock()
+	defer d.configMu.Unlock()
+	d.createSubagentOverride = fn
+}
+
+// CreateSubagentOverride 返回子 Agent 创建覆写函数（仅测试使用）。
+func (d *DeepAgent) CreateSubagentOverride() func(ctx context.Context, subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
+	d.configMu.RLock()
+	defer d.configMu.RUnlock()
+	return d.createSubagentOverride
+}
+
+// SetScheduleAutoInvokeOverride 设置自动 invoke 调度覆写函数（仅测试使用）。
+// 对齐 Python 测试中 agent.schedule_auto_invoke_on_spawn_done = noop 的替身能力。
+func (d *DeepAgent) SetScheduleAutoInvokeOverride(fn func(ctx context.Context, steerText string, delay float64) error) {
+	d.configMu.Lock()
+	defer d.configMu.Unlock()
+	d.scheduleAutoInvokeOverride = fn
 }
 
 // IsInitialized 返回是否已完成懒初始化。

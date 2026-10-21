@@ -19,8 +19,9 @@ import (
 // 深入测试 SessionToolkit 状态管理、SessionsListTool/SessionsCancelTool
 // 输入校验、以及 cancel 路径的各分支逻辑。
 //
-// 注意：Go 端异步子代理模式（enable_async_subagent）尚未实现，
-// TaskScheduler.CancelTask 的端到端测试需要 async 模式回填后补充。
+// 注意：TaskScheduler.CancelTask 的端到端链路（spawn → 后台执行 → cancel →
+// 状态回写）已由 SessionCancelE2ESuite（session_cancel_e2e_test.go）覆盖，
+// 覆盖 Python test_deep_agent_subagent.py 场景 1-6。
 // 此处聚焦可独立测试的 SessionToolkit 和工具层逻辑。
 //
 // 对齐 Python: tests/system_tests/harness/test_deep_agent_subagent.py

@@ -129,6 +129,19 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 		result, invokeErr := subAgent.Invoke(ctx, effective, agentinterfaces.WithSession(sess))
 
 		if invokeErr != nil {
+			// 取消静默路径：任务被 TaskScheduler.CancelTask 取消时 ctx 已取消，
+			// 子代理 Invoke 返回 ctx.Canceled。Python 中 asyncio.Task.cancel 在
+			// await 点直接终止协程（CancelledError 由 TaskScheduler 吞掉），
+			// 不会 yield error chunk；Go 等价语义为静默退出——不发 task_failed
+			// 事件，避免 completeSessionSpawn 的 MarkFailed 覆盖 MarkCanceled。
+			if ctx.Err() != nil {
+				logger.Info(logComponent).
+					Str("task_id", taskID).
+					Err(invokeErr).
+					Msg("SessionSpawn task canceled, exiting silently")
+				return
+			}
+
 			// 异常路径
 			logger.Error(logComponent).
 				Err(invokeErr).
