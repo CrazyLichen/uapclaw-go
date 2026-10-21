@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -113,4 +116,63 @@ func TestMessageToE2A(t *testing.T) {
 	envelope := e2a.MessageToE2AOrFallback(msg)
 	assert.NotNil(t, envelope)
 	assert.Equal(t, "sess-1", envelope.SessionID)
+}
+
+// TestTriggerBeforeChatRequestHook 门控与 params 回写
+// 对齐 Python message_handler.py L1856-1888 + L2502（步骤9）
+func TestTriggerBeforeChatRequestHook(t *testing.T) {
+	extensions.ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := extensions.CreateInstance(fw, map[string]any{}, nil)
+	defer extensions.ResetInstance()
+	reg.Register(extensions.GatewayBeforeChatRequest, func(ctx context.Context, data map[string]any) any {
+		if p, ok := data["params"].(map[string]any); ok {
+			p["query"] = "扩展改写后的query"
+		}
+		return nil
+	}, 100)
+
+	mh := createTestMessageHandlerWithTransport()
+
+	// chat.send 触发 + 回写
+	msg := schema.NewReqMessage("web", "s1", schema.ReqMethodChatSend, json.RawMessage(`{"query":"原始"}`))
+	agentMsg := mh.prepareAgentDispatchMessage(context.Background(), msg)
+	mh.triggerBeforeChatRequestHook(context.Background(), agentMsg)
+	var p map[string]any
+	_ = json.Unmarshal(agentMsg.Params, &p)
+	if p["query"] != "扩展改写后的query" {
+		t.Errorf("params.query = %v, 期望扩展改写后", p["query"])
+	}
+
+	// 非 chat 方法不触发（chat.cancel）
+	msg2 := schema.NewReqMessage("web", "s1", schema.ReqMethodChatCancel, json.RawMessage(`{}`))
+	agentMsg2 := mh.prepareAgentDispatchMessage(context.Background(), msg2)
+	agentMsg2.Params = json.RawMessage(`{"query":"不应被改"}`)
+	mh.triggerBeforeChatRequestHook(context.Background(), agentMsg2)
+	var p2 map[string]any
+	_ = json.Unmarshal(agentMsg2.Params, &p2)
+	if p2["query"] != "不应被改" {
+		t.Errorf("chat.cancel 不应触发: %v", p2["query"])
+	}
+}
+
+// TestShouldTriggerBeforeChatRequestHook 测试门控方法
+func TestShouldTriggerBeforeChatRequestHook(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	cases := []struct {
+		method schema.ReqMethod
+		want   bool
+	}{
+		{schema.ReqMethodChatSend, true},
+		{schema.ReqMethodChatResume, true},
+		{schema.ReqMethodChatAnswer, true},
+		{schema.ReqMethodChatCancel, false},
+		{schema.ReqMethodSessionList, false},
+	}
+	for _, c := range cases {
+		msg := &schema.Message{ReqMethod: c.method}
+		if got := mh.shouldTriggerBeforeChatRequestHook(msg); got != c.want {
+			t.Errorf("shouldTrigger(%v) = %v, 期望 %v", c.method, got, c.want)
+		}
+	}
 }

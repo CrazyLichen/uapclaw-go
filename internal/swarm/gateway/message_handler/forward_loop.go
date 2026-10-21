@@ -57,7 +57,7 @@ func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 //	步骤6:  Inbound Pipeline（预留 TODO）
 //	步骤7:  resolveInboundReferences(msg)
 //	步骤8:  prepareAgentDispatchMessage(ctx, msg)
-//	步骤9:  before_chat_request hook（预留 TODO）
+//	步骤9:  before_chat_request hook（对齐 Python _forward_loop L2502）
 //	步骤10: handleChatSend(ctx, msg)
 //	步骤11: 异常 → buildErrorOutMessage → publishRobotMessages
 func (mh *MessageHandler) forwardLoop(ctx context.Context) {
@@ -123,8 +123,9 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				// 步骤8: 准备 Agent 派发消息
 				agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 
-				// TODO(#11.13): 步骤9 - before_chat_request hook（等 11.13 Gateway Hook 回填）
-				// Python: 触发聊天前钩子
+				// 步骤9: before_chat_request hook（对齐 Python _forward_loop L2502，
+				// 11.3 MessageHandler 既有逻辑——曾误标 TODO(#11.13)，本期回填修正归属）
+				mh.triggerBeforeChatRequestHook(ctx, agentMsg)
 
 				// 步骤10: chat.send 分发
 				mh.handleChatSend(ctx, msg, agentMsg)

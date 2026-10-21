@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -72,4 +73,59 @@ func (mh *MessageHandler) extractModeFromParams(msg *schema.Message) string {
 		}
 	}
 	return "plan"
+}
+
+// shouldTriggerBeforeChatRequestHook 判断是否触发聊天前钩子。
+//
+// Python: _should_trigger_before_chat_request_hook (L1856-1863)：
+// 仅 CHAT_SEND / CHAT_RESUME / CHAT_ANSWER。
+func (mh *MessageHandler) shouldTriggerBeforeChatRequestHook(msg *schema.Message) bool {
+	return msg.ReqMethod == schema.ReqMethodChatSend ||
+		msg.ReqMethod == schema.ReqMethodChatResume ||
+		msg.ReqMethod == schema.ReqMethodChatAnswer
+}
+
+// triggerBeforeChatRequestHook 触发 Gateway 聊天前钩子。
+//
+// Python: _trigger_before_chat_request_hook (L1871-1888)：
+// 构建 GatewayChatHookContext → trigger(BEFORE_CHAT_REQUEST) → 扩展原地改 params →
+// 从同一对象读回（Go：FromMap 写回后重新序列化进 agentMsg.Params）。
+// params 非对象时归一化为空 map（对齐 Python isinstance 检查）。
+func (mh *MessageHandler) triggerBeforeChatRequestHook(ctx context.Context, agentMsg *schema.Message) {
+	if !mh.shouldTriggerBeforeChatRequestHook(agentMsg) {
+		return
+	}
+	extReg, extErr := extensions.GetInstanceErr()
+	if extErr != nil || extReg == nil {
+		return
+	}
+
+	var params map[string]any
+	if len(agentMsg.Params) > 0 {
+		_ = json.Unmarshal(agentMsg.Params, &params)
+	}
+	if params == nil {
+		params = map[string]any{}
+	}
+
+	var reqMethodStr *string
+	if agentMsg.ReqMethod != "" {
+		s := string(agentMsg.ReqMethod)
+		reqMethodStr = &s
+	}
+	hookCtx := &extensions.GatewayChatHookContext{
+		RequestID: agentMsg.ID,
+		ChannelID: agentMsg.ChannelID,
+		SessionID: &agentMsg.SessionID,
+		ReqMethod: reqMethodStr,
+		Params:    params,
+	}
+	data := hookCtx.ToMap()
+	extReg.Trigger(ctx, extensions.GatewayBeforeChatRequest, data)
+	hookCtx.FromMap(data)
+	if hookCtx.Params != nil {
+		if raw, err := json.Marshal(hookCtx.Params); err == nil {
+			agentMsg.Params = raw
+		}
+	}
 }

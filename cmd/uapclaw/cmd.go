@@ -5,9 +5,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -46,6 +49,36 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// readExtensionDirs 读取 extensions.extension_dirs 配置（';' 分割，相对路径转绝对）。
+//
+// 入参为 cfg.Get("extensions") 的返回值（any）。缺失/类型不符返回 nil。
+// 对齐 Python manager.py _extension_dir_paths_from_config + _setup_search_paths：
+// 仅支持字符串值；空段丢弃；相对路径按 cwd 解析为绝对路径。
+func readExtensionDirs(extVal any) []string {
+	ext, ok := extVal.(map[string]any)
+	if !ok {
+		return nil
+	}
+	dirs, ok := ext["extension_dirs"].(string)
+	if !ok {
+		return nil
+	}
+	result := make([]string, 0)
+	for _, p := range strings.Split(dirs, ";") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if !filepath.IsAbs(p) {
+			if abs, err := filepath.Abs(p); err == nil {
+				p = abs
+			}
+		}
+		result = append(result, p)
+	}
+	return result
+}
 
 // newRootCmd 创建根命令
 func newRootCmd() *cobra.Command {
@@ -214,25 +247,54 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	harness.ResetFreeSearchRuntimeFlags()
 
 	// 6. 初始化扩展系统（对齐 Python: app_gateway.py L814-822, app_agentserver.py L131-141）
-	// 最小子集已实现：ExtensionRegistry.CreateInstance + 回调触发机制
-	// ⤵️ 10.5.8: ExtensionManager.LoadAllExtensions 待 loader 实现后回填
 	fw := callback.GetCallbackFramework()
 	extRegistry, err := extensions.CreateInstance(fw, map[string]any{}, nil)
 	if err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("failed to initialize ExtensionRegistry")
+		// 已存在（重复初始化）不算致命，继续取实例
+		extRegistry, _ = extensions.GetInstanceErr()
 	}
-	_ = extRegistry
-	// ⤵️ 10.5.8: extManager := extensions.NewExtensionManager(extRegistry)
-	// ⤵️ 10.5.8: err := extManager.LoadAllExtensions(ctx)
+	var extManager *extensions.ExtensionManager
+	if extRegistry != nil {
+		// 10.5.8 回填：ExtensionManager + WithSearchPaths（config 读取上移到 cmd 层解循环依赖）
+		extDirs := readExtensionDirs(cfg.Get("extensions"))
+		extManager = extensions.NewExtensionManager(extRegistry, extensions.WithSearchPaths(extDirs))
+		if err := extManager.LoadAllExtensions(ctx); err != nil {
+			logger.Error(logComponentGateway).Err(err).Msg("failed to load extensions")
+		}
+		logger.Info(logComponentGateway).
+			Int("count", len(extManager.ListExtensions())).
+			Msg("extensions loaded")
+		defer func() {
+			if err := extManager.ShutdownAllExtensions(context.Background()); err != nil {
+				logger.Warn(logComponentGateway).Err(err).Msg("failed to shutdown extensions")
+			}
+		}()
+	}
 
-	// 创建 ChannelTransport（进程内传输）
-	chTransport := transport.NewChannelTransport()
+	// 创建 transport：扩展 transport 优先（对齐 Python app_gateway.py L828-833），
+	// 无扩展时回落进程内 ChannelTransport
+	var chTransport *transport.ChannelTransport
+	var agentTransport transport.AgentTransport
+	if extRegistry != nil {
+		if t := extRegistry.GetAgentServerClient(); t != nil {
+			agentTransport = t
+			logger.Info(logComponentGateway).
+				Msg("using extension AgentServerClient transport")
+		}
+	}
+	if agentTransport == nil {
+		chTransport = transport.NewChannelTransport()
+		agentTransport = chTransport
+	}
 
 	// 创建 AgentClient（对齐 Python WebSocketAgentServerClient）
-	agentClient := routing.NewAgentClient(chTransport)
+	agentClient := routing.NewAgentClient(agentTransport)
 
-	// 创建 AgentServer（对齐 Python AgentWebSocketServer，单进程内与 Gateway 共存）
-	agentServer := server.NewAgentServer(cfg, chTransport)
+	// 创建 AgentServer（仅进程内 transport 时；扩展 transport = 远端场景，本地不启动）
+	var agentServer *server.AgentServer
+	if chTransport != nil {
+		agentServer = server.NewAgentServer(cfg, chTransport)
+	}
 
 	// 创建 GatewayServer（AgentClient 会等待 AgentServer 就绪后发送 connection.ack）
 	gs, err := gateway.NewGatewayServer(cfg, agentClient)
@@ -245,10 +307,12 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		Str("version", version.Version).
 		Msg("uapclaw app starting")
 
-	// 启动 AgentServer（非阻塞，内部起 goroutine 运行主循环）
-	if err := agentServer.Start(ctx); err != nil {
-		logger.Error(logComponentAgentServer).Err(err).Msg("failed to start AgentServer")
-		return fmt.Errorf("启动 AgentServer 失败: %w", err)
+	// 启动 AgentServer（非阻塞，内部起 goroutine 运行主循环；扩展 transport 时为 nil 不启动）
+	if agentServer != nil {
+		if err := agentServer.Start(ctx); err != nil {
+			logger.Error(logComponentAgentServer).Err(err).Msg("failed to start AgentServer")
+			return fmt.Errorf("启动 AgentServer 失败: %w", err)
+		}
 	}
 
 	// 启动 GatewayServer（HTTP + WebSocket）
@@ -263,8 +327,10 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	logger.Info(logComponentGateway).Msg("received exit signal, shutting down...")
 
 	// 停止顺序：AgentServer（取消任务 + 清理 + 等主循环退出）→ GatewayServer（HTTP 优雅关闭）
-	if err := agentServer.Stop(); err != nil {
-		logger.Error(logComponentAgentServer).Err(err).Msg("failed to stop AgentServer")
+	if agentServer != nil {
+		if err := agentServer.Stop(); err != nil {
+			logger.Error(logComponentAgentServer).Err(err).Msg("failed to stop AgentServer")
+		}
 	}
 	return gs.Stop()
 }
