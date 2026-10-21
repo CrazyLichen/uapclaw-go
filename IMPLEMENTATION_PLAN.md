@@ -695,12 +695,12 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **10.5 扩展系统** | — | | | |
 | 10.5.1 | ✅ | 数据类型 | ExtensionMetadata + ExtensionConfig | `jiuwenswarm/extensions/types.py` |
 | 10.5.2 | ✅ | 钩子事件常量 | GatewayHookEvents + AgentServerHookEvents | `jiuwenswarm/extensions/hook_event.py` |
-| 10.5.3 | ✅ | 钩子上下文结构 | 4 种 HookContext（Memory/GatewayChat/AgentServerChat/SystemPrompt） | `jiuwenswarm/extensions/hooks_context.py` |
+| 10.5.3 | ✅ | 钩子上下文结构 | 4 种 HookContext（Memory/GatewayChat/AgentServerChat/SystemPrompt）；✅ FromMap 写回闭环随 10.5.7 回填（4 上下文 + TriggerMemory 辅助） | `jiuwenswarm/extensions/hooks_context.py` |
 | 10.5.4 | ✅ | BaseExtension 基类 | BaseExtension 接口 + BaseExtensionImpl 默认实现 | `jiuwenswarm/extensions/sdk/base.py` |
 | 10.5.5 | ✅ | AgentServerClientExtension | GetClient() 返回 AgentTransport | `jiuwenswarm/extensions/sdk/agent_server_client.py` |
 | 10.5.6 | ✅ | ExtensionRegistry | 单例 + 回调触发（复用 CallbackFramework；本地接口打破 sdk→extensions 循环依赖） | `jiuwenswarm/extensions/registry.py` |
-| 10.5.7 | ☐ ⤵️ | ExtensionLoader | 延后，Go 插件加载机制待定 | `jiuwenswarm/extensions/loader.py` |
-| 10.5.8 | ☐ ⤵️ | ExtensionManager | 延后，依赖 loader | `jiuwenswarm/extensions/manager.py` |
+| 10.5.7 | ✅ | ExtensionLoader | go-plugin 子进程方案（D）：gRPC 协议（Register/SetExtensionDir/GetMetadata/Shutdown/HandleEvent + Transport 三件套）+ 发现/加载/声明注册编排 + 事件桥 + GRPCPluginTransport；依赖安装删除（Go 静态编译） | `jiuwenswarm/extensions/loader.py` |
+| 10.5.8 | ✅ | ExtensionManager | WithSearchPaths 注入解 config↔extensions 环 + LoadAll（单失败继续）/ShutdownAll/List 对齐 Python | `jiuwenswarm/extensions/manager.py` |
 | 10.5.9 | ⤴️ | CallbackCompat | Go 已有 CallbackFramework，无需额外实现 | `jiuwenswarm/extensions/callback_compat.py` |
 | 10.5.10 | ☐ ⤵️ | CryptoUtility | 延后，CryptoProvider 接口待定义 | `jiuwenswarm/extensions/sdk/crypto_utility.py` |
 | **10.6 Swarm 侧 Harness 集成** | — | | | |
@@ -729,7 +729,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **11.x Gateway 核心** | — | | | |
 | 11.1 | ✅ | BaseChannel 接口 | `Config/Start/Stop/Send/OnMessage` | `jiuwenswarm/gateway/channel_manager/base.py` |
 | 11.2 | ✅ | ChannelManager | 注册/注销/分发/配置热更新回调 | `jiuwenswarm/gateway/channel_manager/channel_manager.py` |
-| 11.3 | ✅ | MessageHandler | 入站→AgentServer，出站→Channel（完整转发链路）；stub：handleCronPushPayload→11.10，skillsSlashNotice/branchSlashNotice/rewindSlashNotice→AgentServer RPC | `jiuwenswarm/gateway/message_handler/message_handler.py` |
+| 11.3 | ✅ | MessageHandler | 入站→AgentServer，出站→Channel（完整转发链路）；✅ before_chat_request 触发点已回填（forward_loop 步骤9，对齐 Python L2502，曾误挂 TODO(#11.13)）；stub：handleCronPushPayload→11.10，skillsSlashNotice/branchSlashNotice/rewindSlashNotice→AgentServer RPC | `jiuwenswarm/gateway/message_handler/message_handler.py` |
 | 11.4 | ✅ | Slash Command Parser | Slash 命令解析（command_parser 子包） | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
 | 11.5 | ✅ | WebSocketAgentServerClient | WS 客户端，请求/响应路由，流式，自动重连 | `jiuwenswarm/gateway/routing/agent_client.py` |
 | 11.6 | ✅ | RouteBinding | 路由绑定 | `jiuwenswarm/gateway/routing/route_binding.py` |
@@ -771,7 +771,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 12.5 | ☐ | 沙箱 HTTP 服务 | API 路由（sandbox/proxy/policy） | `jiuwenbox/server/` |
 | 12.6 | ☐ | JiuwenBox CLI | 命令行工具 | `jiuwenbox/cli/` |
 | **12.x CLI 入口** | — | | | |
-| 12.7 | ✅ | 统一启动器 | `uapclaw app`：启动 AgentServer(goroutine) + Gateway + serverReady 等待 | `jiuwenswarm/app.py` |
+| 12.7 | ✅ | 统一启动器 | `uapclaw app`：启动 AgentServer(goroutine) + Gateway + serverReady 等待；✅ 扩展初始化接线随 10.5.8 回填（CreateInstance→Manager→LoadAll→transport 选择：扩展优先/ChannelTransport 回落，AgentServer nil-guard） | `jiuwenswarm/app.py` |
 | 12.8 | ☐ | AgentServer 启动 | `uapclaw agentserver` | `jiuwenswarm/server/app_agentserver.py` |
 | 12.9 | ☐ | Gateway 启动 | `uapclaw gateway` | `jiuwenswarm/gateway/app_gateway.py` |
 | 12.10 | ☐ | Web UI 启动 | `uapclaw web` | `jiuwenswarm/channels/web/app_web.py` |

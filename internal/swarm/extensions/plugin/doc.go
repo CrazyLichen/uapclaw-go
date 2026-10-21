@@ -22,4 +22,8 @@
 //	└── testdata/echo/        # 端到端测试用 echo 插件源码（TestMain 编译）
 //
 // 对应 Python 代码：jiuwenswarm/extensions/loader.py（加载语义）+ sdk/base.py（扩展形态）
+//
+// 覆盖率说明：ServeExtension/ServeExtensionWithTransport（插件侧 main 入口）
+// 调用 plugin.Serve 会阻塞并劫持 stdout，无法在测试进程内安全调用，
+// 由 e2e_test.go 的真实 echo 子进程端到端覆盖（92.3% 覆盖率豁免此项）。
 package plugin

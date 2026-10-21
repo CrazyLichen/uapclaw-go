@@ -3,6 +3,9 @@
 // 本包定义了扩展开发的抽象接口：BaseExtension（基础扩展）、
 // AgentServerClientExtension（AgentServer 客户端扩展）、CryptoUtility（加解密扩展）。
 //
+// 注意：宿主从不调用 Initialize（对齐 Python loader/manager 事实——仅
+// register_extensions → set_extension_dir → shutdown 三步）。
+//
 // 文件目录：
 //
 //	sdk/
