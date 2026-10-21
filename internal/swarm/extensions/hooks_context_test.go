@@ -163,3 +163,116 @@ func TestSystemPromptHookContext_ToMap(t *testing.T) {
 		}
 	}
 }
+
+// TestMemoryHookContext_FromMap 测试 FromMap 写回输出字段
+func TestMemoryHookContext_FromMap(t *testing.T) {
+	channelID := "ch-001"
+	ctx := MemoryHookContext{SessionID: "sess-001", ChannelID: &channelID}
+	m := map[string]any{
+		"memory_blocks":     []any{"block1", "", "block2"},
+		"assistant_message": "answer",
+		"metadata":          map[string]any{"k": "v"},
+		"session_id":        "篡改输入字段应被忽略",
+	}
+	ctx.FromMap(m)
+	if len(ctx.MemoryBlocks) != 3 {
+		t.Errorf("MemoryBlocks len = %d, 期望 3（FromMap 不过滤空块，过滤在消费点）", len(ctx.MemoryBlocks))
+	}
+	if ctx.AssistantMessage == nil || *ctx.AssistantMessage != "answer" {
+		t.Errorf("AssistantMessage 写回失败: %v", ctx.AssistantMessage)
+	}
+	if ctx.Metadata == nil || ctx.Metadata["k"] != "v" {
+		t.Errorf("Metadata 写回失败: %v", ctx.Metadata)
+	}
+	if ctx.SessionID != "sess-001" {
+		t.Errorf("输入字段不应被写回: %q", ctx.SessionID)
+	}
+}
+
+// TestMemoryHookContext_FromMap_防御分支 测试类型不符与缺失字段
+func TestMemoryHookContext_FromMap_防御分支(t *testing.T) {
+	ctx := MemoryHookContext{SessionID: "s"}
+	ctx.FromMap(map[string]any{
+		"memory_blocks":     "不是数组",
+		"assistant_message": 42,
+		"metadata":          "不是map",
+	})
+	if ctx.MemoryBlocks != nil {
+		t.Errorf("类型不符应跳过: %v", ctx.MemoryBlocks)
+	}
+	if ctx.AssistantMessage != nil {
+		t.Errorf("assistant_message 非字符串应跳过: %v", ctx.AssistantMessage)
+	}
+	if ctx.Metadata != nil {
+		t.Errorf("metadata 非 map 应跳过: %v", ctx.Metadata)
+	}
+	// nil map 不 panic
+	ctx.FromMap(nil)
+}
+
+// TestGatewayChatHookContext_FromMap 测试 params 写回
+func TestGatewayChatHookContext_FromMap(t *testing.T) {
+	ctx := GatewayChatHookContext{RequestID: "r1"}
+	ctx.FromMap(map[string]any{
+		"params":     map[string]any{"query": "改写后"},
+		"request_id": "不应写回",
+	})
+	if ctx.Params == nil || ctx.Params["query"] != "改写后" {
+		t.Errorf("Params 写回失败: %v", ctx.Params)
+	}
+	if ctx.RequestID != "r1" {
+		t.Errorf("输入字段不应写回: %q", ctx.RequestID)
+	}
+}
+
+// TestAgentServerChatHookContext_FromMap 测试 params 与指针字段写回
+func TestAgentServerChatHookContext_FromMap(t *testing.T) {
+	ctx := AgentServerChatHookContext{RequestID: "r2"}
+	ctx.FromMap(map[string]any{
+		"params":     map[string]any{"mode": "code"},
+		"session_id": "sess-9",
+	})
+	if ctx.Params == nil || ctx.Params["mode"] != "code" {
+		t.Errorf("Params 写回失败: %v", ctx.Params)
+	}
+	if ctx.SessionID == nil || *ctx.SessionID != "sess-9" {
+		t.Errorf("SessionID 指针写回失败: %v", ctx.SessionID)
+	}
+}
+
+// TestSystemPromptHookContext_FromMap 测试目录写回
+func TestSystemPromptHookContext_FromMap(t *testing.T) {
+	ctx := SystemPromptHookContext{}
+	ctx.FromMap(map[string]any{
+		"home_dir":  "/custom/home",
+		"skill_dir": 123, // 类型不符跳过
+	})
+	if ctx.HomeDir == nil || *ctx.HomeDir != "/custom/home" {
+		t.Errorf("HomeDir 写回失败: %v", ctx.HomeDir)
+	}
+	if ctx.SkillDir != nil {
+		t.Errorf("skill_dir 类型不符应跳过: %v", ctx.SkillDir)
+	}
+}
+
+// TestHookContext_ToMapFromMap_Roundtrip 测试 ToMap→FromMap 闭环
+func TestHookContext_ToMapFromMap_Roundtrip(t *testing.T) {
+	channelID := "ch"
+	assistant := "msg"
+	orig := MemoryHookContext{
+		SessionID: "s", RequestID: "r", ChannelID: &channelID,
+		AgentName: "a", WorkspaceDir: "/w",
+		AssistantMessage: &assistant,
+		Extra:            map[string]any{"e": 1},
+		MemoryBlocks:     []string{"b1"},
+		Metadata:         map[string]any{"m": 2},
+	}
+	restored := MemoryHookContext{SessionID: "s", RequestID: "r", ChannelID: &channelID, AgentName: "a", WorkspaceDir: "/w"}
+	restored.FromMap(orig.ToMap())
+	if len(restored.MemoryBlocks) != 1 || restored.MemoryBlocks[0] != "b1" {
+		t.Errorf("MemoryBlocks 往返不符: %v", restored.MemoryBlocks)
+	}
+	if restored.AssistantMessage == nil || *restored.AssistantMessage != "msg" {
+		t.Errorf("AssistantMessage 往返不符: %v", restored.AssistantMessage)
+	}
+}

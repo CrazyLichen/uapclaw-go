@@ -119,3 +119,69 @@ func (c *SystemPromptHookContext) ToMap() map[string]any {
 	}
 	return result
 }
+
+// FromMap 从字典写回输出语义字段（ToMap 的逆操作，仅输出字段）。
+// 防御式类型断言：字段缺失或类型不符时跳过，不 panic。
+// 配合事件桥使用：Trigger(memCtx.ToMap()) 后调用 FromMap(data) 读回扩展修改。
+func (c *MemoryHookContext) FromMap(m map[string]any) {
+	if m == nil {
+		return
+	}
+	if v, ok := m["assistant_message"].(string); ok {
+		c.AssistantMessage = &v
+	} else if p, ok := m["assistant_message"].(*string); ok && p != nil {
+		// ToMap 直出形态：*string 直接入 map（进程内原地修改链路）
+		c.AssistantMessage = p
+	}
+	if blocks, ok := m["memory_blocks"].([]any); ok {
+		result := make([]string, 0, len(blocks))
+		for _, b := range blocks {
+			if s, isStr := b.(string); isStr {
+				result = append(result, s)
+			}
+		}
+		c.MemoryBlocks = result
+	} else if blocks, ok := m["memory_blocks"].([]string); ok {
+		// ToMap 直出形态（进程内原地修改链路）；structpb 往返后为 []any（跨进程链路）
+		c.MemoryBlocks = blocks
+	}
+	if md, ok := m["metadata"].(map[string]any); ok {
+		c.Metadata = md
+	}
+}
+
+// FromMap 从字典写回输出语义字段（params 为唯一输出字段）
+func (c *GatewayChatHookContext) FromMap(m map[string]any) {
+	if m == nil {
+		return
+	}
+	if p, ok := m["params"].(map[string]any); ok {
+		c.Params = p
+	}
+}
+
+// FromMap 从字典写回输出语义字段（params + session_id 指针）
+func (c *AgentServerChatHookContext) FromMap(m map[string]any) {
+	if m == nil {
+		return
+	}
+	if p, ok := m["params"].(map[string]any); ok {
+		c.Params = p
+	}
+	if v, ok := m["session_id"].(string); ok {
+		c.SessionID = &v
+	}
+}
+
+// FromMap 从字典写回输出语义字段（home_dir / skill_dir 指针）
+func (c *SystemPromptHookContext) FromMap(m map[string]any) {
+	if m == nil {
+		return
+	}
+	if v, ok := m["home_dir"].(string); ok {
+		c.HomeDir = &v
+	}
+	if v, ok := m["skill_dir"].(string); ok {
+		c.SkillDir = &v
+	}
+}
