@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
@@ -120,11 +121,13 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 
 	// 步骤5：注册 Web RPC handlers + onConnect 钩子（对齐 Python _register_web_handlers(bind)）
 	// AgentClient 通过 BindParams 闭包捕获，不直接设到 WebChannel
+	// CryptoProvider 装配补线：此时扩展已加载完毕，全局已是最终 provider（10.5.10）
 	web.RegisterWebHandlers(&web.WebHandlersBindParams{
 		Channel:        wc,
 		AgentClient:    agentClient,
 		ChannelManager: channelMgr,
 		OnConfigSaved:  onConfigSavedCb,
+		CryptoProvider: crypto.GetCryptoProvider(),
 	})
 
 	// 组装路由

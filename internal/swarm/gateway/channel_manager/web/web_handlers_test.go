@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,18 +12,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// fakeCryptoHandler 用于测试的模拟加密提供者
+// fakeCryptoHandler 用于测试的模拟加密提供者（带 error 签名，对齐 crypto.CryptoProvider）
 type fakeCryptoHandler struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (f *fakeCryptoHandler) Encrypt(plaintext string) string  { return "enc(" + plaintext + ")" }
-func (f *fakeCryptoHandler) Decrypt(ciphertext string) string { return "dec(" + ciphertext + ")" }
+func (f *fakeCryptoHandler) Encrypt(plaintext string) (string, error) { return "enc(" + plaintext + ")", nil }
+
+func (f *fakeCryptoHandler) Decrypt(ciphertext string) (string, error) { return "dec(" + ciphertext + ")", nil }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -851,4 +854,56 @@ func TestBuildSessionDeleteEnvelope(t *testing.T) {
 	assert.Equal(t, "session.delete", envelope.Method)
 	assert.Equal(t, "sess-123", envelope.SessionID)
 	assert.Equal(t, params, envelope.Params)
+}
+
+// fakeCryptoFailDecrypt Decrypt 恒失败的 fake（测试解密失败保留原值语义）
+type fakeCryptoFailDecrypt struct{}
+
+func (f *fakeCryptoFailDecrypt) Encrypt(plaintext string) (string, error) { return "enc(" + plaintext + ")", nil }
+
+func (f *fakeCryptoFailDecrypt) Decrypt(ciphertext string) (string, error) {
+	return "", errors.New("decrypt boom")
+}
+
+// TestHandleConfigGet_解密失败保留原值 解密失败时保留密文原值
+func TestHandleConfigGet_解密失败保留原值(t *testing.T) {
+	_ = os.Setenv("API_KEY", "rawcipher")
+	defer func() { _ = os.Unsetenv("API_KEY") }()
+
+	handler := handleConfigGet(&fakeCryptoFailDecrypt{})
+	result, err := handler(context.Background(), nil, "")
+	require.NoError(t, err)
+	if result["api_key"] != "rawcipher" {
+		t.Errorf("api_key = %v, 期望解密失败时保留原值", result["api_key"])
+	}
+}
+
+// TestHandleConfigGet_解密成功 注入 provider 时敏感字段解密返回
+func TestHandleConfigGet_解密成功(t *testing.T) {
+	_ = os.Setenv("API_KEY", "cipher")
+	defer func() { _ = os.Unsetenv("API_KEY") }()
+
+	handler := handleConfigGet(&fakeCryptoHandler{})
+	result, err := handler(context.Background(), nil, "")
+	require.NoError(t, err)
+	if result["api_key"] != "dec(cipher)" {
+		t.Errorf("api_key = %v, 期望 dec(cipher)", result["api_key"])
+	}
+}
+
+// TestHandleConfigGet_全局provider 注入为 nil 时回退查全局
+func TestHandleConfigGet_全局provider(t *testing.T) {
+	original := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(original)
+	crypto.SetCryptoProvider(&fakeCryptoHandler{})
+
+	_ = os.Setenv("API_KEY", "cipher")
+	defer func() { _ = os.Unsetenv("API_KEY") }()
+
+	handler := handleConfigGet(nil)
+	result, err := handler(context.Background(), nil, "")
+	require.NoError(t, err)
+	if result["api_key"] != "dec(cipher)" {
+		t.Errorf("api_key = %v, 期望全局 provider 解密 dec(cipher)", result["api_key"])
+	}
 }

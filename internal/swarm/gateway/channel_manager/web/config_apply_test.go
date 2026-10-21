@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -15,13 +16,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// fakeCrypto 用于测试的模拟加密提供者
+// fakeCrypto 用于测试的模拟加密提供者（带 error 签名，对齐 crypto.CryptoProvider）
 type fakeCrypto struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (f *fakeCrypto) Encrypt(plaintext string) string  { return "enc(" + plaintext + ")" }
-func (f *fakeCrypto) Decrypt(ciphertext string) string { return "dec(" + ciphertext + ")" }
+func (f *fakeCrypto) Encrypt(plaintext string) (string, error) { return "enc(" + plaintext + ")", nil }
+
+func (f *fakeCrypto) Decrypt(ciphertext string) (string, error) { return "dec(" + ciphertext + ")", nil }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -351,7 +353,7 @@ func TestMergeModelsForReplaceAll_新条目(t *testing.T) {
 }
 
 func TestMergeModelsForReplaceAll_有crypto(t *testing.T) {
-	crypto := &fakeCrypto{}
+	cryptoProv := &fakeCrypto{}
 	parsed := []map[string]any{
 		{
 			"model_client_config": map[string]any{
@@ -364,7 +366,7 @@ func TestMergeModelsForReplaceAll_有crypto(t *testing.T) {
 			"is_default": true,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil, nil, crypto)
+	result := mergeModelsForReplaceAll(parsed, nil, nil, cryptoProv)
 	assert.Len(t, result, 1)
 	mcc, ok := result[0]["model_client_config"].(map[string]any)
 	assert.True(t, ok)
@@ -526,7 +528,7 @@ func TestMergeModelsForReplaceAll_originIndex非int(t *testing.T) {
 }
 
 func TestMergeModelsForReplaceAll_有crypto且originIndex(t *testing.T) {
-	crypto := &fakeCrypto{}
+	cryptoProv := &fakeCrypto{}
 	rawDefaults := []map[string]any{
 		{
 			"model_client_config": map[string]any{
@@ -553,7 +555,7 @@ func TestMergeModelsForReplaceAll_有crypto且originIndex(t *testing.T) {
 			"origin_index": 0,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, rawDefaults, resolvedDefaults, crypto)
+	result := mergeModelsForReplaceAll(parsed, rawDefaults, resolvedDefaults, cryptoProv)
 	assert.Len(t, result, 1)
 }
 
@@ -602,4 +604,47 @@ func TestProcessFiles_无name和filename(t *testing.T) {
 	result := ProcessFiles(context.Background(), params)
 	filesList := result["files"].([]any)
 	assert.Len(t, filesList, 1)
+}
+
+// fakeCryptoEncryptFail Encrypt 恒失败的 fake（测试加密失败保留明文语义）
+type fakeCryptoEncryptFail struct{}
+
+func (f *fakeCryptoEncryptFail) Encrypt(plaintext string) (string, error) {
+	return "", errors.New("encrypt boom")
+}
+
+func (f *fakeCryptoEncryptFail) Decrypt(ciphertext string) (string, error) {
+	return "dec(" + ciphertext + ")", nil
+}
+
+// TestApplyConfigPayload_加密失败保留明文 加密失败时字段保留明文 + 不报错
+func TestApplyConfigPayload_加密失败保留明文(t *testing.T) {
+	_ = os.Unsetenv("API_KEY")
+	defer func() { _ = os.Unsetenv("API_KEY") }()
+
+	envUpdates, _, err := ApplyConfigPayload(map[string]any{"api_key": "plain"}, &fakeCryptoEncryptFail{})
+	require.NoError(t, err)
+	if envUpdates["API_KEY"] != "plain" {
+		t.Errorf("API_KEY = %q, 期望加密失败时保留明文", envUpdates["API_KEY"])
+	}
+}
+
+// TestMergeModelsForReplaceAll_加密失败保留明文 新条目加密失败时 api_key 保留明文
+func TestMergeModelsForReplaceAll_加密失败保留明文(t *testing.T) {
+	parsed := []map[string]any{
+		{
+			"model_client_config": map[string]any{
+				"model_name": "gpt-4",
+				"api_key":    "plain",
+			},
+			"model_config_obj": map[string]any{"temperature": 0.95},
+			"is_default":       true,
+		},
+	}
+	result := mergeModelsForReplaceAll(parsed, nil, nil, &fakeCryptoEncryptFail{})
+	require.Len(t, result, 1)
+	mcc := result[0]["model_client_config"].(map[string]any)
+	if mcc["api_key"] != "plain" {
+		t.Errorf("api_key = %v, 期望加密失败时保留明文", mcc["api_key"])
+	}
 }
