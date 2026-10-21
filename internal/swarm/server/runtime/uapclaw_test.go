@@ -4,13 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
@@ -476,4 +482,204 @@ func TestUapClaw_ensureAdapter_创建真实Adapter(t *testing.T) {
 	// 确保幂等
 	a2, _ := uc.ensureAdapter("agent")
 	assert.Equal(t, a, a2)
+}
+
+// setupCloudMemoryEnv 注入 UAPCLAW_DATA_DIR 指向含 memory_mode: cloud 的临时工作区。
+// 返回恢复函数（重置路径缓存 + 还原环境变量）。
+func setupCloudMemoryEnv(t *testing.T) func() {
+	t.Helper()
+	// 先排干包内更早测试遗留的异步写入队列（哨兵确认后 worker 阻塞在接收上
+	// 不再读路径缓存），再重置缓存注入环境——避免与遗留 worker 的读竞争
+	session.FlushMetadataQueue()
+	session.FlushHistoryQueue()
+
+	// 创建临时工作区：<tmp>/.uapclaw 结构（WorkspaceDir 即 UAPCLAW_DATA_DIR 本身）
+	// ConfigDir = WorkspaceDir()/config，需存在 config/config.yaml 才走"已初始化"分支
+	root := t.TempDir()
+	configDir := filepath.Join(root, "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("创建临时 config 目录失败: %v", err)
+	}
+	configYAML := "memory_mode: cloud\n"
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("写入临时 config.yaml 失败: %v", err)
+	}
+
+	origDataDir := os.Getenv(pathutil.EnvDataDir)
+	origHome := os.Getenv(pathutil.EnvHome)
+	if err := os.Setenv(pathutil.EnvDataDir, root); err != nil {
+		t.Fatalf("设置 UAPCLAW_DATA_DIR 失败: %v", err)
+	}
+	if err := os.Setenv(pathutil.EnvHome, root); err != nil {
+		t.Fatalf("设置 UAPCLAW_HOME 失败: %v", err)
+	}
+	pathutil.ResetCache()
+
+	return func() {
+		// 先等待异步写入队列刷盘（metadata + history），再重置路径缓存。
+		// 哨兵确认后 worker 阻塞在 channel 接收上不再读路径缓存，
+		// 与 ResetCache 形成 happens-before，避免 race（paths.go ResetCache 注释要求）。
+		session.FlushMetadataQueue()
+		session.FlushHistoryQueue()
+		session.ResetHistoryWorker()
+		_ = os.Unsetenv(pathutil.EnvDataDir)
+		_ = os.Unsetenv(pathutil.EnvHome)
+		if origDataDir != "" {
+			_ = os.Setenv(pathutil.EnvDataDir, origDataDir)
+		}
+		if origHome != "" {
+			_ = os.Setenv(pathutil.EnvHome, origHome)
+		}
+		pathutil.ResetCache()
+	}
+}
+
+// TestUapClaw_ProcessMessage_AfterChat钩子双条件 表驱动验证非流式云端记忆对话后钩子门控。
+// 对齐 Python interface.py:852-878：result.ok and payload.get("content") 双条件——
+// 响应无内容（payload 无 content 键或空串）不触发 MEMORY_AFTER_CHAT。
+func TestUapClaw_ProcessMessage_AfterChat钩子双条件(t *testing.T) {
+	// 先验证环境注入生效：BuildInputs 应解析出 memory_mode=cloud
+	t.Run("环境注入验证", func(t *testing.T) {
+		cleanup := setupCloudMemoryEnv(t)
+		defer cleanup()
+		uc := NewUapClaw()
+		params, _ := json.Marshal(map[string]any{"query": "你好"})
+		req := schema.NewAgentRequest("req-env", "web", schema.ReqMethodChatSend, params)
+		_, memoryMode, _ := uc.BuildInputs(req)
+		require.Equal(t, "cloud", memoryMode, "临时 config 应注入 memory_mode=cloud")
+	})
+
+	tests := []struct {
+		name       string
+		ok         bool
+		payload    map[string]any
+		wantAfter  bool
+		wantDescr  string
+	}{
+		{
+			name:      "OK且有内容_触发",
+			ok:        true,
+			payload:   map[string]any{"content": "助手回复"},
+			wantAfter: true,
+			wantDescr: "result.ok and payload.get('content') 均满足",
+		},
+		{
+			name:      "OK无content键_不触发",
+			ok:        true,
+			payload:   map[string]any{"other": "val"},
+			wantAfter: false,
+			wantDescr: "payload.get('content') 为 None",
+		},
+		{
+			name:      "OK空串content_不触发",
+			ok:        true,
+			payload:   map[string]any{"content": ""},
+			wantAfter: false,
+			wantDescr: "空串 content 为 Python 假值",
+		},
+		{
+			name:      "失败响应_不触发",
+			ok:        false,
+			payload:   map[string]any{"content": "错误文本"},
+			wantAfter: false,
+			wantDescr: "result.ok 为 False",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanup := setupCloudMemoryEnv(t)
+			defer cleanup()
+
+			extensions.ResetInstance()
+			fw := callback.NewCallbackFramework()
+			reg, err := extensions.CreateInstance(fw, map[string]any{}, nil)
+			require.NoError(t, err)
+			defer extensions.ResetInstance()
+
+			var afterTriggered atomic.Bool
+			var beforeTriggered atomic.Bool
+			reg.Register(extensions.AgentServerMemoryAfterChat, func(ctx context.Context, data map[string]any) any {
+				afterTriggered.Store(true)
+				return nil
+			}, 100)
+			reg.Register(extensions.AgentServerMemoryBeforeChat, func(ctx context.Context, data map[string]any) any {
+				beforeTriggered.Store(true)
+				return nil
+			}, 100)
+
+			uc := NewUapClaw()
+			fa := newFakeAdapter()
+			fa.processResp = schema.NewAgentResponse("req-1", "web",
+				schema.WithResponseOK(tc.ok),
+				schema.WithPayload(tc.payload))
+			uc.adapter = fa
+
+			params, _ := json.Marshal(map[string]any{"query": "你好"})
+			req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, params,
+				schema.WithAgentSessionID("cloud-sess"))
+
+			resp, err := uc.ProcessMessage(context.Background(), req)
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+
+			// before 钩子无条件触发（memory_mode=cloud 即触发，对齐 Python L834-845）
+			assert.True(t, beforeTriggered.Load(), "before 钩子应触发")
+			// after 钩子受双条件门控
+			assert.Equal(t, tc.wantAfter, afterTriggered.Load(),
+				"after 钩子触发=%v，期望=%v（%s）", afterTriggered.Load(), tc.wantAfter, tc.wantDescr)
+		})
+	}
+}
+
+// TestUapClaw_ProcessMessageStream_AfterChat钩子无内容条件 流式云端记忆对话后钩子无双条件。
+// 对齐 Python interface.py:1120-1150：memory_mode=cloud 即触发（final 为空时也触发，
+// 此时 assistant_message 为空串）——与非流式 L852 双条件不同，勿"顺手修复"。
+func TestUapClaw_ProcessMessageStream_AfterChat钩子无内容条件(t *testing.T) {
+	cleanup := setupCloudMemoryEnv(t)
+	defer cleanup()
+
+	extensions.ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, err := extensions.CreateInstance(fw, map[string]any{}, nil)
+	require.NoError(t, err)
+	defer extensions.ResetInstance()
+
+	var afterContent atomic.Value // string
+	reg.Register(extensions.AgentServerMemoryAfterChat, func(ctx context.Context, data map[string]any) any {
+		if s, ok := data["assistant_message"].(string); ok {
+			afterContent.Store(s)
+		} else if p, ok := data["assistant_message"].(*string); ok && p != nil {
+			afterContent.Store(*p)
+		}
+		return nil
+	}, 100)
+
+	uc := NewUapClaw()
+	fa := newFakeAdapter()
+
+	// 流只发 delta 无 final：assistantMessage 回退拼接 delta
+	chunkCh := make(chan *schema.AgentResponseChunk, 2)
+	chunkCh <- schema.NewAgentResponseChunk("req-s", "web", map[string]any{
+		"event_type": "chat.delta",
+		"content":    "流式回复",
+	})
+	close(chunkCh)
+	fa.streamCh = chunkCh
+	uc.adapter = fa
+
+	params, _ := json.Marshal(map[string]any{"query": "你好"})
+	req := schema.NewAgentRequest("req-s", "web", schema.ReqMethodChatSend, params,
+		schema.WithAgentIsStream(true),
+		schema.WithAgentSessionID("cloud-stream"))
+
+	resultCh, err := uc.ProcessMessageStream(context.Background(), req)
+	require.NoError(t, err)
+	// 消费完流（含终止哨兵）确保钩子已执行
+	for range resultCh {
+	}
+
+	// 流式 after 钩子即便无 chat.final 也触发（无内容条件），内容回退 delta 拼接
+	require.NotNil(t, afterContent.Load(), "流式 after 钩子应触发（memory_mode=cloud 即触发，无内容条件）")
+	assert.Equal(t, "流式回复", afterContent.Load().(string), "assistant_message 应回退拼接 delta")
 }

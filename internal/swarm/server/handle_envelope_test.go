@@ -437,3 +437,57 @@ func TestHandleEnvelope_BeforeChatHook_非聊天方法不触发(t *testing.T) {
 		t.Error("session.list 不应触发 before_chat_request 钩子")
 	}
 }
+
+// TestHandleEnvelope_BeforeChatHook_Params非对象清洗 测试 params 为 JSON 数组时归一化为空 map
+// （对齐 Python agent_ws_server.py L1044-1046：非 dict 时 request.params = {}）
+func TestHandleEnvelope_BeforeChatHook_Params非对象清洗(t *testing.T) {
+	extensions.ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := extensions.CreateInstance(fw, map[string]any{}, nil)
+	defer extensions.ResetInstance()
+
+	gotParams := make(chan map[string]any, 1)
+	reg.Register(extensions.AgentServerBeforeChatRequest, func(ctx context.Context, data map[string]any) any {
+		if p, ok := data["params"].(map[string]any); ok {
+			gotParams <- p
+		}
+		return nil
+	}, 100)
+
+	s, transport := newTestServer()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	env := e2a.NewE2AEnvelope()
+	env.RequestID = "test-req-arr"
+	env.Channel = "web"
+	env.Method = "chat.send"
+	env.IsStream = false
+	// params 为 nil（对应 Python params=None，非 dict）——
+	// Go wire 层 E2AEnvelope.Params 为强类型 map，数组在 JSON 解码时已被拦截，
+	// 可达的非 dict 路径即空 params：request.Params 为空 → params==nil → 归一化为 {}
+	env.Params = nil
+	env.EnsureTimestamp()
+
+	recvCh, err := transport.Recv()
+	if err != nil {
+		t.Fatalf("获取接收通道失败: %v", err)
+	}
+	go s.handleEnvelope(ctx, env)
+
+	// 钩子应收到清洗后的空 map（而非数组）
+	select {
+	case p := <-gotParams:
+		if len(p) != 0 {
+			t.Errorf("非对象 params 应被清洗为空 map, 实际: %v", p)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("超时：before_chat_request 钩子未被触发")
+	}
+
+	select {
+	case <-recvCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("超时：未收到响应")
+	}
+}

@@ -61,9 +61,10 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		s.injectACPCapabilities(request, envelope)
 	}
 
-	// 3. before_chat_request 钩子（对齐 Python: agent_ws_server.py _trigger_before_chat_request_hook()）
+	// 3. before_chat_request 钩子（对齐 Python: agent_ws_server.py _trigger_before_chat_request_hook L1042-1061）
 	// 当 req_method 为 CHAT_SEND/CHAT_RESUME/CHAT_ANSWER 时触发；
-	// 扩展可修改 params，FromMap 写回后重新序列化进 request.Params
+	// 扩展可修改 params，FromMap 写回后重新序列化进 request.Params。
+	// params 非 dict（JSON 数组/字符串等）时归一化为空 map 并强制写回（对齐 Python L1044-1046）。
 	if request.ReqMethod == schema.ReqMethodChatSend ||
 		request.ReqMethod == schema.ReqMethodChatResume ||
 		request.ReqMethod == schema.ReqMethodChatAnswer {
@@ -73,6 +74,13 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 			var params map[string]any
 			if len(request.Params) > 0 {
 				_ = json.Unmarshal(request.Params, &params) // 延迟解析 params
+			}
+			if params == nil {
+				// 非 dict 时清洗为空 map（对齐 Python: request.params = {}）
+				params = map[string]any{}
+				if raw, err := json.Marshal(params); err == nil {
+					request.Params = raw
+				}
 			}
 			hookCtx := &extensions.AgentServerChatHookContext{
 				RequestID: request.RequestID,

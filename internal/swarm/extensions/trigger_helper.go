@@ -56,11 +56,13 @@ func TriggerMemoryAfterChat(ctx context.Context, request *schema.AgentRequest, a
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// buildMemoryHookContext 构造 MemoryHookContext（对齐 Python 构造字段）
+// buildMemoryHookContext 构造 MemoryHookContext（对齐 Python 构造字段）。
+// session_id 回退 "default" 对齐 Python `request.session_id or "default"`
+// （nil 或空串均回退，interface.py L836/869/954/1138 共 4 处）。
 func buildMemoryHookContext(request *schema.AgentRequest, workspaceDir string, assistantMessage *string, extra map[string]any) *MemoryHookContext {
 	channelID := request.ChannelID
-	sid := ""
-	if request.SessionID != nil {
+	sid := "default"
+	if request.SessionID != nil && *request.SessionID != "" {
 		sid = *request.SessionID
 	}
 	return &MemoryHookContext{

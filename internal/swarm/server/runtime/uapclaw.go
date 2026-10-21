@@ -207,8 +207,9 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 	}
 
 	// 记录 assistant 历史
+	assistantContent := ""
 	if resp.OK {
-		content := uc.extractResponseContent(resp)
+		assistantContent = uc.extractResponseContent(resp)
 		// Python: 补传 extra 和 mode
 		assistantMode := ""
 		if p := parseRequestParams(request); p != nil {
@@ -220,13 +221,14 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 			assistantMode = "unknown"
 		}
 		session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
-			"assistant", content, float64(time.Now().UnixMilli())/1000,
+			"assistant", assistantContent, float64(time.Now().UnixMilli())/1000,
 			"chat.final", nil, nil, assistantMode)
 	}
 
-	// 云端记忆对话后钩子（对齐 Python: interface.py:866-877 MEMORY_AFTER_CHAT trigger）
-	if memoryMode == "cloud" && resp.OK {
-		extensions.TriggerMemoryAfterChat(ctx, request, uc.extractResponseContent(resp), filepath.Join(workspace.AgentRootDir(), "home"), parseRequestParams(request))
+	// 云端记忆对话后钩子（对齐 Python: interface.py:852-878 MEMORY_AFTER_CHAT trigger。
+	// Python 双条件 result.ok and payload.get("content")——响应无内容不触发）
+	if memoryMode == "cloud" && resp.OK && assistantContent != "" {
+		extensions.TriggerMemoryAfterChat(ctx, request, assistantContent, filepath.Join(workspace.AgentRootDir(), "home"), parseRequestParams(request))
 	}
 
 	return resp, nil
@@ -302,11 +304,12 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 
 	// 6. 创建中转 channel
 	outCh := make(chan *schema.AgentResponseChunk, 64)
-	streamDone := make(chan struct{})
 
 	// 7. 生产者 goroutine
 	go func() {
-		defer close(streamDone)
+		// 结束时关闭 outCh（对齐 Python 队列哨兵语义：消费者顺序处理完所有 chunk 后退出）。
+		// 关闭的带缓冲 channel 接收端会先排空缓冲数据再返回 !ok，天然保证不丢 chunk。
+		defer close(outCh)
 		chunkCh, streamErr := a.ProcessMessageStreamImpl(ctx, request, inputs)
 		if streamErr != nil {
 			// Python: except asyncio.CancelledError：取消不作为错误
@@ -343,78 +346,68 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		var finalAnswerContent string
 		var finalAnswerChunks []string
 
-		for {
-			select {
-			case chunk, ok := <-outCh:
-				if !ok {
-					goto streamComplete
-				}
-				if payload := chunk.Payload; payload != nil {
-					if eventType, _ := payload["event_type"].(string); eventType != "" {
-						if shouldRecordHistory(eventType) {
-							// Python: 补传 mode
-							streamMode := ""
-							if p := parseRequestParams(request); p != nil {
-								if m, ok := p["mode"].(string); ok {
-									streamMode = m
-								}
+		// 顺序消费 outCh 直至关闭（对齐 Python 异步队列 + 哨兵的顺序语义：
+		// 每个 chunk 都完整经过 history 记录与 finalAnswer 收集，不存在跳过路径）
+		for chunk := range outCh {
+			if payload := chunk.Payload; payload != nil {
+				if eventType, _ := payload["event_type"].(string); eventType != "" {
+					if shouldRecordHistory(eventType) {
+						// Python: 补传 mode
+						streamMode := ""
+						if p := parseRequestParams(request); p != nil {
+							if m, ok := p["mode"].(string); ok {
+								streamMode = m
 							}
-							if streamMode == "" {
-								streamMode = "unknown"
-							}
-							// Python: team.message 展开 event 字段到 extra
-							var extraFields map[string]any
-							if eventType == "team.message" {
-								if event, ok := payload["event"]; ok {
-									if eventData, ok := event.(map[string]any); ok {
-										extraFields = make(map[string]any)
-										for k, v := range eventData {
-											if k != "type" && k != "timestamp" && k != "content" {
-												extraFields[k] = v
-											}
+						}
+						if streamMode == "" {
+							streamMode = "unknown"
+						}
+						// Python: team.message 展开 event 字段到 extra
+						var extraFields map[string]any
+						if eventType == "team.message" {
+							if event, ok := payload["event"]; ok {
+								if eventData, ok := event.(map[string]any); ok {
+									extraFields = make(map[string]any)
+									for k, v := range eventData {
+										if k != "type" && k != "timestamp" && k != "content" {
+											extraFields[k] = v
 										}
 									}
 								}
 							}
-							session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
-								"assistant", extractChunkContent(payload), float64(time.Now().UnixMilli())/1000,
-								eventType, extraFields, nil, streamMode)
 						}
-						// Python: context_compression_state 事件写入 compact history
-						if eventType == "context_compression_state" {
-							compMode := ""
-							if p := parseRequestParams(request); p != nil {
-								if m, ok := p["mode"].(string); ok {
-									compMode = m
-								}
+						session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+							"assistant", extractChunkContent(payload), float64(time.Now().UnixMilli())/1000,
+							eventType, extraFields, nil, streamMode)
+					}
+					// Python: context_compression_state 事件写入 compact history
+					if eventType == "context_compression_state" {
+						compMode := ""
+						if p := parseRequestParams(request); p != nil {
+							if m, ok := p["mode"].(string); ok {
+								compMode = m
 							}
-							if compMode == "" {
-								compMode = "unknown"
-							}
-							session.AppendCompactHistoryFromPayload(payload, sessionID, request.RequestID, request.ChannelID, compMode)
 						}
-						switch eventType {
-						case "chat.final":
-							if c, ok := payload["content"].(string); ok {
-								finalAnswerContent = c
-							}
-						case "chat.delta":
-							if c, ok := payload["content"].(string); ok {
-								finalAnswerChunks = append(finalAnswerChunks, c)
-							}
+						if compMode == "" {
+							compMode = "unknown"
+						}
+						session.AppendCompactHistoryFromPayload(payload, sessionID, request.RequestID, request.ChannelID, compMode)
+					}
+					switch eventType {
+					case "chat.final":
+						if c, ok := payload["content"].(string); ok {
+							finalAnswerContent = c
+						}
+					case "chat.delta":
+						if c, ok := payload["content"].(string); ok {
+							finalAnswerChunks = append(finalAnswerChunks, c)
 						}
 					}
 				}
-				resultCh <- chunk
-			case <-streamDone:
-				for len(outCh) > 0 {
-					resultCh <- <-outCh
-				}
-				goto streamComplete
 			}
+			resultCh <- chunk
 		}
 
-	streamComplete:
 		// 云端记忆对话后钩子（对齐 Python: interface.py:1134-1146 MEMORY_AFTER_CHAT trigger）
 		if memoryMode == "cloud" {
 			assistantMessage := finalAnswerContent

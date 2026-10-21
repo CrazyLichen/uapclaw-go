@@ -35,8 +35,6 @@ type PluginClient struct {
 const (
 	// EntryFilename 扩展入口二进制文件名（对齐 Python ENTRY_FILENAME 语义）
 	EntryFilename = "ext-plugin"
-	// grpcDialTimeout gRPC 握手超时
-	grpcDialTimeout = 10 * time.Second
 	// logComponent 日志组件（基础设施层）
 	logComponent = logger.ComponentCommon
 )

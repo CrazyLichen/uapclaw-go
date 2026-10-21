@@ -363,3 +363,25 @@ func TestTriggerMemoryAfterChat_无异常(t *testing.T) {
 	request := &schema.AgentRequest{RequestID: "r1", ChannelID: "web", SessionID: &sid}
 	TriggerMemoryAfterChat(context.Background(), request, "回答内容", "/tmp/w", nil)
 }
+
+// TestBuildMemoryHookContext_SessionID回退 测试 session_id 三态：
+// 正常值直传 / nil 回退 default / 空串回退 default（对齐 Python `or "default"` 语义）
+func TestBuildMemoryHookContext_SessionID回退(t *testing.T) {
+	// 正常值
+	sid := "sess-9"
+	ctx := buildMemoryHookContext(&schema.AgentRequest{SessionID: &sid}, "/w", nil, nil)
+	if ctx.SessionID != "sess-9" {
+		t.Errorf("SessionID = %q, 期望直传 sess-9", ctx.SessionID)
+	}
+	// nil → default
+	ctx2 := buildMemoryHookContext(&schema.AgentRequest{}, "/w", nil, nil)
+	if ctx2.SessionID != "default" {
+		t.Errorf("nil SessionID 应回退 default, 实际 %q", ctx2.SessionID)
+	}
+	// 空串 → default（Python or 语义：空串为假）
+	empty := ""
+	ctx3 := buildMemoryHookContext(&schema.AgentRequest{SessionID: &empty}, "/w", nil, nil)
+	if ctx3.SessionID != "default" {
+		t.Errorf("空串 SessionID 应回退 default, 实际 %q", ctx3.SessionID)
+	}
+}
