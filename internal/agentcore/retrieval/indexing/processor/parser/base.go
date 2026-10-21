@@ -130,4 +130,75 @@ func NewBaseParser(self Parser) (*BaseParser, error) {
 	return &BaseParser{self: self}, nil
 }
 
+// Parse 解析文档（默认实现，可被嵌入方继承）。
+//
+// 经 self 动态派发子类覆写的 ParseContent：非空内容包装为单文档
+// （Metadata 显式空 map 非 nil，对齐 Python metadata={} 的 default_factory），
+// 空内容返回空切片（对齐 Python if content: truthiness）。
+// 钩子错误原样传播（软失败语义由子类自行返回空串实现）。
+//
+// Python: base.py Parser.parse
+func (b *BaseParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
+	o := NewParseOptions(opts...)
+	content, err := b.self.ParseContent(ctx, doc, o.LLMClient)
+	if err != nil {
+		return nil, err
+	}
+	if content == "" {
+		return []reranker.Document{}, nil
+	}
+	return []reranker.Document{{
+		ID:       o.DocID,
+		Text:     content,
+		Metadata: map[string]any{},
+	}}, nil
+}
+
+// LazyParse 惰性解析（默认实现）。
+//
+// 先完整 Parse（对齐 Python lazy_parse 默认实现"parse 完再逐个 yield"，
+// 非流式），再逐个回调 fn；fn 返回 error 时提前终止并原样返回
+// （filepath.Walk 惯例）。经 self 派发，子类覆写 Parse 即生效。
+//
+// Python: base.py Parser.lazy_parse
+func (b *BaseParser) LazyParse(ctx context.Context, doc string, fn func(reranker.Document) error, opts ...ParseOption) error {
+	docs, err := b.self.Parse(ctx, doc, opts...)
+	if err != nil {
+		return err
+	}
+	for _, d := range docs {
+		if err := fn(d); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Process 处理文档（Processor 契约兼容），转发 Parse。
+//
+// Python: base.py Parser.process
+func (b *BaseParser) Process(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
+	return b.self.Parse(ctx, doc, opts...)
+}
+
+// Supports 检查是否支持该文档源（默认 false，对齐 Python 基类）。
+//
+// Python: base.py Parser.supports
+func (b *BaseParser) Supports(doc string) bool {
+	return false
+}
+
+// ParseContent 子类覆写点（对齐 Python _parse(file_path, llm_client)）。
+//
+// 默认返回 ("", nil)——对齐 Python 基类 _parse 的 `pass` → None →
+// parse 返回 []。BaseParser 单独不构成有意义的解析器。
+//
+// Python: base.py Parser._parse
+func (b *BaseParser) ParseContent(ctx context.Context, doc string, llmClient *llm.Model) (string, error) {
+	_ = ctx // 对齐 Python 同步语义，当前无 ctx 消费
+	_ = doc
+	_ = llmClient
+	return "", nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
