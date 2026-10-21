@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
@@ -135,19 +136,27 @@ func InferIsDefault(entries []map[string]any) []map[string]any {
 // decryptModelEntries 解密模型条目并推断 is_default，返回深拷贝。
 // 对齐 Python: _decrypt_model_entries (L668-694)
 //
-// ⤵️(10.5.10) api_key 解密依赖 ExtensionRegistry CryptoProvider（extensions→common/config
-// 依赖方向已存在，crypto 不能进 common/config），当前为空操作——等价 Python crypto=None
-// 时跳过解密路径。custom_headers 经 ParseCustomHeaders 手动处理
+// api_key 解密查全局 crypto provider（10.5.10 ✅ 实装）。
+// 依赖方向说明（修正旧错误注释）：config→crypto 合法无环（crypto 仅依赖
+// exception 为叶子；真正禁止的是 config→swarm/extensions，那条会环）。
+// 解密失败保留原值（对齐 Python try/except pass）。
+// custom_headers 经 ParseCustomHeaders 手动处理
 // （NormalizeConfig 全项目尚未接线，无法依赖 Load 后处理）。
 func decryptModelEntries(entries []map[string]any) []map[string]any {
 	result := make([]map[string]any, 0, len(entries))
+	provider := crypto.GetCryptoProvider()
 	for _, entry := range entries {
 		copied := utils.DeepCopyMap(entry)
 		if copied == nil {
 			copied = map[string]any{}
 		}
 		if mcc, ok := copied["model_client_config"].(map[string]any); ok {
-			// ⤵️(10.5.10) Python: if mcc.get("api_key") and crypto: mcc["api_key"] = crypto.decrypt(...)
+			// Python: if mcc.get("api_key") and crypto: mcc["api_key"] = crypto.decrypt(...)
+			if key, ok := mcc["api_key"].(string); ok && key != "" && provider != nil {
+				if dec, decErr := provider.Decrypt(key); decErr == nil {
+					mcc["api_key"] = dec
+				}
+			}
 			if rawHeaders, exists := mcc["custom_headers"]; exists {
 				mcc["custom_headers"] = ParseCustomHeaders(rawHeaders)
 			}

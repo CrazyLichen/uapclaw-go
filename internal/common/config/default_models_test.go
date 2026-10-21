@@ -3,7 +3,12 @@ package config
 import (
 	"os"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 )
+
+// testCryptoKey 32 字节测试密钥（AES-256）
+var testCryptoKey = []byte("0123456789abcdef0123456789abcdef")
 
 // TestGetDefaultModels_新格式defaults列表 优先读取 models.defaults 列表并附加 is_default。
 func TestGetDefaultModels_新格式defaults列表(t *testing.T) {
@@ -140,5 +145,76 @@ func TestDecryptModelEntries_customHeaders解析(t *testing.T) {
 	orig := entries[0]["model_client_config"].(map[string]any)
 	if _, isMap := orig["custom_headers"].(map[string]any); isMap {
 		t.Fatalf("original entry should stay unmodified")
+	}
+}
+
+// TestDecryptModelEntries_解密api_key 全局 provider 就绪时 api_key 解密返回。
+func TestDecryptModelEntries_解密api_key(t *testing.T) {
+	original := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(original)
+
+	provider, err := crypto.NewAesGcmProvider(testCryptoKey)
+	if err != nil {
+		t.Fatalf("构造 provider 失败: %v", err)
+	}
+	crypto.SetCryptoProvider(provider)
+
+	ciphertext, err := provider.Encrypt("sk-secret")
+	if err != nil {
+		t.Fatalf("加密失败: %v", err)
+	}
+
+	entries := []map[string]any{{
+		"model_client_config": map[string]any{"api_key": ciphertext, "model_name": "m"},
+	}}
+	result := decryptModelEntries(entries)
+
+	got := result[0]["model_client_config"].(map[string]any)["api_key"]
+	if got != "sk-secret" {
+		t.Errorf("api_key = %v, 期望解密为 sk-secret", got)
+	}
+	// 深拷贝：原 entries 不被修改
+	orig := entries[0]["model_client_config"].(map[string]any)["api_key"]
+	if orig != ciphertext {
+		t.Errorf("原始条目被修改: %v", orig)
+	}
+}
+
+// TestDecryptModelEntries_无provider 全局 nil 时 api_key 保持原值。
+func TestDecryptModelEntries_无provider(t *testing.T) {
+	original := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(original)
+	crypto.SetCryptoProvider(nil)
+
+	entries := []map[string]any{{
+		"model_client_config": map[string]any{"api_key": "plain", "model_name": "m"},
+	}}
+	result := decryptModelEntries(entries)
+
+	got := result[0]["model_client_config"].(map[string]any)["api_key"]
+	if got != "plain" {
+		t.Errorf("api_key = %v, 期望无 provider 时保持 plain", got)
+	}
+}
+
+// TestDecryptModelEntries_解密失败保留原值 密文无效时保留原值（对齐 Python except: pass）。
+func TestDecryptModelEntries_解密失败保留原值(t *testing.T) {
+	original := crypto.GetCryptoProvider()
+	defer crypto.SetCryptoProvider(original)
+
+	provider, err := crypto.NewAesGcmProvider(testCryptoKey)
+	if err != nil {
+		t.Fatalf("构造 provider 失败: %v", err)
+	}
+	crypto.SetCryptoProvider(provider)
+
+	entries := []map[string]any{{
+		"model_client_config": map[string]any{"api_key": "not-a-ciphertext", "model_name": "m"},
+	}}
+	result := decryptModelEntries(entries)
+
+	got := result[0]["model_client_config"].(map[string]any)["api_key"]
+	if got != "not-a-ciphertext" {
+		t.Errorf("api_key = %v, 期望解密失败时保留原值", got)
 	}
 }
