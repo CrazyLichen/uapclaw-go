@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -15,8 +16,11 @@ import (
 
 // TokenizerProvider 可选 tokenizer 提供者。
 //
-// 对齐 Python getattr(embed_model, "tokenizer", None)：embed_model 类型
-// 为 Any，Go 侧以 any 参数 + 类型断言提取（B 决策）。
+// 对齐 Python getattr(embed_model, "tokenizer", None) 的鸭子探测：
+// embed_model 收窄为 embedding.BaseEmbedding（审查决策 4——Python 侧
+// 标注 Any 但生态内实际只传 Embedding；Embedding 基类与全部实现类
+// 均无 tokenizer 属性，探测分支在 Python 生态内是死路径，Go 侧保留
+// 断言语义供自定义嵌入模型启用）。
 type TokenizerProvider interface {
 	// Tokenizer 返回嵌入模型关联的分词器；nil 表示未提供。
 	Tokenizer() Tokenizer
@@ -54,8 +58,8 @@ type PreprocessOptions struct {
 type textChunkerOptions struct {
 	// chunkUnit 分块单位（"char"|"token"，默认 "char"）
 	chunkUnit string
-	// embedModel 嵌入模型（any，断言 TokenizerProvider 提取 tokenizer）
-	embedModel any
+	// embedModel 嵌入模型（断言 TokenizerProvider 提取 tokenizer）
+	embedModel embedding.BaseEmbedding
 	// preprocessOptions 预处理开关（nil 表示不开）
 	preprocessOptions *PreprocessOptions
 }
@@ -79,8 +83,9 @@ func WithChunkUnit(unit string) TextChunkerOption {
 
 // WithEmbedModel 设置嵌入模型（对齐 Python embed_model 参数）。
 //
-// token 路径经 TokenizerProvider 断言提取 tokenizer。
-func WithEmbedModel(model any) TextChunkerOption {
+// token 路径经 TokenizerProvider 断言提取 tokenizer（接口到接口断言，
+// 语义对齐 Python getattr 鸭子探测）。
+func WithEmbedModel(model embedding.BaseEmbedding) TextChunkerOption {
 	return func(o *textChunkerOptions) { o.embedModel = model }
 }
 
@@ -198,7 +203,7 @@ func (c *TextChunker) Process(ctx context.Context, docs []reranker.Document) ([]
 //  5. NewTokenizerChunker（language="auto"/splitterConfig=nil 为 Python 默认值）
 //
 // Python: chunking.py TextChunker.get_chunker
-func getChunker(chunkSize, chunkOverlap int, chunkUnit string, embedModel any) (Chunker, error) {
+func getChunker(chunkSize, chunkOverlap int, chunkUnit string, embedModel embedding.BaseEmbedding) (Chunker, error) {
 	if chunkUnit == "char" {
 		return NewCharChunker(WithChunkSize(chunkSize), WithChunkOverlap(chunkOverlap))
 	}

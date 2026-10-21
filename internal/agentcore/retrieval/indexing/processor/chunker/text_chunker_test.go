@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 )
 
@@ -221,7 +222,10 @@ func TestTextChunker_Process_路由到覆写版ChunkDocuments(t *testing.T) {
 
 // ──────────────────────────── fake 类型 ────────────────────────────
 
-// fakeEmbedModelWithTokenizer 实现 TokenizerProvider 的嵌入模型 fake
+// fakeEmbedModelWithTokenizer 实现 TokenizerProvider 的嵌入模型 fake。
+//
+// 嵌入 BaseEmbedding 四方法的空实现（token 路由测试不触发嵌入调用），
+// 额外实现 TokenizerProvider 携带 tokenizer。
 type fakeEmbedModelWithTokenizer struct {
 	// tk 携带的 tokenizer
 	tk Tokenizer
@@ -230,8 +234,46 @@ type fakeEmbedModelWithTokenizer struct {
 // Tokenizer 返回携带的 tokenizer
 func (f *fakeEmbedModelWithTokenizer) Tokenizer() Tokenizer { return f.tk }
 
-// fakeEmbedModelPlain 无 tokenizer 属性的嵌入模型 fake（不实现 TokenizerProvider）
+// EmbedQuery 空实现（不被触发）
+func (f *fakeEmbedModelWithTokenizer) EmbedQuery(ctx context.Context, text string, opts ...embedding.EmbedOption) ([]float64, error) {
+	return nil, nil
+}
+
+// EmbedDocuments 空实现（不被触发）
+func (f *fakeEmbedModelWithTokenizer) EmbedDocuments(ctx context.Context, texts []string, opts ...embedding.EmbedOption) ([][]float64, error) {
+	return nil, nil
+}
+
+// Dimension 空实现（不被触发）
+func (f *fakeEmbedModelWithTokenizer) Dimension() int { return 0 }
+
+// DimensionWithContext 空实现（不被触发）
+func (f *fakeEmbedModelWithTokenizer) DimensionWithContext(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+// fakeEmbedModelPlain 无 tokenizer 能力的嵌入模型 fake（不实现 TokenizerProvider）。
+//
+// BaseEmbedding 四方法空实现。
 type fakeEmbedModelPlain struct{}
+
+// EmbedQuery 空实现（不被触发）
+func (f *fakeEmbedModelPlain) EmbedQuery(ctx context.Context, text string, opts ...embedding.EmbedOption) ([]float64, error) {
+	return nil, nil
+}
+
+// EmbedDocuments 空实现（不被触发）
+func (f *fakeEmbedModelPlain) EmbedDocuments(ctx context.Context, texts []string, opts ...embedding.EmbedOption) ([][]float64, error) {
+	return nil, nil
+}
+
+// Dimension 空实现（不被触发）
+func (f *fakeEmbedModelPlain) Dimension() int { return 0 }
+
+// DimensionWithContext 空实现（不被触发）
+func (f *fakeEmbedModelPlain) DimensionWithContext(ctx context.Context) (int, error) {
+	return 0, nil
+}
 
 // fakeTokenizerWithMaxLength 实现 MaxLengthProvider 的 fake tokenizer
 type fakeTokenizerWithMaxLength struct {
@@ -283,7 +325,7 @@ func TestNewTextChunker_token路径embedModel带tokenizer(t *testing.T) {
 func TestNewTextChunker_token路径embedModel无tokenizer(t *testing.T) {
 	c, err := NewTextChunker(512, 50,
 		WithChunkUnit("token"),
-		WithEmbedModel(fakeEmbedModelPlain{}),
+		WithEmbedModel(&fakeEmbedModelPlain{}),
 	)
 	assert.NoError(t, err)
 	_, ok := c.inner.(*TokenizerChunker)

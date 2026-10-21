@@ -185,24 +185,21 @@ type PreprocessingPipeline struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
+// 【审查修正 2026-10-20】方案 B：删除 pyWordClassStr（实施中零使用的死常量）
+// 与 pySpaceClassStr（并入 sCore），仅保留 wCore/sCore 两个内芯常量，
+// 全部 6 个模式统一拼接（D1' 语义集唯一定义点）。
 const (
-	// pyWordClassStr Python \w 精确集。
+	// wCore Python \w 精确集内芯（不带外层方括号，供字符类拼接）。
 	//
 	// Python \w = [a-zA-Z0-9_] + Unicode 词字符，实测含 No/Nl 类
 	//（①②③/½/Ⅷ 是词字符）；regexp2(.NET) \w 含 Mn/Pc 但缺 No/Nl——
 	// 若用原生 \w，"①②③序号" 会被 REDUNDANT_SYMBOLS 误删（Python 保留）。
 	// 显式集消除该差异（D1' 决策）。
-	pyWordClassStr = `[\p{L}\p{Nd}\p{Nl}\p{No}_]`
-	// pySpaceClassStr Python \s 补偿集。
+	wCore = `\p{L}\p{Nd}\p{Nl}\p{No}_`
+	// sCore Python \s 补偿集内芯（不带外层方括号，供字符类拼接）。
 	//
 	// .NET \s 与 Python \s 在 U+0085/U+00A0/U+1680/U+2028/U+3000 等
 	// 已一致，唯缺文件分隔符组 \x1c-\x1f，显式补齐（D1' 决策）。
-	pySpaceClassStr = `[\s\x{1c}-\x{1f}]`
-)
-
-// wCore/sCore 语义集"内芯"（去掉外层方括号），供字符类拼接。
-const (
-	wCore = `\p{L}\p{Nd}\p{Nl}\p{No}_`
 	sCore = `\s\x{1c}-\x{1f}`
 )
 
@@ -212,7 +209,7 @@ var (
 	// pySpaceSeqPattern Python r"\s+"：连续空白 → 单空格。
 	//
 	// Python: text_preprocessor.py WhitespaceNormalizer.process L53
-	pySpaceSeqPattern = regexp2.MustCompile(pySpaceClassStr+`+`, regexp2.None)
+	pySpaceSeqPattern = regexp2.MustCompile(`[`+sCore+`]+`, regexp2.None)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -260,7 +257,7 @@ func isPySpaceRune(r rune) bool {
 go test ./internal/agentcore/retrieval/indexing/processor/chunker/ -run TestWhitespaceNormalizer -v
 ```
 
-预期：11 个测试全 PASS
+预期：9 个测试全 PASS（【实施修正 2026-10-20】原计划写 11 系计数笔误，下方代码列表实为 9 个函数）
 
 - [ ] **Step 5: 提交**
 
@@ -345,8 +342,12 @@ func TestURLEmailRemover_禁用URL移除(t *testing.T) {
 }
 
 // TestURLEmailRemover_禁用邮箱移除 Go 专项（对偶覆盖）
+// 【实施修正 2026-10-20】原计划 RemoveURLs:true + 断言邮箱保留是错误的：
+// Python 纯 re 复刻实测，remove_urls=true 时 COM_PATTERN 的 \S+?\.com 把
+// 'test@example.com' 当域名吞掉（输出 'Contact '）——COM 对邮箱有交叉副作用。
+// 改为两开关全关，验证 EMAIL_PATTERN 不被应用的干净直通场景。
 func TestURLEmailRemover_禁用邮箱移除(t *testing.T) {
-	r := URLEmailRemover{RemoveURLs: true, RemoveEmails: false}
+	r := URLEmailRemover{RemoveURLs: false, RemoveEmails: false}
 	assert.Contains(t, r.Process("Contact test@example.com"), "test@example.com")
 }
 
@@ -914,8 +915,9 @@ type PreprocessOptions struct {
 type textChunkerOptions struct {
 	// chunkUnit 分块单位（"char"|"token"，默认 "char"）
 	chunkUnit string
-	// embedModel 嵌入模型（any，断言 TokenizerProvider 提取 tokenizer）
-	embedModel any
+	// embedModel 嵌入模型（【审查修正 2026-10-20】any → embedding.BaseEmbedding，
+	// Python 标注 Any 但生态内实际只传 Embedding，收窄零行为损失）
+	embedModel embedding.BaseEmbedding
 	// preprocessOptions 预处理开关（nil 表示不开）
 	preprocessOptions *PreprocessOptions
 }
@@ -928,7 +930,9 @@ type TextChunkerOption func(*textChunkerOptions)
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期断言 TextChunker 实现 Chunker
-var _ Chunker = (*TextChunker)(nil)
+// 【实施修正 2026-10-20】本断言与 bc.SetSelf 要求三方法齐备，但三方法在
+// Task 5 才落地——Task 4 先注释、Task 5 落地三方法时恢复（原计划内部时序矛盾）
+// var _ Chunker = (*TextChunker)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -940,7 +944,10 @@ func WithChunkUnit(unit string) TextChunkerOption {
 // WithEmbedModel 设置嵌入模型（对齐 Python embed_model 参数）。
 //
 // token 路径经 TokenizerProvider 断言提取 tokenizer。
-func WithEmbedModel(model any) TextChunkerOption {
+// 【审查修正 2026-10-20】any → embedding.BaseEmbedding：Python 标注 Any
+// 但生态内（indexer 层标注/全部实现类）实际只传 Embedding；Embedding
+// 家族无 tokenizer 属性，探测分支在 Python 生态内是死路径，收窄零损失。
+func WithEmbedModel(model embedding.BaseEmbedding) TextChunkerOption {
 	return func(o *textChunkerOptions) { o.embedModel = model }
 }
 
@@ -986,7 +993,9 @@ func NewTextChunker(chunkSize, chunkOverlap int, opts ...TextChunkerOption) (*Te
 	}
 
 	c := &TextChunker{BaseChunker: bc, pipeline: pipeline, inner: inner}
-	bc.SetSelf(c)
+	// 【实施修正 2026-10-20】SetSelf 要求三方法齐备才能通过 Chunker 断言，
+	// 三方法在 Task 5 才落地——Task 4 先注释此行，Task 5 恢复
+	// bc.SetSelf(c)
 	return c, nil
 }
 ```
@@ -1005,7 +1014,7 @@ func NewTextChunker(chunkSize, chunkOverlap int, opts ...TextChunkerOption) (*Te
 //  5. NewTokenizerChunker（language="auto"/splitterConfig=nil 为 Python 默认值）
 //
 // Python: chunking.py TextChunker.get_chunker
-func getChunker(chunkSize, chunkOverlap int, chunkUnit string, embedModel any) (Chunker, error) {
+func getChunker(chunkSize, chunkOverlap int, chunkUnit string, embedModel embedding.BaseEmbedding) (Chunker, error) {
 	if chunkUnit == "char" {
 		return NewCharChunker(WithChunkSize(chunkSize), WithChunkOverlap(chunkOverlap))
 	}
@@ -1306,7 +1315,10 @@ git commit -m "feat(chunker): 13.9 TextChunker 三方法覆写（A1：ChunkText 
 ```go
 // ──────────────────────────── fake 类型 ────────────────────────────
 
-// fakeEmbedModelWithTokenizer 实现 TokenizerProvider 的嵌入模型 fake
+// fakeEmbedModelWithTokenizer 实现 TokenizerProvider 的嵌入模型 fake。
+// 【审查修正 2026-10-20】embedModel 收窄为 embedding.BaseEmbedding 后，
+// 两个 fake 均需补 BaseEmbedding 四方法空实现（EmbedQuery/EmbedDocuments/
+// Dimension/DimensionWithContext，token 路由测试不触发嵌入调用）。
 type fakeEmbedModelWithTokenizer struct {
 	// tk 携带的 tokenizer
 	tk Tokenizer
@@ -1315,7 +1327,7 @@ type fakeEmbedModelWithTokenizer struct {
 // Tokenizer 返回携带的 tokenizer
 func (f *fakeEmbedModelWithTokenizer) Tokenizer() Tokenizer { return f.tk }
 
-// fakeEmbedModelPlain 无 tokenizer 属性的嵌入模型 fake（不实现 TokenizerProvider）
+// fakeEmbedModelPlain 无 tokenizer 能力的嵌入模型 fake（不实现 TokenizerProvider）
 type fakeEmbedModelPlain struct{}
 
 // fakeTokenizerWithMaxLength 实现 MaxLengthProvider 的 fake tokenizer
@@ -1403,11 +1415,15 @@ func TestNewTextChunker_token路径size不超限不下调(t *testing.T) {
 }
 
 // TestNewTextChunker_token路径真实分块 Go 专项（决策 10：真实 tiktoken 端到端）
-// cl100k_base 词表本地计算不联网
+// cl100k_base 词表本地计算不联网。
+// 【实施修正 2026-10-20】原计划单句文本实测仅 15 token < chunk_size=50，
+// 单块装下致 Greater(1) 必败；经 Python tiktoken 实测改用 10 倍重复
+// 文本（151 token），必然多块。
 func TestNewTextChunker_token路径真实分块(t *testing.T) {
 	c, err := NewTextChunker(50, 10, WithChunkUnit("token"))
 	assert.NoError(t, err)
-	docs := []reranker.Document{{ID: "doc_1", Text: "This is a longer document that should be split into multiple token budget chunks."}}
+	text := "This is a longer document that should be split into multiple token budget chunks. "
+	docs := []reranker.Document{{ID: "doc_1", Text: strings.Repeat(text, 10)}}
 	chunks, err := c.ChunkDocuments(context.Background(), docs)
 	assert.NoError(t, err)
 	assert.Greater(t, len(chunks), 1)

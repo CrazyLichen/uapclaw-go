@@ -68,24 +68,20 @@ type PreprocessingPipeline struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
+// D1' 决策：Python \w/\s 与 regexp2(.NET) 的字符类语义有分叉，
+// 全部模式统一用以下两个显式语义集（唯一修改点）：
 const (
-	// pyWordClassStr Python \w 精确集。
+	// wCore Python \w 精确集内芯（不带外层方括号，供字符类拼接）。
 	//
 	// Python \w = [a-zA-Z0-9_] + Unicode 词字符，实测含 No/Nl 类
 	//（①②③/½/Ⅷ 是词字符）；regexp2(.NET) \w 含 Mn/Pc 但缺 No/Nl——
 	// 若用原生 \w，"①②③序号" 会被 REDUNDANT_SYMBOLS 误删（Python 保留）。
-	// 显式集消除该差异（D1' 决策）。
-	pyWordClassStr = `[\p{L}\p{Nd}\p{Nl}\p{No}_]`
-	// pySpaceClassStr Python \s 补偿集。
+	// 显式集消除该差异。
+	wCore = `\p{L}\p{Nd}\p{Nl}\p{No}_`
+	// sCore Python \s 补偿集内芯（不带外层方括号，供字符类拼接）。
 	//
 	// .NET \s 与 Python \s 在 U+0085/U+00A0/U+1680/U+2028/U+3000 等
-	// 已一致，唯缺文件分隔符组 \x1c-\x1f，显式补齐（D1' 决策）。
-	pySpaceClassStr = `[\s\x{1c}-\x{1f}]`
-)
-
-// wCore/sCore 语义集"内芯"（去掉外层方括号），供字符类拼接。
-const (
-	wCore = `\p{L}\p{Nd}\p{Nl}\p{No}_`
+	// 已一致，唯缺文件分隔符组 \x1c-\x1f，显式补齐。
 	sCore = `\s\x{1c}-\x{1f}`
 )
 
@@ -95,13 +91,13 @@ var (
 	// pySpaceSeqPattern Python r"\s+"：连续空白 → 单空格。
 	//
 	// Python: text_preprocessor.py WhitespaceNormalizer.process L53
-	pySpaceSeqPattern = regexp2.MustCompile(pySpaceClassStr+`+`, regexp2.None)
+	pySpaceSeqPattern = regexp2.MustCompile(`[`+sCore+`]+`, regexp2.None)
 	// urlPattern Python URL_PATTERN r"https?://\S+|www\.\S+"。
 	//
-	// \S → 非 pySpace 集（D1' 决策：显式语义集替换）。
+	// \S → 非 Python \s 集（D1' 决策：显式语义集替换）。
 	//
 	// Python: text_preprocessor.py URLEmailRemover.URL_PATTERN L66
-	urlPattern = regexp2.MustCompile(`https?://[^\s\x{1c}-\x{1f}]+|www\.[^\s\x{1c}-\x{1f}]+`, regexp2.None)
+	urlPattern = regexp2.MustCompile(`https?://[^`+sCore+`]+|www\.[^`+sCore+`]+`, regexp2.None)
 	// comPattern Python COM_PATTERN
 	// r"(?:https?://|www\.)?\S+?\.(?:com|net|org|cn)(?:[/?#]\S*)?\b"。
 	//
@@ -110,7 +106,7 @@ var (
 	//
 	// Python: text_preprocessor.py URLEmailRemover.COM_PATTERN L67
 	comPattern = regexp2.MustCompile(
-		`(?:https?://|www\.)?[^\s\x{1c}-\x{1f}]+?\.(?:com|net|org|cn)(?:[/?#][^\s\x{1c}-\x{1f}]*)?\b`,
+		`(?:https?://|www\.)?[^`+sCore+`]+?\.(?:com|net|org|cn)(?:[/?#][^`+sCore+`]*)?\b`,
 		regexp2.None)
 	// emailPattern Python EMAIL_PATTERN r"\b[\w\.-]+@[\w\.-]+\.\w+\b"。
 	//
