@@ -77,9 +77,14 @@ func (f *fakeHost) Load(root string) (PluginClientFace, error) {
 // newChanAgentTransportT 最简 AgentTransport（ch 双向复用）
 type newChanAgentTransportT struct{ ch chan []byte }
 
-func newChanAgentTransport(ch chan []byte) *newChanAgentTransportT { return &newChanAgentTransportT{ch: ch} }
+func newChanAgentTransport(ch chan []byte) *newChanAgentTransportT {
+	return &newChanAgentTransportT{ch: ch}
+}
 
-func (c *newChanAgentTransportT) Send(ctx context.Context, data []byte) error { c.ch <- data; return nil }
+func (c *newChanAgentTransportT) Send(ctx context.Context, data []byte) error {
+	c.ch <- data
+	return nil
+}
 
 func (c *newChanAgentTransportT) Recv() (<-chan []byte, error) { return c.ch, nil }
 

@@ -14,6 +14,7 @@
 //
 //	config/
 //	├── config.go         # Config 核心结构体：New/Load/Save/Get/Set/Reload
+//	├── roundtrip.go      # round-trip 写回：SetRoundTrip（yaml.v3 Node 保注释）
 //	├── envvar.go         # 环境变量解析：ResolveEnvVars + DecryptFunc
 //	├── normalize.go      # 配置后处理：NormalizeConfig + ParseCustomHeaders
 //	├── sections.go       # 专用分段方法：Server/Logging/Workspace

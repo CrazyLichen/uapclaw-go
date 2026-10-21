@@ -326,13 +326,15 @@ func updateYAMLKeyInConfig(key string, value any) error {
 
 	switch key {
 	case "context_engine_enabled":
-		return cfg.Set("react.context_engine_config.enabled", parsed)
+		// M-05: SetRoundTrip（yaml.v3 Node 保注释）替代 Set（yaml.Marshal 全量重写丢注释），
+		// 对齐 Python 各 update_*_in_config 的 ruamel round-trip 写回
+		return cfg.SetRoundTrip("react.context_engine_config.enabled", parsed)
 	case "kv_cache_affinity_enabled":
-		return cfg.Set("react.context_engine_config.enable_kv_cache_release", parsed)
+		return cfg.SetRoundTrip("react.context_engine_config.enable_kv_cache_release", parsed)
 	case "permissions_enabled":
-		return cfg.Set("permissions.enabled", parsed)
+		return cfg.SetRoundTrip("permissions.enabled", parsed)
 	case "memory_forbidden_enabled":
-		return cfg.Set("memory.forbidden_memory_definition.enabled", parsed)
+		return cfg.SetRoundTrip("memory.forbidden_memory_definition.enabled", parsed)
 	case "memory_forbidden_description":
 		// Python: update_memory_forbidden_description_in_config
 		// 先读后合并：current_desc = config.get("memory.forbidden_memory_definition.description", {})
@@ -357,7 +359,7 @@ func updateYAMLKeyInConfig(key string, value any) error {
 			}
 			currentDesc[preferredLang] = strings.TrimSpace(descStr)
 		}
-		return cfg.Set("memory.forbidden_memory_definition.description", currentDesc)
+		return cfg.SetRoundTrip("memory.forbidden_memory_definition.description", currentDesc)
 	default:
 		return fmt.Errorf("未知的 YAML 配置键: %s", key)
 	}
@@ -389,6 +391,8 @@ func replaceTeamsInConfig(params map[string]any) error {
 			if modes, ok := data["modes"].(map[string]any); ok {
 				if _, hasTeamKey := modes["team"]; hasTeamKey {
 					delete(modes, "team")
+					// M-05: Save → SetRoundTrip 不可行（删除无对应 API），
+					// 保留 Save 全量写回（Python ruamel del + dump 等价路径）
 					if err := cfg.Save(data); err != nil {
 						return fmt.Errorf("保存配置失败（删除 modes.team）: %w", err)
 					}
@@ -398,7 +402,8 @@ func replaceTeamsInConfig(params map[string]any) error {
 			return nil
 		}
 		// 非空数组：写入 modes.team
-		if err := cfg.Set("modes.team", teamData); err != nil {
+		// M-05: SetRoundTrip 保注释写回
+		if err := cfg.SetRoundTrip("modes.team", teamData); err != nil {
 			return fmt.Errorf("写入 modes.team 失败: %w", err)
 		}
 	}
@@ -406,7 +411,8 @@ func replaceTeamsInConfig(params map[string]any) error {
 	// agents 数据写入 web_config_panel.agent_team_agents
 	agentsData, hasAgents := params["agents"]
 	if hasAgents {
-		if err := cfg.Set("web_config_panel.agent_team_agents", agentsData); err != nil {
+		// M-05: SetRoundTrip 保注释写回
+		if err := cfg.SetRoundTrip("web_config_panel.agent_team_agents", agentsData); err != nil {
 			return fmt.Errorf("写入 web_config_panel.agent_team_agents 失败: %w", err)
 		}
 	}
@@ -427,7 +433,7 @@ func updateDefaultModelsInConfig(models []map[string]any) error {
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
 
-	if err := cfg.Set("models.defaults", models); err != nil {
+	if err := cfg.SetRoundTrip("models.defaults", models); err != nil {
 		return fmt.Errorf("写入 models.defaults 失败: %w", err)
 	}
 
@@ -482,7 +488,8 @@ func updateMemoryForbiddenInConfig(updates map[string]any) error {
 	}
 
 	// 写回 memory.forbidden_memory_definition
-	if err := cfg.Set("memory.forbidden_memory_definition", section); err != nil {
+	// M-05: SetRoundTrip 保注释写回（对齐 Python ruamel round-trip）
+	if err := cfg.SetRoundTrip("memory.forbidden_memory_definition", section); err != nil {
 		return fmt.Errorf("写入 memory.forbidden_memory_definition 失败: %w", err)
 	}
 

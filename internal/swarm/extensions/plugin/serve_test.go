@@ -62,9 +62,9 @@ func TestFakeExtension_接口满足(t *testing.T) {
 // fakeRecvErrTransport Recv 返回错误的 transport 实现
 type fakeRecvErrTransport struct{}
 
-func (f *fakeRecvErrTransport) Send(ctx context.Context, data []byte) error   { return nil }
-func (f *fakeRecvErrTransport) Recv() (<-chan []byte, error)                  { return nil, errors.New("recv-boom") }
-func (f *fakeRecvErrTransport) Close() error                                  { return nil }
+func (f *fakeRecvErrTransport) Send(ctx context.Context, data []byte) error { return nil }
+func (f *fakeRecvErrTransport) Recv() (<-chan []byte, error)                { return nil, errors.New("recv-boom") }
+func (f *fakeRecvErrTransport) Close() error                                { return nil }
 
 // fakeNoImplServer 仅嵌入 Unimplemented 的服务（所有 RPC 走默认"未实现"）
 type fakeNoImplServer struct {

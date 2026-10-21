@@ -53,6 +53,24 @@ func TestLoopQueues_HasFollowUp(t *testing.T) {
 	assert.False(t, q.HasFollowUp())
 }
 
+// TestLoopQueues_FollowUpLen 测试 FollowUpLen 返回当前积压长度
+// （集成测试同步屏障的轮询依据）
+func TestLoopQueues_FollowUpLen(t *testing.T) {
+	q := NewLoopQueues(16)
+	assert.Equal(t, 0, q.FollowUpLen())
+
+	q.PushFollowUp("f1")
+	assert.Equal(t, 1, q.FollowUpLen())
+
+	q.PushFollowUp("f2")
+	q.PushFollowUp("f3")
+	assert.Equal(t, 3, q.FollowUpLen())
+
+	// 排空后归零
+	q.DrainFollowUp()
+	assert.Equal(t, 0, q.FollowUpLen())
+}
+
 // TestLoopQueues_DrainSteering_空队列 测试空队列排空
 func TestLoopQueues_DrainSteering_空队列(t *testing.T) {
 	q := NewLoopQueues(16)

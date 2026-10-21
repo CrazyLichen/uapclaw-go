@@ -158,6 +158,20 @@ func (tc *TaskLoopController) HasFollowUp() bool {
 	return false
 }
 
+// FollowUpLen 返回 follow-up 队列当前长度（只读）。
+// [Go 扩展] Python 无此方法：asyncio 单线程 FIFO 保证测试中
+// follow_up 发布先于外层循环退出检查被消费，无需显式同步；
+// Go 真并行下 MQ 消费者 goroutine 与外层循环自由竞争，
+// 集成测试需轮询本访问器确认消息真实入队后再释放被阻塞的内层调用，
+// 消除 follow_up→release 之间的竞态窗口。
+func (tc *TaskLoopController) FollowUpLen() int {
+	queues := tc.getInteractionQueues()
+	if queues != nil {
+		return queues.FollowUpLen()
+	}
+	return 0
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getInteractionQueues 从 EventHandler 防御性获取 LoopQueues。

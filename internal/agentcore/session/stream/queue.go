@@ -28,6 +28,14 @@ type StreamQueue struct {
 	closed atomic.Bool
 	// chCloseOnce 保证 channel 只 close 一次
 	chCloseOnce sync.Once
+	// sendMu 排除 Send 与 Close 的并发：
+	// Send 持读锁（允许并发发送者），Close 持写锁（等在途 Send 完成后才 close(ch)）。
+	// [Go 扩展] Python 单线程 asyncio 无 send/close 竞态；Go 真并行下
+	// closed 原子检查与 ch<- 之间存在窗口，close(ch) 与 chansend 竞争
+	// 会触发 race 告警（send on closed channel panic 由 recover 兜底但数据丢失）。
+	// 读锁语义下 Close 最多等待单次 Send 重试周期（默认 5×200ms=1s），
+	// 与 Python close() 的 queue.join()（默认 5s 超时）等待语义兼容。
+	sendMu sync.RWMutex
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -70,9 +78,11 @@ func NewStreamQueue(maxSize int) *StreamQueue {
 }
 
 // Send 带超时的发送，对齐 Python AsyncStreamQueue.send()。
-// closed 后直接返回 ErrQueueClosed；使用 recover 捕获 closed 检查与 close(ch) 之间的窗口 panic。
+// closed 后直接返回 ErrQueueClosed；sendMu 读锁与 Close 的写锁互斥，
+// 消除 closed 检查与 ch<- 之间 close(ch) 的竞态窗口。
 func (q *StreamQueue) Send(ctx context.Context, data Schema, attemptTimeout ...time.Duration) (err error) {
-	// recover 兜底：closed.Load() 返回 false 后、ch<- 之前，Close 可能已 close(ch)
+	// recover 兜底（防御层，正常路径已由 sendMu 排除竞争）：
+	// 历史上存在 closed.Load() 返回 false 后、ch<- 之前 Close 已 close(ch) 的窗口
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn(logComponent).
@@ -94,6 +104,10 @@ func (q *StreamQueue) Send(ctx context.Context, data Schema, attemptTimeout ...t
 			Msg("StreamQueue closed, cannot send data")
 		return ErrQueueClosed
 	}
+
+	// 读锁：与 Close 的写锁互斥，保证持锁期间 ch<- 不会与 close(ch) 并发
+	q.sendMu.RLock()
+	defer q.sendMu.RUnlock()
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		sendCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -168,16 +182,21 @@ func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (Sc
 //
 // 使用 sync.Once 保证 close(ch) 只执行一次，天然幂等。
 // 关闭后消费端仍可读取残留数据直到 ok=false（Go channel 语义保证）。
+//
+// sendMu 写锁：等待在途 Send 完成后才 close(ch)，
+// 排除 chansend 与 closechan 的并发（race detector 视角的未同步访问）。
 func (q *StreamQueue) Close(ctx context.Context, timeout ...time.Duration) error {
 	if q.closed.Load() {
 		return nil
 	}
 	q.closed.Store(true)
 
-	// close(ch)：消费端仍可读取残留数据，直到 ok=false
+	// 写锁：等待所有在途 Send（持读锁）完成后才 close(ch)
+	q.sendMu.Lock()
 	q.chCloseOnce.Do(func() {
 		close(q.ch)
 	})
+	q.sendMu.Unlock()
 
 	return nil
 }

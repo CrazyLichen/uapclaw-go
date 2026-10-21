@@ -424,9 +424,9 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 6.21 | ✅ | TaskScheduler / EventHandler | 调度器与事件处理器 + intent_recognizer.go | `openjiuwen/core/controller/` |
 | 6.22 | ☐ | ControllerAgent | 基于 Controller 的 Agent | `openjiuwen/core/single_agent/base.py` (ControllerAgent) |
 | **6.x Runner 编排** | — | | | |
-| 6.23 | ✅ | ResourceMgr | Agent/Tool/Workflow/Model/Prompt 全局注册表 | `openjiuwen/core/runner/resources_manager/resource_manager.py` |
+| 6.23 | ✅ | ResourceMgr | Agent/Tool/Workflow/Model/Prompt 全局注册表；✅ SetMcpClientFactory/McpClientFactory 客户端工厂注入（ToolMgr.createClient 优先注入工厂，对齐 Python 系统测试 patch(SseClient) 类级替换语义，先例 swarm AgentManager.SetAgentFactory）；✅ MCP 生命周期集成测试（tests/integration/agentcore/runner/mcp_lifecycle_test.go，对齐 Python test_mcp_tools_sse/stdio/playwright 三用例，走 AddMcpServer→GetMcpToolInfos→Invoke→RemoveMcpServer 全路径） | `openjiuwen/core/runner/resources_manager/resource_manager.py` |
 | 6.24 | ✅ | AsyncCallbackFramework | 事件注册/触发/emit_before/emit_after/transform_io | `openjiuwen/core/runner/callback/` |
-| 6.25 | ✅ | Runner 单例 | `RunAgent/RunAgentStreaming/RunWorkflow/SpawnAgent` | `openjiuwen/core/runner/runner.py` |
+| 6.25 | ✅ | Runner 单例 | `RunAgent/RunAgentStreaming/RunWorkflow/SpawnAgent`；✅ Agent 资源管理集成测试（对齐 Python test_runner_agent_resource_management 资源管理链路：AddAgent→RunAgent(ByAgentID) 会话全链路→RemoveAgent→再运行失败；交互中断恢复部分依赖 8.14-8.24 ⤵️） | `openjiuwen/core/runner/runner.py` |
 | 6.26 | ✅ | RunnerConfig | Runner 配置（distributed_mode 等） | `openjiuwen/core/runner/runner_config.py` |
 | 6.27 | ✅ | LocalMessageQueue | 本地消息队列 | `openjiuwen/core/runner/message_queue_inmemory.py` |
 | 6.28 | ✅ | Spawn 子进程 | JSON over stdin/stdout，`SpawnedProcessHandle` | `openjiuwen/core/runner/spawn/` |
@@ -708,7 +708,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.6.3-10 | ✅ | Swarm Rails | AskUser✅/Avatar✅/Permissions✅/Interrupt✅/ProjectMemory✅/ResponsePrompt✅/RuntimePrompt✅/StreamEvent✅ | `jiuwenswarm/agents/harness/common/rails/` |
 | 10.6.11 | ☐ | AutoHarness | 自动化调度 | `jiuwenswarm/agents/harness/common/auto_harness/` |
 | 10.6.12 | ✅ | SessionOps | 会话操作 | `jiuwenswarm/agents/harness/common/session_ops_service.py` |
-| 10.6.13-18 | ✅ | Swarm Memory | Config✅(swarm版config.go+包内缓存+ClearConfigCache回填)/Dreaming✅/Embeddings✅(Provider接口+OpenAICompatible+Mock+工厂，含manager/internal/types依赖链补齐)/External✅(config+builder 迁入 swarm memory 包：engine 门禁+external 段解析+openjiuwen 映射+四路分发 builder；偏差修复：kv 默认 shelve/键名 embed_base_url/ltm mkdir/mem0+openviking env 回退/品牌默认 uapclawswarm/IsExternalMemoryEnabled 双条件/agentarts 移除；adapter 瘦身薄调用，agentName 回退删除)/Forbidden✅/RPC✅(独立子包 common/memoryrpc：5 handler 纯函数层 List/Edit/Status/Toggle/Open+13 个 Python 对齐私有函数+6 个 Go 辅助函数(pathPartContains/expandUser/absoluteJoin/loadConfigMap/dirOrEmpty/anyOr)；白名单校验/UAPCLAWSWARM.md 根特例/品牌映射 jiuwen→uapclaw；Toggle 写回 Load+Set 点路径(D3)对齐 11.14 先例；Status 六块统计含 detailed 分支 external_memory(engine external/both)；Edit preview splitlines 语义对齐(尾换行/CRLF)；写回失败 D6 new_value=old_value；覆盖率 91.5%；⤵️ TUI 面板注册(11.15)) | `jiuwenswarm/agents/harness/common/memory/` |
+| 10.6.13-18 | ✅ | Swarm Memory | Config✅(swarm版config.go+包内缓存+ClearConfigCache回填)/Dreaming✅/Embeddings✅(Provider接口+OpenAICompatible+Mock+工厂，含manager/internal/types依赖链补齐)/External✅(config+builder 迁入 swarm memory 包：engine 门禁+external 段解析+openjiuwen 映射+四路分发 builder；偏差修复：kv 默认 shelve/键名 embed_base_url/ltm mkdir/mem0+openviking env 回退/品牌默认 uapclawswarm/IsExternalMemoryEnabled 双条件/agentarts 移除；adapter 瘦身薄调用，agentName 回退删除)/Forbidden✅/RPC✅(独立子包 common/memoryrpc：5 handler 纯函数层 List/Edit/Status/Toggle/Open+13 个 Python 对齐私有函数+6 个 Go 辅助函数(pathPartContains/expandUser/absoluteJoin/loadConfigMap/dirOrEmpty/anyOr)；白名单校验/UAPCLAWSWARM.md 根特例/品牌映射 jiuwen→uapclaw；Toggle 写回 Load+SetRoundTrip 点路径(D3)对齐 11.14 先例+ruamel round-trip 保注释(M-05：config 包 SetRoundTrip yaml.v3 Node 模式)；Status 六块统计含 detailed 分支 external_memory(engine external/both)且 provider/model nil 对齐 Python None(T-09)；Edit preview splitlines 语义对齐(尾换行/CRLF)；CJK 字符计数 S-03(utf8.RuneCountInString)；mtime float 秒 M-02；mkdir/touch error 字段协议 M-04；写回失败 D6 new_value=old_value；覆盖率 91.5%；⤵️ TUI 面板注册(11.15)) | `jiuwenswarm/agents/harness/common/memory/` |
 | 10.6.19 | ✅ | TeamManager 主体 | 72 方法骨架回填+customizer 六步(a-e 实现/f ⤵️10.6.24)+runtime_inheritance(四结构体+双白名单+BuildMemberRails 13 步)+2 rail+exceptions+分布式纯函数层+model_pool 注入+GetDefaultModels 权威收敛三处+CodeMemberConfigurer 注入+buildAndMountMemberRailsForContext 真实实现（updateEvolutionConfig 步骤 6 闭环，审查 M-25 修复）；覆盖率 67.1%（新代码 87-100% 达标；lifecycle/interact/distributed 骨架属 10.6.20-22、stepD/DrainTeamSkillEvents 为集成路径无注入点，不追） | `team_manager.py` |
 | 10.6.20 | ☐ | DistributedRuntime | zmq 传输层（✅ 纯函数层已随 10.6.19 带出：IsDistributedMode/RuntimeRole/ParsePort/NormalizeDistributedTransportFields/FallbackDistributedToLocal/PG 五函数）；⤴️ 纯函数层来源 10.6.19 | `distributed_runtime.py` |
 | 10.6.21 | ☐ | RemoteMemberBootstrap | 远程成员引导 | `remote_member_bootstrap.py` |
@@ -741,7 +741,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 11.12 | ☐ | IM Pipeline | 数字人入站/出站管道 | `jiuwenswarm/gateway/im_pipeline/` |
 | 11.13 | ☐ | Gateway Hook | 钩子处理 | `jiuwenswarm/gateway/hooks/` |
 | **11.x IM 渠道** | — | | | |
-| 11.14 | ✅ | Web 通道 | WebSocket + HTTP RPC | `jiuwenswarm/gateway/channel_manager/web/` |
+| 11.14 | ✅ | Web 通道 | WebSocket + HTTP RPC（M-05：config 写回点 updateYAMLKeyInConfig/replaceTeamsInConfig/updateDefaultModelsInConfig/updateMemoryForbiddenInConfig 全部切换 SetRoundTrip ruamel round-trip 保注释；modes.team 删除分支保留 Save——无删除 API 的等价路径） | `jiuwenswarm/gateway/channel_manager/web/` |
 | 11.15 | ☐ | TUI 通道 | 终端 UI 交互（⤴️ 需回填来源：10.6.18 memory_rpc 5 个 local handler 注册进 TUI 记忆管理面板） | `jiuwenswarm/gateway/channel_manager/tui/` |
 | 11.16 | ☐ | 飞书通道 | 事件回调，企业多机器人 | `jiuwenswarm/gateway/channel_manager/im_platforms/feishu/` |
 | 11.17 | ☐ | 钉钉通道 | DingTalk Stream 协议 | `jiuwenswarm/gateway/channel_manager/im_platforms/dingtalk/` |

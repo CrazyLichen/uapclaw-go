@@ -319,7 +319,7 @@ func (s *MilvusVectorStore) Search(ctx context.Context, queryVector []float64, t
 			Str("method", "Search").
 			Str("collection_name", s.collectionName).
 			Err(err).
-			Msg("向量搜索失败")
+			Msg("vector search failed")
 		return nil, err
 	}
 
@@ -365,7 +365,7 @@ func (s *MilvusVectorStore) SparseSearch(ctx context.Context, queryText string, 
 			Str("method", "SparseSearch").
 			Str("query_text", queryText).
 			Err(err).
-			Msg("BM25 文本搜索失败")
+			Msg("BM25 text search failed")
 		return nil, nil
 	}
 
@@ -441,7 +441,7 @@ func (s *MilvusVectorStore) HybridSearch(ctx context.Context, queryText string, 
 			Str("method", "HybridSearch").
 			Str("collection_name", s.collectionName).
 			Err(err).
-			Msg("混合搜索失败，降级到分别搜索")
+			Msg("Hybrid search failed, falling back to separate searches")
 		return s.hybridSearchFallback(ctx, queryText, queryVector, topK, filters)
 	}
 
@@ -493,7 +493,7 @@ func (s *MilvusVectorStore) Add(ctx context.Context, data []map[string]any, opts
 					Int("processed", processed).
 					Int("total", total).
 					Str("collection_name", s.collectionName).
-					Msg("写入进度")
+					Msg("written records progress")
 			}
 		}
 	}
@@ -508,11 +508,18 @@ func (s *MilvusVectorStore) Add(ctx context.Context, data []map[string]any, opts
 		Int("processed", processed).
 		Int("total", total).
 		Str("collection_name", s.collectionName).
-		Msg("写入完成")
+		Msg("Writing completed")
 
-	// 对齐 Python: self._client.flush(self.collection_name)
+	// 对齐 Python: self._client.flush(self.collection_name)（无 try/except，异常上抛）
+	// M-03: flush 失败必须返回 error——数据已 insert 但未持久化可搜时，调用方
+	// （BuildIndex）应沿既有错误链路感知失败，而非静默报成功
 	if err := c.Flush(ctx, milvusclient.NewFlushOption(s.collectionName)); err != nil {
-		logger.Warn(logComponent).Err(err).Str("collection_name", s.collectionName).Msg("Flush 失败")
+		logger.Error(logComponent).
+			Str("method", "Add").
+			Str("collection_name", s.collectionName).
+			Err(err).
+			Msg("flush failed")
+		return err
 	}
 	return nil
 }
@@ -558,11 +565,11 @@ func (s *MilvusVectorStore) Delete(ctx context.Context, ids []string, filterExpr
 			Str("method", "Delete").
 			Str("collection_name", s.collectionName).
 			Err(err).
-			Msg("删除向量失败")
+			Msg("failed to delete vectors")
 		return false, nil
 	}
 	if err := c.Flush(ctx, milvusclient.NewFlushOption(s.collectionName)); err != nil {
-		logger.Warn(logComponent).Err(err).Str("collection_name", s.collectionName).Msg("Flush 失败")
+		logger.Warn(logComponent).Err(err).Str("collection_name", s.collectionName).Msg("flush failed")
 	}
 	// 对齐 Python: result.get("delete_count", 0) > 0
 	return result.DeleteCount > 0, nil
@@ -611,7 +618,7 @@ func (s *MilvusVectorStore) CloseWithRelease(releaseCollection bool) {
 			if state, stateErr := c.GetLoadState(ctx, milvusclient.NewGetLoadStateOption(s.collectionName)); stateErr == nil && state.State == entity.LoadStateLoaded {
 				if err := c.ReleaseCollection(ctx, milvusclient.NewReleaseCollectionOption(s.collectionName)); err != nil {
 					// 对齐 Python: logger.warning(f"Failed to release Milvus collection: {e}")
-					logger.Warn(logComponent).Err(err).Str("collection_name", s.collectionName).Msg("释放集合失败")
+					logger.Warn(logComponent).Err(err).Str("collection_name", s.collectionName).Msg("failed to release collection")
 				}
 				s.mu.Lock()
 				s.collectionLoaded = false
@@ -621,7 +628,7 @@ func (s *MilvusVectorStore) CloseWithRelease(releaseCollection bool) {
 	}
 	if err := c.Close(ctx); err != nil {
 		// 对齐 Python: logger.warning(f"Failed to close Milvus client: {e}")
-		logger.Warn(logComponent).Err(err).Msg("关闭 Milvus 客户端失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to close Milvus client")
 	}
 }
 
@@ -879,12 +886,12 @@ func (s *MilvusVectorStore) ensureLoaded(ctx context.Context) error {
 	}
 
 	// 对齐 Python: logger.info("Retrieval Milvus Store: loading collection %s", ...)
-	logger.Info(logComponent).Str("collection_name", s.collectionName).Msg("正在加载集合")
+	logger.Info(logComponent).Str("collection_name", s.collectionName).Msg("loading collection")
 	if err := c.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(s.collectionName)); err != nil {
 		return err
 	}
 	// 对齐 Python: logger.info("Retrieval Milvus Store: %s collection loaded", ...)
-	logger.Info(logComponent).Str("collection_name", s.collectionName).Msg("集合加载完成")
+	logger.Info(logComponent).Str("collection_name", s.collectionName).Msg("collection loaded")
 
 	s.mu.Lock()
 	s.collectionLoaded = true
@@ -1054,12 +1061,25 @@ func (s *MilvusVectorStore) hybridSearchFallback(ctx context.Context, queryText 
 
 	for i := 0; i < 2; i++ {
 		out := <-outCh
-		if out.err != nil || len(out.results) == 0 {
+		if out.err != nil {
+			// M-01: 对齐 Python await 语义——fallback 内单路异常使整个降级搜索失败上抛
+			// （Python await task_vector 直接传播异常，无静默单路降级）
+			logger.Warn(logComponent).
+				Str("method", "HybridSearchFallback").
+				Str("collection_name", s.collectionName).
+				Err(out.err).
+				Msg("hybrid fallback search path failed")
+			return nil, out.err
+		}
+		if len(out.results) == 0 {
 			continue
 		}
 		var retrievalResults []common.RetrievalResult
 		for _, sr := range out.results {
-			idMapping[sr.Text] = sr.ID
+			// M-01: 首次保留，对齐 Python fusion.py L41-42 if key not in result_dict
+			if _, exists := idMapping[sr.Text]; !exists {
+				idMapping[sr.Text] = sr.ID
+			}
 			// 拷贝 metadata 后写入 id（避免污染原始 map，供融合后恢复）
 			metadata := make(map[string]any, len(sr.Metadata)+1)
 			for k, v := range sr.Metadata {

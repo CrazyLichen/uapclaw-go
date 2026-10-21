@@ -47,7 +47,9 @@ type MilvusIndexer struct {
 	docIDField string
 	// databaseName 数据库名称
 	databaseName string
-	// constructConfig 构建阶段配置（AUTO 时仅含 metric_type）
+	// constructConfig 构建阶段配置（AUTO 时仅含 metric_type）。
+	// S-02: dense 索引建库唯一真源——buildDenseIndex 消费此字典透传给服务器，
+	// 与 CheckVectorField 的 CheckConfigsMatching 校验期望同源。
 	constructConfig map[string]any
 	// searchConfig 搜索阶段配置
 	searchConfig map[string]any
@@ -217,7 +219,7 @@ func (mi *MilvusIndexer) IndexExists(ctx context.Context, indexName string) (boo
 		logger.Error(logComponent).
 			Str("index_name", indexName).
 			Err(err).
-			Msg("检查索引存在性失败")
+			Msg("failed to check index existence")
 		return false, nil
 	}
 	return ok, nil
@@ -239,7 +241,7 @@ func (mi *MilvusIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 			Str("doc_id", docID).
 			Str("index_name", indexName).
 			Err(err).
-			Msg("删除索引条目失败")
+			Msg("failed to delete index entries")
 		return false, nil
 	}
 
@@ -247,7 +249,7 @@ func (mi *MilvusIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 	logger.Info(logComponent).
 		Str("doc_id", docID).
 		Int64("delete_count", result.DeleteCount).
-		Msg("成功删除文档条目")
+		Msg("deleted doc entries")
 
 	return result.DeleteCount > 0, nil
 }
@@ -271,7 +273,7 @@ func (mi *MilvusIndexer) GetIndexInfo(ctx context.Context, indexName string) (ma
 		logger.Error(logComponent).
 			Str("index_name", indexName).
 			Err(err).
-			Msg("获取集合统计失败")
+			Msg("failed to get collection stats")
 		return map[string]any{"exists": false, "error": err.Error()}, nil
 	}
 	rowCount := 0
@@ -287,7 +289,7 @@ func (mi *MilvusIndexer) GetIndexInfo(ctx context.Context, indexName string) (ma
 		logger.Error(logComponent).
 			Str("index_name", indexName).
 			Err(err).
-			Msg("获取集合描述失败")
+			Msg("failed to describe collection")
 		return map[string]any{"exists": false, "error": err.Error()}, nil
 	}
 
@@ -307,7 +309,7 @@ func (mi *MilvusIndexer) Close() {
 	}
 	if err := mi.client.Close(context.Background()); err != nil {
 		// 对齐 Python: logger.warning(f"Failed to close Milvus client: {e}")
-		logger.Warn(logComponent).Err(err).Msg("关闭 Milvus 客户端失败")
+		logger.Warn(logComponent).Err(err).Msg("failed to close Milvus client")
 	}
 }
 
@@ -464,7 +466,7 @@ func (mi *MilvusIndexer) BuildIndex(
 	logger.Info(logComponent).
 		Str("index_name", collectionName).
 		Int("chunk_count", len(chunks)).
-		Msg("成功构建索引")
+		Msg("successfully built index")
 
 	return true, nil
 }
@@ -489,7 +491,7 @@ func (mi *MilvusIndexer) UpdateIndex(
 			Str("doc_id", docID).
 			Str("index_name", config.IndexName).
 			Err(err).
-			Msg("更新索引失败")
+			Msg("failed to update index")
 		return false, err
 	}
 
@@ -500,7 +502,7 @@ func (mi *MilvusIndexer) UpdateIndex(
 			Str("doc_id", docID).
 			Str("index_name", config.IndexName).
 			Err(err).
-			Msg("更新索引-flush失败")
+			Msg("failed to flush after update index")
 		return false, err
 	}
 
@@ -599,10 +601,10 @@ func (mi *MilvusIndexer) ensureCollection(ctx context.Context, collectionName st
 			if testEmb, embErr := embedModel.EmbedQuery(ctx, "X"); embErr == nil {
 				dimension = len(testEmb)
 				// 对齐 Python: logger.debug(f"Got dimension through API call: {dimension}")
-				logger.Debug(logComponent).Int("dimension", dimension).Msg("通过 API 调用获取维度")
+				logger.Debug(logComponent).Int("dimension", dimension).Msg("got dimension through API call")
 			} else {
 				// 对齐 Python: logger.warning(f"Unable to get dimension through API call: {e}")
-				logger.Warn(logComponent).Err(embErr).Msg("无法通过 API 调用获取维度")
+				logger.Warn(logComponent).Err(embErr).Msg("unable to get dimension through API call")
 			}
 		}
 		if dimension == 0 {
@@ -639,41 +641,45 @@ func (mi *MilvusIndexer) ensureCollection(ctx context.Context, collectionName st
 		logger.Error(logComponent).
 			Str("collection_name", collectionName).
 			Err(err).
-			Msg("创建集合失败")
+			Msg("failed to create collection")
 		return err
 	}
 
 	// 对齐 Python: logger.info(f"Created collection: {collection_name}")
 	logger.Info(logComponent).
 		Str("collection_name", collectionName).
-		Msg("集合创建成功")
+		Msg("created collection")
 	return nil
 }
 
-// buildDenseIndex 根据向量字段配置构建 dense 索引。
+// buildDenseIndex 根据 constructConfig 构建 dense 索引（S-01/S-02 字典透传方案）。
 //
-// 对齐 Python _ensure_collection 中的 index_type 计算：
-// auto → AUTOINDEX；其他 → 具体索引构造（参数来自 vectorField 字段）。
+// 对齐 Python _ensure_collection：
+//
+//	index_params.add_index(field_name=..., index_type=index_type, **self._construct_config)
+//
+// Python 将 index_type 与 _construct_config 参数字典整体透传给服务器，无类型化构造层。
+// Go 用 SDK NewGenericIndex 等价实现——以 constructConfig 为建库唯一真源：
+// 建库参数与 CheckVectorField 的 CheckConfigsMatching 校验期望天然同源。
+// AUTO 分支保持 NewAutoIndex（constructConfig 仅含 metric_type，无参数可透传）。
 func (mi *MilvusIndexer) buildDenseIndex() (index.Index, error) {
 	metricType := mapMilvusMetricType(mi.distanceMetric)
 
-	switch vf := mi.vectorField.(type) {
-	case *vector_fields.MilvusAUTO:
-		return index.NewAutoIndex(metricType), nil
-	case *vector_fields.MilvusFLAT:
-		// 对齐 foundation 层：FLAT 等价 nlist=1 的 IVF_FLAT
-		return index.NewIvfFlatIndex(metricType, 1), nil
-	case *vector_fields.MilvusHNSW:
-		return index.NewHNSWIndex(metricType, vf.M, vf.EfConstruction), nil
-	case *vector_fields.MilvusIVF:
-		return index.NewIvfFlatIndex(metricType, vf.Nlist), nil
-	case *vector_fields.MilvusSCANN:
-		// TODO(#通用): 新 SDK 暂无 SCANN 构造器，用 IVF_PQ 近似（对齐 foundation 层做法）；
-		// SDK 补充 SCANN 构造器后回填真实实现（与 foundation/store/vector_fields 的 SCANN TODO 联动）
-		return index.NewIvfPQIndex(metricType, vf.Nlist, 8, 8), nil
-	default:
+	if vf, ok := mi.vectorField.(*vector_fields.MilvusAUTO); ok {
+		_ = vf
 		return index.NewAutoIndex(metricType), nil
 	}
+
+	// 字典透传：constructConfig 键（index_type 补充后）直接进 NewGenericIndex，
+	// 服务器按 index_type 解释其余键（nlist/M/efConstruction/with_raw_data 等）。
+	// future variant（T-13 回填后）的 extra_construct 并入 dict 即自动下发，无需新 case。
+	params := make(map[string]string, len(mi.constructConfig)+1)
+	for k, v := range mi.constructConfig {
+		params[k] = fmt.Sprintf("%v", v)
+	}
+	// 对齐 Python: index_type = self.vector_field.index_type.upper()（auto 已在上分支处理）
+	params[index.IndexTypeKey] = strings.ToUpper(mi.vectorField.IndexType().String())
+	return index.NewGenericIndex("", params), nil
 }
 
 // mapMilvusMetricType 距离度量字符串转 SDK MetricType。

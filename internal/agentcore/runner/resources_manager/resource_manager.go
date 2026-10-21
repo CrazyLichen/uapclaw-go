@@ -829,6 +829,12 @@ func (m *ResourceMgr) GetMcpServerConfig(serverID string) (*mcptypes.McpServerCo
 	return m.registry.Tool().GetMcpServerConfig(serverID)
 }
 
+// SetMcpClientFactory 设置 MCP 客户端工厂（供测试注入 mock 客户端，生产环境不需要调用）。
+// 转发到内部 ToolMgr.SetClientFactory，对齐 Python 系统测试中 patch(SseClient) 的类级替换语义。
+func (m *ResourceMgr) SetMcpClientFactory(factory McpClientFactory) {
+	m.registry.Tool().SetClientFactory(factory)
+}
+
 // GetMcpToolIDs 获取指定服务器下所有工具 ID。
 //
 // Python: ResourceManager.get_mcp_tool_ids(server_id)

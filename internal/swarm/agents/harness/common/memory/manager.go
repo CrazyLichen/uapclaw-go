@@ -367,7 +367,10 @@ func (m *MemoryIndexManager) Status() map[string]any {
 		}
 	}
 
-	provider, model := "", ""
+	// T-09: Python self.provider.id if self.provider else None → null 语义。
+	// 原空串 "" 在 RPC payload 中与 Python None（JSON null）不一致，
+	// 11.15 TUI 前端 === null 判空不命中。无 provider 时存 nil 对齐。
+	var provider, model any
 	if m.provider != nil {
 		provider = m.provider.ID()
 		model = m.provider.Model()
@@ -729,9 +732,12 @@ func (m *MemoryIndexManager) setupFileWatcher() {
 	}
 
 	// Python: isdir → schedule(recursive=True)；文件 → schedule(dirname, recursive=False)
+	// S-04: fsnotify v1.10.1 Watcher.Add 是非递归的（官方文档 "Subdirectories are not
+	// watched (i.e. it's non-recursive)"），watchdog recursive=True 的等价实现需要
+	// Walk 展开现存子目录 + watchLoop 收到 Create 时动态补 Add（见 watchLoop）。
 	for watchPath := range watchPaths {
 		if st, err := os.Stat(watchPath); err == nil && st.IsDir() {
-			_ = watcher.Add(watchPath) // fsnotify 目录监听默认递归（Add 递归子目录需手动；此处对齐 watchdog recursive=True 语义）
+			addWatchRecursive(watcher, watchPath)
 		} else {
 			parent := filepath.Dir(watchPath)
 			if parent != "" && parent != "." {
@@ -761,7 +767,9 @@ func (m *MemoryIndexManager) setupFileWatcher() {
 }
 
 // watchLoop 监听事件循环。对齐 Python MemoryFileHandler.on_modified/on_created/on_deleted：
-// watcherInitialized 后过滤 is_memory_path 再防抖同步
+// watcherInitialized 后过滤 is_memory_path 再防抖同步。
+// S-04: Create 事件命中目录时动态补 Add（含子目录展开）——对齐 watchdog
+// recursive=True 对运行期新建子目录的监听语义。
 func (m *MemoryIndexManager) watchLoop() {
 	for {
 		select {
@@ -774,6 +782,12 @@ func (m *MemoryIndexManager) watchLoop() {
 			m.watchMu.Unlock()
 			if !initialized {
 				continue
+			}
+			// S-04: 新建目录 → 递归补 Add，子目录内后续事件才可监听
+			if event.Op&fsnotify.Create != 0 {
+				if st, err := os.Stat(event.Name); err == nil && st.IsDir() {
+					addWatchRecursive(m.watcher, event.Name)
+				}
 			}
 			// Python: rel_path = os.path.relpath(path, workspace_dir); if is_memory_path(rel_path): schedule
 			rel, err := filepath.Rel(m.WorkspaceDir, event.Name)
@@ -790,6 +804,24 @@ func (m *MemoryIndexManager) watchLoop() {
 			}
 		}
 	}
+}
+
+// addWatchRecursive 递归监听目录（S-04：watchdog recursive=True 等价）。
+// 对 root 及其全部现存子目录执行 watcher.Add；跳过 symlink 子目录（防符号链接环）。
+func addWatchRecursive(watcher *fsnotify.Watcher, root string) {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // 单目录失败不中断整体监听
+		}
+		if !info.IsDir() {
+			return nil
+		}
+		if path != root && info.Mode()&os.ModeSymlink != 0 {
+			return filepath.SkipDir // symlink 目录不展开（Walk 本身不 follow symlink，此处双保险）
+		}
+		_ = watcher.Add(path)
+		return nil
+	})
 }
 
 // scheduleWatchSync 防抖调度同步。对齐 Python _schedule_watch_sync（manager.py L416-447）：

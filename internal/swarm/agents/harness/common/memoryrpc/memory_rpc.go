@@ -3,12 +3,12 @@
 package memoryrpc
 
 import (
-	"bufio"
 	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -73,23 +73,33 @@ func HandleMemoryEdit(ctx context.Context, workspace string, params map[string]a
 	}
 
 	// Python L276-278：不存在 → parent.mkdir(parents=True, exist_ok=True) + touch
+	// M-04: Python 该两步在 try 外，OSError 上抛由注册层转 ok=False；
+	// Go handler 无 error 返回通道，改用响应内嵌 error 字段协议
+	// （11.15 注册层检查该字段转 ok=False，对齐 Python 外层 wrapper 语义）。
+	// editable 保持 true 不动：payload 结构稳定，Python 异常路径无 payload 可参照。
+	createErr := ""
 	parent := filepath.Dir(resolved)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		logger.Error(logComponent).Err(err).Str("path", resolved).Msg("memory.edit mkdir failed")
-	}
-	if f, err := os.OpenFile(resolved, os.O_CREATE|os.O_WRONLY, 0o644); err != nil {
+		createErr = err.Error()
+	} else if f, err := os.OpenFile(resolved, os.O_CREATE|os.O_WRONLY, 0o644); err != nil {
 		logger.Error(logComponent).Err(err).Str("path", resolved).Msg("memory.edit touch failed")
+		createErr = err.Error()
 	} else {
 		_ = f.Close()
 	}
 
-	return map[string]any{
+	result := map[string]any{
 		"path":            resolved,
 		"exists":          false,
 		"content_preview": "",
 		"kind":            kind,
 		"editable":        true,
 	}
+	if createErr != "" {
+		result["error"] = createErr
+	}
+	return result
 }
 
 // HandleMemoryOpen 返回各记忆目录路径。
@@ -141,7 +151,15 @@ func HandleMemoryList(ctx context.Context, workspace, mode string, params map[st
 		if projectDir != "" {
 			discoverWorkspace = projectDir
 		}
-		projectFiles, _ := projectmemory.DiscoverAndLoadMemoryFiles(ctx, discoverWorkspace, discoverWorkspace, additionalDirs)
+		projectFiles, discoverErr := projectmemory.DiscoverAndLoadMemoryFiles(ctx, discoverWorkspace, discoverWorkspace, additionalDirs)
+		// M-06: 吞错改为日志可观测（发现层故障时 List 展示与真实状态可区分）
+		if discoverErr != nil {
+			logger.Warn(logComponent).
+				Str("method", "MemoryList").
+				Str("workspace", discoverWorkspace).
+				Err(discoverErr).
+				Msg("discover memory files failed")
+		}
 		for _, f := range projectFiles {
 			stat := safeStat(f.Path)
 			// Python: "lines": f.content.count("\n") + 1 if f.content else 0
@@ -250,10 +268,21 @@ func HandleMemoryStatus(ctx context.Context, workspace, mode string, params map[
 		discoverWorkspace = projectDir
 	}
 	projectmemory.ClearProjectMemoryCache(discoverWorkspace)
-	projectFiles, _ := projectmemory.DiscoverAndLoadMemoryFiles(ctx, discoverWorkspace, discoverWorkspace, nil)
+	projectFiles, discoverErr := projectmemory.DiscoverAndLoadMemoryFiles(ctx, discoverWorkspace, discoverWorkspace, nil)
+	// M-06: 吞错改为日志可观测（对齐 Python 注册层 ok=False 通道的 Go 侧补偿，
+	// 11.15 注册层实现时可用 error 字段协议透传）
+	if discoverErr != nil {
+		logger.Warn(logComponent).
+			Str("method", "MemoryStatus").
+			Str("workspace", discoverWorkspace).
+			Err(discoverErr).
+			Msg("discover memory files failed")
+	}
 	totalChars := 0
 	for _, f := range projectFiles {
-		totalChars += len(f.Content)
+		// S-03: Python len() 按 Unicode 字符计数，Go 用 RuneCountInString 对齐
+		// （byte 长度对 CJK 有 ~3x 偏差，total_chars 统计失真）
+		totalChars += utf8.RuneCountInString(f.Content)
 	}
 	largeFiles := projectmemory.GetLargeMemoryFiles(projectFiles, projectmemory.MaxMemoryCharCount)
 	// Python logger.info（规则 3 日志同步：5 字段）
@@ -288,7 +317,8 @@ func HandleMemoryStatus(ctx context.Context, workspace, mode string, params map[
 	codingTotalChars := 0
 	for _, cf := range codingFiles {
 		if data, err := os.ReadFile(cf["path"].(string)); err == nil {
-			codingTotalChars += len(data)
+			// S-03: rune 计数对齐 Python len()（CJK 偏差 3x）
+			codingTotalChars += utf8.RuneCountInString(string(data))
 		}
 	}
 	result["coding_memory"] = map[string]any{
@@ -304,7 +334,8 @@ func HandleMemoryStatus(ctx context.Context, workspace, mode string, params map[
 	autoTotalChars := 0
 	for _, af := range autoFiles {
 		if data, err := os.ReadFile(af["path"].(string)); err == nil {
-			autoTotalChars += len(data)
+			// S-03: rune 计数对齐 Python len()（CJK 偏差 3x）
+			autoTotalChars += utf8.RuneCountInString(string(data))
 		}
 	}
 	result["auto_memory"] = map[string]any{
@@ -415,6 +446,9 @@ func isForbiddenEnabled(cfg map[string]any) bool {
 		forbidden = map[string]any{}
 	}
 	// Python: return bool(forbidden.get("enabled", False))
+	// T-05: 非 bool 类型（如字符串 "false"/数字）时 Go 类型断言失败判 false，
+	// Python truthy 判 true（含 "false"→true 的坑）。仅配置误写场景触发；
+	// Go 的 fail-safe 方向更合理，有意不复刻 Python truthy 语义。
 	enabled, _ := forbidden["enabled"].(bool)
 	return enabled
 }
@@ -607,7 +641,9 @@ func relativePath(absPath, workspace, projectDir string) string {
 	return absPath
 }
 
-// expandUser 展开 ~ 前缀（对齐 Python os.path.expanduser 的 ~ 与 ~/ 前缀分支）
+// expandUser 展开 ~ 前缀（对齐 Python os.path.expanduser 的 ~ 与 ~/ 前缀分支）。
+// T-06: 不支持 ~user 形式（Python 会查 passwd 解析到该用户 home）；
+// 调用方白名单目录不含其他用户 home 路径，实际不可达，无需支持。
 func expandUser(path string) string {
 	if path == "~" {
 		return utilpath.UserHomeDir()
@@ -629,27 +665,35 @@ func absoluteJoin(base, rel string) string {
 	return joined
 }
 
-// safeStat 安全取文件 stat，失败返回 {size:0, mtime:0}。
+// safeStat 安全取文件 stat，失败返回 {size:0, mtime:0.0}。
 // Python: _safe_stat (L159-164)
 func safeStat(path string) map[string]any {
 	if s, err := os.Stat(path); err == nil {
 		// Python: {"size": s.st_size, "mtime": s.st_mtime}
-		return map[string]any{"size": s.Size(), "mtime": s.ModTime().UnixMilli()}
+		// M-02: st_mtime 是 float 秒（含亚秒精度），UnixMilli 是 int64 毫秒——
+		// 量纲与类型均偏差（值大 1000 倍、丢亚秒），TUI 前端按秒渲染会错乱
+		return map[string]any{"size": s.Size(), "mtime": float64(s.ModTime().UnixNano()) / 1e9}
 	}
-	return map[string]any{"size": int64(0), "mtime": int64(0)}
+	// M-02: 失败分支同步 float 秒（原 int64(0) 类型不一致）
+	return map[string]any{"size": int64(0), "mtime": float64(0)}
 }
 
 // countLines 统计文件行数（utf-8 容错读），失败或空文件返回 0。
 // Python: _count_lines (L167-172)：逐行迭代计数（"l1\nl2\n"→2，"l1\nl2\nl3"→3，""→0）
+// T-04: 行界对齐 Python 文本模式 universal newlines 语义——\n、\r\n、孤立 \r
+// 都是行界；原 bufio.Scanner 只认 \n（孤立 \r 少计）且有 64KB 单行上限
+// （超长行触发 token too long 后静默停止，行数少计无信号——detailed 分支
+// 恰恰扫描 40000+ 字符大文件，长段落 md 单行可超 64KB）。
 func countLines(path string) int {
-	f, err := os.Open(path)
-	if err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) == 0 {
 		return 0
 	}
-	defer func() { _ = f.Close() }()
-	count := 0
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
+	// \n 与 \r 合计为行界数，再扣除 \r\n 的双重计数
+	count := strings.Count(string(data), "\n") + strings.Count(string(data), "\r") - strings.Count(string(data), "\r\n")
+	// 尾部无行界的最后一行：Python 逐行迭代同样计入（"l1\nl2" → 2 行）
+	last := data[len(data)-1]
+	if last != '\n' && last != '\r' {
 		count++
 	}
 	return count
@@ -669,10 +713,16 @@ func scanMDFiles(dir, kind, workspace string, projectDir string) []map[string]an
 	var results []map[string]any
 	for _, entry := range entries {
 		// Python: if entry.is_file() and entry.name.endswith(".md")
+		// T-07: entry.IsDir() 基于 lstat 不 follow symlink——指向目录的 .md symlink
+		// 会被误纳入（后续读内容失败计 0 行）。Python is_file() follow symlink，
+		// 故用 os.Stat + IsRegular() 二次判定对齐（symlink→文件保留，symlink→目录排除）。
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
 		full := filepath.Join(dir, entry.Name())
+		if fi, err := os.Stat(full); err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
 		stat := safeStat(full)
 		results = append(results, map[string]any{
 			"path":          full,
@@ -694,7 +744,10 @@ func isCodeMode(mode string) bool {
 }
 
 // loadConfigMap 读取全局 config（不缓存，每次现读）。
-// 对齐 Python get_config()（toggle/status 每次取最新）
+// 对齐 Python get_config()（toggle/status 每次取最新）。
+// T-08: Python get_config() = resolve_env_vars + _normalize_config（custom_headers
+// JSON 解析 + web.send_file_allowed 默认）；Go Load 已含 env 解析，未应用 normalize。
+// memoryrpc 仅消费 memory/modes 键，normalize 影响的 custom_headers/web 键无行为差异。
 func loadConfigMap() map[string]any {
 	cfg, err := config.New("")
 	if err != nil {
@@ -709,8 +762,9 @@ func loadConfigMap() map[string]any {
 
 // updateModeMemoryConfig 更新 modes.agent.{mode}.memory.{field} 并写回。
 // Python: _update_mode_memory_config (memory_rpc.py L447-456)：
-// round-trip 写回 modes→agent→{mode}→memory→{field}；Go 用 Load+Set 点路径等价
-// （对齐 11.14 web 通道先例：Set 前必须 Load，否则空 raw 覆盖整个文件）
+// round-trip 写回 modes→agent→{mode}→memory→{field}。
+// T-11: config.yaml 不存在时 Go 自动创建写入（Python ruamel 抛 FileNotFoundError
+// 由注册层转 ok=False）——Go 行为更健壮，有意增强，M-05 round-trip 实现延续该语义。
 func updateModeMemoryConfig(mode, field string, value bool) error {
 	cfg, err := config.New("")
 	if err != nil {
@@ -719,12 +773,13 @@ func updateModeMemoryConfig(mode, field string, value bool) error {
 	if _, err := cfg.Load(); err != nil {
 		return err
 	}
-	return cfg.Set("modes.agent."+mode+".memory."+field, value)
+	// M-05: SetRoundTrip（yaml.v3 Node 保注释）替代 Set（yaml.Marshal 全量重写丢注释）
+	return cfg.SetRoundTrip("modes.agent."+mode+".memory."+field, value)
 }
 
 // updateMemoryForbiddenEnabledInConfig 更新 memory.forbidden_memory_definition.enabled 并写回。
-// Python: update_memory_forbidden_enabled_in_config (common/config.py L1190-1198)；
-// 与 11.14 web 通道 forbidden.set 同键同先例（Load + Config.Set 点路径）
+// Python: update_memory_forbidden_enabled_in_config (common/config.py L1190-1198)。
+// M-05: SetRoundTrip（yaml.v3 Node 保注释）替代 Set，对齐 Python ruamel round-trip
 func updateMemoryForbiddenEnabledInConfig(value bool) error {
 	cfg, err := config.New("")
 	if err != nil {
@@ -733,7 +788,7 @@ func updateMemoryForbiddenEnabledInConfig(value bool) error {
 	if _, err := cfg.Load(); err != nil {
 		return err
 	}
-	return cfg.Set("memory.forbidden_memory_definition.enabled", value)
+	return cfg.SetRoundTrip("memory.forbidden_memory_definition.enabled", value)
 }
 
 // dirOrEmpty 目录存在返回原路径，否则空串（对齐 Python os.path.isdir 三元）

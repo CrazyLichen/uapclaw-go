@@ -226,7 +226,8 @@ func TestSafeStat_正常与异常(t *testing.T) {
 
 	st2 := safeStat(filepath.Join(tmp, "missing.md"))
 	assert.Equal(t, int64(0), st2["size"])
-	assert.Equal(t, int64(0), st2["mtime"])
+	// M-02: Python stat() mtime 是 float 秒（st_mtime），Go 等价 float64(UnixNano())/1e9
+	assert.Equal(t, float64(0), st2["mtime"])
 }
 
 // TestCountLines_行数统计 测试正常与 OSError 与空文件

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	utilpath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
@@ -351,18 +352,19 @@ func MergeMemoryContent(files []LoadedMemoryFile, maxChars int) string {
 	for _, f := range files {
 		// Python: chunk = f"### {f.kind} memory -- {_short(f.path)}\n{f.content}\n"
 		chunk := "### " + f.Kind + " memory -- " + short(f.Path) + "\n" + f.Content + "\n"
-		// Python: if total + len(chunk) > max_chars:
-		if total+len(chunk) > maxChars {
+		// Python: if total + len(chunk) > max_chars:（len 是 Unicode 字符数，非字节数）
+		chunkLen := utf8.RuneCountInString(chunk)
+		if total+chunkLen > maxChars {
 			remaining := maxChars - total
-			// Python: if remaining > 200: parts.append(chunk[:remaining])
+			// Python: if remaining > 200: parts.append(chunk[:remaining])（字符切片，非字节切片）
 			if remaining > 200 {
-				parts = append(parts, chunk[:remaining])
+				parts = append(parts, string([]rune(chunk)[:remaining]))
 			}
 			truncatedAt = f.Path
 			break
 		}
 		parts = append(parts, chunk)
-		total += len(chunk)
+		total += chunkLen
 	}
 	// Python: merged = "\n".join(parts).strip()
 	merged := strings.TrimSpace(strings.Join(parts, "\n"))
@@ -383,7 +385,8 @@ func MergeMemoryContent(files []LoadedMemoryFile, maxChars int) string {
 func GetLargeMemoryFiles(files []LoadedMemoryFile, threshold int) []map[string]any {
 	var warnings []map[string]any
 	for _, f := range files {
-		charCount := len(f.Content)
+		// Python: char_count = len(f.content)（Unicode 字符数，非字节数）
+		charCount := utf8.RuneCountInString(f.Content)
 		if charCount > threshold {
 			// Python: warnings.append({"path": f.path, "kind": f.kind, "char_count": ..., ...})
 			warnings = append(warnings, map[string]any{

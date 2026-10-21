@@ -270,10 +270,9 @@ func (l *ExtensionLoader) makeEventBridge(pc PluginClientFace, event string) cal
 				Msg("[ExtensionLoader] 事件桥调用失败")
 			return nil
 		}
-		if result != nil {
-			for k, v := range result {
-				data[k] = v
-			}
+		// range nil map 安全，无需前置 nil 检查（staticcheck S1031）
+		for k, v := range result {
+			data[k] = v
 		}
 		return nil
 	}

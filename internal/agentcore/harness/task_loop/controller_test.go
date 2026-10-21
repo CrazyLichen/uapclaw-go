@@ -171,6 +171,31 @@ func TestTaskLoopController_HasFollowUp_有Queues(t *testing.T) {
 	assert.False(t, tc.HasFollowUp())
 }
 
+// TestTaskLoopController_FollowUpLen 测试 FollowUpLen 返回积压长度
+// （集成测试同步屏障的轮询依据；无 EventHandler 时返回 0）
+func TestTaskLoopController_FollowUpLen(t *testing.T) {
+	// 无 Handler：返回 0
+	tcNoHandler := NewTaskLoopController()
+	assert.Equal(t, 0, tcNoHandler.FollowUpLen())
+
+	// 有 Queues：返回真实积压长度
+	tc := NewTaskLoopController()
+	card := newTestCard()
+	cfg := config.DefaultControllerConfig()
+	tc.Init(card, cfg, &mockAbilityMgr{}, nil)
+
+	queues := NewLoopQueues(16)
+	handler := &mockEventHandlerWithQueues{queues: queues}
+	tc.SetEventHandler(handler)
+
+	assert.Equal(t, 0, tc.FollowUpLen())
+	queues.PushFollowUp("f1")
+	queues.PushFollowUp("f2")
+	assert.Equal(t, 2, tc.FollowUpLen())
+	queues.DrainFollowUp()
+	assert.Equal(t, 0, tc.FollowUpLen())
+}
+
 // TestTaskLoopController_WaitRoundCompletion 测试等待轮次完成
 func TestTaskLoopController_WaitRoundCompletion(t *testing.T) {
 	tc := NewTaskLoopController()

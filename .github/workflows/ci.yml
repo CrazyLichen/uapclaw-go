@@ -295,7 +295,25 @@ jobs:
           echo "检查集成测试合规性..."
           echo ""
 
-          for file in $(find tests/integration -name '*_test.go'); do
+          # 读取跨子系统豁免目录列表（格式：每行一个 tests/integration 下的相对目录，# 开头为注释）
+          SCOPE_EXEMPT_DIRS=""
+          if [ -f .integration-scope-exempt ]; then
+            SCOPE_EXEMPT_DIRS=$(grep -v '^#' .integration-scope-exempt | grep -v '^$' || true)
+          fi
+
+          is_scope_exempt() {
+            local dir="$1"
+            if [ -n "$SCOPE_EXEMPT_DIRS" ]; then
+              for exempt_dir in $SCOPE_EXEMPT_DIRS; do
+                if [ "$dir" = "$exempt_dir" ]; then
+                  return 0
+                fi
+              done
+            fi
+            return 1
+          }
+
+          for file in $(find tests/integration -name '*_test.go' | sort); do
             echo "::group::检查 ${file}"
             VIOLATIONS=""
 
@@ -327,6 +345,42 @@ jobs:
 
             echo "::endgroup::"
           done
+
+          echo ""
+          echo "检查单包测试冒充集成测试（按二级子系统跨度判定）..."
+          echo ""
+
+          # 按测试文件所在目录聚合 import 的 internal 二级子系统（如 agentcore/runner、swarm/server），
+          # 跨度 ≥2 判定为真集成测试；单子系统的属于单元测试性质，必须显式豁免。
+          # 豁免方式：在 .integration-scope-exempt 中登记目录并注明理由（如真跨进程测试）。
+          HAS_SCOPE_ERROR=false
+          for dir in $(find tests/integration -name '*_test.go' -exec dirname {} \; | sort -u); do
+            rel_dir=${dir#./}
+
+            if is_scope_exempt "$rel_dir"; then
+              echo "  ${rel_dir}: 豁免（见 .integration-scope-exempt）"
+              continue
+            fi
+
+            # 统计该目录下所有 .go 文件 import 的 internal 二级子系统（忽略 common/* 纯公共层）
+            subsystems=$(grep -rh '"github.com/uapclaw/uapclaw-go/internal/' "$dir"/*.go 2>/dev/null | \
+              sed 's|.*"\(github.com/uapclaw/uapclaw-go/internal/[^"]*\)".*|\1|' | \
+              sort -u | \
+              sed 's|github.com/uapclaw/uapclaw-go/internal/||' | \
+              awk -F/ '{print $1"/"$2}' | grep -v '^common/' | sort -u)
+            subsystem_count=$(echo "$subsystems" | grep -c . || true)
+
+            if [ "$subsystem_count" -lt 2 ]; then
+              echo "::error file=${rel_dir}::仅跨 ${subsystem_count} 个子系统（$(echo $subsystems | tr '\n' ' ')），疑似单元测试冒充集成测试。若确属集成性质（如真跨进程），请在 .integration-scope-exempt 中登记并注明理由"
+              HAS_SCOPE_ERROR=true
+            else
+              echo "  ${rel_dir}: 跨 ${subsystem_count} 个子系统，合规"
+            fi
+          done
+
+          if [ "$HAS_SCOPE_ERROR" = true ]; then
+            HAS_ERROR=true
+          fi
 
           echo ""
           if [ "$HAS_ERROR" = true ]; then
