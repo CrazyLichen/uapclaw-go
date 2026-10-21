@@ -75,6 +75,12 @@ func (q *LoopQueues) HasFollowUp() bool {
 	return len(q.followUp) > 0
 }
 
+// FollowUpLen 返回 follow-up 队列当前积压长度（只读）。
+// [Go 扩展] 测试同步用：等待 N 条 follow-up 全部入队的轮询依据。
+func (q *LoopQueues) FollowUpLen() int {
+	return len(q.followUp)
+}
+
 // DrainSteering 非阻塞一次性排空所有引导指令。
 // Python: LoopQueues.drain_steering
 func (q *LoopQueues) DrainSteering() []string {

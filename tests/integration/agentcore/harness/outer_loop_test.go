@@ -4,6 +4,7 @@ package harness_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -241,6 +243,13 @@ func (s *OuterLoopSuite) TestOuterLoop_FollowUp触发额外轮次() {
 	// 在阻塞期间注入 follow-up
 	agent.FollowUp(ctx, followUpText, "", sess)
 
+	// 同步屏障：确认 follow-up 已被消费者推入 LoopQueues 后再释放。
+	// 否则 Go 真并行下外层循环退出检查可能先于 MQ 消费执行（asyncio 无此竞态）
+	s.Require().NoError(
+		s.waitForFollowUpQueued(agent, 1, 30*time.Second),
+		"等待 follow-up 入队超时",
+	)
+
 	// 释放第 2 次调用
 	controlledAgent.ReleaseCall(2)
 
@@ -317,6 +326,12 @@ func (s *OuterLoopSuite) TestOuterLoop_多个FollowUpFIFO消费() {
 	agent.FollowUp(ctx, "第一步补充", "", sess)
 	agent.FollowUp(ctx, "第二步补充", "", sess)
 	agent.FollowUp(ctx, "第三步补充", "", sess)
+
+	// 同步屏障：确认 3 条 follow-up 全部入队后再释放（消除消费者竞态）
+	s.Require().NoError(
+		s.waitForFollowUpQueued(agent, 3, 30*time.Second),
+		"等待 3 条 follow-up 入队超时",
+	)
 
 	// 释放第 2 次调用
 	controlledAgent.ReleaseCall(2)
@@ -401,6 +416,12 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer加FollowUp组合() {
 	// 在阻塞期间注入 steer + follow-up
 	agent.Steer(ctx, steerText, sess)
 	agent.FollowUp(ctx, followUpText, "", sess)
+
+	// 同步屏障：确认 follow-up 入队后再释放（steer 为独立队列无需等待）
+	s.Require().NoError(
+		s.waitForFollowUpQueued(agent, 1, 30*time.Second),
+		"等待 follow-up 入队超时",
+	)
 
 	// 释放第 2 次调用
 	controlledAgent.ReleaseCall(2)
@@ -657,6 +678,12 @@ func (s *OuterLoopSuite) TestOuterLoop_FollowUp持久化到SessionState() {
 	agent.FollowUp(ctx, "fu_alpha", "", sess)
 	agent.FollowUp(ctx, "fu_beta", "", sess)
 
+	// 同步屏障：确认 2 条 follow-up 全部入队后再释放（消除消费者竞态）
+	s.Require().NoError(
+		s.waitForFollowUpQueued(agent, 2, 30*time.Second),
+		"等待 2 条 follow-up 入队超时",
+	)
+
 	// 释放第 2 次调用
 	controlledAgent.ReleaseCall(2)
 
@@ -778,4 +805,32 @@ func seedTaskPlan(agent *harness.DeepAgent, sess *session.Session, goal string, 
 	}
 	state.TaskPlan = &plan
 	agent.SaveState(sess, state)
+}
+
+// waitForFollowUpQueued 等待 follow-up 事件真实入队（LoopQueues.followUp 非空）。
+//
+// 背景（asyncio→Go 竞态差异）：
+// Python 中 follow_up 是 fire-and-forget 发布，但 asyncio 单线程就绪 FIFO 保证
+// 消费者协程先于外层循环恢复——测试里 follow_up → release_call 的顺序即消费顺序。
+// Go 真并行下 MQ 消费者 goroutine 与外层循环 goroutine 自由竞争调度，
+// CI 高负载（2 核 + 覆盖率插桩开销）时消费者可能晚于外层循环退出检查执行，
+// 导致 HasFollowUp()==false + 无剩余任务 → 循环提前退出 → 第 3 轮永不启动。
+//
+// 本函数在 FollowUp 注入与 ReleaseCall 之间建立显式同步屏障：
+// 轮询 TaskLoopController.HasFollowUp() 直到为 true，确保消息已被
+// HandleFollowUp 消费并推入 LoopQueues 后再释放被阻塞的内层调用。
+// 生产代码保持 fire-and-forget 语义不变（对齐 Python）。
+func (s *OuterLoopSuite) waitForFollowUpQueued(agent *harness.DeepAgent, expected int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		// LoopController() 返回 ControllerInterface，TaskLoopController 上的
+		// FollowUpLen 通过类型断言访问
+		if tl, ok := agent.LoopController().(*task_loop.TaskLoopController); ok && tl != nil {
+			if tl.FollowUpLen() >= expected {
+				return nil
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return fmt.Errorf("等待 %d 条 follow-up 入队超时（%v）", expected, timeout)
 }
