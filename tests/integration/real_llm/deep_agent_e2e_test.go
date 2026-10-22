@@ -4,6 +4,7 @@ package real_llm
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,9 +14,11 @@ import (
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -35,7 +38,7 @@ func TestDeepAgentE2ESuite(t *testing.T) {
 }
 
 // TestDeepAgent_真实LLM_基础问答 测试真实 LLM 下 DeepAgent 的基础问答
-// 对齐 Python: test_deep_agent_e2e.py — 简单问答场景
+// 对齐 Python: test_deep_agent_invoke_e2e_require_api_key_base
 func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_基础问答() {
 	s.SkipIfNoRealLLM()
 
@@ -106,9 +109,284 @@ func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_多轮交互() {
 	s.NotNil(result, "运行结果不应为 nil")
 }
 
+// TestDeepAgent_真实LLM_流式输出 测试真实 LLM 下 DeepAgent.Stream 流式输出。
+// 对齐 Python: test_deep_agent_stream_e2e_require_api_key_base
+//
+// 断言对齐 Python 原文：
+//   - stream 至少产出一个 chunk
+//   - chunk 中存在 type=="llm_output" 的数据
+//   - llm_output chunk 的 content 拼接后非空
+func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_流式输出() {
+	s.SkipIfNoRealLLM()
+
+	model, err := s.NewRealModel()
+	s.Require().NoError(err, "创建真实 Model 失败")
+
+	ctx, cancel := context.WithTimeout(s.Ctx, 2*time.Minute)
+	defer cancel()
+
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID("e2e_real_llm_stream"),
+		agentschema.WithAgentName("E2ERealLLMStreamAgent"),
+	)
+	agent, err := harness.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Card:          card,
+		Model:         model,
+		MaxIterations: 5,
+	})
+	s.Require().NoError(err, "创建 DeepAgent 失败")
+
+	sess := session.NewSession(
+		session.WithSessionID("e2e_stream_session"),
+		session.WithEnvs(map[string]any{}),
+	)
+	err = sess.PreRun(ctx)
+	s.Require().NoError(err, "Session PreRun 失败")
+
+	ch, err := agent.Stream(ctx, map[string]any{"query": "请用一句话介绍你自己"},
+		agentinterfaces.WithSession(sess),
+	)
+	s.Require().NoError(err, "Stream 调用失败")
+	s.Require().NotNil(ch, "流式通道不应为 nil")
+
+	// 消费所有 chunk（带超时保护，防止通道异常挂死）
+	var chunks []stream.Schema
+	type chunkOrTimeout struct {
+		chunk stream.Schema
+		ok    bool
+	}
+	recv := make(chan chunkOrTimeout, 1)
+	go func() {
+		for c := range ch {
+			recv <- chunkOrTimeout{chunk: c, ok: true}
+		}
+		recv <- chunkOrTimeout{ok: false}
+	}()
+
+deadline:
+	for {
+		select {
+		case r := <-recv:
+			if !r.ok {
+				break deadline
+			}
+			chunks = append(chunks, r.chunk)
+		case <-ctx.Done():
+			break deadline
+		}
+	}
+
+	s.NotEmpty(chunks, "stream 应至少产出一个 chunk")
+
+	// 对齐 Python: has_llm_output = any(c.type == "llm_output" for c in chunks)
+	hasLLMOutput := false
+	var combined strings.Builder
+	for _, c := range chunks {
+		if output, ok := c.(stream.OutputSchema); ok && output.Type == "llm_output" {
+			hasLLMOutput = true
+			if payloadMap, ok := output.Payload.(map[string]any); ok {
+				if content, ok := payloadMap["content"].(string); ok {
+					combined.WriteString(content)
+				}
+			}
+		}
+	}
+	s.True(hasLLMOutput, "stream chunks 应包含 llm_output 类型数据")
+	s.NotEmpty(combined.String(), "llm_output 拼接内容不应为空")
+}
+
+// TestDeepAgent_真实LLM_外循环多步steer与followup 测试真实 LLM 外层任务循环的多步规划 + steer + follow_up。
+// 对齐 Python: test_deep_agent_task_loop_real_multistep_steer_follow_up
+//
+// Python 原文用 LoopObserveRail.iteration_event 等待轮次时机；
+// Go 用 testhelpers.ModelCallObserver（LoopObserveRail 的等价物）轮询
+// 模型调用次数达到目标后注入 steer/follow_up。
+// 断言对齐 Python 原文：
+//   - result_type=="answer" 且 output 非空
+//   - 迭代轮次 ≥ 2（模型调用次数为代理指标）
+//   - steering 文本出现在模型消息中（SteerSeenInMessages）
+func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_外循环多步steer与followup() {
+	s.SkipIfNoRealLLM()
+
+	model, err := s.NewRealModel()
+	s.Require().NoError(err, "创建真实 Model 失败")
+
+	ctx, cancel := context.WithTimeout(s.Ctx, 10*time.Minute)
+	defer cancel()
+
+	const steerText = "输出请使用简洁中文要点"
+	const followUpText = "在结尾追加一条风险提示"
+
+	observer := testhelpers.NewModelCallObserver()
+
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID("e2e_real_llm_taskloop"),
+		agentschema.WithAgentName("E2ERealLLMTaskLoopAgent"),
+	)
+	agent, err := harness.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Card:           card,
+		Model:          model,
+		Rails:          []agentinterfaces.AgentRail{observer},
+		EnableTaskLoop: true,
+		MaxIterations:  12,
+	})
+	s.Require().NoError(err, "创建 DeepAgent 失败")
+
+	sess := session.NewSession(
+		session.WithSessionID("e2e_taskloop_session"),
+		session.WithEnvs(map[string]any{}),
+	)
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+
+	query := "请制定一个简短的项目启动计划，包含以下方面：1. 需求分析；2. 技术选型；3. 实施方案。每个方面给出简要说明。"
+
+	// goroutine 中执行 Invoke（对齐 Python asyncio.create_task + run_agent）
+	type invokeResult struct {
+		result map[string]any
+		err    error
+	}
+	done := make(chan invokeResult, 1)
+	go func() {
+		result, invokeErr := agent.Invoke(ctx, map[string]any{"query": query},
+			agentinterfaces.WithSession(sess))
+		done <- invokeResult{result: result, err: invokeErr}
+	}()
+
+	// 等第 1 轮模型调用发生后注入 steer（对齐 Python iteration_event(1).wait()）
+	s.Require().True(s.waitForModelCalls(observer, 1, 3*time.Minute),
+		"等待第 1 次模型调用超时")
+	agent.Steer(ctx, steerText, sess)
+
+	// 等第 2 轮模型调用发生后注入 follow_up（对齐 Python iteration_event(2).wait()）
+	s.Require().True(s.waitForModelCalls(observer, 2, 5*time.Minute),
+		"等待第 2 次模型调用超时")
+	agent.FollowUp(ctx, followUpText, "", sess)
+
+	// 等待 Invoke 完成（对齐 Python asyncio.wait_for(invoke_task, 600)）
+	select {
+	case r := <-done:
+		s.Require().NoError(r.err, "Invoke 失败")
+		s.Require().NotNil(r.result, "结果不应为 nil")
+		testhelpers.AssertAnswerResult(s.T(), r.result)
+		output, _ := r.result["output"].(string)
+		s.NotEmpty(output, "answer output 不应为空")
+	case <-time.After(10 * time.Minute):
+		s.T().Fatal("Invoke 超时")
+	}
+
+	sess.PostRun(ctx)
+
+	// 对齐 Python: assertGreaterEqual(observe_rail.iteration_count, 2)
+	s.GreaterOrEqual(observer.CallCount(), 2, "任务循环应至少执行 2 轮模型调用")
+	// 对齐 Python: assertTrue(observe_rail.steer_seen_in_model_messages)
+	s.True(observer.SteerSeenInMessages(), "[STEERING] 应出现在模型消息中")
+}
+
+// TestDeepAgent_真实LLM_外循环流式输出 测试真实 LLM enable_task_loop=True 时 Stream 逐轮流式输出。
+// 对齐 Python: test_deep_agent_task_loop_stream_e2e
+//
+// Python 原文收集 run_agent_streaming 的每轮 round result 并验证
+// output 非空；Go 的 task_loop Stream 路径产出每轮 result 的
+// OutputSchema（round result 写入流，见 writeRoundResultToStream）。
+func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_外循环流式输出() {
+	s.SkipIfNoRealLLM()
+
+	model, err := s.NewRealModel()
+	s.Require().NoError(err, "创建真实 Model 失败")
+
+	ctx, cancel := context.WithTimeout(s.Ctx, 5*time.Minute)
+	defer cancel()
+
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID("e2e_real_llm_taskloop_stream"),
+		agentschema.WithAgentName("E2ERealLLMTaskLoopStreamAgent"),
+	)
+	agent, err := harness.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Card:           card,
+		Model:          model,
+		EnableTaskLoop: true,
+		MaxIterations:  12,
+	})
+	s.Require().NoError(err, "创建 DeepAgent 失败")
+
+	sess := session.NewSession(
+		session.WithSessionID("e2e_taskloop_stream_session"),
+		session.WithEnvs(map[string]any{}),
+	)
+	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
+
+	ch, err := agent.Stream(ctx, map[string]any{
+		"query": "请制定一个简短的项目启动计划，包含以下方面：1. 需求分析；2. 技术选型。每个方面给出简要说明。",
+	}, agentinterfaces.WithSession(sess))
+	s.Require().NoError(err, "Stream 调用失败")
+
+	// 消费所有 chunk（带超时保护）
+	var chunks []stream.Schema
+	type chunkOrTimeout struct {
+		chunk stream.Schema
+		ok    bool
+	}
+	recv := make(chan chunkOrTimeout, 1)
+	go func() {
+		for c := range ch {
+			recv <- chunkOrTimeout{chunk: c, ok: true}
+		}
+		recv <- chunkOrTimeout{ok: false}
+	}()
+
+deadline:
+	for {
+		select {
+		case r := <-recv:
+			if !r.ok {
+				break deadline
+			}
+			chunks = append(chunks, r.chunk)
+		case <-ctx.Done():
+			break deadline
+		}
+	}
+
+	// 对齐 Python: assertGreater(len(round_results), 0)
+	s.NotEmpty(chunks, "task loop stream 应至少产出一个 chunk")
+
+	// 对齐 Python: 每轮 round result 的 output 非空。
+	// task_loop 路径的每轮结果通过 OutputSchema 写入流。
+	roundOutputs := 0
+	for _, c := range chunks {
+		if output, ok := c.(stream.OutputSchema); ok {
+			if payloadMap, ok := output.Payload.(map[string]any); ok {
+				if outputVal, ok := payloadMap["output"]; ok {
+					if str, ok := outputVal.(string); ok && str != "" {
+						roundOutputs++
+					}
+				}
+			}
+		}
+	}
+	s.Greater(roundOutputs, 0, "应至少有一轮非空 output 的结果")
+}
+
 // TestDeepAgentE2EDoc_包引用验证 验证引用的 internal 包可正常访问
 func (s *DeepAgentE2ESuite) TestDeepAgentE2EDoc_包引用验证() {
 	s.NotNil(llm.NewModel)
 	s.NotNil(runner.GetResourceMgr)
 	s.NotNil(harness.CreateDeepAgent)
+	s.NotNil(stream.OutputSchema{})
+	s.NotNil(testhelpers.NewModelCallObserver)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// waitForModelCalls 轮询等待 observer 记录的模型调用次数达到 n。
+// 返回 false 表示超时未达到。替代 Python LoopObserveRail.iteration_event(k).wait()。
+func (s *DeepAgentE2ESuite) waitForModelCalls(observer *testhelpers.ModelCallObserver, n int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if observer.CallCount() >= n {
+			return true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return observer.CallCount() >= n
 }
