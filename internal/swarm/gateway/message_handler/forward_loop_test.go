@@ -13,9 +13,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
-	hooksgw "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
+	hooksgw "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

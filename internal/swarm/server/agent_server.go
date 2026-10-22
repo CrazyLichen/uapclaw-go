@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentServer Agent 核心服务，对齐 Python AgentWebSocketServer，通过 AgentTransport 接口通信。

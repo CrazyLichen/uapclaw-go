@@ -1067,8 +1067,9 @@ func TestTaskLoopEventHandler_HandleTaskCompletion_SessionSpawn_更新Toolkit(t 
 	}
 
 	// 验证 toolkit 被更新为 completed
-	row := tk.Get("task-spawn-1")
-	if row == nil {
+	// M-01: Get 返回 (值, 是否存在) 双返回值（原单值 nil 判空不再适用）
+	row, ok := tk.Get("task-spawn-1")
+	if !ok {
 		t.Fatal("toolkit 中应找到 task-spawn-1")
 	}
 	if row.Status != "completed" {
@@ -1114,8 +1115,9 @@ func TestTaskLoopEventHandler_HandleTaskFailed_SessionSpawn_更新Toolkit(t *tes
 	}
 
 	// 验证 toolkit 被更新为 error
-	row := tk.Get("task-spawn-2")
-	if row == nil {
+	// M-01: Get 返回 (值, 是否存在) 双返回值（原单值 nil 判空不再适用）
+	row, ok := tk.Get("task-spawn-2")
+	if !ok {
 		t.Fatal("toolkit 中应找到 task-spawn-2")
 	}
 	if row.Status != "error" {
