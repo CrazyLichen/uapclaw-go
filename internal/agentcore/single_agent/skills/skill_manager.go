@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -39,10 +40,13 @@ type FsProvider interface {
 type SkillManager struct {
 	// registry 技能注册表，name → Skill
 	registry map[string]*Skill
+	// mu registry 互斥锁。
+	// Python asyncio 单线程下 _registry 天然安全；Go 并发注册（集成测试
+	// TestSkillManager_并发注册 多 goroutine Register）会触发 concurrent
+	// map writes fatal——按 asyncio→Go 移植规则补锁
+	mu sync.RWMutex
 	// sysOperationID 系统操作 ID，用于后续对接 SysOperation
 	sysOperationID string
-	// description 当前描述缓存
-	description string
 	// fsProvider 文件系统操作提供者
 	fsProvider FsProvider
 }
@@ -147,6 +151,8 @@ func (sm *SkillManager) Register(skillPaths []string, overwrite bool) error {
 //
 // Python: SkillManager.unregister(name)
 func (sm *SkillManager) Unregister(name string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 	delete(sm.registry, name)
 }
 
@@ -154,6 +160,8 @@ func (sm *SkillManager) Unregister(name string) {
 //
 // Python: SkillManager.get(name)
 func (sm *SkillManager) Get(name string) *Skill {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
 	return sm.registry[name]
 }
 
@@ -161,10 +169,12 @@ func (sm *SkillManager) Get(name string) *Skill {
 //
 // Python: SkillManager.get_all()
 func (sm *SkillManager) GetAll() []*Skill {
+	sm.mu.RLock()
 	result := make([]*Skill, 0, len(sm.registry))
 	for _, skill := range sm.registry {
 		result = append(result, skill)
 	}
+	sm.mu.RUnlock()
 	// 按名称排序，保证输出顺序稳定
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Name < result[j].Name
@@ -176,10 +186,12 @@ func (sm *SkillManager) GetAll() []*Skill {
 //
 // Python: SkillManager.get_names()
 func (sm *SkillManager) GetNames() []string {
+	sm.mu.RLock()
 	result := make([]string, 0, len(sm.registry))
 	for name := range sm.registry {
 		result = append(result, name)
 	}
+	sm.mu.RUnlock()
 	sort.Strings(result)
 	return result
 }
@@ -188,6 +200,8 @@ func (sm *SkillManager) GetNames() []string {
 //
 // Python: SkillManager.has(name)
 func (sm *SkillManager) Has(name string) bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
 	_, ok := sm.registry[name]
 	return ok
 }
@@ -196,6 +210,8 @@ func (sm *SkillManager) Has(name string) bool {
 //
 // Python: SkillManager.clear()
 func (sm *SkillManager) Clear() {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 	sm.registry = make(map[string]*Skill)
 }
 
@@ -203,6 +219,8 @@ func (sm *SkillManager) Clear() {
 //
 // Python: SkillManager.count()
 func (sm *SkillManager) Count() int {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
 	return len(sm.registry)
 }
 
@@ -301,8 +319,10 @@ func (sm *SkillManager) loadYAML(path string) (map[string]any, string, error) {
 // loadDescription 从 SKILL.md 的 YAML front-matter 提取 description 字段。
 //
 // Python: SkillManager._load_description(path, session_id)
+// Python 原实现把 self._description 当临时缓存（asyncio 单线程安全）；
+// Go 并发注册时实例字段写入会触发 data race——改局部变量，不再落实例字段
+// （该字段原本无任何读取点，纯写入死存储）。
 func (sm *SkillManager) loadDescription(path string) (string, error) {
-	sm.description = ""
 	yamlData, _, err := sm.loadYAML(path)
 	if err != nil {
 		return "", err
@@ -318,7 +338,6 @@ func (sm *SkillManager) loadDescription(path string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("SKILL.md description 字段类型错误，期望 string，实际 %T", descVal)
 	}
-	sm.description = desc
 	return desc, nil
 }
 
@@ -360,6 +379,8 @@ func findSkillMD(files []FileInfo) (bool, string) {
 //
 // Python: SkillManager._add_to_registry(skill, overwrite)
 func (sm *SkillManager) addToRegistry(skill *Skill, overwrite bool) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 	if !overwrite {
 		if _, exists := sm.registry[skill.Name]; exists {
 			return fmt.Errorf("技能已存在: %s", skill.Name)
