@@ -62,6 +62,10 @@ var channelModeLookup map[string]ChannelMode
 // controlChannelTypes 控制类渠道类型集合
 var controlChannelTypes map[string]bool
 
+// sessionMapChannelTypes 使用 SessionMap 的通道族集合（精确或 base: 前缀匹配）
+// Python: _session_map_channel_types = frozenset({"feishu_enterprise"})
+var sessionMapChannelTypes map[string]bool
+
 var _ sync.RWMutex //nolint:unused // 保留 import 引用
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -264,6 +268,35 @@ func inferChannelTypeFromID(channelID string) channel_manager.ChannelType {
 	return channel_manager.ChannelTypeWeb
 }
 
+// extractIdentityTuple 提取消息身份四元组。
+//
+// Python: _extract_identity_tuple (L321-329)：
+// 四字段 TrimSpace 后任一为空返回 ok=false（对齐 Python all(identity_parts)）
+func extractIdentityTuple(msg *schema.Message) (provider, chatID, botID, userID string, ok bool) {
+	provider = strings.TrimSpace(msg.Provider)
+	chatID = strings.TrimSpace(msg.ChatID)
+	botID = strings.TrimSpace(msg.BotID)
+	userID = strings.TrimSpace(msg.UserID)
+	if provider == "" || chatID == "" || botID == "" || userID == "" {
+		return "", "", "", "", false
+	}
+	return provider, chatID, botID, userID, true
+}
+
+// channelIDMatchesSessionMapTypes channel_id 是否属于 SessionMap 通道族。
+//
+// Python: _channel_id_matches_session_map_types (L331-337)：
+// 精确匹配或 "base:" 前缀
+func channelIDMatchesSessionMapTypes(channelID string) bool {
+	cid := strings.TrimSpace(channelID)
+	for base := range sessionMapChannelTypes {
+		if cid == base || strings.HasPrefix(cid, base+":") {
+			return true
+		}
+	}
+	return false
+}
+
 func generateRandomHex(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
@@ -289,5 +322,11 @@ func init() {
 		string(channel_manager.ChannelTypeWhatsApp): true,
 		string(channel_manager.ChannelTypeWeCom):    true,
 		string(channel_manager.ChannelTypeWeChat):   true,
+	}
+
+	// 构建企业通道会话映射族集合
+	// Python: _session_map_channel_types = frozenset({"feishu_enterprise"})
+	sessionMapChannelTypes = map[string]bool{
+		"feishu_enterprise": true,
 	}
 }

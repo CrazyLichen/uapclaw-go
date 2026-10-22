@@ -287,3 +287,77 @@ func createTestMessageHandlerWithTransport() *MessageHandler {
 	agentClient := routing.NewAgentClient(transport)
 	return NewMessageHandler(agentClient)
 }
+
+// TestNewMessageHandler_sessionMap装配 测试构造注入
+func TestNewMessageHandler_sessionMap装配(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	// sessionMap 应在构造时装配（scope 未注册 config 时降级默认，不失败）
+	assert.NotNil(t, mh.sessionMap, "sessionMap 应在构造时装配")
+	// 未注册全局 config 时 hookHandler 为 nil（对齐 Python try/except 降级）
+	assert.Nil(t, mh.gatewayHookHandler, "未注册全局 config 时 gatewayHookHandler 应为 nil")
+}
+
+// TestExtractIdentityTuple 四元组提取
+func TestExtractIdentityTuple(t *testing.T) {
+	// 全齐
+	msg := schema.NewReqMessage("feishu_enterprise", "s",
+		schema.ReqMethodChatSend, json.RawMessage(`{}`),
+		schema.WithProvider("feishu_enterprise"),
+		schema.WithChatID("oc-1"),
+		schema.WithBotID("bot-1"),
+		schema.WithUserID("u-1"))
+	p, c, b, u, ok := extractIdentityTuple(msg)
+	assert.True(t, ok)
+	assert.Equal(t, "feishu_enterprise", p)
+	assert.Equal(t, "oc-1", c)
+	assert.Equal(t, "bot-1", b)
+	assert.Equal(t, "u-1", u)
+
+	// 缺 user_id
+	msg2 := schema.NewReqMessage("feishu_enterprise", "s",
+		schema.ReqMethodChatSend, json.RawMessage(`{}`),
+		schema.WithProvider("feishu_enterprise"),
+		schema.WithChatID("oc-1"),
+		schema.WithBotID("bot-1"))
+	_, _, _, _, ok2 := extractIdentityTuple(msg2)
+	assert.False(t, ok2, "缺任一字段应 ok=false")
+
+	// 空白字符串按缺失处理（Python strip 语义）
+	msg3 := schema.NewReqMessage("feishu_enterprise", "s",
+		schema.ReqMethodChatSend, json.RawMessage(`{}`),
+		schema.WithProvider("  "),
+		schema.WithChatID("oc-1"),
+		schema.WithBotID("bot-1"),
+		schema.WithUserID("u-1"))
+	_, _, _, _, ok3 := extractIdentityTuple(msg3)
+	assert.False(t, ok3, "空白 provider 应按缺失处理")
+}
+
+// TestChannelIDMatchesSessionMapTypes 通道族匹配
+func TestChannelIDMatchesSessionMapTypes(t *testing.T) {
+	cases := []struct {
+		cid  string
+		want bool
+	}{
+		{"feishu_enterprise", true},
+		{"feishu_enterprise:bot-2", true},
+		{"feishu", false},
+		{"web", false},
+		{"", false},
+		{"feishu_enterpriseX", false}, // 前缀必须带冒号
+	}
+	for _, c := range cases {
+		if got := channelIDMatchesSessionMapTypes(c.cid); got != c.want {
+			t.Errorf("channelIDMatchesSessionMapTypes(%q) = %v, want %v", c.cid, got, c.want)
+		}
+	}
+}
+
+// TestTriggerSessionStartHook_nilHandler 测试 nil handler 时静默跳过不 panic
+func TestTriggerSessionStartHook_nilHandler(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	// gatewayHookHandler 为 nil（未注册全局 config）时不 panic
+	assert.NotPanics(t, func() {
+		mh.TriggerSessionStartHook("sess-1", "startup")
+	})
+}

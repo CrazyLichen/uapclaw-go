@@ -8,7 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	hooksgw "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -95,6 +97,11 @@ type MessageHandler struct {
 	// updateChannelInConfig 更新 config 中渠道配置回调（对齐 Python _update_channel_in_config，由外部注入）
 	updateChannelInConfig func(channelID string, update map[string]any)
 
+	// sessionMap 企业通道会话映射（对齐 Python _session_map，11.7）
+	sessionMap *routing.SessionMap
+	// gatewayHookHandler Gateway 层钩子处理器（对齐 Python _gateway_hook_handler，11.13；装配失败为 nil）
+	gatewayHookHandler *hooksgw.GatewayHookHandler
+
 	// outboundPipeline 出站管道（对齐 Python _outbound_pipeline，预留给 11.12 IM Pipeline 回填）
 	// TODO(#11.12): 实现 OutboundPipeline interface（等 11.12 IM Pipeline 回填）
 	outboundPipeline OutboundPipeline
@@ -115,7 +122,7 @@ const logComponent = logger.ComponentGateway
 //
 // Python: MessageHandler(agent_client) — 只需 1 个参数。
 func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
-	return &MessageHandler{
+	m := &MessageHandler{
 		agentClient:                 agentClient,
 		userMessages:                make(chan *schema.Message, 256),
 		robotMessages:               make(chan *schema.Message, 256),
@@ -130,6 +137,16 @@ func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 		streamEmitsProcessingStatus: make(map[string]bool),
 		sessionLastUserQuery:        make(map[string]string),
 	}
+
+	// 11.7：企业通道会话映射（scope 从 config 读一次）
+	// Python: self._session_map = SessionMap() (L155)
+	m.sessionMap = routing.NewSessionMap(nil)
+
+	// 11.13：Gateway hooks handler 装配（失败 Warn + nil，对齐 Python L163-170）
+	// Python: load_hooks_config(get_config()) + GatewayHookHandler(config)
+	m.gatewayHookHandler = m.initGatewayHookHandler()
+
+	return m
 }
 
 // HandleMessage 处理入站消息（用户→Agent）。
@@ -200,6 +217,16 @@ func (mh *MessageHandler) PublishUserMessagesNowait(msg *schema.Message) {
 			Str("msg_id", msg.ID).
 			Msg("inbound message queue full, dropping message")
 	}
+}
+
+// TriggerSessionStartHook 供 Channel 层调用，触发 SessionStart hook。
+//
+// Python: trigger_session_start_hook (L172-177)：asyncio.create_task fire-and-forget。
+func (mh *MessageHandler) TriggerSessionStartHook(sessionID, source string) {
+	if mh.gatewayHookHandler == nil {
+		return
+	}
+	go mh.gatewayHookHandler.OnSessionStart(context.Background(), sessionID, source)
 }
 
 // StartForwarding 启动入站转发循环。
@@ -354,4 +381,31 @@ func (mh *MessageHandler) getSessionLastUserQuery(sessionID string) string {
 	mh.queryMu.RLock()
 	defer mh.queryMu.RUnlock()
 	return mh.sessionLastUserQuery[sessionID]
+}
+
+// initGatewayHookHandler 装配 Gateway hooks handler。
+//
+// Python: L163-170 try/except——LoadHooksConfig 失败时 Warn + 返回 nil。
+func (mh *MessageHandler) initGatewayHookHandler() *hooksgw.GatewayHookHandler {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).
+				Any("panic", r).
+				Msg("Failed to init GatewayHookHandler")
+		}
+	}()
+	cfg := hookscfg.GetGlobalConfigForScope()
+	if cfg == nil {
+		logger.Warn(logComponent).
+			Msg("Failed to init GatewayHookHandler: global config not registered")
+		return nil
+	}
+	configBase, err := cfg.Load()
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Msg("Failed to init GatewayHookHandler")
+		return nil
+	}
+	hooksCfg := hookscfg.LoadHooksConfig(configBase)
+	return hooksgw.NewGatewayHookHandler(hooksCfg)
 }
