@@ -980,7 +980,7 @@ func TestNewTodoModifyTool_Invoke(t *testing.T) {
 
 	modifyTool := NewTodoModifyTool(todoTool, "cn", "agent1")
 
-	// update: t1→completed, t2→in_progress
+	// update 动作：t1→completed、t2→in_progress 批量更新状态
 	result, err := modifyTool.Invoke(context.Background(), map[string]any{
 		"action": "update",
 		"todos": []any{

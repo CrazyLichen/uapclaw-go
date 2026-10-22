@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// ──────────────────────────── WhitespaceNormalizer ────────────────────────────
+// ──────────────────────────── WhitespaceNormalizer 空白规整器 ────────────────────────────
 
 // TestWhitespaceNormalizer_正常文本 对齐 Python test_process_normal_text
 func TestWhitespaceNormalizer_正常文本(t *testing.T) {
@@ -62,7 +62,7 @@ func TestWhitespaceNormalizer_补偿集命中(t *testing.T) {
 	assert.Equal(t, "a b", n.Process("a\x1cb"))
 }
 
-// ──────────────────────────── URLEmailRemover ────────────────────────────
+// ──────────────────────────── URLEmailRemover URL邮箱移除器 ────────────────────────────
 
 // TestURLEmailRemover_构造默认值 对齐 Python test_init_defaults
 func TestURLEmailRemover_构造默认值(t *testing.T) {
@@ -148,7 +148,7 @@ func TestURLEmailRemover_URL加邮箱混合(t *testing.T) {
 	assert.Equal(t, "Visit  and email  now", r.Process("Visit https://example.com and email a@b.com now"))
 }
 
-// ──────────────────────────── SpecialCharacterNormalizer ────────────────────────────
+// ──────────────────────────── SpecialCharacterNormalizer 特殊字符规整器 ────────────────────────────
 
 // TestSpecialCharacterNormalizer_构造默认值 对齐 Python test_init_defaults
 func TestSpecialCharacterNormalizer_构造默认值(t *testing.T) {
@@ -262,7 +262,7 @@ func TestSpecialCharacterNormalizer_组合记号不动(t *testing.T) {
 	assert.Equal(t, "á组合记号", n.Process("á组合记号"))
 }
 
-// ──────────────────────────── PreprocessingPipeline ────────────────────────────
+// ──────────────────────────── PreprocessingPipeline 预处理管线 ────────────────────────────
 
 // TestPreprocessingPipeline_空管线 对齐 Python test_init_empty
 func TestPreprocessingPipeline_空管线(t *testing.T) {

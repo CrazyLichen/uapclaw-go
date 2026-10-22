@@ -290,7 +290,7 @@ func (a *pluginHostAdapter) Load(root string) (PluginClientFace, error) {
 	return &pluginClientAdapter{pc: pc}, nil
 }
 
-// pluginClientAdapter plugin.PluginClient → PluginClientFace + RegisterCapable
+// pluginClientAdapter 适配器：把 plugin.PluginClient 包装为 PluginClientFace + RegisterCapable
 type pluginClientAdapter struct {
 	pc *plugin.PluginClient
 }

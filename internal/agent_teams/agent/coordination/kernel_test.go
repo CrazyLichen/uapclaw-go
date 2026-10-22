@@ -331,19 +331,19 @@ func TestCoordinationKernel_生命周期转换(t *testing.T) {
 	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
 
-	// idle → running
+	// idle → running 启动后进入运行态
 	k.Start(context.Background(), "")
 	if k.LifecycleState() != kernelStateRunning {
 		t.Errorf("期望 running，实际 %q", k.LifecycleState())
 	}
 
-	// running → paused
+	// running → paused 运行态可暂停
 	k.Pause(context.Background())
 	if k.LifecycleState() != kernelStatePaused {
 		t.Errorf("期望 paused，实际 %q", k.LifecycleState())
 	}
 
-	// paused → stopped
+	// paused → stopped 暂停态可停止
 	k.Stop(context.Background())
 	if k.LifecycleState() != kernelStateStopped {
 		t.Errorf("期望 stopped，实际 %q", k.LifecycleState())

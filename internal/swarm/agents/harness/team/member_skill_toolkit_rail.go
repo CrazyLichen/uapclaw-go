@@ -26,6 +26,9 @@ type MemberSkillToolkitRail struct {
 	manager *skillruntime.SkillManager
 }
 
+// 编译时验证 AgentRail 接口实现
+var _ agentinterfaces.AgentRail = (*MemberSkillToolkitRail)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMemberSkillToolkitRail 创建 MemberSkillToolkitRail 实例。
@@ -115,9 +118,6 @@ func (r *MemberSkillToolkitRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	r.manager = nil
 	return nil
 }
-
-// 编译时验证 AgentRail 接口实现
-var _ agentinterfaces.AgentRail = (*MemberSkillToolkitRail)(nil)
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

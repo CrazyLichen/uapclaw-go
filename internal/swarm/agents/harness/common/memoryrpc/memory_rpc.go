@@ -465,7 +465,7 @@ func getCodingMemoryDir(workspace, projectDir string) string {
 
 // getAllowedDirs 返回记忆编辑白名单目录。
 // Python: _get_allowed_dirs (L41-51)：
-// memory/coding_memory/workspace·.uapclaw/~/.uapclaw/project_dir/project_dir·.uapclaw
+// 白名单包含 memory/coding_memory/workspace·.uapclaw/~/.uapclaw/project_dir/project_dir·.uapclaw 等目录
 func getAllowedDirs(workspace, projectDir string) []string {
 	allowedDirs := []string{
 		filepath.Join(workspace, "memory"),

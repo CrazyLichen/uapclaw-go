@@ -373,7 +373,7 @@ func TestBuildMemoryHookContext_SessionID回退(t *testing.T) {
 	if ctx.SessionID != "sess-9" {
 		t.Errorf("SessionID = %q, 期望直传 sess-9", ctx.SessionID)
 	}
-	// nil → default
+	// nil → default 空指针回退默认值
 	ctx2 := buildMemoryHookContext(&schema.AgentRequest{}, "/w", nil, nil)
 	if ctx2.SessionID != "default" {
 		t.Errorf("nil SessionID 应回退 default, 实际 %q", ctx2.SessionID)

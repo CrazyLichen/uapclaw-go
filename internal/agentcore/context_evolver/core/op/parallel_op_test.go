@@ -84,7 +84,7 @@ func TestParallelOp_Then_混合顺序并行(t *testing.T) {
 	}}
 
 	// 对齐 Python: flow = LoadPlaybookOp() >> (ReflectOp() | ParallelReflectOp()) >> ApplyDeltaOp()
-	// Go: Seq(load).Then(Par(reflect).With(parallelReflect)).Then(apply)
+	// Go 等价写法: Seq(load).Then(Par(reflect).With(parallelReflect)).Then(apply)
 	flow := Seq(loadOp).Then(Par(reflectOp).With(parallelReflectOp)).Then(applyOp)
 	err := flow.Execute(context.Background(), rc)
 	require.NoError(t, err)

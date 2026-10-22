@@ -71,66 +71,6 @@ type inflightToolCallInfo struct {
 	sessionID string              // 关联的会话 ID
 }
 
-// newPauseCond 创建暂停条件变量，初始为未暂停状态（对齐 Python: asyncio.Event 初始 set）
-func newPauseCond() *pauseCond {
-	pc := &pauseCond{paused: false}
-	pc.cond = sync.NewCond(&pc.mu)
-	return pc
-}
-
-// Wait 阻塞直到未暂停，对齐 Python: await asyncio.Event.wait()
-func (pc *pauseCond) Wait() {
-	pc.mu.Lock()
-	for pc.paused {
-		pc.cond.Wait()
-	}
-	pc.mu.Unlock()
-}
-
-// WaitWithContext 阻塞直到未暂停或 context 被取消，避免 goroutine 泄漏
-func (pc *pauseCond) WaitWithContext(ctx context.Context) error {
-	pc.mu.Lock()
-	defer pc.mu.Unlock()
-
-	if !pc.paused {
-		return nil
-	}
-
-	// 启动辅助 goroutine：context 取消时唤醒 cond.Wait()
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			pc.cond.Broadcast()
-		case <-done:
-		}
-	}()
-	defer close(done)
-
-	for pc.paused {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		pc.cond.Wait()
-	}
-	return nil
-}
-
-// Pause 设置暂停状态，对齐 Python: asyncio.Event.clear()
-func (pc *pauseCond) Pause() {
-	pc.mu.Lock()
-	pc.paused = true
-	pc.mu.Unlock()
-}
-
-// Resume 恢复执行，对齐 Python: asyncio.Event.set()
-func (pc *pauseCond) Resume() {
-	pc.mu.Lock()
-	pc.paused = false
-	pc.mu.Unlock()
-	pc.cond.Broadcast()
-}
-
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -462,6 +402,66 @@ func (r *JiuClawStreamEventRail) GetCallbacks() map[sainterfaces.AgentCallbackEv
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newPauseCond 创建暂停条件变量，初始为未暂停状态（对齐 Python: asyncio.Event 初始 set）
+func newPauseCond() *pauseCond {
+	pc := &pauseCond{paused: false}
+	pc.cond = sync.NewCond(&pc.mu)
+	return pc
+}
+
+// Wait 阻塞直到未暂停，对齐 Python: await asyncio.Event.wait()
+func (pc *pauseCond) Wait() {
+	pc.mu.Lock()
+	for pc.paused {
+		pc.cond.Wait()
+	}
+	pc.mu.Unlock()
+}
+
+// WaitWithContext 阻塞直到未暂停或 context 被取消，避免 goroutine 泄漏
+func (pc *pauseCond) WaitWithContext(ctx context.Context) error {
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+
+	if !pc.paused {
+		return nil
+	}
+
+	// 启动辅助 goroutine：context 取消时唤醒 cond.Wait()
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			pc.cond.Broadcast()
+		case <-done:
+		}
+	}()
+	defer close(done)
+
+	for pc.paused {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		pc.cond.Wait()
+	}
+	return nil
+}
+
+// Pause 设置暂停状态，对齐 Python: asyncio.Event.clear()
+func (pc *pauseCond) Pause() {
+	pc.mu.Lock()
+	pc.paused = true
+	pc.mu.Unlock()
+}
+
+// Resume 恢复执行，对齐 Python: asyncio.Event.set()
+func (pc *pauseCond) Resume() {
+	pc.mu.Lock()
+	pc.paused = false
+	pc.mu.Unlock()
+	pc.cond.Broadcast()
+}
 
 // lazyLoadTodoTool 从 agent 的 AbilityManager 懒加载 TodoTool。
 // 对齐 Python: TaskPlanningRail._find_todo_tool() — 在需要时从已注册工具中查找。

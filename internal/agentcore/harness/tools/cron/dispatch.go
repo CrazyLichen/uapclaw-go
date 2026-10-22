@@ -103,8 +103,8 @@ func dispatchCronAction(
 	case "add":
 		// Python: L176-179:
 		// Python: create_input = dict(job or {})
-		// if not create_input: create_input = flat_kwargs
-		// return await backend.create_job(create_input, context=context)
+		// Python: if not create_input: create_input = flat_kwargs
+		// Python: return await backend.create_job(create_input, context=context)
 		createInput := mapVal(inputs, "job")
 		if len(createInput) == 0 {
 			createInput = flatKwargs
@@ -117,10 +117,10 @@ func dispatchCronAction(
 
 	case "update":
 		// Python: L180-186:
-		// if not target_job_id: raise ValueError("jobId is required")
+		// Python: if not target_job_id: raise ValueError("jobId is required")
 		// Python: patch_input = dict(patch or {})
-		// if not patch_input: patch_input = flat_kwargs
-		// return await backend.update_job(target_job_id, patch_input, context=context)
+		// Python: if not patch_input: patch_input = flat_kwargs
+		// Python: return await backend.update_job(target_job_id, patch_input, context=context)
 		if targetJobID == "" {
 			return nil, fmt.Errorf("jobId 为必填项")
 		}

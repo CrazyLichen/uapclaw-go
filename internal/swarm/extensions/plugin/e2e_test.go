@@ -79,7 +79,7 @@ func TestE2E_FullLifecycle(t *testing.T) {
 		t.Error("应声明 ProvidesCrypto")
 	}
 
-	// SetExtensionDir + GetMetadata
+	// SetExtensionDir + GetMetadata 目录设置与元数据查询
 	if err := pc.SetExtensionDir(context.Background(), root); err != nil {
 		t.Errorf("SetExtensionDir 失败: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestE2E_FullLifecycle(t *testing.T) {
 		t.Fatal("transport 回环超时")
 	}
 
-	// Shutdown RPC + Kill
+	// Shutdown RPC + Kill 优雅关闭与进程终止
 	if err := pc.Shutdown(context.Background()); err != nil {
 		t.Errorf("Shutdown 失败: %v", err)
 	}

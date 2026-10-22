@@ -102,7 +102,7 @@ func TestTextChunker_ChunkText_显式错误(t *testing.T) {
 	assert.Contains(t, err.Error(), "does not support ChunkText")
 }
 
-// ──────────────────────────── ChunkDocuments ────────────────────────────
+// ──────────────────────────── ChunkDocuments 分块文档 ────────────────────────────
 
 // TestTextChunker_ChunkDocuments_预处理生效 对齐 Python test_chunk_documents_with_preprocessing
 // Python 基准: 'This   is   document   1'（normalize_whitespace）→ 块文本无三连空格

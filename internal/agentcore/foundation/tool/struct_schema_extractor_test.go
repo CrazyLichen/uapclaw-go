@@ -53,11 +53,11 @@ func TestStructSchemaExtractor_omitempty和required(t *testing.T) {
 	if len(params) != 3 {
 		t.Fatalf("期望 3 个参数，实际 %d", len(params))
 	}
-	// name: 无 omitempty → Required=true
+	// name 字段：无 omitempty → Required=true
 	if !params[0].Required {
 		t.Error("name 应该 Required=true")
 	}
-	// nick: omitempty → Required=false
+	// nick 字段：omitempty → Required=false
 	if params[1].Required {
 		t.Error("nick 应该 Required=false")
 	}
