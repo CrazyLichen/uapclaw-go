@@ -41,6 +41,9 @@ go 1.26
 //
 // 领域十二：沙箱
 // - github.com/landlock-lsm/go-landlock/landlock  Landlock
+//
+// 领域十三：检索文档索引
+// - github.com/saintfish/chardet         字符编码统计检测（对齐 Python charset-normalizer）
 
 require (
 	github.com/PuerkitoBio/goquery v1.12.0
@@ -147,6 +150,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
 	github.com/samber/lo v1.27.0 // indirect
 	github.com/shirou/gopsutil/v3 v3.23.12 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
