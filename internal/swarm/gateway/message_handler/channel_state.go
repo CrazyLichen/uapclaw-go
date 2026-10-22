@@ -100,7 +100,14 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 	}
 	state := mh.GetOrCreateChannelState(msg)
 
-	if state.SessionID != "" {
+	// 仅 sessionMapChannelTypes 中的通道族使用 SessionMap；其它受控通道仍按 config/state 与入站 session_id。
+	// Python: _apply_channel_state (L1151-1159)：
+	// 企业通道族走 SessionMap（无条件刷新 state + msg）；其它受控通道按 state（elif）
+	if p, c, b, u, ok := extractIdentityTuple(msg); ok && channelIDMatchesSessionMapTypes(msg.ChannelID) {
+		sid := mh.sessionMap.GetSessionID(p, c, b, u, false)
+		state.SessionID = sid
+		msg.SessionID = sid
+	} else if state.SessionID != "" {
 		msg.SessionID = state.SessionID
 	}
 
@@ -126,7 +133,7 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 //
 // Python: _get_or_create_channel_state (L278-299)：
 // 使用复合键 channelID:sessionID（对齐 Python _get_channel_state_key）。
-// TODO(#11.7): SessionMap 集成（等 11.7 回填）。
+// 首建时若企业通道身份齐备，SessionMap 覆盖 config 默认 session_id（Python L295-297）。
 func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelControlState {
 	ch := msg.ChannelID
 	key := getChannelStateKey(ch, msg.SessionID)
@@ -141,6 +148,12 @@ func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelC
 
 	// 创建默认状态（从 config 读取）
 	state = mh.getChannelDefaultState(ch)
+
+	// 企业通道身份齐备时，SessionMap 覆盖默认 session_id
+	// Python: identity_key = self._extract_identity_tuple(msg); if identity_key and _channel_id_matches_session_map_types(str(ch or "")): state.session_id = self._session_map.get_session_id(*identity_key) (L295-297)
+	if p, c, b, u, ok := extractIdentityTuple(msg); ok && channelIDMatchesSessionMapTypes(ch) {
+		state.SessionID = mh.sessionMap.GetSessionID(p, c, b, u, false)
+	}
 
 	mh.statesMu.Lock()
 	// 双重检查，防止并发创建

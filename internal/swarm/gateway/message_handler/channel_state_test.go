@@ -2,10 +2,12 @@ package message_handler
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -256,5 +258,101 @@ func createTestMessageHandler() *MessageHandler {
 		streamMetadata: make(map[string]map[string]any),
 		streamModes:    make(map[string]string),
 		channelStates:  make(map[string]*ChannelControlState),
+	}
+}
+
+// newTestSessionMap 测试用 SessionMap（t.TempDir 隔离，避免写真实 checkpoint 目录）
+func newTestSessionMap(t *testing.T) *routing.SessionMap {
+	return routing.NewSessionMapAtForTest(filepath.Join(t.TempDir(), "session_map.json"), routing.SessionMapScopePerChatBot)
+}
+
+// TestApplyChannelState_sessionMap分支 企业通道身份齐备走 SessionMap
+// Python 事实：FeishuChannel.name="feishu"（provider，受控检查通过），
+// channel_id="feishu_enterprise:{app_id}"（SessionMap 通道族前缀匹配）
+func TestApplyChannelState_sessionMap分支(t *testing.T) {
+	mh := createTestMessageHandler()
+	mh.sessionMap = newTestSessionMap(t)
+
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "",
+		schema.ReqMethodChatSend, json.RawMessage(`{}`),
+		schema.WithProvider("feishu"),
+		schema.WithChatID("oc-9"),
+		schema.WithBotID("bot-1"),
+		schema.WithUserID("u-1"))
+
+	mh.ApplyChannelState(msg)
+
+	if !strings.Contains(msg.SessionID, "feishu::oc-9::bot-1::") {
+		t.Errorf("SessionMap 分支应注入 session-map 风格 sid，实际 %q", msg.SessionID)
+	}
+	// state 同步刷新（无条件覆盖，spec 陷阱点）
+	state := mh.GetOrCreateChannelState(msg)
+	if state.SessionID != msg.SessionID {
+		t.Errorf("state.SessionID 应与 msg.SessionID 同步: %q vs %q", state.SessionID, msg.SessionID)
+	}
+	// 二次应用幂等（非轮转返回同值）
+	first := msg.SessionID
+	mh.ApplyChannelState(msg)
+	if msg.SessionID != first {
+		t.Errorf("二次 Apply 应幂等: %q vs %q", msg.SessionID, first)
+	}
+}
+
+// TestApplyChannelState_身份缺失走elif 企业通道但缺 user_id → config/state 路径
+// Python L1158-1159：elif state.session_id → msg.session_id = state.session_id（覆盖入站值）
+func TestApplyChannelState_身份缺失走elif(t *testing.T) {
+	mh := createTestMessageHandler()
+	mh.sessionMap = newTestSessionMap(t)
+
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "existing-sid",
+		schema.ReqMethodChatSend, json.RawMessage(`{}`),
+		schema.WithProvider("feishu"),
+		schema.WithChatID("oc-9"),
+		schema.WithBotID("bot-1")) // 缺 UserID
+
+	mh.ApplyChannelState(msg)
+	// 身份缺失 → 不走 SessionMap → elif 分支用 state 覆盖（state 为首建生成值）
+	if msg.SessionID == "existing-sid" {
+		t.Errorf("elif 分支应用 state.SessionID 覆盖入站 sid（对齐 Python L1158-1159），实际保留入站值")
+	}
+	if strings.Contains(msg.SessionID, "::") {
+		t.Errorf("身份缺失不应走 SessionMap，实际 sid %q", msg.SessionID)
+	}
+}
+
+// TestApplyChannelState_非企业通道不触发SessionMap
+// provider=feishu 受控，但 channel_id 无 feishu_enterprise 前缀 → 走 elif
+func TestApplyChannelState_非企业通道不触发SessionMap(t *testing.T) {
+	mh := createTestMessageHandler()
+	mh.sessionMap = newTestSessionMap(t)
+
+	msg := schema.NewReqMessage("feishu_test", "",
+		schema.ReqMethodChatSend, json.RawMessage(`{}`),
+		schema.WithProvider("feishu"),
+		schema.WithChatID("oc-9"),
+		schema.WithBotID("bot-1"),
+		schema.WithUserID("u-1"))
+
+	mh.ApplyChannelState(msg)
+	if strings.Contains(msg.SessionID, "::") {
+		t.Errorf("非企业通道不应走 SessionMap，实际 sid %q", msg.SessionID)
+	}
+}
+
+// TestGetOrCreateChannelState_首次创建sessionMap覆盖 首建时 SessionMap 覆盖 config 默认值
+func TestGetOrCreateChannelState_首次创建sessionMap覆盖(t *testing.T) {
+	mh := createTestMessageHandler()
+	mh.sessionMap = newTestSessionMap(t)
+
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "",
+		schema.ReqMethodChatSend, json.RawMessage(`{}`),
+		schema.WithProvider("feishu"),
+		schema.WithChatID("oc-9"),
+		schema.WithBotID("bot-1"),
+		schema.WithUserID("u-1"))
+
+	state := mh.GetOrCreateChannelState(msg)
+	if !strings.Contains(state.SessionID, "feishu::oc-9::bot-1::") {
+		t.Errorf("首次创建应被 SessionMap 覆盖 config 默认，实际 %q", state.SessionID)
 	}
 }

@@ -118,6 +118,11 @@ func NewSessionMap(scope *SessionMapScope) *SessionMap {
 	return m
 }
 
+// NewSessionMapAtForTest 指定存储路径构造（供跨包测试使用，生产代码勿用）。
+func NewSessionMapAtForTest(storePath string, scope SessionMapScope) *SessionMap {
+	return newSessionMapAt(storePath, scope)
+}
+
 // GetSessionID 获取（或生成）身份键对应的 agent session_id。
 //
 // rotate=false 且已有映射 → 返回既有值；否则生成新值写盘。
@@ -143,6 +148,17 @@ func (m *SessionMap) GetSessionID(provider, chatID, botID, userID string, rotate
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newSessionMapAt 指定存储路径的构造（测试与 NewSessionMapAtForTest 共用）。
+func newSessionMapAt(storePath string, scope SessionMapScope) *SessionMap {
+	m := &SessionMap{
+		scope:     scope,
+		storePath: storePath,
+		mapping:   make(map[string]string),
+	}
+	m.load()
+	return m
+}
 
 // makeKey 生成身份键。
 //
