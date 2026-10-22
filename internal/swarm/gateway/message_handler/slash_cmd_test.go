@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler/command_parser"
@@ -161,11 +162,6 @@ func TestHandleChannelControl_非控制文本(t *testing.T) {
 func TestNewSessionCancelAndNotice(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
-	go func() {
-		for range mh.robotMessages {
-		}
-	}()
-
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/new_session"}`))
 
@@ -175,10 +171,13 @@ func TestNewSessionCancelAndNotice(t *testing.T) {
 
 	mh.newSessionCancelAndNotice(msg, oldSID, "new-sid-x")
 
-	// 验证通知已发出（收尾函数不再改 state）
+	// 验证通知已发出（收尾函数不再改 state）。
+	// CI -race 修复：原先排空 goroutine 与主 select 竞争消费同一消息，
+	// 排空侧先就绪时通知被其消费、主 select 落 default 误报失败；
+	// channel 容量 256 足够容纳单条通知，改阻塞接收+超时判定。
 	select {
 	case <-mh.robotMessages:
-	default:
+	case <-time.After(2 * time.Second):
 		t.Fatal("收尾函数应发送变更通知")
 	}
 }
