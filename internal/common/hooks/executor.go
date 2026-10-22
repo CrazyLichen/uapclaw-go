@@ -77,6 +77,19 @@ func RegisterConfig(cfg *config.Config) {
 	globalCfg = cfg
 }
 
+// GetGlobalConfigForScope 返回全局 Config（供 SessionMapScope 等配置读取方使用）。
+// 未注册时返回 nil。
+func GetGlobalConfigForScope() *config.Config {
+	return getGlobalConfig()
+}
+
+// ResetGlobalConfigForTest 清空全局 Config 注册（仅供测试隔离使用）。
+func ResetGlobalConfigForTest() {
+	globalCfgMu.Lock()
+	globalCfg = nil
+	globalCfgMu.Unlock()
+}
+
 // NewHookExecutor 创建 HookExecutor，对齐 Python HookExecutor()（无参构造）
 func NewHookExecutor() *HookExecutor {
 	return &HookExecutor{}

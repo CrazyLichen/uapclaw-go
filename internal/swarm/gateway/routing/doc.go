@@ -8,6 +8,9 @@
 //
 // RouteBinding 描述 WS 路径的消息处理策略，预留多路径框架（/ws、/acp、/tui）。
 //
+// SessionMap 将企业 IM 稳定身份映射为轮转 agent session_id（checkpoint 持久化，
+// Python session_map.py；scope 从 config gateway.session_map_scope 读一次）。
+//
 // Python: jiuwenswarm/gateway/routing/agent_client.py (WebSocketAgentServerClient)
 //
 // 文件目录：
@@ -15,7 +18,8 @@
 //	routing/
 //	├── doc.go              # 包文档
 //	├── agent_client.go     # AgentClient 完整实现
-//	└── route_binding.go    # RouteBinding 多路径 WS 路由绑定
+//	├── route_binding.go    # RouteBinding 多路径 WS 路由绑定
+//	└── session_map.go      # SessionMap 企业通道会话映射（11.7）
 //
 // 对应 Python 代码：jiuwenswarm/gateway/routing/
 package routing
