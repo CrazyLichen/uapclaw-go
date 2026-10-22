@@ -681,7 +681,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.21-22 | ✅ | GatewayPush | Transport/Wire 服务端推送 | `jiuwenswarm/server/gateway_push/` |
 | 10.3.23.1 | ✅ | HookType/HookEvent 常量 | AgentRailEvents/GatewayEvents | `hooks_config.py` HookType/HookEvent |
 | 10.3.23.2 | ✅ | 配置模型 | CommandHookConfig/PromptHookConfig/HookMatcher/HooksConfig/LoadHooksConfig | `hooks_config.py` 配置模型 |
-| 10.3.23.3 | ✅ | HookExecutor | command/prompt 两类 hook + ParseCommandOutput + ExtractJSONFromResponse | `executor.py` |
+| 10.3.23.3 | ✅ | HookExecutor | command/prompt 两类 hook + ParseCommandOutput + ExtractJSONFromResponse；11.13 起对应物迁至 internal/common/hooks/executor.go 供 Gateway/AgentServer 共享 | `executor.py` |
 | 10.3.23.4 | ✅ | UserHookRail | embed DeepAgentRail + BeforeToolCall/AfterToolCall/OnToolException/AfterInvoke | `user_hook_rail.py` |
 | 10.3.23.5 | ✅ | 回填注册 | DeepAdapter 注册 UserHookRail + handleHooksList 真实实现 | `interface_deep.py` 注册 |
 | 10.3.24 | ☐ | Sandbox | 延后 | `sandbox/` |
@@ -734,13 +734,13 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 11.4 | ✅ | Slash Command Parser | Slash 命令解析（command_parser 子包） | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
 | 11.5 | ✅ | WebSocketAgentServerClient | WS 客户端，请求/响应路由，流式，自动重连 | `jiuwenswarm/gateway/routing/agent_client.py` |
 | 11.6 | ✅ | RouteBinding | 路由绑定 | `jiuwenswarm/gateway/routing/route_binding.py` |
-| 11.7 | ☐ | SessionMap | 会话映射 | `jiuwenswarm/gateway/routing/session_map.py` |
+| 11.7 | ✅ | SessionMap | scope 枚举+LoadSessionMapScope（未知值/未注册降级默认）+ makeKey/makeSessionID（::分隔+hex时间戳+6位hex）+ checkpoint 持久化（load 过滤/防御 save）+ MessageHandler 集成：首建覆盖/ApplyChannelState 无条件刷新双分支（对齐 L1151-1159 陷阱）/new_session rotate 轮转 + TriggerSessionStartHook；sync.Mutex 并发补齐 | `jiuwenswarm/gateway/routing/session_map.py` |
 | 11.8 | ☐ | InteractionContext | 交互上下文 | `jiuwenswarm/gateway/routing/interaction_context.py` |
 | 11.9 | ✅ | GatewayServer | 多路由 WS 服务器组装 + Transport/MessageHandler 注入 | `jiuwenswarm/gateway/app_gateway.py` |
 | 11.10 | ☐ | Cron 调度服务 | Cron 表达式，Job 持久化，调度执行 | `jiuwenswarm/gateway/cron/` |
 | 11.11 | ☐ | 心跳服务 | 定时心跳，活跃时段控制 | `jiuwenswarm/gateway/heartbeat/heartbeat.py` |
 | 11.12 | ☐ | IM Pipeline | 数字人入站/出站管道 | `jiuwenswarm/gateway/im_pipeline/` |
-| 11.13 | ☐ | Gateway Hook | 钩子处理 | `jiuwenswarm/gateway/hooks/` |
+| 11.13 | ✅ | Gateway Hook | GatewayHookHandler 4 事件方法（SessionStart 去重/UserPromptSubmit 空 query/SessionEnd 先 discard/Notification type query）+ activeSessions + 10s setdefault + recover 兜底；HookExecutor 迁 server/hooks→common/hooks（第三例破环，user_hook_rail 留守）；forward_loop 步骤3 回填；NewGatewayServer 装配 RegisterConfig | `jiuwenswarm/gateway/hooks/` |
 | **11.x IM 渠道** | — | | | |
 | 11.14 | ✅ | Web 通道 | WebSocket + HTTP RPC（M-05：config 写回点 updateYAMLKeyInConfig/replaceTeamsInConfig/updateDefaultModelsInConfig/updateMemoryForbiddenInConfig 全部切换 SetRoundTrip ruamel round-trip 保注释；modes.team 删除分支保留 Save——无删除 API 的等价路径） | `jiuwenswarm/gateway/channel_manager/web/` |
 | 11.15 | ☐ | TUI 通道 | 终端 UI 交互（⤴️ 需回填来源：10.6.18 memory_rpc 5 个 local handler 注册进 TUI 记忆管理面板） | `jiuwenswarm/gateway/channel_manager/tui/` |

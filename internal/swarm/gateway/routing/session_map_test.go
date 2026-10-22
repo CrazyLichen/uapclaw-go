@@ -208,3 +208,72 @@ func TestLoadSessionMapScope_读取per_chat_bot_user(t *testing.T) {
 		t.Errorf("应读取 per_chat_bot_user（大小写无关），实际 %d", got)
 	}
 }
+
+// TestNewSessionMap_显式scope 构造注入 scope 分支
+func TestNewSessionMap_显式scope(t *testing.T) {
+	hookscfg.ResetGlobalConfigForTest()
+	defer hookscfg.ResetGlobalConfigForTest()
+
+	s := SessionMapScopePerChatBotUser
+	m := NewSessionMap(&s)
+	if m.scope != SessionMapScopePerChatBotUser {
+		t.Errorf("显式 scope 应生效，实际 %d", m.scope)
+	}
+	if m.storePath == "" {
+		t.Error("storePath 应为 checkpoint 路径")
+	}
+	if m.mapping == nil {
+		t.Error("mapping 应初始化")
+	}
+}
+
+// TestNewSessionMap_默认scope 未注册 config 时降级 PerChatBot
+func TestNewSessionMap_默认scope(t *testing.T) {
+	hookscfg.ResetGlobalConfigForTest()
+	defer hookscfg.ResetGlobalConfigForTest()
+
+	m := NewSessionMap(nil)
+	if m.scope != SessionMapScopePerChatBot {
+		t.Errorf("scope=nil 未注册 config 时应降级默认，实际 %d", m.scope)
+	}
+}
+
+// TestNewSessionMapAtForTest 跨包测试构造
+func TestNewSessionMapAtForTest(t *testing.T) {
+	dir := t.TempDir()
+	m := NewSessionMapAtForTest(filepath.Join(dir, "session_map.json"), SessionMapScopePerChatBot)
+	if m == nil || m.storePath == "" {
+		t.Fatal("应返回有效实例")
+	}
+	sid := m.GetSessionID("p", "c", "b", "u", false)
+	if sid == "" {
+		t.Error("应能正常生成 sid")
+	}
+}
+
+// TestSave_目录不可写 防御式失败仅 Warn（storePath 指向目录下的文件名本身是目录）
+func TestSave_目录不可写(t *testing.T) {
+	dir := t.TempDir()
+	// storePath 是一个已存在的目录 → WriteFile 失败 → 仅 Warn 不 panic
+	store := filepath.Join(dir, "session_map.json")
+	_ = os.MkdirAll(store, 0o755)
+	m := newSessionMapAt(store, SessionMapScopePerChatBot)
+	sid := m.GetSessionID("p", "c", "b", "u", false)
+	if sid == "" {
+		t.Error("save 失败应不影响内存返回值")
+	}
+}
+
+// TestGetSessionID_并发安全 并发调用不竞态
+func TestGetSessionID_并发安全(t *testing.T) {
+	dir := t.TempDir()
+	m := newSessionMapAt(filepath.Join(dir, "session_map.json"), SessionMapScopePerChatBot)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 50; i++ {
+			m.GetSessionID("p", "c", "b", "u", i%2 == 0)
+		}
+	}()
+	<-done
+}

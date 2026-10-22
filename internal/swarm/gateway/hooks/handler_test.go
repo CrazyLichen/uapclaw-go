@@ -49,6 +49,44 @@ func TestOnSessionEnd_移除activeSessions后可再次start(t *testing.T) {
 	}
 }
 
+// TestOnSessionEnd_matchQuery差异 reason 匹配 matcher 才执行
+func TestOnSessionEnd_matchQuery差异(t *testing.T) {
+	hooks := []map[string]any{{"type": "command", "command": "echo ok"}}
+	h := NewGatewayHookHandler(&hookscfg.HooksConfig{
+		Events: map[string][]hookscfg.HookMatcher{
+			hookscfg.HookEventSessionEnd: {{
+				Matcher: "clear",
+				Hooks:   hooks,
+			}},
+		},
+	})
+	h.OnSessionEnd(context.Background(), "sess-1", "timeout")
+	if _, touched := hooks[0]["timeout"]; touched {
+		t.Error("reason=timeout 不匹配 matcher=clear，不应触发 setdefault")
+	}
+	h.OnSessionEnd(context.Background(), "sess-1", "clear")
+	if v, _ := hooks[0]["timeout"].(int); v != 10 {
+		t.Errorf("匹配时应补 timeout=10，实际 %v", hooks[0]["timeout"])
+	}
+}
+
+// TestOnSessionStart_cwd字段 hook input 含 cwd（os.Getwd 成功路径）
+func TestOnSessionStart_cwd字段(t *testing.T) {
+	hooks := []map[string]any{{"type": "command", "command": "echo ok"}}
+	h := NewGatewayHookHandler(&hookscfg.HooksConfig{
+		Events: map[string][]hookscfg.HookMatcher{
+			hookscfg.HookEventSessionStart: {{
+				Matcher: "*",
+				Hooks:   hooks,
+			}},
+		},
+	})
+	h.OnSessionStart(context.Background(), "sess-cwd", "startup")
+	if v, _ := hooks[0]["timeout"].(int); v != 10 {
+		t.Errorf("首次应补 timeout=10，实际 %v", hooks[0]["timeout"])
+	}
+}
+
 // TestOnUserPromptSubmit_timeoutSetdefault
 func TestOnUserPromptSubmit_timeoutSetdefault(t *testing.T) {
 	hooks := []map[string]any{

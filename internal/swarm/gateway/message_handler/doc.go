@@ -3,18 +3,20 @@
 // MessageHandler 是 Gateway 中 Channel 与 AgentServer 之间的桥梁：
 // - 入站方向：接收 Channel 投递的用户消息，转换为 E2A 信封发送到 AgentServer
 // - 出站方向：从 AgentServer 接收响应，转换为 Message 分发到 Channel
+// - 11.7：SessionMap 企业通道稳定身份→轮转 agent session_id 映射集成
+// - 11.13：GatewayHookHandler 装配 + SessionStart/UserPromptSubmit hook 触发
 //
 // 文件目录：
 //
 //	message_handler/
 //	├── doc.go              # 包文档
-//	├── message_handler.go  # MessageHandler 核心结构（双 channel、transport、state）
-//	├── forward_loop.go     # 入站转发循环（forwardLoop 11步骤 + processStream + processNonStreamRequest）
+//	├── message_handler.go  # MessageHandler 核心结构（双 channel、transport、state、SessionMap/hookHandler 装配）
+//	├── forward_loop.go     # 入站转发循环（forwardLoop 11步骤含步骤3 UserPromptSubmit hook + processStream）
 //	├── outbound.go         # 出站 push 消费 + handleAgentServerPush + cron push
-//	├── channel_state.go    # ChannelControlState + ChannelMode + ApplyChannelState + 复合键
+//	├── channel_state.go    # ChannelControlState + ApplyChannelState（SessionMap 双分支）+ 身份四元组提取
 //	├── convert.go          # E2AResponse→Message 转换函数（ResponseToMessage、ChunkToMessage、MergeAgentMetadata）
 //	├── cancel.go           # 取消/中断逻辑（CancelAgentWorkForSession + sendInterruptResultNotification）
-//	├── slash_cmd.go        # Slash 命令处理（handleChannelControl + skills/branch/rewind RPC）
+//	├── slash_cmd.go        # Slash 命令处理（handleChannelControl Python 结构 + SessionMap 轮转 + SessionStart hook）
 //	├── at_file.go          # @file 引用解析 + @agent 提及 + ResolveStructuredAttachments
 //	├── evolution.go        # Evolution 状态机（15 个方法，审批/排队/自动接受）
 //	├── dispatch.go         # 派发辅助（prepareAgentDispatchMessage + nonStreamRPCMayRunParallel）
