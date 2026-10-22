@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
@@ -245,7 +244,7 @@ func (h *TaskBoardHandler) nudgeIdleAgent(ctx context.Context, memberName string
 			// Python: self._blueprint.lifecycle（窄接口无此方法，
 			// 实际实现 TeamAgentBlueprint 有 Lifecycle()——类型断言获取）
 			lifecycle := "temporary"
-			if lp, ok := h.blueprint.(interface{ Lifecycle() atschema.TeamLifecycle }); ok {
+			if lp, ok := h.blueprint.(interface{ Lifecycle() schema.TeamLifecycle }); ok {
 				lifecycle = string(lp.Lifecycle())
 			}
 			lifecycleKey := "dispatcher.all_done_temporary"

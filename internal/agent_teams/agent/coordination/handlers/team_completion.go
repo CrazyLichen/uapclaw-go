@@ -4,7 +4,6 @@ import (
 	"context"
 
 	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -132,7 +131,7 @@ func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ types.Coordina
 	// 让 Runner 最终驱动 finalize → pause；temporary 团队由 leader
 	// 通过 clean_team 自行拆除，不在此处处理。
 	lifecycle := "temporary"
-	if lp, ok := h.blueprint.(interface{ Lifecycle() atschema.TeamLifecycle }); ok {
+	if lp, ok := h.blueprint.(interface{ Lifecycle() schema.TeamLifecycle }); ok {
 		lifecycle = string(lp.Lifecycle())
 	}
 	if lifecycle == "persistent" {
@@ -145,7 +144,7 @@ func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ types.Coordina
 
 // publishTeamCompleted 在团队 topic 上发布 TEAM_COMPLETED 事件。
 // Python: TeamCompletionHandler._publish_team_completed（team_completion.py L132-152）
-func (h *TeamCompletionHandler) publishTeamCompleted(ctx context.Context, teamName string, snapshot *atschema.TeamCompletionSnapshot) {
+func (h *TeamCompletionHandler) publishTeamCompleted(ctx context.Context, teamName string, snapshot *schema.TeamCompletionSnapshot) {
 	if h.infra == nil {
 		return
 	}
