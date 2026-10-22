@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -71,11 +72,11 @@ type memoryIndexManager struct {
 	vectorDims      *int
 
 	// 文件监听
-	watcher            *fsnotify.Watcher
-	watcherInitialized bool
-	watchDebounce      time.Duration
-	watchTimer         *time.Timer
-	watchMu            sync.Mutex
+	watcher       *fsnotify.Watcher
+	watcherInit   atomic.Bool // AfterFunc 写 + watchLoop 读，跨 goroutine 须原子（race 修复）
+	watchDebounce time.Duration
+	watchTimer    *time.Timer
+	watchMu       sync.Mutex
 
 	// 定时同步
 	intervalCancel context.CancelFunc
@@ -1383,8 +1384,9 @@ func (m *memoryIndexManager) setupFileWatcher() {
 	go m.watchLoop()
 
 	// 延迟 1 秒后标记为已初始化，避免初始扫描触发
+	// （watchLoop 并发读 watcherInit——atomic 写，race 修复）
 	time.AfterFunc(1*time.Second, func() {
-		m.watcherInitialized = true
+		m.watcherInit.Store(true)
 		logger.Debug(logComponent).Int("watch_paths", len(watchPaths)).Msg("file watcher initialized")
 	})
 }
@@ -1397,7 +1399,7 @@ func (m *memoryIndexManager) watchLoop() {
 			if !ok {
 				return
 			}
-			if !m.watcherInitialized {
+			if !m.watcherInit.Load() {
 				continue
 			}
 			if IsMemoryPath(event.Name) {
@@ -1423,7 +1425,8 @@ func (m *memoryIndexManager) scheduleWatchSync() {
 		m.watchTimer.Stop()
 	}
 	m.watchTimer = time.AfterFunc(time.Duration(debounceMs)*time.Millisecond, func() {
-		if m.closed {
+		// race 修复：closed 在锁保护下读写（Close 持 mu 写），此处经 IsClosed 锁读
+		if m.IsClosed() {
 			return
 		}
 		if err := m.Sync(context.Background(), "watch", false); err != nil {
@@ -1451,7 +1454,8 @@ func (m *memoryIndexManager) ensureIntervalSync() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if m.closed {
+				// race 修复：closed 在锁保护下读写（Close 持 mu 写），此处经 IsClosed 锁读
+				if m.IsClosed() {
 					return
 				}
 				if err := m.Sync(ctx, "interval", false); err != nil {
