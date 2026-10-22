@@ -62,7 +62,7 @@ func NewJSONParser() (*JSONParser, error) {
 //
 // Python: json_parser.py JSONParser._parse
 func (p *JSONParser) ParseContent(ctx context.Context, doc string, llmClient *llm.Model) (string, error) {
-	_ = ctx    // 对齐 Python 无 ctx 消费
+	_ = ctx // 对齐 Python 无 ctx 消费
 	_ = llmClient
 	raw, err := os.ReadFile(doc)
 	if err != nil {
