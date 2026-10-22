@@ -1,5 +1,9 @@
 package hooks
 
+// 本文件从 server/hooks 迁入（11.13），供 Gateway 与 AgentServer 共享。
+// 迁移原因：Python GatewayHookHandler 直接 import server 侧 executor，
+// Go 规则 6.5 禁止 gateway→server，故下沉共享位置。
+
 import (
 	"bytes"
 	"context"
@@ -16,7 +20,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
-	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -53,15 +56,12 @@ const (
 	HookOutcomeBlocking = "blocking"
 	// HookOutcomeNonBlockingError 非阻塞错误，对齐 Python HookOutcome.NON_BLOCKING_ERROR
 	HookOutcomeNonBlockingError = "non_blocking_error"
-
-	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentServer
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// globalCfg 全局 Config 实例，由 AgentServer 启动时通过 RegisterConfig 注册
+	// globalCfg 全局 Config 实例，由 AgentServer 或 GatewayServer 启动时注册（谁先启动谁注册，幂等）
 	// Python: from jiuwenswarm.common.config import get_config
 	globalCfg   *config.Config
 	globalCfgMu sync.RWMutex
@@ -70,7 +70,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RegisterConfig 注册全局 Config 实例，对齐 Python get_config() 的全局可用性。
-// 必须在首次创建 HookExecutor 之前调用（通常由 AgentServer 启动时注册）。
+// 必须在首次创建 HookExecutor 之前调用（由 AgentServer 或 GatewayServer 启动时注册，幂等）。
 func RegisterConfig(cfg *config.Config) {
 	globalCfgMu.Lock()
 	defer globalCfgMu.Unlock()
@@ -106,7 +106,7 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 			hookType = "command"
 		}
 		// 未知类型跳过，不加入执行列表
-		if hookType == string(hookscfg.HookTypeCommand) || hookType == string(hookscfg.HookTypePrompt) {
+		if hookType == string(HookTypeCommand) || hookType == string(HookTypePrompt) {
 			validHooks = append(validHooks, indexedHook{idx: i, cfg: cfg})
 		}
 	}
@@ -139,9 +139,9 @@ func (e *HookExecutor) RunAll(ctx context.Context, hookConfigs []map[string]any,
 			if !hasType {
 				hookType = "command"
 			}
-			if hookType == string(hookscfg.HookTypeCommand) {
+			if hookType == string(HookTypeCommand) {
 				results[resultIdx] = e.runCommandHook(ctx, cfg, hookInput)
-			} else if hookType == string(hookscfg.HookTypePrompt) {
+			} else if hookType == string(HookTypePrompt) {
 				results[resultIdx] = e.runPromptHook(ctx, cfg, hookInput)
 			}
 		}(i, h.cfg)

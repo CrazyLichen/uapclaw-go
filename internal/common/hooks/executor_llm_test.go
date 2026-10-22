@@ -10,7 +10,7 @@ import (
 )
 
 // TestHookExecutor_queryLLM_真实调用 测试 queryLLM 真实 LLM 调用
-// 运行方式: go test -tags=llm ./internal/swarm/server/hooks/... -v -run TestHookExecutor_queryLLM
+// 运行方式: go test -tags=llm ./internal/common/hooks/... -v -run TestHookExecutor_queryLLM
 // 需要: 真实 API Key 和网络连接
 func TestHookExecutor_queryLLM_真实调用(t *testing.T) {
 	// 确保全局 Config 已注册
@@ -30,7 +30,7 @@ func TestHookExecutor_queryLLM_真实调用(t *testing.T) {
 }
 
 // TestHookExecutor_runPromptHook_真实LLM 测试 runPromptHook 真实 LLM 调用
-// 运行方式: go test -tags=llm ./internal/swarm/server/hooks/... -v -run TestHookExecutor_runPromptHook
+// 运行方式: go test -tags=llm ./internal/common/hooks/... -v -run TestHookExecutor_runPromptHook
 func TestHookExecutor_runPromptHook_真实LLM(t *testing.T) {
 	if getGlobalConfig() == nil {
 		cfg, err := config.New("")

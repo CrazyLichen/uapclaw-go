@@ -7,16 +7,15 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
-	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentServer Agent 核心服务，对齐 Python AgentWebSocketServer，通过 AgentTransport 接口通信。
@@ -108,9 +107,9 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	s.running = true
 	s.runningMu.Unlock()
 
-	// 注册全局 Config，供 HookExecutor.queryLLM 运行时读取
+	// 注册全局 Config，供 HookExecutor.queryLLM 运行时读取（executor 已迁 common/hooks）
 	// Python: from jiuwenswarm.common.config import get_config
-	serverhooks.RegisterConfig(s.config)
+	hookscfg.RegisterConfig(s.config)
 
 	// 注入默认 SendPush 到 adapter 包，避免 adapter→server→adapter 循环依赖
 	adapter.SetDefaultSendPushFunc(s.SendPush)

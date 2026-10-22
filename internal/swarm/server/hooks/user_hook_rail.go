@@ -21,13 +21,16 @@ type UserHookRail struct {
 	rails.DeepAgentRail
 	// config hooks 配置实例
 	config hookscfg.HooksConfig
-	// executor hook 执行器实例
-	executor *HookExecutor
+	// executor hook 执行器实例（HookExecutor 已迁 common/hooks，11.13 共享）
+	executor *hookscfg.HookExecutor
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件标识（executor.go 迁走后本包自行定义，规则 3.2 AgentServer 域）
+const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -37,7 +40,7 @@ type UserHookRail struct {
 func NewUserHookRail(config hookscfg.HooksConfig) *UserHookRail {
 	r := &UserHookRail{
 		config:   config,
-		executor: NewHookExecutor(),
+		executor: hookscfg.NewHookExecutor(),
 	}
 	// Python: priority=60
 	base := agentinterfaces.NewBaseRail().WithPriority(60)
@@ -72,7 +75,7 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 	results := r.executor.RunAll(ctx, hookConfigs, hookInput, sessionID)
 
 	for _, result := range results {
-		if result.Outcome == HookOutcomeBlocking {
+		if result.Outcome == hookscfg.HookOutcomeBlocking {
 			// Python: ctx.extra["_skip_tool"] = True; ctx.extra["_hook_feedback"] = r.error
 			cbc.Extra()["_skip_tool"] = true
 			cbc.Extra()["_hook_feedback"] = result.Error
@@ -131,7 +134,7 @@ func (r *UserHookRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.A
 	results := r.executor.RunAll(ctx, hookConfigs, hookInput, sessionID)
 
 	for _, result := range results {
-		if result.Outcome == HookOutcomeBlocking {
+		if result.Outcome == hookscfg.HookOutcomeBlocking {
 			// Python: ctx.extra["_post_tool_hook_feedback"] = r.error
 			cbc.Extra()["_post_tool_hook_feedback"] = result.Error
 			logger.Info(logComponent).Str("tool_name", toolName).Str("reason", result.Error).Msg("UserHookRail: PostToolUse blocked")
@@ -207,7 +210,7 @@ func (r *UserHookRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Age
 	results := r.executor.RunAll(ctx, hookConfigs, hookInput, sessionID)
 
 	for _, result := range results {
-		if result.Outcome == HookOutcomeBlocking {
+		if result.Outcome == hookscfg.HookOutcomeBlocking {
 			// Python: ctx.extra["_stop_hook_feedback"] = r.error
 			cbc.Extra()["_stop_hook_feedback"] = result.Error
 			reason := result.Error
