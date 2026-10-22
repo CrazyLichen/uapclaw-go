@@ -11,16 +11,8 @@ import (
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 )
 
-// newSessionMapAt 测试专用构造：注入 storePath（不污染公共 API）
-func newSessionMapAt(storePath string, scope SessionMapScope) *SessionMap {
-	m := &SessionMap{
-		scope:     scope,
-		storePath: storePath,
-		mapping:   make(map[string]string),
-	}
-	m.load()
-	return m
-}
+// newSessionMapAt 已移至 session_map.go 实现文件（非导出函数区），
+// 与 NewSessionMapAtForTest 共用，测试文件不再重复声明。
 
 // TestMakeKey 两 scope 的键格式
 func TestMakeKey(t *testing.T) {
