@@ -284,7 +284,7 @@ func TestMakeSessionID_格式(t *testing.T) {
 	// 前缀为 sess_
 	parts := splitSessionID(sid)
 	assert.Equal(t, "sess", parts[0])
-	assert.Len(t, parts, 3) // sess, hex_ts, 6hex
+	assert.Len(t, parts, 3) // 三段：sess、hex 时间戳、6 位 hex 后缀
 
 	// 后缀为 6 个 hex 字符
 	assert.Len(t, parts[2], 6)

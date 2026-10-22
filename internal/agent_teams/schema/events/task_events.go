@@ -122,8 +122,10 @@ func (e TaskPlanRequestEvent) ToPayload() map[string]any {
 func (e TaskPlanResponseEvent) EventTypeName() string { return TeamEventTaskPlanResponse }
 
 // ToPayload 转换为事件载荷。
+// S-附录4: 对齐 Python model_dump()——member_name（被审批成员）必须进载荷，
+// OnTaskPlanDecision 依赖它区分"给自己的审批"与"他人的审批"。
 func (e TaskPlanResponseEvent) ToPayload() map[string]any {
-	return map[string]any{"team_name": e.TeamName, "task_id": e.TaskID, "approved": e.Approved, "status": e.Status, "plan_id": e.PlanID, "feedback": e.Feedback, "tool_call_id": e.ToolCallID}
+	return map[string]any{"team_name": e.TeamName, "member_name": e.MemberName, "task_id": e.TaskID, "approved": e.Approved, "status": e.Status, "plan_id": e.PlanID, "feedback": e.Feedback, "tool_call_id": e.ToolCallID}
 }
 
 // EventTypeName 返回任务更新事件类型名。

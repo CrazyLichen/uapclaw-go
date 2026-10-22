@@ -41,7 +41,6 @@ func TestDecideRunAction(t *testing.T) {
 		wantKind        RunActionKind
 		wantRequireSpec bool
 		wantReason      bool // 是否期望有 reason
-		wantPanic       bool
 	}{
 		{
 			name:     "全新团队_无DB无Session无Pool",
@@ -105,18 +104,14 @@ func TestDecideRunAction(t *testing.T) {
 			teamInDB: true, teamInSession: true,
 			poolEntry: &ActiveTeam{TeamName: "team-a", SessionID: "sess-old", State: RuntimeStateRunning},
 			sessionID: "sess-new", teamName: "team-a", teamDBState: "",
-			wantPanic: true,
+			// T-18: 对齐 Python raise RuntimeError（可捕获）——改 panic 为
+			// RejectInconsistent 返回，避免导出函数直接调用导致进程崩溃
+			wantKind: RunActionKindRejectInconsistent, wantRequireSpec: false, wantReason: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.wantPanic {
-				assert.Panics(t, func() {
-					DecideRunAction(tt.teamInDB, tt.teamInSession, tt.poolEntry, tt.sessionID, tt.teamName, tt.teamDBState)
-				})
-				return
-			}
 			got := DecideRunAction(tt.teamInDB, tt.teamInSession, tt.poolEntry, tt.sessionID, tt.teamName, tt.teamDBState)
 			assert.Equal(t, tt.wantKind, got.Kind)
 			assert.Equal(t, tt.wantRequireSpec, got.RequireSpec)

@@ -40,6 +40,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"time"
@@ -964,38 +965,190 @@ func (a *TeamAgent) BuildSpawnConfig(runtimeCtx atschema.TeamRuntimeContext) run
 }
 
 // FromSpawnPayload 从生成载荷重构 TeamAgent。
-// Python: TeamAgent.from_spawn_payload(payload)
+// Python: TeamAgent.from_spawn_payload(payload)（team_agent.py L721-746）
+//
+// payload 的 spec/context 由 BuildSpawnConfig 写入（model_dump 等价的
+// map[string]any），经跨进程 JSON 线路传输后子进程拿到的是 map 而非 struct——
+// S-26/S-27 关联修复：原直接类型断言 map→struct 恒失败（跨进程 payload 必然
+// 全部走 map），改为 map→JSON→struct 桥接（对齐 Python model_validate）。
 func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, error) {
-	// 步骤 1: 反序列化 spec/context
-	specAny := payload["spec"]
-	contextAny := payload["context"]
-
-	spec, ok := specAny.(atschema.TeamAgentSpec)
-	if !ok {
-		return nil, fmt.Errorf("payload 中 spec 字段无效")
+	// 步骤 1: 反序列化 spec/context（Python: TeamAgentSpec.model_validate / TeamRuntimeContext.model_validate）
+	spec, err := teamAgentSpecFromAny(payload["spec"])
+	if err != nil {
+		return nil, fmt.Errorf("payload 中 spec 字段无效: %w", err)
 	}
-	runtimeCtx, ok := contextAny.(atschema.TeamRuntimeContext)
-	if !ok {
-		return nil, fmt.Errorf("payload 中 context 字段无效")
+	runtimeCtx, err := teamRuntimeContextFromAny(payload["context"])
+	if err != nil {
+		return nil, fmt.Errorf("payload 中 context 字段无效: %w", err)
 	}
 
-	// 步骤 2: 构造 AgentCard
-	card := agentschema.NewAgentCard(
-		agentschema.WithAgentID(fmt.Sprintf("%s_%s", spec.TeamName, runtimeCtx.MemberName)),
-		agentschema.WithAgentName(runtimeCtx.MemberName),
-		agentschema.WithAgentDescription(fmt.Sprintf("Teammate: %s", runtimeCtx.Persona)),
-	)
+	// 步骤 2: 构造 AgentCard（Python: agent_spec = spec.agents.get(role.value) or spec.agents["leader"]；
+	// card = agent_spec.card or AgentCard(id=team_member, ...)）
+	card := buildTeamAgentCardFromSpec(spec, runtimeCtx)
 
 	// 步骤 3: NewTeamAgent + Configure
 	agent := NewTeamAgent(ctx, card)
-	agent.Configure(ctx, spec, runtimeCtx)
+	agent.Configure(ctx, *spec, runtimeCtx)
 
-	// 步骤 4: RefreshHumanAgentRoster
+	// 步骤 4: RefreshHumanAgentRoster（Python: 子进程持有独立 TeamBackend，
+	// HITT roster 缓存为空，需从 DB 拉取当前名册使 is_human_agent 同步检查生效）
 	if backend := agent.TeamBackend(); backend != nil {
 		backend.RefreshHumanAgentRoster(ctx)
 	}
 
 	return agent, nil
+}
+
+// RecoverFromSession 从 session 检查点重构 Leader TeamAgent。
+// 流程：读取 team namespace → 解析 spec/context → NewTeamAgent → configure → restore_allocator_state → set_session_id
+//
+// Python: TeamAgent.recover_from_session(session, team_name, runtime_spec)
+func RecoverFromSession(ctx context.Context, session any, teamName string, runtimeSpec *atschema.TeamAgentSpec) (*TeamAgent, error) {
+	// 步骤 1: 读取 team namespace
+	var sf sessinterfaces.SessionFacade
+	if s, ok := session.(sessinterfaces.SessionFacade); ok {
+		sf = s
+	} else {
+		return nil, fmt.Errorf("session 不满足 SessionFacade 接口")
+	}
+	bucket := metadata.ReadTeamNamespace(sf, teamName)
+	if bucket == nil {
+		return nil, fmt.Errorf("team namespace %s 不存在", teamName)
+	}
+
+	// 步骤 2: 反序列化 spec（S-26: bucket["spec"] 是 PersistLeaderConfig 写入的
+	// map[string]any（model_dump 等价物），原直接断言 atschema.TeamAgentSpec 恒失败，
+	// COLD_RECOVER 冷恢复路径 100% 报错——改用 map→JSON 桥接对齐 Python model_validate）
+	spec, err := teamAgentSpecFromAny(bucket["spec"])
+	if err != nil {
+		return nil, fmt.Errorf("team spec 反序列化失败: %w", err)
+	}
+
+	// 步骤 3: 如果 runtimeSpec 有自定义器则覆盖
+	// Python: agent_customizer 是 Field(exclude=True) 的 Callable，序列化时被丢弃，
+	// 冷恢复必须从运行时 spec 重新注入，否则平台适配器的 rails/tools 钩子被静默禁用
+	if runtimeSpec != nil && runtimeSpec.AgentCustomizer != nil {
+		spec.AgentCustomizer = runtimeSpec.AgentCustomizer
+	}
+
+	// 步骤 4: 反序列化 context（S-26: 同步骤 2 的桥接修复）
+	runtimeCtx, err := teamRuntimeContextFromAny(bucket["context"])
+	if err != nil {
+		return nil, fmt.Errorf("team context 反序列化失败: %w", err)
+	}
+
+	// 步骤 5: 构造 AgentCard（对齐 Python: agent_spec.card or AgentCard(card_id, ...)）
+	card := buildTeamAgentCardFromSpec(spec, runtimeCtx)
+
+	// 步骤 6: NewTeamAgent + Configure
+	agent := NewTeamAgent(ctx, card)
+	agent.Configure(ctx, *spec, runtimeCtx)
+
+	// 步骤 7: 恢复 allocator state
+	allocatorStateAny := bucket["model_allocator_state"]
+	if allocatorState, ok := allocatorStateAny.(map[string]any); ok {
+		agent.RestoreAllocatorState(allocatorState)
+	}
+
+	// 步骤 8: 设置 session_id
+	if sessionIDer, ok := session.(interface{ GetSessionID() string }); ok {
+		if state := sessionctx.SessionStateFromCtx(ctx); state != nil {
+			state.SetSessionID(sessionIDer.GetSessionID())
+		}
+	}
+
+	return agent, nil
+}
+
+// teamAgentSpecFromAny 从 any（struct 直传或 map 桥接）解析 TeamAgentSpec。
+// S-26: 跨进程/checkpoint 路径拿到的是 map[string]any（model_dump 等价物），
+// 原直接断言 atschema.TeamAgentSpec 恒失败。
+func teamAgentSpecFromAny(v any) (*atschema.TeamAgentSpec, error) {
+	if v == nil {
+		return nil, fmt.Errorf("spec 数据为空")
+	}
+	// 同进程直传 struct（测试/内存传递路径）
+	if s, ok := v.(atschema.TeamAgentSpec); ok {
+		return &s, nil
+	}
+	if ps, ok := v.(*atschema.TeamAgentSpec); ok && ps != nil {
+		return ps, nil
+	}
+	// 跨进程 map 桥接（Python model_validate 等价）
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("spec 数据类型 %T 非 map[string]any", v)
+	}
+	if spec := atschema.NewTeamAgentSpecFromDict(m); spec != nil {
+		return spec, nil
+	}
+	return nil, fmt.Errorf("spec 反序列化失败")
+}
+
+// teamRuntimeContextFromAny 从 any（struct 直传或 map 桥接）解析 TeamRuntimeContext。
+// S-26: 原直接断言 atschema.TeamRuntimeContext 恒失败（同 teamAgentSpecFromAny）。
+func teamRuntimeContextFromAny(v any) (atschema.TeamRuntimeContext, error) {
+	if v == nil {
+		return atschema.TeamRuntimeContext{}, fmt.Errorf("context 数据为空")
+	}
+	if c, ok := v.(atschema.TeamRuntimeContext); ok {
+		return c, nil
+	}
+	if pc, ok := v.(*atschema.TeamRuntimeContext); ok && pc != nil {
+		return *pc, nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return atschema.TeamRuntimeContext{}, fmt.Errorf("context 数据类型 %T 非 map[string]any", v)
+	}
+	// map→JSON→struct 桥接（对齐 Python TeamRuntimeContext.model_validate）
+	data, err := json.Marshal(m)
+	if err != nil {
+		return atschema.TeamRuntimeContext{}, err
+	}
+	var ctx atschema.TeamRuntimeContext
+	if err := json.Unmarshal(data, &ctx); err != nil {
+		return atschema.TeamRuntimeContext{}, err
+	}
+	return ctx, nil
+}
+
+// buildTeamAgentCardFromSpec 对齐 Python from_spawn_payload/recover_from_session 的
+// card 构造逻辑：优先 spec.agents[role] 的 card，缺失时按 team_name+member_name
+// 构建兜底卡片。
+func buildTeamAgentCardFromSpec(spec *atschema.TeamAgentSpec, runtimeCtx atschema.TeamRuntimeContext) *agentschema.AgentCard {
+	// Python: team_name = (context.team_spec.team_name if context.team_spec else None) or spec.team_name
+	teamName := spec.TeamName
+	if runtimeCtx.TeamSpec != nil && runtimeCtx.TeamSpec.TeamName != "" {
+		teamName = runtimeCtx.TeamSpec.TeamName
+	}
+	// Python: agent_spec = spec.agents.get(context.role.value) or spec.agents["leader"]
+	var agentSpec *agentschema.AgentCard
+	if as, ok := spec.Agents[string(runtimeCtx.Role)]; ok && as.Card != nil {
+		agentSpec = as.Card
+	} else if as, ok := spec.Agents["leader"]; ok && as.Card != nil {
+		agentSpec = as.Card
+	}
+	if agentSpec != nil {
+		return agentSpec
+	}
+	cardID := "unknown"
+	if runtimeCtx.MemberName != "" {
+		cardID = fmt.Sprintf("%s_%s", teamName, runtimeCtx.MemberName)
+	}
+	name := runtimeCtx.MemberName
+	if name == "" {
+		name = "unknown"
+	}
+	description := "Teammate"
+	if runtimeCtx.Persona != "" {
+		description = fmt.Sprintf("Teammate: %s", runtimeCtx.Persona)
+	}
+	return agentschema.NewAgentCard(
+		agentschema.WithAgentID(cardID),
+		agentschema.WithAgentName(name),
+		agentschema.WithAgentDescription(description),
+	)
 }
 
 // ResumeForNewSession 为新会话恢复。
@@ -1030,68 +1183,6 @@ func (a *TeamAgent) RecoverTeam(ctx context.Context) ([]string, error) {
 		return a.recoveryManager.RecoverTeam(ctx), nil
 	}
 	return nil, nil
-}
-
-// RecoverFromSession 从 session 检查点重构 Leader TeamAgent。
-// 流程：读取 team namespace → 解析 spec/context → NewTeamAgent → configure → restore_allocator_state → set_session_id
-//
-// Python: TeamAgent.recover_from_session(session, team_name, runtime_spec)
-func RecoverFromSession(ctx context.Context, session any, teamName string, runtimeSpec *atschema.TeamAgentSpec) (*TeamAgent, error) {
-	// 步骤 1: 读取 team namespace
-	var sf sessinterfaces.SessionFacade
-	if s, ok := session.(sessinterfaces.SessionFacade); ok {
-		sf = s
-	} else {
-		return nil, fmt.Errorf("session 不满足 SessionFacade 接口")
-	}
-	bucket := metadata.ReadTeamNamespace(sf, teamName)
-	if bucket == nil {
-		return nil, fmt.Errorf("team namespace %s 不存在", teamName)
-	}
-
-	// 步骤 2: 反序列化 spec
-	specAny := bucket["spec"]
-	spec, ok := specAny.(atschema.TeamAgentSpec)
-	if !ok {
-		return nil, fmt.Errorf("team spec 反序列化失败")
-	}
-
-	// 步骤 3: 如果 runtimeSpec 有自定义器则覆盖
-	if runtimeSpec != nil && runtimeSpec.AgentCustomizer != nil {
-		spec.AgentCustomizer = runtimeSpec.AgentCustomizer
-	}
-
-	// 步骤 4: 反序列化 context
-	contextAny := bucket["context"]
-	runtimeCtx, ok := contextAny.(atschema.TeamRuntimeContext)
-	if !ok {
-		return nil, fmt.Errorf("team context 反序列化失败")
-	}
-
-	// 步骤 5: 构造 AgentCard
-	card := agentschema.NewAgentCard(
-		agentschema.WithAgentID(fmt.Sprintf("%s_%s", teamName, runtimeCtx.MemberName)),
-		agentschema.WithAgentName(runtimeCtx.MemberName),
-	)
-
-	// 步骤 6: NewTeamAgent + Configure
-	agent := NewTeamAgent(ctx, card)
-	agent.Configure(ctx, spec, runtimeCtx)
-
-	// 步骤 7: 恢复 allocator state
-	allocatorStateAny := bucket["model_allocator_state"]
-	if allocatorState, ok := allocatorStateAny.(map[string]any); ok {
-		agent.RestoreAllocatorState(allocatorState)
-	}
-
-	// 步骤 8: 设置 session_id
-	if sessionIDer, ok := session.(interface{ GetSessionID() string }); ok {
-		if state := sessionctx.SessionStateFromCtx(ctx); state != nil {
-			state.SetSessionID(sessionIDer.GetSessionID())
-		}
-	}
-
-	return agent, nil
 }
 
 // PersistSessionManifest 持久化恢复和清理所需的最小会话清单。

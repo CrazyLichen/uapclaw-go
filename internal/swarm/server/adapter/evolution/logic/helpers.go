@@ -150,20 +150,56 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // EventPayloadDict 提取事件 payload 为 map。
-// Python: event_payload_dict() — 当前事件来源始终返回 dict。
+// Python: event_payload_dict()（evolution_helpers.py L99-104）——
+// 读 evt.payload 属性（OutputSchema 对象）或 dict 直返。
+// Go 事件域是 map[string]any 两种形状：
+//   - typed 嵌套形状（chunkToMap/evolutionOutputSchemasToMaps 产出）："payload" 键存在 → 解包返回 payload 内容
+//     （对齐 Python hasattr(evt, "payload") 分支）
+//   - 展平/dict 直出形状（outputSchemaToDict 产出）：无 "payload" 键 → 整体即 payload
+//     （对齐 Python isinstance(evt, dict) 分支）
+//
+// 解包后叠加顶层身份键（type/event_type/role 等非 payload 键），确保
+// EventType 等身份判定对 typed 形状也能从解包结果读到内容键。
 func EventPayloadDict(evt map[string]any) map[string]any {
 	if evt == nil {
 		return map[string]any{}
+	}
+	if payload, ok := evt["payload"].(map[string]any); ok {
+		result := cloneMap(payload)
+		// 叠加顶层身份键（payload 内同名键优先——Python payload 是属性源）
+		for k, v := range evt {
+			if k == "payload" {
+				continue
+			}
+			if _, exists := result[k]; !exists {
+				result[k] = v
+			}
+		}
+		return result
 	}
 	return cloneMap(evt)
 }
 
 // EventType 提取事件类型字符串。
-// Python: event_type() — 仅从 map[string]any 的 event_type 字段提取，
-// 不再使用 reflect 访问 struct.Type 字段（过度对齐 Python hasattr 防御性代码）。
+// Python: event_type()（evolution_helpers.py L107-113）——优先读 evt.type 属性
+// （OutputSchema.Type；approval 事件 Type 即 "chat.ask_user_question"），
+// 无 type 属性时读 payload 的 event_type 键。
+// Go 事件域是 map[string]any：chunkToMap 展平时把 OutputSchema.Type 写入 "type" 键、
+// payload 展平后 event_type 也在顶层——语义等价映射：先读 "type" 键（typed 形状），
+// 再读 "event_type" 键（dict 形状 / payload 展平形状）。
+// S-20 关联：原实现只读 event_type，对 Type="chat.ask_user_question" 的审批事件
+// （payload 无 event_type 键）恒返回空——IsEvolutionApprovalEvent 恒 false，
+// 演进审批在 watch 循环中被当 stream 事件跳过（grouped_approvals 恒空）。
 func EventType(evt map[string]any) string {
-	payload := EventPayloadDict(evt)
-	if t, ok := payload["event_type"].(string); ok {
+	if evt == nil {
+		return ""
+	}
+	// Python: evt_type = getattr(evt, "type", None) — chunkToMap 展平后的 "type" 键
+	if t, ok := evt["type"].(string); ok && t != "" {
+		return t
+	}
+	// Python: payload_type = payload.get("event_type")
+	if t, ok := evt["event_type"].(string); ok {
 		return t
 	}
 	return ""
@@ -199,10 +235,17 @@ func ResolveEvolutionEventTimeoutSec(rail map[string]any, opts ...float64) float
 	return parsedTimeout + math.Max(grace, 0.0)
 }
 
-// IsEvolutionApprovalEvent 判断是否为演进审批事件（检查 event_type）。
-// Python: is_evolution_approval_event()
+// IsEvolutionApprovalEvent 判断是否为演进审批事件。
+// Python: is_evolution_approval_event()（evolution_helpers.py L141-146）——
+// 双判定：event_type()（.type 属性 / "type" 键优先）== chat.ask_user_question，
+// 或 payload.event_type 键 == chat.ask_user_question（Type="team" 但 payload
+// 携带 event_type 的旧形状事件，双源兜底）。
 func IsEvolutionApprovalEvent(evt map[string]any) bool {
-	return EventType(evt) == "chat.ask_user_question"
+	if EventType(evt) == "chat.ask_user_question" {
+		return true
+	}
+	payload := EventPayloadDict(evt)
+	return payload["event_type"] == "chat.ask_user_question"
 }
 
 // EvolutionEventKind 判断事件类别（approval/outcome/progress/stream）。

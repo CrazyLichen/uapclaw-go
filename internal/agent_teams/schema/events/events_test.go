@@ -431,13 +431,18 @@ func TestToPayload_任务事件(t *testing.T) {
 	})
 
 	t.Run("TaskPlanResponseEvent", func(t *testing.T) {
-		e := TaskPlanResponseEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1"}, TaskID: "task1", Approved: true, Status: "approved", PlanID: "plan1", Feedback: "ok", ToolCallID: "tc2"}
+		e := TaskPlanResponseEvent{BaseEventMessage: BaseEventMessage{TeamName: "t1", MemberName: "m1"}, TaskID: "task1", Approved: true, Status: "approved", PlanID: "plan1", Feedback: "ok", ToolCallID: "tc2"}
 		p := e.ToPayload()
 		if p["approved"] != true {
 			t.Errorf("approved = %v, want true", p["approved"])
 		}
 		if p["feedback"] != "ok" {
 			t.Errorf("feedback = %v, want ok", p["feedback"])
+		}
+		// S-附录4: member_name 必须进载荷（OnTaskPlanDecision 依赖其区分
+		// 给自己/他人的审批，Python model_dump 全字段序列化）
+		if p["member_name"] != "m1" {
+			t.Errorf("member_name = %v, want m1", p["member_name"])
 		}
 	})
 

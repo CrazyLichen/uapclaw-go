@@ -57,6 +57,17 @@ var (
 	// TeamRunnerFunc 团队执行函数变量（由 runtime 包注入，打破循环依赖）。
 	// 签名：func(ctx, agentTeam, inputs, base, member, sess) (map[string]any, error)
 	TeamRunnerFunc any
+
+	// TeamRunnerStreamingFunc 团队流式执行函数变量（由 runtime 包注入，打破循环依赖）。
+	// 签名：func(ctx, agentTeam, inputs, base, member, sess) (<-chan stream.Schema, error)
+	// S-27: 子进程 TEAM_AGENT 流式路径需要（原只注入非流式，streaming 标志被无视）
+	TeamRunnerStreamingFunc any
+
+	// TeamAgentFromPayloadFunc 从 spawn payload 构建 TeamAgent 实例的函数变量
+	// （由 runtime 包注入，打破 runner/spawn → agent_teams/agent 循环依赖）。
+	// 签名：func(ctx, payload map[string]any) (any, error)
+	// S-27: 对齐 Python TeamAgent.from_spawn_payload(agent_config.payload)
+	TeamAgentFromPayloadFunc any
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -330,8 +341,56 @@ func ExecuteAgent(
 	case SpawnAgentKindClassAgent:
 		return executeChildAgent(ctx, agentConfig, inputs, stdout, streaming, streamModes, childRunner, agentCreator)
 	case SpawnAgentKindTeamAgent:
-		// 回填（#9.85）：通过函数变量调用 TeamRunner
-		// 因循环依赖，runner/spawn 无法直接导入 agent_teams/runtime
+		// S-27: 对齐 Python _execute_child_team_agent（child_process.py L170-193）——
+		// FromSpawnPayload 构建已配置实例 + member=True 走 spawn-only 路径
+		// （跳过 activate/dispatch，保住 leader-only pool 不变式）+ 尊重 streaming。
+		// 原 member=false 以 leader 路径运行 spawned teammate，
+		// 以 team_name 在池中注册条目与真实 leader 冲突/覆盖。
+		// 因循环依赖，runner/spawn 无法导入 agent_teams/agent——
+		// 构造函数与流式 runner 均由 runtime 包注入。
+		fromPayloadFn := TeamAgentFromPayloadFunc
+		if fromPayloadFn == nil {
+			return nil, fmt.Errorf("team_agent 模式未初始化：TeamAgentFromPayloadFunc 尚未注入（需先调用 runtime.GetTeamRuntimeManager()）")
+		}
+		fromPayload, ok := fromPayloadFn.(func(context.Context, map[string]any) (any, error))
+		if !ok {
+			return nil, fmt.Errorf("team_agent 模式初始化异常：TeamAgentFromPayloadFunc 函数类型不匹配")
+		}
+		if agentConfig.Payload == nil {
+			return nil, fmt.Errorf("team_agent 模式：Payload 为空")
+		}
+		agent, err := fromPayload(ctx, agentConfig.Payload)
+		if err != nil {
+			return nil, fmt.Errorf("team_agent 模式：FromSpawnPayload 失败: %w", err)
+		}
+		if streaming {
+			// 流式路径（Python: async for chunk in Runner.run_agent_team_streaming(agent, inputs, member=True, session=session)）
+			streamFn := TeamRunnerStreamingFunc
+			if streamFn == nil {
+				return nil, fmt.Errorf("team_agent 模式未初始化：TeamRunnerStreamingFunc 尚未注入")
+			}
+			runStreamFn, ok := streamFn.(func(context.Context, any, any, bool, bool, any) (<-chan stream.Schema, error))
+			if !ok {
+				return nil, fmt.Errorf("team_agent 模式初始化异常：TeamRunnerStreamingFunc 函数类型不匹配")
+			}
+			streamCh, err := runStreamFn(ctx, agent, inputs, false, true, agentConfig.SessionID)
+			if err != nil {
+				return nil, fmt.Errorf("team_agent 模式：流式执行启动失败: %w", err)
+			}
+			var resultChunks []any
+			for chunk := range streamCh {
+				chunkMsg := NewMessage(MessageTypeStreamChunk, chunk)
+				if writeErr := WriteMessage(stdout, chunkMsg); writeErr != nil {
+					logger.Error(logComponent).
+						Str("event_type", "SPAWN_STREAM_WRITE_ERROR").
+						Err(writeErr).
+						Msg("failed to write STREAM_CHUNK")
+				}
+				resultChunks = append(resultChunks, chunk)
+			}
+			return resultChunks, nil
+		}
+		// 非流式路径（Python: Runner.run_agent_team(agent, inputs, member=True, session=session)）
 		fn := TeamRunnerFunc
 		if fn == nil {
 			return nil, fmt.Errorf("team_agent 模式未初始化：TeamRunner 尚未注入（需先调用 runtime.GetTeamRuntimeManager()）")
@@ -340,19 +399,7 @@ func ExecuteAgent(
 		if !ok {
 			return nil, fmt.Errorf("team_agent 模式初始化异常：TeamRunner 函数类型不匹配")
 		}
-		// agentTeam 从 Payload 中提取 spec 或 team_name
-		var agentTeam any
-		if agentConfig.Payload != nil {
-			if spec, exists := agentConfig.Payload["spec"]; exists {
-				agentTeam = spec
-			} else if name, exists := agentConfig.Payload["team_name"]; exists {
-				agentTeam = name
-			}
-		}
-		if agentTeam == nil {
-			return nil, fmt.Errorf("team_agent 模式：Payload 中缺少 spec 或 team_name")
-		}
-		return runFn(ctx, agentTeam, inputs, false, false, agentConfig.SessionID)
+		return runFn(ctx, agent, inputs, false, true, agentConfig.SessionID)
 	default:
 		return nil, fmt.Errorf("不支持的 Agent 启动方式: %s", agentConfig.AgentKind)
 	}

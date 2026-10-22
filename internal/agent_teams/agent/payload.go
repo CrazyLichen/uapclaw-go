@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"encoding/json"
+
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 )
@@ -108,9 +110,37 @@ func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) *atsc
 
 // BuildSpawnConfig 构建 SpawnAgentConfig。
 // Python: SpawnPayloadBuilder.build_spawn_config(ctx)
+//
+// payload 是子进程 TeamAgent.FromSpawnPayload 的公共契约：
+// {spec: model_dump, context: model_dump}。
+// 注意与 BuildSpawnPayload 的区分——后者产出 {coordination, query}
+// 形状，作为 spawn_agent 的 inputs 参数传递（Python spawn_manager L86-91：
+// Runner.spawn_agent(build_spawn_config(ctx), build_spawn_payload(...)) 双参数分离）。
+// 原实现误用 BuildSpawnPayload 覆盖 payload，导致子进程
+// from_spawn_payload 读不到 spec/context。
 func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) runnerspawn.SpawnAgentConfig {
+	// S-26: spec/context 序列化为 map（Python model_dump(mode="json") 等价）
+	specBytes, err := json.Marshal(b.spec)
+	if err != nil {
+		specBytes = []byte("{}")
+	}
+	var specMap map[string]any
+	if err := json.Unmarshal(specBytes, &specMap); err != nil {
+		specMap = make(map[string]any)
+	}
+	ctxBytes, err := json.Marshal(ctx)
+	if err != nil {
+		ctxBytes = []byte("{}")
+	}
+	var ctxMap map[string]any
+	if err := json.Unmarshal(ctxBytes, &ctxMap); err != nil {
+		ctxMap = make(map[string]any)
+	}
 	return runnerspawn.SpawnAgentConfig{
 		AgentKind: runnerspawn.SpawnAgentKindTeamAgent,
-		Payload:   b.BuildSpawnPayload(ctx, ""),
+		Payload: map[string]any{
+			"spec":    specMap,
+			"context": ctxMap,
+		},
 	}
 }

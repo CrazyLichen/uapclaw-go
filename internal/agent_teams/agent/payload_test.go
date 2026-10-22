@@ -1,6 +1,7 @@
 package agent_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -120,4 +121,47 @@ func TestSpawnPayloadBuilder_BuildSpawnConfig(t *testing.T) {
 	cfg := b.BuildSpawnConfig(ctx)
 	assert.Equal(t, runnerspawn.SpawnAgentKindTeamAgent, cfg.AgentKind)
 	assert.NotNil(t, cfg.Payload, "Payload 应非 nil")
+	// S-26: payload 形状是 FromSpawnPayload 公共契约——必须含 spec/context 键
+	//（Python build_spawn_config: payload={"spec": model_dump, "context": model_dump}）
+	assert.Contains(t, cfg.Payload, "spec", "payload 必须含 spec 键")
+	assert.Contains(t, cfg.Payload, "context", "payload 必须含 context 键")
+	specMap, ok := cfg.Payload["spec"].(map[string]any)
+	assert.True(t, ok, "spec 应为 map[string]any（model_dump 等价）")
+	if ok {
+		assert.Contains(t, specMap, "team_name", "spec dump 应含 team_name")
+	}
+	ctxMap, ok := cfg.Payload["context"].(map[string]any)
+	assert.True(t, ok, "context 应为 map[string]any（model_dump 等价）")
+	if ok {
+		assert.Contains(t, ctxMap, "role", "context dump 应含 role")
+	}
+	// payload 不应混入 coordination/query（那是 BuildSpawnPayload 的 inputs 形状）
+	assert.NotContains(t, cfg.Payload, "coordination", "payload 不应含 coordination（属于 inputs）")
+	assert.NotContains(t, cfg.Payload, "query", "payload 不应含 query（属于 inputs）")
+}
+
+// TestSpawnPayloadBuilder_BuildSpawnConfig_消费链端到端 测试 BuildSpawnConfig 产出
+// 可被 FromSpawnPayload 消费（子进程路径闭环）。
+// S-26/S-27: spawn payload wire 契约——BuildSpawnConfig → FromSpawnPayload 往返。
+func TestSpawnPayloadBuilder_BuildSpawnConfig_消费链端到端(t *testing.T) {
+	memberSpec := atschema.TeamMemberSpec{
+		MemberName: "teammate_1",
+		RoleType:   atschema.TeamRoleTeammate,
+		Persona:    "coder",
+	}
+	spec := atschema.NewTeamAgentSpec()
+	spec.TeamName = "team_e2e"
+	spec.Agents = map[string]atschema.DeepAgentSpec{
+		"leader": {},
+	}
+	leaderCtx := atschema.TeamRuntimeContext{Role: atschema.TeamRoleLeader, TeamSpec: &atschema.TeamSpec{TeamName: "team_e2e"}}
+	b := agent.NewSpawnPayloadBuilder(spec, leaderCtx)
+
+	memberCtx := b.BuildMemberContext(memberSpec)
+	cfg := b.BuildSpawnConfig(memberCtx)
+
+	// FromSpawnPayload 消费（agentConfig.Payload 直传）
+	ta, err := agent.FromSpawnPayload(context.Background(), cfg.Payload)
+	assert.NoError(t, err)
+	assert.NotNil(t, ta)
 }

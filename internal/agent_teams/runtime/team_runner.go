@@ -456,7 +456,12 @@ func runAgentTeam(
 		return nil, nil
 	}
 
-	return activation.Agent.Invoke(ctx, nil, agentinterfaces.WithSession(activation.Session))
+	// S-24: 对齐 Python L194 activation.agent.invoke(inputs, session=...)——
+	// 原硬编码 nil 导致团队首请求用户 query 整体丢失（TeamAgent.Invoke 读
+	// inputs["query"] 得 nil map → PendingUserQuery 不设置 → 首轮空事件入队）。
+	// inputs 非 map 时传 nil map（Invoke 对 nil map 读键安全）。
+	inputsDict, _ := inputs.(map[string]any)
+	return activation.Agent.Invoke(ctx, inputsDict, agentinterfaces.WithSession(activation.Session))
 }
 
 // runAgentTeamStreaming TeamAgent 路径（流式）。
@@ -519,7 +524,10 @@ func runAgentTeamStreaming(
 		leaderRole,
 	)
 
-	agentCh, streamErr := activation.Agent.Stream(ctx, nil, agentinterfaces.WithSession(activation.Session))
+	// S-24: 对齐 Python L260 activation.agent.stream(inputs, session=...)——
+	// 与非流式路径同因：原硬编码 nil 导致流式团队首请求用户 query 整体丢失。
+	inputsDict, _ := inputs.(map[string]any)
+	agentCh, streamErr := activation.Agent.Stream(ctx, inputsDict, agentinterfaces.WithSession(activation.Session))
 	if streamErr != nil {
 		// M-53: defer 清理已就位，这里只需返回错误（原手动清理代码删除）
 		return nil, streamErr

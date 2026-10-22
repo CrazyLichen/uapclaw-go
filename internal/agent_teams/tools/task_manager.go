@@ -982,8 +982,11 @@ func (tm *TeamTaskManager) ApprovePlan(ctx context.Context, planID string, appro
 	}
 
 	// 发布事件
+	// S-附录4: 对齐 Python member_name=task.assignee（被审批成员）——
+	// 原误用 tm.memberName（审批发起人 leader 自己），导致接收方
+	// OnTaskPlanDecision 判定"不是给自己的"而错误转发
 	tm.publishTaskEvent(ctx, events.TaskPlanResponseEvent{
-		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: tm.memberName},
+		BaseEventMessage: events.BaseEventMessage{TeamName: tm.teamName, MemberName: *task.Assignee},
 		TaskID:           planRecord.TaskID,
 		Approved:         approved,
 		Status:           planRecord.Status,

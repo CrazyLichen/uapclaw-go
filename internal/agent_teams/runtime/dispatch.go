@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -125,11 +126,23 @@ func DecideRunAction(
 	// Manager.activate 保证条目属于 target_session_id —
 	// 跨 session 条目在 dispatch 之前已拆除，
 	// 因此到达此分支时 session 不匹配是契约违反。
+	// T-18: 对齐 Python raise RuntimeError（可捕获）——改 panic 为
+	// RejectInconsistent 返回（原 panic 无 recover 防护，导出函数直接调用
+	// 会崩溃整个进程）。
 	if poolEntry.SessionID != targetSessionID {
-		panic(fmt.Sprintf(
-			"dispatch invariant violated: pool entry for %q on session %q must be torn down before dispatching to session %q",
-			targetTeamName, poolEntry.SessionID, targetSessionID,
-		))
+		logger.Error(logComponent).
+			Str("team_name", targetTeamName).
+			Str("pool_session_id", poolEntry.SessionID).
+			Str("target_session_id", targetSessionID).
+			Msg("dispatch invariant violated: pool entry must be torn down before dispatching")
+		return RunAction{
+			Kind:        RunActionKindRejectInconsistent,
+			RequireSpec: false,
+			Reason: fmt.Sprintf(
+				"dispatch invariant violated: pool entry for %q on session %q must be torn down before dispatching to session %q",
+				targetTeamName, poolEntry.SessionID, targetSessionID,
+			),
+		}
 	}
 	if poolEntry.State == RuntimeStatePaused {
 		return RunAction{Kind: RunActionKindResumeFromPause, RequireSpec: false}

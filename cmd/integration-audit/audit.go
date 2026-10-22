@@ -453,7 +453,7 @@ func isSkipCall(call *ast.CallExpr) bool {
 				}
 			}
 			if _, ok := sel.X.(*ast.Ident); ok {
-				return true // t.Skip(...)
+				return true // t.Skip(...) 形式：裸 t 变量直接调用
 			}
 		}
 	}

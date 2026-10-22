@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -361,12 +362,8 @@ func (m *SpawnManager) BuildContextFromDB(ctx context.Context, memberName string
 	}
 
 	// 解析 model_ref_json → resolveMemberModelFromDB
-	var memberModel *models.TeamModelConfig
-	if raw := resolveMemberModelFromDB(m.configurator, teammate.ModelRefJSON); raw != nil {
-		if mm, ok := raw.(*models.TeamModelConfig); ok {
-			memberModel = mm
-		}
-	}
+	// S-16: resolveMemberModelFromDB 已返回具体类型 *models.TeamModelConfig
+	memberModel := resolveMemberModelFromDB(m.configurator, teammate.ModelRefJSON)
 
 	// 从 configurator 继承 team_spec、db_config 等
 	runtimeCtx := m.configurator.RuntimeContext()
@@ -471,14 +468,43 @@ func (m *SpawnManager) CancelRecoveryTasks() {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveMemberModelFromDB 从 DB 记录解析成员模型。
-// Python: SpawnManager.build_context_from_db 中的 resolve_member_model
-func resolveMemberModelFromDB(configurator *AgentConfigurator, modelRefJSON string) any {
+// Python: SpawnManager.build_context_from_db 中的 resolve_member_model（spawn_manager.py L232-252）——
+// 解析 model_ref_json（Allocation.to_db_ref 产出的 {model_name, model_index}），
+// 经 resolve_member_model(team_spec, model_name, model_index) 从活跃池做纯位置查找。
+// S-16: 原实现恒返回 nil，重启/恢复场景下成员拿到 nil 模型无法调用 LLM。
+// 9.64 已实现 ResolveMemberModelFromPool——此处接线即可。
+func resolveMemberModelFromDB(configurator *AgentConfigurator, modelRefJSON string) *models.TeamModelConfig {
 	if configurator == nil || modelRefJSON == "" {
 		return nil
 	}
-	// 简化实现：从 model_ref_json 解析模型引用
-	// TODO(#9.64): 完整实现 model_ref_json 解析 + ResolveMemberModelFromPool
-	return nil
+	// Python: ref = json.loads(ref_json)（解析失败仅告警并忽略）
+	var ref map[string]any
+	if err := json.Unmarshal([]byte(modelRefJSON), &ref); err != nil {
+		logger.Warn(logComponent).
+			Str("member_name", func() string {
+				if configurator != nil {
+					return configurator.MemberName()
+				}
+				return "?"
+			}()).
+			Err(err).
+			Msg("resolveMemberModelFromDB: malformed model_ref_json on DB record; ignoring")
+		return nil
+	}
+	// Python: if isinstance(ref, dict): team_spec → resolve_member_model(...)
+	if len(ref) == 0 {
+		return nil
+	}
+	teamSpec := configurator.TeamSpec()
+	if teamSpec == nil {
+		return nil
+	}
+	modelName, _ := ref["model_name"].(string)
+	modelIndex := 0
+	if idx, ok := ref["model_index"].(float64); ok {
+		modelIndex = int(idx)
+	}
+	return models.ResolveMemberModelFromPool(teamSpec.ModelPool, modelName, modelIndex)
 }
 
 // spawnInprocess 以 inprocess 模式生成 teammate。
@@ -540,16 +566,16 @@ func (m *SpawnManager) spawnSubprocess(
 	// 构建配置
 	agentConfig := m.configurator.BuildSpawnConfig(runtimeCtx)
 
-	// Python: payload = build_spawn_payload(ctx, initial_message=initial_message)
-	// 用带 initialMessage 的 payload 覆盖 BuildSpawnConfig 中构建的空 payload
+	// S-26/S-27: 对齐 Python spawn_manager L86-91——
+	// Python: Runner.spawn_agent(build_spawn_config(ctx), build_spawn_payload(ctx, initial_message), ...)
+	// 双参数分离：agentConfig.Payload 是 {spec, context}（FromSpawnPayload 契约），
+	// inputs 是 {coordination, query}（build_spawn_payload 产出，传给子进程作为
+	// run_agent_team(agent, inputs, member=True) 的输入）。
+	// 原实现误用 BuildSpawnPayload 覆盖 payload，导致子进程读不到 spec/context。
 	payload := m.configurator.BuildSpawnPayload(runtimeCtx, initialMessage)
-	if payload != nil {
-		agentConfig.Payload = payload
-	}
-
-	inputs := map[string]any{"query": initialMessage}
-	if initialMessage == "" {
-		inputs["query"] = "Join the team and wait for your first assignment."
+	inputs := payload
+	if inputs == nil {
+		inputs = map[string]any{"query": initialMessage}
 	}
 
 	// 调用 Runner.SpawnAgent

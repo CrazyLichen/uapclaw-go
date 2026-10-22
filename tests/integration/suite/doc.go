@@ -16,5 +16,7 @@
 //	├── base_suite.go       # BaseIntegrationSuite（MockLLM + Context）
 //	├── runner_suite.go     # RunnerSuite（+ Runner 启动/停止）
 //	├── session_suite.go    # SessionSuite（+ Session 创建/销毁）
-//	└── agent_suite.go      # AgentSuite（+ Agent 注册/执行）
+//	├── agent_suite.go      # AgentSuite（+ Agent 注册/执行）
+//	├── memory_suite.go     # MemorySuite（+ KV 存储/Mock embedding/临时目录）
+//	└── real_llm_suite.go   # RealLLMSuite（+ 真实 LLM 客户端注入）
 package suite

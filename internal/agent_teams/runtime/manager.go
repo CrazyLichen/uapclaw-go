@@ -20,6 +20,7 @@ import (
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	sessionstream "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -95,6 +96,16 @@ func GetTeamRuntimeManager() *TeamRuntimeManager {
 		spawn.SetRunTeamMemberFunc(RunTeamMember)
 		// 注入 TeamRunner 函数到 runner/spawn 包（打破循环依赖）
 		runnerspawn.SetTeamRunnerFunc(RunAgentTeam)
+		// S-27: 注入团队流式执行函数（子进程 TEAM_AGENT 流式路径用，
+		// RunAgentTeamStreaming 多一个 streamLogger 参数，子进程场景传 nil）
+		runnerspawn.TeamRunnerStreamingFunc = func(ctx context.Context, agentTeam any, inputs any, base bool, member bool, sess any) (<-chan sessionstream.Schema, error) {
+			return RunAgentTeamStreaming(ctx, agentTeam, inputs, base, member, sess, nil)
+		}
+		// S-27: 注入 FromSpawnPayload（子进程 TEAM_AGENT 构造入口，
+		// 打破 runner/spawn → agent_teams/agent 循环依赖）
+		runnerspawn.TeamAgentFromPayloadFunc = func(ctx context.Context, payload map[string]any) (any, error) {
+			return agent.FromSpawnPayload(ctx, payload)
+		}
 	}
 	return globalTeamRuntimeManager
 }
@@ -290,8 +301,13 @@ func (m *TeamRuntimeManager) Finalize(ctx context.Context, teamName string, sess
 	ag := entry.Agent
 	shutdownRequested, err := ag.IsShutdownRequested(ctx)
 	if err != nil {
+		// T-17: 对齐 Python manager.py L203-229——shutdown_requested 检查异常时
+		// 外层 except 捕获后什么都不做（不 stop 不 pause，条目保持原状）。
+		// 原逻辑 err 后 shutdownRequested=false 继续走 pause 分支，
+		// 会把 RUNNING 团队错误暂停。
 		logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-			Err(err).Msg("finalize: shutdown_requested check failed, defaulting to pause")
+			Err(err).Msg("finalize: shutdown_requested check failed, keeping entry as-is")
+		return nil
 	}
 	if shutdownRequested || ag.Lifecycle() != "persistent" {
 		logger.Info(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
@@ -906,17 +922,24 @@ func (m *TeamRuntimeManager) inspectSession(
 			Any("db_config_type", fmt.Sprintf("%T", dbCfgAny)).
 			Msg("inspectSession: ResolveDBConfig returned non-DBConfigProvider type")
 	}
+	// M-18: 对齐 Python L847-849——db.initialize() 失败直接异常上抛，
+	// activate 中断。原 Go 版本吞错继续导致 teamInDB=false →
+	// DecideRunAction 误判 REJECT_ORPHANED/CREATE（DB 瞬断会把合法团队拒绝为 orphaned）。
 	db := spawn.GetSharedDB(dbCfgProvider)
-	if db != nil {
-		if initErr := db.Initialize(ctx); initErr != nil {
-			logger.Warn(logComponent).Err(initErr).
-				Str("team_name", teamName).
-				Msg("inspectSession: database initialization failed")
-		} else {
-			// Python: L834: team_in_db = await db.team.team_exists(team_name)
-			teamInDB = db.Team().TeamExists(ctx, teamName)
-		}
+	if db == nil {
+		logger.Error(logComponent).
+			Str("team_name", teamName).
+			Msg("inspectSession: GetSharedDB returned nil")
+		return false, false, "", fmt.Errorf("inspectSession: shared db unavailable for team %s", teamName)
 	}
+	if initErr := db.Initialize(ctx); initErr != nil {
+		logger.Error(logComponent).Err(initErr).
+			Str("team_name", teamName).
+			Msg("inspectSession: database initialization failed")
+		return false, false, "", fmt.Errorf("inspectSession: database initialization failed: %w", initErr)
+	}
+	// Python: L834: team_in_db = await db.team.team_exists(team_name)
+	teamInDB = db.Team().TeamExists(ctx, teamName)
 
 	return teamInSession, teamInDB, teamDBState, nil
 }
@@ -1119,12 +1142,17 @@ func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.T
 	}
 
 	// Python: L419-425 — build model allocator + leader allocation
+	// M-17: 只 Allocate 一次，同一 leaderAlloc 同时用于 ToTeamModelConfig 和
+	// AttachModelAllocator（Python 注释强调 "reuses the same rotation state"）。
+	// 原双重 Allocate 在 round_robin/by_model_name 下 index 递增两次：
+	// TeamRuntimeContext.MemberModel 与 attach 的 allocation 指向不同条目。
 	var modelAllocator models.ModelAllocator
 	var leaderMemberModel *models.TeamModelConfig
+	var leaderAlloc *models.Allocation
 	if len(teamPool) > 0 {
 		modelAllocator = models.BuildModelAllocatorForPool(teamPool, teamStrategy, spec.TeamName)
 		if modelAllocator != nil {
-			leaderAlloc := modelAllocator.Allocate(spec.Leader.ModelName)
+			leaderAlloc = modelAllocator.Allocate(spec.Leader.ModelName)
 			if leaderAlloc != nil {
 				cfg := leaderAlloc.ToTeamModelConfig()
 				leaderMemberModel = &cfg
@@ -1160,12 +1188,8 @@ func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.T
 	ag := agent.NewTeamAgent(ctx, leaderCard)
 
 	// Python: L444 — agent.attach_model_allocator(model_allocator, leader_allocation=leader_allocation)
+	// M-17: 复用上面 Allocate 的同一 leaderAlloc（同一 rotation 状态），不再二次分配
 	if modelAllocator != nil {
-		var leaderAlloc *models.Allocation
-		if len(teamPool) > 0 {
-			alloc := modelAllocator.Allocate(spec.Leader.ModelName)
-			leaderAlloc = alloc
-		}
 		ag.AttachModelAllocator(modelAllocator, leaderAlloc)
 	}
 

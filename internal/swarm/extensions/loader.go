@@ -253,6 +253,14 @@ func (l *ExtensionLoader) loadAndRegister(ctx context.Context, root string, pc P
 		}
 		loaded = append(loaded, LoadedExtension{Metadata: decl.Metadata, Root: root, client: pc})
 	}
+	// 全部声明失败（loaded 为空但有声明）→ Kill 子进程并报错：
+	// 否则 pc 无人持有（manager 视为成功、ShutdownAllExtensions 遍历空列表），
+	// 插件子进程永不回收。Python 语义是 register_extensions 异常 → root 级失败，
+	// 无泄漏路径。与 LoadExtension 中 registerDecls 失败即 Kill 的先例对称。
+	if len(loaded) == 0 && len(decls) > 0 {
+		pc.Kill()
+		return nil, fmt.Errorf("扩展 %s 的全部 %d 个声明 SetExtensionDir 均失败，已终止插件子进程", root, len(decls))
+	}
 	return loaded, nil
 }
 

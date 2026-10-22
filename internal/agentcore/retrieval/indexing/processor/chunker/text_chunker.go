@@ -195,6 +195,7 @@ func (c *TextChunker) Process(ctx context.Context, docs []reranker.Document) ([]
 // getChunker 单位路由（对齐 Python get_chunker 方法）。
 //
 // 执行序严格对齐 Python chunking.py L56-95：
+//
 //  1. chunk_unit == "char" → CharChunker
 //  2. 否则：embedModel 断言 TokenizerProvider 提取 tokenizer
 //  3. tokenizer == nil → tiktoken fallback（155102 失败分支保留，

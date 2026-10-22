@@ -30,6 +30,7 @@
 //	├── exceptions.go                 # Team 异常类型（TeamError + 7 子类）
 //	├── member_skill_toolkit_rail.go  # 成员技能工具 rail
 //	├── monitor_handler.go            # TeamMonitorHandler 事件收集、转换和广播
+//	├── remote_member_shutdown_cleanup.go # 分布式全员 shutdown 后延迟清理 session runtime
 //	├── runtime_inheritance.go        # 成员运行时继承（rails 构造/能力过滤/模型解析）
 //	├── team_manager.go               # TeamManager 结构体 + 全局索引 + 访问器
 //	├── team_manager_distributed.go   # 分布式 hooks

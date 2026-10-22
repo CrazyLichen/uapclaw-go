@@ -387,12 +387,40 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// ⤴️ 9.66 回填完成：已在下方传参
 
 	// 步骤 13: TeamToolApprovalRail（仅 TEAMMATE + 有审批工具时）
+	// S-11: 对齐 Python agent_configurator.py L404-418——
+	// is_coordinated_teammate = role==TEAMMATE and team_spec 存在；
+	// 且 team_backend/messager 可用且 agent_spec.approval_required_tools 非空时构造。
+	// 原实现 TODO 占位导致审批流在生产链路完全失效（Rail 实现已就绪但永不构造）。
 	var toolApprovalRail *rails.TeamToolApprovalRail
-	// TODO(#9.runtime): 集成审批工具条件判断
+	isCoordinatedTeammate := ctx.Role == atschema.TeamRoleTeammate && ctx.TeamSpec != nil
+	if isCoordinatedTeammate && c.TeamBackend() != nil && c.Messager() != nil {
+		approvalTools := agentSpec.ApprovalRequiredTools
+		if len(approvalTools) > 0 {
+			teamSpecForRail := ctx.TeamSpec
+			leaderMemberName := ""
+			if teamSpecForRail != nil {
+				leaderMemberName = teamSpecForRail.LeaderMemberName
+			}
+			toolApprovalRail = rails.NewTeamToolApprovalRail(
+				ctx.TeamSpec.TeamName,
+				ctx.MemberName,
+				c.TeamBackend().DB(),
+				c.Messager(),
+				leaderMemberName,
+				approvalTools,
+			)
+		}
+	}
 
 	// 步骤 14: TeamPlanModeRail（仅 LEADER + team.plan 启用时）
+	// S-11: 对齐 Python L420-425——is_team_plan_leader = role==LEADER and
+	// is_team_plan_enabled(spec)（enable_team_plan 字段，team_plan.py L25-27）。
+	// initial_plan_mode=is_team_plan_leader（Python TeamHarness.build L437）。
 	var teamPlanModeRail *rails.TeamPlanModeRail
-	// TODO(#9.runtime): 集成 team.plan 启用条件
+	isTeamPlanLeader := ctx.Role == atschema.TeamRoleLeader && spec.EnableTeamPlan
+	if isTeamPlanLeader {
+		teamPlanModeRail = rails.NewTeamPlanModeRail(rails.WithLanguageOverride(resolvedLanguage))
+	}
 
 	// 15. 构建团队线束
 	// ⤴️ 9.68 回填完成：Rail 实例传入
@@ -410,7 +438,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 		wsRail,
 		toolApprovalRail,
 		teamPlanModeRail,
-		false, // TODO(#9.runtime): 是否启用团队规划模式
+		isTeamPlanLeader, // S-11: initial_plan_mode 对齐 Python（原 TODO 恒 false）
 	)
 	c.SetHarness(harness)
 

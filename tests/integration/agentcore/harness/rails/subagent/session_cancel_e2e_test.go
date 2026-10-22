@@ -148,8 +148,8 @@ func (s *SessionCancelE2ESuite) TestSessionCancelE2E_场景1_立即取消() {
 		agentinterfaces.WithSession(sess))
 	s.Require().NoError(err, "第二轮 Invoke 失败")
 
-	row := toolkit.Get(taskID)
-	s.Require().NotNil(row)
+	row, ok := toolkit.Get(taskID)
+	s.Require().True(ok, "任务应存在")
 	s.Equal("canceled", row.Status, "任务状态应为 canceled")
 }
 
@@ -190,8 +190,8 @@ func (s *SessionCancelE2ESuite) TestSessionCancelE2E_场景2_运行中取消() {
 		agentinterfaces.WithSession(sess))
 	s.Require().NoError(err)
 
-	row := toolkit.Get(taskID)
-	s.Require().NotNil(row)
+	row, ok := toolkit.Get(taskID)
+	s.Require().True(ok, "任务应存在")
 	s.Equal("canceled", row.Status, "运行中任务取消后状态应为 canceled")
 }
 
@@ -339,8 +339,8 @@ func (s *SessionCancelE2ESuite) TestSessionCancelE2E_场景5_重复取消幂等(
 		agentinterfaces.WithSession(sess))
 	s.Require().NoError(err)
 
-	row := toolkit.Get(taskID)
-	s.Require().NotNil(row)
+	row, ok := toolkit.Get(taskID)
+	s.Require().True(ok, "任务应存在")
 	s.Equal("canceled", row.Status, "第一次取消后应为 canceled")
 
 	// 第二次取消（幂等）
@@ -353,8 +353,8 @@ func (s *SessionCancelE2ESuite) TestSessionCancelE2E_场景5_重复取消幂等(
 		agentinterfaces.WithSession(sess))
 	s.Require().NoError(err)
 
-	row = toolkit.Get(taskID)
-	s.Require().NotNil(row)
+	row, ok = toolkit.Get(taskID)
+	s.Require().True(ok, "任务应存在")
 	s.Equal("canceled", row.Status, "重复取消后状态应保持 canceled")
 }
 
@@ -385,7 +385,7 @@ func (s *SessionCancelE2ESuite) TestSessionCancelE2E_场景6_取消已完成保�
 	// 快子代理：等任务完成
 	s.Require().NoError(waitForTaskStatus(toolkit, taskID, "completed", 5*time.Second),
 		"等待快速任务完成超时")
-	row := toolkit.Get(taskID)
+	row, _ := toolkit.Get(taskID)
 	s.Require().Equal("completed", row.Status, "完成后状态应为 completed")
 
 	// 对已完成任务执行取消
@@ -398,9 +398,8 @@ func (s *SessionCancelE2ESuite) TestSessionCancelE2E_场景6_取消已完成保�
 		agentinterfaces.WithSession(sess))
 	s.Require().NoError(err)
 
-	row = toolkit.Get(taskID)
-	s.Require().NotNil(row)
-	s.Equal("completed", row.Status, "取消已完成任务后状态应保持 completed")
+	row, _ = toolkit.Get(taskID)
+	s.Require().Equal("completed", row.Status, "取消已完成任务后状态应保持 completed")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -502,7 +501,7 @@ func (s *SessionCancelE2ESuite) setDescriptionBoundSubagents(
 func waitForTaskStatus(toolkit *hsubagent.SessionToolkit, taskID, wantStatus string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if row := toolkit.Get(taskID); row != nil && row.Status == wantStatus {
+		if row, ok := toolkit.Get(taskID); ok && row.Status == wantStatus {
 			return nil
 		}
 		time.Sleep(20 * time.Millisecond)

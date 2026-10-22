@@ -2,9 +2,12 @@ package subagent
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
@@ -85,8 +88,8 @@ func TestNewSessionToolkit(t *testing.T) {
 func TestSessionToolkit_UpsertRunning(t *testing.T) {
 	tk := NewSessionToolkit()
 	tk.UpsertRunning("task-1", "sub-1", "研究A方向")
-	row := tk.Get("task-1")
-	if row == nil {
+	row, ok := tk.Get("task-1")
+	if !ok {
 		t.Fatal("应找到 task-1")
 	}
 	if row.Status != "running" {
@@ -102,7 +105,7 @@ func TestSessionToolkit_MarkCompleted(t *testing.T) {
 	tk := NewSessionToolkit()
 	tk.UpsertRunning("task-1", "sub-1", "研究A方向")
 	tk.MarkCompleted("task-1", "研究结果")
-	row := tk.Get("task-1")
+	row, _ := tk.Get("task-1")
 	if row.Status != "completed" {
 		t.Fatalf("期望 completed, 实际 %s", row.Status)
 	}
@@ -116,7 +119,7 @@ func TestSessionToolkit_MarkFailed(t *testing.T) {
 	tk := NewSessionToolkit()
 	tk.UpsertRunning("task-1", "sub-1", "研究A方向")
 	tk.MarkFailed("task-1", "网络错误")
-	row := tk.Get("task-1")
+	row, _ := tk.Get("task-1")
 	if row.Status != "error" {
 		t.Fatalf("期望 error, 实际 %s", row.Status)
 	}
@@ -130,7 +133,7 @@ func TestSessionToolkit_MarkCanceled(t *testing.T) {
 	tk := NewSessionToolkit()
 	tk.UpsertRunning("task-1", "sub-1", "研究A方向")
 	tk.MarkCanceled("task-1")
-	row := tk.Get("task-1")
+	row, _ := tk.Get("task-1")
 	if row.Status != "canceled" {
 		t.Fatalf("期望 canceled, 实际 %s", row.Status)
 	}
@@ -140,7 +143,8 @@ func TestSessionToolkit_MarkCanceled(t *testing.T) {
 func TestSessionToolkit_MarkCompleted_不存在的任务(t *testing.T) {
 	tk := NewSessionToolkit()
 	tk.MarkCompleted("nonexistent", "result")
-	if row := tk.Get("nonexistent"); row != nil {
+	if row, ok := tk.Get("nonexistent"); ok {
+		_ = row
 		t.Fatal("不应创建不存在的任务行")
 	}
 }
@@ -171,7 +175,7 @@ func TestSessionToolkit_UpsertRunning_覆盖(t *testing.T) {
 	tk := NewSessionToolkit()
 	tk.UpsertRunning("task-1", "sub-1", "旧描述")
 	tk.UpsertRunning("task-1", "sub-2", "新描述")
-	row := tk.Get("task-1")
+	row, _ := tk.Get("task-1")
 	if row.Description != "新描述" {
 		t.Fatalf("期望 新描述, 实际 %s", row.Description)
 	}
@@ -181,6 +185,62 @@ func TestSessionToolkit_UpsertRunning_覆盖(t *testing.T) {
 	if row.Status != "running" {
 		t.Fatalf("期望 running, 实际 %s", row.Status)
 	}
+}
+
+// TestSessionToolkit_并发读写无数据竞争 M-01 回归测试：
+// Get/ListAll 返回指针时，锁外读 row.Status 与 MarkXxx 并发写构成
+// DATA RACE（race detector 可检出）；值拷贝返回后读的是独立副本，
+// 与任何并发写无交集。旧实现下本测试 -race 必报 DATA RACE。
+func TestSessionToolkit_并发读写无数据竞争(t *testing.T) {
+	tk := NewSessionToolkit()
+	tk.UpsertRunning("task-1", "sub-1", "并发任务")
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	// 读侧：模拟 sessions_list 工具与 hasPendingSessionSpawn 的锁外读
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				if row, ok := tk.Get("task-1"); ok {
+					_ = row.Status + row.Result + row.Error
+				}
+				for _, r := range tk.ListAll() {
+					_ = r.Status + r.Description
+				}
+			}
+		}()
+	}
+
+	// 写侧：模拟 spawn 完成事件处理器的 MarkXxx
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				switch j % 3 {
+				case 0:
+					tk.MarkCompleted("task-1", fmt.Sprintf("结果-%d-%d", n, j))
+				case 1:
+					tk.MarkFailed("task-1", fmt.Sprintf("错误-%d-%d", n, j))
+				case 2:
+					tk.MarkCanceled("task-1")
+				}
+			}
+		}(i)
+	}
+
+	// 等写侧完成后通知读侧退出
+	time.Sleep(10 * time.Millisecond)
+	close(stop)
+	wg.Wait()
 }
 
 // TestSessionSpawnTaskTypeConstant 常量值正确
@@ -538,8 +598,8 @@ func TestSessionsCancelTool_Invoke_终态守卫保持completed(t *testing.T) {
 	}
 
 	// 关键断言：toolkit 状态保持 completed
-	row := tk.Get(task.TaskID)
-	if row == nil {
+	row, ok := tk.Get(task.TaskID)
+	if !ok {
 		t.Fatal("toolkit 中应找到任务")
 	}
 	if row.Status != "completed" {
@@ -584,7 +644,7 @@ func TestSessionsCancelTool_Invoke_终态守卫保持error(t *testing.T) {
 		t.Fatalf("期望 success=true（终态幂等），实际 %v", result["success"])
 	}
 
-	row := tk.Get(task.TaskID)
+	row, _ := tk.Get(task.TaskID)
 	if row.Status != "error" {
 		t.Errorf("终态守卫生效失败：期望 error，实际 %s", row.Status)
 	}

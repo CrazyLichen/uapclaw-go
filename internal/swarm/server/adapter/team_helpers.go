@@ -65,6 +65,8 @@ var (
 	eventBroadcastInitialized bool
 	// teamDepsInjected 标记是否已向 TeamManager 注入 code member 配置回调
 	teamDepsInjected bool
+	// shutdownCleanupNoticePusherInjected 标记是否已向 team 包注入 shutdown cleanup 通知推送回调
+	shutdownCleanupNoticePusherInjected bool
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -127,6 +129,26 @@ func EnsureTeamDependenciesInjected(channelID string) {
 		)
 	})
 	teamDepsInjected = true
+}
+
+// EnsureShutdownCleanupNoticePusherInjected 确保 shutdown cleanup 通知推送回调已注入。
+// 对齐 Python: _push_shutdown_cleanup_notice 中直接构造 WebSocketGatewayPushTransport。
+// Go 因循环依赖（team → adapter → team）改为注入回调，模式同 EnsureEventBroadcastInjected。
+// 此函数幂等，多次调用无副作用。
+func EnsureShutdownCleanupNoticePusherInjected() {
+	if shutdownCleanupNoticePusherInjected {
+		return
+	}
+	team.SetShutdownCleanupNoticePusher(func(ctx context.Context, msg map[string]any) error {
+		// 复用 DeepAdapter 的默认推送函数（AgentServer 启动时注入）
+		if sendPush := defaultSendPushFunc; sendPush != nil {
+			return sendPush(ctx, msg)
+		}
+		logger.Warn(logComponent).
+			Msg("shutdown cleanup notice push: defaultSendPushFunc not injected")
+		return nil
+	})
+	shutdownCleanupNoticePusherInjected = true
 }
 
 // SyncTeamIdentityMetadata 持久化 team 身份元数据（仅新创建的 team 会话）。
@@ -657,12 +679,25 @@ func approvalResultFromEventOrItems(skillName string, event any, items []map[str
 }
 
 // teamHelperEventAsMap 将 any 转为 map[string]any（对齐 Python 中 event 可以是 dict 或对象）。
+// 对齐 Python: _approval_chunk_from_event 内部调 parse_stream_chunk(evt) 展平——
+// S-21: /evolve 与 /evolve_simplify 的审批事件 ApprovalEvent 是
+// *stream.OutputSchema（Type="chat.ask_user_question"，payload 含 request_id/questions），
+// Python parse_stream_chunk 的 typed 分支展平后 _approval_chunk_from_event 才能读到
+// 顶层 event_type。原 ToMap() 直接转换是 model_dump 嵌套语义（{type,index,payload}），
+// approvalChunkFromEvent 读 evt["event_type"] 恒空——审批弹框仍然缺失。
+// 修复：dict 直接返回；OutputSchema/TeamOutputSchema 先 chunkToMap（展平 typed 形状）
+// 再走 utilsParseStreamChunk（Python utils 层 parse_stream_chunk 的 map 适配版），
+// 展平出顶层 event_type/request_id/questions。
 func teamHelperEventAsMap(v any) map[string]any {
 	if v == nil {
 		return nil
 	}
 	if m, ok := v.(map[string]any); ok {
 		return m
+	}
+	// OutputSchema 家族 → chunkToMap 展平 → parse_stream_chunk 展平
+	if m := chunkToMap(v); m != nil {
+		return utilsParseStreamChunk(m)
 	}
 	return nil
 }

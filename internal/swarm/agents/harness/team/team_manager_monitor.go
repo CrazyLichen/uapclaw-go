@@ -366,7 +366,18 @@ func (m *TeamManager) clearTeamRailRegistries(sessionID string) {
 //
 // Go 差异：Python 通过 _broadcast_event 查找 _pending_waiters 并放入每个 waiter 的 queue。
 // Go 端通过 onEventBroadcast 回调实现，由 adapter 层在初始化时注入。
+// M-07: 对齐 Python 步骤 5 except Exception——defer recover 兜底 onEventBroadcast
+// 回调 panic（Go 中 goroutine panic 会击穿进程，必须 recover）。
 func (m *TeamManager) consumeMonitorEvents(ctx context.Context, sessionID string, handler TeamMonitorHandler) {
+	// defer LIFO：先注册 recover（后执行），再注册退出日志（先执行）
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).
+				Str("session_id", sessionID).
+				Any("panic", r).
+				Msg("consumeMonitorEvents: monitor event loop failed")
+		}
+	}()
 	defer logger.Info(logComponent).Str("session_id", sessionID).Msg("monitor event consumer goroutine exited")
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("monitor event consumer goroutine started")
 

@@ -15,13 +15,16 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	teammonitor "github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
 	ateamruntime "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 	sessionmd "github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -271,7 +274,15 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 	// 确保 code member 配置回调已注入（幂等操作）
 	EnsureTeamDependenciesInjected(channelID)
 
-	// 步骤 3: 判断是否首次请求
+	// S-04: 确保 shutdown cleanup 通知推送回调已注入（幂等操作）
+	EnsureShutdownCleanupNoticePusherInjected()
+
+	// 步骤 3: S-04——等待该 session 的 pending shutdown 清理完成（最多 15s）。
+	// 对齐 Python team_helpers.py L624-635：前一个 team session 全员 shutdown 后
+	// 清理（远程成员 bootstrap 清理）未完成时，等待其结束再继续，避免新请求
+	// 读到残留的远程成员状态。等待失败（超时/panic）仅 warning，不中断请求。
+	team.WaitForPendingShutdownCleanupForSession(ctx, sessionID)
+
 	// 对齐 Python: if not team_manager.has_stream_task(session_id)
 	isFirstRequest := !teamManager.HasStreamTask(sessionID)
 
@@ -373,67 +384,70 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			return
 		}
 
+		// 步骤 6: 获取 enriched team spec（对齐 Python L694-706——在 slash 命令后、
+		// is_first_request 分支前执行，两分支共用）
+		// Python: team_spec = await team_manager.get_enriched_team_spec(session_id, deep_agent, ...)
+		var requestMetadata map[string]any
+		if req.Metadata != nil {
+			requestMetadata = make(map[string]any, len(req.Metadata))
+			for k, v := range req.Metadata {
+				requestMetadata[k] = v
+			}
+		}
+		// M-34: 对齐 Python L703-704——params 是 dict 时 setdefault "mode"
+		// （mode=="team.plan" 是 ApplyTeamPlanMode 的唯一入口，Metadata 优先级高于 Params）。
+		// req.Params 为 json.RawMessage 延迟解析：数组/字符串 → Unmarshal 失败跳过
+		// （= Python isinstance 非 dict）；null → paramsMap==nil 跳过（= Python params None）。
+		if len(req.Params) > 0 {
+			var paramsMap map[string]any
+			if err := json.Unmarshal(req.Params, &paramsMap); err == nil && paramsMap != nil {
+				if _, exists := requestMetadata["mode"]; !exists {
+					if requestMetadata == nil {
+						requestMetadata = make(map[string]any, 1)
+					}
+					requestMetadata["mode"] = paramsMap["mode"]
+				}
+			}
+		}
+		teamSpec := teamManager.GetEnrichedTeamSpec(ctx, sessionID, d.instance, req.RequestID, channelID, requestMetadata)
+		if teamSpec == nil {
+			logger.Error(logComponent).Str("session_id", sessionID).
+				Msg("processTeamMessageStream: GetEnrichedTeamSpec returned nil")
+			ch <- &agentschema.AgentResponseChunk{
+				RequestID: req.RequestID, ChannelID: channelID,
+				Payload:    map[string]any{"event_type": "chat.error", "error": "TeamAgent 创建失败：无法获取 team spec"},
+				IsComplete: false,
+			}
+			ch <- &agentschema.AgentResponseChunk{RequestID: req.RequestID, ChannelID: channelID, IsComplete: true}
+			return
+		}
+		teamName := teamSpec.TeamName
+
+		// 步骤 7: 解析 /evolve_rebuild followup（S-22: 对齐 Python L729-750——
+		// 在 is_first_request 分支之前执行，首次/后续两条路径共用；原先放在首请求块内，
+		// 导致后续请求的 /evolve_rebuild 完全失效）
+		// Python: followup_prompt, rebuild_error = await _resolve_team_rebuild_followup(channel_id, session_id, query_text)
+		followupPrompt, rebuildError := ResolveTeamRebuildFollowup(ctx, channelID, sessionID, queryText)
+		if rebuildError != "" {
+			ch <- &agentschema.AgentResponseChunk{
+				RequestID: req.RequestID, ChannelID: channelID,
+				Payload:    map[string]any{"event_type": "chat.error", "error": rebuildError},
+				IsComplete: false,
+			}
+			ch <- &agentschema.AgentResponseChunk{RequestID: req.RequestID, ChannelID: channelID, IsComplete: true}
+			return
+		}
+		if followupPrompt != "" {
+			queryText = followupPrompt
+		}
+
 		if isFirstRequest {
 			// ─── 首次请求：完整 TeamAgent 创建 + streaming 流程 ───
 			// 对齐 Python: process_team_message_stream 首次请求分支 (line 699-887)
 			logger.Info(logComponent).Str("session_id", sessionID).Str("channel_id", channelID).
 				Msg("processTeamMessageStream: first request")
 
-			// 步骤 1: 获取 enriched team spec
-			// Python: team_spec = await team_manager.get_enriched_team_spec(session_id, deep_agent, ...)
-			var requestMetadata map[string]any
-			if req.Metadata != nil {
-				requestMetadata = make(map[string]any, len(req.Metadata))
-				for k, v := range req.Metadata {
-					requestMetadata[k] = v
-				}
-			}
-			// M-34: 对齐 Python L703-704——params 是 dict 时 setdefault "mode"
-			// （mode=="team.plan" 是 ApplyTeamPlanMode 的唯一入口，Metadata 优先级高于 Params）。
-			// req.Params 为 json.RawMessage 延迟解析：数组/字符串 → Unmarshal 失败跳过
-			// （= Python isinstance 非 dict）；null → paramsMap==nil 跳过（= Python params None）。
-			if len(req.Params) > 0 {
-				var paramsMap map[string]any
-				if err := json.Unmarshal(req.Params, &paramsMap); err == nil && paramsMap != nil {
-					if _, exists := requestMetadata["mode"]; !exists {
-						if requestMetadata == nil {
-							requestMetadata = make(map[string]any, 1)
-						}
-						requestMetadata["mode"] = paramsMap["mode"]
-					}
-				}
-			}
-			teamSpec := teamManager.GetEnrichedTeamSpec(ctx, sessionID, d.instance, req.RequestID, channelID, requestMetadata)
-			if teamSpec == nil {
-				logger.Error(logComponent).Str("session_id", sessionID).
-					Msg("processTeamMessageStream: GetEnrichedTeamSpec returned nil")
-				ch <- &agentschema.AgentResponseChunk{
-					RequestID: req.RequestID, ChannelID: channelID,
-					Payload:    map[string]any{"event_type": "chat.error", "error": "TeamAgent 创建失败：无法获取 team spec"},
-					IsComplete: false,
-				}
-				ch <- &agentschema.AgentResponseChunk{RequestID: req.RequestID, ChannelID: channelID, IsComplete: true}
-				return
-			}
-			teamName := teamSpec.TeamName
-
-			// 步骤 2: 解析 /evolve_rebuild followup
-			// Python: followup_prompt, rebuild_error = await _resolve_team_rebuild_followup(channel_id, session_id, query_text)
-			followupPrompt, rebuildError := ResolveTeamRebuildFollowup(ctx, channelID, sessionID, queryText)
-			if rebuildError != "" {
-				ch <- &agentschema.AgentResponseChunk{
-					RequestID: req.RequestID, ChannelID: channelID,
-					Payload:    map[string]any{"event_type": "chat.error", "error": rebuildError},
-					IsComplete: false,
-				}
-				ch <- &agentschema.AgentResponseChunk{RequestID: req.RequestID, ChannelID: channelID, IsComplete: true}
-				return
-			}
-			if followupPrompt != "" {
-				queryText = followupPrompt
-			}
-
-			// 步骤 3: PrepareRuntimeActivation
+			// 步骤 1: PrepareRuntimeActivation
 			// Python: team_manager.ensure_team_shared_skills_initialized(team_spec)
 			// Python: await team_manager.prepare_runtime_activation(session_id, team_name)
 			teamManager.EnsureTeamSharedSkillsInitialized(teamSpec)
@@ -477,10 +491,12 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 			// 步骤 6: 启动后台 goroutine 消费 team 流
 			// Python: stream_task = asyncio.create_task(_consume_stream_with_query(...))
 			streamCtx, streamCancel := context.WithCancel(ctx)
-			go d.consumeStreamWithQuery(streamCtx, channelID, sessionID, teamSpec, queryText, roundID, streamEnvs)
-
-			// 步骤 7: 注册流任务 cancel
+			// M-20: 先注册后启动——Python create_task 是惰性调度（任务体在控制权让出后才跑），
+			// 文本顺序安全；Go 的 go 语句立即执行，若 goroutine 先跑完（如 RunAgentTeamStreaming
+			// 立即出错），defer PopStreamTask 与 RegisterStreamTask 竞争会产生 streamTasks
+			// 残留死条目。先注册再启动消除该竞窗。
 			teamManager.RegisterStreamTask(sessionID, streamCancel)
+			go d.consumeStreamWithQuery(streamCtx, channelID, sessionID, teamSpec, queryText, roundID, streamEnvs)
 
 			// 步骤 8: 从 waiter queue 读取事件并输出到 ch
 			// 对齐 Python: while team_manager.has_stream_task(session_id):
@@ -771,80 +787,106 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 	}
 
 	// Python 步骤 3: 遍历流 chunk
-	for chunk := range streamCh {
-		receivedChunks++
+	// S-05: 对齐 Python except CancelledError——select+ctx.Done 显式响应取消：
+	// 记日志后正常退出（取消≠失败，不走 receivedChunks==0 的 team.error 分支）。
+	// 生产侧 S-58 已在 team_runner.go 发送端 select 化并会在取消时关闭 mergedCh，
+	// 此处消费侧补齐取消感知与日志。
+	streamCancelled := false
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			streamCancelled = true
+			// Python: except asyncio.CancelledError: logger.info("[TeamHelpers] stream cancelled: ...")
+			logger.Info(logComponent).
+				Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).Int("round_id", roundID).
+				Err(ctx.Err()).
+				Msg("consumeStreamWithQuery: stream cancelled")
+			break loop
+		case chunk, ok := <-streamCh:
+			if !ok {
+				break loop
+			}
+			receivedChunks++
 
-		// 将 stream.Schema 转为 map[string]any
-		chunkMap := chunkToMap(chunk)
-		if chunkMap == nil {
-			continue
-		}
+			// 将 stream.Schema 转为 map[string]any
+			chunkMap := chunkToMap(chunk)
+			if chunkMap == nil {
+				continue
+			}
 
-		isLeader := isLeaderOutput(chunkMap)
-		isTeammate := isTeammateOutput(chunkMap)
-		if !isLeader && !isTeammate {
-			continue
-		}
+			isLeader := isLeaderOutput(chunkMap)
+			isTeammate := isTeammateOutput(chunkMap)
+			if !isLeader && !isTeammate {
+				continue
+			}
 
-		parsed := utilsParseStreamChunk(chunkMap)
-		if parsed == nil {
-			continue
-		}
+			parsed := utilsParseStreamChunk(chunkMap)
+			if parsed == nil {
+				continue
+			}
 
-		if isDuplicateAskUserQuestion(parsed, emittedAskUserRequestIDs) {
-			continue
-		}
+			if isDuplicateAskUserQuestion(parsed, emittedAskUserRequestIDs) {
+				continue
+			}
 
-		parsed["rid"] = roundID
+			parsed["rid"] = roundID
 
-		if isTeammate {
-			parsed = enrichTeammateEvent(parsed, chunkMap)
-		}
+			if isTeammate {
+				parsed = enrichTeammateEvent(parsed, chunkMap)
+			}
 
-		// Python 步骤 4: 处理 runtime_ready 事件
-		if evtType, _ := parsed["event_type"].(string); evtType == "team.runtime_ready" {
-			readyTeamName, _ := parsed["team_name"].(string)
-			if readyTeamName == "" {
-				if specTeamName := teamSpecTeamName(teamSpec); specTeamName != "" {
-					readyTeamName = specTeamName
+			// Python 步骤 4: 处理 runtime_ready 事件
+			if evtType, _ := parsed["event_type"].(string); evtType == "team.runtime_ready" {
+				readyTeamName, _ := parsed["team_name"].(string)
+				if readyTeamName == "" {
+					if specTeamName := teamSpecTeamName(teamSpec); specTeamName != "" {
+						readyTeamName = specTeamName
+					}
 				}
+				activationKind := ""
+				if v, _ := parsed["activation_kind"].(string); v != "" {
+					activationKind = v
+				}
+
+				// 对齐 Python 步骤（Go 等价实现依次如下）：
+				// 同步团队身份元数据 → 提交 runtime_ready → 附加分布式 hooks →
+				// 确保活跃 runtime 的监控 → 注册团队进化 watcher
+				SyncTeamIdentityMetadata(ctx, channelID, sessionID, "team", readyTeamName, activationKind)
+
+				tm := team.GetTeamManager(channelID)
+				tm.CommitRuntimeReady(sessionID, readyTeamName)
+
+				// 分布式 hooks（S-04 回填；M-09: channelID 透传——原传 nil 导致
+				// shutdown cleanup wrapper 丢失 channel 上下文，notice 推送回退 default）
+				tm.AttachDistributedHooksForRunnerRuntime(readyTeamName, sessionID, &channelID)
+
+				d.ensureMonitorForActiveRuntime(ctx, channelID, sessionID, readyTeamName, hideDM)
+				d.ensureTeamEvolutionWatcher(ctx, channelID, sessionID, "runtime_ready")
+			} else if evtType == "team.completed" {
+				// Python 步骤 5: 处理 team.completed 事件
+				broadcastEvent(channelID, sessionID, map[string]any{
+					"event_type":    "chat.processing_status",
+					"session_id":    sessionID,
+					"rid":           roundID,
+					"is_processing": false,
+					"is_complete":   true,
+					"member_count":  parsed["member_count"],
+					"task_count":    parsed["task_count"],
+				})
+				continue
 			}
-			activationKind := ""
-			if v, _ := parsed["activation_kind"].(string); v != "" {
-				activationKind = v
-			}
 
-			// 对齐 Python 步骤（Go 等价实现依次如下）：
-			// 同步团队身份元数据 → 提交 runtime_ready → 附加分布式 hooks →
-			// 确保活跃 runtime 的监控 → 注册团队进化 watcher
-			SyncTeamIdentityMetadata(ctx, channelID, sessionID, "team", readyTeamName, activationKind)
-
-			tm := team.GetTeamManager(channelID)
-			tm.CommitRuntimeReady(sessionID, readyTeamName)
-
-			// 分布式 hooks — ⤵️(#10.6.20) 待回填
-			tm.AttachDistributedHooksForRunnerRuntime(readyTeamName, sessionID, nil)
-
-			d.ensureMonitorForActiveRuntime(ctx, channelID, sessionID, readyTeamName, hideDM)
-			d.ensureTeamEvolutionWatcher(ctx, channelID, sessionID, "runtime_ready")
-		} else if evtType == "team.completed" {
-			// Python 步骤 5: 处理 team.completed 事件
-			broadcastEvent(channelID, sessionID, map[string]any{
-				"event_type":    "chat.processing_status",
-				"session_id":    sessionID,
-				"rid":           roundID,
-				"is_processing": false,
-				"is_complete":   true,
-				"member_count":  parsed["member_count"],
-				"task_count":    parsed["task_count"],
-			})
-			continue
+			broadcastEvent(channelID, sessionID, parsed)
 		}
-
-		broadcastEvent(channelID, sessionID, parsed)
 	}
 
 	// Python 步骤 6: 流结束处理
+	// S-05: 取消路径不走 team.error——取消是正常终止（对齐 Python CancelledError 语义），
+	// receivedChunks==0 的 team.error 只在非取消的空流场景发出。
+	if streamCancelled {
+		return
+	}
 	if receivedChunks == 0 {
 		logger.Warn(logComponent).
 			Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
@@ -874,7 +916,17 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 //
 // Go 差异：此方法在 TeamManager.EnsureMonitor 中已有简化实现（team_manager_monitor.go），
 // 此处提供 DeepAdapter 级别的完整实现，支持通过 broadcastEvent 广播到 channel waiters。
+// M-07: 对齐 Python 步骤 5 except Exception——defer recover 兜底 broadcastEvent 回调 panic
+// （Go 中 goroutine panic 会击穿进程，比 Python 更严重，必须 recover）。
 func (d *DeepAdapter) consumeMonitorEvents(ctx context.Context, channelID, sessionID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).
+				Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
+				Any("panic", r).
+				Msg("consumeMonitorEvents: monitor event loop failed")
+		}
+	}()
 	tm := team.GetTeamManager(channelID)
 	handler := tm.GetMonitor(sessionID)
 	if handler == nil {
@@ -1041,7 +1093,9 @@ func (d *DeepAdapter) watchTeamEvolutionAndPushTeam(ctx context.Context, channel
 		}
 
 		// Python: events = await rail.drain_pending_approval_events(wait=False) or []
-		events := rail.DrainPendingApprovalEvents(true, nil)
+		// S-23: wait 必须为 false——true 时 timeout=nil 回退 GetEvolutionTotalTimeoutSecs()，
+		// watcher 循环可阻塞最长 900s 且期间 ctx.Done 完全无法响应（M-35 只修了常量，本笔误未修）。
+		events := rail.DrainPendingApprovalEvents(false, nil)
 		eventsMap := evolutionOutputSchemasToMaps(events)
 
 		if len(eventsMap) == 0 {
@@ -1280,17 +1334,23 @@ func chunkToMap(chunk any) map[string]any {
 	// 处理 *stream.OutputSchema / stream.OutputSchema（公开字段，无 getter 方法）
 	// T-01 遗留点 C：原实现只断言带 GetType/GetPayload 方法的接口，OutputSchema 实际是公开字段，
 	// 三段断言全部失败返回 nil，导致 watcher 和 consumeStream 循环丢失全部事件。
+	// S-20（方案A）：产出 typed 嵌套形状——payload 键保留嵌套（utilsParseStreamChunk
+	// 的 typed 分支从 "payload" 键读，对齐 Python getattr(chunk, "payload")）+
+	// payload 内容键提升顶层（evolutionlogic 判定函数直接读顶层键，经 EventPayloadDict
+	// 解包后语义不变）+ type/index 顶层（对齐 getattr(chunk, "type")）。
 	switch os := chunk.(type) {
 	case *stream.OutputSchema:
 		if os == nil || os.Payload == nil {
 			return nil
 		}
 		if m, ok := os.Payload.(map[string]any); ok {
-			result := make(map[string]any, len(m)+1)
+			result := make(map[string]any, len(m)+3)
 			for k, v := range m {
 				result[k] = v
 			}
 			result["type"] = os.Type
+			result["index"] = os.Index
+			result["payload"] = m
 			return result
 		}
 		return nil
@@ -1299,11 +1359,49 @@ func chunkToMap(chunk any) map[string]any {
 			return nil
 		}
 		if m, ok := os.Payload.(map[string]any); ok {
-			result := make(map[string]any, len(m)+1)
+			result := make(map[string]any, len(m)+3)
 			for k, v := range m {
 				result[k] = v
 			}
 			result["type"] = os.Type
+			result["index"] = os.Index
+			result["payload"] = m
+			return result
+		}
+		return nil
+	}
+	// S-20: *TeamOutputSchema 显式分支——Go 类型断言不匹配嵌入类型
+	// （case *stream.OutputSchema 不会命中 *TeamOutputSchema——团队流实际 chunk：
+	// readyChunk 与 tagChunk 升级后的 leader/teammate chunk 都是它）。
+	// Python parse_stream_chunk 用 hasattr 鸭子类型天然命中继承的 type/payload
+	// 属性 + getattr 读 role/source_member；Go 以显式分支等价。
+	// 形状（方案A 半展平，对齐 Python typed chunk 的语义）：payload 键保留嵌套 +
+	// type/index/source_member/role 顶层——utilsParseStreamChunk 的 typed 分支
+	// 从 "payload" 键读取（对齐 Python getattr(chunk, "payload")），
+	// isLeader/isTeammate/enrich 从顶层 type/role/source_member 读取
+	// （对齐 Python getattr(chunk, "type"/"role"/"source_member")）。
+	// 注意不能用 ToMap() 接口兜底——原生 OutputSchema.ToMap 是 model_dump 嵌套语义
+	// {type,index,payload}（TeamOutputSchema.ToMap 额外含 source_member/role 但同为嵌套），
+	// 与此处需要的"属性访问等价物"语义相同但接口断言会劫持 native 分支；
+	// 显式类型分支互斥更清晰。
+	if tos, ok := chunk.(*atschema.TeamOutputSchema); ok {
+		if tos == nil || tos.Payload == nil {
+			return nil
+		}
+		if m, ok := tos.Payload.(map[string]any); ok {
+			result := make(map[string]any, len(m)+5)
+			for k, v := range m {
+				result[k] = v
+			}
+			result["type"] = tos.Type
+			result["index"] = tos.Index
+			result["payload"] = m
+			if tos.SourceMember != nil {
+				result["source_member"] = *tos.SourceMember
+			}
+			if tos.Role != nil {
+				result["role"] = string(*tos.Role)
+			}
 			return result
 		}
 		return nil
@@ -1336,7 +1434,14 @@ func teamSpecTeamName(teamSpec any) string {
 	if teamSpec == nil {
 		return ""
 	}
-	// TeamAgentSpec 有 TeamName 字段
+	// T-19: 直接断言 *atschema.TeamAgentSpec——GetEnrichedTeamSpec 的实际返回类型。
+	// 该结构体只有 TeamName 公开字段（无 GetTeamName()/TeamName() 方法），
+	// 原先两个接口分支均无实现者（死代码），导致 runtime_ready 事件缺 team_name 时
+	// 此兜底恒返回空串。Python 直接访问 team_spec.team_name 属性，无此间接层。
+	if spec, ok := teamSpec.(*atschema.TeamAgentSpec); ok {
+		return spec.TeamName
+	}
+	// 兼容断言：保留接口分支以防其他实现者（防御性，与 Python getattr 宽容度对应）
 	type teamNameHolder interface {
 		GetTeamName() string
 	}
@@ -1360,6 +1465,13 @@ func teamSpecTeamName(teamSpec any) string {
 }
 
 // evolutionOutputSchemasToMaps 将 []*stream.OutputSchema 转为 []map[string]any。
+// S-20 关联：产出 typed 嵌套形状（{type, index, payload, ...payload 键}——payload 键保留嵌套，
+// 其余 payload 内容键同时提升顶层），对齐 Python watch 循环把原始 OutputSchema 对象
+// 同时传给 is_evolution_approval_event（读 .type 属性+.payload）与 parse_stream_chunk
+// （hasattr type/payload 走 typed 分支）的双语义：
+//   - evolutionlogic 判定函数经 EventPayloadDict 解包 "payload" 键读内容键
+//   - EventType 读顶层 "type" 键（对齐 .type 属性）
+//   - utilsParseStreamChunk 走 typed 分支（llm_reasoning → chat.reasoning 等）
 func evolutionOutputSchemasToMaps(events any) []map[string]any {
 	if events == nil {
 		return nil
@@ -1390,14 +1502,401 @@ func evolutionOutputSchemasToMaps(events any) []map[string]any {
 }
 
 // utilsParseStreamChunk 解析流式 chunk。
-// 对齐 Python: parse_stream_chunk(evt)
+// 对齐 Python: parse_stream_chunk(chunk, _has_streamed_content=False)（server/utils/stream_utils.py L10-44）
+// —— utils 层版本，与 interface_deep._parse_stream_chunk（Go: utils.ParseStreamChunk）是
+// 两个不同的 Python 函数：utils 层无 harness.* 分支（message 走兜底 team. 直传），
+// interface_deep 层有 harness.message/stage_result 等专属分支。团队消费链 import 的是 utils 层版本。
+//
+// Go 差异：Python 接收 SDK chunk 对象（hasattr 鸭子类型）；Go 端 chunk 已被 chunkToMap
+// 转为 map[string]any，语义映射为 Python 的两个入口分支：
+//   - map 含 "payload" 键（chunkToMap 对 OutputSchema/TeamOutputSchema 的产出）→ _parse_typed_chunk
+//   - map 无 "payload" 键（event_type/type/content/output 直接顶层）→ _parse_dict_chunk
+//
+// S-20 完整落地：原实现是 identity 桩（T-01 标记），导致 parsed 无顶层 event_type，
+// 消费循环的 runtime_ready 分支与 chat.delta 派生全部断裂，S-04 接入点成死代码。
 func utilsParseStreamChunk(chunk map[string]any) map[string]any {
 	if chunk == nil {
 		return nil
 	}
-	// Python: parse_stream_chunk 将 SDK chunk 转为前端可消费的 dict
-	// Go 差异：chunk 已经是 map[string]any，直接返回
+	// Python: if hasattr(chunk, "type") and hasattr(chunk, "payload"): return _parse_typed_chunk(...)
+	// Go 等价：chunkToMap 的 typed 产出带 "payload" 键
+	if _, hasPayload := chunk["payload"]; hasPayload {
+		return parseTypedChunkMap(chunk)
+	}
+	// Python: elif isinstance(chunk, dict): return _parse_dict_chunk(chunk, ...)
+	return parseDictChunkMap(chunk)
+	// Python 其余分支（hasattr type 无 payload / event_type 属性 / 默认 chat.delta）
+	// 在 chunkToMap 产出域内不会出现，不单独复刻。
+}
+
+// parseDictChunkMap 解析 dict 形状的 chunk。
+// 对齐 Python: _parse_dict_chunk(chunk, _has_streamed_content)（stream_utils.py L47-94）
+func parseDictChunkMap(chunk map[string]any) map[string]any {
+	// Python: if "event_type" in chunk: return _serialize_chunk_recursive(chunk)
+	if _, hasEvt := chunk["event_type"]; hasEvt {
+		if m, ok := serializeDictChunkRecursive(chunk).(map[string]any); ok {
+			return m
+		}
+		return chunk
+	}
+	// Python: if "type" in chunk: → event_type = type，剔除 type 键后透传
+	if _, hasType := chunk["type"]; hasType {
+		eventType, _ := chunk["type"].(string)
+		result := map[string]any{"event_type": eventType}
+		for k, v := range chunk {
+			if k == "type" {
+				continue
+			}
+			result[k] = serializeValueAny(v)
+		}
+		return result
+	}
+	// Python: if "content" in chunk: 空白内容返回 None
+	if content, hasContent := chunk["content"]; hasContent {
+		if s, ok := content.(string); ok && s != "" && strings.TrimSpace(s) != "" {
+			return map[string]any{"event_type": "chat.delta", "content": s}
+		}
+		return nil
+	}
+	// Python: if "output" in chunk: result_type=="error" → chat.error；空白 → None；否则 chat.delta
+	if output, hasOutput := chunk["output"]; hasOutput {
+		if rt, _ := chunk["result_type"].(string); rt == "error" {
+			errMsg, _ := output.(string)
+			return map[string]any{"event_type": "chat.error", "error": errMsg}
+		}
+		if s, ok := output.(string); ok && s != "" && strings.TrimSpace(s) != "" {
+			return map[string]any{"event_type": "chat.delta", "content": s}
+		}
+		return nil
+	}
+	// Python: return chunk（兜底原样返回）
 	return chunk
+}
+
+// parseTypedChunkMap 解析 typed 形状的 chunk（chunkToMap 产出：{type, payload, ...}）。
+// 对齐 Python: _parse_typed_chunk(chunk, _has_streamed_content)（stream_utils.py L107-341）
+func parseTypedChunkMap(chunk map[string]any) map[string]any {
+	chunkType, _ := chunk["type"].(string)
+	payload, _ := chunk["payload"].(map[string]any)
+	if payload == nil {
+		payload = map[string]any{}
+	}
+
+	// Python: if isinstance(chunk_type, str) and "." in chunk_type:
+	if strings.Contains(chunkType, ".") {
+		// Python: chat.{chunk_type} 前缀 + payload 键透传（serialize）
+		if len(payload) > 0 {
+			result := map[string]any{"event_type": chunkType}
+			for k, v := range payload {
+				result[k] = serializeValueAny(v)
+			}
+			return result
+		}
+		// Python: return {"event_type": chunk_type, "content": str(payload)}
+		return map[string]any{"event_type": chunkType, "content": fmt.Sprintf("%v", payload)}
+	}
+
+	switch chunkType {
+	case "controller_output":
+		if len(payload) > 0 {
+			// Python: interactions = _find_interaction_payloads(payload)
+			interactions := utils.FindInteractionPayloads(payload)
+			if len(interactions) > 0 {
+				return parseInteractionPayloadUtils(interactions)
+			}
+			// Python: inner type 判断——task_completion → None；task_failed → chat.error；
+			// 其余 inner type 落到后续分支（Python 无 return 即继续匹配）
+			innerType, _ := payload["type"].(string)
+			switch innerType {
+			case "task_completion":
+				return nil
+			case "task_failed":
+				errorMsg := "任务执行失败"
+				if data, ok := payload["data"].([]any); ok {
+					for _, item := range data {
+						if m, ok := item.(map[string]any); ok {
+							if text, ok := m["text"].(string); ok && text != "" {
+								errorMsg = text
+								break
+							}
+						}
+					}
+				}
+				return map[string]any{"event_type": "chat.error", "error": errorMsg}
+			}
+		}
+		// Python: payload is None 时不进入 controller_output 分支，落到兜底
+
+	case "llm_output":
+		content := strFromPayloadKey(payload, "content")
+		if content == "" || strings.TrimSpace(content) == "" {
+			return nil
+		}
+		return map[string]any{"event_type": "chat.delta", "content": content}
+
+	case "llm_reasoning":
+		// Python: content or output，空白 → None
+		content := strFromPayloadKey(payload, "content")
+		if content == "" {
+			content = strFromPayloadKey(payload, "output")
+		}
+		if content == "" || strings.TrimSpace(content) == "" {
+			return nil
+		}
+		return map[string]any{"event_type": "chat.reasoning", "content": content}
+
+	case "content_chunk":
+		content := strFromPayloadKey(payload, "content")
+		if content == "" || strings.TrimSpace(content) == "" {
+			return nil
+		}
+		return map[string]any{"event_type": "chat.delta", "content": content}
+
+	case "answer":
+		// Python: result_type=="error" → chat.error（output 兜底 "未知错误"）
+		if rt, _ := payload["result_type"].(string); rt == "error" {
+			errMsg, _ := payload["output"].(string)
+			if errMsg == "" {
+				errMsg = "未知错误"
+			}
+			return map[string]any{"event_type": "chat.error", "error": errMsg}
+		}
+		var content string
+		var isChunked bool
+		if output, ok := payload["output"].(map[string]any); ok {
+			content, _ = output["output"].(string)
+			isChunked, _ = output["chunked"].(bool)
+		} else if s, ok := payload["output"].(string); ok {
+			content = s
+		}
+		if content == "" || strings.TrimSpace(content) == "" {
+			return nil
+		}
+		// Python: _has_streamed_content and not is_chunked → chat.final；
+		// is_chunked → chat.delta；否则 chat.final。
+		// _has_streamed_content 团队消费循环恒 False（Python 团队路径不传该参数），按 False 处理。
+		if isChunked {
+			return map[string]any{"event_type": "chat.delta", "content": content}
+		}
+		return map[string]any{"event_type": "chat.final", "content": content}
+
+	case "tool_call":
+		toolInfo := any(payload)
+		if sub, ok := payload["tool_call"].(map[string]any); ok {
+			toolInfo = sub
+		}
+		return map[string]any{"event_type": "chat.tool_call", "tool_call": toolInfo}
+
+	case "tool_update":
+		// Python: update_info = payload.get("tool_update", payload)
+		var updatePayload map[string]any
+		if sub, ok := payload["tool_update"].(map[string]any); ok {
+			updatePayload = sub
+		} else if s, ok := payload["tool_update"].(string); ok {
+			// Python: dict(update_info) if isinstance(update_info, dict) else {"content": str(update_info)}
+			updatePayload = map[string]any{"content": s}
+		} else {
+			// 缺 tool_update 键 → 用整个 payload
+			updatePayload = payload
+		}
+		result := map[string]any{"event_type": "chat.tool_update"}
+		for k, v := range updatePayload {
+			result[k] = v
+		}
+		return result
+
+	case "tool_result":
+		resultInfo := any(payload)
+		if sub, ok := payload["tool_result"].(map[string]any); ok {
+			resultInfo = sub
+		}
+		resultPayload := map[string]any{}
+		if info, ok := resultInfo.(map[string]any); ok {
+			if res, ok := info["result"]; ok {
+				resultPayload["result"] = res
+			} else {
+				resultPayload["result"] = fmt.Sprintf("%v", info)
+			}
+			if tn, ok := info["tool_name"].(string); ok && tn != "" {
+				resultPayload["tool_name"] = tn
+			} else if tn, ok := info["name"].(string); ok && tn != "" {
+				resultPayload["tool_name"] = tn
+			}
+			if tcid, ok := info["tool_call_id"].(string); ok && tcid != "" {
+				resultPayload["tool_call_id"] = tcid
+			} else if tcid, ok := info["toolCallId"].(string); ok && tcid != "" {
+				resultPayload["tool_call_id"] = tcid
+			}
+			rawOutput := info["raw_output"]
+			if rawOutput == nil {
+				rawOutput = info["rawOutput"]
+			}
+			if rawOutput != nil {
+				resultPayload["raw_output"] = rawOutput
+			}
+			for _, key := range []string{"success", "status", "is_error", "summary"} {
+				if v, ok := info[key]; ok {
+					resultPayload[key] = v
+				}
+			}
+		} else {
+			resultPayload["result"] = fmt.Sprintf("%v", resultInfo)
+		}
+		result := map[string]any{"event_type": "chat.tool_result"}
+		for k, v := range resultPayload {
+			result[k] = v
+		}
+		return result
+
+	case "error":
+		errorMsg := fmt.Sprintf("%v", payload)
+		if m, ok := payload["error"]; ok {
+			errorMsg = fmt.Sprintf("%v", m)
+		}
+		return map[string]any{"event_type": "chat.error", "error": errorMsg}
+
+	case "thinking":
+		return map[string]any{
+			"event_type":    "chat.processing_status",
+			"is_processing": true,
+			"current_task":  "thinking",
+		}
+
+	case "todo.updated":
+		var todos any = []any{}
+		if td, ok := payload["todos"].([]any); ok {
+			todos = td
+		}
+		return map[string]any{"event_type": "todo.updated", "todos": todos}
+
+	case "context.usage":
+		rate := 0.0
+		if r, ok := payload["rate"].(float64); ok {
+			rate = r
+		}
+		contextMax := 0.0
+		if cm, ok := payload["context_max"].(float64); ok && cm != 0 {
+			contextMax = cm
+		}
+		tokensUsed := 0.0
+		if tu, ok := payload["tokens_used"].(float64); ok && tu != 0 {
+			tokensUsed = tu
+		}
+		return map[string]any{
+			"event_type":  "context.usage",
+			"rate":        rate,
+			"context_max": contextMax,
+			"tokens_used": tokensUsed,
+		}
+
+	case "chat.ask_user_question":
+		result := map[string]any{"event_type": "chat.ask_user_question"}
+		for k, v := range payload {
+			result[k] = v
+		}
+		return result
+
+	case "__interaction__":
+		return parseInteractionPayloadUtils([]any{any(payload)})
+	}
+
+	// Python 兜底: isinstance(payload, dict) → team.* 直传 / chat.{type} 前缀 + 键透传
+	if len(payload) > 0 {
+		if innerEventType, ok := payload["event_type"].(string); ok {
+			// Python: team.* 命名空间事件直传（不包 chat. 前缀）
+			if strings.HasPrefix(innerEventType, "team.") {
+				result := map[string]any{}
+				for k, v := range payload {
+					result[k] = serializeValueAny(v)
+				}
+				return result
+			}
+		}
+		result := map[string]any{"event_type": "chat." + chunkType}
+		for k, v := range payload {
+			result[k] = serializeValueAny(v)
+		}
+		return result
+	}
+	// Python: return {"event_type": f"chat.{chunk_type}", "content": str(payload)}
+	return map[string]any{"event_type": "chat." + chunkType, "content": fmt.Sprintf("%v", payload)}
+}
+
+// parseInteractionPayloadUtils 对齐 Python utils 层 _parse_interaction_payload(interactions)
+// （stream_utils.py L356-373）——与 interface_deep 版本（Go: utils.ParseInteractionPayload，
+// 接收单 payload map）不同，utils 层版本接收 interactions 列表。
+// activate_confirm → harness.activate_interaction 事件；否则委托
+// interrupt.ConvertInteractionsToAskUserQuestion（Python: convert_interactions_to_ask_user_question）。
+func parseInteractionPayloadUtils(interactions []any) map[string]any {
+	for _, interaction := range interactions {
+		m, ok := interaction.(map[string]any)
+		if !ok {
+			continue
+		}
+		if m["interaction_type"] == "activate_confirm" {
+			extRuntimePath := teamHelperStrFromAny(m["extension_runtime_path"])
+			if extRuntimePath == "" {
+				extRuntimePath = teamHelperStrFromAny(m["runtime_path"])
+			}
+			options := []string{"accept", "reject"}
+			if opts, ok := m["options"].([]any); ok && len(opts) > 0 {
+				options = make([]string, 0, len(opts))
+				for _, o := range opts {
+					if s, ok := o.(string); ok {
+						options = append(options, s)
+					}
+				}
+			}
+			return map[string]any{
+				"event_type":             "harness.activate_interaction",
+				"interaction_type":       "activate_confirm",
+				"interaction_id":         teamHelperStrFromAny(m["interaction_id"]),
+				"extension_name":         teamHelperStrFromAny(m["extension_name"]),
+				"runtime_path":           teamHelperStrFromAny(m["runtime_path"]),
+				"session_runtime_path":   teamHelperStrFromAny(m["session_runtime_path"]),
+				"extension_runtime_path": extRuntimePath,
+				"options":                options,
+			}
+		}
+	}
+	// Python: return convert_interactions_to_ask_user_question([payload])
+	return interrupt.ConvertInteractionsToAskUserQuestion(interactions)
+}
+
+// strFromPayloadKey 从 payload 中安全提取字符串值。
+func strFromPayloadKey(payload map[string]any, key string) string {
+	if s, ok := payload[key].(string); ok {
+		return s
+	}
+	return ""
+}
+
+// serializeValueAny 对齐 Python _serialize_value：datetime → RFC3339 字符串，其余原样。
+func serializeValueAny(v any) any {
+	if t, ok := v.(time.Time); ok {
+		return t.UTC().Format(time.RFC3339Nano)
+	}
+	return v
+}
+
+// serializeDictChunkRecursive 对齐 Python _serialize_chunk_recursive：dict/list 递归 + 标量 _serialize_value。
+func serializeDictChunkRecursive(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(val))
+		for k, v2 := range val {
+			result[k] = serializeDictChunkRecursive(v2)
+		}
+		return result
+	case []any:
+		result := make([]any, len(val))
+		for i, v2 := range val {
+			result[i] = serializeDictChunkRecursive(v2)
+		}
+		return result
+	default:
+		return serializeValueAny(val)
+	}
 }
 
 // resolveEvolutionEventTimeoutSec 从 TeamSkillEvolutionRail 解析事件超时秒数。

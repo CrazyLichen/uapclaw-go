@@ -49,7 +49,8 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_UpsertRunning() {
 
 	toolkit.UpsertRunning("task_001", "sess_sub_001", "数据导入任务")
 
-	row := toolkit.Get("task_001")
+	row, ok := toolkit.Get("task_001")
+	s.Require().True(ok, "任务应存在")
 	s.Require().NotNil(row, "应找到任务 task_001")
 	s.Equal("task_001", row.TaskID, "TaskID 应为 task_001")
 	s.Equal("sess_sub_001", row.SubSessionID, "SubSessionID 应为 sess_sub_001")
@@ -67,7 +68,8 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_MarkCompleted() {
 
 	toolkit.MarkCompleted("task_002", "任务成功完成")
 
-	row := toolkit.Get("task_002")
+	row, ok := toolkit.Get("task_002")
+	s.Require().True(ok, "任务应存在")
 	s.Require().NotNil(row)
 	s.Equal("completed", row.Status, "Status 应为 completed")
 	s.Equal("任务成功完成", row.Result, "Result 应为 '任务成功完成'")
@@ -81,7 +83,8 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_MarkFailed() {
 
 	toolkit.MarkFailed("task_003", "连接超时")
 
-	row := toolkit.Get("task_003")
+	row, ok := toolkit.Get("task_003")
+	s.Require().True(ok, "任务应存在")
 	s.Require().NotNil(row)
 	s.Equal("error", row.Status, "Status 应为 error")
 	s.Equal("连接超时", row.Error, "Error 应为 '连接超时'")
@@ -95,7 +98,8 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_MarkCanceled() {
 
 	toolkit.MarkCanceled("task_004")
 
-	row := toolkit.Get("task_004")
+	row, ok := toolkit.Get("task_004")
+	s.Require().True(ok, "任务应存在")
 	s.Require().NotNil(row)
 	s.Equal("canceled", row.Status, "Status 应为 canceled")
 }
@@ -113,12 +117,14 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_Cancel不影响其他任�
 	toolkit.MarkCanceled("task_A")
 
 	// 验证 task_A 已取消
-	rowA := toolkit.Get("task_A")
+	rowA, ok := toolkit.Get("task_A")
+	s.Require().True(ok, "任务应存在")
 	s.Require().NotNil(rowA)
 	s.Equal("canceled", rowA.Status, "task_A 应为 canceled")
 
 	// 验证 task_B 仍为 running
-	rowB := toolkit.Get("task_B")
+	rowB, ok := toolkit.Get("task_B")
+	s.Require().True(ok, "任务应存在")
 	s.Require().NotNil(rowB)
 	s.Equal("running", rowB.Status, "task_B 应仍为 running")
 }
@@ -133,7 +139,8 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_重复取消幂等() {
 	toolkit.MarkCanceled("task_005")
 	toolkit.MarkCanceled("task_005")
 
-	row := toolkit.Get("task_005")
+	row, ok := toolkit.Get("task_005")
+	s.Require().True(ok, "任务应存在")
 	s.Require().NotNil(row)
 	s.Equal("canceled", row.Status, "重复取消后状态应仍为 canceled")
 }
@@ -152,7 +159,8 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_取消已完成任务状�
 
 	// 注意：Go 端的 MarkCanceled 不做状态守卫（对齐 Python 端行为）
 	// 实际取消操作由 TaskScheduler.CancelTask 处理状态守卫
-	row := toolkit.Get("task_006")
+	row, ok := toolkit.Get("task_006")
+	s.Require().True(ok, "任务应存在")
 	s.Require().NotNil(row)
 	// MarkCanceled 直接修改状态，但 TaskScheduler.CancelTask 对已完成任务返回幂等 true
 	s.Equal("canceled", row.Status, "MarkCanceled 直接设置 canceled（无状态守卫）")
@@ -187,15 +195,17 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_Clear() {
 	s.Empty(rows, "Clear 后应为空列表")
 
 	// Get 应返回 nil
-	s.Nil(toolkit.Get("t1"), "Clear 后 Get 应返回 nil")
+	_, ok := toolkit.Get("t1")
+	s.Require().False(ok)
 }
 
 // TestSessionToolkit_Get不存在 测试 Get 对不存在的任务返回 nil。
 func (s *SessionToolkitCancelSuite) TestSessionToolkit_Get不存在() {
 	toolkit := hsubagent.NewSessionToolkit()
 
-	row := toolkit.Get("nonexistent")
-	s.Nil(row, "不存在的任务应返回 nil")
+	row, ok := toolkit.Get("nonexistent")
+	s.Require().False(ok, "任务应不存在")
+	s.Empty(row.TaskID, "不存在的任务应返回零值")
 }
 
 // TestSessionToolkit_MarkCompleted不存在 测试 MarkCompleted 对不存在的任务不崩溃。
@@ -205,7 +215,8 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_MarkCompleted不存在() 
 	// 对不存在的任务执行 MarkCompleted 不应 panic
 	toolkit.MarkCompleted("nonexistent", "完成")
 
-	s.Nil(toolkit.Get("nonexistent"), "不存在的任务应仍为 nil")
+	_, ok := toolkit.Get("nonexistent")
+	s.Require().False(ok)
 }
 
 // TestSessionToolkit_MarkCanceled不存在 测试 MarkCanceled 对不存在的任务不崩溃。
@@ -215,7 +226,8 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_MarkCanceled不存在() {
 	// 对不存在的任务执行 MarkCanceled 不应 panic
 	toolkit.MarkCanceled("nonexistent")
 
-	s.Nil(toolkit.Get("nonexistent"), "不存在的任务应仍为 nil")
+	_, ok := toolkit.Get("nonexistent")
+	s.Require().False(ok)
 }
 
 // TestSessionToolkit_UpsertRunning更新 测试 UpsertRunning 对已存在任务的更新行为。
@@ -224,15 +236,15 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_UpsertRunning更新() {
 
 	// 第一次插入
 	toolkit.UpsertRunning("task_up", "sess_v1", "原始描述")
-	row := toolkit.Get("task_up")
+	row, ok := toolkit.Get("task_up")
+	s.Require().True(ok, "任务应存在")
 	s.Require().NotNil(row)
 	s.Equal("原始描述", row.Description, "初始描述应为 '原始描述'")
 	s.Equal("running", row.Status, "初始状态应为 running")
 
 	// UpsertRunning 覆盖更新
 	toolkit.UpsertRunning("task_up", "sess_v2", "更新描述")
-	row = toolkit.Get("task_up")
-	s.Require().NotNil(row)
+	row, _ = toolkit.Get("task_up")
 	s.Equal("更新描述", row.Description, "描述应被更新")
 	s.Equal("running", row.Status, "更新后状态应为 running")
 	s.Equal("sess_v2", row.SubSessionID, "SubSessionID 应被更新")
@@ -287,19 +299,19 @@ func (s *SessionToolkitCancelSuite) TestSessionTaskRow_状态流转() {
 	// 正常完成路径
 	toolkit.UpsertRunning("t_done", "s1", "正常完成")
 	toolkit.MarkCompleted("t_done", "OK")
-	row := toolkit.Get("t_done")
+	row, _ := toolkit.Get("t_done")
 	s.Equal("completed", row.Status, "正常完成路径")
 
 	// 取消路径
 	toolkit.UpsertRunning("t_cancel", "s2", "被取消")
 	toolkit.MarkCanceled("t_cancel")
-	row = toolkit.Get("t_cancel")
+	row, _ = toolkit.Get("t_cancel")
 	s.Equal("canceled", row.Status, "取消路径")
 
 	// 失败路径
 	toolkit.UpsertRunning("t_fail", "s3", "执行失败")
 	toolkit.MarkFailed("t_fail", "timeout")
-	row = toolkit.Get("t_fail")
+	row, _ = toolkit.Get("t_fail")
 	s.Equal("error", row.Status, "失败路径")
 }
 
@@ -324,7 +336,7 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_并发安全() {
 	go func() {
 		defer func() { done <- struct{}{} }()
 		for i := 0; i < 100; i++ {
-			_ = toolkit.Get("concurrent")
+			_, _ = toolkit.Get("concurrent")
 		}
 	}()
 
@@ -334,7 +346,8 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_并发安全() {
 	<-done
 
 	// 不崩溃即为通过
-	row := toolkit.Get("concurrent")
+	row, ok := toolkit.Get("concurrent")
+	s.Require().True(ok, "任务应存在")
 	s.NotNil(row, "并发操作后应仍有记录")
 }
 
@@ -392,9 +405,9 @@ func (s *SessionToolkitCancelSuite) TestSessionsCancelTool_空TaskID校验() {
 func (s *SessionToolkitCancelSuite) TestSessionsCancelTool_Task不存在校验() {
 	toolkit := hsubagent.NewSessionToolkit()
 
-	// 不存在的 task_id → toolkit.Get 返回 nil
-	row := toolkit.Get("nonexistent_task")
-	s.Nil(row, "不存在的任务应返回 nil")
+	// 不存在的 task_id → toolkit.Get 返回零值
+	_, ok := toolkit.Get("nonexistent_task")
+	s.Require().False(ok, "任务应不存在")
 }
 
 // TestSessionToolkit_完整Cancel工作流 测试完整的 cancel 工作流：
@@ -408,15 +421,15 @@ func (s *SessionToolkitCancelSuite) TestSessionToolkit_完整Cancel工作流() {
 	toolkit.UpsertRunning(taskID, "sub_001", "待取消任务")
 
 	// 步骤 2：验证 running
-	row := toolkit.Get(taskID)
-	s.Require().NotNil(row)
+	row, ok := toolkit.Get(taskID)
+	s.Require().True(ok, "任务应存在")
 	s.Equal("running", row.Status)
 
 	// 步骤 3：执行取消
 	toolkit.MarkCanceled(taskID)
 
 	// 步骤 4：验证 canceled
-	row = toolkit.Get(taskID)
-	s.Require().NotNil(row)
+	row, ok = toolkit.Get(taskID)
+	s.Require().True(ok, "任务应存在")
 	s.Equal("canceled", row.Status, "取消后状态应为 canceled")
 }

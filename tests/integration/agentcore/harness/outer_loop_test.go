@@ -181,7 +181,7 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer注入() {
 	s.GreaterOrEqual(controlledAgent.InvokeCallCount(), 2, "外层循环应至少执行 2 轮")
 
 	// 验证第 2 轮 inputs 包含 _steering_queue（steering 通过此 channel 传递）
-	secondCall := controlledAgent.GetInvokeCall(1) // 0-indexed
+	secondCall := controlledAgent.GetInvokeCall(1) // 下标 0 起始
 	s.Require().NotNil(secondCall, "第 2 次调用记录应存在")
 	steeringQueue, hasSQ := secondCall.Inputs["_steering_queue"]
 	s.True(hasSQ, "第 2 轮内层调用 inputs 应包含 _steering_queue")
@@ -276,7 +276,7 @@ func (s *OuterLoopSuite) TestOuterLoop_FollowUp触发额外轮次() {
 		"外层循环应至少执行 3 轮（2 原始 + 1 follow-up）")
 
 	// 验证第 3 轮 query 包含 follow-up 文本
-	thirdCall := controlledAgent.GetInvokeCall(2) // 0-indexed
+	thirdCall := controlledAgent.GetInvokeCall(2) // 下标 0 起始
 	s.Require().NotNil(thirdCall, "第 3 次调用记录应存在")
 	queryStr, _ := thirdCall.Inputs["query"].(string)
 	s.Contains(queryStr, followUpText,
@@ -357,7 +357,7 @@ func (s *OuterLoopSuite) TestOuterLoop_多个FollowUpFIFO消费() {
 	// 第 3、4、5 次调用应分别是 3 个 follow-up
 	followUpTexts := []string{"第一步补充", "第二步补充", "第三步补充"}
 	for i, expected := range followUpTexts {
-		callIdx := 2 + i // 0-indexed: 第 3、4、5 次调用
+		callIdx := 2 + i // 下标 0 起始：第 3、4、5 次调用
 		call := controlledAgent.GetInvokeCall(callIdx)
 		if call == nil {
 			s.T().Logf("第 %d 次调用记录不存在（循环可能提前退出）", callIdx+1)
@@ -449,13 +449,13 @@ func (s *OuterLoopSuite) TestOuterLoop_Steer加FollowUp组合() {
 	s.GreaterOrEqual(callCount, 3, "外层循环应至少执行 3 轮")
 
 	// 验证第 2 轮 inputs 包含 _steering_queue
-	secondCall := controlledAgent.GetInvokeCall(1) // 0-indexed
+	secondCall := controlledAgent.GetInvokeCall(1) // 下标 0 起始
 	s.Require().NotNil(secondCall, "第 2 次调用记录应存在")
 	_, hasSQ := secondCall.Inputs["_steering_queue"]
 	s.True(hasSQ, "第 2 轮内层调用 inputs 应包含 _steering_queue（steering 通道）")
 
 	// 验证第 3 轮 query 包含 follow-up 文本
-	thirdCall := controlledAgent.GetInvokeCall(2) // 0-indexed
+	thirdCall := controlledAgent.GetInvokeCall(2) // 下标 0 起始
 	if thirdCall != nil {
 		queryStr, _ := thirdCall.Inputs["query"].(string)
 		s.Contains(queryStr, followUpText,

@@ -128,24 +128,34 @@ func (t *SessionToolkit) MarkCanceled(taskID string) {
 	}
 }
 
-// ListAll 返回所有任务行。
+// ListAll 返回所有任务行的值拷贝。
 // Python: SessionToolkit.list_all
-func (t *SessionToolkit) ListAll() []*SessionTaskRow {
+//
+// 返回值切片（非指针）：asyncio 单线程下 Python 返回共享引用无碍，
+// Go 真并行下调用方锁外读 row 字段会与 MarkXxx 并发写构成 DATA RACE
+// （map 锁只保护 map 结构不保护 row 字段），故锁内深拷贝值返回。
+func (t *SessionToolkit) ListAll() []SessionTaskRow {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	result := make([]*SessionTaskRow, 0, len(t.rows))
+	result := make([]SessionTaskRow, 0, len(t.rows))
 	for _, row := range t.rows {
-		result = append(result, row)
+		result = append(result, *row)
 	}
 	return result
 }
 
-// Get 按 ID 获取任务行。
+// Get 按 ID 获取任务行的值拷贝。
 // Python: SessionToolkit.get
-func (t *SessionToolkit) Get(taskID string) *SessionTaskRow {
+//
+// 返回 (值, 是否存在)：不存在时返回零值（TaskID 为空串），
+// 存在时返回锁内拷贝，调用方读字段无并发写风险（同 ListAll）。
+func (t *SessionToolkit) Get(taskID string) (SessionTaskRow, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	return t.rows[taskID]
+	if row, ok := t.rows[taskID]; ok {
+		return *row, true
+	}
+	return SessionTaskRow{}, false
 }
 
 // Clear 清空所有任务行。
@@ -300,8 +310,8 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 		}
 
 		// 步骤 2：校验任务存在于 toolkit
-		task := toolkit.Get(input.TaskID)
-		if task == nil {
+		task, ok := toolkit.Get(input.TaskID)
+		if !ok {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
 				exception.WithParam("reason", fmt.Sprintf("Task %s not found", input.TaskID)),
@@ -374,7 +384,7 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 		}
 		// status 反映 toolkit 真实状态（终态守卫后 completed/error 保持原状态）
 		finalStatus := "canceled"
-		if row := toolkit.Get(input.TaskID); row != nil {
+		if row, ok := toolkit.Get(input.TaskID); ok {
 			finalStatus = row.Status
 		}
 		return map[string]any{

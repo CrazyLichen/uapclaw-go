@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"context"
+	"sort"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/interaction"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -147,24 +149,106 @@ func (h *MessageHandler) processUnreadMessages(ctx context.Context, memberName s
 }
 
 // processUnreadMessagesWithSteer 排空未读邮箱消息。
-// 对齐 Python: MessageHandler._process_unread_messages
-// TODO(#9.63): 等消息管理器接口就绪后补充完整的读取→格式化→投递→标记已读逻辑
+// 对齐 Python: MessageHandler._process_unread_messages（message.py L105-143）——
+// 循环读取未读（直发+广播，时间倒序）→ 逐条格式化投递 → 标记已读；
+// pending interrupt 时延迟投递直接返回。
+// S-附录4: 接通已实现的 MessageManager（原 TODO(#9.63) 空壳仅日志）。
 func (h *MessageHandler) processUnreadMessagesWithSteer(ctx context.Context, memberName string, useSteer bool) {
-	// 对齐 Python 步骤：
-	// 1. 读取所有未读消息（_read_all_unread）
-	// 2. 循环直到无新消息
-	// 3. 对每条消息：
-	//    a. 如果有 pending interrupt，延迟投递
-	//    b. 格式化消息（_format_message）
-	//    c. 投递输入（deliver_input(content, use_steer=useSteer)）
-	//    d. 标记已读
-	_ = ctx
-	_ = memberName
-	_ = useSteer
-	logger.Debug(logComponent).
-		Str("member_name", memberName).
-		Bool("use_steer", useSteer).
-		Msg("processUnreadMessagesWithSteer: TODO waiting for message manager")
+	// M-29 同款 nil 守卫：测试/降级构造可能传 nil infra
+	if h.infra == nil {
+		return
+	}
+	mm := h.infra.MessageManager()
+	if mm == nil {
+		return
+	}
+	// Python: 角色查找只做一次（is_human_agent 终身不变）
+	backend := h.infra.TeamBackend()
+	isHumanAgent := backend != nil && backend.IsHumanAgent(memberName)
+
+	seenIDs := make(map[string]struct{})
+	for {
+		// Python: _read_all_unread（直发+广播合并，时间倒序）
+		var allUnread []*database.TeamMessageBase
+		if direct, err := mm.GetMessages(ctx, memberName, true, ""); err == nil {
+			allUnread = append(allUnread, direct...)
+		}
+		if broadcasts, err := mm.GetBroadcastMessages(ctx, memberName, true, ""); err == nil {
+			allUnread = append(allUnread, broadcasts...)
+		}
+		sort.SliceStable(allUnread, func(i, j int) bool {
+			return allUnread[i].Timestamp > allUnread[j].Timestamp
+		})
+
+		var newMessages []*database.TeamMessageBase
+		for _, m := range allUnread {
+			if _, seen := seenIDs[m.MessageID]; !seen {
+				newMessages = append(newMessages, m)
+			}
+		}
+		if len(newMessages) == 0 {
+			break
+		}
+
+		logger.Info(logComponent).
+			Str("member_name", memberName).
+			Int("count", len(newMessages)).
+			Bool("use_steer", useSteer).
+			Msg("processing unread messages")
+
+		for _, msg := range newMessages {
+			seenIDs[msg.MessageID] = struct{}{}
+			// Python: pending interrupt 时延迟投递（直接 return，等中断解决后重新触发）
+			if h.round.HasPendingInterrupt() {
+				logger.Info(logComponent).
+					Str("member_name", memberName).
+					Str("message_id", msg.MessageID).
+					Msg("deferring mailbox message until pending interrupt is resolved")
+				return
+			}
+			text := formatTeamMessage(msg, isHumanAgent)
+			logger.Debug(logComponent).
+				Str("member_name", memberName).
+				Str("from", msg.FromMemberName).
+				Str("message_id", msg.MessageID).
+				Msg("message delivered")
+
+			if err := h.round.DeliverInput(ctx, text, useSteer); err != nil {
+				logger.Error(logComponent).Err(err).
+					Str("message_id", msg.MessageID).
+					Msg("deliver_input failed")
+			}
+			mm.MarkMessageRead(ctx, msg.MessageID, memberName)
+		}
+	}
+}
+
+// formatTeamMessage 格式化一条 TeamMessage 为 agent 输入。
+// 对齐 Python: MessageHandler._format_message（message.py L252-275）——
+// human-agent 用 hitt.msg_received_for_human 模板；普通成员用
+// dispatcher.msg_received（含回复引导）。
+func formatTeamMessage(msg *database.TeamMessageBase, isHumanAgent bool) string {
+	msgTypeKey := "dispatcher.msg_type_direct"
+	if msg.Broadcast {
+		msgTypeKey = "dispatcher.msg_type_broadcast"
+	}
+	msgType := msgTypeKey
+	if rendered, err := schema.T(msgTypeKey); err == nil {
+		msgType = rendered
+	}
+	key := "dispatcher.msg_received"
+	if isHumanAgent {
+		key = "hitt.msg_received_for_human"
+	}
+	if content, err := schema.T(key, map[string]any{
+		"msg_type":   msgType,
+		"message_id": msg.MessageID,
+		"sender":     msg.FromMemberName,
+		"content":    msg.Content,
+	}); err == nil {
+		return content
+	}
+	return key
 }
 
 // ackUserBoundMessage Leader 自动确认 teammate→user 的直接消息。

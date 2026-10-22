@@ -4,6 +4,7 @@ import (
 	"context"
 
 	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -85,55 +86,95 @@ func (h *TeamCompletionHandler) Rearm() {
 // 2. 所有成员处于 settled 状态
 // 3. 无 in-flight round
 // 上升沿时发布 TEAM_COMPLETED 事件，持久团队还需 conclude_completed_round。
-// Python: TeamCompletionHandler.on_poll_task
+// Python: TeamCompletionHandler.on_poll_task（team_completion.py L96-130）
+// S-附录4: 接通已实现的 TeamBackend.IsTeamCompleted（原 TODO(#9.63) 空壳）。
 func (h *TeamCompletionHandler) OnPollTask(ctx context.Context, _ types.CoordinationEvent) {
 	// 对齐 Python: 仅 leader 评估完成条件
 	role := h.blueprint.Role()
 	if role != schema.TeamRoleLeader {
 		return
 	}
-
+	// M-29 同款 nil 守卫
+	if h.infra == nil {
+		return
+	}
+	backend := h.infra.TeamBackend()
+	if backend == nil {
+		return
+	}
 	// 对齐 Python: if self._round.has_in_flight_round() or self._round.is_agent_running(): return
 	// 先于 teamCompletedEmitted 检查，避免 leader 忙碌时永不重置上升沿标志
 	if h.round.HasInFlightRound() || h.round.IsAgentRunning() {
 		return
 	}
 
+	// Python: snapshot = await team_backend.is_team_completed()
+	snapshot, err := backend.IsTeamCompleted(ctx)
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Msg("onPollTask: is_team_completed check failed")
+		return
+	}
+	if snapshot == nil {
+		// 下降沿：重置上升沿（任务列表非空或有成员未 settled）
+		h.teamCompletedEmitted = false
+		return
+	}
 	if h.teamCompletedEmitted {
 		return
 	}
 
-	// TODO(#9.63): 等任务后端接口就绪后补充 is_team_completed 检查
-	// 对齐 Python 步骤：
-	//  1. 调用 TeamBackend.IsTeamCompleted() → (snapshot, error)
-	//  2. 若 snapshot == nil（下降沿）：重置 teamCompletedEmitted = false，return
-	//  3. 上升沿：!teamCompletedEmitted && is_completed → publish_team_completed
-	//  4. 持久团队：conclude_completed_round
-	//
-	// 结构化框架（待 IsTeamCompleted 就绪后取消注释）：
-	//
-	//	backend := h.blueprint.TeamBackendAccessor()
-	//	if backend == nil { return }
-	//	snapshot, err := backend.IsTeamCompleted(ctx)
-	//	if err != nil { logger.Error(...); return }
-	//	if snapshot == nil {
-	//	    // 下降沿：任务列表非空或有成员未 settled，重置上升沿
-	//	    h.teamCompletedEmitted = false
-	//	    return
-	//	}
-	//	// 上升沿检测：仅首次从 false → true 时发出
-	//	if !h.teamCompletedEmitted {
-	//	    h.teamCompletedEmitted = true
-	//	    // 发布 TEAM_COMPLETED 事件
-	//	    h.publishTeamCompleted(ctx, snapshot)
-	//	    // 持久团队需 conclude_completed_round
-	//	    // TODO(#9.63): backend.ConcludeCompletedRound(ctx)
-	//	}
+	// 上升沿：发布 TEAM_COMPLETED
+	h.publishTeamCompleted(ctx, backend.TeamName(), snapshot)
+	h.teamCompletedEmitted = true
 
-	logger.Debug(logComponent).
-		Str("role", string(role)).
-		Bool("emitted", h.teamCompletedEmitted).
-		Msg("onPollTask: waiting for task backend, skipping completion check")
+	// Python: persistent 团队在完成时自动暂停——关闭 leader 流
+	// 让 Runner 最终驱动 finalize → pause；temporary 团队由 leader
+	// 通过 clean_team 自行拆除，不在此处处理。
+	lifecycle := "temporary"
+	if lp, ok := h.blueprint.(interface{ Lifecycle() atschema.TeamLifecycle }); ok {
+		lifecycle = string(lp.Lifecycle())
+	}
+	if lifecycle == "persistent" {
+		if err := h.lifecycle.ConcludeCompletedRound(ctx, snapshot.MemberCount, snapshot.TaskCount); err != nil {
+			logger.Error(logComponent).Err(err).
+				Msg("onPollTask: conclude_completed_round failed")
+		}
+	}
+}
+
+// publishTeamCompleted 在团队 topic 上发布 TEAM_COMPLETED 事件。
+// Python: TeamCompletionHandler._publish_team_completed（team_completion.py L132-152）
+func (h *TeamCompletionHandler) publishTeamCompleted(ctx context.Context, teamName string, snapshot *atschema.TeamCompletionSnapshot) {
+	if h.infra == nil {
+		return
+	}
+	messagerRef := h.infra.Messager()
+	if messagerRef == nil {
+		return
+	}
+	// Python: TeamCompletedEvent(team_name=..., member_count=..., task_count=...)
+	event := &events.TeamCompletedEvent{
+		BaseEventMessage: events.BaseEventMessage{
+			TeamName: teamName,
+		},
+		MemberCount: snapshot.MemberCount,
+		TaskCount:   snapshot.TaskCount,
+	}
+	topicID := events.TeamTopicTeam.Build(schema.GetSessionID(ctx), teamName)
+	msg := events.EventMessageFromEvent(event)
+	// Python: publish 失败时仅日志（try/except 吞掉）
+	if err := messagerRef.Publish(ctx, topicID, msg); err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("team_name", teamName).
+			Msg("publishTeamCompleted: publish failed")
+		return
+	}
+	logger.Info(logComponent).
+		Str("team_name", teamName).
+		Int("member_count", snapshot.MemberCount).
+		Int("task_count", snapshot.TaskCount).
+		Msg("team completed")
 }
 
 // OnTaskListDrained 记录任务列表清空事件并触发所有注册的完成回调。

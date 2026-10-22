@@ -31,6 +31,11 @@ type GRPCPluginTransport struct {
 	closed bool
 	// recvStarted 接收 goroutine 是否已启动
 	recvStarted bool
+	// recvCancel 取消 pump 流 context（Recv 首次调用时创建）。
+	// Close 通过它唤醒阻塞在 stream.Recv() 或 recvCh 发送上的 pump，
+	// 由 pump 的 defer close(recvCh) 统一收口——Close 自身不直接
+	// close(recvCh)，从根上消除 send-on-closed-channel panic 竞态
+	recvCancel context.CancelFunc
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -86,12 +91,18 @@ func (t *GRPCPluginTransport) Recv() (<-chan []byte, error) {
 	if !t.recvStarted {
 		t.recvStarted = true
 		t.recvCh = make(chan []byte, recvChannelBuffer)
-		go t.pumpRecvLoop()
+		// pump 专用 context：Close 时取消，唤醒阻塞在
+		// stream.Recv() 或 recvCh 发送上的 pump goroutine
+		ctx, cancel := context.WithCancel(context.Background())
+		t.recvCancel = cancel
+		go t.pumpRecvLoop(ctx)
 	}
 	return t.recvCh, nil
 }
 
-// Close 关闭代理（幂等）：先标记关闭，再通知扩展侧
+// Close 关闭代理（幂等）：先标记关闭并取消 pump 的 context，
+// 由 pump 的 defer close(recvCh) 统一收口通道（Close 不直接 close），
+// 再通知扩展侧关闭。
 func (t *GRPCPluginTransport) Close() error {
 	t.mu.Lock()
 	if t.closed {
@@ -99,11 +110,13 @@ func (t *GRPCPluginTransport) Close() error {
 		return nil
 	}
 	t.closed = true
-	recvCh := t.recvCh
+	cancel := t.recvCancel
 	t.mu.Unlock()
 
-	if recvCh != nil {
-		close(recvCh)
+	// 取消 pump context：阻塞在 stream.Recv() 或 recvCh 发送上的
+	// pump goroutine 立即被唤醒并在 defer 中关闭 recvCh
+	if cancel != nil {
+		cancel()
 	}
 	// 通知插件侧关闭（ctx 背景即可，出错不阻断宿主关闭流程）
 	_, _ = t.pc.RawProtoClient().TransportClose(context.Background(), transportCloseRequestOf())
@@ -114,29 +127,32 @@ func (t *GRPCPluginTransport) Close() error {
 
 // pumpRecvLoop 消费 TransportRecv 流并写入 recvCh。
 //
-// 写入用 select 防护：通道长期满（消费方停摆）时丢弃帧并 warn，
-// 避免 Close 的 close(recvCh) 与阻塞发送竞态 panic（send on closed channel）。
-func (t *GRPCPluginTransport) pumpRecvLoop() {
-	stream, err := t.pc.RawProtoClient().TransportRecv(context.Background(), transportRecvRequestOf())
+// 通道收口唯一路径：pump 退出时 defer close(recvCh)。任何退出分支
+// （流断开/出错/Close 取消 context）都经过 defer，保证 close 恒发生在
+// 该 goroutine 内部——Close 与 pump 分属两个 goroutine，若 Close 侧
+// 直接 close(recvCh)，则与本处发送存在 send-on-closed-channel panic
+// 竞态（pump 检查 closed 与发送之间无法原子）。
+//
+// 写入用 select 防护：ctx 取消立即退出；通道长期满（消费方停摆）时
+// 丢弃帧并 warn，避免阻塞拖住收口。
+func (t *GRPCPluginTransport) pumpRecvLoop(ctx context.Context) {
+	// recvCh 在 Recv() 中先于本 goroutine 启动完成赋值，此处读取安全
+	defer close(t.recvCh)
+
+	stream, err := t.pc.RawProtoClient().TransportRecv(ctx, transportRecvRequestOf())
 	if err != nil {
-		t.closeRecvCh()
 		return
 	}
 	for {
 		resp, err := stream.Recv()
 		if err != nil {
-			t.closeRecvCh()
 			return
 		}
 		data := resp.GetData()
-		t.mu.Lock()
-		closed := t.closed
-		t.mu.Unlock()
-		if closed {
-			return
-		}
 		select {
 		case t.recvCh <- data:
+		case <-ctx.Done():
+			return
 		case <-time.After(recvStallTimeout):
 			// 通道长期满：丢弃帧并记录 warn（对齐 ChannelTransport 缓冲满丢弃语义）
 			logger.Warn(proxyLogComponent).
@@ -144,15 +160,6 @@ func (t *GRPCPluginTransport) pumpRecvLoop() {
 				Int("bytes", len(data)).
 				Msg("recv 通道缓冲满，丢弃帧")
 		}
-	}
-}
-
-// closeRecvCh 关闭接收通道（幂等保护：closed 标记未置位时才关）
-func (t *GRPCPluginTransport) closeRecvCh() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.recvCh != nil && !t.closed {
-		close(t.recvCh)
 	}
 }
 

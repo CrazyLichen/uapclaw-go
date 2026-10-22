@@ -2,14 +2,40 @@ package memory
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	harnessfactory "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	runnerpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// extractionReadFileInput 读取记忆文件工具入参。
+type extractionReadFileInput struct {
+	// Path 文件相对路径
+	Path string `json:"path"`
+}
+
+// extractionWriteFileInput 写入记忆文件工具入参。
+type extractionWriteFileInput struct {
+	// Path 文件相对路径
+	Path string `json:"path"`
+	// Content 写入内容
+	Content string `json:"content"`
+}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -69,17 +95,232 @@ TEAM_MEMORY.md 中每条记忆用三级标题 + 类型标签，示例：
 如果没有值得提取的新信息，不要修改文件。`
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildExtractionContext 构建提取上下文。⤵️ 回填: 7.2+9.65a
-func BuildExtractionContext(tasks []any, messages []any, tzOffsetHours float64) string { return "" }
+// BuildExtractionContext 构建提取上下文。
+// S-12: 对齐 Python _build_extraction_context（extractor.py L74-104）——
+// DB 记录组装为提取 agent 的用户消息（任务记录 + 按时间排序的团队对话）。
+func BuildExtractionContext(tasks []*database.TeamTaskBase, messages []*database.TeamMessageBase, tzOffsetHours float64) string {
+	tz := time.FixedZone("extract_tz", int(tzOffsetHours*3600))
+	parts := []string{"# 本轮团队协作记录\n"}
 
-// CreateExtractionTools 创建提取 agent 限定工具。⤵️ 回填: 7.2
-func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamName string) []any {
+	if len(tasks) > 0 {
+		parts = append(parts, "## 任务记录\n")
+		for _, t := range tasks {
+			assignee := "未分配"
+			if t.Assignee != nil && *t.Assignee != "" {
+				assignee = *t.Assignee
+			}
+			parts = append(parts, fmt.Sprintf("### %s [%s] -> %s", t.Title, t.Status, assignee))
+			if t.Content != "" {
+				content := t.Content
+				// rune 口径截断（Python str[:] 按字符计）
+				if runes := []rune(content); len(runes) > taskContentPreviewMax {
+					content = string(runes[:taskContentPreviewMax])
+				}
+				parts = append(parts, content)
+			}
+			parts = append(parts, "")
+		}
+	}
+
+	if len(messages) > 0 {
+		parts = append(parts, "## 团队对话\n")
+		sortedMsgs := make([]*database.TeamMessageBase, len(messages))
+		copy(sortedMsgs, messages)
+		sort.SliceStable(sortedMsgs, func(i, j int) bool {
+			return sortedMsgs[i].Timestamp < sortedMsgs[j].Timestamp
+		})
+		for _, m := range sortedMsgs {
+			ts := time.UnixMilli(m.Timestamp).In(tz).Format("01-02 15:04")
+			direction := "-> ?"
+			if m.Broadcast {
+				direction = "-> 全体"
+			} else if m.ToMemberName != nil && *m.ToMemberName != "" {
+				direction = "-> " + *m.ToMemberName
+			}
+			content := m.Content
+			if runes := []rune(content); len(runes) > messageContentPreviewMax {
+				content = string(runes[:messageContentPreviewMax])
+			}
+			parts = append(parts, fmt.Sprintf("[%s] %s %s: %s", ts, m.FromMemberName, direction, content))
+		}
+		parts = append(parts, "")
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+// CreateExtractionTools 创建提取 agent 限定工具。
+// S-12: 对齐 Python _create_extraction_tools（extractor.py L107-191）——
+// read/write/list 三个本地函数工具，路径限制在团队记忆目录内
+// （禁止 ".." 与绝对路径，filepath.Base 语义收窄）。
+func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamName string) []tool.Tool {
+	prefix := "extract." + teamName
+	if teamName == "" {
+		prefix = "extract"
+	}
+
+	// read_memory_file
+	readTool, readErr := tool.NewTool(func(ctx context.Context, in extractionReadFileInput, opts ...tool.ToolOption) (map[string]any, error) {
+		if strings.Contains(in.Path, "..") || strings.HasPrefix(in.Path, "/") {
+			return map[string]any{"error": "Invalid path"}, nil
+		}
+		// Python: os.path.join(team_memory_dir, os.path.basename(path))
+		fullPath := filepath.Join(teamMemoryDir, filepath.Base(in.Path))
+		if sysOp != nil && sysOp.Fs() != nil {
+			if result, err := sysOp.Fs().ReadFile(ctx, fullPath); err == nil && result != nil && result.Data != nil {
+				return map[string]any{"content": result.Data.Content, "path": fullPath}, nil
+			}
+		}
+		// Python: except → {"content": "", "path": full_path, "note": "file not found"}
+		return map[string]any{"content": "", "path": fullPath, "note": "file not found"}, nil
+	}, tool.WithToolCard(tool.NewToolCardWithID(
+		prefix+".read", "read_memory_file", "读取团队记忆目录下的文件",
+		[]*schema.Param{schema.NewStringParam("path", "file path", true)}, nil)))
+	if readErr != nil {
+		logger.Warn(logComponent).Err(readErr).Msg("[extractor] failed to create read tool")
+	}
+
+	// write_memory_file
+	writeTool, writeErr := tool.NewTool(func(ctx context.Context, in extractionWriteFileInput, opts ...tool.ToolOption) (map[string]any, error) {
+		if strings.Contains(in.Path, "..") || strings.HasPrefix(in.Path, "/") {
+			return map[string]any{"error": "Invalid path"}, nil
+		}
+		fullPath := filepath.Join(teamMemoryDir, filepath.Base(in.Path))
+		if sysOp != nil && sysOp.Fs() != nil {
+			if _, err := sysOp.Fs().WriteFile(ctx, fullPath, in.Content, sysop.WithFsCreateIfNotExist(true)); err != nil {
+				return map[string]any{"success": false, "error": err.Error()}, nil
+			}
+			return map[string]any{"success": true, "path": fullPath}, nil
+		}
+		// 本地文件系统回退（sysOp 缺失时）
+		if err := os.WriteFile(fullPath, []byte(in.Content), 0o644); err != nil {
+			return map[string]any{"success": false, "error": err.Error()}, nil
+		}
+		return map[string]any{"success": true, "path": fullPath}, nil
+	}, tool.WithToolCard(tool.NewToolCardWithID(
+		prefix+".write", "write_memory_file", "写入团队记忆目录下的文件（覆盖）",
+		[]*schema.Param{
+			schema.NewStringParam("path", "file path", true),
+			schema.NewStringParam("content", "content to write", true),
+		}, nil)))
+	if writeErr != nil {
+		logger.Warn(logComponent).Err(writeErr).Msg("[extractor] failed to create write tool")
+	}
+
+	// list_memory_files
+	listTool, listErr := tool.NewTool(func(_ context.Context, _ struct{}, opts ...tool.ToolOption) (map[string]any, error) {
+		entries, err := os.ReadDir(teamMemoryDir)
+		if err != nil {
+			return map[string]any{"files": []string{}}, nil
+		}
+		files := make([]string, 0, len(entries))
+		for _, e := range entries {
+			if !e.IsDir() {
+				files = append(files, e.Name())
+			}
+		}
+		return map[string]any{"files": files}, nil
+	}, tool.WithToolCard(tool.NewToolCardWithID(
+		prefix+".list", "list_memory_files", "列出团队记忆目录下的所有文件", nil, nil)))
+	if listErr != nil {
+		logger.Warn(logComponent).Err(listErr).Msg("[extractor] failed to create list tool")
+	}
+
+	var tools []tool.Tool
+	for _, t := range []tool.Tool{readTool, writeTool, listTool} {
+		if t != nil {
+			tools = append(tools, t)
+		}
+	}
+	return tools
+}
+
+// ExtractTeamMemories 提取团队记忆。
+// S-12: 对齐 Python extract_team_memories（extractor.py L194-245）——
+// Forked Agent 提炼：拉取任务+消息 → 无数据早退 → 建目录 → 构建上下文 →
+// create_deep_agent + Runner.run_agent 执行提取。model 为 nil 时不执行。
+func ExtractTeamMemories(
+	ctx context.Context,
+	teamName string,
+	db database.TeamDatabase,
+	taskMgr *tools.TeamTaskManager,
+	teamMemoryDir string,
+	sysOp sysop.SysOperation,
+	model *llm.Model,
+	tzOffsetHours float64,
+) error {
+	// Python: required_components 任一为 None → return
+	if sysOp == nil || teamMemoryDir == "" || model == nil || db == nil || taskMgr == nil {
+		return nil
+	}
+
+	// 失败仅告警不中断（Python: except → logger.warning）
+	if err := func() (err error) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				err = fmt.Errorf("panic: %v", rec)
+			}
+		}()
+
+		tasks, taskErr := taskMgr.ListTasks(ctx, "")
+		if taskErr != nil {
+			return fmt.Errorf("list tasks failed: %w", taskErr)
+		}
+		messages, msgErr := db.Message().GetTeamMessages(ctx, teamName, "")
+		if msgErr != nil {
+			return fmt.Errorf("get team messages failed: %w", msgErr)
+		}
+
+		// Python: if not tasks and not messages: return
+		if len(tasks) == 0 && len(messages) == 0 {
+			return nil
+		}
+
+		// Python: os.makedirs(team_memory_dir, exist_ok=True)
+		if err := os.MkdirAll(teamMemoryDir, 0o755); err != nil {
+			return err
+		}
+
+		contextStr := BuildExtractionContext(tasks, messages, tzOffsetHours)
+
+		// Python: extraction_tools = _create_extraction_tools(...)
+		extractionTools := CreateExtractionTools(teamMemoryDir, sysOp, teamName)
+
+		// Python: agent = create_deep_agent(model, system_prompt=..., tools=...,
+		//   max_iterations=EXTRACTION_AGENT_MAX_ITERATIONS, enable_task_loop=False)
+		agent, agentErr := harnessfactory.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+			Model:          model,
+			SystemPrompt:   ExtractionAgentPrompt,
+			ToolInstances:  extractionTools,
+			MaxIterations:  extractionAgentMaxIterations,
+			EnableTaskLoop: false,
+		})
+		if agentErr != nil {
+			return fmt.Errorf("create extraction agent failed: %w", agentErr)
+		}
+
+		// Python: await Runner.run_agent(agent, {"query": ...})
+		_, runErr := runnerpkg.RunAgent(ctx, runnerpkg.ByAgent(agent), map[string]any{
+			"query": fmt.Sprintf("请分析以下团队 %s 的协作记录并提取记忆：\n\n%s", teamName, contextStr),
+		}, runnerpkg.SessionRef{}, nil, nil)
+		if runErr != nil {
+			return fmt.Errorf("extraction agent run failed: %w", runErr)
+		}
+
+		logger.Info(logComponent).
+			Str("team_name", teamName).
+			Msg("[extractor] Extraction agent completed")
+		return nil
+	}(); err != nil {
+		logger.Warn(logComponent).
+			Str("team_name", teamName).
+			Err(err).
+			Msg("[extractor] extract_team_memories failed")
+	}
 	return nil
 }
 
-// ExtractTeamMemories 提取团队记忆。⤵️ 回填: 7.2+9.65a
-func ExtractTeamMemories(ctx context.Context, teamName string, db database.TeamDatabase, taskMgr *tools.TeamTaskManager, teamMemoryDir string, sysOp sysop.SysOperation, model *llm.Model, tzOffsetHours float64) error {
-	return nil
-}
+// ──────────────────────────── 非导出函数 ────────────────────────────
