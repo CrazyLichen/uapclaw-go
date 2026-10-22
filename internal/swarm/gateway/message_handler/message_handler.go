@@ -229,6 +229,11 @@ func (mh *MessageHandler) TriggerSessionStartHook(sessionID, source string) {
 	go mh.gatewayHookHandler.OnSessionStart(context.Background(), sessionID, source)
 }
 
+// GetGatewayHookHandlerForTest 返回 gatewayHookHandler（仅供跨包测试断言使用）。
+func (mh *MessageHandler) GetGatewayHookHandlerForTest() *hooksgw.GatewayHookHandler {
+	return mh.gatewayHookHandler
+}
+
 // StartForwarding 启动入站转发循环。
 //
 // Python: start_forwarding：启动 forwardLoop，

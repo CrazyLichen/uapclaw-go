@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
@@ -36,6 +38,42 @@ func TestNewGatewayServer(t *testing.T) {
 	assert.NotNil(t, gs.webChannel)
 	assert.NotNil(t, gs.channelMgr)
 	assert.NotNil(t, gs.msgHandler)
+}
+
+// TestNewGatewayServer_装配全局Config RegisterConfig 幂等装配
+func TestNewGatewayServer_装配全局Config(t *testing.T) {
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	_ = os.WriteFile(cfgFile, []byte("gateway:\n  session_map_scope: per_chat_bot_user\n"), 0o644)
+
+	hookscfg.ResetGlobalConfigForTest()
+	defer hookscfg.ResetGlobalConfigForTest()
+
+	cfg, err := config.New(cfgFile)
+	if err != nil {
+		t.Fatalf("config.New: %v", err)
+	}
+
+	transport := transport.NewChannelTransport()
+	agentClient := routing.NewAgentClient(transport)
+
+	s, err := NewGatewayServer(cfg, agentClient)
+	if err != nil {
+		t.Fatalf("NewGatewayServer: %v", err)
+	}
+	assert.NotNil(t, s)
+
+	// 全局 config 已注册（scope 可读到 per_chat_bot_user）
+	if got := hookscfg.GetGlobalConfigForScope(); got == nil {
+		t.Fatal("NewGatewayServer 应装配全局 Config")
+	}
+	if got := routing.LoadSessionMapScope(); got != routing.SessionMapScopePerChatBotUser {
+		t.Errorf("装配后 scope 应读到 per_chat_bot_user，实际 %d", got)
+	}
+	// MessageHandler 的 hookHandler 非 nil
+	if s.msgHandler == nil || s.msgHandler.GetGatewayHookHandlerForTest() == nil {
+		t.Error("装配后 MessageHandler.gatewayHookHandler 应非 nil")
+	}
 }
 
 func TestGatewayServer_Router路由(t *testing.T) {

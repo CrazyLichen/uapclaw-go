@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
@@ -69,6 +70,11 @@ const shutdownTimeout = 5 * time.Second
 //  3. 创建 Web 频道
 //  4. 注册频道入站回调
 func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*GatewayServer, error) {
+	// 11.7+11.13：注册全局 Config（幂等，对齐 Python get_config() 全局可用性）
+	// Python: 独立 Gateway 进程不启动 AgentServer，全局函数随时可读；
+	// Go 由 NewGatewayServer 注册，12.7 单体路径由 AgentServer 注册，谁先启动谁注册
+	hookscfg.RegisterConfig(cfg)
+
 	// 从配置读取 Web 通道参数
 	webCfg := web.WebChannelConfig{
 		Enabled: true,
