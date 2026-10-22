@@ -2,6 +2,7 @@ package message_handler
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -168,12 +169,73 @@ func TestNewSessionCancelAndNotice(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/new_session"}`))
 
-	parsed := command_parser.ParseChannelControlText("/new_session")
-	mh.newSessionCancelAndNotice(msg, parsed)
-
-	// 验证渠道状态已更新
+	// 预建 state（模拟首建），获取 oldSID 后重构
 	state := mh.GetOrCreateChannelState(msg)
-	assert.NotEqual(t, "sess-1", state.SessionID, "sessionID 应已更新")
+	oldSID := state.SessionID
+
+	mh.newSessionCancelAndNotice(msg, oldSID, "new-sid-x")
+
+	// 验证通知已发出（收尾函数不再改 state）
+	select {
+	case <-mh.robotMessages:
+	default:
+		t.Fatal("收尾函数应发送变更通知")
+	}
+}
+
+// TestHandleChannelControl_newSession企业通道SessionMap轮转
+// Python L654-667：企业通道身份齐备走 SessionMap rotate=true
+func TestHandleChannelControl_newSession企业通道SessionMap轮转(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	mh.sessionMap = newTestSessionMap(t)
+
+	go func() {
+		for range mh.robotMessages {
+		}
+	}()
+
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "sess-old",
+		schema.ReqMethodChatSend, json.RawMessage(`{"content":"/new_session"}`),
+		schema.WithProvider("feishu"),
+		schema.WithChatID("oc-9"),
+		schema.WithBotID("bot-1"),
+		schema.WithUserID("u-1"))
+
+	handled := mh.handleChannelControl(msg)
+	assert.True(t, handled)
+
+	state := mh.GetOrCreateChannelState(msg)
+	if !strings.Contains(state.SessionID, "feishu::oc-9::bot-1::") {
+		t.Errorf("企业通道 /new_session 应经 SessionMap 轮转，实际 %q", state.SessionID)
+	}
+	if state.SessionID == "sess-old" {
+		t.Error("应轮转出新值")
+	}
+}
+
+// TestHandleChannelControl_newSession非企业通道走GenerateChannelSessionID
+func TestHandleChannelControl_newSession非企业通道(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	mh.sessionMap = newTestSessionMap(t)
+
+	go func() {
+		for range mh.robotMessages {
+		}
+	}()
+
+	msg := schema.NewReqMessage("feishu_test", "sess-old",
+		schema.ReqMethodChatSend, json.RawMessage(`{"content":"/new_session"}`))
+
+	handled := mh.handleChannelControl(msg)
+	assert.True(t, handled)
+
+	state := mh.GetOrCreateChannelState(msg)
+	if !strings.HasPrefix(state.SessionID, "feishu") {
+		t.Errorf("非企业通道应走 GenerateChannelSessionID（feishu 前缀），实际 %q", state.SessionID)
+	}
+	if state.SessionID == "sess-old" {
+		t.Error("应生成新值")
+	}
 }
 
 // TestModeChangeCancelAndNotice 测试 /mode 处理

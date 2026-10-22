@@ -59,10 +59,28 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 		return false
 	}
 
+	// 获取当前会话的状态（使用复合键）
+	// Python: state = self._get_or_create_channel_state(msg) (L652)
+	state := mh.GetOrCreateChannelState(msg)
+
 	// 按 action 分发
 	switch parsed.Action {
 	case command_parser.ActionNewSessionOK:
-		mh.newSessionCancelAndNotice(msg, parsed)
+		// 11.7+11.13：SessionMap 轮转 + state 更新 + SessionStart hook
+		// Python: L654-667（全部在入口函数体内，收尾甩子函数）
+		oldSID := state.SessionID
+		var newSID string
+		if p, c, b, u, ok := extractIdentityTuple(msg); ok && channelIDMatchesSessionMapTypes(msg.ChannelID) {
+			newSID = mh.sessionMap.GetSessionID(p, c, b, u, true) // rotate=true
+		} else {
+			newSID = GenerateChannelSessionID(string(channelType))
+		}
+		state.SessionID = newSID
+		// 触发 SessionStart hook（fire-and-forget）
+		// Python: if self._gateway_hook_handler: asyncio.create_task(on_session_start(new_sid, source=channel_type))
+		mh.TriggerSessionStartHook(newSID, string(channelType))
+		// 收尾：异步取消旧会话 + 发变更通知
+		mh.newSessionCancelAndNotice(msg, oldSID, newSID)
 	case command_parser.ActionNewSessionBad:
 		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
 	case command_parser.ActionModeOK:
@@ -97,22 +115,11 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 	return true
 }
 
-// newSessionCancelAndNotice 处理 /new_session 命令。
+// newSessionCancelAndNotice /new_session 收尾：异步取消旧会话 + 发变更通知。
 //
-// Python: _new_session_cancel_and_notice (L575-591)：
-// 先更新 state 再异步取消旧会话（publishInterruptResult=false），最后发通知。
-func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, _ command_parser.ParsedChannelControl) {
-	state := mh.GetOrCreateChannelState(msg)
-	oldSID := state.SessionID
-
-	// 生成新 session_id
-	newSID := GenerateChannelSessionID(msg.ChannelID)
-
-	// 先更新 state（对齐 Python：先更新 state.session_id 再 cancel）
-	state.SessionID = newSID
-
-	// TODO(#11.7+#11.13): SessionMap 集成 + triggerSessionStartHook（等 11.7 + 11.13 回填）
-
+// Python: _new_session_cancel_and_notice (L575-591)。
+// 状态更新（SessionMap 轮转/state.SessionID/hook）已上提至 handleChannelControl（D5 对齐）。
+func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, oldSID, newSID string) {
 	// 异步取消旧会话（静默模式：publishInterruptResult=false）
 	if oldSID != "" {
 		go mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, false)
