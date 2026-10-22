@@ -36,7 +36,7 @@ CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" -coverprofile=coverage.out ./.
 
 **背景（给零上下文工程师）：** Go 项目规则禁止 `gateway/` import `server/`（规则 6.5，因 Gateway 与 AgentServer 是两个可独立部署的服务）。Python 里 Gateway 侧的 GatewayHookHandler 直接 `from jiuwenswarm.server.hooks.executor import HookExecutor`——Go 做不到，所以把 executor（无 server 域内依赖，仅依赖 agentcore/*+common/*）下沉到共享包 `common/hooks`。这是 transport 包提取（commit 9ba8a1b1）之后的第三例同类破环迁移。
 
-- [ ] **Step 1.1: 迁移 executor.go 到 common/hooks**
+- [x] **Step 1.1: 迁移 executor.go 到 common/hooks**
 
 ```bash
 git mv internal/swarm/server/hooks/executor.go internal/common/hooks/executor.go
@@ -58,13 +58,13 @@ package hooks
 1. **logComponent 冲突**：`server/hooks/executor.go:58` 定义 `logComponent = logger.ComponentAgentServer`，而 `common/hooks/config.go:61` 已定义 `logComponent = logger.ComponentCommon`——同包冲突。删除 executor.go 中的 logComponent 定义（常量块中该行+注释），executor 内日志调用统一用 `config.go` 已有的 `logger.ComponentCommon`。这符合规则 3.2 的组件选择（common/hooks 属基础设施层）。
 2. **注释更新**：`RegisterConfig` 的注释"由 AgentServer 启动时通过 RegisterConfig 注册"改为"由 AgentServer 或 GatewayServer 启动时注册（谁先启动谁注册，幂等）"。
 
-- [ ] **Step 1.2: user_hook_rail.go 改用共享 executor**
+- [x] **Step 1.2: user_hook_rail.go 改用共享 executor**
 
 `internal/swarm/server/hooks/user_hook_rail.go`：executor 符号（`HookExecutor`/`HookResult`/`HookOutcome*`/`NewHookExecutor`）已不在本包。检查现有 import——文件已 import `hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"`（第 11 行）。
 
 将 `user_hook_rail.go:25` 的 `executor *HookExecutor` 改为 `executor *hookscfg.HookExecutor`；`:40` 的 `NewHookExecutor()` 改为 `hookscfg.NewHookExecutor()`；`HookResult`/`HookOutcome*` 引用全部加 `hookscfg.` 前缀。
 
-- [ ] **Step 1.3: server 侧 import 点修改**
+- [x] **Step 1.3: server 侧 import 点修改**
 
 `internal/swarm/server/agent_server.go`：
 ```go
@@ -77,7 +77,7 @@ hookscfg.RegisterConfig(s.config)
 
 `internal/swarm/server/adapter/deep_adapter_rails.go:28` 与 `code_adapter.go:39`：这两个文件只用了 `serverhooks.NewUserHookRail`（UserHookRail 仍在 server/hooks），import 不变。若文件里另有 executor 符号引用（grep 确认过没有），一并加 `hookscfg` import。
 
-- [ ] **Step 1.4: 更新两个 doc.go**
+- [x] **Step 1.4: 更新两个 doc.go**
 
 `internal/common/hooks/doc.go` 文件目录段改为：
 ```
@@ -106,7 +106,7 @@ hookscfg.RegisterConfig(s.config)
 package hooks
 ```
 
-- [ ] **Step 1.5: 运行测试验证迁移**
+- [x] **Step 1.5: 运行测试验证迁移**
 
 ```bash
 pgrep -f 'go (build|test)' || true
@@ -114,14 +114,14 @@ CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/common/hooks/... ./
 ```
 Expected: 全部 PASS（executor_test 迁移后原测试全绿；server/hooks 只剩 user_hook_rail_test）。
 
-- [ ] **Step 1.6: 编译全仓确认无残留引用**
+- [x] **Step 1.6: 编译全仓确认无残留引用**
 
 ```bash
 go build ./...
 ```
 Expected: 编译通过（若有文件残留引用旧位置 `server/hooks` 的 executor 符号会在此暴露）。
 
-- [ ] **Step 1.7: Commit**
+- [x] **Step 1.7: Commit**
 
 ```bash
 git add -A
@@ -144,7 +144,7 @@ git commit -m "refactor(hooks): HookExecutor 迁移 server/hooks → common/hook
 
 **背景：** Python `jiuwenswarm/gateway/routing/session_map.py`（109 行）。核心：`SessionMapScope` 枚举（per_chat_bot 默认 / per_chat_bot_user）+ `load_session_map_scope()`（config `gateway.session_map_scope` 读一次）+ `SessionMap`（map 持久化到 `{workspace}/agent/.checkpoint/session_map.json`，rotate 语义）。Go 需补 `sync.Mutex`（Python asyncio 单线程无锁）。
 
-- [ ] **Step 2.1: 写失败测试（session_map_test.go 骨干用例）**
+- [x] **Step 2.1: 写失败测试（session_map_test.go 骨干用例）**
 
 ```go
 package routing
@@ -320,14 +320,14 @@ func TestLoad_过滤非法值(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2.2: 运行测试确认失败**
+- [x] **Step 2.2: 运行测试确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/routing/ -run "TestMakeKey|TestMakeSessionID|TestGetSessionID|TestLoad_" 2>&1 | head -20
 ```
 Expected: FAIL（`undefined: SessionMapScope` 等编译错误）。
 
-- [ ] **Step 2.3: 实现 session_map.go**
+- [x] **Step 2.3: 实现 session_map.go**
 
 ```go
 package routing
@@ -564,14 +564,14 @@ func GetGlobalConfigForScope() *config.Config {
 }
 ```
 
-- [ ] **Step 2.4: 运行测试确认通过**
+- [x] **Step 2.4: 运行测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/routing/ -run "TestMakeKey|TestMakeSessionID|TestGetSessionID|TestLoad_"
 ```
 Expected: PASS（7 个用例）。
 
-- [ ] **Step 2.5: 补 LoadSessionMapScope 测试（含 config 注册路径）**
+- [x] **Step 2.5: 补 LoadSessionMapScope 测试（含 config 注册路径）**
 
 `session_map_test.go` 追加：
 
@@ -637,14 +637,14 @@ func ResetGlobalConfigForTest() {
 
 （测试文件头已含 config/hookscfg import，见 Step 2.1。）
 
-- [ ] **Step 2.6: 运行全部 routing 测试**
+- [x] **Step 2.6: 运行全部 routing 测试**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/routing/
 ```
 Expected: PASS（含既有 agent_client/route_binding 测试）。
 
-- [ ] **Step 2.7: 更新 routing/doc.go 文件目录**
+- [x] **Step 2.7: 更新 routing/doc.go 文件目录**
 
 文件目录段插入：
 ```
@@ -656,7 +656,7 @@ Expected: PASS（含既有 agent_client/route_binding 测试）。
 ```
 包概述补："SessionMap 将企业 IM 稳定身份映射为轮转 agent session_id（checkpoint 持久化，Python session_map.py）。"
 
-- [ ] **Step 2.8: Commit**
+- [x] **Step 2.8: Commit**
 
 ```bash
 git add -A
@@ -679,7 +679,7 @@ git commit -m "feat(routing): 11.7 SessionMap 会话映射组件
 
 **背景：** Python `jiuwenswarm/gateway/hooks/handler.py`（127 行）。4 个事件方法（SessionStart/UserPromptSubmit/SessionEnd/Notification），共同结构：`config.match(event, query)` → 逐项 setdefault timeout=10 → `executor.run_all`（失败 Warn 不传播）。SessionStart 有 activeSessions 去重；SessionEnd 先 discard。**同步执行**（保证 session 生命周期顺序），异步性由调用方 TriggerSessionStartHook 的 goroutine 提供。
 
-- [ ] **Step 3.1: 写失败测试（handler_test.go）**
+- [x] **Step 3.1: 写失败测试（handler_test.go）**
 
 ```go
 package hooks
@@ -870,14 +870,14 @@ func TestOnSessionStart_activeSessions去重(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3.2: 运行测试确认失败**
+- [x] **Step 3.2: 运行测试确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/hooks/ 2>&1 | head -10
 ```
 Expected: FAIL（包不存在 / undefined: GatewayHookHandler）。
 
-- [ ] **Step 3.3: 实现 handler.go 与 doc.go**
+- [x] **Step 3.3: 实现 handler.go 与 doc.go**
 
 `internal/swarm/gateway/hooks/handler.go`：
 
@@ -1065,14 +1065,14 @@ func recoverHookPanic(event string) {
 
 `doc.go` 内容已并入 handler.go 包注释（单文件包，按项目惯例 doc.go 独立）：创建 `internal/swarm/gateway/hooks/doc.go`，把上述包注释移入 doc.go，handler.go 只留 `package hooks` + import + 实现。
 
-- [ ] **Step 3.4: 运行测试确认通过**
+- [x] **Step 3.4: 运行测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/hooks/
 ```
 Expected: PASS（5 个用例：去重/移除/setdefault/match-query/DisableAllHooks）。
 
-- [ ] **Step 3.5: Commit**
+- [x] **Step 3.5: Commit**
 
 ```bash
 git add -A
@@ -1093,7 +1093,7 @@ git commit -m "feat(gateway/hooks): 11.13 GatewayHookHandler 四事件网关钩�
 - Modify: `internal/swarm/gateway/message_handler/message_handler.go`（新增字段 + 构造 + TriggerSessionStartHook）
 - Modify: `internal/swarm/gateway/message_handler/channel_state.go`（新增 extractIdentityTuple/channelIDMatchesSessionMapTypes + sessionMapChannelTypes）
 
-- [ ] **Step 4.1: 写失败测试（message_handler_test.go 追加）**
+- [x] **Step 4.1: 写失败测试（message_handler_test.go 追加）**
 
 ```go
 // TestNewMessageHandler_sessionMap与HookHandler装配 测试构造注入
@@ -1163,14 +1163,14 @@ func TestChannelIDMatchesSessionMapTypes(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4.2: 运行确认失败**
+- [x] **Step 4.2: 运行确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/message_handler/ -run "TestNewMessageHandler_sessionMap|TestExtractIdentityTuple|TestChannelIDMatchesSessionMapTypes" 2>&1 | head -8
 ```
 Expected: FAIL（undefined: extractIdentityTuple 等）。
 
-- [ ] **Step 4.3: 实现 channel_state.go 辅助函数**
+- [x] **Step 4.3: 实现 channel_state.go 辅助函数**
 
 `channel_state.go` 修改（非导出函数区追加；init() 的受控渠道集合后追加 sessionMap 集合）：
 
@@ -1221,7 +1221,7 @@ func channelIDMatchesSessionMapTypes(channelID string) bool {
 }
 ```
 
-- [ ] **Step 4.4: 实现 message_handler.go 字段与构造**
+- [x] **Step 4.4: 实现 message_handler.go 字段与构造**
 
 字段区追加（`updateChannelInConfig` 字段后）：
 ```go
@@ -1297,7 +1297,7 @@ func (mh *MessageHandler) TriggerSessionStartHook(sessionID, source string) {
 
 message_handler.go import 需补 `hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"`（若未引入）与 `"context"`（TriggerSessionStartHook 用）。
 
-- [ ] **Step 4.5: 运行测试确认通过**
+- [x] **Step 4.5: 运行测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/message_handler/ -run "TestNewMessageHandler|TestExtractIdentityTuple|TestChannelIDMatchesSessionMapTypes"
@@ -1312,7 +1312,7 @@ Expected: PASS。注意：测试进程未调 RegisterConfig 时 GetGlobalConfigF
 
 （构造装配完整路径在 Task 6 的 NewGatewayServer 测试中覆盖 RegisterConfig 后非 nil。）
 
-- [ ] **Step 4.6: Commit**
+- [x] **Step 4.6: Commit**
 
 ```bash
 git add -A
@@ -1334,7 +1334,7 @@ git commit -m "feat(message_handler): 11.7+11.13 字段装配与身份提取
 
 **⚠️ 陷阱（spec §6.3）**：ApplyChannelState 的 SessionMap 分支是**无条件覆盖** `state.SessionID` + `msg.SessionID`（Python L1156-1157）；非 SessionMap 分支才是 `elif`（state 有值才写 msg）。
 
-- [ ] **Step 5.1: 写失败测试（channel_state_test.go 追加）**
+- [x] **Step 5.1: 写失败测试（channel_state_test.go 追加）**
 
 ```go
 // TestApplyChannelState_sessionMap分支 企业通道身份齐备走 SessionMap
@@ -1438,14 +1438,14 @@ func NewSessionMapAtForTest(storePath string, scope SessionMapScope) *SessionMap
 
 （`newSessionMapAt` 为 Step 2.1 测试文件里定义的私有构造——**移到 session_map.go 非导出区**，测试文件与实现文件同包共用。）
 
-- [ ] **Step 5.2: 运行确认失败**
+- [x] **Step 5.2: 运行确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/message_handler/ -run "TestApplyChannelState_sessionMap|TestGetOrCreateChannelState_首次" 2>&1 | head -8
 ```
 Expected: FAIL（NewSessionMapAtForTest undefined + 逻辑未实现）。
 
-- [ ] **Step 5.3: 实现回填点 ①②**
+- [x] **Step 5.3: 实现回填点 ①②**
 
 `channel_state.go` `GetOrCreateChannelState`（L126-151）修改——TODO 行删除，创建默认 state 后追加：
 
@@ -1509,14 +1509,14 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 }
 ```
 
-- [ ] **Step 5.4: 运行测试确认通过**
+- [x] **Step 5.4: 运行测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/message_handler/ -run "TestApplyChannelState|TestGetOrCreateChannelState"
 ```
 Expected: PASS（含既有受控渠道/setdefault 用例不回归）。
 
-- [ ] **Step 5.5: Commit**
+- [x] **Step 5.5: Commit**
 
 ```bash
 git add -A
@@ -1537,7 +1537,7 @@ git commit -m "feat(message_handler): 回填 11.7 集成点①②（GetOrCreateC
 
 **背景（D5）**：Python 把"改状态"写在 `_handle_channel_control` 函数体（L652-667），收尾甩异步；Go 现在是一锅端在 `newSessionCancelAndNotice`。重构为 Python 结构。
 
-- [ ] **Step 6.1: 写失败测试（slash_cmd_test.go 追加）**
+- [x] **Step 6.1: 写失败测试（slash_cmd_test.go 追加）**
 
 ```go
 // TestHandleChannelControl_newSession企业通道SessionMap轮转
@@ -1585,14 +1585,14 @@ func TestHandleChannelControl_newSession非企业通道(t *testing.T) {
 
 既有测试 `TestNewSessionCancelAndNotice`（slash_cmd_test.go:159-177）**签名适配**：`newSessionCancelAndNotice(msg, parsed)` → `newSessionCancelAndNotice(msg, oldSID, newSID)`。
 
-- [ ] **Step 6.2: 运行确认失败**
+- [x] **Step 6.2: 运行确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/message_handler/ -run "TestHandleChannelControl_newSession" 2>&1 | head -8
 ```
 Expected: FAIL（企业通道用例：sid 未含 `::`；现逻辑一律 GenerateChannelSessionID）。
 
-- [ ] **Step 6.3: 重构 handleChannelControl + newSessionCancelAndNotice**
+- [x] **Step 6.3: 重构 handleChannelControl + newSessionCancelAndNotice**
 
 `slash_cmd.go`：`handleChannelControl` 的 switch 前追加 state 获取（对齐 Python L652），NewSessionOK 分支展开（对齐 L654-680）：
 
@@ -1640,14 +1640,14 @@ func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, oldSID,
 
 注意：`channelType` 变量在 switch 前已由 `mh.resolveControlChannelType(msg)` 赋值（L56 现有代码），NewSessionOK 分支直接复用。`TODO(#11.7+#11.13)` 行删除。
 
-- [ ] **Step 6.4: 运行测试确认通过（含签名适配的既有用例）**
+- [x] **Step 6.4: 运行测试确认通过（含签名适配的既有用例）**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/message_handler/ -run "TestHandleChannelControl|TestNewSessionCancelAndNotice"
 ```
 Expected: PASS。
 
-- [ ] **Step 6.5: Commit**
+- [x] **Step 6.5: Commit**
 
 ```bash
 git add -A
@@ -1667,7 +1667,7 @@ git commit -m "feat(message_handler): 回填 11.7+11.13 集成点③（handleCha
 - Modify: `internal/swarm/gateway/message_handler/forward_loop.go:97-99`
 - Modify: `internal/swarm/gateway/message_handler/forward_loop_test.go`（追加用例）
 
-- [ ] **Step 7.1: 写失败测试（forward_loop_test.go 追加）**
+- [x] **Step 7.1: 写失败测试（forward_loop_test.go 追加）**
 
 ```go
 // TestForwardLoop_步骤3UserPromptSubmitHook 触发 UserPromptSubmit（nil handler 跳过不 panic）
@@ -1715,14 +1715,14 @@ func mustLoadConfigBase(t *testing.T, cfg *config.Config) map[string]any {
 }
 ```
 
-- [ ] **Step 7.2: 运行确认失败**
+- [x] **Step 7.2: 运行确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/message_handler/ -run "TestForwardLoop_步骤3" 2>&1 | head -6
 ```
 Expected: FAIL（`forwardLoopStep3UserPromptSubmit` undefined）。
 
-- [ ] **Step 7.3: 实现（forward_loop.go）**
+- [x] **Step 7.3: 实现（forward_loop.go）**
 
 步骤3 TODO 块替换为：
 
@@ -1770,14 +1770,14 @@ func (mh *MessageHandler) forwardLoopStep3UserPromptSubmit(ctx context.Context, 
 
 （forward_loop.go 需已有 `encoding/json` 与 `logger` import——按现有文件头核对，缺则补。）
 
-- [ ] **Step 7.4: 运行测试确认通过**
+- [x] **Step 7.4: 运行测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/message_handler/ -run "TestForwardLoop_步骤3"
 ```
 Expected: PASS。
 
-- [ ] **Step 7.5: Commit**
+- [x] **Step 7.5: Commit**
 
 ```bash
 git add -A
@@ -1795,7 +1795,7 @@ git commit -m "feat(message_handler): 回填 11.13 集成点④（forwardLoop �
 - Modify: `internal/swarm/gateway/app_gateway.go:71-84`
 - Modify: `internal/swarm/gateway/app_gateway_test.go`（追加用例）
 
-- [ ] **Step 8.1: 写失败测试**
+- [x] **Step 8.1: 写失败测试**
 
 ```go
 // TestNewGatewayServer_装配全局Config RegisterConfig 幂等装配
@@ -1837,14 +1837,14 @@ func TestNewGatewayServer_装配全局Config(t *testing.T) {
 
 ⚠️ app_gateway_test.go 需补 import：`hookscfg`、`routing`（若无）、`transport`（既有）。
 
-- [ ] **Step 8.2: 运行确认失败**
+- [x] **Step 8.2: 运行确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/ -run "TestNewGatewayServer_装配全局Config" 2>&1 | head -6
 ```
 Expected: FAIL（GetGlobalConfigForScope()==nil）。
 
-- [ ] **Step 8.3: 实现（app_gateway.go）**
+- [x] **Step 8.3: 实现（app_gateway.go）**
 
 `NewGatewayServer` 步骤1 之前插入：
 
@@ -1857,14 +1857,14 @@ Expected: FAIL（GetGlobalConfigForScope()==nil）。
 
 import 增加：`hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"`。
 
-- [ ] **Step 8.4: 运行测试确认通过**
+- [x] **Step 8.4: 运行测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -v -tags "sqlite_fts5 test" ./internal/swarm/gateway/ -run "TestNewGatewayServer"
 ```
 Expected: PASS（含既有用例）。
 
-- [ ] **Step 8.5: Commit**
+- [x] **Step 8.5: Commit**
 
 ```bash
 git add -A
@@ -1882,7 +1882,7 @@ git commit -m "feat(gateway): NewGatewayServer 装配全局 Config（D4）
 - Modify: `internal/swarm/gateway/message_handler/doc.go`（文件目录与概述更新）
 - Modify: `IMPLEMENTATION_PLAN.md`（11.7/11.13/10.3.23.3 三行回填）
 
-- [ ] **Step 9.1: 更新 message_handler/doc.go**
+- [x] **Step 9.1: 更新 message_handler/doc.go**
 
 文件目录段 `channel_state.go` 条目补 SessionMap 说明，`slash_cmd.go` 条目补 Python 结构说明：
 
@@ -1904,7 +1904,7 @@ git commit -m "feat(gateway): NewGatewayServer 装配全局 Config（D4）
 //	└── command_parser/     # Slash 命令解析器子包
 ```
 
-- [ ] **Step 9.2: 回填 IMPLEMENTATION_PLAN.md**
+- [x] **Step 9.2: 回填 IMPLEMENTATION_PLAN.md**
 
 11.7 行（L736）：
 ```markdown
@@ -1921,7 +1921,7 @@ git commit -m "feat(gateway): NewGatewayServer 装配全局 Config（D4）
 `executor.py`（11.13 起对应物迁至 internal/common/hooks/executor.go 供 Gateway/AgentServer 共享）
 ```
 
-- [ ] **Step 9.3: 全仓测试 + 覆盖率**
+- [x] **Step 9.3: 全仓测试 + 覆盖率**
 
 ```bash
 pgrep -f 'go (build|test)' || true
@@ -1930,7 +1930,7 @@ go tool cover -func=coverage.out | grep -E "session_map|handler\.go|executor\.go
 ```
 Expected: 新增文件覆盖率 ≥85%；受影响包全部 PASS。
 
-- [ ] **Step 9.4: Commit**
+- [x] **Step 9.4: Commit**
 
 ```bash
 git add -A
@@ -1941,9 +1941,9 @@ git commit -m "docs(plan): 11.7+11.13 实现完成回填（IMPLEMENTATION_PLAN +
 
 ## 验收清单（对齐 spec）
 
-- [ ] gateway 域 0 个 import server（`grep -rn "uapclaw-go/internal/swarm/server" internal/swarm/gateway --include="*.go" | grep -v _test | wc -l` == 0）
-- [ ] 代码内 TODO(#11.7)/TODO(#11.7+#11.13)/TODO(#11.13) 全部清除（grep 为空）
-- [ ] TODO(#11.12) 等其它章节回填标记未受影响
-- [ ] session_map.json 语义：rotate=false 幂等 / rotate=true 新值 / 跨实例恢复 / 损坏降级
-- [ ] GatewayHookHandler：4 事件 query 差异 / setdefault / 去重 / DisableAllHooks 短路
-- [ ] 全量测试绿 + 新增包覆盖率 ≥85%
+- [x] gateway 域 0 个 import server（`grep -rn "uapclaw-go/internal/swarm/server" internal/swarm/gateway --include="*.go" | grep -v _test | wc -l` == 0）
+- [x] 代码内 TODO(#11.7)/TODO(#11.7+#11.13)/TODO(#11.13) 全部清除（grep 为空）
+- [x] TODO(#11.12) 等其它章节回填标记未受影响
+- [x] session_map.json 语义：rotate=false 幂等 / rotate=true 新值 / 跨实例恢复 / 损坏降级
+- [x] GatewayHookHandler：4 事件 query 差异 / setdefault / 去重 / DisableAllHooks 短路
+- [x] 全量测试绿 + 新增包覆盖率 ≥85%
