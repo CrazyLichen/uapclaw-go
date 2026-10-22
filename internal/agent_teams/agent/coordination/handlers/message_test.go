@@ -98,9 +98,10 @@ func newMessageHandlerFixture(t *testing.T, humanAgentNames []string) (*MessageH
 type handlerTestInfra struct {
 	msgMgr  *tools.TeamMessageManager
 	backend *tools.TeamBackend
+	taskMgr *tools.TeamTaskManager
 }
 
-func (i *handlerTestInfra) TaskManager() *tools.TeamTaskManager       { return nil }
+func (i *handlerTestInfra) TaskManager() *tools.TeamTaskManager       { return i.taskMgr }
 func (i *handlerTestInfra) MessageManager() *tools.TeamMessageManager { return i.msgMgr }
 func (i *handlerTestInfra) TeamBackend() *tools.TeamBackend           { return i.backend }
 func (i *handlerTestInfra) Messager() messager.Messager               { return nil }

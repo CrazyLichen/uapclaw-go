@@ -8,6 +8,8 @@ import (
 	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
 
 // ──────────────────────────── AgentLifecycleHandler 测试 ────────────────────────────
@@ -201,12 +203,21 @@ func TestTaskBoardHandler_GetCallbacks_事件映射(t *testing.T) {
 
 func TestTaskBoardHandler_OnTaskPlanDecision_有ToolCallID跳过(t *testing.T) {
 	host := &fakeHost{}
-	h := NewTaskBoardHandler(host, &fakeBP{role: schema.TeamRoleTeammate, memberName: "w1"}, nil, &fakePollCtrl{})
+	// S-附录4: infra 提供 TaskManager 使前置守卫通过，
+	// 真正验证 tool_call_id 分支（原 nil infra 版本被守卫短路退化成恒真）
+	db := database.NewInMemoryTeamDatabase()
+	if err := db.Initialize(context.Background()); err != nil {
+		t.Fatalf("db init 失败: %v", err)
+	}
+	taskMgr := tools.NewTeamTaskManager(db, "t1", "w1", nil, nil, t.TempDir(), "plan-1", "leader")
+	infra := &handlerTestInfra{taskMgr: taskMgr}
+	h := NewTaskBoardHandler(host, &fakeBP{role: schema.TeamRoleTeammate, memberName: "w1"}, infra, &fakePollCtrl{})
 
 	h.OnTaskPlanDecision(context.Background(), types.CoordinationEvent{
 		Transport: &events.EventMessage{
 			EventType: events.TeamEventTaskPlanResponse,
 			Payload: map[string]any{
+				"member_name":  "w1",
 				"tool_call_id": "tc-123",
 				"approved":     true,
 			},
@@ -215,6 +226,65 @@ func TestTaskBoardHandler_OnTaskPlanDecision_有ToolCallID跳过(t *testing.T) {
 
 	if host.deliverCalled {
 		t.Error("有 tool_call_id 时应跳过额外 deliver_input")
+	}
+}
+
+// TestTaskBoardHandler_OnTaskPlanDecision_批准投递模板 S-附录4: 给自己的审批
+// （member_name 匹配 + 无 tool_call_id）→ 投递 task_plan_approved_to_self
+func TestTaskBoardHandler_OnTaskPlanDecision_批准投递模板(t *testing.T) {
+	host := &fakeHost{}
+	db := database.NewInMemoryTeamDatabase()
+	if err := db.Initialize(context.Background()); err != nil {
+		t.Fatalf("db init 失败: %v", err)
+	}
+	taskMgr := tools.NewTeamTaskManager(db, "t1", "w1", nil, nil, t.TempDir(), "plan-1", "leader")
+	infra := &handlerTestInfra{taskMgr: taskMgr}
+	h := NewTaskBoardHandler(host, &fakeBP{role: schema.TeamRoleTeammate, memberName: "w1"}, infra, &fakePollCtrl{})
+
+	h.OnTaskPlanDecision(context.Background(), types.CoordinationEvent{
+		Transport: &events.EventMessage{
+			EventType: events.TeamEventTaskPlanResponse,
+			Payload: map[string]any{
+				"member_name": "w1",
+				"task_id":     "task-9",
+				"approved":    true,
+				"feedback":    "good",
+			},
+		},
+	})
+
+	if !host.deliverCalled {
+		t.Fatal("给自己的审批（无 tool_call_id）应投递模板内容")
+	}
+}
+
+// TestTaskBoardHandler_OnTaskPlanDecision_他人审批转发 S-附录4:
+// member_name 不匹配 → 转发 OnTaskBoardEvent（恢复轮询，不走计划模板路径）
+func TestTaskBoardHandler_OnTaskPlanDecision_他人审批转发(t *testing.T) {
+	host := &fakeHost{}
+	db := database.NewInMemoryTeamDatabase()
+	if err := db.Initialize(context.Background()); err != nil {
+		t.Fatalf("db init 失败: %v", err)
+	}
+	taskMgr := tools.NewTeamTaskManager(db, "t1", "w2", nil, nil, t.TempDir(), "plan-1", "leader")
+	infra := &handlerTestInfra{taskMgr: taskMgr}
+	pollCtrl := &fakePollCtrl{}
+	h := NewTaskBoardHandler(host, &fakeBP{role: schema.TeamRoleTeammate, memberName: "w1"}, infra, pollCtrl)
+
+	h.OnTaskPlanDecision(context.Background(), types.CoordinationEvent{
+		Transport: &events.EventMessage{
+			EventType: events.TeamEventTaskPlanResponse,
+			Payload: map[string]any{
+				"member_name": "other-member",
+				"task_id":     "task-1",
+				"approved":    true,
+			},
+		},
+	})
+
+	// 转发路径会走 OnTaskBoardEvent → resume_polls
+	if !pollCtrl.resumed {
+		t.Error("他人审批应转发 OnTaskBoardEvent 并恢复轮询")
 	}
 }
 
