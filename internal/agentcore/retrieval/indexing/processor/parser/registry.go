@@ -54,9 +54,11 @@ func RegisterParser(fileExtensions []string, factory func() Parser) {
 		parserRegistry[normalizedExt] = factory
 		// 对齐 Python: logger.info(f"Registered parser {parser_class.__name__} for {normalized_ext}")
 		// Python 取类名（类对象非实例）；Go 工厂闭包无类型名可取，
-		// 实例化一次取名是最低成本近似（注册表内容零偏差，归档为已知偏差）
+		// 实例化一次取名是最低成本近似（注册表内容零偏差，归档为已知偏差）。
+		// 经 parserTypeName 转发获得 nil 防御（工厂吞错返回 nil 时
+		// 打 "unknown" 而非 "<nil>"）
 		logger.Info(logComponent).
-			Str("parser_name", fmt.Sprintf("%T", factory())).
+			Str("parser_name", parserTypeName(factory())).
 			Str("ext", normalizedExt).
 			Msg("registered parser")
 	}
