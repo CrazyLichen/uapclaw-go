@@ -94,9 +94,9 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				// 步骤2: 注入渠道状态（session_id / mode）
 				mh.ApplyChannelState(msg)
 
-				// TODO(#11.13): 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
-				// Python: 网关钩子处理器检测
-				// Python: await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
+				// 步骤3: Gateway hook: UserPromptSubmit（11.13 回填）
+				// Python: L2188-2197（失败仅 Debug 日志，不阻塞转发）
+				mh.forwardLoopStep3UserPromptSubmit(ctx, msg)
 
 				// 步骤4: CHAT_ANSWER 分支
 				if msg.ReqMethod == schema.ReqMethodChatAnswer {
@@ -132,6 +132,38 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 			}()
 		}
 	}
+}
+
+// forwardLoopStep3UserPromptSubmit 步骤3：触发 UserPromptSubmit hooks。
+//
+// Python: _forward_loop 内 L2188-2197：
+// params 解析非 map 时空 map；prompt 取 params["query"] 或 params["content"]；
+// handler 为 nil 跳过；异常仅 Debug 日志。
+func (mh *MessageHandler) forwardLoopStep3UserPromptSubmit(ctx context.Context, msg *schema.Message) {
+	if mh.gatewayHookHandler == nil {
+		return
+	}
+	var paramsMap map[string]any
+	if len(msg.Params) > 0 {
+		if err := json.Unmarshal(msg.Params, &paramsMap); err != nil {
+			paramsMap = map[string]any{}
+		}
+	}
+	promptText := ""
+	if v, ok := paramsMap["query"].(string); ok && v != "" {
+		promptText = v
+	} else if v, ok := paramsMap["content"].(string); ok {
+		promptText = v
+	}
+	// Python: str(params.get("query") or params.get("content") or "")
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Debug(logComponent).
+				Any("panic", r).
+				Msg("Gateway hook UserPromptSubmit failed")
+		}
+	}()
+	mh.gatewayHookHandler.OnUserPromptSubmit(ctx, msg.SessionID, promptText)
 }
 
 // handleChatSend 处理 chat.send 请求的 stream/non-stream 分发。

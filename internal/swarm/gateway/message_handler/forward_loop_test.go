@@ -3,12 +3,17 @@ package message_handler
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
+	hooksgw "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -39,6 +44,49 @@ func TestForwardLoop_消息处理(t *testing.T) {
 
 	// 给 forwardLoop 一点时间处理
 	time.Sleep(50 * time.Millisecond)
+}
+
+// mustLoadConfigBase 测试辅助：加载 config 原始 map
+func mustLoadConfigBase(t *testing.T, cfg *config.Config) map[string]any {
+	t.Helper()
+	base, err := cfg.Load()
+	if err != nil {
+		t.Fatalf("cfg.Load: %v", err)
+	}
+	return base
+}
+
+// TestForwardLoop_步骤3UserPromptSubmitHook 触发 UserPromptSubmit（nil handler 跳过不 panic）
+func TestForwardLoop_步骤3UserPromptSubmitHook(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+
+	// nil handler（未注册全局 config 的默认构造路径）不 panic 即可
+	msg := schema.NewReqMessage("feishu_test", "sess-1",
+		schema.ReqMethodChatSend, json.RawMessage(`{"content":"hi"}`))
+
+	mh.ApplyChannelState(msg)
+	assert.NotPanics(t, func() {
+		mh.forwardLoopStep3UserPromptSubmit(context.Background(), msg)
+	})
+
+	// 非 nil handler：配置一个 UserPromptSubmit hook（command echo）验证执行
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	hookYAML := "hooks:\n  events:\n    UserPromptSubmit:\n      - matcher: \"*\"\n        hooks:\n          - type: command\n            command: echo ok\n"
+	_ = os.WriteFile(cfgFile, []byte(hookYAML), 0o644)
+	cfg, err := config.New(cfgFile)
+	if err != nil {
+		t.Fatalf("config.New: %v", err)
+	}
+	hookscfg.ResetGlobalConfigForTest()
+	hookscfg.RegisterConfig(cfg)
+	defer hookscfg.ResetGlobalConfigForTest()
+
+	hooksCfg := hookscfg.LoadHooksConfig(mustLoadConfigBase(t, cfg))
+	mh.gatewayHookHandler = hooksgw.NewGatewayHookHandler(hooksCfg)
+	assert.NotPanics(t, func() {
+		mh.forwardLoopStep3UserPromptSubmit(context.Background(), msg)
+	})
 }
 
 // TestHandleChatSend_ChatSend 测试 handleChatSend 处理 chat.send
