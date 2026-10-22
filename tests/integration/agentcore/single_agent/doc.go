@@ -18,5 +18,6 @@
 //	    └── skill_manager_e2e_test.go # SkillManager E2E
 //
 // 对应 Python 代码：tests/system_tests/rail/test_model_backup_rail.py
-//                   tests/system_tests/single_agent/skills/
+//
+//	tests/system_tests/single_agent/skills/
 package single_agent

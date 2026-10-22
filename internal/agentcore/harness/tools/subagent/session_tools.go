@@ -350,7 +350,15 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 		}
 
 		// 步骤 4：更新 toolkit 状态
-		toolkit.MarkCanceled(input.TaskID)
+		// 终态守卫：scheduler 对终态任务（COMPLETED/FAILED/CANCELED）幂等返回 true
+		// （对齐 Python cancel_task 终态幂等），但 toolkit 不应把已完成/已失败
+		// 覆盖为 canceled——Python 场景6 依赖第二轮 ClearState 保证此语义，
+		// Go 的 kept-alive 分支（goroutine 异步清理竞态）会保留 controller 使
+		// 任务仍在 taskManager，故此处显式守卫，等价对齐可观测行为：
+		// 取消已完成任务后状态保持 completed。
+		if task.Status != "completed" && task.Status != "error" {
+			toolkit.MarkCanceled(input.TaskID)
+		}
 
 		// 步骤 5：日志
 		logger.Info(logComponent).
@@ -364,11 +372,16 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 		} else {
 			msg = fmt.Sprintf("Task %s cancel success", input.TaskID)
 		}
+		// status 反映 toolkit 真实状态（终态守卫后 completed/error 保持原状态）
+		finalStatus := "canceled"
+		if row := toolkit.Get(input.TaskID); row != nil {
+			finalStatus = row.Status
+		}
 		return map[string]any{
 			"success": true,
 			"data": map[string]any{
 				"task_id": input.TaskID,
-				"status":  "canceled",
+				"status":  finalStatus,
 				"message": msg,
 			},
 		}, nil

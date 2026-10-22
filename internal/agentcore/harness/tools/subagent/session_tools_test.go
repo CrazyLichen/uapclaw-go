@@ -497,6 +497,99 @@ func TestSessionsCancelTool_Invoke_Scheduler为nil(t *testing.T) {
 	}
 }
 
+// TestSessionsCancelTool_Invoke_终态守卫保持completed 任务已完成时取消，
+// toolkit 状态应保持 completed（对齐 Python 场景6 可观测行为）。
+// 背景：TaskScheduler.CancelTask 对终态任务幂等返回 true，Python 依赖
+// 第二轮 ClearState 保证状态不被覆盖；Go 的 kept-alive 分支（goroutine
+// 异步清理竞态）会保留 controller 使任务仍在 taskManager，若工具层
+// 无条件 MarkCanceled 会把 completed 覆盖为 canceled（CI 慢机器复现）。
+func TestSessionsCancelTool_Invoke_终态守卫保持completed(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	tm := modules.NewTaskManager(cfg)
+	eq := modules.NewEventQueue(cfg)
+
+	// 构造 COMPLETED 任务
+	task := cschema.NewTask("test-session", "SESSION_SPAWN")
+	if err := tm.AddTask(context.Background(), task); err != nil {
+		t.Fatalf("AddTask 失败: %v", err)
+	}
+	if err := tm.UpdateTaskStatus(context.Background(), task.TaskID, cschema.TaskCompleted); err != nil {
+		t.Fatalf("UpdateTaskStatus 失败: %v", err)
+	}
+
+	sched := modules.NewTaskScheduler(cfg, tm, nil, nil, eq, nil)
+	ctrl := &fakeController{taskManager: tm, taskScheduler: sched}
+	provider := &fakeDeepAgentProvider{loopController: ctrl}
+
+	// toolkit 中任务已标记 completed（对齐场景6：spawn 完成后 MarkCompleted）
+	tk := NewSessionToolkit()
+	tk.UpsertRunning(task.TaskID, "sub-1", "fast complete")
+	tk.MarkCompleted(task.TaskID, "completed quickly")
+
+	tl := NewSessionsCancelTool(provider, tk, "cn", "")
+	result, err := tl.Invoke(context.Background(), map[string]any{"task_id": task.TaskID}, nil)
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+
+	// scheduler 幂等取消返回 success=true
+	if result["success"] != true {
+		t.Fatalf("期望 success=true（终态幂等），实际 %v", result["success"])
+	}
+
+	// 关键断言：toolkit 状态保持 completed
+	row := tk.Get(task.TaskID)
+	if row == nil {
+		t.Fatal("toolkit 中应找到任务")
+	}
+	if row.Status != "completed" {
+		t.Errorf("终态守卫生效失败：期望 completed，实际 %s", row.Status)
+	}
+
+	// 返回的 data.status 应反映真实状态而非硬编码 canceled
+	data, _ := result["data"].(map[string]any)
+	if data["status"] != "completed" {
+		t.Errorf("期望 data.status=completed，实际 %v", data["status"])
+	}
+}
+
+// TestSessionsCancelTool_Invoke_终态守卫保持error 任务已失败时取消，toolkit 状态保持 error。
+func TestSessionsCancelTool_Invoke_终态守卫保持error(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	tm := modules.NewTaskManager(cfg)
+	eq := modules.NewEventQueue(cfg)
+
+	task := cschema.NewTask("test-session", "SESSION_SPAWN")
+	if err := tm.AddTask(context.Background(), task); err != nil {
+		t.Fatalf("AddTask 失败: %v", err)
+	}
+	if err := tm.UpdateTaskStatus(context.Background(), task.TaskID, cschema.TaskFailed); err != nil {
+		t.Fatalf("UpdateTaskStatus 失败: %v", err)
+	}
+
+	sched := modules.NewTaskScheduler(cfg, tm, nil, nil, eq, nil)
+	ctrl := &fakeController{taskManager: tm, taskScheduler: sched}
+	provider := &fakeDeepAgentProvider{loopController: ctrl}
+
+	tk := NewSessionToolkit()
+	tk.UpsertRunning(task.TaskID, "sub-1", "will fail")
+	tk.MarkFailed(task.TaskID, "boom")
+
+	tl := NewSessionsCancelTool(provider, tk, "cn", "")
+	result, err := tl.Invoke(context.Background(), map[string]any{"task_id": task.TaskID}, nil)
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	if result["success"] != true {
+		t.Fatalf("期望 success=true（终态幂等），实际 %v", result["success"])
+	}
+
+	row := tk.Get(task.TaskID)
+	if row.Status != "error" {
+		t.Errorf("终态守卫生效失败：期望 error，实际 %s", row.Status)
+	}
+}
+
 // TestJoinLines 多行连接（使用 strings.Join 替代已删除的 joinLines）
 func TestJoinLines(t *testing.T) {
 	result := strings.Join([]string{"a", "b", "c"}, "\n")
