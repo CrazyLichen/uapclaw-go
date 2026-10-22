@@ -9,12 +9,17 @@
 //   - 具体解析器：嵌入 BaseParser 并覆写 ParseContent（对齐 Python 仅覆写 _parse），
 //     构造时 NewBaseParser(self) 注入自身
 //   - 组合解析器（13.11 AutoParser）：嵌入 BaseParser 并覆写 Parse 整体路由
+//   - 文件解析器注册：具体解析器文件 init() 调 RegisterParser 按扩展名注册工厂
+//     （对齐 Python @register_parser 装饰器 import 时执行；重复扩展名 first-wins 跳过）
 //
 // 文件目录：
 //
 //	parser/
 //	├── doc.go           # 包文档
-//	└── base.go          # Parser 接口 + ParseOptions + BaseParser 模板适配器（13.10）
+//	├── base.go          # Parser 接口 + ParseOptions + BaseParser 模板适配器（13.10）
+//	├── registry.go      # parserRegistry + RegisterParser 注册骨架（13.16 带出自 auto_file_parser.py）
+//	├── json_parser.go   # JSONParser：JSON 格式化解析（13.16）
+//	└── txt_md_parser.go # TxtMdParser：文本/Markdown 编码统计检测解析（13.16）
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/processor/parser/
 package parser
