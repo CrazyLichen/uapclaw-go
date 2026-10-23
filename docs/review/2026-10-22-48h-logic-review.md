@@ -339,6 +339,19 @@ Python `tests/system_tests/harness/test_deep_agent_subagent.py:139-349` 的 `Tes
 9. **deep_agent 工厂链**：CreateSubagent 配置合并（model/card/prompt/tools/mcps/rails/max_iterations/workspace/skills/backend/sys_operation/language/prompt_mode/subagents=None/enable_async=False/add_general=False/enable_plan_mode/restrict_to_work_dir）与 Python L938-982 逐项对齐；browser/code/research 工厂分派一致；mobile_gui_agent 占位真实（⤵️ 9.31 与计划表一致）。
 10. **占位真实性核查**：`load_harness_config`/`unload_harness_config`（⤵️ 9.3）、mobile_gui_agent（⤵️ 9.31）确实未实现，与 IMPLEMENTATION_PLAN 回填标记一致，无"假完成"。
 
+## 复核状态（2026-10-23）
+
+上一轮已修复 4 项：
+
+- **S-01 ✅**：transport_proxy.go 重写为 recvCancel context 收口方案（`Recv()` 创建 cancel、`Close()` 取消、pump `defer close(recvCh)` 统一收口）——比本文原建议的 done channel 方案更完整，同时覆盖了 pump 阻塞在 `stream.Recv()` 的场景
+- **M-01 ✅**：`ListAll() []SessionTaskRow` 值切片深拷贝 + `Get(taskID) (SessionTaskRow, bool)`，调用方值语义读法不变
+- **M-03 ✅**：loader.go 全声明 SetExtensionDir 失败 → `pc.Kill()` + 返回 error
+- **T-04 ✅（可接受，维持现状）**：显式覆盖 + registry 内部双写并存，注释已说明为"最后加载者胜"语义强调，与文档原结论"幂等无害，可接受"一致
+
+尚未修复 10 项 + 部分 1 项：M-02、M-04、M-05、M-06、T-01、T-03、T-05、T-06、T-07、T-08；T-02 部分（CancelMock 6 场景与 real_llm 场景 1 简化版已有，Mock 级场景 1/2/4 集成测试未补）。
+
+---
+
 ## 处置建议汇总
 
 | 级别 | 数量 | 编号 |
@@ -348,3 +361,23 @@ Python `tests/system_tests/harness/test_deep_agent_subagent.py:139-349` 的 `Tes
 | 提示 | 8 | T-01 ~ T-08 |
 
 优先级：S-01（宿主进程 panic 风险）> M-01（race detector 可检出的数据竞争）> M-03（进程泄漏）> M-02/M-04/M-05 > M-06 > T 系列。
+
+### 逐项修复状态（2026-10-23 复核）
+
+| 编号 | 级别 | 状态 | 复核证据 |
+|------|------|------|----------|
+| S-01 | 严重 | ✅ 已修复 | transport_proxy.go：recvCancel 收口方案落地，Close 不再直接 close(recvCh) |
+| M-01 | 一般 | ✅ 已修复 | session_tools.go:137-159：值拷贝返回 + 竞态注释 |
+| M-02 | 一般 | ❌ 未修复 | manager.go:103-119：ShutdownAllExtensions 仍逐条 Shutdown+Kill，无 client 指针去重 |
+| M-03 | 一般 | ✅ 已修复 | loader.go:260-263：`len(loaded)==0 && len(decls)>0` → Kill + 返回 error |
+| M-04 | 一般 | ❌ 未修复 | crypto_provider.go:38-45：Encrypt/Decrypt 仍 `context.Background()` 无超时 |
+| M-05 | 一般 | ❌ 未修复 | web_handlers.go isSensitiveKey：仍无 `strings.ToLower`，与 config_apply.go 不一致 |
+| M-06 | 一般 | ❌ 未修复 | subagent_rail.go:333：步骤 2 仍为"暂不实现"注释占位 |
+| T-01 | 提示 | ❌ 未修复 | task_loop/handler.go：5 处字节截断（638/645 行 500 字节、317/456 行 100 字节、extractErrorFromEvent 300 字节），无 rune 安全截断 |
+| T-02 | 提示 | ◐ 部分覆盖 | CancelMock 6 场景 + real_llm 场景 1 简化版已有；Mock 级场景 1/2/4 集成测试未补，auto-invoke/dedup 仅 unit 级覆盖 |
+| T-03 | 提示 | ❌ 未修复 | app_gateway.go:131：生产装配仍 `crypto.GetCryptoProvider()` 快照注入，与设计文档"生产不注入"相悖 |
+| T-04 | 提示 | ✅ 可接受 | 双写冗余维持现状（本文原结论"幂等无害，可接受"） |
+| T-05 | 提示 | ❌ 未修复 | manager.go:122：注释仍称"按非空 ID 判断"，代码无过滤 |
+| T-06 | 提示 | ❌ 未修复 | serve.go:257-263：GetMetadata 每次调用重复执行 impl.Register，无 sync.Once 缓存 |
+| T-07 | 提示 | ❌ 未修复 | serve.go:242：Priority 直接透传，无 0→100 默认值归一化 |
+| T-08 | 提示 | ❌ 未修复 | dispatch.go:119：`SessionID: &agentMsg.SessionID` 无条件取指针，空串序列化为 `""` 而非 null |
