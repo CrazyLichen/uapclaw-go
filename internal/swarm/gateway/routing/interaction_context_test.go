@@ -253,3 +253,59 @@ func TestUnmarshalJSON_null元数据(t *testing.T) {
 		t.Errorf("JSON null 应解为 nil map")
 	}
 }
+
+// TestFindGroupPending_直达加载 ID 拼接正确 + 不做 status/TTL 过滤（completed 也返回）
+func TestFindGroupPending_直达加载(t *testing.T) {
+	setupInteractionsEnv(t)
+
+	// completed 状态的文件（find_group_pending 不过滤）
+	pi := newTestPI("gpq_sess-9_ou-user9")
+	pi.Status = StatusCompleted
+	pi.CreatedAt = 1.0 // 远古时间（不过滤 TTL）
+	pi.Save()
+
+	got := FindGroupPending("sess-9", "ou-user9")
+	if got == nil {
+		t.Fatal("completed/远古时间也应返回（不过滤 status/TTL）")
+	}
+	if got.InteractionID != "gpq_sess-9_ou-user9" {
+		t.Errorf("ID 拼接应 gpq_{session}_{user}")
+	}
+
+	// 不存在 → nil
+	if got2 := FindGroupPending("sess-none", "ou-none"); got2 != nil {
+		t.Errorf("不存在应返回 nil")
+	}
+}
+
+// TestFindAllGroupPending pending+未过期收集、completed/过期排除
+func TestFindAllGroupPending(t *testing.T) {
+	setupInteractionsEnv(t)
+
+	// 应收集（CreatedAt 用当前时间——newTestPI 固定 1.7e9 已超 TTL 会误判过期）
+	p1 := newTestPI("gpq_s1_u1")
+	p1.CreatedAt = float64(time.Now().Unix()) - 10
+	p1.Save()
+	// completed → 排除
+	p2 := newTestPI("gpq_s2_u2")
+	p2.Status = StatusCompleted
+	p2.Save()
+	// 过期 → 排除
+	p3 := newTestPI("gpq_s3_u3")
+	p3.CreatedAt = float64(time.Now().Unix()) - DefaultTTL - 100
+	p3.Save()
+	// iact 前缀 → 不在 gpq_ glob 内，排除
+	p4 := newTestPI("iact_ch_abcd")
+	p4.Save()
+	// 坏 JSON → 跳过
+	dir := pathutil.AgentInteractionsDir()
+	_ = os.WriteFile(filepath.Join(dir, "gpq_bad.json"), []byte("{not json"), 0o644)
+
+	all := FindAllGroupPending()
+	if len(all) != 1 {
+		t.Fatalf("应只收集 1 个 pending 未过期 gpq, 实际 %d: %+v", len(all), all)
+	}
+	if all[0].InteractionID != "gpq_s1_u1" {
+		t.Errorf("应收集 gpq_s1_u1, 实际 %s", all[0].InteractionID)
+	}
+}

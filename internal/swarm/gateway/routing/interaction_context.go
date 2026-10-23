@@ -236,6 +236,34 @@ func LoadPendingInteraction(interactionID string) *PendingInteraction {
 	return pi
 }
 
+// FindGroupPending 查群聊追问（直达加载 gpq_{session}_{user}，不过滤 status/TTL）。
+//
+// Python: find_group_pending (L149-151)
+func FindGroupPending(sessionID, userID string) *PendingInteraction {
+	return LoadPendingInteraction(fmt.Sprintf("gpq_%s_%s", sessionID, userID))
+}
+
+// FindAllGroupPending 收集全部 pending 且未过期的群聊追问。
+//
+// Python: find_all_group_pending (L133-146)：gpq_* glob → 重建 dataclass →
+// status=="pending" 且未过期才收集；解析失败 debug 跳过。
+// 注：Python 全仓零消费方，对齐原则照实实现（spec §1）。
+func FindAllGroupPending() []*PendingInteraction {
+	var result []*PendingInteraction
+	dir := interactionsDir()
+	fps, _ := filepath.Glob(filepath.Join(dir, "gpq_*.json"))
+	for _, fp := range fps {
+		pi := parseInteractionFile(fp)
+		if pi == nil {
+			continue
+		}
+		if pi.Status == StatusPending && float64(time.Now().Unix())-pi.CreatedAt <= DefaultTTL {
+			result = append(result, pi)
+		}
+	}
+	return result
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // path 交互文件完整路径：{interactionsDir}/{interaction_id}.json
@@ -353,4 +381,29 @@ func unmarshalPendingInteraction(raw []byte) (*PendingInteraction, error) {
 		return nil, err
 	}
 	return &pi, nil
+}
+
+// parseInteractionFile 读文件并解析（失败 Debug 日志 + nil）。
+//
+// Python: find_pending/find_all_group_pending 内层 try 块的共享语义
+// （读文件 → json.loads → cls(**fields)；except → logger.debug + continue）。
+// 注意：与 load() 的 warning 级别不同——Python 扫描场景用 debug。
+func parseInteractionFile(fp string) *PendingInteraction {
+	raw, err := os.ReadFile(fp)
+	if err != nil {
+		logger.Debug(logComponent).
+			Str("file", fp).
+			Err(err).
+			Msg("PendingInteraction parse interaction file failed")
+		return nil
+	}
+	pi, err := unmarshalPendingInteraction(raw)
+	if err != nil {
+		logger.Debug(logComponent).
+			Str("file", fp).
+			Err(err).
+			Msg("PendingInteraction parse interaction file failed")
+		return nil
+	}
+	return pi
 }
