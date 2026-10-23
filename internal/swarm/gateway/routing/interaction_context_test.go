@@ -309,3 +309,104 @@ func TestFindAllGroupPending(t *testing.T) {
 		t.Errorf("应收集 gpq_s1_u1, 实际 %s", all[0].InteractionID)
 	}
 }
+
+// TestFindPending_五层过滤顺序 ①status ②TTL触发删除 ③principal ④target ⑤取最旧
+func TestFindPending_五层过滤顺序(t *testing.T) {
+	setupInteractionsEnv(t)
+
+	channelID := "feishu_enterprise:app1"
+	principal := "ou-principal"
+
+	// ① 非 pending → 跳过
+	a := newTestPI("iact_" + channelID + "_aaaa")
+	a.Status = StatusCompleted
+	a.PrincipalID = principal
+	a.Save()
+
+	// ② TTL 过期 → 触发 Remove + 跳过
+	b := newTestPI("iact_" + channelID + "_bbbb")
+	b.PrincipalID = principal
+	b.CreatedAt = float64(time.Now().Unix()) - DefaultTTL - 100
+	b.Save()
+
+	// ③ principal 不匹配 → 跳过
+	c := newTestPI("iact_" + channelID + "_cccc")
+	c.PrincipalID = "ou-other"
+	c.Save()
+
+	// ④ target 不匹配 → 跳过
+	d := newTestPI("iact_" + channelID + "_dddd")
+	d.PrincipalID = principal
+	d.TargetUserID = "ou-somebody-else"
+	d.Save()
+
+	// ⑤ 候选 1（较新）
+	e := newTestPI("iact_" + channelID + "_eeee")
+	e.PrincipalID = principal
+	e.TargetUserID = principal
+	e.CreatedAt = float64(time.Now().Unix()) - 10
+	e.Save()
+	// ⑤ 候选 2（较旧 → 应命中）
+	f := newTestPI("gpq_sess-1_ou-zhangsan")
+	f.PrincipalID = principal
+	f.TargetUserID = principal
+	f.CreatedAt = float64(time.Now().Unix()) - 50
+	f.Save()
+
+	got := FindPendingInteraction(channelID, principal)
+	if got == nil {
+		t.Fatal("应命中候选 2（最旧）")
+	}
+	if got.InteractionID != "gpq_sess-1_ou-zhangsan" {
+		t.Errorf("应取最旧 gpq_sess-1_ou-zhangsan, 实际 %s", got.InteractionID)
+	}
+
+	// ② 的过期文件已被顺带删除
+	fpB := filepath.Join(pathutil.AgentInteractionsDir(), "iact_"+channelID+"_bbbb.json")
+	if _, err := os.Stat(fpB); !os.IsNotExist(err) {
+		t.Errorf("过期文件应被 Remove")
+	}
+}
+
+// TestFindPending_全部不匹配 全过滤后返回 nil
+func TestFindPending_全部不匹配(t *testing.T) {
+	setupInteractionsEnv(t)
+
+	// 只有 principal 不匹配的文件
+	c := newTestPI("iact_feishu_enterprise:app1_cccc")
+	c.PrincipalID = "ou-other"
+	c.Save()
+
+	if got := FindPendingInteraction("feishu_enterprise:app1", "ou-principal"); got != nil {
+		t.Errorf("全部不匹配应返回 nil")
+	}
+}
+
+// TestFindPending_尾随cleanup FindPending 尾部无条件 CleanupExpired
+func TestFindPending_尾随cleanup(t *testing.T) {
+	setupInteractionsEnv(t)
+
+	dir := pathutil.AgentInteractionsDir()
+	_ = os.MkdirAll(dir, 0o755)
+
+	// 预置坏 JSON gpq 文件（两前缀扫描 parse 失败跳过，不影响主流程）
+	_ = os.WriteFile(filepath.Join(dir, "gpq_badjson.json"), []byte("{not json"), 0o644)
+	// 预置缺 created_at 的完整 iact 文件 → 尾部清理当 0 → 恒过期 → 删除
+	// （主扫描：UnmarshalJSON 补 now → 不会在过滤链中被判过期；尾部清理走裸 dict → 删除）
+	raw := `{"interaction_id":"iact_ch_zzzz","mode":"dm","origin_channel_id":"ch",
+"origin_session_id":"s","origin_content":"c","origin_sender_name":"n",
+"origin_sender_id":"u","question":"q","target_user_id":"ou-principal",
+"origin_metadata":{},"principal_id":"ou-principal","status":"pending"}`
+	_ = os.WriteFile(filepath.Join(dir, "iact_ch_zzzz.json"), []byte(raw), 0o644)
+
+	_ = FindPendingInteraction("ch", "ou-principal")
+
+	// 坏 JSON 文件保留（两处解析都跳过）
+	if _, err := os.Stat(filepath.Join(dir, "gpq_badjson.json")); err != nil {
+		t.Errorf("坏 JSON 文件不应被删除（解析失败跳过）")
+	}
+	// 缺 created_at 的文件被尾部清理删除（裸 dict 语义 created_at=0 → 恒过期）
+	if _, err := os.Stat(filepath.Join(dir, "iact_ch_zzzz.json")); !os.IsNotExist(err) {
+		t.Errorf("缺 created_at 文件应被尾部 CleanupExpired 删除（get 默认 0 → 过期）")
+	}
+}

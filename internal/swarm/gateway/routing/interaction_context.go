@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -264,6 +265,92 @@ func FindAllGroupPending() []*PendingInteraction {
 	return result
 }
 
+// FindPendingInteraction 扫描 iact_{channel}_* 与 gpq_* 两前缀，按五层过滤取最旧。
+//
+// Python: find_pending (L106-130)，过滤顺序不可调换（执行顺序纪律）：
+//  1. 解析失败 → debug 跳过
+//  2. status != pending → 跳过
+//  3. 过期 → 顺带 Remove + 跳过
+//  4. principal_id 非空且不匹配 → 跳过
+//  5. target_user_id 非空且不匹配 → 跳过
+//  6. 取 created_at 最旧
+// 尾部无条件 cleanup_expired。
+func FindPendingInteraction(channelID, principalID string) *PendingInteraction {
+	dir := interactionsDir()
+	var oldest *PendingInteraction
+	now := float64(time.Now().Unix())
+	for _, prefix := range []string{"iact_" + channelID + "_", "gpq_"} {
+		fps, _ := filepath.Glob(filepath.Join(dir, prefix+"*.json"))
+		for _, fp := range fps {
+			pi := parseInteractionFile(fp)
+			if pi == nil {
+				continue // 解析失败 debug 已记
+			}
+			if pi.Status != StatusPending {
+				continue
+			}
+			if now-pi.CreatedAt > DefaultTTL {
+				pi.Remove() // Python L118: 过期顺带删除
+				continue
+			}
+			if pi.PrincipalID != "" && pi.PrincipalID != principalID {
+				continue
+			}
+			if pi.TargetUserID != "" && pi.TargetUserID != principalID {
+				continue
+			}
+			if oldest == nil || pi.CreatedAt < oldest.CreatedAt {
+				oldest = pi
+			}
+		}
+	}
+	CleanupExpired(DefaultTTL) // Python L129: 尾部无条件清理
+	return oldest
+}
+
+// CleanupExpired 清理过期交互文件（宽松解析：字符串时间戳容忍），返回删除数。
+//
+// Python: cleanup_expired (L154-170)：*.json glob → 裸 dict 取 created_at：
+//   - 缺失 → 0 → 恒过期 → 删除（data.get("created_at", 0)）
+//   - 字符串数字 → float() 转换成功 → 用
+//   - 字符串非数字 → ValueError → except → 跳过不删
+//   - JSON 解析失败 → debug 跳过
+func CleanupExpired(ttl float64) int {
+	dir := interactionsDir()
+	fps, _ := filepath.Glob(filepath.Join(dir, "*.json"))
+	count := 0
+	now := float64(time.Now().Unix())
+	for _, fp := range fps {
+		raw, err := os.ReadFile(fp)
+		if err != nil {
+			logger.Debug(logComponent).Str("file", fp).Err(err).
+				Msg("PendingInteraction cleanup interaction file failed")
+			continue
+		}
+		var data map[string]any
+		if err := json.Unmarshal(raw, &data); err != nil {
+			logger.Debug(logComponent).Str("file", fp).Err(err).
+				Msg("PendingInteraction cleanup interaction file failed")
+			continue
+		}
+		created, ok := extractCreatedAt(data)
+		if !ok {
+			continue // Python: float("abc") ValueError → except 跳过
+		}
+		if now-created > ttl {
+			if err := os.Remove(fp); err == nil {
+				count++
+			}
+		}
+	}
+	if count > 0 {
+		logger.Info(logComponent).
+			Int("count", count).
+			Msg("PendingInteraction cleanup expired")
+	}
+	return count
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // path 交互文件完整路径：{interactionsDir}/{interaction_id}.json
@@ -406,4 +493,27 @@ func parseInteractionFile(fp string) *PendingInteraction {
 		return nil
 	}
 	return pi
+}
+
+// extractCreatedAt 从裸 dict 提取 created_at（对齐 Python float(data.get("created_at", 0))）：
+// 数字 → 直接用；字符串数字 → ParseFloat；字符串非数字 → !ok（跳过）；
+// 缺失 → 0（恒过期语义）；JSON null → 0。
+func extractCreatedAt(data map[string]any) (float64, bool) {
+	v, exists := data["created_at"]
+	if !exists || v == nil {
+		return 0, true // Python: get 默认 0
+	}
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case string:
+		f, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return 0, false // Python: float("abc") → ValueError → except 跳过
+		}
+		return f, true
+	default:
+		// Python: float(其他类型如 list/dict) → TypeError → except 跳过
+		return 0, false
+	}
 }
