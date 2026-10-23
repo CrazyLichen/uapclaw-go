@@ -351,6 +351,30 @@ func CleanupExpired(ttl float64) int {
 	return count
 }
 
+// BuildResumeContent 构建任务恢复提示词（dm/group 两套模板，逐字对齐 Python）。
+//
+// Python: build_resume_content (L172-189)。中文提示词一比一复制，禁止改写。
+func (pi *PendingInteraction) BuildResumeContent(answer string) string {
+	if pi.Mode == ModeDM {
+		return "[任务恢复] 之前的群聊请求：" + pi.OriginContent + "（来自 " + pi.OriginSenderName + "）\n" +
+			"你之前的追问：" + pi.Question + "\n" +
+			"principal 的回答：" + answer + "\n" +
+			"请综合「原始请求」和「principal 的回答」中的所有信息继续完成任务，" +
+			"原始请求中已明确提供的信息直接使用即可，不要再次追问。" +
+			"并将结果回复到群聊。"
+	}
+	targetName := pi.TargetUserName
+	if targetName == "" {
+		targetName = "用户"
+	}
+	return "[任务恢复] 你正在处理的群聊请求：" + pi.OriginContent + "（来自 " + pi.OriginSenderName + "）\n" +
+		"你之前追问了 " + targetName + "：" + pi.Question + "\n" +
+		targetName + " 的回答：" + answer + "\n" +
+		"请综合「原始请求」和「用户的回答」中的所有信息来完成任务。" +
+		"原始请求中已明确提供的信息（如时间、地点等）直接使用即可，不要再次追问或要求补充。" +
+		"现在请立即执行任务（如设置提醒、创建日程等），不要只是确认或记录信息，并将执行结果回复到群聊。"
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // path 交互文件完整路径：{interactionsDir}/{interaction_id}.json

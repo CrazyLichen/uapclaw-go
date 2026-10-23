@@ -2,8 +2,10 @@ package routing
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -408,5 +410,108 @@ func TestFindPending_尾随cleanup(t *testing.T) {
 	// 缺 created_at 的文件被尾部清理删除（裸 dict 语义 created_at=0 → 恒过期）
 	if _, err := os.Stat(filepath.Join(dir, "iact_ch_zzzz.json")); !os.IsNotExist(err) {
 		t.Errorf("缺 created_at 文件应被尾部 CleanupExpired 删除（get 默认 0 → 过期）")
+	}
+}
+
+// TestCleanupExpired 过期删/未过期留/坏文件跳过不删/返回计数
+func TestCleanupExpired(t *testing.T) {
+	setupInteractionsEnv(t)
+	dir := pathutil.AgentInteractionsDir()
+	_ = os.MkdirAll(dir, 0o755)
+
+	writeFile := func(name, content string) {
+		_ = os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644)
+	}
+	now := time.Now().Unix()
+
+	// 过期（数字时间戳）→ 删
+	writeFile("gpq_old1.json", fmt.Sprintf(`{"created_at": %d}`, now-int64(DefaultTTL)-100))
+	// 未过期 → 留
+	writeFile("gpq_new1.json", fmt.Sprintf(`{"created_at": %d}`, now-10))
+	// 坏 JSON → 跳过不删
+	writeFile("gpq_bad.json", "{not json")
+	// 字符串时间戳可解析且过期 → 删
+	writeFile("gpq_str1.json", `{"created_at": "1"}`)
+	// 字符串时间戳无法解析 → 跳过不删
+	writeFile("gpq_str2.json", `{"created_at": "abc"}`)
+	// 缺 created_at → 当 0 → 恒过期 → 删
+	writeFile("gpq_missing.json", `{"interaction_id": "x"}`)
+	// 非数字非字符串类型（list）→ 跳过不删
+	writeFile("gpq_list.json", `{"created_at": [1, 2]}`)
+
+	count := CleanupExpired(DefaultTTL)
+
+	if count != 3 {
+		t.Errorf("应删除 3 个（gpq_old1/gpq_str1/gpq_missing）, 实际 %d", count)
+	}
+	for _, gone := range []string{"gpq_old1.json", "gpq_str1.json", "gpq_missing.json"} {
+		if _, err := os.Stat(filepath.Join(dir, gone)); !os.IsNotExist(err) {
+			t.Errorf("%s 应被删除", gone)
+		}
+	}
+	for _, keep := range []string{"gpq_new1.json", "gpq_bad.json", "gpq_str2.json", "gpq_list.json"} {
+		if _, err := os.Stat(filepath.Join(dir, keep)); err != nil {
+			t.Errorf("%s 应保留: %v", keep, err)
+		}
+	}
+}
+
+// TestBuildResumeContent_DM模板 逐字节断言中文模板（提示词一比一纪律）
+func TestBuildResumeContent_DM模板(t *testing.T) {
+	pi := newTestPI("iact_ch_1")
+	pi.Mode = "dm"
+	pi.OriginContent = "帮我订明天的会议室"
+	pi.OriginSenderName = "张三"
+	pi.Question = "需要哪个楼层？"
+	answer := "三楼"
+
+	want := "[任务恢复] 之前的群聊请求：帮我订明天的会议室（来自 张三）\n" +
+		"你之前的追问：需要哪个楼层？\n" +
+		"principal 的回答：三楼\n" +
+		"请综合「原始请求」和「principal 的回答」中的所有信息继续完成任务，" +
+		"原始请求中已明确提供的信息直接使用即可，不要再次追问。" +
+		"并将结果回复到群聊。"
+
+	if got := pi.BuildResumeContent(answer); got != want {
+		t.Errorf("DM 模板不匹配:\n got: %q\nwant: %q", got, want)
+	}
+}
+
+// TestBuildResumeContent_群聊模板 target_user_name 回退 "用户" 分支 + 显式名分支
+func TestBuildResumeContent_群聊模板(t *testing.T) {
+	// 显式名分支
+	pi := newTestPI("gpq_s_u")
+	pi.Mode = "group"
+	pi.OriginContent = "订会议室"
+	pi.OriginSenderName = "张三"
+	pi.Question = "几点开始？"
+	pi.TargetUserName = "李四"
+	answer := "14点"
+
+	want := "[任务恢复] 你正在处理的群聊请求：订会议室（来自 张三）\n" +
+		"你之前追问了 李四：几点开始？\n" +
+		"李四 的回答：14点\n" +
+		"请综合「原始请求」和「用户的回答」中的所有信息来完成任务。" +
+		"原始请求中已明确提供的信息（如时间、地点等）直接使用即可，不要再次追问或要求补充。" +
+		"现在请立即执行任务（如设置提醒、创建日程等），不要只是确认或记录信息，并将执行结果回复到群聊。"
+
+	if got := pi.BuildResumeContent(answer); got != want {
+		t.Errorf("群聊模板（显式名）不匹配:\n got: %q\nwant: %q", got, want)
+	}
+
+	// 回退 "用户" 分支（TargetUserName 为空）
+	pi2 := newTestPI("gpq_s_u2")
+	pi2.Mode = "group"
+	pi2.OriginContent = "订会议室"
+	pi2.OriginSenderName = "张三"
+	pi2.Question = "几点开始？"
+	pi2.TargetUserName = ""
+
+	got2 := pi2.BuildResumeContent(answer)
+	if !strings.Contains(got2, "你之前追问了 用户：几点开始？") {
+		t.Errorf("空名应回退 '用户':\n%q", got2)
+	}
+	if !strings.Contains(got2, "用户 的回答：14点") {
+		t.Errorf("空名应回退 '用户'（回答段）:\n%q", got2)
 	}
 }
