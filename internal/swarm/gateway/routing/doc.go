@@ -11,15 +11,19 @@
 // SessionMap 将企业 IM 稳定身份映射为轮转 agent session_id（checkpoint 持久化，
 // Python session_map.py；scope 从 config gateway.session_map_scope 读一次）。
 //
+// PendingInteraction 统一追问上下文（群聊/DM 两模式），JSON 文件持久化 + 24h TTL
+// （Python interaction_context.py；消费方 im_pipeline 11.12 / feishu 11.16 / wecom 11.21 ⤵️）。
+//
 // Python: jiuwenswarm/gateway/routing/agent_client.py (WebSocketAgentServerClient)
 //
 // 文件目录：
 //
 //	routing/
-//	├── doc.go              # 包文档
-//	├── agent_client.go     # AgentClient 完整实现
-//	├── route_binding.go    # RouteBinding 多路径 WS 路由绑定
-//	└── session_map.go      # SessionMap 企业通道会话映射（11.7）
+//	├── doc.go                 # 包文档
+//	├── agent_client.go        # AgentClient 完整实现
+//	├── route_binding.go       # RouteBinding 多路径 WS 路由绑定
+//	├── session_map.go         # SessionMap 企业通道会话映射（11.7）
+//	└── interaction_context.go # PendingInteraction 追问上下文（11.8）
 //
 // 对应 Python 代码：jiuwenswarm/gateway/routing/
 package routing

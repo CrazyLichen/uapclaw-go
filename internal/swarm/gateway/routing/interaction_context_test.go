@@ -331,15 +331,17 @@ func TestFindPending_五层过滤顺序(t *testing.T) {
 	b.CreatedAt = float64(time.Now().Unix()) - DefaultTTL - 100
 	b.Save()
 
-	// ③ principal 不匹配 → 跳过
+	// ③ principal 不匹配 → 跳过（CreatedAt 须未过期，否则在 ② 就被拦截走不到 ③）
 	c := newTestPI("iact_" + channelID + "_cccc")
 	c.PrincipalID = "ou-other"
+	c.CreatedAt = float64(time.Now().Unix()) - 30
 	c.Save()
 
-	// ④ target 不匹配 → 跳过
+	// ④ target 不匹配 → 跳过（同上，须未过期）
 	d := newTestPI("iact_" + channelID + "_dddd")
 	d.PrincipalID = principal
 	d.TargetUserID = "ou-somebody-else"
+	d.CreatedAt = float64(time.Now().Unix()) - 20
 	d.Save()
 
 	// ⑤ 候选 1（较新）
@@ -374,9 +376,10 @@ func TestFindPending_五层过滤顺序(t *testing.T) {
 func TestFindPending_全部不匹配(t *testing.T) {
 	setupInteractionsEnv(t)
 
-	// 只有 principal 不匹配的文件
+	// 只有 principal 不匹配的文件（CreatedAt 未过期，走 ③ 分支被跳过）
 	c := newTestPI("iact_feishu_enterprise:app1_cccc")
 	c.PrincipalID = "ou-other"
+	c.CreatedAt = float64(time.Now().Unix()) - 30
 	c.Save()
 
 	if got := FindPendingInteraction("feishu_enterprise:app1", "ou-principal"); got != nil {
@@ -513,5 +516,110 @@ func TestBuildResumeContent_群聊模板(t *testing.T) {
 	}
 	if !strings.Contains(got2, "用户 的回答：14点") {
 		t.Errorf("空名应回退 '用户'（回答段）:\n%q", got2)
+	}
+}
+
+// TestRemove_目录权限错误失败仅Warn interactions 路径被同名文件占据 → Stat 失败非 NotExist 分支
+func TestRemove_目录权限错误失败仅Warn(t *testing.T) {
+	tmp := setupInteractionsEnv(t)
+	dir := filepath.Join(tmp, "agent", "workspace", "interactions")
+	_ = os.MkdirAll(filepath.Dir(dir), 0o755)
+	_ = os.WriteFile(dir, []byte("occupied"), 0o644)
+
+	pi := newTestPI("gpq_perm")
+	pi.Remove() // Stat/Remove 失败分支，不 panic 即通过
+}
+
+// TestRemove_删除失败 Stat 成功但 os.Remove 失败（非空目录占据 .json 路径 → ENOTEMPTY）
+func TestRemove_删除失败(t *testing.T) {
+	setupInteractionsEnv(t)
+	dir := pathutil.AgentInteractionsDir()
+	// 文件路径本身是非空目录：os.Stat 成功，os.Remove 报 ENOTEMPTY（root 无法绕过，POSIX 语义）
+	fp := filepath.Join(dir, "gpq_notempty.json")
+	_ = os.MkdirAll(fp, 0o755)
+	_ = os.WriteFile(filepath.Join(fp, "child"), []byte("x"), 0o644)
+
+	pi := newTestPI("gpq_notempty")
+	pi.Remove() // os.Remove 失败 → 仅 Warn 分支，不 panic 即通过
+
+	if _, err := os.Stat(fp); err != nil {
+		t.Errorf("非空目录删除应失败仍存在: %v", err)
+	}
+}
+
+// TestLoad_读文件权限失败 ReadFile 返回非 NotExist 错误（目录占据 .json 路径 → EISDIR）
+func TestLoad_读文件权限失败(t *testing.T) {
+	tmp := setupInteractionsEnv(t)
+	// 制造 interaction_id+".json" 同名目录 → ReadFile 返回 EISDIR（非 NotExist）
+	dir := pathutil.AgentInteractionsDir()
+	_ = os.MkdirAll(filepath.Join(dir, "gpq_isdir.json"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmp, "agent", "workspace"), 0o755)
+	_ = os.WriteFile(filepath.Join(tmp, "x"), []byte(""), 0o644)
+
+	if got := LoadPendingInteraction("gpq_isdir"); got != nil {
+		t.Errorf("读目录失败应返回 nil, 实际 %v", got)
+	}
+}
+
+// TestParseInteractionFile_读失败 glob 命中但读取失败（目录占据）
+func TestParseInteractionFile_读失败(t *testing.T) {
+	tmp := setupInteractionsEnv(t)
+	dir := pathutil.AgentInteractionsDir()
+	_ = os.MkdirAll(filepath.Join(dir, "gpq_isdir2"), 0o755)
+	_ = os.MkdirAll(filepath.Join(tmp, "agent", "workspace"), 0o755)
+
+	if got := parseInteractionFile(filepath.Join(dir, "gpq_isdir2")); got != nil {
+		t.Errorf("读目录失败应返回 nil")
+	}
+}
+
+// TestUnmarshalJSON_非法JSON 外层类型不匹配（合法 JSON 但字段类型错）→ alias 反序列化失败
+//
+// 注意：纯语法错误（"{not json"）被 json 包 checkValid 预检拦截，不会进入 UnmarshalJSON；
+// 用数字赋给 string 字段触发 alias 解码 error，覆盖 UnmarshalJSON 内部 L422-424 分支。
+func TestUnmarshalJSON_非法JSON(t *testing.T) {
+	raw := `{"interaction_id":123}` // 合法 JSON，类型不匹配
+	var pi PendingInteraction
+	if err := json.Unmarshal([]byte(raw), &pi); err == nil {
+		t.Errorf("字段类型不匹配应返回 error")
+	}
+}
+// TestUnmarshalJSON_metadata非对象 origin_metadata 是字符串 → error（Python 重建时类型不匹配 TypeError）
+func TestUnmarshalJSON_metadata非对象(t *testing.T) {
+	var pi PendingInteraction
+	raw := `{"interaction_id":"a","mode":"dm","origin_channel_id":"c","origin_session_id":"s",
+"origin_content":"c","origin_sender_name":"n","origin_sender_id":"u","question":"q",
+"target_user_id":"t","origin_metadata":"not-an-object"}`
+	if err := json.Unmarshal([]byte(raw), &pi); err == nil {
+		t.Errorf("origin_metadata 非对象应返回 error（对齐 Python TypeError 跳过文件）")
+	}
+}
+
+// TestIndentJSON_非JSON输入 缩进失败退回紧凑形式
+func TestIndentJSON_非JSON输入(t *testing.T) {
+	out := indentJSON([]byte("{not json"))
+	if string(out) != "{not json" {
+		t.Errorf("非 JSON 输入应原样返回, 实际 %q", out)
+	}
+}
+
+// TestSave_Encode失败保险 不可编码值（channel）→ Warn 分支不 panic
+func TestSave_Encode失败保险(t *testing.T) {
+	setupInteractionsEnv(t)
+	pi := newTestPI("gpq_enc_fail")
+	pi.OriginMetadata = map[string]any{"ch": make(chan int)} // chan 不可序列化
+	pi.Save() // Encode 失败分支 → Warn，不 panic
+}
+
+// TestCleanupExpired_读取失败 glob 命中目录名 → ReadFile 失败跳过
+func TestCleanupExpired_读取失败(t *testing.T) {
+	tmp := setupInteractionsEnv(t)
+	dir := pathutil.AgentInteractionsDir()
+	_ = os.MkdirAll(filepath.Join(dir, "gpq_isdir3.json"), 0o755) // 目录伪装 .json
+	_ = os.MkdirAll(filepath.Join(tmp, "agent", "workspace"), 0o755)
+
+	count := CleanupExpired(DefaultTTL)
+	if count != 0 {
+		t.Errorf("读取失败应跳过不删, 实际删了 %d 个", count)
 	}
 }
