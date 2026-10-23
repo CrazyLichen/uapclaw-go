@@ -5,6 +5,9 @@
 // 嵌入 → VectorStore 入库。Parser 是管线第一站，与 Chunker 层
 // （13.5-13.9）呈前后手关系——Parser 产 Document，Chunker 吃 Document。
 //
+// 图片文件经 ImageParser 解析：归档到 images/ 目录并经 ImageCaptioner
+// 生成 caption，产出 metadata["image_path"] 供 13.4 多模态嵌入消费。
+//
 // 使用方式（对齐 Python Parser 继承体系）：
 //   - 具体解析器：嵌入 BaseParser 并覆写 ParseContent（对齐 Python 仅覆写 _parse），
 //     构造时 NewBaseParser(self) 注入自身
@@ -19,7 +22,9 @@
 //	├── base.go          # Parser 接口 + ParseOptions + BaseParser 模板适配器（13.10）
 //	├── registry.go      # parserRegistry + RegisterParser 注册骨架（13.16 带出自 auto_file_parser.py）
 //	├── json_parser.go   # JSONParser：JSON 格式化解析（13.16）
-//	└── txt_md_parser.go # TxtMdParser：文本/Markdown 编码统计检测解析（13.16）
+//	├── txt_md_parser.go # TxtMdParser：文本/Markdown 编码统计检测解析（13.16）
+//	├── captioner.go     # ImageCaptioner 图片描述生成 + CpImage 归档（13.15）
+//	└── image_parser.go  # ImageParser 图片解析（image_path 元数据产出）（13.15）
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/processor/parser/
 package parser
