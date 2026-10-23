@@ -3,6 +3,7 @@ package routing
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,8 +78,8 @@ type pendingInteractionAlias struct {
 	TargetUserID *string `json:"target_user_id"`
 	// TargetUserName 被追问用户名称
 	TargetUserName *string `json:"target_user_name"`
-	// OriginMetadata 原始 metadata
-	OriginMetadata map[string]any `json:"origin_metadata"`
+	// OriginMetadata 原始 metadata（RawMessage 区分：缺失键 / 显式 null / 对象）
+	OriginMetadata json.RawMessage `json:"origin_metadata"`
 	// PrincipalID 数字分身主体用户 ID
 	PrincipalID *string `json:"principal_id"`
 	// Status 状态
@@ -208,6 +209,33 @@ func (pi *PendingInteraction) Remove() {
 		Msg("PendingInteraction remove")
 }
 
+// LoadPendingInteraction 按 ID 加载交互上下文；文件不存在/解析失败/必填字段缺失返回 nil。
+//
+// Python: load (L94-103)：文件不存在 → None；cls(**fields) 重建（必填缺失
+// TypeError → except → None）；解析失败 warning + None。
+func LoadPendingInteraction(interactionID string) *PendingInteraction {
+	fp := filepath.Join(interactionsDir(), interactionID+".json")
+	raw, err := os.ReadFile(fp)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			logger.Warn(logComponent).
+				Str("interaction_id", interactionID).
+				Err(err).
+				Msg("PendingInteraction load failed")
+		}
+		return nil
+	}
+	pi, err := unmarshalPendingInteraction(raw)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("interaction_id", interactionID).
+			Err(err).
+			Msg("PendingInteraction load failed")
+		return nil
+	}
+	return pi
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // path 交互文件完整路径：{interactionsDir}/{interaction_id}.json
@@ -243,4 +271,86 @@ func indentJSON(compact []byte) []byte {
 		return compact // 缩进失败退回紧凑形式（写入仍有效）
 	}
 	return buf.Bytes()
+}
+
+// UnmarshalJSON 对齐 Python dataclass 重建语义（spec §6 决策2 三类默认值）：
+//   - 必填字段缺失 → error（Python TypeError → 文件跳过）
+//   - 可选字段缺失 → dataclass 默认值：status→"pending"、origin_metadata→空 map、
+//     created_at/updated_at→当前时间（default_factory=time.time 构造期求值）
+//   - 未知键 → 忽略（Python k in dataclass_fields；Go json 天然忽略）
+func (pi *PendingInteraction) UnmarshalJSON(data []byte) error {
+	var alias pendingInteractionAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+	// Python dataclass 必填字段（无默认值）：缺失 → TypeError
+	required := map[string]*string{
+		"interaction_id":     alias.InteractionID,
+		"mode":               alias.Mode,
+		"origin_channel_id":  alias.OriginChannelID,
+		"origin_session_id":  alias.OriginSessionID,
+		"origin_content":     alias.OriginContent,
+		"origin_sender_name": alias.OriginSenderName,
+		"origin_sender_id":   alias.OriginSenderID,
+		"question":           alias.Question,
+		"target_user_id":     alias.TargetUserID,
+	}
+	for name, v := range required {
+		if v == nil {
+			return fmt.Errorf("missing required field %q", name)
+		}
+	}
+
+	now := float64(time.Now().UnixMilli()) / 1000.0
+	pi.InteractionID = *alias.InteractionID
+	pi.Mode = *alias.Mode
+	pi.OriginChannelID = *alias.OriginChannelID
+	pi.OriginSessionID = *alias.OriginSessionID
+	pi.OriginContent = *alias.OriginContent
+	pi.OriginSenderName = *alias.OriginSenderName
+	pi.OriginSenderID = *alias.OriginSenderID
+	pi.Question = *alias.Question
+	pi.TargetUserID = *alias.TargetUserID
+	if alias.TargetUserName != nil {
+		pi.TargetUserName = *alias.TargetUserName
+	}
+	// 缺失键 origin_metadata → 空 map（dataclass default_factory=dict，spec 决策2）
+	// 显式 null → nil map（Python None，spec 决策4）——用 RawMessage 三态区分
+	pi.OriginMetadata = map[string]any{}
+	if len(alias.OriginMetadata) > 0 && string(alias.OriginMetadata) != "null" {
+		var meta map[string]any
+		if err := json.Unmarshal(alias.OriginMetadata, &meta); err != nil {
+			return fmt.Errorf("origin_metadata: %w", err)
+		}
+		pi.OriginMetadata = meta
+	} else if string(alias.OriginMetadata) == "null" {
+		pi.OriginMetadata = nil
+	}
+	if alias.PrincipalID != nil {
+		pi.PrincipalID = *alias.PrincipalID
+	}
+	// 可选默认：status → "pending"（dataclass default）
+	pi.Status = StatusPending
+	if alias.Status != nil {
+		pi.Status = *alias.Status
+	}
+	// 可选默认：时间 → 当前时间（default_factory=time.time）
+	pi.CreatedAt = now
+	if alias.CreatedAt != nil {
+		pi.CreatedAt = *alias.CreatedAt
+	}
+	pi.UpdatedAt = now
+	if alias.UpdatedAt != nil {
+		pi.UpdatedAt = *alias.UpdatedAt
+	}
+	return nil
+}
+
+// unmarshalPendingInteraction 解析字节流为 PendingInteraction（UnmarshalJSON 封装）
+func unmarshalPendingInteraction(raw []byte) (*PendingInteraction, error) {
+	var pi PendingInteraction
+	if err := json.Unmarshal(raw, &pi); err != nil {
+		return nil, err
+	}
+	return &pi, nil
 }

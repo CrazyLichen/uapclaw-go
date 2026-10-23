@@ -133,3 +133,123 @@ func TestRemove_存在与不存在(t *testing.T) {
 	pi2 := newTestPI("gpq_rm_missing")
 	pi2.Remove()
 }
+
+// TestLoad_完整往返 Save→Load 15 字段逐一断言
+func TestLoad_完整往返(t *testing.T) {
+	setupInteractionsEnv(t)
+
+	pi := newTestPI("gpq_round_1")
+	pi.Save()
+
+	loaded := LoadPendingInteraction("gpq_round_1")
+	if loaded == nil {
+		t.Fatal("load 应返回非 nil")
+	}
+	if loaded.InteractionID != pi.InteractionID || loaded.Mode != pi.Mode ||
+		loaded.OriginChannelID != pi.OriginChannelID || loaded.OriginSessionID != pi.OriginSessionID ||
+		loaded.OriginContent != pi.OriginContent || loaded.OriginSenderName != pi.OriginSenderName ||
+		loaded.OriginSenderID != pi.OriginSenderID || loaded.Question != pi.Question ||
+		loaded.TargetUserID != pi.TargetUserID || loaded.TargetUserName != pi.TargetUserName ||
+		loaded.PrincipalID != pi.PrincipalID || loaded.Status != pi.Status ||
+		loaded.CreatedAt != pi.CreatedAt {
+		t.Errorf("字段往返不匹配:\n got %+v\nwant %+v", loaded, pi)
+	}
+	if _, ok := loaded.OriginMetadata["keep"]; !ok {
+		t.Errorf("origin_metadata.keep 应保留")
+	}
+	// updated_at 被 Save 刷新为 now，往返后 >= 原值
+	if loaded.UpdatedAt < pi.CreatedAt {
+		t.Errorf("UpdatedAt 应 >= 原时间戳")
+	}
+}
+
+// TestLoad_文件不存在与损坏 nil 返回 + 坏 JSON → nil
+func TestLoad_文件不存在与损坏(t *testing.T) {
+	setupInteractionsEnv(t)
+
+	if got := LoadPendingInteraction("gpq_not_exist"); got != nil {
+		t.Errorf("文件不存在应返回 nil, 实际 %v", got)
+	}
+
+	// 坏 JSON
+	dir := pathutil.AgentInteractionsDir()
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "gpq_bad.json"), []byte("{not json"), 0o644)
+	if got := LoadPendingInteraction("gpq_bad"); got != nil {
+		t.Errorf("坏 JSON 应返回 nil, 实际 %v", got)
+	}
+}
+
+// TestLoad_未知键忽略与缺失时间补now 手写 JSON 含未知字段、缺 created_at → now 附近
+func TestLoad_未知键忽略与缺失时间补now(t *testing.T) {
+	setupInteractionsEnv(t)
+
+	raw := `{
+  "interaction_id": "iact_ch_1",
+  "mode": "dm",
+  "origin_channel_id": "feishu_enterprise:app1",
+  "origin_session_id": "sess-1",
+  "origin_content": "订会议室",
+  "origin_sender_name": "张三",
+  "origin_sender_id": "ou-zhangsan",
+  "question": "确认吗？",
+  "target_user_id": "ou-principal",
+  "unknown_extra_key": "ignored"
+}`
+	dir := pathutil.AgentInteractionsDir()
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "iact_ch_1.json"), []byte(raw), 0o644)
+
+	pi := LoadPendingInteraction("iact_ch_1")
+	if pi == nil {
+		t.Fatal("应加载成功")
+	}
+	// 未知键被忽略（无报错）
+	// 缺失可选字段用默认值
+	if pi.TargetUserName != "" || pi.PrincipalID != "" {
+		t.Errorf("缺失可选字段应为零值")
+	}
+	if pi.Status != StatusPending {
+		t.Errorf("缺 status 应默认 pending（dataclass default），实际 %q", pi.Status)
+	}
+	if pi.OriginMetadata == nil || len(pi.OriginMetadata) != 0 {
+		t.Errorf("缺 origin_metadata 应为空 map（dataclass default_factory=dict）")
+	}
+	// 缺失时间字段补当前时间（default_factory=time.time）
+	if pi.CreatedAt < float64(time.Now().Unix())-2 {
+		t.Errorf("缺 created_at 应补当前时间, 实际 %v", pi.CreatedAt)
+	}
+	if pi.UpdatedAt < float64(time.Now().Unix())-2 {
+		t.Errorf("缺 updated_at 应补当前时间, 实际 %v", pi.UpdatedAt)
+	}
+}
+
+// TestLoad_必填字段缺失跳过 缺 question 的 JSON → nil（Python TypeError→except 对齐）
+func TestLoad_必填字段缺失跳过(t *testing.T) {
+	setupInteractionsEnv(t)
+
+	raw := `{"interaction_id": "gpq_miss_q", "mode": "group", "origin_channel_id": "ch",
+"origin_session_id": "s", "origin_content": "c", "origin_sender_name": "n",
+"origin_sender_id": "u"}`
+	dir := pathutil.AgentInteractionsDir()
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "gpq_miss_q.json"), []byte(raw), 0o644)
+
+	if got := LoadPendingInteraction("gpq_miss_q"); got != nil {
+		t.Errorf("必填字段缺失应返回 nil, 实际 %+v", got)
+	}
+}
+
+// TestUnmarshalJSON_null元数据 JSON null → nil map（Python None）
+func TestUnmarshalJSON_null元数据(t *testing.T) {
+	var pi PendingInteraction
+	raw := `{"interaction_id":"a","mode":"dm","origin_channel_id":"c","origin_session_id":"s",
+"origin_content":"c","origin_sender_name":"n","origin_sender_id":"u","question":"q",
+"target_user_id":"t","origin_metadata":null}`
+	if err := json.Unmarshal([]byte(raw), &pi); err != nil {
+		t.Fatalf("unmarshal 失败: %v", err)
+	}
+	if pi.OriginMetadata != nil {
+		t.Errorf("JSON null 应解为 nil map")
+	}
+}
