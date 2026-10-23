@@ -274,6 +274,7 @@ func FindAllGroupPending() []*PendingInteraction {
 //  4. principal_id 非空且不匹配 → 跳过
 //  5. target_user_id 非空且不匹配 → 跳过
 //  6. 取 created_at 最旧
+//
 // 尾部无条件 cleanup_expired。
 func FindPendingInteraction(channelID, principalID string) *PendingInteraction {
 	dir := interactionsDir()

@@ -584,6 +584,7 @@ func TestUnmarshalJSON_非法JSON(t *testing.T) {
 		t.Errorf("字段类型不匹配应返回 error")
 	}
 }
+
 // TestUnmarshalJSON_metadata非对象 origin_metadata 是字符串 → error（Python 重建时类型不匹配 TypeError）
 func TestUnmarshalJSON_metadata非对象(t *testing.T) {
 	var pi PendingInteraction
@@ -608,7 +609,7 @@ func TestSave_Encode失败保险(t *testing.T) {
 	setupInteractionsEnv(t)
 	pi := newTestPI("gpq_enc_fail")
 	pi.OriginMetadata = map[string]any{"ch": make(chan int)} // chan 不可序列化
-	pi.Save() // Encode 失败分支 → Warn，不 panic
+	pi.Save()                                                // Encode 失败分支 → Warn，不 panic
 }
 
 // TestCleanupExpired_读取失败 glob 命中目录名 → ReadFile 失败跳过

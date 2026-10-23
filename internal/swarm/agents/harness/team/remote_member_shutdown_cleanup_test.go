@@ -247,7 +247,7 @@ func TestWaitForPendingShutdownCleanupForSession_超时(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	got := WaitForPendingPendingTimeoutShim(ctx, "sess-timeout")
+	got := WaitForPendingTimeoutShim(ctx, "sess-timeout")
 	elapsed := time.Since(start)
 	if got {
 		t.Error("超时应返回 false")
@@ -257,8 +257,8 @@ func TestWaitForPendingShutdownCleanupForSession_超时(t *testing.T) {
 	}
 }
 
-// WaitForPendingPendingTimeoutShim 以短超时 ctx 测试超时分支（避免 15s 真等）。
-func WaitForPendingPendingTimeoutShim(ctx context.Context, sessionID string) bool {
+// WaitForPendingTimeoutShim 以短超时 ctx 测试超时分支（避免 15s 真等）。
+func WaitForPendingTimeoutShim(ctx context.Context, sessionID string) bool {
 	// 复刻 WaitForPendingShutdownCleanupForSession 的核心等待逻辑，但用 ctx 超时驱动
 	shutdownCleanupMu.Lock()
 	entry := shutdownCleanupTasks[sessionID]

@@ -162,7 +162,7 @@ func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamN
 		prefix = "extract"
 	}
 
-	// read_memory_file
+	// read_memory_file 读取工具：限制路径在团队记忆目录内
 	readTool, readErr := tool.NewTool(func(ctx context.Context, in extractionReadFileInput, opts ...tool.ToolOption) (map[string]any, error) {
 		if strings.Contains(in.Path, "..") || strings.HasPrefix(in.Path, "/") {
 			return map[string]any{"error": "Invalid path"}, nil
@@ -183,7 +183,7 @@ func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamN
 		logger.Warn(logComponent).Err(readErr).Msg("[extractor] failed to create read tool")
 	}
 
-	// write_memory_file
+	// write_memory_file 写入工具：覆盖写且限制路径在团队记忆目录内
 	writeTool, writeErr := tool.NewTool(func(ctx context.Context, in extractionWriteFileInput, opts ...tool.ToolOption) (map[string]any, error) {
 		if strings.Contains(in.Path, "..") || strings.HasPrefix(in.Path, "/") {
 			return map[string]any{"error": "Invalid path"}, nil
@@ -210,7 +210,7 @@ func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamN
 		logger.Warn(logComponent).Err(writeErr).Msg("[extractor] failed to create write tool")
 	}
 
-	// list_memory_files
+	// list_memory_files 列出工具：返回团队记忆目录下所有文件名
 	listTool, listErr := tool.NewTool(func(_ context.Context, _ struct{}, opts ...tool.ToolOption) (map[string]any, error) {
 		entries, err := os.ReadDir(teamMemoryDir)
 		if err != nil {

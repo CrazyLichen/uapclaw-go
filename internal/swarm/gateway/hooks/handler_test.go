@@ -87,7 +87,7 @@ func TestOnSessionStart_cwd字段(t *testing.T) {
 	}
 }
 
-// TestOnUserPromptSubmit_timeoutSetdefault
+// TestOnUserPromptSubmit_timeoutSetdefault 无 timeout 的 hook 就地补默认值 10，已有则不覆盖
 func TestOnUserPromptSubmit_timeoutSetdefault(t *testing.T) {
 	hooks := []map[string]any{
 		{"type": "command", "command": "echo ok"},               // 无 timeout → 补 10
