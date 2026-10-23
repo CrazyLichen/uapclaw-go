@@ -299,31 +299,32 @@ func TestNewMessageHandler_sessionMap装配(t *testing.T) {
 
 // TestExtractIdentityTuple 四元组提取
 func TestExtractIdentityTuple(t *testing.T) {
-	// 全齐
-	msg := schema.NewReqMessage("feishu_enterprise", "s",
+	// 全齐（provider 传 Python FeishuChannel.name="feishu"——与 channel_id 的
+	// "feishu_enterprise:{app_id}" 是两个不同字段，各查各的）
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "s",
 		schema.ReqMethodChatSend, json.RawMessage(`{}`),
-		schema.WithProvider("feishu_enterprise"),
+		schema.WithProvider("feishu"),
 		schema.WithChatID("oc-1"),
 		schema.WithBotID("bot-1"),
 		schema.WithUserID("u-1"))
 	p, c, b, u, ok := extractIdentityTuple(msg)
 	assert.True(t, ok)
-	assert.Equal(t, "feishu_enterprise", p)
+	assert.Equal(t, "feishu", p)
 	assert.Equal(t, "oc-1", c)
 	assert.Equal(t, "bot-1", b)
 	assert.Equal(t, "u-1", u)
 
 	// 缺 user_id
-	msg2 := schema.NewReqMessage("feishu_enterprise", "s",
+	msg2 := schema.NewReqMessage("feishu_enterprise:app-1", "s",
 		schema.ReqMethodChatSend, json.RawMessage(`{}`),
-		schema.WithProvider("feishu_enterprise"),
+		schema.WithProvider("feishu"),
 		schema.WithChatID("oc-1"),
 		schema.WithBotID("bot-1"))
 	_, _, _, _, ok2 := extractIdentityTuple(msg2)
 	assert.False(t, ok2, "缺任一字段应 ok=false")
 
 	// 空白字符串按缺失处理（Python strip 语义）
-	msg3 := schema.NewReqMessage("feishu_enterprise", "s",
+	msg3 := schema.NewReqMessage("feishu_enterprise:app-1", "s",
 		schema.ReqMethodChatSend, json.RawMessage(`{}`),
 		schema.WithProvider("  "),
 		schema.WithChatID("oc-1"),

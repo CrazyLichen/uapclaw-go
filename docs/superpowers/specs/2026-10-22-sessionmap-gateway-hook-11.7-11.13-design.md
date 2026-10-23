@@ -8,6 +8,8 @@
   - `jiuwenswarm/gateway/hooks/handler.py`（127 行）
   - `jiuwenswarm/gateway/message_handler/message_handler.py` 集成点（L150-177 / L278-299 / L615-680 / L1144-1165 / L2185-2197）
 
+> **执行过程教训（流程备注，非设计内容）**：本计划实施中途发生对话上下文压缩（compaction），压缩后旧回合并行收尾与恢复进程产生并发写（重复测试声明/提交哈希漂移/互相覆盖）。恢复后正确姿势：先 `git log -5` + `git status` + `git stash list` 三查确认现场，比对旧回合产出质量后择优采纳，再继续；**严禁**在未检查现场前直接 `git stash pop`（可能弹出不相关的历史 stash 造成冲突）。
+
 ## 1. 背景与目标
 
 ### 1.1 问题
@@ -361,6 +363,8 @@ func (mh *MessageHandler) TriggerSessionStartHook(sessionID, source string) {
 4. **brand 映射不适用**：`feishu_enterprise` 为第三方平台标识，不做 jiuwen→uapclaw 映射
 5. **executor 归属迁移**（D2）：Python `server/hooks/executor.py` 对应物迁至 `common/hooks`，`user_hook_rail.go` 留守 `server/hooks`——包布局偏差，由 Go 禁止 gateway→server 强制（规则 6.5）
 6. **RegisterConfig 全局注册**（D3/D4）：Python `get_config()` 全局函数随时可读，Go 用 RegisterConfig+getGlobalConfig 等价实现；NewGatewayServer 补注册点保证独立 Gateway 进程可用
+7. **newSessionCancelAndNotice 外层空守卫（双重防御）**：Python `_new_session_cancel_and_notice`（L575-591）无外层空判（内部 `_cancel_agent_work_for_session` 自守卫）；Go 在 `slash_cmd.go` 调用点补了 `if oldSID != ""` 外层守卫 + `cancel.go` 内层守卫双保险。语义等价（空值两处都跳过），仅多一次判空——保留，不回改
+8. **构造时快照不订阅热重载**：SessionMap scope（LoadSessionMapScope）与 hooks 配置（LoadHooksConfig）均在构造时读一次，不订阅 config.Reloader 热重载事件——对齐 Python（`__init__` 时读一次）；如需热生效属偏离 Python 的自主增强，范围外
 
 ## 9. 测试策略（覆盖率 ≥85%）
 

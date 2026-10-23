@@ -171,17 +171,18 @@ func newSessionMapAt(storePath string, scope SessionMapScope) *SessionMap {
 	return m
 }
 
-// TestMakeKey 两 scope 的键格式
+// TestMakeKey 两 scope 的键格式（首段为 provider，运行时实值如 "feishu"——
+// FeishuChannel.name；channel_id 的 feishu_enterprise 前缀与此无关）
 func TestMakeKey(t *testing.T) {
 	cases := []struct {
 		scope  SessionMapScope
 		want   string
 	}{
-		{SessionMapScopePerChatBot, "feishu_enterprise::oc-123::bot-001"},
-		{SessionMapScopePerChatBotUser, "feishu_enterprise::oc-123::bot-001::user-9"},
+		{SessionMapScopePerChatBot, "feishu::oc-123::bot-001"},
+		{SessionMapScopePerChatBotUser, "feishu::oc-123::bot-001::user-9"},
 	}
 	for _, c := range cases {
-		got := makeKey(c.scope, "feishu_enterprise", "oc-123", "bot-001", "user-9")
+		got := makeKey(c.scope, "feishu", "oc-123", "bot-001", "user-9")
 		if got != c.want {
 			t.Errorf("makeKey(scope=%d) = %q, want %q", c.scope, got, c.want)
 		}
@@ -190,12 +191,12 @@ func TestMakeKey(t *testing.T) {
 
 // TestMakeSessionID 格式：key + "::" + hex时间戳 + "::" + 6位hex
 func TestMakeSessionID(t *testing.T) {
-	sid := makeSessionID(SessionMapScopePerChatBot, "feishu_enterprise", "oc-123", "bot-001", "user-9")
+	sid := makeSessionID(SessionMapScopePerChatBot, "feishu", "oc-123", "bot-001", "user-9")
 	parts := strings.Split(sid, "::")
 	if len(parts) != 5 {
 		t.Fatalf("PerChatBot session_id 应 5 段，实际 %d 段: %q", len(parts), sid)
 	}
-	if parts[0] != "feishu_enterprise" || parts[1] != "oc-123" || parts[2] != "bot-001" {
+	if parts[0] != "feishu" || parts[1] != "oc-123" || parts[2] != "bot-001" {
 		t.Errorf("前三段应为身份键，实际 %q", sid)
 	}
 	if len(parts[3]) == 0 {
@@ -1108,31 +1109,32 @@ func TestNewMessageHandler_sessionMap与HookHandler装配(t *testing.T) {
 
 // TestExtractIdentityTuple 四元组提取
 func TestExtractIdentityTuple(t *testing.T) {
-	// 全齐
-	msg := schema.NewReqMessage("feishu_enterprise", "s",
+	// 全齐（provider 传 Python FeishuChannel.name="feishu"——与 channel_id 的
+	// "feishu_enterprise:{app_id}" 是两个不同字段，各查各的）
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "s",
 		schema.ReqMethodChatSend, json.RawMessage(`{}`),
-		schema.WithProvider("feishu_enterprise"),
+		schema.WithProvider("feishu"),
 		schema.WithChatID("oc-1"),
 		schema.WithBotID("bot-1"),
 		schema.WithUserID("u-1"))
 	p, c, b, u, ok := extractIdentityTuple(msg)
 	assert.True(t, ok)
-	assert.Equal(t, "feishu_enterprise", p)
+	assert.Equal(t, "feishu", p)
 	assert.Equal(t, "oc-1", c)
 	assert.Equal(t, "bot-1", b)
 	assert.Equal(t, "u-1", u)
 
 	// 缺 user_id
-	msg2 := schema.NewReqMessage("feishu_enterprise", "s",
+	msg2 := schema.NewReqMessage("feishu_enterprise:app-1", "s",
 		schema.ReqMethodChatSend, json.RawMessage(`{}`),
-		schema.WithProvider("feishu_enterprise"),
+		schema.WithProvider("feishu"),
 		schema.WithChatID("oc-1"),
 		schema.WithBotID("bot-1"))
 	_, _, _, _, ok2 := extractIdentityTuple(msg2)
 	assert.False(t, ok2, "缺任一字段应 ok=false")
 
 	// 空白字符串按缺失处理（Python strip 语义）
-	msg3 := schema.NewReqMessage("feishu_enterprise", "s",
+	msg3 := schema.NewReqMessage("feishu_enterprise:app-1", "s",
 		schema.ReqMethodChatSend, json.RawMessage(`{}`),
 		schema.WithProvider("  "),
 		schema.WithChatID("oc-1"),
@@ -1338,21 +1340,23 @@ git commit -m "feat(message_handler): 11.7+11.13 字段装配与身份提取
 
 ```go
 // TestApplyChannelState_sessionMap分支 企业通道身份齐备走 SessionMap
+// Python 事实：FeishuChannel.name="feishu"（provider，受控检查通过），
+// channel_id="feishu_enterprise:{app_id}"（SessionMap 通道族前缀匹配）
 func TestApplyChannelState_sessionMap分支(t *testing.T) {
 	mh := createTestMessageHandler() // 既有 helper：transport+agentClient 构造
 	// SessionMap 用测试注入（避免写真实 checkpoint 目录）
 	mh.sessionMap = newTestSessionMap(t)
 
-	msg := schema.NewReqMessage("feishu_enterprise", "",
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "",
 		schema.ReqMethodChatSend, json.RawMessage(`{}`),
-		schema.WithProvider("feishu_enterprise"),
+		schema.WithProvider("feishu"),
 		schema.WithChatID("oc-9"),
 		schema.WithBotID("bot-1"),
 		schema.WithUserID("u-1"))
 
 	mh.ApplyChannelState(msg)
 
-	if !strings.Contains(msg.SessionID, "feishu_enterprise::oc-9::bot-1::") {
+	if !strings.Contains(msg.SessionID, "feishu::oc-9::bot-1::") {
 		t.Errorf("SessionMap 分支应注入 session-map 风格 sid，实际 %q", msg.SessionID)
 	}
 	// state 同步刷新（无条件覆盖，spec 陷阱点）
@@ -1369,19 +1373,23 @@ func TestApplyChannelState_sessionMap分支(t *testing.T) {
 }
 
 // TestApplyChannelState_身份缺失走elif 企业通道但缺 user_id → config/state 路径
+// Python L1158-1159：elif state.session_id → msg.session_id = state.session_id（覆盖入站值）
 func TestApplyChannelState_身份缺失走elif(t *testing.T) {
 	mh := createTestMessageHandler()
 	mh.sessionMap = newTestSessionMap(t)
 
-	msg := schema.NewReqMessage("feishu_enterprise", "existing-sid",
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "existing-sid",
 		schema.ReqMethodChatSend, json.RawMessage(`{}`),
-		schema.WithProvider("feishu_enterprise"),
+		schema.WithProvider("feishu"),
 		schema.WithChatID("oc-9"),
 		schema.WithBotID("bot-1")) // 缺 UserID
 
 	mh.ApplyChannelState(msg)
-	if msg.SessionID != "existing-sid" {
-		t.Errorf("身份缺失应走 elif 分支保留入站 sid，实际 %q", msg.SessionID)
+	if msg.SessionID == "existing-sid" {
+		t.Errorf("elif 分支应用 state.SessionID 覆盖入站 sid（对齐 Python L1158-1159），实际保留入站值")
+	}
+	if strings.Contains(msg.SessionID, "::") {
+		t.Errorf("身份缺失不应走 SessionMap，实际 sid %q", msg.SessionID)
 	}
 }
 
@@ -1408,15 +1416,15 @@ func TestGetOrCreateChannelState_首次创建sessionMap覆盖(t *testing.T) {
 	mh := createTestMessageHandler()
 	mh.sessionMap = newTestSessionMap(t)
 
-	msg := schema.NewReqMessage("feishu_enterprise", "",
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "",
 		schema.ReqMethodChatSend, json.RawMessage(`{}`),
-		schema.WithProvider("feishu_enterprise"),
+		schema.WithProvider("feishu"),
 		schema.WithChatID("oc-9"),
 		schema.WithBotID("bot-1"),
 		schema.WithUserID("u-1"))
 
 	state := mh.GetOrCreateChannelState(msg)
-	if !strings.Contains(state.SessionID, "feishu_enterprise::oc-9::bot-1::") {
+	if !strings.Contains(state.SessionID, "feishu::oc-9::bot-1::") {
 		t.Errorf("首次创建应被 SessionMap 覆盖 config 默认，实际 %q", state.SessionID)
 	}
 }
@@ -1541,15 +1549,17 @@ git commit -m "feat(message_handler): 回填 11.7 集成点①②（GetOrCreateC
 
 ```go
 // TestHandleChannelControl_newSession企业通道SessionMap轮转
+// Python 事实：FeishuChannel.name="feishu"（provider，受控检查通过），
+// channel_id="feishu_enterprise:{app_id}"（SessionMap 通道族前缀匹配）
 func TestHandleChannelControl_newSession企业通道SessionMap轮转(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	mh.sessionMap = newTestSessionMap(t)
 
 	go func() { for range mh.robotMessages {} }()
 
-	msg := schema.NewReqMessage("feishu_enterprise", "sess-old",
+	msg := schema.NewReqMessage("feishu_enterprise:app-1", "sess-old",
 		schema.ReqMethodChatSend, json.RawMessage(`{"content":"/new_session"}`),
-		schema.WithProvider("feishu_enterprise"),
+		schema.WithProvider("feishu"),
 		schema.WithChatID("oc-9"),
 		schema.WithBotID("bot-1"),
 		schema.WithUserID("u-1"))
@@ -1558,7 +1568,7 @@ func TestHandleChannelControl_newSession企业通道SessionMap轮转(t *testing.
 	assert.True(t, handled)
 
 	state := mh.GetOrCreateChannelState(msg)
-	if !strings.Contains(state.SessionID, "feishu_enterprise::oc-9::bot-1::") {
+	if !strings.Contains(state.SessionID, "feishu::oc-9::bot-1::") {
 		t.Errorf("企业通道 /new_session 应经 SessionMap 轮转，实际 %q", state.SessionID)
 	}
 }

@@ -14,17 +14,18 @@ import (
 // newSessionMapAt 已移至 session_map.go 实现文件（非导出函数区），
 // 与 NewSessionMapAtForTest 共用，测试文件不再重复声明。
 
-// TestMakeKey 两 scope 的键格式
+// TestMakeKey 两 scope 的键格式（首段为 provider，运行时实值如 "feishu"——
+// FeishuChannel.name；channel_id 的 feishu_enterprise 前缀与此无关）
 func TestMakeKey(t *testing.T) {
 	cases := []struct {
 		scope SessionMapScope
 		want  string
 	}{
-		{SessionMapScopePerChatBot, "feishu_enterprise::oc-123::bot-001"},
-		{SessionMapScopePerChatBotUser, "feishu_enterprise::oc-123::bot-001::user-9"},
+		{SessionMapScopePerChatBot, "feishu::oc-123::bot-001"},
+		{SessionMapScopePerChatBotUser, "feishu::oc-123::bot-001::user-9"},
 	}
 	for _, c := range cases {
-		got := makeKey(c.scope, "feishu_enterprise", "oc-123", "bot-001", "user-9")
+		got := makeKey(c.scope, "feishu", "oc-123", "bot-001", "user-9")
 		if got != c.want {
 			t.Errorf("makeKey(scope=%d) = %q, want %q", c.scope, got, c.want)
 		}
@@ -33,12 +34,12 @@ func TestMakeKey(t *testing.T) {
 
 // TestMakeSessionID 格式：key + "::" + hex时间戳 + "::" + 6位hex
 func TestMakeSessionID(t *testing.T) {
-	sid := makeSessionID(SessionMapScopePerChatBot, "feishu_enterprise", "oc-123", "bot-001", "user-9")
+	sid := makeSessionID(SessionMapScopePerChatBot, "feishu", "oc-123", "bot-001", "user-9")
 	parts := strings.Split(sid, "::")
 	if len(parts) != 5 {
 		t.Fatalf("PerChatBot session_id 应 5 段，实际 %d 段: %q", len(parts), sid)
 	}
-	if parts[0] != "feishu_enterprise" || parts[1] != "oc-123" || parts[2] != "bot-001" {
+	if parts[0] != "feishu" || parts[1] != "oc-123" || parts[2] != "bot-001" {
 		t.Errorf("前三段应为身份键，实际 %q", sid)
 	}
 	if len(parts[3]) == 0 {
