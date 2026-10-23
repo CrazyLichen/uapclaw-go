@@ -3,11 +3,24 @@ package parser
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// ImageCaptioner 图片描述生成器。
+//
+// 构造即检查 LLM 客户端支持度（nil 或模型名不在白名单仅 Warn 不报错——
+// caption 是软能力，禁用态合法）。归档能力经包级 CpImage 提供。
+//
+// Python: captioner.py ImageCaptioner
+type ImageCaptioner struct {
+	// llmClient 可选 LLM 客户端（nil = 禁用态：仅归档不 caption）。
+	llmClient *llm.Model
+}
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -38,6 +51,17 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewImageCaptioner 构造 ImageCaptioner。
+//
+// 构造即调用 isLLMSupported（对齐 Python __init__ 内 self._is_llm_supported()）。
+//
+// Python: captioner.py ImageCaptioner.__init__
+func NewImageCaptioner(llmClient *llm.Model) *ImageCaptioner {
+	c := &ImageCaptioner{llmClient: llmClient}
+	c.isLLMSupported()
+	return c
+}
 
 // CpImage 复制图片到 savedImageDir 目录并返回目标路径。
 //
@@ -81,6 +105,38 @@ func CpImage(imageLoc string) (string, error) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isLLMSupported 检查 LLM 客户端对图片 captioning 的支持度。
+//
+// 两分支均仅 Warn 不报错（对齐 Python docstring 声明的 bool 语义但实现
+// 只打日志）：
+//  1. nil 客户端 → 禁用态提示
+//  2. 模型名前缀不在白名单 → 可能不支持提示
+//
+// Python: captioner.py ImageCaptioner._is_llm_supported
+func (c *ImageCaptioner) isLLMSupported() {
+	if c.llmClient == nil {
+		// Python f"...empty {self.llm_client=}..." 的 = 自省语法 Go 无等价物，
+		// 用字面 "nil" 近似（偏差归档 spec §8-3）
+		logger.Warn(logComponent).
+			Str("llm_client", "nil").
+			Msg("image captioning is disabled for empty llm_client, please ensure an appropriate VLM is used")
+		return
+	}
+	modelName := ""
+	if c.llmClient.ModelConfig != nil {
+		modelName = c.llmClient.ModelConfig.ModelName
+	}
+	for _, base := range supportedLLMClient {
+		if strings.HasPrefix(modelName, base) {
+			return
+		}
+	}
+	// 对齐 Python f"{self.llm_client.model_config.model_name=} may not be supported..."
+	logger.Warn(logComponent).
+		Str("model_name", modelName).
+		Msg("model may not be supported for image captioning, please ensure an appropriate VLM is used")
+}
 
 // copyFile 读源写目标复制文件。
 //

@@ -1,12 +1,58 @@
 package parser
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
+
+// stubCaptionClient 惰性 mock：所有方法零行为，具体断言场景用 captionClient。
+type stubCaptionClient struct{}
+
+func (s *stubCaptionClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	return llmschema.NewAssistantMessage(""), nil
+}
+func (s *stubCaptionClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubCaptionClient) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubCaptionClient) GenerateSpeech(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubCaptionClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubCaptionClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubCaptionClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+func (s *stubCaptionClient) SupportsKVCacheRelease() bool { return false }
+
+// newTestModel 构造带 stub 客户端的 Model（WithClient 注入，走真实 Invoke 链）。
+func newTestModel(t *testing.T, modelCfg *llmschema.ModelRequestConfig) *llm.Model {
+	t.Helper()
+	clientCfg, err := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	if err != nil {
+		t.Fatalf("构造客户端配置失败: %v", err)
+	}
+	model, err := llm.NewModel(clientCfg, modelCfg, llm.WithClient(&stubCaptionClient{}))
+	if err != nil {
+		t.Fatalf("构造 Model 失败: %v", err)
+	}
+	return model
+}
 
 // writeTempImage 在临时目录写一个最小 PNG 字节文件，返回路径。
 func writeTempImage(t *testing.T, name string) string {
@@ -118,5 +164,30 @@ func TestCpImage_复制失败回落原路径(t *testing.T) {
 	}
 	if got != srcDir {
 		t.Errorf("复制失败应回落原路径 %s，实际 %s", srcDir, got)
+	}
+}
+
+// ──────────────────────────── ImageCaptioner 构造测试 ────────────────────────────
+
+// TestNewImageCaptioner_三类客户端 测试 nil/匹配名/不匹配名构造均不报错。
+func TestNewImageCaptioner_三类客户端(t *testing.T) {
+	// nil 客户端：禁用态，构造不报错
+	c := NewImageCaptioner(nil)
+	if c == nil {
+		t.Fatal("nil client 构造应返回非 nil 实例")
+	}
+
+	// 匹配名：qwen3-vl 前缀命中白名单
+	cfg := llmschema.NewModelRequestConfig(llmschema.WithModelName("qwen3-vl-plus"))
+	matched := NewImageCaptioner(newTestModel(t, cfg))
+	if matched == nil {
+		t.Fatal("匹配名构造应返回非 nil 实例")
+	}
+
+	// 不匹配名：仅 warn 不报错
+	cfg2 := llmschema.NewModelRequestConfig(llmschema.WithModelName("deepseek-r1"))
+	unmatched := NewImageCaptioner(newTestModel(t, cfg2))
+	if unmatched == nil {
+		t.Fatal("不匹配名构造应返回非 nil 实例（仅 warn）")
 	}
 }
