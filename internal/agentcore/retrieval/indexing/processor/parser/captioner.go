@@ -1,11 +1,17 @@
 package parser
 
 import (
+	"context"
+	"encoding/base64"
+	"fmt"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -104,7 +110,39 @@ func CpImage(imageLoc string) (string, error) {
 	return destPath, nil
 }
 
+// CaptionImages 逐图串行生成 caption 列表。
+//
+// 文件不存在的图：Warn + 空串占位（对齐 Python skip 分支）。
+// 顺序与输入一致（对齐 Python captions.append 逐个累积）。
+//
+// Python: captioner.py ImageCaptioner.caption_images
+func (c *ImageCaptioner) CaptionImages(ctx context.Context, imageLocs []string) []string {
+	captions := make([]string, 0, len(imageLocs))
+	for _, imageLoc := range imageLocs {
+		var caption string
+		if _, err := os.Stat(imageLoc); err != nil {
+			// 对齐 Python: logger.warning(f"Image file {image_loc} does not exist, skipping captioning.")
+			logger.Warn(logComponent).
+				Str("image_loc", imageLoc).
+				Msg("image file does not exist, skipping captioning")
+			caption = ""
+		} else {
+			caption = c.llmCall(ctx, imageLoc)
+		}
+		captions = append(captions, caption)
+	}
+	return captions
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// init 注册 Python 端补充的 MIME 类型映射（幂等：retrieval/common/document.go
+// init 已注册过，重复注册同一映射无副作用；字面对齐 captioner.py 模块级
+// mimetypes.add_type("image/jpeg", ".jfif", strict=True)）。
+func init() {
+	// Python mimetypes.add_type 无返回值；注册失败仅影响该扩展名识别
+	_ = mime.AddExtensionType(".jfif", "image/jpeg")
+}
 
 // isLLMSupported 检查 LLM 客户端对图片 captioning 的支持度。
 //
@@ -136,6 +174,83 @@ func (c *ImageCaptioner) isLLMSupported() {
 	logger.Warn(logComponent).
 		Str("model_name", modelName).
 		Msg("model may not be supported for image captioning, please ensure an appropriate VLM is used")
+}
+
+// llmCall 生成单张图片的 caption。
+//
+// 流程（逐条对齐 Python _llm_call_async）：
+//  1. nil 客户端 → 返回空串（禁用态非失败）
+//  2. mime 按扩展名检测；未知 → 回落 image/png + Warn
+//  3. 读文件 base64 编码
+//  4. 多模态消息（text 提示词 + image_url data URI）Invoke
+//  5. resp.Content.Text() 取描述
+//  6. 任一步失败 → Warn + 返回空串（软失败）
+//
+// Python: captioner.py ImageCaptioner._llm_call_async
+func (c *ImageCaptioner) llmCall(ctx context.Context, imageLoc string) string {
+	if c.llmClient == nil {
+		return ""
+	}
+
+	// 对齐 Python: mime_type, _ = mimetypes.guess_type(image_loc)
+	mimeType := mime.TypeByExtension(filepath.Ext(imageLoc))
+	if mimeType == "" {
+		mimeType = "image/png"
+		// 对齐 Python: logger.warning(f"Could not determine MIME type for {image_loc=}, using {mime_type}")
+		logger.Warn(logComponent).
+			Str("image_loc", imageLoc).
+			Str("mime_type", mimeType).
+			Msg("could not determine MIME type, using fallback")
+	}
+
+	// 对齐 Python: logger.info(f"Calling LLM for image captioning for {image_loc=}")
+	logger.Info(logComponent).
+		Str("image_loc", imageLoc).
+		Msg("calling LLM for image captioning")
+
+	imageBytes, err := os.ReadFile(imageLoc)
+	if err != nil {
+		// 对齐 Python: logger.warning(f"LLM-based caption for {image_loc=} with invocation failed for {image_loc}: {e}")
+		//（Python 该条日志变量冗余，Go 字段单次——偏差归档 spec §8-4）
+		logger.Warn(logComponent).
+			Str("image_loc", imageLoc).
+			Err(err).
+			Msg("LLM-based caption failed for image")
+		return ""
+	}
+	imageB64 := base64.StdEncoding.EncodeToString(imageBytes)
+
+	// 对齐 Python messages=[{"role": "user", "content": [
+	//   {"type": "text", "text": IMAGE_CAPTION_PROMPT},
+	//   {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}}]}]
+	msg := llmschema.NewUserMessage("", llmschema.WithMultiModalContent(
+		llmschema.ContentPart{
+			Type: "text",
+			Text: imageCaptionPrompt,
+		},
+		llmschema.ContentPart{
+			Type: "image_url",
+			ImageURL: &llmschema.ImageURL{
+				URL: fmt.Sprintf("data:%s;base64,%s", mimeType, imageB64),
+			},
+		},
+	))
+
+	resp, err := c.llmClient.Invoke(ctx, model_clients.NewMessagesParam(msg))
+	if err != nil {
+		// 对齐 Python: logger.warning(f"LLM-based caption ... failed ...: {e}")
+		//（Python 该条日志变量冗余，Go 字段单次——偏差归档 spec §8-4）
+		logger.Warn(logComponent).
+			Str("image_loc", imageLoc).
+			Err(err).
+			Msg("LLM-based caption failed for image")
+		return ""
+	}
+	if resp == nil {
+		return ""
+	}
+	// 对齐 Python: return resp.content if hasattr(resp, "content") else str(resp)
+	return resp.Content.Text()
 }
 
 // copyFile 读源写目标复制文件。

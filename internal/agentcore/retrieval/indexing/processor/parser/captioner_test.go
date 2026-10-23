@@ -2,9 +2,11 @@ package parser
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -189,5 +191,136 @@ func TestNewImageCaptioner_三类客户端(t *testing.T) {
 	unmatched := NewImageCaptioner(newTestModel(t, cfg2))
 	if unmatched == nil {
 		t.Fatal("不匹配名构造应返回非 nil 实例（仅 warn）")
+	}
+}
+
+// ──────────────────────────── llmCall/CaptionImages 测试 ────────────────────────────
+
+// captionInvokeFn Invoke 注入函数类型。
+type captionInvokeFn func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error)
+
+// captionClient 可断言 Invoke 入参的 mock：记录收到的消息。
+type captionClient struct {
+	stubCaptionClient
+	invokeFn captionInvokeFn
+}
+
+func (c *captionClient) Invoke(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	if c.invokeFn != nil {
+		return c.invokeFn(ctx, messages, opts...)
+	}
+	return llmschema.NewAssistantMessage("default caption"), nil
+}
+
+// newCaptionModel 构造带断言 mock 的 Model。
+func newCaptionModel(t *testing.T, modelCfg *llmschema.ModelRequestConfig, fn captionInvokeFn) *llm.Model {
+	t.Helper()
+	clientCfg, _ := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	model, err := llm.NewModel(clientCfg, modelCfg, llm.WithClient(&captionClient{invokeFn: fn}))
+	if err != nil {
+		t.Fatalf("构造 Model 失败: %v", err)
+	}
+	return model
+}
+
+// TestCaptionImages_单图成功 核心用例：断言 LLM 收到正确的多模态消息。
+func TestCaptionImages_单图成功(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	src := writeTempImage(t, "photo.png")
+	wantBytes := mustRead(t, src)
+
+	var gotRole string
+	var gotParts []llmschema.ContentPart
+	model := newCaptionModel(t, nil, func(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		msgs := messages.Messages()
+		if len(msgs) != 1 {
+			t.Fatalf("应发 1 条消息，实际 %d", len(msgs))
+		}
+		gotRole = msgs[0].GetRole().String()
+		gotParts = msgs[0].GetContent().Parts()
+		return llmschema.NewAssistantMessage("A chart."), nil
+	})
+
+	c := NewImageCaptioner(model)
+	got := c.CaptionImages(context.Background(), []string{src})
+	if len(got) != 1 || got[0] != "A chart." {
+		t.Fatalf("应返回 [A chart.]，实际 %v", got)
+	}
+	if gotRole != "user" {
+		t.Errorf("role 应为 user，实际 %s", gotRole)
+	}
+	if len(gotParts) != 2 {
+		t.Fatalf("content 应为 2 个分片，实际 %d", len(gotParts))
+	}
+	// 分片 1：提示词文本
+	if gotParts[0].Type != "text" || !strings.HasPrefix(gotParts[0].Text, "You are an assistant") {
+		t.Errorf("分片 1 应为提示词文本，实际 type=%s", gotParts[0].Type)
+	}
+	// 分片 2：data URI，base64 解码后等于原件字节
+	if gotParts[1].Type != "image_url" || gotParts[1].ImageURL == nil {
+		t.Fatalf("分片 2 应为 image_url，实际 %+v", gotParts[1])
+	}
+	url := gotParts[1].ImageURL.URL
+	if !strings.HasPrefix(url, "data:image/png;base64,") {
+		t.Errorf("data URI 前缀错误: %s", url[:40])
+	}
+	b64 := strings.TrimPrefix(url, "data:image/png;base64,")
+	decoded, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		t.Fatalf("base64 解码失败: %v", err)
+	}
+	if string(decoded) != string(wantBytes) {
+		t.Error("解码后字节应与图片原件一致")
+	}
+}
+
+// TestCaptionImages_文件不存在 测试跳过不存在的图。
+func TestCaptionImages_文件不存在(t *testing.T) {
+	c := NewImageCaptioner(nil) // 任何 client：文件不存在分支在前
+	got := c.CaptionImages(context.Background(), []string{"/no/such/file.png"})
+	if len(got) != 1 || got[0] != "" {
+		t.Fatalf("不存在文件应返回 [\"\"]，实际 %v", got)
+	}
+}
+
+// TestLLMCall_禁用态 测试 nil client 返回空串。
+func TestLLMCall_禁用态(t *testing.T) {
+	c := NewImageCaptioner(nil)
+	if got := c.llmCall(context.Background(), "whatever.png"); got != "" {
+		t.Errorf("禁用态应返回空串，实际 %q", got)
+	}
+}
+
+// TestLLMCall_调用失败软失败 测试 Invoke 报错时返回空串。
+func TestLLMCall_调用失败软失败(t *testing.T) {
+	src := writeTempImage(t, "fail.png")
+	model := newCaptionModel(t, nil, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return nil, errors.New("boom")
+	})
+	c := NewImageCaptioner(model)
+	if got := c.llmCall(context.Background(), src); got != "" {
+		t.Errorf("Invoke 失败应返回空串，实际 %q", got)
+	}
+}
+
+// TestLLMCall_mime回落 测试无法识别扩展名时回落 image/png。
+func TestLLMCall_mime回落(t *testing.T) {
+	src := writeTempImage(t, "noext") // 无扩展名
+	var gotURL string
+	model := newCaptionModel(t, nil, func(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		parts := messages.Messages()[0].GetContent().Parts()
+		gotURL = parts[1].ImageURL.URL
+		return llmschema.NewAssistantMessage("x"), nil
+	})
+	c := NewImageCaptioner(model)
+	_ = c.llmCall(context.Background(), src)
+	if !strings.HasPrefix(gotURL, "data:image/png;base64,") {
+		t.Errorf("无扩展名应回落 image/png，实际 %s", gotURL[:30])
 	}
 }
