@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -159,7 +160,7 @@ func TestDecryptModelEntries_解密api_key(t *testing.T) {
 	}
 	crypto.SetCryptoProvider(provider)
 
-	ciphertext, err := provider.Encrypt("sk-secret")
+	ciphertext, err := provider.Encrypt(context.Background(), "sk-secret")
 	if err != nil {
 		t.Fatalf("加密失败: %v", err)
 	}

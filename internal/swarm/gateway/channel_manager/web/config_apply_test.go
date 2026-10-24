@@ -21,9 +21,11 @@ type fakeCrypto struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (f *fakeCrypto) Encrypt(plaintext string) (string, error) { return "enc(" + plaintext + ")", nil }
+func (f *fakeCrypto) Encrypt(_ context.Context, plaintext string) (string, error) {
+	return "enc(" + plaintext + ")", nil
+}
 
-func (f *fakeCrypto) Decrypt(ciphertext string) (string, error) {
+func (f *fakeCrypto) Decrypt(_ context.Context, ciphertext string) (string, error) {
 	return "dec(" + ciphertext + ")", nil
 }
 
@@ -117,19 +119,19 @@ func TestNotifyConfigSavedOnce_nil回调不触发(t *testing.T) {
 }
 
 func TestBuildModelsDefaultsFromFrontend_无效类型(t *testing.T) {
-	_, err := buildModelsDefaultsFromFrontend("not a list", nil)
+	_, err := buildModelsDefaultsFromFrontend(context.Background(), "not a list", nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must be a non-empty list")
 }
 
 func TestBuildModelsDefaultsFromFrontend_空列表(t *testing.T) {
-	_, err := buildModelsDefaultsFromFrontend([]any{}, nil)
+	_, err := buildModelsDefaultsFromFrontend(context.Background(), []any{}, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must be a non-empty list")
 }
 
 func TestBuildModelsDefaultsFromFrontend_缺model_name(t *testing.T) {
-	_, err := buildModelsDefaultsFromFrontend([]any{
+	_, err := buildModelsDefaultsFromFrontend(context.Background(), []any{
 		map[string]any{"api_key": "key1"},
 	}, nil)
 	assert.Error(t, err)
@@ -137,7 +139,7 @@ func TestBuildModelsDefaultsFromFrontend_缺model_name(t *testing.T) {
 }
 
 func TestBuildModelsDefaultsFromFrontend_缺api_key和origin_index(t *testing.T) {
-	_, err := buildModelsDefaultsFromFrontend([]any{
+	_, err := buildModelsDefaultsFromFrontend(context.Background(), []any{
 		map[string]any{"model_name": "gpt-4"},
 	}, nil)
 	assert.Error(t, err)
@@ -145,7 +147,7 @@ func TestBuildModelsDefaultsFromFrontend_缺api_key和origin_index(t *testing.T)
 }
 
 func TestBuildModelsDefaultsFromFrontend_无效provider(t *testing.T) {
-	_, err := buildModelsDefaultsFromFrontend([]any{
+	_, err := buildModelsDefaultsFromFrontend(context.Background(), []any{
 		map[string]any{
 			"model_name":     "gpt-4",
 			"api_key":        "key1",
@@ -157,7 +159,7 @@ func TestBuildModelsDefaultsFromFrontend_无效provider(t *testing.T) {
 }
 
 func TestBuildModelsDefaultsFromFrontend_正常(t *testing.T) {
-	result, err := buildModelsDefaultsFromFrontend([]any{
+	result, err := buildModelsDefaultsFromFrontend(context.Background(), []any{
 		map[string]any{
 			"model_name":     "gpt-4",
 			"api_key":        "key1",
@@ -184,7 +186,7 @@ func TestBuildModelsDefaultsFromFrontend_正常(t *testing.T) {
 }
 
 func TestBuildModelsDefaultsFromFrontend_verifySslFalse(t *testing.T) {
-	result, err := buildModelsDefaultsFromFrontend([]any{
+	result, err := buildModelsDefaultsFromFrontend(context.Background(), []any{
 		map[string]any{
 			"model_name":     "gpt-4",
 			"api_key":        "key1",
@@ -220,7 +222,7 @@ func TestApplyConfigPayload_正常环境变量(t *testing.T) {
 	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
-	envUpdates, _, err := ApplyConfigPayload(map[string]any{
+	envUpdates, _, err := ApplyConfigPayload(context.Background(), map[string]any{
 		"model_provider": "OpenAI",
 		"model":          "gpt-4",
 	}, nil)
@@ -234,7 +236,7 @@ func TestApplyConfigPayload_正常环境变量(t *testing.T) {
 }
 
 func TestApplyConfigPayload_无效Provider(t *testing.T) {
-	_, _, err := ApplyConfigPayload(map[string]any{
+	_, _, err := ApplyConfigPayload(context.Background(), map[string]any{
 		"model_provider": "BadProvider",
 	}, nil)
 	assert.Error(t, err)
@@ -247,7 +249,7 @@ func TestApplyConfigPayload_nil值(t *testing.T) {
 	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
-	envUpdates, _, err := ApplyConfigPayload(map[string]any{
+	envUpdates, _, err := ApplyConfigPayload(context.Background(), map[string]any{
 		"model": nil,
 	}, nil)
 	require.NoError(t, err)
@@ -255,7 +257,7 @@ func TestApplyConfigPayload_nil值(t *testing.T) {
 }
 
 func TestApplyConfigPayload_空params(t *testing.T) {
-	envUpdates, yamlUpdated, err := ApplyConfigPayload(map[string]any{}, nil)
+	envUpdates, yamlUpdated, err := ApplyConfigPayload(context.Background(), map[string]any{}, nil)
 	require.NoError(t, err)
 	assert.Empty(t, envUpdates)
 	assert.Empty(t, yamlUpdated)
@@ -301,7 +303,7 @@ func TestProcessFiles_本地文件无URL(t *testing.T) {
 }
 
 func TestBuildModelsDefaultsFromFrontend_有originIndex(t *testing.T) {
-	result, err := buildModelsDefaultsFromFrontend([]any{
+	result, err := buildModelsDefaultsFromFrontend(context.Background(), []any{
 		map[string]any{
 			"model_name":   "gpt-4",
 			"api_key":      "key1",
@@ -314,7 +316,7 @@ func TestBuildModelsDefaultsFromFrontend_有originIndex(t *testing.T) {
 }
 
 func TestBuildModelsDefaultsFromFrontend_重复Alias(t *testing.T) {
-	_, err := buildModelsDefaultsFromFrontend([]any{
+	_, err := buildModelsDefaultsFromFrontend(context.Background(), []any{
 		map[string]any{
 			"model_name": "gpt-4",
 			"api_key":    "key1",
@@ -332,7 +334,7 @@ func TestBuildModelsDefaultsFromFrontend_重复Alias(t *testing.T) {
 }
 
 func TestBuildModelsDefaultsFromFrontend_非对象项(t *testing.T) {
-	_, err := buildModelsDefaultsFromFrontend([]any{"not an object"}, nil)
+	_, err := buildModelsDefaultsFromFrontend(context.Background(), []any{"not an object"}, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must be object")
 }
@@ -350,7 +352,7 @@ func TestMergeModelsForReplaceAll_新条目(t *testing.T) {
 			"is_default": true,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil, nil, nil)
+	result := mergeModelsForReplaceAll(context.Background(), parsed, nil, nil, nil)
 	assert.Len(t, result, 1)
 }
 
@@ -368,7 +370,7 @@ func TestMergeModelsForReplaceAll_有crypto(t *testing.T) {
 			"is_default": true,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil, nil, cryptoProv)
+	result := mergeModelsForReplaceAll(context.Background(), parsed, nil, nil, cryptoProv)
 	assert.Len(t, result, 1)
 	mcc, ok := result[0]["model_client_config"].(map[string]any)
 	assert.True(t, ok)
@@ -489,7 +491,7 @@ func TestMergeModelsForReplaceAll_有originIndex匹配(t *testing.T) {
 			"origin_index": 0,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, rawDefaults, resolvedDefaults, nil)
+	result := mergeModelsForReplaceAll(context.Background(), parsed, rawDefaults, resolvedDefaults, nil)
 	assert.Len(t, result, 1)
 }
 
@@ -507,7 +509,7 @@ func TestMergeModelsForReplaceAll_originIndex越界(t *testing.T) {
 			"origin_index": 99,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil, nil, nil)
+	result := mergeModelsForReplaceAll(context.Background(), parsed, nil, nil, nil)
 	assert.Len(t, result, 1)
 }
 
@@ -525,7 +527,7 @@ func TestMergeModelsForReplaceAll_originIndex非int(t *testing.T) {
 			"origin_index": "0",
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil, nil, nil)
+	result := mergeModelsForReplaceAll(context.Background(), parsed, nil, nil, nil)
 	assert.Len(t, result, 1)
 }
 
@@ -557,7 +559,7 @@ func TestMergeModelsForReplaceAll_有crypto且originIndex(t *testing.T) {
 			"origin_index": 0,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, rawDefaults, resolvedDefaults, cryptoProv)
+	result := mergeModelsForReplaceAll(context.Background(), parsed, rawDefaults, resolvedDefaults, cryptoProv)
 	assert.Len(t, result, 1)
 }
 
@@ -611,11 +613,11 @@ func TestProcessFiles_无name和filename(t *testing.T) {
 // fakeCryptoEncryptFail Encrypt 恒失败的 fake（测试加密失败保留明文语义）
 type fakeCryptoEncryptFail struct{}
 
-func (f *fakeCryptoEncryptFail) Encrypt(plaintext string) (string, error) {
+func (f *fakeCryptoEncryptFail) Encrypt(_ context.Context, plaintext string) (string, error) {
 	return "", errors.New("encrypt boom")
 }
 
-func (f *fakeCryptoEncryptFail) Decrypt(ciphertext string) (string, error) {
+func (f *fakeCryptoEncryptFail) Decrypt(_ context.Context, ciphertext string) (string, error) {
 	return "dec(" + ciphertext + ")", nil
 }
 
@@ -624,7 +626,7 @@ func TestApplyConfigPayload_加密失败保留明文(t *testing.T) {
 	_ = os.Unsetenv("API_KEY")
 	defer func() { _ = os.Unsetenv("API_KEY") }()
 
-	envUpdates, _, err := ApplyConfigPayload(map[string]any{"api_key": "plain"}, &fakeCryptoEncryptFail{})
+	envUpdates, _, err := ApplyConfigPayload(context.Background(), map[string]any{"api_key": "plain"}, &fakeCryptoEncryptFail{})
 	require.NoError(t, err)
 	if envUpdates["API_KEY"] != "plain" {
 		t.Errorf("API_KEY = %q, 期望加密失败时保留明文", envUpdates["API_KEY"])
@@ -643,7 +645,7 @@ func TestMergeModelsForReplaceAll_加密失败保留明文(t *testing.T) {
 			"is_default":       true,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil, nil, &fakeCryptoEncryptFail{})
+	result := mergeModelsForReplaceAll(context.Background(), parsed, nil, nil, &fakeCryptoEncryptFail{})
 	require.Len(t, result, 1)
 	mcc := result[0]["model_client_config"].(map[string]any)
 	if mcc["api_key"] != "plain" {

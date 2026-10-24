@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"context"
 	"encoding/hex"
 	"strings"
 	"sync"
@@ -383,12 +384,12 @@ func TestAesGcmProvider_加密解密(t *testing.T) {
 	}
 
 	plaintext := "my-secret-api-key"
-	ciphertext, err := provider.Encrypt(plaintext)
+	ciphertext, err := provider.Encrypt(context.Background(), plaintext)
 	if err != nil {
 		t.Fatalf("加密失败: %v", err)
 	}
 
-	decrypted, err := provider.Decrypt(ciphertext)
+	decrypted, err := provider.Decrypt(context.Background(), ciphertext)
 	if err != nil {
 		t.Fatalf("解密失败: %v", err)
 	}
@@ -431,12 +432,12 @@ func TestAesGcmProvider_密钥隔离(t *testing.T) {
 	key[0] = 0xFF
 
 	// provider 应仍能正常工作
-	ciphertext, err := provider.Encrypt("test")
+	ciphertext, err := provider.Encrypt(context.Background(), "test")
 	if err != nil {
 		t.Fatalf("加密失败: %v", err)
 	}
 
-	decrypted, err := provider.Decrypt(ciphertext)
+	decrypted, err := provider.Decrypt(context.Background(), ciphertext)
 	if err != nil {
 		t.Fatalf("解密失败: %v", err)
 	}
@@ -506,7 +507,7 @@ func TestNewDecryptFunc_敏感变量解密(t *testing.T) {
 	SetCryptoProvider(provider)
 
 	// 先加密一个值
-	ciphertext, err := provider.Encrypt("sk-1234567890")
+	ciphertext, err := provider.Encrypt(context.Background(), "sk-1234567890")
 	if err != nil {
 		t.Fatalf("加密失败: %v", err)
 	}
@@ -561,7 +562,7 @@ func TestNewDecryptFunc_token变量解密(t *testing.T) {
 	provider, _ := NewAesGcmProvider(testKey)
 	SetCryptoProvider(provider)
 
-	ciphertext, _ := provider.Encrypt("token-value")
+	ciphertext, _ := provider.Encrypt(context.Background(), "token-value")
 
 	decryptFn := NewDecryptFunc()
 	decrypted, ok := decryptFn("ACCESS_TOKEN", ciphertext)
@@ -580,7 +581,7 @@ func TestNewDecryptFunc_连字符变量名(t *testing.T) {
 	provider, _ := NewAesGcmProvider(testKey)
 	SetCryptoProvider(provider)
 
-	ciphertext, _ := provider.Encrypt("key-value")
+	ciphertext, _ := provider.Encrypt(context.Background(), "key-value")
 
 	decryptFn := NewDecryptFunc()
 	decrypted, ok := decryptFn("MY-API-KEY", ciphertext)

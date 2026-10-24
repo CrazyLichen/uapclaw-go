@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -16,11 +17,15 @@ import (
 //
 // 适用场景：上层业务调用，调用方无需关心密钥管理。
 // 例如：配置文件中的 api_key 解密、Web/TUI 通道敏感参数加解密。
+//
+// ctx 设计说明：Python encrypt/decrypt 为同进程函数调用无 ctx 概念；
+// Go 侧 GRPCPluginCryptoProvider 等实现跨进程往返（有挂起风险），故接口
+// 透传 ctx 供实现施加超时。进程内实现（AesGcmProvider 等）可忽略 ctx。
 type CryptoProvider interface {
 	// Encrypt 加密明文，返回密文字符串。
-	Encrypt(plaintext string) (string, error)
+	Encrypt(ctx context.Context, plaintext string) (string, error)
 	// Decrypt 解密密文，返回明文字符串。
-	Decrypt(ciphertext string) (string, error)
+	Decrypt(ctx context.Context, ciphertext string) (string, error)
 }
 
 // AesGcmProvider 基于 AES-256-GCM 的 CryptoProvider 实现。
@@ -74,14 +79,14 @@ func NewAesGcmProvider(key []byte) (*AesGcmProvider, error) {
 }
 
 // Encrypt 加密明文。
-// 委托内部 BaseCrypt 实例，使用持有密钥进行加密。
-func (p *AesGcmProvider) Encrypt(plaintext string) (string, error) {
+// 委托内部 BaseCrypt 实例，使用持有密钥进行加密（进程内实现，忽略 ctx）。
+func (p *AesGcmProvider) Encrypt(_ context.Context, plaintext string) (string, error) {
 	return p.crypt.Encrypt(p.key, plaintext)
 }
 
 // Decrypt 解密密文。
-// 委托内部 BaseCrypt 实例，使用持有密钥进行解密。
-func (p *AesGcmProvider) Decrypt(ciphertext string) (string, error) {
+// 委托内部 BaseCrypt 实例，使用持有密钥进行解密（进程内实现，忽略 ctx）。
+func (p *AesGcmProvider) Decrypt(_ context.Context, ciphertext string) (string, error) {
 	return p.crypt.Decrypt(p.key, ciphertext)
 }
 
@@ -140,7 +145,9 @@ func NewDecryptFunc() func(envName, value string) (string, bool) {
 		}
 
 		// 调用 CryptoProvider 解密
-		decrypted, err := provider.Decrypt(value)
+		// ctx 说明：config.DecryptFunc 签名无 ctx（对齐 Python），
+		// 此处用 Background；插件实现内部有超时兜底
+		decrypted, err := provider.Decrypt(context.Background(), value)
 		if err != nil {
 			return value, false
 		}

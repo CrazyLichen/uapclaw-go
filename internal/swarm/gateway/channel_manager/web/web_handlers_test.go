@@ -23,11 +23,11 @@ type fakeCryptoHandler struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (f *fakeCryptoHandler) Encrypt(plaintext string) (string, error) {
+func (f *fakeCryptoHandler) Encrypt(_ context.Context, plaintext string) (string, error) {
 	return "enc(" + plaintext + ")", nil
 }
 
-func (f *fakeCryptoHandler) Decrypt(ciphertext string) (string, error) {
+func (f *fakeCryptoHandler) Decrypt(_ context.Context, ciphertext string) (string, error) {
 	return "dec(" + ciphertext + ")", nil
 }
 
@@ -844,6 +844,11 @@ func TestIsSensitiveKey(t *testing.T) {
 	assert.False(t, isSensitiveKey("model_name"))
 	assert.False(t, isSensitiveKey("base_url"))
 	assert.False(t, isSensitiveKey("timeout"))
+	// M-05：大写键大小写不敏感（对齐 Python key.lower()，与 config_apply 加密路径对称）
+	assert.True(t, isSensitiveKey("OPENAI_API_KEY"))
+	assert.True(t, isSensitiveKey("MY_TOKEN"))
+	assert.True(t, isSensitiveKey("Api_Key"))
+	assert.False(t, isSensitiveKey("MODEL_NAME"))
 }
 
 // TestStrOrEmpty 测试 strOrEmpty 转换
@@ -868,11 +873,11 @@ func TestBuildSessionDeleteEnvelope(t *testing.T) {
 // fakeCryptoFailDecrypt Decrypt 恒失败的 fake（测试解密失败保留原值语义）
 type fakeCryptoFailDecrypt struct{}
 
-func (f *fakeCryptoFailDecrypt) Encrypt(plaintext string) (string, error) {
+func (f *fakeCryptoFailDecrypt) Encrypt(_ context.Context, plaintext string) (string, error) {
 	return "enc(" + plaintext + ")", nil
 }
 
-func (f *fakeCryptoFailDecrypt) Decrypt(ciphertext string) (string, error) {
+func (f *fakeCryptoFailDecrypt) Decrypt(_ context.Context, ciphertext string) (string, error) {
 	return "", errors.New("decrypt boom")
 }
 
@@ -934,7 +939,7 @@ func TestHandleModelsList_走config层解密(t *testing.T) {
 	defer crypto.SetCryptoProvider(original)
 	provider, err := crypto.NewAesGcmProvider([]byte("0123456789abcdef0123456789abcdef"))
 	require.NoError(t, err)
-	ciphertext, err := provider.Encrypt("sk-plain")
+	ciphertext, err := provider.Encrypt(context.Background(), "sk-plain")
 	require.NoError(t, err)
 	crypto.SetCryptoProvider(provider)
 

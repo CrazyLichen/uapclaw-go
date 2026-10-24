@@ -28,11 +28,11 @@ type memPluginClient struct {
 // fakeCryptoProvider 测试用 crypto 提供者（extensions 包共享，loader/registry 测试均用）
 type fakeCryptoProvider struct{}
 
-func (f *fakeCryptoProvider) Encrypt(plaintext string) (string, error) {
+func (f *fakeCryptoProvider) Encrypt(_ context.Context, plaintext string) (string, error) {
 	return "enc:" + plaintext, nil
 }
 
-func (f *fakeCryptoProvider) Decrypt(ciphertext string) (string, error) {
+func (f *fakeCryptoProvider) Decrypt(_ context.Context, ciphertext string) (string, error) {
 	return "dec:" + ciphertext, nil
 }
 
@@ -298,6 +298,36 @@ func TestExtensionManager_ShutdownAllExtensions(t *testing.T) {
 	// 二次调用幂等
 	if err := mgr.ShutdownAllExtensions(context.Background()); err != nil {
 		t.Errorf("二次 shutdown 应无异常: %v", err)
+	}
+}
+
+// TestExtensionManager_ShutdownAllExtensions_多声明去重 M-02：
+// 一个插件进程的 N 个声明共享同一 client，shutdown 应按 client 去重仅执行一次
+func TestExtensionManager_ShutdownAllExtensions_多声明去重(t *testing.T) {
+	ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := CreateInstance(fw, map[string]any{}, nil)
+	defer ResetInstance()
+
+	pc := &memPluginClient{}
+	host := &fakeHost{clients: map[string]PluginClientFace{"/tmp/extM": pc}}
+
+	mgr := NewExtensionManager(reg, WithSearchPaths([]string{}), WithPluginHostForManager(host))
+	// 同一 client 的 3 个声明（loader 对多声明插件的实际产出形态）
+	mgr.loaded = []LoadedExtension{
+		{Metadata: plugin.Metadata{ID: "d1"}, Root: "/tmp/extM", client: pc},
+		{Metadata: plugin.Metadata{ID: "d2"}, Root: "/tmp/extM", client: pc},
+		{Metadata: plugin.Metadata{ID: "d3"}, Root: "/tmp/extM", client: pc},
+	}
+
+	if err := mgr.ShutdownAllExtensions(context.Background()); err != nil {
+		t.Fatalf("ShutdownAllExtensions 失败: %v", err)
+	}
+	if len(pc.shutdownCalls) != 1 {
+		t.Errorf("共享 client 的 3 声明应仅 shutdown 一次, 实际 %d 次", len(pc.shutdownCalls))
+	}
+	if len(mgr.loaded) != 0 {
+		t.Errorf("shutdown 后 loaded 应清空, 实际 %d", len(mgr.loaded))
 	}
 }
 

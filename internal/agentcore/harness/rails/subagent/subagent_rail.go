@@ -71,6 +71,15 @@ type sessionToolkitSetter interface {
 	SetSessionToolkit(toolkit *hsubagent.SessionToolkit)
 }
 
+// deepAgentToolLister DeepAgent 实例读取已注册工具的本地等价接口（M-06）。
+// 与 sessionToolkitSetter 同因：rail 无法 import harness 主包
+// （harness/factory.go → rails/subagent 已存在，反向导入成环），
+// 用结构化接口断言等价访问。*harness.DeepAgent 通过具体方法签名自动满足。
+// Python: getattr(spec, "ability_manager", None) 的等价物。
+type deepAgentToolLister interface {
+	AbilityManager() agentinterfaces.AbilityManagerInterface
+}
+
 // 编译时接口检查
 // _ 编译时验证 SubagentRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*SubagentRail)(nil)
@@ -330,7 +339,27 @@ func (r *SubagentRail) extractAgentTools(spec hschema.SubagentSpec, agentName st
 		}
 	}
 
-	// 2. DeepAgent 实例的已注册工具 — Go 中暂不实现（需要 ability_manager 访问）
+	// 2. DeepAgent 实例的已注册工具（M-06 补齐）
+	// Python: if not isinstance(spec, SubAgentConfig): ability_mgr = getattr(spec, "ability_manager", None)
+	// Python: tool_names = [c.name for c in ability_mgr.cards if isinstance(c.name, str)]
+	// Python: if tool_names: return ", ".join(tool_names)（异常仅 debug 日志后继续）
+	if _, isCfg := spec.(*hschema.SubAgentConfig); !isCfg {
+		if lister, ok := spec.(deepAgentToolLister); ok {
+			if am := lister.AbilityManager(); am != nil {
+				var toolNames []string
+				for _, ability := range am.List() {
+					if ability != nil {
+						if n := ability.AbilityName(); n != "" {
+							toolNames = append(toolNames, n)
+						}
+					}
+				}
+				if len(toolNames) > 0 {
+					return strings.Join(toolNames, ", ")
+				}
+			}
+		}
+	}
 
 	// 3. 已知默认
 	// Python: if agent_name in self._KNOWN_AGENT_TOOLS

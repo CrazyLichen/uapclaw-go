@@ -78,7 +78,7 @@ func (e *ConfigInternalError) Error() string { return e.Message }
 // 返回值：
 //   - envUpdates: 本次变更的环境变量增量
 //   - yamlUpdated: 本次变更的 YAML 键列表
-func ApplyConfigPayload(params map[string]any, cryptoProv crypto.CryptoProvider) (envUpdates map[string]string, yamlUpdated []string, err error) {
+func ApplyConfigPayload(ctx context.Context, params map[string]any, cryptoProv crypto.CryptoProvider) (envUpdates map[string]string, yamlUpdated []string, err error) {
 	// Python: _encrypt_config_params (L692-699):
 	// 遍历 params，key 名包含 api_key 或 token 时加密。
 	// 加密失败保留明文 + Warn（Go error 签名；对齐 Python 无 error 概念的宽容语义）
@@ -87,7 +87,7 @@ func ApplyConfigPayload(params map[string]any, cryptoProv crypto.CryptoProvider)
 			kl := strings.ToLower(key)
 			if strings.Contains(kl, "api_key") || strings.Contains(kl, "token") {
 				if strVal, ok := val.(string); ok && strVal != "" {
-					if enc, encErr := cryptoProv.Encrypt(strVal); encErr == nil {
+					if enc, encErr := cryptoProv.Encrypt(ctx, strVal); encErr == nil {
 						params[key] = enc
 					} else {
 						logger.Warn(logComponentConfigApply).
@@ -499,7 +499,7 @@ func updateMemoryForbiddenInConfig(updates map[string]any) error {
 // buildModelsDefaultsFromFrontend 从前端 models 参数构建 models.defaults 列表。
 // Python: _build_models_defaults_from_frontend (app_web_handlers.py L784-868)。
 // cryptoProv 用于加密 api_key；rawModels 中的 origin_index 用于匹配原始 YAML 条目。
-func buildModelsDefaultsFromFrontend(rawModels any, cryptoProv crypto.CryptoProvider) ([]map[string]any, error) {
+func buildModelsDefaultsFromFrontend(ctx context.Context, rawModels any, cryptoProv crypto.CryptoProvider) ([]map[string]any, error) {
 	modelsList, ok := rawModels.([]any)
 	if !ok || len(modelsList) == 0 {
 		return nil, &ConfigBadRequest{Message: "models must be a non-empty list"}
@@ -629,7 +629,7 @@ func buildModelsDefaultsFromFrontend(rawModels any, cryptoProv crypto.CryptoProv
 	// 合并原始 YAML 条目（对齐 Python _merge_models_for_replace_all）
 	rawDefaults := loadRawModelsDefaults()
 	resolvedDefaults := config.GetDefaultModels(nil)
-	merged := mergeModelsForReplaceAll(parsed, rawDefaults, resolvedDefaults, cryptoProv)
+	merged := mergeModelsForReplaceAll(ctx, parsed, rawDefaults, resolvedDefaults, cryptoProv)
 
 	// 推断 is_default（对齐 Python _infer_is_default）
 	merged = inferIsDefault(merged)
@@ -760,7 +760,7 @@ func valuesMatch(parsedVal, resolvedVal any) bool {
 }
 
 // encryptAPIKey 加密条目的 api_key（cryptoProv nil 或加密失败时保留明文 + Warn）
-func encryptAPIKey(mcc map[string]any, cryptoProv crypto.CryptoProvider) {
+func encryptAPIKey(ctx context.Context, mcc map[string]any, cryptoProv crypto.CryptoProvider) {
 	if cryptoProv == nil {
 		return
 	}
@@ -768,7 +768,7 @@ func encryptAPIKey(mcc map[string]any, cryptoProv crypto.CryptoProvider) {
 	if !ok || apiKey == "" {
 		return
 	}
-	enc, err := cryptoProv.Encrypt(apiKey)
+	enc, err := cryptoProv.Encrypt(ctx, apiKey)
 	if err != nil {
 		logger.Warn(logComponentConfigApply).
 			Err(err).
@@ -786,7 +786,7 @@ func encryptAPIKey(mcc map[string]any, cryptoProv crypto.CryptoProvider) {
 //   - 比较时用 resolvedDefaults[oi] 与前端值比较，匹配时保留 rawDefaults[oi] 的值
 //   - api_key 变更时加密，未变更时保留原始值
 //   - 新条目（无 origin_index）：加密 api_key 后原样存入
-func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]any, resolvedDefaults []map[string]any, cryptoProv crypto.CryptoProvider) []map[string]any {
+func mergeModelsForReplaceAll(ctx context.Context, parsed []map[string]any, rawDefaults []map[string]any, resolvedDefaults []map[string]any, cryptoProv crypto.CryptoProvider) []map[string]any {
 
 	result := make([]map[string]any, 0, len(parsed))
 
@@ -796,7 +796,7 @@ func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]
 			// 新条目：加密 api_key 后原样存入
 			newEntry := utils.DeepCopyMap(entry)
 			if mcc, ok := newEntry["model_client_config"].(map[string]any); ok {
-				encryptAPIKey(mcc, cryptoProv)
+				encryptAPIKey(ctx, mcc, cryptoProv)
 			}
 			result = append(result, newEntry)
 			continue
@@ -819,7 +819,7 @@ func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]
 			// origin_index 越界，当作新条目处理
 			newEntry := utils.DeepCopyMap(entry)
 			if mcc, ok := newEntry["model_client_config"].(map[string]any); ok {
-				encryptAPIKey(mcc, cryptoProv)
+				encryptAPIKey(ctx, mcc, cryptoProv)
 			}
 			result = append(result, newEntry)
 			continue
@@ -856,7 +856,7 @@ func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]
 						if k == "api_key" {
 							// api_key 特殊处理：加密后写入（失败保留明文 + Warn）
 							if apiKeyStr, ok := parsedVal.(string); ok && apiKeyStr != "" && cryptoProv != nil {
-								if enc, encErr := cryptoProv.Encrypt(apiKeyStr); encErr == nil {
+								if enc, encErr := cryptoProv.Encrypt(ctx, apiKeyStr); encErr == nil {
 									mergedMCC[k] = enc
 								} else {
 									logger.Warn(logComponentConfigApply).Err(encErr).Msg("api_key 加密失败，保留明文")

@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
-	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
@@ -133,13 +132,16 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 
 	// 步骤5：注册 Web RPC handlers + onConnect 钩子（对齐 Python _register_web_handlers(bind)）
 	// AgentClient 通过 BindParams 闭包捕获，不直接设到 WebChannel
-	// CryptoProvider 装配补线：此时扩展已加载完毕，全局已是最终 provider（10.5.10）
+	// CryptoProvider 生产不注入（传 nil）：handler 每次请求经 resolveCrypto 查全局，
+	// 对齐 Python ExtensionRegistry.get_instance().get_crypto_provider() 逐请求取
+	// （app_web_handlers.py L612/L696/L858）——避免装配期快照在扩展热加载后陈旧。
+	// BindParams 注入通道仅测试使用（T-03，对齐设计文档 §七"生产不注入"）。
 	web.RegisterWebHandlers(&web.WebHandlersBindParams{
 		Channel:        wc,
 		AgentClient:    agentClient,
 		ChannelManager: channelMgr,
 		OnConfigSaved:  onConfigSavedCb,
-		CryptoProvider: crypto.GetCryptoProvider(),
+		CryptoProvider: nil,
 	})
 
 	// 组装路由

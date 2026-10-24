@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -152,8 +153,10 @@ func decryptModelEntries(entries []map[string]any) []map[string]any {
 		}
 		if mcc, ok := copied["model_client_config"].(map[string]any); ok {
 			// Python: if mcc.get("api_key") and crypto: mcc["api_key"] = crypto.decrypt(...)
+			// ctx 说明：GetDefaultModels(cfg) 签名对齐 Python 无 ctx，
+			// 此处用 Background；插件 provider 内部有超时兜底
 			if key, ok := mcc["api_key"].(string); ok && key != "" && provider != nil {
-				if dec, decErr := provider.Decrypt(key); decErr == nil {
+				if dec, decErr := provider.Decrypt(context.Background(), key); decErr == nil {
 					mcc["api_key"] = dec
 				}
 			}

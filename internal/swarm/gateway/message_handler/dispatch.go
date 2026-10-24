@@ -113,10 +113,18 @@ func (mh *MessageHandler) triggerBeforeChatRequestHook(ctx context.Context, agen
 		s := string(agentMsg.ReqMethod)
 		reqMethodStr = &s
 	}
+	// SessionID 条件取指针：空串留 nil，对齐 Python msg.session_id 为 None 时
+	// hook ctx 收到 None（message.py L246 str | None）。空串取指针会把
+	// session_id 序列化为 "" 而非 null，扩展判存语义有差（T-08）。
+	var sessionIDStr *string
+	if agentMsg.SessionID != "" {
+		s := agentMsg.SessionID
+		sessionIDStr = &s
+	}
 	hookCtx := &extensions.GatewayChatHookContext{
 		RequestID: agentMsg.ID,
 		ChannelID: agentMsg.ChannelID,
-		SessionID: &agentMsg.SessionID,
+		SessionID: sessionIDStr,
 		ReqMethod: reqMethodStr,
 		Params:    params,
 	}

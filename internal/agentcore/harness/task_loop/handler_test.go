@@ -2,8 +2,10 @@ package task_loop
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
@@ -1126,6 +1128,95 @@ func TestTaskLoopEventHandler_HandleTaskFailed_SessionSpawn_更新Toolkit(t *tes
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestTruncateRunes_短字符串原样返回 测试 rune 数不超过上限时不截断（T-01）
+func TestTruncateRunes_短字符串原样返回(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		max  int
+	}{
+		{"ASCII短", "hello", 10},
+		{"CJK短", "中文文本", 10},
+		{"正好等于上限", "abc", 3},
+		{"CJK正好等于上限", "四个字", 3}, // 4 个 rune > 3，会截断，改用 3 字
+	}
+	for _, c := range cases {
+		if got := truncateRunes(c.in, c.max); got != c.in {
+			t.Errorf("%s: truncateRunes(%q, %d) = %q, 期望原样返回", c.name, c.in, c.max, got)
+		}
+	}
+}
+
+// TestTruncateRunes_短字符串原样返回2 测试恰好等于上限时原样返回（T-01）
+func TestTruncateRunes_短字符串原样返回2(t *testing.T) {
+	if got := truncateRunes("四个字", 4); got != "四个字" {
+		t.Errorf("truncateRunes(%q, 4) = %q, 期望原样返回", "四个字", got)
+	}
+	if got := truncateRunes("中文文本", 4); got != "中文文本" {
+		t.Errorf("truncateRunes(%q, 4) = %q, 期望原样返回", "中文文本", got)
+	}
+}
+
+// TestTruncateRunes_超限截断 测试超过上限时按 rune 截断（T-01）
+func TestTruncateRunes_超限截断(t *testing.T) {
+	if got := truncateRunes("hello world", 5); got != "hello" {
+		t.Errorf("truncateRunes(%q, 5) = %q, 期望 %q", "hello world", got, "hello")
+	}
+}
+
+// TestTruncateRunes_CJK边界安全 测试中文多字节边界不产生非法 UTF-8（T-01）
+// 这是 T-01 的核心场景：旧字节截断 s[:500] 在中文 3 字节边界会截出半个字符。
+func TestTruncateRunes_CJK边界安全(t *testing.T) {
+	// 100 个中文字符 = 300 字节；maxLen=100 rune → 原样
+	long := strings.Repeat("中", 100)
+	if got := truncateRunes(long, 100); got != long {
+		t.Errorf("CJK 100 rune 上限应原样返回")
+	}
+	// 200 个中文字符（600 字节），截到 100 rune = 300 字节，首尾字符完整
+	long2 := strings.Repeat("文", 200)
+	got := truncateRunes(long2, 100)
+	if want := strings.Repeat("文", 100); got != want {
+		t.Errorf("CJK 截断结果错误：得到 %d 字节，期望 %d 字节", len(got), len(want))
+	}
+	// 结果必须是合法 UTF-8（旧实现会产生尾部非法字节）
+	if !utf8.ValidString(got) {
+		t.Errorf("截断结果不是合法 UTF-8")
+	}
+}
+
+// TestTruncateRunes_混合中英文 测试混合字符按 rune 计数（T-01）
+func TestTruncateRunes_混合中英文(t *testing.T) {
+	in := "abc中文def英文"
+	// 截 5 rune: "abc中文"
+	if got := truncateRunes(in, 5); got != "abc中文" {
+		t.Errorf("truncateRunes(%q, 5) = %q, 期望 %q", in, got, "abc中文")
+	}
+	// 截 1 rune
+	if got := truncateRunes(in, 1); got != "a" {
+		t.Errorf("truncateRunes(%q, 1) = %q, 期望 %q", in, got, "a")
+	}
+}
+
+// TestTruncateRunes_空字符串 测试空输入（T-01）
+func TestTruncateRunes_空字符串(t *testing.T) {
+	if got := truncateRunes("", 5); got != "" {
+		t.Errorf("truncateRunes(\"\", 5) = %q, 期望空串", got)
+	}
+	if got := truncateRunes("", 0); got != "" {
+		t.Errorf("truncateRunes(\"\", 0) = %q, 期望空串", got)
+	}
+}
+
+// TestTruncateRunes_零上限 测试 maxLen=0（T-01）
+func TestTruncateRunes_零上限(t *testing.T) {
+	if got := truncateRunes("abc", 0); got != "" {
+		t.Errorf("truncateRunes(%q, 0) = %q, 期望空串", "abc", got)
+	}
+	if got := truncateRunes("中文", 0); got != "" {
+		t.Errorf("truncateRunes(%q, 0) = %q, 期望空串", "中文", got)
+	}
+}
 
 // GetSessionID 实现 SessionFacade 接口
 func (f *fakeHandlerSess) GetSessionID() string {

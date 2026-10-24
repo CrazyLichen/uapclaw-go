@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
@@ -82,7 +83,8 @@ func (c *AesStorageCodec) Encode(plaintext string) string {
 	if provider == nil {
 		return plaintext
 	}
-	encrypted, err := provider.Encrypt(plaintext)
+	// ctx 说明：对齐 Python encode/decode 无 ctx 签名，进程内实现忽略 ctx
+	encrypted, err := provider.Encrypt(context.Background(), plaintext)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).
 			Str("method", "Encode").
@@ -106,7 +108,8 @@ func (c *AesStorageCodec) Decode(ciphertext string) string {
 	if provider == nil {
 		return ciphertext
 	}
-	decrypted, err := provider.Decrypt(ciphertext)
+	// ctx 说明：对齐 Python encode/decode 无 ctx 签名，进程内实现忽略 ctx
+	decrypted, err := provider.Decrypt(context.Background(), ciphertext)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).
 			Str("method", "Decode").
@@ -124,13 +127,13 @@ func (c *AesStorageCodec) IsPassthrough() bool {
 	return len(c.key) == 0
 }
 
-// Encrypt 加密明文，委托 BaseCrypt 并传入持有密钥
-func (p *keyedProvider) Encrypt(plaintext string) (string, error) {
+// Encrypt 加密明文，委托 BaseCrypt 并传入持有密钥（进程内实现，忽略 ctx）
+func (p *keyedProvider) Encrypt(_ context.Context, plaintext string) (string, error) {
 	return p.crypt.Encrypt(p.key, plaintext)
 }
 
-// Decrypt 解密密文，委托 BaseCrypt 并传入持有密钥
-func (p *keyedProvider) Decrypt(ciphertext string) (string, error) {
+// Decrypt 解密密文，委托 BaseCrypt 并传入持有密钥（进程内实现，忽略 ctx）
+func (p *keyedProvider) Decrypt(_ context.Context, ciphertext string) (string, error) {
 	return p.crypt.Decrypt(p.key, ciphertext)
 }
 

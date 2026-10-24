@@ -204,6 +204,51 @@ func TestTriggerBeforeChatRequestHook(t *testing.T) {
 	}
 }
 
+// TestTriggerBeforeChatRequestHook_空SessionID为nil T-08：
+// SessionID 空串时 hook ctx 应传 nil（对齐 Python msg.session_id=None），
+// 非空时传指针——ToMap 的 session_id 字段分别 nil / *string("s1")
+func TestTriggerBeforeChatRequestHook_空SessionID为nil(t *testing.T) {
+	extensions.ResetInstance()
+	fw := callback.NewCallbackFramework()
+	reg, _ := extensions.CreateInstance(fw, map[string]any{}, nil)
+	defer extensions.ResetInstance()
+
+	var gotSessionIDs []any
+	reg.Register(extensions.GatewayBeforeChatRequest, func(ctx context.Context, data map[string]any) any {
+		gotSessionIDs = append(gotSessionIDs, data["session_id"])
+		return nil
+	}, 100)
+
+	mh := createTestMessageHandlerWithTransport()
+
+	// 非空 session_id → ToMap 后为 *string（进程内链路）
+	msg := schema.NewReqMessage("web", "s1", schema.ReqMethodChatSend, json.RawMessage(`{}`), schema.WithSessionID("s1"))
+	agentMsg := mh.prepareAgentDispatchMessage(context.Background(), msg)
+	mh.triggerBeforeChatRequestHook(context.Background(), agentMsg)
+	if len(gotSessionIDs) != 1 {
+		t.Fatalf("应触发 1 次, 实际 %d", len(gotSessionIDs))
+	}
+	if sid, ok := gotSessionIDs[0].(*string); !ok || sid == nil || *sid != "s1" {
+		t.Errorf("非空 session_id 应传 *string(\"s1\"), 实际 %v (%T)", gotSessionIDs[0], gotSessionIDs[0])
+	}
+
+	// 空 session_id → ToMap 后为 nil 指针（跨进程 structpb/JSON 序列化为 null，对齐 Python None）
+	gotSessionIDs = nil
+	msg2 := schema.NewReqMessage("web", "", schema.ReqMethodChatSend, json.RawMessage(`{}`))
+	agentMsg2 := mh.prepareAgentDispatchMessage(context.Background(), msg2)
+	mh.triggerBeforeChatRequestHook(context.Background(), agentMsg2)
+	if len(gotSessionIDs) != 1 {
+		t.Fatalf("应触发 1 次, 实际 %d", len(gotSessionIDs))
+	}
+	sid2, isPtr := gotSessionIDs[0].(*string)
+	if !isPtr {
+		t.Fatalf("空 session_id 应传类型化 nil 指针, 实际非指针类型 %T", gotSessionIDs[0])
+	}
+	if sid2 != nil {
+		t.Errorf("空 session_id 应传 nil 指针（序列化为 null）, 实际 %q", *sid2)
+	}
+}
+
 // TestShouldTriggerBeforeChatRequestHook 测试门控方法
 func TestShouldTriggerBeforeChatRequestHook(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()

@@ -8,8 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -79,6 +81,8 @@ func (f *fakeBaseAgentForTest) UnregisterRail(_ context.Context, _ agentinterfac
 type fakeDeepAgentForTest struct {
 	fakeBaseAgentForTest
 	deepConfig *hschema.DeepAgentConfig
+	// am AbilityManager 返回值（M-06 extractAgentTools 测试注入用；nil 与内嵌默认行为一致）
+	am agentinterfaces.AbilityManagerInterface
 	// sessionToolkit 记录 SetSessionToolkit 设置的 toolkit（async 分支断言用）
 	sessionToolkit *hsubagent.SessionToolkit
 }
@@ -93,6 +97,12 @@ func (f *fakeDeepAgentForTest) ReactAgent() *agents.ReActAgent                  
 func (f *fakeDeepAgentForTest) LoopCoordinator() hinterfaces.LoopCoordinatorInterface { return nil }
 func (f *fakeDeepAgentForTest) LoopController() controller.ControllerInterface        { return nil }
 func (f *fakeDeepAgentForTest) EventHandler() modules.EventHandler                    { return nil }
+
+// AbilityManager 遮蔽内嵌 fakeBaseAgentForTest 的默认 nil 实现，支持注入（M-06 测试用）。
+func (f *fakeDeepAgentForTest) AbilityManager() agentinterfaces.AbilityManagerInterface { return f.am }
+
+// SpecName 实现 hschema.SubagentSpec（生产 *harness.DeepAgent 同样实现该接口）。
+func (f *fakeDeepAgentForTest) SpecName() string { return "general-purpose" }
 func (f *fakeDeepAgentForTest) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	return nil
 }
@@ -143,6 +153,34 @@ func (f *fakeDeepAgentForTest) SetSessionToolkit(toolkit *hsubagent.SessionToolk
 // 编译时验证
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgentForTest)(nil)
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForTest)(nil)
+var _ hschema.SubagentSpec = (*fakeDeepAgentForTest)(nil)
+
+// fakeAbilityManagerForTools 仅覆盖 List 的最小 mock（M-06 extractAgentTools 测试用）。
+type fakeAbilityManagerForTools struct {
+	abilities []cschema.Ability
+}
+
+func (m *fakeAbilityManagerForTools) Add(ability cschema.Ability) agentschema.AddAbilityResult {
+	return agentschema.AddAbilityResult{Added: true}
+}
+func (m *fakeAbilityManagerForTools) AddMany(_ []cschema.Ability) []agentschema.AddAbilityResult {
+	return nil
+}
+func (m *fakeAbilityManagerForTools) Remove(string) cschema.Ability           { return nil }
+func (m *fakeAbilityManagerForTools) RemoveMany(_ []string) []cschema.Ability { return nil }
+func (m *fakeAbilityManagerForTools) Get(string) cschema.Ability              { return nil }
+func (m *fakeAbilityManagerForTools) List() []cschema.Ability                 { return m.abilities }
+func (m *fakeAbilityManagerForTools) ListToolInfo(context.Context, []string, ...string) ([]cschema.ToolInfoInterface, error) {
+	return nil, nil
+}
+func (m *fakeAbilityManagerForTools) Execute(context.Context, *agentinterfaces.AgentCallbackContext, []*llmschema.ToolCall, sessioninterfaces.SessionFacade, string) []agentschema.ExecuteResult {
+	return nil
+}
+func (m *fakeAbilityManagerForTools) SetContextEngine(ceinterface.ContextEngine) {}
+func (m *fakeAbilityManagerForTools) ReorderTools([]string)                      {}
+
+// 编译时验证 fakeAbilityManagerForTools 满足 AbilityManagerInterface
+var _ agentinterfaces.AbilityManagerInterface = (*fakeAbilityManagerForTools)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -243,6 +281,50 @@ func TestExtractAgentTools_回退(t *testing.T) {
 	cfg := &hschema.SubAgentConfig{} // 无显式 tools
 	result := r.extractAgentTools(cfg, "unknown_agent")
 
+	assert.Equal(t, "All tools", result)
+}
+
+// TestExtractAgentTools_DeepAgent实例 测试 DeepAgent 实例走 ability_manager 路径（M-06）
+// Python: test_extract_agent_tools_deep_agent_instance
+func TestExtractAgentTools_DeepAgent实例(t *testing.T) {
+	r := NewSubagentRail()
+
+	// DeepAgent 实例（非 SubAgentConfig），注册了两个工具
+	agent := newFakeDeepAgentForTest()
+	agent.am = &fakeAbilityManagerForTools{
+		abilities: []cschema.Ability{
+			tool.NewToolCard("bash", "执行命令", nil, nil),
+			tool.NewToolCard("read_file", "读取文件", nil, nil),
+		},
+	}
+
+	result := r.extractAgentTools(agent, "general-purpose")
+	assert.Equal(t, "bash, read_file", result)
+}
+
+// TestExtractAgentTools_DeepAgent实例空列表回退 测试 DeepAgent 工具列表为空时回退已知默认（M-06）
+// Python: ability_manager.cards 为空 → 落到 _KNOWN_AGENT_TOOLS
+func TestExtractAgentTools_DeepAgent实例空列表回退(t *testing.T) {
+	r := NewSubagentRail()
+
+	// DeepAgent 实例但未注册任何工具
+	agent := newFakeDeepAgentForTest()
+	agent.am = &fakeAbilityManagerForTools{}
+
+	// general-purpose 不在已知默认表内 → 最终回退 "All tools"
+	result := r.extractAgentTools(agent, "general-purpose")
+	assert.Equal(t, "All tools", result)
+}
+
+// TestExtractAgentTools_DeepAgent实例无管理器回退 测试 AbilityManager 为 nil 时不 panic（M-06）
+func TestExtractAgentTools_DeepAgent实例无管理器回退(t *testing.T) {
+	r := NewSubagentRail()
+
+	// DeepAgent 实例但 am 为 nil（newFakeDeepAgentForTest 默认）
+	agent := newFakeDeepAgentForTest()
+
+	// SpecName 为 general-purpose，不在已知默认表内 → 回退 "All tools"
+	result := r.extractAgentTools(agent, "general-purpose")
 	assert.Equal(t, "All tools", result)
 }
 

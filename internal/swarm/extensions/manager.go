@@ -100,11 +100,21 @@ func (m *ExtensionManager) LoadAllExtensions(ctx context.Context) error {
 
 // ShutdownAllExtensions 关闭所有扩展，对齐 Python shutdown_all_extensions：
 // 逐个 shutdown（失败仅 warn 日志）+ Kill 子进程，最后清空列表。
+//
+// M-02：Go 侧一个插件进程的多个声明共享同一 PluginClient（Python 侧
+// _loaded_extensions 存扩展实例、每实例独立 shutdown），N 声明会对同一
+// 进程发 N 次 Shutdown RPC + N 次 Kill——首次成功后其余 RPC 报错产生误导性
+// warn。故按 client 指针去重，每进程一次 Shutdown+Kill。
 func (m *ExtensionManager) ShutdownAllExtensions(ctx context.Context) error {
+	seen := make(map[PluginClientFace]struct{}, len(m.loaded))
 	for _, le := range m.loaded {
 		if le.client == nil {
 			continue
 		}
+		if _, dup := seen[le.client]; dup {
+			continue
+		}
+		seen[le.client] = struct{}{}
 		if err := le.client.Shutdown(ctx); err != nil {
 			logger.Warn(managerLogComponent).
 				Str("event_type", "extension_manager_shutdown_failed").
@@ -119,7 +129,8 @@ func (m *ExtensionManager) ShutdownAllExtensions(ctx context.Context) error {
 }
 
 // ListExtensions 列出已加载扩展，对齐 Python list_extensions：
-// [{id, name, version}] 同构（Python 按 hasattr(p, "metadata") 过滤，Go 按非空 ID 判断）。
+// [{id, name, version}] 同构。Python 按 hasattr(p, "metadata") 过滤，
+// Go 的 LoadedExtension 结构恒有 Metadata（该过滤条件恒真），无需过滤（T-05）。
 func (m *ExtensionManager) ListExtensions() []map[string]string {
 	result := make([]map[string]string, 0, len(m.loaded))
 	for _, le := range m.loaded {

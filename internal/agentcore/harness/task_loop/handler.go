@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
@@ -312,10 +313,7 @@ func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input 
 	}
 
 	// Python: 始终返回 steer_injected + msg，始终打 info 日志
-	steerPreview := steerText
-	if len(steerPreview) > 100 {
-		steerPreview = steerPreview[:100]
-	}
+	steerPreview := truncateRunes(steerText, 100)
 	logger.Info(logComponent).
 		Str("steer_text", steerPreview).
 		Msg("bootstrap instruction injected")
@@ -451,10 +449,7 @@ func (h *TaskLoopEventHandler) HandleFollowUp(ctx context.Context, input *module
 	}
 
 	// Python: 始终返回 follow_up_queued + msg，始终打 info 日志
-	followUpPreview := followUpText
-	if len(followUpPreview) > 100 {
-		followUpPreview = followUpPreview[:100]
-	}
+	followUpPreview := truncateRunes(followUpText, 100)
 	logger.Info(logComponent).
 		Str("follow_up_text", followUpPreview).
 		Msg("follow-up message enqueued")
@@ -620,7 +615,7 @@ func (h *TaskLoopEventHandler) completeSessionSpawn(ctx context.Context, taskID 
 }
 
 // extractResultFromEvent 从完成事件中提取结果字符串。
-// 截断到 500 字符。
+// 截断到 500 字符（rune 语义，对齐 Python str(...)[:500]）。
 // Python: TaskLoopEventHandler._extract_result_from_event
 func extractResultFromEvent(input *modules.EventHandlerInput) string {
 	event := input.Event
@@ -634,16 +629,11 @@ func extractResultFromEvent(input *modules.EventHandlerInput) string {
 					s = fmt.Sprintf("%v", output)
 				}
 				// output 不存在或为 nil 时 s 保持空字符串，对齐 Python data.get("output", "")
-				if len(s) > 500 {
-					s = s[:500]
-				}
+				s = truncateRunes(s, 500)
 				return s
 			}
 			if textDF, ok := df.(*cschema.TextDataFrame); ok {
-				s := textDF.Text
-				if len(s) > 500 {
-					s = s[:500]
-				}
+				s := truncateRunes(textDF.Text, 500)
 				return s
 			}
 		}
@@ -662,10 +652,7 @@ func extractErrorFromEvent(input *modules.EventHandlerInput) string {
 			errMsg = tfe.ErrorMessage
 		}
 	}
-	if len(errMsg) > 300 {
-		errMsg = errMsg[:300]
-	}
-	return errMsg
+	return truncateRunes(errMsg, 300)
 }
 
 // formatSessionSpawnSteer 格式化 SessionSpawn 完成后的引导文本。
@@ -729,4 +716,16 @@ func extractQuery(event cschema.Event) string {
 		}
 	}
 	return ""
+}
+
+// truncateRunes 截断字符串到指定 rune 长度（CJK-safe，T-01）。
+// 对齐 Python str(...)[:n]——Python 按字符（rune）截断，Go 若按字节截断
+// 会在多字节字符（中文 3 字节）边界产生非法 UTF-8 尾字节，推入 steer 队列
+// 的中文模板文本会被截坏。与 viking_provider.go truncStr 同构。
+func truncateRunes(s string, maxLen int) string {
+	if utf8.RuneCountInString(s) <= maxLen {
+		return s
+	}
+	runes := []rune(s)
+	return string(runes[:maxLen])
 }

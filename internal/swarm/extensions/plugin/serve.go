@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
@@ -103,6 +104,11 @@ type extensionServer struct {
 	cryptoImpl CryptoImpl
 	// extensionDir 扩展目录（SetExtensionDir RPC 设置）
 	extensionDir string
+	// metadataCache GetMetadata 缓存（T-06，对齐 Python sdk/base.py _metadata_cache：
+	// metadata property 只算一次；SetExtensionDir 时失效重算——yaml 元数据依赖目录）
+	metadataCache *Metadata
+	// metadataMu 保护 metadataCache 的读写锁（GetMetadata RPC 可并发）
+	metadataMu sync.Mutex
 }
 
 // connDialer GRPCClient 返回的包装类型（宿主通过 Conn() 拿 gRPC 连接）
@@ -130,6 +136,9 @@ const (
 	MagicCookieKey = "UAPCLAW_EXTENSION_PLUGIN"
 	// MagicCookieValue 握手魔数值（宿主与插件必须一致）
 	MagicCookieValue = "uapclaw-extension-1a2b3c4d"
+	// defaultEventPriority 事件订阅默认优先级
+	// （对齐 Python registry.py register(event, handler, priority: int = 100)）
+	defaultEventPriority = 100
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -237,9 +246,17 @@ func (s *extensionServer) Register(ctx context.Context, _ *extproto.RegisterRequ
 			pb.ProvidesCrypto = false
 		}
 		for _, sub := range d.EventSubs {
+			priority := sub.Priority
+			// T-07：对齐 Python register(event, handler, priority=100) 默认值。
+			// proto int32 无法区分"未设置"（零值 0）与显式 0，而 priority 语义
+			// 为正值（显式 0 无意义），故 0 归一为 100，避免忘设 priority 的
+			// 扩展回调排到默认扩展之前。
+			if priority == 0 {
+				priority = defaultEventPriority
+			}
 			pb.EventSubs = append(pb.EventSubs, &extproto.EventSubscription{
 				Event:    sub.Event,
-				Priority: sub.Priority,
+				Priority: priority,
 			})
 		}
 		resp.Decls = append(resp.Decls, pb)
@@ -250,16 +267,36 @@ func (s *extensionServer) Register(ctx context.Context, _ *extproto.RegisterRequ
 // SetExtensionDir 处理设置扩展目录 RPC
 func (s *extensionServer) SetExtensionDir(ctx context.Context, req *extproto.SetDirRequest) (*extproto.SetDirResponse, error) {
 	s.extensionDir = req.GetPath()
+	// 对齐 Python sdk/base.py set_extension_dir：目录变更后元数据缓存失效
+	// （_metadata_cache = None），下次 GetMetadata 依新目录重算（T-06）
+	s.metadataMu.Lock()
+	s.metadataCache = nil
+	s.metadataMu.Unlock()
 	return &extproto.SetDirResponse{}, nil
 }
 
-// GetMetadata 处理元数据查询 RPC
+// GetMetadata 处理元数据查询 RPC。
+//
+// T-06：对齐 Python sdk/base.py metadata property 的缓存语义——
+// Register 有副作用（声明注册）时，每次 RPC 重执行会被重复触发；
+// 结果缓存后仅首次执行，SetExtensionDir 时失效重算。
 func (s *extensionServer) GetMetadata(ctx context.Context, _ *extproto.GetMetadataRequest) (*extproto.GetMetadataResponse, error) {
+	s.metadataMu.Lock()
+	cached := s.metadataCache
+	s.metadataMu.Unlock()
+	if cached != nil {
+		return &extproto.GetMetadataResponse{Metadata: metadataToProto(*cached)}, nil
+	}
 	decls, err := s.impl.Register(ctx)
 	if err != nil || len(decls) == 0 {
+		// Register 失败不缓存：下次调用可重试（对齐 Python 异常不落 _metadata_cache）
 		return &extproto.GetMetadataResponse{}, err
 	}
-	return &extproto.GetMetadataResponse{Metadata: metadataToProto(decls[0].Metadata)}, nil
+	md := decls[0].Metadata
+	s.metadataMu.Lock()
+	s.metadataCache = &md
+	s.metadataMu.Unlock()
+	return &extproto.GetMetadataResponse{Metadata: metadataToProto(md)}, nil
 }
 
 // Shutdown 处理关闭 RPC

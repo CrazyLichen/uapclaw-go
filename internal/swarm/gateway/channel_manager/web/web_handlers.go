@@ -603,7 +603,7 @@ func stubHandler(_ string, payload map[string]any) RPCHandlerFunc {
 // Python: config_get_handler 中 ~65 字段的返回。
 // cryptoProv 用于解密 api_key/token 等敏感字段。
 func handleConfigGet(cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+	return func(ctx context.Context, _ map[string]any, _ string) (map[string]any, error) {
 		p := resolveCrypto(cryptoProv)
 		result := make(map[string]any, len(configEnvMap)+10)
 
@@ -613,7 +613,7 @@ func handleConfigGet(cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
 			// Python: 对包含 api_key 或 token 的键解密（app_web_handlers.py L611-614）
 			// 解密失败保留原值 + Warn（Go error 签名；Python 整体 except 降级 → Go 逐字段跳过）
 			if p != nil && val != "" && isSensitiveKey(key) {
-				if dec, decErr := p.Decrypt(val); decErr == nil {
+				if dec, decErr := p.Decrypt(ctx, val); decErr == nil {
 					val = dec
 				} else {
 					logger.Warn(logComponent).
@@ -713,9 +713,12 @@ func resolveCrypto(injected crypto.CryptoProvider) crypto.CryptoProvider {
 
 // isSensitiveKey 判断配置键是否为敏感字段（需要解密）。
 //
-// Python: 包含 "api_key" 或 "token" 的键视为敏感字段。
+// Python: "api_key" in key.lower() or "token" in key.lower()（app_web_handlers.py L612）。
+// 先 ToLower 再匹配，与 config_apply.go 的加密路径对称——否则大写键
+// （如 OPENAI_API_KEY）会"set 时加密、get 时不解密"，产生永远解不开的密文。
 func isSensitiveKey(key string) bool {
-	return strings.Contains(key, "api_key") || strings.Contains(key, "token")
+	kl := strings.ToLower(key)
+	return strings.Contains(kl, "api_key") || strings.Contains(kl, "token")
 }
 
 // normalizeTruthy 对布尔型环境变量做 truthy 归一化。
@@ -733,14 +736,14 @@ func normalizeTruthy(val string) string {
 // 完整实现：参数映射→provider校验→YAML键写入→agents/team写入→os.Setenv+.env持久化→回包→触发热重载。
 // Python: _config_set (app_web_handlers.py L870-895)。
 func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return nil, fmt.Errorf("params 不能为空")
 		}
 		p := resolveCrypto(cryptoProv)
 
 		// 步骤1-5: applyConfigPayload 统一处理
-		envUpdates, yamlUpdated, err := ApplyConfigPayload(params, p)
+		envUpdates, yamlUpdated, err := ApplyConfigPayload(ctx, params, p)
 		if err != nil {
 			// 区分 BadRequest 和 InternalError
 			if _, ok := err.(*ConfigBadRequest); ok {
@@ -778,7 +781,7 @@ func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cry
 //
 // 支持子载荷：config、models、agents、team。
 func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return map[string]any{"ok": false, "error": "params 必须是对象", "code": WsErrBadRequest}, nil
 		}
@@ -792,7 +795,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc,
 		var newModels []map[string]any
 		if modelsVal, ok := params["models"]; ok && modelsVal != nil {
 			// 将 []any 转为 []map[string]any
-			parsed, err := buildModelsDefaultsFromFrontend(modelsVal, p)
+			parsed, err := buildModelsDefaultsFromFrontend(ctx, modelsVal, p)
 			if err != nil {
 				if _, ok := err.(*ConfigBadRequest); ok {
 					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
@@ -822,7 +825,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc,
 
 		// 应用 config 子载荷
 		if len(configParams) > 0 {
-			appliedEnv, appliedYAML, err := ApplyConfigPayload(configParams, p)
+			appliedEnv, appliedYAML, err := ApplyConfigPayload(ctx, configParams, p)
 			if err != nil {
 				if _, ok := err.(*ConfigBadRequest); ok {
 					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
@@ -1179,7 +1182,7 @@ func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 //
 // Python: _models_replace_all_handler (app_web_handlers.py L1058-1084)。
 func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return nil, fmt.Errorf("params 不能为空")
 		}
@@ -1191,7 +1194,7 @@ func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv crypto.C
 		}
 
 		// 调用 buildModelsDefaultsFromFrontend（内部会调 merge + infer）
-		newModels, err := buildModelsDefaultsFromFrontend(modelsVal, p)
+		newModels, err := buildModelsDefaultsFromFrontend(ctx, modelsVal, p)
 		if err != nil {
 			if _, ok := err.(*ConfigBadRequest); ok {
 				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil

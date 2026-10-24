@@ -241,6 +241,107 @@ func TestExtensionServer_GetMetadata空声明(t *testing.T) {
 	}
 }
 
+// countingExt 计数 Register 调用次数的 fake（T-06 缓存语义测试用）
+type countingExt struct {
+	fakeExtension
+	registerCalls int
+}
+
+func (c *countingExt) Register(ctx context.Context) ([]Declaration, error) {
+	c.registerCalls++
+	return []Declaration{{Metadata: Metadata{ID: "counting", Name: "计数", Version: "1.0"}}}, nil
+}
+
+// declExt 返回固定声明列表的 fake（不计数，供构造带订阅声明的场景）
+type declExt struct {
+	decls []Declaration
+}
+
+func (d *declExt) Register(ctx context.Context) ([]Declaration, error) {
+	return d.decls, nil
+}
+
+func (d *declExt) Shutdown(ctx context.Context) error { return nil }
+
+func (d *declExt) HandleEvent(ctx context.Context, event string, ctxData map[string]any) (map[string]any, error) {
+	return ctxData, nil
+}
+
+// TestExtensionServer_GetMetadata缓存 T-06：Register 只执行一次（缓存命中），
+// SetExtensionDir 失效缓存后重算（对齐 Python sdk/base.py _metadata_cache）
+func TestExtensionServer_GetMetadata缓存(t *testing.T) {
+	impl := &countingExt{}
+	srv := &extensionServer{impl: impl}
+
+	// 首次：执行 Register
+	resp1, err := srv.GetMetadata(context.Background(), &extproto.GetMetadataRequest{})
+	if err != nil {
+		t.Fatalf("首次 GetMetadata 失败: %v", err)
+	}
+	if resp1.GetMetadata().GetId() != "counting" {
+		t.Errorf("首次 Metadata.ID = %q, 期望 counting", resp1.GetMetadata().GetId())
+	}
+	if impl.registerCalls != 1 {
+		t.Fatalf("首次应执行 Register 1 次, 实际 %d 次", impl.registerCalls)
+	}
+
+	// 二次：缓存命中，不再执行 Register
+	resp2, err := srv.GetMetadata(context.Background(), &extproto.GetMetadataRequest{})
+	if err != nil {
+		t.Fatalf("二次 GetMetadata 失败: %v", err)
+	}
+	if resp2.GetMetadata().GetId() != "counting" {
+		t.Errorf("二次 Metadata.ID = %q, 期望 counting", resp2.GetMetadata().GetId())
+	}
+	if impl.registerCalls != 1 {
+		t.Errorf("缓存命中不应重执行 Register, 实际 %d 次", impl.registerCalls)
+	}
+
+	// SetExtensionDir 失效缓存 → 三次重算
+	if _, err := srv.SetExtensionDir(context.Background(), &extproto.SetDirRequest{Path: "/new/dir"}); err != nil {
+		t.Fatalf("SetExtensionDir 失败: %v", err)
+	}
+	resp3, err := srv.GetMetadata(context.Background(), &extproto.GetMetadataRequest{})
+	if err != nil {
+		t.Fatalf("三次 GetMetadata 失败: %v", err)
+	}
+	if resp3.GetMetadata().GetId() != "counting" {
+		t.Errorf("三次 Metadata.ID = %q, 期望 counting", resp3.GetMetadata().GetId())
+	}
+	if impl.registerCalls != 2 {
+		t.Errorf("SetExtensionDir 后应失效缓存重算 Register（共 2 次）, 实际 %d 次", impl.registerCalls)
+	}
+}
+
+// TestExtensionServer_Register优先级归一 T-07：priority=0 归一为 100（对齐 Python 默认值），
+// 非 0 值原样透传
+func TestExtensionServer_Register优先级归一(t *testing.T) {
+	// 直接构造带订阅声明的 fake（覆盖 Register RPC 的归一逻辑）
+	srv := &extensionServer{impl: &declExt{decls: []Declaration{{
+		Metadata:   Metadata{ID: "prio"},
+		EventSubs:  []EventSubscription{{Event: "e1", Priority: 0}, {Event: "e2", Priority: 200}, {Event: "e3", Priority: 0}},
+	}}}}
+	resp, err := srv.Register(context.Background(), &extproto.RegisterRequest{})
+	if err != nil {
+		t.Fatalf("Register 失败: %v", err)
+	}
+	subs := resp.GetDecls()[0].GetEventSubs()
+	if len(subs) != 3 {
+		t.Fatalf("EventSubs 数 = %d, 期望 3", len(subs))
+	}
+	// 0 → 100（默认值兜底）
+	if subs[0].GetPriority() != 100 {
+		t.Errorf("priority 0 应归一为 100, 实际 %d", subs[0].GetPriority())
+	}
+	// 非 0 原样透传
+	if subs[1].GetPriority() != 200 {
+		t.Errorf("priority 200 应原样透传, 实际 %d", subs[1].GetPriority())
+	}
+	if subs[2].GetPriority() != 100 {
+		t.Errorf("priority 0 应归一为 100, 实际 %d", subs[2].GetPriority())
+	}
+}
+
 // TestExtensionServer_默认未实现方法 验证嵌入 Unimplemented 后全部 RPC 可达（防御性）
 func TestExtensionServer_默认未实现方法(t *testing.T) {
 	var srv extproto.ExtensionServer = &fakeNoImplServer{}
