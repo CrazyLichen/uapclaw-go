@@ -1,0 +1,86 @@
+package parser
+
+import (
+	"math"
+	"testing"
+	"time"
+)
+
+// TestPyFloatStr 测试 Python str(float) 记法还原。
+//
+// 实测锚点（spec §3.4）：1e15→"1000000000000000.0"、0.1+0.2 全精度、
+// 1e-05 两位指数、1e+16 出 e 记法。
+func TestPyFloatStr(t *testing.T) {
+	// 运行时求值（避免 Go 常量折叠把 0.1+0.2 算成精确 0.3）
+	a, b := 0.1, 0.2
+	cases := []struct {
+		in   float64
+		want string
+	}{
+		{3.5, "3.5"},
+		{a + b, "0.30000000000000004"},
+		{1e15, "1000000000000000.0"},
+		{1e16, "1e+16"},
+		{1e-4, "0.0001"},
+		{1e-5, "1e-05"},
+		{2.0, "2.0"},
+		{-3.5, "-3.5"},
+		{1e15 + 0.5, "1000000000000000.5"},
+		{9999999999999998.0, "9999999999999998.0"},
+		{0, "0.0"},
+		{math.Copysign(0, -1), "-0.0"}, // Go -0.0 常量折叠成正零，用 Copysign 构造真负零
+	}
+	for _, c := range cases {
+		if got := pyFloatStr(c.in); got != c.want {
+			t.Errorf("pyFloatStr(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	// NaN/Inf（Python 输出 nan/inf/-inf）
+	if got := pyFloatStr(math.NaN()); got != "nan" {
+		t.Errorf("pyFloatStr(NaN) = %q, want nan", got)
+	}
+	if got := pyFloatStr(math.Inf(1)); got != "inf" {
+		t.Errorf("pyFloatStr(+Inf) = %q, want inf", got)
+	}
+	if got := pyFloatStr(math.Inf(-1)); got != "-inf" {
+		t.Errorf("pyFloatStr(-Inf) = %q, want -inf", got)
+	}
+}
+
+// TestCellStr 测试 cellStr 逐类型模拟（Python str(value).strip()）。
+func TestCellStr(t *testing.T) {
+	cases := []struct {
+		in   any
+		want string
+	}{
+		{nil, ""},
+		{30, "30"},
+		{int64(30), "30"},
+		{"  x  ", "x"},
+		{3.5, "3.5"},
+		{2.0, "2.0"},
+		{true, "True"},
+		{false, "False"},
+		{"", ""},
+		{"  ", ""},
+	}
+	for _, c := range cases {
+		if got := cellStr(c.in); got != c.want {
+			t.Errorf("cellStr(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestCellStr_日期 测试 time.Time 的 Python str(datetime) 格式。
+func TestCellStr_日期(t *testing.T) {
+	// 微秒 0：无小数部分（对齐 str(datetime) 省略微秒）
+	d := time.Date(2025, 1, 1, 12, 30, 5, 0, time.UTC)
+	if got := cellStr(d); got != "2025-01-01 12:30:05" {
+		t.Errorf("cellStr(日期) = %q, want %q", got, "2025-01-01 12:30:05")
+	}
+	// 微秒非 0：补 .%06d（对齐 str(datetime) 的 6 位微秒）
+	d2 := time.Date(2025, 1, 1, 12, 30, 5, 123456000, time.UTC)
+	if got := cellStr(d2); got != "2025-01-01 12:30:05.123456" {
+		t.Errorf("cellStr(带微秒日期) = %q, want %q", got, "2025-01-01 12:30:05.123456")
+	}
+}
