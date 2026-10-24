@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -136,4 +138,41 @@ func TestInboundGatewayServer_满队丢弃(t *testing.T) {
 	require.NoError(t, s.HandleMessage(context.Background(), &schema.Message{ID: "overflow"}))
 	// 溢出消息未入队（queue 长度仍为容量值）
 	assert.Equal(t, inboundQueueCapacity, len(s.queue))
+}
+
+// ──────────────────────────── NormalizeAndForwardMessage 测试 ────────────────────────────
+
+func TestNormalizeAndForwardMessage_恒转发(t *testing.T) {
+	// 真实链路：MessageHandler(nil agentClient 可安全构造) + ChannelManager
+	handler := mh.NewMessageHandler(nil)
+	channelMgr := cm.NewChannelManager(handler, nil, nil)
+
+	// content → query 标准化 + 恒转发（无三层路由短路）
+	msg := &schema.Message{
+		ID:        "n1",
+		Type:      schema.MessageTypeReq,
+		ChannelID: "tui",
+		SessionID: "s1",
+		Params:    []byte(`{"content":"hello"}`),
+		ReqMethod: schema.ReqMethodChatSend,
+	}
+	NormalizeAndForwardMessage(msg, channelMgr)
+
+	// 消息已入 MessageHandler.userMessages 队列（容量 256，非阻塞可读）
+	consumed := handler.ConsumeUserMessages(500 * time.Millisecond)
+	require.NotNil(t, consumed)
+	assert.Equal(t, "n1", consumed.ID)
+	// 标准化生效：content 已复制为 query
+	assert.Contains(t, string(consumed.Params), `"query":"hello"`)
+	// is_stream 推断：chat.send → true
+	assert.True(t, consumed.IsStream)
+}
+
+func TestNormalizeAndForwardMessage_无handler仅Warn(t *testing.T) {
+	// messageHandler 为 nil：DeliverToMessageHandler 走 Warn 分支，不 panic
+	channelMgr := cm.NewChannelManager(nil, nil, nil)
+	msg := &schema.Message{ID: "n2", ChannelID: "tui"}
+	assert.NotPanics(t, func() {
+		NormalizeAndForwardMessage(msg, channelMgr)
+	})
 }
