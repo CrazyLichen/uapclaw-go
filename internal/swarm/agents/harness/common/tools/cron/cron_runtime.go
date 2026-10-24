@@ -148,7 +148,7 @@ func (b *CronRuntimeBridge) GetBackend() agentcron.CronToolBackend {
 		tools.SetSchedulerDeps(agentClient, nil, configLoader)
 		b.toolsOverride = tools
 	}
-	// ST1023：类型由右侧推断，声明处省略显式类型
+	// publisher 变量需显式类型（userPublisher 可能为 nil，赋值 override 前需稳定类型推断）
 	publisher := userPublisher
 	if b.userPublisherOverride != nil {
 		publisher = b.userPublisherOverride

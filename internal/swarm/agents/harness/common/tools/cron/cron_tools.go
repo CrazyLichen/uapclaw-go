@@ -99,8 +99,8 @@ func BindRuntimeCronContext(ctx context.Context, channelID, sessionID string, me
 		normalizedChannel = gwcron.TargetChannelWeb
 	}
 	normalizedMode := strings.TrimSpace(mode)
-	// range 对 nil map 天然安全（S1031：无需显式 nil 检查）
 	normalizedMetadata := map[string]any{}
+	// range nil map 是空迭代（Go 语义安全），无需显式 nil 检查
 	for k, v := range metadata {
 		normalizedMetadata[k] = v
 	}
