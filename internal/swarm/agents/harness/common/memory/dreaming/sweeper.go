@@ -998,7 +998,7 @@ func (s *Sweeper) promoteCode(title, content, sessionID string) string {
 // M-25: 有意偏差声明——Python 端 scanned_sessions 为 list[str]，
 // 历史上曾为 list[dict] 的旧格式在 Python 端反序列化时元素类型
 // 宽松兼容；Go 强类型 Unmarshal 对旧 list 格式会失败并全量重扫
-//（返回空 CheckpointData）。Go 版本从未产生过旧格式 checkpoint，
+// （返回空 CheckpointData）。Go 版本从未产生过旧格式 checkpoint，
 // 无存量数据需要兼容，此偏差仅存在于跨版本迁移场景，按误报关闭。
 func (s *Sweeper) loadCheckpoint() CheckpointData {
 	path := filepath.Join(s.dreamsDir, "ingestion-checkpoint.json")

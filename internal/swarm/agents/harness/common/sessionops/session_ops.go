@@ -491,15 +491,15 @@ func RestoreSessionFiles(sessionID string, turnIndex int) *RestoreSessionFilesRe
 		case "write":
 			// 勘误 E5: FileRestoreInfo.RestoreContent 是 *string，不是 string
 			if info.RestoreContent != nil {
-			dir := filepath.Dir(filePath)
-			if mkdirErr := os.MkdirAll(dir, 0o755); mkdirErr != nil {
-				result.Errors = append(result.Errors, FileRestoreError{File: dir, Error: mkdirErr.Error()})
-				logger.Warn(logComponent).Str("dir", dir).Err(mkdirErr).Msg("restore_session_files: failed to create directory")
-				// M-32: 对齐 Python write 分支整体 try 语义——mkdir 失败
-				// 直接进 except，不再执行 write（原实现缺 continue 会再触发
-				// WriteFile 失败，同一文件产生双错误条目）。
-				continue
-			}
+				dir := filepath.Dir(filePath)
+				if mkdirErr := os.MkdirAll(dir, 0o755); mkdirErr != nil {
+					result.Errors = append(result.Errors, FileRestoreError{File: dir, Error: mkdirErr.Error()})
+					logger.Warn(logComponent).Str("dir", dir).Err(mkdirErr).Msg("restore_session_files: failed to create directory")
+					// M-32: 对齐 Python write 分支整体 try 语义——mkdir 失败
+					// 直接进 except，不再执行 write（原实现缺 continue 会再触发
+					// WriteFile 失败，同一文件产生双错误条目）。
+					continue
+				}
 				if err := os.WriteFile(filePath, []byte(*info.RestoreContent), 0o644); err != nil {
 					result.Errors = append(result.Errors, FileRestoreError{File: filePath, Error: err.Error()})
 					logger.Warn(logComponent).Str("file", filePath).Err(err).Msg("restore_session_files: failed to write file back")

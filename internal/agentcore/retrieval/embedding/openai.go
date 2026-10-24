@@ -25,7 +25,7 @@ import (
 // M-29: 刻意不实现 EmbedMultimodal——对齐 Python OpenAIEmbedding 无
 // embed_multimodal 方法的现状，使 ComputeChunkEmbeddings 的
 // MultimodalEmbedder 能力探测语义与 Python getattr 探测一致
-//（探测失败 → OpenAI 模型走纯文本批量路径）。
+// （探测失败 → OpenAI 模型走纯文本批量路径）。
 //
 // Python: openjiuwen/core/retrieval/embedding/openai_embedding.py
 type OpenAIEmbedding struct {
