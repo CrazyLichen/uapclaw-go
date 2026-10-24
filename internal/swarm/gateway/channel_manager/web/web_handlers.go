@@ -72,11 +72,34 @@ type WebHandlersBindParams struct {
 	// ⤵️ 11.15: GatewayHeartbeatService，注入后处理 heartbeat.get_conf / heartbeat.set_conf
 	HeartbeatService any
 	// CronController 定时任务控制器，可为 nil
-	// ⤵️ 11.16: CronController，注入后处理 schedule.* 方法
-	CronController any
+	// 11.10 已回填：注入后处理 cron.job.* 8 个方法
+	// gateway/cron.CronController 隐式实现
+	CronController CronJobController
 	// UpdaterService 更新服务，可为 nil
 	// ⤵️ 11.17: UpdaterService，注入后处理 update.* 方法
 	UpdaterService any
+}
+
+// CronJobController web 端点所需 CronController 接口。
+// gateway/cron.CronController 隐式实现。
+// 对齐 Python: bind.cron_controller 的 list/get/create/update/delete/toggle/preview/run_now 方法面。
+type CronJobController interface {
+	// ListJobs 列出全部任务
+	ListJobs() ([]map[string]any, error)
+	// GetJob 获取单个任务
+	GetJob(jobID string) (map[string]any, error)
+	// CreateJob 创建任务
+	CreateJob(params map[string]any) (map[string]any, error)
+	// UpdateJob 更新任务
+	UpdateJob(jobID string, patch map[string]any) (map[string]any, error)
+	// DeleteJob 删除任务
+	DeleteJob(jobID string) (bool, error)
+	// ToggleJob 启停任务
+	ToggleJob(jobID string, enabled bool) (map[string]any, error)
+	// PreviewJob 预览下 N 次执行
+	PreviewJob(jobID string, count int) ([]map[string]any, error)
+	// RunNow 立即执行
+	RunNow(jobID string) (string, error)
 }
 
 // EventSender 事件推送回调，用于向 WebSocket 客户端推送事件帧。
@@ -225,6 +248,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	var agentClient *routing.AgentClient
 	var messageHandler MessageHandler
 	var channel *WebChannel
+	var cronController CronJobController
 	if bind != nil {
 		if bind.Channel != nil {
 			sendEvent = bind.Channel.broadcastEvent
@@ -235,6 +259,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 		channelMgr = bind.ChannelManager
 		agentClient = bind.AgentClient
 		messageHandler = bind.MessageHandler
+		cronController = bind.CronController
 	}
 
 	// ─── 本地实现方法 ───
@@ -325,16 +350,30 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("channel.wechat.unbind", stubHandler("channel.wechat.unbind", map[string]any{}))
 
 	// ─── 定时任务 ───
-	cronListStub := stubHandler("cron", map[string]any{"jobs": []any{}})
-	cronOkStub := stubHandler("cron", map[string]any{"ok": true})
-	d.Register("cron.job.list", cronListStub)
-	d.Register("cron.job.create", cronOkStub)
-	d.Register("cron.job.update", cronOkStub)
-	d.Register("cron.job.delete", cronOkStub)
-	d.Register("cron.job.enable", cronOkStub)
-	d.Register("cron.job.disable", cronOkStub)
-	d.Register("cron.job.run", cronOkStub)
-	d.Register("cron.job.status", stubHandler("cron", map[string]any{}))
+	// 11.10 已回填：8 个 cron.job.* 端点接真实 CronController
+	// （对齐 Python register_method：list/get/create/update/delete/toggle/preview/run_now）
+	if cronController != nil {
+		cc := cronController
+		d.Register("cron.job.list", handleCronJobList(cc))
+		d.Register("cron.job.get", handleCronJobGet(cc))
+		d.Register("cron.job.create", handleCronJobCreate(cc))
+		d.Register("cron.job.update", handleCronJobUpdate(cc))
+		d.Register("cron.job.delete", handleCronJobDelete(cc))
+		d.Register("cron.job.toggle", handleCronJobToggle(cc))
+		d.Register("cron.job.preview", handleCronJobPreview(cc))
+		d.Register("cron.job.run_now", handleCronJobRunNow(cc))
+	} else {
+		cronListStub := stubHandler("cron", map[string]any{"jobs": []any{}})
+		cronOkStub := stubHandler("cron", map[string]any{"ok": true})
+		d.Register("cron.job.list", cronListStub)
+		d.Register("cron.job.create", cronOkStub)
+		d.Register("cron.job.update", cronOkStub)
+		d.Register("cron.job.delete", cronOkStub)
+		d.Register("cron.job.enable", cronOkStub)
+		d.Register("cron.job.disable", cronOkStub)
+		d.Register("cron.job.run", cronOkStub)
+		d.Register("cron.job.status", stubHandler("cron", map[string]any{}))
+	}
 
 	// ─── 运行时 ───
 	harnessListStub := stubHandler("harness", map[string]any{"packages": []any{}})
@@ -1809,4 +1848,193 @@ func handlePermissionsForwardToAgent(ac *routing.AgentClient, method string) RPC
 		}
 		return nil, fmt.Errorf("权限 RPC 本地 dispatch 失败: %s", errMsg)
 	}
+}
+
+// handleCronJobList 处理 cron.job.list。
+// Python: _cron_job_list (app_web_handlers.py L2050-2056)。
+func handleCronJobList(cc CronJobController) RPCHandlerFunc {
+	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+		jobs, err := cc.ListJobs()
+		if err != nil {
+			return cronErrPayload(WsErrInternalError, err.Error()), nil
+		}
+		return map[string]any{"jobs": jobs}, nil
+	}
+}
+
+// handleCronJobGet 处理 cron.job.get。
+// Python: _cron_job_get (L2058-2074)。id 必填；job 不存在 → NOT_FOUND。
+func handleCronJobGet(cc CronJobController) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+		}
+		jobID := strings.TrimSpace(cronStrVal(params["id"]))
+		if jobID == "" {
+			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+		}
+		job, err := cc.GetJob(jobID)
+		if err != nil {
+			return cronErrPayload(WsErrInternalError, err.Error()), nil
+		}
+		if job == nil {
+			return cronErrPayload(WsErrNotFound, "job not found"), nil
+		}
+		return map[string]any{"job": job}, nil
+	}
+}
+
+// handleCronJobCreate 处理 cron.job.create。
+// Python: _cron_job_create (L2076-2089)。异常 → BAD_REQUEST。
+func handleCronJobCreate(cc CronJobController) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+		}
+		job, err := cc.CreateJob(params)
+		if err != nil {
+			return cronErrPayload(WsErrBadRequest, err.Error()), nil
+		}
+		return map[string]any{"job": job}, nil
+	}
+}
+
+// handleCronJobUpdate 处理 cron.job.update。
+// Python: _cron_job_update (L2091-2115)。job not found → NOT_FOUND，其余 → BAD_REQUEST。
+func handleCronJobUpdate(cc CronJobController) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+		}
+		jobID := strings.TrimSpace(cronStrVal(params["id"]))
+		if jobID == "" {
+			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+		}
+		patch, _ := params["patch"].(map[string]any)
+		if params["patch"] != nil && patch == nil {
+			return cronErrPayload(WsErrBadRequest, "patch must be object"), nil
+		}
+		job, err := cc.UpdateJob(jobID, patch)
+		if err != nil {
+			if strings.Contains(err.Error(), "job not found") {
+				return cronErrPayload(WsErrNotFound, "job not found"), nil
+			}
+			return cronErrPayload(WsErrBadRequest, err.Error()), nil
+		}
+		return map[string]any{"job": job}, nil
+	}
+}
+
+// handleCronJobDelete 处理 cron.job.delete。
+// Python: _cron_job_delete (L2117-2136)。未删除 → NOT_FOUND。
+func handleCronJobDelete(cc CronJobController) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+		}
+		jobID := strings.TrimSpace(cronStrVal(params["id"]))
+		if jobID == "" {
+			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+		}
+		deleted, err := cc.DeleteJob(jobID)
+		if err != nil {
+			return cronErrPayload(WsErrInternalError, err.Error()), nil
+		}
+		if !deleted {
+			return cronErrPayload(WsErrNotFound, "job not found"), nil
+		}
+		return map[string]any{"deleted": true}, nil
+	}
+}
+
+// handleCronJobToggle 处理 cron.job.toggle。
+// Python: _cron_job_toggle (L2138-2161)。enabled 必填；job not found → NOT_FOUND。
+func handleCronJobToggle(cc CronJobController) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+		}
+		jobID := strings.TrimSpace(cronStrVal(params["id"]))
+		if jobID == "" {
+			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+		}
+		enabledRaw, hasEnabled := params["enabled"]
+		if !hasEnabled || enabledRaw == nil {
+			return cronErrPayload(WsErrBadRequest, "enabled is required"), nil
+		}
+		enabled := false
+		if b, ok := enabledRaw.(bool); ok {
+			enabled = b
+		}
+		job, err := cc.ToggleJob(jobID, enabled)
+		if err != nil {
+			if strings.Contains(err.Error(), "job not found") {
+				return cronErrPayload(WsErrNotFound, "job not found"), nil
+			}
+			return cronErrPayload(WsErrBadRequest, err.Error()), nil
+		}
+		return map[string]any{"job": job}, nil
+	}
+}
+
+// handleCronJobPreview 处理 cron.job.preview。
+// Python: _cron_job_preview (L2163-2180)。count 默认 5；job not found → NOT_FOUND。
+func handleCronJobPreview(cc CronJobController) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+		}
+		jobID := strings.TrimSpace(cronStrVal(params["id"]))
+		if jobID == "" {
+			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+		}
+		count := 5
+		if v, ok := params["count"].(float64); ok {
+			count = int(v)
+		}
+		rows, err := cc.PreviewJob(jobID, count)
+		if err != nil {
+			if strings.Contains(err.Error(), "job not found") {
+				return cronErrPayload(WsErrNotFound, "job not found"), nil
+			}
+			return cronErrPayload(WsErrBadRequest, err.Error()), nil
+		}
+		return map[string]any{"next": rows}, nil
+	}
+}
+
+// handleCronJobRunNow 处理 cron.job.run_now。
+// Python: _cron_job_run_now (L2182-2198)。job not found → NOT_FOUND，其余 → INTERNAL_ERROR。
+func handleCronJobRunNow(cc CronJobController) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return cronErrPayload(WsErrBadRequest, "params must be object"), nil
+		}
+		jobID := strings.TrimSpace(cronStrVal(params["id"]))
+		if jobID == "" {
+			return cronErrPayload(WsErrBadRequest, "id is required"), nil
+		}
+		runID, err := cc.RunNow(jobID)
+		if err != nil {
+			if strings.Contains(err.Error(), "job not found") {
+				return cronErrPayload(WsErrNotFound, "job not found"), nil
+			}
+			return cronErrPayload(WsErrInternalError, err.Error()), nil
+		}
+		return map[string]any{"run_id": runID}, nil
+	}
+}
+
+// cronErrPayload 构造 cron 端点错误响应。
+// 对齐 Python channel.send_response(ok=False, error=..., code=...)。
+func cronErrPayload(code, msg string) map[string]any {
+	return map[string]any{"ok": false, "error": msg, "code": code}
+}
+
+// cronStrVal 安全取字符串。
+func cronStrVal(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
