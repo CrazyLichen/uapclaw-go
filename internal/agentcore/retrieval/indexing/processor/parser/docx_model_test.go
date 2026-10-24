@@ -119,3 +119,39 @@ func summarizeBlocks(blocks []docxBlock) []string {
 	}
 	return out
 }
+
+// TestDocxTableMerge 测试合并单元格展开：vMerge 纵向回填 + gridSpan 横向重复。
+//
+// 黄金基准（python-docx row.cells 实测，fixture_word.golden.json 表格行）：
+// vMerge 表 r1c0 输出 "master"（续格回填）；gridSpan 表第二行输出
+// ["span2","span2","c2"]（横向重复）。
+func TestDocxTableMerge(t *testing.T) {
+	dm, err := loadDocxModel("testdata/fixture_word.docx")
+	if err != nil {
+		t.Fatalf("loadDocxModel: %v", err)
+	}
+	blocks := dm.parseBlocks()
+
+	// blocks[7] = vMerge 表，blocks[8] = gridSpan 表
+	vm := blocks[7].rows
+	if len(vm) != 2 {
+		t.Fatalf("vMerge 表行数 = %d, want 2", len(vm))
+	}
+	if vm[0][0] != "master" || vm[1][0] != "master" {
+		t.Errorf("vMerge r0c0=%q r1c0=%q, want 均为 master（续格回填）", vm[0][0], vm[1][0])
+	}
+	if vm[0][1] != "r0c1" || vm[1][1] != "r1c1" {
+		t.Errorf("vMerge 右列 = %q/%q, want r0c1/r1c1", vm[0][1], vm[1][1])
+	}
+
+	gs := blocks[8].rows
+	if len(gs) != 2 {
+		t.Fatalf("gridSpan 表行数 = %d, want 2", len(gs))
+	}
+	if gs[0][0] != "h0" || gs[0][1] != "h1" || gs[0][2] != "h2" {
+		t.Errorf("gridSpan 表头 = %v, want [h0 h1 h2]", gs[0])
+	}
+	if gs[1][0] != "span2" || gs[1][1] != "span2" || gs[1][2] != "c2" {
+		t.Errorf("gridSpan 第二行 = %v, want [span2 span2 c2]（横向重复）", gs[1])
+	}
+}
