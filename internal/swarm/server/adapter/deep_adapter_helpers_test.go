@@ -1205,8 +1205,6 @@ func TestDeepAdapter_A2x占位函数(t *testing.T) {
 	if err := d.syncA2xRuntimeState(); err != nil {
 		t.Errorf("syncA2xRuntimeState error: %v", err)
 	}
-	d.bindRuntimeCronContext("req1", "s1")
-	d.resetRuntimeCronContext(nil)
 }
 
 // TestDeepAdapter_Evolution占位函数 测试 evolution 占位函数不 panic。
