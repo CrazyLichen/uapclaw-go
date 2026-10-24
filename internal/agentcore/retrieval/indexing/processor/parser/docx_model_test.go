@@ -2,6 +2,9 @@ package parser
 
 import (
 	"bytes"
+	"image/png"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -153,5 +156,89 @@ func TestDocxTableMerge(t *testing.T) {
 	}
 	if gs[1][0] != "span2" || gs[1][1] != "span2" || gs[1][2] != "c2" {
 		t.Errorf("gridSpan 第二行 = %v, want [span2 span2 c2]（横向重复）", gs[1])
+	}
+}
+
+// TestDocxExtractImages 测试图片提取链：a:blip → r:embed → media 字节 → RGBA → PNG 落盘。
+//
+// 对齐 Python _extract_images_from_paragraph：命名 images/{filename}__para_{n}__img_{i}.png；
+// 坏图（无法解码）炸整篇（error 向上传播，非局部吞掉）。
+func TestDocxExtractImages(t *testing.T) {
+	dm, err := loadDocxModel("testdata/fixture_word.docx")
+	if err != nil {
+		t.Fatalf("loadDocxModel: %v", err)
+	}
+	blocks := dm.parseBlocks()
+	// 找带图段落（按 paraXML 含 blip 定位）
+	var picBlock *docxBlock
+	picIdx := -1
+	for i := range blocks {
+		if blocks[i].kind == "para" && bytes.Contains(blocks[i].paraXML, []byte("blip")) {
+			picBlock = &blocks[i]
+			picIdx = i
+			break
+		}
+	}
+	if picBlock == nil {
+		t.Fatal("未找到带图段落（fixture 应含 add_picture）")
+	}
+
+	dir := t.TempDir()
+	images, err := dm.extractImages(picBlock.paraXML, "fixture_word.docx", picIdx, dir)
+	if err != nil {
+		t.Fatalf("extractImages: %v", err)
+	}
+	if len(images) != 1 {
+		t.Fatalf("images = %d, want 1", len(images))
+	}
+	want := filepath.Join(dir, "fixture_word.docx__para_6__img_0.png")
+	if images[0] != want {
+		t.Errorf("images[0] = %q, want %q", images[0], want)
+	}
+	// 解码验证：PNG 格式，1×1
+	f, err := os.Open(images[0])
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatalf("png.Decode: %v", err)
+	}
+	if img.Bounds().Dx() != 1 || img.Bounds().Dy() != 1 {
+		t.Errorf("尺寸 = %v, want 1×1", img.Bounds())
+	}
+}
+
+// TestDocxExtractImages_坏图炸整篇 测试坏图错误传播（无局部 try 语义）。
+//
+// 两分支对齐 Python：
+//   - r:embed 指向不存在的 part → related_parts.get 返回 None → if image_part
+//     跳过（不炸、不产出）
+//   - media 字节存在但无法解码 → Image.open 抛异常 → error 冒泡炸整篇
+func TestDocxExtractImages_坏图炸整篇(t *testing.T) {
+	dm, err := loadDocxModel("testdata/fixture_word.docx")
+	if err != nil {
+		t.Fatalf("loadDocxModel: %v", err)
+	}
+	// ① 不存在的 media part：静默跳过（对齐 Python related_parts.get → None）
+	fakeXML := []byte(`<w:p xmlns:w="` + docxMainNS + `" xmlns:r="` + docxRelNS + `" xmlns:a="` + docxDrawingNS + `"><w:r><w:drawing><a:blip r:embed="rIdBad"/></w:drawing></w:r></w:p>`)
+	images, err := dm.extractImages(fakeXML, "x.docx", 0, t.TempDir())
+	if err != nil {
+		t.Fatalf("不存在的 media part 应跳过不炸（对齐 Python None 分支）: %v", err)
+	}
+	if len(images) != 0 {
+		t.Errorf("不存在的 media part 不产出图片, got %d", len(images))
+	}
+
+	// ② 坏图字节：error 向上传播（对齐 Python Image.open 异常冒泡）
+	bad := &docxModel{
+		rels:   map[string]string{"rIdBad": "media/bad.png"},
+		files:  map[string][]byte{"word/media/bad.png": []byte("not an image")},
+		docDir: "word",
+	}
+	_, err = bad.extractImages(fakeXML, "x.docx", 0, t.TempDir())
+	if err == nil {
+		t.Fatal("坏图字节应向上传播 error（对齐 Python 无局部 try，Image.open 失败炸整篇）")
 	}
 }

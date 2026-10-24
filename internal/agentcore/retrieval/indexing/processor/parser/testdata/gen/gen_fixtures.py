@@ -26,7 +26,9 @@ def png1x1():
         return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
 
     ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)
-    idat = zlib.compress(b"\x00\xff\x00\x00\xff\x00")  # RGBA 绿
+    # 1 行 = 1 字节 filter(0) + 4 字节 RGBA = 5 字节（filter 0 + RGBA 绿）
+    # 注意不能多写字节：PIL 宽容忍让，Go png 严格（too much pixel data）
+    idat = zlib.compress(b"\x00\xff\x00\x00\xff")
     return sig + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
 
 

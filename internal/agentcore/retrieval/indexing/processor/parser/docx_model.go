@@ -5,9 +5,16 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"image"
+	"image/draw"
+	"image/png"
 	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+
+	_ "golang.org/x/image/webp" // webp 解码器副作用注册
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -518,4 +525,86 @@ func (dm *docxModel) parseTableBlock(dec *xml.Decoder, start xml.StartElement) d
 	}
 	blk.rows = rows
 	return blk
+}
+
+// extractImages 从段落 XML 提取图片并落盘。
+//
+// 对齐 Python _extract_images_from_paragraph 逐字语义：
+//  1. 段落元素内 findall(".//a:blip")——Go token 流扫描（blip 无嵌套 blip，等效）
+//  2. r:embed 空 → continue
+//  3. media 字节不存在 → Python related_parts.get 返回 None 跳过（不炸）
+//  4. 解码失败 → error 向上传播（对齐 Image.open 抛异常炸整篇）
+//  5. RGBA/P → RGB（PIL convert 语义；Go draw.Draw 到 RGBA 画布再 png.Encode）
+//  6. 落盘命名 images/{filename}__para_{n}__img_{i}.png
+func (dm *docxModel) extractImages(paraXML []byte, filename string, paragraphNum int, outputDir string) ([]string, error) {
+	var images []string
+	imagesPerParagraph := 0
+
+	// token 流扫描找所有 a:blip 节点的 r:embed 属性
+	dec := xml.NewDecoder(bytes.NewReader(paraXML))
+	var blipEmbeds []string
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if se, ok := tok.(xml.StartElement); ok && se.Name.Local == "blip" {
+			for _, a := range se.Attr {
+				if a.Name.Local == "embed" {
+					blipEmbeds = append(blipEmbeds, a.Value)
+				}
+			}
+		}
+	}
+
+	for _, rEmbed := range blipEmbeds {
+		if rEmbed == "" {
+			continue
+		}
+		data, ok := dm.mediaBytes(rEmbed)
+		if !ok {
+			// 对齐 Python image_part 为 None 跳过（不炸）
+			continue
+		}
+		img, _, err := image.Decode(bytes.NewReader(data))
+		if err != nil {
+			// 坏图炸整篇（对齐 Python Image.open 异常冒泡）
+			return nil, fmt.Errorf("decode image %s: %w", rEmbed, err)
+		}
+		// RGBA/P → RGB：Go 统一转 RGBA 画布（png/jpeg/gif 注册由各包 init 完成）
+		rgb := toRGBImage(img)
+		if err := os.MkdirAll(outputDir, 0o755); err != nil {
+			return nil, err
+		}
+		imagePath := filepath.Join(outputDir, fmt.Sprintf("%s__para_%d__img_%d.png", filename, paragraphNum, imagesPerParagraph))
+		f, err := os.Create(imagePath)
+		if err != nil {
+			return nil, err
+		}
+		if err := png.Encode(f, rgb); err != nil {
+			f.Close()
+			return nil, err
+		}
+		f.Close()
+		images = append(images, imagePath)
+		imagesPerParagraph++
+	}
+	return images, nil
+}
+
+// toRGBImage 转 RGBA 画布（≈ PIL RGBA/P convert("RGB")）。
+//
+// PIL convert("RGB") 是去 alpha；Go 解码已得具体 image 类型，统一
+// draw.Draw 到 RGBA 画布（PNG 编码接受，语义等效"去模式标签"）。
+func toRGBImage(img image.Image) *image.RGBA {
+	if rgba, ok := img.(*image.RGBA); ok {
+		return rgba
+	}
+	b := img.Bounds()
+	out := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(out, out.Bounds(), img, b.Min, draw.Src)
+	return out
 }
