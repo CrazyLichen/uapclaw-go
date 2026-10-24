@@ -185,8 +185,11 @@ func (mh *MessageHandler) resolveControlChannelType(msg *schema.Message) channel
 	if msg.Provider != "" {
 		return channel_manager.ChannelType(msg.Provider)
 	}
-	// fallback: 从 channelID 推断（对齐 Python: msg.channel_id）
-	return inferChannelTypeFromID(msg.ChannelID)
+	// M-06: fallback 原样返回 msg.ChannelID（对齐 Python: return str(msg.channel_id)）。
+	// 原实现走 inferChannelTypeFromID 前缀映射，未知前缀静默归为 web——
+	// 过度受控：Python 的 fallback 语义是"原样透传"，由 controlChannelTypes
+	// 集合判定是否受控，未知值不应被改写。
+	return channel_manager.ChannelType(msg.ChannelID)
 }
 
 // getChannelDefaultState 从默认配置创建渠道状态。
@@ -255,30 +258,6 @@ func (mh *MessageHandler) saveChannelStateToConfig(channelID string) {
 		"default_session_id": state.SessionID,
 		"default_mode":       ChannelModeString(state.Mode),
 	})
-}
-
-// inferChannelTypeFromID 从 channelID 推断渠道类型
-func inferChannelTypeFromID(channelID string) channel_manager.ChannelType {
-	lower := strings.ToLower(channelID)
-	prefixes := map[string]channel_manager.ChannelType{
-		"web":      channel_manager.ChannelTypeWeb,
-		"feishu":   channel_manager.ChannelTypeFeishu,
-		"xiaoyi":   channel_manager.ChannelTypeXiaoyi,
-		"dingtalk": channel_manager.ChannelTypeDingTalk,
-		"telegram": channel_manager.ChannelTypeTelegram,
-		"discord":  channel_manager.ChannelTypeDiscord,
-		"whatsapp": channel_manager.ChannelTypeWhatsApp,
-		"wecom":    channel_manager.ChannelTypeWeCom,
-		"wechat":   channel_manager.ChannelTypeWeChat,
-		"tui":      channel_manager.ChannelTypeCLI,
-		"acp":      channel_manager.ChannelTypeACP,
-	}
-	for prefix, ct := range prefixes {
-		if strings.HasPrefix(lower, prefix) {
-			return ct
-		}
-	}
-	return channel_manager.ChannelTypeWeb
 }
 
 // extractIdentityTuple 提取消息身份四元组。

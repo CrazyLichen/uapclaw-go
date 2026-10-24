@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	ateamschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
 )
@@ -453,5 +454,93 @@ func TestEvolutionOutputSchemasToMaps_消费链端到端(t *testing.T) {
 	}
 	if evt, _ := parsed["event_type"].(string); evt != "chat.reasoning" {
 		t.Fatalf("parsed event_type = %q, 期望 chat.reasoning", evt)
+	}
+}
+
+// TestChunkToMap_ControllerOutputPayload桥接 S-03 回归测试。
+// 生产端 executor.go/task_scheduler.go 产出 *OutputSchema{Payload: *ControllerOutputPayload}——
+// 原 map-only 断言返回 nil 导致 task_failed 事件整块丢弃。
+// 桥接后形状对齐 Python model_dump(mode="json")：{type,data:[{text}],metadata}
+// 并提升顶层（type/index/payload）。
+func TestChunkToMap_ControllerOutputPayload桥接(t *testing.T) {
+	cop := &cschema.ControllerOutputPayload{
+		Type: "task_failed",
+		Data: []cschema.DataFrame{
+			&cschema.TextDataFrame{Text: "工具执行失败 [error_code=5001]"},
+		},
+		Metadata: map[string]any{"task_id": "t-1"},
+	}
+	chunk := &agentschema.OutputSchema{
+		Type:    "task_failed",
+		Index:   7,
+		Payload: cop,
+	}
+	m := chunkToMap(chunk)
+	if m == nil {
+		t.Fatal("结构体 payload 应被桥接而非返回 nil（S-03）")
+	}
+	// 顶层提升键
+	if m["type"] != "task_failed" {
+		t.Errorf("顶层 type 应为 task_failed，实际 %v", m["type"])
+	}
+	if idx, _ := m["index"].(int); idx != 7 {
+		t.Errorf("顶层 index 应为 7，实际 %v", m["index"])
+	}
+	// payload 嵌套键（对齐 model_dump）
+	payload, ok := m["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload 应为 map，实际 %T", m["payload"])
+	}
+	if payload["type"] != "task_failed" {
+		t.Errorf("payload.type 应为 task_failed，实际 %v", payload["type"])
+	}
+	data, ok := payload["data"].([]any)
+	if !ok || len(data) != 1 {
+		t.Fatalf("payload.data 应为 1 元素切片，实际 %v", payload["data"])
+	}
+	dm, _ := data[0].(map[string]any)
+	if dm["text"] != "工具执行失败 [error_code=5001]" {
+		t.Errorf("data[0].text 应为错误文本，实际 %v", dm["text"])
+	}
+	if payload["metadata"].(map[string]any)["task_id"] != "t-1" {
+		t.Errorf("metadata.task_id 应保留，实际 %v", payload["metadata"])
+	}
+	// payload 内容键同时提升顶层（方案A 半展平，evolutionlogic 判定函数读顶层键）
+	if m["metadata"].(map[string]any)["task_id"] != "t-1" {
+		t.Errorf("顶层 metadata.task_id 应保留，实际 %v", m["metadata"])
+	}
+}
+
+// TestChunkToMap_ControllerOutputPayload值类型 值类型（非指针）桥接分支。
+func TestChunkToMap_ControllerOutputPayload值类型(t *testing.T) {
+	cop := cschema.ControllerOutputPayload{
+		Type: "task_completion",
+		Data: []cschema.DataFrame{
+			&cschema.JsonDataFrame{Data: map[string]any{"result": "done"}},
+		},
+	}
+	chunk := agentschema.OutputSchema{Type: "task_completion", Payload: cop}
+	m := chunkToMap(chunk)
+	if m == nil {
+		t.Fatal("值类型结构体 payload 也应被桥接（S-03）")
+	}
+	if m["type"] != "task_completion" {
+		t.Errorf("type 应为 task_completion，实际 %v", m["type"])
+	}
+	payload := m["payload"].(map[string]any)
+	data, _ := payload["data"].([]any)
+	dm, _ := data[0].(map[string]any)
+	if dm["data"].(map[string]any)["result"] != "done" {
+		t.Errorf("JsonDataFrame.data 应保留，实际 %v", dm)
+	}
+}
+
+// TestChunkToMap_NilControllerOutputPayload nil 指针防御分支。
+func TestChunkToMap_NilControllerOutputPayload(t *testing.T) {
+	if m := payloadToMap((*cschema.ControllerOutputPayload)(nil)); m != nil {
+		t.Errorf("nil 指针应返回 nil，实际 %v", m)
+	}
+	if m := payloadToMap(nil); m != nil {
+		t.Errorf("nil payload 应返回 nil，实际 %v", m)
 	}
 }

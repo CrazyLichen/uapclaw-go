@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler/command_parser"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -115,14 +116,15 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 	return true
 }
 
-// newSessionCancelAndNotice /new_session 收尾：异步取消旧会话 + 发变更通知。
+// newSessionCancelAndNotice /new_session 收尾：取消旧会话 + 发变更通知。
 //
-// Python: _new_session_cancel_and_notice (L575-591)。
+// Python: _new_session_cancel_and_notice (L575-591)：await 先取消完再发通知。
+// M-05: Go 原实现 go 异步导致取消未完成通知先到（顺序丢失），改同步对齐。
 // 状态更新（SessionMap 轮转/state.SessionID/hook）已上提至 handleChannelControl（D5 对齐）。
 func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, oldSID, newSID string) {
-	// 异步取消旧会话（静默模式：publishInterruptResult=false）
+	// 取消旧会话（静默模式：publishInterruptResult=false）
 	if oldSID != "" {
-		go mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, false)
+		mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, false)
 	}
 
 	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], session_id 已变更为 %s", newSID)})
@@ -140,7 +142,21 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed 
 	var newMode ChannelMode
 	switch parsed.Action {
 	case command_parser.ActionModeOK:
-		newMode = ParseChannelMode(parsed.ModeSubcommand)
+		// S-01: 对齐 Python L715-730 的 8 路一级映射。
+		// 原实现直接 ParseChannelMode(mode_subcommand)，但 "agent"/"code"/"team"
+		// 三个一级值不在 ParseChannelMode 词表内会回落 AgentPlan，导致
+		// /mode code 误映射 AGENT_PLAN、/mode team 误映射 AGENT_PLAN。
+		switch parsed.ModeSubcommand {
+		case "agent":
+			newMode = ChannelModeAgentPlan
+		case "code":
+			newMode = ChannelModeCodeNormal
+		case "team":
+			newMode = ChannelModeTeam
+		default:
+			// 二级值（agent.plan/agent.fast/code.plan/code.normal/code.team）
+			newMode = ParseChannelMode(parsed.ModeSubcommand)
+		}
 	case command_parser.ActionSwitchOK:
 		// Python: 根据当前 state.Mode 判断模式家族，再决定目标模式
 		currentMode := state.Mode
@@ -197,8 +213,14 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed 
 
 	if oldMode != newMode {
 		// 模式确实变更：先取消当前会话任务（静默模式）
-		if oldSID != "" && mh.hasActiveStreamTaskForSession(oldSID) {
-			go mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, false)
+		// M-01: 对齐 Python L734-743——_mode_change_cancel_and_notice 内部
+		// 无 hasActiveStreamTaskForSession 守卫，只要 old_sid 非空就取消
+		// （AgentServer 侧可能有网关不可见的派发工作）。
+		// M-05: Python 为 await 同步调用（先取消完再发通知）；Go 原实现 go 异步
+		// 导致取消未完成通知先到。CancelAgentWorkForSession 内部 SendRequest
+		// 有超时不会永久阻塞 forwardLoop。
+		if oldSID != "" {
+			mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, false)
 		}
 		mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel)})
 	} else {
@@ -243,7 +265,9 @@ func (mh *MessageHandler) skillsSlashNotice(msg *schema.Message) {
 		return
 	}
 
-	reqID := fmt.Sprintf("skills_slash_%x", time.Now().UnixMilli())
+	// T-08: 对齐 Python _skills_slash_notice——req_id 带 _{token_hex(3)}
+	// 随机后缀（避免毫秒内并发请求 req_id 冲突）
+	reqID := fmt.Sprintf("skills_slash_%x_%s", time.Now().UnixMilli(), generateRandomHex(3))
 	skillsReq := &schema.Message{
 		ID:        reqID,
 		Type:      schema.MessageTypeReq,
@@ -322,11 +346,15 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 		return
 	}
 
-	newSID := GenerateChannelSessionID(msg.ChannelID)
+	// M-02: 对齐 Python L962-963——先用 _resolve_control_channel_type 解析渠道类型，
+	// 再以此生成 new_sid（原实现直接用 msg.ChannelID 裸字符串）
+	channelType := mh.resolveControlChannelType(msg)
+	newSID := GenerateChannelSessionID(string(channelType))
 
 	env := e2a.E2AFromAgentFields(
-		fmt.Sprintf("branch-%x", time.Now().UnixMilli()),
-		e2a.WithFieldChannelID(msg.ChannelID),
+		fmt.Sprintf("branch-%x-%s", time.Now().UnixMilli(), generateRandomHex(3)),
+		// M-02: Python L971 channel_id=channel_type（非裸 channel_id）
+		e2a.WithFieldChannelID(string(channelType)),
 		e2a.WithFieldSessionID(sourceSID),
 		e2a.WithFieldReqMethod(string(schema.ReqMethodSessionFork)),
 		e2a.WithFieldParams(map[string]any{
@@ -390,13 +418,23 @@ func (mh *MessageHandler) rewindSlashConfirmPrompt(msg *schema.Message, parsed c
 	if turn == 0 {
 		turn = 1
 	}
-	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /rewind %d] 确认回退到第 %d 轮？发送 /rewind confirm 确认，/rewind cancel 取消。", turn, turn)})
+	// M-03: 逐字复制 Python L1046-1050 四行模板（不可逆警告/删除范围/
+	// confirm 格式/bash 文件影响说明），原实现压缩成单行丢失关键信息
+	content := fmt.Sprintf(
+		"[收到 /rewind %d 指令] 确认要回退到第 %d 轮吗？\n"+
+			"此操作不可逆，将删除第 %d 轮及之后的所有对话。\n"+
+			"请回复 /rewind confirm %d 确认，或 /rewind cancel 取消。\n"+
+			"注意：回退不影响手动编辑的文件或通过 bash 执行的命令。",
+		turn, turn, turn, turn)
+	mh.sendChannelNotice(msg, map[string]any{"content": content})
 }
 
 // rewindSlashNotice 处理 /rewind 命令（用户已确认）。
 //
 // Python: _rewind_slash_notice (L1047-1142)：
-// E2A-first + fallback：构造 SESSION_REWIND E2A → AgentClient.SendRequest。
+// E2A-first + fallback：构造 SESSION_REWIND E2A → AgentClient.SendRequest；
+// 失败/错误时 fallback 本地 sessionops.RewindSession 截断 history.json，
+// 通知带「（注意：上下文未同步截断）」。
 func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	state := mh.GetOrCreateChannelState(msg)
 	targetSID := state.SessionID
@@ -410,71 +448,109 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 		turn = 1
 	}
 
-	// 先取消当前任务
+	// 先取消当前任务（Python: await 同步调用）
 	mh.CancelAgentWorkForSession(context.Background(), msg, targetSID, false)
 
-	if mh.agentClient == nil || !mh.agentClient.IsConnected() {
-		mh.sendChannelNotice(msg, map[string]any{"error": "回退失败：AgentClient 未连接"})
-		return
+	// E2A-first：转发到 AgentServer（原子性截断 history + context + checkpointer）
+	// AgentClient 未连接时直接走本地 fallback
+	if mh.agentClient != nil && mh.agentClient.IsConnected() {
+		env := e2a.E2AFromAgentFields(
+			fmt.Sprintf("rewind-%x-%s", time.Now().UnixMilli(), generateRandomHex(3)),
+			e2a.WithFieldChannelID(msg.ChannelID),
+			e2a.WithFieldSessionID(targetSID),
+			e2a.WithFieldReqMethod(string(schema.ReqMethodSessionRewind)),
+			e2a.WithFieldParams(map[string]any{
+				"session_id": targetSID,
+				"turn_index": turn,
+			}),
+			e2a.WithFieldIsStream(false),
+			e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1000.0),
+		)
+
+		resp, err := mh.agentClient.SendRequest(context.Background(), env)
+		if err != nil {
+			// Python: logger.warning + fall through to local fallback
+			logger.Warn(logComponent).
+				Str("event_type", "rewind_e2a_error").
+				Err(err).
+				Str("session_id", targetSID).
+				Msg("/rewind E2A failed, fallback to local rewind")
+		} else if resp.OK {
+			// E2A 成功路径
+			preview := ""
+			remaining := 0
+			removed := 0
+			if resp.Payload != nil {
+				if p, ok := resp.Payload["content_preview"].(string); ok {
+					// M-07: Python preview[:50] 按字符切，Go 按 rune 对齐口径，
+					// 否则 CJK 多字节字符在字节边界截断产生非法 UTF-8
+					preview = truncRunes(p, 50)
+				}
+				remaining = payloadToInt(resp.Payload["remaining_records"])
+				removed = payloadToInt(resp.Payload["removed_records"])
+			}
+			mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。", turn, preview, removed, remaining)})
+			return
+		} else {
+			// AgentServer 返回错误 — fall through to local fallback
+			logger.Warn(logComponent).
+				Str("event_type", "rewind_e2a_rejected").
+				Str("session_id", targetSID).
+				Msgf("/rewind E2A failed, fallback to local rewind: %v", resp.Payload)
+		}
 	}
 
-	// E2A-first：转发到 AgentServer
-	env := e2a.E2AFromAgentFields(
-		fmt.Sprintf("rewind-%x", time.Now().UnixMilli()),
-		e2a.WithFieldChannelID(msg.ChannelID),
-		e2a.WithFieldSessionID(targetSID),
-		e2a.WithFieldReqMethod(string(schema.ReqMethodSessionRewind)),
-		e2a.WithFieldParams(map[string]any{
-			"session_id": targetSID,
-			"turn_index": turn,
-		}),
-		e2a.WithFieldIsStream(false),
-		e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1000.0),
-	)
-
-	resp, err := mh.agentClient.SendRequest(context.Background(), env)
+	// M-04: Fallback——本地截断 history.json（对齐 Python rewind_session 本地兜底）
+	result, err := sessionops.RewindSession(sessionops.RewindSessionParams{
+		SessionID: targetSID,
+		TurnIndex: turn,
+	})
 	if err != nil {
-		logger.Warn(logComponent).
-			Str("event_type", "rewind_e2a_error").
-			Err(err).
-			Msg("/rewind E2A request failed")
 		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("回退失败：%v", err)})
 		return
 	}
-
-	if resp.OK {
-		preview := ""
-		remaining := 0
-		removed := 0
-		if resp.Payload != nil {
-			if p, ok := resp.Payload["content_preview"].(string); ok {
-				if len(p) > 50 {
-					preview = p[:50]
-				} else {
-					preview = p
-				}
-			}
-			if r, ok := resp.Payload["remaining_records"]; ok {
-				if n, isNum := r.(int); isNum {
-					remaining = n
-				}
-			}
-			if r, ok := resp.Payload["removed_records"]; ok {
-				if n, isNum := r.(int); isNum {
-					removed = n
-				}
-			}
-		}
-		mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。", turn, preview, removed, remaining)})
-	} else {
-		errMsg := "session.rewind failed"
-		if resp.Payload != nil {
-			if e, ok := resp.Payload["error"].(string); ok && e != "" {
-				errMsg = e
-			}
-		}
-		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("回退失败：%s", errMsg)})
+	preview := result.ContentPreview
+	if preview == "" && result.Content != "" {
+		preview = truncRunes(result.Content, 50)
 	}
+	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf(
+		"[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。（注意：上下文未同步截断）",
+		turn, preview, result.RemovedRecords, result.RemainingRecords)})
+}
+
+// truncRunes 按字符（rune）截断字符串。
+// Python s[:n] 语义对齐：CJK 多字节字符不会在字节中间截断。
+func truncRunes(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
+}
+
+// payloadToInt 从 JSON 反序列化 payload 中宽容提取 int。
+// S-06: 跨进程 JSON 数值必为 float64（agent_client.go json.Unmarshal），
+// 直接 .(int) 断言永不命中导致字段恒为 0。
+func payloadToInt(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return int(i)
+		}
+		if f, err := n.Float64(); err == nil {
+			return int(f)
+		}
+	}
+	return 0
 }
 
 // extractTextFromParams 从消息 params 中提取文本内容。

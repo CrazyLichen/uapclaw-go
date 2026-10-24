@@ -10,6 +10,7 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -810,22 +811,58 @@ func detectTaskFailed(chunk streambase.Schema) error {
 	if payload == nil {
 		return nil
 	}
-	payloadMap, ok := payload.(map[string]any)
-	if !ok {
+
+	// S-03 直读分支：生产端（task_loop executor 等）产出
+	// *cschema.ControllerOutputPayload 结构体指针——原实现只断言
+	// map[string]any，结构体 payload 恒返回 nil，task_failed 重试机制失效。
+	if cop, ok := payload.(*cschema.ControllerOutputPayload); ok {
+		if cop == nil || cop.Type != taskFailedPayloadType {
+			return nil
+		}
+		// Python: 只要 type == "task_failed" 就是失败；
+		// data[0].text 直接从结构体读（对齐 Python item.text 属性访问）
+		var text string
+		if len(cop.Data) > 0 {
+			if tdf, ok := cop.Data[0].(*cschema.TextDataFrame); ok && tdf != nil {
+				text = tdf.Text
+			}
+		}
+		return newTaskFailedErrorFromText(text)
+	}
+
+	// S-03: 生产端 executor.go/task_scheduler.go 产出 *ControllerOutputPayload
+	// 结构体指针——原 map-only 断言使 task_failed 检测失效（重试机制不触发）。
+	// 两个域统一提取 (type, data, text) 后走共同判定逻辑。
+	var payloadType string
+	var text string
+	if cop, ok := payload.(*cschema.ControllerOutputPayload); ok && cop != nil {
+		payloadType = cop.Type
+		if len(cop.Data) > 0 {
+			if td, ok := cop.Data[0].(*cschema.TextDataFrame); ok {
+				text = td.Text
+			}
+		}
+	} else if payloadMap, ok := payload.(map[string]any); ok {
+		payloadType, _ = payloadMap["type"].(string)
+		// Python: 只要 type == "task_failed" 就是失败
+		data, _ := payloadMap["data"].([]any)
+		if len(data) > 0 {
+			if dataMap, ok := data[0].(map[string]any); ok {
+				text, _ = dataMap["text"].(string)
+			}
+		}
+	} else {
 		return nil
 	}
-	payloadType, _ := payloadMap["type"].(string)
 	if payloadType != taskFailedPayloadType {
 		return nil
 	}
-	// Python: 只要 type == "task_failed" 就是失败
-	data, _ := payloadMap["data"].([]any)
-	var text string
-	if len(data) > 0 {
-		if dataMap, ok := data[0].(map[string]any); ok {
-			text, _ = dataMap["text"].(string)
-		}
-	}
+	return newTaskFailedErrorFromText(text)
+}
+
+// newTaskFailedErrorFromText 从错误文本提取错误码并构造 taskFailedError。
+// Python: error_code 正则提取 + logger.debug 记录。
+func newTaskFailedErrorFromText(text string) error {
 	match := errorCodePattern.FindStringSubmatch(text)
 	var code int
 	if len(match) > 1 {

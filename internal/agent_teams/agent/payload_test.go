@@ -120,6 +120,9 @@ func TestSpawnPayloadBuilder_BuildSpawnConfig(t *testing.T) {
 
 	cfg := b.BuildSpawnConfig(ctx)
 	assert.Equal(t, runnerspawn.SpawnAgentKindTeamAgent, cfg.AgentKind)
+	// M-18: RunnerConfig 必须填父进程 Runner 快照（Python L121 serialize_runner_config）
+	assert.NotNil(t, cfg.RunnerConfig, "RunnerConfig 应非 nil（子进程据此应用父进程配置）")
+	assert.NotEmpty(t, cfg.RunnerConfig, "RunnerConfig 应非空 map")
 	assert.NotNil(t, cfg.Payload, "Payload 应非 nil")
 	// S-26: payload 形状是 FromSpawnPayload 公共契约——必须含 spec/context 键
 	//（Python build_spawn_config: payload={"spec": model_dump, "context": model_dump}）

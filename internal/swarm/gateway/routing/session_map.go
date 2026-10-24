@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -71,8 +72,13 @@ func LoadSessionMapScope() SessionMapScope {
 		configBase, err := cfg.Load()
 		if err == nil {
 			if gateway, ok := configBase["gateway"].(map[string]any); ok {
-				if v, ok := gateway["session_map_scope"].(string); ok && v != "" {
-					raw = v
+				if v, ok := gateway["session_map_scope"]; ok && v != nil {
+					// T-03: 对齐 Python str(...) 强转——非字符串值（数字/bool 等）
+					// Python 经 str() 走 SessionMapScope(raw) 未知值 Warn 路径；
+					// 原实现仅 string 断言，非字符串值静默用默认值（丢 Warn）
+					if s := fmt.Sprintf("%v", v); s != "" {
+						raw = s
+					}
 				}
 			}
 		} else {
@@ -195,12 +201,19 @@ func (m *SessionMap) load() {
 		}
 		return
 	}
-	var parsed map[string]any
+	// T-02: Python json.load 后 isinstance(data, dict) 检查——非 dict 静默跳过
+	//（Python 非 dict 走 except 分支仅 Warn 一次；Go 先 Unmarshal 到 any 判断顶层类型）
+	var parsed any
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("SessionMap load failed")
 		return
 	}
-	for k, v := range parsed {
+	dict, ok := parsed.(map[string]any)
+	if !ok {
+		// Python: 非 dict 不进 mapping 赋值，静默保持空映射
+		return
+	}
+	for k, v := range dict {
 		if s, ok := v.(string); ok && s != "" {
 			m.mapping[k] = s
 		}
@@ -215,12 +228,19 @@ func (m *SessionMap) save() {
 		logger.Warn(logComponent).Err(err).Msg("SessionMap save failed")
 		return
 	}
-	data, err := json.MarshalIndent(m.mapping, "", "  ")
-	if err != nil {
+	// T-01: Python json.dump(ensure_ascii=False, indent=2) — 中文不转义。
+	// 对齐 interaction_context.go 同包写法：Encoder+SetEscapeHTML(false)。
+	// MarshalIndent 默认转义 HTML 字符（<>&），与非 ASCII 语义不一致。
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(m.mapping); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("SessionMap save failed")
 		return
 	}
-	if err := os.WriteFile(m.storePath, data, 0o644); err != nil {
+	// Encode 自带尾换行（Python json.dump 无尾换行）→ TrimSpace 对齐
+	if err := os.WriteFile(m.storePath, bytes.TrimSpace(buf.Bytes()), 0o644); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("SessionMap save failed")
 	}
 }

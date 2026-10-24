@@ -588,7 +588,7 @@ func Test断连_stale清理与disconnect回调(t *testing.T) {
 func Test断连_cleanup兜底回调(t *testing.T) {
 	cleanupCh := make(chan struct{}, 1)
 	route := &RouteConfig{
-		Path:  "/tui",
+		Path: "/tui",
 		CleanupHandler: func(ws *websocket.Conn) {
 			cleanupCh <- struct{}{}
 		},
@@ -698,7 +698,7 @@ func TestHandleConnection_断连回调panic恢复(t *testing.T) {
 
 func TestHandleConnection_cleanup回调panic恢复(t *testing.T) {
 	route := &RouteConfig{
-		Path:  "/tui",
+		Path: "/tui",
 		CleanupHandler: func(ws *websocket.Conn) {
 			panic("boom")
 		},

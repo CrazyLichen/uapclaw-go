@@ -479,3 +479,94 @@ func TestHookExecutor_RunAll_command进程被杀(t *testing.T) {
 		t.Errorf("Outcome = %q, want %q", results[0].Outcome, HookOutcomeNonBlockingError)
 	}
 }
+
+// TestHookTimeoutFromAny_类型矩阵 M-10 回归：数值直用、数字字符串宽容、
+// 非数字字符串/bool/list 拒绝执行（对齐 Python TypeError 语义）。
+func TestHookTimeoutFromAny_类型矩阵(t *testing.T) {
+	cases := []struct {
+		name string
+		in   any
+		want int
+		err  bool
+	}{
+		{"int 直用", 30, 30, false},
+		{"int64 直用", int64(15), 15, false},
+		{"float64 截断", 10.9, 10, false},
+		{"数字字符串宽容", "30", 30, false},
+		{"非数字字符串拒绝", "abc", 0, true},
+		{"bool 拒绝", true, 0, true},
+		{"list 拒绝", []any{1}, 0, true},
+	}
+	for _, tc := range cases {
+		got, err := hookTimeoutFromAny(tc.in)
+		if tc.err {
+			if err == nil {
+				t.Errorf("%s: 应返回错误，实际 %d", tc.name, got)
+			}
+		} else {
+			if err != nil || got != tc.want {
+				t.Errorf("%s: got %d err %v, want %d nil", tc.name, got, err, tc.want)
+			}
+		}
+	}
+}
+
+// TestHookExecutor_RunAll_command字符串Timeout数字 M-10：YAML 引号 "30" 宽容使用。
+func TestHookExecutor_RunAll_command字符串Timeout数字(t *testing.T) {
+	exec := NewHookExecutor()
+	hookConfigs := []map[string]any{
+		{"type": "command", "command": `echo '{"decision": "allow"}'`, "timeout": "30"},
+	}
+	results := exec.RunAll(context.Background(), hookConfigs, map[string]any{"tool_name": "t"}, "")
+	if len(results) != 1 || results[0].Outcome != HookOutcomeSuccess {
+		t.Errorf("数字字符串 timeout 应宽容执行，实际 %v", results)
+	}
+}
+
+// TestHookExecutor_RunAll_command字符串Timeout非法 M-10：非数字字符串拒绝执行。
+func TestHookExecutor_RunAll_command字符串Timeout非法(t *testing.T) {
+	exec := NewHookExecutor()
+	hookConfigs := []map[string]any{
+		{"type": "command", "command": `echo '{"decision": "allow"}'`, "timeout": "thirty"},
+	}
+	results := exec.RunAll(context.Background(), hookConfigs, map[string]any{"tool_name": "t"}, "")
+	if len(results) != 1 || results[0].Outcome != HookOutcomeNonBlockingError {
+		t.Errorf("非法 timeout 应 NON_BLOCKING_ERROR 拒绝，实际 %v", results)
+	}
+}
+
+// TestHookExecutor_RunAll_blockReason语义 M-08 回归：key 存在即用原值。
+// Python data.get("reason", "blocked by hook")：{"reason":""} → error=""
+// （空串也用原值）；{"reason":123} → error="123"（非字符串转 str）；
+// 无 reason key → error="blocked by hook"（兜底）。
+func TestHookExecutor_RunAll_blockReason语义(t *testing.T) {
+	exec := NewHookExecutor()
+	cases := []struct {
+		name       string
+		stdoutJSON string
+		wantError  string
+	}{
+		{"空串 reason 用原值", `{"decision": "block", "reason": ""}`, ""},
+		{"非字符串 reason 转 str", `{"decision": "block", "reason": 123}`, "123"},
+		{"无 reason key 走兜底", `{"decision": "block"}`, "blocked by hook"},
+		{"非空字符串 reason 原样", `{"decision": "block", "reason": "custom reason"}`, "custom reason"},
+	}
+	for _, tc := range cases {
+		hookConfigs := []map[string]any{
+			{"type": "command", "command": "echo '" + tc.stdoutJSON + "'"},
+		}
+		results := exec.RunAll(context.Background(), hookConfigs, map[string]any{"tool_name": "t"}, "")
+		if len(results) != 1 {
+			t.Fatalf("%s: RunAll = %d results", tc.name, len(results))
+		}
+		if results[0].Outcome != HookOutcomeBlocking {
+			t.Errorf("%s: Outcome = %q, want blocking", tc.name, results[0].Outcome)
+		}
+		if results[0].Error != tc.wantError {
+			t.Errorf("%s: Error = %q, want %q", tc.name, results[0].Error, tc.wantError)
+		}
+		if !results[0].ShowToModel {
+			t.Errorf("%s: ShowToModel 应为 true", tc.name)
+		}
+	}
+}

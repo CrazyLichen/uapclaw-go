@@ -548,7 +548,10 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 
 	if cached, ok := indexCache.Load(cacheKey); ok {
 		mgr := cached.(*memoryIndexManager)
-		if !mgr.closed {
+		// M-15: Close() 持锁写 closed、Sync 持锁读，此处 sync.Map Load 后
+		// 无锁直接读 mgr.closed 构成 data race（450d0f98 修了两处 IsClosed
+		// 锁读，此处残留）。经 IsClosed() 锁读对齐。
+		if !mgr.IsClosed() {
 			return mgr, nil
 		}
 		_ = mgr.Close()

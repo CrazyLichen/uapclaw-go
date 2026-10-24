@@ -217,3 +217,28 @@ func TestTeamHarness_InjectMemberMemory_Nil(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
 	assert.NoError(t, h.InjectMemberMemory(context.TODO(), nil, ""))
 }
+
+// TestTeamHarness_RunStreaming_非BaseAgent降级空流 M-17 回归测试。
+// deepAgent 非 nil 但未实现 BaseAgent 时应降级为关闭的空流（Warn 日志路径），
+// 而非 panic 或阻塞。
+func TestTeamHarness_RunStreaming_非BaseAgent降级空流(t *testing.T) {
+	// mockDeepAgent 只嵌入接口，不实现 BaseAgent 的完整方法集 → 断言失败路径
+	h := agent_teams.NewTeamHarness(&mockDeepAgent{}, nil, string(atschema.TeamRoleLeader), "m1", false)
+	ch, err := h.RunStreaming(context.TODO(), map[string]any{"q": "hi"}, "sess-1", nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, ch)
+	// 通道应立即关闭（降级空流）
+	_, ok := <-ch
+	assert.False(t, ok)
+}
+
+// TestTeamHarness_RunStreaming_teamSession占位分支 M-17 回归测试。
+// teamSession 非 nil 走分支 2 占位（⤵️ plan-mode 种子化回填前返回关闭空流）。
+func TestTeamHarness_RunStreaming_teamSession占位分支(t *testing.T) {
+	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "m1", false)
+	ch, err := h.RunStreaming(context.TODO(), nil, "sess-1", map[string]any{"team": "state"})
+	assert.NoError(t, err)
+	assert.NotNil(t, ch)
+	_, ok := <-ch
+	assert.False(t, ok)
+}

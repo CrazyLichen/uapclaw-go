@@ -224,3 +224,30 @@ func TestShouldTriggerBeforeChatRequestHook(t *testing.T) {
 		}
 	}
 }
+
+// TestPythonOrStr_or链语义 M-09 回归：对齐 Python str(a or b or "")。
+// {"query":123} → "123"（数字 truthy 转 str）；query 空串 → 回退 content；
+// 两者均 falsy → ""。
+func TestPythonOrStr_or链语义(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b any
+		want string
+	}{
+		{"query 字符串直接用", "hello", "content", "hello"},
+		{"query 数字转 str", float64(123), nil, "123"},
+		{"query 空串回退 content", "", "fallback", "fallback"},
+		{"query nil 回退 content", nil, "fallback", "fallback"},
+		{"query 0 回退 content", float64(0), "fallback", "fallback"},
+		{"query false 回退 content", false, "fallback", "fallback"},
+		{"全 falsy 空串", "", "", ""},
+		{"nil nil 空串", nil, nil, ""},
+		{"int 值转 str", 42, nil, "42"},
+		{"负数 truthy", -1, nil, "-1"},
+	}
+	for _, tc := range cases {
+		if got := pythonOrStr(tc.a, tc.b); got != tc.want {
+			t.Errorf("%s: pythonOrStr(%v, %v) = %q, want %q", tc.name, tc.a, tc.b, got, tc.want)
+		}
+	}
+}

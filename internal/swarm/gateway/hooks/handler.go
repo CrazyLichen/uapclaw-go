@@ -58,6 +58,10 @@ func NewGatewayHookHandler(hooksConfig *hookscfg.HooksConfig) *GatewayHookHandle
 // Python: on_session_start (L31-57)：activeSessions 去重；
 // match(query=source)；失败仅 Warn 不传播。
 func (h *GatewayHookHandler) OnSessionStart(ctx context.Context, sessionID, source string) {
+	// S-02 治标：defer recover 前移到方法第一行——原位置在 Match/applyGatewayTimeout
+	// 之后，前置代码 panic 时（如共享 map 并发写触发）recover 未注册直接炸出。
+	defer recoverHookPanic("SessionStart")
+
 	h.mu.Lock()
 	if h.activeSessions[sessionID] {
 		h.mu.Unlock()
@@ -70,10 +74,9 @@ func (h *GatewayHookHandler) OnSessionStart(ctx context.Context, sessionID, sour
 	if len(hookConfigs) == 0 {
 		return
 	}
-	applyGatewayTimeout(hookConfigs, h.gatewayTimeout)
+	hookConfigs = applyGatewayTimeout(hookConfigs, h.gatewayTimeout)
 
 	cwd, _ := os.Getwd() // 失败降级空串（Python Path.cwd() 不会失败，Go 需防御）
-	defer recoverHookPanic("SessionStart")
 	h.executor.RunAll(ctx, hookConfigs, map[string]any{
 		"event":      "SessionStart",
 		"source":     source,
@@ -86,13 +89,15 @@ func (h *GatewayHookHandler) OnSessionStart(ctx context.Context, sessionID, sour
 //
 // Python: on_user_prompt_submit (L59-78)：match 无 query（默认空串）。
 func (h *GatewayHookHandler) OnUserPromptSubmit(ctx context.Context, sessionID, prompt string) {
+	// S-02 治标：defer recover 前移到方法第一行
+	defer recoverHookPanic("UserPromptSubmit")
+
 	hookConfigs := h.config.Match(hookscfg.HookEventUserPromptSubmit, "")
 	if len(hookConfigs) == 0 {
 		return
 	}
-	applyGatewayTimeout(hookConfigs, h.gatewayTimeout)
+	hookConfigs = applyGatewayTimeout(hookConfigs, h.gatewayTimeout)
 
-	defer recoverHookPanic("UserPromptSubmit")
 	h.executor.RunAll(ctx, hookConfigs, map[string]any{
 		"event":      "UserPromptSubmit",
 		"prompt":     prompt,
@@ -104,6 +109,9 @@ func (h *GatewayHookHandler) OnUserPromptSubmit(ctx context.Context, sessionID, 
 //
 // Python: on_session_end (L80-103)：先 discard activeSessions，match(query=reason)。
 func (h *GatewayHookHandler) OnSessionEnd(ctx context.Context, sessionID, reason string) {
+	// S-02 治标：defer recover 前移到方法第一行
+	defer recoverHookPanic("SessionEnd")
+
 	h.mu.Lock()
 	delete(h.activeSessions, sessionID)
 	h.mu.Unlock()
@@ -112,9 +120,8 @@ func (h *GatewayHookHandler) OnSessionEnd(ctx context.Context, sessionID, reason
 	if len(hookConfigs) == 0 {
 		return
 	}
-	applyGatewayTimeout(hookConfigs, h.gatewayTimeout)
+	hookConfigs = applyGatewayTimeout(hookConfigs, h.gatewayTimeout)
 
-	defer recoverHookPanic("SessionEnd")
 	h.executor.RunAll(ctx, hookConfigs, map[string]any{
 		"event":      "SessionEnd",
 		"reason":     reason,
@@ -126,13 +133,15 @@ func (h *GatewayHookHandler) OnSessionEnd(ctx context.Context, sessionID, reason
 //
 // Python: on_notification (L105-127)：match(query=notification_type)。
 func (h *GatewayHookHandler) OnNotification(ctx context.Context, notificationType, message, sessionID string) {
+	// S-02 治标：defer recover 前移到方法第一行
+	defer recoverHookPanic("Notification")
+
 	hookConfigs := h.config.Match(hookscfg.HookEventNotification, notificationType)
 	if len(hookConfigs) == 0 {
 		return
 	}
-	applyGatewayTimeout(hookConfigs, h.gatewayTimeout)
+	hookConfigs = applyGatewayTimeout(hookConfigs, h.gatewayTimeout)
 
-	defer recoverHookPanic("Notification")
 	h.executor.RunAll(ctx, hookConfigs, map[string]any{
 		"event":             "Notification",
 		"notification_type": notificationType,
@@ -145,13 +154,23 @@ func (h *GatewayHookHandler) OnNotification(ctx context.Context, notificationTyp
 
 // applyGatewayTimeout 逐项补默认超时（Python cfg.setdefault("timeout", 10)）。
 //
-// 就地修改共享 map（Python 同样就地改 Match 返回的 dict 引用，行为一致）。
-func applyGatewayTimeout(hookConfigs []map[string]any, timeout int) {
-	for i := range hookConfigs {
-		if _, ok := hookConfigs[i]["timeout"]; !ok {
-			hookConfigs[i]["timeout"] = timeout
+// S-02 治本：Match 返回的是 config 中共享的 map 引用，Python 单线程就地改
+// 无碍，Go 并发调用 On* 时多 goroutine 写同一 map 是数据竞争。此处构造
+// 新 slice+浅拷贝 map 后再补 timeout，不污染共享配置（timeout 每次调用
+// 注入的值相同，语义不变）。
+func applyGatewayTimeout(hookConfigs []map[string]any, timeout int) []map[string]any {
+	out := make([]map[string]any, len(hookConfigs))
+	for i, cfg := range hookConfigs {
+		clone := make(map[string]any, len(cfg)+1)
+		for k, v := range cfg {
+			clone[k] = v
 		}
+		if _, ok := clone["timeout"]; !ok {
+			clone["timeout"] = timeout
+		}
+		out[i] = clone
 	}
+	return out
 }
 
 // recoverHookPanic hook 执行 panic 兜底（对齐 Python try/except + logger.warning）。

@@ -67,7 +67,9 @@ const logComponent = logger.ComponentCommon
 // Matches 检查 query 是否匹配此 matcher，对齐 Python HookMatcher.matches()
 // 支持：*（匹配所有）| |分隔的 OR 匹配 | 正则匹配 | 精确匹配
 func (m *HookMatcher) Matches(query string) bool {
-	pattern := m.Matcher
+	// T-12: 对齐 Python self.matcher.strip()——"  *  " 应匹配所有，
+	// 原实现未 strip 导致精确匹配失败（配置 YAML 缩进/手写空格场景）
+	pattern := strings.TrimSpace(m.Matcher)
 	if pattern == "" {
 		pattern = "*"
 	}
