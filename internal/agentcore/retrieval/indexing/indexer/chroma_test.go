@@ -301,3 +301,99 @@ func TestChromaIndexer_Close(t *testing.T) {
 	indexer.Close()
 	indexer.Close() // 幂等性验证
 }
+
+// TestChromaIndexer_BuildIndex_重复docID报错 测试查重保护
+//
+// T-28: 验证 BuildIndex 步骤 1 的查重不变式——同 doc_id 二次写入被拒绝，
+// 错误信息含 duplicate_doc_ids（S-29 保证 Get 失败时报错中断而非静默放行）。
+func TestChromaIndexer_BuildIndex_重复docID报错(t *testing.T) {
+	dir := t.TempDir()
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+
+	indexer, err := NewChromaIndexer(config, dir)
+	require.NoError(t, err)
+	defer indexer.Close()
+
+	indexName := "dup-check-test"
+	chunks := []common.TextChunk{
+		{ID: "chunk-1", Text: "first write", DocID: "doc-dup", Embedding: []float64{0.1, 0.2, 0.3}},
+	}
+	indexConfig := common.IndexConfig{
+		IndexName: indexName,
+		IndexType: common.IndexTypeBM25,
+	}
+
+	// 首次写入成功
+	ok, err := indexer.BuildIndex(t.Context(), chunks, indexConfig, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	// 同 doc_id 二次写入被查重拒绝
+	ok, err = indexer.BuildIndex(t.Context(), chunks, indexConfig, nil)
+	require.Error(t, err)
+	assert.False(t, ok)
+	assert.Contains(t, err.Error(), "duplicate_doc_ids")
+}
+
+// TestChromaIndexer_UpdateIndex_先删后建 测试 UpdateIndex 全流程
+//
+// T-28: 验证 UpdateIndex 的先删后建语义（M-26 后删除失败不阻断 rebuild）——
+// doc-docA 首建 → Update 换内容 → 旧记录被删、新记录生效、总数不变。
+func TestChromaIndexer_UpdateIndex_先删后建(t *testing.T) {
+	dir := t.TempDir()
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+
+	indexer, err := NewChromaIndexer(config, dir)
+	require.NoError(t, err)
+	defer indexer.Close()
+
+	indexName := "update-flow-test"
+	first := []common.TextChunk{
+		{ID: "chunk-a", Text: "version one content", DocID: "docA", Embedding: []float64{0.1, 0.2, 0.3}},
+		{ID: "chunk-b", Text: "extra chunk same doc", DocID: "docA", Embedding: []float64{0.4, 0.5, 0.6}},
+	}
+	indexConfig := common.IndexConfig{
+		IndexName: indexName,
+		IndexType: common.IndexTypeBM25,
+	}
+
+	ok, err := indexer.BuildIndex(t.Context(), first, indexConfig, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	info, err := indexer.GetIndexInfo(t.Context(), indexName)
+	require.NoError(t, err)
+	assert.Equal(t, 2, info["count"], "首次写入应有 2 条记录")
+
+	// UpdateIndex：删除 docA 全部 2 条 → 重建 1 条
+	second := []common.TextChunk{
+		{ID: "chunk-a2", Text: "version two content", DocID: "docA", Embedding: []float64{0.7, 0.8, 0.9}},
+	}
+	ok, err = indexer.UpdateIndex(t.Context(), second, "docA", indexConfig, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	info, err = indexer.GetIndexInfo(t.Context(), indexName)
+	require.NoError(t, err)
+	assert.Equal(t, 1, info["count"], "更新后应只剩 1 条记录（旧的 2 条已删除）")
+
+	// UpdateIndex 对不存在的 doc_id：删除返回 false 不报错，重建正常
+	third := []common.TextChunk{
+		{ID: "chunk-c", Text: "fresh doc content", DocID: "docC", Embedding: []float64{0.2, 0.4, 0.6}},
+	}
+	ok, err = indexer.UpdateIndex(t.Context(), third, "docC", indexConfig, nil)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	info, err = indexer.GetIndexInfo(t.Context(), indexName)
+	require.NoError(t, err)
+	assert.Equal(t, 2, info["count"], "追加新 doc 后共 2 条记录")
+}

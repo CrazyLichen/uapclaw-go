@@ -898,7 +898,10 @@ func extractContentStr(content llmschema.MessageContent) string {
 	}
 	var textParts []string
 	for _, p := range parts {
-		if p.Type == "text" {
+		// T-15: 对齐 Python `item.get("text", "")`——不查 type 字段，
+		// 无 type 但有 text 的 part 同样收集；带 type 的非 text part 的
+		// Text 字段为空串，收集与否无行为差异。
+		if p.Type == "text" || (p.Type == "" && p.Text != "") {
 			textParts = append(textParts, p.Text)
 		}
 	}
@@ -991,6 +994,12 @@ func (s *Sweeper) promoteCode(title, content, sessionID string) string {
 
 // loadCheckpoint 加载 checkpoint 文件。
 // Python: Sweeper._load_checkpoint()
+//
+// M-25: 有意偏差声明——Python 端 scanned_sessions 为 list[str]，
+// 历史上曾为 list[dict] 的旧格式在 Python 端反序列化时元素类型
+// 宽松兼容；Go 强类型 Unmarshal 对旧 list 格式会失败并全量重扫
+//（返回空 CheckpointData）。Go 版本从未产生过旧格式 checkpoint，
+// 无存量数据需要兼容，此偏差仅存在于跨版本迁移场景，按误报关闭。
 func (s *Sweeper) loadCheckpoint() CheckpointData {
 	path := filepath.Join(s.dreamsDir, "ingestion-checkpoint.json")
 	data, err := os.ReadFile(path)

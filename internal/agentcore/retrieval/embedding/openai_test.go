@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 )
 
 // newOpenAITestServer 创建模拟 OpenAI API 的测试 HTTP 服务
@@ -150,38 +149,6 @@ func TestOpenAIEmbedding_Matryoshka维度(t *testing.T) {
 	assert.Contains(t, string(receivedBody["dimensions"]), "256")
 }
 
-func TestOpenAIEmbedding_EmbedMultimodal(t *testing.T) {
-	server := newOpenAITestServer(`{
-		"data": [{"embedding": [0.1, 0.2, 0.3], "index": 0}],
-		"model": "text-embedding-3-small",
-		"object": "list",
-		"usage": {"prompt_tokens": 5, "total_tokens": 5}
-	}`)
-	defer server.Close()
-
-	client := NewOpenAIEmbedding(EmbeddingConfig{
-		ModelName: "text-embedding-3-small",
-		BaseURL:   server.URL,
-		APIKey:    "sk-test",
-	})
-
-	doc, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "描述文本")
-	require.NoError(t, addErr)
-	vec, err := client.EmbedMultimodal(context.Background(), doc)
-	require.NoError(t, err)
-	assert.Len(t, vec, 3)
-}
-
-func TestOpenAIEmbedding_EmbedMultimodal_nil文档(t *testing.T) {
-	client := NewOpenAIEmbedding(EmbeddingConfig{
-		ModelName: "test-model",
-		BaseURL:   "http://localhost",
-	})
-
-	_, err := client.EmbedMultimodal(context.Background(), nil)
-	assert.Error(t, err)
-}
-
 func TestOpenAIEmbedding_服务端错误(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -202,8 +169,11 @@ func TestOpenAIEmbedding_服务端错误(t *testing.T) {
 func TestOpenAIEmbedding_接口约束(t *testing.T) {
 	// 验证 OpenAIEmbedding 满足 BaseEmbedding 接口
 	var _ embedding.BaseEmbedding = &OpenAIEmbedding{}
-	// 验证 OpenAIEmbedding 满足 MultimodalEmbedder 接口
-	var _ MultimodalEmbedder = &OpenAIEmbedding{}
+	// M-29: OpenAIEmbedding 刻意不实现 MultimodalEmbedder——
+	// 对齐 Python OpenAIEmbedding 无 embed_multimodal 的能力探测语义。
+	// 若此断言编译失败（有人重新加回 EmbedMultimodal），请先核对
+	// Python openai_embedding.py 是否新增了 embed_multimodal。
+	// var _ MultimodalEmbedder = &OpenAIEmbedding{}
 }
 
 func TestParseOpenAIResponse(t *testing.T) {

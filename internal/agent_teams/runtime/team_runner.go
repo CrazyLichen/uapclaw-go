@@ -31,6 +31,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -499,7 +500,16 @@ func runAgentTeamStreaming(
 			Str("kind", string(action.Kind)).
 			Str("reason", action.Reason).
 			Msg("run_agent_team_streaming rejected")
-		return nil, nil
+		// S-25: 流式 reject 返回 error 而非 nil channel——
+		// Python 流式路径 reject 直接 return（零 chunk 立即结束），
+		// Go nil channel 会令调用方 range 永久阻塞；返回 error 走
+		// 调用方现成错误分支（deep_adapter 广播 team.error / child.go
+		// 包装上抛），错误信息携带具体 kind/reason。
+		return nil, exception.BuildError(
+			exception.StatusAgentTeamExecutionError,
+			exception.WithParam("error_msg", fmt.Sprintf(
+				"team rejected: kind=%s reason=%s", action.Kind, action.Reason)),
+		)
 	}
 
 	// S-62: 对齐 Python L248 blueprint.member_name——成员标识而非显示名。

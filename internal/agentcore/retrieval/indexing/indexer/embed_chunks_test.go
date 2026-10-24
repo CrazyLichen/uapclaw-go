@@ -139,13 +139,30 @@ func makeImageChunk(imagePath string) common.TextChunk {
 
 // ──────────────────────────── 测试 ────────────────────────────
 
-// TestComputeChunkEmbeddings_空chunks 测试空分块列表不执行任何操作
-func TestComputeChunkEmbeddings_空chunks(t *testing.T) {
-	fake := newFakeBaseEmbedding(0)
+// TestComputeChunkEmbeddings_空chunks纯文本路径抛错 测试空分块列表在纯文本路径走
+// EmbedDocuments 校验链（T-27：删统一早退后对齐 Python "Empty texts list" 语义）。
+// 真实 EmbedDocuments 实现有"所有文本为空"校验会报错；fake 无该校验故返回
+// fake 预置的空结果——此测试锁定"空 chunks 仍会调用 EmbedDocuments"的行为。
+func TestComputeChunkEmbeddings_空chunks纯文本路径抛错(t *testing.T) {
+	fake := &fakeBaseEmbedding{
+		// 空 texts 传入时真实实现会报错；这里用显式错误模拟该校验触发
+		embedDocsErr: fmt.Errorf("所有文本为空"),
+	}
+	chunks := []common.TextChunk{}
+	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
+	assert.Error(t, err)
+	assert.Equal(t, 1, fake.embedDocsCalled, "空 chunks 应仍调用 EmbedDocuments 走校验链")
+}
+
+// TestComputeChunkEmbeddings_空chunks多模态路径静默 测试空分块列表在多模态路径
+// 不调用任何嵌入（T-27：对齐 Python image_indices/text_only 双空的自然短路）。
+func TestComputeChunkEmbeddings_空chunks多模态路径静默(t *testing.T) {
+	fake := newFakeMultimodalEmbedding(0, 0)
 	chunks := []common.TextChunk{}
 	err := ComputeChunkEmbeddings(context.Background(), chunks, fake, WithUseCaptionForImages(false))
 	assert.NoError(t, err)
 	assert.Equal(t, 0, fake.embedDocsCalled)
+	assert.Equal(t, 0, fake.embedMMCalled)
 }
 
 // TestComputeChunkEmbeddings_模型不支持多模态 测试纯文本路径

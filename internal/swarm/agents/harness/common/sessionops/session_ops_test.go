@@ -626,6 +626,7 @@ func TestListSessionTurns_正常(t *testing.T) {
 }
 
 // TestListSessionTurns_不存在 验证会话不存在时返回空结果。
+// T-12: Turns 为非 nil 空切片（序列化为 [] 而非 null，对齐 Python 空列表）。
 func TestListSessionTurns_不存在(t *testing.T) {
 	_, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
@@ -634,8 +635,11 @@ func TestListSessionTurns_不存在(t *testing.T) {
 	if result.Total != 0 {
 		t.Errorf("Total = %d, 期望 0", result.Total)
 	}
-	if result.Turns != nil {
-		t.Errorf("Turns 应为 nil")
+	if result.Turns == nil {
+		t.Errorf("Turns 应为非 nil 空切片（JSON [] 而非 null）")
+	}
+	if len(result.Turns) != 0 {
+		t.Errorf("Turns 长度 = %d, 期望 0", len(result.Turns))
 	}
 }
 

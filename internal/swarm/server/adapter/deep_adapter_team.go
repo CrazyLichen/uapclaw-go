@@ -863,9 +863,14 @@ loop:
 
 				d.ensureMonitorForActiveRuntime(ctx, channelID, sessionID, readyTeamName, hideDM)
 				d.ensureTeamEvolutionWatcher(ctx, channelID, sessionID, "runtime_ready")
-			} else if evtType == "team.completed" {
-				// Python 步骤 5: 处理 team.completed 事件
-				broadcastEvent(channelID, sessionID, map[string]any{
+		} else if evtType == "team.completed" {
+			// Python 步骤 5: 处理 team.completed 事件
+			// M-10: 此处有意重建事件（非直传 parsed）——对齐 Python
+			// team_helpers.py L979-995：team.completed 触发的是统一的
+			// round-complete 信号（chat.processing_status），只透传
+			// member_count/task_count 两个统计字段，原始事件的其余字段
+			//（如内部状态）按 Python 语义不透出。
+			broadcastEvent(channelID, sessionID, map[string]any{
 					"event_type":    "chat.processing_status",
 					"session_id":    sessionID,
 					"rid":           roundID,

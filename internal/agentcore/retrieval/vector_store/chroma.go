@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"sync"
 
@@ -504,6 +505,14 @@ func (s *ChromaVectorStore) HybridSearch(ctx context.Context, queryText string, 
 		if resultID == "" {
 			resultID = idMapping[rr.Text]
 		}
+		// T-24: 对齐 Python `str(hash(rr.text))` 最终兜底——两层未命中时
+		// 用文本哈希字符串化，保证 ID 恒非空（Go fnv 与 Python hash 算法不同，
+		// 仅保证非空唯一性，不保证跨语言值一致）。
+		if resultID == "" {
+			h := fnv.New64a()
+			_, _ = h.Write([]byte(rr.Text))
+			resultID = fmt.Sprintf("%d", h.Sum64())
+		}
 		metadata := make(map[string]any)
 		for k, v := range rr.Metadata {
 			if k != "id" {
@@ -760,6 +769,14 @@ func (s *ChromaVectorStore) addBatch(ctx context.Context, nodes []map[string]any
 					for k, v := range parsed {
 						metaMap[k] = v
 					}
+				} else {
+					// T-25: 对齐 Python addBatch 的 warning——metadata JSON
+					// 解析失败必须留排查线索，静默丢弃会掩盖数据损坏。
+					logger.Warn(logComponent).
+						Str("event_type", "VECTOR_STORE_WARN").
+						Str("metadata_field", s.metadataField).
+						Err(err).
+						Msg("failed to load metadata")
 				}
 			}
 		}
@@ -882,6 +899,22 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 			if docID, ok := metadata[s.docIDField]; ok {
 				metadata["doc_id"] = docID
 				delete(metadata, s.docIDField)
+			}
+		}
+
+		// M-30: 对齐 Python 搜索结果的 sparse_vector 反序列化——
+		// 写入侧把稀疏向量 json.Marshal 成字符串存 metadata，读出时必须
+		// json.Unmarshal 还原，否则消费方拿到的是 JSON 字符串而非结构。
+		if sparseStr, ok := metadata[s.sparseVectorField].(string); ok {
+			var sparseVec any
+			if err := json.Unmarshal([]byte(sparseStr), &sparseVec); err == nil {
+				metadata[s.sparseVectorField] = sparseVec
+			} else {
+				logger.Warn(logComponent).
+					Str("event_type", "VECTOR_STORE_WARN").
+					Str("sparse_vector_field", s.sparseVectorField).
+					Err(err).
+					Msg("failed to load sparse vector")
 			}
 		}
 

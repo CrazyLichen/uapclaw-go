@@ -384,15 +384,19 @@ func loadMultimodalData(kind ModalityKind, data string, filePath string) (Modali
 	}
 
 	// data 模式
+	// S-28: text 模态豁免空 data——对齐 Python `isinstance(data, str)` 对空串
+	// 成立 + `kind == "text"` 直接放行的语义（compute_chunk_embeddings 的
+	// `add_field("text", chunk.text or "")` 会传空串，非 None）。
+	// 其他模态空 data 仍走下方"必须提供数据"报错（对齐 Python no_xxx_source）。
+	if kind == ModalityText {
+		return kind, data, nil
+	}
+
 	if data == "" {
 		return "", "", exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("必须提供 %s 类型的数据或文件路径", kind)),
 		)
-	}
-
-	if kind == ModalityText {
-		return kind, data, nil
 	}
 
 	// 检查 base64 前缀
