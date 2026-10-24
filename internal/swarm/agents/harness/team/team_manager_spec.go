@@ -147,7 +147,7 @@ func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMet
 //	c. code adapter 配置（parent adapter mode == "code" 时注入回调）
 //	d. build_member_rails + 白名单 AddRail + 三类 rail 注册
 //	e. 注册 TeamRailContext（leader）
-//	f. 注册 member runtime tools（cron/SendFile ⤵️(10.6.24/11.10) 保留日志骨架）
+//	f. 注册 member runtime tools（cron 已随 11.10 回填；SendFile ⤵️(10.6.24)）
 //
 // 差异说明：Python L948-959 的 rail_manager 扩展 rail 循环，Go 无 get_rail_manager
 // 对应物（扩展 rail 加载机制属 10.5.7 ExtensionLoader 延后），空操作。
@@ -243,7 +243,7 @@ func (m *TeamManager) BuildAgentCustomizer(
 
 		// Python L948-959 rail_manager 扩展 rail 循环：Go 无对应机制（10.5.7 延后），空操作
 
-		// ── 步骤 f：member runtime tools（cron/SendFile ⤵️(10.6.24/11.10) 保留日志骨架）──
+		// ── 步骤 f：member runtime tools（cron 已随 11.10 回填；SendFile ⤵️(10.6.24)）──
 		mgr.RegisterMemberRuntimeTools(agent, sessionID, &capturedRequestID, &resolvedChannel, capturedRequestMetadata)
 
 		return nil
@@ -272,6 +272,7 @@ func (m *TeamManager) RegisterMemberRuntimeTools(
 	// 11.10 已回填：CronRuntimeBridge 工具注册
 	// Python: cron_runtime = CronRuntimeBridge() + build_tools(context=..., agent_id=..., language=...)
 	cronRuntime := cronbridge.NewCronRuntimeBridge()
+	// Python: channel_id=channel_id or "web"
 	channel := ""
 	if channelID != nil {
 		channel = strings.TrimSpace(*channelID)
@@ -279,44 +280,46 @@ func (m *TeamManager) RegisterMemberRuntimeTools(
 	if channel == "" {
 		channel = "web"
 	}
+	// Python: language=getattr(agent.deep_config, "language", "cn")
 	language := "cn"
 	if dc := agent.DeepConfig(); dc != nil && strings.TrimSpace(dc.Language) != "" {
 		language = strings.TrimSpace(dc.Language)
 	}
+	// Python L497-503: SimpleNamespace(tool_scope=f"team_member_{agent_id or 'unknown'}", ...)
+	// metadata 直接传 request_metadata（不注入 request_id，与 deep_adapter 步骤 9 的绑定不同）
+	scopeAgentID := agentID
+	if scopeAgentID == "" {
+		scopeAgentID = "unknown"
+	}
 	cronCtx := &agentcron.CronToolContext{
-		ChannelID: channel,
-		SessionID: sessionID,
-		Metadata:  copyMetadataMap(requestMetadata),
-		Mode:      "team",
+		ChannelID:         channel,
+		SessionID:         sessionID,
+		Metadata:          copyMetadataMap(requestMetadata),
+		Mode:              "team",
+		ToolScopeOverride: "team_member_" + scopeAgentID,
 	}
-	if requestID != nil && strings.TrimSpace(*requestID) != "" {
-		if cronCtx.Metadata == nil {
-			cronCtx.Metadata = map[string]any{}
-		}
-		cronCtx.Metadata["request_id"] = strings.TrimSpace(*requestID)
-	}
-	if tools := cronRuntime.BuildTools(cronCtx, agentID, language); len(tools) > 0 {
-		registeredCount := 0
-		// 对齐 Python: if not Runner.resource_mgr.get_tool(cron_tool.card.id): add_tool
-		resourceMgr := runner.GetResourceMgr()
-		abilityMgr := agent.AbilityManager()
-		for _, cronTool := range tools {
-			card := cronTool.Card()
-			if existing := abilityMgr.Get(card.Name); existing == nil {
-				if err := resourceMgr.AddTool(cronTool); err != nil {
-					logger.Warn(logComponent).Err(err).Str("tool", card.Name).
-						Msg("[TeamManager] cron tool add to resource manager failed")
-					continue
-				}
+	// Python L505-517: try/except 包裹 build_tools + 注册循环
+	tools := cronRuntime.BuildTools(cronCtx, agentID, language)
+	registeredCount := 0
+	resourceMgr := runner.GetResourceMgr()
+	abilityMgr := agent.AbilityManager()
+	for _, cronTool := range tools {
+		card := cronTool.Card()
+		// Python L512: if not Runner.resource_mgr.get_tool(cron_tool.card.id): add_tool
+		if existing, gerr := resourceMgr.GetTool([]string{card.ID}); gerr != nil || len(existing) == 0 {
+			if err := resourceMgr.AddTool(cronTool); err != nil {
+				logger.Warn(logComponent).Err(err).Str("tool", card.Name).
+					Msg("[TeamManager] cron tool add to resource manager failed")
+				continue
 			}
-			abilityMgr.Add(card)
-			registeredCount++
 		}
-		logger.Info(logComponent).
-			Str("agent_id", agentID).
-			Int("registered", registeredCount).
-			Msg("[TeamManager] Registered cron tools for member")
+		abilityMgr.Add(card)
+		registeredCount++
 	}
+	logger.Info(logComponent).
+		Str("agent_id", agentID).
+		Int("registered", registeredCount).
+		Msg("[TeamManager] Registered cron tools for member")
 
 	if requestID == nil || *requestID == "" || channelID == nil || *channelID == "" {
 		logger.Info(logComponent).
