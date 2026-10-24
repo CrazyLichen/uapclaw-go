@@ -57,7 +57,7 @@ func TestVerifyMode_四变体类型(t *testing.T) {
 
 // TestVerifyMode_四变体均实现密封接口 包内四变体可赋值 verifyMode。
 func TestVerifyMode_四变体均实现密封接口(t *testing.T) {
-	var modes []verifyMode = []verifyMode{
+	modes := []verifyMode{
 		verifyDefault{}, verifySkip{}, verifyCAPath{}, verifyTLSConfig{},
 	}
 	for i, m := range modes {

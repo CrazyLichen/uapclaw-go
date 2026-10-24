@@ -344,7 +344,15 @@ func downloadHTML(ctx context.Context, url string, timeout time.Duration, userAg
 			exception.WithCause(err),
 		)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		// 关闭失败不影响已读取结果，仅记录（errcheck 合规）
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.Warn(logComponent).
+				Str("url", url).
+				Err(closeErr).
+				Msg("failed to close response body")
+		}
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", exception.BuildError(
 			exception.StatusRetrievalIndexingFetchError,
