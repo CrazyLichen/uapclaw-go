@@ -441,18 +441,24 @@ func TestCleanupExpired(t *testing.T) {
 	writeFile("gpq_missing.json", `{"interaction_id": "x"}`)
 	// 非数字非字符串类型（list）→ 跳过不删
 	writeFile("gpq_list.json", `{"created_at": [1, 2]}`)
+	// JSON null → Python float(None) TypeError → except 跳过不删（与键缺失不同路径）
+	writeFile("gpq_null.json", `{"created_at": null}`)
+	// JSON true → Python float(True)=1.0 → 过期删除
+	writeFile("gpq_true.json", `{"created_at": true}`)
+	// JSON false → Python float(False)=0.0 → 恒过期删除
+	writeFile("gpq_false.json", `{"created_at": false}`)
 
 	count := CleanupExpired(DefaultTTL)
 
-	if count != 3 {
-		t.Errorf("应删除 3 个（gpq_old1/gpq_str1/gpq_missing）, 实际 %d", count)
+	if count != 5 {
+		t.Errorf("应删除 5 个（gpq_old1/gpq_str1/gpq_missing/gpq_true/gpq_false）, 实际 %d", count)
 	}
-	for _, gone := range []string{"gpq_old1.json", "gpq_str1.json", "gpq_missing.json"} {
+	for _, gone := range []string{"gpq_old1.json", "gpq_str1.json", "gpq_missing.json", "gpq_true.json", "gpq_false.json"} {
 		if _, err := os.Stat(filepath.Join(dir, gone)); !os.IsNotExist(err) {
 			t.Errorf("%s 应被删除", gone)
 		}
 	}
-	for _, keep := range []string{"gpq_new1.json", "gpq_bad.json", "gpq_str2.json", "gpq_list.json"} {
+	for _, keep := range []string{"gpq_new1.json", "gpq_bad.json", "gpq_str2.json", "gpq_list.json", "gpq_null.json"} {
 		if _, err := os.Stat(filepath.Join(dir, keep)); err != nil {
 			t.Errorf("%s 应保留: %v", keep, err)
 		}

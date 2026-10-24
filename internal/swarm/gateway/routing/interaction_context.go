@@ -522,10 +522,11 @@ func parseInteractionFile(fp string) *PendingInteraction {
 
 // extractCreatedAt 从裸 dict 提取 created_at（对齐 Python float(data.get("created_at", 0))）：
 // 数字 → 直接用；字符串数字 → ParseFloat；字符串非数字 → !ok（跳过）；
-// 缺失 → 0（恒过期语义）；JSON null → 0。
+// 缺失 → 0（恒过期语义）；JSON null → !ok（Python float(None) TypeError → except 跳过）；
+// JSON bool → 1.0/0.0（Python float(True/False)，按值删/留）。
 func extractCreatedAt(data map[string]any) (float64, bool) {
 	v, exists := data["created_at"]
-	if !exists || v == nil {
+	if !exists {
 		return 0, true // Python: get 默认 0
 	}
 	switch val := v.(type) {
@@ -537,6 +538,13 @@ func extractCreatedAt(data map[string]any) (float64, bool) {
 			return 0, false // Python: float("abc") → ValueError → except 跳过
 		}
 		return f, true
+	case bool:
+		if val {
+			return 1.0, true // Python: float(True) == 1.0
+		}
+		return 0, true // Python: float(False) == 0.0
+	case nil:
+		return 0, false // Python: float(None) → TypeError → except 跳过
 	default:
 		// Python: float(其他类型如 list/dict) → TypeError → except 跳过
 		return 0, false
