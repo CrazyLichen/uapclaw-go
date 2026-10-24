@@ -319,6 +319,12 @@ func DeepAgentUserMDPath() string {
 	return filepath.Join(WorkspaceDir(), "agent", "workspace", "USER.md")
 }
 
+// CronJobsPath 返回 cron 任务文件路径：WorkspaceDir()/agent/home/cron_jobs.json。
+// Python: get_cron_jobs_path()（gateway 与 agentserver 共享同一文件）
+func CronJobsPath() string {
+	return filepath.Join(WorkspaceDir(), "agent", "home", "cron_jobs.json")
+}
+
 // AgentTeamsHomeDir 返回 Agent Teams 主目录：WorkspaceDir()/agent_teams。
 // Python: get_agent_teams_home()
 func AgentTeamsHomeDir() string {
