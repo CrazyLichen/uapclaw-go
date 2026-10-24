@@ -20,6 +20,7 @@ import (
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	gwcron "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/cron"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -153,6 +154,25 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	cronController := gwcron.NewCronController(cronStore, cronScheduler)
 	msgHandler.SetCronController(cronController)
 	s.cronScheduler = cronScheduler
+
+	// 11.10 已回填：cronbridge 全局注入（对齐 Python MessageHandler.get_instance() 单例语义）
+	// 单进程形态下 AgentServer 侧 bridge 惰性构造 CronTools 时消费这些全局注入：
+	// - wake 发布器：MessageHandler.PublishUserMessagesNowait 隐式满足 UserMessagePublisher
+	// - config 读取器：pushToTargets 渠道元数据路由用（对齐 Python get_config_raw）
+	// - agent 客户端：内嵌调度器 standalone fallback 用（对齐 Python AgentServerClient）
+	// E2A push 通道由 AgentServer 侧注入（agent_server.go SetGlobalGatewayPushFunc(s.SendPush)）
+	cronbridge.SetGlobalUserPublisher(msgHandler)
+	cronbridge.SetGlobalAgentClient(agentClient)
+	cronbridge.SetGlobalConfigLoader(func() map[string]any {
+		if cfg == nil {
+			return nil
+		}
+		data, err := cfg.Raw()
+		if err != nil {
+			return nil
+		}
+		return data
+	})
 
 	// 步骤5：注册 Web RPC handlers + onConnect 钩子（对齐 Python _register_web_handlers(bind)）
 	// AgentClient 通过 BindParams 闭包捕获，不直接设到 WebChannel
