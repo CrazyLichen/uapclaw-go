@@ -20,6 +20,7 @@ import (
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -46,6 +47,10 @@ type AppGatewayServer struct {
 	httpServer *http.Server
 	// reloader 配置热重载监听器
 	reloader *config.Reloader
+	// gwServer 多路由 WS 服务器（11.9，对齐 Python GatewayServer 类）
+	gwServer *GatewayServer
+	// inboundServer 入站队列服务（11.9，对齐 Python _InboundGatewayServer）
+	inboundServer *InboundGatewayServer
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -203,6 +208,44 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 		}
 	}
 
+	// ── 11.9：GatewayServer 多路由 WS 入站链装配（对齐 Python L1032-1069）──
+	// A1 空路由形态：routeBindings 为空切片，循环体零次执行（⤵️ 11.25 ACP /
+	// ⤵️ 11.15 TUI 接线时注入 binding）
+	s.inboundServer = NewInboundGatewayServer(func(ctx context.Context, msg *schema.Message) {
+		NormalizeAndForwardMessage(msg, s.channelMgr)
+	})
+	if err := s.inboundServer.Start(ctx); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("failed to start inbound gateway server")
+	}
+
+	gwCfg := NewGatewayServerConfig()
+	if v := os.Getenv("GATEWAY_HOST"); v != "" {
+		gwCfg.Host = v
+	}
+	if v := os.Getenv("GATEWAY_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			gwCfg.Port = p
+		}
+	}
+	s.gwServer = NewGatewayServer(gwCfg)
+
+	// 对齐 Python L1056-1064：for binding in route_bindings
+	routeBindings := []*routing.RouteBinding{} // A1：空（⤵️ 11.25/11.15 注入）
+	for _, binding := range routeBindings {
+		routeConfig := gwCfg.Routes[binding.Path]
+		s.channelMgr.RegisterExternalChannel(routeConfig.ChannelID, s.gwServer)
+		if binding.Install != nil {
+			binding.Install(s.gwServer)
+		}
+	}
+
+	// 对齐 Python L1069：gateway_server.on_message(acp_inbound_server.handle_message)
+	s.gwServer.OnMessage(s.inboundServer.HandleMessage)
+
+	if err := s.gwServer.Start(ctx); err != nil {
+		logger.Error(logComponent).Err(err).Msg("failed to start GatewayServer (19001)")
+	}
+
 	// 启动配置热重载监听（对齐 Python 无 fsnotify，Go 补充）
 	if s.reloader != nil {
 		s.reloader.OnReload(func(data map[string]any) {
@@ -259,10 +302,20 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 
 // Stop 优雅关闭 Gateway 服务器。
 //
-// 停止顺序：WebChannel → MessageHandler → Transport → HTTP Server。
+// 停止顺序：GatewayServer(19001) → InboundGatewayServer → WebChannel → MessageHandler → Transport → HTTP Server。
 func (s *AppGatewayServer) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
+
+	// 停 19001 多路由 WS 服务器（先于 WebChannel，对齐 Python 停机逆序）
+	if s.gwServer != nil {
+		if err := s.gwServer.Stop(); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("failed to stop GatewayServer")
+		}
+	}
+	if s.inboundServer != nil {
+		s.inboundServer.Stop()
+	}
 
 	// 关闭 WebChannel
 	if err := s.webChannel.Stop(ctx); err != nil {

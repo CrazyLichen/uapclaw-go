@@ -178,3 +178,25 @@ func TestAppGatewayServer_OnConfigSaved(t *testing.T) {
 	callback := gs.OnConfigSaved()
 	assert.NotNil(t, callback)
 }
+
+// TestAppGatewayServer_空路由装配不panic 11.9 装配链验证：A1 空路由形态下
+// Start 全流程（inboundServer + gwServer 装配 + 空路由零次循环）→ Stop 逆序。
+// GATEWAY_PORT 用空闲端口 19099（t.Setenv 结束自动还原；0 会被 Atoi 的 p>0 拒绝）。
+func TestAppGatewayServer_空路由装配不panic(t *testing.T) {
+	t.Setenv("GATEWAY_HOST", "127.0.0.1")
+	t.Setenv("GATEWAY_PORT", "19099")
+	gs := newTestAppGatewayServer(t)
+
+	require.NoError(t, gs.Start(context.Background()))
+	t.Cleanup(func() { _ = gs.Stop() })
+
+	// 装配断言：gwServer/inboundServer 均已创建
+	assert.NotNil(t, gs.gwServer)
+	assert.NotNil(t, gs.inboundServer)
+	// gwServer 读到环境变量端口
+	assert.Equal(t, 19099, gs.gwServer.config.Port)
+	assert.True(t, gs.gwServer.running.Load())
+	assert.True(t, gs.inboundServer.running.Load())
+	// A1 空路由形态：路由表为空
+	assert.Empty(t, gs.gwServer.config.Routes)
+}
