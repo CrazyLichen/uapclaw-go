@@ -100,10 +100,9 @@ func BindRuntimeCronContext(ctx context.Context, channelID, sessionID string, me
 	}
 	normalizedMode := strings.TrimSpace(mode)
 	normalizedMetadata := map[string]any{}
-	if metadata != nil {
-		for k, v := range metadata {
-			normalizedMetadata[k] = v
-		}
+	// range nil map 是空迭代（Go 语义安全），无需显式 nil 检查
+	for k, v := range metadata {
+		normalizedMetadata[k] = v
 	}
 	if strings.TrimSpace(requestID) != "" {
 		normalizedMetadata["request_id"] = strings.TrimSpace(requestID)
