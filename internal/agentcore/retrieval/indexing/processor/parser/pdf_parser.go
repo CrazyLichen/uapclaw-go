@@ -7,10 +7,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
+	pdf "github.com/ledongthuc/pdf"
 	pdfapi "github.com/pdfcpu/pdfcpu/pkg/api"
 	pdfmodel "github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -56,6 +59,51 @@ func NewPDFParser() (*PDFParser, error) {
 	}
 	p.BaseParser = bp
 	return p, nil
+}
+
+// ParseContent 解析 PDF：双通道（对齐 Python _parse(file_path, llm_client)）。
+//
+// 流程（对齐 Python _async_parse_pdf 主循环）：
+//  1. 读入字节（双通道共享——图片通道 io.ReadSeeker / 文本通道 ReaderAt）
+//  2. extractImagesByPage 一次性提图分桶（独立软失败）
+//  3. 逐页 GetPlainText（fonts 跨页累积——read_file.go 先例）；
+//     非空文本入 content
+//  4. 该页图片 caption 经 CaptionImages 生成；非空 caption 紧随该页
+//     文本入 content（Python 同页+追加序关联语义）
+//  5. 过滤空行后 "\n".join；空串返回（对齐 "result if result else None"）
+//
+// 整体软失败：任一通道 err → Error 日志 + 返回 ("", nil)
+// （对齐 Python except → logger.error → return None）。
+//
+// Python: pdf_parser.py PDFParser._parse
+func (p *PDFParser) ParseContent(ctx context.Context, doc string, llmClient *llm.Model) (string, error) {
+	pdfBytes, err := os.ReadFile(doc)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("file_path", doc).
+			Err(err).
+			Msg("failed to parse pdf")
+		return "", nil
+	}
+
+	imgByPage := extractImagesByPage(ctx, pdfBytes, savedImageDir, filepath.Base(doc))
+
+	// 文本通道：ledongthuc 逐页（ReadFile err 之外错误在此统一软失败）
+	content, err := p.parsePages(ctx, pdfBytes, imgByPage, llmClient)
+	if err != nil {
+		// 对齐 Python: logger.error(f"Failed to parse PDF {file_path}: {e}")
+		logger.Error(logComponent).
+			Str("file_path", doc).
+			Err(err).
+			Msg("failed to parse pdf")
+		return "", nil
+	}
+
+	result := joinNonBlank(content)
+	if result == "" {
+		return "", nil // 对齐 Python "result if result else None"
+	}
+	return result, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -115,4 +163,63 @@ func extractImagesByPage(ctx context.Context, pdfBytes []byte, outputDir, filena
 		return map[int][]string{}
 	}
 	return imgByPage
+}
+
+// parsePages 文本通道逐页循环 + caption 并入。
+//
+// Python: pdf_parser.py _async_parse_pdf 循环体
+func (p *PDFParser) parsePages(ctx context.Context, pdfBytes []byte, imgByPage map[int][]string, llmClient *llm.Model) ([]string, error) {
+	r, err := pdf.NewReader(bytes.NewReader(pdfBytes), int64(len(pdfBytes)))
+	if err != nil {
+		return nil, err
+	}
+
+	// 单次构造 captioner（Python 每页重建但无状态副作用，等价——偏差 §8-6）
+	captioner := NewImageCaptioner(llmClient)
+
+	fonts := make(map[string]*pdf.Font)
+	content := []string{}
+	for pageNr := 1; pageNr <= r.NumPage(); pageNr++ {
+		page := r.Page(pageNr)
+		if page.V.IsNull() {
+			continue // 空页跳过（Python extract_text 返回 None → ""）
+		}
+		// 缓存当前页字体（跨页共享——read_file.go 先例）
+		for _, name := range page.Fonts() {
+			if _, ok := fonts[name]; !ok {
+				f := page.Font(name)
+				fonts[name] = &f
+			}
+		}
+		pageText, err := page.GetPlainText(fonts)
+		if err != nil {
+			return nil, fmt.Errorf("第 %d 页文本抽取失败: %w", pageNr, err)
+		}
+		if pageText != "" {
+			content = append(content, pageText)
+		}
+
+		// 该页图片 caption（对齐 Python captions 紧随该页文本）
+		imgs := imgByPage[pageNr]
+		if len(imgs) > 0 {
+			captions := captioner.CaptionImages(ctx, imgs)
+			for _, c := range captions {
+				if c != "" {
+					content = append(content, c)
+				}
+			}
+		}
+	}
+	return content, nil
+}
+
+// joinNonBlank 过滤空行后拼接（对齐 Python "[line for line in content if line.strip()]"）。
+func joinNonBlank(lines []string) string {
+	var kept []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
 }

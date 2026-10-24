@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"os"
@@ -9,6 +10,9 @@ import (
 	"testing"
 
 	pdf "github.com/ledongthuc/pdf"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 测试辅助：合成 PDF ────────────────────────────
@@ -52,6 +56,10 @@ type pdfObject struct {
 // pages：每页一项（页文本）；imgOnPage：页号→是否嵌图（嵌入 DCTDecode XObject）。
 // 固定对象布局：1=Catalog 2=Pages 3=Font 4=Image XObject（仅需要时）
 // 5..=每页 Page 与 Contents。图片绘制走内容流 Do 操作符 + Resources XObject 声明。
+//
+// 文本走裸 Td/Tj（不带 BT/ET）：ledongthuc 的 BT 操作符会注入前导 "\n"
+// （page.go showText("\n")），真实 PDF 渲染器无此行为；去掉 BT/ET 使
+// GetPlainText 输出即页面文本本身，断言无需容忍前导换行。
 func buildPDF(pages []string, imgOnPage map[int]bool) []byte {
 	var objs []pdfObject
 
@@ -99,10 +107,10 @@ func buildPDF(pages []string, imgOnPage map[int]bool) []byte {
 		contentsNum := pageNum + 1
 
 		resources := "<< /Font << /F1 3 0 R >>"
-		content := fmt.Sprintf("BT /F1 12 Tf 72 720 Td (%s) Tj ET", escapePDFText(text))
+		content := fmt.Sprintf("/F1 12 Tf 72 720 Td (%s) Tj", escapePDFText(text))
 		if imgOnPage[i+1] {
 			resources += fmt.Sprintf(" /XObject << /Im0 %d 0 R >>", imgObj)
-			content = fmt.Sprintf("q 100 0 0 100 72 500 cm /Im0 Do Q BT /F1 12 Tf 72 720 Td (%s) Tj ET", escapePDFText(text))
+			content = fmt.Sprintf("q 100 0 0 100 72 500 cm /Im0 Do Q /F1 12 Tf 72 720 Td (%s) Tj", escapePDFText(text))
 		}
 		resources += " >>"
 
@@ -261,5 +269,154 @@ func TestExtractImagesByPage_损坏输入软失败(t *testing.T) {
 	imgByPage := extractImagesByPage(t.Context(), []byte("not a pdf at all"), savedImageDir, "x.pdf")
 	if len(imgByPage) != 0 {
 		t.Errorf("损坏输入应返回空 map，实际 %v", imgByPage)
+	}
+}
+
+// ──────────────────────────── ParseContent 测试 ────────────────────────────
+
+// newPDFParserOrFatal 构造 PDFParser。
+func newPDFParserOrFatal(t *testing.T) *PDFParser {
+	t.Helper()
+	p, err := NewPDFParser()
+	if err != nil {
+		t.Fatalf("构造 PDFParser 失败: %v", err)
+	}
+	return p
+}
+
+// TestPDFParser_ParseContent_双通道 文本+图片 caption 拼接。
+func TestPDFParser_ParseContent_双通道(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	pdfPath := writeTempPDF(t, "doc.pdf", []string{"page one text", "page two text"}, map[int]bool{1: true})
+
+	// caption 固定返回（fakeClient 走真实 Invoke 链——13.15 captionClient 复用）
+	model := newCaptionModel(t, nil, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("image caption"), nil
+	})
+
+	p := newPDFParserOrFatal(t)
+	content, err := p.ParseContent(t.Context(), pdfPath, model)
+	if err != nil {
+		t.Fatalf("ParseContent 不应报错: %v", err)
+	}
+
+	// 断言拼接顺序：页1文本 → caption → 页2文本（Python 同页+追加序语义）
+	want := "page one text\nimage caption\npage two text"
+	if content != want {
+		t.Errorf("content 应为:\n%q\n实际:\n%q", want, content)
+	}
+	// 落盘验证
+	if _, err := os.Stat(filepath.Join("images", "doc.pdf__page_1__img_0.jpg")); err != nil {
+		t.Errorf("图片应落盘 images/doc.pdf__page_1__img_0.jpg: %v", err)
+	}
+}
+
+// TestPDFParser_ParseContent_禁用态 nil client 只出文本。
+func TestPDFParser_ParseContent_禁用态(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	pdfPath := writeTempPDF(t, "plain.pdf", []string{"only text"}, map[int]bool{1: true})
+
+	p := newPDFParserOrFatal(t)
+	content, err := p.ParseContent(t.Context(), pdfPath, nil)
+	if err != nil {
+		t.Fatalf("禁用态不应报错: %v", err)
+	}
+	if content != "only text" {
+		t.Errorf("禁用态应只含文本，实际 %q", content)
+	}
+}
+
+// TestPDFParser_ParseContent_空结果软失败 空白页返回空串。
+func TestPDFParser_ParseContent_空结果软失败(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	pdfPath := writeTempPDF(t, "blank.pdf", []string{""}, nil)
+
+	p := newPDFParserOrFatal(t)
+	content, err := p.ParseContent(t.Context(), pdfPath, nil)
+	if err != nil {
+		t.Fatalf("空结果不应报错: %v", err)
+	}
+	if content != "" {
+		t.Errorf("空结果应返回空串（对齐 Python None falsy），实际 %q", content)
+	}
+}
+
+// TestPDFParser_ParseContent_损坏输入软失败 非 PDF 字节整体软失败。
+func TestPDFParser_ParseContent_损坏输入软失败(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	badPath := filepath.Join(dir, "bad.pdf")
+	if err := os.WriteFile(badPath, []byte("garbage bytes not pdf"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := newPDFParserOrFatal(t)
+	content, err := p.ParseContent(t.Context(), badPath, nil)
+	if err != nil {
+		t.Fatalf("损坏输入应软失败不报错（对齐 Python except→None），实际 err: %v", err)
+	}
+	if content != "" {
+		t.Errorf("软失败应返回空串，实际 %q", content)
+	}
+}
+
+// TestPDFParser_Parse_模板集成 Parse 经 BaseParser 包装单文档。
+func TestPDFParser_Parse_模板集成(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	pdfPath := writeTempPDF(t, "integ.pdf", []string{"integ text"}, nil)
+
+	p := newPDFParserOrFatal(t)
+	docs, err := p.Parse(t.Context(), pdfPath, WithDocID("pdf-doc-1"))
+	if err != nil {
+		t.Fatalf("Parse 不应报错: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("应包装 1 个 Document，实际 %d", len(docs))
+	}
+	if docs[0].ID != "pdf-doc-1" || docs[0].Text != "integ text" {
+		t.Errorf("Document 应透传 DocID 与文本，实际 ID=%q Text=%q", docs[0].ID, docs[0].Text)
+	}
+}
+
+// TestPDFParser_注册 .pdf 注册 / .PDF 小写归一跳过。
+func TestPDFParser_注册(t *testing.T) {
+	if _, ok := getParserFactory(".pdf"); !ok {
+		t.Error(".pdf 应已注册")
+	}
+	if _, ok := getParserFactory(".PDF"); ok {
+		t.Error(".PDF 应被 first-wins 小写归一跳过（13.16 既定语义）")
+	}
+	factory, _ := getParserFactory(".pdf")
+	if _, ok := factory().(*PDFParser); !ok {
+		t.Error("工厂应产出 *PDFParser")
 	}
 }
