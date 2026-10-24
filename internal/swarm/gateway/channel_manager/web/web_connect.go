@@ -291,7 +291,7 @@ func (wc *WebChannel) Config() any {
 
 // Start 启动 Web 通道。
 //
-// 设置 running 标志。HTTP 服务器由 GatewayServer 启动。
+// 设置 running 标志。HTTP 服务器由 AppGatewayServer 启动。
 func (wc *WebChannel) Start(_ context.Context) error {
 	wc.runningMu.Lock()
 	defer wc.runningMu.Unlock()

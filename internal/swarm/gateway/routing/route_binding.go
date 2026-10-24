@@ -18,7 +18,7 @@ type RouteBinding struct {
 	OutboundInterceptor InterceptorFunc
 	// DisconnectHandler 连接断开回调
 	DisconnectHandler DisconnectFunc
-	// Install 在 GatewayServer 上注册本地 handler 的钩子
+	// Install 在 AppGatewayServer 上注册本地 handler 的钩子
 	Install InstallFunc
 }
 
@@ -28,7 +28,7 @@ type InterceptorFunc func(channel any, data []byte) ([]byte, error)
 // DisconnectFunc 连接断开回调类型。
 type DisconnectFunc func(channel any, sessionKeys []string)
 
-// InstallFunc 在 GatewayServer 上注册本地 handler 的钩子类型。
+// InstallFunc 在 AppGatewayServer 上注册本地 handler 的钩子类型。
 type InstallFunc func(server any)
 
 // ──────────────────────────── 枚举 ────────────────────────────

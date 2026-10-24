@@ -319,11 +319,11 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		agentServer = server.NewAgentServer(cfg, chTransport)
 	}
 
-	// 创建 GatewayServer（AgentClient 会等待 AgentServer 就绪后发送 connection.ack）
-	gs, err := gateway.NewGatewayServer(cfg, agentClient)
+	// 创建 AppGatewayServer（AgentClient 会等待 AgentServer 就绪后发送 connection.ack）
+	gs, err := gateway.NewAppGatewayServer(cfg, agentClient)
 	if err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("failed to create GatewayServer")
-		return fmt.Errorf("创建 GatewayServer 失败: %w", err)
+		logger.Error(logComponentGateway).Err(err).Msg("failed to create AppGatewayServer")
+		return fmt.Errorf("创建 AppGatewayServer 失败: %w", err)
 	}
 
 	logger.Info(logComponentGateway).
@@ -338,18 +338,18 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	// 启动 GatewayServer（HTTP + WebSocket）
+	// 启动 AppGatewayServer（HTTP + WebSocket）
 	// WebChannel.HandleWebSocket 会等待 AgentServer.WaitServerReady 后再发 connection.ack
 	if err := gs.Start(ctx); err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("failed to start GatewayServer")
-		return fmt.Errorf("启动 GatewayServer 失败: %w", err)
+		logger.Error(logComponentGateway).Err(err).Msg("failed to start AppGatewayServer")
+		return fmt.Errorf("启动 AppGatewayServer 失败: %w", err)
 	}
 
 	// 等待退出信号
 	<-ctx.Done()
 	logger.Info(logComponentGateway).Msg("received exit signal, shutting down...")
 
-	// 停止顺序：AgentServer（取消任务 + 清理 + 等主循环退出）→ GatewayServer（HTTP 优雅关闭）
+	// 停止顺序：AgentServer（取消任务 + 清理 + 等主循环退出）→ AppGatewayServer（HTTP 优雅关闭）
 	if agentServer != nil {
 		if err := agentServer.Stop(); err != nil {
 			logger.Error(logComponentAgentServer).Err(err).Msg("failed to stop AgentServer")

@@ -29,7 +29,7 @@ const configReloadTimeout = 10 * time.Second
 
 // OnConfigSaved 返回配置保存回调，供 WebHandler 注册。
 // Python: WebHandlersBindParams(on_config_saved=_on_config_saved)。
-func (s *GatewayServer) OnConfigSaved() web.OnConfigSavedFunc {
+func (s *AppGatewayServer) OnConfigSaved() web.OnConfigSavedFunc {
 	return s.onConfigSavedImpl
 }
 
@@ -44,7 +44,7 @@ func (s *GatewayServer) OnConfigSaved() web.OnConfigSavedFunc {
 //  3. 检查 reload 响应
 //  4. 条件发 browser.runtime_restart
 //  5. 异常兜底：调用 scheduleRestart 退出进程，由外部 supervisor 重启
-func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error {
+func (s *AppGatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error {
 	// 步骤1：本地缓存更新（对齐 Python: set_or_update_server_config）
 	// 当前 WebSocket client 是空操作，接口预留
 	// TODO(⤵️ 扩展系统): 扩展 client 实现本地缓存

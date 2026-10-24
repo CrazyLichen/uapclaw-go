@@ -24,11 +24,12 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// GatewayServer Gateway 服务器，整合 HTTP 路由、WebChannel、ChannelManager、MessageHandler。
+// AppGatewayServer Gateway 应用服务器（HTTP 宿主+组装器），整合 HTTP 路由、WebChannel、ChannelManager、MessageHandler。
 //
+// 对应 Python app_gateway.py _run() 函数的组装职责（Python 侧无同名类）。
 // 提供 WebSocket RPC 端点、静态文件服务和文件操作 HTTP API，
 // 通过 AgentClient 与 AgentServer 通信。
-type GatewayServer struct {
+type AppGatewayServer struct {
 	// config 配置管理器
 	config *config.Config
 	// router chi 路由器实例
@@ -61,7 +62,7 @@ const shutdownTimeout = 5 * time.Second
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewGatewayServer 创建 Gateway 服务器实例。
+// NewAppGatewayServer 创建 Gateway 服务器实例。
 //
 // 初始化 MessageHandler、ChannelManager、WebChannel，组装 chi 路由。
 // 创建顺序对齐 Python app_gateway.py：
@@ -69,10 +70,10 @@ const shutdownTimeout = 5 * time.Second
 //  2. 创建频道管理器
 //  3. 创建 Web 频道
 //  4. 注册频道入站回调
-func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*GatewayServer, error) {
+func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*AppGatewayServer, error) {
 	// 11.7+11.13：注册全局 Config（幂等，对齐 Python get_config() 全局可用性）
 	// Python: 独立 Gateway 进程不启动 AgentServer，全局函数随时可读；
-	// Go 由 NewGatewayServer 注册，12.7 单体路径由 AgentServer 注册，谁先启动谁注册
+	// Go 由 NewAppGatewayServer 注册，12.7 单体路径由 AgentServer 注册，谁先启动谁注册
 	hookscfg.RegisterConfig(cfg)
 
 	// 从配置读取 Web 通道参数
@@ -89,8 +90,8 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 	// 步骤2：创建 ChannelManager（3 参数，对齐 Python ChannelManager(message_handler, config, on_config_updated)）
 	channelMgr := cm.NewChannelManager(msgHandler, nil, nil)
 
-	// 先创建 GatewayServer（onConfigSavedImpl 需要 agentClient 和 config）
-	s := &GatewayServer{
+	// 先创建 AppGatewayServer（onConfigSavedImpl 需要 agentClient 和 config）
+	s := &AppGatewayServer{
 		config:      cfg,
 		channelMgr:  channelMgr,
 		msgHandler:  msgHandler,
@@ -145,7 +146,7 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 // Start 启动 Gateway 服务器。
 //
 // 注册 WebChannel、启动 MessageHandler 转发循环、启动 HTTP 服务器。
-func (s *GatewayServer) Start(ctx context.Context) error {
+func (s *AppGatewayServer) Start(ctx context.Context) error {
 	// TODO(⤵️ 领域11): 初始化 IMInboundPipeline + IMOutboundPipeline，注册到 MessageHandler
 	// Python: app_gateway.py L851-856
 
@@ -230,7 +231,7 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 
 	logger.Info(logComponent).
 		Str("addr", addr).
-		Msg("GatewayServer HTTP starting")
+		Msg("AppGatewayServer HTTP starting")
 
 	// 在 goroutine 中启动 HTTP 服务
 	errCh := make(chan error, 1)
@@ -251,7 +252,7 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 		// HTTP 服务器已启动（无立即错误）
 		logger.Info(logComponent).
 			Str("addr", addr).
-			Msg("GatewayServer started")
+			Msg("AppGatewayServer started")
 		return nil
 	}
 }
@@ -259,7 +260,7 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 // Stop 优雅关闭 Gateway 服务器。
 //
 // 停止顺序：WebChannel → MessageHandler → Transport → HTTP Server。
-func (s *GatewayServer) Stop() error {
+func (s *AppGatewayServer) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
@@ -312,7 +313,7 @@ func (s *GatewayServer) Stop() error {
 		}
 	}
 
-	logger.Info(logComponent).Msg("GatewayServer stopped")
+	logger.Info(logComponent).Msg("AppGatewayServer stopped")
 	return nil
 }
 
@@ -324,7 +325,7 @@ func (s *GatewayServer) Stop() error {
 //   - GET /ws → WebSocket 端点
 //   - /file-api/* → 文件操作 API
 //   - /* → 前端静态文件（SPA fallback）
-func (s *GatewayServer) setupRouter() {
+func (s *AppGatewayServer) setupRouter() {
 	r := chi.NewRouter()
 
 	// 中间件
