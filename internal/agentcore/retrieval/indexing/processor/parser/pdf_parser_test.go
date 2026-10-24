@@ -126,7 +126,7 @@ func buildPDF(pages []string, imgOnPage map[int]bool) []byte {
 	offsets := map[int]int{}
 	for _, o := range objs {
 		offsets[o.num] = buf.Len()
-		buf.WriteString(fmt.Sprintf("%d 0 obj\n%s\n", o.num, o.dict))
+		fmt.Fprintf(&buf, "%d 0 obj\n%s\n", o.num, o.dict)
 		if o.stream != nil {
 			buf.WriteString("stream\n")
 			buf.Write(o.stream)
@@ -141,16 +141,16 @@ func buildPDF(pages []string, imgOnPage map[int]bool) []byte {
 			maxNum = n
 		}
 	}
-	buf.WriteString(fmt.Sprintf("xref\n0 %d\n", maxNum+1))
+	fmt.Fprintf(&buf, "xref\n0 %d\n", maxNum+1)
 	buf.WriteString("0000000000 65535 f \n")
 	for i := 1; i <= maxNum; i++ {
 		if off, ok := offsets[i]; ok {
-			buf.WriteString(fmt.Sprintf("%010d 00000 n \n", off))
+			fmt.Fprintf(&buf, "%010d 00000 n \n", off)
 		} else {
 			buf.WriteString("0000000000 65535 f \n")
 		}
 	}
-	buf.WriteString(fmt.Sprintf("trailer << /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", maxNum+1, xrefPos))
+	fmt.Fprintf(&buf, "trailer << /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", maxNum+1, xrefPos)
 	return buf.Bytes()
 }
 
