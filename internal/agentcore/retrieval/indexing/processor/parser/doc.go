@@ -8,6 +8,10 @@
 // 图片文件经 ImageParser 解析：归档到 images/ 目录并经 ImageCaptioner
 // 生成 caption，产出 metadata["image_path"] 供 13.4 多模态嵌入消费。
 //
+// PDF 文档经 PDFParser 双通道解析：ledongthuc 逐页文本 + pdfcpu 抽取嵌入
+// 图片（落盘 images/）经 ImageCaptioner 生成 caption，文本与 caption 按页
+// 拼接为单一 Document 文本。
+//
 // 使用方式（对齐 Python Parser 继承体系）：
 //   - 具体解析器：嵌入 BaseParser 并覆写 ParseContent（对齐 Python 仅覆写 _parse），
 //     构造时 NewBaseParser(self) 注入自身
@@ -24,7 +28,8 @@
 //	├── json_parser.go   # JSONParser：JSON 格式化解析（13.16）
 //	├── txt_md_parser.go # TxtMdParser：文本/Markdown 编码统计检测解析（13.16）
 //	├── captioner.go     # ImageCaptioner 图片描述生成 + CpImage 归档（13.15）
-//	└── image_parser.go  # ImageParser 图片解析（image_path 元数据产出）（13.15）
+//	├── image_parser.go  # ImageParser 图片解析（image_path 元数据产出）（13.15）
+//	└── pdf_parser.go    # PDFParser：PDF 双通道解析（文本+图片 caption）（13.12）
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/processor/parser/
 package parser
