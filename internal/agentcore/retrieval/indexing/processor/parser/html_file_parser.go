@@ -6,14 +6,30 @@
 package parser
 
 import (
+	"context"
 	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/dlclark/regexp2"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// HTMLFileParser 本地 .htm/.html 文件解析器（对齐 Python HTMLFileParser(TxtMdParser)）。
+//
+// 嵌入 TxtMdParser 复用编码容错读文件（super()._parse 对应物：
+// p.TxtMdParser.ParseContent 显式穿透）。覆写整体 Parse（非 ParseContent）
+// 产出带 title/source_type metadata 的单 Document。
+// 硬错误范式：读不到文件/找不到主内容/正文过短 → 155110。
+//
+// Python: html_file_parser.py HTMLFileParser
+type HTMLFileParser struct {
+	// TxtMdParser 父级（编码检测读文件）
+	*TxtMdParser
+}
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -50,7 +66,66 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewHTMLFileParser 构造 HTMLFileParser。
+//
+// 零参数（对齐 Python __init__(**kwargs): super().__init__(**kwargs)）。
+// 多级嵌入链构造：TxtMdParser 层的 BaseParser.self 注入最终实例——
+// BaseParser 模板方法（LazyParse/Process/Supports）经 self 派发到
+// HTMLFileParser 覆写版本。
+// Python: html_file_parser.py HTMLFileParser.__init__
+func NewHTMLFileParser() (*HTMLFileParser, error) {
+	p := &HTMLFileParser{}
+	// 重建 TxtMdParser 链（对齐 Python super().__init__ 链）
+	tmp, err := NewTxtMdParser()
+	if err != nil {
+		return nil, err
+	}
+	p.TxtMdParser = tmp
+	// 覆盖 BaseParser.self 为最终实例：多级链 self 指最终实例
+	bp, err := NewBaseParser(p)
+	if err != nil {
+		return nil, err
+	}
+	p.TxtMdParser.BaseParser = bp
+	return p, nil
+}
+
+// Parse 解析本地 HTML 文件（覆写整体，对齐 Python HTMLFileParser.parse）。
+//
+// 1. super()._parse 读文件（TxtMdParser 编码检测，软失败返回空串）
+//    空串 → 155110 "Could not read HTML file or file is empty (source=%s)"
+// 2. parseHTMLToDocs：title/findMainContent/getTextFromSoup/门槛校验
+//    → 单 Document（对齐 Python parse 调 _parse_html classmethod）
+// 3. DocID 未设回落 doc（对齐 doc_id=doc_id or doc）
+//
+// Python: html_file_parser.py HTMLFileParser.parse
+func (p *HTMLFileParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {
+	o := NewParseOptions(opts...)
+	html, _ := p.TxtMdParser.ParseContent(ctx, doc, o.LLMClient)
+	if html == "" {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalIndexingFetchError,
+			exception.WithMsg("Could not read HTML file or file is empty (source="+doc+")"),
+		)
+	}
+	docID := o.DocID
+	if docID == "" {
+		docID = doc
+	}
+	return p.parseHTMLToDocs(html, docID, doc)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// init 注册 .htm/.html（对齐 @register_parser([".htm", ".HTM", ".html", ".HTML"])，
+// 小写归一 first-wins 静默跳过——registry 既定语义，.HTM/.HTML 与 13.12/13.13 同款）。
+func init() {
+	RegisterParser([]string{".htm", ".HTM", ".html", ".HTML"}, func() Parser {
+		p, _ := NewHTMLFileParser()
+		return p
+	})
+}
 
 // parseHTML 解析 HTML 字符串（对齐 _parse_html）。
 //
@@ -176,4 +251,42 @@ func appendTextNodes(sel *goquery.Selection, parts *[]string) {
 		}
 		appendTextNodes(s, parts)
 	})
+}
+
+// parseHTMLToDocs 解析 HTML 字符串产出 Document（对齐 Python _parse_html classmethod）。
+//
+// title 提取 → findMainContent → getTextFromSoup → 门槛校验 → 单 Document。
+// 门槛 htmlMinArticleLength=50（对齐 Python len(text) < 50；text 已 TrimSpace，
+// not text 与 len<50 前者包含后者，两条件字面保留）。
+// title 空串兜底 "(无标题)"（对齐 Python title or "(无标题)"——数据值保留中文）。
+// Python: html_file_parser.py HTMLFileParser._parse_html
+func (p *HTMLFileParser) parseHTMLToDocs(html string, docID string, source string) ([]reranker.Document, error) {
+	soup := parseHTML(html)
+	title := extractTitle(soup)
+	contentNode := findMainContent(soup)
+	if contentNode == nil {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalIndexingFetchError,
+			exception.WithMsg("Could not find main content in HTML (source="+source+")"),
+		)
+	}
+	text := getTextFromSoup(contentNode)
+	if len(text) == 0 || len(text) < htmlMinArticleLength {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalIndexingFetchError,
+			exception.WithMsg("Article content too short or empty after parsing html (source="+source+")"),
+		)
+	}
+	effectiveTitle := title
+	if effectiveTitle == "" {
+		effectiveTitle = "(无标题)"
+	}
+	return []reranker.Document{{
+		ID:   docID,
+		Text: text,
+		Metadata: map[string]any{
+			"title":       effectiveTitle,
+			"source_type": "web_page",
+		},
+	}}, nil
 }

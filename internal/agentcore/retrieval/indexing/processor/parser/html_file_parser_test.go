@@ -1,8 +1,15 @@
 package parser
 
 import (
+	"context"
+	"errors"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 // ──────────────────────────── 共享 HTML 工具测试（13.14） ────────────────────────────
@@ -211,5 +218,153 @@ func TestGetTextFromSoup_nil选区防御(t *testing.T) {
 	}
 	if got := getTextFromSoup(doc.Find("#nonexistent")); got != "" {
 		t.Errorf("空选区应返回空串, got %q", got)
+	}
+}
+
+// ──────────────────────────── HTMLFileParser 测试（13.14） ────────────────────────────
+
+// TestHTMLFileParserParse_正常 单 Document 全字段。
+func TestHTMLFileParserParse_正常(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/page.html"
+	html := `<html><head><meta property="og:title" content="文档标题"/></head><body><article>` + longBody(12) + `</article></body></html>`
+	if err := os.WriteFile(path, []byte(html), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := NewHTMLFileParser()
+	docs, err := p.Parse(context.Background(), path)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("docs = %d, want 1", len(docs))
+	}
+	if docs[0].Metadata["title"] != "文档标题" {
+		t.Errorf("title = %v", docs[0].Metadata["title"])
+	}
+	if docs[0].Metadata["source_type"] != "web_page" {
+		t.Errorf("source_type = %v", docs[0].Metadata["source_type"])
+	}
+	if docs[0].Text == "" {
+		t.Error("正文不应为空")
+	}
+	if docs[0].ID != path { // DocID 未设回落 doc 路径（对齐 doc_id or doc）
+		t.Errorf("ID = %q, want %q", docs[0].ID, path)
+	}
+}
+
+// TestHTMLFileParserParse_空文件 155110 "Could not read HTML file or file is empty"。
+func TestHTMLFileParserParse_空文件(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/empty.html"
+	os.WriteFile(path, []byte(""), 0o644)
+	p, _ := NewHTMLFileParser()
+	_, err := p.Parse(context.Background(), path)
+	var be *exception.BaseError
+	if !errors.As(err, &be) || be.Status() != exception.StatusRetrievalIndexingFetchError {
+		t.Fatalf("应返回 155110, got %v", err)
+	}
+	if be.Message() != "Could not read HTML file or file is empty (source="+path+")" {
+		t.Errorf("message = %q", be.Message())
+	}
+}
+
+// TestHTMLFileParserParse_正文过短 155110 "Article content too short"。
+func TestHTMLFileParserParse_正文过短(t *testing.T) {
+	// 选择器全不中 + body fallback 全 <200：返回 body，但正文 <50 → too short 分支。
+	// "找不到主内容"需 body 缺失——goquery 自动补 body 不达，由 findMainContent
+	// 单元测覆盖（空body返回body用例）。
+	dir := t.TempDir()
+	path := dir + "/short.html"
+	html := `<html><body><article>短</article></body></html>`
+	os.WriteFile(path, []byte(html), 0o644)
+	p, _ := NewHTMLFileParser()
+	_, err := p.Parse(context.Background(), path)
+	var be *exception.BaseError
+	if !errors.As(err, &be) || be.Status() != exception.StatusRetrievalIndexingFetchError {
+		t.Fatalf("应返回 155110, got %v", err)
+	}
+	if be.Message() != "Article content too short or empty after parsing html (source="+path+")" {
+		t.Errorf("message = %q", be.Message())
+	}
+}
+
+// TestHTMLFileParserParse_GBK编码 super 链编码检测。
+func TestHTMLFileParserParse_GBK编码(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/gbk.html"
+	// GBK 编码的中文正文（GB18030 编码器产出，chardet 检 GB-18030）
+	encoder := simplifiedchinese.GB18030.NewEncoder()
+	gbk, err := encoder.Bytes([]byte(`<html><head><meta property="og:title" content="标题"/></head><body><article>` + longBody(12) + `</article></body></html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(path, gbk, 0o644)
+	p, _ := NewHTMLFileParser()
+	docs, err := p.Parse(context.Background(), path)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if len(docs) != 1 || docs[0].Metadata["title"] != "标题" {
+		t.Fatalf("GBK 链路失败: %v", docs)
+	}
+}
+
+// TestHTMLFileParserParse_标题兜底无标题 title 缺失时 metadata 兜底 "(无标题)"。
+func TestHTMLFileParserParse_标题兜底无标题(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/notitle.html"
+	html := `<html><body><article>` + longBody(12) + `</article></body></html>`
+	os.WriteFile(path, []byte(html), 0o644)
+	p, _ := NewHTMLFileParser()
+	docs, err := p.Parse(context.Background(), path)
+	if err != nil || len(docs) != 1 {
+		t.Fatalf("err=%v docs=%d", err, len(docs))
+	}
+	if docs[0].Metadata["title"] != "(无标题)" {
+		t.Errorf("title = %v, want (无标题)", docs[0].Metadata["title"])
+	}
+}
+
+// TestHTMLFileParserParse_注册表查询 .html/.htm 注册可查。
+//
+// registry 扩展名小写归一（.HTM/.HTML 归一为 .htm/.html 存键——first-wins
+// 静默跳过既定语义），查询统一用小写键。
+func TestHTMLFileParserParse_注册表查询(t *testing.T) {
+	for _, ext := range []string{".html", ".htm"} {
+		if _, ok := getParserFactory(ext); !ok {
+			t.Errorf("扩展名 %s 应已注册", ext)
+		}
+	}
+}
+
+// TestHTMLFileParserLazyParse_经self派发 多级链 self 指最终实例：
+// LazyParse（BaseParser 模板）经 self 派发到 HTMLFileParser 覆写的 Parse。
+func TestHTMLFileParserLazyParse_经self派发(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/lazy.html"
+	html := `<html><body><article>` + longBody(12) + `</article></body></html>`
+	os.WriteFile(path, []byte(html), 0o644)
+	p, _ := NewHTMLFileParser()
+	var seen []string
+	err := p.LazyParse(context.Background(), path, func(d reranker.Document) error {
+		seen = append(seen, d.Text)
+		return nil
+	})
+	if err != nil || len(seen) != 1 {
+		t.Fatalf("LazyParse 应派发到覆写 Parse: err=%v seen=%d", err, len(seen))
+	}
+}
+
+// TestHTMLFileParserProcess_经self派发 Process（BaseParser 模板）经 self 派发。
+func TestHTMLFileParserProcess_经self派发(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/proc.html"
+	html := `<html><body><article>` + longBody(12) + `</article></body></html>`
+	os.WriteFile(path, []byte(html), 0o644)
+	p, _ := NewHTMLFileParser()
+	docs, err := p.Process(context.Background(), path)
+	if err != nil || len(docs) != 1 {
+		t.Fatalf("Process 应派发到覆写 Parse: err=%v docs=%d", err, len(docs))
 	}
 }
