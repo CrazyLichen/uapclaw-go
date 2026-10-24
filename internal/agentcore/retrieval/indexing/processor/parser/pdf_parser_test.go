@@ -3,6 +3,7 @@ package parser
 import (
 	"bytes"
 	"fmt"
+	"image"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,32 +13,31 @@ import (
 
 // ──────────────────────────── 测试辅助：合成 PDF ────────────────────────────
 
-// tinyJPEGBytes 1x1 灰度 JPEG 真实字节（合法 JPEG 流，作 DCTDecode XObject 数据）。
+// tinyJPEGBytes 1x1 灰度 JPEG 真实字节（Go 标准库 jpeg.Encode 产物，
+// 作 DCTDecode XObject 数据——保证 image.DecodeConfig 可解码断言成立）。
 var tinyJPEGBytes = []byte{
-	0xFF, 0xD8, 0xFF, 0xDB, 0x00, 0x0D, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06,
-	0x05, 0x08, 0x07, 0x07, 0x07, 0x09, 0x09, 0x08, 0x0A, 0x0C, 0x14, 0x0D,
-	0x0E, 0x0F, 0x10, 0x14, 0x11, 0x0E, 0x0F, 0x0D, 0xFF, 0xC0, 0x00, 0x08,
-	0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xC4, 0x00, 0x1F,
-	0x00, 0x00, 0x01, 0x05, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
-	0x07, 0x08, 0x09, 0x0A, 0x0B, 0xFF, 0xC4, 0x00, 0xB5, 0x10, 0x00, 0x02,
-	0x01, 0x03, 0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00,
-	0x01, 0x7D, 0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31,
-	0x41, 0x06, 0x13, 0x51, 0x61, 0x07, 0x22, 0x71, 0x14, 0x32, 0x81, 0x91,
-	0xA1, 0x08, 0x23, 0x42, 0xB1, 0xC1, 0x15, 0x52, 0xD1, 0xF0, 0x24, 0x33,
-	0x62, 0x72, 0x82, 0x09, 0x0A, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x25, 0x26,
-	0x27, 0x28, 0x29, 0x2A, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x43,
-	0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x53, 0x54, 0x55, 0x56, 0x57,
-	0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x73,
-	0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x83, 0x84, 0x85, 0x86, 0x87,
-	0x88, 0x89, 0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A,
-	0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4,
-	0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7,
-	0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA,
-	0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF1, 0xF2,
-	0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFF, 0xDA, 0x00, 0x08,
-	0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0x7B, 0xA0, 0x00, 0x00, 0x00, 0x00,
-	0x01, 0xFF, 0xD9,
+	255, 216, 255, 219, 0, 132, 0, 5, 3, 4, 4, 4, 3, 5, 4, 4, 4, 5, 5, 5,
+	6, 7, 12, 8, 7, 7, 7, 7, 15, 11, 11, 9, 12, 17, 15, 18, 18, 17, 15, 17,
+	17, 19, 22, 28, 23, 19, 20, 26, 21, 17, 17, 24, 33, 24, 26, 29, 29, 31,
+	31, 31, 19, 23, 34, 36, 34, 30, 36, 28, 30, 31, 30, 1, 5, 5, 5, 7, 6,
+	7, 14, 8, 8, 14, 30, 20, 17, 20, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
+	30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
+	30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30,
+	30, 30, 30, 30, 255, 192, 0, 11, 8, 0, 1, 0, 1, 1, 1, 17, 0, 255, 196,
+	0, 210, 0, 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3,
+	4, 5, 6, 7, 8, 9, 10, 11, 16, 0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0,
+	0, 1, 125, 1, 2, 3, 0, 4, 17, 5, 18, 33, 49, 65, 6, 19, 81, 97, 7, 34,
+	113, 20, 50, 129, 145, 161, 8, 35, 66, 177, 193, 21, 82, 209, 240, 36,
+	51, 98, 114, 130, 9, 10, 22, 23, 24, 25, 26, 37, 38, 39, 40, 41, 42, 52,
+	53, 54, 55, 56, 57, 58, 67, 68, 69, 70, 71, 72, 73, 74, 83, 84, 85, 86,
+	87, 88, 89, 90, 99, 100, 101, 102, 103, 104, 105, 106, 115, 116, 117,
+	118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136, 137, 138, 146,
+	147, 148, 149, 150, 151, 152, 153, 154, 162, 163, 164, 165, 166, 167,
+	168, 169, 170, 178, 179, 180, 181, 182, 183, 184, 185, 186, 194, 195,
+	196, 197, 198, 199, 200, 201, 202, 210, 211, 212, 213, 214, 215, 216,
+	217, 218, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 241, 242,
+	243, 244, 245, 246, 247, 248, 249, 250, 255, 218, 0, 8, 1, 1, 0, 0, 63,
+	0, 248, 202, 191, 255, 217,
 }
 
 // pdfObject PDF 对象条目。
@@ -195,5 +195,71 @@ func TestBuildPDF_合成合法性(t *testing.T) {
 	}
 	if !bytes.Contains([]byte(text), []byte("Hello PDF")) {
 		t.Errorf("文本应含 'Hello PDF'，实际 %q", text)
+	}
+
+	// pdfcpu 图片侧：图片通道分桶断言（TestExtractImagesByPage_* 覆盖，
+	// 此处仅保证 fixture 不被 pdfcpu 文档级拒绝——经图片用例间接验证）
+}
+
+// ──────────────────────────── extractImagesByPage 测试 ────────────────────────────
+
+// TestExtractImagesByPage_单页带图 单图分桶 + 落盘字节可解码。
+func TestExtractImagesByPage_单页带图(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	pdfBytes := buildPDF([]string{"page one"}, map[int]bool{1: true})
+	imgByPage := extractImagesByPage(t.Context(), pdfBytes, savedImageDir, "doc.pdf")
+
+	if len(imgByPage[1]) != 1 {
+		t.Fatalf("第 1 页应提取 1 张图，实际 %d", len(imgByPage[1]))
+	}
+	imgPath := imgByPage[1][0]
+	if filepath.Base(imgPath) != "doc.pdf__page_1__img_0.jpg" {
+		t.Errorf("落盘名应为 doc.pdf__page_1__img_0.jpg（原生扩展名），实际 %q", filepath.Base(imgPath))
+	}
+	// 字节可 image.Decode（解码后 JPEG）
+	data, err := os.ReadFile(imgPath)
+	if err != nil {
+		t.Fatalf("读落盘图失败: %v", err)
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		t.Errorf("落盘字节应可解码，实际 err: %v", err)
+	}
+	if cfg.Width != 1 || cfg.Height != 1 {
+		t.Errorf("尺寸应为 1x1，实际 %dx%d", cfg.Width, cfg.Height)
+	}
+}
+
+// TestExtractImagesByPage_多页分桶 页码归属正确。
+func TestExtractImagesByPage_多页分桶(t *testing.T) {
+	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	pdfBytes := buildPDF([]string{"p1", "p2", "p3"}, map[int]bool{1: true, 3: true})
+	imgByPage := extractImagesByPage(t.Context(), pdfBytes, savedImageDir, "m.pdf")
+
+	if len(imgByPage[1]) != 1 || len(imgByPage[3]) != 1 {
+		t.Fatalf("页 1/3 各应 1 图，实际 %d/%d", len(imgByPage[1]), len(imgByPage[3]))
+	}
+	if len(imgByPage[2]) != 0 {
+		t.Errorf("页 2 无图，实际 %d", len(imgByPage[2]))
+	}
+}
+
+// TestExtractImagesByPage_损坏输入软失败 非法字节返回空 map 不报错。
+func TestExtractImagesByPage_损坏输入软失败(t *testing.T) {
+	imgByPage := extractImagesByPage(t.Context(), []byte("not a pdf at all"), savedImageDir, "x.pdf")
+	if len(imgByPage) != 0 {
+		t.Errorf("损坏输入应返回空 map，实际 %v", imgByPage)
 	}
 }
