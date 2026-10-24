@@ -237,21 +237,3 @@ func (b *BaseParser) ParseContent(ctx context.Context, doc string, llmClient *ll
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// verifyMode TLS 校验模式密封接口（对齐 Python verify: bool | str | ssl.SSLContext）。
-//
-// Task 2 迁至 web_page_parser.go 并完整实现，此处为 Task 1 最小占位。
-// 密封机制：非导出标记方法 isVerifyMode()，包外无法新增变体（13.13 cellValue 先例）。
-type verifyMode interface {
-	// isVerifyMode 密封标记（非导出，包外不可实现）
-	isVerifyMode()
-}
-
-// verifySkip 跳过校验变体（Task 2 迁移并完整实现，此处占位）。
-type verifySkip struct{}
-
-// isVerifyMode 密封标记。
-func (verifySkip) isVerifyMode() {}
-
-// NewVerifySkip 构造跳过校验变体（Task 2 迁移，此处占位）。
-func NewVerifySkip() verifyMode { return verifySkip{} }
