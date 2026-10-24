@@ -17,22 +17,22 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
-// newTestGatewayServer 创建测试用 GatewayServer
-func newTestGatewayServer(t *testing.T) *GatewayServer {
+// newTestAppGatewayServer 创建测试用 AppGatewayServer
+func newTestAppGatewayServer(t *testing.T) *AppGatewayServer {
 	t.Helper()
 	cfg, err := config.New("")
 	require.NoError(t, err)
 	transport := transport.NewChannelTransport()
 	agentClient := routing.NewAgentClient(transport)
-	gs, err := NewGatewayServer(cfg, agentClient)
+	gs, err := NewAppGatewayServer(cfg, agentClient)
 	require.NoError(t, err)
 	return gs
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func TestNewGatewayServer(t *testing.T) {
-	gs := newTestGatewayServer(t)
+func TestNewAppGatewayServer(t *testing.T) {
+	gs := newTestAppGatewayServer(t)
 	assert.NotNil(t, gs)
 	assert.NotNil(t, gs.router)
 	assert.NotNil(t, gs.webChannel)
@@ -40,8 +40,8 @@ func TestNewGatewayServer(t *testing.T) {
 	assert.NotNil(t, gs.msgHandler)
 }
 
-// TestNewGatewayServer_装配全局Config RegisterConfig 幂等装配
-func TestNewGatewayServer_装配全局Config(t *testing.T) {
+// TestNewAppGatewayServer_装配全局Config RegisterConfig 幂等装配
+func TestNewAppGatewayServer_装配全局Config(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
 	_ = os.WriteFile(cfgFile, []byte("gateway:\n  session_map_scope: per_chat_bot_user\n"), 0o644)
@@ -57,15 +57,15 @@ func TestNewGatewayServer_装配全局Config(t *testing.T) {
 	transport := transport.NewChannelTransport()
 	agentClient := routing.NewAgentClient(transport)
 
-	s, err := NewGatewayServer(cfg, agentClient)
+	s, err := NewAppGatewayServer(cfg, agentClient)
 	if err != nil {
-		t.Fatalf("NewGatewayServer: %v", err)
+		t.Fatalf("NewAppGatewayServer: %v", err)
 	}
 	assert.NotNil(t, s)
 
 	// 全局 config 已注册（scope 可读到 per_chat_bot_user）
 	if got := hookscfg.GetGlobalConfigForScope(); got == nil {
-		t.Fatal("NewGatewayServer 应装配全局 Config")
+		t.Fatal("NewAppGatewayServer 应装配全局 Config")
 	}
 	if got := routing.LoadSessionMapScope(); got != routing.SessionMapScopePerChatBotUser {
 		t.Errorf("装配后 scope 应读到 per_chat_bot_user，实际 %d", got)
@@ -76,8 +76,8 @@ func TestNewGatewayServer_装配全局Config(t *testing.T) {
 	}
 }
 
-func TestGatewayServer_Router路由(t *testing.T) {
-	gs := newTestGatewayServer(t)
+func TestAppGatewayServer_Router路由(t *testing.T) {
+	gs := newTestAppGatewayServer(t)
 
 	// 启动测试服务器
 	server := httptest.NewServer(gs.router)
@@ -99,8 +99,8 @@ func TestGatewayServer_Router路由(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
-func TestGatewayServer_Stop(t *testing.T) {
-	gs := newTestGatewayServer(t)
+func TestAppGatewayServer_Stop(t *testing.T) {
+	gs := newTestAppGatewayServer(t)
 
 	// 验证 Stop 不崩溃（httpServer 为 nil 的情况）
 	err := gs.Stop()
@@ -163,8 +163,8 @@ func TestDefaultPort_环境变量零值(t *testing.T) {
 	assert.Equal(t, 19000, defaultPort(nil))
 }
 
-func TestGatewayServer_StartStop(t *testing.T) {
-	gs := newTestGatewayServer(t)
+func TestAppGatewayServer_StartStop(t *testing.T) {
+	gs := newTestAppGatewayServer(t)
 
 	err := gs.Start(context.Background())
 	require.NoError(t, err)
@@ -173,8 +173,30 @@ func TestGatewayServer_StartStop(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGatewayServer_OnConfigSaved(t *testing.T) {
-	gs := newTestGatewayServer(t)
+func TestAppGatewayServer_OnConfigSaved(t *testing.T) {
+	gs := newTestAppGatewayServer(t)
 	callback := gs.OnConfigSaved()
 	assert.NotNil(t, callback)
+}
+
+// TestAppGatewayServer_空路由装配不panic 11.9 装配链验证：A1 空路由形态下
+// Start 全流程（inboundServer + gwServer 装配 + 空路由零次循环）→ Stop 逆序。
+// GATEWAY_PORT 用空闲端口 19099（t.Setenv 结束自动还原；0 会被 Atoi 的 p>0 拒绝）。
+func TestAppGatewayServer_空路由装配不panic(t *testing.T) {
+	t.Setenv("GATEWAY_HOST", "127.0.0.1")
+	t.Setenv("GATEWAY_PORT", "19099")
+	gs := newTestAppGatewayServer(t)
+
+	require.NoError(t, gs.Start(context.Background()))
+	t.Cleanup(func() { _ = gs.Stop() })
+
+	// 装配断言：gwServer/inboundServer 均已创建
+	assert.NotNil(t, gs.gwServer)
+	assert.NotNil(t, gs.inboundServer)
+	// gwServer 读到环境变量端口
+	assert.Equal(t, 19099, gs.gwServer.config.Port)
+	assert.True(t, gs.gwServer.running.Load())
+	assert.True(t, gs.inboundServer.running.Load())
+	// A1 空路由形态：路由表为空
+	assert.Empty(t, gs.gwServer.config.Routes)
 }

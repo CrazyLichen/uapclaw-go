@@ -33,6 +33,15 @@ type MessageHandlerInterface interface {
 	ConsumeRobotMessages(timeout time.Duration) *schema.Message
 }
 
+// ExternalChannel 仅出站能力的渠道接口。
+//
+// 对齐 Python register_external_channel 的 duck typing 语义：
+// Python 只要求对象有 send 方法即可入 channels 表；Go 侧用窄接口表达。
+type ExternalChannel interface {
+	// Send 向该渠道投递出站消息（对齐 Python channel.send(msg)）。
+	Send(ctx context.Context, msg *schema.Message) error
+}
+
 // ChannelManager 负责 Channel 的注册、注销、查找与消息分发。
 //
 // 核心职责：
@@ -45,6 +54,10 @@ type MessageHandlerInterface interface {
 type ChannelManager struct {
 	// channels 已注册的 Channel 实例映射（channelID → BaseChannel）
 	channels map[string]BaseChannel
+	// externalChannels 外部渠道表（仅出站，channelID → ExternalChannel）
+	// 对齐 Python register_external_channel 直接写 _channels 的语义；
+	// Go 因接口宽度不同分表存放，出站派发时 channels 优先、miss 后查本表。
+	externalChannels map[string]ExternalChannel
 	// config Channel 相关配置（channelID → 配置 dict）
 	config map[string]map[string]any
 	// onConfigUpdated 配置更新回调
@@ -57,7 +70,7 @@ type ChannelManager struct {
 	running atomic.Bool
 	// dispatchCancel 出站派发循环取消函数（对齐 Python _dispatch_task）
 	dispatchCancel context.CancelFunc
-	// mu 保护 channels/config/pendingChannelRestart 的并发访问
+	// mu 保护 channels/externalChannels/config/pendingChannelRestart 的并发访问
 	mu sync.RWMutex
 }
 
@@ -96,6 +109,7 @@ func NewChannelManager(
 	}
 	return &ChannelManager{
 		channels:              make(map[string]BaseChannel),
+		externalChannels:      make(map[string]ExternalChannel),
 		config:                cfg,
 		onConfigUpdated:       onConfigUpdated,
 		pendingChannelRestart: make(map[string]struct{}),
@@ -141,6 +155,35 @@ func (cm *ChannelManager) RegisterChannelWithInbound(ch BaseChannel, onMessage f
 		Msg("Channel registered (custom inbound)")
 }
 
+// RegisterExternalChannel 登记一个已由外部完成入站装配的渠道实例。
+//
+// 不做存活检查、不设 onMessage，仅入 externalChannels 表供出站派发。
+// Python: ChannelManager.register_external_channel()（channel_manager.py L86-88）。
+func (cm *ChannelManager) RegisterExternalChannel(channelID string, ch ExternalChannel) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if _, exists := cm.externalChannels[channelID]; exists {
+		logger.Warn(logComponent).
+			Str("channel_id", channelID).
+			Msg("external channel re-registered, overwriting")
+	}
+	if _, exists := cm.channels[channelID]; exists {
+		logger.Warn(logComponent).
+			Str("channel_id", channelID).
+			Msg("external channel shadows registered BaseChannel in dispatch priority")
+	}
+	cm.externalChannels[channelID] = ch
+}
+
+// GetExternalChannel 根据 channelID 获取外部渠道，不存在返回 nil。
+func (cm *ChannelManager) GetExternalChannel(channelID string) ExternalChannel {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	return cm.externalChannels[channelID]
+}
+
 // DeliverToMessageHandler 将消息直接交给 MessageHandler。
 //
 // 供自定义入站路径使用，不做存活检查。
@@ -156,12 +199,14 @@ func (cm *ChannelManager) DeliverToMessageHandler(msg *schema.Message) {
 
 // UnregisterChannel 注销指定 Channel。
 //
+// 同时清理 BaseChannel 表与外部渠道表（对齐 Python 单 dict pop 语义）。
 // Python: ChannelManager.unregister_channel()
 func (cm *ChannelManager) UnregisterChannel(channelID string) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
 	delete(cm.channels, channelID)
+	delete(cm.externalChannels, channelID)
 
 	logger.Info(logComponent).
 		Str("channel_id", channelID).
@@ -364,6 +409,10 @@ func (cm *ChannelManager) dispatchRobotMessages(ctx context.Context) {
 		}
 		cm.mu.RLock()
 		channel, exists := cm.channels[msg.ChannelID]
+		var ext ExternalChannel
+		if !exists {
+			ext = cm.externalChannels[msg.ChannelID]
+		}
 		cm.mu.RUnlock()
 
 		if exists {
@@ -376,6 +425,14 @@ func (cm *ChannelManager) dispatchRobotMessages(ctx context.Context) {
 				if strings.HasPrefix(msg.ID, "cron-push-") {
 					cm.notifyCronDeliveryError(msg, err)
 				}
+			}
+		} else if ext != nil {
+			// 外部渠道派发（对齐 Python register_external_channel 后的 send 路径）
+			if err := ext.Send(ctx, msg); err != nil {
+				logger.Error(logComponent).
+					Str("channel_id", msg.ChannelID).
+					Err(err).
+					Msg("failed to deliver message to external channel")
 			}
 		} else {
 			logger.Warn(logComponent).

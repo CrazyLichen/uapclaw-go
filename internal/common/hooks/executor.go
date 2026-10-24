@@ -62,7 +62,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// globalCfg 全局 Config 实例，由 AgentServer 或 GatewayServer 启动时注册（谁先启动谁注册，幂等）
+	// globalCfg 全局 Config 实例，由 AgentServer 或 AppGatewayServer 启动时注册（谁先启动谁注册，幂等）
 	// Python: from jiuwenswarm.common.config import get_config
 	globalCfg   *config.Config
 	globalCfgMu sync.RWMutex
@@ -71,7 +71,7 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // RegisterConfig 注册全局 Config 实例，对齐 Python get_config() 的全局可用性。
-// 必须在首次创建 HookExecutor 之前调用（由 AgentServer 或 GatewayServer 启动时注册，幂等）。
+// 必须在首次创建 HookExecutor 之前调用（由 AgentServer 或 AppGatewayServer 启动时注册，幂等）。
 func RegisterConfig(cfg *config.Config) {
 	globalCfgMu.Lock()
 	defer globalCfgMu.Unlock()
