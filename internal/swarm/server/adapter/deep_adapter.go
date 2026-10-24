@@ -910,8 +910,8 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	func() {
 		defer func() {
 			// 步骤 20: finally 清理
-			// Go 上下文不可变值模式，无需 reset/cleanup（Python 需要 reset(token)）
-			// ⤵️ 11.10: _reset_runtime_cron_context(cron_context_tokens)
+			// Go ctx values 不可变值模式：_reset_runtime_cron_context 语义天然满足
+			// （绑定后的 ctx 只在本次请求闭包内传递，函数返回即失效，无需显式 reset）
 			d.unmarkSessionActive(sessionID)
 		}()
 		result, runErr = runner.RunAgent(ctx, runner.ByAgent(d.instance), inputs, runner.BySessionID(sessionID), nil, nil)
@@ -1391,6 +1391,10 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		// Python: instance.abort() 仅当 otherActiveSessions == 0
 		if sessionActive && d.instance != nil && d.otherActiveSessions(normalizedSID) == 0 {
 			d.instance.Abort(ctx)
+			// 协作式 abort 只能在 checkpoint 之间生效，无法打断 in-flight LLM HTTP 调用。
+			// 直接取消 TaskScheduler 中运行中的任务，注入取消到 await 点。
+			// Python: self._cancel_scheduler_running_tasks()（other_sessions guard 内）
+			d.cancelSchedulerRunningTasks()
 		}
 		interruptMsg = "supplement 已处理"
 		logger.Info(logComponent).Str("intent", "supplement").Msg("Interrupt: supplement processed")

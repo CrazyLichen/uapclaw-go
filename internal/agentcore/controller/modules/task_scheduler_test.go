@@ -945,3 +945,68 @@ func TestTaskScheduler_EnsureSessionCompletionSignal_会话不存在(t *testing.
 	// 没有注册任何 session，EnsureSessionCompletionSignal 应优雅返回
 	sched.EnsureSessionCompletionSignal(context.Background(), "nonexistent-session")
 }
+
+// TestTaskScheduler_CancelRunningTasks 测试取消全部运行中任务
+// 对齐 Python _cancel_scheduler_running_tasks（interrupt 场景）
+func TestTaskScheduler_CancelRunningTasks(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	cfg.ScheduleInterval = 0.05
+	cfg.EventQueueSize = 100
+	cfg.EventTimeout = 5
+
+	sched, tm, eq, reg := newTestScheduler(cfg)
+
+	// 无任务时返回 0
+	assert.Equal(t, 0, sched.CancelRunningTasks())
+
+	// 阻塞式执行器：任务保持 WORKING 直到 cancel 注入
+	releaseCh := make(chan struct{})
+	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
+		return &configurableFakeTaskExecutor{
+			canCancelResult: true,
+			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
+				ch := make(chan *stream.OutputSchema)
+				go func() {
+					// 同时监听 ctx 取消与手动释放
+					select {
+					case <-ctx.Done():
+					case <-releaseCh:
+					}
+					close(ch)
+				}()
+				return ch, nil
+			},
+		}
+	})
+
+	eq.SetEventHandler(&schedulerFakeEventHandler{})
+	eq.Start()
+	defer func() { _ = eq.Stop(context.Background()) }()
+
+	sess := &schedulerFakeSessionFacade{sessionID: "sess-cr"}
+	sched.AddSession("sess-cr", sess)
+
+	err := sched.Start(context.Background())
+	require.NoError(t, err)
+	defer func() { _ = sched.Stop(context.Background()) }()
+
+	// 提交两个任务
+	for i := 0; i < 2; i++ {
+		task := schema.NewTask("sess-cr", "test-type")
+		require.NoError(t, tm.AddTask(context.Background(), task))
+	}
+
+	// 等任务进入 WORKING（runningTasks 非空）
+	assert.Eventually(t, func() bool {
+		sched.mu.Lock()
+		defer sched.mu.Unlock()
+		return len(sched.runningTasks) >= 1
+	}, 2*time.Second, 50*time.Millisecond)
+
+	// 取消全部
+	cancelled := sched.CancelRunningTasks()
+	assert.GreaterOrEqual(t, cancelled, 1)
+
+	// 手动释放剩余阻塞（ctx 已取消的会先退出）
+	close(releaseCh)
+}

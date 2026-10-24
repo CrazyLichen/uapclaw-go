@@ -116,6 +116,15 @@ func BindRuntimeCronContext(ctx context.Context, channelID, sessionID string, me
 	})
 }
 
+// FromRuntimeCronContext 从 ctx 读取运行时 cron 上下文（未绑定为 nil）。
+// 供 deep_adapter 测试与跨包读取绑定值使用。
+func FromRuntimeCronContext(ctx context.Context) *RuntimeCronContext {
+	if rcc, ok := ctx.Value(runtimeCronCtxKey).(*RuntimeCronContext); ok {
+		return rcc
+	}
+	return nil
+}
+
 // SetSchedulerDeps 注入内嵌调度器依赖（agentClient/publisher/configLoader 可空）。
 func (t *CronTools) SetSchedulerDeps(agentClient gwcron.SchedulerAgentClient, publisher gwcron.MessagePublisher, configLoader func() map[string]any) {
 	t.mu.Lock()

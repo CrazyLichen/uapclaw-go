@@ -456,6 +456,25 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 	return true, nil
 }
 
+// CancelRunningTasks 取消全部运行中任务（interrupt/abort 场景用）。
+//
+// 对齐 Python: _cancel_scheduler_running_tasks (interface_deep.py L3478-3506)
+// 遍历 _running_tasks 逐个 exec_task.cancel()。协作式中断（rail.abort +
+// instance.abort）只在检查点生效，in-flight LLM HTTP 需要在 await 点
+// 直接注入取消才能立即中止。返回实际取消数。
+func (s *TaskScheduler) CancelRunningTasks() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cancelled := 0
+	for _, entry := range s.runningTasks {
+		if entry != nil && entry.cancel != nil {
+			entry.cancel()
+			cancelled++
+		}
+	}
+	return cancelled
+}
+
 // EnsureSessionCompletionSignal 检查并发送 all_tasks_processed 信号。
 //
 // Python: TaskScheduler.ensure_session_completion_signal
