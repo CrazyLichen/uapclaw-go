@@ -318,8 +318,8 @@ func TestExtensionServer_GetMetadata缓存(t *testing.T) {
 func TestExtensionServer_Register优先级归一(t *testing.T) {
 	// 直接构造带订阅声明的 fake（覆盖 Register RPC 的归一逻辑）
 	srv := &extensionServer{impl: &declExt{decls: []Declaration{{
-		Metadata:   Metadata{ID: "prio"},
-		EventSubs:  []EventSubscription{{Event: "e1", Priority: 0}, {Event: "e2", Priority: 200}, {Event: "e3", Priority: 0}},
+		Metadata:  Metadata{ID: "prio"},
+		EventSubs: []EventSubscription{{Event: "e1", Priority: 0}, {Event: "e2", Priority: 200}, {Event: "e3", Priority: 0}},
 	}}}}
 	resp, err := srv.Register(context.Background(), &extproto.RegisterRequest{})
 	if err != nil {

@@ -715,7 +715,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.6.21 | ☐ | RemoteMemberBootstrap | 远程成员引导 | `remote_member_bootstrap.py` |
 | 10.6.22 | ☐ | A2X RegistryRuntime | A2X 注册运行时（lifecycle ⤵️ 标记已改指本节） | `a2x/` |
 | 10.6.23 | ✅ | TeamRails | inheritance+MemberSkillToolkitRail+WorkspaceReportPathRail+exceptions 已随 10.6.19 实现（方案 C 合并决策） | `team_runtime_inheritance.py` · `rails/` |
-| 10.6.24 | ☐ | Swarm 内置工具集 | 浏览器/MCP/搜索/视频/发文件/TODO/Cron/小艺电话 | `jiuwenswarm/agents/harness/common/tools/` |
+| 10.6.24 | ☐ | Swarm 内置工具集 | 浏览器/MCP/搜索/视频/发文件/TODO/Cron/小艺电话（cron 工具集已随 11.10 实现回填：team_manager 注册点已接 CronRuntimeBridge.BuildTools 双注册） | `jiuwenswarm/agents/harness/common/tools/` |
 
 **验证点**：✅ 用户运行 `uapclaw chat` 即可与 Agent 对话（REPL → Gateway → E2A → AgentServer）
 
@@ -730,14 +730,14 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **11.x Gateway 核心** | — | | | |
 | 11.1 | ✅ | BaseChannel 接口 | `Config/Start/Stop/Send/OnMessage` | `jiuwenswarm/gateway/channel_manager/base.py` |
 | 11.2 | ✅ | ChannelManager | 注册/注销/分发/配置热更新回调 | `jiuwenswarm/gateway/channel_manager/channel_manager.py` |
-| 11.3 | ✅ | MessageHandler | 入站→AgentServer，出站→Channel（完整转发链路）；✅ before_chat_request 触发点已回填（forward_loop 步骤9，对齐 Python L2502，曾误挂 TODO(#11.13)）；stub：handleCronPushPayload→11.10，skillsSlashNotice/branchSlashNotice/rewindSlashNotice→AgentServer RPC | `jiuwenswarm/gateway/message_handler/message_handler.py` |
+| 11.3 | ✅ | MessageHandler | 入站→AgentServer，出站→Channel（完整转发链路）；✅ before_chat_request 触发点已回填（forward_loop 步骤9，对齐 Python L2502，曾误挂 TODO(#11.13)）；✅ handleCronPushPayload 已随 11.10 实现（8 action 路由 + chat.tool_result 回发 + streamModes mode 覆盖）；stub：skillsSlashNotice/branchSlashNotice/rewindSlashNotice→AgentServer RPC | `jiuwenswarm/gateway/message_handler/message_handler.py` |
 | 11.4 | ✅ | Slash Command Parser | Slash 命令解析（command_parser 子包） | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
 | 11.5 | ✅ | WebSocketAgentServerClient | WS 客户端，请求/响应路由，流式，自动重连 | `jiuwenswarm/gateway/routing/agent_client.py` |
 | 11.6 | ✅ | RouteBinding | 路由绑定 | `jiuwenswarm/gateway/routing/route_binding.py` |
 | 11.7 | ✅ | SessionMap | scope 枚举+LoadSessionMapScope（未知值/未注册降级默认）+ makeKey/makeSessionID（::分隔+hex时间戳+6位hex）+ checkpoint 持久化（load 过滤/防御 save）+ MessageHandler 集成：首建覆盖/ApplyChannelState 无条件刷新双分支（对齐 L1151-1159 陷阱）/new_session rotate 轮转 + TriggerSessionStartHook；sync.Mutex 并发补齐 | `jiuwenswarm/gateway/routing/session_map.py` |
 | 11.8 | ✅ | InteractionContext | 交互上下文：PendingInteraction 15字段+8方法（Save/Remove/Load/FindPending五层过滤/FindAllGroupPending/FindGroupPending/CleanupExpired宽松解析/BuildResumeContent双模板）+dataclass三类默认值对齐（必填缺失跳过/status默认pending/时间补now）+敏感键过滤；⤵️ 消费方 11.12（im_pipeline）/11.16 飞书/11.21 企微 DM resume | `jiuwenswarm/gateway/routing/interaction_context.py` |
 | 11.9 | ✅ | GatewayServer | 多路由 WS 服务器本体已补齐（GatewayServer 类 L240-720：resolveRoute 四分支/双客户端路由表/connection.ack/handleRawMessage 三层处理/Send 四段出站/断连清理）+ InboundGatewayServer 双层 chan + ExternalChannel 出站装配 + 现有 HTTP 宿主改名 AppGatewayServer；ACP/TUI 路由接线 ⤵️ 11.25/11.15 | `jiuwenswarm/gateway/app_gateway.py` |
-| 11.10 | ☐ | Cron 调度服务 | Cron 表达式，Job 持久化，调度执行 | `jiuwenswarm/gateway/cron/` |
+| 11.10 | ✅ | Cron 调度服务 | go-quartz v0.15.2（croniter→Quartz dow 变换）；CronJobStore tmp+rename 原子写；CronSchedulerService 事件堆三分支（wake/push/push_update）+方案B委托降级单调度器（进程注册表修正 Python 单进程双跑缺陷）；MessagePublisher 接口破环；9渠道元数据全量对齐；CronController+8个cron.job.*端点+handleCronPushPayload；Agent侧CronTools双写+E2A转发+cronToolsBackend 11方法；deep_adapter步骤9绑定+TaskScheduler取消×2；team_manager注册点；app_gateway装配；覆盖率 gateway/cron 85.9% + cronbridge 90.1% | `jiuwenswarm/gateway/cron/` |
 | 11.11 | ☐ | 心跳服务 | 定时心跳，活跃时段控制 | `jiuwenswarm/gateway/heartbeat/heartbeat.py` |
 | 11.12 | ☐ | IM Pipeline | 数字人入站/出站管道 | `jiuwenswarm/gateway/im_pipeline/` |
 | 11.13 | ✅ | Gateway Hook | GatewayHookHandler 4 事件方法（SessionStart 去重/UserPromptSubmit 空 query/SessionEnd 先 discard/Notification type query）+ activeSessions + 10s setdefault + recover 兜底；HookExecutor 迁 server/hooks→common/hooks（第三例破环，user_hook_rail 留守）；forward_loop 步骤3 回填；NewGatewayServer 装配 RegisterConfig | `jiuwenswarm/gateway/hooks/` |

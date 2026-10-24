@@ -15,8 +15,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
+	gwcron "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/cron"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -50,6 +53,8 @@ type AppGatewayServer struct {
 	gwServer *GatewayServer
 	// inboundServer 入站队列服务（11.9，对齐 Python _InboundGatewayServer）
 	inboundServer *InboundGatewayServer
+	// cronScheduler cron 调度器（11.10，对齐 Python cron_scheduler）
+	cronScheduler *gwcron.CronSchedulerService
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -130,6 +135,44 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	)
 	channelMgr.RegisterChannelWithInbound(wc, webNormAndForward)
 
+	// 步骤4.5：Cron 调度服务装配（11.10，对齐 Python app_gateway.py L858-865）
+	// 构造 store/scheduler/controller + 方案 B 进程注册 + MessageHandler 注入；
+	// scheduler 实际启动在 Start()（对齐 Python L1615 await cron_scheduler.start()）
+	cronStore := gwcron.NewCronJobStore(path.CronJobsPath())
+	cronScheduler := gwcron.NewCronSchedulerService(cronStore, agentClient, msgHandler, nil)
+	if cfg != nil {
+		cronScheduler.SetConfigLoader(func() map[string]any {
+			data, err := cfg.Raw()
+			if err != nil {
+				return nil
+			}
+			return data
+		})
+	}
+	gwcron.SetProcessScheduler(cronScheduler)
+	cronController := gwcron.NewCronController(cronStore, cronScheduler)
+	msgHandler.SetCronController(cronController)
+	s.cronScheduler = cronScheduler
+
+	// 11.10 已回填：cronbridge 全局注入（对齐 Python MessageHandler.get_instance() 单例语义）
+	// 单进程形态下 AgentServer 侧 bridge 惰性构造 CronTools 时消费这些全局注入：
+	// - wake 发布器：MessageHandler.PublishUserMessagesNowait 隐式满足 UserMessagePublisher
+	// - config 读取器：pushToTargets 渠道元数据路由用（对齐 Python get_config_raw）
+	// - agent 客户端：内嵌调度器 standalone fallback 用（对齐 Python AgentServerClient）
+	// E2A push 通道由 AgentServer 侧注入（agent_server.go SetGlobalGatewayPushFunc(s.SendPush)）
+	cronbridge.SetGlobalUserPublisher(msgHandler)
+	cronbridge.SetGlobalAgentClient(agentClient)
+	cronbridge.SetGlobalConfigLoader(func() map[string]any {
+		if cfg == nil {
+			return nil
+		}
+		data, err := cfg.Raw()
+		if err != nil {
+			return nil
+		}
+		return data
+	})
+
 	// 步骤5：注册 Web RPC handlers + onConnect 钩子（对齐 Python _register_web_handlers(bind)）
 	// AgentClient 通过 BindParams 闭包捕获，不直接设到 WebChannel
 	// CryptoProvider 生产不注入（传 nil）：handler 每次请求经 resolveCrypto 查全局，
@@ -141,7 +184,9 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 		AgentClient:    agentClient,
 		ChannelManager: channelMgr,
 		OnConfigSaved:  onConfigSavedCb,
+		// CryptoProvider 生产不注入（传 nil）：handler 每次请求经 resolveCrypto 查全局
 		CryptoProvider: nil,
+		CronController: cronController, // 11.10 注入：8 个 cron.job.* 端点
 	})
 
 	// 组装路由
@@ -157,8 +202,12 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 	// TODO(⤵️ 领域11): 初始化 IMInboundPipeline + IMOutboundPipeline，注册到 MessageHandler
 	// Python: app_gateway.py L851-856
 
-	// TODO(⤵️ Cron): 初始化 CronJobStore + CronSchedulerService + CronController，启动 cron_scheduler
-	// Python: app_gateway.py L858-865, L1615
+	// 11.10 已回填：启动 cron 调度器（对齐 Python L1615 await cron_scheduler.start()）
+	if s.cronScheduler != nil {
+		if err := s.cronScheduler.Start(ctx); err != nil {
+			logger.Error(logComponent).Err(err).Msg("failed to start cron scheduler")
+		}
+	}
 
 	// TODO(⤵️ Heartbeat): 初始化 GatewayHeartbeatService（配置 interval/timeout/active_hours），启动
 	// Python: app_gateway.py L884-913
@@ -304,10 +353,15 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 
 // Stop 优雅关闭 Gateway 服务器。
 //
-// 停止顺序：GatewayServer(19001) → InboundGatewayServer → WebChannel → MessageHandler → Transport → HTTP Server。
+// 停止顺序：GatewayServer(19001) → InboundGatewayServer → WebChannel → MessageHandler → Transport → HTTP Server → CronScheduler。
 func (s *AppGatewayServer) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
+
+	// 11.10 已回填：停止 cron 调度器（对齐 Python L1736 await cron_scheduler.stop()）
+	if s.cronScheduler != nil {
+		s.cronScheduler.Stop()
+	}
 
 	// 停 19001 多路由 WS 服务器（先于 WebChannel，对齐 Python 停机逆序）
 	if s.gwServer != nil {

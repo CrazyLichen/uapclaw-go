@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -16,6 +17,7 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -641,5 +643,121 @@ func TestConfigPreferredLanguage_env隔离读config(t *testing.T) {
 	writeFile(t, filepath.Join(cfgDir, "config.yaml"), "preferred_language: \"\"\n")
 	if got := configPreferredLanguage(); got != "zh" {
 		t.Fatalf("empty preferred_language should default zh, got %q", got)
+	}
+}
+
+// ──────────────────────────── 11.10：RegisterMemberRuntimeTools cron 注册 ────────────────────────────
+
+// TestRegisterMemberRuntimeTools_cron工具注册 测试 cron 工具经 CronRuntimeBridge 注册到
+// 资源管理器与成员能力管理器（对齐 Python team_manager.py L484-517）。
+func TestRegisterMemberRuntimeTools_cron工具注册(t *testing.T) {
+	agent := newCustomizerFakeAgent("worker-1")
+	agent.card = agentschema.NewAgentCard(agentschema.WithAgentID("member-a1"))
+	agent.deepConfig = &hschema.DeepAgentConfig{Language: "en"}
+
+	reqID := "req-100"
+	chID := "web"
+	mgr := &TeamManager{}
+
+	mgr.RegisterMemberRuntimeTools(agent, "sess-team", &reqID, &chID, map[string]any{"k": "v"})
+
+	// 能力管理器：cron 统一工具 + 7 个遗留兼容工具 = 8 张卡
+	if got := len(agent.abilityMgr.abilities); got != 8 {
+		t.Fatalf("registered abilities = %d, want 8 (1 unified cron + 7 legacy compat)", got)
+	}
+	names := map[string]bool{}
+	for _, a := range agent.abilityMgr.abilities {
+		names[a.AbilityName()] = true
+	}
+	if !names["cron"] {
+		t.Errorf("unified cron tool card missing, got %v", names)
+	}
+	for _, legacy := range []string{"cron_list_jobs", "cron_get_job", "cron_create_job", "cron_update_job", "cron_delete_job", "cron_toggle_job", "cron_preview_job"} {
+		if !names[legacy] {
+			t.Errorf("legacy cron tool card %q missing", legacy)
+		}
+	}
+
+	// 资源管理器：8 个工具已注册（GetTool 按 card.ID 可取回）
+	resourceMgr := runner.GetResourceMgr()
+	for _, a := range agent.abilityMgr.abilities {
+		tools, err := resourceMgr.GetTool([]string{a.AbilityID()})
+		if err != nil || len(tools) == 0 {
+			t.Errorf("tool %q not registered in resource manager (err=%v)", a.AbilityName(), err)
+		}
+	}
+}
+
+// TestRegisterMemberRuntimeTools_作用域覆盖 验证 team 场景 tool_scope 覆盖为 team_member_{agentID}。
+// Python: SimpleNamespace(tool_scope=f"team_member_{agent_id or 'unknown'}")。
+// 卡 Name 恒为工具名（"cron" 等），作用域体现在卡 ID：BuildToolCard 生成
+// f"{toolID}_{agentID}"，toolID = "cron_" + scope → ID 前缀 cron_team_member_{agentID}。
+func TestRegisterMemberRuntimeTools_作用域覆盖(t *testing.T) {
+	agent := newCustomizerFakeAgent("worker-2")
+	agent.card = agentschema.NewAgentCard(agentschema.WithAgentID("member-b2"))
+
+	reqID := "req-101"
+	chID := "feishu"
+	mgr := &TeamManager{}
+	mgr.RegisterMemberRuntimeTools(agent, "sess-scope", &reqID, &chID, nil)
+
+	// 作用域覆盖后：统一工具卡 ID 前缀为 cron_team_member_member-b2_member-b2
+	// （scope=team_member_member-b2，BuildToolCard 再拼 _agentID），替代默认 feishu_sess-scope
+	unified := agent.abilityMgr.Get("cron")
+	if unified == nil {
+		t.Fatalf("unified cron card missing")
+	}
+	if prefix := "cron_team_member_member-b2_member-b2"; !strings.HasPrefix(unified.AbilityID(), prefix) {
+		t.Errorf("unified card ID = %q, want prefix %q (tool_scope override)", unified.AbilityID(), prefix)
+	}
+	// agentID 兜底：Go NewAgentCard 默认构造自动生成 uuid（Python AgentCard 无默认 id
+	// 时走 "unknown"），scope = team_member_{uuid}，卡 ID 前缀 cron_team_member_{uuid}
+	agent2 := newCustomizerFakeAgent("worker-3")
+	mgr.RegisterMemberRuntimeTools(agent2, "sess-scope2", nil, nil, nil)
+	unified2 := agent2.abilityMgr.Get("cron")
+	if unified2 == nil {
+		t.Fatalf("unified cron card (fallback) missing")
+	}
+	// NewAgentCard 自动 uuid → scope 用该 uuid（非 unknown，Go 构造语义差异）
+	if prefix := "cron_team_member_" + agent2.card.ID + "_"; !strings.HasPrefix(unified2.AbilityID(), prefix) {
+		t.Errorf("fallback card ID = %q, want prefix %q (auto uuid card)", unified2.AbilityID(), prefix)
+	}
+	// card 为 nil 时才走 Python 语义的 unknown 兜底
+	agent3 := newCustomizerFakeAgent("worker-4")
+	agent3.card = nil
+	mgr.RegisterMemberRuntimeTools(agent3, "sess-scope3", nil, nil, nil)
+	unified3 := agent3.abilityMgr.Get("cron")
+	if unified3 == nil {
+		t.Fatalf("unified cron card (nil card) missing")
+	}
+	if prefix := "cron_team_member_unknown_"; !strings.HasPrefix(unified3.AbilityID(), prefix) {
+		t.Errorf("nil card fallback ID = %q, want prefix %q", unified3.AbilityID(), prefix)
+	}
+}
+
+// TestRegisterMemberRuntimeTools_幂等注册 验证重复注册不重复添加 resource manager 条目。
+// Python: if not Runner.resource_mgr.get_tool(cron_tool.card.id): add_tool。
+func TestRegisterMemberRuntimeTools_幂等注册(t *testing.T) {
+	agent := newCustomizerFakeAgent("worker-4")
+	agent.card = agentschema.NewAgentCard(agentschema.WithAgentID("member-c3"))
+
+	reqID := "req-102"
+	chID := "web"
+	mgr := &TeamManager{}
+	mgr.RegisterMemberRuntimeTools(agent, "sess-idem", &reqID, &chID, nil)
+	mgr.RegisterMemberRuntimeTools(agent, "sess-idem", &reqID, &chID, nil)
+
+	// abilityMgr 为 fake（Add 不查重），resourceMgr 走 GetTool 查重：
+	// 第二轮 GetTool 命中已注册 → 不再 AddTool → ability 数量翻倍但 resource 不重复
+	if got := len(agent.abilityMgr.abilities); got != 16 {
+		t.Fatalf("abilities after double registration = %d, want 16 (fake Add 无查重)", got)
+	}
+	resourceMgr := runner.GetResourceMgr()
+	tools, err := resourceMgr.GetTool([]string{agent.abilityMgr.abilities[0].AbilityID()})
+	if err != nil {
+		t.Fatalf("GetTool error: %v", err)
+	}
+	if got := len(tools); got != 1 {
+		t.Fatalf("resource manager tool entries = %d, want 1 (GetTool 查重生效)", got)
 	}
 }

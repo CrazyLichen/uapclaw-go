@@ -840,6 +840,14 @@ func (mh *MessageHandler) getStreamSessionID(requestID string) string {
 	return mh.streamSessions[requestID]
 }
 
+// getStreamMode 获取流式任务的请求 mode。
+// 对齐 Python: self._stream_modes.get(request_id)。
+func (mh *MessageHandler) getStreamMode(requestID string) string {
+	mh.streamMu.RLock()
+	defer mh.streamMu.RUnlock()
+	return mh.streamModes[requestID]
+}
+
 // hasActiveStreamTaskForSession 检查指定 session 是否有活跃流式任务
 func (mh *MessageHandler) hasActiveStreamTaskForSession(sessionID string) bool {
 	mh.streamMu.RLock()

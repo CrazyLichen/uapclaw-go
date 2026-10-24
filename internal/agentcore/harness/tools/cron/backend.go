@@ -69,6 +69,10 @@ type CronToolContext struct {
 	Metadata map[string]any
 	// Mode 触发模式
 	Mode string
+	// ToolScopeOverride 工具作用域覆盖值（team 场景 team_member_{agentID}）。
+	// Python team_manager 传 SimpleNamespace(tool_scope=...) 覆盖默认计算；
+	// 冻结 dataclass 无此字段，Go 用显式覆盖字段对齐该动态属性语义。空串不覆盖。
+	ToolScopeOverride string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -85,8 +89,12 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ToolScope 计算工具作用域，格式为 "{channel}:{session}"。
+// ToolScopeOverride 非空时直接返回（对齐 Python SimpleNamespace.tool_scope 属性覆盖）。
 // Python: CronToolContext.tool_scope (cron.py L23-26)
 func (c *CronToolContext) ToolScope() string {
+	if override := strings.TrimSpace(c.ToolScopeOverride); override != "" {
+		return override
+	}
 	channel := strings.TrimSpace(c.ChannelID)
 	if channel == "" {
 		channel = "unknown"

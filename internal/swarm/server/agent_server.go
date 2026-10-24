@@ -10,6 +10,7 @@ import (
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
@@ -114,6 +115,10 @@ func (s *AgentServer) Start(ctx context.Context) error {
 
 	// 注入默认 SendPush 到 adapter 包，避免 adapter→server→adapter 循环依赖
 	adapter.SetDefaultSendPushFunc(s.SendPush)
+
+	// 11.10 已回填：注入 E2A push 到 cronbridge（对齐 Python WebSocketGatewayPushTransport 注入）
+	// Agent 侧 CronTools.SendSplit 经此通道转发 cron 请求到 Gateway
+	cronbridge.SetGlobalGatewayPushFunc(s.SendPush)
 
 	ctx, s.cancel = context.WithCancel(ctx)
 	go s.run(ctx)

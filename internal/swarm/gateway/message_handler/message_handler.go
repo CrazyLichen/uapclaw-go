@@ -105,6 +105,32 @@ type MessageHandler struct {
 	// outboundPipeline 出站管道（对齐 Python _outbound_pipeline，预留给 11.12 IM Pipeline 回填）
 	// TODO(#11.12): 实现 OutboundPipeline interface（等 11.12 IM Pipeline 回填）
 	outboundPipeline OutboundPipeline
+
+	// cronController cron 控制器（对齐 Python _cron_controller，11.10）
+	// Python: set_cron_controller 注入；Go 由 app_gateway 装配时设置
+	cronController CronControllerAPI
+}
+
+// CronControllerAPI handleCronPushPayload 所需的 CronController 接口。
+// gateway/cron.CronController 隐式实现（破环：避免 import gateway/cron）。
+// 对齐 Python: _handle_cron_push_payload 中调用的 CronController 方法面。
+type CronControllerAPI interface {
+	// ListJobs 列出全部任务
+	ListJobs() ([]map[string]any, error)
+	// GetJob 获取单个任务
+	GetJob(jobID string) (map[string]any, error)
+	// CreateJob 创建任务
+	CreateJob(params map[string]any) (map[string]any, error)
+	// UpdateJob 更新任务
+	UpdateJob(jobID string, patch map[string]any) (map[string]any, error)
+	// DeleteJob 删除任务
+	DeleteJob(jobID string) (bool, error)
+	// ToggleJob 启停任务
+	ToggleJob(jobID string, enabled bool) (map[string]any, error)
+	// PreviewJob 预览下 N 次执行
+	PreviewJob(jobID string, count int) ([]map[string]any, error)
+	// RunNow 立即执行
+	RunNow(jobID string) (string, error)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -286,6 +312,12 @@ func (mh *MessageHandler) StopForwarding() error {
 		Str("event_type", "message_handler_stopped").
 		Msg("MessageHandler forwarding loop stopped")
 	return nil
+}
+
+// SetCronController 注入 cron 控制器。
+// 对齐 Python: set_cron_controller (message_handler.py L1674-1675)。
+func (mh *MessageHandler) SetCronController(cc CronControllerAPI) {
+	mh.cronController = cc
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

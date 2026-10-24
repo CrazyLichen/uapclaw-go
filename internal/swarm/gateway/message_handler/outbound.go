@@ -1,8 +1,13 @@
 package message_handler
 
 import (
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -79,7 +84,7 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 	// cron 判断：chunk.Payload["event_type"] == "cron.response"
 	if chunk.Payload != nil {
 		if eventType, ok := chunk.Payload["event_type"].(string); ok && eventType == "cron.response" {
-			mh.handleCronPushPayload(chunk.Payload)
+			mh.handleCronPushPayload(chunk.Payload, rid, chunk.ChannelID, sessionID, busMetadata)
 			return
 		}
 	}
@@ -110,11 +115,86 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 // handleCronPushPayload 处理 cron 推送消息。
 //
 // Python: _handle_cron_push_payload (L1677-L1737)：
-// 路由 cron action 到 CronController（当前 CronController 为 stub，直接返回空结果）。
-// 依赖：11.10 Cron 调度服务实现后对接。
-func (mh *MessageHandler) handleCronPushPayload(payload map[string]any) {
-	logger.Debug(logComponent).
-		Str("event_type", "cron_push_received").
-		Msg("cron push message received (currently a stub)")
-	// 后续对接 CronController（11.10）
+// action 路由到 CronController，结果以 chat.tool_result event_type 回发。
+// create 时从 _stream_modes 取 mode 覆盖 LLM 工具调用的默认值。
+func (mh *MessageHandler) handleCronPushPayload(payload map[string]any, requestID, channelID, sessionID string, metadata map[string]any) {
+	if payload == nil {
+		return
+	}
+	cc := mh.cronController
+	if cc == nil {
+		return
+	}
+	action := strings.TrimSpace(strVal(payload["action"]))
+	params, _ := payload["data"].(map[string]any)
+	if params == nil {
+		params = map[string]any{}
+	}
+
+	var data any
+	var err error
+	switch action {
+	case "list":
+		data, err = cc.ListJobs()
+	case "get":
+		data, err = cc.GetJob(strings.TrimSpace(strVal(params["job_id"])))
+	case "create":
+		// 从原始请求中获取 mode，覆盖 LLM 工具调用的默认值
+		// Python: request_mode = self._stream_modes.get(request_id)
+		if mode := mh.getStreamMode(requestID); mode != "" {
+			params["mode"] = mode
+		}
+		data, err = cc.CreateJob(params)
+	case "update":
+		patch, _ := params["patch"].(map[string]any)
+		if patch == nil {
+			// 对齐 Python: dict(params.get("patch") or {})
+			patch = map[string]any{}
+		}
+		data, err = cc.UpdateJob(strings.TrimSpace(strVal(params["job_id"])), patch)
+	case "delete":
+		var deleted bool
+		deleted, err = cc.DeleteJob(strings.TrimSpace(strVal(params["job_id"])))
+		data = map[string]any{"deleted": deleted}
+	case "toggle":
+		data, err = cc.ToggleJob(strings.TrimSpace(strVal(params["job_id"])), toBool(params["enabled"]))
+	case "preview":
+		count := 5
+		if v, ok := params["count"].(float64); ok {
+			count = int(v)
+		}
+		data, err = cc.PreviewJob(strings.TrimSpace(strVal(params["job_id"])), count)
+	case "run_now":
+		var runID string
+		runID, err = cc.RunNow(strings.TrimSpace(strVal(params["job_id"])))
+		data = map[string]any{"run_id": runID}
+	default:
+		data = map[string]any{"error": fmt.Sprintf("unknown cron action: %s", action)}
+	}
+	if err != nil {
+		data = map[string]any{"error": err.Error()}
+	}
+
+	out := schema.NewEventMessage(channelID, sessionID, schema.EventTypeChatToolResult,
+		map[string]any{
+			"event_type": "chat.tool_result",
+			"tool_name":  "cron",
+			"result":     data,
+		},
+		schema.WithMetadata(metadata),
+	)
+	out.ID = requestID
+	out.Timestamp = float64(time.Now().UnixNano()) / 1e9
+	// enable_streaming=false：工具结果不开启流式，避免被发送到群聊
+	// （NewEventMessage 默认 true，显式关闭对齐 Python enable_streaming=False）
+	out.EnableStreaming = false
+	mh.PublishRobotMessages(out)
+}
+
+// strVal 安全取字符串（nil/非字符串返回空串）。
+func strVal(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }

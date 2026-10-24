@@ -57,17 +57,8 @@ func (d *DeepAdapter) syncA2xRuntimeState() error {
 	return nil
 }
 
-// bindRuntimeCronContext 绑定 Cron 运行时上下文。
-// Python: _bind_runtime_cron_context() (line 2719-2752)。
-// ⤵️ 11.10: 绑定 Cron 运行时上下文
-func (d *DeepAdapter) bindRuntimeCronContext(requestID string, sessionID string) any {
-	logger.Info(logComponent).Msg("bindRuntimeCronContext pending backfill")
-	return nil
-}
-
-// resetRuntimeCronContext 重置 Cron 运行时上下文。
-// Python: _reset_runtime_cron_context() (line 2754-2760)。
-// ⤵️ 11.10: 重置 Cron 运行时上下文
-func (d *DeepAdapter) resetRuntimeCronContext(tokens any) {
-	logger.Info(logComponent).Msg("resetRuntimeCronContext pending backfill")
-}
+// 说明：11.10 的 _bind_runtime_cron_context/_reset_runtime_cron_context
+// 未按 10.3.6 计划落在适配器私有方法，而是按 11.10 设计决策用 ctx values
+// 实现（cronbridge.BindRuntimeCronContext 公开函数，ProcessMessageImpl/
+// ProcessMessageStreamImpl 步骤 9/10 两处调用）。Go ctx 不可变值模式
+// 下 reset 语义天然满足，无需 token 方法。

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -418,4 +419,58 @@ func TestCodeAdapter_实现DreamingController(t *testing.T) {
 // TestCodeAdapter_实现GatewayDisconnectHandler 编译期检查 CodeAdapter 实现 GatewayDisconnectHandler。
 func TestCodeAdapter_实现GatewayDisconnectHandler(t *testing.T) {
 	var _ GatewayDisconnectHandler = (*CodeAdapter)(nil)
+}
+
+// TestDeepAdapter_CancelSchedulerRunningTasks_Nil安全 未初始化实例不 panic
+// 对齐 Python _cancel_scheduler_running_tasks 的 try/except 降级语义
+func TestDeepAdapter_CancelSchedulerRunningTasks_Nil安全(t *testing.T) {
+	d := NewDeepAdapter()
+	// instance 为 nil → 直接返回，不 panic
+	d.cancelSchedulerRunningTasks()
+
+	// AbortOnGatewayDisconnect 全流程也不 panic
+	d.AbortOnGatewayDisconnect(t.Context())
+}
+
+// TestDeepAdapter_BindRuntimeCronContext_绑定语义 ctx 注入四元组
+// 对齐 Python _bind_runtime_cron_context：channel 归一化默认 web、
+// metadata 注入 request_id、mode 透传
+func TestDeepAdapter_BindRuntimeCronContext_绑定语义(t *testing.T) {
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(),
+		"  ", "sess-1", map[string]any{"k": "v"}, "req-9", "agent.plan")
+
+	rcc := cronbridge.FromRuntimeCronContext(ctx)
+	if rcc.ChannelID != "web" {
+		t.Errorf("空 channel 应归一化 web，got %q", rcc.ChannelID)
+	}
+	if rcc.SessionID != "sess-1" {
+		t.Errorf("session = %q", rcc.SessionID)
+	}
+	if rcc.Metadata["request_id"] != "req-9" {
+		t.Errorf("metadata request_id 应注入: %v", rcc.Metadata["request_id"])
+	}
+	if rcc.Metadata["k"] != "v" {
+		t.Errorf("原 metadata 应保留: %v", rcc.Metadata["k"])
+	}
+	if rcc.Mode != "agent.plan" {
+		t.Errorf("mode = %q", rcc.Mode)
+	}
+}
+
+// TestDeepAdapter_BindRuntimeCronContext_完整参数 非空 channel 原样传递
+func TestDeepAdapter_BindRuntimeCronContext_完整参数(t *testing.T) {
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(),
+		"feishu", "s", nil, "  ", "")
+
+	rcc := cronbridge.FromRuntimeCronContext(ctx)
+	if rcc.ChannelID != "feishu" {
+		t.Errorf("channel = %q, want feishu", rcc.ChannelID)
+	}
+	// nil metadata → 空 map + 空 request_id 不注入
+	if rcc.Metadata == nil || len(rcc.Metadata) != 0 {
+		t.Errorf("nil metadata 应为空 map: %v", rcc.Metadata)
+	}
+	if rcc.Mode != "" {
+		t.Errorf("空 mode 应保持空: %q", rcc.Mode)
+	}
 }
