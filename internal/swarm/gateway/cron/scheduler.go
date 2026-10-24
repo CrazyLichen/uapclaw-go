@@ -633,11 +633,20 @@ func (s *CronSchedulerService) onPushUpdate(job *CronJob, runID string) {
 // pushToTargets 推送结果到目标频道（对齐 Python _push_to_targets L503-713）。
 // 9 渠道元数据路由：feishu/xiaoyi/whatsapp/wecom/wechat/dingtalk + feishu_enterprise 前缀。
 func (s *CronSchedulerService) pushToTargets(job *CronJob, state *CronRunState, text string, isPlaceholder bool) {
+	// Go 并发补齐：快照 state 状态字段（Python asyncio 单线程天然安全，
+	// Go 的 runAgent goroutine 可能并发写 Status/RunID/ISO 字段）
+	s.mu.Lock()
+	statusSnap := state.Status
+	runIDSnap := state.RunID
+	pushAtSnap := state.PushAtISO
+	wakeAtSnap := state.WakeAtISO
+	s.mu.Unlock()
+
 	logger.Info(logComponent).
-		Str("job_id", job.ID).Str("run_id", state.RunID).
+		Str("job_id", job.ID).Str("run_id", runIDSnap).
 		Str("channel", strings.TrimSpace(job.Targets)).
 		Bool("is_placeholder", isPlaceholder).
-		Int("text_len", len(text)).Str("status", state.Status).
+		Int("text_len", len(text)).Str("status", statusSnap).
 		Msg("[Cron] push_to_targets")
 
 	payloadExtra := map[string]any{
@@ -645,11 +654,11 @@ func (s *CronSchedulerService) pushToTargets(job *CronJob, state *CronRunState, 
 		"cron": map[string]any{
 			"job_id":         job.ID,
 			"job_name":       job.Name,
-			"run_id":         state.RunID,
-			"push_at":        state.PushAtISO,
-			"wake_at":        state.WakeAtISO,
+			"run_id":         runIDSnap,
+			"push_at":        pushAtSnap,
+			"wake_at":        wakeAtSnap,
 			"is_placeholder": isPlaceholder,
-			"status":         state.Status,
+			"status":         statusSnap,
 		},
 	}
 	channelID := strings.TrimSpace(job.Targets)
@@ -745,7 +754,7 @@ func (s *CronSchedulerService) pushToTargets(job *CronJob, state *CronRunState, 
 		schema.WithMetadata(metadata),
 		schema.WithGroupDigitalAvatar(groupDigitalAvatar),
 	)
-	msg.ID = fmt.Sprintf("cron-push-%s-%s", state.RunID, channelID)
+	msg.ID = fmt.Sprintf("cron-push-%s-%s", runIDSnap, channelID)
 	msg.Timestamp = s.nowFn()
 	s.publisher.PublishRobotMessages(msg)
 }
