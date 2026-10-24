@@ -3,7 +3,9 @@ package parser
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
@@ -338,5 +340,37 @@ func TestSupports_默认与覆写(t *testing.T) {
 	full := &fakeFullParser{supports: true}
 	if !full.Supports("http://x") {
 		t.Fatal("覆写后 Supports 应为 true")
+	}
+}
+
+// ──────────────────────────── ParseOptions 网页四字段测试（13.14） ────────────────────────────
+
+// TestParseOptions_网页四字段覆盖 测试 13.14 新增四结构化字段的 With 构造器。
+func TestParseOptions_网页四字段覆盖(t *testing.T) {
+	o := NewParseOptions(
+		WithTimeout(5*time.Second),
+		WithUserAgent("test-ua"),
+		WithVerify(NewVerifySkip()),
+		WithHTTPClient(&http.Client{}),
+	)
+	if o.Timeout != 5*time.Second {
+		t.Errorf("Timeout = %v, want 5s", o.Timeout)
+	}
+	if o.UserAgent != "test-ua" {
+		t.Errorf("UserAgent = %q, want %q", o.UserAgent, "test-ua")
+	}
+	if _, ok := o.Verify.(verifySkip); !ok {
+		t.Errorf("Verify 类型 = %T, want verifySkip", o.Verify)
+	}
+	if o.HTTPClient == nil {
+		t.Error("HTTPClient 应非 nil")
+	}
+}
+
+// TestParseOptions_网页四字段零值未设 测试零值回退语义（调用方判零值回落实例字段）。
+func TestParseOptions_网页四字段零值未设(t *testing.T) {
+	o := NewParseOptions()
+	if o.Timeout != 0 || o.UserAgent != "" || o.Verify != nil || o.HTTPClient != nil {
+		t.Error("零值 ParseOptions 四字段应全未设")
 	}
 }

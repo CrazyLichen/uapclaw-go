@@ -3,6 +3,8 @@ package parser
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
@@ -42,7 +44,9 @@ type Parser interface {
 // ParseOptions Parser 可选参数集合。
 //
 // 收纳 Python parse 的三个可选参数 doc_id/llm_client/**kwargs
-// （Python parse(self, doc, doc_id="", llm_client=None, **kwargs)）。
+// （Python parse(self, doc, doc_id="", llm_client=None, **kwargs)）；
+// 13.14 扩展网页解析四结构化字段（对齐 Python WebPageParser.parse 的
+// kwargs 四键 timeout/user_agent/verify/client——运行时覆盖实例字段）。
 type ParseOptions struct {
 	// DocID 文档 ID（Python doc_id）。未设置时 Document.ID 保持空串——
 	// 字面对齐 Python：pydantic default_factory 只在"未传"时触发，
@@ -53,6 +57,17 @@ type ParseOptions struct {
 	LLMClient *llm.Model
 	// Extra 额外参数（Python **kwargs），13.11 AutoFileParser 消费 file_name 等。
 	Extra map[string]any
+	// Timeout 请求超时（Python timeout float 秒→Duration）。零值=未设，
+	// 调用方回落实例字段。仅自建 client 时生效（注入 client 自带配置生效）。
+	Timeout time.Duration
+	// UserAgent HTTP UA 头（Python user_agent）。空串=未设，回落实例字段。
+	UserAgent string
+	// Verify TLS 校验模式（Python verify: bool|str|SSLContext）。nil=未设，
+	// 回落实例字段。密封 sum type 四变体（13.14 定义于 web_page_parser.go）。
+	Verify verifyMode
+	// HTTPClient 注入共享客户端（Python httpx.AsyncClient）。非 nil 即生效，
+	// 此时 Verify/Timeout/UserAgent 失效（client 自身配置生效）。
+	HTTPClient *http.Client
 }
 
 // ParseOption Parser 可选参数函数。
@@ -107,6 +122,26 @@ func WithExtra(key string, value any) ParseOption {
 		}
 		o.Extra[key] = value
 	}
+}
+
+// WithTimeout 设置请求超时（13.14 网页解析，对齐 Python kwargs timeout 键）。
+func WithTimeout(d time.Duration) ParseOption {
+	return func(o *ParseOptions) { o.Timeout = d }
+}
+
+// WithUserAgent 设置 HTTP User-Agent（13.14 网页解析，对齐 Python kwargs user_agent 键）。
+func WithUserAgent(ua string) ParseOption {
+	return func(o *ParseOptions) { o.UserAgent = ua }
+}
+
+// WithVerify 设置 TLS 校验模式（13.14 网页解析，对齐 Python kwargs verify 键）。
+func WithVerify(v verifyMode) ParseOption {
+	return func(o *ParseOptions) { o.Verify = v }
+}
+
+// WithHTTPClient 注入共享 HTTP 客户端（13.14 网页解析，对齐 Python kwargs client 键）。
+func WithHTTPClient(c *http.Client) ParseOption {
+	return func(o *ParseOptions) { o.HTTPClient = c }
 }
 
 // NewBaseParser 构造 BaseParser 并注入 self。
@@ -202,3 +237,21 @@ func (b *BaseParser) ParseContent(ctx context.Context, doc string, llmClient *ll
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// verifyMode TLS 校验模式密封接口（对齐 Python verify: bool | str | ssl.SSLContext）。
+//
+// Task 2 迁至 web_page_parser.go 并完整实现，此处为 Task 1 最小占位。
+// 密封机制：非导出标记方法 isVerifyMode()，包外无法新增变体（13.13 cellValue 先例）。
+type verifyMode interface {
+	// isVerifyMode 密封标记（非导出，包外不可实现）
+	isVerifyMode()
+}
+
+// verifySkip 跳过校验变体（Task 2 迁移并完整实现，此处占位）。
+type verifySkip struct{}
+
+// isVerifyMode 密封标记。
+func (verifySkip) isVerifyMode() {}
+
+// NewVerifySkip 构造跳过校验变体（Task 2 迁移，此处占位）。
+func NewVerifySkip() verifyMode { return verifySkip{} }
