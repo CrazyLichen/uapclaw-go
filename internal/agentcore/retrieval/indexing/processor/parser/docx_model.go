@@ -109,7 +109,7 @@ func loadDocxModel(filePath string) (*docxModel, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer zr.Close()
+	defer func() { _ = zr.Close() }()
 
 	dm := &docxModel{
 		styles: map[string]string{},
@@ -124,7 +124,7 @@ func loadDocxModel(filePath string) (*docxModel, error) {
 			return nil, fmt.Errorf("open zip entry %s: %w", f.Name, err)
 		}
 		data, err := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		if err != nil {
 			return nil, fmt.Errorf("read zip entry %s: %w", f.Name, err)
 		}
@@ -585,10 +585,10 @@ func (dm *docxModel) extractImages(paraXML []byte, filename string, paragraphNum
 			return nil, err
 		}
 		if err := png.Encode(f, rgb); err != nil {
-			f.Close()
+			_ = f.Close()
 			return nil, err
 		}
-		f.Close()
+		_ = f.Close()
 		images = append(images, imagePath)
 		imagesPerParagraph++
 	}
