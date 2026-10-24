@@ -278,7 +278,7 @@ func TestFromCronJobDict_mode默认agent(t *testing.T) {
 	}
 }
 
-// TestIsValidTargetChannelID
+// TestIsValidTargetChannelID 目标渠道 ID 合法性
 func TestIsValidTargetChannelID(t *testing.T) {
 	for _, valid := range []string{"web", "tui", "feishu", "wecom", "dingtalk", "wechat", "whatsapp", "xiaoyi"} {
 		if !IsValidTargetChannelID(valid) {
@@ -295,7 +295,7 @@ func TestIsValidTargetChannelID(t *testing.T) {
 	}
 }
 
-// TestNormalizeTargetChannelID
+// TestNormalizeTargetChannelID 目标渠道 ID 归一化
 func TestNormalizeTargetChannelID(t *testing.T) {
 	if got := NormalizeTargetChannelID("WEB", "web"); got != "web" {
 		t.Errorf("uppercase should normalize, got %q", got)

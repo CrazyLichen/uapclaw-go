@@ -127,7 +127,7 @@ func TestTransformDow_6域不处理(t *testing.T) {
 	}
 }
 
-// TestISOToSevenFieldCron
+// TestISOToSevenFieldCron ISO 字符串转七域 cron
 func TestISOToSevenFieldCron(t *testing.T) {
 	got, err := ISOToSevenFieldCron("2026-12-28T17:00:00", "Asia/Shanghai")
 	if err != nil {
@@ -199,7 +199,7 @@ func TestISOToSevenFieldCron_空串报错(t *testing.T) {
 	}
 }
 
-// TestValidateCronExpression
+// TestValidateCronExpression 表达式+时区校验
 func TestValidateCronExpression(t *testing.T) {
 	if err := ValidateCronExpression("0 9 * * *", "Asia/Shanghai"); err != nil {
 		t.Errorf("valid expr should pass: %v", err)
@@ -285,7 +285,7 @@ func TestNextFireTime_未来一次性表达式(t *testing.T) {
 	}
 }
 
-// TestIsNoNextDateError
+// TestIsNoNextDateError 无下次触发日期错误判定
 func TestIsNoNextDateError(t *testing.T) {
 	if IsNoNextDateError(nil) {
 		t.Error("nil should be false")

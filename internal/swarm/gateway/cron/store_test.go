@@ -55,7 +55,7 @@ func TestStoreCrud(t *testing.T) {
 		t.Fatal("created_at should be positive")
 	}
 
-	// update
+	// update 更新任务
 	updated, err := s.UpdateJob(job.ID, map[string]any{"enabled": false})
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestStoreCrud(t *testing.T) {
 		t.Fatalf("mode update should lowercase, got %q", got.Mode)
 	}
 
-	// delete
+	// delete 删除任务
 	ok, _ := s.DeleteJob(job.ID)
 	if !ok {
 		t.Fatal("delete should succeed")

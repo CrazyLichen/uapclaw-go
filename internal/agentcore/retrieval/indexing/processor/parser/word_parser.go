@@ -200,7 +200,7 @@ func tableToMarkdown(rows [][]string) string {
 		}
 		lines = append(lines, "| "+strings.Join(cells, " | ")+" |")
 	}
-	lines = append(lines, "") // Markdown table need a one-line separation
+	lines = append(lines, "") // Markdown 表格前后需空行分隔
 	return strings.Join(lines, "\n")
 }
 

@@ -10,7 +10,7 @@ import (
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
-// fakeCronJobController fake CronJobController
+// fakeCronJobController CronJobController 的测试桩实现
 type fakeCronJobController struct {
 	jobs       []map[string]any
 	lastCreate map[string]any
@@ -218,7 +218,7 @@ func TestCronJobUpdate(t *testing.T) {
 	assert.Equal(t, "j1", cc.lastUpdate.jobID)
 	assert.Equal(t, "new", cc.lastUpdate.patch["name"])
 
-	// job not found → NOT_FOUND
+	// 任务不存在 → NOT_FOUND
 	cc.err = errors.New("job not found")
 	result, _ = d.Dispatch("cron.job.update", map[string]any{"id": "ghost", "patch": map[string]any{}}, "s")
 	assert.Equal(t, WsErrNotFound, result["code"])
@@ -265,7 +265,7 @@ func TestCronJobToggle(t *testing.T) {
 	assert.Equal(t, WsErrBadRequest, result["code"])
 	assert.Equal(t, "enabled is required", result["error"])
 
-	// job not found
+	// 任务不存在
 	cc.err = errors.New("job not found")
 	result, _ = d.Dispatch("cron.job.toggle", map[string]any{"id": "g", "enabled": true}, "s")
 	assert.Equal(t, WsErrNotFound, result["code"])
@@ -288,7 +288,7 @@ func TestCronJobPreview(t *testing.T) {
 	_, _ = d.Dispatch("cron.job.preview", map[string]any{"id": "j1"}, "s")
 	assert.Equal(t, 5, cc.lastPreview.count)
 
-	// job not found
+	// 任务不存在
 	cc.err = errors.New("job not found")
 	result, _ = d.Dispatch("cron.job.preview", map[string]any{"id": "g"}, "s")
 	assert.Equal(t, WsErrNotFound, result["code"])
@@ -304,7 +304,7 @@ func TestCronJobRunNow(t *testing.T) {
 	assert.Equal(t, "run-123", result["run_id"])
 	assert.Equal(t, "j1", cc.runNowJobID)
 
-	// job not found → NOT_FOUND
+	// 任务不存在 → NOT_FOUND
 	cc.err = errors.New("job not found")
 	result, _ = d.Dispatch("cron.job.run_now", map[string]any{"id": "g"}, "s")
 	assert.Equal(t, WsErrNotFound, result["code"])

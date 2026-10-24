@@ -32,7 +32,7 @@ func TestHandleAgentServerPush_空Map(t *testing.T) {
 
 // ──────────────────────────── handleCronPushPayload 测试 ────────────────────────────
 
-// fakeCronController fake CronControllerAPI
+// fakeCronController CronControllerAPI 的测试桩实现
 type fakeCronController struct {
 	listed           bool
 	created          bool

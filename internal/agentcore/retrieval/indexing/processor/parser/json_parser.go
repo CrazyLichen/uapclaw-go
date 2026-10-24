@@ -36,6 +36,9 @@ type JSONParser struct {
 // 编译期断言 JSONParser 实现 Parser
 var _ Parser = (*JSONParser)(nil)
 
+// errMultipleJSONValues 多余 JSON 值错误（对齐 json.Unmarshal 多值报错行为）。
+var errMultipleJSONValues = errors.New("multiple JSON values in input")
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewJSONParser 构造 JSONParser。
@@ -308,9 +311,6 @@ func decodeJSONFromToken(dec *json.Decoder, tok json.Token) (any, error) {
 	// string/bool/nil 直接返回
 	return tok, nil
 }
-
-// errMultipleJSONValues 多余 JSON 值错误（对齐 json.Unmarshal 多值报错行为）。
-var errMultipleJSONValues = errors.New("multiple JSON values in input")
 
 // init 注册到 registry（对齐 Python @register_parser([".json", ".JSON"]) import 时执行）。
 func init() {

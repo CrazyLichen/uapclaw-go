@@ -51,14 +51,14 @@ func TestRowsToDocuments_golden对拍(t *testing.T) {
 	}
 	assertDocsEqual(t, docs, golden.Xlsx, "xlsx")
 
-	// csv
+	// csv 逗号分隔输入
 	docs, err = p.Parse(context.Background(), "testdata/fixture_csv.csv", WithDocID("base"))
 	if err != nil {
 		t.Fatalf("Parse csv: %v", err)
 	}
 	assertDocsEqual(t, docs, golden.Csv, "csv")
 
-	// tsv
+	// tsv 制表符分隔输入
 	docs, err = p.Parse(context.Background(), "testdata/fixture_tsv.tsv", WithDocID("base"))
 	if err != nil {
 		t.Fatalf("Parse tsv: %v", err)
@@ -230,11 +230,11 @@ func TestExcelCellValue_类型还原(t *testing.T) {
 	if rows[0][0] != cellString("Name") || rows[0][1] != noneCell || rows[0][2] != cellString("Age") {
 		t.Errorf("表头 = %v, want [Name None Age]", rows[0])
 	}
-	// int cell
+	// int cell 整数单元格
 	if v, ok := rows[1][2].(cellInt); !ok || v != 30 {
 		t.Errorf("rows[1][2] = %#v, want cellInt 30", rows[1][2])
 	}
-	// float cell
+	// float cell 浮点数单元格
 	if v, ok := rows[3][0].(cellFloat); !ok || v != 3.5 {
 		t.Errorf("rows[3][0] = %#v, want cellFloat 3.5", rows[3][0])
 	}
@@ -242,7 +242,7 @@ func TestExcelCellValue_类型还原(t *testing.T) {
 	if v, ok := rows[3][1].(cellInt); !ok || v != 1000000000000000 {
 		t.Errorf("rows[3][1] = %#v, want cellInt 1000000000000000（存储整数字面量）", rows[3][1])
 	}
-	// bool cell
+	// bool cell 布尔单元格
 	if v, ok := rows[3][2].(cellBool); !ok || v != cellBool(true) {
 		t.Errorf("rows[3][2] = %#v, want cellBool true", rows[3][2])
 	}

@@ -64,55 +64,6 @@ type verifyTLSConfig struct {
 // isVerifyMode 密封标记。
 func (verifyTLSConfig) isVerifyMode() {}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// defaultUserAgent 默认 UA（对齐 Python DEFAULT_USER_AGENT 字面复制）。
-	defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-	// defaultTimeoutSeconds 默认超时秒数（对齐 Python DEFAULT_TIMEOUT = 30.0）。
-	defaultTimeoutSeconds = 30.0
-)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-var (
-	// httpURLPattern http(s) URL 模式（对齐 HTTP_URL_PATTERN = re.compile(r"^https?://\S+", re.IGNORECASE)；
-	// Go 原生大小写敏感，(?i) 前缀对齐 IGNORECASE）。
-	httpURLPattern = regexp.MustCompile(`(?i)^https?://\S+`)
-	// wechatMPURLPattern 微信公众号文章 URL 模式（对齐 WECHAT_MP_URL_PATTERN 字面）。
-	// 偏差：Go RE2 无惰性量词，`.*?` 按 `.*` 实现等价（尾部无后续锚点）。
-	wechatMPURLPattern = regexp.MustCompile(`(?i)^https?://(?:mp\.weixin\.qq\.com|.*?\.weixin\.qq\.com)/s\b.*`)
-	// verifyDefaultInstance 默认变体单例（对齐 Python True 字面量语义）。
-	verifyDefaultInstance = verifyDefault{}
-)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// NewVerifyDefault 构造默认校验变体（单例，对齐 Python verify=True）。
-func NewVerifyDefault() verifyMode { return verifyDefaultInstance }
-
-// NewVerifySkip 构造跳过校验变体（对齐 Python verify=False）。
-func NewVerifySkip() verifyMode { return verifySkip{} }
-
-// NewVerifyCAPath 构造 CA bundle 路径变体（对齐 Python verify=str 路径）。
-func NewVerifyCAPath(path string) verifyMode { return verifyCAPath{path: path} }
-
-// NewVerifyTLSConfig 构造自定义 TLS 配置变体（对齐 Python verify=ssl.SSLContext）。
-func NewVerifyTLSConfig(cfg *tls.Config) verifyMode { return verifyTLSConfig{cfg: cfg} }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// isWeChatArticleURL 判定微信文章 URL（对齐 _is_wechat_article_url）。
-//
-// 空串/空 url 直接 false（对齐 bool(url and ...)）。
-// Python: web_page_parser.py _is_wechat_article_url
-func isWeChatArticleURL(url string) bool {
-	return url != "" && wechatMPURLPattern.MatchString(strings.TrimSpace(url))
-}
-
-// ──────────────────────────── WebPageParser 本体（Task 4） ────────────────────────────
-
 // htmlParseDispatcher _parse_html/_validate_url 覆写动态派发接口。
 //
 // Python classmethod 覆写（WeChatArticleParser._parse_html/_validate_url）
@@ -144,6 +95,42 @@ type WebPageParser struct {
 	// dispatch 动态派发钩子（构造注入最终实例）
 	dispatch htmlParseDispatcher
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// defaultUserAgent 默认 UA（对齐 Python DEFAULT_USER_AGENT 字面复制）。
+	defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	// defaultTimeoutSeconds 默认超时秒数（对齐 Python DEFAULT_TIMEOUT = 30.0）。
+	defaultTimeoutSeconds = 30.0
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// httpURLPattern http(s) URL 模式（对齐 HTTP_URL_PATTERN = re.compile(r"^https?://\S+", re.IGNORECASE)；
+	// Go 原生大小写敏感，(?i) 前缀对齐 IGNORECASE）。
+	httpURLPattern = regexp.MustCompile(`(?i)^https?://\S+`)
+	// wechatMPURLPattern 微信公众号文章 URL 模式（对齐 WECHAT_MP_URL_PATTERN 字面）。
+	// 偏差：Go RE2 无惰性量词，`.*?` 按 `.*` 实现等价（尾部无后续锚点）。
+	wechatMPURLPattern = regexp.MustCompile(`(?i)^https?://(?:mp\.weixin\.qq\.com|.*?\.weixin\.qq\.com)/s\b.*`)
+	// verifyDefaultInstance 默认变体单例（对齐 Python True 字面量语义）。
+	verifyDefaultInstance = verifyDefault{}
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+// NewVerifyDefault 构造默认校验变体（单例，对齐 Python verify=True）。
+func NewVerifyDefault() verifyMode { return verifyDefaultInstance }
+
+// NewVerifySkip 构造跳过校验变体（对齐 Python verify=False）。
+func NewVerifySkip() verifyMode { return verifySkip{} }
+
+// NewVerifyCAPath 构造 CA bundle 路径变体（对齐 Python verify=str 路径）。
+func NewVerifyCAPath(path string) verifyMode { return verifyCAPath{path: path} }
+
+// NewVerifyTLSConfig 构造自定义 TLS 配置变体（对齐 Python verify=ssl.SSLContext）。
+func NewVerifyTLSConfig(cfg *tls.Config) verifyMode { return verifyTLSConfig{cfg: cfg} }
 
 // NewWebPageParserWithDefaults 默认参数构造（对齐 Python 默认
 // timeout=30.0/user_agent=DEFAULT_USER_AGENT/verify=True）。
@@ -179,6 +166,129 @@ func NewWebPageParser(timeout float64, userAgent string, verify verifyMode) (*We
 	p.HTMLFileParser.TxtMdParser.BaseParser = bp
 	return p, nil
 }
+
+// ParseWebPageURL 包级别名（对齐 parse_web_page_url = WebPageParser.parse_url）。
+//
+// 默认参数全链；覆盖参数经 ParseOption 传入（kwargs 对应物）。
+// Python: web_page_parser.py 模块尾别名赋值
+func ParseWebPageURL(ctx context.Context, url string, docID string, opts ...ParseOption) ([]reranker.Document, error) {
+	p, err := NewWebPageParserWithDefaults()
+	if err != nil {
+		return nil, err
+	}
+	o := NewParseOptions(opts...)
+	timeout := o.Timeout
+	if timeout == 0 {
+		timeout = p.timeout
+	}
+	userAgent := o.UserAgent
+	if userAgent == "" {
+		userAgent = p.userAgent
+	}
+	verify := o.Verify
+	if verify == nil {
+		verify = p.verify
+	}
+	return p.ParseURL(ctx, url, docID, timeout, userAgent, verify, o.HTTPClient)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isWeChatArticleURL 判定微信文章 URL（对齐 _is_wechat_article_url）。
+//
+// 空串/空 url 直接 false（对齐 bool(url and ...)）。
+// Python: web_page_parser.py _is_wechat_article_url
+func isWeChatArticleURL(url string) bool {
+	return url != "" && wechatMPURLPattern.MatchString(strings.TrimSpace(url))
+}
+
+// downloadHTML 下载网页 HTML（对齐 Python _download_html）。
+//
+// 注入 client 时直接使用（UA header 仍注入——对齐 Python 注入分支
+// headers_for_request=request_headers）；自建时按 verify 变体配
+// transport + client.Timeout（对齐 httpx.AsyncClient(verify=, timeout=,
+// headers=)）。三分支错误对齐 Python 三层 except：网络错→"Web page
+// fetch failed for %s: %v"；非 2xx（raise_for_status）→"Web page
+// request failed: %d for %s"；其余异常→兜底同网络错格式。
+// Python: web_page_parser.py WebPageParser._download_html
+func downloadHTML(ctx context.Context, url string, timeout time.Duration, userAgent string, verify verifyMode, client *http.Client) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", exception.BuildError(
+			exception.StatusRetrievalIndexingFetchError,
+			exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
+			exception.WithCause(err),
+		)
+	}
+	req.Header.Set("User-Agent", userAgent)
+	if client == nil {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		switch v := verify.(type) {
+		case verifySkip:
+			transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		case verifyCAPath:
+			pem, err := os.ReadFile(v.path)
+			if err != nil {
+				return "", exception.BuildError(
+					exception.StatusRetrievalIndexingFetchError,
+					exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
+					exception.WithCause(err),
+				)
+			}
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM(pem) {
+				err := fmt.Errorf("failed to append CA certs from %s", v.path)
+				return "", exception.BuildError(
+					exception.StatusRetrievalIndexingFetchError,
+					exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
+					exception.WithCause(err),
+				)
+			}
+			transport.TLSClientConfig = &tls.Config{RootCAs: pool}
+		case verifyTLSConfig:
+			transport.TLSClientConfig = v.cfg
+		default: // verifyDefault / nil：零配置走系统 CA（对齐 verify=True）
+		}
+		client = &http.Client{
+			Transport: transport,
+			Timeout:   timeout,
+		}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", exception.BuildError(
+			exception.StatusRetrievalIndexingFetchError,
+			exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
+			exception.WithCause(err),
+		)
+	}
+	defer func() {
+		// 关闭失败不影响已读取结果，仅记录（errcheck 合规）
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.Warn(logComponent).
+				Str("url", url).
+				Err(closeErr).
+				Msg("failed to close response body")
+		}
+	}()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", exception.BuildError(
+			exception.StatusRetrievalIndexingFetchError,
+			exception.WithMsg(fmt.Sprintf("Web page request failed: %d for %s", resp.StatusCode, url)),
+		)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", exception.BuildError(
+			exception.StatusRetrievalIndexingFetchError,
+			exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
+			exception.WithCause(err),
+		)
+	}
+	return string(body), nil
+}
+
+// ──────────────────────────── WebPageParser 方法（方法跟类型走） ────────────────────────────
 
 // Parse 解析网页 URL（覆写整体，对齐 Python WebPageParser.parse）。
 //
@@ -282,115 +392,4 @@ func (p *WebPageParser) Supports(doc string) bool {
 		return false
 	}
 	return !isWeChatArticleURL(doc)
-}
-
-// downloadHTML 下载网页 HTML（对齐 Python _download_html）。
-//
-// 注入 client 时直接使用（UA header 仍注入——对齐 Python 注入分支
-// headers_for_request=request_headers）；自建时按 verify 变体配
-// transport + client.Timeout（对齐 httpx.AsyncClient(verify=, timeout=,
-// headers=)）。三分支错误对齐 Python 三层 except：网络错→"Web page
-// fetch failed for %s: %v"；非 2xx（raise_for_status）→"Web page
-// request failed: %d for %s"；其余异常→兜底同网络错格式。
-// Python: web_page_parser.py WebPageParser._download_html
-func downloadHTML(ctx context.Context, url string, timeout time.Duration, userAgent string, verify verifyMode, client *http.Client) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", exception.BuildError(
-			exception.StatusRetrievalIndexingFetchError,
-			exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
-			exception.WithCause(err),
-		)
-	}
-	req.Header.Set("User-Agent", userAgent)
-	if client == nil {
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-		switch v := verify.(type) {
-		case verifySkip:
-			transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-		case verifyCAPath:
-			pem, err := os.ReadFile(v.path)
-			if err != nil {
-				return "", exception.BuildError(
-					exception.StatusRetrievalIndexingFetchError,
-					exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
-					exception.WithCause(err),
-				)
-			}
-			pool := x509.NewCertPool()
-			if !pool.AppendCertsFromPEM(pem) {
-				err := fmt.Errorf("failed to append CA certs from %s", v.path)
-				return "", exception.BuildError(
-					exception.StatusRetrievalIndexingFetchError,
-					exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
-					exception.WithCause(err),
-				)
-			}
-			transport.TLSClientConfig = &tls.Config{RootCAs: pool}
-		case verifyTLSConfig:
-			transport.TLSClientConfig = v.cfg
-		default: // verifyDefault / nil：零配置走系统 CA（对齐 verify=True）
-		}
-		client = &http.Client{
-			Transport: transport,
-			Timeout:   timeout,
-		}
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", exception.BuildError(
-			exception.StatusRetrievalIndexingFetchError,
-			exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
-			exception.WithCause(err),
-		)
-	}
-	defer func() {
-		// 关闭失败不影响已读取结果，仅记录（errcheck 合规）
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			logger.Warn(logComponent).
-				Str("url", url).
-				Err(closeErr).
-				Msg("failed to close response body")
-		}
-	}()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", exception.BuildError(
-			exception.StatusRetrievalIndexingFetchError,
-			exception.WithMsg(fmt.Sprintf("Web page request failed: %d for %s", resp.StatusCode, url)),
-		)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", exception.BuildError(
-			exception.StatusRetrievalIndexingFetchError,
-			exception.WithMsg(fmt.Sprintf("Web page fetch failed for %s: %v", url, err)),
-			exception.WithCause(err),
-		)
-	}
-	return string(body), nil
-}
-
-// ParseWebPageURL 包级别名（对齐 parse_web_page_url = WebPageParser.parse_url）。
-//
-// 默认参数全链；覆盖参数经 ParseOption 传入（kwargs 对应物）。
-// Python: web_page_parser.py 模块尾别名赋值
-func ParseWebPageURL(ctx context.Context, url string, docID string, opts ...ParseOption) ([]reranker.Document, error) {
-	p, err := NewWebPageParserWithDefaults()
-	if err != nil {
-		return nil, err
-	}
-	o := NewParseOptions(opts...)
-	timeout := o.Timeout
-	if timeout == 0 {
-		timeout = p.timeout
-	}
-	userAgent := o.UserAgent
-	if userAgent == "" {
-		userAgent = p.userAgent
-	}
-	verify := o.Verify
-	if verify == nil {
-		verify = p.verify
-	}
-	return p.ParseURL(ctx, url, docID, timeout, userAgent, verify, o.HTTPClient)
 }

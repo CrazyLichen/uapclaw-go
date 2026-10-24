@@ -308,7 +308,7 @@ func TestPayloadToInt(t *testing.T) {
 
 // TestTruncRunes M-07 回归测试。CJK 按字符截断不产生非法 UTF-8。
 func TestTruncRunes(t *testing.T) {
-	// ASCII
+	// ASCII 纯英文字符
 	assert.Equal(t, "abcde", truncRunes("abcdefgh", 5))
 	// CJK：3 字节/字符，按 rune 切
 	assert.Equal(t, "测试数", truncRunes("测试数据", 3))

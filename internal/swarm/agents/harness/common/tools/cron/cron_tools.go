@@ -173,7 +173,7 @@ func (t *CronTools) EnsureScheduler(ctx context.Context) *gwcron.CronSchedulerSe
 		return nil
 	}
 
-	// 4. standalone fallback
+	// 4. standalone 回退（对齐 Python：无进程注册表条目时启动内嵌调度器）
 	if t.agentClient == nil {
 		logger.Warn(logComponent).
 			Msg("[CronTools] Cannot start scheduler: agent client not available")
