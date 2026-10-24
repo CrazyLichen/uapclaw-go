@@ -30,8 +30,9 @@ import (
 type GatewayServer struct {
 	// config 服务器配置（路由表/监听地址）
 	config *GatewayServerConfig
-	// bus 对齐 Python router/_DummyBus 占位（Go 暂未消费，保留字段）
-	bus any
+	// bus 对齐 Python router/_DummyBus 占位（Python self.bus 存而不用，
+	// 恒传 _DummyBus 占位；Go 以 struct{} 零尺寸占位，不消费）
+	bus struct{}
 	// httpServer 独立 HTTP 服务器（对齐 Python websockets.serve）
 	httpServer *http.Server
 	// upgrader gorilla WebSocket 升级器
@@ -68,7 +69,7 @@ const gwReadLimit = 8 * 1024 * 1024
 // NewGatewayServer 创建多路由 WS 服务器实例。
 //
 // Python: GatewayServer.__init__（L240-262）——router 在 Python 侧仅作占位传递
-// （_DummyBus），Go 侧以 bus 字段 any 类型保留语义，不消费。
+// （_DummyBus），Go 侧以 bus 字段 struct{} 零尺寸占位，不消费。
 func NewGatewayServer(config *GatewayServerConfig) *GatewayServer {
 	if config == nil {
 		config = NewGatewayServerConfig()
