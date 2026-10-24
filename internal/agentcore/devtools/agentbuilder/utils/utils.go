@@ -1,9 +1,19 @@
 package utils
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"os"
 	"regexp"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
+
+// logComponent 日志组件常量
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -99,6 +109,77 @@ func MergeDictLists(existing, newItems []map[string]any, uniqueKey ...string) []
 	return existing
 }
 
+// SafeJSONLoads 安全解析 JSON 字符串。
+// 对齐 Python: utils.safe_json_loads + JsonUtils.safe_json_loads 三层语义：
+//  1. 空文本短路返回 default
+//  2. def 未传（nil）→ 解析失败返回 BuildError(StatusCommonJsonInputProcessError)
+//  3. def 已传 → 解析失败记录 Error 日志后返回 def
+//
+// 变长参数承载"是否传了 default"的信息（nil 无法区分"没传"与"传了 nil"）。
+func SafeJSONLoads(text string, def ...any) (any, error) {
+	var defaultValue any
+	hasDefault := len(def) > 0
+	if hasDefault {
+		defaultValue = def[0]
+	}
+
+	if text == "" {
+		return defaultValue, nil
+	}
+
+	var result any
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		if !hasDefault {
+			return nil, exception.BuildError(
+				exception.StatusCommonJsonInputProcessError,
+				exception.WithMsg("JSON decode error"),
+			)
+		}
+		logger.Error(logComponent).
+			Str("error", err.Error()).
+			Msg("JSON decode error")
+		return defaultValue, nil
+	}
+	return result, nil
+}
+
+// LoadJSONFile 加载 JSON 文件。
+// 对齐 Python: load_json_file。
+// 不存在 → 包裹 fs.ErrNotExist 的错误 + Error 日志；空文件 → 空 map + Warn 日志；
+// 顶层非 dict / 解析异常 → BuildError(StatusContextMessageInvalid) + cause 链
+// （Python 的 ValueError(顶层非 dict) 在 try 块内被 except 包装为 ValidationError，Go 同路径）。
+func LoadJSONFile(filePath string) (map[string]any, error) {
+	if _, err := os.Stat(filePath); err != nil {
+		logger.Error(logComponent).
+			Str("file_path", filePath).
+			Msg("File not found")
+		return nil, fmt.Errorf("File not found: %s: %w", filePath, fs.ErrNotExist)
+	}
+
+	raw, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, wrapJSONFileError(filePath, err)
+	}
+
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		logger.Warn(logComponent).
+			Str("file_path", filePath).
+			Msg("JSON file is empty")
+		return map[string]any{}, nil
+	}
+
+	var data any
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return nil, wrapJSONFileError(filePath, err)
+	}
+
+	m, ok := data.(map[string]any)
+	if !ok {
+		return nil, wrapJSONFileError(filePath, fmt.Errorf("JSON top level must be object/dict, got: %T", data))
+	}
+	return m, nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isTruthy 判断值是否为 Python truthy 语义（空串/0/false 视为 falsy）。
@@ -120,4 +201,19 @@ func isTruthy(v any) bool {
 	default:
 		return true
 	}
+}
+
+// wrapJSONFileError 包装 JSON 文件读取/解析错误。
+// 对齐 Python: load_json_file 的 ValidationError(CONTEXT_MESSAGE_INVALID) + cause 链。
+func wrapJSONFileError(filePath string, cause error) error {
+	logger.Error(logComponent).
+		Str("file_path", filePath).
+		Str("error", cause.Error()).
+		Msg("JSON parse failed")
+	return exception.BuildError(
+		exception.StatusContextMessageInvalid,
+		exception.WithMsg(fmt.Sprintf("JSON parse error: %s", cause)),
+		exception.WithDetails(map[string]any{"file_path": filePath, "error": cause.Error()}),
+		exception.WithCause(cause),
+	)
 }
