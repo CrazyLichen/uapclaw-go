@@ -584,10 +584,14 @@ func (s *TaskScheduler) schedule(ctx context.Context) {
 				cancel: taskCancel,
 				done:   make(chan struct{}),
 			}
+			// wg.Add 必须与 runningTasks 写入同临界区：
+			// waitAllTasksComplete 持 mu 取消任务后调用 wg.Wait()，
+			// 若 Add 在锁外并发执行，会与 Wait 构成 WaitGroup 竞态
+			//（Add 与 计数器清零的 Wait 并发 → race detector 告警）。
+			s.wg.Add(1)
 			s.runningTasks[task.TaskID] = entry
 			s.mu.Unlock()
 
-			s.wg.Add(1)
 			go s.executeTaskWrapper(taskCtx, task.TaskID, sess, entry)
 
 			logger.Info(logComponent).
