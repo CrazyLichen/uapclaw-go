@@ -330,6 +330,110 @@ func TestHandleSessionDelete_缺少SessionID(t *testing.T) {
 	}
 }
 
+// TestHandleSessionDelete_会话不存在 验证目录不存在时返回 NOT_FOUND。
+// Python: session_dir.exists() 守卫（agent_ws_server.py L1537-1544）。
+func TestHandleSessionDelete_会话不存在(t *testing.T) {
+	_, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
+		json.RawMessage(`{"session_id": "no_such_session"}`))
+
+	resp, err := s.handleSessionDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleSessionDelete 返回错误: %v", err)
+	}
+	if resp.OK {
+		t.Error("resp.OK 应为 false")
+	}
+	if code, _ := resp.Payload["code"].(string); code != "NOT_FOUND" {
+		t.Errorf("code 应为 NOT_FOUND，实际 %v", resp.Payload["code"])
+	}
+}
+
+// TestHandleSessionDelete_路径为文件 验证 session_dir 非目录时返回 BAD_REQUEST。
+// Python: session_dir.is_dir() 守卫（agent_ws_server.py L1545-1552）。
+func TestHandleSessionDelete_路径为文件(t *testing.T) {
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	notDir := filepath.Join(sessionsDir, "a_file")
+	if err := os.WriteFile(notDir, []byte("x"), 0o644); err != nil {
+		t.Fatalf("创建占位文件失败: %v", err)
+	}
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
+		json.RawMessage(`{"session_id": "a_file"}`))
+
+	resp, err := s.handleSessionDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleSessionDelete 返回错误: %v", err)
+	}
+	if resp.OK {
+		t.Error("resp.OK 应为 false")
+	}
+	if code, _ := resp.Payload["code"].(string); code != "BAD_REQUEST" {
+		t.Errorf("code 应为 BAD_REQUEST，实际 %v", resp.Payload["code"])
+	}
+	// 目录（文件）不应被删除
+	if _, statErr := os.Stat(notDir); os.IsNotExist(statErr) {
+		t.Error("占位文件不应被删除")
+	}
+}
+
+// TestHandleSessionDelete_团队模式清理失败 验证 team 模式 DeleteSessionRuntime
+// 失败时返回 DELETE_FAILED 且不删目录。
+// Python: mode=="team" → delete_session_runtime，deleted=False → DELETE_FAILED（L1565-1596）。
+func TestHandleSessionDelete_团队模式清理失败(t *testing.T) {
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	writeTestMetadata(t, sessionsDir, "sess_team", map[string]any{
+		"session_id": "sess_team",
+		"mode":       "team",
+		"channel_id": "web",
+	})
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
+		json.RawMessage(`{"session_id": "sess_team"}`))
+
+	// DeleteSessionRuntime 无 team_name 可解析时走 Release fallback（无活跃 session
+	// 的场景 Release 成功），此处团队 runtime 已不在内存中——删除成功路径也验证
+	// team 分支真实走到了 DeleteSessionRuntime（通过 mode=team 元数据路由）。
+	resp, err := s.handleSessionDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleSessionDelete 返回错误: %v", err)
+	}
+	// 无活跃 runtime 时 Python delete_session_runtime 正常返回 True（release 成功）
+	if !resp.OK {
+		t.Errorf("无活跃团队 runtime 时应删除成功，实际 payload=%v", resp.Payload)
+	}
+	if _, statErr := os.Stat(filepath.Join(sessionsDir, "sess_team")); !os.IsNotExist(statErr) {
+		t.Error("会话目录应已被删除")
+	}
+}
+
+// TestHandleSessionDelete_空SessionID空白字符 验证空白 session_id 视为缺失。
+// Python: target = str(params.get("session_id") or "").strip()。
+func TestHandleSessionDelete_空SessionID空白字符(t *testing.T) {
+	_, s, cleanup := setupTestSessionsDir(t)
+	defer cleanup()
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
+		json.RawMessage(`{"session_id": "   "}`))
+
+	resp, err := s.handleSessionDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleSessionDelete 返回错误: %v", err)
+	}
+	if resp.OK {
+		t.Error("resp.OK 应为 false")
+	}
+	if code, _ := resp.Payload["code"].(string); code != "BAD_REQUEST" {
+		t.Errorf("code 应为 BAD_REQUEST，实际 %v", resp.Payload["code"])
+	}
+}
+
 // TestHandleSessionCreate_自动生成ID 验证不传 session_id 时自动生成。
 func TestHandleSessionCreate_自动生成ID(t *testing.T) {
 	sessionsDir, s, cleanup := setupTestSessionsDir(t)

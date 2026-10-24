@@ -54,6 +54,11 @@ type shutdownCleanupTool struct {
 	channelID string
 	// teamAgent 绑定的 TeamAgent（rebind 更新，全员关闭判定用）
 	teamAgent *agent.TeamAgent
+	// constructSessionID 构造时捕获的 session 标识快照（不可变）。
+	// 对齐 Python: wrapped_invoke 闭包变量 session_id（L1455-1457 fallback 源）。
+	// Python rebind 路径（setattr 三属性 + return）不重建闭包，fallback 值
+	// 恒为最初构造时的 session_id；Go 用显式快照字段等价实现该闭包语义。
+	constructSessionID string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -239,6 +244,9 @@ func AttachShutdownMemberRemoteCleanupWrapper(teamAgent *agent.TeamAgent, sessio
 		sessionID: sessionID,
 		channelID: chID,
 		teamAgent: teamAgent,
+		// Python: 闭包捕获构造时 session_id（rebind 不重建闭包），
+		// Go 快照等价——fallbackSessionID 的取值源
+		constructSessionID: sessionID,
 	}
 	addOpts := []resourcesmanager.ResourceOption{resourcesmanager.WithRefresh()}
 	if foundWithTag && tag != "" {
@@ -326,11 +334,12 @@ func (w *shutdownCleanupTool) rebind(sessionID, channelID string, teamAgent *age
 	w.teamAgent = teamAgent
 }
 
-// fallbackSessionID 读取构造时的 sessionID（rebind 前的原始绑定）。
+// fallbackSessionID 返回构造时捕获的 sessionID 快照。
+// 对齐 Python: wrapped_invoke 闭包变量 session_id——rebind 只 setattr 实例属性，
+// 闭包 fallback 源不变，故本函数读 constructSessionID 而非可 rebind 的 sessionID。
 func (w *shutdownCleanupTool) fallbackSessionID() string {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	return w.sessionID
+	// constructSessionID 构造后不可变，无需加锁
+	return w.constructSessionID
 }
 
 // isDistributedLeaderRuntime 判定是否为分布式 leader 运行时。

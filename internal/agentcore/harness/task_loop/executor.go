@@ -272,7 +272,11 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			}
 
 			ch <- &stream.OutputSchema{
-				Type: string(cschema.EventTaskFailed),
+				// Python: ControllerOutputChunk.type 固定默认值 "controller_output"
+				// （不传 type 参数），事件语义在内层 payload.type="task_failed"。
+				// 原实现外层写 "task_failed" 使消费端 case "controller_output"
+				// 永不命中，task_failed 走兜底分支产出错误事件名。
+				Type: cschema.ControllerOutputChunkType,
 				Payload: &cschema.ControllerOutputPayload{
 					Type: string(cschema.EventTaskFailed),
 					Data: []cschema.DataFrame{&cschema.TextDataFrame{Text: invokeErr.Error()}},
@@ -343,7 +347,9 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		}
 
 		ch <- &stream.OutputSchema{
-			Type: string(cschema.EventTaskCompletion),
+			// Python: ControllerOutputChunk.type 固定默认值 "controller_output"，
+			// 完成语义在内层 payload.type="task_completion"（消费端返回 nil 丢弃）。
+			Type: cschema.ControllerOutputChunkType,
 			Payload: &cschema.ControllerOutputPayload{
 				Type: string(cschema.EventTaskCompletion),
 				Data: []cschema.DataFrame{&cschema.JsonDataFrame{Data: resultMap}},

@@ -420,6 +420,8 @@ func TestShutdownCleanupTool_Rebind(t *testing.T) {
 		sessionID: "sess-old",
 		channelID: "web",
 		teamAgent: teamAgent,
+		// 构造快照：Python 闭包捕获构造时 session_id，rebind 不更新
+		constructSessionID: "sess-old",
 	}
 
 	newAgent := newShutdownCleanupTestAgent(t, "t7")
@@ -432,6 +434,70 @@ func TestShutdownCleanupTool_Rebind(t *testing.T) {
 		t.Errorf("rebind 后应为 (sess-new, cli, newAgent)，got (%s, %s, %p)",
 			gotSess, gotCh, gotAgent)
 	}
+}
+
+// TestShutdownCleanupTool_FallbackSessionID_构造快照 验证 fallback 源为构造时
+// 快照而非当前绑定的 sessionID。
+// 对齐 Python: wrapped_invoke L1455-1457 的闭包变量 session_id——
+// rebind 只 setattr 实例属性（L1433-1443 setattr 后直接 return），
+// 闭包 fallback 源恒为最初构造时的 session_id。
+func TestShutdownCleanupTool_FallbackSessionID_构造快照(t *testing.T) {
+	resetShutdownCleanupState(t)
+	teamAgent := newShutdownCleanupTestAgent(t, "t6b")
+
+	inner := &fakeShutdownTool{result: map[string]any{"success": true}}
+	wrapped := &shutdownCleanupTool{
+		Tool:      inner,
+		sessionID: "sess-orig",
+		channelID: "web",
+		teamAgent: teamAgent,
+		// 构造快照：闭包捕获等价
+		constructSessionID: "sess-orig",
+	}
+
+	if got := wrapped.fallbackSessionID(); got != "sess-orig" {
+		t.Errorf("构造后 fallback = %q, 期望 %q", got, "sess-orig")
+	}
+
+	// rebind 更新绑定字段，但构造快照（Python 闭包源）保持不变
+	newAgent := newShutdownCleanupTestAgent(t, "t7b")
+	wrapped.rebind("sess-rebound", "cli", newAgent)
+
+	if got := wrapped.fallbackSessionID(); got != "sess-orig" {
+		t.Errorf("rebind 后 fallback = %q, 期望仍为构造快照 %q", got, "sess-orig")
+	}
+
+	// fallbackSessionID 与 Invoke 的一致性：绑定置空后 Invoke 内部
+	// fallback 应落到构造快照（Python: active or session_id 闭包兜底）
+	wrapped.mu.Lock()
+	wrapped.sessionID = ""
+	wrapped.mu.Unlock()
+
+	// newAgent 需有全员 shutdown 状态成员才能走到 fallback 判定
+	ctx := context.Background()
+	backend := newAgent.TeamBackend()
+	mkMember(t, backend, ctx, "m1", string(atschema.MemberStatusShutdown))
+
+	result, err := wrapped.Invoke(ctx, map[string]any{"member_name": "m1"})
+	if err != nil {
+		t.Fatalf("wrapper 不应报错: %v", err)
+	}
+	if success, _ := result["success"].(bool); !success {
+		t.Error("wrapper 应透传原始成功结果")
+	}
+
+	// 等待调度注册表出现构造快照条目（go 调度是异步的）
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		shutdownCleanupMu.Lock()
+		_, ok := shutdownCleanupTasks["sess-orig"]
+		shutdownCleanupMu.Unlock()
+		if ok {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("sessionID 置空后应 fallback 到构造快照 sess-orig 调度清理")
 }
 
 // TestDelayedShutdownCleanup_完成移除 验证延迟清理完成后注册表自动移除条目。

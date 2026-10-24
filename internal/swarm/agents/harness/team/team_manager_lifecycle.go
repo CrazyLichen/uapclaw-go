@@ -517,19 +517,28 @@ func (m *TeamManager) PauseSessionRuntime(ctx context.Context, sessionID string,
 // Python 步骤：
 //
 //	Python: 1. team_name = self._resolve_delete_session_team_name(session_id)
-//	Python: 2. await self.stop_session_runtime(session_id, reason=reason)
+//	Python: 2. await self.stop_session_runtime(session_id, reason=reason)（try 块外，异常直接传播）
 //	Python: 3. if team_name: await Runner.delete_agent_team(team_name=, session_ids=, force=True)
 //	Python: 4. else: await Runner.release(session_id)
+//	Python: 5. except → logger.warning + return False（失败契约：清理失败必须告知调用方）
 func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string, reason string) (bool, error) {
 	teamName := m.resolveDeleteSessionTeamName(sessionID)
 
-	m.StopSessionRuntime(ctx, sessionID, reason) //nolint:errcheck // 清理操作，错误不可操作
+	// Python: stop 在 try 块外——异常直接传播给调用方（外层 except → deleted=False）。
+	// 原实现吞错恒 (true,nil)，清理失败用户仍收到"已解散"成功文案（错误契约失真）。
+	if _, stopErr := m.StopSessionRuntime(ctx, sessionID, reason); stopErr != nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).
+			Err(stopErr).Msg("failed to stop team session runtime")
+		return false, stopErr
+	}
 
 	if teamName != "" {
 		// Python: await Runner.delete_agent_team(team_name=team_name, session_ids=[session_id], force=True)
 		if _, err := runner.DeleteAgentTeam(ctx, teamName, []string{sessionID}, true); err != nil {
+			// Python: except → logger.warning("[TeamManager] failed to delete team session runtime: ...") + return False
 			logger.Warn(logComponent).Str("team_name", teamName).Str("session_id", sessionID).
-				Err(err).Msg("failed to delete Runner-owned team")
+				Err(err).Msg("failed to delete team session runtime")
+			return false, err
 		}
 	} else {
 		logger.Warn(logComponent).Str("session_id", sessionID).
@@ -537,7 +546,8 @@ func (m *TeamManager) DeleteSessionRuntime(ctx context.Context, sessionID string
 		// Python: await Runner.release(session_id)
 		if err := runner.Release(ctx, sessionID, false); err != nil {
 			logger.Warn(logComponent).Str("session_id", sessionID).Err(err).
-				Msg("fallback session release failed")
+				Msg("failed to delete team session runtime")
+			return false, err
 		}
 	}
 

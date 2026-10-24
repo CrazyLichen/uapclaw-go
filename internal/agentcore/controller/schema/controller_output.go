@@ -34,4 +34,8 @@ const (
 	TaskProcessing = "processing"
 	// AllTasksProcessed 全部任务已处理类型标识
 	AllTasksProcessed = "all_tasks_processed"
+	// ControllerOutputChunkType 控制器输出分片的外层固定类型。
+	// Python: ControllerOutputChunk.type 固定默认值 "controller_output"
+	// （controller_output.py L60），事件语义走内层 payload.type。
+	ControllerOutputChunkType = "controller_output"
 )

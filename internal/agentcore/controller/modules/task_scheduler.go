@@ -491,7 +491,7 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 
 	// 发送 all_tasks_processed chunk 到 session 流（补充 Payload.Data 对齐 Python）
 	chunk := &stream.OutputSchema{
-		Type: "controller_output",
+		Type: schema.ControllerOutputChunkType,
 		Payload: &schema.ControllerOutputPayload{
 			Type: schema.AllTasksProcessed,
 			Data: []schema.DataFrame{

@@ -168,7 +168,9 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 
 		// 步骤 8：发送完成事件
 		ch <- &stream.OutputSchema{
-			Type: string(cschema.EventTaskCompletion),
+			// Python: ControllerOutputChunk.type 固定默认值 "controller_output"，
+			// 完成语义在内层 payload.type="task_completion"。
+			Type: cschema.ControllerOutputChunkType,
 			Payload: &cschema.ControllerOutputPayload{
 				Type: string(cschema.EventTaskCompletion),
 				Data: []cschema.DataFrame{&cschema.JsonDataFrame{Data: map[string]any{"output": payload}}},
@@ -226,7 +228,9 @@ func BuildSessionSpawnExecutor(provider interfaces.DeepAgentInterface) func(deps
 // Python: SessionSpawnExecutor._build_error_chunk
 func (e *SessionSpawnExecutor) buildErrorChunk(taskID string, errMsg string) *stream.OutputSchema {
 	return &stream.OutputSchema{
-		Type: string(cschema.EventTaskFailed),
+		// Python: ControllerOutputChunk.type 固定默认值 "controller_output"，
+		// 失败语义在内层 payload.type="task_failed"。
+		Type: cschema.ControllerOutputChunkType,
 		Payload: &cschema.ControllerOutputPayload{
 			Type: string(cschema.EventTaskFailed),
 			Data: []cschema.DataFrame{&cschema.TextDataFrame{Text: errMsg}},

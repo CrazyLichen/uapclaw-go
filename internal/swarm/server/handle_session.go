@@ -9,10 +9,13 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	singleagentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
@@ -123,8 +126,18 @@ func (s *AgentServer) handleSessionSwitch(_ context.Context, request *schema.Age
 
 // handleSessionDelete 处理 session.delete 请求，对齐 Python _handle_session_delete。
 //
-// 从 request.Params 读取 session_id，删除会话目录。
-func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+// Python 步骤（agent_ws_server.py L1525-1613）：
+//
+//	Python: 1. params.session_id 为空 → BAD_REQUEST
+//	Python: 2. session_dir 不存在 → NOT_FOUND
+//	Python: 3. session_dir 非目录 → BAD_REQUEST
+//	Python: 4. ensure_persistent_checkpointer 失败 → 错误响应
+//	Python: 5. 读 session metadata：mode/channel_id
+//	Python: 6. mode=="team" → team_manager.delete_session_runtime（失败 deleted=False）
+//	          否则 → Runner.release（异常 deleted=False）
+//	Python: 7. deleted=False → DELETE_FAILED 错误响应（不删目录）
+//	Python: 8. deleted=True → rmtree + remove_session_metadata_cache + 成功响应
+func (s *AgentServer) handleSessionDelete(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params sessionDeleteParams
 	if request.Params != nil {
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -135,7 +148,8 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 		}
 	}
 
-	if params.SessionID == "" {
+	target := strings.TrimSpace(params.SessionID)
+	if target == "" {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
@@ -146,25 +160,111 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 	}
 
 	sessionsDir := session.GetSessionsDir()
-	sessionDir := filepath.Join(sessionsDir, params.SessionID)
+	sessionDir := filepath.Join(sessionsDir, target)
+
+	// Python: session_dir.exists()/is_dir() 守卫
+	dirInfo, statErr := os.Stat(sessionDir)
+	if os.IsNotExist(statErr) {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "session not found",
+				"code":  "NOT_FOUND",
+			}),
+		), nil
+	}
+	if statErr != nil || !dirInfo.IsDir() {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "session is not a directory",
+				"code":  "BAD_REQUEST",
+			}),
+		), nil
+	}
+
+	// Python: ensure_persistent_checkpointer（团队模式删除前确保持久化检查点器可用）
+	if cpErr := adapter.EnsurePersistentCheckpointer(); cpErr != nil {
+		logger.Error(logComponent).
+			Err(cpErr).
+			Str("request_id", request.RequestID).
+			Msg("persistent checkpointer unavailable")
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "persistent checkpointer is unavailable",
+				"code":  "CHECKPOINT_UNAVAILABLE",
+			}),
+		), nil
+	}
+
+	// Python: mode = metadata.get("mode"); channel_id = metadata.get("channel_id") or request.channel_id
+	metadata := session.GetSessionMetadata(target)
+	mode := ""
+	if metadata != nil {
+		if m, ok := metadata["mode"].(string); ok {
+			mode = strings.ToLower(strings.TrimSpace(m))
+		}
+	}
+	channelID := ""
+	if metadata != nil {
+		if c, ok := metadata["channel_id"].(string); ok && strings.TrimSpace(c) != "" {
+			channelID = strings.TrimSpace(c)
+		}
+	}
+	if channelID == "" {
+		channelID = request.ChannelID
+	}
+
+	// Python: try: team 模式走 delete_session_runtime；否则 Runner.release；except → deleted=False
+	deleted := true
+	if mode == "team" {
+		teamManager := team.GetTeamManager(channelID)
+		d, err := teamManager.DeleteSessionRuntime(ctx, target, "session.delete: ")
+		if err != nil || !d {
+			// Python: except → logger.warning + deleted=False
+			logger.Warn(logComponent).
+				Str("session_id", target).Err(err).
+				Msg("session.delete runtime cleanup failed")
+			deleted = false
+		}
+	} else {
+		if err := runner.Release(ctx, target, false); err != nil {
+			logger.Warn(logComponent).
+				Str("session_id", target).Err(err).
+				Msg("session.delete runtime cleanup failed")
+			deleted = false
+		}
+	}
+
+	if !deleted {
+		// Python: deleted=False → DELETE_FAILED，不删目录
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "session runtime cleanup failed",
+				"code":  "DELETE_FAILED",
+			}),
+		), nil
+	}
 
 	if err := os.RemoveAll(sessionDir); err != nil {
 		logger.Error(logComponent).
 			Err(err).
-			Str("session_id", params.SessionID).
+			Str("session_id", target).
 			Msg("failed to delete session directory")
 		return nil, fmt.Errorf("删除会话目录失败: %w", err)
 	}
 
 	// 清理内存缓存，对齐 Python remove_session_metadata_cache()
-	session.RemoveSessionMetadataCache(params.SessionID)
+	session.RemoveSessionMetadataCache(target)
 
 	logger.Info(logComponent).
-		Str("session_id", params.SessionID).
+		Str("session_id", target).
 		Msg("session deleted")
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithPayload(map[string]any{"session_id": params.SessionID}),
+		schema.WithPayload(map[string]any{"session_id": target}),
 	), nil
 }
 

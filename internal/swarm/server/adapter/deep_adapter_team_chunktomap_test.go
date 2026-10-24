@@ -462,6 +462,8 @@ func TestEvolutionOutputSchemasToMaps_消费链端到端(t *testing.T) {
 // 原 map-only 断言返回 nil 导致 task_failed 事件整块丢弃。
 // 桥接后形状对齐 Python model_dump(mode="json")：{type,data:[{text}],metadata}
 // 并提升顶层（type/index/payload）。
+// 外层 Type 用 ControllerOutputChunkType 固定值（对齐 Python ControllerOutputChunk.type，
+// 事件语义在内层 payload.type）。
 func TestChunkToMap_ControllerOutputPayload桥接(t *testing.T) {
 	cop := &cschema.ControllerOutputPayload{
 		Type: "task_failed",
@@ -471,7 +473,7 @@ func TestChunkToMap_ControllerOutputPayload桥接(t *testing.T) {
 		Metadata: map[string]any{"task_id": "t-1"},
 	}
 	chunk := &agentschema.OutputSchema{
-		Type:    "task_failed",
+		Type:    cschema.ControllerOutputChunkType,
 		Index:   7,
 		Payload: cop,
 	}
@@ -480,8 +482,8 @@ func TestChunkToMap_ControllerOutputPayload桥接(t *testing.T) {
 		t.Fatal("结构体 payload 应被桥接而非返回 nil（S-03）")
 	}
 	// 顶层提升键
-	if m["type"] != "task_failed" {
-		t.Errorf("顶层 type 应为 task_failed，实际 %v", m["type"])
+	if m["type"] != cschema.ControllerOutputChunkType {
+		t.Errorf("顶层 type 应为 controller_output，实际 %v", m["type"])
 	}
 	if idx, _ := m["index"].(int); idx != 7 {
 		t.Errorf("顶层 index 应为 7，实际 %v", m["index"])
@@ -509,6 +511,17 @@ func TestChunkToMap_ControllerOutputPayload桥接(t *testing.T) {
 	if m["metadata"].(map[string]any)["task_id"] != "t-1" {
 		t.Errorf("顶层 metadata.task_id 应保留，实际 %v", m["metadata"])
 	}
+	// 端到端路由断言：外层 controller_output + 内层 task_failed → chat.error
+	parsed := utilsParseStreamChunk(m)
+	if parsed == nil {
+		t.Fatal("utilsParseStreamChunk 应产出 chat.error 事件，实际 nil")
+	}
+	if evt, _ := parsed["event_type"].(string); evt != "chat.error" {
+		t.Errorf("parsed event_type 应为 chat.error，实际 %v", parsed["event_type"])
+	}
+	if errText, _ := parsed["error"].(string); errText != "工具执行失败 [error_code=5001]" {
+		t.Errorf("parsed error 应为错误文本，实际 %v", parsed["error"])
+	}
 }
 
 // TestChunkToMap_ControllerOutputPayload值类型 值类型（非指针）桥接分支。
@@ -519,19 +532,26 @@ func TestChunkToMap_ControllerOutputPayload值类型(t *testing.T) {
 			&cschema.JsonDataFrame{Data: map[string]any{"result": "done"}},
 		},
 	}
-	chunk := agentschema.OutputSchema{Type: "task_completion", Payload: cop}
+	chunk := agentschema.OutputSchema{Type: cschema.ControllerOutputChunkType, Payload: cop}
 	m := chunkToMap(chunk)
 	if m == nil {
 		t.Fatal("值类型结构体 payload 也应被桥接（S-03）")
 	}
-	if m["type"] != "task_completion" {
-		t.Errorf("type 应为 task_completion，实际 %v", m["type"])
+	if m["type"] != cschema.ControllerOutputChunkType {
+		t.Errorf("type 应为 controller_output，实际 %v", m["type"])
 	}
 	payload := m["payload"].(map[string]any)
+	if payload["type"] != "task_completion" {
+		t.Errorf("payload.type 应为 task_completion，实际 %v", payload["type"])
+	}
 	data, _ := payload["data"].([]any)
 	dm, _ := data[0].(map[string]any)
 	if dm["data"].(map[string]any)["result"] != "done" {
 		t.Errorf("JsonDataFrame.data 应保留，实际 %v", dm)
+	}
+	// 端到端路由断言：外层 controller_output + 内层 task_completion → nil（丢弃）
+	if parsed := utilsParseStreamChunk(m); parsed != nil {
+		t.Errorf("task_completion chunk 应被丢弃返回 nil，实际 %v", parsed)
 	}
 }
 

@@ -95,8 +95,13 @@ func TestSessionSpawnExecutor_ExecuteAbility_任务未找到(t *testing.T) {
 		t.Fatalf("不应返回错误: %v", err)
 	}
 	out := <-ch
-	if out.Type != string(cschema.EventTaskFailed) {
-		t.Fatalf("期望 TASK_FAILED, 实际 %s", out.Type)
+	// Python: ControllerOutputChunk.type 固定默认值 "controller_output"，
+	// 失败语义在内层 payload.type="task_failed"。
+	if out.Type != cschema.ControllerOutputChunkType {
+		t.Fatalf("期望 controller_output, 实际 %s", out.Type)
+	}
+	if payload, ok := out.Payload.(*cschema.ControllerOutputPayload); !ok || payload.Type != string(cschema.EventTaskFailed) {
+		t.Fatalf("内层 payload.type 应为 task_failed, 实际 %v", out.Payload)
 	}
 }
 
@@ -104,8 +109,9 @@ func TestSessionSpawnExecutor_ExecuteAbility_任务未找到(t *testing.T) {
 func TestSessionSpawnExecutor_buildErrorChunk(t *testing.T) {
 	executor := NewSessionSpawnExecutor(nil, nil)
 	chunk := executor.buildErrorChunk("task-1", "网络错误")
-	if chunk.Type != string(cschema.EventTaskFailed) {
-		t.Fatalf("期望 TASK_FAILED, 实际 %s", chunk.Type)
+	// Python: ControllerOutputChunk.type 固定默认值 "controller_output"
+	if chunk.Type != cschema.ControllerOutputChunkType {
+		t.Fatalf("期望 controller_output, 实际 %s", chunk.Type)
 	}
 	if !chunk.IsLastSchema {
 		t.Fatal("应为最后分片")
