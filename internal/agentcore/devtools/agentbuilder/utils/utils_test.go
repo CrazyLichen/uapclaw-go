@@ -187,6 +187,59 @@ func TestMergeDictLists(t *testing.T) {
 			t.Errorf("result=%v", result)
 		}
 	})
+	t.Run("空容器键值跳过_列表", func(t *testing.T) {
+		// Python: bool([]) == False，unique_key 值为空列表时整条跳过
+		existing := []map[string]any{{"id": "1"}}
+		newItems := []map[string]any{{"id": []any{}}}
+		result := MergeDictLists(existing, newItems, "id")
+		if len(result) != 1 {
+			t.Errorf("空列表键值应跳过，result=%v", result)
+		}
+	})
+	t.Run("空容器键值跳过_字典", func(t *testing.T) {
+		// Python: bool({}) == False，unique_key 值为空字典时整条跳过
+		existing := []map[string]any{{"id": "1"}}
+		newItems := []map[string]any{{"id": map[string]any{}}}
+		result := MergeDictLists(existing, newItems, "id")
+		if len(result) != 1 {
+			t.Errorf("空字典键值应跳过，result=%v", result)
+		}
+	})
+	// 注：非空容器键值（如 []any{1}）在两侧均为崩溃路径，非对齐修复范围——
+	// Python: key_value not in existing_keys → TypeError: unhashable type: 'list'
+	// Go: existingKeys[keyValue] → runtime panic: hash of unhashable type
+	// 空容器跳过（isTruthy 的 []any/map[string]any case）正是防止该崩溃的唯一安全路径。
+}
+
+// TestIsTruthy 对齐 Python 隐式 bool() 全类型矩阵（Go 增强覆盖，Python 侧无直接单测）
+func TestIsTruthy(t *testing.T) {
+	cases := []struct {
+		name     string
+		value    any
+		expected bool
+	}{
+		{"nil为falsy", nil, false},
+		{"空串为falsy", "", false},
+		{"非空串为truthy", "a", true},
+		{"false为falsy", false, false},
+		{"true为truthy", true, true},
+		{"零int为falsy", 0, false},
+		{"非零int为truthy", 1, true},
+		{"零int64为falsy", int64(0), false},
+		{"零float64为falsy", 0.0, false},
+		{"非零float64为truthy", 0.1, true},
+		{"空列表为falsy", []any{}, false},
+		{"非空列表为truthy", []any{1}, true},
+		{"空字典为falsy", map[string]any{}, false},
+		{"非空字典为truthy", map[string]any{"k": 1}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := isTruthy(c.value); got != c.expected {
+				t.Errorf("isTruthy(%#v) = %v, 期望 %v（对齐 Python bool() 语义）", c.value, got, c.expected)
+			}
+		})
+	}
 }
 
 // TestSafeJSONLoads 对齐 Python TestSafeJsonLoads（5 用例 + 未传默认值错误分支）

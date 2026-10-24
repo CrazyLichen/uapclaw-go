@@ -202,8 +202,9 @@ func DeepMergeDict(base, update map[string]any) map[string]any {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// isTruthy 判断值是否为 Python truthy 语义（空串/0/false 视为 falsy）。
-// 对齐 Python: item[unique_key] 的隐式布尔转换。
+// isTruthy 判断值是否为 Python truthy 语义（空串/0/false/nil/空容器视为 falsy）。
+// 对齐 Python: item[unique_key] 的隐式布尔转换，bool([])==False、bool({})==False。
+// 覆盖 json.Unmarshal 全部产物类型（nil/bool/float64/string/[]any/map[string]any）。
 func isTruthy(v any) bool {
 	switch val := v.(type) {
 	case string:
@@ -216,6 +217,10 @@ func isTruthy(v any) bool {
 		return val != 0
 	case float64:
 		return val != 0
+	case []any:
+		return len(val) > 0
+	case map[string]any:
+		return len(val) > 0
 	case nil:
 		return false
 	default:
