@@ -29,7 +29,11 @@
 //	├── txt_md_parser.go # TxtMdParser：文本/Markdown 编码统计检测解析（13.16）
 //	├── captioner.go     # ImageCaptioner 图片描述生成 + CpImage 归档（13.15）
 //	├── image_parser.go  # ImageParser 图片解析（image_path 元数据产出）（13.15）
-//	└── pdf_parser.go    # PDFParser：PDF 双通道解析（文本+图片 caption）（13.12）
+//	├── pdf_parser.go    # PDFParser：PDF 双通道解析（文本+图片 caption）（13.12）
+//	├── docx_model.go    # docx stdlib 自研解析层：zip/rels/styles/块遍历/合并单元格/图片链（13.13）
+//	├── word_parser.go   # WordParser：DOCX markdown 转换（13.13）
+//	├── excel_value.go   # cellStr/pyFloatStr + excelize adapter（openpyxl 类型语义还原）（13.13）
+//	└── excel_parser.go  # ExcelParser：行/列 Document 产出 + CSV/TSV（13.13）
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/processor/parser/
 package parser

@@ -84,3 +84,30 @@ func TestCellStr_日期(t *testing.T) {
 		t.Errorf("cellStr(带微秒日期) = %q, want %q", got, "2025-01-01 12:30:05.123456")
 	}
 }
+
+// TestDateTokensInCode 测试 numFmt code 的日期 token 扫描（对齐 openpyxl is_date_format）。
+func TestDateTokensInCode(t *testing.T) {
+	cases := []struct {
+		code string
+		want bool
+	}{
+		{"yyyy-mm-dd", true},                   // 日期 token
+		{"hh:mm:ss", true},                     // 时间 token
+		{"m/d/yy hh:mm", true},                 // 混合
+		{"0.00", false},                        // 纯数字
+		{"#,##0", false},                       // 千分位
+		{"General", false},                     // 常规
+		{"yyyy\"年\"m\"月\"", true},              // 引号内中文不含 token，token 在引号外
+		{"\"Day\" 0", false},                   // 引号内 Day 但在引号里
+		{"_(* #,##0_);_(* \\(#,##0\\)", false}, // 会计格式（_ 转义）
+		{"0.00;[red]0.00", false},              // 分段格式只看第一段
+		{"yyyy-mm-dd;0.00", true},              // 第一段含 token
+		{"0.00;yyyy-mm-dd", false},             // token 只在第二段（第一段无）
+		{"\\d\\m", false},                      // 反斜杠转义
+	}
+	for _, c := range cases {
+		if got := dateTokensInCode(c.code); got != c.want {
+			t.Errorf("dateTokensInCode(%q) = %v, want %v", c.code, got, c.want)
+		}
+	}
+}

@@ -262,9 +262,9 @@ func rowsToDocuments(rows [][]any, sheetName, baseID string, sheetIndex int, inc
 			ID:   docID,
 			Text: text,
 			Metadata: map[string]any{
-				"sheet_name":   sheetName,
-				"column_name":  colName,
-				"source_type":  "column",
+				"sheet_name":  sheetName,
+				"column_name": colName,
+				"source_type": "column",
 			},
 		})
 	}

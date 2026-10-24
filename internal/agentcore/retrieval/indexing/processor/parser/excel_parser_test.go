@@ -251,3 +251,74 @@ func TestExcelCellValue_类型还原(t *testing.T) {
 		t.Errorf("Calc rows[1][0] = %#v, want float64 0.3", sheets[1].rows[1][0])
 	}
 }
+
+// TestRowsToDocuments_includeHeaderFalse 测试 include_header=false 分支（Python 基准锁定）。
+//
+// Python 直跑基准：行文档仅非空值、无表头前缀；全空行 continue；
+// 列文档无 "Column name:" 前缀，纯 values join；空列空串。
+func TestRowsToDocuments_includeHeaderFalse(t *testing.T) {
+	rows := [][]any{
+		{"Name", "", "Age"},
+		{"alice", "x", 30},
+		{"", "", ""},
+		{"bob", "", ""},
+	}
+	docs := rowsToDocuments(rows, "S", "b", 0, false)
+	if len(docs) != 5 {
+		t.Fatalf("docs = %d, want 5（2 行 + 3 列，Python 基准）", len(docs))
+	}
+	// 行文档：仅非空值
+	if docs[0].ID != "b_s0_r2" || docs[0].Text != "alice, x, 30" {
+		t.Errorf("docs[0] = %q %q, want b_s0_r2 'alice, x, 30'", docs[0].ID, docs[0].Text)
+	}
+	// 全空行 continue（r3 缺席）
+	if docs[1].ID != "b_s0_r4" || docs[1].Text != "bob" {
+		t.Errorf("docs[1] = %q %q, want b_s0_r4 'bob'", docs[1].ID, docs[1].Text)
+	}
+	// 列文档：纯 values join，无前缀
+	if docs[2].ID != "b_s0_c0" || docs[2].Text != "alice, bob" {
+		t.Errorf("docs[2] = %q %q, want b_s0_c0 'alice, bob'", docs[2].ID, docs[2].Text)
+	}
+	// 空表头列回落 Column 2（metadata column_name）+ 非空过滤
+	if docs[3].ID != "b_s0_c1" || docs[3].Text != "x" {
+		t.Errorf("docs[3] = %q %q, want b_s0_c1 'x'", docs[3].ID, docs[3].Text)
+	}
+	if docs[3].Metadata["column_name"] != "Column 2" {
+		t.Errorf("docs[3].Metadata[column_name] = %v, want Column 2", docs[3].Metadata["column_name"])
+	}
+	// 值列
+	if docs[4].ID != "b_s0_c2" || docs[4].Text != "30" {
+		t.Errorf("docs[4] = %q %q, want b_s0_c2 '30'", docs[4].ID, docs[4].Text)
+	}
+}
+
+// TestRowsToDocuments_空表头行 测试表头边界（Python 基准锁定）。
+//
+// 全空串表头行（[”,”]）：headers 为非空列表不触发 Column N 补齐，
+// 空表头格在列文档循环回落 Column N。
+// 空 rows[0]（[]）：headers=[] → range(0) 空 → 0 docs。
+func TestRowsToDocuments_空表头行(t *testing.T) {
+	// 全空串表头
+	docs := rowsToDocuments([][]any{{"", ""}, {"v1", "v2"}}, "S", "b", 0, true)
+	if len(docs) != 2 {
+		t.Fatalf("docs = %d, want 2（0 行 + 2 列，Python 基准）", len(docs))
+	}
+	if docs[0].ID != "b_s0_c0" || docs[0].Text != "Column name: Column 1. Values: v1" {
+		t.Errorf("docs[0] = %q %q", docs[0].ID, docs[0].Text)
+	}
+	if docs[1].ID != "b_s0_c1" || docs[1].Text != "Column name: Column 2. Values: v2" {
+		t.Errorf("docs[1] = %q %q", docs[1].ID, docs[1].Text)
+	}
+
+	// 空首行（headers 空 → 0 docs）
+	docs2 := rowsToDocuments([][]any{{}, {"v1"}}, "S", "b", 0, true)
+	if len(docs2) != 0 {
+		t.Fatalf("空首行 docs = %d, want 0", len(docs2))
+	}
+
+	// rows 整体为空
+	docs3 := rowsToDocuments(nil, "S", "b", 0, true)
+	if len(docs3) != 0 {
+		t.Fatalf("空 rows docs = %d, want 0", len(docs3))
+	}
+}
