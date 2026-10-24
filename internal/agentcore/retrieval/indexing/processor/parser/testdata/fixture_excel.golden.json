@@ -1,0 +1,161 @@
+{
+  "xlsx": [
+    {
+      "id": "base_s0_r2",
+      "text": "Name: alice, Age: 30",
+      "metadata": {
+        "sheet_name": "Data",
+        "row_index": 2,
+        "source_type": "row"
+      }
+    },
+    {
+      "id": "base_s0_r3",
+      "text": "Name: bob, Age: ",
+      "metadata": {
+        "sheet_name": "Data",
+        "row_index": 3,
+        "source_type": "row"
+      }
+    },
+    {
+      "id": "base_s0_r4",
+      "text": "Name: 3.5, Age: True",
+      "metadata": {
+        "sheet_name": "Data",
+        "row_index": 4,
+        "source_type": "row"
+      }
+    },
+    {
+      "id": "base_s0_r5",
+      "text": "Name: , Age: ",
+      "metadata": {
+        "sheet_name": "Data",
+        "row_index": 5,
+        "source_type": "row"
+      }
+    },
+    {
+      "id": "base_s0_c0",
+      "text": "Column name: Name. Values: alice, bob, 3.5",
+      "metadata": {
+        "sheet_name": "Data",
+        "column_name": "Name",
+        "source_type": "column"
+      }
+    },
+    {
+      "id": "base_s0_c1",
+      "text": "Column name: Column 2. Values: x, 1000000000000000",
+      "metadata": {
+        "sheet_name": "Data",
+        "column_name": "Column 2",
+        "source_type": "column"
+      }
+    },
+    {
+      "id": "base_s0_c2",
+      "text": "Column name: Age. Values: 30, True",
+      "metadata": {
+        "sheet_name": "Data",
+        "column_name": "Age",
+        "source_type": "column"
+      }
+    },
+    {
+      "id": "base_s1_r2",
+      "text": "f1: 0.3, f2: tail",
+      "metadata": {
+        "sheet_name": "Calc",
+        "row_index": 2,
+        "source_type": "row"
+      }
+    },
+    {
+      "id": "base_s1_c0",
+      "text": "Column name: f1. Values: 0.3",
+      "metadata": {
+        "sheet_name": "Calc",
+        "column_name": "f1",
+        "source_type": "column"
+      }
+    },
+    {
+      "id": "base_s1_c1",
+      "text": "Column name: f2. Values: tail",
+      "metadata": {
+        "sheet_name": "Calc",
+        "column_name": "f2",
+        "source_type": "column"
+      }
+    }
+  ],
+  "csv": [
+    {
+      "id": "base_s0_r2",
+      "text": "h1: v1, h2: v2",
+      "metadata": {
+        "sheet_name": "fixture_csv.csv",
+        "row_index": 2,
+        "source_type": "row"
+      }
+    },
+    {
+      "id": "base_s0_r3",
+      "text": "h1: , h2: v",
+      "metadata": {
+        "sheet_name": "fixture_csv.csv",
+        "row_index": 3,
+        "source_type": "row"
+      }
+    },
+    {
+      "id": "base_s0_c0",
+      "text": "Column name: h1. Values: v1",
+      "metadata": {
+        "sheet_name": "fixture_csv.csv",
+        "column_name": "h1",
+        "source_type": "column"
+      }
+    },
+    {
+      "id": "base_s0_c1",
+      "text": "Column name: h2. Values: v2, v",
+      "metadata": {
+        "sheet_name": "fixture_csv.csv",
+        "column_name": "h2",
+        "source_type": "column"
+      }
+    }
+  ],
+  "tsv": [
+    {
+      "id": "base_s0_r2",
+      "text": "a: 1, b: 2",
+      "metadata": {
+        "sheet_name": "fixture_tsv.tsv",
+        "row_index": 2,
+        "source_type": "row"
+      }
+    },
+    {
+      "id": "base_s0_c0",
+      "text": "Column name: a. Values: 1",
+      "metadata": {
+        "sheet_name": "fixture_tsv.tsv",
+        "column_name": "a",
+        "source_type": "column"
+      }
+    },
+    {
+      "id": "base_s0_c1",
+      "text": "Column name: b. Values: 2",
+      "metadata": {
+        "sheet_name": "fixture_tsv.tsv",
+        "column_name": "b",
+        "source_type": "column"
+      }
+    }
+  ]
+}
