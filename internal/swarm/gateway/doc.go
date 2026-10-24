@@ -16,6 +16,7 @@
 //	gateway/
 //	├── doc.go              # 包文档
 //	├── app_gateway.go      # AppGatewayServer 启动入口（对应 Python _run() 组装），chi router 组装，reloader 管理
+//	├── route_config.go     # RouteConfig/GatewayServerConfig 路由配置（对齐 Python GatewayServer 类族 L207-238/L723-752）
 //	├── config_push.go      # 配置热重载回调（onConfigSavedImpl）
 //	├── config_env_map.go   # 配置键→环境变量映射 + browserRuntimeKeys
 //	├── embed.go            # go:embed 前端静态资源
