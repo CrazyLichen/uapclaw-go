@@ -15,7 +15,7 @@
 
 | 模块 | 关键机制 |
 |------|---------|
-| `html_file_parser.py` | 模块级共享工具：`_parse_html`（lxml 优先/HTMLParser 回落）、`_extract_title`（og:title → title 标签）、`MAIN_CONTENT_SELECTORS` 11 选择器 + >100 字符门槛、`_find_main_content` 两段式（选择器 → body 内 [article,main,div,section] 树序第一个 >200）、`_text_length`（排除 script/style 的**不改树**近似长度）、`_get_text_from_soup`（decompose script/style → get_text("\n", strip=True) → `[ \t]+`→空格 → `\n\s*\n`→`\n\n`）。**硬错误**范式（155110，非其他解析器的软失败范式）：读不到文件/找不到主内容/正文<50 字符。`HTMLFileParser(TxtMdParser)` 覆写整体 `parse`：`super()._parse` 编码检测读文件 → `_parse_html` classmethod → 单 Document（title/`(无标题)`/source_type=web_page） |
+| `html_file_parser.py` | 模块级共享工具：`_parse_html`（lxml 优先/HTMLParser 回落）、`_extract_title`（og:title → title 标签）、`MAIN_CONTENT_SELECTORS` 10 选择器 + >100 字符门槛、`_find_main_content` 两段式（选择器 → body 内 [article,main,div,section] 树序第一个 >200）、`_text_length`（排除 script/style 的**不改树**近似长度）、`_get_text_from_soup`（decompose script/style → get_text("\n", strip=True) → `[ \t]+`→空格 → `\n\s*\n`→`\n\n`）。**硬错误**范式（155110，非其他解析器的软失败范式）：读不到文件/找不到主内容/正文<50 字符。`HTMLFileParser(TxtMdParser)` 覆写整体 `parse`：`super()._parse` 编码检测读文件 → `_parse_html` classmethod → 单 Document（title/`(无标题)`/source_type=web_page） |
 | `web_page_parser.py` | `DEFAULT_USER_AGENT`/`DEFAULT_TIMEOUT=30.0`。`HTTP_URL_PATTERN`（`^https?://\S+` 忽略大小写）、`WECHAT_MP_URL_PATTERN`（`^https?://(?:mp\.weixin\.qq\.com\|.*?\.weixin\.qq\.com)/s\b.*` 忽略大小写）。`_validate_url` 静态方法（非 http / WeChat URL → 155110）。`_download_html`：注入 client or 自建 httpx.AsyncClient(verify/timeout/UA) → `_do_get` → 三层 except（HTTPStatusError 带 status / RequestError / 兜底，均 155110 带 cause）。`parse_url` classmethod：validate → download → `effective_id = doc_id or url or uuid4()` → `_parse_html`（**动态派发**：子类覆写生效）→ 补 source_url + Info 日志。`parse` 从 kwargs 取 timeout/user_agent/verify/client 四覆盖参数。`supports`：http 且非 WeChat。模块尾 `parse_web_page_url = WebPageParser.parse_url` |
 | `wechat_article_parser.py` | 复用 html_file_parser 的三个模块级函数。`_extract_js_content`（`div#js_content`）。覆写 `_parse_html`：title → js_content → 缺失/空 → 155110（**无 50 字符门槛只判空**）→ 单 Document（source_type=wechat_article）。覆写 `_validate_url`（非 WeChat URL → 155110）。覆写 `supports`。模块尾 `parse_wechat_article_url` 别名 |
 
@@ -161,7 +161,7 @@ Go regexp 原生大小写敏感，需 `(?i)` 前缀对齐 IGNORECASE：`(?i)^htt
 const (
     defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     defaultTimeoutSeconds = 30.0
-    // mainContentSelectors 对齐 MAIN_CONTENT_SELECTORS 11 选择器（字面复制）
+    // mainContentSelectors 对齐 MAIN_CONTENT_SELECTORS 10 选择器（字面复制）
     // htmlMinTextLength = 100 / htmlFallbackTextLength = 200 / htmlMinArticleLength = 50
 )
 ```
@@ -174,7 +174,7 @@ const (
 |---------|------------|---------|
 | `parseHTML(html string) *goquery.Document` | `_parse_html` | goquery.NewDocumentFromReader；解析失败返回空文档（对齐 web_tools 先例降级） |
 | `extractTitle(soup) string` | `_extract_title` | `soup.Find(`meta[property="og:title"]`)` 取 content 属性 TrimSpace → 回落 `Find("title")` 文本 TrimSpace → 空串。og:title content 空串也回落（Python `meta.get("content")` falsy 判断） |
-| `findMainContent(soup) *goquery.Selection` | `_find_main_content` | 两段式：①11 选择器逐一 Find，`textLength(sel) > 100` 命中即返 ②`body.Find("article,main,div,section")` **树序**第一个 >200 ③body 不存在 → nil。树序=文档序：goquery Each 按文档序遍历，嵌套时外层先到（Python find_all 同序） |
+| `findMainContent(soup) *goquery.Selection` | `_find_main_content` | 两段式：①10 选择器逐一 Find，`textLength(sel) > 100` 命中即返 ②`body.Find("article,main,div,section")` **树序**第一个 >200 ③body 不存在 → nil。树序=文档序：goquery Each 按文档序遍历，嵌套时外层先到（Python find_all 同序） |
 | `textLength(sel) int` | `_text_length` | **不改树**的近似长度：遍历文本节点（排除 parent 为 script/style），累加 strip 后长度。实现：递归 Contents() 遍历，文本节点 TrimSpace 长度累加；script/style 子树跳过 |
 | `getTextFromSoup(sel) string` | `_get_text_from_soup` | ①**先移除** script/style（对齐 decompose，Find("script").Remove()）②逐文本节点收集 TrimSpace，"\n" 拼接（对齐 get_text(separator="\n", strip=True)）③`[ \t]+`→单空格 ④`\n\s*\n`→`\n\n` ⑤TrimSpace。正则用 regexp2（D1' 先例，`\s` 语义对齐 Python） |
 
@@ -334,7 +334,7 @@ func ParseWebPageURL(ctx context.Context, url string, docID string, opts ...Pars
 
 **共享工具**：
 - extractTitle：og:title 命中（含 content 前后空格 Trim）/ og:title content 空 → 回落 title 标签 / title 缺失 → 空串
-- findMainContent：11 选择器逐一命中（>100 门槛）/ 选择器命中但文本 ≤100 跳过继续 / 全部不中走 fallback / fallback body 内 article/main/div/section 树序第一个 >200 / body 无 → nil / 嵌套块外层先到（树序）
+- findMainContent：10 选择器逐一命中（>100 门槛）/ 选择器命中但文本 ≤100 跳过继续 / 全部不中走 fallback / fallback body 内 article/main/div/section 树序第一个 >200 / body 无 → nil / 嵌套块外层先到（树序）
 - textLength：script/style 内容不计入 / 普通 div 计入 / 空节点 0
 - getTextFromSoup：script/style 内容不出现在产出 / 多文本节点 "\n" 拼接 / `[ \t]+` 压缩 / `\n\s*\n` 压缩 / 首尾 TrimSpace
 - parseHTML：正常 HTML / 空 HTML / 非法 HTML 降级空文档
@@ -397,6 +397,8 @@ parser 包当前 87.7%（13.13 后基线）。本节新增约 900 行生产代�
 | 5 | WeChat 全链 dispatch 验证以"覆写 validateURLFor 拦截普通 URL"为证 | httptest 本地 URL 无法命中 mp.weixin.qq.com 正则，无法走真实全链 | TestWeChatParserParse_继承链dispatch 断言 WeChat 覆写错误信息拦截本地 URL；另用 js_content 与 article 并存断言解析覆写胜出 |
 | 6 | ParseURL 的 metadata["title"] 兜底 "(无标题)" 仅写入日志字段不回写 metadata | 对齐 Python parse_url 仅在 logger.info 使用 `title or "(无标题)"`，metadata title 由 parseHTMLToDocs 写入 | 字面对齐；测试断言 Document.Metadata["title"] 由 parseHTMLToDocs 侧兜底 |
 | 7 | 空方法体密封标记 isVerifyMode() 覆盖率恒 0%（4 处） | Go 覆盖率工具对无函数体的空方法计 1 条语句且无法插桩 | 13.13 cellValue isCellValue 同款先例，接受；密封性经 TestVerifyMode_四变体均实现密封接口 保证 |
+| 8 | ParseURL 尾部补 source_url 与 Info 日志合并为单循环（计划稿为两个循环） | Python 原文为单循环同时做两件事（web_page_parser.py L179-185）；实施时修正计划稿写作失误，代码更贴 Python | 保持单循环；Task 6 测试经 stub dispatch 验证 nil metadata 补建路径 |
+| 9 | ParseWebPageURL/ParseWeChatArticleURL 别名函数带零值回落（计划稿直传 o.Timeout 等零值） | 计划稿直传会在未设参数时传 0 超时——计划稿缺陷；实施补与 WebPageParser.Parse 一致的零值回落实例字段逻辑，等价 Python classmethod 默认参数语义 | 保持零值回落；TestParseWebPageURL_别名函数（默认全链）+ 覆盖参数传别名 双向验证 |
 
 ## 9. 回填点
 
