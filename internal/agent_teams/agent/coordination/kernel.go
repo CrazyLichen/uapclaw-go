@@ -188,9 +188,21 @@ func (k *CoordinationKernel) Start(ctx context.Context, sessionID string) {
 	}
 
 	// 步骤 3: Session bind/release
+	// M-19: 对齐 Python kernel.py——bind_session 返回的 ctx 必须用于后续步骤传播
+	// （Python 端 set_session_id 写 contextvar 后天然全局可见；Go 端 ctx 是值传递，
+	// 丢弃 newCtx 会导致步骤 4-10 拿不到 SessionState，DB 表/恢复/记忆注入全部失联）。
 	sessCtrl := k.host.SessionController()
 	if sessionID != "" && sessCtrl != nil {
-		_, _ = sessCtrl.BindSession(ctx, sessionID)
+		newCtx, err := sessCtrl.BindSession(ctx, sessionID)
+		if err != nil {
+			logger.Error(logComponent).
+				Err(err).
+				Str("session_id", sessionID).
+				Str("member_name", memberName).
+				Msg("kernel start: bind session failed")
+		} else {
+			ctx = newCtx
+		}
 	} else if sessCtrl != nil {
 		_ = sessCtrl.ReleaseSession(ctx)
 	}

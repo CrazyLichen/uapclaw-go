@@ -567,7 +567,9 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 	a.state.PendingUserQuery = query
 
 	// Python: await self._coordination.start(session)
-	a.coordination.Start(ctx, agentteams.GetSessionID(ctx))
+	// M-19: session 优先取 opts 传入（对齐 Python invoke(inputs, session) 显式参数）；
+	// opts 未传时回退 ctx 中的 SessionState（对齐 Python contextvar 全局可见语义）。
+	a.coordination.Start(ctx, a.sessionIDFromOptsOrCtx(ctx, opts...))
 
 	// Python: try:
 	//   await self._coordination.enqueue_user_input(inputs)
@@ -628,7 +630,9 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 	a.state.PendingUserQuery = query
 
 	// Python: await self._coordination.start(session)
-	a.coordination.Start(ctx, agentteams.GetSessionID(ctx))
+	// M-19: session 优先取 opts 传入（对齐 Python stream(inputs, session) 显式参数）；
+	// opts 未传时回退 ctx 中的 SessionState（对齐 Python contextvar 全局可见语义）。
+	a.coordination.Start(ctx, a.sessionIDFromOptsOrCtx(ctx, opts...))
 
 	// Python: try:
 	//   await self._coordination.enqueue_user_input(inputs)
@@ -1256,6 +1260,21 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail interfaces.AgentRai
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// sessionIDFromOptsOrCtx 解析本轮应绑定的 sessionID。
+//
+// M-19: 对齐 Python invoke(inputs, session=None) / stream(inputs, session=None) 的
+// 显式 session 参数语义——优先取 opts 传入的 SessionFacade；
+// opts 未传时回退 ctx 中 SessionState 的 sessionID（对齐 Python contextvar 兜底）。
+func (a *TeamAgent) sessionIDFromOptsOrCtx(ctx context.Context, opts ...interfaces.AgentOption) string {
+	if len(opts) > 0 {
+		agentOpts := interfaces.NewAgentOptions(opts...)
+		if agentOpts.Session != nil {
+			return agentOpts.Session.GetSessionID()
+		}
+	}
+	return agentteams.GetSessionID(ctx)
+}
 
 // finalizeRoundDetached 执行轮次收尾清理，不受调用方 ctx 取消影响。
 // S-30: 对齐 Python finally 块不受 cancellation 影响的语义——

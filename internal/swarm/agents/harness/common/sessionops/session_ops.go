@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -192,9 +193,15 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 		} else {
 			// Python: 添加 forked_from 元数据到每条记录
 			data, err := os.ReadFile(targetHistory)
-			if err == nil {
+			if err != nil {
+				// M-14: 对齐 Python try/except warning——三层失败分支均须留排查线索
+				logger.Warn(logComponent).Str("file", targetHistory).Err(err).Msg("fork_session: failed to read history file")
+			} else {
 				var records []map[string]any
-				if err := json.Unmarshal(data, &records); err == nil {
+				if err := json.Unmarshal(data, &records); err != nil {
+					// M-14: 反序列化失败静默会掩盖损坏的 fork 产物
+					logger.Warn(logComponent).Str("file", targetHistory).Err(err).Msg("fork_session: failed to parse history json")
+				} else {
 					for _, record := range records {
 						// T-01: 对齐 Python record.get("id", "") — 缺失时默认空串而非 nil
 						originalID, _ := record["id"].(string)
@@ -204,7 +211,10 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 						}
 					}
 					// Python: json.dumps(data, ensure_ascii=False, indent=2)
-					if updated, err := json.MarshalIndent(records, "", "  "); err == nil {
+					if updated, err := json.MarshalIndent(records, "", "  "); err != nil {
+						// M-14: 序列化失败静默同上
+						logger.Warn(logComponent).Str("file", targetHistory).Err(err).Msg("fork_session: failed to marshal history records")
+					} else {
 						if writeErr := os.WriteFile(targetHistory, updated, 0o644); writeErr != nil {
 							logger.Warn(logComponent).Str("file", targetHistory).Err(writeErr).Msg("fork_session: failed to write history file")
 						}
@@ -338,12 +348,7 @@ func RewindSession(params RewindSessionParams) (*RewindSessionResult, error) {
 		SetMessageCount: &remaining,
 	})
 
-	contentPreview := ""
-	if len(removedTurnContent) > 80 {
-		contentPreview = removedTurnContent[:80]
-	} else {
-		contentPreview = removedTurnContent
-	}
+	contentPreview := truncRunes(removedTurnContent, 80)
 
 	return &RewindSessionResult{
 		SessionID:        params.SessionID,
@@ -357,23 +362,31 @@ func RewindSession(params RewindSessionParams) (*RewindSessionResult, error) {
 
 // ListSessionTurns 列出会话中所有用户 turn（含 diff 统计）。
 // Python: list_session_turns(*, session_id)
+//
+// T-12: Turns 序列化语义对齐 Python 空列表 []——所有返回点返回非 nil 空切片，
+// 避免 JSON null（消费方遍历时 nil slice 与空 slice 行为一致，但跨语言
+// 消费方拿到 null 需额外判空）。
+//
+// T-10: Total 与 Turns 口径差异（对齐 Python 有意行为）——
+// Total 统计所有 user 角色消息（含不可选的系统注入类消息），
+// Turns 只含 _is_selectable_user_message 通过的可选消息，两者可以不等。
 func ListSessionTurns(sessionID string) *ListSessionTurnsResult {
 	sessionsDir := workspace.AgentSessionsDir()
 	historyPath := filepath.Join(sessionsDir, sessionID, "history.json")
 
 	if _, err := os.Stat(historyPath); os.IsNotExist(err) {
-		return &ListSessionTurnsResult{Turns: nil, Total: 0}
+		return &ListSessionTurnsResult{Turns: []SessionTurnInfo{}, Total: 0}
 	}
 
 	data, err := os.ReadFile(historyPath)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("list_session_turns: failed to read history.json")
-		return &ListSessionTurnsResult{Turns: nil, Total: 0}
+		return &ListSessionTurnsResult{Turns: []SessionTurnInfo{}, Total: 0}
 	}
 
 	var history []map[string]any
 	if err := json.Unmarshal(data, &history); err != nil {
-		return &ListSessionTurnsResult{Turns: nil, Total: 0}
+		return &ListSessionTurnsResult{Turns: []SessionTurnInfo{}, Total: 0}
 	}
 
 	// Python: 获取 diff 统计
@@ -422,9 +435,8 @@ func ListSessionTurns(sessionID string) *ListSessionTurnsResult {
 		// Python: 剥离 <file-content> 块
 		cleaned := fileContentRe.ReplaceAllString(content, "")
 		preview := strings.TrimSpace(cleaned)
-		if len(preview) > 80 {
-			preview = preview[:80]
-		}
+		// S-19: rune 截断对齐 Python preview[:80]（字符语义）
+		preview = truncRunes(preview, 80)
 
 		stats := diffStatsMap[userCount]
 		if stats == nil {
@@ -446,6 +458,10 @@ func ListSessionTurns(sessionID string) *ListSessionTurnsResult {
 		})
 	}
 
+	// T-12: 尾部防御——history 非空但无可选 turn 时 turns 保持非 nil 空切片
+	if turns == nil {
+		turns = []SessionTurnInfo{}
+	}
 	return &ListSessionTurnsResult{Turns: turns, Total: userCount}
 }
 
@@ -479,6 +495,10 @@ func RestoreSessionFiles(sessionID string, turnIndex int) *RestoreSessionFilesRe
 				if mkdirErr := os.MkdirAll(dir, 0o755); mkdirErr != nil {
 					result.Errors = append(result.Errors, FileRestoreError{File: dir, Error: mkdirErr.Error()})
 					logger.Warn(logComponent).Str("dir", dir).Err(mkdirErr).Msg("restore_session_files: failed to create directory")
+					// M-32: 对齐 Python write 分支整体 try 语义——mkdir 失败
+					// 直接进 except，不再执行 write（原实现缺 continue 会再触发
+					// WriteFile 失败，同一文件产生双错误条目）。
+					continue
 				}
 				if err := os.WriteFile(filePath, []byte(*info.RestoreContent), 0o644); err != nil {
 					result.Errors = append(result.Errors, FileRestoreError{File: filePath, Error: err.Error()})
@@ -624,7 +644,11 @@ func RewindSessionContext(ctx context.Context, deepAgent *harness.DeepAgent, ses
 	}
 	// 勘误 E1: WithSessionID 而非 WithClearSessionID
 	if err := contextEngine.ClearContext(ctx, ceinterface.WithSessionID(sessionID)); err != nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("rewind_session_context: failed to clear context")
+		// M-16: 对齐 Python——该调用不在 try 内（session_ops_service.py L457），
+		// 异常直接向上传播使整个 rewind 失败；原实现 Warn 后继续返回 true，
+		// 旧上下文残留但调用方以为 rewind 成功。
+		logger.Error(logComponent).Str("session_id", sessionID).Err(err).Msg("rewind_session_context: failed to clear context")
+		return false
 	}
 
 	// --- 4. 构建新上下文 ---
@@ -819,6 +843,16 @@ func CopySessionContext(ctx context.Context, deepAgent *harness.DeepAgent, sourc
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// truncRunes 按 rune 数截断字符串。
+// S-19: Python 切片 s[:80] 是字符语义；Go 切片是字节语义，CJK 内容直接
+// 字节截断会产出非法 UTF-8 乱码且预览量级缩小 3 倍，须按 rune 截断。
+func truncRunes(s string, maxRune int) string {
+	if utf8.RuneCountInString(s) <= maxRune {
+		return s
+	}
+	return string([]rune(s)[:maxRune])
+}
+
 // getUniqueForkName 生成不重复的分叉标题。
 // Python: _get_unique_fork_name(base_name, existing_titles)
 func getUniqueForkName(baseName string, existingTitles map[string]bool) string {
@@ -903,7 +937,16 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	return os.Chmod(dst, srcInfo.Mode())
+	if err := os.Chmod(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	// T-13: shutil.copy2 同时复制 mtime/atime——补 Chtimes 完成对齐
+	//（Chtimes 失败不影响数据完整性，对齐 copy2 的 best-effort 元数据语义）。
+	if err := os.Chtimes(dst, srcInfo.ModTime(), srcInfo.ModTime()); err != nil {
+		return err
+	}
+	return nil
 }
 
 // deepCopyMap 深拷贝 map[string]any（通过 JSON 序列化/反序列化）。

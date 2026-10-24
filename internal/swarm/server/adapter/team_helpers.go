@@ -61,12 +61,6 @@ var (
 	// 键: [2]string{channelID, sessionID}，值: []pendingWaiter
 	// 对齐 Python: _pending_waiters: dict[tuple[str, str], list[tuple[str, asyncio.Queue]]] (line 61)
 	pendingWaiters = make(map[[2]string][]pendingWaiter)
-	// eventBroadcastInitialized 标记是否已向 TeamManager 注入事件广播回调
-	eventBroadcastInitialized bool
-	// teamDepsInjected 标记是否已向 TeamManager 注入 code member 配置回调
-	teamDepsInjected bool
-	// shutdownCleanupNoticePusherInjected 标记是否已向 team 包注入 shutdown cleanup 通知推送回调
-	shutdownCleanupNoticePusherInjected bool
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -74,26 +68,23 @@ var (
 // EnsureEventBroadcastInjected 确保 TeamManager 的事件广播回调已注入。
 // 对齐 Python: _broadcast_event(channel_id, session_id, event)
 // 由 adapter 层在首次使用 TeamManager 时调用，将 broadcastEvent 绑定到 TeamManager。
-// 此函数幂等，多次调用无副作用。
+//
+// T-02: 幂等语义改为"每次 Set"——SetOnEventBroadcast 对同一函数重复赋值
+// 无副作用，等价 Python 模块级函数每次调用直接可用。原一次性标志在
+// channel 切换/TeamManager 重建场景会阻止重新注入，已删除。
 func EnsureEventBroadcastInjected(channelID string) {
-	if eventBroadcastInitialized {
-		return
-	}
 	tm := team.GetTeamManager(channelID)
 	tm.SetOnEventBroadcast(func(chID, sessID string, event map[string]any) {
 		broadcastEvent(chID, sessID, event)
 	})
-	eventBroadcastInitialized = true
 }
 
 // EnsureTeamDependenciesInjected 确保 TeamManager 的依赖回调已注入。
 // 对齐 Python: customizer 内 from interface_code import configure_code_team_member_agent
 // （模块级函数每次调用新建 JiuwenClawCodeAdapter 实例）。
-// 此函数幂等，多次调用无副作用。
+//
+// T-02: 幂等语义同上——SetCodeMemberConfigurer 重复赋同一闭包无副作用。
 func EnsureTeamDependenciesInjected(channelID string) {
-	if teamDepsInjected {
-		return
-	}
 	tm := team.GetTeamManager(channelID)
 	tm.SetCodeMemberConfigurer(func(
 		ctx context.Context,
@@ -128,17 +119,14 @@ func EnsureTeamDependenciesInjected(channelID string) {
 			forceEnglishRuntimePrompt,
 		)
 	})
-	teamDepsInjected = true
 }
 
 // EnsureShutdownCleanupNoticePusherInjected 确保 shutdown cleanup 通知推送回调已注入。
 // 对齐 Python: _push_shutdown_cleanup_notice 中直接构造 WebSocketGatewayPushTransport。
 // Go 因循环依赖（team → adapter → team）改为注入回调，模式同 EnsureEventBroadcastInjected。
-// 此函数幂等，多次调用无副作用。
+//
+// T-02: 幂等语义同上——SetShutdownCleanupNoticePusher 重复赋同一闭包无副作用。
 func EnsureShutdownCleanupNoticePusherInjected() {
-	if shutdownCleanupNoticePusherInjected {
-		return
-	}
 	team.SetShutdownCleanupNoticePusher(func(ctx context.Context, msg map[string]any) error {
 		// 复用 DeepAdapter 的默认推送函数（AgentServer 启动时注入）
 		if sendPush := defaultSendPushFunc; sendPush != nil {
@@ -148,7 +136,6 @@ func EnsureShutdownCleanupNoticePusherInjected() {
 			Msg("shutdown cleanup notice push: defaultSendPushFunc not injected")
 		return nil
 	})
-	shutdownCleanupNoticePusherInjected = true
 }
 
 // SyncTeamIdentityMetadata 持久化 team 身份元数据（仅新创建的 team 会话）。
@@ -156,6 +143,10 @@ func EnsureShutdownCleanupNoticePusherInjected() {
 //
 // 仅在 activationKind 属于 teamCreateKinds 时执行。
 // 已有 team_name 不匹配时保留现有元数据并 warn。
+//
+// T-04: 与 Python 的顺序差异为有意优化——Python 先无条件读 session
+// metadata 再判 kind；Go 先判 kind 再读（非 team-create 场景省一次
+// metadata 读取）。两者对 team-create 场景行为完全一致。
 func SyncTeamIdentityMetadata(ctx context.Context, channelID, sessionID, mode, readyTeamName, activationKind string) {
 	normalizedKind := strings.TrimSpace(activationKind)
 	if !teamCreateKinds[normalizedKind] {

@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	chromav2 "github.com/amikos-tech/chroma-go/pkg/api/v2"
@@ -192,7 +193,31 @@ func (ci *ChromaIndexer) BuildIndex(
 	config common.IndexConfig,
 	embedModel embedding.BaseEmbedding,
 	opts ...IndexOption,
-) (bool, error) {
+) (built bool, err error) {
+	// M-28: 对齐 Python build_index 的外层异常包装——
+	//   except BaseError: raise                        → BuildError 原样透传
+	//   except Exception as e: logger.error + 包装上抛  → 非 BuildError 统一包装
+	//   ADD_DOC_RUNTIME_ERROR + Error 日志（含 cause 链）。
+	defer func() {
+		if err == nil {
+			return
+		}
+		if _, ok := err.(*exception.BaseError); ok {
+			return
+		}
+		logger.Error(logComponent).
+			Str("event_type", "INDEXING_ERROR").
+			Str("index_name", config.IndexName).
+			Int("chunk_count", len(chunks)).
+			Err(err).
+			Msg("failed to build index")
+		err = exception.BuildError(
+			exception.StatusRetrievalIndexingAddDocRuntimeError,
+			exception.WithParam("error_msg", err.Error()),
+			exception.WithCause(err),
+		)
+	}()
+
 	collectionName := config.IndexName
 	indexOpts := NewIndexOptions(opts...)
 	databaseName, _ := indexOpts.Extra["database_name"].(string)
@@ -204,7 +229,10 @@ func (ci *ChromaIndexer) BuildIndex(
 		DatabaseName:   databaseName,
 	}
 
-	// 对齐 Python: vector_store = ChromaVectorStore(...)
+	// T-26: 对齐偏差说明——Python build_index 传 vector_field=self.vector_field.vector_field
+	// （仅名字，建集合用默认 HNSW 16/100/100，indexer 自定义 HNSW 参数不生效）；
+	// Go 传完整 *ChromaVectorField，自定义 HNSW 参数在 build 路径生效。
+	// 此为有意保留的修正性偏差：参数生效比 Python 行为更合理，不改回对齐。
 	vectorStore, err := vector_store.NewChromaVectorStore(
 		vectorStoreConfig, ci.chromaPath,
 		ci.textField, ci.vectorField,
@@ -238,7 +266,17 @@ func (ci *ChromaIndexer) BuildIndex(
 		whereFilter := vector_store.BuildChromaWhereFilter(map[string]any{ci.docIDField: docID})
 		if whereFilter != nil {
 			getResult, err := collection.Get(ctx, chromav2.WithWhere(whereFilter))
-			if err == nil && getResult != nil {
+			// S-29: 查重保护不可静默失效——Python 端 collection.get 异常会沿
+			// build_index 外层 except 包装上抛；Go 原实现吞错放行会让重复 doc_id
+			// 绕过保护写入，破坏 Add 不变式，改为报错中断。
+			if err != nil {
+				return false, exception.BuildError(
+					exception.StatusRetrievalIndexingAddDocRuntimeError,
+					exception.WithParam("error_msg", fmt.Sprintf(
+						"查重阶段 collection.Get 失败（doc_id=%s）: %v", docID, err)),
+				)
+			}
+			if getResult != nil {
 				ids := getResult.GetIDs()
 				if len(ids) > 0 {
 					duplicateDocIDs = append(duplicateDocIDs, docID)
@@ -246,6 +284,9 @@ func (ci *ChromaIndexer) BuildIndex(
 			}
 		}
 	}
+
+	// T-22: map 遍历顺序不确定，排序对齐 Python sorted() 输出确定性。
+	sort.Strings(duplicateDocIDs)
 
 	// 对齐 Python: if duplicate_doc_ids: raise build_error(...)
 	if len(duplicateDocIDs) > 0 {
@@ -325,15 +366,19 @@ func (ci *ChromaIndexer) UpdateIndex(
 	opts ...IndexOption,
 ) (bool, error) {
 	// 对齐 Python: await self.delete_index(doc_id, config.index_name)
+	//
+	// M-26: 对齐 Python 吞错语义——Python update_index 对 delete_index 失败
+	// 的处理是记录日志后继续 rebuild（底层 delete_index 自身已吞掉多数异常
+	// 返回 False），不会让旧数据删除失败阻断新数据写入。
+	// Go 原实现直接中断 rebuild，旧数据删除失败时新数据也无法写入，语义偏离。
 	_, err := ci.DeleteIndex(ctx, docID, config.IndexName)
 	if err != nil {
-		logger.Error(logComponent).
-			Str("event_type", "INDEXING_ERROR").
+		logger.Warn(logComponent).
+			Str("event_type", "INDEXING_WARN").
 			Str("doc_id", docID).
 			Str("index_name", config.IndexName).
 			Err(err).
-			Msg("update index: failed to delete old data")
-		return false, err
+			Msg("update index: failed to delete old data, continuing with rebuild")
 	}
 
 	// 对齐 Python: return await self.build_index(chunks, config, embed_model, **kwargs)
@@ -366,12 +411,14 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 
 	getResult, err := collection.Get(ctx, chromav2.WithWhere(whereFilter))
 	if err != nil {
+		// M-26: 对齐 Python delete_index 整体 try/except——查询失败也走
+		// except 分支 return False（吞错不抛），上层 update_index 才能继续 rebuild。
 		logger.Error(logComponent).
 			Str("event_type", "INDEXING_ERROR").
 			Str("doc_id", docID).
 			Err(err).
 			Msg("delete index: query failed")
-		return false, err
+		return false, nil
 	}
 
 	ids := getResult.GetIDs()
@@ -388,12 +435,14 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 	copy(chromaIDs, ids)
 
 	if err := collection.Delete(ctx, chromav2.WithIDs(chromaIDs...)); err != nil {
+		// M-26: 对齐 Python delete_index 整体 try/except——删除失败也走
+		// except 分支 return False（吞错不抛）。
 		logger.Error(logComponent).
 			Str("event_type", "INDEXING_ERROR").
 			Str("doc_id", docID).
 			Err(err).
 			Msg("failed to delete index entries")
-		return false, err
+		return false, nil
 	}
 
 	// 对齐 Python: logger.info(f"Deleted {delete_count} entries for doc_id={doc_id}")
@@ -447,7 +496,15 @@ func (ci *ChromaIndexer) GetIndexInfo(ctx context.Context, indexName string) (ma
 	}
 	count, err := collection.Count(ctx)
 	if err != nil {
-		count = 0
+		// M-31: 对齐 Python get_index_info 的整体 try/except——count 异常
+		// 走 except 分支 return {"exists": False, "error": str(e)}，
+		// 不静默置 0（否则无法区分空集合与查询失败）。
+		logger.Error(logComponent).
+			Str("event_type", "INDEXING_ERROR").
+			Str("index_name", indexName).
+			Err(err).
+			Msg("failed to get index info: count failed")
+		return map[string]any{"exists": false, "error": err.Error()}, nil
 	}
 
 	metadata := make(map[string]any)

@@ -55,7 +55,9 @@ func RRFFusion(resultsList [][]common.RetrievalResult, k int) []common.Retrieval
 	for key, score := range scoreDict {
 		sorted = append(sorted, kv{key: key, score: score})
 	}
-	sort.Slice(sorted, func(i, j int) bool {
+	// T-23: Python sorted() 是稳定排序——并列分数时保持各列表首次出现顺序。
+	// Go sort.Slice 非稳定，改用 SliceStable 对齐。
+	sort.SliceStable(sorted, func(i, j int) bool {
 		return sorted[i].score > sorted[j].score
 	})
 

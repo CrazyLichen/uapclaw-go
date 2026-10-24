@@ -13,7 +13,6 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -22,7 +21,11 @@ import (
 
 // OpenAIEmbedding OpenAI 向量嵌入客户端。
 //
-// 使用 openai-go SDK，支持 Matryoshka 维度截断和多模态嵌入。
+// 使用 openai-go SDK，支持 Matryoshka 维度截断。
+// M-29: 刻意不实现 EmbedMultimodal——对齐 Python OpenAIEmbedding 无
+// embed_multimodal 方法的现状，使 ComputeChunkEmbeddings 的
+// MultimodalEmbedder 能力探测语义与 Python getattr 探测一致
+// （探测失败 → OpenAI 模型走纯文本批量路径）。
 //
 // Python: openjiuwen/core/retrieval/embedding/openai_embedding.py
 type OpenAIEmbedding struct {
@@ -218,42 +221,6 @@ func (o *OpenAIEmbedding) EmbedDocuments(ctx context.Context, texts []string, op
 	}
 
 	return ExecuteWithConcurrency(ctx, tasks, o.limiter)
-}
-
-// EmbedMultimodal 将多模态文档转换为向量。
-func (o *OpenAIEmbedding) EmbedMultimodal(ctx context.Context, doc *common.MultimodalDocument, opts ...MultimodalOption) ([]float64, error) {
-	if doc == nil {
-		return nil, exception.BuildError(
-			exception.StatusRetrievalEmbeddingInputInvalid,
-			exception.WithParam("error_msg", "多模态文档为 nil"),
-		)
-	}
-
-	// OpenAI 多模态嵌入：将 content 中的文本作为 input 传入
-	// 目前 OpenAI embedding 不直接支持多模态 content，这里以文本回退
-	// 后续如果 OpenAI 支持多模态嵌入 API，可以改为传 doc.Content()
-	// 对齐 G-25 修复：AddField(ModalityText,...) 不再更新 doc.Text，
-	// 因此需要从 Content() 中提取文本字段作为回退。
-	text := doc.Text
-	if text == "" {
-		// 从 Content() 中提取文本字段
-		for _, item := range doc.Content() {
-			if t, ok := item["type"].(string); ok && t == "text" {
-				if txt, ok := item["text"].(string); ok && txt != "" {
-					text = txt
-					break
-				}
-			}
-		}
-	}
-	if text == "" {
-		return nil, exception.BuildError(
-			exception.StatusRetrievalEmbeddingInputInvalid,
-			exception.WithParam("error_msg", "多模态文档的文本回退字段为空"),
-		)
-	}
-
-	return o.EmbedQuery(ctx, text)
 }
 
 // Dimension 返回嵌入向量维度。

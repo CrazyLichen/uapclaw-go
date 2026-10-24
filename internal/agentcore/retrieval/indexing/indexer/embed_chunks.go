@@ -96,9 +96,12 @@ func ComputeChunkEmbeddings(
 	useCaptionForImages := embedOpts.UseCaptionForImages
 	docIndexCallback := embedOpts.DocIndexCallback
 
-	if len(chunks) == 0 {
-		return nil
-	}
+	// T-27: 不做空 chunks 统一早退——对齐 Python 分路径语义：
+	//   - 纯文本路径：空 chunks → embed_documents([]) → 抛 "Empty texts list"
+	//     （Go EmbedDocuments 有对应"所有文本为空"校验，自然对齐）
+	//   - 多模态路径：image_indices/text_only 均为空 → 不调用任何嵌入，静默返回
+	// 原统一早退会让 vector/hybrid + 空 chunks 的 BuildIndex 静默成功写 0 条
+	//（Python 抛错），语义偏离已修正。
 
 	// 对齐 Python: embed_multimodal = getattr(embed_model, "embed_multimodal", None)
 	// 对齐 Python: if not callable(embed_multimodal) or use_caption_for_images
