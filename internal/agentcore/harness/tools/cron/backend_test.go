@@ -78,3 +78,23 @@ func TestToolScope_有上下文(t *testing.T) {
 		t.Errorf("toolScope(ctx) = %q, want %q", scope, "wechat_sess_123")
 	}
 }
+
+// TestToolScope_覆盖值优先 测试 ToolScopeOverride 非空时优先于默认计算。
+// Python: team_manager 传 SimpleNamespace(tool_scope=f"team_member_{agent_id or 'unknown'}")，
+// _tool_scope 读 context.tool_scope 属性即覆盖 frozen dataclass 的默认 channel:session 计算。
+func TestToolScope_覆盖值优先(t *testing.T) {
+	ctx := &CronToolContext{
+		ChannelID:         "web",
+		SessionID:         "s1",
+		ToolScopeOverride: " team_member_member-1 ",
+	}
+	scope := toolScope(ctx)
+	if scope != "team_member_member-1" {
+		t.Errorf("toolScope(ctx with override) = %q, want %q", scope, "team_member_member-1")
+	}
+	// 空白覆盖不生效，回退默认计算
+	ctx.ToolScopeOverride = "   "
+	if scope := toolScope(ctx); scope != "web_s1" {
+		t.Errorf("toolScope(ctx blank override) = %q, want %q", scope, "web_s1")
+	}
+}
