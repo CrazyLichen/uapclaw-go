@@ -178,7 +178,7 @@ func excelSheetRows(filePath string) ([]excelSheet, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var sheets []excelSheet
 	for _, sheet := range f.GetSheetList() {
@@ -199,7 +199,7 @@ func readSheetRows(f *excelize.File, sheet string) ([][]cellValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer it.Close()
+	defer func() { _ = it.Close() }()
 
 	// 第一遍：Rows 迭代器按 XML 行元素产出（空行保留为空切片）
 	var rawRows [][]string
