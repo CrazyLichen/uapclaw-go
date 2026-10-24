@@ -62,6 +62,11 @@ type routeCtxKeyType struct{}
 
 var routeCtxKey = routeCtxKeyType{}
 
+// runtimeCronCtxKey 运行时 cron 上下文 key（对齐 Python _bind_runtime_cron_context 的 ContextVar 组）
+type runtimeCronCtxKeyType struct{}
+
+var runtimeCronCtxKey = runtimeCronCtxKeyType{}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCronTools 创建 Agent 侧工具集。
@@ -71,6 +76,44 @@ func NewCronTools(gatewayPush func(ctx context.Context, payload map[string]any) 
 		gatewayPush: gatewayPush,
 		localStore:  gwcron.NewCronJobStore(path.CronJobsPath()),
 	}
+}
+
+// RuntimeCronContext 运行时 cron 上下文（ctx values 载体，对齐 Python 4 个 ContextVar）。
+type RuntimeCronContext struct {
+	// ChannelID 频道标识（归一化默认 web）
+	ChannelID string
+	// SessionID 会话标识
+	SessionID string
+	// Metadata 扩展元数据（含注入的 request_id）
+	Metadata map[string]any
+	// Mode 触发模式
+	Mode string
+}
+
+// BindRuntimeCronContext 绑定运行时 cron 上下文（对齐 Python _bind_runtime_cron_context）。
+// 4 个 ContextVar → ctx values：channelID 归一化默认 web、sessionID、metadata 注入 request_id、mode。
+// Go ctx 不可变传递，reset 语义天然满足（无需显式 reset）。
+func BindRuntimeCronContext(ctx context.Context, channelID, sessionID string, metadata map[string]any, requestID, mode string) context.Context {
+	normalizedChannel := strings.TrimSpace(channelID)
+	if normalizedChannel == "" {
+		normalizedChannel = gwcron.TargetChannelWeb
+	}
+	normalizedMode := strings.TrimSpace(mode)
+	normalizedMetadata := map[string]any{}
+	if metadata != nil {
+		for k, v := range metadata {
+			normalizedMetadata[k] = v
+		}
+	}
+	if strings.TrimSpace(requestID) != "" {
+		normalizedMetadata["request_id"] = strings.TrimSpace(requestID)
+	}
+	return context.WithValue(ctx, runtimeCronCtxKey, &RuntimeCronContext{
+		ChannelID: normalizedChannel,
+		SessionID: sessionID,
+		Metadata:  normalizedMetadata,
+		Mode:      normalizedMode,
+	})
 }
 
 // SetSchedulerDeps 注入内嵌调度器依赖（agentClient/publisher/configLoader 可空）。

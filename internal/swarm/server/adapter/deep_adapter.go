@@ -39,6 +39,7 @@ import (
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -214,9 +215,9 @@ type DeepAdapter struct {
 	// a2xBlankDataset A2X blank 数据集
 	// ⤵️ A2X / 11.10
 	a2xBlankDataset string
-	// cronRuntime Cron 运行时桥接
-	// ⤵️ 11.10
-	cronRuntime any
+	// cronRuntime Cron 运行时桥接（11.10 已回填）
+	// Python: self._cron_runtime = CronRuntimeBridge()
+	cronRuntime *cronbridge.CronRuntimeBridge
 	// dreamingMode dreaming 模式
 	dreamingMode string
 	// dreamingStarted dreaming 是否已启动
@@ -325,6 +326,9 @@ func NewDeepAdapter() *DeepAdapter {
 		registeredMCPServerIDs: make(map[string]bool),
 		registeredMCPServers:   make(map[string]*mcptypes.McpServerConfig),
 		interactionConverter:   interrupt.ConvertInteractionsToAskUserQuestion,
+		// 11.10 已回填：CronRuntimeBridge 构造
+		// Python: self._cron_runtime = CronRuntimeBridge() (interface_deep.py L538)
+		cronRuntime: cronbridge.NewCronRuntimeBridge(),
 	}
 	// 默认指向 DeepAdapter 自身的 updateRuntimeConfig 方法
 	// CodeAdapter 在构造后覆写此字段实现子类行为（修复 S-17）
@@ -848,8 +852,9 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		}
 	}
 
-	// 步骤 9: cron 上下文绑定
-	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
+	// 步骤 9: cron 上下文绑定（11.10 已回填）
+	// Python: cron_context_tokens = _bind_runtime_cron_context(channel_id=, session_id=, metadata=, request_id=, mode=)
+	ctx = cronbridge.BindRuntimeCronContext(ctx, req.ChannelID, sessionID, req.Metadata, req.RequestID, mode)
 
 	// 步骤 10-11: 权限上下文设置
 	// Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
@@ -1048,8 +1053,9 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		}
 	}
 
-	// 步骤 10: cron 上下文绑定
-	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
+	// 步骤 10: cron 上下文绑定（11.10 已回填）
+	// Python: cron_context_tokens = _bind_runtime_cron_context(channel_id=, session_id=, metadata=, request_id=, mode=)
+	ctx = cronbridge.BindRuntimeCronContext(ctx, req.ChannelID, sessionID, req.Metadata, req.RequestID, mode)
 
 	// 步骤 10-11: 权限上下文设置
 	// Python: TOOL_PERMISSION_CHANNEL_ID.set(channel_id) + setup_permission_context(request)
@@ -1397,9 +1403,12 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		}
 		if sessionActive && d.instance != nil && d.otherActiveSessions(normalizedSID) == 0 {
 			d.instance.Abort(ctx)
+			// 协作式 abort 只能在 checkpoint 之间生效，无法打断 in-flight LLM HTTP 调用。
+			// 直接取消 TaskScheduler 中运行中的任务，注入取消到 await 点。
+			// Python: self._cancel_scheduler_running_tasks()（other_sessions guard 内）
+			d.cancelSchedulerRunningTasks()
 		}
 		d.unmarkSessionActive(normalizedSID)
-		// ⤵️ 11.10: _cancel_scheduler_running_tasks()
 		// ⤵️ 10.6.3-10: _cancel_pending_todos(sessionID)
 		interruptMsg = "执行已取消"
 		logger.Info(logComponent).Str("intent", "cancel").Msg("Interrupt: cancel processed")
@@ -1640,7 +1649,8 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	}
 
 	// 步骤 3: 取消调度器任务，在 await 点注入 CancelledError
-	// ⤵️ 11.10: _cancel_scheduler_running_tasks()
+	// Python: self._cancel_scheduler_running_tasks()（abort_on_gateway_disconnect 步骤 3）
+	d.cancelSchedulerRunningTasks()
 
 	logger.Info(logComponent).Msg("DeepAdapter AbortOnGatewayDisconnect completed")
 }
@@ -2216,6 +2226,31 @@ func (d *DeepAdapter) otherActiveSessions(sessionID string) int {
 		}
 	}
 	return total
+}
+
+// cancelSchedulerRunningTasks 取消 TaskScheduler 运行中的任务。
+//
+// Python: _cancel_scheduler_running_tasks (interface_deep.py L3478-3506)。
+// 协作式中断（rail.abort + instance.abort）只在检查点生效，
+// in-flight LLM HTTP 需要在 await 点直接注入取消才能立即中止。
+func (d *DeepAdapter) cancelSchedulerRunningTasks() {
+	if d.instance == nil {
+		return
+	}
+	controller := d.instance.LoopController()
+	if controller == nil {
+		return
+	}
+	scheduler := controller.TaskScheduler()
+	if scheduler == nil {
+		return
+	}
+	cancelled := scheduler.CancelRunningTasks()
+	if cancelled > 0 {
+		logger.Info(logComponent).
+			Int("cancelled", cancelled).
+			Msg("[DeepAdapter] interrupt: cancelled running TaskScheduler tasks")
+	}
 }
 
 // parseParams 将 json.RawMessage 解析为 map[string]any。

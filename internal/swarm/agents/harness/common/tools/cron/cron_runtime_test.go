@@ -537,3 +537,36 @@ func TestGlobal注入(t *testing.T) {
 		t.Error("global user publisher should propagate")
 	}
 }
+
+// TestBindRuntimeCronContext 运行时上下文绑定（对齐 Python 4 个 ContextVar）
+func TestBindRuntimeCronContext(t *testing.T) {
+	ctx := BindRuntimeCronContext(context.Background(), "feishu", "sess-1",
+		map[string]any{"chat_type": "group"}, "req-9", "agent.plan")
+
+	rc, ok := ctx.Value(runtimeCronCtxKey).(*RuntimeCronContext)
+	if !ok || rc == nil {
+		t.Fatal("runtime cron context should be bound")
+	}
+	if rc.ChannelID != "feishu" || rc.SessionID != "sess-1" || rc.Mode != "agent.plan" {
+		t.Errorf("context = %+v", rc)
+	}
+	// metadata 注入 request_id（原 metadata 保留）
+	if rc.Metadata["request_id"] != "req-9" || rc.Metadata["chat_type"] != "group" {
+		t.Errorf("metadata = %v", rc.Metadata)
+	}
+}
+
+// TestBindRuntimeCronContext归一化 空 channel 默认 web、空 mode 保留空
+func TestBindRuntimeCronContext归一化(t *testing.T) {
+	ctx := BindRuntimeCronContext(context.Background(), "  ", "", nil, "", "")
+	rc := ctx.Value(runtimeCronCtxKey).(*RuntimeCronContext)
+	if rc.ChannelID != "web" {
+		t.Errorf("empty channel should default web, got %q", rc.ChannelID)
+	}
+	if rc.Mode != "" {
+		t.Errorf("empty mode should stay empty, got %q", rc.Mode)
+	}
+	if rc.Metadata == nil || len(rc.Metadata) != 0 {
+		t.Errorf("nil metadata should be empty map, got %v", rc.Metadata)
+	}
+}
