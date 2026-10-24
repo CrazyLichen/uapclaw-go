@@ -821,7 +821,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **14.x 基础层** | — | | | |
-| 14.1 | 🔄 | devtools 包骨架 + 共享 utils | `internal/agentcore/devtools/agentbuilder/utils/`：7 函数（ExtractJSONFromText/FormatDialogHistory/SafeJSONLoads/MergeDictLists/LoadJSONFile/DeepMergeDict/ValidateSessionID，含 2 死函数）+ 20 常量（含 13 死常量）+ 61 子用例；错误码 188002/153003 消费 | `openjiuwen/dev_tools/agent_builder/utils/` |
+| 14.1 | ✅ | devtools 包骨架 + 共享 utils | `internal/agentcore/devtools/agentbuilder/utils/`：7 函数（ExtractJSONFromText/FormatDialogHistory/SafeJSONLoads三层语义/MergeDictLists原地语义+isTruthy/LoadJSONFile四分支/DeepMergeDict死函数实现/ValidateSessionID）+ 20 常量（13 死常量全量对齐）+ 62 子用例（36 unit+3 system+5 LoadJSONFile增强+1 SafeJSONLoads空串nil边界+21.5 constants；JSON number→float64 断言）+ 错误码 188002/153003 消费（BuildError+WithMsg/WithDetails/WithCause/WithParam 选项）+ 正则 (?s) 翻译 Go/Python 双端 9 边界用例交叉验证 + ValueError(顶层非dict)走 except 包装路径对齐；覆盖率 91.0%；设计：docs/superpowers/specs/2026-10-25-devtools-utils-14.1-design.md | `openjiuwen/dev_tools/agent_builder/utils/` |
 | 14.2 | ☐ | 枚举层 | AgentType/BuildState/ProgressStage/ProgressStatus；⤴️ system 用例 3 个归本节（test_utils_integration.py 枚举部分+混合用例枚举半边） | `openjiuwen/dev_tools/agent_builder/utils/enums.py` |
 | 14.3 | ☐ | 进度上报 | ProgressStep/BuildProgress/ProgressReporter/ProgressManager 观察者模式（512 行，Go 需加锁）；⤴️ system 用例 4 个归本节 | `openjiuwen/dev_tools/agent_builder/utils/progress.py` |
 | **14.x agent_builder** | — | | | |
