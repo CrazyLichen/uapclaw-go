@@ -37,7 +37,7 @@ func TestImageParser_Parse_正常(t *testing.T) {
 	model := newCaptionModel(t, nil, nil) // 默认返回 "default caption"
 
 	p := newImageParserOrFatal(t)
-	docs, err := p.Parse(context.Background(), src, WithDocID("doc-1"), WithLLMClient(model))
+	docs, err := p.Parse(t.Context(), src, WithDocID("doc-1"), WithLLMClient(model))
 	if err != nil {
 		t.Fatalf("Parse 不应报错: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestImageParser_Parse_禁用态(t *testing.T) {
 	src := writeTempImage(t, "disabled.png")
 
 	p := newImageParserOrFatal(t)
-	docs, err := p.Parse(context.Background(), src)
+	docs, err := p.Parse(t.Context(), src)
 	if err != nil {
 		t.Fatalf("禁用态不应报错: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestImageParser_Parse_禁用态(t *testing.T) {
 // TestImageParser_Parse_源不存在 测试软失败返回空切片。
 func TestImageParser_Parse_源不存在(t *testing.T) {
 	p := newImageParserOrFatal(t)
-	docs, err := p.Parse(context.Background(), "/no/such/file.png")
+	docs, err := p.Parse(t.Context(), "/no/such/file.png")
 	if err != nil {
 		t.Fatalf("软失败不应报错: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestImageParser_Parse_B1归档路径直通(t *testing.T) {
 	})
 
 	p := newImageParserOrFatal(t)
-	docs, err := p.Parse(context.Background(), src, WithLLMClient(model))
+	docs, err := p.Parse(t.Context(), src, WithLLMClient(model))
 	if err != nil || len(docs) != 1 {
 		t.Fatalf("Parse 应成功: %v, %d docs", err, len(docs))
 	}
@@ -155,7 +155,7 @@ func TestImageParser_LazyParse转发(t *testing.T) {
 	p := newImageParserOrFatal(t)
 
 	var seen []string
-	err := p.LazyParse(context.Background(), src, func(d reranker.Document) error {
+	err := p.LazyParse(t.Context(), src, func(d reranker.Document) error {
 		seen = append(seen, d.Text)
 		return nil
 	})

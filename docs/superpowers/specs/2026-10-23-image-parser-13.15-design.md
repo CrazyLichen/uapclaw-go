@@ -207,3 +207,17 @@ parser/                          # 13.10/13.16 已建包
 - 覆盖率（规范 3）：≥85% 硬线，本节预计 >90%
 - any 审查：零新增破环 any（Metadata map[string]any 是 13.10 数据契约既定）
 - 编译互斥（规则 5）：实施前 `pgrep -f 'go (build|test)'` 检查残留
+
+## 10. 实施偏差记录（2026-10-23 审查回填）
+
+实施与计划（docs/superpowers/plans/2026-10-23-image-parser-13.15.md）的 5 处偏差。前 4 项为实施期发现并修正的计划笔误/改进，第 5 项为实施后审查发现的不彻底修复，本节回填时已一并修复：
+
+| # | 计划原文 | 实际实施 | 性质 | 处置 |
+|---|---------|---------|------|------|
+| 1 | `cfg, _ := llmschema.NewModelRequestConfig(...)`（双值接收） | `cfg := ...`（单值） | 计划笔误：函数实际单返回值，计划代码编译不过 | 无代码动作（实现即唯一正确写法） |
+| 2 | 测试统一 `t.Context()` | 实施先用了 `context.Background()` | 计划自注的兼容选项之一 | 2026-10-23 审查后按用户拍板改回 `t.Context()`（10 处） |
+| 3 | `TestCpImage_正常复制` 无 Chdir（计划明示容忍 images/ 落在测试工作目录） | 实施加了 Chdir(t.TempDir()) 防污染；但 `复制失败回落原路径` 漏防（该用例 Stat 通过后同样执行 MkdirAll("images")，且未切目录——实施照抄计划原文） | 实施改进但不彻底 | 2026-10-23 审查补齐该用例 Chdir+Cleanup 并清理源码目录残留 images/（空目录，测试运行产物） |
+| 4 | image_parser_test.go 导入块含未使用的 `llm`（编译报错）且缺 B1 闭包需要的 `llmschema` | 去 `llm`、补 `llmschema` | 计划导入块笔误 | 无代码动作（实现即正确解） |
+| 5 | `captionClient.invokeFn` 用内联函数类型字面量，`captionInvokeFn` 命名类型定义置于 `newCaptionModel` 之后 | 命名类型前置声明后再用于字段 | 声明顺序调整（两写法皆可编译） | 无代码动作（等价改进，可读性更佳） |
+
+回填后回归：`go test -race -cover ./internal/agentcore/retrieval/indexing/processor/parser/` → ok，coverage 90.9%（基线不降），race 零报告，测试运行后源码目录零残留。

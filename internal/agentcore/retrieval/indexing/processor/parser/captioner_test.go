@@ -153,8 +153,16 @@ func TestCpImage_源即目标(t *testing.T) {
 
 // TestCpImage_复制失败回落原路径 测试复制失败时软失败返回源路径。
 func TestCpImage_复制失败回落原路径(t *testing.T) {
-	// 源是目录：Stat 成功但 ReadFile 失败，构造复制失败分支
+	// CpImage 的 images/ 相对当前工作目录：本用例 Stat 通过后会执行
+	// MkdirAll("images")（到 copyFile 才失败），须切到临时目录防污染源码目录
 	dir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("切换工作目录失败: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	// 源是目录：Stat 成功但 ReadFile 失败，构造复制失败分支
 	srcDir := filepath.Join(dir, "fake.png")
 	if err := os.Mkdir(srcDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -248,7 +256,7 @@ func TestCaptionImages_单图成功(t *testing.T) {
 	})
 
 	c := NewImageCaptioner(model)
-	got := c.CaptionImages(context.Background(), []string{src})
+	got := c.CaptionImages(t.Context(), []string{src})
 	if len(got) != 1 || got[0] != "A chart." {
 		t.Fatalf("应返回 [A chart.]，实际 %v", got)
 	}
@@ -283,7 +291,7 @@ func TestCaptionImages_单图成功(t *testing.T) {
 // TestCaptionImages_文件不存在 测试跳过不存在的图。
 func TestCaptionImages_文件不存在(t *testing.T) {
 	c := NewImageCaptioner(nil) // 任何 client：文件不存在分支在前
-	got := c.CaptionImages(context.Background(), []string{"/no/such/file.png"})
+	got := c.CaptionImages(t.Context(), []string{"/no/such/file.png"})
 	if len(got) != 1 || got[0] != "" {
 		t.Fatalf("不存在文件应返回 [\"\"]，实际 %v", got)
 	}
@@ -292,7 +300,7 @@ func TestCaptionImages_文件不存在(t *testing.T) {
 // TestLLMCall_禁用态 测试 nil client 返回空串。
 func TestLLMCall_禁用态(t *testing.T) {
 	c := NewImageCaptioner(nil)
-	if got := c.llmCall(context.Background(), "whatever.png"); got != "" {
+	if got := c.llmCall(t.Context(), "whatever.png"); got != "" {
 		t.Errorf("禁用态应返回空串，实际 %q", got)
 	}
 }
@@ -304,7 +312,7 @@ func TestLLMCall_调用失败软失败(t *testing.T) {
 		return nil, errors.New("boom")
 	})
 	c := NewImageCaptioner(model)
-	if got := c.llmCall(context.Background(), src); got != "" {
+	if got := c.llmCall(t.Context(), src); got != "" {
 		t.Errorf("Invoke 失败应返回空串，实际 %q", got)
 	}
 }
@@ -319,7 +327,7 @@ func TestLLMCall_mime回落(t *testing.T) {
 		return llmschema.NewAssistantMessage("x"), nil
 	})
 	c := NewImageCaptioner(model)
-	_ = c.llmCall(context.Background(), src)
+	_ = c.llmCall(t.Context(), src)
 	if !strings.HasPrefix(gotURL, "data:image/png;base64,") {
 		t.Errorf("无扩展名应回落 image/png，实际 %s", gotURL[:30])
 	}
