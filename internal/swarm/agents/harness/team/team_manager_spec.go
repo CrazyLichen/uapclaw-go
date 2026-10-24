@@ -12,12 +12,15 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	agentteamsmodels "github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	agentcron "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
@@ -266,23 +269,77 @@ func (m *TeamManager) RegisterMemberRuntimeTools(
 	if card := agent.Card(); card != nil {
 		agentID = card.ID
 	}
-	// ⤵️(10.6.24/11.10) CronRuntimeBridge 工具注册 — 待 Cron 工具集实现回填
-	// Python: cron_runtime.build_tools(context=...) → Runner.resource_mgr.add_tool → agent.ability_manager.add
-	logger.Info(logComponent).
-		Str("agent_id", agentID).
-		Str("session_id", sessionID).
-		Msg("[TeamManager] cron tool registration pending (10.6.24)")
+	// 11.10 已回填：CronRuntimeBridge 工具注册
+	// Python: cron_runtime = CronRuntimeBridge() + build_tools(context=..., agent_id=..., language=...)
+	cronRuntime := cronbridge.NewCronRuntimeBridge()
+	channel := ""
+	if channelID != nil {
+		channel = strings.TrimSpace(*channelID)
+	}
+	if channel == "" {
+		channel = "web"
+	}
+	language := "cn"
+	if dc := agent.DeepConfig(); dc != nil && strings.TrimSpace(dc.Language) != "" {
+		language = strings.TrimSpace(dc.Language)
+	}
+	cronCtx := &agentcron.CronToolContext{
+		ChannelID: channel,
+		SessionID: sessionID,
+		Metadata:  copyMetadataMap(requestMetadata),
+		Mode:      "team",
+	}
+	if requestID != nil && strings.TrimSpace(*requestID) != "" {
+		if cronCtx.Metadata == nil {
+			cronCtx.Metadata = map[string]any{}
+		}
+		cronCtx.Metadata["request_id"] = strings.TrimSpace(*requestID)
+	}
+	if tools := cronRuntime.BuildTools(cronCtx, agentID, language); len(tools) > 0 {
+		registeredCount := 0
+		// 对齐 Python: if not Runner.resource_mgr.get_tool(cron_tool.card.id): add_tool
+		resourceMgr := runner.GetResourceMgr()
+		abilityMgr := agent.AbilityManager()
+		for _, cronTool := range tools {
+			card := cronTool.Card()
+			if existing := abilityMgr.Get(card.Name); existing == nil {
+				if err := resourceMgr.AddTool(cronTool); err != nil {
+					logger.Warn(logComponent).Err(err).Str("tool", card.Name).
+						Msg("[TeamManager] cron tool add to resource manager failed")
+					continue
+				}
+			}
+			abilityMgr.Add(card)
+			registeredCount++
+		}
+		logger.Info(logComponent).
+			Str("agent_id", agentID).
+			Int("registered", registeredCount).
+			Msg("[TeamManager] Registered cron tools for member")
+	}
 
 	if requestID == nil || *requestID == "" || channelID == nil || *channelID == "" {
 		logger.Info(logComponent).
 			Msg("[TeamManager] SendFileToolkit skipped: missing request_id or channel_id")
 		return
 	}
-	// ⤵️(10.6.24/11.10) SendFileToolkit 注册 — 待 SendFile 工具集实现回填
+	// ⤵️(10.6.24) SendFileToolkit 注册 — 待 SendFile 工具集实现回填
 	// Python: send_file_allowed 三态（None 时 web 默认 True，其余 False）→ SendFileToolkit(...).get_tools() 注册
 	logger.Info(logComponent).
 		Str("channel_id", *channelID).
 		Msg("[TeamManager] SendFileToolkit registration pending (10.6.24)")
+}
+
+// copyMetadataMap 浅拷贝 metadata（nil 保留 nil，对齐 Python metadata 原样传递）。
+func copyMetadataMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 // NormalizeDistributedTransportFields 公共包装：分布式传输字段标准化。
