@@ -570,3 +570,177 @@ func TestBindRuntimeCronContext归一化(t *testing.T) {
 		t.Errorf("nil metadata should be empty map, got %v", rc.Metadata)
 	}
 }
+
+// TestGlobalSetters 四个全局注入 setter
+func TestGlobalSetters(t *testing.T) {
+	globalMu.Lock()
+	oldPush, oldPub, oldCfg, oldAgent := globalGatewayPushFunc, globalUserPublisher, globalConfigLoader, globalAgentClient
+	globalGatewayPushFunc, globalUserPublisher, globalConfigLoader, globalAgentClient = nil, nil, nil, nil
+	globalMu.Unlock()
+	defer func() {
+		globalMu.Lock()
+		globalGatewayPushFunc, globalUserPublisher, globalConfigLoader, globalAgentClient = oldPush, oldPub, oldCfg, oldAgent
+		globalMu.Unlock()
+	}()
+
+	called := false
+	SetGlobalGatewayPushFunc(func(ctx context.Context, payload map[string]any) error {
+		called = true
+		return nil
+	})
+	SetGlobalUserPublisher(&fakeUserPublisher{})
+	SetGlobalConfigLoader(func() map[string]any { return map[string]any{"x": 1} })
+	SetGlobalAgentClient(nil)
+
+	globalMu.RLock()
+	fn := globalGatewayPushFunc
+	globalMu.RUnlock()
+	if fn == nil {
+		t.Fatal("SetGlobalGatewayPushFunc should set global fn")
+	}
+	if fn(context.Background(), nil) != nil || !called {
+		t.Error("push fn should be invocable")
+	}
+
+	globalMu.RLock()
+	cfg := globalConfigLoader
+	globalMu.RUnlock()
+	if cfg == nil || cfg()["x"] != 1 {
+		t.Error("SetGlobalConfigLoader should set global loader")
+	}
+}
+
+// TestBridgeSetToolsOverrides tools 覆盖传播
+func TestBridgeSetToolsOverrides(t *testing.T) {
+	pushRec := &pushRecorder{}
+	tools := newTestTools(t, pushRec.push)
+	pub := &fakeUserPublisher{}
+	bridge := NewCronRuntimeBridge()
+	bridge.SetToolsOverrides(tools, pub)
+
+	backend := bridge.GetBackend()
+	cronBackend, ok := backend.(*cronToolsBackend)
+	if !ok {
+		t.Fatal("resolved backend should be cronToolsBackend")
+	}
+	if cronBackend.tools != tools {
+		t.Error("toolsOverride should propagate")
+	}
+	if cronBackend.userPublisher != pub {
+		t.Error("userPublisherOverride should propagate")
+	}
+}
+
+// TestBridgeGetBackendNilPush 全局无注入时 backend 仍可解析
+func TestBridgeGetBackendNilPush(t *testing.T) {
+	globalMu.Lock()
+	oldPush, oldPub, oldCfg, oldAgent := globalGatewayPushFunc, globalUserPublisher, globalConfigLoader, globalAgentClient
+	globalGatewayPushFunc, globalUserPublisher, globalConfigLoader, globalAgentClient = nil, nil, nil, nil
+	globalMu.Unlock()
+	defer func() {
+		globalMu.Lock()
+		globalGatewayPushFunc, globalUserPublisher, globalConfigLoader, globalAgentClient = oldPush, oldPub, oldCfg, oldAgent
+		globalMu.Unlock()
+	}()
+
+	bridge := NewCronRuntimeBridge()
+	backend := bridge.GetBackend()
+	if backend == nil {
+		t.Fatal("backend should resolve without global injections")
+	}
+	// 二次调用返回缓存
+	if bridge.GetBackend() != backend {
+		t.Error("second GetBackend should return cached backend")
+	}
+}
+
+// TestBackendCRUD错误路径 store 错误传播
+func TestBackendCRUD错误路径(t *testing.T) {
+	backend := newBackendWithTmp(t)
+	ctx := context.Background()
+
+	// GetJob 不存在 → nil
+	got, err := backend.GetJob(ctx, "ghost")
+	if err != nil || got != nil {
+		t.Errorf("ghost get = %v, err=%v", got, err)
+	}
+	// DeleteJob 不存在 → false
+	deleted, err := backend.DeleteJob(ctx, "ghost")
+	if err != nil || deleted {
+		t.Errorf("ghost delete = %v, err=%v", deleted, err)
+	}
+	// PreviewJob 不存在 → 错误
+	if _, err := backend.PreviewJob(ctx, "ghost", 5); err == nil {
+		t.Error("ghost preview should error")
+	}
+	// UpdateJob 不存在 → 错误
+	if _, err := backend.UpdateJob(ctx, "ghost", map[string]any{"name": "x"}, nil); err == nil {
+		t.Error("ghost update should error")
+	}
+	// ToggleJob 不存在 → 错误
+	if _, err := backend.ToggleJob(ctx, "ghost", true); err == nil {
+		t.Error("ghost toggle should error")
+	}
+	// CreateJob 非法表达式 → 错误
+	if _, err := backend.CreateJob(ctx, map[string]any{
+		"schedule": map[string]any{"kind": "cron", "expr": "bad-expr"},
+	}, nil); err == nil {
+		t.Error("invalid cron expr should error")
+	}
+}
+
+// TestDeepCopyMetadata 深拷贝语义
+func TestDeepCopyMetadata(t *testing.T) {
+	if deepCopyMetadata(nil) != nil {
+		t.Error("nil → nil")
+	}
+	src := map[string]any{"a": "x"}
+	dst := deepCopyMetadata(src)
+	dst["a"] = "y"
+	if src["a"] != "x" {
+		t.Error("copy should isolate from source")
+	}
+}
+
+// TestContextChannelID nil 上下文安全
+func TestContextChannelID(t *testing.T) {
+	if contextChannelID(nil) != "" {
+		t.Error("nil ctx → empty channel")
+	}
+	if contextSessionID(nil) != "" {
+		t.Error("nil ctx → empty session")
+	}
+}
+
+// TestJsonRawMessage 序列化降级
+func TestJsonRawMessage(t *testing.T) {
+	raw := jsonRawMessage(map[string]any{"a": "b"})
+	if string(raw) != `{"a":"b"}` {
+		t.Errorf("raw = %s", raw)
+	}
+	// 无法序列化的值降级 {}（chan 不可 marshal）
+	raw = jsonRawMessage(map[string]any{"ch": make(chan int)})
+	if string(raw) != `{}` {
+		t.Errorf("degraded = %s", raw)
+	}
+}
+
+// TestBackendRunNow转发生命周期 RunNow 空 route 转发
+func TestBackendRunNow转发生命周期(t *testing.T) {
+	pushRec := &pushRecorder{}
+	tools := newTestTools(t, pushRec.push)
+	backend := &cronToolsBackend{tools: tools}
+	runID, err := backend.RunNow(context.Background(), "job-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runID != "" {
+		t.Errorf("forwarded result has no run_id, got %q", runID)
+	}
+	if len(pushRec.payloads) != 1 {
+		t.Fatalf("push count = %d", len(pushRec.payloads))
+	}
+	if pushRec.payloads[0]["body"].(map[string]any)["action"] != "run_now" {
+		t.Error("action should be run_now")
+	}
+}
