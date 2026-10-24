@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"regexp"
 	"strings"
@@ -178,6 +179,25 @@ func LoadJSONFile(filePath string) (map[string]any, error) {
 		return nil, wrapJSONFileError(filePath, fmt.Errorf("JSON top level must be object/dict, got: %T", data))
 	}
 	return m, nil
+}
+
+// DeepMergeDict 深度合并字典。
+// 对齐 Python: deep_merge_dict（Python 侧死代码，全量对齐实现）。
+// 递归合并嵌套 dict，update 覆盖 base 同名键；不修改原 dict（浅拷贝起点 + 递归新建）。
+func DeepMergeDict(base, update map[string]any) map[string]any {
+	result := maps.Clone(base)
+	for key, value := range update {
+		if existing, ok := result[key]; ok {
+			existingMap, existingIsMap := existing.(map[string]any)
+			valueMap, valueIsMap := value.(map[string]any)
+			if existingIsMap && valueIsMap {
+				result[key] = DeepMergeDict(existingMap, valueMap)
+				continue
+			}
+		}
+		result[key] = value
+	}
+	return result
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

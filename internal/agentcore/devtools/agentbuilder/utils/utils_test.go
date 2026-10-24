@@ -308,3 +308,103 @@ func TestLoadJSONFile(t *testing.T) {
 		}
 	})
 }
+
+// TestDeepMergeDict 对齐 Python TestDeepMergeDict（5 用例 + 嵌套层增强断言）
+func TestDeepMergeDict(t *testing.T) {
+	t.Run("简单合并", func(t *testing.T) {
+		result := DeepMergeDict(map[string]any{"a": 1}, map[string]any{"b": 2})
+		if result["a"] != 1 || result["b"] != 2 {
+			t.Errorf("result=%v", result)
+		}
+	})
+	t.Run("嵌套合并", func(t *testing.T) {
+		base := map[string]any{"a": map[string]any{"b": 1, "c": 2}}
+		update := map[string]any{"a": map[string]any{"b": 3, "d": 4}}
+		result := DeepMergeDict(base, update)
+		inner := result["a"].(map[string]any)
+		if inner["b"] != 3 || inner["c"] != 2 || inner["d"] != 4 {
+			t.Errorf("result=%v", result)
+		}
+	})
+	t.Run("非dict值覆盖", func(t *testing.T) {
+		result := DeepMergeDict(map[string]any{"a": 1}, map[string]any{"a": 2})
+		if result["a"] != 2 {
+			t.Errorf("result=%v", result)
+		}
+	})
+	t.Run("不改原map", func(t *testing.T) {
+		base := map[string]any{"a": 1}
+		result := DeepMergeDict(base, map[string]any{"b": 2})
+		if _, exists := base["b"]; exists {
+			t.Error("base 不应被修改")
+		}
+		if _, exists := result["b"]; !exists {
+			t.Error("result 应含 b")
+		}
+	})
+	t.Run("嵌套层不改原map_增强断言", func(t *testing.T) {
+		// Python 测试只断言顶层；Go 增强为嵌套层也验证（测试增强非偏差）
+		base := map[string]any{"a": map[string]any{"x": 1}}
+		result := DeepMergeDict(base, map[string]any{"a": map[string]any{"y": 2}})
+		inner := result["a"].(map[string]any)
+		inner["z"] = 3 // 修改结果嵌套层
+		baseInner := base["a"].(map[string]any)
+		if _, exists := baseInner["z"]; exists {
+			t.Error("base 嵌套层不应被修改（递归必须新建 map）")
+		}
+		if _, exists := baseInner["y"]; exists {
+			t.Error("base 嵌套层不应被合并写入")
+		}
+	})
+	t.Run("双空", func(t *testing.T) {
+		result := DeepMergeDict(map[string]any{}, map[string]any{})
+		if len(result) != 0 {
+			t.Errorf("result=%v", result)
+		}
+	})
+}
+
+// TestUtils集成_JSON提取解析工作流 对齐 Python system test_extract_and_parse_json_workflow
+func TestUtils集成_JSON提取解析工作流(t *testing.T) {
+	llmResponse := "\n        Here is the generated DSL:\n        ```json\n        {\n            \"name\": \"Test Agent\",\n            \"type\": \"llm_agent\",\n            \"config\": {\n                \"temperature\": 0.7,\n                \"max_tokens\": 1000\n            }\n        }\n        ```\n        Please review and confirm.\n        "
+	jsonStr := ExtractJSONFromText(llmResponse)
+	if jsonStr == "" {
+		t.Fatal("提取结果为空")
+	}
+	parsed, err := SafeJSONLoads(jsonStr)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	m := parsed.(map[string]any)
+	if m["name"] != "Test Agent" {
+		t.Errorf("name=%v", m["name"])
+	}
+	if m["config"].(map[string]any)["temperature"] != 0.7 {
+		t.Errorf("temperature=%v", m["config"])
+	}
+}
+
+// TestUtils集成_对话历史格式化 对齐 Python system test_dialog_history_formatting_integration
+func TestUtils集成_对话历史格式化(t *testing.T) {
+	history := []map[string]string{
+		{"role": "user", "content": "创建一个助手"},
+		{"role": "assistant", "content": "好的，请告诉我助手名称"},
+		{"role": "user", "content": "叫小助手"},
+	}
+	formatted := FormatDialogHistory(history)
+	for _, expect := range []string{"user: 创建一个助手", "assistant: 好的，请告诉我助手名称", "user: 叫小助手"} {
+		if !strings.Contains(formatted, expect) {
+			t.Errorf("formatted=%q 缺少 %q", formatted, expect)
+		}
+	}
+}
+
+// TestUtils集成_真实模式SessionID校验 对齐 Python system test_session_id_validation_with_real_patterns
+func TestUtils集成_真实模式SessionID校验(t *testing.T) {
+	validIDs := []string{"session-12345", "user_001_session", "abc123XYZ", "test-session-2024"}
+	for _, id := range validIDs {
+		if !ValidateSessionID(id) {
+			t.Errorf("%q 应为有效", id)
+		}
+	}
+}
