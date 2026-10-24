@@ -74,6 +74,12 @@ var (
 	runnerOnce sync.Once
 	// runnerMu Runner读写锁
 	runnerMu sync.RWMutex
+	// teamRuntimeManagerMu 保护 Runner.teamRuntimeManager 字段的读写锁。
+	// runnerMu 仅保护 globalRunner 指针的懒初始化与替换；teamRuntimeManager
+	// 字段在运行期可被 runtime.GetTeamRuntimeManager 懒创建注入，也可能被
+	// 后台 goroutine（如 shutdown cleanup 的 Release 链路）并发读取，
+	// 无锁读写构成数据竞争，需独立锁保护。
+	teamRuntimeManagerMu sync.RWMutex
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -653,13 +659,19 @@ func GetDistPubSub() any {
 // 对齐 Python: runner._team_runtime_manager = TeamRuntimeManager()。
 func SetTeamRuntimeManager(mgr registry.PoolAccessor) {
 	r := getRunner()
+	teamRuntimeManagerMu.Lock()
 	r.teamRuntimeManager = mgr
+	teamRuntimeManagerMu.Unlock()
 }
 
 // GetTeamRuntimeManager 获取 TeamRuntimeManager（registry.PoolAccessor 类型）。
 // 对齐 Python: runner._team_runtime_manager
 func GetTeamRuntimeManager() registry.PoolAccessor {
-	return getRunner().teamRuntimeManager
+	r := getRunner()
+	teamRuntimeManagerMu.RLock()
+	mgr := r.teamRuntimeManager
+	teamRuntimeManagerMu.RUnlock()
+	return mgr
 }
 
 // IsRemoteAgent 判断Agent是否为远程Agent。

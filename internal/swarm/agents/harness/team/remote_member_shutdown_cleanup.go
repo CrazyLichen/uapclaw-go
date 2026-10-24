@@ -87,6 +87,10 @@ var (
 	// （对齐 Python 直接构造 WebSocketGatewayPushTransport——Go 因循环依赖
 	// team → adapter 改为注入回调，模式同 SetOnEventBroadcast）。
 	shutdownCleanupNoticePusher func(ctx context.Context, msg map[string]any) error
+	// shutdownCleanupNoticeMu 保护 shutdownCleanupNoticePusher 的读写锁。
+	// 注入方（adapter 层启动/测试 cleanup）与消费方（延迟清理后台 goroutine）
+	// 可能并发读写该回调，无锁访问构成数据竞争。
+	shutdownCleanupNoticeMu sync.RWMutex
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -94,7 +98,9 @@ var (
 // SetShutdownCleanupNoticePusher 设置清理结果通知推送回调（由 adapter 层注入）。
 // 对齐 Python: _push_shutdown_cleanup_notice 中的 WebSocketGatewayPushTransport().send_push
 func SetShutdownCleanupNoticePusher(fn func(ctx context.Context, msg map[string]any) error) {
+	shutdownCleanupNoticeMu.Lock()
 	shutdownCleanupNoticePusher = fn
+	shutdownCleanupNoticeMu.Unlock()
 }
 
 // WaitForPendingShutdownCleanupForSession 等待指定 session 的 pending shutdown 清理完成。
@@ -518,7 +524,9 @@ func runPendingShutdownCleanupForSession(ctx context.Context, sessionID string, 
 // pushShutdownCleanupNotice 推送清理结果通知到前端（失败仅 warning）。
 // 对齐 Python: _push_shutdown_cleanup_notice (L1334-1361)
 func pushShutdownCleanupNotice(ctx context.Context, sessionID string, channelID string, deleted bool) {
+	shutdownCleanupNoticeMu.RLock()
 	pusher := shutdownCleanupNoticePusher
+	shutdownCleanupNoticeMu.RUnlock()
 	if pusher == nil {
 		// Go 差异：注入缺失等价 Python transport 构造异常被 except 捕获
 		logger.Warn(logComponent).

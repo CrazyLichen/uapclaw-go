@@ -24,6 +24,22 @@ func resetShutdownCleanupState(t *testing.T) {
 	shutdownCleanupMu.Unlock()
 }
 
+// waitShutdownCleanupEntryDone 等待延迟清理任务完成信号。
+// 测试在注册表出现条目后直接返回会泄漏后台 goroutine 到后续测试，
+// 其触碰全局状态（Runner.teamRuntimeManager/checkpointer/通知回调）与
+// 后续测试对这些全局的注入写入构成数据竞争，必须在测试内等待收尾。
+func waitShutdownCleanupEntryDone(t *testing.T, entry *shutdownCleanupEntry) {
+	t.Helper()
+	// 覆盖 2s 固定延迟 + 清理执行；对齐生产等待超时 15s 口径
+	timer := time.NewTimer(15 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-entry.done:
+	case <-timer.C:
+		t.Fatal("延迟清理任务未在超时内完成")
+	}
+}
+
 // newShutdownCleanupTestAgent 构造带内存 DB TeamBackend 的 TeamAgent（leader 角色）。
 func newShutdownCleanupTestAgent(t *testing.T, teamName string) *agent.TeamAgent {
 	t.Helper()
@@ -191,12 +207,23 @@ func TestScheduleShutdownCleanup_注册表生命周期(t *testing.T) {
 		t.Error("重复调度应复用现有条目")
 	}
 
+	// 等待延迟清理 goroutine 完成，避免泄漏到后续测试（触碰全局状态的 race）。
+	// 完成后 finally 语义应将条目从注册表移除（done 关闭先于 defer 移除的逆序
+	// 不成立——delayedShutdownCleanup 返回即移除，close(done) 在其后）。
+	waitShutdownCleanupEntryDone(t, entry)
+	shutdownCleanupMu.Lock()
+	count = len(shutdownCleanupTasks)
+	shutdownCleanupMu.Unlock()
+	if count != 0 {
+		t.Errorf("任务完成后注册表应移除条目，count = %d", count)
+	}
+
 	// 空白 sessionID → 直接返回
 	scheduleShutdownCleanup("  ", "web")
 	shutdownCleanupMu.Lock()
 	count = len(shutdownCleanupTasks)
 	shutdownCleanupMu.Unlock()
-	if count != 1 {
+	if count != 0 {
 		t.Errorf("空白 sessionID 不应注册，count = %d", count)
 	}
 }
@@ -301,13 +328,15 @@ func TestShutdownCleanupTool_Invoke_成功触发调度(t *testing.T) {
 		t.Error("wrapper 应透传原始成功结果")
 	}
 
-	// 等待调度注册表出现条目（go 调度是异步的）
+	// 等待调度注册表出现条目（go 调度是异步的），随后等待清理 goroutine
+	// 完成，避免泄漏到后续测试（触碰全局状态的 race）
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		shutdownCleanupMu.Lock()
-		_, ok := shutdownCleanupTasks["sess-wrap"]
+		entry, ok := shutdownCleanupTasks["sess-wrap"]
 		shutdownCleanupMu.Unlock()
 		if ok {
+			waitShutdownCleanupEntryDone(t, entry)
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -486,13 +515,15 @@ func TestShutdownCleanupTool_FallbackSessionID_构造快照(t *testing.T) {
 		t.Error("wrapper 应透传原始成功结果")
 	}
 
-	// 等待调度注册表出现构造快照条目（go 调度是异步的）
+	// 等待调度注册表出现构造快照条目（go 调度是异步的），随后等待清理
+	// goroutine 完成，避免泄漏到后续测试（触碰全局状态的 race）
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		shutdownCleanupMu.Lock()
-		_, ok := shutdownCleanupTasks["sess-orig"]
+		entry, ok := shutdownCleanupTasks["sess-orig"]
 		shutdownCleanupMu.Unlock()
 		if ok {
+			waitShutdownCleanupEntryDone(t, entry)
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
