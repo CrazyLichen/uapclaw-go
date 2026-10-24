@@ -32,7 +32,7 @@
 //	├── pdf_parser.go    # PDFParser：PDF 双通道解析（文本+图片 caption）（13.12）
 //	├── docx_model.go    # docx stdlib 自研解析层：zip/rels/styles/块遍历/合并单元格/图片链（13.13）
 //	├── word_parser.go   # WordParser：DOCX markdown 转换（13.13）
-//	├── excel_value.go   # cellStr/pyFloatStr + excelize adapter（openpyxl 类型语义还原）（13.13）
+//	├── excel_value.go   # cellValue 密封 sum type + cellStr/pyFloatStr + excelize adapter（openpyxl 类型语义还原）（13.13）
 //	└── excel_parser.go  # ExcelParser：行/列 Document 产出 + CSV/TSV（13.13）
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/processor/parser/

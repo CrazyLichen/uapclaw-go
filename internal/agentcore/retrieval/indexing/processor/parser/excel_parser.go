@@ -114,16 +114,16 @@ func (p *ExcelParser) Parse(ctx context.Context, doc string, opts ...ParseOption
 		if sheetName == "" {
 			sheetName = "default"
 		}
-		// rows [][]string → [][]any 包装（rowsToDocuments 消费 any）
-		anyRows := make([][]any, len(rows))
+		// rows [][]string → cellString 变体包装（rowsToDocuments 消费 cellValue）
+		cellRows := make([][]cellValue, len(rows))
 		for i, row := range rows {
-			r := make([]any, len(row))
+			r := make([]cellValue, len(row))
 			for j, c := range row {
-				r[j] = c
+				r[j] = cellString(c)
 			}
-			anyRows[i] = r
+			cellRows[i] = r
 		}
-		documents = rowsToDocuments(anyRows, sheetName, baseID, 0, includeHeader)
+		documents = rowsToDocuments(cellRows, sheetName, baseID, 0, includeHeader)
 	} else {
 		sheets, err := excelSheetRows(doc)
 		if err != nil {
@@ -179,7 +179,7 @@ func (p *ExcelParser) Supports(doc string) bool {
 // "(empty)"；false → join（空列空串）。
 //
 // Python: excel_parser.py _rows_to_documents
-func rowsToDocuments(rows [][]any, sheetName, baseID string, sheetIndex int, includeHeader bool) []reranker.Document {
+func rowsToDocuments(rows [][]cellValue, sheetName, baseID string, sheetIndex int, includeHeader bool) []reranker.Document {
 	var docs []reranker.Document
 	if len(rows) == 0 {
 		return docs

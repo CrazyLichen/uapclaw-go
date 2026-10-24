@@ -226,29 +226,29 @@ func TestExcelCellValue_类型还原(t *testing.T) {
 	if len(rows) != 5 {
 		t.Fatalf("Data 行数 = %d, want 5", len(rows))
 	}
-	// 表头：str/None/str（空 cell → nil）
-	if rows[0][0] != "Name" || rows[0][1] != nil || rows[0][2] != "Age" {
-		t.Errorf("表头 = %v, want [Name <nil> Age]", rows[0])
+	// 表头：str/None/str（空 cell → cellNone）
+	if rows[0][0] != cellString("Name") || rows[0][1] != noneCell || rows[0][2] != cellString("Age") {
+		t.Errorf("表头 = %v, want [Name None Age]", rows[0])
 	}
 	// int cell
-	if v, ok := rows[1][2].(int); !ok || v != 30 {
-		t.Errorf("rows[1][2] = %#v, want int 30", rows[1][2])
+	if v, ok := rows[1][2].(cellInt); !ok || v != 30 {
+		t.Errorf("rows[1][2] = %#v, want cellInt 30", rows[1][2])
 	}
 	// float cell
-	if v, ok := rows[3][0].(float64); !ok || v != 3.5 {
-		t.Errorf("rows[3][0] = %#v, want float64 3.5", rows[3][0])
+	if v, ok := rows[3][0].(cellFloat); !ok || v != 3.5 {
+		t.Errorf("rows[3][0] = %#v, want cellFloat 3.5", rows[3][0])
 	}
 	// 大数 int 化（%.16g 存储字面量无 ./e/E → int，对齐 openpyxl _cast_number）
-	if v, ok := rows[3][1].(int); !ok || v != 1000000000000000 {
-		t.Errorf("rows[3][1] = %#v, want int 1000000000000000（存储整数字面量）", rows[3][1])
+	if v, ok := rows[3][1].(cellInt); !ok || v != 1000000000000000 {
+		t.Errorf("rows[3][1] = %#v, want cellInt 1000000000000000（存储整数字面量）", rows[3][1])
 	}
 	// bool cell
-	if v, ok := rows[3][2].(bool); !ok || !v {
-		t.Errorf("rows[3][2] = %#v, want bool true", rows[3][2])
+	if v, ok := rows[3][2].(cellBool); !ok || v != cellBool(true) {
+		t.Errorf("rows[3][2] = %#v, want cellBool true", rows[3][2])
 	}
 	// Calc sheet：0.3 float
-	if v, ok := sheets[1].rows[1][0].(float64); !ok || v != 0.3 {
-		t.Errorf("Calc rows[1][0] = %#v, want float64 0.3", sheets[1].rows[1][0])
+	if v, ok := sheets[1].rows[1][0].(cellFloat); !ok || v != 0.3 {
+		t.Errorf("Calc rows[1][0] = %#v, want cellFloat 0.3", sheets[1].rows[1][0])
 	}
 }
 
@@ -257,11 +257,11 @@ func TestExcelCellValue_类型还原(t *testing.T) {
 // Python 直跑基准：行文档仅非空值、无表头前缀；全空行 continue；
 // 列文档无 "Column name:" 前缀，纯 values join；空列空串。
 func TestRowsToDocuments_includeHeaderFalse(t *testing.T) {
-	rows := [][]any{
-		{"Name", "", "Age"},
-		{"alice", "x", 30},
-		{"", "", ""},
-		{"bob", "", ""},
+	rows := [][]cellValue{
+		{cellString("Name"), cellString(""), cellString("Age")},
+		{cellString("alice"), cellString("x"), cellInt(30)},
+		{cellString(""), cellString(""), cellString("")},
+		{cellString("bob"), cellString(""), cellString("")},
 	}
 	docs := rowsToDocuments(rows, "S", "b", 0, false)
 	if len(docs) != 5 {
@@ -299,7 +299,7 @@ func TestRowsToDocuments_includeHeaderFalse(t *testing.T) {
 // 空 rows[0]（[]）：headers=[] → range(0) 空 → 0 docs。
 func TestRowsToDocuments_空表头行(t *testing.T) {
 	// 全空串表头
-	docs := rowsToDocuments([][]any{{"", ""}, {"v1", "v2"}}, "S", "b", 0, true)
+	docs := rowsToDocuments([][]cellValue{{cellString(""), cellString("")}, {cellString("v1"), cellString("v2")}}, "S", "b", 0, true)
 	if len(docs) != 2 {
 		t.Fatalf("docs = %d, want 2（0 行 + 2 列，Python 基准）", len(docs))
 	}
@@ -311,7 +311,7 @@ func TestRowsToDocuments_空表头行(t *testing.T) {
 	}
 
 	// 空首行（headers 空 → 0 docs）
-	docs2 := rowsToDocuments([][]any{{}, {"v1"}}, "S", "b", 0, true)
+	docs2 := rowsToDocuments([][]cellValue{{}, {cellString("v1")}}, "S", "b", 0, true)
 	if len(docs2) != 0 {
 		t.Fatalf("空首行 docs = %d, want 0", len(docs2))
 	}

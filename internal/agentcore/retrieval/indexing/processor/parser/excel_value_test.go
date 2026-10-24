@@ -47,22 +47,22 @@ func TestPyFloatStr(t *testing.T) {
 	}
 }
 
-// TestCellStr 测试 cellStr 逐类型模拟（Python str(value).strip()）。
+// TestCellStr 测试 cellStr 逐变体模拟（Python str(value).strip()）。
 func TestCellStr(t *testing.T) {
 	cases := []struct {
-		in   any
+		in   cellValue
 		want string
 	}{
 		{nil, ""},
-		{30, "30"},
-		{int64(30), "30"},
-		{"  x  ", "x"},
-		{3.5, "3.5"},
-		{2.0, "2.0"},
-		{true, "True"},
-		{false, "False"},
-		{"", ""},
-		{"  ", ""},
+		{noneCell, ""},
+		{cellString("  x  "), "x"},
+		{cellInt(30), "30"},
+		{cellFloat(3.5), "3.5"},
+		{cellFloat(2.0), "2.0"},
+		{cellBool(true), "True"},
+		{cellBool(false), "False"},
+		{cellString(""), ""},
+		{cellString("  "), ""},
 	}
 	for _, c := range cases {
 		if got := cellStr(c.in); got != c.want {
@@ -71,15 +71,15 @@ func TestCellStr(t *testing.T) {
 	}
 }
 
-// TestCellStr_日期 测试 time.Time 的 Python str(datetime) 格式。
+// TestCellStr_日期 测试 cellTime 的 Python str(datetime) 格式。
 func TestCellStr_日期(t *testing.T) {
 	// 微秒 0：无小数部分（对齐 str(datetime) 省略微秒）
-	d := time.Date(2025, 1, 1, 12, 30, 5, 0, time.UTC)
+	d := cellTime(time.Date(2025, 1, 1, 12, 30, 5, 0, time.UTC))
 	if got := cellStr(d); got != "2025-01-01 12:30:05" {
 		t.Errorf("cellStr(日期) = %q, want %q", got, "2025-01-01 12:30:05")
 	}
 	// 微秒非 0：补 .%06d（对齐 str(datetime) 的 6 位微秒）
-	d2 := time.Date(2025, 1, 1, 12, 30, 5, 123456000, time.UTC)
+	d2 := cellTime(time.Date(2025, 1, 1, 12, 30, 5, 123456000, time.UTC))
 	if got := cellStr(d2); got != "2025-01-01 12:30:05.123456" {
 		t.Errorf("cellStr(带微秒日期) = %q, want %q", got, "2025-01-01 12:30:05.123456")
 	}

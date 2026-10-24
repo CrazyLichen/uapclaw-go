@@ -17,8 +17,42 @@ type excelSheet struct {
 	// name sheet 名称
 	name string
 	// rows 类型化单元格行（openpyxl values_only 语义）
-	rows [][]any
+	rows [][]cellValue
 }
+
+// cellValue Excel 单元格值的密封 sum type。
+//
+// 对齐 openpyxl iter_rows(values_only=True) 的类型空间
+// [None|str|int|float|bool|datetime]，每个 Python 类型一个变体。
+// 密封机制：非导出标记方法 isCellValue()，包外无法新增变体，
+// 类型分支穷尽性由 cellStr 的 default 兜底（新变体漏写 case 时
+// 落入 default 而非静默错误）。
+//
+// 取代 [][]any：异构 cell 值的 Go 等价表达收敛为编译期可枚举的
+// 6 变体密封接口，下游（rowsToDocuments/cellStr）不再做发散的
+// any 类型断言。
+type cellValue interface {
+	// isCellValue 密封标记（非导出，包外不可实现）
+	isCellValue()
+}
+
+// cellNone 空 cell（对齐 Python None——openpyxl 空 cell 产出 None）。
+type cellNone struct{}
+
+// cellString 文本 cell（对齐 Python str）。
+type cellString string
+
+// cellInt 整数 cell（对齐 openpyxl _cast_number 的 int 分支）。
+type cellInt int
+
+// cellFloat 浮点 cell（对齐 Python float）。
+type cellFloat float64
+
+// cellBool 布尔 cell（对齐 Python bool）。
+type cellBool bool
+
+// cellTime 日期时间 cell（对齐 Python datetime.datetime）。
+type cellTime time.Time
 
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
@@ -29,8 +63,31 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// noneCell 空 cell 单例（对齐 Python None；interface nil 语义由
+// cellNone 变体显式承载，避免 nil 接口与 nil 值混淆）。
+var noneCell = cellNone{}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isCellValue 密封标记实现（cellNone）。
+func (cellNone) isCellValue() {}
+
+// isCellValue 密封标记实现（cellString）。
+func (cellString) isCellValue() {}
+
+// isCellValue 密封标记实现（cellInt）。
+func (cellInt) isCellValue() {}
+
+// isCellValue 密封标记实现（cellFloat)。
+func (cellFloat) isCellValue() {}
+
+// isCellValue 密封标记实现（cellBool）。
+func (cellBool) isCellValue() {}
+
+// isCellValue 密封标记实现（cellTime）。
+func (cellTime) isCellValue() {}
 
 // pyFloatStr 还原 Python str(float) 记法。
 //
@@ -66,38 +123,36 @@ func pyFloatStr(f float64) string {
 	return strconv.FormatFloat(f, 'e', -1, 64)
 }
 
-// cellStr 对齐 Python _cell_str：nil→""，str(value).strip()。
+// cellStr 对齐 Python _cell_str：None→""，str(value).strip()。
 //
-// 逐类型模拟 Python str()：
-//   - int/int64 → 十进制
-//   - float64 → pyFloatStr
-//   - bool → "True"/"False"
-//   - time.Time → Python str(datetime) 格式（微秒非 0 补 .%06d）
-//   - string → 原文（strip）
-//
-// Python: excel_parser.py _cell_str
-func cellStr(v any) string {
-	if v == nil {
-		return ""
-	}
+// 逐变体模拟 Python str()：
+//   - cellInt → 十进制
+//   - cellFloat → pyFloatStr
+//   - cellBool → "True"/"False"
+//   - cellTime → Python str(datetime) 格式（微秒非 0 补 .%06d）
+//   - cellString → 原文（strip）
+func cellStr(v cellValue) string {
 	switch val := v.(type) {
-	case string:
-		return strings.TrimSpace(val)
-	case int:
-		return strconv.Itoa(val)
-	case int64:
-		return strconv.FormatInt(val, 10)
-	case float64:
-		return pyFloatStr(val)
-	case bool:
+	case nil:
+		return ""
+	case cellNone:
+		return ""
+	case cellString:
+		return strings.TrimSpace(string(val))
+	case cellInt:
+		return strconv.Itoa(int(val))
+	case cellFloat:
+		return pyFloatStr(float64(val))
+	case cellBool:
 		if val {
 			return "True"
 		}
 		return "False"
-	case time.Time:
-		s := val.Format(pyDateTimeFormat)
-		if val.Nanosecond() != 0 {
-			s += fmt.Sprintf(".%06d", val.Nanosecond()/1000)
+	case cellTime:
+		t := time.Time(val)
+		s := t.Format(pyDateTimeFormat)
+		if t.Nanosecond() != 0 {
+			s += fmt.Sprintf(".%06d", t.Nanosecond()/1000)
 		}
 		return s
 	default:
@@ -105,7 +160,7 @@ func cellStr(v any) string {
 	}
 }
 
-// excelSheetRows excelize adapter：读 xlsx 产 sheet 列表（名称 + [][]any）。
+// excelSheetRows excelize adapter：读 xlsx 产 sheet 列表（名称 + [][]cellValue）。
 //
 // 对齐 openpyxl load_workbook(read_only=True, data_only=True) +
 // iter_rows(values_only=True)：
@@ -139,7 +194,7 @@ func excelSheetRows(filePath string) ([]excelSheet, error) {
 // readSheetRows 读单 sheet 为类型化行（满宽 pad）。
 //
 // 两遍扫描：第一遍收原始字面量行并记最大列宽；第二遍按轴还原类型。
-func readSheetRows(f *excelize.File, sheet string) ([][]any, error) {
+func readSheetRows(f *excelize.File, sheet string) ([][]cellValue, error) {
 	it, err := f.Rows(sheet)
 	if err != nil {
 		return nil, err
@@ -161,9 +216,9 @@ func readSheetRows(f *excelize.File, sheet string) ([][]any, error) {
 	}
 
 	// 第二遍：pad 到满宽 + 逐轴类型还原（对齐 openpyxl iter_rows 满宽语义）
-	rows := make([][]any, len(rawRows))
+	rows := make([][]cellValue, len(rawRows))
 	for ri := range rawRows {
-		typed := make([]any, maxCols)
+		typed := make([]cellValue, maxCols)
 		for ci := 0; ci < maxCols; ci++ {
 			axis, _ := excelize.CoordinatesToCellName(ci+1, ri+1)
 			typed[ci] = excelCellValue(f, sheet, axis)
@@ -182,56 +237,56 @@ func readSheetRows(f *excelize.File, sheet string) ([][]any, error) {
 // _cast_number 按 xlsx 存储字面量推断 int/float）。
 // 日期样式 cell（numFmt 为日期类）：序列数 → ExcelDateToTime 还原
 // time.Time（对齐 openpyxl from_excel，同 1900 epoch 与补正算法）。
-func excelCellValue(f *excelize.File, sheet, axis string) any {
+func excelCellValue(f *excelize.File, sheet, axis string) cellValue {
 	ct, err := f.GetCellType(sheet, axis)
 	if err != nil {
-		return nil
+		return noneCell
 	}
 	rawOpts := excelize.Options{RawCellValue: true}
 	switch ct {
 	case excelize.CellTypeBool:
 		v, err := f.GetCellValue(sheet, axis, rawOpts)
 		if err != nil {
-			return nil
+			return noneCell
 		}
 		// excelize bool 原始值 "1"/"0"（t="b" 存储字面量）
 		switch v {
 		case "1":
-			return true
+			return cellBool(true)
 		case "0":
-			return false
+			return cellBool(false)
 		}
-		return strings.EqualFold(v, "TRUE")
+		return cellBool(strings.EqualFold(v, "TRUE"))
 	case excelize.CellTypeNumber, excelize.CellTypeUnset:
 		raw, err := f.GetCellValue(sheet, axis, rawOpts)
 		if err != nil || raw == "" {
-			return nil
+			return noneCell
 		}
 		// 日期样式判定（对齐 openpyxl style_id in date_formats → from_excel）
 		if isDateCell(f, sheet, axis) {
 			if fv, err := strconv.ParseFloat(raw, 64); err == nil {
 				if t, err := excelize.ExcelDateToTime(fv, false); err == nil {
-					return t
+					return cellTime(t)
 				}
 			}
 		}
 		// 对齐 openpyxl _cast_number：无 ./e/E → int，否则 float
 		if !strings.ContainsAny(raw, ".eE") {
 			if n, err := strconv.ParseInt(raw, 10, 64); err == nil {
-				return int(n)
+				return cellInt(n)
 			}
 		}
 		if fv, err := strconv.ParseFloat(raw, 64); err == nil {
-			return fv
+			return cellFloat(fv)
 		}
-		return raw
+		return cellString(raw)
 	default:
 		// String/InlineString/Error → 原文
 		v, err := f.GetCellValue(sheet, axis, rawOpts)
 		if err != nil || v == "" {
-			return nil
+			return noneCell
 		}
-		return v
+		return cellString(v)
 	}
 }
 
