@@ -263,6 +263,16 @@ func IsValidTargetChannelID(raw string) bool {
 	return validTargetChannels[strings.ToLower(s)]
 }
 
+// AllTargetChannels 返回全部目标频道列表（CronTargetChannel 枚举值）。
+// 对齐 Python: [e.value for e in CronTargetChannel]。
+func AllTargetChannels() []string {
+	return []string{
+		TargetChannelWeb, TargetChannelTUI, TargetChannelFeishu,
+		TargetChannelWeCom, TargetChannelDingTalk, TargetChannelWeChat,
+		TargetChannelWhatsApp, TargetChannelXiaoyi,
+	}
+}
+
 // NormalizeTargetChannelID 归一化目标频道 ID，非法回退 default。
 // 对齐 Python: normalize_target_channel_id (models.py L44-57)。
 func NormalizeTargetChannelID(raw string, defaultChannel string) string {
