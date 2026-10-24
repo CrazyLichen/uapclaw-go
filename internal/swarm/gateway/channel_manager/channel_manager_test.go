@@ -432,3 +432,126 @@ func TestChannelManager_PopChannelRestartPending_重置(t *testing.T) {
 		t.Errorf("第二次 Pop 应为空, 实际 = %v", pending2)
 	}
 }
+
+// ──────────────────────────── RegisterExternalChannel 测试 ────────────────────────────
+
+// fakeExternalChannel 仅出站能力的测试桩（实现 ExternalChannel）。
+type fakeExternalChannel struct {
+	mu   sync.Mutex
+	sent []*schema.Message
+}
+
+func (f *fakeExternalChannel) Send(_ context.Context, msg *schema.Message) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, msg)
+	return nil
+}
+
+func (f *fakeExternalChannel) sentCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.sent)
+}
+
+// TestChannelManager_RegisterExternalChannel_入表 测试外部渠道注册到独立表
+func TestChannelManager_RegisterExternalChannel_入表(t *testing.T) {
+	cm, _ := newTestCM()
+	ch := &fakeExternalChannel{}
+	cm.RegisterExternalChannel("acp", ch)
+
+	// BaseChannel 的 GetChannel 查不到（不同表）
+	if got := cm.GetChannel("acp"); got != nil {
+		t.Errorf("GetChannel() 应为 nil（externalChannels 独立表）, 实际 = %v", got)
+	}
+	// GetExternalChannel 可查到
+	if got := cm.GetExternalChannel("acp"); got == nil {
+		t.Error("GetExternalChannel() 不应为 nil")
+	}
+}
+
+// TestChannelManager_出站派发_命中ExternalChannel 测试出站消息派发到外部渠道
+func TestChannelManager_出站派发_命中ExternalChannel(t *testing.T) {
+	cm, mh := newTestCM()
+	ext := &fakeExternalChannel{}
+	cm.RegisterExternalChannel("acp", ext)
+	mh.enqueueConsume(&schema.Message{ID: "m1", Type: "event", ChannelID: "acp"})
+
+	if err := cm.StartDispatch(context.Background()); err != nil {
+		t.Fatalf("StartDispatch() error = %v", err)
+	}
+	defer func() { _ = cm.StopDispatch() }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if ext.sentCount() == 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := ext.sentCount(); got != 1 {
+		t.Errorf("外部渠道应收到 1 条消息, 实际 = %d", got)
+	}
+}
+
+// TestChannelManager_出站派发_BaseChannel优先 测试同 key 双表注册时 BaseChannel 优先
+func TestChannelManager_出站派发_BaseChannel优先(t *testing.T) {
+	cm, mh := newTestCM()
+	base := newStubChannel("dup", ChannelTypeWeb)
+	ext := &fakeExternalChannel{}
+	cm.RegisterChannel(base)
+	cm.RegisterExternalChannel("dup", ext)
+	mh.enqueueConsume(&schema.Message{ID: "m1", Type: "event", ChannelID: "dup"})
+
+	if err := cm.StartDispatch(context.Background()); err != nil {
+		t.Fatalf("StartDispatch() error = %v", err)
+	}
+	defer func() { _ = cm.StopDispatch() }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(base.getSentMsgs()) == 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := len(base.getSentMsgs()); got != 1 {
+		t.Errorf("BaseChannel 应收到 1 条消息, 实际 = %d", got)
+	}
+	if got := ext.sentCount(); got != 0 {
+		t.Errorf("ExternalChannel 不应收到消息（BaseChannel 优先）, 实际 = %d", got)
+	}
+}
+
+// TestChannelManager_UnregisterChannel_清两表 测试注销同时清 BaseChannel 表与外部表
+func TestChannelManager_UnregisterChannel_清两表(t *testing.T) {
+	cm, _ := newTestCM()
+	base := newStubChannel("ch1", ChannelTypeWeb)
+	ext := &fakeExternalChannel{}
+	cm.RegisterChannel(base)
+	cm.RegisterExternalChannel("ch1", ext)
+
+	cm.UnregisterChannel("ch1")
+
+	if got := cm.GetChannel("ch1"); got != nil {
+		t.Error("BaseChannel 表应已清空")
+	}
+	if got := cm.GetExternalChannel("ch1"); got != nil {
+		t.Error("externalChannels 表应已清空")
+	}
+}
+
+// TestChannelManager_出站派发_外部渠道两表均无 测试未注册渠道的出站消息被丢弃
+func TestChannelManager_出站派发_外部渠道两表均无(t *testing.T) {
+	cm, mh := newTestCM()
+	mh.enqueueConsume(&schema.Message{ID: "m1", Type: "event", ChannelID: "ghost"})
+
+	if err := cm.StartDispatch(context.Background()); err != nil {
+		t.Fatalf("StartDispatch() error = %v", err)
+	}
+	defer func() { _ = cm.StopDispatch() }()
+
+	// 消息既不在 channels 也不在 externalChannels → Warn 丢弃，不 panic
+	// （等待派发循环消费完即视为通过）
+	time.Sleep(300 * time.Millisecond)
+}

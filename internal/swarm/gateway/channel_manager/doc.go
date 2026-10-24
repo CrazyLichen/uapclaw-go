@@ -6,13 +6,14 @@
 //
 // 核心接口：
 //   - MessageHandlerInterface — 消息处理器接口（合并入站+出站），由 MessageHandler 实现
+//   - ExternalChannel — 仅出站能力的窄渠道接口（11.9，对齐 Python register_external_channel）
 //
 // 文件目录：
 //
 //	channel_manager/
 //	├── doc.go              # 包文档
 //	├── base.go             # BaseChannel 接口 + ChannelType + ChannelMetadata
-//	├── channel_manager.go  # ChannelManager 注册/入站中转/出站派发/配置管理
+//	├── channel_manager.go  # ChannelManager 注册/入站中转/出站派发/配置管理 + ExternalChannel 外部渠道表
 //	└── web/                # Web 渠道实现（WebSocket + RPC 分发 + 帧协议）
 //
 // 对应 Python 代码：jiuwenswarm/gateway/channel_manager/
