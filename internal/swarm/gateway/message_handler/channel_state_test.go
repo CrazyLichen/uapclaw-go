@@ -75,8 +75,8 @@ func TestIsValidChannelMode(t *testing.T) {
 func TestApplyChannelState_受控渠道(t *testing.T) {
 	mh := createTestMessageHandler()
 
-	// 创建飞书渠道消息
-	msg := schema.NewReqMessage("feishu_test", "", schema.ReqMethodChatSend, json.RawMessage(`{}`))
+	// 创建飞书渠道消息（M-06: fallback 不再做前缀推断，显式指定 Provider）
+	msg := schema.NewReqMessage("feishu_test", "", schema.ReqMethodChatSend, json.RawMessage(`{}`), schema.WithProvider("feishu"))
 
 	// 应用渠道状态
 	mh.ApplyChannelState(msg)
@@ -213,18 +213,21 @@ func TestControlChannelTypes(t *testing.T) {
 	}
 }
 
-// TestInferChannelTypeFromID 测试从 channelID 推断渠道类型
-func TestInferChannelTypeFromID(t *testing.T) {
-	tests := map[string]channel_manager.ChannelType{
-		"web_123":    channel_manager.ChannelTypeWeb,
-		"feishu_abc": channel_manager.ChannelTypeFeishu,
-		"dingtalk_x": channel_manager.ChannelTypeDingTalk,
-		"tui_1":      channel_manager.ChannelTypeCLI,
+// TestResolveControlChannelType_Fallback原样返回 M-06 回归测试。
+// Python _resolve_control_channel_type fallback 语义是原样透传 msg.channel_id，
+// 不做前缀推断改写（未知值由 controlChannelTypes 集合判不受控）。
+func TestResolveControlChannelType_Fallback原样返回(t *testing.T) {
+	mh := &MessageHandler{}
+	// 无 Provider：fallback 原样返回 ChannelID（不做前缀映射）
+	if got := mh.resolveControlChannelType(&schema.Message{ChannelID: "feishu_abc"}); got != channel_manager.ChannelType("feishu_abc") {
+		t.Errorf("fallback 应原样返回 channelID，实际：%v", got)
 	}
-	for id, expected := range tests {
-		if got := inferChannelTypeFromID(id); got != expected {
-			t.Errorf("inferChannelTypeFromID(%q) = %v, want %v", id, got, expected)
-		}
+	if got := mh.resolveControlChannelType(&schema.Message{ChannelID: "unknown_prefix_x"}); got != channel_manager.ChannelType("unknown_prefix_x") {
+		t.Errorf("未知前缀不应被改写为 web，实际：%v", got)
+	}
+	// 有 Provider：优先返回
+	if got := mh.resolveControlChannelType(&schema.Message{ChannelID: "ch", Provider: "dingtalk"}); got != channel_manager.ChannelTypeDingTalk {
+		t.Errorf("Provider 优先，实际：%v", got)
 	}
 }
 

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 
 	types "github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination/types"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -186,7 +187,8 @@ func (h *TeamCompletionHandler) OnTaskListDrained(ctx context.Context, event typ
 	em := event.Transport
 
 	teamName, _ := em.Payload["team_name"].(string)
-	taskCount, _ := em.Payload["task_count"].(int)
+	// S-06/N-02: 跨进程 JSON 数值必为 float64，.(int) 断言永不命中
+	taskCount := payloadToIntLoose(em.Payload["task_count"])
 	logger.Info(logComponent).
 		Str("event_type", em.EventType).
 		Str("team_name", teamName).
@@ -214,8 +216,9 @@ func (h *TeamCompletionHandler) OnTeamCompleted(_ context.Context, event types.C
 	}
 	em := event.Transport
 
-	memberCount, _ := em.Payload["member_count"].(int)
-	taskCount, _ := em.Payload["task_count"].(int)
+	// S-06/N-02: 跨进程 JSON 数值必为 float64，.(int) 断言永不命中
+	memberCount := payloadToIntLoose(em.Payload["member_count"])
+	taskCount := payloadToIntLoose(em.Payload["task_count"])
 	logger.Info(logComponent).
 		Str("event_type", em.EventType).
 		Str("team_name", func() string {
@@ -225,4 +228,26 @@ func (h *TeamCompletionHandler) OnTeamCompleted(_ context.Context, event types.C
 		Int("member_count", memberCount).
 		Int("task_count", taskCount).
 		Msg("onTeamCompleted: team completed")
+}
+
+// payloadToIntLoose 从事件 payload 中宽容提取 int。
+// S-06/N-02: 事件跨进程 JSON 化后数值必为 float64，.(int) 断言永不命中；
+// 同时兼容本进程内构造的 int/int64 与 json.Number。
+func payloadToIntLoose(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return int(i)
+		}
+		if f, err := n.Float64(); err == nil {
+			return int(f)
+		}
+	}
+	return 0
 }

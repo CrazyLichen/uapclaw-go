@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 )
 
@@ -118,6 +119,14 @@ func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) *atsc
 // Runner.spawn_agent(build_spawn_config(ctx), build_spawn_payload(...)) 双参数分离）。
 // 原实现误用 BuildSpawnPayload 覆盖 payload，导致子进程
 // from_spawn_payload 读不到 spec/context。
+//
+// M-18: 补 RunnerConfig=serialize_runner_config(Runner.get_config())
+// （Python L121）——子进程 child.go 以非 nil 判定应用配置，
+// 原实现恒空导致子进程 Runner 永远用默认配置而非父进程快照。
+// LoggingConfig 归档 TODO：Python _build_member_logging_config 按 sinks
+// 结构改写文件 sink 到 per-member 目录，Go LoggingConfig 仅
+// level+output_dir 无 sinks 结构，无法逐 sink 复刻（Runner.SpawnAgent
+// 已兜底全局快照，等 Go 日志配置结构对齐 Python 后回填）。
 func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) runnerspawn.SpawnAgentConfig {
 	// S-26: spec/context 序列化为 map（Python model_dump(mode="json") 等价）
 	specBytes, err := json.Marshal(b.spec)
@@ -136,8 +145,16 @@ func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) 
 	if err := json.Unmarshal(ctxBytes, &ctxMap); err != nil {
 		ctxMap = make(map[string]any)
 	}
+	// M-18: Python L121 runner_config=serialize_runner_config(Runner.get_config())
+	var runnerConfig map[string]any
+	if rc, rcErr := runnerspawn.SerializeRunnerConfig(runner.GetConfig()); rcErr == nil && rc != nil {
+		runnerConfig = rc
+	}
 	return runnerspawn.SpawnAgentConfig{
-		AgentKind: runnerspawn.SpawnAgentKindTeamAgent,
+		AgentKind:    runnerspawn.SpawnAgentKindTeamAgent,
+		RunnerConfig: runnerConfig,
+		// TODO(LoggingConfig): 归档——Go LoggingConfig 无 sinks 结构，
+		// 无法复刻 Python per-member 目录改写；Runner.SpawnAgent 已兜底全局快照
 		Payload: map[string]any{
 			"spec":    specMap,
 			"context": ctxMap,

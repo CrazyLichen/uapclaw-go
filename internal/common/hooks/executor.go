@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -193,9 +194,16 @@ func ParseCommandOutput(stdout string) HookResult {
 	decision, _ := data["decision"].(string)
 	if decision == "block" {
 		// Python: decision == "block" → BLOCKING
+		// M-08: Python data.get("reason", "blocked by hook")——key 存在（哪怕
+		// 空串/非字符串）即用原值；原实现 `&& v != ""` 导致 {"reason":""} 时
+		// 误用兜底文案，ShowToModel 拦截提示在边缘输入下不一致
 		reason := "blocked by hook"
-		if v, ok := data["reason"].(string); ok && v != "" {
-			reason = v
+		if v, ok := data["reason"]; ok {
+			if s, isStr := v.(string); isStr {
+				reason = s
+			} else {
+				reason = fmt.Sprintf("%v", v)
+			}
 		}
 		return HookResult{
 			Outcome:     HookOutcomeBlocking,
@@ -262,6 +270,31 @@ func ExtractJSONFromResponse(text string) map[string]any {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// hookTimeoutFromAny 从 hook 配置中提取 timeout（秒）。
+//
+// M-10: Python asyncio.wait_for 收到非数值 timeout（如 YAML 引号字符串 "30"）
+// 抛 TypeError → hook 拒绝执行（NON_BLOCKING_ERROR，配置错误显式暴露）。
+// Go 对齐：int/int64/float64 直接用；字符串 Atoi 成功的数字字符串宽容使用
+// （YAML "30" 引号场景），失败或其他类型返回 error 拒绝执行。
+func hookTimeoutFromAny(v any) (int, error) {
+	switch n := v.(type) {
+	case int:
+		return n, nil
+	case int64:
+		return int(n), nil
+	case float64:
+		return int(n), nil
+	case string:
+		parsed, err := strconv.Atoi(n)
+		if err != nil {
+			return 0, fmt.Errorf("invalid timeout %q: must be a number", n)
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("invalid timeout type %T: must be a number", v)
+	}
+}
+
 // runCommandHook 执行 command 类型 hook（子进程），对齐 Python _run_command_hook
 func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any, hookInput map[string]any) HookResult {
 	command, _ := config["command"].(string)
@@ -273,12 +306,14 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 	// Python: timeout = config.get("timeout", 30)
 	timeout := 30
 	if v, ok := config["timeout"]; ok {
-		switch n := v.(type) {
-		case int:
-			timeout = n
-		case float64:
-			timeout = int(n)
+		// M-10: Python 传非数值 timeout 给 asyncio.wait_for 会 TypeError →
+		// NON_BLOCKING_ERROR 拒绝执行（配置错误显式暴露）。Go 对齐：
+		// 字符串数字 Atoi 成功则用（宽容 YAML 引号场景），失败返回错误。
+		n, err := hookTimeoutFromAny(v)
+		if err != nil {
+			return HookResult{Outcome: HookOutcomeNonBlockingError, Error: err.Error()}
 		}
+		timeout = n
 	}
 	// Python: shell = config.get("shell", "bash")
 	shell := "bash"
@@ -397,12 +432,12 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 	// Python: timeout = config.get("timeout", 15)
 	timeout := 15
 	if v, ok := config["timeout"]; ok {
-		switch n := v.(type) {
-		case int:
-			timeout = n
-		case float64:
-			timeout = int(n)
+		// M-10: 同 runCommandHook——字符串数字宽容、非法值返回错误拒绝执行
+		n, err := hookTimeoutFromAny(v)
+		if err != nil {
+			return HookResult{Outcome: HookOutcomeNonBlockingError, Error: err.Error()}
 		}
+		timeout = n
 	}
 	// Python: model_name = config.get("model", "")
 	modelName, _ := config["model"].(string)
@@ -445,9 +480,14 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 
 	if decision == "block" {
 		// Python: decision == "block" → BLOCKING
-		reason, _ := data["reason"].(string)
-		if reason == "" {
-			reason = "blocked by prompt hook"
+		// M-08: 同 runCommandHook——key 存在即用原值（含空串/非字符串）
+		reason := "blocked by prompt hook"
+		if v, ok := data["reason"]; ok {
+			if s, isStr := v.(string); isStr {
+				reason = s
+			} else {
+				reason = fmt.Sprintf("%v", v)
+			}
 		}
 		return HookResult{
 			Outcome:     HookOutcomeBlocking,

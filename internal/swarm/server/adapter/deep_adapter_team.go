@@ -16,6 +16,7 @@ import (
 	teammonitor "github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
 	ateamruntime "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -1348,7 +1349,7 @@ func chunkToMap(chunk any) map[string]any {
 		if os == nil || os.Payload == nil {
 			return nil
 		}
-		if m, ok := os.Payload.(map[string]any); ok {
+		if m := payloadToMap(os.Payload); m != nil {
 			result := make(map[string]any, len(m)+3)
 			for k, v := range m {
 				result[k] = v
@@ -1363,7 +1364,7 @@ func chunkToMap(chunk any) map[string]any {
 		if os.Payload == nil {
 			return nil
 		}
-		if m, ok := os.Payload.(map[string]any); ok {
+		if m := payloadToMap(os.Payload); m != nil {
 			result := make(map[string]any, len(m)+3)
 			for k, v := range m {
 				result[k] = v
@@ -1393,7 +1394,7 @@ func chunkToMap(chunk any) map[string]any {
 		if tos == nil || tos.Payload == nil {
 			return nil
 		}
-		if m, ok := tos.Payload.(map[string]any); ok {
+		if m := payloadToMap(tos.Payload); m != nil {
 			result := make(map[string]any, len(m)+5)
 			for k, v := range m {
 				result[k] = v
@@ -1421,7 +1422,7 @@ func chunkToMap(chunk any) map[string]any {
 		if payload == nil {
 			return nil
 		}
-		if m, ok := payload.(map[string]any); ok {
+		if m := payloadToMap(payload); m != nil {
 			// 附加 type 和其他元信息到 map
 			result := make(map[string]any, len(m)+1)
 			for k, v := range m {
@@ -1432,6 +1433,57 @@ func chunkToMap(chunk any) map[string]any {
 		}
 	}
 	return nil
+}
+
+// payloadToMap 将 OutputSchema.Payload 转为 map[string]any。
+//
+// S-03: 生产端（task_loop/executor.go、session_spawn_executor.go、
+// task_scheduler.go）产出 *cschema.ControllerOutputPayload 结构体指针而非 map——
+// 原三个 typed 分支只断言 map[string]any，结构体 payload 全部返回 nil，
+// 导致 task_failed/task_completion 事件在消费循环被整块丢弃（前端静默失败）。
+//
+// 桥接对齐 Python payload.model_dump(mode="json")：json.Marshal→Unmarshal
+// 产 map，形状与 Python dict 逐键一致（type/data/metadata，DataFrame
+// 经 MarshalDataFrames 多态序列化为 {text}/{data}/{name,...}）。
+func payloadToMap(payload any) map[string]any {
+	if payload == nil {
+		return nil
+	}
+	if m, ok := payload.(map[string]any); ok {
+		return m
+	}
+	// 指针与值类型都桥接（生产端为指针；值类型分支对齐 Python
+	// isinstance 的宽容度，防御未来构造点变化）
+	switch cop := payload.(type) {
+	case *cschema.ControllerOutputPayload:
+		if cop == nil {
+			return nil
+		}
+		return marshalControllerOutputPayload(cop)
+	case cschema.ControllerOutputPayload:
+		return marshalControllerOutputPayload(&cop)
+	}
+	return nil
+}
+
+// marshalControllerOutputPayload 桥接单个 ControllerOutputPayload 到 map。
+// json.Marshal→Unmarshal 产 map，形状对齐 Python payload.model_dump(mode="json")。
+func marshalControllerOutputPayload(cop *cschema.ControllerOutputPayload) map[string]any {
+	b, err := json.Marshal(cop)
+	if err != nil {
+		logger.Warn(logComponent).
+			Err(err).
+			Msg("chunkToMap: ControllerOutputPayload marshal failed")
+		return nil
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		logger.Warn(logComponent).
+			Err(err).
+			Msg("chunkToMap: ControllerOutputPayload unmarshal failed")
+		return nil
+	}
+	return m
 }
 
 // teamSpecTeamName 从 teamSpec 中提取 team_name。

@@ -211,7 +211,27 @@ func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamN
 	}
 
 	// list_memory_files 列出工具：返回团队记忆目录下所有文件名
-	listTool, listErr := tool.NewTool(func(_ context.Context, _ struct{}, opts ...tool.ToolOption) (map[string]any, error) {
+	// M-16: 对齐 Python _list_files——sys_operation.fs().list_files(dir, recursive=False)
+	// 提取非目录项名称；异常/缺失回退 {"files": []}（原实现 os.ReadDir 直读
+	// 本地盘，Fs 抽象隔离/远程 sysOp 场景下读不到）
+	listTool, listErr := tool.NewTool(func(ctx context.Context, _ struct{}, opts ...tool.ToolOption) (map[string]any, error) {
+		if sysOp != nil && sysOp.Fs() != nil {
+			// Python: result = await sys_operation.fs().list_files(team_memory_dir, recursive=False)
+			if result, err := sysOp.Fs().ListFiles(ctx, teamMemoryDir, sysop.WithFsRecursive(false)); err == nil &&
+				result != nil && result.Data != nil {
+				files := make([]string, 0, len(result.Data.ListItems))
+				for _, item := range result.Data.ListItems {
+					// Python: files = [f.name for f in result.data.list_items if not f.is_directory]
+					if !item.IsDirectory {
+						files = append(files, item.Name)
+					}
+				}
+				return map[string]any{"files": files}, nil
+			}
+			// Python: except / result 无 data → {"files": []}
+			return map[string]any{"files": []string{}}, nil
+		}
+		// 本地文件系统回退（sysOp 缺失时，与 write 工具兜底口径一致）
 		entries, err := os.ReadDir(teamMemoryDir)
 		if err != nil {
 			return map[string]any{"files": []string{}}, nil

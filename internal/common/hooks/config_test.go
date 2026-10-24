@@ -274,3 +274,23 @@ func TestLoadHooksConfig_多事件(t *testing.T) {
 		t.Errorf("Events count = %d, want 2", len(cfg.Events))
 	}
 }
+
+// TestHookMatcher_Matches_前后空白strip T-12 回归：对齐 Python
+// self.matcher.strip()——"  *  " 应匹配所有（原实现精确匹配失败）。
+func TestHookMatcher_Matches_前后空白strip(t *testing.T) {
+	m := &HookMatcher{Matcher: "  *  "}
+	if !m.Matches("anything") {
+		t.Error(`Matcher "  *  " strip 后应匹配所有 query`)
+	}
+	m2 := &HookMatcher{Matcher: "  session_start  "}
+	if !m2.Matches("session_start") {
+		t.Error(`Matcher "  session_start  " strip 后应精确命中`)
+	}
+	if m2.Matches("other") {
+		t.Error("非匹配 query 应返回 false")
+	}
+	m3 := &HookMatcher{Matcher: "  "}
+	if !m3.Matches("x") {
+		t.Error("纯空白 Matcher strip 后为空应视同 * 匹配所有")
+	}
+}

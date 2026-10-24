@@ -305,7 +305,8 @@ func (m *TeamMemoryManager) LoadAndInject(ctx context.Context, deepAgent interfa
 
 	// Python: personal_content = await self._fetch_personal_memory_for_prompt(query)
 	if personalContent := m.fetchPersonalMemoryForPrompt(ctx, query); personalContent != "" {
-		header := "\n\n## Team shared memory\n\n"
+		// Python L294: header = "## 你的相关记忆" if cn else "## Your relevant memories"
+		header := "\n\n## Your relevant memories\n\n"
 		if cn {
 			header = "\n\n## 你的相关记忆\n\n"
 		}
@@ -530,10 +531,10 @@ func (m *TeamMemoryManager) fetchPersonalMemoryForPrompt(ctx context.Context, qu
 				if totalBytes+contentBytes > maxPersonalMemoryBytes {
 					remaining := maxPersonalMemoryBytes - totalBytes
 					if remaining > 200 {
-						truncated := content
-						if len(truncated) > remaining {
-							truncated = truncated[:remaining]
-						}
+						// Python L215: content[:remaining] 按字符切片（remaining 为
+						// 字节差值但 Python 按字符切），Go 须按 rune 对齐口径，
+						// 否则 CJK 多字节字符在字节边界截断会产生非法 UTF-8
+						truncated := string([]rune(content)[:min(remaining, len([]rune(content)))])
 						parts = append(parts, "### "+rPath+"\n\n"+truncated+"\n... (truncated)")
 					}
 					break

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -149,13 +150,11 @@ func (mh *MessageHandler) forwardLoopStep3UserPromptSubmit(ctx context.Context, 
 			paramsMap = map[string]any{}
 		}
 	}
-	promptText := ""
-	if v, ok := paramsMap["query"].(string); ok && v != "" {
-		promptText = v
-	} else if v, ok := paramsMap["content"].(string); ok {
-		promptText = v
-	}
-	// Python: str(params.get("query") or params.get("content") or "")
+	// M-09: 对齐 Python str(params.get("query") or params.get("content") or "")：
+	// or 链取第一个 truthy 值后 str() 强转——数字等非字符串 truthy 值也转字符串
+	// （params={"query":123} 时 Python prompt="123"，原 Go 只断言 string 直接
+	// 跳过取 content，hook 收到的 prompt 字段在非字符串输入下不一致）。
+	promptText := pythonOrStr(paramsMap["query"], paramsMap["content"])
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Debug(logComponent).
@@ -895,4 +894,73 @@ func (mh *MessageHandler) extractRuntimeParams(msg *schema.Message, paramsMap ma
 	}
 
 	return runtimeParams
+}
+
+// pythonOrStr 模拟 Python 的 `str(a or b or "")` 语义。
+//
+// M-09: 取第一个 truthy 值（非零/非空/非 nil）并转字符串表示；
+// 全部 falsy 时返回空串。对齐 Python str() 的显示语义：
+// float64(123.0)→"123"（%.0f 系数整除时无小数）、bool→"True"/"False"、
+// 其他标量走 %v。注意此处不处理 Python 的 __str__ 自定义对象（JSON 域
+// 内只会出现标量/容器，容器转 JSON 形式字符串与 Python repr 有差异，
+// 但 Python 端此类场景本身为配置错误路径）。
+func pythonOrStr(a, b any) string {
+	for _, v := range []any{a, b} {
+		if s := pythonTruthyStr(v); s != nil {
+			return *s
+		}
+	}
+	return ""
+}
+
+// pythonTruthyStr truthy 值转字符串指针（falsy 返回 nil）。
+func pythonTruthyStr(v any) *string {
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case string:
+		if t == "" {
+			return nil
+		}
+		return &t
+	case bool:
+		// Python: bool 是 int 子类，True/False 均 truthy 语义上 str() 得 "True"/"False"
+		if t {
+			s := "True"
+			return &s
+		}
+		return nil
+	case float64:
+		if t == 0 {
+			return nil
+		}
+		s := strconv.FormatFloat(t, 'f', -1, 64)
+		return &s
+	case int:
+		if t == 0 {
+			return nil
+		}
+		s := strconv.Itoa(t)
+		return &s
+	case int64:
+		if t == 0 {
+			return nil
+		}
+		s := strconv.FormatInt(t, 10)
+		return &s
+	case json.RawMessage, map[string]any, []any:
+		// 复合类型 truthy（非空容器）——转 JSON 字符串
+		if b, err := json.Marshal(v); err == nil && len(b) > 2 && string(b) != "{}" && string(b) != "[]" {
+			s := string(b)
+			return &s
+		}
+		return nil
+	default:
+		// 其他标量走 %v
+		s := fmt.Sprintf("%v", v)
+		if s == "" || s == "<nil>" {
+			return nil
+		}
+		return &s
+	}
 }

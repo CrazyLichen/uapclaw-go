@@ -14,6 +14,7 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -348,11 +349,34 @@ func (h *TeamHarness) Abort(ctx context.Context) error { return nil }
 // Python: TeamHarness.run_streaming(inputs, session_id, team_session)
 //
 // 分支 1（teamSession 为 nil 且非 initialPlanMode）：直接调 runner.RunAgentStreaming。
-// 分支 2（有 teamSession）：⤵️ 待 9.57+ session 层回填。
+// M-17 实装（deepAgent→BaseAgent 编译期断言 deep_agent.go:195 已满足）。
+// 分支 2（有 teamSession）：⤵️ 待 plan-mode 种子化（_prepare_agent_session +
+// _ensure_initial_plan_mode）回填。
 func (h *TeamHarness) RunStreaming(ctx context.Context, inputs map[string]any, sessionID string, teamSession any) (<-chan stream.Schema, error) {
-	// ⤵️ 待 9.57 deepAgent 类型升级为 BaseAgent 后实现分支 1
-	// 分支 1: teamSession == nil && !h.initialPlanMode → runner.RunAgentStreaming
-	// 分支 2: ⤵️ 待 9.57+ session 层回填：实现 _prepare_agent_session + _ensure_initial_plan_mode
+	// 分支 1: teamSession == nil && !h.initialPlanMode → Runner.run_agent_streaming
+	if teamSession == nil && !h.initialPlanMode {
+		if h.deepAgent == nil {
+			ch := make(chan stream.Schema)
+			close(ch)
+			return ch, nil
+		}
+		// Python: Runner.run_agent_streaming(self._deep_agent, inputs, session=session_id)
+		// DeepAgent 实现 BaseAgent（编译期断言），断言失败理论不可能
+		baseAgent, ok := h.deepAgent.(agentinterfaces.BaseAgent)
+		if !ok {
+			logger.Warn(logComponent).
+				Str("member_name", h.memberName).
+				Msg("TeamHarness.RunStreaming: deepAgent does not implement BaseAgent, returning empty stream")
+			ch := make(chan stream.Schema)
+			close(ch)
+			return ch, nil
+		}
+		return runner.RunAgentStreaming(ctx, runner.ByAgent(baseAgent), inputs, runner.BySessionID(sessionID), nil, nil, nil)
+	}
+
+	// 分支 2: ⤵️ 待 plan-mode 种子化回填——
+	// Python: agent_session = await self._prepare_agent_session(inputs, session_id, team_session)
+	// 然后 Runner.run_agent_streaming(self._deep_agent, inputs, session=agent_session)
 	ch := make(chan stream.Schema)
 	close(ch)
 	return ch, nil

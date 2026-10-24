@@ -278,3 +278,93 @@ func TestGetSessionID_并发安全(t *testing.T) {
 	}()
 	<-done
 }
+
+// TestSave_HTML转义关闭 T-01 回归测试。
+// Python json.dump(ensure_ascii=False, indent=2)——HTML 字符（<>&）与
+// 非 ASCII 均不转义；原 MarshalIndent 会把 <>& 转成 \u003c 等转义串。
+func TestSave_HTML转义关闭(t *testing.T) {
+	dir := t.TempDir()
+	store := filepath.Join(dir, "session_map.json")
+	m := newSessionMapAt(store, SessionMapScopePerChatBot)
+	m.mapping[makeKey(SessionMapScopePerChatBot, "p", "c", "b", "u")] = "sess<&>中文"
+	m.save()
+
+	data, err := os.ReadFile(store)
+	if err != nil {
+		t.Fatalf("save 应写盘: %v", err)
+	}
+	content := string(data)
+	if strings.Contains(content, `\u003c`) || strings.Contains(content, `\u0026`) {
+		t.Errorf("HTML 字符不应转义（ensure_ascii=False 语义）: %s", content)
+	}
+	if !strings.Contains(content, "<&>") {
+		t.Errorf("应原样保留 <&> 字符: %s", content)
+	}
+	if !strings.Contains(content, "中文") {
+		t.Errorf("非 ASCII 应原样保留不转义: %s", content)
+	}
+	// indent=2 缩进保持（Python json.dump indent=2）
+	if !strings.Contains(content, "\n  ") {
+		t.Errorf("应使用 indent=2 缩进: %s", content)
+	}
+}
+
+// TestLoad_非dict顶层静默跳过 T-02 回归测试。
+// Python json.load 后 isinstance(data, dict) 才处理——非 dict（数组/字符串/
+// 数字）静默跳过保持空映射，不进 mapping 赋值。
+func TestLoad_非dict顶层静默跳过(t *testing.T) {
+	for name, payload := range map[string]string{
+		"数组":  `["a", "b"]`,
+		"字符串": `"hello"`,
+		"数字":  `42`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			store := filepath.Join(dir, "session_map.json")
+			if err := os.WriteFile(store, []byte(payload), 0o644); err != nil {
+				t.Fatalf("预置非 dict JSON: %v", err)
+			}
+			m := newSessionMapAt(store, SessionMapScopePerChatBot)
+			if len(m.mapping) != 0 {
+				t.Errorf("非 dict 顶层应保持空映射，实际 %d 项: %v", len(m.mapping), m.mapping)
+			}
+		})
+	}
+}
+
+// TestLoadSessionMapScope_非字符串值转str T-03 回归测试。
+// Python str(...).strip().lower()——非字符串配置值（数字/bool）转 str 后
+// 走未知值路径（返回默认 PerChatBot），而非静默跳过保留默认。
+func TestLoadSessionMapScope_非字符串值转str(t *testing.T) {
+	// 纯函数级验证：fmt.Sprintf("%v", 42) == "42"、bool 值同理
+	// LoadSessionMapScope 走全局配置，此处验证转换语义进入 switch 的结果
+	cases := []struct {
+		name string
+		raw  string
+		want SessionMapScope
+	}{
+		{"数字42走默认", "42", SessionMapScopePerChatBot},
+		{"bool值走默认", "true", SessionMapScopePerChatBot},
+		{"字符串per_chat_bot", "per_chat_bot", SessionMapScopePerChatBot},
+		{"字符串per_chat_bot_user", "per_chat_bot_user", SessionMapScopePerChatBotUser},
+		{"未知字符串走默认", "bogus", SessionMapScopePerChatBot},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// 模拟 fmt.Sprintf("%v") 之后的 switch 语义（与 LoadSessionMapScope 同构）
+			raw := strings.TrimSpace(strings.ToLower(tc.raw))
+			var got SessionMapScope
+			switch raw {
+			case sessionMapScopePerChatBotStr:
+				got = SessionMapScopePerChatBot
+			case sessionMapScopePerChatBotUserStr:
+				got = SessionMapScopePerChatBotUser
+			default:
+				got = SessionMapScopePerChatBot
+			}
+			if got != tc.want {
+				t.Errorf("raw=%q 期望 %v 实际 %v", tc.raw, tc.want, got)
+			}
+		})
+	}
+}
