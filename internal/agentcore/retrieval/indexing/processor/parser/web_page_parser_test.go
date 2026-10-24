@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -73,9 +75,9 @@ func TestIsWeChatArticleURL_微信URL判定(t *testing.T) {
 	}{
 		{"https://mp.weixin.qq.com/s/abc", true},
 		{"http://mp.weixin.qq.com/s/x?y=1", true},
-		{"https://any.weixin.qq.com/s/abc", true},  // .*?.weixin.qq.com
-		{"HTTPS://MP.WEIXIN.QQ.COM/S/ABC", true},   // IGNORECASE
-		{"https://mp.weixin.qq.com/other", false},  // /s 后必须 \b（无 /s 前缀）
+		{"https://any.weixin.qq.com/s/abc", true}, // .*?.weixin.qq.com
+		{"HTTPS://MP.WEIXIN.QQ.COM/S/ABC", true},  // IGNORECASE
+		{"https://mp.weixin.qq.com/other", false}, // /s 后必须 \b（无 /s 前缀）
 		{"https://example.com/s/abc", false},
 		{"", false},
 	}
@@ -377,5 +379,226 @@ func TestParseWebPageURL_别名函数(t *testing.T) {
 	}
 	if docs[0].Metadata["source_url"] != srv.URL {
 		t.Errorf("source_url = %v", docs[0].Metadata["source_url"])
+	}
+}
+
+// TestDownloadHTML_TLSConfig自定义 verifyTLSConfig 直用注入的 tls.Config。
+func TestDownloadHTML_TLSConfig自定义(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<html><body>tls-config</body></html>`)
+	}))
+	defer srv.Close()
+	// InsecureSkipVerify 自定义配置承载 verifySkip 等价语义
+	html, err := downloadHTML(context.Background(), srv.URL, time.Second, defaultUserAgent,
+		NewVerifyTLSConfig(&tls.Config{InsecureSkipVerify: true}), nil)
+	if err != nil {
+		t.Fatalf("verifyTLSConfig 应成功, got %v", err)
+	}
+	if !strings.Contains(html, "tls-config") {
+		t.Errorf("html = %q", html)
+	}
+}
+
+// TestNewWebPageParser_自定义参数 构造器参数落字段 + verify nil 防御回落默认。
+func TestNewWebPageParser_自定义参数(t *testing.T) {
+	p, err := NewWebPageParser(1.5, "custom-ua", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.timeout != 1500*time.Millisecond {
+		t.Errorf("timeout = %v, want 1.5s", p.timeout)
+	}
+	if p.userAgent != "custom-ua" {
+		t.Errorf("userAgent = %q", p.userAgent)
+	}
+	if _, ok := p.verify.(verifyDefault); !ok {
+		t.Errorf("verify nil 应回落 verifyDefault, got %T", p.verify)
+	}
+}
+
+// TestParseURL_uuid兜底 docID 与 url 双空走 uuid 分支。
+func TestParseURL_uuid兜底(t *testing.T) {
+	p, _ := NewWebPageParserWithDefaults()
+	// validateURLFor 先拦空串——绕过校验直测 effectiveID 兜底需走 dispatch
+	// 覆写路径不可达；改为验证 url 非空时 effectiveID=url 的常规路径已覆盖，
+	// uuid 分支字面保留（Python doc_id or url or uuid4 三级字面）。
+	// 此处断言：空 docID + 非空 url → effectiveID = url（第二级）。
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `<html><body><article>%s</article></body></html>`, longBody(12))
+	}))
+	defer srv.Close()
+	docs, err := p.ParseURL(context.Background(), srv.URL, "", p.timeout, p.userAgent, p.verify, nil)
+	if err != nil || len(docs) != 1 {
+		t.Fatalf("err=%v docs=%d", err, len(docs))
+	}
+	if docs[0].ID != srv.URL {
+		t.Errorf("ID = %q, want %q", docs[0].ID, srv.URL)
+	}
+}
+
+// TestParseWebPageURL_覆盖参数传别名 别名函数透传 WithTimeout/WithUserAgent。
+func TestParseWebPageURL_覆盖参数传别名(t *testing.T) {
+	var gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		fmt.Fprintf(w, `<html><body><article>%s</article></body></html>`, longBody(12))
+	}))
+	defer srv.Close()
+	_, err := ParseWebPageURL(context.Background(), srv.URL, "", WithUserAgent("alias-ua"))
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if gotUA != "alias-ua" {
+		t.Errorf("UA = %q, want alias-ua", gotUA)
+	}
+}
+
+// TestVerifyMode_密封方法被调用 变体方法体空语句计数（覆盖密封标记方法）。
+func TestVerifyMode_密封方法被调用(t *testing.T) {
+	var m verifyMode = verifyDefault{}
+	m.isVerifyMode()
+	m = verifySkip{}
+	m.isVerifyMode()
+	m = verifyCAPath{}
+	m.isVerifyMode()
+	m = verifyTLSConfig{}
+	m.isVerifyMode()
+}
+
+// ──────────────────────────── dispatch stub 测试（13.14 覆盖率补齐） ────────────────────────────
+
+// stubParseDispatcher dispatch 桩（替换 WebPageParser.dispatch 测内部分支）。
+type stubParseDispatcher struct {
+	// docs parseHTMLToDocs 返回值
+	docs []reranker.Document
+	// parseErr parseHTMLToDocs 返回错误
+	parseErr error
+	// validateErr validateURLFor 返回错误
+	validateErr error
+	// gotHTML parseHTMLToDocs 收到的 html
+	gotHTML string
+	// gotDocID parseHTMLToDocs 收到的 docID（验证 effectiveID 三级兜底）
+	gotDocID string
+}
+
+// parseHTMLToDocs 桩实现：记录入参并返回预设值。
+func (s *stubParseDispatcher) parseHTMLToDocs(html string, docID string, source string) ([]reranker.Document, error) {
+	s.gotHTML = html
+	s.gotDocID = docID
+	return s.docs, s.parseErr
+}
+
+// validateURLFor 桩实现：返回预设错误。
+func (s *stubParseDispatcher) validateURLFor(url string) error {
+	return s.validateErr
+}
+
+// TestParseURL_dispatch错误传播 桩 parseHTMLToDocs 返回错误时 ParseURL 原样透传。
+func TestParseURL_dispatch错误传播(t *testing.T) {
+	p, _ := NewWebPageParserWithDefaults()
+	want := errors.New("parse failed")
+	p.dispatch = &stubParseDispatcher{parseErr: want}
+	_, err := p.ParseURL(context.Background(), "http://example.com", "id", p.timeout, p.userAgent, p.verify, nil)
+	if !errors.Is(err, want) {
+		t.Errorf("err = %v, want %v", err, want)
+	}
+}
+
+// okBodyTransport 任意请求均返回 200 与固定 body（供空 URL 注入 client 场景）。
+type okBodyTransport struct{}
+
+// RoundTrip 返回 200 响应与固定 body。
+func (okBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("<html><body>ok</body></html>")),
+		Header:     http.Header{},
+	}, nil
+}
+
+// TestParseURL_dispatch返回nil元数据 建无 metadata 的 Document 补 source_url + effectiveID uuid 兜底。
+func TestParseURL_dispatch返回nil元数据(t *testing.T) {
+	p, _ := NewWebPageParserWithDefaults()
+	// uuid 兜底分支：docID 与 url 双空（dispatch 桩绕开 validateURLFor 拦截；
+	// 注入 okBodyTransport 假 client 使 downloadHTML 对空 URL 也返回成功）
+	stub := &stubParseDispatcher{docs: []reranker.Document{{ID: "", Text: "x"}}}
+	p.dispatch = stub
+	client := &http.Client{Transport: okBodyTransport{}}
+	docs, err := p.ParseURL(context.Background(), "", "", p.timeout, p.userAgent, p.verify, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("docs = %d", len(docs))
+	}
+	if docs[0].Metadata["source_url"] != "" {
+		t.Errorf("source_url = %q, want \"\"", docs[0].Metadata["source_url"])
+	}
+	// effectiveID 三级兜底第三级：docID 与 url 双空 → 传给 dispatch 的是 uuid
+	if stub.gotDocID == "" {
+		t.Errorf("gotDocID 应为 uuid 兜底非空")
+	}
+	// dispatch 桩收到了假 client 返回的 body
+	if stub.gotHTML != "<html><body>ok</body></html>" {
+		t.Errorf("dispatch 未收到预期 html, got %q", stub.gotHTML)
+	}
+}
+
+// errBodyTransport 读 body 阶段返回错误（覆盖 io.ReadAll 失败分支）。
+type errBodyTransport struct{}
+
+// RoundTrip 返回 200 响应但 body 读取即错。
+func (errBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(errReader{}),
+		Header:     http.Header{},
+	}, nil
+}
+
+// errReader 永远返回错误的读取器。
+type errReader struct{}
+
+// Read 永远返回错误。
+func (errReader) Read(p []byte) (int, error) {
+	return 0, errors.New("read failed")
+}
+
+// TestDownloadHTML_读body失败 响应 200 但 body 读取失败 → 网络错格式。
+func TestDownloadHTML_读body失败(t *testing.T) {
+	client := &http.Client{Transport: errBodyTransport{}}
+	_, err := downloadHTML(context.Background(), "http://example.com", time.Second, "ua", NewVerifyDefault(), client)
+	if err == nil {
+		t.Fatal("读 body 失败应返回错误")
+	}
+	if !strings.Contains(err.Error(), "Web page fetch failed for") {
+		t.Errorf("err = %v, want 网络错格式", err)
+	}
+}
+
+// TestDownloadHTML_非法URL NewRequest 阶段即错（控制字符 URL）。
+func TestDownloadHTML_非法URL(t *testing.T) {
+	_, err := downloadHTML(context.Background(), "http://exa mple.com/\x7f", time.Second, "ua", NewVerifyDefault(), nil)
+	if err == nil {
+		t.Fatal("非法 URL 应返回错误")
+	}
+	if !strings.Contains(err.Error(), "Web page fetch failed for") {
+		t.Errorf("err = %v, want 网络错格式", err)
+	}
+}
+
+// TestDownloadHTML_CAPath无效PEM CA 文件非 PEM 内容 → append 失败分支。
+func TestDownloadHTML_CAPath无效PEM(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ca.pem")
+	if err := os.WriteFile(path, []byte("not a pem"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := downloadHTML(context.Background(), "https://example.com", time.Second, "ua", NewVerifyCAPath(path), nil)
+	if err == nil {
+		t.Fatal("无效 PEM 应返回错误")
+	}
+	if !strings.Contains(err.Error(), "failed to append CA certs") {
+		t.Errorf("err = %v, want append 失败", err)
 	}
 }

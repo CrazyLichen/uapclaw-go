@@ -12,6 +12,12 @@
 // 图片（落盘 images/）经 ImageCaptioner 生成 caption，文本与 caption 按页
 // 拼接为单一 Document 文本。
 //
+// HTML/网页经三层链解析（13.14）：TxtMdParser ← HTMLFileParser（本地 .html
+// 文件，主内容选择器定位+文本净化）← WebPageParser（URL 抓取下载，verify
+// 密封 sum type 四变体配置 TLS）← WeChatArticleParser（微信公众号文章，
+// div#js_content 正文抽取）。Python classmethod 覆写语义经非导出
+// htmlParseDispatcher 接口注入实现（构造时指向最终实例）。
+//
 // 使用方式（对齐 Python Parser 继承体系）：
 //   - 具体解析器：嵌入 BaseParser 并覆写 ParseContent（对齐 Python 仅覆写 _parse），
 //     构造时 NewBaseParser(self) 注入自身
@@ -33,7 +39,10 @@
 //	├── docx_model.go    # docx stdlib 自研解析层：zip/rels/styles/块遍历/合并单元格/图片链（13.13）
 //	├── word_parser.go   # WordParser：DOCX markdown 转换（13.13）
 //	├── excel_value.go   # cellValue 密封 sum type + cellStr/pyFloatStr + excelize adapter（openpyxl 类型语义还原）（13.13）
-//	└── excel_parser.go  # ExcelParser：行/列 Document 产出 + CSV/TSV（13.13）
+//	├── excel_parser.go  # ExcelParser：行/列 Document 产出 + CSV/TSV（13.13）
+//	├── html_file_parser.go  # HTMLFileParser：本地 HTML 主内容/标题/文本净化共享工具链（13.14）
+//	├── web_page_parser.go   # WebPageParser：网页 URL 下载解析 + verify 密封 sum type + URL 正则（13.14）
+//	└── wechat_article_parser.go # WeChatArticleParser：微信公众号 js_content 正文抽取（13.14）
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/processor/parser/
 package parser

@@ -30,6 +30,7 @@ type HTMLFileParser struct {
 	// TxtMdParser 父级（编码检测读文件）
 	*TxtMdParser
 }
+
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -93,11 +94,11 @@ func NewHTMLFileParser() (*HTMLFileParser, error) {
 
 // Parse 解析本地 HTML 文件（覆写整体，对齐 Python HTMLFileParser.parse）。
 //
-// 1. super()._parse 读文件（TxtMdParser 编码检测，软失败返回空串）
-//    空串 → 155110 "Could not read HTML file or file is empty (source=%s)"
-// 2. parseHTMLToDocs：title/findMainContent/getTextFromSoup/门槛校验
-//    → 单 Document（对齐 Python parse 调 _parse_html classmethod）
-// 3. DocID 未设回落 doc（对齐 doc_id=doc_id or doc）
+//  1. super()._parse 读文件（TxtMdParser 编码检测，软失败返回空串）
+//     空串 → 155110 "Could not read HTML file or file is empty (source=%s)"
+//  2. parseHTMLToDocs：title/findMainContent/getTextFromSoup/门槛校验
+//     → 单 Document（对齐 Python parse 调 _parse_html classmethod）
+//  3. DocID 未设回落 doc（对齐 doc_id=doc_id or doc）
 //
 // Python: html_file_parser.py HTMLFileParser.parse
 func (p *HTMLFileParser) Parse(ctx context.Context, doc string, opts ...ParseOption) ([]reranker.Document, error) {

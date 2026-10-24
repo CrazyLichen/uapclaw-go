@@ -390,7 +390,13 @@ parser 包当前 87.7%（13.13 后基线）。本节新增约 900 行生产代�
 
 | # | 偏差 | 原因 | 处理 |
 |---|------|------|------|
-| | | | |
+| 1 | wechatMPURLPattern 尾部 `.*?` 按 `.*` 实现 | Go RE2 无惰性量词；尾部无后续锚点时两者匹配语义等价 | 已预置于 spec §3，测试 TestIsWeChatArticleURL_微信URL判定 全分支覆盖 |
+| 2 | findMainContent 的 body 兜底分支 "body 不存在返回 nil" 不可达 | goquery（x/net/html）解析时自动补全 body 元素，Python 侧 body None 场景在 Go 不达 | 字面保留防御分支；测试改为验证"空 body 回落 body 自身"并注释说明 |
+| 3 | init 注册 .HTM/.HTML 大写扩展名经 registry 小写归一后与 .htm/.html first-wins 静默跳过 | parserRegistry 既定小写归一语义（13.16 确立，13.12/13.13 同款） | 字面保留四扩展名注册对齐 Python 装饰器参数；测试仅查小写键并注释 |
+| 4 | textLength 用 Go len()（字节数）而非 Python len()（码点数） | Go 字符串按 UTF-8 字节计长；阈值 100/200 为相对门槛，中文文本语义不受影响 | 测试 TestTextLength_排除scriptStyle 断言 156 字节（52 码点×3 字节）并在注释标注差异 |
+| 5 | WeChat 全链 dispatch 验证以"覆写 validateURLFor 拦截普通 URL"为证 | httptest 本地 URL 无法命中 mp.weixin.qq.com 正则，无法走真实全链 | TestWeChatParserParse_继承链dispatch 断言 WeChat 覆写错误信息拦截本地 URL；另用 js_content 与 article 并存断言解析覆写胜出 |
+| 6 | ParseURL 的 metadata["title"] 兜底 "(无标题)" 仅写入日志字段不回写 metadata | 对齐 Python parse_url 仅在 logger.info 使用 `title or "(无标题)"`，metadata title 由 parseHTMLToDocs 写入 | 字面对齐；测试断言 Document.Metadata["title"] 由 parseHTMLToDocs 侧兜底 |
+| 7 | 空方法体密封标记 isVerifyMode() 覆盖率恒 0%（4 处） | Go 覆盖率工具对无函数体的空方法计 1 条语句且无法插桩 | 13.13 cellValue isCellValue 同款先例，接受；密封性经 TestVerifyMode_四变体均实现密封接口 保证 |
 
 ## 9. 回填点
 
