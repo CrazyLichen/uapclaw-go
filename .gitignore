@@ -36,3 +36,4 @@ internal/agentcore/memory/external/memory.db
 tests/integration/agentcore/harness/rails/memory/coding_memory/
 tests/integration/agentcore/harness/rails/memory/memory/
 internal/agent_teams/tools/index.json
+internal/agentcore/retrieval/indexing/processor/parser/images/
