@@ -549,6 +549,54 @@ func TestCreateExtractionTools_ListFs异常回退空列表(t *testing.T) {
 	}
 }
 
+// TestCreateExtractionTools_Read分支语义 T-03 回归测试。
+// Python extractor.py L118-128：异常分支带 note="file not found"，
+// 空数据分支（result.data 为空）无 note 键——两分支不得合并。
+func TestCreateExtractionTools_Read分支语义(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	memDir := filepath.Join(dir, "team-memory")
+	require.NoError(t, os.MkdirAll(memDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(memDir, "exists.md"), []byte("hello"), 0o644))
+
+	localFs, ok := local.NewLocalFsOperation(nil).(sysop.FsOperation)
+	require.True(t, ok, "LocalFsOperation 应实现 FsOperation 接口")
+	sysOp := &fakeSysOperation{fsOp: localFs}
+	tools := CreateExtractionTools(memDir, sysOp, "team_a")
+	require.Len(t, tools, 3)
+	var readTool tool.Tool
+	for _, tl := range tools {
+		if tl.Card().Name == "read_memory_file" {
+			readTool = tl
+		}
+	}
+	require.NotNil(t, readTool, "未找到 read_memory_file 工具")
+
+	// 场景1：成功读取 → 带内容、无 note
+	out, err := readTool.Invoke(ctx, map[string]any{"path": "exists.md"})
+	require.NoError(t, err)
+	assert.Equal(t, "hello", out["content"])
+	assert.NotContains(t, out, "note", "成功分支不应带 note 键")
+
+	// 场景2：文件不存在（Fs 层内部捕获返回 error result，data 为 nil）
+	// → Python 空数据分支：{"content": "", "path"}，无 note
+	out, err = readTool.Invoke(ctx, map[string]any{"path": "missing.md"})
+	require.NoError(t, err)
+	assert.Equal(t, "", out["content"])
+	assert.NotContains(t, out, "note", "Fs error result 场景应走空数据分支（无 note），对齐 Python hasattr(result,'data') and result.data")
+
+	// 场景3：sysOp 缺失兜底 → 等价异常口径（带 note）
+	toolsNoSysOp := CreateExtractionTools(memDir, nil, "team_a")
+	for _, tl := range toolsNoSysOp {
+		if tl.Card().Name == "read_memory_file" {
+			out, err = tl.Invoke(ctx, map[string]any{"path": "exists.md"})
+			require.NoError(t, err)
+			assert.Equal(t, "", out["content"])
+			assert.Equal(t, "file not found", out["note"], "sysOp 缺失兜底等价异常分支口径")
+		}
+	}
+}
+
 // toStringSlice 将 Invoke 输出的 files 字段（JSON 中转后为 []any）转为 []string。
 func toStringSlice(t *testing.T, v any) []string {
 	t.Helper()

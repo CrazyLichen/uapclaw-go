@@ -170,11 +170,22 @@ func CreateExtractionTools(teamMemoryDir string, sysOp sysop.SysOperation, teamN
 		// Python: os.path.join(team_memory_dir, os.path.basename(path))
 		fullPath := filepath.Join(teamMemoryDir, filepath.Base(in.Path))
 		if sysOp != nil && sysOp.Fs() != nil {
-			if result, err := sysOp.Fs().ReadFile(ctx, fullPath); err == nil && result != nil && result.Data != nil {
+			result, err := sysOp.Fs().ReadFile(ctx, fullPath)
+			if err != nil {
+				// Python: except → {"content": "", "path": full_path, "note": "file not found"}
+				// Go Fs 层错误经 Go error 表达（对应 Python read_file 抛出的意外异常）
+				return map[string]any{"content": "", "path": fullPath, "note": "file not found"}, nil
+			}
+			// Python: result.data 存在（含 error result 内部捕获场景 data 为 None）
+			// → hasattr(result, "data") and result.data 判定；error result（文件
+			// 未找到等）data 为 nil → 空数据分支（无 note），对齐 Python 语义
+			if result != nil && result.Data != nil {
 				return map[string]any{"content": result.Data.Content, "path": fullPath}, nil
 			}
+			// Python: return {"content": "", "path": full_path}（空数据：无 note 键）
+			return map[string]any{"content": "", "path": fullPath}, nil
 		}
-		// Python: except → {"content": "", "path": full_path, "note": "file not found"}
+		// sysOp 缺失兜底：等价异常分支口径（带 note，read 侧无本地回退）
 		return map[string]any{"content": "", "path": fullPath, "note": "file not found"}, nil
 	}, tool.WithToolCard(tool.NewToolCardWithID(
 		prefix+".read", "read_memory_file", "读取团队记忆目录下的文件",
