@@ -811,4 +811,32 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 13.18 | ✅ | Splitter | `全部由 13.7 前置带出（SentenceSplitter：detectChinese CJK 占比+标点启发+语义早退 / SplitDoc 分句+token 预算打包 / splitLongSegment 长句滑窗子切分 decode 失败跳过+整句 fallback / flush overlap 尾缀倒序累加 + BaseSplitter：构造校验 155100/155101+GetNodesFromDocuments+SplitText+GetTokenCount + sentencizer v0.3.0 替代 pysbd）`。本步骤无剩余内容 | `openjiuwen/core/retrieval/indexing/processor/splitter/splitter.py + base.py` |
 
 **验证点**：✅ 外部文档可被解析、分块、嵌入、索引，并支持增删改查
+
+---
+
+## 领域十四：devtools 开发者工具面
+
+> 与运行时会话链路（Gateway/E2A/AgentServer/DeepAgent）平行的开发者工具面，进程内直接调用，不经过会话链路。agent_builder 为核心子模块（NL→Agent DSL 生成器）。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| **14.x 基础层** | — | | | |
+| 14.1 | 🔄 | devtools 包骨架 + 共享 utils | `internal/agentcore/devtools/agentbuilder/utils/`：7 函数（ExtractJSONFromText/FormatDialogHistory/SafeJSONLoads/MergeDictLists/LoadJSONFile/DeepMergeDict/ValidateSessionID，含 2 死函数）+ 20 常量（含 13 死常量）+ 61 子用例；错误码 188002/153003 消费 | `openjiuwen/dev_tools/agent_builder/utils/` |
+| 14.2 | ☐ | 枚举层 | AgentType/BuildState/ProgressStage/ProgressStatus；⤴️ system 用例 3 个归本节（test_utils_integration.py 枚举部分+混合用例枚举半边） | `openjiuwen/dev_tools/agent_builder/utils/enums.py` |
+| 14.3 | ☐ | 进度上报 | ProgressStep/BuildProgress/ProgressReporter/ProgressManager 观察者模式（512 行，Go 需加锁）；⤴️ system 用例 4 个归本节 | `openjiuwen/dev_tools/agent_builder/utils/progress.py` |
+| **14.x agent_builder** | — | | | |
+| 14.4 | ☐ | resource 层 | PluginProcessor + plugins.json 内嵌 + ResourceRetriever LLM 检索 | `openjiuwen/dev_tools/agent_builder/resource/` |
+| 14.5 | ☐ | executor 层 | HistoryManager + createCoreModel + AgentBuilderExecutor | `openjiuwen/dev_tools/agent_builder/executor/` |
+| 14.6 | ☐ | builders 基座 | BaseAgentBuilder 三态模板方法 + Factory 注册机制 | `openjiuwen/dev_tools/agent_builder/builders/base.py + factory.py` |
+| 14.7 | ☐ | llm_agent 链 | prompts 中英提示词 + Clarifier + Generator + Transformer + IntentionDetector + template | `openjiuwen/dev_tools/agent_builder/builders/llm_agent/` |
+| 14.8 | ☐ | workflow 链 | builder + dl_generator + dl_reflector + dl_assets + cycle_checker + dl_transformer + workflow_designer（~4000 行最大块） | `openjiuwen/dev_tools/agent_builder/builders/workflow/` |
+| 14.9 | ☐ | AgentBuilder 门面 | build_agent/get_progress/map_state_to_status | `openjiuwen/dev_tools/agent_builder/main.py` |
+| 14.10 | ☐ | 测试对齐 | 36 system + 54 unit Python 测试转 Go，闭环 A-4 缺口 | `tests/*_tests/dev_tools/` |
+| **14.x 其余模块（处置待裁）** | — | | | |
+| 14.11 | ⤵️ | prompt_builder | 处置待裁（依赖就绪可正常实现） | `openjiuwen/dev_tools/prompt_builder/` |
+| 14.12 | ⤵️ | skill_creator | 处置待裁（依赖 9.34 sys_operation LOCAL + 技能包 Python 脚本承载方案待设计） | `openjiuwen/dev_tools/skill_creator/` |
+| 14.13 | ⤵️ | skill_evaluator | 处置待裁（同 14.12 依赖） | `openjiuwen/dev_tools/skill_evaluator/` |
+| 14.14 | ⤵️ | tune 旧版调参 | 处置待裁（与 agent_evolving 9.70-9.72 功能重叠，倾向跳过） | `openjiuwen/dev_tools/tune/` |
+
+**验证点**：devtools agent_builder 工具面可用：NL 多轮对话 → 澄清 → DSL 产出
 | 12.13 | ☐ | 自动更新器 | 版本检测与升级 | `jiuwenswarm/common/updater.py` · `upgrade_executor.py` |
