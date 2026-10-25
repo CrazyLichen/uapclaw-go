@@ -1,6 +1,7 @@
 package im_pipeline
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -9,12 +10,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -101,6 +105,167 @@ func (p *IMOutboundPipeline) UnregisterAdapter(channelID string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.adapters, channelID)
+}
+
+// Apply 对出站消息执行路由决策，原地修改 msg.metadata/payload。
+// 常规短路分支返回 nil；error 仅记录不可恢复错误（当前恒 nil，挂接方统一
+// 降级 Warn 不阻塞入队）。
+// Python: im_outbound.py L128-230 apply（步骤顺序不可调换）：
+//  1. 非数字分身；2. 跳过事件；3. 非群聊；4. 无适配器；5. 空 content；
+//  6. 群聊追问 pending 清除（先于前缀解析）；7. 追问前缀解析；
+//  8. reply_scope 已设/无候选；9. 继续日志；10. 关键词兜底；11. LLM 分类三路日志；
+//  12. 兜底合并；13. false → 群聊；14. true → meta 四键升级 DM
+func (p *IMOutboundPipeline) Apply(ctx context.Context, msg *schema.Message) error {
+	meta := msg.Metadata
+	if meta == nil {
+		meta = map[string]any{}
+	}
+
+	// 步骤1：非数字分身（msg 标志或 metadata avatar_mode）
+	isDigitalAvatar := msg.GroupDigitalAvatar || truthy(meta["avatar_mode"])
+	if !isDigitalAvatar {
+		return nil
+	}
+
+	// 步骤2：跳过事件类型
+	payload := msg.Payload
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	eventType, _ := payload["event_type"].(string)
+	if skipEventTypes[eventType] {
+		return nil
+	}
+
+	// 步骤3：非群聊
+	chatType, _ := meta["chat_type"].(string)
+	if strings.TrimSpace(chatType) != "group" {
+		return nil
+	}
+
+	// 步骤4：无适配器
+	p.mu.RLock()
+	adapter := p.adapters[msg.ChannelID]
+	p.mu.RUnlock()
+	if adapter == nil {
+		return nil
+	}
+
+	// 步骤5：空内容
+	content := extractContent(msg)
+	if content == "" {
+		return nil
+	}
+
+	// 步骤6：群聊追问 pending 清除（必须在追问前缀解析之前）
+	answeredUserID, _ := meta["interaction_answered_user_id"].(string)
+	answeredUserID = strings.TrimSpace(answeredUserID)
+	if answeredUserID != "" {
+		sessionID := strings.TrimSpace(msg.SessionID)
+		if sessionID != "" {
+			if existing := routing.FindGroupPending(sessionID, answeredUserID); existing != nil {
+				existing.Remove()
+				logger.Info(logComponent).
+					Str("event_type", "clear_pending").
+					Str("session_id", sessionID).
+					Str("user_id", answeredUserID).
+					Msg("cleared pending interaction")
+			}
+		}
+	}
+
+	// 步骤7：追问前缀解析（优先于原有路由逻辑）
+	if groupMatch := reGroupFollowup.FindStringSubmatch(content); groupMatch != nil {
+		p.handleGroupFollowup(msg, meta, adapter, content, groupMatch)
+		return nil
+	}
+	if reDMFollowup.MatchString(content) {
+		p.handleDMFollowup(msg, meta, adapter, content)
+		return nil
+	}
+
+	// 步骤8：原有路由决策
+	replyScope, _ := meta["reply_scope"].(string)
+	if strings.TrimSpace(replyScope) != "" {
+		return nil
+	}
+	candidateUserID := adapter.GetCandidateUserID(meta)
+	if candidateUserID == "" {
+		return nil
+	}
+
+	// 步骤9：继续处理日志
+	logger.Info(logComponent).
+		Str("event_type", "outbound_routing_continue").
+		Str("channel_id", msg.ChannelID).
+		Str("candidate", candidateUserID).
+		Int("content_len", utf8.RuneCountInString(content)).
+		Msg("outbound routing continue")
+
+	// 步骤10：关键词兜底
+	keywordHit := isPersonalActionReply(content)
+
+	// 步骤11：LLM 分类（三路日志逐字段对齐）
+	isPersonal, llmRaw := p.classifyPersonalAction(ctx, adapter.PlatformName(), meta, content)
+	if isPersonal == nil {
+		logger.Info(logComponent).
+			Str("event_type", "llm_no_result").
+			Str("channel_id", msg.ChannelID).
+			Str("request_id", msg.ID).
+			Bool("keyword_hit", keywordHit).
+			Str("llm_output", llmRaw).
+			Str("content_snippet", truncateStr(content, 100)).
+			Msg("LLM no result, keyword fallback")
+		v := keywordHit
+		isPersonal = &v
+	} else if *isPersonal {
+		logger.Info(logComponent).
+			Str("event_type", "llm_dm").
+			Str("channel_id", msg.ChannelID).
+			Str("request_id", msg.ID).
+			Bool("keyword_hit", keywordHit).
+			Str("llm_output", llmRaw).
+			Str("content_snippet", truncateStr(content, 100)).
+			Msg("LLM classified as DM")
+	} else {
+		logger.Info(logComponent).
+			Str("event_type", "llm_chat").
+			Str("channel_id", msg.ChannelID).
+			Str("request_id", msg.ID).
+			Bool("keyword_hit", keywordHit).
+			Str("llm_output", llmRaw).
+			Str("content_snippet", truncateStr(content, 100)).
+			Msg("LLM classified as CHAT")
+	}
+
+	// 步骤12-13：false → 群聊不升级
+	if !*isPersonal {
+		logger.Info(logComponent).
+			Str("event_type", "outbound_group_reply").
+			Str("channel_id", msg.ChannelID).
+			Str("request_id", msg.ID).
+			Msg("classified as group chat, not upgrading to DM")
+		return nil
+	}
+
+	// 步骤14：升级为私发（meta 四键）
+	meta["reply_scope"] = "dm"
+	meta[adapter.ReplyUserIDKey()] = candidateUserID
+	replyReason := orStr(meta["reply_candidate_reason"])
+	if replyReason == "" {
+		replyReason = "processor_target_user"
+	}
+	meta["reply_reason"] = strings.TrimSpace(replyReason)
+	meta["reply_personal_action"] = true
+	msg.Metadata = meta
+
+	logger.Info(logComponent).
+		Str("event_type", "outbound_upgraded_dm").
+		Str("channel_id", msg.ChannelID).
+		Str("request_id", msg.ID).
+		Str("reply_user_id_key", adapter.ReplyUserIDKey()).
+		Msg("upgraded to DM")
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -247,10 +412,86 @@ func newHexID() string {
 	return hex.EncodeToString(b)
 }
 
-// truncateWithSuffix 截断加省略号后缀（Python api_base[:30] + "..." if len>30）。
+// truncateWithSuffix 截断加省略号后缀（Python api_base[:30] + "..." if len>30，
+// 字符语义 rune 域）。
 func truncateWithSuffix(s string, max int) string {
-	if len(s) > max {
-		return s[:max] + "..."
+	runes := []rune(s)
+	if len(runes) > max {
+		return string(runes[:max]) + "..."
 	}
 	return s
+}
+
+// classifyPersonalAction 使用 LLM 判断回复是否属于个人行动类内容。
+// 返回 (decision, llmRaw)：decision true(DM)/false(CHAT)/nil(失败)。
+// Python: im_outbound.py L373-436 _classify_personal_action
+func (p *IMOutboundPipeline) classifyPersonalAction(ctx context.Context, platformName string, metadata map[string]any, content string) (*bool, string) {
+	if !p.ensureLLM() {
+		return nil, ""
+	}
+
+	targetName := orStr(metadata["reply_target_name"])
+	if targetName == "" {
+		targetName = "目标用户"
+	}
+	originalQuery := orStr(metadata["avatar_original_query"])
+
+	querySection := ""
+	if originalQuery != "" {
+		querySection = fmt.Sprintf("群聊中的原始提问：\n%s\n\n", truncateStr(originalQuery, 300))
+	}
+
+	prompt := fmt.Sprintf(classifyPromptTemplate, platformName, querySection, targetName, truncateStr(content, 500))
+
+	logger.Info(logComponent).
+		Str("event_type", "classify_request").
+		Str("model", p.llmModelName).
+		Str("target_name", targetName).
+		Int("content_len", utf8.RuneCountInString(content)).
+		Str("prompt", prompt).
+		Msg("LLM classify request")
+
+	resp, err := p.llm.Invoke(ctx,
+		model_clients.NewMessagesParam(llmschema.NewUserMessage(prompt)),
+		model_clients.WithInvokeModel(p.llmModelName),
+		model_clients.WithInvokeTemperature(0),
+		model_clients.WithInvokeTimeout(60),
+	)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Msg("LLM classify delivery intent failed")
+		return nil, ""
+	}
+
+	text := ""
+	if resp != nil {
+		// 多模态 content 时 Text() 空——对齐 Python isinstance(content,str) False
+		text = strings.ToUpper(strings.TrimSpace(resp.Content.Text()))
+	}
+	logger.Info(logComponent).
+		Str("event_type", "llm_raw_response").
+		Str("text", text).
+		Msg("LLM raw response")
+	if strings.Contains(text, "DM") {
+		v := true
+		return &v, text
+	}
+	if strings.Contains(text, "CHAT") {
+		v := false
+		return &v, text
+	}
+	logger.Warn(logComponent).
+		Str("text", text).
+		Msg("LLM response unparsable as DM/CHAT")
+	return nil, text
+}
+
+// handleGroupFollowup 处理群聊追问（Task 7 完整实现，本任务占位空签名）。
+// Python: im_outbound.py L234-304 _handle_group_followup
+func (p *IMOutboundPipeline) handleGroupFollowup(msg *schema.Message, meta map[string]any, adapter IMPlatformAdapter, content string, match []string) {
+}
+
+// handleDMFollowup 处理私聊追问（Task 7 完整实现，本任务占位空签名）。
+// Python: im_outbound.py L306-356 _handle_dm_followup
+func (p *IMOutboundPipeline) handleDMFollowup(msg *schema.Message, meta map[string]any, adapter IMPlatformAdapter, content string) {
 }

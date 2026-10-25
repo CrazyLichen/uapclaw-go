@@ -534,8 +534,11 @@ func orStr(values ...any) string {
 
 // truncateStr 截断字符串（Python [:n] 字节域近似，resolveInboundReferences 8000 截断先例）。
 func truncateStr(s string, n int) string {
-	if len(s) > n {
-		return s[:n]
+	// Python [:n] 为字符语义（rune 域截断，多字节中文不切碎）；
+	// resolveInboundReferences 8000 截断为纯 ASCII 场景，字节/字符等价。
+	runes := []rune(s)
+	if len(runes) > n {
+		return string(runes[:n])
 	}
 	return s
 }
