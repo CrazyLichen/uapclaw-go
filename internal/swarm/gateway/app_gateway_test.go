@@ -276,3 +276,10 @@ func TestNewAppGatewayServer_HeartbeatConfig回退(t *testing.T) {
 	assert.Equal(t, 42.0, conf["every"])
 	assert.Equal(t, "tui", conf["target"])
 }
+
+// TestNewAppGatewayServer_IM管线装配 11.12 双管线非 nil。
+func TestNewAppGatewayServer_IM管线装配(t *testing.T) {
+	gs := newTestAppGatewayServer(t)
+	assert.NotNil(t, gs.imInbound)
+	assert.NotNil(t, gs.imOutbound)
+}

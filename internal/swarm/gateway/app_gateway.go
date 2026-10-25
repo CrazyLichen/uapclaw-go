@@ -22,6 +22,7 @@ import (
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	gwcron "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/cron"
 	gwheartbeat "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/heartbeat"
+	impipeline "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/im_pipeline"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -59,6 +60,11 @@ type AppGatewayServer struct {
 	cronScheduler *gwcron.CronSchedulerService
 	// heartbeatService 心跳服务（11.11，对齐 Python heartbeat_service）
 	heartbeatService *gwheartbeat.GatewayHeartbeatService
+	// imInbound 数字分身入站管线（11.12，对齐 Python im_inbound）
+	// 供 11.16 飞书 / 11.21 企微适配器 RegisterAdapter 接线引用
+	imInbound *impipeline.IMInboundPipeline
+	// imOutbound 数字分身出站管线（11.12，对齐 Python im_outbound）
+	imOutbound *impipeline.IMOutboundPipeline
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -225,6 +231,21 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	}
 	s.heartbeatService = gwheartbeat.NewGatewayHeartbeatService(agentClient, hbConfig, msgHandler, nil)
 
+	// 步骤4.7：IM Pipeline 装配（11.12，对齐 Python app_gateway.py L851-856）
+	// Python: start_forwarding 之后、cron 装配之前：
+	//     im_inbound = IMInboundPipeline()
+	//     im_outbound = IMOutboundPipeline()
+	//     message_handler.set_inbound_pipeline(im_inbound)
+	//     message_handler.set_outbound_pipeline(im_outbound)
+	// 适配器注册留 11.16 飞书 / 11.21 企微（Python L1279/1355/1568 通道装配处）；
+	// 本期零适配器运行：管线全放行，Web 通道行为零变化。
+	s.imInbound = impipeline.NewIMInboundPipeline(nil, nil)
+	s.imOutbound = impipeline.NewIMOutboundPipeline()
+	msgHandler.SetInboundPipeline(s.imInbound)
+	// config 回调：与 Python set_outbound_pipeline 内 get_config_raw/update_channel_in_config
+	// 等价——Go 侧直接读全局注册的 config（getConfigSnapshot 语义），无独立模块函数可引
+	msgHandler.SetOutboundPipeline(s.imOutbound, makeConfigRawReader(cfg), nil)
+
 	// 11.10 已回填：cronbridge 全局注入（对齐 Python MessageHandler.get_instance() 单例语义）
 	// 单进程形态下 AgentServer 侧 bridge 惰性构造 CronTools 时消费这些全局注入：
 	// - wake 发布器：MessageHandler.PublishUserMessagesNowait 隐式满足 UserMessagePublisher
@@ -271,8 +292,8 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 //
 // 注册 WebChannel、启动 MessageHandler 转发循环、启动 HTTP 服务器。
 func (s *AppGatewayServer) Start(ctx context.Context) error {
-	// TODO(⤵️ 领域11): 初始化 IMInboundPipeline + IMOutboundPipeline，注册到 MessageHandler
-	// Python: app_gateway.py L851-856
+	// 11.12 已回填：IM Pipeline 装配在 NewAppGatewayServer 步骤4.7（管线为纯
+	// 预处理器，无启动/停止生命周期；Python L851-856 也仅构造+注入）
 
 	// 11.10 已回填：启动 cron 调度器（对齐 Python L1615 await cron_scheduler.start()）
 	if s.cronScheduler != nil {
@@ -508,6 +529,21 @@ func (s *AppGatewayServer) Stop() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// makeConfigRawReader 构造 config 原始数据读取回调（对齐 Python get_config_raw：
+// 读全局 config 返回原始 map；未注册/读失败返回 nil）。
+func makeConfigRawReader(cfg *config.Config) func() map[string]any {
+	return func() map[string]any {
+		if cfg == nil {
+			return nil
+		}
+		data, err := cfg.Raw()
+		if err != nil {
+			return nil
+		}
+		return data
+	}
+}
 
 // setupRouter 组装 chi 路由。
 //
