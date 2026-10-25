@@ -83,4 +83,5 @@ func WithRetrieveExtra(key string, value any) RetrieveOption {
 // 编译期断言：两实现满足 Retriever 接口（13.17 先例）。
 var (
 	_ Retriever = (*VectorRetriever)(nil)
+	_ Retriever = (*SparseRetriever)(nil)
 )
