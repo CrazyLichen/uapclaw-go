@@ -170,3 +170,253 @@ type warnStageConfig struct {
 	message *string
 	details map[string]any
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ProgressStepOption ProgressStep 构造选项。
+type ProgressStepOption func(*ProgressStep)
+
+// BuildProgressOption BuildProgress 构造选项。
+type BuildProgressOption func(*BuildProgress)
+
+// StartStageOption StartStage 方法选项。
+type StartStageOption func(*startStageConfig)
+
+// UpdateStageOption UpdateStage 方法选项。
+type UpdateStageOption func(*updateStageConfig)
+
+// CompleteStageOption CompleteStage 方法选项。
+type CompleteStageOption func(*completeStageConfig)
+
+// FailStageOption FailStage 方法选项。
+type FailStageOption func(*failStageConfig)
+
+// WarnStageOption WarnStage 方法选项。
+type WarnStageOption func(*warnStageConfig)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// llmAgentProgressMap LLM Agent 阶段进度映射。
+	// 对齐 Python: llm_agent_progress（L370-377）。
+	llmAgentProgressMap = map[ProgressStage]float64{
+		ProgressStageInitializing:       0,
+		ProgressStageClarifying:         20,
+		ProgressStageResourceRetrieving: 40,
+		ProgressStageGeneratingConfig:   60,
+		ProgressStageTransformingDSL:    80,
+		ProgressStageCompleted:          100,
+	}
+
+	// workflowProgressMap Workflow Agent 阶段进度映射。
+	// 对齐 Python: workflow_progress（L380-390）。
+	workflowProgressMap = map[ProgressStage]float64{
+		ProgressStageInitializing:             0,
+		ProgressStageDetectingIntention:       10,
+		ProgressStageGeneratingWorkflowDesign: 25,
+		ProgressStageGeneratingDL:             45,
+		ProgressStageValidatingDL:             60,
+		ProgressStageRefiningDL:               70,
+		ProgressStageTransformingMermaid:      85,
+		ProgressStageTransformingWorkflowDSL:  95,
+		ProgressStageCompleted:                100,
+	}
+
+	// globalProgressManager 全局进度管理器单例。
+	// 对齐 Python: progress_manager = ProgressManager()（模块级 L512）。
+	globalProgressManager *ProgressManager
+
+	// globalProgressManagerOnce 确保单例只初始化一次。
+	globalProgressManagerOnce sync.Once
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewProgressStep 创建构建步骤快照。
+// 对齐 Python dataclass ProgressStep 必填三参 + 默认值：
+// details=空 dict、timestamp=now(utc)、duration/error=None。
+func NewProgressStep(stage ProgressStage, status ProgressStatus, message string, opts ...ProgressStepOption) ProgressStep {
+	step := ProgressStep{
+		Stage:     stage,
+		Status:    status,
+		Message:   message,
+		Details:   make(map[string]any),
+		Timestamp: time.Now(),
+	}
+	for _, opt := range opts {
+		opt(&step)
+	}
+	return step
+}
+
+// WithStepDetails 设置步骤细节字典（整体替换）。
+func WithStepDetails(details map[string]any) ProgressStepOption {
+	return func(s *ProgressStep) {
+		s.Details = details
+	}
+}
+
+// WithStepDuration 设置步骤时长秒。
+func WithStepDuration(duration float64) ProgressStepOption {
+	return func(s *ProgressStep) {
+		s.Duration = &duration
+	}
+}
+
+// WithStepError 设置步骤错误消息。
+func WithStepError(errMsg string) ProgressStepOption {
+	return func(s *ProgressStep) {
+		s.Error = &errMsg
+	}
+}
+
+// NewBuildProgress 创建构建进度聚合。
+// 对齐 Python dataclass BuildProgress 必填五参 + 默认值：
+// steps=空 list、overall_progress=0.0、start/last_update_time=now(utc)、error=None。
+func NewBuildProgress(sessionID, agentType string, stage ProgressStage, status ProgressStatus, message string, opts ...BuildProgressOption) BuildProgress {
+	progress := BuildProgress{
+		SessionID:       sessionID,
+		AgentType:       agentType,
+		CurrentStage:    stage,
+		CurrentStatus:   status,
+		CurrentMessage:  message,
+		Steps:           make([]ProgressStep, 0),
+		OverallProgress: 0.0,
+		StartTime:       time.Now(),
+		LastUpdateTime:  time.Now(),
+	}
+	for _, opt := range opts {
+		opt(&progress)
+	}
+	return progress
+}
+
+// WithProgressSteps 设置进度步骤列表（整体替换）。
+func WithProgressSteps(steps []ProgressStep) BuildProgressOption {
+	return func(p *BuildProgress) {
+		p.Steps = steps
+	}
+}
+
+// NewProgressReporter 创建进度上报器。
+// 对齐 Python: ProgressReporter.__init__（progress 初始字面量 L135-141）。
+func NewProgressReporter(sessionID, agentType string) *ProgressReporter {
+	return &ProgressReporter{
+		sessionID: sessionID,
+		agentType: agentType,
+		progress: NewBuildProgress(
+			sessionID, agentType,
+			ProgressStageInitializing,
+			ProgressStatusPending,
+			"Initializing...",
+		),
+		stepStartTimes: make(map[ProgressStage]float64),
+	}
+}
+
+// NewProgressManager 创建独立进度管理器实例（测试隔离用）。
+// 对齐 Python: ProgressManager() 直构（system 测试同款）。
+func NewProgressManager() *ProgressManager {
+	return &ProgressManager{
+		reporters: make(map[string]*ProgressReporter),
+	}
+}
+
+// GetProgressManager 获取全局进度管理器单例。
+// 对齐 Python: from progress import progress_manager（模块级单例）。
+// 消费方：14.5 executor 创建 reporter、14.9 门面查询、REST/WS 推送。
+func GetProgressManager() *ProgressManager {
+	return getGlobalProgressManager()
+}
+
+// WithStartStageDetails 设置 StartStage 细节。
+func WithStartStageDetails(details map[string]any) StartStageOption {
+	return func(c *startStageConfig) {
+		c.details = details
+	}
+}
+
+// WithStartStageProgress 设置 StartStage 显式总体进度（nil 则自动计算）。
+func WithStartStageProgress(progress float64) StartStageOption {
+	return func(c *startStageConfig) {
+		c.progress = &progress
+	}
+}
+
+// WithUpdateStageMessage 设置 UpdateStage 消息。
+func WithUpdateStageMessage(message string) UpdateStageOption {
+	return func(c *updateStageConfig) {
+		c.message = &message
+	}
+}
+
+// WithUpdateStageDetails 设置 UpdateStage 细节（合并进末步骤）。
+func WithUpdateStageDetails(details map[string]any) UpdateStageOption {
+	return func(c *updateStageConfig) {
+		c.details = details
+	}
+}
+
+// WithUpdateStageProgress 设置 UpdateStage 总体进度。
+func WithUpdateStageProgress(progress float64) UpdateStageOption {
+	return func(c *updateStageConfig) {
+		c.progress = &progress
+	}
+}
+
+// WithCompleteStageMessage 设置 CompleteStage 消息。
+func WithCompleteStageMessage(message string) CompleteStageOption {
+	return func(c *completeStageConfig) {
+		c.message = &message
+	}
+}
+
+// WithCompleteStageDetails 设置 CompleteStage 细节。
+func WithCompleteStageDetails(details map[string]any) CompleteStageOption {
+	return func(c *completeStageConfig) {
+		c.details = details
+	}
+}
+
+// WithFailStageMessage 设置 FailStage 消息。
+func WithFailStageMessage(message string) FailStageOption {
+	return func(c *failStageConfig) {
+		c.message = &message
+	}
+}
+
+// WithFailStageDetails 设置 FailStage 细节。
+func WithFailStageDetails(details map[string]any) FailStageOption {
+	return func(c *failStageConfig) {
+		c.details = details
+	}
+}
+
+// WithWarnStageMessage 设置 WarnStage 消息。
+func WithWarnStageMessage(message string) WarnStageOption {
+	return func(c *warnStageConfig) {
+		c.message = &message
+	}
+}
+
+// WithWarnStageDetails 设置 WarnStage 细节。
+func WithWarnStageDetails(details map[string]any) WarnStageOption {
+	return func(c *warnStageConfig) {
+		c.details = details
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getGlobalProgressManager 获取全局进度管理器单例（sync.Once 惰性初始化）。
+// 先例：harness/registry.go getGlobalRegistry。
+func getGlobalProgressManager() *ProgressManager {
+	globalProgressManagerOnce.Do(func() {
+		globalProgressManager = &ProgressManager{
+			reporters: make(map[string]*ProgressReporter),
+		}
+	})
+	return globalProgressManager
+}
