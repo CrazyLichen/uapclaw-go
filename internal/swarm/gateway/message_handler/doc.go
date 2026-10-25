@@ -11,7 +11,7 @@
 //	message_handler/
 //	├── doc.go              # 包文档
 //	├── message_handler.go  # MessageHandler 核心结构（双 channel、transport、state、SessionMap/hookHandler 装配）
-//	├── forward_loop.go     # 入站转发循环（forwardLoop 11步骤含步骤3 UserPromptSubmit hook + processStream）
+//	├── forward_loop.go     # 入站转发循环（forwardLoop 11步骤含步骤3 UserPromptSubmit hook + 步骤6 Inbound Pipeline + processStream）
 //	├── outbound.go         # 出站 push 消费 + handleAgentServerPush + cron push
 //	├── channel_state.go    # ChannelControlState + ApplyChannelState（SessionMap 双分支）+ 身份四元组提取
 //	├── convert.go          # E2AResponse→Message 转换函数（ResponseToMessage、ChunkToMessage、MergeAgentMetadata）
@@ -20,7 +20,7 @@
 //	├── at_file.go          # @file 引用解析 + @agent 提及 + ResolveStructuredAttachments
 //	├── evolution.go        # Evolution 状态机（15 个方法，审批/排队/自动接受）
 //	├── dispatch.go         # 派发辅助（prepareAgentDispatchMessage + nonStreamRPCMayRunParallel）
-//	├── config_inject.go    # SetOutboundPipeline 注入 + getConfigRaw/updateChannelInConfig
+//	├── config_inject.go    # SetOutboundPipeline/SetInboundPipeline 注入 + getConfigRaw/updateChannelInConfig
 //	├── disconnect.go       # CancelAgentSessionsOnDisconnect（断连取消）
 //	└── command_parser/     # Slash 命令解析器子包
 //	    ├── doc.go          # 子包文档

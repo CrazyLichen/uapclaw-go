@@ -26,6 +26,7 @@
 //	├── cron/               # 定时任务调度（11.10：CronSchedulerService 事件堆 + CronController）
 //	├── hooks/              # Gateway Hook（11.13：GatewayHookHandler 4 事件）
 //	├── heartbeat/          # 心跳服务（11.11：GatewayHeartbeatService 旁路定时器）
+//	├── im_pipeline/        # 数字分身入站/出站管线（11.12：相关性过滤+LLM 改写+路由决策+追问前缀）
 //	├── channel_manager/    # 渠道管理
 //	├── message_handler/    # 消息处理器
 //	└── routing/            # 路由与 AgentServer 客户端
