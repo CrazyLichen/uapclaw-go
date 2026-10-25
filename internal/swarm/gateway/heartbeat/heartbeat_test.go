@@ -320,7 +320,7 @@ func TestTick_OK大小写不敏感(t *testing.T) {
 
 // TestTick_relay关闭 RelayChannelID nil 或 publisher nil → 不发消息。
 func TestTick_relay关闭(t *testing.T) {
-	// RelayChannelID nil
+	// RelayChannelID nil（无 relay 配置）
 	fc := &fakeAgentClient{}
 	fp := &fakePublisher{}
 	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{IntervalSeconds: 10}, fp, nil)

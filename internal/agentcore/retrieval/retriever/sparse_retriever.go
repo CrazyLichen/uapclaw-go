@@ -21,6 +21,9 @@ type SparseRetriever struct {
 	vectorStore vector_store.VectorStore
 }
 
+// 编译期断言：SparseRetriever 满足 Retriever 接口。
+var _ Retriever = (*SparseRetriever)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSparseRetriever 创建稀疏检索器。

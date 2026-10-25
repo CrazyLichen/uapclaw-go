@@ -25,6 +25,9 @@ type VectorRetriever struct {
 	embedModel embedding.BaseEmbedding
 }
 
+// 编译期断言：VectorRetriever 满足 Retriever 接口。
+var _ Retriever = (*VectorRetriever)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewVectorRetriever 创建向量检索器。

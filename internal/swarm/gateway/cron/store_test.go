@@ -227,7 +227,7 @@ func TestStore原子写(t *testing.T) {
 	}
 }
 
-// TestStoreUpdateNotFound
+// TestStoreUpdateNotFound 更新不存在的任务 ID 时应报错（含空 ID）。
 func TestStoreUpdateNotFound(t *testing.T) {
 	s := NewCronJobStore(filepath.Join(t.TempDir(), "cron_jobs.json"))
 	if _, err := s.UpdateJob("nope", map[string]any{"name": "x"}); err == nil {
