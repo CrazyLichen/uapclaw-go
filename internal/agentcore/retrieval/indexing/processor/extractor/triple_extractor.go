@@ -1,15 +1,21 @@
 package extractor
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	jsonrepair "github.com/RealAlexandreAI/json-repair"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -163,8 +169,8 @@ Passage:
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译期断言 TripleExtractor 实现 Extractor（Task 6 实现 Extract/Process 后恢复）
-// var _ Extractor = (*TripleExtractor)(nil)
+// 编译期断言 TripleExtractor 实现 Extractor
+var _ Extractor = (*TripleExtractor)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -193,6 +199,71 @@ func NewTripleExtractor(llmClient *llm.Model, modelName string, opts ...TripleEx
 		opt(e)
 	}
 	return e
+}
+
+// Extract 并发抽取 chunks 的三元组（方案 A：预分配槽位 + 信号量 + 收齐扫描）。
+//
+// 语义逐字对齐 Python asyncio.gather(return_exceptions=True)：
+//   - 全部任务跑完才扫描（无 fail-fast 取消）
+//   - 成功结果按 chunk 序合并
+//   - 首错按 chunk 序（非完成序）选取
+//   - BaseError 原样返回（对齐 isinstance first_error BaseError raise）
+//   - 首错时成功结果不返回（对齐 Python extend 后随 raise 丢弃——偏差 §8-7）
+//
+// Python: triple_extractor.py TripleExtractor.extract（L47-145）
+func (e *TripleExtractor) Extract(ctx context.Context, chunks []common.TextChunk, _ ...ExtractOption) ([]common.Triple, error) {
+	results := make([]chunkResult, len(chunks)) // 空 chunks → 空 make，扫描零循环直接返回
+	var wg sync.WaitGroup
+	for i := range chunks {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			// 对齐 async with self.limiter（包住 invoke+解析全流程）
+			e.limiter <- struct{}{}
+			defer func() { <-e.limiter }()
+			results[i] = e.extractChunk(ctx, chunks[i]) // 各写各的槽位，无竞争
+		}(i)
+	}
+	wg.Wait() // 收齐全部（gather 全跑完语义）
+
+	allTriples := make([]common.Triple, 0)
+	var firstErr error
+	var firstErrChunkID string
+	for i := range chunks { // 按 chunk 序扫描（对齐 for idx, result in enumerate）
+		if results[i].err != nil {
+			// 对齐 Python: logger.error(f"Task failed for chunk {chunk_id}: {result}")
+			logger.Error(logComponent).
+				Str("chunk_id", chunks[i].ID).
+				Err(results[i].err).
+				Msg("Task failed for chunk")
+			if firstErr == nil {
+				firstErr = results[i].err
+				firstErrChunkID = chunks[i].ID
+			}
+			continue
+		}
+		allTriples = append(allTriples, results[i].triples...)
+	}
+
+	if firstErr != nil {
+		var be *exception.BaseError
+		if errors.As(firstErr, &be) { // isinstance(first_error, BaseError): raise 原样
+			return nil, firstErr
+		}
+		return nil, exception.BuildError(
+			exception.StatusRetrievalKbTripleExtractionProcessError,
+			exception.WithParam("error_msg", firstErrChunkID+": "+firstErr.Error()),
+			exception.WithCause(firstErr),
+		)
+	}
+	return allTriples, nil
+}
+
+// Process 处理文本分块（Processor 契约兼容入口），转发 Extract。
+//
+// Python: base.py Extractor.process → self.extract(chunks, **kwargs)
+func (e *TripleExtractor) Process(ctx context.Context, chunks []common.TextChunk, opts ...ExtractOption) ([]common.Triple, error) {
+	return e.Extract(ctx, chunks, opts...)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -395,4 +466,52 @@ func truncateContent(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// extractChunk 单 chunk 抽取：构建提示词 → Invoke → 解析。
+//
+// 错误统一 wrap 155507（对齐 Python except Exception as e → build_error）。
+// nil llmClient → 155507 硬失败（Python None.invoke AttributeError 被 wrap
+// 的等价路径——偏差 §8-5）。
+//
+// Python: triple_extractor.py TripleExtractor.extract 内 _extract_chunk（L70-115）
+func (e *TripleExtractor) extractChunk(ctx context.Context, chunk common.TextChunk) chunkResult {
+	if e.llmClient == nil {
+		return chunkResult{err: exception.BuildError(
+			exception.StatusRetrievalKbTripleExtractionProcessError,
+			exception.WithParam("error_msg", chunk.ID+": llm client is nil"),
+		)}
+	}
+
+	// 对齐 prompt = self._build_prompt(chunk.text, chunk.metadata.get("title", ""))
+	prompt := e.buildPrompt(chunk.Text, metadataTitle(chunk.Metadata))
+	messages := model_clients.NewMessagesParam(llmschema.NewUserMessage(prompt))
+
+	resp, err := e.llmClient.Invoke(ctx, messages,
+		model_clients.WithInvokeTemperature(e.temperature))
+	if err != nil {
+		// 对齐 Python: logger.error(f"Failed to extract triples from chunk {chunk.id_}: {e}")
+		logger.Error(logComponent).
+			Str("chunk_id", chunk.ID).
+			Err(err).
+			Msg("Failed to extract triples from chunk")
+		return chunkResult{err: exception.BuildError(
+			exception.StatusRetrievalKbTripleExtractionProcessError,
+			exception.WithParam("error_msg", chunk.ID+": "+err.Error()),
+			exception.WithCause(err),
+		)}
+	}
+
+	var content string
+	if resp != nil {
+		content = resp.Content.Text()
+	}
+	triples, ok := e.parseTriples(content, chunk.DocID, chunk.ID)
+	if !ok {
+		return chunkResult{err: exception.BuildError(
+			exception.StatusRetrievalKbTripleExtractionProcessError,
+			exception.WithParam("error_msg", chunk.ID+": LLM response could not be parsed as valid triple JSON"),
+		)}
+	}
+	return chunkResult{triples: triples}
 }

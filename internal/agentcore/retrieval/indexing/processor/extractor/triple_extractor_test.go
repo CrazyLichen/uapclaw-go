@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -368,5 +372,342 @@ func TestPyStr_jsonNumber(t *testing.T) {
 		if got := pyStr(c.in); got != c.want {
 			t.Errorf("pyStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
 		}
+	}
+}
+
+// ──────────────────────────── Extract/Process 测试 ────────────────────────────
+
+// captionTripleClient 可编程 mock：按序返回预置响应或错误，记录 Invoke 参数。
+//
+// 并发安全设计：responses/errs 构造后只读；callCount/current/concurrentPeak
+// 走 atomic；lastMessages/lastTemperature 经 mu 保护（多 chunk 并发 Invoke
+// 写入不 race，go test -race 下安全）。
+type captionTripleClient struct {
+	stubTripleClient
+	// mu 保护 last* 字段（并发 Invoke 写入）
+	mu sync.Mutex
+	// responses 按调用序预置响应（content 字段）
+	responses []string
+	// errs 按调用序预置错误（与 responses 索引对应，优先于 content）
+	errs []error
+	// callCount Invoke 调用计数
+	callCount int32
+	// current 当前并发数（进入 +1 / 退出 -1）
+	current int32
+	// concurrentPeak 并发峰值（CAS 更新）
+	concurrentPeak int32
+	// lastTemperature 最近一次 Invoke 的温度（NewInvokeParams 提取）
+	lastTemperature *float64
+	// lastMessages 最近一次 Invoke 的消息
+	lastMessages model_clients.MessagesParam
+}
+
+// Invoke 按预置返回；耗尽时返回错误。
+func (c *captionTripleClient) Invoke(_ context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	cur := atomic.AddInt32(&c.current, 1)
+	for {
+		peak := atomic.LoadInt32(&c.concurrentPeak)
+		if cur <= peak || atomic.CompareAndSwapInt32(&c.concurrentPeak, peak, cur) {
+			break
+		}
+	}
+	defer atomic.AddInt32(&c.current, -1)
+
+	idx := int(atomic.AddInt32(&c.callCount, 1)) - 1
+	c.mu.Lock()
+	c.lastMessages = messages
+	c.lastTemperature = model_clients.NewInvokeParams(opts...).Temperature
+	c.mu.Unlock()
+
+	if c.errs != nil && idx < len(c.errs) {
+		if c.errs[idx] != nil {
+			return nil, c.errs[idx]
+		}
+	}
+	if idx < len(c.responses) {
+		return llmschema.NewAssistantMessage(c.responses[idx]), nil
+	}
+	return nil, errors.New("mock responses exhausted")
+}
+
+// newExtractTestModelWithMock 构造带可编程 mock 的 Model 并返回 mock 引用。
+func newExtractTestModelWithMock(t *testing.T, responses []string, errs []error) (*llm.Model, *captionTripleClient) {
+	t.Helper()
+	clientCfg, err := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	if err != nil {
+		t.Fatalf("构造客户端配置失败: %v", err)
+	}
+	mock := &captionTripleClient{responses: responses, errs: errs}
+	model, err := llm.NewModel(clientCfg, llmschema.NewModelRequestConfig(), llm.WithClient(mock))
+	if err != nil {
+		t.Fatalf("构造 Model 失败: %v", err)
+	}
+	return model, mock
+}
+
+// TestExtract_多分块 对齐 test_extract_multiple_chunks（invoke 计数=2）
+//
+// 注意：多 chunk 并发下 triples 顺序 = chunk 序 × 每 chunk 内列表序（方案 A
+// 扫描合并），两 chunk 各 2 条共 4 条。
+func TestExtract_多分块(t *testing.T) {
+	content := `{"triples": [["Alice", "knows", "Bob"], ["Bob", "works_at", "Company"]]}`
+	model, mock := newExtractTestModelWithMock(t, []string{content, content}, nil)
+	ex := NewTripleExtractor(model, "test-model", WithTripleMaxConcurrent(2))
+	chunks := []common.TextChunk{
+		{ID: "1", Text: "Alice knows Bob", DocID: "doc_1"},
+		{ID: "2", Text: "Charlie knows David", DocID: "doc_1"},
+	}
+	triples, err := ex.Extract(context.Background(), chunks)
+	if err != nil {
+		t.Fatalf("Extract 不应报错: %v", err)
+	}
+	if got := atomic.LoadInt32(&mock.callCount); got != 2 {
+		t.Errorf("invoke 应调用 2 次，实际 %d", got)
+	}
+	if len(triples) != 4 {
+		t.Errorf("应抽取 4 条三元组（2 chunk × 2 条），实际 %d", len(triples))
+	}
+	// 首条应来自 chunk 1（按 chunk 序合并）
+	if triples[0].Subject != "Alice" {
+		t.Errorf("首条三元组 Subject 应为 Alice（chunk 序），实际 %q", triples[0].Subject)
+	}
+	// metadata 注入 doc_id/chunk_id
+	if triples[0].Metadata["chunk_id"] != "1" || triples[0].Metadata["doc_id"] != "doc_1" {
+		t.Errorf("metadata 应注入 doc_id=doc_1 chunk_id=1，实际 %v", triples[0].Metadata)
+	}
+}
+
+// TestExtract_invoke异常 对齐 test_extract_with_exception（断言 155507 + 消息包含）
+func TestExtract_invoke异常(t *testing.T) {
+	model, _ := newExtractTestModelWithMock(t, nil, []error{errors.New("429 too many requests")})
+	ex := NewTripleExtractor(model, "test-model")
+	chunks := []common.TextChunk{{ID: "1", Text: "Alice knows Bob", DocID: "doc_1"}}
+	_, err := ex.Extract(context.Background(), chunks)
+	if err == nil {
+		t.Fatal("invoke 异常应报错")
+	}
+	var be *exception.BaseError
+	if !errors.As(err, &be) {
+		t.Fatalf("应为 BaseError，实际 %T", err)
+	}
+	if be.Code() != 155507 {
+		t.Errorf("错误码应为 155507，实际 %d", be.Code())
+	}
+	if !strings.Contains(be.Message(), "429 too many requests") {
+		t.Errorf("消息应包含 \"429 too many requests\"，实际 %q", be.Message())
+	}
+}
+
+// TestExtract_invalidJSON 对齐 test_extract_invalid_json（"parsed" in msg）
+func TestExtract_invalidJSON(t *testing.T) {
+	model, _ := newExtractTestModelWithMock(t, []string{"Invalid JSON response"}, nil)
+	ex := NewTripleExtractor(model, "test-model")
+	chunks := []common.TextChunk{{ID: "1", Text: "Alice knows Bob", DocID: "doc_1"}}
+	_, err := ex.Extract(context.Background(), chunks)
+	if err == nil {
+		t.Fatal("invalid JSON 应报错")
+	}
+	var be *exception.BaseError
+	if !errors.As(err, &be) {
+		t.Fatalf("应为 BaseError，实际 %T", err)
+	}
+	if be.Code() != 155507 {
+		t.Errorf("错误码应为 155507，实际 %d", be.Code())
+	}
+	// 对齐 assert "parsed" in (exc_info.value.message or "").lower()
+	if !strings.Contains(strings.ToLower(be.Message()), "parsed") {
+		t.Errorf("消息应包含 \"parsed\"（lower），实际 %q", be.Message())
+	}
+}
+
+// TestExtract_空chunks 对齐 test_extract_empty_chunks（返回空且 invoke 未调）
+func TestExtract_空chunks(t *testing.T) {
+	model, mock := newExtractTestModelWithMock(t, []string{"unused"}, nil)
+	ex := NewTripleExtractor(model, "test-model")
+	triples, err := ex.Extract(context.Background(), []common.TextChunk{})
+	if err != nil {
+		t.Fatalf("空 chunks 不应报错: %v", err)
+	}
+	if len(triples) != 0 {
+		t.Errorf("应返回空列表，实际 %d", len(triples))
+	}
+	if got := atomic.LoadInt32(&mock.callCount); got != 0 {
+		t.Errorf("invoke 不应被调用，实际 %d 次", got)
+	}
+}
+
+// TestExtract_nil客户端 对齐 §8-5 路径（nil → 155507 硬失败）
+func TestExtract_nil客户端(t *testing.T) {
+	ex := NewTripleExtractor(nil, "test-model")
+	chunks := []common.TextChunk{{ID: "1", Text: "Alice knows Bob", DocID: "doc_1"}}
+	_, err := ex.Extract(context.Background(), chunks)
+	if err == nil {
+		t.Fatal("nil llmClient 应报错")
+	}
+	var be *exception.BaseError
+	if !errors.As(err, &be) || be.Code() != 155507 {
+		t.Fatalf("应为 155507 BaseError，实际 %v", err)
+	}
+}
+
+// TestExtract_首错按chunk序 §7.2-2：首错选取按 chunk 序而非执行/完成序
+//
+// maxConcurrent=1 下 goroutine 抢信号量的调度序不确定——mock 按提示词内容
+// 分派（prompt 内嵌 chunk 文本 → 确定性识别 chunk 身份），与调度序解耦。
+// 双向验证：场景 A chunk0 失败/chunk1 成功 → 首错含 "c0"；
+// 场景 B chunk0 成功/chunk1 失败 → 首错含 "c1"（成功结果随 raise 丢弃）。
+func TestExtract_首错按chunk序(t *testing.T) {
+	okContent := `{"triples": [["a", "b", "c"]]}`
+	// 场景 A：c0 失败（提示词含 "first"）→ 首错取 c0
+	modelA, _ := newExtractDispatchModelWithMock(t, map[string]string{
+		"first":  "boom-c0",
+		"second": okContent,
+	})
+	exA := NewTripleExtractor(modelA, "test-model", WithTripleMaxConcurrent(1))
+	_, err := exA.Extract(context.Background(), []common.TextChunk{
+		{ID: "c0", Text: "first", DocID: "doc"},
+		{ID: "c1", Text: "second", DocID: "doc"},
+	})
+	var be *exception.BaseError
+	if !errors.As(err, &be) || be.Code() != 155507 {
+		t.Fatalf("场景 A 应为 155507 BaseError，实际 %v", err)
+	}
+	if !strings.Contains(be.Message(), "c0") || !strings.Contains(be.Message(), "boom-c0") {
+		t.Errorf("场景 A 首错消息应含 \"c0: boom-c0\"，实际 %q", be.Message())
+	}
+
+	// 场景 B：c1 失败（提示词含 "second"）→ 首错取 c1（c0 成功结果丢弃）
+	modelB, _ := newExtractDispatchModelWithMock(t, map[string]string{
+		"first":  okContent,
+		"second": "boom-c1",
+	})
+	exB := NewTripleExtractor(modelB, "test-model", WithTripleMaxConcurrent(1))
+	_, err = exB.Extract(context.Background(), []common.TextChunk{
+		{ID: "c0", Text: "first", DocID: "doc"},
+		{ID: "c1", Text: "second", DocID: "doc"},
+	})
+	if !errors.As(err, &be) || be.Code() != 155507 {
+		t.Fatalf("场景 B 应为 155507 BaseError，实际 %v", err)
+	}
+	if !strings.Contains(be.Message(), "c1") || !strings.Contains(be.Message(), "boom-c1") {
+		t.Errorf("场景 B 首错消息应含 \"c1: boom-c1\"，实际 %q", be.Message())
+	}
+}
+
+// newExtractDispatchModelWithMock 构造按提示词内容分派的 mock Model。
+// dispatch 键为 chunk 文本子串（提示词内嵌该文本），值为响应内容或
+// "boom-" 前缀错误标记。
+func newExtractDispatchModelWithMock(t *testing.T, dispatch map[string]string) (*llm.Model, *dispatchTripleClient) {
+	t.Helper()
+	clientCfg, err := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	if err != nil {
+		t.Fatalf("构造客户端配置失败: %v", err)
+	}
+	mock := newDispatchTripleClient(dispatch)
+	model, err := llm.NewModel(clientCfg, llmschema.NewModelRequestConfig(), llm.WithClient(mock))
+	if err != nil {
+		t.Fatalf("构造 Model 失失败: %v", err)
+	}
+	return model, mock
+}
+
+// newDispatchTripleClient 构造按消息文本分派的 mock 客户端。
+//
+// 与 captionTripleClient（按调用序）互补：并发调度序不确定的场景用本类型
+// 按内容分派，确定性识别"哪个 chunk 的请求"。
+func newDispatchTripleClient(dispatch map[string]string) *dispatchTripleClient {
+	return &dispatchTripleClient{dispatch: dispatch}
+}
+
+// dispatchTripleClient 按提示词内容分派响应的 mock 客户端。
+type dispatchTripleClient struct {
+	stubTripleClient
+	// dispatch 文本子串 → 响应内容（"boom-" 前缀视为错误）
+	dispatch map[string]string
+	// mu 保护 callCount 计数（并发安全）
+	mu sync.Mutex
+	// callCount Invoke 调用计数
+	callCount int32
+}
+
+// Invoke 按消息文本匹配 dispatch 键分派响应。
+func (c *dispatchTripleClient) Invoke(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	atomic.AddInt32(&c.callCount, 1)
+	// 从消息列表提取首条文本（buildPrompt 产物为单条 UserMessage）
+	promptText := ""
+	if msgs := messages.Messages(); len(msgs) > 0 {
+		promptText = msgs[0].GetContent().String()
+	}
+	for key, resp := range c.dispatch {
+		if strings.Contains(promptText, key) {
+			if strings.HasPrefix(resp, "boom-") {
+				return nil, errors.New(resp)
+			}
+			return llmschema.NewAssistantMessage(resp), nil
+		}
+	}
+	return nil, errors.New("no dispatch key matched: " + promptText)
+}
+
+// TestExtract_temperature透传 §7.2-3：mock 记录 InvokeParams 断言温度
+//
+// 单 chunk 场景（lastTemperature 断言无歧义）
+func TestExtract_temperature透传(t *testing.T) {
+	content := `{"triples": [["a", "b", "c"]]}`
+	// 默认 0.0
+	model, mock := newExtractTestModelWithMock(t, []string{content}, nil)
+	ex := NewTripleExtractor(model, "test-model")
+	_, _ = ex.Extract(context.Background(), []common.TextChunk{{ID: "1", Text: "t", DocID: "d"}})
+	mock.mu.Lock()
+	lt := mock.lastTemperature
+	mock.mu.Unlock()
+	if lt != nil && *lt != 0.0 {
+		t.Errorf("默认温度应为 0.0，实际 %v", *lt)
+	}
+	// 自定义 0.7
+	model2, mock2 := newExtractTestModelWithMock(t, []string{content}, nil)
+	ex2 := NewTripleExtractor(model2, "test-model", WithTripleTemperature(0.7))
+	_, _ = ex2.Extract(context.Background(), []common.TextChunk{{ID: "1", Text: "t", DocID: "d"}})
+	mock2.mu.Lock()
+	lt2 := mock2.lastTemperature
+	mock2.mu.Unlock()
+	if lt2 == nil || *lt2 != 0.7 {
+		t.Errorf("自定义温度应为 0.7，实际 %v", lt2)
+	}
+}
+
+// TestExtract_maxConcurrent串行性 §7.2-8：信号量并发峰值=1
+func TestExtract_maxConcurrent串行性(t *testing.T) {
+	content := `{"triples": [["a", "b", "c"]]}`
+	responses := []string{content, content, content, content}
+	model, mock := newExtractTestModelWithMock(t, responses, nil)
+	ex := NewTripleExtractor(model, "test-model", WithTripleMaxConcurrent(1))
+	chunks := []common.TextChunk{
+		{ID: "1", Text: "a", DocID: "d"},
+		{ID: "2", Text: "b", DocID: "d"},
+		{ID: "3", Text: "c", DocID: "d"},
+		{ID: "4", Text: "e", DocID: "d"},
+	}
+	_, err := ex.Extract(context.Background(), chunks)
+	if err != nil {
+		t.Fatalf("Extract 不应报错: %v", err)
+	}
+	if peak := atomic.LoadInt32(&mock.concurrentPeak); peak != 1 {
+		t.Errorf("maxConcurrent=1 时并发峰值应为 1，实际 %d", peak)
+	}
+}
+
+// TestProcess_转发 对齐 Process 契约（Python 基类一行转发）
+func TestProcess_转发(t *testing.T) {
+	content := `{"triples": [["a", "b", "c"]]}`
+	model, mock := newExtractTestModelWithMock(t, []string{content}, nil)
+	ex := NewTripleExtractor(model, "test-model")
+	chunks := []common.TextChunk{{ID: "1", Text: "t", DocID: "d"}}
+	triples, err := ex.Process(context.Background(), chunks)
+	if err != nil {
+		t.Fatalf("Process 不应报错: %v", err)
+	}
+	if len(triples) != 1 || atomic.LoadInt32(&mock.callCount) != 1 {
+		t.Errorf("Process 应转发 Extract 产出 1 条，实际 %d", len(triples))
 	}
 }
