@@ -18,12 +18,19 @@
 // div#js_content 正文抽取）。Python classmethod 覆写语义经非导出
 // htmlParseDispatcher 接口注入实现（构造时指向最终实例）。
 //
+// 组合路由三件套（13.11）收口 Parser 层：AutoFileParser（扩展名 registry
+// 路由 + metadata 四键增强）+ AutoLinkParser（docMatcher 双形态 URL 路由，
+// 微信/网页先匹配先赢）+ AutoParser（顶层 URL/文件二选一，单入口
+// parse(path_or_url)）。llm_client 经 AutoLinkParser 转发时字面剔除
+//（对齐 Python 关键字调用天然不含）。
+//
 // 使用方式（对齐 Python Parser 继承体系）：
 //   - 具体解析器：嵌入 BaseParser 并覆写 ParseContent（对齐 Python 仅覆写 _parse），
 //     构造时 NewBaseParser(self) 注入自身
-//   - 组合解析器（13.11 AutoParser）：嵌入 BaseParser 并覆写 Parse 整体路由
+//   - 组合路由解析器（13.11 三件套）：嵌入 BaseParser 并覆写 Parse/Supports 整体路由
 //   - 文件解析器注册：具体解析器文件 init() 调 RegisterParser 按扩展名注册工厂
-//     （对齐 Python @register_parser 装饰器 import 时执行；重复扩展名 first-wins 跳过）
+//     （对齐 Python @register_parser 装饰器 import 时执行；重复扩展名 first-wins 跳过）；
+//     运行时动态注册走 RegisterNewParser（last-wins 无条件覆盖）
 //
 // 文件目录：
 //
@@ -42,7 +49,10 @@
 //	├── excel_parser.go  # ExcelParser：行/列 Document 产出 + CSV/TSV（13.13）
 //	├── html_file_parser.go  # HTMLFileParser：本地 HTML 主内容/标题/文本净化共享工具链（13.14）
 //	├── web_page_parser.go   # WebPageParser：网页 URL 下载解析 + verify 密封 sum type + URL 正则（13.14）
-//	└── wechat_article_parser.go # WeChatArticleParser：微信公众号 js_content 正文抽取（13.14）
+//	├── wechat_article_parser.go # WeChatArticleParser：微信公众号 js_content 正文抽取（13.14）
+//	├── auto_file_parser.go    # AutoFileParser：扩展名路由 + metadata 四键增强 + RegisterNewParser last-wins（13.11）
+//	├── auto_link_parser.go    # AutoLinkParser：docMatcher 双形态 URL 路由，微信/网页先匹配先赢（13.11）
+//	└── auto_parser.go         # AutoParser：顶层路由 URL/文件二选一（13.11）
 //
 // 对应 Python 代码：openjiuwen/core/retrieval/indexing/processor/parser/
 package parser
