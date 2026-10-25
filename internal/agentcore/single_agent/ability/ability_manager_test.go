@@ -1048,7 +1048,7 @@ func TestAbilityManager_Execute_skipTool(t *testing.T) {
 			return nil
 		}
 		// 模拟安全护栏拒绝工具执行
-		cbc.Extra()["_skip_tool"] = true
+		cbc.SetExtra("_skip_tool", true)
 		inputs.ToolResult = map[string]any{"error": "工具被安全护栏拒绝"}
 		inputs.ToolMsg = llmschema.NewToolMessage("tc1", "工具被安全护栏拒绝")
 		return nil
@@ -1059,7 +1059,7 @@ func TestAbilityManager_Execute_skipTool(t *testing.T) {
 	mgr.RegisterCallback(context.Background(), interfaces.CallbackAfterToolCall, func(_ context.Context, railCtx any) error {
 		afterFired = true
 		// after 不应再看到 _skip_tool（pop 一次性消费）
-		_, exists := railCtx.(*interfaces.AgentCallbackContext).Extra()["_skip_tool"]
+		_, exists := railCtx.(*interfaces.AgentCallbackContext).GetExtra("_skip_tool")
 		assert.False(t, exists, "after 钩子不应看到 _skip_tool（应已被 pop 消费）")
 		return nil
 	})
@@ -1096,7 +1096,7 @@ func TestAbilityManager_Execute_skipTool非bool值(t *testing.T) {
 	// before_tool_call 钩子：设置 _skip_tool 为字符串（非 bool），应被忽略
 	mgr.RegisterCallback(context.Background(), interfaces.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
 		cbc := railCtx.(*interfaces.AgentCallbackContext)
-		cbc.Extra()["_skip_tool"] = "yes" // 非 bool，应被忽略
+		cbc.SetExtra("_skip_tool", "yes") // 非 bool，应被忽略
 		return nil
 	})
 

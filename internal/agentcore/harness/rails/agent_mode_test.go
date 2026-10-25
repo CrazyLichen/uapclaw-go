@@ -348,7 +348,8 @@ func TestAgentModeRail_BeforeToolCall_非Plan模式放行(t *testing.T) {
 	require.NoError(t, err)
 
 	// 不应被标记为跳过
-	assert.Nil(t, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Nil(t, v)
 }
 
 // TestAgentModeRail_BeforeToolCall_EnterPlanMode校验 验证 enter_plan_mode 模式前提校验
@@ -371,7 +372,8 @@ func TestAgentModeRail_BeforeToolCall_EnterPlanMode校验(t *testing.T) {
 	require.NoError(t, err)
 
 	// 应被标记为跳过
-	assert.Equal(t, true, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Equal(t, true, v)
 }
 
 // TestAgentModeRail_BeforeToolCall_ExitPlanMode校验 验证 exit_plan_mode 模式前提校验
@@ -394,7 +396,8 @@ func TestAgentModeRail_BeforeToolCall_ExitPlanMode校验(t *testing.T) {
 	require.NoError(t, err)
 
 	// 应被标记为跳过
-	assert.Equal(t, true, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Equal(t, true, v)
 }
 
 // TestAgentModeRail_BeforeToolCall_Plan模式白名单拒绝 验证非白名单工具被拒绝
@@ -417,7 +420,8 @@ func TestAgentModeRail_BeforeToolCall_Plan模式白名单拒绝(t *testing.T) {
 	require.NoError(t, err)
 
 	// 应被标记为跳过
-	assert.Equal(t, true, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Equal(t, true, v)
 }
 
 // TestAgentModeRail_BeforeToolCall_Git写操作拦截 验证 plan 模式下 git 写操作被拦截
@@ -443,7 +447,8 @@ func TestAgentModeRail_BeforeToolCall_Git写操作拦截(t *testing.T) {
 	require.NoError(t, err)
 
 	// 应被标记为跳过
-	assert.Equal(t, true, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Equal(t, true, v)
 }
 
 // TestAgentModeRail_BeforeToolCall_计划文件路径拦截 验证 write_file 写入非计划文件被拦截
@@ -470,7 +475,8 @@ func TestAgentModeRail_BeforeToolCall_计划文件路径拦截(t *testing.T) {
 	require.NoError(t, err)
 
 	// 应被标记为跳过
-	assert.Equal(t, true, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Equal(t, true, v)
 }
 
 // TestAgentModeRail_BeforeToolCall_计划文件路径放行 验证 write_file 写入计划文件被放行
@@ -497,7 +503,7 @@ func TestAgentModeRail_BeforeToolCall_计划文件路径放行(t *testing.T) {
 	require.NoError(t, err)
 
 	// 不应被标记为跳过
-	_, hasSkip := cbc.Extra()[extraSkipToolKey]
+	_, hasSkip := cbc.GetExtra(extraSkipToolKey)
 	assert.False(t, hasSkip)
 }
 
@@ -689,7 +695,7 @@ func TestAgentModeRail_BeforeToolCall_已跳过工具放行(t *testing.T) {
 	inputs := &agentinterfaces.ToolCallInputs{ToolName: "dangerous_tool"}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 	// 预设 _skip_tool = true
-	cbc.Extra()[extraSkipToolKey] = true
+	cbc.SetExtra(extraSkipToolKey, true)
 
 	err := r.BeforeToolCall(context.Background(), cbc)
 	require.NoError(t, err)
@@ -716,7 +722,8 @@ func TestAgentModeRail_BeforeToolCall_HiddenInPlan工具拦截(t *testing.T) {
 	err := r.BeforeToolCall(context.Background(), cbc)
 	require.NoError(t, err)
 
-	assert.Equal(t, true, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Equal(t, true, v)
 }
 
 // TestAgentModeRail_BeforeToolCall_Git只读放行 验证 plan 模式下 git 只读操作放行
@@ -740,7 +747,7 @@ func TestAgentModeRail_BeforeToolCall_Git只读放行(t *testing.T) {
 	err := r.BeforeToolCall(context.Background(), cbc)
 	require.NoError(t, err)
 
-	_, hasSkip := cbc.Extra()[extraSkipToolKey]
+	_, hasSkip := cbc.GetExtra(extraSkipToolKey)
 	assert.False(t, hasSkip)
 }
 
@@ -766,7 +773,8 @@ func TestAgentModeRail_BeforeToolCall_EditFile拦截(t *testing.T) {
 	err := r.BeforeToolCall(context.Background(), cbc)
 	require.NoError(t, err)
 
-	assert.Equal(t, true, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Equal(t, true, v)
 }
 
 // TestAgentModeRail_BeforeToolCall_EnterPlanMode在Plan模式下放行 验证 plan 模式下 enter_plan_mode 放行
@@ -788,7 +796,7 @@ func TestAgentModeRail_BeforeToolCall_EnterPlanMode在Plan模式下放行(t *tes
 	require.NoError(t, err)
 
 	// 在 plan 模式下，enter_plan_mode 不应被拒绝
-	_, hasSkip := cbc.Extra()[extraSkipToolKey]
+	_, hasSkip := cbc.GetExtra(extraSkipToolKey)
 	assert.False(t, hasSkip)
 }
 
@@ -811,7 +819,7 @@ func TestAgentModeRail_BeforeToolCall_ExitPlanMode在Plan模式下放行(t *test
 	require.NoError(t, err)
 
 	// 在 plan 模式下，exit_plan_mode 不应被拒绝
-	_, hasSkip := cbc.Extra()[extraSkipToolKey]
+	_, hasSkip := cbc.GetExtra(extraSkipToolKey)
 	assert.False(t, hasSkip)
 }
 
@@ -870,7 +878,7 @@ func TestAgentModeRail_AfterToolCall_SkipTool为true时跳过注册(t *testing.T
 
 	inputs := &agentinterfaces.ToolCallInputs{ToolName: "enter_plan_mode"}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
-	cbc.Extra()[extraSkipToolKey] = true
+	cbc.SetExtra(extraSkipToolKey, true)
 
 	err := r.AfterToolCall(context.Background(), cbc)
 	require.NoError(t, err)
@@ -895,7 +903,8 @@ func TestRejectTool(t *testing.T) {
 	r.rejectTool(cbc, "test error message")
 
 	// 应设置 skip 标记
-	assert.Equal(t, true, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Equal(t, true, v)
 	// 应设置 ToolResult
 	assert.NotNil(t, inputs.ToolResult)
 	// 应设置 ToolMsg
@@ -1401,7 +1410,8 @@ func TestRejectTool_非ToolCallInputs(t *testing.T) {
 
 	r.rejectTool(cbc, "test error")
 
-	assert.Equal(t, true, cbc.Extra()[extraSkipToolKey])
+	v, _ := cbc.GetExtra(extraSkipToolKey)
+	assert.Equal(t, true, v)
 }
 
 // --- handleEnter/handleExit 边界测试 ---
@@ -1424,7 +1434,7 @@ func TestHandleEnter_Plan模式下不拒绝(t *testing.T) {
 	r.handleEnter(cbc)
 
 	// plan 模式下不应被拒绝
-	_, hasSkip := cbc.Extra()[extraSkipToolKey]
+	_, hasSkip := cbc.GetExtra(extraSkipToolKey)
 	assert.False(t, hasSkip)
 }
 
@@ -1446,7 +1456,7 @@ func TestHandleExit_Plan模式下不拒绝(t *testing.T) {
 	r.handleExit(cbc)
 
 	// plan 模式下不应被拒绝
-	_, hasSkip := cbc.Extra()[extraSkipToolKey]
+	_, hasSkip := cbc.GetExtra(extraSkipToolKey)
 	assert.False(t, hasSkip)
 }
 

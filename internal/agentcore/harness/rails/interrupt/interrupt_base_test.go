@@ -152,7 +152,8 @@ func TestBaseInterruptRail_BeforeToolCall_拒绝(t *testing.T) {
 
 	err := r.BeforeToolCall(context.Background(), cbc)
 	assert.NoError(t, err)
-	assert.Equal(t, true, cbc.Extra()["_skip_tool"])
+	v, _ := cbc.GetExtra("_skip_tool")
+	assert.Equal(t, true, v)
 
 	toolInputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	require.True(t, ok)
@@ -313,7 +314,8 @@ func TestBaseInterruptRail_applyDecision_RejectResult(t *testing.T) {
 
 	r.applyDecision(cbc, toolInputs, &RejectResult{ToolResult: "拒绝结果"})
 
-	assert.Equal(t, true, cbc.Extra()["_skip_tool"])
+	v, _ := cbc.GetExtra("_skip_tool")
+	assert.Equal(t, true, v)
 	assert.Equal(t, "拒绝结果", toolInputs.ToolResult)
 	assert.NotNil(t, toolInputs.ToolMsg)
 }
@@ -354,7 +356,8 @@ func TestBaseInterruptRail_skipTool_自定义ToolMessage(t *testing.T) {
 
 	r.skipTool(cbc, toolInputs, &RejectResult{ToolResult: "拒绝", ToolMessage: customMsg})
 
-	assert.Equal(t, true, cbc.Extra()["_skip_tool"])
+	v, _ := cbc.GetExtra("_skip_tool")
+	assert.Equal(t, true, v)
 	assert.Equal(t, "拒绝", toolInputs.ToolResult)
 	assert.Equal(t, customMsg, toolInputs.ToolMsg)
 }
@@ -400,7 +403,7 @@ var _ cb.AbortError
 func newTestCBC(extra map[string]any) *agentinterfaces.AgentCallbackContext {
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
 	for k, v := range extra {
-		cbc.Extra()[k] = v
+		cbc.SetExtra(k, v)
 	}
 	return cbc
 }

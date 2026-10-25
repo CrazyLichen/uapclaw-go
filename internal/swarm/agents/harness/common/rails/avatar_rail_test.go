@@ -211,7 +211,7 @@ func TestAvatarPromptRail_BeforeToolCall_群聊禁写(t *testing.T) {
 
 		rail.BeforeToolCall(ctx, cbc)
 
-		if cbc.Extra()["_skip_tool"] != true {
+		if v, _ := cbc.GetExtra("_skip_tool"); v != true {
 			t.Errorf("群聊模式应拦截 %s", toolName)
 		}
 	}
@@ -235,7 +235,7 @@ func TestAvatarPromptRail_BeforeToolCall_记忆完全禁用(t *testing.T) {
 
 		rail.BeforeToolCall(ctx, cbc)
 
-		if cbc.Extra()["_skip_tool"] != true {
+		if v, _ := cbc.GetExtra("_skip_tool"); v != true {
 			t.Errorf("记忆完全禁用应拦截 %s", toolName)
 		}
 	}
@@ -258,7 +258,7 @@ func TestAvatarPromptRail_BeforeToolCall_正常放行(t *testing.T) {
 
 	rail.BeforeToolCall(ctx, cbc)
 
-	if cbc.Extra()["_skip_tool"] == true {
+	if v, _ := cbc.GetExtra("_skip_tool"); v == true {
 		t.Error("非记忆工具不应被拦截")
 	}
 }
@@ -281,7 +281,7 @@ func TestAvatarPromptRail_BeforeToolCall_读取放行(t *testing.T) {
 
 		rail.BeforeToolCall(ctx, cbc)
 
-		if cbc.Extra()["_skip_tool"] == true {
+		if v, _ := cbc.GetExtra("_skip_tool"); v == true {
 			t.Errorf("群聊模式（enable_memory=true）下 %s 不应被拦截", toolName)
 		}
 	}
@@ -300,7 +300,7 @@ func TestAvatarPromptRail_rejectTool(t *testing.T) {
 
 	rail.rejectTool(cbc, toolInputs, "[PERMISSION_DENIED] test")
 
-	if cbc.Extra()["_skip_tool"] != true {
+	if v, _ := cbc.GetExtra("_skip_tool"); v != true {
 		t.Error("_skip_tool 应为 true")
 	}
 	// 对齐 Python: ctx.inputs.tool_result = message（字符串）

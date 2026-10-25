@@ -1616,7 +1616,7 @@ func TestReActAgent_railedModelCall_流式模式(t *testing.T) {
 	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
 	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 	cbc.SetModelContext(fmc)
-	cbc.Extra()["_streaming"] = true
+	cbc.SetExtra("_streaming", true)
 
 	msg, err := agent.railedModelCall(context.Background(), cbc, sess)
 	assert.NoError(t, err)
@@ -2171,7 +2171,7 @@ func TestReActAgent_InvokeImpl_invokeResult优先(t *testing.T) {
 	manager := agent.CallbackManager()
 	manager.RegisterCallback(context.Background(), interfaces.CallbackBeforeInvoke, func(_ context.Context, railCtx any) error {
 		if c, ok := railCtx.(*interfaces.AgentCallbackContext); ok {
-			c.Extra()["invoke_result"] = map[string]any{"output": "回调结果", "result_type": "answer"}
+			c.SetExtra("invoke_result", map[string]any{"output": "回调结果", "result_type": "answer"})
 		}
 		return nil
 	})

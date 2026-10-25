@@ -46,7 +46,7 @@ func TestBeforeToolCall_非团队路径忽略(t *testing.T) {
 	err := r.BeforeToolCall(context.Background(), cbc)
 
 	assert.NoError(t, err)
-	_, hasReject := cbc.Extra()["workspace_lock_rejected"]
+	_, hasReject := cbc.GetExtra("workspace_lock_rejected")
 	assert.False(t, hasReject)
 }
 
@@ -59,7 +59,7 @@ func TestBeforeToolCall_读操作放行(t *testing.T) {
 	err := r.BeforeToolCall(context.Background(), cbc)
 
 	assert.NoError(t, err)
-	_, hasReject := cbc.Extra()["workspace_lock_rejected"]
+	_, hasReject := cbc.GetExtra("workspace_lock_rejected")
 	assert.False(t, hasReject)
 }
 
@@ -72,7 +72,7 @@ func TestBeforeToolCall_写操作无锁放行(t *testing.T) {
 	err := r.BeforeToolCall(context.Background(), cbc)
 
 	assert.NoError(t, err)
-	_, hasReject := cbc.Extra()["workspace_lock_rejected"]
+	_, hasReject := cbc.GetExtra("workspace_lock_rejected")
 	assert.False(t, hasReject)
 }
 
@@ -93,7 +93,7 @@ func TestBeforeToolCall_写操作锁冲突(t *testing.T) {
 
 	// 不返回错误，但 Extra 中标记拒绝
 	assert.NoError(t, err)
-	rejectMsg, hasReject := cbc.Extra()["workspace_lock_rejected"]
+	rejectMsg, hasReject := cbc.GetExtra("workspace_lock_rejected")
 	assert.True(t, hasReject)
 	assert.Contains(t, rejectMsg, "other-member")
 }
@@ -115,7 +115,7 @@ func TestBeforeToolCall_写操作自己的锁(t *testing.T) {
 
 	// 自己的锁，不应被拒绝
 	assert.NoError(t, err)
-	_, hasReject := cbc.Extra()["workspace_lock_rejected"]
+	_, hasReject := cbc.GetExtra("workspace_lock_rejected")
 	assert.False(t, hasReject)
 }
 

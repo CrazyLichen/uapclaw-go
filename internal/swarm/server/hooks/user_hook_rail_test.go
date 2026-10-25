@@ -62,11 +62,11 @@ func TestUserHookRail_BeforeToolCall_阻塞(t *testing.T) {
 	if err != nil {
 		t.Errorf("BeforeToolCall error: %v", err)
 	}
-	if cbc.Extra()["_skip_tool"] != true {
+	if v, _ := cbc.GetExtra("_skip_tool"); v != true {
 		t.Error("_skip_tool should be true after blocking")
 	}
-	if cbc.Extra()["_hook_feedback"] != "dangerous" {
-		t.Errorf("_hook_feedback = %v, want %q", cbc.Extra()["_hook_feedback"], "dangerous")
+	if v, _ := cbc.GetExtra("_hook_feedback"); v != "dangerous" {
+		t.Errorf("_hook_feedback = %v, want %q", v, "dangerous")
 	}
 }
 
@@ -126,8 +126,8 @@ func TestUserHookRail_BeforeToolCall_附加上下文(t *testing.T) {
 	if err != nil {
 		t.Errorf("BeforeToolCall error: %v", err)
 	}
-	if cbc.Extra()["_hook_additional_context"] != "extra info" {
-		t.Errorf("_hook_additional_context = %v, want %q", cbc.Extra()["_hook_additional_context"], "extra info")
+	if v, _ := cbc.GetExtra("_hook_additional_context"); v != "extra info" {
+		t.Errorf("_hook_additional_context = %v, want %q", v, "extra info")
 	}
 }
 
@@ -148,8 +148,8 @@ func TestUserHookRail_AfterToolCall_阻塞(t *testing.T) {
 	if err != nil {
 		t.Errorf("AfterToolCall error: %v", err)
 	}
-	if cbc.Extra()["_post_tool_hook_feedback"] != "post blocked" {
-		t.Errorf("_post_tool_hook_feedback = %v, want %q", cbc.Extra()["_post_tool_hook_feedback"], "post blocked")
+	if v, _ := cbc.GetExtra("_post_tool_hook_feedback"); v != "post blocked" {
+		t.Errorf("_post_tool_hook_feedback = %v, want %q", v, "post blocked")
 	}
 }
 
@@ -229,8 +229,8 @@ func TestUserHookRail_AfterInvoke_阻塞(t *testing.T) {
 	if err != nil {
 		t.Errorf("AfterInvoke error: %v", err)
 	}
-	if cbc.Extra()["_stop_hook_feedback"] != "stop blocked" {
-		t.Errorf("_stop_hook_feedback = %v, want %q", cbc.Extra()["_stop_hook_feedback"], "stop blocked")
+	if v, _ := cbc.GetExtra("_stop_hook_feedback"); v != "stop blocked" {
+		t.Errorf("_stop_hook_feedback = %v, want %q", v, "stop blocked")
 	}
 }
 
@@ -267,8 +267,8 @@ func TestUserHookRail_BeforeToolCall_带SessionID(t *testing.T) {
 		t.Errorf("BeforeToolCall error: %v", err)
 	}
 	// 验证 additionalContext 被设置（说明 hook 成功执行，session_id 已传递到 hookInput）
-	if cbc.Extra()["_hook_additional_context"] != "session_ok" {
-		t.Errorf("_hook_additional_context = %v, want %q", cbc.Extra()["_hook_additional_context"], "session_ok")
+	if v, _ := cbc.GetExtra("_hook_additional_context"); v != "session_ok" {
+		t.Errorf("_hook_additional_context = %v, want %q", v, "session_ok")
 	}
 }
 
@@ -323,7 +323,7 @@ func TestUserHookRail_BeforeToolCall_多次附加上下文(t *testing.T) {
 	if err != nil {
 		t.Errorf("BeforeToolCall error: %v", err)
 	}
-	got := cbc.Extra()["_hook_additional_context"]
+	got, _ := cbc.GetExtra("_hook_additional_context")
 	if got != "context1\ncontext2" {
 		t.Errorf("_hook_additional_context = %q, want %q", got, "context1\ncontext2")
 	}
@@ -394,7 +394,7 @@ func TestUserHookRail_AfterInvoke_超长reason截断(t *testing.T) {
 	if err != nil {
 		t.Errorf("AfterInvoke error: %v", err)
 	}
-	feedback := cbc.Extra()["_stop_hook_feedback"]
+	feedback, _ := cbc.GetExtra("_stop_hook_feedback")
 	feedbackStr, ok := feedback.(string)
 	if !ok {
 		t.Fatalf("_stop_hook_feedback should be string, got %T", feedback)

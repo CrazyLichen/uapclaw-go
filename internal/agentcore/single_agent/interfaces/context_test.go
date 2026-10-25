@@ -80,9 +80,10 @@ func TestAgentCallbackContext_GetterSetter(t *testing.T) {
 	ctx.SetRetryAttempt(3)
 	assert.Equal(t, 3, ctx.RetryAttempt())
 
-	// Extra 可以直接修改
-	ctx.Extra()["key"] = "value"
-	assert.Equal(t, "value", ctx.Extra()["key"])
+	// Extra 线程安全读写（S-24: Extra() 已 Deprecated，改用 SetExtra/GetExtra）
+	ctx.SetExtra("key", "value")
+	v, _ := ctx.GetExtra("key")
+	assert.Equal(t, "value", v)
 }
 
 // TestPushSteering_无队列 验证无队列时 PushSteering 为 no-op

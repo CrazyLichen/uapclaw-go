@@ -143,7 +143,7 @@ var _ sys_operation.SysOperation = (*fakeSysOperation)(nil)
 // newCBCWithRunKind 创建 AgentCallbackContext 并设置 run_kind
 func newCBCWithRunKind(agent agentinterfaces.BaseAgent, runKind string) *agentinterfaces.AgentCallbackContext {
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, &agentinterfaces.ModelCallInputs{}, nil)
-	cbc.Extra()["run_kind"] = runKind
+	cbc.SetExtra("run_kind", runKind)
 	return cbc
 }
 

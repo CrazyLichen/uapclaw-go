@@ -117,7 +117,8 @@ func TestVerificationRail_BeforeToolCall_拦截工具(t *testing.T) {
 	resultMap, ok := inputs.ToolResult.(map[string]any)
 	require.True(t, ok)
 	assert.Contains(t, resultMap["error"], "[VerificationAgent]")
-	assert.True(t, cbc.Extra()["_skip_tool"].(bool), "应设置 _skip_tool 标记")
+	v, _ := cbc.GetExtra("_skip_tool")
+	assert.True(t, v.(bool), "应设置 _skip_tool 标记")
 }
 
 // TestVerificationRail_BeforeToolCall_MCP放行 测试 mcp__* 前缀放行
@@ -144,7 +145,7 @@ func TestVerificationRail_BeforeToolCall_skip标记跳过(t *testing.T) {
 		ToolName: "write_file",
 	}
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, inputs, nil)
-	cbc.Extra()["_skip_tool"] = true
+	cbc.SetExtra("_skip_tool", true)
 
 	err := r.BeforeToolCall(context.Background(), cbc)
 
@@ -184,5 +185,6 @@ func TestRejectTool_设置ToolMsg(t *testing.T) {
 
 	assert.Equal(t, "test error", inputs.ToolMsg.GetContent().Text())
 	assert.Equal(t, "call-123", inputs.ToolMsg.ToolCallID)
-	assert.True(t, cbc.Extra()["_skip_tool"].(bool))
+	v, _ := cbc.GetExtra("_skip_tool")
+	assert.True(t, v.(bool))
 }

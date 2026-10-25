@@ -253,7 +253,8 @@ func TestHandleResume_无新中断(t *testing.T) {
 	result, err := h.HandleResume(context.Background(), resumeCtx)
 	require.NoError(t, err)
 	assert.Nil(t, result)
-	assert.Equal(t, 4, cbc.Extra()[ResumeStartIterationKey])
+	v, _ := cbc.GetExtra(ResumeStartIterationKey)
+	assert.Equal(t, 4, v)
 }
 
 func TestHandleResume_有新中断(t *testing.T) {

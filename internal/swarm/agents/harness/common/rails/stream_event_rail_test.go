@@ -221,7 +221,7 @@ func TestJiuClawStreamEventRail_ClearCancelledToolResults(t *testing.T) {
 func TestJiuClawStreamEventRail_ResolveSID_从Extra(t *testing.T) {
 	rail := NewJiuClawStreamEventRail()
 	cbc := sainterfaces.NewAgentCallbackContext(nil, nil, nil)
-	cbc.Extra()[sidKey] = "session-from-extra"
+	cbc.SetExtra(sidKey, "session-from-extra")
 
 	sid := rail.resolveSID(cbc, nil)
 	if sid != "session-from-extra" {
@@ -282,8 +282,8 @@ func TestJiuClawStreamEventRail_BeforeInvoke(t *testing.T) {
 	}
 
 	// 验证 extra 中设置了 sid
-	if cbc.Extra()[sidKey] != "conv-123" {
-		t.Errorf("extra[sidKey] = %v, want %q", cbc.Extra()[sidKey], "conv-123")
+	if v, _ := cbc.GetExtra(sidKey); v != "conv-123" {
+		t.Errorf("extra[sidKey] = %v, want %q", v, "conv-123")
 	}
 }
 
@@ -323,7 +323,7 @@ func TestJiuClawStreamEventRail_BeforeModelCall_Abort(t *testing.T) {
 	rail.Abort("test-sid")
 
 	cbc := sainterfaces.NewAgentCallbackContext(nil, nil, nil)
-	cbc.Extra()[sidKey] = "test-sid"
+	cbc.SetExtra(sidKey, "test-sid")
 
 	err := rail.BeforeModelCall(context.Background(), cbc)
 	if err == nil {
@@ -335,7 +335,7 @@ func TestJiuClawStreamEventRail_BeforeModelCall_正常(t *testing.T) {
 	rail := NewJiuClawStreamEventRail()
 
 	cbc := sainterfaces.NewAgentCallbackContext(nil, nil, nil)
-	cbc.Extra()[sidKey] = "test-sid"
+	cbc.SetExtra(sidKey, "test-sid")
 
 	err := rail.BeforeModelCall(context.Background(), cbc)
 	if err != nil {
@@ -351,7 +351,7 @@ func TestJiuClawStreamEventRail_BeforeToolCall_正常(t *testing.T) {
 	tc := llmschema.NewToolCall("tc-1", "read_file", `{"path": "/tmp"}`)
 
 	cbc := sainterfaces.NewAgentCallbackContext(nil, &sainterfaces.ToolCallInputs{ToolCall: tc, ToolName: "read_file"}, sess)
-	cbc.Extra()[sidKey] = "test-sid"
+	cbc.SetExtra(sidKey, "test-sid")
 
 	err := rail.BeforeToolCall(context.Background(), cbc)
 	if err != nil {
@@ -375,7 +375,7 @@ func TestJiuClawStreamEventRail_BeforeToolCall_Abort(t *testing.T) {
 	rail.Abort("test-sid")
 
 	cbc := sainterfaces.NewAgentCallbackContext(nil, nil, nil)
-	cbc.Extra()[sidKey] = "test-sid"
+	cbc.SetExtra(sidKey, "test-sid")
 
 	err := rail.BeforeToolCall(context.Background(), cbc)
 	if err == nil {
@@ -401,7 +401,7 @@ func TestJiuClawStreamEventRail_AfterToolCall_正常(t *testing.T) {
 		ToolName:   "read_file",
 		ToolResult: "file content",
 	}, sess)
-	cbc.Extra()[sidKey] = "test-sid"
+	cbc.SetExtra(sidKey, "test-sid")
 
 	err := rail.AfterToolCall(context.Background(), cbc)
 	if err != nil {

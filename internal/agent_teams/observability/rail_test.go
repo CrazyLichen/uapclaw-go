@@ -52,7 +52,7 @@ func TestObservabilityRail_BeforeTaskIteration_存储span(t *testing.T) {
 	require.NoError(t, err)
 
 	// Extra 中应存储了 span
-	spanVal, ok := railCtx.Extra()[spanKey]
+	spanVal, ok := railCtx.GetExtra(spanKey)
 	require.True(t, ok)
 	_, ok = spanVal.(trace.Span)
 	assert.True(t, ok)
@@ -73,8 +73,8 @@ func TestObservabilityRail_AfterTaskIteration_关闭span(t *testing.T) {
 	require.NoError(t, err)
 
 	// Extra 中 span 应被移除
-	_, ok := railCtx.Extra()[spanKey]
-	assert.False(t, ok)
+	_, exists := railCtx.GetExtra(spanKey)
+	assert.False(t, exists)
 
 	// 应有已结束的 span
 	spans := recorder.Ended()
