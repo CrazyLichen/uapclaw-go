@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 在 `internal/agentcore/devtools/agentbuilder/utils/` 同包续建 enums.go：4 个 `type X string` 枚举（26 常量）+ Parse×4 + All×4，并用 enums_test.go 收口 12 个 Python unit 用例（1:1 映射）+ 4.5 个 system 回填用例 + 增强用例。
+**Goal:** 在 `internal/agentcore/devtools/agentbuilder/utils/` 同包续建 enums.go：4 个 `type X string` 枚举（25 常量，勘误 2026-10-26：原写 26）+ Parse×4 + All×4，并用 enums_test.go 收口 12 个 Python unit 用例（1:1 映射）+ 4.5 个 system 回填用例 + 增强用例。
 
 **Architecture:** 方案 A（已批准 spec docs/superpowers/specs/2026-10-26-devtools-enums-14.2-design.md）：开放字符串类型 + 显式 Parse 收口（对应 Python str-Enum 的 from-string 构造 ValueError 语义）；All 函数对应 Python Enum 可迭代/len 语义。AgentTypeLiteral 无 Go 对应物（纯静态类型别名）。
 
@@ -24,7 +24,7 @@
 
 ---
 
-### Task 1: enums.go——四类型 + 26 常量
+### Task 1: enums.go——四类型 + 25 常量（勘误 2026-10-26：原写 26）
 
 **Files:**
 - Create: `internal/agentcore/devtools/agentbuilder/utils/enums.go`
@@ -32,7 +32,7 @@
 - [ ] **Step 1: 写 enums.go 完整声明部分**
 
 ```go
-// 4 个枚举类型与 26 个常量定义（包文档见 doc.go）。
+// 4 个枚举类型与 25 个常量定义（包文档见 doc.go）。
 // 对齐 Python: openjiuwen/dev_tools/agent_builder/utils/enums.py。
 package utils
 
@@ -144,7 +144,7 @@ Expected: 无输出（成功）
 
 ```bash
 git add internal/agentcore/devtools/agentbuilder/utils/enums.go
-git commit -m "feat(devtools): 14.2 枚举层四类型+26常量对齐 Python enums.py"
+git commit -m "feat(devtools): 14.2 枚举层四类型+25常量对齐 Python enums.py"
 ```
 
 ---
@@ -582,7 +582,7 @@ git commit -m "test(devtools): 14.2 system 回填 4.5 用例+Parse/All 增强用
 //
 //	utils/
 //	├── doc.go              # 包文档
-//	├── enums.go            # 4 枚举类型+26 常量+Parse×4+All×4（对齐 Python enums.py）
+//	├── enums.go            # 4 枚举类型+25 常量+Parse×4+All×4（对齐 Python enums.py）
 //	├── constants.go        # 20 个共享常量（含 13 个死常量，对齐 Python 全量）
 //	├── utils.go            # 7 个工具函数 + 2 个预编译正则
 //	├── constants_test.go   # 21.5 用例（对齐 Python test_constants.py）
@@ -617,7 +617,7 @@ git commit -m "docs(devtools): 14.2 doc.go 目录树补 enums 两文件条目"
 状态 ☐→✅，产出摘要（含勘误后计数）。替换 825 行为：
 
 ```markdown
-| 14.2 | ✅ | 枚举层 | `internal/agentcore/devtools/agentbuilder/utils/enums.go`：AgentType(2)/BuildState(3)/ProgressStage(15,三注释组)/ProgressStatus(5) 四个 type X string + 26 常量 + ParseAgentType(唯一真实消费者,140032 入口,错误含合法值清单)/ParseBuildState/ParseProgressStage/ParseProgressStatus(语言特性级等价物) + AllAgentTypes(supported_types 消费)/AllBuildStates/AllProgressStages/AllProgressStatuses(可迭代语义)；AgentTypeLiteral 零 Go 对应物(显式偏差)；enums_test.go 统一收口 12 unit 1:1 + system 回填 **4**+混合半边(spec §4-4 勘误:14.1 归属拆分算式少算 1,正确 12=3+1+4+4) + Parse×3 正反例+All×4 声明序增强；包覆盖率 9x%；设计：docs/superpowers/specs/2026-10-26-devtools-enums-14.2-design.md | `openjiuwen/dev_tools/agent_builder/utils/enums.py` |
+| 14.2 | ✅ | 枚举层 | `internal/agentcore/devtools/agentbuilder/utils/enums.go`：AgentType(2)/BuildState(3)/ProgressStage(15,三注释组)/ProgressStatus(5) 四个 type X string + 25 常量 + ParseAgentType(唯一真实消费者,140032 入口,错误含合法值清单)/ParseBuildState/ParseProgressStage/ParseProgressStatus(语言特性级等价物) + AllAgentTypes(supported_types 消费)/AllBuildStates/AllProgressStages/AllProgressStatuses(可迭代语义)；AgentTypeLiteral 零 Go 对应物(显式偏差)；enums_test.go 统一收口 12 unit 1:1 + system 回填 **4**+混合半边(spec §4-4 勘误:14.1 归属拆分算式少算 1,正确 12=3+1+4+4) + Parse×3 正反例+All×4 声明序增强；包覆盖率 9x%；设计：docs/superpowers/specs/2026-10-26-devtools-enums-14.2-design.md | `openjiuwen/dev_tools/agent_builder/utils/enums.py` |
 ```
 
 （实际覆盖率数字待 Task 4 Step 3 实测后填入，不留占位符。）
@@ -671,4 +671,4 @@ Expected: Build/Lint/Unit Test/Integration Test 四 job 全绿。
 
 1. **Spec 覆盖**：§2 文件结构→Task 1/3/5；§3.1 常量→Task 1；§3.2 Parse→Task 2；§3.3 All→Task 2；§3.4 Literal 偏差→Task 3 Step 1（TestAgentTypeLiteral 注释+断言）；§4 五偏差→Task 3（4-2/4-3/4-5）+Task 4 Step 1 注释（4-4）；§5 测试表 8 行→Task 3/4 逐行落位；§6 零日志→无需任务（已注记）；§8 回填 4 项→Task 6 三处+14.3 锚点不变；§9 验收→Task 7。无缺口。
 2. **占位符扫描**：Task 6 Step 1 的"9x%"是唯一待实测数字，已注明"实测后填入不留占位符"——执行者从 Task 4 Step 3 输出取数。其余零 TBD/TODO。
-3. **类型一致性**：ParseAgentType/AllAgentTypes 等 8 函数名在 Task 2 定义、Task 3/4 消费，签名一致；26 常量名 Task 1 定义、Task 2 switch 分支与 Task 3/4 断言逐一同名。
+3. **类型一致性**：ParseAgentType/AllAgentTypes 等 8 函数名在 Task 2 定义、Task 3/4 消费，签名一致；25 常量名 Task 1 定义、Task 2 switch 分支与 Task 3/4 断言逐一同名。

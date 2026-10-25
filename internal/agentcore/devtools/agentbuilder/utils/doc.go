@@ -12,7 +12,7 @@
 //
 //	utils/
 //	├── doc.go              # 包文档
-//	├── enums.go            # 4 枚举类型+26 常量+Parse×4+All×4（对齐 Python enums.py）
+//	├── enums.go            # 4 枚举类型+25 常量+Parse×4+All×4（对齐 Python enums.py）
 //	├── constants.go        # 20 个共享常量（含 13 个死常量，对齐 Python 全量）
 //	├── utils.go            # 7 个工具函数 + 2 个预编译正则
 //	├── constants_test.go   # 21.5 用例（对齐 Python test_constants.py）

@@ -48,7 +48,7 @@ Python 消费点（已核实）：executor.py L155/L166（构造+遍历值）、
 ```
 utils/
 ├── doc.go            # 目录树补 enums.go / enums_test.go 两条目
-├── enums.go          # 新增：4 类型 + 26 常量 + 4 Parse + 4 All
+├── enums.go          # 新增：4 类型 + 25 常量 + 4 Parse + 4 All（勘误 2026-10-26：原写 26，机器核对实际 25）
 ├── enums_test.go     # 新增：12 unit + 4.5 system 回填 + 增强用例（~20 子用例）
 └── (constants/utils 及其测试 4 文件不动)
 ```
@@ -57,7 +57,7 @@ enums.go 声明顺序（规范 2）：枚举区块（4 个 `type X string`）→
 
 ## 3. 组件细节
 
-### 3.1 四类型 26 常量（值逐一对齐 Python）
+### 3.1 四类型 25 常量（值逐一对齐 Python；勘误 2026-10-26：原写 26，2+3+15+5=25）
 
 | 类型 | 值数 | 常量（示例/全部） |
 |---|---|---|

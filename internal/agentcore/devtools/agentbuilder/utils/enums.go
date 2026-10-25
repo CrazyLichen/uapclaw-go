@@ -1,4 +1,4 @@
-// 4 个枚举类型与 26 个常量定义（包文档见 doc.go）。
+// 4 个枚举类型与 25 个常量定义（包文档见 doc.go）。
 // 对齐 Python: openjiuwen/dev_tools/agent_builder/utils/enums.py。
 package utils
 
