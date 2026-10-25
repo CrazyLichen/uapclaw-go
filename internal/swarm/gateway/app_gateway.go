@@ -256,8 +256,8 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 		ChannelManager: channelMgr,
 		OnConfigSaved:  onConfigSavedCb,
 		// CryptoProvider 生产不注入（传 nil）：handler 每次请求经 resolveCrypto 查全局
-		CryptoProvider: nil,
-		CronController: cronController, // 11.10 注入：8 个 cron.job.* 端点
+		CryptoProvider:   nil,
+		CronController:   cronController,     // 11.10 注入：8 个 cron.job.* 端点
 		HeartbeatService: s.heartbeatService, // 11.11 注入：heartbeat.get_conf/set_conf/get_path
 	})
 

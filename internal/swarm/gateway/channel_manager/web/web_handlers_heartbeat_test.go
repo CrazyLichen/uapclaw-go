@@ -216,9 +216,9 @@ func TestHandleHeartbeatSetConf_成功写回(t *testing.T) {
 	data, err := os.ReadFile(cfgPath)
 	require.NoError(t, err)
 	content := string(data)
-	assert.Contains(t, content, "# 顶部注释保留验证") // 头注释保留
-	assert.Contains(t, content, "every: 120")      // 数值更新
-	assert.Contains(t, content, "target: tui")     // 目标更新
+	assert.Contains(t, content, "# 顶部注释保留验证")  // 头注释保留
+	assert.Contains(t, content, "every: 120")  // 数值更新
+	assert.Contains(t, content, "target: tui") // 目标更新
 	// yaml.v3 对 "08:00" 字符串加引号防 60 进制歧义（与 Python ruamel 引号风格差异可接受）
 	assert.Contains(t, content, `start: "08:00"`) // active_hours 写入
 }

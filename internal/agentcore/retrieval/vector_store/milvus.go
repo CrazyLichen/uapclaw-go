@@ -404,6 +404,7 @@ func (s *MilvusVectorStore) SparseSearch(ctx context.Context, queryText string, 
 //   - 始终构建 sparse BM25 AnnRequest
 //   - 原生 hybrid_search + RRFRanker(k=60)
 //   - 失败时降级到分别搜索后 RRF 融合
+//
 // M-27: filters 对齐 Python dict | QueryExpr，nil 表示无过滤。
 func (s *MilvusVectorStore) HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters query.QueryExpr, _ ...StoreOption) ([]common.SearchResult, error) {
 	if err := s.ensureLoaded(ctx); err != nil {
@@ -1053,6 +1054,7 @@ func dataToColumns(nodes []map[string]any) ([]column.Column, error) {
 //     milvusComparisonFilter 输出 "field == value"，
 //     milvusLogicalFilter and 输出 "(left) and (right)"，
 //     组合结果与 Python dict 分支 "a == 1 && b == 2" 等价）
+//
 // filters 为 nil 或空表达式时返回 ""（无过滤）。
 func buildMilvusFilterExpr(filters query.QueryExpr) (string, error) {
 	if filters == nil {

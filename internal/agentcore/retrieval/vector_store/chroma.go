@@ -1061,13 +1061,13 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 		switch mode {
 		case "vector":
 			if rawScoreVal != nil {
-			switch s.distanceMetric {
-			case "l2":
-				// S-19: 对齐 Python convert_l2_squared(raw_score, max_dist=4.0) 默认值，
-				// 传 0 会导致 l2 度量得分全部归零/NaN（同仓其余 6 处调用均传 4.0）
-				scaled := vector.ConvertL2Squared(*rawScoreVal, 4.0)
-				rawScoreScaled = &scaled
-				finalScore = scaled
+				switch s.distanceMetric {
+				case "l2":
+					// S-19: 对齐 Python convert_l2_squared(raw_score, max_dist=4.0) 默认值，
+					// 传 0 会导致 l2 度量得分全部归零/NaN（同仓其余 6 处调用均传 4.0）
+					scaled := vector.ConvertL2Squared(*rawScoreVal, 4.0)
+					rawScoreScaled = &scaled
+					finalScore = scaled
 				case "cosine":
 					scaled := vector.ConvertCosineDistance(*rawScoreVal)
 					rawScoreScaled = &scaled

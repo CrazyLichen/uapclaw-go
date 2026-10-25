@@ -16,13 +16,13 @@ import (
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // ──────────────────────────── Mock 测试桩 ────────────────────────────
@@ -81,11 +81,13 @@ type railSysOperation struct {
 	fsOp *railFsOperation
 }
 
-func (s *railSysOperation) Card() *sys_operation.SysOperationCard   { return sys_operation.NewSysOperationCard() }
-func (s *railSysOperation) Fs() sys_operation.FsOperation           { return s.fsOp }
-func (s *railSysOperation) Shell() sys_operation.ShellOperation     { return nil }
-func (s *railSysOperation) Code() sys_operation.CodeOperation       { return nil }
-func (s *railSysOperation) IsolationKeyTemplate() string     { return "" }
+func (s *railSysOperation) Card() *sys_operation.SysOperationCard {
+	return sys_operation.NewSysOperationCard()
+}
+func (s *railSysOperation) Fs() sys_operation.FsOperation       { return s.fsOp }
+func (s *railSysOperation) Shell() sys_operation.ShellOperation { return nil }
+func (s *railSysOperation) Code() sys_operation.CodeOperation   { return nil }
+func (s *railSysOperation) IsolationKeyTemplate() string        { return "" }
 
 var _ sys_operation.SysOperation = (*railSysOperation)(nil)
 
@@ -95,11 +97,11 @@ type railAbility struct {
 	desc string
 }
 
-func (a *railAbility) AbilityName() string { return a.name }
-func (a *railAbility) AbilityID() string   { return a.name }
+func (a *railAbility) AbilityName() string             { return a.name }
+func (a *railAbility) AbilityID() string               { return a.name }
 func (a *railAbility) AbilityKind() schema.AbilityKind { return schema.AbilityKindTool }
-func (a *railAbility) GetDescription() string { return a.desc }
-func (a *railAbility) ListTools() []*tool.ToolCard { return nil }
+func (a *railAbility) GetDescription() string          { return a.desc }
+func (a *railAbility) ListTools() []*tool.ToolCard     { return nil }
 
 var _ schema.Ability = (*railAbility)(nil)
 
@@ -123,9 +125,9 @@ func (m *railAbilityManager) AddMany(abilities []schema.Ability) []agentschema.A
 	}
 	return nil
 }
-func (m *railAbilityManager) Remove(name string) schema.Ability { return nil }
+func (m *railAbilityManager) Remove(name string) schema.Ability          { return nil }
 func (m *railAbilityManager) RemoveMany(names []string) []schema.Ability { return nil }
-func (m *railAbilityManager) Get(name string) schema.Ability { return nil }
+func (m *railAbilityManager) Get(name string) schema.Ability             { return nil }
 func (m *railAbilityManager) List() []schema.Ability {
 	result := make([]schema.Ability, len(m.abilities))
 	for i, a := range m.abilities {
@@ -142,9 +144,11 @@ func (m *railAbilityManager) Execute(
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) []agentschema.ExecuteResult { return nil }
+) []agentschema.ExecuteResult {
+	return nil
+}
 func (m *railAbilityManager) SetContextEngine(ce ceinterface.ContextEngine) {}
-func (m *railAbilityManager) ReorderTools(orderedNames []string) {}
+func (m *railAbilityManager) ReorderTools(orderedNames []string)            {}
 
 var _ sainterfaces.AbilityManagerInterface = (*railAbilityManager)(nil)
 
@@ -152,15 +156,15 @@ var _ sainterfaces.AbilityManagerInterface = (*railAbilityManager)(nil)
 // 对齐 Python _make_agent + register_rail 的 Init 捕获链路。
 // 其余 BaseAgent 方法均为空实现（测试只走 Init 的捕获路径）。
 type railAgent struct {
-	builder    *saprompt.SystemPromptBuilder
-	ability    sainterfaces.AbilityManagerInterface
-	sysOp      sys_operation.SysOperation
-	workspace  *hworkspace.Workspace
-	callbacks  *sainterfaces.AgentCallbackManager
+	builder   *saprompt.SystemPromptBuilder
+	ability   sainterfaces.AbilityManagerInterface
+	sysOp     sys_operation.SysOperation
+	workspace *hworkspace.Workspace
+	callbacks *sainterfaces.AgentCallbackManager
 }
 
 func (a *railAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return a.builder }
-func (a *railAgent) AbilityManager() sainterfaces.AbilityManagerInterface { return a.ability }
+func (a *railAgent) AbilityManager() sainterfaces.AbilityManagerInterface       { return a.ability }
 
 // ── BaseAgent 其余方法空实现 ──
 
@@ -171,7 +175,7 @@ func (a *railAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...s
 func (a *railAgent) Stream(ctx context.Context, inputs map[string]any, opts ...sainterfaces.AgentOption) (<-chan stream.Schema, error) {
 	return nil, nil
 }
-func (a *railAgent) Card() *agentschema.AgentCard { return nil }
+func (a *railAgent) Card() *agentschema.AgentCard     { return nil }
 func (a *railAgent) Config() sainterfaces.AgentConfig { return nil }
 func (a *railAgent) CallbackManager() *sainterfaces.AgentCallbackManager {
 	if a.callbacks == nil {
@@ -185,7 +189,9 @@ func (a *railAgent) RegisterCallback(ctx context.Context, event sainterfaces.Age
 func (a *railAgent) RegisterRail(ctx context.Context, rail sainterfaces.AgentRail, opts ...cb.CallbackOption) error {
 	return nil
 }
-func (a *railAgent) UnregisterRail(ctx context.Context, rail sainterfaces.AgentRail) error { return nil }
+func (a *railAgent) UnregisterRail(ctx context.Context, rail sainterfaces.AgentRail) error {
+	return nil
+}
 
 var _ sainterfaces.BaseAgent = (*railAgent)(nil)
 
@@ -337,9 +343,9 @@ func TestRailInit_捕获builder(t *testing.T) {
 	builder := saprompt.NewSystemPromptBuilder()
 	ability := &railAbilityManager{}
 	agent := &railAgent{
-		builder:  builder,
-		ability:  ability,
-		sysOp:    &railSysOperation{fsOp: newRailFsOperation()},
+		builder:   builder,
+		ability:   ability,
+		sysOp:     &railSysOperation{fsOp: newRailFsOperation()},
 		workspace: hworkspace.NewWorkspace(root, "cn"),
 	}
 
