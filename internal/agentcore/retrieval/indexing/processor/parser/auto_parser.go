@@ -67,7 +67,7 @@ func NewAutoParser(linkParser, fileParser Parser) (*AutoParser, error) {
 // 形成链路分层：顶层传、路由层丢弃）；
 // fileParser.Supports → Debug 日志 → fileParser.Parse 全量透传；
 // 都不中 → 空切片。URL-but-unsupported fall-through 到 file 分支
-//（Python 真实控制流字面保留：is_likely_url 为真但 link 不支持时
+// （Python 真实控制流字面保留：is_likely_url 为真但 link 不支持时
 // 不提前返回，落到 file 分支判定）。
 //
 // Python: auto_parser.py AutoParser.parse
@@ -100,7 +100,7 @@ func (p *AutoParser) Supports(doc string) bool {
 // isLikelyURL 判定文档源是否像 http(s) URL（复用 13.14 httpURLPattern）。
 //
 // Python: auto_parser.py _is_likely_url
-//（bool(doc and HTTP_URL_PATTERN.match(doc.strip()))）
+// （bool(doc and HTTP_URL_PATTERN.match(doc.strip()))）
 func isLikelyURL(doc string) bool {
 	return doc != "" && httpURLPattern.MatchString(strings.TrimSpace(doc))
 }

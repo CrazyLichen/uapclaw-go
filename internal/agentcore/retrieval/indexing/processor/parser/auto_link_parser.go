@@ -83,7 +83,7 @@ func NewFuncMatcher(fn func(string) bool) docMatcher {
 // routes 非空 → 字面使用调用方路由表。
 //
 // Python: auto_link_parser.py AutoLinkParser.__init__
-//（routes if routes is not None else _default_routes()——None/[]/非空三态）
+// （routes if routes is not None else _default_routes()——None/[]/非空三态）
 func NewAutoLinkParser(routes []linkRoute) (*AutoLinkParser, error) {
 	if routes == nil {
 		var err error
@@ -143,7 +143,7 @@ func (p *AutoLinkParser) Supports(doc string) bool {
 //
 // 微信优先：WECHAT_MP_URL_PATTERN → WeChatArticleParser；
 // 兜底：HTTP_URL_PATTERN → WebPageParser。两构造 error 直接上抛
-//（Python 侧构造无异常面，Go 构造含 error 为语言差异）。
+// （Python 侧构造无异常面，Go 构造含 error 为语言差异）。
 //
 // Python: auto_link_parser.py _default_routes
 func defaultRoutes() ([]linkRoute, error) {

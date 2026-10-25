@@ -36,7 +36,7 @@ type AutoFileParser struct {
 // NewAutoFileParser 构造 AutoFileParser。
 //
 // Python: auto_file_parser.py AutoFileParser.__init__
-//（self._ensure_parsers_loaded() 对应物为 Go 同包 init 注册，构造期天然完成）
+// （self._ensure_parsers_loaded() 对应物为 Go 同包 init 注册，构造期天然完成）
 func NewAutoFileParser() (*AutoFileParser, error) {
 	p := &AutoFileParser{}
 	bp, err := NewBaseParser(p)
