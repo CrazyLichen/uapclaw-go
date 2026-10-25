@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -346,10 +347,14 @@ func TestForwardLoop_步骤6入站管线_拦截(t *testing.T) {
 // TestForwardLoop_步骤6入站管线_放行 Apply=true 消息继续走步骤7-10。
 func TestForwardLoop_步骤6入站管线_放行(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
+	// seenMu 保护 seen：forwardLoop goroutine 写 / 测试主 goroutine 读（-race 门禁）
+	var seenMu sync.Mutex
 	var seen *schema.Message
 	mh.inboundPipeline = &fakeInboundPipeline{
 		applyFn: func(_ context.Context, m *schema.Message) bool {
+			seenMu.Lock()
 			seen = m
+			seenMu.Unlock()
 			return true
 		},
 	}
@@ -365,7 +370,10 @@ func TestForwardLoop_步骤6入站管线_放行(t *testing.T) {
 		t.Fatal("userMessages channel 满了")
 	}
 	time.Sleep(50 * time.Millisecond)
-	assert.NotNil(t, seen)
+	seenMu.Lock()
+	captured := seen
+	seenMu.Unlock()
+	assert.NotNil(t, captured)
 }
 
 // TestForwardLoop_步骤6入站管线_nil管线跳过 无挂接不 panic。
