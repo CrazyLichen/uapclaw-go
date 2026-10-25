@@ -828,3 +828,54 @@ func TestSendResponse_ok帧不带error字段(t *testing.T) {
 	_, hasErr := frame["error"]
 	assert.False(t, hasErr)
 }
+
+// TestSend_stale定向连接探测后广播fallback 定向目标已断开（TCP 半关闭窗口、
+// 路由键尚未清理）时，Send 须视为未命中落入广播 fallback——同 channel 其他
+// 在线客户端仍能收到消息（对齐 Python ws.closed 检查 L428）。
+func TestSend_stale定向连接探测后广播fallback(t *testing.T) {
+	done := make(chan struct{}, 1)
+	s, server := newTestGatewayServer(t, forwardRoute("/tui", "tui"))
+	s.OnMessage(func(ctx context.Context, msg *schema.Message) error {
+		done <- struct{}{}
+		return nil
+	})
+	// 客户端 A：注册 s1 的 session 键后将断开
+	connA := dialWS(t, server, "/tui")
+	readFrame(t, connA) // connection.ack
+	sendReqFrame(t, connA, "q1", "s1")
+	waitForwarded(t, done)
+
+	// 客户端 B：同 channel 的第二个连接，注册 s2 键（进入广播目标集合）
+	connB := dialWS(t, server, "/tui")
+	readFrame(t, connB) // connection.ack
+	sendReqFrame(t, connB, "q2", "s2")
+	waitForwarded(t, done)
+
+	// A 底层断开；本地环回下读循环很快感知并清理键。为确定性复现
+	// "断开已发生、路由键尚未清理"的生产竞态窗口（TCP 半关闭、
+	// ReadMessage 尚未感知），手动把 A 的 stale conn 塞回 session 键
+	connA.Close()
+	time.Sleep(50 * time.Millisecond) // 等 A 的读循环清理完成
+	key := [2]string{"tui", "s1"}
+	s.clientsMu.Lock()
+	s.sessionToClient[key] = connA
+	s.clientsMu.Unlock()
+	t.Cleanup(func() {
+		s.clientsMu.Lock()
+		delete(s.sessionToClient, key)
+		s.clientsMu.Unlock()
+	})
+
+	err := s.Send(context.Background(), &schema.Message{
+		ID: "r8", Type: "event", ChannelID: "tui", SessionID: "s1",
+		EventType: schema.EventTypeChatFinal,
+		Payload:   map[string]any{"content": "stale-fallback"},
+	})
+	require.NoError(t, err)
+
+	// B 收到广播帧（A 的 stale 定向被 probeWritable 探测失败 → 视为未命中）
+	frame := readFrame(t, connB)
+	assert.Equal(t, "event", frame["type"])
+	payload := frame["payload"].(map[string]any)
+	assert.Equal(t, "stale-fallback", payload["content"])
+}

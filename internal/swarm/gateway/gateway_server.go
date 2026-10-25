@@ -292,6 +292,14 @@ func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
 		}
 	}
 
+	// 定向发送前探测连接存活性（对齐 Python L428 ws.closed 检查）：
+	// 客户端断开后、HandleConnection finally 清理 session 键之前（TCP 半关闭、
+	// ReadMessage 尚未感知的窗口），定向发送命中 stale 连接时 Python 视为
+	// 未命中落入广播 fallback——同 channel 其他在线客户端仍能收到消息
+	if ws != nil && !s.probeWritable(ws) {
+		ws = nil
+	}
+
 	if ws == nil {
 		// 广播 fallback（对齐 L423-439）
 		if msg.ChannelID != "" && msg.ChannelID != "acp" && msg.Type != schema.MessageTypeRes {

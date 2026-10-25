@@ -846,3 +846,88 @@ func TestSchedulerReload保留PushUpdate(t *testing.T) {
 		t.Errorf("wake/push from old schedule should be cleared, got %v", kinds)
 	}
 }
+
+// TestSchedulerOnWake去重Reload期间双跑 agent 执行中途 Reload 重建事件堆后，
+// 同一 runID 的 wake 事件不得再次启动 runAgent（对齐 Python _run_tasks 去重 L365-366）。
+// 场景：0 9 * * * 任务（next fire 9:00），wake_offset=300 → wake 8:55。
+// 8:55 wake 触发慢 agent（阻塞 400ms）；8:57 Reload 重算——wake_dt=8:55 已过去，
+// 事件立即到期再次 onWake；断言 SendRequest 全程仅 1 次。
+func TestSchedulerOnWake去重Reload期间双跑(t *testing.T) {
+	clock := &fakeClock{now: float64(time.Date(2026, 12, 25, 8, 0, 0, 0, time.UTC).Unix())}
+	store := NewCronJobStore(filepath.Join(t.TempDir(), "cron_jobs.json"))
+	_, err := store.CreateJob(CreateJobParams{
+		Name: "t", CronExpr: "0 9 * * *", Timezone: "UTC",
+		Description: "d", Targets: "web", Enabled: true,
+		WakeOffsetSeconds: ptrInt(300),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	agent := &fakeAgentClient{
+		respond: func(call int) (*schema.AgentResponse, error) {
+			// 慢响应 400ms：确保 Reload 时 agent 仍在飞行中
+			time.Sleep(400 * time.Millisecond)
+			return &schema.AgentResponse{OK: true, Payload: map[string]any{"content": map[string]any{"output": "slow"}}}, nil
+		},
+	}
+	pub := &fakePublisher{}
+	svc := NewCronSchedulerService(store, agent, pub, clock.Now)
+	svc.storePollInterval = 0.1
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := svc.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Stop()
+
+	// 推进到 8:55 → wake 触发，agent 开始执行（阻塞 400ms）
+	clock.Advance(3300)
+	if !waitFor(t, func() bool { return agent.Calls() >= 1 }, 2*time.Second) {
+		t.Fatal("first wake should start agent")
+	}
+
+	// 8:57 Reload：事件堆清空重算，wake_dt=8:55 落在过去再次入堆并立即到期
+	clock.Advance(120)
+	if err := svc.Reload(); err != nil {
+		t.Fatal(err)
+	}
+
+	// 等 agent 完成（400ms 阻塞）+ 留出迟到 wake 事件处理窗口
+	time.Sleep(700 * time.Millisecond)
+
+	if got := agent.Calls(); got != 1 {
+		t.Errorf("SendRequest called %d times, want 1 (in-flight dedup must prevent double-run)", got)
+	}
+}
+
+// TestSchedulerPushToTargetsNilPublisher publisher 为 nil 时不 panic（对齐
+// Python message_handler=None 时 _loop 捕获异常的净效果：消息丢弃+调度器存活）
+func TestSchedulerPushToTargetsNilPublisher(t *testing.T) {
+	store := NewCronJobStore(filepath.Join(t.TempDir(), "cron_jobs.json"))
+	// publisher 传 nil——standalone 兜底装配遗漏场景
+	svc := NewCronSchedulerService(store, &fakeAgentClient{}, nil, nil)
+	svc.storePollInterval = 0.1
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := svc.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Stop()
+
+	// 直接调用 pushToTargets：nil publisher 不得 panic（无守卫时 nil 接口
+	// 方法调用会炸掉无 recover 的 loop goroutine → 整进程崩溃）
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("pushToTargets panicked with nil publisher: %v", r)
+		}
+	}()
+	svc.pushToTargets(
+		&CronJob{ID: "j", Name: "n", Targets: "web"},
+		&CronRunState{RunID: "j:1", Status: "succeeded"},
+		"result-text",
+		false,
+	)
+}

@@ -286,8 +286,11 @@ func (t *CronTools) CreateJob(ctx context.Context, params map[string]any) (map[s
 		WakeOffsetSeconds: intPtrVal(normalized["wake_offset_seconds"]),
 		SessionID:         sessionID,
 		ChatType:          chatType,
-		Mode:              strings.TrimSpace(strVal(normalized["mode"])),
-		DeleteAfterRun:    boolPtrVal(normalized["delete_after_run"]),
+		// Mode 留空（对齐 Python create_job 显式参数列表不含 mode——
+		// extractLegacyParams 算出的 mode 被丢弃，store 层 modeAny("")
+		// 兜底 "agent"，与 Python store.py L71 行为一致）
+		Mode:           "",
+		DeleteAfterRun: boolPtrVal(normalized["delete_after_run"]),
 	})
 	if err != nil {
 		return nil, err

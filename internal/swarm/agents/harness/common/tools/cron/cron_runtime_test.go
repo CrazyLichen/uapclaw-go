@@ -744,3 +744,29 @@ func TestBackendRunNow转发生命周期(t *testing.T) {
 		t.Error("action should be run_now")
 	}
 }
+
+// TestBackendCreateJobMode兜底agent create_job 落库 mode 应为 "agent"
+// （对齐 Python create_job 显式参数列表不含 mode——store 层兜底 "agent"，
+// extractLegacyParams 算出的 agent.fast 被 Python 丢弃，Go 同步对齐）
+func TestBackendCreateJobMode兜底agent(t *testing.T) {
+	backend := newBackendWithTmp(t)
+	ctx := context.Background()
+	// legacy 形态入参（无嵌套 schedule/payload/delivery → 原样透传），
+	// extractLegacyParams 默认 mode=agent.fast 不应写入 store
+	d, err := backend.CreateJob(ctx, map[string]any{
+		"name": "n", "cron_expr": "0 9 * * *", "timezone": "UTC",
+		"description": "d", "targets": "web", "enabled": true,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobID, _ := d["id"].(string)
+	got, err := backend.GetJob(ctx, jobID)
+	if err != nil || got == nil {
+		t.Fatalf("get = %v, err=%v", got, err)
+	}
+	mode, _ := got["mode"].(string)
+	if mode != "agent" {
+		t.Errorf("stored mode = %q, want \"agent\" (store fallback, Python create_job drops mode)", mode)
+	}
+}

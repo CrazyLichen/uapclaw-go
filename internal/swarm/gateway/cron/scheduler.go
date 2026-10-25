@@ -68,6 +68,10 @@ type CronSchedulerService struct {
 	seq int
 	// runs 运行状态：runID → state
 	runs map[string]*CronRunState
+	// activeRuns 飞行中 agent goroutine：runID → 运行标记
+	// 对齐 Python: _run_tasks (scheduler.py L102)——reload 重建事件堆后
+	// 同一 runID 的 wake 事件可能重新入堆，飞行中任务须去重防双跑
+	activeRuns map[string]struct{}
 	// lastStoreMtime 上次 store 文件 mtime 快照
 	lastStoreMtime float64
 }
@@ -174,6 +178,7 @@ func NewCronSchedulerService(
 		reloadCh:          make(chan struct{}, 1),
 		jobs:              make(map[string]*CronJob),
 		runs:              make(map[string]*CronRunState),
+		activeRuns:        make(map[string]struct{}),
 		storePollInterval: defaultStorePollInterval,
 	}
 }
@@ -458,17 +463,31 @@ func (s *CronSchedulerService) handleEvent(ctx context.Context, ev *cronEvent) {
 }
 
 // onWake 唤醒事件：启动 runAgent goroutine（对齐 Python _on_wake L341-444）。
-// Python 在 _on_wake 中先建 state、再检查 _run_tasks 去重；
-// Go 用 mu 互斥保证同一 runID 的 goroutine 只启动一次（去重语义由 getOrCreateRun 的
-// 存在性 + runAgent 串行写状态共同保证，wake 事件本身不会重复入堆）。
+// Python 在 _on_wake 中先建 state、再检查 _run_tasks 去重（L365-366）；
+// Go 同样以 activeRuns 集合实现 in-flight 去重——reload() 会清空事件堆并按
+// 当前时刻重算入堆，执行中 run 的 wake 事件可能重算到过去时刻再次触发，
+// 飞行中的 runID 必须直接返回，否则同一轮 agent 被双跑（双倍 LLM 消耗 +
+// state 互相覆盖）。
 func (s *CronSchedulerService) onWake(ctx context.Context, job *CronJob, runID string) {
 	state := s.getOrCreateRun(job, runID)
 	if state == nil {
 		return
 	}
+	s.mu.Lock()
+	if _, running := s.activeRuns[runID]; running {
+		s.mu.Unlock()
+		return // in-flight 去重（对齐 Python L365-366）
+	}
+	s.activeRuns[runID] = struct{}{}
+	s.mu.Unlock()
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		defer func() {
+			s.mu.Lock()
+			delete(s.activeRuns, runID)
+			s.mu.Unlock()
+		}()
 		s.runAgent(ctx, job, state)
 	}()
 }
@@ -633,6 +652,15 @@ func (s *CronSchedulerService) onPushUpdate(job *CronJob, runID string) {
 // pushToTargets 推送结果到目标频道（对齐 Python _push_to_targets L503-713）。
 // 9 渠道元数据路由：feishu/xiaoyi/whatsapp/wecom/wechat/dingtalk + feishu_enterprise 前缀。
 func (s *CronSchedulerService) pushToTargets(job *CronJob, state *CronRunState, text string, isPlaceholder bool) {
+	// nil 守卫兜底（对齐 Python message_handler=None 时 _loop 捕获异常的净效果：
+	// 该轮消息丢弃 + Error 日志 + 调度器存活——Go 无 recover 的 loop goroutine
+	// 无法容忍 nil 接口 panic，须显式拦截）
+	if s.publisher == nil {
+		logger.Error(logComponent).
+			Str("job_id", job.ID).Str("run_id", state.RunID).
+			Msg("[Cron] push skipped: message publisher is nil")
+		return
+	}
 	// Go 并发补齐：快照 state 状态字段（Python asyncio 单线程天然安全，
 	// Go 的 runAgent goroutine 可能并发写 Status/RunID/ISO 字段）
 	s.mu.Lock()

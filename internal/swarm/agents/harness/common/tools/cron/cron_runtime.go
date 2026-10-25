@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -141,17 +142,26 @@ func (b *CronRuntimeBridge) GetBackend() agentcron.CronToolBackend {
 	agentClient := globalAgentClient
 	globalMu.RUnlock()
 
-	if b.toolsOverride != nil {
-		b.toolsOverride.SetSchedulerDeps(agentClient, nil, configLoader)
-	} else {
-		tools := NewCronTools(pushFn)
-		tools.SetSchedulerDeps(agentClient, nil, configLoader)
-		b.toolsOverride = tools
-	}
-	// publisher 变量需显式类型（userPublisher 可能为 nil，赋值 override 前需稳定类型推断）
+	// publisher 解析：override 优先，其次全局注入（对齐 Python: MessageHandler
+	// 同时用于 wake 用户消息发布与 scheduler _push_to_targets 消息推送）
 	publisher := userPublisher
 	if b.userPublisherOverride != nil {
 		publisher = b.userPublisherOverride
+	}
+	// 调度器 publisher 接口断言还原：MessageHandler 隐式实现双接口
+	// （PublishRobotMessages + PublishUserMessagesNowait）；仅实现
+	// UserMessagePublisher 的注入方安全降级为 nil → pushToTargets nil 守卫兜底
+	var schedulerPublisher gwcron.MessagePublisher
+	if mp, ok := publisher.(gwcron.MessagePublisher); ok {
+		schedulerPublisher = mp
+	}
+
+	if b.toolsOverride != nil {
+		b.toolsOverride.SetSchedulerDeps(agentClient, schedulerPublisher, configLoader)
+	} else {
+		tools := NewCronTools(pushFn)
+		tools.SetSchedulerDeps(agentClient, schedulerPublisher, configLoader)
+		b.toolsOverride = tools
 	}
 	backend := &cronToolsBackend{tools: b.toolsOverride, userPublisher: publisher}
 	b.resolvedBackend = backend
@@ -190,6 +200,15 @@ func (b *CronRuntimeBridge) BuildTools(cronCtx *agentcron.CronToolContext, agent
 		true,
 		agentID,
 	)
+	// 尾部汇总（对齐 Python L396-398 "Built %d cron tools: %s"）
+	names := make([]string, 0, len(tools))
+	for _, tl := range tools {
+		names = append(names, tl.Card().Name)
+	}
+	logger.Info(logComponent).
+		Int("count", len(tools)).
+		Strs("tools", names).
+		Msg("[CronRuntimeBridge] Built cron tools")
 	return tools
 }
 
@@ -239,10 +258,18 @@ func (bk *cronToolsBackend) CreateJob(ctx context.Context, params map[string]any
 			requestID = strVal(v)
 		}
 	}
+	// raw_keys：入参 key 排序列表（对齐 Python L67-76 第 4 字段——
+	// 排查 legacy 参数映射问题的关键线索）
+	rawKeys := make([]string, 0, len(params))
+	for k := range params {
+		rawKeys = append(rawKeys, k)
+	}
+	sort.Strings(rawKeys)
 	logger.Info(logComponent).
 		Str("channel_id", contextChannelID(cronCtx)).
 		Str("session_id", contextSessionID(cronCtx)).
 		Str("request_id", requestID).
+		Strs("raw_keys", rawKeys).
 		Msg("[CronRuntimeBridge] create_job in")
 
 	payload, err := extractLegacyParams(copyMap(params), cronCtx, true)
