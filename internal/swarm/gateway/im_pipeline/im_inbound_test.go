@@ -214,7 +214,7 @@ func TestExtractText(t *testing.T) {
 	assert.Equal(t, "q1", extractText(newChatSendMsg(`{"query":"q1","content":"c1"}`, nil)))
 	assert.Equal(t, "c1", extractText(newChatSendMsg(`{"content":"c1"}`, nil)))
 	assert.Equal(t, "c1", extractText(newChatSendMsg(`{"query":"  ","content":"c1"}`, nil))) // query 空 strip 回退
-	assert.Equal(t, "c1", extractText(newChatSendMsg(`{"query":123,"content":"c1"}`, nil))) // query 非 str 跳过 → content 回退
+	assert.Equal(t, "c1", extractText(newChatSendMsg(`{"query":123,"content":"c1"}`, nil)))  // query 非 str 跳过 → content 回退
 	assert.Equal(t, "", extractText(newChatSendMsg(`{"content":123}`, nil)))
 	assert.Equal(t, "", extractText(newChatSendMsg(`[1,2]`, nil)))
 	assert.Equal(t, "", extractText(newChatSendMsg(`null`, nil)))
@@ -559,7 +559,7 @@ func TestProcess_层5必答(t *testing.T) {
 	adapter := newTestAdapter()
 	adapter.relevancePatch = map[string]any{"mentioned": true}
 	meta := map[string]any{
-		"chat_type":            "group",
+		"chat_type":             "group",
 		"im_mentioned_user_ids": []any{"ou-principal"},
 	}
 	r := proc.Process(context.Background(), newChatSendMsg(`{"query":"@张三 你好"}`, meta), adapter, "")

@@ -137,30 +137,30 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 					return
 				}
 
-			// 步骤6: Inbound Pipeline（数字分身入站过滤，11.12 回填）
-			// Python: _forward_loop L2440-2447：
-			//     if self._inbound_pipeline is not None and msg.req_method == ReqMethod.CHAT_SEND:
-			//         try: should_forward = await self._inbound_pipeline.apply(msg)
-			//         except Exception: logger.exception("Inbound pipeline error, fallback to forwarding")
-			//         else:
-			//             if not should_forward: continue
-			if mh.inboundPipeline != nil && msg.ReqMethod == schema.ReqMethodChatSend {
-				shouldForward := true
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							logger.Error(logComponent).
-								Any("panic", r).
-								Str("msg_id", msg.ID).
-								Msg("Inbound pipeline error, fallback to forwarding")
-						}
+				// 步骤6: Inbound Pipeline（数字分身入站过滤，11.12 回填）
+				// Python: _forward_loop L2440-2447：
+				//     if self._inbound_pipeline is not None and msg.req_method == ReqMethod.CHAT_SEND:
+				//         try: should_forward = await self._inbound_pipeline.apply(msg)
+				//         except Exception: logger.exception("Inbound pipeline error, fallback to forwarding")
+				//         else:
+				//             if not should_forward: continue
+				if mh.inboundPipeline != nil && msg.ReqMethod == schema.ReqMethodChatSend {
+					shouldForward := true
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								logger.Error(logComponent).
+									Any("panic", r).
+									Str("msg_id", msg.ID).
+									Msg("Inbound pipeline error, fallback to forwarding")
+							}
+						}()
+						shouldForward = mh.inboundPipeline.Apply(ctx, msg)
 					}()
-					shouldForward = mh.inboundPipeline.Apply(ctx, msg)
-				}()
-				if !shouldForward {
-					return // 不相关消息，跳过（Python continue 语义——外层 func() 已 return）
+					if !shouldForward {
+						return // 不相关消息，跳过（Python continue 语义——外层 func() 已 return）
+					}
 				}
-			}
 
 				// 步骤7: Resolve @file/@agent（仅 CHAT_SEND）
 				if msg.ReqMethod == schema.ReqMethodChatSend {

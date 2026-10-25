@@ -17,8 +17,8 @@ import (
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
-	impipeline "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/im_pipeline"
 	hooksgw "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/hooks"
+	impipeline "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/im_pipeline"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

@@ -30,7 +30,7 @@ func TestCreateVectorStore_milvus分支(t *testing.T) {
 	require.NotNil(t, vs)
 	s, ok := vs.(*MilvusVectorStore)
 	require.True(t, ok)
-	assert.Equal(t, "content", s.textField)                        // Python 默认 text_field="content"
+	assert.Equal(t, "content", s.textField) // Python 默认 text_field="content"
 	assert.Equal(t, "sparse_vector", s.sparseVectorField)
 	assert.Equal(t, "metadata", s.metadataField)
 	assert.Equal(t, "document_id", s.docIDField)

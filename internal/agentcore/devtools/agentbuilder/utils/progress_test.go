@@ -502,9 +502,9 @@ func TestProgressStep_ToDict_空指针形态(t *testing.T) {
 // CLARIFY→GENERATING 触发收尾（末步 SUCCESS+duration 计算）。
 func TestProgressReporter_隐性自动收尾(t *testing.T) {
 	reporter := NewProgressReporter("autoend", "llm_agent")
-	reporter.StartStage(ProgressStageInitializing, "Init...")      // 前序=构造器 INITIALIZING：不收尾
-	reporter.StartStage(ProgressStageInitializing, "Reinit...")    // 前序=INITIALIZING：不收尾
-	reporter.StartStage(ProgressStageClarifying, "Clarify...")     // 前序=INITIALIZING：不收尾
+	reporter.StartStage(ProgressStageInitializing, "Init...")   // 前序=构造器 INITIALIZING：不收尾
+	reporter.StartStage(ProgressStageInitializing, "Reinit...") // 前序=INITIALIZING：不收尾
+	reporter.StartStage(ProgressStageClarifying, "Clarify...")  // 前序=INITIALIZING：不收尾
 	p1 := reporter.GetProgress()
 	if p1.Steps[0].Status != ProgressStatusRunning || p1.Steps[1].Status != ProgressStatusRunning {
 		t.Error("前序为 INITIALIZING 时不应触发自动收尾（Python L194 条件为假）")
