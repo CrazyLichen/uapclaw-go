@@ -32,8 +32,13 @@ type streamFinalState struct {
 // PublishRobotMessages 将 Agent 响应写入出站 channel。
 //
 // 非阻塞写入，channel 满时丢弃并记录警告。
-// Python: MessageHandler.publish_robot_messages()
+// Outbound Pipeline（数字分身出站路由）在入队前运行；异常/错误降级 Warn
+// 照常入队（11.12 回填）。
+// Python: MessageHandler.publish_robot_messages() L1193-1201
 func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
+	if mh.outboundPipeline != nil {
+		mh.applyOutboundPipeline(context.Background(), msg)
+	}
 	select {
 	case mh.robotMessages <- msg:
 	default:
@@ -41,6 +46,27 @@ func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 			Str("event_type", "outbound_queue_full").
 			Str("msg_id", msg.ID).
 			Msg("outbound message queue full, dropping message")
+	}
+}
+
+// applyOutboundPipeline 执行出站管线，panic/error 均降级为日志不阻塞入队。
+// Python: publish_robot_messages 内 try/except（L1197-1200）
+//
+//	except Exception: logger.exception("Outbound pipeline error, message queued without routing")
+func (mh *MessageHandler) applyOutboundPipeline(ctx context.Context, msg *schema.Message) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).
+				Any("panic", r).
+				Str("msg_id", msg.ID).
+				Msg("Outbound pipeline error, message queued without routing")
+		}
+	}()
+	if err := mh.outboundPipeline.Apply(ctx, msg); err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Str("msg_id", msg.ID).
+			Msg("Outbound pipeline error, message queued without routing")
 	}
 }
 
@@ -55,7 +81,7 @@ func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 //	步骤3:  Gateway hook: UserPromptSubmit（预留 TODO）
 //	步骤4:  CHAT_ANSWER 分支
 //	步骤5:  CHAT_CANCEL 分支
-//	步骤6:  Inbound Pipeline（预留 TODO）
+//	步骤6:  Inbound Pipeline（数字分身入站过滤，11.12）
 //	步骤7:  resolveInboundReferences(msg)
 //	步骤8:  prepareAgentDispatchMessage(ctx, msg)
 //	步骤9:  before_chat_request hook（对齐 Python _forward_loop L2502）
@@ -111,10 +137,30 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 					return
 				}
 
-				// TODO(#11.12): 步骤6 - Inbound Pipeline（数字分身入站过滤）（等 11.12 IM Pipeline 回填）
-				// Python: 入站管道处理
-				//     Python: should_forward = await self._inbound_pipeline.apply(msg)
-				//     如果不应转发则跳过
+			// 步骤6: Inbound Pipeline（数字分身入站过滤，11.12 回填）
+			// Python: _forward_loop L2440-2447：
+			//     if self._inbound_pipeline is not None and msg.req_method == ReqMethod.CHAT_SEND:
+			//         try: should_forward = await self._inbound_pipeline.apply(msg)
+			//         except Exception: logger.exception("Inbound pipeline error, fallback to forwarding")
+			//         else:
+			//             if not should_forward: continue
+			if mh.inboundPipeline != nil && msg.ReqMethod == schema.ReqMethodChatSend {
+				shouldForward := true
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							logger.Error(logComponent).
+								Any("panic", r).
+								Str("msg_id", msg.ID).
+								Msg("Inbound pipeline error, fallback to forwarding")
+						}
+					}()
+					shouldForward = mh.inboundPipeline.Apply(ctx, msg)
+				}()
+				if !shouldForward {
+					return // 不相关消息，跳过（Python continue 语义——外层 func() 已 return）
+				}
+			}
 
 				// 步骤7: Resolve @file/@agent（仅 CHAT_SEND）
 				if msg.ReqMethod == schema.ReqMethodChatSend {

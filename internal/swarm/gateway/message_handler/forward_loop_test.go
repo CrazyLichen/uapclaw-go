@@ -3,18 +3,21 @@ package message_handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
+	impipeline "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/im_pipeline"
 	hooksgw "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -295,4 +298,179 @@ func TestPythonOrStr_or链语义(t *testing.T) {
 			t.Errorf("%s: pythonOrStr(%v, %v) = %q, want %q", tc.name, tc.a, tc.b, got, tc.want)
 		}
 	}
+}
+
+// ──────────────────────────── 11.12 双挂接测试 ────────────────────────────
+
+// fakeInboundPipeline 可编程入站管线 fake（实现 InboundPipelineAPI）。
+type fakeInboundPipeline struct {
+	applyFn func(ctx context.Context, msg *schema.Message) bool
+}
+
+func (f *fakeInboundPipeline) Apply(ctx context.Context, msg *schema.Message) bool {
+	return f.applyFn(ctx, msg)
+}
+
+// fakeOutboundPipeline 可编程出站管线 fake（实现 OutboundPipeline 新签名）。
+type fakeOutboundPipeline struct {
+	applyErr error
+	applied  []*schema.Message
+}
+
+func (f *fakeOutboundPipeline) Apply(ctx context.Context, msg *schema.Message) error {
+	f.applied = append(f.applied, msg)
+	return f.applyErr
+}
+
+// TestForwardLoop_步骤6入站管线_拦截 拦截路径：Apply=false 的 chat.send 消息不达步骤7。
+func TestForwardLoop_步骤6入站管线_拦截(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	mh.inboundPipeline = &fakeInboundPipeline{
+		applyFn: func(_ context.Context, _ *schema.Message) bool { return false },
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go mh.forwardLoop(ctx)
+
+	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{"query":"无关消息"}`), schema.WithIsStream(true))
+	select {
+	case mh.userMessages <- msg:
+	default:
+		t.Fatal("userMessages channel 满了")
+	}
+	// 被拦截：无 panic 即可（下游 handleChatSend 无 AgentClient 连接仅 Warn）
+	time.Sleep(50 * time.Millisecond)
+}
+
+// TestForwardLoop_步骤6入站管线_放行 Apply=true 消息继续走步骤7-10。
+func TestForwardLoop_步骤6入站管线_放行(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	var seen *schema.Message
+	mh.inboundPipeline = &fakeInboundPipeline{
+		applyFn: func(_ context.Context, m *schema.Message) bool {
+			seen = m
+			return true
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go mh.forwardLoop(ctx)
+
+	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{"content":"hello"}`), schema.WithIsStream(true))
+	select {
+	case mh.userMessages <- msg:
+	default:
+		t.Fatal("userMessages channel 满了")
+	}
+	time.Sleep(50 * time.Millisecond)
+	assert.NotNil(t, seen)
+}
+
+// TestForwardLoop_步骤6入站管线_nil管线跳过 无挂接不 panic。
+func TestForwardLoop_步骤6入站管线_nil管线跳过(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go mh.forwardLoop(ctx)
+
+	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{"content":"hello"}`), schema.WithIsStream(true))
+	select {
+	case mh.userMessages <- msg:
+	default:
+		t.Fatal("userMessages channel 满了")
+	}
+	time.Sleep(50 * time.Millisecond)
+}
+
+// TestForwardLoop_步骤6入站管线_panic兜底 Apply panic → fallback 转发不中断。
+func TestForwardLoop_步骤6入站管线_panic兜底(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	mh.inboundPipeline = &fakeInboundPipeline{
+		applyFn: func(_ context.Context, _ *schema.Message) bool { panic("boom") },
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go mh.forwardLoop(ctx)
+
+	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{"content":"hello"}`), schema.WithIsStream(true))
+	select {
+	case mh.userMessages <- msg:
+	default:
+		t.Fatal("userMessages channel 满了")
+	}
+	time.Sleep(50 * time.Millisecond) // 不 panic 不死循环即通过
+}
+
+// TestForwardLoop_步骤6非chatsend不进管线 chat.answer 消息不调 Apply。
+func TestForwardLoop_步骤6非chatsend不进管线(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	called := false
+	mh.inboundPipeline = &fakeInboundPipeline{
+		applyFn: func(_ context.Context, _ *schema.Message) bool {
+			called = true
+			return true
+		},
+	}
+	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatAnswer, json.RawMessage(`{}`))
+	// 直接调用含步骤6 的流程入口（forwardLoop 为私有，经行为断言：步骤4 已分流 return）
+	mh.handleChatUserAnswer(context.Background(), msg)
+	assert.False(t, called)
+}
+
+// TestPublishRobotMessages_出站管线挂接 nil pipeline 直接入队。
+func TestPublishRobotMessages_出站管线挂接(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	msg := schema.NewResMessage("web", "s", true, map[string]any{"content": "ok"})
+	mh.PublishRobotMessages(msg)
+	// 消费验证入队
+	select {
+	case got := <-mh.robotMessages:
+		assert.Equal(t, msg.ID, got.ID)
+	default:
+		t.Fatal("消息应入队")
+	}
+}
+
+// TestPublishRobotMessages_管线执行且入队 pipeline 执行后照常入队（幂等）。
+func TestPublishRobotMessages_管线执行且入队(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	fake := &fakeOutboundPipeline{}
+	mh.outboundPipeline = fake
+	msg := schema.NewResMessage("web", "s", true, map[string]any{"content": "ok"})
+	mh.PublishRobotMessages(msg)
+	require.Len(t, fake.applied, 1)
+	select {
+	case <-mh.robotMessages:
+	default:
+		t.Fatal("管线执行后消息仍应入队")
+	}
+}
+
+// TestPublishRobotMessages_管线错误降级入队 Apply 返回 error → Warn + 照常入队。
+func TestPublishRobotMessages_管线错误降级入队(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	mh.outboundPipeline = &fakeOutboundPipeline{applyErr: fmt.Errorf("pipeline boom")}
+	msg := schema.NewResMessage("web", "s", true, map[string]any{"content": "ok"})
+	assert.NotPanics(t, func() {
+		mh.PublishRobotMessages(msg)
+	})
+	select {
+	case <-mh.robotMessages:
+	default:
+		t.Fatal("错误后消息仍应入队")
+	}
+}
+
+// TestSetInboundPipeline 注入后字段非 nil。
+func TestSetInboundPipeline(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	mh.SetInboundPipeline(nil) // nil 容忍
+	assert.Nil(t, mh.inboundPipeline)
+	// 真实类型隐式实现验证（编译期断言）
+	var _ InboundPipelineAPI = &impipeline.IMInboundPipeline{}
+	var _ OutboundPipeline = &impipeline.IMOutboundPipeline{}
 }

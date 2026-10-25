@@ -18,11 +18,21 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OutboundPipeline 出站管道接口，对齐 Python _outbound_pipeline。
-//
-// 预留给 11.12 IM Pipeline 回填，当前未使用。
+// Python apply(msg) 原地修改 metadata 返回 None；Go 以 error 返回不可恢复错误
+// （常规短路返回 nil）。具体类型 im_pipeline.IMOutboundPipeline 隐式实现（破环：
+// 避免 import im_pipeline）。
 type OutboundPipeline interface {
-	// Apply 对出站消息应用管道处理
-	Apply(msg *schema.Message) (*schema.Message, error)
+	// Apply 对出站消息应用路由决策，原地修改 msg
+	// Python: publish_robot_messages L1196-1200 await self._outbound_pipeline.apply(msg)
+	Apply(ctx context.Context, msg *schema.Message) error
+}
+
+// InboundPipelineAPI 入站管道接口，对齐 Python _inbound_pipeline。
+// 具体类型 im_pipeline.IMInboundPipeline 隐式实现（破环：避免 import im_pipeline）。
+// Python: _forward_loop L2440-2447
+type InboundPipelineAPI interface {
+	// Apply 对入站消息应用管道处理，返回是否继续转发
+	Apply(ctx context.Context, msg *schema.Message) bool
 }
 
 // streamTaskEntry 流式任务条目，包含取消函数和退出等待。
@@ -102,9 +112,13 @@ type MessageHandler struct {
 	// gatewayHookHandler Gateway 层钩子处理器（对齐 Python _gateway_hook_handler，11.13；装配失败为 nil）
 	gatewayHookHandler *hooksgw.GatewayHookHandler
 
-	// outboundPipeline 出站管道（对齐 Python _outbound_pipeline，预留给 11.12 IM Pipeline 回填）
-	// TODO(#11.12): 实现 OutboundPipeline interface（等 11.12 IM Pipeline 回填）
+	// outboundPipeline 出站管道（对齐 Python _outbound_pipeline，11.12）
+	// Python: set_outbound_pipeline 注入；Go 由 app_gateway 装配时设置
 	outboundPipeline OutboundPipeline
+
+	// inboundPipeline 入站管道（对齐 Python _inbound_pipeline，11.12）
+	// Python: set_inbound_pipeline 注入；Go 由 app_gateway 装配时设置
+	inboundPipeline InboundPipelineAPI
 
 	// cronController cron 控制器（对齐 Python _cron_controller，11.10）
 	// Python: set_cron_controller 注入；Go 由 app_gateway 装配时设置
