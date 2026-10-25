@@ -30,7 +30,7 @@
 **Files:**
 - Create: `internal/agentcore/devtools/agentbuilder/utils/progress.go`
 
-- [ ] **Step 1: 写 progress.go 结构体区块**
+- [x] **Step 1: 写 progress.go 结构体区块**
 
 文件头 + import + 结构体区块（ProgressCallback 放最前，接口/回调类型先于结构体的规范惯例）：
 
@@ -176,12 +176,12 @@ type ProgressManager struct {
 }
 ```
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agentcore/devtools/agentbuilder/utils/`
 Expected: 编译失败（progress.go 引用未定义的方法/函数——Step 1 只放结构体+ToDict，无其他引用则应通过；若通过直接进 Task 2）
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/agentcore/devtools/agentbuilder/utils/progress.go
@@ -195,7 +195,7 @@ git commit -m "feat(devtools): 14.3 progress 结构体区块——ProgressCallba
 **Files:**
 - Modify: `internal/agentcore/devtools/agentbuilder/utils/progress.go`
 
-- [ ] **Step 1: 追加选项类型区块、全局变量区块、导出构造器与单例**
+- [x] **Step 1: 追加选项类型区块、全局变量区块、导出构造器与单例**
 
 在结构体区块之后追加（规范 2 声明顺序）：
 
@@ -493,12 +493,12 @@ type warnStageConfig struct {
 
 注意：这 5 个 config 结构体是 Go 结构体（归结构体区块，追加在 ProgressManager 之后），选项类型引用它们。
 
-- [ ] **Step 2: 编译 + gofmt 验证**
+- [x] **Step 2: 编译 + gofmt 验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agentcore/devtools/agentbuilder/utils/ && gofmt -l internal/agentcore/devtools/agentbuilder/utils/`
 Expected: 编译通过；gofmt 输出为空
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/agentcore/devtools/agentbuilder/utils/progress.go
@@ -512,7 +512,7 @@ git commit -m "feat(devtools): 14.3 选项类型+进度映射表+构造器+单�
 **Files:**
 - Modify: `internal/agentcore/devtools/agentbuilder/utils/progress.go`
 
-- [ ] **Step 1: 追加 ProgressReporter 方法（结构体区块内，方法按 Python 方法序）**
+- [x] **Step 1: 追加 ProgressReporter 方法（结构体区块内，方法按 Python 方法序）**
 
 ```go
 // AddCallback 添加进度回调，返回取消函数。
@@ -713,7 +713,7 @@ func (r *ProgressReporter) Complete(message ...string) {
 }
 ```
 
-- [ ] **Step 2: 追加非导出辅助函数（非导出函数区块）**
+- [x] **Step 2: 追加非导出辅助函数（非导出函数区块）**
 
 ```go
 // endCurrentStageLocked 结束当前阶段（须持有 r.mu 调用）。
@@ -823,7 +823,7 @@ func nowWallClock() float64 {
 
 注意 import 需补 `"fmt"`（notifyLocked 的 recover 格式化用）与 `"reflect"`（funcPtrEqual 用）；`"strings"` 若无消费则删除。
 
-- [ ] **Step 4: 追加 ProgressManager 方法（结构体区块内）**
+- [x] **Step 4: 追加 ProgressManager 方法（结构体区块内）**
 
 ```go
 // GetReporter 获取进度上报器（不存在返回 nil，对齐 Python None）。
@@ -867,12 +867,12 @@ func (m *ProgressManager) GetProgress(sessionID string) *BuildProgress {
 }
 ```
 
-- [ ] **Step 5: 编译 + gofmt 验证**
+- [x] **Step 5: 编译 + gofmt 验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/agentcore/devtools/agentbuilder/utils/ && gofmt -l internal/agentcore/devtools/agentbuilder/utils/`
 Expected: 编译通过；gofmt 输出为空（strings import 若未用则移除——Task 1 引入的 strings 供后用，如未消费删除之）
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/agentcore/devtools/agentbuilder/utils/progress.go
@@ -886,7 +886,7 @@ git commit -m "feat(devtools): 14.3 ProgressReporter 方法群+Manager+单例访
 **Files:**
 - Create: `internal/agentcore/devtools/agentbuilder/utils/progress_test.go`
 
-- [ ] **Step 1: 写 TestProgressStep（4 用例）+ TestBuildProgress（3 用例）**
+- [x] **Step 1: 写 TestProgressStep（4 用例）+ TestBuildProgress（3 用例）**
 
 ```go
 package utils
@@ -1045,7 +1045,7 @@ func TestBuildProgress(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 写 TestProgressReporter（8 用例）**
+- [x] **Step 2: 写 TestProgressReporter（8 用例）**
 
 ```go
 // TestProgressReporter 对齐 Python TestProgressReporter（8 用例）
@@ -1186,12 +1186,12 @@ func TestProgressReporter(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 运行测试验证通过**
+- [x] **Step 3: 运行测试验证通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/devtools/agentbuilder/utils/ -run 'TestProgressStep|TestBuildProgress|TestProgressReporter' -v 2>&1 | tail -20`
 Expected: 全部 PASS（15 子用例）
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/agentcore/devtools/agentbuilder/utils/progress_test.go
@@ -1205,7 +1205,7 @@ git commit -m "test(devtools): 14.3 progress 15 个 Python unit 用例 1:1 映�
 **Files:**
 - Modify: `internal/agentcore/devtools/agentbuilder/utils/progress_test.go`
 
-- [ ] **Step 1: 追加 system 回填 4 用例（TestProgressIntegration——14.1 spec 归属拆分承诺兑现）**
+- [x] **Step 1: 追加 system 回填 4 用例（TestProgressIntegration——14.1 spec 归属拆分承诺兑现）**
 
 ```go
 // TestProgressIntegration_回调上报 对齐 Python system test_progress_reporter_with_callbacks
@@ -1270,7 +1270,7 @@ func TestProgressIntegration_完整工作流(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 追加 Go 增强用例（并发+隐性语义，Python 无对应）**
+- [x] **Step 2: 追加 Go 增强用例（并发+隐性语义，Python 无对应）**
 
 ```go
 // TestProgressReporter_并发阶段操作 验证方法级锁（-race 必跑）
@@ -1493,12 +1493,12 @@ func TestProgressReporter_警告阶段语义(t *testing.T) {
 
 import 追加：`"fmt"`、`"sync"`（progress_test.go 文件头 import 块补齐）。
 
-- [ ] **Step 3: 运行全量包测试 + race + 覆盖率**
+- [x] **Step 3: 运行全量包测试 + race + 覆盖率**
 
 Run: `cd /home/opensource/uap-claw-go && go test -race ./internal/agentcore/devtools/agentbuilder/utils/ -cover 2>&1 | tail -3`
 Expected: ok + coverage ≥ 96%（包基线 97.2%；progress.go 预估 95%+，包级不低于 96%）
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/agentcore/devtools/agentbuilder/utils/progress_test.go
@@ -1512,7 +1512,7 @@ git commit -m "test(devtools): 14.3 system 回填 4 用例+并发/隐性语义�
 **Files:**
 - Modify: `internal/agentcore/devtools/agentbuilder/utils/doc.go`
 
-- [ ] **Step 1: 目录树补两条目 + 流程位置段落更新**
+- [x] **Step 1: 目录树补两条目 + 流程位置段落更新**
 
 doc.go 中文件目录树修改为（在 utils.go 行后、constants_test.go 行前插入 progress 两行）：
 
@@ -1536,12 +1536,12 @@ doc.go 中文件目录树修改为（在 utils.go 行后、constants_test.go 行
 // 5 个上报点、14.7/14.8 细粒度调用、14.9 门面查询。
 ```
 
-- [ ] **Step 2: gofmt 验证 + 编译**
+- [x] **Step 2: gofmt 验证 + 编译**
 
 Run: `cd /home/opensource/uap-claw-go && gofmt -l internal/agentcore/devtools/agentbuilder/utils/ && go build ./internal/agentcore/devtools/agentbuilder/utils/`
 Expected: gofmt 输出为空；编译通过
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/agentcore/devtools/agentbuilder/utils/doc.go
@@ -1557,7 +1557,7 @@ git commit -m "docs(devtools): 14.3 doc.go 目录树补 progress 两条目+流�
 - Modify: `/root/.codebuddy/projects/home-opensource-uap-claw-go/memory/domain-14-devtools-progress.md`
 - Modify: `/root/.codebuddy/projects/home-opensource-uap-claw-go/memory/MEMORY.md`（索引行更新）
 
-- [ ] **Step 1: 更新 IMPLEMENTATION_PLAN.md 14.3 行**
+- [x] **Step 1: 更新 IMPLEMENTATION_PLAN.md 14.3 行**
 
 状态 ☐→✅，替换 826 行为（覆盖率数字以 Task 5 Step 3 实测为准填入，不留占位符）：
 
@@ -1565,15 +1565,15 @@ git commit -m "docs(devtools): 14.3 doc.go 目录树补 progress 两条目+流�
 | 14.3 | ✅ | 进度上报 | `internal/agentcore/devtools/agentbuilder/utils/progress.go`：ProgressStep/BuildProgress 值类型(ToDict×2,RFC3339Nano)+ProgressReporter(方法级锁+AddCallback 返回取消函数+Start/Update/Complete/Fail/Warn Stage+10 条隐性语义保真：自动收尾/删键计时/update·warn 不建新 step/fail 双写 error)+ProgressManager(RWMutex)+GetProgressManager 单例(sync.Once)+llmAgent/workflow 双进度映射表+11 个 With 薄构造器；progress_test.go 15 unit 1:1+4 system 回填(⤴️ 清偿,utils 系 system 12/12 全清)+13 并发/语义增强；包覆盖率 9x%；设计：docs/superpowers/specs/2026-10-26-devtools-progress-14.3-design.md | `openjiuwen/dev_tools/agent_builder/utils/progress.py` |
 ```
 
-- [ ] **Step 2: 更新记忆文件 domain-14-devtools-progress.md**
+- [x] **Step 2: 更新记忆文件 domain-14-devtools-progress.md**
 
 "后续步骤"段更新：14.3 完成（日期+提交号+覆盖率+⤴️ 清偿记录）；下一节 14.4 resource；新增关键坑记录（removeCallback 代码指针比较限制、回调锁内执行约束、manager 两锁不嵌套）。
 
-- [ ] **Step 3: 更新 MEMORY.md 索引行**
+- [x] **Step 3: 更新 MEMORY.md 索引行**
 
 `领域十四 devtools 实施进度与决策` 行更新为：14.1/14.2/14.3 完成（utils 目录测试 100% 回填），下一节 14.4。
 
-- [ ] **Step 4: Commit（仓库内文件）**
+- [x] **Step 4: Commit（仓库内文件）**
 
 ```bash
 git add IMPLEMENTATION_PLAN.md
@@ -1586,21 +1586,21 @@ git commit -m "docs(plan): 14.3 状态回填 ✅（⤴️ 4 system 用例清偿,
 
 **Files:** 无新文件（验证-only）
 
-- [ ] **Step 1: 包全量测试 + race + 覆盖率确认**
+- [x] **Step 1: 包全量测试 + race + 覆盖率确认**
 
 Run: `cd /home/opensource/uap-claw-go && go test -race ./internal/agentcore/devtools/agentbuilder/utils/ -cover 2>&1 | tail -3`
 Expected: ok + coverage ≥ 96%（基线 97.2% 不显著下降；progress.go 高覆盖应拉平）
 
-- [ ] **Step 2: 全仓库编译确认（防跨包破坏）**
+- [x] **Step 2: 全仓库编译确认（防跨包破坏）**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./...`
 Expected: 编译通过（progress.go 仅同包扩展零外部影响，此步为保险）
 
-- [ ] **Step 3: 单进程互斥确认（规则 5）**
+- [x] **Step 3: 单进程互斥确认（规则 5）**
 
 Run: `pgrep -f 'go (build|test)'`（如有残留先 kill）
 
-- [ ] **Step 4: 远端 CI 确认（规则 6）**
+- [x] **Step 4: 远端 CI 确认（规则 6）**
 
 ```bash
 git push
