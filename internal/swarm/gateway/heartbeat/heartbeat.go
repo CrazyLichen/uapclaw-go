@@ -433,20 +433,25 @@ func (s *GatewayHeartbeatService) tick(ctx context.Context) {
 	resp, err := s.agentClient.SendRequest(tickCtx, envelope)
 
 	if err != nil {
+		// 停机取消豁免（对齐 Python 语义）：Stop 取消 ctx → in-flight SendRequest
+		// 返回 context.Canceled——Python 的 CancelledError 继承 BaseException，
+		// 不进 except Exception 分支，last_tick_ok/at 保持不变；
+		// Go 侧须显式豁免，避免停机把 lastTickOK 置 false。
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		// ⑥ 失败路径（对齐 L245-256）
 		s.mu.Lock()
 		s.lastTickOK = ptrBool(false)
 		s.lastTickAt = ptrFloat64(s.nowFn())
 		s.mu.Unlock()
-		if errors.Is(err, context.DeadlineExceeded) {
+		// timeout 日志归类收紧：仅本 tick 真配了 TimeoutSeconds 时才可能是
+		// asyncio.wait_for 超时（Python 无 timeout 配置就没有 wait_for，
+		// 不存在 TimeoutError 分支）；父 ctx 自带 deadline 超时归 request failed。
+		if timeout != nil && errors.Is(err, context.DeadlineExceeded) {
 			logger.Warn(logComponent).
 				Str("request_id", requestID).
-				Float64("timeout_seconds", func() float64 {
-					if timeout != nil {
-						return *timeout
-					}
-					return 0
-				}()).
+				Float64("timeout_seconds", *timeout).
 				Msg("Gateway heartbeat timeout")
 		} else {
 			logger.Warn(logComponent).

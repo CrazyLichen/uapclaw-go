@@ -404,6 +404,64 @@ func TestTick_错误分支(t *testing.T) {
 	}
 }
 
+// TestTick_停机取消豁免 ctx 取消 → lastTick 状态保持不变（对齐 Python
+// CancelledError 不进 except Exception 语义，审查修复方案A）。
+func TestTick_停机取消豁免(t *testing.T) {
+	fc := &fakeAgentClient{
+		respond: func(ctx context.Context, call int) (*schema.AgentResponse, error) {
+			if call == 1 {
+				// 首次调用：成功
+				return &schema.AgentResponse{OK: true, Payload: map[string]any{"heartbeat": "HEARTBEAT_OK"}}, nil
+			}
+			// 二次调用：挂起直到 ctx 取消（模拟 Stop 时 in-flight）
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+	s := NewGatewayHeartbeatService(fc, relayCfg(), nil, mkTime(1000))
+
+	// 先成功一次 → lastTickOK=true / lastTickAt=1000
+	s.tick(context.Background())
+	if ok := s.LastTickOK(); ok == nil || !*ok {
+		t.Fatal("precondition: lastTickOK should be true after successful tick")
+	}
+	if at := s.LastTickAt(); at == nil || *at != 1000 {
+		t.Fatalf("precondition: lastTickAt should be 1000, got %v", at)
+	}
+
+	// 取消 ctx 后 tick → 豁免失败分支，lastTick 状态保持成功值
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s.tick(ctx)
+	if ok := s.LastTickOK(); ok == nil || !*ok {
+		t.Fatal("lastTickOK should stay true on context cancel")
+	}
+	if at := s.LastTickAt(); at == nil || *at != 1000 {
+		t.Fatalf("lastTickAt should stay 1000 on context cancel, got %v", at)
+	}
+}
+
+// TestTick_父ctx超时归requestFailed 无 TimeoutSeconds 配置但父 ctx 带
+// deadline 超时 → 不走 timeout 日志分支（归类收紧，审查修复）。
+func TestTick_父ctx超时归requestFailed(t *testing.T) {
+	fc := &fakeAgentClient{
+		respond: func(ctx context.Context, _ int) (*schema.AgentResponse, error) {
+			<-ctx.Done() // 挂起直到父 ctx deadline 超时
+			return nil, ctx.Err()
+		},
+	}
+	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{
+		IntervalSeconds: 10, // 无 TimeoutSeconds
+	}, nil, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	s.tick(ctx)
+	// lastTickOK=false（仍是失败），但归类为 request failed（无 Warn timeout）
+	if ok := s.LastTickOK(); ok == nil || *ok {
+		t.Fatal("lastTickOK should be false on parent ctx deadline exceeded")
+	}
+}
+
 // ──────────────────────────── Task 5: get/set_conf ────────────────────────────
 
 // TestGetHeartbeatConf 三键断言。
