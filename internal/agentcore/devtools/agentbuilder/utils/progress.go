@@ -1,8 +1,12 @@
 package utils
 
 import (
+	"fmt"
+	"reflect"
 	"sync"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // 进度上报（观察者模式）。
@@ -133,6 +137,224 @@ type ProgressManager struct {
 	mu sync.RWMutex
 	// reporters 会话→上报器注册表
 	reporters map[string]*ProgressReporter
+}
+
+// GetReporter 获取进度上报器（不存在返回 nil，对齐 Python None）。
+func (m *ProgressManager) GetReporter(sessionID string) *ProgressReporter {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.reporters[sessionID]
+}
+
+// CreateReporter 创建进度上报器。
+// 对齐 Python: create_reporter（L463-485）——同 session 已存在返回既有实例（幂等，agentType 被忽略）。
+func (m *ProgressManager) CreateReporter(sessionID, agentType string) *ProgressReporter {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if reporter, ok := m.reporters[sessionID]; ok {
+		return reporter
+	}
+	reporter := NewProgressReporter(sessionID, agentType)
+	m.reporters[sessionID] = reporter
+	return reporter
+}
+
+// RemoveReporter 移除进度上报器（不存在为 no-op）。
+func (m *ProgressManager) RemoveReporter(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.reporters, sessionID)
+}
+
+// GetProgress 获取构建进度。
+// 对齐 Python: get_progress（L497-508）——reporter 存在转发，否则 nil。
+// 两锁不嵌套：manager 锁内只取指针，锁释放后再调 reporter 方法。
+func (m *ProgressManager) GetProgress(sessionID string) *BuildProgress {
+	m.mu.RLock()
+	reporter := m.reporters[sessionID]
+	m.mu.RUnlock()
+	if reporter == nil {
+		return nil
+	}
+	return reporter.GetProgress()
+}
+
+// AddCallback 添加进度回调，返回取消函数。
+// 对齐 Python: add_callback + remove_callback（Go 函数值不可 == 比较，
+// 取消函数是语言特性级等价物；cancel 幂等，二次调用安全）。
+func (r *ProgressReporter) AddCallback(cb ProgressCallback) func() {
+	r.mu.Lock()
+	r.callbacks = append(r.callbacks, cb)
+	r.mu.Unlock()
+	return func() { r.removeCallback(cb) }
+}
+
+// StartStage 开始构建阶段。
+// 对齐 Python: start_stage（L177-228）。
+// ①当前阶段非 INITIALIZING 先自动收尾 SUCCESS（隐性状态机）
+// ②记录墙钟起始 ③更新当前态 ④显式进度或自动计算 ⑤追加步骤
+// ⑥Info 日志 ⑦通知回调。
+func (r *ProgressReporter) StartStage(stage ProgressStage, message string, opts ...StartStageOption) {
+	cfg := startStageConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	r.mu.Lock()
+	// 阶段自动收尾：前序阶段非 INITIALIZING 时先以 SUCCESS 结束
+	if r.progress.CurrentStage != ProgressStageInitializing {
+		r.endCurrentStageLocked(ProgressStatusSuccess, nil, nil, nil)
+	}
+
+	r.stepStartTimes[stage] = nowWallClock()
+
+	r.progress.CurrentStage = stage
+	r.progress.CurrentStatus = ProgressStatusRunning
+	r.progress.CurrentMessage = message
+	r.progress.LastUpdateTime = time.Now()
+
+	if cfg.progress != nil {
+		r.progress.OverallProgress = *cfg.progress
+	} else {
+		r.progress.OverallProgress = calculateProgress(r.agentType, stage)
+	}
+
+	step := NewProgressStep(stage, ProgressStatusRunning, message, WithStepDetails(cloneStageDetails(cfg.details)))
+	r.progress.Steps = append(r.progress.Steps, step)
+
+	sessionID := r.sessionID
+	stageStr := string(stage)
+	r.notifyLocked()
+	r.mu.Unlock()
+
+	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Str("stage", stageStr).
+		Str("message", message).
+		Msg("Started build stage")
+}
+
+// UpdateStage 更新当前阶段信息。
+// 对齐 Python: update_stage（L230-254）。不建新步骤；细节合并进末步骤。
+func (r *ProgressReporter) UpdateStage(opts ...UpdateStageOption) {
+	cfg := updateStageConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	r.mu.Lock()
+	if cfg.message != nil {
+		r.progress.CurrentMessage = *cfg.message
+	}
+	if cfg.details != nil && len(r.progress.Steps) > 0 {
+		mergeDetails(r.progress.Steps[len(r.progress.Steps)-1].Details, cfg.details)
+	}
+	if cfg.progress != nil {
+		r.progress.OverallProgress = *cfg.progress
+	}
+	r.progress.LastUpdateTime = time.Now()
+	r.notifyLocked()
+	r.mu.Unlock()
+}
+
+// CompleteStage 完成当前阶段。
+// 对齐 Python: complete_stage（L256-268）。
+func (r *ProgressReporter) CompleteStage(opts ...CompleteStageOption) {
+	cfg := completeStageConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	r.mu.Lock()
+	r.endCurrentStageLocked(ProgressStatusSuccess, cfg.message, cfg.details, nil)
+	r.mu.Unlock()
+}
+
+// FailStage 标记当前阶段失败。
+// 对齐 Python: fail_stage（L270-285）。
+// 先写 progress.error 再收尾 FAILED（双写 error 同一值）。
+func (r *ProgressReporter) FailStage(errMsg string, opts ...FailStageOption) {
+	cfg := failStageConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	r.mu.Lock()
+	r.progress.Error = &errMsg
+	r.endCurrentStageLocked(ProgressStatusFailed, cfg.message, cfg.details, &errMsg)
+	r.mu.Unlock()
+}
+
+// WarnStage 标记当前阶段警告。
+// 对齐 Python: warn_stage（L287-320）。不建新步骤；末步骤改 WARNING+写细节。
+func (r *ProgressReporter) WarnStage(warning string, opts ...WarnStageOption) {
+	cfg := warnStageConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	r.mu.Lock()
+	if cfg.message != nil {
+		r.progress.CurrentMessage = *cfg.message
+	}
+	if len(r.progress.Steps) > 0 {
+		step := &r.progress.Steps[len(r.progress.Steps)-1]
+		step.Status = ProgressStatusWarning
+		step.Details["warning"] = warning
+		mergeDetails(step.Details, cfg.details)
+	}
+	r.progress.CurrentStatus = ProgressStatusWarning
+	r.progress.LastUpdateTime = time.Now()
+
+	stageStr := string(r.progress.CurrentStage)
+	sessionID := r.sessionID
+	r.notifyLocked()
+	r.mu.Unlock()
+
+	logger.Warn(logComponent).
+		Str("session_id", sessionID).
+		Str("stage", stageStr).
+		Str("warning", warning).
+		Msg("Build stage warning")
+}
+
+// GetProgress 获取当前进度。
+// 对齐 Python: get_progress（返回同一对象引用）。
+// 注意：跨 goroutine 读取须走 ToDict 或在回调内读（锁内安全窗口）。
+func (r *ProgressReporter) GetProgress() *BuildProgress {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return &r.progress
+}
+
+// Complete 标记构建整体完成。
+// 对齐 Python: complete（L408-431）。message 变参默认 "Build completed"。
+func (r *ProgressReporter) Complete(message ...string) {
+	msg := "Build completed"
+	if len(message) > 0 {
+		msg = message[0]
+	}
+
+	r.mu.Lock()
+	r.progress.CurrentStage = ProgressStageCompleted
+	r.progress.CurrentStatus = ProgressStatusSuccess
+	r.progress.CurrentMessage = msg
+	r.progress.OverallProgress = 100.0
+	r.progress.LastUpdateTime = time.Now()
+
+	if len(r.progress.Steps) > 0 {
+		r.endCurrentStageLocked(ProgressStatusSuccess, &msg, nil, nil)
+	}
+
+	sessionID := r.sessionID
+	agentType := r.agentType
+	r.notifyLocked()
+	r.mu.Unlock()
+
+	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Str("agent_type", agentType).
+		Msg("Build completed")
 }
 
 // startStageConfig StartStage 可选参数聚合。
@@ -419,4 +641,127 @@ func getGlobalProgressManager() *ProgressManager {
 		}
 	})
 	return globalProgressManager
+}
+
+// endCurrentStageLocked 结束当前阶段（须持有 r.mu 调用）。
+// 对齐 Python: _end_current_stage（L322-357）。
+// 步骤空直接返回；末步骤置终态；算时长并删计时键。
+func (r *ProgressReporter) endCurrentStageLocked(status ProgressStatus, message *string, details map[string]any, errMsg *string) {
+	if len(r.progress.Steps) == 0 {
+		return
+	}
+
+	step := &r.progress.Steps[len(r.progress.Steps)-1]
+	step.Status = status
+
+	if message != nil {
+		step.Message = *message
+	}
+
+	if details != nil {
+		mergeDetails(step.Details, details)
+	}
+
+	if errMsg != nil {
+		step.Error = errMsg
+		r.progress.Error = errMsg
+	}
+
+	// 计算时长：阶段在计时表中则算墙钟差并删键（同阶段二次进入重新计时）
+	if start, ok := r.stepStartTimes[step.Stage]; ok {
+		duration := nowWallClock() - start
+		step.Duration = &duration
+		delete(r.stepStartTimes, step.Stage)
+	}
+
+	r.progress.CurrentStatus = status
+	if message != nil {
+		r.progress.CurrentMessage = *message
+	}
+	r.progress.LastUpdateTime = time.Now()
+}
+
+// notifyLocked 通知所有回调（须持有 r.mu 调用）。
+// 对齐 Python: _notify（L164-175）——单回调异常吞掉只记日志，不中断后续。
+func (r *ProgressReporter) notifyLocked() {
+	for _, cb := range r.callbacks {
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.Error(logComponent).
+						Str("error", fmt.Sprintf("%v", rec)).
+						Str("callback", "progress_callback").
+						Str("session_id", r.sessionID).
+						Msg("Progress callback execution failed")
+				}
+			}()
+			cb(&r.progress)
+		}()
+	}
+}
+
+// removeCallback 按代码指针移除回调（仅 cancel 闭包内调用，幂等：未找到为 no-op）。
+// 注意：funcPtrEqual 比较函数代码指针——同一闭包字面量的两个实例代码指针相同
+// 会误判相等（可接受：Python == 语义同为值比较且生产零消费；spec §4-1 已归档）。
+func (r *ProgressReporter) removeCallback(cb ProgressCallback) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, existing := range r.callbacks {
+		if funcPtrEqual(existing, cb) {
+			r.callbacks = append(r.callbacks[:i], r.callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// funcPtrEqual 比较两个回调的代码指针（reflect.ValueOf(f).Pointer()）。
+func funcPtrEqual(a, b ProgressCallback) bool {
+	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
+}
+
+// calculateProgress 按阶段计算总体进度。
+// 对齐 Python: _calculate_progress（L359-397）。
+// agentType 命中映射查表（未命中键 0.0）；未知 agentType 0.0。
+func calculateProgress(agentType string, stage ProgressStage) float64 {
+	switch agentType {
+	case string(AgentTypeLLMAgent):
+		if v, ok := llmAgentProgressMap[stage]; ok {
+			return v
+		}
+		return 0.0
+	case string(AgentTypeWorkflow):
+		if v, ok := workflowProgressMap[stage]; ok {
+			return v
+		}
+		return 0.0
+	default:
+		return 0.0
+	}
+}
+
+// mergeDetails 将 src 逐键合并进 dst（对齐 Python dict.update 原地覆盖）。
+func mergeDetails(dst, src map[string]any) {
+	if src == nil {
+		return
+	}
+	for k, v := range src {
+		dst[k] = v
+	}
+}
+
+// cloneStageDetails 克隆细节字典（nil 转 nil，避免构造步骤与调用方共享可变 map）。
+func cloneStageDetails(details map[string]any) map[string]any {
+	if details == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(details))
+	for k, v := range details {
+		cloned[k] = v
+	}
+	return cloned
+}
+
+// nowWallClock 当前墙钟秒（对齐 Python time.time()，非单调钟——原始行为保留）。
+func nowWallClock() float64 {
+	return float64(time.Now().UnixNano()) / 1e9
 }
