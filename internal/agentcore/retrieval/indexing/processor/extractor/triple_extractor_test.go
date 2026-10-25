@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -709,5 +710,71 @@ func TestProcess_转发(t *testing.T) {
 	}
 	if len(triples) != 1 || atomic.LoadInt32(&mock.callCount) != 1 {
 		t.Errorf("Process 应转发 Extract 产出 1 条，实际 %d", len(triples))
+	}
+}
+
+// ──────────────────────────── 覆盖率补充 ────────────────────────────
+
+// TestTruncateContent_截断分支 覆盖补充：直接调用非导出函数走 >200 分支；
+// 注意探针实测纯文本经 repair 成 string 走 default false——不触发 repair err
+// 路径，故 truncateContent 的截断分支直接单测
+func TestTruncateContent_截断分支(t *testing.T) {
+	s := strings.Repeat("x", 250)
+	got := truncateContent(s, 200)
+	if len(got) != 203 { // 200 字符 + "..."
+		t.Errorf("截断结果应为 200+3 字符，实际 %d", len(got))
+	}
+	if got[:200] != s[:200] || got[200:] != "..." {
+		t.Error("截断结果应保留前 200 字符 + \"...\" 后缀")
+	}
+	// ≤n 原样返回
+	if got := truncateContent("short", 200); got != "short" {
+		t.Errorf("短字符串应原样返回，实际 %q", got)
+	}
+}
+
+// TestPyStr_int64字段 覆盖补充：深修复路径 int64 分支防御
+func TestPyStr_int64字段(t *testing.T) {
+	if got := pyStr(int64(99)); got != "99" {
+		t.Errorf("pyStr(int64(99)) 应为 \"99\"，实际 %q", got)
+	}
+}
+
+// TestMetadataTitle_类型分支 覆盖补充：metadata 缺 title / 非字符串 title
+func TestMetadataTitle_类型分支(t *testing.T) {
+	if got := metadataTitle(nil); got != "" {
+		t.Errorf("nil metadata 应返回空串，实际 %q", got)
+	}
+	if got := metadataTitle(map[string]any{"other": "x"}); got != "" {
+		t.Errorf("缺 title 键应返回空串，实际 %q", got)
+	}
+	// 非字符串 title（Python get 返回 None → 或 "" 后置空；Go 类型守卫置空）
+	if got := metadataTitle(map[string]any{"title": 42}); got != "" {
+		t.Errorf("非字符串 title 应返回空串，实际 %q", got)
+	}
+	if got := metadataTitle(map[string]any{"title": "T"}); got != "T" {
+		t.Errorf("字符串 title 应原样返回，实际 %q", got)
+	}
+}
+
+// TestPyFloatStr_特殊字面 覆盖补充：nan/inf 三分支（jsonrepair 正常输入
+// 不可达，防御分支）
+func TestPyFloatStr_特殊字面(t *testing.T) {
+	cases := []struct {
+		in   float64
+		want string
+	}{
+		{math.NaN(), "nan"},
+		{math.Inf(1), "inf"},
+		{math.Inf(-1), "-inf"},
+		{0.0, "0.0"},   // abs==0 走 f 记法
+		{-0.0, "0.0"},  // 负零 abs==0 同 f 记法
+		{1e-5, "1e-05"}, // 下界外 e 记法
+		{1.5e16, "1.5e+16"}, // 上界外 e 记法
+	}
+	for _, c := range cases {
+		if got := pyFloatStr(c.in); got != c.want {
+			t.Errorf("pyFloatStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
+		}
 	}
 }
