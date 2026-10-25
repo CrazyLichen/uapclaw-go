@@ -557,17 +557,20 @@ func TestExtract_nil客户端(t *testing.T) {
 // 分派（prompt 内嵌 chunk 文本 → 确定性识别 chunk 身份），与调度序解耦。
 // 双向验证：场景 A chunk0 失败/chunk1 成功 → 首错含 "c0"；
 // 场景 B chunk0 成功/chunk1 失败 → 首错含 "c1"（成功结果随 raise 丢弃）。
+// 注意：chunk 文本用 "alpha"/"beta"（few-shot 模板 L102 含 "selected first
+// overall" 字样，若用 "first" 作 dispatch 键，另一 chunk 的 prompt 同时含
+// 模板 "first" 与自身键，map 迭代序随机导致误匹配——曾引发 ~30% flaky）。
 func TestExtract_首错按chunk序(t *testing.T) {
 	okContent := `{"triples": [["a", "b", "c"]]}`
-	// 场景 A：c0 失败（提示词含 "first"）→ 首错取 c0
+	// 场景 A：c0 失败（提示词含 "alpha"）→ 首错取 c0
 	modelA, _ := newExtractDispatchModelWithMock(t, map[string]string{
-		"first":  "boom-c0",
-		"second": okContent,
+		"alpha": "boom-c0",
+		"beta":  okContent,
 	})
 	exA := NewTripleExtractor(modelA, "test-model", WithTripleMaxConcurrent(1))
 	_, err := exA.Extract(context.Background(), []common.TextChunk{
-		{ID: "c0", Text: "first", DocID: "doc"},
-		{ID: "c1", Text: "second", DocID: "doc"},
+		{ID: "c0", Text: "alpha", DocID: "doc"},
+		{ID: "c1", Text: "beta", DocID: "doc"},
 	})
 	var be *exception.BaseError
 	if !errors.As(err, &be) || be.Code() != 155507 {
@@ -577,15 +580,15 @@ func TestExtract_首错按chunk序(t *testing.T) {
 		t.Errorf("场景 A 首错消息应含 \"c0: boom-c0\"，实际 %q", be.Message())
 	}
 
-	// 场景 B：c1 失败（提示词含 "second"）→ 首错取 c1（c0 成功结果丢弃）
+	// 场景 B：c1 失败（提示词含 "beta"）→ 首错取 c1（c0 成功结果丢弃）
 	modelB, _ := newExtractDispatchModelWithMock(t, map[string]string{
-		"first":  okContent,
-		"second": "boom-c1",
+		"alpha": okContent,
+		"beta":  "boom-c1",
 	})
 	exB := NewTripleExtractor(modelB, "test-model", WithTripleMaxConcurrent(1))
 	_, err = exB.Extract(context.Background(), []common.TextChunk{
-		{ID: "c0", Text: "first", DocID: "doc"},
-		{ID: "c1", Text: "second", DocID: "doc"},
+		{ID: "c0", Text: "alpha", DocID: "doc"},
+		{ID: "c1", Text: "beta", DocID: "doc"},
 	})
 	if !errors.As(err, &be) || be.Code() != 155507 {
 		t.Fatalf("场景 B 应为 155507 BaseError，实际 %v", err)
