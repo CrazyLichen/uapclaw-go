@@ -576,3 +576,118 @@ func TestApply_清除先于前缀解析(t *testing.T) {
 	assert.Nil(t, routing.FindGroupPending("sess-1", "ou-answered"))
 	assert.NotNil(t, routing.LoadPendingInteraction("gpq_sess-1_ou-lisi"))
 }
+
+// ──────────────────────────── 审查偏差修复回归（2026-11-04） ────────────────────────────
+
+// TestIsPersonalActionReply_Unicode空白 审查偏差②修复：Python re \s 为 Unicode 语义，
+// 关键词中间夹全角空格/NBSP/行分隔符时移除后仍命中关键词。
+func TestIsPersonalActionReply_Unicode空白(t *testing.T) {
+	assert.True(t, isPersonalActionReply("记\u3000下了"))       // 全角空格
+	assert.True(t, isPersonalActionReply("记\u00a0下了"))       // NBSP
+	assert.True(t, isPersonalActionReply("提\u2028醒"))         // 行分隔符
+	assert.True(t, isPersonalActionReply("待\u3000办\u3000已建")) // 多处全角空白
+	assert.False(t, isPersonalActionReply("记\u4e00下了"))      // 非空白汉字不移除，不命中
+}
+
+// TestExtractContent_第三态pythonStr 审查偏差③修复：truthy 非字符串经 pythonStr
+// 转换——true → "True"（对齐 Python str()；原 fmt.Sprint 产 "true"）；数字仍 "123"。
+// false 走 Python str(False or "") → "" 路径（or 链先吞 False），非差异场景。
+func TestExtractContent_第三态pythonStr(t *testing.T) {
+	msg := func(payload map[string]any) *schema.Message {
+		return schema.NewResMessage("ch", "s", true, payload)
+	}
+	assert.Equal(t, "True", extractContent(msg(map[string]any{"content": true})))
+	assert.Equal(t, "123", extractContent(msg(map[string]any{"content": 123})))
+	assert.Equal(t, "123", extractContent(msg(map[string]any{"content": 123.0})))
+	assert.Equal(t, "", extractContent(msg(map[string]any{"content": false})))
+}
+
+// TestOutboundEnsureLLM_provider显式null 审查偏差④修复：key 存在但 null →
+// pythonStr → "" → 构造校验失败 → false（对齐 Python pydantic 拒绝 None）。
+func TestOutboundEnsureLLM_provider显式null(t *testing.T) {
+	setupInteractionsEnv(t)
+	// YAML 显式 null key：client_provider:（空值）
+	writeTestConfig(t, "react:\n  model_client_config:\n    api_key: k\n    api_base: http://x\n    client_provider:\n")
+	p := NewIMOutboundPipeline()
+	assert.False(t, p.ensureLLM())
+	assert.Nil(t, p.llm)
+}
+
+// TestOutboundEnsureLLM_provider空串 审查偏差④修复：key 存在但空串 → 校验失败 → false。
+func TestOutboundEnsureLLM_provider空串(t *testing.T) {
+	setupInteractionsEnv(t)
+	writeTestConfig(t, "react:\n  model_client_config:\n    api_key: k\n    api_base: http://x\n    client_provider: \"\"\n")
+	p := NewIMOutboundPipeline()
+	assert.False(t, p.ensureLLM())
+	assert.Nil(t, p.llm)
+}
+
+// TestOutboundEnsureLLM_provider小写归一 审查偏差④伴随验证："openai" 小写 →
+// 两边均归一化 "OpenAI" → 构造成功。
+func TestOutboundEnsureLLM_provider小写归一(t *testing.T) {
+	setupInteractionsEnv(t)
+	writeTestConfig(t, "react:\n  model_client_config:\n    api_key: k\n    api_base: http://x\n    client_provider: openai\n")
+	p := NewIMOutboundPipeline()
+	assert.True(t, p.ensureLLM())
+}
+
+// TestOutboundApply_层6清除pending_数字ID_审查偏差⑤ 审查偏差⑤修复：数字类型
+// interaction_answered_user_id（Python str(12345) truthy）转字符串后照常清除。
+func TestOutboundApply_层6清除pending_数字ID_审查偏差(t *testing.T) {
+	setupInteractionsEnv(t)
+	pi := &routing.PendingInteraction{
+		InteractionID: "gpq_sess-1_12345", Mode: routing.ModeGroup,
+		OriginChannelID: "feishu_test", OriginSessionID: "sess-1",
+		OriginContent: "oc", OriginSenderName: "n", OriginSenderID: "o",
+		Question: "q", TargetUserID: "12345", Status: routing.StatusPending,
+	}
+	pi.Save()
+	require.NotNil(t, routing.FindGroupPending("sess-1", "12345"))
+
+	p := NewIMOutboundPipeline()
+	p.RegisterAdapter("feishu_test", newTestAdapter())
+	msg := newOutboundMsg(map[string]any{"content": "群聊回复", "event_type": "chat.final"},
+		map[string]any{"chat_type": "group", "interaction_answered_user_id": 12345})
+	msg.GroupDigitalAvatar = true
+	assert.NoError(t, p.Apply(context.Background(), msg))
+	assert.Nil(t, routing.FindGroupPending("sess-1", "12345"))
+}
+
+// TestOutboundApply_层6清除pending_带空白ID_审查偏差① 带空白填充的字符串 ID
+// stripOrStr 归一后照常清除。
+func TestOutboundApply_层6清除pending_带空白ID_审查偏差(t *testing.T) {
+	setupInteractionsEnv(t)
+	pi := &routing.PendingInteraction{
+		InteractionID: "gpq_sess-1_ou-answered", Mode: routing.ModeGroup,
+		OriginChannelID: "feishu_test", OriginSessionID: "sess-1",
+		OriginContent: "oc", OriginSenderName: "n", OriginSenderID: "o",
+		Question: "q", TargetUserID: "ou-answered", Status: routing.StatusPending,
+	}
+	pi.Save()
+
+	p := NewIMOutboundPipeline()
+	p.RegisterAdapter("feishu_test", newTestAdapter())
+	msg := newOutboundMsg(map[string]any{"content": "群聊回复", "event_type": "chat.final"},
+		map[string]any{"chat_type": "group", "interaction_answered_user_id": " ou-answered "})
+	msg.GroupDigitalAvatar = true
+	assert.NoError(t, p.Apply(context.Background(), msg))
+	assert.Nil(t, routing.FindGroupPending("sess-1", "ou-answered"))
+}
+
+// TestGroupFollowup_元数据带空白 审查偏差①端到端：sender 三键带空白 →
+// PendingInteraction.OriginSenderID 落盘干净值。
+func TestGroupFollowup_元数据带空白(t *testing.T) {
+	setupInteractionsEnv(t)
+	adapter := newTestAdapter()
+	adapter.displayNameByID = map[string]string{"ou-sender": "王五"}
+	p := NewIMOutboundPipeline()
+	p.RegisterAdapter("feishu_test", adapter)
+	msg := newDigitalAvatarOut("[群聊追问]啥时候交付？",
+		map[string]any{"im_sender_user_id": " ou-sender "})
+	assert.NoError(t, p.Apply(context.Background(), msg))
+
+	pi := routing.FindGroupPending("sess-1", "ou-sender")
+	require.NotNil(t, pi)
+	assert.Equal(t, "ou-sender", pi.OriginSenderID)
+	assert.Equal(t, "王五", pi.TargetUserName)
+}

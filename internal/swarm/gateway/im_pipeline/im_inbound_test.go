@@ -80,6 +80,18 @@ func (f *fakeAdapterWithNameResolver) ResolveUserIDByName(name string) string {
 	return f.nameToID[name]
 }
 
+// promptCaptureAdapter 嵌入 fakeAdapter 并捕获 LoadRecentMessages 的 threadID
+// （审查偏差①回归：threadID strip 归一验证）。
+type promptCaptureAdapter struct {
+	fakeAdapter
+	gotThreadIDs *[]string
+}
+
+func (f *promptCaptureAdapter) LoadRecentMessages(threadID string, limit int) []IMHistoryMessage {
+	*f.gotThreadIDs = append(*f.gotThreadIDs, threadID)
+	return f.fakeAdapter.LoadRecentMessages(threadID, limit)
+}
+
 // TestIMHistoryMessage字段 四字段对齐 Python dataclass。
 func TestIMHistoryMessage字段(t *testing.T) {
 	m := IMHistoryMessage{UserID: "ou-1", UserName: "张三", Content: "hi", TimestampMs: 1712345678000}
@@ -133,6 +145,42 @@ func TestOrStr(t *testing.T) {
 	assert.Equal(t, "env", orStr(nil, "env", "OpenAI"))
 	assert.Equal(t, "OpenAI", orStr(nil, "", "OpenAI"))
 	assert.Equal(t, "123", orStr(123.0, "x"))
+}
+
+// TestStripOrStr 审查偏差①⑤修复：str(a or b or ...).strip() 链式语义。
+func TestStripOrStr(t *testing.T) {
+	assert.Equal(t, "", stripOrStr())
+	assert.Equal(t, "", stripOrStr(nil, "", 0.0))
+	assert.Equal(t, "", stripOrStr("   ", "\t\n"))
+	assert.Equal(t, "ou-123", stripOrStr(" ou-123 "))
+	assert.Equal(t, "12345", stripOrStr(12345)) // 数字 ID truthy 转字符串（偏差⑤）
+	assert.Equal(t, "second", stripOrStr("", " second ", "third")) // 取值后整体 strip
+}
+
+// TestPendingRepr 审查偏差⑧修复：对齐 Python 日志 %s 输出 dataclass repr。
+func TestPendingRepr(t *testing.T) {
+	assert.Equal(t, "None", pendingRepr(nil))
+	pi := &routing.PendingInteraction{
+		InteractionID: "gpq_s_u", Mode: routing.ModeGroup,
+		OriginSessionID: "s", Question: "问一下", TargetUserID: "u",
+		Status: routing.StatusPending,
+	}
+	got := pendingRepr(pi)
+	assert.Contains(t, got, `"interaction_id":"gpq_s_u"`)
+	assert.Contains(t, got, `"question":"问一下"`)
+	assert.Contains(t, got, `"status":"pending"`)
+}
+
+// TestIsDigits 审查偏差⑦修复：全 ASCII 数字判定。
+func TestIsDigits(t *testing.T) {
+	assert.True(t, isDigits("123"))
+	assert.True(t, isDigits("0"))
+	assert.False(t, isDigits(""))
+	assert.False(t, isDigits("+123"))
+	assert.False(t, isDigits("-123"))
+	assert.False(t, isDigits("12.5"))
+	assert.False(t, isDigits(" 123"))
+	assert.False(t, isDigits("abc"))
 }
 
 // TestTruncateStr Python [:n] 切片近似（字节域，resolveInboundReferences 8000 截断先例）。
@@ -222,14 +270,22 @@ func TestExtractText(t *testing.T) {
 }
 
 // TestResolveTimestampMs 三态：metadata int 直用 / 字符串全数字转换 / 回退 timestamp*1000。
+// 审查偏差⑦修复后语义：±号/小数点字符串拒绝回退（对齐 Python isdigit）；
+// 浮点仅整数值采用（JSON 整数），小数浮点回退（Python isinstance int False）。
 func TestResolveTimestampMs(t *testing.T) {
 	msg := newChatSendMsg(`{}`, nil)
 	msg.Timestamp = 1712345678.5
 	assert.Equal(t, int64(123), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": 123}))
 	assert.Equal(t, int64(456), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": "456"}))
+	assert.Equal(t, int64(1712345678901), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": 1712345678901})) // JSON 整数 float64 直用
 	assert.Equal(t, int64(1712345678500), resolveTimestampMs(msg.Timestamp, nil))
 	assert.Equal(t, int64(1712345678500), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": "abc"}))
 	assert.Equal(t, int64(1712345678500), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": "12.5"}))
+	assert.Equal(t, int64(1712345678500), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": "+123"}))
+	assert.Equal(t, int64(1712345678500), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": "-123"}))
+	assert.Equal(t, int64(1712345678500), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": ""}))
+	assert.Equal(t, int64(1712345678500), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": 12.5})) // 小数浮点回退
+	assert.Equal(t, int64(1), resolveTimestampMs(msg.Timestamp, map[string]any{"timestamp_ms": true}))
 }
 
 // TestHasImageContext msg_type 与 merged_msg_types 两路。
@@ -253,6 +309,9 @@ func TestShouldAlwaysReply_提及列表(t *testing.T) {
 	meta2 := map[string]any{"mentioned_open_ids": []any{"ou-me"}}
 	assert.True(t, shouldAlwaysReply("hello", meta2, "sender", "ou-me", "张三", nil))
 	assert.False(t, shouldAlwaysReply("hello", map[string]any{}, "sender", "ou-me", "张三", nil))
+	// 审查偏差⑥修复：空数组是 Python or 链 falsy → 回退第二键
+	meta3 := map[string]any{"im_mentioned_user_ids": []any{}, "mentioned_open_ids": []any{"ou-me"}}
+	assert.True(t, shouldAlwaysReply("hello", meta3, "sender", "ou-me", "张三", nil))
 }
 
 // TestShouldAlwaysReply_botMentionToken 条件2a。
@@ -887,4 +946,116 @@ func TestApply_尾部日志不panic(t *testing.T) {
 	assert.NotPanics(t, func() {
 		p.Apply(context.Background(), msg)
 	})
+}
+
+// ──────────────────────────── 审查偏差修复回归（2026-11-04） ────────────────────────────
+
+// TestProcess_元数据带空白_审查偏差① 层4 threadID 取值 strip：feishu_chat_id
+// 带空白填充时 LoadRecentMessages 收到归一后的 threadID（" chat-1 " → "chat-1"）。
+func TestProcess_元数据带空白_审查偏差修复(t *testing.T) {
+	setupInteractionsEnv(t)
+	adapter := newTestAdapter()
+	var gotThreadIDs []string
+	adapter.history = nil
+	p := NewIMInboundPipeline(nil, nil)
+	p.RegisterAdapter("feishu_test", &promptCaptureAdapter{fakeAdapter: *adapter, gotThreadIDs: &gotThreadIDs})
+	p.processor.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("改写内容"), nil
+	})
+	msg := newAvatarChatMsg(`{"query":"hi"}`, map[string]any{
+		"chat_type":     "group",
+		"feishu_chat_id": " chat-1 ",
+	})
+	assert.True(t, p.Apply(context.Background(), msg))
+	assert.Equal(t, []string{"chat-1"}, gotThreadIDs)
+}
+
+// TestApply_pending命中带空白元数据 偏差①端到端：sender 三键带空白 → pending 命中
+// （TrimSpace 后查 FindGroupPending）+ interaction_answered_user_id 落盘干净值。
+func TestApply_pending命中带空白元数据(t *testing.T) {
+	setupInteractionsEnv(t)
+	pi := &routing.PendingInteraction{
+		InteractionID: "gpq_sess-1_ou-sender", Mode: routing.ModeGroup,
+		OriginChannelID: "feishu_test", OriginSessionID: "sess-1",
+		OriginContent: "原始请求", OriginSenderName: "王五", OriginSenderID: "ou-sender",
+		Question: "需要哪个楼层？", TargetUserID: "ou-sender", TargetUserName: "李四",
+		Status: routing.StatusPending,
+	}
+	pi.Save()
+
+	p := newInboundWithAdapter(t, newTestAdapter())
+	p.processor.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("改写后的回答上下文"), nil
+	})
+	msg := newAvatarChatMsg(`{"query":"3楼"}`, map[string]any{
+		"chat_type":         "group",
+		"im_sender_user_id": " ou-sender ",
+	})
+	msg.SessionID = "sess-1"
+	assert.True(t, p.Apply(context.Background(), msg))
+
+	// 带空白填充的 sender 经 stripOrStr 归一后命中 pending → interaction_context 落盘
+	assert.Contains(t, msg.Metadata["interaction_context"], "【追问上下文】")
+	assert.Equal(t, "ou-sender", msg.Metadata["interaction_answered_user_id"])
+	var paramsMap map[string]any
+	require.NoError(t, json.Unmarshal(msg.Params, &paramsMap))
+	assert.Equal(t, pi.BuildResumeContent("改写后的回答上下文"), paramsMap["query"])
+}
+
+// TestApply_resume_带空白pendingID_审查偏差① resume 分支 dm_pending_interaction_id
+// 带空白填充的字符串 ID：stripOrStr 归一后照常加载并 resume。
+func TestApply_resume_带空白pendingID_审查偏差修复(t *testing.T) {
+	setupInteractionsEnv(t)
+	pi := &routing.PendingInteraction{
+		InteractionID: "iact_feishu_test_12345678", Mode: routing.ModeDM,
+		OriginChannelID: "feishu_test", OriginSessionID: "sess-1",
+		OriginContent: "原始请求", OriginSenderName: "n", OriginSenderID: "o",
+		Question: "补充材料？", TargetUserID: "u",
+		Status: routing.StatusPending,
+	}
+	pi.Save()
+	require.NotNil(t, routing.LoadPendingInteraction("iact_feishu_test_12345678"))
+
+	p := newInboundWithAdapter(t, newTestAdapter())
+	msg := newAvatarChatMsg(`{"query":"材料在这"}`, map[string]any{
+		"is_resume_message":         true,
+		"dm_pending_interaction_id": " iact_feishu_test_12345678 ", // 带空白填充
+		"im_sender_user_id":         " ou-sender ",
+	})
+	assert.True(t, p.Apply(context.Background(), msg))
+
+	var paramsMap map[string]any
+	require.NoError(t, json.Unmarshal(msg.Params, &paramsMap))
+	resumeContent := pi.BuildResumeContent("材料在这")
+	assert.Equal(t, resumeContent, paramsMap["query"])
+	assert.Equal(t, resumeContent, msg.Metadata["interaction_context"])
+	assert.Nil(t, routing.LoadPendingInteraction("iact_feishu_test_12345678")) // Save 后 Remove
+}
+
+// TestApply_resume_数字pendingID不匹配_审查偏差⑤ 数字 ID（truthy 非字符串）经
+// pythonStr 转 "12345678" 后查 Load → nil（ID 实际带 iact_ 前缀）→ 仅放行不改写，
+// 对齐 Python str(12345678) 加载失败路径。
+func TestApply_resume_数字pendingID不匹配_审查偏差修复(t *testing.T) {
+	setupInteractionsEnv(t)
+	pi := &routing.PendingInteraction{
+		InteractionID: "iact_ch_12345678", Mode: routing.ModeDM,
+		OriginChannelID: "feishu_test", OriginSessionID: "sess-1",
+		OriginContent: "原始请求", OriginSenderName: "n", OriginSenderID: "o",
+		Question: "补充材料？", TargetUserID: "u",
+		Status: routing.StatusPending,
+	}
+	pi.Save()
+
+	p := newInboundWithAdapter(t, newTestAdapter())
+	msg := newAvatarChatMsg(`{"query":"材料在这"}`, map[string]any{
+		"is_resume_message":         true,
+		"dm_pending_interaction_id": 12345678, // 数字：str → "12345678" ≠ 保存 ID → Load nil
+	})
+	assert.True(t, p.Apply(context.Background(), msg))
+
+	var paramsMap map[string]any
+	require.NoError(t, json.Unmarshal(msg.Params, &paramsMap))
+	assert.Equal(t, "材料在这", paramsMap["query"])                    // 未被 resume 改写
+	assert.Nil(t, msg.Metadata["interaction_context"])                 // 未落 interaction_context
+	require.NotNil(t, routing.LoadPendingInteraction("iact_ch_12345678")) // pending 未被消费
 }

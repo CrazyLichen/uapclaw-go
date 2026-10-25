@@ -77,8 +77,10 @@ var reGroupFollowup = regexp.MustCompile(`^\[群聊追问(?:@(.+?))?\]\s*`)
 var reDMFollowup = regexp.MustCompile(`^\[私聊追问\]\s*`)
 
 // reWhitespace 空白移除（关键词兜底用）。
-// Python: im_outbound.py L441 re.sub(r"\s+", "", ...)
-var reWhitespace = regexp.MustCompile(`\s+`)
+// Python: im_outbound.py L441 re.sub(r"\s+", "", ...)。
+// 审查偏差②修复：Python re \s 为 Unicode 语义（含 \u3000/\u00a0/\u2028 等），
+// RE2 \s 仅 ASCII——显式并集补齐（\p{Z} 全部分隔符类，语义双向精确等价）。
+var reWhitespace = regexp.MustCompile(`[\s\v\x{1c}-\x{1f}\x{85}\p{Z}]+`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -158,8 +160,9 @@ func (p *IMOutboundPipeline) Apply(ctx context.Context, msg *schema.Message) err
 	}
 
 	// 步骤6：群聊追问 pending 清除（必须在追问前缀解析之前）
-	answeredUserID, _ := meta["interaction_answered_user_id"].(string)
-	answeredUserID = strings.TrimSpace(answeredUserID)
+	// 审查偏差⑤修复：stripOrStr 对齐 Python str(or...).strip()——数字 ID
+	// （int truthy）也转字符串照常清除（原 .(string) 断言失败跳过）
+	answeredUserID := stripOrStr(meta["interaction_answered_user_id"])
 	if answeredUserID != "" {
 		sessionID := strings.TrimSpace(msg.SessionID)
 		if sessionID != "" {
@@ -251,11 +254,11 @@ func (p *IMOutboundPipeline) Apply(ctx context.Context, msg *schema.Message) err
 	// 步骤14：升级为私发（meta 四键）
 	meta["reply_scope"] = "dm"
 	meta[adapter.ReplyUserIDKey()] = candidateUserID
-	replyReason := orStr(meta["reply_candidate_reason"])
+	replyReason := stripOrStr(meta["reply_candidate_reason"])
 	if replyReason == "" {
 		replyReason = "processor_target_user"
 	}
-	meta["reply_reason"] = strings.TrimSpace(replyReason)
+	meta["reply_reason"] = replyReason
 	meta["reply_personal_action"] = true
 	msg.Metadata = meta
 
@@ -293,7 +296,10 @@ func extractContent(msg *schema.Message) string {
 		return ""
 	default:
 		if truthy(content) {
-			return strings.TrimSpace(fmt.Sprint(content))
+			// 审查偏差③修复：pythonStr 对齐 Python str()（bool → "True"/"False"，
+			// 原 fmt.Sprint 产 "true"/"false"）；整型浮点格式差异为声明容差
+			// （pythonStr 既有先例，全仓一致）。
+			return strings.TrimSpace(pythonStr(content))
 		}
 		return ""
 	}
@@ -340,11 +346,13 @@ func (p *IMOutboundPipeline) ensureLLM() bool {
 	apiBase := strings.TrimSpace(orStr(mccRaw["api_base"], os.Getenv("API_BASE")))
 	apiBase = strings.TrimSuffix(apiBase, "/chat/completions")
 	modelName := strings.TrimSpace(orStr(react["model_name"], os.Getenv("MODEL_NAME"), "gpt-4o"))
+	// 审查偏差④修复：对齐 Python .get(key, default) 语义——仅 key 缺失取
+	// "OpenAI"；key 存在但 null/空串/非字符串 → pythonStr 转出 ""/"False" 等，
+	// 由 NewModelClientConfig 校验拒绝 → Warn → false（对齐 Python 构造/校验
+	// 失败路径）。原实现对非字符串一律保 "OpenAI" 导致构造成功，行为分叉。
 	clientProvider := "OpenAI"
-	if v, exists := mccRaw["client_provider"]; exists {
-		if s, ok := v.(string); ok {
-			clientProvider = s
-		}
+	if _, exists := mccRaw["client_provider"]; exists {
+		clientProvider = pythonStr(mccRaw["client_provider"])
 	}
 
 	// 缺失守卫（仅出站）
@@ -430,11 +438,11 @@ func (p *IMOutboundPipeline) classifyPersonalAction(ctx context.Context, platfor
 		return nil, ""
 	}
 
-	targetName := orStr(metadata["reply_target_name"])
+	targetName := stripOrStr(metadata["reply_target_name"])
 	if targetName == "" {
 		targetName = "目标用户"
 	}
-	originalQuery := orStr(metadata["avatar_original_query"])
+	originalQuery := stripOrStr(metadata["avatar_original_query"])
 
 	querySection := ""
 	if originalQuery != "" {
@@ -504,7 +512,7 @@ func (p *IMOutboundPipeline) handleGroupFollowup(msg *schema.Message, meta map[s
 	}
 	// 层2：sender 三键回退
 	if targetUserID == "" {
-		senderUserID := orStr(meta["im_sender_user_id"], meta["open_id"], meta["sender_id"])
+		senderUserID := stripOrStr(meta["im_sender_user_id"], meta["open_id"], meta["sender_id"])
 		if senderUserID != "" {
 			targetUserID = senderUserID
 			if targetName == "" {
@@ -517,7 +525,7 @@ func (p *IMOutboundPipeline) handleGroupFollowup(msg *schema.Message, meta map[s
 			if candidateUserID != "" {
 				targetUserID = candidateUserID
 				if targetName == "" {
-					targetName = orStr(meta["reply_target_name"])
+					targetName = stripOrStr(meta["reply_target_name"])
 				}
 			}
 		}
@@ -536,8 +544,8 @@ func (p *IMOutboundPipeline) handleGroupFollowup(msg *schema.Message, meta map[s
 	msg.Payload = payload
 
 	sessionID := strings.TrimSpace(msg.SessionID)
-	originContent := orStr(meta["avatar_original_query"])
-	originSenderID := orStr(meta["im_sender_user_id"], meta["open_id"], meta["sender_id"])
+	originContent := stripOrStr(meta["avatar_original_query"])
+	originSenderID := stripOrStr(meta["im_sender_user_id"], meta["open_id"], meta["sender_id"])
 	originSenderName := targetName
 
 	pi := &routing.PendingInteraction{
@@ -588,9 +596,9 @@ func (p *IMOutboundPipeline) handleDMFollowup(msg *schema.Message, meta map[stri
 	msg.Payload = payload
 
 	sessionID := strings.TrimSpace(msg.SessionID)
-	originContent := orStr(meta["avatar_original_query"])
-	originSenderName := orStr(meta["reply_target_name"])
-	originSenderID := orStr(meta["im_sender_user_id"], meta["open_id"], meta["sender_id"])
+	originContent := stripOrStr(meta["avatar_original_query"])
+	originSenderName := stripOrStr(meta["reply_target_name"])
+	originSenderID := stripOrStr(meta["im_sender_user_id"], meta["open_id"], meta["sender_id"])
 	targetUserID := candidateUserID
 
 	pi := &routing.PendingInteraction{

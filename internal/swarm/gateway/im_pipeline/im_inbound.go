@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -183,13 +184,13 @@ func (proc *IMConversationProcessor) Process(ctx context.Context, msg *schema.Me
 	}
 
 	// 层4：非群聊
-	chatType := strings.ToLower(strings.TrimSpace(orStr(metadata["im_chat_type"], metadata["chat_type"])))
+	chatType := strings.ToLower(stripOrStr(metadata["im_chat_type"], metadata["chat_type"]))
 	if chatType != "group" {
 		return InboundProcessResult{ShouldForward: true, Reason: "non-group-chat"}
 	}
 
-	senderUserID := orStr(metadata["im_sender_user_id"], metadata["open_id"], metadata["sender_id"])
-	threadID := orStr(metadata["im_thread_id"], metadata["feishu_chat_id"], msg.SessionID)
+	senderUserID := stripOrStr(metadata["im_sender_user_id"], metadata["open_id"], metadata["sender_id"])
+	threadID := stripOrStr(metadata["im_thread_id"], metadata["feishu_chat_id"], msg.SessionID)
 
 	principalUserID := strings.TrimSpace(adapter.GetPrincipalUserID())
 	principalName := strings.TrimSpace(adapter.GetPrincipalDisplayName())
@@ -290,7 +291,7 @@ func (p *IMInboundPipeline) Apply(ctx context.Context, msg *schema.Message) bool
 
 	// 步骤3：resume 消息分支
 	if truthy(metadata["is_resume_message"]) {
-		dmPendingID := orStr(metadata["dm_pending_interaction_id"])
+		dmPendingID := stripOrStr(metadata["dm_pending_interaction_id"])
 		if dmPendingID != "" {
 			pi := routing.LoadPendingInteraction(dmPendingID)
 			if pi != nil {
@@ -300,7 +301,7 @@ func (p *IMInboundPipeline) Apply(ctx context.Context, msg *schema.Message) bool
 					_ = json.Unmarshal(msg.Params, &paramsMap)
 				}
 				if paramsMap != nil {
-					answer = strings.TrimSpace(orStr(paramsMap["query"], paramsMap["content"]))
+					answer = stripOrStr(paramsMap["query"], paramsMap["content"])
 				}
 				resumeContent := pi.BuildResumeContent(answer)
 				logger.Info(logComponent).
@@ -374,7 +375,7 @@ func (p *IMInboundPipeline) Apply(ctx context.Context, msg *schema.Message) bool
 			msg.Metadata = map[string]any{}
 		}
 		msg.Metadata["interaction_context"] = pendingContext
-		senderUserID := orStr(metadata["im_sender_user_id"], metadata["open_id"], metadata["sender_id"])
+		senderUserID := stripOrStr(metadata["im_sender_user_id"], metadata["open_id"], metadata["sender_id"])
 		if senderUserID != "" {
 			msg.Metadata["interaction_answered_user_id"] = senderUserID
 		}
@@ -382,11 +383,12 @@ func (p *IMInboundPipeline) Apply(ctx context.Context, msg *schema.Message) bool
 		sessionID := strings.TrimSpace(msg.SessionID)
 		if sessionID != "" && senderUserID != "" {
 			pi := routing.FindGroupPending(sessionID, senderUserID)
+			// 审查偏差⑧修复：对齐 Python 日志记完整 repr（原仅记 found 布尔）
 			logger.Info(logComponent).
 				Str("event_type", "find_group_pending").
 				Str("session_id", sessionID).
 				Str("sender_user_id", senderUserID).
-				Bool("found", pi != nil).
+				Str("find_group_pending", pendingRepr(pi)).
 				Msg("find group pending")
 			if pi != nil {
 				answer := result.RewrittenContent
@@ -532,6 +534,39 @@ func orStr(values ...any) string {
 	return ""
 }
 
+// stripOrStr 对齐 Python str(a or b or ...).strip()：or 链取值后两端去空白。
+// IM 元数据取值的标准模式（审查偏差①⑤修复）；TrimSpace 的 Unicode
+// White_Space 语义与 Python str.strip() 等价。
+func stripOrStr(values ...any) string {
+	return strings.TrimSpace(orStr(values...))
+}
+
+// pendingRepr 对齐 Python 日志 %s 输出 PendingInteraction dataclass repr：
+// nil → "None"，非 nil → JSON 序列化全景（审查偏差⑧修复）。
+func pendingRepr(pi *routing.PendingInteraction) string {
+	if pi == nil {
+		return "None"
+	}
+	if data, err := json.Marshal(pi); err == nil {
+		return string(data)
+	}
+	return fmt.Sprintf("%v", pi)
+}
+
+// isDigits 全 ASCII 数字判定（对齐 Python str.isdigit 的 ASCII 域；
+// Unicode Nd 数字如 "١٢٣" 为声明容差——IM 元数据实际不会出现，审查偏差⑦）。
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // truncateStr 截断字符串（Python [:n] 字节域近似，resolveInboundReferences 8000 截断先例）。
 func truncateStr(s string, n int) string {
 	// Python [:n] 为字符语义（rune 域截断，多字节中文不切碎）；
@@ -567,7 +602,10 @@ func extractText(msg *schema.Message) string {
 }
 
 // resolveTimestampMs 解析毫秒时间戳。
-// Python: im_inbound.py L270-277 _resolve_timestamp_ms（bool 是 int 子类：True→1）
+// Python: im_inbound.py L270-277 _resolve_timestamp_ms（bool 是 int 子类：True→1）。
+// 审查偏差⑦修复：字符串须 isdigit 纯数字（±号/小数点拒绝→回退）；浮点仅整数值
+// 采用（JSON 整数 Python 解析为 int 直用；小数浮点 Python isinstance(raw_ts,int)
+// False → 回退，不截断采用）。
 func resolveTimestampMs(timestamp float64, metadata map[string]any) int64 {
 	if raw, ok := metadata["timestamp_ms"]; ok {
 		switch v := raw.(type) {
@@ -576,15 +614,20 @@ func resolveTimestampMs(timestamp float64, metadata map[string]any) int64 {
 		case int64:
 			return v
 		case float64:
-			return int64(v)
+			if v == math.Trunc(v) {
+				return int64(v)
+			}
 		case bool:
 			if v {
 				return 1
 			}
 			return 0
 		case string:
-			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
-				return int64(n)
+			trimmed := strings.TrimSpace(v)
+			if isDigits(trimmed) {
+				if n, err := strconv.Atoi(trimmed); err == nil {
+					return int64(n)
+				}
 			}
 		}
 	}
@@ -615,8 +658,10 @@ func hasImageContext(metadata map[string]any) bool {
 // Python: im_inbound.py L288-325 _should_always_reply
 func shouldAlwaysReply(text string, metadata map[string]any, senderUserID, principalUserID, principalName string, botMentions []string) bool {
 	// 条件1：提及列表（im_mentioned_user_ids or mentioned_open_ids）
+	// 审查偏差⑥修复：空数组/空串等 falsy 值同样回退（对齐 Python or 链，
+	// 原 == nil 仅 nil 回退）。
 	mentioned := metadata["im_mentioned_user_ids"]
-	if mentioned == nil {
+	if !truthy(mentioned) {
 		mentioned = metadata["mentioned_open_ids"]
 	}
 	if list, ok := mentioned.([]any); ok {
@@ -836,7 +881,7 @@ func peekPending(msg *schema.Message) string {
 		metadata = map[string]any{}
 	}
 	sessionID := strings.TrimSpace(msg.SessionID)
-	senderUserID := orStr(metadata["im_sender_user_id"], metadata["open_id"], metadata["sender_id"])
+	senderUserID := stripOrStr(metadata["im_sender_user_id"], metadata["open_id"], metadata["sender_id"])
 	if sessionID == "" || senderUserID == "" {
 		return ""
 	}
