@@ -22,7 +22,7 @@
 // 路由 + metadata 四键增强）+ AutoLinkParser（docMatcher 双形态 URL 路由，
 // 微信/网页先匹配先赢）+ AutoParser（顶层 URL/文件二选一，单入口
 // parse(path_or_url)）。llm_client 经 AutoLinkParser 转发时字面剔除
-//（对齐 Python 关键字调用天然不含）。
+// （对齐 Python 关键字调用天然不含）。
 //
 // 使用方式（对齐 Python Parser 继承体系）：
 //   - 具体解析器：嵌入 BaseParser 并覆写 ParseContent（对齐 Python 仅覆写 _parse），
