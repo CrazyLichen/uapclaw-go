@@ -66,7 +66,9 @@ func (p *AutoFileParser) Parse(ctx context.Context, doc string, opts ...ParseOpt
 	_ = ctx // 对齐 Python 同步语义（async 协程内的直调为 Go 直接调用）
 	o := NewParseOptions(opts...)
 
-	if _, err := os.Stat(doc); os.IsNotExist(err) {
+	// 对齐 Python: if not os.path.exists(doc)（exists 吞一切 OSError 含
+	// ENOTDIR/权限错均返回 False，故 err != nil 全判字面等价——偏差 #11 修复）
+	if _, err := os.Stat(doc); err != nil {
 		// 对齐 Python: raise build_error(RETRIEVAL_INDEXING_FILE_NOT_FOUND,
 		//   error_msg=f"File {doc} does not exist")
 		return nil, exception.BuildError(
@@ -134,9 +136,11 @@ func (p *AutoFileParser) Parse(ctx context.Context, doc string, opts ...ParseOpt
 
 // Supports 检查是否支持该文档源：文件存在且扩展名已注册。
 //
+// 对齐 Python os.path.exists 吞一切 OSError→False（偏差 #11：err != nil 全判）。
+//
 // Python: auto_file_parser.py AutoFileParser.supports
 func (p *AutoFileParser) Supports(doc string) bool {
-	if _, err := os.Stat(doc); os.IsNotExist(err) {
+	if _, err := os.Stat(doc); err != nil {
 		return false
 	}
 	_, ok := getParserFactory(strings.ToLower(filepath.Ext(doc)))

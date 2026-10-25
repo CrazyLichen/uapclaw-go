@@ -105,6 +105,26 @@ func TestExcelParserParse_文件不存在(t *testing.T) {
 	}
 }
 
+// TestExcelParserParse_ENOTDIR路径归155103 路径组件非目录（ENOTDIR）时，
+// 对齐 Python os.path.exists 吞 OSError→False 触发 155103（13.11 偏差 #11
+// 同步修复——旧 IsNotExist 惯例会放行该场景）。
+func TestExcelParserParse_ENOTDIR路径归155103(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := NewExcelParser()
+	_, err := p.Parse(context.Background(), filepath.Join(blocker, "sub.xlsx"))
+	var be *exception.BaseError
+	if !errors.As(err, &be) {
+		t.Fatalf("应为 *exception.BaseError, got %T", err)
+	}
+	if be.Status() != exception.StatusRetrievalIndexingFileNotFound {
+		t.Errorf("status = %v, want StatusRetrievalIndexingFileNotFound", be.Status())
+	}
+}
+
 // TestExcelParserParse_坏xlsx 测试 155104 错误码（非 zip 文件走 xlsx 分支）。
 func TestExcelParserParse_坏xlsx(t *testing.T) {
 	dir := t.TempDir()

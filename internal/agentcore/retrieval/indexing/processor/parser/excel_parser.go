@@ -65,7 +65,9 @@ func (p *ExcelParser) Parse(ctx context.Context, doc string, opts ...ParseOption
 	_ = ctx // 对齐 Python 同步语义（asyncio.to_thread 的 Go 等价物为直接调用）
 	o := NewParseOptions(opts...)
 
-	if _, err := os.Stat(doc); os.IsNotExist(err) {
+	// 对齐 Python: if not os.path.exists(doc)（exists 吞一切 OSError 含
+	// ENOTDIR/权限错均返回 False，故 err != nil 全判字面等价——13.11 偏差 #11 同步修复）
+	if _, err := os.Stat(doc); err != nil {
 		// 对齐 Python: raise build_error(RETRIEVAL_INDEXING_FILE_NOT_FOUND, error_msg=f"File {doc} does not exist")
 		return nil, exception.BuildError(
 			exception.StatusRetrievalIndexingFileNotFound,

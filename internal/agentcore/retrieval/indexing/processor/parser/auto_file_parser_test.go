@@ -141,6 +141,27 @@ func TestAutoFileParserParse_文件不存在(t *testing.T) {
 	}
 }
 
+// TestAutoFileParserParse_ENOTDIR路径归155103 路径中组件为普通文件（非目录）时
+// stat 报 ENOTDIR——Python os.path.exists 吞该 OSError 返回 False 触发 155103；
+// 字面修复后（err != nil 全判）Go 同为 155103。
+// 偏差 #11 回归验证：IsNotExist 旧惯例会放行 ENOTDIR 落到扩展名查找。
+func TestAutoFileParserParse_ENOTDIR路径归155103(t *testing.T) {
+	p, _ := NewAutoFileParser()
+	blocker := writeTempFile(t, "blocker", "x")
+	nonDir := filepath.Join(blocker, "sub.txt")
+	_, err := p.Parse(t.Context(), nonDir)
+	be, ok := err.(*exception.BaseError)
+	if !ok {
+		t.Fatalf("expected *exception.BaseError, got %T", err)
+	}
+	if be.Status() != exception.StatusRetrievalIndexingFileNotFound {
+		t.Errorf("status = %v, want StatusRetrievalIndexingFileNotFound", be.Status())
+	}
+	if !strings.Contains(be.Error(), "does not exist") {
+		t.Errorf("error message 应含 'does not exist': %s", be.Error())
+	}
+}
+
 // TestAutoFileParserParse_不支持格式 155104 + 消息断言。
 // Python: test_parse_unsupported_format
 func TestAutoFileParserParse_不支持格式(t *testing.T) {
