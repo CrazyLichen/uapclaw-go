@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -17,6 +19,7 @@ import (
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler/command_parser"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -112,6 +115,17 @@ type InboundProcessResult struct {
 	MetadataPatch map[string]any
 	// Reason 分支原因（字面值逐字对齐 Python）
 	Reason string
+}
+
+// IMInboundPipeline 数字分身入站管线（适配器注册表 + 入站 Apply）。
+// Python: im_inbound.py L454-616 (IMInboundPipeline)
+type IMInboundPipeline struct {
+	// mu adapters 并发保护（注册/注销与 Apply 读并发）
+	mu sync.RWMutex
+	// adapters 适配器注册表：channel_id → adapter
+	adapters map[string]IMPlatformAdapter
+	// processor 消息处理器（对齐 Python processor or IMConversationProcessor()）
+	processor *IMConversationProcessor
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -217,6 +231,223 @@ func (proc *IMConversationProcessor) Process(ctx context.Context, msg *schema.Me
 		MetadataPatch:    adapter.BuildRelevanceMetadata(metadata, senderUserID, true),
 		Reason:           "rewritten",
 	}
+}
+
+// NewIMInboundPipeline 创建入站管线。processor nil → 默认构造；adapters nil → 空 map。
+// Python: im_inbound.py L454-462 __init__
+func NewIMInboundPipeline(processor *IMConversationProcessor, adapters map[string]IMPlatformAdapter) *IMInboundPipeline {
+	if processor == nil {
+		processor = NewIMConversationProcessor("", "")
+	}
+	if adapters == nil {
+		adapters = map[string]IMPlatformAdapter{}
+	}
+	return &IMInboundPipeline{
+		adapters:  adapters,
+		processor: processor,
+	}
+}
+
+// RegisterAdapter 注册适配器。
+// Python: im_inbound.py L464-465 register_adapter
+func (p *IMInboundPipeline) RegisterAdapter(channelID string, adapter IMPlatformAdapter) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.adapters == nil {
+		p.adapters = map[string]IMPlatformAdapter{}
+	}
+	p.adapters[channelID] = adapter
+}
+
+// UnregisterAdapter 注销适配器（不存在容忍）。
+// Python: im_inbound.py L467-468 unregister_adapter
+func (p *IMInboundPipeline) UnregisterAdapter(channelID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.adapters, channelID)
+}
+
+// Apply 对入站消息应用管线处理，返回是否继续转发。
+// Python: im_inbound.py L470-616 apply（执行顺序纪律，步骤顺序不可调换）
+func (p *IMInboundPipeline) Apply(ctx context.Context, msg *schema.Message) bool {
+	// 步骤1：非数字分身直接放行
+	if !msg.GroupDigitalAvatar {
+		return true
+	}
+
+	// 步骤2：无适配器放行
+	p.mu.RLock()
+	adapter := p.adapters[msg.ChannelID]
+	p.mu.RUnlock()
+	if adapter == nil {
+		return true
+	}
+
+	metadata := msg.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+
+	// 步骤3：resume 消息分支
+	if truthy(metadata["is_resume_message"]) {
+		dmPendingID := orStr(metadata["dm_pending_interaction_id"])
+		if dmPendingID != "" {
+			pi := routing.LoadPendingInteraction(dmPendingID)
+			if pi != nil {
+				answer := ""
+				var paramsMap map[string]any
+				if len(msg.Params) > 0 {
+					_ = json.Unmarshal(msg.Params, &paramsMap)
+				}
+				if paramsMap != nil {
+					answer = strings.TrimSpace(orStr(paramsMap["query"], paramsMap["content"]))
+				}
+				resumeContent := pi.BuildResumeContent(answer)
+				logger.Info(logComponent).
+					Str("event_type", "dm_resume").
+					Str("interaction_id", dmPendingID).
+					Str("answer", truncateStr(answer, 80)).
+					Msg("dm resume")
+				logger.Info(logComponent).
+					Str("event_type", "resume_content").
+					Str("resume_content", resumeContent).
+					Msg("resume content")
+				writeParamsQueryContent(msg, resumeContent)
+				if msg.Metadata == nil {
+					msg.Metadata = map[string]any{}
+				}
+				msg.Metadata["interaction_context"] = resumeContent
+				pi.Status = routing.StatusCompleted
+				pi.Save()
+				pi.Remove()
+			}
+		}
+		logger.Info(logComponent).
+			Str("event_type", "resume_forwarded").
+			Str("channel_id", msg.ChannelID).
+			Str("msg_id", msg.ID).
+			Msg("resume message forwarded directly")
+		return true
+	}
+
+	// 步骤4：originalQuery 提取
+	originalQuery := extractText(msg)
+
+	// 步骤5：peekPending
+	pendingContext := peekPending(msg)
+	if pendingContext != "" {
+		logger.Info(logComponent).
+			Str("event_type", "pending_context").
+			Str("pending_context", pendingContext).
+			Msg("pending context")
+	}
+
+	// 步骤6：处理器
+	result := p.processor.Process(ctx, msg, adapter, pendingContext)
+
+	// 步骤7：metadata_patch 合并
+	if len(result.MetadataPatch) > 0 {
+		if msg.Metadata == nil {
+			msg.Metadata = map[string]any{}
+		}
+		for k, v := range result.MetadataPatch {
+			msg.Metadata[k] = v
+		}
+	}
+
+	// 步骤8：rewritten 双写 params
+	if result.RewrittenContent != "" {
+		writeParamsQueryContent(msg, result.RewrittenContent)
+	}
+
+	// 步骤9：avatar_original_query 保存
+	if originalQuery != "" {
+		if msg.Metadata == nil {
+			msg.Metadata = map[string]any{}
+		}
+		msg.Metadata["avatar_original_query"] = originalQuery
+	}
+
+	// 步骤10：pending 命中且放行 → resume 拼接
+	if pendingContext != "" && result.ShouldForward {
+		if msg.Metadata == nil {
+			msg.Metadata = map[string]any{}
+		}
+		msg.Metadata["interaction_context"] = pendingContext
+		senderUserID := orStr(metadata["im_sender_user_id"], metadata["open_id"], metadata["sender_id"])
+		if senderUserID != "" {
+			msg.Metadata["interaction_answered_user_id"] = senderUserID
+		}
+
+		sessionID := strings.TrimSpace(msg.SessionID)
+		if sessionID != "" && senderUserID != "" {
+			pi := routing.FindGroupPending(sessionID, senderUserID)
+			logger.Info(logComponent).
+				Str("event_type", "find_group_pending").
+				Str("session_id", sessionID).
+				Str("sender_user_id", senderUserID).
+				Bool("found", pi != nil).
+				Msg("find group pending")
+			if pi != nil {
+				answer := result.RewrittenContent
+				if answer == "" {
+					answer = originalQuery
+				}
+				resumeContent := pi.BuildResumeContent(answer)
+				logger.Info(logComponent).
+					Str("event_type", "resume_content").
+					Str("resume_content", resumeContent).
+					Msg("resume content")
+				writeParamsQueryContent(msg, resumeContent)
+			}
+		}
+	}
+
+	// 步骤11：avatar_detail 四键 merge
+	if result.ShouldForward && result.Reason != "non-group-chat" {
+		principalName := strings.TrimSpace(adapter.GetPrincipalDisplayName())
+		avatarDetail := map[string]any{
+			"avatar_mode":         true,
+			"avatar_channel_type": adapter.PlatformName(),
+		}
+		if principalName != "" {
+			avatarDetail["avatar_principal_name"] = principalName
+		}
+		principalID := strings.TrimSpace(adapter.GetPrincipalUserID())
+		if principalID != "" {
+			avatarDetail["principal_user_id"] = principalID
+		}
+		if msg.Metadata == nil {
+			msg.Metadata = map[string]any{}
+		}
+		for k, v := range avatarDetail {
+			msg.Metadata[k] = v
+		}
+	}
+
+	// 步骤12：尾部 Info 日志（九字段）
+	rewrittenPreview := truncateStr(strings.ReplaceAll(result.RewrittenContent, "\n", "\\n"), 120)
+	originalPreview := truncateStr(strings.ReplaceAll(originalQuery, "\n", "\\n"), 120)
+	metadataKeys := make([]string, 0, len(result.MetadataPatch))
+	for k := range result.MetadataPatch {
+		metadataKeys = append(metadataKeys, k)
+	}
+	sort.Strings(metadataKeys)
+	logger.Info(logComponent).
+		Str("event_type", "inbound_pipeline").
+		Str("channel_id", msg.ChannelID).
+		Str("request_id", msg.ID).
+		Bool("should_forward", result.ShouldForward).
+		Str("reason", result.Reason).
+		Bool("rewritten", result.RewrittenContent != "").
+		Str("original_preview", originalPreview).
+		Str("rewritten_preview", rewrittenPreview).
+		Strs("metadata_keys", metadataKeys).
+		Bool("pending", pendingContext != "").
+		Msg("inbound pipeline applied")
+
+	// 步骤13
+	return result.ShouldForward
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -592,4 +823,55 @@ func headersToStringMap(m map[string]any) map[string]string {
 		}
 	}
 	return result
+}
+
+// peekPending 查找群聊追问并拼四段中文模板（逐字对齐 Python L630-640）。
+// Python: im_inbound.py L618-640 _peek_pending
+func peekPending(msg *schema.Message) string {
+	metadata := msg.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	sessionID := strings.TrimSpace(msg.SessionID)
+	senderUserID := orStr(metadata["im_sender_user_id"], metadata["open_id"], metadata["sender_id"])
+	if sessionID == "" || senderUserID == "" {
+		return ""
+	}
+	pi := routing.FindGroupPending(sessionID, senderUserID)
+	if pi == nil {
+		return ""
+	}
+	targetName := pi.TargetUserName
+	if targetName == "" {
+		targetName = "用户"
+	}
+	return "【追问上下文】你之前在处理以下任务时向 " + targetName + " 追问了信息：\n" +
+		"- 原始请求：" + pi.OriginContent + "\n" +
+		"- 你的追问：" + pi.Question + "\n" +
+		"现在 " + targetName + " 已回复，请综合「原始请求」和「用户回复」中的所有信息继续完成任务，" +
+		"原始请求中已明确提供的信息（如时间、地点等）直接使用即可，不要再次追问。" +
+		"不要与群聊历史中的其他任务混淆。"
+}
+
+// writeParamsQueryContent params 双写：query 恒写 + content 条件写（仅当原 params
+// 已含 content 键）。params 非 map（JSON 数组/null）→ 重建空 map（对齐 Python
+// `if not isinstance(msg.params, dict): msg.params = {}`）。
+// 先例：resolveInboundReferences 回写模式（forward_loop.go L629-637）。
+func writeParamsQueryContent(msg *schema.Message, value string) {
+	var paramsMap map[string]any
+	if len(msg.Params) > 0 {
+		if err := json.Unmarshal(msg.Params, &paramsMap); err != nil {
+			paramsMap = map[string]any{}
+		}
+	}
+	if paramsMap == nil {
+		paramsMap = map[string]any{}
+	}
+	paramsMap["query"] = value
+	if _, has := paramsMap["content"]; has {
+		paramsMap["content"] = value
+	}
+	if updated, err := json.Marshal(paramsMap); err == nil {
+		msg.Params = json.RawMessage(updated)
+	}
 }

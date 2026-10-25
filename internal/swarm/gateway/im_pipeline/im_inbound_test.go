@@ -20,6 +20,7 @@ import (
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -636,4 +637,254 @@ func TestProcess_principal缺失(t *testing.T) {
 	r := proc.Process(context.Background(), newChatSendMsg(`{"query":"hi"}`, map[string]any{"chat_type": "group"}), adapter, "")
 	assert.Equal(t, "missing-principal-user", r.Reason)
 	assert.True(t, r.ShouldForward)
+}
+
+// ──────────────────────────── Task 4: IMInboundPipeline ────────────────────────────
+
+// newInboundWithAdapter 构造带 fakeAdapter 的入站管线。
+func newInboundWithAdapter(t *testing.T, adapter IMPlatformAdapter) *IMInboundPipeline {
+	t.Helper()
+	hookscfg.ResetGlobalConfigForTest()
+	t.Cleanup(hookscfg.ResetGlobalConfigForTest)
+	p := NewIMInboundPipeline(nil, nil)
+	if adapter != nil {
+		p.RegisterAdapter("feishu_test", adapter)
+	}
+	return p
+}
+
+// newAvatarChatMsg 数字分身 chat.send 群聊消息。
+func newAvatarChatMsg(params string, metadata map[string]any) *schema.Message {
+	msg := newChatSendMsg(params, metadata)
+	msg.GroupDigitalAvatar = true
+	return msg
+}
+
+// TestIMInboundPipeline_RegisterUnregister 注册/注销/未知渠道容忍 + processor 默认构造。
+func TestIMInboundPipeline_RegisterUnregister(t *testing.T) {
+	p := NewIMInboundPipeline(nil, nil)
+	p.RegisterAdapter("ch-1", newTestAdapter())
+	p.UnregisterAdapter("ch-1")
+	p.UnregisterAdapter("nonexist")
+	assert.NotNil(t, p.processor)
+}
+
+// TestApply_非数字分身放行 步骤1。
+func TestApply_非数字分身放行(t *testing.T) {
+	p := newInboundWithAdapter(t, newTestAdapter())
+	msg := newChatSendMsg(`{"query":"hi"}`, nil)
+	assert.True(t, p.Apply(context.Background(), msg))
+}
+
+// TestApply_无适配器放行 步骤2。
+func TestApply_无适配器放行(t *testing.T) {
+	p := newInboundWithAdapter(t, nil)
+	msg := newAvatarChatMsg(`{"query":"hi"}`, nil)
+	assert.True(t, p.Apply(context.Background(), msg))
+}
+
+// TestApply_resume分支 步骤3全链。
+func TestApply_resume分支(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := newInboundWithAdapter(t, newTestAdapter())
+	pi := &routing.PendingInteraction{
+		InteractionID:    "iact_feishu_test_abcd1234",
+		Mode:             routing.ModeDM,
+		OriginChannelID:  "feishu_test",
+		OriginSessionID:  "sess-1",
+		OriginContent:    "原始请求",
+		OriginSenderName: "李四",
+		OriginSenderID:   "ou-sender",
+		Question:         "追问内容",
+		TargetUserID:     "ou-principal",
+		Status:           routing.StatusPending,
+	}
+	pi.Save()
+	require.NotNil(t, routing.LoadPendingInteraction("iact_feishu_test_abcd1234"))
+
+	msg := newAvatarChatMsg(`{"query":"principal 的回答","content":"principal 的回答"}`, map[string]any{
+		"is_resume_message":         true,
+		"dm_pending_interaction_id": "iact_feishu_test_abcd1234",
+	})
+	assert.True(t, p.Apply(context.Background(), msg))
+
+	var paramsMap map[string]any
+	require.NoError(t, json.Unmarshal(msg.Params, &paramsMap))
+	resumeContent := pi.BuildResumeContent("principal 的回答")
+	assert.Equal(t, resumeContent, paramsMap["query"])
+	assert.Equal(t, resumeContent, paramsMap["content"])
+	assert.Equal(t, resumeContent, msg.Metadata["interaction_context"])
+	assert.Nil(t, routing.LoadPendingInteraction("iact_feishu_test_abcd1234")) // Save 后 Remove
+}
+
+// TestApply_resume无pendingID is_resume_message 但无 id → 仅放行不改写。
+func TestApply_resume无pendingID(t *testing.T) {
+	p := newInboundWithAdapter(t, newTestAdapter())
+	msg := newAvatarChatMsg(`{"query":"hi"}`, map[string]any{"is_resume_message": true})
+	assert.True(t, p.Apply(context.Background(), msg))
+	var paramsMap map[string]any
+	require.NoError(t, json.Unmarshal(msg.Params, &paramsMap))
+	assert.Equal(t, "hi", paramsMap["query"])
+}
+
+// TestApply_resume_params非map params JSON 数组 → answer 空 + params 重建 map。
+func TestApply_resume_params非map(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := newInboundWithAdapter(t, newTestAdapter())
+	pi := &routing.PendingInteraction{
+		InteractionID: "iact_x_1", Mode: routing.ModeDM, OriginChannelID: "c",
+		OriginSessionID: "s", OriginContent: "oc", OriginSenderName: "n",
+		OriginSenderID: "o", Question: "q", TargetUserID: "t", Status: routing.StatusPending,
+	}
+	pi.Save()
+	msg := newAvatarChatMsg(`[1,2]`, map[string]any{
+		"is_resume_message": true, "dm_pending_interaction_id": "iact_x_1",
+	})
+	assert.True(t, p.Apply(context.Background(), msg))
+	var paramsMap map[string]any
+	require.NoError(t, json.Unmarshal(msg.Params, &paramsMap))
+	assert.Contains(t, paramsMap["query"], "[任务恢复]")
+}
+
+// TestPeekPending 四段模板逐字断言（含名空回退双处）。
+func TestPeekPending(t *testing.T) {
+	setupInteractionsEnv(t)
+	pi := &routing.PendingInteraction{
+		InteractionID: "gpq_sess-1_ou-sender", Mode: routing.ModeGroup,
+		OriginChannelID: "c", OriginSessionID: "sess-1",
+		OriginContent: "原始请求内容", OriginSenderName: "王五", OriginSenderID: "ou-sender",
+		Question: "你的追问内容", TargetUserID: "ou-sender", TargetUserName: "李四",
+		Status: routing.StatusPending,
+	}
+	pi.Save()
+	msg := newAvatarChatMsg(`{}`, map[string]any{"im_sender_user_id": "ou-sender"})
+	msg.SessionID = "sess-1"
+
+	got := peekPending(msg)
+	want := "【追问上下文】你之前在处理以下任务时向 李四 追问了信息：\n" +
+		"- 原始请求：原始请求内容\n" +
+		"- 你的追问：你的追问内容\n" +
+		"现在 李四 已回复，请综合「原始请求」和「用户回复」中的所有信息继续完成任务，" +
+		"原始请求中已明确提供的信息（如时间、地点等）直接使用即可，不要再次追问。" +
+		"不要与群聊历史中的其他任务混淆。"
+	assert.Equal(t, want, got)
+
+	pi2 := &routing.PendingInteraction{
+		InteractionID: "gpq_sess-2_ou-s2", Mode: routing.ModeGroup,
+		OriginChannelID: "c", OriginSessionID: "sess-2",
+		OriginContent: "oc", OriginSenderName: "n", OriginSenderID: "o",
+		Question: "q", TargetUserID: "ou-s2", Status: routing.StatusPending,
+	}
+	pi2.Save()
+	msg2 := newAvatarChatMsg(`{}`, map[string]any{"open_id": "ou-s2"})
+	msg2.SessionID = "sess-2"
+	got2 := peekPending(msg2)
+	assert.Contains(t, got2, "向 用户 追问了信息")
+	assert.Contains(t, got2, "现在 用户 已回复")
+
+	msg3 := newAvatarChatMsg(`{}`, nil)
+	msg3.SessionID = ""
+	assert.Equal(t, "", peekPending(msg3))
+}
+
+// TestApply_完整改写链 步骤4/7/8/9/11 全链断言。
+func TestApply_完整改写链(t *testing.T) {
+	setupInteractionsEnv(t)
+	adapter := newTestAdapter()
+	adapter.relevancePatch = map[string]any{"relevance": "high"}
+	p := newInboundWithAdapter(t, adapter)
+	p.processor.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("改写后的请求"), nil
+	})
+
+	msg := newAvatarChatMsg(`{"query":"原始问题","content":"原始问题"}`, map[string]any{
+		"chat_type":         "group",
+		"im_sender_user_id": "ou-sender",
+	})
+	assert.True(t, p.Apply(context.Background(), msg))
+
+	var paramsMap map[string]any
+	require.NoError(t, json.Unmarshal(msg.Params, &paramsMap))
+	assert.Equal(t, "改写后的请求", paramsMap["query"])
+	assert.Equal(t, "改写后的请求", paramsMap["content"])
+	assert.Equal(t, "原始问题", msg.Metadata["avatar_original_query"])
+	assert.Equal(t, "high", msg.Metadata["relevance"])
+	assert.Equal(t, true, msg.Metadata["avatar_mode"])
+	assert.Equal(t, "飞书", msg.Metadata["avatar_channel_type"])
+	assert.Equal(t, "张三", msg.Metadata["avatar_principal_name"])
+	assert.Equal(t, "ou-principal", msg.Metadata["principal_user_id"])
+}
+
+// TestApply_irrelevant丢弃 should_forward=false。
+func TestApply_irrelevant丢弃(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := newInboundWithAdapter(t, newTestAdapter())
+	p.processor.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("[无需处理]"), nil
+	})
+	msg := newAvatarChatMsg(`{"query":"无关消息"}`, map[string]any{"chat_type": "group"})
+	assert.False(t, p.Apply(context.Background(), msg))
+}
+
+// TestApply_pending命中步骤10 二次 FindGroupPending → resume 拼接双写。
+func TestApply_pending命中步骤10(t *testing.T) {
+	setupInteractionsEnv(t)
+	pi := &routing.PendingInteraction{
+		InteractionID: "gpq_sess-1_ou-sender", Mode: routing.ModeGroup,
+		OriginChannelID: "feishu_test", OriginSessionID: "sess-1",
+		OriginContent: "原始请求", OriginSenderName: "王五", OriginSenderID: "ou-sender",
+		Question: "需要哪个楼层？", TargetUserID: "ou-sender", TargetUserName: "李四",
+		Status: routing.StatusPending,
+	}
+	pi.Save()
+
+	p := newInboundWithAdapter(t, newTestAdapter())
+	p.processor.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("改写后的回答上下文"), nil
+	})
+	msg := newAvatarChatMsg(`{"query":"3楼"}`, map[string]any{
+		"chat_type":         "group",
+		"im_sender_user_id": "ou-sender",
+	})
+	msg.SessionID = "sess-1"
+	assert.True(t, p.Apply(context.Background(), msg))
+
+	assert.Contains(t, msg.Metadata["interaction_context"], "【追问上下文】")
+	assert.Equal(t, "ou-sender", msg.Metadata["interaction_answered_user_id"])
+	var paramsMap map[string]any
+	require.NoError(t, json.Unmarshal(msg.Params, &paramsMap))
+	assert.Equal(t, pi.BuildResumeContent("改写后的回答上下文"), paramsMap["query"])
+}
+
+// TestApply_avatarDetail键省略 principal 名/ID 空时条件键省略。
+func TestApply_avatarDetail键省略(t *testing.T) {
+	setupInteractionsEnv(t)
+	adapter := newTestAdapter()
+	adapter.principalName = ""
+	adapter.principalUserID = ""
+	p := newInboundWithAdapter(t, adapter)
+	msg := newAvatarChatMsg(`{"query":"hi"}`, map[string]any{"chat_type": "group"})
+	assert.True(t, p.Apply(context.Background(), msg))
+	assert.Equal(t, true, msg.Metadata["avatar_mode"])
+	assert.NotContains(t, msg.Metadata, "avatar_principal_name")
+	assert.NotContains(t, msg.Metadata, "principal_user_id")
+}
+
+// TestApply_非群聊不进步骤11 reason=non-group-chat → avatar_detail 不写。
+func TestApply_非群聊不进步骤11(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := newInboundWithAdapter(t, newTestAdapter())
+	msg := newAvatarChatMsg(`{"query":"hi"}`, map[string]any{"chat_type": "p2p"})
+	assert.True(t, p.Apply(context.Background(), msg))
+	assert.NotContains(t, msg.Metadata, "avatar_mode")
+}
+
+// TestApply_尾部日志不panic 尾部九字段（空 MetadataPatch 场景）。
+func TestApply_尾部日志不panic(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := newInboundWithAdapter(t, newTestAdapter())
+	msg := newAvatarChatMsg(`{}`, map[string]any{"chat_type": "group"})
+	assert.NotPanics(t, func() {
+		p.Apply(context.Background(), msg)
+	})
 }
