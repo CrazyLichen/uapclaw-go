@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmSchema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -69,8 +70,9 @@ type WebHandlersBindParams struct {
 	// CryptoProvider 加密/解密提供者（注入通道，测试用；生产装配时传入全局快照）
 	CryptoProvider crypto.CryptoProvider
 	// HeartbeatService 心跳服务，可为 nil
-	// ⤵️ 11.15: GatewayHeartbeatService，注入后处理 heartbeat.get_conf / heartbeat.set_conf
-	HeartbeatService any
+	// 11.11 已回填：注入后处理 heartbeat.get_conf / heartbeat.set_conf
+	// gateway/heartbeat.GatewayHeartbeatService 隐式实现
+	HeartbeatService HeartbeatConfService
 	// CronController 定时任务控制器，可为 nil
 	// 11.10 已回填：注入后处理 cron.job.* 8 个方法
 	// gateway/cron.CronController 隐式实现
@@ -78,6 +80,20 @@ type WebHandlersBindParams struct {
 	// UpdaterService 更新服务，可为 nil
 	// ⤵️ 11.17: UpdaterService，注入后处理 update.* 方法
 	UpdaterService any
+}
+
+// HeartbeatConfService web 端点所需心跳服务接口。
+// gateway/heartbeat.GatewayHeartbeatService 隐式实现（对齐 CronJobController 先例）。
+//
+// spec 接口签名细化（相对 spec §三/§六的 map[string]string → map[string]any）：
+// Python set_heartbeat_conf 不做值类型转换原样存（数值 1320 存 int，
+// 由 normalize_active_hours 回转 "22:00"）；若 Go 侧在 web 层字符串化会
+// 破坏该回转链（"1320" 字符串直通 → parseHM 失败 → always-active 回退）。
+type HeartbeatConfService interface {
+	// GetHeartbeatConf 返回配置摘要（every/target/active_hours）
+	GetHeartbeatConf() map[string]any
+	// SetHeartbeatConf 更新配置并按需热重启
+	SetHeartbeatConf(every *float64, target *string, activeHours map[string]any) error
 }
 
 // CronJobController web 端点所需 CronController 接口。
@@ -249,6 +265,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	var messageHandler MessageHandler
 	var channel *WebChannel
 	var cronController CronJobController
+	var heartbeatSvc HeartbeatConfService
 	if bind != nil {
 		if bind.Channel != nil {
 			sendEvent = bind.Channel.broadcastEvent
@@ -260,6 +277,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 		agentClient = bind.AgentClient
 		messageHandler = bind.MessageHandler
 		cronController = bind.CronController
+		heartbeatSvc = bind.HeartbeatService
 	}
 
 	// ─── 本地实现方法 ───
@@ -303,11 +321,18 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("locale.set_conf", stubHandler("locale.set_conf", map[string]any{"ok": true}))
 
 	// ─── 心跳配置 ───
-	d.Register("heartbeat.get_conf", stubHandler("heartbeat.get_conf", map[string]any{
-		"every": 0, "target": "", "active_hours": map[string]any{},
-	}))
-	d.Register("heartbeat.set_conf", stubHandler("heartbeat.set_conf", map[string]any{"ok": true}))
-	d.Register("heartbeat.get_path", stubHandler("heartbeat.get_path", map[string]any{"path": ""}))
+	// 11.11 已回填：注入服务时接真实 handler（对齐 Python _heartbeat_get_conf/_set_conf/_get_path）
+	if heartbeatSvc != nil {
+		d.Register("heartbeat.get_conf", handleHeartbeatGetConf(heartbeatSvc))
+		d.Register("heartbeat.set_conf", handleHeartbeatSetConf(heartbeatSvc, agentClient))
+		d.Register("heartbeat.get_path", handleHeartbeatGetPath())
+	} else {
+		d.Register("heartbeat.get_conf", stubHandler("heartbeat.get_conf", map[string]any{
+			"every": 0, "target": "", "active_hours": map[string]any{},
+		}))
+		d.Register("heartbeat.set_conf", stubHandler("heartbeat.set_conf", map[string]any{"ok": true}))
+		d.Register("heartbeat.get_path", stubHandler("heartbeat.get_path", map[string]any{"path": ""}))
+	}
 
 	// ─── 更新器 ───
 	updaterStub := stubHandler("updater", map[string]any{"status": "up_to_date"})
@@ -2040,4 +2065,140 @@ func cronStrVal(v any) string {
 		return s
 	}
 	return ""
+}
+
+// ──────────────────────────── 心跳配置 handler（11.11） ────────────────────────────
+
+// handleHeartbeatGetConf 处理 heartbeat.get_conf。
+// Python: _heartbeat_get_conf (app_web_handlers.py L1513-1525)。
+func handleHeartbeatGetConf(svc HeartbeatConfService) RPCHandlerFunc {
+	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+		if svc == nil {
+			return heartbeatErrPayload(WsErrServiceUnavailable, "heartbeat service not available"), nil
+		}
+		return svc.GetHeartbeatConf(), nil
+	}
+}
+
+// handleHeartbeatSetConf 处理 heartbeat.set_conf。
+// Python: _heartbeat_set_conf (app_web_handlers.py L1527-1563)。
+func handleHeartbeatSetConf(svc HeartbeatConfService, ac *routing.AgentClient) RPCHandlerFunc {
+	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if svc == nil {
+			return heartbeatErrPayload(WsErrServiceUnavailable, "heartbeat service not available"), nil
+		}
+		if params == nil {
+			return heartbeatErrPayload(WsErrBadRequest, "params must be object"), nil
+		}
+
+		// 三值提取（对齐 Python L1538-1550）
+		var every *float64
+		if v, ok := params["every"]; ok && v != nil {
+			f, err := heartbeatAnyToFloat(v)
+			if err != nil {
+				return heartbeatErrPayload(WsErrBadRequest, "every must be number"), nil
+			}
+			every = &f
+		}
+		var target *string
+		if v, ok := params["target"]; ok && v != nil {
+			s := fmt.Sprint(v) // 对齐 Python str(target)
+			target = &s
+		}
+		var activeHours map[string]any
+		if v, ok := params["active_hours"]; ok && v != nil {
+			if ahMap, isMap := v.(map[string]any); isMap {
+				// 必须同时包含 start/end，否则视为清除时间段（始终生效）
+				if _, hasStart := ahMap["start"]; hasStart {
+					if _, hasEnd := ahMap["end"]; hasEnd {
+						// 值原样直通（对齐 Python dict 传引用不转换：
+						// 数值 1320 保留 int，由 heartbeat 侧 NormalizeActiveHours 回转）
+						activeHours = ahMap
+					}
+				}
+			}
+			// 非 map 或缺 start/end → nil（清除语义，前端传 {} 走此分支）
+		}
+
+		if err := svc.SetHeartbeatConf(every, target, activeHours); err != nil {
+			// 对齐 Python except ValueError → BAD_REQUEST
+			return heartbeatErrPayload(WsErrBadRequest, err.Error()), nil
+		}
+		payload := svc.GetHeartbeatConf()
+
+		// 写回 config.yaml（对齐 L1553-1557 try/Warn：失败仅 Warn 不阻断响应）
+		if err := updateHeartbeatInConfig(payload); err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Msg("[heartbeat.set_conf] 写回 config.yaml 失败")
+		} else {
+			// 清 Agent 侧配置缓存（对齐 _clear_agent_config_cache，失败静默 pass）
+			clearAgentConfigCache(ac, ctx)
+		}
+		return payload, nil
+	}
+}
+
+// handleHeartbeatGetPath 处理 heartbeat.get_path。
+// Python: _heartbeat_get_path (app_web_handlers.py L1565-1583)。
+func handleHeartbeatGetPath() RPCHandlerFunc {
+	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+		heartbeatPath := workspace.DeepAgentHeartbeatPath()
+		agentRoot := workspace.AgentRootDir()
+		rel, err := filepath.Rel(filepath.Dir(agentRoot), heartbeatPath)
+		if err != nil {
+			logger.Error(logComponent).Err(err).Msg("[heartbeat.get_path] 计算相对路径失败")
+			return heartbeatErrPayload(WsErrInternalError, err.Error()), nil
+		}
+		return map[string]any{"path": rel}, nil
+	}
+}
+
+// heartbeatErrPayload 心跳 RPC 错误载荷。
+func heartbeatErrPayload(code, msg string) map[string]any {
+	return map[string]any{"ok": false, "error": msg, "code": code}
+}
+
+// heartbeatAnyToFloat every 参数数值化。
+// 对齐 Python float(every)：string/int/int64/float64 → float64；
+// 失败或类型不支持 → error（调用方转 BAD_REQUEST "every must be number"）。
+func heartbeatAnyToFloat(v any) (float64, error) {
+	switch val := v.(type) {
+	case float64:
+		return val, nil
+	case int:
+		return float64(val), nil
+	case int64:
+		return float64(val), nil
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid number: %q", val)
+		}
+		return f, nil
+	default:
+		return 0, fmt.Errorf("unsupported type: %T", v)
+	}
+}
+
+// clearAgentConfigCache 写回 config.yaml 后清 Agent 侧缓存。
+// 对齐 Python _clear_agent_config_cache (L485-501)：
+// agentClient 非 nil → AGENT_RELOAD_CONFIG E2A（10s 超时）；
+// nil → 跳过（Go 装配 web bind 总有 agentClient；Python else 分支 get_config()
+// 本地重读在 Go 对应 config 全局已注册，无需动作，偏差⑦）。
+// 失败静默 pass（对齐 Python except: pass）。
+func clearAgentConfigCache(ac *routing.AgentClient, ctx context.Context) {
+	if ac == nil {
+		return
+	}
+	defer func() {
+		_ = recover() // 静默（对齐 Python except: pass）
+	}()
+	reloadCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	requestID := "cfg-reload-" + uuid.New().String()[:8]
+	envelope := e2a.E2AFromAgentFields(requestID,
+		e2a.WithFieldReqMethod(string(schema.ReqMethodAgentReloadConfig)),
+	)
+	_, _ = ac.SendRequest(reloadCtx, envelope)
 }

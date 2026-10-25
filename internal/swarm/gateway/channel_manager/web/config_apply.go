@@ -440,6 +440,36 @@ func updateDefaultModelsInConfig(models []map[string]any) error {
 	return nil
 }
 
+// updateHeartbeatInConfig 只更新 heartbeat 段并写回。
+// Python: update_heartbeat_in_config (common/config.py L152-164)。
+// 逐键条件写回（if "every" in payload ...），SetRoundTrip 保注释（M-05 先例）。
+func updateHeartbeatInConfig(payload map[string]any) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+	_, err = cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+	if v, ok := payload["every"]; ok {
+		if err := cfg.SetRoundTrip("heartbeat.every", v); err != nil {
+			return fmt.Errorf("写入 heartbeat.every 失败: %w", err)
+		}
+	}
+	if v, ok := payload["target"]; ok {
+		if err := cfg.SetRoundTrip("heartbeat.target", v); err != nil {
+			return fmt.Errorf("写入 heartbeat.target 失败: %w", err)
+		}
+	}
+	if v, ok := payload["active_hours"]; ok {
+		if err := cfg.SetRoundTrip("heartbeat.active_hours", v); err != nil {
+			return fmt.Errorf("写入 heartbeat.active_hours 失败: %w", err)
+		}
+	}
+	return nil
+}
+
 // updateMemoryForbiddenInConfig 更新 memory.forbidden_memory_definition 并写回。
 // Python: update_memory_forbidden_in_config (common/config.py)。
 // description 字段使用先读后合并逻辑（新值覆盖同名 key，旧的其他 key 保留）。
