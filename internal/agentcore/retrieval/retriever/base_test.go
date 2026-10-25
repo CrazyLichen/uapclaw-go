@@ -2,6 +2,7 @@ package retriever
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,6 +47,9 @@ func TestRetrievalMode_常量值(t *testing.T) {
 // 检索三方法可编程返回值/错误并计数；其余方法零实现（两检索器不触达）。
 // searchErrAfter > 0 时前 N 次 Search 成功、之后返回 searchErr（G5 首错
 // 传播用：q1 成功 q2 失败）。
+// mu 保护计数/捕获字段：BatchRetrieve 裸 errgroup 并发打桩时多 goroutine
+// 并发写（-race 实测抓到，13.17 dispatchTripleClient 先例）。测试断言在
+// g.Wait() 之后读，WaitGroup happens-before 保证无需加锁读。
 type fakeVectorStore struct {
 	searchResult   []common.SearchResult
 	sparseResult   []common.SearchResult
@@ -58,6 +62,7 @@ type fakeVectorStore struct {
 	lastTopK       int
 	lastQueryVec   []float64
 	lastQueryText  string
+	mu             sync.Mutex
 }
 
 func (f *fakeVectorStore) CheckVectorField() error { return nil }
@@ -65,6 +70,8 @@ func (f *fakeVectorStore) Add(_ context.Context, _ []map[string]any, _ ...vector
 	return nil
 }
 func (f *fakeVectorStore) Search(_ context.Context, queryVector []float64, topK int, _ query.QueryExpr, _ ...vector_store.StoreOption) ([]common.SearchResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.searchCalls++
 	f.lastTopK = topK
 	f.lastQueryVec = queryVector
@@ -74,6 +81,8 @@ func (f *fakeVectorStore) Search(_ context.Context, queryVector []float64, topK 
 	return f.searchResult, f.searchErr
 }
 func (f *fakeVectorStore) SparseSearch(_ context.Context, queryText string, topK int, _ query.QueryExpr, _ ...vector_store.StoreOption) ([]common.SearchResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.sparseCalls++
 	f.lastTopK = topK
 	f.lastQueryText = queryText
@@ -89,16 +98,24 @@ func (f *fakeVectorStore) TableExists(_ context.Context, _ string) (bool, error)
 	return false, nil
 }
 func (f *fakeVectorStore) DeleteTable(_ context.Context, _ string) error { return nil }
-func (f *fakeVectorStore) Close()                                        { f.closeCalls++ }
+func (f *fakeVectorStore) Close() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.closeCalls++
+}
 
 // fakeEmbedModel 实现 embedding.BaseEmbedding 的测试桩。
+// mu 保护 embedQueryCalls：批量并发打桩场景（同上）。
 type fakeEmbedModel struct {
 	queryVec        []float64
 	err             error
 	embedQueryCalls int
+	mu              sync.Mutex
 }
 
 func (f *fakeEmbedModel) EmbedQuery(_ context.Context, _ string, _ ...embedding.EmbedOption) ([]float64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.embedQueryCalls++
 	return f.queryVec, f.err
 }
