@@ -91,7 +91,7 @@ encoding/json, regexp, os, maps, errors, fmt → 标准库
 | （Python 无） | TestLoadJSONFile | **4 新增用例**：不存在→errors.Is(fs.ErrNotExist)/空文件→{}/非 dict→error/正常→内容；t.TempDir() 临时文件 |
 | system 3 个 | TestUtils集成_* | JSON 提取解析工作流（LLM 回复样例两步链路）/对话历史格式化（CJK）/真实模式 SessionID 校验 |
 
-**system 用例归属拆分**（回填锚点）：test_utils_integration.py 共 12 用例——3 个纯 14.1 并入 utils_test.go；`test_constants_enums_consistency` 混合用例常量半边并入 constants_test.go、枚举半边留 14.2；3 个枚举用例归 14.2；4 个 progress 用例归 14.3。
+**system 用例归属拆分**（回填锚点）：test_utils_integration.py 共 12 用例——3 个纯 14.1 并入 utils_test.go；`test_constants_enums_consistency` 混合用例常量半边并入 constants_test.go、枚举半边留 14.2；4 个枚举用例归 14.2（勘误 2026-10-26：原少算 1，正确算式 12=3+1+4+4）；4 个 progress 用例归 14.3。
 
 ## 6. 显式偏差记录（Go↔Python）
 
