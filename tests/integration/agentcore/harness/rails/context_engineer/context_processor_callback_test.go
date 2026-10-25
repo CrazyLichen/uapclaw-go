@@ -367,7 +367,7 @@ func (s *ContextProcessorCallbackSuite) TestContextAssembleCallback_Uninit联合
 	s.Require().NotNil(spb)
 	s.False(spb.HasSection(hsections.SectionWorkspace), "Uninit 后 SectionWorkspace 应移除")
 	s.False(spb.HasSection(hsections.SectionContext), "Uninit 后 SectionContext 应移除")
-	s.False(spb.HasSection(hsections.SectionTools), "Uninit 后 SectionTools 应移除")
+	// M-17: Python uninit 代码只移 workspace/context 两节，tools 节保留（docstring 笔误）
 	s.False(spb.HasSection("offload"), "Uninit 后 offload 节应移除")
 }
 

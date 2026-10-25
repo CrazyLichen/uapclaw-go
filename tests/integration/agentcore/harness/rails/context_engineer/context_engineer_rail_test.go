@@ -158,8 +158,8 @@ func (s *ContextEngineerRailSuite) TestContextAssembleRail_BeforeModelCall_注�
 	s.False(spb.HasSection(hsections.SectionContext), "无 context 文件时 SectionContext 不应注入")
 }
 
-// TestContextAssembleRail_Uninit移除所有节 测试 Uninit 移除 workspace/context/tools 三个 section。
-// 对齐 Python: ContextAssembleRail.uninit() 中 section 清理
+// TestContextAssembleRail_Uninit移除所有节 测试 Uninit 移除 workspace/context 两个 section。
+// 对齐 Python: ContextAssembleRail.uninit() 中 section 清理（M-17: 代码实际只移 2 节）
 func (s *ContextEngineerRailSuite) TestContextAssembleRail_Uninit移除所有节() {
 	tmpDir := s.T().TempDir()
 	ws := workspace.NewWorkspace(tmpDir, "cn")
@@ -182,12 +182,12 @@ func (s *ContextEngineerRailSuite) TestContextAssembleRail_Uninit移除所有节
 		rail.Uninit(agent)
 	}, "Uninit 不应 panic")
 
-	// 验证 3 个 section 已移除
+	// 验证 2 个 section 已移除（M-17: Python uninit 代码只移 workspace/context 两节，
+	// docstring 说 3 节系 Python 自身笔误，以代码实际行为为准——tools 节保留）
 	spb := agent.SystemPromptBuilder()
 	s.Require().NotNil(spb)
 	s.False(spb.HasSection(hsections.SectionWorkspace), "Uninit 后应移除 SectionWorkspace")
 	s.False(spb.HasSection(hsections.SectionContext), "Uninit 后应移除 SectionContext")
-	s.False(spb.HasSection(hsections.SectionTools), "Uninit 后应移除 SectionTools")
 }
 
 // TestContextProcessorRail_Init成功 测试 NewContextProcessorRail + Init 成功。

@@ -362,11 +362,11 @@ func TestPyStr_jsonNumber(t *testing.T) {
 		in   json.Number
 		want string
 	}{
-		{json.Number("1"), "1"},                       // Python json 解码 int → str(1)="1"
-		{json.Number("1.0"), "1.0"},                   // Python float → str(1.0)="1.0"
-		{json.Number("1.5"), "1.5"},                   // 最短往返同形
+		{json.Number("1"), "1"},                                 // Python json 解码 int → str(1)="1"
+		{json.Number("1.0"), "1.0"},                             // Python float → str(1.0)="1.0"
+		{json.Number("1.5"), "1.5"},                             // 最短往返同形
 		{json.Number("10000000000000000"), "10000000000000000"}, // int 超界仍整数字面（Python int 无界）
-		{json.Number("1e16"), "1e+16"},                // Python float(1e16) → str → "1e+16"
+		{json.Number("1e16"), "1e+16"},                          // Python float(1e16) → str → "1e+16"
 		{json.Number("0.0001"), "0.0001"},
 	}
 	for _, c := range cases {
@@ -767,9 +767,9 @@ func TestPyFloatStr_特殊字面(t *testing.T) {
 		{math.NaN(), "nan"},
 		{math.Inf(1), "inf"},
 		{math.Inf(-1), "-inf"},
-		{0.0, "0.0"},   // abs==0 走 f 记法
-		{-0.0, "0.0"},  // 负零 abs==0 同 f 记法
-		{1e-5, "1e-05"}, // 下界外 e 记法
+		{0.0, "0.0"},        // abs==0 走 f 记法
+		{-0.0, "0.0"},       // 负零 abs==0 同 f 记法
+		{1e-5, "1e-05"},     // 下界外 e 记法
 		{1.5e16, "1.5e+16"}, // 上界外 e 记法
 	}
 	for _, c := range cases {

@@ -369,7 +369,7 @@ func (e *TripleExtractor) parseTriples(content, docID, chunkID string) ([]common
 }
 
 // hasInvalidHeadItem 检查三元组头部是否含嵌套容器或 null
-//（对齐 any(isinstance(x, (list, tuple, dict)) or x is None for x in head)）。
+// （对齐 any(isinstance(x, (list, tuple, dict)) or x is None for x in head)）。
 func hasInvalidHeadItem(head []any) bool {
 	for _, x := range head {
 		switch x.(type) {
