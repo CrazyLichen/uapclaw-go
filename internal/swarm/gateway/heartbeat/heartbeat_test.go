@@ -2,6 +2,9 @@ package heartbeat
 
 import (
 	"context"
+	"errors"
+	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -128,6 +131,277 @@ func TestStop(t *testing.T) {
 		t.Fatalf("should not tick after Stop: %d -> %d", calls, fc.Calls())
 	}
 	s.Stop() // 二次 Stop 安全
+}
+
+// ──────────────────────────── Task 4: tick 六步 ────────────────────────────
+
+// relayCfg 构造带 relay 的服务配置。
+func relayCfg() *HeartbeatConfig {
+	target := "web"
+	return &HeartbeatConfig{
+		IntervalSeconds: 10,
+		ChannelID:       HeartbeatChannelID,
+		RelayChannelID:  &target,
+	}
+}
+
+// TestTick_envelope字段断言 请求 ID/session ID 正则格式、params 三键、channel_id。
+func TestTick_envelope字段断言(t *testing.T) {
+	fc := &fakeAgentClient{}
+	s := NewGatewayHeartbeatService(fc, relayCfg(), nil, nil)
+	s.tick(context.Background())
+
+	env := fc.lastEnv
+	if env == nil {
+		t.Fatal("envelope not captured")
+	}
+	// request_id: heartbeat-{hex毫秒}_{6hex}
+	reID := regexp.MustCompile(`^heartbeat-[0-9a-f]+_[0-9a-f]{6}$`)
+	if !reID.MatchString(env.RequestID) {
+		t.Fatalf("request_id format: %q", env.RequestID)
+	}
+	// session_id: heartbeat_{hex毫秒}_{6hex}
+	reSID := regexp.MustCompile(`^heartbeat_[0-9a-f]+_[0-9a-f]{6}$`)
+	if !reSID.MatchString(env.SessionID) {
+		t.Fatalf("session_id format: %q", env.SessionID)
+	}
+	if env.Channel != "__heartbeat__" {
+		t.Fatalf("channel: %q", env.Channel)
+	}
+	if env.Params["heartbeat"] != HeartbeatPrompt {
+		t.Fatalf("params.heartbeat not verbatim prompt: %q", env.Params["heartbeat"])
+	}
+	runMap, ok := env.Params["run"].(map[string]any)
+	if !ok {
+		t.Fatalf("params.run type: %T", env.Params["run"])
+	}
+	if runMap["kind"] != "heartbeat" {
+		t.Fatalf("run.kind: %v", runMap["kind"])
+	}
+	runCtx, ok := runMap["context"].(map[string]any)
+	if !ok {
+		t.Fatalf("run.context type: %T", runMap["context"])
+	}
+	if runCtx["reason"] != "interval" {
+		t.Fatalf("run.context.reason: %v", runCtx["reason"])
+	}
+	if runCtx["session_id"] != env.SessionID {
+		t.Fatalf("run.context.session_id mismatch: %v", runCtx["session_id"])
+	}
+	// request_id 与 session_id 共享时间戳与后缀
+	if !strings.HasSuffix(env.RequestID, strings.SplitN(env.SessionID, "_", 2)[1]) {
+		t.Fatalf("request_id/session_id suffix mismatch: %q vs %q", env.RequestID, env.SessionID)
+	}
+}
+
+// TestTick_心跳OK直接取 payload.heartbeat 字符串。
+func TestTick_心跳OK直接取(t *testing.T) {
+	fc := &fakeAgentClient{
+		respond: func(context.Context, int) (*schema.AgentResponse, error) {
+			return &schema.AgentResponse{OK: true, Payload: map[string]any{"heartbeat": "HEARTBEAT_OK"}}, nil
+		},
+	}
+	fp := &fakePublisher{}
+	s := NewGatewayHeartbeatService(fc, relayCfg(), fp, nil)
+	s.tick(context.Background())
+	ok, at := s.LastTickOK(), s.LastTickAt()
+	if ok == nil || *ok != true {
+		t.Fatalf("lastTickOK should be true, got %v", ok)
+	}
+	if at == nil || *at <= 0 {
+		t.Fatalf("lastTickAt should be set, got %v", at)
+	}
+	if len(fp.Messages()) != 1 {
+		t.Fatalf("relay msgs: %d", len(fp.Messages()))
+	}
+	msg := fp.Messages()[0]
+	if msg.Payload["heartbeat"] != "HEARTBEAT_OK" {
+		t.Fatalf("relay payload: %v", msg.Payload)
+	}
+}
+
+// TestTick_contentOutput三级提取 payload.content.output 提取。
+func TestTick_contentOutput三级提取(t *testing.T) {
+	fc := &fakeAgentClient{
+		respond: func(context.Context, int) (*schema.AgentResponse, error) {
+			return &schema.AgentResponse{OK: true, Payload: map[string]any{
+				"content": map[string]any{"output": "任务执行完成", "result_type": "answer"},
+			}}, nil
+		},
+	}
+	fp := &fakePublisher{}
+	s := NewGatewayHeartbeatService(fc, relayCfg(), fp, nil)
+	s.tick(context.Background())
+	msgs := fp.Messages()
+	if len(msgs) != 1 || msgs[0].Payload["heartbeat"] != "任务执行完成" {
+		t.Fatalf("relay payload: %v", msgs)
+	}
+}
+
+// TestTick_content字符串提取 payload.content 为字符串直接取。
+func TestTick_content字符串提取(t *testing.T) {
+	fc := &fakeAgentClient{
+		respond: func(context.Context, int) (*schema.AgentResponse, error) {
+			return &schema.AgentResponse{OK: true, Payload: map[string]any{"content": "纯文本响应"}}, nil
+		},
+	}
+	fp := &fakePublisher{}
+	s := NewGatewayHeartbeatService(fc, relayCfg(), fp, nil)
+	s.tick(context.Background())
+	msgs := fp.Messages()
+	if len(msgs) != 1 || msgs[0].Payload["heartbeat"] != "纯文本响应" {
+		t.Fatalf("relay payload: %v", msgs)
+	}
+}
+
+// TestTick_皆不命中空串 payload 无可提取字段 → heartbeat 空串仍 relay。
+func TestTick_皆不命中空串(t *testing.T) {
+	fc := &fakeAgentClient{
+		respond: func(context.Context, int) (*schema.AgentResponse, error) {
+			return &schema.AgentResponse{OK: true, Payload: map[string]any{"other": 1}}, nil
+		},
+	}
+	fp := &fakePublisher{}
+	s := NewGatewayHeartbeatService(fc, relayCfg(), fp, nil)
+	s.tick(context.Background())
+	msgs := fp.Messages()
+	if len(msgs) != 1 || msgs[0].Payload["heartbeat"] != "" {
+		t.Fatalf("relay payload should be empty string: %v", msgs)
+	}
+}
+
+// TestTick_relay消息字段 ID 前缀/EventType/Payload/OK/ChannelID/SessionID/Timestamp。
+func TestTick_relay消息字段(t *testing.T) {
+	fc := &fakeAgentClient{}
+	fp := &fakePublisher{}
+	s := NewGatewayHeartbeatService(fc, relayCfg(), fp, nil)
+	s.tick(context.Background())
+	msg := fp.Messages()[0]
+	if !strings.HasPrefix(msg.ID, "heartbeat-relay-heartbeat-") {
+		t.Fatalf("relay ID: %q", msg.ID)
+	}
+	if msg.Type != schema.MessageTypeEvent {
+		t.Fatalf("relay Type: %v", msg.Type)
+	}
+	if msg.EventType != schema.EventTypeHeartbeatRelay {
+		t.Fatalf("relay EventType: %v", msg.EventType)
+	}
+	if msg.ChannelID != "web" {
+		t.Fatalf("relay ChannelID: %q", msg.ChannelID)
+	}
+	if msg.SessionID == "" || !strings.HasPrefix(msg.SessionID, "heartbeat_") {
+		t.Fatalf("relay SessionID: %q", msg.SessionID)
+	}
+	if !msg.OK {
+		t.Fatal("relay OK should be true")
+	}
+	if msg.Timestamp <= 0 {
+		t.Fatalf("relay Timestamp: %v", msg.Timestamp)
+	}
+	if string(msg.Params) != "{}" {
+		t.Fatalf("relay Params should be {}: %q", string(msg.Params))
+	}
+}
+
+// TestTick_OK大小写不敏感 "heartbeat_ok" 小写也判定 OK。
+func TestTick_OK大小写不敏感(t *testing.T) {
+	fc := &fakeAgentClient{
+		respond: func(context.Context, int) (*schema.AgentResponse, error) {
+			return &schema.AgentResponse{OK: true, Payload: map[string]any{"heartbeat": " heartbeat_ok "}}, nil
+		},
+	}
+	s := NewGatewayHeartbeatService(fc, relayCfg(), nil, nil)
+	s.tick(context.Background())
+	// 大小写不敏感判定仅影响日志分支，行为断言经 lastTickOK
+	if ok := s.LastTickOK(); ok == nil || !*ok {
+		t.Fatal("lastTickOK should be true")
+	}
+}
+
+// TestTick_relay关闭 RelayChannelID nil 或 publisher nil → 不发消息。
+func TestTick_relay关闭(t *testing.T) {
+	// RelayChannelID nil
+	fc := &fakeAgentClient{}
+	fp := &fakePublisher{}
+	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{IntervalSeconds: 10}, fp, nil)
+	s.tick(context.Background())
+	if len(fp.Messages()) != 0 {
+		t.Fatalf("no relay expected, got %d", len(fp.Messages()))
+	}
+	// publisher nil（无 panic 即通过）
+	s2 := NewGatewayHeartbeatService(fc, relayCfg(), nil, nil)
+	s2.tick(context.Background())
+}
+
+// TestTick_非活跃时段 isActiveNow false → fake 无调用。
+func TestTick_非活跃时段(t *testing.T) {
+	fc := &fakeAgentClient{}
+	// 假时钟固定 12:00（本地），活跃时段 00:00-00:01 → 必然跳过
+	ts := time.Date(2026, 10, 27, 12, 0, 0, 0, time.Local).Unix()
+	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{
+		IntervalSeconds: 10,
+		ActiveHours:     map[string]any{"start": "00:00", "end": "00:01"},
+	}, nil, mkTime(ts))
+	s.tick(context.Background())
+	if fc.Calls() != 0 {
+		t.Fatalf("should skip due to inactive hours, got %d calls", fc.Calls())
+	}
+}
+
+// TestTick_nil客户端 nil AgentRequester 守卫 → lastTickOK=false 不 panic。
+// 对齐 Python agent_client=None 时 send_request AttributeError → except 置 failed。
+func TestTick_nil客户端(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, relayCfg(), nil, nil)
+	s.tick(context.Background()) // 不 panic 即通过
+	if ok := s.LastTickOK(); ok == nil || *ok {
+		t.Fatal("lastTickOK should be false when agentClient is nil")
+	}
+}
+
+// TestTick_timeout超时 fake 挂起 + TimeoutSeconds=50ms → ctx deadline。
+func TestTick_timeout超时(t *testing.T) {
+	fc := &fakeAgentClient{
+		respond: func(ctx context.Context, _ int) (*schema.AgentResponse, error) {
+			<-ctx.Done() // 挂起直到 ctx 超时/取消
+			return nil, ctx.Err()
+		},
+	}
+	to := 0.05
+	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{
+		IntervalSeconds: 10,
+		TimeoutSeconds:  &to,
+	}, nil, nil)
+	s.tick(context.Background())
+	if ok := s.LastTickOK(); ok == nil || *ok {
+		t.Fatal("lastTickOK should be false on timeout")
+	}
+}
+
+// TestTick_无timeout配置 ctx 直传无 deadline。
+func TestTick_无timeout配置(t *testing.T) {
+	fc := &fakeAgentClient{}
+	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{IntervalSeconds: 10}, nil, nil)
+	s.tick(context.Background())
+	if _, hasDeadline := fc.lastCtx.Deadline(); hasDeadline {
+		t.Fatal("ctx should have no deadline when timeout not configured")
+	}
+}
+
+// TestTick_错误分支 fake 返回 error → lastTickOK=false。
+func TestTick_错误分支(t *testing.T) {
+	fc := &fakeAgentClient{
+		respond: func(context.Context, int) (*schema.AgentResponse, error) {
+			return nil, errors.New("connection refused")
+		},
+	}
+	s := NewGatewayHeartbeatService(fc, relayCfg(), nil, nil)
+	s.tick(context.Background())
+	if ok := s.LastTickOK(); ok == nil || *ok {
+		t.Fatal("lastTickOK should be false on error")
+	}
+	if at := s.LastTickAt(); at == nil {
+		t.Fatal("lastTickAt should be set on error")
+	}
 }
 
 // TestIsActiveNow_无配置 ActiveHours 为空 → true。

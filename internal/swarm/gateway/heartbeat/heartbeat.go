@@ -2,6 +2,10 @@ package heartbeat
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -221,6 +225,22 @@ func (s *GatewayHeartbeatService) IsRunning() bool {
 	return s.running.Load()
 }
 
+// LastTickOK 最近一次心跳是否成功，nil 表示尚未执行过任何一次 tick。
+// 对齐 Python: last_tick_ok property (heartbeat.py L258-261)。
+func (s *GatewayHeartbeatService) LastTickOK() *bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastTickOK
+}
+
+// LastTickAt 最近一次心跳执行时间（Unix 时间戳），nil 表示尚未执行过。
+// 对齐 Python: last_tick_at property (heartbeat.py L263-266)。
+func (s *GatewayHeartbeatService) LastTickAt() *float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastTickAt
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runLoop 主循环：先睡 interval 再 tick（逐字对齐 Python _run_loop L155-165，已拍板）。
@@ -249,10 +269,182 @@ func (s *GatewayHeartbeatService) runLoop(ctx context.Context) {
 // 对齐 Python: _tick (heartbeat.py L167-256) 六步：
 // ① 活跃时段判断 ② 构造标识与 envelope ③ 发送（可选超时）
 // ④ 成功路径三级 content 提取 ⑤ relay 回传 ⑥ 失败路径。
-// 完整实现于 11.11 Task 4 落地；此处先以最小占位保证 runLoop 编译。
 func (s *GatewayHeartbeatService) tick(ctx context.Context) {
-	_ = ctx
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).
+				Any("recover", r).
+				Msg("Gateway heartbeat loop error")
+		}
+	}()
+
+	// ① 活跃时段判断（对齐 L172-177）
+	if !s.isActiveNow() {
+		s.mu.Lock()
+		activeHours := s.config.ActiveHours
+		s.mu.Unlock()
+		// 对齐 Python logger.debug("...: %r", self._config.active_hours)——打印原始配置
+		logger.Debug(logComponent).
+			Any("active_hours", activeHours).
+			Msg("Gateway heartbeat skipped due to inactive hours")
+		return
+	}
+
+	// ② 构造标识与 envelope（对齐 L179-197）
+	ts := fmt.Sprintf("%x", time.Now().UnixMilli()) // format(int(time.time()*1000), "x")
+	suffix := generateRandomHex(3)                  // secrets.token_hex(3)，6 hex 字符
+	requestID := fmt.Sprintf("heartbeat-%s_%s", ts, suffix)
+	sessionID := fmt.Sprintf("heartbeat_%s_%s", ts, suffix)
+	s.mu.Lock()
+	channelID := s.config.ChannelID
+	s.mu.Unlock()
+	envelope := e2a.E2AFromAgentFields(requestID,
+		e2a.WithFieldChannelID(channelID),
+		e2a.WithFieldSessionID(sessionID),
+		e2a.WithFieldParams(map[string]any{
+			"heartbeat": HeartbeatPrompt,
+			"run": map[string]any{
+				"kind": "heartbeat",
+				"context": map[string]any{
+					"reason":     "interval",
+					"session_id": sessionID,
+				},
+			},
+		}),
+	)
+
+	// ③ 发送（对齐 L199-205 双分支）
+	tickCtx := ctx
+	var cancel context.CancelFunc
+	s.mu.Lock()
+	timeout := s.config.TimeoutSeconds
+	s.mu.Unlock()
+	if timeout != nil && *timeout > 0 {
+		tickCtx, cancel = context.WithTimeout(ctx, time.Duration(*timeout*float64(time.Second)))
+		defer cancel()
+	}
+	// nil 客户端守卫（对齐 Python agent_client=None 时 send_request 抛
+	// AttributeError 被 except 捕获置 failed——Go nil 接口方法调用直接
+	// panic，须显式拦截为失败分支；cron runAgent 同款先例）
+	if s.agentClient == nil {
+		s.mu.Lock()
+		s.lastTickOK = ptrBool(false)
+		s.lastTickAt = ptrFloat64(s.nowFn())
+		s.mu.Unlock()
+		logger.Warn(logComponent).
+			Str("request_id", requestID).
+			Msg("Gateway heartbeat request failed")
+		return
+	}
+	resp, err := s.agentClient.SendRequest(tickCtx, envelope)
+
+	if err != nil {
+		// ⑥ 失败路径（对齐 L245-256）
+		s.mu.Lock()
+		s.lastTickOK = ptrBool(false)
+		s.lastTickAt = ptrFloat64(s.nowFn())
+		s.mu.Unlock()
+		if errors.Is(err, context.DeadlineExceeded) {
+			logger.Warn(logComponent).
+				Str("request_id", requestID).
+				Float64("timeout_seconds", func() float64 {
+					if timeout != nil {
+						return *timeout
+					}
+					return 0
+				}()).
+				Msg("Gateway heartbeat timeout")
+		} else {
+			logger.Warn(logComponent).
+				Str("request_id", requestID).
+				Err(err).
+				Msg("Gateway heartbeat request failed")
+		}
+		return
+	}
+
+	// ④ 成功路径（对齐 L206-226）
+	nowTS := s.nowFn()
+	s.mu.Lock()
+	s.lastTickOK = ptrBool(true)
+	s.lastTickAt = ptrFloat64(nowTS)
+	s.mu.Unlock()
+	payload := resp.Payload
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	heartbeatContent := ""
+	if hb, ok := payload["heartbeat"].(string); ok {
+		heartbeatContent = hb
+	}
+	if heartbeatContent == "" {
+		// 兼容 Agent 执行 HEARTBEAT.md 任务时返回的 chat 结构：
+		// payload = {"content": {"output": "...", "result_type": "answer"}}
+		switch content := payload["content"].(type) {
+		case map[string]any:
+			if output, ok := content["output"].(string); ok {
+				heartbeatContent = output
+			}
+		case string:
+			heartbeatContent = content
+		}
+	}
+	logger.Info(logComponent).
+		Str("content", heartbeatContent).
+		Msg("Gateway heartbeat content")
+	if strings.Contains(strings.ToUpper(heartbeatContent), HeartbeatOK) {
+		logger.Info(logComponent).
+			Str("request_id", requestID).
+			Float64("last_tick_at", nowTS).
+			Msg("Gateway heartbeat OK")
+	} else {
+		logger.Info(logComponent).
+			Str("request_id", requestID).
+			Float64("last_tick_at", nowTS).
+			Msg("Gateway heartbeat complete")
+	}
+
+	// ⑤ relay 回传（对齐 L229-243）
+	s.mu.Lock()
+	relayChannelID := s.config.RelayChannelID
+	s.mu.Unlock()
+	if relayChannelID != nil && *relayChannelID != "" && s.publisher != nil {
+		// 直接构造 Message（偏差⑥：NewEventMessage ID 自动 UUID；
+		// Python 显式 id=f"heartbeat-relay-{request_id}" 需自定义 ID）
+		relayMsg := &schema.Message{
+			ID:        fmt.Sprintf("heartbeat-relay-%s", requestID),
+			Type:      schema.MessageTypeEvent,
+			ChannelID: *relayChannelID,
+			SessionID: sessionID,
+			Params:    json.RawMessage(`{}`),
+			Timestamp: nowTS,
+			OK:        true,
+			Payload:   map[string]any{"heartbeat": heartbeatContent},
+			EventType: schema.EventTypeHeartbeatRelay,
+		}
+		s.publisher.PublishRobotMessages(relayMsg)
+		logger.Debug(logComponent).
+			Str("relay_channel_id", *relayChannelID).
+			Msg("Gateway heartbeat relay to channel")
+	}
 }
+
+// generateRandomHex 生成 n 字节的随机 hex（2n 字符）。
+// 对齐 Python secrets.token_hex(n)；与 routing/session_map.go 同款实现
+// （包私有复制不跨包引用——提取公共会引入额外重构，超出本节边界）。
+func generateRandomHex(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%x", time.Now().UnixNano())[:n*2]
+	}
+	return hex.EncodeToString(b)
+}
+
+// ptrBool bool 指针辅助。
+func ptrBool(v bool) *bool { return &v }
+
+// ptrFloat64 float64 指针辅助。
+func ptrFloat64(v float64) *float64 { return &v }
 
 // isActiveNow 根据 active_hours 判断当前时间心跳是否应当生效。
 // 对齐 Python: _is_active_now (heartbeat.py L268-301)。
