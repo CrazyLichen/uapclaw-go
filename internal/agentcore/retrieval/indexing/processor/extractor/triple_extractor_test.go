@@ -625,9 +625,7 @@ type dispatchTripleClient struct {
 	stubTripleClient
 	// dispatch 文本子串 → 响应内容（"boom-" 前缀视为错误）
 	dispatch map[string]string
-	// mu 保护 callCount 计数（并发安全）
-	mu sync.Mutex
-	// callCount Invoke 调用计数
+	// callCount Invoke 调用计数（atomic 并发安全；无 last* 字段故无需 mu）
 	callCount int32
 }
 
