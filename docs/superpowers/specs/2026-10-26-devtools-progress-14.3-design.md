@@ -206,7 +206,7 @@ var workflowProgressMap = map[ProgressStage]float64{
 ## 4. 显式偏差记录（Go↔Python）
 
 1. **remove_callback → cancel 函数**：Go 函数值不可 `==` 比较（编译错误），`reflect.ValueOf(f).Pointer()` 仅代码指针（闭包误判相等/方法值误判不等）。取消函数是语言特性级等价物，语义对齐 Python "add 后移除不再通知"。Python 生产代码 add/remove_callback 实际零消费（仅 docstring 示例+测试消费），属死代码全量对齐范畴
-2. **datetime.isoformat() → RFC3339Nano**：Python isoformat 默认微秒精度（2026-10-26T12:34:56.789012+00:00）；Go RFC3339Nano 纳秒自适应（尾零截断）。字符串形态有亚微秒级差异，语义（ISO8601 UTC 带亚秒精度）等价
+2. **datetime.isoformat() → RFC3339Nano**：Python isoformat 默认微秒精度（2026-10-26T12:34:56.789012+00:00）；Go RFC3339Nano 纳秒自适应（尾零截断）。字符串形态有亚微秒级差异，语义（ISO8601 UTC 带亚秒精度）等价。**时区（2026-10-26 审查差异 1，修复后已消除）**：Python 8 处 `datetime.now(timezone.utc)` 为 UTC aware，Go 初版 8 处 `time.Now()` 漏 `.UTC()`（本地时间，ToDict 输出本地偏移）——已修复为 `time.Now().UTC()` 全 8 处（NewProgressStep.Timestamp、NewBuildProgress.StartTime/LastUpdateTime、5 处方法 LastUpdateTime 更新点），ToDict 现输出 `Z`/`+00:00` 对齐 isoformat 的 `+00:00` 形态；验证用例 TestProgressUTC_时间戳语义。`nowWallClock()`（UnixNano 墙钟秒）时区无关，对齐 Python `time.time()` 保持不动
 3. **time.time() 墙钟 → time.Now().Unix()**：Python 用墙钟算 duration（非单调钟，系统改时会跳变——Python 原始缺陷原样保留，不"顺手优化"为单调钟；对齐原则：Python 有意/无意行为都是契约）
 4. **回调异常 → panic recover**：Python except Exception 捕获回调异常记日志继续；Go 回调 error 返回值无法强制，panic recover 是等价防御。注：Go 回调若只是返回 error 而不 panic，则静默忽略（Python 异常=Go panic 的等价映射下，返回 error 的回调约定不检查）
 5. **details dict.update → 逐键合并**：Python `d.update(other)` 原地覆盖合并；Go 等价逐键 for-range 赋值（nil map 守卫：Details 恒非 nil 由构造器收口保证）

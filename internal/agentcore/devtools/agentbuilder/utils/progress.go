@@ -43,6 +43,8 @@ type ProgressStep struct {
 
 // ToDict 将 ProgressStep 序列化为 JSON 友好字典。
 // 对齐 Python: ProgressStep.to_dict（7 键）。
+// timestamp 为 UTC 时间（对齐 Python datetime.now(timezone.utc)），
+// RFC3339Nano 输出 +00:00 偏移（对齐 isoformat 的 +00:00 形态）。
 func (s ProgressStep) ToDict() map[string]any {
 	var duration any
 	if s.Duration != nil {
@@ -211,7 +213,7 @@ func (r *ProgressReporter) StartStage(stage ProgressStage, message string, opts 
 	r.progress.CurrentStage = stage
 	r.progress.CurrentStatus = ProgressStatusRunning
 	r.progress.CurrentMessage = message
-	r.progress.LastUpdateTime = time.Now()
+	r.progress.LastUpdateTime = time.Now().UTC()
 
 	if cfg.progress != nil {
 		r.progress.OverallProgress = *cfg.progress
@@ -252,7 +254,7 @@ func (r *ProgressReporter) UpdateStage(opts ...UpdateStageOption) {
 	if cfg.progress != nil {
 		r.progress.OverallProgress = *cfg.progress
 	}
-	r.progress.LastUpdateTime = time.Now()
+	r.progress.LastUpdateTime = time.Now().UTC()
 	r.notifyLocked()
 	r.mu.Unlock()
 }
@@ -304,7 +306,7 @@ func (r *ProgressReporter) WarnStage(warning string, opts ...WarnStageOption) {
 		mergeDetails(step.Details, cfg.details)
 	}
 	r.progress.CurrentStatus = ProgressStatusWarning
-	r.progress.LastUpdateTime = time.Now()
+	r.progress.LastUpdateTime = time.Now().UTC()
 
 	stageStr := string(r.progress.CurrentStage)
 	sessionID := r.sessionID
@@ -340,7 +342,7 @@ func (r *ProgressReporter) Complete(message ...string) {
 	r.progress.CurrentStatus = ProgressStatusSuccess
 	r.progress.CurrentMessage = msg
 	r.progress.OverallProgress = 100.0
-	r.progress.LastUpdateTime = time.Now()
+	r.progress.LastUpdateTime = time.Now().UTC()
 
 	if len(r.progress.Steps) > 0 {
 		r.endCurrentStageLocked(ProgressStatusSuccess, &msg, nil, nil)
@@ -458,14 +460,14 @@ var (
 
 // NewProgressStep 创建构建步骤快照。
 // 对齐 Python dataclass ProgressStep 必填三参 + 默认值：
-// details=空 dict、timestamp=now(utc)、duration/error=None。
+// details=空 dict、timestamp=now(timezone.utc)、duration/error=None。
 func NewProgressStep(stage ProgressStage, status ProgressStatus, message string, opts ...ProgressStepOption) ProgressStep {
 	step := ProgressStep{
 		Stage:     stage,
 		Status:    status,
 		Message:   message,
 		Details:   make(map[string]any),
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 	}
 	for _, opt := range opts {
 		opt(&step)
@@ -496,7 +498,7 @@ func WithStepError(errMsg string) ProgressStepOption {
 
 // NewBuildProgress 创建构建进度聚合。
 // 对齐 Python dataclass BuildProgress 必填五参 + 默认值：
-// steps=空 list、overall_progress=0.0、start/last_update_time=now(utc)、error=None。
+// steps=空 list、overall_progress=0.0、start/last_update_time=now(timezone.utc)、error=None。
 func NewBuildProgress(sessionID, agentType string, stage ProgressStage, status ProgressStatus, message string, opts ...BuildProgressOption) BuildProgress {
 	progress := BuildProgress{
 		SessionID:       sessionID,
@@ -506,8 +508,8 @@ func NewBuildProgress(sessionID, agentType string, stage ProgressStage, status P
 		CurrentMessage:  message,
 		Steps:           make([]ProgressStep, 0),
 		OverallProgress: 0.0,
-		StartTime:       time.Now(),
-		LastUpdateTime:  time.Now(),
+		StartTime:       time.Now().UTC(),
+		LastUpdateTime:  time.Now().UTC(),
 	}
 	for _, opt := range opts {
 		opt(&progress)
@@ -678,7 +680,7 @@ func (r *ProgressReporter) endCurrentStageLocked(status ProgressStatus, message 
 	if message != nil {
 		r.progress.CurrentMessage = *message
 	}
-	r.progress.LastUpdateTime = time.Now()
+	r.progress.LastUpdateTime = time.Now().UTC()
 }
 
 // notifyLocked 通知所有回调（须持有 r.mu 调用）。

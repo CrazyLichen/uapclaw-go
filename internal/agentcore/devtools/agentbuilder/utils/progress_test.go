@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -686,5 +687,59 @@ func TestBuildProgress_ToDict_错误形态(t *testing.T) {
 	dict := p.ToDict()
 	if dict["error"] != "session failed" {
 		t.Errorf("error = %v, 期望 session failed", dict["error"])
+	}
+}
+
+// TestProgressUTC_时间戳语义 8 处时间戳恒 UTC（对齐 Python datetime.now(timezone.utc)）。
+// 2026-10-26 审查差异 1 修复验证：ToDict 输出 +00:00 偏移（对齐 isoformat 形态），
+// 与本地时区无关（测试机本地时区非 UTC 时仍须通过）。
+func TestProgressUTC_时间戳语义(t *testing.T) {
+	// ProgressStep 构造器：Timestamp 恒 UTC
+	step := NewProgressStep(ProgressStageInitializing, ProgressStatusRunning, "m")
+	if got := step.Timestamp.Location(); got != time.UTC {
+		t.Errorf("ProgressStep.Timestamp.Location() = %v, 期望 time.UTC", got)
+	}
+	// ToDict：RFC3339Nano 输出以 Z/+00:00 偏移结尾（UTC 标志）
+	tsStr, ok := step.ToDict()["timestamp"].(string)
+	if !ok {
+		t.Fatalf("timestamp 期望 string, got %T", step.ToDict()["timestamp"])
+	}
+	if !strings.HasSuffix(tsStr, "Z") && !strings.HasSuffix(tsStr, "+00:00") {
+		t.Errorf("timestamp = %q, 期望 UTC 偏移（Z 或 +00:00 结尾）", tsStr)
+	}
+
+	// BuildProgress 构造器：StartTime/LastUpdateTime 恒 UTC
+	p := NewBuildProgress("s", "llm_agent", ProgressStageInitializing, ProgressStatusPending, "m")
+	if got := p.StartTime.Location(); got != time.UTC {
+		t.Errorf("BuildProgress.StartTime.Location() = %v, 期望 time.UTC", got)
+	}
+	if got := p.LastUpdateTime.Location(); got != time.UTC {
+		t.Errorf("BuildProgress.LastUpdateTime.Location() = %v, 期望 time.UTC", got)
+	}
+
+	// 方法更新点：StartStage/UpdateStage/WarnStage/CompleteStage 后 LastUpdateTime 恒 UTC
+	reporter := NewProgressReporter("utc", "llm_agent")
+	reporter.StartStage(ProgressStageClarifying, "start")
+	reporter.UpdateStage(WithUpdateStageMessage("update"))
+	reporter.WarnStage("warn")
+	reporter.Complete()
+	prog := reporter.GetProgress()
+	if got := prog.LastUpdateTime.Location(); got != time.UTC {
+		t.Errorf("方法更新后 LastUpdateTime.Location() = %v, 期望 time.UTC", got)
+	}
+	if len(prog.Steps) == 0 || prog.Steps[0].Timestamp.Location() != time.UTC {
+		t.Error("reporter 内建步骤 Timestamp 期望 time.UTC")
+	}
+
+	// BuildProgress.ToDict：start_time/last_update_time UTC 偏移
+	pd := prog.ToDict()
+	for _, key := range []string{"start_time", "last_update_time"} {
+		s, ok := pd[key].(string)
+		if !ok {
+			t.Fatalf("ToDict[%q] 期望 string, got %T", key, pd[key])
+		}
+		if !strings.HasSuffix(s, "Z") && !strings.HasSuffix(s, "+00:00") {
+			t.Errorf("ToDict[%q] = %q, 期望 UTC 偏移结尾", key, s)
+		}
 	}
 }
