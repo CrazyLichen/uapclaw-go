@@ -101,3 +101,36 @@ func TestSparseRetriever_Retrieve_错误透传(t *testing.T) {
 	_, err := r.Retrieve(context.Background(), "test query", 5, nil, RetrievalModeSparse)
 	require.Equal(t, sentinel, err) // 原样冒泡不包装
 }
+
+// TestSparseRetriever_Close_关闭底层 G-3（sparse 侧）：对齐 Python close() 判空关底层
+func TestSparseRetriever_Close_关闭底层(t *testing.T) {
+	r, store := newSparseFixture()
+	r.Close()
+	assert.Equal(t, 1, store.closeCalls)
+}
+
+// TestSparseRetriever_Close_nilStore不panic G-3 边界（sparse 侧）
+func TestSparseRetriever_Close_nilStore不panic(t *testing.T) {
+	r := NewSparseRetriever(nil)
+	assert.NotPanics(t, r.Close)
+}
+
+// TestSparseRetriever_RetrieveSearchResults_无嵌入模型可检索 BM25 不需要嵌入模型
+// （Python Sparse 无 embed_model 字段，Vector.rsr 的 155202 在此不存在——不对称钉点）
+func TestSparseRetriever_RetrieveSearchResults_无嵌入模型可检索(t *testing.T) {
+	r, store := newSparseFixture()
+	results, err := r.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalModeSparse)
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+	assert.Equal(t, 1, store.sparseCalls)
+}
+
+// TestSparseRetriever_BatchRetrieve_错误透传 G-5（sparse 侧）：裸 gather 首错传播
+func TestSparseRetriever_BatchRetrieve_错误透传(t *testing.T) {
+	sentinel := errors.New("bm25 down")
+	store := &fakeVectorStore{sparseErr: sentinel}
+	r := NewSparseRetriever(store)
+	_, err := r.BatchRetrieve(context.Background(), []string{"q1", "q2"}, 5)
+	require.Error(t, err)
+	require.Equal(t, sentinel, err)
+}

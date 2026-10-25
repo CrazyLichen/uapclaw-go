@@ -118,3 +118,49 @@ func TestCreateVectorStore_milvusURI为空(t *testing.T) {
 	require.True(t, errors.As(err, &be))
 	assert.Equal(t, 155400, be.Code())
 }
+
+// TestCreateVectorStore_显式字段名 F7：kwargs 全显式（对齐 Python 显式传参覆盖默认值）
+func TestCreateVectorStore_显式字段名(t *testing.T) {
+	vs, err := CreateVectorStore(newMilvusConfig(),
+		WithStoreMilvusURI("http://localhost:19530"),
+		WithStoreMilvusToken("root:Milvus"),
+		WithStoreTextField("custom_text"),
+		WithStoreVectorFieldName("custom_embedding"),
+		WithStoreSparseVectorField("custom_sparse"),
+		WithStoreMetadataField("custom_meta"),
+		WithStoreDocIDField("custom_doc"))
+	require.NoError(t, err)
+	s, ok := vs.(*MilvusVectorStore)
+	require.True(t, ok)
+	assert.Equal(t, "custom_text", s.textField)
+	assert.Equal(t, "custom_embedding", s.vectorField.VectorFieldName())
+	assert.Equal(t, "custom_sparse", s.sparseVectorField)
+	assert.Equal(t, "custom_meta", s.metadataField)
+	assert.Equal(t, "custom_doc", s.docIDField)
+}
+
+// TestCreateVectorStore_chroma显式字段定义 F8：Chroma 强类型直传
+func TestCreateVectorStore_chroma显式字段定义(t *testing.T) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+	vf := vector_fields.NewChromaVectorFieldFromName("custom_chroma_vec")
+	vs, err := CreateVectorStore(config, WithStoreChromaPath(t.TempDir()), WithStoreChromaVectorField(vf))
+	require.NoError(t, err)
+	s, ok := vs.(*ChromaVectorStore)
+	require.True(t, ok)
+	assert.Equal(t, "custom_chroma_vec", s.vectorField.VectorFieldName)
+}
+
+// TestNewStoreCreateOptions_选项合并 F9：选项构建器惰性合并
+func TestNewStoreCreateOptions_选项合并(t *testing.T) {
+	o := NewStoreCreateOptions(
+		WithStoreTextField("t1"),
+		WithStoreMetadataField("m1"),
+	)
+	assert.Equal(t, "t1", o.TextField)
+	assert.Equal(t, "m1", o.MetadataField)
+	assert.Equal(t, "", o.MilvusURI) // 未设为零值
+}

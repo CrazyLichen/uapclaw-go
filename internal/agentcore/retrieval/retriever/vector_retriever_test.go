@@ -227,3 +227,52 @@ func TestVectorRetriever_BM25兜底_阈值仍生效(t *testing.T) {
 	assert.Len(t, results, 1)
 	assert.Equal(t, "Sparse high", results[0].Text)
 }
+
+// TestVectorRetriever_RetrieveSearchResults_无嵌入模型 rsr 的 155202（对齐 Python rsr 内嵌校验）
+func TestVectorRetriever_RetrieveSearchResults_无嵌入模型(t *testing.T) {
+	rNil := NewVectorRetriever(&fakeVectorStore{}, nil)
+	_, err := rNil.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalModeVector)
+	require.Error(t, err)
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155202, be.Code())
+}
+
+// TestVectorRetriever_RetrieveSearchResults_BM25兜底 rsr 空结果也走 BM25 兜底（对齐 Python L154-159）
+func TestVectorRetriever_RetrieveSearchResults_BM25兜底(t *testing.T) {
+	store := &fakeVectorStore{
+		searchResult: []common.SearchResult{},
+		sparseResult: []common.SearchResult{
+			{ID: "1", Text: "Sparse result", Score: 0.8, Metadata: map[string]any{}},
+		},
+	}
+	r := NewVectorRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	results, err := r.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalModeVector)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, "Sparse result", results[0].Text)
+	assert.Equal(t, 1, store.sparseCalls)
+}
+
+// TestVectorRetriever_Retrieve_BM25兜底错误透传 G-7：向量空结果后 sparse 报错原样冒泡
+func TestVectorRetriever_Retrieve_BM25兜底错误透传(t *testing.T) {
+	sentinel := errors.New("bm25 backend down")
+	store := &fakeVectorStore{
+		searchResult: []common.SearchResult{},
+		sparseErr:    sentinel,
+	}
+	r := NewVectorRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	_, err := r.Retrieve(context.Background(), "q", 5, nil, RetrievalModeVector)
+	require.Equal(t, sentinel, err)
+}
+
+// TestVectorRetriever_Retrieve_Search错误带兜底语义 searchErr 非空时不触发 BM25 兜底
+func TestVectorRetriever_Retrieve_Search错误带兜底语义(t *testing.T) {
+	store := &fakeVectorStore{
+		searchErr: errors.New("vector down"),
+	}
+	r := NewVectorRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	_, err := r.Retrieve(context.Background(), "q", 5, nil, RetrievalModeVector)
+	require.Error(t, err)
+	assert.Equal(t, 0, store.sparseCalls) // 报错即返回，不兜底
+}
