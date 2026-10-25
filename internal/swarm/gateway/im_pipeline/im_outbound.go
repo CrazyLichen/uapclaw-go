@@ -486,12 +486,142 @@ func (p *IMOutboundPipeline) classifyPersonalAction(ctx context.Context, platfor
 	return nil, text
 }
 
-// handleGroupFollowup 处理群聊追问（Task 7 完整实现，本任务占位空签名）。
+// handleGroupFollowup 处理群聊追问：目标解析三层（名字接口 → sender 三键 →
+// candidate）→ metadata 三键 + payload.content 原文恢复 + PendingInteraction 落盘
+// （gpq 确定性 ID）。
 // Python: im_outbound.py L234-304 _handle_group_followup
 func (p *IMOutboundPipeline) handleGroupFollowup(msg *schema.Message, meta map[string]any, adapter IMPlatformAdapter, content string, match []string) {
+	targetName := strings.TrimSpace(match[1])
+	stripped := strings.TrimSpace(reGroupFollowup.ReplaceAllString(content, ""))
+
+	// 目标解析三层
+	targetUserID := ""
+	// 层1：名字接口（hasattr 动态探测 → Go 类型断言）
+	if targetName != "" {
+		if resolver, ok := adapter.(imUserIDNameResolver); ok {
+			targetUserID = resolver.ResolveUserIDByName(targetName)
+		}
+	}
+	// 层2：sender 三键回退
+	if targetUserID == "" {
+		senderUserID := orStr(meta["im_sender_user_id"], meta["open_id"], meta["sender_id"])
+		if senderUserID != "" {
+			targetUserID = senderUserID
+			if targetName == "" {
+				// hasattr(resolve_user_display_name) 恒真（主接口方法）
+				targetName = adapter.ResolveUserDisplayName(senderUserID)
+			}
+		} else {
+			// 层3：candidate 回退
+			candidateUserID := adapter.GetCandidateUserID(meta)
+			if candidateUserID != "" {
+				targetUserID = candidateUserID
+				if targetName == "" {
+					targetName = orStr(meta["reply_target_name"])
+				}
+			}
+		}
+	}
+
+	meta["interaction_mention_user"] = targetName
+	meta["interaction_mention_user_id"] = targetUserID
+	meta["interaction_question"] = true
+
+	// payload.content 恢复（含前缀原文，对齐 Python payload 恢复）
+	payload := msg.Payload
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	payload["content"] = content
+	msg.Payload = payload
+
+	sessionID := strings.TrimSpace(msg.SessionID)
+	originContent := orStr(meta["avatar_original_query"])
+	originSenderID := orStr(meta["im_sender_user_id"], meta["open_id"], meta["sender_id"])
+	originSenderName := targetName
+
+	pi := &routing.PendingInteraction{
+		InteractionID:    fmt.Sprintf("gpq_%s_%s", sessionID, targetUserID),
+		Mode:             routing.ModeGroup,
+		OriginChannelID:  msg.ChannelID,
+		OriginSessionID:  sessionID,
+		OriginContent:    originContent,
+		OriginSenderName: originSenderName,
+		OriginSenderID:   originSenderID,
+		Question:         stripped,
+		TargetUserID:     targetUserID,
+		TargetUserName:   targetName,
+		OriginMetadata:   copyMeta(meta),
+		Status:           routing.StatusPending,
+	}
+	pi.Save()
+
+	msg.Metadata = meta
+	logger.Info(logComponent).
+		Str("event_type", "group_followup").
+		Str("session_id", sessionID).
+		Str("target_name", targetName).
+		Str("target_user_id", targetUserID).
+		Str("question", truncateStr(stripped, 80)).
+		Msg("group followup created")
 }
 
-// handleDMFollowup 处理私聊追问（Task 7 完整实现，本任务占位空签名）。
+// handleDMFollowup 处理私聊追问：reply_scope=dm + interaction_question + 条件候选键 +
+// payload.content 原文恢复 + PendingInteraction 落盘（iact 随机 hex ID，无 TargetUserName）。
 // Python: im_outbound.py L306-356 _handle_dm_followup
 func (p *IMOutboundPipeline) handleDMFollowup(msg *schema.Message, meta map[string]any, adapter IMPlatformAdapter, content string) {
+	stripped := strings.TrimSpace(reDMFollowup.ReplaceAllString(content, ""))
+
+	meta["reply_scope"] = "dm"
+	meta["interaction_question"] = true
+
+	candidateUserID := adapter.GetCandidateUserID(meta)
+	if candidateUserID != "" {
+		meta[adapter.ReplyUserIDKey()] = candidateUserID
+	}
+
+	payload := msg.Payload
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	payload["content"] = content
+	msg.Payload = payload
+
+	sessionID := strings.TrimSpace(msg.SessionID)
+	originContent := orStr(meta["avatar_original_query"])
+	originSenderName := orStr(meta["reply_target_name"])
+	originSenderID := orStr(meta["im_sender_user_id"], meta["open_id"], meta["sender_id"])
+	targetUserID := candidateUserID
+
+	pi := &routing.PendingInteraction{
+		InteractionID:    fmt.Sprintf("iact_%s_%s", msg.ChannelID, newHexID()),
+		Mode:             routing.ModeDM,
+		OriginChannelID:  msg.ChannelID,
+		OriginSessionID:  sessionID,
+		OriginContent:    originContent,
+		OriginSenderName: originSenderName,
+		OriginSenderID:   originSenderID,
+		Question:         stripped,
+		TargetUserID:     targetUserID,
+		OriginMetadata:   copyMeta(meta),
+		Status:           routing.StatusPending,
+	}
+	pi.Save()
+
+	msg.Metadata = meta
+	logger.Info(logComponent).
+		Str("event_type", "dm_followup").
+		Str("session_id", sessionID).
+		Str("target_user_id", targetUserID).
+		Str("question", truncateStr(stripped, 80)).
+		Msg("dm followup created")
+}
+
+// copyMeta 浅拷贝 metadata（防御性拷贝，对齐 Python dict(meta)）。
+func copyMeta(meta map[string]any) map[string]any {
+	result := make(map[string]any, len(meta))
+	for k, v := range meta {
+		result[k] = v
+	}
+	return result
 }

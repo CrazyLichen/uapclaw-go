@@ -3,6 +3,7 @@ package im_pipeline
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -392,4 +394,185 @@ func TestClassifyPersonalAction_DMCHAT判定顺序(t *testing.T) {
 	})
 	isPersonal, _ := p.classifyPersonalAction(context.Background(), "飞书", map[string]any{}, "c")
 	assert.True(t, *isPersonal)
+}
+
+// ──────────────────────────── Task 7: 追问 handlers ────────────────────────────
+
+// TestGroupFollowup_全链 名字接口解析成功 → 四键 + payload 恢复 + 落盘断言。
+func TestGroupFollowup_全链(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := NewIMOutboundPipeline()
+	adapter := &fakeAdapterWithNameResolver{
+		fakeAdapter: fakeAdapter{
+			principalUserID: "ou-principal", principalName: "张三",
+			platformName: "飞书", replyUserIDKey: "reply_feishu_open_id",
+			displayNameByID: map[string]string{"ou-sender": "王五"},
+		},
+		nameToID: map[string]string{"李四": "ou-lisi"},
+	}
+	p.RegisterAdapter("feishu_test", adapter)
+
+	msg := newDigitalAvatarOut("[群聊追问@李四] 需要哪个楼层？", map[string]any{
+		"avatar_original_query": "帮我订会议室",
+		"im_sender_user_id":     "ou-sender",
+	})
+	assert.NoError(t, p.Apply(context.Background(), msg))
+
+	assert.Equal(t, "李四", msg.Metadata["interaction_mention_user"])
+	assert.Equal(t, "ou-lisi", msg.Metadata["interaction_mention_user_id"])
+	assert.Equal(t, true, msg.Metadata["interaction_question"])
+	assert.Equal(t, "[群聊追问@李四] 需要哪个楼层？", msg.Payload["content"])
+
+	pi := routing.LoadPendingInteraction("gpq_sess-1_ou-lisi")
+	require.NotNil(t, pi)
+	assert.Equal(t, routing.ModeGroup, pi.Mode)
+	assert.Equal(t, "feishu_test", pi.OriginChannelID)
+	assert.Equal(t, "sess-1", pi.OriginSessionID)
+	assert.Equal(t, "帮我订会议室", pi.OriginContent)
+	assert.Equal(t, "李四", pi.OriginSenderName)
+	assert.Equal(t, "ou-sender", pi.OriginSenderID)
+	assert.Equal(t, "需要哪个楼层？", pi.Question)
+	assert.Equal(t, "ou-lisi", pi.TargetUserID)
+	assert.Equal(t, "李四", pi.TargetUserName)
+	assert.Equal(t, routing.StatusPending, pi.Status)
+	// OriginMetadata 拷贝隔离
+	msg.Metadata["new_key"] = "x"
+	pi2 := routing.LoadPendingInteraction("gpq_sess-1_ou-lisi")
+	assert.NotContains(t, pi2.OriginMetadata, "new_key")
+}
+
+// TestGroupFollowup_sender回退 名字接口未实现 + target_name 空 → sender 回退 + 显示名补齐。
+func TestGroupFollowup_sender回退(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := NewIMOutboundPipeline()
+	adapter := newTestAdapter()
+	adapter.displayNameByID = map[string]string{"ou-sender": "王五"}
+	p.RegisterAdapter("feishu_test", adapter)
+
+	msg := newDigitalAvatarOut("[群聊追问] 需要哪个楼层？", map[string]any{
+		"open_id": "ou-sender",
+	})
+	assert.NoError(t, p.Apply(context.Background(), msg))
+	assert.Equal(t, "王五", msg.Metadata["interaction_mention_user"])
+	assert.Equal(t, "ou-sender", msg.Metadata["interaction_mention_user_id"])
+	pi := routing.LoadPendingInteraction("gpq_sess-1_ou-sender")
+	require.NotNil(t, pi)
+	assert.Equal(t, "王五", pi.TargetUserName)
+}
+
+// TestGroupFollowup_candidate回退 sender 也空 → candidate + reply_target_name 补名。
+func TestGroupFollowup_candidate回退(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := NewIMOutboundPipeline()
+	adapter := newTestAdapter()
+	adapter.candidateUserID = "ou-cand"
+	p.RegisterAdapter("feishu_test", adapter)
+
+	msg := newDigitalAvatarOut("[群聊追问] 问题", map[string]any{
+		"reply_target_name": "赵六",
+	})
+	assert.NoError(t, p.Apply(context.Background(), msg))
+	assert.Equal(t, "赵六", msg.Metadata["interaction_mention_user"])
+	assert.Equal(t, "ou-cand", msg.Metadata["interaction_mention_user_id"])
+	pi := routing.LoadPendingInteraction("gpq_sess-1_ou-cand")
+	require.NotNil(t, pi)
+	assert.Equal(t, "赵六", pi.TargetUserName)
+}
+
+// TestGroupFollowup_名字接口空解析 ResolveUserIDByName 空串 → sender 回退。
+func TestGroupFollowup_名字接口空解析(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := NewIMOutboundPipeline()
+	adapter := &fakeAdapterWithNameResolver{
+		fakeAdapter: fakeAdapter{principalUserID: "p", principalName: "n", platformName: "飞书"},
+		nameToID:    map[string]string{},
+	}
+	p.RegisterAdapter("feishu_test", adapter)
+	msg := newDigitalAvatarOut("[群聊追问@李四] q", map[string]any{"im_sender_user_id": "ou-sender"})
+	assert.NoError(t, p.Apply(context.Background(), msg))
+	assert.Equal(t, "ou-sender", msg.Metadata["interaction_mention_user_id"])
+}
+
+// TestGroupFollowup_全空 无 sender 无 candidate → ID 尾空串仍落盘。
+func TestGroupFollowup_全空(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := NewIMOutboundPipeline()
+	p.RegisterAdapter("feishu_test", newTestAdapter())
+	msg := newDigitalAvatarOut("[群聊追问@某人] q", nil)
+	assert.NoError(t, p.Apply(context.Background(), msg))
+	pi := routing.LoadPendingInteraction("gpq_sess-1_")
+	require.NotNil(t, pi)
+}
+
+// TestDMFollowup_全链 前缀剥离 + reply_scope/candidate 键 + payload 恢复 + 落盘。
+func TestDMFollowup_全链(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := NewIMOutboundPipeline()
+	adapter := newTestAdapter()
+	adapter.candidateUserID = "ou-target"
+	p.RegisterAdapter("feishu_test", adapter)
+
+	msg := newDigitalAvatarOut("[私聊追问] 需要哪个楼层？", map[string]any{
+		"avatar_original_query": "原始请求",
+		"reply_target_name":     "李四",
+		"im_sender_user_id":     "ou-sender",
+	})
+	assert.NoError(t, p.Apply(context.Background(), msg))
+
+	assert.Equal(t, "dm", msg.Metadata["reply_scope"])
+	assert.Equal(t, true, msg.Metadata["interaction_question"])
+	assert.Equal(t, "ou-target", msg.Metadata["reply_feishu_open_id"])
+	assert.Equal(t, "[私聊追问] 需要哪个楼层？", msg.Payload["content"])
+
+	dir := pathutil.AgentInteractionsDir()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	name := entries[0].Name()
+	assert.Regexp(t, `^iact_feishu_test_[0-9a-f]{8}\.json$`, name)
+	pi := routing.LoadPendingInteraction(strings.TrimSuffix(name, ".json"))
+	require.NotNil(t, pi)
+	assert.Equal(t, routing.ModeDM, pi.Mode)
+	assert.Equal(t, "需要哪个楼层？", pi.Question)
+	assert.Equal(t, "ou-target", pi.TargetUserID)
+	assert.Equal(t, "", pi.TargetUserName)
+	assert.Equal(t, "李四", pi.OriginSenderName)
+	assert.Equal(t, "原始请求", pi.OriginContent)
+}
+
+// TestDMFollowup_无候选 candidate 空 → reply 键不写、TargetUserID 空。
+func TestDMFollowup_无候选(t *testing.T) {
+	setupInteractionsEnv(t)
+	p := NewIMOutboundPipeline()
+	p.RegisterAdapter("feishu_test", newTestAdapter())
+	msg := newDigitalAvatarOut("[私聊追问] q", nil)
+	assert.NoError(t, p.Apply(context.Background(), msg))
+	assert.Equal(t, "dm", msg.Metadata["reply_scope"])
+	assert.NotContains(t, msg.Metadata, "reply_feishu_open_id")
+}
+
+// TestApply_清除先于前缀解析 两者并存场景断言清除发生。
+func TestApply_清除先于前缀解析(t *testing.T) {
+	setupInteractionsEnv(t)
+	pi := &routing.PendingInteraction{
+		InteractionID: "gpq_sess-1_ou-answered", Mode: routing.ModeGroup,
+		OriginChannelID: "feishu_test", OriginSessionID: "sess-1",
+		OriginContent: "oc", OriginSenderName: "n", OriginSenderID: "o",
+		Question: "q", TargetUserID: "ou-answered", Status: routing.StatusPending,
+	}
+	pi.Save()
+
+	p := NewIMOutboundPipeline()
+	adapter := &fakeAdapterWithNameResolver{
+		fakeAdapter: fakeAdapter{principalUserID: "p", principalName: "n", platformName: "飞书"},
+		nameToID:    map[string]string{"李四": "ou-lisi"},
+	}
+	p.RegisterAdapter("feishu_test", adapter)
+
+	msg := newDigitalAvatarOut("[群聊追问@李四] 新问题", map[string]any{
+		"interaction_answered_user_id": "ou-answered",
+	})
+	assert.NoError(t, p.Apply(context.Background(), msg))
+	assert.Nil(t, routing.FindGroupPending("sess-1", "ou-answered"))
+	assert.NotNil(t, routing.LoadPendingInteraction("gpq_sess-1_ou-lisi"))
 }
