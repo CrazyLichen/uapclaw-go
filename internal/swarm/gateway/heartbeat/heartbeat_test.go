@@ -404,6 +404,148 @@ func TestTick_错误分支(t *testing.T) {
 	}
 }
 
+// ──────────────────────────── Task 5: get/set_conf ────────────────────────────
+
+// TestGetHeartbeatConf 三键断言。
+func TestGetHeartbeatConf(t *testing.T) {
+	target := "web"
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{
+		IntervalSeconds: 30,
+		RelayChannelID:  &target,
+		ActiveHours:     map[string]any{"start": "08:00", "end": "22:00"},
+	}, nil, nil)
+	conf := s.GetHeartbeatConf()
+	if conf["every"] != 30.0 {
+		t.Fatalf("every: %v", conf["every"])
+	}
+	if conf["target"] != "web" {
+		t.Fatalf("target: %v", conf["target"])
+	}
+	ah, ok := conf["active_hours"].(map[string]string)
+	if !ok || ah["start"] != "08:00" || ah["end"] != "22:00" {
+		t.Fatalf("active_hours: %v", conf["active_hours"])
+	}
+}
+
+// TestGetHeartbeatConf_nil值 target/active_hours 为 nil 时键仍存在。
+func TestGetHeartbeatConf_nil值(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{IntervalSeconds: 60}, nil, nil)
+	conf := s.GetHeartbeatConf()
+	if _, exists := conf["target"]; !exists {
+		t.Fatal("target key must exist (nil value)")
+	}
+	if conf["target"] != nil {
+		t.Fatalf("target should be nil, got %v", conf["target"])
+	}
+	if conf["active_hours"] != nil {
+		t.Fatalf("active_hours should be nil, got %v", conf["active_hours"])
+	}
+}
+
+// TestSetHeartbeatConf_every非法 every<=0 → error（对齐 ValueError）。
+func TestSetHeartbeatConf_every非法(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{IntervalSeconds: 60}, nil, nil)
+	zero := 0.0
+	if err := s.SetHeartbeatConf(&zero, nil, nil); err == nil {
+		t.Fatal("every<=0 should error")
+	}
+	if err := s.SetHeartbeatConf(nil, nil, nil); err != nil {
+		t.Fatalf("all-nil no-op should pass, got %v", err)
+	}
+}
+
+// TestSetHeartbeatConf_热重启 running→set→stop+start，间隔下轮生效。
+func TestSetHeartbeatConf_热重启(t *testing.T) {
+	fc := &fakeAgentClient{}
+	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{IntervalSeconds: 30}, nil, nil)
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	newEvery := 0.03
+	if err := s.SetHeartbeatConf(&newEvery, nil, nil); err != nil {
+		t.Fatalf("SetHeartbeatConf: %v", err)
+	}
+	defer s.Stop()
+	if !s.IsRunning() {
+		t.Fatal("should restart and be running")
+	}
+	// 新间隔生效：30s 间隔在旧配置下永不 tick，新配置 30ms 内应 tick
+	waitFor(t, func() bool { return fc.Calls() >= 1 }, 2*time.Second)
+}
+
+// TestSetHeartbeatConf_lastTick重置 set 后 lastTickOK/At 归 nil。
+func TestSetHeartbeatConf_lastTick重置(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{IntervalSeconds: 60}, nil, nil)
+	// 模拟已执行过一次
+	s.mu.Lock()
+	s.lastTickOK = ptrBool(true)
+	s.lastTickAt = ptrFloat64(100.0)
+	s.mu.Unlock()
+	newEvery := 120.0
+	if err := s.SetHeartbeatConf(&newEvery, nil, nil); err != nil {
+		t.Fatalf("SetHeartbeatConf: %v", err)
+	}
+	if s.LastTickOK() != nil || s.LastTickAt() != nil {
+		t.Fatalf("lastTick should reset to nil, got %v %v", s.LastTickOK(), s.LastTickAt())
+	}
+	// 验证配置已更新
+	if conf := s.GetHeartbeatConf(); conf["every"] != 120.0 {
+		t.Fatalf("every after set: %v", conf["every"])
+	}
+}
+
+// TestSetHeartbeatConf_target与activeHours 两者更新生效（含数值回转链）。
+func TestSetHeartbeatConf_target与activeHours(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{IntervalSeconds: 60}, nil, nil)
+	newTarget := "tui"
+	if err := s.SetHeartbeatConf(nil, &newTarget, map[string]any{"start": "09:00", "end": "18:00"}); err != nil {
+		t.Fatalf("SetHeartbeatConf: %v", err)
+	}
+	conf := s.GetHeartbeatConf()
+	if conf["target"] != "tui" {
+		t.Fatalf("target: %v", conf["target"])
+	}
+	ah, _ := conf["active_hours"].(map[string]string)
+	if ah["start"] != "09:00" {
+		t.Fatalf("active_hours: %v", conf["active_hours"])
+	}
+}
+
+// TestSetHeartbeatConf_activeHours数值原样存储 数值 1320 存储后经 GetHeartbeatConf 回转 "22:00"
+// （对齐 Python set_conf 不做类型转换、get_conf normalize 的回转链）。
+func TestSetHeartbeatConf_activeHours数值原样存储(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{IntervalSeconds: 60}, nil, nil)
+	if err := s.SetHeartbeatConf(nil, nil, map[string]any{"start": 1320, "end": "06:00"}); err != nil {
+		t.Fatalf("SetHeartbeatConf: %v", err)
+	}
+	conf := s.GetHeartbeatConf()
+	ah, _ := conf["active_hours"].(map[string]string)
+	if ah["start"] != "22:00" || ah["end"] != "06:00" {
+		t.Fatalf("numeric passthrough + normalize failed: %v", conf["active_hours"])
+	}
+}
+
+// TestSetHeartbeatConf_activeHours清除 空传 {} → 空 map（生效中清空语义）
+// 语义校准：非 nil 空 map 也被接受存储（GetHeartbeatConf 后 normalize 为空 map）。
+func TestSetHeartbeatConf_activeHours清除(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{
+		IntervalSeconds: 60,
+		ActiveHours:     map[string]any{"start": "08:00", "end": "22:00"},
+	}, nil, nil)
+	if err := s.SetHeartbeatConf(nil, nil, map[string]any{}); err != nil {
+		t.Fatalf("SetHeartbeatConf: %v", err)
+	}
+	// 空 map 存储 → GetHeartbeatConf normalize 为空 map（len 0 非空配置——始终生效）
+	conf := s.GetHeartbeatConf()
+	if ah, _ := conf["active_hours"].(map[string]string); len(ah) != 0 {
+		t.Fatalf("empty active_hours should store as empty, got %v", conf["active_hours"])
+	}
+	// isActiveNow 对空 map 返回 true（len==0 → 始终生效，Task 2 已测）
+	if !s.isActiveNow() {
+		t.Fatal("empty active_hours should be always-active")
+	}
+}
+
 // TestIsActiveNow_无配置 ActiveHours 为空 → true。
 func TestIsActiveNow_无配置(t *testing.T) {
 	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{}, nil, mkTime(0))

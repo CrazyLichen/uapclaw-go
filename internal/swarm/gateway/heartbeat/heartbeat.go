@@ -241,6 +241,92 @@ func (s *GatewayHeartbeatService) LastTickAt() *float64 {
 	return s.lastTickAt
 }
 
+// GetHeartbeatConf 返回当前心跳配置摘要（every/target/active_hours）。
+// 对齐 Python: get_heartbeat_conf (heartbeat.py L303-309)。
+func (s *GatewayHeartbeatService) GetHeartbeatConf() map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var relay any
+	if s.config.RelayChannelID != nil {
+		relay = *s.config.RelayChannelID
+	}
+	// 注意 nil-interface 陷阱：nil 的 map[string]string 装入 any 会变成
+	// 非 nil interface（打印 map[]）——须显式保 nil，对齐 Python None → null
+	var activeHours any
+	if s.config.ActiveHours != nil {
+		activeHours = NormalizeActiveHours(s.config.ActiveHours)
+	}
+	return map[string]any{
+		"every":        s.config.IntervalSeconds,
+		"target":       relay,
+		"active_hours": activeHours,
+	}
+}
+
+// SetHeartbeatConf 更新配置并按需重启。
+// 对齐 Python: set_heartbeat_conf (heartbeat.py L311-354)。
+// 内部重启用 context.Background()（脱离 Start 传入的 ctx 生命周期，
+// 服务自身 cancel 管理——对齐 Python stop/start 不依赖外部 ctx）。
+func (s *GatewayHeartbeatService) SetHeartbeatConf(every *float64, target *string, activeHours map[string]any) error {
+	updated := false
+	s.mu.Lock()
+	if every != nil {
+		if *every <= 0 {
+			s.mu.Unlock()
+			return fmt.Errorf("heartbeat 'every' must be > 0")
+		}
+		s.config.IntervalSeconds = *every
+		updated = true
+	}
+	if target != nil {
+		s.config.RelayChannelID = target
+		updated = true
+	}
+	if activeHours != nil {
+		// 原样存储（对齐 Python：不做值类型转换，数值 1320 存 int，
+		// 由 NormalizeActiveHours 回转 "22:00"）
+		s.config.ActiveHours = activeHours
+		updated = true
+	}
+	s.mu.Unlock()
+
+	if !updated {
+		return nil
+	}
+
+	wasRunning := s.running.Load()
+	if wasRunning {
+		s.Stop()
+	}
+
+	// 重置最近一次心跳状态（对齐 L343-344）
+	s.mu.Lock()
+	s.lastTickOK = nil
+	s.lastTickAt = nil
+	s.mu.Unlock()
+
+	if wasRunning {
+		if err := s.Start(context.Background()); err != nil {
+			return err
+		}
+	}
+
+	s.mu.Lock()
+	everyVal := s.config.IntervalSeconds
+	var targetVal any
+	if s.config.RelayChannelID != nil {
+		targetVal = *s.config.RelayChannelID
+	}
+	activeVal := s.config.ActiveHours
+	s.mu.Unlock()
+	logger.Info(logComponent).
+		Float64("every", everyVal).
+		Any("target", targetVal).
+		Any("active_hours", activeVal).
+		Msg("Gateway heartbeat config updated")
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runLoop 主循环：先睡 interval 再 tick（逐字对齐 Python _run_loop L155-165，已拍板）。
