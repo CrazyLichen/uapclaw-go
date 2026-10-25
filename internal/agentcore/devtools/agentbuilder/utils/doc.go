@@ -12,9 +12,11 @@
 //
 //	utils/
 //	├── doc.go              # 包文档
+//	├── enums.go            # 4 枚举类型+26 常量+Parse×4+All×4（对齐 Python enums.py）
 //	├── constants.go        # 20 个共享常量（含 13 个死常量，对齐 Python 全量）
 //	├── utils.go            # 7 个工具函数 + 2 个预编译正则
 //	├── constants_test.go   # 21.5 用例（对齐 Python test_constants.py）
+//	├── enums_test.go       # 12 unit+4.5 system 回填+增强用例（对齐 Python test_enums.py + system）
 //	└── utils_test.go       # 39.5+17 用例（对齐 Python test_utils.py + system 3 + 增强）
 //
 // 对应 Python 代码：openjiuwen/dev_tools/agent_builder/utils/
