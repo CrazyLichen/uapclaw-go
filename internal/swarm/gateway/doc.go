@@ -23,6 +23,9 @@
 //	├── config_env_map.go   # 配置键→环境变量映射 + browserRuntimeKeys
 //	├── embed.go            # go:embed 前端静态资源
 //	├── file_api.go         # /file-api/* HTTP 路由处理
+//	├── cron/               # 定时任务调度（11.10：CronSchedulerService 事件堆 + CronController）
+//	├── hooks/              # Gateway Hook（11.13：GatewayHookHandler 4 事件）
+//	├── heartbeat/          # 心跳服务（11.11：GatewayHeartbeatService 旁路定时器）
 //	├── channel_manager/    # 渠道管理
 //	├── message_handler/    # 消息处理器
 //	└── routing/            # 路由与 AgentServer 客户端

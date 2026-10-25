@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	gwcron "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/cron"
+	gwheartbeat "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/heartbeat"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -55,6 +57,8 @@ type AppGatewayServer struct {
 	inboundServer *InboundGatewayServer
 	// cronScheduler cron 调度器（11.10，对齐 Python cron_scheduler）
 	cronScheduler *gwcron.CronSchedulerService
+	// heartbeatService 心跳服务（11.11，对齐 Python heartbeat_service）
+	heartbeatService *gwheartbeat.GatewayHeartbeatService
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -154,6 +158,73 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	msgHandler.SetCronController(cronController)
 	s.cronScheduler = cronScheduler
 
+	// 步骤4.6：Heartbeat 心跳服务装配（11.11，对齐 Python app_gateway.py L867-912）
+	// 1) 读 config heartbeat 段（对齐 L867-891）
+	var heartbeatCfgMap map[string]any
+	if cfg != nil {
+		data, err := cfg.Load()
+		if err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Msg("failed to read heartbeat config, using defaults")
+		} else if hb, ok := data["heartbeat"].(map[string]any); ok {
+			heartbeatCfgMap = hb
+		}
+	}
+	var cfgEvery, cfgTarget, cfgActiveHours any
+	if heartbeatCfgMap != nil {
+		cfgEvery = heartbeatCfgMap["every"]
+		cfgTarget = heartbeatCfgMap["target"]
+		cfgActiveHours = heartbeatCfgMap["active_hours"]
+	}
+
+	// 2) 三级回退（对齐 L893-900）
+	interval := 60.0
+	if v := os.Getenv("HEARTBEAT_INTERVAL"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			interval = f
+		}
+	} else if cfgEvery != nil {
+		// 偏差⑧：Python float(str(cfg_every)) 字符串中转；Go 数值直转
+		if f, ok := cfgEvery.(float64); ok {
+			interval = f
+		} else if i, ok := cfgEvery.(int); ok {
+			interval = float64(i)
+		} else if s, ok := cfgEvery.(string); ok {
+			if f, err := strconv.ParseFloat(s, 64); err == nil {
+				interval = f
+			}
+		}
+	}
+	var timeout *float64
+	if v := os.Getenv("HEARTBEAT_TIMEOUT"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			timeout = &f
+		}
+	}
+	relayChannel := "web"
+	if v := os.Getenv("HEARTBEAT_RELAY_CHANNEL_ID"); v != "" {
+		relayChannel = v
+	} else if cfgTarget != nil {
+		if s := fmt.Sprint(cfgTarget); s != "" {
+			relayChannel = s
+		}
+	}
+	var activeHours map[string]any
+	if ah, ok := cfgActiveHours.(map[string]any); ok {
+		activeHours = ah
+	}
+
+	// 3) 构造服务（对齐 L902-912）
+	hbConfig := &gwheartbeat.HeartbeatConfig{
+		IntervalSeconds: interval,
+		TimeoutSeconds:  timeout,
+		ChannelID:       gwheartbeat.HeartbeatChannelID,
+		RelayChannelID:  &relayChannel,
+		ActiveHours:     activeHours,
+	}
+	s.heartbeatService = gwheartbeat.NewGatewayHeartbeatService(agentClient, hbConfig, msgHandler, nil)
+
 	// 11.10 已回填：cronbridge 全局注入（对齐 Python MessageHandler.get_instance() 单例语义）
 	// 单进程形态下 AgentServer 侧 bridge 惰性构造 CronTools 时消费这些全局注入：
 	// - wake 发布器：MessageHandler.PublishUserMessagesNowait 隐式满足 UserMessagePublisher
@@ -187,6 +258,7 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 		// CryptoProvider 生产不注入（传 nil）：handler 每次请求经 resolveCrypto 查全局
 		CryptoProvider: nil,
 		CronController: cronController, // 11.10 注入：8 个 cron.job.* 端点
+		HeartbeatService: s.heartbeatService, // 11.11 注入：heartbeat.get_conf/set_conf/get_path
 	})
 
 	// 组装路由
@@ -209,8 +281,12 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 		}
 	}
 
-	// TODO(⤵️ Heartbeat): 初始化 GatewayHeartbeatService（配置 interval/timeout/active_hours），启动
-	// Python: app_gateway.py L884-913
+	// 11.11 已回填：启动心跳服务（对齐 Python L913 await heartbeat_service.start()）
+	if s.heartbeatService != nil {
+		if err := s.heartbeatService.Start(ctx); err != nil {
+			logger.Error(logComponent).Err(err).Msg("failed to start heartbeat service")
+		}
+	}
 
 	// WebChannel 已通过 RegisterChannelWithInbound 注册（对齐 Python register_channel_with_inbound）
 
@@ -387,6 +463,11 @@ func (s *AppGatewayServer) Stop() error {
 				Err(err).
 				Msg("failed to stop ChannelManager outbound dispatch loop")
 		}
+	}
+
+	// 11.11 已回填：停止心跳服务（对齐 Python L1738 await heartbeat_service.stop()）
+	if s.heartbeatService != nil {
+		s.heartbeatService.Stop()
 	}
 
 	// 停止 MessageHandler

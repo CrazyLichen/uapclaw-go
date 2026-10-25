@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
@@ -199,4 +200,79 @@ func TestAppGatewayServer_空路由装配不panic(t *testing.T) {
 	assert.True(t, gs.inboundServer.running.Load())
 	// A1 空路由形态：路由表为空
 	assert.Empty(t, gs.gwServer.config.Routes)
+}
+
+// ──────────────────────────── 11.11 Heartbeat 装配 ────────────────────────────
+
+// TestNewAppGatewayServer_Heartbeat装配 默认构造心跳服务，三级回退到默认 60s/web。
+func TestNewAppGatewayServer_Heartbeat装配(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	os.Unsetenv("HEARTBEAT_INTERVAL")         //nolint:errcheck // 测试中和
+	os.Unsetenv("HEARTBEAT_TIMEOUT")          //nolint:errcheck // 测试中和
+	os.Unsetenv("HEARTBEAT_RELAY_CHANNEL_ID") //nolint:errcheck // 测试中和
+	workspace.SetUserHome(workspace.UserHomeDir())
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "config", "config.yaml"), []byte(""), 0o644))
+
+	cfg, err := config.New("")
+	require.NoError(t, err)
+	tp := transport.NewChannelTransport()
+	ac := routing.NewAgentClient(tp)
+	gs, err := NewAppGatewayServer(cfg, ac)
+	require.NoError(t, err)
+	require.NotNil(t, gs.heartbeatService)
+	// 未设 env 且 config 无 heartbeat 段 → 默认 60s
+	assert.Equal(t, 60.0, gs.heartbeatService.GetHeartbeatConf()["every"])
+	// 默认 relay target "web"
+	assert.Equal(t, "web", gs.heartbeatService.GetHeartbeatConf()["target"])
+}
+
+// TestNewAppGatewayServer_HeartbeatEnv回退 HEARTBEAT_INTERVAL env 优先于 config 与默认。
+func TestNewAppGatewayServer_HeartbeatEnv回退(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	os.Unsetenv("HEARTBEAT_TIMEOUT")          //nolint:errcheck // 测试中和
+	os.Unsetenv("HEARTBEAT_RELAY_CHANNEL_ID") //nolint:errcheck // 测试中和
+	workspace.SetUserHome(workspace.UserHomeDir())
+	cfgDir := filepath.Join(tmpDir, "config")
+	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	// config.every=42 应被 env=15 覆盖（env > config > 60 三级回退）
+	require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"),
+		[]byte("heartbeat:\n  every: 42\n"), 0o644))
+	t.Setenv("HEARTBEAT_INTERVAL", "15")
+
+	cfg, err := config.New("")
+	require.NoError(t, err)
+	tp := transport.NewChannelTransport()
+	ac := routing.NewAgentClient(tp)
+	gs, err := NewAppGatewayServer(cfg, ac)
+	require.NoError(t, err)
+	require.NotNil(t, gs.heartbeatService)
+	assert.Equal(t, 15.0, gs.heartbeatService.GetHeartbeatConf()["every"])
+}
+
+// TestNewAppGatewayServer_HeartbeatConfig回退 config.yaml heartbeat.every 次优先于默认。
+func TestNewAppGatewayServer_HeartbeatConfig回退(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	os.Unsetenv("HEARTBEAT_INTERVAL")         //nolint:errcheck // 测试中和
+	os.Unsetenv("HEARTBEAT_TIMEOUT")          //nolint:errcheck // 测试中和
+	os.Unsetenv("HEARTBEAT_RELAY_CHANNEL_ID") //nolint:errcheck // 测试中和
+	workspace.SetUserHome(workspace.UserHomeDir())
+	cfgDir := filepath.Join(tmpDir, "config")
+	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	cfgContent := "heartbeat:\n  every: 42\n  target: tui\n"
+	require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte(cfgContent), 0o644))
+
+	cfg, err := config.New("")
+	require.NoError(t, err)
+	tp := transport.NewChannelTransport()
+	ac := routing.NewAgentClient(tp)
+	gs, err := NewAppGatewayServer(cfg, ac)
+	require.NoError(t, err)
+	require.NotNil(t, gs.heartbeatService)
+	conf := gs.heartbeatService.GetHeartbeatConf()
+	assert.Equal(t, 42.0, conf["every"])
+	assert.Equal(t, "tui", conf["target"])
 }
