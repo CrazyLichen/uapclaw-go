@@ -2,6 +2,8 @@
 // 对齐 Python: openjiuwen/dev_tools/agent_builder/utils/enums.py。
 package utils
 
+import "fmt"
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // AgentType 构建的 Agent 类型，对齐 Python str-Enum AgentType。
@@ -97,3 +99,88 @@ const (
 	// ProgressStatusWarning 警告
 	ProgressStatusWarning ProgressStatus = "warning"
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ParseAgentType 解析字符串为 AgentType，非法值返回错误。
+// 对应 Python AgentType("x") 的 ValueError 语义；14.5 executor 消费
+// （err 链入 BuildError cause 触发 140032 AGENT_BUILDER_AGENT_TYPE_NOT_SUPPORTED）。
+func ParseAgentType(s string) (AgentType, error) {
+	switch AgentType(s) {
+	case AgentTypeLLMAgent, AgentTypeWorkflow:
+		return AgentType(s), nil
+	default:
+		return "", fmt.Errorf("unsupported agent type: %q, valid: [llm_agent workflow]", s)
+	}
+}
+
+// ParseBuildState 解析字符串为 BuildState，非法值返回错误。
+// 对应 Python BuildState("x") 的 ValueError 语义（语言特性级等价物，对称补齐）。
+func ParseBuildState(s string) (BuildState, error) {
+	switch BuildState(s) {
+	case BuildStateInitial, BuildStateProcessing, BuildStateCompleted:
+		return BuildState(s), nil
+	default:
+		return "", fmt.Errorf("unsupported build state: %q, valid: [initial processing completed]", s)
+	}
+}
+
+// ParseProgressStage 解析字符串为 ProgressStage，非法值返回错误。
+// 对应 Python ProgressStage("x") 的 ValueError 语义（语言特性级等价物，对称补齐）。
+func ParseProgressStage(s string) (ProgressStage, error) {
+	switch ProgressStage(s) {
+	case ProgressStageInitializing, ProgressStageClarifying, ProgressStageResourceRetrieving,
+		ProgressStageCompleted, ProgressStageError, ProgressStageOptimizing,
+		ProgressStageGeneratingConfig, ProgressStageTransformingDSL,
+		ProgressStageDetectingIntention, ProgressStageGeneratingWorkflowDesign,
+		ProgressStageGeneratingDL, ProgressStageValidatingDL, ProgressStageRefiningDL,
+		ProgressStageTransformingMermaid, ProgressStageTransformingWorkflowDSL:
+		return ProgressStage(s), nil
+	default:
+		return "", fmt.Errorf("unsupported progress stage: %q, valid: 15 values", s)
+	}
+}
+
+// ParseProgressStatus 解析字符串为 ProgressStatus，非法值返回错误。
+// 对应 Python ProgressStatus("x") 的 ValueError 语义（语言特性级等价物，对称补齐）。
+func ParseProgressStatus(s string) (ProgressStatus, error) {
+	switch ProgressStatus(s) {
+	case ProgressStatusPending, ProgressStatusRunning, ProgressStatusSuccess,
+		ProgressStatusFailed, ProgressStatusWarning:
+		return ProgressStatus(s), nil
+	default:
+		return "", fmt.Errorf("unsupported progress status: %q, valid: [pending running success failed warning]", s)
+	}
+}
+
+// AllAgentTypes 按声明序返回全部 AgentType 值。
+// 对应 Python [t for t in AgentType] 可迭代语义；14.5 executor 消费
+// （supported_types 错误详情字段）。
+func AllAgentTypes() []AgentType {
+	return []AgentType{AgentTypeLLMAgent, AgentTypeWorkflow}
+}
+
+// AllBuildStates 按声明序返回全部 BuildState 值。
+// 对应 Python len(BuildState) 计数与可迭代语义；混合回填用例消费。
+func AllBuildStates() []BuildState {
+	return []BuildState{BuildStateInitial, BuildStateProcessing, BuildStateCompleted}
+}
+
+// AllProgressStages 按声明序返回全部 ProgressStage 值（15 个）。
+// 对应 Python 可迭代语义（对称补齐）。
+func AllProgressStages() []ProgressStage {
+	return []ProgressStage{
+		ProgressStageInitializing, ProgressStageClarifying, ProgressStageResourceRetrieving,
+		ProgressStageCompleted, ProgressStageError, ProgressStageOptimizing,
+		ProgressStageGeneratingConfig, ProgressStageTransformingDSL,
+		ProgressStageDetectingIntention, ProgressStageGeneratingWorkflowDesign,
+		ProgressStageGeneratingDL, ProgressStageValidatingDL, ProgressStageRefiningDL,
+		ProgressStageTransformingMermaid, ProgressStageTransformingWorkflowDSL,
+	}
+}
+
+// AllProgressStatuses 按声明序返回全部 ProgressStatus 值。
+// 对应 Python 可迭代语义（对称补齐）。
+func AllProgressStatuses() []ProgressStatus {
+	return []ProgressStatus{ProgressStatusPending, ProgressStatusRunning, ProgressStatusSuccess, ProgressStatusFailed, ProgressStatusWarning}
+}
