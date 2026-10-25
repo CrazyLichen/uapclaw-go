@@ -2,6 +2,7 @@ package extractor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -136,6 +137,236 @@ func TestBuildPrompt_模板完整性(t *testing.T) {
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("模板应包含 %q", want)
+		}
+	}
+}
+
+// ──────────────────────────── parseTriples 测试（Python 7 例 1:1）────────────────────────────
+
+// TestParseTriples_顶层数组 对齐 test_parse_triples_json_array
+func TestParseTriples_顶层数组(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`[["a", "b", "c"]]`, "d1", "c1")
+	if !ok || len(triples) != 1 {
+		t.Fatalf("ok=%v len=%d，应为 true/1", ok, len(triples))
+	}
+	if triples[0].Subject != "a" || triples[0].Predicate != "b" || triples[0].Object != "c" {
+		t.Errorf("三元组字段断言失败: %+v", triples[0])
+	}
+}
+
+// TestParseTriples_多余字段截取 对齐 test_parse_triples_extra_fields_ignored
+func TestParseTriples_多余字段截取(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`[["a", "b", "c", "ignored", 99]]`, "d1", "c1")
+	if !ok {
+		t.Fatal("应为 true")
+	}
+	if triples[0].Object != "c" {
+		t.Errorf("Object 应截取前三项为 c，实际 %s", triples[0].Object)
+	}
+}
+
+// TestParseTriples_包裹dict 对齐 test_parse_triples_wrapped_dict
+func TestParseTriples_包裹dict(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`{"triples": [["x", "y", "z"]]}`, "d1", "c1")
+	if !ok || len(triples) != 1 {
+		t.Fatalf("ok=%v len=%d，应为 true/1", ok, len(triples))
+	}
+	if triples[0].Subject != "x" {
+		t.Errorf("Subject 应为 x，实际 %s", triples[0].Subject)
+	}
+}
+
+// TestParseTriples_含named_entities 对齐 test_parse_triples_prompt_shape
+func TestParseTriples_含named_entities(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`{"named_entities": ["Alice", "Bob"], "triples": [["Alice", "knows", "Bob"]]}`, "d1", "c1")
+	if !ok || len(triples) != 1 {
+		t.Fatalf("ok=%v len=%d，应为 true/1", ok, len(triples))
+	}
+	if triples[0].Subject != "Alice" {
+		t.Errorf("Subject 应为 Alice，实际 %s", triples[0].Subject)
+	}
+}
+
+// TestParseTriples_缺triples键 对齐 test_parse_triples_missing_triples_key_fails
+func TestParseTriples_缺triples键(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`{"named_entities": ["Alice", "Bob"]}`, "d1", "c1")
+	if ok {
+		t.Fatal("缺 triples 键应为 false")
+	}
+	if len(triples) != 0 {
+		t.Errorf("失败时应返回空列表，实际 %d", len(triples))
+	}
+}
+
+// TestParseTriples_invalid混合 对齐 test_parse_triples_invalid_items_ignored
+func TestParseTriples_invalid混合(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`{"triples": [["a", "b", "c"], ["x"], {"bad": 1}, ["y", ["nested"], "z"]]}`, "d1", "c1")
+	if !ok {
+		t.Fatal("混合场景应 ok=true（有 1 条合格）")
+	}
+	if len(triples) != 1 {
+		t.Fatalf("应保留 1 条合格三元组，实际 %d", len(triples))
+	}
+	if triples[0].Subject != "a" {
+		t.Errorf("唯一合格项 Subject 应为 a，实际 %s", triples[0].Subject)
+	}
+}
+
+// TestParseTriples_全invalid 对齐 test_parse_triples_all_invalid_fails
+func TestParseTriples_全invalid(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`{"triples": [["x"], {"bad": 1}]}`, "d1", "c1")
+	if ok {
+		t.Fatal("全 invalid 应为 false")
+	}
+	if len(triples) != 0 {
+		t.Errorf("失败时应返回空列表，实际 %d", len(triples))
+	}
+}
+
+// ──────────────────────────── parseTriples Go 增强 ────────────────────────────
+
+// TestParseTriples_metadata注入 测试 doc_id/chunk_id 元数据注入（Go 增强）
+func TestParseTriples_metadata注入(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`[["a", "b", "c"]]`, "d1", "c1")
+	if !ok || len(triples) != 1 {
+		t.Fatalf("ok=%v len=%d", ok, len(triples))
+	}
+	if triples[0].Metadata["doc_id"] != "d1" || triples[0].Metadata["chunk_id"] != "c1" {
+		t.Errorf("Metadata 应注入 doc_id/chunk_id，实际 %v", triples[0].Metadata)
+	}
+}
+
+// TestParseTriples_fence剥离 测试 3 行 markdown fence 剥离（Go 增强 §7.2-6）
+func TestParseTriples_fence剥离(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	content := "```json\n{\"triples\": [[\"a\", \"b\", \"c\"]]}\n```"
+	triples, ok := e.parseTriples(content, "d1", "c1")
+	if !ok || len(triples) != 1 {
+		t.Fatalf("fence 剥离后应解析成功，ok=%v len=%d", ok, len(triples))
+	}
+}
+
+// TestParseTriples_fence两行不剥 测试 2 行 fence 不剥（Go 增强 §7.2-6）
+func TestParseTriples_fence两行不剥(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	// len(lines)==2 不满足 >2，走原文 → 修复器无法解析 → false
+	_, ok := e.parseTriples("```\n```", "d1", "c1")
+	if ok {
+		t.Fatal("2 行 fence 不剥离应解析失败")
+	}
+}
+
+// TestParseTriples_极坏输入 测试空串/纯文本输入（Go 增强 §7.2-7）
+func TestParseTriples_极坏输入(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	for _, content := range []string{"", "Invalid JSON response", "   "} {
+		if _, ok := e.parseTriples(content, "d1", "c1"); ok {
+			t.Errorf("极坏输入 %q 不应解析成功", content)
+		}
+	}
+}
+
+// TestParseTriples_空triples列表 测试空列表返回 true（Python ([], True) 分支）
+func TestParseTriples_空triples列表(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`{"triples": []}`, "d1", "c1")
+	if !ok {
+		t.Fatal("空 triples 列表应为 true（Python ([], True)）")
+	}
+	if len(triples) != 0 {
+		t.Errorf("应为空列表，实际 %d", len(triples))
+	}
+}
+
+// TestParseTriples_字段strip 测试 str(x).strip() 两步语义（Go 增强）
+func TestParseTriples_字段strip(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`[[" a ", " b ", " c "]]`, "d1", "c1")
+	if !ok || len(triples) != 1 {
+		t.Fatalf("ok=%v len=%d", ok, len(triples))
+	}
+	if triples[0].Subject != "a" || triples[0].Predicate != "b" || triples[0].Object != "c" {
+		t.Errorf("三字段应 strip，实际 %+v", triples[0])
+	}
+}
+
+// TestParseTriples_数字类型字段 测试数字字段经 pyStr 字符串化（Go 增强 §7.2-5）
+//
+// 合法 JSON 主路径：jsonrepair 短路解码产出 json.Number——pyStr 整数字面
+// 原样输出（对齐 Python json.loads int → str）
+func TestParseTriples_数字类型字段(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`[["Magic Johnson", "draft pick number", 1]]`, "d1", "c1")
+	if !ok || len(triples) != 1 {
+		t.Fatalf("ok=%v len=%d", ok, len(triples))
+	}
+	if triples[0].Object != "1" {
+		t.Errorf("数字 1 应字符串化为 \"1\"，实际 %q", triples[0].Object)
+	}
+}
+
+// TestParseTriples_浮点数字段 测试浮点数字段（json.Number → Atoi 失败 →
+// pyFloatStr 记法还原，对齐 Python str(1.5)="1.5"）
+func TestParseTriples_浮点数字段(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	triples, ok := e.parseTriples(`[["a", "value", 1.5]]`, "d1", "c1")
+	if !ok || len(triples) != 1 {
+		t.Fatalf("ok=%v len=%d", ok, len(triples))
+	}
+	if triples[0].Object != "1.5" {
+		t.Errorf("数字 1.5 应字符串化为 \"1.5\"，实际 %q", triples[0].Object)
+	}
+}
+
+// ──────────────────────────── pyStr 测试（Go 增强 §7.2-5）────────────────────────────
+
+// TestPyStr_类型字符串化 对齐 Python str() 逐类型语义
+func TestPyStr_类型字符串化(t *testing.T) {
+	cases := []struct {
+		in   any
+		want string
+	}{
+		{1.0, "1.0"},     // float64 整数值补 .0
+		{1e-4, "0.0001"}, // f 记法下界
+		{1e16, "1e+16"},  // e 记法上界
+		{true, "True"},   // Python str(True)
+		{false, "False"}, // Python str(False)
+		{42, "42"},       // int
+		{"abc", "abc"},   // string 原样
+		{nil, "None"},    // 不可达防御分支
+	}
+	for _, c := range cases {
+		if got := pyStr(c.in); got != c.want {
+			t.Errorf("pyStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
+		}
+	}
+}
+
+// TestPyStr_jsonNumber 对齐合法 JSON 路径的 json.Number 字面输出（探针实测：
+// json.Valid 短路路径经 UseNumber 产出 json.Number，三元组内数字以此形态到达）
+func TestPyStr_jsonNumber(t *testing.T) {
+	cases := []struct {
+		in   json.Number
+		want string
+	}{
+		{json.Number("1"), "1"},                       // Python json 解码 int → str(1)="1"
+		{json.Number("1.0"), "1.0"},                   // Python float → str(1.0)="1.0"
+		{json.Number("1.5"), "1.5"},                   // 最短往返同形
+		{json.Number("10000000000000000"), "10000000000000000"}, // int 超界仍整数字面（Python int 无界）
+		{json.Number("1e16"), "1e+16"},                // Python float(1e16) → str → "1e+16"
+		{json.Number("0.0001"), "0.0001"},
+	}
+	for _, c := range cases {
+		if got := pyStr(c.in); got != c.want {
+			t.Errorf("pyStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
 		}
 	}
 }
