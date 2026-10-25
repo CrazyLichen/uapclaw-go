@@ -9,6 +9,7 @@
 //	├── doc.go           # 包文档
 //	├── config.go        # 索引/知识库/检索/向量存储配置类型
 //	├── document.go      # MultimodalDocument + TextChunk 文档数据模型
+//	├── triple.go        # Triple 三元组数据模型（OpenIE 抽取产物）
 //	├── callbacks.go     # DocIndexCallback 类型别名 + NoOpDocIndexCallback + LoggingDocIndexCallback
 //	└── result.go        # SearchResult + RetrievalResult 数据模型
 //
@@ -16,6 +17,7 @@
 //
 //	openjiuwen/core/retrieval/common/config.py
 //	openjiuwen/core/retrieval/common/document.py
+//	openjiuwen/core/retrieval/common/triple.py
 //	openjiuwen/core/retrieval/common/callbacks.py
 //	openjiuwen/core/retrieval/common/retrieval_result.py
 //
@@ -25,6 +27,7 @@
 //	ModalityField      — 单个模态字段
 //	MultimodalDocument — 多模态文档（文本/图片/音频/视频）
 //	TextChunk          — 文本分块数据模型
+//	Triple             — OpenIE 三元组数据模型
 //	IndexConfig        — 索引配置
 //	KnowledgeBaseConfig — 知识库配置
 //	RetrievalConfig    — 检索配置
