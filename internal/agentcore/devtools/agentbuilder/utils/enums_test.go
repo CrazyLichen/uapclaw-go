@@ -148,3 +148,103 @@ func TestAgentTypeLiteral(t *testing.T) {
 		}
 	}
 }
+
+// TestEnumIntegration_AgentType字符串转换 对齐 Python system test_agent_type_string_conversion
+func TestEnumIntegration_AgentType字符串转换(t *testing.T) {
+	if string(AgentTypeLLMAgent) != "llm_agent" {
+		t.Errorf("AgentTypeLLMAgent = %q", AgentTypeLLMAgent)
+	}
+	if string(AgentTypeWorkflow) != "workflow" {
+		t.Errorf("AgentTypeWorkflow = %q", AgentTypeWorkflow)
+	}
+}
+
+// TestEnumIntegration_BuildState状态流转 对齐 Python system test_build_state_transitions
+func TestEnumIntegration_BuildState状态流转(t *testing.T) {
+	for _, s := range AllBuildStates() {
+		if len(string(s)) == 0 {
+			t.Errorf("BuildState %q 值为空", s)
+		}
+	}
+}
+
+// TestEnumIntegration_ProgressStage值 对齐 Python system test_progress_stage_values
+func TestEnumIntegration_ProgressStage值(t *testing.T) {
+	for _, stage := range []ProgressStage{ProgressStageInitializing, ProgressStageClarifying, ProgressStageCompleted} {
+		if len(string(stage)) == 0 {
+			t.Errorf("ProgressStage %q 值为空", stage)
+		}
+	}
+}
+
+// TestEnumIntegration_ProgressStatus值 对齐 Python system test_progress_status_values
+func TestEnumIntegration_ProgressStatus值(t *testing.T) {
+	for _, status := range []ProgressStatus{ProgressStatusPending, ProgressStatusRunning, ProgressStatusSuccess, ProgressStatusFailed} {
+		if len(string(status)) == 0 {
+			t.Errorf("ProgressStatus %q 值为空", status)
+		}
+	}
+}
+
+// TestConstantsEnumsConsistency_枚举半边 对齐 Python system test_constants_enums_consistency 的枚举半边
+// （常量半边已随 14.1 并入 constants_test.go；本用例为 14.2 回填义务，spec §5）
+func TestConstantsEnumsConsistency_枚举半边(t *testing.T) {
+	if len(AllAgentTypes()) < 2 {
+		t.Errorf("AgentType 计数 = %d, 应 >= 2", len(AllAgentTypes()))
+	}
+	if len(AllBuildStates()) < 3 {
+		t.Errorf("BuildState 计数 = %d, 应 >= 3", len(AllBuildStates()))
+	}
+}
+
+// TestParseBuildState_正反例 测试增强（Python 无对应：语言特性级等价物的补测）
+func TestParseBuildState_正反例(t *testing.T) {
+	for _, s := range []string{"initial", "processing", "completed"} {
+		if _, err := ParseBuildState(s); err != nil {
+			t.Errorf("ParseBuildState(%q) 不应报错: %v", s, err)
+		}
+	}
+	if _, err := ParseBuildState("invalid"); err == nil {
+		t.Errorf("ParseBuildState(invalid) 应返回错误")
+	}
+}
+
+// TestParseProgressStage_正反例 测试增强（Python 无对应）
+func TestParseProgressStage_正反例(t *testing.T) {
+	for _, s := range []string{"initializing", "clarifying", "resource_retrieving", "completed", "error", "optimizing", "generating_config", "transforming_dsl", "detecting_intention", "generating_workflow_design", "generating_dl", "validating_dl", "refining_dl", "transforming_mermaid", "transforming_workflow_dsl"} {
+		if _, err := ParseProgressStage(s); err != nil {
+			t.Errorf("ParseProgressStage(%q) 不应报错: %v", s, err)
+		}
+	}
+	if _, err := ParseProgressStage("no_such_stage"); err == nil {
+		t.Errorf("ParseProgressStage(no_such_stage) 应返回错误")
+	}
+}
+
+// TestParseProgressStatus_正反例 测试增强（Python 无对应）
+func TestParseProgressStatus_正反例(t *testing.T) {
+	for _, s := range []string{"pending", "running", "success", "failed", "warning"} {
+		if _, err := ParseProgressStatus(s); err != nil {
+			t.Errorf("ParseProgressStatus(%q) 不应报错: %v", s, err)
+		}
+	}
+	if _, err := ParseProgressStatus("paused"); err == nil {
+		t.Errorf("ParseProgressStatus(paused) 应返回错误")
+	}
+}
+
+// TestAllEnums_声明序 测试增强（Python 无对应：All 函数顺序契约）
+func TestAllEnums_声明序(t *testing.T) {
+	if got := AllAgentTypes(); got[0] != AgentTypeLLMAgent || got[1] != AgentTypeWorkflow {
+		t.Errorf("AllAgentTypes 顺序不符: %v", got)
+	}
+	if got := AllBuildStates(); got[0] != BuildStateInitial || got[1] != BuildStateProcessing || got[2] != BuildStateCompleted {
+		t.Errorf("AllBuildStates 顺序不符: %v", got)
+	}
+	if got := AllProgressStages(); len(got) != 15 || got[0] != ProgressStageInitializing || got[14] != ProgressStageTransformingWorkflowDSL {
+		t.Errorf("AllProgressStages 长度/首尾不符: len=%d", len(got))
+	}
+	if got := AllProgressStatuses(); len(got) != 5 || got[0] != ProgressStatusPending || got[4] != ProgressStatusWarning {
+		t.Errorf("AllProgressStatuses 长度/首尾不符: len=%d", len(got))
+	}
+}
