@@ -784,6 +784,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 ## 领域十三：检索文档索引管理（retrieval/indexing 缺口）
 
 > 文档级索引管线：解析 → 分块 → 嵌入 → 入库。与 7.36 记忆索引（用户记忆 CRUD）不同，本章节处理外部文档（上传文件/链接/图片）的索引构建与维护。
+> 2026-10-27 扩充：新增 13.19-13.28 检索查询管线（Retriever 六兄弟 + QueryRewriter + KB 三兄弟，~4600 行源码 + ~4700 行 Python 测试），闭环"查"侧。13.17 TripleExtractor 为首个实施（零前置依赖：TextChunk/llm.Model/json-repair v0.0.18/错误码 155507 均已就绪）。零实现归档项：result_ranking.py（16 行纯 re-export shim，Go graph/ranking.go 已有）+ lazy_load.py/__init__.py（Go 显式 import 天然等价）。
 
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
@@ -807,10 +808,24 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 13.15 | ✅ | Image Parser + Captioner | `ImageCaptioner(构造即isLLMSupported warn双分支nil/模型名前缀白名单不匹配均不报错+CpImage四分支软失败归档:不存在err/MkdirAll err/源=目标abspath比较跳过/复制失败Warn+回落原路径+copy2元数据偏差归档§8-2+llmCall多模态消息构造NewUserMessage+WithMultiModalContent[提示词text part逐字复制+image_url data URI part mime检测未知回落image/png+Warn]+base64+Invoke+Content.Text()全链软失败返回空串+CaptionImages逐图串行os.Stat不存在Warn+空串占位) + ImageParser(覆写整体Parse非ParseContent——产出metadata["image_path"]:CpImage单次归档+B1归档路径直通ParseContent/空caption仍返回单Document接通13.4 isImageChunk纯图片嵌入管道禁用态≠失败/ParseContent构造captioner+CaptionImages+非空join对齐None falsy/软失败Error日志空切片对齐except→[]) + 双cp_image去重(spec偏差§8-1/8-5:warn单遍+复制一次)+.jfif MIME幂等注册init(对齐模块级mimetypes.add_type) + 六扩展名init注册.png/.jpg/.jpeg/.webp/.gif/.jfif + WithClient mock走真实Invoke链断言data URI base64逐字节一致`。⚠️ 换序二次修订（2026-10-23）：13.15 提前至 13.12 前实施（13.12 PDF/13.13 Word 硬依赖 ImageCaptioner.caption_images，原序按编号惯性未查消费方向）。覆盖率：parser包90.9%(基线90.2%↑)。设计：docs/superpowers/specs/2026-10-23-image-parser-13.15-design.md | `openjiuwen/core/retrieval/indexing/processor/parser/image_parser.py · captioner.py` |
 | 13.16 | ✅ | JSON/TxtMd Parser | `JSONParser(嵌入BaseParser覆写ParseContent：utf-8容错读+Unmarshal失败返回原文对齐JSONDecodeError分支+两空格缩进序列化对齐indent=2+SetEscapeHTML(false)对齐ensure_ascii=False+Encoder尾换行TrimSuffix对齐json.dumps+软失败空串对齐except返回None+2条Error日志对齐) + TxtMdParser(chardet统计检测对齐charset_normalizer.detect+GB-18030带连字符名手工归一simplifiedchinese.GB18030(htmlindex不认,探针实测)+x/net Lookup映射x/text解码+UTF-8检出走零转换路径+BOM剥离+TrimSpace+软失败+1条Error日志+空输入DetectBest(nil,nil)双重防御) + registry骨架带出(parserRegistry map[ext]func()Parser+parserRegistryMu互斥+RegisterParser扩展名小写归一first-wins静默跳过对齐Python非覆盖语义+info注册日志(实例化取类型名为已知偏差)+getParserFactory包内查询留13.11消费+snapshotRegistry测试辅助;AutoFileParser类本体留13.11⤴️;两解析器init注册.json×2+.txt/.md/.markdown×6扩展名对齐装饰器import时执行;chardet v0.0.0-20230101纯Go零传递依赖)。覆盖率：parser包90.2%(基线88.6%↑)。fixture经Python encode交叉验证(GBK/Big5)。设计：docs/superpowers/specs/2026-10-22-txt-md-json-parser-13.16-design.md` | `openjiuwen/core/retrieval/indexing/processor/parser/json_parser.py + txt_md_parser.py + auto_file_parser.py(registry部分)` |
 | **13.x Extractor/Splitter 层** | — | | | |
-| 13.17 | ☐ | TripleExtractor | 三元组抽取（LLM 调用） | `openjiuwen/core/retrieval/indexing/processor/extractor/triple_extractor.py` |
+| 13.17 | ☐ | TripleExtractor | 三元组抽取（LLM 调用）。Triple 数据模型 + Extractor 抽象 + 并发 LLM 抽取 + JSON 解析（json-repair） | `openjiuwen/core/retrieval/indexing/processor/extractor/triple_extractor.py + base.py + common/triple.py` |
 | 13.18 | ✅ | Splitter | `全部由 13.7 前置带出（SentenceSplitter：detectChinese CJK 占比+标点启发+语义早退 / SplitDoc 分句+token 预算打包 / splitLongSegment 长句滑窗子切分 decode 失败跳过+整句 fallback / flush overlap 尾缀倒序累加 + BaseSplitter：构造校验 155100/155101+GetNodesFromDocuments+SplitText+GetTokenCount + sentencizer v0.3.0 替代 pysbd）`。本步骤无剩余内容 | `openjiuwen/core/retrieval/indexing/processor/splitter/splitter.py + base.py` |
+| **13.x Retriever 层** | — | | | |
+| 13.19 | ☐ | Retriever 抽象接口 | Retrieve/BatchRetrieve/RetrieveSearchResults/Close 四方法接口 | `openjiuwen/core/retrieval/retriever/base.py` |
+| 13.20 | ☐ | Vector/Sparse/PG Retriever + 工厂 | VectorRetriever + SparseRetriever（BM25）；create_vector_store 工厂随出；PGVectorStore（sqlalchemy→GORM+pgvector-go，需新增依赖；vector_fields/pg_fields.go 先例已在，挂本步可选） | `openjiuwen/core/retrieval/retriever/vector_retriever.py + sparse_retriever.py + vector_store/store.py + pg_store.py` |
+| 13.21 | ☐ | HybridRetriever | 向量+稀疏 RRF 融合检索（RRFFusion 已就绪 13.2） | `openjiuwen/core/retrieval/retriever/hybrid_retriever.py` |
+| 13.22 | ☐ | 读取侧数据模型 | TripleBeam + TripleMemory + MultiKBRetrievalResult | `openjiuwen/core/retrieval/common/triple_beam.py + triple_memory.py + retrieval_result.py` |
+| 13.23 | ☐ | GraphRetriever | 三元组 beam search 图检索（813 行，消费 kb_{id}_triples；numpy→gonum/手写余弦待设计） | `openjiuwen/core/retrieval/retriever/graph_retriever.py` |
+| 13.24 | ☐ | QueryRewriter | 查询压缩/重写（ModelContext 注入，Go 接口 GetMessages/SetMessages 已兼容；4 个 md 提示词逐字复制） | `openjiuwen/core/retrieval/query_rewriter/query_rewriter.py + prompts/` |
+| 13.25 | ☐ | AgenticRetriever | 多跳 agentic 检索（消费 TripleMemory + GraphRetriever） | `openjiuwen/core/retrieval/retriever/agentic_retriever.py` |
+| **13.x KnowledgeBase 编排层** | — | | | |
+| 13.26 | ☐ | KnowledgeBase 抽象 | AddDocuments/Retrieve/Delete/Update/GetStatistics 接口层 | `openjiuwen/core/retrieval/knowledge_base.py` |
+| 13.27 | ☐ | SimpleKnowledgeBase | 简单 KB + retrieve_multi_kb / retrieve_multi_kb_with_source；ConfigManager（112 行）随出 | `openjiuwen/core/retrieval/simple_knowledge_base.py + utils/config_manager.py` |
+| 13.28 | ☐ | GraphKnowledgeBase | 图增强 KB（★13.17 TripleExtractor 的真实消费方：use_graph 时抽取三元组建 kb_{id}_triples 索引）；⤴️ 消费 13.17 | `openjiuwen/core/retrieval/graph_knowledge_base.py` |
 
-**验证点**：✅ 外部文档可被解析、分块、嵌入、索引，并支持增删改查
+**验证点**：✅ 外部文档可被解析、分块、嵌入、索引，并支持增删改查；☐ 检索查询管线闭环（向量/稀疏/混合/图/agentic 检索 + 多 KB 聚合）（13.19-13.28 完成后达成）
+
+跨域联动：8.25 KnowledgeRetrievalComp ⤴️ 依赖本领域 13.26-13.28；7.36 行 ⤵️ 缺口清单指向领域十三（2026-10-27 扩充后覆盖完整写入+读取管线）
 
 ---
 

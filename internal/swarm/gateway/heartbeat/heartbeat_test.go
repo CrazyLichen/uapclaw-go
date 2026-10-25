@@ -2,7 +2,102 @@ package heartbeat
 
 import (
 	"testing"
+	"time"
 )
+
+// mkTime 构造固定 Unix 秒的假时钟。
+func mkTime(sec int64) func() float64 {
+	return func() float64 { return float64(sec) }
+}
+
+// TestIsActiveNow_无配置 ActiveHours 为空 → true。
+func TestIsActiveNow_无配置(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{}, nil, mkTime(0))
+	if !s.isActiveNow() {
+		t.Fatal("no active_hours should be active")
+	}
+}
+
+// TestIsActiveNow_普通区间内 15:00 在 08:00-22:00 内。
+func TestIsActiveNow_普通区间内(t *testing.T) {
+	// 2026-10-27 15:00 本地时区的 Unix 秒（测试机时区无关构造见下）
+	inRange := time.Date(2026, 10, 27, 15, 0, 0, 0, time.Local).Unix()
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{
+		ActiveHours: map[string]any{"start": "08:00", "end": "22:00"},
+	}, nil, mkTime(inRange))
+	if !s.isActiveNow() {
+		t.Fatal("15:00 should be in 08:00-22:00")
+	}
+}
+
+// TestIsActiveNow_普通区间外 23:00 在 08:00-22:00 外（含边界 22:00 不含）。
+func TestIsActiveNow_普通区间外(t *testing.T) {
+	outRange := time.Date(2026, 10, 27, 23, 0, 0, 0, time.Local).Unix()
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{
+		ActiveHours: map[string]any{"start": "08:00", "end": "22:00"},
+	}, nil, mkTime(outRange))
+	if s.isActiveNow() {
+		t.Fatal("23:00 should be out of 08:00-22:00")
+	}
+	// 边界：end 时刻本身不生效（now < end 语义）
+	atEnd := time.Date(2026, 10, 27, 22, 0, 0, 0, time.Local).Unix()
+	s2 := NewGatewayHeartbeatService(nil, &HeartbeatConfig{
+		ActiveHours: map[string]any{"start": "08:00", "end": "22:00"},
+	}, nil, mkTime(atEnd))
+	if s2.isActiveNow() {
+		t.Fatal("22:00 boundary should be out (start<=now<end)")
+	}
+}
+
+// TestIsActiveNow_跨午夜区间 22:00-06:00：23:30 与 05:00 生效，15:00 不生效。
+func TestIsActiveNow_跨午夜区间(t *testing.T) {
+	cfg := &HeartbeatConfig{ActiveHours: map[string]any{"start": "22:00", "end": "06:00"}}
+	for _, hour := range []int{23, 5} {
+		ts := time.Date(2026, 10, 27, hour, 30, 0, 0, time.Local).Unix()
+		s := NewGatewayHeartbeatService(nil, cfg, nil, mkTime(ts))
+		if !s.isActiveNow() {
+			t.Fatalf("%d:30 should be in 22:00-06:00", hour)
+		}
+	}
+	ts15 := time.Date(2026, 10, 27, 15, 0, 0, 0, time.Local).Unix()
+	s15 := NewGatewayHeartbeatService(nil, cfg, nil, mkTime(ts15))
+	if s15.isActiveNow() {
+		t.Fatal("15:00 should be out of 22:00-06:00")
+	}
+}
+
+// TestIsActiveNow_非法格式 Warn+true（配置非法时始终生效，避免误停心跳）。
+func TestIsActiveNow_非法格式(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{
+		ActiveHours: map[string]any{"start": "0800", "end": "22:00"}, // 缺冒号
+	}, nil, mkTime(time.Date(2026, 10, 27, 15, 0, 0, 0, time.Local).Unix()))
+	if !s.isActiveNow() {
+		t.Fatal("invalid format should fallback to true")
+	}
+}
+
+// TestIsActiveNow_数字经normalize回转 start/end 数字经回转后走正常区间判断。
+func TestIsActiveNow_数字经normalize回转(t *testing.T) {
+	// 1320→"22:00"、360→"06:00"：跨午夜区间 22:00-06:00
+	// 本地 00:00（时区无关构造）→ nowMinutes=0 < 360 → 生效
+	localMidnight := time.Date(2026, 10, 27, 0, 0, 0, 0, time.Local).Unix()
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{
+		ActiveHours: map[string]any{"start": 1320, "end": 360},
+	}, nil, mkTime(localMidnight))
+	if !s.isActiveNow() {
+		t.Fatal("numeric hours should be normalized and evaluated as cross-midnight")
+	}
+}
+
+// TestIsActiveNow_缺start或end键 normalize 后缺键 → true（对齐 Python isinstance 检查）。
+func TestIsActiveNow_缺start或end键(t *testing.T) {
+	s := NewGatewayHeartbeatService(nil, &HeartbeatConfig{
+		ActiveHours: map[string]any{"start": "08:00"},
+	}, nil, mkTime(0))
+	if !s.isActiveNow() {
+		t.Fatal("missing end key should fallback to true")
+	}
+}
 
 // TestHeartbeatConstants 常量逐字对齐 Python（提示词含半角逗号空格，逐字校验）。
 func TestHeartbeatConstants(t *testing.T) {

@@ -3,6 +3,8 @@ package heartbeat
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -176,6 +178,64 @@ func NormalizeActiveHours(activeHours map[string]any) map[string]string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isActiveNow 根据 active_hours 判断当前时间心跳是否应当生效。
+// 对齐 Python: _is_active_now (heartbeat.py L268-301)。
+// 偏差⑤：nowFn 为 float64 Unix 秒，经 time.Unix().Local() 还原本地时区对齐 Python time.localtime()。
+func (s *GatewayHeartbeatService) isActiveNow() bool {
+	s.mu.Lock()
+	activeHours := s.config.ActiveHours
+	s.mu.Unlock()
+	normalized := NormalizeActiveHours(activeHours)
+	if len(normalized) == 0 {
+		return true
+	}
+	startStr, startOK := normalized["start"]
+	endStr, endOK := normalized["end"]
+	if !startOK || !endOK {
+		return true
+	}
+	startMinutes, err := parseHM(startStr)
+	if err != nil {
+		logger.Warn(logComponent).
+			Any("active_hours", normalized).Err(err).
+			Msg("Invalid heartbeat active_hours config")
+		return true
+	}
+	endMinutes, err := parseHM(endStr)
+	if err != nil {
+		logger.Warn(logComponent).
+			Any("active_hours", normalized).Err(err).
+			Msg("Invalid heartbeat active_hours config")
+		return true
+	}
+	now := time.Unix(int64(s.nowFn()), 0).Local()
+	nowMinutes := now.Hour()*60 + now.Minute()
+	if startMinutes <= endMinutes {
+		// 普通区间：如 08:00-22:00
+		return startMinutes <= nowMinutes && nowMinutes < endMinutes
+	}
+	// 跨午夜区间：如 22:00-06:00
+	return nowMinutes >= startMinutes || nowMinutes < endMinutes
+}
+
+// parseHM 解析 "HH:MM" 为当日分钟数。
+// 对齐 Python _parse_hm（split(":", 1) + 长度检查 + int 解析）。
+func parseHM(s string) (int, error) {
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("invalid time format: %q", s)
+	}
+	h, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, fmt.Errorf("invalid hour %q: %w", parts[0], err)
+	}
+	m, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, fmt.Errorf("invalid minute %q: %w", parts[1], err)
+	}
+	return h*60 + m, nil
+}
 
 // minutesToHM 分钟数转 "HH:MM"（对齐 Python divmod(minutes, 60)）。
 func minutesToHM(minutes int) string {
