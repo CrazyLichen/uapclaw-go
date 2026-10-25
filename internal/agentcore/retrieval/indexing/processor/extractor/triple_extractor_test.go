@@ -3,6 +3,7 @@ package extractor
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -79,5 +80,62 @@ func TestTripleExtractor_默认值构造(t *testing.T) {
 	}
 	if cap(ex.limiter) != 50 {
 		t.Errorf("默认 limiter 容量应为 50，实际 %d", cap(ex.limiter))
+	}
+}
+
+// ──────────────────────────── buildPrompt 测试 ────────────────────────────
+
+// TestBuildPrompt_标题为空 测试空标题回落 Untitled（Go 增强 §7.2-4）
+func TestBuildPrompt_标题为空(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	prompt := e.buildPrompt("Alice knows Bob", "")
+	if !strings.Contains(prompt, "Title:\nUntitled\n") {
+		t.Error("空标题应渲染为 Untitled")
+	}
+	if !strings.Contains(prompt, "Passage:\nAlice knows Bob") {
+		t.Error("passage 应原样渲染")
+	}
+}
+
+// TestBuildPrompt_非空标题 测试非空标题渲染
+func TestBuildPrompt_非空标题(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	prompt := e.buildPrompt("body text", "My Title")
+	if !strings.Contains(prompt, "Title:\nMy Title\n") {
+		t.Error("非空标题应原样渲染")
+	}
+}
+
+// TestBuildPrompt_花括号安全 测试 passage 含 { 特殊字符不破坏 Replacer（Go 增强 §7.2-4）
+func TestBuildPrompt_花括号安全(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	prompt := e.buildPrompt("var x = {a: 1}; func() { return 2; }", "T")
+	// 花括号原样保留（NewReplacer 只替换 {title}/{passage} 字面量，
+	// passage 内部花括号替换后注入不参与二次解析）
+	if !strings.Contains(prompt, "var x = {a: 1}") {
+		t.Error("passage 花括号应原样保留")
+	}
+	if !strings.Contains(prompt, "Title:\nT\n") {
+		t.Error("标题替换应不受 passage 花括号影响")
+	}
+}
+
+// TestBuildPrompt_模板完整性 测试模板关键段落齐备（Go 增强：防逐字复制走样）
+func TestBuildPrompt_模板完整性(t *testing.T) {
+	e := NewTripleExtractor(newTripleTestModel(t), "m")
+	prompt := e.buildPrompt("p", "t")
+	for _, want := range []string{
+		"# Instruction",
+		"# Demonstration 1",
+		"# Demonstration 2",
+		"Magic Johnson",
+		"Elden Ring",
+		`"named_entities"`,
+		`"triples"`,
+		`If no triples are found, return {"named_entities": [...], "triples": []}`,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("模板应包含 %q", want)
+		}
 	}
 }
