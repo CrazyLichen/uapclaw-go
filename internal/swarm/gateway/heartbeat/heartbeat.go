@@ -74,6 +74,8 @@ type GatewayHeartbeatService struct {
 
 	// mu 保护 config/lastTickOK/lastTickAt 的并发读写
 	mu sync.Mutex
+	// startStopMu 串行化 Start/Stop 生命周期竞态（check-then-set 原子化）
+	startStopMu sync.Mutex
 	// running 是否运行中（对齐 Python self._running）
 	running atomic.Bool
 	// cancel 主循环取消函数
@@ -183,11 +185,14 @@ func NormalizeActiveHours(activeHours map[string]any) map[string]string {
 
 // Start 启动周期任务。
 // 对齐 Python: start (heartbeat.py L128-137)：幂等；先睡 interval 再 tick。
+// startStopMu 串行化 Start/Stop/Start 竞态（CompareAndSwap 原子幂等；
+// Python asyncio 单线程无此问题，偏差③并发保护范畴）。
 func (s *GatewayHeartbeatService) Start(ctx context.Context) error {
-	if s.running.Load() {
+	s.startStopMu.Lock()
+	defer s.startStopMu.Unlock()
+	if !s.running.CompareAndSwap(false, true) {
 		return nil
 	}
-	s.running.Store(true)
 	loopCtx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
 	s.cancel = cancel
@@ -206,7 +211,10 @@ func (s *GatewayHeartbeatService) Start(ctx context.Context) error {
 // Stop 停止周期任务。
 // 对齐 Python: stop (heartbeat.py L139-149)：cancel 中断 sleep 与 in-flight SendRequest，
 // wg.Wait 等待循环退出（对齐 await self._task 吞 CancelledError）。
+// startStopMu 与 Start 互斥，防止 Stop 的 wg.Wait 与并发 Start 的 Add(1) 竞态。
 func (s *GatewayHeartbeatService) Stop() {
+	s.startStopMu.Lock()
+	defer s.startStopMu.Unlock()
 	s.running.Store(false)
 	s.mu.Lock()
 	cancel := s.cancel
