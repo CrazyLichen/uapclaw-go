@@ -77,3 +77,10 @@ func WithRetrieveExtra(key string, value any) RetrieveOption {
 		o.Extra[key] = value
 	}
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期断言：两实现满足 Retriever 接口（13.17 先例）。
+var (
+	_ Retriever = (*VectorRetriever)(nil)
+)
