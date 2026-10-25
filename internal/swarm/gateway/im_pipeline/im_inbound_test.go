@@ -153,7 +153,7 @@ func TestStripOrStr(t *testing.T) {
 	assert.Equal(t, "", stripOrStr(nil, "", 0.0))
 	assert.Equal(t, "", stripOrStr("   ", "\t\n"))
 	assert.Equal(t, "ou-123", stripOrStr(" ou-123 "))
-	assert.Equal(t, "12345", stripOrStr(12345)) // 数字 ID truthy 转字符串（偏差⑤）
+	assert.Equal(t, "12345", stripOrStr(12345))                    // 数字 ID truthy 转字符串（偏差⑤）
 	assert.Equal(t, "second", stripOrStr("", " second ", "third")) // 取值后整体 strip
 }
 
@@ -963,7 +963,7 @@ func TestProcess_元数据带空白_审查偏差修复(t *testing.T) {
 		return llmschema.NewAssistantMessage("改写内容"), nil
 	})
 	msg := newAvatarChatMsg(`{"query":"hi"}`, map[string]any{
-		"chat_type":     "group",
+		"chat_type":      "group",
 		"feishu_chat_id": " chat-1 ",
 	})
 	assert.True(t, p.Apply(context.Background(), msg))
@@ -1055,7 +1055,7 @@ func TestApply_resume_数字pendingID不匹配_审查偏差修复(t *testing.T) 
 
 	var paramsMap map[string]any
 	require.NoError(t, json.Unmarshal(msg.Params, &paramsMap))
-	assert.Equal(t, "材料在这", paramsMap["query"])                    // 未被 resume 改写
-	assert.Nil(t, msg.Metadata["interaction_context"])                 // 未落 interaction_context
+	assert.Equal(t, "材料在这", paramsMap["query"])                           // 未被 resume 改写
+	assert.Nil(t, msg.Metadata["interaction_context"])                    // 未落 interaction_context
 	require.NotNil(t, routing.LoadPendingInteraction("iact_ch_12345678")) // pending 未被消费
 }

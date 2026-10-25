@@ -582,11 +582,11 @@ func TestApply_清除先于前缀解析(t *testing.T) {
 // TestIsPersonalActionReply_Unicode空白 审查偏差②修复：Python re \s 为 Unicode 语义，
 // 关键词中间夹全角空格/NBSP/行分隔符时移除后仍命中关键词。
 func TestIsPersonalActionReply_Unicode空白(t *testing.T) {
-	assert.True(t, isPersonalActionReply("记\u3000下了"))       // 全角空格
-	assert.True(t, isPersonalActionReply("记\u00a0下了"))       // NBSP
+	assert.True(t, isPersonalActionReply("记\u3000下了"))        // 全角空格
+	assert.True(t, isPersonalActionReply("记\u00a0下了"))        // NBSP
 	assert.True(t, isPersonalActionReply("提\u2028醒"))         // 行分隔符
 	assert.True(t, isPersonalActionReply("待\u3000办\u3000已建")) // 多处全角空白
-	assert.False(t, isPersonalActionReply("记\u4e00下了"))      // 非空白汉字不移除，不命中
+	assert.False(t, isPersonalActionReply("记\u4e00下了"))       // 非空白汉字不移除，不命中
 }
 
 // TestExtractContent_第三态pythonStr 审查偏差③修复：truthy 非字符串经 pythonStr
