@@ -1,6 +1,7 @@
 package im_pipeline
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,6 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
@@ -355,4 +359,281 @@ func TestLoadUserProfile(t *testing.T) {
 
 	proc3 := NewIMConversationProcessor(filepath.Join(t.TempDir(), "nonexist", "USER.md"), "m")
 	assert.Equal(t, "", proc3.loadUserProfile())
+}
+
+// ──────────────────────────── 测试辅助：LLM fake 注入 ────────────────────────────
+
+// fakeLLMClient 实现 model_clients.BaseModelClient（react_agent_test 先例），Invoke 可编程。
+type fakeLLMClient struct {
+	invokeFn func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error)
+}
+
+func (f *fakeLLMClient) Invoke(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	return f.invokeFn(ctx, messages, opts...)
+}
+func (f *fakeLLMClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeLLMClient) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeLLMClient) GenerateSpeech(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeLLMClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeLLMClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, fmt.Errorf("不支持")
+}
+func (f *fakeLLMClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+func (f *fakeLLMClient) SupportsKVCacheRelease() bool { return false }
+
+// newFakeModel 构造注入 fake client 的 llm.Model（WithClient 先例）。
+// WithVerifySSL(false)：默认 true 时 NewModelClientConfig 校验 ssl_cert 必填。
+func newFakeModel(t *testing.T, invokeFn func(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error)) *llm.Model {
+	t.Helper()
+	clientCfg, err := llmschema.NewModelClientConfig("OpenAI", "test-key", "http://localhost:1",
+		llmschema.WithVerifySSL(false))
+	require.NoError(t, err)
+	model, err := llm.NewModel(clientCfg, llmschema.NewModelRequestConfig(), llm.WithClient(&fakeLLMClient{invokeFn: invokeFn}))
+	require.NoError(t, err)
+	return model
+}
+
+// newTestProcessor 常规测试 Processor（无 config → modelClientRaw 空 map）。
+func newTestProcessor(t *testing.T) *IMConversationProcessor {
+	t.Helper()
+	hookscfg.ResetGlobalConfigForTest()
+	t.Cleanup(hookscfg.ResetGlobalConfigForTest)
+	return NewIMConversationProcessor(filepath.Join(t.TempDir(), "USER.md"), "test-model")
+}
+
+// newTestAdapter 标准测试适配器。
+func newTestAdapter() *fakeAdapter {
+	return &fakeAdapter{
+		principalUserID: "ou-principal",
+		principalName:   "张三",
+		platformName:    "飞书",
+		replyUserIDKey:  "reply_feishu_open_id",
+	}
+}
+
+// TestEnsureLLM_成功 config 注入 + /chat/completions 剥离 + 懒加载幂等。
+func TestEnsureLLM_成功(t *testing.T) {
+	setupInteractionsEnv(t)
+	writeTestConfig(t, "react:\n  model_client_config:\n    api_key: sk-cfg\n    api_base: http://x/chat/completions\n    client_provider: OpenAI\n")
+	t.Setenv("API_KEY", "")
+	t.Setenv("API_BASE", "")
+	proc := NewIMConversationProcessor("", "m1")
+	model := proc.ensureLLM()
+	require.NotNil(t, model)
+	assert.Same(t, model, proc.ensureLLM())
+}
+
+// TestEnsureLLM_环境变量回退 config 无值时 env 兜底。
+func TestEnsureLLM_环境变量回退(t *testing.T) {
+	setupInteractionsEnv(t)
+	hookscfg.ResetGlobalConfigForTest()
+	t.Cleanup(hookscfg.ResetGlobalConfigForTest)
+	t.Setenv("API_KEY", "sk-env")
+	t.Setenv("API_BASE", "http://env/")
+	proc := NewIMConversationProcessor("", "m1")
+	assert.NotNil(t, proc.ensureLLM())
+}
+
+// TestEnsureLLM_失败保持nil 空 key/base 构造失败 → Warn → llm 保持 nil。
+func TestEnsureLLM_失败保持nil(t *testing.T) {
+	setupInteractionsEnv(t)
+	hookscfg.ResetGlobalConfigForTest()
+	t.Cleanup(hookscfg.ResetGlobalConfigForTest)
+	t.Setenv("API_KEY", "")
+	t.Setenv("API_BASE", "")
+	proc := NewIMConversationProcessor("", "m1")
+	assert.Nil(t, proc.ensureLLM())
+	assert.Nil(t, proc.llm)
+}
+
+// TestRewriteQuery_llmNil 返回空串。
+func TestRewriteQuery_llmNil(t *testing.T) {
+	setupInteractionsEnv(t)
+	proc := newTestProcessor(t)
+	assert.Equal(t, "", proc.rewriteQuery(context.Background(), "prompt", "张三", newTestAdapter()))
+}
+
+// TestRewriteQuery_成功 mock 返回 + system prompt 双占位符渲染断言。
+func TestRewriteQuery_成功(t *testing.T) {
+	setupInteractionsEnv(t)
+	proc := newTestProcessor(t)
+	var gotDicts []map[string]any
+	proc.llm = newFakeModel(t, func(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		require.True(t, messages.IsDicts())
+		gotDicts = messages.Dicts()
+		return llmschema.NewAssistantMessage("  改写后的消息  "), nil
+	})
+	adapter := newTestAdapter()
+	adapter.botMentions = []string{"@bot1", "@bot2"}
+	got := proc.rewriteQuery(context.Background(), "user-prompt", "张三", adapter)
+	assert.Equal(t, "改写后的消息", got)
+
+	require.Len(t, gotDicts, 2)
+	assert.Equal(t, "system", gotDicts[0]["role"])
+	sysPrompt := gotDicts[0]["content"].(string)
+	assert.Contains(t, sysPrompt, "你是张三的数字分身")
+	assert.Contains(t, sysPrompt, "例如：`[2026-03-20 14:44:34] [某人]: @bot1 / @bot2 @张三 111`")
+	assert.Equal(t, "user", gotDicts[1]["role"])
+	assert.Equal(t, "user-prompt", gotDicts[1]["content"])
+}
+
+// TestRewriteQuery_空hint回退 bot_mentions 空列表 → "@机器人"。
+func TestRewriteQuery_空hint回退(t *testing.T) {
+	setupInteractionsEnv(t)
+	proc := newTestProcessor(t)
+	var sysPrompt string
+	proc.llm = newFakeModel(t, func(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		sysPrompt = messages.Dicts()[0]["content"].(string)
+		return nil, fmt.Errorf("invoke err")
+	})
+	proc.rewriteQuery(context.Background(), "p", "n", newTestAdapter())
+	assert.Contains(t, sysPrompt, "@机器人")
+}
+
+// TestRewriteQuery_invokeErr Invoke 失败 → 空串。
+func TestRewriteQuery_invokeErr(t *testing.T) {
+	setupInteractionsEnv(t)
+	proc := newTestProcessor(t)
+	proc.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return nil, fmt.Errorf("boom")
+	})
+	assert.Equal(t, "", proc.rewriteQuery(context.Background(), "p", "n", newTestAdapter()))
+}
+
+// TestRewriteQuery_空响应空串 strip 后空 → 空串（偏差⑤ None 语义）。
+func TestRewriteQuery_空响应空串(t *testing.T) {
+	setupInteractionsEnv(t)
+	proc := newTestProcessor(t)
+	proc.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("   "), nil
+	})
+	assert.Equal(t, "", proc.rewriteQuery(context.Background(), "p", "n", newTestAdapter()))
+}
+
+// TestProcess_层1非chatsend reason=non-chat-send。
+func TestProcess_层1非chatsend(t *testing.T) {
+	proc := newTestProcessor(t)
+	msg := schema.NewReqMessage("web", "s", schema.ReqMethodChatAnswer, json.RawMessage(`{}`))
+	r := proc.Process(context.Background(), msg, newTestAdapter(), "")
+	assert.True(t, r.ShouldForward)
+	assert.Equal(t, "non-chat-send", r.Reason)
+}
+
+// TestProcess_层2空内容 reason=empty-content。
+func TestProcess_层2空内容(t *testing.T) {
+	proc := newTestProcessor(t)
+	r := proc.Process(context.Background(), newChatSendMsg(`{}`, nil), newTestAdapter(), "")
+	assert.Equal(t, "empty-content", r.Reason)
+}
+
+// TestProcess_层3控制消息 reason=control-message。
+func TestProcess_层3控制消息(t *testing.T) {
+	proc := newTestProcessor(t)
+	r := proc.Process(context.Background(), newChatSendMsg(`{"query":"/new_session"}`, nil), newTestAdapter(), "")
+	assert.Equal(t, "control-message", r.Reason)
+}
+
+// TestProcess_层4非群聊 reason=non-group-chat。
+func TestProcess_层4非群聊(t *testing.T) {
+	proc := newTestProcessor(t)
+	r := proc.Process(context.Background(), newChatSendMsg(`{"query":"hi"}`, map[string]any{"im_chat_type": "p2p"}), newTestAdapter(), "")
+	assert.Equal(t, "non-group-chat", r.Reason)
+	r2 := proc.Process(context.Background(), newChatSendMsg(`{"query":"hi"}`, map[string]any{"chat_type": " Group "}), newTestAdapter(), "")
+	assert.NotEqual(t, "non-group-chat", r2.Reason)
+}
+
+// TestProcess_层5必答 reason=always-reply + relevance patch。
+func TestProcess_层5必答(t *testing.T) {
+	proc := newTestProcessor(t)
+	adapter := newTestAdapter()
+	adapter.relevancePatch = map[string]any{"mentioned": true}
+	meta := map[string]any{
+		"chat_type":            "group",
+		"im_mentioned_user_ids": []any{"ou-principal"},
+	}
+	r := proc.Process(context.Background(), newChatSendMsg(`{"query":"@张三 你好"}`, meta), adapter, "")
+	assert.Equal(t, "always-reply", r.Reason)
+	assert.Equal(t, true, r.MetadataPatch["relevant"])
+	assert.Equal(t, true, r.MetadataPatch["mentioned"])
+	assert.True(t, r.ShouldForward)
+}
+
+// TestProcess_层6改写失败 三态：llm nil / Invoke err / 空响应。
+func TestProcess_层6改写失败(t *testing.T) {
+	meta := map[string]any{"chat_type": "group"}
+	proc := newTestProcessor(t)
+	assert.Equal(t, "rewrite-failed",
+		proc.Process(context.Background(), newChatSendMsg(`{"query":"hi"}`, meta), newTestAdapter(), "").Reason)
+
+	proc2 := newTestProcessor(t)
+	proc2.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return nil, fmt.Errorf("boom")
+	})
+	assert.Equal(t, "rewrite-failed",
+		proc2.Process(context.Background(), newChatSendMsg(`{"query":"hi"}`, meta), newTestAdapter(), "").Reason)
+
+	proc3 := newTestProcessor(t)
+	proc3.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("  "), nil
+	})
+	assert.Equal(t, "rewrite-failed",
+		proc3.Process(context.Background(), newChatSendMsg(`{"query":"hi"}`, meta), newTestAdapter(), "").Reason)
+}
+
+// TestProcess_层7b无关 should_forward=false + reason=irrelevant。
+func TestProcess_层7b无关(t *testing.T) {
+	proc := newTestProcessor(t)
+	proc.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("[无需处理]"), nil
+	})
+	r := proc.Process(context.Background(), newChatSendMsg(`{"query":"hi"}`, map[string]any{"chat_type": "group"}), newTestAdapter(), "")
+	assert.False(t, r.ShouldForward)
+	assert.Equal(t, "irrelevant", r.Reason)
+}
+
+// TestProcess_层7a图片回退 [无需处理] + 图片上下文 → image-fallback。
+func TestProcess_层7a图片回退(t *testing.T) {
+	proc := newTestProcessor(t)
+	proc.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("[无需处理]"), nil
+	})
+	r := proc.Process(context.Background(), newChatSendMsg(`{"query":"[图片]"}`, map[string]any{"chat_type": "group", "msg_type": "image"}), newTestAdapter(), "")
+	assert.Equal(t, "image-fallback", r.Reason)
+	assert.True(t, r.ShouldForward)
+	r2 := proc.Process(context.Background(), newChatSendMsg(`{"query":"[图片]"}`,
+		map[string]any{"chat_type": "group", "merged_msg_types": []any{"text", "image"}}), newTestAdapter(), "")
+	assert.Equal(t, "image-fallback", r2.Reason)
+}
+
+// TestProcess_层7c改写成功 reason=rewritten。
+func TestProcess_层7c改写成功(t *testing.T) {
+	proc := newTestProcessor(t)
+	proc.llm = newFakeModel(t, func(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+		return llmschema.NewAssistantMessage("改写后的完整请求"), nil
+	})
+	r := proc.Process(context.Background(), newChatSendMsg(`{"query":"那个文件"}`, map[string]any{"chat_type": "group"}), newTestAdapter(), "pending-ctx")
+	assert.Equal(t, "rewritten", r.Reason)
+	assert.Equal(t, "改写后的完整请求", r.RewrittenContent)
+	assert.Equal(t, true, r.MetadataPatch["relevant"])
+	assert.True(t, r.ShouldForward)
+}
+
+// TestProcess_principal缺失 reason=missing-principal-user（Python L209-210）。
+func TestProcess_principal缺失(t *testing.T) {
+	proc := newTestProcessor(t)
+	adapter := newTestAdapter()
+	adapter.principalUserID = ""
+	r := proc.Process(context.Background(), newChatSendMsg(`{"query":"hi"}`, map[string]any{"chat_type": "group"}), adapter, "")
+	assert.Equal(t, "missing-principal-user", r.Reason)
+	assert.True(t, r.ShouldForward)
 }

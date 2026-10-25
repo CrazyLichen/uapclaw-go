@@ -1,6 +1,7 @@
 package im_pipeline
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,9 +10,13 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler/command_parser"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -93,6 +98,22 @@ type IMConversationProcessor struct {
 	llm *llm.Model
 }
 
+// InboundProcessResult 入站处理结果。
+// Python: im_inbound.py L130-135 (dataclass InboundProcessResult——should_forward
+// 默认 true / rewritten_content str|None → Go 空串表 None（偏差⑤）/ metadata_patch
+// 默认空 dict / reason str)
+type InboundProcessResult struct {
+	// ShouldForward 是否继续转发（构造时显式填 true——struct 零值 false，唯一
+	// false 分支是 irrelevant）
+	ShouldForward bool
+	// RewrittenContent 改写后的消息内容（空串表 Python None）
+	RewrittenContent string
+	// MetadataPatch metadata 补丁
+	MetadataPatch map[string]any
+	// Reason 分支原因（字面值逐字对齐 Python）
+	Reason string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -120,6 +141,81 @@ func NewIMConversationProcessor(userProfilePath, modelName string) *IMConversati
 		userProfilePath: userProfilePath,
 		modelName:       name,
 		modelClientRaw:  mcc,
+	}
+}
+
+// Process 处理单条消息：七层分支顺序不可调换（执行顺序纪律），reason 字面值逐字保留。
+// Python: im_inbound.py L171-256 process
+func (proc *IMConversationProcessor) Process(ctx context.Context, msg *schema.Message, adapter IMPlatformAdapter, pendingContext string) InboundProcessResult {
+	// 层1：非 chat.send 直接转发
+	if msg.ReqMethod != schema.ReqMethodChatSend {
+		return InboundProcessResult{ShouldForward: true, Reason: "non-chat-send"}
+	}
+
+	// 层2：空文本
+	text := extractText(msg)
+	if text == "" {
+		return InboundProcessResult{ShouldForward: true, Reason: "empty-content"}
+	}
+
+	// 层3：控制消息（slash 命令文本）
+	if command_parser.ControlMessageTexts[strings.TrimSpace(text)] {
+		return InboundProcessResult{ShouldForward: true, Reason: "control-message"}
+	}
+
+	metadata := msg.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+
+	// 层4：非群聊
+	chatType := strings.ToLower(strings.TrimSpace(orStr(metadata["im_chat_type"], metadata["chat_type"])))
+	if chatType != "group" {
+		return InboundProcessResult{ShouldForward: true, Reason: "non-group-chat"}
+	}
+
+	senderUserID := orStr(metadata["im_sender_user_id"], metadata["open_id"], metadata["sender_id"])
+	threadID := orStr(metadata["im_thread_id"], metadata["feishu_chat_id"], msg.SessionID)
+
+	principalUserID := strings.TrimSpace(adapter.GetPrincipalUserID())
+	principalName := strings.TrimSpace(adapter.GetPrincipalDisplayName())
+	if principalName == "" {
+		principalName = "用户"
+	}
+	if principalUserID == "" {
+		return InboundProcessResult{ShouldForward: true, Reason: "missing-principal-user"}
+	}
+
+	// 层5：必答规则
+	if shouldAlwaysReply(text, metadata, senderUserID, principalUserID, principalName, adapter.GetBotMentionTokens()) {
+		return InboundProcessResult{
+			ShouldForward: true,
+			MetadataPatch: adapter.BuildRelevanceMetadata(metadata, senderUserID, true),
+			Reason:        "always-reply",
+		}
+	}
+
+	// 层6-7：LLM 改写
+	prompt := proc.buildPrompt(threadID, senderUserID, text,
+		resolveTimestampMs(msg.Timestamp, metadata), principalName, adapter, pendingContext)
+	rewrittenContent := proc.rewriteQuery(ctx, prompt, principalName, adapter)
+	if rewrittenContent == "" {
+		return InboundProcessResult{ShouldForward: true, Reason: "rewrite-failed"}
+	}
+
+	normalized := strings.TrimSpace(rewrittenContent)
+	if normalized == "[无需处理]" {
+		if hasImageContext(metadata) {
+			return InboundProcessResult{ShouldForward: true, Reason: "image-fallback"}
+		}
+		return InboundProcessResult{ShouldForward: false, Reason: "irrelevant"}
+	}
+
+	return InboundProcessResult{
+		ShouldForward:    true,
+		RewrittenContent: normalized,
+		MetadataPatch:    adapter.BuildRelevanceMetadata(metadata, senderUserID, true),
+		Reason:           "rewritten",
 	}
 }
 
@@ -395,4 +491,105 @@ func (proc *IMConversationProcessor) loadUserProfile() string {
 		return ""
 	}
 	return string(data)
+}
+
+// ensureLLM 懒加载 LLM 实例（仅入站 Processor 这一份，与出站独立）。
+// Python: im_inbound.py L382-417 _ensure_llm（无 api_key/api_base 缺失守卫——
+// 失败靠构造抛错进 except；Go NewModelClientConfig.Validate 空 key/base 返回
+// error，同走 Warn 回退路径，终效一致）
+func (proc *IMConversationProcessor) ensureLLM() *llm.Model {
+	if proc.llm != nil {
+		return proc.llm
+	}
+	modelCfg := llmschema.NewModelRequestConfig(
+		llmschema.WithModelName(proc.modelName),
+		llmschema.WithTemperature(0.2),
+		llmschema.WithTopP(0.7),
+	)
+	mcc := proc.modelClientRaw
+	if mcc == nil {
+		mcc = map[string]any{}
+	}
+	apiKey := strings.TrimSpace(orStr(mcc["api_key"], os.Getenv("API_KEY")))
+	apiBase := strings.TrimSpace(orStr(mcc["api_base"], os.Getenv("API_BASE")))
+	apiBase = strings.TrimSuffix(apiBase, "/chat/completions")
+	clientProvider := orStr(mcc["client_provider"], os.Getenv("MODEL_PROVIDER"), "OpenAI")
+	rawHeaders := mcc["custom_headers"]
+	if !truthy(rawHeaders) {
+		rawHeaders = os.Getenv("CUSTOM_HEADERS")
+	}
+	customHeaders := headersToStringMap(config.ParseCustomHeaders(rawHeaders))
+
+	clientCfg, err := llmschema.NewModelClientConfig(
+		clientProvider, apiKey, apiBase,
+		llmschema.WithClientID("im_conversation_processor_client"),
+		llmschema.WithVerifySSL(false),
+		llmschema.WithTimeout(180.0),
+		llmschema.WithCustomHeaders(customHeaders),
+	)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Msg("IMConversationProcessor init LLM failed, fallback to original message")
+		return nil
+	}
+	model, err := llm.NewModel(clientCfg, modelCfg)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Msg("IMConversationProcessor init LLM failed, fallback to original message")
+		return nil
+	}
+	proc.llm = model
+	return proc.llm
+}
+
+// rewriteQuery 调用 LLM 改写消息。
+// Python: im_inbound.py L419-451 _rewrite_query
+func (proc *IMConversationProcessor) rewriteQuery(ctx context.Context, prompt, principalName string, adapter IMPlatformAdapter) string {
+	model := proc.ensureLLM()
+	if model == nil {
+		return ""
+	}
+
+	botMentions := adapter.GetBotMentionTokens()
+	botMentionHint := "@机器人"
+	if len(botMentions) > 0 {
+		botMentionHint = strings.Join(botMentions, " / ")
+	}
+	systemPrompt := SYSTEM_PROMPT_TEMPLATE
+	systemPrompt = strings.ReplaceAll(systemPrompt, "{principal_name}", principalName)
+	systemPrompt = strings.ReplaceAll(systemPrompt, "{bot_mention_hint}", botMentionHint)
+
+	resp, err := model.Invoke(ctx,
+		model_clients.NewDictsMessagesParam([]map[string]any{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": prompt},
+		}),
+		model_clients.WithInvokeModel(proc.modelName),
+	)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Msg("IMConversationProcessor LLM rewrite failed, fallback to original message")
+		return ""
+	}
+	if resp != nil && resp.Content.IsText() {
+		if text := strings.TrimSpace(resp.Content.Text()); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+// headersToStringMap custom_headers map[string]any → map[string]string
+// （非字符串值跳过，runtime_inheritance.go customHeadersToStringMap 先例语义）。
+func headersToStringMap(m map[string]any) map[string]string {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]string, len(m))
+	for k, v := range m {
+		if s, ok := v.(string); ok {
+			result[k] = s
+		}
+	}
+	return result
 }
