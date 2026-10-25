@@ -749,10 +749,11 @@ func mergeDetails(dst, src map[string]any) {
 	}
 }
 
-// cloneStageDetails 克隆细节字典（nil 转 nil，避免构造步骤与调用方共享可变 map）。
+// cloneStageDetails 克隆细节字典（nil 转空 map，对齐 Python "details or {}"——
+// 步骤 Details 恒非 nil，避免后续 mergeDetails 写 nil map panic）。
 func cloneStageDetails(details map[string]any) map[string]any {
 	if details == nil {
-		return nil
+		return make(map[string]any)
 	}
 	cloned := make(map[string]any, len(details))
 	for k, v := range details {
