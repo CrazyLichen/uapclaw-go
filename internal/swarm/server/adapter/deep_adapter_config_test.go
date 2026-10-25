@@ -3,14 +3,20 @@ package adapter
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
-
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
+
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -594,5 +600,107 @@ func TestResolveManagedBrowserBinaryFromConfig_chromePath(t *testing.T) {
 	// 无 browser 配置 → 空串
 	if got := d.resolveManagedBrowserBinaryFromConfig(map[string]any{}); got != "" {
 		t.Errorf("无 browser 配置应返回空串，实际 %q", got)
+	}
+}
+
+// ──────────────────────────── updateSessionTools 测试 ────────────────────────────
+// 对齐 Python _update_session_tools (interface_deep.py L2966-3010)：
+// cron 工具按 ctx 绑定的 RuntimeCronContext 注册；heartbeat/cron 前缀跳过；
+// instance 未初始化时降级（Python try/except 语义）。
+
+// TestUpdateSessionTools_nil配置 config 为 nil 直接返回
+func TestUpdateSessionTools_nil配置(t *testing.T) {
+	d := NewDeepAdapter()
+	// 不应 panic
+	d.updateSessionTools(t.Context(), nil)
+}
+
+// TestUpdateSessionTools_前缀跳过 heartbeat/cron 前缀会话跳过 cron 注册
+// Python: if not (session_id.startswith("heartbeat") or session_id.startswith("cron"))
+func TestUpdateSessionTools_前缀跳过(t *testing.T) {
+	d := NewDeepAdapter()
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "s", nil, "r", "agent.plan")
+
+	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "heartbeat_s1"})
+	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "cron_job_x"})
+	// 非前缀命中的普通会话不受影响（instance nil 走降级分支不 panic）
+	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "web_s1"})
+}
+
+// TestUpdateSessionTools_无绑定 ctx 未绑定 RuntimeCronContext 时返回
+func TestUpdateSessionTools_无绑定(t *testing.T) {
+	d := NewDeepAdapter()
+	// ctx 无绑定值 → FromRuntimeCronContext 返回 nil → 直接返回
+	d.updateSessionTools(t.Context(), &runtimeConfig{SessionID: "web_s1"})
+}
+
+// TestUpdateSessionTools_instance未初始化降级 tools 已构建但 instance nil
+// 对齐 Python：self._instance.ability_manager 抛 AttributeError → error 日志降级
+func TestUpdateSessionTools_instance未初始化降级(t *testing.T) {
+	d := NewDeepAdapter()
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
+		map[string]any{"k": "v"}, "req-1", "agent.plan")
+
+	// BuildTools 走默认 backend（GetBackend 懒加载，全局无注入时仍可解析），
+	// 构建出非空工具集后命中 instance nil 守卫 → 降级返回，不 panic
+	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "web_sess-1"})
+}
+
+// TestUpdateSessionTools_正常注册 全链路：工具注册到 ResourceMgr + AbilityManager
+func TestUpdateSessionTools_正常注册(t *testing.T) {
+	d := NewDeepAdapter()
+	// 构造 DeepAgent 实例（agentID 非空走 tool_id_{agentID} 命名分支）
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID("agent-cron-1"),
+		agentschema.WithAgentName("cron-test-agent"),
+	)
+	d.instance = harness.NewDeepAgent(card)
+
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "feishu", "sess-9",
+		map[string]any{"chat_type": "group"}, "req-9", "agent.plan")
+	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "feishu_sess-9"})
+
+	// 断言 1：统一 cron 工具已注册到 AbilityManager（name="cron"）
+	am := d.instance.AbilityManager()
+	found := false
+	for _, ab := range am.List() {
+		if tc, ok := ab.(*tool.ToolCard); ok && tc.Name == "cron" {
+			found = true
+			// 断言 2：tool_id 应含 ToolScopeOverride（runtime_{指针十六进制}）
+			// 期望前缀 "cron_runtime_"（toolScope 替换冒号后拼接）
+			if !strings.HasPrefix(tc.ID, "cron_runtime_") {
+				t.Errorf("cron tool ID 应含 runtime scope 前缀, got %q", tc.ID)
+			}
+			// agentID 非空 → ID 以 agentID 结尾
+			if !strings.HasSuffix(tc.ID, "_agent-cron-1") {
+				t.Errorf("cron tool ID 应以 agentID 结尾, got %q", tc.ID)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("统一 cron 工具（name=cron）未注册到 AbilityManager")
+	}
+
+	// 断言 3：工具已注册到全局 ResourceMgr（可按 ID 查回）
+	for _, ab := range am.List() {
+		if tc, ok := ab.(*tool.ToolCard); ok && tc.Name == "cron" {
+			existing, err := runner.GetResourceMgr().GetTool([]string{tc.ID})
+			if err != nil || len(existing) != 1 {
+				t.Errorf("cron tool 应可从 ResourceMgr 查回, err=%v, count=%d", err, len(existing))
+			}
+		}
+	}
+
+	// 断言 4：二次调用不重复注册（Python: get_tool 查重后跳过 add_tool，
+	// ability_manager.add 重复 name 时 Warn 并保留已有——幂等）
+	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "feishu_sess-9"})
+	cronCount := 0
+	for _, ab := range am.List() {
+		if tc, ok := ab.(*tool.ToolCard); ok && tc.Name == "cron" {
+			cronCount++
+		}
+	}
+	if cronCount != 1 {
+		t.Errorf("重复调用后 cron 工具应保持 1 个, got %d", cronCount)
 	}
 }

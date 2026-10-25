@@ -18,5 +18,12 @@
 //	├── doc.go              # 包文档
 //	└── session_ops.go      # 7 个服务函数 + 辅助函数
 //
+// 依赖说明（已知偏差，10.6.12 破环迁移遗留）：本包 import server/session
+// （会话元数据 7 符号）与 server/utils（GetDiffService）。消费方
+// gateway/message_handler 经本包对 server 形成传递依赖，违反项目规则
+// "gateway 包不 import server/"。因 server 侧（handle_session.go）也消费
+// 本包，sessionops 实质是 gateway/server 共享库，物理位置对齐 Python
+// （agents/harness/common）。待 server↔agents 边界收敛工程统一处理。
+//
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/session_ops_service.py
 package sessionops

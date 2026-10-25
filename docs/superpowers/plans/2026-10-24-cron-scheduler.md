@@ -5508,7 +5508,9 @@ deep_adapter 步骤 9 两处替换：
 
 finally 块（步骤 20）注释更新：Go ctx 不可变值模式，无需 reset（保留 unmarkSessionActive）。
 
-- [ ] **Step 3: cancelSchedulerRunningTasks（1402 + 1643 两处）**
+- [ ] **Step 3: cancelSchedulerRunningTasks（3 处：supplement 1397 + cancel 1413 + disconnect 1657）**
+
+> 实施勘误：Python `_cancel_scheduler_running_tasks` 实际 **3 处**调用（L3347 supplement 分支 / L3393 cancel 分支 / L3538 disconnect 步骤 3），本计划初稿漏列 supplement 分支；以下已补齐。调用点计数以 grep Python 源码为准。
 
 对齐 Python `_cancel_scheduler_running_tasks`（interface_deep.py L3478-3506）——取消 agentcore TaskScheduler 的 runningTasks（与 cron 调度器无关，取消 in-flight LLM HTTP）：
 
@@ -5562,14 +5564,22 @@ func (d *DeepAdapter) cancelSchedulerRunningTasks() {
 
 注意：`controller.ControllerInterface.TaskScheduler()` 返回类型需确认是 `*modules.TaskScheduler`（controller.go:431 确认返回 `*modules.TaskScheduler`），ControllerInterface 是否暴露该方法需 grep。若接口未暴露，加接口方法或用类型断言。
 
-1402 处（interrupt cancel 分支）：
+1397 处（interrupt supplement 分支，other_count == 0 内）：
 
 ```go
-		// 11.10 已回填：取消调度器运行中任务
-		d.cancelSchedulerRunningTasks()
+			// 11.10 已回填：取消调度器运行中任务
+			// Python: self._cancel_scheduler_running_tasks()（supplement 分支 other_count==0 内，L3347）
+			d.cancelSchedulerRunningTasks()
 ```
 
-1643 处（AbortOnGatewayDisconnect 步骤 3）：
+1413 处（interrupt cancel 分支）：
+
+```go
+			// 11.10 已回填：取消调度器运行中任务
+			d.cancelSchedulerRunningTasks()
+```
+
+1657 处（AbortOnGatewayDisconnect 步骤 3）：
 
 ```go
 	// 步骤 3: 取消调度器任务（11.10 已回填）
@@ -5597,46 +5607,57 @@ cd /home/opensource/uapclaw-gateway && go build ./internal/swarm/server/adapter/
 
 对齐 Python team_manager.py L492-515。替换桩：
 
+> 实施勘误：本步骤代码块初稿有两处失误，已按 Python 原文修正——
+> ① `Mode` 字段：Python L498 原文 `mode="team"`（初稿误写 `Mode: ""`）；metadata 直传 `request_metadata`，**不注入 request_id**（request_id 注入是 deep_adapter 步骤 9 绑定的行为，team 场景无此注入）。
+> ② 查重守卫：Python L512 单守卫 `if not Runner.resource_mgr.get_tool(id)`；初稿的 `toolAlreadyRegistered` 双重查重是过度设计（Python 无对应物），且该函数与 `GetCronRuntimeBridge()` 在 Go 侧不存在——bridge 为局部构造（对齐 Python 每次 `cron_runtime = CronRuntimeBridge()` 新建）。
+
 ```go
 	// 11.10 已回填：CronRuntimeBridge 工具注册
 	// Python: cron_runtime.build_tools(context=...) → Runner.resource_mgr.add_tool → agent.ability_manager.add
+	cronRuntime := cronbridge.NewCronRuntimeBridge()
+	// Python: channel_id=channel_id or "web"
+	channel := derefString(channelID)
+	if strings.TrimSpace(channel) == "" {
+		channel = "web"
+	}
+	// Python: language=getattr(agent.deep_config, "language", "cn")
+	language := "cn"
+	if dc := agent.DeepConfig(); dc != nil && strings.TrimSpace(dc.Language) != "" {
+		language = strings.TrimSpace(dc.Language)
+	}
+	// Python L497-503: SimpleNamespace(tool_scope=f"team_member_{agent_id or 'unknown'}", ...)
+	// metadata 直接传 request_metadata（不注入 request_id，与 deep_adapter 步骤 9 的绑定不同）
 	cronCtx := &agentcron.CronToolContext{
-		ChannelID: derefString(channelID),
-		SessionID: sessionID,
-		Metadata: map[string]any{
-			"request_id": derefString(requestID),
-		},
-		Mode: "",
+		ChannelID:         channel,
+		SessionID:         sessionID,
+		Metadata:          copyMetadataMap(requestMetadata),
+		Mode:              "team",
+		ToolScopeOverride: "team_member_" + scopeAgentID,
 	}
-	if requestMetadata != nil {
-		for k, v := range requestMetadata {
-			cronCtx.Metadata[k] = v
-		}
-	}
-	if bridge := m.GetCronRuntimeBridge(); bridge != nil {
-		tools := bridge.BuildTools(cronCtx, agentID, "cn")
-		registeredCount := 0
-		for _, cronTool := range tools {
-			// 对齐 Python: if not Runner.resource_mgr.get_tool(cron_tool.card.id)
-			card := cronTool.Card()
-			if _, gerr := runner.GetResourceMgr().GetTool([]string{card.ID}); gerr != nil || !toolAlreadyRegistered(agent, card.ID) {
-				if aerr := runner.GetResourceMgr().AddTool(cronTool); aerr != nil {
-					logger.Warn(logComponent).Err(aerr).Str("tool_id", card.ID).
-						Msg("[TeamManager] cron tool add to resource manager failed")
-					continue
-				}
+	tools := cronRuntime.BuildTools(cronCtx, agentID, language)
+	registeredCount := 0
+	resourceMgr := runner.GetResourceMgr()
+	abilityMgr := agent.AbilityManager()
+	for _, cronTool := range tools {
+		card := cronTool.Card()
+		// 对齐 Python L512: if not Runner.resource_mgr.get_tool(cron_tool.card.id)
+		if existing, gerr := resourceMgr.GetTool([]string{card.ID}); gerr != nil || len(existing) == 0 {
+			if aerr := resourceMgr.AddTool(cronTool); aerr != nil {
+				logger.Warn(logComponent).Err(aerr).Str("tool", card.Name).
+					Msg("[TeamManager] cron tool add to resource manager failed")
+				continue
 			}
-			agent.AbilityManager().Add(card)
-			registeredCount++
 		}
-		logger.Info(logComponent).
-			Str("agent_id", agentID).
-			Int("registered", registeredCount).
-			Msg("[TeamManager] cron tools registered")
+		abilityMgr.Add(card)
+		registeredCount++
 	}
+	logger.Info(logComponent).
+		Str("agent_id", agentID).
+		Int("registered", registeredCount).
+		Msg("[TeamManager] Registered cron tools for member")
 ```
 
-TeamManager 需补 `GetCronRuntimeBridge()`（返回共享 bridge 实例或惰性构造）。agentID 从 agent.Card().ID 取（函数开头已有）。`toolAlreadyRegistered` 辅助遍历 abilityManager.List()。`derefString` 简单解引用。
+agentID 从 agent.Card().ID 取（函数开头已有；Go `NewAgentCard()` 自动 uuid，nil card 才走 "unknown" 兜底）。`scopeAgentID` 空串兜底 "unknown"（对齐 Python `agent_id or 'unknown'`）。`copyMetadataMap` 为 metadata 深拷贝辅助（对齐 Python `metadata=request_metadata` 直传引用语义下防外部并发修改）。`derefString` 简单解引用。
 
 - [ ] **Step 2: app_gateway.go 装配（:158 TODO 回填）**
 
@@ -5665,9 +5686,12 @@ TeamManager 需补 `GetCronRuntimeBridge()`（返回共享 bridge 实例或惰�
 	}
 	s.cronScheduler = cronScheduler
 
-	// bridge 全局注入（wake 用户消息发布 + E2A push + config）
-	// Go 无 MessageHandler 单例，用全局注入（SetDefaultSendPushFunc 同款先例）
-	cronbridge.SetGlobalUserPublisher(s.msgHandler)     // PublishUserMessagesNowait 隐式满足
+	// bridge 三依赖全局注入（wake 用户消息发布 + 内嵌调度器 agentClient + config）
+	// Go 无 MessageHandler/AgentServerClient 单例，用全局注入（SetDefaultSendPushFunc 同款先例）
+	// Python 对应：ensure_scheduler 内嵌 fallback 经 AgentServerClient.get_instance() +
+	// MessageHandler.get_instance() 单例解析（cron_tools.py L88-99）
+	cronbridge.SetGlobalUserPublisher(s.msgHandler) // PublishUserMessagesNowait 隐式满足
+	cronbridge.SetGlobalAgentClient(agentClient)    // 内嵌调度器 fallback 依赖（缺此行则 fallback 静默失效）
 	cronbridge.SetGlobalConfigLoader(func() map[string]any {
 		if s.config == nil {
 			return nil
@@ -5779,3 +5803,4 @@ cd /home/opensource/uapclaw-gateway && git add IMPLEMENTATION_PLAN.md && git com
 6. **依赖方向**：gateway/cron 不 import message_handler（接口破环）；gateway 包不 import server/；agents/.../tools/cron import gateway/cron 镜像 Python
 7. **日志对齐**：Python logger 调用点在 Go 等价位置有结构化日志（日志文案英文，注释中文——对齐既有 feedback）
 8. **品牌映射**：~/.uapclaw 路径（非 jiuwenswarm）；日志中无中文品牌残留
+9. **cron 全链路消费面**（实施后审查补）：DeepAdapter `updateSessionTools` 已回填（Deep 模式会话级 cron 工具注册，Python L2966-3010——绑定的 ContextVar 必须有注册消费侧，否则 Deep 会话 agent 无 cron 工具）；channel 前缀表 `_KNOWN_JIUWENSWARM_SESSION_PREFIXES`（含 `cron_`）随 11.25 ACP 回填，非 11.10 债务

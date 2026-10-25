@@ -177,7 +177,7 @@ server/adapter ──import agents/.../tools/cron──→ 已有先例（code_a
 
 | # | 位置 | 处置 |
 |---|------|------|
-| 1 | deep_adapter.go:206-216（A2X 4 字段）+ 479/582/702-703 | **保留**——A2X 功能不属于 11.10 |
+| 1 | deep_adapter.go:206-216（A2X 4 字段）+ 479/582/702-703 | **保留**——A2X 功能不属于 11.10（注：物理驻 a2x 文件的 `bindRuntimeCronContext`/`resetRuntimeCronContext` 两桩是 10.3.6 误挂的 cron 桩，已随 11.10 清理删除，见 §十 #5；A2X 4 字段本身保留不动） |
 | 2 | deep_adapter.go:217-219（cronRuntime any） | **回填**——升级具体类型 |
 | 3 | deep_adapter.go:852（非流式步骤 9 绑定） | **回填** |
 | 4 | deep_adapter.go:909（reset） | **回填**（ctx values 不可变，仅 unmark；reset 语义并入 defer） |
@@ -200,6 +200,8 @@ server/adapter ──import agents/.../tools/cron──→ 已有先例（code_a
 | nowFn 注入 | Python 原生 `now_fn` 参数，零偏差对齐；确定性测试 wake→push→push_update 时序 |
 | 保留 5s mtime 轮询 | 方案 B 单调度器下，双部署形态（两进程各一调度器）仍需感知对方写文件；轮询成本可忽略 |
 | cron ctx 用 ctx values | Python 4 ContextVars 在 Go goroutine 模型下用 ctx values 最贴近（不可变传递）；defer 只需 unmark（reset 语义天然满足） |
+| ToolScopeOverride 显式覆盖字段 | Python team 场景用 `SimpleNamespace(tool_scope=f"team_member_{agent_id}")` **动态属性遮蔽** frozen dataclass 的 `tool_scope` property（`{channel}:{session}` 计算）——Python 特有动态语义；Go 无属性遮蔽，用 `CronToolContext.ToolScopeOverride` 显式字段对齐（空串/空白不覆盖，回退默认计算）。ToolScope() 优先返回非空白 override |
+| cronbridge 三依赖全局注入 | Python `ensure_scheduler` 内嵌 fallback 依赖经两个单例解析（`AgentServerClient.get_instance()` + `MessageHandler.get_instance()`，均 try/except 容错）；Go 无单例，用 `SetGlobalUserPublisher`/`SetGlobalAgentClient`/`SetGlobalConfigLoader` 三全局注入（app_gateway 装配时设置，`SetDefaultSendPushFunc` 同款先例）；E2A push 通道由 agent_server 侧注入（`SetGlobalGatewayPushFunc`），与 Gateway 侧三注入职责分离 |
 | 死代码入口保留 | `ensure_scheduler_started` Python 全仓零调用方，保留接口面与 Python 一致（零调用死代码保留原则，对齐既有决策先例） |
 | store 双实例保留 | 对齐 Python 结构（Agent 本地 store + Gateway store 同文件）；upsert 幂等使双写无害；删双实例需 CronTools 感知 controller，违反"工具层不感知 controller"的 Python 结构原则 |
 
@@ -236,5 +238,20 @@ server/adapter ──import agents/.../tools/cron──→ 已有先例（code_a
 5. `controller.go` + `outbound.go` 回填 + `web_handlers.go` 回填
 6. `agents/.../tools/cron` 桥接包（cron_tools + cron_runtime）
 7. deep_adapter 5 处回填（类型升级/绑定/cancel×2）
-8. team_manager 注册点 + app_gateway 装配 + bridge 全局注入
-9. 全量回归（CGO_ENABLED=1 + `-tags "sqlite_fts5 test"`）+ 覆盖率 ≥85% + IMPLEMENTATION_PLAN.md 状态更新
+8. team_manager 注册点 + app_gateway 装配 + bridge 三依赖全局注入（UserPublisher/AgentClient/ConfigLoader）+ agent_server E2A push 注入
+9. DeepAdapter `updateSessionTools` 回填（Deep 模式会话级 cron 工具注册，实施后审查补）
+10. 全量回归（CGO_ENABLED=1 + `-tags "sqlite_fts5 test"`）+ 覆盖率 ≥85% + IMPLEMENTATION_PLAN.md 状态更新
+
+## 十、实施偏差记录（实施时回填）
+
+| # | 偏差 | 原因 | 处理 |
+|---|------|------|------|
+| 1 | team_manager 的 `Mode: "team"` + metadata 直传（计划稿写 `Mode: ""` 且 metadata 注入 request_id） | **计划代码块起草失误**：Python team_manager.py L498 原文 `mode="team"`、`metadata=request_metadata` 直传；request_id 注入是 deep_adapter 步骤 9 绑定的行为，team 场景无此注入 | plan Task 12 Step 1 已就地修正；实现正确（20ce3133） |
+| 2 | cancel 调用 3 处（计划列 2 处：1402+1643） | Python `_cancel_scheduler_running_tasks` 实际 3 处调用（L3347 supplement / L3393 cancel / L3538 disconnect）；计划漏列 supplement 分支。**教训：调用点计数以 grep Python 源码为准，不能只信 plan 枚举** | plan Task 11 Step 3 已修正为 3 处；实现正确（ef159cab：1397/1413/1657） |
+| 3 | `CronToolContext` 新增 `ToolScopeOverride` 字段（计划无此字段，tool_scope 当纯计算属性） | 计划未识别 Python 双路径：默认 property 计算 + team 场景 SimpleNamespace 动态遮蔽；Go 需显式覆盖字段表达（见 §六 决策行） | 翻译决策归档 §六；实现见 2b685360 |
+| 4 | `FromRuntimeCronContext` 导出读取器（计划只规划写侧 Bind） | 测试可观测性：deep_adapter 跨包测试需读绑定值断言归一化语义；降级非导出不可行（测试必须驻 adapter 包驱动真实 Bind 调用）；生产路径零消费 | 注释已注明用途；实现见 ef159cab |
+| 5 | 删除 deep_adapter_a2x.go 的 `bindRuntimeCronContext`/`resetRuntimeCronContext` 两 any 桩（处置表 #1 说"保留"） | 两桩物理驻 a2x 文件但语义是 cron（10.3.6 误挂，桩注释 ⤵️ 11.10）；11.10 公开函数落地后成误导性死代码（桩签名 `(requestID, sessionID) any` 与真实 5 参实现失配）；顺带清理 any 债务 | 处置表 #1 已行内补注；删除见 892873c6 |
+| 6 | app_gateway 装配补 `SetGlobalAgentClient(agentClient)`（计划 Task 12 Step 2 装配块无此行） | Python `ensure_scheduler` 内嵌 fallback 依赖 `AgentServerClient.get_instance()` 单例解析，Go 对应全局注入；缺此行则内嵌调度器 fallback 静默失效 | plan Task 12 Step 2 已补行；§六 L174 描述已补齐三依赖；实现见 e68c3a69 |
+| 7 | GetTool 查重用单查重 `len(existing) == 0`（计划稿为 `gerr != nil \|\| !toolAlreadyRegistered` 双重查重，且 `toolAlreadyRegistered`/`GetCronRuntimeBridge` 两函数 Go 侧不存在） | 计划稿过度设计：Python 无双重查重（`if not get_tool(id)` 单守卫）；bridge 为局部构造对齐 Python 每次 `CronRuntimeBridge()` 新建 | plan Task 12 Step 1 已就地修正（删不存在的辅助函数引用）；实现正确（20ce3133） |
+| 8 | cron sessionID 时间戳用十进制（Python `format(ms, "x")` 十六进制） | 实施时格式直译遗漏；功能等价（均唯一）但与 Python 生成格式不一致，按 sessionID 解析时间戳的工具会不兼容 | 本轮归档暂不改码（无现存解析方；若 11.11 心跳或后续要加 sessionID 时间戳解析，一并统一为十六进制） |
+| 9 | DeepAdapter `_update_session_tools` 未回填（Deep 模式会话级 cron 工具注册缺失） | 11.10 Task 11 只覆盖步骤 9 绑定（ContextVar 写侧），未覆盖步骤 16-17 后的注册消费侧——绑定后无人消费，**Deep 模式普通会话 agent 无 cron 工具可用**；Python L2966-3010（cron 注册分支 + send_file 分支） | 本轮代码回填补齐（cron 分支落地，send_file 分支留 ⤵️ 10.6.24）；plan 自检清单补核对项 |

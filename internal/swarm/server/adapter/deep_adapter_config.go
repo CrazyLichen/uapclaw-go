@@ -7,17 +7,21 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	agentcron "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/cron"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/sysop_builder"
@@ -134,6 +138,11 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	// 步骤 7: rail/tool 模式切换（仅 evolution 分支已实现）
 	// Python: await self._update_rails_for_mode(runtime_config.mode)
 	d.updateRailsForMode(ctx, config.Mode)
+
+	// 步骤 7.5: 会话工具刷新（cron 注册分支）
+	// Python: await self._update_session_tools(session_id, request_id, channel_id) (L3165)
+	// _update_tools_for_mode（agent.fast multi-session 工具）⤵️ 待 agent.fast 模式回填
+	d.updateSessionTools(ctx, config)
 
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).
@@ -444,6 +453,74 @@ func (d *DeepAdapter) filesystemRailEnabledForProfile(instanceOverrides map[stri
 // Python: _resolve_runtime_language() — 调用 resolve_language() 标准化
 func (d *DeepAdapter) resolveRuntimeLanguage() string {
 	return prompts.ResolveLanguage(d.resolvePromptLanguage())
+}
+
+// updateSessionTools 注册 cron 和 send_file 工具（与 mode 无关，每次请求刷新）。
+// Python: _update_session_tools (interface_deep.py L2966-3010)。
+// 定时工具按当前 session 的 channel 注册（ctx values 已由步骤 9
+// BindRuntimeCronContext 绑定）；heartbeat/cron 前缀会话跳过（系统触发
+// 的会话不需要 cron 工具）。send_file 分支 ⤵️ 10.6.24 SendFileToolkit 回填。
+func (d *DeepAdapter) updateSessionTools(ctx context.Context, config *runtimeConfig) {
+	if config == nil {
+		return
+	}
+	// Python: if not (session_id.startswith("heartbeat") or session_id.startswith("cron"))
+	if strings.HasPrefix(config.SessionID, "heartbeat") || strings.HasPrefix(config.SessionID, "cron") {
+		return
+	}
+	// Python L2974: cron_tools = self._build_cron_tools()
+	// context 实参是 _runtime_cron_tool_context（ContextVar 代理）；
+	// Go 对应从 ctx values 读绑定值组装 CronToolContext。
+	rcc := cronbridge.FromRuntimeCronContext(ctx)
+	if rcc == nil {
+		return
+	}
+	// Python L2516: agent_id = self._instance.card.id if self._instance else None
+	agentID := ""
+	if d.instance != nil && d.instance.Card() != nil {
+		agentID = d.instance.Card().ID
+	}
+	cronCtx := &agentcron.CronToolContext{
+		ChannelID: rcc.ChannelID,
+		SessionID: rcc.SessionID,
+		Metadata:  rcc.Metadata,
+		Mode:      rcc.Mode,
+	}
+	// Python L539-541: tool_scope=f"runtime_{id(self):x}"（构造时一次性）。
+	// Go 对齐：runtime_{指针十六进制}，adapter 实例生命周期内稳定。
+	cronCtx.ToolScopeOverride = fmt.Sprintf("runtime_%x", uintptr(unsafe.Pointer(d)))
+	tools := d.cronRuntime.BuildTools(cronCtx, agentID, d.resolveRuntimeLanguage())
+	if len(tools) == 0 {
+		return
+	}
+	logger.Info(logComponent).
+		Int("count", len(tools)).
+		Msg("[DeepAdapter] Registering cron tools")
+	// Python: 注册块整体 try/except——instance 未初始化时 ability_manager 访问
+	// 抛 AttributeError → error 日志降级。Go 用显式 nil 守卫对齐该降级语义。
+	if d.instance == nil {
+		logger.Error(logComponent).
+			Msg("[DeepAdapter] instance not initialized, cron tools registration skipped")
+		return
+	}
+	resourceMgr := runner.GetResourceMgr()
+	for _, cronTool := range tools {
+		// Python L2979: if not Runner.resource_mgr.get_tool(cron_tool.card.id)
+		card := cronTool.Card()
+		if existing, gerr := resourceMgr.GetTool([]string{card.ID}); gerr != nil || len(existing) == 0 {
+			if aerr := resourceMgr.AddTool(cronTool); aerr != nil {
+				logger.Error(logComponent).
+					Err(aerr).
+					Str("tool_id", card.ID).
+					Msg("[DeepAdapter] cron tool registration failed")
+				continue
+			}
+		}
+		d.instance.AbilityManager().Add(card)
+	}
+	logger.Info(logComponent).Msg("[DeepAdapter] Cron tools registered successfully")
+	// ⤵️ 10.6.24: send_file 工具注册分支（channels.<channel>.send_file_allowed
+	// 控制 + SendFileToolkit），待 SendFile 工具集实现回填
 }
 
 // resolvePromptLanguage 解析提示词语言（原始配置值）。
