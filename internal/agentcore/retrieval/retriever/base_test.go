@@ -44,17 +44,20 @@ func TestRetrievalMode_常量值(t *testing.T) {
 // fakeVectorStore 实现 vector_store.VectorStore 全接口的测试桩。
 //
 // 检索三方法可编程返回值/错误并计数；其余方法零实现（两检索器不触达）。
+// searchErrAfter > 0 时前 N 次 Search 成功、之后返回 searchErr（G5 首错
+// 传播用：q1 成功 q2 失败）。
 type fakeVectorStore struct {
-	searchResult  []common.SearchResult
-	sparseResult  []common.SearchResult
-	searchErr     error
-	sparseErr     error
-	searchCalls   int
-	sparseCalls   int
-	closeCalls    int
-	lastTopK      int
-	lastQueryVec  []float64
-	lastQueryText string
+	searchResult   []common.SearchResult
+	sparseResult   []common.SearchResult
+	searchErr      error
+	sparseErr      error
+	searchErrAfter int
+	searchCalls    int
+	sparseCalls    int
+	closeCalls     int
+	lastTopK       int
+	lastQueryVec   []float64
+	lastQueryText  string
 }
 
 func (f *fakeVectorStore) CheckVectorField() error { return nil }
@@ -65,6 +68,9 @@ func (f *fakeVectorStore) Search(_ context.Context, queryVector []float64, topK 
 	f.searchCalls++
 	f.lastTopK = topK
 	f.lastQueryVec = queryVector
+	if f.searchErr != nil && (f.searchErrAfter == 0 || f.searchCalls > f.searchErrAfter) {
+		return nil, f.searchErr
+	}
 	return f.searchResult, f.searchErr
 }
 func (f *fakeVectorStore) SparseSearch(_ context.Context, queryText string, topK int, _ query.QueryExpr, _ ...vector_store.StoreOption) ([]common.SearchResult, error) {
@@ -83,7 +89,7 @@ func (f *fakeVectorStore) TableExists(_ context.Context, _ string) (bool, error)
 	return false, nil
 }
 func (f *fakeVectorStore) DeleteTable(_ context.Context, _ string) error { return nil }
-func (f *fakeVectorStore) Close()                                       { f.closeCalls++ }
+func (f *fakeVectorStore) Close()                                        { f.closeCalls++ }
 
 // fakeEmbedModel 实现 embedding.BaseEmbedding 的测试桩。
 type fakeEmbedModel struct {
@@ -99,5 +105,5 @@ func (f *fakeEmbedModel) EmbedQuery(_ context.Context, _ string, _ ...embedding.
 func (f *fakeEmbedModel) EmbedDocuments(_ context.Context, _ []string, _ ...embedding.EmbedOption) ([][]float64, error) {
 	return nil, nil
 }
-func (f *fakeEmbedModel) Dimension() int                                   { return 384 }
+func (f *fakeEmbedModel) Dimension() int                                    { return 384 }
 func (f *fakeEmbedModel) DimensionWithContext(context.Context) (int, error) { return 384, nil }
