@@ -79,16 +79,22 @@ func (h *teamMonitorHandlerImpl) Start(ctx context.Context) error {
 			Msg("TeamMonitorHandler start failed: monitor.Start failed")
 		return err
 	}
-	// M-05: Stop 时 eventQueue 已被 close 并置 nil，重启时重建
+	// M-05: Stop 时 eventQueue 已置 nil（由 collectEvents 自己 close），
+	// 重启时重建
 	if h.eventQueue == nil {
 		h.eventQueue = make(chan map[string]any, monitorHandlerEventQueueSize)
 	}
 	h.running = true
 
+	// 竞态修复（问题 12）：eventCh/eventQueue 引用本地化传入 goroutine，
+	// collectEvents 退出时自己 close（发送方关闭原则）
+	eventCh := h.monitor.Events()
+	queue := h.eventQueue
+
 	// 启动事件收集 goroutine
 	collectCtx, cancel := context.WithCancel(context.Background())
 	h.cancel = cancel
-	go h.collectEvents(collectCtx)
+	go h.collectEvents(collectCtx, eventCh, queue)
 
 	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("TeamMonitorHandler started successfully")
 	return nil
@@ -105,8 +111,12 @@ func (h *teamMonitorHandlerImpl) Start(ctx context.Context) error {
 //	4. logger.info("Monitor 已停止")
 //
 // M-05: monitor.Stop 会 close eventCh → collectEvents 的 range 正常退出；
-// 此处再 close eventQueue（发送方关闭），使 consumeMonitorEvents 的 range 也能正常退出，
+// collectEvents 退出时自己 close 本地 queue（发送方关闭原则），
+// 使 consumeMonitorEvents 的 range 也能正常退出，
 // 不再依赖 ctx cancel（_monitor 后缀的 streamTask 在 cleanup 路径上未被 cancel，会泄漏）。
+//
+// 竞态修复（问题 12）：Stop 只置 nil 不再 close——close 由 collectEvents
+// （唯一发送方）负责，消除 send-on-closed-channel panic 竞态窗口。
 func (h *teamMonitorHandlerImpl) Stop(ctx context.Context) error {
 	h.mu.Lock()
 	h.running = false
@@ -127,11 +137,9 @@ func (h *teamMonitorHandlerImpl) Stop(ctx context.Context) error {
 		}
 		h.monitor = nil
 	}
-	// M-05: 关闭 eventQueue，终止消费者 range（只 close 一次）
-	if h.eventQueue != nil {
-		close(h.eventQueue)
-		h.eventQueue = nil
-	}
+	// M-05: eventQueue 只置 nil（close 由 collectEvents 发送方负责），
+	// 消费者持有旧引用，range 在 channel 被 collectEvents close 后正常退出
+	h.eventQueue = nil
 	h.mu.Unlock()
 
 	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("TeamMonitorHandler stopped")
@@ -282,18 +290,31 @@ func (h *teamMonitorHandlerImpl) GetTeamSnapshot(ctx context.Context) (map[strin
 //	Python: 3. if not self._running: break
 //	Python: 4. event_dict = await self._convert_event_to_dict(event)
 //	Python: 5. if event_dict: await self._event_queue.put(event_dict)
-func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context) {
+//
+// 竞态修复（问题 12，用户定案方案a——发送方关闭原则）：
+//   - eventCh/eventQueue 引用在启动时本地化传入 goroutine，不受 Stop
+//     置 nil 影响，消除结构体字段并发读写
+//   - collectEvents 退出时自己 close 本地 queue（发送方关闭原则），
+//     Stop 只置 nil 不再 close——消除 send-on-closed-channel panic 竞态
+//   - Python try/except 兜底异常对应 Go defer recover
+func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context, eventCh <-chan *monitor.MonitorEvent, queue chan<- map[string]any) {
 	defer logger.Info(logComponent).Str("session_id", h.sessionID).Msg("event collector goroutine exited")
 	logger.Info(logComponent).Str("session_id", h.sessionID).Msg("event collector goroutine started")
 
-	// Python 步骤 1: if self._monitor is None: return
-	h.mu.Lock()
-	mon := h.monitor
-	h.mu.Unlock()
-	if mon == nil {
-		return
-	}
-	eventCh := mon.Events()
+	// 发送方关闭原则：collectEvents 是 queue 唯一发送方，退出时负责 close，
+	// 消费者 range 正常终止（对齐 Python _collect_events 结束即不再 put）
+	defer close(queue)
+
+	// 对齐 Python: except Exception as e: logger.error(...)——
+	// 事件收集失败兜底（转换异常等），防止 goroutine panic 拖垮进程
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Error(logComponent).
+				Str("session_id", h.sessionID).
+				Any("panic", rec).
+				Msg("event collector goroutine panicked")
+		}
+	}()
 
 	for evt := range eventCh {
 		select {
@@ -316,7 +337,7 @@ func (h *teamMonitorHandlerImpl) collectEvents(ctx context.Context) {
 		eventDict := h.convertEventToDict(ctx, evt)
 		if eventDict != nil {
 			select {
-			case h.eventQueue <- eventDict:
+			case queue <- eventDict:
 			default:
 				logger.Warn(logComponent).Str("session_id", h.sessionID).
 					Msg("event queue full, dropping event")

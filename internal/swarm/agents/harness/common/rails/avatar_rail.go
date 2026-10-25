@@ -250,7 +250,8 @@ func (r *AvatarPromptRail) rejectTool(cbc *agentinterfaces.AgentCallbackContext,
 	if toolInputs.ToolCall != nil {
 		toolCallID = toolInputs.ToolCall.ID
 	}
-	cbc.Extra()["_skip_tool"] = true
+	// S-24: 裸 map 写迁移 SetExtra（线程安全）
+	cbc.SetExtra("_skip_tool", true)
 	toolInputs.ToolResult = message // 对齐 Python: ctx.inputs.tool_result = message（字符串）
 	toolInputs.ToolMsg = llmschema.NewToolMessage(toolCallID, message)
 	logger.Info(logComponent).

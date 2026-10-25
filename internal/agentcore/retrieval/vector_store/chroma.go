@@ -12,6 +12,7 @@ import (
 	"github.com/amikos-tech/chroma-go/pkg/embeddings"
 	"github.com/google/uuid"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
@@ -25,6 +26,24 @@ import (
 // chromaWhereFilter 适配器，将 WhereClause 包装为 WhereFilter 接口。
 type chromaWhereFilter struct {
 	clause chromav2.WhereClause
+}
+
+// chromaMapWhereFilter M-27: map 形态 where 过滤适配器。
+//
+// QueryExpr.ToExpr("chroma") 输出 Chroma 原生 where 字典（如
+// {"$and": [...]}），SDK v0.4.1 未提供从 map 直构 WhereFilter 的工厂，
+// 此适配器直接持有 map 并经 json.Marshal 序列化——SDK 的
+// CollectionQueryOp.Where 字段以 json tag 调用 MarshalJSON 输出请求体。
+type chromaMapWhereFilter struct {
+	m map[string]any
+}
+
+// chromaMapWhereDocumentFilter M-27: map 形态 where_document 过滤适配器。
+//
+// 语义同 chromaMapWhereFilter，包装 Chroma 原生 where_document 字典
+// （$contains/$regex 等文档内容过滤）。
+type chromaMapWhereDocumentFilter struct {
+	m map[string]any
 }
 
 // ChromaVectorStore retrieval 层 ChromaDB 向量存储实现。
@@ -79,12 +98,67 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// String 实现 WhereFilter 接口
+// String 实现 WhereFilter 接口 — chromaWhereFilter
 func (f *chromaWhereFilter) String() string {
 	if f.clause != nil {
 		return f.clause.String()
 	}
 	return ""
+}
+
+// Validate 实现 WhereFilter 接口 — chromaMapWhereFilter
+// map 已是 Chroma 原生 where 语法，无 SDK 侧校验需求，恒通过。
+func (f *chromaMapWhereFilter) Validate() error { return nil }
+
+// String 实现 WhereFilter 接口 — chromaMapWhereFilter
+func (f *chromaMapWhereFilter) String() string {
+	if b, err := json.Marshal(f.m); err == nil {
+		return string(b)
+	}
+	return fmt.Sprintf("%v", f.m)
+}
+
+// MarshalJSON 实现 WhereFilter 接口 — chromaMapWhereFilter
+func (f *chromaMapWhereFilter) MarshalJSON() ([]byte, error) {
+	return json.Marshal(f.m)
+}
+
+// UnmarshalJSON 实现 WhereFilter 接口 — chromaMapWhereFilter
+func (f *chromaMapWhereFilter) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, &f.m)
+}
+
+// Operator 实现 WhereDocumentFilter 接口 — chromaMapWhereDocumentFilter
+func (f *chromaMapWhereDocumentFilter) Operator() chromav2.WhereDocumentFilterOperator {
+	// map 已含操作符键（$contains/$regex/$and/$or），基类不单独暴露
+	return ""
+}
+
+// Operand 实现 WhereDocumentFilter 接口 — chromaMapWhereDocumentFilter
+func (f *chromaMapWhereDocumentFilter) Operand() any {
+	return f.m
+}
+
+// Validate 实现 WhereDocumentFilter 接口 — chromaMapWhereDocumentFilter
+// map 已是 Chroma 原生 where_document 语法，恒通过。
+func (f *chromaMapWhereDocumentFilter) Validate() error { return nil }
+
+// String 实现 WhereDocumentFilter 接口 — chromaMapWhereDocumentFilter
+func (f *chromaMapWhereDocumentFilter) String() string {
+	if b, err := json.Marshal(f.m); err == nil {
+		return string(b)
+	}
+	return fmt.Sprintf("%v", f.m)
+}
+
+// MarshalJSON 实现 WhereDocumentFilter 接口 — chromaMapWhereDocumentFilter
+func (f *chromaMapWhereDocumentFilter) MarshalJSON() ([]byte, error) {
+	return json.Marshal(f.m)
+}
+
+// UnmarshalJSON 实现 WhereDocumentFilter 接口 — chromaMapWhereDocumentFilter
+func (f *chromaMapWhereDocumentFilter) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, &f.m)
 }
 
 // Validate 实现 WhereFilter 接口
@@ -368,7 +442,9 @@ func (s *ChromaVectorStore) Add(ctx context.Context, data []map[string]any, opts
 
 // Search 向量搜索。
 // 对齐 Python ChromaVectorStore.search。
-func (s *ChromaVectorStore) Search(ctx context.Context, queryVector []float64, topK int, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
+// M-27: filters 对齐 Python dict | QueryExpr——QueryExpr 走 to_expr("chroma")
+// 提取 where/where_document，dict 语义由调用方经 query.EqMap 折叠。
+func (s *ChromaVectorStore) Search(ctx context.Context, queryVector []float64, topK int, filters query.QueryExpr, _ ...StoreOption) ([]common.SearchResult, error) {
 	collection, err := s.getCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -380,8 +456,13 @@ func (s *ChromaVectorStore) Search(ctx context.Context, queryVector []float64, t
 		chromav2.WithNResults(topK),
 		chromav2.WithInclude(chromav2.IncludeDocuments, chromav2.IncludeMetadatas, chromav2.IncludeDistances),
 	}
-	if wf := BuildChromaWhereFilter(filters); wf != nil {
-		queryOpts = append(queryOpts, chromav2.WithWhere(wf))
+	if wf, wdf := s.buildChromaFilterPair(filters); wf != nil || wdf != nil {
+		if wf != nil {
+			queryOpts = append(queryOpts, chromav2.WithWhere(wf))
+		}
+		if wdf != nil {
+			queryOpts = append(queryOpts, chromav2.WithWhereDocument(wdf))
+		}
 	}
 
 	result, err := collection.Query(ctx, queryOpts...)
@@ -399,7 +480,8 @@ func (s *ChromaVectorStore) Search(ctx context.Context, queryVector []float64, t
 
 // SparseSearch 稀疏搜索（文本匹配）。
 // 对齐 Python ChromaVectorStore.sparse_search。
-func (s *ChromaVectorStore) SparseSearch(ctx context.Context, queryText string, topK int, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
+// M-27: filters 对齐 Python dict | QueryExpr，nil 表示无过滤。
+func (s *ChromaVectorStore) SparseSearch(ctx context.Context, queryText string, topK int, filters query.QueryExpr, _ ...StoreOption) ([]common.SearchResult, error) {
 	collection, err := s.getCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -410,8 +492,13 @@ func (s *ChromaVectorStore) SparseSearch(ctx context.Context, queryText string, 
 		chromav2.WithNResults(topK),
 		chromav2.WithInclude(chromav2.IncludeDocuments, chromav2.IncludeMetadatas, chromav2.IncludeDistances),
 	}
-	if wf := BuildChromaWhereFilter(filters); wf != nil {
-		queryOpts = append(queryOpts, chromav2.WithWhere(wf))
+	if wf, wdf := s.buildChromaFilterPair(filters); wf != nil || wdf != nil {
+		if wf != nil {
+			queryOpts = append(queryOpts, chromav2.WithWhere(wf))
+		}
+		if wdf != nil {
+			queryOpts = append(queryOpts, chromav2.WithWhereDocument(wdf))
+		}
 	}
 
 	result, err := collection.Query(ctx, queryOpts...)
@@ -431,7 +518,8 @@ func (s *ChromaVectorStore) SparseSearch(ctx context.Context, queryText string, 
 
 // HybridSearch 混合搜索（向量+文本 RRF 融合）。
 // 对齐 Python ChromaVectorStore.hybrid_search。
-func (s *ChromaVectorStore) HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
+// M-27: filters 对齐 Python dict | QueryExpr，nil 表示无过滤。
+func (s *ChromaVectorStore) HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters query.QueryExpr, _ ...StoreOption) ([]common.SearchResult, error) {
 	type searchResult struct {
 		results []common.SearchResult
 		err     error
@@ -532,7 +620,9 @@ func (s *ChromaVectorStore) HybridSearch(ctx context.Context, queryText string, 
 
 // Delete 删除向量。
 // 对齐 Python ChromaVectorStore.delete。
-func (s *ChromaVectorStore) Delete(ctx context.Context, ids []string, filterExpr map[string]any) (bool, error) {
+// M-27: filterExpr 对齐 Python str | QueryExpr——QueryExpr 走 to_expr("chroma")
+// 提取 where 过滤；Go 不支持裸字符串过滤（Python str 分支同样 warning + False）。
+func (s *ChromaVectorStore) Delete(ctx context.Context, ids []string, filterExpr query.QueryExpr) (bool, error) {
 	collection, err := s.getCollection(ctx)
 	if err != nil {
 		return false, err
@@ -551,8 +641,15 @@ func (s *ChromaVectorStore) Delete(ctx context.Context, ids []string, filterExpr
 	}
 
 	if filterExpr != nil {
-		if wf := BuildChromaWhereFilter(filterExpr); wf != nil {
-			if err := collection.Delete(ctx, chromav2.WithWhere(wf)); err != nil {
+		if wf, wdf := s.buildChromaFilterPair(filterExpr); wf != nil || wdf != nil {
+			delOpts := []chromav2.DeleteOption{}
+			if wf != nil {
+				delOpts = append(delOpts, chromav2.WithWhere(wf))
+			}
+			if wdf != nil {
+				delOpts = append(delOpts, chromav2.WithWhereDocument(wdf))
+			}
+			if err := collection.Delete(ctx, delOpts...); err != nil {
 				logger.Error(logComponent).Str("event_type", "DELETE_ERROR").Err(err).Msg("failed to delete vector")
 				return false, err
 			}
@@ -592,43 +689,63 @@ func (s *ChromaVectorStore) Close() {
 	}
 }
 
-// BuildChromaWhereFilter 构建 ChromaDB where 过滤器。
-// 返回 chromav2.WhereFilter 接口，可跨包使用（如 indexer 包调用）。
-// filters 为 nil 或空 map 时返回 nil。
-func BuildChromaWhereFilter(filters map[string]any) chromav2.WhereFilter {
+// buildChromaFilterPair M-27: 将 QueryExpr 转换为 Chroma where/where_document 过滤对。
+//
+// 对齐 Python `query_args.update({k: v for k, v in filters.to_expr("chroma").items() if v})`：
+//   - ToExpr("chroma") 输出 {"where": ..., "where_document": ...} 双键字典
+//   - falsy 过滤：where/where_document 为空 dict 时不注入对应选项（对齐 Python if v）
+//
+// filters 为 nil 时返回 (nil, nil)。where 恒非 nil 时才可能携带 where_document
+// （纯文本过滤 MatchExpr 的 where 为空 dict，对齐 Python 不注入 where）。
+func (s *ChromaVectorStore) buildChromaFilterPair(filters query.QueryExpr) (chromav2.WhereFilter, chromav2.WhereDocumentFilter) {
 	if filters == nil {
+		return nil, nil
+	}
+
+	raw, err := filters.ToExpr("chroma")
+	if err != nil {
+		// 对齐 Python: to_expr 内部异常沿调用链上抛（chroma_def 校验失败等）
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "buildChromaFilterPair").
+			Err(err).
+			Msg("failed to convert filter expression to chroma")
+		return nil, nil
+	}
+
+	exprMap, ok := raw.(map[string]any)
+	if !ok {
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "buildChromaFilterPair").
+			Str("expr_type", fmt.Sprintf("%T", raw)).
+			Msg("chroma filter expression is not a map")
+		return nil, nil
+	}
+
+	var whereFilter chromav2.WhereFilter
+	var whereDocFilter chromav2.WhereDocumentFilter
+
+	if where, ok := exprMap["where"].(map[string]any); ok && len(where) > 0 {
+		whereFilter = &chromaMapWhereFilter{m: where}
+	}
+	if whereDoc, ok := exprMap["where_document"].(map[string]any); ok && len(whereDoc) > 0 {
+		whereDocFilter = &chromaMapWhereDocumentFilter{m: whereDoc}
+	}
+
+	return whereFilter, whereDocFilter
+}
+
+// WrapChromaWhereMap M-27: 将 Chroma 原生 where 字典包装为 WhereFilter。
+//
+// 对齐 Python `collection.get(where={self.doc_id_field: doc_id})` 直传 dict 的
+// wire 语义（{"field": "value"} 简写等值，ChromaDB 服务端原生支持）。
+// 供 indexer 等写入路径跨包使用；nil 或空 map 返回 nil。
+func WrapChromaWhereMap(m map[string]any) chromav2.WhereFilter {
+	if len(m) == 0 {
 		return nil
 	}
-
-	f := filters
-
-	var clauses []chromav2.WhereClause
-	for key, value := range f {
-		switch v := value.(type) {
-		case string:
-			clauses = append(clauses, chromav2.EqString(key, v))
-		case int:
-			clauses = append(clauses, chromav2.EqInt(key, v))
-		case int64:
-			clauses = append(clauses, chromav2.EqInt(key, int(v)))
-		case float32:
-			clauses = append(clauses, chromav2.EqFloat(key, v))
-		case float64:
-			clauses = append(clauses, chromav2.EqFloat(key, float32(v)))
-		case bool:
-			clauses = append(clauses, chromav2.EqBool(key, v))
-		default:
-			clauses = append(clauses, chromav2.EqString(key, fmt.Sprintf("%v", v)))
-		}
-	}
-
-	if len(clauses) == 0 {
-		return nil
-	}
-	if len(clauses) == 1 {
-		return &chromaWhereFilter{clause: clauses[0]}
-	}
-	return &chromaWhereFilter{clause: chromav2.And(clauses...)}
+	return &chromaMapWhereFilter{m: m}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -693,7 +810,17 @@ func buildChromaHNSWCreateOptions(distanceMetric string, constructConfig, search
 	if v, ok := merged["sync_threshold"].(int); ok && v > 0 {
 		opts = append(opts, chromav2.WithHNSWSyncThresholdCreate(v))
 	}
-	// num_threads/resize_factor SDK v0.4.1 无对应 Create 选项，创建后由 SDK 默认值处理
+	// S-18 残留订正：SDK v0.4.1 实际有对应 Create 选项
+	// （client.go L476 WithHNSWNumThreadsCreate / L489 WithHNSWResizeFactorCreate），
+	// 原注释"无对应 Create 选项"为误记，此处补传对齐 Python 全量 HNSW 配置。
+	if v, ok := merged["num_threads"].(int); ok && v > 0 {
+		opts = append(opts, chromav2.WithHNSWNumThreadsCreate(v))
+	}
+	if v, ok := merged["resize_factor"].(float64); ok && v > 0 {
+		opts = append(opts, chromav2.WithHNSWResizeFactorCreate(v))
+	} else if v, ok := merged["resize_factor"].(int); ok && v > 0 {
+		opts = append(opts, chromav2.WithHNSWResizeFactorCreate(float64(v)))
+	}
 	return opts
 }
 
@@ -895,10 +1022,14 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 		}
 
 		// 对齐 Python: if "doc_id" not in metadata: metadata["doc_id"] = metadata.pop(self.doc_id_field, None)
+		// M-20: Python dict.pop(key, None) 在键缺失时仍会设置 "doc_id": None，
+		// sparse 模式下 doc_id 缺失必须显式设 nil，保持键存在性语义一致
 		if _, ok := metadata["doc_id"]; !ok {
 			if docID, ok := metadata[s.docIDField]; ok {
 				metadata["doc_id"] = docID
 				delete(metadata, s.docIDField)
+			} else {
+				metadata["doc_id"] = nil
 			}
 		}
 
@@ -930,11 +1061,13 @@ func (s *ChromaVectorStore) chromaResultToSearchResults(result chromav2.QueryRes
 		switch mode {
 		case "vector":
 			if rawScoreVal != nil {
-				switch s.distanceMetric {
-				case "l2":
-					scaled := vector.ConvertL2Squared(*rawScoreVal, 0)
-					rawScoreScaled = &scaled
-					finalScore = scaled
+			switch s.distanceMetric {
+			case "l2":
+				// S-19: 对齐 Python convert_l2_squared(raw_score, max_dist=4.0) 默认值，
+				// 传 0 会导致 l2 度量得分全部归零/NaN（同仓其余 6 处调用均传 4.0）
+				scaled := vector.ConvertL2Squared(*rawScoreVal, 4.0)
+				rawScoreScaled = &scaled
+				finalScore = scaled
 				case "cosine":
 					scaled := vector.ConvertCosineDistance(*rawScoreVal)
 					rawScoreScaled = &scaled

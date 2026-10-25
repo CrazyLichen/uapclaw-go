@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
@@ -28,16 +29,21 @@ type VectorStore interface {
 	Add(ctx context.Context, data []map[string]any, opts ...StoreOption) error
 
 	// Search 向量搜索，对齐 Python search
-	Search(ctx context.Context, queryVector []float64, topK int, filters map[string]any, opts ...StoreOption) ([]common.SearchResult, error)
+	// M-27: filters 对齐 Python dict | QueryExpr 联合类型——dict 请用 query.EqMap 折叠，
+	// nil 表示无过滤
+	Search(ctx context.Context, queryVector []float64, topK int, filters query.QueryExpr, opts ...StoreOption) ([]common.SearchResult, error)
 
 	// SparseSearch 稀疏搜索（文本匹配），对齐 Python sparse_search
-	SparseSearch(ctx context.Context, queryText string, topK int, filters map[string]any, opts ...StoreOption) ([]common.SearchResult, error)
+	// M-27: filters 对齐 Python dict | QueryExpr 联合类型，nil 表示无过滤
+	SparseSearch(ctx context.Context, queryText string, topK int, filters query.QueryExpr, opts ...StoreOption) ([]common.SearchResult, error)
 
 	// HybridSearch 混合搜索（向量+文本 RRF 融合），对齐 Python hybrid_search
-	HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters map[string]any, opts ...StoreOption) ([]common.SearchResult, error)
+	// M-27: filters 对齐 Python dict | QueryExpr 联合类型，nil 表示无过滤
+	HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters query.QueryExpr, opts ...StoreOption) ([]common.SearchResult, error)
 
 	// Delete 删除向量，对齐 Python delete
-	Delete(ctx context.Context, ids []string, filterExpr map[string]any) (bool, error)
+	// M-27: filterExpr 对齐 Python str | QueryExpr 联合类型，nil 表示无条件删除
+	Delete(ctx context.Context, ids []string, filterExpr query.QueryExpr) (bool, error)
 
 	// TableExists 检查集合是否存在，对齐 Python table_exists
 	TableExists(ctx context.Context, tableName string) (bool, error)

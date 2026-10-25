@@ -25,10 +25,15 @@ type NoOpDocIndexCallback struct {
 // 对齐 Python TqdmCallback 的进度追踪语义。
 // 每 100 批或最后一批打 Info 日志，对齐 Python ChromaVectorStore.add 中
 // `if processed % 100 == 0: logger.info("Written %d/%d records")` 的逻辑。
+//
+// M-18: total/processed 统一为文档数口径（对齐 Python chroma_store.py L150
+// `total = len(data)` 与 L155 `processed += len(nodes)`）——
+// processed 用 endIdx（全局累计文档索引，顺序批处理下与 Python 累计数等值），
+// total 必须存文档总数而非批次数，否则日志出现 "processed=990/total=10" 的单位错配。
 type LoggingDocIndexCallback struct {
-	// total 总批次数
+	// total 总文档数（M-18: 文档数口径，非批次数）
 	total int
-	// processed 已处理批次数
+	// processed 已处理批次数（用于 %100 触发节奏）
 	processed int
 	// mu 线程锁
 	mu sync.Mutex
@@ -52,6 +57,9 @@ type DocIndexCallback = embedding.Callback
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLoggingDocIndexCallback 创建日志进度回调。
+// M-18: total 参数语义为总文档数（对齐 Python total = len(data)），
+// 触发节奏仍按批次数 %100 计算（对齐 Python processed % 100 == 0 的
+// 原始节奏——Python 的 processed 是文档数，但 %100 节奏语义不变）。
 func NewLoggingDocIndexCallback(total int) *LoggingDocIndexCallback {
 	return &LoggingDocIndexCallback{total: total}
 }
@@ -71,12 +79,16 @@ func (c *NoOpDocIndexCallback) CallCounter() int {
 }
 
 // OnBatchComplete 实现 embedding.Callback 接口 — LoggingDocIndexCallback。
+// M-18: 日志口径对齐 Python "Written %d/%d records"——
+// processed 字段输出 endIdx（全局累计文档索引，即已写文档数），
+// total 字段输出文档总数，两者单位一致。
 func (c *LoggingDocIndexCallback) OnBatchComplete(startIdx, endIdx int, _ []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.processed++
 	// 对齐 Python: if processed % 100 == 0: logger.info("Written %d/%d records to %s")
-	if c.processed%100 == 0 || c.processed >= c.total {
+	// 最后一批（endIdx >= total）也打，对齐 Python 尾批后的完成日志可观测性
+	if c.processed%100 == 0 || endIdx >= c.total {
 		logger.Info(logComponent).
 			Int("processed", endIdx).
 			Int("total", c.total).

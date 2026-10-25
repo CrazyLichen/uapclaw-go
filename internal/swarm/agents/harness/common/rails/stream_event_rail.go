@@ -265,7 +265,8 @@ func (r *JiuClawStreamEventRail) BeforeInvoke(ctx context.Context, cbc *sainterf
 	r.mu.Unlock()
 
 	// 通过 ctx.extra 传递 session_id，对齐 Python: ctx.extra[self._SID_KEY] = sid
-	cbc.Extra()[sidKey] = sid
+	// S-24: 裸 map 写迁移 SetExtra（线程安全）
+	cbc.SetExtra(sidKey, sid)
 	return nil
 }
 
@@ -493,19 +494,28 @@ func resolveSessionID(sessionID string) string {
 // 回退到已捕获的主会话标识。
 func (r *JiuClawStreamEventRail) resolveSID(cbc *sainterfaces.AgentCallbackContext, session sessioninterfaces.SessionFacade) string {
 	// 首先从 ctx.extra 获取
-	extra := cbc.Extra()
-	if sid, ok := extra[sidKey].(string); ok && sid != "" {
-		return sid
+	// S-24: 裸 map 读迁移 GetExtra（线程安全）
+	if sidVal, ok := cbc.GetExtra(sidKey); ok {
+		if sid, ok := sidVal.(string); ok && sid != "" {
+			return sid
+		}
 	}
 	// 回退：遍历 mainSessions 查找匹配
 	if session != nil {
+		var matchedSID string
 		r.mu.Lock()
-		defer r.mu.Unlock()
 		for knownSID, knownSession := range r.mainSessions {
 			if knownSession == session {
-				extra[sidKey] = knownSID
-				return knownSID
+				matchedSID = knownSID
+				break
 			}
+		}
+		r.mu.Unlock()
+		// S-24: 裸 map 写迁移 SetExtra（线程安全）；
+		// 锁外写入避免 r.mu 与 extraMu 嵌套死锁
+		if matchedSID != "" {
+			cbc.SetExtra(sidKey, matchedSID)
+			return matchedSID
 		}
 	}
 	return defaultSessionID

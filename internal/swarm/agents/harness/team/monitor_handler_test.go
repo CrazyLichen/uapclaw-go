@@ -80,6 +80,92 @@ func TestTeamMonitorHandlerImpl_StartStop(t *testing.T) {
 	}
 }
 
+// TestTeamMonitorHandlerImpl_StopStartRestart 校验 Stop→Start 重启链路（发送方关闭原则）：
+// Stop 只置 nil 不 close，Start 重建 queue 并启动新 goroutine；
+// 旧 queue 由旧 collectEvents close（唯一发送方），新事件走新 queue。
+// 回归防护：Stop 的 double-close panic 竞态（问题 12 修复）。
+func TestTeamMonitorHandlerImpl_StopStartRestart(t *testing.T) {
+	agent := newTeamTestFakeAgent()
+	db := database.NewInMemoryTeamDatabase()
+	_ = db.Initialize(context.Background())
+	mon := monitor.NewTeamMonitor("team", "sess", db, agent, false)
+
+	handler := newTeamMonitorHandlerImpl(mon, "sess")
+	ctx := context.Background()
+
+	// 第一轮 Start → Stop
+	if err := handler.Start(ctx); err != nil {
+		t.Fatalf("第一次 Start 返回 error: %v", err)
+	}
+	// 记录第一轮 queue 引用，验证重启后指向新 channel
+	firstQueue := handler.Events()
+	if err := handler.Stop(ctx); err != nil {
+		t.Fatalf("第一次 Stop 返回 error: %v", err)
+	}
+
+	// 等待旧 collectEvents goroutine 退出并 close 旧 queue（发送方关闭原则）
+	// 旧 queue 已被 handler 置 nil，消费者持有的 firstQueue 引用应能观察到 close
+	deadline := time.Now().Add(3 * time.Second)
+	closed := false
+	for time.Now().Before(deadline) {
+		select {
+		case _, ok := <-firstQueue:
+			if !ok {
+				closed = true
+			}
+		default:
+		}
+		if closed {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !closed {
+		t.Error("旧 eventQueue 应被 collectEvents 关闭（发送方关闭原则），3s 内未观察到 closed")
+	}
+
+	// 第二轮 Start：Stop 已置 monitor=nil（对齐 Python self._monitor = None），
+	// 需注入新 monitor 实例后重启；重建 queue + 新 goroutine，不应 panic（double-close 防护）
+	mon2 := monitor.NewTeamMonitor("team", "sess", db, agent, false)
+	handler.mu.Lock()
+	handler.monitor = mon2
+	handler.mu.Unlock()
+	if err := handler.Start(ctx); err != nil {
+		t.Fatalf("第二次 Start 返回 error: %v", err)
+	}
+	secondQueue := handler.Events()
+	if secondQueue == nil {
+		t.Fatal("重启后 Events() 不应返回 nil channel")
+	}
+
+	// 触发事件，验证新 queue 正常接收
+	msg := &events.EventMessage{
+		EventType: "member_spawned",
+		Payload: map[string]any{
+			"team_name":   "team",
+			"member_name": "m1",
+		},
+	}
+	agent.fireEvent(ctx, msg)
+
+	select {
+	case evtDict, ok := <-secondQueue:
+		if !ok {
+			t.Fatal("新 queue 不应已关闭")
+		}
+		if evtDict["event_type"] != "team.member" {
+			t.Errorf("event_type = %v, want team.member", evtDict["event_type"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("重启后新 queue 无事件（超时 2s）")
+	}
+
+	// 再次 Stop 收尾（第二轮 close 同样由新 collectEvents 负责）
+	if err := handler.Stop(ctx); err != nil {
+		t.Fatalf("第二次 Stop 返回 error: %v", err)
+	}
+}
+
 // TestTeamMonitorHandlerImpl_Start_NilMonitor 校验 monitor 为 nil 时 Start 返回 error
 func TestTeamMonitorHandlerImpl_Start_NilMonitor(t *testing.T) {
 	handler := newTeamMonitorHandlerImpl(nil, "sess")

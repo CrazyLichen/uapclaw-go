@@ -909,61 +909,6 @@ loop:
 	}
 }
 
-// consumeMonitorEvents 后台消费 monitor 事件并广播。
-// 对齐 Python: _consume_monitor_events(channel_id, session_id, monitor_handler) (line 1050-1083)
-//
-// Python 步骤：
-//
-//	Python: 1. logger.info("monitor event loop started")
-//	Python: 2. async for event in monitor_handler.events(): _broadcast_event(channel_id, session_id, event)
-//	Python: 3. logger.info("monitor event loop ended")
-//	Python: 4. except CancelledError: raise
-//	Python: 5. except Exception: logger.error
-//
-// Go 差异：此方法在 TeamManager.EnsureMonitor 中已有简化实现（team_manager_monitor.go），
-// 此处提供 DeepAdapter 级别的完整实现，支持通过 broadcastEvent 广播到 channel waiters。
-// M-07: 对齐 Python 步骤 5 except Exception——defer recover 兜底 broadcastEvent 回调 panic
-// （Go 中 goroutine panic 会击穿进程，比 Python 更严重，必须 recover）。
-func (d *DeepAdapter) consumeMonitorEvents(ctx context.Context, channelID, sessionID string) {
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Error(logComponent).
-				Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
-				Any("panic", r).
-				Msg("consumeMonitorEvents: monitor event loop failed")
-		}
-	}()
-	tm := team.GetTeamManager(channelID)
-	handler := tm.GetMonitor(sessionID)
-	if handler == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).
-			Msg("consumeMonitorEvents: no TeamMonitorHandler")
-		return
-	}
-
-	logger.Info(logComponent).
-		Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
-		Msg("consumeMonitorEvents: monitor event loop started")
-
-	for evt := range handler.Events() {
-		select {
-		case <-ctx.Done():
-			logger.Info(logComponent).Str("session_id", sessionID).
-				Msg("consumeMonitorEvents: monitor event loop cancelled")
-			return
-		default:
-		}
-
-		if evt != nil {
-			broadcastEvent(channelID, sessionID, evt)
-		}
-	}
-
-	logger.Info(logComponent).
-		Str("channel_id", resolveChannelID(channelID)).Str("session_id", sessionID).
-		Msg("consumeMonitorEvents: monitor event loop ended")
-}
-
 // watchTeamEvolutionAndPushTeam 后台监控 TeamSkillEvolutionRail 并推送状态。
 // 对齐 Python: _watch_team_evolution_and_push(channel_id, session_id, rail) (line 1101-1393)
 //

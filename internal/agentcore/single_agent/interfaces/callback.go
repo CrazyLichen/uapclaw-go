@@ -422,7 +422,11 @@ func (c *AgentCallbackContext) ModelContext() ceinterface.ModelContext { return 
 func (c *AgentCallbackContext) SetModelContext(mc ceinterface.ModelContext) { c.modelContext = mc }
 
 // Extra 返回 extra 通信字典。
-// 注意：返回值可直接读写，内部通过 extraMu 保护并发安全。
+//
+// Deprecated: S-24——返回的 map 引用绕过 extraMu 锁保护，并发读写有
+// fatal error（concurrent map read and map write）风险。请改用
+// GetExtra/SetExtra/DeleteExtra 线程安全方法。仅为兼容既有测试与
+// 只读遍历场景保留。
 func (c *AgentCallbackContext) Extra() map[string]any { return c.extra }
 
 // GetExtra 线程安全地读取 extra 字典中的值。
@@ -946,8 +950,11 @@ func (m *MapInputs) EventKind() string { return "map" }
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // extraLock 返回 extra 字典的并发保护锁。
-// ForkForToolCall 创建的子上下文与父共享同一把锁；兼容历史路径下
-// extraMuPtr 未初始化的上下文（返回独立的临时锁，仅保证不 panic）。
+//
+// S-24: ForkForToolCall 创建的子上下文持有独立锁（extra 为父快照拷贝，
+// 父子不共享 map，无跨锁写入）；历史路径下 extraMuPtr 未初始化的上下文
+// 返回独立的临时锁（仅保证不 panic，不提供跨 goroutine 保护）。
+// 注意：调用方须避免在持其他锁时嵌套调用 SetExtra/GetExtra（潜在死锁）。
 func (c *AgentCallbackContext) extraLock() *sync.RWMutex {
 	if c.extraMuPtr != nil {
 		return c.extraMuPtr

@@ -428,6 +428,8 @@ func runtimeReadySummary(payload any) string {
 // interactionSummary 交互摘要。
 // 对齐 Python: _interaction_summary(payload)
 // M-03: 补齐对象形态分支，对齐 Python getattr(payload, "id", "unknown")
+// M-08: 主链路（interaction.go WaitUserInputs/UserLatestInput 三处）发布的是
+// InteractionOutput 值形态而非指针，必须双形态断言，否则 iid 恒 unknown。
 func interactionSummary(payload any) string {
 	iid := "unknown"
 	if m, ok := payload.(map[string]any); ok {
@@ -435,7 +437,10 @@ func interactionSummary(payload any) string {
 			iid = v
 		}
 	} else if io, ok := payload.(*interaction.InteractionOutput); ok {
-		// Python: getattr(payload, "id", "unknown") — Go 端 __interaction__ payload 常态是 InteractionOutput 结构体
+		// Python: getattr(payload, "id", "unknown") — 指针形态
+		iid = io.ID
+	} else if io, ok := payload.(interaction.InteractionOutput); ok {
+		// M-08: 值形态——主链路 writeInteractionOutput 直传结构体值
 		iid = io.ID
 	}
 	return fmt.Sprintf("interaction_id=%s\n%s", iid, capStr(fmt.Sprintf("%v", payload), genericCap))

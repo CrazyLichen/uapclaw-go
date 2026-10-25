@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 	"sync"
 
@@ -275,10 +274,10 @@ func (s *MilvusVectorStore) DistanceMetric() string { return s.distanceMetric }
 //
 // 对齐 Python MilvusVectorStore.search：
 //   - _ensure_loaded
-//   - 构建 filter 表达式（dict → 等值过滤）
+//   - 构建 filter 表达式（M-27: QueryExpr → to_expr("milvus")）
 //   - client.search（anns_field + search_params 含 metric_type）
 //   - 结果转 SearchResult（vector 模式分数归一化）
-func (s *MilvusVectorStore) Search(ctx context.Context, queryVector []float64, topK int, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
+func (s *MilvusVectorStore) Search(ctx context.Context, queryVector []float64, topK int, filters query.QueryExpr, _ ...StoreOption) ([]common.SearchResult, error) {
 	if err := s.ensureLoaded(ctx); err != nil {
 		return nil, err
 	}
@@ -290,8 +289,18 @@ func (s *MilvusVectorStore) Search(ctx context.Context, queryVector []float64, t
 	// 对齐 Python: output_fields = [text_field, metadata_field, doc_id_field, "chunk_id"]
 	outputFields := []string{s.textField, s.metadataField, s.docIDField, "chunk_id"}
 
-	// 对齐 Python: filter_expr 构建（dict → 等值过滤）
-	filterExpr := buildMilvusFilterExpr(filters)
+	// M-27: 对齐 Python filter_expr 构建（QueryExpr → to_expr("milvus")）
+	filterExpr, err := buildMilvusFilterExpr(filters)
+	if err != nil {
+		// 对齐 Python: to_expr 异常沿调用链上抛
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "Search").
+			Str("collection_name", s.collectionName).
+			Err(err).
+			Msg("failed to convert filter expression to milvus")
+		return nil, err
+	}
 
 	// 构建查询向量
 	f32 := make([]float32, len(queryVector))
@@ -334,7 +343,8 @@ func (s *MilvusVectorStore) Search(ctx context.Context, queryVector []float64, t
 //
 // 对齐 Python MilvusVectorStore.sparse_search：
 // 传递查询文本（BM25 Function 自动分词），失败时 warning + 返回空。
-func (s *MilvusVectorStore) SparseSearch(ctx context.Context, queryText string, topK int, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
+// M-27: filters 对齐 Python dict | QueryExpr，nil 表示无过滤。
+func (s *MilvusVectorStore) SparseSearch(ctx context.Context, queryText string, topK int, filters query.QueryExpr, _ ...StoreOption) ([]common.SearchResult, error) {
 	if err := s.ensureLoaded(ctx); err != nil {
 		return nil, err
 	}
@@ -345,7 +355,18 @@ func (s *MilvusVectorStore) SparseSearch(ctx context.Context, queryText string, 
 
 	// 对齐 Python: output_fields = [text_field, metadata_field, doc_id_field]
 	outputFields := []string{s.textField, s.metadataField, s.docIDField}
-	filterExpr := buildMilvusFilterExpr(filters)
+	// M-27: 对齐 Python filter_expr 构建（QueryExpr → to_expr("milvus")）
+	filterExpr, err := buildMilvusFilterExpr(filters)
+	if err != nil {
+		// 对齐 Python: to_expr 异常沿调用链上抛
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "SparseSearch").
+			Str("collection_name", s.collectionName).
+			Err(err).
+			Msg("failed to convert filter expression to milvus")
+		return nil, err
+	}
 
 	// 对齐 Python: data=[query_text] 直接传文本，BM25 function 处理分词
 	vectors := []entity.Vector{entity.Text(queryText)}
@@ -383,7 +404,8 @@ func (s *MilvusVectorStore) SparseSearch(ctx context.Context, queryText string, 
 //   - 始终构建 sparse BM25 AnnRequest
 //   - 原生 hybrid_search + RRFRanker(k=60)
 //   - 失败时降级到分别搜索后 RRF 融合
-func (s *MilvusVectorStore) HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters map[string]any, _ ...StoreOption) ([]common.SearchResult, error) {
+// M-27: filters 对齐 Python dict | QueryExpr，nil 表示无过滤。
+func (s *MilvusVectorStore) HybridSearch(ctx context.Context, queryText string, queryVector []float64, topK int, alpha float64, filters query.QueryExpr, _ ...StoreOption) ([]common.SearchResult, error) {
 	if err := s.ensureLoaded(ctx); err != nil {
 		return nil, err
 	}
@@ -394,7 +416,18 @@ func (s *MilvusVectorStore) HybridSearch(ctx context.Context, queryText string, 
 
 	// 对齐 Python: output_fields = [text_field, metadata_field, doc_id_field]
 	outputFields := []string{s.textField, s.metadataField, s.docIDField}
-	filterExpr := buildMilvusFilterExpr(filters)
+	// M-27: 对齐 Python filter_expr 构建（QueryExpr → to_expr("milvus")）
+	filterExpr, err := buildMilvusFilterExpr(filters)
+	if err != nil {
+		// 对齐 Python: to_expr 异常沿调用链上抛
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "HybridSearch").
+			Str("collection_name", s.collectionName).
+			Err(err).
+			Msg("failed to convert filter expression to milvus")
+		return nil, err
+	}
 
 	var annRequests []*milvusclient.AnnRequest
 
@@ -528,7 +561,9 @@ func (s *MilvusVectorStore) Add(ctx context.Context, data []map[string]any, opts
 //
 // 对齐 Python MilvusVectorStore.delete：按 ids 或 filter_expr 删除 + flush。
 // 异常时 logger.error 并返回 False（不抛错，对齐 Python except 分支）。
-func (s *MilvusVectorStore) Delete(ctx context.Context, ids []string, filterExpr map[string]any) (bool, error) {
+// M-27: filterExpr 对齐 Python str | QueryExpr——QueryExpr 走 to_expr("milvus")，
+// 转换失败对齐 Python try/except 吞错返回 False。
+func (s *MilvusVectorStore) Delete(ctx context.Context, ids []string, filterExpr query.QueryExpr) (bool, error) {
 	if err := s.ensureLoaded(ctx); err != nil {
 		return false, err
 	}
@@ -545,9 +580,19 @@ func (s *MilvusVectorStore) Delete(ctx context.Context, ids []string, filterExpr
 			quoted = append(quoted, fmt.Sprintf("%q", id))
 		}
 		deleteOpt = deleteOpt.WithExpr(fmt.Sprintf("pk in [%s]", strings.Join(quoted, ",")))
-	} else if len(filterExpr) > 0 {
-		// 对齐 Python: filter_expr（dict）构建等值过滤
-		expr := buildMilvusFilterExpr(filterExpr)
+	} else if filterExpr != nil {
+		// M-27: 对齐 Python filter_expr（QueryExpr）→ to_expr("milvus") 等值过滤
+		expr, err := buildMilvusFilterExpr(filterExpr)
+		if err != nil {
+			// 对齐 Python: except Exception as e: logger.error(...); return False
+			logger.Error(logComponent).
+				Str("event_type", "LLM_CALL_ERROR").
+				Str("method", "Delete").
+				Str("collection_name", s.collectionName).
+				Err(err).
+				Msg("failed to convert filter expression to milvus")
+			return false, nil
+		}
 		if expr == "" {
 			return false, nil
 		}
@@ -1000,37 +1045,40 @@ func dataToColumns(nodes []map[string]any) ([]column.Column, error) {
 	return columns, nil
 }
 
-// buildMilvusFilterExpr 构建等值过滤表达式。
+// buildMilvusFilterExpr M-27: 将 QueryExpr 转换为 Milvus 过滤表达式字符串。
 //
-// 对齐 Python MilvusVectorStore.search 中的 filter 构建逻辑：
-// 字符串值用 QueryExpr.sanitize_str 转义，非字符串直接拼接，条件用 " && " 连接。
-// Go map 遍历顺序不确定（Python dict 有序），为保证确定性对 key 排序。
-func buildMilvusFilterExpr(filters map[string]any) string {
-	if len(filters) == 0 {
-		return ""
+// 对齐 Python MilvusVectorStore.search 的 filter 构建逻辑：
+//   - QueryExpr 走 filters.to_expr("milvus") 输出过滤字符串
+//   - dict 等值语义由调用方经 query.EqMap 折叠（And(Eq...) 链，
+//     milvusComparisonFilter 输出 "field == value"，
+//     milvusLogicalFilter and 输出 "(left) and (right)"，
+//     组合结果与 Python dict 分支 "a == 1 && b == 2" 等价）
+// filters 为 nil 或空表达式时返回 ""（无过滤）。
+func buildMilvusFilterExpr(filters query.QueryExpr) (string, error) {
+	if filters == nil {
+		return "", nil
 	}
-	keys := make([]string, 0, len(filters))
-	for k := range filters {
-		keys = append(keys, k)
+
+	raw, err := filters.ToExpr("milvus")
+	if err != nil {
+		// 对齐 Python: to_expr 异常沿调用链上抛
+		return "", err
 	}
-	sort.Strings(keys)
-	var parts []string
-	for _, key := range keys {
-		value := filters[key]
-		if str, ok := value.(string); ok {
-			parts = append(parts, fmt.Sprintf("%s == %s", key, query.SanitizeStr(str)))
-		} else {
-			parts = append(parts, fmt.Sprintf("%s == %v", key, value))
-		}
+
+	expr, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("milvus 过滤表达式转换结果非字符串: %T", raw)
 	}
-	return strings.Join(parts, " && ")
+	return expr, nil
 }
 
 // hybridSearchFallback 降级混合搜索：分别执行向量搜索和 BM25 搜索后 RRF 融合。
 //
 // 对齐 Python MilvusVectorStore._hybrid_search_fallback：
 // 并发两路搜索（vector + text）→ rrf_fusion([results_vector, results_text], k=60) → 截断 top_k。
-func (s *MilvusVectorStore) hybridSearchFallback(ctx context.Context, queryText string, queryVector []float64, topK int, filters map[string]any) ([]common.SearchResult, error) {
+// M-27: filters 对齐 Python dict | QueryExpr（fallback 内部两路搜索均传 nil，
+// 对齐 Python _hybrid_search_fallback 显式传 None）。
+func (s *MilvusVectorStore) hybridSearchFallback(ctx context.Context, queryText string, queryVector []float64, topK int, filters query.QueryExpr) ([]common.SearchResult, error) {
 	// 对齐 Python: asyncio.create_task 并发两路搜索
 	type searchOut struct {
 		results []common.SearchResult

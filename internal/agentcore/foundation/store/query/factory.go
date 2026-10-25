@@ -1,5 +1,9 @@
 package query
 
+import (
+	"sort"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -9,6 +13,32 @@ package query
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// EqMap 将 dict 全等值条件折叠为 And(Eq...) 链。
+//
+// 对齐 Python filters 直传 dict 的等值过滤语义（{key: value} → key == value）：
+// 单条件输出单个 ComparisonExpr，多条件按 key 排序折叠为 And 链保证确定性。
+// 空 map 或 nil 返回 nil（无过滤条件）。
+func EqMap(m map[string]any) QueryExpr {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var result QueryExpr
+	for _, k := range keys {
+		eq := Eq(k, m[k])
+		if result == nil {
+			result = eq
+		} else {
+			result = And(result, eq)
+		}
+	}
+	return result
+}
 
 // Eq 创建等值比较表达式
 //

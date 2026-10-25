@@ -8,9 +8,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -318,4 +320,106 @@ func TestCloseTeamInteractGate_30秒兜底语义(t *testing.T) {
 	// 清理：消费载荷让后台 goroutine 退出，避免测试泄漏
 	gate.ConsumeDone(ticket)
 	<-done
+}
+
+// ──────────────────────────── T-01 PreRun 错误传播 ────────────────────────────
+
+// failingCheckpointer T-01 测试用：PreAgentTeamExecute 永远失败。
+type failingCheckpointer struct{}
+
+func (f *failingCheckpointer) PreWorkflowExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {
+	return nil
+}
+func (f *failingCheckpointer) PostWorkflowExecute(ctx context.Context, s interfaces.InnerSession, result any, exception error) error {
+	return nil
+}
+func (f *failingCheckpointer) PreAgentExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {
+	return nil
+}
+func (f *failingCheckpointer) PreAgentTeamExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {
+	return errors.New("pre-run checkpoint failure")
+}
+func (f *failingCheckpointer) InterruptAgentExecute(ctx context.Context, s interfaces.InnerSession) error {
+	return nil
+}
+func (f *failingCheckpointer) PostAgentExecute(ctx context.Context, s interfaces.InnerSession) error {
+	return nil
+}
+func (f *failingCheckpointer) PostAgentTeamExecute(ctx context.Context, s interfaces.InnerSession) error {
+	return nil
+}
+func (f *failingCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
+	return false, nil
+}
+func (f *failingCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
+	return nil
+}
+func (f *failingCheckpointer) GraphStore() any { return nil }
+
+// 编译期检查
+var _ interfaces.Checkpointer = (*failingCheckpointer)(nil)
+
+// newFailingPreRunSession 构造 PreRun 必失败的 AgentTeamSession。
+func newFailingPreRunSession(id string) *session.AgentTeamSession {
+	return session.NewAgentTeamSession(
+		session.WithAgentTeamSessionID(id),
+		session.WithAgentTeamCheckpointer(&failingCheckpointer{}),
+	)
+}
+
+// TestRunBaseTeam_PreRun失败传播 T-01 回归测试：
+// PreRun（checkpoint 恢复）失败必须向上传播（对齐 Python 裸 await 语义），
+// 修复前只 Warn 吞掉、带空状态继续 Invoke。
+func TestRunBaseTeam_PreRun失败传播(t *testing.T) {
+	invokeCalled := false
+	team := &mockBaseTeam{
+		invokeFn: func(ctx context.Context, inputs map[string]any) (any, error) {
+			invokeCalled = true
+			return map[string]any{"ok": true}, nil
+		},
+	}
+	sess := newFailingPreRunSession("t01-base-fail")
+
+	result, err := RunBaseTeam(context.Background(), team, map[string]any{}, sess)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pre-run checkpoint failure")
+	assert.Nil(t, result)
+	assert.False(t, invokeCalled, "PreRun 失败后不应继续 Invoke（修复前会带空状态执行）")
+}
+
+// TestRunBaseTeamStreaming_PreRun失败传播 T-01 流式路径同步验证
+func TestRunBaseTeamStreaming_PreRun失败传播(t *testing.T) {
+	team := &mockBaseTeam{}
+	sess := newFailingPreRunSession("t01-base-stream-fail")
+
+	ch, err := RunBaseTeamStreaming(context.Background(), team, map[string]any{}, sess)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pre-run checkpoint failure")
+	assert.Nil(t, ch)
+}
+
+// TestRunTeamMember_PreRun失败传播 T-01 Member 路径验证
+func TestRunTeamMember_PreRun失败传播(t *testing.T) {
+	ag := agent.NewTeamAgent(context.Background(), agentschema.NewAgentCard())
+	sess := newFailingPreRunSession("t01-member-fail")
+
+	result, err := RunTeamMember(context.Background(), ag, map[string]any{}, sess)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pre-run checkpoint failure")
+	assert.Nil(t, result)
+}
+
+// TestRunTeamMemberStreaming_PreRun失败传播 T-01 Member 流式路径验证
+func TestRunTeamMemberStreaming_PreRun失败传播(t *testing.T) {
+	ag := agent.NewTeamAgent(context.Background(), agentschema.NewAgentCard())
+	sess := newFailingPreRunSession("t01-member-stream-fail")
+
+	ch, err := RunTeamMemberStreaming(context.Background(), ag, map[string]any{}, sess)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pre-run checkpoint failure")
+	assert.Nil(t, ch)
 }

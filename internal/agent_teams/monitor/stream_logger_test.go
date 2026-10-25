@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
@@ -451,6 +452,26 @@ func TestInteractionSummary_非map类型(t *testing.T) {
 	result := interactionSummary("plain text")
 	if !strings.Contains(result, "interaction_id=unknown") {
 		t.Errorf("非 map 类型应使用 unknown，实际: %s", result)
+	}
+}
+
+// TestInteractionSummary_值形态InteractionOutput M-08 回归测试：
+// 主链路（WaitUserInputs/UserLatestInput）发布的是 InteractionOutput 值形态，
+// 必须提取 ID（修复前只断言指针形态，iid 恒 unknown）。
+func TestInteractionSummary_值形态InteractionOutput(t *testing.T) {
+	payload := interaction.InteractionOutput{ID: "node-42", Value: "ask user"}
+	result := interactionSummary(payload)
+	if !strings.Contains(result, "interaction_id=node-42") {
+		t.Errorf("值形态应提取 ID=node-42，实际: %s", result)
+	}
+}
+
+// TestInteractionSummary_指针形态InteractionOutput M-08 指针分支保持不变
+func TestInteractionSummary_指针形态InteractionOutput(t *testing.T) {
+	payload := &interaction.InteractionOutput{ID: "node-99", Value: nil}
+	result := interactionSummary(payload)
+	if !strings.Contains(result, "interaction_id=node-99") {
+		t.Errorf("指针形态应提取 ID=node-99，实际: %s", result)
 	}
 }
 

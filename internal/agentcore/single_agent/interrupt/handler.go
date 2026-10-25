@@ -251,7 +251,8 @@ func (h *ToolInterruptHandler) HandleResume(
 
 	// 设置恢复用户输入到 ctx.extra
 	// Python: ctx.extra[RESUME_USER_INPUT_KEY] = user_input
-	cbc.Extra()[ResumeUserInputKey] = userInput
+	// S-24: 裸 map 写迁移 SetExtra（线程安全）
+	cbc.SetExtra(ResumeUserInputKey, userInput)
 
 	// 构建需要重执行的工具调用列表
 	// Python: copy.deepcopy(entry.tool_call) + 子 Agent 注入 query
@@ -279,7 +280,8 @@ func (h *ToolInterruptHandler) HandleResume(
 
 	// 清除恢复用户输入
 	// Python: ctx.extra.pop(RESUME_USER_INPUT_KEY, None)
-	delete(cbc.Extra(), ResumeUserInputKey)
+	// S-24: 裸 map 删迁移 DeleteExtra（线程安全，语义对齐 pop）
+	cbc.DeleteExtra(ResumeUserInputKey)
 
 	// 重新收集中断
 	newInterruptedTools, subAgentOutputs, autoConfirmMapping := h.collectInterrupts(results, toolsToExecute)
@@ -294,7 +296,8 @@ func (h *ToolInterruptHandler) HandleResume(
 
 	// 无新中断，设置恢复起始迭代
 	// Python: ctx.extra[RESUME_START_ITERATION_KEY] = resume_iteration + 1
-	cbc.Extra()[ResumeStartIterationKey] = resumeIteration + 1
+	// S-24: 裸 map 写迁移 SetExtra（线程安全）
+	cbc.SetExtra(ResumeStartIterationKey, resumeIteration+1)
 	return nil, nil
 }
 

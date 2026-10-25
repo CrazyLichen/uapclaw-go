@@ -82,12 +82,13 @@ func (r *ContextAssembleRail) Init(_ context.Context, agent sainterfaces.BaseAge
 
 // Uninit Rail 注销钩子：移除 workspace、context 节。
 //
-// Python: ContextAssembleRail.uninit(agent)
+// Python: ContextAssembleRail.uninit(agent)——只移除 workspace/context 两节
+// （context_assemble_rail.py L36-40 实际代码；其 docstring 提及 tools 节是
+// Python 自身文档笔误，以代码实际行为为准）。M-17: 删除多移的 SectionTools。
 func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
 	if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.RemoveSection(sections.SectionWorkspace)
 		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
-		r.systemPromptBuilder.RemoveSection(sections.SectionTools)
 	}
 
 	logger.Info(logComponent).

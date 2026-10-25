@@ -83,7 +83,8 @@ func (r *ObservabilityRail) BeforeTaskIteration(ctx context.Context, railCtx *ag
 		attribute.Bool(DATaskIsFollowUp, isFollowUp),
 	)
 	// Python: ctx.extra[_SPAN_KEY] = span
-	railCtx.Extra()[spanKey] = span
+	// S-24: 裸 map 写迁移 SetExtra（线程安全）
+	railCtx.SetExtra(spanKey, span)
 	return nil
 }
 
@@ -97,7 +98,8 @@ func (r *ObservabilityRail) AfterTaskIteration(_ context.Context, railCtx *agent
 	}()
 
 	// Python: span: Span | None = ctx.extra.pop(_SPAN_KEY, None)
-	spanVal, ok := railCtx.Extra()[spanKey]
+	// S-24: 裸 map 读+删迁移 DeleteExtra（线程安全，语义对齐 pop）
+	spanVal, ok := railCtx.DeleteExtra(spanKey)
 	if !ok {
 		return nil
 	}
@@ -105,7 +107,6 @@ func (r *ObservabilityRail) AfterTaskIteration(_ context.Context, railCtx *agent
 	if !ok {
 		return nil
 	}
-	delete(railCtx.Extra(), spanKey)
 
 	// Python: if ctx.exception is not None: span.record_exception / set_status(ERROR)
 	if railCtx.Exception() != nil {

@@ -130,10 +130,13 @@ func RunBaseTeam(
 
 	teamSession := createAgentTeamSession(baseTeam, sess)
 	inputsDict, _ := inputs.(map[string]any)
+	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L299）
+	// PreRun 是 checkpoint 恢复入口，失败时继续执行会用空状态跑完 session
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
-		logger.Warn(logComponent).Err(preErr).
+		logger.Error(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
 			Msg("RunBaseTeam: PreRun failed")
+		return nil, preErr
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime
@@ -184,10 +187,12 @@ func RunBaseTeamStreaming(
 
 	teamSession := createAgentTeamSession(baseTeam, sess)
 	inputsDict, _ := inputs.(map[string]any)
+	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L327）
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
-		logger.Warn(logComponent).Err(preErr).
+		logger.Error(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
 			Msg("RunBaseTeamStreaming: PreRun failed")
+		return nil, preErr
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime
@@ -246,10 +251,12 @@ func RunTeamMember(
 
 	teamSession := createAgentTeamSession(agentTeam, sess)
 	inputsDict, _ := inputs.(map[string]any)
+	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L355）
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
-		logger.Warn(logComponent).Err(preErr).
+		logger.Error(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
 			Msg("RunTeamMember: PreRun failed")
+		return nil, preErr
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime
@@ -288,10 +295,12 @@ func RunTeamMemberStreaming(
 
 	teamSession := createAgentTeamSession(agentTeam, sess)
 	inputsDict, _ := inputs.(map[string]any)
+	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L377）
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
-		logger.Warn(logComponent).Err(preErr).
+		logger.Error(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
 			Msg("RunTeamMemberStreaming: PreRun failed")
+		return nil, preErr
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime

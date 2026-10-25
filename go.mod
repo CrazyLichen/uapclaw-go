@@ -74,6 +74,7 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/pdfcpu/pdfcpu v0.16.3
 	github.com/redis/go-redis/v9 v9.20.0
+	github.com/reugn/go-quartz v0.15.2
 	github.com/rs/zerolog v1.35.1
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d
 	github.com/sentencizer/sentencizer v0.3.0
@@ -157,7 +158,6 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/reugn/go-quartz v0.15.2 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/samber/lo v1.27.0 // indirect

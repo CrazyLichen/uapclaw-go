@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
@@ -341,7 +342,7 @@ func TestMilvusVectorStore_Delete(t *testing.T) {
 	fake.deleteCount = 3
 	s := newTestStoreWithFake(t, fake)
 
-	ok, err := s.Delete(context.Background(), nil, map[string]any{"document_id": "d1"})
+	ok, err := s.Delete(context.Background(), nil, query.EqMap(map[string]any{"document_id": "d1"}))
 	require.NoError(t, err)
 	assert.True(t, ok) // delete_count > 0
 	assert.True(t, fake.flushCalled)
@@ -364,7 +365,7 @@ func TestMilvusVectorStore_Delete_零删除(t *testing.T) {
 	fake.deleteCount = 0
 	s := newTestStoreWithFake(t, fake)
 
-	ok, err := s.Delete(context.Background(), nil, map[string]any{"document_id": "d1"})
+	ok, err := s.Delete(context.Background(), nil, query.EqMap(map[string]any{"document_id": "d1"}))
 	require.NoError(t, err)
 	assert.False(t, ok)
 }
@@ -385,7 +386,7 @@ func TestMilvusVectorStore_Delete_异常(t *testing.T) {
 	fake.deleteErr = fmt.Errorf("delete failed")
 	s := newTestStoreWithFake(t, fake)
 
-	ok, err := s.Delete(context.Background(), nil, map[string]any{"document_id": "d1"})
+	ok, err := s.Delete(context.Background(), nil, query.EqMap(map[string]any{"document_id": "d1"}))
 	// 对齐 Python: 异常时不抛错，返回 False（Go err 返回原始错误信息用 error 通道，此处对齐 Python 语义返回 nil error + false）
 	require.NoError(t, err)
 	assert.False(t, ok)
@@ -457,16 +458,33 @@ func TestMilvusVectorStore_CloseWithRelease(t *testing.T) {
 	assert.False(t, s.collectionLoaded)
 }
 
-// TestBuildMilvusFilterExpr 对齐 Python search 中的 filter 构建（key 排序保证确定性）
+// TestBuildMilvusFilterExpr M-27: 对齐 Python filter 构建（QueryExpr → to_expr("milvus")）
 func TestBuildMilvusFilterExpr(t *testing.T) {
-	assert.Equal(t, "", buildMilvusFilterExpr(nil))
-	assert.Equal(t, `document_id == "d1"`, buildMilvusFilterExpr(map[string]any{"document_id": "d1"}))
-	// 字符串值带引号时转义
-	assert.Equal(t, `name == "a\"b"`, buildMilvusFilterExpr(map[string]any{"name": `a"b`}))
+	// nil 无过滤
+	expr, err := buildMilvusFilterExpr(nil)
+	require.NoError(t, err)
+	assert.Equal(t, "", expr)
+
+	// dict 等值：EqMap 折叠为单 ComparisonExpr
+	expr, err = buildMilvusFilterExpr(query.EqMap(map[string]any{"document_id": "d1"}))
+	require.NoError(t, err)
+	assert.Equal(t, `document_id == "d1"`, expr)
+
+	// 字符串值带引号时转义（对齐 Python sanitize_str）
+	expr, err = buildMilvusFilterExpr(query.EqMap(map[string]any{"name": `a"b`}))
+	require.NoError(t, err)
+	assert.Equal(t, `name == "a\"b"`, expr)
+
 	// 非字符串直接拼接
-	assert.Equal(t, "count == 5", buildMilvusFilterExpr(map[string]any{"count": 5}))
-	// 多条件按 key 排序连接
-	assert.Equal(t, `a == "1" && b == 2`, buildMilvusFilterExpr(map[string]any{"b": 2, "a": "1"}))
+	expr, err = buildMilvusFilterExpr(query.EqMap(map[string]any{"count": 5}))
+	require.NoError(t, err)
+	assert.Equal(t, "count == 5", expr)
+
+	// 多条件 dict：EqMap 按 key 排序折叠为 And 链——milvusLogicalFilter
+	// and 输出 "(left) and (right)"（带括号），语义等价 Python dict 分支 " && " 连接
+	expr, err = buildMilvusFilterExpr(query.EqMap(map[string]any{"b": 2, "a": "1"}))
+	require.NoError(t, err)
+	assert.Equal(t, `(a == "1") and (b == 2)`, expr)
 }
 
 // buildTestResultSet 构建测试用搜索结果集
@@ -542,7 +560,7 @@ func TestMilvusVectorStore_Search_带过滤(t *testing.T) {
 		map[string][]any{"content": {"hello"}}, []float32{0.9})}
 	s := newTestStoreWithFake(t, fake)
 
-	results, err := s.Search(context.Background(), []float64{0.1}, 5, map[string]any{"document_id": "d1"})
+	results, err := s.Search(context.Background(), []float64{0.1}, 5, query.EqMap(map[string]any{"document_id": "d1"}))
 	require.NoError(t, err)
 	assert.Len(t, results, 1)
 }

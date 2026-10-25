@@ -68,3 +68,18 @@ func TestLoggingDocIndexCallback_最后一批打日志(t *testing.T) {
 	}
 	// 第3批（processed=3 >= total=3）会打日志，不 panic
 }
+
+// TestLoggingDocIndexCallback_文档数口径 M-18 回归测试：
+// total 存文档总数（非批次数），日志的 processed/total 单位一致。
+// 1000 文档 10 批场景：第 10 批 endIdx=1000 >= total=1000 触发尾批日志；
+// 中间批次 endIdx < total 且 processed%100 != 0 不触发。
+func TestLoggingDocIndexCallback_文档数口径(t *testing.T) {
+	cb := NewLoggingDocIndexCallback(1000)
+	// 10 批各 100 文档
+	for i := 0; i < 10; i++ {
+		cb.OnBatchComplete(i*100, (i+1)*100, nil)
+	}
+	// processed 内部计数=10，total=1000——不再出现"批次数>=文档数"的误触发
+	assert.Equal(t, 1000, cb.total)
+	assert.Equal(t, 10, cb.processed)
+}

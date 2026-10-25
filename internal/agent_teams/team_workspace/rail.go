@@ -122,7 +122,8 @@ func (r *TeamWorkspaceRail) BeforeToolCall(ctx context.Context, cbc *interfaces.
 				Str("holder_name", lock.HolderName).
 				Msg(toolMsgText)
 			// 在 extra 中存储拒绝信息，供下游处理
-			cbc.Extra()["workspace_lock_rejected"] = toolMsgText
+			// S-24: 裸 map 写迁移 SetExtra（线程安全）
+			cbc.SetExtra("workspace_lock_rejected", toolMsgText)
 		}
 	}
 

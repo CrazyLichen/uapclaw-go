@@ -49,9 +49,9 @@ func NewUserHookRail(config hookscfg.HooksConfig) *UserHookRail {
 }
 
 // BeforeToolCall 对齐 Python before_tool_call → HookEvent.PRE_TOOL_USE
-// 阻塞时 → cbc.Extra()["_skip_tool"]=true, cbc.Extra()["_hook_feedback"]=error
+// 阻塞时 → SetExtra("_skip_tool", true), SetExtra("_hook_feedback", error)
 // 修改输入时 → 修改 cbc.Inputs.ToolArgs/ToolName
-// additionalContext → cbc.Extra()["_hook_additional_context"] 追加
+// additionalContext → SetExtra("_hook_additional_context") 追加
 func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	toolInputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
 	toolName := toolInputs.ToolName
@@ -77,8 +77,9 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 	for _, result := range results {
 		if result.Outcome == hookscfg.HookOutcomeBlocking {
 			// Python: ctx.extra["_skip_tool"] = True; ctx.extra["_hook_feedback"] = r.error
-			cbc.Extra()["_skip_tool"] = true
-			cbc.Extra()["_hook_feedback"] = result.Error
+			// S-24: 裸 map 写迁移 SetExtra（线程安全）
+			cbc.SetExtra("_skip_tool", true)
+			cbc.SetExtra("_hook_feedback", result.Error)
 			logger.Info(logComponent).Str("tool_name", toolName).Str("reason", result.Error).Msg("UserHookRail: PreToolUse blocked")
 			return nil
 		}
@@ -97,11 +98,13 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 		}
 		if result.AdditionalContext != "" {
 			// Python: existing = ctx.extra.get("_hook_additional_context", "")
-			existing, _ := cbc.Extra()["_hook_additional_context"].(string)
+			// S-24: 裸 map 读写迁移 GetExtra/SetExtra（线程安全）
+			existingVal, _ := cbc.GetExtra("_hook_additional_context")
+			existing, _ := existingVal.(string)
 			if existing != "" {
-				cbc.Extra()["_hook_additional_context"] = existing + "\n" + result.AdditionalContext
+				cbc.SetExtra("_hook_additional_context", existing+"\n"+result.AdditionalContext)
 			} else {
-				cbc.Extra()["_hook_additional_context"] = result.AdditionalContext
+				cbc.SetExtra("_hook_additional_context", result.AdditionalContext)
 			}
 		}
 	}
@@ -109,7 +112,7 @@ func (r *UserHookRail) BeforeToolCall(ctx context.Context, cbc *agentinterfaces.
 }
 
 // AfterToolCall 对齐 Python after_tool_call → HookEvent.POST_TOOL_USE
-// 阻塞时 → cbc.Extra()["_post_tool_hook_feedback"]=error
+// 阻塞时 → SetExtra("_post_tool_hook_feedback", error)
 // additionalContext → 拼接到 cbc.Inputs.ToolResult
 func (r *UserHookRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	toolInputs := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
@@ -136,7 +139,8 @@ func (r *UserHookRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.A
 	for _, result := range results {
 		if result.Outcome == hookscfg.HookOutcomeBlocking {
 			// Python: ctx.extra["_post_tool_hook_feedback"] = r.error
-			cbc.Extra()["_post_tool_hook_feedback"] = result.Error
+			// S-24: 裸 map 写迁移 SetExtra（线程安全）
+			cbc.SetExtra("_post_tool_hook_feedback", result.Error)
 			logger.Info(logComponent).Str("tool_name", toolName).Str("reason", result.Error).Msg("UserHookRail: PostToolUse blocked")
 		}
 		if result.AdditionalContext != "" {
@@ -186,7 +190,7 @@ func (r *UserHookRail) OnToolException(ctx context.Context, cbc *agentinterfaces
 }
 
 // AfterInvoke 对齐 Python after_invoke → HookEvent.STOP
-// 阻塞时 → cbc.Extra()["_stop_hook_feedback"]=error
+// 阻塞时 → SetExtra("_stop_hook_feedback", error)
 func (r *UserHookRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// Python: hook_configs = self._config.match(HookEvent.STOP.value)
 	hookConfigs := r.config.Match(hookscfg.HookEventStop, "")
@@ -212,7 +216,8 @@ func (r *UserHookRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.Age
 	for _, result := range results {
 		if result.Outcome == hookscfg.HookOutcomeBlocking {
 			// Python: ctx.extra["_stop_hook_feedback"] = r.error
-			cbc.Extra()["_stop_hook_feedback"] = result.Error
+			// S-24: 裸 map 写迁移 SetExtra（线程安全）
+			cbc.SetExtra("_stop_hook_feedback", result.Error)
 			reason := result.Error
 			if len(reason) > 200 {
 				reason = reason[:200]

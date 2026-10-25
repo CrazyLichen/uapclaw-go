@@ -263,7 +263,8 @@ func (ci *ChromaIndexer) BuildIndex(
 			continue
 		}
 		// 对齐 Python: collection.get(where={self.doc_id_field: doc_id}).get("ids")
-		whereFilter := vector_store.BuildChromaWhereFilter(map[string]any{ci.docIDField: docID})
+		// M-27: dict 直传 where 语义，走 WrapChromaWhereMap 包装
+		whereFilter := vector_store.WrapChromaWhereMap(map[string]any{ci.docIDField: docID})
 		if whereFilter != nil {
 			getResult, err := collection.Get(ctx, chromav2.WithWhere(whereFilter))
 			// S-29: 查重保护不可静默失效——Python 端 collection.get 异常会沿
@@ -404,7 +405,8 @@ func (ci *ChromaIndexer) DeleteIndex(ctx context.Context, docID string, indexNam
 	}
 
 	// 对齐 Python: results = collection.get(where={self.doc_id_field: doc_id})
-	whereFilter := vector_store.BuildChromaWhereFilter(map[string]any{ci.docIDField: docID})
+	// M-27: dict 直传 where 语义，走 WrapChromaWhereMap 包装
+	whereFilter := vector_store.WrapChromaWhereMap(map[string]any{ci.docIDField: docID})
 	if whereFilter == nil {
 		return false, nil
 	}
