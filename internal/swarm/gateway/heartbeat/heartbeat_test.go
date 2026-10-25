@@ -1,13 +1,133 @@
 package heartbeat
 
 import (
+	"context"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // mkTime 构造固定 Unix 秒的假时钟。
 func mkTime(sec int64) func() float64 {
 	return func() float64 { return float64(sec) }
+}
+
+// fakeAgentClient 记录调用的测试桩（对齐 cron scheduler_test 模式；
+// respond 收 ctx 参数——timeout 用例需挂起等待 ctx 取消，避免裸读共享字段竞态）。
+type fakeAgentClient struct {
+	mu      sync.Mutex
+	calls   int
+	respond func(ctx context.Context, call int) (*schema.AgentResponse, error)
+	lastEnv *e2a.E2AEnvelope
+	lastCtx context.Context
+}
+
+func (f *fakeAgentClient) SendRequest(ctx context.Context, env *e2a.E2AEnvelope) (*schema.AgentResponse, error) {
+	f.mu.Lock()
+	f.calls++
+	n := f.calls
+	f.lastEnv = env
+	f.lastCtx = ctx
+	fn := f.respond
+	f.mu.Unlock()
+	if fn == nil {
+		return &schema.AgentResponse{OK: true, Payload: map[string]any{"heartbeat": "HEARTBEAT_OK"}}, nil
+	}
+	return fn(ctx, n)
+}
+
+func (f *fakeAgentClient) Calls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
+}
+
+// fakePublisher 收集 relay 消息的测试桩。
+type fakePublisher struct {
+	mu   sync.Mutex
+	msgs []*schema.Message
+}
+
+func (f *fakePublisher) PublishRobotMessages(msg *schema.Message) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.msgs = append(f.msgs, msg)
+}
+
+func (f *fakePublisher) Messages() []*schema.Message {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]*schema.Message{}, f.msgs...)
+}
+
+// waitFor 轮询等待条件成立（对齐 cron 测试辅助）。
+func waitFor(t *testing.T, cond func() bool, timeout time.Duration) bool {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return true
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return false
+}
+
+// TestStart_先睡后跳 启动后 interval 内不 tick，interval 后首跳。
+func TestStart_先睡后跳(t *testing.T) {
+	fc := &fakeAgentClient{}
+	iv := 0.05 // 50ms
+	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{IntervalSeconds: iv}, nil, nil)
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer s.Stop()
+	// 30ms（< interval 50ms）时不应有调用——time.After(50ms) 不会提前触发
+	time.Sleep(30 * time.Millisecond)
+	if fc.Calls() != 0 {
+		t.Fatalf("should not tick before first interval, got %d calls", fc.Calls())
+	}
+	// interval 过后应有首次调用
+	waitFor(t, func() bool { return fc.Calls() >= 1 }, 2*time.Second)
+}
+
+// TestStart_幂等 重复 Start 不产生第二个循环。
+func TestStart_幂等(t *testing.T) {
+	fc := &fakeAgentClient{}
+	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{IntervalSeconds: 10}, nil, nil)
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer s.Stop()
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("second Start: %v", err)
+	}
+	if !s.IsRunning() {
+		t.Fatal("should be running")
+	}
+}
+
+// TestStop 停止后不再 tick；二次 Stop 安全；IsRunning=false。
+func TestStop(t *testing.T) {
+	fc := &fakeAgentClient{}
+	s := NewGatewayHeartbeatService(fc, &HeartbeatConfig{IntervalSeconds: 0.02}, nil, nil)
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitFor(t, func() bool { return fc.Calls() >= 1 }, 2*time.Second)
+	s.Stop()
+	if s.IsRunning() {
+		t.Fatal("should not be running after Stop")
+	}
+	calls := fc.Calls()
+	time.Sleep(80 * time.Millisecond)
+	if fc.Calls() != calls {
+		t.Fatalf("should not tick after Stop: %d -> %d", calls, fc.Calls())
+	}
+	s.Stop() // 二次 Stop 安全
 }
 
 // TestIsActiveNow_无配置 ActiveHours 为空 → true。

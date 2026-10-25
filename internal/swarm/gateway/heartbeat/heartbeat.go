@@ -177,7 +177,82 @@ func NormalizeActiveHours(activeHours map[string]any) map[string]string {
 	return result
 }
 
+// Start 启动周期任务。
+// 对齐 Python: start (heartbeat.py L128-137)：幂等；先睡 interval 再 tick。
+func (s *GatewayHeartbeatService) Start(ctx context.Context) error {
+	if s.running.Load() {
+		return nil
+	}
+	s.running.Store(true)
+	loopCtx, cancel := context.WithCancel(ctx)
+	s.mu.Lock()
+	s.cancel = cancel
+	s.mu.Unlock()
+	s.wg.Add(1)
+	go s.runLoop(loopCtx)
+	s.mu.Lock()
+	every := s.config.IntervalSeconds
+	s.mu.Unlock()
+	logger.Info(logComponent).
+		Float64("every_seconds", every).
+		Msg("Gateway heartbeat started")
+	return nil
+}
+
+// Stop 停止周期任务。
+// 对齐 Python: stop (heartbeat.py L139-149)：cancel 中断 sleep 与 in-flight SendRequest，
+// wg.Wait 等待循环退出（对齐 await self._task 吞 CancelledError）。
+func (s *GatewayHeartbeatService) Stop() {
+	s.running.Store(false)
+	s.mu.Lock()
+	cancel := s.cancel
+	s.cancel = nil
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	s.wg.Wait()
+	logger.Info(logComponent).Msg("Gateway heartbeat stopped")
+}
+
+// IsRunning 是否运行中。
+// 对齐 Python: is_running (heartbeat.py L151-153)。
+func (s *GatewayHeartbeatService) IsRunning() bool {
+	return s.running.Load()
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// runLoop 主循环：先睡 interval 再 tick（逐字对齐 Python _run_loop L155-165，已拍板）。
+// time.After 每轮进入 select 前从 mu 保护下快照最新 IntervalSeconds——
+// 对齐 Python 每轮 sleep 读最新值（set_conf 改间隔下轮生效）。
+// tick 内部自行 recover；循环层不因 tick 异常退出（对齐 Python except 仅日志）。
+func (s *GatewayHeartbeatService) runLoop(ctx context.Context) {
+	defer s.wg.Done()
+	for s.running.Load() {
+		s.mu.Lock()
+		interval := s.config.IntervalSeconds
+		s.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Duration(interval * float64(time.Second))):
+			// 先睡 interval 再 tick（对齐 L159），启动后首跳等一个完整间隔
+		}
+		if s.running.Load() {
+			s.tick(ctx)
+		}
+	}
+}
+
+// tick 执行一次探活：构造 E2A 发往 AgentServer，不向 Channel 下发。
+// 对齐 Python: _tick (heartbeat.py L167-256) 六步：
+// ① 活跃时段判断 ② 构造标识与 envelope ③ 发送（可选超时）
+// ④ 成功路径三级 content 提取 ⑤ relay 回传 ⑥ 失败路径。
+// 完整实现于 11.11 Task 4 落地；此处先以最小占位保证 runLoop 编译。
+func (s *GatewayHeartbeatService) tick(ctx context.Context) {
+	_ = ctx
+}
 
 // isActiveNow 根据 active_hours 判断当前时间心跳是否应当生效。
 // 对齐 Python: _is_active_now (heartbeat.py L268-301)。
