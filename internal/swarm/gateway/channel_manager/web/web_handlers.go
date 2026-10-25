@@ -1079,6 +1079,13 @@ func handleSessionList(_ context.Context, params map[string]any, _ string) (map[
 		if !entry.IsDir() {
 			continue
 		}
+		// heartbeat_ 前缀会话不参与列表展示
+		// 对齐 Python session_metadata.py L31/L416 _HEARTBEAT_SESSION_PREFIX = "heartbeat_"
+		// （偏差⑨：与 session_startup.go 既有常量 heartbeatSessionPrefix 语义一致；
+		// dreaming sweeper 的无下划线 "heartbeat" 是另一处独立先例，不适用本过滤点）
+		if strings.HasPrefix(entry.Name(), "heartbeat_") {
+			continue
+		}
 		metaPath := filepath.Join(sessionsDir, entry.Name(), "metadata.json")
 		data, err := os.ReadFile(metaPath)
 		if err != nil {
