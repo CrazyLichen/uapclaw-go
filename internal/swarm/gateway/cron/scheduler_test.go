@@ -197,7 +197,21 @@ func TestSchedulerDirectFinalPush(t *testing.T) {
 	defer svc.Stop()
 
 	clock.Advance(3300) // wake at 8:55
-	time.Sleep(50 * time.Millisecond)
+	// 等 runAgent 完成写 ResultText（race 慢环境下 goroutine 调度延迟，
+	// 固定 50ms sleep 会抢跑——onPush 读到空 ResultText 发占位符）。
+	// 断言点选 state.Status（runAgent 尾部持锁写），比 agent.Calls 更靠后
+	if !waitFor(t, func() bool {
+		svc.mu.Lock()
+		defer svc.mu.Unlock()
+		for _, st := range svc.runs {
+			if st.Status == "succeeded" {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second) {
+		t.Fatal("wake should start agent and finish")
+	}
 	clock.Advance(300) // push at 9:00
 	waitFor(t, func() bool { return len(pub.Messages()) >= 1 }, 2*time.Second)
 	msgs := pub.Messages()

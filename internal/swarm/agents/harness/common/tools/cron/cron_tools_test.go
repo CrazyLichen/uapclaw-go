@@ -539,6 +539,9 @@ func TestCreateJob非法表达式(t *testing.T) {
 }
 
 // TestCreateJob委托GatewayReload Gateway 调度器运行中时 create 触发委托 reload
+// ⚠️ cron_expr 必须远未来（2999 年）：真实时钟下若 wake 窗口（push-offset ~ push）
+// 覆盖 CI 执行时刻，wake 事件立即到期 → onWake 启动 runAgent → nil agentClient
+// panic（CI UTC 00:59 = 上海 08:59 恰在 8:55~9:00 窗口，曾炸 CI 40148394392）
 func TestCreateJob委托GatewayReload(t *testing.T) {
 	gwcron.ResetProcessSchedulerForTest()
 	defer gwcron.ResetProcessSchedulerForTest()
@@ -556,7 +559,7 @@ func TestCreateJob委托GatewayReload(t *testing.T) {
 	tools.localStore = gwStore
 
 	d, err := tools.CreateJob(context.Background(), map[string]any{
-		"name": "n", "cron_expr": "0 9 * * *", "timezone": "Asia/Shanghai",
+		"name": "n", "cron_expr": "0 0 9 1 1 ? 2999", "timezone": "Asia/Shanghai",
 		"description": "d", "targets": "web",
 	})
 	if err != nil {

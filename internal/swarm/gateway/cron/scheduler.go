@@ -236,8 +236,16 @@ func (s *CronSchedulerService) Start(ctx context.Context) error {
 
 // Stop 停止调度器。
 // 对齐 Python: stop (scheduler.py L141-155)。
+// Go 并发补齐：mu 持有下翻转 running 并 drain 事件堆——
+// ① 防止 loop 正在 handleEvent 途中（已过 running 检查）继续 onWake 启动新 run；
+// ② onWake 的 wg.Add 与 activeRuns 写同在 mu 持有段内，与 Stop 的 mu 段互斥
+// （WaitGroup 语义要求 Add 不得与 Wait 并发）。stop 后在途 runAgent goroutine
+// 由 wg.Wait 收尾。
 func (s *CronSchedulerService) Stop() {
+	s.mu.Lock()
 	s.running.Store(false)
+	s.events = s.events[:0]
+	s.mu.Unlock()
 	if s.cancel != nil {
 		s.cancel()
 		s.cancel = nil
@@ -474,13 +482,21 @@ func (s *CronSchedulerService) onWake(ctx context.Context, job *CronJob, runID s
 		return
 	}
 	s.mu.Lock()
+	// 停机后不再启动新 run（Stop 已 drain 事件堆，此为 handleEvent 途中
+	// 携带已弹出事件的兜底——running 翻转与事件弹出的窗口内到达的兜底）
+	if !s.running.Load() {
+		s.mu.Unlock()
+		return
+	}
 	if _, running := s.activeRuns[runID]; running {
 		s.mu.Unlock()
 		return // in-flight 去重（对齐 Python L365-366）
 	}
 	s.activeRuns[runID] = struct{}{}
-	s.mu.Unlock()
+	// wg.Add 在 mu 持有段内（WaitGroup 语义：Add 不得与 Stop 的 Wait 并发；
+	// Stop 同在 mu 内翻转 running，此处的 running 检查与 Add 原子成立）
 	s.wg.Add(1)
+	s.mu.Unlock()
 	go func() {
 		defer s.wg.Done()
 		defer func() {
@@ -559,6 +575,16 @@ func (s *CronSchedulerService) runAgent(ctx context.Context, job *CronJob, state
 		}),
 	)
 
+	// nil 客户端守卫（对齐 Python: agent_client=None 时 send_request 抛
+	// AttributeError 被 _run_agent 的 except 捕获置 failed——Go nil 接口
+	// 方法调用直接 panic，须显式拦截为 failed 状态）
+	if s.agentClient == nil {
+		s.mu.Lock()
+		state.Status = "failed"
+		state.Error = "agent client is nil"
+		s.mu.Unlock()
+		return
+	}
 	resp, err := s.agentClient.SendRequest(ctx, envelope)
 	if err != nil {
 		s.mu.Lock()
