@@ -89,7 +89,7 @@ func TestRegisterHeartbeatHandlers_无服务(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── get_conf ────────────────────────────
+// ──────────────────────────── get_conf 读取配置 ────────────────────────────
 
 // TestHandleHeartbeatGetConf_成功 返回服务配置三键。
 func TestHandleHeartbeatGetConf_成功(t *testing.T) {
@@ -109,7 +109,7 @@ func TestHandleHeartbeatGetConf_服务nil(t *testing.T) {
 	assert.Equal(t, WsErrServiceUnavailable, res["code"])
 }
 
-// ──────────────────────────── set_conf ────────────────────────────
+// ──────────────────────────── set_conf 写入配置 ────────────────────────────
 
 // TestHandleHeartbeatSetConf_params非对象 BAD_REQUEST。
 func TestHandleHeartbeatSetConf_params非对象(t *testing.T) {
@@ -235,7 +235,7 @@ func TestHandleHeartbeatSetConf_agentClientNil跳过清缓存(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// ──────────────────────────── get_path ────────────────────────────
+// ──────────────────────────── get_path 获取路径 ────────────────────────────
 
 // TestHandleHeartbeatGetPath_相对路径 返回 agent/workspace/HEARTBEAT.md。
 func TestHandleHeartbeatGetPath_相对路径(t *testing.T) {

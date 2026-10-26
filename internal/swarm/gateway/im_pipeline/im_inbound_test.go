@@ -698,7 +698,7 @@ func TestProcess_principal缺失(t *testing.T) {
 	assert.True(t, r.ShouldForward)
 }
 
-// ──────────────────────────── Task 4: IMInboundPipeline ────────────────────────────
+// ──────────────────────────── Task 4: IMInboundPipeline 入站管线 ────────────────────────────
 
 // newInboundWithAdapter 构造带 fakeAdapter 的入站管线。
 func newInboundWithAdapter(t *testing.T, adapter IMPlatformAdapter) *IMInboundPipeline {

@@ -462,7 +462,7 @@ func TestTick_父ctx超时归requestFailed(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── Task 5: get/set_conf ────────────────────────────
+// ──────────────────────────── Task 5: get/set_conf 配置读写 ────────────────────────────
 
 // TestGetHeartbeatConf 三键断言。
 func TestGetHeartbeatConf(t *testing.T) {

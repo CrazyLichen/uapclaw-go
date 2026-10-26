@@ -52,7 +52,7 @@ func newTestTools(t *testing.T, push func(ctx context.Context, payload map[strin
 	return tools
 }
 
-// ──────────────────────────── EnsureScheduler ────────────────────────────
+// ──────────────────────────── EnsureScheduler 调度器确保 ────────────────────────────
 
 // TestEnsureScheduler_分支1内嵌运行中 确保 running 内嵌调度器直接返回
 func TestEnsureScheduler_分支1内嵌运行中(t *testing.T) {
@@ -208,7 +208,7 @@ func TestRoute默认值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── SendSplit ────────────────────────────
+// ──────────────────────────── SendSplit 拆分推送 ────────────────────────────
 
 // TestSendSplitPayload 断言 E2A payload 结构
 func TestSendSplitPayload(t *testing.T) {
@@ -292,7 +292,7 @@ func TestSendSplit参数浅拷贝(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── normalizeTargetsParam / defaultTargetFromChannel ────────────────────────────
+// ──────────────────────────── normalizeTargetsParam / defaultTargetFromChannel 目标解析 ────────────────────────────
 
 // TestDefaultTargetFromChannel 前缀矩阵
 func TestDefaultTargetFromChannel(t *testing.T) {
@@ -403,7 +403,7 @@ func TestResolveChannelID优先路由值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ListJobs / GetJob ────────────────────────────
+// ──────────────────────────── ListJobs / GetJob 任务查询 ────────────────────────────
 
 // TestListAndGetJobs 本地 store 读写
 func TestListAndGetJobs(t *testing.T) {
@@ -439,7 +439,7 @@ func TestListAndGetJobs(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── CreateJob ────────────────────────────
+// ──────────────────────────── CreateJob 创建任务 ────────────────────────────
 
 // TestCreateJob本地写推送 本地写 + E2A 推送 + 路由上下文传播
 func TestCreateJob本地写推送(t *testing.T) {
@@ -579,7 +579,7 @@ func TestCreateJob委托GatewayReload(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── UpdateJob ────────────────────────────
+// ──────────────────────────── UpdateJob 更新任务 ────────────────────────────
 
 // TestUpdateJob基本字段 本地更新 + E2A 推送
 func TestUpdateJob基本字段(t *testing.T) {
@@ -682,7 +682,7 @@ func TestUpdateJob不存在(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── DeleteJob / ToggleJob ────────────────────────────
+// ──────────────────────────── DeleteJob / ToggleJob 删除与启停 ────────────────────────────
 
 // TestDeleteJob本地删除推送 删除 + E2A 转发
 func TestDeleteJob本地删除推送(t *testing.T) {
@@ -749,7 +749,7 @@ func TestToggleJob本地启停推送(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── PreviewJob ────────────────────────────
+// ──────────────────────────── PreviewJob 预览下次执行 ────────────────────────────
 
 // TestPreviewJob本地计算 本地计算下次执行（不转发 Gateway）
 func TestPreviewJob本地计算(t *testing.T) {
@@ -818,7 +818,7 @@ func TestPreviewJob计数钳制(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── RunNow ────────────────────────────
+// ──────────────────────────── RunNow 立即执行 ────────────────────────────
 
 // TestRunNow纯转发 run_now 纯转发 Gateway，本地不执行
 func TestRunNow纯转发(t *testing.T) {
