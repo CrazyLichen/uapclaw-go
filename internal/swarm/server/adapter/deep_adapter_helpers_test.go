@@ -1025,10 +1025,14 @@ func TestRemoveRegisteredTools(t *testing.T) {
 	d.removeRegisteredTools(nil) // Python: 传工具实例列表，nil 时直接返回
 }
 
-// TestSyncToolGroup 测试工具组同步。
+// TestSyncToolGroup 测试工具组同步（Python 同签名重构后的空场景）。
 func TestSyncToolGroup(t *testing.T) {
 	d := NewDeepAdapter()
-	d.syncToolGroup("search", nil)
+	// disabled + 未注册 → 原样返回
+	tools, reg := d.syncToolGroup(nil, false, false, nil, "search")
+	if reg || tools != nil {
+		t.Errorf("disabled+unregistered 应返回 nil,false，got %v,%v", tools, reg)
+	}
 }
 
 // TestExtractEnabledMcpServerEntries 测试启用 MCP 条目提取。

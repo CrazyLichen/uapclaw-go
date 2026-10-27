@@ -198,9 +198,10 @@ type DeepAdapter struct {
 	videoTool tool.Tool
 	// videoToolRegistered 视频工具注册状态
 	videoToolRegistered bool
-	// imageGenToolRegistered 图片生成工具是否已注册
-	// ⤵️ 10.6.24 多模态工具
+	// imageGenToolRegistered 图片生成工具是否已注册（对齐 Python: self._image_gen_tool_registered）
 	imageGenToolRegistered bool
+	// imageGenModelConfig 图片生成模型配置是否就绪（对齐 Python: self._image_gen_model_config: bool）
+	imageGenModelConfig bool
 	// skillManager 技能管理器（已回填 10.3.19-20）
 	skillManager *skill.SkillManager
 	// a2xClient A2X 客户端

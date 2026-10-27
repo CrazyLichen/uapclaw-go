@@ -13,6 +13,7 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -67,56 +68,58 @@ const (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// syncToolGroup 同步工具组。
-// Python: _sync_tool_group() (line 1319-1350)
+// syncToolGroup 统一处理一组工具的热更新：启用时注册，禁用时移除。
+// Python: _sync_tool_group() (interface_deep.py:1319-1350)
 //
-// 双重操作：调用 AbilityManager.Add/Remove 同步工具到 Agent，
-// 同时调用 ResourceMgr.AddTool/RemoveTool 同步到资源管理器。
-func (d *DeepAdapter) syncToolGroup(toolGroup string, configBase map[string]any) {
-	if d.instance == nil {
-		logger.Warn(logComponent).Str("tool_group", toolGroup).Msg("syncToolGroup: instance not initialized, skipping")
-		return
-	}
-
-	reactAgent := d.instance.ReactAgent()
-	if reactAgent == nil {
-		logger.Warn(logComponent).Str("tool_group", toolGroup).Msg("syncToolGroup: ReactAgent is nil, skipping")
-		return
-	}
-
-	// 步骤 1: 从配置解析该工具组应启用的工具
-	// ⤵️ 10.6.24: 根据 toolGroup 解析 configBase 中的工具配置
-	var toolInstancesToAdd []tool.Tool  // ResourceMgr.AddTool 需要 tool.Tool
-	var toolCardsToAdd []*tool.ToolCard // AbilityManager.Add 需要 schema.Ability（*ToolCard 实现）
-	var toolIDsToRemove []string
-	_ = toolInstancesToAdd // ⤵️ 10.6.24: 从 configBase 解析待添加的工具实例
-	_ = toolCardsToAdd     // ⤵️ 10.6.24: 从 configBase 解析待添加的工具卡片
-	_ = toolIDsToRemove    // ⤵️ 10.6.24: 从 AbilityManager 查询当前已注册的同组工具
-
-	// 步骤 2: 双重操作 — Add
-	am := reactAgent.AbilityManager()
-	for _, tc := range toolCardsToAdd {
-		if am != nil {
-			am.Add(tc)
+// 返回 (updated_tools, updated_registered)。
+func (d *DeepAdapter) syncToolGroup(
+	currentTools []tool.Tool, registered bool, enabled bool,
+	createFn func() []tool.Tool, warnLabel string,
+) ([]tool.Tool, bool) {
+	if !enabled {
+		if registered {
+			d.removeRegisteredTools(currentTools)
+			namesToRemove := make(map[string]bool, len(currentTools))
+			for _, t := range currentTools {
+				namesToRemove[t.Card().Name] = true
+			}
+			d.toolCards = d.pruneToolCards(d.toolCards, namesToRemove)
 		}
+		return nil, false
 	}
-	for _, t := range toolInstancesToAdd {
-		if err := runner.GetResourceMgr().AddTool(t, resources_manager.WithTag(resources_manager.Tag(toolGroup))); err != nil {
-			logger.Warn(logComponent).Err(err).Str("tool_group", toolGroup).Msg("failed to add tool to ResourceMgr")
+	if !registered {
+		newTools := d.safeCreateTools(createFn, warnLabel)
+		if newTools == nil {
+			return nil, false
 		}
-	}
-
-	// 步骤 3: 双重操作 — Remove
-	if am != nil && len(toolIDsToRemove) > 0 {
-		am.RemoveMany(toolIDsToRemove)
-	}
-	if len(toolIDsToRemove) > 0 {
-		if _, err := runner.GetResourceMgr().RemoveTool(toolIDsToRemove, resources_manager.WithTag(resources_manager.Tag(toolGroup))); err != nil {
-			logger.Warn(logComponent).Err(err).Str("tool_group", toolGroup).Msg("failed to remove tool from ResourceMgr")
+		rm := runner.GetResourceMgr()
+		am := d.getAbilityManager()
+		for _, t := range newTools {
+			if rm != nil {
+				if err := rm.AddTool(t); err != nil {
+					logger.Warn(logComponent).Err(err).Str("warn_label", warnLabel).Msg("syncToolGroup: add tool to ResourceMgr failed")
+				}
+			}
+			d.appendToolCard([]*tool.ToolCard{t.Card()})
+			if am != nil {
+				am.Add(t.Card())
+			}
 		}
+		return newTools, len(newTools) > 0
 	}
+	return currentTools, registered
+}
 
-	logger.Info(logComponent).Str("tool_group", toolGroup).Int("add_count", len(toolCardsToAdd)).Int("remove_count", len(toolIDsToRemove)).Msg("syncToolGroup completed")
+// safeCreateTools 执行 createFn 并 recover 异常（对齐 Python try/except Exception warn）。
+// Python: interface_deep.py L1339-1349
+func (d *DeepAdapter) safeCreateTools(createFn func() []tool.Tool, warnLabel string) (tools []tool.Tool) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).Any("panic", r).Str("warn_label", warnLabel).Msg("syncToolGroup reload failed")
+			tools = nil
+		}
+	}()
+	return createFn()
 }
 
 // removeRegisteredTools 移除已注册的工具。
@@ -345,10 +348,13 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	}
 
 	// 图片生成工具同步
-	if d.imageGenToolRegistered {
-		// TODO(#10.6.24): ⤵️ 确保图片生成工具已注册
-		_ = d.imageGenToolRegistered
-	}
+	// Python: interface_deep.py:1454-1460
+	_, d.imageGenToolRegistered = d.syncToolGroup(
+		[]tool.Tool{swarmtools.GenerateImage},
+		d.imageGenToolRegistered, d.imageGenModelConfig,
+		func() []tool.Tool { return []tool.Tool{swarmtools.GenerateImage} },
+		"generate_image tool",
+	)
 }
 
 // syncPaidSearchToolForRuntime 热同步付费搜索工具。
@@ -390,6 +396,7 @@ func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
 	d.visionModelConfig = d.buildVisionModelConfig(configBase)
 	d.audioModelConfig = d.buildAudioModelConfig(configBase)
 	d.videoModelConfig = d.buildVideoModelConfig(configBase)
+	d.imageGenModelConfig = d.buildImageGenModelConfig(configBase)
 	// Python: 不在此处设置 registered 标志，由 syncMultimodalToolsForRuntime 管理
 	// Python: 将 config 同步到已有工具实例
 	for _, t := range d.visionTools {
@@ -479,13 +486,11 @@ func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) *schema.V
 	return &cfg
 }
 
-// buildImageGenModelConfig 构建图片生成模型配置。
-// Python: _build_image_gen_model_config(config_base) (line 1261-1270)
+// buildImageGenModelConfig 构建图片生成模型配置就绪标志。
+// Python: _build_image_gen_model_config (interface_deep.py:1261-1269)
 // 返回 bool 表示图片生成工具是否启用（Python 原实现返回 bool，通过环境变量传递配置）。
-// ⤵️ 10.6.24 Swarm 内置工具集: apply_image_gen_model_config_from_yaml
 func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
-	// ⤵️ 10.6.24: apply_image_gen_model_config_from_yaml(configBase) — 将 YAML 配置映射到环境变量
-	// 待实现：应用图像生成模型配置 applyImageGenModelConfigFromYAML(configBase)
+	swarmtools.ApplyImageGenModelConfigFromYAML(configBase)
 
 	if os.Getenv("IMAGE_GEN_API_KEY") == "" {
 		logger.Info(logComponent).Msg("image gen tool skipped: incomplete config (IMAGE_GEN_API_KEY not set)")
@@ -635,14 +640,20 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	// ── 步骤 7: 图片生成工具 ──
 	// Python:
+	//   Python: self._image_gen_tool_registered = False（if 之前前置重置，对齐 interface_deep.py L2426）
 	//   Python: if self._image_gen_model_config:
 	//       Python: Runner.resource_mgr.add_tool(generate_image)
 	//       Python: tool_cards.append(generate_image.card)
 	//       Python: self._image_gen_tool_registered = True
-	if d.imageGenToolRegistered {
-		// ⤵️ 10.6.24: generate_image 工具实例尚未实现
-		// 待实现：注册图像生成工具并将卡片追加到 toolCards
-		logger.Info(logComponent).Msg("getToolCards: image gen config ready, pending 10.6.24 backfill for generate_image")
+	//       Python: except Exception → logger.warning("generate_image tool registration failed")
+	d.imageGenToolRegistered = false
+	if d.imageGenModelConfig {
+		if err := runner.GetResourceMgr().AddTool(swarmtools.GenerateImage); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("generate_image tool registration failed")
+		} else {
+			toolCards = append(toolCards, swarmtools.GenerateImage.Card())
+			d.imageGenToolRegistered = true
+		}
 	}
 
 	// ── 步骤 8: 小艺手机端工具 ──
