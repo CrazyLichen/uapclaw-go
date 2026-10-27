@@ -9,15 +9,19 @@
 //	├── doc.go           # 包文档
 //	├── config.go        # 索引/知识库/检索/向量存储配置类型
 //	├── document.go      # MultimodalDocument + TextChunk 文档数据模型
-//	├── triple.go        # Triple 三元组数据模型（OpenIE 抽取产物）
+//	├── triple.go        # Triple 三元组数据模型（OpenIE 抽取产物，写入侧）
+//	├── triple_beam.go   # TripleBeam beam search 路径载体（读取侧）
+//	├── triple_memory.go # TripleMemory 事实记忆 + TripleFact 定长类型（读取侧）
 //	├── callbacks.go     # DocIndexCallback 类型别名 + NoOpDocIndexCallback + LoggingDocIndexCallback
-//	└── result.go        # SearchResult + RetrievalResult 数据模型
+//	└── result.go        # SearchResult + RetrievalResult + MultiKBRetrievalResult 数据模型
 //
 // 对应 Python 代码：
 //
 //	openjiuwen/core/retrieval/common/config.py
 //	openjiuwen/core/retrieval/common/document.py
 //	openjiuwen/core/retrieval/common/triple.py
+//	openjiuwen/core/retrieval/common/triple_beam.py
+//	openjiuwen/core/retrieval/common/triple_memory.py
 //	openjiuwen/core/retrieval/common/callbacks.py
 //	openjiuwen/core/retrieval/common/retrieval_result.py
 //
@@ -38,4 +42,8 @@
 //	DocIndexCallback   — 文档索引进度回调接口（= embedding.Callback）
 //	SearchResult       — 搜索结果数据模型
 //	RetrievalResult    — 检索结果数据模型
+//	TripleBeam         — beam search 路径载体（读取侧）
+//	TripleFact         — 读取侧三元组事实（定长 3 元）
+//	TripleMemory       — 多跳检索事实记忆
+//	MultiKBRetrievalResult — 多 KB 聚合检索结果
 package common
