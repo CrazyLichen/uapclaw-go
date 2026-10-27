@@ -72,9 +72,13 @@ func TestTripleMemory_TriplesStr保留原大小写(t *testing.T) {
 	assert.Equal(t, "(Foo Is Bar)", m.TriplesStr())
 }
 
-// TestTripleMemory_Memory密封 跨对象写穿防护（M8，C2 同链）
-// 注：内存 array 与 slice 不同——Memory() 返回新 slice，append
-// 永不写穿；用与 B8 对称的跨对象形态钉死决策
+// TestTripleMemory_Memory密封 对返回值 append 不写穿内部（M8，C2 同链）
+// 注：简单 append 形态已是本类型的诚实上限——13.25 消费方只读传参
+// （memory.memory → _link_passages），无"从 Memory() 返回值 append 构造
+// 新 memory"场景；且 ExtendMemory 的 append 恒在 len 尾部追加，超 len
+// 的 backing 污染（若有）必被后续 ExtendMemory 覆盖。B8 的跨对象形态
+// 对应 13.23 真实展开（NewTripleBeam(append(b1.Triples(), t), s)），故
+// B8 必要、本测试不升级。
 func TestTripleMemory_Memory密封(t *testing.T) {
 	m := NewTripleMemory()
 	m.ExtendMemory(TripleFact{"A", "r1", "B"})

@@ -668,10 +668,12 @@ Expected: 全部 PASS，无 FAIL（含既有 callbacks/config/document/result/tr
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/retrieval/common/ -cover -count=1`
 Expected: coverage ≥ 90%（13.17 基线 91.8%，纯增量无死分支应维持或小升）
 
-- [ ] **Step 3: 全仓编译回归（CI 同款标签）**
+- [x] **Step 3: 全仓编译回归（CI 同款标签）**
 
-Run: `cd /home/opensource/uapclaw-gateway && CGO_ENABLED=1 go build -tags "sqlite_fts5 test" ./... && go vet ./internal/agentcore/retrieval/common/`
-Expected: 编译零错误；vet 零告警
+Run: `cd /home/opensource/uapclaw-gateway && CGO_ENABLED=1 go vet -tags "sqlite_fts5 test" ./internal/agentcore/retrieval/common/ && CGO_ENABLED=1 go build -tags "sqlite_fts5" ./... && CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/retrieval/... -count=1`
+Expected: vet 零告警；无 test 标签全仓编译零错误；retrieval 全域测试零 FAIL
+
+⚠️ 实施期修正（2026-10-28）：原版命令 `go build -tags "sqlite_fts5 test" ./...` 对 cmd/* 必然报 "function main is undeclared"——cmd/*/main.go 带 `//go:build !test`（规范 4），带 test 标签时 main 被排除。**CI 实际用 go test（不产二进制）不受影响**。修正后口径：CI 标签 `go vet` + **无** test 标签 `go build ./...`（二进制构建口径）+ CI 标签 `go test`（测试口径），三者均通过方为全绿。
 
 - [ ] **Step 4: IMPLEMENTATION_PLAN.md 13.22 行回填**
 
