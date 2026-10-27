@@ -23,6 +23,7 @@ import (
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -40,6 +41,7 @@ import (
 	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -537,6 +539,8 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		VisionModelConfig:      d.visionModelConfig,
 		AudioModelConfig:       d.audioModelConfig,
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
+		// todo_compat 兼容层注入（对齐 Python interface_deep.py:230 install_todo_modify_compat_patch 模块级 patch）
+		TodoModifyFactory:      swarmtools.NewCompatibleTodoModifyTool,
 		AutoCreateWorkspace:    false,                                             // Python: 硬编码 false
 		CompletionTimeout:      paramsFloat(config, "completion_timeout", 3600.0), // Python: config.get("completion_timeout", 3600.0)
 		ContextEngineConfig:    d.deepAgentContextEngineConfig(config),            // Python: context_engine_config=_deep_agent_context_engine_config(config)
@@ -1368,6 +1372,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	// 步骤 6-9: 按 intent 分支
 	// Python: process_interrupt() (line 3268-3476)
 	interruptMsg := ""
+	var cancelledTodos []map[string]any
 	switch intent {
 	case "pause":
 		if sessionActive && d.streamEventRail != nil {
@@ -1414,7 +1419,9 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 			d.cancelSchedulerRunningTasks()
 		}
 		d.unmarkSessionActive(normalizedSID)
-		// ⤵️ 10.6.3-10: _cancel_pending_todos(sessionID)
+		// Python: cancelled_todos = await self._cancel_pending_todos(session_id)
+		// Python: if cancelled_todos: payload["todos"] = cancelled_todos
+		cancelledTodos = d.cancelPendingTodos(ctx, normalizedSID)
 		interruptMsg = "执行已取消"
 		logger.Info(logComponent).Str("intent", "cancel").Msg("Interrupt: cancel processed")
 	}
@@ -1446,9 +1453,114 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		}
 	}
 
+	// Python: if cancelled_todos: payload["todos"] = cancelled_todos
+	if cancelledTodos != nil {
+		payload["todos"] = cancelledTodos
+	}
+
 	return schema.NewAgentResponse(req.RequestID, req.ChannelID,
 		schema.WithPayload(payload),
 	), nil
+}
+
+// cancelPendingTodos 将未完成的 todo 项标记为 cancelled。
+// Python: _cancel_pending_todos (interface_deep.py:4351-4407)
+// 返回前端格式 todo 列表（附加到 interrupt_result 通知前端刷新），无 todo 或失败返回 nil。
+//
+// Python 先从 ability_manager.get("todo_modify") + resource_mgr.get_tool() 取已注册实例，
+// 失败才 fallback 构造。Go 的 tool.Tool 接口无法还原 TodoTool 基类（LoadTodos/SaveTodos
+// 在基类上），因此统一走 fallback 构造——语义等价：todos 文件路径相同（同一 workspace 的
+// todo 节点），读写同一持久层（偏差 #2 说明栏）。
+func (d *DeepAdapter) cancelPendingTodos(ctx context.Context, sessionID string) []map[string]any {
+	if d.instance == nil {
+		return nil
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).Any("panic", r).Str("session_id", sessionID).Msg("cancel pending todos failed")
+		}
+	}()
+
+	// fallback 构造：从 DeepConfig 的 workspace todo 节点构造 TodoTool
+	if d.instance.DeepConfig() == nil || d.instance.DeepConfig().Workspace == nil {
+		return nil
+	}
+	todoPath := d.instance.DeepConfig().Workspace.GetNodePath(hworkspace.WorkspaceNodeTODO)
+	if todoPath == nil {
+		return nil
+	}
+	var fs sysop.FsOperation
+	if d.sysOperation != nil {
+		fs = d.sysOperation.Fs()
+	}
+	_, todoBase := todo.CreateTodosTool(*todoPath, fs, d.resolveRuntimeLanguage(), "")
+	modifyTool := &todoBase
+
+	todos, err := modifyTool.LoadTodos(ctx, sessionID)
+	if err != nil || len(todos) == 0 {
+		return nil
+	}
+
+	// 收集非 completed/cancelled 的 ID
+	var idsToCancel []string
+	for _, item := range todos {
+		if item.Status != hschema.TodoStatusCompleted && item.Status != hschema.TodoStatusCancelled {
+			idsToCancel = append(idsToCancel, item.ID)
+		}
+	}
+
+	if len(idsToCancel) > 0 {
+		// Python: modify_tool._cancel_todos(ids, todos)（SDK 版内含 save）
+		// Go: CancelTodos 不含 save，外层显式两步（spec 偏差 #2）
+		updated, _, cErr := todo.CancelTodos(todos, idsToCancel)
+		if cErr != nil {
+			logger.Warn(logComponent).Err(cErr).Str("session_id", sessionID).Msg("cancel pending todos failed")
+			return nil
+		}
+		if sErr := modifyTool.SaveTodos(ctx, sessionID, updated); sErr != nil {
+			logger.Warn(logComponent).Err(sErr).Str("session_id", sessionID).Msg("cancel pending todos save failed")
+			return nil
+		}
+		logger.Info(logComponent).Str("session_id", sessionID).Int("cancelled_count", len(idsToCancel)).Msg("cancelled pending todos marked as cancelled")
+	}
+
+	// 重新加载并返回前端格式
+	updatedTodos, err := modifyTool.LoadTodos(ctx, sessionID)
+	if err != nil || len(updatedTodos) == 0 {
+		return nil
+	}
+	// formatTodosForFrontend 是 commrails 包非导出函数；
+	// 本地等价实现 formatTodosForFrontendLocal（映射逻辑逐字对齐 stream_event_emit.go:234）
+	return formatTodosForFrontendLocal(updatedTodos)
+}
+
+// formatTodosForFrontendLocal 前端 Todo 格式化（本地等价实现，
+// 对齐 commrails.formatTodosForFrontend —— 该函数非导出无法跨包引用）。
+func formatTodosForFrontendLocal(todosData []hschema.TodoItem) []map[string]any {
+	statusMapping := map[hschema.TodoStatus]string{
+		hschema.TodoStatusPending:    "pending",
+		hschema.TodoStatusInProgress: "in_progress",
+		hschema.TodoStatusCompleted:  "completed",
+	}
+
+	result := make([]map[string]any, 0, len(todosData))
+	for _, item := range todosData {
+		if item.Status == hschema.TodoStatusCancelled {
+			continue
+		}
+		statusStr, ok := statusMapping[item.Status]
+		if !ok {
+			statusStr = item.Status.String()
+		}
+		result = append(result, map[string]any{
+			"id":         item.ID,
+			"content":    item.Content,
+			"activeForm": item.ActiveForm,
+			"status":     statusStr,
+		})
+	}
+	return result
 }
 
 // HandleUserAnswer 处理用户回答（evolution 审批或权限审批）。
