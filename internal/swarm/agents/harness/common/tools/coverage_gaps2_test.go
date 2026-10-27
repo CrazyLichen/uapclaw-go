@@ -37,17 +37,17 @@ func TestResolveExecutionPlan_各显式shell(t *testing.T) {
 		t.Errorf("Linux cmd 应返回 nil plan: %v", plan)
 	}
 	// auto → bash（环境有 bash）
-	plan, _, resolved = resolveExecutionPlan("echo hi", "auto")
+	_, _, resolved = resolveExecutionPlan("echo hi", "auto")
 	if resolved != "bash" && resolved != "sh" {
 		t.Errorf("auto 应解析 bash/sh: %s", resolved)
 	}
 	// powershell 在 Linux：LookPath 失败 → 哨兵
-	plan, _, resolved = resolveExecutionPlan("Get-ChildItem", "powershell")
+	_, _, resolved = resolveExecutionPlan("Get-ChildItem", "powershell")
 	if resolved != "powershell" {
 		t.Errorf("powershell 分支异常: %s", resolved)
 	}
 	// 非法 shellType 回退 auto
-	plan, _, resolved = resolveExecutionPlan("echo hi", "bogus-shell")
+	_, _, resolved = resolveExecutionPlan("echo hi", "bogus-shell")
 	if resolved != "bash" && resolved != "sh" {
 		t.Errorf("非法 shellType 应回退 auto: %s", resolved)
 	}

@@ -79,7 +79,8 @@ func TestTripleMemory_Memory密封(t *testing.T) {
 	m := NewTripleMemory()
 	m.ExtendMemory(TripleFact{"A", "r1", "B"})
 	got := m.Memory()
-	got = append(got, TripleFact{"X", "y", "Z"})
+	// 显式丢弃 append 返回值——本用例只关心对返回 slice 追加不写穿内部状态
+	_ = append(got, TripleFact{"X", "y", "Z"})
 	assert.Equal(t, 1, m.Len(), "对返回值 append 后内部长度不应变化")
 	assert.Equal(t, []TripleFact{{"A", "r1", "B"}}, m.Memory())
 }

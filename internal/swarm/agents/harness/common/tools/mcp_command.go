@@ -320,9 +320,10 @@ func splitShellSegments(command string) []string {
 	for index < len(command) {
 		char := command[index]
 		if char == '"' || char == '\'' {
-			if quote == char {
+			switch quote {
+			case char:
 				quote = 0
-			} else if quote == 0 {
+			case 0:
 				quote = char
 			}
 		}
@@ -382,9 +383,10 @@ func firstShellToken(segment string) (string, bool) {
 	for i := 0; i < len(segment); i++ {
 		c := segment[i]
 		if c == '"' || c == '\'' {
-			if inQuote == c {
+			switch inQuote {
+			case c:
 				inQuote = 0
-			} else if inQuote == 0 {
+			case 0:
 				inQuote = c
 			}
 			token = append(token, c)
@@ -563,7 +565,7 @@ func runCommandBlocking(command string, timeoutSeconds int, workdir string, shel
 func runCommandBackground(command, workdir, shellType string) (int, string, string) {
 	plan, useShell, resolvedShell := resolveExecutionPlan(command, shellType)
 	if plan == nil {
-		return 0, "", fmt.Sprintf("requested shell is not available on this system")
+		return 0, "", "requested shell is not available on this system"
 	}
 
 	var cmd *exec.Cmd

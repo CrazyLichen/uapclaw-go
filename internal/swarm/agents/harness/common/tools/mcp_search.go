@@ -321,8 +321,8 @@ func httpDo(method, rawURL string, body io.Reader, headers map[string]string, ti
 
 	resp, data, err := doOnce(false)
 	if err != nil {
-		// 无显式代理时降级重试（对齐 Python ProxyError → trust_env=False 重试）
-		if !(proxyURL != "" && !shouldBypassFreeSearchProxy(rawURL)) {
+		// 无显式代理或命中绕过列表时降级重试（对齐 Python ProxyError → trust_env=False 重试）
+		if proxyURL == "" || shouldBypassFreeSearchProxy(rawURL) {
 			resp, data, err = doOnce(true)
 		}
 	}
