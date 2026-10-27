@@ -9,14 +9,16 @@
 // 文件目录：
 //
 //	tools/
-//	├── doc.go           # 包文档
-//	├── wiki_tools.go    # wiki_ingest/wiki_query/wiki_lint + LLMWiki + sourceManifest
-//	├── image_gen.go     # generate_image + invokeModelImageGeneration + ApplyImageGenModelConfigFromYAML
-//	├── mcp_toolkits.go  # GetMcpTools 聚合器
-//	├── mcp_search.go    # mcp_free_search + mcp_paid_search + 4 provider
-//	├── mcp_web_fetch.go # mcp_fetch_webpage + Jina Reader 兜底
-//	├── mcp_command.go   # mcp_exec_command + 安全检查 + 后台进程
-//	└── todo_compat.go   # compatibleUpdateTodos + NewCompatibleTodoModifyTool
+//	├── doc.go                 # 包文档
+//	├── wiki_tools.go          # wiki_ingest/wiki_query/wiki_lint + LLMWiki + sourceManifest
+//	├── image_gen.go           # generate_image + invokeModelImageGeneration + ApplyImageGenModelConfigFromYAML
+//	├── mcp_toolkits.go        # GetMcpTools 聚合器
+//	├── mcp_search.go          # mcp_free_search + mcp_paid_search + 4 provider
+//	├── mcp_web_fetch.go       # mcp_fetch_webpage + Jina Reader 兜底
+//	├── mcp_command.go         # mcp_exec_command + 安全检查 + 后台进程
+//	├── mcp_command_windows.go # Windows 专属 shell 探测（build tag 隔离）
+//	├── mcp_command_other.go   # 非 Windows 平台桩（build tag 隔离）
+//	└── todo_compat.go         # compatibleUpdateTodos + NewCompatibleTodoModifyTool
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/tools/
 package tools
