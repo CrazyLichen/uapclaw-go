@@ -42,7 +42,7 @@ type sourceManifest struct {
 	path string
 	// sysOp 系统操作（nil → 本地 os 分支）
 	sysOp sys_operation.SysOperation
-	// data sha256 → entry
+	// data 源文件 sha256 → manifest 条目 的映射
 	data map[string]wikiManifestEntry
 }
 
@@ -360,15 +360,15 @@ func newLLMWiki(ctx context.Context, workspaceDir string, model *llm.Model, sysO
 
 	// Python: final_rails = rails if rails is not None else [SysOperationRail()]
 	agent, err := harness.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
-		Model:           model,
-		Card:            card,
-		SystemPrompt:    systemPrompt,
-		Rails:           []agentinterfaces.AgentRail{rails.NewSysOperationRail()},
-		EnableTaskLoop:  true,
-		MaxIterations:   15,
-		Workspace:       hworkspace.NewWorkspace(workspaceDir, language),
-		Language:        language,
-		SysOperation:    sysOp, // nil → CreateDeepAgent 内部默认
+		Model:               model,
+		Card:                card,
+		SystemPrompt:        systemPrompt,
+		Rails:               []agentinterfaces.AgentRail{rails.NewSysOperationRail()},
+		EnableTaskLoop:      true,
+		MaxIterations:       15,
+		Workspace:           hworkspace.NewWorkspace(workspaceDir, language),
+		Language:            language,
+		SysOperation:        sysOp, // nil → CreateDeepAgent 内部默认
 		AutoCreateWorkspace: true,
 	})
 	if err != nil {

@@ -98,6 +98,11 @@ const (
 	perplexityAPIURLDefault = "https://api.perplexity.ai/chat/completions"
 	// jinaDeepSearchAPIURL jina deepsearch 固定 API 地址
 	jinaDeepSearchAPIURL = "https://deepsearch.jina.ai/v1/chat/completions"
+
+	// placeholderTargetURL 代理绕过判断的探测 URL（代理配置只对搜索目标生效，
+	// 绕过列表按搜索目标域名判断——生产调用方 httpDo 传入真实 URL，
+	// newFreeSearchHTTPClient 构造时以空 URL 预判一次）。
+	placeholderTargetURL = ""
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -274,10 +279,6 @@ func newFreeSearchHTTPClient(verify bool, proxyURL string) *http.Client {
 	}
 	return &http.Client{Transport: transport}
 }
-
-// placeholderTargetURL 代理绕过判断的探测 URL（代理配置只对搜索目标生效，
-// 绕过列表按搜索目标域名判断——生产调用方 httpDo 传入真实 URL）。
-const placeholderTargetURL = ""
 
 // httpDo 执行 HTTP 请求。
 // Python: _http_request —— "Try normal request first; retry without env proxies on ProxyError."

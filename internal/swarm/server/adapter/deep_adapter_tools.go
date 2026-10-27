@@ -12,8 +12,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

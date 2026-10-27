@@ -11,10 +11,34 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
+
+// setupImageGenWorkspaceEnv 隔离 Agent 工作区目录（测试辅助）。
+//
+// 落盘路径 workspace.AgentWorkspaceDir() 在 CI 等未初始化环境不存在，
+// 注入 UAPCLAW_DATA_DIR 指向临时目录并重置路径缓存，测试后恢复。
+// 需同时创建 config 子目录（模拟已初始化，避免回退 resources）
+// 与 agent/workspace 落盘目录（os.WriteFile 不建父目录）。
+func setupImageGenWorkspaceEnv(t *testing.T) {
+	t.Helper()
+	wsRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(wsRoot, "config"), 0o755); err != nil {
+		t.Fatalf("创建 config 目录失败: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(wsRoot, "agent", "workspace"), 0o755); err != nil {
+		t.Fatalf("创建 agent workspace 目录失败: %v", err)
+	}
+	t.Setenv("UAPCLAW_DATA_DIR", wsRoot)
+	upath.ResetCache()
+	t.Cleanup(func() {
+		os.Unsetenv("UAPCLAW_DATA_DIR")
+		upath.ResetCache()
+	})
+}
 
 // fakeImageGenClient 测试用图片生成假客户端
 type fakeImageGenClient struct {
@@ -99,6 +123,7 @@ func TestInvokeModelImageGeneration_无key报错(t *testing.T) {
 // TestInvokeModelImageGeneration_base64落盘 验证 base64 分支落盘
 // Python: image_tools.py L383-392
 func TestInvokeModelImageGeneration_base64落盘(t *testing.T) {
+	setupImageGenWorkspaceEnv(t)
 	fakeClient := &fakeImageGenClient{
 		resp: &llmschema.ImageGenerationResponse{ImagesBase64: []string{base64.StdEncoding.EncodeToString([]byte("pngdata"))}},
 	}
@@ -128,6 +153,7 @@ func TestInvokeModelImageGeneration_base64落盘(t *testing.T) {
 // TestInvokeModelImageGeneration_URL下载 验证 URL 分支下载落盘 + original_url
 // Python: image_tools.py L393-409
 func TestInvokeModelImageGeneration_URL下载(t *testing.T) {
+	setupImageGenWorkspaceEnv(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 验证固定 UA（对齐 Python requests.get(headers={"User-Agent": ua})）
 		if !strings.Contains(r.Header.Get("User-Agent"), "Chrome/91.0.4472.124") {
@@ -251,6 +277,7 @@ func TestApplyImageGenModelConfigFromYAML_非dict配置(t *testing.T) {
 // TestGenerateImage工具_卡片与成功文案 验证工具卡片名称和成功多行文案
 // Python: generate_image (image_tools.py L417-480)
 func TestGenerateImage工具_卡片与成功文案(t *testing.T) {
+	setupImageGenWorkspaceEnv(t)
 	if GenerateImage.Card().Name != "generate_image" {
 		t.Errorf("工具名异常: %s", GenerateImage.Card().Name)
 	}
@@ -284,6 +311,7 @@ func TestGenerateImage工具_卡片与成功文案(t *testing.T) {
 // TestGenerateImage工具_SaveDir搬移 验证 save_dir 参数的文件搬移
 // Python: image_tools.py L459-465
 func TestGenerateImage工具_SaveDir搬移(t *testing.T) {
+	setupImageGenWorkspaceEnv(t)
 	fakeClient := &fakeImageGenClient{
 		resp: &llmschema.ImageGenerationResponse{ImagesBase64: []string{base64.StdEncoding.EncodeToString([]byte("pngdata"))}},
 	}

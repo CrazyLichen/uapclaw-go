@@ -40,8 +40,8 @@ import (
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commonprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/prompt"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
-	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -540,10 +540,10 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		AudioModelConfig:       d.audioModelConfig,
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
 		// todo_compat 兼容层注入（对齐 Python interface_deep.py:230 install_todo_modify_compat_patch 模块级 patch）
-		TodoModifyFactory:      swarmtools.NewCompatibleTodoModifyTool,
-		AutoCreateWorkspace:    false,                                             // Python: 硬编码 false
-		CompletionTimeout:      paramsFloat(config, "completion_timeout", 3600.0), // Python: config.get("completion_timeout", 3600.0)
-		ContextEngineConfig:    d.deepAgentContextEngineConfig(config),            // Python: context_engine_config=_deep_agent_context_engine_config(config)
+		TodoModifyFactory:   swarmtools.NewCompatibleTodoModifyTool,
+		AutoCreateWorkspace: false,                                             // Python: 硬编码 false
+		CompletionTimeout:   paramsFloat(config, "completion_timeout", 3600.0), // Python: config.get("completion_timeout", 3600.0)
+		ContextEngineConfig: d.deepAgentContextEngineConfig(config),            // Python: context_engine_config=_deep_agent_context_engine_config(config)
 	}
 	// 步骤 17 回填：SysOperation
 	params.SysOperation = sysOpInstance
@@ -1535,34 +1535,6 @@ func (d *DeepAdapter) cancelPendingTodos(ctx context.Context, sessionID string) 
 	return formatTodosForFrontendLocal(updatedTodos)
 }
 
-// formatTodosForFrontendLocal 前端 Todo 格式化（本地等价实现，
-// 对齐 commrails.formatTodosForFrontend —— 该函数非导出无法跨包引用）。
-func formatTodosForFrontendLocal(todosData []hschema.TodoItem) []map[string]any {
-	statusMapping := map[hschema.TodoStatus]string{
-		hschema.TodoStatusPending:    "pending",
-		hschema.TodoStatusInProgress: "in_progress",
-		hschema.TodoStatusCompleted:  "completed",
-	}
-
-	result := make([]map[string]any, 0, len(todosData))
-	for _, item := range todosData {
-		if item.Status == hschema.TodoStatusCancelled {
-			continue
-		}
-		statusStr, ok := statusMapping[item.Status]
-		if !ok {
-			statusStr = item.Status.String()
-		}
-		result = append(result, map[string]any{
-			"id":         item.ID,
-			"content":    item.Content,
-			"activeForm": item.ActiveForm,
-			"status":     statusStr,
-		})
-	}
-	return result
-}
-
 // HandleUserAnswer 处理用户回答（evolution 审批或权限审批）。
 //
 // Python: JiuWenClawDeepAdapter.handle_user_answer() (line 3579-3605)
@@ -1833,6 +1805,34 @@ func EnsurePersistentCheckpointer() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// formatTodosForFrontendLocal 前端 Todo 格式化（本地等价实现，
+// 对齐 commrails.formatTodosForFrontend —— 该函数非导出无法跨包引用）。
+func formatTodosForFrontendLocal(todosData []hschema.TodoItem) []map[string]any {
+	statusMapping := map[hschema.TodoStatus]string{
+		hschema.TodoStatusPending:    "pending",
+		hschema.TodoStatusInProgress: "in_progress",
+		hschema.TodoStatusCompleted:  "completed",
+	}
+
+	result := make([]map[string]any, 0, len(todosData))
+	for _, item := range todosData {
+		if item.Status == hschema.TodoStatusCancelled {
+			continue
+		}
+		statusStr, ok := statusMapping[item.Status]
+		if !ok {
+			statusStr = item.Status.String()
+		}
+		result = append(result, map[string]any{
+			"id":         item.ID,
+			"content":    item.Content,
+			"activeForm": item.ActiveForm,
+			"status":     statusStr,
+		})
+	}
+	return result
+}
 
 // getSendPushFunc 获取推送函数。优先使用实例级 sendPushFunc，回退到 defaultSendPushFunc。
 func (d *DeepAdapter) getSendPushFunc() func(ctx context.Context, msg map[string]any) error {

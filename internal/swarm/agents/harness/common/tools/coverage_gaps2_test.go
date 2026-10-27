@@ -148,7 +148,7 @@ func TestDefaultImageGenModelBuilder_构造与凭据(t *testing.T) {
 // TestGetModelConfigTyped_分支 验证 models.{type}.model_config 提取。
 // Python: _get_model_config (multimodal_config.py L28-61)
 func TestGetModelConfigTyped_分支(t *testing.T) {
-	// nil configBase
+	// nil configBase 空配置基线
 	if got := getModelConfigTyped(nil, "image_gen"); len(got) != 0 {
 		t.Errorf("nil 应返回空: %v", got)
 	}

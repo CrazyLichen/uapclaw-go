@@ -285,10 +285,10 @@ func TestShouldBypassFreeSearchProxy_命中(t *testing.T) {
 // Python: _engine_display_name（search_tools.py）
 func TestEngineDisplayName_映射(t *testing.T) {
 	cases := map[string]string{
-		"duckduckgo":       "DuckDuckGo",
-		"duckduckgo-jina":  "DuckDuckGo (via jina.ai)",
-		"bing":             "Bing",
-		"unknown-engine":   "unknown-engine",
+		"duckduckgo":      "DuckDuckGo",
+		"duckduckgo-jina": "DuckDuckGo (via jina.ai)",
+		"bing":            "Bing",
+		"unknown-engine":  "unknown-engine",
 	}
 	for engine, want := range cases {
 		if got := engineDisplayName(engine); got != want {

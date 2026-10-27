@@ -37,7 +37,7 @@ func TestSourceManifest_去重与损坏容错(t *testing.T) {
 	if entry == nil || (*entry)["name"] != "a.txt" {
 		t.Errorf("entry 异常: %v", entry)
 	}
-	// isKnown
+	// isKnown 已知哈希判断
 	if !m.isKnown(sha) || m.isKnown("unknown-sha") {
 		t.Error("isKnown 异常")
 	}

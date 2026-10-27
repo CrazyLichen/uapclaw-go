@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )

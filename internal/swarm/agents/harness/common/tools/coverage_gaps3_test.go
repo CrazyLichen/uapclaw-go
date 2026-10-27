@@ -142,7 +142,7 @@ func TestDecodeWithEncoding_多编码(t *testing.T) {
 	if got, err := decodeWithEncoding(gbkBytes, "gbk"); err != nil || got != "中文" {
 		t.Errorf("gbk 异常: %q %v", got, err)
 	}
-	// Big5
+	// Big5 中文
 	big5Bytes := []byte{0xA4, 0xA4, 0xA4, 0xE5} // "中文" Big5
 	if got, err := decodeWithEncoding(big5Bytes, "big5"); err != nil || got != "中文" {
 		t.Errorf("big5 异常: %q %v", got, err)
