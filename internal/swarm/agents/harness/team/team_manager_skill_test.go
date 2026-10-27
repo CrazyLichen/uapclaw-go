@@ -1,6 +1,7 @@
 package team
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -206,12 +207,12 @@ func TestRegisterTeamLiveRail_幂等注册与反注册(t *testing.T) {
 	}
 
 	// 反注册：清空后 map 键删除
-	mgr.unregisterLiveRail("sess-lr", rail)
+	mgr.unregisterLiveRail(context.Background(), "sess-lr", rail)
 	if _, ok := mgr.teamLiveRails["sess-lr"]; ok {
 		t.Fatalf("live rails entry should be removed when empty")
 	}
 	// 反注册不存在的 session：no-op
-	mgr.unregisterLiveRail("sess-missing", rail)
+	mgr.unregisterLiveRail(context.Background(), "sess-missing", rail)
 }
 
 // TestDrainTeamSkillEvents_无rail返回空 未注册 rail 时返回空切片。
@@ -237,7 +238,7 @@ func TestUpdateEvolutionConfig_热更新开关(t *testing.T) {
 	mgr.RegisterTeamLiveRail("sess-ue", agent, createRail)
 
 	// skill_create 关闭（默认 False 时 evolution skill_create_enabled 未开启）→ create rail 反注册
-	mgr.UpdateEvolutionConfig(map[string]any{})
+	mgr.UpdateEvolutionConfig(context.Background(), map[string]any{})
 
 	if _, ok := mgr.teamSkillCreateRails["sess-ue"]; ok {
 		t.Fatalf("create rail should be unregistered when skill_create disabled")
@@ -323,7 +324,7 @@ react:
 	mgr.RegisterTeamRailContext("sess-bm", ctx)
 
 	// 调用被测函数：仅挂载 skill create rail
-	mgr.buildAndMountMemberRailsForContext("sess-bm", ctx,
+	mgr.buildAndMountMemberRailsForContext(context.Background(), "sess-bm", ctx,
 		false /* mountTeamSkillRail */, true /* mountTeamSkillCreateRail */, false /* mountSkillEvolutionRail */)
 
 	// agent.AddRail 应被调用（TeamSkillCreateRail 挂载到 agent）
@@ -381,7 +382,7 @@ react:
 	}
 	mgr.RegisterTeamRailContext("sess-ev", ctx)
 
-	mgr.buildAndMountMemberRailsForContext("sess-ev", ctx,
+	mgr.buildAndMountMemberRailsForContext(context.Background(), "sess-ev", ctx,
 		true /* mountTeamSkillRail */, false /* mountTeamSkillCreateRail */, false /* mountSkillEvolutionRail */)
 
 	// TeamSkillEvolutionRail 注册
@@ -440,7 +441,7 @@ react:
 	}
 	mgr.RegisterTeamRailContext("sess-cfg", ctx)
 
-	mgr.buildAndMountMemberRailsForContext("sess-cfg", ctx,
+	mgr.buildAndMountMemberRailsForContext(context.Background(), "sess-cfg", ctx,
 		false /* mountTeamSkillRail */, true /* mountTeamSkillCreateRail */, false /* mountSkillEvolutionRail */)
 
 	// 最新 config 含 skill_create → TeamSkillCreateRail 成功挂载
@@ -493,7 +494,7 @@ react:
 	}
 	mgr.RegisterTeamRailContext("sess-member", ctx)
 
-	mgr.buildAndMountMemberRailsForContext("sess-member", ctx,
+	mgr.buildAndMountMemberRailsForContext(context.Background(), "sess-member", ctx,
 		false /* mountTeamSkillRail */, false /* mountTeamSkillCreateRail */, true /* mountSkillEvolutionRail */)
 
 	// member skill evolution rails 表注册
@@ -532,7 +533,7 @@ func TestBuildAndMountMemberRailsForContext_config加载失败返回nil(t *testi
 	}
 	mgr.RegisterTeamRailContext("sess-cfgerr", ctx)
 
-	tsr, scr := mgr.buildAndMountMemberRailsForContext("sess-cfgerr", ctx, true, true, true)
+	tsr, scr := mgr.buildAndMountMemberRailsForContext(context.Background(), "sess-cfgerr", ctx, true, true, true)
 	if tsr != nil || scr != nil {
 		t.Fatalf("config load failure should return (nil, nil), got (%v, %v)", tsr, scr)
 	}
@@ -579,7 +580,7 @@ react:
 	mgr.RegisterTeamRailContext("sess-ue2", ctx)
 
 	// UpdateEvolutionConfig 传 skill_create=true → 步骤 6 触发挂载
-	mgr.UpdateEvolutionConfig(map[string]any{
+	mgr.UpdateEvolutionConfig(context.Background(), map[string]any{
 		"react": map[string]any{"evolution": map[string]any{"skill_create": true}},
 	})
 
@@ -587,7 +588,7 @@ react:
 		t.Fatalf("UpdateEvolutionConfig should mount TeamSkillCreateRail for session missing it")
 	}
 	// 已挂载后再次调用：幂等跳过（sessionID 已在 teamSkillCreateRails 中）
-	mgr.UpdateEvolutionConfig(map[string]any{
+	mgr.UpdateEvolutionConfig(context.Background(), map[string]any{
 		"react": map[string]any{"evolution": map[string]any{"skill_create": true}},
 	})
 	if len(agent.rails) != 1 {

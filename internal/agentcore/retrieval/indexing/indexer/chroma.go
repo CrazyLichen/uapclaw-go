@@ -357,7 +357,10 @@ func (ci *ChromaIndexer) BuildIndex(
 
 // UpdateIndex 更新索引。先删后建。
 //
-// 对齐 Python ChromaIndexer.update_index。
+// 对齐 Python ChromaIndexer.update_index（chroma_indexer.py L198-215）。
+// S-11: 对齐 Python 整体 try/except 吞错语义——delete 或 build 任一失败均
+// 记录 Error 日志后返回 (false, nil)，不让异常传播阻断调用方
+// （Python: except Exception → logger.error → return False）。
 func (ci *ChromaIndexer) UpdateIndex(
 	ctx context.Context,
 	chunks []common.TextChunk,
@@ -366,24 +369,38 @@ func (ci *ChromaIndexer) UpdateIndex(
 	embedModel embedding.BaseEmbedding,
 	opts ...IndexOption,
 ) (bool, error) {
-	// 对齐 Python: await self.delete_index(doc_id, config.index_name)
-	//
-	// M-26: 对齐 Python 吞错语义——Python update_index 对 delete_index 失败
-	// 的处理是记录日志后继续 rebuild（底层 delete_index 自身已吞掉多数异常
-	// 返回 False），不会让旧数据删除失败阻断新数据写入。
-	// Go 原实现直接中断 rebuild，旧数据删除失败时新数据也无法写入，语义偏离。
-	_, err := ci.DeleteIndex(ctx, docID, config.IndexName)
-	if err != nil {
-		logger.Warn(logComponent).
-			Str("event_type", "INDEXING_WARN").
-			Str("doc_id", docID).
-			Str("index_name", config.IndexName).
-			Err(err).
-			Msg("update index: failed to delete old data, continuing with rebuild")
-	}
+	ok, err := func() (ok bool, buildErr error) {
+		defer func() {
+			if buildErr != nil {
+				// 对齐 Python: except Exception as e: logger.error(f"Failed to update index: {e}")
+				logger.Error(logComponent).
+					Str("event_type", "INDEXING_ERROR").
+					Str("doc_id", docID).
+					Str("index_name", config.IndexName).
+					Err(buildErr).
+					Msg("Failed to update index")
+				buildErr = nil
+				ok = false
+			}
+		}()
+		// 对齐 Python: await self.delete_index(doc_id, config.index_name)
+		//
+		// M-26: 对齐 Python 吞错语义——Python update_index 对 delete_index 失败
+		// 的处理是记录日志后继续 rebuild（底层 delete_index 自身已吞掉多数异常
+		// 返回 False），不会让旧数据删除失败阻断新数据写入。
+		if _, delErr := ci.DeleteIndex(ctx, docID, config.IndexName); delErr != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "INDEXING_WARN").
+				Str("doc_id", docID).
+				Str("index_name", config.IndexName).
+				Err(delErr).
+				Msg("update index: failed to delete old data, continuing with rebuild")
+		}
 
-	// 对齐 Python: return await self.build_index(chunks, config, embed_model, **kwargs)
-	return ci.BuildIndex(ctx, chunks, config, embedModel, opts...)
+		// 对齐 Python: return await self.build_index(chunks, config, embed_model, **kwargs)
+		return ci.BuildIndex(ctx, chunks, config, embedModel, opts...)
+	}()
+	return ok, err
 }
 
 // DeleteIndex 删除索引。ChromaDB 不支持复杂过滤删除，需先查后删。

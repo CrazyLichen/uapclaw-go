@@ -16,6 +16,12 @@ import (
 // 由 SpawnManager 注入具体实现，封装 spec 解析 / card 构建 / 配置全流程。
 type AgentFactory func(runtimeCtx atschema.TeamRuntimeContext) (SpawnableAgent, error)
 
+// RunTeamMemberFn 团队成员执行函数类型。
+// T-14: 替代原 any 注入缝——具体类型使注入时类型错误在编译期暴露。
+// spawn 不能 import agent 包（agent → spawn 已存在，反向成环），
+// 参数用本包 SpawnableAgent 接口；注入侧（runtime/manager.go）负责收窄到 *agent.TeamAgent。
+type RunTeamMemberFn func(ctx context.Context, agentTeam SpawnableAgent, inputs map[string]any, sessionID string) (map[string]any, error)
+
 // inProcessResult S-38: goroutine 执行结果载体。
 // 对齐 Python asyncio task 的 result/exception 存储。
 type inProcessResult struct {
@@ -39,14 +45,14 @@ const (
 
 var (
 	// runTeamMemberFunc 团队成员执行函数（由 runtime 包注入，打破 spawn ↔ runtime 循环依赖）。
-	// 签名：func(ctx context.Context, agentTeam any, inputs any, sess any) (map[string]any, error)
-	runTeamMemberFunc any
+	// T-14: 具体函数类型（原 any + 运行时断言）。
+	runTeamMemberFunc RunTeamMemberFn
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetRunTeamMemberFunc 设置团队成员执行函数（由 runtime 包注入）。
-func SetRunTeamMemberFunc(fn any) {
+func SetRunTeamMemberFunc(fn RunTeamMemberFn) {
 	runTeamMemberFunc = fn
 }
 
@@ -102,31 +108,25 @@ func InProcessSpawn(
 		// Python: await Runner.run_agent_team(teammate, inputs, member=True, session=session_id)
 		// 回填（#9.85）：调用 TeamRunner 的 Member 路径（通过函数注入打破循环依赖）
 		// S-38: 捕获 result/err 通过 resultCh 传播，不再静默吞掉
+		// T-14: 注入缝已是具体函数类型，无需运行时类型断言（类型错误在注入时编译期暴露）
 		var result inProcessResult
 		if runTeamMemberFunc != nil {
-			if runFn, ok := runTeamMemberFunc.(func(context.Context, any, any, any) (map[string]any, error)); ok {
-				res, err := runFn(runCtx, teammate, inputs, sessionID)
-				// 对齐 Python: 异常存入 task，wait_for_completion 时可读出
-				result = inProcessResult{res: res, err: err}
-				if err != nil {
-					// Python: cancelled → info；crashed → error 日志（re-raise 语义由 resultCh 承载）
-					if runCtx.Err() != nil {
-						logger.Info(logComponent).
-							Str("member_name", runtimeCtx.MemberName).
-							Err(err).
-							Msg("[inprocess] teammate execution cancelled")
-					} else {
-						logger.Error(logComponent).
-							Str("member_name", runtimeCtx.MemberName).
-							Err(err).
-							Msg("[inprocess] teammate execution failed")
-					}
+			res, err := runTeamMemberFunc(runCtx, teammate, inputs, sessionID)
+			// 对齐 Python: 异常存入 task，wait_for_completion 时可读出
+			result = inProcessResult{res: res, err: err}
+			if err != nil {
+				// Python: cancelled → info；crashed → error 日志（re-raise 语义由 resultCh 承载）
+				if runCtx.Err() != nil {
+					logger.Info(logComponent).
+						Str("member_name", runtimeCtx.MemberName).
+						Err(err).
+						Msg("[inprocess] teammate execution cancelled")
+				} else {
+					logger.Error(logComponent).
+						Str("member_name", runtimeCtx.MemberName).
+						Err(err).
+						Msg("[inprocess] teammate execution failed")
 				}
-			} else {
-				logger.Error(logComponent).
-					Str("member_name", runtimeCtx.MemberName).
-					Any("func_type", fmt.Sprintf("%T", runTeamMemberFunc)).
-					Msg("[inprocess] runTeamMemberFunc type assertion failed, teammate cannot execute")
 			}
 		} else {
 			logger.Error(logComponent).

@@ -6,20 +6,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
-// mockSession 用于测试的 mock session 对象
-type mockSession struct {
-	sessionID string
-}
+// ──────────────────────────── 结构体 ────────────────────────────
 
-// GetSessionID 返回 mock session ID
-func (m *mockSession) GetSessionID() string {
-	return m.sessionID
-}
+// ──────────────────────────── 枚举 ────────────────────────────
 
-// ClearSession 实现 SessionFacade 接口
-func (m *mockSession) ClearSession(_ context.Context) {}
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newTestAgentTeamSession 构造带指定 sessionID 的 *session.AgentTeamSession。
+// M-29: TeamSession 存储收窄到具体类型后，测试统一使用真实 AgentTeamSession。
+func newTestAgentTeamSession(sessionID string) *session.AgentTeamSession {
+	return session.NewAgentTeamSession(session.WithAgentTeamSessionID(sessionID))
+}
 
 // TestNewSessionManager_基本构造 测试构造函数
 // Python: SessionManager.__init__(state, configurator, recovery_manager)
@@ -39,7 +45,7 @@ func TestSessionManager_TeamSession(t *testing.T) {
 	m := NewSessionManager(state, configurator, nil)
 
 	assert.Nil(t, m.TeamSession())
-	sess := &mockSession{sessionID: "sess-1"}
+	sess := newTestAgentTeamSession("sess-1")
 	m.SetTeamSession(sess)
 	assert.Equal(t, sess, m.TeamSession())
 }
@@ -53,7 +59,7 @@ func TestBindSession_基本绑定(t *testing.T) {
 	configurator := NewAgentConfigurator(nil)
 	m := NewSessionManager(state, configurator, nil)
 
-	sess := &mockSession{sessionID: "sess-123"}
+	sess := newTestAgentTeamSession("sess-123")
 	ctx, err := m.BindSession(context.Background(), sess)
 
 	assert.NoError(t, err)
@@ -71,7 +77,7 @@ func TestBindSession_返回新Ctx(t *testing.T) {
 	configurator := NewAgentConfigurator(nil)
 	m := NewSessionManager(state, configurator, nil)
 
-	sess := &mockSession{sessionID: "new-ctx"}
+	sess := newTestAgentTeamSession("new-ctx")
 	newCtx, err := m.BindSession(context.Background(), sess)
 
 	assert.NoError(t, err)
@@ -90,17 +96,34 @@ func TestBindSession_重复绑定(t *testing.T) {
 	configurator := NewAgentConfigurator(nil)
 	m := NewSessionManager(state, configurator, nil)
 
-	sess1 := &mockSession{sessionID: "sess-1"}
+	sess1 := newTestAgentTeamSession("sess-1")
 	ctx1, err := m.BindSession(context.Background(), sess1)
 	assert.NoError(t, err)
 
-	sess2 := &mockSession{sessionID: "sess-2"}
+	sess2 := newTestAgentTeamSession("sess-2")
 	ctx2, err := m.BindSession(ctx1, sess2)
 	assert.NoError(t, err)
 
 	assert.Equal(t, "sess-2", m.sessionState.GetSessionID())
 	assert.Equal(t, sess2, state.TeamSession)
 	assert.Equal(t, "sess-2", agentteams.GetSessionID(ctx2))
+}
+
+// TestBindSession_字符串入参不存session M-29 收窄语义验证：
+// 非 *session.AgentTeamSession 输入（如 string sessionID）存 nil（对齐 Python None），
+// 但 sessionID 仍正常设置。
+// Python: state.team_session = session if isinstance(session, AgentTeamSession) else None
+func TestBindSession_字符串入参不存session(t *testing.T) {
+	state := NewTeamAgentState()
+	configurator := NewAgentConfigurator(nil)
+	m := NewSessionManager(state, configurator, nil)
+
+	_, err := m.BindSession(context.Background(), "str-sess-id")
+
+	assert.NoError(t, err)
+	assert.Equal(t, "str-sess-id", m.sessionState.GetSessionID())
+	// M-29: string 不是 AgentTeamSession → TeamSession 存 nil
+	assert.Nil(t, state.TeamSession)
 }
 
 // TestReleaseSession_释放 测试 sessionID 清空 + teamSession 置 nil
@@ -112,7 +135,7 @@ func TestReleaseSession_释放(t *testing.T) {
 	configurator := NewAgentConfigurator(nil)
 	m := NewSessionManager(state, configurator, nil)
 
-	sess := &mockSession{sessionID: "sess-1"}
+	sess := newTestAgentTeamSession("sess-1")
 	_, _ = m.BindSession(context.Background(), sess)
 
 	m.ReleaseSession(context.Background())
@@ -151,7 +174,7 @@ func TestSessionManager_三态转换(t *testing.T) {
 	assert.Nil(t, state.TeamSession)
 
 	// → 完整绑定（Fully-bound）
-	sess := &mockSession{sessionID: "sess-1"}
+	sess := newTestAgentTeamSession("sess-1")
 	_, _ = m.BindSession(context.Background(), sess)
 	assert.Equal(t, "sess-1", m.sessionState.GetSessionID())
 	assert.Equal(t, sess, state.TeamSession)
@@ -162,7 +185,7 @@ func TestSessionManager_三态转换(t *testing.T) {
 	assert.Nil(t, state.TeamSession)
 
 	// → 再次完整绑定（Fully-bound again）
-	sess2 := &mockSession{sessionID: "sess-2"}
+	sess2 := newTestAgentTeamSession("sess-2")
 	_, _ = m.BindSession(context.Background(), sess2)
 	assert.Equal(t, "sess-2", m.sessionState.GetSessionID())
 	assert.Equal(t, sess2, state.TeamSession)
@@ -176,7 +199,7 @@ func TestResumeForNewSession_基本流程(t *testing.T) {
 	configurator := NewAgentConfigurator(nil)
 	m := NewSessionManager(state, configurator, nil)
 
-	sess := &mockSession{sessionID: "resume-sess"}
+	sess := newTestAgentTeamSession("resume-sess")
 	newCtx, err := m.ResumeForNewSession(context.Background(), sess)
 
 	assert.NoError(t, err)
@@ -192,7 +215,7 @@ func TestRecoverForExistingSession_基本流程(t *testing.T) {
 	configurator := NewAgentConfigurator(nil)
 	m := NewSessionManager(state, configurator, nil)
 
-	sess := &mockSession{sessionID: "recover-sess"}
+	sess := newTestAgentTeamSession("recover-sess")
 	newCtx, err := m.RecoverForExistingSession(context.Background(), sess)
 
 	assert.NoError(t, err)
@@ -208,7 +231,7 @@ func TestExtractSessionID_空session(t *testing.T) {
 // TestExtractSessionID_有GetSessionID 测试含 GetSessionID 方法的对象
 // Python: session.get_session_id()
 func TestExtractSessionID_有GetSessionID(t *testing.T) {
-	sess := &mockSession{sessionID: "extracted-123"}
+	sess := newTestAgentTeamSession("extracted-123")
 	assert.Equal(t, "extracted-123", extractSessionID(sess))
 }
 

@@ -112,13 +112,13 @@ func (h *HumanAgentInbox) Send(ctx context.Context, body string, to *string, sen
 
 	// Python 步骤 3: if to is None: return await self._drive_agent(...)
 	if to == nil {
-		return h.driveAgent(body, resolvedSender)
+		return h.driveAgent(ctx, body, resolvedSender)
 	}
 
 	// Python 步骤 4: if to in BROADCAST_TARGETS: broadcast
 	if BroadcastTargets[*to] {
 		// Python: msg_id = await self._mm.broadcast_message(content=body, from_member_name=resolved_sender)
-		ctx := context.Background()
+		// M-27: 使用入参 ctx（原局部 context.Background() 遮蔽了入参，切断取消传播）
 		msgID, err := h.messageManager.BroadcastMessage(ctx, body, resolvedSender)
 		if err != nil {
 			return NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
@@ -203,7 +203,9 @@ func (h *HumanAgentInbox) resolveSender(sender *string) (string, error) {
 //	Python: 3. if agent is None: return DeliverResult.failure("agent_unavailable")
 //	Python: 4. await agent.deliver_input(body)
 //	Python: 5. return DeliverResult.success(None)
-func (h *HumanAgentInbox) driveAgent(body string, sender string) (*DeliverResult, error) {
+//
+// M-27: 加 ctx 首参（原 context.Background() 切断取消传播）。
+func (h *HumanAgentInbox) driveAgent(ctx context.Context, body string, sender string) (*DeliverResult, error) {
 	// Python 步骤 1
 	if h.agentLookup == nil {
 		logger.Warn(logComponent).Str("sender", sender).
@@ -223,7 +225,7 @@ func (h *HumanAgentInbox) driveAgent(body string, sender string) (*DeliverResult
 
 	// Python 步骤 4-5
 	// ✅(#9.55): 通过 agentLookup 返回的 TeamAgent.DeliverInput 实现投递
-	if err := agent.DeliverInput(context.Background(), body, true); err != nil {
+	if err := agent.DeliverInput(ctx, body, true); err != nil {
 		return NewDeliverResultFailure("deliver_input_failed:" + err.Error()), nil
 	}
 	return NewDeliverResultSuccess(nil), nil
@@ -231,8 +233,8 @@ func (h *HumanAgentInbox) driveAgent(body string, sender string) (*DeliverResult
 
 // memberExists 成员存在性检查。
 // Python: HumanAgentInbox._member_exists(name)
-func (h *HumanAgentInbox) memberExists(name string) (bool, error) {
-	ctx := context.Background()
+// M-27: 加 ctx 首参——GetMember 查询使用调用方 context。
+func (h *HumanAgentInbox) memberExists(ctx context.Context, name string) (bool, error) {
 	member, _ := h.team.GetMember(ctx, name)
 	return member != nil, nil
 }

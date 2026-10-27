@@ -93,7 +93,15 @@ func GetTeamRuntimeManager() *TeamRuntimeManager {
 		// 同步到 Runner.teamRuntimeManager（any 类型）
 		runner.SetTeamRuntimeManager(globalTeamRuntimeManager)
 		// 注入 RunTeamMember 函数到 spawn 包（打破 spawn ↔ runtime 循环依赖）
-		spawn.SetRunTeamMemberFunc(RunTeamMember)
+		// T-01+T-14: spawn 缝是具体函数类型（SpawnableAgent 参数），本闭包负责
+		// 收窄到 *agent.TeamAgent——全链路唯一断言点，收窄失败经 S-38 resultCh 错误传播。
+		spawn.SetRunTeamMemberFunc(func(ctx context.Context, teammate spawn.SpawnableAgent, inputs map[string]any, sessionID string) (map[string]any, error) {
+			ta, ok := teammate.(*agent.TeamAgent)
+			if !ok {
+				return nil, fmt.Errorf("RunTeamMember: agent_team 必须是 *agent.TeamAgent，实际 %T", teammate)
+			}
+			return RunTeamMember(ctx, ta, inputs, sessionID)
+		})
 		// 注入 TeamRunner 函数到 runner/spawn 包（打破循环依赖）
 		runnerspawn.SetTeamRunnerFunc(RunAgentTeam)
 		// S-27: 注入团队流式执行函数（子进程 TEAM_AGENT 流式路径用，
@@ -756,12 +764,13 @@ func (m *TeamRuntimeManager) resolveRecipients(ctx context.Context, entry *Activ
 		return payloads, nil
 	}
 	// Python 步骤 3: async def _member_exists(name): return await backend.get_member(name) is not None
-	memberExists := func(name string) (bool, error) {
+	// M-27: 闭包签名加 ctx（MemberExistsCheck 类型 ctx 化）
+	memberExists := func(ctx context.Context, name string) (bool, error) {
 		member, _ := backend.GetMember(ctx, name)
 		return member != nil, nil
 	}
 	// Python 步骤 4: return await resolve_targets(payloads, member_exists=_member_exists)
-	return interaction.ResolveTargets(payloads, memberExists)
+	return interaction.ResolveTargets(ctx, payloads, memberExists)
 }
 
 // dispatchPayload 按载荷类型分发。
@@ -797,7 +806,7 @@ func (m *TeamRuntimeManager) dispatchPayload(
 		deliverInput := func(ctx context.Context, content string) error {
 			return entry.Agent.DeliverInput(ctx, content, true)
 		}
-		return interaction.DeliverToLeader(deliverInput, p.Body()), nil
+		return interaction.DeliverToLeader(ctx, deliverInput, p.Body()), nil
 
 	case *interaction.OperatorMessage:
 		// Python 步骤 4: inbox = UserInbox(backend.message_manager)
@@ -815,13 +824,13 @@ func (m *TeamRuntimeManager) dispatchPayload(
 			if entry.Agent != nil {
 				entry.Agent.AutoStartAll(ctx)
 			}
-			return inbox.Broadcast(p.Body())
+			return inbox.Broadcast(ctx, p.Body())
 		}
 		// Python 步骤 4c: 点对点前先启动目标成员
 		if entry.Agent != nil {
 			entry.Agent.AutoStartMember(ctx, *p.Target())
 		}
-		return inbox.Direct(*p.Target(), p.Body())
+		return inbox.Direct(ctx, *p.Target(), p.Body())
 
 	case *interaction.HumanAgentMessage:
 		// Python 步骤 5: inbox = HumanAgentInbox(...)

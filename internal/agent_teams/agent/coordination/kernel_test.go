@@ -417,16 +417,19 @@ func TestCoordinationKernel_AddSubscribedTopic后追加(t *testing.T) {
 }
 
 // fakeSessionController T-16 测试用 SessionController——持有真实 AgentTeamSession
+// M-29: TeamSession 返回类型收窄到 *session.AgentTeamSession
 type fakeSessionController struct {
-	teamSession any
+	teamSession *session.AgentTeamSession
 }
 
-func (f *fakeSessionController) BindSession(_ context.Context, session any) (context.Context, error) {
-	f.teamSession = session
+func (f *fakeSessionController) BindSession(_ context.Context, sess any) (context.Context, error) {
+	if ts, ok := sess.(*session.AgentTeamSession); ok {
+		f.teamSession = ts
+	}
 	return context.Background(), nil
 }
 func (f *fakeSessionController) ReleaseSession(_ context.Context) error { return nil }
-func (f *fakeSessionController) TeamSession() any                       { return f.teamSession }
+func (f *fakeSessionController) TeamSession() *session.AgentTeamSession { return f.teamSession }
 
 // TestCoordinationKernel_PersistTeamLifecycle真实写入 T-16 回归测试。
 // 原匿名断言 GetState() map[string]any 与 AgentTeamSession 真实签名不匹配
@@ -451,11 +454,12 @@ func TestCoordinationKernel_PersistTeamLifecycle真实写入(t *testing.T) {
 }
 
 // TestCoordinationKernel_PersistTeamLifecycle非Facade静默跳过 非 SessionFacade 会话静默跳过不 panic
+// M-29: TeamSession 收窄到具体类型后，"非 Facade 会话"以 nil 表示（对齐 Python None 存储）
 func TestCoordinationKernel_PersistTeamLifecycle非Facade静默跳过(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader}
 	kernel := &CoordinationKernel{host: &kernelHostWithSession{
 		KernelHost:  host,
-		sessionCtrl: &fakeSessionController{teamSession: "not-a-session"},
+		sessionCtrl: &fakeSessionController{teamSession: nil},
 	}}
 
 	// 不应 panic

@@ -514,9 +514,11 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 						IsComplete: false,
 					}
 					// Python: if event.get("event_type") == "team.error": break
+					// S-08: 裸 break 只退出 select 不退出 for——对齐 Python break 退出整个
+					// while 循环语义，改用 goto streamDone（与超时/取消分支同一出口）。
 					if event != nil {
 						if evtType, _ := event["event_type"].(string); evtType == "team.error" {
-							break
+							goto streamDone
 						}
 					}
 				case <-time.After(teamEventQueueTimeout):

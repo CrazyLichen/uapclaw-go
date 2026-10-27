@@ -7,6 +7,7 @@ import (
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -26,7 +27,8 @@ type SessionController interface {
 	// ReleaseSession 释放会话
 	ReleaseSession(ctx context.Context) error
 	// TeamSession 返回当前团队会话
-	TeamSession() any
+	// M-29: 返回具体类型（对齐 Python team_session 窄存储语义）
+	TeamSession() *session.AgentTeamSession
 }
 
 // InfraAccessor 基础设施访问接口。

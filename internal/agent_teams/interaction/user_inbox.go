@@ -47,13 +47,14 @@ func NewUserInbox(messageManager *tools.TeamMessageManager) *UserInbox {
 //	Python: 1. msg_id = await self._mm.send_message(content=body, to_member_name=target, from_member_name=USER_PSEUDO_MEMBER_NAME)
 //	Python: 2. if msg_id is None: return DeliverResult.failure(f"send_failed:{target}")
 //	Python: 3. return DeliverResult.success(msg_id)
-func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
+//
+// M-27: 加 ctx 首参（原 context.Background() 切断取消传播）。
+func (u *UserInbox) Direct(ctx context.Context, target string, body string) (*DeliverResult, error) {
 	logger.Debug(logComponent).Str("target", target).
 		Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
 		Msg("UserInbox: point-to-point send")
 	// Python 步骤 1-3
-	ctx := context.Background()
 	msgID, err := u.messageManager.SendMessage(ctx, body, target, agentteams.UserPseudoMemberName)
 	if err != nil {
 		reason := "send_failed:" + target + ":" + err.Error()
@@ -70,12 +71,13 @@ func (u *UserInbox) Direct(target string, body string) (*DeliverResult, error) {
 //	Python: 1. msg_id = await self._mm.broadcast_message(content=body, from_member_name=USER_PSEUDO_MEMBER_NAME)
 //	Python: 2. if msg_id is None: return DeliverResult.failure("broadcast_failed")
 //	Python: 3. return DeliverResult.success(msg_id)
-func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
+//
+// M-27: 加 ctx 首参（原 context.Background() 切断取消传播）。
+func (u *UserInbox) Broadcast(ctx context.Context, body string) (*DeliverResult, error) {
 	logger.Debug(logComponent).Str("from", agentteams.UserPseudoMemberName).
 		Str("body_len", fmt.Sprintf("%d", len(body))).
 		Msg("UserInbox: broadcast")
 	// Python 步骤 1-3
-	ctx := context.Background()
 	msgID, err := u.messageManager.BroadcastMessage(ctx, body, agentteams.UserPseudoMemberName)
 	if err != nil {
 		return NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
@@ -94,7 +96,8 @@ func (u *UserInbox) Broadcast(body string) (*DeliverResult, error) {
 //     Python: 4. return DeliverResult.success(message_id=None)
 //
 // 此通道不产生 bus message ID，成功时 MessageID 为 nil。
-func DeliverToLeader(deliverInput func(ctx context.Context, content string) error, body string) *DeliverResult {
+// M-27: 加 ctx 首参（原 context.Background() 切断取消传播）。
+func DeliverToLeader(ctx context.Context, deliverInput func(ctx context.Context, content string) error, body string) *DeliverResult {
 	// Python 步骤 1
 	logger.Debug(logComponent).Str("body_len", fmt.Sprintf("%d", len(body))).
 		Msg("delivering to leader")
@@ -105,7 +108,6 @@ func DeliverToLeader(deliverInput func(ctx context.Context, content string) erro
 	}
 
 	// Python 步骤 2-4
-	ctx := context.Background()
 	if err := deliverInput(ctx, body); err != nil {
 		// Python 步骤 3: return DeliverResult.failure(f"deliver_to_leader_failed:{e}")
 		reason := "deliver_to_leader_failed:" + err.Error()

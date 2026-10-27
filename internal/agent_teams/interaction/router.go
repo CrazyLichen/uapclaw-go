@@ -17,7 +17,8 @@ import (
 //
 // 每个调用方决定查询来源——通常是闭包包裹
 // TeamBackend.get_member（或任何将名称映射到花名册行的等价物）。
-type MemberExistsCheck func(name string) (bool, error)
+// M-27: 加 ctx 首参——Python 侧查询走 async 上下文，Go 侧 ctx 由调用方传播。
+type MemberExistsCheck func(ctx context.Context, name string) (bool, error)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -199,7 +200,8 @@ func IsReservedName(name string) bool {
 //
 // 已知接收者保留原载荷；未知接收者的 @提及折回到一条无提及消息；
 // God View / Avatar 驱动 / 广播载荷不携带命名目标，直接透传。
-func ResolveTargets(payloads []InteractPayload, memberExists MemberExistsCheck) ([]InteractPayload, error) {
+// M-27: 加 ctx 首参透传到 memberExists。
+func ResolveTargets(ctx context.Context, payloads []InteractPayload, memberExists MemberExistsCheck) ([]InteractPayload, error) {
 	var unknown []InteractPayload
 	var kept []InteractPayload
 
@@ -209,7 +211,7 @@ func ResolveTargets(payloads []InteractPayload, memberExists MemberExistsCheck) 
 			kept = append(kept, p)
 			continue
 		}
-		exists, err := memberExists(*name)
+		exists, err := memberExists(ctx, *name)
 		if err != nil {
 			return nil, err
 		}
@@ -232,7 +234,7 @@ func ResolveTargets(payloads []InteractPayload, memberExists MemberExistsCheck) 
 // Python: deliver_direct(body, *, sender, target, message_manager, member_exists)
 func DeliverDirect(ctx context.Context, body string, sender string, target string, messageManager *tools.TeamMessageManager, memberExists MemberExistsCheck) (*DeliverResult, error) {
 	// Python: if not await member_exists(target): return DeliverResult.failure(f"unknown_member:{target}")
-	exists, err := memberExists(target)
+	exists, err := memberExists(ctx, target)
 	if err != nil {
 		return nil, err
 	}

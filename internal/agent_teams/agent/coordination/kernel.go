@@ -7,7 +7,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/metadata"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -531,13 +530,9 @@ func (k *CoordinationKernel) persistTeamLifecycle(ctx context.Context, lifecycle
 	// 对齐 Python: merge_team_namespace(session, team_name, {"lifecycle": lifecycle})
 	// T-16: 原内联匿名断言 GetState() map[string]any 与 AgentTeamSession 真实签名
 	// GetState(key StateKey) (any, error) 不匹配导致恒 false（生命周期从未持久化），
-	// 改用 SessionFacade 断言 + metadata.MergeTeamNamespace 权威实现。
-	facade, ok := teamSession.(sessioninterfaces.SessionFacade)
-	if !ok {
-		logger.Warn(logComponent).Str("team_name", teamName).Msg("persistTeamLifecycle: session does not support SessionFacade")
-		return
-	}
-	metadata.MergeTeamNamespace(facade, teamName, map[string]any{"lifecycle": lifecycle})
+	// 改用 metadata.MergeTeamNamespace 权威实现。
+	// M-29: TeamSession 已是具体类型 *session.AgentTeamSession（实现 SessionFacade），无需断言。
+	metadata.MergeTeamNamespace(teamSession, teamName, map[string]any{"lifecycle": lifecycle})
 	logger.Debug(logComponent).Str("team_name", teamName).Str("lifecycle", lifecycle).
 		Msg("persistTeamLifecycle completed")
 }

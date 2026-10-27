@@ -9,6 +9,7 @@ import (
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -757,7 +758,8 @@ func TestTeamAgent_persistTeamDbState_无会话(t *testing.T) {
 func TestTeamAgent_persistTeamDbState_无TeamName(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(context.Background(), card)
-	a.state.TeamSession = &mockSessionForPersist{}
+	// M-29: TeamSession 收窄到 *session.AgentTeamSession 后，直接构造真实类型
+	a.state.TeamSession = session.NewAgentTeamSession(session.WithAgentTeamSessionID("sess-persist"))
 
 	// TeamName 为空（未 Configure），应提前返回
 	a.persistTeamDbState(context.Background(), "cleaned")
@@ -785,9 +787,6 @@ func TestTeamAgent_SetMemberID(t *testing.T) {
 	ctx2 := a.SetMemberID(context.Background(), "")
 	assert.NotNil(t, ctx2)
 }
-
-// mockSessionForPersist 测试用 mock，不实现 SessionFacade
-type mockSessionForPersist struct{}
 
 // TestTeamAgent_Configure后markTeamCleaned 测试 Configure 后 markTeamCleaned 设置状态
 func TestTeamAgent_Configure后markTeamCleaned(t *testing.T) {

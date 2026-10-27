@@ -17,7 +17,7 @@ func TestNewUserInbox(t *testing.T) {
 func TestUserInbox_Direct_成功(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	u := NewUserInbox(tb.MessageManager())
-	result, err := u.Direct("alice", "hello")
+	result, err := u.Direct(context.Background(), "alice", "hello")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestUserInbox_Direct_成功(t *testing.T) {
 func TestUserInbox_Broadcast_成功(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
 	u := NewUserInbox(tb.MessageManager())
-	result, err := u.Broadcast("hello all")
+	result, err := u.Broadcast(context.Background(), "hello all")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestDeliverToLeader_成功(t *testing.T) {
 		received = content
 		return nil
 	}
-	result := DeliverToLeader(deliverInput, "hello leader")
+	result := DeliverToLeader(context.Background(), deliverInput, "hello leader")
 	if !result.IsOK() {
 		t.Errorf("IsOK = %v, want true", result.IsOK())
 	}
@@ -67,7 +67,7 @@ func TestDeliverToLeader_投递失败(t *testing.T) {
 	deliverInput := func(ctx context.Context, content string) error {
 		return errors.New("agent busy")
 	}
-	result := DeliverToLeader(deliverInput, "hello")
+	result := DeliverToLeader(context.Background(), deliverInput, "hello")
 	if result.IsOK() {
 		t.Error("IsOK 应为 false")
 	}
@@ -81,7 +81,7 @@ func TestDeliverToLeader_投递失败(t *testing.T) {
 }
 
 func TestDeliverToLeader_nil回调(t *testing.T) {
-	result := DeliverToLeader(nil, "hello")
+	result := DeliverToLeader(context.Background(), nil, "hello")
 	if result.IsOK() {
 		t.Error("IsOK 应为 false（无回调）")
 	}

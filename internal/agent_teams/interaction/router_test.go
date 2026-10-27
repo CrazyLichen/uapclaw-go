@@ -359,8 +359,8 @@ func TestResolveTargets_全部已知(t *testing.T) {
 		NewOperatorMessage("hi", strPtr("alice")),
 		NewOperatorMessage("hi", strPtr("bob")),
 	}
-	check := func(name string) (bool, error) { return true, nil }
-	result, err := ResolveTargets(payloads, check)
+	check := func(_ context.Context, name string) (bool, error) { return true, nil }
+	result, err := ResolveTargets(context.Background(), payloads, check)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,8 +374,8 @@ func TestResolveTargets_未知接收者折叠(t *testing.T) {
 		NewOperatorMessage("hi", strPtr("alice")),
 		NewOperatorMessage("hi", strPtr("ghost")),
 	}
-	check := func(name string) (bool, error) { return name == "alice", nil }
-	result, err := ResolveTargets(payloads, check)
+	check := func(_ context.Context, name string) (bool, error) { return name == "alice", nil }
+	result, err := ResolveTargets(context.Background(), payloads, check)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,8 +403,8 @@ func TestResolveTargets_未知接收者折叠(t *testing.T) {
 
 func TestResolveTargets_GodView透传(t *testing.T) {
 	payloads := []InteractPayload{NewGodViewMessage("hello")}
-	check := func(name string) (bool, error) { return false, nil }
-	result, err := ResolveTargets(payloads, check)
+	check := func(_ context.Context, name string) (bool, error) { return false, nil }
+	result, err := ResolveTargets(context.Background(), payloads, check)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,8 +418,8 @@ func TestResolveTargets_GodView透传(t *testing.T) {
 
 func TestResolveTargets_检查函数报错(t *testing.T) {
 	payloads := []InteractPayload{NewOperatorMessage("hi", strPtr("alice"))}
-	check := func(name string) (bool, error) { return false, errors.New("db error") }
-	_, err := ResolveTargets(payloads, check)
+	check := func(_ context.Context, name string) (bool, error) { return false, errors.New("db error") }
+	_, err := ResolveTargets(context.Background(), payloads, check)
 	if err == nil {
 		t.Error("应返回错误")
 	}
@@ -427,8 +427,8 @@ func TestResolveTargets_检查函数报错(t *testing.T) {
 
 func TestResolveTargets_广播透传(t *testing.T) {
 	payloads := []InteractPayload{NewOperatorMessage("hi all", nil)} // nil target = broadcast
-	check := func(name string) (bool, error) { return false, nil }
-	result, err := ResolveTargets(payloads, check)
+	check := func(_ context.Context, name string) (bool, error) { return false, nil }
+	result, err := ResolveTargets(context.Background(), payloads, check)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,7 +443,7 @@ func TestResolveTargets_广播透传(t *testing.T) {
 // ──────────── DeliverDirect 测试 ────────────
 
 func TestDeliverDirect_未知成员(t *testing.T) {
-	check := func(name string) (bool, error) { return false, nil }
+	check := func(_ context.Context, name string) (bool, error) { return false, nil }
 	result, err := DeliverDirect(context.Background(), "hi", "user", "ghost", nil, check)
 	if err != nil {
 		t.Fatal(err)
@@ -458,7 +458,7 @@ func TestDeliverDirect_未知成员(t *testing.T) {
 
 func TestDeliverDirect_成功(t *testing.T) {
 	tb := newTestTeamBackendForInteraction()
-	check := func(name string) (bool, error) { return true, nil }
+	check := func(_ context.Context, name string) (bool, error) { return true, nil }
 	result, err := DeliverDirect(context.Background(), "hi", "user", "alice", tb.MessageManager(), check)
 	if err != nil {
 		t.Fatal(err)

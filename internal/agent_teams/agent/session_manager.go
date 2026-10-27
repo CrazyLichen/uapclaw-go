@@ -5,6 +5,7 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -65,14 +66,16 @@ func NewSessionManager(
 
 // TeamSession 返回当前团队会话。
 // Python: SessionManager.team_session (property getter)
-func (m *SessionManager) TeamSession() any {
+// M-29: 返回具体类型 *session.AgentTeamSession（对齐 Python 窄存储语义）。
+func (m *SessionManager) TeamSession() *session.AgentTeamSession {
 	return m.state.TeamSession
 }
 
 // SetTeamSession 设置团队会话。
 // Python: SessionManager.team_session (property setter)
-func (m *SessionManager) SetTeamSession(session any) {
-	m.state.TeamSession = session
+// M-29: 存储收窄到具体类型 *session.AgentTeamSession。
+func (m *SessionManager) SetTeamSession(s *session.AgentTeamSession) {
+	m.state.TeamSession = s
 }
 
 // BindSession 完整绑定到指定会话。
@@ -96,9 +99,9 @@ func (m *SessionManager) SetTeamSession(session any) {
 // 返回新的 context.Context（含 SessionState），调用方必须用于后续传播。
 func (m *SessionManager) BindSession(
 	ctx context.Context,
-	session any, // TODO(#9.59): AgentTeamSession 接口
+	sess any, // 对齐 Python 联合类型 str | AgentTeamSession（kernel.Start 传 str）
 ) (context.Context, error) {
-	sessionID := extractSessionID(session)
+	sessionID := extractSessionID(sess)
 
 	// 步骤 1-2: 设置 sessionID 到 SessionState（原地修改，共享指针立即可见）
 	// Python: _reset_session_id_token() + set_session_id(session.get_session_id())
@@ -114,7 +117,8 @@ func (m *SessionManager) BindSession(
 
 	// 步骤 3: 存储 session 到 state
 	// Python: state.team_session = session if isinstance(session, AgentTeamSession) else None
-	m.state.TeamSession = session
+	// M-29: comma-ok 三元收窄——非 *session.AgentTeamSession 输入存 nil（对齐 Python None）。
+	m.state.TeamSession, _ = sess.(*session.AgentTeamSession)
 
 	// 步骤 4: 创建 DB 表（幂等）
 	// Python: if team_backend: await team_backend.db.create_cur_session_tables()
@@ -129,7 +133,7 @@ func (m *SessionManager) BindSession(
 	// 步骤 5: Leader 侧持久化
 	// Python: if spec and role == TeamRole.LEADER: recovery_manager.persist_leader_config(session)
 	if m.recoveryManager != nil && m.configurator.Role() == atschema.TeamRoleLeader && m.configurator.Spec() != nil {
-		if sf, ok := session.(interfaces.SessionFacade); ok {
+		if sf, ok := sess.(interfaces.SessionFacade); ok {
 			m.recoveryManager.PersistLeaderConfig(sf)
 		} else {
 			logger.Warn(logComponent).Msg("BindSession: session does not implement SessionFacade, skipping Leader config persistence")

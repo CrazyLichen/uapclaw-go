@@ -10,7 +10,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -362,10 +364,24 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 			}
 		}
 
-		// TODO(⤵️ 10.3.2 Team): 更新 team evolution config
-		// Python: L331-339:
-		//   对应 Python: team_config = config if isinstance(config, dict) else get_config()
-		//   对应 Python: await get_team_manager(channel_id).update_evolution_config(team_config)
+		// ⤴️ 10.3.2 Team: 更新 team evolution config（对齐 Python agent_manager.py L331-339）
+		// Python: team_config = config if isinstance(config, dict) else get_config()
+		// Python: await get_team_manager(channel_id).update_evolution_config(team_config)
+		// Python: except Exception → 仅 warning 不中断（吞错语义对齐）。
+		teamConfig := configPayload
+		if teamConfig == nil {
+			// 对齐 Python get_config()：加载默认 config.yaml（失败时降级空配置继续）
+			if c, cfgErr := config.New(""); cfgErr == nil {
+				if loaded, loadErr := c.Load(); loadErr == nil {
+					teamConfig = loaded
+				} else {
+					logger.Warn(logComponent).Err(loadErr).
+						Str("channel_id", chKey).
+						Msg("[AgentManager] team evolution config hot-update: get_config fallback failed")
+				}
+			}
+		}
+		team.GetTeamManager(chKey).UpdateEvolutionConfig(ctx, teamConfig)
 
 		// Python: L340: logger.info(f"channel {channel_id} reload agent config success.")
 		logger.Info(logComponent).

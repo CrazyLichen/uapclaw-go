@@ -26,6 +26,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -83,7 +84,12 @@ func RunAgentTeam(
 		return RunBaseTeam(ctx, team, inputs, sess)
 	}
 	if member {
-		return RunTeamMember(ctx, agentTeam, inputs, sess)
+		// T-01: 路由层一次性断言收窄（错误信息在此报告），Member 路径签名已是具体类型
+		ag, ok := agentTeam.(*agent.TeamAgent)
+		if !ok {
+			return nil, fmt.Errorf("RunTeamMember: agent_team 必须是 *agent.TeamAgent，实际 %T", agentTeam)
+		}
+		return RunTeamMember(ctx, ag, inputs, sess)
 	}
 	return runAgentTeam(ctx, agentTeam, inputs, sess)
 }
@@ -111,7 +117,12 @@ func RunAgentTeamStreaming(
 		return RunBaseTeamStreaming(ctx, team, inputs, sess)
 	}
 	if member {
-		return RunTeamMemberStreaming(ctx, agentTeam, inputs, sess)
+		// T-01: 路由层一次性断言收窄（错误信息在此报告），Member 路径签名已是具体类型
+		ag, ok := agentTeam.(*agent.TeamAgent)
+		if !ok {
+			return nil, fmt.Errorf("RunTeamMemberStreaming: agent_team 必须是 *agent.TeamAgent，实际 %T", agentTeam)
+		}
+		return RunTeamMemberStreaming(ctx, ag, inputs, sess)
 	}
 	return runAgentTeamStreaming(ctx, agentTeam, inputs, sess, streamLogger)
 }
@@ -128,7 +139,7 @@ func RunBaseTeam(
 ) (map[string]any, error) {
 	teamInstance := baseTeam
 
-	teamSession := createAgentTeamSession(baseTeam, sess)
+	teamSession := createAgentTeamSession(sess)
 	inputsDict, _ := inputs.(map[string]any)
 	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L299）
 	// PreRun 是 checkpoint 恢复入口，失败时继续执行会用空状态跑完 session
@@ -185,7 +196,7 @@ func RunBaseTeamStreaming(
 ) (<-chan stream.Schema, error) {
 	teamInstance := baseTeam
 
-	teamSession := createAgentTeamSession(baseTeam, sess)
+	teamSession := createAgentTeamSession(sess)
 	inputsDict, _ := inputs.(map[string]any)
 	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L327）
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
@@ -238,18 +249,17 @@ func RunBaseTeamStreaming(
 
 // RunTeamMember Member 路径（非流式）。
 // Python: _TeamRunnerMixin._run_team_member(agent, inputs, *, session)
+// T-01: 参数收窄到具体类型 *agent.TeamAgent——
+// Python 名义签名 BaseAgent 实际窄（finalize_member 消费 TeamAgent 特有成员，
+// 其他 BaseAgent 实例会 AttributeError）；Go 直接编码真实约束。
+// 唯一工厂 spawn_manager 只产 *agent.TeamAgent，无第二实现。
 func RunTeamMember(
 	ctx context.Context,
-	agentTeam any,
+	ag *agent.TeamAgent,
 	inputs any,
 	sess any,
 ) (map[string]any, error) {
-	ag, ok := agentTeam.(*agent.TeamAgent)
-	if !ok {
-		return nil, fmt.Errorf("RunTeamMember: agent_team 必须是 *agent.TeamAgent，实际 %T", agentTeam)
-	}
-
-	teamSession := createAgentTeamSession(agentTeam, sess)
+	teamSession := createAgentTeamSession(sess)
 	inputsDict, _ := inputs.(map[string]any)
 	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L355）
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
@@ -260,7 +270,9 @@ func RunTeamMember(
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime
-	if getter, ok := agentTeam.(RuntimeGetter); ok {
+	// T-01: 对齐 Python getattr(agent, "runtime", None)——TeamAgent 无 GetRuntime
+	// 方法（两侧同源防御性分支，断言恒 false 保留对齐）
+	if getter, ok := any(ag).(RuntimeGetter); ok {
 		teamRuntime = getter.GetRuntime()
 	}
 	if teamRuntime != nil {
@@ -282,18 +294,14 @@ func RunTeamMember(
 
 // RunTeamMemberStreaming Member 路径（流式）。
 // Python: _TeamRunnerMixin._run_team_member_streaming(agent, inputs, *, session)
+// T-01: 参数收窄到具体类型 *agent.TeamAgent（同 RunTeamMember）。
 func RunTeamMemberStreaming(
 	ctx context.Context,
-	agentTeam any,
+	ag *agent.TeamAgent,
 	inputs any,
 	sess any,
 ) (<-chan stream.Schema, error) {
-	ag, ok := agentTeam.(*agent.TeamAgent)
-	if !ok {
-		return nil, fmt.Errorf("RunTeamMemberStreaming: agent_team 必须是 *agent.TeamAgent，实际 %T", agentTeam)
-	}
-
-	teamSession := createAgentTeamSession(agentTeam, sess)
+	teamSession := createAgentTeamSession(sess)
 	inputsDict, _ := inputs.(map[string]any)
 	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L377）
 	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
@@ -304,7 +312,9 @@ func RunTeamMemberStreaming(
 	}
 
 	var teamRuntime *team_runtime.TeamRuntime
-	if getter, ok := agentTeam.(RuntimeGetter); ok {
+	// T-01: 对齐 Python getattr(agent, "runtime", None)——TeamAgent 无 GetRuntime
+	// 方法（两侧同源防御性分支，断言恒 false 保留对齐）
+	if getter, ok := any(ag).(RuntimeGetter); ok {
 		teamRuntime = getter.GetRuntime()
 	}
 	if teamRuntime != nil {
@@ -361,6 +371,21 @@ func InteractAgentTeam(
 // Python: Runner.get_agent_team_monitor(*, team_name, session_id, hide_dm)
 func GetAgentTeamMonitor(ctx context.Context, teamName string, sessionID string, hideDM bool) (*monitor.TeamMonitor, error) {
 	return GetTeamRuntimeManager().GetMonitor(ctx, teamName, sessionID, hideDM)
+}
+
+// RegisterHumanAgentInbound 注册团队→用户通知回调（门面）。
+// Python: Runner.register_human_agent_inbound(*, team_name, session_id, member_name, callback)
+// (team_runner.py L877-892)
+// S-04: server 层无入口调用 manager.RegisterHumanAgentInbound——
+// manager.go:844 的注释指向本门面，补齐对齐 Python 的 classmethod 门面。
+func RegisterHumanAgentInbound(
+	ctx context.Context,
+	teamName string,
+	sessionID string,
+	memberName string,
+	callback tools.OnInbound,
+) (bool, error) {
+	return GetTeamRuntimeManager().RegisterHumanAgentInbound(ctx, teamName, sessionID, memberName, callback)
 }
 
 // ListActiveTeams 列出所有活跃团队。
@@ -593,7 +618,7 @@ func runAgentTeamStreaming(
 // resolveSpecFromSessionBucket 从 session bucket 读取持久化的 TeamAgentSpec。
 // Python: _TeamRunnerMixin._resolve_spec_from_session_bucket(*, team_name, session)
 func resolveSpecFromSessionBucket(ctx context.Context, teamName string, sess any) *atschema.TeamAgentSpec {
-	teamSession := createAgentTeamSession(nil, sess)
+	teamSession := createAgentTeamSession(sess)
 
 	if preErr := teamSession.PreRun(ctx); preErr != nil {
 		logger.Warn(logComponent).Err(preErr).
@@ -631,9 +656,11 @@ func resolveSpecFromSessionBucket(ctx context.Context, teamName string, sess any
 	return spec
 }
 
-// createAgentTeamSession 从 agent_team 和 session 参数创建 AgentTeamSession。
-// Python: _TeamRunnerMixin._create_agent_team_session(agent_team, session)
-func createAgentTeamSession(agentTeam any, sess any) *session.AgentTeamSession {
+// createAgentTeamSession 从 session 参数创建 AgentTeamSession。
+// Python: _TeamRunnerMixin._create_agent_team_session(agent_team, session)（team_runner.py L682-695）
+// T-01: 删除 Python 同源死参数 agent_team——Python 方法体内完全未使用该参数
+// （只消费 session），Go 侧不保留死参数。
+func createAgentTeamSession(sess any) *session.AgentTeamSession {
 	switch s := sess.(type) {
 	case *session.AgentTeamSession:
 		return s
@@ -701,9 +728,14 @@ func buildTeamControlChunk(
 }
 
 // bindInteractTeamSession 绑定交互团队 session 到 context。
-// Python: _TeamRunnerMixin._bind_interact_team_session(session_id)
+// Python: _TeamRunnerMixin._bind_interact_team_session(session_id)（team_runner.py L140）
+// M-02: 对齐 Python `if session_id and get_session_id() != session_id` 的跳过分支——
+// 当前 context 已绑定同一 sessionID 时不重复覆盖（保留既有 SessionState 携带的其他状态）。
 func bindInteractTeamSession(ctx context.Context, sessionID string) context.Context {
 	if sessionID == "" {
+		return ctx
+	}
+	if current := sessionctx.GetSessionID(ctx); current == sessionID {
 		return ctx
 	}
 	state := sessionctx.InitSessionState()

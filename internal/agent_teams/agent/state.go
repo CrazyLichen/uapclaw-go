@@ -2,6 +2,7 @@ package agent
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -16,8 +17,12 @@ import (
 // 在 state 上缓存字符串会重新引入"双真实来源"问题。
 type TeamAgentState struct {
 	// TeamSession 团队会话
-	// TODO(#9.59): 定义 AgentTeamSession 接口后替换 any
-	TeamSession any
+	// M-29: 对齐 Python state.team_session 的窄存储语义——
+	// Python `session if isinstance(session, AgentTeamSession) else None` 只存
+	// AgentTeamSession 实例（非 AgentTeamSession 输入一律 None）。
+	// BindSession 签名保持 any（对齐 Python 接受 str/AgentTeamSession 联合类型），
+	// 收窄在 BindSession 内完成。
+	TeamSession *session.AgentTeamSession
 	// TeamMember 当前成员句柄
 	TeamMember *TeamMember
 	// PendingUserQuery 待处理的用户查询

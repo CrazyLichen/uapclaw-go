@@ -418,7 +418,8 @@ func (a *TeamAgent) UpdateStatus(ctx context.Context, status atschema.MemberStat
 // Python: TeamAgent.persist_allocator_state()
 func (a *TeamAgent) PersistAllocatorState() {
 	if a.recoveryManager != nil {
-		if sf, ok := a.sessionManager.TeamSession().(sessinterfaces.SessionFacade); ok {
+		// M-29: TeamSession 已是具体类型 *session.AgentTeamSession（实现 SessionFacade），无需断言
+		if sf := a.sessionManager.TeamSession(); sf != nil {
 			a.recoveryManager.PersistAllocatorState(sf)
 		}
 	}
@@ -699,8 +700,9 @@ func (a *TeamAgent) Broadcast(ctx context.Context, content string) (*ateamintera
 		return ateaminteraction.NewDeliverResultFailure("no_message_manager"), nil
 	}
 	// 对齐 Python: UserInbox(backend.message_manager).broadcast(content)
+	// M-27: 透传 ctx
 	inbox := ateaminteraction.NewUserInbox(msgMgr)
-	result, err := inbox.Broadcast(content)
+	result, err := inbox.Broadcast(ctx, content)
 	if err != nil {
 		return ateaminteraction.NewDeliverResultFailure("broadcast_failed:" + err.Error()), nil
 	}
@@ -1213,10 +1215,9 @@ func (a *TeamAgent) UpdateModelPool(newPool []models.ModelPoolEntry) {
 	}
 	// 持久化领导者配置（模型池变更后）
 	if a.recoveryManager != nil && a.sessionManager != nil {
-		if sf, ok := a.sessionManager.TeamSession().(sessinterfaces.SessionFacade); ok {
+		// M-29: TeamSession 已是具体类型 *session.AgentTeamSession（实现 SessionFacade），无需断言
+		if sf := a.sessionManager.TeamSession(); sf != nil {
 			a.recoveryManager.PersistLeaderConfig(sf)
-		} else if a.sessionManager.TeamSession() != nil {
-			logger.Warn(logComponent).Msg("UpdateModelPool: TeamSession does not implement SessionFacade, skipping persistence")
 		}
 	}
 }
@@ -1692,24 +1693,15 @@ func (a *TeamAgent) markTeamBuilt(ctx context.Context) error {
 // persistTeamDbState 持久化团队 DB 生命周期状态到当前检查点。
 // Python: TeamAgent._persist_team_db_state(db_state)
 func (a *TeamAgent) persistTeamDbState(ctx context.Context, dbState string) {
+	// M-29: TeamSession 已是具体类型 *session.AgentTeamSession（实现 SessionFacade 且自带 FlushCheckpoint），无需断言
 	teamSession := a.sessionManager.TeamSession()
 	teamName := a.TeamName()
 	if teamSession == nil || teamName == "" {
 		return
 	}
-	sf, ok := teamSession.(sessinterfaces.SessionFacade)
-	if !ok {
-		return
-	}
 	// Python: metadata.MergeTeamDBState(session, team_name, db_state)
-	metadata.MergeTeamDBState(sf, teamName, dbState)
-	// FlushCheckpoint 不在 SessionFacade 接口上，需要断言到具体类型
-	type flusher interface {
-		FlushCheckpoint(ctx context.Context) error
-	}
-	if f, ok := teamSession.(flusher); ok {
-		_ = f.FlushCheckpoint(ctx)
-	}
+	metadata.MergeTeamDBState(teamSession, teamName, dbState)
+	_ = teamSession.FlushCheckpoint(ctx)
 }
 
 // removeSelfFromPool 从运行时池中移除自身。

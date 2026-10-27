@@ -208,7 +208,7 @@ func (m *TeamManager) DrainTeamSkillEvents(sessionID string) []map[string]any {
 //	   self._build_and_mount_member_rails_for_context(session_id, context,
 //	   mount_team_skill_rail=False, mount_team_skill_create_rail=True,
 //	   mount_skill_evolution_rail=False)
-func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
+func (m *TeamManager) UpdateEvolutionConfig(ctx context.Context, config map[string]any) {
 	autoScanEnabled := GetEvolutionAutoScanEnabled(config)
 	skillCreateEnabled := GetSkillCreateEnabled(config)
 
@@ -227,7 +227,7 @@ func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
 	// 步骤 5: 若 skill_create 未启用，反注册所有 skill create rails
 	if !skillCreateEnabled {
 		for sessionID, rail := range m.teamSkillCreateRails {
-			m.unregisterLiveRail(sessionID, rail)
+			m.unregisterLiveRail(ctx, sessionID, rail)
 			delete(m.teamSkillCreateRails, sessionID)
 		}
 		return
@@ -238,7 +238,7 @@ func (m *TeamManager) UpdateEvolutionConfig(config map[string]any) {
 		if _, ok := m.teamSkillCreateRails[sessionID]; ok {
 			continue
 		}
-		m.buildAndMountMemberRailsForContext(sessionID, context,
+		m.buildAndMountMemberRailsForContext(ctx, sessionID, context,
 			false /* mountTeamSkillRail */, true /* mountTeamSkillCreateRail */, false /* mountSkillEvolutionRail */)
 	}
 
@@ -278,8 +278,9 @@ func isLeaderRole(ctx *TeamRailMountContext) bool {
 //	   skills_dir 非空 → register_team_skill_sync_target(skills_dir, get_agent_skills_dir())
 //	5. team_skill_create_rail 非 nil → register_team_skill_create_rail
 func (m *TeamManager) buildAndMountMemberRailsForContext(
+	ctx context.Context,
 	sessionID string,
-	ctx *TeamRailMountContext,
+	mountCtx *TeamRailMountContext,
 	mountTeamSkillRail bool,
 	mountTeamSkillCreateRail bool,
 	mountSkillEvolutionRail bool,
@@ -293,33 +294,33 @@ func (m *TeamManager) buildAndMountMemberRailsForContext(
 			Msg("[TeamManager] load config failed for rail rebuild")
 		return nil, nil
 	}
-	if ctx.TeamWorkspace != nil {
-		ctx.TeamWorkspace.Config = latestConfig
+	if mountCtx.TeamWorkspace != nil {
+		mountCtx.TeamWorkspace.Config = latestConfig
 	}
 
-	memberRails := BuildMemberRails(ctx.MemberInfo, ctx.Runtime, ctx.TeamWorkspace)
+	memberRails := BuildMemberRails(mountCtx.MemberInfo, mountCtx.Runtime, mountCtx.TeamWorkspace)
 
 	var teamSkillRail *evolution.TeamSkillEvolutionRail
 	var teamSkillCreateRail *evolution.TeamSkillCreateRail
 	for _, rail := range memberRails {
 		if tsr, ok := rail.(*evolution.TeamSkillEvolutionRail); ok && mountTeamSkillRail {
-			ctx.Agent.AddRail(tsr)
-			m.RegisterTeamLiveRail(sessionID, ctx.Agent, tsr)
+			mountCtx.Agent.AddRail(tsr)
+			m.RegisterTeamLiveRail(sessionID, mountCtx.Agent, tsr)
 			teamSkillRail = tsr
 		} else if ser, ok := rail.(*evolution.SkillEvolutionRail); ok && mountSkillEvolutionRail {
-			ctx.Agent.AddRail(ser)
+			mountCtx.Agent.AddRail(ser)
 			m.RegisterTeamMemberSkillEvolutionRail(sessionID, ser)
 		} else if scr, ok := rail.(*evolution.TeamSkillCreateRail); ok && mountTeamSkillCreateRail {
-			ctx.Agent.AddRail(scr)
-			m.RegisterTeamLiveRail(sessionID, ctx.Agent, scr)
+			mountCtx.Agent.AddRail(scr)
+			m.RegisterTeamLiveRail(sessionID, mountCtx.Agent, scr)
 			teamSkillCreateRail = scr
 		}
 	}
 
 	if teamSkillRail != nil {
 		m.RegisterTeamSkillRail(sessionID, teamSkillRail)
-		if ctx.TeamWorkspace != nil && ctx.TeamWorkspace.SkillsDir != nil && *ctx.TeamWorkspace.SkillsDir != "" {
-			m.RegisterTeamSkillSyncTarget(sessionID, *ctx.TeamWorkspace.SkillsDir, workspace.AgentSkillsDir())
+		if mountCtx.TeamWorkspace != nil && mountCtx.TeamWorkspace.SkillsDir != nil && *mountCtx.TeamWorkspace.SkillsDir != "" {
+			m.RegisterTeamSkillSyncTarget(sessionID, *mountCtx.TeamWorkspace.SkillsDir, workspace.AgentSkillsDir())
 		}
 	}
 	if teamSkillCreateRail != nil {
@@ -330,7 +331,8 @@ func (m *TeamManager) buildAndMountMemberRailsForContext(
 
 // unregisterLiveRail 从 live rails 中移除并反注册指定 rail。
 // 对齐 Python: TeamManager._unregister_live_rail(session_id, rail)
-func (m *TeamManager) unregisterLiveRail(sessionID string, rail agentinterfaces.AgentRail) {
+// M-26: ctx 化——UnregisterRail 使用调用方 context（替代原 context.Background()）。
+func (m *TeamManager) unregisterLiveRail(ctx context.Context, sessionID string, rail agentinterfaces.AgentRail) {
 	liveRails, ok := m.teamLiveRails[sessionID]
 	if !ok {
 		return
@@ -340,7 +342,7 @@ func (m *TeamManager) unregisterLiveRail(sessionID string, rail agentinterfaces.
 		if entry.Rail == rail {
 			// 对齐 Python: agent.unregister_rail(live_rail)
 			if entry.Agent != nil {
-				_ = entry.Agent.UnregisterRail(context.Background(), rail)
+				_ = entry.Agent.UnregisterRail(ctx, rail)
 			}
 			continue
 		}
