@@ -318,3 +318,147 @@ func TestHybridRetriever_Close_nilStore不panic(t *testing.T) {
 	r := NewHybridRetriever(nil, nil)
 	assert.NotPanics(t, r.Close)
 }
+
+// ── 覆盖率补齐（错误分支矩阵，G-7 语义在 Hybrid 三方法上的全覆盖）──
+
+// TestHybridRetriever_Retrieve_EmbedQuery错误透传 hybrid 分支 embed 报错原样冒泡
+func TestHybridRetriever_Retrieve_EmbedQuery错误透传(t *testing.T) {
+	sentinel := errors.New("embed backend down")
+	r := NewHybridRetriever(&fakeVectorStore{}, &fakeEmbedModel{err: sentinel})
+	_, err := r.Retrieve(context.Background(), "q", 5, nil, RetrievalModeHybrid)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_Retrieve_vector分支Embed错误透传 vector 分支 embed 报错
+func TestHybridRetriever_Retrieve_vector分支Embed错误透传(t *testing.T) {
+	sentinel := errors.New("embed backend down")
+	r := NewHybridRetriever(&fakeVectorStore{}, &fakeEmbedModel{err: sentinel})
+	_, err := r.Retrieve(context.Background(), "q", 5, nil, RetrievalModeVector)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_Retrieve_vector分支Search错误透传
+func TestHybridRetriever_Retrieve_vector分支Search错误透传(t *testing.T) {
+	sentinel := errors.New("vector backend down")
+	store := &fakeVectorStore{searchErr: sentinel}
+	r := NewHybridRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	_, err := r.Retrieve(context.Background(), "q", 5, nil, RetrievalModeVector)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_Retrieve_vector分支BM25兜底错误透传 空结果后 sparse 报错冒泡
+func TestHybridRetriever_Retrieve_vector分支BM25兜底错误透传(t *testing.T) {
+	sentinel := errors.New("bm25 backend down")
+	store := &fakeVectorStore{searchResult: []common.SearchResult{}, sparseErr: sentinel}
+	r := NewHybridRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	_, err := r.Retrieve(context.Background(), "q", 5, nil, RetrievalModeVector)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_Retrieve_sparse分支错误透传
+func TestHybridRetriever_Retrieve_sparse分支错误透传(t *testing.T) {
+	sentinel := errors.New("bm25 backend down")
+	store := &fakeVectorStore{sparseErr: sentinel}
+	r := NewHybridRetriever(store, nil)
+	_, err := r.Retrieve(context.Background(), "q", 5, nil, RetrievalModeSparse)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_BatchRetrieve_首错即返回 裸 gather 语义：q1 成功 q2 失败整体 error
+func TestHybridRetriever_BatchRetrieve_首错即返回(t *testing.T) {
+	sentinel := errors.New("hybrid backend down")
+	store := &fakeVectorStore{
+		hybridResult: []common.SearchResult{
+			{ID: "1", Text: "q1 result", Score: 0.9, Metadata: map[string]any{}},
+		},
+		hybridErr: sentinel,
+	}
+	r := NewHybridRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	// 首次 hybrid 调用成功后报错：q1 成功、q2 失败（errgroup 首错传播）
+	store.hybridErr = nil
+	results, err := r.BatchRetrieve(context.Background(), []string{"q1"}, 5)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	store.hybridErr = sentinel
+	_, err = r.BatchRetrieve(context.Background(), []string{"q1", "q2"}, 5)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "hybrid backend down")
+}
+
+// TestHybridRetriever_RetrieveSearchResults_hybrid分支Embed错误透传
+func TestHybridRetriever_RetrieveSearchResults_hybrid分支Embed错误透传(t *testing.T) {
+	sentinel := errors.New("embed backend down")
+	r := NewHybridRetriever(&fakeVectorStore{}, &fakeEmbedModel{err: sentinel})
+	_, err := r.RetrieveSearchResults(context.Background(), "q", 5, RetrievalModeHybrid)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_hybrid分支错误透传
+func TestHybridRetriever_RetrieveSearchResults_hybrid分支错误透传(t *testing.T) {
+	sentinel := errors.New("hybrid backend down")
+	store := &fakeVectorStore{hybridErr: sentinel}
+	r := NewHybridRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	_, err := r.RetrieveSearchResults(context.Background(), "q", 5, RetrievalModeHybrid)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_vector模式无embed rsr 的 155202（vector 分支内嵌校验）
+func TestHybridRetriever_RetrieveSearchResults_vector模式无embed(t *testing.T) {
+	r := NewHybridRetriever(&fakeVectorStore{}, nil)
+	_, err := r.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalModeVector)
+	require.Error(t, err)
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155202, be.Code())
+}
+
+// TestHybridRetriever_RetrieveSearchResults_vector分支Embed错误透传
+func TestHybridRetriever_RetrieveSearchResults_vector分支Embed错误透传(t *testing.T) {
+	sentinel := errors.New("embed backend down")
+	r := NewHybridRetriever(&fakeVectorStore{}, &fakeEmbedModel{err: sentinel})
+	_, err := r.RetrieveSearchResults(context.Background(), "q", 5, RetrievalModeVector)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_vector分支Search错误透传
+func TestHybridRetriever_RetrieveSearchResults_vector分支Search错误透传(t *testing.T) {
+	sentinel := errors.New("vector backend down")
+	store := &fakeVectorStore{searchErr: sentinel}
+	r := NewHybridRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	_, err := r.RetrieveSearchResults(context.Background(), "q", 5, RetrievalModeVector)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_BM25兜底 rsr 空结果也走 BM25 兜底（对齐 Python L194-199）
+func TestHybridRetriever_RetrieveSearchResults_BM25兜底(t *testing.T) {
+	store := &fakeVectorStore{
+		searchResult: []common.SearchResult{},
+		sparseResult: []common.SearchResult{
+			{ID: "1", Text: "Sparse result", Score: 0.8, Metadata: map[string]any{}},
+		},
+	}
+	r := NewHybridRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	results, err := r.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalModeVector)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, "Sparse result", results[0].Text)
+	assert.Equal(t, 1, store.sparseCalls)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_BM25兜底错误透传
+func TestHybridRetriever_RetrieveSearchResults_BM25兜底错误透传(t *testing.T) {
+	sentinel := errors.New("bm25 backend down")
+	store := &fakeVectorStore{searchResult: []common.SearchResult{}, sparseErr: sentinel}
+	r := NewHybridRetriever(store, &fakeEmbedModel{queryVec: []float64{0.1}})
+	_, err := r.RetrieveSearchResults(context.Background(), "q", 5, RetrievalModeVector)
+	require.Equal(t, sentinel, err)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_sparse分支错误透传
+func TestHybridRetriever_RetrieveSearchResults_sparse分支错误透传(t *testing.T) {
+	sentinel := errors.New("bm25 backend down")
+	store := &fakeVectorStore{sparseErr: sentinel}
+	r := NewHybridRetriever(store, nil)
+	_, err := r.RetrieveSearchResults(context.Background(), "q", 5, RetrievalModeSparse)
+	require.Equal(t, sentinel, err)
+}
