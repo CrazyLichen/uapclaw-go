@@ -683,3 +683,14 @@ func TestUapClaw_ProcessMessageStream_AfterChat钩子无内容条件(t *testing.
 	require.NotNil(t, afterContent.Load(), "流式 after 钩子应触发（memory_mode=cloud 即触发，无内容条件）")
 	assert.Equal(t, "流式回复", afterContent.Load().(string), "assistant_message 应回退拼接 delta")
 }
+
+func TestUapClaw_ensureSkillDevService_完整构造与幂等(t *testing.T) {
+	uc := NewUapClaw()
+	svc1, err := uc.ensureSkillDevService()
+	require.NoError(t, err)
+	require.NotNil(t, svc1)
+	// 幂等：第二次返回同一实例
+	svc2, err := uc.ensureSkillDevService()
+	require.NoError(t, err)
+	assert.Equal(t, svc1, svc2, "ensureSkillDevService 应幂等返回同一实例")
+}

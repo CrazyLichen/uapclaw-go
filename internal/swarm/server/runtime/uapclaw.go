@@ -10,8 +10,10 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
@@ -802,19 +804,53 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 
 // ensureSkillDevService 确保 SkillDevService 已初始化，幂等。
 //
-// Python: JiuWenClaw 中 _skilldev_service 在首次使用时懒初始化。
+// SkillDevService 是无状态的，单实例即可服务所有请求。
+// 首次调用时构造完整依赖：stateStore/workspaceProvider 基于 workspace 下
+// skilldev 目录，模型配置从 config models.default 提取，
+// MCP 工具工厂注入 swarmtools.GetMcpTools。
+//
+// Python: JiuWenClaw._get_skilldev_service (interface.py:247-279)
 func (uc *UapClaw) ensureSkillDevService() (*skilldev.SkillDevService, error) {
 	uc.skilldevMu.Lock()
 	defer uc.skilldevMu.Unlock()
 	if uc.skilldevService != nil {
 		return uc.skilldevService, nil
 	}
-	// 构造默认 SkillDevDeps（零值依赖，各字段在 SkillDevDeps 内部懒加载）
-	deps := &skilldev.SkillDevDeps{}
+	// 对齐 Python interface.py:261-263: get_workspace_dir() / "skilldev"
+	skilldevBase := filepath.Join(workspace.WorkspaceDir(), "skilldev")
+	stateStore := skilldev.NewStateStore(skilldevBase)
+	workspaceProvider := skilldev.NewWorkspaceProvider(skilldevBase)
+
+	// 对齐 Python interface.py:265-267: config.get("models", {}).get("default", {})
+	modelName := ""
+	modelClientConfig := map[string]any{}
+	if c, cfgErr := config.New(""); cfgErr == nil {
+		if loaded, loadErr := c.Load(); loadErr == nil {
+			if models, ok := loaded["models"].(map[string]any); ok {
+				if defaultModel, ok := models["default"].(map[string]any); ok {
+					if n, ok := defaultModel["model_name"].(string); ok {
+						modelName = n
+					}
+					if mcc, ok := defaultModel["model_client_config"].(map[string]any); ok {
+						modelClientConfig = mcc
+					}
+				}
+			}
+		}
+	}
+
+	deps := &skilldev.SkillDevDeps{
+		ModelName:         modelName,
+		ModelClientConfig: modelClientConfig,
+		MCPToolsFactory:   swarmtools.GetMcpTools, // 对齐 Python: mcp_tools_factory=get_mcp_tools
+		SysOpConfig:       nil,                    // 对齐 Python: sysop_config=None
+		StateStore:        stateStore,
+		WorkspaceProvider: workspaceProvider,
+	}
 	svc := skilldev.NewSkillDevService(deps)
 	uc.skilldevService = svc
 	logger.Info(logComponent).
-		Msg("UapClaw SkillDevService lazily initialized")
+		Msg("UapClaw SkillDevService initialized with full deps")
 	return svc, nil
 }
 
