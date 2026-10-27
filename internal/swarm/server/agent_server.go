@@ -10,6 +10,7 @@ import (
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
@@ -119,6 +120,12 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	// 11.10 已回填：注入 E2A push 到 cronbridge（对齐 Python WebSocketGatewayPushTransport 注入）
 	// Agent 侧 CronTools.SendSplit 经此通道转发 cron 请求到 Gateway
 	cronbridge.SetGlobalGatewayPushFunc(s.SendPush)
+
+	// 10.6.24b 已回填：注入 SendFile push/history 双函数到 swarmtools
+	// Python 为函数体 lazy import + AgentWebSocketServer.get_instance() 单例——
+	// Go 编译期成环（swarmtools→server），等价机制为启动接线（与上行 cronbridge 四行对称）
+	swarmtools.SetSendFilePushFunc(s.SendPush)
+	swarmtools.SetSendFileHistoryFunc(session.AppendHistoryRecord)
 
 	ctx, s.cancel = context.WithCancel(ctx)
 	go s.run(ctx)
