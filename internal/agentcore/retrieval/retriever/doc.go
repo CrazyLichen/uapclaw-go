@@ -9,15 +9,17 @@
 //
 //	retriever/
 //	├── doc.go               # 包文档
-//	├── base.go              # Retriever 接口 + RetrievalMode + RetrieveOptions
+//	├── base.go              # Retriever 接口 + RetrievalMode + RetrieveOptions（13.21 平铺 Alpha）
 //	├── vector_retriever.go  # VectorRetriever 向量检索器
-//	└── sparse_retriever.go  # SparseRetriever 稀疏检索器（BM25）
+//	├── sparse_retriever.go  # SparseRetriever 稀疏检索器（BM25）
+//	└── hybrid_retriever.go  # HybridRetriever 混合检索器（向量+稀疏，alpha 权重路由）
 //
 // 对应 Python 代码：
 //
 //	openjiuwen/core/retrieval/retriever/base.py
 //	openjiuwen/core/retrieval/retriever/vector_retriever.py
 //	openjiuwen/core/retrieval/retriever/sparse_retriever.py
+//	openjiuwen/core/retrieval/retriever/hybrid_retriever.py
 //
 // 核心类型/接口索引：
 //
@@ -25,4 +27,5 @@
 //	RetrievalMode  — 检索模式枚举（vector/sparse/hybrid）
 //	VectorRetriever  — 向量检索器实现
 //	SparseRetriever  — 稀疏检索器实现
+//	HybridRetriever  — 混合检索器实现（alpha 权重路由，RRF 融合在 store 层）
 package retriever

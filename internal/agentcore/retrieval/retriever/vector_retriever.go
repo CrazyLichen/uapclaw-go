@@ -58,7 +58,7 @@ func (r *VectorRetriever) Retrieve(ctx context.Context, query string, topK int, 
 		)
 	}
 	// Python L65-69 的 155201（threshold+mode≠vector）为死分支（前置 mode 校验
-	// 先抛 155200），跳过归档 spec §8-2；155201 留 13.21 HybridRetriever 真实消费
+	// 先抛 155200），跳过归档 spec §8-2；已由 13.21 HybridRetriever 真实消费
 
 	if r.embedModel == nil {
 		return nil, exception.BuildError(
