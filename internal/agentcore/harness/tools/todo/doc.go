@@ -10,7 +10,9 @@
 //
 //	todo/
 //	├── doc.go      # 包文档
-//	└── todo.go     # TodoLockManager + TodoTool 基类 + 四个工具工厂函数
+//	└── todo.go     # TodoLockManager + TodoTool 基类 + 四个工具工厂函数 +
+//	                # 工厂注入版 todo_modify（NewTodoModifyToolWithUpdateFn）+ TodoModifyToolFactory +
+//	                # CreateTodosToolWithModifyFactory + CancelTodos 导出（10.6.24a）
 //
 // 对应 Python 代码：openjiuwen/harness/tools/todo/
 package todo

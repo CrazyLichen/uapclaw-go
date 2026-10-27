@@ -587,6 +587,7 @@ func addDefaultRails(
 		taskPlanningRail := rails.NewTaskPlanningRail(
 			rails.WithModelSelection(modelSelMap),
 			rails.WithLanguage(resolvedLanguage),
+			rails.WithTodoModifyFactory(params.TodoModifyFactory),
 		)
 		agent.AddRail(taskPlanningRail)
 		logger.Debug(logComponent).

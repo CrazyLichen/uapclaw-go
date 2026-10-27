@@ -6,6 +6,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -85,4 +86,8 @@ type CreateDeepAgentParams struct {
 	// ContextEngineConfig 上下文引擎配置
 	// Python: context_engine_config=_deep_agent_context_engine_config(config)
 	ContextEngineConfig *schema.ContextEngineConfig
+	// TodoModifyFactory todo_modify 工具工厂注入（Python 无此字段）。
+	// Python 通过 install_todo_modify_compat_patch() 模块级 monkey-patch 实现，
+	// Go 机制差异显式注入；nil 时 TaskPlanningRail 使用原生工具。
+	TodoModifyFactory todo.TodoModifyToolFactory
 }

@@ -61,6 +61,9 @@ type TaskPlanningRail struct {
 	language string
 	// agentID Agent 标识
 	agentID string
+	// todoModifyFactory todo_modify 工具工厂（nil 时原生构造）
+	// swarm 层 todo_compat 兼容层注入点，等价 Python install_todo_modify_compat_patch()
+	todoModifyFactory todo.TodoModifyToolFactory
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -106,6 +109,12 @@ func WithModelSelection(m map[*llm.Model]string) TaskPlanningOption {
 // WithLanguage 设置语言
 func WithLanguage(lang string) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.language = lang }
+}
+
+// WithTodoModifyFactory 设置 todo_modify 工具工厂。
+// swarm 层 todo_compat 兼容层通过此选项注入 CompatibleTodoModifyTool。
+func WithTodoModifyFactory(f todo.TodoModifyToolFactory) TaskPlanningOption {
+	return func(r *TaskPlanningRail) { r.todoModifyFactory = f }
 }
 
 // WithAgentID 设置 Agent 标识
@@ -213,7 +222,7 @@ func (r *TaskPlanningRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 		return nil
 	}
 
-	allTools, todoToolBase := todo.CreateTodosTool(workspaceDir, fsOp.Fs(), language, agentID)
+	allTools, todoToolBase := todo.CreateTodosToolWithModifyFactory(workspaceDir, fsOp.Fs(), language, agentID, r.todoModifyFactory)
 	r.todoTool = &todoToolBase
 
 	resourceMgr := runner.GetResourceMgr()

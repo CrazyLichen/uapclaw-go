@@ -89,6 +89,12 @@ type TodoInsertData struct {
 	Items []map[string]any `json:"items"`
 }
 
+// TodoModifyToolFactory todo_modify 工具工厂。
+// swarm 层（todo_compat）通过此工厂替换默认的 update 分派逻辑，
+// 等价 Python install_todo_modify_compat_patch() 的模块级 monkey-patch。
+// Python 无此类型（机制差异显式化），Go 用函数注入替代继承覆盖。
+type TodoModifyToolFactory func(todoTool TodoTool, language, agentID string) tool.Tool
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -484,6 +490,14 @@ func NewTodoGetTool(todoTool TodoTool, language, agentID string) tool.Tool {
 // NewTodoModifyTool 创建待办事项修改工具。
 // Python: TodoModifyTool.__init__
 func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
+	return NewTodoModifyToolWithUpdateFn(todoTool, language, agentID, nil)
+}
+
+// NewTodoModifyToolWithUpdateFn 创建带自定义 update 分派的 todo_modify 工具。
+// updateFn 为 nil 时走原生 updateTodos（与 NewTodoModifyTool 行为一致）。
+// swarm 层 todo_compat 兼容层通过注入 compatibleUpdateTodos 实现客户端
+// status=deleted/delete payload 映射（等价 Python 子类覆盖 _update_todos）。
+func NewTodoModifyToolWithUpdateFn(todoTool TodoTool, language, agentID string, updateFn func(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.TodoItem, string, error)) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_modify", "TodoModifyTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input TodoModifyInput, opts ...tool.ToolOption) (map[string]any, error) {
@@ -509,7 +523,11 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			var msg string
 			switch input.Action {
 			case "update":
-				updatedTodos, msg, err = updateTodos(todos, input.Todos)
+				if updateFn != nil {
+					updatedTodos, msg, err = updateFn(todos, input.Todos)
+				} else {
+					updatedTodos, msg, err = updateTodos(todos, input.Todos)
+				}
 			case "delete":
 				updatedTodos, msg, err = deleteTodos(todos, input.IDs)
 			case "cancel":
@@ -587,18 +605,36 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	return invokeFn
 }
 
-// CreateTodosTool 创建全部待办事项工具集，同时返回 TodoTool 基类供 Rail 调用 LoadTodos/SaveTodos/CleanupSession。
-// Python: create_todos_tool
-func CreateTodosTool(workspace string, fs sys_operation.FsOperation, language, agentID string) ([]tool.Tool, TodoTool) {
+// CreateTodosToolWithModifyFactory 创建全部待办事项工具集，todo_modify 项由工厂构造。
+// modifyFactory 为 nil 时等价 CreateTodosTool（modify 项走原生 NewTodoModifyTool）。
+func CreateTodosToolWithModifyFactory(workspace string, fs sys_operation.FsOperation, language, agentID string, modifyFactory TodoModifyToolFactory) ([]tool.Tool, TodoTool) {
 	lockManager := NewTodoLockManager()
 	todoTool := newTodoTool(workspace, fs, lockManager)
-	tools := []tool.Tool{
+	var modifyTool tool.Tool
+	if modifyFactory != nil {
+		modifyTool = modifyFactory(todoTool, language, agentID)
+	} else {
+		modifyTool = NewTodoModifyTool(todoTool, language, agentID)
+	}
+	toolsList := []tool.Tool{
 		NewTodoCreateTool(todoTool, language, agentID),
 		NewTodoListTool(todoTool, language, agentID),
 		NewTodoGetTool(todoTool, language, agentID),
-		NewTodoModifyTool(todoTool, language, agentID),
+		modifyTool,
 	}
-	return tools, todoTool
+	return toolsList, todoTool
+}
+
+// CreateTodosTool 创建全部待办事项工具集，同时返回 TodoTool 基类供 Rail 调用 LoadTodos/SaveTodos/CleanupSession。
+// Python: create_todos_tool
+func CreateTodosTool(workspace string, fs sys_operation.FsOperation, language, agentID string) ([]tool.Tool, TodoTool) {
+	return CreateTodosToolWithModifyFactory(workspace, fs, language, agentID, nil)
+}
+
+// CancelTodos cancel 操作的导出包装，供 swarm 侧 cancelPendingTodos 调用
+// （Python _cancel_todos 在 SDK 内含 save；Go 原生分派不含，调用方显式两步——spec 偏差 #2）。
+func CancelTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, string, error) {
+	return cancelTodos(todos, ids)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
