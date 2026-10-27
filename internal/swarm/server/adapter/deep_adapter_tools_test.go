@@ -83,3 +83,20 @@ func TestBuildImageGenModelConfig_无key返回false(t *testing.T) {
 		t.Error("有 IMAGE_GEN_API_KEY 应返回 true")
 	}
 }
+
+// TestGetToolCards_步骤1_wiki三工具 验证 getToolCards 步骤 1 注册 wiki 3 工具。
+// Python: _get_tool_cards 步骤 1 (interface_deep.py:2360-2366)
+func TestGetToolCards_步骤1_wiki三工具(t *testing.T) {
+	d := NewDeepAdapter()
+	d.configBase = map[string]any{}
+	cards := d.getToolCards("agent-1")
+	names := map[string]bool{}
+	for _, c := range cards {
+		names[c.Name] = true
+	}
+	for _, want := range []string{"wiki_ingest", "wiki_query", "wiki_lint"} {
+		if !names[want] {
+			t.Errorf("缺少 wiki 工具卡: %s", want)
+		}
+	}
+}

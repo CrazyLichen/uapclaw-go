@@ -521,18 +521,18 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	var toolCards []*tool.ToolCard
 
 	// ── 步骤 1: wiki 工具 ──
-	// Python:
-	//   Python: for wtool in [wiki_ingest, wiki_query, wiki_lint]:
-	//       Python: if not Runner.resource_mgr.get_tool(wtool.card.id):
-	//           Python: Runner.resource_mgr.add_tool(wtool)
-	//       Python: tool_cards.append(wtool.card)
-	// ⤵️ 10.6.24: wiki_ingest / wiki_query / wiki_lint 工具类尚未实现
-	// 待实现：注册Wiki工具 for _, wtool := range []tool.Tool{wikiIngest, wikiQuery, wikiLint} {
-	//     if rm.GetTool([]string{wtool.Card().ID}) == nil {
-	//         _ = rm.AddTool(wtool)
-	//     }
-	//     toolCards = append(toolCards, wtool.Card())
-	// }
+	// Python: for wtool in [wiki_ingest, wiki_query, wiki_lint]:
+	//   if not Runner.resource_mgr.get_tool(wtool.card.id): add_tool(wtool)
+	//   tool_cards.append(wtool.card)
+	for _, wtool := range []tool.Tool{swarmtools.WikiIngest, swarmtools.WikiQuery, swarmtools.WikiLint} {
+		existing, _ := runner.GetResourceMgr().GetTool([]string{wtool.Card().ID})
+		if len(existing) == 0 {
+			if err := runner.GetResourceMgr().AddTool(wtool); err != nil {
+				logger.Warn(logComponent).Err(err).Str("tool_name", wtool.Card().Name).Msg("failed to register wiki tool to ResourceMgr")
+			}
+		}
+		toolCards = append(toolCards, wtool.Card())
+	}
 
 	// ── 步骤 2: 付费搜索工具 ──
 	// Python:
