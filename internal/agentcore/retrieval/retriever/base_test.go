@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
@@ -13,26 +14,24 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/vector_store"
 )
 
-// TestNewRetrieveOptions_空参数 空参数构建零值选项
+// TestNewRetrieveOptions_空参数 空参数构建零值选项（Alpha nil=未设）
 func TestNewRetrieveOptions_空参数(t *testing.T) {
 	o := NewRetrieveOptions()
-	assert.Nil(t, o.Extra)
+	assert.Nil(t, o.Alpha)
 }
 
-// TestWithRetrieveExtra_单键 Extra 单键写入
-func TestWithRetrieveExtra_单键(t *testing.T) {
-	o := NewRetrieveOptions(WithRetrieveExtra("alpha", 0.8))
-	assert.Equal(t, map[string]any{"alpha": 0.8}, o.Extra)
+// TestWithRetrieveAlpha_设置 13.21 平铺字段：设置后非 nil、值正确
+func TestWithRetrieveAlpha_设置(t *testing.T) {
+	o := NewRetrieveOptions(WithRetrieveAlpha(0.8))
+	require.NotNil(t, o.Alpha)
+	assert.Equal(t, 0.8, *o.Alpha)
 }
 
-// TestWithRetrieveExtra_多选项 多选项合并（惰性建 map）
-func TestWithRetrieveExtra_多选项(t *testing.T) {
-	o := NewRetrieveOptions(
-		WithRetrieveExtra("alpha", 0.5),
-		WithRetrieveExtra("filters", map[string]any{"doc_id": "d1"}),
-	)
-	assert.Equal(t, 0.5, o.Extra["alpha"])
-	assert.Equal(t, map[string]any{"doc_id": "d1"}, o.Extra["filters"])
+// TestWithRetrieveAlpha_显式零 显式 0 是合法纯稀疏语义，与未设（nil）区分
+func TestWithRetrieveAlpha_显式零(t *testing.T) {
+	o := NewRetrieveOptions(WithRetrieveAlpha(0))
+	require.NotNil(t, o.Alpha)
+	assert.Equal(t, 0.0, *o.Alpha)
 }
 
 // TestRetrievalMode_常量值 枚举常量对齐 Python 字面量

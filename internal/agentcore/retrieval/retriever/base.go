@@ -45,13 +45,18 @@ const (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// RetrieveOptions 检索选项（Python **kwargs 收纳容器）。
+// RetrieveOptions 检索选项（Python **kwargs 的闭合世界对应物）。
 //
-// 本节 Vector/Sparse 收而不用（对齐 Python 死参数：kwargs 收了不读）；
-// 13.21 HybridRetriever 消费 alpha 键；13.27 SimpleKnowledgeBase 写入 filters 键。
+// 13.21 修订：原 Extra map[string]any 平铺为类型化字段（编译期类型安全，
+// 2026-10-28 拍板）。原"Extra 收纳 **kwargs"设计见 13.19 spec §4.1，
+// 修订记录归档两 spec，原约定不删除。
 type RetrieveOptions struct {
-	// Extra 透传给实现的额外参数
-	Extra map[string]any
+	// Alpha hybrid 检索权重（0=纯稀疏，1=纯向量，0.5=平衡）。
+	// nil = 未设置 → HybridRetriever 回落构造默认；非 nil = 调用时覆写。
+	// 指针类型区分"未设"与"显式 0"（alpha=0 是合法纯稀疏语义，不能与
+	// 零值混淆）。仅 HybridRetriever 消费；Vector/Sparse 不读
+	// （对齐 Python 死参数）。
+	Alpha *float64
 }
 
 // RetrieveOption RetrieveOptions 的函数选项。
@@ -68,12 +73,7 @@ func NewRetrieveOptions(opts ...RetrieveOption) RetrieveOptions {
 	return o
 }
 
-// WithRetrieveExtra 设置 Extra 单键的 RetrieveOption。
-func WithRetrieveExtra(key string, value any) RetrieveOption {
-	return func(o *RetrieveOptions) {
-		if o.Extra == nil {
-			o.Extra = make(map[string]any)
-		}
-		o.Extra[key] = value
-	}
+// WithRetrieveAlpha 设置 hybrid 检索权重的 RetrieveOption。
+func WithRetrieveAlpha(v float64) RetrieveOption {
+	return func(o *RetrieveOptions) { o.Alpha = &v }
 }
