@@ -61,7 +61,14 @@ type fakeVectorStore struct {
 	lastTopK       int
 	lastQueryVec   []float64
 	lastQueryText  string
-	mu             sync.Mutex
+	// hybridResult/hybridErr/lastAlpha/lastHybridVec/hybridCalls 为 13.21
+	// HybridSearch 可编程化桩（mu 保护，BatchRetrieve 并发打桩先例）
+	hybridResult  []common.SearchResult
+	hybridErr     error
+	hybridCalls   int
+	lastAlpha     float64   // alpha 覆写断言用（Python call_args 对应物）
+	lastHybridVec []float64 // embed nil 纯稀疏路径断言用（区别于 search 的 lastQueryVec）
+	mu            sync.Mutex
 }
 
 func (f *fakeVectorStore) CheckVectorField() error { return nil }
@@ -87,8 +94,14 @@ func (f *fakeVectorStore) SparseSearch(_ context.Context, queryText string, topK
 	f.lastQueryText = queryText
 	return f.sparseResult, f.sparseErr
 }
-func (f *fakeVectorStore) HybridSearch(_ context.Context, _ string, _ []float64, _ int, _ float64, _ query.QueryExpr, _ ...vector_store.StoreOption) ([]common.SearchResult, error) {
-	return nil, nil
+func (f *fakeVectorStore) HybridSearch(_ context.Context, queryText string, queryVector []float64, _ int, alpha float64, _ query.QueryExpr, _ ...vector_store.StoreOption) ([]common.SearchResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hybridCalls++
+	f.lastQueryText = queryText
+	f.lastHybridVec = queryVector
+	f.lastAlpha = alpha
+	return f.hybridResult, f.hybridErr
 }
 func (f *fakeVectorStore) Delete(_ context.Context, _ []string, _ query.QueryExpr) (bool, error) {
 	return false, nil
