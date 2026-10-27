@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/vector_store"
@@ -29,6 +31,9 @@ type HybridRetriever struct {
 
 // HybridRetrieverOption HybridRetriever 的构造选项。
 type HybridRetrieverOption func(*HybridRetriever)
+
+// 编译期断言：HybridRetriever 满足 Retriever 接口。
+var _ Retriever = (*HybridRetriever)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -155,4 +160,105 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, query string, topK int, 
 		})
 	}
 	return retrievalResults, nil
+}
+
+// BatchRetrieve 批量并发检索。
+//
+// 对齐 Python HybridRetriever.batch_retrieve（L132-144）裸 asyncio.gather：
+// 全启动、首错传播、其余不取消（裸 errgroup 不派生 ctx 不 cancel，
+// 13.20 两兄弟同构）。alpha 经 opts 随 batch 透传（对齐 Python
+// **kwargs 展开调用 self.retrieve(query, top_k=top_k, **kwargs)）。
+func (r *HybridRetriever) BatchRetrieve(ctx context.Context, queries []string, topK int, opts ...RetrieveOption) ([][]common.RetrievalResult, error) {
+	results := make([][]common.RetrievalResult, len(queries))
+	var g errgroup.Group
+	for i, q := range queries {
+		g.Go(func() error {
+			// Python batch_retrieve 不传 mode/score_threshold → 子类默认/None
+			res, err := r.Retrieve(ctx, q, topK, nil, "", opts...)
+			if err != nil {
+				return err
+			}
+			results[i] = res
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+// RetrieveSearchResults 检索原始 SearchResult（不归一化、不阈值过滤）。
+//
+// 对齐 Python retrieve_search_results（L146-209）：三分支树与 Retrieve
+// 完全相同，差异两处——无 155201 threshold 前置校验（Python rsr 没有
+// 这段，同文件不对称字面复刻 spec §8-5）、无归一化循环（直接返回）。
+func (r *HybridRetriever) RetrieveSearchResults(ctx context.Context, query string, topK int, mode RetrievalMode, opts ...RetrieveOption) ([]common.SearchResult, error) {
+	options := NewRetrieveOptions(opts...)
+	alpha := r.alpha
+	if options.Alpha != nil {
+		alpha = *options.Alpha
+	}
+
+	// mode 零值回落子类默认（spec §8-1：Python 签名默认 "hybrid"）
+	if mode == "" {
+		mode = RetrievalModeHybrid
+	}
+
+	switch mode {
+	case RetrievalModeHybrid:
+		// 混合检索：embed 可选，nil 向量走 store 层纯稀疏路径
+		var queryVector []float64
+		var err error
+		if r.embedModel != nil {
+			queryVector, err = r.embedModel.EmbedQuery(ctx, query)
+			if err != nil {
+				return nil, err // Python await 直接冒泡，不包装
+			}
+		}
+		return r.vectorStore.HybridSearch(ctx, query, queryVector, topK, alpha, nil)
+	case RetrievalModeVector:
+		// 纯向量检索：embed 必需
+		if r.embedModel == nil {
+			return nil, exception.BuildError(
+				exception.StatusRetrievalRetrieverEmbedModelNotFound,
+				exception.WithParam("error_msg", "embed_model is required for vector search"),
+			)
+		}
+		queryVector, err := r.embedModel.EmbedQuery(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		searchResults, err := r.vectorStore.Search(ctx, queryVector, topK, nil)
+		if err != nil {
+			return nil, err
+		}
+		// 向量检索空结果时兜底 BM25（对齐 Python fallback to sparse）
+		if len(searchResults) == 0 {
+			searchResults, err = r.vectorStore.SparseSearch(ctx, query, topK, nil)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return searchResults, nil
+	case RetrievalModeSparse:
+		// 纯稀疏检索（BM25）
+		return r.vectorStore.SparseSearch(ctx, query, topK, nil)
+	default:
+		return nil, exception.BuildError(
+			exception.StatusRetrievalRetrieverModeNotSupport,
+			exception.WithParam("error_msg", fmt.Sprintf("Unsupported mode: %s", mode)),
+		)
+	}
+}
+
+// Close 关闭检索器。
+//
+// 对齐 Python close()（L211-221）：if self.vector_store 判空后关底层。
+// Python 的 getattr+iscoroutinefunction 鸭子探测消解为接口静态
+// Close() 直调（spec §8-7，同 13.20 两兄弟）。
+func (r *HybridRetriever) Close() {
+	if r.vectorStore != nil {
+		r.vectorStore.Close()
+	}
 }

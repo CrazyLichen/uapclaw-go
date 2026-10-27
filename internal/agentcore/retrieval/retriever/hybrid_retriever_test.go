@@ -221,3 +221,100 @@ func TestHybridRetriever_Retrieve_默认alpha05(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0.5, store.lastAlpha)
 }
+
+// TestHybridRetriever_BatchRetrieve 对齐 test_batch_retrieve
+func TestHybridRetriever_BatchRetrieve(t *testing.T) {
+	r, _, _ := newHybridFixture()
+	results, err := r.BatchRetrieve(context.Background(), []string{"query 1", "query 2"}, 5)
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+	assert.Len(t, results[0], 2)
+	assert.Len(t, results[1], 2)
+}
+
+// TestHybridRetriever_BatchRetrieve_alpha透传 batch 的 alpha 经 opts 透传
+// （对齐 Python batch_retrieve 的 **kwargs 展开调用 self.retrieve(query, top_k=top_k, **kwargs)）
+func TestHybridRetriever_BatchRetrieve_alpha透传(t *testing.T) {
+	r, store, _ := newHybridFixture0(0.3)
+	_, err := r.BatchRetrieve(context.Background(), []string{"q1", "q2"}, 5, WithRetrieveAlpha(0.9))
+	require.NoError(t, err)
+	assert.Equal(t, 0.9, store.lastAlpha) // 批内每次调用都收到覆写值
+	assert.Equal(t, 2, store.hybridCalls) // 两 query 各走一次 hybrid 路径
+}
+
+// TestHybridRetriever_BatchRetrieve_空queries 空切片非 nil（对齐 Python []）
+func TestHybridRetriever_BatchRetrieve_空queries(t *testing.T) {
+	r, _, _ := newHybridFixture()
+	results, err := r.BatchRetrieve(context.Background(), []string{}, 5)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+	assert.NotNil(t, results)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_hybrid模式 G-6：直接返回 SearchResult 不归一化
+func TestHybridRetriever_RetrieveSearchResults_hybrid模式(t *testing.T) {
+	r, store, _ := newHybridFixture()
+	results, err := r.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalModeHybrid)
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+	assert.Equal(t, "1", results[0].ID) // 原始 ID，非归一化
+	assert.Equal(t, 1, store.hybridCalls)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_vector模式 G-6
+func TestHybridRetriever_RetrieveSearchResults_vector模式(t *testing.T) {
+	r, store, _ := newHybridFixture()
+	results, err := r.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalModeVector)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, 1, store.searchCalls)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_sparse模式 G-6
+func TestHybridRetriever_RetrieveSearchResults_sparse模式(t *testing.T) {
+	store := &fakeVectorStore{
+		sparseResult: []common.SearchResult{
+			{ID: "1", Text: "Sparse result", Score: 0.8, Metadata: map[string]any{}},
+		},
+	}
+	r := NewHybridRetriever(store, nil)
+	results, err := r.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalModeSparse)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, 1, store.sparseCalls)
+}
+
+// TestHybridRetriever_RetrieveSearchResults_无阈值校验 G-7：rsr 签名本无
+// scoreThreshold（对齐 Python rsr 签名），hybrid+alpha 调用不触发 155201
+// （Python retrieve 有前置校验、rsr 没有——同文件不对称，字面复刻 spec §8-5）
+func TestHybridRetriever_RetrieveSearchResults_无阈值校验(t *testing.T) {
+	r, store, _ := newHybridFixture()
+	results, err := r.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalModeHybrid, WithRetrieveAlpha(0.9))
+	require.NoError(t, err) // 无 155201 触发点
+	assert.Len(t, results, 2)
+	assert.Equal(t, 0.9, store.lastAlpha) // alpha 照常生效
+}
+
+// TestHybridRetriever_RetrieveSearchResults_模式不支持 G-4（rsr 侧同款文案）
+func TestHybridRetriever_RetrieveSearchResults_模式不支持(t *testing.T) {
+	r, _, _ := newHybridFixture()
+	_, err := r.RetrieveSearchResults(context.Background(), "test query", 5, RetrievalMode("foo"))
+	require.Error(t, err)
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155200, be.Code())
+	assert.Contains(t, be.Message(), "Unsupported mode: foo")
+}
+
+// TestHybridRetriever_Close_关闭底层 G-9：对齐 Python close() 判空关底层
+func TestHybridRetriever_Close_关闭底层(t *testing.T) {
+	r, store, _ := newHybridFixture()
+	r.Close()
+	assert.Equal(t, 1, store.closeCalls)
+}
+
+// TestHybridRetriever_Close_nilStore不panic G-9 边界
+func TestHybridRetriever_Close_nilStore不panic(t *testing.T) {
+	r := NewHybridRetriever(nil, nil)
+	assert.NotPanics(t, r.Close)
+}
