@@ -37,7 +37,7 @@
 - Modify: `internal/agentcore/retrieval/retriever/base.go`（RetrieveOptions 结构体，约 L57-72）
 - Test: `internal/agentcore/retrieval/retriever/base_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `base_test.go` 末尾追加（对齐既有 Alpha 字段测试形态，先查该文件中现有 `WithRetrieveAlpha` 用例命名再落位）：
 
@@ -60,14 +60,14 @@ func TestNewRetrieveOptions_graphExpansion字段(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/retrieval/retriever/ -run TestNewRetrieveOptions_graphExpansion -count=1 2>&1 | tail -3
 ```
 预期：编译失败 `undefined: WithRetrieveGraphExpansion`。
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 `base.go` 的 RetrieveOptions 结构体 `NumCandidatesPerBeam` 字段后追加：
 
@@ -89,14 +89,14 @@ func WithRetrieveGraphExpansion(v bool) RetrieveOption {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/retriever/ -run TestNewRetrieveOptions -count=1 2>&1 | tail -2
 ```
 预期：PASS（含既有字段用例）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/retrieval/retriever/base.go internal/agentcore/retrieval/retriever/base_test.go
@@ -111,7 +111,7 @@ git commit -m "feat(retriever): RetrieveOptions 新增 GraphExpansion 指针字�
 - Create: `internal/agentcore/retrieval/retriever/agentic_retriever.go`
 - Test: `internal/agentcore/retrieval/retriever/agentic_retriever_test.go`（本任务建桩基建 + 构造测试）
 
-- [ ] **Step 1: 写失败测试（桩基建 + 构造 9 例中的 6 例）**
+- [x] **Step 1: 写失败测试（桩基建 + 构造 9 例中的 6 例）**
 
 新建 `agentic_retriever_test.go`，先落桩基建与构造用例。桩设计依据：spec §6.1（agenticFakeRetriever 可编程 Retrieve/rsr + IndexTypeCarrier；fakeAgenticLLM 按 prompt 内容分派）。13.25 的 LLM 桩**直接持有** `model_clients.BaseModelClient` 接口（不像 13.17 走 llm.NewModel 包装——Python AgenticRetriever 构造参数就是裸 client，不走 Model）：
 
@@ -319,14 +319,14 @@ func TestNewAgenticRetriever_默认模式三态(t *testing.T) {
 
 注意：`messages.Messages()` 的具体方法名实施时以 `model_clients.MessagesParam` 实际定义为准（grep `type MessagesParam` 确认；若为 `[]Message` 切片别名则直接 range）。
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/retriever/ -run TestNewAgenticRetriever -count=1 2>&1 | tail -3
 ```
 预期：编译失败 `undefined: NewAgenticRetriever` 等。
 
-- [ ] **Step 3: 写骨架实现**
+- [x] **Step 3: 写骨架实现**
 
 新建 `agentic_retriever.go`。声明顺序严格按项目规范（结构体→常量→导出函数→非导出函数）。提示词常量从 Python L30-110 **逐字节复制**（三引号内首行 `\n` 起）：
 
@@ -490,14 +490,14 @@ func (a *AgenticRetriever) DefaultMode() RetrievalMode { return a.defaultMode }
 2. 提示词常量从 Python 复制时用 `cat -A` 或 md5 校验（13.24 prompts 的 md5 校验纪律）：`md5sum` Python 源码 L31-48/L52-109 提取串 vs Go 常量。
 3. `Retriever_()` 这个名字有下划线是因为字段名 `retriever` 与接口方法 `Retrieve` 无冲突但方法名 `Retriever()` 会与类型名撞——若包内无冲突可直接叫 `UnderlyingRetriever()`，以编译器为准，doc 注释注明对齐 Python `retriever` 属性。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/retriever/ -run TestNewAgenticRetriever -count=1 2>&1 | tail -3
 ```
 预期：7 个构造用例 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/retrieval/retriever/agentic_retriever.go internal/agentcore/retrieval/retriever/agentic_retriever_test.go
@@ -512,7 +512,7 @@ git commit -m "feat(retriever): AgenticRetriever 骨架——常量/结构体/�
 - Modify: `internal/agentcore/retrieval/retriever/agentic_retriever.go`
 - Test: `internal/agentcore/retrieval/retriever/agentic_retriever_test.go`
 
-- [ ] **Step 1: 写失败测试（通用路径 5 例 + top_k 2 例 + 透传 2 例 + batch 1 例）**
+- [x] **Step 1: 写失败测试（通用路径 5 例 + top_k 2 例 + 透传 2 例 + batch 1 例）**
 
 追加到 `agentic_retriever_test.go`：
 
@@ -693,14 +693,14 @@ func TestBatchRetrieve(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/retriever/ -run 'TestRetrieve_|TestBatchRetrieve' -count=1 2>&1 | tail -3
 ```
 预期：编译失败（Retrieve/BatchRetrieve 方法未实现）。
 
-- [ ] **Step 3: 实现 Retrieve/BatchRetrieve/通用路径/_read/_rewrite/_llmCall**
+- [x] **Step 3: 实现 Retrieve/BatchRetrieve/通用路径/_read/_rewrite/_llmCall**
 
 `agentic_retriever.go` 导出函数区追加（`_read`/`_rewrite`/`_llmCall` 放非导出区）。核心代码：
 
@@ -946,14 +946,14 @@ func pyTruthy(v any) bool {
 
 **核对点**：`jsonrepair.RepairWithOptions` 返回值 `.Value()` 的方法名以 13.17/13.24 实际用法为准（grep `RepairWithOptions` 现有两处用法照抄取值形态）。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/retriever/ -run 'TestRetrieve_|TestBatchRetrieve|TestNewAgenticRetriever' -count=1 2>&1 | tail -3
 ```
 预期：全 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/retrieval/retriever/agentic_retriever.go internal/agentcore/retrieval/retriever/agentic_retriever_test.go
@@ -968,7 +968,7 @@ git commit -m "feat(retriever): AgenticRetriever 通用路径——迭代改写+
 - Modify: `internal/agentcore/retrieval/retriever/agentic_retriever.go`
 - Test: `internal/agentcore/retrieval/retriever/agentic_retriever_test.go`
 
-- [ ] **Step 1: 写失败测试（图路径 2 例 + link 聚合增强 + close 1 例）**
+- [x] **Step 1: 写失败测试（图路径 2 例 + link 聚合增强 + close 1 例）**
 
 ```go
 // ──────────────────────────── 图路径测试 ────────────────────────────
@@ -1150,14 +1150,14 @@ func TestLinkPassages_失败聚合(t *testing.T) {
 
 注意 `TestLinkTriples_部分失败聚合` 里标注的构造修正——写测试时直接把 gr 带桩构造（去掉冗余行）。
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 go test ./internal/agentcore/retrieval/retriever/ -run 'TestRetrieve_图路径|TestClose|TestLink' -count=1 2>&1 | tail -3
 ```
 预期：编译失败（retrieveWithGraph/linkTriples/linkPassages 未定义）。
 
-- [ ] **Step 3: 实现图路径三件**
+- [x] **Step 3: 实现图路径三件**
 
 ```go
 // retrieveWithGraph 图路径：图扩展 + 三元组链接 + 多轮融合。
@@ -1383,14 +1383,14 @@ func tripleFactStr(triple common.TripleFact) string {
 1. Python `_link_triples` 的 Warn 日志两条路径：Exception → 只计数；非 list/空 → "Empty or Unexpected result type" + 计数。上面实现里 error 分支不单独打 "Empty"（对齐 Python：`isinstance(result, Exception)` 走 else 前的 if 分支，不打印 type 日志）。
 2. `append(ret, historyResults...)` 注意 Go 陷阱：ret 是 `[][]RetrievalResult`、historyResults 是 `[][]RetrievalResult`，`append(ret, history...)` 语义即 Python `ret + history` ✅。但**不要** `append(historyResults, ret...)`（顺序反了，Python 是 `ret + history_results` ret 在前）。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 go test ./internal/agentcore/retrieval/retriever/ -count=1 2>&1 | tail -3
 ```
 预期：包内全量 PASS（含 13.23 既有 48+ 测试不回归）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/retrieval/retriever/agentic_retriever.go internal/agentcore/retrieval/retriever/agentic_retriever_test.go
