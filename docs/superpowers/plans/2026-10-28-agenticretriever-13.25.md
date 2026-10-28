@@ -1578,7 +1578,7 @@ git commit -m "test(retriever): AgenticRetriever 增强测试——软失败链/
 - Modify: `internal/agentcore/retrieval/retriever/doc.go`
 - Modify: `IMPLEMENTATION_PLAN.md`
 
-- [ ] **Step 1: 更新 doc.go**
+- [x] **Step 1: 更新 doc.go**
 
 文件目录加一行（graph_retriever_impl.go 之后）：
 
@@ -1594,14 +1594,14 @@ git commit -m "test(retriever): AgenticRetriever 增强测试——软失败链/
 
 包概述段落补一句 13.25 职责（对应 Python 参考路径列表加 `agentic_retriever.py`）。
 
-- [ ] **Step 2: 覆盖率检查**
+- [x] **Step 2: 覆盖率检查**
 
 ```bash
 go test ./internal/agentcore/retrieval/retriever/ -cover -count=1 2>&1 | tail -2
 ```
 预期：≥ 85%（spec 目标 92%+；未达标补分支用例——重点看 linkTriples/linkPassages 的失败分支与 rewrite 收窄分支）。
 
-- [ ] **Step 3: 全量回归（CI 同款构建标签）**
+- [x] **Step 3: 全量回归（CI 同款构建标签）**
 
 ```bash
 pgrep -f 'go (build|test)' || true
@@ -1610,12 +1610,12 @@ go test -tags "sqlite_fts5 test" ./... -count=1 2>&1 | grep -E 'FAIL|ok .*(retri
 ```
 预期：零 FAIL；retrieval 相关包全 ok。跑前确认无残留 go 进程（编译纪律）。
 
-- [ ] **Step 4: 更新 IMPLEMENTATION_PLAN.md**
+- [x] **Step 4: 更新 IMPLEMENTATION_PLAN.md**
 
 1. 13.25 行：`☐` → `✅`，产出列填：`AgenticRetriever(构造类型断言判图路径+IndexTypeCarrier 推导 defaultMode / Retrieve top_k 155210+mode 零值回落 / retrieveGeneric 迭代改写+_read/_rewrite 软失败+RRF 融合 / retrieveWithGraph graph_expansion kwargs.pop 默认 true+主 read 传原 query 字面复刻 / linkTriples 裸 gather 三分类+Deduplicate ID 键+metadata 映射收窄 / linkPassages top_k=5 整列表 / pyStr 包内复刻 13.17 同源 / 错误码 155208-155211 零消费转已消费 / RetrieveOptions 新增 GraphExpansion *bool 潜伏激活字段(13.28 GraphKB 消费))`
 2. 领域十三顶部备注追加：`> 2026-10-28：13.25 AgenticRetriever 完成（多跳 agentic 检索：图/通用双路径+GeAR 三件套+RRF 融合，覆盖率 XX%）。下一节 13.26 KnowledgeBase 抽象。设计：docs/superpowers/specs/2026-10-28-agenticretriever-13.25-design.md`
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/retrieval/retriever/doc.go IMPLEMENTATION_PLAN.md
