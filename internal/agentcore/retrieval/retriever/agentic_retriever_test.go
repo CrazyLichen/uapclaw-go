@@ -585,3 +585,180 @@ func TestLinkPassages_失败聚合(t *testing.T) {
 	assert.Len(t, results, 1) // 1 失败 + 1 成功
 	assert.Equal(t, "passage", results[0][0].Text)
 }
+
+// ──────────────────────────── Go 增强测试 ────────────────────────────
+
+// TestRead_pyStr数字边界 增强 2：jsonrepair 产出数字一律 json.Number
+//（探针实测：1862/0.5/大整数均原样字面），bool/nil 直达 pyStr 分支。
+func TestRead_pyStr数字边界(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) {
+			// 1862 数字、true bool、null → None、长度≠3 过滤、非 list 项过滤
+			return `[["a", "b", 1862], ["x", "y", true], ["p", "q", null], ["short"], "notlist"]`, nil
+		},
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r := newGenericRetriever(t, llm)
+	results := r.read(context.Background(), "q", []common.RetrievalResult{{Text: "doc", Score: 1}}, nil)
+	require.Len(t, results, 3)
+	assert.Equal(t, "1862", results[0][2]) // json.Number "1862" → Atoi 成功原样
+	assert.Equal(t, "True", results[1][2]) // bool true → "True"
+	assert.Equal(t, "None", results[2][2]) // nil → "None"
+}
+
+// TestRead_pyStr浮点与大整数 增强 2 附带：json.Number 浮点走 pyFloatStr、
+// 超界整数字面原样透传（isPureIntegerLiteral）。
+func TestRead_pyStr浮点与大整数(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) {
+			return `[["a", "b", 0.5], ["x", "y", 123456789012345678901234567890]]`, nil
+		},
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r := newGenericRetriever(t, llm)
+	results := r.read(context.Background(), "q", []common.RetrievalResult{{Text: "doc", Score: 1}}, nil)
+	require.Len(t, results, 2)
+	assert.Equal(t, "0.5", results[0][2]) // json.Number "0.5" → Atoi 失败非整数字面 → Float64 → pyFloatStr("0.5")
+	assert.Equal(t, "123456789012345678901234567890", results[1][2]) // 超界整数字面原样（Python int 无界）
+}
+
+// TestRead_facts串形态 增强 3：tuple repr + None 兜底（facts 进 prompt）。
+func TestRead_facts串形态(t *testing.T) {
+	var capturedPrompt string
+	llm := &agenticLLMDispatch{
+		readFn: func(prompt string) (string, error) {
+			capturedPrompt = prompt
+			return "[]", nil
+		},
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r := newGenericRetriever(t, llm)
+	r.read(context.Background(), "q", []common.RetrievalResult{{Text: "doc", Score: 1}},
+		[]common.TripleFact{{"s", "p", "o"}, {"S2", "P2", "O2"}})
+	assert.Contains(t, capturedPrompt, "('s', 'p', 'o'), ('S2', 'P2', 'O2')")
+	// 空时兜底 None
+	r.read(context.Background(), "q", []common.RetrievalResult{{Text: "doc", Score: 1}}, nil)
+	assert.Contains(t, capturedPrompt, "Facts: None")
+}
+
+// TestRead_docs截断语义 增强 3 附带：先切前 5 再滤空（Python
+// `passages[:5] if p.text`——索引 [0,5) 截断后才过滤）。
+func TestRead_docs截断语义(t *testing.T) {
+	var capturedPrompt string
+	llm := &agenticLLMDispatch{
+		readFn: func(prompt string) (string, error) { capturedPrompt = prompt; return "[]", nil },
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r := newGenericRetriever(t, llm)
+	passages := []common.RetrievalResult{
+		{Text: "p1"}, {Text: ""}, {Text: "p2"}, {Text: "p3"}, {Text: "p4"}, {Text: "p5"}, {Text: "p6"},
+	}
+	r.read(context.Background(), "q", passages, nil)
+	assert.Contains(t, capturedPrompt, "p1")
+	assert.NotContains(t, capturedPrompt, "p6") // 索引 6 超出前 5 截断（即使非空）
+	assert.NotContains(t, capturedPrompt, "p5") // 索引 5 也在截断界外——先切前 5 再滤空
+	assert.Contains(t, capturedPrompt, "p2")     // 空文本 p_ 被跳过但 p2 索引 2 在界内
+}
+
+// TestRetrieve_软失败链 增强 4：LLM err→降级继续；解析根非 list/dict 降级。
+func TestRetrieve_软失败链(t *testing.T) {
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return []common.RetrievalResult{{Text: "Result 1", Score: 0.9}}, nil
+		},
+	}
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "", errors.New("llm down") },
+		rewriteFn: func(string) (string, error) { return "", errors.New("llm down") },
+	}
+	r, err := NewAgenticRetriever(fr, llm, WithAgenticMaxIter(2))
+	require.NoError(t, err)
+	// LLM err → _read 空 → 循环继续 → RRF 结果
+	results, err := r.Retrieve(context.Background(), "q", 5, nil, "")
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+
+	// _read 解析根非 list
+	llm.mu.Lock()
+	llm.readFn = func(string) (string, error) { return `{"not": "a list"}`, nil }
+	llm.mu.Unlock()
+	results, err = r.Retrieve(context.Background(), "q", 5, nil, "")
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+
+	// _rewrite 解析根非 dict
+	llm.mu.Lock()
+	llm.readFn = func(string) (string, error) { return "[]", nil }
+	llm.rewriteFn = func(string) (string, error) { return `["not", "dict"]`, nil }
+	llm.mu.Unlock()
+	results, err = r.Retrieve(context.Background(), "q", 5, nil, "")
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+}
+
+// TestRetrieve_maxIter为1 增强 8：单轮无 rewrite 调用。
+func TestRetrieve_maxIter为1(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) { t.Error("max_iter=1 不应调用 rewrite"); return "", errors.New("unreachable") },
+	}
+	r := newGenericRetriever(t, llm)
+	r.maxIter = 1
+	_, err := r.Retrieve(context.Background(), "q", 5, nil, "")
+	require.NoError(t, err)
+	llm.mu.Lock()
+	assert.Equal(t, 1, llm.readCalls)
+	assert.Equal(t, 0, llm.rewriteCalls)
+	llm.mu.Unlock()
+}
+
+// TestRetrieve_RRF分数累加 增强 9：两轮同 text 去重保首见，分数为
+// RRF 累加值（两轮 rank1：1/61+1/61）。
+func TestRetrieve_RRF分数累加(t *testing.T) {
+	callIdx := 0
+	var mu sync.Mutex
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(_ context.Context, _ string, _ int, _ *float64, _ RetrievalMode) ([]common.RetrievalResult, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			callIdx++
+			if callIdx == 1 {
+				return []common.RetrievalResult{{Text: "same", Score: 0.9}}, nil
+			}
+			return []common.RetrievalResult{{Text: "same", Score: 0.8}}, nil
+		},
+	}
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) { return `{"sufficient": false, "next_question": "q2"}`, nil },
+	}
+	r, err := NewAgenticRetriever(fr, llm, WithAgenticMaxIter(2))
+	require.NoError(t, err)
+	results, err := r.Retrieve(context.Background(), "q", 5, nil, "")
+	require.NoError(t, err)
+	assert.Len(t, results, 1) // text 去重保首见
+	assert.InDelta(t, 1.0/61+1.0/61, results[0].Score, 1e-9)
+}
+
+// TestBatchRetrieve_并发race 增强 10：-race 下多 query 并发 + LLM
+// 分派桩共享（mu 保护验证）。
+func TestBatchRetrieve_并发race(t *testing.T) {
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return []common.RetrievalResult{{Text: "r", Score: 0.9}}, nil
+		},
+	}
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r, err := NewAgenticRetriever(fr, llm)
+	require.NoError(t, err)
+	resultsList, err := r.BatchRetrieve(context.Background(), []string{"q1", "q2", "q3"}, 5)
+	require.NoError(t, err)
+	assert.Len(t, resultsList, 3)
+	assert.Len(t, resultsList[0], 1)
+}
