@@ -140,6 +140,11 @@ func (s *AgentServer) Start(ctx context.Context) error {
 		return u.GetInstance()
 	})
 
+	// 10.6.24d 已回填：注入 AcpOutputManager push（六输出工具经 E2A server_push
+	// 推 IDE，acp.tool_response 回流完成）。Python 为 send_jsonrpc_request 内
+	// AgentWebSocketServer.get_instance() 单例直取——Go 同 24b/24c 启动接线。
+	swarmtools.GetAcpOutputManager().SetSendPushFunc(s.SendPush)
+
 	ctx, s.cancel = context.WithCancel(ctx)
 	go s.run(ctx)
 

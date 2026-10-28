@@ -34,7 +34,7 @@ const (
 //  1. 构建 extra_config（含 protocol_version、client_capabilities）
 //  2. 调用 AgentManager.Initialize() 获取 capabilities
 //  3. 非 ACP 通道返回 nil → fallback 到默认 capabilities
-//  4. ACP 通道返回 capabilities（⤵️ 等 ACP 实现）
+//  4. ACP 通道返回 capabilities（AgentManager ACP 分支已回填，10.6.24d Task 9）
 func (s *AgentServer) handleInitialize(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// 1. 构建 extra_config（对齐 Python agent_ws_server.py L563-572）
 	extraConfig := make(map[string]any)
@@ -72,7 +72,7 @@ func (s *AgentServer) handleInitialize(ctx context.Context, request *schema.Agen
 		), nil
 	}
 
-	// 4. ACP 通道返回 capabilities（⤵️ 等 ACP 实现后 Initialize 会返回非 nil）
+	// 4. ACP 通道返回 capabilities（AgentManager ACP 分支已回填，10.6.24d Task 9）
 	caps["protocol_version"] = protocolVersion
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(caps),

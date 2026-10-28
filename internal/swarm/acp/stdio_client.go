@@ -314,6 +314,21 @@ func (c *AcpStdioClient) Chat(ctx context.Context, message string, opts ...ChatO
 			if res.Err != nil {
 				return "", res.Err
 			}
+			// Python 单循环顺序语义：响应行之前到达的 update 必已聚合。
+			// Go 双通道 select 可能先取 result——非阻塞排空 updatesCh 补齐
+			// 缓冲中已投递的 update（readerLoop 顺序保证 result 投递前
+			// 先前 update 已入缓冲）。
+		drainUpdates:
+			for {
+				select {
+				case text := <-updates:
+					if text != "" {
+						parts = append(parts, text)
+					}
+				default:
+					break drainUpdates
+				}
+			}
 			// Python L590: "".join(parts).strip() or _result_text_fallback(...)
 			joined := strings.TrimSpace(strings.Join(parts, ""))
 			if joined != "" {
