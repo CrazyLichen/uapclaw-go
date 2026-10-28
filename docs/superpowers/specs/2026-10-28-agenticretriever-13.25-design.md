@@ -243,7 +243,7 @@ Go 侧四码已定义零消费（codes_context.go L141-153），本节全部激�
 
 ### 6.1 桩基建（Q6 拍板：链路可控桩走真 GraphExpansion）
 
-- **agenticFakeRetriever**（agentic_retriever_test.go 新造，不动 13.23 现有桩）：可编程 `Retrieve` + `RetrieveSearchResults`（闭包注入）+ mu 保护调用记录（lastQuery/lastTopK/lastMode/lastThreshold/calls/rsrCalls）
+- **agenticFakeRetriever**（agentic_retriever_test.go 新造，不动 13.23 现有桩）：可编程 `Retrieve` + `RetrieveSearchResults`（闭包注入）+ mu 保护调用记录（lastQuery/lastTopK/lastMode/lastThreshold/calls/rsrCalls）+ 可配置 `indexType` 字段（实现 IndexTypeCarrier，defaultMode 三态测试用；零值 "" → hybrid 路径）
 - **图路径构造**：`NewGraphRetriever(WithGraphChunkRetriever(chunk), WithGraphTripleRetriever(triple))`——GetRetrieverForMode 固定优先返回桩；GraphExpansion 真方法在「proximal 空（LLM 返回 `[]`）→ linked 空 → fetchTriples 空链 → 返回原 chunks」路径行为确定，与 Python mock 效果等价；beam search 深路径归 13.23 的 48 测试，13.25 只测外壳编排
 - **fakeAgenticLLM**：按 Prompt 内容分派（13.17 dispatchTripleClient 先例——`docs=` 特征识别 _read、`sufficient` 特征识别 _rewrite），响应队列 + mu 保护（BatchRetrieve 并发）
 - **fakeRetriever**（通用路径）：复用 agenticFakeRetriever（isGraph=false 场景）
