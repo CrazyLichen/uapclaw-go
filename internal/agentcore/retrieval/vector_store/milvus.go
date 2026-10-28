@@ -693,6 +693,21 @@ func WithMilvusCreateClient(f func(ctx context.Context, databaseName, uri, token
 	return func(s *MilvusVectorStore) { s.createClientFunc = f }
 }
 
+// CollectionName 返回集合名称（13.23 回填：GraphRetriever 动态创建读取）。
+func (s *MilvusVectorStore) CollectionName() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.collectionName
+}
+
+// SetCollectionName 设置集合名称（13.23 回填：对齐 Python graph_retriever
+// L340 字段赋值——先污染后校验的字面顺序在调用方保留）。
+func (s *MilvusVectorStore) SetCollectionName(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.collectionName = name
+}
+
 // CheckVectorField 校验向量字段配置是否与实际数据库一致。
 //
 // 对齐 Python MilvusVectorStore.check_vector_field：

@@ -689,6 +689,25 @@ func (s *ChromaVectorStore) Close() {
 	}
 }
 
+// CollectionName 返回集合名称（13.23 回填：GraphRetriever 动态创建读取）。
+func (s *ChromaVectorStore) CollectionName() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.collectionName
+}
+
+// SetCollectionName 设置集合并失效集合缓存（13.23 回填）。
+//
+// Python 侧 collection_name 字段赋值后，collection.get 每次按名新建；
+// Go 侧 getCollection 有 nil 缓存，Set 时必须清空对齐"每次按名取"
+// 语义（spec §7-3）。
+func (s *ChromaVectorStore) SetCollectionName(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.collectionName = name
+	s.collection = nil
+}
+
 // buildChromaFilterPair M-27: 将 QueryExpr 转换为 Chroma where/where_document 过滤对。
 //
 // 对齐 Python `query_args.update({k: v for k, v in filters.to_expr("chroma").items() if v})`：
