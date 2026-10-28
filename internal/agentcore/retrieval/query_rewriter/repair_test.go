@@ -92,13 +92,11 @@ func TestSchemaRepair(t *testing.T) {
 	compressSchema := map[string]schemaFieldType{"theme": schemaFieldList, "summary": schemaFieldString}
 
 	// compress schema 原样通过
-	out, err := schemaRepair(map[string]any{"theme": []any{"a"}, "summary": "b"}, compressSchema)
-	assert.NoError(t, err)
+	out := schemaRepair(map[string]any{"theme": []any{"a"}, "summary": "b"}, compressSchema)
 	assert.Equal(t, map[string]any{"theme": []any{"a"}, "summary": "b"}, out)
 
 	// None/缺失字段填默认（Python: output.get(field) 缺失或 None 同路径）
-	out, err = schemaRepair(map[string]any{"theme": nil, "summary": nil}, compressSchema)
-	assert.NoError(t, err)
+	out = schemaRepair(map[string]any{"theme": nil, "summary": nil}, compressSchema)
 	assert.Equal(t, []any{}, out["theme"])
 	assert.Equal(t, "", out["summary"])
 
@@ -116,17 +114,15 @@ func TestSchemaRepair(t *testing.T) {
 		"missing":          []any{}, "typo": []any{}, "gibberish": []any{},
 		"from_history": "history",
 	}
-	out, err = schemaRepair(raw, rewriteSchema)
-	assert.NoError(t, err)
+	out = schemaRepair(raw, rewriteSchema)
 	assert.Equal(t, "淘美乐退货的运费谁出？", out["standalone_query"])
 	assert.Equal(t, []any{}, out["typo"])
 
 	// typo 子结构修复（合法 dict 元素三键收敛）
-	out, err = schemaRepair(
+	out = schemaRepair(
 		map[string]any{"typo": []any{map[string]any{"original": "teh", "corrected": "the", "reason": "typo"}}},
 		map[string]schemaFieldType{"typo": schemaFieldList},
 	)
-	assert.NoError(t, err)
 	typoList := out["typo"].([]any)
 	assert.Equal(t, "teh", typoList[0].(map[string]any)["original"])
 	assert.Equal(t, "the", typoList[0].(map[string]any)["corrected"])
@@ -134,62 +130,54 @@ func TestSchemaRepair(t *testing.T) {
 	// Go 增强：typo 非 dict 元素 forceJSON 包裹后三键白名单收敛——
 	// 字符串 "teh" 解析失败包成 {"typo":"teh"}，白名单键全缺失 → 三键皆 ""
 	// （Python L160-170 同款：item.get(key) 拿不到白名单键填 ""）
-	out, err = schemaRepair(
+	out = schemaRepair(
 		map[string]any{"typo": []any{"teh"}},
 		map[string]schemaFieldType{"typo": schemaFieldList},
 	)
-	assert.NoError(t, err)
 	typoList = out["typo"].([]any)
 	assert.Equal(t, map[string]any{"original": "", "corrected": "", "reason": ""},
 		typoList[0].(map[string]any))
 
 	// Go 增强：typo 元素是 JSON 字符串（含白名单键）→ forceJSON 解析后键存活
-	out, err = schemaRepair(
+	out = schemaRepair(
 		map[string]any{"typo": []any{`{"original":"teh","corrected":"the","reason":"spelling"}`}},
 		map[string]schemaFieldType{"typo": schemaFieldList},
 	)
-	assert.NoError(t, err)
 	typoList = out["typo"].([]any)
 	assert.Equal(t, "teh", typoList[0].(map[string]any)["original"])
 	assert.Equal(t, "the", typoList[0].(map[string]any)["corrected"])
 	assert.Equal(t, "spelling", typoList[0].(map[string]any)["reason"])
 
 	// Go 增强：typo dict 元素缺键/None 值/非 str 值三态收敛（Python L164-170）
-	out, err = schemaRepair(
+	out = schemaRepair(
 		map[string]any{"typo": []any{map[string]any{"original": 123, "corrected": nil}}},
 		map[string]schemaFieldType{"typo": schemaFieldList},
 	)
-	assert.NoError(t, err)
 	item := out["typo"].([]any)[0].(map[string]any)
 	assert.Equal(t, "123", item["original"]) // 非 str → forceString
 	assert.Equal(t, "", item["corrected"])   // None → ""
 	assert.Equal(t, "", item["reason"])      // 缺失 → ""
 
 	// Go 增强：typo 非 list 输入先 forceList 化（Python L156-157）
-	out, err = schemaRepair(
+	out = schemaRepair(
 		map[string]any{"typo": "teh"},
 		map[string]schemaFieldType{"typo": schemaFieldList},
 	)
-	assert.NoError(t, err)
 	assert.Len(t, out["typo"], 1)
 
 	// 正常空输入不报错（Python "非 dict → 155604" 在 Go 编译期消解，spec §8）
-	_, err = schemaRepair(map[string]any{}, compressSchema)
-	assert.NoError(t, err)
+	schemaRepair(map[string]any{}, compressSchema)
 
 	// 类型不匹配 force 转换：string 字段给数字（Python L175-177）
-	out, err = schemaRepair(map[string]any{"summary": 123}, compressSchema)
-	assert.NoError(t, err)
+	out = schemaRepair(map[string]any{"summary": 123}, compressSchema)
 	assert.Equal(t, "123", out["summary"])
 
 	// 类型不匹配 force 转换：list 字段给字符串（Python L178-179）
-	out, err = schemaRepair(map[string]any{"theme": "a"}, compressSchema)
-	assert.NoError(t, err)
+	out = schemaRepair(map[string]any{"theme": "a"}, compressSchema)
 	assert.Equal(t, []any{"a"}, out["theme"])
 
 	// 类型不匹配 force 转换：dict 字段给 JSON 字符串（Python L180-181）
-	out, err = schemaRepair(map[string]any{"references": `{"k":"v"}`},
+	out = schemaRepair(map[string]any{"references": `{"k":"v"}`},
 		map[string]schemaFieldType{"references": schemaFieldDict})
-	assert.NoError(t, err)
 	assert.Equal(t, map[string]any{"k": "v"}, out["references"])
 }

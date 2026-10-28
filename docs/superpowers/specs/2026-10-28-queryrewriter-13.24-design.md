@@ -188,7 +188,7 @@ func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessag
 6. `contentJSON := extractJSON(contentStr)`
 7. `parsed, ok := parseLLMJSON(contentJSON)`；!ok → `q.jsonOutputParser.Parse(contentJSON)`（返回 any；非 map[string]any 视为非 dict）
 8. 非 dict → 155604 `"LLM compress output is not valid JSON (parse returned non-dict); content: {contentJSON[:500]}"`
-9. `schemaRepair(parsed, q.compressOutputSchema)`（err 透传 155604）
+9. `schemaRepair(parsed, q.compressOutputSchema)`（Go 无 error 返回，spec §8-9）
 10. Info 日志 `"Compress completed"` + `.Str("theme", ...)` `.Str("summary", ...)`（对齐 Python `logger.info("Compress completed: %s", dict)`）
 11. 返回 repaired
 
@@ -212,7 +212,7 @@ func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]a
 6. `historyText, err := q.Msg2Text(historyForRewrite)`（err 透传）
 7. `completionPrompt := fillTemplate(promptTemplate, map[string]string{"history": historyText, "query": query})`
 8. Invoke 同 Compress 步骤 4-5（文案 "LLM rewrite output..."）
-9. 解析链 + `schemaRepair(parsed, q.rewriteOutputSchema)`
+9. 解析链 + `schemaRepair(parsed, q.rewriteOutputSchema)`（Go 无 error 返回，spec §8-9）
 10. 返回 repaired
 
 ### 4.7 GetMessages 语义核实
@@ -300,6 +300,7 @@ Go `SessionModelContext.GetMessages(N>0, true)` = `messageBuffer.GetBack(N, true
 | 6 | Python 测试 `qr.llm = mock`（运行时换字段）→ Go `WithModelClientOption` 构造注入 / stub 走 `llm.NewModel(WithClient)` | Go 无运行时字段替换；13.17 dispatchTripleClient 同款注入先例 |
 | 7 | Compress fallback 测试 Python 猴子补丁 `qr.compress = failing` → Go 用坏 JSON stub 让 Compress 内部走 155604，或 stub 返回 error 走 invoke 失败路径 | 等价触发降级分支；两条路径都覆盖（Python 只测前者） |
 | 8 | Python `llm.invoke(model=..., messages=..., temperature=...)` 显式传 model 名（构造已设，字面重复）；Go Invoke 不传 WithInvokeModel（ModelRequestConfig.ModelName 已含） | Go resolveModelName 从 m.ModelConfig 取默认；显式重传是 Python 冗余执行，Go 侧去重（记忆规则：重复调用/冗余参数去重先例 13.15 双 cp_image） |
+| 9 | Python `_schema_repair` 非 dict 入参与未知类型两分支抛 155604；Go `schemaRepair` 去掉 error 返回值，只返回 `map[string]any` | Go 入参类型 `map[string]any` + `schemaFieldType` 三态枚举使两条 155604 路径编译期消解，error 无发生路径；Go 惯例不为不可能路径保留 error 签名（实施后审查与用户共同拍板，2026-10-28） |
 
 ## 9. 实施任务切分（writing-plans 输入）
 

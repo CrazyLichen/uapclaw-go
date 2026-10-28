@@ -295,10 +295,7 @@ func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessag
 		)
 	}
 	// Python L394: _schema_repair(compressed_json, self._compress_output_schema)
-	repaired, err := schemaRepair(parsed, q.compressOutputSchema)
-	if err != nil {
-		return nil, err
-	}
+	repaired := schemaRepair(parsed, q.compressOutputSchema)
 	// Python L409: logger.info("Compress completed: %s", dict)
 	logger.Info(logComponent).
 		Str("theme", fmt.Sprint(repaired["theme"])).
@@ -409,7 +406,7 @@ func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]a
 		)
 	}
 	// Python L509: _schema_repair(rewrote_json, self._rewrite_output_schema)
-	return schemaRepair(parsed, q.rewriteOutputSchema)
+	return schemaRepair(parsed, q.rewriteOutputSchema), nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

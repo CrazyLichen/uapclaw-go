@@ -130,13 +130,13 @@ func forceJSON(key string, raw any) map[string]any {
 }
 
 // schemaRepair 按 schema 校验修复 LLM 输出：类型不匹配时强制转换。
-// 返回只含 schema 字段且类型匹配的 dict；不可修复返回 155604
-// （Python _schema_repair）。
+// 返回只含 schema 字段且类型匹配的 dict（Python _schema_repair）。
 //
-// Go 入参已是 map[string]any（Python 非 dict 的 155604 分支编译期
-// 消解，spec §8）；schemaFieldType 仅三态，Python "其他类型 155604"
-// 两分支同样编译期消解，error 恒为 nil 但保留签名供后续消费方对齐。
-func schemaRepair(output map[string]any, outputSchema map[string]schemaFieldType) (map[string]any, error) {
+// Python 中非 dict 入参与未知类型两分支抛 155604；Go 入参已是
+// map[string]any（Python 非 dict 分支编译期消解，spec §8-3），
+// schemaFieldType 仅三态（"其他类型"分支同样编译期消解），error
+// 无发生路径，按 Go 惯例去掉 error 返回值（spec §8-9）。
+func schemaRepair(output map[string]any, outputSchema map[string]schemaFieldType) map[string]any {
 	repaired := map[string]any{}
 
 	for field, expectedType := range outputSchema {
@@ -199,5 +199,5 @@ func schemaRepair(output map[string]any, outputSchema map[string]schemaFieldType
 		repaired[field] = value
 	}
 	logger.Debug(logComponent).Msg("Schema check and repair done")
-	return repaired, nil
+	return repaired
 }
