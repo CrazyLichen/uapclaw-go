@@ -483,10 +483,11 @@ func (t *MultiSessionToolkit) notify(ctx context.Context, sessionID string, stat
 	// Python: 前端 SubtaskStatus: 'completed' | 'error'，cancelled 映射为 error
 	payloadStatus := "error"
 	message := errStr
-	if status == SessionStatusCompleted {
+	switch status {
+	case SessionStatusCompleted:
 		payloadStatus = "completed"
 		message = result
-	} else if status == SessionStatusCancelled {
+	case SessionStatusCancelled:
 		message = strOr(errStr, "任务已取消")
 	}
 	msg := map[string]any{
@@ -543,7 +544,7 @@ func (t *MultiSessionToolkit) runSummary(ctx context.Context, pushFunc func(cont
 	sb.WriteString("后台会话任务均已完成：\n")
 	t.mu.Lock()
 	for _, st := range t.sessions {
-		sb.WriteString(fmt.Sprintf("\nsession_id: %s\ndescription: %s\nresult: %s\n", st.SessionID, st.Description, st.Result))
+		fmt.Fprintf(&sb, "\nsession_id: %s\ndescription: %s\nresult: %s\n", st.SessionID, st.Description, st.Result)
 	}
 	t.mu.Unlock()
 
