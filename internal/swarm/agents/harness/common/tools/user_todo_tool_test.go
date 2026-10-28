@@ -78,6 +78,133 @@ func TestSanitizeChannelID(t *testing.T) {
 	}
 }
 
-// 以下测试由 Task 2 追加（保留 import 消费：context/cronbridge 在 Task 2 用例中使用）
-var _ = context.Background
-var _ = cronbridge.BindRuntimeCronContext
+// 以下测试由 Task 2 追加
+// TestHandleUserTodos_六action 全分支
+func TestHandleUserTodos_六action(t *testing.T) {
+	dir := t.TempDir()
+	SetGlobalWorkspaceDir(dir)
+	t.Cleanup(func() { SetGlobalWorkspaceDir(".") })
+
+	// create
+	res, err := handleUserTodos(context.Background(), map[string]any{
+		"action": "create", "title": "meeting", "description": "standup",
+		"due_at": "2026-11-01T10:00:00Z",
+	})
+	if err != nil || res["success"] != true {
+		t.Fatalf("create res=%v err=%v", res, err)
+	}
+	// remind_at 自动推算 due-5min（合法 RFC3339）
+	todo := res["todo"].(map[string]any)
+	if todo["remind_at"] != "2026-11-01T09:55:00Z" {
+		t.Errorf("remind_at = %v, want 2026-11-01T09:55:00Z", todo["remind_at"])
+	}
+	todoID := todo["id"].(string)
+	if len(todoID) != 8 {
+		t.Errorf("id len = %d, want 8", len(todoID))
+	}
+
+	// create 非法 due_at → remind_at ""
+	res2, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "create", "title": "x", "due_at": "not-a-time",
+	})
+	if res2["todo"].(map[string]any)["remind_at"] != "" {
+		t.Errorf("invalid due_at should give empty remind_at")
+	}
+
+	// get
+	res3, _ := handleUserTodos(context.Background(), map[string]any{"action": "get", "todo_id": todoID})
+	if res3["success"] != true || res3["todo"].(map[string]any)["title"] != "meeting" {
+		t.Errorf("get res=%v", res3)
+	}
+	res3b, _ := handleUserTodos(context.Background(), map[string]any{"action": "get", "todo_id": "nope"})
+	if res3b["success"] != false {
+		t.Errorf("get missing should be success=false: %v", res3b)
+	}
+
+	// 必填校验
+	for _, act := range []string{"get", "create", "update", "delete", "search"} {
+		res, _ := handleUserTodos(context.Background(), map[string]any{"action": act})
+		if res["success"] != false {
+			t.Errorf("action %s without required param should fail: %v", act, res)
+		}
+	}
+
+	// update（部分字段）
+	res4, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "update", "todo_id": todoID, "status": "completed",
+	})
+	if res4["todo"].(map[string]any)["status"] != "completed" {
+		t.Errorf("update res=%v", res4)
+	}
+
+	// list + search
+	res5, _ := handleUserTodos(context.Background(), map[string]any{"action": "list"})
+	if res5["count"].(int) < 1 {
+		t.Errorf("list count=%v", res5["count"])
+	}
+	res6, _ := handleUserTodos(context.Background(), map[string]any{"action": "search", "query": "MEET"})
+	if res6["count"].(int) != 1 {
+		t.Errorf("search (case-insensitive title) count=%v, want 1", res6["count"])
+	}
+
+	// delete
+	res7, _ := handleUserTodos(context.Background(), map[string]any{"action": "delete", "todo_id": todoID})
+	if res7["success"] != true {
+		t.Errorf("delete res=%v", res7)
+	}
+	res8, _ := handleUserTodos(context.Background(), map[string]any{"action": "list"})
+	if res8["count"].(int) != 1 { // 剩 x 一条
+		t.Errorf("after delete count=%v, want 1", res8["count"])
+	}
+
+	// unknown action
+	res9, _ := handleUserTodos(context.Background(), map[string]any{"action": "bogus"})
+	if res9["error"] != "Unknown action: bogus. Valid actions: list, get, create, update, delete, search" {
+		t.Errorf("unknown action error = %v", res9["error"])
+	}
+}
+
+// TestHandleUserTodos_channel优先级 params > ctx > "default"
+func TestHandleUserTodos_channel优先级(t *testing.T) {
+	dir := t.TempDir()
+	SetGlobalWorkspaceDir(dir)
+	t.Cleanup(func() { SetGlobalWorkspaceDir(".") })
+
+	// ctx 绑定（cron 上下文）
+	ctx := cronbridge.BindRuntimeCronContext(context.Background(), "ctxchan", "sess", nil, "req", "")
+	handleUserTodos(ctx, map[string]any{"action": "create", "title": "a"})
+	if _, err := os.Stat(filepath.Join(dir, "memory", "user_todos", "ctxchan.md")); err != nil {
+		t.Errorf("ctx channel file missing: %v", err)
+	}
+	// params 覆盖 ctx
+	handleUserTodos(ctx, map[string]any{"action": "create", "title": "b", "channel_id": "paramchan"})
+	if _, err := os.Stat(filepath.Join(dir, "memory", "user_todos", "paramchan.md")); err != nil {
+		t.Errorf("param channel file missing: %v", err)
+	}
+	// 无绑定 → default
+	handleUserTodos(context.Background(), map[string]any{"action": "create", "title": "c"})
+	if _, err := os.Stat(filepath.Join(dir, "memory", "user_todos", "default.md")); err != nil {
+		t.Errorf("default channel file missing: %v", err)
+	}
+}
+
+// TestNewUserTodosTool_卡片与注册 GetDecoratedTools
+func TestNewUserTodosTool_卡片与注册(t *testing.T) {
+	tools := GetDecoratedTools()
+	if len(tools) != 1 {
+		t.Fatalf("GetDecoratedTools len=%d, want 1", len(tools))
+	}
+	card := tools[0].Card()
+	if card.Name != "user_todos" {
+		t.Errorf("card name=%s", card.Name)
+	}
+	if !strings.Contains(card.Description, "do NOT use it for internal agent task planning") {
+		t.Errorf("description missing NOTE: %s", card.Description)
+	}
+	// action 参数必填
+	for _, p := range card.InputParams {
+		if p.Name == "action" && !p.Required {
+			t.Errorf("action param should be required")
+		}
+	}
+}

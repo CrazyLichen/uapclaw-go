@@ -4,6 +4,8 @@
 package tools
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,7 +13,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -80,6 +86,16 @@ const (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const (
+	// userTodosToolName 工具名。
+	userTodosToolName = "user_todos"
+	// userTodosToolDescription 工具描述（Python @tool 逐字复制）。
+	userTodosToolDescription = "Manage the user's personal todo items and schedule (meetings, reminders, plans). " +
+		"Proactively invoke when the user mentions future arrangements or plans. " +
+		"NOTE: This is the user's personal todo tool — do NOT use it for internal agent " +
+		"task planning (use todo_create/todo_insert for internal task tracking)."
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -106,6 +122,17 @@ func GetGlobalWorkspaceDir() string {
 	globalWorkspaceMu.RLock()
 	defer globalWorkspaceMu.RUnlock()
 	return globalWorkspaceDir
+}
+
+// GetDecoratedTools 返回 user_todos 工具列表。
+// Python: get_decorated_tools() → [user_todos]
+func GetDecoratedTools() []tool.Tool {
+	return []tool.Tool{newUserTodosTool()}
+}
+
+// NewUserTodosTool 创建 user_todos 工具实例。
+func NewUserTodosTool() tool.Tool {
+	return newUserTodosTool()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -254,4 +281,250 @@ func writeTodosFile(filePath string, todos []*TodoItem) {
 		sb.WriteString(serializeTodoItem(todo))
 	}
 	_ = os.WriteFile(filePath, []byte(sb.String()), 0o644)
+}
+
+// newUserTodosTool 构造 MapFunction 工具卡。
+// Python: @tool(name="user_todos", description=...)
+func newUserTodosTool() tool.Tool {
+	strParam := func(name, desc string, required bool) *schema.Param {
+		return &schema.Param{Name: name, Description: desc, Type: schema.ParamTypeString, Required: required}
+	}
+	card := tool.NewToolCard(
+		userTodosToolName,
+		userTodosToolDescription,
+		[]*schema.Param{
+			strParam("action", "Operation type, one of: list, get, create, update, delete, search", true),
+			strParam("channel_id", "Channel ID for per-channel isolation (defaults to global channel_id)", false),
+			strParam("todo_id", "Todo item ID (for get, update, delete)", false),
+			strParam("title", "Todo title (for create, update)", false),
+			strParam("status", "Status (pending, in_progress, completed, cancelled)", false),
+			strParam("priority", "Priority (high, medium, low)", false),
+			strParam("due_at", "Due time (ISO format)", false),
+			strParam("remind_at", "Reminder time (ISO format)", false),
+			strParam("created_by", "Creator", false),
+			strParam("description", "Detailed description", false),
+			strParam("query", "Search keyword (for search action)", false),
+		},
+		nil,
+	)
+	mf, _ := tool.NewMapFunction(card, handleUserTodos, nil)
+	return mf
+}
+
+// resolveUserTodoChannel 解析待办 channel：params > ctx(cron 绑定) > "default"。
+// Python: cid = params.channel_id or _ctx_channel_id.get()（偏差#5：contextvar→ctx values）
+func resolveUserTodoChannel(ctx context.Context, paramsChannelID string) string {
+	if paramsChannelID != "" {
+		return paramsChannelID
+	}
+	if rcc := cronbridge.FromRuntimeCronContext(ctx); rcc != nil && rcc.ChannelID != "" {
+		return rcc.ChannelID
+	}
+	return "default"
+}
+
+// resolveUserTodoCreatedBy 解析创建者：params > ctx > ""。
+// Python: params.created_by or _ctx_created_by.get()（jiuwenswarm 无 set 调用点，ctx 恒默认 ""）
+func resolveUserTodoCreatedBy(ctx context.Context, paramsCreatedBy string) string {
+	if paramsCreatedBy != "" {
+		return paramsCreatedBy
+	}
+	return ""
+}
+
+// todoStr 取字符串参数（缺省 ""）。
+func todoStr(inputs map[string]any, key string) string {
+	if v, ok := inputs[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// handleUserTodos 处理用户待办六 action。
+// Python: _handle_user_todos()——整体 try/except → {"success": false, "error": ...}
+func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[string]any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).Any("panic", r).Msg("user_todos failed")
+			result = map[string]any{"success": false, "error": fmt.Sprintf("%v", r)}
+			err = nil
+		}
+	}()
+	fail := func(msg string) map[string]any {
+		return map[string]any{"success": false, "error": msg}
+	}
+
+	cid := resolveUserTodoChannel(ctx, todoStr(inputs, "channel_id"))
+	filePath := getTodosFilePath(cid)
+	action := todoStr(inputs, "action")
+
+	switch action {
+	case "list":
+		todos := parseTodosFile(filePath)
+		out := make([]map[string]any, 0, len(todos))
+		for _, t := range todos {
+			out = append(out, todoToDict(t))
+		}
+		return map[string]any{"success": true, "channel_id": cid, "todos": out, "count": len(todos)}, nil
+
+	case "get":
+		todoID := todoStr(inputs, "todo_id")
+		if todoID == "" {
+			return fail("todo_id is required for get action"), nil
+		}
+		for _, t := range parseTodosFile(filePath) {
+			if t.ID == todoID {
+				return map[string]any{"success": true, "todo": todoToDict(t)}, nil
+			}
+		}
+		return fail("Todo not found: " + todoID), nil
+
+	case "create":
+		title := todoStr(inputs, "title")
+		if title == "" {
+			return fail("title is required for create action"), nil
+		}
+		todos := parseTodosFile(filePath)
+		// remind_at 推算：due_at 且无 remind_at → due-5min；解析失败 → ""
+		finalRemindAt := todoStr(inputs, "remind_at")
+		dueAt := todoStr(inputs, "due_at")
+		if dueAt != "" && finalRemindAt == "" {
+			if due, perr := time.Parse(time.RFC3339, dueAt); perr == nil {
+				finalRemindAt = due.Add(-5 * time.Minute).Format(time.RFC3339)
+			} else {
+				finalRemindAt = ""
+			}
+		}
+		status := TodoStatusPending
+		if s := todoStr(inputs, "status"); s != "" {
+			status = TodoStatus(s)
+		}
+		priority := TodoPriorityMedium
+		if p := todoStr(inputs, "priority"); p != "" {
+			priority = TodoPriority(p)
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		newTodo := &TodoItem{
+			ID:          uuidShort8(),
+			Title:       title,
+			Status:      status,
+			Priority:    priority,
+			DueAt:       dueAt,
+			RemindAt:    finalRemindAt,
+			CreateAt:    now,
+			UpdateAt:    now,
+			CreatedBy:   resolveUserTodoCreatedBy(ctx, todoStr(inputs, "created_by")),
+			Description: todoStr(inputs, "description"),
+		}
+		todos = append(todos, newTodo)
+		writeTodosFile(filePath, todos)
+		logger.Info(logComponent).Str("todo_id", newTodo.ID).Str("channel", cid).Msg("Created todo")
+		return map[string]any{"success": true, "todo": todoToDict(newTodo), "message": "Todo created: " + title}, nil
+
+	case "update":
+		todoID := todoStr(inputs, "todo_id")
+		if todoID == "" {
+			return fail("todo_id is required for update action"), nil
+		}
+		todos := parseTodosFile(filePath)
+		var found *TodoItem
+		for _, t := range todos {
+			if t.ID == todoID {
+				found = t
+				break
+			}
+		}
+		if found == nil {
+			return fail("Todo not found: " + todoID), nil
+		}
+		// 存在性判断对齐 Python is not None（显式空串也更新）；
+		// status/priority 例外见偏差#8：Python TodoStatus("") 抛 ValueError → Go 空串跳过
+		if v, ok := inputs["title"].(string); ok {
+			found.Title = v
+		}
+		if v, ok := inputs["status"].(string); ok && v != "" {
+			found.Status = TodoStatus(v)
+		}
+		if v, ok := inputs["priority"].(string); ok && v != "" {
+			found.Priority = TodoPriority(v)
+		}
+		if v, ok := inputs["due_at"].(string); ok {
+			found.DueAt = v
+		}
+		if v, ok := inputs["remind_at"].(string); ok {
+			found.RemindAt = v
+		}
+		if v, ok := inputs["created_by"].(string); ok {
+			found.CreatedBy = v
+		}
+		if v, ok := inputs["description"].(string); ok {
+			found.Description = v
+		}
+		found.UpdateAt = time.Now().UTC().Format(time.RFC3339)
+		writeTodosFile(filePath, todos)
+		logger.Info(logComponent).Str("todo_id", todoID).Str("channel", cid).Msg("Updated todo")
+		return map[string]any{"success": true, "todo": todoToDict(found), "message": "Todo updated: " + found.Title}, nil
+
+	case "delete":
+		todoID := todoStr(inputs, "todo_id")
+		if todoID == "" {
+			return fail("todo_id is required for delete action"), nil
+		}
+		todos := parseTodosFile(filePath)
+		var found *TodoItem
+		for _, t := range todos {
+			if t.ID == todoID {
+				found = t
+				break
+			}
+		}
+		if found == nil {
+			return fail("Todo not found: " + todoID), nil
+		}
+		kept := todos[:0]
+		for _, t := range todos {
+			if t.ID != todoID {
+				kept = append(kept, t)
+			}
+		}
+		writeTodosFile(filePath, kept)
+		logger.Info(logComponent).Str("todo_id", todoID).Str("channel", cid).Msg("Deleted todo")
+		return map[string]any{"success": true, "message": "Todo deleted: " + found.Title}, nil
+
+	case "search":
+		query := todoStr(inputs, "query")
+		if query == "" {
+			return fail("query is required for search action"), nil
+		}
+		q := strings.ToLower(query)
+		var matched []*TodoItem
+		for _, t := range parseTodosFile(filePath) {
+			if strings.Contains(strings.ToLower(t.Title), q) || strings.Contains(strings.ToLower(t.Description), q) {
+				matched = append(matched, t)
+			}
+		}
+		out := make([]map[string]any, 0, len(matched))
+		for _, t := range matched {
+			out = append(out, todoToDict(t))
+		}
+		return map[string]any{"success": true, "channel_id": cid, "query": query, "todos": out, "count": len(matched)}, nil
+
+	default:
+		return fail("Unknown action: " + action + ". Valid actions: list, get, create, update, delete, search"), nil
+	}
+}
+
+// todoToDict TodoItem → map（Python to_dict，键序一致）。
+func todoToDict(t *TodoItem) map[string]any {
+	return map[string]any{
+		"id": t.ID, "title": t.Title, "status": string(t.Status), "priority": string(t.Priority),
+		"due_at": t.DueAt, "remind_at": t.RemindAt, "create_at": t.CreateAt, "update_at": t.UpdateAt,
+		"created_by": t.CreatedBy, "description": t.Description,
+	}
+}
+
+// uuidShort8 生成 uuid 前 8 位（对齐 Python str(uuid.uuid4())[:8]）。
+func uuidShort8() string {
+	u := uuid.New()
+	return strings.ReplaceAll(u.String(), "-", "")[:8]
 }
