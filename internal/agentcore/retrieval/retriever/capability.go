@@ -5,6 +5,15 @@
 //   - 实现返回 nil  ↔ Python 属性存在值为 None
 //   - 实现返回非 nil ↔ Python 属性存在且非 None
 //
+// 放置约定（13.23 审查拍板 A+）：
+//   - 有跨包消费方 → 本文件导出（如 IndexTypeCarrier 的 SetIndexType
+//     由 13.28 GraphKB 跨包注入）
+//   - 仅包内消费   → 用点处包内小接口断言（如 graph_retriever_impl.go
+//     的 collectionNameSetter——Python collection_name 外部写入点全库
+//     仅 graph_retriever.py L340 一处，无跨包需求）
+//   - 本文件不导出仅包内消费的接口，避免公开面扩大
+//     （chromaMetaKeysForFetch 同款原则）
+//
 // 文件目录：
 //
 //	（见 retriever/doc.go）
@@ -60,4 +69,13 @@ type MaxBatchSizeProvider interface {
 type SupportedModesProvider interface {
 	// SupportedModes 返回支持的 RetrievalMode 清单
 	SupportedModes() []RetrievalMode
+}
+
+// collectionNameSetter 集合名注入通道（13.23 包内小接口，审查 A+ 迁入）。
+//
+// Python self.vector_store.collection_name = name 字段赋值（L340，全库
+// 唯一外部写入点）；VectorStore 接口（13.2）无此方法，Milvus/Chroma 真
+// 实现与测试桩经此断言注入。未实现的 store 跳过（宽松处理归档 spec §8-9）。
+type collectionNameSetter interface {
+	SetCollectionName(string)
 }

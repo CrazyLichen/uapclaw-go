@@ -24,17 +24,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
-
-// collectionNameSetter 集合名注入通道（13.23 包内小接口）。
-//
-// Python self.vector_store.collection_name = name 字段赋值；VectorStore
-// 接口（13.2）无此方法，Milvus/Chroma 真实现（Task 4 回填）与测试桩
-// 经此断言注入。未实现的 store 跳过（宽松处理归档 spec §8-9）。
-type collectionNameSetter interface {
-	SetCollectionName(string)
-}
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // GraphRetriever 图检索器。

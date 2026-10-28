@@ -83,6 +83,12 @@ type ChromaVectorStore struct {
 	mu sync.RWMutex
 }
 
+// ChromaStoreOption ChromaVectorStore 的可选参数函数。
+//
+// 13.23 审查拍板 A：对齐 MilvusStoreOption 先例，提供测试注入口
+// （WithChromaClientOption），消除构造期真实连接导致的测试盲区。
+type ChromaStoreOption func(*ChromaVectorStore)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -198,7 +204,7 @@ func NewChromaVectorStore(
 	sparseVectorField string,
 	metadataField string,
 	docIDField string,
-	_ ...StoreOption,
+	opts ...ChromaStoreOption,
 ) (*ChromaVectorStore, error) {
 	// 对齐 Python: if not chroma_path or not chroma_path.strip():
 	//   raise build_error(RETRIEVAL_VECTOR_STORE_PATH_NOT_FOUND)
@@ -241,46 +247,68 @@ func NewChromaVectorStore(
 	// 对齐 Python: self._search_config = self.vector_field.to_dict(stage="search")
 	s.searchConfig = s.vectorField.ToSearchDict()
 
+	for _, opt := range opts {
+		opt(s)
+	}
+
 	// S-50: 实装 databaseName（原为死字段）。
 	// M-44: 建库逻辑抽取到 CreateChromaClient，供 indexer 等上层组件复用，
 	// 对齐 Python ChromaVectorStore.create_client 静态方法。
-	client, err := CreateChromaClient(config.DatabaseName, chromaPath)
-	if err != nil {
-		return nil, err
-	}
-	s.client = client
+	// 13.23 审查拍板 A：注入即跳过真实连接（对齐 WithMilvusClientOption
+	// 先例）——测试经 WithChromaClientOption 注入桩客户端后，构造期
+	// CreateChromaClient + GetOrCreateCollection 两步副作用全跳过；
+	// s.collection 留 nil 安全：store 内部走惰性 getCollection()，
+	// retriever 侧 queryByFilterChroma 直调 client.GetCollection。
+	if s.client == nil {
+		client, err := CreateChromaClient(config.DatabaseName, chromaPath)
+		if err != nil {
+			return nil, err
+		}
+		s.client = client
 
-	// 对齐 Python: self._collection = self._client.get_or_create_collection(
-	//   name=self.collection_name, configuration={"hnsw": self._construct_config | self._search_config})
-	// S-48: 传完整 HNSW 配置（原仅传 distance metric）。
-	// Python construct_config 含 ef_search（chroma_fields.py L60-67 标 IS_CONSTRUCT），
-	// 合并 constructConfig|searchConfig 后 ef_search 由 construct 侧提供。
-	//
-	// 注：chroma-go v2 CreateCollectionOp 在 embeddingFunction==nil 时强制构建
-	// ONNX 默认 EF（运行时下载 onnxruntime 原生库与 MiniLM 模型）。本项目所有向量
-	// 均由 embedModel 预计算后显式传入，默认 EF 从未被真正使用，因此显式传入
-	// chroma-go 自带的 consistent_hash 轻量 EF（纯 SHA-256，无原生库依赖）阻止
-	// ONNX 下载——CI 冷缓存环境下曾因该下载触发 racefini SIGSEGV。
-	collection, err := s.client.GetOrCreateCollection(context.Background(), s.collectionName,
-		append(
-			buildChromaHNSWCreateOptions(s.distanceMetric, s.constructConfig, s.searchConfig),
-			chromav2.WithEmbeddingFunctionCreate(embeddings.NewConsistentHashEmbeddingFunction()),
-		)...,
-	)
-	if err != nil {
-		return nil, exception.BuildError(
-			exception.StatusRetrievalVectorStoreProviderInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("创建/获取 ChromaDB 集合失败: %s", err)),
-			exception.WithCause(err),
+		// 对齐 Python: self._collection = self._client.get_or_create_collection(
+		//   name=self.collection_name, configuration={"hnsw": self._construct_config | self._search_config})
+		// S-48: 传完整 HNSW 配置（原仅传 distance metric）。
+		// Python construct_config 含 ef_search（chroma_fields.py L60-67 标 IS_CONSTRUCT），
+		// 合并 constructConfig|searchConfig 后 ef_search 由 construct 侧提供。
+		//
+		// 注：chroma-go v2 CreateCollectionOp 在 embeddingFunction==nil 时强制构建
+		// ONNX 默认 EF（运行时下载 onnxruntime 原生库与 MiniLM 模型）。本项目所有向量
+		// 均由 embedModel 预计算后显式传入，默认 EF 从未被真正使用，因此显式传入
+		// chroma-go 自带的 consistent_hash 轻量 EF（纯 SHA-256，无原生库依赖）阻止
+		// ONNX 下载——CI 冷缓存环境下曾因该下载触发 racefini SIGSEGV。
+		collection, err := s.client.GetOrCreateCollection(context.Background(), s.collectionName,
+			append(
+				buildChromaHNSWCreateOptions(s.distanceMetric, s.constructConfig, s.searchConfig),
+				chromav2.WithEmbeddingFunctionCreate(embeddings.NewConsistentHashEmbeddingFunction()),
+			)...,
 		)
+		if err != nil {
+			return nil, exception.BuildError(
+				exception.StatusRetrievalVectorStoreProviderInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("创建/获取 ChromaDB 集合失败: %s", err)),
+				exception.WithCause(err),
+			)
+		}
+		s.collection = collection
 	}
-	s.collection = collection
 
 	return s, nil
 }
 
 // Client 返回 ChromaDB 客户端
 func (s *ChromaVectorStore) Client() chromav2.Client { return s.client }
+
+// WithChromaClientOption 注入 ChromaDB 客户端实现。
+//
+// 13.23 审查拍板 A：对齐 WithMilvusClientOption 先例——注入即跳过
+// 构造期 CreateChromaClient + GetOrCreateCollection 两步真实连接，
+// 供测试桩注入消除 retriever 层 dispatch 胶水的测试盲区（spec §8-14）。
+func WithChromaClientOption(c chromav2.Client) ChromaStoreOption {
+	return func(s *ChromaVectorStore) {
+		s.client = c
+	}
+}
 
 // CreateChromaClient 创建 ChromaDB 持久化客户端并确保指定数据库存在。
 //

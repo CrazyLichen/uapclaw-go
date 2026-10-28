@@ -13,6 +13,7 @@ import (
 
 	milvuscol "github.com/milvus-io/milvus/client/v2/column"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
+	chromav2 "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"google.golang.org/grpc"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
@@ -520,6 +521,25 @@ func newGraphMilvusStore(t *testing.T, stub *graphFetchMilvusStub) *vector_store
 	return s
 }
 
+// newGraphChromaStore 构造注入桩客户端的真实 ChromaVectorStore
+// （13.23 审查拍板 A：WithChromaClientOption 注入即跳过构造期真实连接，
+// 消除 spec §8-14 测试盲区）
+func newGraphChromaStore(t *testing.T, client chromav2.Client, collectionName string) *vector_store.ChromaVectorStore {
+	t.Helper()
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: collectionName,
+		DatabaseName:   "default",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+	s, err := vector_store.NewChromaVectorStore(config, "/nonexistent/stub-path",
+		"content", vector_fields.NewChromaVectorFieldFromName("embedding"),
+		"sparse_vector", "metadata", "document_id",
+		vector_store.WithChromaClientOption(client))
+	require.NoError(t, err)
+	return s
+}
+
 // graphEmbedRetriever 双能力桩：EmbedModelProvider + VectorStoreAccessor。
 //
 // Python 测试桩同时挂 embed_model 与 vector_store 属性（_RetrieverStub
@@ -737,14 +757,100 @@ func TestGraphRetriever_fetchChunks空结果(t *testing.T) {
 	assert.Empty(t, newChunks)
 }
 
+// TestGraphRetriever_fetchChunkChroma链 EqString 过滤 → Get → 归一化
+// （13.23 审查拍板 A：WithChromaClientOption 注入消除盲区，替换原 t.Skip
+// 占位——spec §8-14 由测试盲区改写为注入口方案）
+func TestGraphRetriever_fetchChunkChroma链(t *testing.T) {
+	meta, err := chromav2.NewDocumentMetadataFromMap(map[string]any{
+		"chunk_id": "cid-a", "doc_id": "doc-1",
+	})
+	require.NoError(t, err)
+	getResult := &chromav2.GetResultImpl{
+		Ids:       chromav2.DocumentIDs{"id1"},
+		Documents: chromav2.Documents{&chromav2.TextDocument{Content: "chroma expanded chunk"}},
+		Metadatas: chromav2.DocumentMetadatas{meta},
+	}
+	coll := &chromaCollectionStub{getResult: getResult}
+	client := &chromaClientStub{collection: coll}
+	store := newGraphChromaStore(t, client, "kb_1_chunks")
+
+	chunkRetriever := &graphEmbedRetriever{fakeBeamRetriever{}, nil, store}
+	gr := NewGraphRetriever(WithGraphChunkRetriever(chunkRetriever))
+	triples := []common.RetrievalResult{
+		{Text: "A relates B", ChunkID: "cid-a"},
+	}
+	newChunks, err := gr.fetchChunks(context.Background(), triples, RetrievalModeSparse)
+	require.NoError(t, err)
+	require.Len(t, newChunks, 1)
+	assert.Equal(t, "chroma expanded chunk", newChunks[0].Text)
+	assert.Equal(t, "cid-a", newChunks[0].ChunkID)
+	assert.Equal(t, "doc-1", newChunks[0].DocID)
+	assert.Equal(t, 1, coll.getCalls) // Get 被调用（dispatch 链真实执行）
+}
+
 // TestGraphRetriever_fetchChunkChroma空结果 Chroma 无命中路径（fetchChunk
 // Chroma 分支 len(items)==0 → nil）
 func TestGraphRetriever_fetchChunkChroma空结果(t *testing.T) {
-	// graphChunkChromaRetriever 无法跨包构造 ChromaVectorStore（私有
-	// client 字段），此处经 fetchChunk 的 Chroma 分支需要真实
-	// ChromaVectorStore——用 Chroma 分支 stub 桩直接验证归一化函数行为，
-	// 分支本身在 graph_fetch_test.go 已覆盖
-	t.Skip("ChromaVectorStore 私有字段无法注入；Chroma 归一化已在 graph_fetch_test.go 覆盖")
+	getResult := &chromav2.GetResultImpl{}
+	coll := &chromaCollectionStub{getResult: getResult}
+	client := &chromaClientStub{collection: coll}
+	store := newGraphChromaStore(t, client, "kb_1_chunks")
+
+	chunkRetriever := &graphEmbedRetriever{fakeBeamRetriever{}, nil, store}
+	gr := NewGraphRetriever(WithGraphChunkRetriever(chunkRetriever))
+	triples := []common.RetrievalResult{
+		{Text: "A relates B", ChunkID: "cid-a"},
+	}
+	newChunks, err := gr.fetchChunks(context.Background(), triples, RetrievalModeSparse)
+	require.NoError(t, err)
+	assert.Empty(t, newChunks)
+}
+
+// TestGraphRetriever_fetchTriplesChroma链 InString 过滤 → Get → 三元组
+// 归一化（fetchTriples Chroma 分支 dispatch，原 spec §8-14 盲区主体）
+func TestGraphRetriever_fetchTriplesChroma链(t *testing.T) {
+	meta, err := chromav2.NewDocumentMetadataFromMap(map[string]any{
+		"chunk_id": "cid-a",
+	})
+	require.NoError(t, err)
+	getResult := &chromav2.GetResultImpl{
+		Ids:       chromav2.DocumentIDs{"id1"},
+		Documents: chromav2.Documents{&chromav2.TextDocument{Content: "A relates B"}},
+		Metadatas: chromav2.DocumentMetadatas{meta},
+	}
+	coll := &chromaCollectionStub{getResult: getResult}
+	client := &chromaClientStub{collection: coll}
+	store := newGraphChromaStore(t, client, "kb_1_triples")
+
+	// 固定 triple retriever 持有 store（fetchTriples 挖取通道）
+	tripleRetriever := &graphEmbedRetriever{fakeBeamRetriever{}, nil, store}
+	gr := NewGraphRetriever(WithGraphTripleRetriever(tripleRetriever))
+	chunks := []common.RetrievalResult{
+		makeChunkResult("chunk-a", "cid-a", "doc-1", 0.9),
+	}
+	results, err := gr.fetchTriples(context.Background(), chunks, RetrievalModeSparse)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "A relates B", results[0].Text)
+	assert.Equal(t, "cid-a", results[0].ChunkID)
+	assert.Equal(t, 1, coll.getCalls) // Get 被调用（dispatch 链真实执行）
+}
+
+// TestGraphRetriever_fetchTriplesChroma查询错误吞掉 Chroma 整体 try/except
+// 语义（Python L588-592 → Go fetchTriples 内吞错回落空）
+func TestGraphRetriever_fetchTriplesChroma查询错误吞掉(t *testing.T) {
+	coll := &chromaCollectionStub{getErr: errors.New("chroma get failed")}
+	client := &chromaClientStub{collection: coll}
+	store := newGraphChromaStore(t, client, "kb_1_triples")
+
+	tripleRetriever := &graphEmbedRetriever{fakeBeamRetriever{}, nil, store}
+	gr := NewGraphRetriever(WithGraphTripleRetriever(tripleRetriever))
+	chunks := []common.RetrievalResult{
+		makeChunkResult("chunk-a", "cid-a", "doc-1", 0.9),
+	}
+	results, err := gr.fetchTriples(context.Background(), chunks, RetrievalModeSparse)
+	require.NoError(t, err) // Chroma 分支吞错 warn 回落空
+	assert.Empty(t, results)
 }
 
 // TestGraphRetriever_GraphExpansion全链RRF融合 beam 扩展 + fetchChunks

@@ -113,6 +113,57 @@ func TestChromaVectorStore_距离度量归一化(t *testing.T) {
 	}
 }
 
+// chromaClientStubForOption 注入测试桩：嵌入 nil Client，任何未显式
+// 实现的方法一被调用即 panic——用于证明构造期真实连接两步被跳过。
+type chromaClientStubForOption struct {
+	chromav2.Client
+}
+
+// TestChromaVectorStore_WithChromaClientOption注入跳过真实连接
+// 13.23 审查拍板 A：注入即跳过 CreateChromaClient + GetOrCreateCollection，
+// Client() 返回桩本身、collection 留 nil。
+func TestChromaVectorStore_WithChromaClientOption注入跳过真实连接(t *testing.T) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "stub-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+	// chromaPath 指向不存在也无所谓的路径——若守卫失效会真实建库失败或
+	// 调用桩方法 panic，两种形态都能暴露回归。
+	stub := &chromaClientStubForOption{}
+
+	vs, err := NewChromaVectorStore(config, "/nonexistent/path/for/stub",
+		"content", vector_fields.NewChromaVectorFieldFromName("embedding"),
+		"sparse_vector", "metadata", "document_id",
+		WithChromaClientOption(stub),
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, vs)
+	assert.Same(t, stub, vs.Client())
+	assert.Nil(t, vs.collection)
+	assert.Equal(t, "stub-collection", vs.CollectionName())
+}
+
+// TestChromaVectorStore_无选项走真实连接 默认路径不回归
+func TestChromaVectorStore_无选项走真实连接(t *testing.T) {
+	config := common.VectorStoreConfig{
+		StoreProvider:  common.StoreTypeChroma,
+		CollectionName: "test-collection",
+		DistanceMetric: common.DistanceMetricCosine,
+	}
+	dir := t.TempDir()
+
+	vs, err := NewChromaVectorStore(config, dir,
+		"content", vector_fields.NewChromaVectorFieldFromName("embedding"), "sparse_vector", "metadata", "document_id",
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, vs)
+	assert.NotNil(t, vs.Client())     // 真实嵌入式客户端
+	assert.NotNil(t, vs.collection)   // 构造期 GetOrCreateCollection 完成
+}
+
 // TestChromaVectorStore_ConstructConfig 测试构建配置含 space
 func TestChromaVectorStore_ConstructConfig(t *testing.T) {
 	config := common.VectorStoreConfig{

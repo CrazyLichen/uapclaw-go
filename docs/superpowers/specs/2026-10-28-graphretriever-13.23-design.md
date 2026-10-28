@@ -253,6 +253,6 @@ Python 20 例 1:1 映射 + Go 增强：
 | 11 | Retrieve/GraphExpansion mode 零值 ""→hybrid 回落 | Python 签名默认值在 Go 无默认参数，零值回落同构（13.19 先例） |
 | 12 | BatchRetrieve 裸 errgroup（不 WithContext 派生 ctx） | WithContext 首错取消兄弟协程偏离 Python asyncio.gather 全启动语义（13.20 先例） |
 | 13 | fetchChunk Chroma 分支错误吞掉返回 nil（非冒泡） | Python fetch_chunk 整体 try/except None（L746-749）；Milvus 分支错误冒泡对齐 Python _fetch_chunks 上层无吞 |
-| 14 | ChromaVectorStore 构造期 GetOrCreateCollection→测试桩不可达 | 私有 client 字段无法跨包注入；queryByFilterChroma 已在 graph_fetch_test.go 用 chromaClientStub 直接覆盖，store 级 dispatch 分支记为测试盲区 |
+| 14 | ChromaVectorStore 构造期真实连接→测试桩不可达 → **审查修复：加注入口** | 原归档"私有 client 字段无法跨包注入，store 级 dispatch 分支记为测试盲区"；审查拍板 A 后消除：加 `ChromaStoreOption` + `WithChromaClientOption`（对齐 WithMilvusClientOption 先例），构造器 `s.client == nil` 守卫跳过 CreateChromaClient + GetOrCreateCollection 两步副作用；retriever 侧补 fetchTriples/fetchChunk Chroma 链用例（原 t.Skip 占位替换），盲区归零，覆盖率 92.3%→94.3% |
 | 15 | truncateResults 统一 `*topk > 0` 才截断 | Python `if topk` truthiness（0 视为未设不截断）；Go *int nil=未设、0 显式传等价未设，两语言 0 语义对齐为不截断 |
-| 16 | SetCollectionName 经 collectionNameSetter 包内小接口断言 | VectorStore 接口（13.2）无此方法；Milvus/Chroma 真实现与测试桩经接口注入，未实现者跳过（宽松语义与 #9 同源） |
+| 16 | SetCollectionName 经 collectionNameSetter 包内小接口断言 | VectorStore 接口（13.2）无此方法；Milvus/Chroma 真实现与测试桩经接口注入，未实现者跳过（宽松语义与 #9 同源）。审查拍板 A+：接口迁入 capability.go（保持不导出），放置约定文档化——跨包消费→导出，仅包内→用点处私有 |
