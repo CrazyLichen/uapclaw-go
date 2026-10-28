@@ -251,7 +251,7 @@ func TestSearchCandidates_无indexType用retrieveMode(t *testing.T) {
 	assert.Equal(t, 7, r.lastTopK)
 }
 
-// TestSearchCandidates_retrieveModeVector
+// TestSearchCandidates_retrieveModeVector 显式 vector 模式透传
 func TestSearchCandidates_retrieveModeVector(t *testing.T) {
 	r := &withEmbedRetriever{fakeBeamRetriever{retrieveFn: func(context.Context, string, int) ([]common.RetrievalResult, error) {
 		return nil, nil
@@ -303,7 +303,7 @@ func TestSearchCandidates_防御路径(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, ret)
 
-	// len<2
+	// len<2 解析后元素不足
 	beam = common.NewTripleBeam([]common.RetrievalResult{makeTriple("t", `["a"]`, 1.0)}, 1.0)
 	ret, err = s.searchCandidates(context.Background(), beam)
 	assert.NoError(t, err)

@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/wsorigin"
+	"github.com/uapclaw/uapclaw-go/internal/common/wswrite"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -185,13 +186,11 @@ func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request)
 	}
 	conn.SetReadLimit(gwReadLimit)
 
-	s.clientsMu.Lock()
-	s.clients[conn] = struct{}{}
-	s.clientsMu.Unlock()
+	s.registerConn(conn)
 
 	// connection.ack 首帧（对齐 L513-525）
 	ack := buildConnectionAckFrame(route.ChannelID)
-	if err := conn.WriteMessage(websocket.TextMessage, ack); err != nil {
+	if err := s.writeMessage(conn, ack); err != nil {
 		logger.Debug(logComponent).
 			Err(err).
 			Str("channel", route.ChannelID).
@@ -199,6 +198,7 @@ func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request)
 		s.clientsMu.Lock()
 		delete(s.clients, conn)
 		s.clientsMu.Unlock()
+		wswrite.Unregister(conn)
 		return
 	}
 
@@ -226,21 +226,7 @@ func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request)
 	}
 
 	// finally 语义（对齐 L532-559）：清集合 + 清 stale 路由键 + 断连回调
-	s.clientsMu.Lock()
-	delete(s.clients, conn)
-	var staleSessionKeys [][2]string
-	for key, c := range s.sessionToClient {
-		if c == conn {
-			staleSessionKeys = append(staleSessionKeys, key)
-			delete(s.sessionToClient, key)
-		}
-	}
-	for key, c := range s.requestToClient {
-		if c == conn {
-			delete(s.requestToClient, key)
-		}
-	}
-	s.clientsMu.Unlock()
+	staleSessionKeys := s.unregisterConn(conn)
 
 	if route.DisconnectHandler != nil {
 		func() {
@@ -312,15 +298,13 @@ func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
 					Int("clients", len(clients)).
 					Str("id", msg.ID).
 					Msg("broadcast fallback")
-				s.clientsMu.RLock()
 				for _, c := range clients {
-					if err := c.WriteMessage(websocket.TextMessage, data); err != nil {
+					if err := s.writeMessage(c, data); err != nil {
 						logger.Debug(logComponent).
 							Err(err).
 							Msg("broadcast send failed (client disconnected?)")
 					}
 				}
-				s.clientsMu.RUnlock()
 				return nil
 			}
 		}
@@ -362,7 +346,7 @@ func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
 
 	frame := buildOutboundFrame(msg)
 	data, _ := json.Marshal(frame)
-	if err := ws.WriteMessage(websocket.TextMessage, data); err != nil {
+	if err := s.writeMessage(ws, data); err != nil {
 		logger.Debug(logComponent).
 			Err(err).
 			Msg("gateway send failed (client disconnected?)")
@@ -371,6 +355,44 @@ func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// writeMessage 串行化出站写：经 per-connection 写锁后写 TextMessage。
+// [Go 扩展] gorilla/websocket 不允许并发 WriteMessage（触发
+// "concurrent write to websocket connection" panic）；Python websockets
+// 库 send 天然受事件循环串行化。Go 侧读循环线程（本地 handler ack）与
+// ChannelManager 派发线程（定向/广播出站）会并发写同一连接，必须显式互斥。
+func (s *GatewayServer) writeMessage(ws *websocket.Conn, data []byte) error {
+	return wswrite.Write(ws, data)
+}
+
+// registerConn 注册连接：clients 集合 + 进程级写锁表。
+func (s *GatewayServer) registerConn(conn *websocket.Conn) {
+	s.clientsMu.Lock()
+	s.clients[conn] = struct{}{}
+	s.clientsMu.Unlock()
+	wswrite.Register(conn)
+}
+
+// unregisterConn 清理连接：clients 集合 + 进程级写锁表，返回 stale 会话键。
+func (s *GatewayServer) unregisterConn(conn *websocket.Conn) [][2]string {
+	s.clientsMu.Lock()
+	delete(s.clients, conn)
+	var staleSessionKeys [][2]string
+	for key, c := range s.sessionToClient {
+		if c == conn {
+			staleSessionKeys = append(staleSessionKeys, key)
+			delete(s.sessionToClient, key)
+		}
+	}
+	for key, c := range s.requestToClient {
+		if c == conn {
+			delete(s.requestToClient, key)
+		}
+	}
+	s.clientsMu.Unlock()
+	wswrite.Unregister(conn)
+	return staleSessionKeys
+}
 
 // r2s 取路由路径（disconnect 日志辅助，避免与 recover 变量名冲突）。
 func r2s(route *RouteConfig) string {
@@ -588,16 +610,29 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 }
 
 // probeWritable 写探针：判断 ws 是否仍可写（对齐 Python getattr(ws,"closed")）。
+// [Go 扩展] 探针同样写连接（Ping + SetWriteDeadline），必须与数据帧写点
+// 共用连接写锁，否则与本地 ack / 出站派发并发时触发 data race。
 func (s *GatewayServer) probeWritable(ws *websocket.Conn) bool {
-	_ = ws.SetWriteDeadline(time.Now().Add(50 * time.Millisecond))
-	defer func() { _ = ws.SetWriteDeadline(time.Time{}) }()
-	return ws.WriteMessage(websocket.PingMessage, nil) == nil
+	writable := false
+	wswrite.Lock(ws, func() {
+		_ = ws.SetWriteDeadline(time.Now().Add(50 * time.Millisecond))
+		defer func() { _ = ws.SetWriteDeadline(time.Time{}) }()
+		writable = ws.WriteMessage(websocket.PingMessage, nil) == nil
+	})
+	return writable
 }
 
 // sendResponse 发送 res 帧。
 //
 // Python: send_response（L332-356）——发送失败仅 Debug。
 func (s *GatewayServer) sendResponse(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string) {
+	writeResponseFrame(ws, reqID, ok, payload, errMsg, code)
+}
+
+// writeResponseFrame 构造并写入 res 帧（包级，供 tui 本地 handler 复用）。
+//
+// 零行为变更：帧构造与写入逻辑自 sendResponse 提取（11.15 最小装配）。
+func writeResponseFrame(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string) {
 	if payload == nil {
 		payload = map[string]any{}
 	}
@@ -617,12 +652,14 @@ func (s *GatewayServer) sendResponse(ws *websocket.Conn, reqID string, ok bool, 
 		}
 	}
 	data, _ := json.Marshal(frame)
-	if err := ws.WriteMessage(websocket.TextMessage, data); err != nil {
-		logger.Debug(logComponent).
-			Err(err).
-			Str("method", "send_response").
-			Msg("send failed (client disconnected?)")
-	}
+	wswrite.Lock(ws, func() {
+		if err := ws.WriteMessage(websocket.TextMessage, data); err != nil {
+			logger.Debug(logComponent).
+				Err(err).
+				Str("method", "send_response").
+				Msg("send failed (client disconnected?)")
+		}
+	})
 }
 
 // sendEvent 发送 event 帧（供本地 handler 使用，11.15 TUI 消费）。
@@ -638,12 +675,14 @@ func (s *GatewayServer) sendEvent(ws *websocket.Conn, event string, payload map[
 		"payload": payload,
 	}
 	data, _ := json.Marshal(frame)
-	if err := ws.WriteMessage(websocket.TextMessage, data); err != nil {
-		logger.Debug(logComponent).
-			Err(err).
-			Str("method", "send_event").
-			Msg("send failed (client disconnected?)")
-	}
+	wswrite.Lock(ws, func() {
+		if err := ws.WriteMessage(websocket.TextMessage, data); err != nil {
+			logger.Debug(logComponent).
+				Err(err).
+				Str("method", "send_event").
+				Msg("send failed (client disconnected?)")
+		}
+	})
 }
 
 // buildConnectionAckFrame 构建 connection.ack 首帧。

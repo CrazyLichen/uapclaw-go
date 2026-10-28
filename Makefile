@@ -99,4 +99,4 @@ proto-gen:
 
 # CI 重触发专用（2026-10-24）：空提交被 paths-ignore 拦截不触发流水线，
 # 递增本计数器以携带文件变更重新触发 CI。
-ci-retrigger-counter := 3
+ci-retrigger-counter := 4

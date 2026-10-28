@@ -255,6 +255,14 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 	if isFollowUp {
 		coreTask.Metadata["is_follow_up"] = true
 	}
+	// 透传 _streaming（controller.SubmitRound 写入 event metadata）。
+	// Python task_loop_event_executor L202 硬编码 _streaming=True 传给
+	// react_agent.invoke；Go 用 metadata 携带该标志（executor.go L230 读取），
+	// 此处漏传会导致流式请求退化为非流式 invoke——llm_output/llm_usage
+	// 不再写入 session 流，deep adapter 只收到 answer 帧，chat.delta 全丢。
+	if v, ok := metadata["_streaming"]; ok {
+		coreTask.Metadata["_streaming"] = v
+	}
 
 	logger.Info(logComponent).
 		Str("task_id", taskID).

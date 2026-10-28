@@ -415,10 +415,16 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 			gwCfg.Port = p
 		}
 	}
+	// 11.15 最小装配：/tui CLI 路由（对齐 Python L1045-1054 build_cli_route_binding）
+	// 纯本地 handler（config.*/session.list/memory.*/cron.* 等 27 个）⤵️ 11.15 完整范围
+	if s.msgHandler != nil {
+		tuiRoute := BuildTuiRouteConfig(TuiRouteParams{MessageHandler: s.msgHandler})
+		gwCfg.Routes[tuiRoute.Path] = tuiRoute
+	}
 	s.gwServer = NewGatewayServer(gwCfg)
 
 	// 对齐 Python L1056-1064：for binding in route_bindings
-	routeBindings := []*routing.RouteBinding{} // A1：空（⤵️ 11.25/11.15 注入）
+	routeBindings := []*routing.RouteBinding{} // ACP ⤵️ 11.25（TUI 已改为直填 Routes，不走 binding）
 	for _, binding := range routeBindings {
 		routeConfig := gwCfg.Routes[binding.Path]
 		s.channelMgr.RegisterExternalChannel(routeConfig.ChannelID, s.gwServer)
@@ -426,6 +432,8 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 			binding.Install(s.gwServer)
 		}
 	}
+	// 11.15：/tui 出站注册（对齐 Python register_external_channel("tui", gateway_server)）
+	s.channelMgr.RegisterExternalChannel("tui", s.gwServer)
 
 	// 对齐 Python L1069：gateway_server.on_message(acp_inbound_server.handle_message)
 	s.gwServer.OnMessage(s.inboundServer.HandleMessage)

@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/wsorigin"
+	"github.com/uapclaw/uapclaw-go/internal/common/wswrite"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -147,10 +148,12 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// 设置消息大小限制
 	conn.SetReadLimit(wsReadLimit)
 
-	// 加入连接集合
+	// 加入连接集合（同时登记进程级写锁：读循环线程的 res 帧与派发线程的
+	// 广播/定向出站会并发写同一连接，gorilla WriteMessage 非并发安全）
 	wc.clientsMu.Lock()
 	wc.clients[conn] = true
 	wc.clientsMu.Unlock()
+	wswrite.Register(conn)
 
 	logger.Info(logComponent).
 		Str("event_type", "ws_connected").
@@ -180,6 +183,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		wc.clientsMu.Lock()
 		delete(wc.clients, conn)
 		wc.clientsMu.Unlock()
+		wswrite.Unregister(conn)
 		_ = conn.Close()
 
 		logger.Info(logComponent).
@@ -265,7 +269,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// 写入成功响应
 		res := NewResFrame(req.ID, true, result, "", "")
 		resData, _ := res.Encode()
-		if err := conn.WriteMessage(websocket.TextMessage, resData); err != nil {
+		if err := wswrite.Write(conn, resData); err != nil {
 			logger.Error(logComponent).
 				Err(err).
 				Str("method", req.Method).
@@ -466,7 +470,7 @@ func (wc *WebChannel) broadcastRaw(data []byte) {
 	defer wc.clientsMu.RUnlock()
 
 	for conn := range wc.clients {
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		if err := wswrite.Write(conn, data); err != nil {
 			logger.Warn(logComponent).
 				Err(err).
 				Msg("failed to broadcast raw frame to client")
@@ -478,7 +482,7 @@ func (wc *WebChannel) broadcastRaw(data []byte) {
 func (wc *WebChannel) writeError(conn *websocket.Conn, reqID, errMsg, code string) {
 	res := NewResFrame(reqID, false, make(map[string]any), errMsg, code)
 	data, _ := res.Encode()
-	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+	if err := wswrite.Write(conn, data); err != nil {
 		logger.Error(logComponent).
 			Err(err).
 			Msg("failed to write error response")

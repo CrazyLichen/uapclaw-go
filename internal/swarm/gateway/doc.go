@@ -17,6 +17,7 @@
 //	├── doc.go              # 包文档
 //	├── app_gateway.go      # AppGatewayServer 启动入口（对应 Python _run() 组装），chi router 组装，reloader 管理
 //	├── gateway_server.go   # GatewayServer 多路由 WS 服务器本体（对齐 Python app_gateway.py GatewayServer 类 L240-720）
+//	├── tui_route.go        # /tui 路由装配（BuildTuiRouteConfig，11.15：TUI 本地 handler + 断连桥接）
 //	├── inbound_gateway_server.go # InboundGatewayServer 入站队列服务 + NormalizeAndForwardMessage（对齐 Python _InboundGatewayServer/_normalize_and_forward_message）
 //	├── route_config.go     # RouteConfig/GatewayServerConfig 路由配置（对齐 Python GatewayServer 类族 L207-238/L723-752）
 //	├── config_push.go      # 配置热重载回调（onConfigSavedImpl）
