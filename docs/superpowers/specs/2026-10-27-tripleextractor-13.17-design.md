@@ -287,11 +287,17 @@ mock：`llm.NewModel(WithClient(mockModelClient))`——mockModelClient 实现 `
 |---|---|---|
 | 1 | modelName 死参数 | Python 同样存字段不用于 invoke；Go 保留字段对齐 API 形状（13.28 构造传参用） |
 | 2 | CancelledError 分支省略 | Python `isinstance(result, BaseException) and not isinstance(result, Exception)` 直接 raise 不记首错；Go ctx 取消走普通 error → wrap 155507 路径 |
-| 3 | pyStr 语言差异 | `str(True)→"True"`、`str(1.0)→"1.0"`（13.13 先例）；`pyStr(nil)→"None"` 不可达防御 |
+| 3 | pyStr 语言差异 | `str(True)→"True"`、`str(1.0)→"1.0"`（13.13 先例）；`pyStr(nil)→"None"` 不可达防御。json.Number 分支超 int64 纯整数字面原样透传（2026-10-27 审查 S-02 修复：初版 `Atoi 失败→Float64` 把 `12345678901234567890` e 记法化 `"1.2345678901234568e+19"`；Python `str(int)` 无界原样。补 `isPureIntegerLiteral` 纯数字判定透传，超界测试用例 3 例） |
 | 4 | 抽象实例化/pydantic 校验零实现 | cannot_instantiate 用例与 ValidationError 必填校验：Go 接口编译期防实现外实例化 / 结构体无校验机制，天然等价 |
 | 5 | nil llmClient → 155507 | Python None.invoke AttributeError 被 except wrap；Go 显式判 nil 返回 155507（硬失败，区别于 13.15 captioner 的禁用态软失败） |
 | 6 | 外层兜底 except 无对应 | Python L336-338 全函数 try/except 兜底（防 repair_json 之外意外异常）；Go 无 panic 路径（RepairWithOptions 自带 recover），零代码归档 |
 | 7 | 成功结果随首错丢弃 | Python `all_triples.extend` 先于 raise——最终错误返回时成功结果不返回；Go 显式 `return nil, firstErr`（allTriples 计算后丢弃，注释说明对齐意图） |
+| 8 | json-repair 库深修复路径 float32 截断（2026-10-27 审查 S-03，拍板跳过） | 库 v0.0.18 `jsonrepair.go:1081` 用 `ParseFloat(...,32)` 解析数字（float32 24 位尾数）：深修复路径（LLM 输出不合规 JSON 高频路径）`1e-4`→`"9.9999997e-05"`、`1e15`→`"999999986991104.0"`；Python json_repair 0.64.2 双精度 `"0.0001"`/`"1000000000000000.0"`。合法 JSON 短路路径（json.Valid+UseNumber）无损。库级根因，等上游修复（ParseFloat 64），暂不包装层绕过 |
+| 9 | json-repair 库深修复路径超 int64 截断（2026-10-27 审查 S-04，拍板跳过与 S-03 一致） | 库 v0.0.18 `jsonrepair.go:1088` `Atoi` 忽略 ErrRange：超大整数截断为 MaxInt64（`12345678901234567890`→`"9223372036854775807"`）；Python int 无界原样。与 S-03 同根因同代码区域，一并等上游 |
+| 10 | metadata title 非字符串回落 Untitled（2026-10-27 审查 M-01(13.17)，拍板归档有意防御） | Python `title or "Untitled"` 对 42/true 等 truthy 值 str 化渲染（"42"）；Go metadataTitle 类型断言失败返回空串回落 "Untitled"——上游脏数据回落更安全 |
+| 11 | ~~normalizeActiveHours 对 bool 无分支~~（条目错位，2026-10-28 移除） | 该项属 heartbeat 域，已在 11.11 spec §8-⑱ 正确归档，本表误收录 |
+| 12 | repair 失败日志 content 截断不加 "..." 后缀（2026-10-27 审查 T-09 修复） | Python `logger.debug(f"...content={content[:100]}")` 纯截断；Go 初版 `truncateContent` 追加 "..." 后缀——L100 边界输出超 100 字符，已删 |
+| 13 | WithTripleMaxConcurrent n≤0 钳制到默认 50（2026-10-27 审查 T-10 修复） | Python `asyncio.Semaphore(-1)` 构造期 ValueError fail-fast（triple_extractor.py 测试即有该用例）；Go 初版 `make(chan struct{}, n)` 负数 panic、0 容量永久阻塞。用户拍板钳制 `defaultTripleMaxConcurrent = 50`（构造器/NewTripleExtractor 默认值统一走该常量），非法输入静默修正不炸启动 |
 
 ## 9. 实施完成回填清单
 

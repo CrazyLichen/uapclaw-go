@@ -256,3 +256,79 @@ func TestNewAutoLinkParser_空表字面语义(t *testing.T) {
 		t.Fatal("空表 supports 应 false（无路由命中）")
 	}
 }
+
+// ──────────────────── 审查修复 2026-10-27 补充用例 ────────────────────
+
+// TestNewLinkRoute_包外注入构造 审查修复 S-01：NewLinkRoute 导出构造
+// 打通包外注入链路（非导出字段复合字面量不可构造的断裂修复）。
+// 注意 supports 有 HTTP URL 级门卫（对齐 Python L54 HTTP_URL_PATTERN.match
+// 前置），custom:// 非 http 协议在门卫层即被拒（Python 同样 False）——
+// 注入路由的命中验证走 parse 路径（无门卫直接遍历路由，对齐 Python L58-63）。
+func TestNewLinkRoute_包外注入构造(t *testing.T) {
+	fake := newFakeRouteParser(true, []reranker.Document{{ID: "d1", Text: "custom doc", Metadata: map[string]any{}}})
+	route := NewLinkRoute(NewRegexpMatcher(regexp.MustCompile(`^custom://`)), fake)
+	p, err := NewAutoLinkParser([]linkRoute{route})
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	// parse 无门卫：注入路由应命中 custom:// 前缀并委托 fake
+	docs, err := p.Parse(t.Context(), "custom://doc-1")
+	if err != nil {
+		t.Fatalf("Parse 失败: %v", err)
+	}
+	if fake.calls != 1 {
+		t.Fatalf("注入路由应命中 custom:// 前缀委托 fake, got %d 次调用", fake.calls)
+	}
+	if len(docs) != 1 || docs[0].ID != "d1" {
+		t.Fatalf("fake 应产出预置文档, got %+v", docs)
+	}
+	// 非 custom:// 前缀不命中注入路由
+	fake.calls = 0
+	if _, err := p.Parse(t.Context(), "https://example.com"); err != nil {
+		t.Fatalf("Parse 失败: %v", err)
+	}
+	if fake.calls != 0 {
+		t.Fatalf("非 custom:// 前缀不应命中注入路由, got %d 次调用", fake.calls)
+	}
+	// supports 门卫：custom:// 非 http URL 门卫即拒（对齐 Python HTTP_URL_PATTERN 前置）
+	if p.Supports("custom://doc-1") {
+		t.Fatal("custom:// 非 http URL，supports 门卫应拒绝（对齐 Python）")
+	}
+}
+
+// TestMatchDoc_nil防御 审查修复 S-01：nil matcher 视作不命中不 panic
+// （对齐决策 6 防御优先——Python 垃圾路由 AttributeError 可捕获）。
+func TestMatchDoc_nil防御(t *testing.T) {
+	if matchDoc(nil, "https://example.com") {
+		t.Fatal("nil matcher 应视作不命中")
+	}
+	p, _ := NewAutoLinkParser([]linkRoute{{}}) // 零值路由：matcher/parser 均 nil
+	if p.Supports("https://example.com/page") {
+		t.Fatal("零值路由 Supports 应不命中（nil matcher 防御）")
+	}
+	docs, err := p.Parse(t.Context(), "https://example.com/page")
+	if err != nil {
+		t.Fatalf("零值路由 Parse 应不 panic: %v", err)
+	}
+	if len(docs) != 0 {
+		t.Fatalf("零值路由 Parse 应继续遍历返回空, got %d", len(docs))
+	}
+}
+
+// TestRegexpMatcher_MatchDoc_头部锚定 审查修复 M-01：未锚定正则
+// 对齐 Python re.match 头部锚定（非 search 任意位置）。
+func TestRegexpMatcher_MatchDoc_头部锚定(t *testing.T) {
+	m := NewRegexpMatcher(regexp.MustCompile(`weixin\.qq\.com`)) // 无 ^ 锚定
+	// Python: match 从位置 0 起，"https" 开头不中 → False
+	if m.MatchDoc("https://mp.weixin.qq.com/s/x") {
+		t.Fatal("未锚定正则应头部锚定：位置 0 是 https，不中")
+	}
+	// 头部命中才中
+	if !m.MatchDoc("weixin.qq.com/s/x") {
+		t.Fatal("头部命中应返回 true")
+	}
+	// strip 后头部命中（对齐 match(doc.strip())）
+	if !m.MatchDoc("  weixin.qq.com/s/x  ") {
+		t.Fatal("strip 后头部命中应返回 true")
+	}
+}

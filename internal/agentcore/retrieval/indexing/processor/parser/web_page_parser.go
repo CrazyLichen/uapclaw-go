@@ -197,9 +197,15 @@ func ParseWebPageURL(ctx context.Context, url string, docID string, opts ...Pars
 // isWeChatArticleURL 判定微信文章 URL（对齐 _is_wechat_article_url）。
 //
 // 空串/空 url 直接 false（对齐 bool(url and ...)）。
+// 审查修复 M-01：FindStringIndex 判 loc[0]==0 对齐 Python re.match
+// 头部锚定语义（正则自带 ^ 时等价，统一防御未来正则改动）。
 // Python: web_page_parser.py _is_wechat_article_url
 func isWeChatArticleURL(url string) bool {
-	return url != "" && wechatMPURLPattern.MatchString(strings.TrimSpace(url))
+	if url == "" {
+		return false
+	}
+	loc := wechatMPURLPattern.FindStringIndex(strings.TrimSpace(url))
+	return loc != nil && loc[0] == 0
 }
 
 // downloadHTML 下载网页 HTML（对齐 Python _download_html）。
@@ -368,7 +374,8 @@ func (p *WebPageParser) ParseURL(ctx context.Context, url string, docID string, 
 // Python: web_page_parser.py WebPageParser._validate_url
 func (p *WebPageParser) validateURLFor(url string) error {
 	url = strings.TrimSpace(url)
-	if url == "" || !httpURLPattern.MatchString(url) {
+	// 审查修复 M-01：头部锚定匹配对齐 Python re.match（正则自带 ^ 等价，统一防御）
+	if url == "" || httpURLPattern.FindStringIndex(url) == nil {
 		return exception.BuildError(
 			exception.StatusRetrievalIndexingFetchError,
 			exception.WithMsg(fmt.Sprintf("Not a valid HTTP URL: %q", url)),
@@ -386,9 +393,13 @@ func (p *WebPageParser) validateURLFor(url string) error {
 // Supports 检查是否支持该文档源（覆写，对齐 Python WebPageParser.supports）。
 //
 // http(s) URL 且非微信文章 URL（strip 后匹配，对齐 doc.strip()）。
+// 审查修复 M-01：头部锚定匹配对齐 Python re.match（正则自带 ^ 等价，统一防御）。
 // Python: web_page_parser.py WebPageParser.supports
 func (p *WebPageParser) Supports(doc string) bool {
-	if doc == "" || !httpURLPattern.MatchString(strings.TrimSpace(doc)) {
+	if doc == "" {
+		return false
+	}
+	if httpURLPattern.FindStringIndex(strings.TrimSpace(doc)) == nil {
 		return false
 	}
 	return !isWeChatArticleURL(doc)

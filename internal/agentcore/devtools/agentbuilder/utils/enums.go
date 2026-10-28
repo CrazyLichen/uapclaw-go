@@ -137,7 +137,9 @@ func ParseProgressStage(s string) (ProgressStage, error) {
 		ProgressStageTransformingMermaid, ProgressStageTransformingWorkflowDSL:
 		return ProgressStage(s), nil
 	default:
-		return "", fmt.Errorf("unsupported progress stage: %q, valid: 15 values", s)
+		// 审查修复 T-05：列出全部合法值清单（对齐同文件 ParseAgentType/
+		// ParseBuildState/ParseProgressStatus 风格；15 值经 grep 机器核对）
+		return "", fmt.Errorf("unsupported progress stage: %q, valid: [initializing clarifying resource_retrieving completed error optimizing generating_config transforming_dsl detecting_intention generating_workflow_design generating_dl validating_dl refining_dl transforming_mermaid transforming_workflow_dsl]", s)
 	}
 }
 

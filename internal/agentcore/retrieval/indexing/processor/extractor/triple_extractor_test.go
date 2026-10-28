@@ -365,7 +365,7 @@ func TestPyStr_jsonNumber(t *testing.T) {
 		{json.Number("1"), "1"},                                 // Python json 解码 int → str(1)="1"
 		{json.Number("1.0"), "1.0"},                             // Python float → str(1.0)="1.0"
 		{json.Number("1.5"), "1.5"},                             // 最短往返同形
-		{json.Number("10000000000000000"), "10000000000000000"}, // int 超界仍整数字面（Python int 无界）
+		{json.Number("10000000000000000"), "10000000000000000"}, // 1e16 < int64 界 9.22e18（Atoi 可达）
 		{json.Number("1e16"), "1e+16"},                          // Python float(1e16) → str → "1e+16"
 		{json.Number("0.0001"), "0.0001"},
 	}
@@ -373,6 +373,29 @@ func TestPyStr_jsonNumber(t *testing.T) {
 		if got := pyStr(c.in); got != c.want {
 			t.Errorf("pyStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
 		}
+	}
+}
+
+// TestPyStr_jsonNumber超int64界 审查修复 S-02：超 int64 界（>9.22e18）的
+// 纯整数字面 Atoi 返回 ErrRange，修复前漏到 Float64 被 e 记法化；修复后
+// 纯整数字面原样透传（Python int 无界 str 原样输出）。
+func TestPyStr_jsonNumber超int64界(t *testing.T) {
+	cases := []struct {
+		in   json.Number
+		want string
+	}{
+		{json.Number("12345678901234567890"), "12345678901234567890"},   // 1.2e19 > 9.22e18 真实超界
+		{json.Number("-12345678901234567890"), "-12345678901234567890"}, // 负数超界原样
+		{json.Number("9223372036854775808"), "9223372036854775808"},     // MaxInt64+1 恰超界
+	}
+	for _, c := range cases {
+		if got := pyStr(c.in); got != c.want {
+			t.Errorf("pyStr(%v) 应为 %q（整数字面原样），实际 %q", c.in, c.want, got)
+		}
+	}
+	// 小数/指数记法仍走 Float64 记法还原（不受 S-02 修复影响）
+	if got := pyStr(json.Number("1.5e300")); got != "1.5e+300" {
+		t.Errorf("pyStr(1.5e300) 应为 \"1.5e+300\"，实际 %q", got)
 	}
 }
 
@@ -718,15 +741,16 @@ func TestProcess_转发(t *testing.T) {
 
 // TestTruncateContent_截断分支 覆盖补充：直接调用非导出函数走 >200 分支；
 // 注意探针实测纯文本经 repair 成 string 走 default false——不触发 repair err
-// 路径，故 truncateContent 的截断分支直接单测
+// 路径，故 truncateContent 的截断分支直接单测。
+// 审查修复 T-09：对齐 Python content[:200] 纯截断，无 "..." 后缀
 func TestTruncateContent_截断分支(t *testing.T) {
 	s := strings.Repeat("x", 250)
 	got := truncateContent(s, 200)
-	if len(got) != 203 { // 200 字符 + "..."
-		t.Errorf("截断结果应为 200+3 字符，实际 %d", len(got))
+	if len(got) != 200 { // 纯截断 200 字符，无后缀
+		t.Errorf("截断结果应为 200 字符纯截断，实际 %d", len(got))
 	}
-	if got[:200] != s[:200] || got[200:] != "..." {
-		t.Error("截断结果应保留前 200 字符 + \"...\" 后缀")
+	if got != s[:200] {
+		t.Error("截断结果应保留前 200 字符")
 	}
 	// ≤n 原样返回
 	if got := truncateContent("short", 200); got != "short" {
@@ -777,5 +801,27 @@ func TestPyFloatStr_特殊字面(t *testing.T) {
 		if got := pyFloatStr(c.in); got != c.want {
 			t.Errorf("pyFloatStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
 		}
+	}
+}
+
+// TestWithTripleMaxConcurrent_负数钳制 审查修复 T-10：n≤0 钳制到默认 50
+// （原实现 make(chan, -1) 直接 panic；Python asyncio.Semaphore(-1) ValueError）。
+func TestWithTripleMaxConcurrent_负数钳制(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("WithTripleMaxConcurrent(-1) 不应 panic: %v", r)
+		}
+	}()
+	e := NewTripleExtractor(nil, "m", WithTripleMaxConcurrent(-1))
+	if cap(e.limiter) != defaultTripleMaxConcurrent {
+		t.Fatalf("n=-1 应钳制到默认 %d, got %d", defaultTripleMaxConcurrent, cap(e.limiter))
+	}
+	e2 := NewTripleExtractor(nil, "m", WithTripleMaxConcurrent(0))
+	if cap(e2.limiter) != defaultTripleMaxConcurrent {
+		t.Fatalf("n=0 应钳制到默认 %d, got %d", defaultTripleMaxConcurrent, cap(e2.limiter))
+	}
+	e3 := NewTripleExtractor(nil, "m", WithTripleMaxConcurrent(7))
+	if cap(e3.limiter) != 7 {
+		t.Fatalf("n=7 应保留 7, got %d", cap(e3.limiter))
 	}
 }

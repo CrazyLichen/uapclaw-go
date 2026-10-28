@@ -211,6 +211,12 @@ var workflowProgressMap = map[ProgressStage]float64{
 4. **回调异常 → panic recover**：Python except Exception 捕获回调异常记日志继续；Go 回调 error 返回值无法强制，panic recover 是等价防御。注：Go 回调若只是返回 error 而不 panic，则静默忽略（Python 异常=Go panic 的等价映射下，返回 error 的回调约定不检查）
 5. **details dict.update → 逐键合并**：Python `d.update(other)` 原地覆盖合并；Go 等价逐键 for-range 赋值（nil map 守卫：Details 恒非 nil 由构造器收口保证）
 6. **`InitProgressStep` 不设**：Python dataclass 字段直接可写（progress.steps[-1].status = ...）；Go 值语义结构体经 `&r.progress.Steps[len-1]` 直接字段写，无需 setter 辅助
+7. **StartStage details 深位克隆**（2026-10-27 审查 M-03 补录）：Python `details or {}` 非空 dict 时 step.details 与调用方共享引用（后续 update 写穿调用方 dict）；Go `cloneStageDetails` 非空 map 深位克隆断开别名——语言驱动防御（并发下调用方再改 map 有 data race 风险，CI race 门禁拦截）。已验证 Python 全部调用方（builders）传内联字典字面量，写穿语义无依赖方
+8. **message/error 空串赋值真值判断**（2026-10-27 审查 M-04 修复）：Python `if message:` truthy（空串与 None 同 falsy，不覆盖旧值）；Go 初版 nil 判断漏空串（`*string` 非nil 即赋值，空串覆盖旧值）。修复四处：UpdateStage L248 step.Message、WarnStage L299、endCurrentStageLocked 的 step.Message/step.Error——均补 `&& *x != ""`。errMsg 特殊：step.Error 真值判断 + progress.Error 无条件赋值（对齐 Python fail_stage L284 `self.progress.error = error` 无条件 + end_current_stage L342 `if error:` 真值判断两处独立写）。新增测试 TestProgressReporter_空串消息不覆盖/TestProgressReporter_FailStage空串error保持
+9. **回调失败日志 callback 字段动态化**（2026-10-27 审查 T-02 修复）：Python `logger.error(f"Callback failed: {cb}")` repr 含回调标识；Go 初版固定串 "progress callback" 无法定位故障回调。改 `reflect.TypeOf(cb).String()`（函数类型全名）
+10. **日志与回调通知顺序**（2026-10-27 审查 T-03 归档）：Go StartStage 日志在 notify 之前（锁外日志防御——持锁做 IO 是 Go 反模式，Python 单线程无此约束）。注释已在 StartStage 声明有意为之
+11. **五个 config 结构体上移**（2026-10-27 审查 T-04 修复）：startStageConfig/updateStageConfig/completeStageConfig/failStageConfig/warnStageConfig 原置于导出方法之后，违反规范 2 声明排列（结构体区块须在导出函数区块之前）。已上移至 ProgressManager 结构体后
+12. **ParseProgressStage 错误消息列全合法值**（2026-10-27 审查 T-05 修复）：对齐同文件其余 3 个 Parse 函数先例（enums.go ParseAgentType/ParseBuildState/ParseProgressStatus 均列全值清单），错误消息补全 15 个 ProgressStage 值（grep 机器核对 15 值各出现 2 次）
 
 ## 4b. 隐性语义保真点（易丢，逐条核对自 Python 源码）
 

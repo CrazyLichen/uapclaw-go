@@ -153,7 +153,8 @@ func TestHandleHeartbeatSetConf_every非法类型(t *testing.T) {
 	assert.Contains(t, res["error"], "every must be number")
 }
 
-// TestHandleHeartbeatSetConf_activeHours清除 传 {}（缺 start/end）→ nil 清除语义。
+// TestHandleHeartbeatSetConf_activeHours清除 传 {}（空 map）→ 非 nil 空 map 透传
+// （审查修复 S-06：空 dict 是 falsy，Python elif 不命中原样穿透 → 清除生效）。
 func TestHandleHeartbeatSetConf_activeHours清除(t *testing.T) {
 	hb := &fakeHeartbeatSvc{}
 	d := newHeartbeatTestDispatcher(hb)
@@ -161,7 +162,20 @@ func TestHandleHeartbeatSetConf_activeHours清除(t *testing.T) {
 		"active_hours": map[string]any{},
 	}, "")
 	require.NoError(t, err)
-	assert.Nil(t, hb.lastAH, "empty active_hours should normalize to nil (clear)")
+	require.NotNil(t, hb.lastAH, "empty map should pass through as non-nil to trigger clear")
+	assert.Empty(t, hb.lastAH, "cleared active_hours should be empty map")
+}
+
+// TestHandleHeartbeatSetConf_activeHours非空缺键 truthy 缺 start/end → nil
+// （审查修复 S-06 三分支：Python `{"foo":1}` truthy 缺键 elif 命中置 None → 不更新保持旧值）。
+func TestHandleHeartbeatSetConf_activeHours非空缺键(t *testing.T) {
+	hb := &fakeHeartbeatSvc{}
+	d := newHeartbeatTestDispatcher(hb)
+	_, err := d.Dispatch("heartbeat.set_conf", map[string]any{
+		"active_hours": map[string]any{"foo": 1},
+	}, "")
+	require.NoError(t, err)
+	assert.Nil(t, hb.lastAH, "truthy map without start/end should normalize to nil (no update)")
 }
 
 // TestHandleHeartbeatSetConf_activeHours非法类型 非数组非 map → nil。

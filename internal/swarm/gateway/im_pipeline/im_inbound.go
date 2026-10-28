@@ -98,6 +98,10 @@ type IMConversationProcessor struct {
 	modelName string
 	// modelClientRaw react.model_client_config 原始 map（懒加载 LLM 时逐字段取）
 	modelClientRaw map[string]any
+	// llmDisabled 审查修复 M-09：react/model_client_config 存在但非 map 时
+	// 置 true——对齐 Python AttributeError → except → llm=None（LLM 不激活）；
+	// Go 原实现断言失败静默换空 map 走 env 回退，方向相反
+	llmDisabled bool
 	// llm 懒加载 LLM 实例；ensureLLM 失败保持 nil（改写恒回退）
 	llm *llm.Model
 }
@@ -151,11 +155,12 @@ func NewIMConversationProcessor(userProfilePath, modelName string) *IMConversati
 	if userProfilePath == "" {
 		userProfilePath = workspace.DeepAgentUserMDPath()
 	}
-	name, mcc := loadModelConfig(modelName)
+	name, mcc, disabled := loadModelConfig(modelName)
 	return &IMConversationProcessor{
 		userProfilePath: userProfilePath,
 		modelName:       name,
 		modelClientRaw:  mcc,
+		llmDisabled:     disabled,
 	}
 }
 
@@ -370,6 +375,11 @@ func (p *IMInboundPipeline) Apply(ctx context.Context, msg *schema.Message) bool
 	}
 
 	// 步骤10：pending 命中且放行 → resume 拼接
+	// 审查修复 T-13（注释声明）：sender 三键读 metadata 引用（步骤7 patch
+	// 合并后的值）；Python L478 入口快照（Process 入参处的 metadata）。
+	// 现有适配器 patch 不含三键（interaction_context/avatar_*/principal_*
+	// 等），引用与快照等价不触发；若未来 patch 写入 im_sender_user_id/
+	// open_id/sender_id，需改为入口复制快照对齐 Python。
 	if pendingContext != "" && result.ShouldForward {
 		if msg.Metadata == nil {
 			msg.Metadata = map[string]any{}
@@ -456,7 +466,13 @@ func (p *IMInboundPipeline) Apply(ctx context.Context, msg *schema.Message) bool
 
 // loadModelConfig 模型配置读取（与 react agent 一致：config.yaml → 环境变量 → 默认值）。
 // Python: im_inbound.py L153-169 _load_model_config
-func loadModelConfig(modelNameOverride string) (string, map[string]any) {
+//
+// 审查修复 M-09：第三返回值 disabled——react/model_client_config 存在但
+// 非 map 时置 true（Python cfg.get("react").get(...) 对非 dict 抛
+// AttributeError → _ensure_llm except → llm=None，LLM 不激活）；Go 原
+// 实现断言失败静默换空 map 走 env 回退链，若环境变量存在则 LLM 构造
+// 成功激活——方向相反。
+func loadModelConfig(modelNameOverride string) (string, map[string]any, bool) {
 	cfgBase := map[string]any{}
 	if cfg := hookscfg.GetGlobalConfigForScope(); cfg != nil {
 		if base, err := cfg.Load(); err == nil {
@@ -464,6 +480,24 @@ func loadModelConfig(modelNameOverride string) (string, map[string]any) {
 		}
 	}
 	react, _ := cfgBase["react"].(map[string]any)
+	if rawReact, exists := cfgBase["react"]; exists && rawReact != nil {
+		if _, isMap := rawReact.(map[string]any); !isMap {
+			logger.Warn(logComponent).
+				Str("config_key", "react").
+				Str("actual_type", fmt.Sprintf("%T", rawReact)).
+				Msg("IMConversationProcessor config 'react' is not a map, LLM disabled")
+			return "gpt-4o", map[string]any{}, true
+		}
+	}
+	if rawMcc, exists := react["model_client_config"]; exists && rawMcc != nil {
+		if _, isMap := rawMcc.(map[string]any); !isMap {
+			logger.Warn(logComponent).
+				Str("config_key", "react.model_client_config").
+				Str("actual_type", fmt.Sprintf("%T", rawMcc)).
+				Msg("IMConversationProcessor config 'model_client_config' is not a map, LLM disabled")
+			return "gpt-4o", map[string]any{}, true
+		}
+	}
 	mcc, _ := react["model_client_config"].(map[string]any)
 	if mcc == nil {
 		mcc = map[string]any{}
@@ -472,7 +506,7 @@ func loadModelConfig(modelNameOverride string) (string, map[string]any) {
 	if name == "" {
 		name = "gpt-4o"
 	}
-	return name, mcc
+	return name, mcc, false
 }
 
 // truthy 对齐 Python bool() 真值语义（JSON 域值：nil/false/空串/0/空容器为假）。
@@ -779,6 +813,11 @@ func (proc *IMConversationProcessor) loadUserProfile() string {
 func (proc *IMConversationProcessor) ensureLLM() *llm.Model {
 	if proc.llm != nil {
 		return proc.llm
+	}
+	// 审查修复 M-09：构造期类型守卫标记的 disabled——对齐 Python
+	// AttributeError → except → llm=None（改写恒回退），不走 env 回退
+	if proc.llmDisabled {
+		return nil
 	}
 	modelCfg := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName(proc.modelName),

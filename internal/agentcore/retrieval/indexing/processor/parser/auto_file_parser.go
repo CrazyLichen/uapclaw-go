@@ -93,6 +93,15 @@ func (p *AutoFileParser) Parse(ctx context.Context, doc string, opts ...ParseOpt
 
 	// 对齐 Python: parser = _PARSER_REGISTRY[file_ext]()
 	parser := factory()
+	// 审查修复 T-01：第三方工厂返回 nil 的守卫——nil 接口调用 Parse 直接
+	// panic 不可恢复（Python None.parse 抛 AttributeError 可被上层捕获），
+	// 对齐异常可捕获语义改返回 error。
+	if parser == nil {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalIndexingFormatNotSupport,
+			exception.WithMsg("Parser factory returned nil for extension: "+fileExt),
+		)
+	}
 	// 对齐 Python: logger.info(f"Using {parser.__class__.__name__} to parse {doc}")
 	logger.Info(logComponent).
 		Str("parser_name", parserTypeName(parser)).

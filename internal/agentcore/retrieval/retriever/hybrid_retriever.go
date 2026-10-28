@@ -165,8 +165,10 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, query string, topK int, 
 // BatchRetrieve 批量并发检索。
 //
 // 对齐 Python HybridRetriever.batch_retrieve（L132-144）裸 asyncio.gather：
-// 全启动、首错传播、其余不取消（裸 errgroup 不派生 ctx 不 cancel，
-// 13.20 两兄弟同构）。alpha 经 opts 随 batch 透传（对齐 Python
+// 全启动、其余不取消跑完结果丢弃、错误负载与传播序一致（裸 errgroup
+// 不派生 ctx 不 cancel，13.20 两兄弟同构）。审查修复 M-11（表述修正）：
+// Wait 阻塞等全部完成后返回时间首个错误，Python 首异常立即传播——
+// 返回时机差异为声明容差。alpha 经 opts 随 batch 透传（对齐 Python
 // **kwargs 展开调用 self.retrieve(query, top_k=top_k, **kwargs)）。
 func (r *HybridRetriever) BatchRetrieve(ctx context.Context, queries []string, topK int, opts ...RetrieveOption) ([][]common.RetrievalResult, error) {
 	results := make([][]common.RetrievalResult, len(queries))

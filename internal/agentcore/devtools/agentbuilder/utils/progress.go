@@ -141,6 +141,42 @@ type ProgressManager struct {
 	reporters map[string]*ProgressReporter
 }
 
+// startStageConfig StartStage 可选参数聚合。
+// 对齐 Python: details=None, progress=None。
+type startStageConfig struct {
+	details  map[string]any
+	progress *float64
+}
+
+// updateStageConfig UpdateStage 可选参数聚合。
+// 对齐 Python: message=None, details=None, progress=None。
+type updateStageConfig struct {
+	message  *string
+	details  map[string]any
+	progress *float64
+}
+
+// completeStageConfig CompleteStage 可选参数聚合。
+// 对齐 Python: message=None, details=None。
+type completeStageConfig struct {
+	message *string
+	details map[string]any
+}
+
+// failStageConfig FailStage 可选参数聚合。
+// 对齐 Python: message=None, details=None。
+type failStageConfig struct {
+	message *string
+	details map[string]any
+}
+
+// warnStageConfig WarnStage 可选参数聚合。
+// 对齐 Python: message=None, details=None。
+type warnStageConfig struct {
+	message *string
+	details map[string]any
+}
+
 // GetReporter 获取进度上报器（不存在返回 nil，对齐 Python None）。
 func (m *ProgressManager) GetReporter(sessionID string) *ProgressReporter {
 	m.mu.RLock()
@@ -229,6 +265,9 @@ func (r *ProgressReporter) StartStage(stage ProgressStage, message string, opts 
 	r.notifyLocked()
 	r.mu.Unlock()
 
+	// 审查修复 T-03（注释声明）：日志在 notify 之后——Python L221 logger →
+	// L228 notify 先日志后通知；Go 日志移出锁外（避免持锁做 IO 的并发
+	// 防御），顺序颠倒为 notify → logger 属有意为之
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Str("stage", stageStr).
@@ -245,7 +284,9 @@ func (r *ProgressReporter) UpdateStage(opts ...UpdateStageOption) {
 	}
 
 	r.mu.Lock()
-	if cfg.message != nil {
+	// 审查修复 M-04：补 != "" 对齐 Python if message: 真值判断——
+	// 空串与 None 同为 falsy 跳过赋值（原仅 nil 判断，空串会赋值清空消息）
+	if cfg.message != nil && *cfg.message != "" {
 		r.progress.CurrentMessage = *cfg.message
 	}
 	if cfg.details != nil && len(r.progress.Steps) > 0 {
@@ -296,7 +337,8 @@ func (r *ProgressReporter) WarnStage(warning string, opts ...WarnStageOption) {
 	}
 
 	r.mu.Lock()
-	if cfg.message != nil {
+	// 审查修复 M-04：补 != "" 对齐 Python if message: 真值判断（空串跳过赋值）
+	if cfg.message != nil && *cfg.message != "" {
 		r.progress.CurrentMessage = *cfg.message
 	}
 	if len(r.progress.Steps) > 0 {
@@ -357,42 +399,6 @@ func (r *ProgressReporter) Complete(message ...string) {
 		Str("session_id", sessionID).
 		Str("agent_type", agentType).
 		Msg("Build completed")
-}
-
-// startStageConfig StartStage 可选参数聚合。
-// 对齐 Python: details=None, progress=None。
-type startStageConfig struct {
-	details  map[string]any
-	progress *float64
-}
-
-// updateStageConfig UpdateStage 可选参数聚合。
-// 对齐 Python: message=None, details=None, progress=None。
-type updateStageConfig struct {
-	message  *string
-	details  map[string]any
-	progress *float64
-}
-
-// completeStageConfig CompleteStage 可选参数聚合。
-// 对齐 Python: message=None, details=None。
-type completeStageConfig struct {
-	message *string
-	details map[string]any
-}
-
-// failStageConfig FailStage 可选参数聚合。
-// 对齐 Python: message=None, details=None。
-type failStageConfig struct {
-	message *string
-	details map[string]any
-}
-
-// warnStageConfig WarnStage 可选参数聚合。
-// 对齐 Python: message=None, details=None。
-type warnStageConfig struct {
-	message *string
-	details map[string]any
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -656,7 +662,9 @@ func (r *ProgressReporter) endCurrentStageLocked(status ProgressStatus, message 
 	step := &r.progress.Steps[len(r.progress.Steps)-1]
 	step.Status = status
 
-	if message != nil {
+	// 审查修复 M-04：补 != "" 对齐 Python if message: 真值判断（空串
+	// 跳过赋值——Python complete_stage(message="") 后 step.message 保持不变）
+	if message != nil && *message != "" {
 		step.Message = *message
 	}
 
@@ -664,8 +672,14 @@ func (r *ProgressReporter) endCurrentStageLocked(status ProgressStatus, message 
 		mergeDetails(step.Details, details)
 	}
 
+	// 审查修复 M-04：step.Error 真值判断（Python end_current_stage L342
+	// if error: step.error = error——空串跳过，fail_stage(error="") 后
+	// step.error 保持不变）；progress.Error 无条件赋值对齐 Python L284
+	// （fail_stage 方法体 self.progress.error = error）
 	if errMsg != nil {
-		step.Error = errMsg
+		if *errMsg != "" {
+			step.Error = errMsg
+		}
 		r.progress.Error = errMsg
 	}
 
@@ -677,7 +691,8 @@ func (r *ProgressReporter) endCurrentStageLocked(status ProgressStatus, message 
 	}
 
 	r.progress.CurrentStatus = status
-	if message != nil {
+	// 审查修复 M-04：第 4 处真值判断（Python L336 if message: 空串跳过）
+	if message != nil && *message != "" {
 		r.progress.CurrentMessage = *message
 	}
 	r.progress.LastUpdateTime = time.Now().UTC()
@@ -690,9 +705,12 @@ func (r *ProgressReporter) notifyLocked() {
 		func() {
 			defer func() {
 				if rec := recover(); rec != nil {
+					// 审查修复 T-02：callback 字段改 reflect.TypeOf 动态类型
+					// （Python str(callback) 可辨识回调，固定串无区分度；
+					// 注：Go 闭包多为 func()，区分度有限但优于固定串）
 					logger.Error(logComponent).
 						Str("error", fmt.Sprintf("%v", rec)).
-						Str("callback", "progress_callback").
+						Str("callback", reflect.TypeOf(cb).String()).
 						Str("session_id", r.sessionID).
 						Msg("Progress callback execution failed")
 				}
@@ -751,8 +769,15 @@ func mergeDetails(dst, src map[string]any) {
 	}
 }
 
-// cloneStageDetails 克隆细节字典（nil 转空 map，对齐 Python "details or {}"——
-// 步骤 Details 恒非 nil，避免后续 mergeDetails 写 nil map panic）。
+// cloneStageDetails 克隆细节字典。
+//
+// 审查修复 M-03（注释修正+归档）：Python "details or {}" 非空 dict 时
+// step.details 与调用方共享引用（后续 update 写穿调用方 dict）；Go 对
+// 非空 map 深位克隆为语言驱动防御（并发下调用方再改 map 有 data race
+// 风险——CI race 门禁拦截；已验证 Python 调用方全为内联字典字面量，
+// 写穿语义无依赖方）。语义差异已在 14.3 spec §4 补录第 7 条偏差。
+// nil 转空 map 保持：步骤 Details 恒非 nil，避免 mergeDetails 写 nil
+// map panic。
 func cloneStageDetails(details map[string]any) map[string]any {
 	if details == nil {
 		return make(map[string]any)

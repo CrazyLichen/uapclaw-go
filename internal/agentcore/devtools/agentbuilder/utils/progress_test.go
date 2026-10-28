@@ -743,3 +743,49 @@ func TestProgressUTC_时间戳语义(t *testing.T) {
 		}
 	}
 }
+
+// TestProgressReporter_空串消息不覆盖 审查修复 M-04：Python if message:
+// 真值判断（空串与 None 同为 falsy 跳过赋值）——Go 四处补 != "" 对齐。
+func TestProgressReporter_空串消息不覆盖(t *testing.T) {
+	reporter := NewProgressReporter("session-m04", string(AgentTypeLLMAgent))
+	reporter.StartStage(ProgressStageClarifying, "原始消息")
+
+	// UpdateStage 空串消息：CurrentMessage 保持
+	reporter.UpdateStage(WithUpdateStageMessage(""))
+	if reporter.GetProgress().CurrentMessage != "原始消息" {
+		t.Errorf("UpdateStage 空串消息应跳过赋值, got %q", reporter.GetProgress().CurrentMessage)
+	}
+
+	// CompleteStage 空串消息：step.Message 保持
+	reporter.CompleteStage(WithCompleteStageMessage(""))
+	p := reporter.GetProgress()
+	if len(p.Steps) == 0 || p.Steps[len(p.Steps)-1].Message != "原始消息" {
+		t.Errorf("CompleteStage 空串消息应保持 step.Message, got %+v", p.Steps)
+	}
+
+	// 非空消息正常覆盖
+	reporter.UpdateStage(WithUpdateStageMessage("新消息"))
+	if reporter.GetProgress().CurrentMessage != "新消息" {
+		t.Errorf("非空消息应正常赋值, got %q", reporter.GetProgress().CurrentMessage)
+	}
+}
+
+// TestProgressReporter_FailStage空串error保持 审查修复 M-04：
+// fail_stage(error="") 后 step.error 保持 None（Python L342 if error:）。
+func TestProgressReporter_FailStage空串error保持(t *testing.T) {
+	reporter := NewProgressReporter("session-m04b", string(AgentTypeLLMAgent))
+	reporter.StartStage(ProgressStageClarifying, "msg")
+	reporter.FailStage("boom") // 先失败一次写入 error
+
+	// 重建 reporter 测空串场景（FailStage 终态后不建新步骤）
+	r2 := NewProgressReporter("session-m04c", string(AgentTypeLLMAgent))
+	r2.StartStage(ProgressStageClarifying, "msg2")
+	r2.FailStage("") // 空串 error
+	p := r2.GetProgress()
+	if len(p.Steps) == 0 {
+		t.Fatal("应有步骤")
+	}
+	if p.Steps[len(p.Steps)-1].Error != nil {
+		t.Errorf("FailStage 空串 error 后 step.Error 应保持 nil, got %v", *p.Steps[len(p.Steps)-1].Error)
+	}
+}

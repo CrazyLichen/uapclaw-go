@@ -76,6 +76,16 @@ func NewFuncMatcher(fn func(string) bool) docMatcher {
 	return &funcMatcher{fn: fn}
 }
 
+// NewLinkRoute 构造单条路由（审查修复 S-01：导出构造打通包外注入链路）。
+//
+// linkRoute 字段非导出，包外无法编写复合字面量——此前 NewAutoLinkParser 的
+// 导出参数 routes 不可构造（注入链路断裂）；经本构造 + NewRegexpMatcher/
+// NewFuncMatcher 组合，外部可完整注入自定义路由表（对齐 Python routes
+// 公开构造参数语义）。
+func NewLinkRoute(m docMatcher, p Parser) linkRoute {
+	return linkRoute{matcher: m, parser: p}
+}
+
 // NewAutoLinkParser 构造 AutoLinkParser（切片参数二分，决策 7）。
 //
 // routes == nil → defaultRoutes() 两条默认路由（微信优先）；
@@ -126,7 +136,11 @@ func (p *AutoLinkParser) Parse(ctx context.Context, doc string, opts ...ParseOpt
 //
 // Python: auto_link_parser.py AutoLinkParser.supports
 func (p *AutoLinkParser) Supports(doc string) bool {
-	if doc == "" || !httpURLPattern.MatchString(strings.TrimSpace(doc)) {
+	if doc == "" {
+		return false
+	}
+	// 审查修复 M-01：头部锚定匹配对齐 Python re.match（正则自带 ^ 等价，统一防御）
+	if httpURLPattern.FindStringIndex(strings.TrimSpace(doc)) == nil {
 		return false
 	}
 	for _, route := range p.routes {
@@ -163,17 +177,32 @@ func defaultRoutes() ([]linkRoute, error) {
 
 // matchDoc 双形态匹配 dispatch（Python _match_doc 对应物）。
 //
+// nil 防御（审查修复 S-01）：nil 路由视作不命中并 Warn（对齐决策 6
+// "nil 防御优先"——Python 传垃圾路由抛 AttributeError 可被上层捕获，
+// Go panic 不可恢复，防御为不命中更安全）。
+//
 // regexpMatcher 内部 strip（对齐 pattern.match(doc.strip())）；
 // funcMatcher 原样传入（对齐 callable(doc)）。
 //
 // Python: auto_link_parser.py _match_doc
 func matchDoc(m docMatcher, doc string) bool {
+	if m == nil {
+		logger.Warn(logComponent).
+			Msg("AutoLinkParser route matcher is nil, treating as no match")
+		return false
+	}
 	return m.MatchDoc(doc)
 }
 
-// MatchDoc 正则形态：strip 后匹配（对齐 Python pattern.match(doc.strip())）。
+// MatchDoc 正则形态：strip 后头部锚定匹配（对齐 Python pattern.match(doc.strip())）。
+//
+// 审查修复 M-01：Python re.match 要求从串首匹配；Go MatchString 是
+// search 语义（任意位置命中）。改用 FindStringIndex 判 loc[0]==0 精确
+// 复刻 match 头部锚定——默认路由正则自带 ^ 锚定零差异，自定义注入
+// 未锚定正则时行为不再反转。
 func (m *regexpMatcher) MatchDoc(doc string) bool {
-	return m.re.MatchString(strings.TrimSpace(doc))
+	loc := m.re.FindStringIndex(strings.TrimSpace(doc))
+	return loc != nil && loc[0] == 0
 }
 
 // MatchDoc 可调用形态：原样传入（对齐 Python callable(doc) 不 strip）。

@@ -102,8 +102,11 @@ func (r *VectorRetriever) Retrieve(ctx context.Context, query string, topK int, 
 
 // BatchRetrieve 批量并发检索。
 //
-// 对齐 Python 裸 asyncio.gather：全启动、首错传播、其余不取消。
-// 裸 errgroup（不派生 ctx、不 cancel）——字面一致。
+// 对齐 Python 裸 asyncio.gather：全启动、其余 goroutine 不取消跑完结果
+// 丢弃、错误负载与传播序一致。裸 errgroup（不派生 ctx、不 cancel）。
+// 审查修复 M-11（表述修正）：errgroup.Wait 阻塞等全部 goroutine 完成
+// 后返回时间首个错误——Python gather 首异常立即向 awaiter 传播，返回
+// 时机差异为声明容差（底层 store 挂时调用方延迟 N×timeout，语义等价）。
 func (r *VectorRetriever) BatchRetrieve(ctx context.Context, queries []string, topK int, opts ...RetrieveOption) ([][]common.RetrievalResult, error) {
 	results := make([][]common.RetrievalResult, len(queries))
 	var g errgroup.Group

@@ -67,6 +67,16 @@ type AppGatewayServer struct {
 	imOutbound *impipeline.IMOutboundPipeline
 }
 
+// ackMessagePublisher connection.ack 出站推送适配器（审查修复 T-11）。
+//
+// 将 *mh.MessageHandler 适配为 web.MessageHandler 接口：底层
+// PublishRobotMessages 无 error 返回（channel 满非阻塞丢弃 + Warn，对齐
+// Python 队列 put_nowait 语义），ctx 忽略（非阻塞无取消面）。
+type ackMessagePublisher struct {
+	// mh 消息处理器（机器人消息出站队列）
+	mh *mh.MessageHandler
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -80,6 +90,14 @@ const shutdownTimeout = 5 * time.Second
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// PublishRobotMessages 实现 web.MessageHandler 接口（审查修复 T-11：
+// connection.ack 经 mh 出站管线推送，对齐 Python publish_robot_messages
+// 优先路径）。
+func (a ackMessagePublisher) PublishRobotMessages(_ context.Context, msg *schema.Message) error {
+	a.mh.PublishRobotMessages(msg)
+	return nil
+}
 
 // NewAppGatewayServer 创建 Gateway 服务器实例。
 //
@@ -185,10 +203,17 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	}
 
 	// 2) 三级回退（对齐 L893-900）
+	// 审查修复 T-06：env 非法值时 Python float() ValueError 直接炸装配
+	// （fail-fast）；Go 静默保持默认但补 Warn 日志保证可观测。
 	interval := 60.0
 	if v := os.Getenv("HEARTBEAT_INTERVAL"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			interval = f
+		} else {
+			logger.Warn(logComponent).
+				Str("env", "HEARTBEAT_INTERVAL").
+				Str("value", v).
+				Msg("invalid HEARTBEAT_INTERVAL, fallback to default")
 		}
 	} else if cfgEvery != nil {
 		// 偏差⑧：Python float(str(cfg_every)) 字符串中转；Go 数值直转
@@ -206,15 +231,24 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	if v := os.Getenv("HEARTBEAT_TIMEOUT"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			timeout = &f
+		} else {
+			// 审查修复 T-06：同 HEARTBEAT_INTERVAL，非法值补 Warn
+			logger.Warn(logComponent).
+				Str("env", "HEARTBEAT_TIMEOUT").
+				Str("value", v).
+				Msg("invalid HEARTBEAT_TIMEOUT, ignored")
 		}
 	}
+	// 审查修复 S-05：cfgTarget != nil 即赋值（含空串）——对齐 Python
+	// or-chain（str(cfg_target) if cfg_target is not None else "web"）。
+	// 原实现 s != "" 拦截空串回退默认 "web"，把 config 显式 target: ""
+	// 禁用 relay 的合法配置反转为向 web 通道回传心跳；空串经下游
+	// tick falsy 判断不回传，终效与 Python 一致。
 	relayChannel := "web"
 	if v := os.Getenv("HEARTBEAT_RELAY_CHANNEL_ID"); v != "" {
 		relayChannel = v
 	} else if cfgTarget != nil {
-		if s := fmt.Sprint(cfgTarget); s != "" {
-			relayChannel = s
-		}
+		relayChannel = fmt.Sprint(cfgTarget)
 	}
 	var activeHours map[string]any
 	if ah, ok := cfgActiveHours.(map[string]any); ok {
@@ -271,11 +305,17 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	// 对齐 Python ExtensionRegistry.get_instance().get_crypto_provider() 逐请求取
 	// （app_web_handlers.py L612/L696/L858）——避免装配期快照在扩展热加载后陈旧。
 	// BindParams 注入通道仅测试使用（T-03，对齐设计文档 §七"生产不注入"）。
+	// 审查修复 T-11：补注入 MessageHandler——connection.ack 走
+	// publish_robot_messages 过出站管线（对齐 Python _on_connect L592-596
+	// 优先路径），失败 fallback channel.Send。mh.PublishRobotMessages 无
+	// error 返回（channel 满丢弃 Warn，对齐 Python 非阻塞语义）——包装
+	// 适配 web.MessageHandler 接口（ctx 忽略：底层非阻塞无取消面）。
 	web.RegisterWebHandlers(&web.WebHandlersBindParams{
 		Channel:        wc,
 		AgentClient:    agentClient,
 		ChannelManager: channelMgr,
 		OnConfigSaved:  onConfigSavedCb,
+		MessageHandler: ackMessagePublisher{mh: msgHandler},
 		// CryptoProvider 生产不注入（传 nil）：handler 每次请求经 resolveCrypto 查全局
 		CryptoProvider:   nil,
 		CronController:   cronController,     // 11.10 注入：8 个 cron.job.* 端点

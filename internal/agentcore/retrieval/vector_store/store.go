@@ -125,7 +125,12 @@ func WithStoreDocIDField(name string) StoreCreateOption {
 // milvus/chroma 分支组装既有构造器（含 str→强类型转换，对齐 Python
 // isinstance 分支）；pgvector 分支返回 155402 not-implemented（⤵️ PGVectorStore
 // 依赖 pgvector-go 拆后交付，届时只改本分支内部）；default 分支 155402
-// 错误文案逐字符对齐 Python（含逗号+空格拼接）。
+// 错误文案逐字符对齐 Python（",and" 无空格——相邻 f-string 隐式拼接）。
+//
+// 审查修复 T-14（归档）：kwargs→options 翻译边界——Python 显式传
+// vector_field=None 触发 155109 在 options 模式下不可达（"未设置"与
+// "显式 nil"不可区分，一律兜底默认值）；typed-nil（(*MilvusAUTO)(nil)）
+// 经接口非 nil 直传构造器，属调用方契约边界。
 func CreateVectorStore(config common.VectorStoreConfig, opts ...StoreCreateOption) (VectorStore, error) {
 	o := NewStoreCreateOptions(opts...)
 
@@ -175,11 +180,13 @@ func CreateVectorStore(config common.VectorStoreConfig, opts ...StoreCreateOptio
 
 	default:
 		// 对齐 Python: "unavailable vector store provider: {provider},"
-		//   f"and available providers are: {', '.join(...)}" 两行拼接（逗号+空格）
+		//   f"and available providers are: {', '.join(...)}" 相邻 f-string
+		//   隐式拼接（",and" 中间无空格——审查修复 M-10：原实现多一个空格，
+		//   错误源头是设计文档转录笔误，实现/注释/spec/测试四处连锁照抄）
 		return nil, exception.BuildError(
 			exception.StatusRetrievalVectorStoreProviderInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf(
-				"unavailable vector store provider: %s, and available providers are: milvus, chroma, pgvector",
+				"unavailable vector store provider: %s,and available providers are: milvus, chroma, pgvector",
 				config.StoreProvider)),
 		)
 	}

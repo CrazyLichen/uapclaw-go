@@ -188,8 +188,11 @@ func (p *IMOutboundPipeline) Apply(ctx context.Context, msg *schema.Message) err
 	}
 
 	// 步骤8：原有路由决策
-	replyScope, _ := meta["reply_scope"].(string)
-	if strings.TrimSpace(replyScope) != "" {
+	// 审查修复 M-08：改用 stripOrStr 对齐 Python str(meta.get("reply_scope")
+	// or "").strip()——bool true/数字等非字符串 truthy 值 Python str 化短路
+	// 返回（不路由）；原 .(string) 断言失败得空串继续走 LLM 分类可能升级
+	// DM，行为反转（R1 批量修复漏改点位）。
+	if replyScope := stripOrStr(meta["reply_scope"]); replyScope != "" {
 		return nil
 	}
 	candidateUserID := adapter.GetCandidateUserID(meta)
@@ -293,6 +296,13 @@ func extractContent(msg *schema.Message) string {
 				return strings.TrimSpace(val)
 			}
 		}
+		// 审查修复 M-07：dict 无匹配键不提前退出——对齐 Python 落
+		// str(content or "").strip() 生成 dict repr 串继续管线（R3 修复
+		// 只改了 default 分支漏了此处；原 return "" 使后续 pending 清除/
+		// 前缀解析/路由决策全链静默不执行）。
+		if truthy(c) {
+			return strings.TrimSpace(pythonStr(c))
+		}
 		return ""
 	default:
 		if truthy(content) {
@@ -336,7 +346,30 @@ func (p *IMOutboundPipeline) ensureLLM() bool {
 			cfgBase = base
 		}
 	}
+	// 审查修复 M-09：react/model_client_config 存在但非 map 时——Python
+	// react.get("model_client_config") 对非 dict 抛 AttributeError →
+	// except → llm=None（LLM 不激活）；Go 原实现断言失败静默换空 map 走
+	// env 回退链，若环境变量存在则 LLM 构造成功激活——方向相反。改为
+	// 类型守卫：key 存在但非 map 时 Warn 并 return false 不激活。
+	if rawReact, exists := cfgBase["react"]; exists && rawReact != nil {
+		if _, isMap := rawReact.(map[string]any); !isMap {
+			logger.Warn(logComponent).
+				Str("config_key", "react").
+				Str("actual_type", fmt.Sprintf("%T", rawReact)).
+				Msg("IMOutboundPipeline config 'react' is not a map, LLM disabled")
+			return false
+		}
+	}
 	react, _ := cfgBase["react"].(map[string]any)
+	if rawMcc, exists := react["model_client_config"]; exists && rawMcc != nil {
+		if _, isMap := rawMcc.(map[string]any); !isMap {
+			logger.Warn(logComponent).
+				Str("config_key", "react.model_client_config").
+				Str("actual_type", fmt.Sprintf("%T", rawMcc)).
+				Msg("IMOutboundPipeline config 'model_client_config' is not a map, LLM disabled")
+			return false
+		}
+	}
 	mccRaw, _ := react["model_client_config"].(map[string]any)
 	if mccRaw == nil {
 		mccRaw = map[string]any{}

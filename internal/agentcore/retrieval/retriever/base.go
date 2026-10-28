@@ -20,8 +20,12 @@ type Retriever interface {
 	// mode 零值 "" 时由实现回落各自默认模式（spec §8-1 已知偏差：
 	// Python 显式传空串走 155200，Go 空串等同未设）。
 	Retrieve(ctx context.Context, query string, topK int, scoreThreshold *float64, mode RetrievalMode, opts ...RetrieveOption) ([]common.RetrievalResult, error)
-	// BatchRetrieve 批量并发检索。裸 errgroup 首错即返回（对齐 Python
-	// 裸 asyncio.gather：全启动、首错传播、其余 goroutine 不取消跑完结果丢弃）。
+	// BatchRetrieve 批量并发检索。裸 errgroup 阻塞等全部 goroutine 完成后
+	// 返回时间首个错误（审查修复 M-11 修正表述：原"首错即返回"不准确）。
+	// 对齐 Python 裸 asyncio.gather 的错误负载与传播序（全启动、其余
+	// goroutine 不取消跑完结果丢弃），差异仅在返回时机——Python 首异常
+	// 立即向 awaiter 传播，Go Wait() 等最慢查询结束才返回首错
+	// （2026-10-27 审查 M-11 拍板维持 errgroup，语义声明容差归档）。
 	BatchRetrieve(ctx context.Context, queries []string, topK int, opts ...RetrieveOption) ([][]common.RetrievalResult, error)
 	// RetrieveSearchResults 检索原始 SearchResult（不归一化、不阈值过滤）。
 	RetrieveSearchResults(ctx context.Context, query string, topK int, mode RetrievalMode, opts ...RetrieveOption) ([]common.SearchResult, error)

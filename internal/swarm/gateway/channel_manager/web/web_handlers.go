@@ -1107,7 +1107,18 @@ func handleSessionList(_ context.Context, params map[string]any, _ string) (map[
 	}
 
 	// 分页截取（对齐 Python L1286-1291）
+	// 审查修复 M-06：①负 offset clamp 到 0（对齐 Python max(0, offset)，
+	// 原实现负值直通 sessions[offset:] 切片 panic）；②按 last_message_at
+	// 降序排序（对齐 Python sessions.sort(key=lambda x: x.get(
+	// "last_message_at", 0), reverse=True)——原 ReadDir 词法序每次都
+	// 偏离 Python 展示序；缺键兜底 0，JSON 解码值为 float64）。
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessionLastMessageAt(sessions[i]) > sessionLastMessageAt(sessions[j])
+	})
 	total := len(sessions)
+	if offset < 0 {
+		offset = 0
+	}
 	if offset > total {
 		offset = total
 	}
@@ -1117,6 +1128,30 @@ func handleSessionList(_ context.Context, params map[string]any, _ string) (map[
 	}
 
 	return map[string]any{"sessions": sessions, "total": total, "limit": limit, "offset": offset}, nil
+}
+
+// sessionLastMessageAt 读取会话 metadata 的 last_message_at（缺键/非数值兜底 0）。
+// 审查修复 M-06 辅助：对齐 Python x.get("last_message_at", 0)。
+func sessionLastMessageAt(session map[string]any) float64 {
+	v, ok := session["last_message_at"]
+	if !ok || v == nil {
+		return 0
+	}
+	switch t := v.(type) {
+	case float64:
+		return t
+	case int:
+		return float64(t)
+	case int64:
+		return float64(t)
+	case string:
+		if f, err := strconv.ParseFloat(t, 64); err == nil {
+			return f
+		}
+		return 0
+	default:
+		return 0
+	}
 }
 
 // handleSessionCreate 处理 session.create 请求。
@@ -2112,19 +2147,32 @@ func handleHeartbeatSetConf(svc HeartbeatConfService, ac *routing.AgentClient) R
 			s := fmt.Sprint(v) // 对齐 Python str(target)
 			target = &s
 		}
+		// 审查修复 S-06：区分三分支对齐 Python 微妙三分语义：
+		//   ① 空 map（len==0）→ 传非 nil 空 map（{} 为 falsy，Python elif
+		//      不命中原样穿透 set_heartbeat_conf 更新为 {}——清除生效
+		//      始终活跃）；NormalizeActiveHours 空 map 出空 map，isActiveNow
+		//      对空配置返回始终活跃
+		//   ② 非空且同时含 start/end → 原样直通
+		//   ③ 非空但缺 start/end → 保持 nil（Python truthy 缺键置 None →
+		//      set_heartbeat_conf 不更新保持旧值）
+		// 原实现空 map 落 nil → SetHeartbeatConf updated=false 早退——注释
+		// 声称的"清除语义"实际是 no-op，旧时段保留。
 		var activeHours map[string]any
 		if v, ok := params["active_hours"]; ok && v != nil {
 			if ahMap, isMap := v.(map[string]any); isMap {
-				// 必须同时包含 start/end，否则视为清除时间段（始终生效）
-				if _, hasStart := ahMap["start"]; hasStart {
+				if len(ahMap) == 0 {
+					// 空 map：非 nil 空配置触发 SetHeartbeatConf 更新（清除时段）
+					activeHours = map[string]any{}
+				} else if _, hasStart := ahMap["start"]; hasStart {
 					if _, hasEnd := ahMap["end"]; hasEnd {
 						// 值原样直通（对齐 Python dict 传引用不转换：
 						// 数值 1320 保留 int，由 heartbeat 侧 NormalizeActiveHours 回转）
 						activeHours = ahMap
 					}
 				}
+				// 非空但缺 start/end → nil（不更新保持旧值）
 			}
-			// 非 map 或缺 start/end → nil（清除语义，前端传 {} 走此分支）
+			// 非 map → nil（不更新保持旧值）
 		}
 
 		if err := svc.SetHeartbeatConf(every, target, activeHours); err != nil {

@@ -341,8 +341,14 @@ func (s *GatewayHeartbeatService) SetHeartbeatConf(every *float64, target *strin
 // time.After 每轮进入 select 前从 mu 保护下快照最新 IntervalSeconds——
 // 对齐 Python 每轮 sleep 读最新值（set_conf 改间隔下轮生效）。
 // tick 内部自行 recover；循环层不因 tick 异常退出（对齐 Python except 仅日志）。
+//
+// 审查修复 M-05：defer 复位 running——父 ctx 被外部取消而未走 Stop() 时，
+// 心跳静默死亡但 IsRunning()=true、再次 Start() 因 CAS 基于 stale true
+// 被拒（假幂等僵尸态）。正常 Stop() 已置 false，重复 Store 无害
+// （Python 取消唯一路径 stop() 先置 _running=False 无此问题）。
 func (s *GatewayHeartbeatService) runLoop(ctx context.Context) {
 	defer s.wg.Done()
+	defer s.running.Store(false)
 	for s.running.Load() {
 		s.mu.Lock()
 		interval := s.config.IntervalSeconds

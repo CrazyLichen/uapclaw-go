@@ -94,8 +94,8 @@ func TestCreateVectorStore_default分支(t *testing.T) {
 	var be *exception.BaseError
 	require.True(t, errors.As(err, &be))
 	assert.Equal(t, 155402, be.Code())
-	// Python 两行 f-string 拼接渲染结果（逗号+空格）
-	assert.True(t, strings.Contains(be.Message(), "unavailable vector store provider: opensearch, and available providers are: milvus, chroma, pgvector"))
+	// Python 相邻 f-string 隐式拼接渲染结果（",and" 无空格——审查修复 M-10）
+	assert.True(t, strings.Contains(be.Message(), "unavailable vector store provider: opensearch,and available providers are: milvus, chroma, pgvector"))
 }
 
 // TestCreateVectorStore_显式字段定义 F5：强类型直传不转 AUTO

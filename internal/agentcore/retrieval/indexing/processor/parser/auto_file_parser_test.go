@@ -345,3 +345,18 @@ func (p *nilMetadataParser) Parse(ctx context.Context, doc string, opts ...Parse
 
 // Supports 覆写：恒真。
 func (p *nilMetadataParser) Supports(doc string) bool { return true }
+
+// TestAutoFileParserParse_工厂返回nil防御 审查修复 T-01：第三方工厂返回
+// nil 时 Parse 返回 error 而非 nil 接口调用 panic（对齐 Python
+// None.parse 抛 AttributeError 可被上层捕获的语义）。
+func TestAutoFileParserParse_工厂返回nil防御(t *testing.T) {
+	backup := backupRegistry(t)
+	defer restoreRegistry(t, backup)
+	RegisterNewParser(".nilfactory", func() Parser { return nil })
+	p, _ := NewAutoFileParser()
+	path := writeTempFile(t, "x.nilfactory", "any")
+	_, err := p.Parse(t.Context(), path)
+	if err == nil {
+		t.Fatal("工厂返回 nil 应返回 error 而非 panic")
+	}
+}

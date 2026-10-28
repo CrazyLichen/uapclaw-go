@@ -54,6 +54,10 @@ const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 
+	// defaultTripleMaxConcurrent 默认最大并发数（对齐 Python 默认参数 50；
+	// WithTripleMaxConcurrent n≤0 钳制回退值——审查修复 T-10）
+	defaultTripleMaxConcurrent = 50
+
 	// tripleExtractionPrompt OpenIE 三元组抽取提示词模板。
 	//
 	// Python: triple_extractor.py TripleExtractor._build_prompt 内模板
@@ -180,7 +184,12 @@ func WithTripleTemperature(t float64) TripleExtractorOption {
 }
 
 // WithTripleMaxConcurrent 设置最大并发数。
+// 审查修复 T-10：n≤0 钳制到默认 50——原实现 make(chan, n) 对负数直接
+// panic（Python asyncio.Semaphore(-1) 构造期 ValueError 可捕获）。
 func WithTripleMaxConcurrent(n int) TripleExtractorOption {
+	if n <= 0 {
+		n = defaultTripleMaxConcurrent
+	}
 	return func(e *TripleExtractor) { e.limiter = make(chan struct{}, n) }
 }
 
@@ -193,7 +202,7 @@ func NewTripleExtractor(llmClient *llm.Model, modelName string, opts ...TripleEx
 		llmClient:   llmClient,
 		modelName:   modelName,
 		temperature: 0.0,
-		limiter:     make(chan struct{}, 50),
+		limiter:     make(chan struct{}, defaultTripleMaxConcurrent),
 	}
 	for _, opt := range opts {
 		opt(e)
@@ -406,15 +415,24 @@ func pyStr(v any) string {
 		}
 		return "False"
 	case json.Number:
-		// 整数字面优先（Python int 无界，str 原样）；浮点字面走记法还原
-		if i, err := strconv.Atoi(val.String()); err == nil {
+		// 整数字面优先（Python int 无界，str 原样）；浮点字面走记法还原。
+		// 审查修复 S-02：超 int64 界（>9.22e18）的纯整数字面 Atoi 返回
+		// ErrRange 后漏到 Float64 被 e 记法化（"12345678901234567890" →
+		// "1.2345678901234568e+29"）——Python int 无界原样输出。修复：
+		// Atoi 失败后先判纯整数字面（可选符号+全数字）则原样返回字面量，
+		// 仅小数/指数记法走 Float64。
+		s := val.String()
+		if i, err := strconv.Atoi(s); err == nil {
 			_ = i
-			return val.String()
+			return s
+		}
+		if isPureIntegerLiteral(s) {
+			return s
 		}
 		if f, err := val.Float64(); err == nil {
 			return pyFloatStr(f)
 		}
-		return val.String()
+		return s
 	case float64:
 		return pyFloatStr(val)
 	case int:
@@ -450,7 +468,31 @@ func pyFloatStr(f float64) string {
 	return strconv.FormatFloat(f, 'e', -1, 64)
 }
 
+// isPureIntegerLiteral 判纯整数字面量：可选符号 + 全数字（无小数点/指数）。
+// 审查修复 S-02 辅助：Atoi 溢出的超界整数字面原样透传（Python int 无界）。
+func isPureIntegerLiteral(s string) bool {
+	if s == "" {
+		return false
+	}
+	body := s
+	if body[0] == '+' || body[0] == '-' {
+		body = body[1:]
+	}
+	if body == "" {
+		return false
+	}
+	for _, r := range body {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // metadataTitle 读取 chunk 元数据 title（对齐 chunk.metadata.get("title", "")）。
+// 审查 M-01(13.17) 处置为归档有意防御：非字符串 title（如 42/true）类型
+// 断言失败返回空串回落 "Untitled"（Python truthy 直传 str 化渲染 "42"——
+// 行为分叉已归档，上游脏数据回落 Untitled 更安全）。
 func metadataTitle(metadata map[string]any) string {
 	if v, ok := metadata["title"]; ok {
 		if s, isStr := v.(string); isStr {
@@ -461,11 +503,12 @@ func metadataTitle(metadata map[string]any) string {
 }
 
 // truncateContent 截取字符串前 n 个字符用于日志输出（content[:200] 对齐）。
+// 审查修复 T-09：去掉 "..." 后缀——Python content[:200] 纯截断。
 func truncateContent(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "..."
+	return s[:n]
 }
 
 // extractChunk 单 chunk 抽取：构建提示词 → Invoke → 解析。
