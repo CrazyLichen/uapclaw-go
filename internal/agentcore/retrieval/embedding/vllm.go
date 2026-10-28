@@ -106,6 +106,12 @@ func (v *VLLMEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
 	return v.openAI.DimensionWithContext(ctx)
 }
 
+// MaxBatchSize 返回每批最大文档数（13.23 回填），委托给 OpenAIEmbedding。
+//
+// Python VLLMEmbedding 继承 OpenAIEmbedding（hasattr max_batch_size=True），
+// Go 委托结构同构转发。
+func (v *VLLMEmbedding) MaxBatchSize() int { return v.openAI.MaxBatchSize() }
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // callWithMessages 使用 extra_body.messages 调用 vLLM 多模态嵌入 API。

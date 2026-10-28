@@ -291,6 +291,10 @@ func (o *OpenAIEmbedding) DimensionWithContext(ctx context.Context) (int, error)
 	return o.dimension, nil
 }
 
+// MaxBatchSize 返回每批最大文档数（13.23 回填：MaxBatchSizeProvider
+// 能力接口消费点；Python max_batch_size 实例字段）。
+func (o *OpenAIEmbedding) MaxBatchSize() int { return o.maxBatchSize }
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // callAPI 调用 OpenAI Embeddings API。

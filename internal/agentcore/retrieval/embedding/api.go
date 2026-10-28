@@ -247,6 +247,10 @@ func (a *APIEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
 	return a.dimension, nil
 }
 
+// MaxBatchSize 返回每批最大文档数（13.23 回填：MaxBatchSizeProvider
+// 能力接口消费点；Python max_batch_size 实例字段）。
+func (a *APIEmbedding) MaxBatchSize() int { return a.maxBatchSize }
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // apiIsRetryable 判断 APIEmbedding 错误是否可重试。

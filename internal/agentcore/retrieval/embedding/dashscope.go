@@ -299,6 +299,10 @@ func (ds *DashscopeEmbedding) DimensionWithContext(ctx context.Context) (int, er
 	return dim, nil
 }
 
+// MaxBatchSize 返回每批最大文档数（13.23 回填：MaxBatchSizeProvider
+// 能力接口消费点；Python max_batch_size 实例字段）。
+func (ds *DashscopeEmbedding) MaxBatchSize() int { return ds.maxBatchSize }
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // callAPI 调用 DashScope Embeddings API。
