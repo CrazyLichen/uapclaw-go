@@ -16,10 +16,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	agentcron "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -326,11 +328,80 @@ func (m *TeamManager) RegisterMemberRuntimeTools(
 			Msg("[TeamManager] SendFileToolkit skipped: missing request_id or channel_id")
 		return
 	}
-	// ⤵️(10.6.24) SendFileToolkit 注册 — 待 SendFile 工具集实现回填
-	// Python: send_file_allowed 三态（None 时 web 默认 True，其余 False）→ SendFileToolkit(...).get_tools() 注册
-	logger.Info(logComponent).
-		Str("channel_id", *channelID).
-		Msg("[TeamManager] SendFileToolkit registration pending (10.6.24)")
+	// ── 步骤 f-send_file：SendFileToolkit 注册（10.6.24b 已回填）──
+	// Python: register_member_runtime_tools L519-555（整块 try/except 兜底 → Go recover）
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Warn(logComponent).Any("panic", r).
+					Msg("[TeamManager] SendFileToolkit registration failed")
+			}
+		}()
+		// Python L524-532: 三态开关（None → web 默认 true，其余默认 false）
+		var cfgData map[string]any
+		cfg, cfgErr := config.New("")
+		if cfgErr != nil {
+			logger.Warn(logComponent).Err(cfgErr).
+				Msg("[TeamManager] SendFileToolkit config init failed")
+			return
+		}
+		cfgData, loadErr := cfg.Load()
+		if loadErr != nil || cfgData == nil {
+			logger.Warn(logComponent).Err(loadErr).
+				Msg("[TeamManager] SendFileToolkit config load failed")
+			return
+		}
+		sendFileEnabled := false
+		sendFileConfigured := false
+		if channelsRaw, ok := cfgData["channels"]; ok {
+			if channelsMap, ok := channelsRaw.(map[string]any); ok {
+				if chRaw, ok := channelsMap[*channelID]; ok {
+					if chMap, ok := chRaw.(map[string]any); ok {
+						if b, ok := chMap["send_file_allowed"].(bool); ok {
+							sendFileEnabled = b
+							sendFileConfigured = true
+						}
+					}
+				}
+			}
+		}
+		// Python: if send_file_enabled is None: send_file_enabled = (channel_id == "web")
+		if !sendFileConfigured {
+			sendFileEnabled = *channelID == "web"
+		}
+		if !sendFileEnabled {
+			logger.Info(logComponent).
+				Str("channel_id", *channelID).
+				Msg("[TeamManager] SendFileToolkit skipped: send_file_allowed=False for channel")
+			return
+		}
+
+		// Python L540-542: ability 前缀扫描移除旧卡
+		abilityMgr := agent.AbilityManager()
+		for _, existing := range abilityMgr.List() {
+			if strings.HasPrefix(existing.AbilityName(), "send_file_to_user") {
+				abilityMgr.Remove(existing.AbilityName())
+			}
+		}
+
+		// Python L544-552: 新建 toolkit 注册
+		// 有意偏差（spec 偏差 #2）：WithRefresh() 显式替换旧实例——
+		// Python add_tool 重复注册静默丢弃异常（旧 toolkit 残留 ResourceMgr），
+		// Go 侧修正为显式替换，语义对齐"每次请求重新注册"
+		toolkit := swarmtools.NewSendFileToolkit(*requestID, sessionID, *channelID, requestMetadata)
+		resourceMgr := runner.GetResourceMgr()
+		for _, sfTool := range toolkit.GetTools() {
+			if err := resourceMgr.AddTool(sfTool, resourcesmanager.WithRefresh()); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Str("tool", sfTool.Card().Name).
+					Msg("[TeamManager] send_file tool add failed")
+			}
+			abilityMgr.Add(sfTool.Card())
+		}
+		logger.Info(logComponent).
+			Str("channel_id", *channelID).
+			Msg("[TeamManager] SendFileToolkit registered")
+	}()
 }
 
 // copyMetadataMap 浅拷贝 metadata（nil 保留 nil，对齐 Python metadata 原样传递）。

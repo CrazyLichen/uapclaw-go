@@ -661,9 +661,10 @@ func TestRegisterMemberRuntimeTools_cron工具注册(t *testing.T) {
 
 	mgr.RegisterMemberRuntimeTools(agent, "sess-team", &reqID, &chID, map[string]any{"k": "v"})
 
-	// 能力管理器：cron 统一工具 + 7 个遗留兼容工具 = 8 张卡
-	if got := len(agent.abilityMgr.abilities); got != 8 {
-		t.Fatalf("registered abilities = %d, want 8 (1 unified cron + 7 legacy compat)", got)
+	// 能力管理器：cron 统一工具 + 7 个遗留兼容工具 = 8 张卡；
+	// 10.6.24b 起 web 渠道三态默认启用 send_file → +1 = 9 张
+	if got := len(agent.abilityMgr.abilities); got != 9 {
+		t.Fatalf("registered abilities = %d, want 9 (1 unified cron + 7 legacy compat + 1 send_file)", got)
 	}
 	names := map[string]bool{}
 	for _, a := range agent.abilityMgr.abilities {
@@ -676,6 +677,9 @@ func TestRegisterMemberRuntimeTools_cron工具注册(t *testing.T) {
 		if !names[legacy] {
 			t.Errorf("legacy cron tool card %q missing", legacy)
 		}
+	}
+	if !names["send_file_to_user"] {
+		t.Errorf("send_file tool card missing (web 默认三态启用), got %v", names)
 	}
 
 	// 资源管理器：8 个工具已注册（GetTool 按 card.ID 可取回）
@@ -748,9 +752,11 @@ func TestRegisterMemberRuntimeTools_幂等注册(t *testing.T) {
 	mgr.RegisterMemberRuntimeTools(agent, "sess-idem", &reqID, &chID, nil)
 
 	// abilityMgr 为 fake（Add 不查重），resourceMgr 走 GetTool 查重：
-	// 第二轮 GetTool 命中已注册 → 不再 AddTool → ability 数量翻倍但 resource 不重复
-	if got := len(agent.abilityMgr.abilities); got != 16 {
-		t.Fatalf("abilities after double registration = %d, want 16 (fake Add 无查重)", got)
+	// 第二轮 GetTool 命中已注册 → 不再 AddTool → ability 数量翻倍但 resource 不重复。
+	// 10.6.24b：web 渠道三态默认启用 send_file——但 SendFile 分支先做前缀移除
+	// 再注册（fake Remove 真实移除），故 send_file 卡数稳定为 1（不随轮次翻倍）
+	if got := len(agent.abilityMgr.abilities); got != 17 {
+		t.Fatalf("abilities after double registration = %d, want 17 (cron 翻倍 + send_file 前缀移除后稳定 1)", got)
 	}
 	resourceMgr := runner.GetResourceMgr()
 	tools, err := resourceMgr.GetTool([]string{agent.abilityMgr.abilities[0].AbilityID()})
@@ -759,5 +765,80 @@ func TestRegisterMemberRuntimeTools_幂等注册(t *testing.T) {
 	}
 	if got := len(tools); got != 1 {
 		t.Fatalf("resource manager tool entries = %d, want 1 (GetTool 查重生效)", got)
+	}
+}
+
+// ──────────────────── 10.6.24b：RegisterMemberRuntimeTools SendFile 分支 ────────────────────
+
+// TestRegisterMemberRuntimeTools_SendFile三态默认 注册分支三态：web 默认启用 / 其他渠道默认关 / 显式配置覆盖。
+// Python: L524-532 send_file_enabled is None → (channel_id == "web")
+func TestRegisterMemberRuntimeTools_SendFile三态默认(t *testing.T) {
+	mgr := &TeamManager{}
+
+	// web 渠道无配置 → 三态 None → 默认启用
+	agentWeb := newCustomizerFakeAgent("sf-web")
+	reqID, chWeb := "req-sf", "web"
+	mgr.RegisterMemberRuntimeTools(agentWeb, "sess-sf", &reqID, &chWeb, nil)
+	if !agentWeb.abilityMgr.has("send_file_to_user") {
+		t.Error("web 渠道三态默认应注册 send_file")
+	}
+
+	// feishu 渠道无配置 → 三态 None → 默认关闭
+	agentFeishu := newCustomizerFakeAgent("sf-feishu")
+	chFeishu := "feishu"
+	mgr.RegisterMemberRuntimeTools(agentFeishu, "sess-sf", &reqID, &chFeishu, nil)
+	if agentFeishu.abilityMgr.has("send_file_to_user") {
+		t.Error("feishu 渠道三态默认应跳过 send_file")
+	}
+}
+
+// TestRegisterMemberRuntimeTools_SendFile缺参数 缺 requestID/channelID 跳过。
+// Python: L519-522
+func TestRegisterMemberRuntimeTools_SendFile缺参数(t *testing.T) {
+	mgr := &TeamManager{}
+	agent := newCustomizerFakeAgent("sf-nil")
+
+	mgr.RegisterMemberRuntimeTools(agent, "sess", nil, nil, nil)
+	if agent.abilityMgr.has("send_file_to_user") {
+		t.Error("缺 requestID/channelID 应跳过 send_file 分支")
+	}
+
+	empty := ""
+	mgr.RegisterMemberRuntimeTools(agent, "sess", &empty, &empty, nil)
+	if agent.abilityMgr.has("send_file_to_user") {
+		t.Error("空串 requestID/channelID 应跳过 send_file 分支")
+	}
+}
+
+// TestRegisterMemberRuntimeTools_SendFile重复注册前缀移除 二次调用移除旧卡再注册。
+// Python: L540-542 for existing in list(): startswith("send_file_to_user") → remove
+func TestRegisterMemberRuntimeTools_SendFile重复注册前缀移除(t *testing.T) {
+	mgr := &TeamManager{}
+	agent := newCustomizerFakeAgent("sf-dup")
+	agent.card = agentschema.NewAgentCard(agentschema.WithAgentID("member-sf"))
+
+	reqID, chID := "req-1", "web"
+	mgr.RegisterMemberRuntimeTools(agent, "sess-dup", &reqID, &chID, nil)
+	first := agent.abilityMgr.abilities
+	sfCount := 0
+	for _, a := range first {
+		if strings.HasPrefix(a.AbilityName(), "send_file_to_user") {
+			sfCount++
+		}
+	}
+	if sfCount != 1 {
+		t.Fatalf("首轮 send_file 卡应 1 张, got %d", sfCount)
+	}
+
+	// 二次注册：前缀移除旧卡 → 仍 1 张（fake Add 无查重，验证移除生效）
+	mgr.RegisterMemberRuntimeTools(agent, "sess-dup", &reqID, &chID, nil)
+	sfCount2 := 0
+	for _, a := range agent.abilityMgr.abilities {
+		if strings.HasPrefix(a.AbilityName(), "send_file_to_user") {
+			sfCount2++
+		}
+	}
+	if sfCount2 != 1 {
+		t.Errorf("二轮 send_file 卡应前缀移除后仍 1 张, got %d", sfCount2)
 	}
 }
