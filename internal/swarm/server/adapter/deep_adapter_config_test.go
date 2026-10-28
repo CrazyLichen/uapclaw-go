@@ -994,3 +994,71 @@ func TestBuildModelFromEntry_customHeaders透传(t *testing.T) {
 		t.Errorf("custom_headers 不应重复进 Extra: %v", m.ClientConfig.Extra)
 	}
 }
+
+// ──────────────────────────── updateToolsForMode 测试（10.6.24c） ────────────────────────────
+
+// TestUpdateToolsForMode_非agentFast直接返回 mode 不匹配时不注册（不 panic）
+// Python: if mode != "agent.fast": return
+func TestUpdateToolsForMode_非agentFast直接返回(t *testing.T) {
+	d := NewDeepAdapter()
+	// code/team 模式不注册（不 panic 即可——instance nil 守卫）
+	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "code", SessionID: "s", RequestID: "r"})
+}
+
+// TestUpdateToolsForMode_三条件守卫 mode 对但缺 requestID/sessionID/modelClientConfig
+// Python: if not (request_id and session_id and self._model_client_config is not None): return
+func TestUpdateToolsForMode_三条件守卫(t *testing.T) {
+	d := NewDeepAdapter()
+	// 缺 requestID
+	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "agent.fast", SessionID: "s"})
+	// 缺 sessionID
+	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "agent.fast", RequestID: "r"})
+	// 缺 modelClientConfig
+	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "agent.fast", SessionID: "s", RequestID: "r"})
+}
+
+// TestUpdateToolsForMode_instance未初始化降级 三条件齐但 instance nil
+// Python: self._instance.ability_manager 抛异常 → except 降级
+func TestUpdateToolsForMode_instance未初始化降级(t *testing.T) {
+	d := NewDeepAdapter()
+	d.modelClientConfig = &llmschema.ModelClientConfig{}
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "s", nil, "r", "agent.fast")
+	d.updateToolsForMode(ctx, &runtimeConfig{Mode: "agent.fast", SessionID: "s", RequestID: "r"})
+}
+
+// TestUpdateToolsForMode_正常注册 全链路：移除旧卡+注册三工具到 AbilityManager
+func TestUpdateToolsForMode_正常注册(t *testing.T) {
+	d := NewDeepAdapter()
+	d.modelClientConfig = &llmschema.ModelClientConfig{}
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID("agent-ms-1"),
+		agentschema.WithAgentName("ms-test-agent"),
+	)
+	d.instance = harness.NewDeepAgent(card)
+
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-ms", nil, "req-ms", "agent.fast")
+	d.updateToolsForMode(ctx, &runtimeConfig{Mode: "agent.fast", SessionID: "sess-ms", RequestID: "req-ms"})
+
+	// 三工具卡已注册到 AbilityManager
+	names := map[string]bool{}
+	for _, a := range d.instance.AbilityManager().List() {
+		names[a.AbilityName()] = true
+	}
+	for _, want := range []string{"session_new", "session_cancel", "session_list"} {
+		if !names[want] {
+			t.Errorf("ability %s not registered, got %v", want, names)
+		}
+	}
+
+	// 幂等：二次调用移除旧卡再注册（不重复）
+	d.updateToolsForMode(ctx, &runtimeConfig{Mode: "agent.fast", SessionID: "sess-ms", RequestID: "req-ms"})
+	count := 0
+	for _, a := range d.instance.AbilityManager().List() {
+		if a.AbilityName() == "session_new" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("session_new ability count=%d, want 1（移除旧卡后重注册）", count)
+	}
+}

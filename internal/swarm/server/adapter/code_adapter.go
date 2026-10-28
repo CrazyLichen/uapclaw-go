@@ -34,6 +34,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
@@ -652,9 +653,29 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 		}
 	}
 
-	// ⤵️ 待后续章节回填:
-	//   - _update_tools_for_mode（按模式更新工具）
-	//   - _update_session_tools（更新会话工具）
+	// 步骤 7.4-7.5: tools/session 更新（Python interface_code.py L898-904 覆写版调用序）
+	// Python: await self._update_tools_for_mode(runtime_config.mode, runtime_config.session_id, runtime_config.request_id)
+	c.deep.updateToolsForMode(ctx, config)
+	// Python: await self._update_session_tools(runtime_config.session_id, runtime_config.request_id, channel_id=runtime_config.channel_id)
+	c.deep.updateSessionTools(ctx, config)
+	// ⤵️ _refresh_acp_runtime_tools（10.6.24d）
+	// Python: self._refresh_acp_runtime_tools(runtime_config.session_id, ...)
+
+	// user_todos channel per-request sync（Python L913-927）
+	// workspace 设置 + 注册（channel 经 ctx 读取，偏差#5；Python ImportError 静默 →
+	// Go 无导入失败概念，agentWorkspaceDir 为空时跳过）
+	if c.deep.agentWorkspaceDir != "" && c.deep.instance != nil {
+		swarmtools.SetGlobalWorkspaceDir(c.deep.agentWorkspaceDir)
+		for _, ut := range swarmtools.GetDecoratedTools() {
+			if existing, gerr := runner.GetResourceMgr().GetTool([]string{ut.Card().ID}); gerr != nil || len(existing) == 0 {
+				if aerr := runner.GetResourceMgr().AddTool(ut); aerr != nil {
+					logger.Warn(logComponent).Err(aerr).Str("tool", "user_todos").Msg("Failed to register tool to ResourceMgr")
+					continue
+				}
+			}
+			c.deep.instance.AbilityManager().Add(ut.Card())
+		}
+	}
 
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).
@@ -807,8 +828,20 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 				toolCards = append(toolCards, paidSearchTool.Card())
 			}
 		case "user_todos":
-			// ⤵️ 10.6.3-10: user_todos 工具尚未实现
-			logger.Debug(logComponent).Str("tool", toolName).Msg("user_todos tool not implemented, skipping")
+			// Python: _build_user_todos_tool（L1008-1022）——workspace 设置 + 返回工具
+			// Python L948-956: build_code_tool_cards 统一判存注册后 append 卡片
+			if c.deep.agentWorkspaceDir != "" {
+				swarmtools.SetGlobalWorkspaceDir(c.deep.agentWorkspaceDir)
+			}
+			for _, ut := range swarmtools.GetDecoratedTools() {
+				if existing, gerr := runner.GetResourceMgr().GetTool([]string{ut.Card().ID}); gerr != nil || len(existing) == 0 {
+					if aerr := runner.GetResourceMgr().AddTool(ut); aerr != nil {
+						logger.Warn(logComponent).Err(aerr).Str("tool", "user_todos").Msg("Failed to register tool to ResourceMgr")
+						continue
+					}
+				}
+				toolCards = append(toolCards, ut.Card())
+			}
 		case "skill_toolkit":
 			// Python: JiuwenClawCodeAdapter._build_skill_toolkit(agent_id)
 			// 构建 SkillToolkit 并注册到 ResourceMgr，与 Deep 模式步骤 9 逻辑一致

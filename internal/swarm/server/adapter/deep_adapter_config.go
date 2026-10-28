@@ -17,6 +17,7 @@ import (
 	agentcron "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/cron"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -140,9 +141,12 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	// Python: await self._update_rails_for_mode(runtime_config.mode)
 	d.updateRailsForMode(ctx, config.Mode)
 
+	// 步骤 7.4: 按模式更新 multi-session 工具（agent.fast）
+	// Python: await self._update_tools_for_mode(mode, session_id, request_id) (L3162)
+	d.updateToolsForMode(ctx, config)
+
 	// 步骤 7.5: 会话工具刷新（cron 注册分支）
 	// Python: await self._update_session_tools(session_id, request_id, channel_id) (L3165)
-	// _update_tools_for_mode（agent.fast multi-session 工具）⤵️ 待 agent.fast 模式回填
 	d.updateSessionTools(ctx, config)
 
 	logger.Info(logComponent).
@@ -454,6 +458,46 @@ func (d *DeepAdapter) filesystemRailEnabledForProfile(instanceOverrides map[stri
 // Python: _resolve_runtime_language() — 调用 resolve_language() 标准化
 func (d *DeepAdapter) resolveRuntimeLanguage() string {
 	return prompts.ResolveLanguage(d.resolvePromptLanguage())
+}
+
+// updateToolsForMode 按 mode 注册/卸载 multi-session 工具。
+// Python: _update_tools_for_mode (interface_deep.py L2935-2964)。
+func (d *DeepAdapter) updateToolsForMode(ctx context.Context, config *runtimeConfig) {
+	if config == nil || config.Mode != "agent.fast" {
+		return // Python L2939: if mode != "agent.fast": return
+	}
+	if config.RequestID == "" || config.SessionID == "" || d.modelClientConfig == nil {
+		return // Python L2941: if not (request_id and session_id and self._model_client_config is not None)
+	}
+	// Python L2944-2948: 移除旧 session_* 工具卡（startswith 元组）
+	if d.instance == nil {
+		return // Python ability_manager 访问异常 → except 降级
+	}
+	abilityMgr := d.instance.AbilityManager()
+	for _, existing := range abilityMgr.List() {
+		name := existing.AbilityName()
+		if strings.HasPrefix(name, "session_new") ||
+			strings.HasPrefix(name, "session_cancel") ||
+			strings.HasPrefix(name, "session_list") {
+			abilityMgr.Remove(name)
+		}
+	}
+	// channel 对齐 Python _CRON_TOOL_CHANNEL_ID.get()（default "web"）
+	channel := "web"
+	if rcc := cronbridge.FromRuntimeCronContext(ctx); rcc != nil && rcc.ChannelID != "" {
+		channel = rcc.ChannelID
+	}
+	subAgentConfig := &saconfig.ReActAgentConfig{
+		ModelClientConfig:  d.modelClientConfig,
+		ModelRequestConfig: d.modelRequestConfig,
+	}
+	toolkit := swarmtools.NewMultiSessionToolkit(config.SessionID, channel, config.RequestID, subAgentConfig)
+	for _, msTool := range toolkit.GetTools() {
+		// Python L2960 裸调 add_tool（重复静默失败）——err 忽略
+		_ = runner.GetResourceMgr().AddTool(msTool)
+		abilityMgr.Add(msTool.Card())
+	}
+	logger.Info(logComponent).Msg("[DeepAdapter] MultiSessionToolkit registered for agent mode")
 }
 
 // updateSessionTools 注册 cron 和 send_file 工具（与 mode 无关，每次请求刷新）。
