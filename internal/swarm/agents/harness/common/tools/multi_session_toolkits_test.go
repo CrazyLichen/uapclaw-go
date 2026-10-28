@@ -328,3 +328,154 @@ func TestNotify_推送函数未注入(t *testing.T) {
 	// 不应 panic
 	tk.notify(context.Background(), "sub-x", SessionStatusCompleted, "ok", "")
 }
+
+// ──────────────────────────── 覆盖率补全：CreateNewSessions/CancelSession/getSubAgent 等 ────────────────────────────
+
+// TestCreateNewSessions_创建与文案 task_descriptions → goroutine 派生 + 返回文案
+func TestCreateNewSessions_创建与文案(t *testing.T) {
+	tk, rec := newTestToolkit(t)
+	res, err := tk.CreateNewSessions(context.Background(), map[string]any{
+		"task_descriptions": []any{"task A", "task B"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, _ := res["content"].(string)
+	if !strings.Contains(content, "已创建 2 个协程") {
+		t.Errorf("create res=%v", res)
+	}
+	// 等待两个后台协程完成推送（getSubAgent 走真实 ReActAgent，无 LLM 配置时
+	// 走 error 降级分支——同样推送 session_result，对齐 Python 异常路径）
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		results := 0
+		for _, m := range rec.snapshot() {
+			if p, ok := m["payload"].(map[string]any); ok && p["event_type"] == "chat.session_result" {
+				results++
+			}
+		}
+		if results >= 2 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// session_list 非空路径：两条记录均在（completed/error 皆为合法结束态）
+	listRes, _ := tk.ListAllSessions(context.Background(), nil)
+	listContent, _ := listRes["content"].(string)
+	if !strings.Contains(listContent, "task A") || !strings.Contains(listContent, "task B") {
+		t.Errorf("list content=%q", listContent)
+	}
+	// tasks map 已清理（finally 弹出）
+	tk.mu.Lock()
+	remaining := len(tk.tasks)
+	tk.mu.Unlock()
+	if remaining != 0 {
+		t.Errorf("tasks remaining=%d, want 0（finally 弹出）", remaining)
+	}
+}
+
+// TestCancelSession_运行中取消 delay agent 创建后取消
+func TestCancelSession_运行中取消(t *testing.T) {
+	tk, _ := newTestToolkit(t)
+	// 混入长时任务：通过 CreateNewSessions 派生（内部走 getSubAgent 真实例，但 agent 调用需 LLM——
+	// 改为直接操作 tasks map 模拟运行中会话）
+	tk.mu.Lock()
+	tk.tasks["spawn_cancel_me"] = func() {}
+	tk.mu.Unlock()
+
+	res, err := tk.CancelSession(context.Background(), map[string]any{"session_id": "spawn_cancel_me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content, _ := res["content"].(string); !strings.Contains(content, "已取消 session_id=spawn_cancel_me") {
+		t.Errorf("cancel res=%v", res)
+	}
+}
+
+// TestCancelSession_已结束分支 sessions 有记录但 tasks 无 → "已结束"
+func TestCancelSession_已结束分支(t *testing.T) {
+	tk, _ := newTestToolkit(t)
+	tk.mu.Lock()
+	tk.sessions = append(tk.sessions, SessionTask{SessionID: "spawn_done", Description: "d", Status: SessionStatusCompleted})
+	tk.mu.Unlock()
+
+	res, _ := tk.CancelSession(context.Background(), map[string]any{"session_id": "spawn_done"})
+	if content, _ := res["content"].(string); !strings.Contains(content, "session_id=spawn_done 已结束") {
+		t.Errorf("done branch res=%v", res)
+	}
+}
+
+// TestAllTasksDone 空列表/全完成/含 running 三态
+func TestAllTasksDone(t *testing.T) {
+	tk := NewMultiSessionToolkit("s", "c", "r", &saconfig.ReActAgentConfig{})
+	if !tk.allTasksDone() {
+		t.Errorf("empty sessions should be all done")
+	}
+	tk.mu.Lock()
+	tk.sessions = append(tk.sessions,
+		SessionTask{SessionID: "a", Status: SessionStatusCompleted},
+		SessionTask{SessionID: "b", Status: SessionStatusError})
+	tk.mu.Unlock()
+	if !tk.allTasksDone() {
+		t.Errorf("completed+error should be all done")
+	}
+	tk.mu.Lock()
+	tk.sessions = append(tk.sessions, SessionTask{SessionID: "c", Status: SessionStatusCancelled})
+	tk.mu.Unlock()
+	if tk.allTasksDone() {
+		t.Errorf("cancelled should NOT be all done（Python 逐字：不含 CANCELLED）")
+	}
+}
+
+// TestToStringSlice 宽容转换
+func TestToStringSlice(t *testing.T) {
+	if got := toStringSlice([]string{"a"}); len(got) != 1 || got[0] != "a" {
+		t.Errorf("[]string case=%v", got)
+	}
+	if got := toStringSlice([]any{"a", 1, "b"}); len(got) != 2 {
+		t.Errorf("[]any case=%v（非字符串跳过）", got)
+	}
+	if got := toStringSlice("solo"); len(got) != 1 || got[0] != "solo" {
+		t.Errorf("string case=%v", got)
+	}
+	if got := toStringSlice(42); got != nil {
+		t.Errorf("int case=%v", got)
+	}
+}
+
+// TestTruncate 截断边界
+func TestTruncate(t *testing.T) {
+	if truncate("short", 10) != "short" {
+		t.Errorf("short passthrough failed")
+	}
+	if got := truncate("0123456789A", 10); got != "0123456789..." {
+		t.Errorf("truncate=%q", got)
+	}
+}
+
+// TestRandHex4 长度 8
+func TestRandHex4(t *testing.T) {
+	if len(randHex4()) != 8 {
+		t.Errorf("randHex4 len=%d", len(randHex4()))
+	}
+}
+
+// TestGetSubAgent_真实构造 ReActAgent + MCP 工具注入
+func TestGetSubAgent_真实构造(t *testing.T) {
+	tk := NewMultiSessionToolkit("s", "c", "r", &saconfig.ReActAgentConfig{ModelNameVal: "test-model"})
+	agent := tk.getSubAgent()
+	if agent == nil {
+		t.Fatal("getSubAgent returned nil")
+	}
+	if agent.Card() == nil || agent.Card().Name != "spawn_sub_agent" {
+		t.Errorf("agent card=%+v", agent.Card())
+	}
+	// MCP 工具卡已注入 AbilityManager
+	names := map[string]bool{}
+	for _, a := range agent.AbilityManager().List() {
+		names[a.AbilityName()] = true
+	}
+	if !names["mcp_fetch_webpage"] || !names["mcp_exec_command"] {
+		t.Errorf("mcp tools not injected: %v", names)
+	}
+}

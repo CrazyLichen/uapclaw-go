@@ -461,6 +461,7 @@ func (t *MultiSessionToolkit) notify(ctx context.Context, sessionID string, stat
 		}
 	}
 	total := len(t.sessions)
+	// Python: allDone = all(s.status in [COMPLETED, ERROR])（all_tasks_done 内联等价）
 	allDone := true
 	for _, s := range t.sessions {
 		if s.Status != SessionStatusCompleted && s.Status != SessionStatusError {

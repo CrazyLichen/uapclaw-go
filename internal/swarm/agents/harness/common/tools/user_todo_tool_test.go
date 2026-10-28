@@ -208,3 +208,84 @@ func TestNewUserTodosTool_卡片与注册(t *testing.T) {
 		}
 	}
 }
+
+// TestNewUserTodosTool_独立构造 导出构造器与 GetGlobalWorkspaceDir
+func TestNewUserTodosTool_独立构造(t *testing.T) {
+	if NewUserTodosTool() == nil {
+		t.Error("NewUserTodosTool returned nil")
+	}
+	if GetGlobalWorkspaceDir() == "" {
+		t.Error("GetGlobalWorkspaceDir should be non-empty（默认 '.'）")
+	}
+	SetGlobalWorkspaceDir("/tmp/ws-test")
+	t.Cleanup(func() { SetGlobalWorkspaceDir(".") })
+	if GetGlobalWorkspaceDir() != "/tmp/ws-test" {
+		t.Errorf("GetGlobalWorkspaceDir=%q", GetGlobalWorkspaceDir())
+	}
+	// agentWorkspaceDir 为空串时 SetGlobalWorkspaceDir("") 也可写入（Python 语义）
+	SetGlobalWorkspaceDir("")
+	if GetGlobalWorkspaceDir() != "" {
+		t.Errorf("empty set failed: %q", GetGlobalWorkspaceDir())
+	}
+}
+
+// TestHandleUserTodos_create带createdBy与status 显式参数路径
+func TestHandleUserTodos_create带createdBy与status(t *testing.T) {
+	dir := t.TempDir()
+	SetGlobalWorkspaceDir(dir)
+	t.Cleanup(func() { SetGlobalWorkspaceDir(".") })
+
+	res, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "create", "title": "t", "created_by": "alice",
+		"status": "in_progress", "priority": "low", "remind_at": "2026-11-01T09:00:00Z",
+		"description": "d",
+	})
+	todo := res["todo"].(map[string]any)
+	if todo["created_by"] != "alice" || todo["status"] != "in_progress" || todo["priority"] != "low" {
+		t.Errorf("create with explicit fields=%v", todo)
+	}
+	// 显式 remind_at 不被 due-5min 覆盖（无 due_at）
+	if todo["remind_at"] != "2026-11-01T09:00:00Z" {
+		t.Errorf("explicit remind_at=%v", todo["remind_at"])
+	}
+}
+
+// TestHandleUserTodos_update存在性判断 显式空串也更新（对齐 Python is not None）
+func TestHandleUserTodos_update存在性判断(t *testing.T) {
+	dir := t.TempDir()
+	SetGlobalWorkspaceDir(dir)
+	t.Cleanup(func() { SetGlobalWorkspaceDir(".") })
+
+	res, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "create", "title": "orig", "description": "keep",
+	})
+	id := res["todo"].(map[string]any)["id"].(string)
+
+	// 显式空串 title → 更新为空（Python is not None 语义）
+	res2, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "update", "todo_id": id, "title": "",
+	})
+	if res2["todo"].(map[string]any)["title"] != "" {
+		t.Errorf("explicit empty title should update: %v", res2["todo"])
+	}
+	// status 空串跳过（偏差#8）
+	res3, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "update", "todo_id": id, "status": "",
+	})
+	if res3["todo"].(map[string]any)["status"] != "pending" {
+		t.Errorf("empty status should skip（偏差#8）: %v", res3["todo"])
+	}
+}
+
+// TestParseTodosFile_无frontmatter边界 描述含 --- 与 header 混排
+func TestParseTodosFile_无frontmatter边界(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "edge.md")
+	// 只有一对 ---（无闭合 frontmatter）→ body 吞 EOF
+	content := "# User Todos\n\n---\nid: only\n---\nbody line\nstays\n"
+	os.WriteFile(file, []byte(content), 0o644)
+	todos := parseTodosFile(file)
+	if len(todos) != 1 || todos[0].Description != "body line\nstays" {
+		t.Errorf("edge parse=%+v", todos)
+	}
+}
