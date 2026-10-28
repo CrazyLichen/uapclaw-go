@@ -328,3 +328,62 @@ func TestMcpPaidSearch_真实请求serper(t *testing.T) {
 		t.Errorf("serper 链路异常: %s", s)
 	}
 }
+
+// TestSearchDuckduckgo_默认verify校验证书 验证免费搜索默认构造走证书校验（S-02 修复）。
+// Python _http_request L101 setdefault("verify", get_requests_verify()) 先行短路，
+// 实际默认 verify=true；JIUWENSWARM_SSL_VERIFY 未设置时对自签证书服务应报 TLS 错误。
+func TestSearchDuckduckgo_默认verify校验证书(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short 模式跳过网络栈用例")
+	}
+	// 自签证书 HTTPS 服务（非 TLShttptest 不可用时跳过）
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<a class="result__a" href="https://r1.com">T1</a>`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("JIUWENSWARM_SSL_VERIFY", "")
+	t.Setenv("FREE_SEARCH_SSL_VERIFY", "")
+	t.Setenv("FREE_SEARCH_DDG_URL", srv.URL)
+	t.Setenv("FREE_SEARCH_PROXY_URL", "")
+	t.Setenv("NO_PROXY", "")
+	t.Setenv("no_proxy", "")
+
+	// client=nil 触发默认构造路径（getRequestsVerify() → InsecureSkipVerify=false）
+	_, err := searchDuckduckgo("test", 3, 5, nil)
+	if err == nil {
+		t.Fatal("自签证书服务默认 verify=true 应报 TLS 校验错误")
+	}
+	if !strings.Contains(err.Error(), "certificate") && !strings.Contains(err.Error(), "tls") {
+		t.Errorf("应为证书校验错误，实际: %v", err)
+	}
+}
+
+// TestSearchBing_默认verify校验证书 同 S-02，Bing 引擎默认构造验证。
+func TestSearchBing_默认verify校验证书(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short 模式跳过网络栈用例")
+	}
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<li class="b_algo"><h2><a href="https://r1.com">T1</a></h2></li>`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("JIUWENSWARM_SSL_VERIFY", "")
+	t.Setenv("FREE_SEARCH_SSL_VERIFY", "")
+	t.Setenv("FREE_SEARCH_PROXY_URL", "")
+	t.Setenv("NO_PROXY", "")
+	t.Setenv("no_proxy", "")
+
+	origURL := bingSearchURL
+	bingSearchURL = srv.URL
+	t.Cleanup(func() { bingSearchURL = origURL })
+
+	_, err := searchBing("test", 3, 5, nil)
+	if err == nil {
+		t.Fatal("自签证书服务默认 verify=true 应报 TLS 校验错误")
+	}
+	if !strings.Contains(err.Error(), "certificate") && !strings.Contains(err.Error(), "tls") {
+		t.Errorf("应为证书校验错误，实际: %v", err)
+	}
+}

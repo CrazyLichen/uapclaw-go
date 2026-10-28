@@ -591,11 +591,35 @@ func getDefaultWikiModel() (*llm.Model, error) {
 	clientConfigOpts := []llmschema.ModelClientConfigOption{
 		llmschema.WithClientID("wiki_default_model"),
 	}
-	if v, ok := clientConfig["timeout"].(float64); ok {
-		clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(v))
+	// 数值字段双类型兼容：本仓 YAML 库整数解出为 int（JSON 恒 float64），
+	// 两种来源都要能透传（对齐 buildModelFromEntry 的 switch 模式）。
+	if v, ok := clientConfig["timeout"]; ok {
+		switch n := v.(type) {
+		case float64:
+			clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(n))
+		case int:
+			clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(float64(n)))
+		}
 	}
 	if v, ok := clientConfig["verify_ssl"].(bool); ok {
 		clientConfigOpts = append(clientConfigOpts, llmschema.WithVerifySSL(v))
+	}
+	// 对齐 Python ModelClientConfig(**client_config) 全字段透传——
+	// max_retries / ssl_cert / custom_headers 此前漏映射（2026-10-28 审查 M-01），
+	// 配置了内部网关鉴权头或自签 CA 证书的部署会以错误参数调用模型。
+	if v, ok := clientConfig["max_retries"]; ok {
+		switch n := v.(type) {
+		case float64:
+			clientConfigOpts = append(clientConfigOpts, llmschema.WithMaxRetries(int(n)))
+		case int:
+			clientConfigOpts = append(clientConfigOpts, llmschema.WithMaxRetries(n))
+		}
+	}
+	if v, ok := clientConfig["ssl_cert"].(string); ok && v != "" {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithSSLCert(v))
+	}
+	if headers := wikiCustomHeadersToStringMap(clientConfig["custom_headers"]); headers != nil {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithCustomHeaders(headers))
 	}
 	mcc, err := llmschema.NewModelClientConfig(provider, apiKey, apiBase, clientConfigOpts...)
 	if err != nil {
@@ -607,8 +631,62 @@ func getDefaultWikiModel() (*llm.Model, error) {
 	if reqModel == "" {
 		reqModel = modelName
 	}
-	mco := llmschema.NewModelRequestConfig(llmschema.WithModelName(reqModel))
+	// 对齐 Python ModelRequestConfig(**req_config) 全字段透传——
+	// temperature / top_p / max_tokens / stop 此前漏映射（M-01）。
+	reqOpts := []llmschema.ModelRequestConfigOption{llmschema.WithModelName(reqModel)}
+	if v, ok := reqConfig["temperature"]; ok {
+		switch n := v.(type) {
+		case float64:
+			reqOpts = append(reqOpts, llmschema.WithTemperature(n))
+		case int:
+			reqOpts = append(reqOpts, llmschema.WithTemperature(float64(n)))
+		}
+	}
+	if v, ok := reqConfig["top_p"]; ok {
+		switch n := v.(type) {
+		case float64:
+			reqOpts = append(reqOpts, llmschema.WithTopP(n))
+		case int:
+			reqOpts = append(reqOpts, llmschema.WithTopP(float64(n)))
+		}
+	}
+	if v, ok := reqConfig["max_tokens"]; ok {
+		switch n := v.(type) {
+		case float64:
+			reqOpts = append(reqOpts, llmschema.WithMaxTokens(int(n)))
+		case int:
+			reqOpts = append(reqOpts, llmschema.WithMaxTokens(n))
+		}
+	}
+	if v, ok := reqConfig["stop"].(string); ok && v != "" {
+		reqOpts = append(reqOpts, llmschema.WithStop(v))
+	}
+	mco := llmschema.NewModelRequestConfig(reqOpts...)
 	return llm.NewModel(mcc, mco)
+}
+
+// wikiCustomHeadersToStringMap 将 wiki 默认模型的 custom_headers 配置转为 map[string]string。
+// YAML 解出为 map[string]any，llmschema.WithCustomHeaders 签名收 map[string]string；
+// 非字符串值跳过（对齐 runtime_inheritance.customHeadersToStringMap 的宽松语义，
+// 该函数为 team 包私有无法导入，此处内联同款逻辑）。
+func wikiCustomHeadersToStringMap(v any) map[string]string {
+	if v == nil {
+		return nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	result := make(map[string]string, len(m))
+	for k, val := range m {
+		if s, ok := val.(string); ok {
+			result[k] = s
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 // resolveWikiWorkspace 解析 workspace 为绝对路径（四分支）。

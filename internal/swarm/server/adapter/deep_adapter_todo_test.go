@@ -12,6 +12,7 @@ import (
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	// blank import 触发 local 包 init()：向 GlobalRegistry 注册 fs/shell/code 本地实现
 	// （生产路径经 sysop_builder import 链触发；测试直连 sysop 需显式引入）
 	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
@@ -29,6 +30,8 @@ func TestCancelPendingTodos_无实例返回nil(t *testing.T) {
 // TestCancelPendingTodos_全链路标记cancelled 验证完整链路：
 // workspace todo 节点 → LoadTodos → CancelTodos → SaveTodos → 重载 → 前端格式。
 // Python: _cancel_pending_todos 主路径（interface_deep.py:4351-4410）。
+// 2026-10-28 T-02 修复后对齐 Python 双条件：无 streamEventRail 返回 nil；
+// 有 rail 才格式化返回（interrupt_result 事件带 todos 刷新数据）。
 func TestCancelPendingTodos_全链路标记cancelled(t *testing.T) {
 	root := t.TempDir()
 	ws := hworkspace.NewWorkspace(root, "cn")
@@ -53,14 +56,27 @@ func TestCancelPendingTodos_全链路标记cancelled(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+
+	// 场景一：无 rail → 返回 nil（对齐 Python self._stream_event_rail is None 分支）
 	d := NewDeepAdapter()
 	d.instance = agent
 	// 注入本地 SysOperation（对齐生产路径 createSysOperation 的 LOCAL 模式构造）
 	d.sysOperation = sysop.NewLocalSysOperation(sysop.NewSysOperationCard(
 		sysop.WithSysOpMode(sysop.OperationModeLocal),
 	))
+	if got := d.cancelPendingTodos(context.Background(), "sess-1"); got != nil {
+		t.Errorf("无 rail 应返回 nil: %v", got)
+	}
 
-	got := d.cancelPendingTodos(context.Background(), "sess-1")
+	// 场景二：有 rail → 返回前端格式列表
+	d2 := NewDeepAdapter()
+	d2.instance = agent
+	d2.sysOperation = sysop.NewLocalSysOperation(sysop.NewSysOperationCard(
+		sysop.WithSysOpMode(sysop.OperationModeLocal),
+	))
+	d2.streamEventRail = commrails.NewJiuClawStreamEventRail()
+
+	got := d2.cancelPendingTodos(context.Background(), "sess-1")
 	if len(got) != 1 {
 		t.Fatalf("completed 保留 1 项，pending 已 cancelled 被过滤: %v", got)
 	}

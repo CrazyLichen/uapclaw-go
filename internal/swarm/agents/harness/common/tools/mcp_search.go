@@ -194,6 +194,10 @@ func searchEnvFlag(name string, defaultVal bool) bool {
 
 // freeSearchSSLVerify 免费搜索 SSL 验证开关（默认 false）。
 // Python: _free_search_ssl_verify
+// 注意：Python 侧该函数在 search_tools._http_request 中是死代码——L101
+// kwargs.setdefault("verify", get_requests_verify()) 先行使 L104 "verify" not in kwargs
+// 恒为 False，从未生效（对齐保留见 2026-10-28 审查 S-02）。仅 web_fetch_tools._http_get
+// 独立副本（变量先存再 setdefault，无死代码）可达，Go 侧仅 fetchHTTPGet 调用本函数。
 func freeSearchSSLVerify() bool {
 	return searchEnvBool(freeSearchSSLVerifyEnv, false)
 }
@@ -419,9 +423,11 @@ func isDDGChallengePage(statusCode int, pageHTML string) bool {
 // searchDuckduckgo DDG HTML 搜索。
 // Python: _search_duckduckgo_sync(query, max_results, timeout_seconds)
 // Go 差异：client 尾参为测试注入扩展（生产传 newFreeSearchHTTPClient 构造实例）。
+// verify 用 getRequestsVerify()：对齐 Python _http_request L101 setdefault 短路后的
+// 实际行为（verify 恒为 get_requests_verify() 默认 true，L104-107 为死代码）。
 func searchDuckduckgo(query string, maxResults, timeoutSeconds int, client *http.Client) ([]searchRow, error) {
 	if client == nil {
-		client = newFreeSearchHTTPClient(freeSearchSSLVerify(), getFreeSearchProxyURL())
+		client = newFreeSearchHTTPClient(getRequestsVerify(), getFreeSearchProxyURL())
 	}
 	req, err := http.NewRequest("GET", duckduckgoSearchURL(query), nil)
 	if err != nil {
@@ -478,9 +484,10 @@ func searchDuckduckgo(query string, maxResults, timeoutSeconds int, client *http
 
 // searchDuckduckgoViaJina 经 Jina Reader 的 DDG 搜索。
 // Python: _search_duckduckgo_via_jina_sync（URL: r.jina.ai/http://duckduckgo.com/html/?q=）
+// verify 用 getRequestsVerify()（对齐 Python setdefault 短路后的实际行为，同 searchDuckduckgo）。
 func searchDuckduckgoViaJina(query string, maxResults, timeoutSeconds int, client *http.Client) ([]searchRow, error) {
 	if client == nil {
-		client = newFreeSearchHTTPClient(freeSearchSSLVerify(), getFreeSearchProxyURL())
+		client = newFreeSearchHTTPClient(getRequestsVerify(), getFreeSearchProxyURL())
 	}
 	fullURL := jinaSearchURLPrefix + "http://duckduckgo.com/html/?q=" + url.QueryEscape(query)
 	req, err := http.NewRequest("GET", fullURL, nil)
@@ -531,9 +538,10 @@ func searchDuckduckgoViaJina(query string, maxResults, timeoutSeconds int, clien
 
 // searchBing Bing 搜索。
 // Python: _search_bing_sync
+// verify 用 getRequestsVerify()（对齐 Python setdefault 短路后的实际行为，同 searchDuckduckgo）。
 func searchBing(query string, maxResults, timeoutSeconds int, client *http.Client) ([]searchRow, error) {
 	if client == nil {
-		client = newFreeSearchHTTPClient(freeSearchSSLVerify(), getFreeSearchProxyURL())
+		client = newFreeSearchHTTPClient(getRequestsVerify(), getFreeSearchProxyURL())
 	}
 	fullURL := bingSearchURL + "?q=" + url.QueryEscape(query)
 	req, err := http.NewRequest("GET", fullURL, nil)

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -218,6 +219,56 @@ func TestMcpExecCommand_后台进程启动(t *testing.T) {
 	s := result["result"].(string)
 	if !strings.Contains(s, `"status": "started"`) {
 		t.Errorf("后台启动异常: %s", s)
+	}
+}
+
+// TestMcpExecCommand_非零退出落payload 验证 exit 1 返回 JSON payload 而非 [ERROR]。
+// 对齐 Python subprocess.run 无 check=True：非零退出是正常返回值（S-01 修复）。
+func TestMcpExecCommand_非零退出落payload(t *testing.T) {
+	result, err := McpExecCommand.Invoke(t.Context(), map[string]any{
+		"command": "echo to_stderr 1>&2; exit 1", "workdir": ".",
+	}, tool.WithSkipInputsValidate(true))
+	if err != nil {
+		t.Fatalf("invoke err: %v", err)
+	}
+	s, ok := result["result"].(string)
+	if !ok {
+		t.Fatalf("result 应为 string: %T", result["result"])
+	}
+	// 非零退出不应被包装成 [ERROR]
+	if strings.Contains(s, "[ERROR]") {
+		t.Errorf("非零退出不应返回 [ERROR]: %s", s)
+	}
+	// exit_code=1 + stdout/stderr 保留（Python payload 语义）
+	if !strings.Contains(s, `"exit_code": 1`) {
+		t.Errorf("payload 应含 exit_code 1: %s", s)
+	}
+	if !strings.Contains(s, "to_stderr") {
+		t.Errorf("payload 应保留 stderr: %s", s)
+	}
+}
+
+// TestMcpExecCommand_二进制不存在仍走ERROR 验证启动失败（非 ExitError）路径不变。
+func TestMcpExecCommand_二进制不存在仍走ERROR(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux/macOS 专属路径")
+	}
+	// Linux 下 auto 解析为 bash -lc <command>，"命令不存在"是 bash 的 exit 127（ExitError），
+	// 恰好落 payload——与 Python returncode=127 一致（该语义已由非零退出用例覆盖）。
+	// 真正的非 ExitError 启动失败是 shell_type=cmd（Linux 不支持，plan=nil）：
+	// Python raise RuntimeError 被 except Exception 捕获返回 [ERROR]，Go 走同路径。
+	result, err := McpExecCommand.Invoke(t.Context(), map[string]any{
+		"command": "echo hi", "workdir": ".", "shell_type": "cmd",
+	}, tool.WithSkipInputsValidate(true))
+	if err != nil {
+		t.Fatalf("invoke err: %v", err)
+	}
+	s, ok := result["result"].(string)
+	if !ok {
+		t.Fatalf("result 应为 string: %T", result["result"])
+	}
+	if !strings.Contains(s, "[ERROR]: command execution failed:") {
+		t.Errorf("启动失败应返回 [ERROR]: %s", s)
 	}
 }
 

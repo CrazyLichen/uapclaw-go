@@ -960,3 +960,37 @@ func TestUpdateSendFileTools_instance未初始化(t *testing.T) {
 	// 不应 panic
 	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
 }
+
+// TestBuildModelFromEntry_customHeaders透传 验证 M-01 越界发现顺手修：
+// custom_headers 此前仅列入 knownKeys 排除 extra 却无映射分支，静默丢弃。
+// 对齐 Python ModelClientConfig(**model_client_config) 全字段透传。
+func TestBuildModelFromEntry_customHeaders透传(t *testing.T) {
+	d := NewDeepAdapter()
+	mcc := map[string]any{
+		"client_provider": "OpenAI",
+		"api_key":         "k",
+		"api_base":        "https://m.example.com/v1",
+		"model_name":      "m1",
+		// verify_ssl 默认 true 时 Validate 要求 ssl_cert 必填，此处关掉走纯 headers 断言
+		"verify_ssl": false,
+		"custom_headers": map[string]any{
+			"X-Gateway-Auth": "token-1",
+			"X-Org":          "org-9",
+		},
+	}
+	m, err := d.buildModelFromEntry(mcc, map[string]any{})
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	if m.ClientConfig == nil {
+		t.Fatal("clientConfig 不应为 nil")
+	}
+	got := m.ClientConfig.CustomHeaders
+	if got["X-Gateway-Auth"] != "token-1" || got["X-Org"] != "org-9" {
+		t.Errorf("custom_headers 应透传: %v", got)
+	}
+	// custom_headers 已正确映射，不应再落入 Extra
+	if _, exists := m.ClientConfig.Extra["custom_headers"]; exists {
+		t.Errorf("custom_headers 不应重复进 Extra: %v", m.ClientConfig.Extra)
+	}
+}

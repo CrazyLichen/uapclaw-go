@@ -1531,6 +1531,11 @@ func (d *DeepAdapter) cancelPendingTodos(ctx context.Context, sessionID string) 
 	if err != nil || len(updatedTodos) == 0 {
 		return nil
 	}
+	// Python: if updated_todos and self._stream_event_rail is not None —— 无 rail 返回 None
+	// （interrupt_result 事件不带 todos 刷新数据）
+	if d.streamEventRail == nil {
+		return nil
+	}
 	// formatTodosForFrontend 是 commrails 包非导出函数；
 	// 本地等价实现 formatTodosForFrontendLocal（映射逻辑逐字对齐 stream_event_emit.go:234）
 	return formatTodosForFrontendLocal(updatedTodos)
@@ -2054,6 +2059,21 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 	if v, ok := mcc["ssl_cert"]; ok {
 		if s, ok := v.(string); ok {
 			clientConfigOpts = append(clientConfigOpts, llmschema.WithSSLCert(s))
+		}
+	}
+	// custom_headers 透传：此前仅列入 knownKeys 排除 extra 却无映射分支，静默丢弃
+	// （2026-10-28 审查 M-01 越界发现顺手修）。对齐 BuildEvolutionLLM 的收敛模式。
+	if v, ok := mcc["custom_headers"]; ok {
+		if m, ok := v.(map[string]any); ok && len(m) > 0 {
+			headers := make(map[string]string, len(m))
+			for k, hv := range m {
+				if s, ok := hv.(string); ok {
+					headers[k] = s
+				}
+			}
+			if len(headers) > 0 {
+				clientConfigOpts = append(clientConfigOpts, llmschema.WithCustomHeaders(headers))
+			}
 		}
 	}
 

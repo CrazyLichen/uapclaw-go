@@ -393,7 +393,8 @@ func NewTodoListTool(todoTool TodoTool, language, agentID string) tool.Tool {
 				Status    string   `json:"status"`
 				DependsOn []string `json:"depends_on"`
 			}
-			var simplified []simplifiedTask
+			// make 初始化保证空结果序列化为 [] 而非 null（对齐 Python 空列表推导式）
+			simplified := make([]simplifiedTask, 0)
 			for _, item := range todos {
 				if item.Status != hschema.TodoStatusCompleted && item.Status != hschema.TodoStatusCancelled {
 					simplified = append(simplified, simplifiedTask{

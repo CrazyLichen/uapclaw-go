@@ -6,6 +6,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -706,7 +707,15 @@ func newMcpExecCommandTool() tool.Tool {
 			if isTimeoutError(runErr) {
 				return map[string]any{"result": fmt.Sprintf("[ERROR]: command timed out after %ds.", timeoutSeconds)}, nil
 			}
-			return map[string]any{"result": fmt.Sprintf("[ERROR]: command execution failed: %v", runErr)}, nil
+			var exitErr *exec.ExitError
+			if errors.As(runErr, &exitErr) {
+				// 非零退出 = 正常返回（对齐 Python subprocess.run 无 check=True，
+				// exit 1 等探查型命令的退出码/stdout/stderr 落 payload 供 Agent 继续推理）。
+				// exitCode 已由 runCommandBlocking 从 ProcessState.ExitCode() 提取；
+				// 被信号杀死（ExitCode() == -1）时 Python 同样走 payload 路径，此处完整对齐。
+			} else {
+				return map[string]any{"result": fmt.Sprintf("[ERROR]: command execution failed: %v", runErr)}, nil
+			}
 		}
 
 		payload := map[string]any{

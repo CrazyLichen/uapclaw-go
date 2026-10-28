@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // TestSourceManifest_去重与损坏容错 验证 manifest 哈希去重与损坏 JSON 容错。
@@ -178,6 +180,97 @@ func TestWikiPrompts_双语常量(t *testing.T) {
 func TestGetDefaultWikiModel_空配置容错(t *testing.T) {
 	// 无配置时不 panic（GetDefaultModels 环境回退），返回 Model 或错误皆可——验证不 panic
 	_, _ = getDefaultWikiModel()
+}
+
+// TestGetDefaultWikiModel_全字段透传 验证 M-01 修复：client 侧 max_retries/ssl_cert/custom_headers
+// 与 req 侧 temperature/top_p/max_tokens/stop 全部透传进 Model 配置。
+// 对齐 Python ModelClientConfig(**client_config) / ModelRequestConfig(**req_config) 全字段透传。
+func TestGetDefaultWikiModel_全字段透传(t *testing.T) {
+	// 隔离 workspace：UAPCLAW_DATA_DIR + config/ 目录（模拟已初始化防 resources 回退）+ ResetCache
+	wsRoot := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", wsRoot)
+	upath.ResetCache()
+	t.Cleanup(func() {
+		os.Unsetenv("UAPCLAW_DATA_DIR")
+		upath.ResetCache()
+	})
+	// 屏蔽环境回退（models.defaults 命中后 env 不参与）
+	t.Setenv("MODEL_PROVIDER", "")
+	t.Setenv("MODEL_NAME", "")
+	t.Setenv("API_KEY", "")
+	t.Setenv("API_BASE", "")
+
+	configDir := filepath.Join(wsRoot, "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// YAML 数值在解析后为 float64；这里直接写 YAML 走真实加载链
+	yamlContent := `models:
+  defaults:
+    - is_default: true
+      model_client_config:
+        client_provider: OpenAI
+        api_key: wiki-key
+        api_base: https://wiki.example.com/v1
+        model_name: wiki-full-model
+        timeout: 120
+        max_retries: 7
+        verify_ssl: true
+        ssl_cert: /path/to/ca.pem
+        custom_headers:
+          X-Gateway-Auth: internal-token
+          X-Org: org-42
+      model_config_obj:
+        model: wiki-full-model
+        temperature: 0.33
+        top_p: 0.77
+        max_tokens: 4096
+        stop: "END"
+`
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(yamlContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := getDefaultWikiModel()
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	if m == nil || m.ClientConfig == nil || m.ModelConfig == nil {
+		t.Fatal("model/clientConfig/modelConfig 不应为 nil")
+	}
+
+	// client 侧断言
+	cc := m.ClientConfig
+	if cc.Timeout != 120 {
+		t.Errorf("timeout 异常: %v", cc.Timeout)
+	}
+	if cc.MaxRetries != 7 {
+		t.Errorf("max_retries 应透传 7: %d", cc.MaxRetries)
+	}
+	if !cc.VerifySSL {
+		t.Error("verify_ssl 应透传 true")
+	}
+	if cc.SSLCert != "/path/to/ca.pem" {
+		t.Errorf("ssl_cert 应透传: %q", cc.SSLCert)
+	}
+	if cc.CustomHeaders["X-Gateway-Auth"] != "internal-token" || cc.CustomHeaders["X-Org"] != "org-42" {
+		t.Errorf("custom_headers 应透传: %v", cc.CustomHeaders)
+	}
+
+	// req 侧断言
+	mc := m.ModelConfig
+	if mc.Temperature != 0.33 {
+		t.Errorf("temperature 应透传 0.33: %v", mc.Temperature)
+	}
+	if mc.TopP == nil || *mc.TopP != 0.77 {
+		t.Errorf("top_p 应透传 0.77: %v", mc.TopP)
+	}
+	if mc.MaxTokens == nil || *mc.MaxTokens != 4096 {
+		t.Errorf("max_tokens 应透传 4096: %v", mc.MaxTokens)
+	}
+	if mc.Stop == nil || *mc.Stop != "END" {
+		t.Errorf("stop 应透传 END: %v", mc.Stop)
+	}
 }
 
 // TestWikiIngest_工具卡schema 验证三个工具的卡片名称。

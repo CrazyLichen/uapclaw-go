@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -927,6 +928,39 @@ func TestNewTodoListTool_Invoke_空列表(t *testing.T) {
 	}
 	if _, ok := result["tasks"]; !ok {
 		t.Fatal("期望 tasks 字段存在")
+	}
+}
+
+// TestNewTodoListTool_Invoke_全完成序列化为空数组 验证 T-01 修复：
+// 任务全部 completed/cancelled 时 tasks 序列化为 [] 而非 null（对齐 Python）。
+func TestNewTodoListTool_Invoke_全完成序列化为空数组(t *testing.T) {
+	fs := NewMockFsOperation()
+	lockMgr := NewTodoLockManager()
+	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
+
+	// 预写全部已完成的任务
+	items := []hschema.TodoItem{
+		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusCompleted},
+		{ID: "t2", Content: "任务2", Status: hschema.TodoStatusCancelled},
+	}
+	_ = todoTool.SaveTodos(context.Background(), "sess1", items)
+
+	tl := NewTodoListTool(todoTool, "cn", "agent1")
+	result, err := tl.Invoke(context.Background(), map[string]any{}, tool.WithToolSession(&mockSession{sessionID: "sess1"}))
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	tasks, ok := result["tasks"]
+	if !ok {
+		t.Fatal("期望 tasks 字段存在")
+	}
+	// 序列化后应为 [] 而非 null（下游 JSON 反序列化按数组处理）
+	data, err := json.Marshal(map[string]any{"tasks": tasks})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(data, []byte(`"tasks":[]`)) {
+		t.Errorf("tasks 应序列化为 [] 而非 null: %s", data)
 	}
 }
 
