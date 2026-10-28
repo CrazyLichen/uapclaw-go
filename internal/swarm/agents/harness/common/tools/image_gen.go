@@ -396,9 +396,10 @@ func getModelConfigTyped(configBase map[string]any, modelType string) map[string
 }
 
 // loadConfigMapOrEmpty 加载配置，失败返回空 map。
-// Python: get_config()（工具内 import 局部获取，异常吞掉）
+// Python: get_config()（工具内 import 局部获取，异常吞掉）。
+// 含 _normalize_config 后处理（2026-10-28 审查接线）。
 func loadConfigMapOrEmpty() map[string]any {
-	c, err := config.New("")
+	c, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
 		return map[string]any{}
 	}

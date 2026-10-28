@@ -822,9 +822,10 @@ func (uc *UapClaw) ensureSkillDevService() (*skilldev.SkillDevService, error) {
 	workspaceProvider := skilldev.NewWorkspaceProvider(skilldevBase)
 
 	// 对齐 Python interface.py:265-267: config.get("models", {}).get("default", {})
+	// （get_config 含 _normalize_config——custom_headers 结构化——2026-10-28 审查接线）
 	modelName := ""
 	modelClientConfig := map[string]any{}
-	if c, cfgErr := config.New(""); cfgErr == nil {
+	if c, cfgErr := config.New("", config.WithNormalize(config.NormalizeConfig)); cfgErr == nil {
 		if loaded, loadErr := c.Load(); loadErr == nil {
 			if models, ok := loaded["models"].(map[string]any); ok {
 				if defaultModel, ok := models["default"].(map[string]any); ok {

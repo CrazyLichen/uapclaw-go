@@ -339,7 +339,10 @@ func (m *TeamManager) RegisterMemberRuntimeTools(
 		}()
 		// Python L524-532: 三态开关（None → web 默认 true，其余默认 false）
 		var cfgData map[string]any
-		cfg, cfgErr := config.New("")
+		// 对齐 Python get_config()：normalize 一并应用（2026-10-28 审查接线）。
+		// 注：normalize 补 web 缺省 true 后，三态的 None→web 分支仍保留——
+		// 显式 send_file_allowed: false 时 sendFileConfigured=true 不触发兜底
+		cfg, cfgErr := config.New("", config.WithNormalize(config.NormalizeConfig))
 		if cfgErr != nil {
 			logger.Warn(logComponent).Err(cfgErr).
 				Msg("[TeamManager] SendFileToolkit config init failed")
@@ -1072,7 +1075,8 @@ func loadTeamSpec(sessionID string, configBase ...map[string]any) (*atschema.Tea
 	}
 	if cb == nil {
 		// M-38: 对齐 Python config_base = get_config()——无参调用走全局配置加载
-		cfg, cfgErr := config.New("")
+		// 对齐 Python get_config()：normalize 一并应用（2026-10-28 审查接线）
+		cfg, cfgErr := config.New("", config.WithNormalize(config.NormalizeConfig))
 		if cfgErr != nil {
 			logger.Warn(logComponent).Str("session_id", sessionID).Err(cfgErr).
 				Msg("loadTeamSpec: config init failed, using default spec")

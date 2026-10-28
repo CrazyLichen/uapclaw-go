@@ -89,10 +89,27 @@ func TestNormalizeConfig(t *testing.T) {
 		assert.Equal(t, "val", headers["X-Custom"])
 	})
 
-	t.Run("channels.web.send_file_allowed设置默认值true", func(t *testing.T) {
+	t.Run("channels.web缺send_file_allowed时整体替换", func(t *testing.T) {
+		// Python: channels["web"] = {"send_file_allowed": True}
+		// 整个替换——web 下其他键丢失（严格对齐 Python）
 		data := map[string]any{
 			"channels": map[string]any{
-				"web": map[string]any{},
+				"web": map[string]any{"other_setting": "will-be-lost"},
+			},
+		}
+		NormalizeConfig(data)
+
+		web := data["channels"].(map[string]any)["web"].(map[string]any)
+		assert.Equal(t, true, web["send_file_allowed"])
+		assert.NotContains(t, web, "other_setting")
+		assert.Len(t, web, 1)
+	})
+
+	t.Run("channels.web.send_file_allowed显式null时也触发替换", func(t *testing.T) {
+		// Python: .get("send_file_allowed") is None（YAML ~ 解出 nil）→ 替换
+		data := map[string]any{
+			"channels": map[string]any{
+				"web": map[string]any{"send_file_allowed": nil},
 			},
 		}
 		NormalizeConfig(data)
@@ -116,6 +133,20 @@ func TestNormalizeConfig(t *testing.T) {
 	t.Run("channels无web段时创建web默认值", func(t *testing.T) {
 		data := map[string]any{
 			"channels": map[string]any{},
+		}
+		NormalizeConfig(data)
+
+		web := data["channels"].(map[string]any)["web"].(map[string]any)
+		assert.Equal(t, true, web["send_file_allowed"])
+	})
+
+	t.Run("web为非map时防御性替换", func(t *testing.T) {
+		// Python: channels.get("web", {}) 返回字符串 → .get 抛 AttributeError；
+		// Go 防御性替换（吞异常路径对齐）
+		data := map[string]any{
+			"channels": map[string]any{
+				"web": "not-a-map",
+			},
 		}
 		NormalizeConfig(data)
 

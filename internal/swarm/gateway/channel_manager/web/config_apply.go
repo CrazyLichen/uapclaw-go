@@ -668,9 +668,9 @@ func buildModelsDefaultsFromFrontend(ctx context.Context, rawModels any, cryptoP
 }
 
 // getConfigSnapshot 获取当前配置快照。
-// Python: get_config() / get_config_raw()。
+// Python: get_config()（含 _normalize_config——2026-10-28 审查接线）。
 func getConfigSnapshot() map[string]any {
-	cfg, err := config.New("")
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
 		return make(map[string]any)
 	}

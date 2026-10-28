@@ -334,8 +334,8 @@ func TestSearchCandidates_候选裸解析冒泡(t *testing.T) {
 func TestSearchCandidates_三重过滤(t *testing.T) {
 	candidates := []common.RetrievalResult{
 		{Text: "entity1 relation entity2", Metadata: map[string]any{"triple": `["entity1","r","entity2"]`}}, // Contains 过滤（text 判重）
-		{Text: "unrelated", Metadata: map[string]any{"triple": `["x","r","y"]`}},                             // 首尾过滤
-		{Text: "good", Metadata: map[string]any{"triple": `["entity1","r2","z"]`}},                           // 保留
+		{Text: "unrelated", Metadata: map[string]any{"triple": `["x","r","y"]`}},                            // 首尾过滤
+		{Text: "good", Metadata: map[string]any{"triple": `["entity1","r2","z"]`}},                          // 保留
 	}
 	r := &withEmbedRetriever{fakeBeamRetriever{retrieveFn: func(context.Context, string, int) ([]common.RetrievalResult, error) {
 		return candidates, nil
@@ -383,7 +383,7 @@ func TestTripleBeamSearch_候选已在existTriples过滤(t *testing.T) {
 	emb := &fakeBeamEmbedModel{
 		batchSize: 32,
 		batches: [][][]float64{
-			{{1, 0}, {1, 0}},   // 首轮
+			{{1, 0}, {1, 0}},     // 首轮
 			{{1, 0}, {0.5, 0.5}}, // 次轮：保原路径
 		},
 	}

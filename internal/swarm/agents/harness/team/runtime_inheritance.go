@@ -674,9 +674,9 @@ func getBoolEnv(key string) (value bool, ok bool) {
 }
 
 // teamLoadConfig 加载默认 config.yaml。
-// 对齐 Python: get_config()
+// 对齐 Python: get_config()（含 _normalize_config 后处理——2026-10-28 审查接线）
 func teamLoadConfig() (map[string]any, error) {
-	c, err := config.New("")
+	c, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
 		return nil, err
 	}

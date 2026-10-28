@@ -1485,8 +1485,9 @@ func handleChatUserAnswer() RPCHandlerFunc {
 //
 // 封装 config.New + Load 流程，失败时返回空 map 而非 error，
 // 调用方用默认值兜底。
+// 对齐 Python get_config()（含 _normalize_config——2026-10-28 审查接线）。
 func loadAppConfig() (map[string]any, error) {
-	cfg, err := config.New("")
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
 		return make(map[string]any), err
 	}
@@ -1832,14 +1833,17 @@ func sortedKeys(m map[string]string) []string {
 // 直接从配置读取 owner_scopes，不经 E2A / config_rpc。
 func handlePermissionsOwnerScopesGet() RPCHandlerFunc {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-		// Python: get_permissions_owner_scopes() — 从 config.yaml 读取
+		// Python: get_permissions_owner_scopes() — get_config()（normalize 后）
 		cfgPath := workspace.ConfigFile()
-		cfg, err := config.New(cfgPath)
+		// 2026-10-28 审查接线：改走 Load+WithNormalize，对齐 Python get_config()
+		// （此前 Raw() 为原始视图；permissions 键不受 normalize 影响，行为无差，
+		// 但统一读链入口，消除与 Python 的视图分歧）
+		cfg, err := config.New(cfgPath, config.WithNormalize(config.NormalizeConfig))
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get load config failed")
 			return nil, fmt.Errorf("读取 owner_scopes 配置失败: %w", err)
 		}
-		raw, err := cfg.Raw()
+		raw, err := cfg.Load()
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("permissions.owner_scopes.get read config failed")
 			return nil, fmt.Errorf("读取 owner_scopes 配置失败: %w", err)

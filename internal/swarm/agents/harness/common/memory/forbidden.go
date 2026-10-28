@@ -74,7 +74,8 @@ func getMemoryForbiddenConfig() *MemoryForbiddenConfig {
 // Python: _get_memory_forbidden_config() 中的 try/except 防御性编程。
 // 返回配置和可能的错误，便于调用方决定是否中断。
 func getMemoryForbiddenConfigSafe() (*MemoryForbiddenConfig, error) {
-	cfg, err := config.New("")
+	// 对齐 Python get_config()（含 _normalize_config——2026-10-28 审查接线）
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
 		// 对齐 Python: logger.warning("[forbidden] Failed to load memory forbidden config: %s", e)
 		logger.Warn(logComponent).Err(err).Msg("failed to load forbidden memory config")

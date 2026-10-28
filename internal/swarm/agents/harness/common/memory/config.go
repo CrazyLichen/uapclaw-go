@@ -326,7 +326,10 @@ func GetMemoryMode(cfg map[string]any) string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultConfigLoader 默认配置加载：读全局 config.yaml。
-// 对齐 Python _load_config（config.py L53-68）：文件不存在 warn + 空配置
+// 对齐 Python _load_config（config.py L53-68）：文件不存在 warn + 空配置。
+// 注意：Python _load_config 是独立实现（open+resolve_env_vars），
+// 不走 get_config() 的 _normalize_config 后处理——此处不加 WithNormalize，
+// 与 2026-10-28 审查的读链接线有意区分（勿误接）。
 func defaultConfigLoader() (map[string]any, error) {
 	cfg, err := config.New(pathutil.ConfigFile())
 	if err != nil {

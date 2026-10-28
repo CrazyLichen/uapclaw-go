@@ -141,8 +141,10 @@ func InferIsDefault(entries []map[string]any) []map[string]any {
 // 依赖方向说明（修正旧错误注释）：config→crypto 合法无环（crypto 仅依赖
 // exception 为叶子；真正禁止的是 config→swarm/extensions，那条会环）。
 // 解密失败保留原值（对齐 Python try/except pass）。
-// custom_headers 经 ParseCustomHeaders 手动处理
-// （NormalizeConfig 全项目尚未接线，无法依赖 Load 后处理）。
+// custom_headers 经 ParseCustomHeaders 手动处理。
+// 2026-10-28 审查已将读链接入 WithNormalize(NormalizeConfig)；此处保留
+// 手动解析是因为 GetDefaultModels 亦被无 normalize 的调用链使用（Python
+// 侧 get_default_models 同样独立于 get_config），双保险幂等无冲突。
 func decryptModelEntries(entries []map[string]any) []map[string]any {
 	result := make([]map[string]any, 0, len(entries))
 	provider := crypto.GetCryptoProvider()

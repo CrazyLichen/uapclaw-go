@@ -54,15 +54,22 @@ func NormalizeConfig(data map[string]any) {
 		}
 	}
 
-	// 3. 设置 channels.web.send_file_allowed 默认值
-	channels, ok := data["channels"].(map[string]any)
-	if ok {
-		web, ok := channels["web"].(map[string]any)
-		if ok {
-			if _, exists := web["send_file_allowed"]; !exists {
-				web["send_file_allowed"] = true
+	// 3. channels.web.send_file_allowed 缺省 true（Python L100-103）
+	// Python: if channels.get("web", {}).get("send_file_allowed") is None:
+	//             channels["web"] = {"send_file_allowed": True}
+	// 严格对齐 Python 替换语义：web 缺键或 send_file_allowed 显式 null（YAML ~）
+	// 时整个替换 channels.web（web 下其他键随之丢失，与 Python 一致）。
+	// channels 节不存在时不操作（Python .get("channels", {}) 返回脱离
+	// config 的临时 dict，修改不影响原 config）。web 为非 map 时 Python
+	// 抛 AttributeError，Go 防御性替换（吞异常路径对齐）。
+	if channels, ok := data["channels"].(map[string]any); ok {
+		needReplace := true
+		if web, ok := channels["web"].(map[string]any); ok {
+			if v, exists := web["send_file_allowed"]; exists && v != nil {
+				needReplace = false
 			}
-		} else {
+		}
+		if needReplace {
 			channels["web"] = map[string]any{"send_file_allowed": true}
 		}
 	}

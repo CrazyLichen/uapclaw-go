@@ -184,7 +184,8 @@ func LoadDreamingConfig(mode string) DreamingConfig {
 	}
 
 	// 对齐 Python: from jiuwenswarm.common.config import get_config
-	cfg, err := config.New("")
+	// （含 _normalize_config 后处理——2026-10-28 审查接线）
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
 		logger.Warn(logComponent).Str("mode", mode).Err(err).Msg("[dreaming] configuration load failed, using default values")
 		return defaultCfg

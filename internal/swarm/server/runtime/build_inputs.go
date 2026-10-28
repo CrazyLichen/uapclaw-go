@@ -28,8 +28,9 @@ import (
 // 返回: inputs 字典、memoryMode 字符串、原始 query。
 func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, string, string) {
 	// 1. 获取配置
+	// Python: config_base = get_config()（含 _normalize_config——2026-10-28 审查接线）
 	var configBase map[string]any
-	if cfg, err := config.New(""); err == nil {
+	if cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig)); err == nil {
 		if raw, err2 := cfg.Load(); err2 == nil {
 			configBase = raw
 		}

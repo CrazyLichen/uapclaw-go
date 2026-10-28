@@ -397,7 +397,9 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 
 	// 步骤 5: get_config → configBase
-	cfg, err := config.New("")
+	// 对齐 Python get_config()：Load 后过 _normalize_config（custom_headers
+	// 结构化 + channels.web.send_file_allowed 默认 true）——2026-10-28 审查接线
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
 		return fmt.Errorf("创建配置管理器失败: %w", err)
 	}
@@ -652,7 +654,8 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	// Python: if config_base is None: config_base = get_config()
 	// Python: else: config_base = resolve_env_vars(config_base) (G10)
 	if configBase == nil {
-		cfg, err := config.New("")
+		// 对齐 Python get_config()：normalize 后处理一并应用（2026-10-28 审查接线）
+		cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 		if err != nil {
 			return fmt.Errorf("创建配置管理器失败: %w", err)
 		}

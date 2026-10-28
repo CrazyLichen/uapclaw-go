@@ -370,8 +370,9 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 		// Python: except Exception → 仅 warning 不中断（吞错语义对齐）。
 		teamConfig := configPayload
 		if teamConfig == nil {
-			// 对齐 Python get_config()：加载默认 config.yaml（失败时降级空配置继续）
-			if c, cfgErr := config.New(""); cfgErr == nil {
+			// 对齐 Python get_config()：加载默认 config.yaml（失败时降级空配置继续）。
+			// 含 _normalize_config 后处理（2026-10-28 审查接线）
+			if c, cfgErr := config.New("", config.WithNormalize(config.NormalizeConfig)); cfgErr == nil {
 				if loaded, loadErr := c.Load(); loadErr == nil {
 					teamConfig = loaded
 				} else {

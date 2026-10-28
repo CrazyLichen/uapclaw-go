@@ -539,9 +539,10 @@ func (s *AgentConfigService) loadFromDir(dirPath string, source string) []*types
 
 // loadSubagentStates 从 config.yaml 的 react.subagents 读取 enabled 状态。
 // Python: list_agents() 中读取 subagent_states 的逻辑
+// （get_config 含 _normalize_config——2026-10-28 审查接线）
 func (s *AgentConfigService) loadSubagentStates() map[string]bool {
 	states := make(map[string]bool)
-	cfg, err := config.New("")
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
 		// Python: except Exception as e: logger.debug("Failed to load subagent states from config: %s", e)
 		logger.Debug(logComponent).Err(err).Msg("createconfigmanager failed")

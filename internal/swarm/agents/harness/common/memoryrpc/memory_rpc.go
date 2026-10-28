@@ -745,11 +745,10 @@ func isCodeMode(mode string) bool {
 
 // loadConfigMap 读取全局 config（不缓存，每次现读）。
 // 对齐 Python get_config()（toggle/status 每次取最新）。
-// T-08: Python get_config() = resolve_env_vars + _normalize_config（custom_headers
-// JSON 解析 + web.send_file_allowed 默认）；Go Load 已含 env 解析，未应用 normalize。
-// memoryrpc 仅消费 memory/modes 键，normalize 影响的 custom_headers/web 键无行为差异。
+// 2026-10-28 审查接线：WithNormalize(NormalizeConfig) 对齐 Python get_config()
+// 的 _normalize_config 后处理（custom_headers JSON 解析 + web.send_file_allowed 默认）。
 func loadConfigMap() map[string]any {
-	cfg, err := config.New("")
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
 		return map[string]any{}
 	}
