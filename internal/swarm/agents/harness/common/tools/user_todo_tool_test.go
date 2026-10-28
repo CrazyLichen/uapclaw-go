@@ -85,7 +85,7 @@ func TestHandleUserTodos_六action(t *testing.T) {
 	SetGlobalWorkspaceDir(dir)
 	t.Cleanup(func() { SetGlobalWorkspaceDir(".") })
 
-	// create
+	// create 创建待办
 	res, err := handleUserTodos(context.Background(), map[string]any{
 		"action": "create", "title": "meeting", "description": "standup",
 		"due_at": "2026-11-01T10:00:00Z",
@@ -111,7 +111,7 @@ func TestHandleUserTodos_六action(t *testing.T) {
 		t.Errorf("invalid due_at should give empty remind_at")
 	}
 
-	// get
+	// get 查询单条
 	res3, _ := handleUserTodos(context.Background(), map[string]any{"action": "get", "todo_id": todoID})
 	if res3["success"] != true || res3["todo"].(map[string]any)["title"] != "meeting" {
 		t.Errorf("get res=%v", res3)
@@ -137,7 +137,7 @@ func TestHandleUserTodos_六action(t *testing.T) {
 		t.Errorf("update res=%v", res4)
 	}
 
-	// list + search
+	// list + search 列表与大小写不敏感搜索
 	res5, _ := handleUserTodos(context.Background(), map[string]any{"action": "list"})
 	if res5["count"].(int) < 1 {
 		t.Errorf("list count=%v", res5["count"])
@@ -147,7 +147,7 @@ func TestHandleUserTodos_六action(t *testing.T) {
 		t.Errorf("search (case-insensitive title) count=%v, want 1", res6["count"])
 	}
 
-	// delete
+	// delete 删除待办
 	res7, _ := handleUserTodos(context.Background(), map[string]any{"action": "delete", "todo_id": todoID})
 	if res7["success"] != true {
 		t.Errorf("delete res=%v", res7)
@@ -157,7 +157,7 @@ func TestHandleUserTodos_六action(t *testing.T) {
 		t.Errorf("after delete count=%v, want 1", res8["count"])
 	}
 
-	// unknown action
+	// unknown action 未知 action 报错
 	res9, _ := handleUserTodos(context.Background(), map[string]any{"action": "bogus"})
 	if res9["error"] != "Unknown action: bogus. Valid actions: list, get, create, update, delete, search" {
 		t.Errorf("unknown action error = %v", res9["error"])

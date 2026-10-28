@@ -98,7 +98,7 @@ func (s *CliRouteFullChainSuite) SetupSuite() {
 	// 2. AgentClient（消费同一 Transport）
 	s.agentClient = routing.NewAgentClient(s.transport)
 
-	// 3. MessageHandler
+	// 3. MessageHandler 消息处理器
 	s.msgHandler = mh.NewMessageHandler(s.agentClient)
 
 	// 4. ChannelManager（注入 MessageHandler）

@@ -16,7 +16,7 @@ func TestVectorRetriever_能力接口回填(t *testing.T) {
 	assert.True(t, ok)
 	assert.Nil(t, ep.EmbedModel())
 
-	// VectorStoreAccessor
+	// VectorStoreAccessor 能力断言
 	vs, ok := r.(VectorStoreAccessor)
 	assert.True(t, ok)
 	assert.Equal(t, store, vs.VectorStore())
