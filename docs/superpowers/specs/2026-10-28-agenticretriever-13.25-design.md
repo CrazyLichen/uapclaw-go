@@ -301,7 +301,7 @@ Go 侧四码已定义零消费（codes_context.go L141-153），本节全部激�
 | # | 偏差 | 理由 |
 |---|---|---|
 | 1 | `mode==""` 等同未设回落 defaultMode | 13.19 既定偏差延续（Python 显式空串走 155200） |
-| 2 | `_read` 主抽取传原始 query 非 q | 字面复刻 Python L237 真实行为（本设计明确保留） |
+| 2 | 图路径 `_read` 主抽取传原始 query 非 q | 字面复刻 Python L237 真实行为（本设计明确保留；注意通用路径 L278 传 q——两路径 Python 源码本就不一致，各自字面复刻，实施期审查曾误统一为 query 后修正） |
 | 3 | top_k=None / isinstance(max_iter,int) 非法类型场景 | Go 强类型编译期消解 |
 | 4 | hasattr(resp,"content") / hasattr(retriever,"close")+iscoroutinefunction 双探测 | Go 接口/方法编译期消解 |
 | 5 | kwargs.pop("graph_expansion") 后底层收不到键 | Go 值传 RetrieveOptions 底层不读该字段，行为等价 |
@@ -311,6 +311,7 @@ Go 侧四码已定义零消费（codes_context.go L141-153），本节全部激�
 | 9 | pyStr 在 retriever 包私有复刻（~60 行） | extractor 包 pyStr 私有；读取侧/写入侧管线分立（13.23 pyAnyStr 先例） |
 | 10 | _assert_graph_retriever 防御断言不可达 | Go 类型系统保证仅 isGraph 分支可达；保留防御检查+155211，不可达测试归档 |
 | 11 | Python `**kwargs` 构造透传（SimpleKB/GraphKB 调用点传空） | 零额外 kwargs 透传，不加 Go 字段 |
+| 12 | rewritePrompt 常量存 format 转义后形态 | Python `.format()` 把 `{{`→`{` 发给 LLM，Go NewReplacer 无此转义——常量直接存转义后串，与 Python 发送内容逐字节一致（实施期曾丢失三占位符，从源重提取修复） |
 
 ## 9. 拍板决策记录
 
