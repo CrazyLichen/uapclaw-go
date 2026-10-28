@@ -149,7 +149,7 @@ func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMet
 //	c. code adapter 配置（parent adapter mode == "code" 时注入回调）
 //	d. build_member_rails + 白名单 AddRail + 三类 rail 注册
 //	e. 注册 TeamRailContext（leader）
-//	f. 注册 member runtime tools（cron 已随 11.10 回填；SendFile ⤵️(10.6.24)）
+//	f. 注册 member runtime tools（cron 11.10、SendFile 10.6.24b 已回填）
 //
 // 差异说明：Python L948-959 的 rail_manager 扩展 rail 循环，Go 无 get_rail_manager
 // 对应物（扩展 rail 加载机制属 10.5.7 ExtensionLoader 延后），空操作。
@@ -245,7 +245,7 @@ func (m *TeamManager) BuildAgentCustomizer(
 
 		// Python L948-959 rail_manager 扩展 rail 循环：Go 无对应机制（10.5.7 延后），空操作
 
-		// ── 步骤 f：member runtime tools（cron 已随 11.10 回填；SendFile ⤵️(10.6.24)）──
+		// ── 步骤 f：member runtime tools（cron 11.10、SendFile 10.6.24b 已回填）──
 		mgr.RegisterMemberRuntimeTools(agent, sessionID, &capturedRequestID, &resolvedChannel, capturedRequestMetadata)
 
 		return nil
