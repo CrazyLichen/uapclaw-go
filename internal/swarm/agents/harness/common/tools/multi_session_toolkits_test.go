@@ -10,11 +10,11 @@ import (
 	"time"
 
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	stream "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // fakeSessionAgent 测试用 BaseAgent——记录 Invoke 调用并返回预置结果
@@ -27,7 +27,9 @@ type fakeSessionAgent struct {
 
 var _ agentinterfaces.BaseAgent = (*fakeSessionAgent)(nil)
 
-func (f *fakeSessionAgent) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error { return nil }
+func (f *fakeSessionAgent) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
+	return nil
+}
 func (f *fakeSessionAgent) Invoke(ctx context.Context, inputs map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
 	f.mu.Lock()
 	f.invocations = append(f.invocations, inputs)

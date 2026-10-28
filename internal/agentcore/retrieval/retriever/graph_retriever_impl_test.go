@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	chromav2 "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	milvuscol "github.com/milvus-io/milvus/client/v2/column"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
-	chromav2 "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"google.golang.org/grpc"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"

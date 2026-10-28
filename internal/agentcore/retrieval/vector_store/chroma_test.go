@@ -160,8 +160,8 @@ func TestChromaVectorStore_无选项走真实连接(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, vs)
-	assert.NotNil(t, vs.Client())     // 真实嵌入式客户端
-	assert.NotNil(t, vs.collection)   // 构造期 GetOrCreateCollection 完成
+	assert.NotNil(t, vs.Client())   // 真实嵌入式客户端
+	assert.NotNil(t, vs.collection) // 构造期 GetOrCreateCollection 完成
 }
 
 // TestChromaVectorStore_ConstructConfig 测试构建配置含 space
