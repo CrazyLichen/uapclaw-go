@@ -8,9 +8,19 @@ package retriever
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+
+	jsonrepair "github.com/RealAlexandreAI/json-repair"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -220,14 +230,52 @@ func (a *AgenticRetriever) IsGraphRetriever() bool { return a.isGraph }
 // DefaultMode 返回默认检索模式（对齐 Python property default_mode）。
 func (a *AgenticRetriever) DefaultMode() RetrievalMode { return a.defaultMode }
 
-// Retrieve 多跳检索主链（Task 3 实现；Python retrieve L173-194）。
+// Retrieve 多跳检索主链。
+//
+// 对齐 Python retrieve（L173-194）：top_k 非正整数 → 155210（None 场景
+// 编译期消解，偏差 §8-3）；mode 零值回落 defaultMode（13.19 偏差延续）；
+// 图/通用路径分派。
 func (a *AgenticRetriever) Retrieve(ctx context.Context, query string, topK int, scoreThreshold *float64, mode RetrievalMode, opts ...RetrieveOption) ([]common.RetrievalResult, error) {
-	return nil, nil // TODO(Task3): 155210 校验 + mode 回落 + 图/通用分派
+	if topK <= 0 {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalRetrieverTopKInvalid,
+			exception.WithParam("error_msg", "top_k is invalid, must be a positive integer"),
+		)
+	}
+	resolvedMode := mode
+	if mode == "" {
+		resolvedMode = a.defaultMode
+	}
+	if a.isGraph {
+		return a.retrieveWithGraph(ctx, query, topK, scoreThreshold, resolvedMode, opts...)
+	}
+	return a.retrieveGeneric(ctx, query, topK, scoreThreshold, resolvedMode, opts...)
 }
 
-// BatchRetrieve 批量并发检索（Task 3 实现；Python batch_retrieve L530-537）。
+// BatchRetrieve 批量并发检索。
+//
+// 对齐 Python batch_retrieve（L530-537）：裸 gather 全启动。Go 裸
+// errgroup（不派生 ctx 不 cancel——13.19/13.23 先例，WithContext 会在
+// 首错时取消兄弟协程，偏离 Python gather 语义）。Python 只透传 top_k
+// 不透传 score_threshold/mode，Go 接口签名天然不含，1:1。
 func (a *AgenticRetriever) BatchRetrieve(ctx context.Context, queries []string, topK int, opts ...RetrieveOption) ([][]common.RetrievalResult, error) {
-	return nil, nil // TODO(Task3): 裸 errgroup
+	results := make([][]common.RetrievalResult, len(queries))
+	var gg errgroup.Group
+	for i, query := range queries {
+		i, query := i, query
+		gg.Go(func() error {
+			ret, err := a.Retrieve(ctx, query, topK, nil, "", opts...)
+			if err != nil {
+				return err
+			}
+			results[i] = ret
+			return nil
+		})
+	}
+	if err := gg.Wait(); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // RetrieveSearchResults 返回 nil（Python 未覆写，继承基类空方法 None；
@@ -240,4 +288,299 @@ func (a *AgenticRetriever) RetrieveSearchResults(context.Context, string, int, R
 // Go 接口编译期消解，偏差归档 spec §8-4）。
 func (a *AgenticRetriever) Close() {
 	a.retriever.Close()
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// retrieveWithGraph 图路径（Task 4 实现；Python _retrieve_with_graph L196-251）。
+func (a *AgenticRetriever) retrieveWithGraph(ctx context.Context, query string, topK int, scoreThreshold *float64, mode RetrievalMode, opts ...RetrieveOption) ([]common.RetrievalResult, error) {
+	return nil, nil // TODO(Task4): 图扩展 + 三元组链接 + linkPassages
+}
+
+// retrieveGeneric 通用路径：迭代查询改写 + RRF 融合。
+//
+// 对齐 Python _retrieve_generic（L253-296）：每轮底层 retrieve → _read
+// 抽三元组入 TripleMemory → _rewrite 判充分性（空=break）；融合
+// history_results 截 top_k。参考：Millions of GeAR-s（arXiv:2507.17399）。
+func (a *AgenticRetriever) retrieveGeneric(ctx context.Context, query string, topK int, scoreThreshold *float64, mode RetrievalMode, opts ...RetrieveOption) ([]common.RetrievalResult, error) {
+	queries := []string{query}
+	var historyResults [][]common.RetrievalResult
+	memory := common.NewTripleMemory()
+
+	for turn := 1; turn <= a.maxIter; turn++ {
+		q := queries[len(queries)-1]
+
+		chunkResults, err := a.retriever.Retrieve(ctx, q, topK, scoreThreshold, mode, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		triples := a.read(ctx, query, chunkResults, memory.Memory())
+		memory.BatchExtendMemory(triples)
+		historyResults = append(historyResults, chunkResults)
+
+		if turn >= a.maxIter {
+			break
+		}
+
+		rewritten := a.rewrite(ctx, query, memory.TriplesStr(), queries)
+		if rewritten == "" {
+			break
+		}
+		queries = append(queries, rewritten)
+	}
+
+	fused := utils.RRFFusion(historyResults, 60)
+	if len(fused) > topK {
+		fused = fused[:topK]
+	}
+	return fused, nil
+}
+
+// llmCall 单次 LLM 调用（软失败）。
+//
+// 对齐 Python _llm_call_async（L298-316）：Invoke 失败 Warn 返回 None
+// （Go (空串, false)）；resp.content 的 hasattr 分支编译期消解
+// （偏差 §8-4），Go AssistantMessage.Content.Text()。
+func (a *AgenticRetriever) llmCall(ctx context.Context, prompt string) (string, bool) {
+	resp, err := a.llm.Invoke(ctx,
+		model_clients.NewMessagesParam(llmschema.NewUserMessage(prompt)),
+		model_clients.WithInvokeTemperature(0.0))
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("Agentic LLM invocation failed")
+		return "", false
+	}
+	if resp == nil {
+		return "", false
+	}
+	return resp.Content.Text(), true
+}
+
+// read 读步骤：从 passages 抽知识三元组（软失败 → 空切片）。
+//
+// 对齐 Python _read（L374-413）：docs 跳过空文本截前 5 + "\n\n" join；
+// facts 串 Python tuple repr（('s', 'p', 'o')）逗号空格 join，空兜底
+// "None"（[3]string 零值不过滤——Python 非空 tuple 恒 True，偏差 §8-8）；
+// jsonrepair 根非 list Warn；逐项非 list/长度≠3 丢弃；pyStr 逐元素。
+func (a *AgenticRetriever) read(ctx context.Context, query string, passages []common.RetrievalResult, existingFacts []common.TripleFact) []common.TripleFact {
+	var docParts []string
+	for i, p := range passages {
+		if i >= 5 {
+			break
+		}
+		if p.Text != "" {
+			docParts = append(docParts, p.Text)
+		}
+	}
+	docs := strings.Join(docParts, "\n\n")
+	factsStr := "None"
+	if len(existingFacts) > 0 {
+		parts := make([]string, 0, len(existingFacts))
+		for _, fact := range existingFacts {
+			parts = append(parts, pyTupleRepr(fact))
+		}
+		factsStr = strings.Join(parts, ", ")
+	}
+	prompt := strings.NewReplacer(
+		"{docs}", docs,
+		"{query}", query,
+		"{facts}", factsStr,
+	).Replace(readPrompt)
+
+	content, ok := a.llmCall(ctx, prompt)
+	if !ok {
+		return nil
+	}
+
+	result, err := jsonrepair.RepairWithOptions(content, jsonrepair.RepairOptions{})
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("Failed to parse read response as JSON")
+		return nil
+	}
+	arr, isList := result.Value.([]any)
+	if !isList {
+		logger.Warn(logComponent).Any("response", result.Value).Msg("Read response JSON is not a list")
+		return nil
+	}
+	var triples []common.TripleFact
+	for _, item := range arr {
+		triple, isTriple := item.([]any)
+		if !isTriple || len(triple) != 3 {
+			continue
+		}
+		var fact common.TripleFact
+		for j, elem := range triple {
+			fact[j] = pyStr(elem)
+		}
+		triples = append(triples, fact)
+	}
+	return triples
+}
+
+// rewrite 改写步骤：判充分性，不足则生成下一问（软失败 → 空串=break）。
+//
+// 对齐 Python _rewrite（L326-372）：历史行 "Rewritten Question {i}: {q}"
+// 逐行 join（history[1:] 起），单元素历史兜底 "(No rewriting steps yet)"；
+// jsonrepair 根非 dict Warn；sufficient 缺省 False；next_question 非空
+// 才返回。类型收窄偏差 §8-6：next_question 必须 string，非 string 视为
+// falsy → 空串（Python 病态输入会进循环，Go 强类型收窄）。
+func (a *AgenticRetriever) rewrite(ctx context.Context, query, triplesStr string, questionHistory []string) string {
+	historyStr := "(No rewriting steps yet)"
+	if len(questionHistory) > 1 {
+		lines := make([]string, 0, len(questionHistory)-1)
+		for i, q := range questionHistory[1:] {
+			lines = append(lines, fmt.Sprintf("Rewritten Question %d: %s", i+1, q))
+		}
+		historyStr = strings.Join(lines, "\n")
+	}
+	prompt := strings.NewReplacer(
+		"{query}", query,
+		"{triples}", triplesStr,
+		"{question_rewriting_history}", historyStr,
+	).Replace(rewritePrompt)
+
+	content, ok := a.llmCall(ctx, prompt)
+	if !ok {
+		return ""
+	}
+
+	result, err := jsonrepair.RepairWithOptions(content, jsonrepair.RepairOptions{})
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("Failed to parse rewrite response as JSON")
+		return ""
+	}
+	obj, isDict := result.Value.(map[string]any)
+	if !isDict {
+		logger.Warn(logComponent).Any("response", result.Value).Msg("Rewrite response JSON is not an object")
+		return ""
+	}
+	sufficient := pyTruthy(obj["sufficient"])
+	nextQuestion, _ := obj["next_question"].(string)
+	if sufficient || nextQuestion == "" {
+		return ""
+	}
+	return nextQuestion
+}
+
+// pyTupleRepr Python tuple repr：('s', 'p', 'o')——单引号+逗号空格。
+// str(fact) 进 facts 串（提示词注入），字面复刻 Python repr 形态。
+func pyTupleRepr(f common.TripleFact) string {
+	quoted := make([]string, 3)
+	for i, s := range f {
+		quoted[i] = "'" + s + "'"
+	}
+	return "(" + strings.Join(quoted, ", ") + ")"
+}
+
+// pyTruthy Python truthy 判定（sufficient 字段：response_json.get
+// ("sufficient", False)）——缺失 nil falsy；bool 直判；数值非零 truthy；
+// 其余容器非空 truthy 由 fmt 兜底（Go 只可能收到 JSON 标量）。
+func pyTruthy(v any) bool {
+	switch val := v.(type) {
+	case nil:
+		return false
+	case bool:
+		return val
+	case float64:
+		return val != 0
+	case json.Number:
+		f, err := val.Float64()
+		return err == nil && f != 0
+	case string:
+		return val != ""
+	default:
+		return true
+	}
+}
+
+// tripleFactStr 三元组转检索串（" ".join(map(str, triple))——TripleFact
+// 元素已是 string，直接空格 join）。
+func tripleFactStr(triple common.TripleFact) string {
+	return strings.Join(triple[:], " ")
+}
+
+// pyStr 标量转 Python str() 形态（读取侧复刻，偏差 §8-9）。
+//
+// 13.17 extractor 包 pyStr 同源语义（私有复刻，不动 extractor 公开面——
+// 读取侧/写入侧管线分立，13.23 pyAnyStr 先例）：
+//   - nil → "None"；bool → "True"/"False"；string 原样
+//   - json.Number（合法 JSON 短路路径）：整数字面原样，浮点走 pyFloatStr
+//   - float64（深修复路径小数）：pyFloatStr；int/int64：十进制
+func pyStr(v any) string {
+	switch val := v.(type) {
+	case nil:
+		return "None"
+	case string:
+		return val
+	case bool:
+		if val {
+			return "True"
+		}
+		return "False"
+	case json.Number:
+		s := val.String()
+		if _, err := strconv.Atoi(s); err == nil {
+			return s
+		}
+		if isPureIntegerLiteral(s) {
+			return s
+		}
+		if f, err := val.Float64(); err == nil {
+			return pyFloatStr(f)
+		}
+		return s
+	case float64:
+		return pyFloatStr(val)
+	case int:
+		return strconv.Itoa(val)
+	case int64:
+		return strconv.FormatInt(val, 10)
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+// pyFloatStr 还原 Python str(float) 记法（13.17 pyFloatStr 同源复刻）。
+// abs ∈ [1e-4, 1e16) 用 f 记法（整数值补 ".0"），其余 e 记法；
+// nan/inf 特殊字面。
+func pyFloatStr(f float64) string {
+	if math.IsNaN(f) {
+		return "nan"
+	}
+	if math.IsInf(f, 1) {
+		return "inf"
+	}
+	if math.IsInf(f, -1) {
+		return "-inf"
+	}
+	abs := math.Abs(f)
+	if abs == 0 || (abs >= 1e-4 && abs < 1e16) {
+		s := strconv.FormatFloat(f, 'f', -1, 64)
+		if !strings.Contains(s, ".") {
+			s += ".0"
+		}
+		return s
+	}
+	return strconv.FormatFloat(f, 'e', -1, 64)
+}
+
+// isPureIntegerLiteral 判纯整数字面量：可选符号 + 全数字（无小数点/指数）。
+// 13.17 同源复刻：Atoi 溢出的超界整数字面原样透传（Python int 无界）。
+func isPureIntegerLiteral(s string) bool {
+	if s == "" {
+		return false
+	}
+	body := s
+	if body[0] == '+' || body[0] == '-' {
+		body = body[1:]
+	}
+	if body == "" {
+		return false
+	}
+	for _, r := range body {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }

@@ -3,6 +3,7 @@ package retriever
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -203,4 +204,191 @@ func TestNewAgenticRetriever_默认模式三态(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, tc.want, r.DefaultMode(), "indexType=%q", tc.indexType)
 	}
+}
+
+// ──────────────────────────── 通用路径测试 ────────────────────────────
+
+// newGenericRetriever 通用路径测试脚手架：固定单结果 chunk 桩 + 可分派 LLM。
+func newGenericRetriever(t *testing.T, llm *agenticLLMDispatch) *AgenticRetriever {
+	t.Helper()
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return []common.RetrievalResult{{Text: "Result 1", Score: 0.9}}, nil
+		},
+	}
+	r, err := NewAgenticRetriever(fr, llm)
+	require.NoError(t, err)
+	return r
+}
+
+// TestRetrieve_通用路径单轮 对齐 test_retrieve_generic_single_iteration。
+func TestRetrieve_通用路径单轮(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r := newGenericRetriever(t, llm)
+	results, err := r.Retrieve(context.Background(), "original query", 5, nil, "")
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+}
+
+// TestRetrieve_通用路径多轮 对齐 test_retrieve_generic_multiple_iterations
+// （max_iter=3，chunk 桩 calls==3 断言）。
+func TestRetrieve_通用路径多轮(t *testing.T) {
+	rewriteCount := 0
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) {
+			rewriteCount++
+			return fmt.Sprintf(`{"sufficient": false, "next_question": "rewritten query %d"}`, rewriteCount), nil
+		},
+	}
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return []common.RetrievalResult{{Text: "Result 1", Score: 0.9}}, nil
+		},
+	}
+	r, err := NewAgenticRetriever(fr, llm, WithAgenticMaxIter(3))
+	require.NoError(t, err)
+	results, err := r.Retrieve(context.Background(), "original query", 5, nil, "")
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, 3, fr.calls)
+}
+
+// TestRetrieve_通用路径到顶 对齐 test_retrieve_generic_max_iterations
+// （默认 max_iter=2 到顶退出）。
+func TestRetrieve_通用路径到顶(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) {
+			return `{"sufficient": false, "next_question": "rewritten query 1"}`, nil
+		},
+	}
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return []common.RetrievalResult{{Text: "Result 1", Score: 0.9}}, nil
+		},
+	}
+	r, err := NewAgenticRetriever(fr, llm)
+	require.NoError(t, err)
+	results, err := r.Retrieve(context.Background(), "original query", 5, nil, "")
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, 2, fr.calls)
+}
+
+// TestRetrieve_融合多结果 对齐 test_retrieve_fusion_multiple_results
+// （两轮不同 text → RRF 融合 2 条）。
+func TestRetrieve_融合多结果(t *testing.T) {
+	callIdx := 0
+	var mu sync.Mutex
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(_ context.Context, _ string, _ int, _ *float64, _ RetrievalMode) ([]common.RetrievalResult, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			callIdx++
+			if callIdx == 1 {
+				return []common.RetrievalResult{{Text: "Result 1", Score: 0.9}}, nil
+			}
+			return []common.RetrievalResult{{Text: "Result 2", Score: 0.8}}, nil
+		},
+	}
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) {
+			return `{"sufficient": false, "next_question": "rewritten query"}`, nil
+		},
+	}
+	r, err := NewAgenticRetriever(fr, llm, WithAgenticMaxIter(2))
+	require.NoError(t, err)
+	results, err := r.Retrieve(context.Background(), "test query", 5, nil, "")
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(results), 1)
+	// RRF text 去重：两轮两个不同 text → 2 条
+	assert.Len(t, results, 2)
+}
+
+// TestRetrieve_topK无效 对齐 test_retrieve_without_valid_top_k +
+// _negative（Python None 场景 Go 编译期消解，spec §8-3）。
+func TestRetrieve_topK无效(t *testing.T) {
+	r := newGenericRetriever(t, &agenticLLMDispatch{})
+	for _, topK := range []int{0, -1} {
+		_, err := r.Retrieve(context.Background(), "test query", topK, nil, "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "top_k is invalid, must be a positive integer")
+	}
+}
+
+// TestRetrieve_模式透传 对齐 test_retrieve_with_custom_mode
+// （桩 lastMode/lastTopK 断言，Python call_kwargs 对应物）。
+func TestRetrieve_模式透传(t *testing.T) {
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return []common.RetrievalResult{{Text: "Result 1", Score: 0.9}}, nil
+		},
+	}
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r, err := NewAgenticRetriever(fr, llm)
+	require.NoError(t, err)
+	_, err = r.Retrieve(context.Background(), "test query", 5, nil, RetrievalModeVector)
+	require.NoError(t, err)
+	fr.mu.Lock()
+	assert.Equal(t, RetrievalModeVector, fr.lastMode)
+	assert.Equal(t, 5, fr.lastTopK)
+	fr.mu.Unlock()
+}
+
+// TestRetrieve_阈值透传 对齐 test_retrieve_with_score_threshold。
+func TestRetrieve_阈值透传(t *testing.T) {
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return []common.RetrievalResult{{Text: "Result 1", Score: 0.9}}, nil
+		},
+	}
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r, err := NewAgenticRetriever(fr, llm)
+	require.NoError(t, err)
+	threshold := 0.8
+	_, err = r.Retrieve(context.Background(), "test query", 5, &threshold, "")
+	require.NoError(t, err)
+	fr.mu.Lock()
+	require.NotNil(t, fr.lastThreshold)
+	assert.Equal(t, 0.8, *fr.lastThreshold)
+	fr.mu.Unlock()
+}
+
+// TestBatchRetrieve 对齐 test_batch_retrieve（双 query 各自走完循环，
+// LLM 按 prompt 内容分派与调度序解耦——13.17 假失败教训）。
+func TestBatchRetrieve(t *testing.T) {
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return []common.RetrievalResult{{Text: "Result 1", Score: 0.9}}, nil
+		},
+	}
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r, err := NewAgenticRetriever(fr, llm)
+	require.NoError(t, err)
+	resultsList, err := r.BatchRetrieve(context.Background(), []string{"query 1", "query 2"}, 5)
+	require.NoError(t, err)
+	assert.Len(t, resultsList, 2)
+	assert.Len(t, resultsList[0], 1)
+	assert.Len(t, resultsList[1], 1)
 }
