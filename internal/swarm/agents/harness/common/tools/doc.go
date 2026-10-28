@@ -7,6 +7,7 @@
 // Python 为函数体 lazy import 单例，Go 编译期成环改 agent_server 启动接线）、
 // acp_output 六工具（10.6.24d：AcpOutputManager 单例 + fs/terminal 输出请求，
 // 经 E2A server_push 推 IDE、acp.tool_response 回流完成）、
+// acp_chat 子包（10.6.24d：外部 ACP 子代理聊天，profile 缓存 + new_session 重启）、
 // MultiSessionToolkit 并行子代理（agent.fast，10.6.24c：session_new/cancel/list
 // goroutine 并发 + chat.session_result 推送 + sync.Once 汇总 chat.final，
 // push/agentProvider 经包级注入函数）与 user_todos 用户待办（code 模式，
@@ -24,6 +25,7 @@
 //	├── web_file_download.go      # WebFileDownloadManager——HMAC 下载令牌+三级密钥（10.6.24b）
 //	├── send_file.go              # SendFileToolkit——chat.file 事件+双注入（10.6.24b）
 //	├── acp_output_tools.go       # AcpOutputManager+六 ACP 输出工具（10.6.24d）
+//	├── acp_chat/                 # acp_chat 子包——外部 ACP 子代理聊天（10.6.24d）
 //	├── multi_session_toolkits.go # MultiSessionToolkit——session_new/cancel/list（10.6.24c）
 //	├── user_todo_tool.go         # user_todos——按 channel 隔离用户待办（10.6.24c）
 //	├── mcp_toolkits.go           # GetMcpTools 聚合器
