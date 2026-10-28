@@ -395,3 +395,175 @@ func TestRewrite_尾逗号JSON修复(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "x", result["standalone_query"])
 }
+
+// longConversation Python LONG_CONVERSATION 六轮语料。
+var longConversation = [][2]string{
+	{"你们这个淘美乐 App 是干什么的？", "淘美乐是一款综合购物与生活服务的 App。"},
+	{"怎么注册和登录？", "使用手机号验证码或第三方账号登录。"},
+	{"我想买点日用品，从哪里进？", "首页有「日百」等入口。"},
+	{"搜索出来的结果太多，怎么筛选？", "搜索结果页有「筛选」按钮。"},
+	{"下单后多久能送到？", "一般 1～3 天送达。"},
+	{"可以修改订单吗？", "待发货状态下可以修改或取消。"},
+}
+
+// TestRewrite_完整对话流 6 轮 × compressRange=5（Python test_full_conversation_with_compress_and_rewrite）。
+// 轮次推演：turn2=4<5 不压缩；turn4=8>=5 压缩→1 条；turn5 加 2=3 条；turn6=5>=5 再压缩→1 条。
+// 最终 rewriteCnt=3（Python 精确断言）、compressCnt=2（Python 宽松 >=0，此处补精确值）。
+func TestRewrite_完整对话流(t *testing.T) {
+	fmc := &fakeModelContext{}
+	stub := &stubQRClient{
+		compressResp: makeCompressResponse(),
+		rewriteResp:  makeFullRewriteResponse("占位"),
+	}
+	qr := newQRTestRewriter(t, stub, fmc, WithCompressRange(5))
+
+	rewriteAfterTurns := map[int]string{2: "那运费呢？", 4: "会员怎么升级？", 6: "生鲜能退吗？"}
+	for turnIdx, turn := range longConversation {
+		_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+			llmschema.NewUserMessage(turn[0]), llmschema.NewAssistantMessage(turn[1]),
+		})
+		// Python L636: n >= 1 and n <= turn_idx * 2
+		n := fmc.Len()
+		assert.GreaterOrEqual(t, n, 1)
+		assert.LessOrEqual(t, n, (turnIdx+1)*2)
+
+		if q, ok := rewriteAfterTurns[turnIdx+1]; ok {
+			// Python L640: current_query_for_mock 先设置再 rewrite
+			stub.mu.Lock()
+			stub.rewriteResp = makeFullRewriteResponse(q)
+			stub.mu.Unlock()
+			result, err := qr.Rewrite(context.Background(), q)
+			assert.NoError(t, err)
+			assert.Contains(t, result, "standalone_query")
+			assert.Equal(t, q, result["standalone_query"])
+		}
+	}
+	// Python L653-654: rewrite 精确、compress 宽松
+	assert.Equal(t, 3, stub.rewriteCnt)
+	assert.GreaterOrEqual(t, stub.compressCnt, 0)
+	assert.Equal(t, 2, stub.compressCnt) // Go 增强：精确值（轮次推演 turn4/turn6 两次触发）
+}
+
+// TestLoadTemplate_并发竞态 Go 增强：并发加载同模板不炸不脏。
+func TestLoadTemplate_并发竞态(t *testing.T) {
+	qr := newQRTestRewriter(t, &stubQRClient{}, &fakeModelContext{})
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			content, err := qr.LoadTemplate("compression")
+			assert.NoError(t, err)
+			assert.True(t, len(content) > 0)
+		}()
+	}
+	wg.Wait()
+}
+
+// TestNewQueryRewriter_配置透传 custom_headers 经 Extra（Python test_init_passes_only_custom_headers）
+func TestNewQueryRewriter_配置透传(t *testing.T) {
+	mi := llmschema.NewBaseModelInfo("https://mock.test",
+		llmschema.WithAPIKey("test-key"),
+		llmschema.WithModelNameForInfo("gpt-4"),
+		llmschema.WithTimeoutForInfo(60),
+		llmschema.WithInfoExtra(map[string]any{
+			"custom_headers": map[string]string{"X-Tenant": "tenant-a"},
+			"verify_ssl":     false,
+		}),
+	)
+	qr, err := NewQueryRewriter(llmschema.NewModelConfig("OpenAI", *mi), &fakeModelContext{}, WithCompressRange(5))
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]string{"X-Tenant": "tenant-a"}, qr.llm.ClientConfig.CustomHeaders)
+}
+
+// TestNewQueryRewriter_verifySSL无证书强制关闭 Go 增强：Extra 边界。
+func TestNewQueryRewriter_verifySSL无证书强制关闭(t *testing.T) {
+	mi := llmschema.NewBaseModelInfo("https://mock.test",
+		llmschema.WithAPIKey("test-key"),
+		llmschema.WithModelNameForInfo("gpt-4"),
+		llmschema.WithInfoExtra(map[string]any{"verify_ssl": true}), // 无 ssl_cert
+	)
+	qr, err := NewQueryRewriter(llmschema.NewModelConfig("OpenAI", *mi), &fakeModelContext{})
+	assert.NoError(t, err)
+	assert.False(t, qr.llm.ClientConfig.VerifySSL)
+}
+
+// TestNewQueryRewriter_verifySSL关闭有证书透传 Go 增强：Extra 边界（spec §6.3）。
+func TestNewQueryRewriter_verifySSL关闭有证书透传(t *testing.T) {
+	mi := llmschema.NewBaseModelInfo("https://mock.test",
+		llmschema.WithAPIKey("test-key"),
+		llmschema.WithModelNameForInfo("gpt-4"),
+		llmschema.WithInfoExtra(map[string]any{"verify_ssl": false, "ssl_cert": "/tmp/ca.pem"}),
+	)
+	qr, err := NewQueryRewriter(llmschema.NewModelConfig("OpenAI", *mi), &fakeModelContext{})
+	assert.NoError(t, err)
+	assert.False(t, qr.llm.ClientConfig.VerifySSL)
+	assert.Equal(t, "/tmp/ca.pem", qr.llm.ClientConfig.SSLCert)
+}
+
+// TestNewQueryRewriter_非法provider Go 增强：错误透传。
+func TestNewQueryRewriter_非法provider(t *testing.T) {
+	mi := llmschema.NewBaseModelInfo("https://mock.test",
+		llmschema.WithAPIKey("test-key"),
+		llmschema.WithModelNameForInfo("gpt-4"),
+	)
+	_, err := NewQueryRewriter(llmschema.NewModelConfig("NotAProvider", *mi), &fakeModelContext{})
+	assert.Error(t, err)
+}
+
+// TestNewQueryRewriter_注入通道 Go 增强：WithModelClientOption 跳过内部构造。
+func TestNewQueryRewriter_注入通道(t *testing.T) {
+	clientCfg, err := llmschema.NewModelClientConfig("openai", "test-key", "https://mock.test", llmschema.WithVerifySSL(false))
+	assert.NoError(t, err)
+	model, err := llm.NewModel(clientCfg, llmschema.NewModelRequestConfig(), llm.WithClient(&stubQRClient{}))
+	assert.NoError(t, err)
+	// 非法 cfg（provider 错误）本应报错，但注入通道跳过构造 → 不报错
+	mi := llmschema.NewBaseModelInfo("https://mock.test", llmschema.WithAPIKey("k"), llmschema.WithModelNameForInfo("m"))
+	qr, err := NewQueryRewriter(llmschema.NewModelConfig("NotAProvider", *mi), &fakeModelContext{}, WithModelClientOption(model))
+	assert.NoError(t, err)
+	assert.Equal(t, model, qr.llm)
+}
+
+// TestRewrite_英文模板 Go 增强：prompt_lang=en 路由。
+func TestRewrite_英文模板(t *testing.T) {
+	fmc := &fakeModelContext{}
+	_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+		llmschema.NewUserMessage("hello"), llmschema.NewAssistantMessage("hi!"),
+	})
+	qr := newQRTestRewriter(t, &stubQRClient{rewriteResp: makeFullRewriteResponse("test")}, fmc,
+		WithPromptLang("en"), WithCompressRange(5))
+	result, err := qr.Rewrite(context.Background(), "test")
+	assert.NoError(t, err)
+	assert.Equal(t, "test", result["standalone_query"])
+}
+
+// TestCompress_触发压缩写回上下文 Go 增强：compressed_history 消息形态。
+func TestCompress_触发压缩写回上下文(t *testing.T) {
+	fmc := &fakeModelContext{}
+	for i := 0; i < 3; i++ {
+		_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+			llmschema.NewUserMessage(fmt.Sprintf("q%d", i)), llmschema.NewAssistantMessage(fmt.Sprintf("a%d", i)),
+		})
+	}
+	stub := &stubQRClient{compressResp: makeCompressResponse(), rewriteResp: makeFullRewriteResponse("x")}
+	qr := newQRTestRewriter(t, stub, fmc, WithCompressRange(5))
+	_, err := qr.Rewrite(context.Background(), "x")
+	assert.NoError(t, err)
+	msgs, _ := fmc.GetMessages(0, true)
+	assert.Len(t, msgs, 1)
+	assert.Equal(t, "system", msgs[0].GetRole().String())
+	assert.Equal(t, "compressed_history", msgs[0].GetName())
+	assert.Contains(t, msgs[0].GetContent().Text(), `"theme"`)
+}
+
+// TestMsg2Text_多模态content Go 增强：Parts JSON 序列化路径（Python list/dict content）。
+func TestMsg2Text_多模态content(t *testing.T) {
+	qr := newQRTestRewriter(t, &stubQRClient{}, &fakeModelContext{})
+	// 构造带 Parts 的消息（parts 非 nil 即非 IsText）
+	msg := llmschema.NewUserMessage("")
+	msg.SetContent(llmschema.NewMultiModalContent(llmschema.ContentPart{Type: "text", Text: "图片描述"}))
+	text, err := qr.Msg2Text([]llmschema.BaseMessage{msg})
+	assert.NoError(t, err)
+	assert.Contains(t, text, "user: ")
+	assert.Contains(t, text, "图片描述")
+}
