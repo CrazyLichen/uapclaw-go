@@ -27,6 +27,9 @@ type HybridRetriever struct {
 	embedModel embedding.BaseEmbedding
 	// alpha hybrid 权重（0=纯稀疏，1=纯向量，0.5=平衡），构造默认 0.5
 	alpha float64
+	// indexType 索引类型（"" = Python None；上层 GraphRetriever 注入，
+	// 13.23 回填）
+	indexType string
 }
 
 // HybridRetrieverOption HybridRetriever 的构造选项。
@@ -264,3 +267,15 @@ func (r *HybridRetriever) Close() {
 		r.vectorStore.Close()
 	}
 }
+
+// EmbedModel 返回嵌入模型（能力接口回填，13.23；nil = Python None）。
+func (r *HybridRetriever) EmbedModel() embedding.BaseEmbedding { return r.embedModel }
+
+// VectorStore 返回底层向量存储（能力接口回填，13.23）。
+func (r *HybridRetriever) VectorStore() vector_store.VectorStore { return r.vectorStore }
+
+// IndexType 返回索引类型（"" = Python None，能力接口回填 13.23）。
+func (r *HybridRetriever) IndexType() string { return r.indexType }
+
+// SetIndexType 注入索引类型（上层 GraphRetriever 动态创建后回写，13.23）。
+func (r *HybridRetriever) SetIndexType(indexType string) { r.indexType = indexType }

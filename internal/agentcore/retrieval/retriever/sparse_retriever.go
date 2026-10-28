@@ -19,6 +19,10 @@ import (
 type SparseRetriever struct {
 	// vectorStore 底层向量存储（需支持稀疏搜索）
 	vectorStore vector_store.VectorStore
+	// indexType 索引类型（"" = Python None；上层注入，13.23 回填）。
+	// 无 embedModel 字段——Python SparseRetriever 无 embed_model 属性，
+	// hasattr False 同构（EmbedModelProvider 断言失败）
+	indexType string
 }
 
 // 编译期断言：SparseRetriever 满足 Retriever 接口。
@@ -113,3 +117,12 @@ func (r *SparseRetriever) Close() {
 		r.vectorStore.Close()
 	}
 }
+
+// VectorStore 返回底层向量存储（能力接口回填，13.23）。
+func (r *SparseRetriever) VectorStore() vector_store.VectorStore { return r.vectorStore }
+
+// IndexType 返回索引类型（"" = Python None，能力接口回填 13.23）。
+func (r *SparseRetriever) IndexType() string { return r.indexType }
+
+// SetIndexType 注入索引类型（上层注入通道，13.23）。
+func (r *SparseRetriever) SetIndexType(indexType string) { r.indexType = indexType }

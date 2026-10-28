@@ -23,6 +23,9 @@ type VectorRetriever struct {
 	// embedModel 嵌入模型（nil = Python None；向量检索必需，
 	// 缺失时 retrieve 报 155202）
 	embedModel embedding.BaseEmbedding
+	// indexType 索引类型（"" = Python None；上层 GraphRetriever/GraphKB
+	// 注入，13.23 回填）
+	indexType string
 }
 
 // 编译期断言：VectorRetriever 满足 Retriever 接口。
@@ -165,6 +168,18 @@ func (r *VectorRetriever) Close() {
 		r.vectorStore.Close()
 	}
 }
+
+// EmbedModel 返回嵌入模型（能力接口回填，13.23；nil = Python None）。
+func (r *VectorRetriever) EmbedModel() embedding.BaseEmbedding { return r.embedModel }
+
+// VectorStore 返回底层向量存储（能力接口回填，13.23）。
+func (r *VectorRetriever) VectorStore() vector_store.VectorStore { return r.vectorStore }
+
+// IndexType 返回索引类型（"" = Python None，能力接口回填 13.23）。
+func (r *VectorRetriever) IndexType() string { return r.indexType }
+
+// SetIndexType 注入索引类型（上层 GraphRetriever 动态创建后回写，13.23）。
+func (r *VectorRetriever) SetIndexType(indexType string) { r.indexType = indexType }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
