@@ -598,6 +598,13 @@ func (s *GatewayServer) probeWritable(ws *websocket.Conn) bool {
 //
 // Python: send_response（L332-356）——发送失败仅 Debug。
 func (s *GatewayServer) sendResponse(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string) {
+	writeResponseFrame(ws, reqID, ok, payload, errMsg, code)
+}
+
+// writeResponseFrame 构造并写入 res 帧（包级，供 tui 本地 handler 复用）。
+//
+// 零行为变更：帧构造与写入逻辑自 sendResponse 提取（11.15 最小装配）。
+func writeResponseFrame(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string) {
 	if payload == nil {
 		payload = map[string]any{}
 	}
