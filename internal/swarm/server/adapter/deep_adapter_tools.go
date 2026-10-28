@@ -13,6 +13,7 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 )
 
@@ -692,20 +693,25 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	}
 
 	// ── 步骤 10: acp_chat ──
-	// Python:
-	//   Python: acp_cfg = get_config().get("acp_agents")
-	//   Python: if isinstance(acp_cfg, dict) and acp_cfg:
-	//       Python: if not Runner.resource_mgr.get_tool(acp_chat.card.id):
-	//           Python: Runner.resource_mgr.add_tool(acp_chat)
-	//       Python: tool_cards.append(acp_chat.card)
-	// ⤵️ 10.6.24: acp_chat 工具尚未实现
-	// 待实现：ACP配置检查 acpCfg, _ := configBase["acp_agents"].(map[string]any)
-	// 如果存在 ACP 配置
-	//     if rm.GetTool([]string{acpChat.Card().ID}) == nil {
-	//         _ = rm.AddTool(acpChat)
-	//     }
-	//     toolCards = append(toolCards, acpChat.Card())
-	// }
+	// Python: acp_cfg = get_config().get("acp_agents")
+	// Python: if isinstance(acp_cfg, dict) and acp_cfg:
+	//     Python: if not Runner.resource_mgr.get_tool(acp_chat.card.id):
+	//         Python: Runner.resource_mgr.add_tool(acp_chat)
+	//     Python: tool_cards.append(acp_chat.card)
+	// ⤴️ 10.6.24d 回填点①：acp_agents 配置检查 + 注册 + append
+	if acpCfg, ok := d.configBase["acp_agents"].(map[string]any); ok && len(acpCfg) > 0 {
+		acpChat := acpchat.NewAcpChatTool(d.configBase)
+		for _, at := range acpChat.GetTools() {
+			if existing, gerr := runner.GetResourceMgr().GetTool([]string{at.Card().ID}); gerr != nil || len(existing) == 0 {
+				if aerr := runner.GetResourceMgr().AddTool(at); aerr != nil {
+					logger.Warn(logComponent).Err(aerr).Str("tool", "acp_chat").
+						Msg("Failed to register tool to ResourceMgr")
+					continue
+				}
+			}
+			toolCards = append(toolCards, at.Card())
+		}
+	}
 
 	// 优先付费搜索
 	toolCards = d.prioritizePaidSearchToolCard(toolCards)

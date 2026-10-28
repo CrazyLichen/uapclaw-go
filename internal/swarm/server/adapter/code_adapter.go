@@ -35,6 +35,7 @@ import (
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
@@ -860,8 +861,21 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 				logger.Info(logComponent).Msg("CodeAdapter: SkillToolkit registered")
 			}
 		case "acp_chat":
-			// ⤵️ 10.6.24: acp_chat 工具尚未实现
-			logger.Debug(logComponent).Str("tool", toolName).Msg("acp_chat tool not implemented, skipping")
+			// Python: _build_acp_chat_tool（L1037-1043）——getToolCards 步骤 10 同构
+			// ⤴️ 10.6.24d 回填点②：acp_agents 非空时注册（空时 Python 返回 None → 跳过）
+			if acpCfg, ok := c.deep.configBase["acp_agents"].(map[string]any); ok && len(acpCfg) > 0 {
+				acpChat := acpchat.NewAcpChatTool(c.deep.configBase)
+				for _, at := range acpChat.GetTools() {
+					if existing, gerr := runner.GetResourceMgr().GetTool([]string{at.Card().ID}); gerr != nil || len(existing) == 0 {
+						if aerr := runner.GetResourceMgr().AddTool(at); aerr != nil {
+							logger.Warn(logComponent).Err(aerr).Str("tool", "acp_chat").
+								Msg("Failed to register tool to ResourceMgr")
+							continue
+						}
+					}
+					toolCards = append(toolCards, at.Card())
+				}
+			}
 		default:
 			logger.Warn(logComponent).Str("tool", toolName).Msg("Unknown code mode tool name, skipping")
 		}
