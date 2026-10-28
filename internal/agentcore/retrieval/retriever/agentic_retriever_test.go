@@ -392,3 +392,196 @@ func TestBatchRetrieve(t *testing.T) {
 	assert.Len(t, resultsList[0], 1)
 	assert.Len(t, resultsList[1], 1)
 }
+
+// ──────────────────────────── 图路径测试 ────────────────────────────
+
+// newGraphSetup 图路径脚手架：真 GraphRetriever + 双桩（chunk/triple）+ LLM。
+//
+// 链路可控性（spec §6.1/Q6 拍板）：GetRetrieverForMode 固定优先返回桩；
+// GraphExpansion 真方法在「proximal 空 → linked 空 → fetchTriples 空 →
+// 返回原 chunks」路径行为确定（beam search 深路径归 13.23 的 48 测试，
+// 13.25 只测外壳编排）。
+func newGraphSetup(t *testing.T, llm *agenticLLMDispatch) (*AgenticRetriever, *agenticFakeRetriever, *agenticFakeRetriever) {
+	t.Helper()
+	chunk := &agenticFakeRetriever{
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return []common.RetrievalResult{{Text: "Result 1", Score: 0.9}}, nil
+		},
+		rsrFn: func(context.Context, string, int, RetrievalMode) ([]common.SearchResult, error) {
+			return nil, nil
+		},
+	}
+	triple := &agenticFakeRetriever{
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return nil, nil
+		},
+		rsrFn: func(context.Context, string, int, RetrievalMode) ([]common.SearchResult, error) {
+			return nil, nil
+		},
+	}
+	gr := NewGraphRetriever(
+		WithGraphChunkRetriever(chunk),
+		WithGraphTripleRetriever(triple),
+	)
+	r, err := NewAgenticRetriever(gr, llm)
+	require.NoError(t, err)
+	return r, chunk, triple
+}
+
+// TestRetrieve_图路径单轮 对齐 test_retrieve_with_graph_single_iteration。
+func TestRetrieve_图路径单轮(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r, _, _ := newGraphSetup(t, llm)
+	results, err := r.Retrieve(context.Background(), "original query", 5, nil, "")
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(results), 1)
+}
+
+// TestRetrieve_图路径多轮 对齐 test_retrieve_with_graph_multiple_iterations
+// （chunk 桩 calls==2 断言，Python mock_chunk_retriever.retrieve.call_count）。
+func TestRetrieve_图路径多轮(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) {
+			return `{"sufficient": false, "next_question": "rewritten query 1"}`, nil
+		},
+	}
+	r, chunk, _ := newGraphSetup(t, llm)
+	results, err := r.Retrieve(context.Background(), "original query", 5, nil, "")
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(results), 1)
+	chunk.mu.Lock()
+	assert.Equal(t, 2, chunk.calls)
+	chunk.mu.Unlock()
+}
+
+// TestRetrieve_图路径graphExpansion开关 Go 增强 7：nil（默认 true）/
+// 显式 false 两路。true 时 proximal _read 非空 → _linkTriples 走 rsr；
+// false 时跳过整段 → triple 桩 rsrCalls==0。
+func TestRetrieve_图路径graphExpansion开关(t *testing.T) {
+	tripleOut := `[["Neville A. Stanton", "employer", "University of Southampton"]]`
+	for _, tc := range []struct {
+		name      string
+		expansion *bool
+		wantRsr   int
+	}{
+		{"未设默认true", nil, 1},
+		{"显式false", func() *bool { b := false; return &b }(), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			readCount := 0
+			llm := &agenticLLMDispatch{
+				readFn: func(string) (string, error) {
+					readCount++
+					if readCount == 1 {
+						return tripleOut, nil // proximal read
+					}
+					return "[]", nil // 主 read
+				},
+				rewriteFn: func(string) (string, error) {
+					return `{"sufficient": true, "next_question": null}`, nil
+				},
+			}
+			r, _, triple := newGraphSetup(t, llm)
+			var opts []RetrieveOption
+			if tc.expansion != nil {
+				opts = append(opts, WithRetrieveGraphExpansion(*tc.expansion))
+			}
+			_, err := r.Retrieve(context.Background(), "original query", 5, nil, "", opts...)
+			require.NoError(t, err)
+			triple.mu.Lock()
+			assert.Equal(t, tc.wantRsr, triple.rsrCalls)
+			triple.mu.Unlock()
+		})
+	}
+}
+
+// TestClose 对齐 test_close 三态（Go 接口编译期消解，1 例断言委托）。
+func TestClose(t *testing.T) {
+	fr := &agenticFakeRetriever{}
+	r, err := NewAgenticRetriever(fr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	r.Close()
+	fr.mu.Lock()
+	assert.Equal(t, 1, fr.closed)
+	fr.mu.Unlock()
+}
+
+// TestLinkTriples_部分失败聚合 Go 增强 5：rsr 桩混排 error/空列表/正常
+// （同 ID 去重 + metadata 映射 doc_id/chunk_id + 非 string 收窄空串）。
+func TestLinkTriples_部分失败聚合(t *testing.T) {
+	idx := 0
+	var mu sync.Mutex
+	triple := &agenticFakeRetriever{
+		rsrFn: func(context.Context, string, int, RetrievalMode) ([]common.SearchResult, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			idx++
+			switch idx {
+			case 1:
+				return nil, errors.New("boom")
+			case 2:
+				return []common.SearchResult{}, nil
+			default:
+				return []common.SearchResult{
+					{ID: "t1", Text: "(a b c)", Score: 0.9, Metadata: map[string]any{"doc_id": "d1", "chunk_id": "c1"}},
+					{ID: "t1", Text: "(a b c) dup", Score: 0.8}, // 同 ID 去重
+				}, nil
+			}
+		},
+	}
+	gr := NewGraphRetriever(WithGraphTripleRetriever(triple))
+	r, err := NewAgenticRetriever(gr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	results, err := r.linkTriples(context.Background(), []common.TripleFact{{"a", "b", "c"}, {"x", "y", "z"}, {"p", "q", "r"}}, RetrievalModeHybrid)
+	require.NoError(t, err)
+	assert.Len(t, results, 1) // 3 输入：1 失败 + 1 空 + 1 成功（同 ID 去重后 1 条）
+	assert.Equal(t, "d1", results[0].DocID)
+	assert.Equal(t, "c1", results[0].ChunkID)
+}
+
+// TestLinkTriples_非string元数据收窄 Go 增强：doc_id 非 string → 空串
+// （偏差 §8-7）。
+func TestLinkTriples_非string元数据收窄(t *testing.T) {
+	triple := &agenticFakeRetriever{
+		rsrFn: func(context.Context, string, int, RetrievalMode) ([]common.SearchResult, error) {
+			return []common.SearchResult{
+				{ID: "t1", Text: "(a b c)", Score: 0.9, Metadata: map[string]any{"doc_id": 42}},
+			}, nil
+		},
+	}
+	gr := NewGraphRetriever(WithGraphTripleRetriever(triple))
+	r, err := NewAgenticRetriever(gr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	results, err := r.linkTriples(context.Background(), []common.TripleFact{{"a", "b", "c"}}, RetrievalModeHybrid)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "", results[0].DocID) // 非 string 收窄空串
+}
+
+// TestLinkPassages_失败聚合 Go 增强 6：Retrieve 桩混排 error/正常。
+func TestLinkPassages_失败聚合(t *testing.T) {
+	idx := 0
+	var mu sync.Mutex
+	chunk := &agenticFakeRetriever{
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			idx++
+			if idx == 1 {
+				return nil, errors.New("boom")
+			}
+			return []common.RetrievalResult{{Text: "passage", Score: 0.5}}, nil
+		},
+	}
+	gr := NewGraphRetriever(WithGraphChunkRetriever(chunk))
+	r, err := NewAgenticRetriever(gr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	results, err := r.linkPassages(context.Background(), []common.TripleFact{{"a", "b", "c"}, {"x", "y", "z"}}, RetrievalModeHybrid)
+	require.NoError(t, err)
+	assert.Len(t, results, 1) // 1 失败 + 1 成功
+	assert.Equal(t, "passage", results[0][0].Text)
+}

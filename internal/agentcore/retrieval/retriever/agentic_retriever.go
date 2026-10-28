@@ -13,6 +13,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	jsonrepair "github.com/RealAlexandreAI/json-repair"
 	"golang.org/x/sync/errgroup"
@@ -134,11 +135,11 @@ Response:
 Now, please carefully consider the following case:
 
 Question History:
-Original Question: 
-
+Original Question: {query}
+{question_rewriting_history}
 
 Knowledge triples:
-
+{triples}
 
 Response (JSON only, no additional text):
 `
@@ -292,9 +293,229 @@ func (a *AgenticRetriever) Close() {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// retrieveWithGraph 图路径（Task 4 实现；Python _retrieve_with_graph L196-251）。
+// retrieveWithGraph 图路径：图扩展 + 三元组链接 + 多轮融合。
+//
+// 对齐 Python _retrieve_with_graph（L196-251）：graph_expansion 默认
+// true（kwargs.pop）；proximal _read 传当前轮 q、主 _read 传原始 query
+// （Python L237 字面行为，偏差 §8-2）；末轮后 _linkPassages 把 memory
+// 三元组链回 passages；RRF 输入 ret 在前 + history 在后（拼接序字面）。
 func (a *AgenticRetriever) retrieveWithGraph(ctx context.Context, query string, topK int, scoreThreshold *float64, mode RetrievalMode, opts ...RetrieveOption) ([]common.RetrievalResult, error) {
-	return nil, nil // TODO(Task4): 图扩展 + 三元组链接 + linkPassages
+	if err := a.assertGraphRetriever(); err != nil {
+		return nil, err
+	}
+	options := NewRetrieveOptions(opts...)
+	graphExpansion := true
+	if options.GraphExpansion != nil {
+		graphExpansion = *options.GraphExpansion
+	}
+
+	graphRetriever := a.retriever.(*GraphRetriever)
+	queries := []string{query}
+	var historyResults [][]common.RetrievalResult
+	memory := common.NewTripleMemory()
+
+	for turn := 1; turn <= a.maxIter; turn++ {
+		q := queries[len(queries)-1]
+
+		chunkRetriever, err := graphRetriever.GetRetrieverForMode(mode, true)
+		if err != nil {
+			return nil, err
+		}
+		chunkResults, err := chunkRetriever.Retrieve(ctx, q, topK, scoreThreshold, mode, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		if graphExpansion {
+			proximalTriples := a.read(ctx, q, chunkResults, nil)
+			linkedTriples, err := a.linkTriples(ctx, proximalTriples, mode, opts...)
+			if err != nil {
+				return nil, err
+			}
+			chunkResults, err = graphRetriever.GraphExpansion(ctx, q, chunkResults, linkedTriples, &topK, mode, opts...)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		triples := a.read(ctx, query, chunkResults, memory.Memory())
+		memory.BatchExtendMemory(triples)
+		historyResults = append(historyResults, chunkResults)
+
+		if turn >= a.maxIter {
+			break
+		}
+
+		rewritten := a.rewrite(ctx, query, memory.TriplesStr(), queries)
+		if rewritten == "" {
+			break
+		}
+		queries = append(queries, rewritten)
+	}
+
+	ret, err := a.linkPassages(ctx, memory.Memory(), mode, opts...)
+	if err != nil {
+		return nil, err
+	}
+	fusionInput := append(ret, historyResults...)
+	fused := utils.RRFFusion(fusionInput, 60)
+	if len(fused) > topK {
+		fused = fused[:topK]
+	}
+	return fused, nil
+}
+
+// assertGraphRetriever 防御断言。
+//
+// 对齐 Python _assert_graph_retriever（L318-324）：非 GraphRetriever 调
+// 图路径方法 → 155211。Go 类型系统保证仅 isGraph 分支可达（偏差 §8-10，
+// 保留防御检查）。
+func (a *AgenticRetriever) assertGraphRetriever() error {
+	if _, ok := a.retriever.(*GraphRetriever); !ok {
+		return exception.BuildError(
+			exception.StatusRetrievalRetrieverInvalid,
+			exception.WithParam("error_msg", "Underlying retriever must be a GraphRetriever to link passages"),
+		)
+	}
+	return nil
+}
+
+// linkTriples 邻近三元组链接到 KB 三元组。
+//
+// 对齐 Python _link_triples（L415-479）：每 triple 一个
+// retrieve_search_results（top_k=1）裸 gather（return_exceptions=True
+// 全跑完语义，13.17 方案 A 无信号量版）；三分类聚合（error→failed 计数/
+// 空列表→failed+Warn 类型日志/非空→取 [0]）；Deduplicate 按 ID 键；
+// 映射 RetrievalResult（doc_id/chunk_id 非 string 收窄空串，偏差 §8-7；
+// metadata nil 防御对齐 or {}）。
+func (a *AgenticRetriever) linkTriples(ctx context.Context, triples []common.TripleFact, mode RetrievalMode, opts ...RetrieveOption) ([]common.RetrievalResult, error) {
+	if err := a.assertGraphRetriever(); err != nil {
+		return nil, err
+	}
+	graphRetriever := a.retriever.(*GraphRetriever)
+	tripleRetriever, err := graphRetriever.GetRetrieverForMode(mode, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// 预分配槽位 + WaitGroup：各 goroutine 写各的槽（gather 全跑完语义）
+	searchResults := make([][]common.SearchResult, len(triples))
+	failedFlags := make([]bool, len(triples))
+	var wg sync.WaitGroup
+	for i, triple := range triples {
+		i, triple := i, triple
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results, err := tripleRetriever.RetrieveSearchResults(ctx, tripleFactStr(triple), 1, mode, opts...)
+			if err != nil {
+				failedFlags[i] = true
+				return
+			}
+			if len(results) == 0 {
+				logger.Warn(logComponent).
+					Str("type", fmt.Sprintf("%T", results)).
+					Msg("Empty or unexpected result type during link triples")
+				failedFlags[i] = true
+				return
+			}
+			searchResults[i] = results
+		}()
+	}
+	wg.Wait()
+
+	var allTriples []common.SearchResult
+	failed := 0
+	for i := range triples {
+		if failedFlags[i] {
+			failed++
+			continue
+		}
+		allTriples = append(allTriples, searchResults[i][0])
+	}
+	if failed > 0 {
+		logger.Warn(logComponent).
+			Int("failed", failed).
+			Int("total", len(triples)).
+			Msg("Triple linking failed for triples")
+	}
+
+	deduped := utils.Deduplicate(allTriples, func(r common.SearchResult) string { return r.ID })
+	retrievalResults := make([]common.RetrievalResult, 0, len(deduped))
+	for _, result := range deduped {
+		metadata := result.Metadata
+		if metadata == nil {
+			metadata = map[string]any{}
+		}
+		docID, _ := metadata["doc_id"].(string)
+		chunkID, _ := metadata["chunk_id"].(string)
+		retrievalResults = append(retrievalResults, common.RetrievalResult{
+			Text:     result.Text,
+			Score:    result.Score,
+			Metadata: metadata,
+			DocID:    docID,
+			ChunkID:  chunkID,
+		})
+	}
+	return retrievalResults, nil
+}
+
+// linkPassages memory 三元组链接回 passages。
+//
+// 对齐 Python _link_passages（L481-528）：每 triple 一个 Retrieve
+// （top_k=5）裸 gather 三分类聚合；成功项整列表保留（不取 [0]）；
+// 返回 [][]RetrievalResult。
+func (a *AgenticRetriever) linkPassages(ctx context.Context, triples []common.TripleFact, mode RetrievalMode, opts ...RetrieveOption) ([][]common.RetrievalResult, error) {
+	if err := a.assertGraphRetriever(); err != nil {
+		return nil, err
+	}
+	graphRetriever := a.retriever.(*GraphRetriever)
+	chunkRetriever, err := graphRetriever.GetRetrieverForMode(mode, true)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([][]common.RetrievalResult, len(triples))
+	failedFlags := make([]bool, len(triples))
+	var wg sync.WaitGroup
+	for i, triple := range triples {
+		i, triple := i, triple
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ret, err := chunkRetriever.Retrieve(ctx, tripleFactStr(triple), 5, nil, mode, opts...)
+			if err != nil {
+				failedFlags[i] = true
+				return
+			}
+			if len(ret) == 0 {
+				logger.Warn(logComponent).
+					Str("type", fmt.Sprintf("%T", ret)).
+					Msg("Empty or unexpected result type during link passages")
+				failedFlags[i] = true
+				return
+			}
+			results[i] = ret
+		}()
+	}
+	wg.Wait()
+
+	var out [][]common.RetrievalResult
+	failed := 0
+	for i := range triples {
+		if failedFlags[i] {
+			failed++
+			continue
+		}
+		out = append(out, results[i])
+	}
+	if failed > 0 {
+		logger.Warn(logComponent).
+			Int("failed", failed).
+			Int("total", len(triples)).
+			Msg("Link passages failed for triples")
+	}
+	return out, nil
 }
 
 // retrieveGeneric 通用路径：迭代查询改写 + RRF 融合。
