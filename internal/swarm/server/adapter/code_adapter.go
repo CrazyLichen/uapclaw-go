@@ -658,8 +658,9 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	c.deep.updateToolsForMode(ctx, config)
 	// Python: await self._update_session_tools(runtime_config.session_id, runtime_config.request_id, channel_id=runtime_config.channel_id)
 	c.deep.updateSessionTools(ctx, config)
-	// ⤵️ _refresh_acp_runtime_tools（10.6.24d）
-	// Python: self._refresh_acp_runtime_tools(runtime_config.session_id, ...)
+	// ⤴️ _refresh_acp_runtime_tools（10.6.24d 回填点③，code 侧）
+	// Python: self._refresh_acp_runtime_tools(runtime_config.session_id, ...) (interface_code.py L905)
+	c.deep.refreshAcpRuntimeTools(config)
 
 	// user_todos channel per-request sync（Python L913-927）
 	// workspace 设置 + 注册（channel 经 ctx 读取，偏差#5；Python ImportError 静默 →

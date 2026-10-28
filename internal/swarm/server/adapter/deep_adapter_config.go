@@ -149,6 +149,10 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 	// Python: await self._update_session_tools(session_id, request_id, channel_id) (L3165)
 	d.updateSessionTools(ctx, config)
 
+	// 步骤 7.6: ACP 运行时工具刷新（10.6.24d 回填点③）
+	// Python: self._refresh_acp_runtime_tools(session_id, request_id, channel_id, request_metadata) (L3170)
+	d.refreshAcpRuntimeTools(config)
+
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).
 		Str("language", resolvedLanguage).

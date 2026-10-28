@@ -28,6 +28,7 @@
 //	├── team_helpers.go           # Team 模式运行时辅助函数（10.3.8）：常量/全局状态/纯函数/事件判断/审批/broadcast/元数据同步/slash 回调
 //	├── deep_adapter_dreaming.go  # DreamingController 接口实现（⤵️）
 //	├── deep_adapter_config.go    # RuntimeConfig + Profile/Prompt/Subagent + createSysOperation
+//	├── deep_adapter_acp.go       # ACP 运行时工具刷新（10.6.24d：能力装卸+快照日志）
 //	├── evolution/                # Evolution 事件分类/状态提取/推送辅助（10.3.9）
 //	│   ├── doc.go                # 包文档
 //	│   └── helpers.go            # 3 结构体 + 常量/变量 + ~22 导出函数
