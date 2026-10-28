@@ -10,6 +10,7 @@ import (
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
@@ -126,6 +127,18 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	// Go 编译期成环（swarmtools→server），等价机制为启动接线（与上行 cronbridge 四行对称）
 	swarmtools.SetSendFilePushFunc(s.SendPush)
 	swarmtools.SetSendFileHistoryFunc(session.AppendHistoryRecord)
+
+	// 10.6.24c 已回填：注入 MultiSession push/agentProvider 双函数到 swarmtools
+	// Python 为 notify 内 AgentWebSocketServer.get_instance() 单例直取——
+	// Go 编译期成环（swarmtools→server），等价机制为启动接线（与上行 24b 对称）
+	swarmtools.SetSessionPushFunc(s.SendPush)
+	swarmtools.SetSessionAgentProvider(func() agentinterfaces.BaseAgent {
+		u := s.AgentManager().GetAgentNoWait("", "", "", "")
+		if u == nil {
+			return nil
+		}
+		return u.GetInstance()
+	})
 
 	ctx, s.cancel = context.WithCancel(ctx)
 	go s.run(ctx)
