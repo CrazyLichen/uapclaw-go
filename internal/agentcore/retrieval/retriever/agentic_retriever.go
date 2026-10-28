@@ -522,7 +522,10 @@ func (a *AgenticRetriever) linkPassages(ctx context.Context, triples []common.Tr
 //
 // 对齐 Python _retrieve_generic（L253-296）：每轮底层 retrieve → _read
 // 抽三元组入 TripleMemory → _rewrite 判充分性（空=break）；融合
-// history_results 截 top_k。参考：Millions of GeAR-s（arXiv:2507.17399）。
+// history_results 截 top_k。注意：主 _read 传当前轮 q（Python L278
+// `self._read(q, ...)` 字面如此——与图路径 L237 传原始 query 在 Python
+// 源码中本就不一致，各自字面复刻）。参考：Millions of GeAR-s
+// （arXiv:2507.17399）。
 func (a *AgenticRetriever) retrieveGeneric(ctx context.Context, query string, topK int, scoreThreshold *float64, mode RetrievalMode, opts ...RetrieveOption) ([]common.RetrievalResult, error) {
 	queries := []string{query}
 	var historyResults [][]common.RetrievalResult
@@ -536,7 +539,7 @@ func (a *AgenticRetriever) retrieveGeneric(ctx context.Context, query string, to
 			return nil, err
 		}
 
-		triples := a.read(ctx, query, chunkResults, memory.Memory())
+		triples := a.read(ctx, q, chunkResults, memory.Memory())
 		memory.BatchExtendMemory(triples)
 		historyResults = append(historyResults, chunkResults)
 
