@@ -814,6 +814,25 @@ func TestUpdateSendFileTools_已注册复用(t *testing.T) {
 	}
 }
 
+// TestUpdateSendFileTools_cron块降级不阻断send_file cron 注册降级路径（rcc 未绑定）
+// 不得连带跳过 send_file 块——Python 两块平级（cron 块 try/except 仅降级自身），
+// Go 侧 2026-10-28 推送后复审 P1 修复：cron 块抽为独立方法、return 仅退出自身。
+func TestUpdateSendFileTools_cron块降级不阻断send_file(t *testing.T) {
+	d := newSendFileTestAdapter(t, map[string]any{
+		"web": map[string]any{"send_file_allowed": true},
+	})
+	// ctx 未绑定 RuntimeCronContext（模拟 rcc==nil 降级路径）
+	// —— Python _build_cron_tools 依赖 contextvar 默认值仍可构造，
+	//    Go 侧 rcc==nil 时 cron 块整体跳过，但 send_file 块必须继续执行。
+	d.updateSessionTools(t.Context(), &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
+	if d.sendFileToolkit == nil {
+		t.Fatal("cron 块降级（rcc 未绑定）时 send_file 分支仍应执行（Python 平级语义）")
+	}
+	if n := countSendFileAbilities(d); n != 1 {
+		t.Errorf("应注册 1 张 send_file 卡, got %d", n)
+	}
+}
+
 // TestUpdateSendFileTools_heartbeat会话 守卫收窄回归：cron 跳过但 send_file 仍执行。
 // Python L2974 守卫仅包 cron 块（10.6.24b 对齐性修正，spec 偏差 #1）。
 // 注意：heartbeat_s1 前缀 → resolvePromptChannel → "heartbeat" 渠道，

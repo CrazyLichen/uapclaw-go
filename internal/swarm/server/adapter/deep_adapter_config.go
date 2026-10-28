@@ -458,69 +458,79 @@ func (d *DeepAdapter) resolveRuntimeLanguage() string {
 
 // updateSessionTools 注册 cron 和 send_file 工具（与 mode 无关，每次请求刷新）。
 // Python: _update_session_tools (interface_deep.py L2966-3021)。
-// heartbeat/cron 前缀守卫仅包住 cron 块（对齐 Python L2974）；
-// send_file 分支对所有会话执行（10.6.24b 对齐性修正，spec 偏差 #1）。
+// 两块平级：Python cron 块整体 try/except 仅降级自身，异常/空工具均不阻断
+// send_file 块执行（2026-10-28 推送后复审 P1 修复：cron 块抽为独立方法，
+// 内部 return 仅退出自身，精确复刻 Python 平级语义）。
 func (d *DeepAdapter) updateSessionTools(ctx context.Context, config *runtimeConfig) {
 	if config == nil {
 		return
 	}
 	// ── cron 块（守卫仅包此处，Python L2974）──
-	// Python: if not (session_id.startswith("heartbeat") or session_id.startswith("cron"))
-	if !strings.HasPrefix(config.SessionID, "heartbeat") && !strings.HasPrefix(config.SessionID, "cron") {
-		// Python L2974: cron_tools = self._build_cron_tools()
-		// context 实参是 _runtime_cron_tool_context（ContextVar 代理）；
-		// Go 对应从 ctx values 读绑定值组装 CronToolContext。
-		rcc := cronbridge.FromRuntimeCronContext(ctx)
-		if rcc == nil {
-			return
-		}
-		// Python L2516: agent_id = self._instance.card.id if self._instance else None
-		agentID := ""
-		if d.instance != nil && d.instance.Card() != nil {
-			agentID = d.instance.Card().ID
-		}
-		cronCtx := &agentcron.CronToolContext{
-			ChannelID: rcc.ChannelID,
-			SessionID: rcc.SessionID,
-			Metadata:  rcc.Metadata,
-			Mode:      rcc.Mode,
-		}
-		// Python L539-541: tool_scope=f"runtime_{id(self):x}"（构造时一次性）。
-		// Go 对齐：runtime_{指针十六进制}，adapter 实例生命周期内稳定。
-		cronCtx.ToolScopeOverride = fmt.Sprintf("runtime_%x", uintptr(unsafe.Pointer(d)))
-		tools := d.cronRuntime.BuildTools(cronCtx, agentID, d.resolveRuntimeLanguage())
-		if len(tools) == 0 {
-			return
-		}
-		logger.Info(logComponent).
-			Int("count", len(tools)).
-			Msg("[DeepAdapter] Registering cron tools")
-		// Python: 注册块整体 try/except——instance 未初始化时 ability_manager 访问
-		// 抛 AttributeError → error 日志降级。Go 用显式 nil 守卫对齐该降级语义。
-		if d.instance == nil {
-			logger.Error(logComponent).
-				Msg("[DeepAdapter] instance not initialized, cron tools registration skipped")
-			return
-		}
-		resourceMgr := runner.GetResourceMgr()
-		for _, cronTool := range tools {
-			// Python L2979: if not Runner.resource_mgr.get_tool(cron_tool.card.id)
-			card := cronTool.Card()
-			if existing, gerr := resourceMgr.GetTool([]string{card.ID}); gerr != nil || len(existing) == 0 {
-				if aerr := resourceMgr.AddTool(cronTool); aerr != nil {
-					logger.Error(logComponent).
-						Err(aerr).
-						Str("tool_id", card.ID).
-						Msg("[DeepAdapter] cron tool registration failed")
-					continue
-				}
-			}
-			d.instance.AbilityManager().Add(card)
-		}
-		logger.Info(logComponent).Msg("[DeepAdapter] Cron tools registered successfully")
-	}
+	d.registerSessionCronTools(ctx, config)
 	// ── send_file 块（对齐 Python L2989-3021）──
 	d.updateSendFileTools(ctx, config)
+}
+
+// registerSessionCronTools 会话级 cron 工具注册（updateSessionTools 的 cron 块）。
+// Python: interface_deep.py L2974-2987 try 块。heartbeat/cron 前缀守卫；
+// 降级路径（rcc 未绑定/构建空工具/instance 未初始化）return 仅退出本方法，
+// 不阻断调用方的 send_file 块。
+func (d *DeepAdapter) registerSessionCronTools(ctx context.Context, config *runtimeConfig) {
+	// Python: if not (session_id.startswith("heartbeat") or session_id.startswith("cron"))
+	if strings.HasPrefix(config.SessionID, "heartbeat") || strings.HasPrefix(config.SessionID, "cron") {
+		return
+	}
+	// Python L2974: cron_tools = self._build_cron_tools()
+	// context 实参是 _runtime_cron_tool_context（ContextVar 代理）；
+	// Go 对应从 ctx values 读绑定值组装 CronToolContext。
+	rcc := cronbridge.FromRuntimeCronContext(ctx)
+	if rcc == nil {
+		return
+	}
+	// Python L2516: agent_id = self._instance.card.id if self._instance else None
+	agentID := ""
+	if d.instance != nil && d.instance.Card() != nil {
+		agentID = d.instance.Card().ID
+	}
+	cronCtx := &agentcron.CronToolContext{
+		ChannelID: rcc.ChannelID,
+		SessionID: rcc.SessionID,
+		Metadata:  rcc.Metadata,
+		Mode:      rcc.Mode,
+	}
+	// Python L539-541: tool_scope=f"runtime_{id(self):x}"（构造时一次性）。
+	// Go 对齐：runtime_{指针十六进制}，adapter 实例生命周期内稳定。
+	cronCtx.ToolScopeOverride = fmt.Sprintf("runtime_%x", uintptr(unsafe.Pointer(d)))
+	tools := d.cronRuntime.BuildTools(cronCtx, agentID, d.resolveRuntimeLanguage())
+	if len(tools) == 0 {
+		return
+	}
+	logger.Info(logComponent).
+		Int("count", len(tools)).
+		Msg("[DeepAdapter] Registering cron tools")
+	// Python: 注册块整体 try/except——instance 未初始化时 ability_manager 访问
+	// 抛 AttributeError → error 日志降级。Go 用显式 nil 守卫对齐该降级语义。
+	if d.instance == nil {
+		logger.Error(logComponent).
+			Msg("[DeepAdapter] instance not initialized, cron tools registration skipped")
+		return
+	}
+	resourceMgr := runner.GetResourceMgr()
+	for _, cronTool := range tools {
+		// Python L2979: if not Runner.resource_mgr.get_tool(cron_tool.card.id)
+		card := cronTool.Card()
+		if existing, gerr := resourceMgr.GetTool([]string{card.ID}); gerr != nil || len(existing) == 0 {
+			if aerr := resourceMgr.AddTool(cronTool); aerr != nil {
+				logger.Error(logComponent).
+					Err(aerr).
+					Str("tool_id", card.ID).
+					Msg("[DeepAdapter] cron tool registration failed")
+				continue
+			}
+		}
+		d.instance.AbilityManager().Add(card)
+	}
+	logger.Info(logComponent).Msg("[DeepAdapter] Cron tools registered successfully")
 }
 
 // updateSendFileTools send_file 工具注册/刷新（每次请求）。

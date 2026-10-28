@@ -278,48 +278,6 @@ func HandleRebuildAgentData(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "rebuild_stub"})
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// safeFilePath 将用户提供的相对路径转为绝对路径，并验证不超出工作区目录。
-//
-// 路径穿越防护：拒绝包含 ".." 的路径，确保结果路径在工作区内。
-func safeFilePath(userPath string) (string, error) {
-	// 拒绝明显的路径穿越
-	if strings.Contains(userPath, "..") {
-		return "", fmt.Errorf("路径不允许包含 '..': %s", userPath)
-	}
-
-	// 基于工作区目录解析绝对路径
-	workspaceDir := workspace.AgentWorkspaceDir()
-	absPath := filepath.Join(workspaceDir, userPath)
-
-	// 清理路径并验证仍在工作区内
-	cleanPath := filepath.Clean(absPath)
-	cleanWorkspace := filepath.Clean(workspaceDir)
-
-	if !strings.HasPrefix(cleanPath, cleanWorkspace) {
-		return "", fmt.Errorf("路径超出工作区范围: %s", userPath)
-	}
-
-	return cleanPath, nil
-}
-
-// writeJSON 写入 JSON 响应。
-func writeJSON(w http.ResponseWriter, statusCode int, data any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		logger.Error(logComponent).
-			Err(err).
-			Msg("failed to encode response as JSON")
-	}
-}
-
-// writeJSONError 写入 JSON 错误响应。
-func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
-	writeJSON(w, statusCode, map[string]any{"error": message})
-}
-
 // HandleFileDownload 处理 GET/HEAD /file-api/download 请求。
 //
 // HMAC 令牌验签 + 过期检查 + 流式返回。不做工作区沙箱检查——
@@ -392,6 +350,48 @@ func HandleFileDownload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// safeFilePath 将用户提供的相对路径转为绝对路径，并验证不超出工作区目录。
+//
+// 路径穿越防护：拒绝包含 ".." 的路径，确保结果路径在工作区内。
+func safeFilePath(userPath string) (string, error) {
+	// 拒绝明显的路径穿越
+	if strings.Contains(userPath, "..") {
+		return "", fmt.Errorf("路径不允许包含 '..': %s", userPath)
+	}
+
+	// 基于工作区目录解析绝对路径
+	workspaceDir := workspace.AgentWorkspaceDir()
+	absPath := filepath.Join(workspaceDir, userPath)
+
+	// 清理路径并验证仍在工作区内
+	cleanPath := filepath.Clean(absPath)
+	cleanWorkspace := filepath.Clean(workspaceDir)
+
+	if !strings.HasPrefix(cleanPath, cleanWorkspace) {
+		return "", fmt.Errorf("路径超出工作区范围: %s", userPath)
+	}
+
+	return cleanPath, nil
+}
+
+// writeJSON 写入 JSON 响应。
+func writeJSON(w http.ResponseWriter, statusCode int, data any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Msg("failed to encode response as JSON")
+	}
+}
+
+// writeJSONError 写入 JSON 错误响应。
+func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
+	writeJSON(w, statusCode, map[string]any{"error": message})
 }
 
 // isRegularFileForDownload 判定常规文件（对齐 os.path.isfile）。
