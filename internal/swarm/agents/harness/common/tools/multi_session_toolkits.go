@@ -391,10 +391,11 @@ func (t *MultiSessionToolkit) runAndNotify(ctx context.Context, sessionID, descr
 		// Python finally: self._tasks.pop(session_id, None)
 		t.mu.Lock()
 		delete(t.tasks, sessionID)
+		remaining := len(t.tasks)
 		t.mu.Unlock()
 		logger.Debug(logComponent).
 			Str("session_id", sessionID).
-			Int("remaining", len(t.tasks)).
+			Int("remaining", remaining).
 			Msg("[MultiSessionToolkit] run_and_notify 结束")
 	}()
 
