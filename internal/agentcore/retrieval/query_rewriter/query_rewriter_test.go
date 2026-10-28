@@ -265,3 +265,40 @@ func TestMsg2Text_空消息读上下文(t *testing.T) {
 	assert.Contains(t, text, "user: 你好")
 	assert.Contains(t, text, "assistant: 你好！")
 }
+
+// TestCompress_合法响应（Python test_compress_valid_mock）
+func TestCompress_合法响应(t *testing.T) {
+	fmc := &fakeModelContext{}
+	_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+		llmschema.NewUserMessage("用户问"), llmschema.NewAssistantMessage("助手答"),
+	})
+	qr := newQRTestRewriter(t, &stubQRClient{compressResp: makeCompressResponse()}, fmc, WithCompressRange(5))
+	result, err := qr.Compress(context.Background(), nil) // nil → Msg2Text 读上下文（Python msg_2_text(raw) 同链路）
+	assert.NoError(t, err)
+	assert.Contains(t, result, "theme")
+	assert.Contains(t, result, "summary")
+}
+
+// TestCompress_非法JSON → 155604（Python test_compress_invalid_json_raises）
+func TestCompress_非法JSON(t *testing.T) {
+	fmc := &fakeModelContext{}
+	_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+		llmschema.NewUserMessage("用户问"), llmschema.NewAssistantMessage("助手答"),
+	})
+	qr := newQRTestRewriter(t, &stubQRClient{compressResp: "not valid json at all"}, fmc, WithCompressRange(5))
+	_, err := qr.Compress(context.Background(), nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "155604")
+}
+
+// TestCompress_invoke失败 → 155605（Python test_compress_llm_invoke_failure_raises）
+func TestCompress_invoke失败(t *testing.T) {
+	fmc := &fakeModelContext{}
+	_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+		llmschema.NewUserMessage("用户问"), llmschema.NewAssistantMessage("助手答"),
+	})
+	qr := newQRTestRewriter(t, &stubQRClient{invokeErr: errors.New("network error")}, fmc, WithCompressRange(5))
+	_, err := qr.Compress(context.Background(), nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "155605")
+}

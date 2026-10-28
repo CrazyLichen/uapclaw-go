@@ -1,6 +1,7 @@
 package query_rewriter
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -9,9 +10,11 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/output_parsers"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -231,4 +234,85 @@ func (q *QueryRewriter) Msg2Text(messages []llmschema.BaseMessage) (string, erro
 		lines = append(lines, m.GetRole().String()+": "+text)
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n")), nil
+}
+
+// Compress 用 LLM 把一段历史消息压缩成结构化摘要（theme + summary）。
+//
+// 解析链：extractJSON → parseLLMJSON → 兜底 jsonOutputParser →
+// schemaRepair；解析失败统一 155604，invoke 失败 155605
+// （Python 三层 except 在 Go 统一消解为两条 155604 路径，spec §8-3）。
+//
+// Python: query_rewriter.py QueryRewriter.compress
+func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessage) (map[string]any, error) {
+	// Python L366: raw_text = self.msg_2_text(raw)
+	rawText, err := q.Msg2Text(raw)
+	if err != nil {
+		return nil, err
+	}
+	// Python L367: compression_prompt = _fill_template(load_template, history=raw_text)
+	template, err := q.LoadTemplate("compression")
+	if err != nil {
+		return nil, err
+	}
+	compressionPrompt := fillTemplate(template, map[string]string{"history": rawText})
+
+	// Python L369-373: invoke(model=..., SystemMessage, temperature=构造期已固定 0.0)
+	resp, err := q.llm.Invoke(ctx,
+		model_clients.NewMessagesParam(llmschema.NewSystemMessage(compressionPrompt)),
+		model_clients.WithInvokeTemperature(0.0))
+	if err != nil {
+		// Python L374-379: 155605
+		return nil, exception.BuildError(
+			exception.StatusRetrievalQueryRewriterLlmInvokeFailed,
+			exception.WithParam("error_msg", err.Error()),
+			exception.WithCause(err),
+		)
+	}
+	// Python L380: (compressed.content or "").strip()
+	contentStr := ""
+	if resp != nil {
+		contentStr = strings.TrimSpace(resp.Content.Text())
+	}
+	// Python L381: content_json = _extract_json(content_str)
+	contentJSON := extractJSON(contentStr)
+
+	// Python L383-385: 解析链三层
+	parsed, ok := parseLLMJSON(contentJSON)
+	if !ok {
+		// 兜底：JsonOutputParser（markdown 代码块提取 + 直接解析）
+		fallback, perr := q.jsonOutputParser.Parse(contentJSON)
+		if perr == nil {
+			if m, isMap := fallback.(map[string]any); isMap {
+				parsed, ok = m, true
+			}
+		}
+	}
+	if !ok {
+		// Python L386-393: 非 dict → 155604（含 content[:500]）
+		return nil, exception.BuildError(
+			exception.StatusRetrievalQueryRewriterOutputInvalid,
+			exception.WithParam("error_msg", "LLM compress output is not valid JSON (parse returned non-dict); content: "+truncateForMsg(contentJSON, 500)),
+		)
+	}
+	// Python L394: _schema_repair(compressed_json, self._compress_output_schema)
+	repaired, err := schemaRepair(parsed, q.compressOutputSchema)
+	if err != nil {
+		return nil, err
+	}
+	// Python L409: logger.info("Compress completed: %s", dict)
+	logger.Info(logComponent).
+		Str("theme", fmt.Sprint(repaired["theme"])).
+		Str("summary", fmt.Sprint(repaired["summary"])).
+		Msg("Compress completed")
+	return repaired, nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// truncateForMsg 截取前 n 字节用于错误消息（Python content[:500]）。
+func truncateForMsg(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }
