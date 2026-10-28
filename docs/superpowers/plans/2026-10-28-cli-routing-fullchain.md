@@ -35,7 +35,7 @@
 - Modify: `internal/swarm/gateway/gateway_server.go`（sendResponse L597-626）
 - Test: `internal/swarm/gateway/tui_route_test.go`（Task 3 建，此处不建）
 
-- [ ] **Step 1.1: sendResponse 中提取包级函数**
+- [x] **Step 1.1: sendResponse 中提取包级函数**
 
 将现有：
 
@@ -116,17 +116,17 @@ func writeResponseFrame(ws *websocket.Conn, reqID string, ok bool, payload map[s
 
 注意：按规范 2，`writeResponseFrame` 是非导出函数，须放文件"非导出函数"区块（现有 `probeWritable`/`resolveRoute` 等附近）；`sendResponse` 留在导出区块不动位置。
 
-- [ ] **Step 1.2: 编译验证**
+- [x] **Step 1.2: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/gateway/`
 Expected: 无输出（成功）
 
-- [ ] **Step 1.3: 既有单测全跑**
+- [x] **Step 1.3: 既有单测全跑**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/swarm/gateway/ 2>&1 | tail -3`
 Expected: `ok` （零行为变更重构，既有测试全绿）
 
-- [ ] **Step 1.4: Commit**
+- [x] **Step 1.4: Commit**
 
 ```bash
 git add internal/swarm/gateway/gateway_server.go
@@ -141,7 +141,7 @@ git commit -m "refactor: 提取 writeResponseFrame 供 tui 本地 handler 复用
 - Create: `internal/swarm/gateway/tui_route.go`
 - Test: `internal/swarm/gateway/tui_route_test.go`（Task 3 建）
 
-- [ ] **Step 2.1: 创建 tui_route.go 完整文件**
+- [x] **Step 2.1: 创建 tui_route.go 完整文件**
 
 对齐 Python `tui_connect.py` L163-330（集合）+ L1402-1433（5 handler）+ L2093-2119（binding）。注意按规范 2 的声明顺序（结构体→枚举→常量→全局变量→导出函数→非导出函数）与规范 1（全中文注释）：
 
@@ -313,7 +313,7 @@ var TuiForwardNoLocalHandlerMethods = map[string]bool{
 }
 ```
 
-- [ ] **Step 2.2: 机器生成两个集合的 Go 代码**
+- [x] **Step 2.2: 机器生成两个集合的 Go 代码**
 
 Run（在仓库根目录）:
 
@@ -342,12 +342,12 @@ for goname, pyname in [('TuiForwardReqMethods', 'CLI_FORWARD_REQ_METHODS'),
 
 Expected: 输出两段 Go 代码（80 项 + 75 项）。将输出粘贴进 tui_route.go 的"全局变量"区块。
 
-- [ ] **Step 2.3: 编译验证**
+- [x] **Step 2.3: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/gateway/`
 Expected: 无输出（成功）
 
-- [ ] **Step 2.4: Commit**
+- [x] **Step 2.4: Commit**
 
 ```bash
 git add internal/swarm/gateway/tui_route.go
@@ -362,7 +362,7 @@ git commit -m "feat: /tui CLI 路由装配（80/75 集合 + 5 本地 ack handler
 - Create: `internal/swarm/gateway/tui_route_test.go`
 - Test: 同文件
 
-- [ ] **Step 3.1: 写失败测试（差集 + 字段完整性 + DisconnectHandler nil 安全）**
+- [x] **Step 3.1: 写失败测试（差集 + 字段完整性 + DisconnectHandler nil 安全）**
 
 ```go
 package gateway
@@ -440,12 +440,12 @@ func TestTuiDisconnectHandlerNilSafe(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3.2: 跑测试验证失败→通过**
+- [x] **Step 3.2: 跑测试验证失败→通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/swarm/gateway/ -run 'TestTui|TestBuildTuiRouteConfig' -v 2>&1 | tail -15`
 Expected: 4 个测试 PASS
 
-- [ ] **Step 3.3: 补 5 handler ack 行为测试（httptest + gorilla）**
+- [x] **Step 3.3: 补 5 handler ack 行为测试（httptest + gorilla）**
 
 追加测试（同文件）：
 
@@ -546,12 +546,12 @@ func TestTuiLocalHandlersAck(t *testing.T) {
 
 import 追加：`encoding/json`、`fmt`、`net/http`、`net/http/httptest`、`strings`、`time`、`github.com/gorilla/websocket`。
 
-- [ ] **Step 3.4: 跑全部新测试**
+- [x] **Step 3.4: 跑全部新测试**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/swarm/gateway/ -run 'TestTui|TestBuildTuiRouteConfig' -v 2>&1 | tail -20`
 Expected: 全部 PASS（含子测试）
 
-- [ ] **Step 3.5: Commit**
+- [x] **Step 3.5: Commit**
 
 ```bash
 git add internal/swarm/gateway/tui_route_test.go
@@ -565,7 +565,7 @@ git commit -m "test: tui_route 集合差集/计数/ack 行为/nil 安全单测"
 **Files:**
 - Modify: `internal/swarm/gateway/app_gateway.go`（L409-431 装配段）
 
-- [ ] **Step 4.1: 修改装配段**
+- [x] **Step 4.1: 修改装配段**
 
 将现有（app_gateway.go L409-431）：
 
@@ -625,12 +625,12 @@ git commit -m "test: tui_route 集合差集/计数/ack 行为/nil 安全单测"
 	s.channelMgr.RegisterExternalChannel("tui", s.gwServer)
 ```
 
-- [ ] **Step 4.2: 编译 + gateway 包全测**
+- [x] **Step 4.2: 编译 + gateway 包全测**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./internal/swarm/gateway/ && go test ./internal/swarm/gateway/ 2>&1 | tail -3`
 Expected: 编译成功 + `ok`
 
-- [ ] **Step 4.3: Commit**
+- [x] **Step 4.3: Commit**
 
 ```bash
 git add internal/swarm/gateway/app_gateway.go
@@ -644,7 +644,7 @@ git commit -m "feat: AppGatewayServer 接线 /tui CLI 路由 + 出站 external c
 **Files:**
 - Create: `tests/integration/swarm/gateway/doc.go`
 
-- [ ] **Step 5.1: 创建 doc.go（规范 1）**
+- [x] **Step 5.1: 创建 doc.go（规范 1）**
 
 ```go
 //go:build integration
@@ -668,7 +668,7 @@ git commit -m "feat: AppGatewayServer 接线 /tui CLI 路由 + 出站 external c
 package gateway_test
 ```
 
-- [ ] **Step 5.2: Commit**
+- [x] **Step 5.2: Commit**
 
 ```bash
 git add tests/integration/swarm/gateway/doc.go
@@ -684,7 +684,7 @@ git commit -m "docs: 集成测试 gateway 目录 doc.go"
 
 本任务代码量大，拆 4 步：骨架装配（6.1-6.5）、主测试（6.6-6.7）、副测试（6.8）、收尾（6.9）。
 
-- [ ] **Step 6.1: 写 suite 骨架 + 装配（完整代码）**
+- [x] **Step 6.1: 写 suite 骨架 + 装配（完整代码）**
 
 ```go
 //go:build integration
@@ -1100,12 +1100,12 @@ func (s *CliRouteFullChainSuite) assertCommonRoundtrip(reqID, sessionID, mode st
 
 **import 说明**：Step 6.1 代码块顶部的 import 块已是完整正确版本（含 `net`、`schema`、`mockllm`、`pathutil` 别名；不含 `net/http`——测试代码用不到）。结构体的 `envBackup [][3]string` 字段已在代码中给出。
 
-- [ ] **Step 6.2: 编译验证（骨架）**
+- [x] **Step 6.2: 编译验证（骨架）**
 
 Run: `cd /home/opensource/uap-claw-go && go vet -tags=integration ./tests/integration/swarm/gateway/ 2>&1 | head -20`
 Expected: 无 vet 错误（还没写测试方法，`go vet` 应通过；若报 unused import 则修正）
 
-- [ ] **Step 6.3: 写主测试（显式 agent.plan）**
+- [x] **Step 6.3: 写主测试（显式 agent.plan）**
 
 ```go
 // TestChatSendFullChain_显式agentPlan 显式 mode=agent.plan 的全链路往返。
@@ -1129,7 +1129,7 @@ func (s *CliRouteFullChainSuite) TestChatSendFullChain_显式agentPlan() {
 
 （mockllm import 已含在 Step 6.1 主 import 块中，无需追加。）
 
-- [ ] **Step 6.4: 写副测试（不传 mode → tui 默认 code.normal）**
+- [x] **Step 6.4: 写副测试（不传 mode → tui 默认 code.normal）**
 
 ```go
 // TestChatSendFullChain_默认codeNormal 不传 mode，验证 tui 路由默认注入 code.normal。
@@ -1152,17 +1152,17 @@ func (s *CliRouteFullChainSuite) TestChatSendFullChain_默认codeNormal() {
 
 **注意**：上面代码块中不应保留任何 `s//` 开头的行——若粘贴时发现请删除（计划早期草稿笔误已在本文档修正）。
 
-- [ ] **Step 6.5: 编译验证**
+- [x] **Step 6.5: 编译验证**
 
 Run: `cd /home/opensource/uap-claw-go && go vet -tags=integration ./tests/integration/swarm/gateway/ 2>&1 | head -20`
 Expected: 无错误
 
-- [ ] **Step 6.6: 本地跑集成测试（主测试先跑通）**
+- [x] **Step 6.6: 本地跑集成测试（主测试先跑通）**
 
 Run: `cd /home/opensource/uap-claw-go && go test -tags=integration ./tests/integration/swarm/gateway/ -run TestCliRouteFullChainSuite -v -timeout 120s 2>&1 | tail -30`
 Expected: 两个测试 PASS。若失败按报错修复（常见坑见 Step 6.7）。
 
-- [ ] **Step 6.7: 失败排查指引（按优先级）**
+- [x] **Step 6.7: 失败排查指引（按优先级）**
 
 1. **mock 未命中**（InvokeCallCount=0）：config.yaml 的 `client_provider` 与注册名不一致，或 `pathutil.ResetCache()` 时机晚于首次 WorkspaceDir 解析——检查 SetupSuite 顺序（先 setenv + ResetCache 再构造 AgentServer）
 2. **connection.ack 超时**：AgentServer.Start 后 AgentClient.Connect 顺序反了——确认 Start 顺序（agentServer.Start → agentClient.Connect）
@@ -1171,12 +1171,12 @@ Expected: 两个测试 PASS。若失败按报错修复（常见坑见 Step 6.7�
 5. **suite 第二个测试失败但第一个通过**：GetAgent 缓存了旧实例——mode 不同应产生新实例；检查 modeRecorder 清零逻辑（每测试开头清）
 6. **端口占用**：pickFreePort 后立即被抢——重跑即可（测试偶发）
 
-- [ ] **Step 6.8: Rule 7 双层门禁验证**
+- [x] **Step 6.8: Rule 7 双层门禁验证**
 
 Run: `cd /home/opensource/uap-claw-go && go run ./cmd/integration-audit -verify 2>&1 | tail -15`
 Expected: 通过（新目录静跨度 ≥ 3：gateway/routing/transport/server/agentcore 多个二级子系统）
 
-- [ ] **Step 6.9: Commit**
+- [x] **Step 6.9: Commit**
 
 ```bash
 git add tests/integration/swarm/gateway/
@@ -1194,7 +1194,7 @@ mock 在 llm.ClientRegistry 边界。覆盖 tui 默认 mode 注入。"
 - Modify: `internal/swarm/gateway/doc.go`（文件目录条目）
 - Modify: `IMPLEMENTATION_PLAN.md`（11.15 状态）
 
-- [ ] **Step 7.1: gateway/doc.go 加 tui_route.go 条目**
+- [x] **Step 7.1: gateway/doc.go 加 tui_route.go 条目**
 
 在 `internal/swarm/gateway/doc.go` 的文件目录树中按字母序插入：
 
@@ -1202,7 +1202,7 @@ mock 在 llm.ClientRegistry 边界。覆盖 tui 默认 mode 注入。"
 ├── tui_route.go         # /tui CLI 路由装配（集合 + 5 本地 ack handler + DisconnectHandler，11.15 最小装配）
 ```
 
-- [ ] **Step 7.2: IMPLEMENTATION_PLAN.md 11.15 状态更新**
+- [x] **Step 7.2: IMPLEMENTATION_PLAN.md 11.15 状态更新**
 
 `IMPLEMENTATION_PLAN.md` L751：
 
@@ -1226,22 +1226,22 @@ git commit -m "docs: 11.15 最小装配状态更新（CLI 路由已落地，纯�
 **Files:**
 - 无新文件
 
-- [ ] **Step 8.1: 全仓构建**
+- [x] **Step 8.1: 全仓构建**
 
 Run: `cd /home/opensource/uap-claw-go && go build ./... 2>&1 | head -10`
 Expected: 无输出
 
-- [ ] **Step 8.2: 全仓单测（默认 tag）**
+- [x] **Step 8.2: 全仓单测（默认 tag）**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./... 2>&1 | grep -v "^ok\|no test files" | head -20`
 Expected: 无 FAIL 行
 
-- [ ] **Step 8.3: 集成测试全量（本地）**
+- [x] **Step 8.3: 集成测试全量（本地）**
 
 Run: `cd /home/opensource/uap-claw-go && go test -tags=integration ./tests/integration/... -timeout 600s 2>&1 | grep -v "^ok\|no test files" | head -20`
 Expected: 无 FAIL 行
 
-- [ ] **Step 8.4: gofmt + staticcheck**
+- [x] **Step 8.4: gofmt + staticcheck**
 
 Run: `cd /home/opensource/uap-claw-go && gofmt -l internal/swarm/gateway/ tests/integration/swarm/gateway/ && staticcheck ./internal/swarm/gateway/... ./tests/integration/swarm/gateway/... 2>&1 | head -10`
 Expected: gofmt 无输出；staticcheck 无告警（注意 CJK 注释 gofmt 坑——用完整路径执行）
