@@ -2,8 +2,10 @@ package retriever
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -761,4 +763,319 @@ func TestBatchRetrieve_并发race(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, resultsList, 3)
 	assert.Len(t, resultsList[0], 1)
+}
+
+// ──────────────────────────── 覆盖率补强测试 ────────────────────────────
+
+// TestAccessors_回读 访问器零覆盖补强：Retriever_/LLM 返回构造注入原值。
+func TestAccessors_回读(t *testing.T) {
+	fr := &agenticFakeRetriever{indexType: "vector"}
+	llm := &stubAgenticLLM{}
+	r, err := NewAgenticRetriever(fr, llm)
+	require.NoError(t, err)
+	assert.Same(t, fr, r.Retriever_())
+	assert.Same(t, llm, r.LLM())
+}
+
+// TestRetrieveSearchResults_未覆写 Python 未覆写继承基类空方法：
+// 返回 nil,nil（13.19 base.go 接口注释预留语义）。
+func TestRetrieveSearchResults_未覆写(t *testing.T) {
+	r, err := NewAgenticRetriever(&agenticFakeRetriever{}, &stubAgenticLLM{})
+	require.NoError(t, err)
+	ret, err := r.RetrieveSearchResults(context.Background(), "q", 1, "")
+	require.NoError(t, err)
+	assert.Nil(t, ret)
+}
+
+// TestBatchRetrieve_底层错误传播 空 queries 桩（retrieveFn 未设）→ 首错
+// 返回 nil,err（裸 errgroup 聚合语义）。
+func TestBatchRetrieve_底层错误传播(t *testing.T) {
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return nil, errors.New("retriever down")
+		},
+	}
+	r, err := NewAgenticRetriever(fr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	resultsList, err := r.BatchRetrieve(context.Background(), []string{"q1"}, 5)
+	require.Error(t, err)
+	assert.Nil(t, resultsList)
+	assert.Contains(t, err.Error(), "retriever down")
+}
+
+// TestRetrieve_底层检索错误传播 retrieveGeneric/retrieveWithGraph 两路径的
+// chunk 检索失败传播（图路径 GetRetrieverForMode 后 Retrieve 失败）。
+func TestRetrieve_底层检索错误传播(t *testing.T) {
+	// 通用路径
+	fr := &agenticFakeRetriever{
+		indexType: "hybrid",
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return nil, errors.New("generic down")
+		},
+	}
+	r, err := NewAgenticRetriever(fr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	_, err = r.Retrieve(context.Background(), "q", 5, nil, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "generic down")
+
+	// 图路径：chunk 桩 Retrieve 失败传播
+	chunk := &agenticFakeRetriever{
+		retrieveFn: func(context.Context, string, int, *float64, RetrievalMode) ([]common.RetrievalResult, error) {
+			return nil, errors.New("graph chunk down")
+		},
+		rsrFn: func(context.Context, string, int, RetrievalMode) ([]common.SearchResult, error) {
+			return nil, nil
+		},
+	}
+	gr := NewGraphRetriever(WithGraphChunkRetriever(chunk))
+	rg, err := NewAgenticRetriever(gr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	_, err = rg.Retrieve(context.Background(), "q", 5, nil, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "graph chunk down")
+}
+
+// TestAssertGraphRetriever_非图防御 155211 防御分支：Go 类型系统保证
+// 正常分派不可达（偏差 §8-10），同包直改 isGraph 构造病态实例触发。
+func TestAssertGraphRetriever_非图防御(t *testing.T) {
+	fr := &agenticFakeRetriever{indexType: "hybrid"}
+	r, err := NewAgenticRetriever(fr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	r.isGraph = true // 同包直改模拟病态分派（类型断言外的旁路）
+	_, err = r.Retrieve(context.Background(), "q", 5, nil, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Underlying retriever must be a GraphRetriever to link passages")
+}
+
+// TestLinkTriples_非图防御与工厂失败 linkTriples 直调的防御分支 +
+// GetRetrieverForMode 失败传播。
+func TestLinkTriples_非图防御与工厂失败(t *testing.T) {
+	// 非图防御
+	fr := &agenticFakeRetriever{indexType: "hybrid"}
+	r, err := NewAgenticRetriever(fr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	_, err = r.linkTriples(context.Background(), []common.TripleFact{{"a", "b", "c"}}, RetrievalModeHybrid)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Underlying retriever must be a GraphRetriever to link passages")
+
+	// 工厂失败：非法 mode（13.23 GetRetrieverForMode 的 mode 校验）
+	gr := NewGraphRetriever()
+	rg, err := NewAgenticRetriever(gr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	_, err = rg.linkTriples(context.Background(), []common.TripleFact{{"a", "b", "c"}}, RetrievalMode("bad"))
+	require.Error(t, err)
+}
+
+// TestLinkPassages_非图防御与工厂失败 linkPassages 直调的防御分支 +
+// 工厂失败传播。
+func TestLinkPassages_非图防御与工厂失败(t *testing.T) {
+	fr := &agenticFakeRetriever{indexType: "hybrid"}
+	r, err := NewAgenticRetriever(fr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	_, err = r.linkPassages(context.Background(), []common.TripleFact{{"a", "b", "c"}}, RetrievalModeHybrid)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Underlying retriever must be a GraphRetriever to link passages")
+
+	gr := NewGraphRetriever()
+	rg, err := NewAgenticRetriever(gr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	_, err = rg.linkPassages(context.Background(), []common.TripleFact{{"a", "b", "c"}}, RetrievalMode("bad"))
+	require.Error(t, err)
+}
+
+// TestRetrieve_图路径工厂失败 图路径主循环内 GetRetrieverForMode 失败传播
+//（13.23 mode 校验）。
+func TestRetrieve_图路径工厂失败(t *testing.T) {
+	gr := NewGraphRetriever()
+	r, err := NewAgenticRetriever(gr, &stubAgenticLLM{})
+	require.NoError(t, err)
+	_, err = r.Retrieve(context.Background(), "q", 5, nil, RetrievalMode("bad"))
+	require.Error(t, err)
+}
+
+// TestRead_pyStr字符串与纯整数字面 pyStr 的 string 分支 + json.Number
+// 整数字面（isPureIntegerLiteral Atoi 溢出兜底）。
+func TestRead_pyStr字符串与纯整数字面(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) {
+			// 注：jsonrepair 对裸 +42 会吞成粘合串（实测），符号分支
+			// 改由 TestPyStr_分支表 json.Number("+42") 直测覆盖
+			return `[["a", "b", "plain string"], ["x", "y", 99999999999999999999]]`, nil
+		},
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
+	}
+	r := newGenericRetriever(t, llm)
+	results := r.read(context.Background(), "q", []common.RetrievalResult{{Text: "doc", Score: 1}}, nil)
+	require.Len(t, results, 2)
+	assert.Equal(t, "plain string", results[0][2])
+	assert.Equal(t, "99999999999999999999", results[1][2]) // 超界整数字面原样透传（isPureIntegerLiteral）
+}
+
+// TestPyStr_分支表 同包直调 pyStr 覆盖残余分支（float64/int/int64/
+// json.Number 病态非数字/nil/bool）。
+func TestPyStr_分支表(t *testing.T) {
+	assert.Equal(t, "None", pyStr(nil))
+	assert.Equal(t, "True", pyStr(true))
+	assert.Equal(t, "False", pyStr(false))
+	assert.Equal(t, "abc", pyStr("abc"))
+	assert.Equal(t, "42", pyStr(42))       // int
+	assert.Equal(t, "-7", pyStr(int64(-7))) // int64
+	assert.Equal(t, "+42", pyStr(json.Number("+42"))) // json.Number 符号整数 Atoi 成功原样
+	assert.Equal(t, "0.5", pyStr(0.5))     // float64 → pyFloatStr
+	assert.Equal(t, "2.0", pyStr(2.0))     // float64 整数值补 .0
+	// json.Number 病态非数字（Repair 后仍非数字字面）
+	assert.Equal(t, "abc", pyStr(json.Number("abc")))
+	// json.Number 溢出整数（Atoi 失败 → isPureIntegerLiteral 命中）
+	assert.Equal(t, "99999999999999999999", pyStr(json.Number("99999999999999999999")))
+	// json.Number 病态：非纯整数字面也非合法 float（Float64 失败原样）
+	assert.Equal(t, "1.2.3", pyStr(json.Number("1.2.3")))
+}
+
+// TestPyFloatStr_边界表 同包直调 pyFloatStr：nan/inf/科学记法/补 .0。
+func TestPyFloatStr_边界表(t *testing.T) {
+	assert.Equal(t, "nan", pyFloatStr(math.NaN()))
+	assert.Equal(t, "inf", pyFloatStr(math.Inf(1)))
+	assert.Equal(t, "-inf", pyFloatStr(math.Inf(-1)))
+	assert.Equal(t, "1e+16", pyFloatStr(1e16))   // e 记法上界
+	assert.Equal(t, "1e-05", pyFloatStr(1e-5))   // e 记法下界
+	assert.Equal(t, "0.0", pyFloatStr(0.0))      // 零 f 记法补 .0
+	assert.Equal(t, "0.0001", pyFloatStr(1e-4))  // f 记法下界
+	assert.Equal(t, "1862.0", pyFloatStr(1862.0)) // f 记法整数值补 .0
+}
+
+// TestIsPureIntegerLiteral_边界表 同包直调：符号/非数字/空串边界。
+func TestIsPureIntegerLiteral_边界表(t *testing.T) {
+	assert.True(t, isPureIntegerLiteral("123"))
+	assert.True(t, isPureIntegerLiteral("+123"))
+	assert.True(t, isPureIntegerLiteral("-123"))
+	assert.False(t, isPureIntegerLiteral(""))
+	assert.False(t, isPureIntegerLiteral("+"))
+	assert.False(t, isPureIntegerLiteral("-"))
+	assert.False(t, isPureIntegerLiteral("1.5"))
+	assert.False(t, isPureIntegerLiteral("1e5"))
+	assert.False(t, isPureIntegerLiteral("12a"))
+}
+
+// TestPyTruthy_分支表 同包直调：nil/bool/数值/json.Number/其余 truthy。
+func TestPyTruthy_分支表(t *testing.T) {
+	assert.False(t, pyTruthy(nil))
+	assert.True(t, pyTruthy(true))
+	assert.False(t, pyTruthy(false))
+	assert.True(t, pyTruthy(1.0))
+	assert.False(t, pyTruthy(0.0))
+	assert.True(t, pyTruthy(json.Number("1")))
+	assert.False(t, pyTruthy(json.Number("0")))
+	assert.True(t, pyTruthy("yes")) // string 非空 truthy
+	assert.False(t, pyTruthy(""))
+	assert.True(t, pyTruthy([]any{1})) // 容器非空兜底
+}
+
+// TestRewrite_历史渲染与nextQuestion形态 同包直调 rewrite：多轮历史
+// 行渲染 + sufficient=false + next_question 空 → break（空串）。
+func TestRewrite_历史渲染与nextQuestion形态(t *testing.T) {
+	var capturedPrompt string
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(prompt string) (string, error) {
+			capturedPrompt = prompt
+			return `{"sufficient": false, "next_question": "next q"}`, nil
+		},
+	}
+	r := newGenericRetriever(t, llm)
+	// 双元素历史：Rewritten Question 1 渲染
+	got := r.rewrite(context.Background(), "orig", "t1, t2", []string{"orig", "r1"})
+	assert.Equal(t, "next q", got)
+	assert.Contains(t, capturedPrompt, "Rewritten Question 1: r1")
+
+	// sufficient=true → 空串
+	llm.rewriteFn = func(string) (string, error) {
+		return `{"sufficient": true, "next_question": "ignored"}`, nil
+	}
+	got = r.rewrite(context.Background(), "orig", "", []string{"orig"})
+	assert.Empty(t, got)
+
+	// sufficient=false + next_question 空 → 空串
+	llm.rewriteFn = func(string) (string, error) {
+		return `{"sufficient": false, "next_question": ""}`, nil
+	}
+	got = r.rewrite(context.Background(), "orig", "", []string{"orig"})
+	assert.Empty(t, got)
+
+	// next_question 非 string（数字）→ 收窄空串（偏差 §8-6）
+	llm.rewriteFn = func(string) (string, error) {
+		return `{"sufficient": false, "next_question": 123}`, nil
+	}
+	got = r.rewrite(context.Background(), "orig", "", []string{"orig"})
+	assert.Empty(t, got)
+
+	// LLM err → 软失败空串
+	llm.rewriteFn = func(string) (string, error) { return "", errors.New("down") }
+	got = r.rewrite(context.Background(), "orig", "", []string{"orig"})
+	assert.Empty(t, got)
+}
+
+// TestRead_LLM失败与修复失败 read 软失败三分支：Invoke err / jsonrepair
+// err / 根非 list。
+func TestRead_LLM失败与修复失败(t *testing.T) {
+	// Invoke err
+	llm := &agenticLLMDispatch{
+		readFn:    func(string) (string, error) { return "", errors.New("down") },
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true}`, nil },
+	}
+	r := newGenericRetriever(t, llm)
+	assert.Empty(t, r.read(context.Background(), "q", []common.RetrievalResult{{Text: "d"}}, nil))
+
+	// jsonrepair err：损坏到无法修复的串
+	llm.readFn = func(string) (string, error) { return `{{{`, nil }
+	assert.Empty(t, r.read(context.Background(), "q", []common.RetrievalResult{{Text: "d"}}, nil))
+}
+
+// TestRetrieve_图路径rewrite中断 图路径多轮循环中 rewrite 返回空串 →
+// break（Python rewritten 变量未赋值分支同构）。
+func TestRetrieve_图路径rewrite中断(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) {
+			return `{"sufficient": true, "next_question": null}`, nil
+		},
+	}
+	r, chunk, _ := newGraphSetup(t, llm)
+	r.maxIter = 2
+	_, err := r.Retrieve(context.Background(), "original query", 5, nil, "")
+	require.NoError(t, err)
+	chunk.mu.Lock()
+	assert.Equal(t, 1, chunk.calls) // rewrite 返回空串 → 提前 break
+	chunk.mu.Unlock()
+}
+
+// TestRetrieve_通用路径rewrite中断 通用路径同构验证。
+func TestRetrieve_通用路径rewrite中断(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) {
+			return `{"sufficient": true, "next_question": null}`, nil
+		},
+	}
+	r := newGenericRetriever(t, llm)
+	r.maxIter = 3
+	_, err := r.Retrieve(context.Background(), "q", 5, nil, "")
+	require.NoError(t, err)
+	fr := r.Retriever_().(*agenticFakeRetriever)
+	fr.mu.Lock()
+	assert.Equal(t, 1, fr.calls)
+	fr.mu.Unlock()
+}
+
+// TestRead_jsonrepair空串 read 空串内容（Repair 返回非 list）。
+func TestRead_jsonrepair空串(t *testing.T) {
+	llm := &agenticLLMDispatch{
+		readFn: func(string) (string, error) {
+			return `{"still": "not a list"}`, nil
+		},
+		rewriteFn: func(string) (string, error) { return `{"sufficient": true}`, nil },
+	}
+	r := newGenericRetriever(t, llm)
+	assert.Empty(t, r.read(context.Background(), "q", []common.RetrievalResult{{Text: "d"}}, nil))
 }
