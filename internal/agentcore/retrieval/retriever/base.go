@@ -69,6 +69,12 @@ type RetrieveOptions struct {
 	NumBeams *int
 	// NumCandidatesPerBeam 每束候选数（13.23 消费；nil→100）。
 	NumCandidatesPerBeam *int
+	// GraphExpansion 图路径是否启用图扩展（13.25 AgenticRetriever 消费）。
+	// nil → true（对齐 Python kwargs.pop("graph_expansion", True)）。
+	// 指针类型：13.28 GraphKB 传 RetrievalConfig.graph_expansion 默认 False，
+	// bool 零值无法区分"未设"与"显式 false"（Python 两层默认值不一致是
+	// 真实行为，字面复刻）。
+	GraphExpansion *bool
 }
 
 // RetrieveOption RetrieveOptions 的函数选项。
@@ -103,4 +109,9 @@ func WithRetrieveNumBeams(v int) RetrieveOption {
 // WithRetrieveNumCandidatesPerBeam 设置每束候选数的 RetrieveOption。
 func WithRetrieveNumCandidatesPerBeam(v int) RetrieveOption {
 	return func(o *RetrieveOptions) { o.NumCandidatesPerBeam = &v }
+}
+
+// WithRetrieveGraphExpansion 设置图路径是否启用图扩展的 RetrieveOption。
+func WithRetrieveGraphExpansion(v bool) RetrieveOption {
+	return func(o *RetrieveOptions) { o.GraphExpansion = &v }
 }

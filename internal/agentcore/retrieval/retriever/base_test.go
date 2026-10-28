@@ -59,6 +59,24 @@ func TestWithRetrieve三潜伏字段_设置回读(t *testing.T) {
 	assert.Equal(t, 0, *zero.GraphHops)
 }
 
+// TestWithRetrieveGraphExpansion_设置回读 13.25 消费字段：nil=未设（默认
+// true，kwargs.pop("graph_expansion", True)）；显式 false 是 GraphKB 层
+// RetrievalConfig 默认（两层默认值不一致是 Python 真实行为，字面复刻）
+func TestWithRetrieveGraphExpansion_设置回读(t *testing.T) {
+	// 未设 → nil
+	assert.Nil(t, NewRetrieveOptions().GraphExpansion)
+
+	// 显式 true
+	o := NewRetrieveOptions(WithRetrieveGraphExpansion(true))
+	require.NotNil(t, o.GraphExpansion)
+	assert.True(t, *o.GraphExpansion)
+
+	// 显式 false（零值陷阱：bool 无法区分未设，必须指针）
+	o = NewRetrieveOptions(WithRetrieveGraphExpansion(false))
+	require.NotNil(t, o.GraphExpansion)
+	assert.False(t, *o.GraphExpansion)
+}
+
 // TestRetrievalMode_常量值 枚举常量对齐 Python 字面量
 func TestRetrievalMode_常量值(t *testing.T) {
 	assert.Equal(t, RetrievalMode("vector"), RetrievalModeVector)
