@@ -1000,10 +1000,9 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	}
 
 	// 9: CodingMemoryRail（编程记忆护栏）
-	if cm := c.buildCodingMemoryRail(); cm != nil {
-		c.codingMemoryRail = cm
-		railsList = append(railsList, cm)
-	}
+	// buildCodingMemoryRail 永远返回非 nil（构造器无条件返回），无需 nil 检查
+	c.codingMemoryRail = c.buildCodingMemoryRail()
+	railsList = append(railsList, c.codingMemoryRail)
 
 	// 10: AgentModeRail（Agent 模式护栏）
 	am := c.deep.buildAgentModeRail(nil)
@@ -1113,6 +1112,7 @@ func (c *CodeAdapter) appendDynamicRails(configBase map[string]any, railsList *[
 		case "buildProjectMemoryRail":
 			rail = c.buildProjectMemoryRail()
 		case "buildCodingMemoryRail":
+			// buildCodingMemoryRail 永远返回非 nil，无需 nil 检查（与固定列表装配处一致）
 			rail = c.buildCodingMemoryRail()
 		default:
 			// 回退到 DeepAdapter 的 builder
