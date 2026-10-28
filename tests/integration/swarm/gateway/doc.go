@@ -12,8 +12,12 @@
 // 文件目录：
 //
 //	gateway/
-//	├── doc.go              # 包文档
-//	└── cli_route_test.go   # CliRouteFullChainSuite 双 mode 全链路测试
+//	├── doc.go                    # 包文档
+//	└── tui_cli_route_test.go     # CliRouteFullChainSuite 双 mode 全链路测试
+//
+// 注意：测试文件名以 t 开头确保排序在 doc.go 之后——go/build 处理目录内
+// 首个 _test.go 声明 package X_test 时依赖文件迭代顺序，测试文件在前会
+// 触发 xtest 后缀剥离误判（p.Name != pkg 分支）。
 //
 // 对应 Python 代码：tests/system_tests/test_cli_channel_ws.py + jiuwenswarm/gateway/channel_manager/tui/tui_connect.py
 package gateway_test

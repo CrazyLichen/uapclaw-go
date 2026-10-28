@@ -1147,8 +1147,17 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		accumulatedReasoning := ""
 
 		for raw := range rawCh {
-			output, ok := raw.(*stream.OutputSchema)
-			if !ok {
+			// 值/指针双分支（对齐 deep_adapter_team.go T-01 遗留点 C 的修复模式）：
+			// session 流写入路径（normalizeOutputStream）将 *OutputSchema 解引用为
+			// 值 OutputSchema 出队；仅断言指针时全部业务 chunk 静默跳过
+			// （chat.delta/chat.final/usage_metadata 全丢，只剩终止哨兵）。
+			var output *stream.OutputSchema
+			switch v := raw.(type) {
+			case *stream.OutputSchema:
+				output = v
+			case stream.OutputSchema:
+				output = &v
+			default:
 				// 非输出帧（TraceSchema/CustomSchema），跳过
 				continue
 			}

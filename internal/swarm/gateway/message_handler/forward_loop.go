@@ -259,11 +259,16 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 			}()
 			mh.processStreamWithEntry(streamCtx, streamCancel, entry, msg, env, emitProcessingStatus)
 		}()
+		// 并发计数读取须持 streamMu：后台清理 goroutine（streamFinalCleanup）
+		// 可能并发 delete 同一 map，裸读触发 data race。
+		mh.streamMu.Lock()
+		concurrentTasks := len(mh.streamTasks)
+		mh.streamMu.Unlock()
 		logger.Info(logComponent).
 			Str("event_type", "stream_task_started").
 			Str("request_id", streamRid).
 			Str("channel_id", msg.ChannelID).
-			Int("concurrent_tasks", len(mh.streamTasks)).
+			Int("concurrent_tasks", concurrentTasks).
 			Msg("stream task started (background)")
 	} else if mh.nonStreamRPCMayRunParallel(env) {
 		// 非流式并行
@@ -718,7 +723,7 @@ func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCan
 
 	// 追踪状态（供 defer 使用）
 	streamState := &streamFinalState{}
-	defer mh.streamFinalCleanup(requestID, sessionID, emitProcessingStatus, streamState)
+	defer mh.streamFinalCleanup(requestID, channelID, sessionID, emitProcessingStatus, streamState)
 
 	// 通过 AgentClient 发送流式请求
 	chunkCh, err := mh.agentClient.SendRequestStream(streamCtx, envelope)
@@ -785,7 +790,10 @@ func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCan
 // streamFinalCleanup 流式任务结束后执行 finally 清理逻辑。
 //
 // Python: process_stream finally 块 (L2618-2648)。
-func (mh *MessageHandler) streamFinalCleanup(requestID, sessionID string, emitProcessingStatus bool, state *streamFinalState) {
+// channelID 对齐 Python channel_id = env.channel or ""——
+// processing_status(false) 必须携带渠道标识，否则出站派发按空渠道
+// 查找失败（"Channel not found, dropping"），前端收不到处理完成信号。
+func (mh *MessageHandler) streamFinalCleanup(requestID, channelID, sessionID string, emitProcessingStatus bool, state *streamFinalState) {
 	// 清理状态
 	mh.streamMu.Lock()
 	// Python: asyncio.gather 等待 — 通知 goroutine 已退出
@@ -809,7 +817,7 @@ func (mh *MessageHandler) streamFinalCleanup(requestID, sessionID string, emitPr
 		// 检查该 session_id 是否还有活跃的 emitsProcessingStatus 任务
 		sessionHasActiveTasks := mh.hasActiveEmitProcessingStatusTaskForSession(sessionID)
 		if !sessionHasActiveTasks {
-			mh.sendProcessingStatus(requestID, sessionID, "", false)
+			mh.sendProcessingStatus(requestID, sessionID, channelID, false)
 			logger.Info(logComponent).
 				Str("event_type", "processing_status_false").
 				Str("session_id", sessionID).
