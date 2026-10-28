@@ -1,7 +1,10 @@
-// Package tools 提供 Swarm 侧轻量工具集（10.6.24a）：
+// Package tools 提供 Swarm 侧轻量工具集（10.6.24a/24b）：
 // wiki 3 工具（内嵌 DeepAgent 编译知识库）、generate_image 文生图、
 // mcp_* 4 工具（free/paid search、fetch webpage、exec command）、
-// todo_compat 兼容层（status=deleted/delete 客户端 payload 映射）。
+// todo_compat 兼容层（status=deleted/delete 客户端 payload 映射）、
+// send_file 全链（10.6.24b：WebFileDownloadManager HMAC 下载令牌 +
+// SendFileToolkit chat.file 事件工具，push/history 经包级注入函数——
+// Python 为函数体 lazy import 单例，Go 编译期成环改 agent_server 启动接线）。
 //
 // 全部工具对齐 Python jiuwenswarm/agents/harness/common/tools/ 同名文件，
 // 包级 var 单例对齐 Python 模块级 @tool 实例。
@@ -12,6 +15,8 @@
 //	├── doc.go                 # 包文档
 //	├── wiki_tools.go          # wiki_ingest/wiki_query/wiki_lint + LLMWiki + sourceManifest
 //	├── image_gen.go           # generate_image + invokeModelImageGeneration + ApplyImageGenModelConfigFromYAML
+//	├── web_file_download.go   # WebFileDownloadManager——HMAC 下载令牌+三级密钥（10.6.24b）
+//	├── send_file.go           # SendFileToolkit——chat.file 事件+双注入（10.6.24b）
 //	├── mcp_toolkits.go        # GetMcpTools 聚合器
 //	├── mcp_search.go          # mcp_free_search + mcp_paid_search + 4 provider
 //	├── mcp_web_fetch.go       # mcp_fetch_webpage + Jina Reader 兜底
