@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -9,10 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
+	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -156,8 +160,11 @@ func (am *AgentManager) GetAgent(ctx context.Context, channelID, mode, projectDi
 	if projectKey != "" {
 		config["project_dir"] = projectKey
 	}
-	// ⤵️ ACP: channel_key=="acp" 时合并 _build_acp_agent_config
+	// ⤴️ 10.6.24d 回填点⑤a: channel_key=="acp" 时合并 _build_acp_agent_config
 	// Python: L250-254: if channel_key == "acp": config = {**config, **_build_acp_agent_config()}
+	if channelKey == "acp" {
+		config = mergeAcpAgentConfig(config, nil)
+	}
 
 	return am.createAgent(ctx, channelKey, modeKey, config, subModeKey, cacheKey)
 }
@@ -220,19 +227,45 @@ func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode stri
 
 // Initialize 初始化 AgentManager。
 // Python: AgentManager.initialize(channel_id, extra_config) -> dict|None。
-// 非 ACP 通道返回 nil；ACP 通道 ⤵️ 延后。
+// 非 ACP 通道返回 nil；ACP 通道记录能力、重置 agents、以 code 模式创建并返回 capabilities。
 func (am *AgentManager) Initialize(ctx context.Context, channelID string, extraConfig map[string]any) (map[string]any, error) {
 	// Python: L160-182: channel_key == "acp" → 特殊处理
 	channelKey := normalizeChannelID(channelID)
-	// ⤵️ ACP: channel_key=="acp" 时：
-	//   1. 记录 client_capabilities 到 clientCapabilitiesByChannel
-	//   2. cleanup 已有 ACP agents
-	//   3. 调用 Python: _build_acp_agent_config(extra_config) 后执行 _create_agent("acp", "code", config)
-	//   4. 返回 Python: ACP_DEFAULT_CAPABILITIES.copy() 的等价字典
-	_ = channelKey
-	_ = ctx
-	_ = extraConfig
-	return nil, nil
+	if channelKey != "acp" {
+		return nil, nil
+	}
+	// ⤴️ 10.6.24d 回填点⑤b
+	logger.Info(logComponent).Msg("[AgentManager] ACP initialize")
+	// Python L163-166: 记录 client_capabilities
+	if extraConfig != nil {
+		if clientCapabilities, ok := extraConfig["client_capabilities"].(map[string]any); ok {
+			am.mu.Lock()
+			am.clientCapabilitiesByChannel["acp"] = copyMap(clientCapabilities)
+			am.mu.Unlock()
+		}
+	}
+	// Python L168-176: cleanup 已有 ACP agents（异常仅 Warn）
+	am.mu.Lock()
+	acpAgents := am.agents["acp"]
+	delete(am.agents, "acp")
+	delete(am.agentCreateParams, "acp")
+	am.mu.Unlock()
+	if len(acpAgents) > 0 {
+		logger.Info(logComponent).Msg("[AgentManager] Resetting ACP agent")
+		for _, entry := range acpAgents {
+			if err := entry.agent.Cleanup(); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Msg("[AgentManager] ACP agent cleanup failed")
+			}
+		}
+	}
+	// Python L178-179: config + _create_agent("acp", "code", config)
+	config := mergeAcpAgentConfig(nil, extraConfig)
+	if _, err := am.createAgent(ctx, "acp", "code", config, "", ""); err != nil {
+		return nil, err
+	}
+	// Python L181: return ACP_DEFAULT_CAPABILITIES.copy()
+	return e2aacp.AcpDefaultCapabilities(), nil
 }
 
 // CreateSession 创建会话。
@@ -249,8 +282,14 @@ func (am *AgentManager) CreateSession(channelID, sessionID string) (string, erro
 	}
 	// Python: L211-215: ACP 通道 → acp_{uuid[:8]}
 	channelKey := normalizeChannelID(channelID)
-	// ⤵️ ACP: if channel_key == "acp": return fmt.Sprintf("acp_%s", randomHex[:8])
-	_ = channelKey
+	// ⤴️ 10.6.24d 回填点⑤c
+	if channelKey == "acp" {
+		sessionID = fmt.Sprintf("acp_%s", randomAcpHex8())
+		logger.Info(logComponent).
+			Str("session_id", sessionID).
+			Msg("[AgentManager] ACP session created")
+		return sessionID, nil
+	}
 	// Python: L216: 其他 → "default"
 	return "default", nil
 }
@@ -690,6 +729,37 @@ func copyMap(m map[string]any) map[string]any {
 // copyStringMap 深拷贝 map[string]string。
 func copyStringMap(m map[string]string) map[string]string {
 	return maps.Clone(m)
+}
+
+// mergeAcpAgentConfig 构造 ACP 专用 Agent 配置（base 合并 extra 后强制双键）。
+// Python: _build_acp_agent_config (agent_manager.py L55-71)
+func mergeAcpAgentConfig(base map[string]any, extraConfig map[string]any) map[string]any {
+	config := map[string]any{
+		"agent_name":             "acp_agent",
+		"channel_id":             "acp",
+		"tool_profile":           "acp",
+		"enable_filesystem_rail": true,
+	}
+	for k, v := range base {
+		config[k] = v
+	}
+	for k, v := range extraConfig {
+		config[k] = v
+	}
+	// Python L69-70: update 后强制覆盖
+	config["channel_id"] = "acp"
+	config["tool_profile"] = "acp"
+	return config
+}
+
+// randomAcpHex8 生成 8 位随机十六进制串（uuid.uuid4().hex[:8] 等价）。
+func randomAcpHex8() string {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand 失败极罕见（Python uuid 同样不处理）；回退时间戳低位
+		return fmt.Sprintf("%08x", time.Now().UnixNano()&0xffffffff)
+	}
+	return hex.EncodeToString(b)
 }
 
 // stringMapToAny 将 map[string]string 转为 map[string]any，
