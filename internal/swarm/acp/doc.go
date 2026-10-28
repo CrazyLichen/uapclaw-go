@@ -7,10 +7,13 @@
 // 文件目录：
 //
 //	acp/
-//	├── doc.go                # 包文档
-//	├── stdio_client.go       # AcpStdioClient 主体（连接/聊天/关闭）
-//	├── stdio_client_parse.go # stdout 缓冲 JSON 解析（raw_decode 语义）
-//	└── subprocess_env.go     # 子进程环境变量构造（profile 隔离敏感键）
+//	├── doc.go                  # 包文档
+//	├── stdio_client.go         # AcpStdioClient 主体（连接/聊天/关闭）
+//	├── stdio_client_parse.go   # stdout 缓冲 JSON 解析（raw_decode 语义）
+//	├── stdio_client_unix.go    # POSIX 进程组/信号（build tag 隔离）
+//	├── stdio_client_windows.go # Windows 进程终止与命令 shim 解析（build tag 隔离）
+//	├── subprocess_env.go       # 子进程环境变量构造（profile 隔离敏感键）
+//	└── testdata/               # 测试对端 shell 脚本（acp_peer.sh / acp_peer_fs.sh）
 //
 // 对应 Python 代码：jiuwenswarm/acp/stdio_client.py · subprocess_env.py
 package acp
