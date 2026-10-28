@@ -307,6 +307,111 @@ func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessag
 	return repaired, nil
 }
 
+// Rewrite 在当前会话上下文里把用户 query 改写为独立可检索的
+// standalone_query；历史达 compressRange 时先触发一次压缩（失败降级
+// 为原文写回），rewrite 提示词只携带最近 compressRange 条历史。
+//
+// Python: query_rewriter.py QueryRewriter.rewrite
+func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]any, error) {
+	// Python L439-443: 非 str 或空白 → 155606（Go 入参已 string，
+	// 只剩空白校验；非 str 分支编译期消解）
+	if strings.TrimSpace(query) == "" {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalQueryRewriterInputInvalid,
+			exception.WithParam("error_msg", "query must be a non-empty string"),
+		)
+	}
+	// Python L444: load_template("intention_completion")
+	promptTemplate, err := q.LoadTemplate("intention_completion")
+	if err != nil {
+		return nil, err
+	}
+
+	// Python L447: 全量历史判断是否触发压缩
+	historyFull, err := q.sessionCtx.GetMessages(0, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Python L449-467: 压缩触发 + 降级双通道
+	if len(historyFull) >= q.compressRange {
+		compressed, cerr := q.Compress(ctx, historyFull)
+		if cerr == nil {
+			// Python L452-456: json.dumps(summary) 写 compressed_history
+			historyJSON, merr := json.Marshal(compressed)
+			if merr == nil {
+				q.sessionCtx.SetMessages([]llmschema.BaseMessage{
+					llmschema.NewSystemMessage(string(historyJSON), llmschema.WithMessageName("compressed_history")),
+				}, true)
+			}
+		} else {
+			// Python L457-467: BaseError 降级——Warning + 原文写回 original_history
+			logger.Warn(logComponent).
+				Err(cerr).
+				Msg("Query rewriter compress failed, falling back to original history")
+			fallbackText, _ := q.Msg2Text(historyFull)
+			q.sessionCtx.SetMessages([]llmschema.BaseMessage{
+				llmschema.NewSystemMessage(fallbackText, llmschema.WithMessageName("original_history")),
+			}, true)
+		}
+	}
+
+	// Python L470-473: 只取最近 compressRange 条防提示词无限膨胀
+	historyForRewrite, err := q.sessionCtx.GetMessages(q.compressRange, true)
+	if err != nil {
+		return nil, err
+	}
+	// Python L474: msg_2_text(history_for_rewrite)
+	historyText, err := q.Msg2Text(historyForRewrite)
+	if err != nil {
+		return nil, err
+	}
+	// Python L476-480: 模板填 history + query
+	completionPrompt := fillTemplate(promptTemplate, map[string]string{
+		"history": historyText,
+		"query":   query,
+	})
+
+	// Python L484-488: invoke（temperature 构造期已固定 0.0）
+	resp, err := q.llm.Invoke(ctx,
+		model_clients.NewMessagesParam(llmschema.NewSystemMessage(completionPrompt)),
+		model_clients.WithInvokeTemperature(0.0))
+	if err != nil {
+		// Python L489-494: 155605
+		return nil, exception.BuildError(
+			exception.StatusRetrievalQueryRewriterLlmInvokeFailed,
+			exception.WithParam("error_msg", err.Error()),
+			exception.WithCause(err),
+		)
+	}
+	// Python L495-496: strip + extract_json
+	contentStr := ""
+	if resp != nil {
+		contentStr = strings.TrimSpace(resp.Content.Text())
+	}
+	contentJSON := extractJSON(contentStr)
+
+	// Python L498-508: 解析链三层（同 Compress）
+	parsed, ok := parseLLMJSON(contentJSON)
+	if !ok {
+		fallback, perr := q.jsonOutputParser.Parse(contentJSON)
+		if perr == nil {
+			if m, isMap := fallback.(map[string]any); isMap {
+				parsed, ok = m, true
+			}
+		}
+	}
+	if !ok {
+		// Python L501-508: 非 dict → 155604（含 content[:500]）
+		return nil, exception.BuildError(
+			exception.StatusRetrievalQueryRewriterOutputInvalid,
+			exception.WithParam("error_msg", "LLM rewrite output is not valid JSON (parse returned non-dict); content: "+truncateForMsg(contentJSON, 500)),
+		)
+	}
+	// Python L509: _schema_repair(rewrote_json, self._rewrite_output_schema)
+	return schemaRepair(parsed, q.rewriteOutputSchema)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // truncateForMsg 截取前 n 字节用于错误消息（Python content[:500]）。

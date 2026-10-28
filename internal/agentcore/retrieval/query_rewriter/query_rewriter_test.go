@@ -302,3 +302,96 @@ func TestCompress_invoke失败(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "155605")
 }
+
+// TestRewrite_合法响应（Python test_rewrite_valid_mock）
+func TestRewrite_合法响应(t *testing.T) {
+	fmc := &fakeModelContext{}
+	_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+		llmschema.NewUserMessage("你好"), llmschema.NewAssistantMessage("你好！"),
+	})
+	currentQuery := "那运费呢？"
+	qr := newQRTestRewriter(t, &stubQRClient{rewriteResp: makeFullRewriteResponse(currentQuery)}, fmc, WithCompressRange(5))
+	result, err := qr.Rewrite(context.Background(), currentQuery)
+	assert.NoError(t, err)
+	assert.Equal(t, currentQuery, result["standalone_query"])
+	assert.Contains(t, result, "before")
+	assert.Contains(t, result, "intention")
+}
+
+// TestRewrite_前后缀包裹JSON（Python test_rewrite_with_json_prefix_suffix）
+func TestRewrite_前后缀包裹JSON(t *testing.T) {
+	fmc := &fakeModelContext{}
+	_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+		llmschema.NewUserMessage("你好"), llmschema.NewAssistantMessage("你好！"),
+	})
+	qr := newQRTestRewriter(t, &stubQRClient{rewriteResp: "这是回答：\n" + makeFullRewriteResponse("测试") + "\n以上是结果。"}, fmc, WithCompressRange(5))
+	result, err := qr.Rewrite(context.Background(), "测试")
+	assert.NoError(t, err)
+	assert.Equal(t, "测试", result["standalone_query"])
+}
+
+// TestRewrite_非法输出 → 155604（Python test_rewrite_invalid_output_raises）
+func TestRewrite_非法输出(t *testing.T) {
+	fmc := &fakeModelContext{}
+	_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+		llmschema.NewUserMessage("你好"), llmschema.NewAssistantMessage("你好！"),
+	})
+	qr := newQRTestRewriter(t, &stubQRClient{rewriteResp: "not json"}, fmc, WithCompressRange(5))
+	_, err := qr.Rewrite(context.Background(), "问题")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "155604")
+}
+
+// TestRewrite_空查询 → 155606（Python test_rewrite_invalid_input_empty_raises）
+func TestRewrite_空查询(t *testing.T) {
+	qr := newQRTestRewriter(t, &stubQRClient{}, &fakeModelContext{}, WithCompressRange(5))
+	_, err := qr.Rewrite(context.Background(), "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "155606")
+}
+
+// TestRewrite_纯空白查询 → 155606（Python test_rewrite_invalid_input_whitespace_raises）
+func TestRewrite_纯空白查询(t *testing.T) {
+	qr := newQRTestRewriter(t, &stubQRClient{}, &fakeModelContext{}, WithCompressRange(5))
+	_, err := qr.Rewrite(context.Background(), "   ")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "155606")
+}
+
+// TestRewrite_压缩失败降级原文（Python test_rewrite_compress_failure_fallback）
+func TestRewrite_压缩失败降级原文(t *testing.T) {
+	fmc := &fakeModelContext{}
+	for i := 0; i < 3; i++ {
+		_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+			llmschema.NewUserMessage(fmt.Sprintf("用户问%d", i)),
+			llmschema.NewAssistantMessage(fmt.Sprintf("助手答%d", i)),
+		})
+	}
+	// compress 响应是坏 JSON（触发 Compress 内部 155604 → Rewrite 降级）
+	stub := &stubQRClient{compressResp: "broken", rewriteResp: makeFullRewriteResponse("总结一下")}
+	qr := newQRTestRewriter(t, stub, fmc, WithCompressRange(5))
+	result, err := qr.Rewrite(context.Background(), "总结一下")
+	assert.NoError(t, err)
+	assert.Equal(t, "总结一下", result["standalone_query"])
+	// 降级后历史被替换为一条 system 消息（name=original_history）
+	msgs, _ := fmc.GetMessages(0, true)
+	assert.Len(t, msgs, 1)
+	assert.Equal(t, "system", msgs[0].GetRole().String())
+	assert.Equal(t, "original_history", msgs[0].GetName())
+	assert.Contains(t, msgs[0].GetContent().Text(), "user: 用户问0")
+	// rewrite 只被调用一次
+	assert.Equal(t, 1, stub.rewriteCnt)
+}
+
+// TestRewrite_尾逗号JSON修复（Python test_rewrite_with_trailing_comma_mock）
+func TestRewrite_尾逗号JSON修复(t *testing.T) {
+	fmc := &fakeModelContext{}
+	_, _ = fmc.AddMessages(context.Background(), []llmschema.BaseMessage{
+		llmschema.NewUserMessage("你好"), llmschema.NewAssistantMessage("你好！"),
+	})
+	broken := `{"before":"x","intention":"y","standalone_query":"x","references":{},"missing":[],"typo":[],"gibberish":[],"from_history":"",}`
+	qr := newQRTestRewriter(t, &stubQRClient{rewriteResp: broken}, fmc, WithCompressRange(5))
+	result, err := qr.Rewrite(context.Background(), "x")
+	assert.NoError(t, err)
+	assert.Equal(t, "x", result["standalone_query"])
+}
