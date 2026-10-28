@@ -748,7 +748,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 11.13 | ✅ | Gateway Hook | GatewayHookHandler 4 事件方法（SessionStart 去重/UserPromptSubmit 空 query/SessionEnd 先 discard/Notification type query）+ activeSessions + 10s setdefault + recover 兜底；HookExecutor 迁 server/hooks→common/hooks（第三例破环，user_hook_rail 留守）；forward_loop 步骤3 回填；NewGatewayServer 装配 RegisterConfig | `jiuwenswarm/gateway/hooks/` |
 | **11.x IM 渠道** | — | | | |
 | 11.14 | ✅ | Web 通道 | WebSocket + HTTP RPC（M-05：config 写回点 updateYAMLKeyInConfig/replaceTeamsInConfig/updateDefaultModelsInConfig/updateMemoryForbiddenInConfig 全部切换 SetRoundTrip ruamel round-trip 保注释；modes.team 删除分支保留 Save——无删除 API 的等价路径） | `jiuwenswarm/gateway/channel_manager/web/` |
-| 11.15 | 🔄 | TUI 通道 | CLI 路由最小装配已落地（/tui ForwardMethods 80 项 + 5 chat ack handler + DisconnectHandler + 全链路集成测试 tests/integration/swarm/gateway/）；纯本地 handler 27 个（config.*/session.list/memory.*/cron.* 等）与 TUI 面板/memory_rpc 注册 ⤵️ 继续 | `jiuwenswarm/gateway/channel_manager/tui/` |
+| 11.15 | 🔄 | TUI 通道 | CLI 路由最小装配已落地（/tui ForwardMethods 80 项 + 5 chat ack handler + DisconnectHandler + 全链路集成测试 tests/integration/swarm/gateway/）；纯本地 handler 27 个（config.*/session.list/memory.*/cron.* 等）与 TUI 面板 ⤵️ 继续（⤴️ 需回填来源：10.6.18 memory_rpc 5 个 local handler 注册进 TUI 记忆管理面板） | `jiuwenswarm/gateway/channel_manager/tui/` |
 | 11.16 | ☐ | 飞书通道 | 事件回调，企业多机器人 | `jiuwenswarm/gateway/channel_manager/im_platforms/feishu/` |
 | 11.17 | ☐ | 钉钉通道 | DingTalk Stream 协议 | `jiuwenswarm/gateway/channel_manager/im_platforms/dingtalk/` |
 | 11.18 | ☐ | Telegram 通道 | Telegram Bot API | `jiuwenswarm/gateway/channel_manager/im_platforms/telegram/` |
