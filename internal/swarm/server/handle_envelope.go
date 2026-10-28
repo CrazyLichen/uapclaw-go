@@ -825,29 +825,34 @@ func (s *AgentServer) writeErrorResponse(requestID, channelID, errMsg, code stri
 	s.writeResponse(requestID, channelID, resp)
 }
 
-// injectACPCapabilities 为 ACP 通道注入 client_capabilities 到 metadata。
-// 使用 setdefault 语义：不覆盖已有 client_capabilities 值。
+// injectACPCapabilities 为 ACP 通道注入客户端能力到 metadata。
+// 使用 setdefault 语义：不覆盖已有 acp_client_capabilities 值。
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:803-810
-// agent_manager.get_client_capabilities("acp") fallback 已实现
+// metadata.setdefault("acp_client_capabilities",
+//
+//	ws_caps or agent_manager.get_client_capabilities("acp"))
+//
+// ws 层能力缓存经 envelope.Params["client_capabilities"] 等价传入
+// （Go ChannelTransport 无 per-ws 状态，能力由请求参数携带）。
 func (s *AgentServer) injectACPCapabilities(request *schema.AgentRequest, envelope *e2a.E2AEnvelope) {
 	if request.Metadata == nil {
 		request.Metadata = make(map[string]any)
 	}
-	// setdefault 语义：已有 client_capabilities 则不覆盖
-	if _, exists := request.Metadata["client_capabilities"]; exists {
+	// setdefault 语义：已有 acp_client_capabilities 则不覆盖
+	if _, exists := request.Metadata["acp_client_capabilities"]; exists {
 		return
 	}
 	if envelope.Params != nil {
 		if caps, ok := envelope.Params["client_capabilities"]; ok {
-			request.Metadata["client_capabilities"] = caps
+			request.Metadata["acp_client_capabilities"] = caps
 			return
 		}
 	}
 	// fallback 到 agent_manager.get_client_capabilities("acp")
 	if s.agentManager != nil {
 		if caps := s.agentManager.GetClientCapabilities("acp"); len(caps) > 0 {
-			request.Metadata["client_capabilities"] = caps
+			request.Metadata["acp_client_capabilities"] = caps
 		}
 	}
 }

@@ -322,7 +322,8 @@ func TestWriteErrorResponse(t *testing.T) {
 	}
 }
 
-// TestInjectACPCapabilities 验证 ACP 通道注入 client_capabilities。
+// TestInjectACPCapabilities 验证 ACP 通道注入 acp_client_capabilities。
+// Python agent_ws_server.py L803-810: setdefault("acp_client_capabilities", ...)。
 func TestInjectACPCapabilities(t *testing.T) {
 	s, _ := newTestServer()
 	request := schema.NewAgentRequest("req-1", "acp", schema.ReqMethodInitialize, json.RawMessage(`{}`))
@@ -336,16 +337,74 @@ func TestInjectACPCapabilities(t *testing.T) {
 	if request.Metadata == nil {
 		t.Fatal("metadata 不应为 nil")
 	}
-	caps, ok := request.Metadata["client_capabilities"]
+	caps, ok := request.Metadata["acp_client_capabilities"]
 	if !ok {
-		t.Fatal("metadata 中应包含 client_capabilities")
+		t.Fatal("metadata 中应包含 acp_client_capabilities")
 	}
 	capsMap, ok := caps.(map[string]any)
 	if !ok {
-		t.Fatal("client_capabilities 应为 map[string]any")
+		t.Fatal("acp_client_capabilities 应为 map[string]any")
 	}
 	if tools, ok := capsMap["tools"]; !ok || tools != true {
-		t.Error("client_capabilities.tools 应为 true")
+		t.Error("acp_client_capabilities.tools 应为 true")
+	}
+}
+
+// TestInjectACPCapabilities_setdefault不覆盖 已有 acp_client_capabilities 时不覆盖。
+func TestInjectACPCapabilities_setdefault不覆盖(t *testing.T) {
+	s, _ := newTestServer()
+	request := schema.NewAgentRequest("req-1", "acp", schema.ReqMethodChatSend, json.RawMessage(`{}`))
+	request.Metadata = map[string]any{
+		"acp_client_capabilities": map[string]any{"tools": "preset"},
+	}
+	envelope := e2a.NewE2AEnvelope()
+	envelope.Params = map[string]any{
+		"client_capabilities": map[string]any{"tools": true},
+	}
+
+	s.injectACPCapabilities(request, envelope)
+
+	caps := request.Metadata["acp_client_capabilities"].(map[string]any)
+	if caps["tools"] != "preset" {
+		t.Errorf("setdefault 应保留原值, got %v", caps["tools"])
+	}
+}
+
+// TestInjectACPCapabilities_无params回退manager params 无能力时回退 GetClientCapabilities。
+func TestInjectACPCapabilities_无params回退manager(t *testing.T) {
+	s, _ := newTestServer()
+	// manager 记录能力
+	if _, err := s.agentManager.Initialize(context.Background(), "acp", map[string]any{
+		"client_capabilities": map[string]any{"fs": true},
+	}); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	request := schema.NewAgentRequest("req-1", "acp", schema.ReqMethodChatSend, json.RawMessage(`{}`))
+	envelope := e2a.NewE2AEnvelope()
+	envelope.Params = map[string]any{}
+
+	s.injectACPCapabilities(request, envelope)
+
+	caps, ok := request.Metadata["acp_client_capabilities"]
+	if !ok {
+		t.Fatal("应回退注入 manager 能力")
+	}
+	capsMap := caps.(map[string]any)
+	if capsMap["fs"] != true {
+		t.Errorf("fs = %v", capsMap["fs"])
+	}
+}
+
+// TestInjectACPCapabilities_无来源不注入 params 与 manager 均无能力。
+func TestInjectACPCapabilities_无来源不注入(t *testing.T) {
+	s, _ := newTestServer()
+	request := schema.NewAgentRequest("req-1", "acp", schema.ReqMethodChatSend, json.RawMessage(`{}`))
+	envelope := e2a.NewE2AEnvelope()
+
+	s.injectACPCapabilities(request, envelope)
+
+	if _, exists := request.Metadata["acp_client_capabilities"]; exists {
+		t.Error("无来源时不应注入")
 	}
 }
 
