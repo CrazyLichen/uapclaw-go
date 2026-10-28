@@ -345,7 +345,10 @@ func TestHandleFileDownload_文件不存在(t *testing.T) {
 }
 
 // TestHandleFileDownload_成功 全响应头断言 + 64KB 分块流式。
-// Python: L693-720（Content-Disposition filename*=UTF-8'' + quote(safe="")）
+// Python: L693-720（Content-Disposition filename*=UTF-8 加两个连续单引号前缀 + quote(safe="")）
+// 注：RFC 5987 语法的连续双单引号字面量不直接写入注释——go1.26 gofmt 对
+// doc comment 做 smart-quote 规范化（ASCII 排版惯例中两个连续单引号被视为
+// Unicode 右双引号的等价排版），会被静默改写导致与原文不符。
 func TestHandleFileDownload_成功(t *testing.T) {
 	srv := newDownloadServer()
 	defer srv.Close()
@@ -433,13 +436,13 @@ func TestHandleFileDownload_目录404(t *testing.T) {
 // unreserved（RFC 3986）外全编码，十六进制大写，'/' 也编码。
 func TestQuoteAllForDownload(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{"plain.txt", "plain.txt"},                                     // 字母数字点保留
-		{"a b.pdf", "a%20b.pdf"},                                       // 空格编码
-		{"报告.pdf", "%E6%8A%A5%E5%91%8A.pdf"},                         // 中文逐字节 UTF-8 编码
-		{"a/b.txt", "a%2Fb.txt"},                                       // 斜杠编码（PathEscape 不编）
-		{"x~y-z_w.", "x~y-z_w."},                                       // unreserved 全保留
-		{"a+b.txt", "a%2Bb.txt"},                                       // 加号编码
-		{"100%.csv", "100%25.csv"},                                     // 百分号本身编码
+		{"plain.txt", "plain.txt"},           // 字母数字点保留
+		{"a b.pdf", "a%20b.pdf"},             // 空格编码
+		{"报告.pdf", "%E6%8A%A5%E5%91%8A.pdf"}, // 中文逐字节 UTF-8 编码
+		{"a/b.txt", "a%2Fb.txt"},             // 斜杠编码（PathEscape 不编）
+		{"x~y-z_w.", "x~y-z_w."},             // unreserved 全保留
+		{"a+b.txt", "a%2Bb.txt"},             // 加号编码
+		{"100%.csv", "100%25.csv"},           // 百分号本身编码
 	}
 	for _, c := range cases {
 		if got := quoteAllForDownload(c.in); got != c.want {
