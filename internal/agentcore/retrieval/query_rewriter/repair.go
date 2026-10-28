@@ -2,6 +2,7 @@ package query_rewriter
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	jsonrepair "github.com/RealAlexandreAI/json-repair"
@@ -9,6 +10,18 @@ import (
 )
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// schemaFieldType schema 字段期望类型（Python str/list/dict 类型对象）。
+type schemaFieldType int
+
+const (
+	// schemaFieldString 期望字符串
+	schemaFieldString schemaFieldType = iota
+	// schemaFieldList 期望列表
+	schemaFieldList
+	// schemaFieldDict 期望字典
+	schemaFieldDict
+)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -71,4 +84,120 @@ func parseLLMJSON(jsonStr string) (map[string]any, bool) {
 		return m, true
 	}
 	return nil, false
+}
+
+// forceString 值转字符串：dict 走 JSON 序列化（非 ASCII 不转义），
+// 失败 Debug 日志后回落 fmt.Sprint；其他类型 fmt.Sprint
+// （Python _force_string）。
+func forceString(raw any) string {
+	if m, ok := raw.(map[string]any); ok {
+		data, err := json.Marshal(m)
+		if err == nil {
+			return string(data)
+		}
+		logger.Debug(logComponent).Msg("json.dumps failed when forcing value to string, using str(raw)")
+	}
+	return fmt.Sprint(raw)
+}
+
+// forceList 值转列表：list 直返，其他包单元素（Python _force_list）。
+func forceList(raw any) []any {
+	if l, ok := raw.([]any); ok {
+		return l
+	}
+	return []any{raw}
+}
+
+// forceJSON 值转 dict：dict 直返；str 尝试 JSON 解析（成 dict 返回 /
+// 成功非 dict 包 {key: parsed} / 失败包 {key: raw}）；list/其他包 {key: raw}
+// （Python _force_json）。
+func forceJSON(key string, raw any) map[string]any {
+	switch v := raw.(type) {
+	case map[string]any:
+		return v
+	case string:
+		var parsed any
+		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
+			if m, ok := parsed.(map[string]any); ok {
+				return m
+			}
+			return map[string]any{key: parsed}
+		}
+		return map[string]any{key: raw}
+	default:
+		return map[string]any{key: raw}
+	}
+}
+
+// schemaRepair 按 schema 校验修复 LLM 输出：类型不匹配时强制转换。
+// 返回只含 schema 字段且类型匹配的 dict；不可修复返回 155604
+// （Python _schema_repair）。
+//
+// Go 入参已是 map[string]any（Python 非 dict 的 155604 分支编译期
+// 消解，spec §8）；schemaFieldType 仅三态，Python "其他类型 155604"
+// 两分支同样编译期消解，error 恒为 nil 但保留签名供后续消费方对齐。
+func schemaRepair(output map[string]any, outputSchema map[string]schemaFieldType) (map[string]any, error) {
+	repaired := map[string]any{}
+
+	for field, expectedType := range outputSchema {
+		value, exists := output[field]
+		// Python output.get(field)：缺失与 None 同走默认填充路径
+		if !exists || value == nil {
+			switch expectedType {
+			case schemaFieldString:
+				value = ""
+			case schemaFieldList:
+				value = []any{}
+			case schemaFieldDict:
+				value = map[string]any{}
+			}
+		}
+
+		// typo 特判：不看 expected_type，先 list 化再逐元素三键收敛
+		// （Python L155-173）
+		if field == "typo" {
+			if _, isList := value.([]any); !isList {
+				value = forceList(value)
+			}
+			repairedTypo := []any{}
+			for _, item := range value.([]any) {
+				m, isMap := item.(map[string]any)
+				if !isMap {
+					m = forceJSON(field, item)
+				}
+				repairedItem := map[string]any{}
+				for _, key := range []string{"original", "corrected", "reason"} {
+					v, ok := m[key]
+					if !ok || v == nil {
+						v = ""
+					} else if _, isStr := v.(string); !isStr {
+						v = forceString(v)
+					}
+					repairedItem[key] = v
+				}
+				repairedTypo = append(repairedTypo, repairedItem)
+			}
+			value = repairedTypo
+		}
+
+		// 最终类型校验：不匹配走 force 三兄弟（Python L175-186）
+		switch expectedType {
+		case schemaFieldString:
+			if _, isStr := value.(string); !isStr {
+				value = forceString(value)
+			}
+		case schemaFieldList:
+			if _, isList := value.([]any); !isList {
+				value = forceList(value)
+			}
+		case schemaFieldDict:
+			if _, isMap := value.(map[string]any); !isMap {
+				value = forceJSON(field, value)
+			}
+		}
+
+		repaired[field] = value
+	}
+	logger.Debug(logComponent).Msg("Schema check and repair done")
+	return repaired, nil
 }
