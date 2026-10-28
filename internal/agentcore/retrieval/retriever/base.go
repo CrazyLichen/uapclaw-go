@@ -61,6 +61,14 @@ type RetrieveOptions struct {
 	// 零值混淆）。仅 HybridRetriever 消费；Vector/Sparse 不读
 	// （对齐 Python 死参数）。
 	Alpha *float64
+	// GraphHops 图检索跳数（13.23 消费；nil→默认 2；显式 0 →
+	// max_length=0 → 155204，Python 行为保真）。潜伏参数：Python 侧
+	// kwargs.get 消费、全库零生产方（13.28 接线后激活）。
+	GraphHops *int
+	// NumBeams beam search 束宽（13.23 TripleBeamSearch 消费；nil→10）。
+	NumBeams *int
+	// NumCandidatesPerBeam 每束候选数（13.23 消费；nil→100）。
+	NumCandidatesPerBeam *int
 }
 
 // RetrieveOption RetrieveOptions 的函数选项。
@@ -80,4 +88,19 @@ func NewRetrieveOptions(opts ...RetrieveOption) RetrieveOptions {
 // WithRetrieveAlpha 设置 hybrid 检索权重的 RetrieveOption。
 func WithRetrieveAlpha(v float64) RetrieveOption {
 	return func(o *RetrieveOptions) { o.Alpha = &v }
+}
+
+// WithRetrieveGraphHops 设置图检索跳数的 RetrieveOption。
+func WithRetrieveGraphHops(v int) RetrieveOption {
+	return func(o *RetrieveOptions) { o.GraphHops = &v }
+}
+
+// WithRetrieveNumBeams 设置 beam search 束宽的 RetrieveOption。
+func WithRetrieveNumBeams(v int) RetrieveOption {
+	return func(o *RetrieveOptions) { o.NumBeams = &v }
+}
+
+// WithRetrieveNumCandidatesPerBeam 设置每束候选数的 RetrieveOption。
+func WithRetrieveNumCandidatesPerBeam(v int) RetrieveOption {
+	return func(o *RetrieveOptions) { o.NumCandidatesPerBeam = &v }
 }

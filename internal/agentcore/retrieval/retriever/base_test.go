@@ -34,6 +34,31 @@ func TestWithRetrieveAlpha_显式零(t *testing.T) {
 	assert.Equal(t, 0.0, *o.Alpha)
 }
 
+// TestWithRetrieve三潜伏字段_设置回读 13.23 三潜伏字段（GraphHops/NumBeams/
+// NumCandidatesPerBeam）：设置后非 nil、值正确；显式 0 与未设区分
+func TestWithRetrieve三潜伏字段_设置回读(t *testing.T) {
+	assert.Nil(t, NewRetrieveOptions().GraphHops)
+	assert.Nil(t, NewRetrieveOptions().NumBeams)
+	assert.Nil(t, NewRetrieveOptions().NumCandidatesPerBeam)
+
+	o := NewRetrieveOptions(
+		WithRetrieveGraphHops(3),
+		WithRetrieveNumBeams(5),
+		WithRetrieveNumCandidatesPerBeam(50),
+	)
+	require.NotNil(t, o.GraphHops)
+	assert.Equal(t, 3, *o.GraphHops)
+	require.NotNil(t, o.NumBeams)
+	assert.Equal(t, 5, *o.NumBeams)
+	require.NotNil(t, o.NumCandidatesPerBeam)
+	assert.Equal(t, 50, *o.NumCandidatesPerBeam)
+
+	// 显式 0：GraphHops=0 → max_length=0 → 155204（Python 行为保真）
+	zero := NewRetrieveOptions(WithRetrieveGraphHops(0))
+	require.NotNil(t, zero.GraphHops)
+	assert.Equal(t, 0, *zero.GraphHops)
+}
+
 // TestRetrievalMode_常量值 枚举常量对齐 Python 字面量
 func TestRetrievalMode_常量值(t *testing.T) {
 	assert.Equal(t, RetrievalMode("vector"), RetrievalModeVector)
