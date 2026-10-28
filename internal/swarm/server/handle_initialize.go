@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -77,12 +79,55 @@ func (s *AgentServer) handleInitialize(ctx context.Context, request *schema.Agen
 	), nil
 }
 
-// handleACPToolResponse 处理 acp.tool_response 请求。stub：返回 ok=true。
+// handleACPToolResponse 处理 acp.tool_response 请求：完成 pending 的 JSON-RPC 请求。
+// Python: _handle_acp_tool_response (agent_ws_server.py L4659-4698)
+//
+// params: {jsonrpc_id, response}；完成成功回 accepted=true，
+// 未知/迟到回 accepted=false + ignored=true（回填点④）。
 func (s *AgentServer) handleACPToolResponse(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	// TODO(#ACP): 实现 ACP 工具响应处理逻辑
+	params := map[string]any{}
+	if len(request.Params) > 0 {
+		_ = json.Unmarshal(request.Params, &params)
+	}
+	jsonrpcID := params["jsonrpc_id"]
+	responsePayload, _ := params["response"].(map[string]any)
+	if responsePayload == nil {
+		responsePayload = map[string]any{}
+	}
+
+	if swarmtools.GetAcpOutputManager().CompleteJsonrpcResponse(jsonrpcID, responsePayload) {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithPayload(map[string]any{
+				"accepted": true,
+			}),
+		), nil
+	}
+	// Python L4679-4683: 未知/迟到响应仅 Info 不上抛
+	logger.Info(logComponent).
+		Str("jsonrpc_id", jsonToStr(jsonrpcID)).
+		Str("request_id", request.RequestID).
+		Msg("[AgentServer] ignore unknown/late acp tool response")
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"ok": true,
+			"accepted":  false,
+			"ignored":   true,
+			"reason":    "unknown_or_late_response",
+			"jsonrpc_id": jsonrpcID,
 		}),
 	), nil
+}
+
+// jsonToStr 任意 ID 值安全字符串化（nil→"<nil>" 对齐 Python %s）。
+func jsonToStr(v any) string {
+	if v == nil {
+		return "<nil>"
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "<nil>"
+	}
+	return string(b)
 }
