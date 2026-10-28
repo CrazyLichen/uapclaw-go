@@ -24,6 +24,8 @@ import (
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	permowner "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/permissions"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	serverhooks "github.com/uapclaw/uapclaw-go/internal/swarm/server/hooks"
 )
@@ -1134,8 +1136,8 @@ func (d *DeepAdapter) getPermissionYAMLPath() string {
 // requestPermissionConfirmation 对 ASK 级别征求用户确认。
 // Python: _request_permission_confirmation (interrupt_helpers.py L126-208)
 //
-// 非 ACP 通道返回 ConfirmActionInterrupt（走内置中断），ACP 通道走 JSON-RPC。
-// 当前 ACP output manager 尚未实现，统一降级为 ConfirmActionInterrupt。
+// 非 ACP 通道返回 ConfirmActionInterrupt（走内置中断），ACP 通道经
+// AcpOutputManager 发 session/request_permission JSON-RPC 请求。
 func (d *DeepAdapter) requestPermissionConfirmation(req harnesssecurity.PermissionConfirmationRequest) (*harnesssecurity.PermissionConfirmResponse, error) {
 	// Python: channel = TOOL_PERMISSION_CHANNEL_ID.get() or "web"
 	channelID := sschema.ToolPermissionChannelIDFromCtx(req.GoCtx)
@@ -1148,21 +1150,138 @@ func (d *DeepAdapter) requestPermissionConfirmation(req harnesssecurity.Permissi
 			Action: harnesssecurity.ConfirmActionInterrupt,
 		}, nil
 	}
-	// ⤵️ ACP：ACP 输出管理器未实现，回退到 ConfirmActionInterrupt
+	// Python L133-135: session_id = _resolve_session_id(req.ctx); if not session_id: return None
+	sessionID := resolvePermissionSessionID(req.Ctx)
+	if sessionID == "" {
+		return nil, nil
+	}
+
+	// Python L139-142: 工具调用字段提取（name/arguments/id 兜底）
 	toolName := ""
+	var toolArgsRaw any
+	toolCallID := ""
 	if req.ToolCall != nil {
 		toolName = req.ToolCall.Name
+		toolArgsRaw = req.ToolCall.Arguments
+		toolCallID = strings.TrimSpace(req.ToolCall.ID)
 	}
-	if toolName == "" {
-		toolName = "unknown"
+	if toolCallID == "" {
+		toolCallID = fmt.Sprintf("permission_%s", firstNonEmptyPermStr(toolName, "tool"))
 	}
-	logger.Warn(logComponent).
-		Str("channel_id", channelID).
-		Str("tool_name", toolName).
-		Msg("ACP channel permission confirmation not implemented, falling back to interrupt")
-	return &harnesssecurity.PermissionConfirmResponse{
-		Action: harnesssecurity.ConfirmActionInterrupt,
-	}, nil
+	// Python L143-149: descriptor = build_acp_tool_descriptor(..., status="pending", kind="other")
+	descriptor := e2aacp.BuildAcpToolDescriptor(toolName, toolArgsRaw,
+		e2aacp.WithToolCallID(toolCallID),
+		e2aacp.WithStatus("pending"),
+		e2aacp.WithKind("other"))
+	// Python L150-152: title 组装（reason 追加）
+	title, _ := descriptor["title"].(string)
+	if title == "" {
+		title = fmt.Sprintf("Approve `%s`", toolName)
+	}
+	if req.Result != nil && req.Result.Reason != "" {
+		title = fmt.Sprintf("%s: %s", title, req.Result.Reason)
+	}
+	descriptor["title"] = title
+
+	// Python L154-164: 请求参数组装
+	toolCall := map[string]any{}
+	for k, v := range descriptor {
+		toolCall[k] = v
+	}
+	toolCall["title"] = title
+	requestParams := map[string]any{
+		"toolCall": toolCall,
+		"options": []any{
+			map[string]any{"optionId": "allow-once", "name": "Allow once", "kind": "allow_once"},
+			map[string]any{"optionId": "allow-always", "name": "Always allow", "kind": "allow_always"},
+			map[string]any{"optionId": "reject-once", "name": "Reject", "kind": "reject_once"},
+		},
+	}
+
+	// Python L166-174: 发送请求；异常仅 Warn 并返回 None
+	response, err := swarmtools.GetAcpOutputManager().SendJsonrpcRequest(
+		req.GoCtx, "session/request_permission", requestParams,
+		swarmtools.WithAcpSessionID(sessionID))
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Msg("[InterruptHelpers] ACP permission request failed")
+		return nil, nil
+	}
+
+	// Python L176-179: 错误响应 → 拒绝
+	if errPayload, ok := response["error"].(map[string]any); ok {
+		message := "Permission request failed"
+		if m, ok := errPayload["message"].(string); ok && m != "" {
+			message = m
+		}
+		return &harnesssecurity.PermissionConfirmResponse{
+			Approved: false,
+			Feedback: fmt.Sprintf("[PERMISSION_DENIED] %s", message),
+		}, nil
+	}
+
+	// Python L186-200: outcome 解析
+	resultPayload, _ := response["result"].(map[string]any)
+	if resultPayload == nil {
+		resultPayload = map[string]any{}
+	}
+	outcome, _ := resultPayload["outcome"].(map[string]any)
+	if outcome == nil {
+		outcome = map[string]any{}
+	}
+	outcomeKind := strings.ToLower(strings.TrimSpace(strOrEmptyPerm(outcome["outcome"])))
+	optionID := strings.ToLower(strings.TrimSpace(strOrEmptyPerm(outcome["optionId"])))
+
+	switch outcomeKind {
+	case "selected":
+		switch optionID {
+		case "allow-once":
+			return &harnesssecurity.PermissionConfirmResponse{Approved: true}, nil
+		case "allow-always":
+			return &harnesssecurity.PermissionConfirmResponse{Approved: true, AutoConfirm: true}, nil
+		default:
+			return &harnesssecurity.PermissionConfirmResponse{
+				Feedback: "[PERMISSION_REJECTED] User rejected the request.",
+			}, nil
+		}
+	case "cancelled":
+		return &harnesssecurity.PermissionConfirmResponse{
+			Feedback: "[PERMISSION_REJECTED] Permission request was cancelled.",
+		}, nil
+	}
+	// Python L208: 其他 outcome → None
+	return nil, nil
+}
+
+// resolvePermissionSessionID 从回调上下文解析会话 ID。
+// Python: _resolve_session_id (interrupt_helpers.py L112-124)
+func resolvePermissionSessionID(ctx *sainterfaces.AgentCallbackContext) string {
+	if ctx == nil {
+		return ""
+	}
+	session := ctx.Session()
+	if session == nil {
+		return ""
+	}
+	return strings.TrimSpace(session.GetSessionID())
+}
+
+// firstNonEmptyPermStr 依序取第一个非空串。
+func firstNonEmptyPermStr(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// strOrEmptyPerm 安全字符串化（nil→""）。
+func strOrEmptyPerm(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // permissionSceneHook 宿主场景钩子（数字分身/owner_scopes）。

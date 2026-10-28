@@ -125,11 +125,12 @@ func TestDeepAdapter_requestPermissionConfirmation_非ACP(t *testing.T) {
 	}
 }
 
-// TestDeepAdapter_requestPermissionConfirmation_ACP降级 测试 ACP 通道降级。
-func TestDeepAdapter_requestPermissionConfirmation_ACP降级(t *testing.T) {
+// TestDeepAdapter_requestPermissionConfirmation_ACP无会话 测试 ACP 通道无会话时返回 nil。
+// Python L133-135: session_id 为空 → return None（10.6.24d 后不再降级 interrupt）
+func TestDeepAdapter_requestPermissionConfirmation_ACP无会话(t *testing.T) {
 	d := NewDeepAdapter()
 
-	// ACP 通道
+	// ACP 通道但回调上下文为 nil → 无 session
 	ctx := sschema.WithToolPermissionChannelID(context.Background(), "acp")
 	req := harnesssecurity.PermissionConfirmationRequest{
 		GoCtx: ctx,
@@ -138,9 +139,8 @@ func TestDeepAdapter_requestPermissionConfirmation_ACP降级(t *testing.T) {
 	if err != nil {
 		t.Fatalf("非预期错误: %v", err)
 	}
-	// 当前 ACP output manager 尚未实现，降级为 ConfirmActionInterrupt
-	if resp.Action != harnesssecurity.ConfirmActionInterrupt {
-		t.Fatalf("ACP 通道应降级为 ConfirmActionInterrupt，得到 %v", resp.Action)
+	if resp != nil {
+		t.Fatalf("ACP 无会话应返回 nil，得到 %+v", resp)
 	}
 }
 
