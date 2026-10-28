@@ -1212,7 +1212,7 @@ mock 在 llm.ClientRegistry 边界。覆盖 tui 默认 mode 注入。"
 
 同时检查 11.9 行（L744）的 "ACP/TUI 路由接线 ⤵️ 11.25/11.15" 备注是否需要更新为 "ACP ⤵️ 11.25（TUI 已于 11.15 最小装配落地）"。
 
-- [ ] **Step 7.3: Commit**
+- [x] **Step 7.3: Commit**
 
 ```bash
 git add internal/swarm/gateway/doc.go IMPLEMENTATION_PLAN.md
@@ -1246,7 +1246,7 @@ Expected: 无 FAIL 行
 Run: `cd /home/opensource/uap-claw-go && gofmt -l internal/swarm/gateway/ tests/integration/swarm/gateway/ && staticcheck ./internal/swarm/gateway/... ./tests/integration/swarm/gateway/... 2>&1 | head -10`
 Expected: gofmt 无输出；staticcheck 无告警（注意 CJK 注释 gofmt 坑——用完整路径执行）
 
-- [ ] **Step 8.5: 推送并监控远端 CI（规则 6）**
+- [x] **Step 8.5: 推送并监控远端 CI（规则 6）**
 
 ```bash
 git push
@@ -1256,7 +1256,7 @@ gh run watch <run-id>
 
 Expected: Build/Lint/UnitTest/IntegrationTest 四 job 全绿。失败则修复再推，直到全绿。
 
-- [ ] **Step 8.6: 最终 Commit（如有修复）**
+- [x] **Step 8.6: 最终 Commit（如有修复）**
 
 ```bash
 git add -A
