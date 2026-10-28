@@ -309,7 +309,10 @@ func TestHandleFileDownload_缺token(t *testing.T) {
 func TestHandleFileDownload_无效token(t *testing.T) {
 	srv := newDownloadServer()
 	defer srv.Close()
-	resp, _ := http.Get(srv.URL + "/file-api/download?token=abc")
+	resp, err := http.Get(srv.URL + "/file-api/download?token=abc")
+	if err != nil {
+		t.Fatalf("http.Get: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status: %d", resp.StatusCode)
@@ -323,7 +326,10 @@ func TestHandleFileDownload_过期token(t *testing.T) {
 	defer srv.Close()
 	m := swarmtools.GetWebFileDownloadManager()
 	token := m.GenerateToken("/nonexistent", "", -10)
-	resp, _ := http.Get(srv.URL + "/file-api/download?token=" + token)
+	resp, err := http.Get(srv.URL + "/file-api/download?token=" + token)
+	if err != nil {
+		t.Fatalf("http.Get: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status: %d", resp.StatusCode)
@@ -337,7 +343,10 @@ func TestHandleFileDownload_文件不存在(t *testing.T) {
 	defer srv.Close()
 	m := swarmtools.GetWebFileDownloadManager()
 	token := m.GenerateToken("/nonexistent/file.pdf", "", 600)
-	resp, _ := http.Get(srv.URL + "/file-api/download?token=" + token)
+	resp, err := http.Get(srv.URL + "/file-api/download?token=" + token)
+	if err != nil {
+		t.Fatalf("http.Get: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status: %d", resp.StatusCode)
@@ -425,7 +434,10 @@ func TestHandleFileDownload_目录404(t *testing.T) {
 	m := swarmtools.GetWebFileDownloadManager()
 	tmp := t.TempDir()
 	token := m.GenerateToken(tmp, "", 600)
-	resp, _ := http.Get(srv.URL + "/file-api/download?token=" + token)
+	resp, err := http.Get(srv.URL + "/file-api/download?token=" + token)
+	if err != nil {
+		t.Fatalf("http.Get: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("目录应按 isfile=False 走 404, status: %d", resp.StatusCode)

@@ -373,7 +373,8 @@ func HandleFileDownload(w http.ResponseWriter, r *http.Request) {
 		logger.Error(logComponent).Err(err).Str("path", filePath).Msg("file download open failed")
 		return
 	}
-	defer f.Close()
+	// errcheck：Close 错误不可行动（头已发、读循环已结束），显式丢弃并注释
+	defer func() { _ = f.Close() }()
 	buf := make([]byte, 64*1024) // Python chunk 65536
 	for {
 		n, readErr := f.Read(buf)
