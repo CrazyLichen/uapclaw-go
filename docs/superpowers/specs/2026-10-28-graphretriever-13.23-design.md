@@ -231,10 +231,10 @@ Python 20 例 1:1 映射 + Go 增强：
 
 ## 7. 风险与开放点（实施时核实）
 
-1. chromav2 `GetResult` 字段映射（ids/documents/metadata 数组对齐 Python zip 形态）——实施时读 SDK 源码钉死
-2. Milvus SDK v2.6.5 `QueryOption` 构造（FilterExpr 字符串/OutputFields/Limit）——13.3 milvusClientAdapter.Query 已有通路
-3. ChromaVectorStore.SetCollectionName 与内部 getCollection 缓存的交互——构造时 `s.collection` 已绑原集合名，Set 后需失效缓存（Python 侧 collection_name 赋值同样不刷新已持有的 collection 引用，**行为偏差点：Python get 是 `client.get_collection(name)` 每次新建，Go 侧需对齐"每次按名取"而非用缓存引用**——实施时核实 Go getCollection 实现取用哪条路径，选与 Python 每次新建语义一致者）
-4. Milvus ResultSet 的 document_id 顶层字段（Python 注释"may be at top level"）——按 Go SDK 实际返回结构映射，双源逻辑保序
+1. chromav2 `GetResult` 字段映射（ids/documents/metadata 数组对齐 Python zip 形态）——✅ 已核实：`GetResultImpl{Ids: DocumentIDs, Documents: Documents, Metadatas: DocumentMetadatas}` 直构；`GetIDs()/GetDocuments()/GetMetadatas()` 三 getter 取数组；MetadataValue 需 `.GetRaw()` 二次拆包
+2. Milvus SDK v2.6.5 `QueryOption` 构造（FilterExpr 字符串/OutputFields/Limit）——✅ 已核实：`NewQueryOption(coll)` 返回 `*queryOption`，链式 `.WithFilter(expr).WithOutputFields("*").WithLimit(n)`，`client.Query(ctx, opt)` 直传指针；ResultSet.Fields 为 `milvusclient.DataSet`（非 `[]Column`）
+3. ChromaVectorStore.SetCollectionName 与内部 getCollection 缓存的交互——✅ 已实施：Go getCollection 是 nil-缓存按名惰性取（非 Python 每次新建），Set 后清 `s.collection=nil` 强制下次按新名重取，与 Python 行为等价；13.23 fetch 链不触达 store.getCollection（直接 client.GetCollection），无额外交互
+4. Milvus ResultSet 的 document_id 顶层字段（Python 注释"may be at top level"）——✅ 已实施：`colData["document_id"]` 顶层字段 + metadata["doc_id"] 双源（docIDTop 空回落），fetchItemsToRetrievalResults 统一消费
 
 ## 8. 偏差归档（实施后按实际编号回填细化）
 
@@ -250,3 +250,9 @@ Python 20 例 1:1 映射 + Go 增强：
 | 8 | _search_candidates len(beam)<1 RuntimeError 分支删去 | beam 构造恒 ≥1 元素，不可达 |
 | 9 | SetIndexType 对未实现 IndexTypeCarrier 的动态 retriever 跳过注入 | Python 动态属性恒成功的宽松语义，Go 类型化收窄 |
 | 10 | 死参数 kwargs（encoder_batch_size/graph_expansion/filters/max_length 直传）不加 RetrieveOptions 字段 | 冗余执行去重先例 |
+| 11 | Retrieve/GraphExpansion mode 零值 ""→hybrid 回落 | Python 签名默认值在 Go 无默认参数，零值回落同构（13.19 先例） |
+| 12 | BatchRetrieve 裸 errgroup（不 WithContext 派生 ctx） | WithContext 首错取消兄弟协程偏离 Python asyncio.gather 全启动语义（13.20 先例） |
+| 13 | fetchChunk Chroma 分支错误吞掉返回 nil（非冒泡） | Python fetch_chunk 整体 try/except None（L746-749）；Milvus 分支错误冒泡对齐 Python _fetch_chunks 上层无吞 |
+| 14 | ChromaVectorStore 构造期 GetOrCreateCollection→测试桩不可达 | 私有 client 字段无法跨包注入；queryByFilterChroma 已在 graph_fetch_test.go 用 chromaClientStub 直接覆盖，store 级 dispatch 分支记为测试盲区 |
+| 15 | truncateResults 统一 `*topk > 0` 才截断 | Python `if topk` truthiness（0 视为未设不截断）；Go *int nil=未设、0 显式传等价未设，两语言 0 语义对齐为不截断 |
+| 16 | SetCollectionName 经 collectionNameSetter 包内小接口断言 | VectorStore 接口（13.2）无此方法；Milvus/Chroma 真实现与测试桩经接口注入，未实现者跳过（宽松语义与 #9 同源） |
