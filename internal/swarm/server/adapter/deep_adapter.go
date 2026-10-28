@@ -233,8 +233,9 @@ type DeepAdapter struct {
 	// ⤵️ 10.6.11
 	autoHarnessService any
 	// sendFileToolkit 发送文件工具包
-	// ⤵️ agentcore.DeepAgent
-	sendFileToolkit any
+	// Python: self._send_file_toolkit: SendFileToolkit | None (interface_deep.py L551)
+	// ✅ 10.6.24b 已回填
+	sendFileToolkit *swarmtools.SendFileToolkit
 	// isProactiveMemory 是否主动记忆
 	isProactiveMemory *bool
 	// paidSearchRegistered 付费搜索是否已注册

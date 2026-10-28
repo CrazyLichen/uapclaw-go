@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -703,4 +705,239 @@ func TestUpdateSessionTools_正常注册(t *testing.T) {
 	if cronCount != 1 {
 		t.Errorf("重复调用后 cron 工具应保持 1 个, got %d", cronCount)
 	}
+}
+
+// ──────────────────── updateSendFileTools 测试（10.6.24b）────────────────────
+
+// newSendFileTestAdapter 构造带 instance 与 send_file 启用配置的最小 DeepAdapter。
+// 复用既有 fake 模式（真实 harness.NewDeepAgent + 真实 AbilityManager）。
+func newSendFileTestAdapter(t *testing.T, channels map[string]any) *DeepAdapter {
+	t.Helper()
+	// loader 注入固定密钥（零文件系统副作用，避免触碰真实 ~/.uapclaw）
+	swarmtools.ResetWebFileDownloadManager()
+	t.Cleanup(swarmtools.ResetWebFileDownloadManager)
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentID("agent-sf-1"),
+		agentschema.WithAgentName("sf-test-agent"),
+	)
+	d := NewDeepAdapter()
+	d.instance = harness.NewDeepAgent(card)
+	d.configBase = map[string]any{"channels": channels}
+	return d
+}
+
+// countSendFileAbilities 统计 ability 中 send_file_to_user 前缀卡数。
+func countSendFileAbilities(d *DeepAdapter) int {
+	n := 0
+	for _, ab := range d.instance.AbilityManager().List() {
+		if strings.HasPrefix(ab.AbilityName(), "send_file_to_user") {
+			n++
+		}
+	}
+	return n
+}
+
+// TestUpdateSendFileTools_开关三态 缺省 false / 显式 true / 未配渠道 false。
+// Python L2995-2997: channels[channel].send_file_allowed 缺省 False
+func TestUpdateSendFileTools_开关三态(t *testing.T) {
+	// 缺省（无 channels 配置）→ false → 不注册
+	d := newSendFileTestAdapter(t, nil)
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
+		map[string]any{"k": "v"}, "req-1", "agent.plan")
+	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
+	if d.sendFileToolkit != nil {
+		t.Error("未配置 send_file_allowed 时 toolkit 应为 nil")
+	}
+
+	// 显式 true → 注册
+	d2 := newSendFileTestAdapter(t, map[string]any{
+		"web": map[string]any{"send_file_allowed": true},
+	})
+	d2.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
+	if d2.sendFileToolkit == nil {
+		t.Fatal("send_file_allowed=true 时 toolkit 应非 nil")
+	}
+	if n := countSendFileAbilities(d2); n != 1 {
+		t.Errorf("应注册 1 张卡, got %d", n)
+	}
+
+	// 配置了但 false → 不注册
+	d3 := newSendFileTestAdapter(t, map[string]any{
+		"web": map[string]any{"send_file_allowed": false},
+	})
+	d3.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
+	if d3.sendFileToolkit != nil {
+		t.Error("send_file_allowed=false 时 toolkit 应为 nil")
+	}
+}
+
+// TestUpdateSendFileTools_已注册复用 二次调用刷新三元组、卡数不变。
+// Python L3016-3021: already_registered → update_runtime_context
+func TestUpdateSendFileTools_已注册复用(t *testing.T) {
+	d := newSendFileTestAdapter(t, map[string]any{
+		"web": map[string]any{"send_file_allowed": true},
+	})
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
+		map[string]any{"k": "v"}, "req-1", "agent.plan")
+	cfg1 := &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"}
+	d.updateSendFileTools(ctx, cfg1)
+	tk1 := d.sendFileToolkit
+
+	// 二次调用（改 requestID，channel 保持 web——config 未带 ChannelID 时
+	// resolvePromptChannel("sess-2") 回退 web，命中已启用的 web 开关）
+	ctx2 := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-2",
+		map[string]any{"k": "v2"}, "req-2", "agent.plan")
+	d.updateSendFileTools(ctx2, &runtimeConfig{SessionID: "sess-2", RequestID: "req-2"})
+	if d.sendFileToolkit != tk1 {
+		t.Error("二次调用应复用同一 toolkit 实例")
+	}
+	if n := countSendFileAbilities(d); n != 1 {
+		t.Errorf("复用时卡数应保持 1, got %d", n)
+	}
+	// 三元组刷新经行为验证：hooks 捕获 push 断言路由
+	var gotReq, gotSess string
+	swarmtools.SetSendFilePushFunc(func(_ context.Context, msg map[string]any) error {
+		gotReq, _ = msg["request_id"].(string)
+		gotSess, _ = msg["session_id"].(string)
+		return nil
+	})
+	t.Cleanup(func() { swarmtools.SetSendFilePushFunc(nil) })
+	fp := filepath.Join(t.TempDir(), "reuse.txt")
+	if err := os.WriteFile(fp, []byte("r"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sendFileToolkit.SendFile(t.Context(), fp); err != nil {
+		t.Fatal(err)
+	}
+	if gotReq != "req-2" || gotSess != "sess-2" {
+		t.Errorf("三元组应刷新为 req-2/sess-2, got %q/%q", gotReq, gotSess)
+	}
+}
+
+// TestUpdateSendFileTools_heartbeat会话 守卫收窄回归：cron 跳过但 send_file 仍执行。
+// Python L2974 守卫仅包 cron 块（10.6.24b 对齐性修正，spec 偏差 #1）。
+// 注意：heartbeat_s1 前缀 → resolvePromptChannel → "heartbeat" 渠道，
+// 开关须配 channels.heartbeat.send_file_allowed（Python 同语义）。
+func TestUpdateSendFileTools_heartbeat会话(t *testing.T) {
+	d := newSendFileTestAdapter(t, map[string]any{
+		"heartbeat": map[string]any{"send_file_allowed": true},
+	})
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "heartbeat_s1",
+		nil, "req-h", "agent.plan")
+	// heartbeat 前缀：cron 块跳过，send_file 块仍执行
+	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "heartbeat_s1", RequestID: "req-h"})
+	if d.sendFileToolkit == nil {
+		t.Error("heartbeat 会话 send_file 分支仍应执行（守卫收窄）")
+	}
+	if n := countSendFileAbilities(d); n != 1 {
+		t.Errorf("应注册 1 张卡, got %d", n)
+	}
+	// 同时确认 cron 未注册（heartbeat 前缀守卫生效）
+	cronCount := 0
+	for _, ab := range d.instance.AbilityManager().List() {
+		if tc, ok := ab.(*tool.ToolCard); ok && tc.Name == "cron" {
+			cronCount++
+		}
+	}
+	if cronCount != 0 {
+		t.Errorf("heartbeat 会话 cron 不应注册, got %d", cronCount)
+	}
+}
+
+// TestUpdateSendFileTools_channel三级fallback ChannelID 缺省时从 sessionID 解析。
+// Python L2992-2994: channel_id or resolve_prompt_channel(session_id) or "web"
+func TestUpdateSendFileTools_channel三级fallback(t *testing.T) {
+	// feishu_xxx 前缀 → channel 解析 feishu → 查 feishu 渠道开关
+	d := newSendFileTestAdapter(t, map[string]any{
+		"feishu": map[string]any{"send_file_allowed": true},
+		"web":    map[string]any{"send_file_allowed": false},
+	})
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "", "feishu_x",
+		nil, "req-f", "agent.plan")
+	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "feishu_x", RequestID: "req-f"})
+	if d.sendFileToolkit == nil {
+		t.Error("feishu 渠道启用时 toolkit 应非 nil")
+	}
+
+	// 普通会话前缀 → resolvePromptChannel 回退 web → 查 web 渠道
+	d2 := newSendFileTestAdapter(t, map[string]any{
+		"feishu": map[string]any{"send_file_allowed": false},
+		"web":    map[string]any{"send_file_allowed": true},
+	})
+	d2.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess_1", RequestID: "req-w"})
+	if d2.sendFileToolkit == nil {
+		t.Error("web 渠道启用时 toolkit 应非 nil")
+	}
+}
+
+// TestUpdateSendFileTools_缺RequestID 开关开但缺 requestID/sessionID 跳过。
+// Python L2998: if send_file_enabled and request_id and session_id
+func TestUpdateSendFileTools_缺RequestID(t *testing.T) {
+	d := newSendFileTestAdapter(t, map[string]any{
+		"web": map[string]any{"send_file_allowed": true},
+	})
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
+		nil, "req-1", "agent.plan")
+	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: ""})
+	if d.sendFileToolkit != nil {
+		t.Error("缺 requestID 应跳过")
+	}
+	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "", RequestID: "req-1"})
+	if d.sendFileToolkit != nil {
+		t.Error("缺 sessionID 应跳过")
+	}
+}
+
+// TestUpdateSendFileTools_跨实例残留 ability 有卡但本实例 nil → 重建绑定。
+// Go 补充分支：Python 无此分支（同进程同 adapter），跨实例残留时补绑
+func TestUpdateSendFileTools_跨实例残留(t *testing.T) {
+	d := newSendFileTestAdapter(t, map[string]any{
+		"web": map[string]any{"send_file_allowed": true},
+	})
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
+		nil, "req-1", "agent.plan")
+
+	// 首次注册
+	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
+	tk1 := d.sendFileToolkit
+
+	// 模拟跨实例残留：清空本实例字段但保留 ability 卡
+	d.sendFileToolkit = nil
+	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-9"})
+	if d.sendFileToolkit == nil {
+		t.Fatal("跨实例残留应重建 toolkit")
+	}
+	if d.sendFileToolkit == tk1 {
+		t.Error("重建应为新实例")
+	}
+	// 重建绑定的新 requestID 经行为验证（跨包无法直读未导出字段）
+	var gotReq string
+	swarmtools.SetSendFilePushFunc(func(_ context.Context, msg map[string]any) error {
+		gotReq, _ = msg["request_id"].(string)
+		return nil
+	})
+	t.Cleanup(func() { swarmtools.SetSendFilePushFunc(nil) })
+	fp := filepath.Join(t.TempDir(), "rebuild.txt")
+	if err := os.WriteFile(fp, []byte("r"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sendFileToolkit.SendFile(t.Context(), fp); err != nil {
+		t.Fatal(err)
+	}
+	if gotReq != "req-9" {
+		t.Errorf("重建应绑定新 requestID, got %q", gotReq)
+	}
+}
+
+// TestUpdateSendFileTools_instance未初始化 instance nil 时静默跳过。
+// Python: ability_manager 访问抛 AttributeError → 分支不执行
+func TestUpdateSendFileTools_instance未初始化(t *testing.T) {
+	d := NewDeepAdapter()
+	d.configBase = map[string]any{
+		"channels": map[string]any{"web": map[string]any{"send_file_allowed": true}},
+	}
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
+		nil, "req-1", "agent.plan")
+	// 不应 panic
+	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
 }

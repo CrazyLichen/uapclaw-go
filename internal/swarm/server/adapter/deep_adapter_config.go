@@ -21,6 +21,7 @@ import (
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 
@@ -456,71 +457,157 @@ func (d *DeepAdapter) resolveRuntimeLanguage() string {
 }
 
 // updateSessionTools 注册 cron 和 send_file 工具（与 mode 无关，每次请求刷新）。
-// Python: _update_session_tools (interface_deep.py L2966-3010)。
-// 定时工具按当前 session 的 channel 注册（ctx values 已由步骤 9
-// BindRuntimeCronContext 绑定）；heartbeat/cron 前缀会话跳过（系统触发
-// 的会话不需要 cron 工具）。send_file 分支 ⤵️ 10.6.24 SendFileToolkit 回填。
+// Python: _update_session_tools (interface_deep.py L2966-3021)。
+// heartbeat/cron 前缀守卫仅包住 cron 块（对齐 Python L2974）；
+// send_file 分支对所有会话执行（10.6.24b 对齐性修正，spec 偏差 #1）。
 func (d *DeepAdapter) updateSessionTools(ctx context.Context, config *runtimeConfig) {
 	if config == nil {
 		return
 	}
+	// ── cron 块（守卫仅包此处，Python L2974）──
 	// Python: if not (session_id.startswith("heartbeat") or session_id.startswith("cron"))
-	if strings.HasPrefix(config.SessionID, "heartbeat") || strings.HasPrefix(config.SessionID, "cron") {
-		return
+	if !strings.HasPrefix(config.SessionID, "heartbeat") && !strings.HasPrefix(config.SessionID, "cron") {
+		// Python L2974: cron_tools = self._build_cron_tools()
+		// context 实参是 _runtime_cron_tool_context（ContextVar 代理）；
+		// Go 对应从 ctx values 读绑定值组装 CronToolContext。
+		rcc := cronbridge.FromRuntimeCronContext(ctx)
+		if rcc == nil {
+			return
+		}
+		// Python L2516: agent_id = self._instance.card.id if self._instance else None
+		agentID := ""
+		if d.instance != nil && d.instance.Card() != nil {
+			agentID = d.instance.Card().ID
+		}
+		cronCtx := &agentcron.CronToolContext{
+			ChannelID: rcc.ChannelID,
+			SessionID: rcc.SessionID,
+			Metadata:  rcc.Metadata,
+			Mode:      rcc.Mode,
+		}
+		// Python L539-541: tool_scope=f"runtime_{id(self):x}"（构造时一次性）。
+		// Go 对齐：runtime_{指针十六进制}，adapter 实例生命周期内稳定。
+		cronCtx.ToolScopeOverride = fmt.Sprintf("runtime_%x", uintptr(unsafe.Pointer(d)))
+		tools := d.cronRuntime.BuildTools(cronCtx, agentID, d.resolveRuntimeLanguage())
+		if len(tools) == 0 {
+			return
+		}
+		logger.Info(logComponent).
+			Int("count", len(tools)).
+			Msg("[DeepAdapter] Registering cron tools")
+		// Python: 注册块整体 try/except——instance 未初始化时 ability_manager 访问
+		// 抛 AttributeError → error 日志降级。Go 用显式 nil 守卫对齐该降级语义。
+		if d.instance == nil {
+			logger.Error(logComponent).
+				Msg("[DeepAdapter] instance not initialized, cron tools registration skipped")
+			return
+		}
+		resourceMgr := runner.GetResourceMgr()
+		for _, cronTool := range tools {
+			// Python L2979: if not Runner.resource_mgr.get_tool(cron_tool.card.id)
+			card := cronTool.Card()
+			if existing, gerr := resourceMgr.GetTool([]string{card.ID}); gerr != nil || len(existing) == 0 {
+				if aerr := resourceMgr.AddTool(cronTool); aerr != nil {
+					logger.Error(logComponent).
+						Err(aerr).
+						Str("tool_id", card.ID).
+						Msg("[DeepAdapter] cron tool registration failed")
+					continue
+				}
+			}
+			d.instance.AbilityManager().Add(card)
+		}
+		logger.Info(logComponent).Msg("[DeepAdapter] Cron tools registered successfully")
 	}
-	// Python L2974: cron_tools = self._build_cron_tools()
-	// context 实参是 _runtime_cron_tool_context（ContextVar 代理）；
-	// Go 对应从 ctx values 读绑定值组装 CronToolContext。
-	rcc := cronbridge.FromRuntimeCronContext(ctx)
-	if rcc == nil {
-		return
+	// ── send_file 块（对齐 Python L2989-3021）──
+	d.updateSendFileTools(ctx, config)
+}
+
+// updateSendFileTools send_file 工具注册/刷新（每次请求）。
+// Python: interface_deep.py L2989-3021。
+// channels.<channel>.send_file_allowed 控制（缺省 false——对齐 .get(..., False)）；
+// channel_for_tool/metadata_for_tool 从 ctx 绑定的 RuntimeCronContext 取
+// （Python 为 _CRON_TOOL_CHANNEL_ID/_CRON_TOOL_METADATA contextvar）。
+func (d *DeepAdapter) updateSendFileTools(ctx context.Context, config *runtimeConfig) {
+	// Python L2992-2994: channel = str(channel_id or resolve_prompt_channel(session_id) or "web").strip() or "web"
+	channel := commrails.FirstNonEmpty(
+		config.ChannelID,
+		resolvePromptChannel(config.SessionID),
+		"web",
+	)
+	channel = strings.TrimSpace(channel)
+	if channel == "" {
+		channel = "web"
 	}
-	// Python L2516: agent_id = self._instance.card.id if self._instance else None
-	agentID := ""
-	if d.instance != nil && d.instance.Card() != nil {
-		agentID = d.instance.Card().ID
-	}
-	cronCtx := &agentcron.CronToolContext{
-		ChannelID: rcc.ChannelID,
-		SessionID: rcc.SessionID,
-		Metadata:  rcc.Metadata,
-		Mode:      rcc.Mode,
-	}
-	// Python L539-541: tool_scope=f"runtime_{id(self):x}"（构造时一次性）。
-	// Go 对齐：runtime_{指针十六进制}，adapter 实例生命周期内稳定。
-	cronCtx.ToolScopeOverride = fmt.Sprintf("runtime_%x", uintptr(unsafe.Pointer(d)))
-	tools := d.cronRuntime.BuildTools(cronCtx, agentID, d.resolveRuntimeLanguage())
-	if len(tools) == 0 {
-		return
-	}
-	logger.Info(logComponent).
-		Int("count", len(tools)).
-		Msg("[DeepAdapter] Registering cron tools")
-	// Python: 注册块整体 try/except——instance 未初始化时 ability_manager 访问
-	// 抛 AttributeError → error 日志降级。Go 用显式 nil 守卫对齐该降级语义。
-	if d.instance == nil {
-		logger.Error(logComponent).
-			Msg("[DeepAdapter] instance not initialized, cron tools registration skipped")
-		return
-	}
-	resourceMgr := runner.GetResourceMgr()
-	for _, cronTool := range tools {
-		// Python L2979: if not Runner.resource_mgr.get_tool(cron_tool.card.id)
-		card := cronTool.Card()
-		if existing, gerr := resourceMgr.GetTool([]string{card.ID}); gerr != nil || len(existing) == 0 {
-			if aerr := resourceMgr.AddTool(cronTool); aerr != nil {
-				logger.Error(logComponent).
-					Err(aerr).
-					Str("tool_id", card.ID).
-					Msg("[DeepAdapter] cron tool registration failed")
-				continue
+
+	// Python L2995-2997: send_file_enabled = channels[channel].send_file_allowed（缺省 False）
+	sendFileEnabled := false
+	if channelsRaw, ok := d.configBase["channels"]; ok {
+		if channelsMap, ok := channelsRaw.(map[string]any); ok {
+			if chRaw, ok := channelsMap[channel]; ok {
+				if chMap, ok := chRaw.(map[string]any); ok {
+					if b, ok := chMap["send_file_allowed"].(bool); ok {
+						sendFileEnabled = b
+					}
+				}
 			}
 		}
-		d.instance.AbilityManager().Add(card)
 	}
-	logger.Info(logComponent).Msg("[DeepAdapter] Cron tools registered successfully")
-	// ⤵️ 10.6.24: send_file 工具注册分支（channels.<channel>.send_file_allowed
-	// 控制 + SendFileToolkit），待 SendFile 工具集实现回填
+
+	// Python L2998: if send_file_enabled and request_id and session_id
+	if !sendFileEnabled || config.RequestID == "" || config.SessionID == "" {
+		return
+	}
+
+	// Python L2999-3000: channel_for_tool/metadata_for_tool 从 contextvar 取
+	// （_bind_runtime_cron_context 已归一化：channel 空→web、metadata 注入 request_id）
+	channelForTool := "web"
+	var metadataForTool map[string]any
+	if rcc := cronbridge.FromRuntimeCronContext(ctx); rcc != nil {
+		channelForTool = strings.TrimSpace(rcc.ChannelID)
+		if channelForTool == "" {
+			channelForTool = "web"
+		}
+		metadataForTool = rcc.Metadata
+	}
+
+	// Python L3001-3004: already_registered 前缀扫描
+	// （instance 未初始化时 ability_manager 访问异常 → 该分支整体不执行）
+	if d.instance == nil {
+		return
+	}
+	abilityMgr := d.instance.AbilityManager()
+	alreadyRegistered := false
+	for _, existing := range abilityMgr.List() {
+		if strings.HasPrefix(existing.AbilityName(), "send_file_to_user") {
+			alreadyRegistered = true
+			break
+		}
+	}
+
+	if !alreadyRegistered {
+		// Python L3006-3014: 新建 toolkit 并注册
+		d.sendFileToolkit = swarmtools.NewSendFileToolkit(
+			config.RequestID, config.SessionID, channelForTool, metadataForTool)
+		resourceMgr := runner.GetResourceMgr()
+		for _, sfTool := range d.sendFileToolkit.GetTools() {
+			// Python 直调 add_tool 不查重（重复注册异常仅日志降级）
+			if err := resourceMgr.AddTool(sfTool); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Str("tool", sfTool.Card().Name).
+					Msg("[DeepAdapter] send_file tool add failed")
+			}
+			abilityMgr.Add(sfTool.Card())
+		}
+		logger.Info(logComponent).Msg("[DeepAdapter] send_file tool registered")
+	} else if d.sendFileToolkit != nil {
+		// Python L3016-3021: 复用刷新
+		d.sendFileToolkit.UpdateRuntimeContext(config.RequestID, config.SessionID, channelForTool, metadataForTool)
+	} else {
+		// Go 补充分支：ability 有卡但本实例 toolkit 为 nil（跨实例残留）→ 重建绑定
+		d.sendFileToolkit = swarmtools.NewSendFileToolkit(
+			config.RequestID, config.SessionID, channelForTool, metadataForTool)
+	}
 }
 
 // resolvePromptLanguage 解析提示词语言（原始配置值）。
