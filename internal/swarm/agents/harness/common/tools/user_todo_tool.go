@@ -55,13 +55,6 @@ type TodoItem struct {
 	Description string
 }
 
-// userTodoParamsNames 已知参数名集合（对齐 UserTodosParams dataclass 字段）。
-var userTodoParamsNames = map[string]bool{
-	"action": true, "channel_id": true, "todo_id": true, "title": true,
-	"status": true, "priority": true, "due_at": true, "remind_at": true,
-	"created_by": true, "description": true, "query": true,
-}
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 const (

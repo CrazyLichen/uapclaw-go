@@ -45,6 +45,14 @@ type SessionTask struct {
 	Result string
 }
 
+// sessionTaskHandle 运行中任务句柄（偏差#9：per-task done channel）。
+type sessionTaskHandle struct {
+	// cancel 取消函数
+	cancel context.CancelFunc
+	// done 任务结束信号（goroutine defer close）
+	done chan struct{}
+}
+
 // MultiSessionToolkit 多会话并行子代理工具集。
 // Python: MultiSessionToolkit——生命周期从创建新 session 到所有协程结束。
 type MultiSessionToolkit struct {
@@ -56,14 +64,12 @@ type MultiSessionToolkit struct {
 	requestID string
 	// sessions 任务记录列表（Python self.sessions）
 	sessions []SessionTask
-	// tasks 运行中任务取消函数（Python _tasks: Dict[str, asyncio.Task]）
-	tasks map[string]context.CancelFunc
+	// tasks 运行中任务句柄（Python _tasks: Dict[str, asyncio.Task]）
+	tasks map[string]*sessionTaskHandle
 	// subAgentConfig 子代理配置（Python _sub_agent_config）
 	subAgentConfig *saconfig.ReActAgentConfig
 	// mu 保护 sessions/tasks 并发访问（Python 单线程 GIL 免锁）
 	mu sync.Mutex
-	// wg 等待全部子任务结束（cancel_session 用）
-	wg sync.WaitGroup
 	// sumOnce 汇总链单次触发守卫（Python GIL+协程原子性 → sync.Once）
 	sumOnce sync.Once
 }
@@ -122,7 +128,7 @@ func NewMultiSessionToolkit(sessionID, channelID, requestID string, subAgentConf
 		sessionID:      sessionID,
 		channelID:      channelID,
 		requestID:      requestID,
-		tasks:          make(map[string]context.CancelFunc),
+		tasks:          make(map[string]*sessionTaskHandle),
 		subAgentConfig: subAgentConfig,
 	}
 }
@@ -159,12 +165,13 @@ func (t *MultiSessionToolkit) CreateNewSessions(ctx context.Context, inputs map[
 		}
 		// 偏差#7：WithoutCancel 保后台生命周期，WithCancel 供 cancel_session
 		taskCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-		t.wg.Add(1)
+		// 偏差#9：per-task done channel——cancel_session 只等被取消的单个任务
+		handle := &sessionTaskHandle{cancel: cancel, done: make(chan struct{})}
 		t.mu.Lock()
-		t.tasks[sessionID] = cancel
+		t.tasks[sessionID] = handle
 		t.mu.Unlock()
 		go func() {
-			defer t.wg.Done()
+			defer close(handle.done)
 			t.runAndNotify(taskCtx, sessionID, desc, agent, inputsForTask)
 		}()
 		created = append(created, sessionID)
@@ -185,7 +192,7 @@ func (t *MultiSessionToolkit) CancelSession(ctx context.Context, inputs map[stri
 		Str("target_session_id", sessionID).
 		Msg("[MultiSessionToolkit] cancel_session 请求")
 	t.mu.Lock()
-	cancel, ok := t.tasks[sessionID]
+	handle, ok := t.tasks[sessionID]
 	t.mu.Unlock()
 	if !ok {
 		// 未在 tasks 中：从未创建或已结束（Python task is None / task.done() 双分支）
@@ -208,8 +215,10 @@ func (t *MultiSessionToolkit) CancelSession(ctx context.Context, inputs map[stri
 			Msg("[MultiSessionToolkit] cancel_session 未找到")
 		return map[string]any{"content": fmt.Sprintf("未找到 session_id=%s", sessionID)}, nil
 	}
-	cancel()
-	t.wg.Wait() // 等待协程退出（对齐 await asyncio.gather(task, return_exceptions=True)）
+	// 偏差#9：只等被取消的单个任务（对齐 await asyncio.gather(task, return_exceptions=True)）——
+	// 此前实现为 t.wg.Wait() 等 toolkit 全部任务，并发场景 session_cancel 会被无关任务卡住
+	handle.cancel()
+	<-handle.done
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("[MultiSessionToolkit] cancel_session 已取消")
 	return map[string]any{"content": fmt.Sprintf("已取消 session_id=%s", sessionID)}, nil
 }

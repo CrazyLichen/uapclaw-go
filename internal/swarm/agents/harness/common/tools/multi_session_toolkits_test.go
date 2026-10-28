@@ -378,9 +378,10 @@ func TestCreateNewSessions_创建与文案(t *testing.T) {
 func TestCancelSession_运行中取消(t *testing.T) {
 	tk, _ := newTestToolkit(t)
 	// 混入长时任务：通过 CreateNewSessions 派生（内部走 getSubAgent 真实例，但 agent 调用需 LLM——
-	// 改为直接操作 tasks map 模拟运行中会话）
+	// 改为直接操作 tasks map 模拟运行中会话：cancel 被调用即模拟协程退出并关闭 done）
+	done := make(chan struct{})
 	tk.mu.Lock()
-	tk.tasks["spawn_cancel_me"] = func() {}
+	tk.tasks["spawn_cancel_me"] = &sessionTaskHandle{cancel: func() { close(done) }, done: done}
 	tk.mu.Unlock()
 
 	res, err := tk.CancelSession(context.Background(), map[string]any{"session_id": "spawn_cancel_me"})
@@ -390,6 +391,58 @@ func TestCancelSession_运行中取消(t *testing.T) {
 	if content, _ := res["content"].(string); !strings.Contains(content, "已取消 session_id=spawn_cancel_me") {
 		t.Errorf("cancel res=%v", res)
 	}
+}
+
+// TestCancelSession_只等被取消的单个任务 偏差#9：并发多任务时取消一个不被其他任务卡住
+func TestCancelSession_只等被取消的单个任务(t *testing.T) {
+	tk, _ := newTestToolkit(t)
+
+	// 第一个任务：真实运行 runAndNotify，阻塞在 agent Invoke（长时）
+	blockAgent := &fakeSessionAgent{invokeDelay: 10 * time.Second}
+	taskCtx1, cancel1 := context.WithCancel(context.Background())
+	handle1 := &sessionTaskHandle{cancel: cancel1, done: make(chan struct{})}
+	tk.mu.Lock()
+	tk.tasks["spawn_slow"] = handle1
+	tk.mu.Unlock()
+	go func() {
+		defer close(handle1.done)
+		tk.runAndNotify(taskCtx1, "spawn_slow", "slow task", blockAgent, map[string]any{"conversation_id": "spawn_slow", "query": "q"})
+	}()
+
+	// 第二个任务：另一个仍在跑的长时任务（验证取消第一个不等第二个）
+	handle2 := &sessionTaskHandle{cancel: func() {}, done: make(chan struct{})}
+	tk.mu.Lock()
+	tk.tasks["spawn_other"] = handle2
+	tk.mu.Unlock()
+
+	// 取消 spawn_slow：若实现退化为等全部任务（旧 wg.Wait bug），此调用会阻塞 10s 直至超时
+	start := time.Now()
+	done := make(chan struct{})
+	var res map[string]any
+	var err error
+	go func() {
+		res, err = tk.CancelSession(context.Background(), map[string]any{"session_id": "spawn_slow"})
+		close(done)
+	}()
+	select {
+	case <-done:
+		if elapsed := time.Since(start); elapsed > 5*time.Second {
+			t.Errorf("cancel blocked %v, want ms-level（旧 wg.Wait bug：被无关任务卡住）", elapsed)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if content, _ := res["content"].(string); !strings.Contains(content, "已取消 session_id=spawn_slow") {
+			t.Errorf("cancel res=%v", res)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("CancelSession blocked >5s——退化为等全部任务（旧 wg.Wait bug 复现）")
+	}
+
+	// 收尾：放行并等第一个任务退出，避免泄漏
+	cancel1()
+	<-handle1.done
+	// spawn_other 仍在运行（未被动过）——按设计不清理（toolkit 生命周期放跑）
 }
 
 // TestCancelSession_已结束分支 sessions 有记录但 tasks 无 → "已结束"
