@@ -180,9 +180,10 @@ func TestAppGatewayServer_OnConfigSaved(t *testing.T) {
 	assert.NotNil(t, callback)
 }
 
-// TestAppGatewayServer_空路由装配不panic 11.9 装配链验证：A1 空路由形态下
-// Start 全流程（inboundServer + gwServer 装配 + 空路由零次循环）→ Stop 逆序。
-// GATEWAY_PORT 用空闲端口 19099（t.Setenv 结束自动还原；0 会被 Atoi 的 p>0 拒绝）。
+// TestAppGatewayServer_空路由装配不panic 11.9 装配链验证 + 11.15 /tui 最小装配：
+// Start 全流程（inboundServer + gwServer 装配 + Routes["/tui"] 填充 + tui 出站注册）
+// → Stop 逆序。GATEWAY_PORT 用空闲端口 19099（t.Setenv 结束自动还原；0 会被
+// Atoi 的 p>0 拒绝）。
 func TestAppGatewayServer_空路由装配不panic(t *testing.T) {
 	t.Setenv("GATEWAY_HOST", "127.0.0.1")
 	t.Setenv("GATEWAY_PORT", "19099")
@@ -198,8 +199,15 @@ func TestAppGatewayServer_空路由装配不panic(t *testing.T) {
 	assert.Equal(t, 19099, gs.gwServer.config.Port)
 	assert.True(t, gs.gwServer.running.Load())
 	assert.True(t, gs.inboundServer.running.Load())
-	// A1 空路由形态：路由表为空
-	assert.Empty(t, gs.gwServer.config.Routes)
+	// 11.15 最小装配：/tui CLI 路由已填充（对齐 Python build_cli_route_binding）
+	tuiRoute, ok := gs.gwServer.config.Routes["/tui"]
+	if assert.True(t, ok, "Routes 应含 /tui") {
+		assert.Equal(t, "tui", tuiRoute.ChannelID)
+		assert.NotEmpty(t, tuiRoute.LocalHandlers)
+		assert.NotNil(t, tuiRoute.DisconnectHandler)
+	}
+	// tui 出站渠道已注册
+	assert.NotNil(t, gs.channelMgr.GetExternalChannel("tui"))
 }
 
 // ──────────────────────────── 11.11 Heartbeat 装配 ────────────────────────────
