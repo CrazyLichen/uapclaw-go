@@ -608,6 +608,7 @@ func (s *AppGatewayServer) setupRouter() {
 		r.Post("/file-content", HandleFileContentPost)
 		r.Get("/list-files", HandleListFiles)
 		r.Get("/list-markdown", HandleListMarkdown)
+		r.Get("/download", HandleFileDownload)
 		r.Get("/ws-debug-config", HandleWsDebugConfigGet)
 		r.Post("/ws-debug-config", HandleWsDebugConfigPost)
 		r.Post("/rebuild-agent-data", HandleRebuildAgentData)

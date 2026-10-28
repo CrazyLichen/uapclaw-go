@@ -3,15 +3,19 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -314,4 +318,103 @@ func writeJSON(w http.ResponseWriter, statusCode int, data any) {
 // writeJSONError 写入 JSON 错误响应。
 func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
 	writeJSON(w, statusCode, map[string]any{"error": message})
+}
+
+// HandleFileDownload 处理 GET/HEAD /file-api/download 请求。
+//
+// HMAC 令牌验签 + 过期检查 + 流式返回。不做工作区沙箱检查——
+// 令牌本身即授权（对齐 Python _handle_file_download 设计）。
+// Python: app_web.py L676-732 _handle_file_download
+func HandleFileDownload(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "missing_token"})
+		return
+	}
+
+	payload := swarmtools.ValidateFileDownloadToken(token)
+	if payload == nil {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": "invalid_or_expired_token"})
+		return
+	}
+
+	filePath, _ := payload["path"].(string)
+	if filePath == "" || !isRegularFileForDownload(filePath) {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "file_not_found"})
+		return
+	}
+
+	fi, err := os.Stat(filePath)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "download_failed", "detail": err.Error()})
+		return
+	}
+	fileName := filepath.Base(filePath)
+
+	// Python: mimetypes.guess_type(file_name)，未识别回退 octet-stream
+	mimeType := mime.TypeByExtension(filepath.Ext(fileName))
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Content-Length", strconv.FormatInt(fi.Size(), 10))
+	// Python: quote(file_name, safe="") 全量百分号编码（含 '/'）
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+quoteAllForDownload(fileName))
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+
+	if r.Method == http.MethodHead {
+		return
+	}
+	f, err := os.Open(filePath)
+	if err != nil {
+		// 头已发，只能记录（对齐 Python 写失败 log_error）
+		logger.Error(logComponent).Err(err).Str("path", filePath).Msg("file download open failed")
+		return
+	}
+	defer f.Close()
+	buf := make([]byte, 64*1024) // Python chunk 65536
+	for {
+		n, readErr := f.Read(buf)
+		if n > 0 {
+			if _, wErr := w.Write(buf[:n]); wErr != nil {
+				logger.Error(logComponent).Err(wErr).Msg("failed to send download response")
+				return
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			logger.Error(logComponent).Err(readErr).Msg("file download read error")
+			return
+		}
+	}
+}
+
+// isRegularFileForDownload 判定常规文件（对齐 os.path.isfile）。
+func isRegularFileForDownload(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.Mode().IsRegular()
+}
+
+// quoteAllForDownload 百分号编码全部非 unreserved 字符（对齐 Python urllib.parse.quote(safe="")）。
+// Go url.PathEscape 不转义 "/"，须手写逐字节编码；十六进制大写与 Python %XX 输出一致。
+func quoteAllForDownload(s string) string {
+	const hexDigits = "0123456789ABCDEF"
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		// RFC 3986 unreserved: A-Z a-z 0-9 - _ . ~
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+			c == '-' || c == '_' || c == '.' || c == '~' {
+			b.WriteByte(c)
+		} else {
+			b.WriteByte('%')
+			b.WriteByte(hexDigits[c>>4])
+			b.WriteByte(hexDigits[c&0xF])
+		}
+	}
+	return b.String()
 }
