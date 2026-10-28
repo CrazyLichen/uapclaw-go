@@ -1,10 +1,12 @@
-// Package tools 提供 Swarm 侧轻量工具集（10.6.24a/24b/24c）：
+// Package tools 提供 Swarm 侧轻量工具集（10.6.24a/24b/24c/24d）：
 // wiki 3 工具（内嵌 DeepAgent 编译知识库）、generate_image 文生图、
 // mcp_* 4 工具（free/paid search、fetch webpage、exec command）、
 // todo_compat 兼容层（status=deleted/delete 客户端 payload 映射）、
 // send_file 全链（10.6.24b：WebFileDownloadManager HMAC 下载令牌 +
 // SendFileToolkit chat.file 事件工具，push/history 经包级注入函数——
 // Python 为函数体 lazy import 单例，Go 编译期成环改 agent_server 启动接线）、
+// acp_output 六工具（10.6.24d：AcpOutputManager 单例 + fs/terminal 输出请求，
+// 经 E2A server_push 推 IDE、acp.tool_response 回流完成）、
 // MultiSessionToolkit 并行子代理（agent.fast，10.6.24c：session_new/cancel/list
 // goroutine 并发 + chat.session_result 推送 + sync.Once 汇总 chat.final，
 // push/agentProvider 经包级注入函数）与 user_todos 用户待办（code 模式，
@@ -21,6 +23,7 @@
 //	├── image_gen.go              # generate_image + invokeModelImageGeneration + ApplyImageGenModelConfigFromYAML
 //	├── web_file_download.go      # WebFileDownloadManager——HMAC 下载令牌+三级密钥（10.6.24b）
 //	├── send_file.go              # SendFileToolkit——chat.file 事件+双注入（10.6.24b）
+//	├── acp_output_tools.go       # AcpOutputManager+六 ACP 输出工具（10.6.24d）
 //	├── multi_session_toolkits.go # MultiSessionToolkit——session_new/cancel/list（10.6.24c）
 //	├── user_todo_tool.go         # user_todos——按 channel 隔离用户待办（10.6.24c）
 //	├── mcp_toolkits.go           # GetMcpTools 聚合器
