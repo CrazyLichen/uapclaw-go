@@ -17,9 +17,9 @@ func TestFillTemplate(t *testing.T) {
 
 // TestExtractJSON 首尾花括号提取（Python TestExtractJson 4 例）
 func TestExtractJSON(t *testing.T) {
-	assert.Equal(t, `{"a":1}`, extractJSON(`prefix {"a":1} suffix`)) // 单对象
-	assert.Equal(t, "", extractJSON("no json here"))                 // 无括号
-	assert.Equal(t, "", extractJSON("{"))                            // 只有开括号
+	assert.Equal(t, `{"a":1}`, extractJSON(`prefix {"a":1} suffix`))                 // 单对象
+	assert.Equal(t, "", extractJSON("no json here"))                                 // 无括号
+	assert.Equal(t, "", extractJSON("{"))                                            // 只有开括号
 	assert.Equal(t, `{"outer":{"inner":1}}`, extractJSON(` {"outer":{"inner":1}} `)) // 首{到尾}
 }
 
@@ -112,8 +112,8 @@ func TestSchemaRepair(t *testing.T) {
 	raw := map[string]any{
 		"before": "那运费呢？", "intention": "咨询运费",
 		"standalone_query": "淘美乐退货的运费谁出？",
-		"references": map[string]any{"那": "退货运费"},
-		"missing": []any{}, "typo": []any{}, "gibberish": []any{},
+		"references":       map[string]any{"那": "退货运费"},
+		"missing":          []any{}, "typo": []any{}, "gibberish": []any{},
 		"from_history": "history",
 	}
 	out, err = schemaRepair(raw, rewriteSchema)
