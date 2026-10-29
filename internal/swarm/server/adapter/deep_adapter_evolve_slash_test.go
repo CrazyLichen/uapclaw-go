@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -448,7 +447,7 @@ func TestHandleEvolveCommand_信号指纹去重(t *testing.T) {
 	assistantMsg := llmschema.NewAssistantMessage("正在读取技能",
 		llmschema.WithToolCalls([]*llmschema.ToolCall{
 			llmschema.NewToolCall("call_1", "skill_tool",
-				fmt.Sprintf(`{"skill_name": "demo-skill", "relative_file_path": "SKILL.md"}`)),
+				`{"skill_name": "demo-skill", "relative_file_path": "SKILL.md"}`),
 		}))
 	toolMsg := llmschema.NewToolMessage("call_1", "执行失败: connection error timeout", llmschema.WithMessageName("skill_tool"))
 	if _, err := mc.AddMessages(ctx, []llmschema.BaseMessage{assistantMsg, toolMsg}); err != nil {
