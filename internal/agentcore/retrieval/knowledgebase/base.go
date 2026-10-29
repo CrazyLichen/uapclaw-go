@@ -131,7 +131,3 @@ func (b *BaseKnowledgeBase) VectorStore() vector_store.VectorStore { return b.ve
 func (b *BaseKnowledgeBase) IndexManager() indexer.Indexer { return b.indexManager }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// postAssignValidation 赋值期三段式校验（Task 4 实现，本处占位返回 nil）。
-// ⚠️ Task 4 将替换此实现（移入 validate.go）。
-func (b *BaseKnowledgeBase) postAssignValidation(ctx context.Context) error { return nil }
