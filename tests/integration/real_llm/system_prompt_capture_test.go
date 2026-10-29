@@ -3,12 +3,19 @@
 package real_llm
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -162,4 +169,107 @@ trigger: 用户提到"测试技能"关键词时加载。
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
 		t.Fatalf("写入 SKILL.md 失败: %v", err)
 	}
+}
+
+// record 回调本体。对齐 Python: PromptCapture.on_llm_input。
+//
+// 捕获点在 Model 门面层（LLMInvokeInput model.go:141 / LLMStreamInput
+// model.go:239），晚于 RuntimePromptRail 的 BeforeModelCall 动态注入，
+// 故含 "# 运行时" 节——这正是选 Model 门面层而非 testhelpers
+// ModelCallObserver 的原因（设计文档 4.2：后者捕获先于动态注入）。
+func (c *promptCapture) record(_ context.Context, data *callback.LLMCallEventData) any {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	ev := capturedEvent{
+		modelName:     data.ModelName,
+		systemMessages: extractSystemMessages(data.Messages),
+	}
+
+	switch tools := data.Tools.(type) {
+	case []map[string]any:
+		ev.toolCount = len(tools)
+	case []any:
+		ev.toolCount = len(tools)
+	}
+
+	c.events = append(c.events, ev)
+	return nil
+}
+
+// extractSystemMessages 从事件 Messages 字段提取全部 system 角色消息。
+// 对齐 Python: _extract_system_messages。
+//
+// Messages 是 any 类型，运行时为 model_clients.MessagesParam 值；
+// 其内部有三种形态（text/messages/dicts），需分别处理：
+//   - messages 形态：遍历 BaseMessage 取 GetRole/GetContent（Runner 主路径）
+//   - dicts 形态：遍历 map 取 role/content 键
+//   - text 形态：纯文本无 system 消息，自然为空
+func extractSystemMessages(messages any) []string {
+	mp, ok := messages.(model_clients.MessagesParam)
+	if !ok {
+		return nil
+	}
+	var results []string
+	if mp.IsMessages() {
+		for _, m := range mp.Messages() {
+			if m.GetRole() == llmschema.RoleTypeSystem {
+				results = append(results, m.GetContent().String())
+			}
+		}
+		return results
+	}
+	if mp.IsDicts() {
+		for _, d := range mp.Dicts() {
+			if role, _ := d["role"].(string); role != "system" {
+				continue
+			}
+			switch content := d["content"].(type) {
+			case string:
+				results = append(results, content)
+			default:
+				// 对齐 Python: 非 str content 走 json.dumps 序列化
+				if b, err := json.Marshal(content); err == nil {
+					results = append(results, string(b))
+				}
+			}
+		}
+	}
+	return results
+}
+
+// firstSystemPrompt 返回首个捕获事件的全部 system 消息拼接。
+// 对齐 Python: "\n\n".join(first_event["system_messages"])
+func (c *promptCapture) firstSystemPrompt() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.events) == 0 {
+		return ""
+	}
+	return strings.Join(c.events[0].systemMessages, "\n\n")
+}
+
+// eventCount 返回捕获事件数
+func (c *promptCapture) eventCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.events)
+}
+
+// registerPromptCapture 注册双事件回调并挂 cleanup 反注册。
+//
+// 双注册对齐 Python LLM_INPUT 在 invoke/stream 双路径触发的语义
+// （Python emit_before 同时装饰 invoke 与 stream）；plan 模式实际走哪条
+// 路径由 DeepAgent 内部决定，双注册兜底。
+func registerPromptCapture(t *testing.T) *promptCapture {
+	t.Helper()
+	c := &promptCapture{}
+	fw := runner.GetCallbackFramework()
+	fw.OnLLM(callback.LLMInvokeInput, c.record)
+	fw.OnLLM(callback.LLMStreamInput, c.record)
+	t.Cleanup(func() {
+		fw.OffLLM(callback.LLMInvokeInput, c.record)
+		fw.OffLLM(callback.LLMStreamInput, c.record)
+	})
+	return c
 }
