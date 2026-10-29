@@ -154,3 +154,138 @@ func TestSetIndexManager_卸载后再配齐重新校验(t *testing.T) {
 	_, im2 := makeCompatiblePair()
 	assert.NoError(t, b.SetIndexManager(im2)) // 重新配齐 → 重新校验（兼容通过）
 }
+
+// ──────────────────────────── 增强测试（Python 未覆盖） ────────────────────────────
+
+// chromaFakeStore 类型名 chroma 前缀（R1 反射探测目标）。不实现 storageAttrProvider——
+// 7 属性全 nil 与 fakeAttrIndexer 空值桩匹配通过属性比对，专测 chroma 拦截。
+type chromaFakeStore struct {
+	fakeAttrStore
+}
+
+// fakeEnsureLoaderStore 实现 ensureLoader 的桩（调用计数）。
+type fakeEnsureLoaderStore struct {
+	fakeAttrStore
+	ensureLoadedCalls int
+	ensureErr         error
+}
+
+func (f *fakeEnsureLoaderStore) EnsureLoaded(ctx context.Context) error {
+	f.ensureLoadedCalls++
+	return f.ensureErr
+}
+
+// TestChroma拦截_非vector索引 对齐 Python chroma 命名约定拦截（Go 增强，
+// Python 测试未覆盖此路径）。
+func TestChroma拦截_非vector索引(t *testing.T) {
+	vs := &chromaFakeStore{}
+	im := &fakeAttrIndexer{} // 全空值与 vs 空 storageAttr 匹配
+	_, err := NewBaseKnowledgeBase(
+		common.KnowledgeBaseConfig{KBID: "kb", IndexType: common.IndexTypeHybrid},
+		WithVectorStore(vs), WithIndexManager(im))
+	require.Error(t, err)
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155508, be.Code())
+	assert.Contains(t, be.Message(), "Chroma database does not support sparse embedding & hybrid search in local mode yet")
+}
+
+// TestChroma拦截_vector索引放行 chroma 命名但 index_type=vector → 放行。
+func TestChroma拦截_vector索引放行(t *testing.T) {
+	vs := &chromaFakeStore{}
+	im := &fakeAttrIndexer{}
+	_, err := NewBaseKnowledgeBase(
+		common.KnowledgeBaseConfig{KBID: "kb", IndexType: common.IndexTypeVector},
+		WithVectorStore(vs), WithIndexManager(im))
+	assert.NoError(t, err)
+}
+
+// TestChroma拦截_非strict放行 strict=false 时不拦（对齐 Python strict 门控）。
+func TestChroma拦截_非strict放行(t *testing.T) {
+	vs := &chromaFakeStore{}
+	im := &fakeAttrIndexer{}
+	_, err := NewBaseKnowledgeBase(
+		common.KnowledgeBaseConfig{KBID: "kb", IndexType: common.IndexTypeHybrid},
+		WithVectorStore(vs), WithIndexManager(im), WithStrictValidationFalse())
+	assert.NoError(t, err)
+}
+
+// TestStrict不影响七属性比对 重要语义固化：strict=false 时 7 属性比对仍执行
+// （Python strict 只影响 check_vector_field 与 chroma 拦截，Go 增强）。
+func TestStrict不影响七属性比对(t *testing.T) {
+	vs, im := makeCompatiblePair()
+	im.databaseName = "db2"
+	_, err := NewBaseKnowledgeBase(
+		common.KnowledgeBaseConfig{KBID: "kb", IndexType: common.IndexTypeVector},
+		WithVectorStore(vs), WithIndexManager(im), WithStrictValidationFalse())
+	require.Error(t, err)
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155508, be.Code())
+}
+
+// TestEnsureLoader_钩子调用 实现者被调、未实现者跳过（Go 增强）。
+func TestEnsureLoader_钩子调用(t *testing.T) {
+	el := &fakeEnsureLoaderStore{}
+	el.databaseName = "test_db"
+	el.distanceMetric = "cosine"
+	el.textField = "content"
+	el.vectorField = any("test_vector_field")
+	el.sparseVectorField = "sparse_vector"
+	el.metadataField = "metadata"
+	el.docIDField = "document_id"
+	im := &fakeAttrIndexer{
+		databaseName: "test_db", distanceMetric: "cosine", textField: "content",
+		vectorField: any("test_vector_field"), sparseVectorField: "sparse_vector",
+		metadataField: "metadata", docIDField: "document_id",
+	}
+	_, err := NewBaseKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"},
+		WithVectorStore(el), WithIndexManager(im))
+	require.NoError(t, err)
+	assert.Equal(t, 1, el.ensureLoadedCalls)
+}
+
+// TestEnsureLoader_错误传播 EnsureLoaded 失败炸构造（对齐 Python 异常传播）。
+func TestEnsureLoader_错误传播(t *testing.T) {
+	el := &fakeEnsureLoaderStore{ensureErr: errors.New("load failed")}
+	el.databaseName = "test_db"
+	el.distanceMetric = "cosine"
+	el.textField = "content"
+	el.vectorField = any("test_vector_field")
+	el.sparseVectorField = "sparse_vector"
+	el.metadataField = "metadata"
+	el.docIDField = "document_id"
+	im := &fakeAttrIndexer{
+		databaseName: "test_db", distanceMetric: "cosine", textField: "content",
+		vectorField: any("test_vector_field"), sparseVectorField: "sparse_vector",
+		metadataField: "metadata", docIDField: "document_id",
+	}
+	_, err := NewBaseKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"},
+		WithVectorStore(el), WithIndexManager(im))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "load failed")
+}
+
+// TestEnsureLoader_校验失败不触加载 三段式顺序：①失败时 ③不被调（Go 增强）。
+func TestEnsureLoader_校验失败不触加载(t *testing.T) {
+	el := &fakeEnsureLoaderStore{}
+	// 属性不匹配
+	im := &fakeAttrIndexer{databaseName: "other"}
+	_, err := NewBaseKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"},
+		WithVectorStore(el), WithIndexManager(im))
+	require.Error(t, err)
+	assert.Equal(t, 0, el.ensureLoadedCalls)
+}
+
+// TestAttrEqual_直测 比较器四态（Go 增强）。
+func TestAttrEqual_直测(t *testing.T) {
+	assert.True(t, attrEqual(nil, nil))
+	assert.False(t, attrEqual(nil, "x"))
+	assert.False(t, attrEqual("x", nil))
+	assert.True(t, attrEqual("a", "a"))
+	assert.False(t, attrEqual("a", "b"))
+	// 同类型同值
+	assert.True(t, attrEqual(struct{ A int }{1}, struct{ A int }{1}))
+	// 跨类型（Chroma 配置 vs Milvus 配置语义）：不同 struct 类型天然 false
+	assert.False(t, attrEqual(struct{ A int }{1}, struct{ B int }{1}))
+}
