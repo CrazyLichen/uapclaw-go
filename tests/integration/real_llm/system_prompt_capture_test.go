@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -18,6 +19,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	swarmruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -182,7 +186,7 @@ func (c *promptCapture) record(_ context.Context, data *callback.LLMCallEventDat
 	defer c.mu.Unlock()
 
 	ev := capturedEvent{
-		modelName:     data.ModelName,
+		modelName:      data.ModelName,
 		systemMessages: extractSystemMessages(data.Messages),
 	}
 
@@ -272,4 +276,78 @@ func registerPromptCapture(t *testing.T) *promptCapture {
 		fw.OffLLM(callback.LLMStreamInput, c.record)
 	})
 	return c
+}
+
+// runLiveCapture 执行单个 skill_mode 分支的完整实时捕获链路。
+//
+// 对齐 Python: _run_live_capture —— create_instance() →
+// process_message_impl() → Runner.run_agent() → rails before_model_call
+// → LLM_INPUT 回调捕获 messages。
+//
+// 与 Python 的两处有意偏差（设计文档 4.5，均有理由记录）：
+//   - set_checkpoint 不 noop 化：UAPCLAW_DATA_DIR 重定向后 checkpoint
+//     落临时目录，天然无害
+//   - load_user_rails 不 noop 化：空数据目录无用户 rails 可加载，自然为空
+func (s *SystemPromptCaptureSuite) runLiveCapture(skillMode string) (string, *promptCapture) {
+	t := s.T()
+
+	// 环境装配（含 fail-not-skip 的 key 检查）
+	setupPromptEnv(t, skillMode)
+
+	capture := registerPromptCapture(t)
+
+	// 对齐 Python: query = "只回复 PONG。不要调用任何工具。不要解释。"
+	query := "只回复 PONG。不要调用任何工具。不要解释。"
+	channel := "web"
+	sessionID := fmt.Sprintf("%s_prompt_capture_%d", channel, time.Now().UnixNano())
+	requestID := fmt.Sprintf("prompt-capture-%d", time.Now().UnixNano())
+
+	// inputs 构造（对齐 Python inputs dict：query 用 BuildUserPrompt 包装）
+	userPrompt := swarmruntime.BuildUserPrompt(query, map[string]any{}, channel, "zh", nil, nil)
+	inputs := map[string]any{
+		"conversation_id": sessionID,
+		"query":           userPrompt,
+		"channel":         channel,
+		"language":        "zh",
+	}
+
+	// AgentRequest 构造（对齐 Python AgentRequest；Params 是 json.RawMessage）
+	params, _ := json.Marshal(map[string]any{
+		"query": query,
+		"mode":  "agent.plan",
+		"files": map[string]any{},
+	})
+	req := swarmschema.NewAgentRequest(
+		requestID, channel, swarmschema.ReqMethodChatSend, params,
+		swarmschema.WithAgentSessionID(sessionID),
+		swarmschema.WithAgentMetadata(map[string]any{
+			"source": fmt.Sprintf("system_test_live_capture_%s", skillMode),
+		}),
+	)
+
+	// DeepAdapter 全链路（无 mock：真实模型 + 真实 rails + 真实回调）
+	adapterInst := adapter.NewDeepAdapter()
+	ctx, cancel := context.WithTimeout(s.Ctx, 180*time.Second)
+	defer cancel()
+
+	if err := adapterInst.CreateInstance(ctx, nil, "agent.plan", ""); err != nil {
+		t.Fatalf("CreateInstance 失败: %v", err)
+	}
+	resp, err := adapterInst.ProcessMessageImpl(ctx, req, inputs)
+	if err != nil {
+		t.Fatalf("ProcessMessageImpl 失败: %v", err)
+	}
+	if resp == nil || !resp.OK {
+		t.Fatalf("响应异常: resp=%+v", resp)
+	}
+
+	// 前置断言（对齐 Python 三条）
+	if capture.eventCount() < 1 {
+		t.Fatal("未捕获到任何 LLM_INPUT 事件")
+	}
+	prompt := capture.firstSystemPrompt()
+	if prompt == "" {
+		t.Fatal("system messages 为空")
+	}
+	return prompt, capture
 }
