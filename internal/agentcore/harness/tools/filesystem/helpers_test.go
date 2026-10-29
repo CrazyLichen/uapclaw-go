@@ -18,18 +18,85 @@ func TestExpandBracePattern_无花括号(t *testing.T) {
 }
 
 // TestExpandBracePattern_简单花括号 测试简单花括号模式
-// 注意：expandGroup 的 braceRe 索引逻辑可能存在 bug，
-// 此处只测试外层 ExpandBracePattern，它使用 expandGroup。
+// 此前 expandGroup 索引错位（capture group 边界 vs 整个匹配边界）导致
+// 花括号残留与无限递归，两个 Skip 桩在修复后启用真实断言。
+// 对齐 Python: _expand_brace_pattern("*.{py,js}") == ["*.py", "*.js"]
 func TestExpandBracePattern_简单花括号(t *testing.T) {
-	// expandGroup 当前实现使用 match[2] 作为 prefix 截断点，
-	// 对于 "*.{py,js}" 可能产生包含 { 的前缀导致无限递归。
-	// 跳过此测试，避免触发已知的 expandGroup bug。
-	t.Skip("expandGroup 索引逻辑待修复，跳过避免无限递归")
+	result := ExpandBracePattern("*.{py,js}")
+	if len(result) != 2 {
+		t.Fatalf("应展开 2 个模式，got %v", result)
+	}
+	if result[0] != "*.py" || result[1] != "*.js" {
+		t.Errorf("应展开为 [*.py *.js]，got %v", result)
+	}
 }
 
 // TestExpandBracePattern_多个选项 测试多个选项
 func TestExpandBracePattern_多个选项(t *testing.T) {
-	t.Skip("expandGroup 索引逻辑待修复，跳过避免无限递归")
+	result := ExpandBracePattern("src/*.{go,md,json}")
+	if len(result) != 3 {
+		t.Fatalf("应展开 3 个模式，got %v", result)
+	}
+	expect := []string{"src/*.go", "src/*.md", "src/*.json"}
+	for i, e := range expect {
+		if result[i] != e {
+			t.Errorf("第 %d 项应为 %q，got %q", i, e, result[i])
+		}
+	}
+}
+
+// TestExpandBracePattern_无逗号单选项 测试无逗号组（真实 LLM glob 常见形态）
+// 修复前：无逗号组（如 "**/*.{md}"）递归输入原样复现 → 无限递归
+// stack overflow（1GB 栈炸测试进程，本地 5 连跑 2 次复现）
+func TestExpandBracePattern_无逗号单选项(t *testing.T) {
+	// 对齐 Python: expand_group("**/*.{md}") 递归一层后 "**/*.md" 无组 → 终止
+	result := ExpandBracePattern("**/*.{md}")
+	if len(result) != 1 || result[0] != "**/*.md" {
+		t.Errorf("无逗号组应展开为 [**/*.md]，got %v", result)
+	}
+}
+
+// TestExpandBracePattern_空组 测试空花括号组
+// 修复前："{}" 经 capture 索引错位后递归自身；修复后 inner="" 拆出
+// 一个空 opt，等价于删除花括号
+func TestExpandBracePattern_空组(t *testing.T) {
+	result := ExpandBracePattern("a{}b")
+	if len(result) != 1 || result[0] != "ab" {
+		t.Errorf("空组应展开为 [ab]，got %v", result)
+	}
+}
+
+// TestExpandBracePattern_尾随逗号 测试尾随逗号（空选项展开为空串分支）
+// 对齐 Python: "{a,}" 拆分 ["a", ""] → ["a", ""]（含空串）
+func TestExpandBracePattern_尾随逗号(t *testing.T) {
+	result := ExpandBracePattern("{a,}")
+	if len(result) != 2 || result[0] != "a" || result[1] != "" {
+		t.Errorf("尾随逗号应展开为 [a ]，got %v", result)
+	}
+}
+
+// TestExpandBracePattern_嵌套组 测试多组连续展开
+// 对齐 Python: 递归逐组展开，每次处理最左无嵌套组
+func TestExpandBracePattern_嵌套组(t *testing.T) {
+	result := ExpandBracePattern("{a,b}/{c,d}")
+	if len(result) != 4 {
+		t.Fatalf("应展开 4 个模式，got %v", result)
+	}
+	expect := []string{"a/c", "a/d", "b/c", "b/d"}
+	for i, e := range expect {
+		if result[i] != e {
+			t.Errorf("第 %d 项应为 %q，got %q", i, e, result[i])
+		}
+	}
+}
+
+// TestExpandBracePattern_选项空格裁剪 测试选项两侧空格裁剪
+// 对齐 Python: opt.strip()
+func TestExpandBracePattern_选项空格裁剪(t *testing.T) {
+	result := ExpandBracePattern("*.{ py , js }")
+	if len(result) != 2 || result[0] != "*.py" || result[1] != "*.js" {
+		t.Errorf("选项应裁剪空格后展开为 [*.py *.js]，got %v", result)
+	}
 }
 
 // TestCatN_空内容 测试空内容
@@ -206,9 +273,13 @@ func TestGetDestructiveWarning_安全命令(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// TestExpandGroup 测试递归展开花括号组
+// TestExpandGroup 测试递归展开花括号组（直接验证 expandGroup 终止性）
 func TestExpandGroup(t *testing.T) {
-	t.Skip("expandGroup 索引逻辑待修复，跳过避免无限递归")
+	// 修复前该输入触发无限递归 stack overflow；此处直接调用确认终止
+	result := expandGroup("**/*.{md}")
+	if len(result) != 1 || result[0] != "**/*.md" {
+		t.Errorf("expandGroup 应展开为 [**/*.md]，got %v", result)
+	}
 }
 
 // TestExpandGroup_无花括号 测试无花括号

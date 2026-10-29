@@ -173,8 +173,8 @@ modes:
         is_proactive: true
 embed:
   embed_api_key: %s
-  embed_base_url: https://ark.cn-beijing.volces.com/api/v3/embeddings
-  embed_model: Doubao-Embedding-Vision
+  embed_base_url: https://ark.cn-beijing.volces.com/api/coding/v3/embeddings
+  embed_model: doubao-embedding-vision
 models:
   defaults:
     - is_default: true
@@ -184,7 +184,7 @@ models:
         model_name: deepseek-v4.1-flash
         api_key: %s
         api_base: https://ark.cn-beijing.volces.com/api/coding/v3
-        timeout: 120
+        timeout: 300
         verify_ssl: false
 `, skillMode, apiKey, apiKey)
 	cfgPath := filepath.Join(dataDir, "config", "config.yaml")

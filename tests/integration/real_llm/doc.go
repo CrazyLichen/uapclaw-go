@@ -16,8 +16,10 @@
 //   - LLM_MODEL_PROVIDER: 服务商标识（默认 OpenAI）
 //   - EMBED_API_KEY: embedding 密钥（缺省回落 LLM_API_KEY）
 //   - EMBED_API_BASE: embedding 完整端点 URL（默认
-//     https://ark.cn-beijing.volces.com/api/v3/embeddings）
-//   - EMBED_MODEL_NAME: embedding 模型名（默认 Doubao-Embedding-Vision）
+//     https://ark.cn-beijing.volces.com/api/coding/v3/embeddings——ark coding
+//     套餐 key 的 embedding 走 coding 端点，标准 /api/v3 会 404）
+//   - EMBED_MODEL_NAME: embedding 模型名（默认 doubao-embedding-vision，
+//     全小写——ark 模型名大小写敏感）
 //   - RUN_REAL_LLM_TESTS: 真跑开关（skill/subagent/todo/ltm/code_agent 套件守卫，
 //     对齐 Python os.getenv("RUN_REAL_LLM_TESTS") 检查，未设为 1 时 Skip）
 //

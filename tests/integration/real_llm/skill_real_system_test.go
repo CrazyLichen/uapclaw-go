@@ -71,7 +71,16 @@ func (s *SkillRealSystemSuite) SetupTest() {
 	s.tempRoot = s.T().TempDir()
 	s.sysOperationID = fmt.Sprintf("ut_skill_sysop_%d", time.Now().UnixNano())
 
+	// card.ID 必须等于注册 ID：registerSysOperationTools 以 card.ID 前缀
+	// 生成工具 ID（{card.ID}.fs.read_file），而 getSysOpTool 用
+	// GenerateStaticToolID(sysOperationID, ...) 查找——两者不一致时
+	// 工具查不到（CI 首跑 40856190636 实证：随机 UUID card.ID 导致
+	// 0.00s 失败"未找到 sys_operation 工具"）。
+	// 对齐 Python: SysOperationCard(id="sys_op", ...) 调用方自定 ID，
+	// add_sys_operation 以 card.id 注册（resource_manager.py L724），
+	// 工具 ID 全链路同前缀。
 	card := sys_operation.NewSysOperationCard()
+	card.BaseCard.ID = s.sysOperationID
 	sysOp, err := sys_operation.NewSysOperation(card)
 	s.Require().NoError(err, "创建 SysOperation 失败")
 

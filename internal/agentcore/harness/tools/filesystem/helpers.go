@@ -247,13 +247,20 @@ func GetDestructiveWarning(command string) string {
 
 // expandGroup 递归展开花括号组。
 // Python: GlobTool._expand_brace_pattern 内的 expand_group (filesystem.py L1433-1443)
+//
+// 索引语义对齐 Python re.match.start()/end()：返回整个匹配（含花括号）的
+// 边界，prefix/suffix 切在花括号之外。此前误用 capture group（inner）边界
+// match[2]/match[3]，导致拼接时保留 "{"、丢弃 "}"：
+//   - 无逗号组（如 "{md}"）递归输入原样复现 → 无限递归 stack overflow
+//     （真实 LLM glob "**/*.{md}" 触发，1GB 栈炸测试进程）
+//   - 有逗号组（如 "*.{py,js}"）展开为 ["*.{py", "*.{js"]（残留花括号）
 func expandGroup(s string) []string {
 	match := braceRe.FindStringSubmatchIndex(s)
 	if match == nil {
 		return []string{s}
 	}
-	prefix := s[:match[2]]
-	suffix := s[match[3]:]
+	prefix := s[:match[0]]
+	suffix := s[match[1]:]
 	inner := s[match[2]:match[3]]
 	opts := strings.Split(inner, ",")
 

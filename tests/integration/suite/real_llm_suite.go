@@ -3,6 +3,7 @@
 package suite
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -23,8 +24,9 @@ import (
 //   - LLM_MODEL_NAME: 模型名称（默认 minimax-m3）
 //   - LLM_MODEL_PROVIDER: 服务商标识（默认 OpenAI）
 //   - EMBED_API_KEY: embedding 密钥（缺省回落 LLM_API_KEY）
-//   - EMBED_API_BASE: embedding 完整端点 URL（默认 https://ark.cn-beijing.volces.com/api/v3/embeddings）
-//   - EMBED_MODEL_NAME: embedding 模型名（默认 Doubao-Embedding-Vision）
+//   - EMBED_API_BASE: embedding 完整端点 URL（默认
+//     https://ark.cn-beijing.volces.com/api/coding/v3/embeddings，coding 套餐端点）
+//   - EMBED_MODEL_NAME: embedding 模型名（默认 doubao-embedding-vision，全小写）
 //
 // 运行方式: go test -tags="sqlite_fts5 test integration llm" ./tests/integration/real_llm/...
 type RealLLMSuite struct {
@@ -44,9 +46,24 @@ type RealLLMSuite struct {
 //
 // embedding 配置对齐 Python test_memory_rail_e2e.py 的 fixture 模式：
 // EMBED_API_KEY/EMBED_API_BASE 独立设置，缺省时回落到 LLM_API_KEY/LLM_API_BASE
-// （复用同一账号 key），模型默认 Doubao-Embedding-Vision。
+// （复用同一账号 key），模型默认 doubao-embedding-vision（coding 端点）。
 func (s *RealLLMSuite) SetupSuite() {
 	s.RunnerSuite.SetupSuite()
+
+	// 替换套件级 ctx：BaseIntegrationSuite 的 5 分钟绝对 deadline 会封顶
+	// 所有子 context.WithTimeout(s.Ctx, N)（context 嵌套取 min(deadline)），
+	// 真实 LLM 套件单套常有 8+ 个测试方法、每个 1~3 次 Invoke（每次
+	// 10~200s），5 分钟必然击穿。CI 首跑 40856190636 实证：memory_rail
+	// 套件 10:22:54→10:27:54 = 300.01s 整（第 7/8 个用例报
+	// "context deadline exceeded"）、code_agent 套件两轮 Invoke
+	// 101s+199s = 300.00s 整（第二轮 WaitCompletion 返回
+	// {"error":"cancelled"} 缺 result_type）——都是套件 ctx 到期，
+	// 而非测试自身超时。
+	// Runner.Start/Stop 的 ctx 仅用于同步初始化/清理（checkpointer 不
+	// 持有 ctx），替换后无泄漏；TearDownSuite 中旧 Cancel 仍会被调用，
+	// 双重 Cancel 安全（幂等）。
+	s.Cancel() // 取消 5 分钟限时 ctx
+	s.Ctx = context.Background()
 
 	apiKey := os.Getenv("LLM_API_KEY")
 	apiBase := envWithDefault("LLM_API_BASE", "https://ark.cn-beijing.volces.com/api/coding/v3")
@@ -60,7 +77,11 @@ func (s *RealLLMSuite) SetupSuite() {
 			APIKey:         apiKey,
 			APIBase:        apiBase,
 			VerifySSL:      false,
-			Timeout:        120,
+			// 300s：CI runner 在海外，访问 ark 北京端点 RTT 高且流式
+			// 长回复易超时（Python 侧 base_model_client 默认 60s 但本地
+			// 跑无跨境延迟；Go 侧套件历史上用 120s，CI 首跑 40856190636
+			// 实测 context deadline exceeded，放宽到 300s）
+			Timeout: 300,
 		}
 		s.RealModelConfig = &llmschema.ModelRequestConfig{
 			ModelName: modelName,
@@ -70,13 +91,18 @@ func (s *RealLLMSuite) SetupSuite() {
 	// embedding：key 缺省回落 LLM_API_KEY（用户决策：复用现有 key）。
 	// 注意 EMBED_API_BASE 是完整端点 URL——Go 的 APIEmbedding 直接 POST 到
 	// BaseURL 原样（不同于 Python lite 路径会自动拼 /embeddings），
-	// 因此默认值必须带 /api/v3/embeddings 完整路径。
+	// 因此默认值必须带完整路径。
+	// 端点实测（2026-10-29，ark coding 套餐 key）：标准 /api/v3/embeddings
+	// 返回 InvalidEndpointOrModel.NotFound——coding 套餐的 embedding 走
+	// /api/coding/v3/embeddings，模型名 doubao-embedding-vision（全小写，
+	// ark 端点模型名大小写敏感，文档风格的大写驼峰 Doubao-Embedding-Vision
+	// 会被拒）。
 	embedAPIKey := envWithDefault("EMBED_API_KEY", apiKey)
 	embedAPIBase := envWithDefault(
 		"EMBED_API_BASE",
-		"https://ark.cn-beijing.volces.com/api/v3/embeddings",
+		"https://ark.cn-beijing.volces.com/api/coding/v3/embeddings",
 	)
-	embedModelName := envWithDefault("EMBED_MODEL_NAME", "Doubao-Embedding-Vision")
+	embedModelName := envWithDefault("EMBED_MODEL_NAME", "doubao-embedding-vision")
 
 	if embedAPIKey != "" {
 		s.RealEmbeddingConfig = &retrievalembedding.EmbeddingConfig{
