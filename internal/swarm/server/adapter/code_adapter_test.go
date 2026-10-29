@@ -324,3 +324,35 @@ func TestCodeAdapter_CreateInstance_agentWorkspaceDir路径(t *testing.T) {
 		t.Errorf("agentWorkspaceDir = %q, want %q", c.deep.agentWorkspaceDir, want)
 	}
 }
+
+// TestCodeAdapter_CreateInstance_configBase已缓存 测试 configBase 缓存到 deep 字段。
+// 回归背景：CodeAdapter.CreateInstance 曾漏存（DeepAdapter 步骤 6 有此赋值，
+// deep_adapter.go:412），导致 getToolCards 中 c.deep.configBase["acp_agents"] 恒为 nil，
+// acp_chat 永不激活。
+func TestCodeAdapter_CreateInstance_configBase已缓存(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	pathutil.ResetCache()
+	t.Cleanup(pathutil.ResetCache)
+	// 模拟已初始化：创建 config 目录 + 最小 config.yaml（含顶层 models 段供断言）
+	if err := os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	minimalYAML := "models:\n  defaults: []\nmodes:\n  code:\n    tools: []\n    rails: []\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "config", "config.yaml"), []byte(minimalYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := NewCodeAdapter()
+	ctx := t.Context()
+	if err := c.CreateInstance(ctx, map[string]any{}, "agent.plan", ""); err != nil {
+		t.Fatalf("CreateInstance error: %v", err)
+	}
+
+	if c.deep.configBase == nil {
+		t.Fatal("configBase 应缓存到 deep 字段（getToolCards 读取 acp_agents 依赖它）")
+	}
+	if _, ok := c.deep.configBase["models"]; !ok {
+		t.Error("configBase 应包含顶层 models 段")
+	}
+}

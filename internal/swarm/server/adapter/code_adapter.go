@@ -218,6 +218,13 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
 
+	// 步骤 3.1: configBase 缓存到 deep 字段
+	// Python: config_base = get_config() 全量配置，后续 _get_tool_cards 等按参数传递；
+	// Go 的 getToolCards 从 c.deep.configBase 字段读取（acp_agents）。
+	// DeepAdapter.CreateInstance 步骤 6 有此赋值（deep_adapter.go:412），
+	// CodeAdapter 重写后曾遗漏，导致 getToolCards 读取 acp_agents 时恒为 nil
+	c.deep.configBase = configBase
+
 	// 步骤 3.5: load_dotenv（对齐 Python: load_dotenv(dotenv_path=get_env_file(), override=True)）
 	if err := dotenv.Load(workspace.EnvFile()); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("load_dotenv failed, continuing with current env vars")
