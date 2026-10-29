@@ -8,8 +8,8 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	sschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -27,9 +27,9 @@ func (m *acpPermSession) WriteStream(_ context.Context, _ any) error { return ni
 func (m *acpPermSession) WriteCustomStream(_ context.Context, _ any) error {
 	return nil
 }
-func (m *acpPermSession) GetEnv(_ string, _ ...any) any          { return nil }
+func (m *acpPermSession) GetEnv(_ string, _ ...any) any           { return nil }
 func (m *acpPermSession) Interact(_ context.Context, _ any) error { return nil }
-func (m *acpPermSession) ClearSession(_ context.Context)         {}
+func (m *acpPermSession) ClearSession(_ context.Context)          {}
 
 // newAcpPermRequest 构造 ACP 通道权限确认请求（带 session 回调上下文）。
 func newAcpPermRequest(t *testing.T, toolCallID, toolName string) harnesssecurity.PermissionConfirmationRequest {
@@ -42,8 +42,8 @@ func newAcpPermRequest(t *testing.T, toolCallID, toolName string) harnesssecurit
 	}
 	if toolName != "" {
 		req.ToolCall = &llmschema.ToolCall{
-			ID:   toolCallID,
-			Name: toolName,
+			ID:        toolCallID,
+			Name:      toolName,
 			Arguments: `{"path":"/tmp/x.txt"}`,
 		}
 	}

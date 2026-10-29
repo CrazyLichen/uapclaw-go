@@ -109,9 +109,9 @@ func (s *AgentServer) handleACPToolResponse(_ context.Context, request *schema.A
 		Msg("[AgentServer] ignore unknown/late acp tool response")
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"accepted":  false,
-			"ignored":   true,
-			"reason":    "unknown_or_late_response",
+			"accepted":   false,
+			"ignored":    true,
+			"reason":     "unknown_or_late_response",
 			"jsonrpc_id": jsonrpcID,
 		}),
 	), nil
