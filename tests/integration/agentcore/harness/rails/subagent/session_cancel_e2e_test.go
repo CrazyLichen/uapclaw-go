@@ -476,6 +476,10 @@ func (s *SessionCancelE2ESuite) setSleepSubagent(
 // Go 无法 patch uuid 固定 task_id，改按 Description 区分：
 // slowDescription 对应慢子代理（被取消），其余为快子代理（完成）。
 // 必须在 spawn 前调用——spawn 提交后 executor 会立即调用 CreateSubagent。
+// 竞态修复（2026-10-29 CI 两连挂）：AddTask 锁内注册后 scheduler 异步唤醒
+// executeTask，而 spawn 工具的 toolkit.UpsertRunning 在 AddTask 返回后才执行
+// ——CreateSubagent 可能先于行 upsert 到达。查不到行时轮询等待行出现
+// （UpsertRunning 必然紧随其后），超时才回落快子代理。
 func (s *SessionCancelE2ESuite) setDescriptionBoundSubagents(
 	agent *harness.DeepAgent,
 	slowDescription string,
@@ -483,17 +487,30 @@ func (s *SessionCancelE2ESuite) setDescriptionBoundSubagents(
 	slowOutput string,
 ) {
 	agent.SetCreateSubagentOverride(func(ctx context.Context, _, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
-		// 按 sub_session_id 查 toolkit 行，按 Description 绑定快慢
-		for _, row := range agent.GetSessionToolkit().ListAll() {
-			if row.SubSessionID == subSessionID {
-				if row.Description == slowDescription {
+		// 按 sub_session_id 查 toolkit 行，按 Description 绑定快慢；
+		// 行尚未 upsert 时短暂轮询（AddTask→UpsertRunning 窗口）
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			var matched *hsubagent.SessionTaskRow
+			for _, row := range agent.GetSessionToolkit().ListAll() {
+				if row.SubSessionID == subSessionID {
+					m := row
+					matched = &m
+					break
+				}
+			}
+			if matched != nil {
+				if matched.Description == slowDescription {
 					return newFakeSubAgent(ctx, slowDelay, slowOutput), nil
 				}
 				return newFakeSubAgent(ctx, 0, "b done"), nil
 			}
+			if time.Now().After(deadline) {
+				// 未匹配时返回快子代理
+				return newFakeSubAgent(ctx, 0, "b done"), nil
+			}
+			time.Sleep(5 * time.Millisecond)
 		}
-		// 未匹配时返回快子代理
-		return newFakeSubAgent(ctx, 0, "b done"), nil
 	})
 }
 
