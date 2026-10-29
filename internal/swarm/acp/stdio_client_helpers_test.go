@@ -71,55 +71,55 @@ func TestHandlePeerRequest_纯函数分支(t *testing.T) {
 	// read 越界路径 → -32001（相对路径按进程 cwd 解析后越界）
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(1),
-		"method":  "fs/read_text_file",
-		"params":  map[string]any{"path": "../../outside.txt"},
+		"method": "fs/read_text_file",
+		"params": map[string]any{"path": "../../outside.txt"},
 	})
 	// read 不存在文件（root 内）→ ENOENT -32002
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(2),
-		"method":  "fs/read_text_file",
-		"params":  map[string]any{"path": filepath.Join(root, "nope.txt")},
+		"method": "fs/read_text_file",
+		"params": map[string]any{"path": filepath.Join(root, "nope.txt")},
 	})
 	// read 无 path 键（nil）→ 拒绝
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(8),
-		"method":  "fs/read_text_file",
-		"params":  map[string]any{},
+		"method": "fs/read_text_file",
+		"params": map[string]any{},
 	})
 	// write 越界路径 → -32001
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(3),
-		"method":  "fs/write_text_file",
-		"params":  map[string]any{"path": "../x.txt", "content": "x"},
+		"method": "fs/write_text_file",
+		"params": map[string]any{"path": "../x.txt", "content": "x"},
 	})
 	// write params nil → -32602
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(4),
-		"method":  "fs/write_text_file",
-		"params":  "not-a-dict",
+		"method": "fs/write_text_file",
+		"params": "not-a-dict",
 	})
 	// read params nil → -32602
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(9),
-		"method":  "fs/read_text_file",
-		"params":  "not-a-dict",
+		"method": "fs/read_text_file",
+		"params": "not-a-dict",
 	})
 	// 未知方法 → -32601
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(5),
-		"method":  "some/unknown",
+		"method": "some/unknown",
 	})
 	// read 真实文件（root 内，绝对路径）
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(6),
-		"method":  "fs/read_text_file",
-		"params":  map[string]any{"path": filepath.Join(root, "f.txt"), "line": float64(2)},
+		"method": "fs/read_text_file",
+		"params": map[string]any{"path": filepath.Join(root, "f.txt"), "line": float64(2)},
 	})
 	// write root 内（绝对路径，真实落盘）
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(7),
-		"method":  "fs/write_text_file",
-		"params":  map[string]any{"path": filepath.Join(root, "w.txt"), "content": "ok"},
+		"method": "fs/write_text_file",
+		"params": map[string]any{"path": filepath.Join(root, "w.txt"), "content": "ok"},
 	})
 	b, err := os.ReadFile(filepath.Join(root, "w.txt"))
 	if err != nil || string(b) != "ok" {
@@ -133,7 +133,7 @@ func TestHandlePeerRequest_权限自动应答(t *testing.T) {
 	c := NewAcpStdioClient("unused", nil, "", nil)
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(1),
-		"method":  "session/request_permission",
+		"method": "session/request_permission",
 	})
 	// 无崩溃即通过（写失败被忽略；日志分支由 autoApprovePermissions 覆盖）
 }
@@ -147,7 +147,7 @@ func TestHandlePeerRequest_权限取消应答(t *testing.T) {
 	c := NewAcpStdioClient("unused", nil, "", nil)
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": "perm-1",
-		"method":  "session/request_permission",
+		"method": "session/request_permission",
 	})
 }
 
@@ -574,7 +574,7 @@ func TestDispatchMessage非对象分发(t *testing.T) {
 	ch2, _ := c.registerPending(43)
 	c.dispatchMessage(map[string]any{
 		"jsonrpc": "2.0", "id": float64(43),
-		"error":   map[string]any{"code": float64(-1), "message": "e"},
+		"error": map[string]any{"code": float64(-1), "message": "e"},
 	})
 	select {
 	case res := <-ch2:

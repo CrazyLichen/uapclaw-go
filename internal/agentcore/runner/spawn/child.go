@@ -55,11 +55,13 @@ const logComponent = logger.ComponentAgentCore
 
 var (
 	// TeamRunnerFunc 团队执行函数变量（由 runtime 包注入，打破循环依赖）。
-	// 签名：func(ctx, agentTeam, inputs, base, member, sess) (map[string]any, error)
+	// S-71(A1) 签名：func(ctx, agentTeam any, inputs map[string]any, sess) (map[string]any, error)
+	// ——member 语义由注入闭包编码（子进程 TEAM_AGENT 路径恒 member=true）。
 	TeamRunnerFunc any
 
 	// TeamRunnerStreamingFunc 团队流式执行函数变量（由 runtime 包注入，打破循环依赖）。
-	// 签名：func(ctx, agentTeam, inputs, base, member, sess) (<-chan stream.Schema, error)
+	// S-71(A1) 签名：func(ctx, agentTeam any, inputs map[string]any, sess) (<-chan stream.Schema, error)
+	// ——同上，member 语义由注入闭包编码。
 	// S-27: 子进程 TEAM_AGENT 流式路径需要（原只注入非流式，streaming 标志被无视）
 	TeamRunnerStreamingFunc any
 
@@ -369,11 +371,13 @@ func ExecuteAgent(
 			if streamFn == nil {
 				return nil, fmt.Errorf("team_agent 模式未初始化：TeamRunnerStreamingFunc 尚未注入")
 			}
-			runStreamFn, ok := streamFn.(func(context.Context, any, any, bool, bool, any) (<-chan stream.Schema, error))
+			// S-71(A1): 注入签名收窄为 (ctx, agent, inputs map, sess)——member 语义
+			// 由注入闭包编码（child.go 原调用恒传 member=true）。
+			runStreamFn, ok := streamFn.(func(context.Context, any, map[string]any, any) (<-chan stream.Schema, error))
 			if !ok {
 				return nil, fmt.Errorf("team_agent 模式初始化异常：TeamRunnerStreamingFunc 函数类型不匹配")
 			}
-			streamCh, err := runStreamFn(ctx, agent, inputs, false, true, agentConfig.SessionID)
+			streamCh, err := runStreamFn(ctx, agent, inputs, agentConfig.SessionID)
 			if err != nil {
 				return nil, fmt.Errorf("team_agent 模式：流式执行启动失败: %w", err)
 			}
@@ -395,11 +399,13 @@ func ExecuteAgent(
 		if fn == nil {
 			return nil, fmt.Errorf("team_agent 模式未初始化：TeamRunner 尚未注入（需先调用 runtime.GetTeamRuntimeManager()）")
 		}
-		runFn, ok := fn.(func(context.Context, any, any, bool, bool, any) (map[string]any, error))
+		// S-71(A1): 注入签名收窄为 (ctx, agent, inputs map, sess)——member 语义
+		// 由注入闭包编码（child.go 原调用恒传 member=true）。
+		runFn, ok := fn.(func(context.Context, any, map[string]any, any) (map[string]any, error))
 		if !ok {
 			return nil, fmt.Errorf("team_agent 模式初始化异常：TeamRunner 函数类型不匹配")
 		}
-		return runFn(ctx, agent, inputs, false, true, agentConfig.SessionID)
+		return runFn(ctx, agent, inputs, agentConfig.SessionID)
 	default:
 		return nil, fmt.Errorf("不支持的 Agent 启动方式: %s", agentConfig.AgentKind)
 	}

@@ -103,11 +103,25 @@ func GetTeamRuntimeManager() *TeamRuntimeManager {
 			return RunTeamMember(ctx, ta, inputs, sessionID)
 		})
 		// 注入 TeamRunner 函数到 runner/spawn 包（打破循环依赖）
-		runnerspawn.SetTeamRunnerFunc(RunAgentTeam)
+		// S-71(A1): 路由函数 RunAgentTeam 删除——子进程 TEAM_AGENT 路径
+		// Python 语义是 member=True（child.go L402 原样传 false,true），
+		// 注入闭包直接适配 RunTeamMember 并收窄类型（agent 参数在
+		// spawn 缝是 any，收窄失败返回错误，同 SetRunTeamMemberFunc 模式）。
+		runnerspawn.SetTeamRunnerFunc(func(ctx context.Context, agentTeam any, inputs map[string]any, sess any) (map[string]any, error) {
+			ta, ok := agentTeam.(*agent.TeamAgent)
+			if !ok {
+				return nil, fmt.Errorf("team_agent 模式：agent 必须是 *agent.TeamAgent，实际 %T", agentTeam)
+			}
+			return RunTeamMember(ctx, ta, inputs, sess)
+		})
 		// S-27: 注入团队流式执行函数（子进程 TEAM_AGENT 流式路径用，
-		// RunAgentTeamStreaming 多一个 streamLogger 参数，子进程场景传 nil）
-		runnerspawn.TeamRunnerStreamingFunc = func(ctx context.Context, agentTeam any, inputs any, base bool, member bool, sess any) (<-chan sessionstream.Schema, error) {
-			return RunAgentTeamStreaming(ctx, agentTeam, inputs, base, member, sess, nil)
+		// S-71(A1): 路由函数删除，直接适配 RunTeamMemberStreaming，子进程场景无 streamLogger）
+		runnerspawn.TeamRunnerStreamingFunc = func(ctx context.Context, agentTeam any, inputs map[string]any, sess any) (<-chan sessionstream.Schema, error) {
+			ta, ok := agentTeam.(*agent.TeamAgent)
+			if !ok {
+				return nil, fmt.Errorf("team_agent 模式：agent 必须是 *agent.TeamAgent，实际 %T", agentTeam)
+			}
+			return RunTeamMemberStreaming(ctx, ta, inputs, sess)
 		}
 		// S-27: 注入 FromSpawnPayload（子进程 TEAM_AGENT 构造入口，
 		// 打破 runner/spawn → agent_teams/agent 循环依赖）

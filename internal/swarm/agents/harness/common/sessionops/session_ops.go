@@ -1,6 +1,7 @@
 package sessionops
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -211,11 +212,20 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 						}
 					}
 					// Python: json.dumps(data, ensure_ascii=False, indent=2)
-					if updated, err := json.MarshalIndent(records, "", "  "); err != nil {
+					// M-65: Encoder+SetEscapeHTML(false) 对齐 ensure_ascii=False——
+					// MarshalIndent 默认转义 &<>（history 中工具标签如 <bash-stdout>
+					// 会变 \u003c 转义串），与 Python 产物字节级不一致。
+					// 同 gateway/routing/session_map.go save() 先例（含 TrimSpace 去
+					// Encode 尾换行对齐 Python json.dump 无尾换行）。
+					var buf bytes.Buffer
+					enc := json.NewEncoder(&buf)
+					enc.SetEscapeHTML(false)
+					enc.SetIndent("", "  ")
+					if err := enc.Encode(records); err != nil {
 						// M-14: 序列化失败静默同上
 						logger.Warn(logComponent).Str("file", targetHistory).Err(err).Msg("fork_session: failed to marshal history records")
 					} else {
-						if writeErr := os.WriteFile(targetHistory, updated, 0o644); writeErr != nil {
+						if writeErr := os.WriteFile(targetHistory, bytes.TrimSpace(buf.Bytes()), 0o644); writeErr != nil {
 							logger.Warn(logComponent).Str("file", targetHistory).Err(writeErr).Msg("fork_session: failed to write history file")
 						}
 					}
@@ -238,6 +248,11 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 
 	// Python: 获取现有标题集合
 	existingTitles := map[string]bool{}
+	// M-63 勘误：Python 侧 try/except + debug 日志是防御性分支——
+	// get_all_sessions_metadata 内部 _read_metadata 已吞掉单会话 IO 异常
+	// （session_metadata.py L396-437 无抛出路径）；Go 签名
+	// GetAllSessionsMetadata() ([]map[string]any, int) 无 error 返回，
+	// 与 Python 可观察行为（不抛）一致，此处无错误可记。
 	allSessions, _ := session.GetAllSessionsMetadata(500, 0)
 	for _, s := range allSessions {
 		if t, ok := s["title"].(string); ok && t != "" {

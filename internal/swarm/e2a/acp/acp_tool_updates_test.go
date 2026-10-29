@@ -8,10 +8,10 @@ import (
 
 func TestNormalizeToolName(t *testing.T) {
 	cases := map[string]string{
-		"free_search":   "mcp_free_search",
-		"exec_command":  "mcp_exec_command",
-		"read_file":     "read_file",
-		"":              "",
+		"free_search":  "mcp_free_search",
+		"exec_command": "mcp_exec_command",
+		"read_file":    "read_file",
+		"":             "",
 	}
 	for in, want := range cases {
 		if got := NormalizeToolName(in); got != want {
@@ -22,16 +22,16 @@ func TestNormalizeToolName(t *testing.T) {
 
 func TestInferToolKind(t *testing.T) {
 	cases := map[string]string{
-		"rm":             "delete",
-		"rename":         "move",
-		"edit_file":      "edit",
-		"bash":           "execute",
+		"rm":              "delete",
+		"rename":          "move",
+		"edit_file":       "edit",
+		"bash":            "execute",
 		"create_terminal": "execute",
-		"fetch":          "fetch",
-		"grep":           "search",
-		"read_file":      "read",
-		"ls":             "read",
-		"unknown_tool":   "other",
+		"fetch":           "fetch",
+		"grep":            "search",
+		"read_file":       "read",
+		"ls":              "read",
+		"unknown_tool":    "other",
 	}
 	for in, want := range cases {
 		if got := inferToolKind(in); got != want {
@@ -216,7 +216,7 @@ func TestBuildAcpToolResultUpdate_状态推断(t *testing.T) {
 	// 无 status：terminal create + terminalId → in_progress
 	u := BuildAcpToolResultUpdate(map[string]any{
 		"tool_call_id": "c2", "tool_name": "create_terminal",
-		"rawOutput":    map[string]any{"terminalId": "t9"},
+		"rawOutput": map[string]any{"terminalId": "t9"},
 	}, nil)
 	if u["status"] != "in_progress" {
 		t.Errorf("terminal create status = %v", u["status"])
@@ -248,7 +248,7 @@ func TestBuildAcpToolResultUpdate_terminalContent(t *testing.T) {
 	// terminalId 命中 → terminal content block 替代 result
 	u := BuildAcpToolResultUpdate(map[string]any{
 		"tool_call_id": "c6", "tool_name": "create_terminal",
-		"result":       "ignored", "rawOutput": map[string]any{"terminalId": "t1"},
+		"result": "ignored", "rawOutput": map[string]any{"terminalId": "t1"},
 	}, nil)
 	if _, hasResult := u["result"]; hasResult {
 		t.Error("terminalId 存在时不应有 result 字段")

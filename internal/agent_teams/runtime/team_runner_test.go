@@ -3,12 +3,14 @@ package runtime
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -146,33 +148,24 @@ func TestRunBaseTeam_正常路径也解绑(t *testing.T) {
 	assert.Nil(t, tr.GetTeamSession(sid), "正常路径 Unbind 应执行")
 }
 
-// TestRunAgentTeam_Base分支类型断言 验证 M-56 facade 断言
-//
-// base=true 传非 BaseTeam 类型 → 明确类型错误（不再是隐式 prepareBaseTeam）。
-func TestRunAgentTeam_Base分支类型断言(t *testing.T) {
-	_, err := RunAgentTeam(context.Background(), "some-team-id", map[string]any{}, true, false, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "accepts BaseTeam")
-	assert.Contains(t, err.Error(), "got string", "错误消息应包含实际类型名")
+// TestRunAgentTeam_Base分支类型断言 已随 S-71(A1) 路由函数删除而移除——
+// base/member 分支类型约束现由 RunBaseTeam/RunTeamMember 签名编译期保证。
 
-	_, err = RunAgentTeamStreaming(context.Background(), "some-team-id", map[string]any{}, true, false, nil, nil)
+// TestRunTeamAgent_str场景外层解析 S-71(A1) 回归：
+// str 不再是 RunTeamAgent 入参（签名收窄 *TeamAgentSpec），
+// 外层经 ResolveTeamAgentSpec 解析；无活跃池条目且无 session 时应报错。
+func TestRunTeamAgent_str场景外层解析(t *testing.T) {
+	_, err := ResolveTeamAgentSpec(context.Background(), "no-such-team", nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "accepts BaseTeam")
+	assert.Contains(t, err.Error(), "no live pool entry")
 }
 
-// TestRunAgentTeam_Base分支正常路由 验证 M-56 facade 正常路径
-func TestRunAgentTeam_Base分支正常路由(t *testing.T) {
-	team := &mockBaseTeam{
-		invokeFn: func(ctx context.Context, inputs map[string]any) (any, error) {
-			return map[string]any{"routed": "base"}, nil
-		},
-	}
-
-	// facade base=true → RunBaseTeam 正常路由
-	result, err := RunAgentTeam(context.Background(), team, map[string]any{}, true, false, nil)
+// TestRunTeamAgent_spec直传 S-71(A1): *TeamAgentSpec 直接透传解析器。
+func TestRunTeamAgent_spec直传(t *testing.T) {
+	spec := &atschema.TeamAgentSpec{TeamName: "s71-direct-spec"}
+	resolved, err := ResolveTeamAgentSpec(context.Background(), spec, nil)
 	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, "base", result["routed"])
+	assert.Same(t, spec, resolved)
 }
 
 // TestRunBaseTeam_InvokePanic传播 验证 panic 经 recover 传播（M-53 前置行为不变）
@@ -208,17 +201,119 @@ func TestRunBaseTeam_正常路径返回结果(t *testing.T) {
 	assert.Equal(t, 42, result["answer"])
 }
 
-// TestRunBaseTeamStreaming_StreamErr时清理仍执行 验证 M-53 streamErr 分支 defer 化
+// TestRunBaseTeamStreaming_StreamErr时清理仍执行 验证 M-53 streamErr 分支 cleanup 显式调用
+//
+// S-75/M-51: streamErr 分支 goroutine 未启动，闭包须显式执行。
+// 观察点：TeamRuntime 解绑在返回错误前完成。
 func TestRunBaseTeamStreaming_StreamErr时清理仍执行(t *testing.T) {
-	team := &mockBaseTeam{
-		streamFn: func(ctx context.Context, inputs map[string]any) (<-chan stream.Schema, error) {
-			return nil, errors.New("stream setup failed")
+	tr := team_runtime.NewTeamRuntime(team_runtime.RuntimeConfig{TeamID: "s75-streamerr-team", P2PTimeout: 30})
+	team := &mockBaseTeamWithRuntime{
+		mockBaseTeam: mockBaseTeam{
+			streamFn: func(ctx context.Context, inputs map[string]any) (<-chan stream.Schema, error) {
+				return nil, errors.New("stream setup failed")
+			},
 		},
+		runtime: tr,
 	}
+	sess := session.NewAgentTeamSession(session.WithAgentTeamSessionID("s75-streamerr"))
+	sid := sess.GetSessionID()
 
-	ch, err := RunBaseTeamStreaming(context.Background(), team, map[string]any{}, nil)
+	ch, err := RunBaseTeamStreaming(context.Background(), team, map[string]any{}, sess)
 	require.Error(t, err)
 	assert.Nil(t, ch, "streamErr 时应返回 nil channel")
+	// streamErr 分支：cleanup 显式调用 → session 已解绑
+	assert.Nil(t, tr.GetTeamSession(sid), "streamErr 分支 Unbind 应在返回前执行")
+}
+
+// postRunObserverCheckpointer S-75 测试用：观察 PostAgentTeamExecute 调用。
+// PostRun 的可观察副作用是 Commit → PostAgentTeamExecute，用于判断
+// PostRun 是否提前执行（返回通道时 vs 流耗尽后）。
+// 注意不能嵌入 failingCheckpointer（其 PreAgentTeamExecute 恒失败会让 PreRun 先挂）。
+type postRunObserverCheckpointer struct {
+	// postRunCalls PostAgentTeamExecute 调用计数（atomic 读写跨 goroutine）
+	postRunCalls int32
+}
+
+func (p *postRunObserverCheckpointer) PreWorkflowExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {
+	return nil
+}
+func (p *postRunObserverCheckpointer) PostWorkflowExecute(ctx context.Context, s interfaces.InnerSession, result any, exception error) error {
+	return nil
+}
+func (p *postRunObserverCheckpointer) PreAgentExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {
+	return nil
+}
+func (p *postRunObserverCheckpointer) PreAgentTeamExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {
+	return nil
+}
+func (p *postRunObserverCheckpointer) InterruptAgentExecute(ctx context.Context, s interfaces.InnerSession) error {
+	return nil
+}
+func (p *postRunObserverCheckpointer) PostAgentExecute(ctx context.Context, s interfaces.InnerSession) error {
+	return nil
+}
+func (p *postRunObserverCheckpointer) PostAgentTeamExecute(ctx context.Context, s interfaces.InnerSession) error {
+	atomic.AddInt32(&p.postRunCalls, 1)
+	return nil
+}
+func (p *postRunObserverCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
+	return false, nil
+}
+func (p *postRunObserverCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
+	return nil
+}
+func (p *postRunObserverCheckpointer) GraphStore() any { return nil }
+
+// 编译期检查
+var _ interfaces.Checkpointer = (*postRunObserverCheckpointer)(nil)
+
+// TestRunBaseTeamStreaming_流耗尽后才清理 S-75/M-51 核心回归：
+//
+// 返回 mergedCh 时（流尚未消费）不得执行 Unbind/PostRun——
+// Python 生成器 finally 语义是流耗尽后清理。修复前外层 defer
+// 在 return 时触发，PostRun 幂等标记导致最终状态永不持久化。
+func TestRunBaseTeamStreaming_流耗尽后才清理(t *testing.T) {
+	tr := team_runtime.NewTeamRuntime(team_runtime.RuntimeConfig{TeamID: "s75-timing-team", P2PTimeout: 30})
+	chunkCh := make(chan stream.Schema, 1)
+	team := &mockBaseTeamWithRuntime{
+		mockBaseTeam: mockBaseTeam{
+			streamFn: func(ctx context.Context, inputs map[string]any) (<-chan stream.Schema, error) {
+				return chunkCh, nil
+			},
+		},
+		runtime: tr,
+	}
+	cp := &postRunObserverCheckpointer{}
+	sess := session.NewAgentTeamSession(
+		session.WithAgentTeamSessionID("s75-timing"),
+		session.WithAgentTeamCheckpointer(cp),
+	)
+	sid := sess.GetSessionID()
+
+	mergedCh, err := RunBaseTeamStreaming(context.Background(), team, map[string]any{}, sess)
+	require.NoError(t, err)
+	require.NotNil(t, mergedCh)
+
+	// 关键断言 1：返回通道后、流耗尽前——不得解绑（清理未提前执行）
+	assert.NotNil(t, tr.GetTeamSession(sid),
+		"返回通道时 Unbind 不得提前执行（S-75：清理须等流耗尽）")
+
+	// 关键断言 2：PostRun 未提前执行（checkpointer 未被 commit）
+	assert.EqualValues(t, 0, atomic.LoadInt32(&cp.postRunCalls),
+		"返回通道时 PostRun 不得提前执行（S-75：提前 commit 会令最终状态永不持久化）")
+
+	// 流耗尽 → goroutine 内 cleanup 执行
+	close(chunkCh)
+	// 排空 mergedCh 等待 goroutine 退出
+	for range mergedCh {
+	}
+
+	assert.Eventually(t, func() bool {
+		return tr.GetTeamSession(sid) == nil
+	}, 2*time.Second, 10*time.Millisecond, "流耗尽后 Unbind 应执行")
+	assert.Eventually(t, func() bool {
+		return atomic.LoadInt32(&cp.postRunCalls) == 1
+	}, 2*time.Second, 10*time.Millisecond, "流耗尽后 PostRun 应恰好执行一次")
 }
 
 // TestCloseTeamInteractGate_已取消ctx仍等待排空 验证 M-54 WithoutCancel 语义
