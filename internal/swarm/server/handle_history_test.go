@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -129,6 +130,13 @@ func TestHandleHistoryGet_不存在的Session(t *testing.T) {
 }
 
 // setupHistoryTest 设置历史测试环境：创建临时目录、会话目录、写入 history.json，重置路径缓存。
+//
+// race 防护：前序测试（如 TestAgentServer_ConsumeEnvelope）可能已启动包级
+// historyWorker 协程在后台消费队列，其 writeHistoryItem → historyFilePath →
+// AgentSessionsDir 会读 path 包全局缓存。ResetCache 写同一缓存前必须先
+// FlushHistoryQueue 排空 + ResetHistoryWorker 终止 worker（对齐
+// path.ResetCache 文档契约与 handle_session_test.go cleanup 先例），
+// 否则 -race 下报 data race。
 func setupHistoryTest(t *testing.T, sessionID string, history []any) string {
 	t.Helper()
 	tmpDir := t.TempDir()
@@ -145,6 +153,9 @@ func setupHistoryTest(t *testing.T, sessionID string, history []any) string {
 
 	// 设置 UAPCLAW_DATA_DIR 并重置路径缓存（对齐 Python: set_user_workspace_dir）
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	// 先排空 history 队列并终止后台 worker，再重置路径缓存（防 race）
+	session.FlushHistoryQueue()
+	session.ResetHistoryWorker()
 	path.ResetCache()
 
 	return tmpDir

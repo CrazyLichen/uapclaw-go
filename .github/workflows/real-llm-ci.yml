@@ -1,0 +1,88 @@
+# 真实 LLM 集成测试 CI 流水线
+#
+# 触发条件：
+#   1. workflow_dispatch（手动触发按钮）
+#   2. schedule: 每日 UTC 18:00 = 北京时间凌晨 02:00
+#
+# 设计决策（用户拍板）：
+#   - 独立于主 CI（ci.yml），不影响 push/PR 流水线速度
+#   - 真实 LLM 套件默认运行，不做环境变量跳过控制——
+#     LLM_API_KEY 缺失时 prompt-capture 套件直接 Fatal（fail-not-skip）
+#   - 提示词捕获测试（Task 5 成果）纳入每日运行
+#
+# 运行范围：tests/integration/real_llm/ 全部 12 套件
+# （system_prompt_capture / llm_invoke / ask_user_rail / task_planning /
+#   deep_agent_e2e / interrupt_stream / skill_real_system / memory_rail /
+#   subagent / code_agent / todo / ltm）
+#
+# 密钥配置：GitHub secret LLM_API_KEY（仓库 Settings → Secrets and variables → Actions）
+
+name: Real LLM CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    # UTC 18:00 = 北京时间 02:00（每日凌晨）
+    - cron: "0 18 * * *"
+
+# 同一分支并发只保留最新，取消旧运行（对 schedule 触发同样适用）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-llm-test:
+    name: Real LLM Test
+    runs-on: ubuntu-latest
+    # 单次全量真跑本地实测约 20~30 分钟（含两个长耗时段），预留 3 倍余量
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v6
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: 环境预检（fail-not-skip 门卫）
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          echo "检查 LLM_API_KEY secret..."
+          if [ -z "$LLM_API_KEY" ]; then
+            echo "::error::GitHub secret LLM_API_KEY 未配置（仓库 Settings → Secrets and variables → Actions）。"
+            echo "::error::真实 LLM 套件要求 fail-not-skip：密钥缺失 = 流水线失败，不做静默跳过。"
+            exit 1
+          fi
+          echo "LLM_API_KEY 已配置"
+          # 仅回显前缀用于排查配置错误（8 字符，不泄露完整密钥）
+          echo "密钥前缀: ${LLM_API_KEY:0:8}..."
+
+      - name: 运行真实 LLM 集成测试
+        env:
+          CGO_ENABLED: "1"
+          # fail-not-skip：prompt-capture 套件缺 key 直接 Fatal；
+          # 其余套件守卫 SkipIfNoRealLLM 缺 key 时跳过——
+          # 上方"环境预检"已确保 key 就绪，跳过分支实际不会走到
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL_NAME: deepseek-v4.1-flash
+          # 开启 skill/subagent/todo/ltm/code_agent 套件的 RUN_REAL_LLM_TESTS 守卫
+          # （对齐 Python RUN_REAL_LLM_TESTS=1 语义，未设为 1 时这些套件 Skip）
+          RUN_REAL_LLM_TESTS: "1"
+        run: |
+          echo "运行真实 LLM 集成测试（12 套件）..."
+          go test -mod=mod -tags "sqlite_fts5 test integration llm" \
+            -v \
+            -timeout 75m \
+            -count=1 \
+            ./tests/integration/real_llm/...
+
+      - name: 汇总测试结果
+        if: always()
+        run: |
+          echo "Real LLM CI 运行完成"
+          echo "触发方式: ${{ github.event_name }}"
+          echo "commit: ${{ github.sha }}"

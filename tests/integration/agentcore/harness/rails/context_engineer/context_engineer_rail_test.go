@@ -236,10 +236,10 @@ func (s *ContextEngineerRailSuite) TestContextProcessorRail_GetCallbacks事件�
 // TestContextProcessorRail_BeforeModelCall_注入Offload节 测试 BeforeModelCall 注入 "offload" section。
 // 对齐 Python: ContextProcessorRail.before_model_call(ctx) 中 maybeInjectOffloadSection
 //
-// 注意：当前 DeepAgent.Config() 返回 nil，导致 ContextProcessorRail.Init 提前返回
-// 而不设置 allProcessors 和 systemPromptBuilder，因此 offload 节不会被注入。
-// 这是一个已知问题：getReactAgentConfig 应尝试 DeepAgentInterface.ReactConfig() 回退。
-// TODO: 修复 getReactAgentConfig 后重新启用此测试
+// 3bcf3c59 修复 getReactAgentConfig 解引用内层 ReactAgent（DeepAgent.Config()
+// 返回 nil）后，Init 正常设置 allProcessors 和 systemPromptBuilder，
+// offload 节会被注入——原断言 s.False（验证修复前已知行为）已过时，
+// 本提交翻转为 s.True。
 func (s *ContextEngineerRailSuite) TestContextProcessorRail_BeforeModelCall_注入Offload节() {
 	rail := ce.NewContextProcessorRail()
 
@@ -255,10 +255,9 @@ func (s *ContextEngineerRailSuite) TestContextProcessorRail_BeforeModelCall_注�
 	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "上下文压缩"})
 	s.Require().NoError(err)
 
-	// 当前 DeepAgent.Config() 返回 nil，Init 不设置 allProcessors，
-	// 所以 offload 节不存在。验证这个已知行为。
+	// getReactAgentConfig 已修复（解引用内层 ReactAgent），Init 设置
+	// allProcessors 非空，BeforeModelCall 注入 offload 节
 	spb := agent.SystemPromptBuilder()
 	s.Require().NotNil(spb)
-	// 一旦 getReactAgentConfig 修复，此断言应改为 s.True(...)
-	s.False(spb.HasSection("offload"), "当前 DeepAgent.Config()=nil 时 offload 节不会被注入")
+	s.True(spb.HasSection("offload"), "Init 后 offload 节应被注入")
 }

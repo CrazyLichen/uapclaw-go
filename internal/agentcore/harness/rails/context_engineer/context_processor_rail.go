@@ -274,6 +274,13 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 	if r.sessionMemoryEnabled {
 		// session memory 启用时的预设
 		// Python: ContextProcessorRail._build_preset_processors (session_memory=True)
+		// 三个处理器均无参构造（Python L157-172），pydantic 自动填默认值。
+		// Go 端等价性说明：
+		//   - ToolResultBudgetProcessorConfig：Validate 先调 applyDefaults()
+		//     自愈填默认（TokensThreshold=50000 等），裸字面量安全；
+		//   - MicroCompact/FullCompact：Validate 无自愈，裸字面量会漏
+		//     TriggerThreshold/TriggerTotalTokens 等必填字段导致初始化失败
+		//     （"初始化处理器类型失败"错误），必须用 New*Config 构造器
 		return []ceiface.ProcessorSpec{
 			{
 				Type:   "ToolResultBudgetProcessor",
@@ -281,14 +288,19 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 			},
 			{
 				Type:   "MicroCompactProcessor",
-				Config: &compressor.MicroCompactProcessorConfig{},
+				Config: compressor.NewMicroCompactProcessorConfig(),
 			},
 			{
 				Type: "FullCompactProcessor",
-				Config: &compressor.FullCompactProcessorConfig{
-					Model:       modelConfig,
-					ModelClient: modelClientConfig,
-				},
+				// NewFullCompactProcessorConfig 携带全部默认值，再按 preset
+				// 覆盖模型配置字段（Python: FullCompactProcessorConfig(model=...,
+				// model_client=...) 其余字段走 pydantic 默认）
+				Config: func() *compressor.FullCompactProcessorConfig {
+					cfg := compressor.NewFullCompactProcessorConfig()
+					cfg.Model = modelConfig
+					cfg.ModelClient = modelClientConfig
+					return cfg
+				}(),
 			},
 		}
 	}
