@@ -145,7 +145,7 @@ func isChromaType(obj any) bool {
 	if t == nil {
 		return false
 	}
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return strings.HasPrefix(strings.ToLower(t.Name()), "chroma")
@@ -157,7 +157,7 @@ func typeName(obj any) string {
 		return "NoneType"
 	}
 	t := reflect.TypeOf(obj)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t.Name()
