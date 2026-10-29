@@ -93,6 +93,8 @@ type AcpChannel struct {
 	gwConn *websocket.Conn
 	// gwConnMu 保护 gwConn/连接关闭
 	gwConnMu sync.Mutex
+	// readerLoopDone WS reader 退出信号
+	readerLoopDone chan struct{}
 	// onMessageCb dispatch 回调（测试注入；生产路径走 sendToGateway，§9-1）
 	onMessageCb func(msg *schema.Message) bool
 	// stdin stdin 读入（生产 os.Stdin；测试注入）
@@ -1358,30 +1360,279 @@ func orStr(s, fallback string) string {
 	return fallback
 }
 
-// ──────────────────────────── WS 客户端族（Task 9 补全，先占方法面） ────────────────────────────
+// ──────────────────────────── WS 客户端族（L1526-1738） ────────────────────────────
 
-// ensureGatewayConnection WS 连接（重试退避）。Task 9 实现。
+// ensureGatewayConnection 建立网关 WS 连接（12 次指数退避 0.15s×2ⁿ 封顶 2s）。
+// Python: _ensure_gateway_connection (L1526-1571)。
+// 并发约束：Dial 在锁外、赋值在锁内——dispatchMessage 只在 stdin loop 单
+// goroutine 调用（§9-2 同源约束），不产生双连接。
 func (ch *AcpChannel) ensureGatewayConnection() error {
-	// ⤵️ 11.25 Task 9：ensureGatewayConnection + readerLoop + sendToGateway + handleGatewayFrame
-	return nil
+	ch.gwConnMu.Lock()
+	if ch.gwConn != nil {
+		ch.gwConnMu.Unlock()
+		return nil
+	}
+	ch.gwConnMu.Unlock()
+
+	var lastErr error
+	for attempt := 1; attempt <= acpGatewayConnectMaxAttempts; attempt++ {
+		conn, _, err := websocket.DefaultDialer.Dial(ch.gatewayURL, nil)
+		if err == nil {
+			done := make(chan struct{})
+			ch.gwConnMu.Lock()
+			ch.gwConn = conn
+			ch.readerLoopDone = done
+			ch.gwConnMu.Unlock()
+			go ch.gatewayReaderLoop(conn, done)
+			if attempt > 1 {
+				logger.Info(logger.ComponentGateway).
+					Int("attempts", attempt).
+					Str("gateway_url", ch.gatewayURL).
+					Msg("[ACP] gateway connected after retries")
+			}
+			return nil
+		}
+		lastErr = err
+		if attempt >= acpGatewayConnectMaxAttempts {
+			break
+		}
+		delay := acpGatewayConnectBaseDelaySec * float64(int(1)<<(attempt-1))
+		if delay > acpGatewayConnectMaxDelaySec {
+			delay = acpGatewayConnectMaxDelaySec
+		}
+		logger.Warn(logger.ComponentGateway).
+			Int("attempt", attempt).
+			Int("max_attempts", acpGatewayConnectMaxAttempts).
+			Str("error", err.Error()).
+			Float64("retry_in_seconds", delay).
+			Msg("[ACP] gateway connect attempt failed")
+		time.Sleep(time.Duration(delay * float64(time.Second)))
+	}
+	return fmt.Errorf("ACP gateway connect failed after %d attempts: %s (last error: %v)",
+		acpGatewayConnectMaxAttempts, ch.gatewayURL, lastErr)
 }
 
-// closeGatewayConnection 关闭 WS 连接。Task 9 实现。
+// closeGatewayConnection Python L1573-1589。
 func (ch *AcpChannel) closeGatewayConnection() {
-	// ⤵️ 11.25 Task 9
+	ch.gwConnMu.Lock()
+	conn := ch.gwConn
+	ch.gwConn = nil
+	done := ch.readerLoopDone
+	ch.readerLoopDone = nil
+	ch.gwConnMu.Unlock()
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+		}
+	}
+	if conn != nil {
+		if err := conn.Close(); err != nil {
+			logger.Debug(logger.ComponentGateway).
+				Err(err).
+				Msg("[ACP] gateway websocket close ignored")
+		}
+	}
 }
 
-// sendToGateway 发送到网关。Task 9 实现。
-func (ch *AcpChannel) sendToGateway(ctx context.Context, msg *schema.Message) error {
-	// ⤵️ 11.25 Task 9
-	_ = ctx
-	_ = msg
-	return nil
+// sendToGateway 发送 type=req 帧。
+// Python: _send_to_gateway (L1591-1609)。
+func (ch *AcpChannel) sendToGateway(_ context.Context, msg *schema.Message) error {
+	if err := ch.ensureGatewayConnection(); err != nil {
+		return err
+	}
+	params := map[string]any{}
+	if len(msg.Params) > 0 {
+		_ = json.Unmarshal(msg.Params, &params)
+	}
+	if msg.SessionID != "" {
+		if _, exists := params["session_id"]; !exists {
+			params["session_id"] = msg.SessionID
+		}
+	}
+	if msg.Mode != "" {
+		if _, exists := params["mode"]; !exists {
+			params["mode"] = msg.Mode.ToRuntimeMode()
+		}
+	}
+	reqMethod := string(msg.ReqMethod)
+	if reqMethod == "" {
+		return fmt.Errorf("gateway forward requires req_method")
+	}
+	frame := map[string]any{
+		"type":   "req",
+		"id":     msg.ID,
+		"method": reqMethod,
+		"params": params,
+	}
+	ch.gwConnMu.Lock()
+	conn := ch.gwConn
+	ch.gwConnMu.Unlock()
+	if conn == nil {
+		return fmt.Errorf("gateway connection closed")
+	}
+	return conn.WriteMessage(websocket.TextMessage, mustJSONBytes(frame))
 }
 
-// handleGatewayFrame 处理网关帧。Task 9 实现。
+// gatewayReaderLoop 网关读循环。
+// Python: _gateway_reader_loop (L1611-1630)。
+func (ch *AcpChannel) gatewayReaderLoop(conn *websocket.Conn, done chan struct{}) {
+	defer close(done)
+	for {
+		_, raw, err := conn.ReadMessage()
+		if err != nil {
+			// 连接关闭/错误：静默退出；gwConn 清理由 closeGatewayConnection 或
+			// finally 语义承担（读错误时对齐 Python finally 自清）
+			ch.gwConnMu.Lock()
+			if ch.gwConn == conn {
+				ch.gwConn = nil
+			}
+			ch.gwConnMu.Unlock()
+			logger.Debug(logger.ComponentGateway).
+				Err(err).
+				Msg("[ACP] gateway reader stopped")
+			return
+		}
+		var data map[string]any
+		if err := json.Unmarshal(raw, &data); err != nil {
+			logger.Debug(logger.ComponentGateway).
+				Str("raw", string(raw)).
+				Msg("[ACP] skip invalid gateway frame")
+			continue
+		}
+		ch.handleGatewayFrame(data)
+	}
+}
+
+// handleGatewayFrame 网关帧处理：jsonrpc request 直写 + pending；
+// type=res/event 重建 Message → Send 链。
+// Python: _handle_gateway_frame (L1632-1649)。
 func (ch *AcpChannel) handleGatewayFrame(data map[string]any) {
-	// ⤵️ 11.25 Task 9
+	if data == nil {
+		return
+	}
+	if isAcpJsonrpcRequest(data) {
+		ch.handleGatewayJsonrpcRequest(data)
+		return
+	}
+	frameType := strings.TrimSpace(strVal(data["type"]))
+	var msg *schema.Message
+	switch frameType {
+	case "res":
+		msg = ch.messageFromGatewayResponse(data)
+	case "event":
+		msg = ch.messageFromGatewayEvent(data)
+	}
+	if msg != nil {
+		ch.Send(context.Background(), msg)
+	}
+}
+
+// handleGatewayJsonrpcRequest 网关下发的 jsonrpc request（工具调用）直写 stdout。
+// Python: _handle_gateway_jsonrpc_request (L1664-1679)。
+func (ch *AcpChannel) handleGatewayJsonrpcRequest(data map[string]any) {
+	jsonrpcID := strings.TrimSpace(strVal(data["id"]))
+	params, _ := data["params"].(map[string]any)
+	if params == nil {
+		params = map[string]any{}
+	}
+	sessionID := strings.TrimSpace(strVal(params["sessionId"]))
+	if sessionID == "" {
+		sessionID = strings.TrimSpace(strVal(params["session_id"]))
+	}
+	if jsonrpcID != "" && sessionID != "" {
+		ch.mu.Lock()
+		ch.knownSessions[sessionID] = struct{}{}
+		ch.pendingRPCSessionByID[jsonrpcID] = acpPendingEntry{
+			sessionID: sessionID, createdAt: nowFloat(),
+		}
+		ctxs := []*acpRequestCtx{}
+		for _, c := range ch.requestCtx {
+			if c.ResponseMode == "jsonrpc" && c.SessionID == sessionID {
+				ctxs = append(ctxs, c)
+			}
+		}
+		for _, c := range ctxs {
+			if c.idleFinalizeTimerSlot != nil {
+				if c.idleFinalizeTimerSlot.timer != nil {
+					c.idleFinalizeTimerSlot.timer.Stop()
+				}
+				c.idleFinalizeTimerSlot = nil
+			}
+		}
+		ch.mu.Unlock()
+	}
+	ch.sweepStalePending()
+	ch.writeLine(mustJSONBytes(data))
+}
+
+// messageFromGatewayResponse type=res 帧重建 Message。
+// Python: _message_from_gateway_response (L1681-1706)。
+func (ch *AcpChannel) messageFromGatewayResponse(data map[string]any) *schema.Message {
+	requestID := strings.TrimSpace(strVal(data["id"]))
+	if requestID == "" {
+		return nil
+	}
+	ch.mu.Lock()
+	c := ch.requestCtx[requestID]
+	ch.mu.Unlock()
+	if c == nil {
+		return nil
+	}
+	payload, _ := data["payload"].(map[string]any)
+	if payload == nil {
+		payload = map[string]any{}
+	} else {
+		payload = cpStrAnyMap(payload)
+	}
+	ok, _ := data["ok"].(bool)
+	if !ok {
+		errText := strVal(data["error"])
+		if errText == "" {
+			errText = strVal(payload["error"])
+		}
+		if errText == "" {
+			errText = "request failed"
+		}
+		payload["error"] = errText
+	}
+	sessionID := c.SessionID
+	return &schema.Message{
+		ID: requestID, Type: schema.MessageTypeRes,
+		ChannelID: ch.ChannelID(), SessionID: sessionID,
+		Timestamp: nowFloat(), OK: ok, Payload: payload,
+	}
+}
+
+// messageFromGatewayEvent type=event 帧重建 Message（activePrompt 反查）。
+// Python: _message_from_gateway_event (L1708-1730)。
+func (ch *AcpChannel) messageFromGatewayEvent(data map[string]any) *schema.Message {
+	eventName := strings.TrimSpace(strVal(data["event"]))
+	payload, _ := data["payload"].(map[string]any)
+	if payload == nil {
+		payload = map[string]any{}
+	} else {
+		payload = cpStrAnyMap(payload)
+	}
+	sessionID := strings.TrimSpace(strVal(payload["session_id"]))
+	if sessionID == "" {
+		sessionID = strings.TrimSpace(strVal(payload["sessionId"]))
+	}
+	ch.mu.Lock()
+	requestID := ch.activePromptBySession[sessionID]
+	ch.mu.Unlock()
+	if requestID == "" {
+		return nil
+	}
+	eventType, err := schema.ParseEventType(eventName)
+	if err != nil {
+		return nil
+	}
+	return &schema.Message{
+		ID: requestID, Type: schema.MessageTypeEvent,
+		ChannelID: ch.ChannelID(), SessionID: sessionID,
+		Timestamp: nowFloat(), OK: true, EventType: eventType, Payload: payload,
+	}
 }
 
 // ──────────────────────────── 测试钩子（Python AcpChannelHarness 对应） ────────────────────────────

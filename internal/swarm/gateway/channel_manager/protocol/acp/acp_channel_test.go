@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -344,4 +345,169 @@ func TestAcpChannel_CancelFinalizesActivePrompt(t *testing.T) {
 	pr, _ := promptResult["result"].(map[string]any)
 	assert.Equal(t, "cancelled", pr["stopReason"])
 	assert.Equal(t, map[string]any{"jsonrpc": "2.0", "id": float64(21), "result": nil}, cancelResult)
+}
+
+// ──────────────────────────── 例 15-16 工具响应回流 ────────────────────────────
+
+// TestAcpChannel_ToolResponseForwarded 例 15：jsonrpc response → acp.tool_response dispatch。
+// Python: test_jsonrpc_response_is_forwarded_as_acp_tool_response
+// （直灌 pending 映射 + HandleJsonrpcResponseForTest + 断言 dispatch 消息形态）。
+func TestAcpChannel_ToolResponseForwarded(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+	dispatched := make(chan *schema.Message, 4)
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		dispatched <- msg
+		return true
+	})
+
+	ch.SetPendingRPCSessionForTest("tool-15", "sess-tool")
+	ch.HandleJsonrpcResponseForTest(map[string]any{
+		"jsonrpc": "2.0", "id": "tool-15", "result": map[string]any{"content": "hello"},
+	})
+
+	select {
+	case msg := <-dispatched:
+		assert.Equal(t, schema.ReqMethodACPToolResponse, msg.ReqMethod)
+		assert.Equal(t, "sess-tool", msg.SessionID)
+		assert.Equal(t, "acp", msg.ChannelID)
+		var p map[string]any
+		assert.NoError(t, json.Unmarshal(msg.Params, &p))
+		assert.Equal(t, "tool-15", p["jsonrpc_id"])
+		resp, _ := p["response"].(map[string]any)
+		if assert.NotNil(t, resp) {
+			assert.Equal(t, "hello", resp["result"].(map[string]any)["content"])
+		}
+		assert.Equal(t, "sess-tool", p["session_id"])
+	case <-time.After(2 * time.Second):
+		t.Fatal("acp.tool_response dispatch not invoked")
+	}
+}
+
+// TestAcpChannel_ResponseWithoutMappingIgnored 例 16：无 pending 映射 → 零 dispatch 零帧。
+func TestAcpChannel_ResponseWithoutMappingIgnored(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+	ch.SetStdinForTest(&fakeStdin{lines: nil})
+	ch.SetStdinEOFGraceSecondsForTest(0.05)
+	ch.SetIdleFinalizeSecondsForTest(0.05)
+	dispatched := 0
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		dispatched++
+		return true
+	})
+	_ = dispatched
+
+	ch.HandleJsonrpcResponseForTest(map[string]any{
+		"jsonrpc": "2.0", "id": "tool-unknown", "result": map[string]any{"late": true},
+	})
+	lines := out.jsonLines(t)
+	assert.Empty(t, lines)
+}
+
+// TestAcpChannel_GatewayJsonrpcWrittenToStdout 例 19：网关 jsonrpc request 原样写 stdout + pending 登记。
+func TestAcpChannel_GatewayJsonrpcWrittenToStdout(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+
+	raw := map[string]any{
+		"jsonrpc": "2.0", "id": "perm-19", "method": "session/request_permission",
+		"params": map[string]any{"sessionId": "sess-gw", "options": []any{}},
+	}
+	ch.HandleGatewayFrameForTest(raw)
+
+	lines := out.jsonLines(t)
+	assert.Len(t, lines, 1)
+	assert.Equal(t, "perm-19", lines[0]["id"])
+	assert.Equal(t, "session/request_permission", lines[0]["method"])
+	// pending 登记
+	assert.Equal(t, "sess-gw", ch.GetPendingRPCSessionForTest("perm-19"))
+}
+
+// TestAcpChannel_GatewayJsonrpcForActivePrompt 例 20：同 19 + 活跃 prompt 的 idle timer 被取消。
+func TestAcpChannel_GatewayJsonrpcForActivePrompt(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+
+	c := &acpRequestCtx{
+		JSONRPCID: 20, Method: "session/prompt", ResponseMode: "jsonrpc",
+		SessionID: "sess-active",
+	}
+	ch.SeedRequestCtxForTest("req-active", c)
+	ch.SetActivePromptRequestForTest("sess-active", "req-active")
+	// 预置 sentinel timer（若未被取消将写 result 帧导致断言失败）
+	fired := make(chan struct{}, 1)
+	ch.mu.Lock()
+	slot := &acpIdleTimerSlot{}
+	c.idleFinalizeTimerSlot = slot
+	slot.timer = time.AfterFunc(50*time.Millisecond, func() {
+		select {
+		case fired <- struct{}{}:
+		default:
+		}
+	})
+	ch.mu.Unlock()
+
+	raw := map[string]any{
+		"jsonrpc": "2.0", "id": "perm-20", "method": "fs/read_text_file",
+		"params": map[string]any{"sessionId": "sess-active"},
+	}
+	ch.HandleGatewayFrameForTest(raw)
+
+	lines := out.jsonLines(t)
+	assert.Len(t, lines, 1)
+	assert.Equal(t, "perm-20", lines[0]["id"])
+	assert.Equal(t, "sess-active", ch.GetPendingRPCSessionForTest("perm-20"))
+	// sentinel 被取消
+	select {
+	case <-fired:
+		t.Fatal("sentinel timer should be cancelled by gateway jsonrpc request")
+	case <-time.After(100 * time.Millisecond):
+	}
+	ch.mu.Lock()
+	assert.Nil(t, c.idleFinalizeTimerSlot)
+	ch.mu.Unlock()
+}
+
+// TestAcpChannel_E2aModeDeltaAndFinal E2A 模式（response_mode=e2a）基本流。
+// Go 增强：Python 基线未直测 e2a 模式出站帧（三路由的 envelope 入口被
+// jsonrpc 用例旁路覆盖），此处补 delta→e2a.chunk + final→acp_prompt_result。
+func TestAcpChannel_E2aModeDeltaAndFinal(t *testing.T) {
+	ch, out, seen := newTestChannel(t, []string{
+		`{"request_id":"e2a-req-1","method":"session/prompt","params":{"session_id":"e2a-sess","query":"hi"},"jsonrpc_id":"e2a-1"}`,
+	})
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		*seen = append(*seen, msg)
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatDelta, map[string]any{"content": "part"}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatFinal, map[string]any{"content": "part done"}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	// prompt 消息形态（E2A 入口 → chat.send 改写）
+	require.Len(t, *seen, 1)
+	req := (*seen)[0]
+	assert.Equal(t, "e2a-req-1", req.ID)
+	assert.Equal(t, schema.ReqMethodChatSend, req.ReqMethod)
+	assert.Equal(t, "e2a-sess", req.SessionID)
+
+	lines := out.jsonLines(t)
+	require.GreaterOrEqual(t, len(lines), 2)
+	// e2a.chunk 帧（sequence 取递增前旧值——Python L887-890 先取后增，首帧 :0；
+	// 计划文档的 ":1" 为转录错误，以 Python 源为准）
+	assert.Equal(t, "e2a-req-1:0", lines[0]["response_id"])
+	assert.Equal(t, "e2a.chunk", lines[0]["response_kind"])
+	assert.Equal(t, false, lines[0]["is_final"])
+	// final 帧
+	last := lines[len(lines)-1]
+	assert.Equal(t, "acp.prompt_result", last["response_kind"])
+	assert.Equal(t, true, last["is_final"])
+	// ctx 清理
+	assert.False(t, ch.HasRequestContextForTest("e2a-req-1"))
 }
