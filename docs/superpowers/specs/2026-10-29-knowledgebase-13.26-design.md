@@ -336,7 +336,7 @@ maybeClose(obj):
 ### 9.1 桩基建
 
 - **fakeAttrStore / fakeAttrIndexer**：实现 storageAttrProvider 7 getter + 字段可配置（含各属性设 nil 复刻 test_validation_passes_when_attributes_are_none）；同时实现 VectorStore/Indexer 接口（不触达的方法空方法体返回零值——校验/模板方法路径不触达真实存储语义）
-- **fakeCloserStore**：`Close() error` 变体，可注入错误（test_close_with_exception）
+- **fakeErrCloserIndexer**（实施勘误：原设计 fakeCloserStore）：`Close() error` 变体桩走 **indexManager 槽**——VectorStore 接口方法集已含 void Close()，Go 不允许同类型并存 `Close()` 与 `Close() error`（重复方法名）；Indexer 接口不含 Close 故可自由加错误变体（test_close_with_exception 的映射通道）
 - **fakeEnsureLoader**：实现 ensureLoader + 调用计数（增强测试）
 - **ChromaFakeStore**（类型名 chroma 前缀）：触发 R1 拦截路径（增强测试）
 

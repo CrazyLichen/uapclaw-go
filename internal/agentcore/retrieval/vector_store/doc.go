@@ -31,4 +31,7 @@
 //	DefaultMilvusCreateClient — 默认客户端创建函数
 //	CreateVectorStore — 向量存储工厂（按 StoreProvider 分发）
 //	StoreCreateOptions — 构造选项（Python **kwargs 收纳）
+//	（13.26）ChromaVectorStore/MilvusVectorStore 增 6 属性 getter + EnsureLoaded
+//	（DatabaseName/TextField/VectorField(any)/SparseVectorField/MetadataField/DocIDField）
+//	——knowledgebase 包 validate_index 消费面
 package vector_store

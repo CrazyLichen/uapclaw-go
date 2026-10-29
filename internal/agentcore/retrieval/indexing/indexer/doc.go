@@ -21,4 +21,7 @@
 //	ChunkEmbedOptions    — ComputeChunkEmbeddings 选项结构
 //	ChromaIndexer        — ChromaDB 文档索引实现（持久 client + Close）
 //	MilvusIndexer        — Milvus 文档索引实现（ensureCollection/BuildIndex/UpdateIndex）
+//	（13.26）ChromaIndexer/MilvusIndexer 增 6 属性 getter
+//	（DatabaseName/TextField/VectorField(any)/SparseVectorField/MetadataField/DocIDField）
+//	——knowledgebase 包 validate_index 消费面
 package indexer
