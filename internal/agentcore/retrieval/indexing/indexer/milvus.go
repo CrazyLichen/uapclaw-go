@@ -209,6 +209,24 @@ func (mi *MilvusIndexer) Client() vector_store.MilvusClient { return mi.client }
 // 对齐 Python distance_metric property。
 func (mi *MilvusIndexer) DistanceMetric() string { return mi.distanceMetric }
 
+// DatabaseName 返回数据库名称（13.26 validate_index 消费）。
+func (mi *MilvusIndexer) DatabaseName() string { return mi.databaseName }
+
+// TextField 返回文本字段名（13.26 validate_index 消费）。
+func (mi *MilvusIndexer) TextField() string { return mi.textField }
+
+// VectorField 返回向量字段配置（13.26 validate_index 消费，any 装箱联合类型）。
+func (mi *MilvusIndexer) VectorField() any { return mi.vectorField }
+
+// SparseVectorField 返回稀疏向量字段名（13.26 validate_index 消费）。
+func (mi *MilvusIndexer) SparseVectorField() string { return mi.sparseVectorField }
+
+// MetadataField 返回元数据字段名（13.26 validate_index 消费）。
+func (mi *MilvusIndexer) MetadataField() string { return mi.metadataField }
+
+// DocIDField 返回文档 ID 字段名（13.26 validate_index 消费）。
+func (mi *MilvusIndexer) DocIDField() string { return mi.docIDField }
+
 // IndexExists 检查索引是否存在。
 //
 // 对齐 Python MilvusIndexer.index_exists：has_collection，异常时返回 False。

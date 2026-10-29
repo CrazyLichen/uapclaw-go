@@ -84,3 +84,37 @@ func TestWithIndexExtra(t *testing.T) {
 	opts := NewIndexOptions(WithIndexExtra("key", "value"))
 	assert.Equal(t, "value", opts.Extra["key"])
 }
+
+// TestChromaIndexer_属性访问器回填 13.26 新增 6 getter（validate_index 消费）。
+func TestChromaIndexer_属性访问器回填(t *testing.T) {
+	ci := &ChromaIndexer{
+		textField:         "content",
+		sparseVectorField: "sparse_vector",
+		metadataField:     "metadata",
+		docIDField:        "document_id",
+		databaseName:      "test_db",
+	}
+	assert.Nil(t, ci.VectorField())
+	assert.Equal(t, "content", ci.TextField())
+	assert.Equal(t, "sparse_vector", ci.SparseVectorField())
+	assert.Equal(t, "metadata", ci.MetadataField())
+	assert.Equal(t, "document_id", ci.DocIDField())
+	assert.Equal(t, "test_db", ci.DatabaseName())
+}
+
+// TestMilvusIndexer_属性访问器回填 13.26 新增 6 getter。
+func TestMilvusIndexer_属性访问器回填(t *testing.T) {
+	mi := &MilvusIndexer{
+		textField:         "content",
+		sparseVectorField: "sparse_vector",
+		metadataField:     "metadata",
+		docIDField:        "document_id",
+		databaseName:      "test_db",
+	}
+	assert.Nil(t, mi.VectorField())
+	assert.Equal(t, "content", mi.TextField())
+	assert.Equal(t, "sparse_vector", mi.SparseVectorField())
+	assert.Equal(t, "metadata", mi.MetadataField())
+	assert.Equal(t, "document_id", mi.DocIDField())
+	assert.Equal(t, "test_db", mi.DatabaseName())
+}

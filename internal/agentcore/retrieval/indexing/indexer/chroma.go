@@ -160,6 +160,24 @@ func WithChromaDocIndexCallback(cb common.DocIndexCallback) ChromaIndexerOption 
 // DistanceMetric 返回归一化距离度量。
 func (ci *ChromaIndexer) DistanceMetric() string { return ci.distanceMetric }
 
+// DatabaseName 返回数据库名称（13.26 validate_index 消费）。
+func (ci *ChromaIndexer) DatabaseName() string { return ci.databaseName }
+
+// TextField 返回文本字段名（13.26 validate_index 消费）。
+func (ci *ChromaIndexer) TextField() string { return ci.textField }
+
+// VectorField 返回向量字段配置（13.26 validate_index 消费，any 装箱联合类型）。
+func (ci *ChromaIndexer) VectorField() any { return ci.vectorField }
+
+// SparseVectorField 返回稀疏向量字段名（13.26 validate_index 消费）。
+func (ci *ChromaIndexer) SparseVectorField() string { return ci.sparseVectorField }
+
+// MetadataField 返回元数据字段名（13.26 validate_index 消费）。
+func (ci *ChromaIndexer) MetadataField() string { return ci.metadataField }
+
+// DocIDField 返回文档 ID 字段名（13.26 validate_index 消费）。
+func (ci *ChromaIndexer) DocIDField() string { return ci.docIDField }
+
 // Client 返回 ChromaDB 持久客户端。
 //
 // M-44: 对齐 Python @property client -> self._client。
