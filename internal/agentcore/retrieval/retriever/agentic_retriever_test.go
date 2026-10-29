@@ -1022,7 +1022,7 @@ func TestRewrite_历史渲染与nextQuestion形态(t *testing.T) {
 // TestRead_LLM失败与修复失败 read 软失败三分支：Invoke err / jsonrepair
 // err / 根非 list。
 func TestRead_LLM失败与修复失败(t *testing.T) {
-	// Invoke err
+	// Invoke err 调用即错
 	llm := &agenticLLMDispatch{
 		readFn:    func(string) (string, error) { return "", errors.New("down") },
 		rewriteFn: func(string) (string, error) { return `{"sufficient": true}`, nil },

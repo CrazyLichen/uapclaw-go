@@ -134,7 +134,7 @@ func EnvelopeFromA2ASendMessage(taskID, contextID string, messageBody map[string
 	if opts == nil {
 		opts = &EnvelopeFromA2ASendMessageOptions{}
 	}
-	// meta = dict(metadata or {})
+	// Python: meta = dict(metadata or {})
 	meta := make(map[string]any, len(opts.Metadata))
 	for k, v := range opts.Metadata {
 		meta[k] = v
@@ -156,7 +156,7 @@ func EnvelopeFromA2ASendMessage(taskID, contextID string, messageBody map[string
 	for k, v := range opts.ExtraProvenanceDetails {
 		details[k] = v
 	}
-	// params={"message": body, "configuration": configuration or {}}
+	// Python: params={"message": body, "configuration": configuration or {}}
 	paramsOut := map[string]any{"message": messageBody}
 	if opts.Configuration != nil {
 		paramsOut["configuration"] = opts.Configuration
@@ -233,7 +233,7 @@ func E2AResponseToACPJsonrpcResponse(resp *E2AResponse) map[string]any {
 
 	rpcID := resp.JSONRPCID
 	kind := resp.ResponseKind
-	// body = dict(response.body or {})
+	// Python: body = dict(response.body or {})
 	body := make(map[string]any, len(resp.Body))
 	for k, v := range resp.Body {
 		body[k] = v

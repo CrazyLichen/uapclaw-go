@@ -408,7 +408,7 @@ func TestSearchCandidates_空beam防御(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTripleBeamSearch: %v", err)
 	}
-	// nil beam
+	// nil beam 传入空束应报错
 	_, err = s.searchCandidates(context.Background(), nil)
 	if err == nil || err.Error() != "unexpected empty beam" {
 		t.Errorf("nil beam: err = %v, want unexpected empty beam", err)

@@ -92,13 +92,13 @@ func TestHandlePeerRequest_纯函数分支(t *testing.T) {
 		"method": "fs/write_text_file",
 		"params": map[string]any{"path": "../x.txt", "content": "x"},
 	})
-	// write params nil → -32602
+	// write params 非 dict → -32602
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(4),
 		"method": "fs/write_text_file",
 		"params": "not-a-dict",
 	})
-	// read params nil → -32602
+	// read params 非 dict → -32602
 	c.handlePeerRequest(map[string]any{
 		"jsonrpc": "2.0", "id": float64(9),
 		"method": "fs/read_text_file",

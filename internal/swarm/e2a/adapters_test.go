@@ -8,7 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// ──────────────────────────── EnvelopeFromACPJsonrpc ────────────────────────────
+// ──────────────────────────── EnvelopeFromACPJsonrpc ACP 入站信封构造 ────────────────────────────
 
 // TestEnvelopeFromACPJsonrpc_ACP入站基础 基本四字段 provenance + 信封字段。
 func TestEnvelopeFromACPJsonrpc_ACP入站基础(t *testing.T) {
@@ -143,7 +143,7 @@ func TestEnvelopeFromACPJsonrpc_params为nil(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── EnvelopeFromA2ASendMessage ────────────────────────────
+// ──────────────────────────── EnvelopeFromA2ASendMessage A2A 入站信封构造 ────────────────────────────
 
 // TestEnvelopeFromA2ASendMessage_A2A入站基础 method 恒 session/prompt + provenance + 字段透传。
 func TestEnvelopeFromA2ASendMessage_A2A入站基础(t *testing.T) {
@@ -272,7 +272,7 @@ func TestEnvelopeFromA2ASendMessage_extra覆盖既有键(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── EnvelopeToACPJsonrpcCall ────────────────────────────
+// ──────────────────────────── EnvelopeToACPJsonrpcCall 出站 JSON-RPC 调用 ────────────────────────────
 
 // TestEnvelopeToACPJsonrpcCall_基础 输出恒四键 + method/params 映射。
 func TestEnvelopeToACPJsonrpcCall_基础(t *testing.T) {
@@ -329,7 +329,7 @@ func TestEnvelopeToACPJsonrpcCall_ext无extMethod回退(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── E2AResponseToACPJsonrpcResponse ────────────────────────────
+// ──────────────────────────── E2AResponseToACPJsonrpcResponse 响应转 JSON-RPC ────────────────────────────
 
 // TestE2AResponseToACPJsonrpcResponse_projections快路径 已组装响应原样返回副本。
 func TestE2AResponseToACPJsonrpcResponse_projections快路径(t *testing.T) {
@@ -632,7 +632,7 @@ func TestE2AResponseToACPJsonrpcResponse_未知kind(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── E2AResponseToA2AStreamPayload ────────────────────────────
+// ──────────────────────────── E2AResponseToA2AStreamPayload 响应转流式载荷 ────────────────────────────
 
 // TestE2AResponseToA2AStreamPayload_非streamEvent返回nil。
 func TestE2AResponseToA2AStreamPayload_非streamEvent(t *testing.T) {
@@ -769,7 +769,7 @@ func TestE2AResponseToA2AStreamPayload_body缺失(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── BuildACPToolResponseMessage ────────────────────────────
+// ──────────────────────────── BuildACPToolResponseMessage ACP 工具响应消息 ────────────────────────────
 
 // TestBuildACPToolResponseMessage_全字段。
 func TestBuildACPToolResponseMessage_全字段(t *testing.T) {

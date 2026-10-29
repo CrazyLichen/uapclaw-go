@@ -15,7 +15,7 @@ func TestLoadProfile_无acpAgents配置(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "config has no acp_agents mapping") {
 		t.Errorf("err = %v", err)
 	}
-	// nil configBase
+	// nil configBase 空配置基线
 	_, err = loadProfile(nil, "x")
 	if err == nil || !strings.Contains(err.Error(), "config has no acp_agents mapping") {
 		t.Errorf("nil err = %v", err)

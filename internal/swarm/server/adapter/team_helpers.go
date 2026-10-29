@@ -242,53 +242,6 @@ func HandleTeamEvolveListCommand(ctx context.Context, channelID, sessionID, quer
 	}
 }
 
-// buildEvolveListSummary 构建单 Skill 的经验库分数表格摘要。
-// 对齐 Python: _handle_evolve_list_command L4052-4076 的表格构建
-// （M-10：team 版 HandleTeamEvolveListCommand 与 agent 版 handleEvolveListCommand 共用，
-//
-//	Used/Effect 列对齐 M-32 真值语义——times_presented==0 时强制 "0/0"）。
-func buildEvolveListSummary(skillName string, records []checkpointing.EvolutionRecord) string {
-	var avgScore float64
-	for _, r := range records {
-		avgScore += r.Score
-	}
-	avgScore /= float64(len(records))
-
-	lines := []string{
-		fmt.Sprintf("📊 Skill \"%s\" — 经验库摘要\n", skillName),
-		fmt.Sprintf("共 %d 条经验 | 平均分：%.2f\n", len(records), avgScore),
-		"| # | Score | Used | Effect | Section | Content (preview) |",
-		"|---|---:|---|---|---|---|",
-	}
-	for i, record := range records {
-		// Python: stats = record.usage_stats — Used/Effect 列取使用统计
-		usedStr := "0/0"
-		effectStr := "+0/-0"
-		if record.UsageStats != nil {
-			// M-32: 对齐 Python L472-474 真值语义——times_presented==0 时
-			// 强制 "0/0"（防御展示 0 次却记了使用次数的数据异常，
-			// Python: used_str = f"{used}/{presented}" if stats.times_presented else "0/0"）
-			if record.UsageStats.TimesPresented > 0 {
-				usedStr = fmt.Sprintf("%d/%d", record.UsageStats.TimesUsed, record.UsageStats.TimesPresented)
-			}
-			effectStr = fmt.Sprintf("+%d/-%d", record.UsageStats.TimesPositive, record.UsageStats.TimesNegative)
-		}
-		section := strings.ReplaceAll(record.Change.Section, "|", "\\|")
-		preview := record.Change.Content
-		if idx := strings.Index(preview, "\n"); idx >= 0 {
-			preview = preview[:idx]
-		}
-		if len(preview) > 40 {
-			preview = preview[:40]
-		}
-		preview = strings.ReplaceAll(preview, "|", "\\|")
-		lines = append(lines, fmt.Sprintf("| %d | %.2f | %s | %s | %s | %s |",
-			i+1, record.Score, usedStr, effectStr, section, preview))
-	}
-	lines = append(lines, fmt.Sprintf("\n提示：使用 /evolve_simplify %s 执行智能整理", skillName))
-	return strings.Join(lines, "\n")
-}
-
 // HandleTeamSlashCommand 处理 team 模式专用 slash 命令。
 // 对齐 Python: _handle_team_slash_command(channel_id, session_id, query) (line 494-608)
 //
@@ -490,6 +443,53 @@ func ResolveTeamRebuildFollowup(ctx context.Context, channelID, sessionID, query
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildEvolveListSummary 构建单 Skill 的经验库分数表格摘要。
+// 对齐 Python: _handle_evolve_list_command L4052-4076 的表格构建
+// （M-10：team 版 HandleTeamEvolveListCommand 与 agent 版 handleEvolveListCommand 共用，
+//
+//	Used/Effect 列对齐 M-32 真值语义——times_presented==0 时强制 "0/0"）。
+func buildEvolveListSummary(skillName string, records []checkpointing.EvolutionRecord) string {
+	var avgScore float64
+	for _, r := range records {
+		avgScore += r.Score
+	}
+	avgScore /= float64(len(records))
+
+	lines := []string{
+		fmt.Sprintf("📊 Skill \"%s\" — 经验库摘要\n", skillName),
+		fmt.Sprintf("共 %d 条经验 | 平均分：%.2f\n", len(records), avgScore),
+		"| # | Score | Used | Effect | Section | Content (preview) |",
+		"|---|---:|---|---|---|---|",
+	}
+	for i, record := range records {
+		// Python: stats = record.usage_stats — Used/Effect 列取使用统计
+		usedStr := "0/0"
+		effectStr := "+0/-0"
+		if record.UsageStats != nil {
+			// M-32: 对齐 Python L472-474 真值语义——times_presented==0 时
+			// 强制 "0/0"（防御展示 0 次却记了使用次数的数据异常，
+			// Python: used_str = f"{used}/{presented}" if stats.times_presented else "0/0"）
+			if record.UsageStats.TimesPresented > 0 {
+				usedStr = fmt.Sprintf("%d/%d", record.UsageStats.TimesUsed, record.UsageStats.TimesPresented)
+			}
+			effectStr = fmt.Sprintf("+%d/-%d", record.UsageStats.TimesPositive, record.UsageStats.TimesNegative)
+		}
+		section := strings.ReplaceAll(record.Change.Section, "|", "\\|")
+		preview := record.Change.Content
+		if idx := strings.Index(preview, "\n"); idx >= 0 {
+			preview = preview[:idx]
+		}
+		if len(preview) > 40 {
+			preview = preview[:40]
+		}
+		preview = strings.ReplaceAll(preview, "|", "\\|")
+		lines = append(lines, fmt.Sprintf("| %d | %.2f | %s | %s | %s | %s |",
+			i+1, record.Score, usedStr, effectStr, section, preview))
+	}
+	lines = append(lines, fmt.Sprintf("\n提示：使用 /evolve_simplify %s 执行智能整理", skillName))
+	return strings.Join(lines, "\n")
+}
 
 // stripDirective 从 query 开头去除 slash 指令前缀。
 // 仅当 query 以 prefix 开头且后跟空格或结尾时才去除。

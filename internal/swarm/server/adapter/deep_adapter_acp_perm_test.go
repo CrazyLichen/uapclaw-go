@@ -421,7 +421,7 @@ func TestRequestPermissionConfirmation_大小写归一(t *testing.T) {
 
 // TestResolvePermissionSessionID 会话 ID 解析。
 func TestResolvePermissionSessionID(t *testing.T) {
-	// nil ctx
+	// nil ctx 空上下文返回空串
 	if got := resolvePermissionSessionID(nil); got != "" {
 		t.Errorf("nil ctx = %q", got)
 	}

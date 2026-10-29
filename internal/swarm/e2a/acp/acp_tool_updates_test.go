@@ -205,7 +205,7 @@ func TestBuildAcpToolResultUpdate(t *testing.T) {
 	if u["toolName"] != "read_file" {
 		t.Errorf("toolName = %v", u["toolName"])
 	}
-	// content blocks
+	// content blocks 内容块数组断言
 	cb, _ := u["content"].([]map[string]any)
 	if len(cb) != 1 {
 		t.Errorf("content = %v", u["content"])
@@ -221,7 +221,7 @@ func TestBuildAcpToolResultUpdate_状态推断(t *testing.T) {
 	if u["status"] != "in_progress" {
 		t.Errorf("terminal create status = %v", u["status"])
 	}
-	// error → failed
+	// error → failed 错误推断为 failed 状态
 	u2 := BuildAcpToolResultUpdate(map[string]any{
 		"tool_call_id": "c3", "tool_name": "bash", "error": "boom",
 	}, nil)
@@ -327,7 +327,7 @@ func TestLegacyArguments(t *testing.T) {
 	if got, ok := legacyArguments(m).(map[string]any); !ok || got["a"] != 1 {
 		t.Errorf("dict 应原样: %v", got)
 	}
-	// JSON str → map
+	// JSON str → map 串参解包为映射
 	if got := legacyArguments(`{"a":1}`); got == nil {
 		t.Errorf("JSON str 应转 map: %v", got)
 	}
@@ -336,7 +336,7 @@ func TestLegacyArguments(t *testing.T) {
 	if got["input"] != "text" {
 		t.Errorf("text = %v", got)
 	}
-	// nil → {}
+	// nil → {} 空参转空映射
 	if got := legacyArguments(nil); got == nil {
 		t.Errorf("nil = %v", got)
 	}

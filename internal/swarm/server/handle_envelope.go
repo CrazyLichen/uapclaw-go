@@ -829,7 +829,7 @@ func (s *AgentServer) writeErrorResponse(requestID, channelID, errMsg, code stri
 // 使用 setdefault 语义：不覆盖已有 acp_client_capabilities 值。
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:803-810
-// metadata.setdefault("acp_client_capabilities",
+// Python: metadata.setdefault("acp_client_capabilities",
 //
 //	ws_caps or agent_manager.get_client_capabilities("acp"))
 //

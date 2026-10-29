@@ -430,7 +430,7 @@ func TestHandleEvolveCommand_信号指纹去重(t *testing.T) {
 	d := newEvolveTestAdapter(t, skillsDir, stub)
 
 	// 构造带 execution_failure 工具消息的会话上下文：
-	// DeepAgent + ReActAgent + ContextEngine + default_context
+	// DeepAgent + ReActAgent + ContextEngine + default_context 组件装配链
 	card := newEvolveTestAgentCard("evolve-dedup-agent")
 	instance := harness.NewDeepAgent(card)
 	reactAgent := newEvolveTestReActAgent(t, card)
