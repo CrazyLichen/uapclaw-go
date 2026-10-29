@@ -511,3 +511,709 @@ func TestAcpChannel_E2aModeDeltaAndFinal(t *testing.T) {
 	// ctx 清理
 	assert.False(t, ch.HasRequestContextForTest("e2a-req-1"))
 }
+
+// ──────────────────────────── 例 12-13 finalize 悬挂 ────────────────────────────
+
+// TestAcpChannel_NoEndTurnBeforeLateToolResult 例 12：final→tool_result→idle 四帧，
+// 末帧才 end_turn（晚到 tool result 不得提前触发收尾）。
+// Python: test_jsonrpc_session_prompt_does_not_end_turn_from_chat_final_before_late_tool_result。
+func TestAcpChannel_NoEndTurnBeforeLateToolResult(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":12,"method":"session/prompt","params":{"sessionId":"sess-idle","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetIdleFinalizeSecondsForTest(0.01)
+	ch.SetStdinEOFGraceSecondsForTest(0.01)
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatFinal, map[string]any{"content": "final answer"}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatToolResult, map[string]any{
+				"tool_name": "write_text_file", "tool_call_id": "tool-call-late-2",
+				"result": "index.html written"}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 4)
+	// 第一个响应是 agent_message_chunk
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, "session/update", lines[0]["method"])
+	assert.Equal(t, "agent_message_chunk", u0["sessionUpdate"])
+	// 第二个响应是晚到的 tool result update（七键全量）
+	p1, _ := lines[1]["params"].(map[string]any)
+	u1, _ := p1["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "tool_call_update",
+		"toolCallId":    "tool-call-late-2",
+		"toolName":      "write_text_file",
+		"title":         "Editing files",
+		"kind":          "edit",
+		"status":        "completed",
+		"result":        "index.html written",
+		"content":       []any{map[string]any{"type": "content", "content": map[string]any{"type": "text", "text": "index.html written"}}},
+	}, u1)
+	// 第三个响应是 idle
+	p2, _ := lines[2]["params"].(map[string]any)
+	u2, _ := p2["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "session_info_update",
+		"status":        "idle",
+	}, u2)
+	// 末帧才是 end_turn result
+	result, _ := lines[3]["result"].(map[string]any)
+	assert.Equal(t, float64(12), lines[3]["id"])
+	assert.Equal(t, "end_turn", result["stopReason"])
+}
+
+// TestAcpChannel_DeltaOnlyNoFinalize 例 13：仅 delta 不自动 end_turn，
+// 显式 Stop 截断循环（对齐 Python await channel.stop()）。
+// Python: test_jsonrpc_session_prompt_does_not_auto_finalize_from_delta_only。
+func TestAcpChannel_DeltaOnlyNoFinalize(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":121,"method":"session/prompt","params":{"sessionId":"sess-delta-only","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetIdleFinalizeSecondsForTest(0.01)
+	ch.SetStdinEOFGraceSecondsForTest(0.05)
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatDelta, map[string]any{"content": "partial answer"}))
+		// delta-only 场景不会自动 end_turn；显式停止通道，避免测试等待未完成请求而超时
+		ch.Stop()
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 1)
+	p0, _ := lines[0]["params"].(map[string]any)
+	update, _ := p0["update"].(map[string]any)
+	assert.Equal(t, "agent_message_chunk", update["sessionUpdate"])
+	assert.IsType(t, "", update["messageId"])
+	assert.Equal(t, map[string]any{"type": "text", "text": "partial answer"}, update["content"])
+}
+
+// ──────────────────────────── 例 17-18 直灌 ctx ────────────────────────────
+
+// TestAcpChannel_IdleDefersUntilPendingRPC 例 17：pending RPC 挂起 end_turn，
+// 回流后补发 result（SeedRequestCtxForTest + SetPendingRPCSessionForTest 直灌，
+// 对齐 Python SimpleNamespace 模式）。
+// Python: test_processing_idle_defers_end_turn_until_pending_client_rpc_resolves。
+func TestAcpChannel_IdleDefersUntilPendingRPC(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+	requestID := "req-pending-client-rpc"
+	sessionID := "sess-pending-client-rpc"
+	seen := make(chan *schema.Message, 4)
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		seen <- msg
+		return true
+	})
+	c := &acpRequestCtx{
+		JSONRPCID: 501, Method: "session/prompt", ResponseMode: "jsonrpc",
+		SessionID: sessionID, UserMessageID: "user-msg-pending",
+	}
+	ch.SeedRequestCtxForTest(requestID, c)
+	ch.SetPendingRPCSessionForTest("tool-pending-1", sessionID)
+
+	isFinal := ch.SendJsonrpcMessageForTest(makeChEvent(requestID, sessionID,
+		schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}), c)
+
+	assert.False(t, isFinal)
+	ch.mu.Lock()
+	assert.Equal(t, "end_turn", c.PendingStopReason)
+	ch.mu.Unlock()
+	// 挂起期唯一一帧：session_info_update idle
+	lines := out.jsonLines(t)
+	assert.Equal(t, []map[string]any{{
+		"jsonrpc": "2.0",
+		"method":  "session/update",
+		"params": map[string]any{
+			"sessionId": sessionID,
+			"update": map[string]any{
+				"sessionUpdate": "session_info_update",
+				"status":        "idle",
+			},
+		},
+	}}, lines)
+
+	// 工具响应回流 → 补发 result
+	ch.HandleJsonrpcResponseForTest(map[string]any{
+		"jsonrpc": "2.0", "id": "tool-pending-1", "result": map[string]any{"ok": true},
+	})
+
+	lines = out.jsonLines(t)
+	last := lines[len(lines)-1]
+	assert.Equal(t, map[string]any{
+		"jsonrpc": "2.0", "id": float64(501),
+		"result": map[string]any{
+			"stopReason":     "end_turn",
+			"userMessageId":  "user-msg-pending",
+		},
+	}, last)
+	assert.False(t, ch.HasRequestContextForTest(requestID))
+	// dispatch 单条 acp.tool_response
+	select {
+	case msg := <-seen:
+		assert.Equal(t, schema.ReqMethodACPToolResponse, msg.ReqMethod)
+		assert.Equal(t, sessionID, msg.SessionID)
+	case <-time.After(2 * time.Second):
+		t.Fatal("acp.tool_response dispatch not invoked")
+	}
+}
+
+// TestAcpChannel_LateFinalSuffixOnly 例 18：迟到 final 只发缺失后缀。
+// 三次直灌：delta("partial") → idle(挂起) → final("partial final answer")。
+// Python: test_processing_idle_waits_for_late_chat_final_and_only_emits_missing_suffix。
+func TestAcpChannel_LateFinalSuffixOnly(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+	requestID := "req-late-final"
+	sessionID := "sess-late-final"
+	c := &acpRequestCtx{
+		JSONRPCID: 551, Method: "session/prompt", ResponseMode: "jsonrpc",
+		SessionID: sessionID,
+	}
+	ch.SeedRequestCtxForTest(requestID, c)
+
+	first := ch.SendJsonrpcMessageForTest(makeChEvent(requestID, sessionID,
+		schema.EventTypeChatDelta, map[string]any{"content": "partial"}), c)
+	second := ch.SendJsonrpcMessageForTest(makeChEvent(requestID, sessionID,
+		schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}), c)
+	third := ch.SendJsonrpcMessageForTest(makeChEvent(requestID, sessionID,
+		schema.EventTypeChatFinal, map[string]any{"content": "partial final answer"}), c)
+
+	assert.False(t, first)
+	assert.False(t, second)
+	assert.True(t, third)
+
+	ch.mu.Lock()
+	assistantID := c.State.AssistantMessageID
+	ch.mu.Unlock()
+
+	lines := out.jsonLines(t)
+	assert.Equal(t, []map[string]any{
+		{
+			"jsonrpc": "2.0",
+			"method":  "session/update",
+			"params": map[string]any{
+				"sessionId": sessionID,
+				"update": map[string]any{
+					"sessionUpdate": "agent_message_chunk",
+					"messageId":     assistantID,
+					"content":       map[string]any{"type": "text", "text": "partial"},
+				},
+			},
+		},
+		{
+			"jsonrpc": "2.0",
+			"method":  "session/update",
+			"params": map[string]any{
+				"sessionId": sessionID,
+				"update": map[string]any{
+					"sessionUpdate": "session_info_update",
+					"status":        "idle",
+				},
+			},
+		},
+		{
+			"jsonrpc": "2.0",
+			"method":  "session/update",
+			"params": map[string]any{
+				"sessionId": sessionID,
+				"update": map[string]any{
+					"sessionUpdate": "agent_message_chunk",
+					"messageId":     assistantID,
+					"content":       map[string]any{"type": "text", "text": " final answer"},
+				},
+			},
+		},
+		{
+			"jsonrpc": "2.0",
+			"id":      float64(551),
+			"result":  map[string]any{"stopReason": "end_turn"},
+		},
+	}, lines)
+}
+
+// ──────────────────────────── 例 21-26 update 族 ────────────────────────────
+
+// TestAcpChannel_ToolCallUpdate 例 21：tool_call 八键全量。
+// Python: test_jsonrpc_session_prompt_emits_tool_call_update。
+func TestAcpChannel_ToolCallUpdate(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":30,"method":"session/prompt","params":{"sessionId":"sess-tool-call","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatToolCall, map[string]any{
+				"tool_call": map[string]any{"name": "read_file",
+					"arguments": map[string]any{"path": "demo.txt"}, "tool_call_id": "tool-call-1"}}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatDelta, map[string]any{"content": "done"}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 4)
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "tool_call",
+		"toolCall": map[string]any{
+			"id":        "tool-call-1",
+			"name":      "read_file",
+			"arguments": map[string]any{"path": "demo.txt"},
+		},
+		"toolCallId": "tool-call-1",
+		"title":      "Reading demo.txt",
+		"kind":       "read",
+		"status":     "pending",
+		"rawInput":   map[string]any{"path": "demo.txt"},
+		"locations":  []any{map[string]any{"path": "demo.txt"}},
+	}, u0)
+	p1, _ := lines[1]["params"].(map[string]any)
+	u1, _ := p1["update"].(map[string]any)
+	assert.Equal(t, "agent_message_chunk", u1["sessionUpdate"])
+	p2, _ := lines[2]["params"].(map[string]any)
+	u2, _ := p2["update"].(map[string]any)
+	assert.Equal(t, "session_info_update", u2["sessionUpdate"])
+	assert.Equal(t, "idle", u2["status"])
+	result, _ := lines[3]["result"].(map[string]any)
+	assert.Equal(t, "end_turn", result["stopReason"])
+}
+
+// TestAcpChannel_ToolResultUpdate 例 22：tool_call_update 七键。
+// Python: test_jsonrpc_session_prompt_emits_tool_result_update。
+func TestAcpChannel_ToolResultUpdate(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":31,"method":"session/prompt","params":{"sessionId":"sess-tool-result","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatToolResult, map[string]any{
+				"tool_name": "read_file", "tool_call_id": "tool-call-2",
+				"result": "file contents"}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatDelta, map[string]any{"content": "done"}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 4)
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "tool_call_update",
+		"toolCallId":    "tool-call-2",
+		"toolName":      "read_file",
+		"title":         "Reading data",
+		"kind":          "read",
+		"status":        "completed",
+		"result":        "file contents",
+		"content":       []any{map[string]any{"type": "content", "content": map[string]any{"type": "text", "text": "file contents"}}},
+	}, u0)
+	p1, _ := lines[1]["params"].(map[string]any)
+	u1, _ := p1["update"].(map[string]any)
+	assert.Equal(t, "agent_message_chunk", u1["sessionUpdate"])
+	p2, _ := lines[2]["params"].(map[string]any)
+	u2, _ := p2["update"].(map[string]any)
+	assert.Equal(t, "session_info_update", u2["sessionUpdate"])
+	assert.Equal(t, "idle", u2["status"])
+	result, _ := lines[3]["result"].(map[string]any)
+	assert.Equal(t, "end_turn", result["stopReason"])
+}
+
+// TestAcpChannel_ToolInProgressUpdate 例 23：tool_call → tool_call_update(in_progress) 两帧。
+// Python: test_jsonrpc_session_prompt_emits_tool_in_progress_update。
+func TestAcpChannel_ToolInProgressUpdate(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":311,"method":"session/prompt","params":{"sessionId":"sess-tool-progress","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatToolCall, map[string]any{
+				"tool_call": map[string]any{"name": "read_file",
+					"arguments": map[string]any{"path": "demo.txt"}, "tool_call_id": "tool-call-progress-1"}}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatToolUpdate, map[string]any{
+				"tool_call_id": "tool-call-progress-1", "status": "in_progress"}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	// Python 断言前两帧 update 内容；后续 idle 帧 + result 由 timer 收尾（四帧）
+	require.Len(t, lines, 4)
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "tool_call",
+		"toolCall": map[string]any{
+			"id":        "tool-call-progress-1",
+			"name":      "read_file",
+			"arguments": map[string]any{"path": "demo.txt"},
+		},
+		"toolCallId": "tool-call-progress-1",
+		"title":      "Reading demo.txt",
+		"kind":       "read",
+		"status":     "pending",
+		"rawInput":   map[string]any{"path": "demo.txt"},
+		"locations":  []any{map[string]any{"path": "demo.txt"}},
+	}, u0)
+	p1, _ := lines[1]["params"].(map[string]any)
+	u1, _ := p1["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "tool_call_update",
+		"toolCallId":    "tool-call-progress-1",
+		"toolName":      "read_file",
+		"title":         "Reading demo.txt",
+		"kind":          "read",
+		"status":        "in_progress",
+		"rawInput":      map[string]any{"path": "demo.txt"},
+		"locations":     []any{map[string]any{"path": "demo.txt"}},
+	}, u1)
+	p2, _ := lines[2]["params"].(map[string]any)
+	u2, _ := p2["update"].(map[string]any)
+	assert.Equal(t, "session_info_update", u2["sessionUpdate"])
+	assert.Equal(t, "idle", u2["status"])
+	result, _ := lines[3]["result"].(map[string]any)
+	assert.Equal(t, "end_turn", result["stopReason"])
+}
+
+// TestAcpChannel_PlanUpdate 例 24：chat.subtask_update → plan。
+// Python: test_jsonrpc_session_prompt_emits_plan_update。
+func TestAcpChannel_PlanUpdate(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":32,"method":"session/prompt","params":{"sessionId":"sess-plan","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatSubtaskUpdate, map[string]any{
+				"session_id": msg.SessionID, "description": "并行执行两个任务",
+				"status": "running", "index": 1, "total": 2,
+				"result": "已启动后台会话", "is_parallel": true}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatDelta, map[string]any{"content": "done"}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 4)
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, "plan", u0["sessionUpdate"])
+	plan, _ := u0["plan"].(map[string]any)
+	assert.Equal(t, "并行执行两个任务", plan["description"])
+	assert.Equal(t, true, plan["is_parallel"])
+	p1, _ := lines[1]["params"].(map[string]any)
+	u1, _ := p1["update"].(map[string]any)
+	assert.Equal(t, "agent_message_chunk", u1["sessionUpdate"])
+	p2, _ := lines[2]["params"].(map[string]any)
+	u2, _ := p2["update"].(map[string]any)
+	assert.Equal(t, "session_info_update", u2["sessionUpdate"])
+	assert.Equal(t, "idle", u2["status"])
+	result, _ := lines[3]["result"].(map[string]any)
+	assert.Equal(t, "end_turn", result["stopReason"])
+}
+
+// TestAcpChannel_ProcessingStatusUpdate 例 25：processing→idle→result 三帧。
+// Python: test_jsonrpc_session_prompt_emits_processing_status_update。
+func TestAcpChannel_ProcessingStatusUpdate(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":33,"method":"session/prompt","params":{"sessionId":"sess-processing","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": true}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 3)
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "session_info_update",
+		"status":        "processing",
+	}, u0)
+	p1, _ := lines[1]["params"].(map[string]any)
+	u1, _ := p1["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "session_info_update",
+		"status":        "idle",
+	}, u1)
+	result, _ := lines[2]["result"].(map[string]any)
+	assert.Equal(t, "end_turn", result["stopReason"])
+}
+
+// TestAcpChannel_UsageUpdateBeforeResult 例 26：delta 带 usage → chunk→usage→idle→result 四帧。
+// Python: test_jsonrpc_session_prompt_emits_usage_update_before_result。
+func TestAcpChannel_UsageUpdateBeforeResult(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":34,"method":"session/prompt","params":{"sessionId":"sess-usage","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatDelta, map[string]any{
+				"content": "done",
+				"usage":   map[string]any{"inputTokens": 12, "outputTokens": 34}}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 4)
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, "agent_message_chunk", u0["sessionUpdate"])
+	p1, _ := lines[1]["params"].(map[string]any)
+	u1, _ := p1["update"].(map[string]any)
+	// usage 数值经 JSON 往返为 float64（Python json 解析同态）
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "usage_update",
+		"usage":         map[string]any{"inputTokens": float64(12), "outputTokens": float64(34)},
+	}, u1)
+	p2, _ := lines[2]["params"].(map[string]any)
+	u2, _ := p2["update"].(map[string]any)
+	assert.Equal(t, "session_info_update", u2["sessionUpdate"])
+	assert.Equal(t, "idle", u2["status"])
+	assert.Equal(t, map[string]any{
+		"jsonrpc": "2.0", "id": float64(34), "result": map[string]any{"stopReason": "end_turn"},
+	}, lines[3])
+}
+
+// ──────────────────────────── 例 27-31 timer 取向 ────────────────────────────
+
+// TestAcpChannel_ProcessingTrueNoSchedule 例 27：is_processing=true 只出一帧且不排 timer。
+// Python: test_processing_status_true_does_not_schedule_idle_finalize。
+func TestAcpChannel_ProcessingTrueNoSchedule(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+	c := &acpRequestCtx{
+		JSONRPCID: 35, Method: "session/prompt", ResponseMode: "jsonrpc",
+		SessionID: "sess-processing-only",
+	}
+	ch.SeedRequestCtxForTest("req-processing-only", c)
+
+	isFinal := ch.SendJsonrpcMessageForTest(makeChEvent("req-processing-only", "sess-processing-only",
+		schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": true}), c)
+
+	assert.False(t, isFinal)
+	assert.Equal(t, []map[string]any{{
+		"jsonrpc": "2.0",
+		"method":  "session/update",
+		"params": map[string]any{
+			"sessionId": "sess-processing-only",
+			"update": map[string]any{
+				"sessionUpdate": "session_info_update",
+				"status":        "processing",
+			},
+		},
+	}}, out.jsonLines(t))
+	ch.mu.Lock()
+	assert.Nil(t, c.idleFinalizeTimerSlot)
+	ch.mu.Unlock()
+}
+
+// TestAcpChannel_ToolEventCancelsIdleFinalize 例 28：tool_call 事件取消 sentinel timer。
+// Python: test_tool_events_cancel_idle_finalize_instead_of_scheduling。
+// （计划代表代码写于 timer slot 模式修复前——此处按 slot 模式适配。）
+func TestAcpChannel_ToolEventCancelsIdleFinalize(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+	c := &acpRequestCtx{
+		JSONRPCID: 36, Method: "session/prompt", ResponseMode: "jsonrpc",
+		SessionID: "sess-tool-idle",
+	}
+	// 预置 sentinel timer：短超时但绝不希望触发（触发即写出 result 帧 = 失败）
+	fired := make(chan struct{}, 1)
+	ch.mu.Lock()
+	slot := &acpIdleTimerSlot{}
+	c.idleFinalizeTimerSlot = slot
+	slot.timer = time.AfterFunc(50*time.Millisecond, func() {
+		select {
+		case fired <- struct{}{}:
+		default:
+		}
+	})
+	ch.mu.Unlock()
+	ch.SeedRequestCtxForTest("req-tool-idle", c)
+
+	isFinal := ch.SendJsonrpcMessageForTest(makeChEvent("req-tool-idle", "sess-tool-idle",
+		schema.EventTypeChatToolCall, map[string]any{
+			"tool_call": map[string]any{"name": "terminal_create",
+				"arguments": map[string]any{"cmd": "ls"}, "tool_call_id": "tc-idle-1"}}), c)
+
+	assert.False(t, isFinal)
+	// sentinel 被取消：100ms 内不触发（原 50ms）
+	select {
+	case <-fired:
+		t.Fatal("sentinel idle finalize timer should have been cancelled by tool event")
+	case <-time.After(100 * time.Millisecond):
+	}
+	ch.mu.Lock()
+	assert.Nil(t, c.idleFinalizeTimerSlot)
+	ch.mu.Unlock()
+	// tool_call 帧本身照发（terminal_create kind=execute）
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 1)
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, "tool_call", u0["sessionUpdate"])
+}
+
+// TestAcpChannel_DirectReasoningUpdate 例 29：chat.reasoning 直发 thought_chunk。
+// Python: test_jsonrpc_session_prompt_emits_direct_reasoning_update。
+func TestAcpChannel_DirectReasoningUpdate(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":37,"method":"session/prompt","params":{"sessionId":"sess-reasoning-direct","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatReasoning, map[string]any{"content": "reasoning step", "event_type": "chat.reasoning"}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 3)
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, "agent_thought_chunk", u0["sessionUpdate"])
+	assert.Equal(t, map[string]any{"type": "text", "text": "reasoning step"}, u0["content"])
+	p1, _ := lines[1]["params"].(map[string]any)
+	u1, _ := p1["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "session_info_update",
+		"status":        "idle",
+	}, u1)
+	assert.Equal(t, map[string]any{
+		"jsonrpc": "2.0", "id": float64(37), "result": map[string]any{"stopReason": "end_turn"},
+	}, lines[2])
+}
+
+// TestAcpChannel_TodoUpdate 例 30：todo.updated → todo_update 三键。
+// Python: test_jsonrpc_session_prompt_emits_todo_update。
+func TestAcpChannel_TodoUpdate(t *testing.T) {
+	ch, out, _ := newTestChannel(t, []string{
+		`{"jsonrpc":"2.0","id":38,"method":"session/prompt","params":{"sessionId":"sess-todo-update","prompt":[{"type":"text","text":"hello"}]}}`,
+	})
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeTodoUpdated, map[string]any{
+				"todos": []any{map[string]any{
+					"id": "todo-1", "content": "Implement ACP todo update",
+					"activeForm": "Implementing ACP todo update", "status": "in_progress",
+					"createdAt": "2026-04-16T00:00:00Z", "updatedAt": "2026-04-16T00:05:00Z"}}}))
+		ch.Send(context.Background(), makeChEvent(msg.ID, msg.SessionID,
+			schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false}))
+		return true
+	})
+	assert.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 3)
+	p0, _ := lines[0]["params"].(map[string]any)
+	u0, _ := p0["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "todo_update",
+		"todos": []any{map[string]any{
+			"id": "todo-1", "content": "Implement ACP todo update",
+			"activeForm": "Implementing ACP todo update", "status": "in_progress",
+			"createdAt": "2026-04-16T00:00:00Z", "updatedAt": "2026-04-16T00:05:00Z"}},
+	}, u0)
+	p1, _ := lines[1]["params"].(map[string]any)
+	u1, _ := p1["update"].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"sessionUpdate": "session_info_update",
+		"status":        "idle",
+	}, u1)
+	assert.Equal(t, map[string]any{
+		"jsonrpc": "2.0", "id": float64(38), "result": map[string]any{"stopReason": "end_turn"},
+	}, lines[2])
+}
+
+// TestAcpChannel_ReasoningTodoCancelIdle 例 31：三事件各取消 sentinel timer。
+// Python: test_reasoning_and_todo_events_cancel_idle_finalize。
+func TestAcpChannel_ReasoningTodoCancelIdle(t *testing.T) {
+	// 事件与 jsonrpc ID 三元组（reasoning delta / 直接 reasoning / todo）
+	cases := []struct {
+		name      string
+		requestID string
+		jsonrpcID int
+		event     schema.EventType
+		payload   map[string]any
+	}{
+		{"reasoning_delta", "req-reasoning-delta-idle", 39, schema.EventTypeChatDelta,
+			map[string]any{"content": "reasoning", "source_chunk_type": "llm_reasoning"}},
+		{"direct_reasoning", "req-reasoning-idle", 40, schema.EventTypeChatReasoning,
+			map[string]any{"content": "reasoning", "event_type": "chat.reasoning"}},
+		{"todo", "req-todo-idle", 41, schema.EventTypeTodoUpdated,
+			map[string]any{"todos": []any{map[string]any{
+				"id": "todo-2", "content": "Keep session alive",
+				"activeForm": "Keeping session alive", "status": "pending",
+				"createdAt": "2026-04-16T00:00:00Z", "updatedAt": "2026-04-16T00:05:00Z"}}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := &safeBuffer{}
+			ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+			ch.SetStdoutForTest(out)
+			c := &acpRequestCtx{
+				JSONRPCID: tc.jsonrpcID, Method: "session/prompt", ResponseMode: "jsonrpc",
+				SessionID: "sess-idle-cancel",
+			}
+			fired := make(chan struct{}, 1)
+			ch.mu.Lock()
+			slot := &acpIdleTimerSlot{}
+			c.idleFinalizeTimerSlot = slot
+			slot.timer = time.AfterFunc(50*time.Millisecond, func() {
+				select {
+				case fired <- struct{}{}:
+				default:
+				}
+			})
+			ch.mu.Unlock()
+			ch.SeedRequestCtxForTest(tc.requestID, c)
+
+			isFinal := ch.SendJsonrpcMessageForTest(makeChEvent(tc.requestID, "sess-idle-cancel",
+				tc.event, tc.payload), c)
+
+			assert.False(t, isFinal)
+			select {
+			case <-fired:
+				t.Fatal("sentinel idle finalize timer should have been cancelled")
+			case <-time.After(100 * time.Millisecond):
+			}
+			ch.mu.Lock()
+			assert.Nil(t, c.idleFinalizeTimerSlot)
+			ch.mu.Unlock()
+		})
+	}
+}
