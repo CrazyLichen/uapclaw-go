@@ -2,9 +2,11 @@ package adapter
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -294,4 +296,31 @@ func TestCodeAdapter_UpdateRuntimeConfig_nil配置(t *testing.T) {
 	ctx := t.Context()
 	// 不应 panic
 	c.updateRuntimeConfig(ctx, nil)
+}
+
+// TestCodeAdapter_CreateInstance_agentWorkspaceDir路径 测试 agentWorkspaceDir 对齐
+// Python get_agent_workspace_dir() = {DATA_DIR}/agent/workspace（interface_code.py:250，
+// utils.py:1294 get_agent_root_dir()/"workspace"）。
+// 回归背景：曾误用 AgentRootDir()（少一层 /workspace），导致 coding_memory/user_todos
+// 落盘到 {DATA_DIR}/agent/coding_memory 而非 {DATA_DIR}/agent/workspace/coding_memory。
+func TestCodeAdapter_CreateInstance_agentWorkspaceDir路径(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	pathutil.ResetCache()
+	t.Cleanup(pathutil.ResetCache)
+	// 模拟已初始化：创建 config 目录防 getResolvedPaths 回退 ResourcesDir
+	if err := os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	c := NewCodeAdapter()
+	ctx := t.Context()
+	if err := c.CreateInstance(ctx, map[string]any{}, "agent.plan", ""); err != nil {
+		t.Fatalf("CreateInstance error: %v", err)
+	}
+
+	want := filepath.Join(tmpDir, "agent", "workspace")
+	if c.deep.agentWorkspaceDir != want {
+		t.Errorf("agentWorkspaceDir = %q, want %q", c.deep.agentWorkspaceDir, want)
+	}
 }

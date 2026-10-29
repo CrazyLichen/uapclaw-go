@@ -275,7 +275,8 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 10: agentWorkspaceDir 始终指向系统 workspace
 	// Python: self._agent_workspace_dir = str(get_agent_workspace_dir())
-	c.deep.agentWorkspaceDir = workspace.AgentRootDir()
+	// get_agent_workspace_dir() = agent_root/workspace（utils.py:1294），曾误用 AgentRootDir() 少一层 /workspace
+	c.deep.agentWorkspaceDir = workspace.AgentWorkspaceDir()
 
 	// 步骤 12: model = d.createModel(configBase) — 不传多模态配置
 	c.deep.model = c.deep.createModel(configBase)
