@@ -54,20 +54,20 @@ func TestAcpOutputManager_Complete唤醒(t *testing.T) {
 	}
 }
 
-// TestAcpOutputManager_Complete空ID 空白/nil ID 返回 false。
+// TestAcpOutputManager_Complete空ID 空白 ID 返回 false。
 func TestAcpOutputManager_Complete空ID(t *testing.T) {
 	m := newAcpTestManager()
 	if m.CompleteJsonrpcResponse("", map[string]any{}) {
 		t.Error("空 ID 应返回 false")
 	}
-	if m.CompleteJsonrpcResponse(nil, map[string]any{}) {
-		t.Error("nil ID 应返回 false")
+	if m.CompleteJsonrpcResponse("   ", map[string]any{}) {
+		t.Error("空白 ID 应返回 false")
 	}
-	// 数字 ID 归一化
+	// 数字 ID 由调用方经 NormalizeJsonrpcID 归一后传入（jsonrpcID 收紧 string）
 	req := &AcpOutputRequest{JsonrpcID: "7", Method: "m", Done: make(chan AcpOutputResult, 1)}
 	m.AddPendingRequest(req)
-	if !m.CompleteJsonrpcResponse(float64(7), map[string]any{}) {
-		t.Error("float64(7) 应归一化命中")
+	if !m.CompleteJsonrpcResponse(NormalizeJsonrpcID(float64(7)), map[string]any{}) {
+		t.Error("float64(7) 归一化后应命中")
 	}
 	if res := <-req.Done; res.Err != nil {
 		t.Errorf("res = %+v", res)
@@ -260,7 +260,7 @@ func TestAcpOutputManager_Send失败唤醒(t *testing.T) {
 	}
 }
 
-// TestNormalizeJsonrpcID ID 归一化各类型。
+// TestNormalizeJsonrpcID ID 归一化各类型（导出单点边界：any → string）。
 func TestNormalizeJsonrpcID(t *testing.T) {
 	cases := []struct {
 		in   any
@@ -275,8 +275,8 @@ func TestNormalizeJsonrpcID(t *testing.T) {
 		{true, ""},
 	}
 	for _, tc := range cases {
-		if got := normalizeJsonrpcID(tc.in); got != tc.want {
-			t.Errorf("normalizeJsonrpcID(%v) = %q, want %q", tc.in, got, tc.want)
+		if got := NormalizeJsonrpcID(tc.in); got != tc.want {
+			t.Errorf("NormalizeJsonrpcID(%v) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }

@@ -155,9 +155,10 @@ func (m *AcpOutputManager) AddPendingRequest(request *AcpOutputRequest) {
 }
 
 // CompleteJsonrpcResponse 完成一个待定的 ACP JSON-RPC 请求。
-// Python: complete_jsonrpc_response (L89-117)
-func (m *AcpOutputManager) CompleteJsonrpcResponse(jsonrpcID any, response map[string]any) bool {
-	key := normalizeJsonrpcID(jsonrpcID)
+// Python: complete_jsonrpc_response (L89-117)（签名 jsonrpc_id: str | int | None，
+// Go 收紧为 string——调用方经 NormalizeJsonrpcID 归一，联合类型边界收敛到单点）。
+func (m *AcpOutputManager) CompleteJsonrpcResponse(jsonrpcID string, response map[string]any) bool {
+	key := strings.TrimSpace(jsonrpcID)
 	if key == "" {
 		return false
 	}
@@ -184,9 +185,9 @@ func (m *AcpOutputManager) CompleteJsonrpcResponse(jsonrpcID any, response map[s
 }
 
 // FailJsonrpcResponse 使一个待定请求以错误完成。
-// Python: fail_jsonrpc_response (L119-134)
-func (m *AcpOutputManager) FailJsonrpcResponse(jsonrpcID any, exc error) bool {
-	key := normalizeJsonrpcID(jsonrpcID)
+// Python: fail_jsonrpc_response (L119-134)（jsonrpc_id 收紧 string，同上）。
+func (m *AcpOutputManager) FailJsonrpcResponse(jsonrpcID string, exc error) bool {
+	key := strings.TrimSpace(jsonrpcID)
 	if key == "" {
 		return false
 	}
@@ -477,6 +478,27 @@ func (e *AcpOutputTimeoutError) Error() string {
 	return fmt.Sprintf("acp output request timed out after %.1fs: %s", e.Timeout.Seconds(), e.Method)
 }
 
+// NormalizeJsonrpcID jsonrpc ID 归一化（string/number → trim 字符串）。
+// Python: str(jsonrpc_id or "").strip() (L94-95)。
+// 唯一 any→string 边界：JSON 解码后的 ID（string/float64/json.Number 皆可能）
+// 在此单点归一，Complete/Fail 等消费方一律收 string。
+func NormalizeJsonrpcID(id any) string {
+	switch v := id.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case json.Number:
+		return strings.TrimSpace(v.String())
+	default:
+		return ""
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // AcpRequestOption SendJsonrpcRequest 选项。
@@ -600,24 +622,8 @@ func sendAcpToolRequest(ctx context.Context, mgr *AcpOutputManager,
 	return map[string]any{}, nil
 }
 
-// normalizeJsonrpcID jsonrpc ID 归一化（string/number → trim 字符串）。
-// Python: str(jsonrpc_id or "").strip() (L94-95)
-func normalizeJsonrpcID(id any) string {
-	switch v := id.(type) {
-	case string:
-		return strings.TrimSpace(v)
-	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64)
-	case int:
-		return strconv.Itoa(v)
-	case int64:
-		return strconv.FormatInt(v, 10)
-	case json.Number:
-		return strings.TrimSpace(v.String())
-	default:
-		return ""
-	}
-}
+// normalizeJsonrpcID → 已升为导出 NormalizeJsonrpcID（jsonrpcID 收紧 string 时随之迁移，
+// 供 server 侧 JSON 解码后的 any ID 单点归一）。
 
 // randomAcpHex12 12 位随机 hex（uuid4().hex[:12] 等价）。
 func randomAcpHex12() string {

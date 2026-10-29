@@ -89,7 +89,10 @@ func (s *AgentServer) handleACPToolResponse(_ context.Context, request *schema.A
 	if len(request.Params) > 0 {
 		_ = json.Unmarshal(request.Params, &params)
 	}
-	jsonrpcID := params["jsonrpc_id"]
+	// rawID 原样回传/记日志（Python payload 回传 params 原值，可为 None/int/str）；
+	// jsonrpcID 归一后仅用于 pending 查找。
+	rawID := params["jsonrpc_id"]
+	jsonrpcID := swarmtools.NormalizeJsonrpcID(rawID)
 	responsePayload, _ := params["response"].(map[string]any)
 	if responsePayload == nil {
 		responsePayload = map[string]any{}
@@ -104,7 +107,7 @@ func (s *AgentServer) handleACPToolResponse(_ context.Context, request *schema.A
 	}
 	// Python L4679-4683: 未知/迟到响应仅 Info 不上抛
 	logger.Info(logComponent).
-		Str("jsonrpc_id", jsonToStr(jsonrpcID)).
+		Str("jsonrpc_id", jsonToStr(rawID)).
 		Str("request_id", request.RequestID).
 		Msg("[AgentServer] ignore unknown/late acp tool response")
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -112,7 +115,7 @@ func (s *AgentServer) handleACPToolResponse(_ context.Context, request *schema.A
 			"accepted":   false,
 			"ignored":    true,
 			"reason":     "unknown_or_late_response",
-			"jsonrpc_id": jsonrpcID,
+			"jsonrpc_id": rawID,
 		}),
 	), nil
 }
