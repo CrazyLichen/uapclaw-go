@@ -69,11 +69,19 @@ type AcpGatewayRequestCtx struct {
 	SawProcessingIdle bool
 	// ClientWS 客户端连接
 	ClientWS *websocket.Conn
-	// idleFinalizeTimer idle finalize 定时器（回调首行引用比对防 superseded，偏差 §9-4）
-	idleFinalizeTimer *time.Timer
+	// idleFinalizeTimerSlot idle finalize 定时器槽（回调引用比对防 superseded，偏差 §9-4）
+	idleFinalizeTimerSlot *acpIdleTimerSlot
 	// matchedRequestID maybeFinalizeDeferredPrompts 遍历辅助（Python 以局部变量
 	// 元组携带；Go 需挂到结构体以在锁外使用）
 	matchedRequestID string
+}
+
+// acpIdleTimerSlot idle finalize 定时器槽（§9-4）。
+// AfterFunc 回调可能先于闭包变量赋值启动，闭包不能引用 timer 变量本身；
+// 经 slot 中转：调度时先建 slot 写 ctx 字段，回调锁内比对 slot 归属。
+type acpIdleTimerSlot struct {
+	// timer 已 arm 的定时器（slot 创建后锁内赋值，回调只读）
+	timer *time.Timer
 }
 
 // pendingRPCEntry pending RPC 条目（Python (session_id, ws, created_at) 元组）。
@@ -651,9 +659,11 @@ func markStreamActivityLocked(pctx *AcpGatewayRequestCtx) {
 // Python: _cancel_idle_finalize_task (L99-104)。
 // Go 侧取消点统一在持锁段内执行（SendMessage/清理路径），timer.Stop 后置 nil。
 func cancelIdleFinalizeTimerLocked(pctx *AcpGatewayRequestCtx) {
-	if pctx.idleFinalizeTimer != nil {
-		pctx.idleFinalizeTimer.Stop()
-		pctx.idleFinalizeTimer = nil
+	if pctx.idleFinalizeTimerSlot != nil {
+		if pctx.idleFinalizeTimerSlot.timer != nil {
+			pctx.idleFinalizeTimerSlot.timer.Stop()
+		}
+		pctx.idleFinalizeTimerSlot = nil
 	}
 }
 
@@ -794,33 +804,41 @@ func (b *AcpGatewayBridge) clearRequestContext(requestID, sessionID string) {
 
 // scheduleIdleFinalize 调度 idle finalize timer。
 // Python: _schedule_idle_finalize (L585-592)。
+// 竞态安全（§9-4 关键）：AfterFunc 回调可能先于闭包变量赋值完成启动，
+// 故不可在回调里引用闭包 timer 变量。改为经 acpIdleTimerSlot 中转：
+// 锁内先建 slot 并写入 ctx 字段，再 arm timer（回调从 slot.idle 读引用）。
 func (b *AcpGatewayBridge) scheduleIdleFinalize(requestID string, pctx *AcpGatewayRequestCtx, ws *websocket.Conn) {
 	b.mu.Lock()
 	cancelIdleFinalizeTimerLocked(pctx)
 	secs := b.getIdleFinalizeSeconds()
-	var timer *time.Timer
-	timer = time.AfterFunc(time.Duration(secs*float64(time.Second)), func() {
-		b.idleFinalizeAfterTimeout(requestID, timer, ws)
+	slot := &acpIdleTimerSlot{}
+	pctx.idleFinalizeTimerSlot = slot
+	slot.timer = time.AfterFunc(time.Duration(secs*float64(time.Second)), func() {
+		b.idleFinalizeAfterTimeout(requestID, pctx, slot, ws)
 	})
-	pctx.idleFinalizeTimer = timer
 	b.mu.Unlock()
 }
 
 // idleFinalizeAfterTimeout timer 超时回调：引用比对防 superseded。
 // Python: _idle_finalize_after_timeout (L594-615)——asyncio.current_task 比对
-// 的 Go 等价：回调闭包捕获 timer 自身引用，与 ctx.idleFinalizeTimer 比对。
-func (b *AcpGatewayBridge) idleFinalizeAfterTimeout(requestID string, timer *time.Timer, ws *websocket.Conn) {
+// 的 Go 等价：回调经 slot（调度时 ctx 上的占位）比对当前 timer 归属。
+func (b *AcpGatewayBridge) idleFinalizeAfterTimeout(requestID string, pctx *AcpGatewayRequestCtx, slot *acpIdleTimerSlot, ws *websocket.Conn) {
 	b.mu.Lock()
-	pctx, ok := b.requestCtxByReqID[requestID]
-	if !ok || pctx.idleFinalizeTimer != timer {
+	cur, ok := b.requestCtxByReqID[requestID]
+	if !ok || cur != pctx || pctx.idleFinalizeTimerSlot != slot {
 		b.mu.Unlock()
 		return
 	}
 	if b.pendingRPCCountBySession[pctx.SessionID] > 0 {
 		pctx.PendingStopReason = "end_turn"
-		pctx.idleFinalizeTimer = nil
+		pctx.idleFinalizeTimerSlot = nil
 		b.mu.Unlock()
 		return
+	}
+	pctx.idleFinalizeTimerSlot = nil
+	// 比对通过后需停掉 slot 内 timer（正常触发场景 Stop 返回 false，无害）
+	if slot.timer != nil {
+		slot.timer.Stop()
 	}
 	b.mu.Unlock()
 	b.sendRawJsonrpcResult(ws, pctx.JSONRPCID,

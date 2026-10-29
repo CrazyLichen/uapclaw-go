@@ -325,7 +325,7 @@ func TestAcpBridge_SendMessageIdleWaitsLateFinal(t *testing.T) {
 	}
 	h.bridge.mu.Lock()
 	_, hasCtx := h.bridge.requestCtxByReqID[rid]
-	timerActive := h.bridge.requestCtxByReqID[rid] != nil && h.bridge.requestCtxByReqID[rid].idleFinalizeTimer != nil
+	timerActive := h.bridge.requestCtxByReqID[rid] != nil && h.bridge.requestCtxByReqID[rid].idleFinalizeTimerSlot != nil
 	h.bridge.mu.Unlock()
 	if !hasCtx {
 		t.Fatal("ctx should still exist (waiting for late final)")
@@ -486,9 +486,9 @@ func TestAcpBridge_TimerSuperseded(t *testing.T) {
 	h.bridge.mu.Unlock()
 	// 手动调度两个 timer：第一个被第二个 supersede
 	h.bridge.scheduleIdleFinalize(rid, ctxEntry, nil)
-	first := ctxEntry.idleFinalizeTimer
+	first := ctxEntry.idleFinalizeTimerSlot
 	h.bridge.scheduleIdleFinalize(rid, ctxEntry, nil)
-	if ctxEntry.idleFinalizeTimer == first {
+	if ctxEntry.idleFinalizeTimerSlot == first {
 		t.Fatal("second schedule should replace first timer")
 	}
 }
