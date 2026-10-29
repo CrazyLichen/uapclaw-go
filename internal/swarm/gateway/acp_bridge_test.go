@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -217,5 +218,314 @@ func TestAcpBridge_IsJsonrpcRequestAndExtractPromptText(t *testing.T) {
 	}
 	if ExtractPromptText(map[string]any{}) != "" {
 		t.Error("no prompt → empty")
+	}
+}
+
+// makeAcpEventMsg 构造 event 消息（测试辅助）。
+func makeAcpEventMsg(requestID, sessionID string, eventType schema.EventType, payload map[string]any) *schema.Message {
+	return &schema.Message{
+		ID:        requestID,
+		Type:      schema.MessageTypeEvent,
+		ChannelID: "acp",
+		SessionID: sessionID,
+		EventType: eventType,
+		Payload:   payload,
+		Timestamp: schema.NowTimestamp(),
+	}
+}
+
+// registerAcpPrompt 注册一个 prompt ctx（测试辅助，返回 requestID）。
+func registerAcpPrompt(t *testing.T, h *acpBridgeHarness, sessionID, userMessageID string) string {
+	t.Helper()
+	data := map[string]any{"jsonrpc": "2.0", "id": 6, "method": "session/prompt", "params": map[string]any{
+		"sessionId": sessionID, "messageId": userMessageID, "text": "hi",
+	}}
+	if !h.bridge.HandleJsonrpcRequest(context.Background(), nil, data) {
+		t.Fatal("session/prompt should be handled")
+	}
+	return h.dispatched[len(h.dispatched)-1].msg.ID
+}
+
+// TestAcpBridge_SendMessageDelta delta → session/update 通知 + markStreamActivity。
+func TestAcpBridge_SendMessageDelta(t *testing.T) {
+	h := newAcpBridgeHarness()
+	rid := registerAcpPrompt(t, h, "s1", "u1")
+	h.bridge.mu.Lock()
+	ctxEntry := h.bridge.requestCtxByReqID[rid]
+	h.bridge.mu.Unlock()
+	// 预置 sawProcessingIdle=true，验证 delta 会 markStreamActivity 重置
+	ctxEntry.SawProcessingIdle = true
+	msg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatDelta, map[string]any{"content": "hello"})
+	if !h.bridge.SendMessage(context.Background(), msg, nil) {
+		t.Fatal("delta should be handled")
+	}
+	if ctxEntry.SawProcessingIdle {
+		t.Error("delta should reset sawProcessingIdle (markStreamActivity)")
+	}
+	if ctxEntry.State.AssistantText != "hello" {
+		t.Errorf("AssistantText = %q, want hello", ctxEntry.State.AssistantText)
+	}
+}
+
+// TestAcpBridge_SendMessageReasoningAndTool reasoning/tool 系 → update + activity 重置。
+func TestAcpBridge_SendMessageReasoningAndTool(t *testing.T) {
+	h := newAcpBridgeHarness()
+	rid := registerAcpPrompt(t, h, "s1", "u1")
+	msg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatToolCall, map[string]any{
+		"tool_call": map[string]any{"id": "tc-1", "name": "bash", "arguments": map[string]any{"command": "ls"}},
+	})
+	if !h.bridge.SendMessage(context.Background(), msg, nil) {
+		t.Fatal("tool_call should be handled")
+	}
+	msg2 := makeAcpEventMsg(rid, "s1", schema.EventTypeChatSubtaskUpdate, map[string]any{"tasks": []any{"a"}})
+	if !h.bridge.SendMessage(context.Background(), msg2, nil) {
+		t.Fatal("subtask_update should be handled")
+	}
+}
+
+// TestAcpBridge_SendMessageFinalAndIdleEndTurn final 后 idle → end_turn + ctx 清理。
+func TestAcpBridge_SendMessageFinalAndIdleEndTurn(t *testing.T) {
+	h := newAcpBridgeHarness()
+	rid := registerAcpPrompt(t, h, "s1", "u1")
+	// chat.final 先到（无既有文本 → 全新直发 chunk）
+	finalMsg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatFinal, map[string]any{"content": "done"})
+	if !h.bridge.SendMessage(context.Background(), finalMsg, nil) {
+		t.Fatal("chat.final should be handled")
+	}
+	h.bridge.mu.Lock()
+	sawFinal := h.bridge.requestCtxByReqID[rid].SawChatFinal
+	h.bridge.mu.Unlock()
+	if !sawFinal {
+		t.Fatal("SawChatFinal should be true after chat.final")
+	}
+	// processing idle 后到 → 直接收尾（无 pending、无需等 final text——已见过）
+	idleMsg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false})
+	if !h.bridge.SendMessage(context.Background(), idleMsg, nil) {
+		t.Fatal("processing idle should be handled")
+	}
+	h.bridge.mu.Lock()
+	_, hasCtx := h.bridge.requestCtxByReqID[rid]
+	h.bridge.mu.Unlock()
+	if hasCtx {
+		t.Error("ctx should be cleared after end_turn finalize")
+	}
+}
+
+// TestAcpBridge_SendMessageIdleWaitsLateFinal idle 先到（有文本无 final）→ timer 挂起。
+func TestAcpBridge_SendMessageIdleWaitsLateFinal(t *testing.T) {
+	h := newAcpBridgeHarness()
+	rid := registerAcpPrompt(t, h, "s1", "u1")
+	// 先 delta（产生 assistant 文本）
+	deltaMsg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatDelta, map[string]any{"content": "partial"})
+	h.bridge.SendMessage(context.Background(), deltaMsg, nil)
+	// idle 到达：sawChatFinal=false 且 assistantText 非空 → shouldWait=true → 调度 timer
+	idleMsg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false})
+	if !h.bridge.SendMessage(context.Background(), idleMsg, nil) {
+		t.Fatal("idle should be handled")
+	}
+	h.bridge.mu.Lock()
+	_, hasCtx := h.bridge.requestCtxByReqID[rid]
+	timerActive := h.bridge.requestCtxByReqID[rid] != nil && h.bridge.requestCtxByReqID[rid].idleFinalizeTimer != nil
+	h.bridge.mu.Unlock()
+	if !hasCtx {
+		t.Fatal("ctx should still exist (waiting for late final)")
+	}
+	if !timerActive {
+		t.Error("idleFinalizeTimer should be scheduled when waiting for late final text")
+	}
+	// 迟到 final 到达 → cancel timer + 补发 delta 后缀 + 收尾
+	lateFinal := makeAcpEventMsg(rid, "s1", schema.EventTypeChatFinal, map[string]any{"content": "partial full"})
+	if !h.bridge.SendMessage(context.Background(), lateFinal, nil) {
+		t.Fatal("late final should be handled")
+	}
+	// 收尾是 clearRequestContext（等同步路径完成）
+	h.bridge.mu.Lock()
+	_, hasCtx2 := h.bridge.requestCtxByReqID[rid]
+	h.bridge.mu.Unlock()
+	if hasCtx2 {
+		t.Error("ctx should be cleared after late final + sawProcessingIdle=true finalize")
+	}
+}
+
+// TestAcpBridge_SendMessageError chat.error → -32603 + ctx 清理。
+func TestAcpBridge_SendMessageError(t *testing.T) {
+	h := newAcpBridgeHarness()
+	rid := registerAcpPrompt(t, h, "s1", "u1")
+	errMsg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatError, map[string]any{"error": "boom"})
+	if !h.bridge.SendMessage(context.Background(), errMsg, nil) {
+		t.Fatal("chat.error should be handled")
+	}
+	h.bridge.mu.Lock()
+	_, hasCtx := h.bridge.requestCtxByReqID[rid]
+	h.bridge.mu.Unlock()
+	if hasCtx {
+		t.Error("ctx should be cleared after error")
+	}
+}
+
+// TestAcpBridge_SendMessageUnknownRequestID 无 ctx → false（不处理）。
+func TestAcpBridge_SendMessageUnknownRequestID(t *testing.T) {
+	h := newAcpBridgeHarness()
+	msg := makeAcpEventMsg("acp_nonexistent", "s1", schema.EventTypeChatDelta, map[string]any{"content": "x"})
+	if h.bridge.SendMessage(context.Background(), msg, nil) {
+		t.Error("unknown request id should return false (not handled)")
+	}
+}
+
+// TestAcpBridge_PendingRPCDeferEndTurn pending RPC>0 → end_turn 挂起，回流后收尾。
+func TestAcpBridge_PendingRPCDeferEndTurn(t *testing.T) {
+	h := newAcpBridgeHarness()
+	rid := registerAcpPrompt(t, h, "s1", "u1")
+	// outbound_intercept 捕获 acp.output_request → pending 注册
+	raw := map[string]any{"jsonrpc": "2.0", "id": "tool-1", "method": "session/request_permission",
+		"params": map[string]any{"sessionId": "s1", "options": []any{}}}
+	outMsg := &schema.Message{
+		ID: rid, Type: schema.MessageTypeEvent, ChannelID: "acp", SessionID: "s1",
+		EventType: schema.EventTypeChatToolResult,
+		Payload: map[string]any{
+			"event_type": "acp.output_request",
+			"jsonrpc":    raw,
+		},
+	}
+	// OutboundIntercept 签名是 (ws, data{"raw": msg})：
+	if !h.bridge.OutboundIntercept(nil, map[string]any{"raw": outMsg}) {
+		t.Fatal("output_request should be intercepted")
+	}
+	h.bridge.mu.Lock()
+	cnt := h.bridge.pendingRPCCountBySession["s1"]
+	h.bridge.mu.Unlock()
+	if cnt != 1 {
+		t.Fatalf("pendingRPCCount[s1] = %d, want 1", cnt)
+	}
+	// idle 到达（无文本无 final）→ pending>0 → 挂起不收尾
+	idleMsg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false})
+	h.bridge.SendMessage(context.Background(), idleMsg, nil)
+	h.bridge.mu.Lock()
+	_, hasCtx := h.bridge.requestCtxByReqID[rid]
+	pendingStop := h.bridge.requestCtxByReqID[rid] != nil && h.bridge.requestCtxByReqID[rid].PendingStopReason == "end_turn"
+	h.bridge.mu.Unlock()
+	if !hasCtx || !pendingStop {
+		t.Fatal("ctx should be deferred with PendingStopReason=end_turn")
+	}
+	// 工具响应回流 → inbound_intercept → dispatch acp.tool_response → pending 清零 → maybe finalize
+	resp := map[string]any{"jsonrpc": "2.0", "id": "tool-1", "result": map[string]any{"outcome": "selected", "optionId": "o1"}}
+	if !h.bridge.InboundIntercept(nil, resp) {
+		t.Fatal("jsonrpc response should be intercepted")
+	}
+	if len(h.dispatched) != 2 {
+		t.Fatalf("dispatch count = %d, want 2 (prompt + tool_response)", len(h.dispatched))
+	}
+	toolMsg := h.dispatched[1].msg
+	if toolMsg.ReqMethod != schema.ReqMethodACPToolResponse {
+		t.Errorf("tool response ReqMethod = %v, want acp.tool_response", toolMsg.ReqMethod)
+	}
+	// Python L559-562：pending_stop_reason 先清，ws 为 None → continue（ctx 保留）。
+	// 本 harness 注册 prompt 时 ws=nil；真 WS 收尾路径在 Task 4 真 WS 用例验证。
+	h.bridge.mu.Lock()
+	_, hasCtx2 := h.bridge.requestCtxByReqID[rid]
+	stopCleared := h.bridge.requestCtxByReqID[rid] != nil && h.bridge.requestCtxByReqID[rid].PendingStopReason == ""
+	h.bridge.mu.Unlock()
+	if !hasCtx2 {
+		t.Error("ctx should remain when client ws is nil (Python: ws is None → continue)")
+	}
+	if !stopCleared {
+		t.Error("PendingStopReason should be cleared before the ws check (Python L559)")
+	}
+}
+
+// TestAcpBridge_InboundInterceptUnknownResponse 未知/迟到响应 → accepted=false 软忽略。
+func TestAcpBridge_InboundInterceptUnknownResponse(t *testing.T) {
+	h := newAcpBridgeHarness()
+	resp := map[string]any{"jsonrpc": "2.0", "id": "unknown-1", "result": map[string]any{}}
+	if !h.bridge.InboundIntercept(nil, resp) {
+		t.Fatal("unknown response should be intercepted (soft-ignored)")
+	}
+	if len(h.dispatched) != 0 {
+		t.Errorf("unknown response should not dispatch, got %d", len(h.dispatched))
+	}
+}
+
+// TestAcpBridge_InboundInterceptNonResponse 非 JSON-RPC 响应帧 → false。
+func TestAcpBridge_InboundInterceptNonResponse(t *testing.T) {
+	h := newAcpBridgeHarness()
+	if h.bridge.InboundIntercept(nil, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "x"}) {
+		t.Error("request frame should not be intercepted by InboundIntercept")
+	}
+	if h.bridge.InboundIntercept(nil, map[string]any{"jsonrpc": "2.0", "method": "notify"}) {
+		t.Error("notification frame should not be intercepted")
+	}
+}
+
+// TestAcpBridge_Cleanup 断连按 ws 清 pending。
+func TestAcpBridge_Cleanup(t *testing.T) {
+	h := newAcpBridgeHarness()
+	registerAcpPrompt(t, h, "s1", "u1")
+	raw := map[string]any{"jsonrpc": "2.0", "id": "tool-1", "method": "session/request_permission"}
+	outMsg := &schema.Message{
+		ID: "x", Type: schema.MessageTypeEvent, ChannelID: "acp", SessionID: "s1",
+		EventType: schema.EventTypeChatToolResult,
+		Payload:   map[string]any{"event_type": "acp.output_request", "jsonrpc": raw},
+	}
+	h.bridge.OutboundIntercept(nil, map[string]any{"raw": outMsg})
+	h.bridge.mu.Lock()
+	cnt := h.bridge.pendingRPCCountBySession["s1"]
+	h.bridge.mu.Unlock()
+	if cnt != 1 {
+		t.Fatalf("pending count = %d, want 1", cnt)
+	}
+	// cleanup(nil) 不 panic；真实 ws 句柄场景在 Task 4 真 WS 用例验证
+	h.bridge.Cleanup(nil)
+}
+
+// TestAcpBridge_TimerSuperseded timer 被 superseded 后不误收尾（Go 增强）。
+func TestAcpBridge_TimerSuperseded(t *testing.T) {
+	h := newAcpBridgeHarness()
+	rid := registerAcpPrompt(t, h, "s1", "u1")
+	h.bridge.mu.Lock()
+	ctxEntry := h.bridge.requestCtxByReqID[rid]
+	h.bridge.mu.Unlock()
+	// 手动调度两个 timer：第一个被第二个 supersede
+	h.bridge.scheduleIdleFinalize(rid, ctxEntry, nil)
+	first := ctxEntry.idleFinalizeTimer
+	h.bridge.scheduleIdleFinalize(rid, ctxEntry, nil)
+	if ctxEntry.idleFinalizeTimer == first {
+		t.Fatal("second schedule should replace first timer")
+	}
+}
+
+// TestAcpBridge_IdleFinalizeAfterTimeout idle timer 超时 → 直发 end_turn（缺尾部文本语义）。
+func TestAcpBridge_IdleFinalizeAfterTimeout(t *testing.T) {
+	short := 0.02
+	h := &acpBridgeHarness{}
+	// dispatch 回调必须记录（rid 取自 dispatched 尾部）
+	h.bridge = NewAcpGatewayBridge(func(ctx context.Context, msg *schema.Message) error {
+		h.dispatched = append(h.dispatched, &acpDispatched{msg: msg})
+		return nil
+	},
+		WithIdleFinalizeSeconds(func() float64 { return short }))
+	data := map[string]any{"jsonrpc": "2.0", "id": 6, "method": "session/prompt",
+		"params": map[string]any{"sessionId": "s1", "text": "hi"}}
+	h.bridge.HandleJsonrpcRequest(context.Background(), nil, data)
+	rid := h.dispatched[len(h.dispatched)-1].msg.ID
+	deltaMsg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatDelta, map[string]any{"content": "partial"})
+	h.bridge.SendMessage(context.Background(), deltaMsg, nil)
+	idleMsg := makeAcpEventMsg(rid, "s1", schema.EventTypeChatProcessingStatus, map[string]any{"is_processing": false})
+	h.bridge.SendMessage(context.Background(), idleMsg, nil)
+	// 等 timer 超时触发
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		h.bridge.mu.Lock()
+		_, hasCtx := h.bridge.requestCtxByReqID[rid]
+		h.bridge.mu.Unlock()
+		if !hasCtx {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	h.bridge.mu.Lock()
+	_, hasCtx := h.bridge.requestCtxByReqID[rid]
+	h.bridge.mu.Unlock()
+	if hasCtx {
+		t.Fatal("ctx should be cleared by idle finalize timer after timeout")
 	}
 }
