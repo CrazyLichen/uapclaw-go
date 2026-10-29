@@ -776,8 +776,9 @@ func (d *DeepAdapter) consumeStreamWithQuery(ctx context.Context, channelID, ses
 
 	// Python 步骤 2: 调用 Runner.run_agent_team_streaming
 	// Go 差异：Python 通过 Runner.run_agent_team_streaming(agent_team=team_spec, inputs=..., session=..., envs=..., stream_logger=lg)
-	// Go 端使用 ateamruntime.RunAgentTeamStreaming 直接调用
-	streamCh, err := ateamruntime.RunAgentTeamStreaming(ctx, teamSpec, map[string]any{"query": initialQuery}, false, false, sessionID, lg)
+	// S-71(A1): Go 端走具体类型入口 RunTeamAgentStreaming——路由函数已删除，
+	// teamSpec 即 *atschema.TeamAgentSpec（GetEnrichedTeamSpec 返回类型）。
+	streamCh, err := ateamruntime.RunTeamAgentStreaming(ctx, teamSpec.(*atschema.TeamAgentSpec), map[string]any{"query": initialQuery}, sessionID, lg)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("session_id", sessionID).
 			Msg("consumeStreamWithQuery: RunAgentTeamStreaming failed")

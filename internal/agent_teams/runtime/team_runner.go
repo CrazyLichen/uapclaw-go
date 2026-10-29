@@ -55,95 +55,55 @@ const ()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// RunAgentTeam 统一团队执行入口（非流式）。
-// Python: Runner.run_agent_team(agent_team, inputs, *, base, member, session, context, envs)
+// RunTeamAgent TeamAgent 路径（非流式）——统一团队执行入口。
+// Python: Runner.run_agent_team(agent_team, inputs, *, session)（默认分支）
 //
-// 三条路径路由：
-//   - base=True → RunBaseTeam（multi_agent BaseTeam 路径）
-//   - member=True → RunTeamMember（spawn-only 路径）
-//   - 默认 → runAgentTeam（TeamAgent 路径）
-//
-// M-56: agentTeam 保持 any（Python Union[str, TeamAgentSpec, BaseTeam, BaseAgent]
-// 的语义承载），base 分支内一次断言收窄到 maschema.BaseTeam。
-func RunAgentTeam(
+// S-71(A1): 原路由函数 RunAgentTeam(agentTeam any, base, member) 删除——
+// 生产调用方（deep_adapter）恒走默认分支传 *TeamAgentSpec，base/member
+// 分支零生产调用且各自已有具体类型入口（RunBaseTeam/RunTeamMember）。
+// str 场景由外层先调 ResolveTeamAgentSpec 解析后传 spec。
+// inputs 同步收紧 map[string]any：三个下游消费者（TeamAgent.Invoke/
+// BaseTeam.Invoke/PreRun）全部要求 map，Python 传非 dict 实际是
+// AttributeError 崩溃，Go 用类型系统直接编码该约束。
+func RunTeamAgent(
 	ctx context.Context,
-	agentTeam any,
-	inputs any,
-	base bool,
-	member bool,
+	spec *atschema.TeamAgentSpec,
+	inputs map[string]any,
 	sess any,
 ) (map[string]any, error) {
-	if base {
-		team, ok := agentTeam.(maschema.BaseTeam)
-		if !ok {
-			return nil, fmt.Errorf(
-				"run_agent_team(base=True) accepts BaseTeam; got %T. For TeamAgentSpec drop base=True. For str team_id use runner.ResourceMgr",
-				agentTeam,
-			)
-		}
-		return RunBaseTeam(ctx, team, inputs, sess)
-	}
-	if member {
-		// T-01: 路由层一次性断言收窄（错误信息在此报告），Member 路径签名已是具体类型
-		ag, ok := agentTeam.(*agent.TeamAgent)
-		if !ok {
-			return nil, fmt.Errorf("RunTeamMember: agent_team 必须是 *agent.TeamAgent，实际 %T", agentTeam)
-		}
-		return RunTeamMember(ctx, ag, inputs, sess)
-	}
-	return runAgentTeam(ctx, agentTeam, inputs, sess)
+	return runTeamAgent(ctx, spec, inputs, sess)
 }
 
-// RunAgentTeamStreaming 统一团队执行入口（流式）。
-// Python: Runner.run_agent_team_streaming(agent_team, inputs, *, base, member, session, ...)
-// M-56: base 分支内一次断言收窄（agentTeam 保持 any 对齐 Python Union）。
-func RunAgentTeamStreaming(
+// RunTeamAgentStreaming TeamAgent 路径（流式）——统一团队执行入口。
+// Python: Runner.run_agent_team_streaming(agent_team, inputs, *, session, ...)
+// S-71(A1): 同 RunTeamAgent——路由函数删除，str 由外层解析。
+func RunTeamAgentStreaming(
 	ctx context.Context,
-	agentTeam any,
-	inputs any,
-	base bool,
-	member bool,
+	spec *atschema.TeamAgentSpec,
+	inputs map[string]any,
 	sess any,
 	streamLogger *monitor.TeamStreamLogger,
 ) (<-chan stream.Schema, error) {
-	if base {
-		team, ok := agentTeam.(maschema.BaseTeam)
-		if !ok {
-			return nil, fmt.Errorf(
-				"run_agent_team(base=True) accepts BaseTeam; got %T. For TeamAgentSpec drop base=True. For str team_id use runner.ResourceMgr",
-				agentTeam,
-			)
-		}
-		return RunBaseTeamStreaming(ctx, team, inputs, sess)
-	}
-	if member {
-		// T-01: 路由层一次性断言收窄（错误信息在此报告），Member 路径签名已是具体类型
-		ag, ok := agentTeam.(*agent.TeamAgent)
-		if !ok {
-			return nil, fmt.Errorf("RunTeamMemberStreaming: agent_team 必须是 *agent.TeamAgent，实际 %T", agentTeam)
-		}
-		return RunTeamMemberStreaming(ctx, ag, inputs, sess)
-	}
-	return runAgentTeamStreaming(ctx, agentTeam, inputs, sess, streamLogger)
+	return runTeamAgentStreaming(ctx, spec, inputs, sess, streamLogger)
 }
 
 // RunBaseTeam BaseTeam 路径（非流式）。
 // Python: _TeamRunnerMixin._run_base_team(base_team, inputs, *, session, context, envs)
 // M-56: 签名换 maschema.BaseTeam 具体类型（原 any）——
 // str 场景由调用方经 runner.ResourceMgr.GetAgentTeam 解析后传实例。
+// S-71(A1): inputs 收紧 map[string]any（下游 Invoke/PreRun 均要求 map）。
 func RunBaseTeam(
 	ctx context.Context,
 	baseTeam maschema.BaseTeam,
-	inputs any,
+	inputs map[string]any,
 	sess any,
 ) (map[string]any, error) {
 	teamInstance := baseTeam
 
 	teamSession := createAgentTeamSession(sess)
-	inputsDict, _ := inputs.(map[string]any)
 	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L299）
 	// PreRun 是 checkpoint 恢复入口，失败时继续执行会用空状态跑完 session
-	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
+	if preErr := teamSession.PreRun(ctx, inputs); preErr != nil {
 		logger.Error(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
 			Msg("RunBaseTeam: PreRun failed")
@@ -170,7 +130,7 @@ func RunBaseTeam(
 	// Python: L304 — return await team_instance.invoke(inputs, session=team_session)
 	var result any
 	var invokeErr error
-	result, invokeErr = teamInstance.Invoke(ctx, inputsDict, maschema.WithTeamSession(teamSession))
+	result, invokeErr = teamInstance.Invoke(ctx, inputs, maschema.WithTeamSession(teamSession))
 
 	if result == nil {
 		return nil, invokeErr
@@ -188,18 +148,22 @@ func RunBaseTeam(
 // RunBaseTeamStreaming BaseTeam 路径（流式）。
 // Python: _TeamRunnerMixin._run_base_team_streaming(...)
 // M-56: 签名换 maschema.BaseTeam 具体类型（原 any）。
+// S-71(A1): inputs 收紧 map[string]any。
+// S-75/M-51: 清理闭包 + 两处调用——对齐 Python 生成器 finally 语义
+// （team_runner.py L323-330：流耗尽/消费方停止后才 unbind+post_run）。
+// 外层函数 return channel 时不能触发清理（流尚未消费，PostRun 提前
+// commit 会因幂等标记导致最终状态永不持久化）。
 func RunBaseTeamStreaming(
 	ctx context.Context,
 	baseTeam maschema.BaseTeam,
-	inputs any,
+	inputs map[string]any,
 	sess any,
 ) (<-chan stream.Schema, error) {
 	teamInstance := baseTeam
 
 	teamSession := createAgentTeamSession(sess)
-	inputsDict, _ := inputs.(map[string]any)
 	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L327）
-	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
+	if preErr := teamSession.PreRun(ctx, inputs); preErr != nil {
 		logger.Error(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
 			Msg("RunBaseTeamStreaming: PreRun failed")
@@ -214,26 +178,29 @@ func RunBaseTeamStreaming(
 		teamRuntime.BindTeamSession(teamSession)
 	}
 
-	// M-53: 清理 defer 化——streamErr 分支、正常路径都执行
-	// （对齐 Python try/finally + generator finally 双路径）。
-	defer func() {
+	// S-75/M-51: cleanup 闭包——PostRun 用 WithoutCancel 保证清理语义
+	// 独立于调用方取消状态（checkpoint 持久化须运行到底）。
+	cleanup := func() {
 		if teamRuntime != nil {
 			teamRuntime.UnbindTeamSession(teamSession.GetSessionID())
 		}
-		_ = teamSession.PostRun(ctx)
-	}()
+		_ = teamSession.PostRun(context.WithoutCancel(ctx))
+	}
 
-	agentCh, streamErr := teamInstance.Stream(ctx, inputsDict, maschema.WithTeamSession(teamSession))
+	agentCh, streamErr := teamInstance.Stream(ctx, inputs, maschema.WithTeamSession(teamSession))
 	if streamErr != nil {
-		// M-53: defer 清理已就位，直接返回错误
+		// M-53: goroutine 未启动，streamErr 分支显式清理
+		cleanup()
 		return nil, streamErr
 	}
 
 	mergedCh := make(chan stream.Schema, 64)
 	go func() {
 		defer close(mergedCh)
-		// S-58: 清理代码 defer 化——消费者停止读取（ctx 取消）与正常结束两路径
-		// 都执行，对齐 Python generator finally 双路径语义（team_runner.py L264-275）
+		// S-75/M-51: 正常路径清理挂在流耗尽（或 ctx 取消退出）后执行
+		defer cleanup()
+		// S-58: 消费者停止读取（ctx 取消）与正常结束两路径都执行，
+		// 对齐 Python generator finally 双路径语义（team_runner.py L264-275）
 		for chunk := range agentCh {
 			// S-58: select+ctx.Done 保护——消费者停止读取时 goroutine 不永久阻塞
 			select {
@@ -256,13 +223,12 @@ func RunBaseTeamStreaming(
 func RunTeamMember(
 	ctx context.Context,
 	ag *agent.TeamAgent,
-	inputs any,
+	inputs map[string]any,
 	sess any,
 ) (map[string]any, error) {
 	teamSession := createAgentTeamSession(sess)
-	inputsDict, _ := inputs.(map[string]any)
 	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L355）
-	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
+	if preErr := teamSession.PreRun(ctx, inputs); preErr != nil {
 		logger.Error(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
 			Msg("RunTeamMember: PreRun failed")
@@ -289,7 +255,7 @@ func RunTeamMember(
 		_ = teamSession.PostRun(ctx)
 	}()
 
-	return ag.Invoke(ctx, inputsDict, agentinterfaces.WithSession(teamSession))
+	return ag.Invoke(ctx, inputs, agentinterfaces.WithSession(teamSession))
 }
 
 // RunTeamMemberStreaming Member 路径（流式）。
@@ -298,13 +264,12 @@ func RunTeamMember(
 func RunTeamMemberStreaming(
 	ctx context.Context,
 	ag *agent.TeamAgent,
-	inputs any,
+	inputs map[string]any,
 	sess any,
 ) (<-chan stream.Schema, error) {
 	teamSession := createAgentTeamSession(sess)
-	inputsDict, _ := inputs.(map[string]any)
 	// T-01: 对齐 Python 裸 await pre_run 异常传播（team_runner.py L377）
-	if preErr := teamSession.PreRun(ctx, inputsDict); preErr != nil {
+	if preErr := teamSession.PreRun(ctx, inputs); preErr != nil {
 		logger.Error(logComponent).Err(preErr).
 			Str("session_id", teamSession.GetSessionID()).
 			Msg("RunTeamMemberStreaming: PreRun failed")
@@ -321,24 +286,28 @@ func RunTeamMemberStreaming(
 		teamRuntime.BindTeamSession(teamSession)
 	}
 
-	// M-53: 清理 defer 化——streamErr 分支、正常路径都执行。
-	defer func() {
-		_ = FinalizeMember(ctx, ag)
+	// S-75/M-51: cleanup 闭包——同 RunBaseTeamStreaming 模式，对齐
+	// Python 生成器 finally（team_runner.py L384-388：流耗尽后才清理）。
+	cleanup := func() {
+		_ = FinalizeMember(context.WithoutCancel(ctx), ag)
 		if teamRuntime != nil {
 			teamRuntime.UnbindTeamSession(teamSession.GetSessionID())
 		}
-		_ = teamSession.PostRun(ctx)
-	}()
+		_ = teamSession.PostRun(context.WithoutCancel(ctx))
+	}
 
-	agentCh, streamErr := ag.Stream(ctx, inputsDict, agentinterfaces.WithSession(teamSession))
+	agentCh, streamErr := ag.Stream(ctx, inputs, agentinterfaces.WithSession(teamSession))
 	if streamErr != nil {
-		// M-53: defer 清理已就位，直接返回错误
+		// M-53: goroutine 未启动，streamErr 分支显式清理
+		cleanup()
 		return nil, streamErr
 	}
 
 	mergedCh := make(chan stream.Schema, 64)
 	go func() {
 		defer close(mergedCh)
+		// S-75/M-51: 正常路径清理挂在流耗尽（或 ctx 取消退出）后执行
+		defer cleanup()
 		for chunk := range agentCh {
 			// S-58: select+ctx.Done 保护
 			select {
@@ -453,19 +422,16 @@ func BuildTeamControlChunk(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// runAgentTeam TeamAgent 路径（非流式）。
+// runTeamAgent TeamAgent 路径（非流式）。
 // Python: _TeamRunnerMixin.run_agent_team(agent_team, inputs, *, session)
-func runAgentTeam(
+// S-71(A1): agentTeam 收窄 *TeamAgentSpec（str 由外层经 ResolveTeamAgentSpec
+// 解析），inputs 收窄 map[string]any。
+func runTeamAgent(
 	ctx context.Context,
-	agentTeam any,
-	inputs any,
+	spec *atschema.TeamAgentSpec,
+	inputs map[string]any,
 	sess any,
 ) (map[string]any, error) {
-	spec, err := ResolveTeamAgentSpec(ctx, agentTeam, sess)
-	if err != nil {
-		return nil, err
-	}
-
 	activation, err := GetTeamRuntimeManager().Activate(ctx, spec, sess, inputs)
 	if err != nil {
 		return nil, err
@@ -494,37 +460,37 @@ func runAgentTeam(
 	// S-24: 对齐 Python L194 activation.agent.invoke(inputs, session=...)——
 	// 原硬编码 nil 导致团队首请求用户 query 整体丢失（TeamAgent.Invoke 读
 	// inputs["query"] 得 nil map → PendingUserQuery 不设置 → 首轮空事件入队）。
-	// inputs 非 map 时传 nil map（Invoke 对 nil map 读键安全）。
-	inputsDict, _ := inputs.(map[string]any)
-	return activation.Agent.Invoke(ctx, inputsDict, agentinterfaces.WithSession(activation.Session))
+	return activation.Agent.Invoke(ctx, inputs, agentinterfaces.WithSession(activation.Session))
 }
 
-// runAgentTeamStreaming TeamAgent 路径（流式）。
+// runTeamAgentStreaming TeamAgent 路径（流式）。
 // Python: _TeamRunnerMixin.run_agent_team_streaming(...)
-func runAgentTeamStreaming(
+// S-71(A1): agentTeam 收窄 *TeamAgentSpec，inputs 收窄 map[string]any。
+// S-75/M-51: 删除外层双重 defer——外层 return channel 时触发 PostRun 会因
+// 幂等标记导致流耗尽后的最终状态永不持久化；改为 cleanup 闭包 + 两处
+// 调用（reject/streamErr 显式、goroutine defer 正常路径）。
+func runTeamAgentStreaming(
 	ctx context.Context,
-	agentTeam any,
-	inputs any,
+	spec *atschema.TeamAgentSpec,
+	inputs map[string]any,
 	sess any,
 	streamLogger *monitor.TeamStreamLogger,
 ) (<-chan stream.Schema, error) {
-	spec, err := ResolveTeamAgentSpec(ctx, agentTeam, sess)
-	if err != nil {
-		return nil, err
-	}
-
 	activation, err := GetTeamRuntimeManager().Activate(ctx, spec, sess, inputs)
 	if err != nil {
 		return nil, err
 	}
 
-	// M-53: 清理代码 defer 化——reject 分支、streamErr 分支、正常路径
-	// 三路径都执行清理（对齐 Python try/finally，reject/streamErr 在 try 内）。
-	defer func() {
-		_ = GetTeamRuntimeManager().Finalize(ctx, spec.TeamName, activation.Session.GetSessionID())
+	// S-75/M-51: cleanup 闭包——WithoutCancel 保证 Finalize/closeGate/PostRun
+	// 清理语义独立于调用方取消状态（PostRun 持久化 checkpoint 须运行到底）。
+	cleanup := func() {
+		if streamLogger != nil {
+			streamLogger.Flush()
+		}
+		_ = GetTeamRuntimeManager().Finalize(context.WithoutCancel(ctx), spec.TeamName, activation.Session.GetSessionID())
 		closeTeamInteractGate(ctx, spec.TeamName, activation.Session.GetSessionID())
-		_ = activation.Session.PostRun(ctx)
-	}()
+		_ = activation.Session.PostRun(context.WithoutCancel(ctx))
+	}
 
 	action := activation.Action
 	if IsTeamRejectKind(action.Kind) {
@@ -539,6 +505,7 @@ func runAgentTeamStreaming(
 		// Go nil channel 会令调用方 range 永久阻塞；返回 error 走
 		// 调用方现成错误分支（deep_adapter 广播 team.error / child.go
 		// 包装上抛），错误信息携带具体 kind/reason。
+		cleanup()
 		return nil, exception.BuildError(
 			exception.StatusAgentTeamExecutionError,
 			exception.WithParam("error_msg", fmt.Sprintf(
@@ -570,26 +537,19 @@ func runAgentTeamStreaming(
 
 	// S-24: 对齐 Python L260 activation.agent.stream(inputs, session=...)——
 	// 与非流式路径同因：原硬编码 nil 导致流式团队首请求用户 query 整体丢失。
-	inputsDict, _ := inputs.(map[string]any)
-	agentCh, streamErr := activation.Agent.Stream(ctx, inputsDict, agentinterfaces.WithSession(activation.Session))
+	agentCh, streamErr := activation.Agent.Stream(ctx, inputs, agentinterfaces.WithSession(activation.Session))
 	if streamErr != nil {
-		// M-53: defer 清理已就位，这里只需返回错误（原手动清理代码删除）
+		// M-53: goroutine 未启动，streamErr 分支显式清理
+		cleanup()
 		return nil, streamErr
 	}
 
 	mergedCh := make(chan stream.Schema, 64)
 	go func() {
 		defer close(mergedCh)
-		// S-58: 清理代码 defer 化——两路径都执行
+		// S-58/S-75: 正常路径清理挂在流耗尽（或 ctx 取消退出）后执行
 		// （对齐 Python generator finally 双路径语义，team_runner.py L384-388）
-		defer func() {
-			if streamLogger != nil {
-				streamLogger.Flush()
-			}
-			_ = GetTeamRuntimeManager().Finalize(ctx, spec.TeamName, activation.Session.GetSessionID())
-			closeTeamInteractGate(ctx, spec.TeamName, activation.Session.GetSessionID())
-			_ = activation.Session.PostRun(ctx)
-		}()
+		defer cleanup()
 		if streamLogger != nil {
 			streamLogger.Feed(readyChunk)
 		}
