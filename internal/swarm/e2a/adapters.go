@@ -9,6 +9,7 @@ package e2a
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -26,6 +27,22 @@ type EnvelopeFromACPOptions struct {
 	// Converter converter 串（零值时用 converterACP）
 	Converter string
 	// ExtraProvenanceDetails 合入 provenance details（可覆盖既有键，对齐 dict.update）
+	ExtraProvenanceDetails map[string]any
+}
+
+// EnvelopeFromA2ASendMessageOptions 对应 Python envelope_from_a2a_send_message 的 keyword-only 参数。
+type EnvelopeFromA2ASendMessageOptions struct {
+	// Metadata 对应 E2A 的 a2a_metadata（A2A 规范侧，与通道 metadata/channel_context 无关）
+	Metadata map[string]any
+	// Configuration A2A configuration（acceptedOutputModes 提取为 ExpectedOutputModes）
+	Configuration map[string]any
+	// Channel 渠道
+	Channel string
+	// IdentityOrigin 身份来源（零值时取 IdentityOriginUser，Python 默认 USER）
+	IdentityOrigin IdentityOrigin
+	// Converter converter 串（零值时用 converterA2A）
+	Converter string
+	// ExtraProvenanceDetails 合入 provenance details
 	ExtraProvenanceDetails map[string]any
 }
 
@@ -88,6 +105,60 @@ func EnvelopeFromACPJsonrpc(method string, params map[string]any, opts *Envelope
 		SessionID:      sid,
 		Channel:        opts.Channel,
 		IdentityOrigin: orDefaultIdentityOrigin(opts.IdentityOrigin),
+	}
+}
+
+// EnvelopeFromA2ASendMessage 将 A2A SendMessage 语义转为 E2A；provenance 标明来源为 a2a。
+// 默认 method 为 session/prompt，完整 message/configuration 保留在 params 与 a2a_metadata。
+// Python: adapters.py envelope_from_a2a_send_message
+func EnvelopeFromA2ASendMessage(taskID, contextID string, messageBody map[string]any, opts *EnvelopeFromA2ASendMessageOptions) *E2AEnvelope {
+	if opts == nil {
+		opts = &EnvelopeFromA2ASendMessageOptions{}
+	}
+	// meta = dict(metadata or {})
+	meta := make(map[string]any, len(opts.Metadata))
+	for k, v := range opts.Metadata {
+		meta[k] = v
+	}
+	// acceptedOutputModes：isinstance(acc, list) 才提取，逐个 str()
+	accepted := make([]string, 0)
+	if opts.Configuration != nil {
+		if acc, ok := opts.Configuration["acceptedOutputModes"].([]any); ok {
+			for _, x := range acc {
+				accepted = append(accepted, fmt.Sprintf("%v", x))
+			}
+		}
+	}
+	// details：kind → abstract_operation → extra.update
+	details := map[string]any{
+		"kind":                "a2a_send_message",
+		"abstract_operation": "SendMessage",
+	}
+	for k, v := range opts.ExtraProvenanceDetails {
+		details[k] = v
+	}
+	// params={"message": body, "configuration": configuration or {}}
+	paramsOut := map[string]any{"message": messageBody}
+	if opts.Configuration != nil {
+		paramsOut["configuration"] = opts.Configuration
+	} else {
+		paramsOut["configuration"] = map[string]any{}
+	}
+	return &E2AEnvelope{
+		Provenance: E2AProvenance{
+			SourceProtocol: E2ASourceProtocolA2A,
+			Converter:      orDefaultString(opts.Converter, converterA2A),
+			ConvertedAt:    UTCNowISO(),
+			Details:        details,
+		},
+		Method:              "session/prompt",
+		TaskID:              taskID,
+		ContextID:           contextID,
+		Channel:             opts.Channel,
+		IdentityOrigin:      orDefaultIdentityOrigin(opts.IdentityOrigin),
+		ExpectedOutputModes: accepted,
+		Params:              paramsOut,
+		A2AMetadata:         meta,
 	}
 }
 

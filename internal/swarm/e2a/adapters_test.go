@@ -143,6 +143,135 @@ func TestEnvelopeFromACPJsonrpc_params为nil(t *testing.T) {
 	}
 }
 
+// ──────────────────────────── EnvelopeFromA2ASendMessage ────────────────────────────
+
+// TestEnvelopeFromA2ASendMessage_A2A入站基础 method 恒 session/prompt + provenance + 字段透传。
+func TestEnvelopeFromA2ASendMessage_A2A入站基础(t *testing.T) {
+	env := EnvelopeFromA2ASendMessage("task-1", "ctx-1", map[string]any{"role": "user", "parts": []any{}},
+		&EnvelopeFromA2ASendMessageOptions{
+			Metadata:      map[string]any{"k": "v"},
+			Configuration: map[string]any{"acceptedOutputModes": []any{"text", "file"}},
+			Channel:       "a2a",
+		})
+	if env.Method != "session/prompt" {
+		t.Errorf("Method = %q, want session/prompt（恒定）", env.Method)
+	}
+	if env.TaskID != "task-1" || env.ContextID != "ctx-1" {
+		t.Errorf("TaskID/ContextID = %q/%q, want task-1/ctx-1", env.TaskID, env.ContextID)
+	}
+	if env.Channel != "a2a" {
+		t.Errorf("Channel = %q, want a2a", env.Channel)
+	}
+	if env.Provenance.SourceProtocol != E2ASourceProtocolA2A {
+		t.Errorf("SourceProtocol = %q, want %q", env.Provenance.SourceProtocol, E2ASourceProtocolA2A)
+	}
+	if env.Provenance.Converter != converterA2A {
+		t.Errorf("Converter = %q, want %q", env.Provenance.Converter, converterA2A)
+	}
+	if env.Provenance.Details["kind"] != "a2a_send_message" {
+		t.Errorf("Details[kind] = %v, want a2a_send_message", env.Provenance.Details["kind"])
+	}
+	if env.Provenance.Details["abstract_operation"] != "SendMessage" {
+		t.Errorf("Details[abstract_operation] = %v, want SendMessage", env.Provenance.Details["abstract_operation"])
+	}
+	// ExpectedOutputModes 提取
+	if len(env.ExpectedOutputModes) != 2 || env.ExpectedOutputModes[0] != "text" || env.ExpectedOutputModes[1] != "file" {
+		t.Errorf("ExpectedOutputModes = %v, want [text file]", env.ExpectedOutputModes)
+	}
+	// params 双键
+	msg, _ := env.Params["message"].(map[string]any)
+	if msg == nil || msg["role"] != "user" {
+		t.Errorf("Params[message] = %v, want 含 role=user", env.Params["message"])
+	}
+	cfg, _ := env.Params["configuration"].(map[string]any)
+	if cfg == nil || cfg["acceptedOutputModes"] == nil {
+		t.Error("Params[configuration] 缺失")
+	}
+	// a2a_metadata
+	if env.A2AMetadata["k"] != "v" {
+		t.Errorf("A2AMetadata[k] = %v, want v", env.A2AMetadata["k"])
+	}
+}
+
+// TestEnvelopeFromA2ASendMessage_配置三态 acceptedOutputModes 提取。
+func TestEnvelopeFromA2ASendMessage_配置三态(t *testing.T) {
+	// 非 list（字符串）→ 忽略，ExpectedOutputModes 为空
+	env1 := EnvelopeFromA2ASendMessage("", "", map[string]any{},
+		&EnvelopeFromA2ASendMessageOptions{Configuration: map[string]any{"acceptedOutputModes": "text"}})
+	if len(env1.ExpectedOutputModes) != 0 {
+		t.Errorf("非 list 时 ExpectedOutputModes 应空，实际 %v", env1.ExpectedOutputModes)
+	}
+	// configuration nil → 空 map 进 params、ExpectedOutputModes 空
+	env2 := EnvelopeFromA2ASendMessage("", "", map[string]any{}, nil)
+	if env2.Params["configuration"] == nil {
+		t.Error("Params[configuration] 应恒存在（configuration or {}）")
+	}
+	cfg2, _ := env2.Params["configuration"].(map[string]any)
+	if cfg2 == nil || len(cfg2) != 0 {
+		t.Errorf("configuration nil 时 Params[configuration] 应空 map，实际 %v", env2.Params["configuration"])
+	}
+	// list 含非字符串元素 → str() 强转
+	env3 := EnvelopeFromA2ASendMessage("", "", map[string]any{},
+		&EnvelopeFromA2ASendMessageOptions{Configuration: map[string]any{"acceptedOutputModes": []any{42, true}}})
+	if len(env3.ExpectedOutputModes) != 2 || env3.ExpectedOutputModes[0] != "42" || env3.ExpectedOutputModes[1] != "true" {
+		t.Errorf("str() 强转 ExpectedOutputModes = %v, want [42 true]", env3.ExpectedOutputModes)
+	}
+}
+
+// TestEnvelopeFromA2ASendMessage_metadata为nil空map。
+func TestEnvelopeFromA2ASendMessage_metadata为nil(t *testing.T) {
+	env := EnvelopeFromA2ASendMessage("", "", map[string]any{}, nil)
+	if env.A2AMetadata == nil || len(env.A2AMetadata) != 0 {
+		t.Errorf("metadata nil → a2a_metadata 应空 map，实际 %v", env.A2AMetadata)
+	}
+}
+
+// TestEnvelopeFromA2ASendMessage_options为nil全默认。
+func TestEnvelopeFromA2ASendMessage_options为nil(t *testing.T) {
+	env := EnvelopeFromA2ASendMessage("", "", map[string]any{}, nil)
+	if env.IdentityOrigin != IdentityOriginUser {
+		t.Errorf("IdentityOrigin = %q, want user（默认）", env.IdentityOrigin)
+	}
+	if env.Provenance.Converter != converterA2A {
+		t.Errorf("Converter = %q, want %q", env.Provenance.Converter, converterA2A)
+	}
+	if env.Channel != "" {
+		t.Errorf("Channel = %q, want 空串", env.Channel)
+	}
+}
+
+// TestEnvelopeFromA2ASendMessage_taskContext透传 空串保留。
+func TestEnvelopeFromA2ASendMessage_taskContext透传(t *testing.T) {
+	env := EnvelopeFromA2ASendMessage("", "ctx-9", map[string]any{}, nil)
+	if env.TaskID != "" || env.ContextID != "ctx-9" {
+		t.Errorf("TaskID/ContextID = %q/%q, want 空串/ctx-9", env.TaskID, env.ContextID)
+	}
+}
+
+// TestEnvelopeFromA2ASendMessage_converter显式与身份来源显式。
+func TestEnvelopeFromA2ASendMessage_converter显式(t *testing.T) {
+	env := EnvelopeFromA2ASendMessage("", "", map[string]any{},
+		&EnvelopeFromA2ASendMessageOptions{Converter: "cc", IdentityOrigin: IdentityOriginAgent})
+	if env.Provenance.Converter != "cc" {
+		t.Errorf("Converter = %q, want cc", env.Provenance.Converter)
+	}
+	if env.IdentityOrigin != IdentityOriginAgent {
+		t.Errorf("IdentityOrigin = %q, want agent", env.IdentityOrigin)
+	}
+}
+
+// TestEnvelopeFromA2ASendMessage_extra覆盖既有键。
+func TestEnvelopeFromA2ASendMessage_extra覆盖既有键(t *testing.T) {
+	env := EnvelopeFromA2ASendMessage("", "", map[string]any{},
+		&EnvelopeFromA2ASendMessageOptions{ExtraProvenanceDetails: map[string]any{"kind": "x", "extra_key": 1}})
+	if env.Provenance.Details["kind"] != "x" {
+		t.Errorf("Details[kind] = %v, want x（可覆盖）", env.Provenance.Details["kind"])
+	}
+	if env.Provenance.Details["extra_key"] != 1 {
+		t.Errorf("Details[extra_key] = %v, want 1", env.Provenance.Details["extra_key"])
+	}
+}
+
 // 暂留 import 引用（Task 5 消费；Go 未使用 import 编译报错，先以 var _ 锚定）
 var (
 	_ = strings.TrimSpace
