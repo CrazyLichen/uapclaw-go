@@ -150,7 +150,7 @@ func EnvelopeFromA2ASendMessage(taskID, contextID string, messageBody map[string
 	}
 	// details：kind → abstract_operation → extra.update
 	details := map[string]any{
-		"kind":                "a2a_send_message",
+		"kind":               "a2a_send_message",
 		"abstract_operation": "SendMessage",
 	}
 	for k, v := range opts.ExtraProvenanceDetails {
@@ -215,6 +215,7 @@ func EnvelopeToACPJsonrpcCall(env *E2AEnvelope) map[string]any {
 //   - acp.prompt_result → result = body
 //   - acp.jsonrpc_error → error = body（须含 JSON-RPC 所需字段）
 //   - e2a.error → error：code 非 int 时用 -32603，原值写入 data.e2a_code
+//
 // Python: adapters.py e2a_response_to_acp_jsonrpc_response
 func E2AResponseToACPJsonrpcResponse(resp *E2AResponse) map[string]any {
 	// projections 快路径：jsonrpc=="2.0" 且含 result 或 error → 副本 + setdefault("id")
