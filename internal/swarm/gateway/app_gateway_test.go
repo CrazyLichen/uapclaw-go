@@ -291,3 +291,65 @@ func TestNewAppGatewayServer_IM管线装配(t *testing.T) {
 	assert.NotNil(t, gs.imInbound)
 	assert.NotNil(t, gs.imOutbound)
 }
+
+// ──────────────────────────── 11.25 ACP 装配测试 ────────────────────────────
+
+// TestAppGateway_AcpRouteAssembled /acp 路由 + 桥 + 外部渠道注册（⑥ 装配验证）。
+// gwServer 装配在 Start 内（对齐 Python run() 启动序）——先起后断言再停。
+func TestAppGateway_AcpRouteAssembled(t *testing.T) {
+	gs := newTestAppGatewayServer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = gs.Start(ctx) }()
+	// 等待 gwServer 装配完成：Start 内 connectWithRetry 等待 connection.ack
+	// 超时 5s 后继续（ChannelTransport 测试态无 AgentServer 对端），轮询上限 8s。
+	// 完成信号 = /acp 路由拦截器已装填（InstallDefaultAcpHooks 是装配序的最后
+	// 阶段之一；routes 经 clientsMu 保护，读侧同锁避免与 hooks 装填竞态）
+	deadline := time.Now().Add(8 * time.Second)
+	var gws *GatewayServer
+	for time.Now().Before(deadline) {
+		gws = gs.GetGatewayServer()
+		if gws != nil {
+			gws.clientsMu.RLock()
+			r := gws.config.Routes["/acp"]
+			done := r != nil && r.InboundInterceptor != nil && r.OutboundInterceptor != nil
+			gws.clientsMu.RUnlock()
+			if done {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if gws == nil {
+		t.Fatal("gwServer not assembled within 8s")
+	}
+
+	// 1. /acp 路由存在且渠道为 acp（同包直读——字段未导出但同包可见）
+	route := gws.config.Routes["/acp"]
+	if route == nil {
+		t.Fatal("/acp route should be assembled")
+	}
+	if route.ChannelID != "acp" {
+		t.Fatalf("/acp channel = %q", route.ChannelID)
+	}
+	// 2. forward 集合与 web 渠道一致（_FORWARD_REQ_METHODS）
+	if !route.ForwardMethods["chat.send"] {
+		t.Fatal("/acp should forward chat.send")
+	}
+	// 3. 拦截器已装（InstallDefaultAcpHooks 已在装配内调用）
+	if route.InboundInterceptor == nil || route.OutboundInterceptor == nil {
+		t.Fatal("acp route interceptors should be installed")
+	}
+	// 4. acp 外部渠道注册（RegisterExternalChannel("acp", gwServer)，
+	// 经导出查询方法 GetExternalChannel 验证）
+	if gs.channelMgr.GetExternalChannel("acp") == nil {
+		t.Fatal("acp external channel should be registered")
+	}
+	// 5. 桥已注入（同包直读 acpBridge 字段——Task 5 ① 装的字段）
+	gws.clientsMu.Lock()
+	bridgeSet := gws.acpBridge != nil
+	gws.clientsMu.Unlock()
+	if !bridgeSet {
+		t.Fatal("acp bridge should be set")
+	}
+}

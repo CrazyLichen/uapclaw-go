@@ -9,10 +9,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gorilla/websocket"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -52,8 +54,12 @@ type AppGatewayServer struct {
 	httpServer *http.Server
 	// reloader 配置热重载监听器
 	reloader *config.Reloader
-	// gwServer 多路由 WS 服务器（11.9，对齐 Python GatewayServer 类）
+	// gwServer 多路由 WS 服务器（11.9，对齐 Python GatewayServer 类）；
+	// Start 内装配（对齐 Python run() 启动序），gwServerMu 保护装配窗口的并发读
+	// （生产路径 Start→Stop 串行，锁为测试/外部观测读取的并发安全兜底）
 	gwServer *GatewayServer
+	// gwServerMu gwServer 字段读写锁
+	gwServerMu sync.RWMutex
 	// inboundServer 入站队列服务（11.9，对齐 Python _InboundGatewayServer）
 	inboundServer *InboundGatewayServer
 	// cronScheduler cron 调度器（11.10，对齐 Python cron_scheduler）
@@ -421,24 +427,51 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 		tuiRoute := BuildTuiRouteConfig(TuiRouteParams{MessageHandler: s.msgHandler})
 		gwCfg.Routes[tuiRoute.Path] = tuiRoute
 	}
+	// ── 11.25：/acp 路由装配（对齐 Python L1037-1044 _build_acp_route_binding）──
+	acpRoute := BuildACPRouteConfig()
+	gwCfg.Routes[acpRoute.Path] = acpRoute
+	s.gwServerMu.Lock()
 	s.gwServer = NewGatewayServer(gwCfg)
+	gwServer := s.gwServer
+	s.gwServerMu.Unlock()
+
+	// ACP 桥构造 + 注入（对齐 Python GatewayServer.__init__ L256-262 + L281-287
+	// _dispatch_on_message → _on_message_cb = acp_inbound_server.handle_message；
+	// Go 装配分离：SetAcpBridge + InstallDefaultAcpHooks，偏差 §9-10）
+	acpBridge := NewAcpGatewayBridge(
+		func(ctx context.Context, msg *schema.Message) error {
+			if gwServer.onMessageCb == nil {
+				return nil
+			}
+			return gwServer.onMessageCb(ctx, msg)
+		},
+		WithBindSessionClient(func(sessionID string, ws *websocket.Conn) {
+			// 对齐 Python _bind_acp_session_client (L289-292)
+			gwServer.clientsMu.Lock()
+			gwServer.sessionToClient[[2]string{"acp", sessionID}] = ws
+			gwServer.clientsMu.Unlock()
+		}))
+	gwServer.SetAcpBridge(acpBridge)
+	gwServer.InstallDefaultAcpHooks()
 
 	// 对齐 Python L1056-1064：for binding in route_bindings
 	routeBindings := []*routing.RouteBinding{} // ACP ⤵️ 11.25（TUI 已改为直填 Routes，不走 binding）
 	for _, binding := range routeBindings {
 		routeConfig := gwCfg.Routes[binding.Path]
-		s.channelMgr.RegisterExternalChannel(routeConfig.ChannelID, s.gwServer)
+		s.channelMgr.RegisterExternalChannel(routeConfig.ChannelID, gwServer)
 		if binding.Install != nil {
-			binding.Install(s.gwServer)
+			binding.Install(gwServer)
 		}
 	}
 	// 11.15：/tui 出站注册（对齐 Python register_external_channel("tui", gateway_server)）
-	s.channelMgr.RegisterExternalChannel("tui", s.gwServer)
+	s.channelMgr.RegisterExternalChannel("tui", gwServer)
+	// 11.25：/acp 出站注册（对齐 Python L1066 register_external_channel("acp", gateway_server)）
+	s.channelMgr.RegisterExternalChannel("acp", gwServer)
 
 	// 对齐 Python L1069：gateway_server.on_message(acp_inbound_server.handle_message)
-	s.gwServer.OnMessage(s.inboundServer.HandleMessage)
+	gwServer.OnMessage(s.inboundServer.HandleMessage)
 
-	if err := s.gwServer.Start(ctx); err != nil {
+	if err := gwServer.Start(ctx); err != nil {
 		logger.Error(logComponent).Err(err).Msg("failed to start GatewayServer (19001)")
 	}
 
@@ -496,6 +529,15 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 	}
 }
 
+// GetGatewayServer 返回多路由 WS 服务器（装配前为 nil）。
+// [Go 扩展] 并发安全的装配观测点：Start 内装配完成后可读（测试/诊断用；
+// Python 无对应物——gwServer 在 run() 局部变量内）。
+func (s *AppGatewayServer) GetGatewayServer() *GatewayServer {
+	s.gwServerMu.RLock()
+	defer s.gwServerMu.RUnlock()
+	return s.gwServer
+}
+
 // Stop 优雅关闭 Gateway 服务器。
 //
 // 停止顺序：GatewayServer(19001) → InboundGatewayServer → WebChannel → MessageHandler → Transport → HTTP Server → CronScheduler。
@@ -509,8 +551,11 @@ func (s *AppGatewayServer) Stop() error {
 	}
 
 	// 停 19001 多路由 WS 服务器（先于 WebChannel，对齐 Python 停机逆序）
-	if s.gwServer != nil {
-		if err := s.gwServer.Stop(); err != nil {
+	s.gwServerMu.RLock()
+	gwServer := s.gwServer
+	s.gwServerMu.RUnlock()
+	if gwServer != nil {
+		if err := gwServer.Stop(); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("failed to stop GatewayServer")
 		}
 	}

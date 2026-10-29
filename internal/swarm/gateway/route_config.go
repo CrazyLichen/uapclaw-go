@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/websocket"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 )
 
@@ -94,6 +95,20 @@ func BuildACPRouteBinding(path, channelID string) *routing.RouteBinding {
 	return &routing.RouteBinding{
 		Path:      path,
 		ChannelID: channelID,
+	}
+}
+
+// BuildACPRouteConfig 构造 /acp 路由配置。
+// Python: _build_acp_route_binding(path="/acp", channel_id="acp",
+// forward_methods=_FORWARD_REQ_METHODS, forward_no_local_handler_methods=_FORWARD_NO_LOCAL_HANDLER_METHODS)
+// + _build_route_config_map（L739-752）。拦截器零值——InstallDefaultAcpHooks 后装。
+func BuildACPRouteConfig() *RouteConfig {
+	return &RouteConfig{
+		Path:                         "/acp",
+		ChannelID:                    "acp",
+		ForwardMethods:               web.ForwardReqMethods,
+		ForwardNoLocalHandlerMethods: web.ForwardNoLocalHandlerMethods,
+		LocalHandlers:                map[string]LocalHandlerFunc{},
 	}
 }
 
