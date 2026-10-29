@@ -182,6 +182,7 @@ Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 //     4.5 宿主密钥初始化    → crypto.key 加载/生成 + SetCryptoProvider（10.5.10）
 //  5. config.New+Load   → 完整配置加载（WithDecrypt 解密 api_key/token）
 //  6. ResetFlags        → 重置免费搜索运行时标志
+//     （步骤 2-6 提取为 bootstrapGatewayEnv，acp 子命令共享）
 func runAppCmd(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -206,93 +207,20 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_START_CMD 失败: %v\n", err)
 	}
 
-	// 2. workspace 自动初始化（等价 Python: prepare_workspace(overwrite=False)）
-	if !workspace.IsInitialized() {
-		if _, err := workspace.Prepare(workspace.InitOption{
-			Overwrite: false,
-			Language:  "zh",
-		}); err != nil {
-			fmt.Fprintf(os.Stderr, "初始化工作区失败: %v\n", err)
-			return fmt.Errorf("初始化工作区失败: %w", err)
-		}
-	}
-
-	// 3. 日志初始化（等价 Python: configure_log() / setup_logger()）
-	//    尽早初始化，让后续步骤的日志能正确输出到文件。
-	//    WithConfigFile() 自己读 config.yaml 的 logging 段，不依赖 Config 对象。
-	if err := logger.Setup(logger.WithConfigFile()); err != nil {
-		fmt.Fprintf(os.Stderr, "初始化日志系统失败: %v\n", err)
-		return fmt.Errorf("初始化日志系统失败: %w", err)
-	}
-
-	// 4. 加载主 .env 文件（等价 Python: load_dotenv(dotenv_path=get_env_file(), override=True)）
-	envFile := workspace.EnvFile()
-	if _, err := os.Stat(envFile); err == nil {
-		if err := dotenv.Load(envFile); err != nil {
-			logger.Error(logComponentGateway).Err(err).Str("env_file", envFile).Msg("failed to load .env file")
-			return fmt.Errorf("加载 .env 文件失败: %w", err)
-		}
-	}
-
-	// 4.5 宿主加密密钥初始化（10.5.10 双路径之宿主内置，须在 config.Load 之前）
-	//     密钥文件不存在时自动生成（~/.uapclaw/crypto.key，0600，受 UAPCLAW_DATA_DIR 重定向）；
-	//     失败仅 Warn 不阻断（等价 Python 无扩展时的明文路径，设计偏差表 #4）。
-	cryptoKeyPath := filepath.Join(workspace.WorkspaceDir(), "crypto.key")
-	if key, keyErr := crypto.LoadOrCreateKeyFile(cryptoKeyPath); keyErr != nil {
-		logger.Warn(logComponentGateway).
-			Str("key_path", cryptoKeyPath).
-			Err(keyErr).
-			Msg("宿主加密密钥初始化失败，api_key 加解密路径降级为明文")
-	} else if provider, provErr := crypto.NewAesGcmProvider(key); provErr != nil {
-		logger.Warn(logComponentGateway).
-			Str("key_path", cryptoKeyPath).
-			Err(provErr).
-			Msg("AesGcmProvider 构造失败，api_key 加解密路径降级为明文")
-	} else {
-		crypto.SetCryptoProvider(provider)
-	}
-
-	// 5. 完整配置加载（等价 Python: get_config()）
-	//    WithDecrypt：api_key/token 环境变量解密钩子（10.5.10，全局 provider 就绪后生效）
-	cfg, err := config.New("",
-		config.WithNormalize(config.NormalizeConfig),
-		config.WithDecrypt(crypto.NewDecryptFunc()))
+	// 2-6. 网关进程共享自举（workspace/logger/dotenv/crypto/config/extensions）
+	//     11.25 提取为 bootstrapGatewayEnv（acp 子命令共享），行为零变更（R6）
+	cfg, extManager, err := bootstrapGatewayEnv(ctx)
 	if err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("failed to create config")
-		return fmt.Errorf("创建配置失败: %w", err)
+		return err
 	}
-	if _, err := cfg.Load(); err != nil {
-		logger.Error(logComponentGateway).Err(err).Msg("failed to load config file")
-		return fmt.Errorf("加载配置文件失败: %w", err)
-	}
-
-	// 6. 重置免费搜索运行时标志（等价 Python: reset_free_search_runtime_flags()）
-	harness.ResetFreeSearchRuntimeFlags()
-
-	// 6. 初始化扩展系统（对齐 Python: app_gateway.py L814-822, app_agentserver.py L131-141）
-	fw := callback.GetCallbackFramework()
-	extRegistry, err := extensions.CreateInstance(fw, map[string]any{}, nil)
-	if err != nil {
-		// 已存在（重复初始化）不算致命，继续取实例
-		extRegistry, _ = extensions.GetInstanceErr()
-	}
-	var extManager *extensions.ExtensionManager
-	if extRegistry != nil {
-		// 10.5.8 回填：ExtensionManager + WithSearchPaths（config 读取上移到 cmd 层解循环依赖）
-		extDirs := readExtensionDirs(cfg.Get("extensions"))
-		extManager = extensions.NewExtensionManager(extRegistry, extensions.WithSearchPaths(extDirs))
-		if err := extManager.LoadAllExtensions(ctx); err != nil {
-			logger.Error(logComponentGateway).Err(err).Msg("failed to load extensions")
-		}
-		logger.Info(logComponentGateway).
-			Int("count", len(extManager.ListExtensions())).
-			Msg("extensions loaded")
+	if extManager != nil {
 		defer func() {
 			if err := extManager.ShutdownAllExtensions(context.Background()); err != nil {
 				logger.Warn(logComponentGateway).Err(err).Msg("failed to shutdown extensions")
 			}
 		}()
 	}
+	extRegistry, _ := extensions.GetInstanceErr()
 
 	// 创建 transport：扩展 transport 优先（对齐 Python app_gateway.py L828-833），
 	// 无扩展时回落进程内 ChannelTransport
@@ -358,6 +286,95 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	return gs.Stop()
 }
 
+// bootstrapGatewayEnv 网关进程共享自举（runAppCmd/runAcpCmd 步骤 2-6）。
+// 11.25 提取自 runAppCmd，行为零变更（R6：workspace→logger→dotenv→crypto→config→extensions）。
+// extManager 非 nil 时调用方负责 ShutdownAllExtensions 收尾。
+func bootstrapGatewayEnv(ctx context.Context) (*config.Config, *extensions.ExtensionManager, error) {
+	// 2. workspace 自动初始化（等价 Python: prepare_workspace(overwrite=False)）
+	if !workspace.IsInitialized() {
+		if _, err := workspace.Prepare(workspace.InitOption{
+			Overwrite: false,
+			Language:  "zh",
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "初始化工作区失败: %v\n", err)
+			return nil, nil, fmt.Errorf("初始化工作区失败: %w", err)
+		}
+	}
+
+	// 3. 日志初始化（等价 Python: configure_log() / setup_logger()）
+	//    尽早初始化，让后续步骤的日志能正确输出到文件。
+	//    WithConfigFile() 自己读 config.yaml 的 logging 段，不依赖 Config 对象。
+	if err := logger.Setup(logger.WithConfigFile()); err != nil {
+		fmt.Fprintf(os.Stderr, "初始化日志系统失败: %v\n", err)
+		return nil, nil, fmt.Errorf("初始化日志系统失败: %w", err)
+	}
+
+	// 4. 加载主 .env 文件（等价 Python: load_dotenv(dotenv_path=get_env_file(), override=True)）
+	envFile := workspace.EnvFile()
+	if _, err := os.Stat(envFile); err == nil {
+		if err := dotenv.Load(envFile); err != nil {
+			logger.Error(logComponentGateway).Err(err).Str("env_file", envFile).Msg("failed to load .env file")
+			return nil, nil, fmt.Errorf("加载 .env 文件失败: %w", err)
+		}
+	}
+
+	// 4.5 宿主加密密钥初始化（10.5.10 双路径之宿主内置，须在 config.Load 之前）
+	//     密钥文件不存在时自动生成（~/.uapclaw/crypto.key，0600，受 UAPCLAW_DATA_DIR 重定向）；
+	//     失败仅 Warn 不阻断（等价 Python 无扩展时的明文路径，设计偏差表 #4）。
+	cryptoKeyPath := filepath.Join(workspace.WorkspaceDir(), "crypto.key")
+	if key, keyErr := crypto.LoadOrCreateKeyFile(cryptoKeyPath); keyErr != nil {
+		logger.Warn(logComponentGateway).
+			Str("key_path", cryptoKeyPath).
+			Err(keyErr).
+			Msg("宿主加密密钥初始化失败，api_key 加解密路径降级为明文")
+	} else if provider, provErr := crypto.NewAesGcmProvider(key); provErr != nil {
+		logger.Warn(logComponentGateway).
+			Str("key_path", cryptoKeyPath).
+			Err(provErr).
+			Msg("AesGcmProvider 构造失败，api_key 加解密路径降级为明文")
+	} else {
+		crypto.SetCryptoProvider(provider)
+	}
+
+	// 5. 完整配置加载（等价 Python: get_config()）
+	//    WithDecrypt：api_key/token 环境变量解密钩子（10.5.10，全局 provider 就绪后生效）
+	cfg, err := config.New("",
+		config.WithNormalize(config.NormalizeConfig),
+		config.WithDecrypt(crypto.NewDecryptFunc()))
+	if err != nil {
+		logger.Error(logComponentGateway).Err(err).Msg("failed to create config")
+		return nil, nil, fmt.Errorf("创建配置失败: %w", err)
+	}
+	if _, err := cfg.Load(); err != nil {
+		logger.Error(logComponentGateway).Err(err).Msg("failed to load config file")
+		return nil, nil, fmt.Errorf("加载配置文件失败: %w", err)
+	}
+
+	// 6. 重置免费搜索运行时标志（等价 Python: reset_free_search_runtime_flags()）
+	harness.ResetFreeSearchRuntimeFlags()
+
+	// 6. 初始化扩展系统（对齐 Python: app_gateway.py L814-822, app_agentserver.py L131-141）
+	fw := callback.GetCallbackFramework()
+	extRegistry, err := extensions.CreateInstance(fw, map[string]any{}, nil)
+	if err != nil {
+		// 已存在（重复初始化）不算致命，继续取实例
+		extRegistry, _ = extensions.GetInstanceErr()
+	}
+	var extManager *extensions.ExtensionManager
+	if extRegistry != nil {
+		// 10.5.8 回填：ExtensionManager + WithSearchPaths（config 读取上移到 cmd 层解循环依赖）
+		extDirs := readExtensionDirs(cfg.Get("extensions"))
+		extManager = extensions.NewExtensionManager(extRegistry, extensions.WithSearchPaths(extDirs))
+		if err := extManager.LoadAllExtensions(ctx); err != nil {
+			logger.Error(logComponentGateway).Err(err).Msg("failed to load extensions")
+		}
+		logger.Info(logComponentGateway).
+			Int("count", len(extManager.ListExtensions())).
+			Msg("extensions loaded")
+	}
+	return cfg, extManager, nil
+}
+
 // newAgentServerCmd 创建 agentserver 子命令
 func newAgentServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -416,17 +433,18 @@ func newInitCmd() *cobra.Command {
 }
 
 // newAcpCmd 创建 acp 子命令
+// 11.25：双模式（--gateway-url 空 → 进程内自举模式一；否则远端模式二）。
 func newAcpCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "acp",
 		Short: "启动 ACP stdio JSON-RPC 协议模式",
 		Long: `通过标准输入输出运行 ACP JSON-RPC 协议，stdio 作为 Channel 接入 Gateway。
 适用于 IDE 集成等场景。
-进程内 Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Fprintf(os.Stderr, "acp 模式尚未实现（领域十）\n")
-		},
+默认进程内自举 GatewayServer 并经本地 WS 回环接入；--gateway-url 指向远端实例。`,
+		RunE: runAcpCmd,
 	}
+	cmd.Flags().String("gateway-url", "", "Gateway WebSocket URL（默认自举 ws://127.0.0.1:19001/acp）")
+	cmd.Flags().String("agent-server-url", "", "兼容旗标（同 --gateway-url）")
 	cmd.PreRunE = makeDotenvPreRunE()
 	return cmd
 }

@@ -1,6 +1,7 @@
 # 构建产物
 bin/
-uapclaw
+# 编译产物二进制（根锚定——非锚定会误匹配 cmd/uapclaw/ 目录）
+/uapclaw
 *.out
 *.test
 coverage.html
