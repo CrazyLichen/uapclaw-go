@@ -47,6 +47,18 @@ import (
 func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[string]any, mode string) []sainterfaces.AgentRail {
 	var railsList []sainterfaces.AgentRail
 
+	// ─── rail_infos 列表构建阶段（参数立即求值，对齐 Python L2127-2176）───
+	// Python 在 build 循环之前构造 rail_infos 列表，params dict 中的
+	// include_tools=self._skill_include_tools_for_profile() 在列表构建
+	// 阶段立即求值：冷启动进入 _build_agent_rails 时 self._filesystem_rail
+	// 仍是 __init__ 置的 None → include_tools=True（即使 filesystem rail
+	// 已启用）；热重载（getCurrentAgentRails → buildAgentRails）进入时
+	// _filesystem_rail 已非 None → False。
+	// 故此求值必须发生在步骤 2 赋值 d.filesystemRail 之前——若放在赋值
+	// 之后，冷启动也会得到 False，code 工具永不注册（Python 实际行为：
+	// 冷启动 include_tools 恒为 True，除非 ACP tool profile）。
+	skillIncludeTools := d.skillIncludeToolsForProfile(d.instanceOverrides)
+
 	// ─── 以下注册顺序对齐 Python _build_agent_rails (interface_deep.py L2130-2156) ───
 
 	// 步骤 1: runtimePromptRail — Python: _runtime_prompt_rail (index 0)
@@ -57,7 +69,8 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	}
 
 	// 步骤 2: filesystemRail — Python: conditional insert at 1
-	if d.filesystemRailEnabledForProfile(d.instanceOverrides) {
+	filesystemEnabled := d.filesystemRailEnabledForProfile(d.instanceOverrides)
+	if filesystemEnabled {
 		readOnly := mode == "agent.plan"
 		fs := d.buildFilesystemRail(readOnly)
 		if fs != nil {
@@ -67,7 +80,9 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	}
 
 	// 步骤 3: skillRail — Python: conditional insert at 2 (or 1 if no filesystem)
-	skill := d.buildSkillRail()
+	// include_tools 已在函数开头（步骤 2 赋值 d.filesystemRail 之前）求值，
+	// 对齐 Python rail_infos 列表构建时 params 立即求值的语义。
+	skill := d.buildSkillRailWithIncludeTools(skillIncludeTools)
 	if skill != nil {
 		d.skillRail = skill
 		railsList = append(railsList, skill)
@@ -178,11 +193,11 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	// Python: SkillCreateRail 由 _update_rails_for_mode 按 mode 按需注册/注销
 	_ = d.buildSkillCreateRail()
 
-	// memoryRail — 仅构建实例存储到字段，不注册
-	// Python: MemoryRail 由 _update_rails_for_mode 按 mode 按需注册/注销
-	if mr := d.buildMemoryRail(); mr != nil {
-		d.memoryRail = mr
-	}
+	// memoryRail — 冷启动不构建（对齐 Python：_memory_rail 仅在
+	// _handle_memory_rail_by_config 内构建，冷启动只置 None）。
+	// 此前 Go 在冷启动构建并存字段，导致后续 handleMemoryRailByConfig
+	// 误判"已注册且类型相同"而跳过 RegisterRail——MemoryRail 永不挂载。
+	d.memoryRail = nil
 
 	// externalMemoryRail — 仅构建实例存储到字段，不注册
 	// Python: ExternalMemoryRail 由 _update_rails_for_mode 按 mode 按需注册/注销
@@ -253,9 +268,10 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 	return nil
 }
 
-// buildSkillRail 构建技能使用护栏。
+// buildSkillRail 构建技能使用护栏（include_tools 由调用方在 filesystemRail
+// 赋值前求值后传入，见 buildAgentRails 步骤 3 注释）。
 // ✅ 已回填：SkillUseRail（对齐 Python: _build_skill_rail() — SkillUseRail）
-func (d *DeepAdapter) buildSkillRail() (rail sainterfaces.AgentRail) {
+func (d *DeepAdapter) buildSkillRailWithIncludeTools(includeTools bool) (rail sainterfaces.AgentRail) {
 	// Python: try-except 保护，失败返回 nil 不影响其他 Rail
 	defer func() {
 		if r := recover(); r != nil {
@@ -273,8 +289,6 @@ func (d *DeepAdapter) buildSkillRail() (rail sainterfaces.AgentRail) {
 	if d.skillManager != nil {
 		disabled = d.skillManager.ListExecutionDisabledSkills()
 	}
-	// Python: include_tools = self._skill_include_tools_for_profile()
-	includeTools := d.skillIncludeToolsForProfile(d.instanceOverrides)
 	// Python: enable_read_image_multimodal = deep_config.enable_read_image_multimodal
 	enableImageMultimodal := true
 	if v, ok := d.instanceOverrides["enable_read_image_multimodal"]; ok {
@@ -526,7 +540,8 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 		}()
 
 		// Python: embed_config = config.get("embed")
-		embedConfig, _ := d.configCache["embed"].(map[string]any)
+		// 注意：embed 是 config.yaml 顶级段（非 react 段），对齐 Python get_config().get("embed")
+		embedConfig, _ := d.configBase["embed"].(map[string]any)
 		if embedConfig == nil {
 			logger.Warn(logComponent).
 				Msg("MemoryRail creation failed: no embed config")
@@ -576,18 +591,22 @@ func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 // ✅ 已回填：handleMemoryRailByConfig（对齐 Python: _handle_memory_rail_by_config()）
 //
 // Python: _handle_memory_rail_by_config(mode) (line 5296-5320)
+//
+// 注意：memory.mode / modes.agent.<mode>.memory / memory.engine 均为
+// config.yaml 顶级段键（Python get_config() 返回完整顶级配置），
+// 此处必须传 d.configBase 而非 d.configCache（react 段快照）。
 func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string) {
 
 	// Python: if get_memory_mode(config) == "local":
-	if commmem.GetMemoryMode(d.configCache) == "local" {
+	if commmem.GetMemoryMode(d.configBase) == "local" {
 		// Python: builtin_on = is_builtin_memory_allowed(config) and is_memory_enabled(mode, config)
-		builtinOn := commmem.IsBuiltinMemoryAllowed(d.configCache) && commmem.IsMemoryEnabled(mode, d.configCache)
+		builtinOn := commmem.IsBuiltinMemoryAllowed(d.configBase) && commmem.IsMemoryEnabled(mode, d.configBase)
 
 		if builtinOn {
 			// 开启记忆
 			if d.memoryRail != nil {
 				// Python: cur_memory_type = is_proactive_memory(mode, config)
-				curProactive := commmem.IsProactiveMemory(mode, d.configCache)
+				curProactive := commmem.IsProactiveMemory(mode, d.configBase)
 				if d.isProactiveMemory != nil && *d.isProactiveMemory != curProactive {
 					// 当前记忆类型（主动/被动）和之前注册的不一致，注销后重建
 					if d.instance != nil {
@@ -681,7 +700,8 @@ func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRai
 			}
 		}()
 
-		embedConfig, _ := d.configCache["embed"].(map[string]any)
+		// embed 为 config.yaml 顶级段（对齐 Python get_config().get("embed")）
+		embedConfig, _ := d.configBase["embed"].(map[string]any)
 		if embedConfig == nil {
 			logger.Warn(logComponent).Msg("buildMemoryRailWithMode: no embed config")
 			return
@@ -694,7 +714,7 @@ func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRai
 		}
 		modelName, _ := embedConfig["embed_model"].(string)
 
-		isProactive := commmem.IsProactiveMemory(mode, d.configCache)
+		isProactive := commmem.IsProactiveMemory(mode, d.configBase)
 		d.isProactiveMemory = &isProactive
 
 		ec := &embedding.EmbeddingConfig{
@@ -1446,7 +1466,10 @@ func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]
 	case "buildFilesystemRail":
 		return d.buildFilesystemRail(false)
 	case "buildSkillRail":
-		return d.buildSkillRail()
+		// 热重载路径：现场求值 include_tools（对齐 Python _get_current_agent_rails
+		// 中 _build_skill_rail(include_tools=self._skill_include_tools_for_profile())，
+		// 此时 _filesystem_rail 通常已赋值）
+		return d.buildSkillRailWithIncludeTools(d.skillIncludeToolsForProfile(d.instanceOverrides))
 	case "buildHeartbeatRail":
 		return d.buildHeartbeatRail()
 	case "buildAvatarRail":

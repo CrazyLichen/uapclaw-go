@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -120,7 +119,7 @@ func setupPromptEnv(t *testing.T, skillMode string) string {
 
 	// ResourcesDir 三级回退在 go test 下不成立（cwd 是包目录、二进制在临时构建目录），
 	// 须显式指向仓库 resources/（包目录在 repo 下的相对位置固定，本地与 CI 均成立）
-	resDir, err := filepath.Abs("../../resources")
+	resDir, err := filepath.Abs("../../../resources")
 	if err != nil || !dirExists(resDir) {
 		t.Fatalf("解析仓库 resources 目录失败: err=%v path=%s", err, resDir)
 	}
@@ -162,16 +161,32 @@ func writeCaptureConfigYAML(t *testing.T, dataDir string, skillMode string, apiK
 	cfg := fmt.Sprintf(`preferred_language: zh
 react:
   skill_mode: %s
+  context_engine_config:
+    enabled: true
+memory:
+  mode: local
+modes:
+  agent:
+    plan:
+      memory:
+        enabled: true
+        is_proactive: true
+embed:
+  embed_api_key: %s
+  embed_base_url: https://ark.cn-beijing.volces.com/api/v3/embeddings
+  embed_model: Doubao-Embedding-Vision
 models:
   defaults:
     - is_default: true
       model_client_config:
         client_provider: OpenAI
+        client_id: real_llm_prompt_capture
         model_name: deepseek-v4.1-flash
         api_key: %s
         api_base: https://ark.cn-beijing.volces.com/api/coding/v3
         timeout: 120
-`, skillMode, apiKey)
+        verify_ssl: false
+`, skillMode, apiKey, apiKey)
 	cfgPath := filepath.Join(dataDir, "config", "config.yaml")
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
 		t.Fatalf("创建 config 目录失败: %v", err)
@@ -297,10 +312,15 @@ func (c *promptCapture) eventCount() int {
 // 双注册对齐 Python LLM_INPUT 在 invoke/stream 双路径触发的语义
 // （Python emit_before 同时装饰 invoke 与 stream）；plan 模式实际走哪条
 // 路径由 DeepAgent 内部决定，双注册兜底。
+//
+// ⚠️ 框架选择：Model 门面层（model.go NewModel）持有的是
+// callback.GetCallbackFramework() 包级全局单例，而非
+// runner.GetCallbackFramework()（后者是 initRunner 独立 new 的实例，
+// 两者不是同一对象）——注册到错误实例将收不到任何事件。
 func registerPromptCapture(t *testing.T) *promptCapture {
 	t.Helper()
 	c := &promptCapture{}
-	fw := runner.GetCallbackFramework()
+	fw := callback.GetCallbackFramework()
 	fw.OnLLM(callback.LLMInvokeInput, c.record)
 	fw.OnLLM(callback.LLMStreamInput, c.record)
 	t.Cleanup(func() {
@@ -386,7 +406,9 @@ func (s *SystemPromptCaptureSuite) runLiveCapture(skillMode string) (string, *pr
 
 // assertCommonPromptStructure 断言公共提示词结构。
 // 对齐 Python: _assert_common_prompt_structure
-// （20 条 = 18 正向 + 2 负向，已与 Python 原文机器核对 1:1）
+// （20 条 = 18 正向 + 2 负向；其中 4 条正向已按 Python 现行渲染调整，
+// 调整理由在各断言处注明——Python 原测试断言的字符串在现行 Python
+// 源码中已不存在或不可触达，原测试在当前 Python 代码上同样失败）
 func (s *SystemPromptCaptureSuite) assertCommonPromptStructure(prompt string) {
 	t := s.T()
 	sTrue := func(substr string, msg string) {
@@ -410,10 +432,21 @@ func (s *SystemPromptCaptureSuite) assertCommonPromptStructure(prompt string) {
 	sFalse("## task_tool 用于创建临时子代理", "旧版 task_tool 文案不应存在")
 	sFalse("- bash / code:", "旧版合并工具描述不应存在")
 
-	// 子代理列表
-	sTrue(`- "code_agent":`, "code_agent 子代理描述")
-	sTrue(`- "research_agent":`, "research_agent 子代理描述")
-	sTrue(`- "browser_agent":`, "browser_agent 子代理描述")
+	// 子代理体系（替代 Python 原断言 '- "code_agent":' / '- "research_agent":' /
+	// '- "browser_agent":'——已实证 Python 现行代码不会把代理名渲染进系统提示词：
+	// 1. 引号格式仅 AgentModeRail._build_available_agents 产生（agent_mode_rail.py
+	//    L431），且仅在 enter_plan_mode 工具调用成功后注册 task_tool 时使用——
+	//    本测试 query 明确"不要调用任何工具"，该路径不触发；
+	// 2. SubagentRail._build_available_agents_description 的 '- name: desc (Tools:)'
+	//    格式（subagent_rail.py L157-172）只进 tool 描述，而 context section 的
+	//    提取器标记为"可用代理类型及对应工具："（context.py L272），与 task_tool
+	//    模板标记"可用代理类型及其工具："（task_tool.py L113）不匹配——代理名
+	//    永远不会被提取进提示词（提取器实际服务于 sessions_spawn 异步路径，
+	//    session_tools.py L103 的标记才是"及对应工具"）。
+	// 故改为断言现行渲染中实际存在的子代理语义三节：
+	sTrue("## task_tool — 主动委派子代理，保护主上下文窗口", "task_tool 委派指引节")
+	sTrue("子代理在独立上下文中运行", "子代理上下文隔离语义")
+	sTrue("# Browser Tool Policy", "browser 子代理策略节（channel=web 门控）")
 
 	// 各 section
 	sTrue("# 技能", "技能节")
@@ -423,7 +456,10 @@ func (s *SystemPromptCaptureSuite) assertCommonPromptStructure(prompt string) {
 	sTrue("# 项目上下文", "项目上下文节")
 	sTrue("使用 todo 工具（todo_create、todo_modify、todo_list）", "todo 工具说明")
 	sTrue("# 上下文压缩", "上下文压缩节")
-	sTrue("# 当前日期与时间", "当前日期与时间节")
+	// 替代 Python 原断言 "# 当前日期与时间"——该字符串在两个 Python 仓库现行
+	// 源码中均不存在；现行渲染节名为 "# 时间说明"（runtime_prompt_rail.py，
+	// Go 对应 runtime_prompt_rail.go injectTimeSection）
+	sTrue("# 时间说明", "时间说明节")
 	sTrue("# 运行时", "运行时节（依赖 Model 门面层捕获点）")
 }
 
@@ -461,7 +497,11 @@ func (s *SystemPromptCaptureSuite) assertSkillModeAll(prompt string) {
 	if !skillEntryRegex.MatchString(prompt) {
 		t.Errorf(`all 分支应含编号技能条目（\n\d+\.\s+.+?: .+）`)
 	}
-	if !strings.Contains(prompt, "Path: ") {
-		t.Errorf("all 分支应含技能路径展示")
+	// 替代 Python 原断言 "Path: "——skill_md_path 参数在 Python 现行代码中
+	// 已注释（skill_use_rail.py L384/L409 `# No longer needed with SkillTool`），
+	// Go 对齐注释行为传 ""（skill_use_rail.go buildAllModeSection L752），
+	// 现行渲染不再含 Path: 行。改为断言测试种子技能名确实渲染进列表：
+	if !strings.Contains(prompt, "test-skill: 测试用技能") {
+		t.Errorf("all 分支应含种子技能条目（test-skill）")
 	}
 }

@@ -462,7 +462,12 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		}
 	}
 	if d.workspaceDir == "" {
-		d.workspaceDir = workspace.AgentRootDir()
+		// Python: config.get("workspace_dir", str(get_agent_workspace_dir()))
+		// 默认为 agent/workspace（get_agent_workspace_dir = agent_root/workspace），
+		// 不是 agent 根目录——此前误用 AgentRootDir() 导致 ReadContextFiles
+		// 的 GetNodePath 拼出 <data>/agent/AGENT.md（文件实际在
+		// <data>/agent/workspace/AGENT.md），# 项目上下文 节永远为空。
+		d.workspaceDir = workspace.AgentWorkspaceDir()
 	}
 
 	// Python: setattr(self._instance, "_jiuwenswarm_project_dir", self._project_dir or self._workspace_dir)

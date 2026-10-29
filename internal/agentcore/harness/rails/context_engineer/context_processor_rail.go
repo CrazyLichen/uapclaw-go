@@ -320,22 +320,33 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 		},
 		{
 			Type: "CurrentRoundCompressor",
-			Config: &compressor.CurrentRoundCompressorConfig{
-				TokensThreshold: 100000,
-				MessagesToKeep:  3,
-				Model:           modelConfig,
-				ModelClient:     modelClientConfig,
-			},
+			// 用 NewCurrentRoundCompressorConfig 构造以携带默认值
+			// （对齐 Python pydantic Field(default=...) 自动填默认——
+			// 结构体字面量会漏 MinSelectedTokensForCompression 等字段导致
+			// Validate 失败），再按 preset 覆盖指定字段
+			Config: func() *compressor.CurrentRoundCompressorConfig {
+				cfg := compressor.NewCurrentRoundCompressorConfig()
+				cfg.TokensThreshold = 100000
+				cfg.MessagesToKeep = 3
+				cfg.Model = modelConfig
+				cfg.ModelClient = modelClientConfig
+				return cfg
+			}(),
 		},
 		{
 			Type: "RoundLevelCompressor",
-			Config: &compressor.RoundLevelCompressorConfig{
-				TriggerTotalTokens: 230000,
-				TargetTotalTokens:  160000,
-				KeepRecentMessages: 6, // Python: keep_recent_messages=6 (覆盖默认0)
-				Model:              modelConfig,
-				ModelClient:        modelClientConfig,
-			},
+			// 用 NewRoundLevelCompressorConfig 构造以携带默认值（对齐
+			// Python pydantic 自动填默认，防止 CompressionCallMaxTokens 等
+			// 字段漏设导致 Validate 失败），再按 preset 覆盖指定字段
+			Config: func() *compressor.RoundLevelCompressorConfig {
+				cfg := compressor.NewRoundLevelCompressorConfig()
+				cfg.TriggerTotalTokens = 230000
+				cfg.TargetTotalTokens = 160000
+				cfg.KeepRecentMessages = 6 // Python: keep_recent_messages=6 (覆盖默认0)
+				cfg.Model = modelConfig
+				cfg.ModelClient = modelClientConfig
+				return cfg
+			}(),
 		},
 	}
 }
@@ -405,9 +416,17 @@ func (r *ContextProcessorRail) maybeScheduleSessionMemoryUpdate(
 // getReactAgentConfig 从 BaseAgent 获取 ReActAgentConfig。
 //
 // Python: config = getattr(getattr(agent, "react_agent", None), "_config", None)
+// ——先解引用内层 react_agent 再取 _config。Init 的 agent 是 DeepAgent
+// （DeepAgent.Config() 返回 nil），必须走 ReactAgent().Config() 内层配置。
 func getReactAgentConfig(agent sainterfaces.BaseAgent) *saconfig.ReActAgentConfig {
 	if agent == nil {
 		return nil
+	}
+	// DeepAgent → 解引用内层 ReActAgent（对齐 Python agent.react_agent._config）
+	if deepAgent, ok := agent.(hinterfaces.DeepAgentInterface); ok {
+		if inner := deepAgent.ReactAgent(); inner != nil {
+			agent = inner
+		}
 	}
 	cfg := agent.Config()
 	if cfg == nil {

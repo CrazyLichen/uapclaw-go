@@ -119,7 +119,15 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 	var contextTools []cschema.ToolInfoInterface
 
 	if modelCtx != nil {
-		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, nil, 0, 0, contextWindowOpts...)
+		// Python: tools=ctx.inputs.tools if ctx.inputs.tools else None
+		// （_railed_model_call L715-717）——从 ModelCallInputs 读取
+		// callModel 预置的 tools，而非硬编码 nil（此前 Go 传 nil 导致
+		// 工具列表整体丢失，模型调用请求不含任何 tools）
+		var inputTools []cschema.ToolInfoInterface
+		if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
+			inputTools = inputs.Tools
+		}
+		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, inputTools, 0, 0, contextWindowOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("获取上下文窗口失败: %w", err)
 		}
@@ -127,6 +135,11 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 		contextTools = contextWindow.GetTools()
 	} else {
 		messages = systemMsgs
+		// modelCtx 为 nil 时直接沿用 callModel 预置的 tools（对齐
+		// Python：ctx.inputs.tools 仍会传给 LLM 调用）
+		if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
+			contextTools = inputs.Tools
+		}
 	}
 
 	// 写回 cbc.Inputs()（对齐 Python L727-728: ctx.inputs.messages = ...; ctx.inputs.tools = ...）
