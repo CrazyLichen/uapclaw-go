@@ -537,7 +537,25 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		return false
 	}
 
-	// 入站拦截器（对齐 L582-594，异常 Warn 继续）
+	// acp JSON-RPC 分支（对齐 L575-581：route.channel_id==acp 时优先交桥处理，
+	// 请求未处理但 is_jsonrpc_request 为真时早退——顺序在入站拦截器之前）
+	if route.ChannelID == "acp" {
+		s.clientsMu.RLock()
+		acpB := s.acpBridge
+		s.clientsMu.RUnlock()
+		if acpB != nil {
+			if acpB.HandleJsonrpcRequest(ctx, ws, data) {
+				return
+			}
+			if IsJsonrpcRequest(data) {
+				// 是 JSON-RPC 请求但桥未处理（理论上不可达——HandleJsonrpcRequest 对
+				// 请求恒返回 true）——防御性 return，避免落入 type=req 的 invalid request
+				return
+			}
+		}
+	}
+
+	// 入站拦截器（对齐 L584-596，异常 Warn 继续）
 	if route.InboundInterceptor != nil {
 		handled := func() (h bool) {
 			defer func() {
@@ -553,23 +571,6 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		}()
 		if handled {
 			return false
-		}
-	}
-
-	// acp JSON-RPC 分支（对齐 L575-580：route.channel_id==acp 时优先交桥处理请求）
-	if route.ChannelID == "acp" {
-		s.clientsMu.RLock()
-		acpB := s.acpBridge
-		s.clientsMu.RUnlock()
-		if acpB != nil {
-			if acpB.HandleJsonrpcRequest(ctx, ws, data) {
-				return
-			}
-			if IsJsonrpcRequest(data) {
-				// 是 JSON-RPC 请求但桥未处理（理论上不可达——HandleJsonrpcRequest 对
-				// 请求恒返回 true）——防御性 return，避免落入 type=req 的 invalid request
-				return
-			}
 		}
 	}
 
