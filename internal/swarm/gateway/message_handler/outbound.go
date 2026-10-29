@@ -77,9 +77,10 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 	}
 	busMetadata := MergeAgentMetadata(requestMetadata, respMetadata)
 
-	// TODO(#ACP): ACP session_id 解析（等 ACP 章节回填）
-	// Python: ACP渠道检测
-	//     Python: session_id = self._resolve_acp_external_session_id(session_id, bus_metadata)
+	// ACP 会话别名出站解析（⑧ 回填，Python L1643-1644：chunk 渠道判定 + 三级回落）
+	if chunk.ChannelID == acpChannelIDConst {
+		sessionID = mh.resolveAcpExternalSessionID(sessionID, busMetadata)
+	}
 
 	// cron 判断：chunk.Payload["event_type"] == "cron.response"
 	if chunk.Payload != nil {

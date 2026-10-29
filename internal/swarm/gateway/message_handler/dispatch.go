@@ -22,15 +22,77 @@ import (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// prepareAgentDispatchMessage 准备发往 AgentServer 的消息。
-//
+// prepareAgentDispatchMessage 准备发往 AgentServer 的消息（ACP 会话别名改写）。
 // Python: _prepare_agent_dispatch_message (L1287-1312)：
-// 当前实现为 identity return（直接返回 msg），ACP session alias 处理待后续回填。
+// 非 acp / initialize / session.create 直通；resolve 内部会话；改写
+// session_id + params.session_id；aliased 时 metadata 记原 external。
 func (mh *MessageHandler) prepareAgentDispatchMessage(_ context.Context, msg *schema.Message) *schema.Message {
-	// TODO(#ACP): ACP session alias 处理（等 ACP 章节回填）
-	// Python: ACP渠道检测
-	//     Python: msg = await self._ensure_acp_agent_session(msg)
-	return msg
+	if msg.ChannelID != acpChannelIDConst {
+		return msg
+	}
+	if msg.ReqMethod == schema.ReqMethodInitialize || msg.ReqMethod == schema.ReqMethodSessionCreate {
+		return msg
+	}
+
+	internalSessionID, aliased := mh.resolveAcpInternalSessionID(msg.SessionID)
+	if internalSessionID == "" {
+		return msg
+	}
+
+	params := map[string]any{}
+	if len(msg.Params) > 0 {
+		_ = json.Unmarshal(msg.Params, &params)
+	}
+	params["session_id"] = internalSessionID
+
+	metadata := map[string]any{}
+	for k, v := range msg.Metadata {
+		metadata[k] = v
+	}
+	if aliased {
+		if _, exists := metadata[acpOriginalSessionIDKey]; !exists {
+			metadata[acpOriginalSessionIDKey] = msg.SessionID
+		}
+	}
+
+	// Python replace(msg, ...) → 浅拷贝 + 三字段替换
+	out := *msg
+	out.SessionID = internalSessionID
+	if data, err := json.Marshal(params); err == nil {
+		out.Params = data
+	}
+	out.Metadata = metadata
+	return &out
+}
+
+// isSessionMapStyleSessionID :: 分段 5/6 段全非空判定。
+// Python: _is_session_map_style_session_id (L1222-1226)。
+func isSessionMapStyleSessionID(sessionID string) bool {
+	parts := strings.Split(sessionID, "::")
+	if len(parts) != 5 && len(parts) != 6 {
+		return false
+	}
+	for _, p := range parts {
+		if strings.TrimSpace(p) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+// isKnownJiuwenswarmSessionID 已知会话判定：12 前缀或 :: 段式。
+// Python: _is_known_jiuwenswarm_session_id (L1228-1235)。
+func isKnownJiuwenswarmSessionID(sessionID string) bool {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" {
+		return false
+	}
+	for _, p := range knownJiuwenswarmSessionPrefixes {
+		if strings.HasPrefix(sid, p) {
+			return true
+		}
+	}
+	return isSessionMapStyleSessionID(sid)
 }
 
 // shouldEmitProcessingStatusForStream 判断是否需要为流式请求发送 processing_status 事件。

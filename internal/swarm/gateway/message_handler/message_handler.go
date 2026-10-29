@@ -123,6 +123,11 @@ type MessageHandler struct {
 	// cronController cron 控制器（对齐 Python _cron_controller，11.10）
 	// Python: set_cron_controller 注入；Go 由 app_gateway 装配时设置
 	cronController CronControllerAPI
+
+	// acpSessionAliasMu ACP 会话别名锁（Python _acp_session_alias_lock）
+	acpSessionAliasMu sync.Mutex
+	// acpSessionAliases ACP 别名缓存：external → internal（无 TTL 无上限，偏差 §9-11）
+	acpSessionAliases map[string]string
 }
 
 // CronControllerAPI handleCronPushPayload 所需的 CronController 接口。
@@ -154,7 +159,21 @@ type CronControllerAPI interface {
 // logComponent 日志组件标识
 const logComponent = logger.ComponentGateway
 
+const (
+	// acpChannelIDConst ACP 渠道标识（Python _ACP_CHANNEL_ID）
+	acpChannelIDConst = "acp"
+	// acpOriginalSessionIDKey 元数据键（Python _ACP_ORIGINAL_SESSION_ID_KEY）
+	acpOriginalSessionIDKey = "acp_original_session_id"
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// knownJiuwenswarmSessionPrefixes 已知会话前缀 12 项（Python _KNOWN_JIUWENSWARM_SESSION_PREFIXES；
+// 含未实现渠道前缀字面保留，偏差 §9-12）
+var knownJiuwenswarmSessionPrefixes = []string{
+	"sess_", "tui_", "acp_", "cron_", "feishu_", "wechat_",
+	"xiaoyi_", "dingtalk_", "wecom_", "telegram_", "discord_", "whatsapp_",
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -176,6 +195,7 @@ func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 		sessionEvolutionInProgress:  make(map[string]bool),
 		streamEmitsProcessingStatus: make(map[string]bool),
 		sessionLastUserQuery:        make(map[string]string),
+		acpSessionAliases:           make(map[string]string),
 	}
 
 	// 11.7：企业通道会话映射（scope 从 config 读一次）
