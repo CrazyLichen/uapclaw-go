@@ -14,15 +14,13 @@
 //	knowledgebase/
 //	├── doc.go           # 包文档
 //	├── base.go          # KnowledgeBase 接口 + BaseKnowledgeBase + 构造/setter/模板方法（13.26）
-//	├── validate.go      # ValidateIndex 三段式 + attrEqual + isChromaType（13.26）
-//	├── simple.go        # SimpleKnowledgeBase + 多 KB 聚合（13.27 ⤵️ 待实施）
-//	└── graph.go         # GraphKnowledgeBase（13.28 ⤵️ 待实施）
+//	└── validate.go      # ValidateIndex 三段式 + attrEqual + isChromaType（13.26）
+//
+// （13.27 simple.go / 13.28 graph.go 落地时补充目录条目与对应 Python 路径）
 //
 // 对应 Python 代码：
 //
 //	openjiuwen/core/retrieval/knowledge_base.py
-//	openjiuwen/core/retrieval/simple_knowledge_base.py（13.27）
-//	openjiuwen/core/retrieval/graph_knowledge_base.py（13.28）
 //
 // 核心类型/接口索引：
 //

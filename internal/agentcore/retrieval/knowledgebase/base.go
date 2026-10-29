@@ -87,6 +87,9 @@ type BaseKnowledgeBase struct {
 	llmClient model_clients.BaseModelClient
 }
 
+// KnowledgeBaseOption BaseKnowledgeBase 构造选项。
+type KnowledgeBaseOption func(*BaseKnowledgeBase)
+
 // KBOptions 知识库方法选项（Python **kwargs 收纳）。
 type KBOptions struct {
 	// FileName ParseFiles 的 file_name 参数（空串=未设回落路径末段）
@@ -94,6 +97,9 @@ type KBOptions struct {
 	// Extra 其余额外参数：ParseURLs 全量透传 parser；抽象方法子类消费
 	Extra map[string]any
 }
+
+// KBOption 知识库方法选项。
+type KBOption func(*KBOptions)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -103,9 +109,6 @@ const logComponent = logger.ComponentAgentCore
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// KnowledgeBaseOption BaseKnowledgeBase 构造选项。
-type KnowledgeBaseOption func(*BaseKnowledgeBase)
 
 // NewBaseKnowledgeBase 构造知识库基座。
 //
@@ -198,9 +201,6 @@ func (b *BaseKnowledgeBase) SetIndexManager(im indexer.Indexer) error {
 	}
 	return nil
 }
-
-// KBOption 知识库方法选项。
-type KBOption func(*KBOptions)
 
 // NewKBOptions 从可变参数构建 KBOptions。
 func NewKBOptions(opts ...KBOption) KBOptions {
