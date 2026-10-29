@@ -591,7 +591,7 @@ func TestLinkPassages_失败聚合(t *testing.T) {
 // ──────────────────────────── Go 增强测试 ────────────────────────────
 
 // TestRead_pyStr数字边界 增强 2：jsonrepair 产出数字一律 json.Number
-//（探针实测：1862/0.5/大整数均原样字面），bool/nil 直达 pyStr 分支。
+// （探针实测：1862/0.5/大整数均原样字面），bool/nil 直达 pyStr 分支。
 func TestRead_pyStr数字边界(t *testing.T) {
 	llm := &agenticLLMDispatch{
 		readFn: func(string) (string, error) {
@@ -620,7 +620,7 @@ func TestRead_pyStr浮点与大整数(t *testing.T) {
 	r := newGenericRetriever(t, llm)
 	results := r.read(context.Background(), "q", []common.RetrievalResult{{Text: "doc", Score: 1}}, nil)
 	require.Len(t, results, 2)
-	assert.Equal(t, "0.5", results[0][2]) // json.Number "0.5" → Atoi 失败非整数字面 → Float64 → pyFloatStr("0.5")
+	assert.Equal(t, "0.5", results[0][2])                            // json.Number "0.5" → Atoi 失败非整数字面 → Float64 → pyFloatStr("0.5")
 	assert.Equal(t, "123456789012345678901234567890", results[1][2]) // 超界整数字面原样（Python int 无界）
 }
 
@@ -648,7 +648,7 @@ func TestRead_facts串形态(t *testing.T) {
 func TestRead_docs截断语义(t *testing.T) {
 	var capturedPrompt string
 	llm := &agenticLLMDispatch{
-		readFn: func(prompt string) (string, error) { capturedPrompt = prompt; return "[]", nil },
+		readFn:    func(prompt string) (string, error) { capturedPrompt = prompt; return "[]", nil },
 		rewriteFn: func(string) (string, error) { return `{"sufficient": true, "next_question": null}`, nil },
 	}
 	r := newGenericRetriever(t, llm)
@@ -659,7 +659,7 @@ func TestRead_docs截断语义(t *testing.T) {
 	assert.Contains(t, capturedPrompt, "p1")
 	assert.NotContains(t, capturedPrompt, "p6") // 索引 6 超出前 5 截断（即使非空）
 	assert.NotContains(t, capturedPrompt, "p5") // 索引 5 也在截断界外——先切前 5 再滤空
-	assert.Contains(t, capturedPrompt, "p2")     // 空文本 p_ 被跳过但 p2 索引 2 在界内
+	assert.Contains(t, capturedPrompt, "p2")    // 空文本 p_ 被跳过但 p2 索引 2 在界内
 }
 
 // TestRetrieve_软失败链 增强 4：LLM err→降级继续；解析根非 list/dict 降级。
@@ -702,8 +702,11 @@ func TestRetrieve_软失败链(t *testing.T) {
 // TestRetrieve_maxIter为1 增强 8：单轮无 rewrite 调用。
 func TestRetrieve_maxIter为1(t *testing.T) {
 	llm := &agenticLLMDispatch{
-		readFn:    func(string) (string, error) { return "[]", nil },
-		rewriteFn: func(string) (string, error) { t.Error("max_iter=1 不应调用 rewrite"); return "", errors.New("unreachable") },
+		readFn: func(string) (string, error) { return "[]", nil },
+		rewriteFn: func(string) (string, error) {
+			t.Error("max_iter=1 不应调用 rewrite")
+			return "", errors.New("unreachable")
+		},
 	}
 	r := newGenericRetriever(t, llm)
 	r.maxIter = 1
@@ -886,7 +889,7 @@ func TestLinkPassages_非图防御与工厂失败(t *testing.T) {
 }
 
 // TestRetrieve_图路径工厂失败 图路径主循环内 GetRetrieverForMode 失败传播
-//（13.23 mode 校验）。
+// （13.23 mode 校验）。
 func TestRetrieve_图路径工厂失败(t *testing.T) {
 	gr := NewGraphRetriever()
 	r, err := NewAgenticRetriever(gr, &stubAgenticLLM{})
@@ -920,11 +923,11 @@ func TestPyStr_分支表(t *testing.T) {
 	assert.Equal(t, "True", pyStr(true))
 	assert.Equal(t, "False", pyStr(false))
 	assert.Equal(t, "abc", pyStr("abc"))
-	assert.Equal(t, "42", pyStr(42))       // int
-	assert.Equal(t, "-7", pyStr(int64(-7))) // int64
+	assert.Equal(t, "42", pyStr(42))                  // int
+	assert.Equal(t, "-7", pyStr(int64(-7)))           // int64
 	assert.Equal(t, "+42", pyStr(json.Number("+42"))) // json.Number 符号整数 Atoi 成功原样
-	assert.Equal(t, "0.5", pyStr(0.5))     // float64 → pyFloatStr
-	assert.Equal(t, "2.0", pyStr(2.0))     // float64 整数值补 .0
+	assert.Equal(t, "0.5", pyStr(0.5))                // float64 → pyFloatStr
+	assert.Equal(t, "2.0", pyStr(2.0))                // float64 整数值补 .0
 	// json.Number 病态非数字（Repair 后仍非数字字面）
 	assert.Equal(t, "abc", pyStr(json.Number("abc")))
 	// json.Number 溢出整数（Atoi 失败 → isPureIntegerLiteral 命中）
@@ -938,10 +941,10 @@ func TestPyFloatStr_边界表(t *testing.T) {
 	assert.Equal(t, "nan", pyFloatStr(math.NaN()))
 	assert.Equal(t, "inf", pyFloatStr(math.Inf(1)))
 	assert.Equal(t, "-inf", pyFloatStr(math.Inf(-1)))
-	assert.Equal(t, "1e+16", pyFloatStr(1e16))   // e 记法上界
-	assert.Equal(t, "1e-05", pyFloatStr(1e-5))   // e 记法下界
-	assert.Equal(t, "0.0", pyFloatStr(0.0))      // 零 f 记法补 .0
-	assert.Equal(t, "0.0001", pyFloatStr(1e-4))  // f 记法下界
+	assert.Equal(t, "1e+16", pyFloatStr(1e16))    // e 记法上界
+	assert.Equal(t, "1e-05", pyFloatStr(1e-5))    // e 记法下界
+	assert.Equal(t, "0.0", pyFloatStr(0.0))       // 零 f 记法补 .0
+	assert.Equal(t, "0.0001", pyFloatStr(1e-4))   // f 记法下界
 	assert.Equal(t, "1862.0", pyFloatStr(1862.0)) // f 记法整数值补 .0
 }
 
