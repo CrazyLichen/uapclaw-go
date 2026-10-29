@@ -250,10 +250,12 @@ func E2AResponseToACPJsonrpcResponse(resp *E2AResponse) map[string]any {
 		code, isInt := resolveJsonrpcErrorCode(codeRaw)
 		message, _ := body["message"].(string)
 		data := map[string]any{}
-		if det, has := body["details"]; has {
+		// Python: det = body.get("details"); if det is not None: data["details"] = det
+		// 值判定（非键存在性）：Go map 取值缺失与 JSON null 同为零值 nil，与 Python get() 语义天然等价
+		if det := body["details"]; det != nil {
 			data["details"] = det
 		}
-		if ext, has := body["external"]; has {
+		if ext := body["external"]; ext != nil {
 			data["external"] = ext
 		}
 		// Python: if code_raw is not None and not isinstance(code_raw, int): data["e2a_code"] = code_raw
@@ -305,8 +307,12 @@ func E2AResponseToA2AStreamPayload(resp *E2AResponse) map[string]any {
 
 // BuildACPToolResponseMessage 为客户端 JSON-RPC 响应（工具执行结果）构建内部 Message。
 // 由 ACP 桥（WebSocket 模式）与 stdio 模式共享，避免重复的 Message 构造逻辑。
+// channelID 空串时回退 "acp"（Python channel_id: str = "acp" 默认值；同 IdentityOrigin 零值回退模式）。
 // Python: adapters.py build_acp_tool_response_message
 func BuildACPToolResponseMessage(jsonrpcID string, responseData map[string]any, sessionID, channelID string) *schema.Message {
+	if channelID == "" {
+		channelID = "acp"
+	}
 	params := map[string]any{
 		"jsonrpc_id": jsonrpcID,
 		"response":   copyMapAny(responseData),

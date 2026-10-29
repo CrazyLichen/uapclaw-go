@@ -610,6 +610,18 @@ func TestE2AResponseToACPJsonrpcResponse_e2aErrorData键(t *testing.T) {
 	if data == nil || data["e2a_code"] != "E_STR" || data["details"] == nil || data["external"] == nil {
 		t.Errorf("data = %v, want e2a_code=E_STR + details + external", err2["data"])
 	}
+	// details/external 值为 null（JSON null）→ 不写 data（Python det is not None 语义；
+	// Go map 取值缺失与 null 同为零值 nil，值判定与 Python get() 天然等价——禁止键存在性判定）
+	resp3 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "d3",
+		Body:         map[string]any{"code": 1, "message": "m", "details": nil, "external": nil},
+	}
+	out3 := E2AResponseToACPJsonrpcResponse(resp3)
+	err3, _ := out3["error"].(map[string]any)
+	if _, has := err3["data"]; has {
+		t.Errorf("details/external 为 null 时不应有 data 键, data = %v", err3["data"])
+	}
 }
 
 // TestE2AResponseToACPJsonrpcResponse_未知kind返回nil。
@@ -824,5 +836,13 @@ func TestBuildACPToolResponseMessage_channel透传(t *testing.T) {
 	msg := BuildACPToolResponseMessage("r", map[string]any{}, "s", "web")
 	if msg.ChannelID != "web" {
 		t.Errorf("ChannelID = %q, want web", msg.ChannelID)
+	}
+}
+
+// TestBuildACPToolResponseMessage_channel空串默认acp channel_id 零值回退默认（Python channel_id: str = "acp"）。
+func TestBuildACPToolResponseMessage_channel空串默认acp(t *testing.T) {
+	msg := BuildACPToolResponseMessage("r", map[string]any{}, "s", "")
+	if msg.ChannelID != "acp" {
+		t.Errorf("ChannelID = %q, want acp（零值回退，同 IdentityOrigin §9-5 模式）", msg.ChannelID)
 	}
 }
