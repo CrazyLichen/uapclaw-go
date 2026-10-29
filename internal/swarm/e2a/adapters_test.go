@@ -542,6 +542,39 @@ func TestE2AResponseToACPJsonrpcResponse_e2aErrorCode链(t *testing.T) {
 			t.Error("nil code 不应写 e2a_code")
 		}
 	}
+	// int64（上游结构体构造场景）→ int 命中，不写 e2a_code
+	resp7 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "c7",
+		Body:         map[string]any{"code": int64(-32001), "message": "m7"},
+	}
+	out7 := E2AResponseToACPJsonrpcResponse(resp7)
+	err7, _ := out7["error"].(map[string]any)
+	if err7["code"] != -32001 {
+		t.Errorf("int64 code = %v, want -32001", err7["code"])
+	}
+	if data, _ := err7["data"].(map[string]any); data != nil {
+		if _, has := data["e2a_code"]; has {
+			t.Error("int64 code 不应写 e2a_code")
+		}
+	}
+
+	// bool false（Python False 是 int 子类）→ 0 命中，不写 e2a_code
+	resp8 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "c8",
+		Body:         map[string]any{"code": false, "message": "m8"},
+	}
+	out8 := E2AResponseToACPJsonrpcResponse(resp8)
+	err8, _ := out8["error"].(map[string]any)
+	if err8["code"] != 0 {
+		t.Errorf("bool false code = %v, want 0", err8["code"])
+	}
+	if data, _ := err8["data"].(map[string]any); data != nil {
+		if _, has := data["e2a_code"]; has {
+			t.Error("bool false code 不应写 e2a_code")
+		}
+	}
 }
 
 // TestE2AResponseToACPJsonrpcResponse_e2aErrorData键 details/external 有无可选。
