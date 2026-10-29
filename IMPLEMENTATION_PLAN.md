@@ -665,8 +665,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.2.6 | ✅ | E2A Constants | 协议常量 | `jiuwenswarm/common/e2a/constants.py` |
 | 10.2.7 | ✅ | gateway_normalize | Message/E2A/AgentResponse 格式互转 | `jiuwenswarm/common/e2a/gateway_normalize.py` |
 | 10.2.8 | ✅ | agent_compat | `e2a_to_agent_request()` 转换 | `jiuwenswarm/common/e2a/agent_compat.py` |
-| 10.2.9 | ☐ | ACP 适配器 | JSON-RPC ACP 协议桥接 | `jiuwenswarm/common/e2a/adapters.py` |
-| 10.2.10 | ☐ | A2A 适配器 | Agent-to-Agent 协议适配 | `jiuwenswarm/common/e2a/adapters.py` |
+| 10.2.9 | ✅ | ACP 适配器 | 与 10.2.10 合并交付（Python 同文件 adapters.py）；6 函数；keyword-only → Options struct；converter 串 Go 化（gateway_normalize 惯例） | `jiuwenswarm/common/e2a/adapters.py` |
+| 10.2.10 | ✅ | A2A 适配器 | 随 10.2.9 合并交付（A2A 入站 SendMessage/出站 stream payload；envelope_to_call 共用） | `jiuwenswarm/common/e2a/adapters.py` |
 | **10.3 AgentServer 核心** | — | | | |
 | 10.3.1 | ✅ | AgentWebSocketServer | WS 服务端，~56 个 RPC 方法分发（对齐 Python，JiuWenClaw/AgentManager 已 stub） | `jiuwenswarm/server/agent_ws_server.py` |
 | 10.3.2 | ✅ | JiuWenClaw 门面 | SDK 路由，会话队列，流式包装，中断处理；✅ 云端记忆钩子(4处)；✅ Team模式判断+BuildInputs三路径+rawQuery替换；✅ Auto-Harness resume绕过；✅ Team中断分流+cancelTeamWork骨架；✅ Dreaming生命周期(CreateInstance/ReloadAgentConfig)；✅ CreateInstance Functional Options+SetSkillnetInstallCompleteHook；⤵️ Team后续请求绕过/TeamManager调用(10.6.19-23) | `jiuwenswarm/server/runtime/agent_adapter/interface.py` |

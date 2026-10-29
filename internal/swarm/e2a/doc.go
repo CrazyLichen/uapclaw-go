@@ -9,6 +9,7 @@
 //   - 请求信封（E2AEnvelope）及其序列化/反序列化，含 5 种 Legacy 兼容逻辑
 //   - 响应模型（E2AResponse）及其序列化/反序列化
 //   - ACP 参数补全（MergeParamsToACPPrompt）
+//   - ACP/A2A 协议适配器（入站信封构造 + 出站响应投影 + 工具响应回流 Message，10.2.9+10.2.10）
 //   - Gateway 规范化（Message→E2AEnvelope、AgentResponse/Chunk↔E2AResponse 格式互转、兜底信封）
 //   - Wire Codec（E2A 线编解码 + legacy fallback）
 //   - Agent 兼容层（E2AEnvelope→AgentRequest 转换）
@@ -17,6 +18,7 @@
 //
 //	e2a/
 //	├── doc.go                 # 包文档
+//	├── adapters.go            # E2A ↔ ACP/A2A 外协议形状互转（10.2.9+10.2.10）
 //	├── constants.go           # 协议常量（来源协议、响应状态、响应类型、ACP 方法名、Wire 键名）
 //	├── provenance.go          # IdentityOrigin 枚举 + E2AProvenance/E2AFileRef/E2AAuth 子结构体
 //	├── envelope.go            # E2AEnvelope 请求信封 + 序列化/反序列化 + Legacy 兼容 + MergeParamsToACPPrompt
