@@ -2,6 +2,7 @@ package skill_call
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
@@ -167,6 +168,12 @@ func WithSkillOnParameterUpdated(cb operator.ParameterUpdatedCallback) SkillExpe
 
 // toSlice 将 value 转为 []any。
 // Python: items = value if isinstance(value, list) else [value]
+//
+// Python isinstance(value, list) 天然覆盖任意元素类型的 list；
+// Go 的 typed slice（如 []checkpointing.EvolutionRecord）不是 []any，
+// 需用反射展开（原实现走 default 把整个切片包成单元素，导致
+// BuildLocalApplyPreview 的逐元素 EvolutionRecord 断言全部失败，
+// records 丢失、演进恒为 NoEvolutionNoRecords）。
 func toSlice(value any) []any {
 	if value == nil {
 		return nil
@@ -175,6 +182,14 @@ func toSlice(value any) []any {
 	case []any:
 		return v
 	default:
+		rv := reflect.ValueOf(value)
+		if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+			out := make([]any, rv.Len())
+			for i := 0; i < rv.Len(); i++ {
+				out[i] = rv.Index(i).Interface()
+			}
+			return out
+		}
 		return []any{v}
 	}
 }

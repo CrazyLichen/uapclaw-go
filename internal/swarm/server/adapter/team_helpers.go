@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/checkpointing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
@@ -235,7 +236,18 @@ func HandleTeamEvolveListCommand(ctx context.Context, channelID, sessionID, quer
 		}
 	}
 
-	// Python: 构建摘要表格 (line 462-487)
+	return map[string]any{
+		"output":      buildEvolveListSummary(skillName, records),
+		"result_type": "answer",
+	}
+}
+
+// buildEvolveListSummary 构建单 Skill 的经验库分数表格摘要。
+// 对齐 Python: _handle_evolve_list_command L4052-4076 的表格构建
+// （M-10：team 版 HandleTeamEvolveListCommand 与 agent 版 handleEvolveListCommand 共用，
+//
+//	Used/Effect 列对齐 M-32 真值语义——times_presented==0 时强制 "0/0"）。
+func buildEvolveListSummary(skillName string, records []checkpointing.EvolutionRecord) string {
 	var avgScore float64
 	for _, r := range records {
 		avgScore += r.Score
@@ -274,11 +286,7 @@ func HandleTeamEvolveListCommand(ctx context.Context, channelID, sessionID, quer
 			i+1, record.Score, usedStr, effectStr, section, preview))
 	}
 	lines = append(lines, fmt.Sprintf("\n提示：使用 /evolve_simplify %s 执行智能整理", skillName))
-
-	return map[string]any{
-		"output":      strings.Join(lines, "\n"),
-		"result_type": "answer",
-	}
+	return strings.Join(lines, "\n")
 }
 
 // HandleTeamSlashCommand 处理 team 模式专用 slash 命令。
@@ -623,6 +631,9 @@ func teamHelperStrFromAny(v any) string {
 //
 // 检查 event_type == "chat.ask_user_question" 且 request_id 和 questions 有效。
 // Go 端直接对 map[string]any 操作（Python 调 parse_stream_chunk，但 Go 端的事件已是解析后的 dict）。
+// questions 兼容 []any 与 []map[string]any 两种形状：经 WS/JSON 序列化的事件是 []any，
+// 进程内原生 *stream.OutputSchema（BuildSkillApprovalEvent 直产）是 []map[string]any——
+// Python 端只做 truthiness 检查，Go 端若只断言 []any 会把原生形状静默击落。
 func approvalChunkFromEvent(evt map[string]any) map[string]any {
 	if evt == nil {
 		return nil
@@ -635,11 +646,26 @@ func approvalChunkFromEvent(evt map[string]any) map[string]any {
 	if strings.TrimSpace(requestID) == "" {
 		return nil
 	}
-	questions, _ := evt["questions"].([]any)
-	if len(questions) == 0 {
+	if len(teamHelperQuestionsItems(evt["questions"])) == 0 {
 		return nil
 	}
 	return evt
+}
+
+// teamHelperQuestionsItems 从 questions 字段提取条目列表，兼容 []any 与 []map[string]any 两种形状。
+// Python: len(questions) 纯 truthiness（无类型约束），Go 端等价适配双形状。
+func teamHelperQuestionsItems(v any) []any {
+	if slice, ok := v.([]any); ok {
+		return slice
+	}
+	if maps, ok := v.([]map[string]any); ok {
+		items := make([]any, len(maps))
+		for i, m := range maps {
+			items[i] = m
+		}
+		return items
+	}
+	return nil
 }
 
 // approvalResultFromEventOrItems 构建审批结果 dict。
@@ -649,7 +675,7 @@ func approvalChunkFromEvent(evt map[string]any) map[string]any {
 func approvalResultFromEventOrItems(skillName string, event any, items []map[string]any, noChangesOutput, invalidOutput string) map[string]any {
 	approvalChunk := approvalChunkFromEvent(teamHelperEventAsMap(event))
 	if approvalChunk != nil {
-		questions, _ := approvalChunk["questions"].([]any)
+		questions := teamHelperQuestionsItems(approvalChunk["questions"])
 		return map[string]any{
 			"output":          fmt.Sprintf("Skill '%s' 演进请求已生成，请在审批弹框中确认。", skillName),
 			"result_type":     "answer",

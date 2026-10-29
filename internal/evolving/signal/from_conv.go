@@ -233,6 +233,20 @@ func (d *ConversationSignalDetector) Detect(msgs []map[string]any) []*EvolutionS
 	return d.deduplicate(signals)
 }
 
+// ParseMessages 将 BaseMessage 列表归一化为 map 列表（含 tool_calls）。
+//
+// 对齐 Python: SkillEvolutionRail._parse_messages(messages)
+// （agent_evolving 基础设施层等价实现——openjiuwen 的 slash 层
+// _collect_messages_for_evolve 收集会话消息后经此转换供 detect 使用）。
+// dict 消息直接透传；对象消息按 role/content/tool_calls 归一化。
+func ParseMessages(messages []llmschema.BaseMessage) []map[string]any {
+	result := make([]map[string]any, 0, len(messages))
+	for _, msg := range messages {
+		result = append(result, baseMessageToMap(msg))
+	}
+	return result
+}
+
 // DetectTrajectorySignals 使用常规对话规则检测被动轨迹信号。
 //
 // Python: ConversationSignalDetector.detect_trajectory_signals(trajectory, messages)

@@ -883,15 +883,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 
 	// 步骤 12-13: 模型选择 + 应用到 ReActAgent
 	resolvedModel := d.resolveModelForRequest(req)
-	if resolvedModel != nil && d.instance != nil {
-		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
-			reactAgent.SetLLM(resolvedModel)
-		}
-		// Python: _apply_model_to_react_agent 中同步 adapter 字段
-		d.modelRequestConfig = resolvedModel.ModelConfig
-		d.modelClientConfig = resolvedModel.ClientConfig
-		d.model = resolvedModel
-	}
+	d.applyModelToReactAgent(resolvedModel)
 
 	// 步骤 14: mark_session_active
 	d.markSessionActive(sessionID)
@@ -1017,6 +1009,44 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 7: team 模式分流
 	// Python: if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
 	if mode == "team" || mode == "team.plan" || mode == "code.team" {
+		// S-07: 对齐 Python L4549-4561——team 分支 6 步运行时设置
+		// （原实现直接进 processTeamMessageStream，模型不切换、language/channel 不解析、
+		//   prompt_rail 不配置、runtime_state.yaml 不更新）
+		//
+		// 步骤 1-2: 模型解析与应用
+		// Python: resolved_model = self._resolve_model_for_request(request)
+		//         self._apply_model_to_react_agent(resolved_model)
+		d.applyModelToReactAgent(d.resolveModelForRequest(req))
+		// 步骤 3: 语言解析
+		// Python: resolved_language = self._resolve_runtime_language()
+		resolvedLanguage := d.resolveRuntimeLanguage()
+		// 步骤 4: 频道解析（cid 优先，其次 session 前缀推断，兜底 "web"）
+		// Python: resolved_channel = str(cid or self._resolve_prompt_channel(session_id) or "web").strip() or "web"
+		resolvedChannel := commrails.FirstNonEmpty(
+			req.ChannelID,
+			resolvePromptChannel(sessionID),
+			"web",
+		)
+		// 步骤 5: RuntimePromptRail 双 setter（team 分支仅设置 model_name/mode）
+		// Python: if self._runtime_prompt_rail:
+		//   self._runtime_prompt_rail.set_model_name(self._resolve_model_name())
+		//   self._runtime_prompt_rail.set_mode(mode)
+		if d.runtimePromptRail != nil {
+			d.runtimePromptRail.SetModelName(d.resolveModelName())
+			d.runtimePromptRail.SetMode(mode)
+		}
+		// 步骤 6: 写 runtime_state.yaml（project_dir 三级回退：
+		// inputs.project_dir → d.projectDir → d.workspaceDir）
+		// Python: self._write_runtime_state(mode=..., language=..., channel=...,
+		//   project_dir=inputs.get("project_dir") or self._project_dir or self._workspace_dir)
+		d.writeRuntimeStateYAML(
+			ctx, mode, resolvedLanguage, resolvedChannel,
+			commrails.FirstNonEmpty(
+				paramsString(inputs, "project_dir", ""),
+				d.projectDir,
+				d.workspaceDir,
+			),
+		)
 		return d.processTeamMessageStream(ctx, req, inputs)
 	}
 	// 步骤 8: auto_harness 分流
@@ -1043,11 +1073,24 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				defer close(slashCh)
 				approvalChunks := slashResultStream["approval_chunks"]
 				if approvalChunks != nil {
-					// 输出审批块
-					if slice, ok := approvalChunks.([]any); ok {
-						for _, item := range slice {
-							if chunkMap, ok := item.(map[string]any); ok {
-								slashCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, chunkMap)
+					// 输出审批块。
+					// M-14：兼容三种切片形状——handleEvolveCommand 产出
+					// []map[string]any（展平后的审批块），team 路径亦用
+					// []map[string]any；旧 /evolve_simplify 产出 []any。
+					// 原 []any 单一断言会静默丢弃 map 切片形状的审批块。
+					emitted := false
+					if slice, ok := approvalChunks.([]map[string]any); ok {
+						for _, chunkMap := range slice {
+							slashCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, chunkMap)
+							emitted = true
+						}
+					}
+					if !emitted {
+						if slice, ok := approvalChunks.([]any); ok {
+							for _, item := range slice {
+								if chunkMap, ok := item.(map[string]any); ok {
+									slashCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, chunkMap)
+								}
 							}
 						}
 					}
@@ -1084,15 +1127,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 	// 步骤 12-13: 模型选择 + 应用到 ReActAgent
 	resolvedModelStream := d.resolveModelForRequest(req)
-	if resolvedModelStream != nil && d.instance != nil {
-		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
-			reactAgent.SetLLM(resolvedModelStream)
-		}
-		// Python: _apply_model_to_react_agent 中同步 adapter 字段
-		d.modelRequestConfig = resolvedModelStream.ModelConfig
-		d.modelClientConfig = resolvedModelStream.ClientConfig
-		d.model = resolvedModelStream
-	}
+	d.applyModelToReactAgent(resolvedModelStream)
 
 	// 步骤 15: mark_session_active
 	d.markSessionActive(sessionID)
@@ -2325,6 +2360,25 @@ func (d *DeepAdapter) resolveModelForRequest(req *schema.AgentRequest) *llm.Mode
 	}
 
 	return d.model
+}
+
+// applyModelToReactAgent 将解析后的模型应用到 ReActAgent 并同步 adapter 模型字段。
+//
+// Python: JiuWenClawDeepAdapter._apply_model_to_react_agent(resolved_model)
+// （非流式/流式/team 三条路径共用的模型应用逻辑，抽出消重）
+func (d *DeepAdapter) applyModelToReactAgent(resolvedModel *llm.Model) {
+	if resolvedModel == nil {
+		return
+	}
+	if d.instance != nil {
+		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
+			reactAgent.SetLLM(resolvedModel)
+		}
+	}
+	// Python: _apply_model_to_react_agent 中同步 adapter 字段
+	d.modelRequestConfig = resolvedModel.ModelConfig
+	d.modelClientConfig = resolvedModel.ClientConfig
+	d.model = resolvedModel
 }
 
 // hasValidModelConfig 检查请求的模型名是否有有效配置。

@@ -233,47 +233,33 @@ func TestDeepAdapter_HandleSlashCommand_未知斜杠命令(t *testing.T) {
 	}
 }
 
-// TestDeepAdapter_OptionMatches 测试选项匹配逻辑。
-func TestDeepAdapter_OptionMatches(t *testing.T) {
-	d := NewDeepAdapter()
-	option := map[string]any{"id": "opt1"}
-
+// TestOptionMatchesLabels 测试生产版选项标签匹配逻辑（M-15：替代已删除的死代码
+// optionMatches 的测试——该测试覆盖 S-42 修复后的生产函数）。
+// 对齐 Python: _option_matches(answers, ("accept", "接收", "接受"))——
+// 读 selected_options，strip().lower() 大小写不敏感匹配。
+func TestOptionMatchesLabels(t *testing.T) {
 	tests := []struct {
 		name    string
-		answers any
+		answers []ApprovalAnswer
 		want    bool
 	}{
-		{"nil选项", nil, false},
 		{"nil答案", nil, false},
-		{"切片匹配", []any{map[string]any{"id": "opt1"}}, true},
-		{"切片不匹配", []any{map[string]any{"id": "opt2"}}, false},
-		{"字符串匹配", []any{"opt1"}, true},
-		{"字符串不匹配", []any{"opt2"}, false},
-		{"map匹配", map[string]any{"id": "opt1"}, true},
-		{"map不匹配", map[string]any{"id": "opt2"}, false},
+		{"空列表", []ApprovalAnswer{}, false},
+		{"选中accept", []ApprovalAnswer{{SelectedOptions: []string{"accept"}}}, true},
+		{"选中接收", []ApprovalAnswer{{SelectedOptions: []string{"接收"}}}, true},
+		{"选中接受", []ApprovalAnswer{{SelectedOptions: []string{"接受"}}}, true},
+		{"大写变体", []ApprovalAnswer{{SelectedOptions: []string{"  Accept "}}}, true},
+		{"选中reject", []ApprovalAnswer{{SelectedOptions: []string{"reject"}}}, false},
+		{"空选项", []ApprovalAnswer{{SelectedOptions: []string{}}}, false},
+		{"多答案之一命中", []ApprovalAnswer{{SelectedOptions: []string{"reject"}}, {SelectedOptions: []string{"接收"}}}, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.name == "nil选项" {
-				if d.optionMatches(nil, tt.answers) != tt.want {
-					t.Errorf("optionMatches(nil, answers) != %v", tt.want)
-				}
-				return
-			}
-			if got := d.optionMatches(option, tt.answers); got != tt.want {
-				t.Errorf("optionMatches() = %v, want %v", got, tt.want)
+			if got := optionMatchesLabels(tt.answers, "accept", "接收", "接受"); got != tt.want {
+				t.Errorf("optionMatchesLabels() = %v, want %v", got, tt.want)
 			}
 		})
-	}
-}
-
-// TestDeepAdapter_OptionMatches_空ID 测试空 ID 返回 false。
-func TestDeepAdapter_OptionMatches_空ID(t *testing.T) {
-	d := NewDeepAdapter()
-	option := map[string]any{"id": ""}
-	if d.optionMatches(option, []any{"opt1"}) {
-		t.Error("空 ID 应返回 false")
 	}
 }
 
@@ -1263,7 +1249,7 @@ func TestDeepAdapter_Slash占位函数(t *testing.T) {
 	if result, err := d.handleEvolveCommand(ctx, "/evolve", "s1"); result != nil || err != nil {
 		t.Errorf("handleEvolveCommand 占位应返回 nil, nil")
 	}
-	if result, err := d.handleEvolveListCommand(ctx, "s1"); result != nil || err != nil {
+	if result, err := d.handleEvolveListCommand(ctx, "/evolve_list", "s1"); result != nil || err != nil {
 		t.Errorf("handleEvolveListCommand 占位应返回 nil, nil")
 	}
 	if result, err := d.handleEvolveSimplifyCommand(ctx, "/evolve_simplify", "s1"); result != nil || err != nil {

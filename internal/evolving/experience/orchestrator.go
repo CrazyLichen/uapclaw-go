@@ -286,8 +286,11 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 	}
 
 	// Python: execute_updates → BuildLocalApplyPreview
-	// 将 updater.Process 返回的 []map[UpdateKey]any 第一个元素转为 map[UpdateKey]UpdateValue
-	var updateValues map[schema.UpdateKey]schema.UpdateValue
+	// Python execute_updates 对 updates 无条件 normalize_updates——裸 records
+	// （如 SkillExperienceOptimizer.step 产出的 []EvolutionRecord）会被
+	// normalize_update_value 按 target=experiences 包装为 append/pending_change。
+	// 原实现只做 value.(schema.UpdateValue) 类型断言，裸 records 被静默丢弃，
+	// 导致 /evolve 成功路径生成的记录永远进不了 preview（NoEvolutionNoRecords）。
 	if len(updates) == 0 {
 		logger.Warn(logComponent).
 			Str("skill", onlineContext.SkillName).
@@ -295,12 +298,7 @@ func (o *OnlineEvolutionOrchestrator) generateLocalApplyPreview(
 		preview, _ := BuildLocalApplyPreview(onlineContext.SkillName, nil)
 		return &preview, nil
 	}
-	updateValues = make(map[schema.UpdateKey]schema.UpdateValue, len(updates[0]))
-	for key, value := range updates[0] {
-		if uv, ok := value.(schema.UpdateValue); ok {
-			updateValues[key] = uv
-		}
-	}
+	updateValues := schema.NormalizeUpdates(updates[0])
 	applyResults := ApplyUpdatesFromManager(
 		map[string]operator.Operator{op.OperatorID(): op},
 		updateValues,

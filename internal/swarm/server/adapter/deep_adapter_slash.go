@@ -7,6 +7,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -27,37 +29,40 @@ import (
 // 按 query 前缀 /evolve* 分发到具体处理器。
 // ✅ 已回填：依赖 SkillEvolutionRail
 func (d *DeepAdapter) handleSlashCommand(ctx context.Context, query string, sessionID string, mode string) (map[string]any, error) {
-	if query == "" || !strings.HasPrefix(query, "/") {
+	// Python: stripped = query.strip() 后按前缀匹配
+	stripped := strings.TrimSpace(query)
+	if stripped == "" || !strings.HasPrefix(stripped, "/") {
 		return nil, nil // 非 slash 命令
 	}
 
-	// Python: 按 query 前缀分发
+	// Python: 按 stripped 前缀分发（L4319-4348）。
+	// /evolve 精确匹配（== "/evolve" 或前缀 "/evolve "），防止 /evolveXXX 误命中
 	switch {
-	case strings.HasPrefix(query, "/evolve_simplify"):
+	case strings.HasPrefix(stripped, "/evolve_simplify"):
 		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveSimplifyCommand(ctx, query, sessionID)
-	case strings.HasPrefix(query, "/evolve_rebuild"):
+		return d.handleEvolveSimplifyCommand(ctx, stripped, sessionID)
+	case strings.HasPrefix(stripped, "/evolve_rebuild"):
 		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveRebuildCommand(ctx, query, sessionID)
-	case strings.HasPrefix(query, "/evolve_rollback"):
+		return d.handleEvolveRebuildCommand(ctx, stripped, sessionID)
+	case strings.HasPrefix(stripped, "/evolve_rollback"):
 		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveRollbackCommand(ctx, query, sessionID)
-	case strings.HasPrefix(query, "/evolve_list"):
+		return d.handleEvolveRollbackCommand(ctx, stripped, sessionID)
+	case strings.HasPrefix(stripped, "/evolve_list"):
 		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveListCommand(ctx, sessionID)
-	case strings.HasPrefix(query, "/evolve"):
+		return d.handleEvolveListCommand(ctx, stripped, sessionID)
+	case stripped == "/evolve" || strings.HasPrefix(stripped, "/evolve "):
 		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
-		return d.handleEvolveCommand(ctx, query, sessionID)
+		return d.handleEvolveCommand(ctx, stripped, sessionID)
 	default:
 		return nil, nil
 	}
@@ -92,17 +97,27 @@ func (d *DeepAdapter) ensureEvolutionRailForSlash(mode string) string {
 }
 
 // handleEvolveCommand 处理 /evolve 命令。
-// ✅ 已回填（对齐 Python: _handle_evolve_command()）
+// 对齐 Python: _handle_evolve_command() (L3773-3920)
 //
-// 格式：/evolve [skill_name] [query]
-// 无 skill_name 时 fallback 到 handleEvolveListCommand
+// 格式：/evolve [list | <skill_name> [<user_query>...]]
+//   - 无参数或 "list" → 待审批经验摘要（list_pending_summary）
+//   - skill_name 不存在 → 错误提示（列出可用 Skill）
+//   - 其余 → 信号检测链：收集会话消息 → SignalDetector 检测 →
+//     processed_signal_keys 去重 → evolution_intent 推导 → RequestUserEvolution
+//
+// S-11: 补齐信号检测链（原实现直接调 RequestUserEvolution，无消息收集/检测/去重/意图推导）。
+// M-14: 返回值对齐 Python 格式（output + result_type + approval_chunks），
+// approval_chunks 装展平后的 map（原装 *stream.OutputSchema 指针会被流式
+// 消费方的双重类型断言静默丢弃）。
 func (d *DeepAdapter) handleEvolveCommand(ctx context.Context, query string, sessionID string) (map[string]any, error) {
 	if d.skillEvolutionRail == nil {
 		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveCommand: SkillEvolutionRail not initialized")
 		return nil, nil
 	}
+	rail := d.skillEvolutionRail
+	store := rail.EvolutionStore()
 
-	// 解析命令：/evolve [skill_name] [query]
+	// 解析命令：/evolve [skill_name] [user_query]
 	// M-37: 对齐 Python L3794+L3812 两级 split(maxsplit=1)——
 	// query.split(1) 取 skill_arg，skill_arg.split(1) 取 skill_name/user_query，
 	// user_query 保留内部连续空白且 strip
@@ -111,6 +126,25 @@ func (d *DeepAdapter) handleEvolveCommand(ctx context.Context, query string, ses
 	if len(parts) > 1 {
 		skillArg = strings.TrimSpace(parts[1])
 	}
+
+	// --- /evolve list (or bare /evolve)：待审批经验摘要 ---
+	// M-10 链 A: 对齐 Python L3797-3808——原先错误 fallback 到 handleEvolveListCommand
+	if skillArg == "" || skillArg == "list" {
+		skillNames := skillruntime.FilterVisibleSkillNames(store.ListSkillNames(ctx))
+		if len(skillNames) == 0 {
+			return map[string]any{
+				"output":      "当前 skills_base_dir 下未找到任何 Skill 目录。",
+				"result_type": "answer",
+			}, nil
+		}
+		summary := store.ListPendingSummary(ctx, skillNames)
+		return map[string]any{
+			"output":      fmt.Sprintf("**Skills 演进记录：**\n\n%s", summary),
+			"result_type": "answer",
+		}, nil
+	}
+
+	// --- /evolve <skill_name> [<user_query>...] ---
 	skillParts := splitMaxN(skillArg, 1)
 	skillName := ""
 	userIntent := ""
@@ -121,60 +155,244 @@ func (d *DeepAdapter) handleEvolveCommand(ctx context.Context, query string, ses
 		userIntent = strings.TrimSpace(skillParts[1])
 	}
 
-	if skillName == "" {
-		// /evolve 无参数 → 列出可用技能
-		return d.handleEvolveListCommand(ctx, sessionID)
+	// Skill 存在性校验（对齐 Python L3816-3825）
+	visibleNames := skillruntime.FilterVisibleSkillNames(store.ListSkillNames(ctx))
+	skillFound := false
+	for _, n := range visibleNames {
+		if n == skillName {
+			skillFound = true
+			break
+		}
 	}
-
-	// Python: result = await self._skill_evolution_rail.request_user_evolution(skill_name, user_intent, auto_approve=False)
-	result, err := d.skillEvolutionRail.RequestUserEvolution(ctx, skillName, userIntent, false)
-	if err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveCommand: RequestUserEvolution failed")
-		return map[string]any{"status": "failed", "error": err.Error()}, nil
-	}
-
-	if result.ApprovalEvent != nil {
+	if !skillFound {
+		available := strings.Join(visibleNames, "、")
+		if available == "" {
+			available = "（无可用 Skill）"
+		}
 		return map[string]any{
-			"action":          "approval_required",
-			"approval_chunks": []any{result.ApprovalEvent},
-			"request_id":      ptrToStr(result.RequestID),
-			"skill_name":      result.SkillName,
+			"output": fmt.Sprintf(
+				"在 skills_base_dir 下未找到 Skill '%s'。\n当前可用 Skill：%s\n可使用 /evolve list 查看所有记录。",
+				skillName, available,
+			),
+			"result_type": "error",
 		}, nil
 	}
 
+	// 1) 收集会话消息（对齐 Python L3827-3828: _collect_messages_for_evolve）
+	parsedMessages := d.collectMessagesForEvolve(sessionID)
+
+	// 2) 信号检测（对齐 Python L3830-3833: SignalDetector(existing_skills).detect）
+	//    纯规则检测，不绑 LLM（Python slash 路径同样不调 bind_llm）
+	existingSkills := make(map[string]bool, len(visibleNames))
+	for _, n := range visibleNames {
+		if store.SkillExists(ctx, n) {
+			existingSkills[n] = true
+		}
+	}
+	detector := signal.NewConversationSignalDetector(signal.WithExistingSkills(existingSkills))
+	var detected []*signal.EvolutionSignal
+	if len(parsedMessages) > 0 {
+		detected = detector.Detect(parsedMessages)
+	}
+
+	// 3) 去重 + 回写 processed_signal_keys（对齐 Python L3835-3841）
+	//    S-11 决策点 A：统一使用 rail 内部同款 4 元组指纹 MakeSignalFingerprint——
+	//    slash 处理过的信号 rail 后台演进自动跳过（比 Python 的 2 元组键更收敛，
+	//    Python 下 slash 与后台各记各账、同一信号可被两边重复演进）
+	keys := rail.ProcessedSignalKeys()
+	var newSignals []*signal.EvolutionSignal
+	for _, sig := range detected {
+		fp := signal.MakeSignalFingerprint(sig)
+		if !keys[fp] {
+			keys[fp] = true
+			newSignals = append(newSignals, sig)
+		}
+	}
+
+	// 4) 归属过滤：只统计 skill_name == 目标 skill 的信号（对齐 Python L3843）
+	var attributed []*signal.EvolutionSignal
+	for _, sig := range newSignals {
+		if sig.SkillName != nil && *sig.SkillName == skillName {
+			attributed = append(attributed, sig)
+		}
+	}
+
+	// 5) 无归属信号且无 user_query → 提示后结束（对齐 Python L3846-3850）
+	if len(attributed) == 0 && userIntent == "" {
+		return map[string]any{
+			"output":      "当前对话未发现明确的演进信号（无工具执行失败、无用户纠正）。\n",
+			"result_type": "answer",
+		}, nil
+	}
+
+	// 6) evolution_intent 三级推导（对齐 Python L3852-3863）：
+	//    a. user_query 非空直接用；b. 归属信号摘录；c. 倒序最后一条非空 content
+	evolutionIntent := userIntent
+	if evolutionIntent == "" {
+		for _, sig := range attributed {
+			if sig.Excerpt != "" {
+				evolutionIntent = sig.Excerpt
+				break
+			}
+		}
+	}
+	if evolutionIntent == "" {
+		for i := len(parsedMessages) - 1; i >= 0; i-- {
+			if content, ok := parsedMessages[i]["content"].(string); ok && content != "" {
+				evolutionIntent = content
+				break
+			}
+		}
+	}
+
+	// 7) 发起演进请求（对齐 Python L3865-3876）
+	evolveResult, err := rail.RequestUserEvolution(ctx, skillName, evolutionIntent, false)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("skill", skillName).
+			Msg("handleEvolveCommand: evolve generate failed")
+		return map[string]any{
+			"output":      fmt.Sprintf("演进经验生成失败：%s", err),
+			"result_type": "error",
+		}, nil
+	}
+
+	// 8) 无变更 → 提示（对齐 Python L3878-3882: has_changes 为假）
+	if len(evolveResult.Records) == 0 && evolveResult.ApprovalEvent == nil {
+		return map[string]any{
+			"output":      "当前对话未发现明确的演进信号（无工具执行失败、无用户纠正）。\n",
+			"result_type": "answer",
+		}, nil
+	}
+
+	// 9) 审批事件校验（对齐 Python L3884-3906: _parse_stream_chunk + ask_user_question 校验）
+	//    复用 S-21 为 team 路径打通的展平链：OutputSchema → chunkToMap 展平 →
+	//    utilsParseStreamChunk 二次展平 → 顶层 event_type/request_id/questions
+	approvalChunk := approvalChunkFromEvent(teamHelperEventAsMap(evolveResult.ApprovalEvent))
+	if approvalChunk == nil {
+		if len(evolveResult.Records) == 0 {
+			return map[string]any{
+				"output":      "当前对话未发现明确的演进信号（无工具执行失败、无用户纠正）。\n",
+				"result_type": "answer",
+			}, nil
+		}
+		return map[string]any{
+			"output": fmt.Sprintf(
+				"已为 Skill '%s' 生成 %d 条演进经验，但审批事件为空或格式无效。",
+				skillName, len(evolveResult.Records),
+			),
+			"result_type": "error",
+		}, nil
+	}
+
+	// 10) 成功：从 questions 构建摘要文案（对齐 Python L3908-3920）
+	//    兼容 []any（JSON 往返后）与 []map[string]any（原生 BuildSkillApprovalEvent）双形状
+	questions := teamHelperQuestionsItems(approvalChunk["questions"])
+	summaries := make([]string, 0, len(questions))
+	for i, q := range questions {
+		qm, _ := q.(map[string]any)
+		text, _ := qm["question"].(string)
+		if len(text) > 200 {
+			text = text[:200]
+		}
+		summaries = append(summaries, fmt.Sprintf("  %d. %s", i+1, text))
+	}
+
 	return map[string]any{
-		"status":        "ok",
-		"skill_name":    result.SkillName,
-		"auto_approved": result.AutoApproved,
+		"output": fmt.Sprintf(
+			"已为 Skill '%s' 生成 %d 条演进经验，请审批：\n%s",
+			skillName, len(questions), strings.Join(summaries, "\n"),
+		),
+		"result_type":     "answer",
+		"approval_chunks": []map[string]any{approvalChunk},
+		"request_id":      ptrToStr(evolveResult.RequestID),
+		"skill_name":      evolveResult.SkillName,
 	}, nil
 }
 
-// handleEvolveListCommand 处理 /evolve_list 命令。
-// ✅ 已回填（对齐 Python: _handle_evolve_list_command()）
+// collectMessagesForEvolve 收集当前会话的缓存消息用于演进信号检测。
+// 对齐 Python: _collect_messages_for_evolve(session_id) (L4003-4019)
 //
-// 列出所有技能及其演进经验摘要
-func (d *DeepAdapter) handleEvolveListCommand(ctx context.Context, sessionID string) (map[string]any, error) {
+// 从 ReActAgent 的 ContextEngine 取 default_context 会话上下文，
+// 读取消息（含历史）并归一化为 map 列表（含 tool_calls）。
+// 任一环节缺失（实例/agent/context）或读取失败均返回 nil（Python 同样降级为空列表）。
+func (d *DeepAdapter) collectMessagesForEvolve(sessionID string) []map[string]any {
+	if d.instance == nil {
+		return nil
+	}
+	reactAgent := d.instance.ReactAgent()
+	if reactAgent == nil {
+		return nil
+	}
+	contextEngine := reactAgent.ContextEngine()
+	if contextEngine == nil {
+		return nil
+	}
+	// Go 创建侧 context ID 为 "default_context"（react_helpers.go initContext），
+	// 非 Python 默认值 "default_context_id"——跟随 Go 创建侧
+	mc := contextEngine.GetContext("default_context", sessionID)
+	if mc == nil {
+		return nil
+	}
+	// size=0 不限制 + with_history=true，对齐 Python context.get_messages() 默认参数
+	rawMessages, err := mc.GetMessages(0, true)
+	if err != nil {
+		logger.Debug(logComponent).Err(err).Str("session_id", sessionID).
+			Msg("collectMessagesForEvolve failed")
+		return nil
+	}
+	return signal.ParseMessages(rawMessages)
+}
+
+// handleEvolveListCommand 处理 /evolve_list 命令。
+// 对齐 Python: _handle_evolve_list_command() (L4021-4080)
+//
+// 格式：/evolve_list <skill_name> [--sort score]
+// 展示指定 Skill 的经验库分数表格（与 team 版 HandleTeamEvolveListCommand 共用
+// buildEvolveListSummary——M-10 链 B：原先返回 {"action": "evolve_list", "skills": [...]}
+// 结构化 map，与 Python 的文本表格格式完全不同）。
+func (d *DeepAdapter) handleEvolveListCommand(ctx context.Context, query string, sessionID string) (map[string]any, error) {
 	if d.skillEvolutionRail == nil {
 		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveListCommand: SkillEvolutionRail not initialized")
 		return nil, nil
 	}
-
 	store := d.skillEvolutionRail.EvolutionStore()
-	skillNames := store.ListSkillNames(ctx)
 
-	skills := make([]map[string]any, 0, len(skillNames))
-	for _, name := range skillNames {
-		skill := map[string]any{
-			"name":          name,
-			"has_evolution": store.SkillExists(ctx, name),
-			"hint_simplify": d.skillEvolutionRail.ShouldHintSimplifyOrRebuild(name),
+	// Python: parts = query.split(); skill_name = parts[1] if len(parts) > 1 else ""
+	parts := strings.Fields(query)
+	skillName := ""
+	if len(parts) > 1 {
+		skillName = parts[1]
+	}
+	// Python: if not skill_name or skill_name.startswith("--")
+	if skillName == "" || strings.HasPrefix(skillName, "--") {
+		return map[string]any{
+			"output":      "请指定 Skill 名称：`/evolve_list <skill_name>`",
+			"result_type": "error",
+		}, nil
+	}
+
+	if !store.SkillExists(ctx, skillName) {
+		available := strings.Join(skillruntime.FilterVisibleSkillNames(store.ListSkillNames(ctx)), "、")
+		if available == "" {
+			available = "（无可用 Skill）"
 		}
-		skills = append(skills, skill)
+		return map[string]any{
+			"output":      fmt.Sprintf("未找到 Skill '%s'。当前可用：%s", skillName, available),
+			"result_type": "error",
+		}, nil
+	}
+
+	records := store.GetRecordsByScore(ctx, skillName, nil)
+	if len(records) == 0 {
+		return map[string]any{
+			"output":      fmt.Sprintf("Skill '%s' 暂无演进经验。", skillName),
+			"result_type": "answer",
+		}, nil
 	}
 
 	return map[string]any{
-		"action": "evolve_list",
-		"skills": skills,
+		"output":      buildEvolveListSummary(skillName, records),
+		"result_type": "answer",
 	}, nil
 }
 
