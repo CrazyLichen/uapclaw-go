@@ -3,6 +3,7 @@
 package adapter_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,9 +13,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -67,6 +71,11 @@ func (s *CodeAdapterCodingMemorySuite) SetupTest() {
 	s.dataDir = s.T().TempDir()
 	s.saveAndSetenv("UAPCLAW_DATA_DIR", s.dataDir)
 	pathutil.ResetCache()
+	// 持久化检查点器单例重置：本测试进程内连续 CreateInstance 且各用
+	// TempDir 隔离，首次绑定的 SQLite 路径随目录清理失效（PreRun 前置读写
+	// kv_store 报 disk I/O error）。重置后本测试的 set_checkpoint 按新
+	// dataDir 重建（对齐 pathutil.ResetCache 的同类测试基础设施语义）
+	adapter.ResetPersistentCheckpointer()
 
 	configDir := filepath.Join(s.dataDir, "config")
 	s.Require().NoError(os.MkdirAll(configDir, 0o755))
@@ -223,4 +232,60 @@ func (s *CodeAdapterCodingMemorySuite) TestCreateInstance_目录按项目名() {
 	info, err := os.Stat(want)
 	s.Require().NoError(err, "目录应创建: %s", want)
 	s.True(info.IsDir())
+}
+
+// TestCreateInstance_工具注册 验证 3 个 coding_memory 工具注册到 AbilityManager。
+// 对齐 Python: CodingMemoryRail.init() → _register_coding_memory_tools
+// （coding_memory_read/write/edit 三工具挂 agent.ability_manager）
+func (s *CodeAdapterCodingMemorySuite) TestCreateInstance_工具注册() {
+	s.writeConfigYaml(false)
+
+	c := s.newCodeAdapter()
+
+	am := c.Instance().AbilityManager()
+	s.Require().NotNil(am)
+	s.NotNil(am.Get("coding_memory_read"), "应注册 coding_memory_read")
+	s.NotNil(am.Get("coding_memory_write"), "应注册 coding_memory_write")
+	s.NotNil(am.Get("coding_memory_edit"), "应注册 coding_memory_edit")
+}
+
+// TestProcessMessage_记忆Section注入 验证 ProcessMessageImpl 触发 BeforeModelCall 注入 memory section。
+// 对齐 Python: CodingMemoryRail.before_model_call() → system_prompt_builder.add_section
+// （先 RemoveSection 再 AddSection，含行为指令 + 索引/召回内容）。
+// 入口先例：real_llm/system_prompt_capture_test.go:372-391（NewAgentRequest +
+// ProcessMessageImpl 完整链路，无需 runner.Start）。
+func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_记忆Section注入() {
+	s.writeConfigYaml(false)
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("section 注入验证"))
+
+	c := s.newCodeAdapter()
+
+	// ProcessMessageImpl 完整装配链入口（先例 real_llm/system_prompt_capture_test.go）
+	params, _ := json.Marshal(map[string]any{
+		"query": "查询记忆",
+		"mode":  "agent.plan",
+		"files": map[string]any{},
+	})
+	req := swarmschema.NewAgentRequest(
+		"itest-req-1", "itest-channel", swarmschema.ReqMethodChatSend, params,
+		swarmschema.WithAgentSessionID("itest-session-cm"),
+	)
+	inputs := map[string]any{
+		"conversation_id": "itest-session-cm",
+		"query":           "查询记忆",
+		"channel":         "itest-channel",
+		"language":        "zh",
+	}
+	resp, err := c.ProcessMessageImpl(s.Ctx, req, inputs)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.True(resp.OK, "响应应成功: %+v", resp)
+
+	spb := c.Instance().SystemPromptBuilder()
+	s.Require().NotNil(spb)
+	s.True(spb.HasSection(hsections.SectionMemory), "应注入 SectionMemory")
+
+	section := spb.GetSection(hsections.SectionMemory)
+	s.Require().NotNil(section)
+	s.NotEmpty(section.Content, "SectionMemory 内容不应为空")
 }

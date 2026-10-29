@@ -291,6 +291,21 @@ func SetDefaultSendPushFunc(fn func(ctx context.Context, msg map[string]any) err
 	defaultSendPushFunc = fn
 }
 
+// ResetPersistentCheckpointer 重置持久化检查点器就绪标记（仅测试用）。
+//
+// Python 侧 _PERSISTENT_CHECKPOINTER_READY 是进程级标记，但 pytest 每个测试
+// 重新 setup 临时目录时同样面临单例指向旧目录的问题（Python 测试通过
+// subprocess/fixture 隔离规避）。Go 测试进程内多个测试连续 CreateInstance
+// 且各自重定向 UAPCLAW_DATA_DIR 时，首次绑定的 SQLite 路径随 TempDir 清理
+// 而失效，后续 PreRun→PreAgentExecute 报 disk I/O error。
+// 测试在重定向 UAPCLAW_DATA_DIR 后调用本函数，使下次 CreateInstance 的
+// set_checkpoint 重新按新目录创建检查点器。
+func ResetPersistentCheckpointer() {
+	persistentCheckpointerLock.Lock()
+	defer persistentCheckpointerLock.Unlock()
+	persistentCheckpointerReady = false
+}
+
 // SetSkillManager 设置技能管理器。
 // Python: def set_skill_manager(self, skill_manager: SkillManager) -> None: self._skill_manager = skill_manager
 func (d *DeepAdapter) SetSkillManager(skillMgr *skill.SkillManager) {
