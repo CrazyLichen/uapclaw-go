@@ -19,7 +19,9 @@ func newAcpTestManager() *AcpOutputManager {
 
 // TestGetAcpOutputManager_单例 验证单例语义。
 func TestGetAcpOutputManager_单例(t *testing.T) {
-	if GetAcpOutputManager() != GetAcpOutputManager() {
+	first := GetAcpOutputManager()
+	second := GetAcpOutputManager()
+	if first != second {
 		t.Error("GetAcpOutputManager 应返回同一实例")
 	}
 }
@@ -553,6 +555,9 @@ func TestWriteTextFile等其余四工具(t *testing.T) {
 	res, err = releaseTerminal(context.Background(), m, "t1", "s")
 	if err != nil {
 		t.Fatalf("releaseTerminal: %v", err)
+	}
+	if len(res) != 0 {
+		t.Errorf("释放终端空 result 应为空 map: %v", res)
 	}
 }
 

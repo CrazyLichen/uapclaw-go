@@ -97,9 +97,9 @@ type AcpOutputTimeoutError struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// acpRequestTimeoutSeconds 默认输出请求超时。
+	// acpRequestTimeout 默认输出请求超时。
 	// Python: _ACP_REQUEST_TIMEOUT_SECONDS (L36)
-	acpRequestTimeoutSeconds = 30 * time.Second
+	acpRequestTimeout = 30 * time.Second
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -211,7 +211,7 @@ func (m *AcpOutputManager) SendJsonrpcRequest(ctx context.Context, method string
 	params map[string]any, opts ...AcpRequestOption) (map[string]any, error) {
 	cfg := acpRequestConfig{
 		ChannelID: "acp",
-		Timeout:   acpRequestTimeoutSeconds,
+		Timeout:   acpRequestTimeout,
 	}
 	for _, o := range opts {
 		o(&cfg)
@@ -568,14 +568,14 @@ func releaseTerminal(ctx context.Context, mgr *AcpOutputManager,
 }
 
 // sendAcpToolRequest 统一发送 + error 检查（六工具共用尾部逻辑）。
-// timeout=0 表示默认（acpRequestTimeoutSeconds）。
+// timeout=0 表示默认（acpRequestTimeout）。
 func sendAcpToolRequest(ctx context.Context, mgr *AcpOutputManager,
 	method string, params map[string]any, sessionID string, timeout time.Duration) (map[string]any, error) {
 	opts := []AcpRequestOption{}
 	if sessionID != "" {
 		opts = append(opts, WithAcpSessionID(sessionID))
 	}
-	if timeout > 0 && timeout != acpRequestTimeoutSeconds {
+	if timeout > 0 && timeout != acpRequestTimeout {
 		opts = append(opts, WithAcpTimeout(timeout))
 	}
 	response, err := mgr.SendJsonrpcRequest(ctx, method, params, opts...)
