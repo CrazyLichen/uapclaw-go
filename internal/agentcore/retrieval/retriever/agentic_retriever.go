@@ -359,10 +359,7 @@ func (a *AgenticRetriever) retrieveWithGraph(ctx context.Context, query string, 
 	}
 	fusionInput := append(ret, historyResults...)
 	fused := utils.RRFFusion(fusionInput, 60)
-	if len(fused) > topK {
-		fused = fused[:topK]
-	}
-	return fused, nil
+	return truncateResults(fused, &topK), nil
 }
 
 // assertGraphRetriever 防御断言。
@@ -555,10 +552,7 @@ func (a *AgenticRetriever) retrieveGeneric(ctx context.Context, query string, to
 	}
 
 	fused := utils.RRFFusion(historyResults, 60)
-	if len(fused) > topK {
-		fused = fused[:topK]
-	}
-	return fused, nil
+	return truncateResults(fused, &topK), nil
 }
 
 // llmCall 单次 LLM 调用（软失败）。
