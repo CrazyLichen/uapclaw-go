@@ -587,9 +587,209 @@ func TestE2AResponseToACPJsonrpcResponse_未知kind(t *testing.T) {
 	}
 }
 
-// 暂留 import 引用（Task 5 消费；Go 未使用 import 编译报错，先以 var _ 锚定）
-var (
-	_ = strings.TrimSpace
-	_ = json.Marshal
-	_ = schema.MessageTypeReq
-)
+// ──────────────────────────── E2AResponseToA2AStreamPayload ────────────────────────────
+
+// TestE2AResponseToA2AStreamPayload_非streamEvent返回nil。
+func TestE2AResponseToA2AStreamPayload_非streamEvent(t *testing.T) {
+	resp := &E2AResponse{ResponseKind: E2AResponseKindACPPromptResult}
+	if out := E2AResponseToA2AStreamPayload(resp); out != nil {
+		t.Errorf("非 stream_event 应 nil, 实际 %v", out)
+	}
+}
+
+// TestE2AResponseToA2AStreamPayload_projections单键快路径。
+func TestE2AResponseToA2AStreamPayload_projections单键快路径(t *testing.T) {
+	resp := &E2AResponse{
+		ResponseKind: E2AResponseKindA2AStreamEvent,
+		Projections: map[string]any{
+			"a2a": map[string]any{"statusUpdate": map[string]any{"state": "working"}},
+		},
+	}
+	out := E2AResponseToA2AStreamPayload(resp)
+	su, _ := out["statusUpdate"].(map[string]any)
+	if su == nil || su["state"] != "working" {
+		t.Errorf("statusUpdate = %v, want state=working", out)
+	}
+	// 副本语义
+	out["statusUpdate"] = "mutated"
+	if resp.Projections["a2a"].(map[string]any)["statusUpdate"] == "mutated" {
+		t.Error("应返回副本")
+	}
+}
+
+// TestE2AResponseToA2AStreamPayload_projections多键走body。
+func TestE2AResponseToA2AStreamPayload_projections多键走body(t *testing.T) {
+	resp := &E2AResponse{
+		ResponseKind: E2AResponseKindA2AStreamEvent,
+		Projections: map[string]any{
+			"a2a": map[string]any{"task": map[string]any{"a": 1}, "message": map[string]any{"b": 2}},
+		},
+		Body: map[string]any{"branch": "status_update", "payload": map[string]any{"state": "working"}},
+	}
+	out := E2AResponseToA2AStreamPayload(resp)
+	su, _ := out["statusUpdate"].(map[string]any)
+	if su == nil || su["state"] != "working" {
+		t.Errorf("多键 projections 走 body, statusUpdate = %v", out)
+	}
+}
+
+// TestE2AResponseToA2AStreamPayload_四分支映射。
+func TestE2AResponseToA2AStreamPayload_四分支映射(t *testing.T) {
+	cases := []struct {
+		branch string
+		outer  string
+	}{
+		{"task", "task"},
+		{"message", "message"},
+		{"status_update", "statusUpdate"},
+		{"artifact_update", "artifactUpdate"},
+	}
+	for _, tc := range cases {
+		resp := &E2AResponse{
+			ResponseKind: E2AResponseKindA2AStreamEvent,
+			Body:         map[string]any{"branch": tc.branch, "payload": map[string]any{"k": "v"}},
+		}
+		out := E2AResponseToA2AStreamPayload(resp)
+		if out == nil || out[tc.outer] == nil {
+			t.Errorf("branch=%s → 外键 %s 缺失: %v", tc.branch, tc.outer, out)
+		}
+	}
+}
+
+// TestE2AResponseToA2AStreamPayload_branch非法或payload非map返回nil。
+func TestE2AResponseToA2AStreamPayload_branch非法或payload非map(t *testing.T) {
+	resp1 := &E2AResponse{
+		ResponseKind: E2AResponseKindA2AStreamEvent,
+		Body:         map[string]any{"branch": "bogus", "payload": map[string]any{}},
+	}
+	if out := E2AResponseToA2AStreamPayload(resp1); out != nil {
+		t.Errorf("非法 branch 应 nil, 实际 %v", out)
+	}
+	resp2 := &E2AResponse{
+		ResponseKind: E2AResponseKindA2AStreamEvent,
+		Body:         map[string]any{"branch": "task", "payload": "not-a-map"},
+	}
+	if out := E2AResponseToA2AStreamPayload(resp2); out != nil {
+		t.Errorf("payload 非 map 应 nil, 实际 %v", out)
+	}
+	resp3 := &E2AResponse{
+		ResponseKind: E2AResponseKindA2AStreamEvent,
+		Body:         map[string]any{"payload": map[string]any{}},
+	}
+	if out := E2AResponseToA2AStreamPayload(resp3); out != nil {
+		t.Errorf("branch 缺失应 nil, 实际 %v", out)
+	}
+}
+
+// TestE2AResponseToA2AStreamPayload_projections单键白名单外走body。
+func TestE2AResponseToA2AStreamPayload_projections白名单外(t *testing.T) {
+	resp := &E2AResponse{
+		ResponseKind: E2AResponseKindA2AStreamEvent,
+		Projections: map[string]any{
+			"a2a": map[string]any{"bogus": map[string]any{"x": 1}},
+		},
+		Body: map[string]any{"branch": "task", "payload": map[string]any{"y": 2}},
+	}
+	out := E2AResponseToA2AStreamPayload(resp)
+	if out == nil || out["task"] == nil {
+		t.Errorf("白名单外单键走 body, out = %v", out)
+	}
+}
+
+// TestE2AResponseToA2AStreamPayload_projections非dict走body。
+func TestE2AResponseToA2AStreamPayload_projections非dict(t *testing.T) {
+	resp := &E2AResponse{
+		ResponseKind: E2AResponseKindA2AStreamEvent,
+		Projections:  map[string]any{"a2a": "not-a-dict"},
+		Body:         map[string]any{"branch": "task", "payload": map[string]any{"z": 3}},
+	}
+	out := E2AResponseToA2AStreamPayload(resp)
+	if out == nil || out["task"] == nil {
+		t.Errorf("projections 非 dict 走 body, out = %v", out)
+	}
+}
+
+// TestE2AResponseToA2AStreamPayload_body缺失走projections body 无 branch 时 projections 单键生效。
+func TestE2AResponseToA2AStreamPayload_body缺失(t *testing.T) {
+	resp := &E2AResponse{
+		ResponseKind: E2AResponseKindA2AStreamEvent,
+		Projections: map[string]any{
+			"a2a": map[string]any{"task": map[string]any{"id": "t1"}},
+		},
+	}
+	out := E2AResponseToA2AStreamPayload(resp)
+	task, _ := out["task"].(map[string]any)
+	if task == nil || task["id"] != "t1" {
+		t.Errorf("body 缺失时 projections 快路径, out = %v", out)
+	}
+}
+
+// ──────────────────────────── BuildACPToolResponseMessage ────────────────────────────
+
+// TestBuildACPToolResponseMessage_全字段。
+func TestBuildACPToolResponseMessage_全字段(t *testing.T) {
+	msg := BuildACPToolResponseMessage("rpc-9", map[string]any{"result": "ok"}, "s1", "acp")
+	if !strings.HasPrefix(msg.ID, "acp_tool_resp_") || len(msg.ID) != len("acp_tool_resp_")+12 {
+		t.Errorf("ID = %q, want 前缀+12hex", msg.ID)
+	}
+	if msg.Type != schema.MessageTypeReq {
+		t.Errorf("Type = %v, want req", msg.Type)
+	}
+	if msg.ChannelID != "acp" || msg.SessionID != "s1" {
+		t.Errorf("ChannelID/SessionID = %q/%q", msg.ChannelID, msg.SessionID)
+	}
+	if !msg.OK {
+		t.Error("OK 应为 true")
+	}
+	if msg.IsStream {
+		t.Error("IsStream 应为 false")
+	}
+	if !msg.EnableStreaming {
+		t.Error("EnableStreaming 应为 true（Python dataclass 默认 True）")
+	}
+	if msg.ReqMethod != schema.ReqMethodACPToolResponse {
+		t.Errorf("ReqMethod = %v, want acp.tool_response", msg.ReqMethod)
+	}
+	var params map[string]any
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		t.Fatalf("Params 非法 JSON: %v", err)
+	}
+	if params["jsonrpc_id"] != "rpc-9" {
+		t.Errorf("params[jsonrpc_id] = %v, want rpc-9", params["jsonrpc_id"])
+	}
+	resp, _ := params["response"].(map[string]any)
+	if resp == nil || resp["result"] != "ok" {
+		t.Errorf("params[response] = %v, want result=ok", params["response"])
+	}
+	if params["session_id"] != "s1" {
+		t.Errorf("params[session_id] = %v, want s1", params["session_id"])
+	}
+	if msg.Timestamp <= 0 {
+		t.Error("Timestamp 应为正")
+	}
+	meta, _ := msg.Metadata["acp"].(map[string]any)
+	if meta == nil || meta["jsonrpc_id"] != "rpc-9" || meta["kind"] != "tool_response" {
+		t.Errorf("Metadata[acp] = %v, want jsonrpc_id+kind=tool_response", msg.Metadata["acp"])
+	}
+}
+
+// TestBuildACPToolResponseMessage_会话空串 sessionID 为空串时照常构造。
+func TestBuildACPToolResponseMessage_会话空串(t *testing.T) {
+	msg := BuildACPToolResponseMessage("rpc-1", map[string]any{}, "", "acp")
+	if msg.SessionID != "" {
+		t.Errorf("SessionID = %q, want 空串", msg.SessionID)
+	}
+	var params map[string]any
+	_ = json.Unmarshal(msg.Params, &params)
+	if params["session_id"] != "" {
+		t.Errorf("params[session_id] = %v, want 空串", params["session_id"])
+	}
+}
+
+// TestBuildACPToolResponseMessage_channel透传。
+func TestBuildACPToolResponseMessage_channel透传(t *testing.T) {
+	msg := BuildACPToolResponseMessage("r", map[string]any{}, "s", "web")
+	if msg.ChannelID != "web" {
+		t.Errorf("ChannelID = %q, want web", msg.ChannelID)
+	}
+}

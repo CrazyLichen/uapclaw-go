@@ -9,7 +9,10 @@ package e2a
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -58,6 +61,22 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// a2aStreamOuterKeys A2A 流外层键白名单（projections 快路径判定用）。
+var a2aStreamOuterKeys = map[string]struct{}{
+	"task":           {},
+	"message":        {},
+	"statusUpdate":   {},
+	"artifactUpdate": {},
+}
+
+// a2aStreamBranchKeyMap branch → A2A 外层键映射。
+var a2aStreamBranchKeyMap = map[string]string{
+	"task":            "task",
+	"message":         "message",
+	"status_update":   "statusUpdate",
+	"artifact_update": "artifactUpdate",
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -250,6 +269,69 @@ func E2AResponseToACPJsonrpcResponse(resp *E2AResponse) map[string]any {
 	return nil
 }
 
+// E2AResponseToA2AStreamPayload 将 response_kind == "a2a.stream_event" 的 E2AResponse 转为
+// A2A StreamResponse 形 JSON：外层键为 task/message/statusUpdate/artifactUpdate 之一。
+// 若 projections.a2a 已为四选一单键对象，则原样返回副本。
+// body.branch 须为 E2AA2AStreamBranches 之一；body.payload 为对应分支对象。
+// 不适用时返回 nil。
+// Python: adapters.py e2a_response_to_a2a_stream_payload
+func E2AResponseToA2AStreamPayload(resp *E2AResponse) map[string]any {
+	if resp.ResponseKind != E2AResponseKindA2AStreamEvent {
+		return nil
+	}
+	// projections 快路径：单键且键在白名单 → 原样副本
+	if projRaw, ok := resp.Projections["a2a"]; ok {
+		if proj, ok := projRaw.(map[string]any); ok && len(proj) == 1 {
+			for key := range proj {
+				if _, ok := a2aStreamOuterKeys[key]; ok {
+					return map[string]any{key: proj[key]}
+				}
+			}
+		}
+	}
+	// body 路径：branch → 外键映射；payload 须为 map
+	body := resp.Body
+	branch, ok := body["branch"].(string)
+	if !ok || !isA2AStreamBranch(branch) {
+		return nil
+	}
+	payload, ok := body["payload"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return map[string]any{a2aStreamBranchKeyMap[branch]: payload}
+}
+
+// BuildACPToolResponseMessage 为客户端 JSON-RPC 响应（工具执行结果）构建内部 Message。
+// 由 ACP 桥（WebSocket 模式）与 stdio 模式共享，避免重复的 Message 构造逻辑。
+// Python: adapters.py build_acp_tool_response_message
+func BuildACPToolResponseMessage(jsonrpcID string, responseData map[string]any, sessionID, channelID string) *schema.Message {
+	params := map[string]any{
+		"jsonrpc_id": jsonrpcID,
+		"response":   copyMapAny(responseData),
+		"session_id": sessionID,
+	}
+	raw, _ := json.Marshal(params)
+	return &schema.Message{
+		ID:              "acp_tool_resp_" + randomHex12(),
+		Type:            schema.MessageTypeReq,
+		ChannelID:       channelID,
+		SessionID:       sessionID,
+		Params:          raw,
+		Timestamp:       schema.NowTimestamp(),
+		OK:              true,
+		ReqMethod:       schema.ReqMethodACPToolResponse,
+		IsStream:        false,
+		EnableStreaming: true, // Python Message dataclass 默认 enable_streaming=True
+		Metadata: map[string]any{
+			"acp": map[string]any{
+				"jsonrpc_id": jsonrpcID,
+				"kind":       "tool_response",
+			},
+		},
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // orDefaultString 空串回退默认值（Python `converter or _CONVERTER_ACP` 的 or 语义）。
@@ -313,4 +395,23 @@ func resolveJsonrpcErrorCode(codeRaw any) (code int, isInt bool) {
 	default:
 		return -32603, false
 	}
+}
+
+// isA2AStreamBranch 判定 branch 是否为合法 A2A 流分支（E2AA2AStreamBranches 查找）。
+func isA2AStreamBranch(branch string) bool {
+	for _, b := range E2AA2AStreamBranches {
+		if b == branch {
+			return true
+		}
+	}
+	return false
+}
+
+// copyMapAny 浅拷贝 map（Python dict(...) 语义）。
+func copyMapAny(src map[string]any) map[string]any {
+	out := make(map[string]any, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
 }
