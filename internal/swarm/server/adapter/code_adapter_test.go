@@ -356,3 +356,48 @@ func TestCodeAdapter_CreateInstance_configBase已缓存(t *testing.T) {
 		t.Error("configBase 应包含顶层 models 段")
 	}
 }
+
+// TestCodeAdapter_ResolveEmbeddingConfig_顶层embed段 测试 embedding 配置从顶层 embed 段读取。
+// Python: create_coding_memory_rail(config=get_config()) → config.get("embed")
+// （interface_code.py:121，默认 config.yaml 顶层 L350 即有 embed 段）。
+// 回归背景：曾误读 configCache（react 段），导致顶层 embed 配置永远读不到、静默降级。
+func TestCodeAdapter_ResolveEmbeddingConfig_顶层embed段(t *testing.T) {
+	c := NewCodeAdapter()
+	// 模拟 CreateInstance 后的 configBase（顶层 embed 段，非 react.embed）
+	c.deep.configBase = map[string]any{
+		"embed": map[string]any{
+			"embed_api_key":  "test-key",
+			"embed_base_url": "http://127.0.0.1:1",
+			"embed_model":    "text-embedding-test",
+		},
+	}
+	// configCache 只有 react 段内容（不含 embed）——修复后不应从这里读
+	c.deep.configCache = map[string]any{
+		"agent_name": "main_agent",
+	}
+
+	emb := c.resolveEmbeddingConfig()
+	if emb == nil {
+		t.Fatal("顶层 embed 段存在时应返回 EmbeddingConfig")
+	}
+	if emb.APIKey != "test-key" {
+		t.Errorf("APIKey = %q, want %q", emb.APIKey, "test-key")
+	}
+	if emb.BaseURL != "http://127.0.0.1:1" {
+		t.Errorf("BaseURL = %q, want %q", emb.BaseURL, "http://127.0.0.1:1")
+	}
+	if emb.ModelName != "text-embedding-test" {
+		t.Errorf("ModelName = %q, want %q", emb.ModelName, "text-embedding-test")
+	}
+}
+
+// TestCodeAdapter_ResolveEmbeddingConfig_无embed段降级 测试无 embed 段时返回 nil（buildCodingMemoryRail 降级空配置）。
+func TestCodeAdapter_ResolveEmbeddingConfig_无embed段降级(t *testing.T) {
+	c := NewCodeAdapter()
+	c.deep.configBase = map[string]any{"models": map[string]any{}}
+	c.deep.configCache = map[string]any{}
+
+	if emb := c.resolveEmbeddingConfig(); emb != nil {
+		t.Errorf("无 embed 段时应返回 nil, got %+v", emb)
+	}
+}

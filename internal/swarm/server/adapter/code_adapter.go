@@ -926,13 +926,15 @@ func (c *CodeAdapter) getCodeModeTools() []string {
 	return tools
 }
 
-// resolveEmbeddingConfig 从 configCache["embed"] 解析嵌入配置。
-// Python: create_coding_memory_rail() (interface_code.py)
+// resolveEmbeddingConfig 从 configBase 顶层 embed 段解析嵌入配置。
+// Python: create_coding_memory_rail() (interface_code.py:114-134)
 //
-// 从 config 解析 embed_api_key/embed_base_url/embed_model，
+// 从 config 顶层 embed 段解析 embed_api_key/embed_base_url/embed_model，
 // 配置不完整时返回 EmbeddingConfig（api_key 为空），让 Rail 降级到 fallback provider。
+// 注意：读 configBase 顶层（对齐 Python config.get("embed")），不是 react 段的 configCache
+// ——默认 config.yaml 顶层即有 embed 段（resources/config.yaml L350）。
 func (c *CodeAdapter) resolveEmbeddingConfig() *embedding.EmbeddingConfig {
-	embedRaw, ok := c.deep.configCache["embed"]
+	embedRaw, ok := c.deep.configBase["embed"]
 	if !ok {
 		return nil
 	}
