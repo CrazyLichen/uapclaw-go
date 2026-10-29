@@ -130,4 +130,24 @@ func (b *BaseKnowledgeBase) VectorStore() vector_store.VectorStore { return b.ve
 // IndexManager 返回写侧组件。
 func (b *BaseKnowledgeBase) IndexManager() indexer.Indexer { return b.indexManager }
 
+// SetVectorStore 构造后替换读侧组件（Python kb.vector_store = vs 显式对应物）。
+//
+// 赋值后双组件非空时触发 postAssignValidation（对齐 Python __setattr__）。
+func (b *BaseKnowledgeBase) SetVectorStore(vs vector_store.VectorStore) error {
+	b.vectorStore = vs
+	if b.vectorStore != nil && b.indexManager != nil {
+		return b.postAssignValidation(context.Background())
+	}
+	return nil
+}
+
+// SetIndexManager 构造后替换写侧组件（Python kb.index_manager = im 显式对应物）。
+func (b *BaseKnowledgeBase) SetIndexManager(im indexer.Indexer) error {
+	b.indexManager = im
+	if b.vectorStore != nil && b.indexManager != nil {
+		return b.postAssignValidation(context.Background())
+	}
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

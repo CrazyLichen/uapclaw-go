@@ -100,3 +100,57 @@ func TestValidateIndex_首个不匹配即停(t *testing.T) {
 	assert.Contains(t, err.Error(), "incompatible database_name configs")
 	assert.NotContains(t, err.Error(), "incompatible distance_metric configs")
 }
+
+// ──────────────────────────── setter 测试 ────────────────────────────
+
+// TestSetVectorStore_后置触发校验 对齐 test_validation_runs_when_setting_vector_store_after_index_manager。
+func TestSetVectorStore_后置触发校验(t *testing.T) {
+	vs, im := makeCompatiblePair()
+	b, err := NewBaseKnowledgeBase(common.KnowledgeBaseConfig{KBID: "test_kb"}, WithIndexManager(im))
+	require.NoError(t, err)
+	assert.NoError(t, b.SetVectorStore(vs))
+	assert.Equal(t, vs, b.vectorStore)
+}
+
+// TestSetIndexManager_后置触发校验 对齐 test_validation_runs_when_setting_index_manager_after_vector_store。
+func TestSetIndexManager_后置触发校验(t *testing.T) {
+	vs, im := makeCompatiblePair()
+	b, err := NewBaseKnowledgeBase(common.KnowledgeBaseConfig{KBID: "test_kb"}, WithVectorStore(vs))
+	require.NoError(t, err)
+	assert.NoError(t, b.SetIndexManager(im))
+	assert.Equal(t, im, b.indexManager)
+}
+
+// TestSetVectorStore_不匹配拒绝 setter 后配置漂移场景（Go 增强）。
+func TestSetVectorStore_不匹配拒绝(t *testing.T) {
+	vs, im := makeCompatiblePair()
+	im.databaseName = "db2"
+	b, err := NewBaseKnowledgeBase(common.KnowledgeBaseConfig{KBID: "test_kb"}, WithIndexManager(im))
+	require.NoError(t, err)
+	err = b.SetVectorStore(vs)
+	require.Error(t, err)
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155508, be.Code())
+}
+
+// TestSetVectorStore_nil无校验 SetVectorStore(nil) 不触发校验不 panic（Go 增强）。
+func TestSetVectorStore_nil无校验(t *testing.T) {
+	vs, im := makeCompatiblePair()
+	b, err := NewBaseKnowledgeBase(common.KnowledgeBaseConfig{KBID: "test_kb"},
+		WithVectorStore(vs), WithIndexManager(im))
+	require.NoError(t, err)
+	assert.NoError(t, b.SetVectorStore(nil))
+	assert.Nil(t, b.vectorStore)
+}
+
+// TestSetIndexManager_卸载后再配齐重新校验（Go 增强：二次变更语义）。
+func TestSetIndexManager_卸载后再配齐重新校验(t *testing.T) {
+	vs, im := makeCompatiblePair()
+	b, err := NewBaseKnowledgeBase(common.KnowledgeBaseConfig{KBID: "test_kb"},
+		WithVectorStore(vs), WithIndexManager(im))
+	require.NoError(t, err)
+	require.NoError(t, b.SetIndexManager(nil)) // 卸载
+	_, im2 := makeCompatiblePair()
+	assert.NoError(t, b.SetIndexManager(im2)) // 重新配齐 → 重新校验（兼容通过）
+}
