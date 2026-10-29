@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/suite"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
@@ -163,4 +166,61 @@ func (s *CodeAdapterCodingMemorySuite) restoreEnv() {
 		}
 	}
 	s.envBackup = nil
+}
+
+// newCodeAdapter 构造 CodeAdapter 并执行 CreateInstance 装配链，
+// 挂 Cleanup 收尾。project_dir 指向 dataDir 下 myproj（目录按项目名用例需真实创建）。
+func (s *CodeAdapterCodingMemorySuite) newCodeAdapter() *adapter.CodeAdapter {
+	c := adapter.NewCodeAdapter()
+	s.Require().NoError(c.CreateInstance(s.Ctx, map[string]any{
+		"project_dir": filepath.Join(s.dataDir, "myproj"),
+	}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = c.Cleanup() })
+	return c
+}
+
+// TestCreateInstance_Rails装配 验证 CreateInstance 把 CodingMemoryRail 装配进 DeepAgent。
+// 对齐 Python: JiuwenClawCodeAdapter._build_agent_rails() 固定 rail 之一
+// （interface_code.py create_coding_memory_rail → rails_list）
+func (s *CodeAdapterCodingMemorySuite) TestCreateInstance_Rails装配() {
+	s.writeConfigYaml(false)
+
+	c := s.newCodeAdapter()
+	inst := c.Instance()
+	s.Require().NotNil(inst)
+
+	rails := inst.FindRailsByType(reflect.TypeOf(&memrail.CodingMemoryRail{}))
+	s.NotEmpty(rails, "CodingMemoryRail 应装配到 rails 列表")
+}
+
+// TestBuildCodingMemoryRail_Embedding降级 验证无 embed 段时 Rail 仍创建（降级空 EmbeddingConfig）。
+// 对齐 Python: test_code_adapter_builds_coding_memory_rail_without_embedding_config
+// （embed 配置不完整 → embed_api_key 置空 → fallback provider，Rail 仍创建）
+func (s *CodeAdapterCodingMemorySuite) TestBuildCodingMemoryRail_Embedding降级() {
+	s.writeConfigYamlNoEmbed()
+
+	c := s.newCodeAdapter()
+	inst := c.Instance()
+	s.Require().NotNil(inst)
+
+	// buildCodingMemoryRail 永远返回非 nil（构造器无条件返回，降级到 fallback provider）
+	rails := inst.FindRailsByType(reflect.TypeOf(&memrail.CodingMemoryRail{}))
+	s.NotEmpty(rails, "无 embed 段时 CodingMemoryRail 仍应创建（降级）")
+}
+
+// TestCreateInstance_目录按项目名 验证 coding_memory 目录按 project_name 创建。
+// Python: coding_memory_dir = agent_workspace_dir/coding_memory/{project_basename}
+// （interface_code.py:139-141），agent_workspace_dir = {DATA_DIR}/agent/workspace
+func (s *CodeAdapterCodingMemorySuite) TestCreateInstance_目录按项目名() {
+	s.writeConfigYaml(false)
+	s.Require().NoError(os.MkdirAll(filepath.Join(s.dataDir, "myproj"), 0o755))
+
+	// CreateInstance 装配链内部执行 create_coding_memory_rail 的 makedirs
+	_ = s.newCodeAdapter()
+
+	// agentWorkspaceDir 修复后路径：{DATA_DIR}/agent/workspace/coding_memory/{project_name}
+	want := filepath.Join(s.dataDir, "agent", "workspace", "coding_memory", "myproj")
+	info, err := os.Stat(want)
+	s.Require().NoError(err, "目录应创建: %s", want)
+	s.True(info.IsDir())
 }
