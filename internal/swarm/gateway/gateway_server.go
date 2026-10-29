@@ -50,6 +50,8 @@ type GatewayServer struct {
 	requestToClient map[[2]string]*websocket.Conn
 	// sessionToClient 会话路由表：(channel, sessionID) → ws
 	sessionToClient map[[2]string]*websocket.Conn
+	// acpBridge ACP 桥（/acp 路由协议对端，⤴️ 11.25 回填；nil = 未装配）
+	acpBridge *AcpGatewayBridge
 	// wg 连接 handler 生命周期
 	wg sync.WaitGroup
 	// listenErr 启动错误回传 channel
@@ -166,6 +168,40 @@ func (s *GatewayServer) Stop() error {
 // Python: GatewayServer.on_message()（L280-283）。
 func (s *GatewayServer) OnMessage(cb func(ctx context.Context, msg *schema.Message) error) {
 	s.onMessageCb = cb
+}
+
+// SetAcpBridge 注入 ACP 桥（装配分离，偏差 §9-10）。
+// Python: GatewayServer.__init__ 内构造（L256-259）；Go 由 app_gateway 装配时注入。
+func (s *GatewayServer) SetAcpBridge(b *AcpGatewayBridge) {
+	s.clientsMu.Lock()
+	s.acpBridge = b
+	s.clientsMu.Unlock()
+}
+
+// InstallDefaultAcpHooks 把桥拦截器装进全部 acp 路由（对齐 _install_default_route_hooks）。
+// Python: app_gateway.py L296-302——route.inbound_interceptor = route.inbound_interceptor or bridge.inbound_intercept
+// 等三行（已装的不覆盖）。Go 同语义：仅装 nil 槽位。
+// 另含 disconnect/cleanup 装填（Python L682 disconnect_handler）。
+func (s *GatewayServer) InstallDefaultAcpHooks() {
+	s.clientsMu.Lock()
+	defer s.clientsMu.Unlock()
+	if s.acpBridge == nil {
+		return
+	}
+	for _, route := range s.config.Routes {
+		if route.ChannelID != "acp" {
+			continue
+		}
+		if route.InboundInterceptor == nil {
+			route.InboundInterceptor = s.acpBridge.InboundIntercept
+		}
+		if route.OutboundInterceptor == nil {
+			route.OutboundInterceptor = s.acpBridge.OutboundIntercept
+		}
+		if route.CleanupHandler == nil {
+			route.CleanupHandler = s.acpBridge.Cleanup
+		}
+	}
 }
 
 // HandleConnection HTTP 处理入口：路由分流 → 升级 WS → 读循环。
@@ -301,6 +337,16 @@ func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
 			Str("id", msg.ID).
 			Msg("message dropped: routed WebSocket client closed")
 		return nil
+	}
+
+	// acp 分支（对齐 L453-455：channel_id==acp 时经桥转换；未处理交回通用出站）
+	s.clientsMu.RLock()
+	bridge := s.acpBridge
+	s.clientsMu.RUnlock()
+	if msg.ChannelID == "acp" && bridge != nil && ws != nil {
+		if bridge.SendMessage(ctx, msg, ws) {
+			return nil
+		}
 	}
 
 	if ws == nil {
@@ -510,6 +556,23 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		}
 	}
 
+	// acp JSON-RPC 分支（对齐 L575-580：route.channel_id==acp 时优先交桥处理请求）
+	if route.ChannelID == "acp" {
+		s.clientsMu.RLock()
+		acpB := s.acpBridge
+		s.clientsMu.RUnlock()
+		if acpB != nil {
+			if acpB.HandleJsonrpcRequest(ctx, ws, data) {
+				return
+			}
+			if IsJsonrpcRequest(data) {
+				// 是 JSON-RPC 请求但桥未处理（理论上不可达——HandleJsonrpcRequest 对
+				// 请求恒返回 true）——防御性 return，避免落入 type=req 的 invalid request
+				return
+			}
+		}
+	}
+
 	if data["type"] != "req" {
 		s.sendInlineError(ws, "", "invalid request")
 		return false
@@ -600,8 +663,11 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 			}
 		}
 
-		// acp early-return ⤵️ 11.25（对齐 L665-668：
-		// ACP route 收到 legacy type=req 帧时转发后直接返回，不落入 unknown method）
+		// acp early-return（对齐 L665-668：ACP route 收到 legacy type=req 帧时
+		// 转发后直接返回，不落入 unknown method / 无本地 ack 路径）
+		if route.ChannelID == "acp" {
+			return
+		}
 
 		// 仅转发集合 → 无本地 ack（对齐 L670-671）
 		if route.ForwardNoLocalHandlerMethods[method] {

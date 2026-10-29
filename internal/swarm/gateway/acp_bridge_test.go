@@ -529,3 +529,106 @@ func TestAcpBridge_IdleFinalizeAfterTimeout(t *testing.T) {
 		t.Fatal("ctx should be cleared by idle finalize timer after timeout")
 	}
 }
+
+// sendAcpJSON 发送 JSON 帧（测试辅助，gateway harness 既有 WriteMessage 模式）。
+func sendAcpJSON(t *testing.T, conn *websocket.Conn, frame map[string]any) {
+	t.Helper()
+	data, err := json.Marshal(frame)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+}
+
+// TestGatewayServerAcp_SetBridgeAndHooks SetAcpBridge + InstallDefaultAcpHooks
+// 把桥拦截器装进 /acp 路由 + JSON-RPC 请求经 acp 分支进入桥。
+func TestGatewayServerAcp_SetBridgeAndHooks(t *testing.T) {
+	route := &RouteConfig{
+		Path: "/acp", ChannelID: "acp",
+		ForwardMethods: map[string]bool{"chat.send": true},
+	}
+	s, httpSrv := newTestGatewayServer(t, route)
+	bridge := NewAcpGatewayBridge(func(ctx context.Context, msg *schema.Message) error { return nil })
+	s.SetAcpBridge(bridge)
+	s.InstallDefaultAcpHooks()
+
+	// 拦截器已装填
+	if route.InboundInterceptor == nil || route.OutboundInterceptor == nil {
+		t.Fatal("InstallDefaultAcpHooks should fill route interceptors")
+	}
+
+	conn := dialWS(t, httpSrv, "/acp")
+	_ = readFrame(t, conn) // connection.ack 首帧
+
+	// JSON-RPC 请求经 handleRawMessage 的 acp 分支进入桥（返回 initialize result）
+	sendAcpJSON(t, conn, map[string]any{
+		"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": map[string]any{},
+	})
+	frame := readFrame(t, conn)
+	if _, hasResult := frame["result"]; !hasResult {
+		t.Fatalf("initialize should return result via acp branch, got %v", frame)
+	}
+}
+
+// TestGatewayServerAcp_SendBranch Send 的 acp 分支调用桥 SendMessage。
+// session/prompt 派生 acp_xxx 请求键并注册桥 ctx；bindSessionClient 把
+// 服务器侧 conn 写入 sessionToClient（对齐 Python _bind_acp_session_client）；
+// ChatDelta 事件经 Send acp 分支转 session/update 通知帧。
+func TestGatewayServerAcp_SendBranch(t *testing.T) {
+	route := &RouteConfig{
+		Path: "/acp", ChannelID: "acp",
+		ForwardMethods: map[string]bool{"chat.send": true},
+	}
+	s, httpSrv := newTestGatewayServer(t, route)
+
+	// dispatch 回调捕获派生请求键（分派在读循环 goroutine 同步执行，
+	// channel 做测试主 goroutine 的同步点）
+	reqIDCh := make(chan string, 1)
+	bridge := NewAcpGatewayBridge(func(ctx context.Context, msg *schema.Message) error {
+		select {
+		case reqIDCh <- msg.ID:
+		default:
+		}
+		return nil
+	},
+		// 注册的是服务器侧 conn（HandleConnection 升级出的连接）——
+		// 直接塞 dialWS 返回的客户端句柄会把出站帧写回服务器，
+		// 触发读循环 invalid request res 帧（gateway_server_test.go 同坑）
+		WithBindSessionClient(func(sessionID string, ws *websocket.Conn) {
+			s.clientsMu.Lock()
+			s.sessionToClient[[2]string{"acp", sessionID}] = ws
+			s.clientsMu.Unlock()
+		}))
+	s.SetAcpBridge(bridge)
+	s.InstallDefaultAcpHooks()
+
+	conn := dialWS(t, httpSrv, "/acp")
+	_ = readFrame(t, conn) // connection.ack 首帧
+
+	// session/prompt：注册桥请求 ctx + 会话路由（无即时响应帧，end_turn 等事件回流）
+	sendAcpJSON(t, conn, map[string]any{
+		"jsonrpc": "2.0", "id": 5, "method": "session/prompt",
+		"params": map[string]any{"sessionId": "s1", "text": "hi"},
+	})
+
+	var requestID string
+	select {
+	case requestID = <-reqIDCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("session/prompt dispatch not invoked")
+	}
+
+	msg := &schema.Message{
+		ID: requestID, Type: schema.MessageTypeEvent, ChannelID: "acp", SessionID: "s1",
+		EventType: schema.EventTypeChatDelta, Payload: map[string]any{"content": "hello"},
+	}
+	if err := s.Send(context.Background(), msg); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	frame := readFrame(t, conn)
+	if frame["method"] != "session/update" {
+		t.Fatalf("acp branch should convert delta to session/update, got %v", frame)
+	}
+}
