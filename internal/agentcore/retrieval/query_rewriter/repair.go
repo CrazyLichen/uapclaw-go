@@ -7,6 +7,7 @@ import (
 
 	jsonrepair "github.com/RealAlexandreAI/json-repair"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -38,10 +39,19 @@ const (
 
 // fillTemplate 只替换模板中显式 {key} 占位符，其他花括号不动
 // （JSON 示例不触发 str.format KeyError，Python _fill_template）。
-func fillTemplate(template string, kv map[string]string) string {
+//
+// T-03：kv 为有序键值对切片（对齐 Python **kwargs 按声明序迭代——
+// history 先替换、query 后替换，后值可包含已被前值引入的 {key} 占位符；
+// map 迭代序随机会 50% 概率破坏该替换顺序语义）。
+type templateKV struct {
+	key   string
+	value string
+}
+
+func fillTemplate(template string, kv ...templateKV) string {
 	out := template
-	for key, value := range kv {
-		out = strings.ReplaceAll(out, "{"+key+"}", value)
+	for _, pair := range kv {
+		out = strings.ReplaceAll(out, "{"+pair.key+"}", pair.value)
 	}
 	return out
 }
@@ -86,12 +96,13 @@ func parseLLMJSON(jsonStr string) (map[string]any, bool) {
 	return nil, false
 }
 
-// forceString 值转字符串：dict 走 JSON 序列化（非 ASCII 不转义），
+// forceString 值转字符串：dict 走 JSON 序列化（非 ASCII 不转义、
+// HTML 字符不转义——T-04 utils.MarshalNoEscape 对齐 ensure_ascii=False），
 // 失败 Debug 日志后回落 fmt.Sprint；其他类型 fmt.Sprint
 // （Python _force_string）。
 func forceString(raw any) string {
 	if m, ok := raw.(map[string]any); ok {
-		data, err := json.Marshal(m)
+		data, err := utils.MarshalNoEscape(m)
 		if err == nil {
 			return string(data)
 		}

@@ -1,7 +1,6 @@
 package sessionops
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	singleagentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -212,20 +212,15 @@ func ForkSession(params ForkSessionParams) (*ForkSessionResult, error) {
 						}
 					}
 					// Python: json.dumps(data, ensure_ascii=False, indent=2)
-					// M-65: Encoder+SetEscapeHTML(false) 对齐 ensure_ascii=False——
-					// MarshalIndent 默认转义 &<>（history 中工具标签如 <bash-stdout>
-					// 会变 \u003c 转义串），与 Python 产物字节级不一致。
-					// 同 gateway/routing/session_map.go save() 先例（含 TrimSpace 去
-					// Encode 尾换行对齐 Python json.dump 无尾换行）。
-					var buf bytes.Buffer
-					enc := json.NewEncoder(&buf)
-					enc.SetEscapeHTML(false)
-					enc.SetIndent("", "  ")
-					if err := enc.Encode(records); err != nil {
+					// M-65: 不转义 &<>——MarshalIndent 默认转义（history 中工具标签
+					// 如 <bash-stdout> 会变 \u003c 转义串），与 Python 产物字节级不一致。
+					// T-04 迁移：utils.MarshalIndentNoEscape 公共助手（尾换行已去）。
+					data, merr := commonutils.MarshalIndentNoEscape(records)
+					if merr != nil {
 						// M-14: 序列化失败静默同上
-						logger.Warn(logComponent).Str("file", targetHistory).Err(err).Msg("fork_session: failed to marshal history records")
+						logger.Warn(logComponent).Str("file", targetHistory).Err(merr).Msg("fork_session: failed to marshal history records")
 					} else {
-						if writeErr := os.WriteFile(targetHistory, bytes.TrimSpace(buf.Bytes()), 0o644); writeErr != nil {
+						if writeErr := os.WriteFile(targetHistory, data, 0o644); writeErr != nil {
 							logger.Warn(logComponent).Str("file", targetHistory).Err(writeErr).Msg("fork_session: failed to write history file")
 						}
 					}

@@ -289,3 +289,117 @@ func TestParseTodosFile_无frontmatter边界(t *testing.T) {
 		t.Errorf("edge parse=%+v", todos)
 	}
 }
+
+// TestParseTodoStatusPriority_M04门卫 M-04：非法值拒绝、合法值直通
+func TestParseTodoStatusPriority_M04门卫(t *testing.T) {
+	for _, s := range []string{"pending", "in_progress", "completed", "cancelled"} {
+		if _, ok := parseTodoStatus(s); !ok {
+			t.Errorf("parseTodoStatus(%q) should be valid", s)
+		}
+	}
+	for _, s := range []string{"", "Pending", "DONE", "done", "in-progress", "unknown"} {
+		if _, ok := parseTodoStatus(s); ok {
+			t.Errorf("parseTodoStatus(%q) should be invalid", s)
+		}
+	}
+	for _, p := range []string{"high", "medium", "low"} {
+		if _, ok := parseTodoPriority(p); !ok {
+			t.Errorf("parseTodoPriority(%q) should be valid", p)
+		}
+	}
+	for _, p := range []string{"", "High", "urgent", "none", "0"} {
+		if _, ok := parseTodoPriority(p); ok {
+			t.Errorf("parseTodoPriority(%q) should be invalid", p)
+		}
+	}
+}
+
+// TestParseTodosFile_坏status跳过该条 M-04：非法 status/priority 的条目
+// 对齐 Python except Exception → warn + 跳过，不影响其余条目。
+func TestParseTodosFile_坏status跳过该条(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "bad.md")
+	content := "# User Todos\n\n" +
+		"---\nid: good1\ntitle: ok\nstatus: pending\npriority: medium\n---\nfine\n\n" +
+		"---\nid: bad1\ntitle: broken status\nstatus: DONE\npriority: medium\n---\nbad\n\n" +
+		"---\nid: bad2\ntitle: broken priority\nstatus: pending\npriority: urgent\n---\nbad2\n\n" +
+		"---\nid: good2\ntitle: also ok\n---\nalso fine\n"
+	os.WriteFile(file, []byte(content), 0o644)
+	todos := parseTodosFile(file)
+	if len(todos) != 2 {
+		t.Fatalf("bad items should be skipped, got %d todos", len(todos))
+	}
+	if todos[0].ID != "good1" || todos[1].ID != "good2" {
+		t.Errorf("surviving ids = %s, %s; want good1, good2", todos[0].ID, todos[1].ID)
+	}
+}
+
+// TestHandleUserTodos_create非法status拒绝 M-04：create 传非法 status/priority
+// → {"success": false}（Python TodoStatus() ValueError → 外层 except）。
+func TestHandleUserTodos_create非法status拒绝(t *testing.T) {
+	dir := t.TempDir()
+	SetGlobalWorkspaceDir(dir)
+	defer SetGlobalWorkspaceDir(".")
+
+	res, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "create", "title": "t", "status": "DONE",
+	})
+	if res["success"] != false {
+		t.Errorf("invalid status should fail: %v", res)
+	}
+	if e, _ := res["error"].(string); !strings.Contains(e, "invalid status") {
+		t.Errorf("error should mention invalid status: %v", res["error"])
+	}
+
+	res2, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "create", "title": "t", "priority": "urgent",
+	})
+	if res2["success"] != false {
+		t.Errorf("invalid priority should fail: %v", res2)
+	}
+
+	// 合法值仍可创建
+	res3, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "create", "title": "ok", "status": "in_progress", "priority": "high",
+	})
+	if res3["success"] != true {
+		t.Errorf("valid status/priority should create: %v", res3)
+	}
+	// 拒绝后未写入任何条目
+	res4, _ := handleUserTodos(context.Background(), map[string]any{"action": "list"})
+	if res4["count"] != 1 {
+		t.Errorf("only the valid create should persist, count = %v", res4["count"])
+	}
+}
+
+// TestHandleUserTodos_update非法status拒绝 M-04：update 传非法 status → 失败。
+func TestHandleUserTodos_update非法status拒绝(t *testing.T) {
+	dir := t.TempDir()
+	SetGlobalWorkspaceDir(dir)
+	defer SetGlobalWorkspaceDir(".")
+
+	created, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "create", "title": "base",
+	})
+	id := created["todo"].(map[string]any)["id"].(string)
+
+	res, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "update", "todo_id": id, "status": "bogus",
+	})
+	if res["success"] != false {
+		t.Errorf("invalid status update should fail: %v", res)
+	}
+	res2, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "update", "todo_id": id, "priority": "top",
+	})
+	if res2["success"] != false {
+		t.Errorf("invalid priority update should fail: %v", res2)
+	}
+	// 合法值仍可更新
+	res3, _ := handleUserTodos(context.Background(), map[string]any{
+		"action": "update", "todo_id": id, "status": "completed",
+	})
+	if res3["success"] != true {
+		t.Errorf("valid status update should succeed: %v", res3)
+	}
+}

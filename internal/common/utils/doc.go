@@ -17,7 +17,8 @@
 //	├── background.go     # 后台任务：BackgroundTask + Task + TaskManager
 //	├── deepcopy.go       # 深拷贝：DeepCopyMap
 //	├── pool.go           # 引用计数连接池：RefCountedResource + TransportPool + ResourcePool[T]
-//	└── strval.go         # 字符串值转换：StrVal + StrValFromMap + StrValDefault
+//	├── strval.go         # 字符串值转换：StrVal + StrValFromMap + StrValDefault
+//	└── pyjson.go         # Python json.dumps 语义对齐序列化：MarshalNoEscape + MarshalIndentNoEscape
 //
 // 对应 Python 代码：
 //   - jiuwenswarm/common/utils.py

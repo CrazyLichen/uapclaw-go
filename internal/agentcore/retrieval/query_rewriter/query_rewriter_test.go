@@ -2,13 +2,16 @@ package query_rewriter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
@@ -291,6 +294,35 @@ func TestCompress_非法JSON(t *testing.T) {
 	assert.Contains(t, err.Error(), "155604")
 }
 
+// TestTruncateForMsg_rune语义 M-03：中文按字符（code point）截断而非字节——
+// Python content[:500] 语义，字节切片在 CJK 3 字节中间会截出无效 UTF-8。
+func TestTruncateForMsg_rune语义(t *testing.T) {
+	// 短串原样返回
+	assert.Equal(t, "abc", truncateForMsg("abc", 500))
+	// ASCII 500 字符边界
+	ascii := strings.Repeat("a", 600)
+	assert.Equal(t, strings.Repeat("a", 500), truncateForMsg(ascii, 500))
+	// 中文 600 字符 → 500 字符（1500 字节 > 500 字节，字节截断会切出半个字符）
+	cjk := strings.Repeat("中", 600)
+	got := truncateForMsg(cjk, 500)
+	assert.Equal(t, strings.Repeat("中", 500), got)
+	assert.True(t, utf8.ValidString(got), "截断结果必须是有效 UTF-8")
+	// 恰好 500 字符不截断
+	assert.Equal(t, strings.Repeat("中", 500), truncateForMsg(strings.Repeat("中", 500), 500))
+	// 混合边界：第 500 个 code point 恰为多字节字符首字节时整体保留
+	mixed := strings.Repeat("a", 499) + strings.Repeat("中", 100)
+	gotMixed := truncateForMsg(mixed, 500)
+	assert.True(t, utf8.ValidString(gotMixed))
+	assert.Equal(t, strings.Repeat("a", 499)+"中", gotMixed)
+}
+
+// TestCompress_非法JSON中文超长 M-03 说明：extractJSON 对无括号输入返回空串、
+// {} 包围坏串经 jsonrepair 几乎必产 map——长中文 content 在 non-dict 分支
+// 结构上不可达（Python 同构），rune 截断语义由 TestTruncateForMsg_rune语义
+// 直接锁定，此处不构造不可达集成路径。
+
+// TestRewrite_非法输出中文超长 M-03：同上，集成路径不可达，见 rune 单测。
+
 // TestCompress_invoke失败 → 155605（Python test_compress_llm_invoke_failure_raises）
 func TestCompress_invoke失败(t *testing.T) {
 	fmc := &fakeModelContext{}
@@ -460,20 +492,44 @@ func TestLoadTemplate_并发竞态(t *testing.T) {
 	wg.Wait()
 }
 
-// TestNewQueryRewriter_配置透传 custom_headers 经 Extra（Python test_init_passes_only_custom_headers）
+// TestNewQueryRewriter_配置透传 custom_headers 声明字段直读 + ssl_cert/verify_ssl 经 Extra
+// （Python test_init_passes_only_custom_headers；S-04：custom_headers 是 mode_info.py
+// 声明字段，不再走 Extra 兜底）
 func TestNewQueryRewriter_配置透传(t *testing.T) {
 	mi := llmschema.NewBaseModelInfo("https://mock.test",
 		llmschema.WithAPIKey("test-key"),
 		llmschema.WithModelNameForInfo("gpt-4"),
 		llmschema.WithTimeoutForInfo(60),
+		llmschema.WithCustomHeadersForInfo(map[string]string{"X-Tenant": "tenant-a"}),
 		llmschema.WithInfoExtra(map[string]any{
-			"custom_headers": map[string]string{"X-Tenant": "tenant-a"},
-			"verify_ssl":     false,
+			"verify_ssl": false,
 		}),
 	)
 	qr, err := NewQueryRewriter(llmschema.NewModelConfig("OpenAI", *mi), &fakeModelContext{}, WithCompressRange(5))
 	assert.NoError(t, err)
 	assert.Equal(t, map[string]string{"X-Tenant": "tenant-a"}, qr.llm.ClientConfig.CustomHeaders)
+}
+
+// TestNewQueryRewriter_customHeaders声明字段JSON反序列化 S-04 生产路径：
+// JSON 配置反序列化（Python pydantic 声明字段）时 custom_headers 进声明字段，
+// Extra 里即使残留同名键也不再被读取（声明字段优先）。
+func TestNewQueryRewriter_customHeaders声明字段JSON反序列化(t *testing.T) {
+	cfgJSON := `{
+		"model_provider": "OpenAI",
+		"model_info": {
+			"api_base": "https://mock.test",
+			"api_key": "test-key",
+			"model": "gpt-4",
+			"timeout": 60,
+			"custom_headers": {"X-Tenant": "tenant-a"}
+		}
+	}`
+	var cfg llmschema.ModelConfig
+	require.NoError(t, json.Unmarshal([]byte(cfgJSON), &cfg))
+	qr, err := NewQueryRewriter(&cfg, &fakeModelContext{})
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]string{"X-Tenant": "tenant-a"}, qr.llm.ClientConfig.CustomHeaders)
+	assert.False(t, qr.llm.ClientConfig.VerifySSL) // 无 ssl_cert → 强制关闭
 }
 
 // TestNewQueryRewriter_verifySSL无证书强制关闭 Go 增强：Extra 边界。

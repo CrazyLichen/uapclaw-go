@@ -5,7 +5,6 @@ package hooks
 // Go 规则 6.5 禁止 gateway→server，故下沉共享位置。
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,6 +21,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -322,13 +322,11 @@ func (e *HookExecutor) runCommandHook(ctx context.Context, config map[string]any
 	}
 
 	// Python: json.dumps(hook_input, ensure_ascii=False) — 不转义 HTML 字符
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(hookInput); err != nil {
+	// （T-04 迁移：utils.MarshalNoEscape 公共助手，Encode 尾换行已去）
+	hookInputJSON, err := utils.MarshalNoEscape(hookInput)
+	if err != nil {
 		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("serialize hook input: %v", err)}
 	}
-	hookInputJSON := bytes.TrimSpace(buf.Bytes())
 	// Python: tool_name = hook_input.get("tool_name", "")
 	toolName, _ := hookInput["tool_name"].(string)
 
@@ -445,13 +443,11 @@ func (e *HookExecutor) runPromptHook(ctx context.Context, config map[string]any,
 	// Python: hook_input_json = json.dumps(hook_input, ensure_ascii=False) — 不转义 HTML 字符
 	// Python: final_prompt = prompt_template.replace("$ARGUMENTS", hook_input_json)
 	// Python: final_prompt = final_prompt.replace("$TOOL_NAME", tool_name)
-	var promptBuf bytes.Buffer
-	promptEnc := json.NewEncoder(&promptBuf)
-	promptEnc.SetEscapeHTML(false)
-	if err := promptEnc.Encode(hookInput); err != nil {
+	// （T-04 迁移：utils.MarshalNoEscape 公共助手）
+	hookInputJSON, err := utils.MarshalNoEscape(hookInput)
+	if err != nil {
 		return HookResult{Outcome: HookOutcomeNonBlockingError, Error: fmt.Sprintf("serialize hook input: %v", err)}
 	}
-	hookInputJSON := bytes.TrimSpace(promptBuf.Bytes())
 	toolName, _ := hookInput["tool_name"].(string)
 	finalPrompt := strings.ReplaceAll(promptTemplate, "$ARGUMENTS", string(hookInputJSON))
 	finalPrompt = strings.ReplaceAll(finalPrompt, "$TOOL_NAME", toolName)

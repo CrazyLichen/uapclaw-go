@@ -153,6 +153,8 @@ func getTodosFilePath(channelID string) string {
 
 // parseTodosFile 解析 markdown 待办文件（frontmatter+body）。
 // Python: _parse_todos_file()——lookahead 正则 RE2 不支持，改逐行状态机（偏差#2，产出一致）。
+// 坏条目（非法 status/priority）对齐 Python except Exception: warn + 跳过该条，
+// 不向上传播错误。
 func parseTodosFile(filePath string) []*TodoItem {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -169,10 +171,12 @@ func parseTodosFile(filePath string) []*TodoItem {
 			if len(body) > 0 {
 				current["description"] = strings.TrimSpace(strings.Join(body, "\n"))
 			}
-			if t, ok := todoItemFromDict(current); ok {
+			if t, terr := todoItemFromDict(current); terr == nil {
 				todos = append(todos, t)
 			} else {
-				logger.Warn(logComponent).Msg("Failed to parse todo item")
+				// Python L157-158: except Exception → warn + 跳过（M-04：
+				// TodoStatus/TodoPriority Enum 构造对非成员抛 ValueError）
+				logger.Warn(logComponent).Err(terr).Msg("Failed to parse todo item")
 			}
 		}
 		current = nil
@@ -205,20 +209,29 @@ func parseTodosFile(filePath string) []*TodoItem {
 	return todos
 }
 
-// todoItemFromDict 从解析 map 构造 TodoItem（容错默认值）。
-// Python: TodoItem.from_dict()
-func todoItemFromDict(data map[string]string) (*TodoItem, bool) {
+// todoItemFromDict 从解析 map 构造 TodoItem。
+// Python: TodoItem.from_dict()——status/priority 非成员值经 TodoStatus()/
+// TodoPriority() Enum 构造抛 ValueError，M-04 严格对齐：非法值返回 error。
+func todoItemFromDict(data map[string]string) (*TodoItem, error) {
 	if data["id"] == "" {
-		return nil, false
+		return nil, fmt.Errorf("todo item missing id")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	status := TodoStatusPending
 	if s := data["status"]; s != "" {
-		status = TodoStatus(s)
+		sv, ok := parseTodoStatus(s)
+		if !ok {
+			return nil, fmt.Errorf("invalid status value: %q", s)
+		}
+		status = sv
 	}
 	priority := TodoPriorityMedium
 	if p := data["priority"]; p != "" {
-		priority = TodoPriority(p)
+		pv, ok := parseTodoPriority(p)
+		if !ok {
+			return nil, fmt.Errorf("invalid priority value: %q", p)
+		}
+		priority = pv
 	}
 	return &TodoItem{
 		ID:          data["id"],
@@ -231,7 +244,37 @@ func todoItemFromDict(data map[string]string) (*TodoItem, bool) {
 		UpdateAt:    strOr(data["update_at"], now),
 		CreatedBy:   data["created_by"],
 		Description: data["description"],
-	}, true
+	}, nil
+}
+
+// parseTodoStatus 校验并解析 status（M-04 门卫，对齐 Python TodoStatus()
+// Enum 构造对非成员抛 ValueError——Go 显式校验拒绝非法值）。
+func parseTodoStatus(s string) (TodoStatus, bool) {
+	switch s {
+	case string(TodoStatusPending):
+		return TodoStatusPending, true
+	case string(TodoStatusInProgress):
+		return TodoStatusInProgress, true
+	case string(TodoStatusCompleted):
+		return TodoStatusCompleted, true
+	case string(TodoStatusCancelled):
+		return TodoStatusCancelled, true
+	}
+	return TodoStatus(""), false
+}
+
+// parseTodoPriority 校验并解析 priority（M-04 门卫，对齐 Python
+// TodoPriority() Enum 构造语义）。
+func parseTodoPriority(s string) (TodoPriority, bool) {
+	switch s {
+	case string(TodoPriorityHigh):
+		return TodoPriorityHigh, true
+	case string(TodoPriorityMedium):
+		return TodoPriorityMedium, true
+	case string(TodoPriorityLow):
+		return TodoPriorityLow, true
+	}
+	return TodoPriority(""), false
 }
 
 // strOr 空串回退。
@@ -388,13 +431,23 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 				finalRemindAt = ""
 			}
 		}
+		// M-04 门卫：status/priority 非法非空值拒绝（Python TodoStatus()
+		// 抛 ValueError → 外层 except → {"success": false}）
 		status := TodoStatusPending
 		if s := todoStr(inputs, "status"); s != "" {
-			status = TodoStatus(s)
+			sv, ok := parseTodoStatus(s)
+			if !ok {
+				return fail("invalid status value: " + s), nil
+			}
+			status = sv
 		}
 		priority := TodoPriorityMedium
 		if p := todoStr(inputs, "priority"); p != "" {
-			priority = TodoPriority(p)
+			pv, ok := parseTodoPriority(p)
+			if !ok {
+				return fail("invalid priority value: " + p), nil
+			}
+			priority = pv
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
 		newTodo := &TodoItem{
@@ -431,15 +484,25 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 			return fail("Todo not found: " + todoID), nil
 		}
 		// 存在性判断对齐 Python is not None（显式空串也更新）；
-		// status/priority 例外见偏差#8：Python TodoStatus("") 抛 ValueError → Go 空串跳过
+		// status/priority 非法非空值 M-04 门卫拒绝（Python TodoStatus()
+		// 抛 ValueError → 外层 except → {"success": false}）；空串跳过
+		// 为 Go 已知偏差#8（todoStr 无法区分缺省与空串）
 		if v, ok := inputs["title"].(string); ok {
 			found.Title = v
 		}
 		if v, ok := inputs["status"].(string); ok && v != "" {
-			found.Status = TodoStatus(v)
+			sv, valid := parseTodoStatus(v)
+			if !valid {
+				return fail("invalid status value: " + v), nil
+			}
+			found.Status = sv
 		}
 		if v, ok := inputs["priority"].(string); ok && v != "" {
-			found.Priority = TodoPriority(v)
+			pv, valid := parseTodoPriority(v)
+			if !valid {
+				return fail("invalid priority value: " + v), nil
+			}
+			found.Priority = pv
 		}
 		if v, ok := inputs["due_at"].(string); ok {
 			found.DueAt = v

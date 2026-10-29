@@ -398,3 +398,25 @@ func TestTripleBeamSearch_候选已在existTriples过滤(t *testing.T) {
 		assert.Equal(t, 1, b.Len()) // 候选被 existTriples 过滤 → 无扩展
 	}
 }
+
+// TestSearchCandidates_空beam防御 T-02：对齐 Python L173-174
+// if len(beam) < 1: raise RuntimeError("unexpected empty beam")。
+// nil beam 与零长 beam 均应返回错误而非 panic（beam.Get(-1) 越界）。
+func TestSearchCandidates_空beam防御(t *testing.T) {
+	r := &fakeBeamRetriever{}
+	s, err := NewTripleBeamSearch(r)
+	if err != nil {
+		t.Fatalf("NewTripleBeamSearch: %v", err)
+	}
+	// nil beam
+	_, err = s.searchCandidates(context.Background(), nil)
+	if err == nil || err.Error() != "unexpected empty beam" {
+		t.Errorf("nil beam: err = %v, want unexpected empty beam", err)
+	}
+	// 空 beam（Len()==0）
+	empty := common.NewTripleBeam(nil, 0)
+	_, err = s.searchCandidates(context.Background(), empty)
+	if err == nil || err.Error() != "unexpected empty beam" {
+		t.Errorf("empty beam: err = %v, want unexpected empty beam", err)
+	}
+}

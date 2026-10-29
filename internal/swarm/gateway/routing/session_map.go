@@ -1,7 +1,6 @@
 package routing
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +13,7 @@ import (
 
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
@@ -229,18 +229,14 @@ func (m *SessionMap) save() {
 		return
 	}
 	// T-01: Python json.dump(ensure_ascii=False, indent=2) — 中文不转义。
-	// 对齐 interaction_context.go 同包写法：Encoder+SetEscapeHTML(false)。
-	// MarshalIndent 默认转义 HTML 字符（<>&），与非 ASCII 语义不一致。
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(m.mapping); err != nil {
+	// T-04 迁移：utils.MarshalIndentNoEscape 公共助手（Encoder+
+	// SetEscapeHTML(false)+SetIndent，尾换行已去——Python json.dump 无尾换行）。
+	data, err := utils.MarshalIndentNoEscape(m.mapping)
+	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("SessionMap save failed")
 		return
 	}
-	// Encode 自带尾换行（Python json.dump 无尾换行）→ TrimSpace 对齐
-	if err := os.WriteFile(m.storePath, bytes.TrimSpace(buf.Bytes()), 0o644); err != nil {
+	if err := os.WriteFile(m.storePath, data, 0o644); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("SessionMap save failed")
 	}
 }

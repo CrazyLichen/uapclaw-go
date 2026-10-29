@@ -233,7 +233,7 @@ func tuiChatSendHandler(ws *websocket.Conn, reqID string, _ map[string]any, sess
 	writeResponseFrame(ws, reqID, true, map[string]any{
 		"accepted":   true,
 		"session_id": sessionID,
-	}, "", "")
+	}, "", "", true)
 	return nil
 }
 
@@ -244,7 +244,7 @@ func tuiChatResumeHandler(ws *websocket.Conn, reqID string, _ map[string]any, se
 	writeResponseFrame(ws, reqID, true, map[string]any{
 		"accepted":   true,
 		"session_id": sessionID,
-	}, "", "")
+	}, "", "", true)
 	return nil
 }
 
@@ -259,7 +259,7 @@ func tuiChatInterruptHandler(ws *websocket.Conn, reqID string, params map[string
 	if intent, ok := params["intent"].(string); ok && intent != "" {
 		payload["intent"] = intent
 	}
-	writeResponseFrame(ws, reqID, true, payload, "", "")
+	writeResponseFrame(ws, reqID, true, payload, "", "", true)
 	return nil
 }
 
@@ -274,7 +274,7 @@ func tuiChatUserAnswerHandler(ws *websocket.Conn, reqID string, params map[strin
 	if rid, ok := params["request_id"].(string); ok && rid != "" {
 		payload["request_id"] = rid
 	}
-	writeResponseFrame(ws, reqID, true, payload, "", "")
+	writeResponseFrame(ws, reqID, true, payload, "", "", true)
 	return nil
 }
 
@@ -292,7 +292,7 @@ func tuiHistoryGetHandler(ws *websocket.Conn, reqID string, params map[string]an
 	if v, ok := params["page_idx"]; ok {
 		payload["page_idx"] = v
 	}
-	writeResponseFrame(ws, reqID, true, payload, "", "")
+	writeResponseFrame(ws, reqID, true, payload, "", "", true)
 	return nil
 }
 

@@ -9,10 +9,23 @@ import (
 // TestFillTemplate 占位符替换（Python TestFillTemplate 2 例）
 func TestFillTemplate(t *testing.T) {
 	// 占位符替换
-	assert.Equal(t, "a=1 b=2", fillTemplate("a={a} b={b}", map[string]string{"a": "1", "b": "2"}))
+	assert.Equal(t, "a=1 b=2", fillTemplate("a={a} b={b}",
+		templateKV{key: "a", value: "1"}, templateKV{key: "b", value: "2"}))
 	// JSON 示例花括号不误伤
 	assert.Equal(t, `output: hi, example: {"x":1}`,
-		fillTemplate(`output: {history}, example: {"x":1}`, map[string]string{"history": "hi"}))
+		fillTemplate(`output: {history}, example: {"x":1}`, templateKV{key: "history", value: "hi"}))
+}
+
+// TestFillTemplate_声明序语义 T-03：对齐 Python kwargs 按声明序迭代——
+// history 先替换、query 后替换；history 值中的字面 {query} 占位符
+// 会被后续 query 值替换（map 迭代序随机时 50% 概率破坏该语义）。
+func TestFillTemplate_声明序语义(t *testing.T) {
+	out := fillTemplate("H={history} Q={query}",
+		templateKV{key: "history", value: "user discussed {query} syntax"},
+		templateKV{key: "query", value: "real query"},
+	)
+	// Python 语义：history 先替换 → "{query} syntax" 中的占位符再被 query 值替换
+	assert.Equal(t, "H=user discussed real query syntax Q=real query", out)
 }
 
 // TestExtractJSON 首尾花括号提取（Python TestExtractJson 4 例）

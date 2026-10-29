@@ -242,9 +242,11 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 		streamCtx, streamCancel := context.WithCancel(ctx)
 		entry := &streamTaskEntry{cancel: streamCancel}
 		entry.wg.Add(1)
-		mh.registerStreamTask(streamRid, msg.SessionID, msg.Metadata, entry)
-		mh.streamEmitsProcessingStatus[streamRid] = emitProcessingStatus
-		mh.streamModes[streamRid] = mh.extractModeFromParams(msg)
+		// S-01 修复：五 map 收编进 registerStreamTask 一次持锁写全
+		// （原 emitsProcessingStatus/streamModes 两行锁外裸写触发
+		// runtime fatal：concurrent map writes and map deletion）
+		mh.registerStreamTask(streamRid, msg.SessionID, msg.Metadata, entry,
+			emitProcessingStatus, mh.extractModeFromParams(msg))
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -723,7 +725,9 @@ func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCan
 
 	// 追踪状态（供 defer 使用）
 	streamState := &streamFinalState{}
-	defer mh.streamFinalCleanup(requestID, channelID, sessionID, emitProcessingStatus, streamState)
+	// S-02 修复：增传 entry——Done 与 map 状态解耦，无条件执行
+	// （"注册即负责退出"：Add(1) 的镜像，map 删除权归两条路径共享）
+	defer mh.streamFinalCleanup(requestID, channelID, sessionID, emitProcessingStatus, streamState, entry)
 
 	// 通过 AgentClient 发送流式请求
 	chunkCh, err := mh.agentClient.SendRequestStream(streamCtx, envelope)
@@ -793,19 +797,26 @@ func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCan
 // channelID 对齐 Python channel_id = env.channel or ""——
 // processing_status(false) 必须携带渠道标识，否则出站派发按空渠道
 // 查找失败（"Channel not found, dropping"），前端收不到处理完成信号。
-func (mh *MessageHandler) streamFinalCleanup(requestID, channelID, sessionID string, emitProcessingStatus bool, state *streamFinalState) {
+func (mh *MessageHandler) streamFinalCleanup(requestID, channelID, sessionID string, emitProcessingStatus bool, state *streamFinalState, entry *streamTaskEntry) {
 	// 清理状态
 	mh.streamMu.Lock()
-	// Python: asyncio.gather 等待 — 通知 goroutine 已退出
-	if entry, ok := mh.streamTasks[requestID]; ok {
+	// S-02 修复：守卫式 Done 的根因错误是把"是否 Done"耦合到"map 里是否
+	// 还有我"——cancelStreamTask 先 delete 就饿死了退出方的 Done（Wait
+	// 永久挂死）。解法即所有权分离：map 状态谁删都行（已被 cancel 删除
+	// 时此处跳过 delete），Done 只由注册-退出的 goroutine 恰好执行一次，
+	// 与 Add(1) 镜像。cancelStreamTask 从不 Done、只 Wait，对齐 Python
+	// asyncio.gather（等待方不替任务完成）。
+	if _, stillRegistered := mh.streamTasks[requestID]; stillRegistered {
+		delete(mh.streamTasks, requestID)
+		delete(mh.streamSessions, requestID)
+		delete(mh.streamMetadata, requestID)
+		delete(mh.streamEmitsProcessingStatus, requestID)
+		delete(mh.streamModes, requestID)
+	}
+	mh.streamMu.Unlock()
+	if entry != nil {
 		entry.wg.Done()
 	}
-	delete(mh.streamTasks, requestID)
-	delete(mh.streamSessions, requestID)
-	delete(mh.streamMetadata, requestID)
-	delete(mh.streamEmitsProcessingStatus, requestID)
-	delete(mh.streamModes, requestID)
-	mh.streamMu.Unlock()
 
 	// evolution 清理：如果 session 不再有任何流式任务，清除 in_progress
 	if sessionID != "" && !mh.hasActiveStreamTaskForSession(sessionID) {
@@ -860,7 +871,13 @@ func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *sche
 }
 
 // registerStreamTask 注册流式任务
-func (mh *MessageHandler) registerStreamTask(requestID, sessionID string, metadata map[string]any, entry *streamTaskEntry) {
+//
+// S-01 修复：emitsProcessingStatus/mode 两 map 原先在调用点锁外裸写，
+// 与 streamFinalCleanup/cancelStreamTask 持锁 delete 并发时触发 Go
+// runtime fatal（concurrent map writes and map deletion）——五 map 收编
+// 进本函数一次持锁写全。mode 由调用方锁外求值传入（只读消息本地数据，
+// 无共享，锁内求值徒增持锁时间）。
+func (mh *MessageHandler) registerStreamTask(requestID, sessionID string, metadata map[string]any, entry *streamTaskEntry, emitsProcessingStatus bool, mode string) {
 	mh.streamMu.Lock()
 	defer mh.streamMu.Unlock()
 	mh.streamTasks[requestID] = entry
@@ -868,6 +885,8 @@ func (mh *MessageHandler) registerStreamTask(requestID, sessionID string, metada
 	if metadata != nil {
 		mh.streamMetadata[requestID] = metadata
 	}
+	mh.streamEmitsProcessingStatus[requestID] = emitsProcessingStatus
+	mh.streamModes[requestID] = mode
 }
 
 // unregisterStreamTask 注销流式任务

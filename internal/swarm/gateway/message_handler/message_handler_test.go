@@ -81,12 +81,20 @@ func TestCancelAgentWorkForSession_空Session(t *testing.T) {
 }
 
 // TestCancelAgentWorkForSession_有流式任务 测试取消流式任务
+// S-02 修复后：cancelStreamTask 的 Wait 由 streamFinalCleanup 无条件 Done
+// 保证（注册即负责退出），无需测试侧"预 Done"workaround。
 func TestCancelAgentWorkForSession_有流式任务(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
-	entry := &streamTaskEntry{cancel: func() {}}
+	// 模拟真实 stream goroutine：select 等 ctx 取消后退出（defer Done）
+	entry := &streamTaskEntry{}
+	goroutineDone := make(chan struct{})
+	entry.cancel = func() { close(goroutineDone) }
 	entry.wg.Add(1)
-	mh.registerStreamTask("req-1", "sess-1", nil, entry)
-	entry.wg.Done() // 模拟 goroutine 退出，避免 cancelStreamTask 中 Wait 死锁
+	mh.registerStreamTask("req-1", "sess-1", nil, entry, true, "plan")
+	go func() {
+		defer entry.wg.Done()
+		<-goroutineDone
+	}()
 
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatCancel, json.RawMessage(`{}`))
 	mh.CancelAgentWorkForSession(context.Background(), msg, "sess-1", true)
@@ -129,7 +137,7 @@ func TestHandleChannelControl_非受控渠道(t *testing.T) {
 func TestRegisterStreamTask(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	metadata := map[string]any{"key": "value"}
-	mh.registerStreamTask("req-1", "sess-1", metadata, &streamTaskEntry{cancel: func() {}})
+	mh.registerStreamTask("req-1", "sess-1", metadata, &streamTaskEntry{cancel: func() {}}, true, "plan")
 
 	sid := mh.getStreamSessionID("req-1")
 	assert.Equal(t, "sess-1", sid)
@@ -156,9 +164,9 @@ func TestPublishRobotMessages(t *testing.T) {
 // TestCollectStreamTasksForSession 测试收集 session 的流式任务
 func TestCollectStreamTasksForSession(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
-	mh.registerStreamTask("req-1", "sess-1", nil, &streamTaskEntry{cancel: func() {}})
-	mh.registerStreamTask("req-2", "sess-1", nil, &streamTaskEntry{cancel: func() {}})
-	mh.registerStreamTask("req-3", "sess-2", nil, &streamTaskEntry{cancel: func() {}})
+	mh.registerStreamTask("req-1", "sess-1", nil, &streamTaskEntry{cancel: func() {}}, true, "plan")
+	mh.registerStreamTask("req-2", "sess-1", nil, &streamTaskEntry{cancel: func() {}}, true, "plan")
+	mh.registerStreamTask("req-3", "sess-2", nil, &streamTaskEntry{cancel: func() {}}, true, "plan")
 
 	reqIDs := mh.collectStreamTasksForSession("sess-1")
 	assert.Len(t, reqIDs, 2)
@@ -269,8 +277,8 @@ func TestPublishUserMessagesNowait_正常写入(t *testing.T) {
 func TestCancelAllStreamTasks(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	cancelled := false
-	mh.registerStreamTask("req-1", "sess-1", nil, &streamTaskEntry{cancel: func() { cancelled = true }})
-	mh.registerStreamTask("req-2", "sess-2", nil, &streamTaskEntry{cancel: func() {}})
+	mh.registerStreamTask("req-1", "sess-1", nil, &streamTaskEntry{cancel: func() { cancelled = true }}, true, "plan")
+	mh.registerStreamTask("req-2", "sess-2", nil, &streamTaskEntry{cancel: func() {}}, true, "plan")
 
 	mh.cancelAllStreamTasks()
 

@@ -3,34 +3,64 @@ package message_handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
 
 // TestCancelAgentWorkForSession_完整流程 测试完整取消流程
+// S-02 修复后：注册真实 goroutine（select 等 ctx 取消退出），
+// 无"预 Done"workaround——cancelStreamTask 的 Wait 依赖 streamFinalCleanup
+// 的无条件 Done，本用例即死锁回归测试（若修复回退则 2 秒超时失败）。
 func TestCancelAgentWorkForSession_完整流程(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
-	// 注册多个流式任务
+	// 注册多个流式任务（真实 goroutine：cancel 信号到达后退出并 Done）
 	cancelled1 := false
 	cancelled2 := false
-	entry1 := &streamTaskEntry{cancel: func() { cancelled1 = true }}
+	entry1 := &streamTaskEntry{}
+	ch1 := make(chan struct{})
+	entry1.cancel = func() { close(ch1) }
 	entry1.wg.Add(1)
-	entry2 := &streamTaskEntry{cancel: func() { cancelled2 = true }}
+	entry2 := &streamTaskEntry{}
+	ch2 := make(chan struct{})
+	entry2.cancel = func() { close(ch2) }
 	entry2.wg.Add(1)
-	mh.registerStreamTask("req-1", "sess-1", map[string]any{"key": "val"}, entry1)
-	mh.registerStreamTask("req-2", "sess-1", nil, entry2)
-	mh.registerStreamTask("req-3", "sess-2", nil, &streamTaskEntry{cancel: func() {}})
+	mh.registerStreamTask("req-1", "sess-1", map[string]any{"key": "val"}, entry1, true, "plan")
+	mh.registerStreamTask("req-2", "sess-1", nil, entry2, true, "plan")
+	mh.registerStreamTask("req-3", "sess-2", nil, &streamTaskEntry{cancel: func() {}}, true, "plan")
+	go func() {
+		defer entry1.wg.Done()
+		<-ch1
+		cancelled1 = true
+	}()
+	go func() {
+		defer entry2.wg.Done()
+		<-ch2
+		cancelled2 = true
+	}()
 
-	// 取消 sess-1 的任务前，模拟 goroutine 退出，避免 cancelStreamTask 中 Wait 死锁
-	entry1.wg.Done()
-	entry2.wg.Done()
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatCancel, json.RawMessage(`{}`))
-	mh.CancelAgentWorkForSession(context.Background(), msg, "sess-1", true)
+	// 死锁守卫：CancelAgentWorkForSession 内部 cancelStreamTask 对每个
+	// rid 先 delete 再 cancel 再 Wait——Done 由 goroutine 退出时执行，
+	// 若守卫式 Done 回归则此处挂死 → goroutine + 超时断言
+	done := make(chan struct{})
+	go func() {
+		mh.CancelAgentWorkForSession(context.Background(), msg, "sess-1", true)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("CancelAgentWorkForSession 挂死：cancelStreamTask Wait 未等到 Done（S-02 死锁回归）")
+	}
 
 	// 验证 sess-1 的任务被取消
 	assert.True(t, cancelled1, "req-1 应被取消")
@@ -87,17 +117,33 @@ func TestPublishStreamCancelledFinal(t *testing.T) {
 }
 
 // TestCancelStreamTask 测试取消单个流式任务
+// S-02 修复后：注册真实 goroutine，Wait 依赖无条件 Done，无 workaround。
 func TestCancelStreamTask(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
 	cancelled := false
-	entry := &streamTaskEntry{cancel: func() { cancelled = true }}
+	goroutineDone := make(chan struct{})
+	entry := &streamTaskEntry{}
+	entry.cancel = func() { close(goroutineDone); cancelled = true }
 	entry.wg.Add(1)
-	mh.registerStreamTask("req-1", "sess-1", nil, entry)
+	mh.registerStreamTask("req-1", "sess-1", nil, entry, true, "plan")
+	go func() {
+		defer entry.wg.Done()
+		<-goroutineDone
+	}()
 
-	// 模拟 goroutine 退出，避免 cancelStreamTask 中 Wait 死锁
-	entry.wg.Done()
-	mh.cancelStreamTask("req-1")
+	// 死锁守卫：cancelStreamTask 先 delete 再 cancel 再 Wait——Done 由
+	// goroutine 退出时执行，若守卫式 Done 回归则此处挂死
+	cancelDone := make(chan struct{})
+	go func() {
+		mh.cancelStreamTask("req-1")
+		close(cancelDone)
+	}()
+	select {
+	case <-cancelDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancelStreamTask 挂死：Wait 未等到 Done（S-02 死锁回归）")
+	}
 	assert.True(t, cancelled, "cancel 函数应被调用")
 
 	// 取消不存在的任务不应 panic
@@ -181,4 +227,84 @@ func TestSendProcessingStatus_新签名(t *testing.T) {
 
 	mh.sendProcessingStatus("req-1", "sess-1", "feishu_test", true)
 	mh.sendProcessingStatus("req-1", "sess-1", "feishu_test", false)
+}
+
+// TestCancelStreamTask_死锁回归 S-02 专项：注册真实 stream goroutine
+// （内部 select 等 ctx 取消后退出、退出路径走 streamFinalCleanup 的
+// 无条件 Done），调用 cancelStreamTask，断言 2 秒内返回。
+// 回归背景：旧实现 streamFinalCleanup 用守卫式 Done（查 map 里有 entry
+// 才 Done），而 cancelStreamTask 先 delete map 再 Wait——delete 后 Done
+// 被跳过、Wait 永久挂死，生产路径 chat.interrupt 无响应/断连清理泄漏。
+func TestCancelStreamTask_死锁回归(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+
+	entry := &streamTaskEntry{}
+	ctx, cancel := context.WithCancel(context.Background())
+	entry.cancel = cancel
+	entry.wg.Add(1)
+	mh.registerStreamTask("deadlock-req-1", "sess-dl", nil, entry, true, "plan")
+
+	// 真实 stream goroutine：select ctx.Done 退出，退出走 streamFinalCleanup
+	go mh.processStreamCore(ctx, cancel, entry,
+		&schema.Message{ID: "deadlock-req-1", ChannelID: "feishu_test", SessionID: "sess-dl"},
+		&e2a.E2AEnvelope{RequestID: "deadlock-req-1", IsStream: true}, true)
+
+	// 取消并限时等待：若守卫式 Done 回归则永久挂死
+	done := make(chan struct{})
+	go func() {
+		mh.cancelStreamTask("deadlock-req-1")
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancelStreamTask 死锁回归失败：Wait 未在 2 秒内等到 Done")
+	}
+
+	// goroutine 退出后 map 全清
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mh.streamMu.RLock()
+		_, exists := mh.streamTasks["deadlock-req-1"]
+		mh.streamMu.RUnlock()
+		if !exists {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("stream goroutine 退出后任务未清理")
+}
+
+// TestRegisterStreamTask_并发注册与清理 S-01 专项：注册（持锁写五 map）
+// 与 streamFinalCleanup（持锁 delete）并发执行，race 检测下不触发
+// runtime fatal（旧实现 emitsProcessingStatus/streamModes 两行锁外裸写）。
+// -race -count=30 复现法对齐项目既有惯例。
+func TestRegisterStreamTask_并发注册与清理(t *testing.T) {
+	for i := 0; i < 30; i++ {
+		mh := createTestMessageHandlerWithTransport()
+		var wg sync.WaitGroup
+
+		// 并发注册方：不同 rid 的注册流
+		for j := 0; j < 8; j++ {
+			rid := fmt.Sprintf("race-reg-%d", j)
+			entry := &streamTaskEntry{cancel: func() {}}
+			entry.wg.Add(1)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				mh.registerStreamTask(rid, "sess-race", nil, entry, true, "plan")
+			}()
+		}
+
+		// 并发清理方：streamFinalCleanup 对同批 rid 反复清理
+		for j := 0; j < 8; j++ {
+			rid := fmt.Sprintf("race-reg-%d", j)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				mh.streamFinalCleanup(rid, "feishu_test", "sess-race", true, &streamFinalState{}, nil)
+			}()
+		}
+		wg.Wait()
+	}
 }

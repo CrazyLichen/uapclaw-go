@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
@@ -154,20 +155,17 @@ func (pi *PendingInteraction) Save() {
 	}
 
 	// Python: json.dumps(data, ensure_ascii=False, indent=2) — 中文不转义
-	// Go: json.Marshal 默认不转义非 ASCII，但会转义 HTML 字符（<>&），
-	// SetEscapeHTML(false) 对齐 ensure_ascii=False 的完整语义
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(data); err != nil {
+	// Go: json.Marshal 默认不转义非 ASCII，但会转义 HTML 字符（<>&）。
+	// T-04 迁移：utils.MarshalNoEscape 公共助手（紧凑+不转义，尾换行已去），
+	// 缩进仍由 indentJSON 后处理（对齐 indent=2）
+	content, err := utils.MarshalNoEscape(data)
+	if err != nil {
 		logger.Warn(logComponent).
 			Str("interaction_id", pi.InteractionID).
 			Err(err).
 			Msg("PendingInteraction save failed")
 		return
 	}
-	// Encode 自带尾换行；Python write_text 不带 → TrimSpace 对齐
-	content := bytes.TrimRight(buf.Bytes(), "\n")
 	// 缩进 2 空格（对齐 indent=2）：Encode 无缩进能力，用 Indent 重排
 	indented := indentJSON(content)
 	if err := os.WriteFile(pi.path(), indented, 0o644); err != nil {

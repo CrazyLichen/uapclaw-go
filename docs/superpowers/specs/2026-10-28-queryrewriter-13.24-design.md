@@ -36,7 +36,7 @@ Agent 会话（每轮）
 
 | 项 | Python 行为 | Go 归宿 |
 |---|---|---|
-| `_fill_template(template, **kwargs)` | 逐 key `out.replace("{"+key+"}", value)`；只替换显式占位符，JSON 示例花括号不误伤 | `fillTemplate(template string, kv map[string]string) string`（strings.ReplaceAll 循环） |
+| `_fill_template(template, **kwargs)` | 逐 key `out.replace("{"+key+"}", value)`；只替换显式占位符，JSON 示例花括号不误伤 | `fillTemplate(template string, kv ...templateKV) string`（strings.ReplaceAll 循环；T-03：有序切片对齐 **kwargs 声明序——history 先替换，其值中的字面 {query} 占位符随后被 query 值替换） |
 | `_extract_json(model_output)` | `find("{")`/`rfind("}")`；`-1 或 end<=start` → Debug "No JSON object found in model output" + `""`；否则 Debug "JSON object from output extracted" + 切片 | `extractJSON(output string) string`（IndexByte/LastIndexByte；两条 Debug 日志对齐） |
 | `_parse_llm_json(json_str)` | 空白 → None；`json.loads` 成 dict → 返回；失败 → `repair_json(json_str)` 再 loads（Debug "JSON parsed after repair_json"）；非 dict 根 → None；不抛异常 | `parseLLMJSON(jsonStr string) (map[string]any, bool)`（jsonrepair.RepairWithOptions，13.17 同款依赖） |
 | `_force_string(raw)` | dict → `json.dumps(ensure_ascii=False)`，失败 Debug + `str(raw)`；其他 `str(raw)` | `forceString(raw any) string` |
@@ -136,16 +136,18 @@ func WithModelClientOption(m *llm.Model) QueryRewriterOption
 4. 若已注入 Model（WithModelClientOption）则跳过构造；否则：
    - `sslCert := mi.Extra["ssl_cert"].(string)`（缺失 `""`，即 Python None）
    - `verifySSL := mi.Extra["verify_ssl"].(bool)`（缺失 true，对齐 Python `getattr(mi, "verify_ssl", True)`）
-   - `customHeaders := mi.Extra["custom_headers"].(map[string]string)`（缺失 nil）
+   - `customHeaders := mi.CustomHeaders`（声明字段直读——S-04 勘误，见 §4.2）
    - `verifySSL && sslCert == "" → verifySSL = false`（Python 注释规则：BaseModelClient 要求 cert）
    - `llmschema.NewModelClientConfig(cfg.ModelProvider, mi.APIKey, mi.APIBase, WithTimeout(float64(mi.Timeout)), WithVerifySSL(verifySSL), WithSSLCert(sslCert)（非空时）, WithCustomHeaders(customHeaders))`
    - `llmschema.NewModelRequestConfig(WithModelName(mi.ModelName), WithTemperature(0.0), WithTopP(mi.TopP))`
    - `llm.NewModel(clientCfg, requestCfg)`，err 透传返回
 5. `jsonOutputParser: output_parsers.NewJsonOutputParser()`
 
-### 4.2 ssl_cert/verify_ssl 走 Extra 的对齐理由
+### 4.2 ssl_cert/verify_ssl 走 Extra、custom_headers 走声明字段的对齐理由
 
 Python `BaseModelInfo` 无 ssl_cert/verify_ssl 声明字段（mode_info.py L11-27 已核），`getattr(mi, "ssl_cert", None)` 读的是 pydantic `extra="allow"` 塞进来的动态字段。Go `BaseModelInfo.Extra` 正是 extra="allow" 的等价物（MarshalJSON/UnmarshalJSON 已实现合并语义），因此 `Extra["ssl_cert"]` 读取是**同构对齐而非近似**。top_p/timeout 是双方标准字段，直接读。
+
+**勘误（2026-10-29 审查 S-04）**：`custom_headers` 在 Python mode_info.py L19 是**声明字段**（`custom_headers: Optional[dict[str, Any]] = Field(default=None)`），`getattr(mi, "custom_headers", None)` 读的是声明字段而非 extra 动态字段。Go 端 `BaseModelInfo.CustomHeaders`（model_info.go L37）同构，且 `custom_headers` 在 `baseModelInfoKnownKeys` 中——JSON 反序列化路由进声明字段后 `mi.Extra["custom_headers"]` 恒为空，Extra 读取断生产配置路径。已改 `customHeaders := mi.CustomHeaders` 声明字段直读；ssl_cert/verify_ssl 保持 Extra（Python 确实未声明）。
 
 ### 4.3 LoadTemplate
 
@@ -169,7 +171,7 @@ func (q *QueryRewriter) Msg2Text(messages []llmschema.BaseMessage) (string, erro
 1. `messages == nil` → `q.sessionCtx.GetMessages(0, true)`（Go size≤0 = 全量，对齐 Python `get_messages(with_history=True)` 无 size；err 透传）
 2. 逐条：`role := m.GetRole().String()`；content 按 MessageContent 三态：
    - `IsText()` → `Text()`（空串天然，Python None→"" 对齐；`str(None)→"None"` 死分支归档 §8-1）
-   - 多模态（Parts）→ `json.Marshal(parts)`（对齐 `json.dumps(list, ensure_ascii=False)`；Go json 默认不转义非 ASCII，HTML 字符不设 SetEscapeHTML）
+   - 多模态（Parts）→ `utils.MarshalNoEscape(parts)`（对齐 `json.dumps(list, ensure_ascii=False)`；T-04：Marshal 默认转义 <>& 为 \u003c 等，公共助手统一关闭——含 HTML 的多模态 content 进提示词时 LLM 会看到转义字面串）
 3. `strings.TrimSpace(strings.Join(lines, "\n"))`
 
 ### 4.5 Compress
@@ -180,7 +182,7 @@ func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessag
 
 1. `rawText, err := q.Msg2Text(raw)`（err 透传——Python 无此分支，Go GetMessages 带 error 的附加防线；raw 非空时直接格式化不经 context）
 2. `template, err := q.LoadTemplate("compression")`（err 透传 155603）
-3. `compressionPrompt := fillTemplate(template, map[string]string{"history": rawText})`
+3. `compressionPrompt := fillTemplate(template, templateKV{key: "history", value: rawText})`
 4. `resp, err := q.llm.Invoke(ctx, model_clients.NewMessagesParam(llmschema.NewSystemMessage(compressionPrompt)), model_clients.WithInvokeTemperature(0.0))`
    - err → 155605（`WithParam("error_msg", err.Error())` + `WithCause(err)`）
    - temperature 传 0.0：Python `self.llm.model_config.temperature` 构造时已固定 0.0，字面等价
@@ -205,12 +207,12 @@ func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]a
 3. `historyFull := q.sessionCtx.GetMessages(0, true)`（err 透传）
 4. `len(historyFull) >= q.compressRange` 时：
    - `compressed, err := q.Compress(ctx, historyFull)`
-   - 成功：`historyText, _ := json.Marshal(compressed)` → `q.sessionCtx.SetMessages([]llmschema.BaseMessage{llmschema.NewSystemMessage(string(historyText), llmschema.WithMessageName("compressed_history"))}, true)`
-     - json.Marshal 对 map[string]any：非 ASCII 不转义 = `json.dumps(ensure_ascii=False)` 对齐
+   - 成功：`historyJSON, _ := utils.MarshalNoEscape(compressed)` →（T-04 迁移公共助手） `q.sessionCtx.SetMessages([]llmschema.BaseMessage{llmschema.NewSystemMessage(string(historyText), llmschema.WithMessageName("compressed_history"))}, true)`
+     - utils.MarshalNoEscape 对 map[string]any：非 ASCII 不转义 + HTML 不转义 = `json.dumps(ensure_ascii=False)` 完整语义对齐（T-04）
    - err（errors.As BaseError）：Warn 日志 `"Query rewriter compress failed, falling back to original history"` + Err 字段 → `historyText, _ := q.Msg2Text(historyFull)` → SetMessages(name="original_history")
 5. `historyForRewrite := q.sessionCtx.GetMessages(q.compressRange, true)`
 6. `historyText, err := q.Msg2Text(historyForRewrite)`（err 透传）
-7. `completionPrompt := fillTemplate(promptTemplate, map[string]string{"history": historyText, "query": query})`
+7. `completionPrompt := fillTemplate(promptTemplate, templateKV{key: "history", value: historyText}, templateKV{key: "query", value: query})`
 8. Invoke 同 Compress 步骤 4-5（文案 "LLM rewrite output..."）
 9. 解析链 + `schemaRepair(parsed, q.rewriteOutputSchema)`（Go 无 error 返回，spec §8-9）
 10. 返回 repaired
@@ -254,7 +256,7 @@ Go `SessionModelContext.GetMessages(N>0, true)` = `messageBuffer.GetBack(N, true
 
 | Python 类 | Go 测试函数 | 备注 |
 |---|---|---|
-| ModelConfigPropagation | TestNewQueryRewriter_配置透传 | custom_headers 经 Extra → ModelClientConfig |
+| ModelConfigPropagation | TestNewQueryRewriter_配置透传 | custom_headers 声明字段直读 → ModelClientConfig（S-04 勘误后） |
 | FillTemplate | TestFillTemplate×2 | |
 | ExtractJson | TestExtractJSON×4 | |
 | ParseLlmJson | TestParseLLMJSON×5 | 尾逗号走 jsonrepair |
@@ -301,6 +303,8 @@ Go `SessionModelContext.GetMessages(N>0, true)` = `messageBuffer.GetBack(N, true
 | 7 | Compress fallback 测试 Python 猴子补丁 `qr.compress = failing` → Go 用坏 JSON stub 让 Compress 内部走 155604，或 stub 返回 error 走 invoke 失败路径 | 等价触发降级分支；两条路径都覆盖（Python 只测前者） |
 | 8 | Python `llm.invoke(model=..., messages=..., temperature=...)` 显式传 model 名（构造已设，字面重复）；Go Invoke 不传 WithInvokeModel（ModelRequestConfig.ModelName 已含） | Go resolveModelName 从 m.ModelConfig 取默认；显式重传是 Python 冗余执行，Go 侧去重（记忆规则：重复调用/冗余参数去重先例 13.15 双 cp_image） |
 | 9 | Python `_schema_repair` 非 dict 入参与未知类型两分支抛 155604；Go `schemaRepair` 去掉 error 返回值，只返回 `map[string]any` | Go 入参类型 `map[string]any` + `schemaFieldType` 三态枚举使两条 155604 路径编译期消解，error 无发生路径；Go 惯例不为不可能路径保留 error 签名（实施后审查与用户共同拍板，2026-10-28） |
+| 10 | Rewrite 降级分支：Python `except BaseError` 降级、其他异常向上传播；Go `cerr != nil` 捕获一切降级（T-05 勘误） | Compress 错误路径 155603/155604/155605 全为 BaseError，无现实非 BaseError 路径——行为等价；设计文档 §4.6 原文 `errors.As BaseError` 与代码裸 catch-all 的出入以本条勘误为准 |
+| 11 | compressed_history 写回：Go `if merr == nil` 才写，Marshal 失败既不写压缩也不走降级（历史保持全量）；Python `json.dumps(dict)` 不会失败（T-05 勘误） | Marshal 对 `map[string]any`（schemaRepair 产物仅含 string/list/dict 基础类型）结构性不可能失败，该分支不可达；防御式静默跳过是 Go 惯例 |
 
 ## 9. 实施任务切分（writing-plans 输入）
 

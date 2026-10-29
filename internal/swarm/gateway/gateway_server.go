@@ -213,6 +213,8 @@ func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request)
 	// 读循环（对齐 L527-530）。
 	// ⚠️ 用 context.Background()：gorilla Upgrade 劫持连接后 r.Context()
 	// 随原始请求结束而取消，不能作为消息处理链的 ctx 传播
+	// M-02：handleRawMessage 返回 true（on_message 回调出错）时断开——
+	// 对齐 Python 异常逃出 async for → websockets 关闭该连接的语义
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
@@ -222,7 +224,11 @@ func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request)
 				Msg("WebSocket connection closed")
 			break
 		}
-		s.handleRawMessage(context.Background(), conn, raw, matchedPath, route)
+		if s.handleRawMessage(context.Background(), conn, raw, matchedPath, route) {
+			// 回调故障快速失败：主动关闭连接（走下方 finally 清理链）
+			_ = conn.Close()
+			break
+		}
 	}
 
 	// finally 语义（对齐 L532-559）：清集合 + 清 stale 路由键 + 断连回调
@@ -278,12 +284,23 @@ func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
 		}
 	}
 
-	// 定向发送前探测连接存活性（对齐 Python L428 ws.closed 检查）：
-	// 客户端断开后、HandleConnection finally 清理 session 键之前（TCP 半关闭、
-	// ReadMessage 尚未感知的窗口），定向发送命中 stale 连接时 Python 视为
-	// 未命中落入广播 fallback——同 channel 其他在线客户端仍能收到消息
-	if ws != nil && !s.probeWritable(ws) {
-		ws = nil
+	// 定向发送前探测连接存活性（对齐 Python L428 ws.closed 检查）。
+	// S-03 修复：区分"未命中"与"命中已死"两种语义（Python L428-451）——
+	// 命中路由键但连接已死（TCP 半关闭、ReadMessage 尚未感知的窗口）时
+	// Python 静默丢弃（return，仅 warning），绝不广播：路由键明确指向
+	// 该死连接的会话，消息不应被同渠道无关客户端收到（防跨客户端消息
+	// 泄漏/TUI 串会话输出）；仅"从未命中"（ws is None）才走广播 fallback。
+	hitStale := ws != nil && !s.probeWritable(ws)
+
+	if hitStale {
+		// 命中路由键但连接已死：静默丢弃（对齐 Python L428/L451 的
+		// closed 分支——仅 warning 后 return，不广播）
+		logger.Warn(logComponent).
+			Str("channel_id", msg.ChannelID).
+			Str("session_id", msg.SessionID).
+			Str("id", msg.ID).
+			Msg("message dropped: routed WebSocket client closed")
+		return nil
 	}
 
 	if ws == nil {
@@ -464,11 +481,14 @@ func (s *GatewayServer) findChannelClients(channelID string) []*websocket.Conn {
 // 拦截器 → forward 集合 → 本地 handler。
 // acp 分支 ⤵️ 11.25（L573-579 的 acp_bridge.handle_jsonrpc_request/is_jsonrpc_request
 // 与 L665-668 的 acp early-return）。
-func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn, raw []byte, requestPath string, route *RouteConfig) {
+// M-02：返回 true 表示 on_message 回调出错、须断开该连接（对齐 Python
+// 异常传播语义——_handle_raw_message 无 except，异常逃出 connection_handler
+// 的 async for → websockets 框架关闭该连接）；false 正常。
+func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn, raw []byte, requestPath string, route *RouteConfig) bool {
 	var data map[string]any
 	if err := json.Unmarshal(raw, &data); err != nil {
-		s.sendResponse(ws, "", false, nil, "invalid json", "")
-		return
+		s.sendInlineError(ws, "", "invalid json")
+		return false
 	}
 
 	// 入站拦截器（对齐 L582-594，异常 Warn 继续）
@@ -486,19 +506,19 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 			return route.InboundInterceptor(ws, data)
 		}()
 		if handled {
-			return
+			return false
 		}
 	}
 
 	if data["type"] != "req" {
-		s.sendResponse(ws, "", false, nil, "invalid request", "")
-		return
+		s.sendInlineError(ws, "", "invalid request")
+		return false
 	}
 	reqID := strings.TrimSpace(strVal(data["id"]))
 	method := strings.TrimSpace(strVal(data["method"]))
 	if reqID == "" || method == "" {
-		s.sendResponse(ws, reqID, false, nil, "invalid request", "")
-		return
+		s.sendInlineError(ws, reqID, "invalid request")
+		return false
 	}
 	params, _ := data["params"].(map[string]any)
 	if params == nil {
@@ -513,8 +533,8 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 	if route.ForwardMethods[method] {
 		reqMethod, err := schema.ParseReqMethod(method)
 		if err != nil {
-			s.sendResponse(ws, reqID, false, nil, fmt.Sprintf("unknown method: %s", method), "")
-			return
+			s.sendInlineError(ws, reqID, fmt.Sprintf("unknown method: %s", method))
+			return false
 		}
 
 		// 注册路由键（对齐 L634-640）
@@ -568,11 +588,15 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 
 		if s.onMessageCb != nil {
 			if err := s.onMessageCb(ctx, msg); err != nil {
-				// 对齐 Python await 无 except——回调异常仅记录不中断
-				logger.Warn(logComponent).
+				// M-02 修复：对齐 Python await 无 except 的真实语义——
+				// 回调异常向上传播（_handle_raw_message → connection_handler
+				// 的 async for → 逃出 handler → websockets 框架关闭该连接）。
+				// 入站管线故障快速失败，避免客户端"消息静默黑洞"。
+				logger.Error(logComponent).
 					Err(err).
 					Str("msg_id", msg.ID).
-					Msg("gateway on_message callback failed")
+					Msg("gateway on_message callback failed, closing connection")
+				return true
 			}
 		}
 
@@ -581,7 +605,7 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 
 		// 仅转发集合 → 无本地 ack（对齐 L670-671）
 		if route.ForwardNoLocalHandlerMethods[method] {
-			return
+			return false
 		}
 	}
 
@@ -594,7 +618,7 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 					Str("method", method).
 					Err(err).
 					Msg("GatewayServer local handler aborted on closed ws")
-				return
+				return false
 			}
 			logger.Error(logComponent).
 				Str("method", method).
@@ -602,11 +626,12 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 				Msg("GatewayServer local handler error")
 			s.sendResponse(ws, reqID, false, nil, fmt.Sprintf("handler error: %s", err), "INTERNAL_ERROR")
 		}
-		return
+		return false
 	}
 
 	// 3. 无 forward 无本地（对齐 L710-717）
-	s.sendResponse(ws, reqID, false, nil, fmt.Sprintf("unknown method: %s", method), "")
+	s.sendInlineError(ws, reqID, fmt.Sprintf("unknown method: %s", method))
+	return false
 }
 
 // probeWritable 写探针：判断 ws 是否仍可写（对齐 Python getattr(ws,"closed")）。
@@ -625,22 +650,36 @@ func (s *GatewayServer) probeWritable(ws *websocket.Conn) bool {
 // sendResponse 发送 res 帧。
 //
 // Python: send_response（L332-356）——发送失败仅 Debug。
+// handler 错误路径帧形状带 payload（payload or {}）。
 func (s *GatewayServer) sendResponse(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string) {
-	writeResponseFrame(ws, reqID, ok, payload, errMsg, code)
+	writeResponseFrame(ws, reqID, ok, payload, errMsg, code, true)
+}
+
+// sendInlineError 发送内联错误帧（invalid json/invalid request/unknown method）。
+//
+// M-01 修复：Python 内联错误帧（L569/L601/L613/L632/L717）只有
+// type/id/ok/error 四键、无 payload——与 send_response（本地 handler
+// 错误帧带 payload or {}）是两套帧形状，Go 此前统一带 "payload": {}。
+func (s *GatewayServer) sendInlineError(ws *websocket.Conn, reqID string, errMsg string) {
+	writeResponseFrame(ws, reqID, false, nil, errMsg, "", false)
 }
 
 // writeResponseFrame 构造并写入 res 帧（包级，供 tui 本地 handler 复用）。
 //
 // 零行为变更：帧构造与写入逻辑自 sendResponse 提取（11.15 最小装配）。
-func writeResponseFrame(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string) {
-	if payload == nil {
-		payload = map[string]any{}
-	}
+// M-01：includePayload 控制是否带 payload 键——内联错误帧传 false
+// 对齐 Python 内联四键形状；sendResponse/handler 错误路径传 true。
+func writeResponseFrame(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string, includePayload bool) {
 	frame := map[string]any{
-		"type":    "res",
-		"id":      reqID,
-		"ok":      ok,
-		"payload": payload,
+		"type": "res",
+		"id":   reqID,
+		"ok":   ok,
+	}
+	if includePayload {
+		if payload == nil {
+			payload = map[string]any{}
+		}
+		frame["payload"] = payload
 	}
 	if !ok {
 		if errMsg == "" {

@@ -3,9 +3,11 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -257,6 +259,9 @@ func Test端到端_invalid_json(t *testing.T) {
 	assert.Equal(t, "", res["id"])
 	assert.False(t, res["ok"].(bool))
 	assert.Equal(t, "invalid json", res["error"])
+	// M-01：Python 内联错误帧仅四键（type/id/ok/error），无 payload
+	_, hasPayload := res["payload"]
+	assert.False(t, hasPayload, "内联错误帧不应带 payload 键")
 }
 
 func Test端到端_非req类型(t *testing.T) {
@@ -328,6 +333,9 @@ func Test端到端_本地handler异常_INTERNAL_ERROR(t *testing.T) {
 	assert.False(t, res["ok"].(bool))
 	assert.Contains(t, res["error"], "handler error")
 	assert.Equal(t, "INTERNAL_ERROR", res["code"])
+	// M-01 对照：本地 handler 错误帧走 send_response 形状——带 payload 键
+	_, hasPayload := res["payload"]
+	assert.True(t, hasPayload, "handler 错误帧应带 payload 键（对齐 Python send_response）")
 }
 
 func Test端到端_本地handler成功(t *testing.T) {
@@ -390,6 +398,66 @@ func Test端到端_入站拦截器短路(t *testing.T) {
 		t.Fatal("onMessage should be short-circuited by interceptor")
 	case <-time.After(300 * time.Millisecond):
 	}
+}
+
+// Test端到端_onMessage回调出错断连 验证 M-02：on_message 回调返回 error 后，
+// 服务器主动关闭该连接（对齐 Python 异常逃出 connection_handler 的 async for →
+// websockets 框架关闭连接的语义），且读循环退出后不再处理后续帧（消息黑洞快速失败）。
+func Test端到端_onMessage回调出错断连(t *testing.T) {
+	route := forwardRoute("/tui", "tui")
+	s, server := newTestGatewayServer(t, route)
+	var mu sync.Mutex
+	calls := 0
+	failNext := false
+	s.OnMessage(func(ctx context.Context, msg *schema.Message) error {
+		mu.Lock()
+		defer mu.Unlock()
+		calls++
+		if failNext {
+			failNext = false
+			return errors.New("boom: upstream session handler failure")
+		}
+		return nil
+	})
+
+	conn := dialWS(t, server, "/tui")
+	readFrame(t, conn) // connection.ack
+
+	// 第一条：回调正常返回 → 连接保持
+	sendReqFrame(t, conn, "ok1", "s1")
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := calls
+		mu.Unlock()
+		if n == 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	mu.Lock()
+	require.Equal(t, 1, calls, "first message should be forwarded")
+	mu.Unlock()
+
+	// 第二条：回调返回 error → 服务器关闭连接（ReadMessage 得到 close/EOF 错误）
+	mu.Lock()
+	failNext = true
+	mu.Unlock()
+	sendReqFrame(t, conn, "bad1", "s1")
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, err := conn.ReadMessage()
+	require.Error(t, err, "connection should be closed after on_message callback error")
+
+	// 第三条：连接关闭、读循环退出后，不再触发回调（写失败可容忍——TCP 已断）
+	req, _ := json.Marshal(map[string]any{
+		"type": "req", "id": "after1", "method": "chat.send",
+		"params": map[string]any{"session_id": "s1"},
+	})
+	_ = conn.WriteMessage(websocket.TextMessage, req)
+	time.Sleep(300 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, 2, calls, "onMessage should not be invoked after connection close")
 }
 
 // ──────────────────────────── Send 出站测试 ────────────────────────────
@@ -829,10 +897,11 @@ func TestSendResponse_ok帧不带error字段(t *testing.T) {
 	assert.False(t, hasErr)
 }
 
-// TestSend_stale定向连接探测后广播fallback 定向目标已断开（TCP 半关闭窗口、
-// 路由键尚未清理）时，Send 须视为未命中落入广播 fallback——同 channel 其他
-// 在线客户端仍能收到消息（对齐 Python ws.closed 检查 L428）。
-func TestSend_stale定向连接探测后广播fallback(t *testing.T) {
+// TestSend_stale定向连接静默丢弃 定向目标已断开（TCP 半关闭窗口、
+// 路由键尚未清理）时，Send 须对齐 Python L428-451 的 stale 语义：
+// 命中路由键但连接已死 → 静默丢弃（仅 warning），**不广播**——
+// 消息不应被同 channel 无关客户端收到（S-03 修复，防跨客户端泄漏）。
+func TestSend_stale定向连接静默丢弃(t *testing.T) {
 	done := make(chan struct{}, 1)
 	s, server := newTestGatewayServer(t, forwardRoute("/tui", "tui"))
 	s.OnMessage(func(ctx context.Context, msg *schema.Message) error {
@@ -845,7 +914,7 @@ func TestSend_stale定向连接探测后广播fallback(t *testing.T) {
 	sendReqFrame(t, connA, "q1", "s1")
 	waitForwarded(t, done)
 
-	// 客户端 B：同 channel 的第二个连接，注册 s2 键（进入广播目标集合）
+	// 客户端 B：同 channel 的第二个连接，注册 s2 键
 	connB := dialWS(t, server, "/tui")
 	readFrame(t, connB) // connection.ack
 	sendReqFrame(t, connB, "q2", "s2")
@@ -866,16 +935,31 @@ func TestSend_stale定向连接探测后广播fallback(t *testing.T) {
 		s.clientsMu.Unlock()
 	})
 
+	// B 侧顺序断言：stale 丢弃场景下 B 不应收到该帧。不直接用 B 的
+	// ReadMessage 超时判定（gorilla 读错误会永久废掉连接，对照组无法
+	// 复用），改用"帧序"验证——对照组广播帧到达后，B 收到的第一帧
+	// 必须是 true-miss-broadcast（若 stale 帧被错误广播则会先收到
+	// stale-drop 内容，断言失败）
 	err := s.Send(context.Background(), &schema.Message{
 		ID: "r8", Type: "event", ChannelID: "tui", SessionID: "s1",
 		EventType: schema.EventTypeChatFinal,
-		Payload:   map[string]any{"content": "stale-fallback"},
+		Payload:   map[string]any{"content": "stale-drop"},
 	})
 	require.NoError(t, err)
 
-	// B 收到广播帧（A 的 stale 定向被 probeWritable 探测失败 → 视为未命中）
+	// 清掉 stale 键（真未命中），同 channel 广播 fallback 仍工作
+	s.clientsMu.Lock()
+	delete(s.sessionToClient, key)
+	s.clientsMu.Unlock()
+	err = s.Send(context.Background(), &schema.Message{
+		ID: "r9", Type: "event", ChannelID: "tui", SessionID: "s1",
+		EventType: schema.EventTypeChatFinal,
+		Payload:   map[string]any{"content": "true-miss-broadcast"},
+	})
+	require.NoError(t, err)
 	frame := readFrame(t, connB)
 	assert.Equal(t, "event", frame["type"])
 	payload := frame["payload"].(map[string]any)
-	assert.Equal(t, "stale-fallback", payload["content"])
+	assert.Equal(t, "true-miss-broadcast", payload["content"],
+		"S-03：stale 定向命中须静默丢弃——B 的第一帧应是对照组广播帧而非 stale-drop")
 }

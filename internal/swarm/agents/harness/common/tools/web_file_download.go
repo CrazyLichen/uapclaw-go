@@ -6,7 +6,6 @@
 package tools
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -22,6 +21,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
@@ -109,8 +109,9 @@ func (m *WebFileDownloadManager) GenerateToken(filePath, sessionID string, expir
 		Sid:  sessionID,
 	}
 	// Python: json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
-	// ——紧凑分隔符+不转义非 ASCII；Go 用 SetEscapeHTML(false) 同步关闭 <>& 转义
-	payloadJSON, err := marshalCompactNoEscape(payload)
+	// ——紧凑分隔符+不转义非 ASCII；utils.MarshalNoEscape 同步关闭 <>& 转义
+	// （T-04 迁移：原私有 marshalCompactNoEscape 收编为公共助手）
+	payloadJSON, err := utils.MarshalNoEscape(payload)
 	if err != nil {
 		// 结构体序列化结构性不可能失败，防御性返回空串
 		return ""
@@ -210,20 +211,6 @@ func (m *WebFileDownloadManager) sign(payloadB64 string) string {
 	mac := hmac.New(sha256.New, []byte(m.secret))
 	mac.Write([]byte(payloadB64))
 	return hex.EncodeToString(mac.Sum(nil))
-}
-
-// marshalCompactNoEscape 紧凑 JSON 序列化，不转义 HTML 字符
-// （对齐 Python separators=(",", ":") + ensure_ascii=False 字节输出）。
-func marshalCompactNoEscape(v any) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	// Encoder 追加换行符，去掉以对齐 json.dumps
-	b := buf.Bytes()
-	return b[:len(b)-1], nil
 }
 
 // getWebFileDownloadSecretFilePath 密钥文件路径。

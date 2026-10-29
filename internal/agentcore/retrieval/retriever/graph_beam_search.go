@@ -281,13 +281,18 @@ func (s *TripleBeamSearch) expandBeams(ctx context.Context, beams []*common.Trip
 
 // searchCandidates 检索单 beam 的候选三元组。
 //
-// 对齐 Python _search_candidates（L172-225）：beam 尾 triple 元数据防御
-// 解析（缺失/非字符串/解析失败 warn 返回空，Python L176-185）；entities=
-// {首,尾}；mode 三级解析 IndexTypeCarrier > retrieveMode > "hybrid"
+// 对齐 Python _search_candidates（L172-225）：空 beam RuntimeError 防御
+// （Python L173-174，构造保证不可达但防御保留——T-02）；beam 尾 triple
+// 元数据防御解析（缺失/非字符串/解析失败 warn 返回空，Python L176-185）；
+// entities={首,尾}；mode 三级解析 IndexTypeCarrier > retrieveMode > "hybrid"
 // （bm25→sparse）；retrieve(top_k=numCandidates)；三重过滤——已在 beam
 // （Contains）/候选解析**裸调用无防御**（Python L213，错误冒泡由上层
 // graph_expansion 降级）/首尾都不在 entities。空结果 warn。
 func (s *TripleBeamSearch) searchCandidates(ctx context.Context, beam *common.TripleBeam) ([]common.RetrievalResult, error) {
+	// Python L173-174: if len(beam) < 1: raise RuntimeError("unexpected empty beam")
+	if beam == nil || beam.Len() < 1 {
+		return nil, fmt.Errorf("unexpected empty beam")
+	}
 	tail := beam.Get(-1)
 	var tripleData any
 	if tail.Metadata != nil {

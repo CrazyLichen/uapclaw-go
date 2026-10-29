@@ -2,7 +2,6 @@ package query_rewriter
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -87,9 +87,11 @@ func WithModelClientOption(m *llm.Model) QueryRewriterOption {
 
 // NewQueryRewriter 构造查询重写器：绑定 LLM 配置与会话上下文。
 //
-// 从 cfg.ModelInfo 读取连接信息建 Model：ssl_cert/verify_ssl/custom_headers
-// 走 Extra 防御读取（Python getattr + pydantic extra="allow" 同构，
-// spec §4.2）；verify_ssl=true 且无证书时强制 false（Python 注释规则：
+// 从 cfg.ModelInfo 读取连接信息建 Model：ssl_cert/verify_ssl 走 Extra
+// 防御读取（Python getattr + pydantic extra="allow" 同构，spec §4.2）；
+// custom_headers 为声明字段直读（Python mode_info.py L19 声明字段，
+// S-04：不再走 Extra 兜底——声明字段读取语义上优先于 extra 通道）；
+// verify_ssl=true 且无证书时强制 false（Python 注释规则：
 // BaseModelClient 要求 verify_ssl=true 时必须配证书）。
 //
 // Python: query_rewriter.py QueryRewriter.__init__
@@ -133,8 +135,8 @@ func NewQueryRewriter(cfg *llmschema.ModelConfig, ctx ceinterface.ModelContext, 
 		return q, nil
 	}
 
-	// Python: mi = self.model_config.model_info（ssl_cert/verify_ssl/
-	// custom_headers 走 extra 字段防御读取）
+	// Python: mi = self.model_config.model_info（ssl_cert/verify_ssl 走
+	// extra 字段防御读取；custom_headers 为声明字段直读——S-04）
 	mi := cfg.ModelInfo
 	sslCert := ""
 	if v, ok := mi.Extra["ssl_cert"].(string); ok {
@@ -149,10 +151,7 @@ func NewQueryRewriter(cfg *llmschema.ModelConfig, ctx ceinterface.ModelContext, 
 	if verifySSL && sslCert == "" {
 		verifySSL = false
 	}
-	var customHeaders map[string]string
-	if v, ok := mi.Extra["custom_headers"].(map[string]string); ok {
-		customHeaders = v
-	}
+	customHeaders := mi.CustomHeaders
 
 	clientOpts := []llmschema.ModelClientConfigOption{
 		llmschema.WithTimeout(float64(mi.Timeout)),
@@ -224,8 +223,11 @@ func (q *QueryRewriter) Msg2Text(messages []llmschema.BaseMessage) (string, erro
 			text = content.Text()
 		} else {
 			// Python: json.dumps(content, ensure_ascii=False)——list/dict
-			// 序列化为 JSON 字符串（Go Parts 对应多模态列表）
-			data, err := json.Marshal(content.Parts())
+			// 序列化为 JSON 字符串（Go Parts 对应多模态列表）。
+			// T-04：utils.MarshalNoEscape 对齐 ensure_ascii=False——
+			// Marshal 默认把 <>& 转义为 \u003c 等，含 HTML 的多模态
+			// content 进提示词时 LLM 会看到转义字面串
+			data, err := utils.MarshalNoEscape(content.Parts())
 			if err != nil {
 				return "", fmt.Errorf("序列化多模态 content 失败: %w", err)
 			}
@@ -254,7 +256,7 @@ func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessag
 	if err != nil {
 		return nil, err
 	}
-	compressionPrompt := fillTemplate(template, map[string]string{"history": rawText})
+	compressionPrompt := fillTemplate(template, templateKV{key: "history", value: rawText})
 
 	// Python L369-373: invoke(model=..., SystemMessage, temperature=构造期已固定 0.0)
 	resp, err := q.llm.Invoke(ctx,
@@ -276,19 +278,28 @@ func (q *QueryRewriter) Compress(ctx context.Context, raw []llmschema.BaseMessag
 	// Python L381: content_json = _extract_json(content_str)
 	contentJSON := extractJSON(contentStr)
 
-	// Python L383-385: 解析链三层
+	// Python L383-385: 解析链三层。M-03 双分支对齐：
+	// Parse 出错 → Python 分支 2 文案（JSONDecodeError——Python 侧因 parse
+	// 全捕获实际不可达，Go 的 error 返回是等价的解码失败信号，映射到该
+	// 文案以保留具体解码错误 + 完整内容不截断）；
+	// 非 dict → Python 分支 1——rune 截断 500
 	parsed, ok := parseLLMJSON(contentJSON)
 	if !ok {
 		// 兜底：JsonOutputParser（markdown 代码块提取 + 直接解析）
 		fallback, perr := q.jsonOutputParser.Parse(contentJSON)
-		if perr == nil {
-			if m, isMap := fallback.(map[string]any); isMap {
-				parsed, ok = m, true
-			}
+		if perr != nil {
+			// Python L395-400: 155604 "is not valid JSON: {e}; compressed: {content_json}"
+			return nil, exception.BuildError(
+				exception.StatusRetrievalQueryRewriterOutputInvalid,
+				exception.WithParam("error_msg", "LLM compress output is not valid JSON: "+perr.Error()+"; compressed: "+contentJSON),
+			)
+		}
+		if m, isMap := fallback.(map[string]any); isMap {
+			parsed, ok = m, true
 		}
 	}
 	if !ok {
-		// Python L386-393: 非 dict → 155604（含 content[:500]）
+		// Python L386-393: 非 dict → 155604（含 content[:500]，rune 语义）
 		return nil, exception.BuildError(
 			exception.StatusRetrievalQueryRewriterOutputInvalid,
 			exception.WithParam("error_msg", "LLM compress output is not valid JSON (parse returned non-dict); content: "+truncateForMsg(contentJSON, 500)),
@@ -334,8 +345,9 @@ func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]a
 	if len(historyFull) >= q.compressRange {
 		compressed, cerr := q.Compress(ctx, historyFull)
 		if cerr == nil {
-			// Python L452-456: json.dumps(summary) 写 compressed_history
-			historyJSON, merr := json.Marshal(compressed)
+			// Python L452-456: json.dumps(summary) 写 compressed_history。
+			// T-04：utils.MarshalNoEscape 对齐 ensure_ascii=False
+			historyJSON, merr := utils.MarshalNoEscape(compressed)
 			if merr == nil {
 				q.sessionCtx.SetMessages([]llmschema.BaseMessage{
 					llmschema.NewSystemMessage(string(historyJSON), llmschema.WithMessageName("compressed_history")),
@@ -363,11 +375,12 @@ func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]a
 	if err != nil {
 		return nil, err
 	}
-	// Python L476-480: 模板填 history + query
-	completionPrompt := fillTemplate(promptTemplate, map[string]string{
-		"history": historyText,
-		"query":   query,
-	})
+	// Python L476-480: 模板填 history + query（kwargs 声明序——T-03：
+	// history 先替换，其值中的字面 {query} 占位符随后被 query 值替换）
+	completionPrompt := fillTemplate(promptTemplate,
+		templateKV{key: "history", value: historyText},
+		templateKV{key: "query", value: query},
+	)
 
 	// Python L484-488: invoke（temperature 构造期已固定 0.0）
 	resp, err := q.llm.Invoke(ctx,
@@ -388,18 +401,24 @@ func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]a
 	}
 	contentJSON := extractJSON(contentStr)
 
-	// Python L498-508: 解析链三层（同 Compress）
+	// Python L498-508: 解析链三层（同 Compress，M-03 双分支对齐：
+	// Parse error → 分支 2 文案完整不截断；非 dict → 分支 1 rune 截 500）
 	parsed, ok := parseLLMJSON(contentJSON)
 	if !ok {
 		fallback, perr := q.jsonOutputParser.Parse(contentJSON)
-		if perr == nil {
-			if m, isMap := fallback.(map[string]any); isMap {
-				parsed, ok = m, true
-			}
+		if perr != nil {
+			// Python L510-515: 155604 "is not valid JSON: {e}; content: {content_json}"
+			return nil, exception.BuildError(
+				exception.StatusRetrievalQueryRewriterOutputInvalid,
+				exception.WithParam("error_msg", "LLM rewrite output is not valid JSON: "+perr.Error()+"; content: "+contentJSON),
+			)
+		}
+		if m, isMap := fallback.(map[string]any); isMap {
+			parsed, ok = m, true
 		}
 	}
 	if !ok {
-		// Python L501-508: 非 dict → 155604（含 content[:500]）
+		// Python L501-508: 非 dict → 155604（含 content[:500]，rune 语义）
 		return nil, exception.BuildError(
 			exception.StatusRetrievalQueryRewriterOutputInvalid,
 			exception.WithParam("error_msg", "LLM rewrite output is not valid JSON (parse returned non-dict); content: "+truncateForMsg(contentJSON, 500)),
@@ -411,10 +430,12 @@ func (q *QueryRewriter) Rewrite(ctx context.Context, query string) (map[string]a
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// truncateForMsg 截取前 n 字节用于错误消息（Python content[:500]）。
+// truncateForMsg 截取前 n 个字符（rune）用于错误消息（Python content[:500]
+// code point 语义——M-03：字节切片在 CJK 3 字节中间会截出无效 UTF-8）。
 func truncateForMsg(s string, n int) string {
-	if len(s) <= n {
+	r := []rune(s)
+	if len(r) <= n {
 		return s
 	}
-	return s[:n]
+	return string(r[:n])
 }
