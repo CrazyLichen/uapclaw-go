@@ -84,13 +84,12 @@ func NewGatewayServerConfig() *GatewayServerConfig {
 	}
 }
 
-// BuildACPRouteBinding 从路径与渠道标识构建 ACP 路由绑定。
+// BuildACPRouteBinding 构造 ACP 路由 binding（零拦截器形态）。
 //
 // Python: _build_acp_route_binding（L723-736）。
-// 注意：Python 的 on_message_cb 参数未存入 binding（死参数），Go 侧不保留。
-// forwardMethods/forwardNoLocal 由调用方直接放进 RouteConfig
-// （见 BuildRouteConfigMap 注释），本函数只装 binding 本体字段。
-// A1 空路由形态下暂无调用方，11.25 接线时使用。
+// 拦截器不在此装填：Python 侧 binding 只带 path/channel_id，
+// 拦截器由 GatewayServer 装配后经 _install_default_route_hooks 补齐（or 语义）；
+// Go 侧对应 InstallDefaultAcpHooks()（11.25 Task 5）。
 func BuildACPRouteBinding(path, channelID string) *routing.RouteBinding {
 	return &routing.RouteBinding{
 		Path:      path,
