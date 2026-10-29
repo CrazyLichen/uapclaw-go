@@ -367,6 +367,26 @@ func (s *ChromaVectorStore) Collection() chromav2.Collection { return s.collecti
 // DistanceMetric 返回距离度量字符串
 func (s *ChromaVectorStore) DistanceMetric() string { return s.distanceMetric }
 
+// DatabaseName 返回数据库名称（13.26 validate_index 消费）。
+func (s *ChromaVectorStore) DatabaseName() string { return s.databaseName }
+
+// TextField 返回文本字段名（13.26 validate_index 消费）。
+func (s *ChromaVectorStore) TextField() string { return s.textField }
+
+// VectorField 返回向量字段配置（13.26 validate_index 消费）。
+// 返回 any 装箱联合类型事实：Chroma 侧 *ChromaVectorField、Milvus 侧
+// MilvusVectorFieldConfig 接口——统一签名供 KB 包 attrEqual(DeepEqual) 比对。
+func (s *ChromaVectorStore) VectorField() any { return s.vectorField }
+
+// SparseVectorField 返回稀疏向量字段名（13.26 validate_index 消费）。
+func (s *ChromaVectorStore) SparseVectorField() string { return s.sparseVectorField }
+
+// MetadataField 返回元数据字段名（13.26 validate_index 消费）。
+func (s *ChromaVectorStore) MetadataField() string { return s.metadataField }
+
+// DocIDField 返回文档 ID 字段名（13.26 validate_index 消费）。
+func (s *ChromaVectorStore) DocIDField() string { return s.docIDField }
+
 // ConstructConfig 返回构建阶段配置
 func (s *ChromaVectorStore) ConstructConfig() map[string]any { return s.constructConfig }
 

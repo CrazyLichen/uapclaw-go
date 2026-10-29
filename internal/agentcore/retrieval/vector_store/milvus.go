@@ -270,6 +270,29 @@ func (s *MilvusVectorStore) Client(ctx context.Context) (MilvusClient, error) {
 // 对齐 Python distance_metric property。
 func (s *MilvusVectorStore) DistanceMetric() string { return s.distanceMetric }
 
+// DatabaseName 返回数据库名称（13.26 validate_index 消费，SimpleKB add_documents 复用）。
+func (s *MilvusVectorStore) DatabaseName() string { return s.databaseName }
+
+// TextField 返回文本字段名（13.26 validate_index 消费）。
+func (s *MilvusVectorStore) TextField() string { return s.textField }
+
+// VectorField 返回向量字段配置（13.26 validate_index 消费）。
+// 返回 any 装箱联合类型事实（Chroma/Milvus 两型不同源，见 ChromaVectorStore.VectorField 注释）。
+func (s *MilvusVectorStore) VectorField() any { return s.vectorField }
+
+// SparseVectorField 返回稀疏向量字段名（13.26 validate_index 消费）。
+func (s *MilvusVectorStore) SparseVectorField() string { return s.sparseVectorField }
+
+// MetadataField 返回元数据字段名（13.26 validate_index 消费）。
+func (s *MilvusVectorStore) MetadataField() string { return s.metadataField }
+
+// DocIDField 返回文档 ID 字段名（13.26 validate_index 消费）。
+func (s *MilvusVectorStore) DocIDField() string { return s.docIDField }
+
+// EnsureLoaded 确保集合已加载（13.26 KB 构造期钩子，对齐 Python _ensure_loaded）。
+// 一行转发既有私有 ensureLoaded；错误传播由调用方决定。
+func (s *MilvusVectorStore) EnsureLoaded(ctx context.Context) error { return s.ensureLoaded(ctx) }
+
 // Search 向量搜索。
 //
 // 对齐 Python MilvusVectorStore.search：
