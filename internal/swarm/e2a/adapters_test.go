@@ -272,6 +272,63 @@ func TestEnvelopeFromA2ASendMessage_extra覆盖既有键(t *testing.T) {
 	}
 }
 
+// ──────────────────────────── EnvelopeToACPJsonrpcCall ────────────────────────────
+
+// TestEnvelopeToACPJsonrpcCall_基础 输出恒四键 + method/params 映射。
+func TestEnvelopeToACPJsonrpcCall_基础(t *testing.T) {
+	env := EnvelopeFromACPJsonrpc("session/prompt", map[string]any{"content": "hi"}, &EnvelopeFromACPOptions{JSONRPCID: 7})
+	out := EnvelopeToACPJsonrpcCall(env)
+	if out["jsonrpc"] != "2.0" {
+		t.Errorf("jsonrpc = %v, want 2.0", out["jsonrpc"])
+	}
+	if out["id"] != 7 {
+		t.Errorf("id = %v, want 7（any 透传）", out["id"])
+	}
+	if out["method"] != "session/prompt" {
+		t.Errorf("method = %v, want session/prompt", out["method"])
+	}
+	params, _ := out["params"].(map[string]any)
+	if params == nil {
+		t.Fatal("params 应为 map")
+	}
+	// session/prompt 走 MergeParamsToACPPrompt：content → prompt 块（返回类型 []map[string]any）
+	prompt, _ := params["prompt"].([]map[string]any)
+	if prompt == nil || len(prompt) != 1 || prompt[0]["type"] != "text" || prompt[0]["text"] != "hi" {
+		t.Errorf("params[prompt] = %v, want 单块 text=hi", params["prompt"])
+	}
+}
+
+// TestEnvelopeToACPJsonrpcCall_ext方法替换。
+func TestEnvelopeToACPJsonrpcCall_ext方法替换(t *testing.T) {
+	env := &E2AEnvelope{Method: "ext", ExtMethod: "custom/method", JSONRPCID: "id1"}
+	out := EnvelopeToACPJsonrpcCall(env)
+	if out["method"] != "custom/method" {
+		t.Errorf("method = %v, want custom/method", out["method"])
+	}
+}
+
+// TestEnvelopeToACPJsonrpcCall_非ext非prompt method 原样、params 拷贝。
+func TestEnvelopeToACPJsonrpcCall_非ext非prompt(t *testing.T) {
+	env := &E2AEnvelope{Method: "chat.send", Params: map[string]any{"query": "q"}}
+	out := EnvelopeToACPJsonrpcCall(env)
+	if out["method"] != "chat.send" {
+		t.Errorf("method = %v, want chat.send", out["method"])
+	}
+	params, _ := out["params"].(map[string]any)
+	if params == nil || params["query"] != "q" {
+		t.Errorf("params = %v, want 含 query=q", out["params"])
+	}
+}
+
+// TestEnvelopeToACPJsonrpcCall_ext无extMethod回退method。
+func TestEnvelopeToACPJsonrpcCall_ext无extMethod回退(t *testing.T) {
+	env := &E2AEnvelope{Method: "ext", ExtMethod: ""}
+	out := EnvelopeToACPJsonrpcCall(env)
+	if out["method"] != "ext" {
+		t.Errorf("method = %v, want ext（ext_method 空回退）", out["method"])
+	}
+}
+
 // 暂留 import 引用（Task 5 消费；Go 未使用 import 编译报错，先以 var _ 锚定）
 var (
 	_ = strings.TrimSpace

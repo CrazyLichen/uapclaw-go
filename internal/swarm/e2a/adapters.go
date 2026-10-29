@@ -162,6 +162,32 @@ func EnvelopeFromA2ASendMessage(taskID, contextID string, messageBody map[string
 	}
 }
 
+// EnvelopeToACPJsonrpcCall 将信封转为 JSON-RPC 风格单条调用描述（日志或下游 ACP 端点）。
+// 若 envelope.Method 为网关 RPC（如 chat.send），输出中的 method 对纯 ACP 端可能无效，
+// 需在业务层先映射为 ACP method（如 session/prompt）再发送。
+// Python: adapters.py envelope_to_acp_jsonrpc_call
+func EnvelopeToACPJsonrpcCall(env *E2AEnvelope) map[string]any {
+	method := env.Method
+	if env.Method == "ext" && env.ExtMethod != "" {
+		method = env.ExtMethod
+	}
+	var params map[string]any
+	if env.Method == "session/prompt" {
+		params = MergeParamsToACPPrompt(env)
+	} else {
+		params = make(map[string]any, len(env.Params))
+		for k, v := range env.Params {
+			params[k] = v
+		}
+	}
+	return map[string]any{
+		"jsonrpc": "2.0",
+		"id":      env.JSONRPCID,
+		"method":  method,
+		"params":  params,
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // orDefaultString 空串回退默认值（Python `converter or _CONVERTER_ACP` 的 or 语义）。
