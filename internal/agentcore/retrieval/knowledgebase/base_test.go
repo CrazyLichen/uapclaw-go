@@ -52,7 +52,7 @@ func (f *fakeAttrStore) TableExists(ctx context.Context, tableName string) (bool
 	return false, nil
 }
 func (f *fakeAttrStore) DeleteTable(ctx context.Context, tableName string) error { return nil }
-func (f *fakeAttrStore) Close()                                                    {}
+func (f *fakeAttrStore) Close()                                                  {}
 
 // storageAttrProvider 7 getter（13.26 校验消费接口）
 func (f *fakeAttrStore) DatabaseName() string      { return f.databaseName }
@@ -335,4 +335,25 @@ func TestClose_错误变体吞并(t *testing.T) {
 	require.NoError(t, err)
 	b.Close() // 错误被 Warn 吞，不 panic
 	assert.Equal(t, 1, ec.closed)
+}
+
+// TestNewBaseKnowledgeBase_全选项与访问器 8 构造选项 + 4 访问器全覆盖（Go 增强）。
+func TestNewBaseKnowledgeBase_全选项与访问器(t *testing.T) {
+	vs, im := makeCompatiblePair()
+	p := &fakeKBParser{}
+	cfg := common.KnowledgeBaseConfig{KBID: "kb"}
+	b, err := NewBaseKnowledgeBase(cfg,
+		WithVectorStore(vs), WithIndexManager(im), WithParser(p),
+		WithEmbedModel(nil), WithChunker(nil), WithExtractor(nil),
+		WithLLMClient(nil), WithStrictValidationFalse())
+	require.NoError(t, err)
+	assert.Equal(t, cfg, b.Config())
+	assert.False(t, b.StrictValidation())
+	assert.Equal(t, vs, b.VectorStore())
+	assert.Equal(t, im, b.IndexManager())
+	assert.NotNil(t, b.parser)
+	assert.Nil(t, b.embedModel)
+	assert.Nil(t, b.chunker)
+	assert.Nil(t, b.extractor)
+	assert.Nil(t, b.llmClient)
 }
