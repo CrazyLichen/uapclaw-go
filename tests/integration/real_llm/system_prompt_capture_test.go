@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/suite"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -57,6 +59,36 @@ type promptCapture struct {
 	mu sync.Mutex
 	// events 捕获到的事件列表
 	events []capturedEvent
+}
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// skillEntryRegex 编号技能条目正则（包级编译一次）。
+// 对齐 Python: re.search(r"\n\d+\.\s+.+?: .+", first_system_prompt)
+var skillEntryRegex = regexp.MustCompile(`\n\d+\.\s+.+?: .+`)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// TestSystemPromptCaptureSuite 运行系统提示词捕获测试套件
+// 运行方式: LLM_API_KEY=... go test -tags="sqlite_fts5 test integration llm" -run TestSystemPromptCapture ./tests/integration/real_llm/...
+func TestSystemPromptCaptureSuite(t *testing.T) {
+	suite.Run(t, new(SystemPromptCaptureSuite))
+}
+
+// TestSystemPromptCapture_AutoList分支 实时捕获 auto_list 模式的完整系统提示词。
+// 对齐 Python: test_live_capture_system_prompt（skill_mode="auto_list"）
+func (s *SystemPromptCaptureSuite) TestSystemPromptCapture_AutoList分支() {
+	prompt, _ := s.runLiveCapture("auto_list")
+	s.assertCommonPromptStructure(prompt)
+	s.assertSkillModeAutoList(prompt)
+}
+
+// TestSystemPromptCapture_All分支 实时捕获 all 模式的完整系统提示词。
+// 对齐 Python: test_live_capture_system_prompt_skill_mode_all（skill_mode="all"）
+func (s *SystemPromptCaptureSuite) TestSystemPromptCapture_All分支() {
+	prompt, _ := s.runLiveCapture("all")
+	s.assertCommonPromptStructure(prompt)
+	s.assertSkillModeAll(prompt)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -350,4 +382,86 @@ func (s *SystemPromptCaptureSuite) runLiveCapture(skillMode string) (string, *pr
 		t.Fatal("system messages 为空")
 	}
 	return prompt, capture
+}
+
+// assertCommonPromptStructure 断言公共提示词结构。
+// 对齐 Python: _assert_common_prompt_structure
+// （20 条 = 18 正向 + 2 负向，已与 Python 原文机器核对 1:1）
+func (s *SystemPromptCaptureSuite) assertCommonPromptStructure(prompt string) {
+	t := s.T()
+	sTrue := func(substr string, msg string) {
+		if !strings.Contains(prompt, substr) {
+			t.Errorf("公共结构断言失败: %s（缺少 %q）", msg, substr)
+		}
+	}
+	sFalse := func(substr string, msg string) {
+		if strings.Contains(prompt, substr) {
+			t.Errorf("公共结构负向断言失败: %s（不应出现 %q）", msg, substr)
+		}
+	}
+
+	// 工具与使用原则
+	sTrue("# 安全原则", "安全原则节")
+	sTrue("# 可用工具", "可用工具节")
+	sTrue("- bash: 执行 Shell 命令", "bash 工具描述")
+	sTrue("- code: 执行 Python 或 JavaScript 代码", "code 工具描述")
+	sTrue("## bash 使用原则", "bash 使用原则小节")
+	sTrue("## task_tool 使用原则", "task_tool 使用原则小节")
+	sFalse("## task_tool 用于创建临时子代理", "旧版 task_tool 文案不应存在")
+	sFalse("- bash / code:", "旧版合并工具描述不应存在")
+
+	// 子代理列表
+	sTrue(`- "code_agent":`, "code_agent 子代理描述")
+	sTrue(`- "research_agent":`, "research_agent 子代理描述")
+	sTrue(`- "browser_agent":`, "browser_agent 子代理描述")
+
+	// 各 section
+	sTrue("# 技能", "技能节")
+	sTrue("# 持久化存储体系", "持久化存储体系节")
+	sTrue("# 消息说明", "消息说明节")
+	sTrue("# 工作空间", "工作空间节")
+	sTrue("# 项目上下文", "项目上下文节")
+	sTrue("使用 todo 工具（todo_create、todo_modify、todo_list）", "todo 工具说明")
+	sTrue("# 上下文压缩", "上下文压缩节")
+	sTrue("# 当前日期与时间", "当前日期与时间节")
+	sTrue("# 运行时", "运行时节（依赖 Model 门面层捕获点）")
+}
+
+// assertSkillModeAutoList 断言 auto_list 分支专属文案。
+// 对齐 Python: test_live_capture_system_prompt 后半段（含 mode/skill_mode
+// 元断言——由测试方法调用 runLiveCapture("auto_list") 固定值隐式覆盖）
+func (s *SystemPromptCaptureSuite) assertSkillModeAutoList(prompt string) {
+	t := s.T()
+	if !strings.Contains(prompt, "- list_skill: 列出可用技能") {
+		t.Errorf("auto_list 分支应含 list_skill 工具描述")
+	}
+	if !strings.Contains(prompt, "需要时先调用 list_skill 查看可用技能") {
+		t.Errorf("auto_list 分支应含 list_skill 使用指引")
+	}
+}
+
+// assertSkillModeAll 断言 all 分支专属文案。
+// 对齐 Python: test_live_capture_system_prompt_skill_mode_all 后半段
+// （含 mode/skill_mode 元断言——由测试方法固定值隐式覆盖）
+func (s *SystemPromptCaptureSuite) assertSkillModeAll(prompt string) {
+	t := s.T()
+	if strings.Contains(prompt, "- list_skill: 列出可用技能") {
+		t.Errorf("all 分支不应含 list_skill 工具描述")
+	}
+	if strings.Contains(prompt, "需要时先调用 list_skill 查看可用技能") {
+		t.Errorf("all 分支不应含 list_skill 使用指引")
+	}
+	if !strings.Contains(prompt, "执行前先用 read_file 阅读相关 SKILL.md。") {
+		t.Errorf("all 分支应含 SKILL.md 阅读指引")
+	}
+	if !strings.Contains(prompt, "可用技能：") {
+		t.Errorf("all 分支应含技能列表标题")
+	}
+	// 对齐 Python: re.search(r"\n\d+\.\s+.+?: .+", first_system_prompt)
+	if !skillEntryRegex.MatchString(prompt) {
+		t.Errorf(`all 分支应含编号技能条目（\n\d+\.\s+.+?: .+）`)
+	}
+	if !strings.Contains(prompt, "Path: ") {
+		t.Errorf("all 分支应含技能路径展示")
+	}
 }
