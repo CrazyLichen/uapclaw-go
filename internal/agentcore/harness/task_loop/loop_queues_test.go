@@ -71,6 +71,24 @@ func TestLoopQueues_FollowUpLen(t *testing.T) {
 	assert.Equal(t, 0, q.FollowUpLen())
 }
 
+// TestLoopQueues_SteerLen 测试 SteerLen 返回当前积压长度
+// （集成测试同步屏障的轮询依据，与 FollowUpLen 同族）
+func TestLoopQueues_SteerLen(t *testing.T) {
+	q := NewLoopQueues(16)
+	assert.Equal(t, 0, q.SteerLen())
+
+	q.PushSteer("s1")
+	assert.Equal(t, 1, q.SteerLen())
+
+	q.PushSteer("s2")
+	q.PushSteer("s3")
+	assert.Equal(t, 3, q.SteerLen())
+
+	// 排空后归零
+	q.DrainSteering()
+	assert.Equal(t, 0, q.SteerLen())
+}
+
 // TestLoopQueues_DrainSteering_空队列 测试空队列排空
 func TestLoopQueues_DrainSteering_空队列(t *testing.T) {
 	q := NewLoopQueues(16)

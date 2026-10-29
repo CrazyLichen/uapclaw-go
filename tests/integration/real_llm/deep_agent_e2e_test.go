@@ -4,6 +4,7 @@ package real_llm
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,11 +13,15 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
@@ -205,6 +210,23 @@ deadline:
 //   - result_type=="answer" 且 output 非空
 //   - 迭代轮次 ≥ 2（模型调用次数为代理指标）
 //   - steering 文本出现在模型消息中（SteerSeenInMessages）
+//
+// 与 Python 的两点移植差异（CI 首跑 40856190636 失败定位）：
+//
+//  1. 补齐 TaskPlanningRail + sys_operation + 规划型 system_prompt。
+//     Python 原文 create_deep_agent 传 rails=[planning_rail, observe_rail]
+//     且 asyncSetUp 注册 sys_operation——todo 工具 + 规划提示词引导模型
+//     产出多步任务结构，外层循环多轮运行，steer/follow_up 有注入窗口。
+//     首跑版本漏掉 planning rail：模型单轮直接 answer，外层循环
+//     hasRemainingTasks=false 直接退出，steer 与 ReAct drain 竞态必输。
+//
+//  2. Steer 后轮询 SteerLen 同步屏障。Steer 是 fire-and-forget：
+//     TaskInteractionEvent 经 MQ 消费者 goroutine 异步转入 LoopQueues.steering，
+//     而 ReAct 迭代开头的 DrainSteering 与消费者 goroutine 在 Go 真并行下
+//     自由竞争（asyncio 单线程 FIFO 保证消费者先跑，Go 无此保证）。
+//     CI 首跑实证：call 2 为 HasPendingSteering 空判定后的普通迭代，
+//     [STEERING] 消息缺失 → 断言失败（14.44s）。对齐 outer_loop_test.go
+//     的 waitForFollowUpQueued 先例（FollowUpLen 同族问题）。
 func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_外循环多步steer与followup() {
 	s.SkipIfNoRealLLM()
 
@@ -219,6 +241,18 @@ func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_外循环多步steer与follo
 
 	observer := testhelpers.NewModelCallObserver()
 
+	// 对齐 Python asyncSetUp：sys_operation（TaskPlanningRail 从
+	// agent.DeepConfig().SysOperation 自动获取同一实例，todo 工具挂载其上）
+	sysOpCard := sys_operation.NewSysOperationCard(
+		sys_operation.WithSysOpMode(sys_operation.OperationModeLocal),
+	)
+	sysOp, err := sys_operation.NewSysOperation(sysOpCard)
+	s.Require().NoError(err, "创建 SysOperation 失败")
+
+	// 对齐 Python: planning_rail = TaskPlanningRail(sys_oper)
+	planningRail := rails.NewTaskPlanningRail()
+	planningRail.SetSysOperation(sysOp)
+
 	card := agentschema.NewAgentCard(
 		agentschema.WithAgentID("e2e_real_llm_taskloop"),
 		agentschema.WithAgentName("E2ERealLLMTaskLoopAgent"),
@@ -226,9 +260,12 @@ func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_外循环多步steer与follo
 	agent, err := harness.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
 		Card:           card,
 		Model:          model,
-		Rails:          []agentinterfaces.AgentRail{observer},
+		SysOperation:   sysOp,
+		Rails:          []agentinterfaces.AgentRail{planningRail, observer},
 		EnableTaskLoop: true,
 		MaxIterations:  12,
+		// 对齐 Python 原文 system_prompt（规划导向）
+		SystemPrompt: "你是一个严谨的任务执行助手。根据当前任务逐步输出结果。",
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 
@@ -256,11 +293,19 @@ func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_外循环多步steer与follo
 	s.Require().True(s.waitForModelCalls(observer, 1, 3*time.Minute),
 		"等待第 1 次模型调用超时")
 	agent.Steer(ctx, steerText, sess)
+	// 同步屏障：确认 steer 已被 MQ 消费者处理并推入 steering 队列，
+	// 消除 Steer→ReAct drain 竞态窗口（详见方法注释移植差异 2）
+	s.Require().NoError(s.waitForSteerQueued(agent, 1, 30*time.Second),
+		"等待 steer 入队超时")
 
 	// 等第 2 轮模型调用发生后注入 follow_up（对齐 Python iteration_event(2).wait()）
 	s.Require().True(s.waitForModelCalls(observer, 2, 5*time.Minute),
 		"等待第 2 次模型调用超时")
 	agent.FollowUp(ctx, followUpText, "", sess)
+	// 同族同步屏障：follow_up 经 MQ 异步入队，外层循环退出检查
+	// HasFollowUp 前必须确认已入队（对齐 outer_loop_test 先例）
+	s.Require().NoError(s.waitForFollowUpQueued(agent, 1, 30*time.Second),
+		"等待 follow_up 入队超时")
 
 	// 等待 Invoke 完成（对齐 Python asyncio.wait_for(invoke_task, 600)）
 	select {
@@ -389,4 +434,37 @@ func (s *DeepAgentE2ESuite) waitForModelCalls(observer *testhelpers.ModelCallObs
 		time.Sleep(200 * time.Millisecond)
 	}
 	return observer.CallCount() >= n
+}
+
+// waitForSteerQueued 等待 steer 事件真实入队（LoopQueues.steering 非空）。
+// 对齐 outer_loop_test.go 的 waitForFollowUpQueued 先例：Steer 是
+// fire-and-forget，事件经 MQ 消费者 goroutine 异步转入 steering 队列，
+// 与 ReAct 迭代 DrainSteering 存在调度竞争，需显式同步屏障。
+func (s *DeepAgentE2ESuite) waitForSteerQueued(agent *harness.DeepAgent, expected int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if tl, ok := agent.LoopController().(*task_loop.TaskLoopController); ok && tl != nil {
+			if tl.SteerLen() >= expected {
+				return nil
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return fmt.Errorf("等待 %d 条 steer 入队超时（%v）", expected, timeout)
+}
+
+// waitForFollowUpQueued 等待 follow_up 事件真实入队（LoopQueues.followUp 非空）。
+// 对齐 outer_loop_test.go 的 waitForFollowUpQueued：外层循环退出检查
+// HasFollowUp 前必须确认 follow_up 已被消费者处理入队。
+func (s *DeepAgentE2ESuite) waitForFollowUpQueued(agent *harness.DeepAgent, expected int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if tl, ok := agent.LoopController().(*task_loop.TaskLoopController); ok && tl != nil {
+			if tl.FollowUpLen() >= expected {
+				return nil
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return fmt.Errorf("等待 %d 条 follow-up 入队超时（%v）", expected, timeout)
 }

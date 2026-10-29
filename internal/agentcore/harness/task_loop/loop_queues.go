@@ -81,6 +81,15 @@ func (q *LoopQueues) FollowUpLen() int {
 	return len(q.followUp)
 }
 
+// SteerLen 返回 steering 队列当前积压长度（只读）。
+// [Go 扩展] 测试同步用：Steer 发布是 fire-and-forget（事件经 MQ 消费者
+// goroutine 异步转入本队列），Go 真并行下消费者与 ReAct 迭代 drain 自由
+// 竞争——集成测试需轮询本访问器确认 steer 已真实入队后再继续，消除
+// Steer→drain 之间的竞态窗口（asyncio 单线程 FIFO 无此问题）。
+func (q *LoopQueues) SteerLen() int {
+	return len(q.steering)
+}
+
 // DrainSteering 非阻塞一次性排空所有引导指令。
 // Python: LoopQueues.drain_steering
 func (q *LoopQueues) DrainSteering() []string {

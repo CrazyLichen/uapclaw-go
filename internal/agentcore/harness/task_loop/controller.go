@@ -172,6 +172,19 @@ func (tc *TaskLoopController) FollowUpLen() int {
 	return 0
 }
 
+// SteerLen 返回 steering 队列当前长度（只读）。
+// [Go 扩展] 与 FollowUpLen 同族：Steer 事件经 MQ 消费者 goroutine
+// 异步推入 steering 队列，集成测试需轮询本访问器确认 steer 已入队
+// 再继续（ReAct 迭代 drain 与消费者 goroutine 竞争，asyncio 单线程
+// FIFO 语义在 Go 真并行下无保证）。
+func (tc *TaskLoopController) SteerLen() int {
+	queues := tc.getInteractionQueues()
+	if queues != nil {
+		return queues.SteerLen()
+	}
+	return 0
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getInteractionQueues 从 EventHandler 防御性获取 LoopQueues。

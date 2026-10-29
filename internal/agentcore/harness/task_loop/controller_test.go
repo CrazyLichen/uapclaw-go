@@ -196,6 +196,31 @@ func TestTaskLoopController_FollowUpLen(t *testing.T) {
 	assert.Equal(t, 0, tc.FollowUpLen())
 }
 
+// TestTaskLoopController_SteerLen 测试 SteerLen 返回积压长度
+// （集成测试同步屏障的轮询依据，与 FollowUpLen 同族；无 EventHandler 时返回 0）
+func TestTaskLoopController_SteerLen(t *testing.T) {
+	// 无 Handler：返回 0
+	tcNoHandler := NewTaskLoopController()
+	assert.Equal(t, 0, tcNoHandler.SteerLen())
+
+	// 有 Queues：返回真实积压长度
+	tc := NewTaskLoopController()
+	card := newTestCard()
+	cfg := config.DefaultControllerConfig()
+	tc.Init(card, cfg, &mockAbilityMgr{}, nil)
+
+	queues := NewLoopQueues(16)
+	handler := &mockEventHandlerWithQueues{queues: queues}
+	tc.SetEventHandler(handler)
+
+	assert.Equal(t, 0, tc.SteerLen())
+	queues.PushSteer("s1")
+	queues.PushSteer("s2")
+	assert.Equal(t, 2, tc.SteerLen())
+	queues.DrainSteering()
+	assert.Equal(t, 0, tc.SteerLen())
+}
+
 // TestTaskLoopController_WaitRoundCompletion 测试等待轮次完成
 func TestTaskLoopController_WaitRoundCompletion(t *testing.T) {
 	tc := NewTaskLoopController()
