@@ -329,6 +329,264 @@ func TestEnvelopeToACPJsonrpcCall_ext无extMethod回退(t *testing.T) {
 	}
 }
 
+// ──────────────────────────── E2AResponseToACPJsonrpcResponse ────────────────────────────
+
+// TestE2AResponseToACPJsonrpcResponse_projections快路径 已组装响应原样返回副本。
+func TestE2AResponseToACPJsonrpcResponse_projections快路径(t *testing.T) {
+	resp := &E2AResponse{
+		ResponseKind: E2AResponseKindACPPromptResult,
+		JSONRPCID:    "rid",
+		Projections: map[string]any{
+			"acp": map[string]any{"jsonrpc": "2.0", "id": "x", "result": map[string]any{"stop": map[string]any{"reason": "end_turn"}}},
+		},
+	}
+	out := E2AResponseToACPJsonrpcResponse(resp)
+	proj, _ := out["result"].(map[string]any)
+	if proj == nil || proj["stop"] == nil {
+		t.Error("projections 快路径应原样返回")
+	}
+	if out["id"] != "x" {
+		t.Errorf("id = %v, want x", out["id"])
+	}
+	// 副本语义：改 out 不影响 resp.Projections
+	out["result"] = "mutated"
+	if resp.Projections["acp"].(map[string]any)["result"] == "mutated" {
+		t.Error("应返回副本")
+	}
+}
+
+// TestE2AResponseToACPJsonrpcResponse_projections缺id补全 setdefault("id")。
+func TestE2AResponseToACPJsonrpcResponse_projections缺id补全(t *testing.T) {
+	resp := &E2AResponse{
+		ResponseKind: E2AResponseKindACPPromptResult,
+		JSONRPCID:    "rid",
+		Projections: map[string]any{
+			"acp": map[string]any{"jsonrpc": "2.0", "result": "ok"},
+		},
+	}
+	out := E2AResponseToACPJsonrpcResponse(resp)
+	if out["id"] != "rid" {
+		t.Errorf("id = %v, want rid（setdefault）", out["id"])
+	}
+}
+
+// TestE2AResponseToACPJsonrpcResponse_projections无效走body projections 缺 result/error 或 jsonrpc 值错。
+func TestE2AResponseToACPJsonrpcResponse_projections无效走body(t *testing.T) {
+	// jsonrpc 值非 "2.0"
+	resp1 := &E2AResponse{
+		ResponseKind: E2AResponseKindACPPromptResult,
+		JSONRPCID:    "r1",
+		Body:         map[string]any{"final": "b1"},
+		Projections:  map[string]any{"acp": map[string]any{"jsonrpc": "1.0", "result": "x"}},
+	}
+	out1 := E2AResponseToACPJsonrpcResponse(resp1)
+	if out1 == nil {
+		t.Fatal("应走 body 路径返回非 nil")
+	}
+	if b, _ := out1["result"].(map[string]any); b == nil || b["final"] != "b1" {
+		t.Errorf("无效 projections 应走 body 路径，result = %v", out1["result"])
+	}
+	// projections.acp 非 dict
+	resp2 := &E2AResponse{
+		ResponseKind: E2AResponseKindACPPromptResult,
+		JSONRPCID:    "r2",
+		Body:         map[string]any{"final": "b2"},
+		Projections:  map[string]any{"acp": "not-a-dict"},
+	}
+	out2 := E2AResponseToACPJsonrpcResponse(resp2)
+	if out2 == nil {
+		t.Fatal("应走 body 路径返回非 nil")
+	}
+	if b, _ := out2["result"].(map[string]any); b == nil || b["final"] != "b2" {
+		t.Errorf("projections.acp 非 dict 应走 body 路径，result = %v", out2["result"])
+	}
+	// projections.acp 是 dict 且 jsonrpc=2.0 但既无 result 也无 error → 走 body
+	resp3 := &E2AResponse{
+		ResponseKind: E2AResponseKindACPPromptResult,
+		JSONRPCID:    "r3",
+		Body:         map[string]any{"final": "b3"},
+		Projections:  map[string]any{"acp": map[string]any{"jsonrpc": "2.0"}},
+	}
+	out3 := E2AResponseToACPJsonrpcResponse(resp3)
+	if b, _ := out3["result"].(map[string]any); b == nil || b["final"] != "b3" {
+		t.Errorf("无 result/error 键应走 body 路径，result = %v", out3["result"])
+	}
+}
+
+// TestE2AResponseToACPJsonrpcResponse_promptResultKind。
+func TestE2AResponseToACPJsonrpcResponse_promptResultKind(t *testing.T) {
+	resp := &E2AResponse{
+		ResponseKind: E2AResponseKindACPPromptResult,
+		JSONRPCID:    99,
+		Body:         map[string]any{"stop": map[string]any{"reason": "end_turn"}},
+	}
+	out := E2AResponseToACPJsonrpcResponse(resp)
+	if out["jsonrpc"] != "2.0" || out["id"] != 99 {
+		t.Errorf("jsonrpc/id = %v/%v, want 2.0/99", out["jsonrpc"], out["id"])
+	}
+	stopWrap, _ := out["result"].(map[string]any)
+	if stopWrap == nil {
+		t.Fatalf("result = %v, want map", out["result"])
+	}
+	stop, _ := stopWrap["stop"].(map[string]any)
+	if stop == nil || stop["reason"] != "end_turn" {
+		t.Errorf("result.stop = %v, want reason=end_turn", stopWrap["stop"])
+	}
+}
+
+// TestE2AResponseToACPJsonrpcResponse_jsonrpcErrorKind。
+func TestE2AResponseToACPJsonrpcResponse_jsonrpcErrorKind(t *testing.T) {
+	resp := &E2AResponse{
+		ResponseKind: E2AResponseKindACPJSONRPCError,
+		JSONRPCID:    "e1",
+		Body:         map[string]any{"code": -32600, "message": "bad"},
+	}
+	out := E2AResponseToACPJsonrpcResponse(resp)
+	errObj, _ := out["error"].(map[string]any)
+	if errObj == nil || errObj["code"] != -32600 || errObj["message"] != "bad" {
+		t.Errorf("error = %v, want code=-32600 message=bad", out["error"])
+	}
+	if _, has := out["result"]; has {
+		t.Error("error 分支不应有 result 键")
+	}
+}
+
+// TestE2AResponseToACPJsonrpcResponse_e2aErrorCode链 code 判定链（路线 X + isInt 标志）。
+func TestE2AResponseToACPJsonrpcResponse_e2aErrorCode链(t *testing.T) {
+	// int 直接用，不写 e2a_code
+	resp1 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "c1",
+		Body:         map[string]any{"code": -32000, "message": "m1"},
+	}
+	out1 := E2AResponseToACPJsonrpcResponse(resp1)
+	err1, _ := out1["error"].(map[string]any)
+	if err1["code"] != -32000 {
+		t.Errorf("int code = %v, want -32000", err1["code"])
+	}
+	if data, _ := err1["data"].(map[string]any); data != nil {
+		if _, has := data["e2a_code"]; has {
+			t.Error("int code 不应写 e2a_code")
+		}
+	}
+	// 合法 int -32603 本身：code=-32603 但不写 e2a_code（isInt 挡）
+	resp2 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "c2",
+		Body:         map[string]any{"code": -32603, "message": "m2"},
+	}
+	out2 := E2AResponseToACPJsonrpcResponse(resp2)
+	err2, _ := out2["error"].(map[string]any)
+	if err2["code"] != -32603 {
+		t.Errorf("int -32603 code = %v, want -32603", err2["code"])
+	}
+	if data, _ := err2["data"].(map[string]any); data != nil {
+		if _, has := data["e2a_code"]; has {
+			t.Error("合法 int -32603 不应写 e2a_code（isInt 判定，非 code 值反推）")
+		}
+	}
+	// float64 整数值（Go JSON 解码）→ 视为 int 命中（路线 X）
+	resp3 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "c3",
+		Body:         map[string]any{"code": -32700.0, "message": "m3"},
+	}
+	out3 := E2AResponseToACPJsonrpcResponse(resp3)
+	err3, _ := out3["error"].(map[string]any)
+	if err3["code"] != -32700 {
+		t.Errorf("float64 整数 code = %v, want -32700（路线 X）", err3["code"])
+	}
+	// float64 非整数 → -32603 + e2a_code
+	resp4 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "c4",
+		Body:         map[string]any{"code": 1.5, "message": "m4"},
+	}
+	out4 := E2AResponseToACPJsonrpcResponse(resp4)
+	err4, _ := out4["error"].(map[string]any)
+	if err4["code"] != -32603 {
+		t.Errorf("float64 非整数 code = %v, want -32603", err4["code"])
+	}
+	if data, _ := err4["data"].(map[string]any); data == nil || data["e2a_code"] != 1.5 {
+		t.Errorf("float64 非整数应写 e2a_code=1.5, data = %v", err4["data"])
+	}
+	// bool → 0/1（Python bool 是 int 子类），不写 e2a_code
+	resp5 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "c5",
+		Body:         map[string]any{"code": true, "message": "m5"},
+	}
+	out5 := E2AResponseToACPJsonrpcResponse(resp5)
+	err5, _ := out5["error"].(map[string]any)
+	if err5["code"] != 1 {
+		t.Errorf("bool code = %v, want 1", err5["code"])
+	}
+	if data, _ := err5["data"].(map[string]any); data != nil {
+		if _, has := data["e2a_code"]; has {
+			t.Error("bool（Python int 子类）不应写 e2a_code")
+		}
+	}
+	// code 缺失（nil）→ -32603，不写 e2a_code（code_raw is not None 挡）
+	resp6 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "c6",
+		Body:         map[string]any{"message": "m6"},
+	}
+	out6 := E2AResponseToACPJsonrpcResponse(resp6)
+	err6, _ := out6["error"].(map[string]any)
+	if err6["code"] != -32603 {
+		t.Errorf("nil code = %v, want -32603", err6["code"])
+	}
+	if data, _ := err6["data"].(map[string]any); data != nil {
+		if _, has := data["e2a_code"]; has {
+			t.Error("nil code 不应写 e2a_code")
+		}
+	}
+}
+
+// TestE2AResponseToACPJsonrpcResponse_e2aErrorData键 details/external 有无可选。
+func TestE2AResponseToACPJsonrpcResponse_e2aErrorData键(t *testing.T) {
+	// 无 details/external → 不含 data 键
+	resp1 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "d1",
+		Body:         map[string]any{"code": 1, "message": "m"},
+	}
+	out1 := E2AResponseToACPJsonrpcResponse(resp1)
+	err1, _ := out1["error"].(map[string]any)
+	if _, has := err1["data"]; has {
+		t.Error("无 details/external 时不应有 data 键")
+	}
+	// 有 details + external + 字符串 code → data.details/data.external/data.e2a_code
+	resp2 := &E2AResponse{
+		ResponseKind: E2AResponseKindE2AError,
+		JSONRPCID:    "d2",
+		Body: map[string]any{
+			"code":     "E_STR",
+			"message":  "m",
+			"details":  map[string]any{"x": 1},
+			"external": map[string]any{"y": 2},
+		},
+	}
+	out2 := E2AResponseToACPJsonrpcResponse(resp2)
+	err2, _ := out2["error"].(map[string]any)
+	if err2["code"] != -32603 {
+		t.Errorf("字符串 code → -32603, 实际 %v", err2["code"])
+	}
+	data, _ := err2["data"].(map[string]any)
+	if data == nil || data["e2a_code"] != "E_STR" || data["details"] == nil || data["external"] == nil {
+		t.Errorf("data = %v, want e2a_code=E_STR + details + external", err2["data"])
+	}
+}
+
+// TestE2AResponseToACPJsonrpcResponse_未知kind返回nil。
+func TestE2AResponseToACPJsonrpcResponse_未知kind(t *testing.T) {
+	resp := &E2AResponse{ResponseKind: "unknown.kind", JSONRPCID: "u"}
+	if out := E2AResponseToACPJsonrpcResponse(resp); out != nil {
+		t.Errorf("未知 kind 应返回 nil, 实际 %v", out)
+	}
+}
+
 // 暂留 import 引用（Task 5 消费；Go 未使用 import 编译报错，先以 var _ 锚定）
 var (
 	_ = strings.TrimSpace

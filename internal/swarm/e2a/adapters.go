@@ -188,6 +188,68 @@ func EnvelopeToACPJsonrpcCall(env *E2AEnvelope) map[string]any {
 	}
 }
 
+// E2AResponseToACPJsonrpcResponse 将 E2AResponse 转为单条 JSON-RPC 2.0 响应对象
+// （仅 result 或 error，无 method）。不适用时返回 nil。
+//
+// 优先使用 projections.acp：若为已组装的完整响应（含 jsonrpc 与 result/error），原样返回副本。
+// 否则按 response_kind 从 body 构造：
+//   - acp.prompt_result → result = body
+//   - acp.jsonrpc_error → error = body（须含 JSON-RPC 所需字段）
+//   - e2a.error → error：code 非 int 时用 -32603，原值写入 data.e2a_code
+// Python: adapters.py e2a_response_to_acp_jsonrpc_response
+func E2AResponseToACPJsonrpcResponse(resp *E2AResponse) map[string]any {
+	// projections 快路径：jsonrpc=="2.0" 且含 result 或 error → 副本 + setdefault("id")
+	if projRaw, ok := resp.Projections["acp"]; ok {
+		if proj, ok := projRaw.(map[string]any); ok {
+			if s, _ := proj["jsonrpc"].(string); s == "2.0" {
+				_, hasResult := proj["result"]
+				_, hasError := proj["error"]
+				if hasResult || hasError {
+					return copyWithDefaultID(proj, resp.JSONRPCID)
+				}
+			}
+		}
+	}
+
+	rpcID := resp.JSONRPCID
+	kind := resp.ResponseKind
+	// body = dict(response.body or {})
+	body := make(map[string]any, len(resp.Body))
+	for k, v := range resp.Body {
+		body[k] = v
+	}
+
+	if kind == E2AResponseKindACPPromptResult {
+		return map[string]any{"jsonrpc": "2.0", "id": rpcID, "result": body}
+	}
+	if kind == E2AResponseKindACPJSONRPCError {
+		return map[string]any{"jsonrpc": "2.0", "id": rpcID, "error": body}
+	}
+	if kind == E2AResponseKindE2AError {
+		codeRaw := body["code"]
+		code, isInt := resolveJsonrpcErrorCode(codeRaw)
+		message, _ := body["message"].(string)
+		data := map[string]any{}
+		if det, has := body["details"]; has {
+			data["details"] = det
+		}
+		if ext, has := body["external"]; has {
+			data["external"] = ext
+		}
+		// Python: if code_raw is not None and not isinstance(code_raw, int): data["e2a_code"] = code_raw
+		// bool 是 int 子类不写；合法 int（含 -32603 本身）不写——用 isInt 标志判定，禁止 code 值反推
+		if codeRaw != nil && !isInt {
+			data["e2a_code"] = codeRaw
+		}
+		err := map[string]any{"code": code, "message": message}
+		if len(data) > 0 {
+			err["data"] = data
+		}
+		return map[string]any{"jsonrpc": "2.0", "id": rpcID, "error": err}
+	}
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // orDefaultString 空串回退默认值（Python `converter or _CONVERTER_ACP` 的 or 语义）。
@@ -212,4 +274,43 @@ func randomHex12() string {
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// copyWithDefaultID 复制 map 并在缺 id 键时补默认（Python dict(setdefault) 语义）。
+func copyWithDefaultID(src map[string]any, defID any) map[string]any {
+	out := make(map[string]any, len(src)+1)
+	for k, v := range src {
+		out[k] = v
+	}
+	if _, has := out["id"]; !has {
+		out["id"] = defID
+	}
+	return out
+}
+
+// resolveJsonrpcErrorCode e2a.error 的 code 判定链（路线 X：Go JSON 解码数字统一 float64，
+// 无法区分字面 1 与 1.0，float64 整数值视为 int 命中——Python json.loads("1")→int 一致）：
+// int/int64 → 直接用；float64 整数值 → int；bool → 0/1（Python bool 是 int 子类）；
+// 其余（float64 非整数/字符串/nil）→ -32603。
+// 返回 (code, isInt)：isInt 表示 Python isinstance(code_raw, int) 命中，
+// 调用方以 isInt 判定是否写 data.e2a_code（禁止用 code == -32603 反推——合法 int -32603 会误写）。
+func resolveJsonrpcErrorCode(codeRaw any) (code int, isInt bool) {
+	switch v := codeRaw.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		if v == float64(int64(v)) {
+			return int(v), true
+		}
+		return -32603, false
+	case bool:
+		if v {
+			return 1, true
+		}
+		return 0, true
+	default:
+		return -32603, false
+	}
 }
