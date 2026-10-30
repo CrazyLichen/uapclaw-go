@@ -101,7 +101,7 @@ func (c *LocalCodeOperation) ExecuteCode(ctx context.Context, code string, opts 
 	}
 
 	// 解析 CWD
-	actualCwd := ResolveCwd(o.Cwd)
+	actualCwd := resolveCwd(ctx, o.Cwd)
 
 	// 创建子进程
 	cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
@@ -173,7 +173,7 @@ func (c *LocalCodeOperation) ExecuteCodeStream(ctx context.Context, code string,
 		defer func() { _ = os.Remove(tmpFile) }()
 	}
 
-	actualCwd := ResolveCwd(o.Cwd)
+	actualCwd := resolveCwd(ctx, o.Cwd)
 	cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
 	cmd.Dir = actualCwd
 	cmd.Env = c.prepareCodeEnv(o.Environment, o.Language)

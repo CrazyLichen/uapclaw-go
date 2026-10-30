@@ -83,9 +83,9 @@ var (
 	// shutdownCleanupMu 保护 shutdownCleanupTasks 的互斥锁
 	// （Python asyncio 单线程无锁，Go map 并发读写是 fatal error）
 	shutdownCleanupMu sync.Mutex
-	// shutdownCleanupNoticePusher 清理结果通知推送回调，由 adapter 层注入
+	// shutdownCleanupNoticePusher 清理结果通知推送回调，由 adapter 层在包 init 时注入
 	// （对齐 Python 直接构造 WebSocketGatewayPushTransport——Go 因循环依赖
-	// team → adapter 改为注入回调，模式同 SetOnEventBroadcast）。
+	// team → adapter 改为注入回调，同 RegisterTeamCallbackDefaults 模式）。
 	shutdownCleanupNoticePusher func(ctx context.Context, msg map[string]any) error
 	// shutdownCleanupNoticeMu 保护 shutdownCleanupNoticePusher 的读写锁。
 	// 注入方（adapter 层启动/测试 cleanup）与消费方（延迟清理后台 goroutine）

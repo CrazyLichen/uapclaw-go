@@ -92,6 +92,15 @@ func RunTeamAgentStreaming(
 // M-56: 签名换 maschema.BaseTeam 具体类型（原 any）——
 // str 场景由调用方经 runner.ResourceMgr.GetAgentTeam 解析后传实例。
 // S-71(A1): inputs 收紧 map[string]any（下游 Invoke/PreRun 均要求 map）。
+//
+// M-02 有意偏差（归档）：Python `_prepare_base_team` 允许 base_team 为 str，
+// 内部经 ResourceMgr.get_agent_team(team_id=...) 解析。Go 端不提供该分支：
+//   - 类型系统直接编码约束，str 输入在编译期即被拒绝，不会运行期报错；
+//   - RunBaseTeam/RunBaseTeamStreaming 生产零调用（仅测试），
+//     实际生产入口 RunTeamAgentStreaming 的 str 场景已由 ResolveTeamAgentSpec 覆盖；
+//   - SDK 使用方需要 str 语义时可自行调 runner.GetResourceMgr().GetAgentTeam。
+//
+// 如未来出现 str 生产调用，应新增独立 ResolveBaseTeam 而非放宽本签名。
 func RunBaseTeam(
 	ctx context.Context,
 	baseTeam maschema.BaseTeam,
@@ -148,6 +157,7 @@ func RunBaseTeam(
 // RunBaseTeamStreaming BaseTeam 路径（流式）。
 // Python: _TeamRunnerMixin._run_base_team_streaming(...)
 // M-56: 签名换 maschema.BaseTeam 具体类型（原 any）。
+// M-02: str 输入不在此解析——同 RunBaseTeam 的归档说明。
 // S-71(A1): inputs 收紧 map[string]any。
 // S-75/M-51: 清理闭包 + 两处调用——对齐 Python 生成器 finally 语义
 // （team_runner.py L323-330：流耗尽/消费方停止后才 unbind+post_run）。
@@ -400,22 +410,25 @@ func CloseTeamInteractGate(ctx context.Context, teamName string, sessionID strin
 
 // BuildTeamRuntimeReadyChunk 构建团队运行时就绪首帧。
 // Python: _TeamRunnerMixin._build_team_runtime_ready_chunk(...)
+// M-22: leaderMemberName / leaderRole 用指针表达 Python 的 Optional[str]/Optional[Any]，
+// nil 即 Python None。
 func BuildTeamRuntimeReadyChunk(
 	teamName string,
 	sessionID string,
 	actionKind RunActionKind,
-	leaderMemberName string,
-	leaderRole atschema.TeamRole,
+	leaderMemberName *string,
+	leaderRole *atschema.TeamRole,
 ) *atschema.TeamOutputSchema {
 	return buildTeamRuntimeReadyChunk(teamName, sessionID, actionKind, leaderMemberName, leaderRole)
 }
 
 // BuildTeamControlChunk 构建团队控制帧。
 // Python: _TeamRunnerMixin._build_team_control_chunk(payload, *, ...)
+// M-22: 同 BuildTeamRuntimeReadyChunk——指针表达 Python 的 Optional。
 func BuildTeamControlChunk(
 	payload map[string]any,
-	leaderMemberName string,
-	leaderRole atschema.TeamRole,
+	leaderMemberName *string,
+	leaderRole *atschema.TeamRole,
 ) *atschema.TeamOutputSchema {
 	return buildTeamControlChunk(payload, leaderMemberName, leaderRole)
 }
@@ -513,18 +526,18 @@ func runTeamAgentStreaming(
 		)
 	}
 
-	// S-62: 对齐 Python L248 blueprint.member_name——成员标识而非显示名。
+	// S-62: 对齐 Python L248-249 blueprint.member_name——成员标识而非显示名。
 	// 原先 AgentCard().Name 是显示名，填入 TeamOutputSchema.source_member 会导致
-	// readyChunk 成员归属错乱；configure 前 Blueprint() 为 nil 兜底空串+默认角色。
-	var leaderMemberName string
+	// readyChunk 成员归属错乱。
+	// M-22: 严格对齐 Python getattr(blueprint, ..., None) 的 None 语义——
+	// blueprint 缺失时 member_name / role 均为 None（Go 用 nil 表达），
+	// 不再以空串 + TeamRoleLeader 兜底。
+	var leaderMemberName *string
+	var leaderRole *atschema.TeamRole
 	if bp := activation.Agent.Blueprint(); bp != nil {
-		if mn := bp.MemberName(); mn != nil {
-			leaderMemberName = *mn
-		}
-	}
-	leaderRole := atschema.TeamRoleLeader
-	if bp := activation.Agent.Blueprint(); bp != nil {
-		leaderRole = bp.Role()
+		leaderMemberName = bp.MemberName()
+		role := bp.Role()
+		leaderRole = &role
 	}
 
 	readyChunk := buildTeamRuntimeReadyChunk(
@@ -653,8 +666,8 @@ func buildTeamRuntimeReadyChunk(
 	teamName string,
 	sessionID string,
 	actionKind RunActionKind,
-	leaderMemberName string,
-	leaderRole atschema.TeamRole,
+	leaderMemberName *string,
+	leaderRole *atschema.TeamRole,
 ) *atschema.TeamOutputSchema {
 	payload := map[string]any{
 		"event_type":      "team.runtime_ready",
@@ -667,24 +680,24 @@ func buildTeamRuntimeReadyChunk(
 		Index:   0,
 		Payload: payload,
 	}
-	role := leaderRole
-	return atschema.NewTeamOutputSchema(base, strPtr(leaderMemberName), &role)
+	// M-22: 直接透传指针——nil 即 Python None，不再造空串/默认角色。
+	return atschema.NewTeamOutputSchema(base, leaderMemberName, leaderRole)
 }
 
 // buildTeamControlChunk 构建团队控制帧。
 // Python: _TeamRunnerMixin._build_team_control_chunk(payload, *, ...)
 func buildTeamControlChunk(
 	payload map[string]any,
-	leaderMemberName string,
-	leaderRole atschema.TeamRole,
+	leaderMemberName *string,
+	leaderRole *atschema.TeamRole,
 ) *atschema.TeamOutputSchema {
 	base := stream.OutputSchema{
 		Type:    "message",
 		Index:   0,
 		Payload: payload,
 	}
-	role := leaderRole
-	return atschema.NewTeamOutputSchema(base, strPtr(leaderMemberName), &role)
+	// M-22: 直接透传指针——nil 即 Python None。
+	return atschema.NewTeamOutputSchema(base, leaderMemberName, leaderRole)
 }
 
 // bindInteractTeamSession 绑定交互团队 session 到 context。

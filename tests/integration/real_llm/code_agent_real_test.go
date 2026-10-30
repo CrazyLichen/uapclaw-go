@@ -104,7 +104,14 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 	model, err := s.NewRealModel()
 	s.Require().NoError(err, "创建真实 Model 失败")
 
-	ctx, cancel := context.WithTimeout(s.Ctx, 15*time.Minute)
+	// 超时预算：本用例 max_iterations=24、单次 LLM 调用客户端超时 300s，
+	// 理论单轮上限 24×300s ≈ 120min，Python 侧无整体 deadline。
+	// 原 15min（900s）在 Ark 延迟抖动下会掐断进行中的模型调用——
+	// CI 41046535306 实证：第 9 轮 in-flight 调用被 ctx 取消，报
+	// "context deadline exceeded"，用例耗时精确 900.00s。
+	// 改为 40min：覆盖 8 轮 × 300s 的最坏量级，同时仍是防真死循环的上限；
+	// 与 workflow timeout-minutes=90 兼容（其余 11 套件约 10min）。
+	ctx, cancel := context.WithTimeout(s.Ctx, 40*time.Minute)
 	defer cancel()
 
 	// 对齐 Python: trace = ToolTraceRail() + create_code_agent(..., rails=[trace], ...)
@@ -158,7 +165,12 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 		if _, hasType := first["result_type"]; hasType {
 			break
 		}
-		s.Require().Less(attempt, 2, "第一轮连续 3 次返回缺 result_type 的空结果，中止")
+		// 空结果诊断：Ark 偶发返回无 content 的空轮次，round result 为
+		// {"status":"completed"}（WaitCompletion 对空 map 的兜底，Python 同构）。
+		// CI 41050214909 实证连续 3 次空结果即中止 → 上限放宽到 5 次并落原始 map。
+		s.T().Logf("[code-agent-plan] 第一轮第 %d 次返回缺 result_type 的空结果: %v",
+			attempt+1, first)
+		s.Require().Less(attempt, 4, "第一轮连续 5 次返回缺 result_type 的空结果，中止")
 	}
 	testhelpers.AssertAnswerResult(s.T(), first)
 
@@ -196,7 +208,9 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 		if _, hasType := second["result_type"]; hasType {
 			break
 		}
-		s.Require().Less(attempt, 2, "第二轮连续 3 次返回缺 result_type 的空结果，中止")
+		s.T().Logf("[code-agent-plan] 第二轮第 %d 次返回缺 result_type 的空结果: %v",
+			attempt+1, second)
+		s.Require().Less(attempt, 4, "第二轮连续 5 次返回缺 result_type 的空结果，中止")
 		var retryErr error
 		second, retryErr = agent.Invoke(ctx, map[string]any{
 			"query": "按照计划执行把",
@@ -222,7 +236,7 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 			"第二轮结果应为 answer 或 interrupt（非 answer 的中间态只允许 interrupt），实际 %q", resultType)
 		interruptIDs, _ := second["interrupt_ids"].([]string)
 		s.Require().NotEmpty(interruptIDs, "interrupt 结果应携带 interrupt_ids")
-		s.Require().Less(attempts, 3, "interrupt 恢复轮次超过 3 次，中止防死循环")
+		s.Require().Less(attempts, 5, "interrupt 恢复轮次超过 5 次，中止防死循环")
 
 		interactiveInput := testhelpers.ConfirmInterrupt(interruptIDs[0], false)
 		second, err = agent.Invoke(ctx, map[string]any{"query": interactiveInput},

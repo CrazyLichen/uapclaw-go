@@ -452,14 +452,14 @@ func TestLocalFsOperation_sortItems(t *testing.T) {
 // TestLocalFsOperation_resolvePath_空路径 测试空路径返回错误
 func TestLocalFsOperation_resolvePath_空路径(t *testing.T) {
 	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
-	_, err := fsOp.resolvePath("", false)
+	_, err := fsOp.resolvePath(context.Background(), "", false)
 	assert.Error(t, err)
 }
 
 // TestLocalFsOperation_resolvePath_绝对路径 测试绝对路径
 func TestLocalFsOperation_resolvePath_绝对路径(t *testing.T) {
 	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
-	resolved, err := fsOp.resolvePath("/tmp", false)
+	resolved, err := fsOp.resolvePath(context.Background(), "/tmp", false)
 	require.NoError(t, err)
 	assert.Equal(t, "/tmp", resolved)
 }
@@ -468,7 +468,7 @@ func TestLocalFsOperation_resolvePath_绝对路径(t *testing.T) {
 func TestLocalFsOperation_resolvePath_创建父目录(t *testing.T) {
 	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	tmpDir := t.TempDir()
-	resolved, err := fsOp.resolvePath(filepath.Join(tmpDir, "subdir", "test.txt"), true)
+	resolved, err := fsOp.resolvePath(context.Background(), filepath.Join(tmpDir, "subdir", "test.txt"), true)
 	require.NoError(t, err)
 	assert.DirExists(t, filepath.Dir(resolved))
 }

@@ -485,19 +485,31 @@ func (OperationUtils) DeleteTmpFile(path string) error {
 	return os.Remove(path)
 }
 
-// ResolveCwd 解析当前工作目录路径。
+// ResolveCwd 解析当前工作目录路径（无 ctx 版本，保留兼容）。
+//
+// 优先使用 resolveCwd(ctx, ...)：agent 的 CwdState（cwd/project_root/
+// workspace）经 ctx 注入，用 context.Background() 读取恒为空，
+// 会让沙箱根为空、相对路径基准退化为进程 CWD。
 func ResolveCwd(cwdPath string) string {
-	if cwdPath != "" {
-		if !filepath.IsAbs(cwdPath) {
-			base := cwd.GetCwd(context.Background())
-			return filepath.Join(base, cwdPath)
-		}
-		return cwdPath
-	}
-	return cwd.GetCwd(context.Background())
+	return resolveCwd(context.Background(), cwdPath)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolveCwd 基于调用方 ctx 中的 CwdState 解析工作目录。
+// 对齐 Python get_cwd()：contextvar 随 ctx 传播，agent 隔离靠不同 CwdState 实例。
+func resolveCwd(ctx context.Context, cwdPath string) string {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if cwdPath != "" {
+		if !filepath.IsAbs(cwdPath) {
+			return filepath.Join(cwd.GetCwd(ctx), cwdPath)
+		}
+		return cwdPath
+	}
+	return cwd.GetCwd(ctx)
+}
 
 func (h *AsyncProcessHandler) setProcessGroup() {
 	if h.cmd.SysProcAttr == nil {

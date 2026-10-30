@@ -98,6 +98,18 @@ func WithStoreBatchSize(n int) StoreOption {
 //   - 字符串比较不区分大小写
 //   - 数值类型使用 isclose 近似比较（rel_tol=1e-2, abs_tol=1e-3）
 //   - 不匹配时抛 RETRIEVAL_KB_DATABASE_CONFIG_INVALID
+//
+// M-15 有意偏差（归档）：Python 用 str(val).casefold()，Go 用
+// strings.ToLower 且额外 TrimSpace。两处差异在真实输入域内均不可达：
+//   - 本函数的配置来源是 ChromaVectorField/MilvusVectorField 的
+//     construct/search 字典，键固定为 max_neighbors/ef_construction/
+//     ef_search/space 等，值只有整数、浮点与 "cosine"/"l2"/"ip" 三个
+//     ASCII 标识——casefold 与 ToLower 的差异字符（ß/ς/ﬁ 等）不会出现；
+//   - TrimSpace 是 Go 侧有意放宽，容忍 YAML 配置值前后空白（同键同源，
+//     两侧对称处理，不会造成单侧匹配/单侧不匹配）。
+//
+// 若未来配置值引入非 ASCII 文本，应改用 golang.org/x/text/cases.Fold()
+// （依赖已在 go.mod 直接声明）并对齐掉 TrimSpace。
 func CheckConfigsMatching(configured, actual map[string]any) error {
 	matches := make(map[string]any)
 	mismatches := make(map[string]map[string]string)

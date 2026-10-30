@@ -99,7 +99,7 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 		Str("method_params", fmt.Sprintf("path=%s, mode=%s", path, o.Mode)).
 		Msg("starting file read")
 
-	resolvedPath, err := f.resolvePath(path, false)
+	resolvedPath, err := f.resolvePath(ctx, path, false)
 	if err != nil {
 		return f.createErrorResult(methodName, err.Error(), startTime), nil
 	}
@@ -186,7 +186,7 @@ func (f *LocalFsOperation) ReadFileStream(ctx context.Context, path string, opts
 	ch := make(chan result.ReadFileStreamResult, 64)
 
 	o := sysop.NewFsOptions(opts...)
-	resolvedPath, err := f.resolvePath(path, false)
+	resolvedPath, err := f.resolvePath(ctx, path, false)
 	if err != nil {
 		close(ch)
 		return ch, err
@@ -246,7 +246,7 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 		Str("method_params", fmt.Sprintf("path=%s", path)).
 		Msg("starting file write")
 
-	resolvedPath, err := f.resolvePath(path, true)
+	resolvedPath, err := f.resolvePath(ctx, path, true)
 	if err != nil {
 		return &result.WriteFileResult{
 			BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), err.Error()),
@@ -374,7 +374,7 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 func (f *LocalFsOperation) UploadFile(ctx context.Context, localPath string, targetPath string, opts ...sysop.FsOption) (*result.UploadFileResult, error) {
 	o := sysop.NewFsOptions(opts...)
 
-	resolvedTarget, err := f.resolvePath(targetPath, o.CreateParentDirs)
+	resolvedTarget, err := f.resolvePath(ctx, targetPath, o.CreateParentDirs)
 	if err != nil {
 		return nil, err
 	}
@@ -416,7 +416,7 @@ func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath strin
 		return ch, fmt.Errorf("解析本地路径失败: %w", err)
 	}
 
-	resolvedTarget, err := f.resolvePath(targetPath, o.CreateParentDirs)
+	resolvedTarget, err := f.resolvePath(ctx, targetPath, o.CreateParentDirs)
 	if err != nil {
 		close(ch)
 		return ch, fmt.Errorf("解析目标路径失败: %w", err)
@@ -505,7 +505,7 @@ func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath strin
 
 // DownloadFile 下载文件（本地模式 = 文件拷贝）
 func (f *LocalFsOperation) DownloadFile(ctx context.Context, sourcePath string, localPath string, opts ...sysop.FsOption) (*result.DownloadFileResult, error) {
-	resolvedSource, err := f.resolvePath(sourcePath, false)
+	resolvedSource, err := f.resolvePath(ctx, sourcePath, false)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +535,7 @@ func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath st
 	o := sysop.NewFsOptions(opts...)
 	ch := make(chan result.DownloadFileStreamResult, 16)
 
-	resolvedSource, err := f.resolvePath(sourcePath, false)
+	resolvedSource, err := f.resolvePath(ctx, sourcePath, false)
 	if err != nil {
 		close(ch)
 		return ch, fmt.Errorf("解析源路径失败: %w", err)
@@ -644,7 +644,7 @@ func (f *LocalFsOperation) ListFiles(ctx context.Context, path string, opts ...s
 func (f *LocalFsOperation) ListDirectories(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ListDirsResult, error) {
 	o := sysop.NewFsOptions(opts...)
 
-	resolvedPath, err := f.resolvePath(path, false)
+	resolvedPath, err := f.resolvePath(ctx, path, false)
 	if err != nil {
 		return nil, err
 	}
@@ -674,7 +674,7 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 		Str("method_params", fmt.Sprintf("path=%s, pattern=%s", path, pattern)).
 		Msg("starting file search")
 
-	resolvedPath, err := f.resolvePath(path, false)
+	resolvedPath, err := f.resolvePath(ctx, path, false)
 	if err != nil {
 		return nil, err
 	}
@@ -994,13 +994,13 @@ func readTail(filePath string, tail int) ([]string, error) {
 // resolvePath 解析路径，基于 CWD 解析相对路径。
 // Python: FsOperation._resolve_path。
 // Python: restrict_to_sandbox=True 时校验路径是否在 sandbox_root 范围内。
-func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, error) {
+func (f *LocalFsOperation) resolvePath(ctx context.Context, path string, createParent bool) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("path 不能为空")
 	}
 
-	// 基于 CWD 解析
-	base := ResolveCwd("")
+	// 基于 CWD 解析（对齐 Python get_cwd()：读 ctx 中的 CwdState）
+	base := resolveCwd(ctx, "")
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(base, path)
 	}
@@ -1019,8 +1019,11 @@ func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, 
 		sandboxRoots := f.runConfig.SandboxRoot
 		if len(sandboxRoots) == 0 {
 			// Python: roots = [p for p in (get_workspace(), get_project_root()) if p]
+			// 必须用调用方 ctx 读取 CwdState：agent 的 workspace/project root
+			// 由 DeepAgent.ensureInitialized 通过 WithCwdState 注入 ctx，
+			// 用 context.Background() 读会恒为空，导致沙箱根为空、所有绝对
+			// 路径被拒（对齐 Python contextvar 语义）。
 			sandboxRoots = []string{}
-			ctx := context.Background()
 			if ws := cwd.GetWorkspace(ctx); ws != "" {
 				sandboxRoots = append(sandboxRoots, ws)
 			}
@@ -1065,7 +1068,7 @@ func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly 
 		Str("method_params", fmt.Sprintf("path=%s", path)).
 		Msg("starting file/directory listing")
 
-	resolvedPath, err := f.resolvePath(path, false)
+	resolvedPath, err := f.resolvePath(ctx, path, false)
 	if err != nil {
 		return nil, err
 	}

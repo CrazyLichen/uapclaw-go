@@ -518,3 +518,34 @@ func TestRunTeamMemberStreaming_PreRun失败传播(t *testing.T) {
 	assert.Contains(t, err.Error(), "pre-run checkpoint failure")
 	assert.Nil(t, ch)
 }
+
+// TestBuildTeamRuntimeReadyChunk_Nil成员与角色 验证 M-22：blueprint 缺失时
+// member_name / role 输出 nil（Python None），不做空串/Leader 兜底。
+func TestBuildTeamRuntimeReadyChunk_Nil成员与角色(t *testing.T) {
+	chunk := buildTeamRuntimeReadyChunk("team-a", "sess-1", RunActionKind("CREATE"), nil, nil)
+	require.NotNil(t, chunk)
+	assert.Nil(t, chunk.SourceMember, "source_member 应为 nil（对齐 Python None）")
+	assert.Nil(t, chunk.Role, "role 应为 nil（对齐 Python None）")
+
+	m := chunk.ToMap()
+	assert.Contains(t, m, "source_member")
+	assert.Contains(t, m, "role")
+	assert.Nil(t, m["source_member"])
+	assert.Nil(t, m["role"])
+}
+
+// TestBuildTeamRuntimeReadyChunk_带成员与角色 验证传入指针时原样输出。
+func TestBuildTeamRuntimeReadyChunk_带成员与角色(t *testing.T) {
+	name := "leader-1"
+	role := atschema.TeamRoleLeader
+	chunk := buildTeamRuntimeReadyChunk("team-a", "sess-1", RunActionKind("CREATE"), &name, &role)
+	require.NotNil(t, chunk)
+	require.NotNil(t, chunk.SourceMember)
+	require.NotNil(t, chunk.Role)
+	assert.Equal(t, "leader-1", *chunk.SourceMember)
+	assert.Equal(t, atschema.TeamRoleLeader, *chunk.Role)
+
+	m := chunk.ToMap()
+	assert.Equal(t, "leader-1", m["source_member"])
+	assert.Equal(t, "leader", m["role"])
+}

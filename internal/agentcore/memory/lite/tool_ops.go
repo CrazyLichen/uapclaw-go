@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -170,6 +171,11 @@ func ReadMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	if err != nil {
 		return &ReadMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
+	if readResult != nil {
+		if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", fullPath); fsErr != nil {
+			return &ReadMemoryResult{Success: false, Path: path, Error: fsErr.Error()}
+		}
+	}
 	var content string
 	if readResult != nil && readResult.Data != nil {
 		content = readResult.Data.Content
@@ -216,6 +222,12 @@ func WriteMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, pat
 		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("write failed")
 		return &WriteMemoryResult{Success: false, Path: path, Error: err.Error()}
 	}
+	if writeResult != nil {
+		if fsErr := fsResultError(writeResult.BaseResult, "写入记忆文件", resolvedPath); fsErr != nil {
+			logger.Error(logComponent).Err(fsErr).Str("path", resolvedPath).Msg("write failed")
+			return &WriteMemoryResult{Success: false, Path: path, Error: fsErr.Error()}
+		}
+	}
 	fileExisted := writeResult != nil && writeResult.Data != nil && writeResult.Data.Size > 0
 	action := "写入"
 	if appendMode {
@@ -251,6 +263,9 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	if err != nil || readResult == nil || readResult.Data == nil {
 		return &EditMemoryResult{Success: false, Path: path, Error: fmt.Sprintf("读取文件失败: %s", path)}
 	}
+	if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", resolvedPath); fsErr != nil {
+		return &EditMemoryResult{Success: false, Path: path, Error: fsErr.Error()}
+	}
 	content := readResult.Data.Content
 	if !strings.Contains(content, oldText) {
 		return &EditMemoryResult{
@@ -268,7 +283,7 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 		}
 	}
 	newContent := strings.Replace(content, oldText, newText, 1)
-	_, err = sysOp.Fs().WriteFile(ctx, resolvedPath, newContent,
+	editWrite, err := sysOp.Fs().WriteFile(ctx, resolvedPath, newContent,
 		sysop.WithFsCreateIfNotExist(true),
 		sysop.WithFsPrependNewline(false),
 		sysop.WithFsAppendNewline(false),
@@ -276,6 +291,12 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("path", resolvedPath).Msg("edit write failed")
 		return &EditMemoryResult{Success: false, Path: path, Error: err.Error()}
+	}
+	if editWrite != nil {
+		if fsErr := fsResultError(editWrite.BaseResult, "写入记忆文件", resolvedPath); fsErr != nil {
+			logger.Error(logComponent).Err(fsErr).Str("path", resolvedPath).Msg("edit write failed")
+			return &EditMemoryResult{Success: false, Path: path, Error: fsErr.Error()}
+		}
 	}
 	logger.Info(logComponent).Str("path", resolvedPath).Msg("file edited")
 	return &EditMemoryResult{
@@ -287,6 +308,20 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// fsResultError 将 sys_operation 的失败结果转为 error。
+//
+// sys_operation 的失败以 BaseResult.Code != 0 表达、err 恒为 nil（对齐 Python
+// 返回 error result 而非 raise）。Python 的 memory 工具靠解引用 result.data
+// 触发异常走 except 分支，Go 侧判空后会静默成功——必须显式检查 Code，
+// 否则沙箱拒绝（如路径在 sandbox 之外）会以 success=true 返回给模型，
+// 表现为「写入假成功、读取恒为空」。
+func fsResultError(base result.BaseResult, action, path string) error {
+	if base.Code == 0 {
+		return nil
+	}
+	return fmt.Errorf("%s失败(code=%d): %s: %s", action, base.Code, path, base.Message)
+}
 
 // lineRangeToFsRead 映射 offset/limit 到 FsOperation 的 LineRange。对齐 Python _line_range_to_fs_read
 func lineRangeToFsRead(firstLine *int, lineCap *int) *[2]int {

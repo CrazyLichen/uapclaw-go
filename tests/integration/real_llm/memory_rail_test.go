@@ -4,7 +4,9 @@ package real_llm
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -101,6 +103,8 @@ func (s *MemoryRailE2ESuite) TestMemoryRail_真实LLM_写入记忆工具() {
 	}, agentinterfaces.WithSession(sess))
 	s.Require().NoError(err, "Invoke 失败")
 	testhelpers.AssertAnswerResult(s.T(), result)
+	// 落盘校验：write_memory 必须真的生成记忆文件（防止沙箱拒绝被静默吞掉）
+	s.assertMemoryFileContains("智能助手开发")
 }
 
 // TestMemoryRail_真实LLM_记忆搜索工具 测试 memory_search 工具：搜索历史记忆。
@@ -148,6 +152,8 @@ func (s *MemoryRailE2ESuite) TestMemoryRail_真实LLM_读取记忆工具() {
 	testhelpers.AssertAnswerResult(s.T(), result)
 	output, _ := result["output"].(string)
 	s.Contains(output, "lisi@example.com", "读取结果应包含邮箱")
+	// 落盘校验：读取结论必须有真实文件支撑（模型可凭上下文复述，不能只看输出）
+	s.assertMemoryFileContains("lisi@example.com")
 }
 
 // TestMemoryRail_真实LLM_编辑记忆工具 测试 edit_memory 工具：编辑已存在的字段。
@@ -168,6 +174,11 @@ func (s *MemoryRailE2ESuite) TestMemoryRail_真实LLM_编辑记忆工具() {
 	}, agentinterfaces.WithSession(sess))
 	s.Require().NoError(err, "更新 Invoke 失败")
 	testhelpers.AssertAnswerResult(s.T(), result)
+	// 落盘校验：编辑必须真的改变磁盘上的记忆文件。
+	// 历史失败（CI 40987848552）根因是沙箱拒绝被静默吞掉——write_memory
+	// 报成功、文件却没生成、edit_memory 因此读不到内容，模型排查到
+	// max_iterations 打满。仅断言模型输出会漏掉这类「假成功」。
+	s.assertMemoryFileContains("13900139000")
 
 	result, err = agent.Invoke(ctx, map[string]any{
 		"query": "我的手机号是多少？",
@@ -327,6 +338,49 @@ func (s *MemoryRailE2ESuite) newMemoryAgent(sessionID, systemPrompt string, maxI
 	s.Require().NoError(sess.PreRun(ctx), "Session PreRun 失败")
 
 	return agent, sess, ctx
+}
+
+// assertMemoryFileContains 断言 workspace 下存在包含指定文本的记忆文件。
+//
+// 记忆文件可能落在 workspace 根（USER.md，对齐 Python _get_base_dir_for_file）
+// 或 memory 节点目录，故两处都扫。该断言专门拦「工具报成功但没落盘」的假绿。
+func (s *MemoryRailE2ESuite) assertMemoryFileContains(substr string) {
+	s.T().Helper()
+
+	memoryDir := ""
+	if ws := workspace.NewWorkspace(s.workspaceRoot, "cn"); ws != nil {
+		if nodePath := ws.GetNodePath("memory"); nodePath != nil {
+			memoryDir = *nodePath
+		}
+	}
+
+	var dump strings.Builder
+	for _, dir := range []string{s.workspaceRoot, memoryDir} {
+		if dir == "" {
+			continue
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+				continue
+			}
+			path := filepath.Join(dir, entry.Name())
+			data, readErr := os.ReadFile(path)
+			content := ""
+			if readErr == nil {
+				content = string(data)
+			}
+			fmt.Fprintf(&dump, "\n--- %s (%d 字节) ---\n%s", path, len(content), content)
+			if strings.Contains(content, substr) {
+				return
+			}
+		}
+	}
+	s.FailNow("记忆内容未落盘",
+		"期望在 workspace 下找到包含 %q 的记忆文件；实际文件内容:%s", substr, dump.String())
 }
 
 // registerCleanup 登记测试结束时的清理函数。
