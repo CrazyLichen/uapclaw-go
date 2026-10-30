@@ -384,3 +384,42 @@ Python 用例 4/5 用 `patch("...graph_knowledge_base.GraphRetriever")` 替换�
 2. `go vet ./...` 跨包检查（接口变更会暴露遗漏的桩）。
 3. `-race` 单包 + 全量回归 `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...`。
 4. 独立 commit，message 前缀 `refactor(retrieval):`，不与 GraphKB 功能混提。
+
+## 14. 实施期修订（2026-10-30）
+
+本节记录实施与计划不一致之处、原因与判定。**没有一处改动放宽对齐要求**：全部属"计划写漏 / 计划判断有误 / 为通过 vet 与 testify 规范做的等价调整"。
+
+### 14.1 计划漏项与判断错误
+
+| # | 类别 | 计划 | 实际 | 原因与判定 |
+|---|---|---|---|---|
+| 1 | 漏数 | Task 0 改 7 处测试桩 | **8** 处（补 `multi_kb_test.go` 的 `fakeKB`） | §13.1 按文件列举时漏了 multi_kb_test.go；`go vet` 暴露 |
+| 2 | 未预见 | Task 0 只改桩签名 | 另把 3 处 `assert.NotPanics(t, r.Close)` 包成 `func(){ _ = r.Close() }` | 返回 error 后不再满足 `assert.PanicTestFunc`，属机械适配 |
+| 3 | 未预见 | Task 1 "行为零变化、断言不改" | 另改 3 处**测试调用点**：`kb.vectorStoreDatabaseName()` → `vectorStoreDatabaseName(kb.vectorStore)` | 13.27 测试直接调用了被下沉的方法；断言本身未动 |
+| 4 | 计划缺陷 | `failSecondBuildIndexer` / `secondDeleteFalseIndexer` 内嵌 `graphIndexer` | 改内嵌 `fakeAttrIndexer` | `graphIndexer` 带 `sync.Mutex`，内嵌复制触发 `go vet` copylocks |
+| 5 | 计划缺陷 | 并发用例在 goroutine 内 `assert.NoError` | 收集 `errs[]` 后主 goroutine 断言 | testify 在子 goroutine 内断言属未定义行为 |
+| 6 | 漏项 | Task 5 只到 9.2-11 | 额外 13 个错误分支用例 + 5 个桩 | 初版覆盖率 93.5%，达不到"≥96.2% 基线"；补齐后 96.6% |
+| 7 | **判断错误（重点）** | 用"静态报错桩"覆盖方法级 `CheckVectorField` 分支 | 改 `flakyCheckStore`：首次通过、之后报错 | **构造期 `postAssignValidation` 就会调 `CheckVectorField`**，静态报错桩在 `NewGraphKnowledgeBase` 阶段即失败，方法级分支永远走不到（三个用例同时红才定位到） |
+| 8 | 未预见 | Task 6 直接改计划表 | 先 `git stash push -- IMPLEMENTATION_PLAN.md` 隔离他任务未提交改动，提交后再 pop | 同文件混着 ACP 11.25 任务的 2 行脏改动；显式 add 会搭车提交 |
+| 9 | 与规范冲突 | 两个委托函数"放文件末尾" | 放导出函数区末尾（非导出区之前） | 规则 2 要求导出函数在非导出函数之前，按规范办 |
+| 10 | 可选项 | 可选改名 `TestClose_void变体关闭` | 未改 | 改名会稀释"零行为变化"的证据 |
+
+### 14.2 循环依赖与 `any` 审查
+
+**循环依赖：零新增。** `knowledgebase` 仍是叶子包——全仓 grep 确认**无任何包 import 它**（8.25 将是首个消费者）。其 import 全指向下层：`common / retriever / indexer / chunker / parser / extractor / vector_store / embedding / reranker / model_clients / exception / logger`。13.27 定下的"聚合函数留 knowledgebase、不进 common"约束未被打破。`kb_helpers.go` 未引入新依赖。
+
+**`any`：7 处，仅 1 处为真问题（已修）。**
+
+| 位置 | 性质 | 判定 |
+|---|---|---|
+| `GetStatistics` 返回 `map[string]any`（4 处） | 数据契约（13.26 定型，Python `Dict[str, Any]`） | 合理 |
+| `TextChunk.Metadata` / `metaString(map[string]any)` | 数据契约（13.22 metadata 即任意值） | 合理 |
+| `maybeClose(obj any)` | 13.26 既有（需接 store/indexer/retriever 三种静态类型） | 合理 |
+| ~~`ensureGraphRetriever` 内 `any(gret).(retriever.IndexTypeCarrier)`~~ | 类型擦除后立即断言回来；`gret` 静态类型为 `*retriever.GraphRetriever`，必然实现该接口 → 断言恒真、`ok` 分支为死代码 | **已修为直接调用 `gret.SetIndexType(...)`**（对应 Python `self.graph_retriever.index_type = ...` 动态属性赋值的静态等价物） |
+
+### 14.3 验收数据
+
+- `knowledgebase` 覆盖率 **96.6%**（13.27 基线 96.2%），`-race` 干净
+- 全量回归 `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 零 FAIL（含与远端 8 个提交合并后的复跑）
+- 错误码 155505 / 155506 零消费 → 已消费
+- 提交：7 个实现 commit（`c3f188de`..`7a533e50`）+ 4 个设计/计划 commit + 1 个远端合并 commit

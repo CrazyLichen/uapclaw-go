@@ -391,9 +391,12 @@ func (g *GraphKnowledgeBase) ensureGraphRetriever() (retriever.Retriever, error)
 	)
 	// 注入 index_type：GraphRetriever 的 mode 校验与 AgenticRetriever 的
 	// defaultMode 推导都读它。
-	if carrier, ok := any(gret).(retriever.IndexTypeCarrier); ok {
-		carrier.SetIndexType(string(g.config.IndexType))
-	}
+	//
+	// 直接调用而非 IndexTypeCarrier 断言：gret 的静态类型就是
+	// *retriever.GraphRetriever，必然实现该方法，断言恒真属死分支。
+	// Python 侧 self.graph_retriever.index_type = ... 是动态属性赋值，
+	// Go 的对应物就是静态方法调用。
+	gret.SetIndexType(string(g.config.IndexType))
 	g.graphRetriever = gret
 	return gret, nil
 }
