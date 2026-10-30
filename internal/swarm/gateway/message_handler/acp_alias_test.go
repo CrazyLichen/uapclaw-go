@@ -5,6 +5,7 @@ package message_handler
 // L1643-1644（出站 resolve）。
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -84,16 +85,16 @@ func TestPrepareAgentDispatchMessage_NonAcpPassthrough(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	msg := &schema.Message{ID: "m1", Type: schema.MessageTypeReq,
 		ChannelID: "web", SessionID: "s1", ReqMethod: schema.ReqMethodChatSend}
-	got := mh.prepareAgentDispatchMessage(nil, msg)
+	got := mh.prepareAgentDispatchMessage(context.TODO(), msg)
 	assert.Same(t, msg, got) // 非 acp：同一指针直通
 
 	acpInit := &schema.Message{ID: "m2", Type: schema.MessageTypeReq,
 		ChannelID: "acp", ReqMethod: schema.ReqMethodInitialize}
-	assert.Same(t, acpInit, mh.prepareAgentDispatchMessage(nil, acpInit))
+	assert.Same(t, acpInit, mh.prepareAgentDispatchMessage(context.TODO(), acpInit))
 
 	acpCreate := &schema.Message{ID: "m3", Type: schema.MessageTypeReq,
 		ChannelID: "acp", ReqMethod: schema.ReqMethodSessionCreate}
-	assert.Same(t, acpCreate, mh.prepareAgentDispatchMessage(nil, acpCreate))
+	assert.Same(t, acpCreate, mh.prepareAgentDispatchMessage(context.TODO(), acpCreate))
 }
 
 // TestPrepareAgentDispatchMessage_AcpRewrite 别名命中 → sessionID/params 改写 + metadata 记原值。
@@ -106,7 +107,7 @@ func TestPrepareAgentDispatchMessage_AcpRewrite(t *testing.T) {
 		ChannelID: "acp", SessionID: "ext-1",
 		ReqMethod: schema.ReqMethodChatSend,
 		Params:    []byte(`{"query":"hi"}`)}
-	got := mh.prepareAgentDispatchMessage(nil, msg)
+	got := mh.prepareAgentDispatchMessage(context.TODO(), msg)
 
 	assert.Equal(t, "acp_internal_1", got.SessionID)
 	var p map[string]any
@@ -128,7 +129,7 @@ func TestPrepareAgentDispatchMessage_AliasNoRewriteWhenSame(t *testing.T) {
 		ChannelID: "acp", SessionID: "sess_same_1",
 		ReqMethod: schema.ReqMethodChatSend,
 		Params:    []byte(`{}`)}
-	got := mh.prepareAgentDispatchMessage(nil, msg)
+	got := mh.prepareAgentDispatchMessage(context.TODO(), msg)
 	assert.Equal(t, "sess_same_1", got.SessionID)
 	assert.Nil(t, got.Metadata["acp_original_session_id"])
 }
