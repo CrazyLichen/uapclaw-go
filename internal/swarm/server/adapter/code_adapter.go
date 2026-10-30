@@ -708,13 +708,22 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 	subagentsCfg, _ := config["subagents"].(map[string]any)
 
+	// 迭代上限两段回退（对齐 Python parse_int 语义）：
+	// Python: max_iterations=parse_int(cfg.get("max_iterations"), react_cfg.get("max_iterations", 15))
+	// 注意 plan_agent 同样以 react.max_iterations 为基准——plan builder 自身的 25 默认值永不生效。
+	defaultMaxIterations := parseIntAny(config["max_iterations"], 15)
+	exploreAgentCfg, _ := subagentsCfg["explore_agent"].(map[string]any)
+	planAgentCfg, _ := subagentsCfg["plan_agent"].(map[string]any)
+	exploreMaxIterations := parseIntAny(exploreAgentCfg["max_iterations"], defaultMaxIterations)
+	planMaxIterations := parseIntAny(planAgentCfg["max_iterations"], defaultMaxIterations)
+
 	// ── 固定挂载：explore_agent ──
 	// Python: explore_agent 始终启用
 	exploreParams := &hschema.SubagentCreateParams{
 		Model:         c.deep.model,
 		Language:      resolvedLanguage,
 		Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
-		MaxIterations: 15,
+		MaxIterations: exploreMaxIterations,
 	}
 	exploreCfg := subagents.BuildExploreAgentConfig(c.deep.model, exploreParams)
 	if exploreCfg != nil {
@@ -734,7 +743,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 		Model:         c.deep.model,
 		Language:      resolvedLanguage,
 		Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
-		MaxIterations: 25,
+		MaxIterations: planMaxIterations,
 	}
 	planCfg := subagents.BuildPlanAgentConfig(c.deep.model, planParams)
 	if planCfg != nil {
