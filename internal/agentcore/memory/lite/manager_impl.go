@@ -787,20 +787,13 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 		}
 	}
 
-	// 删除不存在的文件
-	rows, err := m.db.Query("SELECT path FROM files WHERE source = ?", "memory")
+	// 删除不存在的文件（先收集再删除：rows 持有唯一连接，直接删会自锁）
+	stalePaths, err := m.collectStalePaths("memory", activePaths)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var path string
-		if err := rows.Scan(&path); err != nil {
-			continue
-		}
-		if !activePaths[path] {
-			m.removeFileFromIndex(context.Background(), path)
-		}
+	for _, path := range stalePaths {
+		m.removeFileFromIndex(context.Background(), path)
 	}
 	return nil
 }
@@ -845,22 +838,38 @@ func (m *memoryIndexManager) syncSessionFiles(ctx context.Context) error {
 		}
 	}
 
-	// 删除不存在的文件
-	rows, err := m.db.Query("SELECT path FROM files WHERE source = ?", "sessions")
+	// 删除不存在的文件（先收集再删除：rows 持有唯一连接，直接删会自锁）
+	stalePaths, err := m.collectStalePaths("sessions", activePaths)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = rows.Close() }()
+	for _, path := range stalePaths {
+		m.removeFileFromIndex(context.Background(), path)
+	}
+	return nil
+}
+
+// collectStalePaths 收集索引中已不存在的文件路径。
+//
+// 必须先把 rows 读完并关闭再调用方执行删除：SQLite 连接池上限为 1，
+// rows 未关闭时连接被占用，另行开启事务会永久阻塞。
+func (m *memoryIndexManager) collectStalePaths(source string, activePaths map[string]bool) ([]string, error) {
+	rows, err := m.db.Query("SELECT path FROM files WHERE source = ?", source)
+	if err != nil {
+		return nil, err
+	}
+	var stale []string
 	for rows.Next() {
 		var path string
 		if err := rows.Scan(&path); err != nil {
 			continue
 		}
 		if !activePaths[path] {
-			m.removeFileFromIndex(context.Background(), path)
+			stale = append(stale, path)
 		}
 	}
-	return nil
+	_ = rows.Close()
+	return stale, nil
 }
 
 // indexFile 索引单个文件。对齐 Python _index_file
@@ -896,13 +905,13 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 	chunks := ChunkMarkdown(content, chunkTokens, chunkOverlap)
 
 	// 清除旧索引
-	_, _ = m.db.Exec("DELETE FROM chunks WHERE path = ?", entry.Path)
+	_, _ = tx.Exec("DELETE FROM chunks WHERE path = ?", entry.Path)
 	if m.ftsAvailable {
-		_, _ = m.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry.Path)
+		_, _ = tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE path = ?", ftsTable), entry.Path)
 	}
 
 	for _, chunk := range chunks {
-		if err := m.indexChunk(ctx, entry.Path, source, chunk); err != nil {
+		if err := m.indexChunkWithTx(ctx, tx, entry.Path, source, chunk); err != nil {
 			logger.Warn(logComponent).Err(err).Str("path", entry.Path).Msg("index chunk failed")
 		}
 	}
@@ -927,7 +936,7 @@ func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor
 	chunkHash := HashText(chunk.Text)
 
 	var embBlob []byte
-	emb, err := m.getEmbedding(ctx, chunk.Text)
+	emb, err := m.getEmbeddingWithTx(ctx, db, chunk.Text)
 	if err == nil && emb != nil {
 		embBlob = vectorToBlob(emb)
 	}
@@ -1030,15 +1039,28 @@ func (m *memoryIndexManager) buildFileEntry(absPath, baseDir string) (*FileEntry
 
 // getEmbedding 获取 embedding（带缓存）。对齐 Python _get_embedding
 func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]float64, error) {
+	return m.getEmbeddingWithTx(ctx, m.db, text)
+}
+
+// getEmbeddingWithTx 在指定 dbExecutor 上取 embedding（事务内复用同一连接）。
+func (m *memoryIndexManager) getEmbeddingWithTx(ctx context.Context, db dbExecutor, text string) ([]float64, error) {
 	if m.provider == nil {
 		return nil, nil
 	}
-	textHash := HashText(text)
-
-	tx, err := m.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
+	usesOwnTx := true
+	var tx *sql.Tx
+	if t, ok := db.(*sql.Tx); ok {
+		tx = t
+		usesOwnTx = false
 	}
+	if usesOwnTx {
+		var err error
+		tx, err = m.db.BeginTx(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	textHash := HashText(text)
 
 	// 查缓存
 	cacheEnabled := m.settings.Cache.Enabled
@@ -1049,14 +1071,18 @@ func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]f
 		)
 		var blob []byte
 		if err := row.Scan(&blob); err == nil && blob != nil {
-			_ = tx.Rollback()
+			if usesOwnTx {
+				_ = tx.Rollback()
+			}
 			return blobToVector(blob), nil
 		}
 	}
 
 	emb, err := m.provider.EmbedQuery(ctx, text)
 	if err != nil {
-		_ = tx.Rollback()
+		if usesOwnTx {
+			_ = tx.Rollback()
+		}
 		return nil, err
 	}
 
@@ -1068,8 +1094,10 @@ func (m *memoryIndexManager) getEmbedding(ctx context.Context, text string) ([]f
 		)
 	}
 
-	if err := tx.Commit(); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("getEmbedding failed to commit transaction")
+	if usesOwnTx {
+		if err := tx.Commit(); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("getEmbedding failed to commit transaction")
+		}
 	}
 	return emb, nil
 }
