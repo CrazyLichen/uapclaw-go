@@ -41,7 +41,7 @@ type EmbedModelProvider interface {
 type IndexTypeCarrier interface {
 	// IndexType 返回 index_type（"" = Python None 未注入）
 	IndexType() string
-	// SetIndexType 注入 index_type（上层 13.28 GraphKB 调用）
+	// SetIndexType 注入 index_type（13.28 GraphKB 已接线）
 	SetIndexType(indexType string)
 }
 

@@ -15,20 +15,30 @@
 //	├── doc.go           # 包文档
 //	├── base.go          # KnowledgeBase 接口 + BaseKnowledgeBase + 构造/setter/模板方法（13.26）
 //	├── validate.go      # ValidateIndex 三段式 + attrEqual + isChromaType（13.26）
+//	├── kb_helpers.go    # 包级复用：默认检索配置 / mode 推导 / database_name 取值 / agentic 包装（13.28）
 //	├── simple_kb.go     # SimpleKnowledgeBase 完整实现（13.27，5 抽象方法 + 懒创建 + agentic 包装）
-//	└── multi_kb.go      # 跨知识库聚合检索两函数（13.27）
-//
-// 13.28 graph.go 落地时补充目录条目与对应 Python 路径。
+//	├── multi_kb.go      # 跨知识库聚合检索两函数（13.27）
+//	└── graph_kb.go      # GraphKnowledgeBase 图增强实现（13.28，双索引写入 + 图路径检索）
 //
 // SimpleKnowledgeBase（13.27）实现 5 抽象方法，是检索查询管线在会话侧的
 // 总入口；multi_kb.go 提供跨知识库聚合检索。
 //
+// GraphKnowledgeBase（13.28）是图增强实现：写侧 use_graph 时抽取三元组、
+// 建 kb_{id}_triples 索引（三元组 chunk 的 metadata 承载 doc_id/chunk_id，
+// 供 13.23 graph_fetch 回链原始分块）；读侧懒创建 GraphRetriever 走 beam
+// search 图检索，注入 index_type 后由检索器自行校验 mode；未启用图检索
+// 时回落内建 SimpleKnowledgeBase（不传 extractor）。
+//
 // 对应 Python 代码：
 //
 //	openjiuwen/core/retrieval/knowledge_base.py
+//	openjiuwen/core/retrieval/simple_knowledge_base.py
+//	openjiuwen/core/retrieval/graph_knowledge_base.py
 //
 // 核心类型/接口索引：
 //
-//	KnowledgeBase     — 知识库抽象接口（5 抽象 + 4 模板 + Config）
-//	BaseKnowledgeBase — 子类共享基座（嵌入）
+//	KnowledgeBase      — 知识库抽象接口（5 抽象 + 4 模板 + Config）
+//	BaseKnowledgeBase  — 子类共享基座（嵌入）
+//	SimpleKnowledgeBase — 简单知识库实现（向量/稀疏/混合 + agentic）
+//	GraphKnowledgeBase  — 图增强知识库实现（双索引 + 图检索）
 package knowledgebase

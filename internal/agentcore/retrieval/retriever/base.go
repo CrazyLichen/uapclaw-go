@@ -62,8 +62,9 @@ type RetrieveOptions struct {
 	// （对齐 Python 死参数）。
 	Alpha *float64
 	// GraphHops 图检索跳数（13.23 消费；nil→默认 2；显式 0 →
-	// max_length=0 → 155204，Python 行为保真）。潜伏参数：Python 侧
-	// kwargs.get 消费、全库零生产方（13.28 接线后激活）。
+	// max_length=0 → 155204，Python 行为保真）。死参数：Python 侧
+	// kwargs.get 消费、全库零生产方（13.28 GraphKnowledgeBase 亦不传
+	// graph_hops，注释纠偏见 13.28 spec §8-7）。
 	GraphHops *int
 	// NumBeams beam search 束宽（13.23 TripleBeamSearch 消费；nil→10）。
 	NumBeams *int
