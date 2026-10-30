@@ -2,7 +2,6 @@ package knowledgebase
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -104,7 +103,7 @@ func (s *SimpleKnowledgeBase) AddDocuments(ctx context.Context, documents []rera
 		UseCaptionForImages: s.config.UseCaptionForImages,
 	}
 	success, err := s.indexManager.BuildIndex(ctx, chunks, indexConfig, s.embedModel,
-		indexer.WithIndexExtra("database_name", s.vectorStoreDatabaseName()))
+		indexer.WithIndexExtra("database_name", vectorStoreDatabaseName(s.vectorStore)))
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +147,7 @@ func (s *SimpleKnowledgeBase) Retrieve(ctx context.Context, query string, config
 
 	// 对齐 Python retrieval_config.agentic 分支
 	if retrievalConfig.Agentic {
-		r, err = s.wrapAgentic(ctx, r, opts...)
+		r, err = wrapAgenticRetriever(s.llmClient, r, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -286,27 +285,6 @@ func (s *SimpleKnowledgeBase) GetStatistics(ctx context.Context) (map[string]any
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// defaultRetrievalConfig 默认检索配置（对齐 Python RetrievalConfig() 默认
-// top_k=5，其余字段为零值/ nil）。
-func defaultRetrievalConfig() *common.RetrievalConfig {
-	return &common.RetrievalConfig{TopK: 5}
-}
-
-// resolveRetrievalMode 由 index_type 推导检索模式。
-//
-// Python: mode = "hybrid"; index_type=="vector"→"vector"；
-// index_type=="bm25"→"sparse"；其余保持 "hybrid"。
-func resolveRetrievalMode(indexType common.IndexTypeKind) retriever.RetrievalMode {
-	switch indexType {
-	case common.IndexTypeVector:
-		return retriever.RetrievalModeVector
-	case common.IndexTypeBM25:
-		return retriever.RetrievalModeSparse
-	default:
-		return retriever.RetrievalModeHybrid
-	}
-}
-
 // ensureRetriever 返回可用 retriever，nil 时持锁懒创建。
 //
 // Python 侧在 retrieve 内按 index_type 三分支延迟 import 并构造；Go 为
@@ -339,58 +317,4 @@ func (s *SimpleKnowledgeBase) ensureRetriever() (retriever.Retriever, error) {
 		s.retriever = retriever.NewHybridRetriever(s.vectorStore, s.embedModel)
 	}
 	return s.retriever, nil
-}
-
-// wrapAgentic 用 AgenticRetriever 包装底层 retriever。
-//
-// 对齐 Python `AgenticRetriever(retriever=..., llm_client=..., **kwargs)`：
-// kwargs 只认 max_iter，经 KBOptions.Extra["max_iter"] 映射。Python 的
-// AgenticRetriever 不接受其他关键字参数，多传会在**构造前**抛 TypeError
-// 让整个 retrieve 失败；Go 同样拒绝（155510），不静默忽略。
-// max_iter 类型不符时 Python 侧 isinstance 判假 → Warn 回落默认 2，
-// Go 返回同样的告警由 WithAgenticMaxIter 之外的路径处理（见下）。
-func (s *SimpleKnowledgeBase) wrapAgentic(ctx context.Context, r retriever.Retriever, opts ...KBOption) (retriever.Retriever, error) {
-	_ = ctx
-	kbOpts := NewKBOptions(opts...)
-	var agenticOpts []retriever.AgenticRetrieverOption
-	for key, v := range kbOpts.Extra {
-		switch key {
-		case "max_iter":
-			n, ok := v.(int)
-			if !ok {
-				// Python isinstance(max_iter, int) 判假 → Warn 回落默认 2，不报错
-				logger.Warn(logComponent).
-					Str("max_iter_type", fmt.Sprintf("%T", v)).
-					Msg("max_iter is not an int, falling back to default")
-				continue
-			}
-			agenticOpts = append(agenticOpts, retriever.WithAgenticMaxIter(n))
-		default:
-			return nil, exception.BuildError(
-				exception.StatusAgenticKwargsUnexpected,
-				exception.WithMsg(fmt.Sprintf(
-					"AgenticRetriever() got an unexpected keyword argument '%s'", key)),
-			)
-		}
-	}
-	agentic, err := retriever.NewAgenticRetriever(r, s.llmClient, agenticOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return agentic, nil
-}
-
-// vectorStoreDatabaseName 防御式取 vector_store 的 database_name。
-//
-// Python: getattr(getattr(self.vector_store, "config", None), "database_name", "")
-// 且非 str 归零。Go 用接口断言表达"属性存在性"，未实现即回落空串；
-// 非 str 归零由静态类型天然满足（spec §8-5）。
-func (s *SimpleKnowledgeBase) vectorStoreDatabaseName() string {
-	if s.vectorStore == nil {
-		return ""
-	}
-	if p, ok := s.vectorStore.(interface{ DatabaseName() string }); ok {
-		return p.DatabaseName()
-	}
-	return ""
 }

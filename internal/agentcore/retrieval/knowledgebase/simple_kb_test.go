@@ -359,18 +359,18 @@ func TestSimpleKB_数据库名防御式取值(t *testing.T) {
 	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil,
 		WithVectorStore(&plainVectorStore{}))
 	require.NoError(t, err)
-	assert.Equal(t, "", kb.vectorStoreDatabaseName())
+	assert.Equal(t, "", vectorStoreDatabaseName(kb.vectorStore))
 
 	// nil vector_store 同样回落空串
 	kb2, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "", kb2.vectorStoreDatabaseName())
+	assert.Equal(t, "", vectorStoreDatabaseName(kb2.vectorStore))
 
 	// 实现了 DatabaseName() 的存储原样返回
 	vs, _ := makeCompatiblePair()
 	kb3, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, WithVectorStore(vs))
 	require.NoError(t, err)
-	assert.Equal(t, "test_db", kb3.vectorStoreDatabaseName())
+	assert.Equal(t, "test_db", vectorStoreDatabaseName(kb3.vectorStore))
 }
 
 // TestSimpleKB_AddDocuments数据库名不匹配构造期拦截 与 Python 一致：
