@@ -49,7 +49,7 @@ func RetrieveMultiKB(ctx context.Context, kbs []KnowledgeBase,
 		return []string{}
 	}
 
-	allResults := retrieveMultiKBGather(ctx, kbs, query, config)
+	allResults := retrieveMultiKBGather(ctx, kbs, query, config, "retrieve_multi_kb")
 
 	merged := make(map[string]float64)
 	var order []string
@@ -86,7 +86,7 @@ func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 		return []common.MultiKBRetrievalResult{}
 	}
 
-	allResults := retrieveMultiKBGather(ctx, kbs, query, config)
+	allResults := retrieveMultiKBGather(ctx, kbs, query, config, "retrieve_multi_kb_with_source")
 
 	merged := make(map[string]*multiKBEntry)
 	var order []string
@@ -178,8 +178,12 @@ func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 //
 // 裸 gather（13.17/13.25 方案 A 先例）：协程各写各的槽位，无 fail-fast，
 // 单库错误只 Warn 并留空槽位，与 Python asyncio.gather 全跑完语义一致。
+//
+// caller 为调用方函数名，仅用于 Warn 文案——Python 侧两个聚合函数各自
+// 打印自己的函数名（`retrieve_multi_kb:` / `retrieve_multi_kb_with_source:`），
+// 便于区分失败发生在哪条链路。
 func retrieveMultiKBGather(ctx context.Context, kbs []KnowledgeBase,
-	query string, config *common.RetrievalConfig) [][]common.RetrievalResult {
+	query string, config *common.RetrievalConfig, caller string) [][]common.RetrievalResult {
 	results := make([][]common.RetrievalResult, len(kbs))
 	var wg sync.WaitGroup
 	for i := range kbs {
@@ -191,7 +195,7 @@ func retrieveMultiKBGather(ctx context.Context, kbs []KnowledgeBase,
 				logger.Warn(logComponent).
 					Str("kb_id", kbs[i].Config().KBID).
 					Err(err).
-					Msg("retrieve_multi_kb: kb failed")
+					Msg(caller + ": kb failed")
 				return
 			}
 			results[i] = rs

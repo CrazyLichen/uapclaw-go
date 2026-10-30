@@ -3,6 +3,8 @@ package knowledgebase
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 测试桩 ────────────────────────────
@@ -231,4 +234,30 @@ func TestRetrieveMultiKBWithSource_负Limit(t *testing.T) {
 	results := RetrieveMultiKBWithSource(context.Background(), []KnowledgeBase{kb}, "q", nil, &neg)
 	require.Len(t, results, 1)
 	assert.Equal(t, "a", results[0].Text)
+}
+
+// TestRetrieveMultiKB_失败日志区分链路 两个聚合函数的 Warn 文案各自带
+// 自己的函数名（对齐 Python `retrieve_multi_kb:` / `retrieve_multi_kb_with_source:`）。
+//
+// 日志经 logger.Setup(WithOutputDir(临时目录)) 落盘后读取断言；测试结束
+// 调 logger.Close() 重置全局单例，避免污染同包其它用例。
+func TestRetrieveMultiKB_失败日志区分链路(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, logger.Setup(logger.WithOutputDir(dir)))
+	t.Cleanup(func() { _ = logger.Close() })
+
+	bad := &fakeKB{kbID: "bad_kb", err: errors.New("boom")}
+
+	RetrieveMultiKB(context.Background(), []KnowledgeBase{bad}, "q", nil, nil)
+	RetrieveMultiKBWithSource(context.Background(), []KnowledgeBase{bad}, "q", nil, nil)
+	require.NoError(t, logger.Close())
+
+	raw, err := os.ReadFile(filepath.Join(dir, "agent_core.log"))
+	require.NoError(t, err)
+	logged := string(raw)
+
+	assert.Contains(t, logged, "retrieve_multi_kb: kb failed")
+	assert.Contains(t, logged, "retrieve_multi_kb_with_source: kb failed")
+	// kb_id 作为结构化字段随日志输出
+	assert.Contains(t, logged, "bad_kb")
 }
