@@ -15,12 +15,13 @@
 //	├── doc.go           # 包文档
 //	├── base.go          # KnowledgeBase 接口 + BaseKnowledgeBase + 构造/setter/模板方法（13.26）
 //	├── validate.go      # ValidateIndex 三段式 + attrEqual + isChromaType（13.26）
-//	└── simple_kb.go     # SimpleKnowledgeBase 完整实现（13.27，5 抽象方法 + 懒创建 + agentic 包装）
+//	├── simple_kb.go     # SimpleKnowledgeBase 完整实现（13.27，5 抽象方法 + 懒创建 + agentic 包装）
+//	└── multi_kb.go      # 跨知识库聚合检索两函数（13.27）
 //
 // 13.28 graph.go 落地时补充目录条目与对应 Python 路径。
 //
 // SimpleKnowledgeBase（13.27）实现 5 抽象方法，是检索查询管线在会话侧的
-// 总入口。
+// 总入口；multi_kb.go 提供跨知识库聚合检索。
 //
 // 对应 Python 代码：
 //
