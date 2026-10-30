@@ -193,3 +193,40 @@ func TestConfigManager_JSON保存格式(t *testing.T) {
 	assert.NotContains(t, string(raw), `\u`)
 	assert.Contains(t, string(raw), "\n  \"")
 }
+
+// TestConfigManager_数值越界回落默认 chunk_size 超出 int64 可表示范围时
+// asInt 拒绝转换，字段保留 pydantic 默认值（不静默回绕）。
+func TestConfigManager_数值越界回落默认(t *testing.T) {
+	path := writeTempFile(t, "cfg.json",
+		`{"kb_id":"x","chunk_size":1e300,"chunk_overlap":-1e300}`)
+	m, err := NewConfigManager(path)
+	require.NoError(t, err)
+	cfg, err := m.GetKnowledgeBaseConfig()
+	require.NoError(t, err)
+	assert.Equal(t, 512, cfg.ChunkSize)
+	assert.Equal(t, 50, cfg.ChunkOverlap)
+}
+
+// TestConfigManager_数值边界 边界内的大整数正常接受。
+func TestConfigManager_数值边界(t *testing.T) {
+	path := writeTempFile(t, "cfg.json", `{"kb_id":"x","chunk_size":1048576,"chunk_overlap":0}`)
+	m, err := NewConfigManager(path)
+	require.NoError(t, err)
+	cfg, err := m.GetKnowledgeBaseConfig()
+	require.NoError(t, err)
+	assert.Equal(t, 1048576, cfg.ChunkSize)
+	// 0 是合法值（pydantic 不拒），不应回落默认 50
+	assert.Equal(t, 0, cfg.ChunkOverlap)
+}
+
+// TestConfigManager_非数值类型回落默认 字符串/布尔等非数值保持 pydantic 默认。
+func TestConfigManager_非数值类型回落默认(t *testing.T) {
+	path := writeTempFile(t, "cfg.json",
+		`{"kb_id":"x","chunk_size":"big","chunk_overlap":true}`)
+	m, err := NewConfigManager(path)
+	require.NoError(t, err)
+	cfg, err := m.GetKnowledgeBaseConfig()
+	require.NoError(t, err)
+	assert.Equal(t, 512, cfg.ChunkSize)
+	assert.Equal(t, 50, cfg.ChunkOverlap)
+}

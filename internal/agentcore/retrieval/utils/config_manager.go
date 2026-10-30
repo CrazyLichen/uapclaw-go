@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -34,6 +35,10 @@ type ConfigManager struct {
 const (
 	// knowledgeBaseConfigKey LoadFromFile 的固定存储键（Python 字面 "knowledge_base"）
 	knowledgeBaseConfigKey = "knowledge_base"
+	// maxSafeIntFloat float64 能精确表示的最大 int 边界（2^63）
+	maxSafeIntFloat = float64(1 << 63)
+	// minSafeIntFloat float64 能精确表示的最小 int 边界（-2^63）
+	minSafeIntFloat = -float64(1 << 63)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -248,15 +253,30 @@ func knowledgeBaseConfigToMap(cfg common.KnowledgeBaseConfig) map[string]any {
 }
 
 // asInt 把 JSON 的 float64 或 YAML 的 int 统一取为 int。
-// 非数值类型返回 false（对应 pydantic ValidationError，Go 静默用默认值）。
+//
+// 对齐 Python int() 的精度语义：Python 任意精度整数不存在溢出，Go 的
+// int 会回绕。超出 int 可表示范围的值返回 false，调用方保留字段默认值
+// （Python 侧则是得到一个超大的合法整数——极端输入下仍是分叉，但至少
+// 不会静默得到一个回绕后的负数）。
 func asInt(v any) (int, bool) {
 	switch n := v.(type) {
 	case int:
 		return n, true
 	case int64:
+		if int64(int(n)) != n {
+			return 0, false
+		}
 		return int(n), true
 	case float64:
-		return int(n), true
+		// NaN、±Inf 与超出 int64 可表示范围的数值都无法安全转换
+		if math.IsNaN(n) || math.IsInf(n, 0) {
+			return 0, false
+		}
+		f := math.Trunc(n)
+		if f < minSafeIntFloat || f > maxSafeIntFloat {
+			return 0, false
+		}
+		return int(f), true
 	default:
 		return 0, false
 	}

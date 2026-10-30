@@ -2,10 +2,12 @@ package knowledgebase
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -79,11 +81,14 @@ func RetrieveMultiKB(ctx context.Context, kbs []KnowledgeBase,
 // 在元数据中显式给出时才参与取最大（否则回落本条 score）；kb_ids 取并集
 // 后排序；metadata 固定为首次命中的那条。
 //
+// 元数据中的 raw_score / raw_score_scaled 不是数值时，Python 的 max()
+// 会抛 TypeError 中断整条聚合，故这里同样返回 155509（而非静默跳过）。
+//
 // Python: simple_knowledge_base.py retrieve_multi_kb_with_source
 func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
-	query string, config *common.RetrievalConfig, topK *int) []common.MultiKBRetrievalResult {
+	query string, config *common.RetrievalConfig, topK *int) ([]common.MultiKBRetrievalResult, error) {
 	if len(kbs) == 0 {
-		return []common.MultiKBRetrievalResult{}
+		return []common.MultiKBRetrievalResult{}, nil
 	}
 
 	allResults := retrieveMultiKBGather(ctx, kbs, query, config, "retrieve_multi_kb_with_source")
@@ -98,8 +103,14 @@ func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 				meta = map[string]any{}
 			}
 			score := r.Score
-			rawScore, hasRaw := pyMetaFloat(meta, "raw_score", score)
-			rawScaled, hasScaled := pyMetaFloat(meta, "raw_score_scaled", score)
+			rawScore, hasRaw, err := pyMetaFloat(meta, "raw_score", score)
+			if err != nil {
+				return nil, err
+			}
+			rawScaled, hasScaled, err := pyMetaFloat(meta, "raw_score_scaled", score)
+			if err != nil {
+				return nil, err
+			}
 
 			entry, exists := merged[r.Text]
 			if !exists {
@@ -169,7 +180,7 @@ func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 		}
 		out = append(out, item)
 	}
-	return out
+	return out, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -243,17 +254,21 @@ func pyTake(items []string, limit int) []string {
 //   - 键缺失 → 回落 score，且参与取最大（true）
 //   - 键存在但值为 None → 不参与取最大（false），装填时为 0
 //   - 键存在且为数值 → 参与取最大（true）
-//   - 键存在但非数值 → Python 侧会在 max() 抛 TypeError，Go 按无效值跳过（false）
-func pyMetaFloat(meta map[string]any, key string, fallback float64) (float64, bool) {
+//   - 键存在但非数值 → Python 的 max() 抛 TypeError 中断整条聚合，
+//     Go 同样返回 155509（不静默跳过）
+func pyMetaFloat(meta map[string]any, key string, fallback float64) (float64, bool, error) {
 	v, ok := meta[key]
 	if !ok {
-		return fallback, true
+		return fallback, true, nil
 	}
 	if v == nil {
-		return 0, false
+		return 0, false, nil
 	}
 	if f, ok := v.(float64); ok {
-		return f, true
+		return f, true, nil
 	}
-	return 0, false
+	return 0, false, exception.BuildError(
+		exception.StatusRetrievalKbMetadataTypeInvalid,
+		exception.WithMsg(fmt.Sprintf("metadata %q must be a number, got %T", key, v)),
+	)
 }

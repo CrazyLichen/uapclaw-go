@@ -261,5 +261,21 @@ Python `get_config(Type[T]) -> Optional[T]` 是泛型签名。Go 两选一：
 
 ### 13.3 覆盖率与回归
 
-- knowledgebase 95.6% / utils 89.1%（均高于 85% 规范下限）
-- 全量回归 307 包零 FAIL（CGO_ENABLED=1 + `-tags "sqlite_fts5 test"`），`-race` 干净
+- knowledgebase 96.2% / utils 88.1%（均高于 85% 规范下限）
+- 全量回归零 FAIL（CGO_ENABLED=1 + `-tags "sqlite_fts5 test"`），`-race` 干净
+
+### 13.4 审查后修正：两处"更安全但不对齐"改为完全对齐
+
+初版实现有两处做了"防御式"处理，与 Python 行为分叉。审查时确认**对齐优先于防炸**，改回 Python 语义。
+
+| # | 位置 | 初版（分叉） | Python 行为 | 修正后 |
+|---|---|---|---|---|
+| 1 | `pyMetaFloat` 遇到非数值 | 静默跳过（视为"不参与取最大"） | `max(prev, raw_score)` 抛 `TypeError`，整条聚合中断 | 返回 155509 `StatusRetrievalKbMetadataTypeInvalid`，`RetrieveMultiKBWithSource` 签名增加 `error` 返回 |
+| 2 | `asInt` 遇到超出 int64 的值 | `int(n)` 静默回绕为负数 | 任意精度整数，得到合法大数 | 显式越界检测（含 NaN/±Inf），不转换则保留字段默认值 |
+
+**决策依据**：与 §8-6（agentic kwargs 未知键静默忽略）方向相反——那条是"Python 崩、Go 不崩"，当时已归档认可；这两条不沿用该取向，改为逐条对齐。
+代价：坏元数据会中断整个多 KB 检索，与 Python 一致。
+
+**新增导出契约**：`RetrieveMultiKBWithSource` 由 `[]common.MultiKBRetrievalResult` 改为 `([]common.MultiKBRetrievalResult, error)`；`RetrieveMultiKB`（文本版）不读 metadata，签名不变。
+
+**新增错误码**：155509 `StatusRetrievalKbMetadataTypeInvalid`（占 kb 段 155509 空位，本领域新增消费）。

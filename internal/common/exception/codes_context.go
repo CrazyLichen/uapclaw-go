@@ -229,6 +229,13 @@ var (
 	StatusRetrievalKbDatabaseConfigInvalid = NewStatusCode(
 		"RETRIEVAL_KB_DATABASE_CONFIG_INVALID", 155508,
 		"retrieval kb_database_config is invalid, reason: {error_msg}")
+	// StatusRetrievalKbMetadataTypeInvalid 检索知识库结果元数据类型无效
+	//
+	// 对齐 retrieve_multi_kb_with_source：Python 对 metadata 中 raw_score /
+	// raw_score_scaled 直接参与 max()，非数值时抛 TypeError 中断整条聚合。
+	StatusRetrievalKbMetadataTypeInvalid = NewStatusCode(
+		"RETRIEVAL_KB_METADATA_TYPE_INVALID", 155509,
+		"retrieval kb_metadata_type is invalid, reason: {error_msg}")
 
 	// 知识库检索 — 重排序 155600–155699
 
