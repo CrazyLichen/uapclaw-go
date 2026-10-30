@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 
@@ -339,15 +338,16 @@ func (s *CodeAdapterProjectMemorySuite) TestProcessMessage_ProjectMemory写入�
 	s.Contains(section.Content["en"], "PROJECT-MEMORY-MARKER")
 
 	// 断言 ②：模型入参层
-	// 抬头语言取决于 builder 当前 language（section 恒为中英双语，Build 按语言择一），
-	// 因此断言语义而非固定语言：内容标记必须出现，抬手中/英任一出现即可。
+	// code 模式提示词语言固定 en（Python: JiuwenClawCodeAdapter._resolve_prompt_language() → "en"），
+	// 因此抬头必须是英文；中文抬头出现即回归。
 	prompt := capture.firstSystemMessage()
 	s.Require().NotEmpty(prompt, "应捕获到 system 消息")
 	s.Contains(prompt, "PROJECT-MEMORY-MARKER", "system 消息应含记忆正文")
-	s.True(
-		strings.Contains(prompt, "## Project Memory") || strings.Contains(prompt, "## 项目记忆"),
-		"system 消息应含项目记忆抬头（中/英任一）",
-	)
+	s.Contains(prompt, "## Project Memory", "code 模式 system 消息应含英文项目记忆抬头")
+	s.NotContains(prompt, "## 项目记忆", "code 模式 system 消息不应出现中文抬头")
+
+	// 断言 ④：提示词语言为 en（N-01 回归锚点）
+	s.Equal("en", spb.Language(), "code 模式 builder 语言应为 en")
 
 	// 断言 ③：装配未被请求往返拆掉
 	found := inst.FindRailsByType(reflect.TypeOf(&commonrails.ProjectMemoryRail{}))

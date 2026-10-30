@@ -589,6 +589,36 @@ func (c *CodeAdapter) resolveOutputLanguage() string {
 	return c.deep.resolveRuntimeLanguage()
 }
 
+// updatePromptForMode 覆写 DeepAdapter，按 code 模式的运行时语言刷新提示词语言。
+// Python: JiuwenClawCodeAdapter 经 _update_prompt_for_mode(mode, resolved_language) 传入
+// self._resolve_runtime_language()（code 族固定 en 或 runtime_language_override）。
+//
+// Go 无虚方法派发：DeepAdapter.updatePromptForMode 内部调 d.resolveRuntimeLanguage()，
+// 取到的是 Deep 的偏好语言（默认 cn），会把 code 模式提示词整体降级为中文。
+// 因此必须在 CodeAdapter 侧覆写并由 CodeAdapter 自己调用。
+func (c *CodeAdapter) updatePromptForMode(mode string) {
+	// Python: resolved_language = self._resolve_runtime_language()
+	resolvedLanguage := c.resolveRuntimeLanguage()
+
+	// Python: if self._instance.system_prompt_builder is not None:
+	//             builder.language = resolved_language
+	if c.deep.instance != nil {
+		if spb := c.deep.instance.SystemPromptBuilder(); spb != nil {
+			spb.SetLanguage(resolvedLanguage)
+		}
+		// Python: if self._instance.deep_config is not None:
+		//             deep_config.language = resolved_language
+		if deepCfg := c.deep.instance.DeepConfig(); deepCfg != nil {
+			deepCfg.Language = resolvedLanguage
+		}
+	}
+
+	logger.Info(logComponent).
+		Str("mode", mode).
+		Str("language", resolvedLanguage).
+		Msg("CodeAdapter updatePromptForMode completed")
+}
+
 // updateRuntimeConfig 覆写 DeepAdapter，Code 模式 runtime config。
 // Python: JiuwenClawCodeAdapter._update_runtime_config() — 完全覆写（不调 super）
 //
@@ -644,7 +674,9 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 
 	// 步骤 6: updatePromptForMode
 	// Python: self._update_prompt_for_mode(runtime_config.mode, resolved_language)
-	c.deep.updatePromptForMode(config.Mode)
+	// 注意：必须走 CodeAdapter 自己的方法（Go 无虚方法派发，DeepAdapter 内部取的是
+	// Deep 的偏好语言，会把 code 模式提示词降级为中文）
+	c.updatePromptForMode(config.Mode)
 
 	// 步骤 7: rail 模式切换
 	// Python: await self._update_rails_for_mode(runtime_config.mode)
