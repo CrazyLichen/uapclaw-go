@@ -14,7 +14,8 @@
 //	├── doc.go              # 包文档
 //	├── base.go             # BaseChannel 接口 + ChannelType + ChannelMetadata
 //	├── channel_manager.go  # ChannelManager 注册/入站中转/出站派发/配置管理 + ExternalChannel 外部渠道表
-//	└── web/                # Web 渠道实现（WebSocket + RPC 分发 + 帧协议）
+//	├── web/                # Web 渠道实现（WebSocket + RPC 分发 + 帧协议）
+//	└── protocol/           # 协议渠道（acp：ACP stdio 通道，11.25）
 //
 // 对应 Python 代码：jiuwenswarm/gateway/channel_manager/
 package channel_manager

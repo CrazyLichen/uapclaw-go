@@ -2,6 +2,8 @@
 //
 // 可测试的命令构建逻辑放在此文件，
 // main.go 中的 Execute() + main() 用 //go:build !test 隔离，不参与单元测试覆盖率统计。
+// acp_cmd.go 提供 acp 子命令运行体（11.25：双模式自举——URL 四级回落 +
+// bootstrapGatewayEnv 共享 + AcpChannel 生命周期）。
 package main
 
 import (

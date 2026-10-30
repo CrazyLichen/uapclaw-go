@@ -693,6 +693,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.4.3 | ✅ | ACP Stdio | 标准输入输出 JSON-RPC 协议；✅ AcpStdioClient 已随 10.6.24d 实现于 swarm/acp（读写分离 goroutine+exitCh 免锁探测+三段优雅关闭+平台拆分，覆盖率 87.0%）；剩 cli.py REPL 入口 ⤵️ 10.4.6 | `jiuwenswarm/acp/cli.py` · `stdio_client.py` |
 | 10.4.4 | 🔄 | Slash 命令处理 | `/mode`/`/new`/`/sandbox`/`/model` 等；/evolve 系列分发骨架已在 adapter 实现 | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
 | 10.4.5 | ✅ | ACP Subprocess Env | 子进程环境设置；✅ BuildAcpSubprocessEnv 已随 10.6.24d 实现于 swarm/acp（profileScopedKeys 剥离+${VAR} 解析覆盖） | `jiuwenswarm/acp/subprocess_env.py` |
+| 10.4.6 | ☐ | ACP CLI Smoke 入口 | jiuwenswarm-acp-chat 对应（cli.py 90 行 REPL）；实现留后（D4 拍板，11.25 只占行——Go 侧 acp 子命令已落地，本行余 Python REPL 对等形态） | `jiuwenswarm/acp/cli.py` |
 | **10.5 扩展系统** | — | | | |
 | 10.5.1 | ✅ | 数据类型 | ExtensionMetadata + ExtensionConfig | `jiuwenswarm/extensions/types.py` |
 | 10.5.2 | ✅ | 钩子事件常量 | GatewayHookEvents + AgentServerHookEvents | `jiuwenswarm/extensions/hook_event.py` |
@@ -741,7 +742,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 11.6 | ✅ | RouteBinding | 路由绑定 | `jiuwenswarm/gateway/routing/route_binding.py` |
 | 11.7 | ✅ | SessionMap | scope 枚举+LoadSessionMapScope（未知值/未注册降级默认）+ makeKey/makeSessionID（::分隔+hex时间戳+6位hex）+ checkpoint 持久化（load 过滤/防御 save）+ MessageHandler 集成：首建覆盖/ApplyChannelState 无条件刷新双分支（对齐 L1151-1159 陷阱）/new_session rotate 轮转 + TriggerSessionStartHook；sync.Mutex 并发补齐 | `jiuwenswarm/gateway/routing/session_map.py` |
 | 11.8 | ✅ | InteractionContext | 交互上下文：PendingInteraction 15字段+8方法（Save/Remove/Load/FindPending五层过滤/FindAllGroupPending/FindGroupPending/CleanupExpired宽松解析/BuildResumeContent双模板）+dataclass三类默认值对齐（必填缺失跳过/status默认pending/时间补now）+敏感键过滤；⤵️ 消费方 11.12（im_pipeline）/11.16 飞书/11.21 企微 DM resume | `jiuwenswarm/gateway/routing/interaction_context.py` |
-| 11.9 | ✅ | GatewayServer | 多路由 WS 服务器本体已补齐（GatewayServer 类 L240-720：resolveRoute 四分支/双客户端路由表/connection.ack/handleRawMessage 三层处理/Send 四段出站/断连清理）+ InboundGatewayServer 双层 chan + ExternalChannel 出站装配 + 现有 HTTP 宿主改名 AppGatewayServer；ACP 路由接线 ⤵️ 11.25（TUI 已于 11.15 最小装配落地） | `jiuwenswarm/gateway/app_gateway.py` |
+| 11.9 | ✅ | GatewayServer | 多路由 WS 服务器本体已补齐（GatewayServer 类 L240-720：resolveRoute 四分支/双客户端路由表/connection.ack/handleRawMessage 三层处理/Send 四段出站/断连清理）+ InboundGatewayServer 双层 chan + ExternalChannel 出站装配 + 现有 HTTP 宿主改名 AppGatewayServer；ACP 路由接线已随 11.25 落地（桥+Send/rawMessage 分支+InstallDefaultAcpHooks） | `jiuwenswarm/gateway/app_gateway.py` |
 | 11.10 | ✅ | Cron 调度服务 | go-quartz v0.15.2（croniter→Quartz dow 变换）；CronJobStore tmp+rename 原子写；CronSchedulerService 事件堆三分支（wake/push/push_update）+方案B委托降级单调度器（进程注册表修正 Python 单进程双跑缺陷）；MessagePublisher 接口破环；9渠道元数据全量对齐；CronController+8个cron.job.*端点+handleCronPushPayload；Agent侧CronTools双写+E2A转发+cronToolsBackend 11方法；deep_adapter步骤9绑定+TaskScheduler取消×2；team_manager注册点；app_gateway装配；覆盖率 gateway/cron 85.9% + cronbridge 90.1% | `jiuwenswarm/gateway/cron/` |
 | 11.11 | ✅ | 心跳服务 | GatewayHeartbeatService 旁路定时器（先睡后跳循环/tick 六步/三级 content 提取/HEARTBEAT_OK 判定/relay 回传 webhook/活跃时段跨午夜支持）；web 三 RPC（get_conf/set_conf 热重启+config.yaml round-trip 写回+agent 缓存清除/get_path 相对路径）；app_gateway 装配 env 三级回退+Start/Stop 接线；session.list heartbeat_ 过滤（偏差⑨）；9 项偏差归档 spec；heartbeat 包覆盖率 94.2% | `jiuwenswarm/gateway/heartbeat/heartbeat.py` |
 | 11.12 | ✅ | IM Pipeline | 独立包双管线完整对齐：IMPlatformAdapter 接口(10 方法+imUserIDNameResolver 可选断言)+IMConversationProcessor(七层分支/Lazy LLM 0.2+0.7/SYSTEM_PROMPT 逐字)+IMInboundPipeline(Apply 十三步/resume 分支/peekPending 模板)+IMOutboundPipeline(十四步短路链/追问前缀 gpq+iact 落盘/classify prompt 逐字/api_key 守卫)；message_handler 双挂接(步骤6+PublishRobotMessages 入队前)+OutboundPipeline 签名改造 Apply(ctx,msg) error；app_gateway 装配步骤4.7；⤵️ 适配器注册 11.16 飞书/11.21 企微；9 偏差归档 spec §8 | `jiuwenswarm/gateway/im_pipeline/` |
@@ -758,7 +759,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 11.22 | ☐ | WhatsApp 通道 | WhatsApp 桥接 | `jiuwenswarm/gateway/channel_manager/im_platforms/whatsapp/` |
 | 11.23 | ☐ | 小艺通道 | 华为小艺智能助手 | `jiuwenswarm/gateway/channel_manager/im_platforms/xiaoyi/` |
 | 11.24 | ☐ | 平台适配器 | IM 平台通用适配 | `jiuwenswarm/gateway/channel_manager/im_platforms/platform_adapter/` |
-| 11.25 | ☐ | ACP 协议桥接 | ACP Gateway Bridge | `jiuwenswarm/gateway/channel_manager/protocol/acp/` |
+| 11.25 | ✅ | ACP 协议桥接 | session_updates（e2a/acp）+ AcpGatewayBridge 桥主体/三拦截器/timer + GatewayServer/app_gateway 接线 + MessageHandler 别名链 + AcpChannel 本体/WS 客户端族/31 例映射 + cmd acp 双模式 + 桥 24 例 + e2e 3 用例全绿（protocol/acp 覆盖率 86.1%） | `jiuwenswarm/gateway/channel_manager/protocol/acp/` |
 | 11.26 | ☐ | A2A 协议通道 | A2A Agent 通道 | `jiuwenswarm/gateway/channel_manager/protocol/a2a/` |
 
 ---
