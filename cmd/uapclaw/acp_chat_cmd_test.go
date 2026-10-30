@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/acp"
 )
 
@@ -364,4 +365,130 @@ func TestRunAcpChat_E2E假对端(t *testing.T) {
 	if !strings.Contains(buf.String(), "peer-reply") {
 		t.Errorf("stdout = %q, 期望含 peer-reply", buf.String())
 	}
+}
+
+// TestRunAcpChatArgs_参数与默认消息 覆盖 argparse 等价语义与退出码映射。
+func TestRunAcpChatArgs_参数与默认消息(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("缺参数", func(t *testing.T) {
+		deps, _ := fakeAcpChatDeps(validAcpAgentsRaw(), nil, nil, "ok")
+		stderr := new(bytes.Buffer)
+		err := runAcpChatArgs(ctx, deps, nil, stderr)
+		var exitErr *acpChatExitError
+		if !errors.As(err, &exitErr) || exitErr.code != exitCodeConfig {
+			t.Fatalf("期望码 %d, 实际 %v", exitCodeConfig, err)
+		}
+		if !strings.Contains(stderr.String(), "usage: uapclaw acp-chat") {
+			t.Errorf("usage 未打 stderr: %q", stderr.String())
+		}
+	})
+
+	t.Run("参数过多", func(t *testing.T) {
+		deps, _ := fakeAcpChatDeps(validAcpAgentsRaw(), nil, nil, "ok")
+		err := runAcpChatArgs(ctx, deps, []string{"a", "b", "c"}, new(bytes.Buffer))
+		var exitErr *acpChatExitError
+		if !errors.As(err, &exitErr) || exitErr.code != exitCodeConfig {
+			t.Fatalf("期望码 %d, 实际 %v", exitCodeConfig, err)
+		}
+	})
+
+	t.Run("缺省消息Hello", func(t *testing.T) {
+		deps, _ := fakeAcpChatDeps(validAcpAgentsRaw(), nil, nil, "ok")
+		var got string
+		deps.chat = func(_ context.Context, _ *acp.AcpStdioClient, msg string) (string, error) {
+			got = msg
+			return "ok", nil
+		}
+		if err := runAcpChatArgs(ctx, deps, []string{"codex"}, new(bytes.Buffer)); err != nil {
+			t.Fatalf("期望成功, 实际 %v", err)
+		}
+		if got != defaultAcpChatMessage {
+			t.Errorf("缺省消息 = %q, want %q", got, defaultAcpChatMessage)
+		}
+	})
+
+	t.Run("显式消息", func(t *testing.T) {
+		deps, _ := fakeAcpChatDeps(validAcpAgentsRaw(), nil, nil, "ok")
+		var got string
+		deps.chat = func(_ context.Context, _ *acp.AcpStdioClient, msg string) (string, error) {
+			got = msg
+			return "ok", nil
+		}
+		if err := runAcpChatArgs(ctx, deps, []string{"codex", "自定义消息"}, new(bytes.Buffer)); err != nil {
+			t.Fatalf("期望成功, 实际 %v", err)
+		}
+		if got != "自定义消息" {
+			t.Errorf("消息 = %q", got)
+		}
+	})
+
+	t.Run("会话失败映射码1", func(t *testing.T) {
+		deps, _ := fakeAcpChatDeps(validAcpAgentsRaw(), errors.New("boom"), nil, "")
+		err := runAcpChatArgs(ctx, deps, []string{"codex", "hi"}, new(bytes.Buffer))
+		var exitErr *acpChatExitError
+		if !errors.As(err, &exitErr) || exitErr.code != exitCodeSession {
+			t.Fatalf("期望码 %d, 实际 %v", exitCodeSession, err)
+		}
+	})
+
+	t.Run("信号取消映射码130", func(t *testing.T) {
+		canceled, cancel := context.WithCancel(context.Background())
+		cancel()
+		deps, _ := fakeAcpChatDeps(validAcpAgentsRaw(), nil, context.Canceled, "")
+		err := runAcpChatArgs(canceled, deps, []string{"codex", "hi"}, new(bytes.Buffer))
+		var exitErr *acpChatExitError
+		if !errors.As(err, &exitErr) || exitErr.code != exitCodeInterrupted {
+			t.Fatalf("期望码 %d, 实际 %v", exitCodeInterrupted, err)
+		}
+	})
+}
+
+// TestLoadAcpChatConfigFrom_dotenv失败 envFile 不存在 → 仅 Debug，不阻断配置加载。
+func TestLoadAcpChatConfigFrom_dotenv失败(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("acp_agents:\n  codex:\n    command: codex\n"), 0o600); err != nil {
+		t.Fatalf("写临时 config.yaml 失败: %v", err)
+	}
+	raw, err := loadAcpChatConfigFrom(cfgPath, filepath.Join(dir, "missing.env"))
+	if err != nil {
+		t.Fatalf("dotenv 失败不应阻断, 实际 %v", err)
+	}
+	if _, ok := raw["acp_agents"]; !ok {
+		t.Errorf("配置未加载: %#v", raw)
+	}
+}
+
+// TestLoadAcpChatConfig_生产入口 覆盖 logger.Setup + dotenv 开关两条生产分支。
+func TestLoadAcpChatConfig_生产入口(t *testing.T) {
+	t.Run("跳过dotenv", func(t *testing.T) {
+		t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
+		t.Setenv(envSkipDotenv, "1")
+		pathutil.ResetCache()
+		t.Cleanup(pathutil.ResetCache)
+
+		raw, err := loadAcpChatConfig(context.Background())
+		if err != nil {
+			t.Fatalf("loadAcpChatConfig 失败: %v", err)
+		}
+		if raw == nil {
+			t.Error("期望非 nil 配置 map")
+		}
+	})
+
+	t.Run("走dotenv分支", func(t *testing.T) {
+		// 未设 UAPCLAW_SKIP_DOTENV → 取 workspace.EnvFile()（临时目录无 .env → 仅 Debug）
+		t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
+		pathutil.ResetCache()
+		t.Cleanup(pathutil.ResetCache)
+
+		raw, err := loadAcpChatConfig(context.Background())
+		if err != nil {
+			t.Fatalf("loadAcpChatConfig 失败: %v", err)
+		}
+		if raw == nil {
+			t.Error("期望非 nil 配置 map")
+		}
+	})
 }

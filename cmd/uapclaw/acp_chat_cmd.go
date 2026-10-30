@@ -106,24 +106,31 @@ profile 规格与 acp_chat 工具共用严格校验（args 必须是列表、env
 			ctx, stop := signal.NotifyContext(parent, syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
 
-			if len(args) == 0 || len(args) > 2 {
-				fmt.Fprintln(os.Stderr, "usage: uapclaw acp-chat <profile> [message]")
-				return &acpChatExitError{code: exitCodeConfig}
-			}
-
-			message := defaultAcpChatMessage
-			if len(args) == 2 {
-				message = args[1]
-			}
-
-			code := runAcpChat(ctx, defaultAcpChatDeps(), args[0], message)
-			if code == exitCodeOK {
-				return nil
-			}
-			return &acpChatExitError{code: code}
+			return runAcpChatArgs(ctx, defaultAcpChatDeps(), args, os.Stderr)
 		},
 	}
 	return cmd
+}
+
+// runAcpChatArgs 子命令执行体：参数校验 → 默认消息 → 退出码映射（可注入 deps）。
+// Python: argparse 位置参数解析 + _main_async()。
+func runAcpChatArgs(ctx context.Context, deps acpChatDeps, args []string, stderr io.Writer) error {
+	// Python argparse：位置参数个数不符 → usage 打 stderr + 退出码 2
+	if len(args) == 0 || len(args) > 2 {
+		fmt.Fprintln(stderr, "usage: uapclaw acp-chat <profile> [message]")
+		return &acpChatExitError{code: exitCodeConfig}
+	}
+
+	message := defaultAcpChatMessage
+	if len(args) == 2 {
+		message = args[1]
+	}
+
+	code := runAcpChat(ctx, deps, args[0], message)
+	if code == exitCodeOK {
+		return nil
+	}
+	return &acpChatExitError{code: code}
 }
 
 // Error 实现 error 接口。
