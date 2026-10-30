@@ -353,3 +353,36 @@ func (s *CodeAdapterProjectMemorySuite) TestProcessMessage_ProjectMemory写入�
 	s.Require().True(ok)
 	s.Equal("en", rail.GetLanguage())
 }
+
+// TestProcessMessage_trustedDirs注入附加目录 验证请求 trusted_dirs 经
+// updateRuntimeConfig → ProjectMemoryRail.SetAdditionalDirectories 生效。
+//
+// 对齐 Python: _update_runtime_config 中
+//
+//	if self._project_memory_rail is not None:
+//	    self._project_memory_rail.set_language(resolved_language)
+//	    if runtime_config.trusted_dirs:
+//	        self._project_memory_rail.set_additional_directories(runtime_config.trusted_dirs)
+func (s *CodeAdapterProjectMemorySuite) TestProcessMessage_trustedDirs注入附加目录() {
+	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_trusted")
+	env.WriteConfigYAML(s.T(), "")
+
+	c, projDir := s.newCodeAdapterWithProject(env, "normal")
+	// project_dir 自身无记忆文件，内容只来自 trusted_dirs
+	s.Require().NoError(os.Mkdir(filepath.Join(projDir, ".git"), 0o755))
+
+	extraDir := filepath.Join(env.DataDir, "trusted_extra")
+	s.Require().NoError(os.MkdirAll(extraDir, 0o755))
+	s.Require().NoError(os.WriteFile(filepath.Join(extraDir, "UAPCLAWSWARM.md"), []byte("TRUSTED-DIR-RULE"), 0o644))
+
+	s.processOnce(c, "trusted", map[string]any{
+		"query":        "读取项目记忆",
+		"mode":         "code.plan",
+		"files":        map[string]any{},
+		"trusted_dirs": []any{extraDir},
+	})
+
+	section := c.Instance().SystemPromptBuilder().GetSection(project_memory.SectionName)
+	s.Require().NotNil(section, "trusted_dirs 注入后应出现 project_memory section")
+	s.Contains(section.Content["en"], "TRUSTED-DIR-RULE")
+}
