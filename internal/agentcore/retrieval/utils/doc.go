@@ -9,13 +9,15 @@
 //	├── doc.go              # 包文档
 //	├── api_requests.go     # HTTP 重试请求工具
 //	├── fusion.go           # RRFFusion 倒数秩融合算法
-//	└── common.go           # Milvus 连接别名生成 + 泛型去重工具
+//	├── common.go           # Milvus 连接别名生成 + 泛型去重工具
+//	└── config_manager.go   # ConfigManager 配置管理器（JSON/YAML 加载与保存）
 //
 // 对应 Python 代码：
 //
 //	openjiuwen/core/retrieval/utils/api_requests.py
 //	openjiuwen/core/retrieval/utils/fusion.py
 //	openjiuwen/core/retrieval/utils/common.py
+//	openjiuwen/core/retrieval/utils/config_manager.py
 //
 // 核心类型/函数索引：
 //
@@ -26,4 +28,6 @@
 //	RRFFusion           — 倒数秩融合算法
 //	CreateMilvusAlias   — 生成 Milvus 连接别名
 //	Deduplicate         — 泛型去重（保留顺序）
+//	ConfigManager       — 统一配置管理器（加载/保存/按类型取回）
+//	GetConfig           — 按类型泛型取回配置
 package utils
