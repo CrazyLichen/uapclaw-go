@@ -1,6 +1,6 @@
 //go:build integration
 
-package adapter_test
+package testhelpers
 
 import (
 	"context"
@@ -19,15 +19,18 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// adapterTestEnv CodeAdapter 集成测试的隔离环境。
+// AdapterTestEnv CodeAdapter 集成测试的隔离环境。
 //
-// 隔离三件套（先例 code_adapter_coding_memory_test.go）：
+// 隔离三件套（先例 tests/integration/swarm/server/adapter/code_adapter_coding_memory_test.go）：
 //  1. UAPCLAW_DATA_DIR → t.TempDir()，先 pathutil.ResetCache() 再做任何路径调用
 //  2. 创建 config/ 目录（模拟已初始化，防 getResolvedPaths 回退 ResourcesDir）
-//  3. 创建 agent/workspace/（os.WriteFile 不建父目录）
+//  3. 创建 agent/workspace/（WriteFile 不建父目录）
 //
 // MockLLM 注册必须先于写 config.yaml（YAML 中 client_provider 引用此注册名）。
-type adapterTestEnv struct {
+//
+// 本文件与同包其他助手不同，额外带 //go:build integration 标签：
+// 它依赖 mockllm（同为 integration 标签），不带标签会破坏无标签构建。
+type AdapterTestEnv struct {
 	// DataDir 每测试隔离的 UAPCLAW_DATA_DIR
 	DataDir string
 	// Provider MockLLM 在 ClientRegistry 的注册名（config.yaml 引用）
@@ -36,15 +39,15 @@ type adapterTestEnv struct {
 	envBackup [][3]string
 }
 
-// ──────────────────────────── 导出函数（测试包内共享） ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
-// newAdapterTestEnv 构建隔离环境，并从 t.Cleanup 注册收尾。
+// NewAdapterTestEnv 构建隔离环境，并从 t.Cleanup 注册收尾。
 //
 // prefix 用于生成唯一 provider 名，避免同包多个套件顺序执行时相互覆盖。
-func newAdapterTestEnv(t *testing.T, mock *mockllm.MockModelClient, prefix string) *adapterTestEnv {
+func NewAdapterTestEnv(t *testing.T, mock *mockllm.MockModelClient, prefix string) *AdapterTestEnv {
 	t.Helper()
 
-	env := &adapterTestEnv{
+	env := &AdapterTestEnv{
 		Provider: fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano()),
 	}
 	model_clients.GetClientRegistry().Register(env.Provider, "llm", mock.Factory())
@@ -78,7 +81,7 @@ func newAdapterTestEnv(t *testing.T, mock *mockllm.MockModelClient, prefix strin
 }
 
 // Setenv 记录原值并设置环境变量（Cleanup 时恢复）。
-func (e *adapterTestEnv) Setenv(t *testing.T, key, val string) {
+func (e *AdapterTestEnv) Setenv(t *testing.T, key, val string) {
 	t.Helper()
 	orig, had := os.LookupEnv(key)
 	e.envBackup = append(e.envBackup, [3]string{key, orig, fmt.Sprintf("%t", had)})
@@ -95,7 +98,7 @@ func (e *adapterTestEnv) Setenv(t *testing.T, key, val string) {
 //	"  subagents:\n    explore_agent:\n      max_iterations: 5\n"
 //
 // modes.code.tools/rails 置空，避免拉起无关工具与护栏。
-func (e *adapterTestEnv) WriteConfigYAML(t *testing.T, reactExtra string) {
+func (e *AdapterTestEnv) WriteConfigYAML(t *testing.T, reactExtra string) {
 	t.Helper()
 	yamlContent := fmt.Sprintf(`models:
   defaults:
@@ -124,7 +127,7 @@ react:
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // restoreEnv 恢复环境变量。
-func (e *adapterTestEnv) restoreEnv() {
+func (e *AdapterTestEnv) restoreEnv() {
 	for _, item := range e.envBackup {
 		if item[2] == "false" {
 			_ = os.Unsetenv(item[0])

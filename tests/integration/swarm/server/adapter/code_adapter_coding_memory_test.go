@@ -18,6 +18,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -38,7 +39,7 @@ import (
 type CodeAdapterCodingMemorySuite struct {
 	isuite.BaseIntegrationSuite
 	// env 每测试隔离的集成环境（数据目录 / MockLLM provider / env 备份）
-	env *adapterTestEnv
+	env *testhelpers.AdapterTestEnv
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -54,7 +55,7 @@ func TestCodeAdapterCodingMemorySuite(t *testing.T) {
 // 隔离三件套与收尾（ResourceMgr.Release / env 恢复 / pathutil.ResetCache）
 // 统一由 adapterTestEnv 负责，见 itest_env_helpers_test.go。
 func (s *CodeAdapterCodingMemorySuite) SetupTest() {
-	s.env = newAdapterTestEnv(s.T(), s.MockLLM, "mock_coding_mem_itest")
+	s.env = testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_coding_mem_itest")
 }
 
 // writeConfigYaml 写入含顶层 embed 段的 config/config.yaml。

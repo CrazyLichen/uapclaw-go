@@ -26,6 +26,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -48,7 +49,7 @@ func TestCodeAdapterProjectMemorySuite(t *testing.T) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newCodeAdapterWithProject 在指定 env 下创建 CodeAdapter，project_dir 指向真实目录。
-func (s *CodeAdapterProjectMemorySuite) newCodeAdapterWithProject(env *adapterTestEnv, subMode string) (*adapter.CodeAdapter, string) {
+func (s *CodeAdapterProjectMemorySuite) newCodeAdapterWithProject(env *testhelpers.AdapterTestEnv, subMode string) (*adapter.CodeAdapter, string) {
 	projDir := filepath.Join(env.DataDir, "proj")
 	s.Require().NoError(os.MkdirAll(projDir, 0o755))
 
@@ -107,7 +108,7 @@ func (s *CodeAdapterProjectMemorySuite) TestCreateInstance_各code子模式均�
 	for _, subMode := range []string{"normal", "plan"} {
 		subMode := subMode
 		s.Run("子模式_"+subMode, func() {
-			env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_mode_"+subMode)
+			env := testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_mode_"+subMode)
 			env.WriteConfigYAML(s.T(), "")
 
 			c, projDir := s.newCodeAdapterWithProject(env, subMode)
@@ -131,7 +132,7 @@ func (s *CodeAdapterProjectMemorySuite) TestCreateInstance_各code子模式均�
 // max_iterations=parse_int(子配置.max_iterations, react_cfg.get("max_iterations", 15))
 // 修复前现状：explore 硬编码 15、plan 硬编码 25（plan 断言将失败）
 func (s *CodeAdapterProjectMemorySuite) TestCreateInstance_explore与plan默认迭代上限() {
-	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_iters_default")
+	env := testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_iters_default")
 	env.WriteConfigYAML(s.T(), "")
 
 	c, _ := s.newCodeAdapterWithProject(env, "normal")
@@ -153,7 +154,7 @@ func (s *CodeAdapterProjectMemorySuite) TestCreateInstance_explore与plan默认�
 // 对齐 Python: test_explore_agent_always_enabled
 // （"explore_agent 是 Code 模式核心子代理，始终启用，enabled: False 被忽略"）
 func (s *CodeAdapterProjectMemorySuite) TestBuildConfiguredSubagents_explore开关被忽略() {
-	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_switch")
+	env := testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_switch")
 	env.WriteConfigYAML(s.T(), "  subagents:\n    explore_agent:\n      enabled: false\n    code_agent:\n      enabled: false\n")
 
 	c, _ := s.newCodeAdapterWithProject(env, "normal")
@@ -170,7 +171,7 @@ func (s *CodeAdapterProjectMemorySuite) TestBuildConfiguredSubagents_explore开�
 // 对齐 Python: test_explore_agent_with_custom_max_iterations + parse_int 两段回退语义
 func (s *CodeAdapterProjectMemorySuite) TestBuildConfiguredSubagents_迭代上限覆盖与回退() {
 	s.Run("仅react回退_8", func() {
-		env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_iters_react")
+		env := testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_iters_react")
 		env.WriteConfigYAML(s.T(), "  max_iterations: 8\n")
 
 		c, _ := s.newCodeAdapterWithProject(env, "normal")
@@ -187,7 +188,7 @@ func (s *CodeAdapterProjectMemorySuite) TestBuildConfiguredSubagents_迭代上�
 	})
 
 	s.Run("子配置覆盖_5", func() {
-		env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_iters_override")
+		env := testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_iters_override")
 		env.WriteConfigYAML(s.T(), "  max_iterations: 8\n  subagents:\n    explore_agent:\n      max_iterations: 5\n")
 
 		c, _ := s.newCodeAdapterWithProject(env, "normal")
@@ -212,7 +213,7 @@ func (s *CodeAdapterProjectMemorySuite) TestBuildConfiguredSubagents_迭代上�
 //	raw = overrides.get(..., config_cache.get("project_memory", {}).get("additional_directories"))
 //	if raw is None: raw = os.getenv("JIUWENSWARM_ADDITIONAL_DIRECTORIES", "")
 func (s *CodeAdapterProjectMemorySuite) TestCreateInstance_附加目录三级回退() {
-	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_adddirs")
+	env := testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_adddirs")
 
 	cfgDir := filepath.Join(env.DataDir, "extra_cfg")
 	envDir := filepath.Join(env.DataDir, "extra_env")
@@ -316,7 +317,7 @@ func extractSystemMessages(messages any) []string {
 // 对齐 Python: TestProjectMemoryRailEndToEnd —— Python 仅断言到 MagicMock 的
 // system_prompt_builder.added_sections，此处打穿到模型真实入参。
 func (s *CodeAdapterProjectMemorySuite) TestProcessMessage_ProjectMemory写入模型入参() {
-	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_e2e")
+	env := testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_e2e")
 	env.WriteConfigYAML(s.T(), "")
 
 	c, projDir := s.newCodeAdapterWithProject(env, "normal")
@@ -366,7 +367,7 @@ func (s *CodeAdapterProjectMemorySuite) TestProcessMessage_ProjectMemory写入�
 //	    if runtime_config.trusted_dirs:
 //	        self._project_memory_rail.set_additional_directories(runtime_config.trusted_dirs)
 func (s *CodeAdapterProjectMemorySuite) TestProcessMessage_trustedDirs注入附加目录() {
-	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_trusted")
+	env := testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_trusted")
 	env.WriteConfigYAML(s.T(), "")
 
 	c, projDir := s.newCodeAdapterWithProject(env, "normal")
@@ -395,7 +396,7 @@ func (s *CodeAdapterProjectMemorySuite) TestProcessMessage_trustedDirs注入附�
 // 对齐 Python: JiuwenClawCodeAdapter._update_rails_for_mode —— code 族仅卸载
 // TaskPlanning/SkillEvolution，保留 SubagentRail / ProjectMemoryRail / CodingMemoryRail。
 func (s *CodeAdapterProjectMemorySuite) TestSwitchMode_ProjectMemoryRail不被卸载() {
-	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_switchmode")
+	env := testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_switchmode")
 	env.WriteConfigYAML(s.T(), "")
 
 	c, projDir := s.newCodeAdapterWithProject(env, "normal")

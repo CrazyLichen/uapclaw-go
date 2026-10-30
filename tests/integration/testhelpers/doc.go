@@ -11,5 +11,6 @@
 //	├── controlled_react_agent.go # 可控内层 Agent（对齐 Python ControlledReactAgent）
 //	├── tool_trace_rail.go        # 工具调用追踪 Rail
 //	├── blocking_tool.go          # 阻塞工具
-//	└── model_call_observer.go    # 模型调用观测器
+//	├── model_call_observer.go    # 模型调用观测器
+//	└── adapter_env.go            # CodeAdapter 集成测试隔离环境（数据目录/provider/收尾）
 package testhelpers
