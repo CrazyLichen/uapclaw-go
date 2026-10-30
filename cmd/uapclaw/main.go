@@ -28,7 +28,7 @@ import "os"
 // Execute 执行根命令
 func Execute() {
 	if err := newRootCmd().Execute(); err != nil {
-		os.Exit(1)
+		os.Exit(exitCodeFor(err))
 	}
 }
 
