@@ -178,6 +178,15 @@ func (s *GatewayServer) SetAcpBridge(b *AcpGatewayBridge) {
 	s.clientsMu.Unlock()
 }
 
+// BindAcpSessionClientForTest 注册 ACP 会话客户端路由（sessionToClient 写入）。
+// 对齐 app_gateway.go WithBindSessionClient 内部逻辑（同包直写；此导出版
+// 供集成测试外部包装配）。Python: _bind_acp_session_client (L289-292)。
+func (s *GatewayServer) BindAcpSessionClientForTest(sessionID string, ws *websocket.Conn) {
+	s.clientsMu.Lock()
+	s.sessionToClient[[2]string{"acp", sessionID}] = ws
+	s.clientsMu.Unlock()
+}
+
 // InstallDefaultAcpHooks 把桥拦截器装进全部 acp 路由（对齐 _install_default_route_hooks）。
 // Python: app_gateway.py L296-302——route.inbound_interceptor = route.inbound_interceptor or bridge.inbound_intercept
 // 等三行（已装的不覆盖）。Go 同语义：仅装 nil 槽位。

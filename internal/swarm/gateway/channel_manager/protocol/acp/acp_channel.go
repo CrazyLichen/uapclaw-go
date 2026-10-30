@@ -1716,6 +1716,13 @@ func (ch *AcpChannel) HandleJsonrpcResponseForTest(data map[string]any) {
 	ch.handleJsonrpcResponse(context.Background(), data)
 }
 
+// GwConnForTest 网关连接就绪探测（e2e 轮询用；返回 nil = 未建立）。
+func (ch *AcpChannel) GwConnForTest() (*websocket.Conn, bool) {
+	ch.gwConnMu.Lock()
+	defer ch.gwConnMu.Unlock()
+	return ch.gwConn, ch.gwConn != nil
+}
+
 // DefaultAcpChannelConfig 默认配置。
 func DefaultAcpChannelConfig() AcpChannelConfig {
 	return AcpChannelConfig{
