@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -323,5 +325,43 @@ func TestNewAcpChatCmd_已注册(t *testing.T) {
 	}
 	if !found {
 		t.Error("根命令未注册 acp-chat")
+	}
+}
+
+// TestRunAcpChat_E2E假对端 真客户端 + testdata 假 ACP 对端（Windows 跳过，脚本依赖 sh）。
+func TestRunAcpChat_E2E假对端(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("acp_peer.sh 依赖 sh")
+	}
+
+	// cmd/uapclaw → ../../internal/swarm/acp/testdata/acp_peer.sh
+	peer := "../../internal/swarm/acp/testdata/acp_peer.sh"
+	if _, err := os.Stat(peer); err != nil {
+		t.Fatalf("假对端脚本缺失: %v", err)
+	}
+
+	raw := map[string]any{
+		"acp_agents": map[string]any{
+			"peer": map[string]any{
+				"command": "sh",
+				"args":    []any{"-c", "sh " + peer},
+			},
+		},
+	}
+
+	buf := new(bytes.Buffer)
+	deps := defaultAcpChatDeps()
+	deps.loadConfig = func(context.Context) (map[string]any, error) { return raw, nil }
+	deps.stdout = buf
+	deps.getenv = func(string) string { return "" }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if code := runAcpChat(ctx, deps, "peer", "hi"); code != exitCodeOK {
+		t.Fatalf("码 = %d, want %d", code, exitCodeOK)
+	}
+	if !strings.Contains(buf.String(), "peer-reply") {
+		t.Errorf("stdout = %q, 期望含 peer-reply", buf.String())
 	}
 }
