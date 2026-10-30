@@ -1028,7 +1028,14 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 
 	// Python: TaskInteractionEvent(interaction=[TextDataFrame(text=msg)])
 	// Python: controller.event_queue.publish_event_async(self.card.id, sess, event)
+	// 注意：Python 的 TaskInteractionEvent 是 Pydantic 模型，event_type 字段
+	// 有默认值 EventType.TASK_INTERACTION；Go 无字段默认值机制，字面量构造
+	// 必须显式设置 BaseEvent，否则 EventTypeField 为零值空串——
+	// PublishEventAsync 用它构建 topic "{agentID}_{sessionID}_{eventType}"，
+	// 空事件类型构造出的 topic 无订阅者，Produce 返回 ErrTopicNotFound，
+	// steer 指令被静默丢弃（对齐 task_scheduler.go publishTaskEvent 先例）。
 	event := &cschema.TaskInteractionEvent{
+		BaseEvent:   *cschema.NewBaseEvent(cschema.EventTaskInteraction),
 		Interaction: []cschema.DataFrame{&cschema.TextDataFrame{Text: msg}},
 	}
 	if err := ctrl.PublishEventAsync(ctx, s, event); err != nil {
