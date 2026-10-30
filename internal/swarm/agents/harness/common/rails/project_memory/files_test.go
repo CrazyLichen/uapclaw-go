@@ -729,7 +729,10 @@ func TestMergeMemoryContent_四类优先级排序(t *testing.T) {
 	if idx("MANAGED") < 0 || idx("USER") < 0 || idx("PROJECT") < 0 || idx("LOCAL") < 0 {
 		t.Fatalf("merged should contain all four kinds, got: %s", merged)
 	}
-	if !(idx("MANAGED") < idx("USER") && idx("USER") < idx("PROJECT") && idx("PROJECT") < idx("LOCAL")) {
+	ordered := idx("MANAGED") < idx("USER") &&
+		idx("USER") < idx("PROJECT") &&
+		idx("PROJECT") < idx("LOCAL")
+	if !ordered {
 		t.Fatalf("merged order should be managed<user<project<local, got: %s", merged)
 	}
 }
