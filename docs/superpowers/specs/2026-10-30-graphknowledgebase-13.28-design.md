@@ -295,14 +295,14 @@ func RetrieveMultiGraphKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 2. **triple IndexConfig 硬编码**：捕获 `BuildIndex` 的 `IndexConfig` → `UseCaptionForImages == true`，而 chunk 索引取其配置值（不对称验证）。
 3. **五条错误路径**：155501 / 155502 / 155503（图路径无 vectorStore）/ 155505（chunk build false）/ 155506（triple build false）。
 4. **triple 删除失败**：`DeleteIndex` 返回 false → 总结果仍 true + Warn 日志。
-5. **index_type 注入生效**：`bm25` 配置 → 图检索器构造后 `IndexType()=="bm25"`；agentic 包装后 `defaultMode==sparse`（13.25 联动）。
-6. **并发 Retrieve 只建一次**：N goroutine 并发调用，`graphRetriever` 构造计数 == 1（`-race` 下跑）。
-7. **fallback 保真**：构造出的 SimpleKB `has_extractor==false`；GraphKB `strictValidation=false` 时 fallback 仍严格（用属性不匹配桩验证 155508 仍触发）。
+5. **index_type 注入生效**：`bm25` 配置 → 图检索器构造后 `IndexType()=="bm25"`（`defaultMode` 是 retriever 包未导出字段，不可跨包断言，由 13.25 单测覆盖）。
+6. **并发 Retrieve 只建一次**：N goroutine 并发 `ensureGraphRetriever`，返回实例 `assert.Same` + `-race` 下跑。
+7. **fallback 保真（可观测部分）**：回落路径不创建图检索器（`graphRetriever == nil`）；"不传 extractor / 恒 strict"因 SimpleKB 是局部变量不可直接断言，靠 `retrieveViaSimpleKB` 选项列表代码比对。
 8. **graph_expansion 透传**：fake retriever 捕获 `RetrieveOptions.GraphExpansion`，显式为 `false` 指针（非 nil）。
 9. **空 triples 不建三索引**：extractor 返回空 → `build_index` 仅 1 次。
 10. **两聚合函数委托**：`RetrieveMultiGraphKB(WithSource)` 与 13.27 同名函数同结果。
 11. **`SetGraphRetriever` 短路**：注入后 Retrieve 不再构造新检索器。
-12. **Task 0 回归（本节的先决条件）**：统一 Close 签名后，13.19-13.27 既有测试**断言一字不改**全绿；额外补一条 `TestBaseKB_Close_组件错误被Warn吞`（Task 0 前由 `Close() error` 变体承载，统一后由单变体承载，行为不变）。
+12. **Task 0 回归（本节的先决条件）**：统一 Close 签名后，13.19-13.27 既有测试**断言一字不改**全绿——`TestClose_错误变体吞并`（base_test.go L322）即"组件错误被 Warn 吞"的既有承载者，统一后仍须绿；另三条 `TestClose_void变体关闭`（L308，名字里的 void 已过时，仅改名不改断言）。
 
 ### 9.3 覆盖率
 
