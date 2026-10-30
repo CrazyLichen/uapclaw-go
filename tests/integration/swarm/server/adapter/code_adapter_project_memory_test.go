@@ -16,6 +16,8 @@ import (
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
+	subagent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
@@ -385,4 +387,40 @@ func (s *CodeAdapterProjectMemorySuite) TestProcessMessage_trustedDirs注入附�
 	section := c.Instance().SystemPromptBuilder().GetSection(project_memory.SectionName)
 	s.Require().NotNil(section, "trusted_dirs 注入后应出现 project_memory section")
 	s.Contains(section.Content["en"], "TRUSTED-DIR-RULE")
+}
+
+// TestSwitchMode_ProjectMemoryRail不被卸载 验证 code 族切模式不触发 deep 的
+// updateAgentModeRails（后者会卸 SubagentRail 并挂 ContextAssembleRail）。
+//
+// 对齐 Python: JiuwenClawCodeAdapter._update_rails_for_mode —— code 族仅卸载
+// TaskPlanning/SkillEvolution，保留 SubagentRail / ProjectMemoryRail / CodingMemoryRail。
+func (s *CodeAdapterProjectMemorySuite) TestSwitchMode_ProjectMemoryRail不被卸载() {
+	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_switchmode")
+	env.WriteConfigYAML(s.T(), "")
+
+	c, projDir := s.newCodeAdapterWithProject(env, "normal")
+	s.Require().NoError(os.Mkdir(filepath.Join(projDir, ".git"), 0o755))
+	s.Require().NoError(os.WriteFile(
+		filepath.Join(projDir, "UAPCLAWSWARM.md"),
+		[]byte("SWITCH-MODE-MARKER\n"), 0o644))
+
+	inst := c.Instance()
+	s.Require().NotNil(inst)
+	s.Require().NoError(c.SwitchMode(s.Ctx, "itest-pm-switchmode-session", "plan"))
+
+	// ① ProjectMemoryRail 仍在
+	s.Require().Len(inst.FindRailsByType(reflect.TypeOf(&commonrails.ProjectMemoryRail{})), 1,
+		"切模式后 ProjectMemoryRail 应仍在")
+	// ② SubagentRail 仍在
+	s.NotEmpty(inst.FindRailsByType(reflect.TypeOf(&subagent.SubagentRail{})),
+		"切模式后 SubagentRail 应仍在")
+	// ③ 未误挂 ContextAssembleRail（deep 的 agent.fast 分支产物）
+	s.Empty(inst.FindRailsByType(reflect.TypeOf(&cerails.ContextAssembleRail{})),
+		"code 族不应挂 ContextAssembleRail")
+
+	// ④ 切模式后请求仍注入项目记忆
+	s.processOnce(c, "switchmode", map[string]any{"query": "读取项目记忆", "mode": "code.plan", "files": map[string]any{}})
+	section := inst.SystemPromptBuilder().GetSection(project_memory.SectionName)
+	s.Require().NotNil(section, "切模式后仍应注入 project_memory section")
+	s.Contains(section.Content["en"], "SWITCH-MODE-MARKER")
 }
