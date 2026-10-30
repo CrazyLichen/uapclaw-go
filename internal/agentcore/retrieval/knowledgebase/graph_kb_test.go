@@ -453,3 +453,125 @@ func TestGraphKB_SetGraphRetriever_复位(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotSame(t, first, second)
 }
+
+// ──────────────────────────── Delete / Update / Statistics / Close ────────────────────────────
+
+// secondDeleteFalseIndexer 首次删除 true、后续 false（chunk 成功 / triple 失败）。
+type secondDeleteFalseIndexer struct {
+	fakeAttrIndexer
+	n int
+}
+
+func (s *secondDeleteFalseIndexer) DeleteIndex(_ context.Context, _ string, _ string) (bool, error) {
+	s.n++
+	if s.n == 1 {
+		return true, nil
+	}
+	return false, nil
+}
+
+// TestGraphKB_DeleteDocuments_图 对齐 test_delete_documents_with_graph：
+// chunk + triple 各删一次，返回 true。
+func TestGraphKB_DeleteDocuments_图(t *testing.T) {
+	im := &graphIndexer{deleteOK: true}
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true}, nil, nil,
+		WithIndexManager(im))
+	require.NoError(t, err)
+	ok, err := kb.DeleteDocuments(context.Background(), []string{"doc_1"})
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Len(t, im.delCalls, 2) // chunk + triple 各一次
+}
+
+// TestGraphKB_DeleteDocuments_非图 对齐 test_delete_documents_without_graph：仅一次。
+func TestGraphKB_DeleteDocuments_非图(t *testing.T) {
+	im := &graphIndexer{deleteOK: true}
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: false}, nil, nil,
+		WithIndexManager(im))
+	require.NoError(t, err)
+	ok, err := kb.DeleteDocuments(context.Background(), []string{"doc_1"})
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Len(t, im.delCalls, 1)
+}
+
+// TestGraphKB_DeleteDocuments_triple失败仍返回true triple 删除返回 false 只 Warn，
+// 不影响总结果（Python 真实行为）。
+func TestGraphKB_DeleteDocuments_triple失败仍返回true(t *testing.T) {
+	im := &secondDeleteFalseIndexer{}
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true}, nil, nil,
+		WithIndexManager(im))
+	require.NoError(t, err)
+	ok, err := kb.DeleteDocuments(context.Background(), []string{"doc_1"})
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, 2, im.n)
+}
+
+// TestGraphKB_DeleteDocuments_缺索引管理器 155502。
+func TestGraphKB_DeleteDocuments_缺索引管理器(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil)
+	require.NoError(t, err)
+	_, err = kb.DeleteDocuments(context.Background(), []string{"doc_1"})
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155502, be.Code())
+}
+
+// TestGraphKB_UpdateDocuments 先删后加（对齐 test_update_documents：
+// delete_index 调用 ≥1 且 build_index 调用 ≥1）。
+func TestGraphKB_UpdateDocuments(t *testing.T) {
+	im := &graphIndexer{buildOK: true, deleteOK: true}
+	ch := &countingChunker{chunks: []common.TextChunk{{ID: "c1", Text: "c1", DocID: "doc_1"}}}
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: false}, nil, nil,
+		WithChunker(ch), WithIndexManager(im))
+	require.NoError(t, err)
+	ids, err := kb.UpdateDocuments(context.Background(),
+		[]reranker.Document{{ID: "doc_1", Text: "Updated document"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"doc_1"}, ids)
+	assert.NotEmpty(t, im.delCalls)
+	assert.NotEmpty(t, im.calls)
+}
+
+// TestGraphKB_GetStatistics_图 对齐 test_get_statistics_with_graph：11 键齐全，
+// triple_index_info 恒存在。
+func TestGraphKB_GetStatistics_图(t *testing.T) {
+	im := &graphIndexer{info: map[string]any{"count": 10}}
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "test_kb", UseGraph: true},
+		nil, nil, WithIndexManager(im))
+	require.NoError(t, err)
+	stats, err := kb.GetStatistics(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "test_kb", stats["kb_id"])
+	assert.Equal(t, true, stats["use_graph"])
+	assert.Contains(t, stats, "chunk_index_info")
+	assert.Contains(t, stats, "triple_index_info")
+	assert.Contains(t, stats, "has_graph_retriever")
+	assert.Len(t, stats, 11)
+}
+
+// TestGraphKB_GetStatistics_无IndexManager 对齐 test_get_statistics_without_index_manager。
+func TestGraphKB_GetStatistics_无IndexManager(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "test_kb"}, nil, nil)
+	require.NoError(t, err)
+	stats, err := kb.GetStatistics(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "test_kb", stats["kb_id"])
+	assert.Equal(t, false, stats["index_exists"])
+}
+
+// TestGraphKB_Close 对齐 test_close：graph / chunk / triple 三检索器均被关闭。
+func TestGraphKB_Close(t *testing.T) {
+	graph := &graphFakeRetriever{}
+	chunk := &graphFakeRetriever{}
+	triple := &graphFakeRetriever{}
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, chunk, triple)
+	require.NoError(t, err)
+	kb.SetGraphRetriever(graph)
+
+	require.NoError(t, kb.Close())
+	assert.Equal(t, 1, graph.closed)
+	assert.Equal(t, 1, chunk.closed)
+	assert.Equal(t, 1, triple.closed)
+}

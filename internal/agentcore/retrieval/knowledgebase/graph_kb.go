@@ -40,8 +40,8 @@ type GraphKnowledgeBase struct {
 	graphMu sync.Mutex
 }
 
-// （编译期断言 `var _ KnowledgeBase = (*GraphKnowledgeBase)(nil)` 在五抽象
-// 方法齐全后加入；当前仅 AddDocuments，提前断言会编译失败。）
+// 编译期断言：GraphKnowledgeBase 完整实现 KnowledgeBase 接口。
+var _ KnowledgeBase = (*GraphKnowledgeBase)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -208,7 +208,144 @@ func (g *GraphKnowledgeBase) Retrieve(ctx context.Context, query string,
 		retriever.WithRetrieveGraphExpansion(retrievalConfig.GraphExpansion))
 }
 
+// DeleteDocuments 删除文档（chunk 索引必删；use_graph 时另删 triple 索引）。
+//
+// triple 删除返回值 false 只 Warn 不影响总结果（Python 真实行为）；
+// DeleteIndex 返回 error 仍冒泡（Python 无 try/except）。
+//
+// Python: graph_knowledge_base.py delete_documents
+func (g *GraphKnowledgeBase) DeleteDocuments(ctx context.Context, docIDs []string,
+	opts ...KBOption) (bool, error) {
+	_ = opts
+	if g.indexManager == nil {
+		return false, exception.BuildError(
+			exception.StatusRetrievalKbIndexManagerNotFound,
+			exception.WithMsg("index_manager is required for delete_documents"))
+	}
+	if g.strictValidation && g.vectorStore != nil {
+		if err := g.vectorStore.CheckVectorField(); err != nil {
+			return false, err
+		}
+	}
+
+	chunkIndexName := "kb_" + g.config.KBID + "_chunks"
+	tripleIndexName := "kb_" + g.config.KBID + "_triples"
+
+	success := true
+	for _, docID := range docIDs {
+		result, err := g.indexManager.DeleteIndex(ctx, docID, chunkIndexName)
+		if err != nil {
+			return false, err
+		}
+		if !result {
+			success = false
+		}
+	}
+
+	if g.config.UseGraph {
+		for _, docID := range docIDs {
+			result, err := g.indexManager.DeleteIndex(ctx, docID, tripleIndexName)
+			if err != nil {
+				return false, err
+			}
+			if !result {
+				// triple 删除失败不影响总结果（Python 仅 warning）
+				logger.Warn(logComponent).Str("doc_id", docID).Msg("Failed to delete triples")
+			}
+		}
+	}
+	return success, nil
+}
+
+// UpdateDocuments 更新文档（先删后加）。
+//
+// Python: graph_knowledge_base.py update_documents
+func (g *GraphKnowledgeBase) UpdateDocuments(ctx context.Context, documents []reranker.Document,
+	opts ...KBOption) ([]string, error) {
+	if g.strictValidation && g.vectorStore != nil {
+		if err := g.vectorStore.CheckVectorField(); err != nil {
+			return nil, err
+		}
+	}
+	docIDs := make([]string, len(documents))
+	for i := range documents {
+		docIDs[i] = documents[i].ID
+	}
+	if _, err := g.DeleteDocuments(ctx, docIDs); err != nil {
+		return nil, err
+	}
+	return g.AddDocuments(ctx, documents, opts...)
+}
+
+// GetStatistics 获取知识库统计信息（11 键，triple_index_info 恒存在）。
+//
+// Python: graph_knowledge_base.py get_statistics
+func (g *GraphKnowledgeBase) GetStatistics(ctx context.Context) (map[string]any, error) {
+	chunkIndexName := "kb_" + g.config.KBID + "_chunks"
+	tripleIndexName := "kb_" + g.config.KBID + "_triples"
+
+	if g.indexManager == nil {
+		return map[string]any{
+			"kb_id":        g.config.KBID,
+			"index_exists": false,
+		}, nil
+	}
+
+	chunkInfo, err := g.indexManager.GetIndexInfo(ctx, chunkIndexName)
+	if err != nil {
+		return nil, err
+	}
+	var tripleInfo map[string]any
+	if g.config.UseGraph {
+		tripleInfo, err = g.indexManager.GetIndexInfo(ctx, tripleIndexName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return map[string]any{
+		"kb_id":               g.config.KBID,
+		"index_type":          string(g.config.IndexType),
+		"use_graph":           g.config.UseGraph,
+		"chunk_index_info":    chunkInfo,
+		"triple_index_info":   tripleInfo,
+		"has_parser":          g.parser != nil,
+		"has_chunker":         g.chunker != nil,
+		"has_extractor":       g.extractor != nil,
+		"has_embed_model":     g.embedModel != nil,
+		"has_vector_store":    g.vectorStore != nil,
+		"has_graph_retriever": g.hasGraphRetriever(),
+	}, nil
+}
+
+// Close 关闭知识库（基座组件 + 三个检索器，顺序字面）。
+//
+// 注意：GraphRetriever.Close 内部已关闭固定 chunk/triple 检索器，这里再关
+// 一遍是 Python 真实行为（重复关闭照复刻，spec §6.1）；主链路两字段恒 nil，
+// 仅显式注入固定检索器时才会重复关闭底层 store。
+//
+// Python: graph_knowledge_base.py close
+func (g *GraphKnowledgeBase) Close() error {
+	_ = g.BaseKnowledgeBase.Close()
+
+	g.graphMu.Lock()
+	graph, chunk, triple := g.graphRetriever, g.chunkRetriever, g.tripleRetriever
+	g.graphMu.Unlock()
+
+	g.maybeClose(graph)
+	g.maybeClose(chunk)
+	g.maybeClose(triple)
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// hasGraphRetriever 图检索器是否已创建（持锁读，避免与懒创建竞态）。
+func (g *GraphKnowledgeBase) hasGraphRetriever() bool {
+	g.graphMu.Lock()
+	defer g.graphMu.Unlock()
+	return g.graphRetriever != nil
+}
 
 // ensureGraphRetriever 取图检索器，nil 时持锁懒创建。
 //
