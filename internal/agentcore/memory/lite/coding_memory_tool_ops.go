@@ -210,13 +210,13 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	var conflict ConflictResult
 	for attempt := 0; attempt < maxConflictRetries; attempt++ {
 		// Python: step 6: 快照目录文件列表
-		snapshot := snapshotMemoryFiles(toolCtx, memoryDir)
+		snapshot := snapshotMemoryFiles(ctx, toolCtx, memoryDir)
 		fileExists := snapshot[basename]
 
 		if !fileExists {
 			// Python: step 7a: 创建模式 — 搜索相似文件
 			conflict = ConflictResult{}
-			similarFiles := searchSimilar(toolCtx, body, basename, 5, 0.75)
+			similarFiles := searchSimilar(ctx, toolCtx, body, basename, 5, 0.75)
 
 			// MemUpdateChecker 冗余/冲突判断（对齐 Python: if old_memories and manager and manager.llm: actions = _run_checker(...)）
 			var actions []*update.MemoryActionItem
@@ -272,7 +272,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 		fileLock := getFileLock(resolved)
 		snapshotStale := false
 		fileLock.Lock()
-		currentSnapshot := snapshotMemoryFiles(toolCtx, memoryDir)
+		currentSnapshot := snapshotMemoryFiles(ctx, toolCtx, memoryDir)
 		if !snapshotEqual(currentSnapshot, snapshot) {
 			// Python: 快照过期，并发写入产生了新文件，重试冲突检测
 			logger.Info(logComponent).
@@ -339,7 +339,7 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 
 	fileLock := getFileLock(resolved)
 	fileLock.Lock()
-	currentSnapshot := snapshotMemoryFiles(toolCtx, memoryDir)
+	currentSnapshot := snapshotMemoryFiles(ctx, toolCtx, memoryDir)
 	fileExistsNow := currentSnapshot[basename]
 	sysOp := toolCtx.SysOperation
 	if sysOp != nil {
@@ -478,12 +478,12 @@ func resolveMemoryDir(ctx *CodingMemoryToolContext, resolvedPath string) string 
 
 // searchSimilar 语义搜索相似记忆。对齐 Python _search_similar
 // 返回 orderedmap 保留搜索结果的插入顺序，对齐 Python dict 的插入顺序语义。
-func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath string, topK int, threshold float64) *orderedmap.OrderedMap[string, string] {
+func searchSimilar(ctx context.Context, toolCtx *CodingMemoryToolContext, body string, excludePath string, topK int, threshold float64) *orderedmap.OrderedMap[string, string] {
 	oldMemories := orderedmap.New[string, string]()
 	if toolCtx == nil || toolCtx.Manager == nil {
 		return oldMemories
 	}
-	results, err := toolCtx.Manager.Search(context.Background(), body, SearchOpts{MaxResults: topK})
+	results, err := toolCtx.Manager.Search(ctx, body, SearchOpts{MaxResults: topK})
 	if err != nil {
 		return oldMemories
 	}
@@ -498,8 +498,11 @@ func searchSimilar(toolCtx *CodingMemoryToolContext, body string, excludePath st
 			continue
 		}
 		fullPath := filepath.Join(memoryDir, r.Path)
-		readResult, err := sysOp.Fs().ReadFile(context.Background(), fullPath)
+		readResult, err := sysOp.Fs().ReadFile(ctx, fullPath)
 		if err != nil || readResult == nil || readResult.Data == nil {
+			continue
+		}
+		if fsResultError(readResult.BaseResult, "读取记忆文件", fullPath) != nil {
 			continue
 		}
 		oldBody := ExtractBody(readResult.Data.Content)
@@ -540,8 +543,9 @@ func prepareAppendMode(ctx context.Context, toolCtx *CodingMemoryToolContext, re
 	// 读取自身文件（对齐 Python: existing_body → old_memories["__self__"]）
 	sysOp := toolCtx.SysOperation
 	if sysOp != nil {
-		readResult, err := sysOp.Fs().ReadFile(context.Background(), resolved)
-		if err == nil && readResult != nil && readResult.Data != nil {
+		readResult, err := sysOp.Fs().ReadFile(ctx, resolved)
+		if err == nil && readResult != nil && readResult.Data != nil &&
+			fsResultError(readResult.BaseResult, "读取记忆文件", resolved) == nil {
 			existingBody := ExtractBody(readResult.Data.Content)
 			if existingBody != "" {
 				oldMemories.Set("__self__", existingBody)
@@ -551,7 +555,7 @@ func prepareAppendMode(ctx context.Context, toolCtx *CodingMemoryToolContext, re
 
 	// 其他相似文件（对齐 Python: other = await _search_similar(...)）
 	// searchSimilar 返回 orderedmap，直接合并保留插入顺序
-	other := searchSimilar(toolCtx, body, basename, 5, 0.75)
+	other := searchSimilar(ctx, toolCtx, body, basename, 5, 0.75)
 	for pair := other.Oldest(); pair != nil; pair = pair.Next() {
 		oldMemories.Set(pair.Key, pair.Value)
 	}
@@ -609,7 +613,7 @@ func prepareAppendMode(ctx context.Context, toolCtx *CodingMemoryToolContext, re
 // snapshotMemoryFiles 快照目录下的 .md 文件列表（排除 MEMORY.md）。对齐 Python _snapshot_memory_files
 // 使用 sys_operation.Fs().ListFiles() 读取目录，对齐 Python ctx.sys_operation.fs().list_files()
 // 返回 map[string]bool 对齐 Python frozenset 语义（无序、去重、O(1) 查找）
-func snapshotMemoryFiles(toolCtx *CodingMemoryToolContext, memoryDir string) map[string]bool {
+func snapshotMemoryFiles(ctx context.Context, toolCtx *CodingMemoryToolContext, memoryDir string) map[string]bool {
 	if memoryDir == "" {
 		return nil
 	}
@@ -617,8 +621,11 @@ func snapshotMemoryFiles(toolCtx *CodingMemoryToolContext, memoryDir string) map
 	if sysOp == nil {
 		return nil
 	}
-	listResult, err := sysOp.Fs().ListFiles(context.Background(), memoryDir)
+	listResult, err := sysOp.Fs().ListFiles(ctx, memoryDir)
 	if err != nil || listResult == nil || listResult.Data == nil {
+		return nil
+	}
+	if fsResultError(listResult.BaseResult, "列出记忆目录", memoryDir) != nil {
 		return nil
 	}
 	names := make(map[string]bool)

@@ -347,8 +347,13 @@ func (m *memoryIndexManager) ReadFile(ctx context.Context, relPath string, fromL
 		if err != nil {
 			return nil, fmt.Errorf("读取文件失败: %w", err)
 		}
-		if readResult.Data != nil {
-			content = readResult.Data.Content
+		if readResult != nil {
+			if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", fullPath); fsErr != nil {
+				return nil, fsErr
+			}
+			if readResult.Data != nil {
+				content = readResult.Data.Content
+			}
 		}
 	} else {
 		data, err := os.ReadFile(fullPath)

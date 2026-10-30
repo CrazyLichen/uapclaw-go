@@ -216,7 +216,7 @@ func TestSnapshotEqual(t *testing.T) {
 // TestSnapshotMemoryFiles_空目录 测试空目录
 func TestSnapshotMemoryFiles_空目录(t *testing.T) {
 	ctx := &CodingMemoryToolContext{}
-	result := snapshotMemoryFiles(ctx, "")
+	result := snapshotMemoryFiles(context.Background(), ctx, "")
 	if result != nil {
 		t.Errorf("Expected nil for empty dir, got %v", result)
 	}
