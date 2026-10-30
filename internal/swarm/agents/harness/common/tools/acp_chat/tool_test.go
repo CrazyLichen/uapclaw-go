@@ -11,17 +11,17 @@ import (
 
 // TestLoadProfile_无acpAgents配置 验证缺失映射报错。
 func TestLoadProfile_无acpAgents配置(t *testing.T) {
-	_, err := loadProfile(map[string]any{}, "x")
+	_, err := LoadProfile(map[string]any{}, "x")
 	if err == nil || !strings.Contains(err.Error(), "config has no acp_agents mapping") {
 		t.Errorf("err = %v", err)
 	}
 	// nil configBase 空配置基线
-	_, err = loadProfile(nil, "x")
+	_, err = LoadProfile(nil, "x")
 	if err == nil || !strings.Contains(err.Error(), "config has no acp_agents mapping") {
 		t.Errorf("nil err = %v", err)
 	}
 	// 非 dict
-	_, err = loadProfile(map[string]any{"acp_agents": "bad"}, "x")
+	_, err = LoadProfile(map[string]any{"acp_agents": "bad"}, "x")
 	if err == nil || !strings.Contains(err.Error(), "config has no acp_agents mapping") {
 		t.Errorf("非 dict err = %v", err)
 	}
@@ -29,7 +29,7 @@ func TestLoadProfile_无acpAgents配置(t *testing.T) {
 
 // TestLoadProfile_未知profile 验证未知 profile 报错。
 func TestLoadProfile_未知profile(t *testing.T) {
-	_, err := loadProfile(map[string]any{"acp_agents": map[string]any{}}, "nope")
+	_, err := LoadProfile(map[string]any{"acp_agents": map[string]any{}}, "nope")
 	if err == nil || !strings.Contains(err.Error(), "unknown acp_agents profile") {
 		t.Errorf("err = %v", err)
 	}
@@ -37,7 +37,7 @@ func TestLoadProfile_未知profile(t *testing.T) {
 
 // TestLoadProfile_成功 验证 trim 键名与规格提取。
 func TestLoadProfile_成功(t *testing.T) {
-	spec, err := loadProfile(map[string]any{
+	spec, err := LoadProfile(map[string]any{
 		"acp_agents": map[string]any{
 			"codex": map[string]any{"command": "codex"},
 		},
@@ -53,60 +53,60 @@ func TestLoadProfile_成功(t *testing.T) {
 // TestBuildClientSpec_校验链 验证 command/args/env/cwd 解析。
 func TestBuildClientSpec_校验链(t *testing.T) {
 	// command 空
-	_, err := buildClientSpec(map[string]any{})
+	_, err := BuildClientSpec(map[string]any{})
 	if err == nil || !strings.Contains(err.Error(), "non-empty command") {
 		t.Errorf("command 空 err = %v", err)
 	}
 	// command 非字符串
-	_, err = buildClientSpec(map[string]any{"command": 123})
+	_, err = BuildClientSpec(map[string]any{"command": 123})
 	if err == nil || !strings.Contains(err.Error(), "non-empty command") {
 		t.Errorf("command 非字符串 err = %v", err)
 	}
 	// args 非列表
-	_, err = buildClientSpec(map[string]any{"command": "x", "args": "not-list"})
+	_, err = BuildClientSpec(map[string]any{"command": "x", "args": "not-list"})
 	if err == nil || !strings.Contains(err.Error(), "must be a list") {
 		t.Errorf("args err = %v", err)
 	}
 	// args 合法（元素经 str() 转换）
-	cs, err := buildClientSpec(map[string]any{
+	cs, err := BuildClientSpec(map[string]any{
 		"command": "x", "args": []any{"--flag", 42},
 	})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	if len(cs.args) != 2 || cs.args[1] != "42" {
-		t.Errorf("args = %v", cs.args)
+	if len(cs.Args) != 2 || cs.Args[1] != "42" {
+		t.Errorf("args = %v", cs.Args)
 	}
 	// env 非映射
-	_, err = buildClientSpec(map[string]any{"command": "x", "env": "bad"})
+	_, err = BuildClientSpec(map[string]any{"command": "x", "env": "bad"})
 	if err == nil || !strings.Contains(err.Error(), "must be a map") {
 		t.Errorf("env err = %v", err)
 	}
 	// cwd 空白归空
-	cs, err = buildClientSpec(map[string]any{"command": "x", "cwd": "   "})
+	cs, err = BuildClientSpec(map[string]any{"command": "x", "cwd": "   "})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	if cs.cwd != "" {
-		t.Errorf("cwd = %q", cs.cwd)
+	if cs.Cwd != "" {
+		t.Errorf("cwd = %q", cs.Cwd)
 	}
 	// cwd 非字符串归空
-	cs, err = buildClientSpec(map[string]any{"command": "x", "cwd": 9})
+	cs, err = BuildClientSpec(map[string]any{"command": "x", "cwd": 9})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	if cs.cwd != "" {
-		t.Errorf("cwd 非字符串 = %q", cs.cwd)
+	if cs.Cwd != "" {
+		t.Errorf("cwd 非字符串 = %q", cs.Cwd)
 	}
 	// env 合法带入
-	cs, err = buildClientSpec(map[string]any{
+	cs, err = BuildClientSpec(map[string]any{
 		"command": "x", "env": map[string]any{"K": "V"},
 	})
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	if cs.env["K"] != "V" {
-		t.Errorf("env = %v", cs.env)
+	if cs.Env["K"] != "V" {
+		t.Errorf("env = %v", cs.Env)
 	}
 }
 

@@ -17,16 +17,18 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// clientSpec 子进程启动规格（Python: _get_or_create_client 内局部解析结果）。
-type clientSpec struct {
-	// command 启动命令（trim 后非空）
-	command string
-	// args 命令参数（元素经 str() 转换）
-	args []string
-	// env 子进程环境（nil = 继承）
-	env map[string]any
-	// cwd 子进程工作目录（空 = 继承）
-	cwd string
+// ClientSpec 子进程启动规格（Python: _get_or_create_client 内局部解析结果）。
+//
+// 导出给 cmd 层 acp-chat 冒烟入口（10.4.6）复用严格解析逻辑。
+type ClientSpec struct {
+	// Command 启动命令（trim 后非空）
+	Command string
+	// Args 命令参数（元素经 str() 转换）
+	Args []string
+	// Env 子进程环境（nil = 继承）
+	Env map[string]any
+	// Cwd 子进程工作目录（空 = 继承）
+	Cwd string
 }
 
 // profileLock profile 级互斥（对齐 Python asyncio.Lock 的获取/释放语义）。
@@ -60,11 +62,10 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// loadProfile 从 configBase 读取 acp_agents 映射并提取 profile 规格。
+// LoadProfile 从 configBase 读取 acp_agents 映射并提取 profile 规格。
 // Python: _load_profile (tool.py L28-38)——get_config() 经注入 cfg 等价。
-func loadProfile(configBase map[string]any, profile string) (map[string]any, error) {
+// 导出给 10.4.6 acp-chat 冒烟入口复用。
+func LoadProfile(configBase map[string]any, profile string) (map[string]any, error) {
 	agents, _ := configBase["acp_agents"].(map[string]any)
 	if agents == nil {
 		return nil, fmt.Errorf("config has no acp_agents mapping")
@@ -77,9 +78,10 @@ func loadProfile(configBase map[string]any, profile string) (map[string]any, err
 	return spec, nil
 }
 
-// buildClientSpec 解析并校验子进程启动规格。
+// BuildClientSpec 解析并校验子进程启动规格。
 // Python: _get_or_create_client L62-87 的 command/args/cwd/env 解析段。
-func buildClientSpec(spec map[string]any) (*clientSpec, error) {
+// 导出给 10.4.6 acp-chat 冒烟入口复用（与工具路径共用同一套严格校验）。
+func BuildClientSpec(spec map[string]any) (*ClientSpec, error) {
 	command, _ := spec["command"].(string)
 	command = strings.TrimSpace(command)
 	if command == "" {
@@ -111,10 +113,12 @@ func buildClientSpec(spec map[string]any) (*clientSpec, error) {
 			return nil, fmt.Errorf("acp_agents.env must be a map of strings")
 		}
 		envMap, _ := rawEnv.(map[string]any)
-		return &clientSpec{command: command, args: args, env: envMap, cwd: cwd}, nil
+		return &ClientSpec{Command: command, Args: args, Env: envMap, Cwd: cwd}, nil
 	}
-	return &clientSpec{command: command, args: args, env: nil, cwd: cwd}, nil
+	return &ClientSpec{Command: command, Args: args, Env: nil, Cwd: cwd}, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // acquireProfileLock 获取 profile 互斥锁（懒创建，对齐 _profile_lock）。
 // Python: _profile_lock (tool.py L22-25)
@@ -141,7 +145,7 @@ func releaseProfileLock(profile string, l *profileLock) {
 // newSession=true 时先关闭旧实例再重建（重启子进程与会话）。
 // Python: _get_or_create_client (tool.py L50-91)
 func getOrCreateClient(ctx context.Context, cfg map[string]any, profile string, newSession bool) (*acp.AcpStdioClient, error) {
-	spec, err := loadProfile(cfg, profile)
+	spec, err := LoadProfile(cfg, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -157,12 +161,12 @@ func getOrCreateClient(ctx context.Context, cfg map[string]any, profile string, 
 		closeProfileUnlocked(profile)
 	}
 
-	cs, err := buildClientSpec(spec)
+	cs, err := BuildClientSpec(spec)
 	if err != nil {
 		return nil, err
 	}
 
-	client := acp.NewAcpStdioClient(cs.command, cs.args, cs.cwd, cs.env)
+	client := acp.NewAcpStdioClient(cs.Command, cs.Args, cs.Cwd, cs.Env)
 	if err := client.Connect(ctx); err != nil {
 		return nil, err
 	}
