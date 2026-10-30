@@ -191,6 +191,8 @@ func Execute() {
 | Ctrl-C | `KeyboardInterrupt` → 130 | `signal.NotifyContext` 取消 → 130 | 保真 |
 | 跳过 dotenv 开关 | `JIUWENCLAW_SKIP_DOTENV` | `UAPCLAW_SKIP_DOTENV` | 品牌映射偏差（`UAPCLAW_` 前缀惯例） |
 | 命令名 | `jiuwenswarm-acp-chat` | `uapclaw acp-chat` | 品牌映射 |
+| 关闭超时非法值 | `float()` 解析失败抛 ValueError | 回落默认 30s 并 Warn | 防御性偏差 |
+| close 错误文案 | `Failed to close ACP client: …` | 英文 Msg（日志规范） | 有意偏差 |
 | 测试 | 无 cli 单测 | 自建 ≥85% | 新增 |
 
 ## 7. 测试计划（cmd 包 ≥85%）

@@ -690,10 +690,10 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **10.4 独立交互入口** | — | | | |
 | 10.4.1 | ☐ | 🔥 CLI 聊天模式 | 内置 REPL 交互，直接连接 AgentServer，流式输出 | `jiuwenswarm/channels/acp/app_acp.py` (参考) · 新实现 |
 | 10.4.2 | ☐ | 🔥 HTTP API | RESTful + SSE 流式 | 新实现 |
-| 10.4.3 | ✅ | ACP Stdio | 标准输入输出 JSON-RPC 协议；✅ AcpStdioClient 已随 10.6.24d 实现于 swarm/acp（读写分离 goroutine+exitCh 免锁探测+三段优雅关闭+平台拆分，覆盖率 87.0%）；剩 cli.py REPL 入口 ⤵️ 10.4.6 | `jiuwenswarm/acp/cli.py` · `stdio_client.py` |
+| 10.4.3 | ✅ | ACP Stdio | 标准输入输出 JSON-RPC 协议；✅ AcpStdioClient 已随 10.6.24d 实现于 swarm/acp（读写分离 goroutine+exitCh 免锁探测+三段优雅关闭+平台拆分，覆盖率 87.0%）；cli.py 一次性冒烟入口已随 10.4.6 落地（`uapclaw acp-chat`，非 REPL） | `jiuwenswarm/acp/cli.py` · `stdio_client.py` |
 | 10.4.4 | 🔄 | Slash 命令处理 | `/mode`/`/new`/`/sandbox`/`/model` 等；/evolve 系列分发骨架已在 adapter 实现 | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
 | 10.4.5 | ✅ | ACP Subprocess Env | 子进程环境设置；✅ BuildAcpSubprocessEnv 已随 10.6.24d 实现于 swarm/acp（profileScopedKeys 剥离+${VAR} 解析覆盖） | `jiuwenswarm/acp/subprocess_env.py` |
-| 10.4.6 | ☐ | ACP CLI Smoke 入口 | jiuwenswarm-acp-chat 对应（cli.py 90 行 REPL）；实现留后（D4 拍板，11.25 只占行——Go 侧 acp 子命令已落地，本行余 Python REPL 对等形态） | `jiuwenswarm/acp/cli.py` |
+| 10.4.6 | ✅ | ACP CLI Smoke 入口 | ✅ `uapclaw acp-chat <profile> [message]` 已落地 `cmd/uapclaw/acp_chat_cmd.go`：一次性冒烟（connect→chat→close，message 缺省 Hello，**非 REPL**，已订正 11.25 D4 的误读）；轻量自举（logger.Setup + dotenv 非覆盖 LoadNonOverride + config.Load，不加载 extensions/crypto/workspace）；profile 解析复用 acpchat 严格校验 `LoadProfile`/`BuildClientSpec`（args/env 类型错比 Python 更严，有意偏差）；typed error + `exitCodeFor` 落 0/1/2/130；响应文本直出 stdout、诊断走 logger；`ACP_CLI_CLOSE_TIMEOUT_S` 默认 30s 限时关闭；假对端 e2e（acp_peer.sh）走通 connect→chat→close | `jiuwenswarm/acp/cli.py` |
 | **10.5 扩展系统** | — | | | |
 | 10.5.1 | ✅ | 数据类型 | ExtensionMetadata + ExtensionConfig | `jiuwenswarm/extensions/types.py` |
 | 10.5.2 | ✅ | 钩子事件常量 | GatewayHookEvents + AgentServerHookEvents | `jiuwenswarm/extensions/hook_event.py` |
