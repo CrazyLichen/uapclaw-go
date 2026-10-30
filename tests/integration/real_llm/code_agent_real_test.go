@@ -165,7 +165,12 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 		if _, hasType := first["result_type"]; hasType {
 			break
 		}
-		s.Require().Less(attempt, 2, "第一轮连续 3 次返回缺 result_type 的空结果，中止")
+		// 空结果诊断：Ark 偶发返回无 content 的空轮次，round result 为
+		// {"status":"completed"}（WaitCompletion 对空 map 的兜底，Python 同构）。
+		// CI 41050214909 实证连续 3 次空结果即中止 → 上限放宽到 5 次并落原始 map。
+		s.T().Logf("[code-agent-plan] 第一轮第 %d 次返回缺 result_type 的空结果: %v",
+			attempt+1, first)
+		s.Require().Less(attempt, 4, "第一轮连续 5 次返回缺 result_type 的空结果，中止")
 	}
 	testhelpers.AssertAnswerResult(s.T(), first)
 
@@ -203,7 +208,9 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 		if _, hasType := second["result_type"]; hasType {
 			break
 		}
-		s.Require().Less(attempt, 2, "第二轮连续 3 次返回缺 result_type 的空结果，中止")
+		s.T().Logf("[code-agent-plan] 第二轮第 %d 次返回缺 result_type 的空结果: %v",
+			attempt+1, second)
+		s.Require().Less(attempt, 4, "第二轮连续 5 次返回缺 result_type 的空结果，中止")
 		var retryErr error
 		second, retryErr = agent.Invoke(ctx, map[string]any{
 			"query": "按照计划执行把",
@@ -229,7 +236,7 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 			"第二轮结果应为 answer 或 interrupt（非 answer 的中间态只允许 interrupt），实际 %q", resultType)
 		interruptIDs, _ := second["interrupt_ids"].([]string)
 		s.Require().NotEmpty(interruptIDs, "interrupt 结果应携带 interrupt_ids")
-		s.Require().Less(attempts, 3, "interrupt 恢复轮次超过 3 次，中止防死循环")
+		s.Require().Less(attempts, 5, "interrupt 恢复轮次超过 5 次，中止防死循环")
 
 		interactiveInput := testhelpers.ConfirmInterrupt(interruptIDs[0], false)
 		second, err = agent.Invoke(ctx, map[string]any{"query": interactiveInput},
