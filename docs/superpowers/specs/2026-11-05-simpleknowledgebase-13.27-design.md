@@ -172,7 +172,7 @@ Python `get_config(Type[T]) -> Optional[T]` 是泛型签名。Go 两选一：
 | 3 | 延迟 import | retrieve 内 `from ... import VectorRetriever` | 包级 import（Go 惯例，13.25 同） | 编译期解析 |
 | 4 | asyncio.gather 并发 | 事件循环单线程并发 | goroutine 槽位 + WaitGroup（13.17/13.25 方案 A 先例） | 已验证模式 |
 | 5 | getattr 双层防御取 database_name | `getattr(getattr(vs, "config", None), "database_name", "")` + 非 str 归零 | 接口断言 `DatabaseName() string`，未实现→""；非 str 归零编译期消解 | 13.26 storageAttrProvider 同型 |
-| 6 | agentic kwargs 直通 | `AgenticRetriever(retriever, llm_client, **kwargs)` 只认 max_iter，其他键 TypeError 崩 | `Extra["max_iter"]` 映射 WithAgenticMaxIter，其余键**静默忽略**（拍板：处理 2） | Go 无 kwargs；生产链路与测试均不传，实际不可达；静默 vs 崩是行为分叉已认可 |
+| 6 | agentic kwargs 直通 | `AgenticRetriever(retriever, llm_client, **kwargs)` 只认 max_iter，其他键 TypeError 崩 | `Extra["max_iter"]` 映射 WithAgenticMaxIter；**其余键返回 155510**（2026-10-30 审查后由"静默忽略"改为完全对齐，见 §13.5） | Go 无 kwargs，但未知键仍可经 `WithKBExtra` 传入；对齐优先于防炸 |
 | 7 | zip 配对 | `zip(kbs, all_results)` | 索引并进 `for i := range kbs` | 等价直译 |
 | 8 | pydantic 忽略未知键 | `KnowledgeBaseConfig(**data)` 默认忽略 | JSON/YAML 解析为 map 后显式取已知字段构造 | pydantic 默认行为 |
 | 9 | has_xxx 统计 | `is not None` | `!= nil` 直译 | 平凡 |
@@ -273,9 +273,22 @@ Python `get_config(Type[T]) -> Optional[T]` 是泛型签名。Go 两选一：
 | 1 | `pyMetaFloat` 遇到非数值 | 静默跳过（视为"不参与取最大"） | `max(prev, raw_score)` 抛 `TypeError`，整条聚合中断 | 返回 155509 `StatusRetrievalKbMetadataTypeInvalid`，`RetrieveMultiKBWithSource` 签名增加 `error` 返回 |
 | 2 | `asInt` 遇到超出 int64 的值 | `int(n)` 静默回绕为负数 | 任意精度整数，得到合法大数 | 显式越界检测（含 NaN/±Inf），不转换则保留字段默认值 |
 
-**决策依据**：与 §8-6（agentic kwargs 未知键静默忽略）方向相反——那条是"Python 崩、Go 不崩"，当时已归档认可；这两条不沿用该取向，改为逐条对齐。
+**决策依据**：原 §8-6（agentic kwargs 未知键静默忽略）已一并改为报错，见 §13.5。三处统一取向为：**Python 抛异常的地方 Go 也返回错误**，不以"生产链路不可达"为由静默吞掉。
 代价：坏元数据会中断整个多 KB 检索，与 Python 一致。
 
 **新增导出契约**：`RetrieveMultiKBWithSource` 由 `[]common.MultiKBRetrievalResult` 改为 `([]common.MultiKBRetrievalResult, error)`；`RetrieveMultiKB`（文本版）不读 metadata，签名不变。
 
-**新增错误码**：155509 `StatusRetrievalKbMetadataTypeInvalid`（占 kb 段 155509 空位，本领域新增消费）。
+**新增错误码**：155509 `StatusRetrievalKbMetadataTypeInvalid`、155510 `StatusAgenticKwargsUnexpected`（占 kb 段 155509/155510 空位，本领域新增消费）。
+
+### 13.5 §8-6 反转：agentic 未知 kwargs 由静默忽略改为报错
+
+初版实现沿用 13.25 时代的"静默忽略"决策。审查确认取向应与 §13.4 统一后反转：
+
+| 项 | 初版 | 现在 |
+|---|---|---|
+| 未知 kwargs 键 | 静默忽略 | 返回 155510 `StatusAgenticKwargsUnexpected`，消息 `AgenticRetriever() got an unexpected keyword argument '<key>'` |
+| 报错时机 | — | **构造 AgenticRetriever 之前**（对齐 Python 在 `__init__` 签名绑定时就抛 TypeError），底层检索器不会被调用 |
+| `max_iter` 类型不符 | 静默跳过该选项 | 保持 Python 语义：`isinstance(max_iter, int)` 判假 → Warn 回落默认 2，**不报错** |
+| 非 agentic 分支 | 忽略 | 不变——`Extra` 只透传给 AgenticRetriever，非 agentic 路径不消费（对齐 Python） |
+
+注意未知键与类型不符是两条不同路径：前者是 `TypeError`，后者是 Warn 降级，不可混为一谈。

@@ -2,6 +2,7 @@ package knowledgebase
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -343,15 +344,33 @@ func (s *SimpleKnowledgeBase) ensureRetriever() (retriever.Retriever, error) {
 // wrapAgentic 用 AgenticRetriever 包装底层 retriever。
 //
 // 对齐 Python `AgenticRetriever(retriever=..., llm_client=..., **kwargs)`：
-// kwargs 只认 max_iter，经 KBOptions.Extra["max_iter"] 映射；其余键在
-// Python 会 TypeError，Go 静默忽略（行为分叉已归档 spec §8-6）。
+// kwargs 只认 max_iter，经 KBOptions.Extra["max_iter"] 映射。Python 的
+// AgenticRetriever 不接受其他关键字参数，多传会在**构造前**抛 TypeError
+// 让整个 retrieve 失败；Go 同样拒绝（155510），不静默忽略。
+// max_iter 类型不符时 Python 侧 isinstance 判假 → Warn 回落默认 2，
+// Go 返回同样的告警由 WithAgenticMaxIter 之外的路径处理（见下）。
 func (s *SimpleKnowledgeBase) wrapAgentic(ctx context.Context, r retriever.Retriever, opts ...KBOption) (retriever.Retriever, error) {
 	_ = ctx
 	kbOpts := NewKBOptions(opts...)
 	var agenticOpts []retriever.AgenticRetrieverOption
-	if v, ok := kbOpts.Extra["max_iter"]; ok {
-		if n, ok := v.(int); ok {
+	for key, v := range kbOpts.Extra {
+		switch key {
+		case "max_iter":
+			n, ok := v.(int)
+			if !ok {
+				// Python isinstance(max_iter, int) 判假 → Warn 回落默认 2，不报错
+				logger.Warn(logComponent).
+					Str("max_iter_type", fmt.Sprintf("%T", v)).
+					Msg("max_iter is not an int, falling back to default")
+				continue
+			}
 			agenticOpts = append(agenticOpts, retriever.WithAgenticMaxIter(n))
+		default:
+			return nil, exception.BuildError(
+				exception.StatusAgenticKwargsUnexpected,
+				exception.WithMsg(fmt.Sprintf(
+					"AgenticRetriever() got an unexpected keyword argument '%s'", key)),
+			)
 		}
 	}
 	agentic, err := retriever.NewAgenticRetriever(r, s.llmClient, agenticOpts...)

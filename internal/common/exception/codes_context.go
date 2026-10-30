@@ -236,6 +236,13 @@ var (
 	StatusRetrievalKbMetadataTypeInvalid = NewStatusCode(
 		"RETRIEVAL_KB_METADATA_TYPE_INVALID", 155509,
 		"retrieval kb_metadata_type is invalid, reason: {error_msg}")
+	// StatusAgenticKwargsUnexpected AgenticRetriever 收到未知关键字参数
+	//
+	// 对齐 Python AgenticRetriever(retriever=..., llm_client=..., **kwargs)：
+	// 构造函数不接受其他关键字参数，多传时抛 TypeError 使 retrieve 失败。
+	StatusAgenticKwargsUnexpected = NewStatusCode(
+		"RETRIEVAL_AGENTIC_KWARGS_UNEXPECTED", 155510,
+		"retrieval agentic kwargs is unexpected, reason: {error_msg}")
 
 	// 知识库检索 — 重排序 155600–155699
 

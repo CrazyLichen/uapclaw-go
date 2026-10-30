@@ -754,13 +754,47 @@ func TestSimpleKB_RetrieveAgenticMaxIter(t *testing.T) {
 	_, err = kb.Retrieve(context.Background(), "q", cfg, WithKBExtra("max_iter", 3))
 	require.NoError(t, err)
 	assert.Equal(t, 3, r.calls)
+}
 
-	// 未知键静默忽略（Python 会 TypeError，行为分叉已归档 spec §8-6）
-	r2 := &recordingRetriever{results: []common.RetrievalResult{{Text: "r", Score: 0.9}}}
-	kb2, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r2, WithLLMClient(&agenticRewriteLLM{}))
+// TestSimpleKB_RetrieveAgentic未知kwargs报错 对齐 Python：AgenticRetriever
+// 构造不接受其他关键字参数，多传时抛 TypeError 使 retrieve 失败；Go 以 155510 拒绝。
+func TestSimpleKB_RetrieveAgentic未知kwargs报错(t *testing.T) {
+	r := &recordingRetriever{results: []common.RetrievalResult{{Text: "r", Score: 0.9}}}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r, WithLLMClient(&agenticRewriteLLM{}))
 	require.NoError(t, err)
-	_, err = kb2.Retrieve(context.Background(), "q", cfg, WithKBExtra("unknown_key", "x"))
+	cfg := &common.RetrievalConfig{TopK: 5, Agentic: true}
+	_, err = kb.Retrieve(context.Background(), "q", cfg, WithKBExtra("unknown_key", "x"))
+	require.Error(t, err)
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155510, be.Code())
+	assert.Contains(t, be.Message(), "unknown_key")
+	// 未知键在构造前就被拒 → 底层检索器一次都没被调用
+	assert.Equal(t, 0, r.calls)
+}
+
+// TestSimpleKB_RetrieveAgentic非int的max_iter max_iter 类型不符时 Python
+// isinstance 判假 → Warn 回落默认 2，不报错（与未知键的处理不同）。
+func TestSimpleKB_RetrieveAgentic非int的max_iter(t *testing.T) {
+	r := &recordingRetriever{results: []common.RetrievalResult{{Text: "r", Score: 0.9}}}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r, WithLLMClient(&agenticRewriteLLM{}))
 	require.NoError(t, err)
+	cfg := &common.RetrievalConfig{TopK: 5, Agentic: true}
+	_, err = kb.Retrieve(context.Background(), "q", cfg, WithKBExtra("max_iter", "three"))
+	require.NoError(t, err)
+	// 回落默认 max_iter=2 → 底层调用 2 次
+	assert.Equal(t, 2, r.calls)
+}
+
+// TestSimpleKB_Retrieve非agentic忽略Extra 非 agentic 分支不消费 Extra，
+// 未知键不会报错（对齐 Python：kwargs 只透传给 AgenticRetriever）。
+func TestSimpleKB_Retrieve非agentic忽略Extra(t *testing.T) {
+	r := &recordingRetriever{results: []common.RetrievalResult{{Text: "r", Score: 0.9}}}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r)
+	require.NoError(t, err)
+	_, err = kb.Retrieve(context.Background(), "q", &common.RetrievalConfig{TopK: 5}, WithKBExtra("unknown_key", "x"))
+	require.NoError(t, err)
+	assert.Equal(t, 1, r.calls)
 }
 
 // TestSimpleKB_RetrieveFilters透传 Filters 经 RetrieveOptions 传给 retriever
