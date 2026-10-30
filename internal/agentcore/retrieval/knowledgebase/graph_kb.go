@@ -170,7 +170,99 @@ func (g *GraphKnowledgeBase) AddDocuments(ctx context.Context, documents []reran
 	return docIDs, nil
 }
 
+// Retrieve 检索相关文档（use_graph 时走图检索，否则回落 SimpleKB）。
+//
+// use_graph 三层判定：retrieval_config.use_graph 为 true → 图；为 nil 时随
+// config.use_graph；为 false 显式压过配置 → 回落。
+//
+// Python: graph_knowledge_base.py retrieve
+func (g *GraphKnowledgeBase) Retrieve(ctx context.Context, query string,
+	config *common.RetrievalConfig, opts ...KBOption) ([]common.RetrievalResult, error) {
+	retrievalConfig := config
+	if retrievalConfig == nil {
+		retrievalConfig = defaultRetrievalConfig()
+	}
+
+	useGraph := (retrievalConfig.UseGraph != nil && *retrievalConfig.UseGraph) ||
+		(retrievalConfig.UseGraph == nil && g.config.UseGraph)
+	if !useGraph {
+		return g.retrieveViaSimpleKB(ctx, query, config, opts...)
+	}
+
+	gret, err := g.ensureGraphRetriever()
+	if err != nil {
+		return nil, err
+	}
+	mode := resolveRetrievalMode(g.config.IndexType)
+
+	r := gret
+	if retrievalConfig.Agentic {
+		r, err = wrapAgenticRetriever(g.llmClient, gret, opts...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return r.Retrieve(ctx, query, retrievalConfig.TopK, retrievalConfig.ScoreThreshold, mode,
+		retriever.WithRetrieveFilters(retrievalConfig.Filters),
+		retriever.WithRetrieveGraphExpansion(retrievalConfig.GraphExpansion))
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ensureGraphRetriever 取图检索器，nil 时持锁懒创建。
+//
+// 六个 WithGraph* 选项与 SetIndexType 注入此前零生产调用，13.28 首次接线。
+// 读路径同样持锁（Go 内存模型下锁外读属数据竞争，13.27 §13-1 先例）。
+func (g *GraphKnowledgeBase) ensureGraphRetriever() (retriever.Retriever, error) {
+	g.graphMu.Lock()
+	defer g.graphMu.Unlock()
+	if g.graphRetriever != nil {
+		return g.graphRetriever, nil
+	}
+	if g.vectorStore == nil {
+		return nil, exception.BuildError(
+			exception.StatusRetrievalKbVectorStoreNotFound,
+			exception.WithMsg("vector_store is required for graph retrieval"))
+	}
+
+	gret := retriever.NewGraphRetriever(
+		retriever.WithGraphChunkRetriever(g.chunkRetriever),
+		retriever.WithGraphTripleRetriever(g.tripleRetriever),
+		retriever.WithGraphVectorStore(g.vectorStore),
+		retriever.WithGraphEmbedModel(g.embedModel),
+		retriever.WithGraphChunkCollection("kb_"+g.config.KBID+"_chunks"),
+		retriever.WithGraphTripleCollection("kb_"+g.config.KBID+"_triples"),
+	)
+	// 注入 index_type：GraphRetriever 的 mode 校验与 AgenticRetriever 的
+	// defaultMode 推导都读它。
+	if carrier, ok := any(gret).(retriever.IndexTypeCarrier); ok {
+		carrier.SetIndexType(string(g.config.IndexType))
+	}
+	g.graphRetriever = gret
+	return gret, nil
+}
+
+// retrieveViaSimpleKB 回落路径：现构造 SimpleKB 委托（Python 每次新建、不缓存）。
+//
+// 两处保真：不传 extractor（GraphKB 独有字段）；不传 strict_validation
+// （Python 不传 → SimpleKB 恒为 true）。传原始 config（可能为 nil），由
+// SimpleKB 自己做 nil→默认回落。
+func (g *GraphKnowledgeBase) retrieveViaSimpleKB(ctx context.Context, query string,
+	config *common.RetrievalConfig, opts ...KBOption) ([]common.RetrievalResult, error) {
+	base, err := NewSimpleKnowledgeBase(g.config, nil,
+		WithVectorStore(g.vectorStore),
+		WithEmbedModel(g.embedModel),
+		WithParser(g.parser),
+		WithChunker(g.chunker),
+		WithIndexManager(g.indexManager),
+		WithLLMClient(g.llmClient),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return base.Retrieve(ctx, query, config, opts...)
+}
 
 // triplesToTextChunks 三元组转 TextChunk（图索引的写入形态）。
 //

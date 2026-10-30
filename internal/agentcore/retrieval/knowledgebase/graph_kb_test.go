@@ -307,3 +307,149 @@ func TestGraphKB_ParseFiles(t *testing.T) {
 	assert.Len(t, docs, 1)
 	assert.Equal(t, 1, p.calls)
 }
+
+// ──────────────────────────── Retrieve ────────────────────────────
+
+// TestGraphKB_Retrieve_图路径 图路径分派到注入的检索器，参数透传
+// （对齐 test_retrieve_with_graph：patch GraphRetriever 后断言被调用）。
+func TestGraphKB_Retrieve_图路径(t *testing.T) {
+	vs, _ := makeCompatiblePair()
+	fake := &graphFakeRetriever{results: []common.RetrievalResult{{Text: "Test result", Score: 0.95}}}
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "test_kb", UseGraph: true},
+		nil, nil, WithVectorStore(vs))
+	require.NoError(t, err)
+	kb.SetGraphRetriever(fake)
+
+	useGraph := true
+	results, err := kb.Retrieve(context.Background(), "test query",
+		&common.RetrievalConfig{TopK: 5, UseGraph: &useGraph})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, 1, fake.calls)
+	assert.Equal(t, 5, fake.gotTopK)
+	assert.Equal(t, retriever.RetrievalModeHybrid, fake.gotMode) // 零值 index_type → hybrid
+	// graph_expansion 显式传递（false 但指针非 nil，对齐 Python 传 bool）
+	require.NotNil(t, fake.gotOpts.GraphExpansion)
+	assert.False(t, *fake.gotOpts.GraphExpansion)
+}
+
+// TestGraphKB_Retrieve_懒创建注入indexType 不注入时真实构造 GraphRetriever
+// 并注入 index_type（SetIndexType 首个生产调用）。
+func TestGraphKB_Retrieve_懒创建注入indexType(t *testing.T) {
+	vs, _ := makeCompatiblePair()
+	kb, err := NewGraphKnowledgeBase(
+		common.KnowledgeBaseConfig{KBID: "test_kb", IndexType: common.IndexTypeBM25, UseGraph: true},
+		nil, nil, WithVectorStore(vs))
+	require.NoError(t, err)
+
+	got, err := kb.ensureGraphRetriever()
+	require.NoError(t, err)
+	gret, ok := got.(*retriever.GraphRetriever)
+	require.True(t, ok)
+	assert.Equal(t, "bm25", gret.IndexType())
+
+	again, err := kb.ensureGraphRetriever()
+	require.NoError(t, err)
+	assert.Same(t, got, again)
+}
+
+// TestGraphKB_Retrieve_并发只建一次 并发 ensureGraphRetriever 返回同一实例（-race）。
+func TestGraphKB_Retrieve_并发只建一次(t *testing.T) {
+	vs, _ := makeCompatiblePair()
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true},
+		nil, nil, WithVectorStore(vs))
+	require.NoError(t, err)
+
+	const n = 8
+	var wg sync.WaitGroup
+	got := make([]retriever.Retriever, n)
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			got[idx], errs[idx] = kb.ensureGraphRetriever()
+		}(i)
+	}
+	wg.Wait()
+	for i := 0; i < n; i++ {
+		require.NoError(t, errs[i])
+	}
+	for i := 1; i < n; i++ {
+		assert.Same(t, got[0], got[i])
+	}
+}
+
+// TestGraphKB_Retrieve_无VectorStore 图路径建检索器时缺 store → 155503。
+func TestGraphKB_Retrieve_无VectorStore(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true}, nil, nil)
+	require.NoError(t, err)
+	_, err = kb.Retrieve(context.Background(), "q", &common.RetrievalConfig{TopK: 5})
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155503, be.Code())
+	assert.Contains(t, be.Message(), "vector_store is required for graph retrieval")
+}
+
+// TestGraphKB_Retrieve_回落SimpleKB use_graph 全 false → 回落 SimpleKB
+// （对齐 test_retrieve_without_graph_falls_back_to_simple）。bm25 索引避开
+// embed_model 依赖。
+func TestGraphKB_Retrieve_回落SimpleKB(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(
+		common.KnowledgeBaseConfig{KBID: "kb", IndexType: common.IndexTypeBM25, UseGraph: false},
+		nil, nil, WithVectorStore(&fakeAttrStore{}), WithLLMClient(&stubKBLlm{}))
+	require.NoError(t, err)
+
+	useGraph := false
+	results, err := kb.Retrieve(context.Background(), "q",
+		&common.RetrievalConfig{TopK: 5, UseGraph: &useGraph})
+	require.NoError(t, err)
+	assert.Empty(t, results)
+	assert.Nil(t, kb.graphRetriever) // 未走图路径
+}
+
+// TestGraphKB_Retrieve_agentic无LLM Agentic=true 且 llmClient 为 nil →
+// NewAgenticRetriever 报 155209（证明 agentic 分支已接线，对齐
+// test_retrieve_with_agentic 的构造参数断言）。
+func TestGraphKB_Retrieve_agentic无LLM(t *testing.T) {
+	vs, _ := makeCompatiblePair()
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true},
+		nil, nil, WithVectorStore(vs))
+	require.NoError(t, err)
+	kb.SetGraphRetriever(&graphFakeRetriever{})
+
+	_, err = kb.Retrieve(context.Background(), "q", &common.RetrievalConfig{TopK: 5, Agentic: true})
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155209, be.Code())
+}
+
+// TestGraphKB_Retrieve_agentic未知kwargs Agentic=true + 未知 kwargs → 155510
+// （13.27 §13.5 反转后的统一规则，GraphKB 复用）。
+func TestGraphKB_Retrieve_agentic未知kwargs(t *testing.T) {
+	vs, _ := makeCompatiblePair()
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true},
+		nil, nil, WithVectorStore(vs), WithLLMClient(&stubKBLlm{}))
+	require.NoError(t, err)
+	kb.SetGraphRetriever(&graphFakeRetriever{})
+
+	_, err = kb.Retrieve(context.Background(), "q",
+		&common.RetrievalConfig{TopK: 5, Agentic: true}, WithKBExtra("bogus", 1))
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155510, be.Code())
+}
+
+// TestGraphKB_SetGraphRetriever_复位 传 nil 复位后重新懒创建。
+func TestGraphKB_SetGraphRetriever_复位(t *testing.T) {
+	vs, _ := makeCompatiblePair()
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true},
+		nil, nil, WithVectorStore(vs))
+	require.NoError(t, err)
+	first, err := kb.ensureGraphRetriever()
+	require.NoError(t, err)
+	kb.SetGraphRetriever(nil)
+	second, err := kb.ensureGraphRetriever()
+	require.NoError(t, err)
+	assert.NotSame(t, first, second)
+}
