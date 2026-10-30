@@ -1015,7 +1015,15 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 	loopSess := d.loopSession
 	d.configMu.RUnlock()
 
+	// 静默丢弃点补日志：外循环已结束（controller 已清理）或会话未绑定时，
+	// steer 无法投递。Python 侧同样直接 return，但 Go 的异步发布让这类
+	// 丢弃只能靠日志定位（历史问题：集成测试只看到"等待 steer 入队超时"）。
 	if ctrl == nil {
+		logger.Warn(logComponent).
+			Str("event_type", "STEER_DROPPED").
+			Str("reason", "no_active_loop").
+			Str("msg_preview", steerLogPreview(msg)).
+			Msg("steer dropped: task loop controller is not active")
 		return
 	}
 	s := sess
@@ -1023,6 +1031,11 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 		s = loopSess
 	}
 	if s == nil {
+		logger.Warn(logComponent).
+			Str("event_type", "STEER_DROPPED").
+			Str("reason", "no_session").
+			Str("msg_preview", steerLogPreview(msg)).
+			Msg("steer dropped: neither arg session nor loop session is bound")
 		return
 	}
 
@@ -1043,6 +1056,16 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 		return
 	}
 	logger.Debug(logComponent).Str("msg", msg).Msg("Steer: TaskInteractionEvent published")
+}
+
+// steerLogPreview 截断 steer 文本用于日志（rune 安全，最多 120 字符）。对齐 CJK 截断惯例。
+func steerLogPreview(msg string) string {
+	const maxRunes = 120
+	runes := []rune(msg)
+	if len(runes) <= maxRunes {
+		return msg
+	}
+	return string(runes[:maxRunes])
 }
 
 // Abort 请求立即中止任务循环。
