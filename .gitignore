@@ -35,5 +35,6 @@ internal/agent_teams/tools/tasks/task_test-*/
 internal/agentcore/memory/external/memory.db
 tests/integration/agentcore/harness/rails/memory/coding_memory/
 tests/integration/agentcore/harness/rails/memory/memory/
+tests/integration/swarm/server/adapter/memory.db
 internal/agent_teams/tools/index.json
 internal/agentcore/retrieval/indexing/processor/parser/images/
