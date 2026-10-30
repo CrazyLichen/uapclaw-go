@@ -245,3 +245,52 @@ func TestLoad_Override(t *testing.T) {
 		t.Errorf("期望 override 为 'new_value'，实际 '%s'", v)
 	}
 }
+
+// TestLoadNonOverride_不覆盖已有变量 验证非覆盖语义（Python override=False）。
+func TestLoadNonOverride_不覆盖已有变量(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	if err := os.WriteFile(path, []byte("KEEP=from_file\nNEW=added\n"), 0o600); err != nil {
+		t.Fatalf("写临时 .env 失败: %v", err)
+	}
+
+	t.Setenv("KEEP", "from_shell")
+	os.Unsetenv("NEW")
+	t.Cleanup(func() { os.Unsetenv("NEW") })
+
+	if err := LoadNonOverride(path); err != nil {
+		t.Fatalf("LoadNonOverride 失败: %v", err)
+	}
+
+	if got := os.Getenv("KEEP"); got != "from_shell" {
+		t.Errorf("KEEP 期望保留 shell 值 from_shell, 实际 %q", got)
+	}
+	if got := os.Getenv("NEW"); got != "added" {
+		t.Errorf("NEW 期望 added, 实际 %q", got)
+	}
+}
+
+// TestLoadNonOverride_空值也覆盖 验证 shell 侧为空字符串时按未设置处理。
+func TestLoadNonOverride_空值也覆盖(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	if err := os.WriteFile(path, []byte("EMPTY=from_file\n"), 0o600); err != nil {
+		t.Fatalf("写临时 .env 失败: %v", err)
+	}
+
+	t.Setenv("EMPTY", "")
+
+	if err := LoadNonOverride(path); err != nil {
+		t.Fatalf("LoadNonOverride 失败: %v", err)
+	}
+	if got := os.Getenv("EMPTY"); got != "from_file" {
+		t.Errorf("EMPTY 期望 from_file, 实际 %q", got)
+	}
+}
+
+// TestLoadNonOverride_文件缺失返回错误 读取失败向上抛（对齐 Python 异常语义）。
+func TestLoadNonOverride_文件缺失返回错误(t *testing.T) {
+	if err := LoadNonOverride(filepath.Join(t.TempDir(), "nope.env")); err == nil {
+		t.Error("期望返回读取失败错误")
+	}
+}

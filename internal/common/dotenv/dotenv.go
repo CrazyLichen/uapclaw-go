@@ -83,6 +83,31 @@ func Load(path string) error {
 	return nil
 }
 
+// LoadNonOverride 加载 .env 文件但**不覆盖**已存在的环境变量。
+//
+// 与 Load 的区别仅在于写入前判断变量是否已有非空值：已有非空值 → 保留 shell 侧；
+// 未设置或为空字符串 → 写入文件值（便于 shell 里 `export K=` 占位后仍由 .env 提供值）。
+// Python: dotenv.load_dotenv(path, override=False)
+func LoadNonOverride(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("读取 .env 文件失败: %w", err)
+	}
+
+	kvs := Parse(string(data))
+	for k, v := range kvs {
+		if _, exists := os.LookupEnv(k); exists && os.Getenv(k) != "" {
+			continue
+		}
+		if err := os.Setenv(k, v); err != nil {
+			logger.Error(logComponent).Str("key", k).Err(err).Msg("failed to set env var")
+			return fmt.Errorf("设置环境变量 %s 失败: %w", k, err)
+		}
+	}
+
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseKeyValue 解析单行 KEY=VALUE，返回 key、value 和是否成功。
