@@ -75,6 +75,12 @@ type RetrieveOptions struct {
 	// bool 零值无法区分"未设"与"显式 false"（Python 两层默认值不一致是
 	// 真实行为，字面复刻）。
 	GraphExpansion *bool
+	// Filters 元数据过滤条件（13.27 SimpleKB 写入）。
+	// 潜伏参数：Python 侧 filters 进了 retriever kwargs，但 Vector/Sparse/
+	// Hybrid/Agentic 四个实现全不读（store 调用的 filters 硬编码 None），
+	// 属"写了不消费"的死参数字面复刻（13.19 计划行承诺，13.27 spec §8-14）。
+	// 非指针：map 零值 nil 即"未设置"，与 Python Optional[Dict] 同义。
+	Filters map[string]any
 }
 
 // RetrieveOption RetrieveOptions 的函数选项。
@@ -114,4 +120,12 @@ func WithRetrieveNumCandidatesPerBeam(v int) RetrieveOption {
 // WithRetrieveGraphExpansion 设置图路径是否启用图扩展的 RetrieveOption。
 func WithRetrieveGraphExpansion(v bool) RetrieveOption {
 	return func(o *RetrieveOptions) { o.GraphExpansion = &v }
+}
+
+// WithRetrieveFilters 设置元数据过滤条件的 RetrieveOption。
+//
+// 对齐 Python retrieve(filters=...)：值写进选项，但四个 retriever 实现
+// 均不消费（死参数字面复刻，见 RetrieveOptions.Filters 注释）。
+func WithRetrieveFilters(filters map[string]any) RetrieveOption {
+	return func(o *RetrieveOptions) { o.Filters = filters }
 }

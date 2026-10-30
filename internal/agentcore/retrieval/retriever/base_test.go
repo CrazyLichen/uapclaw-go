@@ -179,3 +179,21 @@ func (f *fakeEmbedModel) EmbedDocuments(_ context.Context, _ []string, _ ...embe
 }
 func (f *fakeEmbedModel) Dimension() int                                    { return 384 }
 func (f *fakeEmbedModel) DimensionWithContext(context.Context) (int, error) { return 384, nil }
+
+// TestNewRetrieveOptions_Filters Filters 槽位（13.19 伏笔：13.27 SimpleKB
+// 写入，四实现均不消费——死参数字面复刻，spec 13.27 §8-14）。
+func TestNewRetrieveOptions_Filters(t *testing.T) {
+	filters := map[string]any{"doc_type": "pdf"}
+	opts := NewRetrieveOptions(WithRetrieveFilters(filters))
+	assert.Equal(t, filters, opts.Filters)
+
+	// 未设置时为 nil（Python filters=None 同义）
+	empty := NewRetrieveOptions()
+	assert.Nil(t, empty.Filters)
+
+	// 与既有选项可叠加且互不干扰
+	combined := NewRetrieveOptions(WithRetrieveAlpha(0.3), WithRetrieveFilters(filters))
+	require.NotNil(t, combined.Alpha)
+	assert.Equal(t, 0.3, *combined.Alpha)
+	assert.Equal(t, filters, combined.Filters)
+}
