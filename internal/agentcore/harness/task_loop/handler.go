@@ -316,15 +316,35 @@ func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input 
 	}
 
 	// 推入 steering 队列（对齐 Python: if msg and self.interaction_queues is not None: push_steer）
-	if steerText != "" && h.interactionQueues != nil {
+	// queued/dropReason 仅用于日志：Python 侧无条件打 "injected"，但 Go 的
+	// 异步链路下「事件已消费」不等于「指令已入队」，日志必须反映真实结果，
+	// 否则排查 steer 丢失会被误导。
+	queued := false
+	dropReason := ""
+	switch {
+	case steerText == "":
+		dropReason = "empty_steer_text"
+	case h.interactionQueues == nil:
+		dropReason = "no_interaction_queues"
+	default:
 		h.interactionQueues.PushSteer(steerText)
+		queued = true
 	}
 
 	// Python: 始终返回 steer_injected + msg，始终打 info 日志
 	steerPreview := truncateRunes(steerText, 100)
 	logger.Info(logComponent).
 		Str("steer_text", steerPreview).
+		Bool("queued", queued).
+		Str("drop_reason", dropReason).
 		Msg("bootstrap instruction injected")
+	if !queued {
+		logger.Warn(logComponent).
+			Str("event_type", "STEER_DROPPED").
+			Str("reason", dropReason).
+			Str("steer_text", steerPreview).
+			Msg("steer consumed but not queued into steering queue")
+	}
 
 	return map[string]any{"status": "steer_injected", "msg": steerText}, nil
 }
