@@ -306,15 +306,15 @@ func resolveRetrievalMode(indexType common.IndexTypeKind) retriever.RetrievalMod
 	}
 }
 
-// ensureRetriever 返回可用 retriever，nil 时加锁双检懒创建。
+// ensureRetriever 返回可用 retriever，nil 时持锁懒创建。
 //
 // Python 侧在 retrieve 内按 index_type 三分支延迟 import 并构造；Go 为
 // 包级 import，分支逻辑保持一致。
+//
+// 并发说明：Go 内存模型下"锁外读 + 锁内写"的经典双重检查属于数据竞争，
+// 故读路径也持锁（13.27 实施期 -race 捕获）。锁粒度仅覆盖字段读取与
+// 一次性构造，实际检索在锁外执行，无吞吐影响。
 func (s *SimpleKnowledgeBase) ensureRetriever() (retriever.Retriever, error) {
-	if s.retriever != nil {
-		return s.retriever, nil
-	}
-
 	s.retrieverMu.Lock()
 	defer s.retrieverMu.Unlock()
 	if s.retriever != nil {

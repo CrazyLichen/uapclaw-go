@@ -3,12 +3,15 @@ package knowledgebase
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
@@ -20,6 +23,32 @@ import (
 )
 
 // ──────────────────────────── 测试桩 ────────────────────────────
+
+// stubKBLlm 零行为 LLM 桩（BaseModelClient 全接口补全）。
+type stubKBLlm struct{}
+
+func (s *stubKBLlm) Invoke(context.Context, model_clients.MessagesParam, ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	return llmschema.NewAssistantMessage(""), nil
+}
+func (s *stubKBLlm) Stream(context.Context, model_clients.MessagesParam, ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubKBLlm) GenerateImage(context.Context, []*llmschema.UserMessage, ...model_clients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubKBLlm) GenerateSpeech(context.Context, []*llmschema.UserMessage, ...model_clients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubKBLlm) GenerateVideo(context.Context, []*llmschema.UserMessage, ...model_clients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubKBLlm) TranscribeAudio(context.Context, string, ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+func (s *stubKBLlm) Release(context.Context, ...model_clients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+func (s *stubKBLlm) SupportsKVCacheRelease() bool { return false }
 
 // countingChunker 可编程返回值的 Chunker 桩（Python MagicMock chunker 同构）。
 type countingChunker struct {
@@ -526,4 +555,244 @@ func TestSimpleKB_GetStatistics错误冒泡(t *testing.T) {
 	_, err = kb.GetStatistics(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "boom")
+}
+
+// ──────────────────────────── Retrieve ────────────────────────────
+
+// fakeEmbed 固定向量的嵌入桩（懒创建 vector 分支所需）。
+type fakeEmbed struct{}
+
+func (f *fakeEmbed) EmbedQuery(context.Context, string, ...embedding.EmbedOption) ([]float64, error) {
+	return []float64{0.1}, nil
+}
+func (f *fakeEmbed) EmbedDocuments(context.Context, []string, ...embedding.EmbedOption) ([][]float64, error) {
+	return nil, nil
+}
+func (f *fakeEmbed) Dimension() int                                    { return 1 }
+func (f *fakeEmbed) DimensionWithContext(context.Context) (int, error) { return 1, nil }
+
+// TestSimpleKB_Retrieve带检索器 对齐 test_retrieve_with_retriever。
+func TestSimpleKB_Retrieve带检索器(t *testing.T) {
+	r := &recordingRetriever{results: []common.RetrievalResult{{Text: "Test result", Score: 0.95}}}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", IndexType: common.IndexTypeVector}, r)
+	require.NoError(t, err)
+	results, err := kb.Retrieve(context.Background(), "test query", nil)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, 1, r.calls)
+}
+
+// TestSimpleKB_Retrieve非agentic 对齐 test_retrieve_without_agentic。
+func TestSimpleKB_Retrieve非agentic(t *testing.T) {
+	r := &recordingRetriever{results: []common.RetrievalResult{{Text: "r", Score: 0.9}}}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r)
+	require.NoError(t, err)
+	results, err := kb.Retrieve(context.Background(), "q", common.NewDefaultRetrievalConfig())
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, 1, r.calls)
+}
+
+// TestSimpleKB_Retrieve无检索器无存储 对齐 test_retrieve_without_retriever_or_vector_store。
+func TestSimpleKB_Retrieve无检索器无存储(t *testing.T) {
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil)
+	require.NoError(t, err)
+	_, err = kb.Retrieve(context.Background(), "test query", nil)
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155503, be.Code())
+	assert.Contains(t, be.Message(), "vector_store or retriever is required")
+}
+
+// TestSimpleKB_Retrieve懒创建三分支 index_type 决定 retriever 具体类型。
+func TestSimpleKB_Retrieve懒创建三分支(t *testing.T) {
+	vs, _ := makeCompatiblePair()
+	cases := []struct {
+		indexType common.IndexTypeKind
+		assertTyp func(t *testing.T, r retriever.Retriever)
+	}{
+		{common.IndexTypeVector, func(t *testing.T, r retriever.Retriever) {
+			_, ok := r.(*retriever.VectorRetriever)
+			assert.True(t, ok, "vector → VectorRetriever")
+		}},
+		{common.IndexTypeBM25, func(t *testing.T, r retriever.Retriever) {
+			_, ok := r.(*retriever.SparseRetriever)
+			assert.True(t, ok, "bm25 → SparseRetriever")
+		}},
+		{common.IndexTypeHybrid, func(t *testing.T, r retriever.Retriever) {
+			_, ok := r.(*retriever.HybridRetriever)
+			assert.True(t, ok, "hybrid → HybridRetriever")
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.indexType), func(t *testing.T) {
+			kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", IndexType: tc.indexType},
+				nil, WithVectorStore(vs), WithEmbedModel(&fakeEmbed{}))
+			require.NoError(t, err)
+			// fakeAttrStore 各 search 返回空，检索器返回空结果
+			_, err = kb.Retrieve(context.Background(), "q", nil)
+			require.NoError(t, err)
+			require.NotNil(t, kb.retriever)
+			tc.assertTyp(t, kb.retriever)
+		})
+	}
+}
+
+// TestSimpleKB_Retrieve模式推导对齐 断言传给底层 retriever 的 mode 与 TopK。
+func TestSimpleKB_Retrieve模式推导对齐(t *testing.T) {
+	cases := []struct {
+		indexType common.IndexTypeKind
+		wantMode  retriever.RetrievalMode
+	}{
+		{common.IndexTypeVector, retriever.RetrievalModeVector},
+		{common.IndexTypeBM25, retriever.RetrievalModeSparse},
+		{common.IndexTypeHybrid, retriever.RetrievalModeHybrid},
+		{common.IndexTypeKind(""), retriever.RetrievalModeHybrid}, // 其他 → hybrid
+	}
+	for _, tc := range cases {
+		r := &recordingRetriever{}
+		kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", IndexType: tc.indexType}, r)
+		require.NoError(t, err)
+		_, err = kb.Retrieve(context.Background(), "q", nil)
+		require.NoError(t, err)
+		assert.Equal(t, tc.wantMode, r.gotMode)
+		// nil config → 私有默认 TopK 5（Python RetrievalConfig() 默认）
+		assert.Equal(t, 5, r.gotTopK)
+	}
+}
+
+// TestSimpleKB_Retrieve配置TopK优先 显式 config.TopK 覆盖默认。
+func TestSimpleKB_Retrieve配置TopK优先(t *testing.T) {
+	r := &recordingRetriever{}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r)
+	require.NoError(t, err)
+	_, err = kb.Retrieve(context.Background(), "q", &common.RetrievalConfig{TopK: 12})
+	require.NoError(t, err)
+	assert.Equal(t, 12, r.gotTopK)
+}
+
+// TestSimpleKB_Retrieve并发懒创建 -race：并发 Retrieve 只建一次且全部成功。
+func TestSimpleKB_Retrieve并发懒创建(t *testing.T) {
+	vs, _ := makeCompatiblePair()
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", IndexType: common.IndexTypeBM25},
+		nil, WithVectorStore(vs))
+	require.NoError(t, err)
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = kb.Retrieve(context.Background(), "q", nil)
+		}()
+	}
+	wg.Wait()
+	assert.NotNil(t, kb.retriever)
+}
+
+// TestSimpleKB_Retrieve检索错误冒泡 底层 retriever 错误原样返回。
+func TestSimpleKB_Retrieve检索错误冒泡(t *testing.T) {
+	boom := errors.New("retrieve boom")
+	r := &recordingRetriever{err: boom}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r)
+	require.NoError(t, err)
+	_, err = kb.Retrieve(context.Background(), "q", nil)
+	require.ErrorIs(t, err, boom)
+}
+
+// agenticRewriteLLM 读步骤返回空、改写步骤返回下一问题的桩——
+// 用于观察 max_iter 的真实生效次数。
+type agenticRewriteLLM struct {
+	stubKBLlm
+	mu           sync.Mutex
+	readCalls    int
+	rewriteCalls int
+}
+
+func (a *agenticRewriteLLM) Invoke(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	prompt := ""
+	for _, m := range messages.Messages() {
+		if u, ok := m.(*llmschema.UserMessage); ok {
+			prompt = u.Content.Text()
+		}
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	switch {
+	case strings.Contains(prompt, "knowledge triples, which are structured"):
+		a.readCalls++
+		return llmschema.NewAssistantMessage(""), nil
+	case strings.Contains(prompt, `"sufficient" to true`):
+		a.rewriteCalls++
+		return llmschema.NewAssistantMessage(`{"sufficient": false, "next_question": "q_next"}`), nil
+	default:
+		return llmschema.NewAssistantMessage(""), nil
+	}
+}
+
+// TestSimpleKB_RetrieveAgentic 对齐 test_retrieve_with_agentic：agentic 分支
+// 用 AgenticRetriever 包裹底层 retriever（retriever/llm_client 透传）。
+func TestSimpleKB_RetrieveAgentic(t *testing.T) {
+	r := &recordingRetriever{results: []common.RetrievalResult{{Text: "r", Score: 0.9}}}
+	llm := &agenticRewriteLLM{}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r, WithLLMClient(llm))
+	require.NoError(t, err)
+	results, err := kb.Retrieve(context.Background(), "test query", &common.RetrievalConfig{TopK: 5, Agentic: true})
+	require.NoError(t, err)
+	assert.NotEmpty(t, results)
+	// 默认 max_iter=2 → 底层 retriever 被调用 2 次（每轮一次）
+	assert.Equal(t, 2, r.calls)
+}
+
+// TestSimpleKB_RetrieveAgenticMaxIter Extra["max_iter"] 映射 WithAgenticMaxIter：
+// max_iter=3 时底层 retriever 调用 3 次；未知键静默忽略不报错。
+func TestSimpleKB_RetrieveAgenticMaxIter(t *testing.T) {
+	r := &recordingRetriever{results: []common.RetrievalResult{{Text: "r", Score: 0.9}}}
+	llm := &agenticRewriteLLM{}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r, WithLLMClient(llm))
+	require.NoError(t, err)
+	cfg := &common.RetrievalConfig{TopK: 5, Agentic: true}
+	_, err = kb.Retrieve(context.Background(), "q", cfg, WithKBExtra("max_iter", 3))
+	require.NoError(t, err)
+	assert.Equal(t, 3, r.calls)
+
+	// 未知键静默忽略（Python 会 TypeError，行为分叉已归档 spec §8-6）
+	r2 := &recordingRetriever{results: []common.RetrievalResult{{Text: "r", Score: 0.9}}}
+	kb2, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r2, WithLLMClient(&agenticRewriteLLM{}))
+	require.NoError(t, err)
+	_, err = kb2.Retrieve(context.Background(), "q", cfg, WithKBExtra("unknown_key", "x"))
+	require.NoError(t, err)
+}
+
+// TestSimpleKB_RetrieveFilters透传 Filters 经 RetrieveOptions 传给 retriever
+// （写而不消费，13.19 伏笔回填）。
+func TestSimpleKB_RetrieveFilters透传(t *testing.T) {
+	r := &recordingRetriever{}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r)
+	require.NoError(t, err)
+	cfg := &common.RetrievalConfig{TopK: 5, Filters: map[string]any{"doc_type": "pdf"}}
+	_, err = kb.Retrieve(context.Background(), "q", cfg)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"doc_type": "pdf"}, r.gotOpts.Filters)
+}
+
+// TestSimpleKB_RetrieveFilters为nil filters 未设时 Options.Filters 为 nil。
+func TestSimpleKB_RetrieveFilters为nil(t *testing.T) {
+	r := &recordingRetriever{}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r)
+	require.NoError(t, err)
+	_, err = kb.Retrieve(context.Background(), "q", nil)
+	require.NoError(t, err)
+	assert.Nil(t, r.gotOpts.Filters)
+}
+
+// TestSimpleKB_RetrieveAgentic无LLM agentic 但 llmClient nil → 155209 冒泡。
+func TestSimpleKB_RetrieveAgentic无LLM(t *testing.T) {
+	r := &recordingRetriever{}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, r)
+	require.NoError(t, err)
+	_, err = kb.Retrieve(context.Background(), "q", &common.RetrievalConfig{TopK: 5, Agentic: true})
+	require.Error(t, err)
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155209, be.Code())
 }
