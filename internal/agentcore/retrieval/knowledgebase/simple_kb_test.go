@@ -796,3 +796,41 @@ func TestSimpleKB_RetrieveAgentic无LLM(t *testing.T) {
 	require.True(t, errors.As(err, &be))
 	assert.Equal(t, 155209, be.Code())
 }
+
+// ──────────────────────────── ParseFiles（模板方法经由 SimpleKB 入口） ────────────────────────────
+
+// TestSimpleKB_ParseFiles成功 对齐 test_parse_files_success。
+// 复用 base_test.go 的 fakeKBParser（两文件各返回两篇文档）。
+func TestSimpleKB_ParseFiles成功(t *testing.T) {
+	p := &fakeKBParser{docs: []reranker.Document{
+		{ID: "doc_1", Text: "Test document 1"},
+		{ID: "doc_2", Text: "Test document 2"},
+	}}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, WithParser(p))
+	require.NoError(t, err)
+	docs, err := kb.ParseFiles(context.Background(), []string{"test1.txt", "test2.txt"})
+	require.NoError(t, err)
+	assert.Len(t, docs, 4)
+	assert.Len(t, p.gotDocs, 2)
+}
+
+// TestSimpleKB_ParseFiles无解析器 对齐 test_parse_files_without_parser。
+func TestSimpleKB_ParseFiles无解析器(t *testing.T) {
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil)
+	require.NoError(t, err)
+	_, err = kb.ParseFiles(context.Background(), []string{"test.txt"})
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155500, be.Code())
+	assert.Contains(t, be.Message(), "parser is required")
+}
+
+// TestSimpleKB_ParseFiles异常吞 对齐 test_parse_files_with_exception。
+func TestSimpleKB_ParseFiles异常吞(t *testing.T) {
+	p := &fakeKBParser{err: errors.New("Parse error")}
+	kb, err := NewSimpleKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, WithParser(p))
+	require.NoError(t, err)
+	docs, err := kb.ParseFiles(context.Background(), []string{"test.txt"})
+	require.NoError(t, err)
+	assert.Empty(t, docs)
+}
