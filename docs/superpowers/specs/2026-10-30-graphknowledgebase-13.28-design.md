@@ -208,7 +208,31 @@ NewSimpleKnowledgeBase(cfg, nil,
 | `DeleteDocuments` | indexManager 缺 → 155502 `"index_manager is required for delete_documents"`；strict → `CheckVectorField`；先删 chunk 索引（逐 doc_id，`DeleteIndex` 返回 false → `success=false`，error 冒泡）；`cfg.UseGraph` 时再删 triple 索引，**false 只 `Warn("Failed to delete triples for doc_id=...")`、不影响总结果**，error 仍冒泡（Python 无 try/except）；返回 success |
 | `UpdateDocuments` | strict → `CheckVectorField`；`DeleteDocuments(docIDs)`；`AddDocuments(documents, opts...)`；返回 add 的 docIDs |
 | `GetStatistics` | indexManager nil → `{kb_id, index_exists:false}` 2 键短路；否则 chunk `GetIndexInfo`（error 冒泡）+ `cfg.UseGraph` 时 triple `GetIndexInfo`；返回 **11 键**：`kb_id` / `index_type` / `use_graph` / `chunk_index_info` / `triple_index_info` / `has_parser` / `has_chunker` / `has_extractor` / `has_embed_model` / `has_vector_store` / `has_graph_retriever`。`triple_index_info` 键**恒存在**，非图路径为 nil（Python None） |
-| `Close` | `BaseKnowledgeBase.Close()`（vectorStore → indexManager）→ `maybeClose(graphRetriever)` → `maybeClose(chunkRetriever)` → `maybeClose(tripleRetriever)`，顺序字面 |
+| `Close` | `BaseKnowledgeBase.Close()`（vectorStore → indexManager）→ `maybeClose(graphRetriever)` → `maybeClose(chunkRetriever)` → `maybeClose(tripleRetriever)`，顺序字面。**含重复关闭，照复刻**，见 §6.1 |
+
+### 6.1 Close 的重复关闭（照复刻，禁止"顺手优化"）
+
+`GraphRetriever.Close()` 内部已经关闭它持有的固定 `chunk_retriever` / `triple_retriever`（`graph_retriever_impl.go` L413-420 / py L795-814），而 `GraphKnowledgeBase.Close()` 之后又逐字段各关一次 —— 同一对象被关两轮。调用树（显式注入固定检索器时）：
+
+```
+GraphKB.Close()
+├─ BaseKnowledgeBase.Close()
+│   ├─ vector_store.Close()                              [1]
+│   └─ index_manager.Close()                             [1]
+├─ graph_retriever.Close()
+│   ├─ chunk_retriever.Close()  → vector_store.Close()   [2]
+│   └─ triple_retriever.Close() → vector_store.Close()   [3]
+├─ chunk_retriever.Close()      → vector_store.Close()   [4]
+└─ triple_retriever.Close()     → vector_store.Close()   [5]
+```
+
+- **主链路（8.25）不受影响**：`GraphKnowledgeBase(config, vector_store, embed_model, llm_client)` 不传固定检索器，`chunkRetriever`/`tripleRetriever` 恒 nil；`GraphRetriever` 的动态检索器每次调用临时创建、不缓存（`GetRetrieverForMode` 直接返回），故 3-5 步皆空操作，`vector_store.Close()` 只调 1 次。
+- **只有显式注入固定检索器才触发**（复用同一 store 的高级用法）；Python 单测未暴露，因 `test_close` 用的是独立 `AsyncMock`。
+- 决策（2026-10-30 用户拍板）：**字面复刻，不加 `if graphRetriever == nil` 守卫**。理由：13.27 §13.4 取向"对齐优先于防炸"；幂等责任在底层 store。**不加固化测试**（把 Python 缺陷钉进断言会让后续修 bug 变得困难）。
+
+### 6.2 maybeClose 双变体对 retriever 字段恒走 void 分支
+
+`retriever.Retriever` 接口已声明 `Close()`（void），故任何赋入三个 retriever 字段的值都命中 `maybeClose` 的第一条断言，`Close() error` 分支对这三个字段不可达（保留零成本）。error 分支实际只服务 `BaseKnowledgeBase.Close()` 的 `indexManager` 槽（`Indexer` 接口无 Close 方法，动态类型决定），与 13.26 spec L339 记录一致。
 
 ## 7. 聚合薄委托
 
@@ -229,8 +253,8 @@ func RetrieveMultiGraphKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 | 8-2 | `metadata["triple"]` 序列化 | `json.dumps([s,p,o])` → `", "` 分隔 + `ensure_ascii=True`（中文 `\uXXXX`） | `json.Marshal([]string{...})` 紧凑、无空格、中文原样、`<>&` → `\u003c` | **用户 2026-10-30 拍板**：语义等价，下游按 JSON 解析（13.23 graph_fetch 只读 doc_id/chunk_id），不追求逐字节 |
 | 8-3 | `doc_id`/`chunk_id` 非 string | pydantic 抛 ValidationError | 断言失败收窄 `""` | 13.25 §8-7 先例（`doc_id`/`chunk_id` 非 string 收窄空串） |
 | 8-4 | 延迟 import | 函数内 import GraphRetriever/SimpleKB | 包级 import | 编译期消解，13.27 同款 |
-| 8-5 | `graph_retriever` 外部赋值 | 属性直写 | `SetGraphRetriever` | Go 无动态属性 |
-| 8-6 | `close` async | `await` | `Close()` / `Close() error` 双变体经 `maybeClose` | 13.26 先例（async 形态编译期消解） |
+| 8-5 | `graph_retriever` 外部赋值 | 属性直写（`kb.graph_retriever = r`，单测靠它注入） | `SetGraphRetriever(r retriever.Retriever)`：持 `graphMu` 写；传 nil = 复位；类型放宽到接口以支持测试注入 | Go 无动态属性。残余风险：注入非 `*GraphRetriever` 的 fake 时 13.25 `isinstance` 判图路径为假（Python 注入 AsyncMock 同理） |
+| 8-6 | `close` async 形态 + 重复关闭 | `async def close`：`await super().close()`（`_maybe_await` 协程/普通双探测）→ graph → chunk → triple；graph 已关固定检索器，KB 再关一遍 | `Close()` void（接口定型）；`maybeClose` 的 `Close()` / `Close() error` 双变体承接 Python 双探测（非重载，靠类型断言；Go 不允许同名方法两签名）。重复关闭**字面复刻**（§6.1） | 13.26 spec §4.4/L339 先例；2026-10-30 用户拍板复刻 |
 | 8-7 | `graph_hops` 接线 | KB 不传 `graph_hops` | 同样不接 | **注释纠偏**：13.19 `base.go` GraphHops 注释「13.28 接线后激活」不成立，改为「无生产方死参数」 |
 
 ## 9. 测试设计
