@@ -264,7 +264,14 @@ func (ci *ChromaIndexer) BuildIndex(
 	// M-45: 补资源释放（对齐 DeleteIndex/GetIndexInfo 的 Close 模式）。
 	// Python build_index 每次也新建 vector_store，此行为保留；
 	// Go 端 PersistentClient 持有底层资源，必须显式释放。
-	defer vectorStore.Close()
+	defer func() {
+		if closeErr := vectorStore.Close(); closeErr != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "INDEXING_WARN").
+				Err(closeErr).
+				Msg("failed to close vector store")
+		}
+	}()
 
 	collection := vectorStore.Collection()
 
