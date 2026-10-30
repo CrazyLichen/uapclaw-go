@@ -230,9 +230,22 @@ GraphKB.Close()
 - **只有显式注入固定检索器才触发**（复用同一 store 的高级用法）；Python 单测未暴露，因 `test_close` 用的是独立 `AsyncMock`。
 - 决策（2026-10-30 用户拍板）：**字面复刻，不加 `if graphRetriever == nil` 守卫**。理由：13.27 §13.4 取向"对齐优先于防炸"；幂等责任在底层 store。**不加固化测试**（把 Python 缺陷钉进断言会让后续修 bug 变得困难）。
 
-### 6.2 maybeClose 双变体对 retriever 字段恒走 void 分支
+### 6.2 maybeClose 在 Task 0 之后只剩单变体
 
-`retriever.Retriever` 接口已声明 `Close()`（void），故任何赋入三个 retriever 字段的值都命中 `maybeClose` 的第一条断言，`Close() error` 分支对这三个字段不可达（保留零成本）。error 分支实际只服务 `BaseKnowledgeBase.Close()` 的 `indexManager` 槽（`Indexer` 接口无 Close 方法，动态类型决定），与 13.26 spec L339 记录一致。
+Task 0（§13）把 `Retriever` / `VectorStore` / `KnowledgeBase` 三接口统一为 `Close() error`，`maybeClose` 随之收敛为单条断言：
+
+```go
+func (b *BaseKnowledgeBase) maybeClose(obj any) {
+    if obj == nil { return }
+    if c, ok := obj.(interface{ Close() error }); ok {
+        if err := c.Close(); err != nil {
+            logger.Warn(logComponent).Err(err).Msg("Failed to close object")   // 保留 Python sync 分支的 Warn 吞
+        }
+    }
+}
+```
+
+三个 retriever 字段（`retriever.Retriever`，Task 0 后为 `Close() error`）必然命中该断言；`indexManager` 槽依赖动态类型——`indexer.Indexer` 接口无 Close，Chroma/Milvus 具体类型在 Task 0 中已改成 error 变体，故仍能命中（§13.3 拒绝项）。**若 Task 0 被推迟**，本节退回 13.26 双变体语义，行为一致（仅多保留一条不可达分支）。
 
 ## 7. 聚合薄委托
 
@@ -254,7 +267,7 @@ func RetrieveMultiGraphKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 | 8-3 | `doc_id`/`chunk_id` 非 string | pydantic 抛 ValidationError | 断言失败收窄 `""` | 13.25 §8-7 先例（`doc_id`/`chunk_id` 非 string 收窄空串） |
 | 8-4 | 延迟 import | 函数内 import GraphRetriever/SimpleKB | 包级 import | 编译期消解，13.27 同款 |
 | 8-5 | `graph_retriever` 外部赋值 | 属性直写（`kb.graph_retriever = r`，单测靠它注入） | `SetGraphRetriever(r retriever.Retriever)`：持 `graphMu` 写；传 nil = 复位；类型放宽到接口以支持测试注入 | Go 无动态属性。残余风险：注入非 `*GraphRetriever` 的 fake 时 13.25 `isinstance` 判图路径为假（Python 注入 AsyncMock 同理） |
-| 8-6 | `close` async 形态 + 重复关闭 | `async def close`：`await super().close()`（`_maybe_await` 协程/普通双探测）→ graph → chunk → triple；graph 已关固定检索器，KB 再关一遍 | `Close()` void（接口定型）；`maybeClose` 的 `Close()` / `Close() error` 双变体承接 Python 双探测（非重载，靠类型断言；Go 不允许同名方法两签名）。重复关闭**字面复刻**（§6.1） | 13.26 spec §4.4/L339 先例；2026-10-30 用户拍板复刻 |
+| 8-6 | `close` async 形态 + 重复关闭 | `async def close`：`await super().close()`（`_maybe_await` 协程/普通双探测）→ graph → chunk → triple；graph 已关固定检索器，KB 再关一遍 | `Close() error` 单一签名（Task 0 统一，§13）；`BaseKnowledgeBase.maybeClose` 单变体 + Warn 吞；重复关闭**字面复刻**（§6.1） | 2026-10-30 用户拍板：签名单一化（方案 B）+ 重复关闭复刻 |
 | 8-7 | `graph_hops` 接线 | KB 不传 `graph_hops` | 同样不接 | **注释纠偏**：13.19 `base.go` GraphHops 注释「13.28 接线后激活」不成立，改为「无生产方死参数」 |
 
 ## 9. 测试设计
@@ -289,6 +302,7 @@ func RetrieveMultiGraphKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 9. **空 triples 不建三索引**：extractor 返回空 → `build_index` 仅 1 次。
 10. **两聚合函数委托**：`RetrieveMultiGraphKB(WithSource)` 与 13.27 同名函数同结果。
 11. **`SetGraphRetriever` 短路**：注入后 Retrieve 不再构造新检索器。
+12. **Task 0 回归（本节的先决条件）**：统一 Close 签名后，13.19-13.27 既有测试**断言一字不改**全绿；额外补一条 `TestBaseKB_Close_组件错误被Warn吞`（Task 0 前由 `Close() error` 变体承载，统一后由单变体承载，行为不变）。
 
 ### 9.3 覆盖率
 
@@ -323,6 +337,7 @@ Python 用例 4/5 用 `patch("...graph_knowledge_base.GraphRetriever")` 替换�
 
 ## 12. 实施顺序建议（供 writing-plans 展开）
 
+0. **Task 0（前置，独立 commit）**：Close 签名统一为 `Close() error`，见 §13
 1. Task 1：`kb_helpers.go` 抽取四函数（`wrapAgenticRetriever` / `vectorStoreDatabaseName` / `resolveRetrievalMode` / `defaultRetrievalConfig`）+ `simple_kb.go` 改薄委托（行为零变化，先跑 13.27 既有测试作回归网）
 2. Task 2：`graph_kb.go` 类型 + `AddDocuments`（含三元组转换）+ 测试（用例 2/3/9.2-1/9.2-2/9.2-3 前半/9.2-9）
 3. Task 3：`Retrieve` 三层判定 + 懒创建 + index_type 注入 + agentic + fallback + 测试（用例 4/5/6 + 9.2-5/6/7/8）
@@ -330,3 +345,42 @@ Python 用例 4/5 用 `patch("...graph_knowledge_base.GraphRetriever")` 替换�
 5. Task 5：两聚合薄委托 + 测试（9.2-10）
 6. Task 6：doc.go ×1 + 注释纠偏 + 计划表状态同步
 7. 全量回归：`go test -race` 单包 + `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...`
+
+## 13. Task 0（前置）：Close 签名统一为 `Close() error`
+
+**动机**（2026-10-30 用户拍板方案 B）：13.26 为承接 Python `_maybe_await` 的"协程/普通"双探测，把 close 做成了 `Close()` + `Close() error` 双变体可选接口。这在 Go 里等于同一职责两种签名，读代码的人必须先理解鸭子探测才知道该实现哪个。统一为单一 `Close() error` 后 `maybeClose` 收敛为单条断言，且全部组件满足 `io.Closer` 惯例。
+
+### 13.1 改动面（已 grep 确认：`internal/` 下域外零实现者）
+
+| 类别 | 文件 | 改动 |
+|---|---|---|
+| 接口 | `retriever/base.go` L33 | `Close()` → `Close() error` |
+| 接口 | `vector_store/base.go` L55 | 同上 |
+| 接口 | `knowledgebase/base.go` L45 + 编译期断言 L52-58 | 同上 |
+| 实现（叶子） | `retriever/vector_retriever.go` / `sparse_retriever.go` / `hybrid_retriever.go` | 关 store 后 `return nil` |
+| 实现（委托） | `retriever/graph_retriever_impl.go` / `agentic_retriever.go` | 逐个关下层，**返回首个非 nil 错误** |
+| 实现（叶子） | `vector_store/chroma.go` / `milvus.go`、`indexing/indexer/chroma.go` / `milvus.go` | `return nil` |
+| 实现（模板） | `knowledgebase/base.go` `Close` / `maybeClose` | `Close()` 恒返回 nil；`maybeClose` 单变体断言，**保留 Warn 吞** |
+| 测试桩 | `retriever` 三个测试文件、`knowledgebase/simple_kb_test.go`、`knowledgebase/base_test.go` | 桩签名同步改 `Close() error { return nil }` |
+
+### 13.2 语义边界（"行为零变化"的确切含义）
+
+| 位置 | 现状 | 统一后 |
+|---|---|---|
+| 叶子实现 | void，本就没有可失败动作 | `return nil` |
+| 委托实现（Graph/AgenticRetriever） | void，失败无通道 | 返回首个非 nil 错误（生产路径全 nil；仅错误桩可观测） |
+| `BaseKnowledgeBase.Close` / `maybeClose` | error 变体 Warn 吞、void 变体直调 | 单变体 + Warn 吞，`Close()` 恒返回 nil |
+| `KnowledgeBase.Close()` 调用方 | `kb.Close()` 语句 | Go 允许有返回值的调用作语句，**调用点零改动** |
+| Python 对齐 | `_maybe_await` 两条探测分支 | 探测消失（单一签名），Warn 吞语义保留（对应 Python sync 分支） |
+
+### 13.3 拒绝项
+
+- **不做 `errors.Join` 聚合、不让 `KnowledgeBase.Close()` 上抛**——那是方案 C，与本任务"零行为变化"冲突，若需要另立一节。
+- **不新增 `Indexer.Close() error` 接口方法**：Python `Indexer` base 也没有 close（仅 `ChromaIndexer` 有 sync close），故 `maybeClose(indexManager)` 的动态类型探测保留。**因此两个 Indexer 具体实现的 `Close()` 必须同步改成 error 变体**，否则统一后 `maybeClose` 断言不到它们 → 退化成"索引管理器不再被关闭"的真实回归。
+
+### 13.4 验收
+
+1. 三个包 `go build` + 单测全绿，且**既有断言一字不改**（这是"行为零变化"的证据）。
+2. `go vet ./...` 跨包检查（接口变更会暴露遗漏的桩）。
+3. `-race` 单包 + 全量回归 `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...`。
+4. 独立 commit，message 前缀 `refactor(retrieval):`，不与 GraphKB 功能混提。
