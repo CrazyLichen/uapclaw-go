@@ -237,3 +237,29 @@ Python `get_config(Type[T]) -> Optional[T]` 是泛型签名。Go 两选一：
 4. Task 4：multi_kb.go 两聚合函数 + 测试
 5. Task 5：doc.go ×2 + IMPLEMENTATION_PLAN.md 状态同步
 6. 全量回归：CGO_ENABLED=1 + `-tags "sqlite_fts5 test"`（记忆 testing-build-tags）
+
+## 13. 实施期修订（2026-10-30）
+
+实施与审查过程中发现 4 处计划缺陷 + 3 处测试期望值错误，均已修正并固化为测试。
+
+### 13.1 计划缺陷
+
+| # | 计划原方案 | 问题 | 实际落地 |
+|---|---|---|---|
+| 1 | `ensureRetriever` 用"锁外快路径 + 锁内双检" | Go 内存模型下锁外读 `retriever` 与锁内写并发构成数据竞争（`-race` 实测触发） | 读路径同样持锁（锁仅覆盖字段读取与一次性构造，检索在锁外执行） |
+| 2 | `knowledgeBaseConfigFromMap` 从零值构造 | 丢失 pydantic 字段默认值（index_type=hybrid / chunk_size=512 / chunk_overlap=50） | 以默认值作基线再覆盖 |
+| 3 | 只按 `float64` 解析 `chunk_size` / `chunk_overlap` | JSON 数字解码为 float64，YAML 数字解码为 int，YAML 路径会静默丢值 | 新增 `asInt` 统一吃 int/int64/float64 |
+| 4 | 多 KB 聚合依赖 map 迭代 + 稳定排序 | Go map 迭代无序，同分时无法复现 Python dict 插入序 | 显式记录 `order` 切片承载首见序 |
+
+### 13.2 计划测试期望值修正
+
+| # | 用例 | 计划期望 | 实际（按 Python 逐条推演） |
+|---|---|---|---|
+| 1 | `AddDocuments传数据库名` | vector_store 与 index_manager 属性不配仍构造成功 | 需构造属性匹配的桩对，否则构造期 155508 |
+| 2 | `RetrieveMultiKBWithSource_RawScore语义` | `RawScore == 0.2` | `max(0.1, 0.95, 0.2) = 0.95`（kb2 无 meta → 回落 score 0.95 参与取最大） |
+| 3 | `ConfigManager_YAML往返` | `UpdateConfig` 后直接 `SaveToFile` | 键双轨下 `SaveToFile` 只读 `"knowledge_base"` 键，必报 155303；改为先 `LoadFromFile` 再保存 |
+
+### 13.3 覆盖率与回归
+
+- knowledgebase 95.6% / utils 89.1%（均高于 85% 规范下限）
+- 全量回归 307 包零 FAIL（CGO_ENABLED=1 + `-tags "sqlite_fts5 test"`），`-race` 干净
