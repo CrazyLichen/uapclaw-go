@@ -1071,3 +1071,27 @@ Expected: 触发的 CI 四个 job（Build / Lint / Unit Test / Integration Test�
 | §6.3 捕获方式 | Task 6 Step 1 |
 | §7 明确不做 | 全 Task 均不涉及（无对应步骤） |
 | §8 验证与门禁 | Task 9 |
+
+---
+
+## 执行期订正（实施时发现）
+
+| # | 计划原样 | 实际执行 | 原因 |
+|---|---|---|---|
+| 1 | Task 1 C1「修 local 优先级假断言」 | **取消** | 原用例（files_test.go:114-138）本就有效；先前判断源于 `sed` 多区间输出误读。Python 的 merge 顺序语义由 C3 覆盖 |
+| 2 | env 助手放 `tests/integration/swarm/server/adapter/itest_env_helpers_test.go` | 迁至 `tests/integration/testhelpers/adapter_env.go`（导出 `AdapterTestEnv` / `NewAdapterTestEnv`） | `cmd/integration-audit` 对 integration 目录**按文件**强制「必须调用 `suite.Run(`」，纯助手文件判违规；testhelpers 为纯辅助包，不在审计目录清单 |
+| 3 | D6 断言 system 消息含 `## Project Memory` | 改为「含记忆正文标记 + 抬头中/英任一」 | 实测 code 模式下 builder 渲染为中文抬头（`## 项目记忆`）。见下「新发现偏差」 |
+
+### 新发现偏差（未修，待评估）
+
+**N-01 code 模式系统提示词语言未按 `_resolve_prompt_language()` 固定为 en**
+
+- 现象：`CodeAdapter` 请求往返后 `SystemPromptBuilder` 渲染出中文 section（`## 项目记忆`），实测提示词整体为中文。
+- 语义依据：Python `JiuwenClawCodeAdapter._resolve_prompt_language()` 固定返回 `"en"`，`_update_runtime_config` 中
+  `_update_prompt_for_mode(runtime_config.mode, resolved_language)` 的 `resolved_language` 来自
+  `_resolve_runtime_language()`（code 族 = `en` 或 override）。
+- Go 侧成因：`CodeAdapter.updateRuntimeConfig` 调用 `c.deep.updatePromptForMode(config.Mode)`，
+  而 `updatePromptForMode` 内部用 `d.resolveRuntimeLanguage()`——`d` 是 `DeepAdapter` 接收者，
+  Go 无虚方法派发，取到的是 Deep 的偏好语言（默认 cn），CodeAdapter 的覆盖未被使用。
+- 影响面：code 模式提示词语言（用户可见的大范围行为），**不在本次迁移的 3 项修复范围**，
+  未擅自改动；如需对齐，建议单独立项（涉及 `updatePromptForMode` 签名或语言显式传参）。
