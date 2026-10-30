@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -369,4 +370,41 @@ func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_写记忆全流程() {
 	indexContent, err := os.ReadFile(indexPath)
 	s.Require().NoError(err, "MEMORY.md 索引应更新: %s", indexPath)
 	s.Contains(string(indexContent), "user_pref.md", "索引应含新条目文件名")
+}
+
+// TestCodeAgentSubagent_CodingMemory注入 验证 code_agent subagent 装配包含 CodingMemoryRail。
+// 对齐 Python: _build_configured_subagents 中
+// if coding_memory_rail is not None:
+//
+//	code_agent_rails = [SysOperationRail(), coding_memory_rail]
+//
+// 链路：CreateSubagent → findSubagentSpec("code_agent") → buildSubagentCreateKwargs
+// （Rails: subCfg.Rails）→ CreateCodeAgent → mergeRailsWithRequired → CreateDeepAgent。
+func (s *CodeAdapterCodingMemorySuite) TestCodeAgentSubagent_CodingMemory注入() {
+	s.writeConfigYaml(true) // react.subagents.code_agent.enabled: true
+
+	c := s.newCodeAdapter()
+
+	// 运行时创建 code_agent subagent（内部 findSubagentSpec → CreateCodeAgent，
+	// kwargs.Rails 来自装配的 codeCfg.Rails = [FilesystemRail, CodingMemoryRail]）
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("subagent 就绪"))
+	sub, err := c.Instance().CreateSubagent(s.Ctx, "code_agent", "itest-sub-session")
+	s.Require().NoError(err)
+	s.Require().NotNil(sub)
+
+	// subagent 的 rails 应含 CodingMemoryRail（FindRailsByType 是 DeepAgentInterface 方法）
+	rails := sub.FindRailsByType(reflect.TypeOf(&memrail.CodingMemoryRail{}))
+	s.NotEmpty(rails, "code_agent subagent 应注入 CodingMemoryRail")
+
+	// Rail Init 懒触发（对齐 Python _ensure_initialized 语义）：
+	// 接口层无 EnsureInitialized，断言到 *DeepAgent 具体类型调用
+	subDeep, ok := sub.(*harness.DeepAgent)
+	s.Require().True(ok, "CreateCodeAgent 应返回 *DeepAgent")
+	_, initErr := subDeep.EnsureInitialized(s.Ctx)
+	s.Require().NoError(initErr)
+
+	// subagent 的工具也应注册（Rail Init 触发 registerCodingMemoryTools）
+	am := sub.AbilityManager()
+	s.Require().NotNil(am)
+	s.NotNil(am.Get("coding_memory_write"), "subagent 应注册 coding_memory_write")
 }
