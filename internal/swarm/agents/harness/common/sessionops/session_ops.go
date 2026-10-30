@@ -725,24 +725,32 @@ func CopySessionState(ctx context.Context, sourceSessionID, targetSessionID stri
 
 	// Python: 读源 state
 	sourceSess := agentsession.CreateAgentSession(sourceSessionID, card, nil)
-	if err := sourceSess.PreRun(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Str("source", sourceSessionID).Msg("copy_session_state: source session PreRun failed")
-		return false
-	}
+	// 对齐 Python try/except/finally（session_ops_service.py L550-566）：
+	// post_run 在 finally 中，pre_run 失败 / get_state 抛错 / 中途 panic 都必须执行，
+	// 且在读完 state 后立即执行（早于后续深拷贝与目标写入）。
+	// PostRun 自带 postRunDone 幂等标记，重复调用无副作用。
+	sourceStateRaw, readOK := func() (any, bool) {
+		defer func() {
+			if postErr := sourceSess.PostRun(ctx); postErr != nil {
+				logger.Warn(logComponent).Err(postErr).Str("source", sourceSessionID).Msg("copy_session_state: source session PostRun failed")
+			}
+		}()
 
-	// 勘误 E7: GetState 返回 (any, error)，需要处理 error
-	sourceStateRaw, stateErr := sourceSess.GetState(state.StringKey(agentschema.SessionStateKey))
-	if stateErr != nil {
-		logger.Warn(logComponent).Err(stateErr).Str("source", sourceSessionID).Msg("copy_session_state: failed to read source state")
-		if postErr := sourceSess.PostRun(ctx); postErr != nil {
-			logger.Warn(logComponent).Err(postErr).Str("source", sourceSessionID).Msg("copy_session_state: source session PostRun failed")
+		if err := sourceSess.PreRun(ctx); err != nil {
+			logger.Warn(logComponent).Err(err).Str("source", sourceSessionID).Msg("copy_session_state: source session PreRun failed")
+			return nil, false
 		}
-		return false
-	}
 
-	// Python: finally: source_session.post_run()
-	if postErr := sourceSess.PostRun(ctx); postErr != nil {
-		logger.Warn(logComponent).Err(postErr).Str("source", sourceSessionID).Msg("copy_session_state: source session PostRun failed")
+		// 勘误 E7: GetState 返回 (any, error)，需要处理 error
+		raw, stateErr := sourceSess.GetState(state.StringKey(agentschema.SessionStateKey))
+		if stateErr != nil {
+			logger.Warn(logComponent).Err(stateErr).Str("source", sourceSessionID).Msg("copy_session_state: failed to read source state")
+			return nil, false
+		}
+		return raw, true
+	}()
+	if !readOK {
+		return false
 	}
 
 	if sourceStateRaw == nil {

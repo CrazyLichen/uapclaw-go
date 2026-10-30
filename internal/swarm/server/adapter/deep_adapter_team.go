@@ -235,16 +235,10 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 
 	// 步骤 2: 通过 channel_id 获取 TeamManager
 	// 对齐 Python: get_team_manager(channel_id)
+	// 事件广播 / code member 配置回调由 adapter 包 init 注册为 team 包默认值，
+	// NewTeamManager 创建实例时继承（对齐 Python 模块级函数恒可用），
+	// 此请求路径不再做任何注入写操作。
 	teamManager := team.GetTeamManager(channelID)
-
-	// 确保事件广播回调已注入（幂等操作）
-	EnsureEventBroadcastInjected(channelID)
-
-	// 确保 code member 配置回调已注入（幂等操作）
-	EnsureTeamDependenciesInjected(channelID)
-
-	// S-04: 确保 shutdown cleanup 通知推送回调已注入（幂等操作）
-	EnsureShutdownCleanupNoticePusherInjected()
 
 	// 步骤 3: S-04——等待该 session 的 pending shutdown 清理完成（最多 15s）。
 	// 对齐 Python team_helpers.py L624-635：前一个 team session 全员 shutdown 后

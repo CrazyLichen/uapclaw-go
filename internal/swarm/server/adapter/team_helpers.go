@@ -66,79 +66,6 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// EnsureEventBroadcastInjected 确保 TeamManager 的事件广播回调已注入。
-// 对齐 Python: _broadcast_event(channel_id, session_id, event)
-// 由 adapter 层在首次使用 TeamManager 时调用，将 broadcastEvent 绑定到 TeamManager。
-//
-// T-02: 幂等语义改为"每次 Set"——SetOnEventBroadcast 对同一函数重复赋值
-// 无副作用，等价 Python 模块级函数每次调用直接可用。原一次性标志在
-// channel 切换/TeamManager 重建场景会阻止重新注入，已删除。
-func EnsureEventBroadcastInjected(channelID string) {
-	tm := team.GetTeamManager(channelID)
-	tm.SetOnEventBroadcast(func(chID, sessID string, event map[string]any) {
-		broadcastEvent(chID, sessID, event)
-	})
-}
-
-// EnsureTeamDependenciesInjected 确保 TeamManager 的依赖回调已注入。
-// 对齐 Python: customizer 内 from interface_code import configure_code_team_member_agent
-// （模块级函数每次调用新建 JiuwenClawCodeAdapter 实例）。
-//
-// T-02: 幂等语义同上——SetCodeMemberConfigurer 重复赋同一闭包无副作用。
-func EnsureTeamDependenciesInjected(channelID string) {
-	tm := team.GetTeamManager(channelID)
-	tm.SetCodeMemberConfigurer(func(
-		ctx context.Context,
-		agent hinterfaces.DeepAgentInterface,
-		parentAgent hinterfaces.DeepAgentInterface,
-		skillManager *skillruntime.SkillManager,
-		memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
-		forceEnglishRuntimePrompt bool,
-	) {
-		// 接口 → 具体类型断言（对齐 Python：configure 接收 DeepAgent 实例；
-		// 断言失败 warning 跳过，等价 Python except）
-		agentImpl, ok := agent.(*harness.DeepAgent)
-		if !ok {
-			logger.Warn(logComponent).
-				Str("member_name", memberName).
-				Str("role", role).
-				Msg("code member configurer: agent is not *harness.DeepAgent, skipping")
-			return
-		}
-		parentImpl, ok := parentAgent.(*harness.DeepAgent)
-		if !ok {
-			logger.Warn(logComponent).
-				Str("member_name", memberName).
-				Str("role", role).
-				Msg("code member configurer: parentAgent is not *harness.DeepAgent, skipping")
-			return
-		}
-		// Python: adapter = JiuwenClawCodeAdapter()（每次调用新建实例）
-		NewCodeAdapter().ConfigureTeamMemberAgent(
-			ctx, agentImpl, parentImpl, skillManager,
-			memberName, role, sessionID, channelID, projectDir, runtimeLanguage,
-			forceEnglishRuntimePrompt,
-		)
-	})
-}
-
-// EnsureShutdownCleanupNoticePusherInjected 确保 shutdown cleanup 通知推送回调已注入。
-// 对齐 Python: _push_shutdown_cleanup_notice 中直接构造 WebSocketGatewayPushTransport。
-// Go 因循环依赖（team → adapter → team）改为注入回调，模式同 EnsureEventBroadcastInjected。
-//
-// T-02: 幂等语义同上——SetShutdownCleanupNoticePusher 重复赋同一闭包无副作用。
-func EnsureShutdownCleanupNoticePusherInjected() {
-	team.SetShutdownCleanupNoticePusher(func(ctx context.Context, msg map[string]any) error {
-		// 复用 DeepAdapter 的默认推送函数（AgentServer 启动时注入）
-		if sendPush := defaultSendPushFunc; sendPush != nil {
-			return sendPush(ctx, msg)
-		}
-		logger.Warn(logComponent).
-			Msg("shutdown cleanup notice push: defaultSendPushFunc not injected")
-		return nil
-	})
-}
-
 // SyncTeamIdentityMetadata 持久化 team 身份元数据（仅新创建的 team 会话）。
 // 对齐 Python: sync_team_identity_metadata(*) (line 95-127)
 //
@@ -443,6 +370,71 @@ func ResolveTeamRebuildFollowup(ctx context.Context, channelID, sessionID, query
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// init 向 team 包注册团队运行时回调的默认实现。
+// 对齐 Python: _broadcast_event 与 configure_code_team_member_agent 均为
+// 模块级可直接引用的函数，任意 TeamManager 实例创建后即可调用。
+// Go 因循环依赖（team → adapter → team）改由 adapter 包在包初始化阶段注册，
+// team.NewTeamManager 创建实例时一次性继承到实例字段，运行期字段只读——
+// 这样避免了原先"每个 team 请求都向 TeamManager 重写回调"造成的并发写读竞态。
+func init() {
+	team.RegisterTeamCallbackDefaults(broadcastEvent, newTeamCodeMemberConfigurer())
+	team.SetShutdownCleanupNoticePusher(newShutdownCleanupNoticePusher())
+}
+
+// newTeamCodeMemberConfigurer 构造 code mode member 配置回调。
+// 对齐 Python: customizer 闭包内 from interface_code import configure_code_team_member_agent
+// （每次调用新建 JiuwenClawCodeAdapter 实例）。
+func newTeamCodeMemberConfigurer() team.CodeMemberConfigurer {
+	return func(
+		ctx context.Context,
+		agent hinterfaces.DeepAgentInterface,
+		parentAgent hinterfaces.DeepAgentInterface,
+		skillManager *skillruntime.SkillManager,
+		memberName, role, sessionID, channelID, projectDir, runtimeLanguage string,
+		forceEnglishRuntimePrompt bool,
+	) {
+		// 接口 → 具体类型断言（对齐 Python：configure 接收 DeepAgent 实例；
+		// 断言失败 warning 跳过，等价 Python except）
+		agentImpl, ok := agent.(*harness.DeepAgent)
+		if !ok {
+			logger.Warn(logComponent).
+				Str("member_name", memberName).
+				Str("role", role).
+				Msg("code member configurer: agent is not *harness.DeepAgent, skipping")
+			return
+		}
+		parentImpl, ok := parentAgent.(*harness.DeepAgent)
+		if !ok {
+			logger.Warn(logComponent).
+				Str("member_name", memberName).
+				Str("role", role).
+				Msg("code member configurer: parentAgent is not *harness.DeepAgent, skipping")
+			return
+		}
+		// Python: adapter = JiuwenClawCodeAdapter()（每次调用新建实例）
+		NewCodeAdapter().ConfigureTeamMemberAgent(
+			ctx, agentImpl, parentImpl, skillManager,
+			memberName, role, sessionID, channelID, projectDir, runtimeLanguage,
+			forceEnglishRuntimePrompt,
+		)
+	}
+}
+
+// newShutdownCleanupNoticePusher 构造 shutdown cleanup 通知推送回调。
+// 对齐 Python: _push_shutdown_cleanup_notice 中直接构造 WebSocketGatewayPushTransport。
+// Go 因循环依赖（team → adapter → team）改为注入回调。
+func newShutdownCleanupNoticePusher() func(ctx context.Context, msg map[string]any) error {
+	return func(ctx context.Context, msg map[string]any) error {
+		// 复用 DeepAdapter 的默认推送函数（AgentServer 启动时注入）
+		if sendPush := defaultSendPushFunc; sendPush != nil {
+			return sendPush(ctx, msg)
+		}
+		logger.Warn(logComponent).
+			Msg("shutdown cleanup notice push: defaultSendPushFunc not injected")
+		return nil
+	}
+}
 
 // buildEvolveListSummary 构建单 Skill 的经验库分数表格摘要。
 // 对齐 Python: _handle_evolve_list_command L4052-4076 的表格构建

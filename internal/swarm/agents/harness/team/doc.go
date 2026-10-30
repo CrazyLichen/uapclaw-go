@@ -19,6 +19,10 @@
 //   - Runner 桥接：Python 有 TeamManager→Runner→TeamRuntimeManager 三层，
 //     Go 省略 Runner 层，TeamManager 直接调 TeamRuntimeManager
 //   - session_id 传参：Python 用 contextvars 隐式传播，Go 显式传参
+//   - 运行时回调：Python 的 _broadcast_event / configure_code_team_member_agent
+//     均为模块级可直接引用的函数；Go 因 team→adapter 循环依赖，改由 adapter 包
+//     init 时调 RegisterTeamCallbackDefaults 注册包级默认值，NewTeamManager
+//     创建实例时继承，实例字段此后只读。
 //
 // 文件目录：
 //
