@@ -120,6 +120,11 @@ type DeepAgent struct {
 	initialized bool
 	// initMu 初始化互斥锁，保护 ensureInitialized 的并发安全
 	initMu sync.Mutex
+	// cwdState agent 级 CWD 状态（初始化时建立，后续每次调用重新挂载到 ctx）
+	// Python 用 contextvars 自动跨 await 传播；Go 必须在每次入口显式注入。
+	cwdState *cwd.CwdState
+	// spanState agent 级可观测 SpanState（同 cwdState，每次入口重新挂载）
+	spanState *observability.OtelSpanState
 	// invokeActive 是否有活跃 invoke
 	invokeActive atomic.Bool
 	// autoInvokeScheduled 是否已调度自动 invoke
@@ -1786,13 +1791,42 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 	return agent
 }
 
+// attachRunContexts 给「已初始化」的后续调用重新注入 agent 级 Context 值。
+//
+// Python 用 contextvars：init_cwd/InitSpanState 设置一次即对同一 context 内
+// 所有后续 await 可见。Go 的 context.Value 不会跨调用传播——调用方每次
+// Invoke/Stream 传入的 ctx 都是新的，若不重新挂载，第二次调用起：
+//   - cwd.GetWorkspace(ctx) 为空 → 沙箱根为空 → 所有文件操作被拒（code=199003）
+//   - span 断链
+//
+// 已由调用方注入（如子 agent 自己的 CwdState）时不覆盖。
+func (d *DeepAgent) attachRunContexts(ctx context.Context) context.Context {
+	if cwd.CwdStateFromCtx(ctx) == nil {
+		d.configMu.RLock()
+		state := d.cwdState
+		d.configMu.RUnlock()
+		if state != nil {
+			ctx = cwd.WithCwdState(ctx, state)
+		}
+	}
+	if observability.SpanStateFromCtx(ctx) == nil {
+		d.configMu.RLock()
+		state := d.spanState
+		d.configMu.RUnlock()
+		if state != nil {
+			ctx = observability.WithSpanState(ctx, state)
+		}
+	}
+	return ctx
+}
+
 // ensureInitialized 执行懒初始化。
 // Python: DeepAgent._ensure_initialized() (line 813)
 func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, error) {
 	d.initMu.Lock()
 	if d.initialized {
 		d.initMu.Unlock()
-		return ctx, nil
+		return d.attachRunContexts(ctx), nil
 	}
 	// 整个初始化过程在锁内执行，防止并发重复初始化
 	defer d.initMu.Unlock()
@@ -1806,6 +1840,9 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 	if cfg != nil && cfg.Workspace != nil && cfg.Workspace.RootPath != "" {
 		initRoot := cfg.Workspace.RootPath
 		cwdState := cwd.InitCwd(initRoot, cwd.WithWorkspace(initRoot))
+		d.configMu.Lock()
+		d.cwdState = cwdState
+		d.configMu.Unlock()
 		ctx = cwd.WithCwdState(ctx, cwdState)
 		logger.Info(logComponent).Str("init_root", initRoot).Msg("CWD initialized")
 	}
@@ -1815,6 +1852,9 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 	// Go: 通过 context.Value 传播 *OtelSpanState 指针
 	if observability.SpanStateFromCtx(ctx) == nil {
 		spanState := observability.InitSpanState()
+		d.configMu.Lock()
+		d.spanState = spanState
+		d.configMu.Unlock()
 		ctx = observability.WithSpanState(ctx, spanState)
 	}
 
