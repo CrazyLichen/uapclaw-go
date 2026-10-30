@@ -338,6 +338,24 @@ func (g *GraphKnowledgeBase) Close() error {
 	return nil
 }
 
+// RetrieveMultiGraphKB 跨图知识库检索，返回去重排序后的文本列表。
+//
+// 纯委托 13.27 聚合函数（Python L353-360 同样两行）。
+//
+// Python: graph_knowledge_base.py retrieve_multi_graph_kb
+func RetrieveMultiGraphKB(ctx context.Context, kbs []KnowledgeBase,
+	query string, config *common.RetrievalConfig, topK *int) []string {
+	return RetrieveMultiKB(ctx, kbs, query, config, topK)
+}
+
+// RetrieveMultiGraphKBWithSource 跨图知识库检索，返回带来源信息的结果。
+//
+// Python: graph_knowledge_base.py retrieve_multi_graph_kb_with_source
+func RetrieveMultiGraphKBWithSource(ctx context.Context, kbs []KnowledgeBase,
+	query string, config *common.RetrievalConfig, topK *int) ([]common.MultiKBRetrievalResult, error) {
+	return RetrieveMultiKBWithSource(ctx, kbs, query, config, topK)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // hasGraphRetriever 图检索器是否已创建（持锁读，避免与懒创建竞态）。

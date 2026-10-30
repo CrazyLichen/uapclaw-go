@@ -12,12 +12,14 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/indexing/indexer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/indexing/processor/extractor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/indexing/processor/parser"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/retriever"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/vector_store"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -574,4 +576,259 @@ func TestGraphKB_Close(t *testing.T) {
 	assert.Equal(t, 1, graph.closed)
 	assert.Equal(t, 1, chunk.closed)
 	assert.Equal(t, 1, triple.closed)
+}
+
+// ──────────────────────────── 多图 KB 聚合委托 ────────────────────────────
+
+// TestRetrieveMultiGraphKB_委托 与 13.27 文本版同结果（Python 纯委托）。
+func TestRetrieveMultiGraphKB_委托(t *testing.T) {
+	fake := &graphFakeRetriever{results: []common.RetrievalResult{{Text: "A", Score: 0.9}}}
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb1", UseGraph: true},
+		nil, nil, WithVectorStore(&fakeAttrStore{}))
+	require.NoError(t, err)
+	kb.SetGraphRetriever(fake)
+
+	got := RetrieveMultiGraphKB(context.Background(), []KnowledgeBase{kb}, "q", nil, nil)
+	assert.Equal(t, []string{"A"}, got)
+}
+
+// TestRetrieveMultiGraphKBWithSource_委托 带来源版同结果 + kb_ids 并集。
+func TestRetrieveMultiGraphKBWithSource_委托(t *testing.T) {
+	fake := &graphFakeRetriever{results: []common.RetrievalResult{{Text: "A", Score: 0.9}}}
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb1", UseGraph: true},
+		nil, nil, WithVectorStore(&fakeAttrStore{}))
+	require.NoError(t, err)
+	kb.SetGraphRetriever(fake)
+
+	got, err := RetrieveMultiGraphKBWithSource(context.Background(), []KnowledgeBase{kb}, "q", nil, nil)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "A", got[0].Text)
+	assert.Equal(t, []string{"kb1"}, got[0].KbIDs)
+}
+
+// ──────────────────────────── 错误分支补全 ────────────────────────────
+
+// flakyCheckStore 首次 CheckVectorField 通过（构造期校验）、之后返回错误
+// 的存储桩——用于覆盖方法级防御式校验分支（构造期就失败的路径由
+// TestGraphKB_构造校验失败 覆盖）。
+type flakyCheckStore struct {
+	fakeAttrStore
+	n int
+}
+
+func (e *flakyCheckStore) CheckVectorField() error {
+	e.n++
+	if e.n == 1 {
+		return nil
+	}
+	return errors.New("vector field boom")
+}
+
+// errDeleteIndexer DeleteIndex 返回错误的索引管理器桩。
+type errDeleteIndexer struct{ fakeAttrIndexer }
+
+func (e *errDeleteIndexer) DeleteIndex(context.Context, string, string) (bool, error) {
+	return false, errors.New("delete boom")
+}
+
+// secondDeleteErrIndexer 首次成功、第二次返回错误（chunk 成功 / triple 报错）。
+type secondDeleteErrIndexer struct {
+	fakeAttrIndexer
+	n int
+}
+
+func (s *secondDeleteErrIndexer) DeleteIndex(context.Context, string, string) (bool, error) {
+	s.n++
+	if s.n == 1 {
+		return true, nil
+	}
+	return false, errors.New("triple delete boom")
+}
+
+// errInfoIndexer GetIndexInfo 返回错误的索引管理器桩。
+type errInfoIndexer struct{ fakeAttrIndexer }
+
+func (e *errInfoIndexer) GetIndexInfo(context.Context, string) (map[string]any, error) {
+	return nil, errors.New("info boom")
+}
+
+// secondInfoErrIndexer 首次正常、第二次报错（chunk 正常 / triple 报错）。
+type secondInfoErrIndexer struct {
+	fakeAttrIndexer
+	n int
+}
+
+func (s *secondInfoErrIndexer) GetIndexInfo(context.Context, string) (map[string]any, error) {
+	s.n++
+	if s.n == 1 {
+		return map[string]any{"count": 1}, nil
+	}
+	return nil, errors.New("triple info boom")
+}
+
+// errSparseStore SparseSearch 返回错误的存储桩（fallback 委托报错冒泡）。
+type errSparseStore struct{ fakeAttrStore }
+
+func (e *errSparseStore) SparseSearch(context.Context, string, int,
+	query.QueryExpr, ...vector_store.StoreOption) ([]common.SearchResult, error) {
+	return nil, errors.New("sparse boom")
+}
+
+// TestGraphKB_构造校验失败 基座构造期属性不一致 → 155508 冒泡。
+func TestGraphKB_构造校验失败(t *testing.T) {
+	vs, im := makeCompatiblePair()
+	im.databaseName = "different_name"
+	_, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil,
+		WithVectorStore(vs), WithIndexManager(im))
+	var be *exception.BaseError
+	require.True(t, errors.As(err, &be))
+	assert.Equal(t, 155508, be.Code())
+}
+
+// TestGraphKB_AddDocuments_校验失败 strict 校验错误冒泡。
+func TestGraphKB_AddDocuments_校验失败(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil,
+		WithVectorStore(&flakyCheckStore{}), WithChunker(&countingChunker{}),
+		WithIndexManager(&graphIndexer{buildOK: true}))
+	require.NoError(t, err)
+	_, err = kb.AddDocuments(context.Background(), []reranker.Document{{ID: "d", Text: "d"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "vector field boom")
+}
+
+// TestGraphKB_AddDocuments_分块失败 ChunkDocuments 错误冒泡。
+func TestGraphKB_AddDocuments_分块失败(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil,
+		WithChunker(&countingChunker{err: errors.New("chunk boom")}),
+		WithIndexManager(&graphIndexer{buildOK: true}))
+	require.NoError(t, err)
+	_, err = kb.AddDocuments(context.Background(), []reranker.Document{{ID: "d", Text: "d"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "chunk boom")
+}
+
+// TestGraphKB_AddDocuments_构建错误 BuildIndex 返回 error 冒泡（非 false 分支）。
+func TestGraphKB_AddDocuments_构建错误(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil,
+		WithChunker(&countingChunker{}),
+		WithIndexManager(&graphIndexer{buildErr: errors.New("build boom")}))
+	require.NoError(t, err)
+	_, err = kb.AddDocuments(context.Background(), []reranker.Document{{ID: "d", Text: "d"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "build boom")
+}
+
+// TestGraphKB_AddDocuments_抽取失败 extractor 错误冒泡。
+func TestGraphKB_AddDocuments_抽取失败(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true}, nil, nil,
+		WithChunker(&countingChunker{}),
+		WithExtractor(&stubExtractor{err: errors.New("extract boom")}),
+		WithIndexManager(&graphIndexer{buildOK: true}))
+	require.NoError(t, err)
+	_, err = kb.AddDocuments(context.Background(), []reranker.Document{{ID: "d", Text: "d"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "extract boom")
+}
+
+// TestGraphKB_DeleteDocuments_校验失败 strict 校验错误冒泡。
+func TestGraphKB_DeleteDocuments_校验失败(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil,
+		WithVectorStore(&flakyCheckStore{}), WithIndexManager(&graphIndexer{deleteOK: true}))
+	require.NoError(t, err)
+	_, err = kb.DeleteDocuments(context.Background(), []string{"doc_1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "vector field boom")
+}
+
+// TestGraphKB_DeleteDocuments_删除错误 chunk 删除返回 error 冒泡。
+func TestGraphKB_DeleteDocuments_删除错误(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil,
+		WithIndexManager(&errDeleteIndexer{}))
+	require.NoError(t, err)
+	_, err = kb.DeleteDocuments(context.Background(), []string{"doc_1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "delete boom")
+}
+
+// TestGraphKB_DeleteDocuments_triple删除错误 triple 删除返回 error 冒泡
+// （Python 无 try/except，异常同样中断）。
+func TestGraphKB_DeleteDocuments_triple删除错误(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true}, nil, nil,
+		WithIndexManager(&secondDeleteErrIndexer{}))
+	require.NoError(t, err)
+	_, err = kb.DeleteDocuments(context.Background(), []string{"doc_1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "triple delete boom")
+}
+
+// TestGraphKB_UpdateDocuments_校验失败 strict 校验错误冒泡。
+func TestGraphKB_UpdateDocuments_校验失败(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil,
+		WithVectorStore(&flakyCheckStore{}), WithChunker(&countingChunker{}),
+		WithIndexManager(&graphIndexer{buildOK: true, deleteOK: true}))
+	require.NoError(t, err)
+	_, err = kb.UpdateDocuments(context.Background(), []reranker.Document{{ID: "d", Text: "d"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "vector field boom")
+}
+
+// TestGraphKB_UpdateDocuments_删除失败 先删阶段的错误冒泡。
+func TestGraphKB_UpdateDocuments_删除失败(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil,
+		WithChunker(&countingChunker{}), WithIndexManager(&errDeleteIndexer{}))
+	require.NoError(t, err)
+	_, err = kb.UpdateDocuments(context.Background(), []reranker.Document{{ID: "d", Text: "d"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "delete boom")
+}
+
+// TestGraphKB_GetStatistics_chunk信息失败 GetIndexInfo 错误冒泡。
+func TestGraphKB_GetStatistics_chunk信息失败(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"}, nil, nil,
+		WithIndexManager(&errInfoIndexer{}))
+	require.NoError(t, err)
+	_, err = kb.GetStatistics(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "info boom")
+}
+
+// TestGraphKB_GetStatistics_triple信息失败 chunk 正常 / triple 报错冒泡。
+func TestGraphKB_GetStatistics_triple信息失败(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb", UseGraph: true}, nil, nil,
+		WithIndexManager(&secondInfoErrIndexer{}))
+	require.NoError(t, err)
+	_, err = kb.GetStatistics(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "triple info boom")
+}
+
+// TestGraphKB_Retrieve_回落检索失败 fallback 委托底层检索 error 冒泡。
+func TestGraphKB_Retrieve_回落检索失败(t *testing.T) {
+	kb, err := NewGraphKnowledgeBase(
+		common.KnowledgeBaseConfig{KBID: "kb", IndexType: common.IndexTypeBM25, UseGraph: false},
+		nil, nil, WithVectorStore(&errSparseStore{}))
+	require.NoError(t, err)
+	_, err = kb.Retrieve(context.Background(), "q", nil) // config nil → 默认 TopK=5
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sparse boom")
+}
+
+// TestGraphKB_元数据取值 metaString 非 string / 缺失 / nil 三分支。
+func TestGraphKB_元数据取值(t *testing.T) {
+	assert.Equal(t, "", metaString(nil, "doc_id"))
+	assert.Equal(t, "", metaString(map[string]any{"doc_id": 42}, "doc_id"))
+	assert.Equal(t, "", metaString(map[string]any{}, "doc_id"))
+	assert.Equal(t, "doc_1", metaString(map[string]any{"doc_id": "doc_1"}, "doc_id"))
+}
+
+// TestGraphKB_三元组元数据非字符串 非 string 的 doc_id/chunk_id 收窄空串（偏差 §8-3）。
+func TestGraphKB_三元组元数据非字符串(t *testing.T) {
+	chunks := triplesToTextChunks([]common.Triple{{
+		Subject: "a", Predicate: "b", Object: "c",
+		Metadata: map[string]any{"doc_id": 7, "chunk_id": true},
+	}})
+	require.Len(t, chunks, 1)
+	assert.Equal(t, "", chunks[0].DocID)
+	assert.Equal(t, "", chunks[0].Metadata["chunk_id"])
 }
