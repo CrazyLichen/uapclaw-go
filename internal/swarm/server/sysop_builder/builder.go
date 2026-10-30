@@ -3,6 +3,12 @@ package sysop_builder
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	// 空白导入：触发 GlobalRegistry 中 local 模式 fs/shell/code 操作的 init 注册。
+	// Go 用 init() 显式注册替代 Python _discover_package() 包扫描，生产链上
+	// 必须有导入锚点（本包是 CreateLocalSysOpCard/CreateSysOperationFromCard
+	// 的必经点），否则 getOperation("fs") 查不到定义、Fs() 返回 BaseFsOperation
+	// 桩（"未实现: WriteFile"），所有走 sysOp.Fs() 的工具在生产中全部失败
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

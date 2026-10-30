@@ -3,6 +3,7 @@
 package adapter_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ import (
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
@@ -82,10 +84,25 @@ func (s *CodeAdapterCodingMemorySuite) SetupTest() {
 	s.Require().NoError(os.MkdirAll(filepath.Join(s.dataDir, "agent", "workspace"), 0o755))
 }
 
-// TearDownTest 恢复环境变量与缓存。
+// TearDownTest 恢复环境变量与缓存，释放全局 ResourceMgr。
+//
+// ResourceMgr 释放（关键，对齐 Python Runner.stop() 语义）：
+// coding_memory 三工具按固定 ID（"coding_memory_write" 等）注册到进程级
+// ResourceMgr（Runner 惰性单例），rail 注册逻辑含 get_tool 查重（对齐
+// Python coding_memory_rail.py L188-190）——查重命中时跳过 add_tool，
+// 导致后续测试拿到前一个测试的工具实例（绑定已删除的 TempDir），
+// 写记忆落盘到不存在的目录。Python 测试靠 fixture 的
+// Runner.stop() → resource_mgr.release() 实现每测试隔离（agent-core
+// test_coding_memory_rail_e2e.py 先例）；Go 侧在 TearDownTest 调用
+// 等价的 ResourceMgr.Release() 重建 registry/tagMgr/idToCard，同时
+// 覆盖本测试链注册的 SysOperation（local 卡随机 UUID 无复用，但同样
+// 会泄漏条目）。
 func (s *CodeAdapterCodingMemorySuite) TearDownTest() {
 	if s.providerName != "" {
 		_ = model_clients.GetClientRegistry().Unregister(s.providerName, "llm")
+	}
+	if rm := runner.GetResourceMgr(); rm != nil {
+		_ = rm.Release(context.Background())
 	}
 	s.restoreEnv()
 	pathutil.ResetCache()
@@ -288,4 +305,68 @@ func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_记忆Section注入() 
 	section := spb.GetSection(hsections.SectionMemory)
 	s.Require().NotNil(section)
 	s.NotEmpty(section.Content, "SectionMemory 内容不应为空")
+}
+
+// TestProcessMessage_写记忆全流程 验证 MockLLM 驱动 coding_memory_write 工具调用→真实落盘→索引更新。
+// 对齐 Python: CodingMemoryRail 注册工具 → agent 循环调用 → coding_memory_write_with_context
+// （write 文件 + upsertMemoryIndex 更新 MEMORY.md）。
+// 工具参数：path/content（coding_memory_tool.go Invoke 提取）；
+// content 须含合法 frontmatter（name/description/type 必填，type ∈
+// {user,feedback,project,reference}，frontmatter.go ValidateFrontmatter）。
+func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_写记忆全流程() {
+	s.writeConfigYaml(false)
+
+	// 工具内容：合法 frontmatter + body
+	memContent := "---\nname: user_pref\ndescription: user preference for tests\ntype: user\n---\nalways run focused tests first"
+	argsJSON := fmt.Sprintf(`{"path":"user_pref.md","content":%q}`, memContent)
+
+	s.MockLLM.SetResponses(
+		// 第 1 轮：触发 coding_memory_write 工具调用
+		mockllm.CreateToolCallResponse("coding_memory_write", argsJSON),
+		// 第 2 轮：文本收尾
+		mockllm.CreateTextResponse("记忆已保存。"),
+	)
+
+	c := s.newCodeAdapter()
+
+	params, _ := json.Marshal(map[string]any{
+		"query": "记住：测试优先跑聚焦用例",
+		"mode":  "agent.plan",
+		"files": map[string]any{},
+	})
+	req := swarmschema.NewAgentRequest(
+		"itest-req-2", "itest-channel", swarmschema.ReqMethodChatSend, params,
+		swarmschema.WithAgentSessionID("itest-session-cm-write"),
+	)
+	inputs := map[string]any{
+		"conversation_id": "itest-session-cm-write",
+		"query":           "记住：测试优先跑聚焦用例",
+		"channel":         "itest-channel",
+		"language":        "zh",
+	}
+	resp, err := c.ProcessMessageImpl(s.Ctx, req, inputs)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.True(resp.OK, "响应应成功: %+v", resp)
+
+	// 断言 1：MockLLM 被调用 2 次（工具调用轮 + 文本轮）
+	s.Equal(2, s.MockLLM.InvokeCallCount(), "应为两轮模型调用")
+
+	// 断言 2：记忆文件落盘（对齐 Python 双路径语义——文件走 workspace node：
+	// validate_coding_memory_path → get_node_path("coding_memory") =
+	// {workspaceDir}/coding_memory/{project}，workspaceDir=projectDir）
+	memFile := filepath.Join(s.dataDir, "myproj", "coding_memory", "myproj", "user_pref.md")
+	content, err := os.ReadFile(memFile)
+	s.Require().NoError(err, "记忆文件应落盘: %s", memFile)
+	s.Contains(string(content), "always run focused tests first", "文件内容应包含工具写入的 body")
+	s.Contains(string(content), "name: user_pref", "文件应保留 frontmatter")
+
+	// 断言 3：MEMORY.md 索引更新（索引走 ctx.coding_memory_dir = Rail 构造时
+	// 恢复的绝对路径 = {agent_workspace_dir}/coding_memory/{project}，
+	// 对齐 Python rail 注释 "Restore the absolute path ... so tools write
+	// to the correct directory"）
+	indexPath := filepath.Join(s.dataDir, "agent", "workspace", "coding_memory", "myproj", "MEMORY.md")
+	indexContent, err := os.ReadFile(indexPath)
+	s.Require().NoError(err, "MEMORY.md 索引应更新: %s", indexPath)
+	s.Contains(string(indexContent), "user_pref.md", "索引应含新条目文件名")
 }
