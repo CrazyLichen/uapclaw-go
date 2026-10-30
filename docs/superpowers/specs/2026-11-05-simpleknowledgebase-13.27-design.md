@@ -66,7 +66,7 @@ func NewSimpleKnowledgeBase(config common.KnowledgeBaseConfig,
 
 | 方法 | 关键行为（Python 字面） |
 |---|---|
-| `AddDocuments(ctx, documents, opts...)` | chunker 缺→155501（文案 `chunker is required for add_documents`）；index_manager 缺→155502；`strictValidation && vectorStore` 时 `CheckVectorField()`；空白 id 才填 uuid（`strings.TrimSpace(ID)==""`）；`ChunkDocuments`；完成日志（文档数/chunk 数）；IndexConfig **带** `UseCaptionForImages`（`kb_{kb_id}_chunks`）；database_name 防御式取（见 §4.1）；`BuildIndex(WithIndexDatabaseName(db))`；false→155504 `Failed to build index`；成功 Info 日志 + 返回 doc_ids |
+| `AddDocuments(ctx, documents, opts...)` | chunker 缺→155501（文案 `chunker is required for add_documents`）；index_manager 缺→155502；`strictValidation && vectorStore` 时 `CheckVectorField()`；空白 id 才填 uuid（`strings.TrimSpace(ID)==""`）；`ChunkDocuments`；完成日志（文档数/chunk 数）；IndexConfig **带** `UseCaptionForImages`（`kb_{kb_id}_chunks`）；database_name 防御式取（见 §4.1）；`BuildIndex(WithIndexExtra("database_name", db))`；false→155504 `Failed to build index`；成功 Info 日志 + 返回 doc_ids |
 | `Retrieve(ctx, query, config, opts...)` | 见 §5 |
 | `DeleteDocuments(ctx, docIDs, opts...)` | index_manager 缺→155502（`for delete_documents`）；strict 校验同 add；逐 doc_id `DeleteIndex`，**循环不中断**，任一 false→总 false |
 | `UpdateDocuments(ctx, documents, opts...)` | 前置校验同 add（文案 `for update_documents`）；**无 uuid 填充**；IndexConfig **不带** `UseCaptionForImages`（与 add 不对称，Python 真实行为）；逐 doc 按 `DocID` 过滤 chunks 分组 `UpdateIndex`；成功才收集 doc_id |
@@ -185,9 +185,9 @@ Python `get_config(Type[T]) -> Optional[T]` 是泛型签名。Go 两选一：
 
 ## 9. 测试设计
 
-### 9.1 Python 26 例 1:1 映射
+### 9.1 Python 27 例 1:1 映射
 
-**TestSimpleKnowledgeBase（16）**：parse_files 成功/无 parser/异常吞（方法实现在 13.26 基座，但**本节保留 1:1 映射**——测 SimpleKB 组合入口行为，与 Python 测试文件归属一致）；database_name mismatch 构造期报错；add 成功（doc_ids 断言 + chunk_documents/build_index 调用断言）/无 chunker/无 index_manager/build 失败；retrieve 带 retriever/agentic（patch 类 → Go 直接构造真 AgenticRetriever 包 mock retriever 或注入工厂，断言构造参数 retriever/llm_client 透传）/非 agentic/无 retriever 且无 vector_store；delete 成功（调用次数）/无 index_manager；update 成功；statistics 成功/无 index_manager。
+**TestSimpleKnowledgeBase（17）**：parse_files 成功/无 parser/异常吞（方法实现在 13.26 基座，但**本节保留 1:1 映射**——测 SimpleKB 组合入口行为，与 Python 测试文件归属一致）；database_name mismatch 构造期报错；add 成功（doc_ids 断言 + chunk_documents/build_index 调用断言）/无 chunker/无 index_manager/build 失败；retrieve 带 retriever/agentic（patch 类 → Go 直接构造真 AgenticRetriever 包 mock retriever 或注入工厂，断言构造参数 retriever/llm_client 透传）/非 agentic/无 retriever 且无 vector_store；delete 成功（调用次数）/无 index_manager；update 成功；statistics 成功/无 index_manager。
 
 **TestRetrieveMultiKb（4）**：空列表/成功去重排序/部分失败/with_source（MultiKBRetrievalResult 字段断言：text/score=0.95/kb_ids=[kb1,kb2]）。
 
@@ -221,7 +221,7 @@ Python `get_config(Type[T]) -> Optional[T]` 是泛型签名。Go 两选一：
 | 3 | 13.22 MultiKBRetrievalResult | RetrieveMultiKBWithSource 生产装填 |
 | 4 | 13.25 AgenticRetriever | agentic 分支包装消费 |
 | 5 | 13.2/13.3 DatabaseName() getter | AddDocuments 防御式取值消费 |
-| 6 | 错误码 155501/155502/155504 + 155300-155304 | 零消费→已消费（共 8 个） |
+| 6 | 错误码 155501/155502/155504 + 155300-155304 | 零消费→已消费（共 8 个；155503 已由 13.26 消费，本节复用不计入新增） |
 
 ## 11. doc.go 与计划表更新
 

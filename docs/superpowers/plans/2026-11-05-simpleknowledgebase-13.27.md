@@ -59,7 +59,7 @@ type IndexConfig struct { IndexName string; IndexType IndexTypeKind; UseCaptionF
 // indexer 包
 func WithIndexExtra(key string, value any) IndexOption  // BuildIndex 的 database_name 经 Extra["database_name"] 传入
 
-// 错误码（已定义零消费，本节启用 8 个）
+// 错误码（已定义零消费，本节新增消费 8 个；155503 复用 13.26 已消费，不计入新增）
 StatusRetrievalUtilsConfigFileNotFound(155300) / StatusRetrievalUtilsPyyamlNotFound(155301，编译期死路径仅保留) /
 StatusRetrievalUtilsConfigFormatNotSupport(155302) / StatusRetrievalUtilsConfigNotFound(155303) /
 StatusRetrievalUtilsConfigProcessError(155304) / StatusRetrievalKbChunkerNotFound(155501) /
@@ -1233,6 +1233,8 @@ Expected: PASS（13.26 既有测试 + 本 Task 新测试全绿）
 //	└── multi_kb.go        # 多知识库聚合检索两函数（13.27）
 ```
 （注意 `└──` 归属：multi_kb.go 在 Task 5 创建，此处一并写入会与"文件不存在"矛盾——**此处先只加 simple_kb.go 行并保持 `└── validate.go`→`├──` 修正，multi_kb.go 行在 Task 5 再加**。）
+
+同时订正 doc.go L19 的待补注释：原文 `（13.27 simple.go / 13.28 graph.go 落地时补充目录条目与对应 Python 路径）`，其中 `simple.go` 是文件名笔误（实际落地为 `simple_kb.go`），改为 `（13.27 simple_kb.go 已落地；13.28 graph.go 落地时补充目录条目与对应 Python 路径）`。
 
 包概述补一句：`SimpleKnowledgeBase（13.27）实现 5 抽象方法，是检索查询管线在会话侧的总入口；multi_kb.go 提供跨知识库聚合检索。`
 
