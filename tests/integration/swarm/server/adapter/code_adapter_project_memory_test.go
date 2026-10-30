@@ -137,3 +137,60 @@ func (s *CodeAdapterProjectMemorySuite) TestCreateInstance_explore与plan默认�
 	s.Require().NotNil(plan, "plan_agent 应恒挂载")
 	s.Equal(15, plan.MaxIterations, "plan 默认迭代上限应为 15（Python 恒传 react.max_iterations）")
 }
+
+// TestBuildConfiguredSubagents_explore开关被忽略 验证 explore_agent 恒挂载，
+// 而 code_agent 受 enabled 开关控制。
+//
+// 对齐 Python: test_explore_agent_always_enabled
+// （"explore_agent 是 Code 模式核心子代理，始终启用，enabled: False 被忽略"）
+func (s *CodeAdapterProjectMemorySuite) TestBuildConfiguredSubagents_explore开关被忽略() {
+	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_switch")
+	env.WriteConfigYAML(s.T(), "  subagents:\n    explore_agent:\n      enabled: false\n    code_agent:\n      enabled: false\n")
+
+	c, _ := s.newCodeAdapterWithProject(env, "normal")
+	inst := c.Instance()
+	s.Require().NotNil(inst)
+
+	s.NotNil(s.subagentByName(inst, "explore_agent"), "explore_agent 恒挂载，enabled:false 被忽略")
+	s.NotNil(s.subagentByName(inst, "plan_agent"), "plan_agent 恒挂载")
+	s.Nil(s.subagentByName(inst, "code_agent"), "code_agent 受 enabled 开关控制，false 时不挂载")
+}
+
+// TestBuildConfiguredSubagents_迭代上限覆盖与回退 验证 react.max_iterations 回退与子配置覆盖。
+//
+// 对齐 Python: test_explore_agent_with_custom_max_iterations + parse_int 两段回退语义
+func (s *CodeAdapterProjectMemorySuite) TestBuildConfiguredSubagents_迭代上限覆盖与回退() {
+	s.Run("仅react回退_8", func() {
+		env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_iters_react")
+		env.WriteConfigYAML(s.T(), "  max_iterations: 8\n")
+
+		c, _ := s.newCodeAdapterWithProject(env, "normal")
+		inst := c.Instance()
+		s.Require().NotNil(inst)
+
+		explore := s.subagentByName(inst, "explore_agent")
+		s.Require().NotNil(explore)
+		s.Equal(8, explore.MaxIterations, "explore 应回退到 react.max_iterations")
+
+		plan := s.subagentByName(inst, "plan_agent")
+		s.Require().NotNil(plan)
+		s.Equal(8, plan.MaxIterations, "plan 应回退到 react.max_iterations")
+	})
+
+	s.Run("子配置覆盖_5", func() {
+		env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_iters_override")
+		env.WriteConfigYAML(s.T(), "  max_iterations: 8\n  subagents:\n    explore_agent:\n      max_iterations: 5\n")
+
+		c, _ := s.newCodeAdapterWithProject(env, "normal")
+		inst := c.Instance()
+		s.Require().NotNil(inst)
+
+		explore := s.subagentByName(inst, "explore_agent")
+		s.Require().NotNil(explore)
+		s.Equal(5, explore.MaxIterations, "子配置应覆盖 react 值")
+
+		plan := s.subagentByName(inst, "plan_agent")
+		s.Require().NotNil(plan)
+		s.Equal(8, plan.MaxIterations, "plan 未配置子项仍取 react 值")
+	})
+}
