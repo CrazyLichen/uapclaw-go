@@ -13,15 +13,17 @@
 //   - web: 启动 Web UI（Web Channel 接入 Gateway）
 //   - init: 初始化工作区
 //   - acp: ACP stdio JSON-RPC 协议模式（stdio 作为 Channel 接入 Gateway）
+//   - acp-chat: 外部 ACP 子代理冒烟入口（一次性 connect→chat→close，10.4.6）
 //   - spawn-child: 作为子进程运行 Agent（内部命令，不应直接调用）
 //
 // 文件目录：
 //
 //	uapclaw/
-//	├── doc.go      # 包文档
-//	├── cmd.go      # 命令定义：newRootCmd / newChatCmd / newServeCmd / newAppCmd 等
-//	├── acp_cmd.go  # ACP 子命令实现：runAcpCmd / resolveAcpGatewayURL / bootstrapInprocServers
-//	└── main.go     # Execute() + main()（//go:build !test 隔离，不参与覆盖率）
+//	├── doc.go           # 包文档
+//	├── cmd.go           # 命令定义：newRootCmd / newChatCmd / newServeCmd / newAppCmd 等
+//	├── acp_cmd.go       # ACP 子命令实现：runAcpCmd / resolveAcpGatewayURL / bootstrapInprocServers
+//	├── acp_chat_cmd.go  # acp-chat 冒烟入口：runAcpChat / acpChatDeps / exitCodeFor（10.4.6）
+//	└── main.go          # Execute() + main()（//go:build !test 隔离，不参与覆盖率）
 //
 // 对应 Python 代码：无（Go 特有 CLI 入口）
 package main

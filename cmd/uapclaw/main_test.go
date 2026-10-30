@@ -42,8 +42,8 @@ func TestHelpFlag(t *testing.T) {
 
 	output := buf.String()
 
-	// 验证所有 8 个子命令都出现在帮助输出中
-	expectedCommands := []string{"chat", "serve", "app", "agentserver", "gateway", "web", "init", "acp"}
+	// 验证所有 9 个子命令都出现在帮助输出中
+	expectedCommands := []string{"chat", "serve", "app", "agentserver", "gateway", "web", "init", "acp", "acp-chat"}
 	for _, cmd := range expectedCommands {
 		if !strings.Contains(output, cmd) {
 			t.Errorf("--help 输出未包含子命令 %q", cmd)
@@ -68,7 +68,7 @@ func TestRootCommand(t *testing.T) {
 func TestSubcommands(t *testing.T) {
 	rootCmd := newRootCmd()
 
-	expectedCommands := []string{"chat", "serve", "app", "agentserver", "gateway", "web", "init", "acp"}
+	expectedCommands := []string{"chat", "serve", "app", "agentserver", "gateway", "web", "init", "acp", "acp-chat"}
 	for _, name := range expectedCommands {
 		found := false
 		for _, cmd := range rootCmd.Commands() {

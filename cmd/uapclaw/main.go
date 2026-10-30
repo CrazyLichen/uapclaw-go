@@ -11,6 +11,7 @@
 //   - web: 启动 Web UI（Web Channel 接入 Gateway）
 //   - init: 初始化工作区
 //   - acp: ACP stdio JSON-RPC 协议模式（stdio 作为 Channel 接入 Gateway）
+//   - acp-chat: 外部 ACP 子代理冒烟入口（一次性 connect→chat→close）
 //
 // 架构要点：
 //   - 所有外部入口统一经过 Gateway，Gateway 与 AgentServer 之间始终走 E2A 协议

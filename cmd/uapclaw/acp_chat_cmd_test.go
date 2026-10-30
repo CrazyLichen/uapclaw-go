@@ -291,3 +291,37 @@ func TestCloseAcpChatClientWithTimeout(t *testing.T) {
 	// nil 安全
 	closeAcpChatClientWithTimeout(nil, time.Second)
 }
+
+// TestNewAcpChatCmd_参数校验 参数个数错 → 码 2 的 typed error。
+func TestNewAcpChatCmd_参数校验(t *testing.T) {
+	cmd := newAcpChatCmd()
+	if cmd.Use != "acp-chat <profile> [message]" {
+		t.Errorf("Use = %q", cmd.Use)
+	}
+	if !cmd.SilenceUsage || !cmd.SilenceErrors {
+		t.Error("应设置 SilenceUsage/SilenceErrors")
+	}
+
+	for _, args := range [][]string{nil, {"a", "b", "c"}} {
+		err := cmd.RunE(cmd, args)
+		var exitErr *acpChatExitError
+		if !errors.As(err, &exitErr) || exitErr.code != exitCodeConfig {
+			t.Errorf("args=%v 期望码 %d, 实际 %v", args, exitCodeConfig, err)
+		}
+	}
+}
+
+// TestNewAcpChatCmd_已注册 根命令包含 acp-chat。
+func TestNewAcpChatCmd_已注册(t *testing.T) {
+	root := newRootCmd()
+	found := false
+	for _, c := range root.Commands() {
+		if c.Name() == "acp-chat" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("根命令未注册 acp-chat")
+	}
+}

@@ -11,9 +11,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
@@ -78,6 +82,49 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newAcpChatCmd 创建 acp-chat 子命令（一次性冒烟，对齐 Python console script jiuwenswarm-acp-chat）。
+func newAcpChatCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "acp-chat <profile> [message]",
+		Short: "外部 ACP 子代理冒烟入口（一次性 connect→chat→close）",
+		Long: `对 config.yaml 的 acp_agents.<profile> 做一次冒烟：spawn 子进程 → ACP 握手 →
+发送一条消息 → 打印回复 → 关闭。不进 Gateway/AgentServer，不产生会话历史。
+
+profile 规格与 acp_chat 工具共用严格校验（args 必须是列表、env 必须是映射）。
+
+退出码：0 成功 / 2 配置错 / 1 会话异常 / 130 中断。`,
+		// 冒烟工具不该打 usage 与 Error: 前缀（对齐 Python argparse 的输出观感）
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// cobra 仅在 Execute 路径注入 ctx；测试/库调用可能为 nil，回落 Background
+			parent := cmd.Context()
+			if parent == nil {
+				parent = context.Background()
+			}
+			ctx, stop := signal.NotifyContext(parent, syscall.SIGINT, syscall.SIGTERM)
+			defer stop()
+
+			if len(args) == 0 || len(args) > 2 {
+				fmt.Fprintln(os.Stderr, "usage: uapclaw acp-chat <profile> [message]")
+				return &acpChatExitError{code: exitCodeConfig}
+			}
+
+			message := defaultAcpChatMessage
+			if len(args) == 2 {
+				message = args[1]
+			}
+
+			code := runAcpChat(ctx, defaultAcpChatDeps(), args[0], message)
+			if code == exitCodeOK {
+				return nil
+			}
+			return &acpChatExitError{code: code}
+		},
+	}
+	return cmd
+}
 
 // Error 实现 error 接口。
 func (e *acpChatExitError) Error() string {
