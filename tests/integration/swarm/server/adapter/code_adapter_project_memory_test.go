@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/project_memory"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -193,4 +194,34 @@ func (s *CodeAdapterProjectMemorySuite) TestBuildConfiguredSubagents_迭代上�
 		s.Require().NotNil(plan)
 		s.Equal(8, plan.MaxIterations, "plan 未配置子项仍取 react 值")
 	})
+}
+
+// TestCreateInstance_附加目录三级回退 验证 instance_overrides → configCache → env 的优先级：
+// 配置存在时 env 不再参与。
+//
+// 对齐 Python: _build_project_memory_rail 中
+//   raw = overrides.get(..., config_cache.get("project_memory", {}).get("additional_directories"))
+//   if raw is None: raw = os.getenv("JIUWENSWARM_ADDITIONAL_DIRECTORIES", "")
+func (s *CodeAdapterProjectMemorySuite) TestCreateInstance_附加目录三级回退() {
+	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_adddirs")
+
+	cfgDir := filepath.Join(env.DataDir, "extra_cfg")
+	envDir := filepath.Join(env.DataDir, "extra_env")
+	s.Require().NoError(os.MkdirAll(cfgDir, 0o755))
+	s.Require().NoError(os.MkdirAll(envDir, 0o755))
+	s.Require().NoError(os.WriteFile(filepath.Join(cfgDir, "UAPCLAWSWARM.md"), []byte("CFG-DIR-RULE"), 0o644))
+	s.Require().NoError(os.WriteFile(filepath.Join(envDir, "UAPCLAWSWARM.md"), []byte("ENV-DIR-RULE"), 0o644))
+
+	env.Setenv(s.T(), "UAPCLAWSWARM_ADDITIONAL_DIRECTORIES", envDir)
+	env.WriteConfigYAML(s.T(), "  project_memory:\n    additional_directories:\n      - "+cfgDir+"\n")
+
+	c, _ := s.newCodeAdapterWithProject(env, "normal")
+	s.processOnce(c, "adddirs", map[string]any{"query": "读取项目记忆", "mode": "code.plan", "files": map[string]any{}})
+
+	spb := c.Instance().SystemPromptBuilder()
+	s.Require().NotNil(spb)
+	section := spb.GetSection(project_memory.SectionName)
+	s.Require().NotNil(section, "应注入 project_memory section")
+	s.Contains(section.Content["en"], "CFG-DIR-RULE", "配置目录内容应被加载")
+	s.NotContains(section.Content["en"], "ENV-DIR-RULE", "配置存在时 env 不参与（Python 语义）")
 }

@@ -401,3 +401,60 @@ func TestCodeAdapter_ResolveEmbeddingConfig_无embed段降级(t *testing.T) {
 		t.Errorf("无 embed 段时应返回 nil, got %+v", emb)
 	}
 }
+
+// TestFlattenStringDirs 验证附加目录配置值的展平规则（对齐 Python 的 str/list 两分支）。
+func TestFlattenStringDirs(t *testing.T) {
+	listSep := string(os.PathListSeparator)
+
+	// 字符串按 PathListSeparator 切分并 trim；空项丢弃
+	got := flattenStringDirs(" /a " + listSep + "/b" + listSep + "")
+	if len(got) != 2 || got[0] != "/a" || got[1] != "/b" {
+		t.Errorf("string 分支 = %v, want [/a /b]", got)
+	}
+
+	// []any（YAML/JSON 反序列化主流形态）
+	gotAny := flattenStringDirs([]any{"/c", " /d ", ""})
+	if len(gotAny) != 2 || gotAny[0] != "/c" || gotAny[1] != "/d" {
+		t.Errorf("[]any 分支 = %v, want [/c /d]", gotAny)
+	}
+
+	// nil 与其他类型 → 空切片（非 nil，确保「已配置但为空」可区分）
+	if gotNil := flattenStringDirs(nil); gotNil == nil || len(gotNil) != 0 {
+		t.Errorf("nil 应返回空非 nil 切片, got %v (nil? %t)", gotNil, gotNil == nil)
+	}
+	if gotInt := flattenStringDirs(42); len(gotInt) != 0 {
+		t.Errorf("非字符串类型应返回空切片, got %v", gotInt)
+	}
+}
+
+// TestProjectMemoryAdditionalDirectories_三级回退 验证 overrides → configCache → env 的优先级。
+func TestProjectMemoryAdditionalDirectories_三级回退(t *testing.T) {
+	t.Setenv("UAPCLAWSWARM_ADDITIONAL_DIRECTORIES", "/from/env")
+
+	// 1) 未配置任何一级 → 回退 env
+	c := NewCodeAdapter()
+	if got := c.projectMemoryAdditionalDirectories(); len(got) != 1 || got[0] != "/from/env" {
+		t.Errorf("仅 env 时 = %v, want [/from/env]", got)
+	}
+
+	// 2) 配置了 configCache → env 不参与
+	c = NewCodeAdapter()
+	c.deep.configCache = map[string]any{
+		"project_memory": map[string]any{"additional_directories": []any{"/from/config"}},
+	}
+	if got := c.projectMemoryAdditionalDirectories(); len(got) != 1 || got[0] != "/from/config" {
+		t.Errorf("configCache 存在时 = %v, want [/from/config]", got)
+	}
+
+	// 3) instanceOverrides 优先于 configCache
+	c = NewCodeAdapter()
+	c.deep.configCache = map[string]any{
+		"project_memory": map[string]any{"additional_directories": []any{"/from/config"}},
+	}
+	c.deep.instanceOverrides = map[string]any{
+		"project_memory_additional_directories": []any{"/from/override"},
+	}
+	if got := c.projectMemoryAdditionalDirectories(); len(got) != 1 || got[0] != "/from/override" {
+		t.Errorf("overrides 应最优先, got %v", got)
+	}
+}

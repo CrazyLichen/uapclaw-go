@@ -1216,28 +1216,11 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 		projectMemoryDir = os.Getenv("UAPSWARM_PROJECT_MEMORY_DIR")
 	}
 
-	// Python: raw_additional_dirs = self._instance_overrides.get("project_memory_additional_directories", ...)
-	// 从环境变量 UAPCLAWSWARM_ADDITIONAL_DIRECTORIES 读取额外目录
-	var additionalDirs []string
-	if rawOverrides, ok := c.deep.instanceOverrides["project_memory_additional_directories"]; ok {
-		// 优先从 instance_overrides 读取
-		if items, ok := rawOverrides.([]any); ok {
-			for _, item := range items {
-				if s, ok := item.(string); ok && s != "" {
-					additionalDirs = append(additionalDirs, s)
-				}
-			}
-		}
-	}
-	rawEnv := os.Getenv("UAPCLAWSWARM_ADDITIONAL_DIRECTORIES")
-	if rawEnv != "" {
-		for _, item := range filepath.SplitList(rawEnv) {
-			item = strings.TrimSpace(item)
-			if item != "" {
-				additionalDirs = append(additionalDirs, item)
-			}
-		}
-	}
+	// Python 三级回退：
+	//   raw = instance_overrides.get("project_memory_additional_directories",
+	//                               config_cache.get("project_memory", {}).get("additional_directories"))
+	//   if raw is None: raw = os.getenv("JIUWENSWARM_ADDITIONAL_DIRECTORIES", "")
+	additionalDirs := c.projectMemoryAdditionalDirectories()
 
 	rail := commonrails.NewProjectMemoryRail(ws, language, 0, additionalDirs)
 
@@ -1255,6 +1238,57 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 		Msg("ProjectMemoryRail created")
 
 	return rail
+}
+
+// flattenStringDirs 展平额外目录配置值（对齐 Python _build_project_memory_rail 的解析分支）。
+//
+//   - string：按 os.PathListSeparator 切分后逐项 trim（Python: str.split(os.pathsep)）
+//   - []any / []string：逐项转字符串后 trim（Python: list/tuple/set 分支）
+//   - nil 与其他类型：返回空切片（非 nil，使「已配置但为空」与「未配置」可区分）
+func flattenStringDirs(value any) []string {
+	result := make([]string, 0)
+	appendTrimmed := func(s string) {
+		if s = strings.TrimSpace(s); s != "" {
+			result = append(result, s)
+		}
+	}
+	switch v := value.(type) {
+	case string:
+		for _, item := range filepath.SplitList(v) {
+			appendTrimmed(item)
+		}
+	case []string:
+		for _, item := range v {
+			appendTrimmed(item)
+		}
+	case []any:
+		for _, item := range v {
+			appendTrimmed(fmt.Sprintf("%v", item))
+		}
+	}
+	return result
+}
+
+// projectMemoryAdditionalDirectories 解析项目记忆附加目录（Python 三级回退）。
+//
+// Python: raw = self._instance_overrides.get(
+//
+//	"project_memory_additional_directories",
+//	self._config_cache.get("project_memory", {}).get("additional_directories"))
+//
+//	if raw is None: raw = os.getenv("JIUWENSWARM_ADDITIONAL_DIRECTORIES", "")
+//
+// 关键语义：env 仅在前两级都缺（raw is None）时才参与，不做无条件追加。
+func (c *CodeAdapter) projectMemoryAdditionalDirectories() []string {
+	if raw, ok := c.deep.instanceOverrides["project_memory_additional_directories"]; ok {
+		return flattenStringDirs(raw)
+	}
+	if pmCfg, ok := c.deep.configCache["project_memory"].(map[string]any); ok {
+		if raw, ok := pmCfg["additional_directories"]; ok {
+			return flattenStringDirs(raw)
+		}
+	}
+	return flattenStringDirs(os.Getenv("UAPCLAWSWARM_ADDITIONAL_DIRECTORIES"))
 }
 
 // buildCodingMemoryRail 构建编码记忆护栏。
