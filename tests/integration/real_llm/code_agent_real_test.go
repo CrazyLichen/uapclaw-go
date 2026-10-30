@@ -104,7 +104,14 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 	model, err := s.NewRealModel()
 	s.Require().NoError(err, "创建真实 Model 失败")
 
-	ctx, cancel := context.WithTimeout(s.Ctx, 15*time.Minute)
+	// 超时预算：本用例 max_iterations=24、单次 LLM 调用客户端超时 300s，
+	// 理论单轮上限 24×300s ≈ 120min，Python 侧无整体 deadline。
+	// 原 15min（900s）在 Ark 延迟抖动下会掐断进行中的模型调用——
+	// CI 41046535306 实证：第 9 轮 in-flight 调用被 ctx 取消，报
+	// "context deadline exceeded"，用例耗时精确 900.00s。
+	// 改为 40min：覆盖 8 轮 × 300s 的最坏量级，同时仍是防真死循环的上限；
+	// 与 workflow timeout-minutes=90 兼容（其余 11 套件约 10min）。
+	ctx, cancel := context.WithTimeout(s.Ctx, 40*time.Minute)
 	defer cancel()
 
 	// 对齐 Python: trace = ToolTraceRail() + create_code_agent(..., rails=[trace], ...)
