@@ -42,46 +42,18 @@ Expected: `ok  	github.com/uapclaw/uapclaw-go/tests/integration/swarm/server/ada
 
 ---
 
-### Task 1: 单测补口 C1–C4（纯测试）
+### Task 1: 单测补口 C2–C4（纯测试）
 
 **Files:**
 - Modify: `internal/swarm/agents/harness/common/rails/project_memory/files_test.go`
 
-- [ ] **Step 1: 替换假断言 C1**
+> **计划订正（执行期发现）**：原 C1「修 `TestDiscoverAndLoadMemoryFiles_Local优先级最高` 假断言」的前提错误——
+> 该用例（files_test.go:114-138）本就断言了 local 索引在 project 之后，是有效的。
+> 早先判断源于 `sed -n '60,120p;205,260p'` 多区间输出拼接，把 `FrontmatterPaths作用域` 的
+> `scoped.md` 断言误读成它的函数体。C1 取消；Python 原用例断言的「merge 后 project 在 local 之前」
+> 由 C3（四类优先级排序）覆盖，语义无丢失。
 
-把现有 `TestDiscoverAndLoadMemoryFiles_Local优先级最高` 整个函数体替换为（原函数体在断言 `scoped.md` 不存在，是复制粘贴残留）：
-
-```go
-func TestDiscoverAndLoadMemoryFiles_Local优先级最高(t *testing.T) {
-	tmpDir := t.TempDir()
-	os.Mkdir(filepath.Join(tmpDir, ".git"), 0o755)
-	os.WriteFile(filepath.Join(tmpDir, "UAPCLAWSWARM.md"), []byte("Project content"), 0o644)
-	os.WriteFile(filepath.Join(tmpDir, "UAPCLAWSWARM.local.md"), []byte("Local content"), 0o644)
-	ClearProjectMemoryCache(tmpDir)
-
-	files, _ := DiscoverAndLoadMemoryFiles(context.Background(), tmpDir, tmpDir, nil)
-
-	var projectPriority, localPriority int
-	var hasProject, hasLocal bool
-	for _, f := range files {
-		switch f.Kind {
-		case "project":
-			hasProject, projectPriority = true, f.Priority
-		case "local":
-			hasLocal, localPriority = true, f.Priority
-		}
-	}
-	if !hasProject || !hasLocal {
-		t.Fatalf("expected both project and local kinds, got %+v", files)
-	}
-	// Python: PRIORITY["project"]=30 < PRIORITY["local"]=40
-	if localPriority <= projectPriority {
-		t.Fatalf("local priority %d should be greater than project priority %d", localPriority, projectPriority)
-	}
-}
-```
-
-- [ ] **Step 2: 追加 C2 子目录向上走查**
+- [ ] **Step 1: 追加 C2 子目录向上走查**
 
 在文件末尾追加：
 
@@ -114,7 +86,7 @@ func TestDiscoverAndLoadMemoryFiles_子目录向上走查(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 追加 C3 四类优先级排序**
+- [ ] **Step 2: 追加 C3 四类优先级排序**
 
 ```go
 // TestMergeMemoryContent_四类优先级排序 验证 merge 输出顺序为 managed < user < project < local。
@@ -138,7 +110,7 @@ func TestMergeMemoryContent_四类优先级排序(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: 追加 C4 不同路径不合并**
+- [ ] **Step 3: 追加 C4 不同路径不合并**
 
 ```go
 // TestMergeMemoryContent_不同路径同内容不合并 验证 merge 按文件逐个追加、不按内容去重。
@@ -155,23 +127,23 @@ func TestMergeMemoryContent_不同路径同内容不合并(t *testing.T) {
 }
 ```
 
-- [ ] **Step 5: 运行 4 个用例**
+- [ ] **Step 4: 运行 3 个用例**
 
 Run: `CGO_ENABLED=1 go test ./internal/swarm/agents/harness/common/rails/project_memory/ -run 'TestDiscoverAndLoadMemoryFiles_(Local优先级最高|子目录向上走查)|TestMergeMemoryContent_(四类优先级排序|不同路径同内容不合并)' -v -count=1`
 
-Expected: 4 个 `--- PASS`。若 C2 失败，说明 `FindProjectRoot` 的向上查找未生效——此时**不要**放宽断言，改为在 `files.go:FindProjectRoot` 定位并修复后重跑。
+Expected: 3 个 `--- PASS`。若 C2 失败，说明 `FindProjectRoot` 的向上查找未生效——此时**不要**放宽断言，改为在 `files.go:FindProjectRoot` 定位并修复后重跑。
 
-- [ ] **Step 6: 全包回归**
+- [ ] **Step 5: 全包回归**
 
 Run: `CGO_ENABLED=1 go test ./internal/swarm/agents/harness/common/rails/... -count=1`
 
 Expected: 全 `ok`
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add internal/swarm/agents/harness/common/rails/project_memory/files_test.go
-git commit -m "test(project_memory): 修 local 优先级假断言 + 补走查/merge 优先级/不同路径三条语义"
+git commit -m "test(project_memory): 补走查/merge 优先级/不同路径三条语义"
 ```
 
 ---
@@ -1087,7 +1059,7 @@ Expected: 触发的 CI 四个 job（Build / Lint / Unit Test / Integration Test�
 |---|---|
 | §4 B1/B2 子代理迭代上限 | Task 3 |
 | §4 B3 附加目录三级回退 | Task 5 |
-| §5 C1–C4 单测补口 | Task 1 |
+| §5 C2–C4 单测补口（C1 执行期取消，见 Task 1 订正说明） | Task 1 |
 | §6.1 文件与基建 | Task 2、Task 3（骨架）、Task 9（doc.go） |
 | §6.2 D1 | Task 3 |
 | §6.2 D2 | Task 5 |
