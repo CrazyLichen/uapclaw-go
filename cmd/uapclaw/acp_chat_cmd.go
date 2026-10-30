@@ -9,14 +9,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/crypto"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/acp"
+	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -25,6 +30,20 @@ import (
 type acpChatExitError struct {
 	// code 进程退出码
 	code int
+}
+
+// acpChatDeps 冒烟入口依赖注入点（生产用 defaultAcpChatDeps，测试替换）。
+type acpChatDeps struct {
+	// loadConfig 读取 config base 映射
+	loadConfig func(context.Context) (map[string]any, error)
+	// connect 建立 ACP 会话
+	connect func(context.Context, *acp.AcpStdioClient) error
+	// chat 发送一轮消息并取回文本
+	chat func(context.Context, *acp.AcpStdioClient, string) (string, error)
+	// stdout 响应文本输出目标
+	stdout io.Writer
+	// getenv 环境变量读取
+	getenv func(string) string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -44,6 +63,14 @@ const (
 	envSkipDotenv = "UAPCLAW_SKIP_DOTENV"
 	// logComponentAcpChat 冒烟入口日志组件（工具层归属 AgentServer，对齐 acpchat 包）
 	logComponentAcpChat = logger.ComponentAgentServer
+	// envCloseTimeout 关闭超时环境变量（对齐 Python ACP_CLI_CLOSE_TIMEOUT_S）
+	envCloseTimeout = "ACP_CLI_CLOSE_TIMEOUT_S"
+	// defaultCloseTimeoutS 关闭超时默认秒数（Python 默认 30）
+	defaultCloseTimeoutS = 30
+	// emptyResponse 空响应占位（对齐 Python cli.py 字面，勿用工具侧文案）
+	emptyResponse = "(empty response)"
+	// defaultAcpChatMessage 缺省消息（Python argparse default="Hello"）
+	defaultAcpChatMessage = "Hello"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -111,4 +138,108 @@ func loadAcpChatConfigFrom(cfgPath, envFile string) (map[string]any, error) {
 		return nil, err
 	}
 	return cfg.Load()
+}
+
+// defaultAcpChatDeps 生产依赖。
+func defaultAcpChatDeps() acpChatDeps {
+	return acpChatDeps{
+		loadConfig: loadAcpChatConfig,
+		connect: func(ctx context.Context, c *acp.AcpStdioClient) error {
+			return c.Connect(ctx)
+		},
+		chat: func(ctx context.Context, c *acp.AcpStdioClient, msg string) (string, error) {
+			return c.Chat(ctx, msg)
+		},
+		stdout: os.Stdout,
+		getenv: os.Getenv,
+	}
+}
+
+// acpChatCloseTimeout 关闭超时（env ACP_CLI_CLOSE_TIMEOUT_S，默认 30s；非法值回落默认）。
+// 偏差：Python float() 解析失败会抛 ValueError，这里回落默认值（防御性）。
+func acpChatCloseTimeout(getenv func(string) string) time.Duration {
+	if getenv != nil {
+		if raw := strings.TrimSpace(getenv(envCloseTimeout)); raw != "" {
+			if secs, err := strconv.ParseFloat(raw, 64); err == nil {
+				if secs < 0 {
+					secs = 0
+				}
+				return time.Duration(secs * float64(time.Second))
+			}
+		}
+	}
+	return defaultCloseTimeoutS * time.Second
+}
+
+// closeAcpChatClientWithTimeout 限时等待关闭（对齐 Python wait_for(shield(close()))）。
+// 超时/错误仅 Warn，不影响退出码。
+func closeAcpChatClientWithTimeout(closer interface{ Close() error }, timeout time.Duration) {
+	if closer == nil {
+		return
+	}
+	done := make(chan error, 1)
+	go func() { done <- closer.Close() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			logger.Warn(logComponentAcpChat).Err(err).Msg("[acp-chat] failed to close ACP client")
+		}
+	case <-time.After(timeout):
+		logger.Warn(logComponentAcpChat).Str("timeout", timeout.String()).
+			Msg("[acp-chat] close ACP client timed out")
+	}
+}
+
+// acpChatFailureCode 失败分支退出码：信号取消 → 130，否则 1（并记 Error 日志）。
+func acpChatFailureCode(ctx context.Context, stage string, err error) int {
+	if ctx.Err() != nil {
+		logger.Warn(logComponentAcpChat).Str("stage", stage).Err(err).
+			Msg("[acp-chat] interrupted by signal")
+		return exitCodeInterrupted
+	}
+	logger.Error(logComponentAcpChat).Str("stage", stage).Err(err).
+		Msg("[acp-chat] ACP session failed")
+	return exitCodeSession
+}
+
+// runAcpChat 冒烟主体（对齐 Python _run_once）：返回进程退出码，不上抛语义错误。
+func runAcpChat(ctx context.Context, deps acpChatDeps, profile, message string) int {
+	raw, err := deps.loadConfig(ctx)
+	if err != nil {
+		logger.Error(logComponentAcpChat).Err(err).Msg("[acp-chat] load config failed")
+		return exitCodeConfig
+	}
+
+	spec, err := acpchat.LoadProfile(raw, profile)
+	if err != nil {
+		logger.Error(logComponentAcpChat).Str("profile", profile).Err(err).
+			Msg("[acp-chat] profile lookup failed")
+		return exitCodeConfig
+	}
+
+	cs, err := acpchat.BuildClientSpec(spec)
+	if err != nil {
+		logger.Error(logComponentAcpChat).Str("profile", profile).Err(err).
+			Msg("[acp-chat] invalid profile spec")
+		return exitCodeConfig
+	}
+
+	client := acp.NewAcpStdioClient(cs.Command, cs.Args, cs.Cwd, cs.Env)
+	// 对齐 Python finally：无论如何都尝试关闭，且不改退出码
+	defer closeAcpChatClientWithTimeout(client, acpChatCloseTimeout(deps.getenv))
+
+	if err := deps.connect(ctx, client); err != nil {
+		return acpChatFailureCode(ctx, "connect", err)
+	}
+
+	out, err := deps.chat(ctx, client, message)
+	if err != nil {
+		return acpChatFailureCode(ctx, "chat", err)
+	}
+
+	if out == "" {
+		out = emptyResponse
+	}
+	fmt.Fprintln(deps.stdout, out)
+	return exitCodeOK
 }
