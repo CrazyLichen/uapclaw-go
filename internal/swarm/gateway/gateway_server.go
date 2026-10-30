@@ -554,12 +554,12 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		s.clientsMu.RUnlock()
 		if acpB != nil {
 			if acpB.HandleJsonrpcRequest(ctx, ws, data) {
-				return
+				return false
 			}
 			if IsJsonrpcRequest(data) {
 				// 是 JSON-RPC 请求但桥未处理（理论上不可达——HandleJsonrpcRequest 对
 				// 请求恒返回 true）——防御性 return，避免落入 type=req 的 invalid request
-				return
+				return false
 			}
 		}
 	}
@@ -676,7 +676,7 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		// acp early-return（对齐 L665-668：ACP route 收到 legacy type=req 帧时
 		// 转发后直接返回，不落入 unknown method / 无本地 ack 路径）
 		if route.ChannelID == "acp" {
-			return
+			return false
 		}
 
 		// 仅转发集合 → 无本地 ack（对齐 L670-671）

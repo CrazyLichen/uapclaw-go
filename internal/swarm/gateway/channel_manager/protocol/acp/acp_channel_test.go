@@ -41,7 +41,7 @@ var errEOF = eofError{}
 
 type eofError struct{}
 
-func (eofError) Error() string   { return "EOF" }
+func (eofError) Error() string            { return "EOF" }
 func (eofError) Read([]byte) (int, error) { return 0, errEOF }
 
 // safeBuffer 并发安全 stdout 收集器。
@@ -171,7 +171,7 @@ func TestAcpChannel_SessionList(t *testing.T) {
 	lines := out.jsonLines(t)
 	assert.Equal(t, map[string]any{
 		"jsonrpc": "2.0", "id": float64(11),
-		"result":  map[string]any{"sessions": []any{map[string]any{"sessionId": "sess-1"}}},
+		"result": map[string]any{"sessions": []any{map[string]any{"sessionId": "sess-1"}}},
 	}, lines[1])
 }
 
@@ -651,8 +651,8 @@ func TestAcpChannel_IdleDefersUntilPendingRPC(t *testing.T) {
 	assert.Equal(t, map[string]any{
 		"jsonrpc": "2.0", "id": float64(501),
 		"result": map[string]any{
-			"stopReason":     "end_turn",
-			"userMessageId":  "user-msg-pending",
+			"stopReason":    "end_turn",
+			"userMessageId": "user-msg-pending",
 		},
 	}, last)
 	assert.False(t, ch.HasRequestContextForTest(requestID))

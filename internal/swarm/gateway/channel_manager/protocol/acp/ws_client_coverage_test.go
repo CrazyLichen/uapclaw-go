@@ -91,7 +91,7 @@ func TestIsAcpJsonrpcResponse_判定分支(t *testing.T) {
 // ──────────────────────────── handleGatewayFrame 重建路径 ────────────────────────────
 
 // TestHandleGatewayFrame_Res帧重建 type=res 帧重建 Message 走 Send 链
-//（requestCtx 命中 → writeJsonrpcResult/branch）。
+// （requestCtx 命中 → writeJsonrpcResult/branch）。
 func TestHandleGatewayFrame_Res帧重建(t *testing.T) {
 	ch, out, _ := newTestChannel(t, nil)
 
@@ -126,7 +126,7 @@ func TestHandleGatewayFrame_Res帧重建(t *testing.T) {
 }
 
 // TestHandleGatewayFrame_Event帧重建 type=event 帧经 activePrompt 反查
-//（delta → session/update 流）。
+// （delta → session/update 流）。
 func TestHandleGatewayFrame_Event帧重建(t *testing.T) {
 	ch, out, _ := newTestChannel(t, nil)
 

@@ -51,7 +51,7 @@ type AcpGatewayBridge struct {
 
 // AcpGatewayRequestCtx prompt 请求上下文。
 // Python: AcpGatewayRequestContext (L83-97)。嵌入 AcpSessionUpdateState
-//（Python 独立 assistant/thought/tool 字段并入，语义一致）。
+// （Python 独立 assistant/thought/tool 字段并入，语义一致）。
 type AcpGatewayRequestCtx struct {
 	// JSONRPCID jsonrpc id（string|int 双形态，原样回写）
 	JSONRPCID any

@@ -242,7 +242,7 @@ func (s *AcpBridgeE2ESuite) TestAcpBridgeE2E_PromptRoundTrip() {
 }
 
 // TestAcpBridgeE2E_TimerSuperseded 用例 2：pending RPC 挂起 end_turn 全链路
-//（对齐 Python test_gateway_server_defers_end_turn_until_pending_client_rpc_resolves
+// （对齐 Python test_gateway_server_defers_end_turn_until_pending_client_rpc_resolves
 // 的 e2e 真实驱动版）。
 // mock LLM 先回 read_text_file 工具调用 → agent 侧 AcpOutputManager.SendJsonrpcRequest
 // server_push fs/read_text_file → 桥 OutboundIntercept 登记 pending → WS →

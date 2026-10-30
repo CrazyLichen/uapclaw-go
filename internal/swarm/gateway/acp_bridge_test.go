@@ -115,7 +115,7 @@ func TestAcpBridge_SessionPromptDispatch(t *testing.T) {
 	h := newAcpBridgeHarness()
 	data := map[string]any{"jsonrpc": "2.0", "id": 6, "method": "session/prompt", "params": map[string]any{
 		"sessionId": "s1", "messageId": "u1",
-		"prompt":    []any{map[string]any{"type": "text", "text": "hello"}},
+		"prompt": []any{map[string]any{"type": "text", "text": "hello"}},
 	}}
 	if !h.bridge.HandleJsonrpcRequest(context.Background(), nil, data) {
 		t.Fatal("session/prompt should be handled")

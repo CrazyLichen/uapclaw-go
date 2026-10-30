@@ -607,10 +607,10 @@ func (ch *AcpChannel) envelopeToMessage(env *e2a.E2AEnvelope) (*schema.Message, 
 		ID: env.RequestID, Type: schema.MessageTypeReq,
 		ChannelID: ch.ChannelID(), SessionID: sessionID,
 		Params: paramsJSON, Timestamp: nowFloat(), OK: true,
-		ReqMethod:      reqMethod,
-		IsStream:       env.IsStream || reqMethod == schema.ReqMethodChatSend,
+		ReqMethod:       reqMethod,
+		IsStream:        env.IsStream || reqMethod == schema.ReqMethodChatSend,
 		EnableStreaming: true,
-		Metadata:       map[string]any{"acp": acpMeta},
+		Metadata:        map[string]any{"acp": acpMeta},
 	}, nil
 }
 
@@ -645,10 +645,10 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 			SessionID:    msg.SessionID,
 			IsStream:     true,
 			Body: map[string]any{
-				"event_type":  "chat.delta",
-				"delta_kind":  deltaKind,
-				"delta":       strVal(payload["content"]),
-				"payload":     payload,
+				"event_type": "chat.delta",
+				"delta_kind": deltaKind,
+				"delta":      strVal(payload["content"]),
+				"payload":    payload,
 			},
 		}
 	}
