@@ -108,6 +108,12 @@ func CodingMemoryReadWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 		logger.Warn(logComponent).Err(err).Str("path", path).Msg("CodingMemoryReadWithContext: failed to read file")
 		return &CodingReadResult{Success: false, Path: path, Error: err.Error()}
 	}
+	if readResult != nil {
+		if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", fullPath); fsErr != nil {
+			logger.Warn(logComponent).Err(fsErr).Str("path", path).Msg("CodingMemoryReadWithContext: failed to read file")
+			return &CodingReadResult{Success: false, Path: path, Error: fsErr.Error()}
+		}
+	}
 	var content string
 	if readResult != nil && readResult.Data != nil {
 		content = readResult.Data.Content
@@ -282,10 +288,16 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 			}
 			if !fileExists {
 				// 创建新文件
-				_, err := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true))
-				if err != nil {
+				writeRes, wErr := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true))
+				if wErr != nil {
 					fileLock.Unlock()
-					return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": err.Error()}
+					return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": wErr.Error()}
+				}
+				if writeRes != nil {
+					if fsErr := fsResultError(writeRes.BaseResult, "写入记忆文件", resolved); fsErr != nil {
+						fileLock.Unlock()
+						return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": fsErr.Error()}
+					}
 				}
 			} else {
 				// 追加到已有文件
@@ -333,9 +345,16 @@ func CodingMemoryWriteWithContext(ctx context.Context, toolCtx *CodingMemoryTool
 	if sysOp != nil {
 		if !fileExistsNow {
 			// T07: 对齐 Python — 降级写入时也检查错误
-			if _, err := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true)); err != nil {
-				logger.Error(logComponent).Err(err).Str("path", resolved).Msg("degraded write failed")
-				return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": err.Error()}
+			degradedRes, dErr := sysOp.Fs().WriteFile(ctx, resolved, content, sysop.WithFsCreateIfNotExist(true))
+			if dErr != nil {
+				logger.Error(logComponent).Err(dErr).Str("path", resolved).Msg("degraded write failed")
+				return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": dErr.Error()}
+			}
+			if degradedRes != nil {
+				if fsErr := fsResultError(degradedRes.BaseResult, "写入记忆文件", resolved); fsErr != nil {
+					logger.Error(logComponent).Err(fsErr).Str("path", resolved).Msg("degraded write failed")
+					return map[string]any{"success": false, "path": path, "mode": "", "type": fm["type"], "error": fsErr.Error()}
+				}
 			}
 		} else {
 			appendToExistingFile(ctx, toolCtx, resolved, body, fm)
@@ -405,6 +424,11 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 		logger.Warn(logComponent).Err(err).Str("path", path).Msg("CodingMemoryEditWithContext: failed to read file")
 		return &CodingEditResult{Error: fmt.Sprintf("读取文件失败: %s", path)}
 	}
+	if fsErr := fsResultError(readResult.BaseResult, "读取记忆文件", resolved); fsErr != nil {
+		fileLock.Unlock()
+		logger.Warn(logComponent).Err(fsErr).Str("path", path).Msg("CodingMemoryEditWithContext: failed to read file")
+		return &CodingEditResult{Error: fsErr.Error()}
+	}
 	content := readResult.Data.Content
 	occurrences := strings.Count(content, oldText)
 	if occurrences == 0 {
@@ -418,11 +442,17 @@ func CodingMemoryEditWithContext(ctx context.Context, toolCtx *CodingMemoryToolC
 		return &CodingEditResult{Error: fmt.Sprintf("old_text 出现 %d 次，请更精确地指定", occurrences)}
 	}
 	newContent := strings.Replace(content, oldText, newText, 1)
-	_, err = sysOp.Fs().WriteFile(ctx, resolved, newContent, sysop.WithFsCreateIfNotExist(true))
+	editRes, err := sysOp.Fs().WriteFile(ctx, resolved, newContent, sysop.WithFsCreateIfNotExist(true))
 	fileLock.Unlock()
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("coding_memory_edit edit failed")
 		return &CodingEditResult{Error: err.Error()}
+	}
+	if editRes != nil {
+		if fsErr := fsResultError(editRes.BaseResult, "写入记忆文件", resolved); fsErr != nil {
+			logger.Error(logComponent).Err(fsErr).Msg("coding_memory_edit edit failed")
+			return &CodingEditResult{Error: fsErr.Error()}
+		}
 	}
 
 	// Python: 更新 MEMORY.md 索引（索引有自己的锁，不需要在文件锁内运行）
