@@ -3,15 +3,21 @@
 package adapter_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/project_memory"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -200,8 +206,9 @@ func (s *CodeAdapterProjectMemorySuite) TestBuildConfiguredSubagents_迭代上�
 // 配置存在时 env 不再参与。
 //
 // 对齐 Python: _build_project_memory_rail 中
-//   raw = overrides.get(..., config_cache.get("project_memory", {}).get("additional_directories"))
-//   if raw is None: raw = os.getenv("JIUWENSWARM_ADDITIONAL_DIRECTORIES", "")
+//
+//	raw = overrides.get(..., config_cache.get("project_memory", {}).get("additional_directories"))
+//	if raw is None: raw = os.getenv("JIUWENSWARM_ADDITIONAL_DIRECTORIES", "")
 func (s *CodeAdapterProjectMemorySuite) TestCreateInstance_附加目录三级回退() {
 	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_adddirs")
 
@@ -224,4 +231,125 @@ func (s *CodeAdapterProjectMemorySuite) TestCreateInstance_附加目录三级回
 	s.Require().NotNil(section, "应注入 project_memory section")
 	s.Contains(section.Content["en"], "CFG-DIR-RULE", "配置目录内容应被加载")
 	s.NotContains(section.Content["en"], "ENV-DIR-RULE", "配置存在时 env 不参与（Python 语义）")
+}
+
+// ──────────────────────────── 模型入参捕获器 ────────────────────────────
+
+// llmPromptCapture 通过进程级回调框架捕获模型入参。
+//
+// 对齐先例 tests/integration/real_llm/system_prompt_capture_test.go::registerPromptCapture。
+// 注意：callback.GetCallbackFramework() 是进程级单例，注册后必须在 Cleanup 反注册。
+type llmPromptCapture struct {
+	// mu 保护 events 并发写
+	mu sync.Mutex
+	// systemMessages 每次调用中 system 角色消息的拼接结果
+	systemMessages []string
+}
+
+// registerLLMPromptCapture 注册捕获器并在测试结束反注册。
+func registerLLMPromptCapture(t *testing.T) *llmPromptCapture {
+	t.Helper()
+	c := &llmPromptCapture{}
+	onEvent := func(_ context.Context, data *callback.LLMCallEventData) any {
+		c.mu.Lock()
+		c.systemMessages = append(c.systemMessages, extractSystemMessages(data.Messages)...)
+		c.mu.Unlock()
+		return nil
+	}
+	fw := callback.GetCallbackFramework()
+	fw.OnLLM(callback.LLMInvokeInput, onEvent)
+	fw.OnLLM(callback.LLMStreamInput, onEvent)
+	t.Cleanup(func() {
+		fw.OffLLM(callback.LLMInvokeInput, onEvent)
+		fw.OffLLM(callback.LLMStreamInput, onEvent)
+	})
+	return c
+}
+
+// firstSystemMessage 返回首次捕获到的第一条 system 消息。
+func (c *llmPromptCapture) firstSystemMessage() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.systemMessages) == 0 {
+		return ""
+	}
+	return c.systemMessages[0]
+}
+
+// extractSystemMessages 从事件 Messages 字段提取 system 角色消息。
+//
+// Messages 运行时为 model_clients.MessagesParam，含 text/messages/dicts 三形态：
+//   - messages 形态：遍历 BaseMessage 取 GetRole/GetContent（Runner 主路径）
+//   - dicts 形态：遍历 map 取 role/content 键
+//   - text 形态：纯文本无 system 消息，自然为空
+func extractSystemMessages(messages any) []string {
+	mp, ok := messages.(model_clients.MessagesParam)
+	if !ok {
+		return nil
+	}
+	var results []string
+	if mp.IsMessages() {
+		for _, m := range mp.Messages() {
+			if m.GetRole() == llmschema.RoleTypeSystem {
+				results = append(results, m.GetContent().String())
+			}
+		}
+		return results
+	}
+	for _, item := range mp.Dicts() {
+		role, _ := item["role"].(string)
+		if role != "system" {
+			continue
+		}
+		if content, ok := item["content"].(string); ok {
+			results = append(results, content)
+		}
+	}
+	return results
+}
+
+// TestProcessMessage_ProjectMemory写入模型入参 双层断言：
+// ① SystemPromptBuilder 中存在 project_memory section；② 模型入参的 system 消息含该内容。
+//
+// 对齐 Python: TestProjectMemoryRailEndToEnd —— Python 仅断言到 MagicMock 的
+// system_prompt_builder.added_sections，此处打穿到模型真实入参。
+func (s *CodeAdapterProjectMemorySuite) TestProcessMessage_ProjectMemory写入模型入参() {
+	env := newAdapterTestEnv(s.T(), s.MockLLM, "mock_pm_e2e")
+	env.WriteConfigYAML(s.T(), "")
+
+	c, projDir := s.newCodeAdapterWithProject(env, "normal")
+	s.Require().NoError(os.Mkdir(filepath.Join(projDir, ".git"), 0o755))
+	s.Require().NoError(os.WriteFile(
+		filepath.Join(projDir, "UAPCLAWSWARM.md"),
+		[]byte("# Test\nPROJECT-MEMORY-MARKER\n"), 0o644))
+
+	capture := registerLLMPromptCapture(s.T())
+	s.processOnce(c, "e2e", map[string]any{"query": "读取项目记忆", "mode": "code.plan", "files": map[string]any{}})
+
+	inst := c.Instance()
+	spb := inst.SystemPromptBuilder()
+	s.Require().NotNil(spb)
+
+	// 断言 ①：builder 层
+	section := spb.GetSection(project_memory.SectionName)
+	s.Require().NotNil(section, "builder 应注入 project_memory section")
+	s.Contains(section.Content["en"], "PROJECT-MEMORY-MARKER")
+
+	// 断言 ②：模型入参层
+	// 抬头语言取决于 builder 当前 language（section 恒为中英双语，Build 按语言择一），
+	// 因此断言语义而非固定语言：内容标记必须出现，抬手中/英任一出现即可。
+	prompt := capture.firstSystemMessage()
+	s.Require().NotEmpty(prompt, "应捕获到 system 消息")
+	s.Contains(prompt, "PROJECT-MEMORY-MARKER", "system 消息应含记忆正文")
+	s.True(
+		strings.Contains(prompt, "## Project Memory") || strings.Contains(prompt, "## 项目记忆"),
+		"system 消息应含项目记忆抬头（中/英任一）",
+	)
+
+	// 断言 ③：装配未被请求往返拆掉
+	found := inst.FindRailsByType(reflect.TypeOf(&commonrails.ProjectMemoryRail{}))
+	s.Require().Len(found, 1, "请求往返后 rail 应仍在")
+	rail, ok := found[0].(*commonrails.ProjectMemoryRail)
+	s.Require().True(ok)
+	s.Equal("en", rail.GetLanguage())
 }
