@@ -342,6 +342,23 @@ func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_外循环流式输出() {
 	ctx, cancel := context.WithTimeout(s.Ctx, 5*time.Minute)
 	defer cancel()
 
+	// 对齐 Python 原文（test_deep_agent_e2e.py L653-700）：
+	// planning_rail + sys_operation + 规划型 system_prompt 缺一不可——
+	// todo 工具 + 规划提示词引导模型产出多步任务结构（TaskPlan），
+	// 外层循环多轮运行，stream 才有逐轮流式输出可验证。
+	// 首跑 40965036663 失败定位（2.90s，roundOutputs=0）：漏 planning rail
+	// 时模型单轮直接 answer，无 TaskPlan → hasRemainingTasks=false →
+	// 外层循环单轮退出；对齐 steer 测试（25c74be7）同构补齐。
+	sysOpCard := sys_operation.NewSysOperationCard(
+		sys_operation.WithSysOpMode(sys_operation.OperationModeLocal),
+	)
+	sysOp, err := sys_operation.NewSysOperation(sysOpCard)
+	s.Require().NoError(err, "创建 SysOperation 失败")
+
+	// 对齐 Python: planning_rail = TaskPlanningRail(sys_oper)
+	planningRail := rails.NewTaskPlanningRail()
+	planningRail.SetSysOperation(sysOp)
+
 	card := agentschema.NewAgentCard(
 		agentschema.WithAgentID("e2e_real_llm_taskloop_stream"),
 		agentschema.WithAgentName("E2ERealLLMTaskLoopStreamAgent"),
@@ -349,8 +366,12 @@ func (s *DeepAgentE2ESuite) TestDeepAgent_真实LLM_外循环流式输出() {
 	agent, err := harness.CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
 		Card:           card,
 		Model:          model,
+		SysOperation:   sysOp,
+		Rails:          []agentinterfaces.AgentRail{planningRail},
 		EnableTaskLoop: true,
 		MaxIterations:  12,
+		// 对齐 Python 原文 system_prompt（规划导向）
+		SystemPrompt: "你是一个严谨的任务执行助手。根据当前任务逐步输出结果。",
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 

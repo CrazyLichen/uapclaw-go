@@ -3140,6 +3140,43 @@ func TestDeepAgent_Steer_用LoopSession(t *testing.T) {
 	agent.Steer(context.Background(), "steer msg", nil)
 }
 
+// TestDeepAgent_Steer_事件类型与入队回归 CI 40965036663 失败回归防护：
+// Steer 构造的 TaskInteractionEvent 漏设 BaseEvent 时 event_type 为零值
+// 空串，PublishEventAsync 构造的 topic "{agentID}_{sessionID}_" 无订阅者，
+// steer 指令被静默丢弃（Python Pydantic event_type 字段有默认值，Go 字面量
+// 构造必须显式设置 BaseEvent）。本测试走完整链路：Steer → MQ 消费者 →
+// HandleTaskInteraction → LoopQueues.steering 真实入队。
+func TestDeepAgent_Steer_事件类型与入队回归(t *testing.T) {
+	card := makeTestCard("deep-st-et", "test-deep-st-et")
+	agent := NewDeepAgent(card)
+
+	cfg := schema.NewDeepAgentConfig()
+	cfg.EnableTaskLoop = true
+	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
+
+	sess := session.NewSession()
+	_, ctrl, err := agent.setupTaskLoop(context.Background(), sess)
+	require.NoError(t, err)
+	require.NotNil(t, ctrl)
+
+	// 订阅事件 topic（对齐 runTaskLoop 的 BindSession 路径）
+	require.NoError(t, ctrl.BindSession(context.Background(), sess))
+	defer func() { _ = ctrl.UnbindSession(context.Background(), sess) }()
+
+	agent.Steer(context.Background(), "输出请使用简洁中文要点", sess)
+
+	// Steer 是 fire-and-forget：事件经 MQ 消费者 goroutine 异步转入
+	// steering 队列，轮询 SteerLen 同步屏障（对齐集成测试先例）
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if ctrl.SteerLen() >= 1 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("steer 应在 5s 内进入 steering 队列（event_type 零值会导致 topic 失配被静默丢弃），当前 SteerLen=%d", ctrl.SteerLen())
+}
+
 // TestDeepAgent_FollowUp_用LoopSession sess 为 nil 但 loopSession 非 nil
 func TestDeepAgent_FollowUp_用LoopSession(t *testing.T) {
 	card := makeTestCard("deep-fu-ls", "test-deep-fu-ls")
