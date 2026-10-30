@@ -187,7 +187,7 @@ func (p *plainVectorStore) Delete(context.Context, []string, query.QueryExpr) (b
 }
 func (p *plainVectorStore) TableExists(context.Context, string) (bool, error) { return false, nil }
 func (p *plainVectorStore) DeleteTable(context.Context, string) error         { return nil }
-func (p *plainVectorStore) Close()                                            {}
+func (p *plainVectorStore) Close() error                                      { return nil }
 
 // recordingRetriever 记录调用参数的 Retriever 桩。
 type recordingRetriever struct {
@@ -216,10 +216,11 @@ func (r *recordingRetriever) BatchRetrieve(context.Context, []string, int, ...re
 func (r *recordingRetriever) RetrieveSearchResults(context.Context, string, int, retriever.RetrievalMode, ...retriever.RetrieveOption) ([]common.SearchResult, error) {
 	return nil, nil
 }
-func (r *recordingRetriever) Close() {
+func (r *recordingRetriever) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.closed++
+	return nil
 }
 
 // ──────────────────────────── 构造与断言缺口 ────────────────────────────

@@ -287,8 +287,11 @@ func (a *AgenticRetriever) RetrieveSearchResults(context.Context, string, int, R
 
 // Close 关闭底层检索器（Python hasattr+iscoroutinefunction 双探测在
 // Go 接口编译期消解，偏差归档 spec §8-4）。
-func (a *AgenticRetriever) Close() {
-	a.retriever.Close()
+func (a *AgenticRetriever) Close() error {
+	if a.retriever == nil {
+		return nil
+	}
+	return a.retriever.Close()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

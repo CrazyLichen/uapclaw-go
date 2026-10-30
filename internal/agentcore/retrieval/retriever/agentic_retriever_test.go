@@ -129,10 +129,11 @@ func (f *agenticFakeRetriever) RetrieveSearchResults(ctx context.Context, query 
 	return f.rsrFn(ctx, query, topK, mode)
 }
 
-func (f *agenticFakeRetriever) Close() {
+func (f *agenticFakeRetriever) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.closed++
+	return nil
 }
 
 // IndexType 实现 IndexTypeCarrier（defaultMode 推导测试用；接口含

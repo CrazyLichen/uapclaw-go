@@ -53,7 +53,7 @@ type closeCountRetriever struct {
 	closed int
 }
 
-func (c *closeCountRetriever) Close() { c.closed++ }
+func (c *closeCountRetriever) Close() error { c.closed++; return nil }
 
 // ──────────────────────────── 用例 ────────────────────────────
 

@@ -185,8 +185,9 @@ func (ci *ChromaIndexer) Client() chromav2.Client { return ci.client }
 
 // Close 关闭索引管理器，释放持久客户端。
 //
-// M-44: 对齐 Python ChromaIndexer.close()。
-func (ci *ChromaIndexer) Close() {
+// M-44: 对齐 Python ChromaIndexer.close()。关闭失败已在此 Warn 记录
+// （对齐 Python logger.warning），故返回 nil。
+func (ci *ChromaIndexer) Close() error {
 	if ci.client != nil {
 		if err := ci.client.Close(); err != nil {
 			logger.Warn(logComponent).
@@ -195,6 +196,7 @@ func (ci *ChromaIndexer) Close() {
 				Msg("failed to close ChromaDB client")
 		}
 	}
+	return nil
 }
 
 // BuildIndex 构建索引。将 chunks 去重→嵌入→写入向量库。

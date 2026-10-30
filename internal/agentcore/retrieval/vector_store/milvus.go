@@ -666,8 +666,9 @@ func (s *MilvusVectorStore) DeleteTable(ctx context.Context, tableName string) e
 
 // Close 关闭存储（不释放集合）。
 // 实现 VectorStore 接口。
-func (s *MilvusVectorStore) Close() {
+func (s *MilvusVectorStore) Close() error {
 	s.CloseWithRelease(false)
+	return nil
 }
 
 // CloseWithRelease 关闭存储，可选释放集合。

@@ -148,7 +148,7 @@ func TestVectorRetriever_Close_关闭底层(t *testing.T) {
 // TestVectorRetriever_Close_nilStore不panic G-3 边界
 func TestVectorRetriever_Close_nilStore不panic(t *testing.T) {
 	r := NewVectorRetriever(nil, nil)
-	assert.NotPanics(t, r.Close)
+	assert.NotPanics(t, func() { _ = r.Close() })
 }
 
 // TestVectorRetriever_Retrieve_mode零值回落 G-4："" 等同未设走子类默认（spec §8-1 钉死）

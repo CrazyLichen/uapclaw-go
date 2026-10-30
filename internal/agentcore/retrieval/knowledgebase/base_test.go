@@ -52,7 +52,7 @@ func (f *fakeAttrStore) TableExists(ctx context.Context, tableName string) (bool
 	return false, nil
 }
 func (f *fakeAttrStore) DeleteTable(ctx context.Context, tableName string) error { return nil }
-func (f *fakeAttrStore) Close()                                                  {}
+func (f *fakeAttrStore) Close() error                                            { return nil }
 
 // storageAttrProvider 7 getter（13.26 校验消费接口）
 func (f *fakeAttrStore) DatabaseName() string      { return f.databaseName }

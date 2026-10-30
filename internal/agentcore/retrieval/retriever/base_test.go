@@ -153,10 +153,11 @@ func (f *fakeVectorStore) TableExists(_ context.Context, _ string) (bool, error)
 	return false, nil
 }
 func (f *fakeVectorStore) DeleteTable(_ context.Context, _ string) error { return nil }
-func (f *fakeVectorStore) Close() {
+func (f *fakeVectorStore) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.closeCalls++
+	return nil
 }
 
 // fakeEmbedModel 实现 embedding.BaseEmbedding 的测试桩。

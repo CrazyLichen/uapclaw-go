@@ -45,7 +45,7 @@ func (f *fakeKB) ParseURLs(context.Context, []string, ...KBOption) ([]reranker.D
 	return nil, nil
 }
 func (f *fakeKB) DeleteCollection(context.Context, string) error { return nil }
-func (f *fakeKB) Close()                                         {}
+func (f *fakeKB) Close() error                                   { return nil }
 func (f *fakeKB) Config() common.KnowledgeBaseConfig {
 	return common.KnowledgeBaseConfig{KBID: f.kbID}
 }

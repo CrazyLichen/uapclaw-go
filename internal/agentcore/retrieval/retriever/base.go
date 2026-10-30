@@ -30,7 +30,7 @@ type Retriever interface {
 	// RetrieveSearchResults 检索原始 SearchResult（不归一化、不阈值过滤）。
 	RetrieveSearchResults(ctx context.Context, query string, topK int, mode RetrievalMode, opts ...RetrieveOption) ([]common.SearchResult, error)
 	// Close 关闭检索器并释放底层资源。
-	Close()
+	Close() error
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

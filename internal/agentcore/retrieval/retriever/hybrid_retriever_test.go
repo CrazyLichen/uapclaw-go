@@ -316,7 +316,7 @@ func TestHybridRetriever_Close_关闭底层(t *testing.T) {
 // TestHybridRetriever_Close_nilStore不panic G-9 边界
 func TestHybridRetriever_Close_nilStore不panic(t *testing.T) {
 	r := NewHybridRetriever(nil, nil)
-	assert.NotPanics(t, r.Close)
+	assert.NotPanics(t, func() { _ = r.Close() })
 }
 
 // ── 覆盖率补齐（错误分支矩阵，G-7 语义在 Hybrid 三方法上的全覆盖）──

@@ -320,15 +320,17 @@ func (mi *MilvusIndexer) GetIndexInfo(ctx context.Context, indexName string) (ma
 }
 
 // Close 关闭索引管理器。
-// 对齐 Python MilvusIndexer.close。
-func (mi *MilvusIndexer) Close() {
+//
+// 对齐 Python MilvusIndexer.close。关闭失败已在此 Warn 记录，故返回 nil。
+func (mi *MilvusIndexer) Close() error {
 	if mi.client == nil {
-		return
+		return nil
 	}
 	if err := mi.client.Close(context.Background()); err != nil {
 		// 对齐 Python: logger.warning(f"Failed to close Milvus client: {e}")
 		logger.Warn(logComponent).Err(err).Msg("failed to close Milvus client")
 	}
+	return nil
 }
 
 // BuildIndex 构建索引。ensureCollection → 查重 → 嵌入 → 转换 → 写入。

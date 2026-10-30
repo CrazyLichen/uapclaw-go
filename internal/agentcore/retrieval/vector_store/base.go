@@ -51,8 +51,8 @@ type VectorStore interface {
 	// DeleteTable 删除集合，对齐 Python delete_table
 	DeleteTable(ctx context.Context, tableName string) error
 
-	// Close 关闭存储
-	Close()
+	// Close 关闭存储并释放底层资源
+	Close() error
 }
 
 // ──────────────────────────── 结构体 ────────────────────────────

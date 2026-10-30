@@ -97,7 +97,7 @@ func (f *fakeBeamRetriever) RetrieveSearchResults(context.Context, string, int, 
 	return nil, nil
 }
 
-func (f *fakeBeamRetriever) Close() {}
+func (f *fakeBeamRetriever) Close() error { return nil }
 
 // noEmbedRetriever 无 embed_model 属性的桩（hasattr False 同构——
 // 不实现 EmbedModelProvider）

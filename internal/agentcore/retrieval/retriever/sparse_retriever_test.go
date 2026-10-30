@@ -112,7 +112,7 @@ func TestSparseRetriever_Close_关闭底层(t *testing.T) {
 // TestSparseRetriever_Close_nilStore不panic G-3 边界（sparse 侧）
 func TestSparseRetriever_Close_nilStore不panic(t *testing.T) {
 	r := NewSparseRetriever(nil)
-	assert.NotPanics(t, r.Close)
+	assert.NotPanics(t, func() { _ = r.Close() })
 }
 
 // TestSparseRetriever_RetrieveSearchResults_无嵌入模型可检索 BM25 不需要嵌入模型

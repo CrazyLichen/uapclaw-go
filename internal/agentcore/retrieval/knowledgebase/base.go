@@ -42,7 +42,7 @@ type KnowledgeBase interface {
 	// DeleteCollection 删除集合（模板）
 	DeleteCollection(ctx context.Context, collection string) error
 	// Close 关闭并释放资源（模板）
-	Close()
+	Close() error
 	// Config 返回知识库配置
 	Config() common.KnowledgeBaseConfig
 }
@@ -53,7 +53,7 @@ var _ interface {
 	ParseFiles(ctx context.Context, filePaths []string, opts ...KBOption) ([]reranker.Document, error)
 	ParseURLs(ctx context.Context, urls []string, opts ...KBOption) ([]reranker.Document, error)
 	DeleteCollection(ctx context.Context, collection string) error
-	Close()
+	Close() error
 	Config() common.KnowledgeBaseConfig
 } = (*BaseKnowledgeBase)(nil)
 
@@ -310,29 +310,30 @@ func (b *BaseKnowledgeBase) DeleteCollection(ctx context.Context, collection str
 
 // Close 关闭知识库并释放资源（模板方法）。
 //
-// 逐组件关闭（vectorStore → indexManager 顺序字面）；
-// void Close 直调；error Close 变体失败 Warn 吞（Python
-// _maybe_await 异常 Warn 同构；async 形态编译期消解，偏差 §8-3）。
+// 逐组件关闭（vectorStore → indexManager 顺序字面）；组件 Close 返回错误时
+// Warn 吞（对齐 Python _maybe_await 的 sync 分支 try/except warn）。
 //
 // Python: knowledge_base.py close
-func (b *BaseKnowledgeBase) Close() {
+func (b *BaseKnowledgeBase) Close() error {
 	b.maybeClose(b.vectorStore)
 	b.maybeClose(b.indexManager)
+	return nil
 }
 
-// maybeClose 关闭单个组件（双变体可选接口）。
+// maybeClose 关闭单个组件（统一 error 变体，13.28 Task 0 单一化）。
+//
+// 13.26 曾用 Close()/Close() error 双变体承接 Python _maybe_await 的
+// 协程/普通双探测；Task 0 统一签名后只剩单条断言，Warn 吞语义保留。
 func (b *BaseKnowledgeBase) maybeClose(obj any) {
 	if obj == nil {
 		return
 	}
-	if c, ok := obj.(interface{ Close() }); ok {
-		c.Close()
+	c, ok := obj.(interface{ Close() error })
+	if !ok {
 		return
 	}
-	if c, ok := obj.(interface{ Close() error }); ok {
-		if err := c.Close(); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("Failed to close object")
-		}
+	if err := c.Close(); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("Failed to close object")
 	}
 }
 

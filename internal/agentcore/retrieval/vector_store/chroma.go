@@ -731,10 +731,14 @@ func (s *ChromaVectorStore) DeleteTable(ctx context.Context, tableName string) e
 }
 
 // Close 关闭存储。
-func (s *ChromaVectorStore) Close() {
+//
+// Chroma 客户端关闭失败在 Python 侧为异常，这里降级为忽略并返回 nil
+// （13.26 的 Warn 吞由调用方 maybeClose 承担）。
+func (s *ChromaVectorStore) Close() error {
 	if s.client != nil {
 		_ = s.client.Close()
 	}
+	return nil
 }
 
 // CollectionName 返回集合名称（13.23 回填：GraphRetriever 动态创建读取）。

@@ -410,13 +410,22 @@ func (g *GraphRetriever) RetrieveSearchResults(context.Context, string, int, Ret
 
 // Close 关闭两个固定检索器（动态创建的不持有——对齐 Python 只关
 // chunk_retriever/triple_retriever 两字段）。
-func (g *GraphRetriever) Close() {
+//
+// 两者都关，返回首个非 nil 错误（Python 串行 await，异常即中断后续；
+// Go 侧同样按序调用，首错留给调用方判断）。
+func (g *GraphRetriever) Close() error {
+	var firstErr error
 	if g.chunkRetriever != nil {
-		g.chunkRetriever.Close()
+		if err := g.chunkRetriever.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
 	if g.tripleRetriever != nil {
-		g.tripleRetriever.Close()
+		if err := g.tripleRetriever.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
+	return firstErr
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -112,10 +112,11 @@ func (r *SparseRetriever) RetrieveSearchResults(ctx context.Context, query strin
 }
 
 // Close 关闭检索器（同 VectorRetriever 语义，鸭子探测消解 spec §8-7）。
-func (r *SparseRetriever) Close() {
+func (r *SparseRetriever) Close() error {
 	if r.vectorStore != nil {
-		r.vectorStore.Close()
+		_ = r.vectorStore.Close()
 	}
+	return nil
 }
 
 // VectorStore 返回底层向量存储（能力接口回填，13.23）。
