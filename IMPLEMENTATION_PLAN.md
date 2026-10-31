@@ -494,18 +494,22 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **8.x Pregel 图引擎** | — | | | |
-| 8.1 | ☐ | Graph 接口 | `StartNode/EndNode/AddNode/AddEdge/AddConditionalEdges/Compile` | `openjiuwen/core/graph/graph.py` |
-| 8.2 | ☐ | ExecutableGraph | `Invoke/Stream/Collect/Transform/Interrupt` | `openjiuwen/core/graph/executable.py` |
-| 8.3 | ☐ | PregelNode | 图节点（name, func, routers） | `openjiuwen/core/graph/pregel/base.py` |
-| 8.4 | ☐ | Channel 接口 | `IsReady/Accept/Consume/Snapshot/Restore` | `openjiuwen/core/graph/pregel/` (Channel) |
-| 8.5 | ☐ | IRouter 接口 | `Dispatch(sourceNode)→[]Message` | `openjiuwen/core/graph/pregel/` (IRouter) |
-| 8.6 | ☐ | Graph Message / Interrupt | 图消息与中断机制 | `openjiuwen/core/graph/pregel/` |
-| 8.7 | ☐ | GraphInterrupt Exception | 图级中断异常 | `openjiuwen/core/graph/pregel/` |
-| 8.8 | ☐ | GraphState | 图状态管理 | `openjiuwen/core/graph/graph_state.py` |
-| 8.9 | ☐ | Graph Store | `Get/Put/Delete/Search` (InMemoryStore) | `openjiuwen/core/graph/store/` |
-| 8.10 | ☐ | AtomicNode | 原子节点 | `openjiuwen/core/graph/atomic_node.py` |
-| 8.11 | ☐ | Vertex | 图顶点 | `openjiuwen/core/graph/vertex.py` |
-| 8.12 | ☐ | StreamActor | 流式执行器 | `openjiuwen/core/graph/stream_actor/` |
+| 8.1 | ☐ | Graph 接口 + 构图实现 | `base.py`：`Graph`(7 方法，含 `GetNodes`) + `ExecutableGraph`(5 方法) + `Router` 类型别名；`graph.py`：`PregelGraph`(`StartNode/EndNode/AddNode/AddEdge/AddConditionalEdges/RegisterBranchTargets/Compile/Reset`，waits 屏障 + branches + branch_targets CNF 解析) + `CompiledGraph`(invoke 生命周期) + `Branch` | `openjiuwen/core/graph/base.py` · `graph.py` |
+| 8.2 | ☐ | ExecutableGraph / Executable | `ExecutableGraph`：`Invoke/Stream/Collect/Transform/Interrupt`；`Executable`：`OnInvoke/OnStream/OnCollect/OnTransform` + `SkipTrace/GraphInvoker/PostCommit/ComponentType` | `openjiuwen/core/graph/executable.py` |
+| 8.3 | ☐ | PregelNode / Channel ABC | `PregelNode`(name/func/routers) + `Channel` ABC(`Key`/`NodeName`/`IsReady`/`Accept`/`Consume`/`Snapshot`/`Restore`) | `openjiuwen/core/graph/pregel/base.py` |
+| 8.3a | ☐ | PregelBuilder | `AddNode`/`AddEdge`(1→N static、N→1 barrier 含 CNF 组)/`AddBranch`/`Build` | `openjiuwen/core/graph/pregel/builder.py` |
+| 8.3b | ☐ | TaskExecutorPool / NodeTask | FIRST_EXCEPTION 等待 + `_commit_failure`(GraphInterrupt→`__interrupt__`、异常→`__error__` 降级) + `CancelAll` + 签名反射注入 `config`/`state` | `openjiuwen/core/graph/pregel/task.py` |
+| 8.3c | ☐ | Pregel 调度引擎 | `PregelLoop.Init`(resume 恢复 channel/node_version/step/pending) + `RunStep`(ready→submit→wait_all→buffer→flush→after_step) + `_save_state_on_error` + `Pregel.Run`(顶层中断转 `{"__interrupt__": value}`) | `openjiuwen/core/graph/pregel/engine.py` |
+| 8.3d | ☐ | PregelConfig / 常量 | `PregelConfig`/`InnerPregelConfig`/`CreateInnerConfig` + `START`/`END`/`MAX_RECURSIVE_LIMIT=10000`/`__interrupt__`/`__error__`/NS 键名 | `openjiuwen/core/graph/pregel/config.py` · `constants.py` |
+| 8.4 | ☐ | ChannelManager / TriggerChannel / BarrierChannel | 就绪节点集合 + `Buffer/Flush/GetReadyNodes/Consume` + `Snapshot`/`Restore`（跳过 END）+ BarrierChannel 的 CNF(AND-of-OR) 判定与 `barrier:...->name` 路由键 | `openjiuwen/core/graph/pregel/channels.py` |
+| 8.5 | ☐ | IRouter 三实现 | `StaticRouter`(1→N)/`ConditionalRouter`(签名反射，仅当形参含 `state` 时注入 None)/`BarrierRouter` | `openjiuwen/core/graph/pregel/router.py` |
+| 8.6 | ☐ | Graph Message / Interrupt | `Message`/`TriggerMessage`/`BarrierMessage` + `Interrupt(value)` | `openjiuwen/core/graph/pregel/base.py` |
+| 8.7 | ☐ | GraphInterrupt | 图级中断异常（Go 用 panic 传播）；⤴️ 从 `session/interaction/base.go` 迁出（原注释：8.7 实现 graph/pregel 时迁移，避免 interaction→graph 反向依赖） | `openjiuwen/core/graph/pregel/base.py` |
+| 8.8 | ☐ | GraphState（节点状态片段） | 仅节点返回值聚合：`source_node_id` 以 `operator.add` 归并；⚠️ 与 8.9 检查点的 `GraphState`(ns/step/channel_values/pending_*) 同名不同义，Go 靠包隔离 | `openjiuwen/core/graph/graph_state.py` |
+| 8.9 | ☐ | Graph Store | `Store` 接口(`Get/Save/Delete`) + `GraphStore` 日志壳 + `InMemoryStore`(深拷贝 + ns 前缀删除) + `PendingNode`/`CreateState`/`serde`；⤴️ 回填 5.8 checkpointer 的 `graphStore any` 与 4 处 Delete | `openjiuwen/core/graph/store/` |
+| 8.10 | ☐ | AtomicNode | 原子节点（强制校验 CommitState 后 `CommitCmp`） | `openjiuwen/core/graph/atomic_node.py` |
+| 8.11 | ☐ | Vertex | 图顶点（4 能力策略 + retry/timeout + 错误恢复回调 + end-node sanitize + trace + stream 收尾）；⤴️ 依赖 8.17 段的 `ComponentAbility` 枚举提前抽取 | `openjiuwen/core/graph/vertex.py` |
+| 8.12 | ☐ | StreamActor | 流式执行器（StreamActor/StreamProcessor/ActorManager）；⤴️ 回填 session 的 `ActorManager any` 占位 | `openjiuwen/core/graph/stream_actor/` |
 | 8.13 | ☐ | Graph Visualization | 图可视化 | `openjiuwen/core/graph/visualization/` |
 | **8.x 工作流** | — | | | |
 | 8.14 | ☐ | Workflow 类 | 编排组件图，会话管理，流式输出 | `openjiuwen/core/workflow/workflow.py` · `_workflow.py` |
@@ -716,7 +720,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.6.21 | ☐ | RemoteMemberBootstrap | 远程成员引导 | `remote_member_bootstrap.py` |
 | 10.6.22 | ☐ | A2X RegistryRuntime | A2X 注册运行时（lifecycle ⤵️ 标记已改指本节） | `a2x/` |
 | 10.6.23 | ✅ | TeamRails | inheritance+MemberSkillToolkitRail+WorkspaceReportPathRail+exceptions 已随 10.6.19 实现（方案 C 合并决策） | `team_runtime_inheritance.py` · `rails/` |
-| 10.6.24 | — | Swarm 内置工具集（2026-10-26 拆分决策：按依赖边界拆 5 子节 a→b→c→d→e，全部归本节不换章节；d 待 11.25 桥接后实施、e 排最后（xiaoyi_gui_agent ⤵️ 9.31）；已实现资产在 24a 建全局接线清单防回填丢失；已核实：cron(11.10)/memory_tools+MemoryRail(10.6.13-18)/skill/web/multimodal/browser_move/todo 基座均在 agentcore 层就绪，10.6.24 仅做 Swarm 侧定制工具+装配接线；browser_tools.py(672行)/swarm audio_tools.py(328行) 疑似零消费死代码，按既定决策仍复刻、待 spec 阶段核实动态引用） | | `jiuwenswarm/agents/harness/common/tools/` |
+| 10.6.24 | — | Swarm 内置工具集（2026-10-26 拆分决策：按依赖边界拆 5 子节 a→b→c→d→e，全部归本节不换章节；d 已随 11.25 桥接落地（✅ 见 10.6.24d 行）、e 排最后（xiaoyi_gui_agent ⤵️ 9.31）；已实现资产在 24a 建全局接线清单防回填丢失；已核实：cron(11.10)/memory_tools+MemoryRail(10.6.13-18)/skill/web/multimodal/browser_move/todo 基座均在 agentcore 层就绪，10.6.24 仅做 Swarm 侧定制工具+装配接线；browser_tools.py(672行)/swarm audio_tools.py(328行) 疑似零消费死代码，按既定决策仍复刻、待 spec 阶段核实动态引用） | | `jiuwenswarm/agents/harness/common/tools/` |
 | 10.6.24a | ✅ | 轻量工具+装配接线 | wiki 3 工具(wiki_ingest/wiki_query/wiki_lint)+generate_image+mcp_toolkits 聚合(GetMcpTools 注入 SkillDevDeps.MCPToolsFactory)+todo_compat 兼容层(status=deleted→delete 映射)；回填桩：getToolCards 步骤1/7、syncToolGroup、uapclaw.go:813、deep_adapter.go:1416(_cancel_pending_todos 标记归属从 10.6.3-10 修正为本节)。已交付：10 commits(b6eb76c9..19c1aa68)——swarmtools 包 7 文件+平台拆分(Windows shell 探测 build tag 隔离)+agentcore todo 注入点(TodoModifyToolFactory)+DeepAdapter 双字段/syncToolGroup Python 同签名/TodoModifyFactory 接线/cancelPendingTodos+formatTodosForFrontendLocal；覆盖率 tools 85.0%/todo 89.5%；spec 8 偏差按定案落地（#2 save 分派外置×2、#5 sysOp 运行时恒 nil、RE2 双限制手动等价、双 _env_flag 保留等） | `wiki_tools.py` · `image_tools.py` · `mcp_toolkits.py` · `todo_compat.py` |
 | 10.6.24b | ✅ | send_file 全链 | web_file_download(HMAC 令牌+密钥文件)+SendFileToolkit(chat.file 事件+AppendHistoryRecord+sendPushFunc)+gateway `/file-api/download` 路由；依赖全就绪(11.14✅/session_history✅/sendPushFunc✅)；已交付：6 commits(96bda791..d0b1c3a0)——令牌管理器载荷结构体保序(字节级对齐 Python json.dumps)+SendFileToolkit 双注入(SetSendFilePushFunc/SetSendFileHistoryFunc 启动接线)+两回填桩落地(守卫收窄对齐修正+WithRefresh 有意偏差#2)+quoteAllForDownload 全量百分号编码(对齐 quote(safe=""))；覆盖率 tools 85.8%/gateway 78.5%/adapter 45.2%/team 70.1% 均不低于基线 | `send_file_to_user.py` · `web_file_download.py` · `channels/web/app_web.py`(下载路由) |
 | 10.6.24c | ✅ | 会话级工具 | agent.fast MultiSessionToolkit(session_new/cancel/list goroutine 并发+chat.session_result 推送+sync.Once 汇总 chat.final)+code 模式 user_todos(六 action+按 channel 隔离 markdown 持久化,channel 经 ctx 读取);已回填:deep_adapter_config.go updateToolsForMode、code_adapter.go:809 case、code_adapter.go:655 双调用+user_todos sync、agent_server 双注入;已交付:8 commits(bd9a514c..273bb16a)——偏差 8 项归档 spec §7(stream 三态适配/lookahead 正则手动等价/params 转换/汇总 nil 守卫/ctx channel/WithoutCancel 双用/status+priority 空串跳过等),race 修复 2 处(defer 内 map len 持锁/测试 recorder 化);覆盖率 tools 87.4%;实施后审查闭环(2026-10-31):P1 修复 cancel_session per-task done channel(旧 wg.Wait 等 toolkit 全部任务会被无关长时任务卡住,Python gather 只等单个)+删 userTodoParamsNames 死变量+偏差扩至 12 项归档(补录 #8 枚举例外/#9 cancel 语义/#10 Configure/#11 签名占位/#12 指针 case 收窄) | `multi_session_toolkits.py` · `user_todo_tool.py` |
@@ -759,7 +763,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 11.22 | ☐ | WhatsApp 通道 | WhatsApp 桥接 | `jiuwenswarm/gateway/channel_manager/im_platforms/whatsapp/` |
 | 11.23 | ☐ | 小艺通道 | 华为小艺智能助手 | `jiuwenswarm/gateway/channel_manager/im_platforms/xiaoyi/` |
 | 11.24 | ☐ | 平台适配器 | IM 平台通用适配 | `jiuwenswarm/gateway/channel_manager/im_platforms/platform_adapter/` |
-| 11.25 | ✅ | ACP 协议桥接 | session_updates（e2a/acp）+ AcpGatewayBridge 桥主体/三拦截器/timer + GatewayServer/app_gateway 接线 + MessageHandler 别名链 + AcpChannel 本体/WS 客户端族/31 例映射 + cmd acp 双模式 + 桥 24 例 + e2e 3 用例全绿（protocol/acp 覆盖率 86.1%） | `jiuwenswarm/gateway/channel_manager/protocol/acp/` |
+| 11.25 | ✅ | ACP 协议桥接 | session_updates（e2a/acp）+ AcpGatewayBridge 桥主体/三拦截器/timer + GatewayServer/app_gateway 接线 + MessageHandler 别名链 + AcpChannel 本体/WS 客户端族/31 例映射 + cmd acp 双模式 + 桥 24 例 + e2e 3 用例全绿；**2026-10-30 完整对齐复核闭合**（P1 数字 jsonrpc id 单点归一 `NormalizeJSONRPCID`／P2 桥 final 非 idle 分支补 timer cancel／P3 stdin 末行无换行不丢弃／P4 路由工厂链真接通：binding 补 forward 集合 + `BuildTuiRouteBinding`+Install + `RegisterLocalHandler`，/acp 与 /tui 同链／B1 WS ping 心跳／B3 桥 panic→-32603／B4 别名锁 RWMutex+ctx 透传／B5 `-g` 短选项／B8 非对象 JSON 文案），protocol/acp 覆盖率 86.1%、gateway 81.9%、e2a/acp 95.2% | `jiuwenswarm/gateway/channel_manager/protocol/acp/` |
 | 11.26 | ☐ | A2A 协议通道 | A2A Agent 通道 | `jiuwenswarm/gateway/channel_manager/protocol/a2a/` |
 
 ---
