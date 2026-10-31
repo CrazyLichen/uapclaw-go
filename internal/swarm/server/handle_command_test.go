@@ -94,7 +94,11 @@ func TestHandleCommandRecap(t *testing.T) {
 	}
 }
 
-// TestHandleCommandModel 验证 command.model 返回 ok=true。
+// TestHandleCommandModel 验证 command.model 未知 action 走 Python 的缺省分支。
+//
+// Python _handle_command_model 对非 add_model/switch_model 的 action 返回
+// ok=True + {"current":..., "available":["default-model"]}，原来的 stub 冒烟
+// 断言 payload.ok==true 编码的是 stub 行为，已按 Python 改写。
 func TestHandleCommandModel(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodCommandModel,
@@ -104,8 +108,11 @@ func TestHandleCommandModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleCommandModel 返回错误: %v", err)
 	}
-	if ok := resp.Payload["ok"]; ok != true {
-		t.Errorf("payload.ok 应为 true, 实际: %v", ok)
+	if !resp.OK {
+		t.Errorf("缺省分支应 ok=true，实际 %v", resp.OK)
+	}
+	if _, has := resp.Payload["available"]; !has {
+		t.Errorf("缺省分支应带 available 字段，实际 payload: %v", resp.Payload)
 	}
 }
 
