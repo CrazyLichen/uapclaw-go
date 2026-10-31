@@ -107,9 +107,11 @@ agent 模式的 output 目录经 `agentWorkspaceDir → workspaceDir` 回退得�
 | 文件 | 改动 | 说明 |
 |---|---|---|
 | `tests/integration/mockllm/mock_client.go` | `InvokeRecord` 增 `Messages` 字段，`Invoke` 记录入参（约 6 行） | D2；目录已在审计豁免清单 |
-| `tests/integration/testhelpers/dreaming_env.go`（新增） | `DreamingEnv`：包装 `NewAdapterTestEnv` + `WriteConfigYAML`；方法 `SessionsDir()` / `OutputDir(mode)` / `PlantSession(sid, mode, rounds)` / `AppendRounds(sid, n)` / `Touch(sid, delta)`（`os.Chtimes`）/ `ReadCheckpoint()` / `ReadDreamingMD()` / `AddJSONResponse(items)` / `UserPrompts()`（从 `InvokeRecord.Messages` 抽 user 文本） | 审计要求"每个文件必须有 suite.Run"，公共 helper 不能放测试文件；`testhelpers` 包没有 `_test.go`，不在审计 Dirs 列表（已用 `integration-audit -json` 核实） |
+| `tests/integration/testhelpers/dreaming_env.go`（新增） | `DreamingEnv`：包装 `NewAdapterTestEnv` + `WriteConfigYAML`；方法 `OutputDir(name)` / `Reset()` / `PlantSession(t, sid, mode, rounds)` / `AppendRounds(t, sid, from, to)` / `Touch(t, sid, delta)`（`os.Chtimes`）/ `QueueJSON(t, items)` / `QueueError(err)` / `UserPrompts()`（从 `InvokeRecord.Messages` 抽 user 文本）/ `ReadCheckpoint(t, outputDir)` / `ReadDreamingMD(outputDir)` | 审计要求"每个文件必须有 suite.Run"，公共 helper 不能放测试文件；`testhelpers` 包没有 `_test.go`，不在审计 Dirs 列表（已用 `integration-audit -json` 核实） |
 
-`AddJSONResponse` 统一以 ```` ```json\n[...]\n``` ```` 形式喂响应，命中 `extractViaLLM` 的围栏分支。
+`QueueJSON` 统一以 ```` ```json\n[...]\n``` ```` 形式喂响应，命中 `extractViaLLM` 的围栏分支。
+
+实施期调整（2026-10-31）：`DreamingEnv` 的 `history.json` / `metadata.json` 造数改用类型化结构体 `historyEntry` / `sessionMetadata`（`event_type` 带 `omitempty` 以保持真实文件形状），不再用 `map[string]any` + `writeJSON(any)`；`real_llm/dreaming_real_test.go` 复用 `DreamingEnv` 播种会话，删掉自己那份 fixture 与 `plantSession`。改后本批新增代码中的 `any` 仅剩 `CreateInstance(ctx, map[string]any{...})` 一处——那是生产签名强制的，与依赖环无关。
 
 ## 5. 用例清单
 
