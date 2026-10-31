@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/suite"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
@@ -42,16 +41,15 @@ func (s *DreamingRealSuite) TestDreamingReal_真实LLM扫一次() {
 	}
 	s.SkipIfNoRealLLM()
 
-	env := testhelpers.NewAdapterTestEnv(s.T(), mockllm.NewMockModelClient(), "dreaming_real")
+	env := testhelpers.NewDreamingEnv(s.T(), mockllm.NewMockModelClient(), "dreaming_real")
 	s.writeRealConfig(env.DataDir)
 
-	sessionsDir := filepath.Join(env.DataDir, "agent", "sessions")
 	for _, sid := range []string{"sess-001", "sess-002", "sess-003"} {
-		s.plantSession(sessionsDir, sid, 5)
+		env.PlantSession(s.T(), sid, "agent.plan", 5)
 	}
 
-	outDir := filepath.Join(env.DataDir, "agent", "workspace", "memory")
-	sweeper := swarmdreaming.NewSweeper(sessionsDir, outDir, "agent", "zh")
+	outDir := env.OutputDir("memory")
+	sweeper := swarmdreaming.NewSweeper(env.SessionsDir, outDir, "agent", "zh")
 	s.Require().NoError(sweeper.Init())
 	sweeper.RunSweep(s.Ctx)
 
@@ -75,6 +73,7 @@ func (s *DreamingRealSuite) TestDreamingReal_真实LLM扫一次() {
 
 // writeRealConfig 把 RealLLMSuite 的真实模型配置写入 <dataDir>/config/config.yaml。
 //
+// NewDreamingEnv 预置的是指向 mock provider 的 config，这里覆盖为真实模型配置：
 // extractViaLLM 通过 config.GetDefaultModels(nil) 读取该文件，因此必须落盘。
 // 写完需重置 path 缓存，否则 ConfigDir 仍指向旧路径。
 func (s *DreamingRealSuite) writeRealConfig(dataDir string) {
@@ -95,28 +94,4 @@ func (s *DreamingRealSuite) writeRealConfig(dataDir string) {
 	s.Require().NoError(os.MkdirAll(filepath.Dir(path), 0o755))
 	s.Require().NoError(os.WriteFile(path, []byte(content), 0o644))
 	pathutil.ResetCache()
-}
-
-// plantSession 在 sessionsDir 下写 history.json 与 metadata.json。
-func (s *DreamingRealSuite) plantSession(sessionsDir, sid string, rounds int) {
-	s.T().Helper()
-
-	dir := filepath.Join(sessionsDir, sid)
-	s.Require().NoError(os.MkdirAll(dir, 0o755))
-	entries := make([]map[string]any, 0, rounds*2)
-	for i := 1; i <= rounds; i++ {
-		entries = append(entries, map[string]any{"role": "user", "content": fmt.Sprintf("第%d个问题：Go 里如何做 mtime 断言？", i)})
-		entries = append(entries, map[string]any{
-			"role":       "assistant",
-			"content":    fmt.Sprintf("第%d个回答：用 os.Chtimes 显式设置。", i),
-			"event_type": "chat.final",
-		})
-	}
-	data, err := json.Marshal(entries)
-	s.Require().NoError(err)
-	s.Require().NoError(os.WriteFile(filepath.Join(dir, "history.json"), data, 0o644))
-
-	meta, err := json.Marshal(map[string]any{"mode": "agent.plan", "session_id": sid, "created_at": time.Now().Unix()})
-	s.Require().NoError(err)
-	s.Require().NoError(os.WriteFile(filepath.Join(dir, "metadata.json"), meta, 0o644))
 }

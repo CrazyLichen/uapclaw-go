@@ -34,6 +34,29 @@ type DreamingEnv struct {
 	Mock *mockllm.MockModelClient
 }
 
+// historyEntry history.json 中的一条对话事件（测试造数用）。
+//
+// 不复用 swarmdreaming.HistoryEvent：后者无 omitempty，会把 user 消息写成
+// "event_type":""，与真实 history.json 形状不符，反而掩盖后续变更。
+type historyEntry struct {
+	// Role 消息角色
+	Role string `json:"role"`
+	// Content 消息内容
+	Content string `json:"content"`
+	// EventType 事件类型（仅 assistant 终态消息携带）
+	EventType string `json:"event_type,omitempty"`
+}
+
+// sessionMetadata metadata.json 的测试造数结构。
+type sessionMetadata struct {
+	// Mode 会话模式（如 agent.plan / code.normal）
+	Mode string `json:"mode"`
+	// SessionID 会话标识
+	SessionID string `json:"session_id"`
+	// CreatedAt 创建时间（Unix 秒）
+	CreatedAt int64 `json:"created_at"`
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDreamingEnv 构建隔离环境并写入指向 mock provider 的 config.yaml。
@@ -80,20 +103,20 @@ func (e *DreamingEnv) PlantSession(t *testing.T, sid, mode string, rounds int) {
 		t.Fatalf("创建会话目录 %s 失败: %v", sid, err)
 	}
 
-	entries := make([]map[string]any, 0, rounds*2)
+	entries := make([]historyEntry, 0, rounds*2)
 	for i := 1; i <= rounds; i++ {
-		entries = append(entries, map[string]any{"role": "user", "content": fmt.Sprintf("第%d个问题", i)})
-		entries = append(entries, map[string]any{
-			"role":       "assistant",
-			"content":    fmt.Sprintf("这是第%d个回答", i),
-			"event_type": "chat.final",
+		entries = append(entries, historyEntry{Role: "user", Content: fmt.Sprintf("第%d个问题", i)})
+		entries = append(entries, historyEntry{
+			Role:      "assistant",
+			Content:   fmt.Sprintf("这是第%d个回答", i),
+			EventType: "chat.final",
 		})
 	}
-	e.writeJSON(t, filepath.Join(dir, "history.json"), entries)
-	e.writeJSON(t, filepath.Join(dir, "metadata.json"), map[string]any{
-		"mode":       mode,
-		"session_id": sid,
-		"created_at": time.Now().Unix(),
+	e.writeHistory(t, filepath.Join(dir, "history.json"), entries)
+	e.writeMetadata(t, filepath.Join(dir, "metadata.json"), sessionMetadata{
+		Mode:      mode,
+		SessionID: sid,
+		CreatedAt: time.Now().Unix(),
 	})
 }
 
@@ -106,19 +129,19 @@ func (e *DreamingEnv) AppendRounds(t *testing.T, sid string, from, to int) {
 	if err != nil {
 		t.Fatalf("读取 %s 失败: %v", sid, err)
 	}
-	var entries []map[string]any
+	var entries []historyEntry
 	if err := json.Unmarshal(raw, &entries); err != nil {
 		t.Fatalf("解析 %s 失败: %v", sid, err)
 	}
 	for i := from; i <= to; i++ {
-		entries = append(entries, map[string]any{"role": "user", "content": fmt.Sprintf("第%d个问题", i)})
-		entries = append(entries, map[string]any{
-			"role":       "assistant",
-			"content":    fmt.Sprintf("这是第%d个回答", i),
-			"event_type": "chat.final",
+		entries = append(entries, historyEntry{Role: "user", Content: fmt.Sprintf("第%d个问题", i)})
+		entries = append(entries, historyEntry{
+			Role:      "assistant",
+			Content:   fmt.Sprintf("这是第%d个回答", i),
+			EventType: "chat.final",
 		})
 	}
-	e.writeJSON(t, path, entries)
+	e.writeHistory(t, path, entries)
 }
 
 // Touch 把会话的 history.json 与目录 mtime 设为 now+delta（delta 可为负）。
@@ -206,11 +229,24 @@ func (e *DreamingEnv) ReadDreamingMD(outputDir string) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// writeJSON 以 UTF-8 JSON 写入文件。
-func (e *DreamingEnv) writeJSON(t *testing.T, path string, v any) {
+// writeHistory 以 UTF-8 JSON 写入 history.json。
+func (e *DreamingEnv) writeHistory(t *testing.T, path string, entries []historyEntry) {
 	t.Helper()
 
-	data, err := json.Marshal(v)
+	data, err := json.Marshal(entries)
+	if err != nil {
+		t.Fatalf("序列化 %s 失败: %v", path, err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("写入 %s 失败: %v", path, err)
+	}
+}
+
+// writeMetadata 以 UTF-8 JSON 写入 metadata.json。
+func (e *DreamingEnv) writeMetadata(t *testing.T, path string, meta sessionMetadata) {
+	t.Helper()
+
+	data, err := json.Marshal(meta)
 	if err != nil {
 		t.Fatalf("序列化 %s 失败: %v", path, err)
 	}

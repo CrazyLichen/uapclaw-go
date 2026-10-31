@@ -357,6 +357,7 @@ func (s *SweeperIncrementalSuite) TestScanNewSessions_模式不匹配跳过() {
 	for _, sess := range sessions {
 		s.NotEqual("sess-code", sess.SessionID)
 	}
+	s.Equal(0, s.MockLLM.InvokeCallCount(), "纯扫描用例不应触发模型调用")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
