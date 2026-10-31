@@ -589,8 +589,9 @@ func TestWithConfigFile(t *testing.T) {
 }
 
 func TestWithConfigFile_文件不存在(t *testing.T) {
-	// 指向不存在的目录
-	t.Setenv("UAPCLAW_DATA_DIR", "/nonexistent/path")
+	// 指向不存在的目录（用 t.TempDir() 下的子路径，避免 CI 非 root 用户
+	// 因 mkdir /nonexistent 权限不足而误判为 Setup 失败）
+	t.Setenv("UAPCLAW_DATA_DIR", filepath.Join(t.TempDir(), "missing-data-dir"))
 
 	pathutil.ResetCache()
 	resetGlobal()
