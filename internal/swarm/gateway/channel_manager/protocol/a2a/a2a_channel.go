@@ -3,13 +3,18 @@ package a2a
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	sdka2a "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/a2aproject/a2a-go/v2/a2asrv"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
@@ -282,7 +287,97 @@ func (ch *A2AChannel) Stop(ctx context.Context) error {
 // C 返回应答队列的只读通道（executor 与测试消费用）。
 func (p *pendingRequest) C() <-chan *schema.Message { return p.ch }
 
+// Start 启动 A2A HTTP 服务（未启用则直接返回）。
+//
+// 对齐 Python start (L197-274)：绑定失败或服务提前退出都向调用方返错。
+// ctx 不参与（生命周期由 Stop 控制），形参保持接口一致。
+func (ch *A2AChannel) Start(_ context.Context) error {
+	if ch.running.Load() {
+		return nil
+	}
+	if !ch.cfg.Enabled {
+		logger.Info(logComponent).Msg("A2A channel disabled by config")
+		return nil
+	}
+
+	srv := &http.Server{
+		Handler:           ch.newMux(),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	addr := fmt.Sprintf("%s:%d", ch.cfg.Host, ch.cfg.Port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", addr, err)
+	}
+
+	ch.mu.Lock()
+	ch.srv = srv
+	ch.mu.Unlock()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.Serve(ln) }()
+
+	// 存活检查窗口，对齐 Python start (L263-267)：sleep(0.2) 后若 task 已完成则抛出异常
+	select {
+	case serveErr := <-errCh:
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			ch.mu.Lock()
+			ch.srv = nil
+			ch.mu.Unlock()
+			return serveErr
+		}
+	case <-time.After(startProbeWindow):
+	}
+
+	ch.running.Store(true)
+	logger.Info(logComponent).
+		Str("url", fmt.Sprintf("http://%s%s", addr, ch.cfg.RPCPath)).
+		Msg("A2A channel started")
+	return nil
+}
+
+// newMux 组装三条路由：JSON-RPC / Agent Card / Extended Agent Card。
+//
+// Python: A2AFastAPIApplication.build(rpc_url, agent_card_url, extended_agent_card_url) (L244-252)
+func (ch *A2AChannel) newMux() *http.ServeMux {
+	card := BuildAgentCard(&ch.cfg)
+	// 扩展卡与公共卡同源（Python 未配置独立扩展卡，spec §9-D6）
+	extendedProducer := func(context.Context, *sdka2a.GetExtendedAgentCardRequest) (*sdka2a.AgentCard, error) {
+		return card, nil
+	}
+	requestHandler := a2asrv.NewHandler(
+		executorFor(ch),
+		a2asrv.WithExtendedAgentCardProducer(a2asrv.ExtendedAgentCardProducerFn(extendedProducer)),
+	)
+
+	mux := http.NewServeMux()
+	// Python: create_jsonrpc_routes 路由声明 methods=['POST']，非 POST 应 405
+	mux.Handle(ch.cfg.RPCPath, postOnly(a2asrv.NewJSONRPCHandler(requestHandler)))
+	mux.Handle(ch.cfg.CardPath, a2asrv.NewStaticAgentCardHandler(card))
+	if ch.cfg.ExtendedCardPath != "" {
+		mux.Handle(ch.cfg.ExtendedCardPath, a2asrv.NewAgentCardHandler(
+			a2asrv.AgentCardProducerFn(func(context.Context) (*sdka2a.AgentCard, error) {
+				return card, nil
+			}),
+		))
+	}
+	return mux
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// postOnly 只放行 POST 请求，其余返回 405（对齐 Python 路由 methods=['POST']）。
+func postOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // orDefault 值非空则返回，否则返回默认值（对齐 Python `x.strip() or 默认`）。
 func orDefault(v, fallback string) string {
 	if v != "" {

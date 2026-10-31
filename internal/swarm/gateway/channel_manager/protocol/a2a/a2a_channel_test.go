@@ -2,6 +2,9 @@ package a2a
 
 import (
 	"encoding/json"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -236,4 +239,103 @@ func TestChannelType_返回A2A(t *testing.T) {
 	if got := ch.ChannelType(); got != cm.ChannelTypeA2A {
 		t.Errorf("ChannelType = %v, 期望 %v", got, cm.ChannelTypeA2A)
 	}
+}
+
+// TestNewMux_三路由 校验 rpc/card/extended 三路径
+func TestNewMux_三路由(t *testing.T) {
+	ch := NewA2AChannel(ConfigFromEnv(func(string) string { return "" }))
+	mux := ch.newMux()
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, ch.cfg.CardPath, nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("card 状态码 = %d, 期望 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"protocolBinding":"JSONRPC"`) {
+		t.Errorf("card 内容 = %s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, ch.cfg.ExtendedCardPath, nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("extended card 状态码 = %d, 期望 200", rec.Code)
+	}
+
+	// rpc 路径只接受 POST
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, ch.cfg.RPCPath, nil))
+	if rec.Code == http.StatusOK {
+		t.Error("rpc GET 不应返回 200")
+	}
+}
+
+// TestStart_未启用不监听 未启用时 Start 直接返回且不置运行态
+func TestStart_未启用不监听(t *testing.T) {
+	ch := NewA2AChannel(A2AChannelConfig{Enabled: false, ChannelID: "a2a"})
+	if err := ch.Start(t.Context()); err != nil {
+		t.Fatalf("未启用 Start 应返回 nil, 实际 %v", err)
+	}
+	if ch.IsRunning() {
+		t.Error("未启用不应处于运行态")
+	}
+}
+
+// TestStart_端口占用返错 端口被占时 Start 返错
+func TestStart_端口占用返错(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("预占端口失败: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	ch := NewA2AChannel(testConfig(port))
+	if err := ch.Start(t.Context()); err == nil {
+		t.Error("端口被占时应返回错误")
+	}
+	if ch.IsRunning() {
+		t.Error("启动失败不应置运行态")
+	}
+}
+
+// TestStartStop_幂等与运行态 重复 Start 幂等，Stop 后非运行态
+func TestStartStop_幂等与运行态(t *testing.T) {
+	ch := NewA2AChannel(testConfig(freePort(t)))
+	if err := ch.Start(t.Context()); err != nil {
+		t.Fatalf("Start 失败: %v", err)
+	}
+	if !ch.IsRunning() {
+		t.Error("Start 后应处于运行态")
+	}
+	if err := ch.Start(t.Context()); err != nil {
+		t.Errorf("重复 Start 应返回 nil, 实际 %v", err)
+	}
+	if err := ch.Stop(t.Context()); err != nil {
+		t.Errorf("Stop 失败: %v", err)
+	}
+	if ch.IsRunning() {
+		t.Error("Stop 后不应运行")
+	}
+}
+
+// testConfig 构造测试用完整配置
+func testConfig(port int) A2AChannelConfig {
+	return A2AChannelConfig{
+		Enabled: true, Host: "127.0.0.1", Port: port,
+		RPCPath: "/a2a", CardPath: "/.well-known/agent-card.json",
+		ExtendedCardPath: "/agent/authenticatedExtendedCard",
+		ProtocolVersion:  "1.0.0", ChannelID: "a2a",
+		AppName: "UapClaw Gateway A2A Server", AppDescription: "d", AppVersion: "0.1.0",
+	}
+}
+
+// freePort 申请一个当前空闲的本地端口
+func freePort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("申请端口失败: %v", err)
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port
 }
