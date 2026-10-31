@@ -29,7 +29,7 @@ type InMemoryCheckpointer struct {
 	// sessionToWorkflowIDs 会话到工作流 ID 集合的映射，key=sessionID
 	sessionToWorkflowIDs map[string]map[string]bool
 	// graphStore 图状态存储
-	// ⤵️ 8.7 回填：Graph Store 实现后替换为 Store 实例
+	// ⤵️ 8.9 回填：Graph Store 实现后替换为 Store 实例
 	graphStore any
 }
 
@@ -102,7 +102,7 @@ func NewInMemoryCheckpointer() *InMemoryCheckpointer {
 		agentTeamStores:      make(map[string]*AgentTeamStorage),
 		workflowStores:       make(map[string]*WorkflowStorage),
 		sessionToWorkflowIDs: make(map[string]map[string]bool),
-		graphStore:           nil, // ⤵️ 8.7 回填
+		graphStore:           nil, // ⤵️ 8.9 回填
 	}
 }
 
@@ -182,7 +182,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 					Str("storage_type", "inmemory").
 					Msg("force clearing all checkpoints of current workflow")
 
-				// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
+				// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
 				func() {
 					// 预留 graph store delete 逻辑
 				}()
@@ -569,7 +569,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 
 	// 清除 workflow 相关的 graph store 和 workflow store
 	for wid := range workflowIDs {
-		// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, wid)
+		// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, wid)
 		_ = wid // 占位
 	}
 	delete(cp.sessionToWorkflowIDs, sessionID)
@@ -620,7 +620,7 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, a
 }
 
 // GraphStore 获取图状态存储。
-// ⤵️ 8.7 回填：Graph Store 实现后返回 Store 实例
+// ⤵️ 8.9 回填：Graph Store 实现后返回 Store 实例
 func (cp *InMemoryCheckpointer) GraphStore() any {
 	return cp.graphStore
 }
@@ -940,7 +940,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, w
 
 	isSucceed := false
 
-	// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
+	// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
 	// 暂时标记为成功（因为没有 graph store 操作）
 	isSucceed = true
 
@@ -996,7 +996,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSessionLocked(ctx context.Cont
 
 	isSucceed := false
 
-	// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
+	// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
 	isSucceed = true
 
 	// 清除 workflow store（不需要再加锁，调用方已持锁）

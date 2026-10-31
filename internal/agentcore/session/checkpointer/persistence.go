@@ -94,7 +94,7 @@ type PersistenceCheckpointer struct {
 	// workflowStorage Workflow 持久化状态存储
 	workflowStorage *PersistenceWorkflowStorage
 	// graphStore 图状态存储
-	// ⤵️ 8.7 回填
+	// ⤵️ 8.9 回填
 	graphStore any
 }
 
@@ -136,7 +136,7 @@ func NewPersistenceCheckpointer(kvStore kv.BaseKVStore) *PersistenceCheckpointer
 		agentStorage:     newPersistenceAgentStorage(kvStore),
 		agentTeamStorage: newPersistenceAgentTeamStorage(kvStore),
 		workflowStorage:  newPersistenceWorkflowStorage(kvStore),
-		graphStore:       nil, // ⤵️ 8.7 回填
+		graphStore:       nil, // ⤵️ 8.9 回填
 	}
 }
 
@@ -742,7 +742,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 					return nil
 				}
 
-				// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
+				// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
 
 				if err := cp.workflowStorage.Clear(ctx, workflowID, sessionID); err != nil {
 					return err
@@ -791,7 +791,7 @@ func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, sess
 			Str("storage_type", "persistence").
 			Msg("workflow completed normally, clearing checkpoint")
 
-		// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
+		// ⤵️ 8.9 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
 
 		if err := cp.workflowStorage.Clear(ctx, workflowID, sessionID); err != nil {
 			return err
@@ -880,7 +880,7 @@ func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string
 }
 
 // GraphStore 获取图状态存储。
-// ⤵️ 8.7 回填
+// ⤵️ 8.9 回填
 func (cp *PersistenceCheckpointer) GraphStore() any {
 	return cp.graphStore
 }

@@ -548,7 +548,7 @@ func TestPersistenceCheckpointer_GraphStore(t *testing.T) {
 
 	gs := cp.GraphStore()
 	if gs != nil {
-		t.Error("GraphStore 当前应为 nil（⤵️ 8.7 回填）")
+		t.Error("GraphStore 当前应为 nil（⤵️ 8.9 回填）")
 	}
 }
 

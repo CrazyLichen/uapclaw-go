@@ -78,7 +78,7 @@ type Checkpointer interface {
 	// Python: release(session_id, agent_id=None)，Go 扩展支持批量 agentID。
 	Release(ctx context.Context, sessionID string, agentID ...string) error
 	// GraphStore 获取图状态存储
-	// ⤵️ 8.7 回填：Graph Store 实现后返回 Store 实例
+	// ⤵️ 8.9 回填：Graph Store 实现后返回 Store 实例
 	GraphStore() any
 }
 
