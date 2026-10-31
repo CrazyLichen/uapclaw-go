@@ -223,8 +223,13 @@ git commit -m "test(acp): 假 ACP 对端小程序（echo/error 两 mode）"
 // 父进程退出时 stdin 关闭 → peer EOF 自然退出（与 Python 进程级 _clients 缓存同语义）。
 //
 // 对应 Python 代码：tests/system_tests/test_acp_stdio_client_st.py
-package acp_test
+package acp
 ```
+
+> **实施修正（2026-10-31 已完成）**：doc.go 必须是 `package acp`，不能是 `package acp_test`。
+> cmd/go 对「目录内非测试文件使用 `<名字>_test` 包名」的判定会与同名外部测试包冲突，
+> 报 `found packages acp (xxx_test.go) and acp_test (doc.go)`。
+> 测试文件仍为 `package acp_test`（标准外部测试包）。
 
 - [ ] **Step 2: 写 suite 骨架 + TestMain + echo 用例（先让它失败）**
 
