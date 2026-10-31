@@ -73,7 +73,7 @@ func TestHandleCommandModel_缺省Action(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, resp.OK)
 	assert.Equal(t, "m-cur", resp.Payload["current"])
-	assert.Equal(t, []any{"default-model"}, resp.Payload["available"])
+	assert.Equal(t, []string{"default-model"}, resp.Payload["available"])
 }
 
 // TestHandleCommandModel_ModelName未设置 current 回退 unknown。

@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/sessionops"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler/command_parser"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -75,6 +76,7 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 	// Python: L645-648 /skills list 走独立路径，且不创建 channel state
 	if parsed.Action == command_parser.ActionSkillsOK {
 		mh.skillsSlashNotice(msg)
+		logControlHandled(msg, channelType, parsed)
 		return true
 	}
 
@@ -123,6 +125,7 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 		return false
 	}
 
+	logControlHandled(msg, channelType, parsed)
 	return true
 }
 
@@ -237,6 +240,21 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed 
 		// 模式未变更：仅通知
 		mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel)})
 	}
+}
+
+// logControlHandled 记录 channel_control_handled 兼容事件。
+//
+// Python 无此事件（Python 只在解析后记一条 info）。Go 侧历史上用该事件名做
+// 排障检索，故保留：字段与旧实现一致（action 整型 + channel_id），另补
+// action_name/channel_type 便于阅读。删掉它会断外部日志看板。
+func logControlHandled(msg *schema.Message, channelType channel_manager.ChannelType, parsed command_parser.ParsedChannelControl) {
+	logger.Info(logComponent).
+		Str("event_type", "channel_control_handled").
+		Int("action", int(parsed.Action)).
+		Str("action_name", command_parser.ParsedControlActionString(parsed.Action)).
+		Str("channel_id", msg.ChannelID).
+		Str("channel_type", string(channelType)).
+		Msg("slash command handled")
 }
 
 // sendChannelNotice 发送渠道通知消息。

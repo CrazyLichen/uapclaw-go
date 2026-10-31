@@ -430,7 +430,7 @@ func (s *AgentServer) handleCommandModel(ctx context.Context, request *schema.Ag
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithPayload(map[string]any{
 				"current":   getenvOr("MODEL_NAME", "unknown"),
-				"available": []any{"default-model"},
+				"available": []string{"default-model"},
 			})), nil
 	}
 }
