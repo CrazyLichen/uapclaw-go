@@ -67,7 +67,7 @@ Channel(feishu/xiaoyi/dingtalk/whatsapp/wecom/wechat)
 
 | 类别 | 内容 |
 |---|---|
-| 对齐修正 | 第四节 A1-A8 共 8 项对账：A1-A3、A5-A8 需改代码（7 项），A4 核实等价仅补测试 |
+| 对齐修正 | 第四节 A1-A8 共 8 项对账：**A1/A2/A5/A6/A7/A8 改代码（6 项）**，A3/A4 核实等价、仅补测试（2 项） |
 | 新实现 | `handleCommandModel` 从 stub 换成真实实现（第六节） |
 | 测试 | 第七节 |
 | 文档 | 第八节 |
@@ -104,7 +104,7 @@ command.sandbox 命令面（agent_ws_server.py L2853-3510，约 660 行；另有
 
 **结论**：这不是「换个章节顺序」能绕开的量级，而是「移植 21k 行 Python 守护进程」或「把它当外部可执行依赖」的二选一。本节点到为止：10.4.4b 只保留命令面契约，⤵️ 10.3.24。
 
-## 四、对账结果：8 项（7 改 + 1 等价确认）
+## 四、对账结果：8 项（6 改 + 2 等价确认）
 
 行号 Python = `message_handler/message_handler.py`，Go = `message_handler/slash_cmd.go`（除注明外）。
 
@@ -127,14 +127,15 @@ command.sandbox 命令面（agent_ws_server.py L2853-3510，约 660 行；另有
 | 改法 | ① 成功分支加 `logger.Info`，字段 `source_session_id` / `fork_session_id` / `title`；② `resp.OK=false` 分支加 `logger.Warn`（`event_type=branch_slash_rejected`）；③ 保持发通知文案不变 |
 | 风险 | 无 |
 
-### A3 `/skills list` 非 dict payload 透传原值
+### A3 `/skills list` 非 dict payload：核实为结构差异，不改代码
 
 | 项 | 内容 |
 |---|---|
-| Python | L918-921：`if isinstance(resp.payload, dict): notice_payload = dict(resp.payload) else: notice_payload = {"data": resp.payload}` |
-| Go 现状 | L309 恒为 `map[string]any{"data": nil}` |
-| 改法 | `resp.Payload` 为 nil 时用 `{"data": nil}`（与 Python `resp.payload is None` 一致），非 nil 时 `{"data": <原值>}`。因 Go 的 `AgentResponse.Payload` 类型为 `map[string]any`，非 dict 只可能来自 wire 解析失败的兜底，此处按「有值透传、无值 nil」落地并在 spec 中登记类型差异 |
-| 风险 | 低 |
+| Python | L918-921：payload 为 dict 则逐键透传，否则 `{"data": resp.payload}` 透传原值 |
+| Go 现状 | L307-310：payload 非 nil 则逐键复制，nil 则 `{"data": nil}` |
+| 核实结论 | Go 的 `schema.AgentResponse.Payload` 类型是 `map[string]any`（`schema/agent.go:64`），**非 dict payload 在 Go 侧结构上不可达**——wire 解码阶段就失败并走 `SendRequest` 错误路径。因此 `{"data": nil}` 恰好等价于 Python 的 `payload is None` 分支 |
+| 改法 | **不改代码**。差异登记为 D6：AgentServer 若真返回非 dict payload，Python 透传原文、Go 走错误路径回 `获取技能列表失败：<err>`。根因是 E2A 响应 schema 在 Go 侧强类型化，改它等于改整个 wire 层，不在本节范围 |
+| 风险 | 无 |
 
 ### A4 `/skills list` 五种文案形态：核实等价，不改代码
 
@@ -205,6 +206,7 @@ command.sandbox 命令面（agent_ws_server.py L2853-3510，约 660 行；另有
 | D3 | 解析器用 `map[ModeSubcommand]string` 等查表，Python 用 `frozenset` 推导 | 等价，Go 侧另有 `ValidModeLines` 等导出变量供测试与外部只读引用 |
 | D4 | `strconv.Atoi` 比 Python `int()` 严格 | Python `int("1_0")==10`、`int("٥")==5`；Go 侧返回 `rewind_bad`。**Go 更严，方向安全**，不为对齐而实现 Python 的 `int()` 全语义 |
 | D5 | `/branch` 的 `resp.OK=false` 走「解析 payload.error 拼文案」而非 Python 的 `raise ValueError` | Go 无异常，等价；文案已对齐为 `分叉失败：<err>` |
+| D6 | `/skills list` 非 dict payload 无法透传（见 A3） | `schema.AgentResponse.Payload` 是 `map[string]any`，非 dict 不可达；要透传必须把整个 E2A 响应 payload 改成 `any`，影响面远超本节 |
 
 ## 六、`command.model` 全量实现
 
@@ -269,7 +271,7 @@ command.sandbox 命令面（agent_ws_server.py L2853-3510，约 660 行；另有
 
 | 函数 | 用例 |
 |---|---|
-| `skillsSlashNotice` | ① 未连接（A4 形态）② `resp.OK=true` 且 payload dict ③ `resp.OK=true` 且 payload nil（A3）④ `resp.OK=false` 带 error ⑤ `resp.OK=false` 无 error ⑥ `Send` 返回 err |
+| `skillsSlashNotice` | ① 未连接（A4 形态）② `resp.OK=true` 且 payload 非空（A3：断言逐键透传）③ `resp.OK=true` 且 payload nil（A3：断言 `{"data": nil}`）④ `resp.OK=false` 带 error ⑤ `resp.OK=false` 无 error ⑥ `Send` 返回 err |
 | `branchSlashNotice` | ① 无活跃会话 ② 未连接 ③ `resp.OK=false` 带 error（A2 日志）④ 成功且 payload 回填 session_id/title ⑤ 成功且 payload 缺字段（回落到 newSID/branchName）⑥ `Send` err ⑦ 成功路径取消为**同步**（A1：断言取消完成先于通知发布） |
 | `rewindSlashNotice` | ① 无活跃会话 ② E2A 成功（断言 preview 无兜底、A5；断言 info 含 rewind_context、A6）③ `resp.OK=false` → fallback ④ `Send` err → fallback ⑤ fallback 返回 err ⑥ fallback 成功（断言不再兜底 content） |
 | `rewindSlashConfirmPrompt` | 已有四行模板用例，补 `turn==0` 回落 1 |
@@ -295,7 +297,7 @@ command.sandbox 命令面（agent_ws_server.py L2853-3510，约 660 行；另有
 10.4.4 行**保留原文**，之后插入两行：
 
 ```
-| 10.4.4a | ☐ | Slash 命令处理（对账收口 + /model） | 8 项对账（A1-A3、A5-A8 改代码，A4 核实等价）+ command.model 全量实现；解析器 94.4%/分发器 ≥85%；/evolve 5 个命令已完整实现（deep_adapter_slash.go 563 行，非骨架） | `command_parser/slash_command.py` · `message_handler.py` L347-1145 · `agent_ws_server.py` L2277-2352 |
+| 10.4.4a | ☐ | Slash 命令处理（对账收口 + /model） | 8 项对账（A1/A2/A5/A6/A7/A8 改代码，A3/A4 核实等价）+ command.model 全量实现；解析器 94.4%/分发器 ≥85%；/evolve 5 个命令已完整实现（deep_adapter_slash.go 563 行，非骨架） | `command_parser/slash_command.py` · `message_handler.py` L347-1145 · `agent_ws_server.py` L2277-2352 |
 | 10.4.4b | ⤵️ | Slash 命令处理（/sandbox 命令面） | 9 个 sub + Linux 平台守卫 + SANDBOX_BAD_REQUEST/SANDBOX_INTERNAL 双错误码；依赖 10.3.24 Sandbox 包与 jiuwenbox（21k 行 Python 守护进程） | `agent_ws_server.py` L2853-3510 |
 ```
 
@@ -313,7 +315,7 @@ command.sandbox 命令面（agent_ws_server.py L2853-3510，约 660 行；另有
 2. `go test -cover ./internal/swarm/server/`：`handleCommandModel` 行覆盖 100%（含掩码辅助函数）；
 3. 全量回归：`CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...` 零 FAIL；
 4. `go vet ./...` 干净，`gofmt -l` 为空；
-5. A1-A8 每项有对应测试断言（A1 断言取消先于通知、A2 断言成功有 info、A3/A5 断言取值、A4 断言三种失败文案、A6 断言 info 含 `rewind_context`、A7 断言 state 未创建、A8 断言 `params` 为 `{}`）。
+5. A1-A8 每项有对应测试断言（A1 断言取消先于通知、A2 断言成功有 info、A3/A4 断言既有形态不被改动、A5 断言 preview 不兜底、A6 断言 info 含 `rewind_context`、A7 断言 state 未创建、A8 断言 `params` 为 `{}`）。
 
 ## 十、风险与回滚
 
