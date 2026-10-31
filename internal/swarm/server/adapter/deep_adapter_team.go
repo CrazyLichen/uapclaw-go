@@ -16,7 +16,6 @@ import (
 	teammonitor "github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
 	ateamruntime "github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -1352,48 +1351,10 @@ func chunkToMap(chunk any) map[string]any {
 // 原三个 typed 分支只断言 map[string]any，结构体 payload 全部返回 nil，
 // 导致 task_failed/task_completion 事件在消费循环被整块丢弃（前端静默失败）。
 //
-// 桥接对齐 Python payload.model_dump(mode="json")：json.Marshal→Unmarshal
-// 产 map，形状与 Python dict 逐键一致（type/data/metadata，DataFrame
-// 经 MarshalDataFrames 多态序列化为 {text}/{data}/{name,...}）。
+// 桥接实现已上提到 utils.PayloadToMap（deep 主循环与 ParseStreamChunk 共用），
+// 此处保留函数名作为包内薄封装，避免改动既有调用点。
 func payloadToMap(payload any) map[string]any {
-	if payload == nil {
-		return nil
-	}
-	if m, ok := payload.(map[string]any); ok {
-		return m
-	}
-	// 指针与值类型都桥接（生产端为指针；值类型分支对齐 Python
-	// isinstance 的宽容度，防御未来构造点变化）
-	switch cop := payload.(type) {
-	case *cschema.ControllerOutputPayload:
-		if cop == nil {
-			return nil
-		}
-		return marshalControllerOutputPayload(cop)
-	case cschema.ControllerOutputPayload:
-		return marshalControllerOutputPayload(&cop)
-	}
-	return nil
-}
-
-// marshalControllerOutputPayload 桥接单个 ControllerOutputPayload 到 map。
-// json.Marshal→Unmarshal 产 map，形状对齐 Python payload.model_dump(mode="json")。
-func marshalControllerOutputPayload(cop *cschema.ControllerOutputPayload) map[string]any {
-	b, err := json.Marshal(cop)
-	if err != nil {
-		logger.Warn(logComponent).
-			Err(err).
-			Msg("chunkToMap: ControllerOutputPayload marshal failed")
-		return nil
-	}
-	var m map[string]any
-	if err := json.Unmarshal(b, &m); err != nil {
-		logger.Warn(logComponent).
-			Err(err).
-			Msg("chunkToMap: ControllerOutputPayload unmarshal failed")
-		return nil
-	}
-	return m
+	return utils.PayloadToMap(payload)
 }
 
 // teamSpecTeamName 从 teamSpec 中提取 team_name。

@@ -1218,7 +1218,9 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			}
 
 			chunkType := output.Type
-			payload, _ := output.Payload.(map[string]any)
+			// payloadToMap 桥接 map 与 *cschema.ControllerOutputPayload 两种形态
+			// （task_loop 产出结构体指针，只断言 map 会让整块 chunk 不可读）
+			payload := payloadToMap(output.Payload)
 
 			switch chunkType {
 			case "llm_usage":

@@ -73,7 +73,9 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 	}
 
 	chunkType := output.Type
-	payload, _ := output.Payload.(map[string]any)
+	// 桥接结构体 payload（ControllerOutputPayload）为 map，对齐 Python dict 语义；
+	// 只断言 map 会让 task_loop 产出的 task_failed/task_completion 被整块丢弃。
+	payload := PayloadToMap(output.Payload)
 	if payload == nil {
 		payload = make(map[string]any)
 	}
