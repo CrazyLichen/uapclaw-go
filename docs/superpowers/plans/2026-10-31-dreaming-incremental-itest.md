@@ -1343,7 +1343,7 @@ tests/integration/swarm/agents/harness/common/memory/dreaming
 
 - [ ] **Step 3: 更新计划表备注**
 
-`IMPLEMENTATION_PLAN.md` 第 466 行（7.20 行）备注列末尾追加：`；✅ 集成用例 37 个（原有 20 + 12 管线增量 + 4 接线 + 1 real-llm，跨 4 子系统，审计豁免已撤销）`。
+`IMPLEMENTATION_PLAN.md` 第 466 行（7.20 行）备注列末尾追加：`；✅ 集成用例 37 个（原有 20 + 12 管线增量 + 4 接线 + 1 real-llm），跨 3 子系统，审计豁免已撤销`。
 
 - [ ] **Step 4: 跑审计验证豁免撤销成立**
 
@@ -1351,7 +1351,7 @@ tests/integration/swarm/agents/harness/common/memory/dreaming
 GOPROXY=https://goproxy.cn,direct go run ./cmd/integration-audit -root tests/integration/swarm/agents/harness/common/memory/dreaming -defer-span
 ```
 
-Expected: 该目录 `Exempt=false`、`CallSpan` 包含 `swarm/agents` / `agentcore/memory` / `swarm/server` / `common/workspace` 四个子系统、无违规。
+Expected: 该目录 `Exempt=false`、`CallSpan` 包含 `swarm/agents` / `agentcore/memory` / `swarm/server` 三个子系统（`internal/common/*` 按审计规则不计入跨度）、`Passed=true`、无违规。
 
 - [ ] **Step 5: 提交**
 

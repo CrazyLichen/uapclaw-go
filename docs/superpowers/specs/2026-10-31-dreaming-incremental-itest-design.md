@@ -159,10 +159,11 @@ agent 模式的 output 目录经 `agentWorkspaceDir → workspaceDir` 回退得�
 |---|---|
 | `swarm/agents` | `NewSweeper` / `RunSweep` / `ScanNewSessions` / `StartDreaming` |
 | `agentcore/memory` | `NewDreamingOrchestrator` / `GetDreamingOrchestrator` / `StopDreaming` |
-| `common/workspace` | `AgentSessionsDir` / `AgentWorkspaceDir` |
 | `swarm/server` | `NewCodeAdapter` / `NewDeepAdapter` / `CreateInstance` / `TryStartDreaming` / `TryStopDreaming` |
 
-跨度 4，高于 `min-call-span=3`，不再进入灰区。收尾时从 `.integration-scope-exempt` 删除该目录条目及其注释（现记"覆盖 2 子系统"），并以 `integration-audit -root <该目录> -verify` 复核。
+计入跨度的子系统为 **3 个**（`swarm/agents`、`agentcore/memory`、`swarm/server`）。`common/workspace`（`AgentSessionsDir` / `AgentWorkspaceDir`）虽然被真实调用，但审计的 `subsystemOf`（`cmd/integration-audit/audit.go:540-552`）显式把 `internal/common/*` 排除在跨度之外——公共层不计入。
+
+跨度 3 已达到 `min-call-span=3`，不再进入灰区。收尾时从 `.integration-scope-exempt` 删除该目录条目及其注释（原记"覆盖 2 子系统"），并以 `integration-audit -root <该目录>` 复核 `Passed=true`。
 
 既有 `sweeper_e2e_test.go` 保留全部 20 个用例，仅调整 helper：`createSessionDir` 增加 mode 参数（默认 `agent`）、mtime 构造改用 `os.Chtimes`。删除用例会削弱有效测试密度，不在本次范围。
 

@@ -73,6 +73,3 @@ tests/integration/agentcore/harness/rails/tools
 # Swarm 记忆提示词：从真实配置文件读取 + 中文输出验证，
 # 覆盖集中于 swarm/agents 单子系统（约 68 行）
 tests/integration/swarm/memory
-
-# Swarm Dreaming 扫描器：覆盖 2 子系统（swarm/agents 248 行 + agentcore/memory 47 行）
-tests/integration/swarm/agents/harness/common/memory/dreaming
