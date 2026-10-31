@@ -1,6 +1,3 @@
-// Package a2a 提供 A2A（Agent2Agent）协议入站通道。
-//
-// 详见 doc.go。
 package a2a
 
 import (
