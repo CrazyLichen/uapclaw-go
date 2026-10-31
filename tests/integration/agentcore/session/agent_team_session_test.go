@@ -23,7 +23,7 @@ type mockCheckpointer struct{}
 func (m *mockCheckpointer) PreWorkflowExecute(_ context.Context, _ interfaces.InnerSession, _ any) error {
 	return nil
 }
-func (m *mockCheckpointer) PostWorkflowExecute(_ context.Context, _ interfaces.InnerSession, _ any, _ error) error {
+func (m *mockCheckpointer) PostWorkflowExecute(_ context.Context, _ interfaces.InnerSession, _ map[string]any, _ error) error {
 	return nil
 }
 func (m *mockCheckpointer) PreAgentExecute(_ context.Context, _ interfaces.InnerSession, _ any) error {

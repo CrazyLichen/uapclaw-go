@@ -758,7 +758,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 
 // PostWorkflowExecute 工作流执行后处理检查点。
 // Python: PersistenceCheckpointer.post_workflow_execute()
-func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
+func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result map[string]any, exception error) error {
 	sessionID := session.SessionID()
 	workflowID := getWorkflowID(session)
 
@@ -778,8 +778,7 @@ func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, sess
 	}
 
 	// 检查结果中是否有中断标记
-	resultMap, isMap := result.(map[string]any)
-	isInterrupted := isMap && isWorkflowInterrupted(resultMap)
+	isInterrupted := isWorkflowInterrupted(result)
 
 	if !isInterrupted {
 		// 工作流正常完成，清除检查点

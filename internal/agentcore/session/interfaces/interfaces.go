@@ -59,8 +59,11 @@ type InnerSession interface {
 type Checkpointer interface {
 	// PreWorkflowExecute 工作流执行前
 	PreWorkflowExecute(ctx context.Context, session InnerSession, inputs any) error
-	// PostWorkflowExecute 工作流执行后
-	PostWorkflowExecute(ctx context.Context, session InnerSession, result any, exception error) error
+	// PostWorkflowExecute 工作流执行后。
+	// result 收窄为 map[string]any：Python 侧该参数无类型注解（untyped），
+	// 唯一消费方式是 result.get(TASK_STATUS_INTERRUPT)，故只接受 map 形状结果，
+	// 非 map 结果由调用方在类型层面排除（偏差记录见 8.3d spec §12）。
+	PostWorkflowExecute(ctx context.Context, session InnerSession, result map[string]any, exception error) error
 	// PreAgentExecute Agent 执行前
 	PreAgentExecute(ctx context.Context, session InnerSession, inputs any) error
 	// PreAgentTeamExecute AgentTeam 执行前

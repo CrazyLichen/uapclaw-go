@@ -202,7 +202,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 
 // PostWorkflowExecute 工作流执行后处理检查点。
 // Python: InMemoryCheckpointer.post_workflow_execute()
-func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
+func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result map[string]any, exception error) error {
 	sessionID := session.SessionID()
 	workflowID := getWorkflowID(session)
 
@@ -222,8 +222,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 
 	// 检查结果中是否有中断标记
 	// Python: result.get(TASK_STATUS_INTERRUPT) is None
-	resultMap, isMap := result.(map[string]any)
-	isInterrupted := isMap && isWorkflowInterrupted(resultMap)
+	isInterrupted := isWorkflowInterrupted(result)
 
 	if !isInterrupted {
 		// 工作流正常完成，清除检查点
@@ -1081,9 +1080,9 @@ func isInteractiveInput(inputs any) bool {
 
 // isWorkflowInterrupted 检查工作流结果是否为中断状态。
 //
-// 只接受 map 形状的工作流结果：调用方负责类型断言，非 map 结果（nil、标量等）
-// 一律视为未中断。判据与 Python 完全一致：result.get(TASK_STATUS_INTERRUPT) is None
-// 为「未中断」，即键存在且值非 nil 才算中断。
+// result 由接口签名保证为 map 形状（nil map 亦安全，取值为零值）。
+// 判据与 Python 完全一致：result.get(TASK_STATUS_INTERRUPT) is None 为「未中断」，
+// 即键存在且值非 nil 才算中断。
 // Python: openjiuwen/core/session/checkpointer/inmemory.py (post_workflow_execute)
 func isWorkflowInterrupted(result map[string]any) bool {
 	interruptVal, exists := result[pregel.TaskStatusInterrupt]

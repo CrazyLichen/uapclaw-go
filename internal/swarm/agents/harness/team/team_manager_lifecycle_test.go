@@ -151,7 +151,7 @@ func (f *failingCheckpointer) PreWorkflowExecute(ctx context.Context, s interfac
 }
 
 // PostWorkflowExecute 工作流执行后（桩，无操作）
-func (f *failingCheckpointer) PostWorkflowExecute(ctx context.Context, s interfaces.InnerSession, result any, exception error) error {
+func (f *failingCheckpointer) PostWorkflowExecute(ctx context.Context, s interfaces.InnerSession, result map[string]any, exception error) error {
 	return nil
 }
 

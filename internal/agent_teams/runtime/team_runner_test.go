@@ -237,7 +237,7 @@ type postRunObserverCheckpointer struct {
 func (p *postRunObserverCheckpointer) PreWorkflowExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (p *postRunObserverCheckpointer) PostWorkflowExecute(ctx context.Context, s interfaces.InnerSession, result any, exception error) error {
+func (p *postRunObserverCheckpointer) PostWorkflowExecute(ctx context.Context, s interfaces.InnerSession, result map[string]any, exception error) error {
 	return nil
 }
 func (p *postRunObserverCheckpointer) PreAgentExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {
@@ -425,7 +425,7 @@ type failingCheckpointer struct{}
 func (f *failingCheckpointer) PreWorkflowExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (f *failingCheckpointer) PostWorkflowExecute(ctx context.Context, s interfaces.InnerSession, result any, exception error) error {
+func (f *failingCheckpointer) PostWorkflowExecute(ctx context.Context, s interfaces.InnerSession, result map[string]any, exception error) error {
 	return nil
 }
 func (f *failingCheckpointer) PreAgentExecute(ctx context.Context, s interfaces.InnerSession, inputs any) error {

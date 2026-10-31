@@ -58,7 +58,7 @@ type testMockCheckpointer struct{}
 func (m *testMockCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *testMockCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
+func (m *testMockCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result map[string]any, exception error) error {
 	return nil
 }
 func (m *testMockCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {

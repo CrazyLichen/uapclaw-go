@@ -169,7 +169,7 @@ type testMockCP struct{}
 func (m *testMockCP) PreWorkflowExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *testMockCP) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
+func (m *testMockCP) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result map[string]any, exception error) error {
 	return nil
 }
 func (m *testMockCP) PreAgentExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
