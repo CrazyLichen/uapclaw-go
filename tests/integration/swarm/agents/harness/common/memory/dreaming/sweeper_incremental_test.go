@@ -3,6 +3,7 @@
 package dreaming
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -228,6 +229,48 @@ func (s *SweeperIncrementalSuite) TestSweep_Code内容哈希去重() {
 	files, err := filepath.Glob(filepath.Join(outDir, "consolidated_*.md"))
 	s.Require().NoError(err)
 	s.Len(files, 1, "同内容只应产生 1 个文件")
+}
+
+// TestSweep_LLM报错无知识且会话仍记为已扫 测试模型报错时的实际落盘语义。
+//
+// 对齐 Python 的真实行为（非注释意图）：run_sweep 的 except 分支不可达，
+// 因为 _extract_via_llm 内部吞掉全部异常返回 []；Go 的 extractViaLLM 同样把
+// 错误降级为 (nil, nil)（sweeper.go S-02）。因此会话仍被记为已扫、不会重试。
+func (s *SweeperIncrementalSuite) TestSweep_LLM报错无知识且会话仍记为已扫() {
+	env := s.newEnv()
+	outDir := env.OutputDir("memory")
+	for _, sid := range []string{"sess-001", "sess-a", "sess-b"} {
+		env.PlantSession(s.T(), sid, "agent", 5)
+	}
+	env.QueueError(errors.New("mock llm failure"))
+	env.QueueError(errors.New("mock llm failure"))
+	env.QueueError(errors.New("mock llm failure"))
+
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(3, s.MockLLM.InvokeCallCount(), "三个会话仍应各尝试一次")
+	s.Empty(env.ReadDreamingMD(outDir), "报错时不应产出任何知识")
+
+	cp := env.ReadCheckpoint(s.T(), outDir)
+	s.Len(cp.ScannedSessions, 3, "报错视为成功，检查点仍应推进（不会重试）")
+	s.Equal(5, cp.ScannedSessions["sess-001"].RoundCount)
+
+	env.Reset()
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(0, s.MockLLM.InvokeCallCount(), "已扫会话不应重试")
+}
+
+// TestSweep_新会话不足3且无过期会话则整轮跳过 测试 MIN_NEW_SESSIONS 门槛。
+func (s *SweeperIncrementalSuite) TestSweep_新会话不足3且无过期会话则整轮跳过() {
+	env := s.newEnv()
+	outDir := env.OutputDir("memory")
+	for _, sid := range []string{"sess-001", "sess-002"} {
+		env.PlantSession(s.T(), sid, "agent", 5)
+	}
+	env.QueueJSON(s.T(), []map[string]string{{"title": "不应产生", "content": "x"}})
+
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(0, s.MockLLM.InvokeCallCount(), "2 个新会话 < 3，不应调用模型")
+	s.Empty(env.ReadDreamingMD(outDir))
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
