@@ -242,6 +242,7 @@ if interruptVal, exists := m["__interrupt__"]; exists && interruptVal != nil {
 | D5 | `sys.intern` 无对应实现 | Go 常量天然常驻且唯一，无需驻留 |
 | D6 | `_workflow.py:104-116` 的 `recursion_limit=100` 不抽入常量集 | Python 即调用点字面量；若抽成常量会诱导后续节「统一」成 10000，反而偏离 |
 | D7 | 测试中保留 `"__interrupt__"` 字面量作为输入数据 | 测试输入与实现常量解耦，可反向验证常量值不漂移；非偏差，仅记录 |
+| D8 | `Checkpointer.PostWorkflowExecute` 的 `result` 由 `any` 收紧为 `map[string]any`  | Python 侧该参数无类型注解，但唯一消费方式是 `result.get(TASK_STATUS_INTERRUPT)`，非 map 在 Python 必 AttributeError；收窄把运行时错误前移到编译期。详见 §12 |
 
 ## 8. 测试设计
 
@@ -290,6 +291,10 @@ if interruptVal, exists := m["__interrupt__"]; exists && interruptVal != nil {
 审查（实现 vs 计划、循环依赖、any 使用）后做两处修订：
 
 1. **计划文本订正**（`b98b7599`）：Task 2 Step 4 的期望值由「11 个子用例」改为「10 个子用例 + 1 个独立断言函数」；Task 4 Step 1 的 import 示例中 logger 路径由 `github.com/uapclaw/common/logger` 改为实际的 `github.com/uapclaw/uapclaw-go/internal/common/logger`。代码实现不变。
-2. **`isWorkflowInterrupted` 入参收窄**（`f88258bb`）：`any` → `map[string]any`，删除函数内的类型断言与 `result == nil` 分支；「非 map 结果视为未中断」上移到两处调用点（`resultMap, isMap := result.(map[string]any); isInterrupted := isMap && isWorkflowInterrupted(resultMap)`）。**接口 `PostWorkflowExecute(ctx, session, result any, exception error)` 保持 `any` 不变**，因为 Python 侧签名是 `result: Any`，收窄接口将引入新偏差且波及 10 个 mock 实现。覆盖率 83.5% → 83.6%（基线用 `git worktree` 单独测量，无回归）。
+2. **`PostWorkflowExecute` 的 `result` 全链收窄为 `map[string]any`**：先收窄私有函数 `isWorkflowInterrupted`（删除函数内类型断言与 `result == nil` 分支），随后按用户决策**贯通到接口**——`interfaces.Checkpointer.PostWorkflowExecute(..., result map[string]any, ...)` + 2 个实现 + 10 个 mock（`agent_teams` / `swarm` / `tests/integration` 各 mock 签名同步）。调用点回落为 `isInterrupted := isWorkflowInterrupted(result)`。
+
+   **新增偏差 D8**：Python 侧 `post_workflow_execute(self, session, result, exception)` 的 `result` **无类型注解**（untyped），Go 由 `any` 收紧为 `map[string]any`。依据：Python 中该参数的唯一消费方式是 `result.get(TASK_STATUS_INTERRUPT)`，非 map 结果在 Python 会直接 AttributeError，收窄后由编译器提前拦截，语义更严而非更松。影响面核实：生产调用点 0 处（8.14 workflow 尚未落地），测试调用点 15 处全部传 `map[string]any` 或 `nil`，无一处需要改语义。覆盖率 83.5%（与基线持平，基线用 `git worktree` 单独测量）。
+
+   **接口中其余 6 处 `any` 本次不动**，逐条理由：`ActorManager() any`（⤵️ 8.12 回填）、`GraphStore() any`（⤵️ 8.9 回填）已有回填标记；`PreWorkflowExecute`/`PreAgentExecute`/`PreAgentTeamExecute`/`Recover` 的 `inputs any` 对应 Python 同名参数（`pre_workflow_execute(inputs: InteractiveInput)` 虽带注解，但 `interaction` 包已 import `interfaces`，反向引用会成环，故只能留 `any`）。
 
 **循环依赖结论（审查项）**：`pregel` 包依赖闭包仅标准库（零业务依赖），`session/checkpointer → graph/pregel` 为单向边，反向不可达，`go list ./...` 无环。**遗留约束**：8.3c 落地后 `pregel` 将 import `graph/store`，届时若 8.9 的 `Store` 反向 import `session/interfaces`，即形成 `checkpointer → pregel → store → session/interfaces` 环；8.9 必须保持 `store` 层 session-free（Python `store/base.py` 只 import logging，可作依据）。
