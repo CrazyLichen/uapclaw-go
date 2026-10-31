@@ -81,6 +81,8 @@ const (
 	ChannelTypeWeChat ChannelType = "wechat"
 	// ChannelTypeCLI TUI/CLI 终端通道
 	ChannelTypeCLI ChannelType = "tui"
+	// ChannelTypeA2A A2A 协议通道（11.26，Go 侧扩展：Python ChannelType 无此项，11.26 spec §9-D10）
+	ChannelTypeA2A ChannelType = "a2a"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -106,6 +108,7 @@ func AllChannelTypes() []ChannelType {
 		ChannelTypeWeCom,
 		ChannelTypeWeChat,
 		ChannelTypeCLI,
+		ChannelTypeA2A,
 	}
 }
 

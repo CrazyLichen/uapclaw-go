@@ -9,7 +9,7 @@ import (
 // TestAllChannelTypes_返回全部枚举 测试 AllChannelTypes 返回值数量
 func TestAllChannelTypes_返回全部枚举(t *testing.T) {
 	types := AllChannelTypes()
-	expected := 11 // acp + web + feishu + xiaoyi + dingtalk + telegram + discord + whatsapp + wecom + wechat + tui
+	expected := 12 // acp + web + feishu + xiaoyi + dingtalk + telegram + discord + whatsapp + wecom + wechat + tui + a2a
 	if len(types) != expected {
 		t.Errorf("AllChannelTypes() 返回 %d 个, 期望 %d 个", len(types), expected)
 	}
@@ -29,6 +29,7 @@ func TestChannelType_字符串值(t *testing.T) {
 		ChannelTypeWeCom:    "wecom",
 		ChannelTypeWeChat:   "wechat",
 		ChannelTypeCLI:      "tui",
+		ChannelTypeA2A:      "a2a",
 	}
 	for ct, expected := range cases {
 		if string(ct) != expected {
