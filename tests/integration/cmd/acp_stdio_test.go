@@ -237,6 +237,112 @@ func (s *AcpStdioBinarySuite) TestAcpStdioBinary_PromptRoundTrip() {
 	s.Require().NotNil(final, "应收到 end_turn 终帧；stderr=%s", child.stderr.String())
 }
 
+// TestAcpStdioBinary_错误终帧 上游失败时子进程输出 error 帧（-32603）
+// 对应 Python test_acp_cli_returns_final_jsonrpc_error。
+//
+// 前置生产修复：task_loop 产出 *cschema.ControllerOutputPayload 结构体 payload，
+// 消费端原先只断言 map[string]any，导致 task_failed 整块丢弃、只剩 idle → end_turn。
+// 修复后 utils.PayloadToMap 桥接结构体，本用例断言真实的 error 帧。
+func (s *AcpStdioBinarySuite) TestAcpStdioBinary_错误终帧() {
+	s.MockLLM.SetResponses(mockllm.CreateErrorResponse(fmt.Errorf("upstream boom")))
+
+	child := s.startChild("")
+	defer child.kill()
+
+	child.writeLine(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
+	s.Require().NotNil(child.waitFrame(15*time.Second, func(f map[string]any) bool { return f["id"] == float64(1) }),
+		"initialize 应有响应；stderr=%s", child.stderr.String())
+
+	child.writeLine(`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"sessionId":"ide-err-1"}}`)
+	s.Require().NotNil(child.waitFrame(15*time.Second, func(f map[string]any) bool { return f["id"] == float64(2) }),
+		"session/new 应有响应；stderr=%s", child.stderr.String())
+
+	child.writeLine(`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"ide-err-1","prompt":[{"type":"text","text":"boom"}]}}`)
+
+	terminal := child.waitFrame(30*time.Second, func(f map[string]any) bool {
+		return f["id"] == float64(3) && (f["result"] != nil || f["error"] != nil)
+	})
+	s.Require().NotNil(terminal, "应有终帧；stderr=%s", child.stderr.String())
+
+	errObj, ok := terminal["error"].(map[string]any)
+	s.Require().True(ok, "终帧应为 error（对齐 Python），实际 %v", terminal)
+	s.Equal(float64(-32603), errObj["code"], "error code 应为 -32603")
+	msg, _ := errObj["message"].(string)
+	s.NotEmpty(msg, "error 应带 message")
+	// 上游错误文本应透传到 IDE（便于排查，如 API 认证失败）
+	s.Contains(msg, "upstream boom")
+}
+
+// TestAcpStdioBinary_stdinEOF优雅退出 关 stdin 后子进程在宽限内退出码 0（Go 增强）
+func (s *AcpStdioBinarySuite) TestAcpStdioBinary_stdinEOF优雅退出() {
+	child := s.startChild("")
+	child.writeLine(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
+	s.Require().NotNil(child.waitFrame(15*time.Second, func(f map[string]any) bool { return f["id"] == float64(1) }),
+		"initialize 应有响应；stderr=%s", child.stderr.String())
+
+	// 关 stdin 写端（等价 IDE 断开）→ 子进程应在 5s 宽限内自然退出
+	s.Require().NoError(child.stdin.Flush())
+	s.Require().NoError(child.stdinW.Close())
+
+	done := make(chan error, 1)
+	go func() { done <- child.cmd.Wait() }()
+	select {
+	case err := <-done:
+		s.NoError(err, "stdin EOF 后应正常退出；stderr=%s", child.stderr.String())
+	case <-time.After(15 * time.Second):
+		_ = child.cmd.Process.Kill()
+		s.FailNow("标准输入 EOF 后 15s 未退出")
+	}
+}
+
+// TestAcpStdioBinary_远端不可达 网关不可达时子进程非零退出（Go 增强）
+func (s *AcpStdioBinarySuite) TestAcpStdioBinary_远端不可达() {
+	child := s.startChild("ws://127.0.0.1:1/acp")
+	defer child.kill()
+
+	child.writeLine(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
+	// 读帧直到通道关闭（子进程退出）
+	for range child.frames {
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- child.cmd.Wait() }()
+	select {
+	case err := <-done:
+		s.Error(err, "网关不可达应非零退出")
+		s.NotEmpty(child.stderr.String(), "stderr 应有可诊断信息")
+	case <-time.After(30 * time.Second):
+		_ = child.cmd.Process.Kill()
+		s.FailNow("网关不可达时子进程 30s 未退出")
+	}
+}
+
+// TestAcpStdioBinary_stdout纯协议帧 子进程日志全部走 stderr，stdout 每行都是合法 JSON
+// 验证 os.Stdout=os.Stderr 重定向 + acpStdout 早捕获（Go 增强）
+func (s *AcpStdioBinarySuite) TestAcpStdioBinary_stdout纯协议帧() {
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("protocol only"))
+
+	child := s.startChild("")
+	defer child.kill()
+
+	child.writeLine(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
+	s.Require().NotNil(child.waitFrame(15*time.Second, func(f map[string]any) bool { return f["id"] == float64(1) }),
+		"initialize 应有响应；stderr=%s", child.stderr.String())
+	child.writeLine(`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"sessionId":"ide-dirty-1"}}`)
+	s.Require().NotNil(child.waitFrame(15*time.Second, func(f map[string]any) bool { return f["id"] == float64(2) }),
+		"session/new 应有响应；stderr=%s", child.stderr.String())
+	child.writeLine(`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"ide-dirty-1","prompt":[{"type":"text","text":"hi"}]}}`)
+	s.Require().NotNil(child.waitFrame(30*time.Second, func(f map[string]any) bool {
+		if f["id"] != float64(3) {
+			return false
+		}
+		result, _ := f["result"].(map[string]any)
+		return result != nil && result["stopReason"] == "end_turn"
+	}), "应收到 end_turn 终帧；stderr=%s", child.stderr.String())
+
+	s.Zero(atomic.LoadInt32(&child.dirty), "stdout 不应出现非 JSON 行；stderr=%s", child.stderr.String())
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // startChild 启动 uapclaw acp 子进程（gatewayURL 为空表示用父进程端口）
