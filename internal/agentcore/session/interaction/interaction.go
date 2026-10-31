@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -134,7 +135,7 @@ func (w *WorkflowInteraction) WaitUserInputs(ctx context.Context, value any) (an
 		Int("index", w.idx).
 		Msg("workflow interaction interrupted: waiting for user input")
 
-	PanicGraphInterrupt(Interrupt{
+	PanicGraphInterrupt(pregel.Interrupt{
 		Value: InteractionOutputSchema{
 			Type:    InteractionType,
 			Index:   w.idx,
@@ -166,7 +167,7 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 		Int("index", w.idx).
 		Msg("workflow latest input interrupted: waiting for user input")
 
-	PanicGraphInterrupt(Interrupt{
+	PanicGraphInterrupt(pregel.Interrupt{
 		Value: InteractionOutputSchema{
 			Type:    InteractionType,
 			Index:   w.idx,

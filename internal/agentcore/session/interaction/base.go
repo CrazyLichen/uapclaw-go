@@ -3,6 +3,7 @@ package interaction
 import (
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -10,22 +11,12 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// Interrupt 图中断信号
-type Interrupt struct {
-	// Value 中断携带的值（OutputSchema 类型）
-	Value any
-	// Resumable 是否可恢复
-	Resumable bool
-	// NS 命名空间（节点 ID）
-	NS string
-}
-
 // GraphInterrupt 图级中断异常，通过 panic 传播。
+// Interrupt 类型来自 graph/pregel（8.6 起单一来源），本类型本体 8.7 迁入该包。
 // Python: openjiuwen/core/graph/pregel/base.py (GraphInterrupt)
-// 暂放 interaction 包，8.7 实现 graph/pregel 包时可迁移。
 type GraphInterrupt struct {
 	// Interrupts 中断信号列表
-	Interrupts []Interrupt
+	Interrupts []pregel.Interrupt
 }
 
 // AgentInterrupt Agent 中断异常，通过 panic 传播。
@@ -88,7 +79,7 @@ func NewBaseInteraction(session interfaces.InnerSession, defaultInput ...any) *B
 
 // PanicGraphInterrupt 触发图级中断 panic。
 // Python: raise GraphInterrupt(...)
-func PanicGraphInterrupt(interrupts ...Interrupt) {
+func PanicGraphInterrupt(interrupts ...pregel.Interrupt) {
 	panic(&GraphInterrupt{Interrupts: interrupts})
 }
 

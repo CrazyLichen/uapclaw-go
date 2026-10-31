@@ -50,7 +50,7 @@
 //	│   └── session_controller.go            # SessionController 核心控制器
 //	├── interaction/        # 交互管理
 //	│   ├── doc.go                           # interaction 包文档
-//	│   ├── base.go                          # ExecutableIDProvider（可执行ID提供者） 类型别名 + BaseInteraction（基础交互） + GraphInterrupt/Interrupt（图级中断） + AgentInterrupt（Agent中断） + 常量
+//	│   ├── base.go                          # ExecutableIDProvider（可执行ID提供者） 类型别名 + BaseInteraction（基础交互） + GraphInterrupt（图级中断，Interrupt 引用 graph/pregel） + AgentInterrupt（Agent中断） + 常量
 //	│   ├── interaction.go                   # WorkflowInteraction（工作流交互） + SimpleAgentInteraction（简单Agent交互） + AgentInteraction（完整Agent交互） + InteractionOutput（交互输出）
 //	│   └── interactive_input.go             # InteractiveInput 用户输入容器
 //	├── interfaces/         # 统一接口定义

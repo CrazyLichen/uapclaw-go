@@ -19,7 +19,7 @@
 //
 //	interaction/
 //	├── doc.go                # 包文档
-//	├── base.go               # ExecutableIDProvider 类型别名（→ interfaces 包）+ BaseInteraction + GraphInterrupt/Interrupt + AgentInterrupt + 常量 + 依赖接口
+//	├── base.go               # ExecutableIDProvider 类型别名（→ interfaces 包）+ BaseInteraction + GraphInterrupt（Interrupt 引用 graph/pregel）+ AgentInterrupt + 常量 + 依赖接口
 //	├── interaction.go        # WorkflowInteraction + SimpleAgentInteraction + AgentInteraction + InteractionOutput
 //	└── interactive_input.go  # InteractiveInput 用户输入容器
 //

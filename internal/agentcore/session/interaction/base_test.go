@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -153,7 +154,7 @@ func TestPanicGraphInterrupt(t *testing.T) {
 			t.Errorf("Interrupt.Value 期望 'test_value'，实际=%v", gi.Interrupts[0].Value)
 		}
 	}()
-	PanicGraphInterrupt(Interrupt{Value: "test_value"})
+	PanicGraphInterrupt(pregel.Interrupt{Value: "test_value"})
 }
 
 // TestPanicAgentInterrupt 测试 AgentInterrupt panic
