@@ -50,7 +50,7 @@ func TestResolveAcpInternalSessionID_AliasCreate(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	external := "ide-session-1"
 
-	internal, aliased := mh.resolveAcpInternalSessionID(external)
+	internal, aliased := mh.resolveAcpInternalSessionID(context.Background(), external)
 	// 无 AgentServer 应答时 ensure 失败 → ("", false) 放行
 	assert.Empty(t, internal)
 	assert.False(t, aliased)
@@ -61,13 +61,13 @@ func TestResolveAcpInternalSessionID_CacheHit(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	mh.acpSessionAliases["ext-ch"] = "int-ch"
 
-	internal, aliased := mh.resolveAcpInternalSessionID("ext-ch")
+	internal, aliased := mh.resolveAcpInternalSessionID(context.Background(), "ext-ch")
 	assert.Equal(t, "int-ch", internal)
 	assert.True(t, aliased)
 
 	// 同值映射 aliased=false
 	mh.acpSessionAliases["self-ch"] = "self-ch"
-	internal2, aliased2 := mh.resolveAcpInternalSessionID("self-ch")
+	internal2, aliased2 := mh.resolveAcpInternalSessionID(context.Background(), "self-ch")
 	assert.Equal(t, "self-ch", internal2)
 	assert.False(t, aliased2)
 }
@@ -76,7 +76,7 @@ func TestResolveAcpInternalSessionID_CacheHit(t *testing.T) {
 // （ensure 仍执行；空 client 失败路径同上。）
 func TestResolveAcpInternalSessionID_KnownIdPassthrough(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
-	internal, _ := mh.resolveAcpInternalSessionID("sess_known_1")
+	internal, _ := mh.resolveAcpInternalSessionID(context.Background(), "sess_known_1")
 	assert.Empty(t, internal)
 }
 

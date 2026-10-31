@@ -6,6 +6,8 @@
 package acp
 
 import (
+	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
@@ -74,6 +76,37 @@ func BuildAcpPromptResult(stopReason string, userMessageID string) map[string]an
 		result["userMessageId"] = uid
 	}
 	return result
+}
+
+// NormalizeJSONRPCID 归一化 JSON-RPC id 为 trim 后的字符串。
+//
+// Python: 全链一律 `str(data.get("id") or "").strip()`（acp_connect.py L159/L212 /
+// app_gateway.py L607）——联合类型 string|number 经 str() 收敛到字符串，再用于
+// pending 表键与日志字段。Go 若只做 `v.(string)`，IDE 把 id 归一成 number 时会得到
+// 空串，导致 pending 查不到、tool response 被丢弃。
+//
+// 支持的输入形态：string / float64（encoding/json 默认数字） / json.Number（UseNumber）
+// / int / int64 / nil。其余类型返回空串（与 Python str(x or "") 对 None 的语义一致）。
+// 数字一律按最短往返格式化（float64(777) → "777"，与 Python str(int) 对齐）。
+func NormalizeJSONRPCID(id any) string {
+	switch v := id.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case json.Number:
+		return strings.TrimSpace(v.String())
+	case nil:
+		return ""
+	default:
+		return ""
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

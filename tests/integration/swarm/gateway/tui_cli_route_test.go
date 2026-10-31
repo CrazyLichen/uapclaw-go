@@ -109,15 +109,17 @@ func (s *CliRouteFullChainSuite) SetupSuite() {
 		gateway.NormalizeAndForwardMessage(msg, s.channelMgr)
 	})
 
-	// 6. GatewayServer（随机端口 + 生产 tui 路由装配）
+	// 6. GatewayServer（随机端口 + 生产 tui 路由装配：binding → RouteConfigMap → Install）
 	s.gwPort = s.pickFreePort()
 	gwCfg := gateway.NewGatewayServerConfig()
 	gwCfg.Host = "127.0.0.1"
 	gwCfg.Port = s.gwPort
-	gwCfg.Routes["/tui"] = gateway.BuildTuiRouteConfig(gateway.TuiRouteParams{
+	tuiBinding := gateway.BuildTuiRouteBinding(gateway.TuiRouteParams{
 		MessageHandler: s.msgHandler,
 	})
+	gwCfg.Routes = gateway.BuildRouteConfigMap([]*routing.RouteBinding{tuiBinding})
 	s.gwServer = gateway.NewGatewayServer(gwCfg)
+	tuiBinding.Install(s.gwServer)
 	s.gwServer.OnMessage(s.inboundServer.HandleMessage)
 
 	// 7. 出站注册（tui → GatewayServer）

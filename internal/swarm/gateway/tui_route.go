@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	messagehandler "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -15,7 +16,7 @@ import (
 // 对齐 Python CliRouteBindParams（tui_connect.py L343-350）裁剪：
 // 仅保留 DisconnectHandler 所需的 message_handler；agent_client/
 // on_config_saved/cron_controller 属纯本地 handler（config.*/cron.*），
-// ⤵️ 11.15 完整范围回填时再扩展。
+// 完整范围随 11.15 扩展（当前 5 个 chat/history handler 已对齐 Python CLI 差集）。
 type TuiRouteParams struct {
 	// MessageHandler 断连取消会话的处理器（可 nil，nil 时 DisconnectHandler 跳过）
 	MessageHandler *messagehandler.MessageHandler
@@ -197,29 +198,38 @@ var TuiForwardNoLocalHandlerMethods = map[string]bool{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildTuiRouteConfig 构建 /tui CLI 路由配置。
+// BuildTuiRouteBinding 构建 /tui CLI 路由 binding。
 //
 // 对齐 Python build_cli_route_binding（tui_connect.py L2093-2119）：
 // forward 集合 80 项、no-local 集合 75 项（差集=5 个 chat 类方法，
-// 计数已机器核对 2026-10-28，见 spec 附录 A）。
+// 计数已机器核对 2026-10-28，见 spec 附录 A）；
+// install 回调在 GatewayServer 构造后注册 5 个本地 handler
+// （对应 Python register_cli_handlers 的 channel=gateway_server 注入）；
+// disconnect_handler 桥接 CancelAgentSessionsOnDisconnect。
 //
 // 与 Python 目录结构的有意偏差：Python tui_connect.py 属 channel_manager
 // 子包，但 Go 端 gateway → channel_manager 依赖方向已存在，tui 装配
 // 放 gateway 包。
-func BuildTuiRouteConfig(params TuiRouteParams) *RouteConfig {
-	return &RouteConfig{
+func BuildTuiRouteBinding(params TuiRouteParams) *routing.RouteBinding {
+	return &routing.RouteBinding{
 		Path:                         "/tui",
 		ChannelID:                    "tui",
 		ForwardMethods:               TuiForwardReqMethods,
 		ForwardNoLocalHandlerMethods: TuiForwardNoLocalHandlerMethods,
-		LocalHandlers: map[string]LocalHandlerFunc{
-			"chat.send":        tuiChatSendHandler,
-			"chat.resume":      tuiChatResumeHandler,
-			"chat.interrupt":   tuiChatInterruptHandler,
-			"chat.user_answer": tuiChatUserAnswerHandler,
-			"history.get":      tuiHistoryGetHandler,
+		DisconnectHandler:            tuiDisconnectHandler(params.MessageHandler),
+		Install: func(server any) {
+			// Python: register_cli_handlers(channel=gateway_server, ...)——
+			// channel 只用于 register_local_handler(path, method, handler) 的注册动作。
+			gs, ok := server.(*GatewayServer)
+			if !ok {
+				return
+			}
+			gs.RegisterLocalHandler("/tui", "chat.send", tuiChatSendHandler)
+			gs.RegisterLocalHandler("/tui", "chat.resume", tuiChatResumeHandler)
+			gs.RegisterLocalHandler("/tui", "chat.interrupt", tuiChatInterruptHandler)
+			gs.RegisterLocalHandler("/tui", "chat.user_answer", tuiChatUserAnswerHandler)
+			gs.RegisterLocalHandler("/tui", "history.get", tuiHistoryGetHandler)
 		},
-		DisconnectHandler: tuiDisconnectHandler(params.MessageHandler),
 	}
 }
 
@@ -300,7 +310,7 @@ func tuiHistoryGetHandler(ws *websocket.Conn, reqID string, params map[string]an
 //
 // Python: _tui_disconnect（tui_connect.py L2106-2110）——
 // mh 为 None 或无 stale keys 时直接返回。
-func tuiDisconnectHandler(mh *messagehandler.MessageHandler) DisconnectFunc {
+func tuiDisconnectHandler(mh *messagehandler.MessageHandler) routing.DisconnectFunc {
 	return func(_ *websocket.Conn, staleSessionKeys [][2]string) {
 		if mh == nil || len(staleSessionKeys) == 0 {
 			return

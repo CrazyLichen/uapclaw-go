@@ -26,7 +26,7 @@ import (
 // Python: _prepare_agent_dispatch_message (L1287-1312)：
 // 非 acp / initialize / session.create 直通；resolve 内部会话；改写
 // session_id + params.session_id；aliased 时 metadata 记原 external。
-func (mh *MessageHandler) prepareAgentDispatchMessage(_ context.Context, msg *schema.Message) *schema.Message {
+func (mh *MessageHandler) prepareAgentDispatchMessage(ctx context.Context, msg *schema.Message) *schema.Message {
 	if msg.ChannelID != acpChannelIDConst {
 		return msg
 	}
@@ -34,7 +34,7 @@ func (mh *MessageHandler) prepareAgentDispatchMessage(_ context.Context, msg *sc
 		return msg
 	}
 
-	internalSessionID, aliased := mh.resolveAcpInternalSessionID(msg.SessionID)
+	internalSessionID, aliased := mh.resolveAcpInternalSessionID(ctx, msg.SessionID)
 	if internalSessionID == "" {
 		return msg
 	}

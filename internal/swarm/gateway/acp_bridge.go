@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -147,12 +148,25 @@ func WithIdleFinalizeSeconds(fn func() float64) AcpBridgeOption {
 // HandleJsonrpcRequest 处理 IDE JSON-RPC 请求（六方法分派）。
 // Python: handle_jsonrpc_request (L241-333)。
 // 返回 true = 已处理；false = 非 JSON-RPC 请求（交回调用方）。
-func (b *AcpGatewayBridge) HandleJsonrpcRequest(ctx context.Context, ws *websocket.Conn, data map[string]any) bool {
+//
+// 异常兜底对齐 Python L327-331 的 `except Exception → -32603`：panic 转 JSON-RPC
+// 错误帧而非拖垮连接（通道版 handleJsonrpcRequest 有同构 recover）。
+func (b *AcpGatewayBridge) HandleJsonrpcRequest(ctx context.Context, ws *websocket.Conn, data map[string]any) (handled bool) {
 	if !IsJsonrpcRequest(data) {
 		return false
 	}
 	rpcID := data["id"]
 	method := strings.TrimSpace(strVal(data["method"]))
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(logComponent).
+				Any("panic", r).
+				Str("method", method).
+				Msg("Gateway ACP JSON-RPC handler failed")
+			b.sendRawJsonrpcError(ws, rpcID, -32603, fmt.Sprintf("%v", r))
+			handled = true
+		}
+	}()
 	params, _ := data["params"].(map[string]any)
 	if params == nil {
 		params = map[string]any{}
@@ -302,7 +316,9 @@ func (b *AcpGatewayBridge) InboundIntercept(ws *websocket.Conn, data map[string]
 	if v, _ := data["jsonrpc"].(string); strings.TrimSpace(v) != "2.0" {
 		return false
 	}
-	idStr := strings.TrimSpace(strVal(data["id"]))
+	// 数字型 id 必须归一（IDE 可能把我们的 string id 回成 number）——否则 pending
+	// 查不到会把 tool response 当 unknown 丢弃，agent 侧工具调用永久挂起。
+	idStr := acp.NormalizeJSONRPCID(data["id"])
 	_, hasResult := data["result"]
 	_, hasError := data["error"]
 	if idStr == "" || (!hasResult && !hasError) {
@@ -366,7 +382,7 @@ func (b *AcpGatewayBridge) OutboundIntercept(ws *websocket.Conn, data map[string
 			Msg("[ACP] outbound_intercept: invalid jsonrpc payload (not dict), dropping frame")
 		return true
 	}
-	jsonrpcID := strings.TrimSpace(strVal(rawJsonrpc["id"]))
+	jsonrpcID := acp.NormalizeJSONRPCID(rawJsonrpc["id"])
 	sessionID := strings.TrimSpace(msg.SessionID)
 	if jsonrpcID == "" || sessionID == "" {
 		logger.Warn(logComponent).
@@ -468,7 +484,13 @@ func (b *AcpGatewayBridge) SendMessage(ctx context.Context, msg *schema.Message,
 		jsonrpcID := pctx.JSONRPCID
 		userMessageID := pctx.UserMessageID
 		pctxSessionID := pctx.SessionID
-		if sawIdle && !hasPending {
+		// cancel 条件对齐 Python L398-413：仅「已见 idle 且有 pending」保留 timer
+		// （该分支转 pending_stop_reason 延后收尾）；其余两态（已见 idle 无 pending、
+		// 未见过 idle）Python 都调 _cancel_idle_finalize_task。
+		// 未见过 idle 也必须取消：deferred 解挂路径（maybeFinalizeDeferredPrompts）
+		// 会在 SawProcessingIdle==false 下 armed timer，不取消会让 timer 提前 3s
+		// 发 end_turn，与 Python「等真正 idle 再收尾」不等价。
+		if !(sawIdle && hasPending) {
 			cancelIdleFinalizeTimerLocked(pctx)
 		}
 		b.mu.Unlock()
@@ -512,6 +534,11 @@ func (b *AcpGatewayBridge) SendMessage(ctx context.Context, msg *schema.Message,
 		b.clearRequestContext(msg.ID, pctxSessionID)
 		return true
 	case isEvent && msg.EventType == schema.EventTypeChatProcessingStatus:
+		// 归档偏差 B7：Python 桥版把 is_processing 处理嵌在 `if update is not None` 内
+		// （acp_connect.py L427-457），通道版则写在 update 写帧之外（L1408-1433）——
+		// 两版本身不一致。Go 桥跟桥版、通道跟通道版。BuildAcpSessionUpdate 对
+		// CHAT_PROCESSING_STATUS 恒返回 session_info_update（session_updates.go），
+		// update 永不为 nil，故该差异不可达。
 		update := acp.BuildAcpSessionUpdate(msg, payload, &pctx.State)
 		if update == nil {
 			b.mu.Unlock()

@@ -13,6 +13,8 @@ import (
 // RouteConfig 单条路由的配置（/acp、/tui 等）。
 //
 // Python: app_gateway.py RouteConfig dataclass（L208-219）。
+// 回调字段一律直接引用 routing 包的函数类型（与 GatewayRouteBinding 同源），
+// 不在本包重复声明同签名类型——避免两处定义漂移。
 type RouteConfig struct {
 	// Path 路由路径（如 "/acp"）
 	Path string
@@ -25,13 +27,13 @@ type RouteConfig struct {
 	// LocalHandlers 本地 handler（method → handler）
 	LocalHandlers map[string]LocalHandlerFunc
 	// InboundInterceptor 入站拦截器（可 nil）
-	InboundInterceptor GatewayInterceptorFunc
+	InboundInterceptor routing.InterceptorFunc
 	// OutboundInterceptor 出站拦截器（可 nil）
-	OutboundInterceptor GatewayInterceptorFunc
+	OutboundInterceptor routing.InterceptorFunc
 	// CleanupHandler 断连清理钩子（可 nil，DisconnectHandler 缺省时的兜底）
-	CleanupHandler CleanupFunc
+	CleanupHandler routing.CleanupFunc
 	// DisconnectHandler 断连回调（可 nil，带 staleSessionKeys）
-	DisconnectHandler DisconnectFunc
+	DisconnectHandler routing.DisconnectFunc
 }
 
 // GatewayServerConfig GatewayServer 配置。
@@ -52,18 +54,11 @@ type GatewayServerConfig struct {
 	ChannelID string
 }
 
-// LocalHandlerFunc 本地 handler（对齐 Python Callable[..., Awaitable[None]]，
-// Python 签名 (ws, req_id, params, session_id)）。
+// LocalHandlerFunc 本地 handler。
+//
+// 对齐 Python Callable[..., Awaitable[None]]，Python 签名 (ws, req_id, params, session_id)。
+// 保留本包命名类型（仅 gateway 包内使用，不跨包共享）；routing 包的回调类型则直接引用。
 type LocalHandlerFunc func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error
-
-// GatewayInterceptorFunc 入/出站拦截器（对齐 Python Awaitable[bool]，返回 true 短路）。
-type GatewayInterceptorFunc func(ws *websocket.Conn, data map[string]any) bool
-
-// CleanupFunc 断连清理（对齐 cleanup_handler，无 disconnect_handler 时的兜底）。
-type CleanupFunc func(ws *websocket.Conn)
-
-// DisconnectFunc 断连回调（对齐 disconnect_handler，带 staleSessionKeys）。
-type DisconnectFunc func(ws *websocket.Conn, staleSessionKeys [][2]string)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -85,56 +80,38 @@ func NewGatewayServerConfig() *GatewayServerConfig {
 	}
 }
 
-// BuildACPRouteBinding 构造 ACP 路由 binding（零拦截器形态）。
+// BuildACPRouteBinding 构造 ACP 路由 binding。
 //
-// Python: _build_acp_route_binding（L723-736）。
-// 拦截器不在此装填：Python 侧 binding 只带 path/channel_id，
-// 拦截器由 GatewayServer 装配后经 _install_default_route_hooks 补齐（or 语义）；
-// Go 侧对应 InstallDefaultAcpHooks()（11.25 Task 5）。
+// Python: _build_acp_route_binding（L723-736）——binding 只带
+// path/channel_id/两个 forward 集合；拦截器不在此装填（Python 侧 binding 的
+// inbound/outbound 为 None），由 InstallDefaultAcpHooks 在装配后按 `or` 语义补齐
+// （对齐 _install_default_route_hooks L294-302）。install 亦为 nil（ACP 无本地 handler）。
 func BuildACPRouteBinding(path, channelID string) *routing.RouteBinding {
 	return &routing.RouteBinding{
-		Path:      path,
-		ChannelID: channelID,
-	}
-}
-
-// BuildACPRouteConfig 构造 /acp 路由配置。
-// Python: _build_acp_route_binding(path="/acp", channel_id="acp",
-// forward_methods=_FORWARD_REQ_METHODS, forward_no_local_handler_methods=_FORWARD_NO_LOCAL_HANDLER_METHODS)
-// + _build_route_config_map（L739-752）。拦截器零值——InstallDefaultAcpHooks 后装。
-func BuildACPRouteConfig() *RouteConfig {
-	return &RouteConfig{
-		Path:                         "/acp",
-		ChannelID:                    "acp",
+		Path:                         path,
+		ChannelID:                    channelID,
 		ForwardMethods:               web.ForwardReqMethods,
 		ForwardNoLocalHandlerMethods: web.ForwardNoLocalHandlerMethods,
-		LocalHandlers:                map[string]LocalHandlerFunc{},
 	}
 }
 
 // BuildRouteConfigMap 将 RouteBinding 列表转为 path 索引的 RouteConfig map。
 //
-// Python: _build_route_config_map（L739-752），8 字段透传。
-// Go 侧三处类型差异（对齐既有骨架决策）：
-//  1. ForwardMethods/ForwardNoLocalHandlerMethods：routing.RouteBinding 已删除这两个字段
-//     （运行时路由用 web 包集合变量），调用方（11.25/11.15）在 binding 之外
-//     直接对返回的 RouteConfig 赋值
-//  2. InboundInterceptor/OutboundInterceptor：routing.InterceptorFunc 是 byte 层签名
-//     func(channel any, data []byte) ([]byte, error)，本包 GatewayInterceptorFunc 是
-//     帧层签名 func(ws *websocket.Conn, data map[string]any) bool——转换逻辑随 ACP 桥
-//     实现（⤵️ 11.25），本函数置 nil
-//  3. DisconnectHandler：routing.DisconnectFunc 签名 func(channel any, sessionKeys []string)
-//     与本包 DisconnectFunc func(ws *websocket.Conn, staleSessionKeys [][2]string) 不同，
-//     同样随桥/路由装配时转换（⤵️ 11.25/11.15），本函数置 nil
+// Python: _build_route_config_map（L739-752）——8 字段透传，唯独 install 不搬
+// （install 需 GatewayServer 实例，由装配循环单独执行）。
 func BuildRouteConfigMap(bindings []*routing.RouteBinding) map[string]*RouteConfig {
-	m := make(map[string]*RouteConfig)
+	m := make(map[string]*RouteConfig, len(bindings))
 	for _, b := range bindings {
 		m[b.Path] = &RouteConfig{
-			Path:          b.Path,
-			ChannelID:     b.ChannelID,
-			LocalHandlers: make(map[string]LocalHandlerFunc),
-			// InboundInterceptor/OutboundInterceptor/DisconnectHandler/CleanupHandler
-			// ⤵️ 11.25/11.15：byte 层→帧层转换随 ACP 桥/TUI 装配实现
+			Path:                         b.Path,
+			ChannelID:                    b.ChannelID,
+			ForwardMethods:               b.ForwardMethods,
+			ForwardNoLocalHandlerMethods: b.ForwardNoLocalHandlerMethods,
+			LocalHandlers:                make(map[string]LocalHandlerFunc),
+			InboundInterceptor:           b.InboundInterceptor,
+			OutboundInterceptor:          b.OutboundInterceptor,
+			CleanupHandler:               b.CleanupHandler,
+			DisconnectHandler:            b.DisconnectHandler,
 		}
 	}
 	return m
@@ -162,7 +139,8 @@ func applyConfigFallback(cfg *GatewayServerConfig) {
 	}
 }
 
-// strVal 安全取字符串（对齐 Python str(x or "")）。
+// strVal 安全取字符串（对齐 Python str(x or "")，仅 string 取值，数字请用
+// acp.NormalizeJSONRPCID）。
 func strVal(v any) string {
 	s, _ := v.(string)
 	return s

@@ -58,9 +58,9 @@ import (
 
 // AcpBridgeE2ESuite ACP 模式一端到端套件。
 //
-// 装配对齐 app_gateway.go Start 的 /acp 段（Task 7）：BuildACPRouteConfig +
-// NewAcpGatewayBridge（onMessage 转发 + WithBindSessionClient 注册 sessionToClient）
-// + SetAcpBridge + InstallDefaultAcpHooks + RegisterExternalChannel("acp")。
+// 装配对齐 app_gateway.go Start 的 /acp 段（Task 7）：BuildACPRouteBinding +
+// BuildRouteConfigMap + NewAcpGatewayBridge（onMessage 转发 + WithBindSessionClient
+// 注册 sessionToClient）+ SetAcpBridge + InstallDefaultAcpHooks + RegisterExternalChannel("acp")。
 type AcpBridgeE2ESuite struct {
 	isuite.BaseIntegrationSuite
 	// 7 件套（SetupSuite 构造，TearDownSuite 停止）
@@ -112,13 +112,15 @@ func (s *AcpBridgeE2ESuite) SetupSuite() {
 		gateway.NormalizeAndForwardMessage(msg, s.channelMgr)
 	})
 
-	// GatewayServer：随机端口 + /acp 路由（Task 7 装配链复刻）
+	// GatewayServer：随机端口 + /acp 路由（对齐 app_gateway.go 装配链：
+	// BuildACPRouteBinding → BuildRouteConfigMap → NewGatewayServer）
 	s.gwPort = s.pickFreePort()
 	gwCfg := gateway.NewGatewayServerConfig()
 	gwCfg.Host = "127.0.0.1"
 	gwCfg.Port = s.gwPort
-	acpRoute := gateway.BuildACPRouteConfig()
-	gwCfg.Routes[acpRoute.Path] = acpRoute
+	gwCfg.Routes = gateway.BuildRouteConfigMap([]*routing.RouteBinding{
+		gateway.BuildACPRouteBinding("/acp", "acp"),
+	})
 	s.gwServer = gateway.NewGatewayServer(gwCfg)
 
 	// ACP 桥构造 + 注入（对齐 app_gateway.go L438-455）

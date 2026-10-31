@@ -93,6 +93,9 @@ type AcpChannel struct {
 	gwConn *websocket.Conn
 	// gwConnMu 保护 gwConn/连接关闭
 	gwConnMu sync.Mutex
+	// gwWriteMu 保护 gwConn 上的写操作（sendToGateway 与 ping ticker 并发写同一连接，
+	// gorilla 不允许并发写——Python asyncio 单线程天然串行，§9-2 同源约束）
+	gwWriteMu sync.Mutex
 	// readerLoopDone WS reader 退出信号
 	readerLoopDone chan struct{}
 	// onMessageCb dispatch 回调（测试注入；生产路径走 sendToGateway，§9-1）
@@ -142,6 +145,12 @@ const (
 	acpGatewayConnectBaseDelaySec = 0.15
 	// acpGatewayConnectMaxDelaySec 重试延迟封顶
 	acpGatewayConnectMaxDelaySec = 2.0
+	// acpGatewayPingInterval 心跳间隔（Python ws_connect ping_interval=20）
+	acpGatewayPingInterval = 20 * time.Second
+	// acpGatewayPingTimeout 心跳超时（Python ws_connect ping_timeout=20）
+	acpGatewayPingTimeout = 20 * time.Second
+	// acpGatewayHandshakeTimeout 握手超时（Python ws_connect open_timeout=30）
+	acpGatewayHandshakeTimeout = 30 * time.Second
 	// acpChannelName 默认渠道名
 	acpChannelName = "acp"
 	// acpDefaultSessionID 默认会话
@@ -245,6 +254,12 @@ func (ch *AcpChannel) Start(ctx context.Context) error {
 		//（测试用 fakeStdin 即时 EOF；生产 IDE 关 stdin 即退出）
 		line, err := reader.ReadString('\n')
 		if err != nil {
+			// bufio.ReadString 在「读到残余数据但无分隔符即 EOF」时返回
+			// (data, io.EOF)；Python readline() 同样返回这段不带换行的内容、
+			// 下一次才返回 b""。故末行非空时须先处理再置 EOF，否则静默丢弃。
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				ch.processStdinLine(ctx, trimmed)
+			}
 			stdinEOF = true
 			stdinEOFSince = nowFloat()
 			continue
@@ -253,22 +268,7 @@ func (ch *AcpChannel) Start(ctx context.Context) error {
 		if line == "" {
 			continue
 		}
-		if err := ch.handleRawLine(ctx, line); err != nil {
-			logger.Error(logger.ComponentGateway).
-				Err(err).
-				Msg("[ACP] stdio inbound failed")
-			prov := ch.provenance("stdio_error")
-			ch.writeE2AResponse(&e2a.E2AResponse{
-				ResponseID:   "acp-err-" + randHexStr(8),
-				Status:       e2a.E2AResponseStatusFailed,
-				ResponseKind: e2a.E2AResponseKindACPJSONRPCError,
-				IsFinal:      true,
-				Timestamp:    e2a.UTCNowISO(),
-				Provenance:   *prov,
-				Channel:      ch.ChannelID(),
-				Body:         map[string]any{"code": -32603, "message": err.Error()},
-			})
-		}
+		ch.processStdinLine(ctx, line)
 	}
 	return nil
 }
@@ -360,6 +360,27 @@ func (ch *AcpChannel) handleRawLine(ctx context.Context, line string) error {
 	ch.mu.Unlock()
 	ch.dispatchMessage(ctx, msg)
 	return nil
+}
+
+// processStdinLine 处理一行已 trim 的非空 stdin 输入。
+// Python: start() 里 try/except 包裹的 _handle_raw_line + stdio_error E2A 响应（L726-742）。
+func (ch *AcpChannel) processStdinLine(ctx context.Context, line string) {
+	if err := ch.handleRawLine(ctx, line); err != nil {
+		logger.Error(logger.ComponentGateway).
+			Err(err).
+			Msg("[ACP] stdio inbound failed")
+		prov := ch.provenance("stdio_error")
+		ch.writeE2AResponse(&e2a.E2AResponse{
+			ResponseID:   "acp-err-" + randHexStr(8),
+			Status:       e2a.E2AResponseStatusFailed,
+			ResponseKind: e2a.E2AResponseKindACPJSONRPCError,
+			IsFinal:      true,
+			Timestamp:    e2a.UTCNowISO(),
+			Provenance:   *prov,
+			Channel:      ch.ChannelID(),
+			Body:         map[string]any{"code": -32603, "message": err.Error()},
+		})
+	}
 }
 
 // parseEnvelope 解析 E2A envelope（request_id/channel 兜底）。
@@ -530,8 +551,9 @@ func (ch *AcpChannel) handleJsonrpcSessionCancel(ctx context.Context, rpcID any,
 }
 
 // handleJsonrpcResponse 工具响应回流（Python L807-830）。
+// id 走 NormalizeJSONRPCID：IDE 把 string id 回成 number 时仍能命中 pending。
 func (ch *AcpChannel) handleJsonrpcResponse(ctx context.Context, data map[string]any) {
-	jsonrpcID := strings.TrimSpace(strVal(data["id"]))
+	jsonrpcID := e2aacp.NormalizeJSONRPCID(data["id"])
 	if jsonrpcID == "" {
 		return
 	}
@@ -1376,14 +1398,23 @@ func (ch *AcpChannel) ensureGatewayConnection() error {
 
 	var lastErr error
 	for attempt := 1; attempt <= acpGatewayConnectMaxAttempts; attempt++ {
-		conn, _, err := websocket.DefaultDialer.Dial(ch.gatewayURL, nil)
+		dialer := &websocket.Dialer{HandshakeTimeout: acpGatewayHandshakeTimeout}
+		conn, _, err := dialer.Dial(ch.gatewayURL, nil)
 		if err == nil {
+			// 心跳与读期限（对齐 Python ws_connect ping_interval=20/ping_timeout=20）：
+			// gorilla 不会自动 ping，须自发 ticker + pong handler 刷新读期限；
+			// 否则半开连接要等 TCP 超时才能发现，远端网关重启后本端会长期挂住。
+			_ = conn.SetReadDeadline(time.Now().Add(acpGatewayPingInterval + acpGatewayPingTimeout))
+			conn.SetPongHandler(func(string) error {
+				return conn.SetReadDeadline(time.Now().Add(acpGatewayPingInterval + acpGatewayPingTimeout))
+			})
 			done := make(chan struct{})
 			ch.gwConnMu.Lock()
 			ch.gwConn = conn
 			ch.readerLoopDone = done
 			ch.gwConnMu.Unlock()
 			go ch.gatewayReaderLoop(conn, done)
+			go ch.gatewayPingLoop(conn, done)
 			if attempt > 1 {
 				logger.Info(logger.ComponentGateway).
 					Int("attempts", attempt).
@@ -1471,7 +1502,35 @@ func (ch *AcpChannel) sendToGateway(_ context.Context, msg *schema.Message) erro
 	if conn == nil {
 		return fmt.Errorf("gateway connection closed")
 	}
+	ch.gwWriteMu.Lock()
+	defer ch.gwWriteMu.Unlock()
 	return conn.WriteMessage(websocket.TextMessage, mustJSONBytes(frame))
+}
+
+// gatewayPingLoop 定期发 WS ping 保活（对齐 Python ws_connect ping_interval=20）。
+//
+// gorilla 不自动 ping/pong：不发 ping 时半开连接只能等 TCP 超时暴露。
+// pong 由 gatewayReaderLoop 侧的 PongHandler 刷新读期限（ping_timeout=20 语义）。
+// 写与 sendToGateway 共用 gwWriteMu（gorilla 不允许并发写同一连接）。
+func (ch *AcpChannel) gatewayPingLoop(conn *websocket.Conn, done chan struct{}) {
+	ticker := time.NewTicker(acpGatewayPingInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			ch.gwWriteMu.Lock()
+			err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(acpGatewayPingTimeout))
+			ch.gwWriteMu.Unlock()
+			if err != nil {
+				logger.Debug(logger.ComponentGateway).
+					Err(err).
+					Msg("[ACP] gateway ping failed, reader loop will observe")
+				return
+			}
+		}
+	}
 }
 
 // gatewayReaderLoop 网关读循环。
@@ -1531,7 +1590,7 @@ func (ch *AcpChannel) handleGatewayFrame(data map[string]any) {
 // handleGatewayJsonrpcRequest 网关下发的 jsonrpc request（工具调用）直写 stdout。
 // Python: _handle_gateway_jsonrpc_request (L1664-1679)。
 func (ch *AcpChannel) handleGatewayJsonrpcRequest(data map[string]any) {
-	jsonrpcID := strings.TrimSpace(strVal(data["id"]))
+	jsonrpcID := e2aacp.NormalizeJSONRPCID(data["id"])
 	params, _ := data["params"].(map[string]any)
 	if params == nil {
 		params = map[string]any{}
@@ -1569,7 +1628,7 @@ func (ch *AcpChannel) handleGatewayJsonrpcRequest(data map[string]any) {
 // messageFromGatewayResponse type=res 帧重建 Message。
 // Python: _message_from_gateway_response (L1681-1706)。
 func (ch *AcpChannel) messageFromGatewayResponse(data map[string]any) *schema.Message {
-	requestID := strings.TrimSpace(strVal(data["id"]))
+	requestID := e2aacp.NormalizeJSONRPCID(data["id"])
 	if requestID == "" {
 		return nil
 	}

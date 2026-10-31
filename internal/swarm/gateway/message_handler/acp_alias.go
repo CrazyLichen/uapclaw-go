@@ -75,7 +75,7 @@ func (mh *MessageHandler) ensureAcpAgentSession(ctx context.Context, sessionID s
 // Python: _resolve_acp_internal_session_id (L1261-1285)。
 // ensure 失败 → Error 日志 + ("", false) 原样放行（design §4.4 拍板，
 // Python raise 语义的 Go 映射：不阻断消息转发）。
-func (mh *MessageHandler) resolveAcpInternalSessionID(externalSessionID string) (string, bool) {
+func (mh *MessageHandler) resolveAcpInternalSessionID(ctx context.Context, externalSessionID string) (string, bool) {
 	external := strings.TrimSpace(externalSessionID)
 	if external == "" {
 		return "", false
@@ -99,7 +99,9 @@ func (mh *MessageHandler) resolveAcpInternalSessionID(externalSessionID string) 
 	if !isKnownJiuwenswarmSessionID(external) {
 		desired = GenerateChannelSessionID(acpChannelIDConst)
 	}
-	ensured, err := mh.ensureAcpAgentSession(context.Background(), desired)
+	// ctx 透传：调用方（forwardLoop 的消息 ctx）取消时 session.create 可随之中断，
+	// 避免连接已断仍阻塞在 RPC 上（Python asyncio 任务取消语义的 Go 等价）。
+	ensured, err := mh.ensureAcpAgentSession(ctx, desired)
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
@@ -126,8 +128,10 @@ func (mh *MessageHandler) resolveAcpExternalSessionID(sessionID string, metadata
 	if original != "" {
 		return original
 	}
-	mh.acpSessionAliasMu.Lock()
-	defer mh.acpSessionAliasMu.Unlock()
+	// 读锁：Python 出站反解不加锁（单线程无需）；Go 用 RLock 避免被在途
+	// session.create 的写锁阻塞（该 RPC 可能耗时数秒）。
+	mh.acpSessionAliasMu.RLock()
+	defer mh.acpSessionAliasMu.RUnlock()
 	for external, internal := range mh.acpSessionAliases {
 		if internal == sid {
 			return external

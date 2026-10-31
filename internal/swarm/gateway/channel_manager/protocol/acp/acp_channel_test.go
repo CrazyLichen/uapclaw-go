@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -1215,5 +1216,128 @@ func TestAcpChannel_ReasoningTodoCancelIdle(t *testing.T) {
 			assert.Nil(t, c.idleFinalizeTimerSlot)
 			ch.mu.Unlock()
 		})
+	}
+}
+
+// ──────────────────────────── Go 增强：数字 id / stdin 末行（P1/P3 回归） ────────────────────────────
+
+// TestAcpChannel_NumericJsonrpcIDToolResponse 数字型 id 必须命中 pending（P1 回归）。
+// Python: _handle_jsonrpc_response 用 str(data.get("id") or "").strip()（L810）。
+func TestAcpChannel_NumericJsonrpcIDToolResponse(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+	seen := make(chan *schema.Message, 4)
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		select {
+		case seen <- msg:
+		default:
+		}
+		return true
+	})
+	requestID := "req-num-id"
+	sessionID := "sess-num-id"
+	c := &acpRequestCtx{
+		JSONRPCID: float64(777), Method: "session/prompt", ResponseMode: "jsonrpc",
+		SessionID: sessionID,
+	}
+	ch.SeedRequestCtxForTest(requestID, c)
+	ch.SetActivePromptRequestForTest(sessionID, requestID)
+	// 我们发出 string id "777"，IDE 回成 number 777
+	ch.SetPendingRPCSessionForTest("777", sessionID)
+
+	ch.HandleJsonrpcResponseForTest(map[string]any{
+		"jsonrpc": "2.0", "id": float64(777), "result": map[string]any{"content": "ok"},
+	})
+
+	select {
+	case msg := <-seen:
+		assert.Equal(t, schema.ReqMethodACPToolResponse, msg.ReqMethod)
+		assert.Equal(t, sessionID, msg.SessionID)
+		var params map[string]any
+		require.NoError(t, json.Unmarshal(msg.Params, &params))
+		assert.Equal(t, "777", params["jsonrpc_id"])
+	case <-time.After(2 * time.Second):
+		t.Fatal("numeric jsonrpc id 未能命中 pending，tool response 被丢弃")
+	}
+}
+
+// noNewlineStdin 首行不带换行即 EOF（验证 P3：末行不丢弃）。
+type noNewlineStdin struct {
+	line string
+	done bool
+}
+
+// Read 首次返回不带 \n 的残余行，之后恒 EOF。
+func (f *noNewlineStdin) Read(p []byte) (int, error) {
+	if f.done {
+		return 0, errEOF
+	}
+	f.done = true
+	return copy(p, f.line), nil
+}
+
+// TestAcpChannel_StdinLastLineWithoutNewline 末行无换行仍须处理（P3 回归）。
+// Python readline() 对「有数据无分隔符 + EOF」返回该行，下一次才返回 b""。
+func TestAcpChannel_StdinLastLineWithoutNewline(t *testing.T) {
+	out := &safeBuffer{}
+	seen := &[]*schema.Message{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+	ch.SetStdinForTest(&noNewlineStdin{
+		line: `{"jsonrpc":"2.0","id":900,"method":"session/new","params":{"sessionId":"sess-tail"}}`,
+	})
+	ch.SetStdinEOFGraceSecondsForTest(0.1)
+	ch.SetOnMessageForTest(func(msg *schema.Message) bool {
+		*seen = append(*seen, msg)
+		return true
+	})
+	require.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 1, "末行无换行仍应产生 session/new 响应")
+	result, _ := lines[0]["result"].(map[string]any)
+	assert.Equal(t, float64(900), lines[0]["id"])
+	if assert.NotNil(t, result) {
+		assert.Equal(t, "sess-tail", result["sessionId"])
+	}
+}
+
+// TestAcpChannel_InvalidJsonLineEmitsStdioError 非法 JSON 行 → E2A stdio_error 响应。
+// Python: start() 的 try/except → E2AResponse(response_kind=acp.jsonrpc_error)（L726-742）。
+func TestAcpChannel_InvalidJsonLineEmitsStdioError(t *testing.T) {
+	out := &safeBuffer{}
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(out)
+	ch.SetStdinForTest(&fakeStdin{lines: []string{`{not json}`}})
+	ch.SetStdinEOFGraceSecondsForTest(0.1)
+	ch.SetOnMessageForTest(func(*schema.Message) bool { return true })
+	require.NoError(t, ch.Start(context.Background()))
+
+	lines := out.jsonLines(t)
+	require.Len(t, lines, 1)
+	assert.Equal(t, e2a.E2AResponseKindACPJSONRPCError, lines[0]["response_kind"])
+	body, _ := lines[0]["body"].(map[string]any)
+	if assert.NotNil(t, body) {
+		assert.Equal(t, float64(-32603), body["code"])
+		assert.Contains(t, body["message"], "invalid json line")
+	}
+}
+
+// TestAcpChannel_GatewayPingLoopExits 网关连接关闭 → ping goroutine 随之退出。
+func TestAcpChannel_GatewayPingLoopExits(t *testing.T) {
+	t.Parallel()
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		ch.gatewayPingLoop(nil, done)
+		close(finished)
+	}()
+	close(done)
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		t.Fatal("gatewayPingLoop 未随 done 关闭退出")
 	}
 }

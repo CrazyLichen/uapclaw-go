@@ -18,9 +18,9 @@
 //	├── app_gateway.go      # AppGatewayServer 启动入口（对应 Python _run() 组装），chi router 组装，reloader 管理
 //	├── gateway_server.go   # GatewayServer 多路由 WS 服务器本体（对齐 Python app_gateway.py GatewayServer 类 L240-720）
 //	├── acp_bridge.go       # AcpGatewayBridge /acp 路由协议对端（11.25：六方法分派 + 三拦截器 + SendMessage 出站链）
-//	├── tui_route.go        # /tui 路由装配（BuildTuiRouteConfig，11.15：TUI 本地 handler + 断连桥接）
+//	├── tui_route.go        # /tui 路由装配（BuildTuiRouteBinding + Install 注册 5 个本地 handler，11.15 最小范围）
 //	├── inbound_gateway_server.go # InboundGatewayServer 入站队列服务 + NormalizeAndForwardMessage（对齐 Python _InboundGatewayServer/_normalize_and_forward_message）
-//	├── route_config.go     # RouteConfig/GatewayServerConfig 路由配置（对齐 Python GatewayServer 类族 L207-238/L723-752）
+//	├── route_config.go     # RouteConfig/GatewayServerConfig + binding 工厂链（BuildACPRouteBinding / BuildRouteConfigMap，对齐 Python L723-752）
 //	├── config_push.go      # 配置热重载回调（onConfigSavedImpl）
 //	├── config_env_map.go   # 配置键→环境变量映射 + browserRuntimeKeys
 //	├── embed.go            # go:embed 前端静态资源

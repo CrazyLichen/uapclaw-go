@@ -14,6 +14,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/wsorigin"
 	"github.com/uapclaw/uapclaw-go/internal/common/wswrite"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -25,9 +27,8 @@ import (
 // 支持多个路径（如 /acp、/tui），每条路径有独立 channel_id 和本地 handler；
 // 本地 handler 优先处理请求，未处理或无匹配则 forward 到 MessageHandler。
 //
-// acpBridge ⤵️ 11.25：AcpGatewayBridge 注入点（构造注入 dispatchOnMessage/
-// bindAcpSessionClient + _install_default_route_hooks + handleRawMessage/send
-// 的 acp 分支），A1 空路由形态下不建模。
+// ACP 桥接（11.25 已落地）：acpBridge 由 SetAcpBridge 注入（装配分离，偏差 §9-10），
+// 拦截器由 InstallDefaultAcpHooks 后装，Send / handleRawMessage 各有 acp 分支。
 type GatewayServer struct {
 	// config 服务器配置（路由表/监听地址）
 	config *GatewayServerConfig
@@ -190,7 +191,12 @@ func (s *GatewayServer) BindAcpSessionClientForTest(sessionID string, ws *websoc
 // InstallDefaultAcpHooks 把桥拦截器装进全部 acp 路由（对齐 _install_default_route_hooks）。
 // Python: app_gateway.py L296-302——route.inbound_interceptor = route.inbound_interceptor or bridge.inbound_intercept
 // 等三行（已装的不覆盖）。Go 同语义：仅装 nil 槽位。
-// 另含 disconnect/cleanup 装填（Python L682 disconnect_handler）。
+// 另含 cleanup 装填（Python L302 第三行 cleanup_handler）。
+//
+// 归档偏差 B6：Python L298-299 有「两个拦截器都非空则整条 route 跳过」的
+// 短路（`if inbound is not None and outbound is not None: continue`），该分支
+// 还连带跳过 cleanup 赋值。生产路径上 acp 路由创建时三槽恒为 nil，不可达；
+// Go 逐槽判空在可达场景下与 Python 等价，故不复刻该短路。
 func (s *GatewayServer) InstallDefaultAcpHooks() {
 	s.clientsMu.Lock()
 	defer s.clientsMu.Unlock()
@@ -211,6 +217,33 @@ func (s *GatewayServer) InstallDefaultAcpHooks() {
 			route.CleanupHandler = s.acpBridge.Cleanup
 		}
 	}
+}
+
+// RegisterLocalHandler 为指定路径注册本地 method handler。
+//
+// Python: register_local_handler（app_gateway.py L324-330）——路由不存在则按
+// channel_id=path.strip("/") 新建一条。Go 侧路由已由 BuildRouteConfigMap 建好，
+// 故仅做「取已有路由 → 写 LocalHandlers」；路由缺失时兜底新建（与 Python 同语义）。
+//
+// 消费方：RouteBinding.Install 回调（TUI 的 5 个 chat/history handler）。
+func (s *GatewayServer) RegisterLocalHandler(path, method string, handler LocalHandlerFunc) {
+	s.clientsMu.Lock()
+	defer s.clientsMu.Unlock()
+	route := s.config.Routes[path]
+	if route == nil {
+		route = &RouteConfig{
+			Path:                         path,
+			ChannelID:                    strings.Trim(path, "/"),
+			ForwardMethods:               map[string]bool{},
+			ForwardNoLocalHandlerMethods: map[string]bool{},
+			LocalHandlers:                map[string]LocalHandlerFunc{},
+		}
+		s.config.Routes[path] = route
+	}
+	if route.LocalHandlers == nil {
+		route.LocalHandlers = make(map[string]LocalHandlerFunc)
+	}
+	route.LocalHandlers[method] = handler
 }
 
 // HandleConnection HTTP 处理入口：路由分流 → 升级 WS → 读循环。
@@ -309,7 +342,7 @@ func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request)
 //
 // Python: GatewayServer.send()（L412-499）——四段路由：
 // request 定向 → session 定向 → 广播 fallback → 帧发送。
-// acp 分支 ⤵️ 11.25（L468-471）。
+// acp 分支见下方 channel_id=="acp" 段（对齐 L453-457）。
 // 裸键回退不实现：Python L417-418/L427-429 的 get(key[1]) 是 dict 对 tuple
 // 的意外行为，实际永不命中（键恒为 tuple），属死代码（spec §7-2 有意偏差）。
 func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
@@ -338,9 +371,10 @@ func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
 	hitStale := ws != nil && !s.probeWritable(ws)
 
 	if hitStale {
-		// 命中路由键但连接已死：静默丢弃（对齐 Python L428/L451 的
-		// closed 分支——仅 warning 后 return，不广播）
-		logger.Warn(logComponent).
+		// 命中路由键但连接已死：静默丢弃（对齐 Python L428-451 的 closed 分支——
+		// `if ws is None or ws.closed: if ws is None: ...; return`，ws 非 None 但
+		// 已关闭时 Python 既不打日志也不广播，故 Go 用 Debug 而非 Warn）
+		logger.Debug(logComponent).
 			Str("channel_id", msg.ChannelID).
 			Str("session_id", msg.SessionID).
 			Str("id", msg.ID).
@@ -389,7 +423,7 @@ func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
 	}
 
 	// 出站拦截器（对齐 L443-467：只处理第一条 channel_id 匹配的路由，异常 Warn 继续）
-	var interceptor GatewayInterceptorFunc
+	var interceptor routing.InterceptorFunc
 	s.clientsMu.RLock()
 	for _, route := range s.config.Routes {
 		if route.ChannelID == msg.ChannelID && route.OutboundInterceptor != nil {
@@ -534,15 +568,24 @@ func (s *GatewayServer) findChannelClients(channelID string) []*websocket.Conn {
 //
 // Python: _handle_raw_message（L561-720）三层处理：
 // 拦截器 → forward 集合 → 本地 handler。
-// acp 分支 ⤵️ 11.25（L573-579 的 acp_bridge.handle_jsonrpc_request/is_jsonrpc_request
-// 与 L665-668 的 acp early-return）。
+// acp 分支见下方 route.ChannelID=="acp" 两段（对齐 L575-581 的桥分派 +
+// L682-683 的 acp early-return）。
 // M-02：返回 true 表示 on_message 回调出错、须断开该连接（对齐 Python
 // 异常传播语义——_handle_raw_message 无 except，异常逃出 connection_handler
 // 的 async for → websockets 框架关闭该连接）；false 正常。
 func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn, raw []byte, requestPath string, route *RouteConfig) bool {
 	var data map[string]any
 	if err := json.Unmarshal(raw, &data); err != nil {
-		s.sendInlineError(ws, "", "invalid json")
+		// 文案区分（对齐 Python L565-573 / L598-605）：
+		// - 非法 JSON → json.JSONDecodeError → "invalid json"
+		// - 合法 JSON 但非对象（数组/字符串/数字）→ json.loads 成功、isinstance(data, dict)
+		//   为假 → "invalid request"
+		// Go 的 json.Unmarshal 对非对象也返回 error，故用 json.Valid 区分两态。
+		if json.Valid(raw) {
+			s.sendInlineError(ws, "", "invalid request")
+		} else {
+			s.sendInlineError(ws, "", "invalid json")
+		}
 		return false
 	}
 
@@ -587,7 +630,7 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		s.sendInlineError(ws, "", "invalid request")
 		return false
 	}
-	reqID := strings.TrimSpace(strVal(data["id"]))
+	reqID := acp.NormalizeJSONRPCID(data["id"])
 	method := strings.TrimSpace(strVal(data["method"]))
 	if reqID == "" || method == "" {
 		s.sendInlineError(ws, reqID, "invalid request")

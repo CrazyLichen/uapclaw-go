@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -58,28 +60,45 @@ func TestTuiForwardSetCounts(t *testing.T) {
 	}
 }
 
-// TestBuildTuiRouteConfig 测试路由配置字段完整性。
-func TestBuildTuiRouteConfig(t *testing.T) {
-	rc := BuildTuiRouteConfig(TuiRouteParams{})
-	if rc.Path != "/tui" {
-		t.Errorf("Path = %s, 期望 /tui", rc.Path)
+// TestBuildTuiRouteBinding 测试 binding 字段完整性 + Install 注册效果。
+func TestBuildTuiRouteBinding(t *testing.T) {
+	rb := BuildTuiRouteBinding(TuiRouteParams{})
+	if rb.Path != "/tui" {
+		t.Errorf("Path = %s, 期望 /tui", rb.Path)
 	}
-	if rc.ChannelID != "tui" {
-		t.Errorf("ChannelID = %s, 期望 tui", rc.ChannelID)
+	if rb.ChannelID != "tui" {
+		t.Errorf("ChannelID = %s, 期望 tui", rb.ChannelID)
 	}
+	if rb.DisconnectHandler == nil {
+		t.Error("DisconnectHandler 不应为 nil")
+	}
+	if rb.Install == nil {
+		t.Fatal("Install 不应为 nil（TUI 本地 handler 靠它注册）")
+	}
+	if !rb.ForwardMethods["chat.send"] || rb.ForwardNoLocalHandlerMethods["chat.send"] {
+		t.Error("chat.send 应在 forward 集合且不在 no-local 集合")
+	}
+	// 拦截器与 CleanupHandler 由 InstallDefaultAcpHooks 后装，binding 阶段应为 nil
+	// （对齐 Python _build_acp_route_binding / build_cli_route_binding 均不设这两个）
+	if rb.InboundInterceptor != nil || rb.OutboundInterceptor != nil {
+		t.Error("binding 阶段不应预装拦截器（由 InstallDefaultAcpHooks 后装）")
+	}
+
+	// Install 效果：经 RouteConfig 转换后由 GatewayServer.RegisterLocalHandler 注册
+	routes := BuildRouteConfigMap([]*routing.RouteBinding{rb})
+	rc := routes["/tui"]
+	if rc == nil {
+		t.Fatal("BuildRouteConfigMap 未产出 /tui 路由")
+	}
+	gs := NewGatewayServer(&GatewayServerConfig{Routes: routes})
+	rb.Install(gs)
 	for _, m := range []string{"chat.send", "chat.interrupt", "chat.resume", "chat.user_answer", "history.get"} {
 		if _, ok := rc.LocalHandlers[m]; !ok {
-			t.Errorf("LocalHandlers 缺少 %s", m)
+			t.Errorf("Install 后 LocalHandlers 缺少 %s", m)
 		}
 	}
 	if len(rc.LocalHandlers) != 5 {
 		t.Errorf("LocalHandlers = %d 个, 期望 5", len(rc.LocalHandlers))
-	}
-	if rc.DisconnectHandler == nil {
-		t.Error("DisconnectHandler 不应为 nil")
-	}
-	if !rc.ForwardMethods["chat.send"] || rc.ForwardNoLocalHandlerMethods["chat.send"] {
-		t.Error("chat.send 应在 forward 集合且不在 no-local 集合")
 	}
 }
 

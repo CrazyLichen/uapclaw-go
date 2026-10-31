@@ -1383,3 +1383,96 @@ func frameMethodOf(f map[string]any) string {
 // 例 24（chat.resume → interrupt+resume）已在 11.9 web 包实现
 // （NormalizeGatewayMessage + web_normalize_test.go：TestNormalizeGatewayMessage_resume转cancel），
 // 按计划映射表核对后跳过。
+
+// ──────────────────────────── Go 增强：数字型 jsonrpc id（P1 回归） ────────────────────────────
+
+// TestAcpGateway_NumericJsonrpcIDToolResponse IDE 把 string id 回成 number 时，
+// pending 仍须命中（Python str(id).strip() 语义）。
+// 回归点：strVal 只做 v.(string)，float64(777) → "" 会让 tool response 被判
+// unknown 丢弃，agent 侧工具调用永久挂起（spec §7 承诺的 "id=777" 用例）。
+func TestAcpGateway_NumericJsonrpcIDToolResponse(t *testing.T) {
+	rec := newAcpDispatchRecorder()
+	a := newAcpTestServerOpt(t, rec.callback())
+	conn, serverConn := a.dialAcpTracked(t)
+	defer conn.Close()
+	a.bindAcpSessionClient("sess-num", serverConn)
+
+	// 我们发出 string id "777"，IDE 可能回成 number 777
+	rawFrame := map[string]any{
+		"jsonrpc": "2.0", "id": "777", "method": "fs/read_text_file",
+		"params": map[string]any{"path": "a.txt", "sessionId": "sess-num"},
+	}
+	if err := a.server.Send(context.Background(), acpOutputRequestMsg("req-num", "sess-num", rawFrame)); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	_ = readFrame(t, conn) // 透传帧
+
+	sendAcpJSON(t, conn, map[string]any{
+		"jsonrpc": "2.0", "id": float64(777), "result": map[string]any{"content": "ok"},
+	})
+	msg := rec.next(t)
+	if msg.ReqMethod != schema.ReqMethodACPToolResponse {
+		t.Fatalf("req_method = %v, want acp.tool_response", msg.ReqMethod)
+	}
+	var params map[string]any
+	_ = json.Unmarshal(msg.Params, &params)
+	if params["jsonrpc_id"] != "777" {
+		t.Errorf("params.jsonrpc_id = %v, want \"777\"", params["jsonrpc_id"])
+	}
+}
+
+// TestAcpGateway_FinalBeforeIdleCancelsTimer P2 回归：deferred 解挂路径可能在
+// SawProcessingIdle==false 下 armed timer，此时 chat.final 必须取消它（Python
+// L413 无条件 _cancel_idle_finalize_task），否则 timer 会在 3s 后提前发 end_turn。
+func TestAcpGateway_FinalBeforeIdleCancelsTimer(t *testing.T) {
+	rec := newAcpDispatchRecorder()
+	a := newAcpTestServerOpt(t, rec.callback(), WithIdleFinalizeSeconds(func() float64 { return 5.0 }))
+	conn, _ := a.dialAcpTracked(t)
+	defer conn.Close()
+	frames, stop := startFrameCollector(t, conn)
+	defer stop()
+
+	reqID := a.sendPromptAndWaitReqID(t, conn, 7001, "sess-final-first", "hello", "", rec)
+
+	// 构造「已 armed timer 且 SawProcessingIdle==false」的状态：
+	// 直接置 ctx 的 timer 槽，模拟 deferred 解挂 scheduling 后的现场。
+	a.bridge.mu.Lock()
+	pctx := a.bridge.requestCtxByReqID[reqID]
+	if pctx == nil {
+		a.bridge.mu.Unlock()
+		t.Fatal("pctx not found")
+	}
+	pctx.SawProcessingIdle = false
+	a.bridge.mu.Unlock()
+	// ⚠️ scheduleIdleFinalize 内部自持 b.mu，不可在持锁状态下调用（Go mutex 不可重入）。
+	// nil ws：timer 若真触发，写帧会静默失败，不影响槽位断言。
+	a.bridge.scheduleIdleFinalize(reqID, pctx, nil)
+	a.bridge.mu.Lock()
+	armed := pctx.idleFinalizeTimerSlot != nil
+	a.bridge.mu.Unlock()
+	if !armed {
+		t.Fatal("timer slot should be armed for this test")
+	}
+
+	// chat.final 到达（无 idle）→ 必须取消 timer
+	if err := a.server.Send(context.Background(), acpEventMsg(reqID, "sess-final-first",
+		schema.EventTypeChatFinal, map[string]any{"content": "final answer"})); err != nil {
+		t.Fatalf("send final: %v", err)
+	}
+	// 消费 final 的 session/update 帧
+	select {
+	case f := <-frames:
+		if frameMethodOf(f) != "session/update" {
+			t.Fatalf("frame = %v, want session/update", f)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no session/update frame for chat.final")
+	}
+
+	a.bridge.mu.Lock()
+	slot := pctx.idleFinalizeTimerSlot
+	a.bridge.mu.Unlock()
+	if slot != nil {
+		t.Error("chat.final with !sawProcessingIdle must cancel idle-finalize timer")
+	}
+}

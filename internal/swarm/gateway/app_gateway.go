@@ -403,8 +403,6 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 	}
 
 	// ── 11.9：GatewayServer 多路由 WS 入站链装配（对齐 Python L1032-1069）──
-	// A1 空路由形态：routeBindings 为空切片，循环体零次执行（⤵️ 11.25 ACP /
-	// ⤵️ 11.15 TUI 接线时注入 binding）
 	s.inboundServer = NewInboundGatewayServer(func(ctx context.Context, msg *schema.Message) {
 		NormalizeAndForwardMessage(msg, s.channelMgr)
 	})
@@ -421,15 +419,17 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 			gwCfg.Port = p
 		}
 	}
-	// 11.15 最小装配：/tui CLI 路由（对齐 Python L1045-1054 build_cli_route_binding）
-	// 纯本地 handler（config.*/session.list/memory.*/cron.* 等 27 个）⤵️ 11.15 完整范围
+	// ── 路由 binding 工厂链（对齐 Python L1037-1062 route_bindings + _build_route_config_map）──
+	// 顺序与 Python 一致：/acp 在前、/tui 在后。/tui 的 5 个本地 handler 由 Install
+	// 回调在 server 构造后注册（对齐 build_cli_route_binding 的 install）；
+	// 纯本地 handler 完整范围（config.*/session.list/memory.*/cron.* 等 27 个）待 11.15 补齐。
+	var routeBindings []*routing.RouteBinding
+	routeBindings = append(routeBindings, BuildACPRouteBinding("/acp", "acp"))
 	if s.msgHandler != nil {
-		tuiRoute := BuildTuiRouteConfig(TuiRouteParams{MessageHandler: s.msgHandler})
-		gwCfg.Routes[tuiRoute.Path] = tuiRoute
+		routeBindings = append(routeBindings,
+			BuildTuiRouteBinding(TuiRouteParams{MessageHandler: s.msgHandler}))
 	}
-	// ── 11.25：/acp 路由装配（对齐 Python L1037-1044 _build_acp_route_binding）──
-	acpRoute := BuildACPRouteConfig()
-	gwCfg.Routes[acpRoute.Path] = acpRoute
+	gwCfg.Routes = BuildRouteConfigMap(routeBindings)
 	s.gwServerMu.Lock()
 	s.gwServer = NewGatewayServer(gwCfg)
 	gwServer := s.gwServer
@@ -454,19 +454,19 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 	gwServer.SetAcpBridge(acpBridge)
 	gwServer.InstallDefaultAcpHooks()
 
-	// 对齐 Python L1056-1064：for binding in route_bindings
-	routeBindings := []*routing.RouteBinding{} // ACP ⤵️ 11.25（TUI 已改为直填 Routes，不走 binding）
+	// 对齐 Python L1064-1068：for binding in route_bindings
+	//   register_external_channel(route_config.channel_id, gateway_server)
+	//   if binding.install is not None: binding.install(gateway_server)
 	for _, binding := range routeBindings {
 		routeConfig := gwCfg.Routes[binding.Path]
+		if routeConfig == nil {
+			continue
+		}
 		s.channelMgr.RegisterExternalChannel(routeConfig.ChannelID, gwServer)
 		if binding.Install != nil {
 			binding.Install(gwServer)
 		}
 	}
-	// 11.15：/tui 出站注册（对齐 Python register_external_channel("tui", gateway_server)）
-	s.channelMgr.RegisterExternalChannel("tui", gwServer)
-	// 11.25：/acp 出站注册（对齐 Python L1066 register_external_channel("acp", gateway_server)）
-	s.channelMgr.RegisterExternalChannel("acp", gwServer)
 
 	// 对齐 Python L1069：gateway_server.on_message(acp_inbound_server.handle_message)
 	gwServer.OnMessage(s.inboundServer.HandleMessage)

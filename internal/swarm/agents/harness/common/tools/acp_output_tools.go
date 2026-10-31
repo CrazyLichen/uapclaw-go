@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -22,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -482,21 +482,11 @@ func (e *AcpOutputTimeoutError) Error() string {
 // Python: str(jsonrpc_id or "").strip() (L94-95)。
 // 唯一 any→string 边界：JSON 解码后的 ID（string/float64/json.Number 皆可能）
 // 在此单点归一，Complete/Fail 等消费方一律收 string。
+//
+// 实现已下沉到 e2a/acp.NormalizeJSONRPCID（gateway 的 ACP 桥/stdio 通道共用同一实现，
+// 避免两处逻辑漂移）；本函数保留仅为既有调用方（server/handle_initialize.go）兼容。
 func NormalizeJsonrpcID(id any) string {
-	switch v := id.(type) {
-	case string:
-		return strings.TrimSpace(v)
-	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64)
-	case int:
-		return strconv.Itoa(v)
-	case int64:
-		return strconv.FormatInt(v, 10)
-	case json.Number:
-		return strings.TrimSpace(v.String())
-	default:
-		return ""
-	}
+	return e2aacp.NormalizeJSONRPCID(id)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

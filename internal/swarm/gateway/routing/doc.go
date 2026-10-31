@@ -6,7 +6,11 @@
 //   - SendRequestStream: 流式请求，持续接收 chunk 直到 is_complete
 //   - receiverLoop: 统一消费 transport.Recv()，区分事件帧/server_push/正常响应
 //
-// RouteBinding 描述 WS 路径的消息处理策略，预留多路径框架（/ws、/acp、/tui）。
+// RouteBinding 描述 WS 路径的消息处理策略，是 Gateway 路由工厂链的中间形态：
+// BuildACPRouteBinding / BuildTuiRouteBinding → BuildRouteConfigMap（gateway 包）
+// → app_gateway 装配循环（register_external_channel + binding.install）。
+// 三个回调类型（InterceptorFunc / CleanupFunc / DisconnectFunc）与
+// RouterConfig 的同名字段同源共享，gateway 包直接引用不另建别名。
 //
 // SessionMap 将企业 IM 稳定身份映射为轮转 agent session_id（checkpoint 持久化，
 // Python session_map.py；scope 从 config gateway.session_map_scope 读一次）。

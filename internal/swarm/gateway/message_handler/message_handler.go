@@ -125,7 +125,10 @@ type MessageHandler struct {
 	cronController CronControllerAPI
 
 	// acpSessionAliasMu ACP 会话别名锁（Python _acp_session_alias_lock）
-	acpSessionAliasMu sync.Mutex
+	// RWMutex：入站解析（可能持锁跨 session.create RPC）走写锁，出站反解读锁——
+	// Python 出站 _resolve_acp_external_session_id 不加锁（单线程无需），Go 侧
+	// 若也取写锁会被在途 RPC 阻塞，故降为读锁。
+	acpSessionAliasMu sync.RWMutex
 	// acpSessionAliases ACP 别名缓存：external → internal（无 TTL 无上限，偏差 §9-11）
 	acpSessionAliases map[string]string
 }

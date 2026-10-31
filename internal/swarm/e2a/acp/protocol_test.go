@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -93,5 +94,35 @@ func TestBuildAcpPromptResult(t *testing.T) {
 	r = BuildAcpPromptResult("cancelled", "  ")
 	if _, ok := r["userMessageId"]; ok {
 		t.Error("空白 userMessageId 不应带键")
+	}
+}
+
+// TestNormalizeJSONRPCID 表驱动覆盖全部取值形态。
+// Python: str(data.get("id") or "").strip()（acp_connect.py L159）。
+func TestNormalizeJSONRPCID(t *testing.T) {
+	cases := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{"字符串去空白", "  abc  ", "abc"},
+		{"数字 id 777", float64(777), "777"},
+		{"数字 id 0", float64(0), "0"},
+		{"负数字 id", float64(-32601), "-32601"},
+		{"小数 id", 1.5, "1.5"},
+		{"int", 42, "42"},
+		{"float32", float32(3.5), "3.5"},
+		{"int64", int64(9007199254740993), "9007199254740993"},
+		{"json.Number", json.Number("888"), "888"},
+		{"nil", nil, ""},
+		{"map 不支持", map[string]any{}, ""},
+		{"bool 不支持", true, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := NormalizeJSONRPCID(c.in); got != c.want {
+				t.Errorf("NormalizeJSONRPCID(%#v) = %q, 期望 %q", c.in, got, c.want)
+			}
+		})
 	}
 }
