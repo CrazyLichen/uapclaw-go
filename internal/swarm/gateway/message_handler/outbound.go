@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -198,4 +199,12 @@ func strVal(v any) string {
 		return s
 	}
 	return ""
+}
+
+// strScalar 取标量并转字符串（对齐 Python str(x or "").strip()）。
+//
+// 会话别名解析读的是外部 sessionId，Python 侧经 str() 收敛，数字也能落成
+// "123"；strVal 只认 string，会让数字形态静默变空串。
+func strScalar(v any) string {
+	return e2aacp.ScalarString(v)
 }

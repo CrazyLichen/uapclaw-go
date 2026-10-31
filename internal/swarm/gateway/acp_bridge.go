@@ -70,19 +70,9 @@ type AcpGatewayRequestCtx struct {
 	SawProcessingIdle bool
 	// ClientWS 客户端连接
 	ClientWS *websocket.Conn
-	// idleFinalizeTimerSlot idle finalize 定时器槽（回调引用比对防 superseded，偏差 §9-4）
-	idleFinalizeTimerSlot *acpIdleTimerSlot
-	// matchedRequestID maybeFinalizeDeferredPrompts 遍历辅助（Python 以局部变量
-	// 元组携带；Go 需挂到结构体以在锁外使用）
-	matchedRequestID string
-}
-
-// acpIdleTimerSlot idle finalize 定时器槽（§9-4）。
-// AfterFunc 回调可能先于闭包变量赋值启动，闭包不能引用 timer 变量本身；
-// 经 slot 中转：调度时先建 slot 写 ctx 字段，回调锁内比对 slot 归属。
-type acpIdleTimerSlot struct {
-	// timer 已 arm 的定时器（slot 创建后锁内赋值，回调只读）
-	timer *time.Timer
+	// idleFinalizeTimerSlot idle finalize 定时器槽（回调引用比对防 superseded，§9-4；
+	// 与 stdio 通道共用 acp.IdleTimer 实现）
+	idleFinalizeTimerSlot *acp.IdleTimer
 }
 
 // pendingRPCEntry pending RPC 条目（Python (session_id, ws, created_at) 元组）。
@@ -178,7 +168,7 @@ func (b *AcpGatewayBridge) HandleJsonrpcRequest(ctx context.Context, ws *websock
 		return true
 	}
 	if method == "session/new" {
-		sessionID := strings.TrimSpace(strVal(params["sessionId"]))
+		sessionID := strings.TrimSpace(strScalar(params["sessionId"]))
 		if sessionID == "" {
 			sessionID = "acp_" + randHexStr(12)
 		}
@@ -187,7 +177,7 @@ func (b *AcpGatewayBridge) HandleJsonrpcRequest(ctx context.Context, ws *websock
 		return true
 	}
 	if method == "session/prompt" {
-		sessionID := strings.TrimSpace(strVal(params["sessionId"]))
+		sessionID := strings.TrimSpace(strScalar(params["sessionId"]))
 		if sessionID == "" {
 			b.sendRawJsonrpcError(ws, rpcID, -32602, "sessionId is required")
 			return true
@@ -203,7 +193,7 @@ func (b *AcpGatewayBridge) HandleJsonrpcRequest(ctx context.Context, ws *websock
 		b.requestCtxByReqID[requestID] = &AcpGatewayRequestCtx{
 			JSONRPCID:     rpcID,
 			SessionID:     sessionID,
-			UserMessageID: strings.TrimSpace(strVal(params["messageId"])),
+			UserMessageID: strings.TrimSpace(strScalar(params["messageId"])),
 			ClientWS:      ws,
 		}
 		b.activePromptBySession[sessionID] = requestID
@@ -225,11 +215,16 @@ func (b *AcpGatewayBridge) HandleJsonrpcRequest(ctx context.Context, ws *websock
 			Mode:      schema.ModeAgentPlan,
 			Metadata:  map[string]any{"acp": map[string]any{"jsonrpc_id": rpcID, "method": method}},
 		}
-		b.dispatchMessage(ctx, msg)
+		if err := b.dispatchMessage(ctx, msg); err != nil {
+			// 派发失败必须回 JSON-RPC error（Python 异常冒泡到 -32603），
+			// 否则 IDE 侧 session/prompt 永久挂起；ctx 同步清理避免泄漏。
+			b.sendRawJsonrpcError(ws, rpcID, -32603, err.Error())
+			b.clearRequestContext(requestID, sessionID)
+		}
 		return true
 	}
 	if method == "session/cancel" {
-		sessionID := strings.TrimSpace(strVal(params["sessionId"]))
+		sessionID := strings.TrimSpace(strScalar(params["sessionId"]))
 		if sessionID != "" {
 			b.mu.Lock()
 			requestID := b.activePromptBySession[sessionID]
@@ -356,7 +351,12 @@ func (b *AcpGatewayBridge) InboundIntercept(ws *websocket.Conn, data map[string]
 	}
 
 	msg := e2a.BuildACPToolResponseMessage(jsonrpcID, cpMap(data), sessionID, b.channelID)
-	b.dispatchMessage(context.Background(), msg)
+	if err := b.dispatchMessage(context.Background(), msg); err != nil {
+		logger.Warn(logComponent).
+			Err(err).
+			Str("session_id", sessionID).
+			Msg("acp bridge tool response dispatch failed")
+	}
 	b.resolvePendingRPC(sessionID)
 	return true
 }
@@ -418,6 +418,14 @@ func (b *AcpGatewayBridge) Cleanup(ws *websocket.Conn) {
 		entry := b.pendingRPCSessionByID[jsonrpcID]
 		delete(b.pendingRPCSessionByID, jsonrpcID)
 		b.decreasePendingRPCCountLocked(entry.sessionID)
+	}
+	// 断连等价 Python 的 ws.closed 判定：该连接上挂起的 prompt 置空 ClientWS
+	// 并停掉 idle timer，避免收尾路径继续向死连接写帧。
+	for _, c := range b.requestCtxByReqID {
+		if c.ClientWS == ws {
+			c.ClientWS = nil
+			cancelIdleFinalizeTimerLocked(c)
+		}
 	}
 	b.mu.Unlock()
 }
@@ -586,18 +594,21 @@ func (b *AcpGatewayBridge) SendMessage(ctx context.Context, msg *schema.Message,
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// dispatchMessage 派发消息（on_message_cb 链）。
-// Python: _dispatch_message (L487-493)：cb 为 None → False；结果取 bool。
-func (b *AcpGatewayBridge) dispatchMessage(ctx context.Context, msg *schema.Message) {
+// dispatchMessage 派发消息（on_message_cb 链），回调错误上抛给调用方。
+// Python: _dispatch_message (L487-493)：cb 为 None → False；异常不捕获，
+// 由 handle_jsonrpc 的 except 统一回 -32603。
+func (b *AcpGatewayBridge) dispatchMessage(ctx context.Context, msg *schema.Message) error {
 	if b.onMessageCb == nil {
-		return
+		return nil
 	}
 	if err := b.onMessageCb(ctx, msg); err != nil {
 		logger.Warn(logComponent).
 			Err(err).
 			Str("msg_id", msg.ID).
 			Msg("acp bridge on_message callback failed")
+		return err
 	}
+	return nil
 }
 
 // bindSession 登记会话并回调绑定。
@@ -686,22 +697,17 @@ func markStreamActivityLocked(pctx *AcpGatewayRequestCtx) {
 // Python: _cancel_idle_finalize_task (L99-104)。
 // Go 侧取消点统一在持锁段内执行（SendMessage/清理路径），timer.Stop 后置 nil。
 func cancelIdleFinalizeTimerLocked(pctx *AcpGatewayRequestCtx) {
-	if pctx.idleFinalizeTimerSlot != nil {
-		if pctx.idleFinalizeTimerSlot.timer != nil {
-			pctx.idleFinalizeTimerSlot.timer.Stop()
-		}
-		pctx.idleFinalizeTimerSlot = nil
-	}
+	// Stop 为 nil 安全方法：无需判空，槽置空后该 timer 视为 superseded
+	pctx.idleFinalizeTimerSlot.Stop()
+	pctx.idleFinalizeTimerSlot = nil
 }
 
 // shouldWaitForFinalTextBeforeEndTurn 判定是否等迟到 final text。
 // Python: _should_wait_for_final_text_before_end_turn (L111-118)：
 // sawChatFinal=true → false；assistant_text 或 assistant_message_id 非空 → true。
 func shouldWaitForFinalTextBeforeEndTurn(pctx *AcpGatewayRequestCtx) bool {
-	if pctx.SawChatFinal {
-		return false
-	}
-	return pctx.State.AssistantText != "" || pctx.State.AssistantMessageID != ""
+	// 判定逻辑与 stdio 通道共用（acp.ShouldWaitForFinalText），避免两处分叉
+	return acp.ShouldWaitForFinalText(pctx.SawChatFinal, pctx.State.AssistantText, pctx.State.AssistantMessageID)
 }
 
 // registerPendingRPC 会话 pending 计数 +1 并取消该会话全部 idle finalize timer。
@@ -779,39 +785,56 @@ func (b *AcpGatewayBridge) maybeFinalizeDeferredPrompts(sessionID string) {
 	if sid == "" || b.sessionHasPendingRPCs(sid) {
 		return
 	}
-	b.mu.Lock()
-	matched := make([]*AcpGatewayRequestCtx, 0)
-	for requestID, c := range b.requestCtxByReqID {
-		if c.SessionID == sid && strings.TrimSpace(c.PendingStopReason) != "" {
-			c.matchedRequestID = requestID
-			matched = append(matched, c)
-		}
+	// 一次持锁快照：stopReason / shouldWait / ws / jsonrpcID 全部在锁内读取。
+	// 这些字段由 SendMessage、idle timer 回调等多 goroutine 持锁写，锁外读取
+	// 属真实数据竞争（-race 可复现）；快照后锁外只做发送与清理。
+	type deferredPrompt struct {
+		requestID     string
+		pctx          *AcpGatewayRequestCtx
+		stopReason    string
+		ws            *websocket.Conn
+		jsonrpcID     any
+		userMessageID string
+		waitFinal     bool
 	}
-	b.mu.Unlock()
-
-	for _, c := range matched {
-		b.mu.Lock()
+	b.mu.Lock()
+	snapshots := make([]deferredPrompt, 0)
+	for requestID, c := range b.requestCtxByReqID {
+		if c.SessionID != sid {
+			continue
+		}
 		stopReason := strings.TrimSpace(c.PendingStopReason)
 		if stopReason == "" {
-			b.mu.Unlock()
 			continue
 		}
 		c.PendingStopReason = ""
-		ws := c.ClientWS
-		b.mu.Unlock()
-		if ws == nil {
+		snapshots = append(snapshots, deferredPrompt{
+			requestID:     requestID,
+			pctx:          c,
+			stopReason:    stopReason,
+			ws:            c.ClientWS,
+			jsonrpcID:     c.JSONRPCID,
+			userMessageID: c.UserMessageID,
+			waitFinal:     shouldWaitForFinalTextBeforeEndTurn(c),
+		})
+	}
+	b.mu.Unlock()
+
+	for _, snap := range snapshots {
+		// ws 为 nil：连接已断开（Cleanup 置空），不再向死连接写帧
+		if snap.ws == nil {
 			continue
 		}
-		if shouldWaitForFinalTextBeforeEndTurn(c) {
-			b.scheduleIdleFinalize(c.matchedRequestID, c, ws)
+		if snap.waitFinal {
+			b.scheduleIdleFinalize(snap.requestID, snap.pctx, snap.ws)
 			continue
 		}
 		b.mu.Lock()
-		cancelIdleFinalizeTimerLocked(c)
+		cancelIdleFinalizeTimerLocked(snap.pctx)
 		b.mu.Unlock()
-		b.sendRawJsonrpcResult(ws, c.JSONRPCID,
-			acp.BuildAcpPromptResult(stopReason, c.UserMessageID))
-		b.clearRequestContext(c.matchedRequestID, sid)
+		b.sendRawJsonrpcResult(snap.ws, snap.jsonrpcID,
+			acp.BuildAcpPromptResult(snap.stopReason, snap.userMessageID))
+		b.clearRequestContext(snap.requestID, sid)
 	}
 }
 
@@ -838,18 +861,17 @@ func (b *AcpGatewayBridge) scheduleIdleFinalize(requestID string, pctx *AcpGatew
 	b.mu.Lock()
 	cancelIdleFinalizeTimerLocked(pctx)
 	secs := b.getIdleFinalizeSeconds()
-	slot := &acpIdleTimerSlot{}
-	pctx.idleFinalizeTimerSlot = slot
-	slot.timer = time.AfterFunc(time.Duration(secs*float64(time.Second)), func() {
-		b.idleFinalizeAfterTimeout(requestID, pctx, slot, ws)
+	slot := acp.NewIdleTimer(time.Duration(secs*float64(time.Second)), func(s *acp.IdleTimer) {
+		b.idleFinalizeAfterTimeout(requestID, pctx, s, ws)
 	})
+	pctx.idleFinalizeTimerSlot = slot
 	b.mu.Unlock()
 }
 
 // idleFinalizeAfterTimeout timer 超时回调：引用比对防 superseded。
 // Python: _idle_finalize_after_timeout (L594-615)——asyncio.current_task 比对
 // 的 Go 等价：回调经 slot（调度时 ctx 上的占位）比对当前 timer 归属。
-func (b *AcpGatewayBridge) idleFinalizeAfterTimeout(requestID string, pctx *AcpGatewayRequestCtx, slot *acpIdleTimerSlot, ws *websocket.Conn) {
+func (b *AcpGatewayBridge) idleFinalizeAfterTimeout(requestID string, pctx *AcpGatewayRequestCtx, slot *acp.IdleTimer, ws *websocket.Conn) {
 	b.mu.Lock()
 	cur, ok := b.requestCtxByReqID[requestID]
 	if !ok || cur != pctx || pctx.idleFinalizeTimerSlot != slot {
@@ -863,10 +885,8 @@ func (b *AcpGatewayBridge) idleFinalizeAfterTimeout(requestID string, pctx *AcpG
 		return
 	}
 	pctx.idleFinalizeTimerSlot = nil
-	// 比对通过后需停掉 slot 内 timer（正常触发场景 Stop 返回 false，无害）
-	if slot.timer != nil {
-		slot.timer.Stop()
-	}
+	// 比对通过后停掉 slot 内 timer（正常触发场景 Stop 返回 false，无害）
+	slot.Stop()
 	b.mu.Unlock()
 	b.sendRawJsonrpcResult(ws, pctx.JSONRPCID,
 		acp.BuildAcpPromptResult("end_turn", pctx.UserMessageID))

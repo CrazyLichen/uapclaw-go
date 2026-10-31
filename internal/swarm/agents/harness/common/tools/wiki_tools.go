@@ -26,6 +26,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -955,17 +956,9 @@ func withWikiRecover(fn func() (string, error), prefix string) (out string, err 
 	return out, nil
 }
 
-// resolvePathStringWiki 路径 resolve（EvalSymlinks 失败回退 Abs）。
-// Python: Path.resolve()
+// resolvePathStringWiki 路径 resolve（对齐 Python Path.resolve 的 strict=False 语义）。
 func resolvePathStringWiki(p string) string {
-	if resolved, err := filepath.EvalSymlinks(p); err == nil {
-		return resolved
-	}
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return p
-	}
-	return abs
+	return upath.ResolveSymlinksLenient(p)
 }
 
 // expandUserHomeWiki ~/ 展开。

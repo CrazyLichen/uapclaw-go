@@ -109,6 +109,29 @@ func NormalizeJSONRPCID(id any) string {
 	}
 }
 
+// ScalarString 对标量与 nil 做 str(x or "").strip() 归一化。
+//
+// 专供 sessionId / messageId 等「Python 侧用 str() 收敛」的字段使用：IDE 把
+// sessionId 传成数字时，Python 得到 "123"，Go 若只做 v.(string) 会得到空串，
+// 进而丢失会话归属或 userMessageId 回填。与 NormalizeJSONRPCID 共用类型分支，
+// 区别仅在语义命名（id 归一化 vs 通用标量字符串化）。
+func ScalarString(v any) string {
+	return NormalizeJSONRPCID(v)
+}
+
+// ShouldWaitForFinalText 收尾前是否还需等待最终文本。
+//
+// Python: _should_wait_for_final_text_before_end_turn (acp_connect.py L111-118)。
+// 未见过 chat.final 且已有助手文本/消息 id 时，说明 end_turn 会早于 final 文本
+// 发出，应延后到 idle 收尾。gateway 桥与 stdio 通道两套实现共用本判定，
+// 避免同一语义写两遍后分叉（历史上的 §9-4 竞态修复就改了两处）。
+func ShouldWaitForFinalText(sawChatFinal bool, assistantText, assistantMessageID string) bool {
+	if sawChatFinal {
+		return false
+	}
+	return assistantText != "" || assistantMessageID != ""
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildAcpInitializeResult 内部构造（不拷贝，供包内单例初始化）。

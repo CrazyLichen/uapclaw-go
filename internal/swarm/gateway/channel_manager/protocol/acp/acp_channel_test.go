@@ -6,15 +6,19 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -443,14 +447,13 @@ func TestAcpChannel_GatewayJsonrpcForActivePrompt(t *testing.T) {
 	// 预置 sentinel timer（若未被取消将写 result 帧导致断言失败）
 	fired := make(chan struct{}, 1)
 	ch.mu.Lock()
-	slot := &acpIdleTimerSlot{}
-	c.idleFinalizeTimerSlot = slot
-	slot.timer = time.AfterFunc(50*time.Millisecond, func() {
+	slot := e2aacp.NewIdleTimer(50*time.Millisecond, func(*e2aacp.IdleTimer) {
 		select {
 		case fired <- struct{}{}:
 		default:
 		}
 	})
+	c.idleFinalizeTimerSlot = slot
 	ch.mu.Unlock()
 
 	raw := map[string]any{
@@ -1053,14 +1056,13 @@ func TestAcpChannel_ToolEventCancelsIdleFinalize(t *testing.T) {
 	// 预置 sentinel timer：短超时但绝不希望触发（触发即写出 result 帧 = 失败）
 	fired := make(chan struct{}, 1)
 	ch.mu.Lock()
-	slot := &acpIdleTimerSlot{}
-	c.idleFinalizeTimerSlot = slot
-	slot.timer = time.AfterFunc(50*time.Millisecond, func() {
+	slot := e2aacp.NewIdleTimer(50*time.Millisecond, func(*e2aacp.IdleTimer) {
 		select {
 		case fired <- struct{}{}:
 		default:
 		}
 	})
+	c.idleFinalizeTimerSlot = slot
 	ch.mu.Unlock()
 	ch.SeedRequestCtxForTest("req-tool-idle", c)
 
@@ -1192,14 +1194,13 @@ func TestAcpChannel_ReasoningTodoCancelIdle(t *testing.T) {
 			}
 			fired := make(chan struct{}, 1)
 			ch.mu.Lock()
-			slot := &acpIdleTimerSlot{}
-			c.idleFinalizeTimerSlot = slot
-			slot.timer = time.AfterFunc(50*time.Millisecond, func() {
+			slot := e2aacp.NewIdleTimer(50*time.Millisecond, func(*e2aacp.IdleTimer) {
 				select {
 				case fired <- struct{}{}:
 				default:
 				}
 			})
+			c.idleFinalizeTimerSlot = slot
 			ch.mu.Unlock()
 			ch.SeedRequestCtxForTest(tc.requestID, c)
 
@@ -1339,5 +1340,99 @@ func TestAcpChannel_GatewayPingLoopExits(t *testing.T) {
 	case <-finished:
 	case <-time.After(2 * time.Second):
 		t.Fatal("gatewayPingLoop 未随 done 关闭退出")
+	}
+}
+
+// dialTestWsConn 拨一条真实 WS 连接并由调用方关闭（供注入已关闭连接使用）。
+func dialTestWsConn(t *testing.T) *websocket.Conn {
+	t.Helper()
+	upgrader := websocket.Upgrader{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				_ = conn.Close()
+				return
+			}
+		}
+	}))
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	if err != nil {
+		srv.Close()
+		t.Fatalf("拨号测试 WS 失败: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+		srv.Close()
+	})
+	return conn
+}
+
+// TestDispatchMessage_派发失败上抛 回归（S-03）：sendToGateway 失败必须作为 error
+// 返回，否则 session/prompt 分支会把失败当成功，IDE 侧永久挂起。
+func TestDispatchMessage_派发失败上抛(t *testing.T) {
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	ch.SetStdoutForTest(&safeBuffer{})
+	ch.gatewayURL = "ws://127.0.0.1:1/acp" // 仅用于走 sendToGateway 分支
+
+	conn := dialTestWsConn(t)
+	_ = conn.Close() // 已关闭：ensureGatewayConnection 复用后写帧必失败
+	ch.gwConnMu.Lock()
+	ch.gwConn = conn
+	ch.gwConnMu.Unlock()
+
+	msg := &schema.Message{ID: "req-dispatch", Type: schema.MessageTypeReq, ChannelID: "acp"}
+	if err := ch.dispatchMessage(context.Background(), msg); err == nil {
+		t.Fatal("派发失败应返回 error（不得静默吞掉）")
+	}
+}
+
+// TestHandleJsonrpcRequest_派发失败回错误帧并清ctx 回归（S-03）：session/prompt
+// 派发失败时须回 -32603，并清理 requestCtx / activePromptBySession。
+func TestHandleJsonrpcRequest_派发失败回错误帧并清ctx(t *testing.T) {
+	ch := NewAcpChannel(AcpChannelConfig{Enabled: true})
+	out := &safeBuffer{}
+	ch.SetStdoutForTest(out)
+	ch.gatewayURL = "ws://127.0.0.1:1/acp"
+
+	conn := dialTestWsConn(t)
+	_ = conn.Close()
+	ch.gwConnMu.Lock()
+	ch.gwConn = conn
+	ch.gwConnMu.Unlock()
+
+	ch.handleJsonrpcRequest(context.Background(), map[string]any{
+		"jsonrpc": "2.0", "id": "prompt-1", "method": "session/prompt",
+		"params": map[string]any{
+			"sessionId": "sess-dispatch-fail",
+			"prompt":    []any{map[string]any{"type": "text", "text": "hi"}},
+		},
+	})
+
+	frames := out.jsonLines(t)
+	foundError := false
+	for _, f := range frames {
+		if errObj, ok := f["error"].(map[string]any); ok {
+			if code, _ := errObj["code"].(float64); code == -32603 {
+				foundError = true
+			}
+		}
+	}
+	if !foundError {
+		t.Fatalf("派发失败应回 -32603 错误帧，实际帧: %+v", frames)
+	}
+
+	ch.mu.Lock()
+	ctxCount := len(ch.requestCtx)
+	activeCount := len(ch.activePromptBySession)
+	ch.mu.Unlock()
+	if ctxCount != 0 {
+		t.Errorf("派发失败后 requestCtx 应清空，实际 %d 条", ctxCount)
+	}
+	if activeCount != 0 {
+		t.Errorf("派发失败后 activePromptBySession 应清空，实际 %d 条", activeCount)
 	}
 }

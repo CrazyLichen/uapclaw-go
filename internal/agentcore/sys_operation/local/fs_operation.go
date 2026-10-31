@@ -22,6 +22,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -1005,8 +1006,8 @@ func (f *LocalFsOperation) resolvePath(ctx context.Context, path string, createP
 		path = filepath.Join(base, path)
 	}
 
-	// 展开用户目录
-	path = expandUser(path)
+	// 展开用户目录（pathutil.ExpandHome 同时覆盖 "~" 与 "~/x"，对齐 expanduser）
+	path = pathutil.ExpandHome(path)
 
 	// 解析路径
 	resolved, err := filepath.Abs(path)
@@ -1031,16 +1032,24 @@ func (f *LocalFsOperation) resolvePath(ctx context.Context, path string, createP
 				sandboxRoots = append(sandboxRoots, pr)
 			}
 		}
+		// 校验用路径解析软链（对齐 Python resolve(strict=False)）：目标可能尚未创建，
+		// 故用「最近已存在祖先 + 拼尾」的宽松解析，避免 ws/link -> /etc 绕过。
+		// 返回值仍用 Abs 形态，保持 I/O 路径与既有行为一致。
+		resolvedForCheck := pathutil.ResolveSymlinksLenient(resolved)
 		allowed := false
 		for _, root := range sandboxRoots {
-			rootAbs, _ := filepath.Abs(root)
-			if strings.HasPrefix(resolved, rootAbs) {
+			if strings.TrimSpace(root) == "" {
+				// 空根条目跳过：否则前缀比较恒真导致 fail-open
+				continue
+			}
+			rootResolved := pathutil.ResolveSymlinksLenient(pathutil.ExpandHome(root))
+			if pathutil.IsPathWithin(rootResolved, resolvedForCheck) {
 				allowed = true
 				break
 			}
 		}
 		if !allowed {
-			return "", fmt.Errorf("路径 %s 在沙箱根目录之外，访问被拒绝", resolved)
+			return "", fmt.Errorf("路径 %s 在沙箱根目录之外，访问被拒绝", resolvedForCheck)
 		}
 	}
 
@@ -1205,18 +1214,6 @@ func (f *LocalFsOperation) createErrorResult(methodName string, errMsg string, s
 			errMsg,
 		),
 	}
-}
-
-// expandUser 展开 ~ 为用户主目录
-func expandUser(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
 }
 
 // parsePermissions 将权限字符串（如 "644"）解析为 os.FileMode。

@@ -5,7 +5,9 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -155,11 +157,14 @@ func getTodosFilePath(channelID string) string {
 // Python: _parse_todos_file()——lookahead 正则 RE2 不支持，改逐行状态机（偏差#2，产出一致）。
 // 坏条目（非法 status/priority）对齐 Python except Exception: warn + 跳过该条，
 // 不向上传播错误。
-func parseTodosFile(filePath string) []*TodoItem {
+func parseTodosFile(filePath string) ([]*TodoItem, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		// Python: os.path.exists → False 时返回 []；读失败同样容错为空
-		return nil
+		// Python: 仅 os.path.exists 为 False 时返回 []；其他读错误向上抛（工具回 success=false）
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("读取待办文件失败: %w", err)
 	}
 	lines := strings.Split(string(data), "\n")
 	var todos []*TodoItem
@@ -206,7 +211,7 @@ func parseTodosFile(filePath string) []*TodoItem {
 		}
 	}
 	flush()
-	return todos
+	return todos, nil
 }
 
 // todoItemFromDict 从解析 map 构造 TodoItem。
@@ -307,16 +312,59 @@ func serializeTodoItem(todo *TodoItem) string {
 	return sb.String()
 }
 
-// writeTodosFile 写回待办文件。
-// Python: _write_todos_file()
-func writeTodosFile(filePath string, todos []*TodoItem) {
-	_ = os.MkdirAll(filepath.Dir(filePath), 0o755)
+// writeTodosFile 写回待办文件（同目录临时文件 + rename 原子替换）。
+//
+// Python: _write_todos_file() —— 写失败会抛异常，工具层回 success=false。
+// Go 侧必须同样上抛：原实现 `_ = os.WriteFile` 会让磁盘写失败仍向模型报成功。
+// 原子替换避免并发读方看到半截文件。
+func writeTodosFile(filePath string, todos []*TodoItem) error {
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("创建待办目录失败: %w", err)
+	}
 	var sb strings.Builder
 	sb.WriteString("# User Todos\n\n")
 	for _, todo := range todos {
 		sb.WriteString(serializeTodoItem(todo))
 	}
-	_ = os.WriteFile(filePath, []byte(sb.String()), 0o644)
+	tmp, err := os.CreateTemp(dir, ".user_todos-*.tmp")
+	if err != nil {
+		return fmt.Errorf("创建待办临时文件失败: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if _, err := tmp.WriteString(sb.String()); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("写入待办临时文件失败: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("刷盘待办临时文件失败: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("关闭待办临时文件失败: %w", err)
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		return fmt.Errorf("设置待办文件权限失败: %w", err)
+	}
+	if err := os.Rename(tmpName, filePath); err != nil {
+		return fmt.Errorf("替换待办文件失败: %w", err)
+	}
+	return nil
+}
+
+// todosFileLocks 进程内 per-path 互斥表（读-改-写串行化）。
+//
+// Python 侧读改写之间没有 await，单事件循环下不会交错；Go 的 goroutine 真并行
+// （网关并发会话 / cron / 团队子代理都命中同一 <channel>.md），必须显式加锁。
+var todosFileLocks sync.Map // map[string]*sync.Mutex
+
+// lockTodosFile 获取文件级互斥，返回解锁函数。
+func lockTodosFile(filePath string) func() {
+	v, _ := todosFileLocks.LoadOrStore(filePath, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 // newUserTodosTool 构造 MapFunction 工具卡。
@@ -396,7 +444,10 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 
 	switch action {
 	case "list":
-		todos := parseTodosFile(filePath)
+		todos, readErr := parseTodosFile(filePath)
+		if readErr != nil {
+			return fail(readErr.Error()), nil
+		}
 		out := make([]map[string]any, 0, len(todos))
 		for _, t := range todos {
 			out = append(out, todoToDict(t))
@@ -408,7 +459,11 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 		if todoID == "" {
 			return fail("todo_id is required for get action"), nil
 		}
-		for _, t := range parseTodosFile(filePath) {
+		todos, readErr := parseTodosFile(filePath)
+		if readErr != nil {
+			return fail(readErr.Error()), nil
+		}
+		for _, t := range todos {
 			if t.ID == todoID {
 				return map[string]any{"success": true, "todo": todoToDict(t)}, nil
 			}
@@ -420,7 +475,13 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 		if title == "" {
 			return fail("title is required for create action"), nil
 		}
-		todos := parseTodosFile(filePath)
+		// read-modify-write 全程持 per-path 锁：并发 create/update 否则会丢更新
+		unlock := lockTodosFile(filePath)
+		defer unlock()
+		todos, readErr := parseTodosFile(filePath)
+		if readErr != nil {
+			return fail(readErr.Error()), nil
+		}
 		// remind_at 推算：due_at 且无 remind_at → due-5min；解析失败 → ""
 		finalRemindAt := todoStr(inputs, "remind_at")
 		dueAt := todoStr(inputs, "due_at")
@@ -463,7 +524,9 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 			Description: todoStr(inputs, "description"),
 		}
 		todos = append(todos, newTodo)
-		writeTodosFile(filePath, todos)
+		if werr := writeTodosFile(filePath, todos); werr != nil {
+			return fail(werr.Error()), nil
+		}
 		logger.Info(logComponent).Str("todo_id", newTodo.ID).Str("channel", cid).Msg("Created todo")
 		return map[string]any{"success": true, "todo": todoToDict(newTodo), "message": "Todo created: " + title}, nil
 
@@ -472,7 +535,12 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 		if todoID == "" {
 			return fail("todo_id is required for update action"), nil
 		}
-		todos := parseTodosFile(filePath)
+		unlock := lockTodosFile(filePath)
+		defer unlock()
+		todos, readErr := parseTodosFile(filePath)
+		if readErr != nil {
+			return fail(readErr.Error()), nil
+		}
 		var found *TodoItem
 		for _, t := range todos {
 			if t.ID == todoID {
@@ -517,7 +585,9 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 			found.Description = v
 		}
 		found.UpdateAt = time.Now().UTC().Format(time.RFC3339)
-		writeTodosFile(filePath, todos)
+		if werr := writeTodosFile(filePath, todos); werr != nil {
+			return fail(werr.Error()), nil
+		}
 		logger.Info(logComponent).Str("todo_id", todoID).Str("channel", cid).Msg("Updated todo")
 		return map[string]any{"success": true, "todo": todoToDict(found), "message": "Todo updated: " + found.Title}, nil
 
@@ -526,7 +596,12 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 		if todoID == "" {
 			return fail("todo_id is required for delete action"), nil
 		}
-		todos := parseTodosFile(filePath)
+		unlock := lockTodosFile(filePath)
+		defer unlock()
+		todos, readErr := parseTodosFile(filePath)
+		if readErr != nil {
+			return fail(readErr.Error()), nil
+		}
 		var found *TodoItem
 		for _, t := range todos {
 			if t.ID == todoID {
@@ -543,7 +618,9 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 				kept = append(kept, t)
 			}
 		}
-		writeTodosFile(filePath, kept)
+		if werr := writeTodosFile(filePath, kept); werr != nil {
+			return fail(werr.Error()), nil
+		}
 		logger.Info(logComponent).Str("todo_id", todoID).Str("channel", cid).Msg("Deleted todo")
 		return map[string]any{"success": true, "message": "Todo deleted: " + found.Title}, nil
 
@@ -553,8 +630,12 @@ func handleUserTodos(ctx context.Context, inputs map[string]any) (result map[str
 			return fail("query is required for search action"), nil
 		}
 		q := strings.ToLower(query)
+		todos, readErr := parseTodosFile(filePath)
+		if readErr != nil {
+			return fail(readErr.Error()), nil
+		}
 		var matched []*TodoItem
-		for _, t := range parseTodosFile(filePath) {
+		for _, t := range todos {
 			if strings.Contains(strings.ToLower(t.Title), q) || strings.Contains(strings.ToLower(t.Description), q) {
 				matched = append(matched, t)
 			}

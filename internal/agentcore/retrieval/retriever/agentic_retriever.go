@@ -398,7 +398,10 @@ func (a *AgenticRetriever) linkTriples(ctx context.Context, triples []common.Tri
 		return nil, err
 	}
 
-	// 预分配槽位 + WaitGroup：各 goroutine 写各的槽（gather 全跑完语义）
+	// 预分配槽位 + WaitGroup：各 goroutine 写各的槽（gather 全跑完语义）。
+	// 并发度与 Python asyncio.gather(*tasks, return_exceptions=True) 一致：每个
+	// triple 一个并发单元、无上限、不取消兄弟任务——triple 数由 LLM 输出决定，
+	// 若要限流属算法变更而非缺陷修复。
 	searchResults := make([][]common.SearchResult, len(triples))
 	failedFlags := make([]bool, len(triples))
 	var wg sync.WaitGroup
@@ -447,8 +450,8 @@ func (a *AgenticRetriever) linkTriples(ctx context.Context, triples []common.Tri
 		if metadata == nil {
 			metadata = map[string]any{}
 		}
-		docID, _ := metadata["doc_id"].(string)
-		chunkID, _ := metadata["chunk_id"].(string)
+		docID := metaString(metadata, "doc_id")
+		chunkID := metaString(metadata, "chunk_id")
 		retrievalResults = append(retrievalResults, common.RetrievalResult{
 			Text:     result.Text,
 			Score:    result.Score,
@@ -804,4 +807,19 @@ func isPureIntegerLiteral(s string) bool {
 		}
 	}
 	return true
+}
+
+// metaString 取元数据中的字符串值（nil → ""；string 原值；其他标量 fmt.Sprint）。
+//
+// 对齐 Python metadata.get("doc_id") 的透传语义：自定义 store 写入 int 时 Python
+// 保留为 123，而 Go 的 .(string) 断言会静默置空，导致 doc_id/chunk_id 丢失。
+func metaString(meta map[string]any, key string) string {
+	v, ok := meta[key]
+	if !ok || v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprint(v)
 }

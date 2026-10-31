@@ -12,6 +12,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/filesystem"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -745,12 +746,8 @@ func normalizePath(p string) string {
 	if err != nil {
 		return strings.ToLower(strings.ReplaceAll(p, "\\", "/"))
 	}
-	// Python: Path.resolve() 解析符号链接
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err != nil {
-		return abs
-	}
-	return resolved
+	// Python: Path.resolve() —— 统一委托公共助手（宽松解析，允许目标不存在）
+	return pathutil.ResolveSymlinksLenient(abs)
 }
 
 // parseOpEntry 从 map[string]any 解析操作历史条目

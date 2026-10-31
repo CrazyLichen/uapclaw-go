@@ -397,8 +397,6 @@ func (d *DeepAdapter) handleEvolveListCommand(ctx context.Context, query string,
 }
 
 // handleEvolveSimplifyCommand 处理 /evolve_simplify 命令。
-// ✅ 已回填（对齐 Python: _handle_evolve_simplify_command()）
-//
 // 格式：/evolve_simplify skill_name [user_intent]
 func (d *DeepAdapter) handleEvolveSimplifyCommand(ctx context.Context, query string, sessionID string) (map[string]any, error) {
 	if d.skillEvolutionRail == nil {
@@ -406,47 +404,45 @@ func (d *DeepAdapter) handleEvolveSimplifyCommand(ctx context.Context, query str
 		return nil, nil
 	}
 
-	// 解析命令：/evolve_simplify skill_name [user_intent]
-	// M-37: 对齐 Python L4088 parts = query.split(maxsplit=2)——
-	// parts[0]=命令、parts[1]=skill、parts[2]=intent（保留内部空白）
+	// M-37: 对齐 Python L4088 parts = query.split(maxsplit=2)
 	parts := splitMaxN(query, 2)
-	if len(parts) < 2 {
-		return map[string]any{"status": "failed", "error": "missing skill_name"}, nil
+	skillName := ""
+	if len(parts) > 1 {
+		skillName = parts[1]
 	}
-	skillName := parts[1]
 	var userIntent *string
-	if len(parts) >= 3 {
+	if len(parts) > 2 {
 		intent := parts[2]
 		userIntent = &intent
 	}
 
-	// Python: result = await self._skill_evolution_rail.request_simplify(skill_name, user_intent=user_intent)
-	result, err := d.skillEvolutionRail.RequestSimplify(ctx, skillName, userIntent)
-	if err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveSimplifyCommand: RequestSimplify failed")
-		return map[string]any{"status": "failed", "error": err.Error()}, nil
+	// Python L4091-4106：空名 + skill_exists 双校验（返回 output/result_type）
+	if resp := evolveSkillArgError(ctx, d.skillEvolutionRail, skillName, "/evolve_simplify <skill_name> [user_intent]"); resp != nil {
+		return resp, nil
 	}
 
-	if result.ApprovalEvent != nil {
+	// Python: result = await rail.request_simplify(skill_name, user_intent=user_intent)
+	result, err := d.skillEvolutionRail.RequestSimplify(ctx, skillName, userIntent)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveSimplifyCommand: RequestSimplify failed")
 		return map[string]any{
-			"action":          "approval_required",
-			"approval_chunks": []any{result.ApprovalEvent},
-			"request_id":      ptrToStr(result.RequestID),
-			"skill_name":      result.SkillName,
-			"actions":         result.Actions,
+			"output":      fmt.Sprintf("智能整理分析失败：%s", err),
+			"result_type": "error",
 		}, nil
 	}
 
-	return map[string]any{
-		"status":     "ok",
-		"skill_name": result.SkillName,
-		"actions":    result.Actions,
-	}, nil
+	// Python: return self._approval_response_from_simplify_result(...)
+	// 复用 team 侧一比一实现（含 OutputSchema 展平与 question_count）
+	return approvalResultFromEventOrItems(
+		skillName,
+		result.ApprovalEvent,
+		result.Actions,
+		fmt.Sprintf("Skill '%s' 经验库状态良好，无需整理。", skillName),
+		fmt.Sprintf("Skill '%s' 精简方案已生成，但审批事件为空或格式无效。", skillName),
+	), nil
 }
 
 // handleEvolveRebuildCommand 处理 /evolve_rebuild 命令。
-// ✅ 已回填（对齐 Python: _handle_evolve_rebuild_command()）
-//
 // 格式：/evolve_rebuild skill_name [user_intent]
 // 返回 followup_prompt 用于注入 agent loop 执行 skill-creator
 func (d *DeepAdapter) handleEvolveRebuildCommand(ctx context.Context, query string, sessionID string) (map[string]any, error) {
@@ -455,72 +451,224 @@ func (d *DeepAdapter) handleEvolveRebuildCommand(ctx context.Context, query stri
 		return nil, nil
 	}
 
-	// 解析命令：/evolve_rebuild skill_name [user_intent]
 	// M-37: 对齐 Python L4123 parts = query.split(maxsplit=2)
 	parts := splitMaxN(query, 2)
-	if len(parts) < 2 {
-		return map[string]any{"status": "failed", "error": "missing skill_name"}, nil
+	skillName := ""
+	if len(parts) > 1 {
+		skillName = parts[1]
 	}
-	skillName := parts[1]
 	var userIntent *string
-	if len(parts) >= 3 {
+	if len(parts) > 2 {
 		intent := parts[2]
 		userIntent = &intent
 	}
 
-	// Python: followup_prompt = await self._skill_evolution_rail.request_rebuild(skill_name, user_intent=user_intent, min_score=0.5)
+	// Python L4126-4141：空名 + skill_exists 双校验
+	if resp := evolveSkillArgError(ctx, d.skillEvolutionRail, skillName, "/evolve_rebuild <skill_name> [user_intent]"); resp != nil {
+		return resp, nil
+	}
+
+	// Python: followup_prompt = await rail.request_rebuild(skill_name, user_intent=user_intent, min_score=0.5)
 	followupPrompt, err := d.skillEvolutionRail.RequestRebuild(ctx, skillName, userIntent, 0.5)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveRebuildCommand: RequestRebuild failed")
-		return map[string]any{"status": "failed", "error": err.Error()}, nil
+		logger.Warn(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveRebuildCommand: RequestRebuild failed")
+		return map[string]any{
+			"output":      fmt.Sprintf("重建分析失败：%s", err),
+			"result_type": "error",
+		}, nil
 	}
 
 	if followupPrompt == "" {
-		return map[string]any{"status": "no_rebuild", "skill_name": skillName}, nil
+		// Python L4148-4152：未生成指令 → error（原 status:no_rebuild 契约不符）
+		return map[string]any{
+			"output":      fmt.Sprintf("Skill '%s' 未生成可执行的重建指令。", skillName),
+			"result_type": "error",
+		}, nil
 	}
 
-	// Python: return {"action": "run_rebuild_followup", "followup_prompt": followup_prompt}
+	// Python L4154-4159：action/followup_prompt/skill_name + result_type=followup
+	// （消费端 extractRebuildFollowupPrompt 依赖 followup_prompt）
 	return map[string]any{
 		"action":          "run_rebuild_followup",
 		"followup_prompt": followupPrompt,
 		"skill_name":      skillName,
+		"result_type":     "followup",
 	}, nil
 }
 
 // handleEvolveRollbackCommand 处理 /evolve_rollback 命令。
-// ✅ 已回填（对齐 Python: _handle_evolve_rollback_command()）
-//
 // 格式：/evolve_rollback skill_name [version]
+//
+// Python: _handle_evolve_rollback_command (L4159-4242) 五段校验顺序：
+// ①空名（列可回滚 Skill 及版本数）②skill_exists ③无归档 ④无 version（只列清单，
+// **不执行回滚**）⑤latest 展开 + 版本合法性。缺任一段都会导致「想查版本却直接回滚」。
 func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query string, sessionID string) (map[string]any, error) {
 	if d.skillEvolutionRail == nil {
 		logger.Warn(logComponent).Str("session_id", sessionID).Msg("handleEvolveRollbackCommand: SkillEvolutionRail not initialized")
 		return nil, nil
 	}
 
-	// 解析命令：/evolve_rollback skill_name [version]
 	// M-37: 对齐 Python L4165 parts = query.split(maxsplit=2)，version strip
 	parts := splitMaxN(query, 2)
-	if len(parts) < 2 {
-		return map[string]any{"status": "failed", "error": "missing skill_name"}, nil
+	skillName := ""
+	if len(parts) > 1 {
+		skillName = parts[1]
 	}
-	skillName := parts[1]
-	var version *string
-	if len(parts) >= 3 {
-		v := strings.TrimSpace(parts[2])
-		version = &v
+	version := ""
+	if len(parts) > 2 {
+		version = strings.TrimSpace(parts[2])
+	}
+	store := d.skillEvolutionRail.EvolutionStore()
+
+	// ① 空名 → 列出可回滚 Skill 及各自版本数（Python L4170-4181）
+	if skillName == "" {
+		archivesHint := ""
+		if store != nil {
+			for _, name := range skillruntime.FilterVisibleSkillNames(store.ListSkillNames(ctx)) {
+				if count := countSkillBodyVersions(store.ListArchives(ctx, name)); count > 0 {
+					archivesHint += fmt.Sprintf("\n  - **%s**: %d 个版本", name, count)
+				}
+			}
+		}
+		output := "请指定 Skill 名称：`/evolve_rollback <skill_name> [version]`"
+		if archivesHint != "" {
+			output += "\n\n可回滚的 Skill：" + archivesHint
+		}
+		return map[string]any{"output": output, "result_type": "error"}, nil
 	}
 
-	// Python: success = await self._skill_evolution_rail.rollback_skill(skill_name, version=version)
-	success, err := d.skillEvolutionRail.RollbackSkill(ctx, skillName, version)
+	// ② skill 存在性（Python L4183-4188）
+	if resp := evolveSkillArgError(ctx, d.skillEvolutionRail, skillName, "/evolve_rollback <skill_name> [version]"); resp != nil {
+		return resp, nil
+	}
+
+	// ③ 归档清单为空（Python L4190-4195）
+	var bodyVersions []string
+	if store != nil {
+		bodyVersions = skillBodyVersions(store.ListArchives(ctx, skillName))
+	}
+	if len(bodyVersions) == 0 {
+		return map[string]any{
+			"output":      fmt.Sprintf("Skill '%s' 没有归档版本可回滚。", skillName),
+			"result_type": "error",
+		}, nil
+	}
+
+	// ④ 未指定版本 → 只列清单让用户选（禁止直接回滚最新版）
+	if version == "" {
+		lines := []string{fmt.Sprintf("**Skill '%s' 可用归档版本（最新在前）：**\n", skillName)}
+		for i, v := range bodyVersions {
+			marker := ""
+			if i == 0 {
+				marker = " ← 最近"
+			}
+			lines = append(lines, fmt.Sprintf("  %d. `%s` (%s)%s", i+1, v, formatArchiveTimestamp(v), marker))
+		}
+		lines = append(lines, fmt.Sprintf("\n用法：`/evolve_rollback %s SKILL.v<时间戳>.md`", skillName))
+		lines = append(lines, fmt.Sprintf("快捷回滚到最近版本：`/evolve_rollback %s latest`", skillName))
+		return map[string]any{"output": strings.Join(lines, "\n"), "result_type": "answer"}, nil
+	}
+
+	// ⑤ latest 简写展开 + 版本合法性（Python L4211-4222）
+	if version == "latest" {
+		version = bodyVersions[0]
+	}
+	if !containsString(bodyVersions, version) {
+		hint := make([]string, 0, 5)
+		for _, v := range bodyVersions {
+			if len(hint) == 5 {
+				break
+			}
+			hint = append(hint, "`"+v+"`")
+		}
+		return map[string]any{
+			"output":      fmt.Sprintf("版本 `%s` 不存在。可用版本：%s", version, strings.Join(hint, "、")),
+			"result_type": "error",
+		}, nil
+	}
+
+	// Python L4224-4236：执行回滚
+	success, err := d.skillEvolutionRail.RollbackSkill(ctx, skillName, &version)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveRollbackCommand: RollbackSkill failed")
-		return map[string]any{"status": "failed", "error": err.Error()}, nil
+		logger.Warn(logComponent).Err(err).Str("skill", skillName).Msg("handleEvolveRollbackCommand: RollbackSkill failed")
+		return map[string]any{
+			"output":      fmt.Sprintf("回滚失败：%s", err),
+			"result_type": "error",
+		}, nil
 	}
-
+	if !success {
+		return map[string]any{
+			"output":      fmt.Sprintf("Skill '%s' 回滚失败，请检查归档版本是否有效。", skillName),
+			"result_type": "error",
+		}, nil
+	}
 	return map[string]any{
-		"status":     fmt.Sprintf("%v", success),
-		"skill_name": skillName,
+		"output":      fmt.Sprintf("Skill '%s' 已成功回滚到 `%s`。\n\n（当前状态已自动归档，可再次回滚恢复。）", skillName, version),
+		"result_type": "answer",
 	}, nil
+}
+
+// evolveSkillArgError 校验 Skill 名称参数（空名 / 不存在），返回 Python 同款错误响应。
+//
+// Python: simplify/rebuild/rollback 三处共同的「空名 + store.skill_exists」双校验，
+// 文案一致，仅使用示例串不同。
+func evolveSkillArgError(ctx context.Context, rail *evolution.SkillEvolutionRail, skillName, usage string) map[string]any {
+	if strings.TrimSpace(skillName) == "" {
+		return map[string]any{
+			"output":      "请指定 Skill 名称：`" + usage + "`",
+			"result_type": "error",
+		}
+	}
+	store := rail.EvolutionStore()
+	if store == nil {
+		return nil
+	}
+	if store.SkillExists(ctx, skillName) {
+		return nil
+	}
+	available := "（无可用 Skill）"
+	if joined := strings.Join(skillruntime.FilterVisibleSkillNames(store.ListSkillNames(ctx)), "、"); joined != "" {
+		available = joined
+	}
+	return map[string]any{
+		"output":      fmt.Sprintf("未找到 Skill '%s'。当前可用：%s", skillName, available),
+		"result_type": "error",
+	}
+}
+
+// skillBodyVersions 过滤出技能主体归档版本（Python: [a for a in archives if a.startswith("SKILL.v")]）。
+func skillBodyVersions(archives []string) []string {
+	out := make([]string, 0, len(archives))
+	for _, a := range archives {
+		if strings.HasPrefix(a, "SKILL.v") {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// countSkillBodyVersions 统计主体归档版本数（空名清单的「N 个版本」）。
+func countSkillBodyVersions(archives []string) int {
+	return len(skillBodyVersions(archives))
+}
+
+// formatArchiveTimestamp 归档文件名转可读时间（Python: SKILL.v20261030_120000.md → 2026-10-30 12:00:00 UTC）。
+func formatArchiveTimestamp(archive string) string {
+	ts := strings.ReplaceAll(strings.ReplaceAll(archive, "SKILL.v", ""), ".md", "")
+	if len(ts) < 15 {
+		return ts
+	}
+	return fmt.Sprintf("%s-%s-%s %s:%s:%s UTC", ts[0:4], ts[4:6], ts[6:8], ts[9:11], ts[11:13], ts[13:15])
+}
+
+// containsString 切片包含判定。
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }
 
 // handleGovernanceApproval 处理治理审批。

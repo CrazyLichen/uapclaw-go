@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -456,5 +457,22 @@ func TestProjectMemoryAdditionalDirectories_三级回退(t *testing.T) {
 	}
 	if got := c.projectMemoryAdditionalDirectories(); len(got) != 1 || got[0] != "/from/override" {
 		t.Errorf("overrides 应最优先, got %v", got)
+	}
+}
+
+// TestUpdateRailsForMode_不因canonicalMode回落Deep分支 回归（S-01）：
+// 真实入参是 "code.normal"/"code.plan"/"code.team"（handle_envelope 回写 canonical
+// 串），旧门控 `mode != "code"` 恒真，会把 code 会话交给 DeepAdapter 的 agent 分支
+// 处理（卸载 SubagentRail 且永不重建）。此处以「Deep 分支产生的 rail 字段」为观察点。
+func TestUpdateRailsForMode_不因canonicalMode回落Deep分支(t *testing.T) {
+	for _, mode := range []string{"code", "code.normal", "code.plan", "code.team"} {
+		c := NewCodeAdapter()
+		c.updateRailsForMode(context.Background(), mode)
+		if c.deep.contextProcessorRail != nil {
+			t.Fatalf("%q: 不应回落到 DeepAdapter.updateAgentModeRails（ContextProcessorRail 被创建）", mode)
+		}
+		if c.deep.contextAssembleRail != nil {
+			t.Fatalf("%q: 不应回落到 DeepAdapter.updateAgentModeRails（ContextAssembleRail 被创建）", mode)
+		}
 	}
 }

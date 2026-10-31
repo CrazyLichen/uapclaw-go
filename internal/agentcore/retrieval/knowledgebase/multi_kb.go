@@ -253,9 +253,9 @@ func pyTake(items []string, limit int) []string {
 // 对齐 Python `meta.get(key, score)` 与其后的 `if raw_score is not None`：
 //   - 键缺失 → 回落 score，且参与取最大（true）
 //   - 键存在但值为 None → 不参与取最大（false），装填时为 0
-//   - 键存在且为数值 → 参与取最大（true）
-//   - 键存在但非数值 → Python 的 max() 抛 TypeError 中断整条聚合，
-//     Go 同样返回 155509（不静默跳过）
+//   - 键存在且为数值族（float32/float64/int/int32/int64/bool）→ 参与取最大（true）
+//   - 键存在但为 string/数组/对象等真非数值 → Python 的 max() 抛 TypeError
+//     中断整条聚合，Go 同样返回 155509（不静默跳过）
 func pyMetaFloat(meta map[string]any, key string, fallback float64) (float64, bool, error) {
 	v, ok := meta[key]
 	if !ok {
@@ -264,8 +264,25 @@ func pyMetaFloat(meta map[string]any, key string, fallback float64) (float64, bo
 	if v == nil {
 		return 0, false, nil
 	}
-	if f, ok := v.(float64); ok {
-		return f, true, nil
+	// 对齐 Python max() 接受的数值族：int/bool 同样可参与比较（bool 视作 1/0）。
+	// 只把 string/数组/对象等真非数值形态判为非法，避免自定义 store 写入整数分值时
+	// 整条多库聚合被中断。
+	switch n := v.(type) {
+	case float64:
+		return n, true, nil
+	case float32:
+		return float64(n), true, nil
+	case int:
+		return float64(n), true, nil
+	case int32:
+		return float64(n), true, nil
+	case int64:
+		return float64(n), true, nil
+	case bool:
+		if n {
+			return 1, true, nil
+		}
+		return 0, true, nil
 	}
 	return 0, false, exception.BuildError(
 		exception.StatusRetrievalKbMetadataTypeInvalid,

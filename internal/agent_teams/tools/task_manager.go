@@ -1113,20 +1113,11 @@ func resolveSubmittedPlanPath(planPath string) (string, error) {
 	// 1. ExpandHome（对齐 Python: Path(raw_path).expanduser()）
 	expanded := pathutil.ExpandHome(rawPath)
 
-	// 2. 转为绝对路径（对齐 Python: base_dir / submitted_path）
-	absPath, err := filepath.Abs(expanded)
-	if err != nil {
-		return "", fmt.Errorf("解析绝对路径失败: %v", err)
-	}
+	// 2. 绝对化 + 解析符号链接（对齐 Python: submitted_path.resolve() 的 strict=False 语义；
+	//    公共助手内部已含 Abs，无需再单独 Abs 一次）
+	resolved := pathutil.ResolveSymlinksLenient(expanded)
 
-	// 3. 解析符号链接（对齐 Python: submitted_path.resolve()）
-	resolved, err := filepath.EvalSymlinks(absPath)
-	if err != nil {
-		// EvalSymlinks 在路径不存在时返回错误，使用 absPath 继续
-		resolved = absPath
-	}
-
-	// 4. 文件存在性检查（对齐 Python: if not submitted_path.is_file()）
+	// 3. 文件存在性检查（对齐 Python: if not submitted_path.is_file()）
 	info, err := os.Stat(resolved)
 	if err != nil {
 		if os.IsNotExist(err) {

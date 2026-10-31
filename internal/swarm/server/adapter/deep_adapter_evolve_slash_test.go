@@ -1004,3 +1004,170 @@ func TestProcessMessageStreamImpl_team分支6步(t *testing.T) {
 		t.Errorf("runtime_state.yaml 应含模型名，内容:\n%s", content)
 	}
 }
+
+// ──────────────────────────── /evolve_rollback（S-04）────────────────────────────
+
+// archiveSkillTwice 为 skill 生成两个主体归档版本（archive/SKILL.v*.md）。
+func archiveSkillTwice(t *testing.T, rail *coreevolution.SkillEvolutionRail, skillName string) {
+	t.Helper()
+	store := rail.EvolutionStore()
+	if _, err := store.ArchiveSkillBody(t.Context(), skillName); err != nil {
+		t.Fatalf("第一次归档失败: %v", err)
+	}
+	// 稍作变更再归档一次，保证两个版本内容不同
+	skillDir := store.ResolveSkillDir(t.Context(), skillName)
+	mdPath := filepath.Join(skillDir, "SKILL.md")
+	if err := os.WriteFile(mdPath, []byte("---\nname: "+skillName+"\ndescription: v2\n---\n# "+skillName+"\n\nv2 body\n"), 0o644); err != nil {
+		t.Fatalf("写第二版 SKILL.md 失败: %v", err)
+	}
+	if _, err := store.ArchiveSkillBody(t.Context(), skillName); err != nil {
+		t.Fatalf("第二次归档失败: %v", err)
+	}
+}
+
+// TestEvolveRollback_无版本只列清单不回滚 回归（S-04）：不带 version 时必须只输出
+// 归档清单（result_type=answer），**不得**触发 RollbackSkill（旧实现 nil 版本=回滚最新）。
+func TestEvolveRollback_无版本只列清单不回滚(t *testing.T) {
+	skillsDir := t.TempDir()
+	d := newEvolveTestAdapter(t, skillsDir, nil)
+	skillName := "rollback-skill"
+	skillDir := makeEvolveSkillDir(t, skillsDir, skillName)
+	archiveSkillTwice(t, d.skillEvolutionRail, skillName)
+
+	mdPath := filepath.Join(skillDir, "SKILL.md")
+	before, err := os.ReadFile(mdPath)
+	if err != nil {
+		t.Fatalf("读 SKILL.md 失败: %v", err)
+	}
+
+	resp, err := d.handleEvolveRollbackCommand(t.Context(), "/evolve_rollback "+skillName, "s1")
+	if err != nil {
+		t.Fatalf("handleEvolveRollbackCommand 返回 error: %v", err)
+	}
+	if got := resp["result_type"]; got != "answer" {
+		t.Fatalf("result_type = %v, 期望 answer（列清单）", got)
+	}
+	output, _ := resp["output"].(string)
+	if !strings.Contains(output, "可用归档版本") {
+		t.Errorf("输出应含版本清单，实际: %s", output)
+	}
+	if !strings.Contains(output, "← 最近") {
+		t.Errorf("首项应标 ← 最近，实际: %s", output)
+	}
+
+	after, err := os.ReadFile(mdPath)
+	if err != nil {
+		t.Fatalf("读 SKILL.md 失败: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("未指定版本时不应回滚（SKILL.md 被改动）")
+	}
+}
+
+// TestEvolveRollback_空名与不存在与无归档 三段校验（S-04）。
+func TestEvolveRollback_空名与不存在与无归档(t *testing.T) {
+	skillsDir := t.TempDir()
+	d := newEvolveTestAdapter(t, skillsDir, nil)
+	skillName := "no-archive-skill"
+	makeEvolveSkillDir(t, skillsDir, skillName)
+
+	cases := []struct {
+		name   string
+		query  string
+		wantIn string
+	}{
+		{"空名", "/evolve_rollback", "请指定 Skill 名称"},
+		{"Skill 不存在", "/evolve_rollback ghost-skill", "未找到 Skill 'ghost-skill'"},
+		{"无归档版本", "/evolve_rollback " + skillName, "没有归档版本可回滚"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			resp, err := d.handleEvolveRollbackCommand(t.Context(), c.query, "s1")
+			if err != nil {
+				t.Fatalf("返回 error: %v", err)
+			}
+			if got := resp["result_type"]; got != "error" {
+				t.Fatalf("result_type = %v, 期望 error", got)
+			}
+			output, _ := resp["output"].(string)
+			if !strings.Contains(output, c.wantIn) {
+				t.Errorf("输出应含 %q，实际: %s", c.wantIn, output)
+			}
+		})
+	}
+}
+
+// TestEvolveRollback_版本非法与latest ⑤段校验（S-04）。
+func TestEvolveRollback_版本非法与latest(t *testing.T) {
+	skillsDir := t.TempDir()
+	d := newEvolveTestAdapter(t, skillsDir, nil)
+	skillName := "rollback-version-skill"
+	makeEvolveSkillDir(t, skillsDir, skillName)
+	archiveSkillTwice(t, d.skillEvolutionRail, skillName)
+
+	resp, err := d.handleEvolveRollbackCommand(t.Context(), "/evolve_rollback "+skillName+" SKILL.v19990101_000000.md", "s1")
+	if err != nil {
+		t.Fatalf("返回 error: %v", err)
+	}
+	if got := resp["result_type"]; got != "error" {
+		t.Fatalf("非法版本 result_type = %v, 期望 error", got)
+	}
+	if output, _ := resp["output"].(string); !strings.Contains(output, "不存在") {
+		t.Errorf("非法版本应提示不存在，实际: %s", output)
+	}
+
+	resp, err = d.handleEvolveRollbackCommand(t.Context(), "/evolve_rollback "+skillName+" latest", "s1")
+	if err != nil {
+		t.Fatalf("返回 error: %v", err)
+	}
+	if got := resp["result_type"]; got != "answer" {
+		t.Fatalf("latest 回滚 result_type = %v, 期望 answer，输出: %v", got, resp["output"])
+	}
+	if output, _ := resp["output"].(string); !strings.Contains(output, "已成功回滚到") {
+		t.Errorf("latest 应成功回滚，实际: %s", output)
+	}
+}
+
+// TestEvolveSimplify与Rebuild_空名与不存在 契约校验（M-14）。
+func TestEvolveSimplify与Rebuild_空名与不存在(t *testing.T) {
+	skillsDir := t.TempDir()
+	d := newEvolveTestAdapter(t, skillsDir, nil)
+	skillName := "simplify-skill"
+	makeEvolveSkillDir(t, skillsDir, skillName)
+
+	type handler func(context.Context, string, string) (map[string]any, error)
+	cases := []struct {
+		name    string
+		handler handler
+		usage   string
+	}{
+		{"simplify", d.handleEvolveSimplifyCommand, "/evolve_simplify"},
+		{"rebuild", d.handleEvolveRebuildCommand, "/evolve_rebuild"},
+	}
+	for _, c := range cases {
+		t.Run(c.name+"_空名", func(t *testing.T) {
+			resp, err := c.handler(t.Context(), c.usage, "s1")
+			if err != nil {
+				t.Fatalf("返回 error: %v", err)
+			}
+			if got := resp["result_type"]; got != "error" {
+				t.Fatalf("result_type = %v, 期望 error", got)
+			}
+			if output, _ := resp["output"].(string); !strings.Contains(output, "请指定 Skill 名称") {
+				t.Errorf("空名应提示指定名称，实际: %s", output)
+			}
+		})
+		t.Run(c.name+"_不存在", func(t *testing.T) {
+			resp, err := c.handler(t.Context(), c.usage+" ghost-skill", "s1")
+			if err != nil {
+				t.Fatalf("返回 error: %v", err)
+			}
+			if got := resp["result_type"]; got != "error" {
+				t.Fatalf("result_type = %v, 期望 error", got)
+			}
+			if output, _ := resp["output"].(string); !strings.Contains(output, "未找到 Skill 'ghost-skill'") {
+				t.Errorf("不存在应提示未找到，实际: %s", output)
+			}
+		})
+	}
+}

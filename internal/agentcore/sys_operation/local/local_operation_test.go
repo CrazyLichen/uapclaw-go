@@ -392,21 +392,6 @@ func TestLocalCodeOperation_ExecuteCode_简单Python(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── ExpandUser 用户目录展开 ────────────────────────────
-
-// TestExpandUser 测试路径展开
-func TestExpandUser(t *testing.T) {
-	home, _ := os.UserHomeDir()
-
-	result := expandUser("~/test")
-	if home != "" {
-		assert.Equal(t, filepath.Join(home, "test"), result)
-	}
-
-	result = expandUser("/tmp/test")
-	assert.Equal(t, "/tmp/test", result)
-}
-
 // TestParsePermissions 测试权限解析
 func TestParsePermissions(t *testing.T) {
 	assert.Equal(t, os.FileMode(0644), parsePermissions("644"))

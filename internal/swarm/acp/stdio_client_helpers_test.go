@@ -241,17 +241,6 @@ func TestToInt(t *testing.T) {
 	}
 }
 
-// TestExpandUser ~ 展开语义。
-func TestExpandUser(t *testing.T) {
-	if got, err := expandUser("/abs"); err != nil || got != "/abs" {
-		t.Errorf("普通路径 = %q %v", got, err)
-	}
-	home, _ := os.UserHomeDir()
-	if got, err := expandUser("~/x"); err != nil || got != filepath.Join(home, "x") {
-		t.Errorf("~ 展开 = %q %v", got, err)
-	}
-}
-
 // TestResolvedSessionRoot 会话根目录解析。
 func TestResolvedSessionRoot(t *testing.T) {
 	if got := resolvedSessionRoot(""); got == "" {

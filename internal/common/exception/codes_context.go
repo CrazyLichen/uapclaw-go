@@ -243,6 +243,14 @@ var (
 	StatusAgenticKwargsUnexpected = NewStatusCode(
 		"RETRIEVAL_AGENTIC_KWARGS_UNEXPECTED", 155510,
 		"retrieval agentic kwargs is unexpected, reason: {error_msg}")
+	// StatusRetrievalUtilsConfigInvalid 检索配置字段非法
+	//
+	// 对齐 Python ConfigManager.load_from_file → KnowledgeBaseConfig(**data) 的
+	// pydantic 校验：kb_id 必填、index_type 限定 hybrid/bm25/vector。Go 若无校验，
+	// 空 kb_id 会退化成 "kb__chunks" 集合名、非法 index_type 静默按 hybrid 处理。
+	StatusRetrievalUtilsConfigInvalid = NewStatusCode(
+		"RETRIEVAL_UTILS_CONFIG_INVALID", 155511,
+		"retrieval utils config is invalid, reason: {error_msg}")
 
 	// 知识库检索 — 重排序 155600–155699
 

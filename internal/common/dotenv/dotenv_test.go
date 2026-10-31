@@ -270,8 +270,9 @@ func TestLoadNonOverride_不覆盖已有变量(t *testing.T) {
 	}
 }
 
-// TestLoadNonOverride_空值也覆盖 验证 shell 侧为空字符串时按未设置处理。
-func TestLoadNonOverride_空值也覆盖(t *testing.T) {
+// TestLoadNonOverride_空值不覆盖 严格对齐 python-dotenv override=False：
+// 按键存在性跳过，shell 侧显式置空（`export K=`）也不会被文件值覆盖。
+func TestLoadNonOverride_空值不覆盖(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env")
 	if err := os.WriteFile(path, []byte("EMPTY=from_file\n"), 0o600); err != nil {
@@ -283,8 +284,8 @@ func TestLoadNonOverride_空值也覆盖(t *testing.T) {
 	if err := LoadNonOverride(path); err != nil {
 		t.Fatalf("LoadNonOverride 失败: %v", err)
 	}
-	if got := os.Getenv("EMPTY"); got != "from_file" {
-		t.Errorf("EMPTY 期望 from_file, 实际 %q", got)
+	if got := os.Getenv("EMPTY"); got != "" {
+		t.Errorf("EMPTY 应保留 shell 空值, 实际 %q", got)
 	}
 }
 

@@ -65,10 +65,9 @@ type acpRequestCtx struct {
 	SawProcessingIdle bool
 	// Sequence 流式序号
 	Sequence int
-	// idleFinalizeTimerSlot idle finalize 定时器槽（引用比对防 superseded，§9-4）
-	idleFinalizeTimerSlot *acpIdleTimerSlot
-	// matchedRequestID maybeFinalize 遍历辅助
-	matchedRequestID string
+	// idleFinalizeTimerSlot idle finalize 定时器槽（引用比对防 superseded，§9-4；
+	// 与 gateway 桥共用 e2aacp.IdleTimer 实现）
+	idleFinalizeTimerSlot *e2aacp.IdleTimer
 }
 
 // acpPendingEntry pending RPC 条目（Python (session_id, created_at)）。
@@ -358,8 +357,7 @@ func (ch *AcpChannel) handleRawLine(ctx context.Context, line string) error {
 		SessionID:    msg.SessionID,
 	}
 	ch.mu.Unlock()
-	ch.dispatchMessage(ctx, msg)
-	return nil
+	return ch.dispatchMessage(ctx, msg)
 }
 
 // processStdinLine 处理一行已 trim 的非空 stdin 输入。
@@ -462,7 +460,7 @@ func (ch *AcpChannel) dispatchJsonrpcMethod(ctx context.Context, rpcID any, meth
 
 // handleJsonrpcSessionNew Python L1109-1120。
 func (ch *AcpChannel) handleJsonrpcSessionNew(rpcID any, params map[string]any) error {
-	sessionID := strings.TrimSpace(strVal(params["sessionId"]))
+	sessionID := strings.TrimSpace(strScalar(params["sessionId"]))
 	if sessionID == "" {
 		sessionID = "acp_" + randHexStr(12)
 	}
@@ -476,7 +474,7 @@ func (ch *AcpChannel) handleJsonrpcSessionNew(rpcID any, params map[string]any) 
 
 // handleJsonrpcSessionPrompt Python L1122-1164。
 func (ch *AcpChannel) handleJsonrpcSessionPrompt(ctx context.Context, rpcID any, params map[string]any) error {
-	sessionID := strings.TrimSpace(strVal(params["sessionId"]))
+	sessionID := strings.TrimSpace(strScalar(params["sessionId"]))
 	if sessionID == "" {
 		return acpValueError("sessionId is required")
 	}
@@ -521,17 +519,22 @@ func (ch *AcpChannel) handleJsonrpcSessionPrompt(ctx context.Context, rpcID any,
 		Method:        env.Method,
 		ResponseMode:  "jsonrpc",
 		SessionID:     sessionID,
-		UserMessageID: strings.TrimSpace(strVal(rpcParams["messageId"])),
+		UserMessageID: strings.TrimSpace(strScalar(rpcParams["messageId"])),
 	}
 	ch.activePromptBySession[sessionID] = msg.ID
 	ch.mu.Unlock()
-	ch.dispatchMessage(ctx, msg)
+	if err := ch.dispatchMessage(ctx, msg); err != nil {
+		// 派发失败必须回 JSON-RPC error（Python 异常上抛到 -32603 分支）；
+		// 同时清理 requestCtx——Python 该路径不清理（会泄漏），Go 主动兜底。
+		ch.clearRequestContext(msg.ID)
+		return err
+	}
 	return nil
 }
 
 // handleJsonrpcSessionCancel Python L1166-1189。
 func (ch *AcpChannel) handleJsonrpcSessionCancel(ctx context.Context, rpcID any, params map[string]any) error {
-	sessionID := strings.TrimSpace(strVal(params["sessionId"]))
+	sessionID := strings.TrimSpace(strScalar(params["sessionId"]))
 	if sessionID == "" {
 		return acpValueError("sessionId is required")
 	}
@@ -544,7 +547,9 @@ func (ch *AcpChannel) handleJsonrpcSessionCancel(ctx context.Context, rpcID any,
 		ReqMethod: schema.ReqMethodChatCancel,
 		Metadata:  map[string]any{"acp": map[string]any{"jsonrpc_id": rpcID, "method": "session/cancel"}},
 	}
-	ch.dispatchMessage(ctx, msg)
+	if err := ch.dispatchMessage(ctx, msg); err != nil {
+		return err
+	}
 	ch.finalizeSessionPrompts(sessionID, "cancelled")
 	ch.writeJsonrpcResult(rpcID, nil)
 	return nil
@@ -574,7 +579,12 @@ func (ch *AcpChannel) handleJsonrpcResponse(ctx context.Context, data map[string
 		return
 	}
 	msg := e2a.BuildACPToolResponseMessage(jsonrpcID, cpStrAnyMap(data), sessionID, ch.ChannelID())
-	ch.dispatchMessage(ctx, msg)
+	if err := ch.dispatchMessage(ctx, msg); err != nil {
+		logger.Warn(logger.ComponentGateway).
+			Err(err).
+			Str("session_id", sessionID).
+			Msg("[ACP] tool response dispatch failed")
+	}
 	ch.maybeFinalizeDeferredPrompts(sessionID)
 }
 
@@ -905,20 +915,26 @@ func (ch *AcpChannel) notifyAgentInitialize(ctx context.Context, params map[stri
 	if msg.Params == nil {
 		msg.Params = []byte(`{}`)
 	}
-	ch.dispatchMessage(ctx, msg) // 异常仅吞（Python try/except debug）
+	// 初始化透传是旁路通知：失败仅 Debug 记录（Python try/except debug 吞）
+	if err := ch.dispatchMessage(ctx, msg); err != nil {
+		logger.Debug(logger.ComponentGateway).Err(err).Msg("[ACP] initialize passthrough failed")
+	}
 }
 
 // dispatchMessage 派发（§9-1：onMessageCb 测试钩子 or sendToGateway 单路径）。
 // Python: _dispatch_message (L1191-1205)。
-func (ch *AcpChannel) dispatchMessage(ctx context.Context, msg *schema.Message) {
+func (ch *AcpChannel) dispatchMessage(ctx context.Context, msg *schema.Message) error {
 	if ch.onMessageCb != nil {
 		ch.onMessageCb(msg)
-		return
+		return nil
 	}
 	if ch.gatewayURL != "" {
-		_ = ch.sendToGateway(ctx, msg)
+		// 错误必须上抛：调用方据此回 JSON-RPC -32603（Python 由异常冒泡到
+		// _handle_jsonrpc_request 的 except 分支），吞掉会让 IDE 永久无响应。
+		return ch.sendToGateway(ctx, msg)
 	}
 	// 无 cb 无 URL：丢弃（Python bus publish 死代码不实现，§9-1）
+	return nil
 }
 
 // clearRequestContext Python L1207-1220。
@@ -930,10 +946,8 @@ func (ch *AcpChannel) clearRequestContext(requestID string) {
 		ch.activePromptBySession[ctxObj.SessionID] == requestID {
 		delete(ch.activePromptBySession, ctxObj.SessionID)
 	}
-	if ctxObj != nil && ctxObj.idleFinalizeTimerSlot != nil {
-		if ctxObj.idleFinalizeTimerSlot.timer != nil {
-			ctxObj.idleFinalizeTimerSlot.timer.Stop()
-		}
+	if ctxObj != nil {
+		ctxObj.idleFinalizeTimerSlot.Stop()
 		ctxObj.idleFinalizeTimerSlot = nil
 	}
 	ch.mu.Unlock()
@@ -973,7 +987,6 @@ func (ch *AcpChannel) collectFinalizableRequestIDs(sessionID string) []string {
 		if strings.TrimSpace(c.PendingStopReason) == "" {
 			continue
 		}
-		c.matchedRequestID = requestID
 		result = append(result, requestID)
 	}
 	return result
@@ -1014,12 +1027,6 @@ func (ch *AcpChannel) maybeFinalizeDeferredPrompts(sessionID string) {
 	}
 }
 
-// acpIdleTimerSlot timer 槽（§9-4：AfterFunc 回调先于闭包变量赋值启动的竞态，
-// 槽在锁内先行创建并写入 ctx 字段，回调经槽引用比对归属）。
-type acpIdleTimerSlot struct {
-	timer *time.Timer
-}
-
 // scheduleIdleFinalize Python L1270-1278（timer 引用比对，§9-4 槽模式）。
 func (ch *AcpChannel) scheduleIdleFinalize(requestID string) {
 	ch.mu.Lock()
@@ -1028,18 +1035,16 @@ func (ch *AcpChannel) scheduleIdleFinalize(requestID string) {
 	if c == nil {
 		return
 	}
-	if c.idleFinalizeTimerSlot != nil && c.idleFinalizeTimerSlot.timer != nil {
-		c.idleFinalizeTimerSlot.timer.Stop()
-	}
-	slot := &acpIdleTimerSlot{}
-	c.idleFinalizeTimerSlot = slot
-	slot.timer = time.AfterFunc(time.Duration(ch.idleFinalizeSecs*float64(time.Second)), func() {
-		ch.idleFinalizeAfterTimeout(requestID, slot)
+	// Stop 为 nil 安全方法：无需判空
+	c.idleFinalizeTimerSlot.Stop()
+	slot := e2aacp.NewIdleTimer(time.Duration(ch.idleFinalizeSecs*float64(time.Second)), func(s *e2aacp.IdleTimer) {
+		ch.idleFinalizeAfterTimeout(requestID, s)
 	})
+	c.idleFinalizeTimerSlot = slot
 }
 
 // idleFinalizeAfterTimeout Python L1280-1304（槽引用比对）。
-func (ch *AcpChannel) idleFinalizeAfterTimeout(requestID string, slot *acpIdleTimerSlot) {
+func (ch *AcpChannel) idleFinalizeAfterTimeout(requestID string, slot *e2aacp.IdleTimer) {
 	ch.mu.Lock()
 	c := ch.requestCtx[requestID]
 	if c == nil || c.ResponseMode != "jsonrpc" || c.idleFinalizeTimerSlot != slot {
@@ -1198,18 +1203,14 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 				} else if acpShouldWaitForFinalText(c) {
 					scheduleWait = true
 				} else {
-					if c.idleFinalizeTimerSlot != nil {
-						c.idleFinalizeTimerSlot.timer.Stop()
-						c.idleFinalizeTimerSlot = nil
-					}
+					c.idleFinalizeTimerSlot.Stop()
+					c.idleFinalizeTimerSlot = nil
 					finishNow = true
 				}
 			} else if isProcSet && isProc {
 				c.SawProcessingIdle = false
-				if c.idleFinalizeTimerSlot != nil {
-					c.idleFinalizeTimerSlot.timer.Stop()
-					c.idleFinalizeTimerSlot = nil
-				}
+				c.idleFinalizeTimerSlot.Stop()
+				c.idleFinalizeTimerSlot = nil
 			}
 			jsonrpcID := c.JSONRPCID
 			userMessageID := c.UserMessageID
@@ -1287,27 +1288,23 @@ func (ch *AcpChannel) sweepStalePending() {
 
 // acpShouldWaitForFinalText Python _should_wait_for_final_text_before_end_turn (L111-118)。
 func acpShouldWaitForFinalText(c *acpRequestCtx) bool {
-	if c.SawChatFinal {
-		return false
-	}
-	return c.State.AssistantText != "" || c.State.AssistantMessageID != ""
+	// 判定逻辑与 gateway 桥共用（e2aacp.ShouldWaitForFinalText），避免两处分叉
+	return e2aacp.ShouldWaitForFinalText(c.SawChatFinal, c.State.AssistantText, c.State.AssistantMessageID)
 }
 
 // acpMarkStreamActivity Python _mark_stream_activity (L106-109)。
 func acpMarkStreamActivity(c *acpRequestCtx) {
 	c.SawProcessingIdle = false
-	if c.idleFinalizeTimerSlot != nil {
-		c.idleFinalizeTimerSlot.timer.Stop()
-		c.idleFinalizeTimerSlot = nil
-	}
+	c.idleFinalizeTimerSlot.Stop()
+	c.idleFinalizeTimerSlot = nil
 }
 
 // cancelIdleFinalize 按 requestID 取消 timer。
 func (ch *AcpChannel) cancelIdleFinalize(requestID string) {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
-	if c := ch.requestCtx[requestID]; c != nil && c.idleFinalizeTimerSlot != nil {
-		c.idleFinalizeTimerSlot.timer.Stop()
+	if c := ch.requestCtx[requestID]; c != nil {
+		c.idleFinalizeTimerSlot.Stop()
 		c.idleFinalizeTimerSlot = nil
 	}
 }
@@ -1374,6 +1371,14 @@ func strVal(v any) string {
 	return s
 }
 
+// strScalar 取标量并转字符串（对齐 Python str(x or "").strip()）。
+//
+// sessionId / messageId 在 Python 侧一律经 str() 收敛，数字也会变成 "123"；
+// strVal 只认 string，会把数字形态静默吞成空串。
+func strScalar(v any) string {
+	return e2aacp.ScalarString(v)
+}
+
 // orStr 空串回退。
 func orStr(s, fallback string) string {
 	if strings.TrimSpace(s) != "" {
@@ -1404,9 +1409,13 @@ func (ch *AcpChannel) ensureGatewayConnection() error {
 			// 心跳与读期限（对齐 Python ws_connect ping_interval=20/ping_timeout=20）：
 			// gorilla 不会自动 ping，须自发 ticker + pong handler 刷新读期限；
 			// 否则半开连接要等 TCP 超时才能发现，远端网关重启后本端会长期挂住。
+			//
+			// 期限语义与 Python 一致：发 ping 后 20s 内没收到 pong 即判定半开。
+			// 首次期限覆盖「等第一个周期 ping + 等它的 pong」，之后由 pingLoop/pong 刷新。
 			_ = conn.SetReadDeadline(time.Now().Add(acpGatewayPingInterval + acpGatewayPingTimeout))
 			conn.SetPongHandler(func(string) error {
-				return conn.SetReadDeadline(time.Now().Add(acpGatewayPingInterval + acpGatewayPingTimeout))
+				// 收到 pong：下一个 ping 周期内必有活动，期限放宽到一个 interval
+				return conn.SetReadDeadline(time.Now().Add(acpGatewayPingInterval))
 			})
 			done := make(chan struct{})
 			ch.gwConnMu.Lock()
@@ -1444,6 +1453,9 @@ func (ch *AcpChannel) ensureGatewayConnection() error {
 }
 
 // closeGatewayConnection Python L1573-1589。
+//
+// 顺序对齐 Python「先 cancel reader task 再 close」：reader 阻塞在 ReadMessage，
+// 只有 Close 才能唤醒它。旧实现先等 done 再 Close，导致每次关闭固定空等 1s。
 func (ch *AcpChannel) closeGatewayConnection() {
 	ch.gwConnMu.Lock()
 	conn := ch.gwConn
@@ -1451,17 +1463,21 @@ func (ch *AcpChannel) closeGatewayConnection() {
 	done := ch.readerLoopDone
 	ch.readerLoopDone = nil
 	ch.gwConnMu.Unlock()
-	if done != nil {
-		select {
-		case <-done:
-		case <-time.After(time.Second):
-		}
-	}
+
+	// 先关连接打断 ReadMessage，再等 reader 退出（1s 仅作兜底，超时需可见）
 	if conn != nil {
 		if err := conn.Close(); err != nil {
 			logger.Debug(logger.ComponentGateway).
 				Err(err).
 				Msg("[ACP] gateway websocket close ignored")
+		}
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			logger.Warn(logger.ComponentGateway).
+				Msg("[ACP] gateway reader loop did not exit within 1s after close")
 		}
 	}
 }
@@ -1510,7 +1526,8 @@ func (ch *AcpChannel) sendToGateway(_ context.Context, msg *schema.Message) erro
 // gatewayPingLoop 定期发 WS ping 保活（对齐 Python ws_connect ping_interval=20）。
 //
 // gorilla 不自动 ping/pong：不发 ping 时半开连接只能等 TCP 超时暴露。
-// pong 由 gatewayReaderLoop 侧的 PongHandler 刷新读期限（ping_timeout=20 语义）。
+// 每次发 ping 前把读期限压到 ping_timeout（20s）：20s 内收不到 pong/数据即由
+// reader 报错退出，等价 Python「ping 后 ping_timeout 未收到 pong 就断开」。
 // 写与 sendToGateway 共用 gwWriteMu（gorilla 不允许并发写同一连接）。
 func (ch *AcpChannel) gatewayPingLoop(conn *websocket.Conn, done chan struct{}) {
 	ticker := time.NewTicker(acpGatewayPingInterval)
@@ -1520,13 +1537,18 @@ func (ch *AcpChannel) gatewayPingLoop(conn *websocket.Conn, done chan struct{}) 
 		case <-done:
 			return
 		case <-ticker.C:
+			// 先收紧读期限，再发 ping：pong 必须在 pingTimeout 内到达
+			_ = conn.SetReadDeadline(time.Now().Add(acpGatewayPingTimeout))
 			ch.gwWriteMu.Lock()
 			err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(acpGatewayPingTimeout))
 			ch.gwWriteMu.Unlock()
 			if err != nil {
 				logger.Debug(logger.ComponentGateway).
 					Err(err).
-					Msg("[ACP] gateway ping failed, reader loop will observe")
+					Msg("[ACP] gateway ping failed, closing connection to trigger reconnect")
+				// ping 写失败说明连接已坏：主动 Close 让 reader 退出并触发重连，
+				// 而不是留下一个永不重连的半开连接。
+				_ = conn.Close()
 				return
 			}
 		}
@@ -1595,9 +1617,9 @@ func (ch *AcpChannel) handleGatewayJsonrpcRequest(data map[string]any) {
 	if params == nil {
 		params = map[string]any{}
 	}
-	sessionID := strings.TrimSpace(strVal(params["sessionId"]))
+	sessionID := strings.TrimSpace(strScalar(params["sessionId"]))
 	if sessionID == "" {
-		sessionID = strings.TrimSpace(strVal(params["session_id"]))
+		sessionID = strings.TrimSpace(strScalar(params["session_id"]))
 	}
 	if jsonrpcID != "" && sessionID != "" {
 		ch.mu.Lock()
@@ -1612,12 +1634,8 @@ func (ch *AcpChannel) handleGatewayJsonrpcRequest(data map[string]any) {
 			}
 		}
 		for _, c := range ctxs {
-			if c.idleFinalizeTimerSlot != nil {
-				if c.idleFinalizeTimerSlot.timer != nil {
-					c.idleFinalizeTimerSlot.timer.Stop()
-				}
-				c.idleFinalizeTimerSlot = nil
-			}
+			c.idleFinalizeTimerSlot.Stop()
+			c.idleFinalizeTimerSlot = nil
 		}
 		ch.mu.Unlock()
 	}
@@ -1673,9 +1691,9 @@ func (ch *AcpChannel) messageFromGatewayEvent(data map[string]any) *schema.Messa
 	} else {
 		payload = cpStrAnyMap(payload)
 	}
-	sessionID := strings.TrimSpace(strVal(payload["session_id"]))
+	sessionID := strings.TrimSpace(strScalar(payload["session_id"]))
 	if sessionID == "" {
-		sessionID = strings.TrimSpace(strVal(payload["sessionId"]))
+		sessionID = strings.TrimSpace(strScalar(payload["sessionId"]))
 	}
 	ch.mu.Lock()
 	requestID := ch.activePromptBySession[sessionID]

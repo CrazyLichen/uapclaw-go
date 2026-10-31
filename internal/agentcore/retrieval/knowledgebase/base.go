@@ -315,25 +315,37 @@ func (b *BaseKnowledgeBase) DeleteCollection(ctx context.Context, collection str
 //
 // Python: knowledge_base.py close
 func (b *BaseKnowledgeBase) Close() error {
-	b.maybeClose(b.vectorStore)
-	b.maybeClose(b.indexManager)
-	return nil
+	var firstErr error
+	if err := b.maybeClose(b.vectorStore); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if err := b.maybeClose(b.indexManager); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	return firstErr
 }
 
-// maybeClose 关闭单个组件（统一 error 变体，13.28 Task 0 单一化）。
+// maybeClose 关闭单个组件并返回错误（Warn 记录后仍上抛，供 Close 聚合）。
 //
-// 13.26 曾用 Close()/Close() error 双变体承接 Python _maybe_await 的
-// 协程/普通双探测；Task 0 统一签名后只剩单条断言，Warn 吞语义保留。
-func (b *BaseKnowledgeBase) maybeClose(obj any) {
+// 对齐 Python _maybe_await：组件只要暴露 close 即可被调用（不要求返回 error）。
+// 历史实现只断言 interface{ Close() error }，实现无返回值 Close 的组件会被静默
+// 跳过；此处补 interface{ Close() } 分支。
+func (b *BaseKnowledgeBase) maybeClose(obj any) error {
 	if obj == nil {
-		return
+		return nil
 	}
-	c, ok := obj.(interface{ Close() error })
-	if !ok {
-		return
-	}
-	if err := c.Close(); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("Failed to close object")
+	switch c := obj.(type) {
+	case interface{ Close() error }:
+		err := c.Close()
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("Failed to close object")
+		}
+		return err
+	case interface{ Close() }:
+		c.Close()
+		return nil
+	default:
+		return nil
 	}
 }
 

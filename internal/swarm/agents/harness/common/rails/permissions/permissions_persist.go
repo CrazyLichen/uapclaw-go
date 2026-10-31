@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -265,30 +265,14 @@ func expandAndResolvePath(rawPath string) string {
 	if cleaned == "" {
 		return ""
 	}
-	// expanduser: 处理 ~
-	expanded := expandUserPath(cleaned)
-	// resolve: 转绝对路径（不要求文件存在）
-	abs, err := filepath.Abs(expanded)
-	if err != nil {
-		return ""
-	}
+	// expanduser + resolve(strict=False)：展开 ~、绝对化并解析已存在前缀的软链
+	// （不要求目标存在）。统一走公共助手，避免各包重复实现产生语义分叉。
+	resolved := pathutil.ResolveSymlinksLenient(cleaned)
 	// POSIX 格式：反斜杠转正斜杠
-	posix := filepath.ToSlash(abs)
+	posix := filepath.ToSlash(resolved)
 	// 去除尾部斜杠
 	posix = strings.TrimRight(posix, "/")
 	return posix
-}
-
-// expandUserPath 展开 ~ 为用户主目录。
-func expandUserPath(path string) string {
-	if strings.HasPrefix(path, "~") {
-		homeDir, err := os.UserHomeDir()
-		if err != nil || homeDir == "" {
-			return path
-		}
-		return homeDir + path[1:]
-	}
-	return path
 }
 
 // sortedSet 对字符串切片去重排序。

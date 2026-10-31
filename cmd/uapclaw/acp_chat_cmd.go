@@ -109,6 +109,12 @@ profile 规格与 acp_chat 工具共用严格校验（args 必须是列表、env
 			return runAcpChatArgs(ctx, defaultAcpChatDeps(), args, os.Stderr)
 		},
 	}
+	// flag 解析失败属于「用法错误」：argparse 对未知/非法选项一律 exit 2，
+	// cobra 默认返回普通 error 会落到运行期错误码 1（误导脚本判断）。
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		fmt.Fprintf(os.Stderr, "usage: uapclaw acp-chat <profile> [message]\nerror: %v\n", err)
+		return &acpChatExitError{code: exitCodeConfig}
+	})
 	// --dotenv/--name 为 root 持久旗标，须在业务前解析（多实例隔离 + .env 定位）；
 	// Python cli.py 无对应旗标，此处为 Go 侧 CLI 一致性扩展。
 	cmd.PreRunE = makeDotenvPreRunE()
@@ -274,7 +280,8 @@ func runAcpChat(ctx context.Context, deps acpChatDeps, profile, message string) 
 		return exitCodeConfig
 	}
 
-	cs, err := acpchat.BuildClientSpec(spec)
+	// Python cli.py 的宽松语义：args 非 list → []、env 非 dict → None
+	cs, err := acpchat.BuildClientSpec(acpchat.NormalizeProfileSpecForCLI(spec))
 	if err != nil {
 		logger.Error(logComponentAcpChat).Str("profile", profile).Err(err).
 			Msg("[acp-chat] invalid profile spec")

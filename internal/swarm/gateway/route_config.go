@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/websocket"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 )
@@ -144,4 +145,12 @@ func applyConfigFallback(cfg *GatewayServerConfig) {
 func strVal(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+// strScalar 取标量并转字符串（对齐 Python str(x or "").strip()）。
+//
+// sessionId / messageId 等字段在 Python 侧一律经 str() 收敛，数字也能落成
+// "123"；strVal 只认 string，会让数字形态静默变空串。
+func strScalar(v any) string {
+	return acp.ScalarString(v)
 }

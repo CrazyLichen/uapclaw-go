@@ -57,9 +57,9 @@ func (mh *MessageHandler) ensureAcpAgentSession(ctx context.Context, sessionID s
 	if payload == nil {
 		payload = map[string]any{}
 	}
-	resolved := strVal(payload["sessionId"])
+	resolved := strScalar(payload["sessionId"])
 	if resolved == "" {
-		resolved = strVal(payload["session_id"])
+		resolved = strScalar(payload["session_id"])
 	}
 	if resolved == "" {
 		resolved = sessionID
@@ -81,18 +81,50 @@ func (mh *MessageHandler) resolveAcpInternalSessionID(ctx context.Context, exter
 		return "", false
 	}
 
-	mh.acpSessionAliasMu.Lock()
+	// 快路径：命中缓存直接返回（读锁）
+	mh.acpSessionAliasMu.RLock()
 	cached := mh.acpSessionAliases[external]
-	mh.acpSessionAliasMu.Unlock()
+	mh.acpSessionAliasMu.RUnlock()
 	if cached != "" {
 		return cached, cached != external
 	}
 
+	// 慢路径：锁内只做「双检 + 占位」，session.create RPC 必须在锁外执行，
+	// 否则单个 agent server 卡顿会阻塞全部 ACP 会话的入站派发与出站反查。
 	mh.acpSessionAliasMu.Lock()
-	defer mh.acpSessionAliasMu.Unlock()
-	// 双检（Python L1274-1276：async with lock 内再查一次）
 	if cached = mh.acpSessionAliases[external]; cached != "" {
+		mh.acpSessionAliasMu.Unlock()
 		return cached, cached != external
+	}
+	if wait, inflight := mh.acpSessionAliasInflight[external]; inflight {
+		// 同 key 已有在途 RPC：索引释放锁后等待，避免重复 session.create
+		mh.acpSessionAliasMu.Unlock()
+		select {
+		case <-wait:
+		case <-ctx.Done():
+			return "", false
+		}
+		mh.acpSessionAliasMu.RLock()
+		cached = mh.acpSessionAliases[external]
+		mh.acpSessionAliasMu.RUnlock()
+		if cached != "" {
+			return cached, cached != external
+		}
+		return "", false
+	}
+	wait := make(chan struct{})
+	mh.acpSessionAliasInflight[external] = wait
+	mh.acpSessionAliasMu.Unlock()
+
+	// 锁外执行 RPC；无论成败都释放占位并唤醒等待者
+	done := func(ensured string) {
+		mh.acpSessionAliasMu.Lock()
+		if ensured != "" {
+			mh.acpSessionAliases[external] = ensured
+		}
+		delete(mh.acpSessionAliasInflight, external)
+		mh.acpSessionAliasMu.Unlock()
+		close(wait)
 	}
 
 	desired := external
@@ -107,9 +139,10 @@ func (mh *MessageHandler) resolveAcpInternalSessionID(ctx context.Context, exter
 			Err(err).
 			Str("session_id", external).
 			Msg("acp session alias ensure failed, passing message through")
+		done("")
 		return "", false
 	}
-	mh.acpSessionAliases[external] = ensured
+	done(ensured)
 	return ensured, ensured != external
 }
 

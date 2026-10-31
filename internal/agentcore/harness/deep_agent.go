@@ -216,9 +216,12 @@ func NewDeepAgent(card *agentschema.AgentCard) *DeepAgent {
 // 首次调用执行 initialConfigure，后续调用执行 hotReconfigure。
 // Python: DeepAgent.configure(config) (line 150)
 func (d *DeepAgent) ConfigureDeepConfig(ctx context.Context, deepCfg *hschema.DeepAgentConfig) error {
-	d.configMu.Lock()
-	defer d.configMu.Unlock()
+	// 锁序必须为 initMu → configMu：ensureInitialized 持 initMu 后再取 configMu，
+	// 反向（configMu → initMu）会构成 ABBA 死锁（热配置与首次 Invoke 并发即可触发）。
+	d.initMu.Lock()
+	defer d.initMu.Unlock()
 
+	d.configMu.Lock()
 	d.filterDisabledTools(deepCfg)
 
 	if d.deepConfig == nil {
@@ -226,10 +229,9 @@ func (d *DeepAgent) ConfigureDeepConfig(ctx context.Context, deepCfg *hschema.De
 	} else {
 		d.hotReconfigure(ctx, deepCfg)
 	}
+	d.configMu.Unlock()
 
-	d.initMu.Lock()
 	d.initialized = false
-	d.initMu.Unlock()
 	return nil
 }
 
@@ -790,12 +792,13 @@ func (d *DeepAgent) SetUapswarmCodeTeamMember(v bool) {
 // SetReactAgent 注入内层 Agent 实现（用于运行时接线/测试）。
 // Python: DeepAgent.set_react_agent(react_agent, initialized) (line 444)
 func (d *DeepAgent) SetReactAgent(reactAgent *agents.ReActAgent, initd bool) {
-	d.configMu.Lock()
-	defer d.configMu.Unlock()
-	d.reactAgent = reactAgent
+	// 锁序同 ConfigureDeepConfig：initMu → configMu
 	d.initMu.Lock()
+	defer d.initMu.Unlock()
+	d.configMu.Lock()
+	d.reactAgent = reactAgent
+	d.configMu.Unlock()
 	d.initialized = initd
-	d.initMu.Unlock()
 }
 
 // SetInnerInvokeOverride 设置内层 invoke 覆写函数（仅测试使用）。
@@ -1852,7 +1855,14 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 	// 初始化可观测性 SpanState（对齐 SessionState 注入模式）
 	// Python: contextvars 自动传播 span_context
 	// Go: 通过 context.Value 传播 *OtelSpanState 指针
-	if observability.SpanStateFromCtx(ctx) == nil {
+	// spanState 必须无条件回写 d.spanState：调用方自带 SpanState（子 agent / 嵌套
+	// 调用）时若跳过赋值，后续任何不带 span 的 ctx 进 attachRunContexts 都注入不到，
+	// tracing 断链（注释声称「每次入口重新挂载」需靠该字段兜底）。
+	if state := observability.SpanStateFromCtx(ctx); state != nil {
+		d.configMu.Lock()
+		d.spanState = state
+		d.configMu.Unlock()
+	} else {
 		spanState := observability.InitSpanState()
 		d.configMu.Lock()
 		d.spanState = spanState

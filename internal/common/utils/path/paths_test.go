@@ -298,3 +298,79 @@ func TestResourcesDir_环境变量不存在(t *testing.T) {
 		t.Error("环境变量指向不存在的目录应返回错误")
 	}
 }
+
+// ──────────────────────────── 路径解析与包含判定 ────────────────────────────
+
+// TestIsPathWithin_段级比较 验证按路径段比较而非字符串前缀。
+func TestIsPathWithin_段级比较(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "ws")
+	cases := []struct {
+		name string
+		p    string
+		want bool
+	}{
+		{"相同路径", root, true},
+		{"子目录", filepath.Join(root, "a", "b.txt"), true},
+		{"同级前缀（易误判）", filepath.Join(string(filepath.Separator), "ws-evil", "x"), false},
+		{"父目录", string(filepath.Separator), false},
+		{"无关路径", filepath.Join(string(filepath.Separator), "etc", "passwd"), false},
+		{"root 为空", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := IsPathWithin(root, c.p); got != c.want {
+				t.Errorf("IsPathWithin(%q, %q) = %v, 期望 %v", root, c.p, got, c.want)
+			}
+		})
+	}
+}
+
+// TestResolveSymlinksLenient_已存在路径 已存在路径按真实路径解析。
+func TestResolveSymlinksLenient_已存在路径(t *testing.T) {
+	dir := t.TempDir()
+	got := ResolveSymlinksLenient(dir)
+	assertResolvedSamePath(t, dir, got)
+}
+
+// TestResolveSymlinksLenient_目标不存在 不存在的尾部原样保留（对齐 resolve(strict=False)）。
+func TestResolveSymlinksLenient_目标不存在(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "not", "created", "file.txt")
+	got := ResolveSymlinksLenient(target)
+	want := filepath.Join(ResolveSymlinksLenient(dir), "not", "created", "file.txt")
+	if got != want {
+		t.Errorf("ResolveSymlinksLenient(%q) = %q, 期望 %q", target, got, want)
+	}
+}
+
+// TestResolveSymlinksLenient_软链目录越界 软链前缀解析后落点在工作区外。
+func TestResolveSymlinksLenient_软链目录越界(t *testing.T) {
+	base := t.TempDir()
+	outside := t.TempDir()
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("当前平台不支持软链: %v", err)
+	}
+	// 软链目录下「尚不存在」的新文件：EvalSymlinks 整链必失败，依赖祖先解析
+	target := filepath.Join(link, "new.txt")
+	got := ResolveSymlinksLenient(target)
+	want := filepath.Join(ResolveSymlinksLenient(outside), "new.txt")
+	if got != want {
+		t.Errorf("软链越界解析 = %q, 期望 %q", got, want)
+	}
+	if IsPathWithin(ResolveSymlinksLenient(base), got) {
+		t.Error("软链落点不应被判为在 base 内")
+	}
+}
+
+// assertResolvedSamePath 断言解析结果指向同一路径（软链平台下用 realpath 对齐）。
+func assertResolvedSamePath(t *testing.T, want, got string) {
+	t.Helper()
+	realWant, err := filepath.EvalSymlinks(want)
+	if err != nil {
+		realWant = want
+	}
+	if got != realWant {
+		t.Errorf("解析结果 = %q, 期望 %q", got, realWant)
+	}
+}

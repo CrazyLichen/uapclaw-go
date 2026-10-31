@@ -22,6 +22,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -77,6 +78,12 @@ type memoryIndexManager struct {
 	watchDebounce time.Duration
 	watchTimer    *time.Timer
 	watchMu       sync.Mutex
+
+	// cachedCwdState 首次从真实请求 ctx 捕获的 CwdState（atomic.Value 存 *cwd.CwdState）。
+	// 后台 watch/interval 同步的 ctx 由 context.Background() 派生，天然缺 CwdState；
+	// 沙箱开启（RestrictToSandbox 且未配 SandboxRoot）时会导致所有读取被拒。
+	// 捕获后注入后台 ctx，等价 Python contextvar 在任务创建时继承上下文。
+	cachedCwdState atomic.Value
 
 	// 定时同步
 	intervalCancel context.CancelFunc
@@ -176,6 +183,9 @@ func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool
 		return nil
 	}
 	m.mu.Unlock()
+
+	// 捕获调用方 CwdState：后续后台同步（watch/interval）用它重建 ctx。
+	m.captureCwdState(ctx)
 
 	needsFullReindex := force || m.shouldFullReindex()
 
@@ -887,15 +897,28 @@ func (m *memoryIndexManager) indexFile(ctx context.Context, entry *FileEntry, so
 	absPath := entry.AbsPath
 	var content string
 	if m.sysOperation != nil {
-		// Python: 使用 sys_operation 读取文件
+		// Python: 使用 sys_operation 读取文件。失败以 BaseResult.Code 表达、err 恒 nil；
+		// 若只判 err，沙箱拒绝会得到空 content → ChunkMarkdown("") → 删旧 chunk + 写入
+		// 空 chunk + 更新 hash，等价永久清空该文件索引且下轮因 hash 相同不再重试。
 		readResult, err := m.sysOperation.Fs().ReadFile(ctx, absPath)
 		if err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("读取文件失败: %w", err)
 		}
-		if readResult.Data != nil {
-			content = readResult.Data.Content
+		if readResult == nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("读取文件失败: 结果为空: %s", absPath)
 		}
+		if fsErr := fsResultError(readResult.BaseResult, "索引记忆文件", absPath); fsErr != nil {
+			_ = tx.Rollback()
+			logger.Error(logComponent).Err(fsErr).Str("path", entry.Path).Msg("index file read failed")
+			return fsErr
+		}
+		if readResult.Data == nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("读取文件失败: 结果无数据: %s", absPath)
+		}
+		content = readResult.Data.Content
 	} else {
 		data, err := os.ReadFile(absPath)
 		if err != nil {
@@ -1465,7 +1488,7 @@ func (m *memoryIndexManager) scheduleWatchSync() {
 		if m.IsClosed() {
 			return
 		}
-		if err := m.Sync(context.Background(), "watch", false); err != nil {
+		if err := m.Sync(m.backgroundContext(), "watch", false); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("file watcher sync failed")
 		}
 	})
@@ -1494,7 +1517,7 @@ func (m *memoryIndexManager) ensureIntervalSync() {
 				if m.IsClosed() {
 					return
 				}
-				if err := m.Sync(ctx, "interval", false); err != nil {
+				if err := m.Sync(m.backgroundContext(), "interval", false); err != nil {
 					logger.Warn(logComponent).Err(err).Msg("periodic sync failed")
 				}
 			}
@@ -1567,4 +1590,30 @@ func containsSource(sources []string, source string) bool {
 		}
 	}
 	return false
+}
+
+// captureCwdState 记住首次从真实请求 ctx 捕获的 CwdState。
+//
+// 后台同步（fsnotify 防抖 / 定时器）的 ctx 由 context.Background() 派生，没有
+// CwdState；沙箱开启且未显式配置 SandboxRoot 时，resolvePath 会因沙箱根为空而
+// 拒绝所有绝对路径。这里缓存一次真实 ctx 的 CwdState 供后台复用，等价 Python
+// contextvar 在后台任务创建时继承上下文。
+func (m *memoryIndexManager) captureCwdState(ctx context.Context) {
+	state := cwd.CwdStateFromCtx(ctx)
+	if state == nil {
+		return
+	}
+	if prev, ok := m.cachedCwdState.Load().(*cwd.CwdState); ok && prev == state {
+		return
+	}
+	m.cachedCwdState.Store(state)
+}
+
+// backgroundContext 构造后台同步 ctx：有缓存的 CwdState 时注入，否则退化为 Background。
+func (m *memoryIndexManager) backgroundContext() context.Context {
+	ctx := context.Background()
+	if state, ok := m.cachedCwdState.Load().(*cwd.CwdState); ok && state != nil {
+		ctx = cwd.WithCwdState(ctx, state)
+	}
+	return ctx
 }

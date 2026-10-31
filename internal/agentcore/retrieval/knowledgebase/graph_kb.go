@@ -326,16 +326,18 @@ func (g *GraphKnowledgeBase) GetStatistics(ctx context.Context) (map[string]any,
 //
 // Python: graph_knowledge_base.py close
 func (g *GraphKnowledgeBase) Close() error {
-	_ = g.BaseKnowledgeBase.Close()
+	firstErr := g.BaseKnowledgeBase.Close()
 
 	g.graphMu.Lock()
 	graph, chunk, triple := g.graphRetriever, g.chunkRetriever, g.tripleRetriever
 	g.graphMu.Unlock()
 
-	g.maybeClose(graph)
-	g.maybeClose(chunk)
-	g.maybeClose(triple)
-	return nil
+	for _, r := range []retriever.Retriever{graph, chunk, triple} {
+		if err := g.maybeClose(r); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 // RetrieveMultiGraphKB 跨图知识库检索，返回去重排序后的文本列表。

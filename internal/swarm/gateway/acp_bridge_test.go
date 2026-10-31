@@ -3,12 +3,15 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -630,5 +633,128 @@ func TestGatewayServerAcp_SendBranch(t *testing.T) {
 	frame := readFrame(t, conn)
 	if frame["method"] != "session/update" {
 		t.Fatalf("acp branch should convert delta to session/update, got %v", frame)
+	}
+}
+
+// newDialedTestConn 建一条真实 WS 连接（httptest 服务端保持读循环），供按
+// 句柄比对的用例使用；返回后由调用方负责关闭。
+func newDialedTestConn(t *testing.T) *websocket.Conn {
+	t.Helper()
+	upgrader := websocket.Upgrader{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				_ = conn.Close()
+				return
+			}
+		}
+	}))
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		srv.Close()
+		t.Fatalf("拨号测试 WS 失败: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+		srv.Close()
+	})
+	return conn
+}
+
+// TestAcpBridge_Cleanup断连置空ClientWS 回归（S-05）：断连后该连接上的挂起
+// prompt 必须置空 ClientWS 并停掉 idle timer，收尾路径不得再向死连接写帧。
+func TestAcpBridge_Cleanup断连置空ClientWS(t *testing.T) {
+	h := newAcpBridgeHarness()
+	ws := newDialedTestConn(t)
+
+	fired := make(chan struct{}, 1)
+	rid := "req-cleanup"
+	h.bridge.mu.Lock()
+	slot := acp.NewIdleTimer(50*time.Millisecond, func(*acp.IdleTimer) {
+		select {
+		case fired <- struct{}{}:
+		default:
+		}
+	})
+	h.bridge.requestCtxByReqID[rid] = &AcpGatewayRequestCtx{
+		JSONRPCID: 1, SessionID: "s-cleanup", ClientWS: ws,
+		PendingStopReason:     "end_turn",
+		idleFinalizeTimerSlot: slot,
+	}
+	h.bridge.activePromptBySession["s-cleanup"] = rid
+	h.bridge.pendingRPCCountBySession["s-cleanup"] = 1
+	h.bridge.pendingRPCSessionByID["tool-1"] = pendingRPCEntry{sessionID: "s-cleanup", ws: ws}
+	h.bridge.mu.Unlock()
+
+	h.bridge.Cleanup(ws)
+
+	h.bridge.mu.Lock()
+	ctxEntry := h.bridge.requestCtxByReqID[rid]
+	_, hasPending := h.bridge.pendingRPCSessionByID["tool-1"]
+	cnt := h.bridge.pendingRPCCountBySession["s-cleanup"]
+	h.bridge.mu.Unlock()
+
+	if ctxEntry == nil {
+		t.Fatal("断连不应删除 requestCtx（终态仍由后续流程收尾）")
+	}
+	if ctxEntry.ClientWS != nil {
+		t.Error("断连后 ClientWS 应置空（等价 Python ws.closed 判定）")
+	}
+	if hasPending {
+		t.Error("断连后 pending RPC 条目应清理")
+	}
+	if cnt != 0 {
+		t.Errorf("断连后 pending 计数应清零，实际 %d", cnt)
+	}
+
+	// timer 已被 Stop：等过原定触发点后不应触发
+	select {
+	case <-fired:
+		t.Error("断连后 idle timer 应被取消，不应触发")
+	case <-time.After(120 * time.Millisecond):
+	}
+
+	// 再跑一次收尾：ClientWS 为 nil → 跳过，不写死连接（无 panic / 无 dispatched 增长）
+	before := len(h.dispatched)
+	h.bridge.maybeFinalizeDeferredPrompts("s-cleanup")
+	if len(h.dispatched) != before {
+		t.Error("断连后不应再派发终态消息")
+	}
+}
+
+// TestAcpBridge_ChatFinal未见过Idle时取消Timer 回归（M-02）：Python 在
+// 「未见过 idle」分支无条件取消 idle timer；Go 用 `!sawIdle || !hasPending`
+// 等价覆盖。本用例锁定该行为，防止后续误改为「仅 hasPending 为假才取消」。
+func TestAcpBridge_ChatFinal未见过Idle时取消Timer(t *testing.T) {
+	h := newAcpBridgeHarness()
+	rid := registerAcpPrompt(t, h, "s2", "u2")
+
+	// 预置一个已 arm 的 idle timer（若未被取消将写 result 帧）
+	fired := make(chan struct{}, 1)
+	h.bridge.mu.Lock()
+	pctx := h.bridge.requestCtxByReqID[rid]
+	pctx.SawProcessingIdle = false
+	pctx.idleFinalizeTimerSlot = acp.NewIdleTimer(50*time.Millisecond, func(*acp.IdleTimer) {
+		select {
+		case fired <- struct{}{}:
+		default:
+		}
+	})
+	h.bridge.mu.Unlock()
+
+	finalMsg := makeAcpEventMsg(rid, "s2", schema.EventTypeChatFinal, map[string]any{"content": "done"})
+	if !h.bridge.SendMessage(context.Background(), finalMsg, nil) {
+		t.Fatal("chat.final should be handled")
+	}
+
+	select {
+	case <-fired:
+		t.Fatal("未见过 idle 时 chat.final 应取消 idle timer")
+	case <-time.After(120 * time.Millisecond):
 	}
 }

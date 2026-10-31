@@ -730,14 +730,14 @@ func (s *ChromaVectorStore) DeleteTable(ctx context.Context, tableName string) e
 	return s.client.DeleteCollection(ctx, tableName)
 }
 
-// Close 关闭存储。
+// Close 关闭存储（空操作，对齐 Python）。
 //
-// Chroma 客户端关闭失败在 Python 侧为异常，这里降级为忽略并返回 nil
-// （13.26 的 Warn 吞由调用方 maybeClose 承担）。
+// Python: chroma_store.py close() —— "ChromaDB client usually doesn't need
+// explicit closing"，函数体只有 pass。原因：ChromaDB 的 client 是进程级共享资源
+// （同一 persistent path 共用一个底层 System），由某个 store 关闭会连带打死
+// KB/Indexer 等其他持有者，且关闭后同进程重建可能取到已关闭实例。因此生命周期
+// 交给进程退出，仓储层 Close 不做任何释放。
 func (s *ChromaVectorStore) Close() error {
-	if s.client != nil {
-		_ = s.client.Close()
-	}
 	return nil
 }
 

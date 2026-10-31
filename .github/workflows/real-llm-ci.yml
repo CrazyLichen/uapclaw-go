@@ -58,8 +58,10 @@ jobs:
             exit 1
           fi
           echo "LLM_API_KEY 已配置"
-          # 仅回显前缀用于排查配置错误（8 字符，不泄露完整密钥）
-          echo "密钥前缀: ${LLM_API_KEY:0:8}..."
+          # 只回显长度与 sha256 前 8 位：前者可发现截断/夹带空格，后者可跨 run 比对
+          # 是否同一把 key。不得回显明文片段——GitHub 只遮蔽完整 secret，子串会泄漏。
+          echo "密钥长度: ${#LLM_API_KEY}"
+          echo "密钥指纹: $(printf '%s' "$LLM_API_KEY" | sha256sum | cut -c1-8)"
 
       - name: 运行真实 LLM 集成测试
         env:

@@ -283,7 +283,7 @@ func TestRetrieveMultiKBWithSource_元数据非数值报错(t *testing.T) {
 	}{
 		{"raw_score为字符串", map[string]any{"raw_score": "0.9"}},
 		{"raw_score_scaled为字符串", map[string]any{"raw_score_scaled": "high"}},
-		{"raw_score为bool", map[string]any{"raw_score": true}},
+		// bool 属 Python max() 接受的数值族（True → 1），故不再计入非法用例
 		{"raw_score为数组", map[string]any{"raw_score": []any{1.0}}},
 	}
 	for _, tc := range cases {
@@ -322,4 +322,31 @@ func TestRetrieveMultiKB_元数据非数值不影响(t *testing.T) {
 		{Text: "t", Score: 0.9, Metadata: map[string]any{"raw_score": "bad"}},
 	}}
 	assert.Equal(t, []string{"t"}, RetrieveMultiKB(context.Background(), []KnowledgeBase{kb}, "q", nil, nil))
+}
+
+// TestRetrieveMultiKBWithSource_整数与布尔分值可聚合 回归（T-13）：Python max()
+// 接受 int/bool，Go 旧实现只认 float64 → 自定义 store 写整数分值时整条多库聚合
+// 以 155509 中断。
+func TestRetrieveMultiKBWithSource_整数与布尔分值可聚合(t *testing.T) {
+	cases := []struct {
+		name     string
+		rawValue any
+		want     float64
+	}{
+		{"int 分值", 3, 3.0},
+		{"int64 分值", int64(4), 4.0},
+		{"bool true", true, 1.0},
+		{"bool false", false, 0.0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kb := &fakeKB{kbID: "kb1", results: []common.RetrievalResult{
+				{Text: "t", Score: 0.9, Metadata: map[string]any{"raw_score": tc.rawValue}},
+			}}
+			results, err := RetrieveMultiKBWithSource(context.Background(), []KnowledgeBase{kb}, "q", nil, nil)
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			assert.Equal(t, tc.want, results[0].RawScore)
+		})
+	}
 }

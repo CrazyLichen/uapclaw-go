@@ -126,3 +126,42 @@ func TestNormalizeJSONRPCID(t *testing.T) {
 		})
 	}
 }
+
+// TestScalarString 标量字符串化（对齐 Python str(x or "").strip()）。
+func TestScalarString(t *testing.T) {
+	cases := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{"字符串去空白", " sess-1 ", "sess-1"},
+		{"整数", 123, "123"},
+		{"浮点整值", float64(456), "456"},
+		{"int64", int64(789), "789"},
+		{"nil", nil, ""},
+		{"不支持类型", []any{"a"}, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := ScalarString(c.in); got != c.want {
+				t.Errorf("ScalarString(%#v) = %q, 期望 %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// TestShouldWaitForFinalText 收尾前等待判定（桥与通道共用）。
+func TestShouldWaitForFinalText(t *testing.T) {
+	if ShouldWaitForFinalText(true, "text", "msg-1") {
+		t.Error("已见过 chat.final 时不应再等")
+	}
+	if !ShouldWaitForFinalText(false, "text", "") {
+		t.Error("有助手文本时应等待")
+	}
+	if !ShouldWaitForFinalText(false, "", "msg-1") {
+		t.Error("有助手消息 id 时应等待")
+	}
+	if ShouldWaitForFinalText(false, "", "") {
+		t.Error("既无文本也无消息 id 时不应等待")
+	}
+}

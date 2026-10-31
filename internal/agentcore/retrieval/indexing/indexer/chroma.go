@@ -183,19 +183,11 @@ func (ci *ChromaIndexer) DocIDField() string { return ci.docIDField }
 // M-44: 对齐 Python @property client -> self._client。
 func (ci *ChromaIndexer) Client() chromav2.Client { return ci.client }
 
-// Close 关闭索引管理器，释放持久客户端。
+// Close 关闭索引管理器（空操作，对齐 Python）。
 //
-// M-44: 对齐 Python ChromaIndexer.close()。关闭失败已在此 Warn 记录
-// （对齐 Python logger.warning），故返回 nil。
+// Python: chroma_indexer.py close() 同样是 pass —— 持久客户端为进程级共享资源，
+// 由单个索引器关闭会让其他持有者失效，生命周期交给进程退出。
 func (ci *ChromaIndexer) Close() error {
-	if ci.client != nil {
-		if err := ci.client.Close(); err != nil {
-			logger.Warn(logComponent).
-				Str("event_type", "INDEXING_WARN").
-				Err(err).
-				Msg("failed to close ChromaDB client")
-		}
-	}
 	return nil
 }
 

@@ -640,7 +640,7 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 	if params == nil {
 		params = map[string]any{}
 	}
-	sessionID := strings.TrimSpace(strVal(params["session_id"]))
+	sessionID := strings.TrimSpace(strScalar(params["session_id"]))
 	if sessionID == "" {
 		sessionID = reqID // 对齐 L619 回退
 	}

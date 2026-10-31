@@ -125,12 +125,15 @@ type MessageHandler struct {
 	cronController CronControllerAPI
 
 	// acpSessionAliasMu ACP 会话别名锁（Python _acp_session_alias_lock）
-	// RWMutex：入站解析（可能持锁跨 session.create RPC）走写锁，出站反解读锁——
-	// Python 出站 _resolve_acp_external_session_id 不加锁（单线程无需），Go 侧
-	// 若也取写锁会被在途 RPC 阻塞，故降为读锁。
+	// RWMutex：入站解析只在「双检 + 占位」的临界区持写锁，session.create RPC
+	// 在锁外执行；出站反解读锁。Python 单事件循环下 await 在锁内不会阻塞其他
+	// 会话的独立工作，Go 若持锁跨 RPC 会让全部 ACP 会话停摆数秒。
 	acpSessionAliasMu sync.RWMutex
 	// acpSessionAliases ACP 别名缓存：external → internal（无 TTL 无上限，偏差 §9-11）
 	acpSessionAliases map[string]string
+	// acpSessionAliasInflight 在途 session.create 占位：external → 完成信号。
+	// 等价 singleflight：并发同 key 只发起一次 RPC，其余等待后重查缓存。
+	acpSessionAliasInflight map[string]chan struct{}
 }
 
 // CronControllerAPI handleCronPushPayload 所需的 CronController 接口。
@@ -199,6 +202,7 @@ func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 		streamEmitsProcessingStatus: make(map[string]bool),
 		sessionLastUserQuery:        make(map[string]string),
 		acpSessionAliases:           make(map[string]string),
+		acpSessionAliasInflight:     make(map[string]chan struct{}),
 	}
 
 	// 11.7：企业通道会话映射（scope 从 config 读一次）

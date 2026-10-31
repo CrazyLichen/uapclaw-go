@@ -21,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	upath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -188,15 +189,9 @@ func contextWorkspaceRoot(ctx context.Context) string {
 	return resolvePathString(dir)
 }
 
-// resolvePathString filepath.EvalSymlinks 失败回退 filepath.Abs（对齐 Python Path.resolve 宽松语义）。
+// resolvePathString 路径 resolve（对齐 Python Path.resolve 的 strict=False 语义）。
 func resolvePathString(p string) string {
-	if resolved, err := filepath.EvalSymlinks(p); err == nil {
-		return resolved
-	}
-	if abs, err := filepath.Abs(p); err == nil {
-		return abs
-	}
-	return p
+	return upath.ResolveSymlinksLenient(p)
 }
 
 // isRelativeTo 判断 path 是否位于 root 之下。

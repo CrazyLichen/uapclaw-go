@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 
@@ -26,6 +27,8 @@ import (
 //
 // Python: class ConfigManager
 type ConfigManager struct {
+	// mu 保护 configs（并发 Load/Update/Save 会对同一 map 读写，未加锁会 panic）
+	mu sync.RWMutex
 	// configs 已加载配置（Python Dict[str, BaseModel]；Go 用 any 收纳）
 	configs map[string]any
 }
@@ -98,8 +101,15 @@ func (m *ConfigManager) LoadFromFile(path string) error {
 		)
 	}
 
-	// 对齐 Python KnowledgeBaseConfig(**data)：忽略未知键，已知字段显式取。
-	m.configs[knowledgeBaseConfigKey] = knowledgeBaseConfigFromMap(data)
+	// 对齐 Python KnowledgeBaseConfig(**data)：忽略未知键，已知字段显式取；
+	// pydantic 的必填 / 字面量约束在此转为显式校验（kb_id 必填、index_type 枚举）。
+	cfg, err := knowledgeBaseConfigFromMap(data)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.configs[knowledgeBaseConfigKey] = cfg
+	m.mu.Unlock()
 	return nil
 }
 
@@ -109,9 +119,15 @@ func (m *ConfigManager) LoadFromFile(path string) error {
 // （对齐 json.dump(indent=2, ensure_ascii=False)）；YAML 用 yaml.Marshal
 // 逐行输出（对齐 yaml.dump(allow_unicode=True, default_flow_style=False)）。
 //
+// 字节差异（有意保留，不影响语义）：Go 的 encoding/json 对 map 按 key 字典序
+// 输出且 Encoder 追加尾换行；Python model_dump + json.dump 按字段声明序且无尾
+// 换行。JSON 对象无序，两侧解析结果等价；仅在与 Python 做字节级对拍时不同。
+//
 // Python: save_to_file
 func (m *ConfigManager) SaveToFile(path string) error {
+	m.mu.RLock()
 	cfgAny, ok := m.configs[knowledgeBaseConfigKey]
+	m.mu.RUnlock()
 	if !ok {
 		return exception.BuildError(
 			exception.StatusRetrievalUtilsConfigNotFound,
@@ -159,6 +175,8 @@ func (m *ConfigManager) SaveToFile(path string) error {
 // 遍历顺序即 map 迭代顺序（Python dict 插入序在 Go map 无序，但同类型
 // 只会有一个键命中，行为等价）。未找到返回零值与 false（Python None）。
 func GetConfig[T any](m *ConfigManager) (T, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	for _, cfg := range m.configs {
 		if v, ok := cfg.(T); ok {
 			return v, true
@@ -175,7 +193,9 @@ func GetConfig[T any](m *ConfigManager) (T, bool) {
 //
 // Python: get_knowledge_base_config
 func (m *ConfigManager) GetKnowledgeBaseConfig() (common.KnowledgeBaseConfig, error) {
+	m.mu.RLock()
 	cfgAny, ok := m.configs[knowledgeBaseConfigKey]
+	m.mu.RUnlock()
 	if !ok {
 		return common.KnowledgeBaseConfig{}, exception.BuildError(
 			exception.StatusRetrievalUtilsConfigProcessError,
@@ -200,7 +220,9 @@ func (m *ConfigManager) GetKnowledgeBaseConfig() (common.KnowledgeBaseConfig, er
 //
 // Python: update_config
 func (m *ConfigManager) UpdateConfig(config any) {
+	m.mu.Lock()
 	m.configs[typeNameOf(config)] = config
+	m.mu.Unlock()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -211,7 +233,7 @@ func (m *ConfigManager) UpdateConfig(config any) {
 // 默认值（index_type="hybrid" / chunk_size=512 / chunk_overlap=50 / 两个
 // bool 为 false）。JSON 数字解码为 float64、YAML 数字解码为 int，两条路径
 // 都要吃下（Python json 同为 int，但我们经 any 中转后类型不同）。
-func knowledgeBaseConfigFromMap(data map[string]any) common.KnowledgeBaseConfig {
+func knowledgeBaseConfigFromMap(data map[string]any) (common.KnowledgeBaseConfig, error) {
 	// 基线取 pydantic 字段默认值
 	cfg := common.KnowledgeBaseConfig{
 		IndexType:    common.IndexTypeHybrid,
@@ -236,7 +258,22 @@ func knowledgeBaseConfigFromMap(data map[string]any) common.KnowledgeBaseConfig 
 	if v, ok := data["use_caption_for_images"].(bool); ok {
 		cfg.UseCaptionForImages = v
 	}
-	return cfg
+	// Python: pydantic KnowledgeBaseConfig 的必填/字面量约束
+	if strings.TrimSpace(cfg.KBID) == "" {
+		return cfg, exception.BuildError(
+			exception.StatusRetrievalUtilsConfigInvalid,
+			exception.WithMsg("knowledge_base.kb_id 不能为空"),
+		)
+	}
+	switch cfg.IndexType {
+	case common.IndexTypeHybrid, common.IndexTypeBM25, common.IndexTypeVector:
+	default:
+		return cfg, exception.BuildError(
+			exception.StatusRetrievalUtilsConfigInvalid,
+			exception.WithMsg(fmt.Sprintf("knowledge_base.index_type 非法: %s", cfg.IndexType)),
+		)
+	}
+	return cfg, nil
 }
 
 // knowledgeBaseConfigToMap 将 KnowledgeBaseConfig 序列化为 map（键名对齐

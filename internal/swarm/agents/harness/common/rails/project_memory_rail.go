@@ -11,6 +11,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/project_memory"
 )
@@ -177,16 +178,7 @@ func (r *ProjectMemoryRail) SetAdditionalDirectories(dirs []string) {
 	// Python: base_resolved = {os.path.realpath(d) for d in self._additional_directories}
 	baseResolved := make(map[string]struct{})
 	for _, d := range r.additionalDirectories {
-		absPath, absErr := filepath.Abs(d)
-		resolved := d
-		if absErr == nil {
-			if evRes, evErr := filepath.EvalSymlinks(absPath); evErr == nil {
-				resolved = evRes
-			} else {
-				resolved = absPath // 降级：EvalSymlinks 失败时使用 Abs 路径
-			}
-		}
-		baseResolved[resolved] = struct{}{}
+		baseResolved[pathutil.ResolveSymlinksLenient(d)] = struct{}{}
 	}
 	// Python: merged = list(self._additional_directories)
 	merged := make([]string, len(r.additionalDirectories))
@@ -198,15 +190,7 @@ func (r *ProjectMemoryRail) SetAdditionalDirectories(dirs []string) {
 		if d == "" {
 			continue
 		}
-		absPath, absErr := filepath.Abs(d)
-		resolved := d
-		if absErr == nil {
-			if evRes, evErr := filepath.EvalSymlinks(absPath); evErr == nil {
-				resolved = evRes
-			} else {
-				resolved = absPath // 降级：EvalSymlinks 失败时使用 Abs 路径
-			}
-		}
+		resolved := pathutil.ResolveSymlinksLenient(d)
 		if _, exists := baseResolved[resolved]; !exists {
 			merged = append(merged, d)
 			baseResolved[resolved] = struct{}{}

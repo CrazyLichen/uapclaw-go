@@ -164,10 +164,12 @@ func (r *VectorRetriever) RetrieveSearchResults(ctx context.Context, query strin
 // Python 的 getattr+iscoroutinefunction 鸭子探测在 Go 消解为
 // 接口静态 Close() 直调（spec §8-7 语言特性级等价物）。
 func (r *VectorRetriever) Close() error {
-	if r.vectorStore != nil {
-		_ = r.vectorStore.Close()
+	if r.vectorStore == nil {
+		return nil
 	}
-	return nil
+	// 底层 store 的错误必须上抛：Close 声明了 error，吞掉会让上层错误聚合
+	// （如 GraphRetriever.firstErr）永远不可达。
+	return r.vectorStore.Close()
 }
 
 // EmbedModel 返回嵌入模型（能力接口回填，13.23；nil = Python None）。

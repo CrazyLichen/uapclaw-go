@@ -85,6 +85,10 @@ const (
 	// Python: ADDITIONAL_DIRECTORIES_ENV = "JIUWENSWARM_ADDITIONAL_DIRECTORIES"
 	AdditionalDirectoriesEnv = "UAPCLAWSWARM_ADDITIONAL_DIRECTORIES"
 
+	// ProjectMemoryDirEnv 项目记忆目录环境变量（品牌映射 JIUWENSWARM_→UAPCLAWSWARM_）。
+	// Python: 读取 JIUWENSWARM_PROJECT_MEMORY_DIR（_build_project_memory_rail 三级回退）
+	ProjectMemoryDirEnv = "UAPCLAWSWARM_PROJECT_MEMORY_DIR"
+
 	// DefaultMaxChars 合并内容默认字符上限。
 	// Python: DEFAULT_MAX_CHARS = 60_000
 	DefaultMaxChars = 60000
@@ -406,15 +410,7 @@ func GetLargeMemoryFiles(files []LoadedMemoryFile, threshold int) []map[string]a
 // safeResolve 安全 resolve（不抛异常）。
 // Python: _safe_resolve (files.py L926-930)
 func safeResolve(p string) string {
-	resolved, err := filepath.Abs(p)
-	if err != nil {
-		return p
-	}
-	// 尝试 EvalSymlinks 获取真实路径（对齐 Python Path.resolve()）
-	if evaled, err := filepath.EvalSymlinks(resolved); err == nil {
-		return evaled
-	}
-	return resolved
+	return utilpath.ResolveSymlinksLenient(p)
 }
 
 // isRelativeTo 判断 path 是否在 root 下。

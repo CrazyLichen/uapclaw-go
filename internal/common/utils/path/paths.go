@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -111,6 +112,45 @@ func ExpandHome(path string) string {
 	}
 	// ~user/ 格式不支持，返回原路径
 	return path
+}
+
+// ResolveSymlinksLenient 按 Python Path.resolve(strict=False) 语义解析路径。
+//
+// 与直接调用 filepath.EvalSymlinks 的区别：目标路径可能**尚不存在**（如待创建
+// 的文件），此时 EvalSymlinks 必然失败。Python 的做法是解析「已存在的前缀」中
+// 的符号链接、保留不存在的尾部；Go 侧同样逐级上溯最近的已存在祖先，解析后把
+// 剩余部分拼回，因此 `ws/link -> /etc` 下的 `ws/link/new.txt` 会解析成
+// `/etc/new.txt`，不会被误判为仍在 `ws` 内。
+//
+// 入参先做 ~ 展开与绝对化；磁盘根仍不存在等极端情况返回清理后的绝对路径。
+func ResolveSymlinksLenient(p string) string {
+	expanded := ExpandHome(p)
+	abs, err := filepath.Abs(expanded)
+	if err != nil {
+		abs = expanded
+	}
+	if resolved, evalErr := filepath.EvalSymlinks(abs); evalErr == nil {
+		return resolved
+	}
+	return resolveExistingAncestor(abs)
+}
+
+// IsPathWithin 判断 p 是否等于 root 或位于其下（按路径段比较，非字符串前缀）。
+//
+// 对齐 Python Path.relative_to：`/ws` 不包含 `/ws-evil`，但包含 `/ws` 本身与
+// `/ws/a/b`。两侧应已由 ResolveSymlinksLenient 解析，调用方负责。
+func IsPathWithin(root, p string) bool {
+	if root == "" || p == "" {
+		return false
+	}
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(p))
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
 }
 
 // SetUserHome 设置自定义主目录并重置所有缓存。
@@ -382,4 +422,32 @@ func dirExists(path string) bool {
 		return false
 	}
 	return info.IsDir()
+}
+
+// resolveExistingAncestor 解析最近已存在祖先的符号链接，再拼回不存在的尾部。
+//
+// 对齐 Python Path.resolve(strict=False)：`/ws/link/new.txt` 中 `/ws/link` 存在
+// 则解析为 `/etc`，尾部 `new.txt` 原样拼接，得到 `/etc/new.txt`。
+func resolveExistingAncestor(abs string) string {
+	remainder := make([]string, 0, 4)
+	current := filepath.Clean(abs)
+	for {
+		parent := filepath.Dir(current)
+		if parent == current {
+			// 已到磁盘根仍不存在：无符号链接可解析，返回清理后的绝对路径
+			return filepath.Clean(abs)
+		}
+		remainder = append(remainder, filepath.Base(current))
+		current = parent
+		resolved, err := filepath.EvalSymlinks(current)
+		if err != nil {
+			continue
+		}
+		parts := make([]string, 0, len(remainder)+1)
+		parts = append(parts, resolved)
+		for i := len(remainder) - 1; i >= 0; i-- {
+			parts = append(parts, remainder[i])
+		}
+		return filepath.Join(parts...)
+	}
 }

@@ -85,9 +85,9 @@ func Load(path string) error {
 
 // LoadNonOverride 加载 .env 文件但**不覆盖**已存在的环境变量。
 //
-// 与 Load 的区别仅在于写入前判断变量是否已有非空值：已有非空值 → 保留 shell 侧；
-// 未设置或为空字符串 → 写入文件值（便于 shell 里 `export K=` 占位后仍由 .env 提供值）。
-// Python: dotenv.load_dotenv(path, override=False)
+// 语义严格对齐 python-dotenv 的 override=False：**按键存在性**跳过，不区分值是否
+// 为空（`export K=` 也算已设置，不会被文件值覆盖）。
+// Python: dotenv.load_dotenv(path, override=False) → `if key in os.environ: continue`
 func LoadNonOverride(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -96,7 +96,7 @@ func LoadNonOverride(path string) error {
 
 	kvs := Parse(string(data))
 	for k, v := range kvs {
-		if _, exists := os.LookupEnv(k); exists && os.Getenv(k) != "" {
+		if _, exists := os.LookupEnv(k); exists {
 			continue
 		}
 		if err := os.Setenv(k, v); err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -19,6 +18,7 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -556,19 +556,8 @@ func (r *AgentModeRail) isPlanFile(filePath, planPath string) bool {
 		return false
 	}
 	// Python: L503-505: Path(file_path).resolve() == Path(plan_path).resolve()
-	// resolve = Abs + EvalSymlinks（与 Python Path.resolve() 行为一致）
-	tryResolve := func(p string) string {
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			return p
-		}
-		resolved, err := filepath.EvalSymlinks(abs)
-		if err != nil {
-			return abs
-		}
-		return resolved
-	}
-	return tryResolve(filePath) == tryResolve(planPath)
+	// resolve 语义统一走公共助手（Abs + 软链解析，允许目标不存在）
+	return pathutil.ResolveSymlinksLenient(filePath) == pathutil.ResolveSymlinksLenient(planPath)
 }
 
 // extractFilePath 从 ToolCallInputs.ToolArgs 中提取 file_path 参数。

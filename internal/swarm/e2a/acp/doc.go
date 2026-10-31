@@ -13,7 +13,8 @@
 //	acp/
 //	├── doc.go                # 包文档
 //	├── acp_tool_updates.go   # descriptor 构造与 tool kind 推断（11.25 起由桥/通道消费，转正）
-//	├── protocol.go           # initialize/session_new/session_list/prompt 响应构造
+//	├── idle_timer.go         # 空闲收尾定时器槽（桥与 stdio 通道共用，§9-4 引用比对）
+//	├── protocol.go           # initialize/session_new/session_list/prompt 响应构造 + id/标量归一
 //	└── session_updates.go    # session/update 构造与增量三态（11.25，session_updates.py 1:1）
 //
 // 对应 Python 代码：jiuwenswarm/common/e2a/acp/acp_tool_updates.py · protocol.py · session_updates.py

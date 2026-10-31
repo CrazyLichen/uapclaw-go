@@ -2,7 +2,7 @@
 
 本文件记录 2026-09-21 审查中因依赖缺失而无法立即实现的问题。
 
-## 已修复项（2026-09-27 / 2026-10-18 两次更新）
+## 已修复项（2026-09-27 / 2026-10-18 / 2026-10-31 三次更新）
 
 | 编号 | 问题 | 修复方式 |
 |------|------|----------|
@@ -17,6 +17,9 @@
 | AH-S-03 | ProcessMessageImpl/Stream 缺少 cron 上下文绑定 | ✅ build_user_prompt.go 的 cron/heartbeat 分支（提示前缀+source/type 改写+files 排除）与 Python interface.py 逐行对齐；build_inputs.go cron→run.kind 转换已实现（2026-10-18 核实） |
 | AH-S-06 | ReloadAgentConfig 缺少 load_user_rails() | ✅ 步骤 8.4 已补 `d.loadUserRails()` 调用（2026-10-18 修复） |
 | AH-S-09 | ReloadAgentConfig 缺少 load_user_rails() | ✅ 同 AH-S-06 |
+| AH-M-02 | CodeAdapter 缺少 _update_tools_for_mode 和 _update_session_tools | ✅ 两步均已实现并调用：`code_adapter.go` 的 `updateToolsForMode` / `updateSessionTools`（2026-10-31 核实） |
+| AH-M-13 | CodeAdapter 缺少 _refresh_acp_runtime_tools | ✅ `refreshAcpRuntimeTools` 已实现并在 `updateRuntimeConfig` 中调用（2026-10-31 核实） |
+| AH-M-14 | CodeAdapter.updateRuntimeConfig 缺少 user_todos channel_id per-request sync | ✅ 已补完整同步块（SetGlobalWorkspaceDir + AddTool + AbilityManager().Add，2026-10-31 核实） |
 | AH-M-12 | CodeAdapter 缺少 browser_agent 配置 | ✅ buildConfiguredSubagents browser 分支完整对齐 Python：browserRuntimeEnabled（PLAYWRIGHT/BROWSER_RUNTIME_MCP_ENABLED）+ BROWSER_DRIVER managed 默认值注入 + chrome_path 解析 + BuildBrowserAgentConfig 真实注册 + parse_int 三级回退 + 未启用跳过日志（2026-10-18 修复） |
 
 ## 待实现依赖缺失项
@@ -24,10 +27,7 @@
 | 编号 | 问题 | 依赖 |
 |------|------|------|
 | M-23 | AutoHarnessService 未实现（10.6.11-12） | IMPLEMENTATION_PLAN 10.6.11 ☐（Python auto_harness/ 约 3667 行，按序排期） |
-| AH-M-02 | CodeAdapter 缺少 _update_tools_for_mode 和 _update_session_tools | 依赖未排期组件：MultiSessionToolkit（agent.fast 模式）/ CronRuntimeBridge + SendFileToolkit（⤵️#9.72 占位）/ ACP 子系统 |
 | AH-M-10 | buildLspRail 返回 nil | 依赖 9.17 LSPRail ☐（openjiuwen/harness/lsp/ 21 文件约 2500 行）。~~10.6.3-10~~ 依赖指向已失效，2026-10-18 修正为 9.17 |
-| AH-M-13 | CodeAdapter 缺少 _refresh_acp_runtime_tools | 依赖 ACP 子系统（10.2.9/10.4.3/10.4.5/11.25 均 ☐） |
-| AH-M-14 | CodeAdapter.updateRuntimeConfig 缺少 user_todos channel_id per-request sync | 依赖 user_todos 子系统（code_adapter.go:810 明确跳过，未排期） |
 
 ## 跳过项（确认无需修复）
 

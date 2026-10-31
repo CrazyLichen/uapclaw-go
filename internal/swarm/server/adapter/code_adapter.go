@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	memoryrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
@@ -34,6 +35,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
+	projectmemory "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/project_memory"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
 	skilltools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
@@ -536,18 +538,19 @@ func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// updateRailsForMode 覆写 DeepAdapter，Code 模式下保留 SubagentRail/ProjectMemoryRail/CodingMemoryRail。
+// updateRailsForMode 覆写 DeepAdapter：Code 语义下管理 Rail 生命周期。
 // Python: JiuwenClawCodeAdapter._update_rails_for_mode() — 完全覆写（不调 super）
 //
-// Code 模式：卸载 TaskPlanningRail 和 SkillEvolutionRail，保留 SubagentRail/ProjectMemoryRail/CodingMemoryRail。
-// 非 Code 模式：回退到 DeepAdapter 默认行为。
+// **不判 mode**：CodeAdapter 实例只由 factory 在 mode=="code" 时创建（team 成员同属
+// code 族），Python 侧同样不对 mode 设门控。历史缺陷：此处曾有 `if mode != "code"`
+// 门控，而真实入参是 canonical 串 "code.normal"/"code.plan"/"code.team"
+// （handle_envelope 的 writeCanonicalMode 回写），门控恒真 → 每条消息都回落到
+// DeepAdapter.updateAgentModeRails，卸载 SubagentRail 且永不重建。
+//
+// Code 模式：卸载 TaskPlanningRail/SkillEvolutionRail；对 SubagentRail/
+// ProjectMemoryRail/CodingMemoryRail 做「缺失则重建注册」（Python 同款三段）。
 func (c *CodeAdapter) updateRailsForMode(ctx context.Context, mode string) {
-	if mode != "code" {
-		// 非 Code 模式回退到 DeepAdapter 默认行为
-		c.deep.updateRailsForMode(ctx, mode)
-		return
-	}
-	// Code 模式：卸载 TaskPlanningRail 和 SkillEvolutionRail
+	// 1. 卸载非 code 专属 rails（Python rail_specs 只含这两项）
 	if c.deep.taskPlanningRail != nil && c.deep.instance != nil {
 		if err := c.deep.instance.UnregisterRail(ctx, c.deep.taskPlanningRail); err != nil {
 			logger.Error(logComponent).Err(err).Str("rail", "TaskPlanningRail").Msg("Failed to unregister Rail")
@@ -564,7 +567,43 @@ func (c *CodeAdapter) updateRailsForMode(ctx context.Context, mode string) {
 		}
 		c.deep.skillEvolutionRail = nil
 	}
-	// 保留 SubagentRail、ProjectMemoryRail、CodingMemoryRail
+
+	// 2. SubagentRail — code 模式保留（task_tool 派发 explore/plan 子代理）；缺失则重建
+	if c.deep.subagentRail == nil && c.deep.instance != nil {
+		if rail, ok := c.deep.buildSubagentRail().(*subagent.SubagentRail); ok && rail != nil {
+			if err := c.deep.instance.RegisterRail(ctx, rail); err != nil {
+				logger.Error(logComponent).Err(err).Str("rail", "SubagentRail").Msg("Failed to register Rail")
+			} else {
+				c.deep.subagentRail = rail
+				logger.Info(logComponent).Str("mode", mode).Str("rail", "SubagentRail").Msg("SubagentRail (re)registered (Code mode)")
+			}
+		}
+	}
+
+	// 3. ProjectMemoryRail — code 模式始终挂载；缺失则重建
+	if c.projectMemoryRail == nil && c.deep.instance != nil {
+		if rail, ok := c.buildProjectMemoryRail().(*commonrails.ProjectMemoryRail); ok && rail != nil {
+			if err := c.deep.instance.RegisterRail(ctx, rail); err != nil {
+				logger.Error(logComponent).Err(err).Str("rail", "ProjectMemoryRail").Msg("Failed to register Rail")
+			} else {
+				c.projectMemoryRail = rail
+				logger.Info(logComponent).Str("mode", mode).Str("rail", "ProjectMemoryRail").Msg("ProjectMemoryRail (re)registered (Code mode)")
+			}
+		}
+	}
+
+	// 4. CodingMemoryRail — code 模式始终挂载；缺失则重建
+	if c.codingMemoryRail == nil && c.deep.instance != nil {
+		rail := c.buildCodingMemoryRail()
+		if rail != nil {
+			if err := c.deep.instance.RegisterRail(ctx, rail); err != nil {
+				logger.Error(logComponent).Err(err).Str("rail", "CodingMemoryRail").Msg("Failed to register Rail")
+			} else {
+				c.codingMemoryRail = rail
+				logger.Info(logComponent).Str("mode", mode).Str("rail", "CodingMemoryRail").Msg("CodingMemoryRail (re)registered (Code mode)")
+			}
+		}
+	}
 }
 
 // resolvePromptLanguage 覆写 DeepAdapter，code 模式强制英文。
@@ -625,7 +664,8 @@ func (c *CodeAdapter) updatePromptForMode(mode string) {
 // 与 DeepAdapter.updateRuntimeConfig 的关键差异：
 //  1. SetForceEnglish(c.forceEnglishRuntimePrompt) — Code 模式强制英文 section
 //  2. writeRuntimeStateYAML 用 resolveOutputLanguage() 而非 resolvedLanguage
-//  3. ⤵️ 待后续章节回填: ProjectMemoryRail / _update_tools_for_mode / _update_session_tools
+//  3. ⤴️ 已回填：ProjectMemoryRail 语言/trusted_dirs 同步（:690）、
+//     updateToolsForMode（:699）、updateSessionTools（:701）、refreshAcpRuntimeTools（:704）
 func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeConfig) {
 	if config == nil {
 		return
@@ -1245,7 +1285,7 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 		}
 	}
 	if projectMemoryDir == "" {
-		projectMemoryDir = os.Getenv("UAPSWARM_PROJECT_MEMORY_DIR")
+		projectMemoryDir = os.Getenv(projectmemory.ProjectMemoryDirEnv)
 	}
 
 	// Python 三级回退：

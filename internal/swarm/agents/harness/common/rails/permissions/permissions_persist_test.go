@@ -309,44 +309,6 @@ func TestAppendOverrideIfMissing(t *testing.T) {
 	})
 }
 
-// ---------- expandUserPath 测试 ----------
-
-func TestExpandUserPath(t *testing.T) {
-	t.Run("以~开头的路径展开为主目录", func(t *testing.T) {
-		homeDir, err := os.UserHomeDir()
-		if err != nil || homeDir == "" {
-			t.Skip("无法获取用户主目录")
-		}
-		got := expandUserPath("~/test")
-		expected := homeDir + "/test"
-		if got != expected {
-			t.Errorf("期望 %s，得到 %s", expected, got)
-		}
-	})
-	t.Run("仅~展开为主目录", func(t *testing.T) {
-		homeDir, err := os.UserHomeDir()
-		if err != nil || homeDir == "" {
-			t.Skip("无法获取用户主目录")
-		}
-		got := expandUserPath("~")
-		if got != homeDir {
-			t.Errorf("期望 %s，得到 %s", homeDir, got)
-		}
-	})
-	t.Run("不以~开头的路径不变", func(t *testing.T) {
-		got := expandUserPath("/tmp/test")
-		if got != "/tmp/test" {
-			t.Errorf("期望 /tmp/test，得到 %s", got)
-		}
-	})
-	t.Run("空字符串不变", func(t *testing.T) {
-		got := expandUserPath("")
-		if got != "" {
-			t.Errorf("期望空字符串，得到 %s", got)
-		}
-	})
-}
-
 // ---------- sortedSet 测试 ----------
 
 func TestSortedSet(t *testing.T) {
@@ -566,14 +528,6 @@ func TestSortedSet_大输入(t *testing.T) {
 	}
 	if !sort.StringsAreSorted(got) {
 		t.Error("期望结果已排序")
-	}
-}
-
-func TestExpandUserPath_路径中间含波浪号(t *testing.T) {
-	// ~ 不在开头时不展开
-	got := expandUserPath("/tmp/~user/test")
-	if strings.Contains(got, os.Getenv("HOME")) && !strings.HasPrefix(got, "/tmp") {
-		t.Errorf("中间 ~ 不应展开，得到 %s", got)
 	}
 }
 

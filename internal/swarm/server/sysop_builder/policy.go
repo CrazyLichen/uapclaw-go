@@ -460,28 +460,11 @@ func toSlice(v any) ([]any, bool) {
 	}
 }
 
-// expandHome 展开 ~ 为用户 home 目录。
-// Python: Path.expanduser()
-func expandHome(path string) (string, error) {
-	return pathutil.ExpandHome(path), nil
-}
-
-// resolveSymlinkAbs 解析路径：展开 ~ → 绝对路径 → 解析符号链接。
-// Python: Path.expanduser().resolve()
-// EvalSymlinks 失败时 fallback 到 Abs 结果。
+// resolveSymlinkAbs 解析路径：展开 ~ → 绝对路径 → 解析符号链接（宽松，允许目标不存在）。
+// Python: Path.expanduser().resolve(strict=False)
+//
+// 统一委托公共助手 pathutil.ResolveSymlinksLenient：目标不存在时解析最近已存在
+// 祖先再拼尾，避免「软链目录下新建文件」场景无法解析真实落点。
 func resolveSymlinkAbs(path string) (string, error) {
-	expanded, err := expandHome(path)
-	if err != nil {
-		return "", err
-	}
-	abs, err := filepath.Abs(expanded)
-	if err != nil {
-		return "", err
-	}
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err != nil {
-		// EvalSymlinks 失败时 fallback 到 Abs 结果
-		return abs, nil
-	}
-	return resolved, nil
+	return pathutil.ResolveSymlinksLenient(path), nil
 }

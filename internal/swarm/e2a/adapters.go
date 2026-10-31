@@ -111,7 +111,7 @@ func EnvelopeFromACPJsonrpc(method string, params map[string]any, opts *Envelope
 	for k, v := range opts.ExtraProvenanceDetails {
 		details[k] = v
 	}
-	return &E2AEnvelope{
+	return applyEnvelopeDefaults(&E2AEnvelope{
 		Provenance: E2AProvenance{
 			SourceProtocol: E2ASourceProtocolACP,
 			Converter:      orDefaultString(opts.Converter, converterACP),
@@ -124,7 +124,7 @@ func EnvelopeFromACPJsonrpc(method string, params map[string]any, opts *Envelope
 		SessionID:      sid,
 		Channel:        opts.Channel,
 		IdentityOrigin: orDefaultIdentityOrigin(opts.IdentityOrigin),
-	}
+	})
 }
 
 // EnvelopeFromA2ASendMessage 将 A2A SendMessage 语义转为 E2A；provenance 标明来源为 a2a。
@@ -163,7 +163,7 @@ func EnvelopeFromA2ASendMessage(taskID, contextID string, messageBody map[string
 	} else {
 		paramsOut["configuration"] = map[string]any{}
 	}
-	return &E2AEnvelope{
+	return applyEnvelopeDefaults(&E2AEnvelope{
 		Provenance: E2AProvenance{
 			SourceProtocol: E2ASourceProtocolA2A,
 			Converter:      orDefaultString(opts.Converter, converterA2A),
@@ -178,7 +178,7 @@ func EnvelopeFromA2ASendMessage(taskID, contextID string, messageBody map[string
 		ExpectedOutputModes: accepted,
 		Params:              paramsOut,
 		A2AMetadata:         meta,
-	}
+	})
 }
 
 // EnvelopeToACPJsonrpcCall 将信封转为 JSON-RPC 风格单条调用描述（日志或下游 ACP 端点）。
@@ -421,4 +421,29 @@ func copyMapAny(src map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+// applyEnvelopeDefaults 补齐 E2A 互操作默认字段：协议版本 + 三个扩展槽空 map。
+//
+// Python E2AEnvelope 是 dataclass，默认 protocol_version="1.0"、
+// channel_context/a2a_metadata/acp_meta 均为 field(default_factory=dict)；
+// Go 结构体零值是 ""/nil，序列化后成为 "" 与 null，与 Python 产物不一致。
+// 构造器统一经本函数收尾，避免逐个字面量漏填。
+func applyEnvelopeDefaults(env *E2AEnvelope) *E2AEnvelope {
+	if env == nil {
+		return nil
+	}
+	if env.ProtocolVersion == "" {
+		env.ProtocolVersion = E2AProtocolVersion
+	}
+	if env.ChannelContext == nil {
+		env.ChannelContext = map[string]any{}
+	}
+	if env.A2AMetadata == nil {
+		env.A2AMetadata = map[string]any{}
+	}
+	if env.ACPMeta == nil {
+		env.ACPMeta = map[string]any{}
+	}
+	return env
 }

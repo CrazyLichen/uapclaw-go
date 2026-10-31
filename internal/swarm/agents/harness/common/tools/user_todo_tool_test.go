@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 )
@@ -47,7 +48,10 @@ func TestParseTodosFile_解析与容错(t *testing.T) {
 		"---\ntitle: no id item\n---\nshould be skipped\n"
 	os.WriteFile(file, []byte(content), 0o644)
 
-	todos := parseTodosFile(file)
+	todos, err := parseTodosFile(file)
+	if err != nil {
+		t.Fatalf("parseTodosFile 失败: %v", err)
+	}
 	if len(todos) != 2 {
 		t.Fatalf("parseTodosFile len = %d, want 2（无 id 项跳过）", len(todos))
 	}
@@ -58,7 +62,7 @@ func TestParseTodosFile_解析与容错(t *testing.T) {
 		t.Errorf("todos[1] = %+v", todos[1])
 	}
 	// 文件不存在 → 空列表
-	if got := parseTodosFile(filepath.Join(dir, "nope.md")); len(got) != 0 {
+	if got, err := parseTodosFile(filepath.Join(dir, "nope.md")); err != nil || len(got) != 0 {
 		t.Errorf("missing file should be empty, got %d", len(got))
 	}
 }
@@ -284,7 +288,10 @@ func TestParseTodosFile_无frontmatter边界(t *testing.T) {
 	// 只有一对 ---（无闭合 frontmatter）→ body 吞 EOF
 	content := "# User Todos\n\n---\nid: only\n---\nbody line\nstays\n"
 	os.WriteFile(file, []byte(content), 0o644)
-	todos := parseTodosFile(file)
+	todos, err := parseTodosFile(file)
+	if err != nil {
+		t.Fatalf("parseTodosFile 失败: %v", err)
+	}
 	if len(todos) != 1 || todos[0].Description != "body line\nstays" {
 		t.Errorf("edge parse=%+v", todos)
 	}
@@ -325,7 +332,10 @@ func TestParseTodosFile_坏status跳过该条(t *testing.T) {
 		"---\nid: bad2\ntitle: broken priority\nstatus: pending\npriority: urgent\n---\nbad2\n\n" +
 		"---\nid: good2\ntitle: also ok\n---\nalso fine\n"
 	os.WriteFile(file, []byte(content), 0o644)
-	todos := parseTodosFile(file)
+	todos, err := parseTodosFile(file)
+	if err != nil {
+		t.Fatalf("parseTodosFile 失败: %v", err)
+	}
 	if len(todos) != 2 {
 		t.Fatalf("bad items should be skipped, got %d todos", len(todos))
 	}
@@ -401,5 +411,66 @@ func TestHandleUserTodos_update非法status拒绝(t *testing.T) {
 	})
 	if res3["success"] != true {
 		t.Errorf("valid status update should succeed: %v", res3)
+	}
+}
+
+// TestParseTodosFile_读失败上抛 回归（M-10）：只有「文件不存在」容错为空，
+// 其他读错误必须上抛（旧实现一律返回 nil，create 会以单条覆盖整个待办文件）。
+func TestParseTodosFile_读失败上抛(t *testing.T) {
+	dir := t.TempDir()
+	// 用目录冒充文件：ReadFile 返回 EISDIR，不属于 ErrNotExist
+	if _, err := parseTodosFile(dir); err == nil {
+		t.Fatal("读目录应返回错误，不得当作空列表")
+	}
+}
+
+// TestWriteTodosFile_写失败上抛 回归（M-10）：写盘失败必须上抛（旧实现 `_ = os.WriteFile`
+// 吞错，工具仍向模型回 success=true）。
+func TestWriteTodosFile_写失败上抛(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatalf("构造阻塞文件失败: %v", err)
+	}
+	// 父路径是普通文件 → MkdirAll 必失败
+	if err := writeTodosFile(filepath.Join(blocker, "todos.md"), nil); err == nil {
+		t.Fatal("父路径为文件时应返回写入错误")
+	}
+}
+
+// TestLockTodosFile_串行化 回归（M-10）：同一路径的锁互斥，不同路径互不影响。
+func TestLockTodosFile_串行化(t *testing.T) {
+	pathA := filepath.Join(t.TempDir(), "a.md")
+	pathB := filepath.Join(t.TempDir(), "b.md")
+
+	unlockA := lockTodosFile(pathA)
+	acquiredB := make(chan struct{})
+	go func() {
+		unlockB := lockTodosFile(pathB)
+		unlockB()
+		close(acquiredB)
+	}()
+	select {
+	case <-acquiredB:
+	case <-time.After(time.Second):
+		t.Fatal("不同路径的锁不应互相阻塞")
+	}
+
+	acquiredA := make(chan struct{})
+	go func() {
+		unlockAgain := lockTodosFile(pathA)
+		unlockAgain()
+		close(acquiredA)
+	}()
+	select {
+	case <-acquiredA:
+		t.Fatal("同一路径的锁应互斥（第二次获取应等待）")
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlockA()
+	select {
+	case <-acquiredA:
+	case <-time.After(time.Second):
+		t.Fatal("释放后应能获取锁")
 	}
 }

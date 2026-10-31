@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -729,17 +730,7 @@ func resolvedSessionRoot(clientCwd string) string {
 	if dir == "" {
 		dir, _ = os.Getwd()
 	}
-	if expanded, err := expandUser(dir); err == nil {
-		dir = expanded
-	}
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		abs = dir
-	}
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		return resolved
-	}
-	return abs
+	return pathutil.ResolveSymlinksLenient(dir)
 }
 
 // resolvedPathInsideRoot 判定路径在根内（越界返回空串）。
@@ -749,22 +740,8 @@ func resolvedPathInsideRoot(sessionRoot string, pathIn any) string {
 	if !ok || strings.TrimSpace(s) == "" {
 		return ""
 	}
-	if expanded, err := expandUser(strings.TrimSpace(s)); err == nil {
-		s = expanded
-	}
-	abs, err := filepath.Abs(s)
-	if err != nil {
-		return ""
-	}
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err != nil {
-		// Python realpath 对不存在路径也返回归一结果；Go EvalSymlinks 失败时用 Abs 近似
-		resolved = abs
-	}
-	if resolved == sessionRoot {
-		return resolved
-	}
-	if strings.HasPrefix(resolved, sessionRoot+string(os.PathSeparator)) {
+	resolved := pathutil.ResolveSymlinksLenient(strings.TrimSpace(s))
+	if pathutil.IsPathWithin(sessionRoot, resolved) {
 		return resolved
 	}
 	return ""
@@ -816,17 +793,6 @@ func splitLinesKeepEnds(text string) []string {
 }
 
 // expandUser 展开 ~ 前缀。
-func expandUser(p string) (string, error) {
-	if !strings.HasPrefix(p, "~") {
-		return p, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return p, err
-	}
-	return filepath.Join(home, strings.TrimPrefix(p, "~")), nil
-}
-
 // toInt 宽松整数转换（float64/字符串）。
 func toInt(v any) (int, bool) {
 	switch n := v.(type) {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -450,18 +451,13 @@ func safeChildPath(base string, name string, label string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	baseResolved, err := filepath.EvalSymlinks(base)
-	if err != nil {
-		return "", fmt.Errorf("解析基础路径失败: %w", err)
-	}
+	// 基础路径同样宽松解析：不存在时 Python resolve(strict=False) 也不抛异常
+	baseResolved := pathutil.ResolveSymlinksLenient(base)
 	candidate := filepath.Join(base, safeName)
-	candidateResolved, err := filepath.EvalSymlinks(candidate)
-	if err != nil {
-		// 路径不存在时，用 filepath.Join 结果做前缀检查
-		candidateResolved = filepath.Clean(candidate)
-	}
+	// 目标可能尚不存在：宽松解析（对齐 Python resolve(strict=False)）后再做段级包含判定
+	candidateResolved := pathutil.ResolveSymlinksLenient(candidate)
 	// 对齐 Python: candidate.resolve().relative_to(base_resolved) 失败则 ValueError
-	if !strings.HasPrefix(candidateResolved, baseResolved+string(filepath.Separator)) && candidateResolved != baseResolved {
+	if !pathutil.IsPathWithin(baseResolved, candidateResolved) {
 		return "", fmt.Errorf("无效的 %s 路径: %s", label, safeName)
 	}
 	return candidate, nil

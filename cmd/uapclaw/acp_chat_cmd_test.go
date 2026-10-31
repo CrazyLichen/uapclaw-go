@@ -175,12 +175,14 @@ func TestRunAcpChat_退出码矩阵(t *testing.T) {
 		}
 	})
 
-	t.Run("args非列表_严格", func(t *testing.T) {
+	// T-09：CLI 入口按 Python acp/cli.py 宽松语义处理畸形 args（非 list → []），
+	// 不再像工具侧（tool.py）那样报配置错；工具侧严格校验仍由 BuildClientSpec 保证。
+	t.Run("args非列表_CLI宽松", func(t *testing.T) {
 		raw := map[string]any{"acp_agents": map[string]any{
 			"codex": map[string]any{"command": "sh", "args": "not-a-list"}}}
 		deps, _ := fakeAcpChatDeps(raw, nil, nil, "")
-		if got := runAcpChat(ctx, deps, "codex", "hi"); got != exitCodeConfig {
-			t.Errorf("严格解析应返回 %d, 实际 %d", exitCodeConfig, got)
+		if got := runAcpChat(ctx, deps, "codex", "hi"); got != exitCodeOK {
+			t.Errorf("CLI 宽松语义应成功(0), 实际 %d", got)
 		}
 	})
 
@@ -523,5 +525,22 @@ func TestRunAcpChat_关闭期间中断(t *testing.T) {
 	}
 	if buf.String() != "done\n" {
 		t.Errorf("stdout = %q, 期望已打印回复", buf.String())
+	}
+}
+
+// TestNewAcpChatCmd_未知flag退出码2 回归（T-09）：argparse 对未知选项返回 2，
+// cobra 默认返回普通 error 会落到运行期错误码 1。
+func TestNewAcpChatCmd_未知flag退出码2(t *testing.T) {
+	cmd := newAcpChatCmd()
+	cmd.SetArgs([]string{"--no-such-flag"})
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("未知 flag 应返回错误")
+	}
+	if got := exitCodeFor(err); got != exitCodeConfig {
+		t.Fatalf("未知 flag 退出码 = %d, 期望 %d（用法错误）", got, exitCodeConfig)
 	}
 }

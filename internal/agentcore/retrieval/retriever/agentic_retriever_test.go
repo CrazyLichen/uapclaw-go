@@ -546,9 +546,9 @@ func TestLinkTriples_部分失败聚合(t *testing.T) {
 	assert.Equal(t, "c1", results[0].ChunkID)
 }
 
-// TestLinkTriples_非string元数据收窄 Go 增强：doc_id 非 string → 空串
-// （偏差 §8-7）。
-func TestLinkTriples_非string元数据收窄(t *testing.T) {
+// TestLinkTriples_非string元数据转字符串 回归（T-11）：Python metadata.get 原样透传，
+// Go 旧实现用 .(string) 断言会把数字静默置空；现改为 fmt.Sprint 兜底（42 → "42"）。
+func TestLinkTriples_非string元数据转字符串(t *testing.T) {
 	triple := &agenticFakeRetriever{
 		rsrFn: func(context.Context, string, int, RetrievalMode) ([]common.SearchResult, error) {
 			return []common.SearchResult{
@@ -562,7 +562,7 @@ func TestLinkTriples_非string元数据收窄(t *testing.T) {
 	results, err := r.linkTriples(context.Background(), []common.TripleFact{{"a", "b", "c"}}, RetrievalModeHybrid)
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.Equal(t, "", results[0].DocID) // 非 string 收窄空串
+	assert.Equal(t, "42", results[0].DocID) // 数字标量按 Python 语义字符串化
 }
 
 // TestLinkPassages_失败聚合 Go 增强 6：Retrieve 桩混排 error/正常。

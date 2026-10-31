@@ -218,3 +218,32 @@ func strOfAcpChat(v any) string {
 	}
 	return fmt.Sprintf("%v", v)
 }
+
+// NormalizeProfileSpecForCLI 按 Python acp/cli.py 的宽松语义归一化 profile 规格。
+//
+// Python 两个入口对畸形 profile 的处理不同：
+//   - cli.py（命令行冒烟）：args 非 list → []；env 非 dict → None（静默放宽）
+//   - tool.py（acp_chat 工具）：args/env 类型不符 → 报错
+//
+// Go 两处共用 BuildClientSpec 的严格校验，故由 CLI 入口在调用前先做宽松归一，
+// 保证「命令行能跑的配置不会被更严格的 Go 校验拒掉」，工具侧严格语义不受影响。
+func NormalizeProfileSpecForCLI(spec map[string]any) map[string]any {
+	if spec == nil {
+		return nil
+	}
+	out := make(map[string]any, len(spec))
+	for k, v := range spec {
+		out[k] = v
+	}
+	if rawArgs, ok := out["args"]; ok && rawArgs != nil {
+		if _, isList := rawArgs.([]any); !isList {
+			delete(out, "args")
+		}
+	}
+	if rawEnv, ok := out["env"]; ok && rawEnv != nil {
+		if _, isMap := rawEnv.(map[string]any); !isMap {
+			delete(out, "env")
+		}
+	}
+	return out
+}
