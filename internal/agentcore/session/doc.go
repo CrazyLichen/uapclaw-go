@@ -50,8 +50,8 @@
 //	│   └── session_controller.go            # SessionController 核心控制器
 //	├── interaction/        # 交互管理
 //	│   ├── doc.go                           # interaction 包文档
-//	│   ├── base.go                          # ExecutableIDProvider（可执行ID提供者） 类型别名 + BaseInteraction（基础交互） + GraphInterrupt（图级中断，Interrupt 引用 graph/pregel） + AgentInterrupt（Agent中断） + 常量
-//	│   ├── interaction.go                   # WorkflowInteraction（工作流交互） + SimpleAgentInteraction（简单Agent交互） + AgentInteraction（完整Agent交互） + InteractionOutput（交互输出）
+//	│   ├── base.go                          # ExecutableIDProvider（可执行ID提供者） 类型别名 + BaseInteraction（基础交互） + AgentInterrupt（Agent中断） + 常量；图级中断 GraphInterrupt 定义于 graph/pregel（8.7 迁出）
+//	│   ├── interaction.go                   # WorkflowInteraction（工作流交互） + SimpleAgentInteraction（简单Agent交互） + AgentInteraction（完整Agent交互） + InteractionOutput（交互输出，装进 stream.OutputSchema）
 //	│   └── interactive_input.go             # InteractiveInput 用户输入容器
 //	├── interfaces/         # 统一接口定义
 //	│   ├── doc.go                           # interfaces 包文档
@@ -115,10 +115,10 @@
 //	SessionConfig        — 会话配置接口，环境变量/工作流配置/Agent配置的统一抽象
 //	WorkflowConfigProvider — 工作流配置提供者接口（占位，⤵️ 8.15 回填）
 //	AgentConfig         — Agent 配置接口（定义于 single_agent/interfaces，实现于 single_agent/config）
-//	WorkflowInteraction   — 工作流交互，通过 GraphInterrupt 暂停图执行
+//	WorkflowInteraction   — 工作流交互，通过 pregel.GraphInterrupt 暂停图执行
 //	SimpleAgentInteraction — 简单 Agent 交互，无输入队列
 //	AgentInteraction      — 完整 Agent 交互，含输入队列 + 检查点 + 流输出
 //	InteractiveInput      — 用户交互输入容器
-//	GraphInterrupt        — 图级中断异常
+//	GraphInterrupt        — 图级中断（定义于 graph/pregel，本层只做 panic 传播）
 //	AgentInterrupt        — Agent 中断异常
 package session
