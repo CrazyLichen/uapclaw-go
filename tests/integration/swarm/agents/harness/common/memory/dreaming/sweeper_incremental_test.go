@@ -319,6 +319,46 @@ func (s *SweeperIncrementalSuite) TestSweep_超30天会话标记已扫并丢弃(
 	s.Equal(float64(0), snapshot.HistoryMtime, "标记为空快照")
 }
 
+// TestSweep_增量新轮次不足4则跳过 测试增量侧 minSessionRounds 门槛。
+func (s *SweeperIncrementalSuite) TestSweep_增量新轮次不足4则跳过() {
+	env := s.newEnv()
+	outDir := env.OutputDir("memory")
+	for _, sid := range []string{"sess-001", "sess-a", "sess-b"} {
+		env.PlantSession(s.T(), sid, "agent", 5)
+	}
+	items := []map[string]string{{"title": "初次知识", "content": "第一次扫描"}}
+	env.QueueJSON(s.T(), items)
+	env.QueueJSON(s.T(), items)
+	env.QueueJSON(s.T(), items)
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(3, s.MockLLM.InvokeCallCount())
+
+	for _, sid := range []string{"sess-001", "sess-a", "sess-b"} {
+		env.AppendRounds(s.T(), sid, 6, 7)
+		env.Touch(s.T(), sid, 2*time.Second)
+	}
+
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(3, s.MockLLM.InvokeCallCount(), "新增 2 轮 < 4 轮，应全部跳过")
+}
+
+// TestScanNewSessions_模式不匹配跳过 测试 metadata.mode 前缀过滤。
+func (s *SweeperIncrementalSuite) TestScanNewSessions_模式不匹配跳过() {
+	env := s.newEnv()
+	outDir := env.OutputDir("memory")
+	for _, sid := range []string{"sess-001", "sess-002", "sess-003"} {
+		env.PlantSession(s.T(), sid, "agent", 5)
+	}
+	env.PlantSession(s.T(), "sess-code", "code.normal", 5)
+
+	sweeper := s.newSweeper(env, outDir, "agent")
+	sessions := sweeper.ScanNewSessions()
+	s.Len(sessions, 3, "code.normal 会话不应进入 agent 模式的扫描结果")
+	for _, sess := range sessions {
+		s.NotEqual("sess-code", sess.SessionID)
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newEnv 构建隔离环境并清空 mock 状态（MockLLM 为套件级共享）。
