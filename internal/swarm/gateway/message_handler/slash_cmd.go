@@ -27,9 +27,14 @@ import (
 
 // handleChannelControl 处理 slash 命令，返回 true 表示已处理
 //
-// Python: _handle_channel_control (L615-883)：
-// 调用 command_parser.ParseChannelControlText，按 action 分发处理。
-// Web 渠道不在受控类型中，直接返回 false。
+// Python: _handle_channel_control (L615-883)，顺序严格对齐：
+//
+//	L626 渠道白名单 → L630 取 text → L634 解析 → L639 记 info
+//	→ L645 SKILLS_OK 提前 return（不建 state）→ L652 建 state → 分发
+//
+// D1（有意偏差）：保留 Type/ReqMethod 双重前置守卫。Python 的三个发布方
+// （web publish_user_messages、cron、evolution autoAnswer）均发 type=req，
+// slash 文本只出现在 query/content，守卫等价且省一次解析。
 func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 	// 仅处理请求消息
 	if msg.Type != schema.MessageTypeReq {
@@ -41,27 +46,39 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 		return false
 	}
 
-	// 从 params 提取文本内容
+	// Python: L626 先判渠道白名单，非受控渠道不解析
+	channelType := mh.resolveControlChannelType(msg)
+	if !controlChannelTypes[string(channelType)] {
+		return false
+	}
+
+	// Python: L630 params.get("query") or params.get("content") or ""
 	text := extractTextFromParams(msg.Params)
 	if text == "" {
 		return false
 	}
 
-	// 解析控制指令
+	// Python: L634 解析
 	parsed := command_parser.ParseChannelControlText(text)
 	if parsed.Action == command_parser.ActionNone {
 		return false
 	}
 
-	// 获取渠道类型
-	channelType := mh.resolveControlChannelType(msg)
-	if !controlChannelTypes[string(channelType)] {
-		// 非受控渠道不处理 slash 命令
-		return false
+	// Python: L637-642 解析成功后立即记录（分发之前）
+	logger.Info(logComponent).
+		Str("event_type", "channel_control_parsed").
+		Str("channel_type", string(channelType)).
+		Str("text", text).
+		Str("action", command_parser.ParsedControlActionString(parsed.Action)).
+		Msg("slash command parsed")
+
+	// Python: L645-648 /skills list 走独立路径，且不创建 channel state
+	if parsed.Action == command_parser.ActionSkillsOK {
+		mh.skillsSlashNotice(msg)
+		return true
 	}
 
-	// 获取当前会话的状态（使用复合键）
-	// Python: state = self._get_or_create_channel_state(msg) (L652)
+	// Python: L652 之后才创建 channel state
 	state := mh.GetOrCreateChannelState(msg)
 
 	// 按 action 分发
@@ -92,8 +109,6 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 		mh.modeChangeCancelAndNotice(msg, parsed)
 	case command_parser.ActionSwitchBad:
 		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
-	case command_parser.ActionSkillsOK:
-		mh.skillsSlashNotice(msg)
 	case command_parser.ActionBranchOK:
 		mh.branchSlashNotice(msg, parsed)
 	case command_parser.ActionRewindOK:
@@ -108,11 +123,6 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 		return false
 	}
 
-	logger.Info(logComponent).
-		Str("event_type", "channel_control_handled").
-		Int("action", int(parsed.Action)).
-		Str("channel_id", msg.ChannelID).
-		Msg("slash command processed")
 	return true
 }
 

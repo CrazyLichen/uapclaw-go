@@ -178,7 +178,34 @@ var ControlMessageTexts = buildControlMessageTexts()
 // FirstBatchRegistry 首批注册表
 var FirstBatchRegistry = buildFirstBatchRegistry()
 
+// parsedControlActionStrings ParsedControlAction 到 Python 枚举值的映射
+var parsedControlActionStrings = map[ParsedControlAction]string{
+	ActionNone:          "none",
+	ActionNewSessionOK:  "new_session_ok",
+	ActionNewSessionBad: "new_session_bad",
+	ActionModeOK:        "mode_ok",
+	ActionModeBad:       "mode_bad",
+	ActionSwitchOK:      "switch_ok",
+	ActionSwitchBad:     "switch_bad",
+	ActionSkillsOK:      "skills_ok",
+	ActionBranchOK:      "branch_ok",
+	ActionRewindOK:      "rewind_ok",
+	ActionRewindBad:     "rewind_bad",
+	ActionRewindConfirm: "rewind_confirm",
+	ActionRewindCancel:  "rewind_cancel",
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// ParsedControlActionString 返回 ParsedControlAction 的 Python 枚举值字符串。
+//
+// Python: ParsedControlAction.value（"new_session_ok" 等），用于日志字段对齐。
+func ParsedControlActionString(a ParsedControlAction) string {
+	if s, ok := parsedControlActionStrings[a]; ok {
+		return s
+	}
+	return ""
+}
 
 // GatewaySlashCommandString 返回 GatewaySlashCommand 的字符串表示
 func GatewaySlashCommandString(cmd GatewaySlashCommand) string {

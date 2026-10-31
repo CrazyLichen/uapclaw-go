@@ -125,6 +125,23 @@ func TestHandleChannelControl_ModeBad(t *testing.T) {
 	assert.True(t, handled, "非法 /mode 也应被处理（返回 BAD 通知）")
 }
 
+// TestHandleChannelControl_Skills不创建渠道状态 A7：Python 在 SKILLS_OK 处提前 return，
+// 不调用 _get_or_create_channel_state；Go 必须在建 state 之前短路。
+func TestHandleChannelControl_Skills不创建渠道状态(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{"content":"/skills list"}`), schema.WithProvider("feishu"))
+
+	handled := mh.handleChannelControl(msg)
+	assert.True(t, handled, "/skills list 应被处理")
+
+	mh.statesMu.RLock()
+	count := len(mh.channelStates)
+	mh.statesMu.RUnlock()
+	assert.Equal(t, 0, count, "skills_ok 路径不得创建 channel state")
+}
+
 // TestHandleChannelControl_RewindBad 测试非法 /rewind
 func TestHandleChannelControl_RewindBad(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()

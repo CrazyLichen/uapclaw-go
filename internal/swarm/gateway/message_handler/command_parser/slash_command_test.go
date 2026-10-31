@@ -500,3 +500,31 @@ func containsSubstring(s, sub string) bool {
 	}
 	return false
 }
+
+// TestParsedControlActionString 测试枚举值字符串映射（对齐 Python action.value）
+func TestParsedControlActionString(t *testing.T) {
+	tests := []struct {
+		action ParsedControlAction
+		want   string
+	}{
+		{ActionNone, "none"},
+		{ActionNewSessionOK, "new_session_ok"},
+		{ActionNewSessionBad, "new_session_bad"},
+		{ActionModeOK, "mode_ok"},
+		{ActionModeBad, "mode_bad"},
+		{ActionSwitchOK, "switch_ok"},
+		{ActionSwitchBad, "switch_bad"},
+		{ActionSkillsOK, "skills_ok"},
+		{ActionBranchOK, "branch_ok"},
+		{ActionRewindOK, "rewind_ok"},
+		{ActionRewindBad, "rewind_bad"},
+		{ActionRewindConfirm, "rewind_confirm"},
+		{ActionRewindCancel, "rewind_cancel"},
+		{ParsedControlAction(99), ""},
+	}
+	for _, tc := range tests {
+		if got := ParsedControlActionString(tc.action); got != tc.want {
+			t.Errorf("ParsedControlActionString(%d) = %q, want %q", int(tc.action), got, tc.want)
+		}
+	}
+}
