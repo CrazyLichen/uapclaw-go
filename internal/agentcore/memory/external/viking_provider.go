@@ -38,8 +38,6 @@ type OpenVikingProvider struct {
 	client *vikingClient
 	// sessionID 会话标识
 	sessionID string
-	// initialized 是否已初始化
-	initialized bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -206,9 +204,11 @@ func (p *OpenVikingProvider) IsAvailable() bool {
 }
 
 // IsInitialized 返回 Provider 是否已初始化。
+// 直接以 client 是否存在为准，避免与独立状态位分叉：
+// 健康检查失败时 Initialize 会把 client 置 nil，此时应返回 false。
 // Python: @property is_initialized -> self._client is not None
 func (p *OpenVikingProvider) IsInitialized() bool {
-	return p.initialized
+	return p.client != nil
 }
 
 // GetToolSchemas 返回 Provider 提供的工具 Schema 列表。
@@ -251,16 +251,15 @@ func (p *OpenVikingProvider) Initialize(ctx context.Context, opts ...ProviderOpt
 	healthy := p.client.health(ctx)
 	if !healthy {
 		// 对齐 Python: logger.warning("OpenViking at %s not reachable", self._endpoint)
-		// Python 静默返回 None（不抛异常），client=None，initialized=True
+		// 静默降级：client 置 nil 后 is_initialized 即为 False（与 Python _client is None 一致），
+		// 后续 Prefetch/SyncTurn 通过 client==nil 守卫优雅跳过
 		logger.Warn(logComponent).
 			Str("endpoint", p.endpoint).
 			Msg("OpenViking unreachable, degrading silently")
 		p.client = nil
-		p.initialized = true // 标记已初始化，允许后续 Prefetch/SyncTurn 检查 client==nil 优雅跳过
-		return nil           // 静默降级，对齐 Python
+		return nil
 	}
 
-	p.initialized = true
 	return nil
 }
 
@@ -279,7 +278,7 @@ func (p *OpenVikingProvider) Prefetch(ctx context.Context, query string, _ ...Pr
 	})
 	if err != nil {
 		// 对齐 Python: logger.debug("OpenViking prefetch failed: %s", e)
-		logger.Debug(logComponent).Err(err).Msg("OpenViking prefetch  failed")
+		logger.Debug(logComponent).Err(err).Msg("OpenViking prefetch failed")
 		return "", nil
 	}
 
@@ -340,7 +339,8 @@ func (p *OpenVikingProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 	})
 	if err != nil {
 		// 对齐 Python: logger.debug("OpenViking sync failed: %s", e)
-		logger.Debug(logComponent).Err(err).Msg("OpenViking sync_turn  failed")
+		// role 字段用于区分是哪一条消息失败（Python 单 try/except 无法区分）
+		logger.Debug(logComponent).Err(err).Str("role", "user").Msg("OpenViking sync_turn failed")
 		return nil
 	}
 
@@ -350,7 +350,7 @@ func (p *OpenVikingProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 		"content": truncStr(assistantMsg, 4000),
 	})
 	if err != nil {
-		logger.Debug(logComponent).Err(err).Msg("OpenViking sync_turn  failed")
+		logger.Debug(logComponent).Err(err).Str("role", "assistant").Msg("OpenViking sync_turn failed")
 		return nil
 	}
 
@@ -388,7 +388,7 @@ func (p *OpenVikingProvider) OnSessionEnd(ctx context.Context, _ []map[string]an
 	_, err := p.client.post(ctx, fmt.Sprintf("/api/v1/sessions/%s/commit", p.sessionID), map[string]any{})
 	if err != nil {
 		// 对齐 Python: logger.debug("OpenViking session commit failed: %s", e)
-		logger.Debug(logComponent).Err(err).Msg("OpenViking session commit  failed")
+		logger.Debug(logComponent).Err(err).Msg("OpenViking session commit failed")
 	}
 	return nil
 }
@@ -412,7 +412,6 @@ func (p *OpenVikingProvider) Shutdown(_ context.Context) error {
 		}()
 		p.client = nil
 	}
-	p.initialized = false
 	return nil
 }
 
@@ -460,8 +459,14 @@ func (p *OpenVikingProvider) handleVikingSearch(ctx context.Context, args map[st
 		payload["target_uri"] = scope
 	}
 
-	// 对齐 Python: if args.get("limit"): payload["top_k"] = args["limit"]
-	if limit := utils.IntVal(args["limit"]); limit > 0 {
+	// 结果条数：Schema 声明的是 top_k（默认 10），代码必须优先认它；
+	// limit 是历史参数名，保留作回退（Python 原实现只读 limit，导致 Schema 与实现不一致）。
+	// 两者都缺时不写入 payload，交由服务端按自身默认值处理，与 Python 的线上请求逐字节一致。
+	if v, ok := args["top_k"]; ok {
+		if topK := utils.IntVal(v); topK > 0 {
+			payload["top_k"] = topK
+		}
+	} else if limit := utils.IntVal(args["limit"]); limit > 0 {
 		payload["top_k"] = limit
 	}
 
