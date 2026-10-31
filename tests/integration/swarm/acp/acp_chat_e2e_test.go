@@ -71,6 +71,15 @@ func (s *AcpChatToolSuite) TestAcpChatTool_Echo文本聚合() {
 	s.Equal("echo:hello", s.invoke(cfg, profile, "hello", false))
 }
 
+// TestAcpChatTool_JSONRPC错误转文本 JSON-RPC error 转 [ERROR] 文本且不抛错（Python error 模式）
+func (s *AcpChatToolSuite) TestAcpChatTool_JSONRPC错误转文本() {
+	cfg, profile := s.newConfig("error", nil)
+	out := s.invoke(cfg, profile, "trigger", false)
+	s.Contains(out, "[ERROR] acp_chat failed")
+	s.Contains(out, "-32603")
+	s.Contains(out, "agent failed")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newConfig 构造唯一 profile 的 cfg（profile 名含纳秒时间戳，规避全局缓存串台）
