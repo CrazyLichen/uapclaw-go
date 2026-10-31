@@ -71,7 +71,7 @@
 | 5 | M-01 共享实例 | `Acquire` 增加重入守卫：实例已持锁时返回明确 error；结构体注释与 doc 标注「一实例一持有者，不可跨 goroutine 共享」 |
 | 6 | M-02 吞 error | 保持返回 nil（Python `try/except` 静默），补注释说明「返回 nil 不代表锁已释放」 |
 
-**方案选择依据**：方案 A（直接扩展接口）的代价比初判更大——除 4 个后端外还有 8 个测试 fake 必须实现。为把成本压到最低，在 `kv` 包提供 `CompareAndDeleteFallback` 内嵌助手（默认 Get+Delete 实现），测试 fake 各加一行内嵌即可。
+**方案选择依据**：方案 A（直接扩展接口）的代价比初判更大——除 4 个后端外还有 8 个测试 fake 必须实现。Go 无法在接口方法里访问实现方字段，故不引入「内嵌默认实现」助手（那只能是返回错误的无效抽象），8 个 fake 各写一个 3 行委托方法即可。
 
 **后端实现要点**：
 
@@ -148,7 +148,7 @@ TeamAgent.Configure                             → (ctx, error) 或 (*TeamAgent
 
 | 变更 | 影响面 |
 |---|---|
-| `kv.BaseKVStore` 新增 `CompareAndDelete` | 4 个后端实现 + 8 个测试 fake（内嵌 `CompareAndDeleteFallback`）+ `kv/base_test.go` 契约测试 |
+| `kv.BaseKVStore` 新增 `CompareAndDelete` | 4 个后端实现 + 8 个测试 fake 各补委托方法 + `kv/base_test.go` 契约测试 |
 | `prompts.LoadTemplate` / `LoadSharedTemplate` 返回 error | 12 个生产调用点 + 5 个 builder 签名 |
 | `NewTeamPolicyRail` / `NewTeamPlanModeRail` 返回 error | `agent_configurator.go` 3 处 |
 | `SetupAgent` / `Configure` 增加 error 返回 | 5 个生产调用点 + 约 29 处测试 |
@@ -210,7 +210,7 @@ go run ./cmd/integration-audit -verify        # 集成测试合规性（如有�
 
 | 风险 | 缓解 |
 |---|---|
-| `BaseKVStore` 接口变更破坏外部实现者 | 仓库内实现已全覆盖；`CompareAndDeleteFallback` 提供默认实现，外部实现可内嵌 |
+| `BaseKVStore` 接口变更破坏外部实现者 | 仓库内 4 个后端 + 8 个 fake 全覆盖；外部实现需自行补 `CompareAndDelete`（语义见接口注释） |
 | File/DB 的 JSON 信封比较写错导致锁永不释放 | 每个后端独立表驱动用例，且 `Release` 在 `!released` 时打 Warn，线上可观测 |
 | `Configure` 签名变更波及 29 处测试 | 纯机械改动，逐包编译验证；先改签名再批量修调用点 |
 | `ensureInitialized` 传播 rail 错误可能让存量 rail 的 Init 失败暴露为新错误 | 现有 rail 的 `Init` 均返回 nil；CI 全量回归可捕获意外 |
