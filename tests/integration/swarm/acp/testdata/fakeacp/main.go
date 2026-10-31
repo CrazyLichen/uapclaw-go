@@ -100,6 +100,16 @@ func promptText(msg map[string]any) string {
 
 // handlePrompt 按 mode 处理 session/prompt。
 func handlePrompt(out *bufio.Writer, in *bufio.Scanner, mode string, id any, text string) {
+	if mode == "fsread" {
+		content, errText := fsReadThenWrite(out, in, mode)
+		writeUpdate(out, mode, content+errText)
+		writeMsg(out, map[string]any{
+			"jsonrpc": "2.0", "id": id,
+			"result": map[string]any{"stopReason": "end_turn"},
+		})
+		return
+	}
+
 	if mode == "permission" {
 		// Go 增强：把收到的 outcome/optionId 回显进文本，才能区分批准/取消
 		outcome, optionID := requestPermission(out, in, mode)
@@ -173,4 +183,25 @@ func waitResponse(in *bufio.Scanner, wantID int) map[string]any {
 		}
 	}
 	return nil
+}
+
+// fsReadThenWrite 发 fs/read_text_file（line/limit 切片）+ fs/write_text_file，返回读到的内容。
+func fsReadThenWrite(out *bufio.Writer, in *bufio.Scanner, mode string) (string, string) {
+	writeMsg(out, map[string]any{
+		"jsonrpc": "2.0", "id": 901, "method": "fs/read_text_file",
+		"params": map[string]any{"path": "in_root.txt", "line": 1, "limit": 2},
+	})
+	reply := waitResponse(in, 901)
+	if reply == nil || reply["error"] != nil {
+		return "", "|read-failed"
+	}
+	result, _ := reply["result"].(map[string]any)
+	content, _ := result["content"].(string)
+
+	writeMsg(out, map[string]any{
+		"jsonrpc": "2.0", "id": 902, "method": "fs/write_text_file",
+		"params": map[string]any{"path": "written.txt", "content": "hello-acp"},
+	})
+	_ = waitResponse(in, 902)
+	return content, ""
 }

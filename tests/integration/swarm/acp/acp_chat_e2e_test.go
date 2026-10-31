@@ -94,6 +94,33 @@ func (s *AcpChatToolSuite) TestAcpChatTool_权限取消() {
 	s.Contains(s.invoke(cfg, profile, "need perm", false), "after-perm:need perm:cancelled:")
 }
 
+// TestAcpChatTool_fs读写穿透 对端 fs/read（line/limit 切片）与 fs/write 均生效（Python fs_read 模式）
+func (s *AcpChatToolSuite) TestAcpChatTool_fs读写穿透() {
+	root := s.T().TempDir()
+	s.Require().NoError(os.WriteFile(filepath.Join(root, "in_root.txt"),
+		[]byte("line1\nline2\nline3\n"), 0o644))
+	// 对齐 Python monkeypatch.chdir(tmp_path)：对端发的是相对路径，
+	// 客户端按「进程 cwd」解析后校验是否落在会话 cwd（cwd=root）内。
+	s.T().Chdir(root)
+
+	profile := fmt.Sprintf("it_fsread_%d", time.Now().UnixNano())
+	cfg := map[string]any{"acp_agents": map[string]any{
+		profile: map[string]any{
+			"command": fakeAcpBin,
+			"args":    []any{"fsread"},
+			"cwd":     root,
+		},
+	}}
+
+	out := s.invoke(cfg, profile, "read file", false)
+	// line=1 limit=2 → 只返回前两行；客户端聚合后 TrimSpace 去尾换行
+	s.Equal("line1\nline2", out)
+
+	written, err := os.ReadFile(filepath.Join(root, "written.txt"))
+	s.Require().NoError(err, "对端 fs/write_text_file 应落盘")
+	s.Equal("hello-acp", string(written))
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newConfig 构造唯一 profile 的 cfg（profile 名含纳秒时间戳，规避全局缓存串台）
