@@ -3,6 +3,8 @@
 package dreaming
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -168,6 +170,64 @@ func (s *SweeperIncrementalSuite) TestSweep_未变更会话跳过() {
 	s.Equal(3, s.MockLLM.InvokeCallCount(), "无变更时不应再调用模型")
 	s.Equal(before, env.ReadDreamingMD(outDir), "DREAMING.md 应保持字节级不变")
 	s.NotContains(env.ReadDreamingMD(outDir), "第二次扫描不应该发生")
+}
+
+// TestSweep_Code模式写consolidated 测试 code 模式写出 consolidated_*.md。
+// 对齐 Python: TestDreamingE2ECode.test_sweep_writes_consolidated_files
+func (s *SweeperIncrementalSuite) TestSweep_Code模式写consolidated() {
+	env := s.newEnv()
+	outDir := env.OutputDir("coding_memory")
+	for _, sid := range []string{"sess-010", "sess-011", "sess-012"} {
+		env.PlantSession(s.T(), sid, "code.normal", 5)
+	}
+	items := []map[string]string{
+		{"title": "Python 性能优化", "content": "使用列表推导式替代 for 循环"},
+		{"title": "Git 工作流最佳实践", "content": "推荐使用 feature branch + rebase"},
+	}
+	env.QueueJSON(s.T(), items)
+	env.QueueJSON(s.T(), items)
+	env.QueueJSON(s.T(), items)
+
+	s.newSweeper(env, outDir, "code").RunSweep(s.Ctx)
+	s.Equal(3, s.MockLLM.InvokeCallCount())
+
+	files, err := filepath.Glob(filepath.Join(outDir, "consolidated_*.md"))
+	s.Require().NoError(err)
+	s.Len(files, 2, "内容相同的条目按 hash 归并，应只有 2 个文件")
+	for _, f := range files {
+		raw, readErr := os.ReadFile(f)
+		s.Require().NoError(readErr)
+		text := string(raw)
+		s.Contains(text, "---")
+		s.Contains(text, "name:")
+		s.Contains(text, "source_session:")
+		s.Contains(text, "created_at:")
+	}
+}
+
+// TestSweep_Code内容哈希去重 测试同内容条目只落一个文件。
+// 对齐 Python: TestDreamingE2ECode.test_content_hash_dedup
+func (s *SweeperIncrementalSuite) TestSweep_Code内容哈希去重() {
+	env := s.newEnv()
+	outDir := env.OutputDir("coding_memory")
+	for _, sid := range []string{"sess-020", "sess-021", "sess-022"} {
+		env.PlantSession(s.T(), sid, "code.normal", 5)
+	}
+	shared := "完全相同的知识内容用于测试去重"
+	items := []map[string]string{
+		{"title": "知识点A", "content": shared},
+		{"title": "知识点B", "content": shared},
+	}
+	env.QueueJSON(s.T(), items)
+	env.QueueJSON(s.T(), items)
+	env.QueueJSON(s.T(), items)
+
+	s.newSweeper(env, outDir, "code").RunSweep(s.Ctx)
+	s.Equal(3, s.MockLLM.InvokeCallCount())
+
+	files, err := filepath.Glob(filepath.Join(outDir, "consolidated_*.md"))
+	s.Require().NoError(err)
+	s.Len(files, 1, "同内容只应产生 1 个文件")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
