@@ -3,26 +3,22 @@
 package adapter_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/suite"
-	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -42,12 +38,8 @@ import (
 // （create_coding_memory_rail + _build_agent_rails + _build_configured_subagents）
 type CodeAdapterCodingMemorySuite struct {
 	isuite.BaseIntegrationSuite
-	// providerName MockLLM 在 ClientRegistry 的注册名（config.yaml 引用）
-	providerName string
-	// envBackup 环境变量备份（TearDownTest 恢复）
-	envBackup [][3]string
-	// dataDir 每测试隔离的 UAPCLAW_DATA_DIR
-	dataDir string
+	// env 每测试隔离的集成环境（数据目录 / MockLLM provider / env 备份）
+	env *testhelpers.AdapterTestEnv
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -60,53 +52,10 @@ func TestCodeAdapterCodingMemorySuite(t *testing.T) {
 
 // SetupTest 每个测试方法前构建隔离环境。
 //
-// 隔离三件套（先例 tui_cli_route_test.go::setupDataDir + image_gen CI 路径坑）：
-//  1. UAPCLAW_DATA_DIR → t.TempDir()，先 pathutil.ResetCache() 再做任何路径调用
-//  2. 创建 config/ 目录（模拟已初始化，防 getResolvedPaths 回退 ResourcesDir）
-//  3. 创建 agent/workspace/（os.WriteFile 不建父目录）
-//
-// MockLLM 注册必须先于写 config.yaml（YAML 中 client_provider 引用此注册名）。
+// 隔离三件套与收尾（ResourceMgr.Release / env 恢复 / pathutil.ResetCache）
+// 统一由 adapterTestEnv 负责，见 itest_env_helpers_test.go。
 func (s *CodeAdapterCodingMemorySuite) SetupTest() {
-	// 注册 MockLLM（provider 名带时间戳防并发冲突，先例 runner_suite.go）
-	s.providerName = fmt.Sprintf("mock_coding_mem_itest_%d", time.Now().UnixNano())
-	model_clients.GetClientRegistry().Register(s.providerName, "llm", s.MockLLM.Factory())
-
-	s.dataDir = s.T().TempDir()
-	s.saveAndSetenv("UAPCLAW_DATA_DIR", s.dataDir)
-	pathutil.ResetCache()
-	// 持久化检查点器单例重置：本测试进程内连续 CreateInstance 且各用
-	// TempDir 隔离，首次绑定的 SQLite 路径随目录清理失效（PreRun 前置读写
-	// kv_store 报 disk I/O error）。重置后本测试的 set_checkpoint 按新
-	// dataDir 重建（对齐 pathutil.ResetCache 的同类测试基础设施语义）
-	adapter.ResetPersistentCheckpointer()
-
-	configDir := filepath.Join(s.dataDir, "config")
-	s.Require().NoError(os.MkdirAll(configDir, 0o755))
-	s.Require().NoError(os.MkdirAll(filepath.Join(s.dataDir, "agent", "workspace"), 0o755))
-}
-
-// TearDownTest 恢复环境变量与缓存，释放全局 ResourceMgr。
-//
-// ResourceMgr 释放（关键，对齐 Python Runner.stop() 语义）：
-// coding_memory 三工具按固定 ID（"coding_memory_write" 等）注册到进程级
-// ResourceMgr（Runner 惰性单例），rail 注册逻辑含 get_tool 查重（对齐
-// Python coding_memory_rail.py L188-190）——查重命中时跳过 add_tool，
-// 导致后续测试拿到前一个测试的工具实例（绑定已删除的 TempDir），
-// 写记忆落盘到不存在的目录。Python 测试靠 fixture 的
-// Runner.stop() → resource_mgr.release() 实现每测试隔离（agent-core
-// test_coding_memory_rail_e2e.py 先例）；Go 侧在 TearDownTest 调用
-// 等价的 ResourceMgr.Release() 重建 registry/tagMgr/idToCard，同时
-// 覆盖本测试链注册的 SysOperation（local 卡随机 UUID 无复用，但同样
-// 会泄漏条目）。
-func (s *CodeAdapterCodingMemorySuite) TearDownTest() {
-	if s.providerName != "" {
-		_ = model_clients.GetClientRegistry().Unregister(s.providerName, "llm")
-	}
-	if rm := runner.GetResourceMgr(); rm != nil {
-		_ = rm.Release(context.Background())
-	}
-	s.restoreEnv()
-	pathutil.ResetCache()
+	s.env = testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_coding_mem_itest")
 }
 
 // writeConfigYaml 写入含顶层 embed 段的 config/config.yaml。
@@ -144,10 +93,10 @@ react:
   subagents:
     code_agent:
       enabled: %t
-`, s.providerName, s.providerName, enableCodeAgent)
+`, s.env.Provider, s.env.Provider, enableCodeAgent)
 
 	s.Require().NoError(os.WriteFile(
-		filepath.Join(s.dataDir, "config", "config.yaml"),
+		filepath.Join(s.env.DataDir, "config", "config.yaml"),
 		[]byte(yamlContent), 0o644))
 }
 
@@ -169,30 +118,11 @@ modes:
   code:
     tools: []
     rails: []
-`, s.providerName, s.providerName)
+`, s.env.Provider, s.env.Provider)
 
 	s.Require().NoError(os.WriteFile(
-		filepath.Join(s.dataDir, "config", "config.yaml"),
+		filepath.Join(s.env.DataDir, "config", "config.yaml"),
 		[]byte(yamlContent), 0o644))
-}
-
-// saveAndSetenv 记录原值并设置环境变量（TearDown 恢复）。
-func (s *CodeAdapterCodingMemorySuite) saveAndSetenv(key, val string) {
-	orig, had := os.LookupEnv(key)
-	s.envBackup = append(s.envBackup, [3]string{key, orig, fmt.Sprintf("%t", had)})
-	_ = os.Setenv(key, val)
-}
-
-// restoreEnv 恢复环境变量。
-func (s *CodeAdapterCodingMemorySuite) restoreEnv() {
-	for _, e := range s.envBackup {
-		if e[2] == "false" {
-			_ = os.Unsetenv(e[0])
-		} else {
-			_ = os.Setenv(e[0], e[1])
-		}
-	}
-	s.envBackup = nil
 }
 
 // newCodeAdapter 构造 CodeAdapter 并执行 CreateInstance 装配链，
@@ -200,7 +130,7 @@ func (s *CodeAdapterCodingMemorySuite) restoreEnv() {
 func (s *CodeAdapterCodingMemorySuite) newCodeAdapter() *adapter.CodeAdapter {
 	c := adapter.NewCodeAdapter()
 	s.Require().NoError(c.CreateInstance(s.Ctx, map[string]any{
-		"project_dir": filepath.Join(s.dataDir, "myproj"),
+		"project_dir": filepath.Join(s.env.DataDir, "myproj"),
 	}, "agent.plan", ""))
 	s.T().Cleanup(func() { _ = c.Cleanup() })
 	return c
@@ -240,13 +170,13 @@ func (s *CodeAdapterCodingMemorySuite) TestBuildCodingMemoryRail_Embedding降级
 // （interface_code.py:139-141），agent_workspace_dir = {DATA_DIR}/agent/workspace
 func (s *CodeAdapterCodingMemorySuite) TestCreateInstance_目录按项目名() {
 	s.writeConfigYaml(false)
-	s.Require().NoError(os.MkdirAll(filepath.Join(s.dataDir, "myproj"), 0o755))
+	s.Require().NoError(os.MkdirAll(filepath.Join(s.env.DataDir, "myproj"), 0o755))
 
 	// CreateInstance 装配链内部执行 create_coding_memory_rail 的 makedirs
 	_ = s.newCodeAdapter()
 
 	// agentWorkspaceDir 修复后路径：{DATA_DIR}/agent/workspace/coding_memory/{project_name}
-	want := filepath.Join(s.dataDir, "agent", "workspace", "coding_memory", "myproj")
+	want := filepath.Join(s.env.DataDir, "agent", "workspace", "coding_memory", "myproj")
 	info, err := os.Stat(want)
 	s.Require().NoError(err, "目录应创建: %s", want)
 	s.True(info.IsDir())
@@ -356,7 +286,7 @@ func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_写记忆全流程() {
 	// 断言 2：记忆文件落盘（对齐 Python 双路径语义——文件走 workspace node：
 	// validate_coding_memory_path → get_node_path("coding_memory") =
 	// {workspaceDir}/coding_memory/{project}，workspaceDir=projectDir）
-	memFile := filepath.Join(s.dataDir, "myproj", "coding_memory", "myproj", "user_pref.md")
+	memFile := filepath.Join(s.env.DataDir, "myproj", "coding_memory", "myproj", "user_pref.md")
 	content, err := os.ReadFile(memFile)
 	s.Require().NoError(err, "记忆文件应落盘: %s", memFile)
 	s.Contains(string(content), "always run focused tests first", "文件内容应包含工具写入的 body")
@@ -366,7 +296,7 @@ func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_写记忆全流程() {
 	// 恢复的绝对路径 = {agent_workspace_dir}/coding_memory/{project}，
 	// 对齐 Python rail 注释 "Restore the absolute path ... so tools write
 	// to the correct directory"）
-	indexPath := filepath.Join(s.dataDir, "agent", "workspace", "coding_memory", "myproj", "MEMORY.md")
+	indexPath := filepath.Join(s.env.DataDir, "agent", "workspace", "coding_memory", "myproj", "MEMORY.md")
 	indexContent, err := os.ReadFile(indexPath)
 	s.Require().NoError(err, "MEMORY.md 索引应更新: %s", indexPath)
 	s.Contains(string(indexContent), "user_pref.md", "索引应含新条目文件名")

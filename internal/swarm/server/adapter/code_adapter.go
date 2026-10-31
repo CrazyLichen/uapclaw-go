@@ -589,6 +589,36 @@ func (c *CodeAdapter) resolveOutputLanguage() string {
 	return c.deep.resolveRuntimeLanguage()
 }
 
+// updatePromptForMode 覆写 DeepAdapter，按 code 模式的运行时语言刷新提示词语言。
+// Python: JiuwenClawCodeAdapter 经 _update_prompt_for_mode(mode, resolved_language) 传入
+// self._resolve_runtime_language()（code 族固定 en 或 runtime_language_override）。
+//
+// Go 无虚方法派发：DeepAdapter.updatePromptForMode 内部调 d.resolveRuntimeLanguage()，
+// 取到的是 Deep 的偏好语言（默认 cn），会把 code 模式提示词整体降级为中文。
+// 因此必须在 CodeAdapter 侧覆写并由 CodeAdapter 自己调用。
+func (c *CodeAdapter) updatePromptForMode(mode string) {
+	// Python: resolved_language = self._resolve_runtime_language()
+	resolvedLanguage := c.resolveRuntimeLanguage()
+
+	// Python: if self._instance.system_prompt_builder is not None:
+	//             builder.language = resolved_language
+	if c.deep.instance != nil {
+		if spb := c.deep.instance.SystemPromptBuilder(); spb != nil {
+			spb.SetLanguage(resolvedLanguage)
+		}
+		// Python: if self._instance.deep_config is not None:
+		//             deep_config.language = resolved_language
+		if deepCfg := c.deep.instance.DeepConfig(); deepCfg != nil {
+			deepCfg.Language = resolvedLanguage
+		}
+	}
+
+	logger.Info(logComponent).
+		Str("mode", mode).
+		Str("language", resolvedLanguage).
+		Msg("CodeAdapter updatePromptForMode completed")
+}
+
 // updateRuntimeConfig 覆写 DeepAdapter，Code 模式 runtime config。
 // Python: JiuwenClawCodeAdapter._update_runtime_config() — 完全覆写（不调 super）
 //
@@ -644,7 +674,9 @@ func (c *CodeAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 
 	// 步骤 6: updatePromptForMode
 	// Python: self._update_prompt_for_mode(runtime_config.mode, resolved_language)
-	c.deep.updatePromptForMode(config.Mode)
+	// 注意：必须走 CodeAdapter 自己的方法（Go 无虚方法派发，DeepAdapter 内部取的是
+	// Deep 的偏好语言，会把 code 模式提示词降级为中文）
+	c.updatePromptForMode(config.Mode)
 
 	// 步骤 7: rail 模式切换
 	// Python: await self._update_rails_for_mode(runtime_config.mode)
@@ -708,13 +740,22 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 	subagentsCfg, _ := config["subagents"].(map[string]any)
 
+	// 迭代上限两段回退（对齐 Python parse_int 语义）：
+	// Python: max_iterations=parse_int(cfg.get("max_iterations"), react_cfg.get("max_iterations", 15))
+	// 注意 plan_agent 同样以 react.max_iterations 为基准——plan builder 自身的 25 默认值永不生效。
+	defaultMaxIterations := parseIntAny(config["max_iterations"], 15)
+	exploreAgentCfg, _ := subagentsCfg["explore_agent"].(map[string]any)
+	planAgentCfg, _ := subagentsCfg["plan_agent"].(map[string]any)
+	exploreMaxIterations := parseIntAny(exploreAgentCfg["max_iterations"], defaultMaxIterations)
+	planMaxIterations := parseIntAny(planAgentCfg["max_iterations"], defaultMaxIterations)
+
 	// ── 固定挂载：explore_agent ──
 	// Python: explore_agent 始终启用
 	exploreParams := &hschema.SubagentCreateParams{
 		Model:         c.deep.model,
 		Language:      resolvedLanguage,
 		Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
-		MaxIterations: 15,
+		MaxIterations: exploreMaxIterations,
 	}
 	exploreCfg := subagents.BuildExploreAgentConfig(c.deep.model, exploreParams)
 	if exploreCfg != nil {
@@ -734,7 +775,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 		Model:         c.deep.model,
 		Language:      resolvedLanguage,
 		Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
-		MaxIterations: 25,
+		MaxIterations: planMaxIterations,
 	}
 	planCfg := subagents.BuildPlanAgentConfig(c.deep.model, planParams)
 	if planCfg != nil {
@@ -1207,28 +1248,11 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 		projectMemoryDir = os.Getenv("UAPSWARM_PROJECT_MEMORY_DIR")
 	}
 
-	// Python: raw_additional_dirs = self._instance_overrides.get("project_memory_additional_directories", ...)
-	// 从环境变量 UAPCLAWSWARM_ADDITIONAL_DIRECTORIES 读取额外目录
-	var additionalDirs []string
-	if rawOverrides, ok := c.deep.instanceOverrides["project_memory_additional_directories"]; ok {
-		// 优先从 instance_overrides 读取
-		if items, ok := rawOverrides.([]any); ok {
-			for _, item := range items {
-				if s, ok := item.(string); ok && s != "" {
-					additionalDirs = append(additionalDirs, s)
-				}
-			}
-		}
-	}
-	rawEnv := os.Getenv("UAPCLAWSWARM_ADDITIONAL_DIRECTORIES")
-	if rawEnv != "" {
-		for _, item := range filepath.SplitList(rawEnv) {
-			item = strings.TrimSpace(item)
-			if item != "" {
-				additionalDirs = append(additionalDirs, item)
-			}
-		}
-	}
+	// Python 三级回退：
+	//   raw = instance_overrides.get("project_memory_additional_directories",
+	//                               config_cache.get("project_memory", {}).get("additional_directories"))
+	//   if raw is None: raw = os.getenv("JIUWENSWARM_ADDITIONAL_DIRECTORIES", "")
+	additionalDirs := c.projectMemoryAdditionalDirectories()
 
 	rail := commonrails.NewProjectMemoryRail(ws, language, 0, additionalDirs)
 
@@ -1246,6 +1270,57 @@ func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
 		Msg("ProjectMemoryRail created")
 
 	return rail
+}
+
+// flattenStringDirs 展平额外目录配置值（对齐 Python _build_project_memory_rail 的解析分支）。
+//
+//   - string：按 os.PathListSeparator 切分后逐项 trim（Python: str.split(os.pathsep)）
+//   - []any / []string：逐项转字符串后 trim（Python: list/tuple/set 分支）
+//   - nil 与其他类型：返回空切片（非 nil，使「已配置但为空」与「未配置」可区分）
+func flattenStringDirs(value any) []string {
+	result := make([]string, 0)
+	appendTrimmed := func(s string) {
+		if s = strings.TrimSpace(s); s != "" {
+			result = append(result, s)
+		}
+	}
+	switch v := value.(type) {
+	case string:
+		for _, item := range filepath.SplitList(v) {
+			appendTrimmed(item)
+		}
+	case []string:
+		for _, item := range v {
+			appendTrimmed(item)
+		}
+	case []any:
+		for _, item := range v {
+			appendTrimmed(fmt.Sprintf("%v", item))
+		}
+	}
+	return result
+}
+
+// projectMemoryAdditionalDirectories 解析项目记忆附加目录（Python 三级回退）。
+//
+// Python: raw = self._instance_overrides.get(
+//
+//	"project_memory_additional_directories",
+//	self._config_cache.get("project_memory", {}).get("additional_directories"))
+//
+//	if raw is None: raw = os.getenv("JIUWENSWARM_ADDITIONAL_DIRECTORIES", "")
+//
+// 关键语义：env 仅在前两级都缺（raw is None）时才参与，不做无条件追加。
+func (c *CodeAdapter) projectMemoryAdditionalDirectories() []string {
+	if raw, ok := c.deep.instanceOverrides["project_memory_additional_directories"]; ok {
+		return flattenStringDirs(raw)
+	}
+	if pmCfg, ok := c.deep.configCache["project_memory"].(map[string]any); ok {
+		if raw, ok := pmCfg["additional_directories"]; ok {
+			return flattenStringDirs(raw)
+		}
+	}
+	return flattenStringDirs(os.Getenv("UAPCLAWSWARM_ADDITIONAL_DIRECTORIES"))
 }
 
 // buildCodingMemoryRail 构建编码记忆护栏。

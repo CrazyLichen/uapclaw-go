@@ -679,3 +679,73 @@ func TestParseFrontmatterBlock_空行跳过(t *testing.T) {
 		t.Fatalf("expected 2 items, got %d", len(list))
 	}
 }
+
+// ──────────────────────────── 迁移自 Python 系统测试的语义用例 ────────────────────────────
+
+// TestDiscoverAndLoadMemoryFiles_子目录向上走查 验证 workspace 指向子目录时仍能加载项目根的记忆文件。
+// 对齐 Python: tests/system_tests/test_project_memory.py::test_discovery_walks_up_from_subdir
+// （files.py walk_dirs 从 cwd 逐级上溯到 project_root，reverse 后 root 优先加载）
+func TestDiscoverAndLoadMemoryFiles_子目录向上走查(t *testing.T) {
+	tmpDir := t.TempDir()
+	os.Mkdir(filepath.Join(tmpDir, ".git"), 0o755)
+	os.WriteFile(filepath.Join(tmpDir, "UAPCLAWSWARM.md"), []byte("ROOT-RULE"), 0o644)
+
+	sub := filepath.Join(tmpDir, "src", "feature")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 对齐 Python: clear_project_memory_cache() 无参清空全部；Go 传空串等价
+	ClearProjectMemoryCache("")
+
+	files, _ := DiscoverAndLoadMemoryFiles(context.Background(), sub, sub, nil)
+	found := false
+	for _, f := range files {
+		if strings.Contains(f.Content, "ROOT-RULE") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected root UAPCLAWSWARM.md to be loaded from subdir workspace, got %+v", files)
+	}
+}
+
+// TestMergeMemoryContent_四类优先级排序 验证 merge 按输入顺序产出（priority 由发现阶段排序）。
+// 对齐 Python: test_merge_orders_by_priority（PRIORITY managed=10/user=20/project=30/local=40）
+//
+// 语义说明（与 Python 完全一致）：merge_memory_content 自身**不排序**，排序发生在
+// discover_and_load_memory_files 末尾的 `files.sort(key=lambda f: f.priority)`；
+// 因此本用例按优先级升序传参，断言输出保持该顺序。
+func TestMergeMemoryContent_四类优先级排序(t *testing.T) {
+	files := []LoadedMemoryFile{
+		{Path: "/managed.md", Kind: "managed", Content: "MANAGED", Priority: 10},
+		{Path: "/user.md", Kind: "user", Content: "USER", Priority: 20},
+		{Path: "/project.md", Kind: "project", Content: "PROJECT", Priority: 30},
+		{Path: "/local.md", Kind: "local", Content: "LOCAL", Priority: 40},
+	}
+	merged := MergeMemoryContent(files, DefaultMaxChars)
+
+	idx := func(s string) int { return strings.Index(merged, s) }
+	if idx("MANAGED") < 0 || idx("USER") < 0 || idx("PROJECT") < 0 || idx("LOCAL") < 0 {
+		t.Fatalf("merged should contain all four kinds, got: %s", merged)
+	}
+	ordered := idx("MANAGED") < idx("USER") &&
+		idx("USER") < idx("PROJECT") &&
+		idx("PROJECT") < idx("LOCAL")
+	if !ordered {
+		t.Fatalf("merged order should be managed<user<project<local, got: %s", merged)
+	}
+}
+
+// TestMergeMemoryContent_不同路径同内容不合并 验证 merge 按文件逐个追加、不按内容去重。
+// 对齐 Python: test_merge_keeps_different_paths_separate
+func TestMergeMemoryContent_不同路径同内容不合并(t *testing.T) {
+	files := []LoadedMemoryFile{
+		{Path: "/a/UAPCLAWSWARM.md", Kind: "project", Content: "SAME-CONTENT", Priority: 30},
+		{Path: "/b/UAPCLAWSWARM.md", Kind: "project", Content: "SAME-CONTENT", Priority: 30},
+	}
+	merged := MergeMemoryContent(files, DefaultMaxChars)
+	if !strings.Contains(merged, "/a/UAPCLAWSWARM.md") || !strings.Contains(merged, "/b/UAPCLAWSWARM.md") {
+		t.Fatalf("both file headers should appear, got: %s", merged)
+	}
+}
