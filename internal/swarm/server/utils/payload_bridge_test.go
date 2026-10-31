@@ -182,3 +182,80 @@ func TestParseStreamChunk_interaction_结构体payload(t *testing.T) {
 		t.Fatalf("converter 应收到 1 个已桥接元素，实际 %v", gotList)
 	}
 }
+
+// ──────────────────────────── 信封形态（controller_output 内嵌 interaction）────────────────────────────
+
+// TestFindInteractionPayloads_结构体信封 对齐 Python 信封形态：
+// workflow_task_executor._handle_interruption 把 interaction 塞进
+// WorkflowOutput.result → ControllerOutputPayload.data，且 Go 侧是结构体。
+func TestFindInteractionPayloads_结构体信封(t *testing.T) {
+	// 模拟 JsonDataFrame.data → {"result": <OutputSchema 结构体>}
+	envelope := map[string]any{
+		"type": "task_interaction",
+		"data": []any{
+			map[string]any{"data": map[string]any{
+				"result": &stream.OutputSchema{
+					Type:    "__interaction__",
+					Payload: interaction.InteractionOutput{ID: "req-env", Value: map[string]any{"message": "确认"}},
+				},
+			}},
+		},
+	}
+	found := FindInteractionPayloads(envelope)
+	if len(found) != 1 {
+		t.Fatalf("结构体信封应命中 1 个 interaction，实际 %d：%v", len(found), found)
+	}
+	m := PayloadToMap(found[0])
+	if m["id"] != "req-env" {
+		t.Errorf("应取到 payload 并桥接出 id，实际 %v", m)
+	}
+}
+
+// TestFindInteractionPayloads_值结构体信封 OutputSchema 以值形态嵌套时同样命中
+func TestFindInteractionPayloads_值结构体信封(t *testing.T) {
+	envelope := map[string]any{
+		"data": []map[string]any{
+			{"result": stream.OutputSchema{
+				Type:    "__interaction__",
+				Payload: map[string]any{"id": "req-val"},
+			}},
+		},
+	}
+	found := FindInteractionPayloads(envelope)
+	if len(found) != 1 {
+		t.Fatalf("值结构体信封应命中，实际 %v", found)
+	}
+	if m := PayloadToMap(found[0]); m["id"] != "req-val" {
+		t.Errorf("expected id=req-val，实际 %v", m)
+	}
+}
+
+// TestParseStreamChunk_controllerOutput_结构体信封 信封形态在 ParseStreamChunk 端到端可用
+func TestParseStreamChunk_controllerOutput_结构体信封(t *testing.T) {
+	var gotList []map[string]any
+	converter := func(interactions []map[string]any) map[string]any {
+		gotList = interactions
+		return map[string]any{"event_type": "chat.ask_user_question"}
+	}
+	output := &stream.OutputSchema{
+		Type: "controller_output",
+		Payload: map[string]any{
+			"type": "task_interaction",
+			"data": []any{
+				map[string]any{"data": map[string]any{
+					"result": &stream.OutputSchema{
+						Type:    "__interaction__",
+						Payload: interaction.InteractionOutput{ID: "req-e2e"},
+					},
+				}},
+			},
+		},
+	}
+	result := ParseStreamChunk(output, nil, nil, converter, false)
+	if result["event_type"] != "chat.ask_user_question" {
+		t.Fatalf("信封形态应解析为 chat.ask_user_question，实际 %v", result)
+	}
+	if len(gotList) != 1 || gotList[0]["id"] != "req-e2e" {
+		t.Fatalf("converter 应收到 1 个已桥接元素，实际 %v", gotList)
+	}
+}

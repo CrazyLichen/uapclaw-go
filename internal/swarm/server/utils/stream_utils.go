@@ -591,6 +591,20 @@ func SerializeValue(value any) any {
 
 // FindInteractionPayloads 递归搜索 __interaction__ 载荷。
 // Python: _find_interaction_payloads(obj, _depth=0, _seen=None) (stream_utils.py L378-432)
+//
+// 两种命中特征（与 Python 一致）：
+//   - `type == "__interaction__"` → 返回其 payload
+//   - `event_type == "chat.ask_user_question"` → 还原成 {id, value:{questions}}
+//
+// 信封形态的来源（为何 controller_output 里会有 interaction）：Python
+// `workflow_task_executor._handle_interruption`（workflow_task_executor.py L192-235）
+// 在写独立 `__interaction__` chunk 之后，又把同一个 chunk 放进
+// `WorkflowOutput.result`，随 `ControllerOutputPayload.data=[JsonDataFrame(...)]`
+// 一起作为 task_interaction 事件携带；适配器因此需要从信封里把它挖出来。
+//
+// Go 现状：`application/workflow_agent` 层尚未移植（internal/agentcore/workflow 仅
+// base.go），故当前没有生产者会产出信封形态；本函数保留为移植后的对齐点，
+// 届时无需再改消费端。不要当作死代码删除。
 func FindInteractionPayloads(obj any, opts ...FindOption) []any {
 	return findInteractionPayloadsRecursive(obj, 0, nil)
 }
@@ -628,8 +642,23 @@ func serializeChunkRecursive(v any) any {
 	}
 }
 
+// strValAny 按顺序取第一个命中的字符串值（用于兼容 Go 结构体无 tag 时的大写键名）。
+func strValAny(m map[string]any, keys ...string) string {
+	for _, k := range keys {
+		if s, ok := m[k].(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
 // findInteractionPayloadsRecursive 递归搜索 __interaction__ 载荷。
 // Python: _find_interaction_payloads 内部递归逻辑 (stream_utils.py L378-432)
+//
+// 与 Python 的差异补偿：Python 用 `getattr(obj, "type")` 直接读对象属性，
+// Go 的结构体必须先桥接成 map，因此非 map/slice 的值（结构体及其指针）走
+// PayloadToMap 后再递归。另外 Go 结构体若缺 json tag，桥接后键名保持大写
+// （如 stream.OutputSchema 的 Type/Payload），故 type/Type 两种键名都认。
 func findInteractionPayloadsRecursive(obj any, depth int, seen map[uintptr]bool) []any {
 	if obj == nil || depth > 8 {
 		return nil
@@ -649,10 +678,15 @@ func findInteractionPayloadsRecursive(obj any, depth int, seen map[uintptr]bool)
 
 	switch v := obj.(type) {
 	case map[string]any:
-		if v["type"] == "__interaction__" {
-			return []any{v["payload"]}
+		// Python: getattr(obj, "type") / obj.get("type")；无 tag 结构体桥接后是 "Type"
+		if strValAny(v, "type", "Type") == "__interaction__" {
+			if payload, ok := v["payload"]; ok {
+				return []any{payload}
+			}
+			// 无 tag 结构体（如 stream.OutputSchema）桥接后键名为 "Payload"
+			return []any{v["Payload"]}
 		}
-		if v["event_type"] == "chat.ask_user_question" {
+		if strValAny(v, "event_type", "EventType") == "chat.ask_user_question" {
 			return []any{map[string]any{
 				"id":    v["request_id"],
 				"value": map[string]any{"questions": v["questions"]},
@@ -669,7 +703,18 @@ func findInteractionPayloadsRecursive(obj any, depth int, seen map[uintptr]bool)
 			found = append(found, findInteractionPayloadsRecursive(val, depth+1, seen)...)
 		}
 		return found
+	case []map[string]any:
+		var found []any
+		for _, val := range v {
+			found = append(found, findInteractionPayloadsRecursive(val, depth+1, seen)...)
+		}
+		return found
 	default:
+		// Python: hasattr(obj, "type") 与 model_dump / 属性兜底分支；
+		// Go 等价：结构体先桥接为 map 再递归（非结构体由 PayloadToMap 返回 nil）
+		if m := PayloadToMap(obj); m != nil {
+			return findInteractionPayloadsRecursive(m, depth+1, seen)
+		}
 		return nil
 	}
 }
