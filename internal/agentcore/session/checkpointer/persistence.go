@@ -778,7 +778,8 @@ func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, sess
 	}
 
 	// 检查结果中是否有中断标记
-	isInterrupted := isWorkflowInterrupted(result)
+	resultMap, isMap := result.(map[string]any)
+	isInterrupted := isMap && isWorkflowInterrupted(resultMap)
 
 	if !isInterrupted {
 		// 工作流正常完成，清除检查点
