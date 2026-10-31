@@ -89,7 +89,7 @@ func (s *SweeperE2ESuite) TestScanNewSessions_首次扫描() {
 	// 创建 3 个 session 目录，每个有足够的轮次（≥4）
 	sessionIDs := []string{"sess-001", "sess-002", "sess-003"}
 	for _, sid := range sessionIDs {
-		s.createSessionDir(filepath.Join(sessionsDir, sid), 5)
+		s.createSessionDir(filepath.Join(sessionsDir, sid), 5, "agent")
 	}
 
 	sweeper := swarmdreaming.NewSweeper(sessionsDir, outputDir, "agent", "zh")
@@ -121,7 +121,7 @@ func (s *SweeperE2ESuite) TestScanNewSessions_轮次不足跳过() {
 	s.Require().NoError(os.MkdirAll(sessionsDir, 0o755))
 
 	// 创建轮次不足的 session（2 轮）
-	s.createSessionDir(filepath.Join(sessionsDir, "short-session"), 2)
+	s.createSessionDir(filepath.Join(sessionsDir, "short-session"), 2, "agent")
 
 	sweeper := swarmdreaming.NewSweeper(sessionsDir, outputDir, "agent", "zh")
 	s.Require().NoError(sweeper.Init())
@@ -138,10 +138,10 @@ func (s *SweeperE2ESuite) TestScanNewSessions_heartbeat目录跳过() {
 	s.Require().NoError(os.MkdirAll(sessionsDir, 0o755))
 
 	// 创建 heartbeat session（应被跳过）
-	s.createSessionDir(filepath.Join(sessionsDir, "heartbeat-001"), 5)
+	s.createSessionDir(filepath.Join(sessionsDir, "heartbeat-001"), 5, "agent")
 	// 创建 3 个正常 session（满足 minNewSessions=3 最低要求）
 	for _, sid := range []string{"normal-001", "normal-002", "normal-003"} {
-		s.createSessionDir(filepath.Join(sessionsDir, sid), 5)
+		s.createSessionDir(filepath.Join(sessionsDir, sid), 5, "agent")
 	}
 
 	sweeper := swarmdreaming.NewSweeper(sessionsDir, outputDir, "agent", "zh")
@@ -324,7 +324,7 @@ func (s *SweeperE2ESuite) TestCheckpoint_持久化与恢复() {
 
 	// 创建 5 个 session
 	for _, sid := range []string{"sess-001", "sess-002", "sess-003", "sess-004", "sess-005"} {
-		s.createSessionDir(filepath.Join(sessionsDir, sid), 5)
+		s.createSessionDir(filepath.Join(sessionsDir, sid), 5, "agent")
 	}
 
 	// 模拟已有 checkpoint：sess-001 和 sess-002 已被扫描
@@ -570,15 +570,16 @@ func (s *SweeperE2ESuite) TestGetSysMsg_所有模式() {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // createSessionDir 创建测试用 session 目录，含 history.json 和 metadata.json。
-// rounds 指定对话轮次数（每轮包含 1 个 user + 1 个 assistant）。
-func (s *SweeperE2ESuite) createSessionDir(sessionDir string, rounds int) {
+// rounds 指定对话轮次数（每轮包含 1 个 user + 1 个 assistant）；
+// mode 指定 metadata.mode（code 模式传 "code.normal"）。
+func (s *SweeperE2ESuite) createSessionDir(sessionDir string, rounds int, mode string) {
 	s.Require().NoError(os.MkdirAll(sessionDir, 0o755))
 	s.createHistoryFile(sessionDir, rounds)
 
 	// 写入 metadata.json
 	metadata := map[string]any{
 		"session_id":  filepath.Base(sessionDir),
-		"mode":        "agent",
+		"mode":        mode,
 		"created_at":  time.Now().Format(time.RFC3339),
 		"round_count": rounds,
 	}
