@@ -1,7 +1,6 @@
 package a2a
 
 import (
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -116,6 +115,3 @@ func a2aEnvBool(v string) bool {
 		return false
 	}
 }
-
-// getenvOS os.Getenv 的适配器。
-func getenvOS(key string) string { return os.Getenv(key) }
