@@ -237,9 +237,59 @@ mode-2 路径只跑 `bootstrapGatewayEnv` + `AcpChannel`，跳过 `bootstrapInpr
 
 | # | 风险 | 处置 |
 |---|---|---|
-| R1 | 入站 case 2 的 Go 真实行为未知（上游错误可能不产生 `error` 帧，而是 result+stopReason） | 实施第一步先写探测用例打印真实帧，再定断言；若需补实现，单独提交并在本设计回填 |
+| R1 | 入站 case 2 的 Go 真实行为未知（上游错误可能不产生 `error` 帧，而是 result+stopReason） | 实施第一步先写探测用例打印真实帧，再定断言；若需补实现，单独提交并在本设计回填（见 §10） |
 | R2 | 父进程 7 件套与子进程 WS 的连接时序（子进程可能在 GatewayServer 就绪前连） | 父进程先 `Start` 再 spawn 子进程；子进程失败重试由用例轮询 stdin 写入后的首帧超时兜底 |
 | R3 | `UAPCLAW_DATA_DIR` 与父进程共享同一临时目录会造成 config 竞争 | 父子进程各用独立临时目录（父进程的 `models.defaults` 只在父进程内存注册，子进程只需最小 config） |
 | R4 | 端口占用导致 GatewayServer 启动失败 | `pickFreePort()` 后立即 `Close` 再绑定，失败重试 3 次 |
 | R5 | 出站用例受 acpchat 全局锁表影响，profile 名冲突会串台 | 唯一 profile 名（含纳秒时间戳） |
 | R6 | CI 机器无网络时 `go build` 仍可用（依赖已缓存） | 与既有 `TestMain` 预编译先例一致，失败即 Skip |
+
+## 10. 实施回填（2026-10-31）
+
+### 10.1 R1 命中：上游失败不出错误帧（真生产缺陷，已修）
+
+探测结果：注入 LLM 上游错误后，子进程 stdout 只有
+`session_info_update(processing)` → `session_info_update(idle)` → `result{stopReason:end_turn}`，
+**没有 `error` 帧**，用户看到「空答复的成功轮次」。
+
+分层定位（三步实测量）：
+
+| 层 | 观测 | 结论 |
+|---|---|---|
+| 桥 | `chat.error → -32603` 已有实现与单测（`acp_bridge.go` + `TestAcpBridge_SendMessageError`） | 对齐，非缺陷 |
+| 适配器映射 | `ParseStreamChunk` 已支持 `chunkType=="error"` 与 `controller_output.task_failed → chat.error` | 对齐，非缺陷 |
+| 适配器入参 | 调试打印：`chunkType=controller_output payloadType=*schema.ControllerOutputPayload payload=map[]` | **缺陷：payload 动态类型是结构体指针**，消费端只做 `payload.(map[string]any)` 断言 → 断言失败 → 空 map → `task_failed` 内层语义整块丢失 |
+
+根因：`task_loop/executor.go` 等生产端产出 `*cschema.ControllerOutputPayload`（结构体指针），
+而 `deep_adapter.go` 主循环与 `utils.ParseStreamChunk` 都只接受 `map[string]any`；
+Python 侧 payload 恒为 dict，`_parse_stream_chunk` 按键取值天然兼容。
+
+修复（提交 `fix(stream)`）：
+
+1. 新增 `internal/swarm/server/utils/payload_bridge.go`：`PayloadToMap` 桥接
+   nil / map / `*ControllerOutputPayload` / `ControllerOutputPayload`，
+   结构体走 `json.Marshal→Unmarshal`，形状对齐 Python `payload.model_dump(mode="json")`
+2. `utils.ParseStreamChunk` 与 `deep_adapter.go` 主循环改用该桥接
+3. `adapter.payloadToMap` 收薄为对 `utils.PayloadToMap` 的委托（原 S-03 修复只覆盖 team 路径，主循环漏改）
+
+修复后实测帧：
+`{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"[123003] agent controller runtime error, reason: 迭代 0 模型调用失败: LLM stream 失败: upstream boom"}}`
+——与 Python `test_acp_cli_returns_final_jsonrpc_error` 语义一致。
+
+### 10.2 附加修复：流启动失败投 error 帧（提交 `fix(harness)`）
+
+`DeepAgent.Stream` 两条分支的启动错误原先只 `logger.Error` 后 `return err`，通道直接关闭，
+消费者看到空流。对齐 Python `interface_deep.py` L4889-4898 的 `except → chat.error`，
+改为投一个 `Type="error"` 的 `OutputSchema`（复用适配器既有 `case "error"` 映射），并补 `emitStreamError` 单测。
+
+### 10.3 D8 例外说明
+
+D8 原定「零生产代码变更」。§10.1/§10.2 属于 D8 中声明的唯一例外（R1 触发按 Python 语义补实现），
+已单独提交，且不改变正常路径行为（`PayloadToMap` 对 map 输入原样返回）。
+
+### 10.4 doc.go / 计划修正
+
+- `tests/integration/swarm/acp/doc.go` 必须是 `package acp`（非测试文件不能用 `<名字>_test` 包名，
+  否则与外部测试包冲突报 `found packages acp ... and acp_test ...`）
+- 出站 `fsread` 用例期望值经客户端 `TrimSpace` 聚合后为 `line1\nline2`（非带尾换行）
+- 入站子进程 `go build` 需 `cmd.Dir` 指向模块根（测试进程 cwd 是包目录）
