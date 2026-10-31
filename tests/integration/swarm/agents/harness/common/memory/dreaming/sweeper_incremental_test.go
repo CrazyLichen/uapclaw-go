@@ -5,6 +5,7 @@ package dreaming
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 	swarmdreaming "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory/dreaming"
@@ -101,6 +102,72 @@ func (s *SweeperIncrementalSuite) TestSweep_第二次同标题不重复() {
 	content := env.ReadDreamingMD(outDir)
 	s.Equal(1, strings.Count(content, "## 用户偏好 Python"), "同标题只应保留一条")
 	s.NotContains(content, "第二轮提取", "去重命中后内容应保持第一轮")
+}
+
+// TestSweep_增量只重扫新轮次 测试已扫会话追加轮次后只压缩新增部分。
+//
+// 对齐 Python: TestDreamingE2EAgent.test_incremental_scan_reprocesses_updated_session
+// 并加强：断言第二轮 prompt 含新问题、不含首轮问题（Python 只断言产物共存）。
+func (s *SweeperIncrementalSuite) TestSweep_增量只重扫新轮次() {
+	env := s.newEnv()
+	outDir := env.OutputDir("memory")
+	for _, sid := range []string{"sess-001", "sess-a", "sess-b"} {
+		env.PlantSession(s.T(), sid, "agent", 5)
+	}
+	first := []map[string]string{{"title": "第一轮知识", "content": "第一次扫描提取"}}
+	env.QueueJSON(s.T(), first)
+	env.QueueJSON(s.T(), first)
+	env.QueueJSON(s.T(), first)
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(3, s.MockLLM.InvokeCallCount())
+
+	for _, sid := range []string{"sess-001", "sess-a", "sess-b"} {
+		env.AppendRounds(s.T(), sid, 6, 9)
+		env.Touch(s.T(), sid, 2*time.Second)
+	}
+	second := []map[string]string{{"title": "第二轮新增知识", "content": "增量扫描提取"}}
+	env.QueueJSON(s.T(), second)
+	env.QueueJSON(s.T(), second)
+	env.QueueJSON(s.T(), second)
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(6, s.MockLLM.InvokeCallCount(), "三个会话各应重扫一次")
+
+	prompts := env.UserPrompts()
+	s.Require().Len(prompts, 6)
+	incrementalPrompt := prompts[3]
+	s.Contains(incrementalPrompt, "第6个问题", "增量 prompt 应含新轮次")
+	s.Contains(incrementalPrompt, "第9个问题", "增量 prompt 应含最后一轮新轮次")
+	s.NotContains(incrementalPrompt, "第1个问题", "增量 prompt 不应重复首轮内容")
+
+	content := env.ReadDreamingMD(outDir)
+	s.Contains(content, "第一轮知识")
+	s.Contains(content, "第二轮新增知识")
+
+	cp := env.ReadCheckpoint(s.T(), outDir)
+	s.Equal(9, cp.ScannedSessions["sess-001"].RoundCount, "checkpoint 轮次应推进到 9")
+}
+
+// TestSweep_未变更会话跳过 测试无变更时第二次 sweep 不调用模型且不改文件。
+//
+// 对齐 Python: TestDreamingE2EAgent.test_skips_unchanged_session（断言更强）
+func (s *SweeperIncrementalSuite) TestSweep_未变更会话跳过() {
+	env := s.newEnv()
+	outDir := env.OutputDir("memory")
+	for _, sid := range []string{"sess-001", "sess-a", "sess-b"} {
+		env.PlantSession(s.T(), sid, "agent", 5)
+	}
+	items := []map[string]string{{"title": "初次知识", "content": "第一次扫描"}}
+	env.QueueJSON(s.T(), items)
+	env.QueueJSON(s.T(), items)
+	env.QueueJSON(s.T(), items)
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(3, s.MockLLM.InvokeCallCount())
+	before := env.ReadDreamingMD(outDir)
+
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(3, s.MockLLM.InvokeCallCount(), "无变更时不应再调用模型")
+	s.Equal(before, env.ReadDreamingMD(outDir), "DREAMING.md 应保持字节级不变")
+	s.NotContains(env.ReadDreamingMD(outDir), "第二次扫描不应该发生")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
