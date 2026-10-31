@@ -8,6 +8,15 @@
 // 配置以值类型结构体表达：字段零值等价于 Python TypedDict(total=False)
 // 的「键缺失/None」，因此不存在指针字段，调用方也无须判空。
 //
+// 分层纪律（审查口径）：
+//
+//   - 本包禁止 import internal/agentcore/session/ 下任何包。Python 侧 graph/pregel
+//     同样不依赖 session，二者靠 Interrupt.Value 声明为 Any 维持单向。
+//   - Interrupt.Value 只承载、不解读：本包不读取其内容，也不对其做类型断言；
+//     断言只允许发生在 session 层（那里的具体类型是 interaction.InteractionOutputSchema）。
+//     消费链路只做存在性判断（checkpointer 的 isWorkflowInterrupted 判 key 存在且非 nil）。
+//   - 用户可见的中断内容不依赖该字段，而是在 raise 之前经 writeInteractionOutput 写入流。
+//
 // 文件目录：
 //
 //	pregel/

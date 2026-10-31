@@ -153,6 +153,34 @@ func (m Message) Kind() MessageKind {
 | 零值语义 | 零值 `Message` 的 `Kind()` 为空串，任何通道都不接受 | 无需 Python 里不存在的 `Unknown` 分支；等价于“基类 `Message` 实例传入时两种 isinstance 都失败”（`base.py` 内无任何 `Message(sender=...)` 直接构造点） |
 | `payload` | 保留字段、恒 nil、构造函数不设该形参 | Python 全部调用点均不传；Go 无可选参数，调用方可构造后按需赋值；对齐数据形状优先 |
 
+### 3.2 `Interrupt.Value` 为何必须是 `any`（分层纪律）
+
+Python 把该字段声明为 `Any`（`pregel/base.py:11`）是刻意的：其唯一构造点 `interaction.py:49/61` 装的是 `openjiuwen/core/session/stream/base.py:30` 的 `OutputSchema`，即**值类型属于 session 层**。若写死为具体类型，`graph/pregel/base.py` 就得 import `session.stream`，而 `session/interaction` 又 import `graph.pregel` —— graph 反向依赖 session，成环。Go 侧约束更硬：`interaction → pregel` 已存在，收窄 `Value` 会让 pregel 必须 import interaction，**编译期直接报环**。
+
+该字段在整条链路上**从未被读取内容**，实测证据：
+
+| 位置 | 代码 | 是否读内容 |
+|------|------|-----------|
+| `graph.py:317-318` `CompiledGraph._invoke` | `result = await self._pregel.run(config)` → 直接交给 `post_workflow_execute(session, result, exception)` | ❌ 不读，连返回都没有 |
+| `engine.py:275` | `return {TASK_STATUS_INTERRUPT: e.value}` | ❌ 原样透传 |
+| `persistence.py:876` / `inmemory.py:91` / `redis/checkpointer.py:452` | `if result.get(TASK_STATUS_INTERRUPT) is None:` 决定清或留检查点 | ❌ 只判空 |
+| Go `checkpointer/inmemory.go:1087-1089` `isWorkflowInterrupted` | `exists && interruptVal != nil` | ❌ 只判空 |
+
+用户可见的中断内容**不走该字段**：`interaction.py:46-51` 在 raise 之前已用 `output_writer.write(OutputSchema(...))` 写入流；Go 侧对应 `writeInteractionOutput`（`interaction.go:132`）。
+
+因此三段职责分离，`any` 只落在中间一段：
+
+```
+构造端（session 层，具体类型）  →  转发端（pregel，只看类型不拆箱）  →  判定端（checkpointer，只判空）
+InteractionOutputSchema           Interrupt.Value any                  exists && != nil
+```
+
+**写死的纪律（8.7/8.3c 及后续节审查口径）**：
+
+1. `pregel` 包禁止 import `internal/agentcore/session/**`；`Interrupt.Value` 只承载不解读。
+2. `Interrupt.Value` 的类型断言只允许出现在 session 层（那里可合法 import `interaction`）。
+3. 容器层面亦是 `any`：`PostWorkflowExecute(ctx, session, result map[string]any, exception error)` 由 5.8 定死（`persistence.go:761`），8.3c 的 `Pregel.Run` 返回值必然装入 `map[string]any`，故收窄 `Value` 不会让链路更强。
+
 ## 4. 同批必做：`session/interaction` 去重
 
 `Interrupt` 迁入 pregel 后必须同步处理 `session/interaction` 的本地同名结构体，否则两份类型语义漂移：

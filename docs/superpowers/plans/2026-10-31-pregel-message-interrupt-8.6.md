@@ -569,4 +569,5 @@ cd /home/opensource/uapclaw-gateway && git log --oneline -6 && git status --shor
 | 日志 | 本节零日志（Python `base.py` 无任何 logger 调用，对齐） |
 | 覆盖率 | `pregel` 包 100.0% |
 | 依赖方向 | `session/interaction → graph/pregel` 单向；`pregel` import 仅标准库 |
-| 偏差 | R1（Interrupt 三字段）、R2（Kind() 新增）、R3（单结构体）、R4（构造函数不设 payload 形参）四项在 spec §6 有档 |
+| 断言位置 | `Interrupt.Value` 的类型断言只允许发生在 session 层；`pregel` 内零断言、零 `session/**` import（验收命令：`go list -f '{{join .Imports "\n"}}' ./internal/agentcore/graph/pregel/ \| grep session` 应无输出；不要用 `grep session/ *.go`，注释里提到该路径是正常的） |
+| 偏差 | R1（Interrupt 三字段）、R2（Kind() 新增）、R3（单结构体）、R4（构造函数不设 payload 形参）四项在 spec §6 有档；`Value` 保持 `any` 的分层依据见 spec §3.2 |

@@ -25,9 +25,16 @@ type Message struct {
 // （顶层返回 {"__interrupt__": value}）。
 //
 // 与 GraphInterrupt（控制流跳转手段，8.7 迁入本包）职责不同：本类型只承载中断值。
+//
+// 分层纪律：Value 的具体类型由 session 层决定（当前唯一来源是
+// session/interaction.InteractionOutputSchema），本包只做装箱透传、从不拆箱。
+// 原因：Python 把该字段声明为 Any（pregel/base.py:11），正是为了让 graph 层不依赖
+// session 层；Go 侧若收窄为具体类型，pregel 就必须 import session/interaction，
+// 而 interaction 已 import 本包，构成编译期循环。类型断言只允许发生在 session 层。
 // Python: pregel/base.py:10-14
 type Interrupt struct {
-	// Value 中断携带的值（Go 侧实际装 InteractionOutputSchema）
+	// Value 中断携带的值，由调用方（session 层）构造，本包不读取其内容。
+	// 消费链路只做存在性判断，见 doc.go 的分层纪律说明。
 	Value any
 	// Resumable 是否可恢复中断。Python 类型声明的 __init__ 不接受该形参，
 	// 但 interaction.py:62 以关键字传入（运行时 TypeError），保留以承载作者意图
