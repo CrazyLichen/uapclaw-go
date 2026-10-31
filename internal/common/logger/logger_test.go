@@ -608,3 +608,74 @@ func TestWithConfigFile_文件不存在(t *testing.T) {
 		t.Errorf("期望 Gateway = info（默认），实际 %s", levels.Gateway)
 	}
 }
+
+// TestSetup_控制台写入stderr 控制台日志走 stderr（对齐 Python setup_logger 的
+// StreamHandler 默认流），保证 stdout 只承载业务输出。
+func TestSetup_控制台写入stderr(t *testing.T) {
+	resetGlobal()
+
+	dir := t.TempDir()
+	errFile, err := os.CreateTemp(dir, "stderr-*.log")
+	if err != nil {
+		t.Fatalf("创建临时 stderr 文件失败: %v", err)
+	}
+	outFile, err := os.CreateTemp(dir, "stdout-*.log")
+	if err != nil {
+		t.Fatalf("创建临时 stdout 文件失败: %v", err)
+	}
+
+	origStderr, origStdout := os.Stderr, os.Stdout
+	os.Stderr, os.Stdout = errFile, outFile
+	t.Cleanup(func() {
+		os.Stderr, os.Stdout = origStderr, origStdout
+		_ = Close()
+	})
+
+	if err := Setup(WithOutputDir(t.TempDir())); err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	Info(ComponentCommon).Msg("console-marker")
+	if err := Close(); err != nil {
+		t.Fatalf("Close 失败: %v", err)
+	}
+	os.Stderr, os.Stdout = origStderr, origStdout
+
+	errData, readErr := os.ReadFile(errFile.Name())
+	if readErr != nil {
+		t.Fatalf("读取 stderr 文件失败: %v", readErr)
+	}
+	if !strings.Contains(string(errData), "console-marker") {
+		t.Errorf("控制台日志未写入 stderr, 内容: %q", string(errData))
+	}
+
+	outData, readErr := os.ReadFile(outFile.Name())
+	if readErr != nil {
+		t.Fatalf("读取 stdout 文件失败: %v", readErr)
+	}
+	if strings.Contains(string(outData), "console-marker") {
+		t.Errorf("控制台日志不应写入 stdout, 内容: %q", string(outData))
+	}
+}
+
+// TestSetup_默认输出目录受数据目录控制 默认 outputDir 走 pathutil.LogsDir()，
+// 即 WorkspaceDir()/agent/.logs，随 UAPCLAW_DATA_DIR 变化（不再硬编码 ~/.uapclaw）。
+func TestSetup_默认输出目录受数据目录控制(t *testing.T) {
+	resetGlobal()
+
+	dataDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", dataDir)
+	pathutil.ResetCache()
+	t.Cleanup(func() {
+		pathutil.ResetCache()
+		_ = Close()
+	})
+
+	if err := Setup(); err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+
+	want := filepath.Join(dataDir, "agent", ".logs")
+	if got := OutputDir(); got != want {
+		t.Errorf("默认 outputDir = %q, want %q", got, want)
+	}
+}

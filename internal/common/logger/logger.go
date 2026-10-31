@@ -145,15 +145,11 @@ func Setup(opts ...Option) error {
 			opt(l)
 		}
 
-		// 设置默认输出目录
+		// 设置默认输出目录：WorkspaceDir()/agent/.logs
+		// 经 pathutil.LogsDir() 解析，随 UAPCLAW_DATA_DIR 变化（多实例隔离），不硬编码用户目录。
+		// Python: get_logs_dir() = get_agent_root_dir() / ".logs"
 		if l.outputDir == "" {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				setupErr = exception.NewBaseError(exception.StatusCommonLogPathInitFailed,
-					exception.WithMsg(fmt.Sprintf("failed to get user home directory: %v", err)))
-				return
-			}
-			l.outputDir = filepath.Join(home, ".uapclaw", "agent", ".logs")
+			l.outputDir = pathutil.LogsDir()
 		}
 
 		// 确保输出目录存在
@@ -172,8 +168,9 @@ func Setup(opts ...Option) error {
 		fullWriter := NewMutexWriter(l.fullRotationWriter)
 		sanitizedFullWriter := NewSanitizerWriter(fullWriter, l.sanitizer)
 
-		// 创建控制台 writer
-		l.consoleWriter = zerolog.ConsoleWriter{Out: os.Stdout}
+		// 创建控制台 writer（stderr：stdout 只承载业务输出，可安全管道消费）
+		// Python: logging.StreamHandler() 默认 stream=sys.stderr（setup_logger L1628）
+		l.consoleWriter = zerolog.ConsoleWriter{Out: os.Stderr}
 		sanitizedConsoleWriter := NewSanitizerWriter(&l.consoleWriter, l.sanitizer)
 
 		// 为每个组件创建 Logger
