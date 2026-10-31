@@ -104,6 +104,38 @@ func (s *StartWiringSuite) TestWiring_CodeAdapter真跑后启动Dreaming() {
 	s.Nil(swarmdreaming.GetDreamingOrchestrator("code"))
 }
 
+// TestWiring_DeepAdapter真跑后启动Dreaming 测试 agent 模式 adapter 全链路接线。
+//
+// 生产链路（对齐 Python interface.py:_adapter_mode_for_request 与 Go
+// resolveModeFromRequest）把 "agent.plan" 拆成 mode="agent" + subMode="plan"，
+// 因此 CreateInstance 收到的 mode 恒为 "agent"：dreamingMode="agent"、
+// 配置键 memory.dreaming.agent、环境变量 DREAMING_AGENT_ENABLED，
+// 输出目录为 <DataDir>/agent/workspace/memory。
+// 注意：Python/Go 的 output_name 判定是 mode == "agent"，若直接把 "agent.plan"
+// 传给 CreateInstance 两侧都会落到 coding_memory，这属测试误用而非生产行为。
+func (s *StartWiringSuite) TestWiring_DeepAdapter真跑后启动Dreaming() {
+	env := s.newEnv()
+	env.Setenv(s.T(), "DREAMING_AGENT_ENABLED", "true")
+	for _, sid := range []string{"sess-001", "sess-002", "sess-003"} {
+		env.PlantSession(s.T(), sid, "agent.plan", 5)
+	}
+
+	deepAdapter := adapter.NewDeepAdapter()
+	s.Require().NoError(deepAdapter.CreateInstance(s.Ctx, nil, "agent", ""))
+	s.Require().NoError(deepAdapter.TryStartDreaming(s.Ctx, func() bool { return false }))
+
+	orch := swarmdreaming.GetDreamingOrchestrator("agent")
+	s.Require().NotNil(orch, "agent 模式 orchestrator 应已注册")
+	s.True(orch.IsRunning())
+
+	memoryDir := filepath.Join(env.DataDir, "agent", "workspace", "memory")
+	s.DirExists(memoryDir, "sweeper.Init 应创建 memory 目录")
+	s.DirExists(filepath.Join(memoryDir, ".dreams"), "sweeper.Init 应创建 .dreams 目录")
+
+	s.Require().NoError(deepAdapter.TryStopDreaming(s.Ctx))
+	s.Nil(swarmdreaming.GetDreamingOrchestrator("agent"))
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newEnv 构建隔离环境。
