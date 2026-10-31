@@ -284,3 +284,12 @@ if interruptVal, exists := m["__interrupt__"]; exists && interruptVal != nil {
 3. **计划文本订正**：实现计划 Task 4 Step 1 的 import 示例把 logger 路径写作 `common/logger`，实际文件是 `internal/common/logger`；按「保持原样、只插入 pregel 一行」执行，无代码影响。
 4. **结果**：`pregel` 包 10 个用例全通过（含 11 颗常量逐值断言），`config.go` 覆盖率 100%；全仓 `go test -tags "sqlite_fts5 test" ./...` 293 包 ok、0 FAIL；生产代码中 `"__interrupt__"` 只剩 `constants.go` 一处来源。
 5. **零实施偏差**：D1-D7 全部按 spec 落地，未出现需要新增偏差项的情况。
+
+## 12. 实施后审查修订（2026-10-31）
+
+审查（实现 vs 计划、循环依赖、any 使用）后做两处修订：
+
+1. **计划文本订正**（`b98b7599`）：Task 2 Step 4 的期望值由「11 个子用例」改为「10 个子用例 + 1 个独立断言函数」；Task 4 Step 1 的 import 示例中 logger 路径由 `github.com/uapclaw/common/logger` 改为实际的 `github.com/uapclaw/uapclaw-go/internal/common/logger`。代码实现不变。
+2. **`isWorkflowInterrupted` 入参收窄**（`f88258bb`）：`any` → `map[string]any`，删除函数内的类型断言与 `result == nil` 分支；「非 map 结果视为未中断」上移到两处调用点（`resultMap, isMap := result.(map[string]any); isInterrupted := isMap && isWorkflowInterrupted(resultMap)`）。**接口 `PostWorkflowExecute(ctx, session, result any, exception error)` 保持 `any` 不变**，因为 Python 侧签名是 `result: Any`，收窄接口将引入新偏差且波及 10 个 mock 实现。覆盖率 83.5% → 83.6%（基线用 `git worktree` 单独测量，无回归）。
+
+**循环依赖结论（审查项）**：`pregel` 包依赖闭包仅标准库（零业务依赖），`session/checkpointer → graph/pregel` 为单向边，反向不可达，`go list ./...` 无环。**遗留约束**：8.3c 落地后 `pregel` 将 import `graph/store`，届时若 8.9 的 `Store` 反向 import `session/interfaces`，即形成 `checkpointer → pregel → store → session/interfaces` 环；8.9 必须保持 `store` 层 session-free（Python `store/base.py` 只 import logging，可作依据）。
