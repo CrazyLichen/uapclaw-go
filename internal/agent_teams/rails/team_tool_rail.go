@@ -92,6 +92,14 @@ func NewTeamToolRail(opts ...TeamToolRailOption) *TeamToolRail {
 	for _, opt := range opts {
 		opt(r)
 	}
+	// Python: self._team_name = team_name or "default" / self._member_name = member_name or "unknown"
+	// 选项可能传入空串，此处统一归一化，避免工具 ID 限定与 workspace 锁 owner 出现空段
+	if r.teamName == "" {
+		r.teamName = "default"
+	}
+	if r.memberName == "" {
+		r.memberName = "unknown"
+	}
 	return r
 }
 

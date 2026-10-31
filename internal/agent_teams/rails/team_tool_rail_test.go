@@ -380,3 +380,25 @@ func TestWithWorktreeManager(t *testing.T) {
 	WithWorktreeManager(nil)(r)
 	assert.Nil(t, r.worktreeManager)
 }
+
+// TestNewTeamToolRail_默认名归一化 空 teamName/memberName 应归一化，对齐 Python or 语义
+func TestNewTeamToolRail_默认名归一化(t *testing.T) {
+	r := NewTeamToolRail()
+	if r.teamName != "default" {
+		t.Fatalf("teamName = %q, want default", r.teamName)
+	}
+	if r.memberName != "unknown" {
+		t.Fatalf("memberName = %q, want unknown", r.memberName)
+	}
+}
+
+// TestNewTeamToolRail_空成员名归一化 显式传入空串也应回退为 unknown
+func TestNewTeamToolRail_空成员名归一化(t *testing.T) {
+	r := NewTeamToolRail(WithTeamName(""), WithMemberName(""))
+	if r.teamName != "default" {
+		t.Fatalf("teamName = %q, want default", r.teamName)
+	}
+	if r.memberName != "unknown" {
+		t.Fatalf("memberName = %q, want unknown", r.memberName)
+	}
+}
