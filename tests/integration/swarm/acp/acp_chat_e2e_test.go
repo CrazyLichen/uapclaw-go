@@ -121,6 +121,36 @@ func (s *AcpChatToolSuite) TestAcpChatTool_fs读写穿透() {
 	s.Equal("hello-acp", string(written))
 }
 
+// TestAcpChatTool_Profile缺失 未知 profile 转 [ERROR] 文本（Python _get_spec 返回 None）
+func (s *AcpChatToolSuite) TestAcpChatTool_Profile缺失() {
+	cfg := map[string]any{"acp_agents": map[string]any{}}
+	out := s.invoke(cfg, "no_such_profile", "hi", false)
+	s.Contains(out, "[ERROR] acp_chat failed")
+	s.Contains(out, "unknown acp_agents profile")
+}
+
+// TestAcpChatTool_Profile无command command 为空转 [ERROR] 文本（Python _run_once needs command）
+func (s *AcpChatToolSuite) TestAcpChatTool_Profile无command() {
+	profile := fmt.Sprintf("it_nocmd_%d", time.Now().UnixNano())
+	cfg := map[string]any{"acp_agents": map[string]any{
+		profile: map[string]any{"command": "   ", "args": []any{"echo"}},
+	}}
+	out := s.invoke(cfg, profile, "hi", false)
+	s.Contains(out, "[ERROR] acp_chat failed")
+	s.Contains(out, "needs non-empty command")
+}
+
+// TestAcpChatTool_args非列表 args 非列表转 [ERROR] 文本（Python args 类型校验，Go 走真链路）
+func (s *AcpChatToolSuite) TestAcpChatTool_args非列表() {
+	profile := fmt.Sprintf("it_badargs_%d", time.Now().UnixNano())
+	cfg := map[string]any{"acp_agents": map[string]any{
+		profile: map[string]any{"command": fakeAcpBin, "args": "echo"},
+	}}
+	out := s.invoke(cfg, profile, "hi", false)
+	s.Contains(out, "[ERROR] acp_chat failed")
+	s.Contains(out, "args must be a list of strings")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newConfig 构造唯一 profile 的 cfg（profile 名含纳秒时间戳，规避全局缓存串台）
