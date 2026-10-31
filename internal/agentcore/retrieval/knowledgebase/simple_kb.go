@@ -26,7 +26,7 @@ import (
 // Python: openjiuwen/core/retrieval/simple_knowledge_base.py (SimpleKnowledgeBase)
 type SimpleKnowledgeBase struct {
 	// BaseKnowledgeBase 共享基座（13.26；值嵌入，13.8 HybridChunker 先例）
-	BaseKnowledgeBase
+	*BaseKnowledgeBase
 	// retriever 检索器（nil = 待懒创建；构造期可由调用方显式注入）
 	retriever retriever.Retriever
 	// retrieverMu 懒创建并发保护（同一 KB 并发 Retrieve 只建一次）
@@ -52,7 +52,7 @@ func NewSimpleKnowledgeBase(config common.KnowledgeBaseConfig,
 	if err != nil {
 		return nil, err
 	}
-	return &SimpleKnowledgeBase{BaseKnowledgeBase: *base, retriever: r}, nil
+	return &SimpleKnowledgeBase{BaseKnowledgeBase: base, retriever: r}, nil
 }
 
 // AddDocuments 添加文档到知识库，返回文档 ID 列表。

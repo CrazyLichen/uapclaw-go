@@ -53,9 +53,11 @@ var validateAttrOrder = []string{
 //
 // Python: knowledge_base.py validate_index
 func (b *BaseKnowledgeBase) ValidateIndex(ctx context.Context) error {
+	// 一次性快照：避免逐属性读字段时被 Set* 替换出现「半新半旧」比对
+	vs, im := b.vectorStoreRef(), b.indexManagerRef()
 	for _, attr := range validateAttrOrder {
-		vsVal := storageAttr(b.vectorStore, attr)
-		imVal := storageAttr(b.indexManager, attr)
+		vsVal := storageAttr(vs, attr)
+		imVal := storageAttr(im, attr)
 		if !attrEqual(vsVal, imVal) {
 			return exception.BuildError(
 				exception.StatusRetrievalKbDatabaseConfigInvalid,
@@ -63,14 +65,14 @@ func (b *BaseKnowledgeBase) ValidateIndex(ctx context.Context) error {
 					"Vector store and index manager have incompatible %s configs:\n"+
 						"- Vector Store (%s) is using \"%s\"\n"+
 						"- Index manager (%s) is using \"%s\"",
-					attr, typeName(b.vectorStore), renderAttrVal(vsVal),
-					typeName(b.indexManager), renderAttrVal(imVal),
+					attr, typeName(vs), renderAttrVal(vsVal),
+					typeName(im), renderAttrVal(imVal),
 				)),
 			)
 		}
 	}
-	if b.strictValidation && b.vectorStore != nil {
-		return b.vectorStore.CheckVectorField()
+	if b.strictValidation && vs != nil {
+		return vs.CheckVectorField()
 	}
 	return nil
 }
@@ -86,7 +88,8 @@ func (b *BaseKnowledgeBase) postAssignValidation(ctx context.Context) error {
 	if err := b.ValidateIndex(ctx); err != nil {
 		return err
 	}
-	if isChromaType(b.vectorStore) || isChromaType(b.indexManager) {
+	vs, im := b.vectorStoreRef(), b.indexManagerRef()
+	if isChromaType(vs) || isChromaType(im) {
 		if b.strictValidation && b.config.IndexType != common.IndexTypeVector {
 			return exception.BuildError(
 				exception.StatusRetrievalKbDatabaseConfigInvalid,
@@ -94,7 +97,7 @@ func (b *BaseKnowledgeBase) postAssignValidation(ctx context.Context) error {
 			)
 		}
 	}
-	if el, ok := b.vectorStore.(ensureLoader); ok {
+	if el, ok := vs.(ensureLoader); ok {
 		return el.EnsureLoaded(ctx)
 	}
 	return nil

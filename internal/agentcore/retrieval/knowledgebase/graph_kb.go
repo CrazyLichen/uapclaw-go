@@ -29,7 +29,7 @@ import (
 // Python: openjiuwen/core/retrieval/graph_knowledge_base.py (GraphKnowledgeBase)
 type GraphKnowledgeBase struct {
 	// BaseKnowledgeBase 共享基座（值嵌入，13.27 先例）
-	BaseKnowledgeBase
+	*BaseKnowledgeBase
 	// chunkRetriever 固定 chunk 检索器（nil = 由 GraphRetriever 动态创建）
 	chunkRetriever retriever.Retriever
 	// tripleRetriever 固定三元组检索器（nil = 动态创建）
@@ -59,7 +59,7 @@ func NewGraphKnowledgeBase(config common.KnowledgeBaseConfig,
 		return nil, err
 	}
 	return &GraphKnowledgeBase{
-		BaseKnowledgeBase: *base,
+		BaseKnowledgeBase: base,
 		chunkRetriever:    chunkRetriever,
 		tripleRetriever:   tripleRetriever,
 	}, nil

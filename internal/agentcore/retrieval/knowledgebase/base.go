@@ -3,6 +3,7 @@ package knowledgebase
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -67,6 +68,12 @@ var _ interface {
 //
 // Python: knowledge_base.py (KnowledgeBase 的 __init__ 部分)
 type BaseKnowledgeBase struct {
+	// mu 保护可被 Set* 并发替换的字段（vectorStore/indexManager）。
+	//
+	// Python 靠 GIL 让 `kb.vector_store = vs` 原子生效；Go 的裸指针赋值与并发
+	// Retrieve/ValidateIndex 读取构成 data race（-race 可复现），故读写两侧统一走
+	// RLock/Lock。其余字段仅构造期写入，无需保护。
+	mu sync.RWMutex
 	// strictValidation 严格校验开关（Python strict_validation，默认 true）
 	strictValidation bool
 	// config 知识库配置
@@ -177,17 +184,20 @@ func (b *BaseKnowledgeBase) Config() common.KnowledgeBaseConfig { return b.confi
 func (b *BaseKnowledgeBase) StrictValidation() bool { return b.strictValidation }
 
 // VectorStore 返回读侧组件。
-func (b *BaseKnowledgeBase) VectorStore() vector_store.VectorStore { return b.vectorStore }
+func (b *BaseKnowledgeBase) VectorStore() vector_store.VectorStore { return b.vectorStoreRef() }
 
 // IndexManager 返回写侧组件。
-func (b *BaseKnowledgeBase) IndexManager() indexer.Indexer { return b.indexManager }
+func (b *BaseKnowledgeBase) IndexManager() indexer.Indexer { return b.indexManagerRef() }
 
 // SetVectorStore 构造后替换读侧组件（Python kb.vector_store = vs 显式对应物）。
 //
 // 赋值后双组件非空时触发 postAssignValidation（对齐 Python __setattr__）。
 func (b *BaseKnowledgeBase) SetVectorStore(vs vector_store.VectorStore) error {
+	b.mu.Lock()
 	b.vectorStore = vs
-	if b.vectorStore != nil && b.indexManager != nil {
+	ready := b.vectorStore != nil && b.indexManager != nil
+	b.mu.Unlock()
+	if ready {
 		return b.postAssignValidation(context.Background())
 	}
 	return nil
@@ -195,8 +205,11 @@ func (b *BaseKnowledgeBase) SetVectorStore(vs vector_store.VectorStore) error {
 
 // SetIndexManager 构造后替换写侧组件（Python kb.index_manager = im 显式对应物）。
 func (b *BaseKnowledgeBase) SetIndexManager(im indexer.Indexer) error {
+	b.mu.Lock()
 	b.indexManager = im
-	if b.vectorStore != nil && b.indexManager != nil {
+	ready := b.vectorStore != nil && b.indexManager != nil
+	b.mu.Unlock()
+	if ready {
 		return b.postAssignValidation(context.Background())
 	}
 	return nil
@@ -299,30 +312,51 @@ func (b *BaseKnowledgeBase) ParseURLs(ctx context.Context, urls []string, opts .
 //
 // Python: knowledge_base.py delete_collection
 func (b *BaseKnowledgeBase) DeleteCollection(ctx context.Context, collection string) error {
-	if b.vectorStore == nil {
+	vs := b.vectorStoreRef()
+	if vs == nil {
 		return exception.BuildError(
 			exception.StatusRetrievalKbVectorStoreNotFound,
 			exception.WithMsg("vector_store is required for delete_collection"),
 		)
 	}
-	return b.vectorStore.DeleteTable(ctx, collection)
+	return vs.DeleteTable(ctx, collection)
 }
 
 // Close 关闭知识库并释放资源（模板方法）。
 //
 // 逐组件关闭（vectorStore → indexManager 顺序字面）；组件 Close 返回错误时
-// Warn 吞（对齐 Python _maybe_await 的 sync 分支 try/except warn）。
+// Warn 记录并聚合首个错误返回。
+//
+// **不置空字段、不做幂等短路**：与 Python knowledge_base.close（L195-211）一致——
+// Python 同样只 _maybe_await 两个组件、不置 None，重复 close 由组件自身幂等
+// （Chroma close 为 pass）兜住。此处刻意保持 1:1，不引入 Python 没有的状态机。
 //
 // Python: knowledge_base.py close
 func (b *BaseKnowledgeBase) Close() error {
+	// 快照后关闭：避免关闭期间 Set* 替换字段导致「关旧不关新」或反之。
+	vs, im := b.vectorStoreRef(), b.indexManagerRef()
 	var firstErr error
-	if err := b.maybeClose(b.vectorStore); err != nil && firstErr == nil {
+	if err := b.maybeClose(vs); err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if err := b.maybeClose(b.indexManager); err != nil && firstErr == nil {
+	if err := b.maybeClose(im); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	return firstErr
+}
+
+// vectorStoreRef 读侧组件快照（SetVectorStore 可并发替换）。
+func (b *BaseKnowledgeBase) vectorStoreRef() vector_store.VectorStore {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.vectorStore
+}
+
+// indexManagerRef 写侧组件快照（SetIndexManager 可并发替换）。
+func (b *BaseKnowledgeBase) indexManagerRef() indexer.Indexer {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.indexManager
 }
 
 // maybeClose 关闭单个组件并返回错误（Warn 记录后仍上抛，供 Close 聚合）。
