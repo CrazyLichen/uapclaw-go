@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
@@ -385,8 +385,8 @@ func TestNodeSessionFacade_Interact_非流式模式触发GraphInterrupt(t *testi
 		if r == nil {
 			t.Fatal("非流式模式下 Interact 应触发 GraphInterrupt")
 		}
-		if _, ok := r.(*interaction.GraphInterrupt); !ok {
-			t.Fatalf("期望 *interaction.GraphInterrupt，得到 %T", r)
+		if _, ok := r.(*pregel.GraphInterrupt); !ok {
+			t.Fatalf("期望 *pregel.GraphInterrupt，得到 %T", r)
 		}
 	}()
 

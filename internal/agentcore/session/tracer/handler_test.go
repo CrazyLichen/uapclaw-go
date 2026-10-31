@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
@@ -20,11 +21,6 @@ type mockStreamWriter struct {
 	// writeErr 模拟写入错误
 	writeErr error
 }
-
-// testGraphInterrupt 测试用的图中断信号，满足 graphInterrupter 接口
-type testGraphInterrupt struct{}
-
-func (*testGraphInterrupt) isGraphInterrupt() {}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -469,7 +465,7 @@ func TestTraceWorkflowHandler_OnInvoke_异常(t *testing.T) {
 		},
 		{
 			name:       "GraphInterrupt",
-			exc:        &testGraphInterrupt{},
+			exc:        &pregel.GraphInterrupt{Interrupts: []pregel.Interrupt{{Value: "interrupted"}}},
 			wantCode:   0, // 不设置 Error
 			wantStatus: NodeStatusInterrupted,
 		},

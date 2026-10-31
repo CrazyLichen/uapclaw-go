@@ -7,18 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// graphInterrupter 图中断信号接口，避免 tracer → interaction 循环依赖。
-// interaction.GraphInterrupt 隐式满足此接口。
-type graphInterrupter interface {
-	isGraphInterrupt()
-}
 
 // traceBaseHandler 追踪基础处理器，对应 Python TraceBaseHandler。
 // 提供 FormatData 抽象方法、EmitStreamWriter/GetElapsedTime/GetNodeStatus 通用方法。
@@ -285,7 +280,8 @@ func (h *TraceWorkflowHandler) OnPreStream(ctx context.Context, invokeID string,
 }
 
 // OnInvoke 组件调用中（运行时数据/错误）
-// exc 参数支持 *exception.BaseError、*interaction.GraphInterrupt 和普通 error 三种类型
+// exc 参数支持 *exception.BaseError、*pregel.GraphInterrupt 和普通 error 三种类型。
+// 中断必须用具体类型断言放行（禁止 r.(error) 兜底，见 8.7 spec §7 D3）。
 func (h *TraceWorkflowHandler) OnInvoke(ctx context.Context, invokeID string, onInvokeData map[string]any, exc any) error {
 	span := h.getTracerWorkflowSpan(invokeID)
 
@@ -297,7 +293,7 @@ func (h *TraceWorkflowHandler) OnInvoke(ctx context.Context, invokeID string, on
 				"error_code": e.Code(),
 				"message":    e.Message(),
 			}
-		case graphInterrupter:
+		case *pregel.GraphInterrupt:
 			span.Status = string(NodeStatusInterrupted)
 		case error:
 			errMsg := exception.StatusWorkflowExecutionError.RenderMessage(
