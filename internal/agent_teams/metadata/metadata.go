@@ -97,7 +97,8 @@ func ReadTeamDBState(sess interfaces.SessionFacade, teamName string) string {
 // Python: write_team_namespace(session, team_name, payload) -> None
 func WriteTeamNamespace(sess interfaces.SessionFacade, teamName string, payload map[string]any) {
 	teams := readTeamsBucketMutable(sess)
-	teams[teamName] = payload
+	// Python: teams[team_name] = dict(payload) —— 浅拷贝，避免调用方后续修改影响已存储状态
+	teams[teamName] = copyMap(payload)
 	sess.UpdateState(map[string]any{TeamsKey: teams})
 }
 

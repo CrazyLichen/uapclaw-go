@@ -93,9 +93,16 @@ func (m *RecoveryManager) RecoverTeam(ctx context.Context) []string {
 		// Python: if team_name: await team_backend.db.member.update_member_status(
 		//     member.member_name, team_name, MemberStatus.RESTARTING.value)
 		if teamName != "" {
-			teamBackend.DB().Member().UpdateMemberStatus(
+			// Python 未检查返回值；Go 补 Warn，避免"状态没写进去却继续重启"时状态分叉无迹可循
+			if updated := teamBackend.DB().Member().UpdateMemberStatus(
 				ctx, member.MemberName, teamName, string(atschema.MemberStatusRestarting),
-			)
+			); !updated {
+				logger.Warn(logComponent).
+					Str("member_name", member.MemberName).
+					Str("team_name", teamName).
+					Str("member_status", string(atschema.MemberStatusRestarting)).
+					Msg("failed to mark teammate restarting during recover_team")
+			}
 		}
 
 		// Python: if await self._spawn_manager.restart_teammate(member.member_name):

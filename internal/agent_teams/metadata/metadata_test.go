@@ -177,3 +177,34 @@ func TestRemoveTeamNamespace_不存在返回false(t *testing.T) {
 	removed := metadata.RemoveTeamNamespace(sess, "no_team")
 	assert.False(t, removed)
 }
+
+// TestWriteTeamNamespace_不共享调用方map 写入后修改 payload 不应影响已存储的桶
+// Python: teams[team_name] = dict(payload) —— 浅拷贝
+func TestWriteTeamNamespace_不共享调用方map(t *testing.T) {
+	sess := newFakeSessionFacade()
+	payload := map[string]any{"spec": "v1"}
+	metadata.WriteTeamNamespace(sess, "team1", payload)
+
+	// 调用方后续修改 payload
+	payload["spec"] = "mutated"
+	payload["extra"] = "added"
+
+	result := metadata.ReadTeamNamespace(sess, "team1")
+	assert.Equal(t, "v1", result["spec"])
+	assert.NotContains(t, result, "extra")
+}
+
+// TestMergeTeamNamespace_不污染会话内桶 partial 不应直接写穿到会话状态
+// Python: bucket = dict(teams.get(team_name) or {}) —— 浅拷贝后合并
+func TestMergeTeamNamespace_不污染会话内桶(t *testing.T) {
+	sess := newFakeSessionFacade()
+	metadata.WriteTeamNamespace(sess, "team1", map[string]any{"a": 1})
+
+	// 取出会话里的桶引用，合并后原引用不应被就地修改
+	before := metadata.ReadTeamNamespace(sess, "team1")
+	metadata.MergeTeamNamespace(sess, "team1", map[string]any{"b": 2})
+
+	assert.NotContains(t, before, "b")
+	after := metadata.ReadTeamNamespace(sess, "team1")
+	assert.Equal(t, 2, after["b"])
+}

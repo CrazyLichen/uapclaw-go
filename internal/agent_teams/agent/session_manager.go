@@ -161,6 +161,9 @@ func (m *SessionManager) BindSession(
 //
 // 清空后 sessionID=""，teamSession=nil → Unbound 状态。
 func (m *SessionManager) ReleaseSession(ctx context.Context) error {
+	// 清空前快照，否则日志里拿不到归属信息（Python 无此日志，属 Go 侧观测增强）
+	sessionID := m.sessionState.GetSessionID()
+
 	// 步骤 1: 清空 sessionID
 	// Python: _reset_session_id_token()
 	m.sessionState.SetSessionID("")
@@ -169,7 +172,13 @@ func (m *SessionManager) ReleaseSession(ctx context.Context) error {
 	// Python: state.team_session = None
 	m.state.TeamSession = nil
 
+	memberName := ""
+	if m.configurator != nil {
+		memberName = m.configurator.MemberName()
+	}
 	logger.Info(logComponent).
+		Str("session_id", sessionID).
+		Str("member_name", memberName).
 		Msg("SessionManager.ReleaseSession")
 	return nil
 }

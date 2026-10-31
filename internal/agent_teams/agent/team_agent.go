@@ -44,6 +44,7 @@ import (
 	"fmt"
 	"reflect"
 	"time"
+	"unicode/utf8"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
@@ -759,7 +760,17 @@ func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool
 		return a.streamController.FollowUp(ctx, fmt.Sprintf("%v", content))
 	}
 	if a.streamController.HasInFlightRound() {
-		a.streamController.pendingInputs = append(a.streamController.pendingInputs, content)
+		// Python: preview = content if isinstance(content, str) else type(content).__name__
+		// Python: team_logger.info("[{}] queueing input for next round (transition window): {:.60}", ...)
+		preview, ok := content.(string)
+		if !ok {
+			preview = fmt.Sprintf("%T", content)
+		}
+		logger.Info(logComponent).
+			Str("member_name", a.MemberName()).
+			Str("content_preview", truncateRunes(preview, 60)).
+			Msg("queueing input for next round (transition window)")
+		a.streamController.QueuePendingInput(content)
 		return nil
 	}
 	return a.streamController.StartRound(ctx, content)
@@ -1733,4 +1744,13 @@ func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
 		}
 	}()
 	pool.RemoveTeam(teamName)
+}
+
+// truncateRunes 按字符截断字符串，避免破坏多字节字符。
+// 对齐 Python: f"{preview:.60}" 的字符截断语义。
+func truncateRunes(s string, maxLen int) string {
+	if utf8.RuneCountInString(s) <= maxLen {
+		return s
+	}
+	return string([]rune(s)[:maxLen])
 }
