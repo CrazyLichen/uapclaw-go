@@ -14,6 +14,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	gwa2a "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/protocol/a2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
@@ -352,4 +354,23 @@ func TestAppGateway_AcpRouteAssembled(t *testing.T) {
 	if !bridgeSet {
 		t.Fatal("acp bridge should be set")
 	}
+}
+
+// TestNewAppGatewayServer_注册A2A通道 步骤 4.8：a2a 通道应注册进 ChannelManager
+func TestNewAppGatewayServer_注册A2A通道(t *testing.T) {
+	t.Setenv("A2A_SERVER_ENABLED", "")
+	s := newTestAppGatewayServer(t)
+	require.NotNil(t, s.a2aChannel, "a2aChannel 未装配")
+	assert.NotNil(t, s.channelMgr.GetChannel("a2a"), "a2a 通道未注册进 ChannelManager")
+	assert.Equal(t, "a2a", s.a2aChannel.ChannelID())
+	assert.Equal(t, cm.ChannelTypeA2A, s.a2aChannel.ChannelType())
+}
+
+// TestNewAppGatewayServer_A2A默认关闭 未设 env 时 Enabled=false
+func TestNewAppGatewayServer_A2A默认关闭(t *testing.T) {
+	t.Setenv("A2A_SERVER_ENABLED", "")
+	s := newTestAppGatewayServer(t)
+	cfg, ok := s.a2aChannel.Config().(gwa2a.A2AChannelConfig)
+	require.True(t, ok, "Config 类型 = %T", s.a2aChannel.Config())
+	assert.False(t, cfg.Enabled, "未设 env 时应关闭")
 }

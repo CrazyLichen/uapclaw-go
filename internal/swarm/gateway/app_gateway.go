@@ -21,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	gwa2a "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/protocol/a2a"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	gwcron "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/cron"
 	gwheartbeat "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/heartbeat"
@@ -71,6 +72,8 @@ type AppGatewayServer struct {
 	imInbound *impipeline.IMInboundPipeline
 	// imOutbound 数字分身出站管线（11.12，对齐 Python im_outbound）
 	imOutbound *impipeline.IMOutboundPipeline
+	// a2aChannel A2A 入站通道（11.26，对齐 Python a2a_channel）
+	a2aChannel *gwa2a.A2AChannel
 }
 
 // ackMessagePublisher connection.ack 出站推送适配器（审查修复 T-11）。
@@ -305,6 +308,13 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 		return data
 	})
 
+	// 步骤4.8：A2A 入站通道装配（11.26，对齐 Python app_gateway.py L1071-1124）
+	// env 解析 → 建通道 → 注册进 ChannelManager；实际监听在 Start 内后台启动
+	// Python: channel_manager.register_channel(a2a_channel)
+	//         + asyncio.create_task(a2a_channel.start())
+	s.a2aChannel = gwa2a.NewA2AChannel(gwa2a.ConfigFromEnv(os.Getenv))
+	channelMgr.RegisterChannel(s.a2aChannel)
+
 	// 步骤5：注册 Web RPC handlers + onConnect 钩子（对齐 Python _register_web_handlers(bind)）
 	// AgentClient 通过 BindParams 闭包捕获，不直接设到 WebChannel
 	// CryptoProvider 生产不注入（传 nil）：handler 每次请求经 resolveCrypto 查全局，
@@ -359,6 +369,20 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 
 	if err := s.webChannel.Start(ctx); err != nil {
 		return err
+	}
+
+	// 11.26：后台启动 A2A 通道（对齐 Python asyncio.create_task(a2a_channel.start())，
+	// 启动失败只记日志不阻塞主流程，对齐 Python _on_a2a_task_done L1111-1124）
+	if s.a2aChannel != nil {
+		ch := s.a2aChannel
+		go func() {
+			if err := ch.Start(ctx); err != nil {
+				logger.Error(logComponent).
+					Err(err).
+					Str("channel_id", ch.ChannelID()).
+					Msg("A2A channel failed to start")
+			}
+		}()
 	}
 
 	// 启动 AgentClient 接收循环（对齐 Python connect 启动 _message_receiver_loop）
@@ -561,6 +585,17 @@ func (s *AppGatewayServer) Stop() error {
 	}
 	if s.inboundServer != nil {
 		s.inboundServer.Stop()
+	}
+
+	// 11.26：停止 A2A 通道并注销（对齐 Python L1651-1652
+	// await a2a_channel.stop() + unregister_channel）
+	if s.a2aChannel != nil {
+		if err := s.a2aChannel.Stop(ctx); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("failed to stop A2A channel")
+		}
+		if s.channelMgr != nil {
+			s.channelMgr.UnregisterChannel(s.a2aChannel.ChannelID())
+		}
 	}
 
 	// 关闭 WebChannel
