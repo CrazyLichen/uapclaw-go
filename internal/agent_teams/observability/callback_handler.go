@@ -129,7 +129,7 @@ func (h *OtelCallbackHandler) OnLLMInvokeOutput(ctx context.Context, data *cb.LL
 		return nil
 	}
 	// Python: response = kwargs.get("result")
-	h.closeLlmSpan(state, data.Response)
+	h.closeLlmSpan(ctx, state, data.Response)
 	return nil
 }
 
@@ -377,7 +377,7 @@ func (h *OtelCallbackHandler) openLlmSpan(ctx context.Context, data *cb.LLMCallE
 
 // closeLlmSpan 关闭 LLM span：写入 completion 属性，可选生成 reasoning 子 span。
 // Python: _close_llm_span(state, response)
-func (h *OtelCallbackHandler) closeLlmSpan(state *LlmSpanState, response any) {
+func (h *OtelCallbackHandler) closeLlmSpan(ctx context.Context, state *LlmSpanState, response any) {
 	// Python: completion_text = _coerce_message_content(_message_content(response))
 	completionText := coerceMessageContent(messageContent(response))
 	// Python: reasoning_text = str(getattr(response, "reasoning_content", "") or "")
@@ -393,7 +393,7 @@ func (h *OtelCallbackHandler) closeLlmSpan(state *LlmSpanState, response any) {
 	if reasoningText != "" {
 		// Python: with self._tracer().start_as_current_span(name="llm.reasoning", context=set_span_in_context(state.span))
 		// 对齐 Python: 从 state.Span 构建新 context 作为 reasoning span 的 parent
-		reasoningCtx := trace.ContextWithSpan(context.Background(), state.Span)
+		reasoningCtx := trace.ContextWithSpan(ctx, state.Span)
 		_, reasoningSpan := h.tracer().Start(reasoningCtx, "llm.reasoning", trace.WithSpanKind(trace.SpanKindInternal))
 		reasoningSpan.SetAttributes(
 			attribute.String(fmt.Sprintf("%s.0.role", GenAICompletion), "reasoning"),

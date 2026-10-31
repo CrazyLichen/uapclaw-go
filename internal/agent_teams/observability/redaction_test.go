@@ -3,6 +3,7 @@ package observability
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestRedactPrompt_不脱敏时截断(t *testing.T) {
@@ -69,5 +70,26 @@ func TestHashValue_空字符串(t *testing.T) {
 	result := hashValue("")
 	if !strings.HasPrefix(result, "sha256:") {
 		t.Errorf("期望 sha256: 前缀，实际 %q", result)
+	}
+}
+
+// TestTruncate_按rune截断 验证 CJK 截断不产生非法 UTF-8，且计数为字符数
+func TestTruncate_按rune截断(t *testing.T) {
+	got := truncate("中文中文中文", 3)
+	if !utf8.ValidString(got) {
+		t.Fatalf("截断结果不是合法 UTF-8: %q", got)
+	}
+	if !strings.Contains(got, "中文中") {
+		t.Fatalf("截断结果 = %q, 应包含 '中文中'", got)
+	}
+	if !strings.Contains(got, "truncated 3 chars") {
+		t.Fatalf("截断结果 = %q, 应包含 'truncated 3 chars'（6 字符截到 3，按字符计数）", got)
+	}
+}
+
+// TestTruncate_未超长原样返回
+func TestTruncate_未超长原样返回(t *testing.T) {
+	if got := truncate("中文", 3); got != "中文" {
+		t.Fatalf("truncate = %q, want 原样", got)
 	}
 }

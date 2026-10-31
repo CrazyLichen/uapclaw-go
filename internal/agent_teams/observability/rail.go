@@ -37,6 +37,9 @@ const (
 	// railTracerName Rail 层 tracer 名称
 	// Python: _TRACER_NAME = "openjiuwen.agent_teams.observability.rail"
 	railTracerName = "openjiuwen.agent_teams.observability.rail"
+	// observabilityRailPriority Rail 执行优先级
+	// Python: ObservabilityRail.priority = 10（低优先级：可观测性最后执行）
+	observabilityRailPriority = 10
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -50,6 +53,8 @@ func NewObservabilityRail(tracer trace.Tracer) *ObservabilityRail {
 		injectedTracer: tracer,
 	}
 	r.DeepAgentRail = *rails.NewDeepAgentRail()
+	// Python: priority: int = 10 —— 覆盖 DeepAgentRail 默认的 50，确保所有 rail 处理完后再开 span
+	r.WithPriority(observabilityRailPriority)
 	return r
 }
 
