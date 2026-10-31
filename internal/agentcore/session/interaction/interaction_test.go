@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -103,12 +104,29 @@ func TestWorkflowInteraction_WaitUserInputs_队列空时触发GraphInterrupt(t *
 		if r == nil {
 			t.Fatal("期望 panic GraphInterrupt，但未发生")
 		}
-		gi, ok := r.(*GraphInterrupt)
+		gi, ok := r.(*pregel.GraphInterrupt)
 		if !ok {
-			t.Fatalf("期望 *GraphInterrupt，得到 %T", r)
+			t.Fatalf("期望 *pregel.GraphInterrupt，得到 %T", r)
 		}
 		if len(gi.Interrupts) != 1 {
 			t.Fatalf("Interrupts 长度应为 1，实际=%d", len(gi.Interrupts))
+		}
+		val, ok := gi.Interrupts[0].Value.(stream.OutputSchema)
+		if !ok {
+			t.Fatalf("Interrupts[0].Value 期望 stream.OutputSchema，得到 %T", gi.Interrupts[0].Value)
+		}
+		if val.Type != InteractionType {
+			t.Errorf("Value.Type = %q，期望 %q", val.Type, InteractionType)
+		}
+		if val.Index != 0 {
+			t.Errorf("Value.Index = %d，期望 0", val.Index)
+		}
+		payload, ok := val.Payload.(InteractionOutput)
+		if !ok {
+			t.Fatalf("Value.Payload 期望 InteractionOutput，得到 %T", val.Payload)
+		}
+		if payload.Value != "question" {
+			t.Errorf("Payload.Value = %v，期望 \"question\"", payload.Value)
 		}
 	}()
 
@@ -139,8 +157,8 @@ func TestWorkflowInteraction_UserLatestInput_有缓存(t *testing.T) {
 		if r == nil {
 			t.Fatal("缓存清空后应触发 GraphInterrupt")
 		}
-		if _, ok := r.(*GraphInterrupt); !ok {
-			t.Fatalf("期望 *GraphInterrupt，得到 %T", r)
+		if _, ok := r.(*pregel.GraphInterrupt); !ok {
+			t.Fatalf("期望 *pregel.GraphInterrupt，得到 %T", r)
 		}
 	}()
 	_, _ = wi.UserLatestInput(context.Background(), "value2")
@@ -157,9 +175,9 @@ func TestWorkflowInteraction_UserLatestInput_无缓存触发GraphInterrupt(t *te
 		if r == nil {
 			t.Fatal("期望 panic GraphInterrupt，但未发生")
 		}
-		gi, ok := r.(*GraphInterrupt)
+		gi, ok := r.(*pregel.GraphInterrupt)
 		if !ok {
-			t.Fatalf("期望 *GraphInterrupt，得到 %T", r)
+			t.Fatalf("期望 *pregel.GraphInterrupt，得到 %T", r)
 		}
 		if len(gi.Interrupts) != 1 {
 			t.Fatalf("Interrupts 长度应为 1，实际=%d", len(gi.Interrupts))

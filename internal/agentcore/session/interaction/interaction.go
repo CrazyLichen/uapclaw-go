@@ -7,32 +7,21 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InteractionOutput 交互输出数据，标识一次交互的节点和值。
+// 中断值经 stream.OutputSchema{Type: "__interaction__", Index, Payload: 本类型} 承载
+// （Python 复用同一个 OutputSchema，Go 侧 8.7 起同构）。
 // Python: openjiuwen/core/session/interaction/interaction.py (InteractionOutput)
 type InteractionOutput struct {
 	// ID 节点/可执行 ID
 	ID string
 	// Value 交互携带的值
 	Value any
-}
-
-// InteractionOutputSchema 交互中断信号的结构化输出。
-// Python: OutputSchema(type=INTERACTION, index=idx, payload=payload)
-// 替代之前使用 map[string]any 的方式，提供类型安全。
-// Payload 统一为 InteractionOutput 类型（Python 中 wait_user_inputs 用 InteractionOutput，
-// user_latest_input 用 tuple，Go 统一为 InteractionOutput 更一致且类型安全）。
-type InteractionOutputSchema struct {
-	// Type 输出类型（如 "interaction"）
-	Type string `json:"type"`
-	// Index 交互序号
-	Index int `json:"index"`
-	// Payload 交互负载
-	Payload InteractionOutput `json:"payload"`
 }
 
 // WorkflowInteraction 工作流交互，通过 GraphInterrupt 暂停工作流图执行。
@@ -135,8 +124,8 @@ func (w *WorkflowInteraction) WaitUserInputs(ctx context.Context, value any) (an
 		Int("index", w.idx).
 		Msg("workflow interaction interrupted: waiting for user input")
 
-	PanicGraphInterrupt(pregel.Interrupt{
-		Value: InteractionOutputSchema{
+	pregel.PanicGraphInterrupt(pregel.Interrupt{
+		Value: stream.OutputSchema{
 			Type:    InteractionType,
 			Index:   w.idx,
 			Payload: payload,
@@ -167,8 +156,8 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 		Int("index", w.idx).
 		Msg("workflow latest input interrupted: waiting for user input")
 
-	PanicGraphInterrupt(pregel.Interrupt{
-		Value: InteractionOutputSchema{
+	pregel.PanicGraphInterrupt(pregel.Interrupt{
+		Value: stream.OutputSchema{
 			Type:    InteractionType,
 			Index:   w.idx,
 			Payload: payload,

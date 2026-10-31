@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -134,28 +133,7 @@ func TestGetNextInteractiveInput_队列为空(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GraphInterrupt 测试 ────────────────────────────
-
-// TestPanicGraphInterrupt 测试 GraphInterrupt panic
-func TestPanicGraphInterrupt(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("期望 panic GraphInterrupt，但未发生")
-		}
-		gi, ok := r.(*GraphInterrupt)
-		if !ok {
-			t.Fatalf("期望 *GraphInterrupt，得到 %T", r)
-		}
-		if len(gi.Interrupts) != 1 {
-			t.Fatalf("Interrupts 长度应为 1，实际=%d", len(gi.Interrupts))
-		}
-		if gi.Interrupts[0].Value != "test_value" {
-			t.Errorf("Interrupt.Value 期望 'test_value'，实际=%v", gi.Interrupts[0].Value)
-		}
-	}()
-	PanicGraphInterrupt(pregel.Interrupt{Value: "test_value"})
-}
+// ──────────────────────────── AgentInterrupt 测试 ────────────────────────────
 
 // TestPanicAgentInterrupt 测试 AgentInterrupt panic
 func TestPanicAgentInterrupt(t *testing.T) {

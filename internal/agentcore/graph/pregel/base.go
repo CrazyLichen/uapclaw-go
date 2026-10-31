@@ -29,7 +29,8 @@ type Message struct {
 // 与 GraphInterrupt（控制流跳转手段，定义于本文件）职责不同：本类型只承载中断值。
 //
 // 分层纪律：Value 的具体类型由 session 层决定（当前唯一来源是
-// session/interaction.InteractionOutputSchema），本包只做装箱透传、从不拆箱。
+// session/stream.OutputSchema，其 Payload 装 interaction.InteractionOutput），
+// 本包只做装箱透传、从不拆箱。
 // 原因：Python 把该字段声明为 Any（pregel/base.py:11），正是为了让 graph 层不依赖
 // session 层；Go 侧若收窄为具体类型，pregel 就必须 import session/interaction，
 // 而 interaction 已 import 本包，构成编译期循环。类型断言只允许发生在 session 层。
