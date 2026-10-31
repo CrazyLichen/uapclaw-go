@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
@@ -1169,5 +1170,97 @@ func TestEvolveSimplify与Rebuild_空名与不存在(t *testing.T) {
 				t.Errorf("不存在应提示未找到，实际: %s", output)
 			}
 		})
+	}
+}
+
+// TestApprovalSummaryOutput_计数口径与rune截断 回归（D1）：对齐 Python
+// _format_approval_summary —— 条数用 questions 总数、明细只列 dict 项、
+// 单条按 200 字符截断（不得按字节切断中文）。
+func TestApprovalSummaryOutput_计数口径与rune截断(t *testing.T) {
+	longText := strings.Repeat("中", 250)
+	questions := []any{
+		map[string]any{"question": "第一问"},
+		"非dict项", // 占位：计入总数但不产生明细行
+		map[string]any{"question": longText},
+	}
+
+	out := approvalSummaryOutput("demo", questions, "生成")
+
+	if !strings.HasPrefix(out, "已为 Skill 'demo' 生成 3 条待审批内容：\n") {
+		t.Fatalf("文案头不符（条数应为 questions 总数 3）: %q", out)
+	}
+	lines := strings.Split(out, "\n")
+	if len(lines) != 3 { // 首行 + 2 条明细
+		t.Fatalf("明细行数 = %d, 期望 2（非 dict 项不列）: %q", len(lines)-1, out)
+	}
+	if !strings.HasPrefix(lines[1], "  1. 第一问") {
+		t.Errorf("第 1 行不符: %q", lines[1])
+	}
+	// 非 dict 项占掉编号 2，故第 2 条明细编号为 3（对齐 enumerate 下标）
+	if !strings.HasPrefix(lines[2], "  3. ") {
+		t.Errorf("第 2 条明细编号应为 3: %q", lines[2])
+	}
+	if !strings.HasSuffix(lines[2], strings.Repeat("中", 200)) {
+		t.Error("长文本应按 200 字符截断")
+	}
+	if strings.Contains(out, strings.Repeat("中", 201)) {
+		t.Error("不得出现第 201 个字符（截断失效）")
+	}
+	if !utf8.ValidString(out) {
+		t.Error("截断产生非法 UTF-8")
+	}
+}
+
+// TestApprovalResultFromApprovalChunk_无questionCount 回归（D1）：deep 侧审批响应
+// 只有 output/result_type/approval_chunks（Python interface_deep 无 question_count）。
+func TestApprovalResultFromApprovalChunk_无questionCount(t *testing.T) {
+	chunk := map[string]any{
+		"event_type": "chat.ask_user_question",
+		"questions":  []any{map[string]any{"question": "要精简吗"}},
+	}
+	res := approvalResultFromApprovalChunk("demo", chunk, "生成")
+
+	if _, exists := res["question_count"]; exists {
+		t.Error("deep 侧审批响应不应带 question_count（那是 team 侧契约）")
+	}
+	if res["result_type"] != "answer" {
+		t.Errorf("result_type = %v, 期望 answer", res["result_type"])
+	}
+	chunks, ok := res["approval_chunks"].([]map[string]any)
+	if !ok || len(chunks) != 1 {
+		t.Fatalf("approval_chunks 形状不符: %#v", res["approval_chunks"])
+	}
+	if output, _ := res["output"].(string); !strings.Contains(output, "1 条待审批内容") {
+		t.Errorf("output 应含条数: %q", output)
+	}
+}
+
+// TestEvolveRollback_空名列入0版本 回归（D2）：Python 只判 archives 非空，
+// 「有归档但没有 SKILL.v*」的 skill 也要列出（显示 0 个版本）。
+func TestEvolveRollback_空名列入0版本(t *testing.T) {
+	skillsDir := t.TempDir()
+	d := newEvolveTestAdapter(t, skillsDir, nil)
+	skillName := "only-evolution-archive"
+	skillDir := makeEvolveSkillDir(t, skillsDir, skillName)
+
+	// 造出「只有 evolutions 归档、没有 SKILL.v* 归档」的 skill
+	if err := os.WriteFile(filepath.Join(skillDir, "evolutions.json"), []byte("[]"), 0o644); err != nil {
+		t.Fatalf("写 evolutions.json 失败: %v", err)
+	}
+	if _, err := d.skillEvolutionRail.EvolutionStore().ArchiveEvolutions(t.Context(), skillName); err != nil {
+		t.Fatalf("ArchiveEvolutions 失败: %v", err)
+	}
+
+	resp, err := d.handleEvolveRollbackCommand(t.Context(), "/evolve_rollback", "s1")
+	if err != nil {
+		t.Fatalf("返回 error: %v", err)
+	}
+	output, _ := resp["output"].(string)
+	wantLine := "- **" + skillName + "**: 0 个版本"
+	if !strings.Contains(output, wantLine) {
+		t.Fatalf("空名清单应列出 0 版本项 %q，实际输出: %s", wantLine, output)
+	}
+	if got := resp["result_type"]; got != "error" {
+		t.Errorf("result_type = %v, 期望 error", got)
 	}
 }

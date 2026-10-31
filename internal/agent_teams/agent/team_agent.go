@@ -44,7 +44,6 @@ import (
 	"fmt"
 	"reflect"
 	"time"
-	"unicode/utf8"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
@@ -68,6 +67,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -773,7 +773,7 @@ func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool
 		}
 		logger.Info(logComponent).
 			Str("member_name", a.MemberName()).
-			Str("content_preview", truncateRunes(preview, 60)).
+			Str("content_preview", utils.TruncateRunes(preview, 60)).
 			Msg("queueing input for next round (transition window)")
 		a.streamController.QueuePendingInput(content)
 		return nil
@@ -1757,9 +1757,3 @@ func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
 
 // truncateRunes 按字符截断字符串，避免破坏多字节字符。
 // 对齐 Python: f"{preview:.60}" 的字符截断语义。
-func truncateRunes(s string, maxLen int) string {
-	if utf8.RuneCountInString(s) <= maxLen {
-		return s
-	}
-	return string([]rune(s)[:maxLen])
-}

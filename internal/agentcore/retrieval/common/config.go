@@ -236,6 +236,16 @@ func (c *VectorStoreConfig) Validate() error {
 	return validateDistanceMetricKind(dm)
 }
 
+// IsValidIndexType 判断索引类型是否为合法枚举值。
+//
+// 供「需要自己决定错误码」的调用方复用：例如 ConfigManager 加载配置文件时
+// 应报 155511（配置非法）而不是 validateIndexTypeKind 的「索引构建」错误码。
+// 与 validateIndexTypeKind 共用 validIndexTypeKinds 单一真源，避免合法类型
+// 清单在多处字面量不同步。
+func IsValidIndexType(kind IndexTypeKind) bool {
+	return validIndexTypeKinds[kind]
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // validateIndexTypeKind 校验索引类型是否有效。

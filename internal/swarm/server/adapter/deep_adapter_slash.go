@@ -3,10 +3,12 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
 	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
@@ -291,10 +293,8 @@ func (d *DeepAdapter) handleEvolveCommand(ctx context.Context, query string, ses
 	for i, q := range questions {
 		qm, _ := q.(map[string]any)
 		text, _ := qm["question"].(string)
-		if len(text) > 200 {
-			text = text[:200]
-		}
-		summaries = append(summaries, fmt.Sprintf("  %d. %s", i+1, text))
+		// rune 安全截断：按字节切会把中文第 200 字节切断成半个 UTF-8
+		summaries = append(summaries, fmt.Sprintf("  %d. %s", i+1, utils.TruncateRunes(text, 200)))
 	}
 
 	return map[string]any{
@@ -432,14 +432,22 @@ func (d *DeepAdapter) handleEvolveSimplifyCommand(ctx context.Context, query str
 	}
 
 	// Python: return self._approval_response_from_simplify_result(...)
-	// 复用 team 侧一比一实现（含 OutputSchema 展平与 question_count）
-	return approvalResultFromEventOrItems(
-		skillName,
-		result.ApprovalEvent,
-		result.Actions,
-		fmt.Sprintf("Skill '%s' 经验库状态良好，无需整理。", skillName),
-		fmt.Sprintf("Skill '%s' 精简方案已生成，但审批事件为空或格式无效。", skillName),
-	), nil
+	// 注意：deep 侧的审批响应与 team 侧不同（interface_deep._approval_response_from_event_or_records），
+	// 文案是 _format_approval_summary 且**不带 question_count**，不能复用 team helper。
+	approvalChunk := approvalChunkFromEvent(teamHelperEventAsMap(result.ApprovalEvent))
+	if approvalChunk != nil {
+		return approvalResultFromApprovalChunk(skillName, approvalChunk, "生成"), nil
+	}
+	if len(result.Actions) > 0 {
+		return map[string]any{
+			"output":      fmt.Sprintf("Skill '%s' 精简方案已生成，但审批事件为空或格式无效。", skillName),
+			"result_type": "error",
+		}, nil
+	}
+	return map[string]any{
+		"output":      fmt.Sprintf("Skill '%s' 经验库状态良好，无需整理。", skillName),
+		"result_type": "answer",
+	}, nil
 }
 
 // handleEvolveRebuildCommand 处理 /evolve_rebuild 命令。
@@ -525,8 +533,11 @@ func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query str
 		archivesHint := ""
 		if store != nil {
 			for _, name := range skillruntime.FilterVisibleSkillNames(store.ListSkillNames(ctx)) {
-				if count := countSkillBodyVersions(store.ListArchives(ctx, name)); count > 0 {
-					archivesHint += fmt.Sprintf("\n  - **%s**: %d 个版本", name, count)
+				archives := store.ListArchives(ctx, name)
+				// Python L4170-4174 只判 archives 非空（不判 body 版本数），
+				// 故「有归档但没有 SKILL.v*」的 skill 也会列出 0 个版本——照抄该口径。
+				if len(archives) > 0 {
+					archivesHint += fmt.Sprintf("\n  - **%s**: %d 个版本", name, len(skillBodyVersions(archives)))
 				}
 			}
 		}
@@ -573,7 +584,7 @@ func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query str
 	if version == "latest" {
 		version = bodyVersions[0]
 	}
-	if !containsString(bodyVersions, version) {
+	if !slices.Contains(bodyVersions, version) {
 		hint := make([]string, 0, 5)
 		for _, v := range bodyVersions {
 			if len(hint) == 5 {
@@ -606,6 +617,39 @@ func (d *DeepAdapter) handleEvolveRollbackCommand(ctx context.Context, query str
 		"output":      fmt.Sprintf("Skill '%s' 已成功回滚到 `%s`。\n\n（当前状态已自动归档，可再次回滚恢复。）", skillName, version),
 		"result_type": "answer",
 	}, nil
+}
+
+// approvalResultFromApprovalChunk 构造 deep 侧审批响应（有审批事件时）。
+//
+// Python: _approval_response_from_event_or_records 的 approval 分支（L3957-3968）。
+// 与 team 侧的 approvalResultFromEventOrItems 区别：文案来自 _format_approval_summary
+// （action_label 参数化 + 逐条 question 摘要），且**没有 question_count** 字段。
+func approvalResultFromApprovalChunk(skillName string, approvalChunk map[string]any, actionLabel string) map[string]any {
+	questions := teamHelperQuestionsItems(approvalChunk["questions"])
+	return map[string]any{
+		"output":          approvalSummaryOutput(skillName, questions, actionLabel),
+		"result_type":     "answer",
+		"approval_chunks": []map[string]any{approvalChunk},
+	}
+}
+
+// approvalSummaryOutput 生成审批摘要文案（对齐 Python _format_approval_summary L3936-3945）。
+//
+// 计数口径与 Python 一致：条数是 questions 总数（含非 dict 项），而明细只列 dict 项，
+// 因此可能出现「3 条待审批内容」但只列 1 行——这是 Python 既有行为，不做"修正"。
+// 单条文本按 rune 截断到 200 字符（Python 的 q.get('question',”)[:200] 是字符切片）。
+func approvalSummaryOutput(skillName string, questions []any, actionLabel string) string {
+	lines := make([]string, 0, len(questions))
+	for i, q := range questions {
+		qm, ok := q.(map[string]any)
+		if !ok {
+			continue
+		}
+		text, _ := qm["question"].(string)
+		lines = append(lines, fmt.Sprintf("  %d. %s", i+1, utils.TruncateRunes(text, 200)))
+	}
+	return fmt.Sprintf("已为 Skill '%s' %s %d 条待审批内容：\n%s",
+		skillName, actionLabel, len(questions), strings.Join(lines, "\n"))
 }
 
 // evolveSkillArgError 校验 Skill 名称参数（空名 / 不存在），返回 Python 同款错误响应。
@@ -647,11 +691,6 @@ func skillBodyVersions(archives []string) []string {
 	return out
 }
 
-// countSkillBodyVersions 统计主体归档版本数（空名清单的「N 个版本」）。
-func countSkillBodyVersions(archives []string) int {
-	return len(skillBodyVersions(archives))
-}
-
 // formatArchiveTimestamp 归档文件名转可读时间（Python: SKILL.v20261030_120000.md → 2026-10-30 12:00:00 UTC）。
 func formatArchiveTimestamp(archive string) string {
 	ts := strings.ReplaceAll(strings.ReplaceAll(archive, "SKILL.v", ""), ".md", "")
@@ -659,16 +698,6 @@ func formatArchiveTimestamp(archive string) string {
 		return ts
 	}
 	return fmt.Sprintf("%s-%s-%s %s:%s:%s UTC", ts[0:4], ts[4:6], ts[6:8], ts[9:11], ts[11:13], ts[13:15])
-}
-
-// containsString 切片包含判定。
-func containsString(items []string, target string) bool {
-	for _, item := range items {
-		if item == target {
-			return true
-		}
-	}
-	return false
 }
 
 // handleGovernanceApproval 处理治理审批。

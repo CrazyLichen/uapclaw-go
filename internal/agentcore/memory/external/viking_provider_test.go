@@ -552,15 +552,6 @@ func TestOpenVikingProvider_HandleToolCall_VikingBrowse_Stat(t *testing.T) {
 	}
 }
 
-func TestTruncStr(t *testing.T) {
-	if truncStr("hello", 10) != "hello" {
-		t.Error("短字符串不应截断")
-	}
-	if truncStr("hello world", 5) != "hello" {
-		t.Error("长字符串应截断到 maxLen")
-	}
-}
-
 func TestFloatVal(t *testing.T) {
 	if floatVal(float64(3.14)) != 3.14 {
 		t.Error("float64 提取失败")

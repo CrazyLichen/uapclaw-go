@@ -98,7 +98,12 @@ func UserHomeDir() string {
 //   - "~" → 展开为 UserHomeDir()
 //   - "~/foo" → 展开为 UserHomeDir()/foo
 //   - "~/" → 展开为 UserHomeDir()/
+//   - "~user/foo" → **原样返回**（见下方说明）
 //   - 其他路径原样返回
+//
+// 关于 "~user"：Python 的 expanduser 会查 passwd；查不到时原样返回。Go 侧不做
+// passwd 查询（跨平台成本高、生产用不到），统一原样返回 —— 比旧实现把
+// "~otheruser" 拼成 "home/otheruser"（一个不存在的绝对路径）更接近 Python 语义。
 func ExpandHome(path string) string {
 	if len(path) == 0 || path[0] != '~' {
 		return path

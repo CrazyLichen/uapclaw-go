@@ -16,7 +16,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	memoryrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	harnesssecurity "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
@@ -570,25 +569,23 @@ func (c *CodeAdapter) updateRailsForMode(ctx context.Context, mode string) {
 
 	// 2. SubagentRail — code 模式保留（task_tool 派发 explore/plan 子代理）；缺失则重建
 	if c.deep.subagentRail == nil && c.deep.instance != nil {
-		if rail, ok := c.deep.buildSubagentRail().(*subagent.SubagentRail); ok && rail != nil {
-			if err := c.deep.instance.RegisterRail(ctx, rail); err != nil {
-				logger.Error(logComponent).Err(err).Str("rail", "SubagentRail").Msg("Failed to register Rail")
-			} else {
-				c.deep.subagentRail = rail
-				logger.Info(logComponent).Str("mode", mode).Str("rail", "SubagentRail").Msg("SubagentRail (re)registered (Code mode)")
-			}
+		rail := c.deep.buildSubagentRail()
+		if err := c.deep.instance.RegisterRail(ctx, rail); err != nil {
+			logger.Error(logComponent).Err(err).Str("rail", "SubagentRail").Msg("Failed to register Rail")
+		} else {
+			c.deep.subagentRail = rail
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "SubagentRail").Msg("SubagentRail (re)registered (Code mode)")
 		}
 	}
 
 	// 3. ProjectMemoryRail — code 模式始终挂载；缺失则重建
 	if c.projectMemoryRail == nil && c.deep.instance != nil {
-		if rail, ok := c.buildProjectMemoryRail().(*commonrails.ProjectMemoryRail); ok && rail != nil {
-			if err := c.deep.instance.RegisterRail(ctx, rail); err != nil {
-				logger.Error(logComponent).Err(err).Str("rail", "ProjectMemoryRail").Msg("Failed to register Rail")
-			} else {
-				c.projectMemoryRail = rail
-				logger.Info(logComponent).Str("mode", mode).Str("rail", "ProjectMemoryRail").Msg("ProjectMemoryRail (re)registered (Code mode)")
-			}
+		rail := c.buildProjectMemoryRail()
+		if err := c.deep.instance.RegisterRail(ctx, rail); err != nil {
+			logger.Error(logComponent).Err(err).Str("rail", "ProjectMemoryRail").Msg("Failed to register Rail")
+		} else {
+			c.projectMemoryRail = rail
+			logger.Info(logComponent).Str("mode", mode).Str("rail", "ProjectMemoryRail").Msg("ProjectMemoryRail (re)registered (Code mode)")
 		}
 	}
 
@@ -1087,7 +1084,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	// 6: ProjectMemoryRail（项目记忆护栏）
 	// ⤴️ 10.6.7: ProjectMemoryRail 实现
 	if pm := c.buildProjectMemoryRail(); pm != nil {
-		c.projectMemoryRail = pm.(*commonrails.ProjectMemoryRail)
+		c.projectMemoryRail = pm
 		railsList = append(railsList, pm)
 	}
 
@@ -1257,7 +1254,8 @@ func (c *CodeAdapter) buildLspRail() sainterfaces.AgentRail {
 // buildProjectMemoryRail 构建项目记忆护栏。
 // Python: JiuwenClawCodeAdapter._build_project_memory_rail() (interface_code.py)
 // ⤴️ 10.6.7: ProjectMemoryRail 实现
-func (c *CodeAdapter) buildProjectMemoryRail() sainterfaces.AgentRail {
+// 返回具体类型：Caller 需存入 *ProjectMemoryRail 字段，接口返回会迫使类型断言。
+func (c *CodeAdapter) buildProjectMemoryRail() *commonrails.ProjectMemoryRail {
 	// Python: workspace = self._project_dir or self._workspace_dir or "./"
 	ws := c.deep.projectDir
 	if ws == "" {

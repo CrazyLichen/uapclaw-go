@@ -265,9 +265,9 @@ func knowledgeBaseConfigFromMap(data map[string]any) (common.KnowledgeBaseConfig
 			exception.WithMsg("knowledge_base.kb_id 不能为空"),
 		)
 	}
-	switch cfg.IndexType {
-	case common.IndexTypeHybrid, common.IndexTypeBM25, common.IndexTypeVector:
-	default:
+	// 合法类型清单复用 common.IsValidIndexType（与 validateIndexTypeKind 同源），
+	// 只在错误码上区别于索引构建路径：这里是「配置文件非法」→ 155511。
+	if !common.IsValidIndexType(cfg.IndexType) {
 		return cfg, exception.BuildError(
 			exception.StatusRetrievalUtilsConfigInvalid,
 			exception.WithMsg(fmt.Sprintf("knowledge_base.index_type 非法: %s", cfg.IndexType)),

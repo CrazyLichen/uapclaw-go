@@ -230,3 +230,47 @@ func TestConfigManager_非数值类型回落默认(t *testing.T) {
 	assert.Equal(t, 512, cfg.ChunkSize)
 	assert.Equal(t, 50, cfg.ChunkOverlap)
 }
+
+// TestLoadFromFile_字段校验 回归（T-05/D3）：对齐 pydantic 必填/字面量约束——
+// 空 kb_id 与非法 index_type 都应报 155511（配置非法），而不是索引构建类错误码。
+func TestLoadFromFile_字段校验(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"kb_id为空", `{"kb_id":"","index_type":"vector"}`},
+		{"kb_id缺失", `{"index_type":"vector"}`},
+		{"kb_id仅空白", `{"kb_id":"   ","index_type":"vector"}`},
+		{"index_type非法", `{"kb_id":"kb1","index_type":"graph"}`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := writeTempFile(t, "cfg.json", c.body)
+			_, err := NewConfigManager(path)
+			if err == nil {
+				t.Fatal("非法配置应返回错误")
+			}
+			var be *exception.BaseError
+			if !errors.As(err, &be) {
+				t.Fatalf("错误类型不符: %v", err)
+			}
+			if be.Code() != 155511 {
+				t.Errorf("错误码 = %d, 期望 155511", be.Code())
+			}
+		})
+	}
+
+	// 合法配置不受影响（index_type 缺省 → hybrid）
+	path := writeTempFile(t, "cfg.json", `{"kb_id":"kb1"}`)
+	m, err := NewConfigManager(path)
+	if err != nil {
+		t.Fatalf("合法配置不应报错: %v", err)
+	}
+	cfg, err := m.GetKnowledgeBaseConfig()
+	if err != nil {
+		t.Fatalf("取配置失败: %v", err)
+	}
+	if cfg.IndexType != common.IndexTypeHybrid {
+		t.Errorf("index_type = %v, 期望 hybrid（pydantic 默认值）", cfg.IndexType)
+	}
+}

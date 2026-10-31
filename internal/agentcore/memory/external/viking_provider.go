@@ -335,7 +335,7 @@ func (p *OpenVikingProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 	// 对齐 Python: await asyncio.to_thread(self._client.post, f"/api/v1/sessions/{sid}/messages", {"role": "user", "content": user_msg[:4000]})
 	_, err := p.client.post(ctx, fmt.Sprintf("/api/v1/sessions/%s/messages", sid), map[string]any{
 		"role":    "user",
-		"content": truncStr(userMsg, 4000),
+		"content": utils.TruncateRunes(userMsg, 4000),
 	})
 	if err != nil {
 		// 对齐 Python: logger.debug("OpenViking sync failed: %s", e)
@@ -347,7 +347,7 @@ func (p *OpenVikingProvider) SyncTurn(ctx context.Context, userMsg, assistantMsg
 	// 对齐 Python: await asyncio.to_thread(self._client.post, ..., {"role": "assistant", "content": assistant_msg[:4000]})
 	_, err = p.client.post(ctx, fmt.Sprintf("/api/v1/sessions/%s/messages", sid), map[string]any{
 		"role":    "assistant",
-		"content": truncStr(assistantMsg, 4000),
+		"content": utils.TruncateRunes(assistantMsg, 4000),
 	})
 	if err != nil {
 		logger.Debug(logComponent).Err(err).Str("role", "assistant").Msg("OpenViking sync_turn failed")
@@ -764,13 +764,6 @@ func (p *OpenVikingProvider) handleVikingAddResource(ctx context.Context, args m
 
 // truncStr 截断字符串到指定 rune 长度（CJK-safe）。
 // 对齐 Python: user_msg[:4000] — Python 按字符（rune）截断，Go 必须 按 rune 截断以避免破坏多字节字符
-func truncStr(s string, maxLen int) string {
-	if utf8.RuneCountInString(s) <= maxLen {
-		return s
-	}
-	runes := []rune(s)
-	return string(runes[:maxLen])
-}
 
 // floatVal 从 map 值中提取 float64。
 func floatVal(v any) float64 {

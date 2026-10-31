@@ -131,10 +131,9 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	}
 
 	// 步骤 10: subagentRail — Python: _subagent_rail
+	// buildSubagentRail 已返回具体类型，无需类型断言（原先的断言失败会静默丢 rail）
 	sa := d.buildSubagentRail()
-	if rail, ok := sa.(*subagent.SubagentRail); ok {
-		d.subagentRail = rail
-	}
+	d.subagentRail = sa
 	railsList = append(railsList, sa)
 
 	// 步骤 11: permissionRail — Python: _permission_rail
@@ -496,7 +495,10 @@ func (d *DeepAdapter) buildStreamEventRail() *commrails.JiuClawStreamEventRail {
 
 // buildSubagentRail 构建子代理护栏。
 // ✅ 已回填：SubagentRail（对齐 Python: _build_subagent_rail() — SubagentRail()）
-func (d *DeepAdapter) buildSubagentRail() sainterfaces.AgentRail {
+// 返回具体类型（而非 AgentRail 接口）：调用方多需 *SubagentRail 存入字段，
+// 接口返回会迫使调用点做类型断言，断言失败即静默丢 rail（S-01 同类缺陷）。
+// 需要接口的地方直接赋值即可——Go 接口隐式满足，调用方无需改动。
+func (d *DeepAdapter) buildSubagentRail() *subagent.SubagentRail {
 	rail := subagent.NewSubagentRail()
 	logger.Info(logComponent).Msg("SubagentRail created")
 	return rail
@@ -993,10 +995,9 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 
 	// 9. SubagentRail — plan 模式下注册
 	if d.subagentRail == nil {
-		rail := d.buildSubagentRail()
-		var ok bool
-		d.subagentRail, ok = rail.(*subagent.SubagentRail)
-		if ok && d.instance != nil {
+		// buildSubagentRail 已返回具体类型，直接赋值（去断言，避免 ok=false 静默跳过注册）
+		d.subagentRail = d.buildSubagentRail()
+		if d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, d.subagentRail); err != nil {
 				logger.Error(logComponent).Err(err).Msg("Failed to register SubagentRail")
 			} else {

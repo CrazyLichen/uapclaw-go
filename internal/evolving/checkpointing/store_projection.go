@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
 )
 
@@ -356,7 +357,7 @@ func (h *StoreProjectionHelper) ListPendingSummary(ctx context.Context, names []
 			if idx := strings.Index(content, "\n"); idx >= 0 {
 				title = content[:idx]
 			} else if utf8.RuneCountInString(content) > 50 {
-				title = truncateRunes(content, 50)
+				title = utils.TruncateRunesEllipsis(content, 50)
 			}
 			lines = append(lines, fmt.Sprintf("   - [%s] **%s**: ", targetTag, title))
 			if strings.Contains(content, "\n") {
@@ -372,7 +373,7 @@ func (h *StoreProjectionHelper) ListPendingSummary(ctx context.Context, names []
 					}
 					summary := strings.Join(summaryParts, " ")
 					if utf8.RuneCountInString(summary) > 100 {
-						summary = truncateRunes(summary, 100)
+						summary = utils.TruncateRunesEllipsis(summary, 100)
 					}
 					summary = strings.ReplaceAll(summary, "**", "")
 					lines = append(lines, fmt.Sprintf("    %s", summary))
@@ -441,16 +442,6 @@ func recordSummary(record *EvolutionRecord) string {
 }
 
 // truncateRunes 按 rune 数截断字符串，返回最多 maxRune 个 rune 的前缀加 "..."。
-func truncateRunes(s string, maxRune int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRune {
-		return s
-	}
-	if maxRune <= 3 {
-		return string(runes[:maxRune])
-	}
-	return strings.TrimRight(string(runes[:maxRune-3]), " ") + "..."
-}
 
 // normalizeSummaryText 规范化摘要文本。
 // Python: StoreProjectionHelper._normalize_summary_text(text, max_chars=96)
@@ -468,7 +459,7 @@ func normalizeSummaryText(text string, maxChars int) string {
 		maxChars = 96
 	}
 	if utf8.RuneCountInString(value) > maxChars {
-		return truncateRunes(value, maxChars)
+		return utils.TruncateRunesEllipsis(value, maxChars)
 	}
 	return value
 }

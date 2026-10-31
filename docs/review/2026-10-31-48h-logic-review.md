@@ -224,3 +224,20 @@ Python `acp/cli.py:40-46` 未知识别返回 2；Go 走 cobra → `exitCodeFor` 
 - 严重项 5 条全部做过 Python 源码逐行对照（含行号）。
 - 未覆盖：`tui_cli_route_test.go`/`e2e_acp_bridge_test.go` 等新增集成测试的断言有效性（仅抽查）；`internal/swarm/gateway/tui_route.go`(310) 与 `acp_gateway_24_test.go`(1385) 只做了结构级浏览，未逐行对拍，如需可另开一轮。
 - 本文件仅记录问题，未修改任何代码。
+
+## 复核补充（实施后自审，D1–D6）
+
+修复落地后再对照 Python 复核实现本身，发现并处置以下 6 项偏差：
+
+| 编号 | 问题 | 处置 |
+|------|------|------|
+| D1 | `/evolve_simplify` 误用 team 侧 helper `approvalResultFromEventOrItems`：文案变成「演进请求已生成，请在审批弹框中确认」，并多出 `question_count`（Python `interface_deep` 走 `_format_approval_summary`，无该字段） | 新增 deep 侧 `approvalSummaryOutput` / `approvalResultFromApprovalChunk`，文案改为「已为 Skill 'x' 生成 N 条待审批内容：」；N 用 questions 总数、明细只列 dict 项（照抄 Python 口径） |
+| D1b | `/evolve` 明细行用 `text[:200]` 按字节截断，中文会截出半个 rune | 抽 `utils.TruncateRunes`（字符级），`/evolve` 与 simplify 共用 |
+| D2 | rollback 空名清单用 `count > 0` 过滤，漏掉「有归档但 0 个 SKILL.v*」的 skill | 改回 Python 口径：仅判 `len(archives) > 0` |
+| D3 | `config_manager` 手写 `case hybrid, bm25, vector` 与 `common.validIndexTypeKinds` 双份清单 | 导出 `common.IsValidIndexType`，单一真源 + 保留 155511 错误码 |
+| D4 | S-01 重建块的 `.(*subagent.SubagentRail)` 断言失败会静默跳过注册 | `buildSubagentRail`/`buildProjectMemoryRail` 改返回具体类型，消除全部 4 处断言（接口隐式满足，调用点无需改） |
+| D5 | 新增的 `containsString` 重复造轮子 | 改用 `slices.Contains` |
+
+另：截断助手统一收敛到 `utils`，替换 4 处私有实现（agent_teams/team_agent、task_loop/handler、viking_provider、evolving/store_projection——最后一处带省略号语义，落到 `utils.TruncateRunesEllipsis`），删除对应 8 个本地测试（覆盖迁到 `utils/truncate_test.go`）。
+
+保留的两处计划外行为（复核确认合理，已加注释）：`ExpandHome` 不再把 `~otheruser` 拼成 `home/otheruser`（对齐 Python 原样返回）；gateway ping 写失败主动 `conn.Close()` 触发重连。
