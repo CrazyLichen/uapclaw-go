@@ -357,6 +357,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 				ch, err := d.runTaskLoopStream(ctx, invokeInputs, sess, streamModes)
 				if err != nil {
 					logger.Error(logComponent).Err(err).Msg("runTaskLoopStream start failed")
+					emitStreamError(outCh, err)
 					return err
 				}
 				for chunk := range ch {
@@ -370,6 +371,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 				ch, err := d.runSingleRoundStream(ctx, invokeInputs, sess, streamModes)
 				if err != nil {
 					logger.Error(logComponent).Err(err).Msg("runSingleRoundStream start failed")
+					emitStreamError(outCh, err)
 					return err
 				}
 				for chunk := range ch {
@@ -2947,6 +2949,27 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 	}
 	if addErr := resourceMgr.AddTool(webTool, resources_manager.WithTag(resources_manager.Tag(d.card.ID))); addErr != nil {
 		logger.Warn(logComponent).Err(addErr).Str("tool_id", card.ID).Msg("Failed to register search tool")
+	}
+}
+
+// emitStreamError 把流启动失败转为 error 类型的输出帧投进流通道。
+//
+// 对齐 Python interface_deep.py L4889-4898：流式任务抛异常时由适配器
+// `except Exception` 产出 chat.error。Go 的 agent 流无法抛异常，改为在流内
+// 投一个 Type="error" 的输出帧，由 DeepAdapter.ParseStreamChunk 的
+// `case "error"` 分支映射为 chat.error——否则启动期错误只落日志，
+// 消费者看到空流，ACP 侧最终只剩 idle → end_turn（用户看不到任何错误）。
+func emitStreamError(outCh chan stream.Schema, err error) {
+	if err == nil {
+		return
+	}
+	// 适配器按 Payload 桥接为 map（utils.PayloadToMap），载荷用 map 最直接
+	outCh <- &stream.OutputSchema{
+		Type: "error",
+		Payload: map[string]any{
+			"error": err.Error(),
+		},
+		IsLastSchema: true,
 	}
 }
 

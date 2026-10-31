@@ -3940,3 +3940,27 @@ func TestDeepAgent_EnsureInitialized_RailInit错误上抛(t *testing.T) {
 	assert.Contains(t, err.Error(), "rail init boom")
 	assert.False(t, d.initialized, "初始化失败时不应标记为已初始化")
 }
+
+// TestEmitStreamError_投递error帧 验证流启动失败转为 Type="error" 输出帧
+// （适配器 ParseStreamChunk 的 case "error" 映射为 chat.error）
+func TestEmitStreamError_投递error帧(t *testing.T) {
+	outCh := make(chan stream.Schema, 2)
+	emitStreamError(outCh, errors.New("boom"))
+
+	require.Len(t, outCh, 1)
+	raw := <-outCh
+	out, ok := raw.(*stream.OutputSchema)
+	require.True(t, ok, "应为 *stream.OutputSchema，实际 %T", raw)
+	assert.Equal(t, "error", out.Type)
+	payload, ok := out.Payload.(map[string]any)
+	require.True(t, ok, "Payload 应为 map[string]any")
+	assert.Equal(t, "boom", payload["error"])
+	assert.True(t, out.IsLastSchema)
+}
+
+// TestEmitStreamError_nil不投递 验证 nil 错误不产生帧（避免空错误事件）
+func TestEmitStreamError_nil不投递(t *testing.T) {
+	outCh := make(chan stream.Schema, 2)
+	emitStreamError(outCh, nil)
+	assert.Len(t, outCh, 0)
+}
