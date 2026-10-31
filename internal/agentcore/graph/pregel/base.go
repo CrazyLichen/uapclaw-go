@@ -21,6 +21,21 @@ type Message struct {
 	kind MessageKind
 }
 
+// Interrupt 图中断信号，值对象：随检查点持久化后由 Pregel.Run 返回给上层
+// （顶层返回 {"__interrupt__": value}）。
+//
+// 与 GraphInterrupt（控制流跳转手段，8.7 迁入本包）职责不同：本类型只承载中断值。
+// Python: pregel/base.py:10-14
+type Interrupt struct {
+	// Value 中断携带的值（Go 侧实际装 InteractionOutputSchema）
+	Value any
+	// Resumable 是否可恢复中断。Python 类型声明的 __init__ 不接受该形参，
+	// 但 interaction.py:62 以关键字传入（运行时 TypeError），保留以承载作者意图
+	Resumable bool
+	// NS 命名空间（节点 ID），同上，interaction.py:63 以关键字传入
+	NS string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // MessageKind 消息种类判别式。

@@ -109,3 +109,37 @@ func TestMessage_值拷贝独立(t *testing.T) {
 		t.Errorf("原件 Payload 被副本修改：%v", origin.Payload)
 	}
 }
+
+// TestInterrupt_字段 三字段读写往返。
+// Python 声明仅有 value（pregel/base.py:10-14），Resumable/NS 为有意偏差 R1：
+// interaction.py:61-63 实际以关键字传入了这两个 Python 不接受的参数。
+func TestInterrupt_字段(t *testing.T) {
+	it := Interrupt{
+		Value:     "output_schema_stub",
+		Resumable: true,
+		NS:        "nodeA",
+	}
+	if it.Value != "output_schema_stub" {
+		t.Errorf("Value = %v，期望 \"output_schema_stub\"", it.Value)
+	}
+	if !it.Resumable {
+		t.Error("Resumable 应为 true")
+	}
+	if it.NS != "nodeA" {
+		t.Errorf("NS = %q，期望 \"nodeA\"", it.NS)
+	}
+}
+
+// TestInterrupt_零值 零值 Interrupt 各字段为 nil/false/空串，便于直接构造占位。
+func TestInterrupt_零值(t *testing.T) {
+	var it Interrupt
+	if it.Value != nil {
+		t.Errorf("Value = %v，期望 nil", it.Value)
+	}
+	if it.Resumable {
+		t.Error("Resumable 零值应为 false")
+	}
+	if it.NS != "" {
+		t.Errorf("NS = %q，期望空串", it.NS)
+	}
+}
