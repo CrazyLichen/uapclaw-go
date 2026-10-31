@@ -280,8 +280,8 @@ pregel.PanicGraphInterrupt(pregel.Interrupt{
 
 | 用例 | 断言 |
 |---|---|
-| `handler_test.go:471-473` | 删 `testGraphInterrupt`，改用 `pregel.PanicGraphInterrupt` 产出的真实 `*pregel.GraphInterrupt`；仍断言 `span.Status == NodeStatusInterrupted` 且 `span.Error == nil` |
-| `handler_test.go`（新增） | 反证：一个普通 `error` 仍走 `case error` 分支（防止直连改造把兜底分支吃掉） |
+| `handler_test.go:471-473` | 删 `testGraphInterrupt`，用例改用真实 `&pregel.GraphInterrupt{...}`；仍断言 `span.Status == NodeStatusInterrupted` 且 `span.Error == nil` |
+| `handler_test.go`（已有，保留不动） | 反证：表驱动中「普通错误」用例（`fmt.Errorf("普通错误")`）仍走 `case error` 分支——直连改造后必须继续通过，防止把兜底分支吃掉 |
 
 全量回归：`CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...`，包覆盖率 ≥ 85%。
 
