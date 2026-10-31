@@ -273,6 +273,52 @@ func (s *SweeperIncrementalSuite) TestSweep_新会话不足3且无过期会话�
 	s.Empty(env.ReadDreamingMD(outDir))
 }
 
+// TestSweep_存在7天前会话则绕过门槛 测试 _MIN_SESSION_AGE_BYPASS_DAYS 旁路。
+func (s *SweeperIncrementalSuite) TestSweep_存在7天前会话则绕过门槛() {
+	env := s.newEnv()
+	outDir := env.OutputDir("memory")
+	env.PlantSession(s.T(), "sess-old", "agent", 5)
+	env.PlantSession(s.T(), "sess-new", "agent", 5)
+	env.Touch(s.T(), "sess-old", -8*24*time.Hour)
+
+	items := []map[string]string{{"title": "旁路知识", "content": "门槛被绕过"}}
+	env.QueueJSON(s.T(), items)
+	env.QueueJSON(s.T(), items)
+
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(2, s.MockLLM.InvokeCallCount(), "存在 8 天旧会话时应绕过 3 会话门槛")
+	s.Contains(env.ReadDreamingMD(outDir), "旁路知识")
+}
+
+// TestSweep_超30天会话标记已扫并丢弃 测试 _MAX_SESSION_AGE_DAYS 丢弃规则。
+//
+// 注意 saveCheckpoint 只在有成功会话时落盘，因此需另配 2 个正常会话
+// 让检查点真正写出，才能观察被丢弃会话的零值快照。
+func (s *SweeperIncrementalSuite) TestSweep_超30天会话标记已扫并丢弃() {
+	env := s.newEnv()
+	outDir := env.OutputDir("memory")
+	env.PlantSession(s.T(), "sess-ancient", "agent", 5)
+	env.PlantSession(s.T(), "sess-b", "agent", 5)
+	env.PlantSession(s.T(), "sess-c", "agent", 5)
+	env.Touch(s.T(), "sess-ancient", -31*24*time.Hour)
+
+	env.QueueJSON(s.T(), []map[string]string{{"title": "正常知识B", "content": "b"}})
+	env.QueueJSON(s.T(), []map[string]string{{"title": "正常知识C", "content": "c"}})
+
+	s.newSweeper(env, outDir, "agent").RunSweep(s.Ctx)
+	s.Equal(2, s.MockLLM.InvokeCallCount(), "超 30 天会话不应被提取")
+
+	content := env.ReadDreamingMD(outDir)
+	s.Contains(content, "正常知识B")
+	s.Contains(content, "正常知识C")
+
+	cp := env.ReadCheckpoint(s.T(), outDir)
+	snapshot, ok := cp.ScannedSessions["sess-ancient"]
+	s.True(ok, "被丢弃的会话应被标记为已扫")
+	s.Equal(0, snapshot.RoundCount, "标记为空快照")
+	s.Equal(float64(0), snapshot.HistoryMtime, "标记为空快照")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newEnv 构建隔离环境并清空 mock 状态（MockLLM 为套件级共享）。
