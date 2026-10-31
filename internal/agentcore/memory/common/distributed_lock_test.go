@@ -1,5 +1,3 @@
-//go:build test
-
 package common
 
 import (
@@ -207,4 +205,65 @@ func TestDistributedLock_WithLock_fn出错也释放(t *testing.T) {
 	if val != nil {
 		t.Error("fn 出错后锁未被释放")
 	}
+}
+
+// TestDistributedLock_Acquire_重入返回错误 同一实例重复获取应报错而非覆盖 lockValue
+func TestDistributedLock_Acquire_重入返回错误(t *testing.T) {
+	store := kv.NewInMemoryKVStore()
+	lock := NewDistributedLock(store, "reentrant")
+	ctx := context.Background()
+
+	if err := lock.Acquire(ctx); err != nil {
+		t.Fatalf("首次 Acquire 失败: %v", err)
+	}
+	first := lock.lockValue
+
+	err := lock.Acquire(ctx)
+	if !errors.Is(err, ErrLockAlreadyAcquired) {
+		t.Fatalf("重入 Acquire 错误 = %v, want ErrLockAlreadyAcquired", err)
+	}
+	if lock.lockValue != first {
+		t.Errorf("重入后 lockValue 被改写: %q -> %q", first, lock.lockValue)
+	}
+	if err := lock.Release(ctx); err != nil {
+		t.Fatalf("Release 失败: %v", err)
+	}
+	// 释放后应可再次获取
+	if err := lock.Acquire(ctx); err != nil {
+		t.Fatalf("释放后再次 Acquire 失败: %v", err)
+	}
+	_ = lock.Release(ctx)
+}
+
+// TestDistributedLock_Release_锁被抢占不误删 模拟 TTL 过期后他人持锁，Release 不得删除他人锁
+func TestDistributedLock_Release_锁被抢占不误删(t *testing.T) {
+	store := kv.NewInMemoryKVStore()
+	ctx := context.Background()
+
+	lock1 := NewDistributedLock(store, "stolen-lock")
+	if err := lock1.Acquire(ctx); err != nil {
+		t.Fatalf("lock1 Acquire 失败: %v", err)
+	}
+
+	// 模拟锁在持有期间过期并被 lock2 抢占
+	if err := store.Delete(ctx, "_lock/stolen-lock"); err != nil {
+		t.Fatalf("清除锁失败: %v", err)
+	}
+	lock2 := NewDistributedLock(store, "stolen-lock")
+	if err := lock2.Acquire(ctx); err != nil {
+		t.Fatalf("lock2 Acquire 失败: %v", err)
+	}
+
+	// lock1 用已过期的 lockValue 释放，必须失败（不删除 lock2 的锁）
+	if err := lock1.Release(ctx); err != nil {
+		t.Fatalf("lock1 Release 返回 error: %v", err)
+	}
+	val, err := store.Get(ctx, "_lock/stolen-lock")
+	if err != nil {
+		t.Fatalf("Get 失败: %v", err)
+	}
+	if string(val) != lock2.lockValue {
+		t.Fatalf("误删了他人持有的锁: got %q, want %q", string(val), lock2.lockValue)
+	}
+	_ = lock2.Release(ctx)
 }
