@@ -179,7 +179,7 @@ const (
 - [ ] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/graph/pregel/ -run TestConstants -v`
-Expected: `--- PASS: TestConstants_值与Python一致`（11 个子用例）、`--- PASS: TestConstants_递归上限为10000`、`ok`
+Expected: `--- PASS: TestConstants_值与Python一致`（**10 个子用例**：10 颗 string 常量各自一条）、`--- PASS: TestConstants_递归上限为10000`（int 常量单独断言，合计覆盖 11 颗）、`ok`
 
 - [ ] **Step 5: 提交**
 
@@ -399,7 +399,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 ```
 
@@ -409,7 +409,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 ```
 
-（若上游 `logger` 行文本与本示例不同，保持原样不动，只插入 pregel 一行。）
+（若上游 `logger` 行文本与本示例不同，保持原样不动，只插入 pregel 一行。实施期订正：本示例原误写为 `github.com/uapclaw/common/logger`，实际是 `internal/common/logger`。）
 
 - [ ] **Step 2: 替换函数实现与注释**
 
