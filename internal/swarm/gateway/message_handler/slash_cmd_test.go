@@ -610,3 +610,68 @@ func TestBranchSlashNotice_成功回填字段(t *testing.T) {
 	state := mh.GetOrCreateChannelState(msg)
 	assert.NotEmpty(t, state.SessionID, "回落后应写入生成的 newSID")
 }
+
+// rewindReplies 构造 /rewind 的假响应。
+func rewindReplies(ok bool) map[string]fakeReply {
+	return map[string]fakeReply{
+		string(schema.ReqMethodChatCancel): func(rid string, _ map[string]any) *schema.AgentResponse {
+			return schema.NewAgentResponse(rid, "feishu_test", schema.WithPayload(map[string]any{}))
+		},
+		string(schema.ReqMethodSessionRewind): func(rid string, _ map[string]any) *schema.AgentResponse {
+			if !ok {
+				return schema.NewAgentResponse(rid, "feishu_test",
+					schema.WithResponseOK(false),
+					schema.WithPayload(map[string]any{"error": "boom"}))
+			}
+			return schema.NewAgentResponse(rid, "feishu_test", schema.WithPayload(map[string]any{
+				"content_preview":   "hello world",
+				"remaining_records": 3,
+				"removed_records":   2,
+				"rewind_context":    true,
+			}))
+		},
+	}
+}
+
+// TestRewindSlashNotice_E2A成功 A5/A6：preview 只取 content_preview（无兜底），
+// 且读 rewind_context。
+func TestRewindSlashNotice_E2A成功(t *testing.T) {
+	_, mh := newFakeAgentServer(t, rewindReplies(true))
+
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+	seedChannelSession(mh, msg, "sess-1")
+
+	mh.rewindSlashNotice(msg, command_parser.ParsedChannelControl{
+		Action:     command_parser.ActionRewindConfirm,
+		RewindTurn: 2,
+	})
+
+	notice := waitNoticeContaining(t, mh, "已回退到第 2 轮")
+	content, _ := notice.Payload["content"].(string)
+	assert.Contains(t, content, `"hello world"`)
+	assert.Contains(t, content, "删除 2 条记录，剩余 3 条。")
+	assert.NotContains(t, content, "上下文未同步截断", "E2A 成功路径不应带兜底提示")
+}
+
+// 注：「当前无活跃会话，无法回退」分支不可达——Python
+// _get_channel_default_state (L247-270) 与 Go getChannelDefaultState 在 config
+// 未指定 default_session_id 时都会生成 sid，state.session_id 永不为空。
+// 该分支属 Python 同源的防御性代码，故不为其编写用例。
+
+// TestRewindSlashNotice_兜底失败 覆盖 E2A 拒绝后本地回退失败的路径。
+func TestRewindSlashNotice_兜底失败(t *testing.T) {
+	_, mh := newFakeAgentServer(t, rewindReplies(false))
+
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+	seedChannelSession(mh, msg, "sid-without-history-44a")
+
+	mh.rewindSlashNotice(msg, command_parser.ParsedChannelControl{
+		Action:     command_parser.ActionRewindConfirm,
+		RewindTurn: 1,
+	})
+
+	notice := waitNoticeContaining(t, mh, "回退失败")
+	assert.Contains(t, notice.Payload["error"], "回退失败")
+}

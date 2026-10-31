@@ -506,6 +506,7 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 			preview := ""
 			remaining := 0
 			removed := 0
+			rewindContext := false
 			if resp.Payload != nil {
 				if p, ok := resp.Payload["content_preview"].(string); ok {
 					// M-07: Python preview[:50] 按字符切，Go 按 rune 对齐口径，
@@ -514,7 +515,16 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 				}
 				remaining = payloadToInt(resp.Payload["remaining_records"])
 				removed = payloadToInt(resp.Payload["removed_records"])
+				// A6: Python L1096 读取 rewind_context（仅用于日志）
+				rewindContext, _ = resp.Payload["rewind_context"].(bool)
 			}
+			// A6: Python L1104-1107 成功日志
+			logger.Info(logComponent).
+				Str("event_type", "rewind_slash_done_e2a").
+				Str("session_id", targetSID).
+				Int("turn_index", turn).
+				Bool("rewind_context", rewindContext).
+				Msg("/rewind completed via E2A")
 			mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。", turn, preview, removed, remaining)})
 			return
 		} else {
@@ -535,10 +545,17 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("回退失败：%v", err)})
 		return
 	}
+	// A5: Python L1117 只取 result["content_preview"]，无兜底。
+	// 原实现在为空时回填 result.Content，属自造行为（比 Python 更"友好"但不对齐），已删除。
 	preview := result.ContentPreview
-	if preview == "" && result.Content != "" {
-		preview = truncRunes(result.Content, 50)
-	}
+	// A6: Python L1128-1131 fallback 成功日志
+	logger.Info(logComponent).
+		Str("event_type", "rewind_slash_done_local").
+		Str("session_id", targetSID).
+		Int("turn_index", turn).
+		Int("remaining_records", result.RemainingRecords).
+		Int("removed_records", result.RemovedRecords).
+		Msg("/rewind completed via local fallback")
 	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf(
 		"[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。（注意：上下文未同步截断）",
 		turn, preview, result.RemovedRecords, result.RemainingRecords)})

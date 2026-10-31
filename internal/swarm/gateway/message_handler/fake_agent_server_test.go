@@ -156,7 +156,9 @@ func waitNoticeContaining(t *testing.T, mh *MessageHandler, substr string) *sche
 	for {
 		select {
 		case notice := <-mh.robotMessages:
-			if content, _ := notice.Payload["content"].(string); strings.Contains(content, substr) {
+			content, _ := notice.Payload["content"].(string)
+			errText, _ := notice.Payload["error"].(string)
+			if strings.Contains(content, substr) || strings.Contains(errText, substr) {
 				return notice
 			}
 		case <-deadline:
