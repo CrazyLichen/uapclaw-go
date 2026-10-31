@@ -17,11 +17,17 @@ func TestTeamPlanAgentDesc(t *testing.T) {
 
 // TestTeamPlanAgentSystemPrompt 测试系统提示词加载
 func TestTeamPlanAgentSystemPrompt(t *testing.T) {
-	cnPrompt := TeamPlanAgentSystemPrompt("cn")
+	cnPrompt, err := TeamPlanAgentSystemPrompt("cn")
+	if err != nil {
+		t.Fatalf("TeamPlanAgentSystemPrompt cn 返回错误: %v", err)
+	}
 	if cnPrompt == "" {
 		t.Fatal("TeamPlanAgentSystemPrompt cn is empty")
 	}
-	enPrompt := TeamPlanAgentSystemPrompt("en")
+	enPrompt, err := TeamPlanAgentSystemPrompt("en")
+	if err != nil {
+		t.Fatalf("TeamPlanAgentSystemPrompt en 返回错误: %v", err)
+	}
 	if enPrompt == "" {
 		t.Fatal("TeamPlanAgentSystemPrompt en is empty")
 	}
@@ -44,13 +50,17 @@ func TestTeamPlanAgentDescription(t *testing.T) {
 	}
 }
 
-// TestDefaultTeamPlanAgentSystemPrompt 测试默认提示词映射
-func TestDefaultTeamPlanAgentSystemPrompt(t *testing.T) {
-	if DefaultTeamPlanAgentSystemPrompt["cn"] == "" {
-		t.Fatal("DefaultTeamPlanAgentSystemPrompt cn is empty")
+// TestBuiltinTeamPlanAgentPrompts 测试内置提示词映射（改为惰性加载后由函数提供）
+func TestBuiltinTeamPlanAgentPrompts(t *testing.T) {
+	builtin, err := builtinTeamPlanAgentPrompts()
+	if err != nil {
+		t.Fatalf("builtinTeamPlanAgentPrompts 返回错误: %v", err)
 	}
-	if DefaultTeamPlanAgentSystemPrompt["en"] == "" {
-		t.Fatal("DefaultTeamPlanAgentSystemPrompt en is empty")
+	if builtin["cn"] == "" {
+		t.Fatal("builtin cn prompt is empty")
+	}
+	if builtin["en"] == "" {
+		t.Fatal("builtin en prompt is empty")
 	}
 }
 
@@ -70,11 +80,17 @@ func TestBuildTeamPlanAgentCard(t *testing.T) {
 
 // TestGetTeamPlanModePrompt 测试获取 plan mode 模板
 func TestGetTeamPlanModePrompt(t *testing.T) {
-	cnPrompt := GetTeamPlanModePrompt("cn")
+	cnPrompt, err := GetTeamPlanModePrompt("cn")
+	if err != nil {
+		t.Fatalf("GetTeamPlanModePrompt cn 返回错误: %v", err)
+	}
 	if cnPrompt == "" {
 		t.Fatal("GetTeamPlanModePrompt cn is empty")
 	}
-	enPrompt := GetTeamPlanModePrompt("en")
+	enPrompt, err := GetTeamPlanModePrompt("en")
+	if err != nil {
+		t.Fatalf("GetTeamPlanModePrompt en 返回错误: %v", err)
+	}
 	if enPrompt == "" {
 		t.Fatal("GetTeamPlanModePrompt en is empty")
 	}
@@ -82,7 +98,10 @@ func TestGetTeamPlanModePrompt(t *testing.T) {
 
 // TestBuildTeamPlanModePrompt 测试渲染 plan mode 模板
 func TestBuildTeamPlanModePrompt(t *testing.T) {
-	result := BuildTeamPlanModePrompt("cn", "尚未调用 enter_plan_mode", "Plan 文件: /tmp/plan.md")
+	result, err := BuildTeamPlanModePrompt("cn", "尚未调用 enter_plan_mode", "Plan 文件: /tmp/plan.md")
+	if err != nil {
+		t.Fatalf("BuildTeamPlanModePrompt 返回错误: %v", err)
+	}
 	if result == "" {
 		t.Fatal("BuildTeamPlanModePrompt returned empty")
 	}
@@ -96,7 +115,10 @@ func TestBuildTeamPlanModePrompt(t *testing.T) {
 
 // TestBuildTeamPlanModePrompt_English 测试英文 plan mode 渲染
 func TestBuildTeamPlanModePrompt_English(t *testing.T) {
-	result := BuildTeamPlanModePrompt("en", "enter_plan_mode has been called", "Plan file: /tmp/plan.md")
+	result, err := BuildTeamPlanModePrompt("en", "enter_plan_mode has been called", "Plan file: /tmp/plan.md")
+	if err != nil {
+		t.Fatalf("BuildTeamPlanModePrompt 返回错误: %v", err)
+	}
 	if result == "" {
 		t.Fatal("BuildTeamPlanModePrompt returned empty")
 	}

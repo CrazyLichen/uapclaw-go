@@ -372,7 +372,8 @@ func TestAgentConfigurator_Configure(t *testing.T) {
 		TeamSpec:   &atschema.TeamSpec{TeamName: "test_team"},
 	}
 
-	harness := c.Configure(spec, ctx)
+	harness, err := c.Configure(spec, ctx)
+	require.NoError(t, err)
 	assert.NotNil(t, harness)
 	assert.NotNil(t, c.Blueprint())
 	assert.Equal(t, atschema.TeamRoleLeader, c.Role())
@@ -380,7 +381,8 @@ func TestAgentConfigurator_Configure(t *testing.T) {
 	assert.Equal(t, "test_team", c.TeamName())
 	assert.NotNil(t, c.Spec())
 	assert.NotNil(t, c.RuntimeContext())
-	assert.Equal(t, "", c.RolePolicy())
+	// 语言为空时按 Python load_template 默认值 "cn" 加载，角色策略应非空
+	assert.NotEmpty(t, c.RolePolicy())
 	assert.NotNil(t, c.TeamSpec())
 	assert.Equal(t, "temporary", c.Lifecycle())
 }
@@ -398,7 +400,7 @@ func TestAgentConfigurator_SetupInfra(t *testing.T) {
 	}
 
 	// 不 panic 即可
-	c.SetupInfra(spec, ctx)
+	require.NoError(t, c.SetupInfra(spec, ctx))
 	assert.NotNil(t, c.Blueprint())
 	assert.Equal(t, atschema.TeamRoleTeammate, c.Role())
 	assert.Equal(t, "t1", c.MemberName())
@@ -417,11 +419,11 @@ func TestAgentConfigurator_SetupInfra_WithOptions(t *testing.T) {
 
 	createdCalled := false
 	// 验证所有 Option 回调可以被正确赋值
-	c.SetupInfra(spec, ctx,
+	require.NoError(t, c.SetupInfra(spec, ctx,
 		WithOnTeammateCreated(func(ctx context.Context, name string) error { createdCalled = true; return nil }),
 		WithOnTeamCleaned(func(ctx context.Context) error { return nil }),
 		WithOnTeamBuilt(func(ctx context.Context) error { return nil }),
-	)
+	))
 
 	assert.NotNil(t, c.Blueprint())
 	// 手动触发回调验证
@@ -444,9 +446,10 @@ func TestAgentConfigurator_SetupAgent(t *testing.T) {
 	}
 
 	// 先 SetupInfra
-	c.SetupInfra(spec, ctx)
+	require.NoError(t, c.SetupInfra(spec, ctx))
 
-	harness := c.SetupAgent(spec, ctx)
+	harness, err := c.SetupAgent(spec, ctx)
+	require.NoError(t, err)
 	assert.NotNil(t, harness)
 	assert.Equal(t, harness, c.Harness())
 }

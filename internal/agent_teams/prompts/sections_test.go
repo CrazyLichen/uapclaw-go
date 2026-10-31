@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
 // TestBuildTeamRoleSection_Leader 测试 Leader 角色构建
 func TestBuildTeamRoleSection_Leader(t *testing.T) {
-	section := BuildTeamRoleSection(atschema.TeamRoleLeader, "alice", "build_mode", "cn")
+	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "alice", "build_mode", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -35,7 +36,7 @@ func TestBuildTeamRoleSection_Leader(t *testing.T) {
 
 // TestBuildTeamRoleSection_LeaderPlanMode 测试 Leader plan_mode
 func TestBuildTeamRoleSection_LeaderPlanMode(t *testing.T) {
-	section := BuildTeamRoleSection(atschema.TeamRoleLeader, "alice", "plan_mode", "cn")
+	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "alice", "plan_mode", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -50,7 +51,7 @@ func TestBuildTeamRoleSection_LeaderPlanMode(t *testing.T) {
 
 // TestBuildTeamRoleSection_TeammateBuildMode 测试 Teammate build_mode
 func TestBuildTeamRoleSection_TeammateBuildMode(t *testing.T) {
-	section := BuildTeamRoleSection(atschema.TeamRoleTeammate, "bob", "build_mode", "en")
+	section := mustBuildRoleSection(t, atschema.TeamRoleTeammate, "bob", "build_mode", "en")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -68,7 +69,7 @@ func TestBuildTeamRoleSection_TeammateBuildMode(t *testing.T) {
 
 // TestBuildTeamRoleSection_TeammatePlanMode 测试 Teammate plan_mode
 func TestBuildTeamRoleSection_TeammatePlanMode(t *testing.T) {
-	section := BuildTeamRoleSection(atschema.TeamRoleTeammate, "bob", "plan_mode", "cn")
+	section := mustBuildRoleSection(t, atschema.TeamRoleTeammate, "bob", "plan_mode", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -84,7 +85,7 @@ func TestBuildTeamRoleSection_TeammatePlanMode(t *testing.T) {
 
 // TestBuildTeamRoleSection_无MemberName 测试无 member_name 时不显示
 func TestBuildTeamRoleSection_无MemberName(t *testing.T) {
-	section := BuildTeamRoleSection(atschema.TeamRoleLeader, "", "build_mode", "cn")
+	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "", "build_mode", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -97,7 +98,7 @@ func TestBuildTeamRoleSection_无MemberName(t *testing.T) {
 
 // TestBuildTeamRoleSection_English 测试英文 Leader 角色
 func TestBuildTeamRoleSection_English(t *testing.T) {
-	section := BuildTeamRoleSection(atschema.TeamRoleLeader, "leader1", "plan_mode", "en")
+	section := mustBuildRoleSection(t, atschema.TeamRoleLeader, "leader1", "plan_mode", "en")
 	if section == nil {
 		t.Fatal("BuildTeamRoleSection returned nil")
 	}
@@ -262,7 +263,7 @@ func TestBuildTeamHITTSection_名字排序(t *testing.T) {
 
 // TestBuildTeamWorkflowSection_Leader 测试 Leader 工作流
 func TestBuildTeamWorkflowSection_Leader(t *testing.T) {
-	section := BuildTeamWorkflowSection(atschema.TeamRoleLeader, "default", "cn")
+	section := mustBuildWorkflowSection(t, atschema.TeamRoleLeader, "default", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamWorkflowSection returned nil for leader")
 	}
@@ -276,7 +277,7 @@ func TestBuildTeamWorkflowSection_Leader(t *testing.T) {
 
 // TestBuildTeamWorkflowSection_Teammate返回nil 测试 Teammate 无工作流
 func TestBuildTeamWorkflowSection_Teammate返回nil(t *testing.T) {
-	section := BuildTeamWorkflowSection(atschema.TeamRoleTeammate, "default", "cn")
+	section := mustBuildWorkflowSection(t, atschema.TeamRoleTeammate, "default", "cn")
 	if section != nil {
 		t.Fatal("expected nil for teammate workflow")
 	}
@@ -285,7 +286,7 @@ func TestBuildTeamWorkflowSection_Teammate返回nil(t *testing.T) {
 // TestBuildTeamWorkflowSection_三种模式 测试 default/predefined/hybrid 三种模式
 func TestBuildTeamWorkflowSection_三种模式(t *testing.T) {
 	for _, mode := range []string{"default", "predefined", "hybrid"} {
-		section := BuildTeamWorkflowSection(atschema.TeamRoleLeader, mode, "cn")
+		section := mustBuildWorkflowSection(t, atschema.TeamRoleLeader, mode, "cn")
 		if section == nil {
 			t.Fatalf("BuildTeamWorkflowSection returned nil for mode=%s", mode)
 		}
@@ -298,7 +299,7 @@ func TestBuildTeamWorkflowSection_三种模式(t *testing.T) {
 
 // TestBuildTeamWorkflowSection_English 测试英文工作流
 func TestBuildTeamWorkflowSection_English(t *testing.T) {
-	section := BuildTeamWorkflowSection(atschema.TeamRoleLeader, "default", "en")
+	section := mustBuildWorkflowSection(t, atschema.TeamRoleLeader, "default", "en")
 	if section == nil {
 		t.Fatal("BuildTeamWorkflowSection returned nil for English leader")
 	}
@@ -310,7 +311,7 @@ func TestBuildTeamWorkflowSection_English(t *testing.T) {
 
 // TestBuildTeamLifecycleSection_Leader 测试 Leader 生命周期
 func TestBuildTeamLifecycleSection_Leader(t *testing.T) {
-	section := BuildTeamLifecycleSection(atschema.TeamRoleLeader, "temporary", "cn")
+	section := mustBuildLifecycleSection(t, atschema.TeamRoleLeader, "temporary", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamLifecycleSection returned nil for leader")
 	}
@@ -324,7 +325,7 @@ func TestBuildTeamLifecycleSection_Leader(t *testing.T) {
 
 // TestBuildTeamLifecycleSection_Teammate返回nil 测试 Teammate 无生命周期
 func TestBuildTeamLifecycleSection_Teammate返回nil(t *testing.T) {
-	section := BuildTeamLifecycleSection(atschema.TeamRoleTeammate, "temporary", "cn")
+	section := mustBuildLifecycleSection(t, atschema.TeamRoleTeammate, "temporary", "cn")
 	if section != nil {
 		t.Fatal("expected nil for teammate lifecycle")
 	}
@@ -332,7 +333,7 @@ func TestBuildTeamLifecycleSection_Teammate返回nil(t *testing.T) {
 
 // TestBuildTeamLifecycleSection_Persistent 测试 persistent 生命周期模板
 func TestBuildTeamLifecycleSection_Persistent(t *testing.T) {
-	section := BuildTeamLifecycleSection(atschema.TeamRoleLeader, "persistent", "cn")
+	section := mustBuildLifecycleSection(t, atschema.TeamRoleLeader, "persistent", "cn")
 	if section == nil {
 		t.Fatal("BuildTeamLifecycleSection returned nil for persistent lifecycle")
 	}
@@ -630,12 +631,42 @@ func TestFormatHumanAgentRoster(t *testing.T) {
 // TestAllBuilders 返回类型验证
 func TestAllBuilders(t *testing.T) {
 	// 验证所有 builder 返回正确的 PromptSection 类型
-	var _ = BuildTeamRoleSection(atschema.TeamRoleLeader, "a", "build_mode", "cn")
-	var _ = BuildTeamWorkflowSection(atschema.TeamRoleLeader, "default", "cn")
-	var _ = BuildTeamLifecycleSection(atschema.TeamRoleLeader, "temporary", "cn")
+	var _ = mustBuildRoleSection(t, atschema.TeamRoleLeader, "a", "build_mode", "cn")
+	var _ = mustBuildWorkflowSection(t, atschema.TeamRoleLeader, "default", "cn")
+	var _ = mustBuildLifecycleSection(t, atschema.TeamRoleLeader, "temporary", "cn")
 	var _ = BuildTeamPersonaSection("p", "cn")
 	var _ = BuildTeamExtraSection("e", "cn")
 	var _ = BuildTeamInfoSection(&TeamInfo{TeamName: "t"}, "", "", "cn")
 	var _ = BuildTeamMembersSection([]TeamMember{{MemberName: "b"}}, "", "cn")
 	var _ = BuildTeamHITTSection(atschema.TeamRoleLeader, []string{"h"}, "cn", "", false)
+}
+
+// mustBuildRoleSection 断言 BuildTeamRoleSection 无错误。
+func mustBuildRoleSection(t *testing.T, role atschema.TeamRole, memberName, teammateMode, language string) *saprompt.PromptSection {
+	t.Helper()
+	section, err := BuildTeamRoleSection(role, memberName, teammateMode, language)
+	if err != nil {
+		t.Fatalf("BuildTeamRoleSection(%v, %s, %s, %s) 返回错误: %v", role, memberName, teammateMode, language, err)
+	}
+	return section
+}
+
+// mustBuildWorkflowSection 断言 BuildTeamWorkflowSection 无错误。
+func mustBuildWorkflowSection(t *testing.T, role atschema.TeamRole, teamMode, language string) *saprompt.PromptSection {
+	t.Helper()
+	section, err := BuildTeamWorkflowSection(role, teamMode, language)
+	if err != nil {
+		t.Fatalf("BuildTeamWorkflowSection(%v, %s, %s) 返回错误: %v", role, teamMode, language, err)
+	}
+	return section
+}
+
+// mustBuildLifecycleSection 断言 BuildTeamLifecycleSection 无错误。
+func mustBuildLifecycleSection(t *testing.T, role atschema.TeamRole, lifecycle, language string) *saprompt.PromptSection {
+	t.Helper()
+	section, err := BuildTeamLifecycleSection(role, lifecycle, language)
+	if err != nil {
+		t.Fatalf("BuildTeamLifecycleSection(%v, %s, %s) 返回错误: %v", role, lifecycle, language, err)
+	}
+	return section
 }

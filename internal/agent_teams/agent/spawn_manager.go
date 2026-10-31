@@ -538,7 +538,9 @@ func (m *SpawnManager) spawnInprocess(
 
 		// Python: teammate.configure(spec, ctx)
 		// 修复 M-04：使用外层 ctx（context.Context）而非 context.Background()
-		teammate.Configure(ctx, *spec, runtimeCtxParam)
+		if err := teammate.Configure(ctx, *spec, runtimeCtxParam); err != nil {
+			return nil, err
+		}
 
 		return teammate, nil
 	}

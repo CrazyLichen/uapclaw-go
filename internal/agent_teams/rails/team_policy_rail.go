@@ -84,8 +84,9 @@ var _ harnessrails.DeepAgentRailProvider = (*TeamPolicyRail)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamPolicyRail 创建 TeamPolicyRail 实例。
+// 静态 Section 在构造期构建，模板缺失时返回错误（对齐 Python __init__ 抛 FileNotFoundError）。
 // Python: TeamPolicyRail.__init__(role, persona, ...)
-func NewTeamPolicyRail(opts ...TeamPolicyRailOption) *TeamPolicyRail {
+func NewTeamPolicyRail(opts ...TeamPolicyRailOption) (*TeamPolicyRail, error) {
 	r := &TeamPolicyRail{
 		DeepAgentRail: *harnessrails.NewDeepAgentRail(),
 	}
@@ -101,7 +102,11 @@ func NewTeamPolicyRail(opts ...TeamPolicyRailOption) *TeamPolicyRail {
 	}
 
 	// Python: self._static_sections = self._build_static_sections(...)
-	r.staticSections = r.buildStaticSections(humanNames)
+	staticSections, err := r.buildStaticSections(humanNames)
+	if err != nil {
+		return nil, err
+	}
+	r.staticSections = staticSections
 
 	// Python: 动态 section 缓存
 	if r.teamBackend != nil {
@@ -115,7 +120,7 @@ func NewTeamPolicyRail(opts ...TeamPolicyRailOption) *TeamPolicyRail {
 		)
 	}
 
-	return r
+	return r, nil
 }
 
 // Init 缓存 Agent 的共享 prompt builder。
@@ -286,25 +291,38 @@ func (r *TeamPolicyRail) fetchAndBuildMembersSection(ctx context.Context) *sapro
 }
 
 // buildStaticSections 构造不变的静态 Section 列表。
+// 模板缺失时返回错误（对齐 Python _build_static_sections 内 load_template 抛异常）。
 // Python: TeamPolicyRail._build_static_sections(...)
-func (r *TeamPolicyRail) buildStaticSections(humanNames []string) []saprompt.PromptSection {
+func (r *TeamPolicyRail) buildStaticSections(humanNames []string) ([]saprompt.PromptSection, error) {
 	var sections []saprompt.PromptSection
 
 	// Role Section（总是存在）
-	if s := prompts.BuildTeamRoleSection(r.role, r.memberName, r.teammateMode, r.language); s != nil {
-		sections = append(sections, *s)
+	roleSection, err := prompts.BuildTeamRoleSection(r.role, r.memberName, r.teammateMode, r.language)
+	if err != nil {
+		return nil, err
+	}
+	if roleSection != nil {
+		sections = append(sections, *roleSection)
 	}
 	// HITT Section（仅当有人类成员时非 nil）
 	if s := prompts.BuildTeamHITTSection(r.role, humanNames, r.language, r.memberName, r.exposeHumanAgentsToTeammates); s != nil {
 		sections = append(sections, *s)
 	}
 	// Workflow Section（仅 Leader）
-	if s := prompts.BuildTeamWorkflowSection(r.role, r.teamMode, r.language); s != nil {
-		sections = append(sections, *s)
+	workflowSection, err := prompts.BuildTeamWorkflowSection(r.role, r.teamMode, r.language)
+	if err != nil {
+		return nil, err
+	}
+	if workflowSection != nil {
+		sections = append(sections, *workflowSection)
 	}
 	// Lifecycle Section（仅 Leader）
-	if s := prompts.BuildTeamLifecycleSection(r.role, r.lifecycle, r.language); s != nil {
-		sections = append(sections, *s)
+	lifecycleSection, err := prompts.BuildTeamLifecycleSection(r.role, r.lifecycle, r.language)
+	if err != nil {
+		return nil, err
+	}
+	if lifecycleSection != nil {
+		sections = append(sections, *lifecycleSection)
 	}
 	// Persona Section（仅当 persona 非空）
 	if s := prompts.BuildTeamPersonaSection(r.persona, r.language); s != nil {
@@ -314,5 +332,5 @@ func (r *TeamPolicyRail) buildStaticSections(humanNames []string) []saprompt.Pro
 	if s := prompts.BuildTeamExtraSection(r.basePrompt, r.language); s != nil {
 		sections = append(sections, *s)
 	}
-	return sections
+	return sections, nil
 }

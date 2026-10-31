@@ -160,14 +160,16 @@ func WithBackendLeaderAllocation(a *models.Allocation) SetupTeamBackendOption {
 
 // Configure 主入口：配置基础设施并构建 Harness。
 // Python: AgentConfigurator.configure(spec, ctx)
-func (c *AgentConfigurator) Configure(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) *agentteams.TeamHarness {
-	c.SetupInfra(spec, ctx)
+func (c *AgentConfigurator) Configure(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) (*agentteams.TeamHarness, error) {
+	if err := c.SetupInfra(spec, ctx); err != nil {
+		return nil, err
+	}
 	return c.SetupAgent(spec, ctx)
 }
 
 // SetupInfra Phase 1：设置 spec/context，创建 messager、workspace manager、准备 team backend。
 // Python: AgentConfigurator.setup_infra(spec, ctx, ...)
-func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, opts ...SetupInfraOption) {
+func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext, opts ...SetupInfraOption) error {
 	// 应用可选参数
 	cfg := &setupInfraConfig{}
 	for _, opt := range opts {
@@ -184,7 +186,10 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 3. 构建 Blueprint
 	// ⤴️ 9.69 回填完成：角色策略
-	rolePolicyStr := prompts.RolePolicy(ctx.Role, resolvedLanguage)
+	rolePolicyStr, err := prompts.RolePolicy(ctx.Role, resolvedLanguage)
+	if err != nil {
+		return err
+	}
 	c.blueprint = &TeamAgentBlueprint{
 		Card:       c.card,
 		Spec:       spec,
@@ -239,11 +244,12 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 		wtMgr := c.CreateWorktreeManager(spec)
 		c.SetWorktreeManager(wtMgr)
 	}
+	return nil
 }
 
 // SetupAgent Phase 2：构建 prompt，通过 TeamHarness 创建 DeepAgent，设置协调。
 // Python: AgentConfigurator.setup_agent(spec, ctx)
-func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) *agentteams.TeamHarness {
+func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) (*agentteams.TeamHarness, error) {
 	// 1. 解析 AgentSpec
 	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
 
@@ -347,7 +353,8 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	persona := ""
 	var teamPolicyRail *rails.TeamPolicyRail
 	if spec.Workspace != nil && c.WorkspaceManager() != nil {
-		teamPolicyRail = rails.NewTeamPolicyRail(
+		var err error
+		teamPolicyRail, err = rails.NewTeamPolicyRail(
 			rails.WithPolicyRole(ctx.Role),
 			rails.WithPolicyPersona(persona),
 			rails.WithPolicyMemberName(ctx.MemberName),
@@ -361,8 +368,12 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 			rails.WithPolicyTeamBackend(c.TeamBackend()),
 			rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
 		)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		teamPolicyRail = rails.NewTeamPolicyRail(
+		var err error
+		teamPolicyRail, err = rails.NewTeamPolicyRail(
 			rails.WithPolicyRole(ctx.Role),
 			rails.WithPolicyPersona(persona),
 			rails.WithPolicyMemberName(ctx.MemberName),
@@ -374,6 +385,9 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 			rails.WithPolicyTeamBackend(c.TeamBackend()),
 			rails.WithPolicyExposeHumanAgents(spec.ExposeHumanAgentsToTeammates),
 		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// 步骤 11: FirstIterationGate（非 HUMAN_AGENT 角色时创建）
@@ -458,7 +472,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 		harness.RunAgentCustomizer(context.Background(), spec.AgentCustomizer)
 	}
 
-	return harness
+	return harness, nil
 }
 
 // SetupTeamBackend 构造 TeamBackend 并注册 cleanup 路径。
