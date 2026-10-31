@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/graph/pregel"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -1078,17 +1079,17 @@ func isInteractiveInput(inputs any) bool {
 }
 
 // isWorkflowInterrupted 检查工作流结果是否为中断状态。
-// Python: result.get(TASK_STATUS_INTERRUPT) is None
-// Go 版本简化处理：检查 result 中的 interrupt 标记。
+//
+// 判据与 Python 完全一致：result.get(TASK_STATUS_INTERRUPT) is None 为「未中断」，
+// 即键存在且值非 nil 才算中断。
+// Python: openjiuwen/core/session/checkpointer/inmemory.py (post_workflow_execute)
 func isWorkflowInterrupted(result any) bool {
 	if result == nil {
 		return false
 	}
 	if m, ok := result.(map[string]any); ok {
-		// Python: TASK_STATUS_INTERRUPT 键
-		if interruptVal, exists := m["__interrupt__"]; exists && interruptVal != nil {
-			return true
-		}
+		interruptVal, exists := m[pregel.TaskStatusInterrupt]
+		return exists && interruptVal != nil
 	}
 	return false
 }
