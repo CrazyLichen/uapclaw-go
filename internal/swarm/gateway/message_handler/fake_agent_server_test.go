@@ -33,8 +33,12 @@ type fakeAgentServer struct {
 	replies map[string]fakeReply
 	// delays method → 回复前延迟（用于制造时序屏障）
 	delays map[string]time.Duration
+	// streams method → 流式 chunk 脚本（按 requestID 构造 chunk 序列）
+	streams map[string]func(requestID string) []*schema.AgentResponseChunk
 	// methods 已收到的请求 method 序列（按到达顺序）
 	methods []string
+	// closed 传输是否已被测试主动关闭（关闭后禁止再写 recvCh，否则 panic）
+	closed bool
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -49,6 +53,7 @@ func newFakeAgentServer(t *testing.T, replies map[string]fakeReply) (*fakeAgentS
 		tr:      transport.NewChannelTransport(),
 		replies: replies,
 		delays:  make(map[string]time.Duration),
+		streams: make(map[string]func(requestID string) []*schema.AgentResponseChunk),
 	}
 	f.client = routing.NewAgentClient(f.tr)
 
@@ -70,7 +75,7 @@ func newFakeAgentServer(t *testing.T, replies map[string]fakeReply) (*fakeAgentS
 	}
 
 	t.Cleanup(func() {
-		_ = f.tr.Close()
+		f.closeTransport()
 		f.client.Disconnect()
 	})
 	return f, mh
@@ -90,10 +95,24 @@ func (f *fakeAgentServer) serve() {
 		f.methods = append(f.methods, method)
 		reply := f.replies[method]
 		delay := f.delays[method]
+		streamScript := f.streams[method]
 		f.mu.Unlock()
 
 		if delay > 0 {
 			time.Sleep(delay)
+		}
+		if streamScript != nil {
+			for i, chunk := range streamScript(rid) {
+				wire := e2a.EncodeAgentChunkForWire(chunk, rid, i, true)
+				wire["request_id"] = rid
+				wire["response_id"] = rid
+				if out, err := json.Marshal(wire); err == nil {
+					if !f.sendFrame(out) {
+						return
+					}
+				}
+			}
+			continue
 		}
 		if reply == nil {
 			continue
@@ -113,8 +132,40 @@ func (f *fakeAgentServer) serve() {
 		if err != nil {
 			continue
 		}
-		f.tr.RecvCh() <- out
+		if !f.sendFrame(out) {
+			return
+		}
 	}
+}
+
+// sendFrame 在锁内写 recvCh，与 closeTransport 互斥，避免 send on closed channel。
+//
+// 返回 false 表示传输已关闭，调用方应退出循环。
+func (f *fakeAgentServer) sendFrame(out []byte) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.closed {
+		return false
+	}
+	select {
+	case f.tr.RecvCh() <- out:
+		return true
+	default:
+		// 缓冲满则丢弃，避免持锁阻塞
+		return true
+	}
+}
+
+// closeTransport 主动关闭传输（模拟断链），并禁止后续写入。
+func (f *fakeAgentServer) closeTransport() {
+	f.mu.Lock()
+	if f.closed {
+		f.mu.Unlock()
+		return
+	}
+	f.closed = true
+	f.mu.Unlock()
+	_ = f.tr.Close()
 }
 
 // methodCount 返回指定 method 已收到的请求数。
@@ -128,6 +179,13 @@ func (f *fakeAgentServer) methodCount(method string) int {
 		}
 	}
 	return n
+}
+
+// setStream 为指定 method 设置流式 chunk 脚本。
+func (f *fakeAgentServer) setStream(method string, script func(requestID string) []*schema.AgentResponseChunk) {
+	f.mu.Lock()
+	f.streams[method] = script
+	f.mu.Unlock()
 }
 
 // setDelay 为指定 method 设置回复延迟。

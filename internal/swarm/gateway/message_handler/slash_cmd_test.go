@@ -751,7 +751,7 @@ func TestPayloadToInt_jsonNumber(t *testing.T) {
 // TestBranchSlashNotice_发送失败 覆盖 session.fork 发送出错分支（transport 已关闭）。
 func TestBranchSlashNotice_发送失败(t *testing.T) {
 	f, mh := newFakeAgentServer(t, branchReplies())
-	_ = f.tr.Close() // 关闭后 Send 返回 ErrTransportClosed
+	f.closeTransport() // 关闭后 Send 返回 ErrTransportClosed
 
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
@@ -768,7 +768,7 @@ func TestBranchSlashNotice_发送失败(t *testing.T) {
 // TestRewindSlashNotice_发送失败_Discard 覆盖 E2A 发送出错后走本地兜底。
 func TestRewindSlashNotice_发送失败_Discard(t *testing.T) {
 	f, mh := newFakeAgentServer(t, rewindReplies(true))
-	_ = f.tr.Close()
+	f.closeTransport()
 
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
