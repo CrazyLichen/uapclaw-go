@@ -1,7 +1,10 @@
 package a2a
 
 import (
+	"encoding/base64"
 	"testing"
+
+	sdka2a "github.com/a2aproject/a2a-go/v2/a2a"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -113,5 +116,61 @@ func TestMessageToText(t *testing.T) {
 	// ⑦ nil 消息
 	if got = MessageToText(nil); got != "" {
 		t.Errorf("nil 消息 = %q, 期望空串", got)
+	}
+}
+
+// TestMapA2APartsToParams 对齐 Python map_a2a_parts_to_params (L457-500)
+func TestMapA2APartsToParams(t *testing.T) {
+	msg := &sdka2a.Message{
+		Parts: sdka2a.ContentParts{
+			sdka2a.NewTextPart("hello"),
+			{Content: sdka2a.URL("https://example.com/test.txt"), Filename: "sample-url.txt", MediaType: "text/plain"},
+			{Content: sdka2a.Data{Value: "aGVsbG8gd29ybGQ="}, Filename: "inline.txt", MediaType: "text/plain"},
+			{Content: sdka2a.Raw("opaque-bytes")},
+		},
+	}
+
+	query, files := MapA2APartsToParams(msg)
+
+	if query != "hello" {
+		t.Errorf("query = %q, 期望 hello", query)
+	}
+	if len(files) != 3 {
+		t.Fatalf("files 数量 = %d, 期望 3", len(files))
+	}
+	if files[0]["filename"] != "sample-url.txt" || files[0]["url"] != "https://example.com/test.txt" ||
+		files[0]["uri"] != "https://example.com/test.txt" {
+		t.Errorf("files[0] = %v", files[0])
+	}
+	if files[0]["name"] != "sample-url.txt" || files[0]["media_type"] != "text/plain" || files[0]["type"] != "text/plain" {
+		t.Errorf("files[0] 冗余键 = %v", files[0])
+	}
+	if files[1]["data"] != "aGVsbG8gd29ybGQ=" || files[1]["encoding"] != "base64" {
+		t.Errorf("files[1] = %v", files[1])
+	}
+	// raw-only：合成文件名用 Part 原下标
+	if files[2]["filename"] != "a2a_part_3" {
+		t.Errorf("files[2] filename = %v, 期望 a2a_part_3", files[2]["filename"])
+	}
+	// 偏差 D4：Python 直接 str(bytes) 会 TypeError，Go 走 base64
+	if files[2]["raw"] != base64.StdEncoding.EncodeToString([]byte("opaque-bytes")) {
+		t.Errorf("files[2] raw = %v", files[2]["raw"])
+	}
+}
+
+// TestMapA2APartsToParams_边界 空消息与纯文本
+func TestMapA2APartsToParams_边界(t *testing.T) {
+	query, files := MapA2APartsToParams(nil)
+	if query != "" || files != nil {
+		t.Errorf("nil 消息应返回空, 实际 query=%q files=%v", query, files)
+	}
+	query, files = MapA2APartsToParams(&sdka2a.Message{Parts: sdka2a.ContentParts{
+		sdka2a.NewTextPart("a"), sdka2a.NewTextPart("b"),
+	}})
+	if query != "a\nb" {
+		t.Errorf("多文本段应以换行拼接, 实际 %q", query)
+	}
+	if len(files) != 0 {
+		t.Errorf("纯文本不应产生 files, 实际 %v", files)
 	}
 }

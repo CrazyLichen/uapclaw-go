@@ -4,6 +4,7 @@
 package a2a
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -79,6 +80,70 @@ func MessageToText(msg *schema.Message) string {
 		}
 	}
 	return ""
+}
+
+// MapA2APartsToParams 把 A2A 消息的 parts 映射为内部 query 与 files 参数。
+//
+// 文本段按 "\n" 合并为 query；含 url/data/raw 的 Part 转成 files 条目，
+// 键与 web 通道保持兼容（name/filename、media_type/type、url/uri、encoding=base64）。
+// Python: a2a_connect.py map_a2a_parts_to_params (L457-500)
+func MapA2APartsToParams(m *sdka2a.Message) (string, []map[string]any) {
+	if m == nil {
+		return "", nil
+	}
+
+	textSegments := make([]string, 0, len(m.Parts))
+	var files []map[string]any
+
+	for idx, part := range m.Parts {
+		if part == nil {
+			continue
+		}
+		if t := strings.TrimSpace(part.Text()); t != "" {
+			textSegments = append(textSegments, t)
+		}
+
+		filename := strings.TrimSpace(part.Filename)
+		mediaType := strings.TrimSpace(part.MediaType)
+		url := strings.TrimSpace(string(part.URL()))
+		data := part.Data()
+		raw := part.Raw()
+
+		if url == "" && data == nil && len(raw) == 0 {
+			continue
+		}
+
+		name := filename
+		if name == "" {
+			name = fmt.Sprintf("a2a_part_%d", idx)
+		}
+		entry := map[string]any{
+			// web 通道兼容键
+			"name":     name,
+			"filename": name,
+		}
+		if mediaType != "" {
+			entry["media_type"] = mediaType
+			// 通用消费方检查 type
+			entry["type"] = mediaType
+		}
+		if url != "" {
+			entry["url"] = url
+			entry["uri"] = url
+		}
+		if data != nil {
+			entry["data"] = strVal(data)
+			entry["encoding"] = "base64"
+		}
+		if len(raw) > 0 {
+			// 偏差 D4：Python 直接 str(bytes) 会 TypeError，Go 走 base64
+			entry["raw"] = base64.StdEncoding.EncodeToString(raw)
+		}
+		files = append(files, entry)
+	}
+
+	query := strings.TrimSpace(strings.Join(textSegments, "\n"))
+	return query, files
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
