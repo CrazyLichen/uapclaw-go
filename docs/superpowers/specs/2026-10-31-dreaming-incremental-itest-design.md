@@ -89,9 +89,11 @@ Python 通过 `mock.patch.object(Sweeper, "_extract_via_llm", ...)` 替换实例
 | Adapter | `CreateInstance` mode | `dreamingMode` | 配置键 | 输出目录 |
 |---|---|---|---|---|
 | `CodeAdapter` | `"code"`（`code_adapter.go:195` 固定） | `code` | `memory.dreaming.code` / `DREAMING_CODE_ENABLED` | `<DataDir>/agent/workspace/coding_memory` |
-| `DeepAdapter` | `"agent.plan"` → `startswith("agent")`（`deep_adapter.go:397-401`） | `agent.plan` | `memory.dreaming."agent.plan"` / `DREAMING_AGENT.PLAN_ENABLED` | `<DataDir>/agent/workspace/memory` |
+| `DeepAdapter` | `"agent"`（生产由 `resolveModeFromRequest` 从 `agent.plan` 拆出 mode/subMode） | `agent` | `memory.dreaming.agent` / `DREAMING_AGENT_ENABLED` | `<DataDir>/agent/workspace/memory` |
 
 agent 模式的 output 目录经 `agentWorkspaceDir → workspaceDir` 回退得到：`DeepAdapter` 不赋 `agentWorkspaceDir`，`CreateInstance` 步骤 11（`deep_adapter.go:473-485`）把 `workspaceDir` 设为 `workspace.AgentWorkspaceDir()`，恰好等于 Python `getattr(self, "_agent_workspace_dir", None) or self._workspace_dir` 的语义。
+
+> 实施期修正（2026-10-31）：初稿假设 `CreateInstance` 会收到 `"agent.plan"`。实际两侧生产链路都先做归一化——Python `_adapter_mode_for_request` 只返回 `"code"` / `"agent"`，Go `resolveModeFromRequest`（`internal/swarm/server/runtime/agent_manager.go:780-800`）按 `"."` 切分得到 `mode="agent"` + `subMode="plan"`。因此 `dreamingMode` 恒为 `"agent"`。另注：Python 与 Go 的 `output_name` 判定都是 `mode == "agent"`，若测试直接把子模式串传给 `CreateInstance`，两侧都会落到 `coding_memory`——这是测试误用，不是生产行为。
 
 ### D4：tick 不可驱动，接线断言落在副作用上
 
@@ -157,10 +159,11 @@ agent 模式的 output 目录经 `agentWorkspaceDir → workspaceDir` 回退得�
 |---|---|
 | `swarm/agents` | `NewSweeper` / `RunSweep` / `ScanNewSessions` / `StartDreaming` |
 | `agentcore/memory` | `NewDreamingOrchestrator` / `GetDreamingOrchestrator` / `StopDreaming` |
-| `common/workspace` | `AgentSessionsDir` / `AgentWorkspaceDir` |
 | `swarm/server` | `NewCodeAdapter` / `NewDeepAdapter` / `CreateInstance` / `TryStartDreaming` / `TryStopDreaming` |
 
-跨度 4，高于 `min-call-span=3`，不再进入灰区。收尾时从 `.integration-scope-exempt` 删除该目录条目及其注释（现记"覆盖 2 子系统"），并以 `integration-audit -root <该目录> -verify` 复核。
+计入跨度的子系统为 **3 个**（`swarm/agents`、`agentcore/memory`、`swarm/server`）。`common/workspace`（`AgentSessionsDir` / `AgentWorkspaceDir`）虽然被真实调用，但审计的 `subsystemOf`（`cmd/integration-audit/audit.go:540-552`）显式把 `internal/common/*` 排除在跨度之外——公共层不计入。
+
+跨度 3 已达到 `min-call-span=3`，不再进入灰区。收尾时从 `.integration-scope-exempt` 删除该目录条目及其注释（原记"覆盖 2 子系统"），并以 `integration-audit -root <该目录>` 复核 `Passed=true`。
 
 既有 `sweeper_e2e_test.go` 保留全部 20 个用例，仅调整 helper：`createSessionDir` 增加 mode 参数（默认 `agent`）、mtime 构造改用 `os.Chtimes`。删除用例会削弱有效测试密度，不在本次范围。
 
@@ -171,7 +174,7 @@ agent 模式的 output 目录经 `agentWorkspaceDir → workspaceDir` 回退得�
 | 双模式 `CreateInstance` 任一失败 | **视为生产缺陷**，按 D3 定位修复后重跑；不得改为只保留 code、不得 `t.Skip` 掩盖。修复若改变生产行为，需同步在本文档追加"实施期发现的偏差"小节（编号 X-n，含现象/根因/修复点/回归用例） |
 | 配置缺失导致 `extractViaLLM` 返回 `(nil,nil)` 且会话仍记成功 → 空跑通过 | 每个用例强制断言 `InvokeCallCount`，为 0 即失败 |
 | `MockModelClient` 响应按队列顺序消费 | 会话按固定 id 命名，`ScanNewSessions` 内部 `sortedKeys` 保证遍历顺序确定，响应按调用序号对齐；断言时按同序映射 |
-| `agent.plan` 含点号，环境变量名 `DREAMING_AGENT.PLAN_ENABLED` 与 YAML 平面键 `memory.dreaming."agent.plan"` 写法特殊 | 配置以 YAML 平面键为主（引号包裹），env 为辅；若该组合在 `LoadDreamingConfig` 上表现异常，回退 `CreateInstance(mode="agent")`（`dreamingMode` 仍为 `agent`），并把差异记入偏差小节 |
+| 直接把子模式串（`agent.plan`）传给 `CreateInstance` 会落 `coding_memory`，与生产路径不符 | 已核实生产链路先归一化为 `mode="agent"`（见 §3 D3 实施期修正），接线用例统一用 `CreateInstance(ctx, nil, "agent", "")` |
 | 全局状态串味（orchestrator map / ClientRegistry / ResourceMgr / path 缓存） | 复用 `NewAdapterTestEnv` 的 cleanup（Unregister + `rm.Release` + 恢复 env + `pathutil.ResetCache`），用例内 `defer StopDreaming(ctx, "")` |
 | mtime 精度导致增量判定抖动 | 一律 `os.Chtimes` 显式指定，禁用 sleep |
 | 集成审计门禁 | 收尾跑 `go run ./cmd/integration-audit -root <该目录> -verify`，确认跨度 ≥3 且不进入覆盖交叉验证 |

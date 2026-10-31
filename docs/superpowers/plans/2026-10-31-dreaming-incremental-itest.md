@@ -1,5 +1,7 @@
 # Dreaming 增量语义集成测试迁移 实施计划
 
+**状态：** 已完成（CI run 41161797386 四绿：Build / Lint / Unit Test / Integration Test；集成审计该目录跨度 3、Exempt=false）
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 Python `tests/system_tests/test_dreaming_e2e.py` 的 7 个用例迁到 Go 集成层，补 5 条增量边界，真跑 code/agent 两种 `CreateInstance` 打通 adapter→sweeper 接线，并撤销该目录的集成审计豁免。
@@ -34,7 +36,7 @@
 - Modify: `tests/integration/mockllm/mock_client.go:28-33`（`InvokeRecord`）、`:145`（`Invoke` 签名）
 - Test: `tests/integration/mockllm/mock_client_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `tests/integration/mockllm/mock_client_test.go` 末尾追加（该文件已有 `//go:build integration`，且已导入 `context` / `model_clients` / `llmschema`，无需补导入）：
 
@@ -68,7 +70,7 @@ func TestMockModelClient_记录Invoke入参(t *testing.T) {
 
 若文件顶部缺少 `context` / `model_clients` / `llmschema` 导入，一并补上（已存在则跳过本句）。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/mockllm/ -run TestMockModelClient_记录Invoke入参 -v
@@ -76,7 +78,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: 编译失败，`rec.Messages` 未定义。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `InvokeRecord` 改为：
 
@@ -105,7 +107,7 @@ func (m *MockModelClient) Invoke(_ context.Context, messages model_clients.Messa
 
 （`Stream` 的签名保持不变。）
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/mockllm/ -v
@@ -114,7 +116,7 @@ GOPROXY=https://goproxy.cn,direct go build ./...
 
 Expected: PASS，全仓库编译通过。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add tests/integration/mockllm/mock_client.go tests/integration/mockllm/mock_client_test.go
@@ -128,7 +130,7 @@ git commit -m "test(mockllm): InvokeRecord 记录 messages 入参，供 prompt �
 **Files:**
 - Create: `tests/integration/testhelpers/dreaming_env.go`
 
-- [ ] **Step 1: 写文件**
+- [x] **Step 1: 写文件**
 
 ```go
 //go:build integration
@@ -353,7 +355,7 @@ func (e *DreamingEnv) writeJSON(t *testing.T, path string, v any) {
 }
 ```
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go vet -tags=integration ./tests/integration/testhelpers/
@@ -361,7 +363,7 @@ GOPROXY=https://goproxy.cn,direct go vet -tags=integration ./tests/integration/t
 
 Expected: 无输出（通过）。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/testhelpers/dreaming_env.go
@@ -375,7 +377,7 @@ git commit -m "test(testhelpers): 新增 DreamingEnv 隔离环境助手（会话
 **Files:**
 - Create: `tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go`
 
-- [ ] **Step 1: 写骨架与用例 1、2**
+- [x] **Step 1: 写骨架与用例 1、2**
 
 ```go
 //go:build integration
@@ -501,7 +503,7 @@ func (s *SweeperIncrementalSuite) newSweeper(env *testhelpers.DreamingEnv, outDi
 
 本任务的导入块即最终导入块的子集；后续 Task 4 追加 `time`、Task 5 追加 `os` 与 `path/filepath`、Task 6 追加 `errors`。
 
-- [ ] **Step 2: 运行确认通过**
+- [x] **Step 2: 运行确认通过**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run 'TestSweeperIncrementalSuite/TestSweep_首次扫描写出知识与检查点|TestSweeperIncrementalSuite/TestSweep_第二次同标题不重复' -v
@@ -509,7 +511,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: 两个用例 PASS。若 `InvokeCallCount` 为 0，说明 `config.GetDefaultModels(nil)` 没拿到 mock provider，检查 `NewDreamingEnv` 是否先注册后写 yaml。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go
@@ -523,7 +525,7 @@ git commit -m "test(dreaming_itest): 迁移首次扫描与跨轮标题去重用�
 **Files:**
 - Modify: `tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go`
 
-- [ ] **Step 1: 追加两个用例**
+- [x] **Step 1: 追加两个用例**
 
 ```go
 // TestSweep_增量只重扫新轮次 测试已扫会话追加轮次后只压缩新增部分。
@@ -595,7 +597,7 @@ func (s *SweeperIncrementalSuite) TestSweep_未变更会话跳过() {
 
 导入需补 `time`。用例 4 末尾的 `NotContains` 对齐 Python 的"不应该出现"断言（该文案不由本轮 mock 产生，属防御性断言）。
 
-- [ ] **Step 2: 运行**
+- [x] **Step 2: 运行**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run 'TestSweeperIncrementalSuite/TestSweep_增量只重扫新轮次|TestSweeperIncrementalSuite/TestSweep_未变更会话跳过' -v
@@ -603,7 +605,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: PASS。若增量用例未触发（`InvokeCallCount` 仍为 3），检查 `Touch` 是否把 mtime 推到 checkpoint 记录值之后。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go
@@ -617,7 +619,7 @@ git commit -m "test(dreaming_itest): 增量窗口只重扫新轮次 + 未变更�
 **Files:**
 - Modify: `tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go`
 
-- [ ] **Step 1: 追加两个用例**
+- [x] **Step 1: 追加两个用例**
 
 ```go
 // TestSweep_Code模式写consolidated 测试 code 模式写出 consolidated_*.md。
@@ -681,7 +683,7 @@ func (s *SweeperIncrementalSuite) TestSweep_Code内容哈希去重() {
 
 导入需补 `os`。
 
-- [ ] **Step 2: 运行**
+- [x] **Step 2: 运行**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run 'TestSweeperIncrementalSuite/TestSweep_Code' -v
@@ -689,7 +691,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: PASS。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go
@@ -703,7 +705,7 @@ git commit -m "test(dreaming_itest): code 模式 consolidated 落盘与内容哈
 **Files:**
 - Modify: `tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go`
 
-- [ ] **Step 1: 追加两个用例**
+- [x] **Step 1: 追加两个用例**
 
 ```go
 // TestSweep_LLM报错无知识且会话仍记为已扫 测试模型报错时的实际落盘语义。
@@ -751,7 +753,7 @@ func (s *SweeperIncrementalSuite) TestSweep_新会话不足3且无过期会话�
 
 导入需补 `errors`。用例 7 末尾先 `env.Reset()` 再建新 sweeper，是为了排除上一轮队列残留影响计数断言。
 
-- [ ] **Step 2: 运行**
+- [x] **Step 2: 运行**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run 'TestSweeperIncrementalSuite/TestSweep_LLM报错|TestSweeperIncrementalSuite/TestSweep_新会话不足3' -v
@@ -759,7 +761,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: PASS。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go
@@ -773,7 +775,7 @@ git commit -m "test(dreaming_itest): LLM 报错语义与 min-new-sessions 门槛
 **Files:**
 - Modify: `tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go`
 
-- [ ] **Step 1: 追加两个用例**
+- [x] **Step 1: 追加两个用例**
 
 ```go
 // TestSweep_存在7天前会话则绕过门槛 测试 _MIN_SESSION_AGE_BYPASS_DAYS 旁路。
@@ -823,7 +825,7 @@ func (s *SweeperIncrementalSuite) TestSweep_超30天会话标记已扫并丢弃(
 }
 ```
 
-- [ ] **Step 2: 运行**
+- [x] **Step 2: 运行**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run 'TestSweeperIncrementalSuite/TestSweep_存在7天前|TestSweeperIncrementalSuite/TestSweep_超30天' -v
@@ -831,7 +833,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: PASS。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go
@@ -845,7 +847,7 @@ git commit -m "test(dreaming_itest): 7 天旁路与 30 天丢弃边界"
 **Files:**
 - Modify: `tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go`
 
-- [ ] **Step 1: 追加两个用例**
+- [x] **Step 1: 追加两个用例**
 
 ```go
 // TestSweep_增量新轮次不足4则跳过 测试增量侧 minSessionRounds 门槛。
@@ -889,7 +891,7 @@ func (s *SweeperIncrementalSuite) TestScanNewSessions_模式不匹配跳过() {
 }
 ```
 
-- [ ] **Step 2: 运行整套管线用例**
+- [x] **Step 2: 运行整套管线用例**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run TestSweeperIncrementalSuite -v
@@ -897,7 +899,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: 12 个用例全部 PASS。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_incremental_test.go
@@ -911,7 +913,7 @@ git commit -m "test(dreaming_itest): 增量轮次不足与模式前缀过滤边�
 **Files:**
 - Create: `tests/integration/swarm/agents/harness/common/memory/dreaming/start_wiring_test.go`
 
-- [ ] **Step 1: 写文件**
+- [x] **Step 1: 写文件**
 
 ```go
 //go:build integration
@@ -1028,7 +1030,7 @@ func (s *StartWiringSuite) newEnv() *testhelpers.DreamingEnv {
 }
 ```
 
-- [ ] **Step 2: 运行**
+- [x] **Step 2: 运行**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run TestStartWiringSuite -v
@@ -1036,7 +1038,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: 3 个用例 PASS。若 code 模式 `CreateInstance` 失败，按 spec §7 视为生产缺陷：记录现象与堆栈、定位 `internal/swarm/server/adapter/code_adapter.go`、修复后重跑，并在 spec 追加"实施期发现的偏差"小节；不得改为跳过。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/start_wiring_test.go
@@ -1050,28 +1052,30 @@ git commit -m "test(dreaming_itest): 启停生命周期与 CodeAdapter 真跑 Cr
 **Files:**
 - Modify: `tests/integration/swarm/agents/harness/common/memory/dreaming/start_wiring_test.go`
 
-- [ ] **Step 1: 追加用例**
+- [x] **Step 1: 追加用例**
 
 ```go
 // TestWiring_DeepAdapter真跑后启动Dreaming 测试 agent 模式 adapter 全链路接线。
 //
-// dreamingMode 由 CreateInstance 按 mode 前缀决定（"agent.plan" 保持原值），
-// 因此配置键为 memory.dreaming."agent.plan"、环境变量为
-// DREAMING_AGENT.PLAN_ENABLED；输出目录经 agentWorkspaceDir → workspaceDir
-// 回退得到 <DataDir>/agent/workspace/memory。
+// 生产链路（Python _adapter_mode_for_request / Go resolveModeFromRequest）把
+// "agent.plan" 拆成 mode="agent" + subMode="plan"，因此 CreateInstance 收到的
+// mode 恒为 "agent"：dreamingMode="agent"、env DREAMING_AGENT_ENABLED、
+// 输出目录 <DataDir>/agent/workspace/memory。
+// 若直接把 "agent.plan" 传给 CreateInstance，Python/Go 的 output_name 判定
+// （mode == "agent"）都会落到 coding_memory —— 属测试误用。
 func (s *StartWiringSuite) TestWiring_DeepAdapter真跑后启动Dreaming() {
 	env := s.newEnv()
-	env.Setenv(s.T(), "DREAMING_AGENT.PLAN_ENABLED", "true")
+	env.Setenv(s.T(), "DREAMING_AGENT_ENABLED", "true")
 	for _, sid := range []string{"sess-001", "sess-002", "sess-003"} {
 		env.PlantSession(s.T(), sid, "agent.plan", 5)
 	}
 
 	deepAdapter := adapter.NewDeepAdapter()
-	s.Require().NoError(deepAdapter.CreateInstance(s.Ctx, nil, "agent.plan", ""))
+	s.Require().NoError(deepAdapter.CreateInstance(s.Ctx, nil, "agent", ""))
 	s.Require().NoError(deepAdapter.TryStartDreaming(s.Ctx, func() bool { return false }))
 
-	orch := swarmdreaming.GetDreamingOrchestrator("agent.plan")
-	s.Require().NotNil(orch, "agent.plan 模式 orchestrator 应已注册")
+	orch := swarmdreaming.GetDreamingOrchestrator("agent")
+	s.Require().NotNil(orch, "agent 模式 orchestrator 应已注册")
 	s.True(orch.IsRunning())
 
 	memoryDir := filepath.Join(env.DataDir, "agent", "workspace", "memory")
@@ -1079,19 +1083,19 @@ func (s *StartWiringSuite) TestWiring_DeepAdapter真跑后启动Dreaming() {
 	s.DirExists(filepath.Join(memoryDir, ".dreams"), "sweeper.Init 应创建 .dreams 目录")
 
 	s.Require().NoError(deepAdapter.TryStopDreaming(s.Ctx))
-	s.Nil(swarmdreaming.GetDreamingOrchestrator("agent.plan"))
+	s.Nil(swarmdreaming.GetDreamingOrchestrator("agent"))
 }
 ```
 
-- [ ] **Step 2: 运行**
+- [x] **Step 2: 运行**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run 'TestStartWiringSuite/TestWiring_DeepAdapter' -v
 ```
 
-Expected: PASS。若 agent 模式 `CreateInstance` 失败：先确认 `config.yaml` 是否缺 `modes` / `react` 段，再定位 `deep_adapter.go` 中缺失的初始化；失败原因与修复记入 spec 偏差小节。**若 `DREAMING_AGENT.PLAN_ENABLED` 因 mode 含点号未被读到，回退为 `CreateInstance(ctx, nil, "agent", "")`（此时 dreamingMode="agent"、env 为 `DREAMING_AGENT_ENABLED`），并在 spec 记录该回退。**
+Expected: PASS。若 agent 模式 `CreateInstance` 失败：先确认 `config.yaml` 是否缺 `modes` / `react` 段，再定位 `deep_adapter.go` 中缺失的初始化；失败原因与修复记入 spec 偏差小节。**注意 mode 必须用生产归一化后的 `"agent"`**（`resolveModeFromRequest` 从 `agent.plan` 拆出 mode/subMode）；传子模式串会因 `output_name` 判定落到 `coding_memory`，那是测试误用而非生产行为。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/start_wiring_test.go
@@ -1105,7 +1109,7 @@ git commit -m "test(dreaming_itest): DeepAdapter 真跑 CreateInstance 后启动
 **Files:**
 - Modify: `tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_e2e_test.go:574-605`
 
-- [ ] **Step 1: 改 helper 签名与 mtime 构造**
+- [x] **Step 1: 改 helper 签名与 mtime 构造**
 
 `createSessionDir` 增加 `mode` 参数（现有 3 处调用传 `"agent"`）：
 
@@ -1127,7 +1131,7 @@ func (s *SweeperE2ESuite) createSessionDir(sessionDir string, rounds int, mode s
 }
 ```
 
-- [ ] **Step 2: 更新调用点并编译**
+- [x] **Step 2: 更新调用点并编译**
 
 把 `s.createSessionDir(filepath.Join(sessionsDir, sid), 5)` 改为 `s.createSessionDir(filepath.Join(sessionsDir, sid), 5, "agent")`，`createSessionDir(..., 2)` 改为 `createSessionDir(..., 2, "agent")`。
 
@@ -1137,7 +1141,7 @@ GOPROXY=https://goproxy.cn,direct go vet -tags=integration ./tests/integration/s
 
 Expected: 无输出。
 
-- [ ] **Step 3: 跑既有用例确认无回归**
+- [x] **Step 3: 跑既有用例确认无回归**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run 'TestSweeperE2ESuite|TestStartWiringSuite|TestSweeperIncrementalSuite' -v
@@ -1145,7 +1149,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: 全绿（既有 20 例 + 新增 16 例）。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/sweeper_e2e_test.go
@@ -1159,7 +1163,7 @@ git commit -m "test(dreaming_itest): createSessionDir 支持 mode 参数，消�
 **Files:**
 - Create: `tests/integration/real_llm/dreaming_real_test.go`
 
-- [ ] **Step 1: 写文件**
+- [x] **Step 1: 写文件**
 
 ```go
 //go:build integration && llm
@@ -1236,7 +1240,7 @@ func (s *DreamingRealSuite) TestDreamingReal_真实LLM扫一次() {
 }
 ```
 
-- [ ] **Step 2: 追加非导出方法**
+- [x] **Step 2: 追加非导出方法**
 
 在同一文件末尾追加两个方法（`s.Seq` 之外不再需要其他脚手架）：
 
@@ -1292,7 +1296,7 @@ func (s *DreamingRealSuite) plantSession(sessionsDir, sid string, rounds int) {
 
 `mockllm.NewMockModelClient()` 仅用于满足 `NewAdapterTestEnv` 的签名（真实模型不走注入的 mock，provider 由 `writeRealConfig` 指向真实配置）；不要删除该实参，否则 `NewAdapterTestEnv` 无法注册 provider 名称。
 
-- [ ] **Step 3: 编译验证（无凭据时 Skip）**
+- [x] **Step 3: 编译验证（无凭据时 Skip）**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags='integration llm' ./tests/integration/real_llm/ -run TestDreamingRealSuite -v
@@ -1300,7 +1304,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags='integration llm' ./tests/integr
 
 Expected: SKIP（无 `RUN_REAL_LLM_TESTS`）或 PASS（有凭据）。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add tests/integration/real_llm/dreaming_real_test.go
@@ -1316,7 +1320,7 @@ git commit -m "test(real_llm): 真实模型跑通 dreaming sweep 链路"
 - Modify: `.integration-scope-exempt`
 - Modify: `IMPLEMENTATION_PLAN.md:466`（7.20 行的备注列）
 
-- [ ] **Step 1: 更新 doc.go 目录清单**
+- [x] **Step 1: 更新 doc.go 目录清单**
 
 把 doc.go 中的文件目录块整体替换为（注意对齐列，gofmt 会保持 `//` 后 tab 缩进）：
 
@@ -1330,7 +1334,7 @@ git commit -m "test(real_llm): 真实模型跑通 dreaming sweep 链路"
 
 同时把文件头注释的"覆盖"段落补一行：`增量语义（两次 RunSweep 的增量窗口、标题与内容哈希去重、checkpoint 推进）、adapter→sweeper 接线`。
 
-- [ ] **Step 2: 删除豁免登记**
+- [x] **Step 2: 删除豁免登记**
 
 删除 `.integration-scope-exempt` 中以下两行及其注释：
 
@@ -1339,19 +1343,19 @@ git commit -m "test(real_llm): 真实模型跑通 dreaming sweep 链路"
 tests/integration/swarm/agents/harness/common/memory/dreaming
 ```
 
-- [ ] **Step 3: 更新计划表备注**
+- [x] **Step 3: 更新计划表备注**
 
-`IMPLEMENTATION_PLAN.md` 第 466 行（7.20 行）备注列末尾追加：`；✅ 集成用例 37 个（原有 20 + 12 管线增量 + 4 接线 + 1 real-llm，跨 4 子系统，审计豁免已撤销）`。
+`IMPLEMENTATION_PLAN.md` 第 466 行（7.20 行）备注列末尾追加：`；✅ 集成用例 37 个（原有 20 + 12 管线增量 + 4 接线 + 1 real-llm），跨 3 子系统，审计豁免已撤销`。
 
-- [ ] **Step 4: 跑审计验证豁免撤销成立**
+- [x] **Step 4: 跑审计验证豁免撤销成立**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go run ./cmd/integration-audit -root tests/integration/swarm/agents/harness/common/memory/dreaming -defer-span
 ```
 
-Expected: 该目录 `Exempt=false`、`CallSpan` 包含 `swarm/agents` / `agentcore/memory` / `swarm/server` / `common/workspace` 四个子系统、无违规。
+Expected: 该目录 `Exempt=false`、`CallSpan` 包含 `swarm/agents` / `agentcore/memory` / `swarm/server` 三个子系统（`internal/common/*` 按审计规则不计入跨度）、`Passed=true`、无违规。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add tests/integration/swarm/agents/harness/common/memory/dreaming/doc.go .integration-scope-exempt IMPLEMENTATION_PLAN.md
@@ -1362,7 +1366,7 @@ git commit -m "docs(dreaming_itest): 目录清单/豁免登记/计划表同步�
 
 ## Task 14: 全量回归与远端 CI
 
-- [ ] **Step 1: 本地全量集成回归**
+- [x] **Step 1: 本地全量集成回归**
 
 ```bash
 GOPROXY=https://goproxy.cn,direct go test -tags=integration -race ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -v
@@ -1371,7 +1375,7 @@ GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/
 
 Expected: 全绿，无 race 告警。
 
-- [ ] **Step 2: 格式与静态检查**
+- [x] **Step 2: 格式与静态检查**
 
 ```bash
 gofmt -l tests/integration/mockllm tests/integration/testhelpers tests/integration/swarm/agents/harness/common/memory/dreaming tests/integration/real_llm
@@ -1380,7 +1384,7 @@ GOPROXY=https://goproxy.cn,direct go vet -tags=integration ./tests/integration/.
 
 Expected: `gofmt -l` 无输出；`go vet` 无输出。
 
-- [ ] **Step 3: 推送并盯 CI**
+- [x] **Step 3: 推送并盯 CI**
 
 ```bash
 git push
@@ -1390,7 +1394,7 @@ gh run watch <run-id>
 
 Expected: Build / Lint / Unit Test / Integration Test 四个 job 全 SUCCESS。红灯则按规则 6 修复后重推，直至全绿。
 
-- [ ] **Step 4: 记录收尾**
+- [x] **Step 4: 记录收尾**
 
 CI 全绿后在本计划文件顶部追加一行 `**状态：** 已完成（CI run <id> 四绿）`，并提交：
 
@@ -1403,10 +1407,10 @@ git commit -m "docs(plans): dreaming 增量集成测试迁移完结（CI 四绿�
 
 ## 验收清单
 
-- [ ] 12 个管线用例 PASS，每个都断言了 `InvokeCallCount`（无空跑）
-- [ ] 4 个接线用例 PASS（code 与 agent 两种 `CreateInstance` 均真跑通过；失败已定位修复并记入 spec）
-- [ ] real-llm 用例在无凭据时 Skip、有凭据时 PASS
-- [ ] 既有 20 个 e2e 用例零回归，`createSessionDir` 支持 mode
-- [ ] `.integration-scope-exempt` 条目已删，审计 `Exempt=false` 且跨度 ≥3
-- [ ] `gofmt -l` / `go vet` 干净
-- [ ] 远端 CI 四绿
+- [x] 12 个管线用例 PASS，每个都断言了 `InvokeCallCount`（无空跑）
+- [x] 4 个接线用例 PASS（code 与 agent 两种 `CreateInstance` 均真跑通过；失败已定位修复并记入 spec）
+- [x] real-llm 用例在无凭据时 Skip、有凭据时 PASS
+- [x] 既有 20 个 e2e 用例零回归，`createSessionDir` 支持 mode
+- [x] `.integration-scope-exempt` 条目已删，审计 `Exempt=false` 且跨度 ≥3
+- [x] `gofmt -l` / `go vet` 干净
+- [x] 远端 CI 四绿

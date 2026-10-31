@@ -24,7 +24,7 @@
 //     对齐 Python os.getenv("RUN_REAL_LLM_TESTS") 检查，未设为 1 时 Skip）
 //
 // CI 运行：每日北京时间 02:00 由 real-llm-ci.yml 定时触发（cron "0 18 * * *" UTC）
-// + workflow_dispatch 手动触发，运行本包全部 12 套件（含提示词捕获测试），
+// + workflow_dispatch 手动触发，运行本包全部 13 套件（含提示词捕获测试），
 // 并设置 RUN_REAL_LLM_TESTS=1 开启守卫套件。
 //
 // 运行方式: go test -tags="sqlite_fts5 test integration llm" ./tests/integration/real_llm/...
@@ -44,8 +44,9 @@
 //	├── code_agent_real_test.go       # CodeAgent plan 模式两轮流（plan 文件 + normal 执行）
 //	├── todo_real_test.go             # Todo 工具创建/列表/修改链路
 //	├── ltm_real_test.go              # LongTermMemory E2E（Chroma+SQLite+真实 LLM）
-//	└── system_prompt_capture_test.go # 系统提示词实时捕获（双 skill_mode 分支，
+//	├── system_prompt_capture_test.go # 系统提示词实时捕获（双 skill_mode 分支，
 //	    27 断言/分支；fail-not-skip，对齐 Python test_system_prompt_live_capture.py）
+//	└── dreaming_real_test.go         # Dreaming Sweeper 真实模型 sweep（提示词消费 + 围栏解析）
 //
 // 对应 Python 代码：tests/system_tests/harness/（test_deep_agent_ask_user.py、
 // test_deepagent_interrupt_stream.py、test_deep_agent_e2e.py、

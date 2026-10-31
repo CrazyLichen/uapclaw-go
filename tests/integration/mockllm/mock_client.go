@@ -30,6 +30,8 @@ type MockResponse struct {
 type InvokeRecord struct {
 	// InvokeCount 调用序号（从 1 开始）
 	InvokeCount int
+	// Messages 本次调用传入的消息参数（用于断言 prompt 内容）
+	Messages model_clients.MessagesParam
 }
 
 // MockModelClient 集成测试专用的 LLM Mock 客户端。
@@ -142,12 +144,12 @@ func CreateErrorResponse(err error) MockResponse {
 // Invoke 实现 BaseModelClient.Invoke，按序消费预设响应队列。
 // 对齐 Python: MockLLMModel.invoke(messages, ...)
 // 增强：当 InvokeOption 中包含 OutputParser 时，自动解析 JSON 并填充 ParserContent。
-func (m *MockModelClient) Invoke(_ context.Context, _ model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+func (m *MockModelClient) Invoke(_ context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.callCount++
-	record := InvokeRecord{InvokeCount: m.callCount}
+	record := InvokeRecord{InvokeCount: m.callCount, Messages: messages}
 	m.invokeCalls = append(m.invokeCalls, record)
 
 	resp := m.getNextResponseLocked()

@@ -316,3 +316,29 @@ func (s *MockClientSuite) TestMockClientDoc_包引用验证() {
 	s.NotNil(llmschema.ModelRequestConfig{})
 	s.NotNil(runner.GetResourceMgr)
 }
+
+// TestMockModelClient_记录Invoke入参 测试 InvokeRecord 保存 messages 入参。
+func TestMockModelClient_记录Invoke入参(t *testing.T) {
+	client := NewMockModelClient(CreateTextResponse("ok"))
+	msgs := model_clients.NewMessagesParam(
+		llmschema.NewSystemMessage("sys"),
+		llmschema.NewUserMessage("用户提问"),
+	)
+	if _, err := client.Invoke(context.Background(), msgs); err != nil {
+		t.Fatalf("Invoke 失败: %v", err)
+	}
+
+	rec := client.GetInvokeCall(0)
+	if rec == nil {
+		t.Fatal("应记录第 1 次调用")
+	}
+	var userTexts []string
+	for _, m := range rec.Messages.Messages() {
+		if m.GetRole() == llmschema.RoleTypeUser {
+			userTexts = append(userTexts, m.GetContent().Text())
+		}
+	}
+	if len(userTexts) != 1 || userTexts[0] != "用户提问" {
+		t.Fatalf("入参记录不正确: %+v", userTexts)
+	}
+}
