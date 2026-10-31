@@ -540,3 +540,73 @@ func TestSkillsSlashNotice_五种文案形态(t *testing.T) {
 		assert.Equal(t, "获取技能列表失败", notice.Payload["error"])
 	})
 }
+
+// branchReplies 构造 /branch 需要的两个假响应。
+func branchReplies() map[string]fakeReply {
+	return map[string]fakeReply{
+		string(schema.ReqMethodChatCancel): func(rid string, _ map[string]any) *schema.AgentResponse {
+			return schema.NewAgentResponse(rid, "feishu_test", schema.WithPayload(map[string]any{}))
+		},
+		string(schema.ReqMethodSessionFork): func(rid string, _ map[string]any) *schema.AgentResponse {
+			return schema.NewAgentResponse(rid, "feishu_test", schema.WithPayload(map[string]any{
+				"session_id": "fork-1",
+				"title":      "分支标题",
+			}))
+		},
+	}
+}
+
+// seedChannelSession 预置某个消息对应的渠道状态 session_id。
+func seedChannelSession(mh *MessageHandler, msg *schema.Message, sid string) {
+	mh.statesMu.Lock()
+	defer mh.statesMu.Unlock()
+	mh.channelStates[getChannelStateKey(msg.ChannelID, msg.SessionID)] = &ChannelControlState{SessionID: sid}
+}
+
+// TestBranchSlashNotice_取消先于通知 A1：Python await 取消后再发通知。
+// 给 chat.cancel 加 100ms 延迟：同步实现下返回时必已收到 cancel；异步实现下为 0。
+func TestBranchSlashNotice_取消先于通知(t *testing.T) {
+	f, mh := newFakeAgentServer(t, branchReplies())
+	f.setDelay(string(schema.ReqMethodChatCancel), 100*time.Millisecond)
+
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+	seedChannelSession(mh, msg, "sess-1")
+
+	mh.branchSlashNotice(msg, command_parser.ParsedChannelControl{
+		Action:     command_parser.ActionBranchOK,
+		BranchName: "my-branch",
+	})
+
+	assert.Equal(t, 1, f.methodCount(string(schema.ReqMethodChatCancel)),
+		"取消必须同步完成（异步实现下此处为 0）")
+	assert.Equal(t, 1, f.methodCount(string(schema.ReqMethodSessionFork)))
+
+	notice := waitNoticeContaining(t, mh, "已分叉会话")
+	content, _ := notice.Payload["content"].(string)
+	assert.Contains(t, content, "分支标题")
+}
+
+// TestBranchSlashNotice_成功回填字段 验证 payload 缺字段时的回落。
+func TestBranchSlashNotice_成功回填字段(t *testing.T) {
+	replies := branchReplies()
+	replies[string(schema.ReqMethodSessionFork)] = func(rid string, _ map[string]any) *schema.AgentResponse {
+		return schema.NewAgentResponse(rid, "feishu_test", schema.WithPayload(map[string]any{}))
+	}
+	_, mh := newFakeAgentServer(t, replies)
+
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+	seedChannelSession(mh, msg, "sess-1")
+
+	mh.branchSlashNotice(msg, command_parser.ParsedChannelControl{
+		Action:     command_parser.ActionBranchOK,
+		BranchName: "named",
+	})
+
+	notice := waitNoticeContaining(t, mh, "已分叉会话")
+	content, _ := notice.Payload["content"].(string)
+	assert.Contains(t, content, "named")
+	state := mh.GetOrCreateChannelState(msg)
+	assert.NotEmpty(t, state.SessionID, "回落后应写入生成的 newSID")
+}

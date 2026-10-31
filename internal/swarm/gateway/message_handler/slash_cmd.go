@@ -394,6 +394,11 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 				errMsg = e
 			}
 		}
+		// A2: Python L1005-1009 的 except ValueError 分支（发通知 + 无 exception 日志）
+		logger.Warn(logComponent).
+			Str("event_type", "branch_slash_rejected").
+			Str("session_id", sourceSID).
+			Msgf("/branch rejected: %s", errMsg)
 		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("分叉失败：%s", errMsg)})
 		return
 	}
@@ -412,10 +417,20 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 	oldSID := state.SessionID
 	state.SessionID = forkSID
 
-	// 取消旧会话
+	// A1: Python L994 `await self._cancel_agent_work_for_session(msg, old_sid)`
+	// （publish_interrupt_result 取默认 True）。原实现用 go 异步，通知会先于
+	// 取消完成发出，与 Python 顺序相反（M-05 同类问题，/branch 当初漏改）。
 	if oldSID != "" {
-		go mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, true)
+		mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, true)
 	}
+
+	// A2: Python L1001-1004 成功日志
+	logger.Info(logComponent).
+		Str("event_type", "branch_slash_done").
+		Str("source_session_id", sourceSID).
+		Str("fork_session_id", forkSID).
+		Str("title", forkTitle).
+		Msg("/branch completed")
 
 	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /branch 指令] 已分叉会话「%s」，当前已切换到新会话。", forkTitle)})
 }
