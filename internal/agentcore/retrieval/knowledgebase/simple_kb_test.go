@@ -92,6 +92,8 @@ type recordingIndexer struct {
 	deleteIDs     []string
 }
 
+func (r *recordingIndexer) Close() error { return nil }
+
 func (r *recordingIndexer) BuildIndex(_ context.Context, chunks []common.TextChunk, config common.IndexConfig, _ embedding.BaseEmbedding, opts ...indexer.IndexOption) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

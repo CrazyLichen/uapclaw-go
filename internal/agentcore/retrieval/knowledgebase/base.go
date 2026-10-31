@@ -67,6 +67,11 @@ var _ interface {
 // 由 SimpleKnowledgeBase（13.27）/GraphKnowledgeBase（13.28）实现。
 //
 // Python: knowledge_base.py (KnowledgeBase 的 __init__ 部分)
+// closeable 可关闭组件的最小契约（Python close 鸭子类型的静态化替代）。
+type closeable interface {
+	Close() error
+}
+
 type BaseKnowledgeBase struct {
 	// mu 保护可被 Set* 并发替换的字段（vectorStore/indexManager）。
 	//
@@ -361,26 +366,18 @@ func (b *BaseKnowledgeBase) indexManagerRef() indexer.Indexer {
 
 // maybeClose 关闭单个组件并返回错误（Warn 记录后仍上抛，供 Close 聚合）。
 //
-// 对齐 Python _maybe_await：组件只要暴露 close 即可被调用（不要求返回 error）。
-// 历史实现只断言 interface{ Close() error }，实现无返回值 Close 的组件会被静默
-// 跳过；此处补 interface{ Close() } 分支。
-func (b *BaseKnowledgeBase) maybeClose(obj any) error {
-	if obj == nil {
+// 参数类型用 closeable 而非 any：VectorStore / Indexer / Retriever 三个接口都已
+// 声明 Close() error，编译期即可保证「可关闭」，无需运行时类型断言——原先的
+// any + 断言在组件未实现 Close 时会静默跳过关闭（组件泄漏）且不可见。
+func (b *BaseKnowledgeBase) maybeClose(c closeable) error {
+	if c == nil {
 		return nil
 	}
-	switch c := obj.(type) {
-	case interface{ Close() error }:
-		err := c.Close()
-		if err != nil {
-			logger.Warn(logComponent).Err(err).Msg("Failed to close object")
-		}
-		return err
-	case interface{ Close() }:
-		c.Close()
-		return nil
-	default:
-		return nil
+	err := c.Close()
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("Failed to close object")
 	}
+	return err
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

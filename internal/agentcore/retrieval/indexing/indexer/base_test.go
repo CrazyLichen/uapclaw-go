@@ -20,6 +20,8 @@ type fakeIndexer struct {
 
 var _ Indexer = (*fakeIndexer)(nil)
 
+func (f *fakeIndexer) Close() error { return nil }
+
 func (f *fakeIndexer) BuildIndex(_ context.Context, _ []common.TextChunk, _ common.IndexConfig, _ embedding.BaseEmbedding, _ ...IndexOption) (bool, error) {
 	f.buildIndexCalled = true
 	return true, nil

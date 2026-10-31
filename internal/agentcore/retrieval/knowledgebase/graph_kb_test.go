@@ -45,6 +45,8 @@ type graphIndexer struct {
 	info     map[string]any
 }
 
+func (g *graphIndexer) Close() error { return nil }
+
 func (g *graphIndexer) BuildIndex(_ context.Context, chunks []common.TextChunk, config common.IndexConfig,
 	_ embedding.BaseEmbedding, _ ...indexer.IndexOption) (bool, error) {
 	g.mu.Lock()
@@ -69,6 +71,8 @@ type failSecondBuildIndexer struct {
 	fakeAttrIndexer
 	n int
 }
+
+func (f *failSecondBuildIndexer) Close() error { return nil }
 
 func (f *failSecondBuildIndexer) BuildIndex(_ context.Context, _ []common.TextChunk, _ common.IndexConfig,
 	_ embedding.BaseEmbedding, _ ...indexer.IndexOption) (bool, error) {

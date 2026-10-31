@@ -74,6 +74,8 @@ type fakeAttrIndexer struct {
 	docIDField        string
 }
 
+func (f *fakeAttrIndexer) Close() error { return nil }
+
 func (f *fakeAttrIndexer) BuildIndex(ctx context.Context, chunks []common.TextChunk, config common.IndexConfig, embedModel embedding.BaseEmbedding, opts ...indexer.IndexOption) (bool, error) {
 	return true, nil
 }
