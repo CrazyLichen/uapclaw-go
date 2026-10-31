@@ -276,3 +276,11 @@ if interruptVal, exists := m["__interrupt__"]; exists && interruptVal != nil {
 5. R2：13 处生产注释 + 3 处测试注释改号（独立 commit，纯注释）
 6. R3：计划表更新
 7. 回归：`CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/graph/... ./internal/agentcore/session/...` + `golangci-lint run`
+
+## 11. 实施期记录（2026-10-31）
+
+1. **工具替代**：本机未安装 `golangci-lint` / `staticcheck`，以 `go vet ./internal/agentcore/graph/... ./internal/agentcore/session/...`（通过）+ `go fmt`（零差异）+ 全仓 `go test`（0 FAIL）作为等价验证，待 CI 上补跑 lint。
+2. **计划表提交未搭便车**：开工时 `IMPLEMENTATION_PLAN.md` 已存在他处未提交改动（8.1-8.3c 行重写 + 10.6.24/11.25 行补充），实施期间被并发提交 `5822ca50`（08:44）；因此本节对计划表的提交（`85a63bfc`）只含 8.3d 单行改动（1 insertion / 1 deletion）。
+3. **计划文本订正**：实现计划 Task 4 Step 1 的 import 示例把 logger 路径写作 `common/logger`，实际文件是 `internal/common/logger`；按「保持原样、只插入 pregel 一行」执行，无代码影响。
+4. **结果**：`pregel` 包 10 个用例全通过（含 11 颗常量逐值断言），`config.go` 覆盖率 100%；全仓 `go test -tags "sqlite_fts5 test" ./...` 293 包 ok、0 FAIL；生产代码中 `"__interrupt__"` 只剩 `constants.go` 一处来源。
+5. **零实施偏差**：D1-D7 全部按 spec 落地，未出现需要新增偏差项的情况。
