@@ -2,31 +2,34 @@ package utils
 
 // payload_bridge.go 流式 payload 的 map 桥接（对齐 Python `payload.model_dump(mode="json")`）。
 //
-// 背景：Python 流式 chunk 的 payload 恒为 dict，`_parse_stream_chunk` 可直接按键取值；
-// Go 侧生产端存在两种形态——map[string]any（agent 层）与 *cschema.ControllerOutputPayload
-// 结构体指针（task_loop/executor.go、session_spawn_executor.go、task_scheduler.go）。
-// 消费端若只做 `payload.(map[string]any)` 断言，结构体形态会被整块丢弃，
-// 表现为 task_failed/task_completion 等事件静默丢失（前端只剩 idle → end_turn）。
+// 背景：Python 的 `OutputSchema.payload` 声明为 `Any`（openjiuwen/core/session/stream/base.py:33），
+// 生产端既可能是 dict，也可能是 pydantic 模型（如 ControllerOutputChunk.payload 是
+// ControllerOutputPayload 模型、workflow 交互是 InteractionOutput 对象）；消费者靠
+// duck typing（`getattr` / `isinstance(payload, dict)`）兜底。
+//
+// Go 没有 duck typing，消费端的等价落点就是本函数：**把任意结构化 payload 收敛成 map**，
+// 下游只按键读取。这比"逐类型枚举 case"更彻底——新增 payload 结构体无需再改消费端。
 
 import (
 	"encoding/json"
+	"reflect"
 
-	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// PayloadToMap 把流 payload 桥接为 map[string]any。
+// PayloadToMap 把流 payload 统一桥接为 map[string]any。
 //
-// 支持三种形态：
-//   - nil → nil
-//   - map[string]any → 原样返回
-//   - *ControllerOutputPayload / ControllerOutputPayload → json.Marshal→Unmarshal
-//     产 map，形状与 Python dict 逐键一致（type/data/metadata，DataFrame 经
-//     MarshalDataFrames 多态序列化为 {text}/{data}/{name,...}）
+// 处理顺序：
+//  1. nil → nil
+//  2. map[string]any → 原样返回（主流形态，零开销）
+//  3. 实现 ToMap() map[string]any 的类型 → 走快路径
+//  4. 结构体 / 结构体指针 → json.Marshal→Unmarshal，形状对齐 Python model_dump(mode="json")
+//  5. 其他（string / 数字 / 切片 / 映射以外的引用类型）→ nil，与原先类型断言失败行为一致
 //
-// 其他类型返回 nil（与调用方原先的类型断言失败行为一致）。
+// 注意：结构体若缺 json tag，往返后键名保持 Go 字段名（PascalCase），
+// 与 Python 小写字段名不一致——需要消费端按小写键读取的类型必须显式补 tag。
 func PayloadToMap(payload any) map[string]any {
 	if payload == nil {
 		return nil
@@ -34,37 +37,63 @@ func PayloadToMap(payload any) map[string]any {
 	if m, ok := payload.(map[string]any); ok {
 		return m
 	}
-	// 指针与值类型都桥接（生产端为指针；值类型分支对齐 Python
-	// isinstance 的宽容度，防御未来构造点变化）
-	switch cop := payload.(type) {
-	case *cschema.ControllerOutputPayload:
-		if cop == nil {
+	if tm, ok := payload.(interface{ ToMap() map[string]any }); ok {
+		return tm.ToMap()
+	}
+
+	// 按形态判定：只桥接 struct / *struct；nil 指针返回 nil
+	rv := reflect.ValueOf(payload)
+	for rv.Kind() == reflect.Pointer {
+		if rv.IsNil() {
 			return nil
 		}
-		return marshalControllerOutputPayload(cop)
-	case cschema.ControllerOutputPayload:
-		return marshalControllerOutputPayload(&cop)
+		rv = rv.Elem()
 	}
-	return nil
-}
+	if rv.Kind() != reflect.Struct {
+		return nil
+	}
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// marshalControllerOutputPayload 桥接单个 ControllerOutputPayload 到 map。
-func marshalControllerOutputPayload(cop *cschema.ControllerOutputPayload) map[string]any {
-	b, err := json.Marshal(cop)
+	b, err := json.Marshal(payload)
 	if err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("PayloadToMap: ControllerOutputPayload marshal failed")
+			Str("payload_type", reflect.TypeOf(payload).String()).
+			Msg("PayloadToMap: payload marshal failed")
 		return nil
 	}
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("PayloadToMap: ControllerOutputPayload unmarshal failed")
+			Str("payload_type", reflect.TypeOf(payload).String()).
+			Msg("PayloadToMap: payload unmarshal failed")
 		return nil
 	}
 	return m
+}
+
+// PayloadsToMaps 批量桥接 payload 切片，nil 元素会被跳过。
+//
+// 用于「interactions 列表」这类「元素形态可能是 map 也可能是结构体」的场景，
+// 同时承担 Python `_iter_interactions` 的嵌套列表展开职责（interrupt_helpers.py L342-348）：
+// 嵌套的 []any / []map[string]any 会被递归摊平，下游拿到的恒为平坦 []map[string]any。
+func PayloadsToMaps(items []any) []map[string]any {
+	if len(items) == 0 {
+		return nil
+	}
+	result := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		switch nested := item.(type) {
+		case []any:
+			// 对齐 Python _iter_interactions 的嵌套列表展开
+			result = append(result, PayloadsToMaps(nested)...)
+		case []map[string]any:
+			result = append(result, nested...)
+		default:
+			if m := PayloadToMap(item); m != nil {
+				result = append(result, m)
+			}
+		}
+	}
+	return result
 }

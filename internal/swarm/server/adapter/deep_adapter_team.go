@@ -1788,7 +1788,7 @@ func parseInteractionPayloadUtils(interactions []any) map[string]any {
 		}
 	}
 	// Python: return convert_interactions_to_ask_user_question([payload])
-	return interrupt.ConvertInteractionsToAskUserQuestion(interactions)
+	return interrupt.ConvertInteractionsToAskUserQuestion(utils.PayloadsToMaps(interactions))
 }
 
 // strFromPayloadKey 从 payload 中安全提取字符串值。

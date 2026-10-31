@@ -31,17 +31,11 @@ var logComponent = logger.ComponentAgentCore
 // AskUserRail 中断：value 有 questions 字段 → source="ask_user_interrupt"
 // PermissionRail 中断：value 无 questions 字段 → source="permission_interrupt"
 //
-// state_outputs 中的元素可能是：
-//   - map[string]any（有 id、value 键）
-//   - any 其他类型（通过 extractInteractionParts 尝试提取）
-func ConvertInteractionsToAskUserQuestion(stateOutputs any) map[string]any {
-	// 将输入规范化为列表
-	outputs, ok := toSlice(stateOutputs)
-	if !ok || len(outputs) == 0 {
-		return nil
-	}
-
-	interactions := iterInteractions(outputs)
+// interactions 的元素已在调用边界由 utils.PayloadToMap 收敛为 map——
+// Python 的 `state_outputs` 元素既可能是 InteractionOutput 对象也可能是 dict
+// （interrupt_helpers.py L351-362 的 hasattr/dict 双分支），Go 用「桥接成 map」
+// 等价实现；入参收窄为 []map[string]any，避免传单对象时静默返回 nil。
+func ConvertInteractionsToAskUserQuestion(interactions []map[string]any) map[string]any {
 	if len(interactions) == 0 {
 		return nil
 	}
@@ -96,7 +90,10 @@ func ConvertInteractionsToAskUserQuestion(stateOutputs any) map[string]any {
 
 // extractQuestionFromInteraction 从单个 interaction payload 中提取问题信息。
 // Python: extract_question_from_interaction(payload) (line 426-475)
-func extractQuestionFromInteraction(payload any) map[string]any {
+//
+// payload 已由调用边界桥接为 map（对齐 Python 的 dict 分支；
+// Python 的对象分支由 utils.PayloadToMap 的 JSON 往返等价覆盖）。
+func extractQuestionFromInteraction(payload map[string]any) map[string]any {
 	if payload == nil {
 		return nil
 	}
@@ -105,32 +102,26 @@ func extractQuestionFromInteraction(payload any) map[string]any {
 	message := ""
 	var uiOptions any
 
-	// Python: hasattr(payload, 'value') 分支
-	// Go 中 payload 通常是 map[string]any
-	if m, ok := payload.(map[string]any); ok {
-		valueObj, hasValue := m["value"]
-		if hasValue {
-			if valueMap, ok := valueObj.(map[string]any); ok {
-				message = utils.StrValFromMap(valueMap, "message")
-				if message == "" {
-					message = utils.StrValFromMap(valueMap, "question")
-				}
-				toolName = utils.StrValFromMap(valueMap, "tool_name")
-				uiOptions = valueMap["ui_options"]
-			} else {
-				message = utils.StrValFromMap(m, "message")
-				if message == "" {
-					message = utils.StrValFromMap(m, "question")
-				}
-			}
-		} else {
-			message = utils.StrValFromMap(m, "message")
+	valueObj, hasValue := payload["value"]
+	if hasValue {
+		if valueMap, ok := valueObj.(map[string]any); ok {
+			message = utils.StrValFromMap(valueMap, "message")
 			if message == "" {
-				message = utils.StrValFromMap(m, "question")
+				message = utils.StrValFromMap(valueMap, "question")
+			}
+			toolName = utils.StrValFromMap(valueMap, "tool_name")
+			uiOptions = valueMap["ui_options"]
+		} else {
+			message = utils.StrValFromMap(payload, "message")
+			if message == "" {
+				message = utils.StrValFromMap(payload, "question")
 			}
 		}
 	} else {
-		return nil
+		message = utils.StrValFromMap(payload, "message")
+		if message == "" {
+			message = utils.StrValFromMap(payload, "question")
+		}
 	}
 
 	if uiOptions != nil {
@@ -157,30 +148,18 @@ func extractQuestionFromInteraction(payload any) map[string]any {
 	}
 }
 
-// iterInteractions 递归展开嵌套的 interaction 列表。
-// Python: _iter_interactions(state_outputs) (line 342-348)
-func iterInteractions(outputs []any) []any {
-	var result []any
-	for _, item := range outputs {
-		if subSlice, ok := toSlice(item); ok {
-			result = append(result, iterInteractions(subSlice)...)
-		} else {
-			result = append(result, item)
-		}
-	}
-	return result
-}
-
 // extractInteractionParts 从 interaction 中提取 request_id 和 value。
 // Python: _extract_interaction_parts(interaction) (line 351-362)
-func extractInteractionParts(interaction any) (string, any) {
-	if m, ok := interaction.(map[string]any); ok {
-		requestID := utils.StrValFromMap(m, "id")
-		valueObj := m["value"]
-		return strings.TrimSpace(requestID), valueObj
+//
+// interaction 已由调用边界桥接为 map，等价覆盖 Python 的 hasattr(interaction, "id")
+// 对象分支与 isinstance(interaction, dict) 分支。
+func extractInteractionParts(interaction map[string]any) (string, any) {
+	if interaction == nil {
+		return "", nil
 	}
-	// 非 dict 类型无法提取
-	return "", nil
+	requestID := utils.StrValFromMap(interaction, "id")
+	valueObj := interaction["value"]
+	return strings.TrimSpace(requestID), valueObj
 }
 
 // extractQuestionsFromValue 从 value 对象中提取 questions 列表。

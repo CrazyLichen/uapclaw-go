@@ -17,11 +17,15 @@ import (
 // 中断值经 stream.OutputSchema{Type: "__interaction__", Index, Payload: 本类型} 承载
 // （Python 复用同一个 OutputSchema，Go 侧 8.7 起同构）。
 // Python: openjiuwen/core/session/interaction/interaction.py (InteractionOutput)
+//
+// json tag 必须小写：Python 侧是 dataclass/pydantic，序列化后键名为字段名 id/value；
+// 消费端（interrupt.ConvertInteractionsToAskUserQuestion → extractInteractionParts）
+// 读的是 m["id"]/m["value"]，缺 tag 时 JSON 往返得到 "ID"/"Value" 会导致交互事件丢失。
 type InteractionOutput struct {
 	// ID 节点/可执行 ID
-	ID string
+	ID string `json:"id"`
 	// Value 交互携带的值
-	Value any
+	Value any `json:"value"`
 }
 
 // WorkflowInteraction 工作流交互，通过 GraphInterrupt 暂停工作流图执行。

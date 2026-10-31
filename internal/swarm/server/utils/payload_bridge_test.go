@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
@@ -90,5 +91,94 @@ func TestParseStreamChunk_结构体payload_taskFailed(t *testing.T) {
 	}
 	if result["error"] != "上游模型失败" {
 		t.Errorf("error = %v", result["error"])
+	}
+}
+
+// ──────────────────────────── 泛化桥接 ────────────────────────────
+
+// jsonPayload 用于验证"任意结构体（含 json tag）都能被泛化桥接"——无需为每个类型加 case
+type jsonPayload struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+}
+
+// toMapPayload 验证 ToMap 快路径优先于 JSON 往返
+type toMapPayload struct {
+	called int
+}
+
+// ToMap 返回固定映射（快路径）
+func (p *toMapPayload) ToMap() map[string]any {
+	p.called++
+	return map[string]any{"from": "to_map"}
+}
+
+// TestPayloadToMap_泛化自定义结构体 未注册的类型也能桥接（泛化的核心收益）
+func TestPayloadToMap_泛化自定义结构体(t *testing.T) {
+	got := PayloadToMap(&jsonPayload{ID: "n1", Text: "hi"})
+	if got["id"] != "n1" || got["text"] != "hi" {
+		t.Fatalf("期望 id/text 小写键，实际 %v", got)
+	}
+}
+
+// TestPayloadToMap_ToMap快路径 实现 ToMap 的类型优先走快路径
+func TestPayloadToMap_ToMap快路径(t *testing.T) {
+	p := &toMapPayload{}
+	got := PayloadToMap(p)
+	if got["from"] != "to_map" || p.called != 1 {
+		t.Fatalf("应走 ToMap 快路径，实际 %v（调用 %d 次）", got, p.called)
+	}
+}
+
+// TestPayloadToMap_InteractionOutput 交互结构体带小写 json tag，桥接后键名对齐 Python
+func TestPayloadToMap_InteractionOutput(t *testing.T) {
+	got := PayloadToMap(interaction.InteractionOutput{ID: "req-1", Value: map[string]any{"message": "确认"}})
+	if got["id"] != "req-1" {
+		t.Fatalf("期望 id=req-1，实际 %v", got)
+	}
+	value, ok := got["value"].(map[string]any)
+	if !ok || value["message"] != "确认" {
+		t.Fatalf("期望 value.message=确认，实际 %v", got["value"])
+	}
+}
+
+// TestPayloadsToMaps_嵌套展开与结构体桥接 对齐 Python _iter_interactions 的摊平语义
+func TestPayloadsToMaps_嵌套展开与结构体桥接(t *testing.T) {
+	items := []any{
+		map[string]any{"id": "a"},
+		[]any{
+			&jsonPayload{ID: "b"},
+			[]map[string]any{{"id": "c"}},
+		},
+		nil, // 跳过
+	}
+	got := PayloadsToMaps(items)
+	if len(got) != 3 {
+		t.Fatalf("应摊平为 3 个元素，实际 %d：%v", len(got), got)
+	}
+	if got[0]["id"] != "a" || got[1]["id"] != "b" || got[2]["id"] != "c" {
+		t.Errorf("摊平顺序/内容不符：%v", got)
+	}
+}
+
+// TestParseStreamChunk_interaction_结构体payload __interaction__ 携带结构体时也能转为交互事件
+// 回归：payload 是 interaction.InteractionOutput（workflow 中断的真实形态），
+// 只断言 map 时会退化成空 map，交互事件被静默丢弃。
+func TestParseStreamChunk_interaction_结构体payload(t *testing.T) {
+	var gotList []map[string]any
+	converter := func(interactions []map[string]any) map[string]any {
+		gotList = interactions
+		return map[string]any{"event_type": "chat.ask_user_question"}
+	}
+	output := &stream.OutputSchema{
+		Type:    "__interaction__",
+		Payload: interaction.InteractionOutput{ID: "req-9", Value: map[string]any{"message": "确认"}},
+	}
+	result := ParseStreamChunk(output, nil, nil, converter, false)
+	if result["event_type"] != "chat.ask_user_question" {
+		t.Fatalf("期望 chat.ask_user_question，实际 %v", result)
+	}
+	if len(gotList) != 1 || gotList[0]["id"] != "req-9" {
+		t.Fatalf("converter 应收到 1 个已桥接元素，实际 %v", gotList)
 	}
 }

@@ -66,8 +66,8 @@ func TestParseStreamChunk_controllerOutput_interaction(t *testing.T) {
 		"type":    "__interaction__",
 		"payload": map[string]any{"request_id": "req-1"},
 	})
-	converter := func(payload any) map[string]any {
-		return map[string]any{"event_type": "chat.ask_user_question", "data": payload}
+	converter := func(interactions []map[string]any) map[string]any {
+		return map[string]any{"event_type": "chat.ask_user_question", "data": interactions}
 	}
 	result := ParseStreamChunk(output, nil, nil, converter, false)
 	// controller_output 搜索到 __interaction__ 后委托 converter，返回 chat.ask_user_question
@@ -369,10 +369,10 @@ func TestParseStreamChunk_askUserQuestion_无RequestID不去重(t *testing.T) {
 }
 
 func TestParseStreamChunk_interaction_有converter(t *testing.T) {
-	converter := func(payload any) map[string]any {
+	converter := func(interactions []map[string]any) map[string]any {
 		return map[string]any{
 			"event_type": "chat.ask_user_question",
-			"payload":    payload,
+			"payload":    interactions,
 		}
 	}
 	// 非 activate_confirm 类型 → 走 converter
@@ -385,7 +385,7 @@ func TestParseStreamChunk_interaction_有converter(t *testing.T) {
 
 func TestParseStreamChunk_interaction_activateConfirm(t *testing.T) {
 	// S-03: activate_confirm 先于 converter 检查
-	converter := func(payload any) map[string]any {
+	converter := func(interactions []map[string]any) map[string]any {
 		return map[string]any{"event_type": "chat.ask_user_question"}
 	}
 	output := makeOutput("__interaction__", map[string]any{
@@ -533,8 +533,8 @@ func TestExtractFloatFromPayload(t *testing.T) {
 }
 
 func TestParseInteractionPayload_有converter(t *testing.T) {
-	converter := func(payload any) map[string]any {
-		return map[string]any{"event_type": "custom.event", "data": payload}
+	converter := func(interactions []map[string]any) map[string]any {
+		return map[string]any{"event_type": "custom.event", "data": interactions}
 	}
 	result := ParseInteractionPayload(map[string]any{"type": "test"}, converter)
 	if result["event_type"] != "custom.event" {

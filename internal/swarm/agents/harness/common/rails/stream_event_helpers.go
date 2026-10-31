@@ -206,7 +206,7 @@ func askUserQuestionPayloadFromInterrupt(tc *llmschema.ToolCall, interrupt *sasc
 	}
 
 	// 使用已有的 ConvertInteractionsToAskUserQuestion，对齐 Python: convert_interactions_to_ask_user_question([{"id": request_id, "value": value_obj}])
-	interactions := []any{map[string]any{
+	interactions := []map[string]any{{
 		"id":    requestID,
 		"value": valueObj,
 	}}

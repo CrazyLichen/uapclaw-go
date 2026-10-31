@@ -32,7 +32,11 @@ type UsageAccumulator struct {
 // InteractionConverterFunc 交互转换函数，用于自定义 __interaction__ 类型 chunk 的解析逻辑。
 // Python: 不同 adapter 对 interaction payload 的转换方式不同，
 // 通过此函数参数实现多态，避免 utils 包依赖具体 adapter。
-type InteractionConverterFunc func(payload any) map[string]any
+//
+// 入参固定为已桥接的 interactions 列表（元素已由 PayloadToMap 收敛为 map），
+// 对齐 Python `convert_interactions_to_ask_user_question(state_outputs: list)`；
+// 用具体类型而不是 any，把「传单个对象/非列表」从运行时静默失败变成编译期错误。
+type InteractionConverterFunc func(interactions []map[string]any) map[string]any
 
 // FindOption FindInteractionPayloads 可选参数。
 type FindOption struct {
@@ -496,7 +500,10 @@ func ParseInteractionPayload(payload map[string]any, converter InteractionConver
 		}
 	}
 	if converter != nil {
-		return converter(payload)
+		// Python: interface_deep.py L5179 → convert_interactions_to_ask_user_question([payload])
+		// 必须包成列表：converter 契约是「interactions 列表」，直接传单个对象会让
+		// 列表归一化失败、交互事件静默丢失
+		return converter([]map[string]any{payload})
 	}
 	return map[string]any{
 		"event_type":  "chat.interaction",
@@ -677,43 +684,43 @@ func parseControllerOutputInteractions(interactions []any, converter Interaction
 	// Python: for interaction in interactions:
 	// Python:     interaction_type = interaction.get("__interaction__")
 	// Python:     if interaction_type == "activate_confirm": return {...}
-	for _, interaction := range interactions {
-		if m, ok := interaction.(map[string]any); ok {
-			if m["__interaction__"] == "activate_confirm" {
-				extRuntimePath := ExtractStringFromPayload(m, "extension_runtime_path")
-				if extRuntimePath == "" {
-					extRuntimePath = ExtractStringFromPayload(m, "runtime_path")
-				}
-				options := []string{"accept", "reject"}
-				if opts, ok := m["options"].([]any); ok && len(opts) > 0 {
-					options = make([]string, 0, len(opts))
-					for _, o := range opts {
-						if s, ok := o.(string); ok {
-							options = append(options, s)
-						}
+	// 元素统一桥接为 map（producer 可能给 map，也可能给结构体）
+	bridged := PayloadsToMaps(interactions)
+	for _, m := range bridged {
+		if m["__interaction__"] == "activate_confirm" {
+			extRuntimePath := ExtractStringFromPayload(m, "extension_runtime_path")
+			if extRuntimePath == "" {
+				extRuntimePath = ExtractStringFromPayload(m, "runtime_path")
+			}
+			options := []string{"accept", "reject"}
+			if opts, ok := m["options"].([]any); ok && len(opts) > 0 {
+				options = make([]string, 0, len(opts))
+				for _, o := range opts {
+					if s, ok := o.(string); ok {
+						options = append(options, s)
 					}
 				}
-				return map[string]any{
-					"event_type":             "interaction.activate_confirm",
-					"interaction":            m,
-					"interaction_type":       "activate_confirm",
-					"interaction_id":         ExtractStringFromPayload(m, "interaction_id"),
-					"extension_name":         ExtractStringFromPayload(m, "extension_name"),
-					"runtime_path":           ExtractStringFromPayload(m, "runtime_path"),
-					"session_runtime_path":   ExtractStringFromPayload(m, "session_runtime_path"),
-					"extension_runtime_path": extRuntimePath,
-					"options":                options,
-				}
+			}
+			return map[string]any{
+				"event_type":             "interaction.activate_confirm",
+				"interaction":            m,
+				"interaction_type":       "activate_confirm",
+				"interaction_id":         ExtractStringFromPayload(m, "interaction_id"),
+				"extension_name":         ExtractStringFromPayload(m, "extension_name"),
+				"runtime_path":           ExtractStringFromPayload(m, "runtime_path"),
+				"session_runtime_path":   ExtractStringFromPayload(m, "session_runtime_path"),
+				"extension_runtime_path": extRuntimePath,
+				"options":                options,
 			}
 		}
 	}
 	// 默认：委托 converter 转为 ask_user_question
 	// Python: return convert_interactions_to_ask_user_question(interactions)
 	if converter != nil {
-		return converter(interactions)
+		return converter(bridged)
 	}
 	return map[string]any{
 		"event_type":  "chat.interaction",
-		"interaction": interactions,
+		"interaction": bridged,
 	}
 }

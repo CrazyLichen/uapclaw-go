@@ -12,20 +12,16 @@ func TestConvertInteractionsToAskUserQuestion_空输入(t *testing.T) {
 		t.Errorf("期望 nil，实际 %v", result)
 	}
 
-	result = ConvertInteractionsToAskUserQuestion([]any{})
+	result = ConvertInteractionsToAskUserQuestion([]map[string]any{})
 	if result != nil {
 		t.Errorf("期望 nil，实际 %v", result)
 	}
-
-	result = ConvertInteractionsToAskUserQuestion("")
-	if result != nil {
-		t.Errorf("期望 nil，实际 %v", result)
-	}
+	// 非列表入参已由签名收窄为编译期错误（Python 侧是运行时 `toSlice` 失败静默返回 None）
 }
 
 func TestConvertInteractionsToAskUserQuestion_AskUserInterrupt(t *testing.T) {
 	// Python: AskUserRail 中断，value 有 questions 字段
-	stateOutputs := []any{
+	stateOutputs := []map[string]any{
 		map[string]any{
 			"id": "req_001",
 			"value": map[string]any{
@@ -65,7 +61,7 @@ func TestConvertInteractionsToAskUserQuestion_AskUserInterrupt(t *testing.T) {
 }
 
 func TestConvertInteractionsToAskUserQuestion_AskUserInterrupt带选项(t *testing.T) {
-	stateOutputs := []any{
+	stateOutputs := []map[string]any{
 		map[string]any{
 			"id": "req_002",
 			"value": map[string]any{
@@ -107,7 +103,7 @@ func TestConvertInteractionsToAskUserQuestion_AskUserInterrupt带选项(t *testi
 
 func TestConvertInteractionsToAskUserQuestion_PermissionInterrupt(t *testing.T) {
 	// Python: PermissionRail 中断，value 无 questions 字段
-	stateOutputs := []any{
+	stateOutputs := []map[string]any{
 		map[string]any{
 			"id": "perm_001",
 			"value": map[string]any{
@@ -143,7 +139,7 @@ func TestConvertInteractionsToAskUserQuestion_PermissionInterrupt(t *testing.T) 
 
 func TestConvertInteractionsToAskUserQuestion_PermissionInterrupt默认选项(t *testing.T) {
 	// 无 ui_options → 使用默认权限审批选项
-	stateOutputs := []any{
+	stateOutputs := []map[string]any{
 		map[string]any{
 			"id": "perm_002",
 			"value": map[string]any{
@@ -171,7 +167,7 @@ func TestConvertInteractionsToAskUserQuestion_PermissionInterrupt默认选项(t 
 
 func TestConvertInteractionsToAskUserQuestion_toolArgs中的questions(t *testing.T) {
 	// Python: StructuredAskUserRail 路径，questions 嵌入 tool_args
-	stateOutputs := []any{
+	stateOutputs := []map[string]any{
 		map[string]any{
 			"id": "req_003",
 			"value": map[string]any{
@@ -200,7 +196,7 @@ func TestConvertInteractionsToAskUserQuestion_toolArgs中的questions(t *testing
 
 func TestConvertInteractionsToAskUserQuestion_toolArgs为JSON字符串(t *testing.T) {
 	// tool_args 是 JSON string 格式
-	stateOutputs := []any{
+	stateOutputs := []map[string]any{
 		map[string]any{
 			"id": "req_004",
 			"value": map[string]any{
@@ -218,32 +214,11 @@ func TestConvertInteractionsToAskUserQuestion_toolArgs为JSON字符串(t *testin
 	}
 }
 
-func TestConvertInteractionsToAskUserQuestion_嵌套列表(t *testing.T) {
-	// Python: _iter_interactions 递归展开
-	stateOutputs := []any{
-		[]any{
-			map[string]any{
-				"id": "nested_001",
-				"value": map[string]any{
-					"questions": []any{
-						map[string]any{"question": "嵌套问题", "header": "H", "options": []any{}},
-					},
-				},
-			},
-		},
-	}
-
-	result := ConvertInteractionsToAskUserQuestion(stateOutputs)
-	if result == nil {
-		t.Fatal("期望非 nil 结果")
-	}
-	if result["request_id"] != "nested_001" {
-		t.Errorf("期望 request_id=nested_001，实际 %v", result["request_id"])
-	}
-}
+// 嵌套列表展开已上提到 utils.PayloadsToMaps（utils 包内有用例覆盖），
+// 本包入参恒为平坦 []map[string]any，不再重复测试。
 
 func TestConvertInteractionsToAskUserQuestion_空requestID跳过(t *testing.T) {
-	stateOutputs := []any{
+	stateOutputs := []map[string]any{
 		map[string]any{
 			"id": "",
 			"value": map[string]any{
@@ -263,7 +238,7 @@ func TestConvertInteractionsToAskUserQuestion_空requestID跳过(t *testing.T) {
 func TestConvertInteractionsToAskUserQuestion_优先AskUserInterrupt(t *testing.T) {
 	// 第一个有 questions（AskUser），第二个没有（Permission）
 	// 应优先返回 AskUser
-	stateOutputs := []any{
+	stateOutputs := []map[string]any{
 		map[string]any{
 			"id": "perm_only",
 			"value": map[string]any{
