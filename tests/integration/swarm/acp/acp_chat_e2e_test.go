@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/acp"
 	acpchat "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/acp_chat"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -166,6 +167,20 @@ func (s *AcpChatToolSuite) TestAcpChatTool_args非列表() {
 	out := s.invoke(cfg, profile, "hi", false)
 	s.Contains(out, "[ERROR] acp_chat failed")
 	s.Contains(out, "args must be a list of strings")
+}
+
+// TestAcpStdioClient_直连基线 不用工具层，直接用客户端走通 connect→chat→close
+// 对应 Python test_stdio_client_connect_and_chat_with_fake_agent；
+// 同时为 integration-audit 提供 internal/swarm/acp 的真实 pkg.Fn 调用。
+func (s *AcpChatToolSuite) TestAcpStdioClient_直连基线() {
+	c := acp.NewAcpStdioClient(fakeAcpBin, []string{"echo"}, s.root, nil)
+	s.Require().NoError(c.Connect(s.Ctx))
+	defer func() { s.Require().NoError(c.Close()) }()
+
+	s.Equal("fake-echo-sess", c.SessionID())
+	out, err := c.Chat(s.Ctx, "hello", acp.WithChatTimeout(30*time.Second))
+	s.Require().NoError(err)
+	s.Regexp(`^echo:hello:pid=\d+$`, out)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
