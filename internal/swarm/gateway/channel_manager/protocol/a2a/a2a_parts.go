@@ -146,6 +146,92 @@ func MapA2APartsToParams(m *sdka2a.Message) (string, []map[string]any) {
 	return query, files
 }
 
+// MessageToA2AParts 把内部消息 payload 映射为 A2A 响应 parts。
+//
+// CHAT_ERROR 直接转错误文本；content/result 转文本（过滤哨兵）；
+// 工具事件文本化为 [tool_call]/[tool_result]；payload.files 转 url/data/raw 三类 Part。
+// fallbackToText 为真且无任何 part 时回退 MessageToText。
+// Python: a2a_connect.py message_to_a2a_parts (L359-423)
+func MessageToA2AParts(msg *schema.Message, fallbackToText bool) []*sdka2a.Part {
+	if msg == nil {
+		return nil
+	}
+	payload := msg.Payload
+	if payload == nil {
+		payload = map[string]any{}
+	}
+
+	var parts []*sdka2a.Part
+
+	// 错误响应保持可读
+	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatError {
+		text := firstNonEmptyStr(payload["error"], payload["content"])
+		if text == "" {
+			text = agentRequestFailedText
+		}
+		return []*sdka2a.Part{sdka2a.NewTextPart(text)}
+	}
+
+	switch content := payload["content"].(type) {
+	case string:
+		if t := strings.TrimSpace(content); t != "" && !IsCompletionSentinelText(t) {
+			parts = append(parts, sdka2a.NewTextPart(t))
+		}
+	case nil, map[string]any, []any:
+		// 缺失 / 结构化内容不转文本（对齐 Python 跳过 dict/list）
+	default:
+		parts = append(parts, sdka2a.NewTextPart(strVal(content)))
+	}
+
+	if result, ok := payload["result"].(string); ok {
+		if t := strings.TrimSpace(result); t != "" && !IsCompletionSentinelText(t) {
+			parts = append(parts, sdka2a.NewTextPart(t))
+		}
+	}
+
+	// 流式模式暴露工具进度
+	if msg.EventType == schema.EventTypeChatToolCall {
+		if toolCall, ok := payload["tool_call"].(map[string]any); ok && toolCall != nil {
+			name := strings.TrimSpace(strVal(toolCall["name"]))
+			if name == "" {
+				name = "tool"
+			}
+			parts = append(parts, sdka2a.NewTextPart("[tool_call] "+name))
+		}
+	}
+	if msg.EventType == schema.EventTypeChatToolResult {
+		toolName := strings.TrimSpace(strVal(payload["tool_name"]))
+		if toolResult, ok := payload["result"].(string); ok && strings.TrimSpace(toolResult) != "" {
+			label := "[tool_result] "
+			if toolName != "" {
+				label = "[tool_result:" + toolName + "] "
+			}
+			parts = append(parts, sdka2a.NewTextPart(label+strings.TrimSpace(toolResult)))
+		}
+	}
+
+	parts = append(parts, filesToParts(payload["files"])...)
+
+	if len(parts) > 0 {
+		return parts
+	}
+	if fallbackToText {
+		return []*sdka2a.Part{sdka2a.NewTextPart(MessageToText(msg))}
+	}
+	return nil
+}
+
+// BuildRequestParams 构造内部 chat.send 的 params。
+//
+// Python: a2a_connect.py _build_request_params (L446-455)
+func BuildRequestParams(query string, files []map[string]any) map[string]any {
+	params := map[string]any{"query": query}
+	if len(files) > 0 {
+		params["files"] = files
+	}
+	return params
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // strVal 把任意值转字符串；nil 返回空串。
@@ -188,4 +274,44 @@ func joinTextParts(m *sdka2a.Message) string {
 		}
 	}
 	return strings.TrimSpace(strings.Join(segs, "\n"))
+}
+
+// filesToParts 把 payload.files 转成 A2A 文件 Part（url/data/raw 三类）。
+//
+// Python: a2a_connect.py L396-417
+func filesToParts(raw any) []*sdka2a.Part {
+	list, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	var parts []*sdka2a.Part
+	for idx, item := range list {
+		fi, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := strings.TrimSpace(firstNonEmptyStr(fi["filename"], fi["name"]))
+		if name == "" {
+			name = fmt.Sprintf("file_%d", idx)
+		}
+		mediaType := strings.TrimSpace(firstNonEmptyStr(fi["media_type"], fi["type"]))
+		url := strings.TrimSpace(firstNonEmptyStr(fi["url"], fi["uri"]))
+		data := strings.TrimSpace(strVal(fi["data"]))
+		rawText := strings.TrimSpace(strVal(fi["raw"]))
+
+		if url != "" {
+			parts = append(parts, &sdka2a.Part{Content: sdka2a.URL(url), Filename: name, MediaType: mediaType})
+		}
+		if data != "" {
+			parts = append(parts, &sdka2a.Part{Content: sdka2a.Data{Value: data}, Filename: name, MediaType: mediaType})
+		}
+		if rawText != "" {
+			rawBytes, err := base64.StdEncoding.DecodeString(rawText)
+			if err != nil {
+				rawBytes = []byte(rawText)
+			}
+			parts = append(parts, &sdka2a.Part{Content: sdka2a.Raw(rawBytes), Filename: name, MediaType: mediaType})
+		}
+	}
+	return parts
 }

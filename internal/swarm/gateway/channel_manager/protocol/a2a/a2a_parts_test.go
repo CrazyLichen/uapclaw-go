@@ -174,3 +174,100 @@ func TestMapA2APartsToParams_边界(t *testing.T) {
 		t.Errorf("纯文本不应产生 files, 实际 %v", files)
 	}
 }
+
+// TestMessageToA2AParts_sentinel过滤 对齐 Python L359-423
+func TestMessageToA2AParts_sentinel过滤(t *testing.T) {
+	msg := &schema.Message{
+		Type:      schema.MessageTypeEvent,
+		EventType: schema.EventTypeChatFinal,
+		Payload:   map[string]any{"content": "{'is_complete': True}"},
+	}
+	if parts := MessageToA2AParts(msg, false); len(parts) != 0 {
+		t.Errorf("sentinel 应被过滤, 实际 %d 个 part", len(parts))
+	}
+}
+
+// TestMessageToA2AParts_工具事件 对齐 Python L384-394
+func TestMessageToA2AParts_工具事件(t *testing.T) {
+	call := &schema.Message{
+		Type:      schema.MessageTypeEvent,
+		EventType: schema.EventTypeChatToolCall,
+		Payload:   map[string]any{"tool_call": map[string]any{"name": "view_file"}},
+	}
+	callParts := MessageToA2AParts(call, false)
+	if len(callParts) != 1 || callParts[0].Text() != "[tool_call] view_file" {
+		t.Fatalf("tool_call parts = %v", callParts)
+	}
+
+	result := &schema.Message{
+		Type:      schema.MessageTypeEvent,
+		EventType: schema.EventTypeChatToolResult,
+		Payload:   map[string]any{"tool_name": "view_file", "result": "ok"},
+	}
+	resultParts := MessageToA2AParts(result, false)
+	if len(resultParts) != 2 {
+		t.Fatalf("tool_result parts 数量 = %d, 期望 2", len(resultParts))
+	}
+	if resultParts[0].Text() != "ok" || resultParts[1].Text() != "[tool_result:view_file] ok" {
+		t.Errorf("tool_result parts = %q / %q", resultParts[0].Text(), resultParts[1].Text())
+	}
+}
+
+// TestMessageToA2AParts_错误与回退
+func TestMessageToA2AParts_错误与回退(t *testing.T) {
+	errMsg := &schema.Message{
+		Type:      schema.MessageTypeEvent,
+		EventType: schema.EventTypeChatError,
+		Payload:   map[string]any{"error": "boom"},
+	}
+	parts := MessageToA2AParts(errMsg, false)
+	if len(parts) != 1 || parts[0].Text() != "boom" {
+		t.Fatalf("CHAT_ERROR parts = %v", parts)
+	}
+
+	empty := &schema.Message{Type: schema.MessageTypeEvent, EventType: schema.EventTypeChatDelta, Payload: map[string]any{}}
+	if got := MessageToA2AParts(empty, false); len(got) != 0 {
+		t.Errorf("fallback=false 应为空, 实际 %v", got)
+	}
+	withText := &schema.Message{Payload: map[string]any{"content": "plain"}}
+	got := MessageToA2AParts(withText, true)
+	if len(got) != 1 || got[0].Text() != "plain" {
+		t.Errorf("fallback=true parts = %v", got)
+	}
+}
+
+// TestMessageToA2AParts_文件载荷 对齐 Python L396-417
+func TestMessageToA2AParts_文件载荷(t *testing.T) {
+	msg := &schema.Message{
+		Payload: map[string]any{"files": []any{
+			map[string]any{"filename": "a.txt", "media_type": "text/plain", "url": "https://x/a.txt"},
+			map[string]any{"name": "b.txt", "data": "aGk="},
+			"非法项",
+		}},
+	}
+	parts := MessageToA2AParts(msg, false)
+	if len(parts) != 2 {
+		t.Fatalf("parts 数量 = %d, 期望 2", len(parts))
+	}
+	if string(parts[0].URL()) != "https://x/a.txt" || parts[0].Filename != "a.txt" || parts[0].MediaType != "text/plain" {
+		t.Errorf("url part = %+v", parts[0])
+	}
+	if parts[1].Filename != "b.txt" {
+		t.Errorf("data part filename = %q", parts[1].Filename)
+	}
+	if d, ok := parts[1].Data().(string); !ok || d != "aGk=" {
+		t.Errorf("data part value = %v", parts[1].Data())
+	}
+}
+
+// TestBuildRequestParams 对齐 Python _build_request_params (L446-455)
+func TestBuildRequestParams(t *testing.T) {
+	p := BuildRequestParams("hi", nil)
+	if len(p) != 1 || p["query"] != "hi" {
+		t.Errorf("无 files 时 params = %v", p)
+	}
+	p = BuildRequestParams("hi", []map[string]any{{"filename": "x.txt"}})
+	if _, ok := p["files"]; !ok {
+		t.Errorf("有 files 时应带键, 实际 %v", p)
+	}
+}
