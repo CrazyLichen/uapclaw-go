@@ -1,5 +1,7 @@
 package pregel
 
+import "fmt"
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Message 超步之间传递的调度信号。
@@ -24,7 +26,7 @@ type Message struct {
 // Interrupt 图中断信号，值对象：随检查点持久化后由 Pregel.Run 返回给上层
 // （顶层返回 {"__interrupt__": value}）。
 //
-// 与 GraphInterrupt（控制流跳转手段，8.7 迁入本包）职责不同：本类型只承载中断值。
+// 与 GraphInterrupt（控制流跳转手段，定义于本文件）职责不同：本类型只承载中断值。
 //
 // 分层纪律：Value 的具体类型由 session 层决定（当前唯一来源是
 // session/interaction.InteractionOutputSchema），本包只做装箱透传、从不拆箱。
@@ -41,6 +43,19 @@ type Interrupt struct {
 	Resumable bool
 	// NS 命名空间（节点 ID），同上，interaction.py:63 以关键字传入
 	NS string
+}
+
+// GraphInterrupt 图级中断，控制流跳转手段（Python 侧是 Exception）。
+//
+// 生命周期与 Interrupt 不同：Interrupt 是随检查点持久化的值对象，
+// 本类型是一次执行内的控制流跳转——由交互层 panic 抛出，被节点任务恢复成
+// 返回值，最终在引擎顶层转成 {"__interrupt__": Interrupts} 交给上层。
+// Python: pregel/base.py:17-20
+type GraphInterrupt struct {
+	// Interrupts 中断信号列表。Python 类型注解为 Interrupt | tuple[Interrupt, ...]，
+	// 但唯二生产点（interaction.py:49/61）均传一元 tuple、消费点按 [0] 取用，
+	// 故 Go 用切片表达；空切片语义与 Python 空 tuple 一致（8.14 取 [0] 时须自防越界）。
+	Interrupts []Interrupt
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -75,4 +90,20 @@ func NewBarrierMessage(sender, target string) Message {
 // Kind 返回消息种类。
 func (m Message) Kind() MessageKind {
 	return m.kind
+}
+
+// PanicGraphInterrupt 触发图级中断 panic。
+// panic 值恒为 *GraphInterrupt，消费者按指针断言。
+// Python: raise GraphInterrupt((Interrupt(...),))
+func PanicGraphInterrupt(interrupts ...Interrupt) {
+	panic(&GraphInterrupt{Interrupts: interrupts})
+}
+
+// Error 实现 error 接口，对齐 Python Exception.__init__(str(value))（base.py:20）。
+//
+// 纪律：本方法**仅供日志与格式化**。任何层禁止用 r.(error) 判定中断——
+// Python 的 except 顺序（GraphInterrupt 先于 BaseError/Exception）在 Go 侧
+// 只能靠具体类型断言还原，一旦按 error 兜底就会把中断误判成普通错误并吞掉。
+func (e *GraphInterrupt) Error() string {
+	return fmt.Sprintf("%v", e.Interrupts)
 }

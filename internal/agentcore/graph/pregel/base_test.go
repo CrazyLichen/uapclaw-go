@@ -143,3 +143,113 @@ func TestInterrupt_零值(t *testing.T) {
 		t.Errorf("NS = %q，期望空串", it.NS)
 	}
 }
+
+// ──────────────────────────── GraphInterrupt ────────────────────────────
+
+// TestGraphInterrupt_Error 错误文案对齐 Python str(value)。
+// Python: pregel/base.py:20 super().__init__(str(value))
+func TestGraphInterrupt_Error(t *testing.T) {
+	cases := []struct {
+		name       string
+		interrupts []Interrupt
+		want       string
+	}{
+		{"零元素", nil, "[]"},
+		{"单元素", []Interrupt{{Value: "test_value"}}, "[{test_value false }]"},
+		{"双元素", []Interrupt{{Value: "a"}, {Value: 1, Resumable: true, NS: "n1"}}, "[{a false } {1 true n1}]"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gi := &GraphInterrupt{Interrupts: c.interrupts}
+			if got := gi.Error(); got != c.want {
+				t.Errorf("Error() = %q，期望 %q", got, c.want)
+			}
+		})
+	}
+}
+
+// TestPanicGraphInterrupt panic 值恒为 *GraphInterrupt，中断值原样落地。
+// 用例迁移自 session/interaction/base_test.go（8.7 本体迁入）。
+func TestPanicGraphInterrupt(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("期望 panic GraphInterrupt，但未发生")
+		}
+		gi, ok := r.(*GraphInterrupt)
+		if !ok {
+			t.Fatalf("期望 *GraphInterrupt，得到 %T", r)
+		}
+		if len(gi.Interrupts) != 1 {
+			t.Fatalf("Interrupts 长度应为 1，实际=%d", len(gi.Interrupts))
+		}
+		if gi.Interrupts[0].Value != "test_value" {
+			t.Errorf("Interrupts[0].Value = %v，期望 \"test_value\"", gi.Interrupts[0].Value)
+		}
+	}()
+	PanicGraphInterrupt(Interrupt{Value: "test_value"})
+}
+
+// TestPanicGraphInterrupt_多中断 变参展开为切片，顺序与实参一致。
+func TestPanicGraphInterrupt_多中断(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("期望 panic GraphInterrupt，但未发生")
+		}
+		gi, ok := r.(*GraphInterrupt)
+		if !ok {
+			t.Fatalf("期望 *GraphInterrupt，得到 %T", r)
+		}
+		if len(gi.Interrupts) != 2 {
+			t.Fatalf("Interrupts 长度应为 2，实际=%d", len(gi.Interrupts))
+		}
+		if gi.Interrupts[0].Value != "first" || gi.Interrupts[1].Value != "second" {
+			t.Errorf("中断值顺序错乱：%v", gi.Interrupts)
+		}
+	}()
+	PanicGraphInterrupt(Interrupt{Value: "first"}, Interrupt{Value: "second"})
+}
+
+// TestPanicGraphInterrupt_零参数 零参调用不崩，Error() 输出空切片。
+// Python 同样允许 GraphInterrupt()（无参），越界防护由消费方 8.14 自行决定。
+func TestPanicGraphInterrupt_零参数(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("期望 panic GraphInterrupt，但未发生")
+		}
+		gi, ok := r.(*GraphInterrupt)
+		if !ok {
+			t.Fatalf("期望 *GraphInterrupt，得到 %T", r)
+		}
+		if len(gi.Interrupts) != 0 {
+			t.Errorf("Interrupts 长度应为 0，实际=%d", len(gi.Interrupts))
+		}
+		if got := gi.Error(); got != "[]" {
+			t.Errorf("Error() = %q，期望 \"[]\"", got)
+		}
+	}()
+	PanicGraphInterrupt()
+}
+
+// TestGraphInterrupt_Resumable与NS不丢 守住 8.6 §R1 的书面承诺。
+func TestGraphInterrupt_Resumable与NS不丢(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("期望 panic GraphInterrupt，但未发生")
+		}
+		gi, ok := r.(*GraphInterrupt)
+		if !ok {
+			t.Fatalf("期望 *GraphInterrupt，得到 %T", r)
+		}
+		if !gi.Interrupts[0].Resumable {
+			t.Error("Resumable 应为 true（8.6 §R1：迁 GraphInterrupt 时不得删）")
+		}
+		if gi.Interrupts[0].NS != "node_x" {
+			t.Errorf("NS = %q，期望 \"node_x\"", gi.Interrupts[0].NS)
+		}
+	}()
+	PanicGraphInterrupt(Interrupt{Value: "v", Resumable: true, NS: "node_x"})
+}
