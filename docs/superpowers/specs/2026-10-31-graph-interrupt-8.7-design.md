@@ -251,7 +251,8 @@ pregel.PanicGraphInterrupt(pregel.Interrupt{
 
 ## 8. 风险与观察点
 
-- **JSON 键大小写**：被删的 `InteractionOutputSchema` 带 `json:"type"` 等标签，`stream.OutputSchema` **无 json tag**。当前无直序列化路径（checkpointer 只判键存在，`ToMap()` 输出三键），故不改。观察点：若 8.14 需要把中断值直接 `json.Marshal` 到 E2A，届时给 `stream.OutputSchema` 补标签，不在本节扩大改动面。
+- **JSON 键大小写（实施后已部分收敛）**：被删的 `InteractionOutputSchema` 曾带 `json:"type"` 等标签，而 `stream.OutputSchema` **无 json tag**。8.7 完成后，并行提交 `85fb6752`（11.26/stream 桥接）给 `InteractionOutput` 补上了 `json:"id"`/`json:"value"`——原因是消费端 `interrupt.ConvertInteractionsToAskUserQuestion` 读 `m["id"]`/`m["value"]`，缺 tag 会让交互事件在 JSON 往返后丢失。于是内层 payload 键名已与 Python 一致。
+  **仍存的观察点**：`stream.OutputSchema` 自身无 tag，若直接把中断值 `json.Marshal`，envelope 会变成 `"Type"/"Index"/"Payload"`；当前所有流式序列化都走 `ToMap()`（`base.go:100-109`，输出小写三键），故未触发。若 8.14 需要绕过 `ToMap()` 直序列化，届时给 `OutputSchema` 补标签。
 - **`Error()` 诱发误判**：已列入 D3 纪律，8.3b/8.11 落地时逐点核对。
 - **空 `Interrupts`**：`PanicGraphInterrupt()` 允许零参调用（Python 侧同样允许 `GraphInterrupt()`，但 `_workflow.py:124` 会 IndexError）。Go 不在 8.7 引入防护，由 8.14 自行决定；测试中保留一条「零参 panic 不崩」的用例，锁住「不在 panic 路径上多做校验」的决策。
 

@@ -20,11 +20,11 @@ import (
 // Payload 统一为本类型：Python 中 wait_user_inputs 的 payload 是 InteractionOutput，
 // 而 user_latest_input 传的是 tuple（node_id, value）；Go 侧统一为 InteractionOutput
 // 更一致且类型安全（该统一是 8.7 删除 InteractionOutputSchema 时保留的既有决策）。
-// Python: openjiuwen/core/session/interaction/interaction.py (InteractionOutput)
 //
 // json tag 必须小写：Python 侧是 dataclass/pydantic，序列化后键名为字段名 id/value；
 // 消费端（interrupt.ConvertInteractionsToAskUserQuestion → extractInteractionParts）
 // 读的是 m["id"]/m["value"]，缺 tag 时 JSON 往返得到 "ID"/"Value" 会导致交互事件丢失。
+// Python: openjiuwen/core/session/interaction/interaction.py (InteractionOutput)
 type InteractionOutput struct {
 	// ID 节点/可执行 ID
 	ID string `json:"id"`
