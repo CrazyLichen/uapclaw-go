@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,7 +69,23 @@ func (s *AcpChatToolSuite) SetupSuite() {
 // TestAcpChatTool_Echo文本聚合 session/update 文本聚合（对应 Python echo 模式）
 func (s *AcpChatToolSuite) TestAcpChatTool_Echo文本聚合() {
 	cfg, profile := s.newConfig("echo", nil)
-	s.Equal("echo:hello", s.invoke(cfg, profile, "hello", false))
+	s.Regexp(`^echo:hello:pid=\d+$`, s.invoke(cfg, profile, "hello", false))
+}
+
+// TestAcpChatTool_会话缓存复用 同 profile 连续两次调用复用同一子进程（Go 增强）
+func (s *AcpChatToolSuite) TestAcpChatTool_会话缓存复用() {
+	cfg, profile := s.newConfig("echo", nil)
+	first := pidOf(s.T(), s.invoke(cfg, profile, "one", false))
+	second := pidOf(s.T(), s.invoke(cfg, profile, "two", false))
+	s.Equal(first, second, "同 profile 第二次应复用缓存子进程")
+}
+
+// TestAcpChatTool_newSession重启 new_session=true 重启子进程（Go 增强）
+func (s *AcpChatToolSuite) TestAcpChatTool_newSession重启() {
+	cfg, profile := s.newConfig("echo", nil)
+	first := pidOf(s.T(), s.invoke(cfg, profile, "one", false))
+	second := pidOf(s.T(), s.invoke(cfg, profile, "one", true))
+	s.NotEqual(first, second, "new_session=true 应拉起新子进程")
 }
 
 // TestAcpChatTool_JSONRPC错误转文本 JSON-RPC error 转 [ERROR] 文本且不抛错（Python error 模式）
@@ -152,6 +169,16 @@ func (s *AcpChatToolSuite) TestAcpChatTool_args非列表() {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// pidOf 从 "echo:<text>:pid=<n>" 中取出 pid
+func pidOf(t *testing.T, out string) string {
+	t.Helper()
+	idx := strings.LastIndex(out, "pid=")
+	if idx < 0 {
+		t.Fatalf("输出缺少 pid 标记: %q", out)
+	}
+	return out[idx+len("pid="):]
+}
 
 // newConfig 构造唯一 profile 的 cfg（profile 名含纳秒时间戳，规避全局缓存串台）
 func (s *AcpChatToolSuite) newConfig(mode string, extra map[string]any) (map[string]any, string) {

@@ -129,7 +129,8 @@ func handlePrompt(out *bufio.Writer, in *bufio.Scanner, mode string, id any, tex
 		})
 		return
 	case "echo":
-		writeUpdate(out, mode, "echo:"+text)
+		// 回显 pid：供“缓存复用 / new_session 重启”用例区分是否同一子进程
+		writeUpdate(out, mode, fmt.Sprintf("echo:%s:pid=%d", text, os.Getpid()))
 	default:
 		writeUpdate(out, mode, "mode:"+text)
 	}
