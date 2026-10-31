@@ -170,13 +170,18 @@ func Execute() {
 }
 ```
 
-映射：成功 nil → 0；`*acpChatExitError` → 其 code；其他 → 1。130 由 `runAcpChat` 显式返回（`ctx.Err() != nil` 时）。
+映射：成功 nil → 0；`*acpChatExitError` → 其 code；其他 → 1。130 由 `runAcpChat` 显式返回：
+
+- `connect`/`chat` 阶段 `ctx.Err() != nil` → 130；`ctx.Err() == nil` → 1
+- **close 阶段被信号打断** → 130（2026-10-31 修订）：正常路径改为显式 `close` 后再复查 `ctx`，defer 仅作提前 return 的兜底；响应文本已打印不回退
 
 ### 5.2 输出通道
 
-- 响应文本：`fmt.Fprintln(stdout, ...)`（管道可消费，无时间戳/字段前缀）
-- 诊断日志：`logger.Info/Warn/Error(logComponent)`，文案英文（项目日志约定）
-- 空响应占位：逐字 `(empty response)`（对齐 `cli.py`，**不是**工具侧的 `(empty response from external ACP agent)`）
+- **响应文本**：`fmt.Fprintln(stdout, ...)`，无时间戳/字段前缀 → 可被管道/脚本直接消费
+- **诊断日志**：`logger.Info/Warn/Error(logComponent)` → **stderr**（2026-10-31 修订：logger 控制台 writer 由 `os.Stdout` 改为 `os.Stderr`，对齐 Python `setup_logger` 的 `logging.StreamHandler()` 默认流；Python `cli.py` 的 `basicConfig(stream=sys.stdout)` 属该脚本特例，Go 侧不跟随）
+- **日志落盘**：`logger.Setup` 默认目录由硬编码 `~/.uapclaw/agent/.logs` 改为 `pathutil.LogsDir()`（= `WorkspaceDir()/agent/.logs`），受 `UAPCLAW_DATA_DIR` 管辖（2026-10-31 修订）
+- **空响应占位**：逐字 `(empty response)`（对齐 `cli.py`，**不是**工具侧的 `(empty response from external ACP agent)`）
+- **`--dotenv`/`--name`**：`acp-chat` 挂 `makeDotenvPreRunE()`，root 持久旗标生效（Go 侧扩展，Python 无对应旗标）
 
 ## 6. 保真 / 偏差表
 
@@ -193,6 +198,10 @@ func Execute() {
 | 命令名 | `jiuwenswarm-acp-chat` | `uapclaw acp-chat` | 品牌映射 |
 | 关闭超时非法值 | `float()` 解析失败抛 ValueError | 回落默认 30s 并 Warn | 防御性偏差 |
 | close 错误文案 | `Failed to close ACP client: …` | 英文 Msg（日志规范） | 有意偏差 |
+| 日志流 | `basicConfig(stream=sys.stdout)`，全部日志进 stdout | stdout 仅响应文本，日志走 stderr（logger 全局修复） | **有意偏差（用户拍板）** |
+| 日志落盘 | 不落盘 | 写 `WorkspaceDir()/agent/.logs`（受 `UAPCLAW_DATA_DIR`） | 新增行为（Go 日志体系） |
+| `--dotenv`/`--name` | 无该旗标 | `PreRunE` 解析，支持多实例/指定 .env | Go 扩展 |
+| close 阶段中断 | `KeyboardInterrupt` → 130 | close 后复查 ctx → 130 | 保真（时序显式化） |
 | 测试 | 无 cli 单测 | 自建 ≥85% | 新增 |
 
 ## 7. 测试计划（cmd 包 ≥85%）
@@ -217,12 +226,12 @@ func Execute() {
 
 ## 8. 回填清单（实施逐项打勾）
 
-- [ ] `IMPLEMENTATION_PLAN.md` 10.4.6 行：`☐` → `✅`，描述改为「一次性冒烟（connect→chat→close，message 缺省 Hello），落 `cmd/uapclaw/acp_chat_cmd.go`；严格解析对齐 acpchat，偏差入 spec §6」
-- [ ] `IMPLEMENTATION_PLAN.md` 10.4.3 行：删除「剩 cli.py REPL 入口 ⤵️ 10.4.6」，改为「cli.py 一次性冒烟入口已随 10.4.6 落地」
-- [ ] 10.4.1 行不动（CLI REPL 属另一节）
-- [ ] `cmd/uapclaw/doc.go` 文件目录 + `main.go` 包注释子命令清单补 `acp-chat`
-- [ ] `acpchat/doc.go` 说明导出面（`LoadProfile` / `ClientSpec` / `BuildClientSpec`）
-- [ ] 本 spec §6 偏差表随实施核对一遍（实施后发现新偏差继续追加）
+- [x] `IMPLEMENTATION_PLAN.md` 10.4.6 行：`☐` → `✅`，描述改为「一次性冒烟（connect→chat→close，message 缺省 Hello），落 `cmd/uapclaw/acp_chat_cmd.go`；严格解析对齐 acpchat，偏差入 spec §6」
+- [x] `IMPLEMENTATION_PLAN.md` 10.4.3 行：删除「剩 cli.py REPL 入口 ⤵️ 10.4.6」，改为「cli.py 一次性冒烟入口已随 10.4.6 落地」
+- [x] 10.4.1 行不动（CLI REPL 属另一节）
+- [x] `cmd/uapclaw/doc.go` 文件目录 + `main.go` 包注释子命令清单补 `acp-chat`
+- [x] `acpchat/doc.go` 说明导出面（`LoadProfile` / `ClientSpec` / `BuildClientSpec`）
+- [x] 本 spec §6 偏差表随实施核对一遍（实施后发现新偏差继续追加）
 
 ## 9. 风险与注意事项
 

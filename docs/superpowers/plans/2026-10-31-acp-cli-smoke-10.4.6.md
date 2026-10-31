@@ -41,7 +41,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/common/dotenv/ -run Te
 
 **行为零变更**，只改可见性与命名。
 
-- [ ] **Step 1: 改类型声明为导出**
+- [x] **Step 1: 改类型声明为导出**
 
 `client_cache.go` 中把：
 
@@ -77,7 +77,7 @@ type ClientSpec struct {
 }
 ```
 
-- [ ] **Step 2: 改两个函数为导出并更新字段名**
+- [x] **Step 2: 改两个函数为导出并更新字段名**
 
 `loadProfile` → `LoadProfile`（函数体不变，仅签名首字母大写与注释补一句「导出给 10.4.6 冒烟入口复用」）。
 
@@ -97,7 +97,7 @@ type ClientSpec struct {
 
 签名改为 `func BuildClientSpec(spec map[string]any) (*ClientSpec, error)`。
 
-- [ ] **Step 3: 更新 `getOrCreateClient` 内的调用点**
+- [x] **Step 3: 更新 `getOrCreateClient` 内的调用点**
 
 ```go
 	spec, err := LoadProfile(cfg, profile)
@@ -113,7 +113,7 @@ type ClientSpec struct {
 	client := acp.NewAcpStdioClient(cs.Command, cs.Args, cs.Cwd, cs.Env)
 ```
 
-- [ ] **Step 4: 更新 `tool_test.go` 的调用点与字段名**
+- [x] **Step 4: 更新 `tool_test.go` 的调用点与字段名**
 
 全文件替换（共 12 处 `buildClientSpec`、6 处 `loadProfile`，字段 `cs.args`/`cs.cwd`/`cs.env`）：
 
@@ -126,7 +126,7 @@ grep -n "buildClientSpec\|loadProfile\|cs\.\(args\|cwd\|env\|command\)" tool_tes
 
 期望：`grep` 无输出。
 
-- [ ] **Step 5: 更新 `doc.go` 的包说明**
+- [x] **Step 5: 更新 `doc.go` 的包说明**
 
 在包功能段末尾追加一句：
 
@@ -136,7 +136,7 @@ grep -n "buildClientSpec\|loadProfile\|cs\.\(args\|cwd\|env\|command\)" tool_tes
 // 故冒烟入口对 args/env 类型错误的容忍度低于 Python cli.py（有意偏差，见该节 spec §6）。
 ```
 
-- [ ] **Step 6: 跑包内测试确认零回归**
+- [x] **Step 6: 跑包内测试确认零回归**
 
 ```bash
 cd /home/opensource/uapclaw-gateway
@@ -145,7 +145,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/agents/harness/c
 
 期望：`ok`，覆盖率 ≥ 90%（改名前为 92.9%）。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add internal/swarm/agents/harness/common/tools/acp_chat/client_cache.go \
@@ -164,7 +164,7 @@ git commit -m "refactor(acpchat): 导出 LoadProfile/ClientSpec/BuildClientSpec 
 
 Python `cli.py` 用 `load_dotenv(..., override=False)`，现有 `dotenv.Load` 是 `override=True`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 先确认 `dotenv_test.go` 顶部 import 含 `os` 与 `path/filepath`（缺则补）：
 
@@ -221,7 +221,7 @@ func TestLoadNonOverride_空值也覆盖(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd /home/opensource/uapclaw-gateway
@@ -230,7 +230,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/common/dotenv/ -run Te
 
 期望：编译失败 `undefined: LoadNonOverride`。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `dotenv.go` 的导出函数区，`Load` 之后追加：
 
@@ -262,7 +262,7 @@ func LoadNonOverride(path string) error {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/common/dotenv/ -cover
@@ -270,7 +270,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/common/dotenv/ -cover
 
 期望：`ok`，覆盖率 ≥ 90%。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/common/dotenv/dotenv.go internal/common/dotenv/dotenv_test.go
@@ -286,7 +286,7 @@ git commit -m "feat(dotenv): 新增 LoadNonOverride 对齐 Python load_dotenv(ov
 - Test: `cmd/uapclaw/acp_chat_cmd_test.go`
 - Modify: `cmd/uapclaw/main.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `cmd/uapclaw/acp_chat_cmd_test.go`：
 
@@ -325,7 +325,7 @@ func TestExitCodeFor(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd /home/opensource/uapclaw-gateway
@@ -334,7 +334,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run TestExitCodeF
 
 期望：编译失败 `undefined: acpChatExitError`。
 
-- [ ] **Step 3: 创建 `acp_chat_cmd.go` 骨架**
+- [x] **Step 3: 创建 `acp_chat_cmd.go` 骨架**
 
 ```go
 package main
@@ -396,7 +396,7 @@ func exitCodeFor(err error) int {
 }
 ```
 
-- [ ] **Step 4: 改 `main.go` 的 Execute**
+- [x] **Step 4: 改 `main.go` 的 Execute**
 
 ```go
 // Execute 执行根命令
@@ -407,7 +407,7 @@ func Execute() {
 }
 ```
 
-- [ ] **Step 5: 跑测试确认通过**
+- [x] **Step 5: 跑测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run TestExitCodeFor -v
@@ -415,7 +415,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run TestExitCodeF
 
 期望：`PASS`。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add cmd/uapclaw/acp_chat_cmd.go cmd/uapclaw/acp_chat_cmd_test.go cmd/uapclaw/main.go
@@ -430,7 +430,7 @@ git commit -m "feat(cli): acp-chat 退出码基础设施（typed error + exitCod
 - Modify: `cmd/uapclaw/acp_chat_cmd.go`
 - Test: `cmd/uapclaw/acp_chat_cmd_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `acp_chat_cmd_test.go`（import 需补 `os`、`path/filepath`、`context`）：
 
@@ -510,7 +510,7 @@ func TestAcpChatSkipDotenv(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestLoadAcpChatConfigFrom|TestAcpChatSkipDotenv" -v
@@ -518,7 +518,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestLoadAcpC
 
 期望：编译失败 `undefined: loadAcpChatConfigFrom`。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `acp_chat_cmd.go` 的 import 补：
 
@@ -595,7 +595,7 @@ func loadAcpChatConfigFrom(cfgPath, envFile string) (map[string]any, error) {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestLoadAcpChatConfigFrom|TestAcpChatSkipDotenv" -v
@@ -603,7 +603,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestLoadAcpC
 
 期望：全部 `PASS`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cmd/uapclaw/acp_chat_cmd.go cmd/uapclaw/acp_chat_cmd_test.go
@@ -618,7 +618,7 @@ git commit -m "feat(cli): acp-chat 轻量自举（logger.Setup + dotenv 非覆�
 - Modify: `cmd/uapclaw/acp_chat_cmd.go`
 - Test: `cmd/uapclaw/acp_chat_cmd_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `acp_chat_cmd_test.go`（import 补 `bytes`、`io`、`time`、`acp` 包）：
 
@@ -795,7 +795,7 @@ func TestCloseAcpChatClientWithTimeout(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestRunAcpChat|TestAcpChatCloseTimeout|TestCloseAcpChatClientWithTimeout" -v
@@ -803,7 +803,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestRunAcpCh
 
 期望：编译失败 `undefined: runAcpChat` / `undefined: acpChatDeps`。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `acp_chat_cmd.go` 结构体区追加：
 
@@ -946,7 +946,7 @@ func runAcpChat(ctx context.Context, deps acpChatDeps, profile, message string) 
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestRunAcpChat|TestAcpChatCloseTimeout|TestCloseAcpChatClientWithTimeout" -v
@@ -954,7 +954,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestRunAcpCh
 
 期望：全部 `PASS`（含 `args非列表_严格` 返回 2）。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add cmd/uapclaw/acp_chat_cmd.go cmd/uapclaw/acp_chat_cmd_test.go
@@ -972,7 +972,7 @@ git commit -m "feat(cli): acp-chat 执行主体（严格解析 + 一次性 chat 
 - Modify: `cmd/uapclaw/main.go`（包注释）
 - Modify: `cmd/uapclaw/main_test.go`（`TestHelpFlag` 子命令清单）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `acp_chat_cmd_test.go`：
 
@@ -1012,7 +1012,7 @@ func TestNewAcpChatCmd_已注册(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestNewAcpChatCmd" -v
@@ -1020,7 +1020,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestNewAcpCh
 
 期望：编译失败 `undefined: newAcpChatCmd`。
 
-- [ ] **Step 3: 实现子命令**
+- [x] **Step 3: 实现子命令**
 
 `acp_chat_cmd.go` 非导出函数区追加：
 
@@ -1066,7 +1066,7 @@ profile 规格与 acp_chat 工具共用严格校验（args 必须是列表、env
 
 import 补 `"github.com/spf13/cobra"`、`"os/signal"`、`"syscall"`。
 
-- [ ] **Step 4: 注册到根命令**
+- [x] **Step 4: 注册到根命令**
 
 `cmd.go` 的 `rootCmd.AddCommand(...)` 里，`newAcpCmd(),` 之后追加 `newAcpChatCmd(),`：
 
@@ -1085,7 +1085,7 @@ import 补 `"github.com/spf13/cobra"`、`"os/signal"`、`"syscall"`。
 	)
 ```
 
-- [ ] **Step 5: 更新 `TestHelpFlag` 期望清单**
+- [x] **Step 5: 更新 `TestHelpFlag` 期望清单**
 
 `main_test.go` 中：
 
@@ -1093,7 +1093,7 @@ import 补 `"github.com/spf13/cobra"`、`"os/signal"`、`"syscall"`。
 	expectedCommands := []string{"chat", "serve", "app", "agentserver", "gateway", "web", "init", "acp", "acp-chat"}
 ```
 
-- [ ] **Step 6: 更新包文档**
+- [x] **Step 6: 更新包文档**
 
 `cmd/uapclaw/doc.go` 子命令清单在 `acp` 行后追加：
 
@@ -1114,7 +1114,7 @@ import 补 `"github.com/spf13/cobra"`、`"os/signal"`、`"syscall"`。
 //   - acp-chat: 外部 ACP 子代理冒烟入口（一次性 connect→chat→close）
 ```
 
-- [ ] **Step 7: 跑测试确认通过**
+- [x] **Step 7: 跑测试确认通过**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestNewAcpChatCmd|TestHelpFlag" -v
@@ -1122,7 +1122,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestNewAcpCh
 
 期望：`PASS`。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add cmd/uapclaw/acp_chat_cmd.go cmd/uapclaw/acp_chat_cmd_test.go \
@@ -1139,7 +1139,7 @@ git commit -m "feat(cli): 注册 uapclaw acp-chat 子命令并补文档"
 
 复用 `internal/swarm/acp/testdata/acp_peer.sh`（`initialize`/`session/new`/`session/prompt` → `peer-reply`）。
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
 
 ```go
 // TestRunAcpChat_E2E假对端 真客户端 + testdata 假 ACP 对端（Windows 跳过，脚本依赖 sh）。
@@ -1200,7 +1200,7 @@ import (
 )
 ```
 
-- [ ] **Step 2: 跑测试**
+- [x] **Step 2: 跑测试**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestRunAcpChat_E2E假对端" -v
@@ -1208,7 +1208,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./cmd/uapclaw/ -run "TestRunAcpCh
 
 期望：`PASS`。若失败先看子进程 stderr（`acp_peer.sh` 需 `sh`/`sed` 可用）。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add cmd/uapclaw/acp_chat_cmd_test.go
@@ -1223,7 +1223,7 @@ git commit -m "test(cli): acp-chat 假对端 e2e（真实 AcpStdioClient 走通 
 - Modify: `IMPLEMENTATION_PLAN.md`
 - Modify: `docs/superpowers/specs/2026-10-31-acp-cli-smoke-10.4.6-design.md`
 
-- [ ] **Step 1: 改 10.4.6 行**
+- [x] **Step 1: 改 10.4.6 行**
 
 把：
 
@@ -1237,7 +1237,7 @@ git commit -m "test(cli): acp-chat 假对端 e2e（真实 AcpStdioClient 走通 
 | 10.4.6 | ✅ | ACP CLI Smoke 入口 | ✅ `uapclaw acp-chat <profile> [message]` 已落地 `cmd/uapclaw/acp_chat_cmd.go`：一次性冒烟（connect→chat→close，message 缺省 Hello，**非 REPL**，已订正 11.25 D4 的误读）；轻量自举（logger.Setup+dotenv 非覆盖+config.Load，不加载 extensions/crypto/workspace）；profile 解析复用 acpchat 严格校验（args/env 类型错比 Python 更严，有意偏差）；typed error + exitCodeFor 落 0/1/2/130；响应文本直出 stdout；ACP_CLI_CLOSE_TIMEOUT_S=30 限时关闭；假对端 e2e 覆盖 | `jiuwenswarm/acp/cli.py` |
 ```
 
-- [ ] **Step 2: 改 10.4.3 行（关闭悬空回填点）**
+- [x] **Step 2: 改 10.4.3 行（关闭悬空回填点）**
 
 把该行描述里的：
 
@@ -1251,7 +1251,7 @@ git commit -m "test(cli): acp-chat 假对端 e2e（真实 AcpStdioClient 走通 
 cli.py 一次性冒烟入口已随 10.4.6 落地（`uapclaw acp-chat`，非 REPL）
 ```
 
-- [ ] **Step 3: spec 偏差表补两条**
+- [x] **Step 3: spec 偏差表补两条**
 
 在 spec §6 表格末尾追加：
 
@@ -1260,7 +1260,7 @@ cli.py 一次性冒烟入口已随 10.4.6 落地（`uapclaw acp-chat`，非 REPL
 | close 错误文案 | `Failed to close ACP client: …` | 英文 Msg（日志规范） | 有意偏差 |
 ```
 
-- [ ] **Step 4: 校验 PLAN 无残留 ⤵️ 指向 10.4.6**
+- [x] **Step 4: 校验 PLAN 无残留 ⤵️ 指向 10.4.6**
 
 ```bash
 cd /home/opensource/uapclaw-gateway
@@ -1269,7 +1269,7 @@ grep -n "⤵️ 10.4.6\|REPL 入口" IMPLEMENTATION_PLAN.md
 
 期望：无输出。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add IMPLEMENTATION_PLAN.md docs/superpowers/specs/2026-10-31-acp-cli-smoke-10.4.6-design.md
@@ -1283,13 +1283,13 @@ git commit -m "docs(plan): 10.4.6 标记完成并回填 10.4.3 悬空点（订�
 **Files:**
 - 无代码改动（只跑验证）
 
-- [ ] **Step 1: 单进程确认**
+- [x] **Step 1: 单进程确认**
 
 ```bash
 pgrep -f 'go (build|test)' || echo "无残留 go 进程"
 ```
 
-- [ ] **Step 2: 受影响包覆盖率**
+- [x] **Step 2: 受影响包覆盖率**
 
 ```bash
 cd /home/opensource/uapclaw-gateway
@@ -1301,7 +1301,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" -cover \
 
 期望：三包 `ok`，`cmd/uapclaw` ≥ 85%、`dotenv` ≥ 90%、`acp_chat` ≥ 90%。
 
-- [ ] **Step 3: 全量回归**
+- [x] **Step 3: 全量回归**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./... 2>&1 | tail -40
@@ -1309,7 +1309,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./... 2>&1 | tail -40
 
 期望：无 `FAIL`。若出现与本改动无关的既有失败，记录包名并在提交信息中注明（不要顺手改）。
 
-- [ ] **Step 4: staticcheck / vet**
+- [x] **Step 4: staticcheck / vet**
 
 ```bash
 go vet -tags "sqlite_fts5 test" ./cmd/uapclaw/ ./internal/common/dotenv/ ./internal/swarm/agents/harness/common/tools/acp_chat/
@@ -1317,14 +1317,14 @@ go vet -tags "sqlite_fts5 test" ./cmd/uapclaw/ ./internal/common/dotenv/ ./inter
 
 期望：无输出。
 
-- [ ] **Step 5: 手工冒烟（可选，需真实 ACP CLI）**
+- [x] **Step 5: 手工冒烟（可选，需真实 ACP CLI）**
 
 ```bash
 go run ./cmd/uapclaw acp-chat <profile> "hello" ; echo "exit=$?"
 go run ./cmd/uapclaw acp-chat 不存在的profile ; echo "exit=$?"   # 期望 exit=2
 ```
 
-- [ ] **Step 6: 确认无遗漏改动**
+- [x] **Step 6: 确认无遗漏改动**
 
 ```bash
 git status -s
@@ -1341,3 +1341,16 @@ git status -s
 **命名一致性**：`acpChatDeps`/`runAcpChat`/`loadAcpChatConfig`/`loadAcpChatConfigFrom`/`acpChatSkipDotenv`/`acpChatCloseTimeout`/`closeAcpChatClientWithTimeout`/`acpChatFailureCode`/`exitCodeFor`/`acpChatExitError.code`/`LoadProfile`/`BuildClientSpec`/`ClientSpec.{Command,Args,Env,Cwd}` 全程一致。
 
 **已知实施注意**：`config.New("")` 在缺文件时返回空 map（Step 已被 `TestLoadAcpChatConfigFrom_文件缺失不报错` 锁定）；`logger.Setup` 有全局 once 语义，测试里多次调用安全。
+
+---
+
+## 审查后追加修订（2026-10-31，Task 10-13）
+
+Task 1-9 执行完毕后的「实现 vs 计划」审查发现 4 项需修正（用户拍板），已追加实施：
+
+- [x] **Task 10：日志控制台改 stderr** —— `internal/common/logger/logger.go` 的 `ConsoleWriter{Out: os.Stdout}` → `os.Stderr`，对齐 Python `setup_logger` 的 `logging.StreamHandler()` 默认流（`utils.py:1628`）；stdout 只留业务输出。测试 `TestSetup_控制台写入stderr`。
+- [x] **Task 11：日志默认目录去硬编码** —— `outputDir` 默认值由 `~/.uapclaw/agent/.logs` 改用 `pathutil.LogsDir()`（= `WorkspaceDir()/agent/.logs`），随 `UAPCLAW_DATA_DIR` 变化。测试 `TestSetup_默认输出目录受数据目录控制`。
+- [x] **Task 12：`acp-chat` 解析 `--dotenv`/`--name`** —— 挂 `makeDotenvPreRunE()`，`TestSubcommandsHavePreRunE` 白名单补 `acp-chat`。测试 `TestNewAcpChatCmd_解析dotenv旗标`。
+- [x] **Task 13：close 阶段中断 → 130** —— 正常路径显式 `close` 后复查 `ctx`，defer 仅作提前 return 兜底，对齐 Python `finally` 时序。测试 `TestRunAcpChat_关闭期间中断`。
+
+提交：`ab810dc6`（Task 10+11）、`c9582ef2`（Task 12+13）；spec §5.2/§6 已同步订正，11.25 spec D4 与 11.25 plan §12.3 已加 superseded 补记。
