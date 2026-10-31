@@ -1055,23 +1055,25 @@ git commit -m "test(dreaming_itest): 启停生命周期与 CodeAdapter 真跑 Cr
 ```go
 // TestWiring_DeepAdapter真跑后启动Dreaming 测试 agent 模式 adapter 全链路接线。
 //
-// dreamingMode 由 CreateInstance 按 mode 前缀决定（"agent.plan" 保持原值），
-// 因此配置键为 memory.dreaming."agent.plan"、环境变量为
-// DREAMING_AGENT.PLAN_ENABLED；输出目录经 agentWorkspaceDir → workspaceDir
-// 回退得到 <DataDir>/agent/workspace/memory。
+// 生产链路（Python _adapter_mode_for_request / Go resolveModeFromRequest）把
+// "agent.plan" 拆成 mode="agent" + subMode="plan"，因此 CreateInstance 收到的
+// mode 恒为 "agent"：dreamingMode="agent"、env DREAMING_AGENT_ENABLED、
+// 输出目录 <DataDir>/agent/workspace/memory。
+// 若直接把 "agent.plan" 传给 CreateInstance，Python/Go 的 output_name 判定
+// （mode == "agent"）都会落到 coding_memory —— 属测试误用。
 func (s *StartWiringSuite) TestWiring_DeepAdapter真跑后启动Dreaming() {
 	env := s.newEnv()
-	env.Setenv(s.T(), "DREAMING_AGENT.PLAN_ENABLED", "true")
+	env.Setenv(s.T(), "DREAMING_AGENT_ENABLED", "true")
 	for _, sid := range []string{"sess-001", "sess-002", "sess-003"} {
 		env.PlantSession(s.T(), sid, "agent.plan", 5)
 	}
 
 	deepAdapter := adapter.NewDeepAdapter()
-	s.Require().NoError(deepAdapter.CreateInstance(s.Ctx, nil, "agent.plan", ""))
+	s.Require().NoError(deepAdapter.CreateInstance(s.Ctx, nil, "agent", ""))
 	s.Require().NoError(deepAdapter.TryStartDreaming(s.Ctx, func() bool { return false }))
 
-	orch := swarmdreaming.GetDreamingOrchestrator("agent.plan")
-	s.Require().NotNil(orch, "agent.plan 模式 orchestrator 应已注册")
+	orch := swarmdreaming.GetDreamingOrchestrator("agent")
+	s.Require().NotNil(orch, "agent 模式 orchestrator 应已注册")
 	s.True(orch.IsRunning())
 
 	memoryDir := filepath.Join(env.DataDir, "agent", "workspace", "memory")
@@ -1079,7 +1081,7 @@ func (s *StartWiringSuite) TestWiring_DeepAdapter真跑后启动Dreaming() {
 	s.DirExists(filepath.Join(memoryDir, ".dreams"), "sweeper.Init 应创建 .dreams 目录")
 
 	s.Require().NoError(deepAdapter.TryStopDreaming(s.Ctx))
-	s.Nil(swarmdreaming.GetDreamingOrchestrator("agent.plan"))
+	s.Nil(swarmdreaming.GetDreamingOrchestrator("agent"))
 }
 ```
 
@@ -1089,7 +1091,7 @@ func (s *StartWiringSuite) TestWiring_DeepAdapter真跑后启动Dreaming() {
 GOPROXY=https://goproxy.cn,direct go test -tags=integration ./tests/integration/swarm/agents/harness/common/memory/dreaming/ -run 'TestStartWiringSuite/TestWiring_DeepAdapter' -v
 ```
 
-Expected: PASS。若 agent 模式 `CreateInstance` 失败：先确认 `config.yaml` 是否缺 `modes` / `react` 段，再定位 `deep_adapter.go` 中缺失的初始化；失败原因与修复记入 spec 偏差小节。**若 `DREAMING_AGENT.PLAN_ENABLED` 因 mode 含点号未被读到，回退为 `CreateInstance(ctx, nil, "agent", "")`（此时 dreamingMode="agent"、env 为 `DREAMING_AGENT_ENABLED`），并在 spec 记录该回退。**
+Expected: PASS。若 agent 模式 `CreateInstance` 失败：先确认 `config.yaml` 是否缺 `modes` / `react` 段，再定位 `deep_adapter.go` 中缺失的初始化；失败原因与修复记入 spec 偏差小节。**注意 mode 必须用生产归一化后的 `"agent"`**（`resolveModeFromRequest` 从 `agent.plan` 拆出 mode/subMode）；传子模式串会因 `output_name` 判定落到 `coding_memory`，那是测试误用而非生产行为。
 
 - [ ] **Step 3: 提交**
 
