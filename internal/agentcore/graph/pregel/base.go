@@ -17,7 +17,7 @@ type Message struct {
 	// 保留字段以对齐数据形状，当前无消费者
 	Payload any
 	// kind 消息种类，只能经 NewTriggerMessage / NewBarrierMessage 设置，
-	// 包外无法构造非法组合
+	// 包外无法伪造消息种类（零值 kind 会被任何通道拒绝接收）
 	kind MessageKind
 }
 
