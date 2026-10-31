@@ -15,36 +15,33 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// teamPlanModePromptCN 中文 team.plan 模板（包级初始化）。
-// Python: TEAM_PLAN_MODE_PROMPT_CN (openjiuwen/agent_teams/prompts/team_plan_mode.py)
-var teamPlanModePromptCN string
-
-// teamPlanModePromptEN 英文 team.plan 模板（包级初始化）。
-// Python: TEAM_PLAN_MODE_PROMPT_EN (openjiuwen/agent_teams/prompts/team_plan_mode.py)
-var teamPlanModePromptEN string
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetTeamPlanModePrompt 返回指定语言的 team.plan 提示词模板。
+// 模板缺失时返回 error（不在包级 init 中静默吞掉）。
 // Python: get_team_plan_mode_prompt(language) (openjiuwen/agent_teams/prompts/team_plan_mode.py)
-func GetTeamPlanModePrompt(language string) string {
-	if language == "en" {
-		return teamPlanModePromptEN
+func GetTeamPlanModePrompt(language string) (string, error) {
+	tpl, err := LoadTemplate("team_plan_mode", language)
+	if err != nil {
+		return "", err
 	}
-	return teamPlanModePromptCN
+	return strings.TrimSpace(tpl.Content()), nil
 }
 
 // BuildTeamPlanModePrompt 渲染 team.plan 提示词模板。
 // Python: build_team_plan_mode_prompt(language, enter_plan_mode_status, plan_file_info)
 //
 // 使用 PromptTemplate.Render 渲染 {var} 占位符（对齐 Python .format() 风格）。
-func BuildTeamPlanModePrompt(language string, enterPlanModeStatus string, planFileInfo string) string {
-	tpl := GetTeamPlanModePrompt(language)
+func BuildTeamPlanModePrompt(language string, enterPlanModeStatus string, planFileInfo string) (string, error) {
+	tpl, err := GetTeamPlanModePrompt(language)
+	if err != nil {
+		return "", err
+	}
 	pt := &PromptTemplate{content: tpl}
 	return pt.Render(map[string]string{
 		"enter_plan_mode_status": enterPlanModeStatus,
 		"plan_file_info":         planFileInfo,
-	})
+	}), nil
 }
 
 // BuildTeamPlanModeSection 构建 team.plan MODE_INSTRUCTIONS PromptSection。
@@ -53,14 +50,17 @@ func BuildTeamPlanModePrompt(language string, enterPlanModeStatus string, planFi
 // 将 BuildTeamPlanModePrompt 的结果包装为 PromptSection，
 // 其中 name 取 SectionModeInstructions、priority 取 85。
 // enterPlanModeStatus 和 planFileInfo 由调用方提前计算后传入。
-func BuildTeamPlanModeSection(language string, enterPlanModeStatus string, planFileInfo string) *saprompt.PromptSection {
-	content := BuildTeamPlanModePrompt(language, enterPlanModeStatus, planFileInfo)
+func BuildTeamPlanModeSection(language string, enterPlanModeStatus string, planFileInfo string) (*saprompt.PromptSection, error) {
+	content, err := BuildTeamPlanModePrompt(language, enterPlanModeStatus, planFileInfo)
+	if err != nil {
+		return nil, err
+	}
 	section := saprompt.NewPromptSection(
 		harnesssections.SectionModeInstructions,
 		map[string]string{language: content},
 		85,
 	)
-	return &section
+	return &section, nil
 }
 
 // BuildEnterPlanModeStatusCN 构建 plan_mode 状态文本（中文）。
@@ -112,15 +112,3 @@ func BuildPlanFileInfoEN(planFilePath string, exists bool) string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// init 初始化 team.plan 模式的中英文提示词模板（从模板加载）
-func init() {
-	tplCN := LoadTemplate("team_plan_mode", "cn")
-	if tplCN != nil {
-		teamPlanModePromptCN = strings.TrimSpace(tplCN.Content())
-	}
-	tplEN := LoadTemplate("team_plan_mode", "en")
-	if tplEN != nil {
-		teamPlanModePromptEN = strings.TrimSpace(tplEN.Content())
-	}
-}

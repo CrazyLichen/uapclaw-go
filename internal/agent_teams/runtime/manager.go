@@ -1217,7 +1217,9 @@ func buildTeamAgent(ctx context.Context, spec *atschema.TeamAgentSpec) (*agent.T
 	}
 
 	// Python: L445 — agent.configure(self, context)
-	ag.Configure(ctx, *spec, runtimeCtx)
+	if err := ag.Configure(ctx, *spec, runtimeCtx); err != nil {
+		return nil, err
+	}
 
 	return ag, nil
 }

@@ -169,6 +169,14 @@ func ShutdownObservability() {
 		}
 	}
 
+	// 退出前收口仍未结束的 team/task span。
+	// Python 无对应实现（直接丢弃 handler，未 End 的 span 被 SDK 静默丢弃）；
+	// Go 侧加固：必须在 tp.Shutdown 之前 End，否则 span 来不及进入导出队列。
+	// Python: 无（Go 侧加固）
+	if monitorHandler != nil {
+		monitorHandler.CloseAllSpans()
+	}
+
 	// Python: if _provider is not None: _provider.shutdown()
 	if tp, ok := provider.(*sdktrace.TracerProvider); ok && tp != nil {
 		if err := tp.Shutdown(context.Background()); err != nil {

@@ -11,7 +11,7 @@ import (
 
 // TestNewTeamPolicyRail_默认值 测试默认构造
 func TestNewTeamPolicyRail_默认值(t *testing.T) {
-	r := NewTeamPolicyRail()
+	r := mustNewPolicyRail(t)
 	if r == nil {
 		t.Fatal("NewTeamPolicyRail returned nil")
 	}
@@ -19,7 +19,7 @@ func TestNewTeamPolicyRail_默认值(t *testing.T) {
 
 // TestNewTeamPolicyRail_WithOptions 测试选项构造
 func TestNewTeamPolicyRail_WithOptions(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyPersona("高级工程师"),
 		WithPolicyMemberName("alice"),
@@ -38,7 +38,7 @@ func TestNewTeamPolicyRail_WithOptions(t *testing.T) {
 
 // TestTeamPolicyRail_静态Sections_Leader 测试 Leader 静态 Section 数量
 func TestTeamPolicyRail_静态Sections_Leader(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyMemberName("alice"),
 		WithPolicyTeammateMode("build_mode"),
@@ -59,7 +59,7 @@ func TestTeamPolicyRail_静态Sections_Leader(t *testing.T) {
 
 // TestTeamPolicyRail_静态Sections_Teammate 测试 Teammate 静态 Section
 func TestTeamPolicyRail_静态Sections_Teammate(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleTeammate),
 		WithPolicyMemberName("bob"),
 		WithPolicyTeammateMode("build_mode"),
@@ -75,7 +75,7 @@ func TestTeamPolicyRail_静态Sections_Teammate(t *testing.T) {
 
 // TestTeamPolicyRail_无TeamBackend 测试无 TeamBackend 时不创建动态缓存
 func TestTeamPolicyRail_无TeamBackend(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyLanguage("cn"),
 	)
@@ -89,7 +89,7 @@ func TestTeamPolicyRail_无TeamBackend(t *testing.T) {
 
 // TestTeamPolicyRail_Init 测试 Init 缓存 prompt builder
 func TestTeamPolicyRail_Init(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyLanguage("cn"),
 	)
@@ -105,7 +105,7 @@ func TestTeamPolicyRail_Init(t *testing.T) {
 
 // TestTeamPolicyRail_Uninit 测试 Uninit 清理
 func TestTeamPolicyRail_Uninit(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyLanguage("cn"),
 	)
@@ -119,7 +119,7 @@ func TestTeamPolicyRail_Uninit(t *testing.T) {
 
 // TestTeamPolicyRail_StaticSections 测试 StaticSections 访问器
 func TestTeamPolicyRail_StaticSections(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyLanguage("cn"),
 	)
@@ -131,7 +131,7 @@ func TestTeamPolicyRail_StaticSections(t *testing.T) {
 
 // TestTeamPolicyRail_ExtraSection 测试 basePrompt 非空时包含 Extra Section
 func TestTeamPolicyRail_ExtraSection(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyLanguage("cn"),
 		WithPolicyBasePrompt("custom instructions"),
@@ -149,7 +149,7 @@ func TestTeamPolicyRail_ExtraSection(t *testing.T) {
 
 // TestTeamPolicyRail_PersonaSection 测试 persona 非空时包含 Persona Section
 func TestTeamPolicyRail_PersonaSection(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyLanguage("cn"),
 		WithPolicyPersona("高级工程师"),
@@ -167,7 +167,7 @@ func TestTeamPolicyRail_PersonaSection(t *testing.T) {
 
 // TestTeamPolicyRail_BeforeModelCall 测试 BeforeModelCall 注入 section
 func TestTeamPolicyRail_BeforeModelCall(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyMemberName("alice"),
 		WithPolicyLanguage("cn"),
@@ -182,7 +182,7 @@ func TestTeamPolicyRail_BeforeModelCall(t *testing.T) {
 
 // TestTeamPolicyRail_BeforeModelCall_无Builder 测试无 builder 时不 panic
 func TestTeamPolicyRail_BeforeModelCall_无Builder(t *testing.T) {
-	r := NewTeamPolicyRail(
+	r := mustNewPolicyRail(t,
 		WithPolicyRole(atschema.TeamRoleLeader),
 		WithPolicyLanguage("cn"),
 	)
@@ -220,4 +220,25 @@ func TestWithPolicyExposeHumanAgents(t *testing.T) {
 	r := &TeamPolicyRail{}
 	WithPolicyExposeHumanAgents(true)(r)
 	assert.True(t, r.exposeHumanAgentsToTeammates)
+}
+
+// mustNewPolicyRail 断言 NewTeamPolicyRail 无错误。
+func mustNewPolicyRail(t *testing.T, opts ...TeamPolicyRailOption) *TeamPolicyRail {
+	t.Helper()
+	rail, err := NewTeamPolicyRail(opts...)
+	if err != nil {
+		t.Fatalf("NewTeamPolicyRail 返回错误: %v", err)
+	}
+	return rail
+}
+
+// TestNewTeamPolicyRail_模板缺失返回错误 构造期模板缺失必须报错（对齐 Python __init__ 抛 FileNotFoundError）
+func TestNewTeamPolicyRail_模板缺失返回错误(t *testing.T) {
+	_, err := NewTeamPolicyRail(
+		WithPolicyRole(atschema.TeamRoleLeader),
+		WithPolicyLanguage("zz"),
+	)
+	if err == nil {
+		t.Fatal("模板缺失时 NewTeamPolicyRail 应返回错误")
+	}
 }

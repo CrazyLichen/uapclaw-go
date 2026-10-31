@@ -1,8 +1,12 @@
 package rails
 
 import (
+	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 )
@@ -52,14 +56,18 @@ func TestTeamToolApprovalRail_ResolveInterrupt_无ToolCall拒绝(t *testing.T) {
 }
 
 // TestTeamToolApprovalRail_ResolveInterrupt_首次中断 测试首次调用返回中断
+// 需要可用的 db + messager，否则会快速失败（见下一个用例）
 func TestTeamToolApprovalRail_ResolveInterrupt_首次中断(t *testing.T) {
-	r := NewTeamToolApprovalRail("team1", "member1", nil, nil, "leader1", []string{"delete_file"})
+	db := database.NewInMemoryTeamDatabase()
+	msg := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
+	defer messager.CleanupInProcessBus()
+	r := NewTeamToolApprovalRail("team1", "member1", db, msg, "leader1", []string{"delete_file"})
 
 	toolCall := &llmschema.ToolCall{
 		ID:   "call_1",
 		Name: "delete_file",
 	}
-	decision := r.ResolveInterruptFn(nil, nil, toolCall, nil, nil)
+	decision := r.ResolveInterruptFn(context.Background(), nil, toolCall, nil, nil)
 
 	if _, ok := decision.(*interrupt.InterruptResult); !ok {
 		t.Fatalf("expected InterruptResult, got %T", decision)
@@ -145,17 +153,38 @@ func TestTeamToolApprovalRail_ResolveInterrupt_无效输入重新中断(t *testi
 }
 
 // TestTeamToolApprovalRail_NoAutoConfirm 测试无 auto_confirm 配置
+// 需要可用的 db + messager 才会走到「发消息 + 中断」路径
 func TestTeamToolApprovalRail_NoAutoConfirm(t *testing.T) {
-	r := NewTeamToolApprovalRail("team1", "member1", nil, nil, "leader1", []string{"delete_file"})
+	db := database.NewInMemoryTeamDatabase()
+	msg := messager.NewInProcessMessager(atschema.NewMessagerTransportConfig())
+	defer messager.CleanupInProcessBus()
+	r := NewTeamToolApprovalRail("team1", "member1", db, msg, "leader1", []string{"delete_file"})
 
 	toolCall := &llmschema.ToolCall{
 		ID:   "call_1",
 		Name: "delete_file",
 	}
 	// autoConfirmConfig 为 nil
-	decision := r.ResolveInterruptFn(nil, nil, toolCall, nil, nil)
+	decision := r.ResolveInterruptFn(context.Background(), nil, toolCall, nil, nil)
 
 	if _, ok := decision.(*interrupt.InterruptResult); !ok {
 		t.Fatalf("expected InterruptResult when no auto_confirm, got %T", decision)
+	}
+}
+
+// TestTeamToolApprovalRail_ResolveInterrupt_无消息管理器拒绝 缺少 db/messager 时必须快速失败
+// 否则审批请求发不出去、成员却挂起等待，形成静默死等。
+func TestTeamToolApprovalRail_ResolveInterrupt_无消息管理器拒绝(t *testing.T) {
+	r := NewTeamToolApprovalRail("team1", "member1", nil, nil, "leader1", []string{"delete_file"})
+
+	toolCall := &llmschema.ToolCall{ID: "call_1", Name: "delete_file"}
+	decision := r.ResolveInterruptFn(nil, nil, toolCall, nil, nil)
+
+	result, ok := decision.(*interrupt.RejectResult)
+	if !ok {
+		t.Fatalf("expected RejectResult, got %T", decision)
+	}
+	if got, _ := result.ToolResult.(string); got != "Failed to send approval request to leader" {
+		t.Fatalf("RejectResult.ToolResult = %v", result.ToolResult)
 	}
 }

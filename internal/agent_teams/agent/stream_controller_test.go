@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -1280,3 +1281,31 @@ func atschemaTeamRolePtr(v atschema.TeamRole) *atschema.TeamRole { return &v }
 
 // 编译期断言：*TeamOutputSchema 满足 streambase.Schema 接口
 var _ streambase.Schema = (*atschema.TeamOutputSchema)(nil)
+
+// TestStreamController_QueuePendingInput_并发安全 并发入队不应丢数据，-race 下无告警。
+// M-08（复核新发现）：TeamAgent.DeliverInput 原先跨包裸写 pendingInputs，
+// 与 runOneRound 的加锁消费形成数据竞争。
+func TestStreamController_QueuePendingInput_并发安全(t *testing.T) {
+	sc := newTestStreamController()
+	const goroutines = 8
+	const perGoroutine = 50
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < perGoroutine; j++ {
+				sc.QueuePendingInput(fmt.Sprintf("g%d-%d", id, j))
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	sc.mu.Lock()
+	got := len(sc.pendingInputs)
+	sc.mu.Unlock()
+	if want := goroutines * perGoroutine; got != want {
+		t.Fatalf("pendingInputs 长度 = %d, want %d", got, want)
+	}
+}

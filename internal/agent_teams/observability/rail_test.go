@@ -238,3 +238,11 @@ func TestObservabilityRail_BeforeTaskIteration_span属性写入(t *testing.T) {
 	require.True(t, ok, "span 缺少 is_follow_up 属性")
 	assert.Equal(t, true, followUpVal.AsBool())
 }
+
+// TestObservabilityRail_Priority 验证优先级为 10（Python priority = 10，可观测性最后执行）
+func TestObservabilityRail_Priority(t *testing.T) {
+	r := NewObservabilityRail(nil)
+	if got := r.Priority(); got != 10 {
+		t.Fatalf("Priority() = %d, want 10", got)
+	}
+}

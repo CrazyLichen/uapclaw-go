@@ -57,6 +57,15 @@ type Option func(*RedisStore)
 const (
 	// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
 	logComponent = logger.ComponentAgentCore
+
+	// compareAndDeleteScript 原子比较删除脚本：仅当值相等时删除，返回删除条数。
+	// Redis 单线程执行脚本，GET 与 DEL 之间不存在其他命令插入的窗口。
+	compareAndDeleteScript = `
+if redis.call('get', KEYS[1]) == ARGV[1] then
+  return redis.call('del', KEYS[1])
+end
+return 0
+`
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -193,6 +202,20 @@ func (s *RedisStore) Delete(ctx context.Context, key string) error {
 		Int64("deleted", n).
 		Msg("delete key")
 	return nil
+}
+
+// CompareAndDelete 原子性地删除 key，仅当当前值等于 expected 时成功。
+// 通过 Lua 脚本在 Redis 服务端完成「取值-比较-删除」，避免 TOCTOU。
+func (s *RedisStore) CompareAndDelete(ctx context.Context, key string, expected []byte) (bool, error) {
+	n, err := s.client.Eval(ctx, compareAndDeleteScript, []string{key}, string(expected)).Int()
+	if err != nil {
+		logger.Error(logComponent).
+			Str("key", key).
+			Err(err).
+			Msg("failed to compare and delete key")
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // GetByPrefix 获取所有以 prefix 开头的键值对。

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
@@ -66,9 +67,8 @@ func TestTeamAgent_Configure(t *testing.T) {
 		TeamSpec:   &atschema.TeamSpec{TeamName: "test_team"},
 	}
 
-	result := a.Configure(context.Background(), spec, ctx)
-
-	assert.Equal(t, a, result, "Configure 应返回自身")
+	err := a.Configure(context.Background(), spec, ctx)
+	require.NoError(t, err, "Configure 应成功")
 	assert.NotNil(t, a.Blueprint(), "Configure 后 Blueprint 应非 nil")
 	assert.NotNil(t, a.Infra(), "Configure 后 Infra 应非 nil")
 	assert.NotNil(t, a.Resources(), "Configure 后 Resources 应非 nil")

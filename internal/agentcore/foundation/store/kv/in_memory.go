@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"sync"
@@ -91,6 +92,27 @@ func (s *InMemoryKVStore) Delete(_ context.Context, key string) error {
 	defer s.mu.Unlock()
 	delete(s.store, key)
 	return nil
+}
+
+// CompareAndDelete 原子性地删除 key，仅当当前值等于 expected 时成功。
+// 在同一次写锁内完成取值、比较与删除，不存在 TOCTOU 窗口。
+func (s *InMemoryKVStore) CompareAndDelete(_ context.Context, key string, expected []byte) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.store[key]
+	if !ok {
+		return false, nil
+	}
+	// 已过期的 key 视为不存在
+	if e.expiryTs != 0 && time.Now().Unix() > e.expiryTs {
+		delete(s.store, key)
+		return false, nil
+	}
+	if !bytes.Equal(e.value, expected) {
+		return false, nil
+	}
+	delete(s.store, key)
+	return true, nil
 }
 
 // ExclusiveSet 原子性地设置键值对，仅当 key 不存在或已过期时成功。

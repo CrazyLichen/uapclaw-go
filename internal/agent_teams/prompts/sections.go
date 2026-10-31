@@ -134,17 +134,18 @@ var labels = map[string]map[string]string{
 //   - memberName: 成员名（语义 slug），空字符串表示不显示
 //   - teammateMode: 执行模式 "build_mode" 或 "plan_mode"
 //   - language: 提示词语言 "cn" 或 "en"
-func BuildTeamRoleSection(role atschema.TeamRole, memberName string, teammateMode string, language string) *saprompt.PromptSection {
+func BuildTeamRoleSection(role atschema.TeamRole, memberName string, teammateMode string, language string) (*saprompt.PromptSection, error) {
 	lbl := labelsFor(language)
 	policyName := "leader_policy"
 	if role != atschema.TeamRoleLeader {
 		policyName = "teammate_policy"
 	}
-	roleText := LoadTemplate(policyName, language).Content()
-	if roleText == "" {
-		roleText = "（策略模板加载失败）"
+	roleTpl, err := LoadTemplate(policyName, language)
+	if err != nil {
+		return nil, err
 	}
-	roleText = strings.TrimSpace(roleText)
+	// 模板缺失直接返回错误，不再注入 Python 中不存在的「加载失败」占位文案
+	roleText := strings.TrimSpace(roleTpl.Content())
 
 	memberLine := ""
 	if memberName != "" {
@@ -170,7 +171,7 @@ func BuildTeamRoleSection(role atschema.TeamRole, memberName string, teammateMod
 	body := lbl["role_heading"] + "\n\n" + memberLine + modeLine + roleText + "\n"
 
 	section := saprompt.NewPromptSection(SectionRole, map[string]string{language: body}, 11)
-	return &section
+	return &section, nil
 }
 
 // BuildTeamHITTSection 构建 HITT 人类成员协作规则 section。
@@ -219,48 +220,48 @@ func BuildTeamHITTSection(
 // Python: build_team_workflow_section() (openjiuwen/agent_teams/prompts/sections.py)
 //
 // 仅 LEADER 返回非 nil。teamMode 支持 "default"/"predefined"/"hybrid"。
-func BuildTeamWorkflowSection(role atschema.TeamRole, teamMode string, language string) *saprompt.PromptSection {
+func BuildTeamWorkflowSection(role atschema.TeamRole, teamMode string, language string) (*saprompt.PromptSection, error) {
 	if role != atschema.TeamRoleLeader {
-		return nil
+		return nil, nil
 	}
 	lbl := labelsFor(language)
 	templateName := "leader_workflow"
 	if mapped, ok := workflowTemplateName[teamMode]; ok {
 		templateName = mapped
 	}
-	workflowText := LoadTemplate(templateName, language).Content()
-	if workflowText == "" {
-		workflowText = "（工作流模板加载失败）"
+	workflowTpl, err := LoadTemplate(templateName, language)
+	if err != nil {
+		return nil, err
 	}
-	workflowText = strings.TrimSpace(workflowText)
+	workflowText := strings.TrimSpace(workflowTpl.Content())
 	body := lbl["workflow_heading"] + "\n\n" + workflowText + "\n"
 
 	section := saprompt.NewPromptSection(SectionWorkflow, map[string]string{language: body}, 13)
-	return &section
+	return &section, nil
 }
 
 // BuildTeamLifecycleSection 构建 Leader 生命周期策略 section。
 // Python: build_team_lifecycle_section() (openjiuwen/agent_teams/prompts/sections.py)
 //
 // 仅 LEADER 返回非 nil。lifecycle 支持 "persistent"/"temporary"。
-func BuildTeamLifecycleSection(role atschema.TeamRole, lifecycle string, language string) *saprompt.PromptSection {
+func BuildTeamLifecycleSection(role atschema.TeamRole, lifecycle string, language string) (*saprompt.PromptSection, error) {
 	if role != atschema.TeamRoleLeader {
-		return nil
+		return nil, nil
 	}
 	lbl := labelsFor(language)
 	templateName := "lifecycle_temporary"
 	if lifecycle == "persistent" {
 		templateName = "lifecycle_persistent"
 	}
-	lifecycleText := LoadTemplate(templateName, language).Content()
-	if lifecycleText == "" {
-		lifecycleText = "（生命周期模板加载失败）"
+	lifecycleTpl, err := LoadTemplate(templateName, language)
+	if err != nil {
+		return nil, err
 	}
-	lifecycleText = strings.TrimSpace(lifecycleText)
+	lifecycleText := strings.TrimSpace(lifecycleTpl.Content())
 	body := lbl["lifecycle_heading"] + "\n\n" + lifecycleText + "\n"
 
 	section := saprompt.NewPromptSection(SectionLifecycle, map[string]string{language: body}, 14)
-	return &section
+	return &section, nil
 }
 
 // BuildTeamPersonaSection 构建当前人设 section。

@@ -20,8 +20,8 @@ import (
 func newTestVikingProvider(server *httptest.Server) *OpenVikingProvider {
 	p := NewOpenVikingProvider(server.URL, "test-key", "test-account", "test-user", "test-agent")
 	p.sessionID = "test-session"
+	// IsInitialized 以 client != nil 为准，设置 client 即等价于已初始化
 	p.client = newVikingClient(server.URL, "test-key", "test-account", "test-user", "test-agent")
-	p.initialized = true
 	return p
 }
 
@@ -152,8 +152,8 @@ func TestOpenVikingProvider_Initialize_健康检查失败(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Initialize() 应返回 nil（静默降级），实际: %v", err)
 	}
-	if !p.IsInitialized() {
-		t.Error("IsInitialized() = false, want true (静默降级后应标记已初始化)")
+	if p.IsInitialized() {
+		t.Error("IsInitialized() = true, want false (健康检查失败后 client 为 nil，对齐 Python is_initialized)")
 	}
 	if p.client != nil {
 		t.Error("client 应为 nil (健康检查失败)")
@@ -825,4 +825,68 @@ func TestOpenVikingProvider_Shutdown(t *testing.T) {
 func TestOpenVikingProvider_接口满足(t *testing.T) {
 	// 编译时验证 OpenVikingProvider 满足 MemoryProvider 接口
 	var _ MemoryProvider = (*OpenVikingProvider)(nil)
+}
+
+// TestOpenVikingProvider_HandleToolCall_search优先读topK 验证 Schema 声明的 top_k 生效
+func TestOpenVikingProvider_HandleToolCall_search优先读topK(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/search/find" {
+			_ = json.NewDecoder(r.Body).Decode(&got)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"total": 0}})
+	}))
+	defer server.Close()
+
+	p := newTestVikingProvider(server)
+	if _, err := p.HandleToolCall(context.Background(), "viking_search", map[string]any{
+		"query": "q", "top_k": 30, "limit": 5,
+	}); err != nil {
+		t.Fatalf("HandleToolCall() error = %v", err)
+	}
+	if got["top_k"] != float64(30) {
+		t.Fatalf("payload[top_k] = %v, want 30（top_k 应优先于 limit）", got["top_k"])
+	}
+}
+
+// TestOpenVikingProvider_HandleToolCall_search回退limit 验证旧参数 limit 仍可用
+func TestOpenVikingProvider_HandleToolCall_search回退limit(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/search/find" {
+			_ = json.NewDecoder(r.Body).Decode(&got)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"total": 0}})
+	}))
+	defer server.Close()
+
+	p := newTestVikingProvider(server)
+	if _, err := p.HandleToolCall(context.Background(), "viking_search", map[string]any{
+		"query": "q", "limit": 7,
+	}); err != nil {
+		t.Fatalf("HandleToolCall() error = %v", err)
+	}
+	if got["top_k"] != float64(7) {
+		t.Fatalf("payload[top_k] = %v, want 7（应回退读 limit）", got["top_k"])
+	}
+}
+
+// TestOpenVikingProvider_HandleToolCall_search不注入默认值 两者都缺时不写 top_k，与 Python 线上请求一致
+func TestOpenVikingProvider_HandleToolCall_search不注入默认值(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/search/find" {
+			_ = json.NewDecoder(r.Body).Decode(&got)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"total": 0}})
+	}))
+	defer server.Close()
+
+	p := newTestVikingProvider(server)
+	if _, err := p.HandleToolCall(context.Background(), "viking_search", map[string]any{"query": "q"}); err != nil {
+		t.Fatalf("HandleToolCall() error = %v", err)
+	}
+	if _, ok := got["top_k"]; ok {
+		t.Fatalf("payload 不应包含 top_k，实际 = %v", got["top_k"])
+	}
 }

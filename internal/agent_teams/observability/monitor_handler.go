@@ -228,6 +228,28 @@ func (h *OtelTeamMonitorHandler) closeTaskSpan(payload map[string]any, etype str
 	delete(h.taskSpans, taskID)
 }
 
+// CloseAllSpans 结束所有仍未关闭的 team/task span（退出时调用）。
+//
+// 未 End 的 span 不会被 BatchSpanProcessor 导出，进程退出即丢失；正常收尾的团队
+// 会收到 CLEANED/任务终态事件，但异常退出、热重载或事件缺失时会留下悬挂 span。
+// 此处统一以 ERROR 状态收口，明确标注"非正常结束"，避免冒充成功。
+//
+// Python: 无对应实现（shutdown 时直接丢弃 handler）
+func (h *OtelTeamMonitorHandler) CloseAllSpans() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for teamName, span := range h.teamSpans {
+		span.SetStatus(codes.Error, "closed at shutdown")
+		span.End()
+		delete(h.teamSpans, teamName)
+	}
+	for taskID, span := range h.taskSpans {
+		span.SetStatus(codes.Error, "closed at shutdown")
+		span.End()
+		delete(h.taskSpans, taskID)
+	}
+}
+
 // recordTaskEvent 在 task span 上记录事件。
 // Python: _record_task_event(payload, etype)
 func (h *OtelTeamMonitorHandler) recordTaskEvent(payload map[string]any, etype string) {

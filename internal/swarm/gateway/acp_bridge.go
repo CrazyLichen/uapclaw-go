@@ -490,7 +490,7 @@ func (b *AcpGatewayBridge) SendMessage(ctx context.Context, msg *schema.Message,
 		// 未见过 idle 也必须取消：deferred 解挂路径（maybeFinalizeDeferredPrompts）
 		// 会在 SawProcessingIdle==false 下 armed timer，不取消会让 timer 提前 3s
 		// 发 end_turn，与 Python「等真正 idle 再收尾」不等价。
-		if !(sawIdle && hasPending) {
+		if !sawIdle || !hasPending {
 			cancelIdleFinalizeTimerLocked(pctx)
 		}
 		b.mu.Unlock()

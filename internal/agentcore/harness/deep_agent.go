@@ -1916,9 +1916,11 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 				provider.SetWorkspace(cfg.Workspace)
 			}
 		}
+		// Python: rail_inst.init(self) —— 无 try/except，异常直接冒泡中断初始化。
+		// Go 侧此前 Warn + continue 会让 rail 静默缺失（例如 TeamPolicyRail 不生效），
+		// 改为向上返回错误。
 		if err := r.Init(ctx, d); err != nil {
-			logger.Warn(logComponent).Err(err).Str("rail_type", reflect.TypeOf(r).String()).Msg("Rail initialization failed")
-			continue
+			return ctx, fmt.Errorf("rail %s 初始化失败: %w", reflect.TypeOf(r).String(), err)
 		}
 		d.registerRailSelective(ctx, r)
 		d.railsMu.Lock()

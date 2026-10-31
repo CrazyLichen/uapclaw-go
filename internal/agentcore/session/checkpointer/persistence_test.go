@@ -1390,6 +1390,11 @@ func (e *errorKVStore) MGet(_ context.Context, _ []string) ([][]byte, error) {
 func (e *errorKVStore) BatchDelete(_ context.Context, _ []string, _ int) (int, error) {
 	return 0, fmt.Errorf("injected error")
 }
+
+// CompareAndDelete 注入错误。
+func (e *errorKVStore) CompareAndDelete(_ context.Context, _ string, _ []byte) (bool, error) {
+	return false, fmt.Errorf("injected error")
+}
 func (e *errorKVStore) Pipeline(_ context.Context) kv.KVPipeline {
 	return &errorPipeline{}
 }

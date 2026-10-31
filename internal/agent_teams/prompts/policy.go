@@ -41,16 +41,16 @@ var policyLabels = map[string]map[string]string{
 
 // RolePolicy 返回指定角色的策略文本。
 // Python: role_policy(role: TeamRole, language) (openjiuwen/agent_teams/prompts/policy.py)
-func RolePolicy(role atschema.TeamRole, language string) string {
+func RolePolicy(role atschema.TeamRole, language string) (string, error) {
 	policyName := "leader_policy"
 	if role != atschema.TeamRoleLeader {
 		policyName = "teammate_policy"
 	}
-	tpl := LoadTemplate(policyName, language)
-	if tpl == nil {
-		return ""
+	tpl, err := LoadTemplate(policyName, language)
+	if err != nil {
+		return "", err
 	}
-	return tpl.Content()
+	return tpl.Content(), nil
 }
 
 // BuildSystemPrompt 组装团队角色的完整系统提示词。
@@ -80,7 +80,7 @@ func BuildSystemPrompt(
 	teamInfo *TeamInfo,
 	teamMembers []TeamMember,
 	basePrompt string,
-) string {
+) (string, error) {
 	lbl := policyLabelsFor(language)
 
 	// 成员名段落
@@ -94,7 +94,11 @@ func BuildSystemPrompt(
 	if role != atschema.TeamRoleLeader {
 		policyName = "teammate_policy"
 	}
-	rolePolicyText := LoadTemplate(policyName, language).Content()
+	roleTpl, err := LoadTemplate(policyName, language)
+	if err != nil {
+		return "", err
+	}
+	rolePolicyText := roleTpl.Content()
 
 	// workflow_section（仅 LEADER）
 	workflowSection := ""
@@ -103,7 +107,11 @@ func BuildSystemPrompt(
 		if mapped, ok := workflowTemplateName[teamMode]; ok {
 			workflowName = mapped
 		}
-		workflowSection = LoadTemplate(workflowName, language).Content()
+		workflowTpl, tplErr := LoadTemplate(workflowName, language)
+		if tplErr != nil {
+			return "", tplErr
+		}
+		workflowSection = workflowTpl.Content()
 	}
 
 	// lifecycle_section（仅 LEADER）
@@ -113,7 +121,11 @@ func BuildSystemPrompt(
 		if lifecycle == "persistent" {
 			lcName = "lifecycle_persistent"
 		}
-		lifecycleSection = LoadTemplate(lcName, language).Content()
+		lifecycleTpl, tplErr := LoadTemplate(lcName, language)
+		if tplErr != nil {
+			return "", tplErr
+		}
+		lifecycleSection = lifecycleTpl.Content()
 	}
 
 	// 人设标签 + 人设
@@ -138,9 +150,9 @@ func BuildSystemPrompt(
 	}
 
 	// 渲染 system_prompt.md 模板
-	template := LoadSharedTemplate("system_prompt")
-	if template == nil {
-		return ""
+	template, err := LoadSharedTemplate("system_prompt")
+	if err != nil {
+		return "", err
 	}
 	return template.Render(map[string]string{
 		"member_name_section":  memberNameSection,
@@ -152,7 +164,7 @@ func BuildSystemPrompt(
 		"team_info_section":    teamInfoSection,
 		"team_members_section": teamMembersSection,
 		"base_prompt_section":  basePromptSection,
-	})
+	}), nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -44,6 +44,7 @@ import (
 	"fmt"
 	"reflect"
 	"time"
+	"unicode/utf8"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent/coordination"
@@ -504,17 +505,22 @@ func (a *TeamAgent) HasPendingInterrupt() bool {
 }
 
 // Configure 配置 TeamAgent。
+// 装配失败（角色策略/提示词模板缺失等）时返回错误，不再静默降级。
 // Python: TeamAgent.configure(spec, context)
-func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, runtimeCtx atschema.TeamRuntimeContext) *TeamAgent {
+func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, runtimeCtx atschema.TeamRuntimeContext) error {
 	// Phase 1: 基础设施搭建
-	a.configurator.SetupInfra(spec, runtimeCtx,
+	if err := a.configurator.SetupInfra(spec, runtimeCtx,
 		WithOnTeammateCreated(a.onTeammateCreated),
 		WithOnTeamCleaned(a.markTeamCleaned),
 		WithOnTeamBuilt(a.markTeamBuilt),
-	)
+	); err != nil {
+		return err
+	}
 
 	// Phase 2: Agent 组装
-	a.configurator.SetupAgent(spec, runtimeCtx)
+	if _, err := a.configurator.SetupAgent(spec, runtimeCtx); err != nil {
+		return err
+	}
 
 	// 构建 TeamMember 句柄
 	if runtimeCtx.MemberName != "" {
@@ -537,7 +543,7 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
 		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent config")
-	return a
+	return nil
 }
 
 // Invoke 非流式调用 TeamAgent。
@@ -759,7 +765,17 @@ func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool
 		return a.streamController.FollowUp(ctx, fmt.Sprintf("%v", content))
 	}
 	if a.streamController.HasInFlightRound() {
-		a.streamController.pendingInputs = append(a.streamController.pendingInputs, content)
+		// Python: preview = content if isinstance(content, str) else type(content).__name__
+		// Python: team_logger.info("[{}] queueing input for next round (transition window): {:.60}", ...)
+		preview, ok := content.(string)
+		if !ok {
+			preview = fmt.Sprintf("%T", content)
+		}
+		logger.Info(logComponent).
+			Str("member_name", a.MemberName()).
+			Str("content_preview", truncateRunes(preview, 60)).
+			Msg("queueing input for next round (transition window)")
+		a.streamController.QueuePendingInput(content)
 		return nil
 	}
 	return a.streamController.StartRound(ctx, content)
@@ -994,7 +1010,9 @@ func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, 
 
 	// 步骤 3: NewTeamAgent + Configure
 	agent := NewTeamAgent(ctx, card)
-	agent.Configure(ctx, *spec, runtimeCtx)
+	if err := agent.Configure(ctx, *spec, runtimeCtx); err != nil {
+		return nil, fmt.Errorf("配置 TeamAgent 失败: %w", err)
+	}
 
 	// 步骤 4: RefreshHumanAgentRoster（Python: 子进程持有独立 TeamBackend，
 	// HITT roster 缓存为空，需从 DB 拉取当前名册使 is_human_agent 同步检查生效）
@@ -1048,7 +1066,9 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 
 	// 步骤 6: NewTeamAgent + Configure
 	agent := NewTeamAgent(ctx, card)
-	agent.Configure(ctx, *spec, runtimeCtx)
+	if err := agent.Configure(ctx, *spec, runtimeCtx); err != nil {
+		return nil, fmt.Errorf("配置 TeamAgent 失败: %w", err)
+	}
 
 	// 步骤 7: 恢复 allocator state
 	allocatorStateAny := bucket["model_allocator_state"]
@@ -1733,4 +1753,13 @@ func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
 		}
 	}()
 	pool.RemoveTeam(teamName)
+}
+
+// truncateRunes 按字符截断字符串，避免破坏多字节字符。
+// 对齐 Python: f"{preview:.60}" 的字符截断语义。
+func truncateRunes(s string, maxLen int) string {
+	if utf8.RuneCountInString(s) <= maxLen {
+		return s
+	}
+	return string([]rune(s)[:maxLen])
 }

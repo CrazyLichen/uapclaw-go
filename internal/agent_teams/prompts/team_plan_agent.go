@@ -24,27 +24,13 @@ var TeamPlanAgentDesc = map[string]string{
 		"dependencies, and acceptance plans from goals, constraints, and context.",
 }
 
-// teamPlanAgentSystemPromptCN 中文 plan_agent 系统提示词（从模板加载，包级初始化）。
-// Python: TEAM_PLAN_AGENT_SYSTEM_PROMPT_CN (openjiuwen/agent_teams/prompts/team_plan_agent.py)
-var teamPlanAgentSystemPromptCN string
-
-// teamPlanAgentSystemPromptEN 英文 plan_agent 系统提示词（从模板加载，包级初始化）。
-// Python: TEAM_PLAN_AGENT_SYSTEM_PROMPT_EN (openjiuwen/agent_teams/prompts/team_plan_agent.py)
-var teamPlanAgentSystemPromptEN string
-
-// DefaultTeamPlanAgentSystemPrompt plan_agent 中英文系统提示词映射。
-// Python: DEFAULT_TEAM_PLAN_AGENT_SYSTEM_PROMPT (openjiuwen/agent_teams/prompts/team_plan_agent.py)
-var DefaultTeamPlanAgentSystemPrompt map[string]string
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TeamPlanAgentSystemPrompt 返回指定语言的 plan_agent 系统提示词。
+// 模板缺失时返回 error，由调用方上抛（不在包级 init 中静默吞掉）。
 // Python: _team_plan_agent_prompt(language) (openjiuwen/agent_teams/prompts/team_plan_agent.py)
-func TeamPlanAgentSystemPrompt(language string) string {
-	if language == "en" {
-		return teamPlanAgentSystemPromptEN
-	}
-	return teamPlanAgentSystemPromptCN
+func TeamPlanAgentSystemPrompt(language string) (string, error) {
+	return loadTeamPlanAgentPrompt(language)
 }
 
 // TeamPlanAgentDescription 返回指定语言的 plan_agent 描述。
@@ -71,15 +57,19 @@ func BuildTeamPlanAgentCard(language string) *agentschema.AgentCard {
 //
 // 仅替换使用默认 plan 提示词的 plan_agent，用户自定义的 plan_agent 提示词保持不变。
 // 返回 true 表示已替换，false 表示未找到或用户自定义。
-func ApplyTeamPlanAgentPrompt(subagents []hschema.SubagentSpec, language string) bool {
+func ApplyTeamPlanAgentPrompt(subagents []hschema.SubagentSpec, language string) (bool, error) {
 	if len(subagents) == 0 {
-		return false
+		return false, nil
 	}
 
 	// Python: builtin_prompts = set(DEFAULT_PLAN_AGENT_SYSTEM_PROMPT.values())
 	resolvedLang := resolveLanguage(language)
-	builtinPromptSet := make(map[string]struct{})
-	for _, v := range DefaultTeamPlanAgentSystemPrompt {
+	builtinPrompts, err := builtinTeamPlanAgentPrompts()
+	if err != nil {
+		return false, err
+	}
+	builtinPromptSet := make(map[string]struct{}, len(builtinPrompts))
+	for _, v := range builtinPrompts {
 		builtinPromptSet[v] = struct{}{}
 	}
 
@@ -94,18 +84,22 @@ func ApplyTeamPlanAgentPrompt(subagents []hschema.SubagentSpec, language string)
 		}
 		// Python: if spec.system_prompt not in builtin_prompts: return False
 		if _, ok := builtinPromptSet[cfg.SystemPrompt]; !ok {
-			return false
+			return false, nil
 		}
 		// Python: spec.system_prompt = _team_plan_agent_prompt(resolved_language)
-		cfg.SystemPrompt = TeamPlanAgentSystemPrompt(resolvedLang)
+		prompt, err := TeamPlanAgentSystemPrompt(resolvedLang)
+		if err != nil {
+			return false, err
+		}
+		cfg.SystemPrompt = prompt
 		// Python: spec.agent_card = spec.agent_card.model_copy(update={"description": ...})
 		cfg.AgentCard = agentschema.NewAgentCard(
 			agentschema.WithAgentName("plan_agent"),
 			agentschema.WithAgentDescription(TeamPlanAgentDescription(resolvedLang)),
 		)
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -116,18 +110,26 @@ func resolveLanguage(language string) string {
 	return hprompts.ResolveLanguage(language)
 }
 
-// init 初始化 plan_agent 的中英文系统提示词（从模板加载）
-func init() {
-	tplCN := LoadTemplate("team_plan_agent", "cn")
-	if tplCN != nil {
-		teamPlanAgentSystemPromptCN = strings.TrimSpace(tplCN.Content())
+// loadTeamPlanAgentPrompt 按语言加载 plan_agent 系统提示词（依赖 LoadTemplate 的缓存）。
+func loadTeamPlanAgentPrompt(language string) (string, error) {
+	tpl, err := LoadTemplate("team_plan_agent", language)
+	if err != nil {
+		return "", err
 	}
-	tplEN := LoadTemplate("team_plan_agent", "en")
-	if tplEN != nil {
-		teamPlanAgentSystemPromptEN = strings.TrimSpace(tplEN.Content())
+	return strings.TrimSpace(tpl.Content()), nil
+}
+
+// builtinTeamPlanAgentPrompts 返回内置 plan_agent 中英文提示词映射，
+// 用于判定 subagent 是否仍在使用默认提示词。
+// Python: DEFAULT_PLAN_AGENT_SYSTEM_PROMPT
+func builtinTeamPlanAgentPrompts() (map[string]string, error) {
+	cn, err := loadTeamPlanAgentPrompt("cn")
+	if err != nil {
+		return nil, err
 	}
-	DefaultTeamPlanAgentSystemPrompt = map[string]string{
-		"cn": teamPlanAgentSystemPromptCN,
-		"en": teamPlanAgentSystemPromptEN,
+	en, err := loadTeamPlanAgentPrompt("en")
+	if err != nil {
+		return nil, err
 	}
+	return map[string]string{"cn": cn, "en": en}, nil
 }

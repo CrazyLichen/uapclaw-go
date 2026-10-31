@@ -80,8 +80,7 @@ func (r *TeamPlanModeRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 		r.agent = dai
 	}
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
-	r.specializePlanAgent()
-	return nil
+	return r.specializePlanAgent()
 }
 
 // Uninit 移除 team.plan 提示词覆盖。
@@ -127,7 +126,9 @@ func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfac
 	}
 
 	// Plan 模式：特化 plan_agent + 注入 team.plan 指令
-	r.specializePlanAgent()
+	if err := r.specializePlanAgent(); err != nil {
+		return err
+	}
 
 	language := r.resolveLanguage()
 
@@ -150,7 +151,10 @@ func (r *TeamPlanModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfac
 		planFileInfo = prompts.BuildPlanFileInfoCN(planFilePath, planFileExists)
 	}
 
-	section := prompts.BuildTeamPlanModeSection(language, enterPlanModeStatus, planFileInfo)
+	section, err := prompts.BuildTeamPlanModeSection(language, enterPlanModeStatus, planFileInfo)
+	if err != nil {
+		return err
+	}
 	if section != nil {
 		r.systemPromptBuilder.AddSection(*section)
 	}
@@ -191,20 +195,24 @@ func (r *TeamPlanModeRail) resolveLanguage() string {
 // Python: TeamPlanModeRail._specialize_plan_agent()
 //
 // 将 plan subagent 的 system prompt 替换为 team.plan 版本。
-func (r *TeamPlanModeRail) specializePlanAgent() {
+func (r *TeamPlanModeRail) specializePlanAgent() error {
 	if r.agent == nil {
-		return
+		return nil
 	}
 	// Python: deep_config = getattr(self._agent, "deep_config", None)
 	// Python: if deep_config is not None and hasattr(deep_config, "subagents")
 	deepConfig := r.agent.DeepConfig()
 	if deepConfig == nil || len(deepConfig.Subagents) == 0 {
-		return
+		return nil
 	}
 	// Python: applied = apply_team_plan_agent_prompt(deep_config.subagents, language=...)
 	language := r.resolveLanguage()
-	applied := prompts.ApplyTeamPlanAgentPrompt(deepConfig.Subagents, language)
+	applied, err := prompts.ApplyTeamPlanAgentPrompt(deepConfig.Subagents, language)
+	if err != nil {
+		return err
+	}
 	if applied {
 		logger.Debug(logComponent).Str("language", language).Msg("plan_agent system prompt specialized")
 	}
+	return nil
 }

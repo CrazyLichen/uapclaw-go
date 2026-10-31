@@ -74,7 +74,12 @@ func (s *stubKVStore) GetByPrefix(_ context.Context, _ string) (map[string][]byt
 func (s *stubKVStore) DeleteByPrefix(_ context.Context, _ string, _ int) error       { return nil }
 func (s *stubKVStore) MGet(_ context.Context, _ []string) ([][]byte, error)          { return nil, nil }
 func (s *stubKVStore) BatchDelete(_ context.Context, _ []string, _ int) (int, error) { return 0, nil }
-func (s *stubKVStore) Pipeline(_ context.Context) kv.KVPipeline                      { return nil }
+
+// CompareAndDelete 桩实现：模拟锁释放成功（本 stub 的 ExclusiveSet 恒成功）。
+func (s *stubKVStore) CompareAndDelete(_ context.Context, _ string, _ []byte) (bool, error) {
+	return true, nil
+}
+func (s *stubKVStore) Pipeline(_ context.Context) kv.KVPipeline { return nil }
 
 // stubDbStore 用于测试的最小 stub DB 存储
 type stubDbStore struct{}

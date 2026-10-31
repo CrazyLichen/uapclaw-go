@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"go.opentelemetry.io/otel/codes"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -181,4 +183,34 @@ func TestMapToAttributes(t *testing.T) {
 		"key3": true,
 	})
 	assert.Len(t, attrs, 3)
+}
+
+// TestOtelTeamMonitorHandler_CloseAllSpans 退出时收口未关闭的 team/task span
+func TestOtelTeamMonitorHandler_CloseAllSpans(t *testing.T) {
+	handler, tp, recorder := newTestMonitorHandler()
+	defer tp.Shutdown(context.Background())
+
+	ctx := context.Background()
+	handler.HandleEvent(ctx, &events.EventMessage{
+		EventType: events.TeamEventCreated,
+		Payload:   map[string]any{"team_name": "dying-team"},
+	})
+	handler.HandleEvent(ctx, &events.EventMessage{
+		EventType: events.TeamEventTaskCreated,
+		Payload:   map[string]any{"team_name": "dying-team", "task_id": "t1"},
+	})
+	require.Len(t, handler.teamSpans, 1)
+	require.Len(t, handler.taskSpans, 1)
+
+	handler.CloseAllSpans()
+
+	assert.Empty(t, handler.teamSpans)
+	assert.Empty(t, handler.taskSpans)
+
+	spans := recorder.Ended()
+	require.Len(t, spans, 2, "两条未关闭的 span 都应被 End 并导出")
+	for _, s := range spans {
+		assert.Equal(t, codes.Error, s.Status().Code, "span %s 应标记为 ERROR", s.Name())
+		assert.Equal(t, "closed at shutdown", s.Status().Description)
+	}
 }

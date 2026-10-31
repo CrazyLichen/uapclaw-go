@@ -195,6 +195,17 @@ func (sc *StreamController) HasInFlightRound() bool {
 	}
 }
 
+// QueuePendingInput 将输入加入下一轮排队队列（并发安全）。
+// Python: self._stream_controller.pending_inputs.append(content)
+//
+// pendingInputs 由 sc.mu 保护（消费侧 runOneRound 加锁读写），
+// 跨包调用方不得直接操作该字段。
+func (sc *StreamController) QueuePendingInput(content any) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.pendingInputs = append(sc.pendingInputs, content)
+}
+
 // HasPendingInterrupt 是否有待处理的中断。
 // Python: StreamController.has_pending_interrupt()
 func (sc *StreamController) HasPendingInterrupt() bool {

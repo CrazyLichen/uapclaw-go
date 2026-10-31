@@ -1,6 +1,7 @@
 package index
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -91,6 +92,18 @@ func (f *fakeKVStore) Delete(_ context.Context, key string) error {
 	defer f.mu.Unlock()
 	delete(f.data, key)
 	return nil
+}
+
+// CompareAndDelete 在锁内完成比较删除，模拟原子语义。
+func (f *fakeKVStore) CompareAndDelete(_ context.Context, key string, expected []byte) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cur, ok := f.data[key]
+	if !ok || !bytes.Equal(cur, expected) {
+		return false, nil
+	}
+	delete(f.data, key)
+	return true, nil
 }
 
 func (f *fakeKVStore) GetByPrefix(_ context.Context, prefix string) (map[string][]byte, error) {
@@ -1621,6 +1634,14 @@ func (f *failingKVStore) Delete(ctx context.Context, key string) error {
 		return fmt.Errorf("KV Delete 注入错误")
 	}
 	return f.fakeKVStore.Delete(ctx, key)
+}
+
+// CompareAndDelete 委托底层 fake 完成比较删除，失败注入时随 Delete 一起报错。
+func (f *failingKVStore) CompareAndDelete(ctx context.Context, key string, expected []byte) (bool, error) {
+	if f.failDelete {
+		return false, fmt.Errorf("KV Delete 注入错误")
+	}
+	return f.fakeKVStore.CompareAndDelete(ctx, key, expected)
 }
 
 func (f *failingKVStore) GetByPrefix(ctx context.Context, prefix string) (map[string][]byte, error) {

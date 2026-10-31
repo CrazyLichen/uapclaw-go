@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"embed"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -29,39 +30,50 @@ var promptsFS embed.FS
 // templateCache 模板缓存（对齐 Python @cache 装饰器）
 var templateCache sync.Map
 
+// defaultLanguage 默认提示词语言
+// Python: load_template(name, language=_DEFAULT_LANGUAGE="cn")
+const defaultLanguage = "cn"
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // LoadTemplate 加载语言相关模板。
+// 模板缺失时返回 error（对齐 Python: Path.read_text 抛 FileNotFoundError），
+// 调用方必须逐层上抛，不得以空串静默降级。
 // Python: load_template(name, language) -> PromptTemplate
 // 从 prompts/<lang>/<name>.md 加载
-func LoadTemplate(name, language string) *PromptTemplate {
+func LoadTemplate(name, language string) (*PromptTemplate, error) {
+	// Python: load_template(name, language="cn") —— 语言参数默认 "cn"
+	if language == "" {
+		language = defaultLanguage
+	}
 	key := language + "/" + name
 	if cached, ok := templateCache.Load(key); ok {
-		return cached.(*PromptTemplate)
+		return cached.(*PromptTemplate), nil
 	}
 	data, err := promptsFS.ReadFile(language + "/" + name + ".md")
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("加载模板 %s/%s.md 失败: %w", language, name, err)
 	}
 	tpl := &PromptTemplate{content: string(data)}
 	templateCache.Store(key, tpl)
-	return tpl
+	return tpl, nil
 }
 
 // LoadSharedTemplate 加载语言无关模板。
+// 模板缺失时返回 error（对齐 Python: Path.read_text 抛 FileNotFoundError）。
 // Python: load_shared_template(name) -> PromptTemplate
 // 从 prompts/<name>.md 加载
-func LoadSharedTemplate(name string) *PromptTemplate {
+func LoadSharedTemplate(name string) (*PromptTemplate, error) {
 	if cached, ok := templateCache.Load(name); ok {
-		return cached.(*PromptTemplate)
+		return cached.(*PromptTemplate), nil
 	}
 	data, err := promptsFS.ReadFile(name + ".md")
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("加载共享模板 %s.md 失败: %w", name, err)
 	}
 	tpl := &PromptTemplate{content: string(data)}
 	templateCache.Store(name, tpl)
-	return tpl
+	return tpl, nil
 }
 
 // Render 渲染模板，替换占位符。

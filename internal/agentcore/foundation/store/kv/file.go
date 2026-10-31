@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -208,6 +209,33 @@ func (s *FileKVStore) Delete(_ context.Context, key string) error {
 		b := tx.Bucket([]byte(s.bucketName))
 		return b.Delete([]byte(key))
 	})
+}
+
+// CompareAndDelete 原子性地删除 key，仅当解包后的值等于 expected 时成功。
+// bbolt 的 Update 事务内部独占，取值、比较、删除三者天然原子。
+func (s *FileKVStore) CompareAndDelete(_ context.Context, key string, expected []byte) (bool, error) {
+	matched := false
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(s.bucketName))
+		raw := b.Get([]byte(key))
+		if raw == nil {
+			return nil
+		}
+		var entry fileEntry
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			return err
+		}
+		value, err := base64.StdEncoding.DecodeString(entry.Value)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(value, expected) {
+			return nil
+		}
+		matched = true
+		return b.Delete([]byte(key))
+	})
+	return matched, err
 }
 
 // GetByPrefix 获取所有以 prefix 开头的键值对。

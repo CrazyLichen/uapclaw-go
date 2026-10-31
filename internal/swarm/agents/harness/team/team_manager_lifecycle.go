@@ -212,7 +212,9 @@ func (m *TeamManager) CreateTeam(
 		Persona:    spec.Leader.Persona,
 		Role:       atschema.TeamRoleLeader,
 	}
-	teamAgent.Configure(ctx, *spec, runtimeCtx)
+	if err := teamAgent.Configure(ctx, *spec, runtimeCtx); err != nil {
+		return nil, err
+	}
 
 	// 注册到 teamAgents
 	m.mu.Lock()

@@ -1,9 +1,11 @@
 package kv
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -137,6 +139,37 @@ func (s *DbBasedKVStore) Exists(ctx context.Context, key string) (bool, error) {
 func (s *DbBasedKVStore) Delete(ctx context.Context, key string) error {
 	s.ensureTable()
 	return s.db.WithContext(ctx).Where("key = ?", key).Delete(&KVStoreRow{}).Error
+}
+
+// CompareAndDelete 原子性地删除 key，仅当解包后的值等于 expected 时成功。
+// 在单个数据库事务内完成读取、解包、比较与删除，避免 TOCTOU。
+func (s *DbBasedKVStore) CompareAndDelete(ctx context.Context, key string, expected []byte) (bool, error) {
+	s.ensureTable()
+	matched := false
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row KVStoreRow
+		err := tx.Where("key = ?", key).First(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		stored := row.Value
+		// exclusive 格式是 {value: base64, expiry: ts} 信封，普通 Set 存原始字节
+		if decoded, ok := decodeExclusiveValue(row.Value); ok {
+			stored = decoded
+		}
+		if !bytes.Equal(stored, expected) {
+			return nil
+		}
+		matched = true
+		return tx.Where("key = ?", key).Delete(&KVStoreRow{}).Error
+	})
+	if err != nil {
+		return false, err
+	}
+	return matched, nil
 }
 
 // ExclusiveSet 原子性地设置键值对，仅当 key 不存在或已过期时成功。

@@ -66,9 +66,17 @@ func NewTeamToolApprovalRail(
 	r.BaseInterruptRail = *interrupt.NewBaseInterruptRail(toolNames...)
 
 	// Python: self.message_manager = TeamMessageManager(...)
-	// 当 db 和 messager 都不为 nil 时创建 messageManager
+	// Python 无条件创建；Go 在缺少 db 或 messager 时不创建，并在 resolveInterrupt 中快速失败，
+	// 避免"审批请求发不出去却照样挂起等待"的静默死等。
 	if db != nil && messager != nil {
 		r.messageManager = tools.NewTeamMessageManager(db, teamName, memberName, messager)
+	} else {
+		logger.Warn(logComponent).
+			Str("team_name", teamName).
+			Str("member_name", memberName).
+			Bool("has_db", db != nil).
+			Bool("has_messager", messager != nil).
+			Msg("tool approval rail degraded: db or messager missing")
 	}
 
 	// 覆盖 ResolveInterruptFn
@@ -136,15 +144,22 @@ func (r *TeamToolApprovalRail) resolveInterrupt(
 			Str("tool_call_id", toolCallID).
 			Msg("sending tool approval request to leader")
 
-		if r.messageManager != nil {
-			messageID, err := r.messageManager.SendMessage(ctx, message, r.leaderMemberName, "")
-			if err != nil || messageID == "" {
-				logger.Error(logComponent).
-					Str("tool_name", toolName).
-					Err(err).
-					Msg("failed to send approval request")
-				return r.Reject("Failed to send approval request to leader")
-			}
+		// 无消息管理器说明 db/messager 装配缺失，此时挂起等待审批永远不会被满足，
+		// 必须快速失败（对齐 Python: message_id 为空即 reject）
+		if r.messageManager == nil {
+			logger.Error(logComponent).
+				Str("tool_name", toolName).
+				Str("member_name", r.memberName).
+				Msg("failed to send approval request: message manager unavailable")
+			return r.Reject("Failed to send approval request to leader")
+		}
+		messageID, err := r.messageManager.SendMessage(ctx, message, r.leaderMemberName, "")
+		if err != nil || messageID == "" {
+			logger.Error(logComponent).
+				Str("tool_name", toolName).
+				Err(err).
+				Msg("failed to send approval request")
+			return r.Reject("Failed to send approval request to leader")
 		}
 
 		// Python: 创建中断请求

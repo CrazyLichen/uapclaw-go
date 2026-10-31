@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"math"
 	"reflect"
 	"sync"
@@ -3915,4 +3916,27 @@ func TestNormalizeContextMessages_非空(t *testing.T) {
 	if result[0].GetContent().Text() != "hello" || result[1].GetContent().Text() != "world" {
 		t.Errorf("消息内容不匹配，实际: %v, %v", result[0].GetContent().Text(), result[1].GetContent().Text())
 	}
+}
+
+// failingInitRail Init 必定失败的 Rail，用于验证 rail 初始化错误不再被吞掉。
+// 嵌入 fakeAgentRail 继承完整接口实现，只覆盖 Init。
+type failingInitRail struct {
+	fakeAgentRail
+}
+
+// Init 返回固定错误
+func (f *failingInitRail) Init(context.Context, agentinterfaces.BaseAgent) error {
+	return errors.New("rail init boom")
+}
+
+// TestDeepAgent_EnsureInitialized_RailInit错误上抛 验证 rail 初始化失败不再 Warn+跳过
+// Python: deep_agent.py 的懒注册循环里 rail.init(self) 无 try/except，异常直接冒泡
+func TestDeepAgent_EnsureInitialized_RailInit错误上抛(t *testing.T) {
+	d := newTestDeepAgent()
+	d.AddRail(&failingInitRail{})
+
+	_, err := d.ensureInitialized(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rail init boom")
+	assert.False(t, d.initialized, "初始化失败时不应标记为已初始化")
 }
