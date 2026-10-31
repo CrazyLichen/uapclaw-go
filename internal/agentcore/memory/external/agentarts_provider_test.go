@@ -909,4 +909,9 @@ func (s *errorKVStore) MGet(_ context.Context, _ []string) ([][]byte, error)    
 func (s *errorKVStore) BatchDelete(_ context.Context, _ []string, _ int) (int, error) {
 	return 0, nil
 }
+
+// CompareAndDelete 桩实现，返回未删除。
+func (s *errorKVStore) CompareAndDelete(_ context.Context, _ string, _ []byte) (bool, error) {
+	return false, nil
+}
 func (s *errorKVStore) Pipeline(_ context.Context) kv.KVPipeline { return nil }

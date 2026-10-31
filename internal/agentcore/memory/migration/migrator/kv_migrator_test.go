@@ -67,6 +67,16 @@ func (s *fakeKVStore) DeleteByPrefix(_ context.Context, prefix string, _ int) er
 	return nil
 }
 
+// CompareAndDelete 比较后删除，模拟原子语义。
+func (s *fakeKVStore) CompareAndDelete(_ context.Context, key string, expected []byte) (bool, error) {
+	cur, ok := s.data[key]
+	if !ok || string(cur) != string(expected) {
+		return false, nil
+	}
+	delete(s.data, key)
+	return true, nil
+}
+
 func (s *fakeKVStore) MGet(_ context.Context, keys []string) ([][]byte, error) {
 	result := make([][]byte, len(keys))
 	for i, key := range keys {

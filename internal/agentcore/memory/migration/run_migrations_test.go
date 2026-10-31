@@ -73,6 +73,16 @@ func (s *fakeKVStoreForRun) MGet(_ context.Context, keys []string) ([][]byte, er
 	return result, nil
 }
 
+// CompareAndDelete 比较后删除，模拟原子语义。
+func (s *fakeKVStoreForRun) CompareAndDelete(_ context.Context, key string, expected []byte) (bool, error) {
+	cur, ok := s.data[key]
+	if !ok || string(cur) != string(expected) {
+		return false, nil
+	}
+	delete(s.data, key)
+	return true, nil
+}
+
 func (s *fakeKVStoreForRun) BatchDelete(_ context.Context, keys []string, _ int) (int, error) {
 	count := 0
 	for _, key := range keys {

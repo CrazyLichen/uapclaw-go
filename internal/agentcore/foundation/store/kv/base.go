@@ -28,6 +28,13 @@ type BaseKVStore interface {
 	// Delete 删除指定 key。key 不存在时返回 nil（不报错），与 Python 行为一致。
 	Delete(ctx context.Context, key string) error
 
+	// CompareAndDelete 原子性地删除 key，仅当其当前值等于 expected 时成功。
+	// 返回 true 表示值匹配且已删除；false 表示 key 不存在或值不匹配（两者均不报错）。
+	//
+	// 用于分布式锁的安全释放，避免 Get 与 Delete 之间因 TTL 过期或他人抢占造成的 TOCTOU。
+	// 注意：本方法为 Go 侧扩展，Python BaseKVStore 无对应实现。
+	CompareAndDelete(ctx context.Context, key string, expected []byte) (bool, error)
+
 	// GetByPrefix 获取所有以 prefix 开头的键值对。
 	GetByPrefix(ctx context.Context, prefix string) (map[string][]byte, error)
 
