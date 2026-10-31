@@ -80,6 +80,20 @@ func (s *AcpChatToolSuite) TestAcpChatTool_JSONRPC错误转文本() {
 	s.Contains(out, "agent failed")
 }
 
+// TestAcpChatTool_权限自动批准 自动应答 allow-once（Python permission 模式 + env 开关）
+func (s *AcpChatToolSuite) TestAcpChatTool_权限自动批准() {
+	s.T().Setenv("ACP_AUTO_APPROVE_PERMISSIONS", "true")
+	cfg, profile := s.newConfig("permission", nil)
+	s.Equal("after-perm:need perm:selected:allow-once", s.invoke(cfg, profile, "need perm", false))
+}
+
+// TestAcpChatTool_权限取消 自动应答 cancelled（Go 增强：Python 只测了批准分支）
+func (s *AcpChatToolSuite) TestAcpChatTool_权限取消() {
+	s.T().Setenv("ACP_AUTO_APPROVE_PERMISSIONS", "false")
+	cfg, profile := s.newConfig("permission", nil)
+	s.Contains(s.invoke(cfg, profile, "need perm", false), "after-perm:need perm:cancelled:")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newConfig 构造唯一 profile 的 cfg（profile 名含纳秒时间戳，规避全局缓存串台）

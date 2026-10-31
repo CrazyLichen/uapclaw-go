@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -99,6 +100,17 @@ func promptText(msg map[string]any) string {
 
 // handlePrompt 按 mode 处理 session/prompt。
 func handlePrompt(out *bufio.Writer, in *bufio.Scanner, mode string, id any, text string) {
+	if mode == "permission" {
+		// Go 增强：把收到的 outcome/optionId 回显进文本，才能区分批准/取消
+		outcome, optionID := requestPermission(out, in, mode)
+		writeUpdate(out, mode, "after-perm:"+text+":"+outcome+":"+optionID)
+		writeMsg(out, map[string]any{
+			"jsonrpc": "2.0", "id": id,
+			"result": map[string]any{"stopReason": "end_turn"},
+		})
+		return
+	}
+
 	switch mode {
 	case "error":
 		writeMsg(out, map[string]any{
@@ -115,4 +127,50 @@ func handlePrompt(out *bufio.Writer, in *bufio.Scanner, mode string, id any, tex
 		"jsonrpc": "2.0", "id": id,
 		"result": map[string]any{"stopReason": "end_turn"},
 	})
+}
+
+// requestPermission 发 session/request_permission 并等客户端响应，返回 outcome 与 optionId。
+func requestPermission(out *bufio.Writer, in *bufio.Scanner, mode string) (string, string) {
+	const permID = 900
+	writeMsg(out, map[string]any{
+		"jsonrpc": "2.0", "id": permID, "method": "session/request_permission",
+		"params": map[string]any{
+			"sessionId": "fake-" + mode + "-sess",
+			"toolCall":  map[string]any{"toolCallId": "tc-1", "title": "run test"},
+			"options": []any{
+				map[string]any{"optionId": "allow-once", "kind": "allow"},
+				map[string]any{"optionId": "reject-once", "kind": "reject"},
+			},
+		},
+	})
+	reply := waitResponse(in, permID)
+	if reply == nil {
+		return "no-reply", ""
+	}
+	if errObj, ok := reply["error"]; ok {
+		return "error-reply", fmt.Sprintf("%v", errObj)
+	}
+	result, _ := reply["result"].(map[string]any)
+	outcome, _ := result["outcome"].(map[string]any)
+	kind, _ := outcome["outcome"].(string)
+	optionID, _ := outcome["optionId"].(string)
+	return kind, optionID
+}
+
+// waitResponse 读 stdin 直到拿到指定 id 的响应（跳过通知/其他请求）。
+func waitResponse(in *bufio.Scanner, wantID int) map[string]any {
+	for in.Scan() {
+		line := strings.TrimSpace(in.Text())
+		if line == "" {
+			continue
+		}
+		var msg map[string]any
+		if err := json.Unmarshal([]byte(line), &msg); err != nil {
+			continue
+		}
+		if fmt.Sprintf("%v", msg["id"]) == fmt.Sprintf("%d", wantID) {
+			return msg
+		}
+	}
+	return nil
 }
