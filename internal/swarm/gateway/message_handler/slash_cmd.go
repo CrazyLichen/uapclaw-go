@@ -245,6 +245,7 @@ func (mh *MessageHandler) sendChannelNotice(msg *schema.Message, payload map[str
 		Type:            schema.MessageTypeEvent,
 		ChannelID:       msg.ChannelID,
 		SessionID:       msg.SessionID,
+		Params:          json.RawMessage(`{}`),
 		Timestamp:       schema.NowTimestamp(),
 		OK:              true,
 		EventType:       schema.EventTypeChatFinal,

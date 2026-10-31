@@ -358,6 +358,24 @@ func TestSendChannelNotice(t *testing.T) {
 	}
 }
 
+// TestSendChannelNotice_Params为空对象 A8：Python Message(params={})，
+// Go 侧必须发空对象而非 null，否则下游按 params 是否为 nil 分支的 Channel 行为不同。
+func TestSendChannelNotice_Params为空对象(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend, json.RawMessage(`{}`))
+	mh.sendChannelNotice(msg, map[string]any{"content": "测试通知"})
+
+	select {
+	case notice := <-mh.robotMessages:
+		assert.JSONEq(t, `{}`, string(notice.Params), "params 应为空对象 {}")
+		assert.True(t, notice.EnableStreaming, "enable_streaming 默认 True")
+		assert.Equal(t, schema.EventTypeChatFinal, notice.EventType)
+	case <-time.After(2 * time.Second):
+		t.Fatal("未收到通知")
+	}
+}
+
 // ──────────────────────────── 非导出函数测试 ────────────────────────────
 
 // TestSwitchMode_模式家族映射 测试 /switch 命令根据当前模式家族决定目标模式
