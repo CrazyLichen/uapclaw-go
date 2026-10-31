@@ -109,6 +109,9 @@ profile 规格与 acp_chat 工具共用严格校验（args 必须是列表、env
 			return runAcpChatArgs(ctx, defaultAcpChatDeps(), args, os.Stderr)
 		},
 	}
+	// --dotenv/--name 为 root 持久旗标，须在业务前解析（多实例隔离 + .env 定位）；
+	// Python cli.py 无对应旗标，此处为 Go 侧 CLI 一致性扩展。
+	cmd.PreRunE = makeDotenvPreRunE()
 	return cmd
 }
 
@@ -279,8 +282,14 @@ func runAcpChat(ctx context.Context, deps acpChatDeps, profile, message string) 
 	}
 
 	client := acp.NewAcpStdioClient(cs.Command, cs.Args, cs.Cwd, cs.Env)
-	// 对齐 Python finally：无论如何都尝试关闭，且不改退出码
-	defer closeAcpChatClientWithTimeout(client, acpChatCloseTimeout(deps.getenv))
+	closeTimeout := acpChatCloseTimeout(deps.getenv)
+	closed := false
+	// 兜底：任何提前 return 也保证关闭（对齐 Python finally 的必达性）
+	defer func() {
+		if !closed {
+			closeAcpChatClientWithTimeout(client, closeTimeout)
+		}
+	}()
 
 	if err := deps.connect(ctx, client); err != nil {
 		return acpChatFailureCode(ctx, "connect", err)
@@ -295,5 +304,14 @@ func runAcpChat(ctx context.Context, deps acpChatDeps, profile, message string) 
 		out = emptyResponse
 	}
 	fmt.Fprintln(deps.stdout, out)
+
+	// 正常路径：先关闭再决定退出码（对齐 Python finally 时序），
+	// 关闭阶段被信号打断仍按 130 退出（KeyboardInterrupt 语义）
+	closeAcpChatClientWithTimeout(client, closeTimeout)
+	closed = true
+	if ctx.Err() != nil {
+		logger.Warn(logComponentAcpChat).Msg("[acp-chat] interrupted during close")
+		return exitCodeInterrupted
+	}
 	return exitCodeOK
 }

@@ -492,3 +492,36 @@ func TestLoadAcpChatConfig_生产入口(t *testing.T) {
 		}
 	})
 }
+
+// TestNewAcpChatCmd_解析dotenv旗标 --dotenv/--name 持久旗标需被解析（PreRunE 接线）。
+func TestNewAcpChatCmd_解析dotenv旗标(t *testing.T) {
+	cmd := newAcpChatCmd()
+	if cmd.PreRunE == nil {
+		t.Fatal("acp-chat 应设置 PreRunE 以解析 --dotenv/--name")
+	}
+
+	// 未传旗标时应为无操作（不报错）
+	if err := cmd.PreRunE(cmd, nil); err != nil {
+		t.Errorf("空旗标下 PreRunE 应返回 nil, 实际 %v", err)
+	}
+}
+
+// TestRunAcpChat_关闭期间中断 close 阶段被信号打断 → 130（对齐 Python KeyboardInterrupt），
+// 但响应文本已打印不可回退。
+func TestRunAcpChat_关闭期间中断(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	deps, buf := fakeAcpChatDeps(validAcpAgentsRaw(), nil, nil, "done")
+	deps.chat = func(_ context.Context, _ *acp.AcpStdioClient, _ string) (string, error) {
+		cancel() // 模拟回复到手后按下 Ctrl-C
+		return "done", nil
+	}
+
+	if got := runAcpChat(ctx, deps, "codex", "hi"); got != exitCodeInterrupted {
+		t.Errorf("码 = %d, want %d", got, exitCodeInterrupted)
+	}
+	if buf.String() != "done\n" {
+		t.Errorf("stdout = %q, 期望已打印回复", buf.String())
+	}
+}

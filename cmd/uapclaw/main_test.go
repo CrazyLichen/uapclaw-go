@@ -240,7 +240,7 @@ func TestSubcommandsHavePreRunE(t *testing.T) {
 	rootCmd := newRootCmd()
 
 	// 以下子命令应设置 PreRunE
-	withPreRunE := []string{"chat", "serve", "app", "agentserver", "gateway", "web", "acp"}
+	withPreRunE := []string{"chat", "serve", "app", "agentserver", "gateway", "web", "acp", "acp-chat"}
 	for _, name := range withPreRunE {
 		found := false
 		for _, cmd := range rootCmd.Commands() {
