@@ -97,7 +97,7 @@
 | # | 条目 | 方案 |
 |---|---|---|
 | 10 | M-08 排队无日志 | `DeliverInput` 的 in-flight 分支补 Info 日志（`member_name` / `content_preview`，rune 截断 60）；同时新增 `StreamController.QueuePendingInput(content)` 加锁方法，替换现有的跨包裸写 `pendingInputs`（**本项为复核时新发现：该字段消费侧持 `sc.mu`，写入侧无锁，`-race` 下必报**） |
-| 11 | M-10 payload 未拷贝 | `WriteTeamNamespace` 用 `copyMap(payload)`；`MergeTeamNamespace` 内层 bucket 也做 `copyMap`（**报告只列了前者，后者同样原地修改会话状态**），对齐 Python `dict(payload)` / `dict(teams.get(...) or {})` |
+| 11 | M-10 payload 未拷贝 | `WriteTeamNamespace` 改为 `copyMap(payload)`（实施时确认 `MergeTeamNamespace` 此前已做 `copyMap`，无需改动），对齐 Python `teams[team_name] = dict(payload)` |
 | 12 | M-11 忽略返回值 | `recover_team` 的 `UpdateMemberStatus` 结果补 `if !updated { Warn }`，不改控制流（Python 同样忽略，但本文件另两处已检查，属内部一致性） |
 | 13 | T-05 日志缺 session_id | 清空前快照 `sessionID`，日志补 `session_id` / `member_name`（Python 无此日志，属 Go-only 观测增强） |
 
