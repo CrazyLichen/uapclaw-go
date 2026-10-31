@@ -675,3 +675,109 @@ func TestRewindSlashNotice_兜底失败(t *testing.T) {
 	notice := waitNoticeContaining(t, mh, "回退失败")
 	assert.Contains(t, notice.Payload["error"], "回退失败")
 }
+
+// TestBranchSlashNotice_未连接 覆盖 AgentClient 未连接的早退分支。
+func TestBranchSlashNotice_未连接(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+	seedChannelSession(mh, msg, "sess-1")
+
+	mh.branchSlashNotice(msg, command_parser.ParsedChannelControl{
+		Action:     command_parser.ActionBranchOK,
+		BranchName: "",
+	})
+	notice := waitNotice(t, mh)
+	assert.Equal(t, "分叉失败：AgentClient 未连接", notice.Payload["error"])
+}
+
+// TestHandleChannelControl_前置守卫 覆盖类型/方法/渠道/空文本四类早退。
+func TestHandleChannelControl_前置守卫(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	text := json.RawMessage(`{"content":"/new_session"}`)
+
+	// 非 req 类型
+	eventMsg := schema.NewReqMessage("feishu_test", "s", schema.ReqMethodChatSend, text, schema.WithProvider("feishu"))
+	eventMsg.Type = schema.MessageTypeEvent
+	assert.False(t, mh.handleChannelControl(eventMsg), "非 req 类型应早退")
+
+	// 非 chat.send 方法
+	answerMsg := schema.NewReqMessage("feishu_test", "s", schema.ReqMethodChatAnswer, text, schema.WithProvider("feishu"))
+	assert.False(t, mh.handleChannelControl(answerMsg), "非 chat.send 应早退")
+
+	// 非受控渠道（web）
+	webMsg := schema.NewReqMessage("web-1", "s", schema.ReqMethodChatSend, text, schema.WithProvider("web"))
+	assert.False(t, mh.handleChannelControl(webMsg), "web 渠道不解析 slash")
+
+	// 空文本
+	emptyMsg := schema.NewReqMessage("feishu_test", "s", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+	assert.False(t, mh.handleChannelControl(emptyMsg), "空文本应早退")
+}
+
+// TestHandleChannelControl_NewSessionBad 覆盖 /new_session 带后缀的非法分支。
+func TestHandleChannelControl_NewSessionBad(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	msg := schema.NewReqMessage("feishu_test", "s", schema.ReqMethodChatSend,
+		json.RawMessage(`{"content":"/new_session please"}`), schema.WithProvider("feishu"))
+
+	assert.True(t, mh.handleChannelControl(msg))
+	notice := waitNotice(t, mh)
+	assert.Equal(t, "非法指令", notice.Payload["content"])
+}
+
+// TestRewindSlashConfirmPrompt_turn为0回落1 覆盖缺省轮次回落。
+func TestRewindSlashConfirmPrompt_turn为0回落1(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	msg := schema.NewReqMessage("feishu_test", "s", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+
+	mh.rewindSlashConfirmPrompt(msg, command_parser.ParsedChannelControl{Action: command_parser.ActionRewindOK})
+
+	notice := waitNoticeContaining(t, mh, "确认要回退到第 1 轮")
+	content, _ := notice.Payload["content"].(string)
+	assert.Contains(t, content, "/rewind confirm 1")
+}
+
+// TestPayloadToInt_jsonNumber 覆盖 json.Number 分支。
+func TestPayloadToInt_jsonNumber(t *testing.T) {
+	assert.Equal(t, 7, payloadToInt(json.Number("7")))
+	assert.Equal(t, 0, payloadToInt(json.Number("bad")))
+	assert.Equal(t, 5, payloadToInt(int64(5)))
+	assert.Equal(t, 3, payloadToInt(float64(3.9)))
+	assert.Equal(t, 0, payloadToInt("not-a-number"))
+}
+
+// TestBranchSlashNotice_发送失败 覆盖 session.fork 发送出错分支（transport 已关闭）。
+func TestBranchSlashNotice_发送失败(t *testing.T) {
+	f, mh := newFakeAgentServer(t, branchReplies())
+	_ = f.tr.Close() // 关闭后 Send 返回 ErrTransportClosed
+
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+	seedChannelSession(mh, msg, "sess-1")
+
+	mh.branchSlashNotice(msg, command_parser.ParsedChannelControl{
+		Action:     command_parser.ActionBranchOK,
+		BranchName: "x",
+	})
+	notice := waitNotice(t, mh)
+	assert.Contains(t, notice.Payload["error"], "分叉失败")
+}
+
+// TestRewindSlashNotice_发送失败_Discard 覆盖 E2A 发送出错后走本地兜底。
+func TestRewindSlashNotice_发送失败_Discard(t *testing.T) {
+	f, mh := newFakeAgentServer(t, rewindReplies(true))
+	_ = f.tr.Close()
+
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+	seedChannelSession(mh, msg, "sid-without-history-44b")
+
+	mh.rewindSlashNotice(msg, command_parser.ParsedChannelControl{
+		Action:     command_parser.ActionRewindConfirm,
+		RewindTurn: 1,
+	})
+	notice := waitNoticeContaining(t, mh, "回退失败")
+	assert.Contains(t, notice.Payload["error"], "回退失败")
+}
