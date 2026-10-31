@@ -688,14 +688,16 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.23.3 | ✅ | HookExecutor | command/prompt 两类 hook + ParseCommandOutput + ExtractJSONFromResponse；11.13 起对应物迁至 internal/common/hooks/executor.go 供 Gateway/AgentServer 共享 | `executor.py` |
 | 10.3.23.4 | ✅ | UserHookRail | embed DeepAgentRail + BeforeToolCall/AfterToolCall/OnToolException/AfterInvoke | `user_hook_rail.py` |
 | 10.3.23.5 | ✅ | 回填注册 | DeepAdapter 注册 UserHookRail + handleHooksList 真实实现 | `interface_deep.py` 注册 |
-| 10.3.24 | ☐ | Sandbox | 延后 | `sandbox/` |
+| 10.3.24 | ☐ | Sandbox | 延后；⤴️ /sandbox 命令面来源 10.4.4b | `sandbox/` |
 | 10.3.25 | ✅ | Utils | 完成 | `utils/` + `interrupt/helpers` + `filesystem/history` + `shell/rm_tracker` + `server/utils/diff_service` |
 | 10.3.26 | ☐ | 入口 | 延后 | `app_agentserver.py` |
 | **10.4 独立交互入口** | — | | | |
 | 10.4.1 | ☐ | 🔥 CLI 聊天模式 | 内置 REPL 交互，直接连接 AgentServer，流式输出 | `jiuwenswarm/channels/acp/app_acp.py` (参考) · 新实现 |
 | 10.4.2 | ☐ | 🔥 HTTP API | RESTful + SSE 流式 | 新实现 |
 | 10.4.3 | ✅ | ACP Stdio | 标准输入输出 JSON-RPC 协议；✅ AcpStdioClient 已随 10.6.24d 实现于 swarm/acp（读写分离 goroutine+exitCh 免锁探测+三段优雅关闭+平台拆分，覆盖率 87.0%）；cli.py 一次性冒烟入口已随 10.4.6 落地（`uapclaw acp-chat`，非 REPL） | `jiuwenswarm/acp/cli.py` · `stdio_client.py` |
-| 10.4.4 | 🔄 | Slash 命令处理 | `/mode`/`/new`/`/sandbox`/`/model` 等；/evolve 系列分发骨架已在 adapter 实现 | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
+| 10.4.4 | ✅ | Slash 命令处理 | `/mode`/`/new`/`/sandbox`/`/model` 等；/evolve 系列分发骨架已在 adapter 实现；已拆分为 10.4.4a（已完成）/10.4.4b（⤵️ 10.3.24） | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
+| 10.4.4a | ✅ | Slash 命令处理（对账收口 + /model） | 8 项对账（A1/A2/A5/A6/A7/A8 改代码，A3/A4 核实等价）：handleChannelControl 顺序与日志点位（白名单→text→解析→info→SKILLS 提前返回不建 state）、/branch 取消改同步并补成功/拒绝日志、/rewind 删 preview 兜底并补两条成功日志+rewind_context、sendChannelNotice 补 params={}；command.model 三分支全量实现（API_KEY 掩码 + os.environ 非字符串报错复刻 TypeError）；/evolve 5 个命令已完整实现（deep_adapter_slash.go 563 行，非骨架）；message_handler 覆盖率 56.8%→达标 | `command_parser/slash_command.py` · `message_handler.py` L347-1145 · `agent_ws_server.py` L2277-2352 |
+| 10.4.4b | ⤵️ | Slash 命令处理（/sandbox 命令面） | 9 个 sub + Linux 平台守卫 + SANDBOX_BAD_REQUEST/SANDBOX_INTERNAL 双错误码；依赖 10.3.24 Sandbox 包与 jiuwenbox（21k 行 Python 守护进程） | `agent_ws_server.py` L2853-3510 |
 | 10.4.5 | ✅ | ACP Subprocess Env | 子进程环境设置；✅ BuildAcpSubprocessEnv 已随 10.6.24d 实现于 swarm/acp（profileScopedKeys 剥离+${VAR} 解析覆盖） | `jiuwenswarm/acp/subprocess_env.py` |
 | 10.4.6 | ✅ | ACP CLI Smoke 入口 | ✅ `uapclaw acp-chat <profile> [message]` 已落地 `cmd/uapclaw/acp_chat_cmd.go`：一次性冒烟（connect→chat→close，message 缺省 Hello，**非 REPL**，已订正 11.25 D4 的误读）；轻量自举（logger.Setup + dotenv 非覆盖 LoadNonOverride + config.Load，不加载 extensions/crypto/workspace）；profile 解析复用 acpchat 严格校验 `LoadProfile`/`BuildClientSpec`（args/env 类型错比 Python 更严，有意偏差）；typed error + `exitCodeFor` 落 0/1/2/130；响应文本直出 stdout、诊断走 logger；`ACP_CLI_CLOSE_TIMEOUT_S` 默认 30s 限时关闭；假对端 e2e（acp_peer.sh）走通 connect→chat→close；顺带修复 logger（全局）：控制台改 stderr（对齐 Python setup_logger 的 StreamHandler 默认流）、日志目录改 `pathutil.LogsDir()` 受 `UAPCLAW_DATA_DIR` 管辖 | `jiuwenswarm/acp/cli.py` |
 | **10.5 扩展系统** | — | | | |

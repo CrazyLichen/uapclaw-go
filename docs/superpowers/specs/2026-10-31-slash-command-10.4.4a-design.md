@@ -136,6 +136,7 @@ command.sandbox 命令面（agent_ws_server.py L2853-3510，约 660 行；另有
 | 核实结论 | Go 的 `schema.AgentResponse.Payload` 类型是 `map[string]any`（`schema/agent.go:64`），**非 dict payload 在 Go 侧结构上不可达**——wire 解码阶段就失败并走 `SendRequest` 错误路径。因此 `{"data": nil}` 恰好等价于 Python 的 `payload is None` 分支 |
 | 改法 | **不改代码**。差异登记为 D6：AgentServer 若真返回非 dict payload，Python 透传原文、Go 走错误路径回 `获取技能列表失败：<err>`。根因是 E2A 响应 schema 在 Go 侧强类型化，改它等于改整个 wire 层，不在本节范围 |
 | 风险 | 无 |
+| 实施期补充 | 空 payload 经 E2A 线格式往返后是 `{}` 而非 `nil`，Python `isinstance(dict)` 同样命中并透传空 dict（不带 `data` 键）。因此 Go 的 `{"data": nil}` 分支在真实链路上不可达，保留为 Python `payload is None` 语义的占位，不为其写用例 |
 
 ### A4 `/skills list` 五种文案形态：核实等价，不改代码
 
@@ -156,6 +157,7 @@ command.sandbox 命令面（agent_ws_server.py L2853-3510，约 660 行；另有
 | Go 现状 | L512-515：`preview` 为空且 `result.Content` 非空时回填 `truncRunes(result.Content, 50)` |
 | 改法 | 删除兜底，只用 `result.ContentPreview` |
 | 风险 | 低。兜底是「更友好」但非 Python 行为；删掉后若 sessionops 未填 ContentPreview，通知里引号内为空 |
+| 实施期补充 | `/rewind`、`/branch` 的「当前无活跃会话」早退分支**不可达**：Python `_get_channel_default_state`（L247-270）与 Go `getChannelDefaultState` 在 config 未指定 `default_session_id` 时都会 `GenerateChannelSessionID`，`state.session_id` 永不为空。属 Python 同源防御性代码，不写用例 |
 
 ### A6 `/rewind` 补日志与 `rewind_context` 读取
 
@@ -207,6 +209,7 @@ command.sandbox 命令面（agent_ws_server.py L2853-3510，约 660 行；另有
 | D4 | `strconv.Atoi` 比 Python `int()` 严格 | Python `int("1_0")==10`、`int("٥")==5`；Go 侧返回 `rewind_bad`。**Go 更严，方向安全**，不为对齐而实现 Python 的 `int()` 全语义 |
 | D5 | `/branch` 的 `resp.OK=false` 走「解析 payload.error 拼文案」而非 Python 的 `raise ValueError` | Go 无异常，等价；文案已对齐为 `分叉失败：<err>` |
 | D6 | `/skills list` 非 dict payload 无法透传（见 A3） | `schema.AgentResponse.Payload` 是 `map[string]any`，非 dict 不可达；要透传必须把整个 E2A 响应 payload 改成 `any`，影响面远超本节 |
+| D7 | `command.model` 的 `target`/`model` 为 JSON `null` 时 Go 得空串，Python `str(None)` 得 `"None"` | 无实际调用方会传 null；为对齐需实现 Python `str()` 语义，收益为零 |
 
 ## 六、`command.model` 全量实现
 
