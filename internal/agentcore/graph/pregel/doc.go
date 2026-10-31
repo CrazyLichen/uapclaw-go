@@ -1,8 +1,9 @@
-// Package pregel 提供 Pregel 图引擎的配置与常量层。
+// Package pregel 提供 Pregel 图引擎的配置、常量、超步调度信号与中断值。
 //
 // 本包是领域八的编译期最底层：构图（8.1）、节点与通道抽象（8.3）、
 // 调度引擎（8.3b/8.3c）、通道管理（8.4）、顶点（8.11）、工作流（8.14）
-// 均依赖本包提供的保留节点名、终止态键、递归预算与配置归一化能力。
+// 均依赖本包提供的保留节点名、终止态键、递归预算、配置归一化能力，
+// 以及超步之间传递调度消息的 Message 与承载中断值的 Interrupt。
 //
 // 配置以值类型结构体表达：字段零值等价于 Python TypedDict(total=False)
 // 的「键缺失/None」，因此不存在指针字段，调用方也无须判空。
@@ -11,8 +12,9 @@
 //
 //	pregel/
 //	├── doc.go         # 包文档
+//	├── base.go        # Message/MessageKind/构造函数/Kind 与 Interrupt 值对象
 //	├── constants.go   # 保留节点名、终止态键、命名空间键名与分隔符
 //	└── config.go      # PregelConfig/InnerPregelConfig/CreateInnerConfig/DefaultPregelConfig
 //
-// 对应 Python 代码：openjiuwen/core/graph/pregel/config.py · constants.py
+// 对应 Python 代码：openjiuwen/core/graph/pregel/base.py · config.py · constants.py
 package pregel
