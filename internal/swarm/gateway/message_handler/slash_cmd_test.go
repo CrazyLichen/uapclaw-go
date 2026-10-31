@@ -478,3 +478,65 @@ func TestSkillsSlashNotice_ReqID随机后缀(t *testing.T) {
 	// 二次调用确保随机后缀路径稳定
 	mh.skillsSlashNotice(msg)
 }
+
+// skillsReplies 构造 /skills list 的假响应。
+func skillsReplies(payload map[string]any, ok bool) map[string]fakeReply {
+	return map[string]fakeReply{
+		string(schema.ReqMethodSkillsList): func(rid string, _ map[string]any) *schema.AgentResponse {
+			return schema.NewAgentResponse(rid, "feishu_test",
+				schema.WithResponseOK(ok), schema.WithPayload(payload))
+		},
+	}
+}
+
+// TestSkillsSlashNotice_五种文案形态 A3/A4：锁定与 Python 一致的四种失败/成功形态，
+// 防止后续被"统一文案"优化掉。
+func TestSkillsSlashNotice_五种文案形态(t *testing.T) {
+	newMsg := func() *schema.Message {
+		return schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+			json.RawMessage(`{"content":"/skills list"}`), schema.WithProvider("feishu"))
+	}
+
+	t.Run("未连接_全角冒号", func(t *testing.T) {
+		mh := createTestMessageHandlerWithTransport()
+		mh.skillsSlashNotice(newMsg())
+		notice := waitNotice(t, mh)
+		assert.Equal(t, "获取技能列表失败：AgentClient 未连接", notice.Payload["error"])
+	})
+
+	t.Run("成功_payload透传", func(t *testing.T) {
+		_, mh := newFakeAgentServer(t, skillsReplies(map[string]any{
+			"skills": []any{map[string]any{"name": "s1"}},
+		}, true))
+		mh.skillsSlashNotice(newMsg())
+		notice := waitNotice(t, mh)
+		assert.Nil(t, notice.Payload["error"])
+		assert.NotNil(t, notice.Payload["skills"], "成功响应应逐键透传 payload")
+	})
+
+	// 空 payload 经 E2A 线格式往返后是 "{}"（不是 nil），Python isinstance(dict)
+	// 命中，notice_payload = {} —— 同样不带 data 键。Go 的 {"data": nil} 分支
+	// 只在 wire 完全没有 payload 字段时才可能命中，实际链路不可达，保持现状不改。
+	t.Run("成功_payload为空对象_无data键", func(t *testing.T) {
+		_, mh := newFakeAgentServer(t, skillsReplies(nil, true))
+		mh.skillsSlashNotice(newMsg())
+		notice := waitNotice(t, mh)
+		_, exists := notice.Payload["data"]
+		assert.False(t, exists, "空 payload 不应产生 data 键（Python 透传空 dict）")
+		assert.Nil(t, notice.Payload["error"])
+	})
+
+	t.Run("失败_带error_ASCII冒号", func(t *testing.T) {
+		_, mh := newFakeAgentServer(t, skillsReplies(map[string]any{"error": "boom"}, false))
+		mh.skillsSlashNotice(newMsg())
+		notice := waitNotice(t, mh)
+		assert.Equal(t, "获取技能列表失败: boom", notice.Payload["error"])
+	})
+
+	t.Run("失败_无error", func(t *testing.T) {
+		_, mh := newFakeAgentServer(t, skillsReplies(nil, false))
+		mh.skillsSlashNotice(newMsg())
+		notice := waitNotice(t, mh)
+		assert.Equal(t, "获取技能列表失败", notice.Payload["error"])
+	})
+}
