@@ -53,6 +53,11 @@ const logComponent = logger.ComponentChannel
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Error 实现 error 接口，返回中断描述信息。
+//
+// 纪律：与 pregel.GraphInterrupt 同理，任何层禁止用 r.(error) 判定 Agent 中断——
+// 必须断言 r.(*AgentInterrupt)。Python 侧 except 顺序（AgentInterrupt 先于
+// BaseError/Exception）在 Go 只能靠具体类型还原，按 error 兜底会把中断当普通
+// 错误吞掉（见 8.7 spec §7 D3）。
 func (e *AgentInterrupt) Error() string {
 	return fmt.Sprintf("AgentInterrupt: %v", e.Message)
 }
