@@ -94,6 +94,10 @@ jobs:
     steps:
       - name: Checkout 代码
         uses: actions/checkout@v6
+        with:
+          # 修改文件覆盖率门禁需要父提交作为对比基准：默认浅克隆（depth=1）下 HEAD~1 不存在，
+          # 门禁曾因此静默跳过。depth=2 保证 HEAD~1 可用。
+          fetch-depth: 2
 
       - name: 设置 Go 环境
         uses: actions/setup-go@v6
@@ -130,15 +134,42 @@ jobs:
 
       - name: 检查修改文件覆盖率
         run: |
-          # 确定对比基准
+          # 确定对比基准：统一折算成一个明确的提交 SHA，再用两棵树直接对比（two-dot），
+          # 不依赖 merge-base —— 浅克隆下 merge-base 同样会失败。
+          #   push：用事件携带的 before SHA，一次 push 多个提交也能全覆盖
+          #   pull_request：用 base 分支与 HEAD 的 merge-base，只算本 PR 引入的改动
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_REF="origin/main"
+            BASE_BRANCH="${{ github.base_ref }}"
+            # 仅 PR 场景拉 base 分支完整历史（浅克隆下 merge-base 需要祖先链）
+            git fetch --no-tags origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/pr-base" >/dev/null 2>&1 || true
+            BASE_REF=$(git merge-base origin/pr-base HEAD 2>/dev/null || true)
           else
-            BASE_REF="HEAD~1"
+            BASE_REF="${{ github.event.before }}"
+            # 分支首次 push / force push 后 before 为全 0，无可用基准
+            if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
+              BASE_REF=""
+            elif ! git fetch --no-tags --depth=1 origin "$BASE_REF" >/dev/null 2>&1; then
+              echo "::warning::无法拉取基准提交 ${BASE_REF}，回退 HEAD~1"
+              BASE_REF=""
+            fi
           fi
 
+          # 基准缺失时回退父提交（依赖 checkout 的 fetch-depth ≥ 2）
+          if [ -z "$BASE_REF" ]; then
+            BASE_REF=$(git rev-parse --verify HEAD~1 2>/dev/null || true)
+          fi
+          if [ -z "$BASE_REF" ]; then
+            echo "::error::无法确定对比基准（事件 ${{ github.event_name }}，git 历史不足），修改文件覆盖率检查无法执行"
+            exit 1
+          fi
+          echo "对比基准: ${BASE_REF}"
+
           # 获取修改的 .go 源码文件（排除 _test.go 和 doc.go）
-          CHANGED_FILES=$(git diff --name-only --diff-filter=ACM $BASE_REF...HEAD -- '*.go' | grep -v '_test\.go$' | grep -v '/doc\.go$' || true)
+          if ! DIFF_OUT=$(git diff --name-only --diff-filter=ACM "$BASE_REF" HEAD -- '*.go' 2>&1); then
+            echo "::error::计算修改文件失败（基准 ${BASE_REF}）：${DIFF_OUT}"
+            exit 1
+          fi
+          CHANGED_FILES=$(echo "$DIFF_OUT" | grep -v '_test\.go$' | grep -v '/doc\.go$' || true)
 
           if [ -z "$CHANGED_FILES" ]; then
             echo "没有检测到修改的源码文件，跳过覆盖率检查"
@@ -282,6 +313,9 @@ jobs:
     steps:
       - name: Checkout 代码
         uses: actions/checkout@v6
+        with:
+          # 同 unit-test：修改文件集成测试覆盖率门禁需要父提交作为对比基准
+          fetch-depth: 2
 
       - name: 设置 Go 环境
         uses: actions/setup-go@v6
@@ -361,15 +395,42 @@ jobs:
 
       - name: 检查修改文件集成测试覆盖率（≥ 30%）
         run: |
-          # 确定对比基准
+          # 确定对比基准：统一折算成一个明确的提交 SHA，再用两棵树直接对比（two-dot），
+          # 不依赖 merge-base —— 浅克隆下 merge-base 同样会失败。
+          #   push：用事件携带的 before SHA，一次 push 多个提交也能全覆盖
+          #   pull_request：用 base 分支与 HEAD 的 merge-base，只算本 PR 引入的改动
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_REF="origin/main"
+            BASE_BRANCH="${{ github.base_ref }}"
+            # 仅 PR 场景拉 base 分支完整历史（浅克隆下 merge-base 需要祖先链）
+            git fetch --no-tags origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/pr-base" >/dev/null 2>&1 || true
+            BASE_REF=$(git merge-base origin/pr-base HEAD 2>/dev/null || true)
           else
-            BASE_REF="HEAD~1"
+            BASE_REF="${{ github.event.before }}"
+            # 分支首次 push / force push 后 before 为全 0，无可用基准
+            if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
+              BASE_REF=""
+            elif ! git fetch --no-tags --depth=1 origin "$BASE_REF" >/dev/null 2>&1; then
+              echo "::warning::无法拉取基准提交 ${BASE_REF}，回退 HEAD~1"
+              BASE_REF=""
+            fi
           fi
 
+          # 基准缺失时回退父提交（依赖 checkout 的 fetch-depth ≥ 2）
+          if [ -z "$BASE_REF" ]; then
+            BASE_REF=$(git rev-parse --verify HEAD~1 2>/dev/null || true)
+          fi
+          if [ -z "$BASE_REF" ]; then
+            echo "::error::无法确定对比基准（事件 ${{ github.event_name }}，git 历史不足），修改文件覆盖率检查无法执行"
+            exit 1
+          fi
+          echo "对比基准: ${BASE_REF}"
+
           # 获取修改的 .go 源码文件（排除 _test.go 和 doc.go）
-          CHANGED_FILES=$(git diff --name-only --diff-filter=ACM $BASE_REF...HEAD -- '*.go' | grep -v '_test\.go$' | grep -v '/doc\.go$' || true)
+          if ! DIFF_OUT=$(git diff --name-only --diff-filter=ACM "$BASE_REF" HEAD -- '*.go' 2>&1); then
+            echo "::error::计算修改文件失败（基准 ${BASE_REF}）：${DIFF_OUT}"
+            exit 1
+          fi
+          CHANGED_FILES=$(echo "$DIFF_OUT" | grep -v '_test\.go$' | grep -v '/doc\.go$' || true)
 
           if [ -z "$CHANGED_FILES" ]; then
             echo "没有检测到修改的源码文件，跳过集成测试覆盖率检查"
