@@ -95,7 +95,7 @@
 | B2 | `tests/integration/external/github/remote_skill_test.go` | `RUN_GITHUB_TEST=1` 守卫；`GitHubTree` 指向本仓 `tests/fixtures/remote-skills`；`SearchGitHubForSkills` 返回 3 个文件、2 个技能、`README.md` 被排除；`DownloadFileFromGitHub` 取回 `references/example-reference.md` 内容逐字节相等 | Python 用自己的仓库 `dreamofapsychiccat/remote-skills-test` 并锁死数量；Go 用本仓 fixture，断言改为结构 + 内容双锁，不依赖第三方仓库 |
 | B3 | `tests/integration/agentcore/harness/rails/evolution/team_skill_rails_system_test.go` | ①`TeamSkillCreateRail(min_team_members=2)`：2 次 `spawn_member` 后 `follow_up` 恰 1 条且含 `ask_user`、`team-skill-creator` ②`TeamSkillEvolutionRail`：`before_invoke` → 3 次 `after_tool_call` → `after_invoke` → 审批事件 → `ApproveRecord` → 真实 `EvolutionStore` 日志 1 条且 `section == "Workflow"`、内容含 `tighten handoff` | LLM 用 `tests/integration/mockllm`（Python 用 `_MockLLM` 桩类）；Go 无 `drain_pending_approval_events` 同名 API，改用 `ApprovalRuntime` 既有导出方法取事件与 `EvolutionStore()` |
 | B4a | `tests/fixtures/remote-skills/` | 4 文件 fixture（见第 7 节） | — |
-| B4b | `internal/agentcore/single_agent/skills/remote_skill_util_test.go`（包内单测补 1 例） | `SearchGitHubForSkills` 跳过根目录 `SKILL.md`（`len(parts)==1` 分支，当前 0 覆盖） | 该分支仅在整仓扫描（`Directory==""`）触发，而 B2 用子目录定位，故下沉到包内单测用 fake tree 响应覆盖 |
+| B4b | ~~包内单测补根目录跳过分支~~ **不做** | — | 需抽出纯函数才能测，而改 `remote_skill_util.go` 会触发单元 job「修改文件覆盖率 ≥85%」门禁（该文件 5 个函数因 `githubAPI` 为包级常量本就 0%，无法 mock）；且 **Python `test_remote_skill.py` 同样不覆盖此分支**（fixture 根目录无 `SKILL.md`）。为对齐 Python 步骤与本轮零生产改动决策，放弃该用例 |
 
 ## 5. 数据流与观测点
 
@@ -165,7 +165,7 @@ tests/fixtures/remote-skills/
 │       └── SKILL.md                             # 多技能聚合
 ```
 
-**不在 fixture 根放 `SKILL.md`**：`Directory` 定位时路径前缀使 `len(parts)>1`，根级文件会被误判为以目录名命名的技能。根目录跳过分支由 B4b 包内单测覆盖。
+**不在 fixture 根放 `SKILL.md`**：`Directory` 定位时路径前缀使 `len(parts)>1`，根级文件会被误判为以目录名命名的技能。根目录跳过分支本轮不覆盖（见 §4.2 B4b 说明，Python 侧同样未覆盖）。
 
 期望断言：文件数 3、技能数 2（`example-skill`、`second-skill`）、无 `README.md`、`references/example-reference.md` 内容为 `# Example Reference\n\nExample Reference`。
 
@@ -226,7 +226,7 @@ CI:  ${{ github.sha }}  →  测试所在 commit 已在远端，且包含本 PR 
 | `BaseAgent.register_skill` / `lazy_init_skill` 缺失 | Go 只有 `SkillUtil` 与 `ReActAgent.SetSkillUtil` | B1 只迁 SkillUtil 层语义，注释标注差异 |
 | `remote_import` 无 client 注入点 | `httpClient` 为非导出字段 | 补测留在包内单测，集成层不覆盖 |
 | `TeamSkillRail` 命名 | Go 为 `TeamSkillEvolutionRail` | B3 注释注明对应关系 |
-| 根目录 `SKILL.md` 跳过分支 | 只在 `Directory==""` 时触发 | 下沉包内单测（B4b） |
+| 根目录 `SKILL.md` 跳过分支 | 只在 `Directory==""` 时触发，且需改生产代码才能测 | 本轮不覆盖（Python 亦未覆盖） |
 | `SkillManager` 超时/重试参数 | 包 `init` 时读取全局变量 | 不做断言 |
 | `MemberSkillToolkitRail` 无测试 | Python 有 `test_team_member_skill_toolkit_rail.py` | 本轮不做（依赖 `Runner` 全局替换，Go 无 monkeypatch）；如需要，走 A4 的工具链链路部分替代 |
 

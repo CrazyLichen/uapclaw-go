@@ -173,14 +173,18 @@ loopController 接口，方法签名不一致 → 断言恒 false → 团队技�
 
 ---
 
-### Task 2: fixture 目录 + 包内补盲（根目录 `SKILL.md` 跳过）
+### Task 2: fixture 目录（B2 前置）
 
 **Files:**
 - Create: `tests/fixtures/remote-skills/README.md`
 - Create: `tests/fixtures/remote-skills/skills/example-skill/SKILL.md`
 - Create: `tests/fixtures/remote-skills/skills/example-skill/references/example-reference.md`
 - Create: `tests/fixtures/remote-skills/skills/second-skill/SKILL.md`
-- Test: `internal/agentcore/single_agent/skills/remote_skill_util_test.go`（追加）
+
+> **执行期变更（2026-11-01）**：原计划的「B4b 包内单测补根目录跳过分支」取消。
+> 原因：该分支需抽出纯函数才能测，而改动 `remote_skill_util.go` 会触发单元 job 的
+> 「修改文件覆盖率 ≥85%」门禁（该文件 5 个函数因 `githubAPI` 为包级常量本就 0%，无法 mock）；
+> 且 Python `test_remote_skill.py` 同样不覆盖该分支。为对齐 Python 步骤与零生产改动决策，放弃。
 
 - [ ] **Step 1: 创建 fixture 文件**
 
@@ -198,7 +202,7 @@ loopController 接口，方法签名不一致 → 断言恒 false → 团队技�
 - `README.md`：非 SKILL.md，必须被排除
 
 注意：本目录**不放**根级 `SKILL.md`。测试用 `GitHubTree.Directory` 定位子树，
-路径带前缀后 `len(parts)==1` 的根级跳过分支不会被触发，该分支由包内单测覆盖。
+路径带前缀后 `len(parts)==1` 的根级跳过分支不会被触发；该分支 Python 侧同样未覆盖。
 ```
 
 `tests/fixtures/remote-skills/skills/example-skill/SKILL.md`：
@@ -237,176 +241,20 @@ version: 1.0.0
 Body content for the second skill.
 ```
 
-创建后校验（确保参考文件结尾无换行）：
+- [ ] **Step 2: 校验参考文件结尾无换行**
 
 ```bash
 xxd tests/fixtures/remote-skills/skills/example-skill/references/example-reference.md | tail -2
 ```
 
-Expected: 末字节为 `65 6e 63 65`（"ence"），无 `0a`。
+Expected: 末字节为 `65 6e 63 65`（"ence"），无 `0a`；`wc -c` 为 38。
 
-- [ ] **Step 2: 写失败测试**
-
-追加到 `internal/agentcore/single_agent/skills/remote_skill_util_test.go`：
-
-```go
-// TestRemoteSkillUtil_SearchGitHubForSkills_跳过根目录SKILLmd 验证整仓扫描跳过根级 SKILL.md。
-//
-// 该分支（len(parts)==1）只在 Directory 为空（整仓）时触发，集成层用子目录定位无法覆盖，
-// 故在包内用 fake tree 响应覆盖。
-func TestRemoteSkillUtil_SearchGitHubForSkills_跳过根目录SKILLmd(t *testing.T) {
-	treeResponse := gitHubTreeResponse{
-		Tree: []gitHubTreeItem{
-			{Path: "SKILL.md", Type: "blob", SHA: "root"},                    // 根级，必须跳过
-			{Path: "skills/alpha/SKILL.md", Type: "blob", SHA: "a"},          // 有效技能
-			{Path: "skills/alpha/references/ref.md", Type: "blob", SHA: "b"}, // 同目录兄弟文件
-			{Path: "README.md", Type: "blob", SHA: "c"},                      // 非技能
-		},
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(treeResponse)
-	}))
-	defer server.Close()
-
-	r := NewRemoteSkillUtil("op-123")
-	r.httpClient = server.Client()
-
-	// 用 fake tree 直接驱动过滤逻辑：先把 tree 灌进递归列举的等价输入
-	files := make([]gitHubTreeItem, 0, len(treeResponse.Tree))
-	for _, item := range treeResponse.Tree {
-		files = append(files, item)
-	}
-	fileList, skillPaths := searchSkillsFromFiles(files)
-
-	if len(skillPaths) != 1 || skillPaths[0] != "alpha" {
-		t.Fatalf("期望仅 1 个技能 alpha，实际 %v", skillPaths)
-	}
-	paths := make([]string, 0, len(fileList))
-	for _, f := range fileList {
-		paths = append(paths, f.Path)
-	}
-	for _, p := range paths {
-		if p == "SKILL.md" {
-			t.Fatalf("根目录 SKILL.md 不应出现在结果中: %v", paths)
-		}
-	}
-	if len(fileList) != 2 {
-		t.Fatalf("期望 2 个文件（SKILL.md + references/ref.md），实际 %d: %v", len(fileList), paths)
-	}
-}
-```
-
-- [ ] **Step 3: 跑测试确认失败**
+- [ ] **Step 3: 提交**
 
 ```bash
-go test -tags test -run 'TestRemoteSkillUtil_SearchGitHubForSkills_跳过根目录SKILLmd' ./internal/agentcore/single_agent/skills/ -v
+git add tests/fixtures/remote-skills
+git commit -m "test(fixtures): 新增 GitHub 远程技能 fixture（本仓，随代码版本化）"
 ```
-
-Expected: 编译失败 `undefined: searchSkillsFromFiles`。
-
-- [ ] **Step 4: 抽出纯函数供测试直接驱动（生产代码最小重构，行为不变）**
-
-在 `remote_skill_util.go` 中把 `SearchGitHubForSkills` 的过滤循环抽为包级函数，方法改为调用它：
-
-```go
-// searchSkillsFromFiles 从已排序的整树文件列表中提取技能文件与技能目录名。
-//
-// 纯函数：不发起网络、不触碰 fsProvider，便于包内单测直接驱动过滤分支。
-// 对齐 Python: RemoteSkillUtil.search_github_for_skills 的过滤段
-func searchSkillsFromFiles(files []gitHubTreeItem) ([]gitHubFileItem, []string) {
-	var fileList []gitHubFileItem
-	var skillPaths []string
-	for i, file := range files {
-		filePath := file.Path
-		if filePath == "" {
-			continue
-		}
-		// 跳过根目录下的 SKILL.md
-		parts := strings.Split(strings.ReplaceAll(filePath, "\\", "/"), "/")
-		if len(parts) == 1 {
-			continue
-		}
-		// 只处理 SKILL.md
-		fileName := filepath.Base(filePath)
-		if fileName != SkillFileName {
-			continue
-		}
-		parentDir := filepath.Dir(filePath)
-		baseSkillPath := filepath.Base(parentDir)
-		relPath := filepath.Join(baseSkillPath, strings.TrimPrefix(filePath, parentDir+string(filepath.Separator)))
-		fileList = append(fileList, gitHubFileItem{
-			Path: filePath, Type: file.Type, SHA: file.SHA, RelativePath: relPath,
-		})
-		skillPaths = append(skillPaths, baseSkillPath)
-		// 向左搜索同目录文件
-		for j := i - 1; j >= 0; j-- {
-			prevFile := files[j]
-			if !isRelativeTo(prevFile.Path, parentDir) {
-				break
-			}
-			fileList = append(fileList, gitHubFileItem{
-				Path:         prevFile.Path,
-				Type:         prevFile.Type,
-				SHA:          prevFile.SHA,
-				RelativePath: filepath.Join(baseSkillPath, strings.TrimPrefix(prevFile.Path, parentDir+string(filepath.Separator))),
-			})
-		}
-		// 向右搜索同目录文件
-		for j := i + 1; j < len(files); j++ {
-			nextFile := files[j]
-			if !isRelativeTo(nextFile.Path, parentDir) {
-				break
-			}
-			fileList = append(fileList, gitHubFileItem{
-				Path:         nextFile.Path,
-				Type:         nextFile.Type,
-				SHA:          nextFile.SHA,
-				RelativePath: filepath.Join(baseSkillPath, strings.TrimPrefix(nextFile.Path, parentDir+string(filepath.Separator))),
-			})
-		}
-	}
-	return fileList, skillPaths
-}
-```
-
-`SearchGitHubForSkills` 方法体简化为：
-
-```go
-func (r *RemoteSkillUtil) SearchGitHubForSkills(ctx context.Context, tree *GitHubTree, token string) ([]gitHubFileItem, []string, error) {
-	files, truncated, err := r.listGitHubFiles(ctx, tree, token)
-	if err != nil {
-		return nil, nil, err
-	}
-	if truncated {
-		logger.Warn(logComponent).
-			Str("event_type", "github_tree_truncated").
-			Msg("GitHub file list truncated, results may be incomplete")
-	}
-	fileList, skillPaths := searchSkillsFromFiles(files)
-	return fileList, skillPaths, nil
-}
-```
-
-- [ ] **Step 5: 跑测试确认通过**
-
-```bash
-go test -tags test ./internal/agentcore/single_agent/skills/ -count=1 -cover
-```
-
-Expected: PASS，`SearchGitHubForSkills` 相关既有用例不回归；`remote_skill_util.go` 覆盖率上升。
-
-- [ ] **Step 6: 提交**
-
-```bash
-git add tests/fixtures/remote-skills internal/agentcore/single_agent/skills/remote_skill_util.go internal/agentcore/single_agent/skills/remote_skill_util_test.go
-git commit -m "test(remote-skill): 新增 GitHub fixture 并补根目录 SKILL.md 跳过分支用例
-
-- tests/fixtures/remote-skills：本仓 fixture，覆盖兄弟文件收集与多技能聚合
-- 抽出 searchSkillsFromFiles 纯函数供包内单测直接驱动过滤分支（行为零变化）"
-```
-
----
 
 ### Task 3: A 组骨架 + A6 路径穿越防御
 
