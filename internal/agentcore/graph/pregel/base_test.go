@@ -87,6 +87,7 @@ func TestMessage_零值不被任何通道接受(t *testing.T) {
 		t.Errorf("零值 Kind() = %q，期望空串", msg.Kind())
 	}
 	// 8.4 通道的过滤条件形式：Kind() == KindTrigger / Kind() == KindBarrier
+	// 实际用例见 channels_test.go 的 TestTriggerChannel_拒绝汇聚消息 / TestBarrierChannel_拒绝触发消息
 	if msg.Kind() == KindTrigger {
 		t.Error("零值不得被判为激活消息")
 	}

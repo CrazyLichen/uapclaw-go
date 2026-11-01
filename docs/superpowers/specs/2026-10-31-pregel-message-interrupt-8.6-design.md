@@ -3,7 +3,7 @@
 > 对应实现计划：领域八 8.6（IMPLEMENTATION_PLAN.md L506）
 > Python 源码：`openjiuwen/core/graph/pregel/base.py` 第 10-43 行（`Interrupt` / `Message` / `TriggerMessage` / `BarrierMessage`）
 > 前置依赖：8.3d（`config.go` / `constants.go`，已 ✅）
-> 后续消费方：8.3（`Channel.Accept(msg Message)`）、8.4（`TriggerChannel`/`BarrierChannel` 的 `Kind()` 过滤）、8.5（三个 Router 构造消息）、8.3b（`NodeTask` 返回值、`PendingNode`）、8.3c（`ChannelManager.buffer` 重放）、8.9（`GraphState.pending_buffer` 快照）
+> 后续消费方：8.3（`Channel.Accept(msg Message)`）、8.4（`TriggerChannel`/`BarrierChannel` 的 `Kind()` 过滤）、8.5（三个 Router 构造消息）、8.3b（`NodeTask` 返回值、`PendingNode`）、8.3c（`ChannelManager.buffer` 重放）、8.9（`GraphState.pending_buffer` 快照）（2026-11-01 更新：`Channel` 接口最终归属 8.4 而非 8.3；`Kind()` 的过滤消费方已在 8.4 兑现）
 > 章节顺序决策：**8.6 提前于 8.3/8.4/8.5**（已拍板方案 A）。理由：`Message` 是上述各节的共同类型，严格按编号先做 8.3 会因类型未定义无法编译
 
 ## 1. 流程位置与作用
@@ -211,7 +211,7 @@ InteractionOutputSchema           Interrupt.Value any                  exists &&
 | 编号 | 偏差 | 缘由 | 审查口径 |
 |------|------|------|---------|
 | R1 | `Interrupt` 保留 `Value`/`Resumable`/`NS` 三字段，Python 仅 `value` | `interaction.py:61-63` 传了 `resumable`/`ns` 两个 Python 类型不接受的 kwarg（运行必抛 `TypeError`，且无测试覆盖）；作者意图明确，保留成本为零、不改任何执行流程。已拍板方案 A | 两字段当前零消费者，8.7 迁 `GraphInterrupt` 时不得删 |
-| R2 | 新增 `MessageKind` 与 `Kind()` 方法（Python 靠 `isinstance`） | 单结构体建模（已拍板方案 A）必须有可读判别式；供 8.4 通道过滤、日志排障、8.9 序列化打标签 | 属 Go 新增导出 API，不计入对齐缺失 |
+| R2 | 新增 `MessageKind` 与 `Kind()` 方法（Python 靠 `isinstance`） | 单结构体建模（已拍板方案 A）必须有可读判别式；供 8.4 通道过滤、日志排障、8.9 序列化打标签；8.4 已落地（`TriggerChannel.Accept` / `BarrierChannel.Accept` 均按 `Kind()` 过滤） | 属 Go 新增导出 API，不计入对齐缺失 |
 | R3 | `Message`/`TriggerMessage`/`BarrierMessage` 三类型合并为单结构体 | 三者零行为纯数据，`isinstance` 判别在 Go 侧无对应物；已拍板方案 A | 构造函数名保留 Python 类名，调用点可读性不降低 |
 | R4 | 构造函数不设 `payload` 形参，字段恒 nil | Python 全部调用点均不传 payload；Go 无可选参数 | 若后续 Python 出现传 payload 的调用点，补 `SetPayload` 或在构造后赋值 |
 

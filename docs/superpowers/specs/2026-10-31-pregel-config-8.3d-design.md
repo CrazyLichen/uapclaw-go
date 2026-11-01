@@ -3,7 +3,7 @@
 > 对应实现计划：领域八 8.3d（IMPLEMENTATION_PLAN.md L503）
 > Python 源码：`openjiuwen/core/graph/pregel/config.py`（28 行）+ `openjiuwen/core/graph/pregel/constants.py`（19 行）
 > 前置依赖：无（领域八第一个落地节，8.1/8.3/8.3a/8.3b/8.3c/8.11/8.14 全部 import 本节）
-> 后续消费方：8.1（`graph.py` 构图）、8.3a（builder 建 START/END 虚拟节点）、8.3b（`NodeTask` 反射注入 config、`PendingNode.Status`）、8.3c（`Pregel.Run`/`PregelLoop`）、8.4（channels 跳过 END）、8.11（Vertex 子图 config）、8.14（workflow 构造 config）、5.8 回填（checkpointer 判中断）
+> 后续消费方：8.1（`graph.py` 构图）、8.3a（builder 建 START/END 虚拟节点）、8.3b（`NodeTask` 反射注入 config、`PendingNode.Status`）、8.3c（`Pregel.Run`/`PregelLoop`）、8.4（channels 跳过 END —— 2026-11-01 已兑现：`ChannelManager.Snapshot` 显式跳过 `pregel.End`）、8.11（Vertex 子图 config）、8.14（workflow 构造 config）、5.8 回填（checkpointer 判中断）
 
 ## 1. 流程位置与作用
 
