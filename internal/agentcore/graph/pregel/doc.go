@@ -4,7 +4,8 @@
 // 调度引擎（8.3b/8.3c）、通道管理（8.4）、顶点（8.11）、工作流（8.14）
 // 均依赖本包提供的保留节点名、终止态键、递归预算、配置归一化能力，
 // 以及超步之间传递调度消息的 Message、承载中断值的 Interrupt、承载中断跳转的
-// GraphInterrupt，与决定下一超步激活哪些节点并产出调度消息的 Router。
+// GraphInterrupt、产出调度消息的 Router，与落地这些消息并决定下一超步激活哪些
+// 节点的 Channel/ChannelManager（就绪判定 + CNF 汇聚 + 检查点快照）。
 //
 // 配置以值类型结构体表达：字段零值等价于 Python TypedDict(total=False)
 // 的「键缺失/None」，因此不存在指针字段，调用方也无须判空。
@@ -22,15 +23,18 @@
 //     不 recover、不打日志、不读取 Interrupts 的内容。
 //   - recover 点必须用 `case *pregel.GraphInterrupt` 判别；禁止 `r.(error)` 兜底——
 //     GraphInterrupt 实现了 Error()（仅供日志），按 error 兜底会把中断当普通错误吞掉。
+//   - ChannelManager 无锁（对齐 Python 的 channels.py）：只允许超步循环所在
+//     goroutine 串行调用；节点任务在其他 goroutine 执行，但不得触碰 ChannelManager。
 //
 // 文件目录：
 //
 //	pregel/
 //	├── doc.go         # 包文档
 //	├── base.go        # Message/MessageKind/构造函数/Kind 与 Interrupt 值对象、GraphInterrupt 中断跳转
+//	├── channels.go    # Channel 接口 + ChannelSnapshot + Trigger/Barrier 通道 + ChannelManager
 //	├── router.go      # Router 接口 + Selector/SelectorFunc + Static/Barrier/Conditional 三个路由实现
 //	├── constants.go   # 保留节点名、终止态键、命名空间键名与分隔符
 //	└── config.go      # PregelConfig/InnerPregelConfig/CreateInnerConfig/DefaultPregelConfig
 //
-// 对应 Python 代码：openjiuwen/core/graph/pregel/base.py · config.py · constants.py · router.py
+// 对应 Python 代码：openjiuwen/core/graph/pregel/base.py · channels.py · config.py · constants.py · router.py
 package pregel
