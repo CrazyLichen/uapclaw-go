@@ -160,7 +160,11 @@ func (s *TeamDialogSuite) TearDownSuite() {
 func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 	s.MockLLM.ResetCalls()
 	s.MockLLM.SetResponses(
-		mockllm.CreateToolCallResponse("team.spawn_member", `{"member_name":"teammate-itest"}`),
+		// 团队首次请求要先 build_team：leader 的 team_member 记录由 build_team 注册
+		// （Python 同样如此），否则成员 send_message(to=leader) 会过不了 roster 校验。
+		mockllm.CreateToolCallResponse("team.build_team",
+			`{"display_name":"测试团队","leader_display_name":"队长","leader_desc":"负责协调","team_desc":"集成测试团队"}`),
+		mockllm.CreateToolCallResponse("team.spawn_member", `{"member_name":"teammate-itest","display_name":"成员","desc":"测试成员"}`),
 		mockllm.CreateToolCallResponse("team.send_message", `{"to":"teammate-itest","content":"请汇报你的工具清单"}`),
 		mockllm.CreateTextResponse("第一条消息的响应"),
 		// 成员侧轮次：先回消息给 leader，再收尾
@@ -277,10 +281,7 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 	s.True(sawMember, "应收到 team.member（成员启动事件）")
 	s.True(sawMessage, "应收到 team.message（成员间消息事件）")
 	s.True(sawLeaderToMember, "leader 应把消息发给成员（from=team_leader → to=teammate-itest）")
-	// 已知缺口（本批未修）：成员轮次未产出——RunTeamMember 返回空 map、
-	// 成员侧无 LLM 调用，因此成员→leader 的消息不会发生。修复方向见
-	// tests/integration/swarm/gateway/doc.go「team 链路已知缺口」。
-	s.T().Logf("成员回信: sawMemberToLeader=%v（当前为已知缺口）", sawMemberToLeader)
+	s.True(sawMemberToLeader, "成员应回消息给 leader（from=teammate-itest → to=team_leader）")
 	s.True(firstAccepted, "首条 chat.send 应被受理")
 	s.True(runtimeReady, "应收到 team.runtime_ready（团队已建立）")
 	s.True(memberSpawned, "Leader 应成功 spawn 成员（chat.tool_result success）")

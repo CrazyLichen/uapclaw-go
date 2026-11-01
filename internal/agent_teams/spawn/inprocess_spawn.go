@@ -86,7 +86,15 @@ func InProcessSpawn(
 	inputs := map[string]any{"query": query}
 
 	// 3. 启动 goroutine 运行 Agent（对齐 Python: asyncio.create_task(_run())）
-	runCtx, cancel := context.WithCancel(ctx)
+	//
+	// S-46: 成员任务生命周期不随调用方 ctx 取消。Python 的 create_task 是 detached
+	// 语义——调用方（工具调用/leader 轮次）结束后任务照常运行，只有显式 cancel 才停，
+	// 也不传播 asyncio 取消。Go 直接用 WithCancel(ctx) 会让成员继承调用方取消：实测
+	// send_message 的工具 ctx 在 spawn 时已 canceled，成员 Invoke 一进来就命中
+	// ctx.Done 立即返回，defer FinalizeRound 把 streamQueue 置 nil，随后轮次产出的
+	// chunk 全被丢弃（表现为成员零输出、零回信）。这里用 WithoutCancel 切断取消传播，
+	// 保留 trace/session 等值；需要中止时走 handle.Cancel()/Close()。
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	// S-39: 对齐 Python inprocess_spawn.py L70-74 set_session_id(session_id)
 	// 把 sessionID 注入 runCtx，teammate goroutine 内部 GetSessionID(ctx) 可读取
 	if sessionID != "" {
