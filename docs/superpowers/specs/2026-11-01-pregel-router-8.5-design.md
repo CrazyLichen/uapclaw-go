@@ -280,7 +280,7 @@ func buildTriggerMessages(sourceNode string, targets []string) []Message {
 ## 6. 回填清单（不删旧内容）
 
 1. **`IMPLEMENTATION_PLAN.md` L505（8.5 行）**：`☐` → `✅`。内容列保留原文的 `StaticRouter(1→N)/ConditionalRouter(…)/BarrierRouter` 描述，追加 Go 事实：包内 `router.go`、接口名 `Router`、`Selector`/`SelectorFunc`、D1-D6 偏差编号、`router.go` 覆盖率、设计文档路径。
-2. **`IMPLEMENTATION_PLAN.md` 8.6 行与 8.7 行**：不删原文，仅在句末追加 `⤵️ 8.5 已前移至 8.3 之前（2026-11-01 拍板，见 8.5 spec §5）`。
+2. **`IMPLEMENTATION_PLAN.md` 领域八表格之后的独立注记行**（新增一行，不动 8.6/8.7 两行原文）：`> **8.x 实施顺序（2026-11-01 调整）**：8.5 → 8.3 → 8.8 → 8.4 → 8.3a → 8.9a → 8.3b → 8.3c → 8.9b（8.5 自原路线前移，依据见 8.5 spec §5）。`
 3. **`docs/superpowers/specs/2026-10-31-graph-interrupt-8.7-design.md` §11**：在路线代码块**下方**追加一行 `> 2026-11-01 调整：8.5 提前到 8.3 之前（8.5 只依赖已完成的 Message，而 8.3 的 PregelNode 必须先有 Router 接口）。原文保留。`，不改动原代码块。
 4. **`pregel/doc.go`**：文件目录补 `├── router.go       # Router 接口 + Selector/SelectorFunc + 三个路由实现`；包概述段补一句「路由（节点执行后产出下一超步调度消息）」；`对应 Python 代码` 行补 `pregel/router.py`。
 5. **本节无 ⤵️ 待回填点**：全仓 `grep -rn "8\.5" --include=*.go internal/` 仅命中无关字符串（`deep_adapter.go:746` 的步骤注释、测试里的时间戳），无占位类型或 TODO。
