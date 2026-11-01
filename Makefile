@@ -1,8 +1,11 @@
-.PHONY: build clean test test-integration test-llm test-e2e test-all lint proto-gen
+.PHONY: build build-cli web-build clean test test-integration test-llm test-e2e test-all lint proto-gen
 
 # 项目名称
 BINARY_NAME=uapclaw
 BUILD_DIR=./bin
+
+# 前端目录（对齐 Python jiuwenswarm/channels/web/frontend；构建产物经 go:embed 进二进制）
+FRONTEND_DIR=internal/swarm/channels/web/frontend
 
 # Go 编译参数
 GOCMD=go
@@ -27,6 +30,16 @@ build:
 	@echo "Building $(BINARY_NAME) (version=$(VERSION), commit=$(GIT_COMMIT))..."
 	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/
 	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/jiuwenbox ./cmd/jiuwenbox/
+
+# 构建前端产物（对齐 Python `npm run build`，产物经 go:embed 进二进制）
+#
+# 独立目标而非 build 的依赖：build 保持快速，需要带真前端的二进制时先跑本目标。
+# dist/ 只有占位 index.html 时二进制里的前端是空壳（仅提示"前端构建产物未部署"），
+# CI 在 go build 之前串本目标，因此发布产物自带前端。
+web-build:
+	@command -v npm >/dev/null 2>&1 || { echo "缺少 npm，请先安装 Node.js（建议 20+）"; exit 1; }
+	cd $(FRONTEND_DIR) && npm ci && npm run build
+	@echo "前端构建完成：$(FRONTEND_DIR)/dist"
 
 # 仅构建主程序
 build-cli:
