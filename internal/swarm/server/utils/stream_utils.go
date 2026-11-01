@@ -172,6 +172,16 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		if sub, ok := payload["tool_call"].(map[string]any); ok {
 			toolInfo = sub
 		}
+		// S-47: 丢弃流式增量碎片。真实模型的 SSE 会把同一次调用拆成多帧
+		// （name/tool_call_id 为空、arguments 是一段 JSON 片段），Python 在
+		// llm_controller._invoke_llm_stream 里先累加再一次性产出完整消息，
+		// 流式期间不写 tool_call。Go 若逐帧透传，前端会收到大量空名调用，
+		// 且真正的调用（如 build_team）可能永远凑不齐。
+		name, _ := toolInfo["name"].(string)
+		callID, _ := toolInfo["tool_call_id"].(string)
+		if name == "" && callID == "" {
+			return nil
+		}
 		return map[string]any{
 			"event_type": "chat.tool_call",
 			"tool_call":  toolInfo,
