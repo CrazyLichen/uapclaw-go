@@ -327,10 +327,12 @@ func (r *StaticRouter) Dispatch(_ context.Context, sourceNode string) ([]Message
 - [ ] **Step 4: 跑测试确认通过**
 
 ```bash
-cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/graph/pregel/ -run TestStaticRouter -v 2>&1 | tail -8
+cd /home/opensource/uapclaw-gateway && go test ./internal/agentcore/graph/pregel/ -run 'TestNewStaticRouter|TestStaticRouter' -v 2>&1 | tail -8
 ```
 
 预期：4 个 `--- PASS`（`TestStaticRouter_零目标`、`_单目标`、`_多目标保序`、`TestNewStaticRouter_复制入参`）。
+
+> **执行修订（2026-11-01）**：原命令 `-run TestStaticRouter` 匹配不到 `TestNewStaticRouter_复制入参`（`TestNewStaticRouter` 不含子串 `TestStaticRouter`），实测只跑出 3 个 PASS；已改为上面的双模式正则。
 
 - [ ] **Step 5: 提交**
 

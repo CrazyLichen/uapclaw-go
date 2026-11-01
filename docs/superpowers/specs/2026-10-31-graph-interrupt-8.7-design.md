@@ -305,3 +305,5 @@ pregel.PanicGraphInterrupt(pregel.Interrupt{
 ```
 
 依据：`task.py:36-38` 的 `PendingNode` 与 `engine.py:191-198` 的 `create_state` 都落在 8.9 名下，但 8.3b/8.3c 无它们无法编译；8.6 spec §「后续依赖」已提出同一结论，本节只做确认（不改计划表其他行）。
+
+> 2026-11-01 调整：8.5 提前到 8.3 之前（8.5 只依赖已完成的 `Message`，而 8.3 的 `PregelNode` 必须先有 Router 接口）。原文保留。
