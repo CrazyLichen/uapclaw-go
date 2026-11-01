@@ -3,7 +3,6 @@ package gateway
 import (
 	"strings"
 
-	"github.com/gorilla/websocket"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
@@ -55,11 +54,15 @@ type GatewayServerConfig struct {
 	ChannelID string
 }
 
-// LocalHandlerFunc 本地 handler。
+// LocalHandlerFunc 本地 handler（类型别名，定义在 routing 包）。
 //
 // 对齐 Python Callable[..., Awaitable[None]]，Python 签名 (ws, req_id, params, session_id)。
-// 保留本包命名类型（仅 gateway 包内使用，不跨包共享）；routing 包的回调类型则直接引用。
-type LocalHandlerFunc func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error
+//
+// 2026-11-01 迁移：原为本包命名类型（"仅 gateway 包内使用"），tui 路由装配迁往
+// channel_manager/tui 后，tui 需声明「接收本 handler 的注册接口」并在 Install 里
+// 断言 *GatewayServer 满足它——两个包各自定义命名类型会因类型不同而断言失败，
+// 故定义收口到 routing，本包用别名保持全部调用点不变。
+type LocalHandlerFunc = routing.LocalHandlerFunc
 
 // ──────────────────────────── 枚举 ────────────────────────────
 

@@ -783,7 +783,7 @@ func (s *GatewayServer) sendInlineError(ws *websocket.Conn, reqID string, errMsg
 	writeResponseFrame(ws, reqID, false, nil, errMsg, "", false)
 }
 
-// writeResponseFrame 构造并写入 res 帧（包级，供 tui 本地 handler 复用）。
+// writeResponseFrame 构造并写入 res 帧（包级，供本地 handler 复用）。
 //
 // 零行为变更：帧构造与写入逻辑自 sendResponse 提取（11.15 最小装配）。
 // M-01：includePayload 控制是否带 payload 键——内联错误帧传 false

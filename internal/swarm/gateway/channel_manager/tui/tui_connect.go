@@ -1,4 +1,4 @@
-package gateway
+package tui
 
 import (
 	"context"
@@ -11,27 +11,44 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// TuiRouteParams TUI 路由装配参数。
+// RouteParams /tui 路由装配参数。
 //
-// 对齐 Python CliRouteBindParams（tui_connect.py L343-350）裁剪：
-// 仅保留 DisconnectHandler 所需的 message_handler；agent_client/
-// on_config_saved/cron_controller 属纯本地 handler（config.*/cron.*），
-// 完整范围随 11.15 扩展（当前 5 个 chat/history handler 已对齐 Python CLI 差集）。
-type TuiRouteParams struct {
+// 对齐 Python CliRouteBindParams（tui_connect.py L344-353）裁剪：仅保留
+// DisconnectHandler 所需的 message_handler。res 帧发送能力不在此注入——Python 的
+// channel（gateway_server）是 install 阶段才传进来的，Go 侧同样在 Install 里从
+// server 取（见 RouteServer）。agent_client/on_config_saved/cron_controller 属
+// 纯本地 handler（config.*/cron.*），完整范围随 11.15 扩展（当前 5 个
+// chat/history handler 已对齐 Python CLI 差集）。
+type RouteParams struct {
 	// MessageHandler 断连取消会话的处理器（可 nil，nil 时 DisconnectHandler 跳过）
 	MessageHandler *messagehandler.MessageHandler
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ResponseSender res 帧发送器，对齐 Python 本地 handler 拿到的 channel 的
+// send_response(...) 能力。实现方为 gateway.GatewayServer。
+type ResponseSender interface {
+	// SendResFrame 写一条 res 帧；includePayload=false 时不带 payload 键
+	SendResFrame(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string, includePayload bool)
+}
 
-// ──────────────────────────── 常量 ────────────────────────────
+// RouteServer Install 阶段注入的通道对象，与 Python register_cli_handlers(channel=...)
+// 的 channel 同构：既能注册本地 handler，也能替 handler 发 res 帧。
+//
+// 实现方为 gateway.GatewayServer；以接口而非具体类型表达，避免 gateway ↔ tui 成环。
+// 不满足本接口时 Install 直接跳过（与 Python 传入无 send_response 的对象等价于不可用）。
+type RouteServer interface {
+	// ResponseSender 发送 res 帧的能力
+	ResponseSender
+	// RegisterLocalHandler 注册 path+method 对应的本地 handler
+	RegisterLocalHandler(path, method string, handler routing.LocalHandlerFunc)
+}
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// TuiForwardReqMethods /tui 路由转发到 Agent 的 method 集合。
+// ForwardReqMethods /tui 路由转发到 Agent 的 method 集合。
 //
-// Python: CLI_FORWARD_REQ_METHODS（tui_connect.py L163-248），80 项。
-var TuiForwardReqMethods = map[string]bool{
+// Python: CLI_FORWARD_REQ_METHODS（tui_connect.py L101-197），80 项。
+var ForwardReqMethods = map[string]bool{
 	"agents.create":                  true,
 	"agents.delete":                  true,
 	"agents.disable":                 true,
@@ -114,11 +131,11 @@ var TuiForwardReqMethods = map[string]bool{
 	"skills.uninstall":               true,
 }
 
-// TuiForwardNoLocalHandlerMethods /tui 路由仅转发、无本地 handler 的集合。
+// ForwardNoLocalHandlerMethods /tui 路由仅转发、无本地 handler 的集合。
 //
-// Python: CLI_FORWARD_NO_LOCAL_HANDLER_METHODS（L250-330），75 项。
+// Python: CLI_FORWARD_NO_LOCAL_HANDLER_METHODS（L199-329），75 项。
 // 差集（forward − no_local）恰为 5 个 chat 类方法。
-var TuiForwardNoLocalHandlerMethods = map[string]bool{
+var ForwardNoLocalHandlerMethods = map[string]bool{
 	"agents.create":                  true,
 	"agents.delete":                  true,
 	"agents.disable":                 true,
@@ -198,119 +215,131 @@ var TuiForwardNoLocalHandlerMethods = map[string]bool{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildTuiRouteBinding 构建 /tui CLI 路由 binding。
+// BuildRouteBinding 构建 /tui CLI 路由 binding。
 //
 // 对齐 Python build_cli_route_binding（tui_connect.py L2093-2119）：
 // forward 集合 80 项、no-local 集合 75 项（差集=5 个 chat 类方法，
 // 计数已机器核对 2026-10-28，见 spec 附录 A）；
 // install 回调在 GatewayServer 构造后注册 5 个本地 handler
-// （对应 Python register_cli_handlers 的 channel=gateway_server 注入）；
+// （对应 Python register_cli_handlers 的 channel 注入：handler 用的 channel 与
+// 注册用的 channel 是同一个对象，故此处由 Install 的 server 统一提供）；
 // disconnect_handler 桥接 CancelAgentSessionsOnDisconnect。
 //
-// 与 Python 目录结构的有意偏差：Python tui_connect.py 属 channel_manager
-// 子包，但 Go 端 gateway → channel_manager 依赖方向已存在，tui 装配
-// 放 gateway 包。
-func BuildTuiRouteBinding(params TuiRouteParams) *routing.RouteBinding {
+// 目录对齐：Python 该实现位于 jiuwenswarm/gateway/channel_manager/tui/tui_connect.py，
+// 2026-11-01 由 gateway 包迁入本包（原 gateway/tui_route.go 注释里"tui 装配放
+// gateway 包"的偏差已消除）。
+func BuildRouteBinding(params RouteParams) *routing.RouteBinding {
 	return &routing.RouteBinding{
 		Path:                         "/tui",
 		ChannelID:                    "tui",
-		ForwardMethods:               TuiForwardReqMethods,
-		ForwardNoLocalHandlerMethods: TuiForwardNoLocalHandlerMethods,
-		DisconnectHandler:            tuiDisconnectHandler(params.MessageHandler),
+		ForwardMethods:               ForwardReqMethods,
+		ForwardNoLocalHandlerMethods: ForwardNoLocalHandlerMethods,
+		DisconnectHandler:            disconnectHandler(params.MessageHandler),
 		Install: func(server any) {
 			// Python: register_cli_handlers(channel=gateway_server, ...)——
-			// channel 只用于 register_local_handler(path, method, handler) 的注册动作。
-			gs, ok := server.(*GatewayServer)
+			// channel 既用于 register_local_handler(path, method, handler)，
+			// 也被 handler 用来 send_response。
+			rs, ok := server.(RouteServer)
 			if !ok {
 				return
 			}
-			gs.RegisterLocalHandler("/tui", "chat.send", tuiChatSendHandler)
-			gs.RegisterLocalHandler("/tui", "chat.resume", tuiChatResumeHandler)
-			gs.RegisterLocalHandler("/tui", "chat.interrupt", tuiChatInterruptHandler)
-			gs.RegisterLocalHandler("/tui", "chat.user_answer", tuiChatUserAnswerHandler)
-			gs.RegisterLocalHandler("/tui", "history.get", tuiHistoryGetHandler)
+			rs.RegisterLocalHandler("/tui", "chat.send", chatSendHandler(rs))
+			rs.RegisterLocalHandler("/tui", "chat.resume", chatResumeHandler(rs))
+			rs.RegisterLocalHandler("/tui", "chat.interrupt", chatInterruptHandler(rs))
+			rs.RegisterLocalHandler("/tui", "chat.user_answer", chatUserAnswerHandler(rs))
+			rs.RegisterLocalHandler("/tui", "history.get", historyGetHandler(rs))
 		},
 	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// tuiChatSendHandler chat.send 本地 ack。
+// chatSendHandler chat.send 本地 ack。
 //
 // Python: _chat_send（tui_connect.py L1402-1405）——仅返回 ack，
 // 消息转发由 ForwardMethods 集合路径完成。
-func tuiChatSendHandler(ws *websocket.Conn, reqID string, _ map[string]any, sessionID string) error {
-	writeResponseFrame(ws, reqID, true, map[string]any{
-		"accepted":   true,
-		"session_id": sessionID,
-	}, "", "", true)
-	return nil
+func chatSendHandler(send ResponseSender) routing.LocalHandlerFunc {
+	return func(ws *websocket.Conn, reqID string, _ map[string]any, sessionID string) error {
+		send.SendResFrame(ws, reqID, true, map[string]any{
+			"accepted":   true,
+			"session_id": sessionID,
+		}, "", "", true)
+		return nil
+	}
 }
 
-// tuiChatResumeHandler chat.resume 本地 ack。
+// chatResumeHandler chat.resume 本地 ack。
 //
 // Python: _chat_resume（L1407-1410）。
-func tuiChatResumeHandler(ws *websocket.Conn, reqID string, _ map[string]any, sessionID string) error {
-	writeResponseFrame(ws, reqID, true, map[string]any{
-		"accepted":   true,
-		"session_id": sessionID,
-	}, "", "", true)
-	return nil
+func chatResumeHandler(send ResponseSender) routing.LocalHandlerFunc {
+	return func(ws *websocket.Conn, reqID string, _ map[string]any, sessionID string) error {
+		send.SendResFrame(ws, reqID, true, map[string]any{
+			"accepted":   true,
+			"session_id": sessionID,
+		}, "", "", true)
+		return nil
+	}
 }
 
-// tuiChatInterruptHandler chat.interrupt 本地 ack（intent 可选透传）。
+// chatInterruptHandler chat.interrupt 本地 ack（intent 可选透传）。
 //
 // Python: _chat_interrupt（L1412-1417）。
-func tuiChatInterruptHandler(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error {
-	payload := map[string]any{
-		"accepted":   true,
-		"session_id": sessionID,
+func chatInterruptHandler(send ResponseSender) routing.LocalHandlerFunc {
+	return func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error {
+		payload := map[string]any{
+			"accepted":   true,
+			"session_id": sessionID,
+		}
+		if intent, ok := params["intent"].(string); ok && intent != "" {
+			payload["intent"] = intent
+		}
+		send.SendResFrame(ws, reqID, true, payload, "", "", true)
+		return nil
 	}
-	if intent, ok := params["intent"].(string); ok && intent != "" {
-		payload["intent"] = intent
-	}
-	writeResponseFrame(ws, reqID, true, payload, "", "", true)
-	return nil
 }
 
-// tuiChatUserAnswerHandler chat.user_answer 本地 ack（request_id 可选透传）。
+// chatUserAnswerHandler chat.user_answer 本地 ack（request_id 可选透传）。
 //
 // Python: _chat_user_answer（L1419-1424）。
-func tuiChatUserAnswerHandler(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error {
-	payload := map[string]any{
-		"accepted":   true,
-		"session_id": sessionID,
+func chatUserAnswerHandler(send ResponseSender) routing.LocalHandlerFunc {
+	return func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error {
+		payload := map[string]any{
+			"accepted":   true,
+			"session_id": sessionID,
+		}
+		if rid, ok := params["request_id"].(string); ok && rid != "" {
+			payload["request_id"] = rid
+		}
+		send.SendResFrame(ws, reqID, true, payload, "", "", true)
+		return nil
 	}
-	if rid, ok := params["request_id"].(string); ok && rid != "" {
-		payload["request_id"] = rid
-	}
-	writeResponseFrame(ws, reqID, true, payload, "", "", true)
-	return nil
 }
 
-// tuiHistoryGetHandler history.get 本地 ack（session_id 覆写 + page_idx 透传）。
+// historyGetHandler history.get 本地 ack（session_id 覆写 + page_idx 透传）。
 //
 // Python: _history_get（L1426-1433）。
-func tuiHistoryGetHandler(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error {
-	payload := map[string]any{
-		"accepted":   true,
-		"session_id": sessionID,
+func historyGetHandler(send ResponseSender) routing.LocalHandlerFunc {
+	return func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error {
+		payload := map[string]any{
+			"accepted":   true,
+			"session_id": sessionID,
+		}
+		if sid, ok := params["session_id"].(string); ok && sid != "" {
+			payload["session_id"] = sid
+		}
+		if v, ok := params["page_idx"]; ok {
+			payload["page_idx"] = v
+		}
+		send.SendResFrame(ws, reqID, true, payload, "", "", true)
+		return nil
 	}
-	if sid, ok := params["session_id"].(string); ok && sid != "" {
-		payload["session_id"] = sid
-	}
-	if v, ok := params["page_idx"]; ok {
-		payload["page_idx"] = v
-	}
-	writeResponseFrame(ws, reqID, true, payload, "", "", true)
-	return nil
 }
 
-// tuiDisconnectHandler 构造断连回调：桥接 CancelAgentSessionsOnDisconnect。
+// disconnectHandler 构造断连回调：桥接 CancelAgentSessionsOnDisconnect。
 //
 // Python: _tui_disconnect（tui_connect.py L2106-2110）——
 // mh 为 None 或无 stale keys 时直接返回。
-func tuiDisconnectHandler(mh *messagehandler.MessageHandler) routing.DisconnectFunc {
+func disconnectHandler(mh *messagehandler.MessageHandler) routing.DisconnectFunc {
 	return func(_ *websocket.Conn, staleSessionKeys [][2]string) {
 		if mh == nil || len(staleSessionKeys) == 0 {
 			return

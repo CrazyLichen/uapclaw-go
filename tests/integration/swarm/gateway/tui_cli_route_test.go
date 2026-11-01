@@ -20,6 +20,7 @@ import (
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/tui"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -114,7 +115,7 @@ func (s *CliRouteFullChainSuite) SetupSuite() {
 	gwCfg := gateway.NewGatewayServerConfig()
 	gwCfg.Host = "127.0.0.1"
 	gwCfg.Port = s.gwPort
-	tuiBinding := gateway.BuildTuiRouteBinding(gateway.TuiRouteParams{
+	tuiBinding := tui.BuildRouteBinding(tui.RouteParams{
 		MessageHandler: s.msgHandler,
 	})
 	gwCfg.Routes = gateway.BuildRouteConfigMap([]*routing.RouteBinding{tuiBinding})

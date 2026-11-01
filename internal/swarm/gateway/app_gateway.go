@@ -20,6 +20,7 @@ import (
 	webapp "github.com/uapclaw/uapclaw-go/internal/swarm/channels/web"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	gwa2a "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/protocol/a2a"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/tui"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	gwcron "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/cron"
 	gwheartbeat "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/heartbeat"
@@ -449,7 +450,7 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 	routeBindings = append(routeBindings, BuildACPRouteBinding("/acp", "acp"))
 	if s.msgHandler != nil {
 		routeBindings = append(routeBindings,
-			BuildTuiRouteBinding(TuiRouteParams{MessageHandler: s.msgHandler}))
+			tui.BuildRouteBinding(tui.RouteParams{MessageHandler: s.msgHandler}))
 	}
 	gwCfg.Routes = BuildRouteConfigMap(routeBindings)
 	s.gwServerMu.Lock()

@@ -75,6 +75,16 @@ type DisconnectFunc func(ws *websocket.Conn, staleSessionKeys [][2]string)
 // server 为 any：routing 包不能 import gateway（会成环），实现侧做类型断言。
 type InstallFunc func(server any)
 
+// LocalHandlerFunc 本地 handler：由通道包实现、在 GatewayServer 上注册。
+//
+// 对齐 Python Callable[..., Awaitable[None]]，签名 (ws, req_id, params, session_id)。
+//
+// 定义在 routing 而非 gateway 的原因：通道包（如 channel_manager/tui）要声明
+// 「能接收本 handler 的注册接口」以便 Install 里做类型断言；若通道包与 gateway
+// 各自定义命名函数类型，两者不满足「同一类型」，接口断言必然失败。gateway 侧
+// 以类型别名复用（见 gateway.LocalHandlerFunc）。
+type LocalHandlerFunc func(ws *websocket.Conn, reqID string, params map[string]any, sessionID string) error
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
