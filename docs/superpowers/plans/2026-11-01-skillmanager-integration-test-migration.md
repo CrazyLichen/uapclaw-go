@@ -1350,3 +1350,20 @@ CI：run [41262753929](https://github.com/CrazyLichen/uapclaw-go/actions/runs/41
 1. **`agent-data.json` 结构不一致**：Python 递归整树按目录分组输出 dict；Go 只扫 `skills/<dir>/skill/SKILL.md`（多一层 `skill/`）且输出扁平数组 → 本布局下恒为 `null`。
 2. **TeamSkillsHub 无 `detail_key`**，重复安装/zip-slip 的错误文案也与 Python 不同（语义等价）。
 3. **`getLoopController` P0 bug（已修）**：类型断言签名不匹配导致团队技能创建提议永不触发。
+
+---
+
+## 后续修复（问题 1-3，2026-11-01）
+
+CI：run [41271151510](https://github.com/CrazyLichen/uapclaw-go/actions/runs/41271151510) 四绿。
+
+| 问题 | 性质 | 提交 | 改动 |
+|---|---|---|---|
+| 1 `agent-data.json` | 功能缺失（Web Agent 面板三处不齐） | `ff8cd606` | `agent_data.go` 按 app_web 契约重写（递归整树 + 目录分组 dict + isMarkdown + `_zh/_en` 归一 + 双排序）；`file_api.go` 的 rebuild 改真实重建、file-content 补「缺失先重建再读」；agent_data 6 单测 + file_api 5 单测；A1 断言升级为前端 dict 契约 |
+| 2 TeamSkillsHub 契约 | 缺 i18n 键 + 文案不一致 | `9962be07` | 新增 `installFailed`/`searchFailed` 键，detail 按 rune 截断 500；异常类分支统一走 `installFailedResult`；普通返回分支文案对齐 Python（「已安装」「marketplace 未返回 download_url」等）；A3 补 5 处 detail_key 断言 |
+| 3 B3 审批落盘 | 测试欠账（我的误判） | `e4bbd3cc` | `RequestUserEvolution` + `ApproveRecord` + `LoadFullEvolutionLog` 真实链路，mock LLM 提供 patch JSON |
+
+### 遗留（未修，已记账）
+
+- **`file-api` 路径基准分歧**：Python 以数据根（`<data>`）为基准，Go 的 `safeFilePath` 以 agent workspace（`<data>/agent/workspace`）为基准。`agent/workspace/agent-data.json` 已在 handler 内做局部映射（isAgentDataPath），但 `list-files`/`list-markdown`/写文件等端点仍按旧基准；统一需要逐个核对前端传参。
+- **`skill_manager.go` 覆盖率 76.6%**（<85% 门禁）：本轮问题 2 修改了该文件，但 CI 的「修改文件覆盖率」按 `HEAD~1...HEAD` 判定，最后一次提交只含测试与文档，故未触发。若要长期合规，需补该文件分支测试或按仓库既有惯例登记 `.coverage-exempt` 并说明原因。
