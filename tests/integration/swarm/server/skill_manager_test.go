@@ -241,6 +241,8 @@ func (s *SkillManagerSuite) TestTeamSkillsHub_Search失败() {
 	s.Require().NoError(err)
 	s.False(toBool(result["success"]), "search 应失败")
 	s.NotEmpty(toString(result["detail"]), "detail 应包含错误信息")
+	s.Equal("skills.teamskillshub.errors.searchFailed", toString(result["detail_key"]),
+		"应带 searchFailed i18n 键（对齐 Python）")
 }
 
 // TestTeamSkillsHub_Install成功 对齐 Python: test_handle_skills_team_skills_hub_install_success
@@ -325,7 +327,9 @@ func (s *SkillManagerSuite) TestTeamSkillsHub_Install重复未force() {
 	})
 	s.Require().NoError(err)
 	s.False(toBool(result["success"]), "重复安装未 force 应失败")
-	s.Contains(toString(result["detail"]), "已存在", "detail 应提示已存在")
+	// 对齐 Python: f"技能 {skill_name} 已安装"
+	s.Contains(toString(result["detail"]), "已安装", "detail 应提示已安装")
+	s.NotContains(result, "detail_key", "普通返回不带 detail_key（对齐 Python）")
 }
 
 // TestTeamSkillsHub_Install非法zip 对齐 Python: test_handle_skills_team_skills_hub_install_invalid_zip
@@ -350,6 +354,7 @@ func (s *SkillManagerSuite) TestTeamSkillsHub_Install非法zip() {
 	s.Require().NoError(err)
 	s.False(toBool(result["success"]), "非法 zip 应失败")
 	s.Contains(strings.ToLower(toString(result["detail"])), "zip", "detail 应提及 zip")
+	s.Equal("skills.teamskillshub.errors.installFailed", toString(result["detail_key"]))
 }
 
 // TestTeamSkillsHub_Install下载失败 对齐 Python: test_handle_skills_team_skills_hub_install_download_failure
@@ -369,6 +374,7 @@ func (s *SkillManagerSuite) TestTeamSkillsHub_Install下载失败() {
 	s.Require().NoError(err)
 	s.False(toBool(result["success"]), "下载失败应返回 success=false")
 	s.Contains(toString(result["detail"]), "下载校验失败", "detail 应提示下载失败")
+	s.Equal("skills.teamskillshub.errors.installFailed", toString(result["detail_key"]))
 }
 
 // TestTeamSkillsHub_Install非白名单主机被拒
@@ -386,6 +392,7 @@ func (s *SkillManagerSuite) TestTeamSkillsHub_Install非白名单主机被拒() 
 	s.Require().NoError(err)
 	s.False(toBool(result["success"]), "非白名单主机应被拒绝")
 	s.Contains(toString(result["detail"]), "example.com", "detail 应包含主机名")
+	s.Equal("skills.teamskillshub.errors.installFailed", toString(result["detail_key"]))
 }
 
 // TestTeamSkillsHub_Install拒绝zip_slip 对齐 Python: test_handle_skills_team_skills_hub_install_rejects_zip_slip
@@ -419,6 +426,7 @@ func (s *SkillManagerSuite) TestTeamSkillsHub_Install拒绝zip_path穿越() {
 	detail := toString(result["detail"])
 	s.True(strings.Contains(detail, "越界") || strings.Contains(detail, "超出目标目录") ||
 		strings.Contains(detail, "zip slip"), "detail 应提示路径越界，实际: %s", detail)
+	s.Equal("skills.teamskillshub.errors.installFailed", toString(result["detail_key"]))
 
 	// 不得在上层落盘
 	_, statErr := os.Stat(filepath.Join(filepath.Dir(s.workspace), "evil.txt"))

@@ -70,6 +70,14 @@ const (
 	teamSkillsHubDefaultBaseURL = "https://teamskills.openjiuwen.com"
 	// teamSkillsHubDefaultTimeout TeamSkillsHub 默认超时秒数
 	teamSkillsHubDefaultTimeout = 60
+	// teamSkillsHubInstallFailedKey 安装失败的 i18n 键
+	// Python: "skills.teamskillshub.errors.installFailed"
+	teamSkillsHubInstallFailedKey = "skills.teamskillshub.errors.installFailed"
+	// teamSkillsHubSearchFailedKey 搜索失败的 i18n 键
+	// Python: "skills.teamskillshub.errors.searchFailed"
+	teamSkillsHubSearchFailedKey = "skills.teamskillshub.errors.searchFailed"
+	// teamSkillsHubDetailMaxRunes detail 截断长度（rune 计数，对齐 Python str[:500]）
+	teamSkillsHubDetailMaxRunes = 500
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -1305,12 +1313,12 @@ func (sm *SkillManager) HandleSkillsClawhubDownload(ctx context.Context, params 
 	// 定位 SKILL.md（递归搜索，对齐 Python _locate_skill_dir）
 	skillDir := sm.locateSkillDir(tmpDir)
 	if skillDir == "" {
-		return map[string]any{"success": false, "detail": "ZIP 中未找到 SKILL.md"}, nil
+		return map[string]any{"success": false, "detail": "下载内容不完整，未找到 SKILL.md"}, nil
 	}
 	skillFile := sm.tryFindSkillFile(skillDir)
 	meta := sm.parseSkillMD(skillFile)
 	if meta == nil {
-		return map[string]any{"success": false, "detail": "SKILL.md 解析失败"}, nil
+		return map[string]any{"success": false, "detail": "无法解析下载的技能文件"}, nil
 	}
 	skillName := toString(meta["name"])
 	if skillName == "" {
@@ -1653,7 +1661,12 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubSearch(ctx context.Context, par
 
 	data, err := sm.teamSkillsHubHTTPGet(ctx, "/api/v1/plugins", queryParams, 0, baseURL)
 	if err != nil {
-		return map[string]any{"success": false, "detail": err.Error()}, nil
+		// 对齐 Python: except 分支返回 detail + detail_key
+		return map[string]any{
+			"success":    false,
+			"detail":     truncateDetailRunes(err.Error(), teamSkillsHubDetailMaxRunes),
+			"detail_key": teamSkillsHubSearchFailedKey,
+		}, nil
 	}
 
 	// 映射结果字段
@@ -1708,25 +1721,25 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 	}
 	data, err := sm.teamSkillsHubHTTPGet(ctx, "/api/v1/artifacts/"+assetID, queryParams, 0, baseURL)
 	if err != nil {
-		return map[string]any{"success": false, "detail": "获取 artifact 元数据失败: " + err.Error()}, nil
+		return installFailedResult("获取 artifact 元数据失败: " + err.Error()), nil
 	}
 
 	downloadURL := toString(data["download_url"])
 	checksumSHA256 := toString(data["checksum_sha256"])
 
 	if downloadURL == "" {
-		return map[string]any{"success": false, "detail": "artifact 元数据中缺少 download_url"}, nil
+		return map[string]any{"success": false, "detail": "marketplace 未返回 download_url"}, nil
 	}
 
 	// 白名单校验
 	if err := sm.assertTeamSkillsHubDownloadURLAllowed(downloadURL); err != nil {
-		return map[string]any{"success": false, "detail": "下载 URL 校验失败: " + err.Error()}, nil
+		return installFailedResult("下载 URL 校验失败: " + err.Error()), nil
 	}
 
 	// 下载并校验
 	zipBytes, err := sm.downloadZipAndVerify(ctx, downloadURL, checksumSHA256)
 	if err != nil {
-		return map[string]any{"success": false, "detail": "下载校验失败: " + err.Error()}, nil
+		return installFailedResult("下载校验失败: " + err.Error()), nil
 	}
 
 	// 解压到临时目录
@@ -1737,7 +1750,7 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	if err := safeExtractZIPBytesToDir(zipBytes, tmpDir); err != nil {
-		return map[string]any{"success": false, "detail": "ZIP 解压失败: " + err.Error()}, nil
+		return installFailedResult("ZIP 解压失败: " + err.Error()), nil
 	}
 
 	// 定位 SKILL.md（递归搜索，对齐 Python _locate_skill_dir）
@@ -1763,14 +1776,15 @@ func (sm *SkillManager) HandleSkillsTeamSkillsHubInstall(ctx context.Context, pa
 		finalDest = filepath.Join(sm.skillsDir, skillName)
 	}
 	if dirExists(finalDest) && !force {
-		return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", skillName)}, nil
+		// 对齐 Python: f"技能 {skill_name} 已安装"（普通返回，不带 detail_key）
+		return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已安装", skillName)}, nil
 	}
 	if dirExists(finalDest) {
 		_ = safeRmtree(finalDest)
 	}
 	skillSrcDir := skillDir
 	if err := copyDir(skillSrcDir, finalDest); err != nil {
-		return map[string]any{"success": false, "detail": "安装失败: " + err.Error()}, nil
+		return installFailedResult("安装失败: " + err.Error()), nil
 	}
 
 	// 记录安装信息（非自定义 output 时）
@@ -3145,6 +3159,32 @@ func (sm *SkillManager) teamSkillsHubHTTPGet(ctx context.Context, path string, p
 
 	data, _ := payload["data"].(map[string]any)
 	return data, nil
+}
+
+// installFailedResult 构造 TeamSkillsHub 安装失败响应（detail + detail_key）。
+//
+// 对齐 Python: except Exception as exc → {"success": False, "detail": str(exc)[:500],
+// "detail_key": "skills.teamskillshub.errors.installFailed"}
+func installFailedResult(detail string) map[string]any {
+	return map[string]any{
+		"success":    false,
+		"detail":     truncateDetailRunes(detail, teamSkillsHubDetailMaxRunes),
+		"detail_key": teamSkillsHubInstallFailedKey,
+	}
+}
+
+// truncateDetailRunes 按 rune 截断 detail，避免 CJK 被字节切断。
+//
+// 对齐 Python: str(exc)[:500]
+func truncateDetailRunes(s string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return s
+	}
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes])
 }
 
 // assertTeamSkillsHubDownloadURLAllowed 校验下载 URL 主机名是否在白名单中
