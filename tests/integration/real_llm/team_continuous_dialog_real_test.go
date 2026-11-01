@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -188,7 +189,8 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		case "team.runtime_ready":
 			runtimeReady = true
 		case "chat.tool_result":
-			if realToolSucceeded(frame) {
+			// 只认建队/拉人两步的成功结果，避免任意工具（如 bash）成功就算成员已创建
+			if realToolSucceeded(frame) && isTeamBuildTool(realFrameToolName(frame)) {
 				memberSpawned = true
 			}
 		case "team.member":
@@ -220,13 +222,12 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 	s.True(secondAccepted, "第二条 chat.send 应被受理（同 session 不互斥）")
 	s.True(memberSpawned, "真实模型应调用 team.spawn_member 并成功返回")
 	s.True(sawMember, "应收到 team.member（monitor 分类事件）")
-	// 已知缺口（真 LLM 实测 2026-11-01，未修）：
-	//   - firstFinal=false：首条请求 8 分钟内始终没有 chat.final（轮次未正常收尾）
-	//   - sawMessage=false：模型未调用 send_message，成员消息事件缺失
-	// 两者在 MockLLM 版均为绿（见 swarm/gateway/team_continuous_dialog_test.go），
-	// 说明链路本身可用，差异出在真实模型驱动下的轮次收尾与工具调用序列。
-	s.T().Logf("已知缺口: firstFinal=%v sawMessage=%v", firstFinal, sawMessage)
-	s.False(secondSentAt.IsZero(), "第二条消息发送时间应被记录")
+	// 首条请求必须正常收尾（chat.final），且成员消息事件（team.message）应出现。
+	// 2026-11-01 前这两项恒为 false，真因是流式 tool_call 增量帧未聚合：
+	// 模型要调用的 send_message 被拆成碎片从未成调用，leader 只能一直等成员。
+	// 修复见 internal/agentcore/foundation/llm/model_clients/*/parse_stream_chunk.go。
+	s.True(firstFinal, "首条 chat.send 应正常收尾并产出 chat.final")
+	s.True(sawMessage, "应收到 team.message（leader 调用 send_message 后的成员消息）")
 	s.False(secondSentAt.IsZero(), "第二条消息发送时间应被记录")
 }
 
@@ -274,15 +275,17 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 		case "chat.tool_call":
 			if tc, ok := payload["tool_call"].(map[string]any); ok {
 				name, _ := tc["name"].(string)
-				// 流式增量帧会带空 name（见 doc.go「流式工具调用聚合」），
-				// 只记录非空 name，避免断言被噪声干扰
+				// 流式增量帧可能带空 name，只记录非空 name，避免断言被噪声干扰
 				if name != "" {
 					toolNames = append(toolNames, name)
 					s.T().Logf("工具调用: %s", name)
 				}
 			}
 		case "chat.tool_result":
-			if ok, _ := payload["success"].(bool); ok {
+			// 只有建队/拉人这两步成功才算成员已创建。此处曾用「任意 tool_result
+			// success」判定，导致模型先跑一次 bash 就提前退出循环，永远等不到
+			// build_team，断言变成假红。
+			if realToolSucceeded(frame) && isTeamBuildTool(realToolName(payload)) {
 				memberCreated = true
 			}
 		case "team.member":
@@ -298,8 +301,10 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 
 	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v", toolNames, memberCreated, sawFinal)
 	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员")
-	// 建队链路的第一跳必须是 build_team（提示词 leader_workflow.md 第 2 步）
-	s.Contains(toolNames, "team.build_team", "leader 应先调用 build_team 组建团队")
+	// 建队链路的第一跳必须是 build_team（提示词 leader_workflow.md 第 2 步）。
+	// chat.tool_call 的 name 取 ToolCall.Name（工具卡 Name="build_team"），
+	// 不是工具卡 ID "team.build_team"；两种写法都接受，避免依赖注册命名细节。
+	s.True(hasTeamBuildToolCall(toolNames), "leader 应先调用 build_team 组建团队，实际工具序列=%v", toolNames)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -384,4 +389,44 @@ func realToolSucceeded(frame map[string]any) bool {
 	}
 	success, ok := payload["success"].(bool)
 	return ok && success
+}
+
+// realToolName 取 chat.tool_result payload 里的工具名。
+func realToolName(payload map[string]any) string {
+	name, _ := payload["tool_name"].(string)
+	return name
+}
+
+// realFrameToolName 从整帧取 chat.tool_result 的工具名。
+func realFrameToolName(frame map[string]any) string {
+	payload, ok := frame["payload"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	return realToolName(payload)
+}
+
+// normalizeTeamToolName 去掉工具卡 ID 的 "team." 前缀，便于比较 Name 与 ID 两种写法。
+func normalizeTeamToolName(name string) string {
+	return strings.TrimPrefix(strings.TrimSpace(name), "team.")
+}
+
+// isTeamBuildTool 判断是否为建队/拉人工具（成员创建的两条路径）。
+func isTeamBuildTool(name string) bool {
+	switch normalizeTeamToolName(name) {
+	case "build_team", "spawn_member":
+		return true
+	default:
+		return false
+	}
+}
+
+// hasTeamBuildToolCall 判断工具序列里是否出现 build_team。
+func hasTeamBuildToolCall(names []string) bool {
+	for _, name := range names {
+		if normalizeTeamToolName(name) == "build_team" {
+			return true
+		}
+	}
+	return false
 }

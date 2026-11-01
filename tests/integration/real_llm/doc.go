@@ -29,21 +29,28 @@
 //
 // 运行方式: go test -tags="sqlite_fts5 test integration llm" ./tests/integration/real_llm/...
 //
-// 已知缺口（2026-11-01 定位，未修）
+// 已修复缺陷（2026-11-01 定位，2026-11-02 修复）
 //
-// 流式工具调用聚合缺失：真实模型的 tool_call 增量帧被逐帧当作完整调用上报，
-// 例：
+// 流式工具调用聚合失败：真实模型的 tool_call 增量帧曾被逐个当成完整调用，
+// 例（修复前的帧样本）：
 //
 //	{"arguments":"/","name":"","tool_call_id":""}
 //	{"arguments":"Test","name":"","tool_call_id":""}
 //	{"arguments":{"...":...},"name":"list_members","tool_call_id":"call_00_..."}
 //
-// 后果：模型本要调 build_team（参数被拆成 "/"、"Test"、"}"…），但从未形成完整
-// 调用；只有个别完整帧的工具被执行。表现为团队模式下 leader 不建队、
-// send_message 缺失、首轮迟迟没有 chat.final。
+// 根因：真实 SSE 只在首个 delta 携带 tool_calls[].type，后续帧缺省（omitempty）。
+// 三个客户端的流式解析把空串透传给 WithToolCallType，覆盖了 NewToolCall 的
+// "function" 默认值，使 message_chunk.go 的 mergeToolCalls 同调用判定
+// （要求两侧 type == "function"）失效——同一次调用的参数碎片各自成为独立
+// ToolCall，被 ReAct 逐个当工具执行。表现为 leader 不建队、send_message 缺失、
+// 首轮迟迟没有 chat.final；MockLLM 用 NewToolCall 构造（默认 function），
+// 因此 Mock 全绿、真 LLM 全崩。
 //
-// 相关逻辑：foundation/llm/schema/message_chunk.go 的 mergeToolCalls 只提供
-// 合并能力，流式路径未在发事件前聚合。
+// 修复：schema.ToolCallDeltaOptions（type 为空时保留 "function" 默认值，
+// 对齐 Python openai_model_client.py:745-751 的硬编码），openai / siliconflow /
+// inference_affinity 三处流式解析改用它；deep_adapter_team 的 tool_call 分支补齐
+// 与 stream_utils 一致的碎片帧守卫。回归用例见 model_clients 各包的
+// TestParseStreamChunk_缺省type的增量帧可聚合。
 //
 // 文件目录：
 //
