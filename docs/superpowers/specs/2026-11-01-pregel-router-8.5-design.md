@@ -255,6 +255,7 @@ func buildTriggerMessages(sourceNode string, targets []string) []Message {
 | D4 | `Dispatch` 的 `ctx` 在 Static/Barrier 中未使用 | 两者无阻塞点；保留形参以满足统一接口 | 用 `_ context.Context` 形参名显式标注 |
 | D5 | `targets` 构造时复制 | Python 存引用（`self.targets = targets`），可被外部改写；无消费者依赖可变性 | 测试用例 `TestNewStaticRouter_复制入参` 锁死 |
 | D6 | selector 返回 error 原样上抛，不 `fmt.Errorf("...: %w")` | 8.3b/8.3c 需要 `errors.As` 识别 `*pregel.GraphInterrupt`；加包装层会让中断判定失配 | 任意一层包装后必须用 `%w`，且 8.3b 侧用 `errors.As` 而非 `==` |
+| D7 | 目标类型 `Hashable` → `string`（selector 返回 `[]string`） | Python `Router` 类型别名允许任意 `Hashable`（`graph/base.py:24-27`），且 `_validate_node_id` 只校验非空、不校验类型，故理论上 `add_node(1, …)` 能造出 int 键通道并在 Python 里跑通。但节点名/通道键在全链按 str 使用——ns 拼接 `f"{parent}:{node}:{version}"`、barrier 键格式化 `f"barrier:{senders}->{name}"`、`EDGE_TRAVERSED` 事件字段——非 str 在这些路径上必然先失败。**结论：收窄不排除任何合法程序**，只是把「运行期在某些路径炸」提前成编译期拒绝 | 若将来出现非 str 节点名的真实需求，须先让 8.3a builder / 8.4 通道键放弃字符串格式化，届时另开偏差 |
 
 ## 5. 章节顺序调整（8.5 前移，已拍板）
 
@@ -319,7 +320,9 @@ func buildTriggerMessages(sourceNode string, targets []string) []Message {
 
 ## 9. 后续衔接提示（本轮不实施）
 
-- **8.3**：`PregelNode{ Name string; Func NodeFunc; Routers []Router }` 直接引用本节接口；`Channel` ABC 的 `Accept(msg Message) bool` 依赖 8.6 的 `Kind()`。
+- **8.3**：`PregelNode` 直接引用本节接口；`Channel` ABC 的 `Accept(msg Message) bool` 依赖 8.6 的 `Kind()`。
+  - **已拍板（2026-11-01）**：`PregelNode` 字段全部**非导出** + `NewPregelNode(name, fn, routers ...Router)` 构造函数收口，构造时对 `nil` 元素**直接 panic**；8.3b 的 `NodeTask` 循环**零判空**。
+  - **理由**：`[]Router` 有两个坑——① `append(routers, nil)` 后调用即 `nil pointer dereference`；② **typed-nil**（`var r *StaticRouter; var i Router = r`）时 `i != nil` 为 true，`i.Dispatch()` 解引用 `r.targets` 照样 panic，**运行期 `r == nil` 判断挡不住它**。而 8.1 的 `PregelGraph.compile` 只经 `builder.add_node` 构造节点、builder/PregelLoop/NodeTask/PregelNode 同在一个包，字段非导出不阻碍任何消费方。故把「可能 panic」从执行期挪到构造期，不引入 Python 没有的运行期分支（Python 侧对 `None` router 是 `AttributeError`，同样不防御）。
 - **8.3a**：`PregelBuilder.addEdge` 三形状 → `NewBarrierRouter(barrierKey)` / `NewStaticRouter(end...)` / `NewStaticRouter(end)`；`addBranch` → `NewConditionalRouter(selector)`。`barrier:...` 合成键由 8.4 的 `BarrierChannel` 生成，builder 只做转手。
-- **8.3b**：`NodeTask` 在节点函数正常返回后遍历 `node.Routers`；**中断时必须跳过整段路由**（对齐 `task.py:172-174`）。
+- **8.3b**：`NodeTask` 在节点函数正常返回后遍历 `node` 的路由；**中断时必须跳过整段路由**（对齐 `task.py:172-174`）。
 - **8.14**：用户 callable 包装成语义等价 `SelectorFunc`（吞掉 `state`、闭包 `session`），对应 `_workflow.py:275-285`。
