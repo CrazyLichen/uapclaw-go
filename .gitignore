@@ -6,6 +6,10 @@ bin/
 *.test
 coverage.html
 
+# 前端依赖目录兜底：各 frontend/.gitignore 负责自身的 dist；node_modules 在此兜底，
+# 避免前端目录搬迁后子 .gitignore 随之搬走、残留依赖被 git add -A 带进仓库
+node_modules/
+
 # IDE
 .idea/
 .vscode/
