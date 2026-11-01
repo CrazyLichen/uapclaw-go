@@ -203,14 +203,24 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 5. MessagerConfig 调整 + CreateMessager
 	// ⤴️ 9.65 回填完成：使用 messagerConfig 创建 Messager
-	if ctx.Role == atschema.TeamRoleLeader {
-		messagerConfig := c.BuildMemberMessagerConfig(ctx.MemberName)
-		if messagerConfig != nil {
-			if msgr, err := messager.CreateMessager(*messagerConfig); err == nil {
-				c.SetMessager(msgr)
-			} else {
-				logger.Warn(logComponent).Err(err).Msg("CreateMessager failed, continuing without Messager")
-			}
+	//
+	// M-32: 对齐 Python agent_configurator.py L219-224——不分角色，只要
+	// ctx.messager_config 存在就创建 Messager，并把 node_id 覆盖为当前成员名
+	// （Python: messager_config.model_copy(update={"node_id": member_name})）。
+	// 原实现只在 Leader 分支创建，导致 teammate 的 TeamMessageManager 没有
+	// messager，publishMessageEvent 直接 return，成员→leader 的
+	// team.message 事件永远发不出来。
+	messagerConfig := ctx.MessagerConfig
+	if messagerConfig != nil && ctx.MemberName != "" && messagerConfig.NodeID != ctx.MemberName {
+		updated := *messagerConfig
+		updated.NodeID = ctx.MemberName
+		messagerConfig = &updated
+	}
+	if messagerConfig != nil {
+		if msgr, err := messager.CreateMessager(*messagerConfig); err == nil {
+			c.SetMessager(msgr)
+		} else {
+			logger.Warn(logComponent).Err(err).Msg("CreateMessager failed, continuing without Messager")
 		}
 	}
 

@@ -122,8 +122,13 @@ func (m *SessionManager) BindSession(
 
 	// 步骤 4: 创建 DB 表（幂等）
 	// Python: if team_backend: await team_backend.db.create_cur_session_tables()
+	//
+	// S-45: 必须传 newCtx——CreateCurSessionTables 内部靠 sessionctx.GetSessionID(ctx)
+	// 解析动态表后缀，旧 ctx 里没有 SessionState 时会走 "no session_id" 分支静默跳过，
+	// 导致 team_task_* / team_message_* 动态表根本没建，后续 send_message 插入报
+	// no such table。Python 侧 set_session_id 写 contextvar 后天然全局可见，等价于 newCtx。
 	if teamBackend := m.configurator.TeamBackend(); teamBackend != nil {
-		if err := teamBackend.DB().CreateCurSessionTables(ctx); err != nil {
+		if err := teamBackend.DB().CreateCurSessionTables(newCtx); err != nil {
 			logger.Warn(logComponent).Err(err).
 				Str("session_id", sessionID).
 				Msg("failed to create session tables")

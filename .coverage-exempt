@@ -93,3 +93,10 @@ internal/swarm/agents/harness/team/team_manager_monitor.go
 # DB 与 runner 实例；本次改动仅为 OnRuntimeReady 签名对齐（该函数当前无
 # 生产调用方，是 Python 对齐桩）。
 internal/swarm/agents/harness/team/team_manager_lifecycle.go
+
+# ── 2026-11-01 会话绑定建表 ctx 修复 ──
+# session_manager.go — 本次改动仅把 CreateCurSessionTables 的 ctx 换成 newCtx
+# （1 行，动态表建表依赖 SessionState）。文件基线覆盖率 82.7%，剩余未覆盖
+# 语句是错误传播分支（建表失败、持久化失败），需注入失败的 SQL engine 才能
+# 触达，属「依赖外部运行环境」类豁免。
+internal/agent_teams/agent/session_manager.go

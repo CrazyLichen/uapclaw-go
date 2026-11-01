@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,6 +163,9 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 		mockllm.CreateToolCallResponse("team.spawn_member", `{"member_name":"teammate-itest"}`),
 		mockllm.CreateToolCallResponse("team.send_message", `{"to":"teammate-itest","content":"请汇报你的工具清单"}`),
 		mockllm.CreateTextResponse("第一条消息的响应"),
+		// 成员侧轮次：先回消息给 leader，再收尾
+		mockllm.CreateToolCallResponse("team.send_message", `{"to":"team_leader","content":"我的工具清单是：spawn_member, send_message"}`),
+		mockllm.CreateTextResponse("成员回复完成"),
 		mockllm.CreateTextResponse("第二条消息的响应"),
 	)
 
@@ -175,15 +179,18 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 		"告诉我你有哪些工具，不要立刻开始任务"))
 
 	var (
-		firstAccepted   bool
-		secondAccepted  bool
-		runtimeReady    bool
-		memberSpawned   bool
-		secondSentAt    time.Time
-		firstFinalAfter bool
-		firstFinalTime  time.Time
-		secondSent      bool
-		sawCategory     bool
+		firstAccepted     bool
+		secondAccepted    bool
+		runtimeReady      bool
+		memberSpawned     bool
+		secondSentAt      time.Time
+		firstFinalAfter   bool
+		firstFinalTime    time.Time
+		secondSent        bool
+		sawMember         bool
+		sawMessage        bool
+		sawLeaderToMember bool
+		sawMemberToLeader bool
 	)
 
 	deadline := time.Now().Add(120 * time.Second)
@@ -213,10 +220,30 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 		case teamFrameID(frame) == "req-team-2" && teamAccepted(frame):
 			secondAccepted = true
 		}
+		if raw, err := json.Marshal(frame["payload"]); err == nil && strings.Contains(string(raw), "member_id") {
+			s.T().Logf("成员事件: event=%s payload=%s", teamEventName(frame), string(raw))
+		}
 		// Python 原断言：出现 team.member 或 team.message（monitor 分类事件）
-		if name := teamEventName(frame); name == "team.member" || name == "team.message" {
-			sawCategory = true
-			s.T().Logf("收到分类事件: %s", name)
+		if teamEventName(frame) == "team.message" {
+			if ev, ok := frame["payload"].(map[string]any)["event"].(map[string]any); ok {
+				from, _ := ev["from_member"].(string)
+				to, _ := ev["to_member"].(string)
+				if from == "team_leader" && to == "teammate-itest" {
+					sawLeaderToMember = true
+				}
+				if from == "teammate-itest" && to == "team_leader" {
+					sawMemberToLeader = true
+				}
+				s.T().Logf("消息方向: %s → %s", from, to)
+			}
+		}
+		switch teamEventName(frame) {
+		case "team.member":
+			sawMember = true
+			s.T().Logf("收到分类事件: team.member")
+		case "team.message":
+			sawMessage = true
+			s.T().Logf("收到分类事件: team.message")
 		}
 		switch teamEventName(frame) {
 		case "team.runtime_ready":
@@ -239,14 +266,21 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 			secondSent = true
 			secondSentAt = time.Now()
 		}
-		if secondSent && secondAccepted && firstFinalAfter {
+		// 等成员侧回信：成员轮次晚于 leader 第一轮，不能提前收工
+		if secondSent && secondAccepted && firstFinalAfter && sawMemberToLeader {
 			break
 		}
 	}
 
 	s.T().Logf("观测: firstAccepted=%v runtimeReady=%v memberSpawned=%v secondAccepted=%v firstFinalAfter=%v llmCalls=%d",
 		firstAccepted, runtimeReady, memberSpawned, secondAccepted, firstFinalAfter, s.MockLLM.InvokeCallCount())
-	s.True(sawCategory, "应收到 team.member 或 team.message 分类事件（对齐 Python 原断言）")
+	s.True(sawMember, "应收到 team.member（成员启动事件）")
+	s.True(sawMessage, "应收到 team.message（成员间消息事件）")
+	s.True(sawLeaderToMember, "leader 应把消息发给成员（from=team_leader → to=teammate-itest）")
+	// 已知缺口（本批未修）：成员轮次未产出——RunTeamMember 返回空 map、
+	// 成员侧无 LLM 调用，因此成员→leader 的消息不会发生。修复方向见
+	// tests/integration/swarm/gateway/doc.go「team 链路已知缺口」。
+	s.T().Logf("成员回信: sawMemberToLeader=%v（当前为已知缺口）", sawMemberToLeader)
 	s.True(firstAccepted, "首条 chat.send 应被受理")
 	s.True(runtimeReady, "应收到 team.runtime_ready（团队已建立）")
 	s.True(memberSpawned, "Leader 应成功 spawn 成员（chat.tool_result success）")
