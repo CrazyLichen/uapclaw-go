@@ -3,3 +3,7 @@
 # 仅用于确实无法通过集成测试覆盖的代码（如纯工具函数包、无集成入口的内部包）
 # 豁免文件修改时仍会显示 📝 notice 提醒，但不会导致 CI 失败
 # 注意：能通过集成测试覆盖的代码，不得加入此列表
+
+# stream_utils.go — 纯 chunk→事件映射函数集（ParseStreamChunk 等），无独立集成入口；
+# 其行为由 swarm/gateway 集成套件间接覆盖，单测覆盖在 internal/swarm/server/utils。
+internal/swarm/server/utils/stream_utils.go
