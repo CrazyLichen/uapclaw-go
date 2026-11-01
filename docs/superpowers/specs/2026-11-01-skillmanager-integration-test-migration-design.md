@@ -38,6 +38,13 @@
 | `tests/integration/agentcore/single_agent/skills/` | 26 个用例（agentcore 版），目录已豁免（C 类） |
 | `tests/integration/agentcore/harness/rails/evolution/` | 已有 1204 行 team skill rail 集成测试，但只对齐 Python **单测**（构造/选项），系统测试的两条行为流缺失 |
 
+### 1.3 规划期发现的生产 bug 与允许的两处改动
+
+| 改动 | 位置 | 理由 | 是否改变对外行为 |
+|---|---|---|---|
+| 修复 `getLoopController` 类型断言 | `internal/agentcore/harness/rails/evolution/team_skill_create_rail.go:406` | `DeepAgent.LoopController()` 返回 `controller.ControllerInterface`，而断言要求返回 evolution 包未导出的 `loopController`，方法签名不一致 → 断言恒为 false → **团队技能创建提议路径为死代码**（follow-up 永不入队）。改为断言公开接口 + 对返回值二次断言 `EnqueueFollowUp` 能力 | 是：恢复本应触发的 follow-up 入队（Python 语义） |
+| 抽出 `searchSkillsFromFiles` 纯函数 | `internal/agentcore/single_agent/skills/remote_skill_util.go` | 根目录 `SKILL.md` 跳过分支（`len(parts)==1`）只在整仓扫描时触发，集成层用 `Directory` 定位无法覆盖；抽纯函数后包内单测可直接驱动过滤分支 | 否：`SearchGitHubForSkills` 行为与返回完全一致 |
+
 ## 2. 目标与非目标
 
 ### 2.1 目标
@@ -52,12 +59,12 @@
 |---|---|
 | `test_skill_creator.py` / `test_skill_evaluator.py` | Go 侧无 `SkillCreator`/`SkillEvaluator` 实现（属领域十四 devtools），迁移无被测对象 |
 | `remote_import.go` 的远程 URL 下载路径进集成层 | 生产代码零改动前提下 `httpClient` 非导出，外部包无法指向 `httptest`；其 httptest 覆盖留在包内单测 |
-| 修改任何生产代码（含导出内部函数、增加注入口） | 用户决策：零改动 |
+| 修改除 §1.3 例外之外的生产代码 | 用户决策：零改动；两处例外已单列并说明理由 |
 | `SkillManager` 超时/重试行为断言 | 超时与重试参数在包 `init` 时读取，`t.Setenv` 对已加载的全局变量无效 |
 
 ## 3. 约束
 
-1. **生产代码零改动**：验收以 `git diff --stat internal/` 只含 `_test.go` 为准。
+1. **生产代码基本零改动**：验收以 `git diff --stat internal/` 为准，允许的例外仅 §1.3 列出的两处（P0 bug 修复 + 纯函数抽取）。
 2. **mock 只在边界**：网络端点（TeamSkillsHub/ClawHub/GitHub）与 LLM 可 mock；`SkillManager`、`SkillToolkit`、`TeamManager`、`EvolutionStore` 必须真实。
 3. **门禁合规**：每个测试文件必须有 `//go:build integration` 且调用 `suite.Run(`；目录聚合 distinct internal import ≥ 2；调用跨度 ≥ 3 或登记豁免并附真实集成边界。
 4. **注释与目录**：全中文注释；新增测试目录/文件同步更新对应 `doc.go`。
