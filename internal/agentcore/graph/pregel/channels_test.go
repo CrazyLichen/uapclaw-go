@@ -356,3 +356,282 @@ func TestNewBarrierChannel_组内去重(t *testing.T) {
 		t.Fatal("去重后单元素组，收到 a 即应就绪")
 	}
 }
+
+// TestChannelManager_触发通道消费后复位 消费后节点出集，下一超步不重激活（防无限循环）。
+// Python: test_channel.py:11-59
+func TestChannelManager_触发通道消费后复位(t *testing.T) {
+	chStart := NewTriggerChannel("start")
+	chA := NewTriggerChannel("a")
+	m := NewChannelManager([]Channel{chStart, chA})
+
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("构造后就绪集 = %v，期望空", got)
+	}
+
+	m.BufferMessage(NewTriggerMessage(Start, "start"))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "start" {
+		t.Fatalf("就绪集 = %v，期望 [start]", got)
+	}
+	if !chStart.IsReady() {
+		t.Fatal("start 通道应就绪")
+	}
+
+	m.Consume("start")
+	if chStart.IsReady() {
+		t.Fatal("消费后通道必须清空（否则同节点无限重激活）")
+	}
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("消费后就绪集 = %v，期望空", got)
+	}
+
+	m.BufferMessage(NewTriggerMessage("start", "a"))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "a" {
+		t.Fatalf("就绪集 = %v，期望只有 [a]", got)
+	}
+
+	m.Consume("a")
+	if err := m.Flush(); err != nil {
+		t.Fatalf("空 buffer Flush 返回错误：%v", err)
+	}
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("就绪集 = %v，期望空", got)
+	}
+}
+
+// TestChannelManager_汇聚通道全生命周期 等待→部分到达→就绪→消费→再等待。
+// Python: test_channel.py:61-127
+func TestChannelManager_汇聚通道全生命周期(t *testing.T) {
+	bar := NewBarrierChannel("collect", [][]string{{"A"}, {"B"}})
+	m := NewChannelManager([]Channel{bar})
+
+	m.BufferMessage(NewBarrierMessage("A", bar.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if bar.IsReady() {
+		t.Fatal("只到 A 不应就绪")
+	}
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("就绪集 = %v，期望空", got)
+	}
+
+	m.BufferMessage(NewBarrierMessage("B", bar.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "collect" {
+		t.Fatalf("就绪集 = %v，期望 [collect]", got)
+	}
+
+	m.Consume("collect")
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("消费后就绪集 = %v，期望空", got)
+	}
+	if got := len(bar.Snapshot().Received); got != 0 {
+		t.Fatalf("消费后 received = %d，期望 0", got)
+	}
+
+	m.BufferMessage(NewBarrierMessage("A", bar.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if bar.IsReady() {
+		t.Fatal("新一轮只到 A 不应就绪")
+	}
+}
+
+// TestChannelManager_CNF汇聚全链路 Manager 与 CNF 汇聚通道联动，单分支到达即激活目标。
+// Python: test_barrier_cnf.py:127-137
+func TestChannelManager_CNF汇聚全链路(t *testing.T) {
+	bar := NewBarrierChannel("end", [][]string{{"LLM_1", "LLM_2"}})
+	m := NewChannelManager([]Channel{bar})
+	m.BufferMessage(NewBarrierMessage("LLM_1", bar.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if !bar.IsReady() {
+		t.Fatal("OR 组只到 LLM_1 应就绪")
+	}
+	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "end" {
+		t.Fatalf("就绪集 = %v，期望 [end]", got)
+	}
+}
+
+// TestChannelManager_Flush目标无通道 返回 error 且 buffer 不被清空（偏差 D-3）。
+// Python: channels.py:43-45 的 ValueError + :52 的 clear 位置
+func TestChannelManager_Flush目标无通道(t *testing.T) {
+	ch := NewTriggerChannel("a")
+	m := NewChannelManager([]Channel{ch})
+	m.BufferMessage(NewTriggerMessage("s", "ghost"))
+
+	err := m.Flush()
+	if err == nil {
+		t.Fatal("目标通道不存在时应返回 error")
+	}
+	if got := len(m.Buffer()); got != 1 {
+		t.Fatalf("buffer 长度 = %d，期望 1（出错时不清 buffer）", got)
+	}
+}
+
+// TestChannelManager_空通道列表 nil 通道列表可用（等价 Python 空 list）。
+func TestChannelManager_空通道列表(t *testing.T) {
+	m := NewChannelManager(nil)
+	if !m.IsEmpty() {
+		t.Fatal("新建管理器 buffer 应为空")
+	}
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("就绪集 = %v，期望空", got)
+	}
+	if err := m.Flush(); err != nil {
+		t.Fatalf("空 buffer Flush 应返回 nil，实际 %v", err)
+	}
+}
+
+// TestChannelManager_构造期恢复就绪 构造时已有数据的通道使节点立即进就绪集。
+// Python: channels.py:29-31（# recover 分支）
+func TestChannelManager_构造期恢复就绪(t *testing.T) {
+	ch := NewTriggerChannel("a")
+	ch.Accept(NewTriggerMessage("s", "a"))
+
+	m := NewChannelManager([]Channel{ch})
+	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "a" {
+		t.Fatalf("就绪集 = %v，期望 [a]（构造期应扫出已就绪通道）", got)
+	}
+}
+
+// TestChannelManager_GetReadyNodes升序 多节点就绪时按字典序返回（偏差 D-4）。
+// Python: channels.py:60-61 返回 list(set)，顺序无契约
+func TestChannelManager_GetReadyNodes升序(t *testing.T) {
+	chs := make([]Channel, 0, 3)
+	for _, name := range []string{"c", "a", "b"} {
+		ch := NewTriggerChannel(name)
+		ch.Accept(NewTriggerMessage("s", name))
+		chs = append(chs, ch)
+	}
+	m := NewChannelManager(chs)
+	got := m.GetReadyNodes()
+	want := []string{"a", "b", "c"}
+	if len(got) != len(want) {
+		t.Fatalf("就绪集 = %v，期望 %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("就绪集 = %v，期望升序 %v", got, want)
+		}
+	}
+}
+
+// TestChannelManager_Consume未知节点 未知节点无操作、不 panic。
+// Python: channels.py:64-65
+func TestChannelManager_Consume未知节点(t *testing.T) {
+	m := NewChannelManager([]Channel{NewTriggerChannel("a")})
+	m.Consume("ghost")
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("就绪集 = %v，期望空", got)
+	}
+}
+
+// TestChannelManager_重复键后者覆盖 同 Key 的两个通道：写入只进后者，读侧两个都保留（偏差 D-7）。
+// Python: channels.py:26-28（两个索引独立写）
+func TestChannelManager_重复键后者覆盖(t *testing.T) {
+	first := NewTriggerChannel("a")
+	second := NewTriggerChannel("a")
+	m := NewChannelManager([]Channel{first, second})
+
+	m.BufferMessage(NewTriggerMessage("s", "a"))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if first.IsReady() {
+		t.Fatal("重复键时写入应只进后者")
+	}
+	if !second.IsReady() {
+		t.Fatal("重复键时后者应收到消息")
+	}
+	if got := len(m.nodeToChannels["a"]); got != 2 {
+		t.Fatalf("读侧通道数 = %d，期望 2（两个都保留）", got)
+	}
+}
+
+// TestChannelManager_重复键汇聚僵尸 两个同 Key 的 barrier：消息只进后者，前者永远收不满（偏差 D-7）。
+// Python: channels.py:26-28（key 相同才会互相覆盖，故两个通道的 expected_groups 必须一致）
+func TestChannelManager_重复键汇聚僵尸(t *testing.T) {
+	first := NewBarrierChannel("collect", [][]string{{"A"}, {"B"}})
+	second := NewBarrierChannel("collect", [][]string{{"A"}, {"B"}})
+	if first.Key() != second.Key() {
+		t.Fatalf("两个通道 Key 必须相同才能触发覆盖：%q vs %q", first.Key(), second.Key())
+	}
+	m := NewChannelManager([]Channel{first, second})
+
+	m.BufferMessage(NewBarrierMessage("A", first.Key()))
+	m.BufferMessage(NewBarrierMessage("B", first.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if first.IsReady() {
+		t.Fatal("前者不应收到消息（写入索引被后者覆盖）")
+	}
+	if !second.IsReady() {
+		t.Fatal("后者应收到 A、B 并就绪")
+	}
+	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "collect" {
+		t.Fatalf("就绪集 = %v，期望 [collect]", got)
+	}
+}
+
+// TestChannelManager_Buffer引用语义 Buffer 返回内部切片引用（偏差 D-9 的交棒约束）。
+func TestChannelManager_Buffer引用语义(t *testing.T) {
+	m := NewChannelManager(nil)
+	m.BufferMessage(NewTriggerMessage("a", "b"))
+	buf := m.Buffer()
+	if len(buf) != 1 {
+		t.Fatalf("buffer 长度 = %d，期望 1", len(buf))
+	}
+	buf[0] = NewTriggerMessage("x", "y")
+	if got := m.Buffer()[0].Sender; got != "x" {
+		t.Fatalf("Buffer 应返回内部切片引用，实际见到 %q", got)
+	}
+}
+
+// TestChannelManager_Flush只重算状态改变的节点 重复汇聚信号不把已消费节点重新激活。
+// Python: channels.py:47-58（changed 为 false 时不进 updated_nodes）
+func TestChannelManager_Flush只重算状态改变的节点(t *testing.T) {
+	bar := NewBarrierChannel("collect", [][]string{{"A"}, {"B"}})
+	m := NewChannelManager([]Channel{bar})
+
+	m.BufferMessage(NewBarrierMessage("A", bar.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	m.Consume("collect")
+
+	m.BufferMessage(NewBarrierMessage("A", bar.Key()))
+	m.BufferMessage(NewBarrierMessage("B", bar.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if got := m.GetReadyNodes(); len(got) != 1 {
+		t.Fatalf("就绪集 = %v，期望 [collect]", got)
+	}
+	m.Consume("collect")
+
+	// 直接改通道内部状态，制造"已收满但 Accept 返 false"的场景
+	bar.Restore(ChannelSnapshot{Received: []string{"A", "B"}})
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("Restore 通道不应影响管理器就绪集，实际 %v", got)
+	}
+
+	m.BufferMessage(NewBarrierMessage("A", bar.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("重复信号（Accept 返 false）不应把节点加回就绪集，实际 %v", got)
+	}
+}

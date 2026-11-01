@@ -1,12 +1,13 @@
 package pregel
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
 
-// 依赖说明：合成路由键需要 sort（组内升序）与 strings（Join）；
-// Task 3 会再加入 fmt（Flush 的错误文案）。Go 对未使用 import 报编译错误，故按需加入。
+// 依赖说明：fmt 用于 Flush 的错误文案，sort 用于合成路由键与就绪集/快照排序，
+// strings 用于 Join。
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -91,6 +92,30 @@ type BarrierChannel struct {
 	received map[string]struct{}
 	// routerKey 构造期算好的合成路由键（对齐 Python 在 __init__ 里算 key）
 	routerKey string
+}
+
+// ChannelManager 超步调度的通道管理器：写侧按 msg.Target 路由、读侧按节点名聚合。
+//
+// 四份状态：
+//   - keyToChannel：路由键 → 通道（写侧检索，重复键后者覆盖，偏差 D-7）
+//   - nodeToChannels：节点名 → 通道列表（读侧检索，注册顺序；Snapshot/Restore 的下标对齐依赖它）
+//   - readyNodes：就绪节点集合（GetReadyNodes 排序后输出，偏差 D-4）
+//   - buffer：待 Flush 的消息
+//
+// 并发纪律（偏差 D-8）：无锁，对齐 Python。唯一使用者是 PregelLoop，它在超步循环
+// 所在 goroutine 内串行调用本类型全部方法；节点任务在其他 goroutine 执行，但
+// 不得触碰 ChannelManager。
+//
+// Python: channels.py:13-101
+type ChannelManager struct {
+	// keyToChannel 写侧索引：路由键 → 通道
+	keyToChannel map[string]Channel
+	// nodeToChannels 读侧索引：节点名 → 通道列表（注册顺序）
+	nodeToChannels map[string][]Channel
+	// readyNodes 就绪节点集合
+	readyNodes map[string]struct{}
+	// buffer 待下一超步 Flush 的消息
+	buffer []Message
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -248,6 +273,112 @@ func (c *BarrierChannel) Restore(state ChannelSnapshot) {
 		c.received[sender] = struct{}{}
 	}
 }
+
+// NewChannelManager 按通道列表建索引。
+//
+// 构造时即扫描一次 IsReady()，把已有数据的通道所属节点放进就绪集
+// （对齐 Python 的 `# recover` 分支，channels.py:29-31）。
+// Python: channels.py:14-31
+func NewChannelManager(channels []Channel) *ChannelManager {
+	m := &ChannelManager{
+		keyToChannel:   make(map[string]Channel, len(channels)),
+		nodeToChannels: make(map[string][]Channel, len(channels)),
+		readyNodes:     make(map[string]struct{}),
+		buffer:         make([]Message, 0),
+	}
+	for _, ch := range channels {
+		m.keyToChannel[ch.Key()] = ch
+		m.nodeToChannels[ch.NodeName()] = append(m.nodeToChannels[ch.NodeName()], ch)
+		if ch.IsReady() {
+			m.readyNodes[ch.NodeName()] = struct{}{}
+		}
+	}
+	return m
+}
+
+// BufferMessage 把消息暂存到 buffer，等待下一次 Flush。
+// Python: channels.py:33-34
+func (m *ChannelManager) BufferMessage(msg Message) {
+	m.buffer = append(m.buffer, msg)
+}
+
+// IsEmpty buffer 是否为空（只看 buffer，不看就绪集）。
+// Python: channels.py:36-37
+func (m *ChannelManager) IsEmpty() bool { return len(m.buffer) == 0 }
+
+// Flush 把 buffer 里的消息投递给各自目标通道，并按需更新就绪集。
+//
+// 语义要点（逐条对齐 channels.py:39-58）：
+//   - 找不到目标通道时返回 error 且**不清空 buffer**（Python 的 clear 在循环之后，
+//     异常路径不可达，偏差 D-3）；
+//   - 只有 Accept 返 true 的节点才重算就绪——重复的汇聚信号不会把节点重新激活；
+//   - 重算口径是「该节点任一通道就绪即入集」，不是"全部通道就绪"。
+func (m *ChannelManager) Flush() error {
+	updated := make(map[string]struct{}, len(m.buffer))
+	for _, msg := range m.buffer {
+		ch, ok := m.keyToChannel[msg.Target]
+		if !ok {
+			return fmt.Errorf("通道未找到，目标路由键=%q", msg.Target)
+		}
+		if ch.Accept(msg) {
+			updated[ch.NodeName()] = struct{}{}
+		}
+	}
+	clear(m.buffer)
+	m.buffer = m.buffer[:0]
+
+	for nodeName := range updated {
+		for _, ch := range m.nodeToChannels[nodeName] {
+			if ch.IsReady() {
+				m.readyNodes[nodeName] = struct{}{}
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// GetReadyNodes 返回就绪节点名（升序）。
+//
+// 偏差 D-4：Python 返回 list(set)，顺序无跨进程契约；Go 的 map 迭代是 per-iteration
+// 随机，因此排序是唯一能给出稳定结果的选项。顺序不携带语义——同一超步内所有就绪
+// 节点都会被提交执行。
+// Python: channels.py:60-61
+func (m *ChannelManager) GetReadyNodes() []string {
+	nodes := make([]string, 0, len(m.readyNodes))
+	for nodeName := range m.readyNodes {
+		nodes = append(nodes, nodeName)
+	}
+	sort.Strings(nodes)
+	return nodes
+}
+
+// Consume 消费节点已就绪的通道，并把节点移出就绪集。
+//
+// 未知节点直接返回（对齐 Python channels.py:64-65 的存在性判断，不是 defaultdict）。
+// Python: channels.py:63-74
+func (m *ChannelManager) Consume(nodeName string) {
+	channels, ok := m.nodeToChannels[nodeName]
+	if !ok {
+		return
+	}
+	for _, ch := range channels {
+		if ch.IsReady() {
+			ch.Consume()
+		}
+	}
+	delete(m.readyNodes, nodeName)
+}
+
+// Buffer 返回内部 buffer 切片**引用**（对齐 Python 直接读 self.buffer 的别名语义，
+// 偏差 D-9）。
+//
+// 调用方纪律：需要"buffer + 额外消息"时**必须**先复制
+// （`append(append([]Message(nil), m.Buffer()...), extras...)`），不得直接 append
+// 到返回值上——Python 的 `pending_buffer.extend(...)` 实际改写了管理器内部状态，
+// 那是别名副作用，Go 侧不许复刻。
+// Python: engine.py:180（self.manager.buffer）
+func (m *ChannelManager) Buffer() []Message { return m.buffer }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
