@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
@@ -203,4 +204,50 @@ func TestCanEnqueueCreationFollowUp_禁用AutoTrigger(t *testing.T) {
 	r := NewTeamSkillCreateRail("/tmp/skills", WithTeamSkillCreateAutoTrigger(false))
 	r.completedSessionID = "sess-1"
 	assert.False(t, r.canEnqueueCreationFollowUp("sess-1", 5))
+}
+
+// ──────────────────────────── LoopController 解析测试 ────────────────────────────
+
+// fakeController 记录 EnqueueFollowUp 调用；嵌入控制器接口满足其余方法。
+type fakeController struct {
+	controller.ControllerInterface
+	// followUps 已入队的 prompt
+	followUps []string
+}
+
+// EnqueueFollowUp 记录入队内容
+func (f *fakeController) EnqueueFollowUp(msg string) { f.followUps = append(f.followUps, msg) }
+
+// fakeLoopAgent 只覆写 LoopController，其余方法由嵌入接口兜底（调用即 panic，测试不触发）。
+type fakeLoopAgent struct {
+	agentinterfaces.BaseAgent
+	// ctl 底层控制器
+	ctl controller.ControllerInterface
+}
+
+// LoopController 返回注入的控制器，签名对齐 DeepAgent.LoopController
+func (f *fakeLoopAgent) LoopController() controller.ControllerInterface { return f.ctl }
+
+// TestGetLoopController_解析ControllerInterface实现 验证能取到 LoopController 并转发 EnqueueFollowUp。
+//
+// 修复前该断言恒为 nil（要求返回类型为未导出 loopController 接口，与
+// DeepAgent.LoopController 的 controller.ControllerInterface 签名不一致），
+// 导致 TeamSkillCreateRail 的 follow-up 提议永不触发。
+func TestGetLoopController_解析ControllerInterface实现(t *testing.T) {
+	ctl := &fakeController{}
+	agent := &fakeLoopAgent{ctl: ctl}
+
+	got := getLoopController(agent)
+	if !assert.NotNil(t, got, "应能从 ControllerInterface 实现中解析出 LoopController") {
+		return
+	}
+
+	got.EnqueueFollowUp("probe")
+	assert.Equal(t, []string{"probe"}, ctl.followUps, "EnqueueFollowUp 应转发到底层控制器")
+}
+
+// TestGetLoopController_空Agent与无控制器 验证边界
+func TestGetLoopController_空Agent与无控制器(t *testing.T) {
+	assert.Nil(t, getLoopController(nil), "nil agent 应返回 nil")
+	assert.Nil(t, getLoopController(&fakeLoopAgent{}), "控制器为 nil 应返回 nil")
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
@@ -403,16 +404,34 @@ func containsTeamSkillKind(content string) bool {
 }
 
 // getLoopController 从 Agent 获取 LoopController。
+//
+// 对齐 Python: controller = getattr(agent, "_loop_controller", None)
+//
+// 修复说明：DeepAgent.LoopController() 的返回类型是 controller.ControllerInterface，
+// 原先断言 `LoopController() loopController`（返回未导出接口）因方法签名不一致恒为 false，
+// 导致 TeamSkillCreateRail 的 follow-up 提议永不触发。此处改为断言公开接口类型，
+// 再对返回值二次断言 EnqueueFollowUp 能力。
 func getLoopController(agent agentinterfaces.BaseAgent) loopController {
 	if agent == nil {
 		return nil
 	}
-	// 尝试类型断言获取 LoopController
+	// 类型断言获取 LoopController 提供者（返回类型必须与 DeepAgent 的实现完全一致）
 	type loopControllerProvider interface {
-		LoopController() loopController
+		LoopController() controller.ControllerInterface
 	}
-	if provider, ok := agent.(loopControllerProvider); ok {
-		return provider.LoopController()
+	provider, ok := agent.(loopControllerProvider)
+	if !ok {
+		return nil
 	}
-	return nil
+	raw := provider.LoopController()
+	if raw == nil {
+		return nil
+	}
+	ctl, ok := raw.(loopController)
+	if !ok {
+		logger.Warn(logComponent).
+			Msg("TeamSkillCreateRail LoopController does not support EnqueueFollowUp")
+		return nil
+	}
+	return ctl
 }
