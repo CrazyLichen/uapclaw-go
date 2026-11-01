@@ -233,7 +233,7 @@ CI:  ${{ github.sha }}  →  测试所在 commit 已在远端，且包含本 PR 
 | 重复安装文案 | Python「已安装」，Go「技能 X 已存在」 | 按 Go 实际断言并注明 |
 | zip-slip 文案 | Python「非法路径\|越界」，Go「zip slip 检测：路径 ... 超出目标目录」 | 断言三者任一命中 |
 | TeamSkillsHub HTTP 封装 | Python 单测直接替换 `_team_skills_hub_http_get_data`；Go 走真实 HTTP，需 `{"code":200,"data":{...}}` | httptest 按封装返回 |
-| B3 审批→演化日志落盘 | Go 审批事件由内部 ApprovalRuntime 持有，外部包无稳定出口 | 如实 Skip，包内 ApproveRecord 分支已覆盖 |
+| ~~B3 审批→演化日志落盘~~ | 早期判断有误：`RequestUserEvolution` 返回 `RequestID`/`ApprovalEvent`、`ApproveRecord` 与 `EvolutionStore()` 均导出 | **已迁移为真实用例**（SetTrajectorySink + 3 次工具调用 + RequestUserEvolution + ApproveRecord + LoadFullEvolutionLog） |
 | `MemberSkillToolkitRail` 无测试 | Python 有 `test_team_member_skill_toolkit_rail.py` | 本轮不做（依赖 `Runner` 全局替换，Go 无 monkeypatch）；如需要，走 A4 的工具链链路部分替代 |
 
 ## 13. 实施顺序（供 writing-plans 展开）

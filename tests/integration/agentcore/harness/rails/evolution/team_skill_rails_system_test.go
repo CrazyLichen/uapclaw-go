@@ -4,15 +4,24 @@ package evolution_test
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+
+	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -132,15 +141,97 @@ func (s *TeamSkillRailsSystemSuite) TestTeamSkillCreateRail_未达阈值不入�
 	s.Empty(ctl.followUps, "未达阈值不应入队")
 }
 
+// patchMockClient 返回团队技能 patch JSON 的模拟 LLM 客户端
+type patchMockClient struct {
+	model_clients.BaseModelClient
+	// response 固定响应内容
+	response string
+}
+
+// Invoke 返回预置的 patch JSON
+func (m *patchMockClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	return llmschema.NewAssistantMessage(m.response), nil
+}
+
+// Stream 未实现
+func (m *patchMockClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+// newPatchMockModel 构造返回 patch JSON 的 *llm.Model
+func newPatchMockModel(t *testing.T) *llm.Model {
+	t.Helper()
+	provider := fmt.Sprintf("mock_team_skill_patch_%d", time.Now().UnixNano())
+	mockClient := &patchMockClient{response: `{"need_patch": true, "section": "Workflow", "title": "tighten handoff",
+"summary": "handoff quality drifted", "content": "### Experience: tighten handoff\nRequire the leader to restate output format before merge.",
+"reason": "handoff quality drifted during collaboration"}`}
+	model_clients.GetClientRegistry().Register(provider, "llm", func(_ *llmschema.ModelRequestConfig, _ *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+		return mockClient, nil
+	})
+	model, err := llm.NewModel(
+		&llmschema.ModelClientConfig{ClientProvider: provider, ClientID: provider + "_id"},
+		&llmschema.ModelRequestConfig{ModelName: "mock-model"},
+	)
+	require.NoError(t, err, "创建 mock model 失败")
+	return model
+}
+
 // TestTeamSkillEvolutionRail_审批后演化日志落盘
 // 对齐 Python: test_team_skill_rail_generates_and_persists_patch_after_completion
 //
-// 未迁移原因（如实记录，不用弱断言伪装）：Python 用例通过
-// rail.after_invoke → drain_pending_approval_events() → on_approve_record(request_id) 驱动；
-// Go 侧的审批事件由 EvolutionRail 内部 ApprovalRuntime 持有，事件取出入口依赖
-// pendingHostEvents/审批快照内部状态，外部包在零生产改动前提下无法稳定驱动该链路。
-// 该链路的包内单测已覆盖 ApproveRecord/RejectRecord 分支
-// （见 internal/.../team_skill_evolution_rail_test.go 的 TestApprovalLifecycle）。
+// 链路：before_invoke 建轨迹 → 喂 read_file/spawn_member/view_task 工具调用
+// → RequestUserEvolution 生成待审批 patch（返回 requestID + 审批事件）
+// → ApproveRecord 落盘 → LoadFullEvolutionLog 断言 Workflow 章节与内容。
 func (s *TeamSkillRailsSystemSuite) TestTeamSkillEvolutionRail_审批后演化日志落盘() {
-	s.T().Skip("审批→演化日志落盘链路需内部审批事件出口，零生产改动下无法从外部包稳定驱动；包内已有 ApproveRecord 分支覆盖")
+	skillsDir := s.T().TempDir()
+	skillDir := filepath.Join(skillsDir, "research-team")
+	s.Require().NoError(os.MkdirAll(skillDir, 0o755))
+	skillMD := "---\nname: research-team\ndescription: simple research team\nkind: team-skill\n---\n" +
+		"# Workflow\n1. leader assigns tasks\n2. members execute\n"
+	s.Require().NoError(os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o600))
+
+	rail := evolution.NewTeamSkillEvolutionRail(
+		[]string{skillsDir},
+		newPatchMockModel(s.T()),
+		"mock-model",
+		"cn",
+		evolution.WithTeamSkillAutoScan(false),
+		evolution.WithTeamSkillAutoSave(false),
+		evolution.WithTeamSkillAsyncEvolution(false),
+	)
+
+	ctl := &recordingController{}
+	agent := &teamLeaderAgent{ctl: ctl}
+	ctx := context.Background()
+
+	// 1. 建立轨迹会话
+	invokeCbc := agentinterfaces.NewAgentCallbackContext(agent,
+		&agentinterfaces.InvokeInputs{ConversationID: "team-evolve"}, nil)
+	s.Require().NoError(rail.BeforeInvoke(ctx, invokeCbc))
+
+	// 2. 工具调用序列（对齐 Python 用例）
+	toolCalls := []*agentinterfaces.ToolCallInputs{
+		{ToolName: "read_file", ToolArgs: map[string]any{"path": filepath.Join(skillDir, "SKILL.md")}, ToolResult: "loaded"},
+		{ToolName: "spawn_member", ToolArgs: map[string]any{"name": "researcher"}, ToolResult: map[string]any{"status": "spawned"}},
+		{ToolName: "view_task", ToolArgs: map[string]any{}, ToolResult: "task-a completed\ntask-b completed"},
+	}
+	for _, ti := range toolCalls {
+		cbc := agentinterfaces.NewAgentCallbackContext(agent, ti, nil)
+		s.Require().NoError(rail.AfterToolCall(ctx, cbc))
+	}
+
+	// 3. 用户主动请求演化（autoApprove=false → 应产生待审批）
+	result, err := rail.RequestUserEvolution(ctx, "research-team", "tighten handoff", false)
+	s.Require().NoError(err)
+	s.Require().NotNil(result.RequestID, "应返回待审批 requestID")
+
+	// 4. 审批通过 → 落盘
+	s.Require().NoError(rail.ApproveRecord(ctx, *result.RequestID))
+
+	// 5. 断言演化日志
+	log, err := rail.EvolutionStore().LoadFullEvolutionLog(ctx, "research-team")
+	s.Require().NoError(err)
+	s.Require().Len(log.Entries, 1, "应写入 1 条演化记录")
+	s.Equal("Workflow", log.Entries[0].Change.Section)
+	s.Contains(log.Entries[0].Change.Content, "tighten handoff")
 }
