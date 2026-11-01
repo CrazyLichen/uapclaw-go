@@ -174,8 +174,8 @@ func DeepAgentUserMDPath() string {
 	return path.DeepAgentUserMDPath()
 }
 
-// AgentTeamsHomeDir 返回 Agent Teams 主目录：WorkspaceDir()/agent_teams。
-// Python: get_agent_teams_home()
+// AgentTeamsHomeDir 返回 Agent Teams 主目录：WorkspaceDir()/.agent_teams（目录名带前导点）。
+// Python: get_agent_teams_home()（agent_teams/paths.py:41 返回 get_openjiuwen_home()/".agent_teams"）
 func AgentTeamsHomeDir() string {
 	return path.AgentTeamsHomeDir()
 }
