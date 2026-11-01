@@ -173,6 +173,9 @@ func TestHandleWsDebugConfig(t *testing.T) {
 }
 
 func TestHandleRebuildAgentData(t *testing.T) {
+	// 必须隔离工作区：rebuild 已由 stub 改为真实重建，默认 HOME 下 workspace 可能不存在
+	setupAgentDataWorkspace(t)
+
 	req := httptest.NewRequest(http.MethodPost, "/file-api/rebuild-agent-data", nil)
 	w := httptest.NewRecorder()
 	HandleRebuildAgentData(w, req)
@@ -461,4 +464,147 @@ func TestQuoteAllForDownload(t *testing.T) {
 			t.Errorf("quoteAll(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
+}
+
+// ──────────────────────────── agent-data 索引重建测试 ────────────────────────────
+
+// setupAgentDataWorkspace 准备隔离工作区并返回 agent workspace 目录
+func setupAgentDataWorkspace(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	workspace.SetUserHome(workspace.UserHomeDir())
+	wsDir := workspace.AgentWorkspaceDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(wsDir, "skills", "demo"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(wsDir, "AGENT.md"), []byte("# agent"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(wsDir, "skills", "demo", "SKILL.md"), []byte("---\nname: demo\n---\n"), 0o644))
+	return wsDir
+}
+
+// TestHandleRebuildAgentData_生成文件树索引 验证 rebuild 真实重建 agent-data.json
+// 对齐 Python: app_web.py L735 POST /file-api/rebuild-agent-data
+func TestHandleRebuildAgentData_生成文件树索引(t *testing.T) {
+	wsDir := setupAgentDataWorkspace(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/file-api/rebuild-agent-data", nil)
+	w := httptest.NewRecorder()
+	HandleRebuildAgentData(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, true, resp["ok"])
+	assert.Equal(t, "rebuilt", resp["status"])
+
+	raw, err := os.ReadFile(filepath.Join(wsDir, "agent-data.json"))
+	require.NoError(t, err, "应生成 agent-data.json")
+
+	var data map[string][]map[string]any
+	require.NoError(t, json.Unmarshal(raw, &data), "应为「文件夹 → 文件数组」对象: %s", string(raw))
+	assert.Contains(t, data, "workspace", "顶层文件应归属 workspace key")
+	assert.Len(t, data["workspace/skills/demo"], 1)
+	assert.Equal(t, "agent/workspace/skills/demo/SKILL.md", data["workspace/skills/demo"][0]["path"])
+	assert.Equal(t, true, data["workspace/skills/demo"][0]["isMarkdown"])
+}
+
+// TestHandleFileContentGet_agentData缺失时自动生成 验证读取回退
+// 对齐 Python: app_web.py L615 —— 缺失时先 _generate_agent_data 再读
+func TestHandleFileContentGet_agentData缺失时自动生成(t *testing.T) {
+	wsDir := setupAgentDataWorkspace(t)
+	_, statErr := os.Stat(filepath.Join(wsDir, "agent-data.json"))
+	require.True(t, os.IsNotExist(statErr), "前置条件：索引尚不存在")
+
+	req := httptest.NewRequest(http.MethodGet, "/file-api/file-content?path=agent/workspace/agent-data.json", nil)
+	w := httptest.NewRecorder()
+	HandleFileContentGet(w, req)
+	require.Equal(t, http.StatusOK, w.Code, "缺失时应自动生成后返回")
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	content, ok := resp["content"].(string)
+	require.True(t, ok, "应返回 content 字段")
+	assert.Contains(t, content, "workspace/skills/demo", "内容应为重建后的索引")
+}
+
+// TestIsAgentDataPath 验证路径识别
+func TestIsAgentDataPath(t *testing.T) {
+	assert.True(t, isAgentDataPath("agent/workspace/agent-data.json"))
+	assert.True(t, isAgentDataPath("./agent/workspace/agent-data.json"))
+	assert.True(t, isAgentDataPath("agent-data.json"))
+	assert.False(t, isAgentDataPath("agent/workspace/other.json"))
+	assert.False(t, isAgentDataPath("skills/demo/SKILL.md"))
+}
+
+// ──────────────────────────── 覆盖率补齐：rebuild 错误路径 / list-markdown ────────────────────────────
+
+// TestHandleRebuildAgentData_工作区不存在返回500 验证错误路径
+func TestHandleRebuildAgentData_工作区不存在返回500(t *testing.T) {
+	t.Setenv("UAPCLAW_DATA_DIR", filepath.Join(t.TempDir(), "missing-data-dir"))
+	workspace.SetUserHome(workspace.UserHomeDir())
+
+	req := httptest.NewRequest(http.MethodPost, "/file-api/rebuild-agent-data", nil)
+	w := httptest.NewRecorder()
+	HandleRebuildAgentData(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "generate_failed", resp["error"])
+}
+
+// TestHandleListMarkdown_列出Markdown文件 验证递归列出 .md 并跳过隐藏项
+func TestHandleListMarkdown_列出Markdown文件(t *testing.T) {
+	wsDir := setupAgentDataWorkspace(t)
+	require.NoError(t, os.WriteFile(filepath.Join(wsDir, "notes.md"), []byte("# notes"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(wsDir, ".hidden.md"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(wsDir, "plain.txt"), []byte("x"), 0o644))
+
+	req := httptest.NewRequest(http.MethodGet, "/file-api/list-markdown?dir=/", nil)
+	w := httptest.NewRecorder()
+	HandleListMarkdown(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Files []fileEntry `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	names := make([]string, 0, len(resp.Files))
+	for _, f := range resp.Files {
+		names = append(names, f.Name)
+	}
+	assert.Contains(t, names, "notes.md")
+	assert.Contains(t, names, "AGENT.md")
+	assert.Contains(t, names, "SKILL.md")
+	assert.NotContains(t, names, ".hidden.md")
+	assert.NotContains(t, names, "plain.txt")
+}
+
+// TestHandleListMarkdown_错误分支 验证目录不存在与路径穿越
+func TestHandleListMarkdown_错误分支(t *testing.T) {
+	setupAgentDataWorkspace(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/file-api/list-markdown?dir=/no-such-dir", nil)
+	w := httptest.NewRecorder()
+	HandleListMarkdown(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	req = httptest.NewRequest(http.MethodGet, "/file-api/list-markdown?dir=../../etc", nil)
+	w = httptest.NewRecorder()
+	HandleListMarkdown(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// TestHandleFileContentGet_base64编码 验证 base64 分支
+func TestHandleFileContentGet_base64编码(t *testing.T) {
+	wsDir := setupAgentDataWorkspace(t)
+	require.NoError(t, os.WriteFile(filepath.Join(wsDir, "bin.dat"), []byte("hello"), 0o644))
+
+	req := httptest.NewRequest(http.MethodGet, "/file-api/file-content?path=bin.dat&encoding=base64", nil)
+	w := httptest.NewRecorder()
+	HandleFileContentGet(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "base64", resp["encoding"])
 }

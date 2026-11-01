@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
+	skillruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -64,6 +65,15 @@ func HandleFileContentGet(w http.ResponseWriter, r *http.Request) {
 
 	// 读取文件内容
 	data, err := os.ReadFile(absPath)
+	if err != nil && os.IsNotExist(err) && isAgentDataPath(filePath) {
+		// 对齐 Python: app_web.py L615 —— 请求 agent-data.json 且不存在时先重建再重读
+		if genErr := skillruntime.GenerateAgentDataForWorkspace(workspace.AgentWorkspaceDir()); genErr != nil {
+			writeJSONError(w, http.StatusInternalServerError, "生成 agent-data 失败: "+genErr.Error())
+			return
+		}
+		absPath = filepath.Join(workspace.AgentWorkspaceDir(), "agent-data.json")
+		data, err = os.ReadFile(absPath)
+	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeJSONError(w, http.StatusNotFound, "文件不存在")
@@ -272,10 +282,23 @@ func HandleWsDebugConfigPost(w http.ResponseWriter, r *http.Request) {
 
 // HandleRebuildAgentData 处理 POST /file-api/rebuild-agent-data 请求。
 //
-// 重建 Agent 数据（stub 实现）。
+// 重建 agent 工作区的 agent-data.json 文件树索引。
+// 前端 AgentPanel 每次进入/刷新时先调用本接口，再读取 agent/workspace/agent-data.json。
+//
+// Python: app_web.py L735 —— _generate_agent_data(self.project_root)
 func HandleRebuildAgentData(w http.ResponseWriter, _ *http.Request) {
-	logger.Info(logComponent).Msg("rebuild-agent-data: stub implementation")
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "rebuild_stub"})
+	workspaceDir := workspace.AgentWorkspaceDir()
+	if err := skillruntime.GenerateAgentDataForWorkspace(workspaceDir); err != nil {
+		logger.Warn(logComponent).Err(err).Str("workspace_dir", workspaceDir).
+			Msg("rebuild agent-data failed")
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"ok":     false,
+			"error":  "generate_failed",
+			"detail": err.Error(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "rebuilt"})
 }
 
 // HandleFileDownload 处理 GET/HEAD /file-api/download 请求。
@@ -357,6 +380,17 @@ func HandleFileDownload(w http.ResponseWriter, r *http.Request) {
 // safeFilePath 将用户提供的相对路径转为绝对路径，并验证不超出工作区目录。
 //
 // 路径穿越防护：拒绝包含 ".." 的路径，确保结果路径在工作区内。
+// isAgentDataPath 判断请求路径是否指向 agent 工作区的 agent-data.json。
+//
+// 同时接受项目根相对（agent/workspace/agent-data.json，前端实际传入）与裸文件名两种写法。
+//
+// Python: app_web.py file_arg.replace("\\", "/") == "agent/workspace/agent-data.json"
+func isAgentDataPath(filePath string) bool {
+	normalized := strings.ReplaceAll(filePath, "\\", "/")
+	normalized = strings.TrimPrefix(normalized, "./")
+	return normalized == "agent/workspace/agent-data.json" || normalized == "agent-data.json"
+}
+
 func safeFilePath(userPath string) (string, error) {
 	// 拒绝明显的路径穿越
 	if strings.Contains(userPath, "..") {

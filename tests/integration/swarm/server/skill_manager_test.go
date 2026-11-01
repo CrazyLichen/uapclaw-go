@@ -57,7 +57,10 @@ func TestSkillManagerSuite(t *testing.T) {
 
 // SetupTest 每测试创建隔离工作区与 SkillManager
 func (s *SkillManagerSuite) SetupTest() {
-	s.workspace = s.T().TempDir()
+	// 与生产同构：skillsDir = <data>/agent/workspace/skills，
+	// 这样 agent-data.json 的 folder key 才是 "workspace/..."（前端契约）
+	s.workspace = filepath.Join(s.T().TempDir(), "agent", "workspace")
+	s.Require().NoError(os.MkdirAll(s.workspace, 0o755))
 	s.mgr = skillpkg.NewSkillManager(s.workspace)
 }
 
@@ -126,16 +129,18 @@ func (s *SkillManagerSuite) TestImportLocal_落盘与卸载全链() {
 	s.Require().True(ok)
 	s.Equal("demo-skill", record["name"])
 
-	// 3. agent-data.json 索引文件已生成且为合法数组
-	//
-	// 差异说明（不修，零生产改动）：Python _generate_agent_data_for_workspace 递归整个
-	// agent 树并按目录分组输出 dict；Go 侧只扫描 skills/<dir>/skill/SKILL.md（多一层
-	// skill/）且输出扁平数组，因此在 skills/<name>/SKILL.md 布局下恒为空数组。
-	// 此处只断言「文件已生成 + 可解析为数组」，不把分歧固化为期望值。
+	// 3. agent-data.json 文件树索引：文件夹 → 文件数组（前端 AgentPanel 契约）
 	raw := s.readFileBytes(filepath.Join(s.workspace, "agent-data.json"))
-	var anyVal any
-	s.Require().NoError(json.Unmarshal(raw, &anyVal),
-		"agent-data.json 应为合法 JSON，实际内容: %s", string(raw))
+	var index map[string][]map[string]any
+	s.Require().NoError(json.Unmarshal(raw, &index),
+		"agent-data.json 应为「文件夹 → 文件数组」对象，实际内容: %s", string(raw))
+
+	entries, ok := index["workspace/skills/demo-skill"]
+	s.Require().True(ok, "应有 workspace/skills/demo-skill 分组，实际 keys: %v", index)
+	s.Require().NotEmpty(entries)
+	s.Equal("agent/workspace/skills/demo-skill/SKILL.md", entries[0]["path"])
+	s.Equal("SKILL.md", entries[0]["name"])
+	s.Equal(true, entries[0]["isMarkdown"])
 
 	// 4. 导出访问器
 	s.Len(s.mgr.GetLocalSkills(), 1)
