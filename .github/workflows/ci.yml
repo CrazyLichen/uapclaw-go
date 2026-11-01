@@ -317,6 +317,12 @@ jobs:
       - name: 运行集成测试（带覆盖率）
         env:
           CGO_ENABLED: 1
+          # GitHub 远程技能集成测试（对齐 Python RUN_GITHUB_TEST=1 守卫）
+          RUN_GITHUB_TEST: "1"
+          # 内置令牌：匿名 60 次/小时 → 认证 5000 次/小时，避免限流误红
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 读本次提交的 tree，保证 fixture 与代码同版本
+          GITHUB_SKILL_TEST_REF: ${{ github.sha }}
         run: |
           # 收集集成测试直接 import 的 internal 包，作为覆盖率追踪目标
           COVER_PKGS=$(grep -rh '"github.com/uapclaw/uapclaw-go/internal/' tests/integration/ --include='*.go' \

@@ -18,6 +18,10 @@ tests/integration/external/spawn
 # import 的 runner/session 仅用于编译期包引用验证
 tests/integration/cmd
 
+# GitHub 远程技能：被测边界为外部 GitHub API（Trees/Contents），跨度天然为
+# agentcore/single_agent 单子系统；用例由 RUN_GITHUB_TEST=1 守卫，CI 注入令牌与 tree ref
+tests/integration/external/github
+
 # ── B. 需真实外部服务 ────────────────────────────────────────
 
 # 需要真实 ChromaDB 服务/原生库：无服务时全部 Skip，覆盖验证无意义；
@@ -33,10 +37,6 @@ tests/integration/external/gaussdb
 tests/integration/external/mcp
 
 # ── C. 单模块深度测试（过渡豁免）────────────────────────────
-
-# SkillManager：原测试依赖内部非导出方法（gitClone/gitPull/saveState 等），
-# 需 export_test.go 桥接或重构为导出 API 后补真实测试；当前仅包引用验证
-tests/integration/swarm/server
 
 # mock LLM 基础设施：mock_client + ClientRegistry 注册链路自测，
 # 供其他集成测试注入使用；链路仅涉 foundation/llm 单子系统
