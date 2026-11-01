@@ -228,6 +228,7 @@ CI:  ${{ github.sha }}  →  测试所在 commit 已在远端，且包含本 PR 
 | `TeamSkillRail` 命名 | Go 为 `TeamSkillEvolutionRail` | B3 注释注明对应关系 |
 | 根目录 `SKILL.md` 跳过分支 | 只在 `Directory==""` 时触发，且需改生产代码才能测 | 本轮不覆盖（Python 亦未覆盖） |
 | `SkillManager` 超时/重试参数 | 包 `init` 时读取全局变量 | 不做断言 |
+| `agent-data.json` 结构不一致 | Python `_generate_agent_data_for_workspace` 递归整个 agent 树、按目录分组输出 dict；Go 只扫 `skills/<dir>/skill/SKILL.md`（多一层 `skill/`）并输出扁平数组，`skills/<name>/SKILL.md` 布局下恒为空（`null`） | 本轮只断言「文件已生成 + 合法 JSON」，不固化分歧；待专项修复 |
 | `MemberSkillToolkitRail` 无测试 | Python 有 `test_team_member_skill_toolkit_rail.py` | 本轮不做（依赖 `Runner` 全局替换，Go 无 monkeypatch）；如需要，走 A4 的工具链链路部分替代 |
 
 ## 13. 实施顺序（供 writing-plans 展开）
