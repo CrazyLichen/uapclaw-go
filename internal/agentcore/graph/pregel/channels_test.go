@@ -609,7 +609,10 @@ func TestChannelManager_Buffer返回副本(t *testing.T) {
 	}
 
 	// 往副本 append 不影响内部长度
-	buf = append(buf, NewTriggerMessage("e", "d"))
+	grown := append(buf, NewTriggerMessage("e", "d"))
+	if len(grown) != 2 || grown[1].Sender != "e" {
+		t.Fatalf("副本 append 结果长度 = %d，期望 2 且末条 sender=e", len(grown))
+	}
 	if got := len(m.Buffer()); got != 2 {
 		t.Fatalf("对副本 append 影响了内部，内部长度 = %d，期望 2", got)
 	}
