@@ -240,3 +240,32 @@ Stop : 逆序
 - 不改 `internal/common/workspace`、`internal/swarm/*` 的任何生产代码。
 - 不动 `.integration-scope-exempt`（除非风险条目 3 触发）。
 - 不实现 `uapclaw init` 子命令。
+
+## 11. 实施结论
+
+**T0 探针结论：强断言档位需先补生产代码，补完后达成。**
+
+探针实测发现 team 模式本地链路完全不可用，逐层定位出 4 层根因，前 3 层已修：
+
+| 层 | 现象 | 根因 | 处置 |
+|---|---|---|---|
+| 1 | `team.error: nil pointer` | `TeamBackendAccessor()` 把 nil 指针装进接口（typed-nil） | `team_agent.go` 显式判空 |
+| 2 | TeamBackend 恒 nil | `BuildMemberMessagerConfig` 是 `TODO(#9.65)` 桩，恒返 nil → messager 空 → 不装配 backend | 按 Python `payload.py:88-114` 实现（端口基准 16000/步长 10/同名复用/metadata 剔除 `pubsub_bind`），并补 `BuildSpawnPayload` 的 transport 序列化 |
+| 3 | 有 `team.runtime_ready` 但 LLM 零调用 | `TeamHarness.RunStreaming` 分支 2 是空流桩 | 实现 `_prepare_agent_session` + `_ensure_initial_plan_mode`（派生 AgentSession → PreRun → plan 种子化） |
+| 4 | 无 `team.member`/`team.message` | monitor 的分类事件未推送 | **未修**，登记为待回填 |
+
+**用例落地**：17 个 Go 测试方法
+
+- `tests/integration/swarm/workspace/init_flow_test.go`：16 条（15 条对齐 Python 有效用例 + 1 条 config 内容覆盖 Python skip 项），其中 8 条走 PTY 真终端覆盖交互分支；1 条链路用例驱动进程内 serve 完成 WS `initialize` 往返。
+- `tests/integration/swarm/gateway/team_continuous_dialog_test.go`：1 条 MockLLM 版，实测 `firstAccepted/runtimeReady/memberSpawned/secondAccepted/firstFinalAfter` 全为 true、`llmCalls=2`。
+- `tests/integration/real_llm/team_continuous_dialog_real_test.go`：1 条真 LLM 版（`integration && llm`），夜间 `real-llm-ci` 收口。
+
+**门禁**：`go run ./cmd/integration-audit -verify` → `swarm/gateway`（跨度 4）、`swarm/workspace`（跨度 3）均通过，无需登记豁免。
+
+**已知偏差（3 条，均未修改生产代码的部分）**：
+
+1. Go 工作区布局与 Python 不同：`Prepare` 不创建 `agent/home`、`agent/skills`、`agent/memory`（Python `conftest.py:165-174` 期望），技能目录挂在 `agent/workspace/skills`。用例按 Go 实际布局断言并在注释标注。
+2. `uapclaw init` 子命令仍是桩（打印「尚未实现」），用例改由库层 `workspace.Init` 覆盖。
+3. monitor 的 `team.member`/`team.message` 分类事件未推送，team 用例改以 `team.runtime_ready` + `chat.tool_result(success)` 作为"团队已建立且成员已 spawn"的等价锚点。
+
+**副作用修复**：team 用例的成员技能/记忆目录在未设根路径时落进程 CWD，套件期间切换到临时目录避免污染仓库。
