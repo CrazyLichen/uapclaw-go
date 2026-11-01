@@ -1316,3 +1316,37 @@ Expected: `Build` / `Lint` / `Unit Test` / `Integration Test` 全部 SUCCESS。�
 - **spec 覆盖**：A1(Task 4)、A2(Task 6)、A3(Task 5)、A4+A5(Task 7)、A6(Task 3)、B1(Task 8)、B2(Task 10)、B3(Task 9)、B4a(Task 2)、B4b(Task 2)、豁免清理(Task 10)、CI(Task 10) —— 全覆盖。
 - **新增生产改动**：Task 1（bug 修复）与 Task 2（抽出 `searchSkillsFromFiles` 纯函数，行为不变）—— 已在 spec 增补说明，其余为零改动。
 - **类型一致性**：`skillpkg.SkillManager`、`swarmtools.NewSkillToolkit`、`team.NewTeamManager`、`atschema.TeamAgentSpec{Workspace: *teamworkspace.TeamWorkspaceConfig}`、`goskills.NewGitHubTree(owner, repo, ref, dir)`、`evolution.NewTeamSkillCreateRail(dir, opts...)` 均按当前源码签名书写。
+
+---
+
+## 执行记录（2026-11-01，inline execution）
+
+CI：run [41262753929](https://github.com/CrazyLichen/uapclaw-go/actions/runs/41262753929) 四绿
+（Build / Lint / Unit Test / Integration Test）。
+
+| 任务 | 状态 | 提交 | 说明 |
+|---|---|---|---|
+| Task 1 修复 `getLoopController` | ✅ | `3082ece2` | 先写失败用例证明断言恒 false，再修；新增 3 个单测 |
+| Task 2 fixture | ✅（B4b 取消） | `9dea774d` | 取消根目录跳过用例：需改 `remote_skill_util.go` 会触发 85% 修改文件覆盖门禁，且 Python 侧同样未覆盖 |
+| Task 3 A6 路径穿越 + 骨架 | ✅ | `ad995ebd` | 空名走参数校验分支（Python 为 ValueError），断言分开写 |
+| Task 4 A1 导入/卸载全链 | ✅ | `3a8ba01e` | agent-data 断言收敛为「文件已生成 + 合法 JSON」，分歧记入 spec §12 |
+| Task 5 A3 TeamSkillsHub | ✅ | `4cb0c809` | 10 条用例；httptest 需 `{code:200,data:{...}}` 封装 |
+| Task 6 A2 真实 git marketplace | ✅ | `8e8f4f9f` | 覆盖 `gitClone`；commit 断言 40 位 SHA |
+| Task 7 A4 + A5 | ✅ | `1d9c2cba` | 补 TeamSkillCreateRail 注册使调用跨度达 3 |
+| Task 8 B1 skill_init | ✅ | `3ecb7c9a` | `SetSysOperationID` 同步 RemoteSkillUtil；重复注册报「已存在」 |
+| Task 9 B3 rails 行为流 | ✅（第二条 Skip） | `d4fc1885` | follow-up 入队用例是 Task 1 的端到端回归守卫；审批落盘如实 Skip |
+| Task 10 B2 + CI + 豁免 | ✅ | `5846163f` | 本地对真实 GitHub 验证通过（3 文件/2 技能/逐字节内容） |
+
+### 审计结果
+
+```
+[通过] tests/integration/swarm/server（调用跨度 3，有效测试 18）
+[豁免] tests/integration/external/github   ← 新登记 A 类（真网络边界）
+目录总计 55：通过 39，违规 0，豁免 16
+```
+
+### 执行期发现（3 个 Go/Python 分歧，均未修，记入 spec §12）
+
+1. **`agent-data.json` 结构不一致**：Python 递归整树按目录分组输出 dict；Go 只扫 `skills/<dir>/skill/SKILL.md`（多一层 `skill/`）且输出扁平数组 → 本布局下恒为 `null`。
+2. **TeamSkillsHub 无 `detail_key`**，重复安装/zip-slip 的错误文案也与 Python 不同（语义等价）。
+3. **`getLoopController` P0 bug（已修）**：类型断言签名不匹配导致团队技能创建提议永不触发。

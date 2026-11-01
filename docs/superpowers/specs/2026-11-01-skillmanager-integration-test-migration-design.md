@@ -229,6 +229,11 @@ CI:  ${{ github.sha }}  →  测试所在 commit 已在远端，且包含本 PR 
 | 根目录 `SKILL.md` 跳过分支 | 只在 `Directory==""` 时触发，且需改生产代码才能测 | 本轮不覆盖（Python 亦未覆盖） |
 | `SkillManager` 超时/重试参数 | 包 `init` 时读取全局变量 | 不做断言 |
 | `agent-data.json` 结构不一致 | Python `_generate_agent_data_for_workspace` 递归整个 agent 树、按目录分组输出 dict；Go 只扫 `skills/<dir>/skill/SKILL.md`（多一层 `skill/`）并输出扁平数组，`skills/<name>/SKILL.md` 布局下恒为空（`null`） | 本轮只断言「文件已生成 + 合法 JSON」，不固化分歧；待专项修复 |
+| TeamSkillsHub 无 `detail_key` | Python 失败响应带 `detail_key=skills.teamskillshub.errors.*`；Go 只返回 `detail` | 测试断言 detail 语义，不断言 detail_key |
+| 重复安装文案 | Python「已安装」，Go「技能 X 已存在」 | 按 Go 实际断言并注明 |
+| zip-slip 文案 | Python「非法路径\|越界」，Go「zip slip 检测：路径 ... 超出目标目录」 | 断言三者任一命中 |
+| TeamSkillsHub HTTP 封装 | Python 单测直接替换 `_team_skills_hub_http_get_data`；Go 走真实 HTTP，需 `{"code":200,"data":{...}}` | httptest 按封装返回 |
+| B3 审批→演化日志落盘 | Go 审批事件由内部 ApprovalRuntime 持有，外部包无稳定出口 | 如实 Skip，包内 ApproveRecord 分支已覆盖 |
 | `MemberSkillToolkitRail` 无测试 | Python 有 `test_team_member_skill_toolkit_rail.py` | 本轮不做（依赖 `Runner` 全局替换，Go 无 monkeypatch）；如需要，走 A4 的工具链链路部分替代 |
 
 ## 13. 实施顺序（供 writing-plans 展开）
