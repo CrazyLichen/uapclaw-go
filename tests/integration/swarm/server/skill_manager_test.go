@@ -3,10 +3,15 @@
 package server_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -158,7 +163,277 @@ func (s *SkillManagerSuite) TestImportLocal_重复导入与force覆盖() {
 	s.Len(s.mgr.GetLocalSkills(), 1, "force 覆盖不应产生重复记录")
 }
 
+// TestTeamSkillsHub_Info透传 对齐 Python: test_handle_skills_team_skills_hub_info
+//
+// 说明：Python 单测直接替换 _team_skills_hub_http_get_data 返回 data dict，绕过 HTTP 封装；
+// Go 走真实 HTTP，故 httptest 需返回 {"code":200,"data":{...}} 业务封装（helper 校验 code==200）。
+func (s *SkillManagerSuite) TestTeamSkillsHub_Info透传() {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.Equal("/api/v1/artifacts/demo-skill", r.URL.Path)
+		s.Equal("1.0.0", r.URL.Query().Get("version"))
+		_, _ = w.Write([]byte(`{"code":200,"data":{"asset_id":"demo-skill","name":"demo-skill","display_name":"Demo Skill"}}`))
+	}))
+	defer server.Close()
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubInfo(s.Ctx, map[string]any{
+		"asset_id":   "demo-skill",
+		"version":    "1.0.0",
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.True(toBool(result["success"]), "info 应成功: %v", result)
+	s.Equal("demo-skill", result["asset_id"])
+	s.Equal("1.0.0", result["version"])
+	data, ok := result["data"].(map[string]any)
+	s.Require().True(ok)
+	s.Equal("Demo Skill", data["display_name"])
+}
+
+// TestTeamSkillsHub_Search映射 对齐 Python: test_handle_skills_team_skills_hub_search_maps_response
+func (s *SkillManagerSuite) TestTeamSkillsHub_Search映射() {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.Equal("/api/v1/plugins", r.URL.Path)
+		_, _ = w.Write([]byte(`{"code":200,"data":{"items":[{"asset_id":"demo-skill","name":"demo-skill","display_name":"Demo Skill","short_desc":"desc","latest_version":"1.2.3","update_time":123}]}}`))
+	}))
+	defer server.Close()
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubSearch(s.Ctx, map[string]any{
+		"q":          "demo",
+		"limit":      10,
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.True(toBool(result["success"]), "search 应成功: %v", result)
+	s.Equal(1, result["count"])
+	skills, ok := result["skills"].([]map[string]any)
+	s.Require().True(ok)
+	s.Require().Len(skills, 1)
+	s.Equal("demo-skill", skills[0]["asset_id"])
+	s.Equal("Demo Skill", skills[0]["display_name"])
+}
+
+// TestTeamSkillsHub_Search失败 对齐 Python: test_handle_skills_team_skills_hub_search_hide_internal_error
+//
+// 差异：Python 返回 detail_key=skills.teamskillshub.errors.searchFailed；Go 只返回 detail。
+func (s *SkillManagerSuite) TestTeamSkillsHub_Search失败() {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"message":"internal endpoint detail"}`))
+	}))
+	defer server.Close()
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubSearch(s.Ctx, map[string]any{
+		"q":          "demo",
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.False(toBool(result["success"]), "search 应失败")
+	s.NotEmpty(toString(result["detail"]), "detail 应包含错误信息")
+}
+
+// TestTeamSkillsHub_Install成功 对齐 Python: test_handle_skills_team_skills_hub_install_success
+func (s *SkillManagerSuite) TestTeamSkillsHub_Install成功() {
+	zipBytes := buildSkillZip("demo-skill")
+	var downloadPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/artifacts/demo-skill" {
+			_, _ = fmt.Fprintf(w, `{"code":200,"data":{"download_url":"%s","checksum_sha256":"","version":"1.0.0"}}`, downloadPath)
+			return
+		}
+		_, _ = w.Write(zipBytes)
+	}))
+	defer server.Close()
+	downloadPath = server.URL + "/downloads/demo.zip"
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubInstall(s.Ctx, map[string]any{
+		"asset_id":   "demo-skill",
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.True(toBool(result["success"]), "install 应成功: %v", result)
+
+	skill, ok := result["skill"].(map[string]any)
+	s.Require().True(ok)
+	s.Equal("demo-skill", skill["name"])
+	_, statErr := os.Stat(filepath.Join(s.workspace, "skills", "demo-skill", "SKILL.md"))
+	s.Require().NoError(statErr, "安装后 SKILL.md 应落盘")
+	s.Len(s.mgr.GetLocalSkills(), 1, "应记录 local_skills")
+}
+
+// TestTeamSkillsHub_Install扁平zip不残留zip文件
+// 对齐 Python: test_handle_skills_team_skills_hub_install_flat_zip_does_not_copy_staging_zip
+func (s *SkillManagerSuite) TestTeamSkillsHub_Install扁平zip不残留zip文件() {
+	zipBytes := buildSkillZipAtRoot("flat-demo")
+	var downloadPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/artifacts/flat-demo" {
+			_, _ = fmt.Fprintf(w, `{"code":200,"data":{"download_url":"%s","checksum_sha256":"","version":"1.0.0"}}`, downloadPath)
+			return
+		}
+		_, _ = w.Write(zipBytes)
+	}))
+	defer server.Close()
+	downloadPath = server.URL + "/downloads/flat.zip"
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubInstall(s.Ctx, map[string]any{
+		"asset_id":   "flat-demo",
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.True(toBool(result["success"]), "扁平 zip 安装应成功: %v", result)
+
+	dest := filepath.Join(s.workspace, "skills", "flat-demo")
+	_, statErr := os.Stat(filepath.Join(dest, "SKILL.md"))
+	s.Require().NoError(statErr, "扁平 zip 应落盘 SKILL.md")
+	_, statErr = os.Stat(filepath.Join(dest, "skill.zip"))
+	s.True(os.IsNotExist(statErr), "目标目录不应残留 skill.zip")
+}
+
+// TestTeamSkillsHub_Install重复未force 对齐 Python: test_handle_skills_team_skills_hub_install_duplicate_without_force
+//
+// 差异：Python detail 含「已安装」，Go 为「技能 X 已存在」。
+func (s *SkillManagerSuite) TestTeamSkillsHub_Install重复未force() {
+	s.Require().NoError(os.MkdirAll(filepath.Join(s.workspace, "skills", "demo-skill"), 0o755))
+	zipBytes := buildSkillZip("demo-skill")
+	var downloadPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/artifacts/demo-skill" {
+			_, _ = fmt.Fprintf(w, `{"code":200,"data":{"download_url":"%s","checksum_sha256":"","version":"1.0.0"}}`, downloadPath)
+			return
+		}
+		_, _ = w.Write(zipBytes)
+	}))
+	defer server.Close()
+	downloadPath = server.URL + "/downloads/demo.zip"
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubInstall(s.Ctx, map[string]any{
+		"asset_id":   "demo-skill",
+		"force":      false,
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.False(toBool(result["success"]), "重复安装未 force 应失败")
+	s.Contains(toString(result["detail"]), "已存在", "detail 应提示已存在")
+}
+
+// TestTeamSkillsHub_Install非法zip 对齐 Python: test_handle_skills_team_skills_hub_install_invalid_zip
+//
+// 差异：Python 断言 detail 含 "zip"（小写）与 detail_key；Go detail 为「ZIP 解压失败: ...」。
+func (s *SkillManagerSuite) TestTeamSkillsHub_Install非法zip() {
+	var downloadPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/artifacts/demo-skill" {
+			_, _ = fmt.Fprintf(w, `{"code":200,"data":{"download_url":"%s","checksum_sha256":"","version":"1.0.0"}}`, downloadPath)
+			return
+		}
+		_, _ = w.Write([]byte("not-a-zip"))
+	}))
+	defer server.Close()
+	downloadPath = server.URL + "/downloads/bad.zip"
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubInstall(s.Ctx, map[string]any{
+		"asset_id":   "demo-skill",
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.False(toBool(result["success"]), "非法 zip 应失败")
+	s.Contains(strings.ToLower(toString(result["detail"])), "zip", "detail 应提及 zip")
+}
+
+// TestTeamSkillsHub_Install下载失败 对齐 Python: test_handle_skills_team_skills_hub_install_download_failure
+//
+// Python 注入 _download_zip_and_verify 抛 RuntimeError；Go 走真实下载，用未监听的
+// 白名单主机端口制造连接失败（对齐「下载失败」语义）。
+func (s *SkillManagerSuite) TestTeamSkillsHub_Install下载失败() {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"code":200,"data":{"download_url":"http://127.0.0.1:1/unreachable.zip","checksum_sha256":"","version":"1.0.0"}}`))
+	}))
+	defer server.Close()
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubInstall(s.Ctx, map[string]any{
+		"asset_id":   "demo-skill",
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.False(toBool(result["success"]), "下载失败应返回 success=false")
+	s.Contains(toString(result["detail"]), "下载校验失败", "detail 应提示下载失败")
+}
+
+// TestTeamSkillsHub_Install非白名单主机被拒
+// 对齐 Python: test_handle_skills_team_skills_hub_install_rejects_untrusted_download_host
+func (s *SkillManagerSuite) TestTeamSkillsHub_Install非白名单主机被拒() {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"code":200,"data":{"download_url":"https://example.com/demo.zip","checksum_sha256":"","version":"1.0.0"}}`))
+	}))
+	defer server.Close()
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubInstall(s.Ctx, map[string]any{
+		"asset_id":   "demo-skill",
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.False(toBool(result["success"]), "非白名单主机应被拒绝")
+	s.Contains(toString(result["detail"]), "example.com", "detail 应包含主机名")
+}
+
+// TestTeamSkillsHub_Install拒绝zip_slip 对齐 Python: test_handle_skills_team_skills_hub_install_rejects_zip_slip
+func (s *SkillManagerSuite) TestTeamSkillsHub_Install拒绝zip_path穿越() {
+	buf := &bytes.Buffer{}
+	zw := zip.NewWriter(buf)
+	wrt, err := zw.Create("../evil.txt")
+	s.Require().NoError(err)
+	_, _ = wrt.Write([]byte("x"))
+	s.Require().NoError(zw.Close())
+	badZip := buf.Bytes()
+
+	var downloadPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/artifacts/demo-skill" {
+			_, _ = fmt.Fprintf(w, `{"code":200,"data":{"download_url":"%s","checksum_sha256":"","version":"1.0.0"}}`, downloadPath)
+			return
+		}
+		_, _ = w.Write(badZip)
+	}))
+	defer server.Close()
+	downloadPath = server.URL + "/downloads/slip.zip"
+
+	result, err := s.mgr.HandleSkillsTeamSkillsHubInstall(s.Ctx, map[string]any{
+		"asset_id":   "demo-skill",
+		"market_url": server.URL,
+	})
+	s.Require().NoError(err)
+	s.False(toBool(result["success"]), "zip-slip 应被拒绝")
+	// 差异：Python detail 为「非法路径|越界」，Go 为「zip slip 检测：路径 ... 超出目标目录」
+	detail := toString(result["detail"])
+	s.True(strings.Contains(detail, "越界") || strings.Contains(detail, "超出目标目录") ||
+		strings.Contains(detail, "zip slip"), "detail 应提示路径越界，实际: %s", detail)
+
+	// 不得在上层落盘
+	_, statErr := os.Stat(filepath.Join(filepath.Dir(s.workspace), "evil.txt"))
+	s.True(os.IsNotExist(statErr), "不得产生越界文件")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildSkillZip 构造 <name>/SKILL.md 结构的 zip 字节
+func buildSkillZip(skillName string) []byte {
+	buf := &bytes.Buffer{}
+	zw := zip.NewWriter(buf)
+	wrt, _ := zw.Create(skillName + "/SKILL.md")
+	_, _ = wrt.Write([]byte("---\nname: " + skillName + "\ndescription: 测试技能\nversion: 1.0.0\n---\nbody\n"))
+	_ = zw.Close()
+	return buf.Bytes()
+}
+
+// buildSkillZipAtRoot 构造根目录 SKILL.md 的扁平 zip 字节
+func buildSkillZipAtRoot(skillName string) []byte {
+	buf := &bytes.Buffer{}
+	zw := zip.NewWriter(buf)
+	wrt, _ := zw.Create("SKILL.md")
+	_, _ = wrt.Write([]byte("---\nname: " + skillName + "\ndescription: 测试技能\nversion: 1.0.0\n---\nbody\n"))
+	_ = zw.Close()
+	return buf.Bytes()
+}
 
 // writeSkillDir 在临时目录下生成带 SKILL.md 的技能目录，返回目录路径
 func (s *SkillManagerSuite) writeSkillDir(name, description, version string) string {
