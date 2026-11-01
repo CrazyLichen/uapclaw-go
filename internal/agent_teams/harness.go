@@ -336,17 +336,25 @@ func (h *TeamHarness) InitCwdForRound() {}
 // Steer 转向指令到底层 Agent。
 // Python: TeamHarness.steer(content)
 // TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) Steer(ctx context.Context, content string) error { return nil }
+func (h *TeamHarness) Steer(ctx context.Context, content string) error {
+	return h.interactLoop(ctx, content, true)
+}
 
 // FollowUp 追加消息到底层 Agent。
-// Python: TeamHarness.follow_up(content)
-// TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) FollowUp(ctx context.Context, content string) error { return nil }
+// Python: TeamHarness.follow_up(content) → await self._deep_agent.follow_up(content)
+func (h *TeamHarness) FollowUp(ctx context.Context, content string) error {
+	return h.interactLoop(ctx, content, false)
+}
 
 // Abort 协作中止底层任务循环。
-// Python: TeamHarness.abort()
-// TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) Abort(ctx context.Context) error { return nil }
+// Python: TeamHarness.abort() → await self._deep_agent.abort()
+func (h *TeamHarness) Abort(_ context.Context) error {
+	// DeepAgentInterface 未声明 RequestAbort（属 LoopCoordinatorInterface），按能力收窄
+	if aborter, ok := h.deepAgent.(interface{ RequestAbort() }); ok {
+		aborter.RequestAbort()
+	}
+	return nil
+}
 
 // RunStreaming 从底层 Agent 流式输出 chunk。
 // Python: TeamHarness.run_streaming(inputs, session_id, team_session)
@@ -382,6 +390,38 @@ func (h *TeamHarness) streamWithSessionRef(ctx context.Context, inputs map[strin
 		return closedChunkChan(), nil
 	}
 	return runner.RunAgentStreaming(ctx, runner.ByAgent(baseAgent), inputs, sessionRef, nil, nil, nil)
+}
+
+// interactLoop 把运行中的输入投递给底层 DeepAgent 的任务循环。
+// Python: TeamHarness.steer / follow_up —— 直接 await self._deep_agent.steer(...)
+//
+// 原实现是 TODO(#9.57) 空桩，导致运行中到达的第二条 chat.send 被静默丢弃
+// （adapter → Interact → DeliverInput → StreamController.Steer → 这里 return nil）。
+// DeepAgentInterface 未声明 steer/follow_up（只有 RequestAbort），故此处按具体类型收窄；
+// 收窄失败记日志而不是静默吞掉，保证下次定位有线索。
+func (h *TeamHarness) interactLoop(ctx context.Context, content string, steer bool) error {
+	d, ok := h.deepAgent.(*harness.DeepAgent)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("member_name", h.memberName).
+			Bool("steer", steer).
+			Msg("TeamHarness: deepAgent 不是 *harness.DeepAgent，输入无法投递")
+		return nil
+	}
+	sess, _ := h.activeAgentSession.(*session.Session)
+	if sess == nil {
+		logger.Warn(logComponent).
+			Str("member_name", h.memberName).
+			Bool("steer", steer).
+			Msg("TeamHarness: 无活跃 Agent 会话，输入无法投递")
+		return nil
+	}
+	if steer {
+		d.Steer(ctx, content, sess)
+		return nil
+	}
+	d.FollowUp(ctx, content, "", sess)
+	return nil
 }
 
 // prepareAgentSession 为底层 Agent 准备本轮使用的会话。
