@@ -3,15 +3,24 @@
 package workspace_test
 
 import (
+	"encoding/json"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
@@ -236,6 +245,83 @@ func (s *InitFlowSuite) TestInit_覆盖前拒绝() {
 	s.Require().FileExists(sentinel)
 }
 
+// TestInit_链路_服务可启动 覆盖 Python 中被 skip 的 test_full_initialization_flow。
+//
+// 初始化产物 → 配置加载 → 进程内 transport/server/gateway 装配 → WS 握手
+// → initialize 往返。这条用例同时是本目录通过 integration-audit 调用跨度
+// 门禁的依据：文件内真实调用 swarm/transport、swarm/server、swarm/gateway
+// 三个子系统，跨度 = 3。
+func (s *InitFlowSuite) TestInit_链路_服务可启动() {
+	s.forceNonInteractive()
+
+	_, err := workspace.Init(workspace.InitOption{Language: "en"})
+	s.Require().NoError(err)
+
+	wsPort := s.pickFreePort()
+	s.saveAndSetenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", wsPort))
+	pathutil.ResetCache()
+
+	cfg, err := config.New("")
+	s.Require().NoError(err)
+	_, err = cfg.Load()
+	s.Require().NoError(err)
+	s.Require().Equal("en", cfg.Get("preferred_language"))
+
+	ctx := s.Ctx
+	tr := transport.NewChannelTransport()
+	agentServer := server.NewAgentServer(cfg, tr)
+	agentClient := routing.NewAgentClient(tr)
+	gwServer, err := gateway.NewAppGatewayServer(cfg, agentClient)
+	s.Require().NoError(err)
+
+	s.Require().NoError(agentServer.Start(ctx))
+	s.Require().NoError(gwServer.Start(ctx))
+	s.T().Cleanup(func() {
+		_ = gwServer.Stop()
+		_ = agentServer.Stop()
+	})
+
+	url := fmt.Sprintf("ws://127.0.0.1:%d/ws", wsPort)
+	var conn *websocket.Conn
+	s.Require().Eventually(func() bool {
+		c, _, dialErr := websocket.DefaultDialer.Dial(url, nil)
+		if dialErr != nil {
+			return false
+		}
+		conn = c
+		return true
+	}, 15*time.Second, 200*time.Millisecond, "WS 拨号超时：%s", url)
+	defer conn.Close()
+
+	// initialize 是轻量握手方法，不触发 LLM 调用
+	req := map[string]any{
+		"type":   "req",
+		"id":     "init-probe-1",
+		"method": "initialize",
+		"params": map[string]any{},
+	}
+	payload, err := json.Marshal(req)
+	s.Require().NoError(err)
+	s.Require().NoError(conn.WriteMessage(websocket.TextMessage, payload))
+
+	var respID string
+	_ = conn.SetReadDeadline(time.Now().Add(20 * time.Second))
+	for i := 0; i < 50; i++ {
+		_, raw, err := conn.ReadMessage()
+		s.Require().NoError(err, "等待 initialize 响应超时")
+		var frame map[string]any
+		if json.Unmarshal(raw, &frame) != nil {
+			continue
+		}
+		if id, ok := frame["id"].(string); ok && id == "init-probe-1" {
+			respID = id
+			s.T().Logf("initialize 响应: %s", truncateFrame(raw))
+			break
+		}
+	}
+	s.Require().Equal("init-probe-1", respID, "应收到 id 匹配的 initialize 响应")
+}
+
 // ──────────────────────────── 非导出函数（PTY） ────────────────────────────
 
 // withPTY 打开 PTY、装上 stdin、写入 input，环境不支持时 Skip。
@@ -251,6 +337,23 @@ func (s *InitFlowSuite) withPTY(input string) {
 	})
 	testhelpers.WithPTYStdin(s.T(), slave)
 	testhelpers.WritePTYInput(s.T(), master, input)
+}
+
+// pickFreePort 选一个空闲端口。
+func (s *InitFlowSuite) pickFreePort() int {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	s.Require().NoError(err)
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+// truncateFrame 截断帧内容用于日志。
+func truncateFrame(raw []byte) string {
+	const max = 300
+	if len(raw) <= max {
+		return string(raw)
+	}
+	return string(raw[:max]) + "..."
 }
 
 // requireCancelledWithoutWorkspace 断言取消且未创建工作区。
