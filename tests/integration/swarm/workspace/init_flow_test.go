@@ -1,0 +1,233 @@
+//go:build integration
+
+package workspace_test
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/suite"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// InitFlowSuite 工作区初始化链路集成测试套件。
+//
+// 对齐 Python test_init_workspace.py 的 6 个测试类，按 Go 实际布局断言。
+type InitFlowSuite struct {
+	isuite.BaseIntegrationSuite
+	// dataRoot 本次测试的隔离根目录
+	dataRoot string
+	// resDir 模板资源目录
+	resDir string
+	// wsDir 初始化产生的工作区目录
+	wsDir string
+	// envBackup 环境变量备份（[key, 原值, 是否原本存在]）
+	envBackup [][3]string
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// TestInitFlowSuite 套件入口。
+func TestInitFlowSuite(t *testing.T) {
+	suite.Run(t, new(InitFlowSuite))
+}
+
+// SetupTest 每条用例重建隔离环境。
+func (s *InitFlowSuite) SetupTest() {
+	s.dataRoot = s.T().TempDir()
+	s.resDir = filepath.Join(s.dataRoot, "resources")
+	s.wsDir = filepath.Join(s.dataRoot, "data")
+	s.buildTestResources()
+
+	s.saveAndSetenv(workspace.EnvDataDir, s.wsDir)
+	s.saveAndSetenv(workspace.EnvResourcesDir, s.resDir)
+	workspace.SetUserHome("")
+	pathutil.ResetCache()
+}
+
+// TearDownTest 恢复环境变量与缓存。
+func (s *InitFlowSuite) TearDownTest() {
+	s.restoreEnv()
+	workspace.SetUserHome("")
+	pathutil.ResetCache()
+}
+
+// TestInit_显式语言 对齐 Python test_resolve_explicit_language。
+// 显式 Language 参数优先，写回 config.yaml 且 config.New 可读回。
+func (s *InitFlowSuite) TestInit_显式语言() {
+	s.forceNonInteractive()
+
+	result, err := workspace.Init(workspace.InitOption{Language: "en"})
+	s.Require().NoError(err)
+	s.Require().False(result.Cancelled)
+	s.Require().Equal(s.wsDir, result.WorkspaceDir)
+	s.Require().Equal("en", s.readPreferredLanguage())
+}
+
+// TestInit_缺省回落zh 对齐 Python test_resolve_default_to_zh。
+// 非交互（管道 stdin）且不传语言时回落 zh。
+func (s *InitFlowSuite) TestInit_缺省回落zh() {
+	s.forceNonInteractive()
+
+	result, err := workspace.Init(workspace.InitOption{})
+	s.Require().NoError(err)
+	s.Require().False(result.Cancelled)
+	s.Require().Equal("zh", s.readPreferredLanguage())
+}
+
+// TestInit_首次初始化_结构 对齐 Python test_init_user_workspace_first_time。
+//
+// 断言按 Go 实际布局（workspace.Prepare）：config/ + agent/{.checkpoint,.logs,
+// sessions,workspace}。与 Python conftest.py:165-174 期望的 agent/home、
+// agent/skills、agent/memory 存在布局差异（Go 的技能目录挂在
+// agent/workspace/skills 下），本批不修改生产代码，仅记录差异。
+func (s *InitFlowSuite) TestInit_首次初始化_结构() {
+	s.forceNonInteractive()
+
+	result, err := workspace.Init(workspace.InitOption{Language: "zh"})
+	s.Require().NoError(err)
+	s.Require().False(result.Cancelled)
+
+	dirs := []string{
+		filepath.Join(s.wsDir, "config"),
+		filepath.Join(s.wsDir, "agent", "workspace"),
+		filepath.Join(s.wsDir, "agent", "workspace", "memory"),
+		filepath.Join(s.wsDir, "agent", "sessions"),
+		filepath.Join(s.wsDir, "agent", ".checkpoint"),
+		filepath.Join(s.wsDir, "agent", ".logs"),
+	}
+	for _, d := range dirs {
+		s.Require().DirExists(d, "目录应存在: %s", d)
+	}
+
+	files := []string{
+		filepath.Join(s.wsDir, "config", "config.yaml"),
+		filepath.Join(s.wsDir, "config", ".env"),
+		filepath.Join(s.wsDir, "agent", "workspace", "AGENT.md"),
+		filepath.Join(s.wsDir, "agent", "workspace", "HEARTBEAT.md"),
+		filepath.Join(s.wsDir, "agent", "workspace", "IDENTITY.md"),
+		filepath.Join(s.wsDir, "agent", "workspace", "SOUL.md"),
+		filepath.Join(s.wsDir, "agent", "workspace", "memory", "MEMORY.md"),
+	}
+	for _, f := range files {
+		s.Require().FileExists(f, "文件应存在: %s", f)
+	}
+}
+
+// TestInit_force重建 对齐 Python test_main_force_init。
+// force 模式清空工作区并重建，脏文件被清除。
+func (s *InitFlowSuite) TestInit_force重建() {
+	s.forceNonInteractive()
+	s.Require().NoError(os.MkdirAll(s.wsDir, 0o755))
+	dirty := filepath.Join(s.wsDir, "dirty.txt")
+	s.Require().NoError(os.WriteFile(dirty, []byte("stale"), 0o644))
+
+	result, err := workspace.Init(workspace.InitOption{Language: "en", Overwrite: true})
+	s.Require().NoError(err)
+	s.Require().False(result.Cancelled)
+	s.Require().NoFileExists(dirty)
+	s.Require().FileExists(filepath.Join(s.wsDir, "config", "config.yaml"))
+}
+
+// TestInit_config内容 覆盖 Python 中被 skip 的 test_config_file_content。
+// config.yaml 的语言与 models 段能被 config.New 正确解析。
+func (s *InitFlowSuite) TestInit_config内容() {
+	s.forceNonInteractive()
+
+	_, err := workspace.Init(workspace.InitOption{Language: "en"})
+	s.Require().NoError(err)
+
+	cfg, err := config.New("")
+	s.Require().NoError(err)
+	_, err = cfg.Load()
+	s.Require().NoError(err)
+
+	s.Require().Equal("en", cfg.Get("preferred_language"))
+	s.Require().NotNil(cfg.Get("models.defaults"), "models.defaults 应可解析")
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// forceNonInteractive 把 stdin 换成已关闭的管道，强制走非交互分支。
+//
+// 必要性：isInteractive() 判的是 ModeCharDevice，而测试进程的 stdin
+// 常见为 /dev/null——它同样是字符设备，会被误判成"连着终端"，
+// 从而走进 overwrite/语言确认的交互分支。
+func (s *InitFlowSuite) forceNonInteractive() {
+	s.T().Helper()
+	old := os.Stdin
+	r, w, err := os.Pipe()
+	s.Require().NoError(err)
+	os.Stdin = r
+	_ = w.Close()
+	s.T().Cleanup(func() { os.Stdin = old })
+}
+
+// buildTestResources 构造模板资源目录。
+//
+// config.yaml 必须包含 models 段——链路用例要据此装配 mock provider。
+func (s *InitFlowSuite) buildTestResources() {
+	ws := filepath.Join(s.resDir, "agent", "workspace")
+	s.Require().NoError(os.MkdirAll(filepath.Join(ws, "memory"), 0o755))
+
+	configYAML := `preferred_language: zh
+models:
+  defaults:
+    - model_client_config:
+        model_name: mock-model
+        client_provider: mock
+        api_key: mock-api-key
+        api_base: http://127.0.0.1:1
+        client_id: mock
+      is_default: true
+`
+	s.Require().NoError(os.WriteFile(filepath.Join(s.resDir, "config.yaml"), []byte(configYAML), 0o644))
+	s.Require().NoError(os.WriteFile(filepath.Join(s.resDir, ".env.template"), []byte("API_KEY=sk-test\n"), 0o644))
+
+	for _, name := range []string{"AGENT", "HEARTBEAT", "IDENTITY", "SOUL"} {
+		s.Require().NoError(os.WriteFile(filepath.Join(ws, name+"_ZH.md"), []byte("# "+name+" 中文"), 0o644))
+		s.Require().NoError(os.WriteFile(filepath.Join(ws, name+"_EN.md"), []byte("# "+name+" English"), 0o644))
+	}
+	s.Require().NoError(os.WriteFile(filepath.Join(ws, "USER.md"), []byte("# User"), 0o644))
+	s.Require().NoError(os.WriteFile(filepath.Join(ws, "memory", "MEMORY_ZH.md"), []byte("记忆中文"), 0o644))
+	s.Require().NoError(os.WriteFile(filepath.Join(ws, "memory", "MEMORY_EN.md"), []byte("Memory English"), 0o644))
+}
+
+// readPreferredLanguage 读回工作区 config.yaml 中的 preferred_language。
+func (s *InitFlowSuite) readPreferredLanguage() any {
+	cfg, err := config.New("")
+	s.Require().NoError(err)
+	_, err = cfg.Load()
+	s.Require().NoError(err)
+	return cfg.Get("preferred_language")
+}
+
+// saveAndSetenv 记录并设置环境变量。
+func (s *InitFlowSuite) saveAndSetenv(key, val string) {
+	orig, had := os.LookupEnv(key)
+	flag := "0"
+	if had {
+		flag = "1"
+	}
+	s.envBackup = append(s.envBackup, [3]string{key, orig, flag})
+	_ = os.Setenv(key, val)
+}
+
+// restoreEnv 恢复环境变量并清空备份。
+func (s *InitFlowSuite) restoreEnv() {
+	for _, e := range s.envBackup {
+		if e[2] == "1" {
+			_ = os.Setenv(e[0], e[1])
+		} else {
+			_ = os.Unsetenv(e[0])
+		}
+	}
+	s.envBackup = nil
+}
