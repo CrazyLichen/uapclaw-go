@@ -635,3 +635,150 @@ func TestChannelManager_Flush只重算状态改变的节点(t *testing.T) {
 		t.Fatalf("重复信号（Accept 返 false）不应把节点加回就绪集，实际 %v", got)
 	}
 }
+
+// TestChannelManager_Snapshot跳过END END 虚拟节点的通道不进快照。
+// Python: channels.py:79-80
+func TestChannelManager_Snapshot跳过END(t *testing.T) {
+	ch := NewTriggerChannel(End)
+	ch.Accept(NewTriggerMessage("s", End))
+	m := NewChannelManager([]Channel{ch})
+
+	if _, ok := m.Snapshot()[End]; ok {
+		t.Fatalf("快照不应包含 END 节点，实际 %v", m.Snapshot())
+	}
+}
+
+// TestChannelManager_Snapshot空节点不存 全空节点整条不出现。
+// Python: channels.py:82-84（has_state 判定）
+func TestChannelManager_Snapshot空节点不存(t *testing.T) {
+	trig := NewTriggerChannel("idle")
+	m := NewChannelManager([]Channel{trig})
+	if got := m.Snapshot(); len(got) != 0 {
+		t.Fatalf("快照 = %v，期望空", got)
+	}
+}
+
+// TestChannelManager_Snapshot空管理器 无通道时返回空 map（非 nil）。
+func TestChannelManager_Snapshot空管理器(t *testing.T) {
+	m := NewChannelManager(nil)
+	snap := m.Snapshot()
+	if snap == nil {
+		t.Fatal("Snapshot 应返回非 nil map")
+	}
+	if len(snap) != 0 {
+		t.Fatalf("快照 = %v，期望空", snap)
+	}
+}
+
+// TestChannelManager_Snapshot保留空占位 有任一通道非空时，同节点其余通道的空快照必须按位保留。
+// Python: channels.py:81-84（整串存储，restore 靠下标 zip）
+func TestChannelManager_Snapshot保留空占位(t *testing.T) {
+	trig := NewTriggerChannel("collect")
+	bar := NewBarrierChannel("collect", [][]string{{"A"}})
+	m := NewChannelManager([]Channel{trig, bar})
+	bar.Accept(NewBarrierMessage("A", bar.Key()))
+
+	snap := m.Snapshot()
+	states, ok := snap["collect"]
+	if !ok {
+		t.Fatalf("快照缺少 collect 节点，实际 %v", snap)
+	}
+	if len(states) != 2 {
+		t.Fatalf("通道快照数 = %d，期望 2（空占位必须保留）", len(states))
+	}
+	if len(states[0].Messages) != 0 {
+		t.Errorf("下标 0（触发通道）快照 = %+v，期望空", states[0])
+	}
+	if len(states[1].Received) != 1 || states[1].Received[0] != "A" {
+		t.Errorf("下标 1（汇聚通道）快照 = %+v，期望 Received=[A]", states[1])
+	}
+}
+
+// TestChannelManager_快照恢复往返 快照→新管理器→恢复后节点重新就绪。
+func TestChannelManager_快照恢复往返(t *testing.T) {
+	bar := NewBarrierChannel("collect", [][]string{{"A"}, {"B"}})
+	m1 := NewChannelManager([]Channel{bar})
+	m1.BufferMessage(NewBarrierMessage("A", bar.Key()))
+	m1.BufferMessage(NewBarrierMessage("B", bar.Key()))
+	if err := m1.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	snap := m1.Snapshot()
+
+	bar2 := NewBarrierChannel("collect", [][]string{{"A"}, {"B"}})
+	m2 := NewChannelManager([]Channel{bar2})
+	m2.Restore(snap)
+
+	if got := m2.GetReadyNodes(); len(got) != 1 || got[0] != "collect" {
+		t.Fatalf("恢复后就绪集 = %v，期望 [collect]", got)
+	}
+}
+
+// TestChannelManager_Restore长度不匹配静默 通道数变了就整节点跳过，不 panic 不报错（偏差 D-5）。
+// Python: channels.py:93-94
+func TestChannelManager_Restore长度不匹配静默(t *testing.T) {
+	trig := NewTriggerChannel("collect")
+	bar := NewBarrierChannel("collect", [][]string{{"A"}})
+	m := NewChannelManager([]Channel{trig, bar})
+
+	m.Restore(map[string][]ChannelSnapshot{
+		"collect": {{Received: []string{"A"}}},
+	})
+
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("长度不匹配时应静默跳过，就绪集实际 %v", got)
+	}
+	if bar.IsReady() {
+		t.Fatal("长度不匹配时不应调用通道的 Restore")
+	}
+}
+
+// TestChannelManager_Restore未知节点静默 快照里的陌生节点被忽略，其余正常恢复（偏差 D-5）。
+// Python: channels.py:90
+func TestChannelManager_Restore未知节点静默(t *testing.T) {
+	bar := NewBarrierChannel("collect", [][]string{{"A"}})
+	m := NewChannelManager([]Channel{bar})
+
+	m.Restore(map[string][]ChannelSnapshot{
+		"ghost":   {{Received: []string{"Z"}}},
+		"collect": {{Received: []string{"A"}}},
+	})
+
+	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "collect" {
+		t.Fatalf("就绪集 = %v，期望 [collect]（未知节点被忽略）", got)
+	}
+}
+
+// TestChannelManager_Restore空快照跳过 空快照不调用通道的 Restore、不加就绪集（偏差 D-5）。
+// Python: channels.py:96-98
+func TestChannelManager_Restore空快照跳过(t *testing.T) {
+	bar := NewBarrierChannel("collect", [][]string{{"A"}})
+	m := NewChannelManager([]Channel{bar})
+
+	m.Restore(map[string][]ChannelSnapshot{"collect": {{}}})
+
+	if bar.IsReady() {
+		t.Fatal("空快照不应使通道就绪")
+	}
+	if got := m.GetReadyNodes(); len(got) != 0 {
+		t.Fatalf("就绪集 = %v，期望空", got)
+	}
+}
+
+// TestBarrierChannel_检查点恢复不死锁 旧检查点 + CNF 分组自动修复死锁。
+// Python: test_barrier_cnf.py:139-153
+func TestBarrierChannel_检查点恢复不死锁(t *testing.T) {
+	bar := NewBarrierChannel("end", [][]string{{"LLM_3"}, {"LLM_1", "LLM_2"}})
+	m := NewChannelManager([]Channel{bar})
+
+	m.Restore(map[string][]ChannelSnapshot{
+		"end": {{Received: []string{"LLM_1", "LLM_3"}}},
+	})
+
+	if !bar.IsReady() {
+		t.Fatal("LLM_2 永不到来时，OR 组仍应被 LLM_1 满足")
+	}
+	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "end" {
+		t.Fatalf("就绪集 = %v，期望 [end]", got)
+	}
+}

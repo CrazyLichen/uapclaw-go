@@ -380,6 +380,67 @@ func (m *ChannelManager) Consume(nodeName string) {
 // Python: engine.py:180（self.manager.buffer）
 func (m *ChannelManager) Buffer() []Message { return m.buffer }
 
+// Snapshot 导出全部通道快照。
+//
+// 语义要点（逐条对齐 channels.py:76-86）：
+//   - 跳过 pregel.End 节点；
+//   - 每节点按 nodeToChannels 顺序存**全部**通道快照——只要任一条非空就整串存储，
+//     空快照作为占位保留（Restore 靠下标 zip，占位不可省）；
+//   - 整节点全空则不存该节点。
+func (m *ChannelManager) Snapshot() map[string][]ChannelSnapshot {
+	snap := make(map[string][]ChannelSnapshot, len(m.nodeToChannels))
+	for nodeName, channels := range m.nodeToChannels {
+		if nodeName == End {
+			continue
+		}
+		states := make([]ChannelSnapshot, 0, len(channels))
+		hasState := false
+		for _, ch := range channels {
+			state := ch.Snapshot()
+			if len(state.Messages) > 0 || len(state.Received) > 0 {
+				hasState = true
+			}
+			states = append(states, state)
+		}
+		if hasState {
+			snap[nodeName] = states
+		}
+	}
+	return snap
+}
+
+// Restore 用快照恢复通道状态。
+//
+// 偏差 D-5（用户 2026-11-01 拍板"都先按照 Python 实现"）：三类情况**静默忽略**，
+// 不返回 error、不 panic——
+//  1. 快照里的节点在当前图中不存在；
+//  2. 该节点的通道数与快照长度不等（图结构变更）；
+//  3. 单条通道快照为空（两字段皆空）。
+//
+// 恢复后若通道就绪，把节点加入就绪集（对应 channels.py:100-101）。
+// Python: channels.py:88-101
+func (m *ChannelManager) Restore(snapshot map[string][]ChannelSnapshot) {
+	for nodeName, states := range snapshot {
+		channels, ok := m.nodeToChannels[nodeName]
+		if !ok {
+			continue
+		}
+		if len(channels) != len(states) {
+			continue
+		}
+		for i, ch := range channels {
+			state := states[i]
+			if len(state.Messages) == 0 && len(state.Received) == 0 {
+				continue
+			}
+			ch.Restore(state)
+			if ch.IsReady() {
+				m.readyNodes[nodeName] = struct{}{}
+			}
+		}
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // makeBarrierRouterKey 生成 CNF 合成路由键："barrier:(a|b)&c->target"。
