@@ -759,7 +759,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 11.13 | ✅ | Gateway Hook | GatewayHookHandler 4 事件方法（SessionStart 去重/UserPromptSubmit 空 query/SessionEnd 先 discard/Notification type query）+ activeSessions + 10s setdefault + recover 兜底；HookExecutor 迁 server/hooks→common/hooks（第三例破环，user_hook_rail 留守）；forward_loop 步骤3 回填；NewGatewayServer 装配 RegisterConfig | `jiuwenswarm/gateway/hooks/` |
 | **11.x IM 渠道** | — | | | |
 | 11.14 | ✅ | Web 通道 | WebSocket + HTTP RPC（M-05：config 写回点 updateYAMLKeyInConfig/replaceTeamsInConfig/updateDefaultModelsInConfig/updateMemoryForbiddenInConfig 全部切换 SetRoundTrip ruamel round-trip 保注释；modes.team 删除分支保留 Save——无删除 API 的等价路径） | `jiuwenswarm/gateway/channel_manager/web/` |
-| 11.15 | 🔄 | TUI 通道 | CLI 路由最小装配已落地（/tui ForwardMethods 80 项 + 5 chat ack handler + DisconnectHandler + 全链路集成测试 tests/integration/swarm/gateway/）；纯本地 handler 27 个（config.*/session.list/memory.*/cron.* 等）与 TUI 面板 ⤵️ 继续（⤴️ 需回填来源：10.6.18 memory_rpc 5 个 local handler 注册进 TUI 记忆管理面板） | `jiuwenswarm/gateway/channel_manager/tui/` |
+| 11.15 | 🔄 | TUI 通道 | CLI 路由最小装配已落地（/tui ForwardMethods 80 项 + 5 chat ack handler + DisconnectHandler + 全链路集成测试 tests/integration/swarm/gateway/）；纯本地 handler 27 个（config.*/session.list/memory.*/cron.* 等）与 TUI 面板 ⤵️ 继续（⤴️ 需回填来源：10.6.18 memory_rpc 5 个 local handler 注册进 TUI 记忆管理面板）；✅ 目录已对齐 Python：`tui_route.go` 自 gateway 包迁入 `internal/swarm/gateway/channel_manager/tui/`（2026-11-01），原"tui 装配放 gateway 包"偏差消除——Install 注入改为 `RouteServer` 接口（`RegisterLocalHandler` + `SendResFrame`），与 Python `register_cli_handlers(channel=gateway_server)` 同构；`routing.LocalHandlerFunc` 收口到 routing 包供两包共用 | `jiuwenswarm/gateway/channel_manager/tui/` |
 | 11.16 | ☐ | 飞书通道 | 事件回调，企业多机器人 | `jiuwenswarm/gateway/channel_manager/im_platforms/feishu/` |
 | 11.17 | ☐ | 钉钉通道 | DingTalk Stream 协议 | `jiuwenswarm/gateway/channel_manager/im_platforms/dingtalk/` |
 | 11.18 | ☐ | Telegram 通道 | Telegram Bot API | `jiuwenswarm/gateway/channel_manager/im_platforms/telegram/` |
@@ -769,8 +769,14 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 11.22 | ☐ | WhatsApp 通道 | WhatsApp 桥接 | `jiuwenswarm/gateway/channel_manager/im_platforms/whatsapp/` |
 | 11.23 | ☐ | 小艺通道 | 华为小艺智能助手 | `jiuwenswarm/gateway/channel_manager/im_platforms/xiaoyi/` |
 | 11.24 | ☐ | 平台适配器 | IM 平台通用适配 | `jiuwenswarm/gateway/channel_manager/im_platforms/platform_adapter/` |
-| 11.25 | ✅ | ACP 协议桥接 | session_updates（e2a/acp）+ AcpGatewayBridge 桥主体/三拦截器/timer + GatewayServer/app_gateway 接线 + MessageHandler 别名链 + AcpChannel 本体/WS 客户端族/31 例映射 + cmd acp 双模式 + 桥 24 例 + e2e 3 用例全绿；**2026-10-30 完整对齐复核闭合**（P1 数字 jsonrpc id 单点归一 `NormalizeJSONRPCID`／P2 桥 final 非 idle 分支补 timer cancel／P3 stdin 末行无换行不丢弃／P4 路由工厂链真接通：binding 补 forward 集合 + `BuildTuiRouteBinding`+Install + `RegisterLocalHandler`，/acp 与 /tui 同链／B1 WS ping 心跳／B3 桥 panic→-32603／B4 别名锁 RWMutex+ctx 透传／B5 `-g` 短选项／B8 非对象 JSON 文案），protocol/acp 覆盖率 86.1%、gateway 81.9%、e2a/acp 95.2% | `jiuwenswarm/gateway/channel_manager/protocol/acp/` |
+| 11.25 | ✅ | ACP 协议桥接 | session_updates（e2a/acp）+ AcpGatewayBridge 桥主体/三拦截器/timer + GatewayServer/app_gateway 接线 + MessageHandler 别名链 + AcpChannel 本体/WS 客户端族/31 例映射 + cmd acp 双模式 + 桥 24 例 + e2e 3 用例全绿；**2026-10-30 完整对齐复核闭合**（P1 数字 jsonrpc id 单点归一 `NormalizeJSONRPCID`／P2 桥 final 非 idle 分支补 timer cancel／P3 stdin 末行无换行不丢弃／P4 路由工厂链真接通：binding 补 forward 集合 + `BuildTuiRouteBinding`+Install + `RegisterLocalHandler`（2026-11-01 更名：`tui.BuildRouteBinding`，见 11.15 行），/acp 与 /tui 同链／B1 WS ping 心跳／B3 桥 panic→-32603／B4 别名锁 RWMutex+ctx 透传／B5 `-g` 短选项／B8 非对象 JSON 文案），protocol/acp 覆盖率 86.1%、gateway 81.9%、e2a/acp 95.2% | `jiuwenswarm/gateway/channel_manager/protocol/acp/` |
 | 11.26 | ✅ | A2A 协议通道 | 引官方 SDK `a2aproject/a2a-go/v2 v2.7.0`：A2AChannel(BaseChannel 8 方法)+a2aExecutor(a2asrv.AgentExecutor)+6 映射函数+a2a_card+三路由（rpc POST-only / card / extended card）+app_gateway 步骤4.8 与启停接线+`ChannelTypeA2A`；Python 侧 bootstrap 与其钉死的 `a2a-sdk 1.0.0` 不兼容（`a2a.server.apps`/`DefaultRequestHandler` 已移除），故基线改为「通道层语义 1:1 复刻源码 + 服务端行为 1:1 对齐 SDK 1.0.0」，12 项偏差归档 spec §9；10.2.10 E2A A2A 适配器保持无消费方（Python 同）；覆盖率 93.0% | `jiuwenswarm/gateway/channel_manager/protocol/a2a/` |
+
+> **channels 子树目录对齐审计（2026-11-01）**：与 Python `jiuwenswarm/channels/` 对照，Go 侧 `internal/swarm/channels/` 目前只有 `web/`（= Python `channels/web/{app_web.py, frontend/}`，已 1:1）。缺口均为**功能未实现**、无物可迁，实现时按下表落位：
+> - `channels/acp/app_acp.py`（ACP 服务入口，173 行）→ 对应 10.4.1 CLI 聊天模式（☐ 未实现）；⚠️ 勿与 `internal/swarm/acp/`（外部 ACP 子进程 stdio **客户端**，10.6.24d）混淆，后者不属于 channels 子树。
+> - `channels/desktop/desktop_app.py`（784 行）、`channels/tui/frontend/`（112 个 src 文件）→ 无对应计划行，暂不落位。
+> - `gateway/channel_manager/im_platforms/{platform_adapter,dingtalk,feishu,telegram,discord,wechat,wecom,whatsapp,xiaoyi}` → 11.16-11.24（全 ☐），计划表已按该路径记录。
+> - 已对齐：`channels/web/`、`channel_manager/{base,channel_manager,protocol/{a2a,acp},web,tui}`、`gateway/im_pipeline/`。
 
 ---
 
