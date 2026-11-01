@@ -17,6 +17,12 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
+	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/tools"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -463,7 +469,140 @@ func (s *SkillManagerSuite) TestMarketplaceInstall_真实git克隆与安装() {
 	s.True(os.IsNotExist(statErr), "卸载后技能目录应消失")
 }
 
+// TestSkillToolkit_安装与卸载 对齐 Python: test_skill_toolkits
+//
+// Python 直接 import 本地技能后调 toolkit.uninstall_skill；Go 侧同链路，
+// 额外断言 toolkit 作用于真实 SkillManager（非 mock）。
+func (s *SkillManagerSuite) TestSkillToolkit_安装与卸载() {
+	src := s.writeSkillDir("toolkit-skill", "工具链技能", "1.0.0")
+
+	imported, err := s.mgr.HandleSkillsImportLocal(s.Ctx, map[string]any{"path": src})
+	s.Require().NoError(err)
+	s.Require().True(toBool(imported["success"]), "导入应成功: %v", imported["detail"])
+
+	toolkit := swarmtools.NewSkillToolkit(s.mgr)
+	s.Require().NotNil(toolkit)
+
+	uninstall, err := toolkit.UninstallSkill(s.Ctx, map[string]any{"name": "toolkit-skill"})
+	s.Require().NoError(err)
+	s.True(toBool(uninstall["success"]), "工具卸载应成功: %v", uninstall)
+
+	_, statErr := os.Stat(filepath.Join(s.workspace, "skills", "toolkit-skill"))
+	s.True(os.IsNotExist(statErr), "卸载后目录应消失")
+	s.Empty(s.mgr.GetLocalSkills(), "卸载后 local_skills 应清空")
+}
+
+// TestTeamSharedSkills_全局到团队共享复制 对齐 Python: test_team_shared_skills
+//
+// 对齐点：全局技能目录（含 skills_state.json）复制到 <team>/skills 并写
+// .team_skills_copied 标记；marker 存在时幂等跳过。
+func (s *SkillManagerSuite) TestTeamSharedSkills_全局到团队共享复制() {
+	dataDir := s.isolateDataDir()
+
+	globalSkills := filepath.Join(dataDir, "agent", "workspace", "skills")
+	for _, name := range []string{"skill-b", "skill-a"} {
+		dir := filepath.Join(globalSkills, name)
+		s.Require().NoError(os.MkdirAll(dir, 0o755))
+		md := "---\nname: " + name + "\ndescription: 团队共享\n---\nbody\n"
+		s.Require().NoError(os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(md), 0o600))
+	}
+	s.Require().NoError(os.WriteFile(
+		filepath.Join(globalSkills, "skills_state.json"),
+		[]byte(`{"installed_plugins":[],"local_skills":[]}`),
+		0o600,
+	))
+
+	teamWsRoot := s.T().TempDir()
+	spec := &schema.TeamAgentSpec{
+		TeamName:  "itest-team",
+		Workspace: &team_workspace.TeamWorkspaceConfig{RootPath: teamWsRoot},
+	}
+
+	mgr := team.NewTeamManager()
+	mgr.EnsureTeamSharedSkillsInitialized(spec)
+
+	sharedDir := filepath.Join(teamWsRoot, "skills")
+	for _, name := range []string{"skill-a", "skill-b"} {
+		_, statErr := os.Stat(filepath.Join(sharedDir, name, "SKILL.md"))
+		s.Require().NoError(statErr, "团队共享目录应镜像 %s", name)
+	}
+	_, statErr := os.Stat(filepath.Join(sharedDir, "skills_state.json"))
+	s.Require().NoError(statErr, "state 文件应一并复制")
+	_, statErr = os.Stat(filepath.Join(sharedDir, ".team_skills_copied"))
+	s.Require().NoError(statErr, "marker 文件应存在")
+
+	// 团队技能创建 rail 注册到 TeamManager（团队技能链路的下游锚点）
+	rail := evolution.NewTeamSkillCreateRail(sharedDir)
+	mgr.RegisterTeamSkillCreateRail("itest-session", rail)
+	s.Same(rail, mgr.GetTeamSkillCreateRail("itest-session"), "rail 应可按键取回")
+
+	// 幂等：删掉 skill-a 后再次调用，marker 存在 → 不重新复制
+	s.Require().NoError(os.RemoveAll(filepath.Join(sharedDir, "skill-a")))
+	mgr.EnsureTeamSharedSkillsInitialized(spec)
+	_, statErr = os.Stat(filepath.Join(sharedDir, "skill-a"))
+	s.True(os.IsNotExist(statErr), "marker 存在时应跳过复制（幂等）")
+}
+
+// TestToggle_禁用后不可见 对齐 Python: test_skill_manager_enable_disable
+//
+// 对齐点：
+//   - 已注册技能（local_skills）禁用后进入 list_execution_disabled_skills，并从可见列表中剔除
+//   - 未注册技能禁用后只进 list_disabled_skills，不进 execution_disabled
+//     （对齐 Python: test_set_skill_enabled_also_supports_uninstalled_skill）
+func (s *SkillManagerSuite) TestToggle_禁用后不可见() {
+	dataDir := s.isolateDataDir()
+	workspaceRoot := filepath.Join(dataDir, "agent", "workspace")
+	s.Require().NoError(os.MkdirAll(filepath.Join(workspaceRoot, "skills", "alpha"), 0o755))
+	s.Require().NoError(os.WriteFile(
+		filepath.Join(workspaceRoot, "skills", "alpha", "SKILL.md"),
+		[]byte("---\nname: alpha\ndescription: 可见性\n---\nbody\n"),
+		0o600,
+	))
+	// alpha 作为已注册本地技能写入 state，构造 manager 时加载
+	s.Require().NoError(os.WriteFile(
+		filepath.Join(workspaceRoot, "skills", "skills_state.json"),
+		[]byte(`{"installed_plugins":[],"local_skills":[{"name":"alpha","origin":"/tmp/alpha","source":"local"}]}`),
+		0o600,
+	))
+
+	globalMgr := skillpkg.NewSkillManager(workspaceRoot)
+
+	toggle, err := globalMgr.HandleSkillsToggle(s.Ctx, map[string]any{"name": "alpha", "enabled": false})
+	s.Require().NoError(err)
+	s.True(toBool(toggle["success"]), "toggle 应成功: %v", toggle)
+
+	s.Equal([]string{"alpha"}, globalMgr.ListDisabledSkills(), "禁用列表应含 alpha")
+	s.False(globalMgr.GetSkillEnabled("alpha"), "alpha 应处于禁用态")
+	s.Contains(globalMgr.ListExecutionDisabledSkills(), "alpha", "已注册技能应进入执行禁用列表")
+
+	visible := skillpkg.FilterVisibleSkillNames([]string{"alpha", "beta"})
+	s.Equal([]string{"beta"}, visible, "禁用技能应从可见列表剔除")
+
+	// 未注册技能：只进 disabled，不进 execution_disabled（对齐 Python）
+	unregistered, err := globalMgr.HandleSkillsToggle(s.Ctx, map[string]any{"name": "gamma", "enabled": false})
+	s.Require().NoError(err)
+	s.True(toBool(unregistered["success"]))
+	s.ElementsMatch([]string{"alpha", "gamma"}, globalMgr.ListDisabledSkills())
+	s.NotContains(globalMgr.ListExecutionDisabledSkills(), "gamma", "未注册技能不应进执行禁用列表")
+
+	// 重新启用后恢复可见
+	enable, err := globalMgr.HandleSkillsToggle(s.Ctx, map[string]any{"name": "alpha", "enabled": true})
+	s.Require().NoError(err)
+	s.True(toBool(enable["success"]))
+	s.Equal([]string{"alpha", "beta"}, skillpkg.FilterVisibleSkillNames([]string{"alpha", "beta"}))
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isolateDataDir 把全局 UAPCLAW_DATA_DIR 指到临时目录（团队共享技能与 state 工具函数依赖它）
+func (s *SkillManagerSuite) isolateDataDir() string {
+	dir := s.T().TempDir()
+	// 先注册 ResetCache（LIFO 最后执行，晚于 t.Setenv 的恢复动作）
+	s.T().Cleanup(pathutil.ResetCache)
+	s.T().Setenv("UAPCLAW_DATA_DIR", dir)
+	pathutil.ResetCache()
+	return dir
+}
 
 // initMarketplaceRepo 在 dir 初始化含 skills/<plugin>/SKILL.md 的 git 仓库
 func (s *SkillManagerSuite) initMarketplaceRepo(dir, plugin string) {
