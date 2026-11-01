@@ -139,6 +139,58 @@ func TestParseStreamChunk_ToolCallsDelta(t *testing.T) {
 	}
 }
 
+// TestParseStreamChunk_缺省type的增量帧可聚合 验证真实 SSE 缺省 type 的增量帧仍能聚合。
+//
+// 真实 OpenAI 兼容 SSE 只在首个 delta 携带 type/id/name，后续帧只有 arguments
+// （types.go:149 的 omitempty 决定缺省时不出现该字段）。Python 在流式解析里把
+// type 硬编码为 "function"（openai_model_client.py:745-751），Go 若把空串透传，
+// mergeToolCalls 的同调用判定（要求两侧 type == "function"）失效，一个调用的
+// JSON 碎片会被拆成多个独立 ToolCall，最终逐个被当成工具执行。
+func TestParseStreamChunk_缺省type的增量帧可聚合(t *testing.T) {
+	modelConfig := llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model"))
+
+	frames := []ChunkToolCall{
+		{ID: "call_00_x", Type: "function", Function: ChunkFunction{Name: "build_team", Arguments: `{"name":`}, Index: intPtr(0)},
+		{Function: ChunkFunction{Arguments: `"Team"}`}, Index: intPtr(0)},
+	}
+
+	var accumulated *llmschema.AssistantMessageChunk
+	for i, frame := range frames {
+		chunk := &ChatCompletionChunkResponse{
+			Choices: []ChunkChoice{{Delta: &ChunkDelta{ToolCalls: []ChunkToolCall{frame}}}},
+		}
+		parsed := ParseStreamChunk(chunk, modelConfig)
+		if parsed == nil {
+			t.Fatalf("第 %d 帧解析结果不应为 nil", i)
+		}
+		if len(parsed.ToolCalls) != 1 {
+			t.Fatalf("第 %d 帧 ToolCalls 数量 = %d，want 1", i, len(parsed.ToolCalls))
+		}
+		if got := parsed.ToolCalls[0].Type; got != "function" {
+			t.Fatalf("第 %d 帧 Type = %q，want %q（缺省 type 必须补齐为 function）", i, got, "function")
+		}
+		if accumulated == nil {
+			accumulated = parsed
+		} else {
+			accumulated = accumulated.Merge(parsed)
+		}
+	}
+
+	if len(accumulated.ToolCalls) != 1 {
+		t.Fatalf("增量帧应聚合为 1 个调用，实际 %d 个：%+v", len(accumulated.ToolCalls), accumulated.ToolCalls)
+	}
+	tc := accumulated.ToolCalls[0]
+	if tc.Name != "build_team" {
+		t.Errorf("Name = %q，want %q", tc.Name, "build_team")
+	}
+	if tc.Arguments != `{"name":"Team"}` {
+		t.Errorf("Arguments = %q，want %q", tc.Arguments, `{"name":"Team"}`)
+	}
+	if tc.ID != "call_00_x" {
+		t.Errorf("ID = %q，want %q", tc.ID, "call_00_x")
+	}
+}
+
 func TestParseStreamChunk_ReasoningContent(t *testing.T) {
 	// 带 reasoning_content 的块
 	modelConfig := llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model"))

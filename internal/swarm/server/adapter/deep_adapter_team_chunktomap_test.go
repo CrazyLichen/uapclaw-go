@@ -245,6 +245,28 @@ func TestParseTypedChunkMap_主要分支(t *testing.T) {
 			wantEvt: "chat.tool_call",
 		},
 		{
+			// 真实 SSE 的增量帧：name/tool_call_id 双空、arguments 为 JSON 碎片
+			name:    "tool_call碎片帧→nil",
+			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"name": "", "tool_call_id": "", "arguments": "/"}}},
+			wantNil: true,
+		},
+		{
+			name:    "tool_call未闭合arguments→nil",
+			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"name": "build_team", "arguments": `{"name":`}}},
+			wantNil: true,
+		},
+		{
+			name:    "tool_call完整帧携带id→chat.tool_call",
+			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"name": "build_team", "tool_call_id": "call_00_x", "arguments": `{"name":"Team"}`}}},
+			wantEvt: "chat.tool_call",
+		},
+		{
+			// 只有 id 没有 name 的帧（首帧后补 id 场景）不能当作碎片丢弃
+			name:    "tool_call仅有id→chat.tool_call",
+			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"tool_call_id": "call_00_y", "arguments": "{}"}}},
+			wantEvt: "chat.tool_call",
+		},
+		{
 			name:    "error→chat.error",
 			chunk:   map[string]any{"type": "error", "payload": map[string]any{"error": "boom"}},
 			wantEvt: "chat.error",

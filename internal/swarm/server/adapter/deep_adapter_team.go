@@ -1606,6 +1606,20 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 		if sub, ok := payload["tool_call"].(map[string]any); ok {
 			toolInfo = sub
 		}
+		// 丢弃流式增量碎片，与 stream_utils.ParseStreamChunk 的同名分支对齐：
+		// 真实模型 SSE 会把同一次调用拆成多帧（name/tool_call_id 为空、
+		// arguments 是未闭合的 JSON 片段），团队路径若逐帧透传，前端会收到
+		// 大量空名调用，真正的调用也凑不齐。
+		if info, ok := toolInfo.(map[string]any); ok {
+			name, _ := info["name"].(string)
+			callID, _ := info["tool_call_id"].(string)
+			if name == "" && callID == "" {
+				return nil
+			}
+			if args, ok := info["arguments"].(string); ok && args != "" && !json.Valid([]byte(args)) {
+				return nil
+			}
+		}
 		return map[string]any{"event_type": "chat.tool_call", "tool_call": toolInfo}
 
 	case "tool_update":
