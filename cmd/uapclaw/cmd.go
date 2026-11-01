@@ -21,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/channels/web"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
@@ -165,6 +166,7 @@ Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 	cmd.PreRunE = makeDotenvPreRunE()
 	cmd.Flags().String("host", "", "监听地址（默认 127.0.0.1）")
 	cmd.Flags().Int("port", 0, "监听端口（默认 19000）")
+	cmd.Flags().String("dist", "", "前端产物目录（默认：<数据根>/channels/web/frontend/dist，再回落内嵌资源；对齐 Python --dist）")
 	return cmd
 }
 
@@ -196,6 +198,20 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	if port > 0 {
 		if err := os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port)); err != nil {
 			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_GATEWAY_PORT 失败: %v\n", err)
+		}
+	}
+
+	// --dist 显式指定前端产物目录（对齐 Python app_web.py L985-991 的 --dist：
+	// 不存在/不是目录即启动失败，Python 为 SystemExit）。
+	// 校验复用 web.ResolveDist，避免两处各写一套判定。
+	if dist, _ := cmd.Flags().GetString("dist"); dist != "" {
+		if _, err := web.ResolveDist(dist); err != nil {
+			fmt.Fprintf(os.Stderr, "前端目录不可用: %v\n", err)
+			return err
+		}
+		if err := os.Setenv(web.DistDirEnv, dist); err != nil {
+			fmt.Fprintf(os.Stderr, "设置环境变量 %s 失败: %v\n", web.DistDirEnv, err)
+			return err
 		}
 	}
 

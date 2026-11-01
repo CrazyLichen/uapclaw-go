@@ -777,6 +777,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 > - `channels/desktop/desktop_app.py`（784 行）、`channels/tui/frontend/`（112 个 src 文件）→ 无对应计划行，暂不落位。
 > - `gateway/channel_manager/im_platforms/{platform_adapter,dingtalk,feishu,telegram,discord,wechat,wecom,whatsapp,xiaoyi}` → 11.16-11.24（全 ☐），计划表已按该路径记录。
 > - 已对齐：`channels/web/`、`channel_manager/{base,channel_manager,protocol/{a2a,acp},web,tui}`、`gateway/im_pipeline/`。
+>
+> **前端产物来源已对齐 Python `_default_dist_dir`（2026-11-01）**：`channels/web/dist.go` 三级优先级 —— ① `--dist`（→ 环境变量 `UAPCLAW_WEB_DIST`，不存在即启动失败，对齐 Python `SystemExit`）② 用户数据根 `<WorkspaceDir>/channels/web/frontend/dist`（存在即用，装后可替换前端）③ 编译期内嵌 `frontend/dist`（`go:embed` 兜底）。占位产物只打 Warn 不拦截（Python 亦只判存在）。
 
 ---
 
