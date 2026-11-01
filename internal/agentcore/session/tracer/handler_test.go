@@ -496,6 +496,11 @@ func TestTraceWorkflowHandler_OnInvoke_异常(t *testing.T) {
 				if span.Error["error_code"] != tt.wantCode {
 					t.Errorf("error_code = %v, want %d", span.Error["error_code"], tt.wantCode)
 				}
+			} else if span.Error != nil {
+				// T-10：中断（GraphInterrupt）是控制流跳转，不是失败；spec §9 要求
+				// 「Status == Interrupted 且 Error == nil」。原用例只在 wantCode>0 时
+				// 断言 Error，中断被误写进 span.Error 也不会红。
+				t.Errorf("非错误路径不应写入 Error，实际 %v", span.Error)
 			}
 			if tt.wantStatus != "" {
 				if span.Status != string(tt.wantStatus) {

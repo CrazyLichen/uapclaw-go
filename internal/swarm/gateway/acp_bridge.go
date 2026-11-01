@@ -304,7 +304,7 @@ func ExtractPromptText(params map[string]any) string {
 // InboundIntercept 入站拦截器：识别 IDE JSON-RPC 响应（工具结果回流）。
 // Python: inbound_intercept (L147-198)。
 // 返回 true = 已拦截（响应帧或软忽略帧）；false = 非响应帧，交回路由。
-func (b *AcpGatewayBridge) InboundIntercept(ws *websocket.Conn, data map[string]any) bool {
+func (b *AcpGatewayBridge) InboundIntercept(ctx context.Context, ws *websocket.Conn, data map[string]any) bool {
 	if data == nil {
 		return false
 	}
@@ -351,7 +351,7 @@ func (b *AcpGatewayBridge) InboundIntercept(ws *websocket.Conn, data map[string]
 	}
 
 	msg := e2a.BuildACPToolResponseMessage(jsonrpcID, cpMap(data), sessionID, b.channelID)
-	if err := b.dispatchMessage(context.Background(), msg); err != nil {
+	if err := b.dispatchMessage(ctx, msg); err != nil {
 		logger.Warn(logComponent).
 			Err(err).
 			Str("session_id", sessionID).
@@ -365,7 +365,7 @@ func (b *AcpGatewayBridge) InboundIntercept(ws *websocket.Conn, data map[string]
 // Python: outbound_intercept (L199-228)。
 // Go 侧拦截器收 {"raw": msg} 包裹帧（gateway_server.go Send() 既有约定）。
 // 返回 true = 已拦截；false = 非本拦截器关注的消息。
-func (b *AcpGatewayBridge) OutboundIntercept(ws *websocket.Conn, data map[string]any) bool {
+func (b *AcpGatewayBridge) OutboundIntercept(ctx context.Context, ws *websocket.Conn, data map[string]any) bool {
 	msg, _ := data["raw"].(*schema.Message)
 	if msg == nil {
 		return false

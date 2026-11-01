@@ -1,6 +1,7 @@
 package message_handler
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -25,7 +26,7 @@ func TestHandleChannelControl_NewSession(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/new_session"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "飞书渠道 + /new_session 应被处理")
 }
 
@@ -41,7 +42,7 @@ func TestHandleChannelControl_ModeOK(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/mode code.normal"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "飞书渠道 + /mode code.normal 应被处理")
 }
 
@@ -57,7 +58,7 @@ func TestHandleChannelControl_SwitchOK(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/switch fast"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "飞书渠道 + /switch fast 应被处理")
 }
 
@@ -73,7 +74,7 @@ func TestHandleChannelControl_SkillsList(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/skills list"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "飞书渠道 + /skills list 应被处理")
 }
 
@@ -89,7 +90,7 @@ func TestHandleChannelControl_BranchOK(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/branch feature-x"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "飞书渠道 + /branch 应被处理")
 }
 
@@ -105,7 +106,7 @@ func TestHandleChannelControl_RewindOK(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/rewind 5"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "飞书渠道 + /rewind 5 应被处理")
 }
 
@@ -121,7 +122,7 @@ func TestHandleChannelControl_ModeBad(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/mode unknown"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "非法 /mode 也应被处理（返回 BAD 通知）")
 }
 
@@ -133,7 +134,7 @@ func TestHandleChannelControl_Skills不创建渠道状态(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/skills list"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "/skills list 应被处理")
 
 	mh.statesMu.RLock()
@@ -154,7 +155,7 @@ func TestHandleChannelControl_RewindBad(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/rewind"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled, "非法 /rewind 也应被处理")
 }
 
@@ -162,7 +163,7 @@ func TestHandleChannelControl_RewindBad(t *testing.T) {
 func TestHandleChannelControl_非请求消息(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	msg := &schema.Message{Type: schema.MessageTypeEvent, EventType: schema.EventTypeChatDelta}
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.False(t, handled)
 }
 
@@ -171,7 +172,7 @@ func TestHandleChannelControl_非控制文本(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"普通消息"}`))
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.False(t, handled)
 }
 
@@ -186,7 +187,7 @@ func TestNewSessionCancelAndNotice(t *testing.T) {
 	state := mh.GetOrCreateChannelState(msg)
 	oldSID := state.SessionID
 
-	mh.newSessionCancelAndNotice(msg, oldSID, "new-sid-x")
+	mh.newSessionCancelAndNotice(context.Background(), msg, oldSID, "new-sid-x")
 
 	// 验证通知已发出（收尾函数不再改 state）。
 	// CI -race 修复：原先排空 goroutine 与主 select 竞争消费同一消息，
@@ -217,7 +218,7 @@ func TestHandleChannelControl_newSession企业通道SessionMap轮转(t *testing.
 		schema.WithBotID("bot-1"),
 		schema.WithUserID("u-1"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled)
 
 	state := mh.GetOrCreateChannelState(msg)
@@ -242,7 +243,7 @@ func TestHandleChannelControl_newSession非企业通道(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "sess-old",
 		schema.ReqMethodChatSend, json.RawMessage(`{"content":"/new_session"}`), schema.WithProvider("feishu"))
 
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.True(t, handled)
 
 	state := mh.GetOrCreateChannelState(msg)
@@ -270,7 +271,7 @@ func TestModeChangeCancelAndNotice(t *testing.T) {
 		Action:         command_parser.ActionModeOK,
 		ModeSubcommand: "code.normal",
 	}
-	mh.modeChangeCancelAndNotice(msg, parsed)
+	mh.modeChangeCancelAndNotice(context.Background(), msg, parsed)
 
 	state := mh.GetOrCreateChannelState(msg)
 	assert.Equal(t, ChannelModeCodeNormal, state.Mode)
@@ -302,7 +303,7 @@ func TestModeChange_一级映射(t *testing.T) {
 			}()
 			msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
 				json.RawMessage(`{}`), schema.WithProvider("feishu"))
-			mh.modeChangeCancelAndNotice(msg, command_parser.ParsedChannelControl{
+			mh.modeChangeCancelAndNotice(context.Background(), msg, command_parser.ParsedChannelControl{
 				Action:         command_parser.ActionModeOK,
 				ModeSubcommand: tt.subcommand,
 			})
@@ -453,7 +454,7 @@ func TestSwitchMode_模式家族映射(t *testing.T) {
 				Action:           command_parser.ActionSwitchOK,
 				SwitchSubcommand: tt.switchCmd,
 			}
-			mh.modeChangeCancelAndNotice(msg, parsed)
+			mh.modeChangeCancelAndNotice(context.Background(), msg, parsed)
 
 			if tt.wantInvalid {
 				// 非法指令时模式不应变更
@@ -474,9 +475,9 @@ func TestSkillsSlashNotice_ReqID随机后缀(t *testing.T) {
 
 	// AgentClient 未连接 → skillsSlashNotice 走"获取技能列表失败"分支
 	// （不 panic 即覆盖 T-08 的 req_id 格式变更编译路径）
-	mh.skillsSlashNotice(msg)
+	mh.skillsSlashNotice(context.Background(), msg)
 	// 二次调用确保随机后缀路径稳定
-	mh.skillsSlashNotice(msg)
+	mh.skillsSlashNotice(context.Background(), msg)
 }
 
 // skillsReplies 构造 /skills list 的假响应。
@@ -499,7 +500,7 @@ func TestSkillsSlashNotice_五种文案形态(t *testing.T) {
 
 	t.Run("未连接_全角冒号", func(t *testing.T) {
 		mh := createTestMessageHandlerWithTransport()
-		mh.skillsSlashNotice(newMsg())
+		mh.skillsSlashNotice(context.Background(), newMsg())
 		notice := waitNotice(t, mh)
 		assert.Equal(t, "获取技能列表失败：AgentClient 未连接", notice.Payload["error"])
 	})
@@ -508,7 +509,7 @@ func TestSkillsSlashNotice_五种文案形态(t *testing.T) {
 		_, mh := newFakeAgentServer(t, skillsReplies(map[string]any{
 			"skills": []any{map[string]any{"name": "s1"}},
 		}, true))
-		mh.skillsSlashNotice(newMsg())
+		mh.skillsSlashNotice(context.Background(), newMsg())
 		notice := waitNotice(t, mh)
 		assert.Nil(t, notice.Payload["error"])
 		assert.NotNil(t, notice.Payload["skills"], "成功响应应逐键透传 payload")
@@ -519,7 +520,7 @@ func TestSkillsSlashNotice_五种文案形态(t *testing.T) {
 	// 只在 wire 完全没有 payload 字段时才可能命中，实际链路不可达，保持现状不改。
 	t.Run("成功_payload为空对象_无data键", func(t *testing.T) {
 		_, mh := newFakeAgentServer(t, skillsReplies(nil, true))
-		mh.skillsSlashNotice(newMsg())
+		mh.skillsSlashNotice(context.Background(), newMsg())
 		notice := waitNotice(t, mh)
 		_, exists := notice.Payload["data"]
 		assert.False(t, exists, "空 payload 不应产生 data 键（Python 透传空 dict）")
@@ -528,14 +529,14 @@ func TestSkillsSlashNotice_五种文案形态(t *testing.T) {
 
 	t.Run("失败_带error_ASCII冒号", func(t *testing.T) {
 		_, mh := newFakeAgentServer(t, skillsReplies(map[string]any{"error": "boom"}, false))
-		mh.skillsSlashNotice(newMsg())
+		mh.skillsSlashNotice(context.Background(), newMsg())
 		notice := waitNotice(t, mh)
 		assert.Equal(t, "获取技能列表失败: boom", notice.Payload["error"])
 	})
 
 	t.Run("失败_无error", func(t *testing.T) {
 		_, mh := newFakeAgentServer(t, skillsReplies(nil, false))
-		mh.skillsSlashNotice(newMsg())
+		mh.skillsSlashNotice(context.Background(), newMsg())
 		notice := waitNotice(t, mh)
 		assert.Equal(t, "获取技能列表失败", notice.Payload["error"])
 	})
@@ -573,7 +574,7 @@ func TestBranchSlashNotice_取消先于通知(t *testing.T) {
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
 	seedChannelSession(mh, msg, "sess-1")
 
-	mh.branchSlashNotice(msg, command_parser.ParsedChannelControl{
+	mh.branchSlashNotice(context.Background(), msg, command_parser.ParsedChannelControl{
 		Action:     command_parser.ActionBranchOK,
 		BranchName: "my-branch",
 	})
@@ -599,7 +600,7 @@ func TestBranchSlashNotice_成功回填字段(t *testing.T) {
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
 	seedChannelSession(mh, msg, "sess-1")
 
-	mh.branchSlashNotice(msg, command_parser.ParsedChannelControl{
+	mh.branchSlashNotice(context.Background(), msg, command_parser.ParsedChannelControl{
 		Action:     command_parser.ActionBranchOK,
 		BranchName: "named",
 	})
@@ -642,7 +643,7 @@ func TestRewindSlashNotice_E2A成功(t *testing.T) {
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
 	seedChannelSession(mh, msg, "sess-1")
 
-	mh.rewindSlashNotice(msg, command_parser.ParsedChannelControl{
+	mh.rewindSlashNotice(context.Background(), msg, command_parser.ParsedChannelControl{
 		Action:     command_parser.ActionRewindConfirm,
 		RewindTurn: 2,
 	})
@@ -667,7 +668,7 @@ func TestRewindSlashNotice_兜底失败(t *testing.T) {
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
 	seedChannelSession(mh, msg, "sid-without-history-44a")
 
-	mh.rewindSlashNotice(msg, command_parser.ParsedChannelControl{
+	mh.rewindSlashNotice(context.Background(), msg, command_parser.ParsedChannelControl{
 		Action:     command_parser.ActionRewindConfirm,
 		RewindTurn: 1,
 	})
@@ -683,7 +684,7 @@ func TestBranchSlashNotice_未连接(t *testing.T) {
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
 	seedChannelSession(mh, msg, "sess-1")
 
-	mh.branchSlashNotice(msg, command_parser.ParsedChannelControl{
+	mh.branchSlashNotice(context.Background(), msg, command_parser.ParsedChannelControl{
 		Action:     command_parser.ActionBranchOK,
 		BranchName: "",
 	})
@@ -699,20 +700,20 @@ func TestHandleChannelControl_前置守卫(t *testing.T) {
 	// 非 req 类型
 	eventMsg := schema.NewReqMessage("feishu_test", "s", schema.ReqMethodChatSend, text, schema.WithProvider("feishu"))
 	eventMsg.Type = schema.MessageTypeEvent
-	assert.False(t, mh.handleChannelControl(eventMsg), "非 req 类型应早退")
+	assert.False(t, mh.handleChannelControl(context.Background(), eventMsg), "非 req 类型应早退")
 
 	// 非 chat.send 方法
 	answerMsg := schema.NewReqMessage("feishu_test", "s", schema.ReqMethodChatAnswer, text, schema.WithProvider("feishu"))
-	assert.False(t, mh.handleChannelControl(answerMsg), "非 chat.send 应早退")
+	assert.False(t, mh.handleChannelControl(context.Background(), answerMsg), "非 chat.send 应早退")
 
 	// 非受控渠道（web）
 	webMsg := schema.NewReqMessage("web-1", "s", schema.ReqMethodChatSend, text, schema.WithProvider("web"))
-	assert.False(t, mh.handleChannelControl(webMsg), "web 渠道不解析 slash")
+	assert.False(t, mh.handleChannelControl(context.Background(), webMsg), "web 渠道不解析 slash")
 
 	// 空文本
 	emptyMsg := schema.NewReqMessage("feishu_test", "s", schema.ReqMethodChatSend,
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
-	assert.False(t, mh.handleChannelControl(emptyMsg), "空文本应早退")
+	assert.False(t, mh.handleChannelControl(context.Background(), emptyMsg), "空文本应早退")
 }
 
 // TestHandleChannelControl_NewSessionBad 覆盖 /new_session 带后缀的非法分支。
@@ -721,7 +722,7 @@ func TestHandleChannelControl_NewSessionBad(t *testing.T) {
 	msg := schema.NewReqMessage("feishu_test", "s", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/new_session please"}`), schema.WithProvider("feishu"))
 
-	assert.True(t, mh.handleChannelControl(msg))
+	assert.True(t, mh.handleChannelControl(context.Background(), msg))
 	notice := waitNotice(t, mh)
 	assert.Equal(t, "非法指令", notice.Payload["content"])
 }
@@ -757,7 +758,7 @@ func TestBranchSlashNotice_发送失败(t *testing.T) {
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
 	seedChannelSession(mh, msg, "sess-1")
 
-	mh.branchSlashNotice(msg, command_parser.ParsedChannelControl{
+	mh.branchSlashNotice(context.Background(), msg, command_parser.ParsedChannelControl{
 		Action:     command_parser.ActionBranchOK,
 		BranchName: "x",
 	})
@@ -774,7 +775,7 @@ func TestRewindSlashNotice_发送失败_Discard(t *testing.T) {
 		json.RawMessage(`{}`), schema.WithProvider("feishu"))
 	seedChannelSession(mh, msg, "sid-without-history-44b")
 
-	mh.rewindSlashNotice(msg, command_parser.ParsedChannelControl{
+	mh.rewindSlashNotice(context.Background(), msg, command_parser.ParsedChannelControl{
 		Action:     command_parser.ActionRewindConfirm,
 		RewindTurn: 1,
 	})

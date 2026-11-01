@@ -142,7 +142,12 @@ func (s *DbBasedKVStore) Delete(ctx context.Context, key string) error {
 }
 
 // CompareAndDelete 原子性地删除 key，仅当解包后的值等于 expected 时成功。
-// 在单个数据库事务内完成读取、解包、比较与删除，避免 TOCTOU。
+//
+// S-03：删除语句携带 value 条件并校验 RowsAffected，而非先读后按 key 删。
+// 原实现（读后 `DELETE WHERE key = ?`）在 MySQL REPEATABLE READ / PostgreSQL
+// READ COMMITTED 下会删掉「他人刚重新获取的锁」：两个并发事务都能读到同一快照值，
+// 各自 matched=true，后一条 DELETE 作用于最新已提交行。加上 value 谓词后，值一旦
+// 被替换（他人抢锁）删除即影响 0 行，matched 保持 false。
 func (s *DbBasedKVStore) CompareAndDelete(ctx context.Context, key string, expected []byte) (bool, error) {
 	s.ensureTable()
 	matched := false
@@ -163,8 +168,16 @@ func (s *DbBasedKVStore) CompareAndDelete(ctx context.Context, key string, expec
 		if !bytes.Equal(stored, expected) {
 			return nil
 		}
+		// 条件删除：value 参与谓词，行的值被他人改写时影响 0 行
+		result := tx.Where("key = ? AND value = ?", key, row.Value).Delete(&KVStoreRow{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
 		matched = true
-		return tx.Where("key = ?", key).Delete(&KVStoreRow{}).Error
+		return nil
 	})
 	if err != nil {
 		return false, err

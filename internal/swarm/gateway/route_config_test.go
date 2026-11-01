@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"testing"
 
 	"github.com/gorilla/websocket"
@@ -54,8 +55,8 @@ func TestNewGatewayServerConfig_兜底跳过条件(t *testing.T) {
 
 func TestBuildRouteConfigMap_字段透传(t *testing.T) {
 	// 8 字段透传（install 不搬，对齐 Python _build_route_config_map L739-752）
-	inbound := func(*websocket.Conn, map[string]any) bool { return true }
-	outbound := func(*websocket.Conn, map[string]any) bool { return false }
+	inbound := func(context.Context, *websocket.Conn, map[string]any) bool { return true }
+	outbound := func(context.Context, *websocket.Conn, map[string]any) bool { return false }
 	cleanup := func(*websocket.Conn) {}
 	disconnect := func(*websocket.Conn, [][2]string) {}
 	bindings := []*routing.RouteBinding{
@@ -81,8 +82,8 @@ func TestBuildRouteConfigMap_字段透传(t *testing.T) {
 	assert.NotNil(t, rc.OutboundInterceptor)
 	assert.NotNil(t, rc.CleanupHandler)
 	assert.NotNil(t, rc.DisconnectHandler)
-	assert.True(t, rc.InboundInterceptor(nil, nil))
-	assert.False(t, rc.OutboundInterceptor(nil, nil))
+	assert.True(t, rc.InboundInterceptor(context.Background(), nil, nil))
+	assert.False(t, rc.OutboundInterceptor(context.Background(), nil, nil))
 	assert.NotNil(t, rc.LocalHandlers)
 }
 

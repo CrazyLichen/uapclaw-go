@@ -1768,30 +1768,9 @@ func parseInteractionPayloadUtils(interactions []any) map[string]any {
 		if !ok {
 			continue
 		}
-		if m["interaction_type"] == "activate_confirm" {
-			extRuntimePath := teamHelperStrFromAny(m["extension_runtime_path"])
-			if extRuntimePath == "" {
-				extRuntimePath = teamHelperStrFromAny(m["runtime_path"])
-			}
-			options := []string{"accept", "reject"}
-			if opts, ok := m["options"].([]any); ok && len(opts) > 0 {
-				options = make([]string, 0, len(opts))
-				for _, o := range opts {
-					if s, ok := o.(string); ok {
-						options = append(options, s)
-					}
-				}
-			}
-			return map[string]any{
-				"event_type":             "harness.activate_interaction",
-				"interaction_type":       "activate_confirm",
-				"interaction_id":         teamHelperStrFromAny(m["interaction_id"]),
-				"extension_name":         teamHelperStrFromAny(m["extension_name"]),
-				"runtime_path":           teamHelperStrFromAny(m["runtime_path"]),
-				"session_runtime_path":   teamHelperStrFromAny(m["session_runtime_path"]),
-				"extension_runtime_path": extRuntimePath,
-				"options":                options,
-			}
+		// M-04：三份重复实现收口到 utils.ParseActivateConfirm（键名/事件名以 Python 为准）
+		if event, hit := utils.ParseActivateConfirm(m); hit {
+			return event
 		}
 	}
 	// Python: return convert_interactions_to_ask_user_question([payload])

@@ -10,10 +10,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/wk8/go-ordered-map/v2"
 	"gopkg.in/yaml.v3"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -29,8 +31,12 @@ import (
 type ConfigManager struct {
 	// mu 保护 configs（并发 Load/Update/Save 会对同一 map 读写，未加锁会 panic）
 	mu sync.RWMutex
-	// configs 已加载配置（Python Dict[str, BaseModel]；Go 用 any 收纳）
-	configs map[string]any
+	// configs 已加载配置（Python Dict[str, BaseModel]；Go 用 any 收纳）。
+	//
+	// M-12：用有序 map 复刻 Python dict 的插入序。同一类型可能存在两个键
+	// （"knowledge_base" 与类型名键），GetConfig 遍历顺序决定了返回哪个；
+	// 原实现用原生 map，遍历随机，同一进程两次调用可能拿到不同对象。
+	configs *orderedmap.OrderedMap[string, any]
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -50,7 +56,7 @@ const (
 //
 // Python: ConfigManager.__init__（config_path 真值时调 load_from_file）
 func NewConfigManager(configPath string) (*ConfigManager, error) {
-	m := &ConfigManager{configs: make(map[string]any)}
+	m := &ConfigManager{configs: orderedmap.New[string, any]()}
 	if configPath != "" {
 		if err := m.LoadFromFile(configPath); err != nil {
 			return nil, err
@@ -108,7 +114,7 @@ func (m *ConfigManager) LoadFromFile(path string) error {
 		return err
 	}
 	m.mu.Lock()
-	m.configs[knowledgeBaseConfigKey] = cfg
+	m.configs.Set(knowledgeBaseConfigKey, cfg)
 	m.mu.Unlock()
 	return nil
 }
@@ -126,7 +132,7 @@ func (m *ConfigManager) LoadFromFile(path string) error {
 // Python: save_to_file
 func (m *ConfigManager) SaveToFile(path string) error {
 	m.mu.RLock()
-	cfgAny, ok := m.configs[knowledgeBaseConfigKey]
+	cfgAny, ok := m.configs.Get(knowledgeBaseConfigKey)
 	m.mu.RUnlock()
 	if !ok {
 		return exception.BuildError(
@@ -177,8 +183,8 @@ func (m *ConfigManager) SaveToFile(path string) error {
 func GetConfig[T any](m *ConfigManager) (T, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	for _, cfg := range m.configs {
-		if v, ok := cfg.(T); ok {
+	for pair := m.configs.Oldest(); pair != nil; pair = pair.Next() {
+		if v, ok := pair.Value.(T); ok {
 			return v, true
 		}
 	}
@@ -194,7 +200,7 @@ func GetConfig[T any](m *ConfigManager) (T, bool) {
 // Python: get_knowledge_base_config
 func (m *ConfigManager) GetKnowledgeBaseConfig() (common.KnowledgeBaseConfig, error) {
 	m.mu.RLock()
-	cfgAny, ok := m.configs[knowledgeBaseConfigKey]
+	cfgAny, ok := m.configs.Get(knowledgeBaseConfigKey)
 	m.mu.RUnlock()
 	if !ok {
 		return common.KnowledgeBaseConfig{}, exception.BuildError(
@@ -221,7 +227,7 @@ func (m *ConfigManager) GetKnowledgeBaseConfig() (common.KnowledgeBaseConfig, er
 // Python: update_config
 func (m *ConfigManager) UpdateConfig(config any) {
 	m.mu.Lock()
-	m.configs[typeNameOf(config)] = config
+	m.configs.Set(typeNameOf(config), config)
 	m.mu.Unlock()
 }
 
@@ -249,11 +255,26 @@ func knowledgeBaseConfigFromMap(data map[string]any) (common.KnowledgeBaseConfig
 	if v, ok := data["use_graph"].(bool); ok {
 		cfg.UseGraph = v
 	}
-	if n, ok := asInt(data["chunk_size"]); ok {
-		cfg.ChunkSize = n
+	if rawSize, exists := data["chunk_size"]; exists {
+		if n, ok := asInt(rawSize); ok {
+			cfg.ChunkSize = n
+		} else {
+			// M-12：键存在但类型/取值非法时不再完全静默（Python 侧 pydantic 抛错）
+			logger.Warn(logComponent).
+				Str("field", "chunk_size").
+				Str("value_type", fmt.Sprintf("%T", rawSize)).
+				Msg("knowledge_base.chunk_size is not a valid int, falling back to default")
+		}
 	}
-	if n, ok := asInt(data["chunk_overlap"]); ok {
-		cfg.ChunkOverlap = n
+	if rawOverlap, exists := data["chunk_overlap"]; exists {
+		if n, ok := asInt(rawOverlap); ok {
+			cfg.ChunkOverlap = n
+		} else {
+			logger.Warn(logComponent).
+				Str("field", "chunk_overlap").
+				Str("value_type", fmt.Sprintf("%T", rawOverlap)).
+				Msg("knowledge_base.chunk_overlap is not a valid int, falling back to default")
+		}
 	}
 	if v, ok := data["use_caption_for_images"].(bool); ok {
 		cfg.UseCaptionForImages = v
@@ -309,11 +330,16 @@ func asInt(v any) (int, bool) {
 		if math.IsNaN(n) || math.IsInf(n, 0) {
 			return 0, false
 		}
-		f := math.Trunc(n)
-		if f < minSafeIntFloat || f > maxSafeIntFloat {
+		// M-12：非整值浮点不再静默截断（Python 侧 pydantic 对 int 字段的
+		// 512.5 直接 ValidationError，Go 原实现 math.Trunc 后得到 512）。
+		if n != math.Trunc(n) {
 			return 0, false
 		}
-		return int(f), true
+		// M-12：边界用 >= / <=，避免恰好 2^63 通过后被 int() 溢出成负数
+		if n <= minSafeIntFloat || n >= maxSafeIntFloat {
+			return 0, false
+		}
+		return int(n), true
 	default:
 		return 0, false
 	}

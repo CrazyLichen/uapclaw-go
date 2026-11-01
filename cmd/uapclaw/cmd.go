@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -458,7 +459,7 @@ func newAcpCmd() *cobra.Command {
 	}
 	// Python: argparse --gateway-url 带 -g 短选项（acp_connect.py L1782-1788）
 	cmd.Flags().StringP("gateway-url", "g", "", "Gateway WebSocket URL（默认自举 ws://127.0.0.1:19001/acp）")
-	cmd.Flags().String("agent-server-url", "", "兼容旗标（同 --gateway-url）")
+	cmd.Flags().StringP("agent-server-url", "u", "", "兼容旗标（同 --gateway-url）")
 	cmd.PreRunE = makeDotenvPreRunE()
 	return cmd
 }
@@ -476,8 +477,17 @@ func makeDotenvPreRunE() func(cmd *cobra.Command, args []string) error {
 		if dotenvPath == "" && instanceName == "" {
 			return nil
 		}
-		_, err := dotenv.ParseEarly(dotenvPath, instanceName)
-		return err
+		if _, err := dotenv.ParseEarly(dotenvPath, instanceName); err != nil {
+			// M-14：--dotenv 指定的文件不存在时只告警继续（对齐 Python
+			// dotenv_early.py 的 warning 后继续），否则冒烟命令会被一个可选文件直接终止。
+			// 其余解析错误（权限/格式）仍然上抛。
+			if errors.Is(err, os.ErrNotExist) {
+				fmt.Fprintf(os.Stderr, "warning: --dotenv 文件不存在，继续使用默认配置: %v\n", err)
+				return nil
+			}
+			return &acpChatExitError{code: exitCodeConfig}
+		}
+		return nil
 	}
 }
 

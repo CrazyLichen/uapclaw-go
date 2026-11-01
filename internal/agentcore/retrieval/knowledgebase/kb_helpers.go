@@ -11,6 +11,8 @@ package knowledgebase
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
@@ -69,8 +71,19 @@ func vectorStoreDatabaseName(vs vector_store.VectorStore) string {
 func wrapAgenticRetriever(llm model_clients.BaseModelClient, r retriever.Retriever,
 	opts ...KBOption) (retriever.Retriever, error) {
 	kbOpts := NewKBOptions(opts...)
+	// T-16：未知键一次列全并按字典序排列。原实现遍历 Go map（随机序）并在首个
+	// 未知键处返回，同一份错误输入两次跑可能报不同键，测试与日志都不稳定；
+	// Python 侧由解释器一次性列出全部未知关键字参数。
+	keys := make([]string, 0, len(kbOpts.Extra))
+	for key := range kbOpts.Extra {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
 	var agenticOpts []retriever.AgenticRetrieverOption
-	for key, v := range kbOpts.Extra {
+	unknown := make([]string, 0, len(keys))
+	for _, key := range keys {
+		v := kbOpts.Extra[key]
 		switch key {
 		case "max_iter":
 			n, ok := v.(int)
@@ -83,12 +96,15 @@ func wrapAgenticRetriever(llm model_clients.BaseModelClient, r retriever.Retriev
 			}
 			agenticOpts = append(agenticOpts, retriever.WithAgenticMaxIter(n))
 		default:
-			return nil, exception.BuildError(
-				exception.StatusAgenticKwargsUnexpected,
-				exception.WithMsg(fmt.Sprintf(
-					"AgenticRetriever() got an unexpected keyword argument '%s'", key)),
-			)
+			unknown = append(unknown, "'"+key+"'")
 		}
+	}
+	if len(unknown) > 0 {
+		return nil, exception.BuildError(
+			exception.StatusAgenticKwargsUnexpected,
+			exception.WithMsg(fmt.Sprintf(
+				"AgenticRetriever() got an unexpected keyword argument %s", strings.Join(unknown, ", "))),
+		)
 	}
 	return retriever.NewAgenticRetriever(r, llm, agenticOpts...)
 }

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"math"
 	"errors"
 	"os"
 	"path/filepath"
@@ -272,5 +273,51 @@ func TestLoadFromFile_字段校验(t *testing.T) {
 	}
 	if cfg.IndexType != common.IndexTypeHybrid {
 		t.Errorf("index_type = %v, 期望 hybrid（pydantic 默认值）", cfg.IndexType)
+	}
+}
+
+// ──── M-12：插入序与类型解析 ────
+
+// TestConfigManager_GetConfig按插入序 同一类型存在两个键时，必须稳定返回先插入的
+// "knowledge_base"（Python dict 插入序），而不是 Go map 的随机遍历结果。
+func TestConfigManager_GetConfig按插入序(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "kb.json")
+	loaded := []byte(`{"kb_id":"from-file","index_type":"vector","chunk_size":256}`)
+	if err := os.WriteFile(path, loaded, 0o600); err != nil {
+		t.Fatalf("写配置文件失败: %v", err)
+	}
+	m, err := NewConfigManager(path)
+	if err != nil {
+		t.Fatalf("加载配置失败: %v", err)
+	}
+	// 更新写入类型名键（第二个键，值为不同内容）
+	updated := common.KnowledgeBaseConfig{KBID: "from-update", IndexType: common.IndexTypeBM25, ChunkSize: 999}
+	m.UpdateConfig(updated)
+
+	for i := 0; i < 20; i++ {
+		got, ok := GetConfig[common.KnowledgeBaseConfig](m)
+		if !ok {
+			t.Fatal("应能取到配置")
+		}
+		if got.KBID != "from-file" {
+			t.Fatalf("第 %d 次取值 = %q，期望恒为插入序首个 \"from-file\"", i, got.KBID)
+		}
+	}
+}
+
+// TestAsInt_非整值与边界 非整值浮点不再截断，2^63 边界不再溢出成负数。
+func TestAsInt_非整值与边界(t *testing.T) {
+	if _, ok := asInt(512.5); ok {
+		t.Error("512.5 不应被接受（Python 侧 pydantic 报错）")
+	}
+	if got, ok := asInt(512.0); !ok || got != 512 {
+		t.Errorf("512.0 应被接受为 512，实际 (%d, %v)", got, ok)
+	}
+	if _, ok := asInt(math.Pow(2, 63)); ok {
+		t.Error("2^63 应被拒绝（否则 int() 溢出成负数）")
+	}
+	if _, ok := asInt(math.Pow(2, 62)); !ok {
+		t.Error("2^62 应被接受")
 	}
 }

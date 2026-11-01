@@ -778,11 +778,7 @@ func TestStreamController_startRound_正常启动(t *testing.T) {
 	}
 
 	// 等待轮次完成（无真实 harness，streamOneRound 直接返回成功）
-	select {
-	case <-sc.roundDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("轮次超时未完成")
-	}
+	waitRoundFinished(t, sc)
 }
 
 // TestStreamController_StartRound_有harness有队列 测试有 harness 和 streamQueue 时 StartRound 启动轮次。
@@ -799,11 +795,7 @@ func TestStreamController_StartRound_有harness有队列(t *testing.T) {
 		t.Fatal("roundDone 不应为 nil")
 	}
 
-	select {
-	case <-sc.roundDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("轮次超时未完成")
-	}
+	waitRoundFinished(t, sc)
 }
 
 // TestStreamController_StartRound_长内容截断预览 测试长内容预览截断。
@@ -821,11 +813,7 @@ func TestStreamController_StartRound_长内容截断预览(t *testing.T) {
 		t.Errorf("StartRound 不应返回错误: %v", err)
 	}
 
-	select {
-	case <-sc.roundDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("轮次超时未完成")
-	}
+	waitRoundFinished(t, sc)
 }
 
 // TestStreamController_StartRound_非字符串内容 测试非字符串内容。
@@ -839,11 +827,7 @@ func TestStreamController_StartRound_非字符串内容(t *testing.T) {
 		t.Errorf("StartRound 不应返回错误: %v", err)
 	}
 
-	select {
-	case <-sc.roundDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("轮次超时未完成")
-	}
+	waitRoundFinished(t, sc)
 }
 
 // TestStreamController_Steer_有harness 测试有 harness 时 Steer。
@@ -927,11 +911,7 @@ func TestStreamController_CancelAgent_有飞行轮次(t *testing.T) {
 	}
 
 	// 等待轮次完成
-	select {
-	case <-sc.roundDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("轮次超时未完成")
-	}
+	waitRoundFinished(t, sc)
 
 	// 验证状态转换
 	mu.Lock()
@@ -963,11 +943,7 @@ func TestStreamController_CooperativeCancel_等待轮次完成(t *testing.T) {
 	sc.startRound(context.Background(), "hello")
 
 	// 等待轮次先完成
-	select {
-	case <-sc.roundDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("轮次超时未完成")
-	}
+	waitRoundFinished(t, sc)
 
 	err := sc.CooperativeCancel(context.Background())
 	if err != nil {
@@ -1199,11 +1175,7 @@ func TestStreamController_DrainAgentTask_有飞行轮次(t *testing.T) {
 	}
 
 	// 等待轮次完成，避免与 goroutine 并发访问字段
-	select {
-	case <-sc.roundDone:
-	case <-time.After(5 * time.Second):
-		t.Fatal("轮次超时未完成")
-	}
+	waitRoundFinished(t, sc)
 
 	if len(sc.pendingInputs) != 0 {
 		t.Error("pendingInputs 应被清除")
@@ -1308,4 +1280,20 @@ func TestStreamController_QueuePendingInput_并发安全(t *testing.T) {
 	if want := goroutines * perGoroutine; got != want {
 		t.Fatalf("pendingInputs 长度 = %d, want %d", got, want)
 	}
+}
+
+// waitRoundFinished 轮询等待本轮结束。
+//
+// M-16 后 runOneRound 收尾会把 roundDone 清零（表示无在飞轮次），因此测试不能再
+// 直接读该字段等待，改为轮询 HasInFlightRound。
+func waitRoundFinished(t *testing.T, sc *StreamController) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if !sc.HasInFlightRound() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("轮次超时未完成")
 }

@@ -44,6 +44,9 @@ func ConvertInteractionsToAskUserQuestion(interactions []map[string]any) map[str
 	// real ask_user interrupt。优先匹配 AskUserRail 中断（有 questions 字段），
 	// 否则前端可能收到空的 permission prompt。
 	for _, interaction := range interactions {
+		if isLatestInputPlaceholder(interaction) {
+			continue
+		}
 		requestID, valueObj := extractInteractionParts(interaction)
 		if requestID == "" {
 			continue
@@ -65,6 +68,9 @@ func ConvertInteractionsToAskUserQuestion(interactions []map[string]any) map[str
 
 	// 第二轮：遍历所有 interaction，尝试提取 permission_interrupt
 	for _, interaction := range interactions {
+		if isLatestInputPlaceholder(interaction) {
+			continue
+		}
 		requestID, _ := extractInteractionParts(interaction)
 		if requestID == "" {
 			continue
@@ -146,6 +152,19 @@ func extractQuestionFromInteraction(payload map[string]any) map[string]any {
 		},
 		"multi_select": false,
 	}
+}
+
+// isLatestInputPlaceholder 判断交互是否为 user_latest_input 占位交互（M-11）。
+//
+// 该交互的 kind 为 "latest_input"，语义是「图挂起等输入」而非权限审批；
+// 不做判别会让前端凭空弹一个空问题的三选项审批框（对齐 Python：元组形状导致
+// 转换器直接跳过）。
+func isLatestInputPlaceholder(interaction map[string]any) bool {
+	if interaction == nil {
+		return false
+	}
+	kind, _ := interaction["kind"].(string)
+	return kind == "latest_input"
 }
 
 // extractInteractionParts 从 interaction 中提取 request_id 和 value。

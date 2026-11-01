@@ -763,7 +763,10 @@ func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool
 		}
 		return a.streamController.FollowUp(ctx, fmt.Sprintf("%v", content))
 	}
-	if a.streamController.HasInFlightRound() {
+	// M-16：判断与动作合并为一次持锁（EnqueueOrStart），对齐 Python 单线程下
+	// 「has_in_flight_round() + pending_inputs.append()」之间无 await 的原子性。
+	// 原实现先判断再入队，若轮次恰在两步之间收尾并 drain 完，这条输入会滞留到下次起轮。
+	if !a.streamController.EnqueueOrStart(ctx, content) {
 		// Python: preview = content if isinstance(content, str) else type(content).__name__
 		// Python: team_logger.info("[{}] queueing input for next round (transition window): {:.60}", ...)
 		preview, ok := content.(string)
@@ -774,10 +777,8 @@ func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool
 			Str("member_name", a.MemberName()).
 			Str("content_preview", utils.TruncateRunes(preview, 60)).
 			Msg("queueing input for next round (transition window)")
-		a.streamController.QueuePendingInput(content)
-		return nil
 	}
-	return a.streamController.StartRound(ctx, content)
+	return nil
 }
 
 // StartAgent 启动 Agent。
@@ -1789,6 +1790,3 @@ func (a *TeamAgent) removeSelfFromPool(ctx context.Context, sessionID string) {
 	}()
 	pool.RemoveTeam(teamName)
 }
-
-// truncateRunes 按字符截断字符串，避免破坏多字节字符。
-// 对齐 Python: f"{preview:.60}" 的字符截断语义。

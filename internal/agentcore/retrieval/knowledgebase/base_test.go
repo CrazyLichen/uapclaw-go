@@ -320,8 +320,10 @@ func TestClose_双nil组件(t *testing.T) {
 	b.Close() // 不 panic
 }
 
-// TestClose_错误变体吞并 对齐 test_close_with_exception（Warn 吞错误）。
-func TestClose_错误变体吞并(t *testing.T) {
+// TestClose_部分失败返回首个错误 Close 聚合首错：两个组件都失败时返回**首个**
+// 错误，且第二个组件仍会被关闭（M-17：原用例名「吞并」描述旧行为，且丢弃返回值，
+// 首错聚合路径零覆盖）。
+func TestClose_部分失败返回首个错误(t *testing.T) {
 	vs, _ := makeCompatiblePair()
 	ec := &fakeErrCloserIndexer{closeErr: errors.New("close boom")}
 	// 构造尾部 7 属性比对需配齐（vs 全属性，ec 零值会 155508 → b 为 nil）
@@ -335,8 +337,10 @@ func TestClose_错误变体吞并(t *testing.T) {
 	b, err := NewBaseKnowledgeBase(common.KnowledgeBaseConfig{KBID: "kb"},
 		WithVectorStore(vs), WithIndexManager(ec))
 	require.NoError(t, err)
-	b.Close() // 错误被 Warn 吞，不 panic
-	assert.Equal(t, 1, ec.closed)
+	err = b.Close()
+	require.Error(t, err, "组件关闭失败时 Close 应返回错误")
+	assert.ErrorContains(t, err, "close boom")
+	assert.Equal(t, 1, ec.closed, "失败的组件也应被调用（全尝试完再返回首错）")
 }
 
 // TestNewBaseKnowledgeBase_全选项与访问器 8 构造选项 + 4 访问器全覆盖（Go 增强）。

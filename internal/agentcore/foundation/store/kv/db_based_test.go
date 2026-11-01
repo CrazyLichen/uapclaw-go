@@ -1007,3 +1007,44 @@ func TestKVStoreRow_TableName(t *testing.T) {
 		t.Errorf("TableName = %q, 期望 %q", row.TableName(), "kv_store")
 	}
 }
+
+// ──── CompareAndDelete 原子性回归（S-03） ────
+
+// TestDbBasedKVStore_CompareAndDelete_读后被替换不删除 模拟「读到匹配值之后、
+// DELETE 执行之前」他人重新抢锁把值改掉：带 value 谓词的删除语句此时影响 0 行，
+// 必须返回 false 且不删除任何行；旧实现（DELETE 仅按 key）会删掉他人的锁。
+func TestDbBasedKVStore_CompareAndDelete_读后被替换不删除(t *testing.T) {
+	store := newTestDbBasedKVStore(t)
+	ctx := context.Background()
+	if err := store.Set(ctx, "lock", []byte("v1")); err != nil {
+		t.Fatalf("Set 失败: %v", err)
+	}
+
+	var once sync.Once
+	err := store.db.Callback().Delete().Before("gorm:delete").Register(
+		"test:swap_value_before_delete", func(tx *gorm.DB) {
+			once.Do(func() {
+				// 复用事务所在连接直接改写，避免二次取连接（sqlite 内存库会走另一个库）
+				_, _ = tx.Statement.ConnPool.ExecContext(
+					ctx, "UPDATE kv_store SET value = ? WHERE key = ?", []byte("v2"), "lock")
+			})
+		})
+	if err != nil {
+		t.Fatalf("注册删除前回调失败: %v", err)
+	}
+
+	ok, err := store.CompareAndDelete(ctx, "lock", []byte("v1"))
+	if err != nil {
+		t.Fatalf("CompareAndDelete 失败: %v", err)
+	}
+	if ok {
+		t.Fatal("值在删除前被他人替换时应返回 false")
+	}
+	got, err := store.Get(ctx, "lock")
+	if err != nil {
+		t.Fatalf("Get 失败: %v", err)
+	}
+	if string(got) != "v2" {
+		t.Fatalf("他人的锁应保留，got %q", string(got))
+	}
+}

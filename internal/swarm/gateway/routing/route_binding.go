@@ -1,6 +1,10 @@
 package routing
 
-import "github.com/gorilla/websocket"
+import (
+	"context"
+
+	"github.com/gorilla/websocket"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -53,7 +57,7 @@ type RouteBinding struct {
 //
 // ⚠️ 历史：本类型曾误写为 func(channel any, data []byte) ([]byte, error)（2026-07-09
 // 骨架凭空建模，零生产调用），与 Python 的 ws/map/bool 三处全不符，已按 Python 修正。
-type InterceptorFunc func(ws *websocket.Conn, data map[string]any) bool
+type InterceptorFunc func(ctx context.Context, ws *websocket.Conn, data map[string]any) bool
 
 // CleanupFunc 断连清理函数类型（无 DisconnectHandler 时的兜底）。
 //

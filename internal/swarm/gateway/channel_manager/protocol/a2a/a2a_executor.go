@@ -68,6 +68,12 @@ func (e *a2aExecutor) Execute(ctx context.Context, ec *a2asrv.ExecutorContext) i
 			select {
 			case <-ctx.Done():
 				return
+			case <-e.ch.Stopped():
+				// S-04：通道级停止信号。SDK 用 context.WithoutCancel 派生执行 ctx，
+				// ctx.Done() 永不触发，关机必须靠自有信号才能让 handler 及时返回。
+				return
+			case msg = <-pending.Terminal():
+				// M-01：终态保底槽优先（主队列满时终态只能从这里到达）
 			case msg = <-pending.C():
 			}
 			if msg == nil {
@@ -124,6 +130,12 @@ func (e *a2aExecutor) Cancel(_ context.Context, ec *a2asrv.ExecutorContext) iter
 				return
 			}
 		}
+		// M-02：向该请求投递一条合成终态，唤醒仍阻塞在 pending 上的 Execute
+		// （Python 侧靠 event_queue.close(immediate=True) 结束客户端流，但执行协程
+		// 同样不会被打断；Go 若不唤醒则 goroutine 与 pending 条目一直挂到内部任务
+		// 自行结束）。event_type 用 chat.interrupt_result，terminalState 直接映射
+		// 为 Canceled，与本次 yield 的 CANCELED 语义一致。
+		e.ch.deliverCanceled(string(ec.TaskID))
 		yield(sdka2a.NewStatusUpdateEvent(ec, sdka2a.TaskStateCanceled, nil), nil)
 	}
 }

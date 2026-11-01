@@ -289,8 +289,12 @@ func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request)
 	}()
 
 	// 读循环（对齐 L527-530）。
-	// ⚠️ 用 context.Background()：gorilla Upgrade 劫持连接后 r.Context()
-	// 随原始请求结束而取消，不能作为消息处理链的 ctx 传播
+	// ⚠️ 不能用 r.Context()：gorilla Upgrade 劫持连接后 r.Context() 随原始请求
+	// 结束而取消，不能作为消息处理链的 ctx 传播。M-13 改为自建连接级 ctx：
+	// 读循环退出（连接断开）时 cancel，把「连接生命周期」显式传下去，
+	// 让 ACP 别名解析等 RPC 不再用恒不取消的 context.Background()。
+	connCtx, cancelConn := context.WithCancel(context.Background())
+	defer cancelConn()
 	// M-02：handleRawMessage 返回 true（on_message 回调出错）时断开——
 	// 对齐 Python 异常逃出 async for → websockets 关闭该连接的语义
 	for {
@@ -302,7 +306,7 @@ func (s *GatewayServer) HandleConnection(w http.ResponseWriter, r *http.Request)
 				Msg("WebSocket connection closed")
 			break
 		}
-		if s.handleRawMessage(context.Background(), conn, raw, matchedPath, route) {
+		if s.handleRawMessage(connCtx, conn, raw, matchedPath, route) {
 			// 回调故障快速失败：主动关闭连接（走下方 finally 清理链）
 			_ = conn.Close()
 			break
@@ -443,7 +447,7 @@ func (s *GatewayServer) Send(ctx context.Context, msg *schema.Message) error {
 					h = false
 				}
 			}()
-			return interceptor(ws, map[string]any{"raw": msg})
+			return interceptor(ctx, ws, map[string]any{"raw": msg})
 		}()
 		if handled {
 			return nil
@@ -619,7 +623,7 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 					h = false
 				}
 			}()
-			return route.InboundInterceptor(ws, data)
+			return route.InboundInterceptor(ctx, ws, data)
 		}()
 		if handled {
 			return false

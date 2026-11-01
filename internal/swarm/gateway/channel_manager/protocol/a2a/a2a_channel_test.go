@@ -10,6 +10,8 @@ import (
 
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+
+	sdka2a "github.com/a2aproject/a2a-go/v2/a2a"
 )
 
 // TestConfigFromEnv_默认值 对齐 Python A2AChannelConfig 默认值 (L23-35)
@@ -31,7 +33,9 @@ func TestConfigFromEnv_默认值(t *testing.T) {
 	if cfg.ExtendedCardPath != "/agent/authenticatedExtendedCard" {
 		t.Errorf("ExtendedCardPath = %q", cfg.ExtendedCardPath)
 	}
-	if cfg.ProtocolVersion != "1.0.0" {
+	// M-03：默认协议版本取 SDK 的 a2a.Version（"1.0"），与 a2asrv 的严格校验口径一致；
+	// 原默认 "1.0.0" 会让按卡片回填 A2A-Version 的第三方客户端一律被 -32009 拒绝。
+	if cfg.ProtocolVersion != string(sdka2a.Version) {
 		t.Errorf("ProtocolVersion = %q", cfg.ProtocolVersion)
 	}
 	if cfg.ChannelID != "a2a" {

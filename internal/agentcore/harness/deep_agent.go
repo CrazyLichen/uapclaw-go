@@ -1899,9 +1899,12 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 	d.staleRails = nil
 
 	// 注册待处理 Rail
+	// S-01：**不在遍历前清空队列**——对齐 Python「循环全部成功后才 clear」
+	// （deep_agent.py 的 _pending_rails.clear() 位于 for 循环之后）。遍历前清空会导致
+	// 任意一个 rail Init 失败后重试时队列为空、initialized 被置真、整批 rail 静默丢失。
+	// 失败项与剩余项保留在队列中，已成功的项在下方按引用摘除，重试幂等。
 	pendingToRegister := make([]agentinterfaces.AgentRail, len(d.pendingRails))
 	copy(pendingToRegister, d.pendingRails)
-	d.pendingRails = nil
 	d.railsMu.Unlock()
 
 	// 执行废弃 Rail 注销
@@ -1912,7 +1915,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 	}
 
 	// 注册待处理 Rail
-	for _, r := range pendingToRegister {
+	for i, r := range pendingToRegister {
 		if tc, ok := r.(*rails.TaskCompletionRail); ok {
 			d.railsMu.Lock()
 			d.taskCompletionRail = tc
@@ -1932,6 +1935,9 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 		// Go 侧此前 Warn + continue 会让 rail 静默缺失（例如 TeamPolicyRail 不生效），
 		// 改为向上返回错误。
 		if err := r.Init(ctx, d); err != nil {
+			// S-01：仅摘除已成功的项（[0,i)），失败项与剩余项留在队列，重试时重新 Init。
+			// Python 侧异常逃出 for 循环时 _pending_rails 完整保留，go 侧按引用摘除等价。
+			d.removePendingRailsByRefs(pendingToRegister[:i])
 			return ctx, fmt.Errorf("rail %s 初始化失败: %w", reflect.TypeOf(r).String(), err)
 		}
 		d.registerRailSelective(ctx, r)
@@ -1940,6 +1946,8 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 		d.railsMu.Unlock()
 	}
 
+	// S-01：全部成功后才摘除队列（对齐 Python clear 的位置）
+	d.removePendingRailsByRefs(pendingToRegister)
 	d.initialized = true
 	return ctx, nil
 }
@@ -3034,6 +3042,33 @@ func removeRailByRef(rails []agentinterfaces.AgentRail, target agentinterfaces.A
 		}
 	}
 	return result
+}
+
+// removePendingRailsByRefs 按引用批量摘除排队队列中的 Rail。
+//
+// S-01 专用：ensureInitialized 在每条 rail Init 成功后调用，把已处理项从
+// d.pendingRails 中剔除；遍历期间经 AddRail 新追加的项不受影响。按引用（而非按类型）
+// 摘除，避免同类型的其它实例被误删。
+func (d *DeepAgent) removePendingRailsByRefs(done []agentinterfaces.AgentRail) {
+	if len(done) == 0 {
+		return
+	}
+	d.railsMu.Lock()
+	defer d.railsMu.Unlock()
+	remaining := make([]agentinterfaces.AgentRail, 0, len(d.pendingRails))
+	for _, pending := range d.pendingRails {
+		processed := false
+		for _, r := range done {
+			if pending == r {
+				processed = true
+				break
+			}
+		}
+		if !processed {
+			remaining = append(remaining, pending)
+		}
+	}
+	d.pendingRails = remaining
 }
 
 // filterRailsNotType 按类型谓词过滤 Rail。

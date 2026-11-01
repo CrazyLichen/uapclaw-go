@@ -163,7 +163,7 @@ func TestStreamWriterManager_InteractionOutputWriter(t *testing.T) {
 	}
 
 	// 通过接口写入
-	if err := iw.WriteInteraction("__interaction__", 0, "test"); err != nil {
+	if err := iw.WriteInteraction(context.Background(), "__interaction__", 0, "test"); err != nil {
 		t.Fatalf("WriteInteraction 失败: %v", err)
 	}
 

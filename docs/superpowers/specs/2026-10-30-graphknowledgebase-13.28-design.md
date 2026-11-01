@@ -230,22 +230,33 @@ GraphKB.Close()
 - **只有显式注入固定检索器才触发**（复用同一 store 的高级用法）；Python 单测未暴露，因 `test_close` 用的是独立 `AsyncMock`。
 - 决策（2026-10-30 用户拍板）：**字面复刻，不加 `if graphRetriever == nil` 守卫**。理由：13.27 §13.4 取向"对齐优先于防炸"；幂等责任在底层 store。**不加固化测试**（把 Python 缺陷钉进断言会让后续修 bug 变得困难）。
 
-### 6.2 maybeClose 在 Task 0 之后只剩单变体
+### 6.2 Close 的现行形态（2026-11-02 审查同步，M-17）
 
-Task 0（§13）把 `Retriever` / `VectorStore` / `KnowledgeBase` 三接口统一为 `Close() error`，`maybeClose` 随之收敛为单条断言：
+`Close() error` 统一（`c3f188de`）后，基座实现已改为「**逐组件关闭 + 聚合首错返回**」，
+不再是「Warn 吞错」：
 
 ```go
-func (b *BaseKnowledgeBase) maybeClose(obj any) {
-    if obj == nil { return }
-    if c, ok := obj.(interface{ Close() error }); ok {
-        if err := c.Close(); err != nil {
-            logger.Warn(logComponent).Err(err).Msg("Failed to close object")   // 保留 Python sync 分支的 Warn 吞
-        }
-    }
+func (b *BaseKnowledgeBase) Close() error {
+    vs, im := b.vectorStoreRef(), b.indexManagerRef()   // 先快照，避免关闭期间被 Set* 替换
+    var firstErr error
+    if err := b.maybeClose(vs); err != nil && firstErr == nil { firstErr = err }
+    if err := b.maybeClose(im); err != nil && firstErr == nil { firstErr = err }
+    return firstErr
 }
+
+// maybeClose：nil 跳过；实现 Close() error 则调用并返回错误（不再吞）
+func (b *BaseKnowledgeBase) maybeClose(obj interface{ Close() error }) error
 ```
 
-三个 retriever 字段（`retriever.Retriever`，Task 0 后为 `Close() error`）必然命中该断言；`indexManager` 槽依赖动态类型——`indexer.Indexer` 接口无 Close，Chroma/Milvus 具体类型在 Task 0 中已改成 error 变体，故仍能命中（§13.3 拒绝项）。**若 Task 0 被推迟**，本节退回 13.26 双变体语义，行为一致（仅多保留一条不可达分支）。
+要点：
+
+- **两个组件都会被尝试关闭**，即使前一个失败；返回值是**首个**错误（`base_test.go`
+  的 `TestClose_部分失败返回首个错误` 覆盖，含「第二个组件仍被调用」断言）。
+- `maybeClose` 仍保留为单变体，但参数已是 `interface{ Close() error }` 具体约束，
+  不需要运行时断言——三接口在 Task 0 后统一为 `Close() error`。
+- 组件侧（`indexer/chroma.go`、`indexer/milvus.go`、`vector_store/*`）当前恒返回
+  `nil`（内部只 Warn），因此「首错聚合」在真实组件上走不到，只有测试能覆盖；
+  这与 Python「记日志不抛」一致，**不引入真实错误产出**（审查 M-17 决策）。
 
 ## 7. 聚合薄委托
 

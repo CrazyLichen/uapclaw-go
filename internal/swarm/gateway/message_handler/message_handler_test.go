@@ -120,7 +120,7 @@ func TestSendProcessingStatus(t *testing.T) {
 func TestHandleChannelControl_非ChatSend(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatResume, json.RawMessage(`{}`))
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.False(t, handled, "非 chat.send 不应处理 slash 命令")
 }
 
@@ -129,7 +129,7 @@ func TestHandleChannelControl_非受控渠道(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	msg := schema.NewReqMessage("web_test", "sess-1", schema.ReqMethodChatSend,
 		json.RawMessage(`{"content":"/new_session"}`))
-	handled := mh.handleChannelControl(msg)
+	handled := mh.handleChannelControl(context.Background(), msg)
 	assert.False(t, handled, "Web 渠道不在受控类型中")
 }
 

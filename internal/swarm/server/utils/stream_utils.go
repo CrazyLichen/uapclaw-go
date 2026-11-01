@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -38,6 +39,17 @@ type UsageAccumulator struct {
 // 对齐 Python `convert_interactions_to_ask_user_question(state_outputs: list)`；
 // 用具体类型而不是 any，把「传单个对象/非列表」从运行时静默失败变成编译期错误。
 type InteractionConverterFunc func(interactions []map[string]any) map[string]any
+
+// payloadSeenKey 递归遍历的循环检测键。
+//
+// T-04：只用指针地址会让「同一底层数组的两个不同子切片」撞键（slice 的 Pointer()
+// 返回首元素地址），加长度后二者可区分；map/pointer 的长度位固定为 0。
+type payloadSeenKey struct {
+	// ptr 地址（map/slice/pointer 的 Pointer()）
+	ptr uintptr
+	// length 切片长度（非切片为 0）
+	length int
+}
 
 // FindOption FindInteractionPayloads 可选参数。
 type FindOption struct {
@@ -80,7 +92,18 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 	chunkType := output.Type
 	// 桥接结构体 payload（ControllerOutputPayload）为 map，对齐 Python dict 语义；
 	// 只断言 map 会让 task_loop 产出的 task_failed/task_completion 被整块丢弃。
-	payload := PayloadToMap(output.Payload)
+	//
+	// T-03：结构体桥接失败时丢弃该 chunk 并记 Error。原实现把 nil 兜成空 map，
+	// default 分支会输出 content="map[]" 的伪帧；Python 侧空 dict 走 **payload 展开，
+	// 不会产出 content。
+	payload, bridgeErr := PayloadToMapChecked(output.Payload)
+	if bridgeErr != nil {
+		logger.Error(logComponent).
+			Err(bridgeErr).
+			Str("chunk_type", chunkType).
+			Msg("failed to bridge stream payload, dropping chunk")
+		return nil
+	}
 	if payload == nil {
 		payload = make(map[string]any)
 	}
@@ -294,10 +317,10 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		// M-01: 对齐 Python — payload 所有键展开到顶层（不再只提取 5 个固定字段）
 		// Python: interface_deep._parse_stream_chunk L5147-5157
 		result := map[string]any{"event_type": "context.compression_state"}
-		if payloadMap, ok := output.Payload.(map[string]any); ok {
-			for k, v := range payloadMap {
-				result[k] = SerializeValue(v)
-			}
+		// T-02：使用函数开头已桥接的 payload。原先对 output.Payload 做裸类型断言，
+		// 结构体 payload 断言失败后只剩 event_type，压缩状态字段全丢。
+		for k, v := range payload {
+			result[k] = SerializeValue(v)
 		}
 		result["event_type"] = "context.compression_state" // 确保 event_type 正确
 		return result
@@ -482,38 +505,54 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 	}
 }
 
+// ParseActivateConfirm 识别并转换 activate_confirm 交互载荷。
+//
+// M-04：仓库原有三份近乎相同的实现（本文件 ParseInteractionPayload、
+// parseControllerOutputInteractions，以及 adapter 包的 parseInteractionPayloadUtils），
+// 其中 parseControllerOutputInteractions 那份键名与事件名双错（查 m["__interaction__"]、
+// 返回 interaction.activate_confirm），导致真实信封永不命中、即便命中也没有消费端。
+// 此处收口为唯一实现，三处调用点共用。
+//
+// Python: stream_utils.py:356-372 / interface_deep.py:5166-5183
+// 返回 (事件 map, 是否命中)。
+func ParseActivateConfirm(m map[string]any) (map[string]any, bool) {
+	if m == nil || m["interaction_type"] != "activate_confirm" {
+		return nil, false
+	}
+	extRuntimePath := ExtractStringFromPayload(m, "extension_runtime_path")
+	if extRuntimePath == "" {
+		extRuntimePath = ExtractStringFromPayload(m, "runtime_path")
+	}
+	options := []string{"accept", "reject"}
+	if opts, ok := m["options"].([]any); ok && len(opts) > 0 {
+		options = make([]string, 0, len(opts))
+		for _, o := range opts {
+			if s, ok := o.(string); ok {
+				options = append(options, s)
+			}
+		}
+	}
+	return map[string]any{
+		"event_type":             "harness.activate_interaction",
+		"interaction_type":       "activate_confirm",
+		"interaction_id":         ExtractStringFromPayload(m, "interaction_id"),
+		"extension_name":         ExtractStringFromPayload(m, "extension_name"),
+		"runtime_path":           ExtractStringFromPayload(m, "runtime_path"),
+		"session_runtime_path":   ExtractStringFromPayload(m, "session_runtime_path"),
+		"extension_runtime_path": extRuntimePath,
+		"options":                options,
+	}, true
+}
+
 // ParseInteractionPayload 解析 __interaction__ 类型的 payload。
 // Python: interface_deep._parse_stream_chunk L5165-5179
 // 先检查 activate_confirm 交互类型（返回 harness.activate_interaction 事件），
 // 否则委托 converter 进行交互转换；
 // 若 converter 为 nil，回退为默认行为，直接返回 chat.interaction 事件。
 func ParseInteractionPayload(payload map[string]any, converter InteractionConverterFunc) map[string]any {
-	// S-03: 先检查 activate_confirm
-	// Python: if isinstance(payload, dict) and payload.get("interaction_type") == "activate_confirm"
-	if payload["interaction_type"] == "activate_confirm" {
-		extRuntimePath := ExtractStringFromPayload(payload, "extension_runtime_path")
-		if extRuntimePath == "" {
-			extRuntimePath = ExtractStringFromPayload(payload, "runtime_path")
-		}
-		options := []string{"accept", "reject"}
-		if opts, ok := payload["options"].([]any); ok && len(opts) > 0 {
-			options = make([]string, 0, len(opts))
-			for _, o := range opts {
-				if s, ok := o.(string); ok {
-					options = append(options, s)
-				}
-			}
-		}
-		return map[string]any{
-			"event_type":             "harness.activate_interaction",
-			"interaction_type":       "activate_confirm",
-			"interaction_id":         ExtractStringFromPayload(payload, "interaction_id"),
-			"extension_name":         ExtractStringFromPayload(payload, "extension_name"),
-			"runtime_path":           ExtractStringFromPayload(payload, "runtime_path"),
-			"session_runtime_path":   ExtractStringFromPayload(payload, "session_runtime_path"),
-			"extension_runtime_path": extRuntimePath,
-			"options":                options,
-		}
+	// 先检查 activate_confirm（唯一实现见 ParseActivateConfirm）
+	if event, ok := ParseActivateConfirm(payload); ok {
+		return event
 	}
 	if converter != nil {
 		// Python: interface_deep.py L5179 → convert_interactions_to_ask_user_question([payload])
@@ -622,7 +661,13 @@ func SerializeValue(value any) any {
 // base.go），故当前没有生产者会产出信封形态；本函数保留为移植后的对齐点，
 // 届时无需再改消费端。不要当作死代码删除。
 func FindInteractionPayloads(obj any, opts ...FindOption) []any {
-	return findInteractionPayloadsRecursive(obj, 0, nil)
+	// T-01：MaxDepth 原先被丢弃、实现里硬编码 8。改为真正生效，未传或非正时
+	// 沿用 defaultInteractionMaxDepth（与桥接摊平递归同源）。
+	maxDepth := defaultInteractionMaxDepth
+	if len(opts) > 0 && opts[0].MaxDepth > 0 {
+		maxDepth = opts[0].MaxDepth
+	}
+	return findInteractionPayloadsRecursive(obj, 0, maxDepth, nil)
 }
 
 // FindInteractionPayload 返回第一个匹配的 __interaction__ 载荷。
@@ -675,21 +720,27 @@ func strValAny(m map[string]any, keys ...string) string {
 // Go 的结构体必须先桥接成 map，因此非 map/slice 的值（结构体及其指针）走
 // PayloadToMap 后再递归。另外 Go 结构体若缺 json tag，桥接后键名保持大写
 // （如 stream.OutputSchema 的 Type/Payload），故 type/Type 两种键名都认。
-func findInteractionPayloadsRecursive(obj any, depth int, seen map[uintptr]bool) []any {
-	if obj == nil || depth > 8 {
+func findInteractionPayloadsRecursive(obj any, depth, maxDepth int, seen map[payloadSeenKey]bool) []any {
+	if obj == nil || depth > maxDepth {
 		return nil
 	}
-	// 循环检测：对 map/slice/ptr 取地址作 seen 标记
+	// 循环检测：map/slice/ptr 取地址作 seen 标记。
+	//
+	// T-04：键必须带长度——slice 的 Pointer() 返回「底层数组首元素地址」，同一数组的
+	// 两个不同子切片会撞键、被误判成已访问而漏检（Python 用 id(obj)，不会撞）。
 	rv := reflect.ValueOf(obj)
 	if rv.Kind() == reflect.Map || rv.Kind() == reflect.Slice || rv.Kind() == reflect.Pointer {
-		ptr := rv.Pointer()
-		if seen == nil {
-			seen = make(map[uintptr]bool)
+		key := payloadSeenKey{ptr: rv.Pointer()}
+		if rv.Kind() == reflect.Slice {
+			key.length = rv.Len()
 		}
-		if seen[ptr] {
+		if seen == nil {
+			seen = make(map[payloadSeenKey]bool)
+		}
+		if seen[key] {
 			return nil
 		}
-		seen[ptr] = true
+		seen[key] = true
 	}
 
 	switch v := obj.(type) {
@@ -709,27 +760,35 @@ func findInteractionPayloadsRecursive(obj any, depth int, seen map[uintptr]bool)
 			}}
 		}
 		var found []any
-		for _, val := range v {
-			found = append(found, findInteractionPayloadsRecursive(val, depth+1, seen)...)
+		// T-01：Python 的 dict 保插入序，Go 的 map 无序；按 key 排序遍历保证
+		// 「多个 interaction 同时存在时命中第一个」是确定行为。
+		keys := make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			found = append(found, findInteractionPayloadsRecursive(v[k], depth+1, maxDepth, seen)...)
 		}
 		return found
 	case []any:
+		// 切片本身有序（插入序），无需排序
 		var found []any
 		for _, val := range v {
-			found = append(found, findInteractionPayloadsRecursive(val, depth+1, seen)...)
+			found = append(found, findInteractionPayloadsRecursive(val, depth+1, maxDepth, seen)...)
 		}
 		return found
 	case []map[string]any:
 		var found []any
 		for _, val := range v {
-			found = append(found, findInteractionPayloadsRecursive(val, depth+1, seen)...)
+			found = append(found, findInteractionPayloadsRecursive(val, depth+1, maxDepth, seen)...)
 		}
 		return found
 	default:
 		// Python: hasattr(obj, "type") 与 model_dump / 属性兜底分支；
 		// Go 等价：结构体先桥接为 map 再递归（非结构体由 PayloadToMap 返回 nil）
 		if m := PayloadToMap(obj); m != nil {
-			return findInteractionPayloadsRecursive(m, depth+1, seen)
+			return findInteractionPayloadsRecursive(m, depth+1, maxDepth, seen)
 		}
 		return nil
 	}
@@ -741,38 +800,14 @@ func findInteractionPayloadsRecursive(obj any, depth int, seen map[uintptr]bool)
 // 先检查是否存在 activate_confirm 类型（返回 interaction.activate_confirm 事件），
 // 否则委托 converter 进行交互转换；若 converter 为 nil，回退为默认行为。
 func parseControllerOutputInteractions(interactions []any, converter InteractionConverterFunc) map[string]any {
-	// S-04: 对齐 Python _parse_interaction_payload — 遍历 interactions 检查 activate_confirm
-	// Python: for interaction in interactions:
-	// Python:     interaction_type = interaction.get("__interaction__")
-	// Python:     if interaction_type == "activate_confirm": return {...}
-	// 元素统一桥接为 map（producer 可能给 map，也可能给结构体）
+	// M-04: 对齐 Python _parse_interaction_payload — 遍历 interactions 检查 activate_confirm。
+	// 原实现查 m["__interaction__"]（那是 chunk 类型标记，不是载荷字段），且返回的
+	// interaction.activate_confirm 事件全仓零消费端；现统一委托 ParseActivateConfirm。
+	// 元素统一桥接为 map（producer 可能给 map，也可能给结构体）。
 	bridged := PayloadsToMaps(interactions)
 	for _, m := range bridged {
-		if m["__interaction__"] == "activate_confirm" {
-			extRuntimePath := ExtractStringFromPayload(m, "extension_runtime_path")
-			if extRuntimePath == "" {
-				extRuntimePath = ExtractStringFromPayload(m, "runtime_path")
-			}
-			options := []string{"accept", "reject"}
-			if opts, ok := m["options"].([]any); ok && len(opts) > 0 {
-				options = make([]string, 0, len(opts))
-				for _, o := range opts {
-					if s, ok := o.(string); ok {
-						options = append(options, s)
-					}
-				}
-			}
-			return map[string]any{
-				"event_type":             "interaction.activate_confirm",
-				"interaction":            m,
-				"interaction_type":       "activate_confirm",
-				"interaction_id":         ExtractStringFromPayload(m, "interaction_id"),
-				"extension_name":         ExtractStringFromPayload(m, "extension_name"),
-				"runtime_path":           ExtractStringFromPayload(m, "runtime_path"),
-				"session_runtime_path":   ExtractStringFromPayload(m, "session_runtime_path"),
-				"extension_runtime_path": extRuntimePath,
-				"options":                options,
-			}
+		if event, ok := ParseActivateConfirm(m); ok {
+			return event
 		}
 	}
 	// 默认：委托 converter 转为 ask_user_question

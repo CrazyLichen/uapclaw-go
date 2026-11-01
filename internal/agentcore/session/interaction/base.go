@@ -1,6 +1,7 @@
 package interaction
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -149,7 +150,7 @@ func (b *BaseInteraction) getNextInteractiveInput() any {
 
 // writeInteractionOutput 写入交互输出到流。
 // ✅ 5.10 已回填：StreamWriterManager 类型确定后直接调用
-func writeInteractionOutput(session interfaces.InnerSession, outputType string, index int, payload any) error {
+func writeInteractionOutput(ctx context.Context, session interfaces.InnerSession, outputType string, index int, payload any) error {
 	mgr := session.StreamWriterManager()
 	if mgr == nil {
 		return nil
@@ -158,7 +159,7 @@ func writeInteractionOutput(session interfaces.InnerSession, outputType string, 
 	if writer == nil {
 		return nil
 	}
-	err := writer.WriteInteraction(outputType, index, payload)
+	err := writer.WriteInteraction(ctx, outputType, index, payload)
 	if err != nil {
 		logger.Warn(logComponent).
 			Err(err).

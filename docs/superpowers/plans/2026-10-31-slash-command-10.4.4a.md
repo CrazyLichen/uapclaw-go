@@ -1,5 +1,7 @@
 # 10.4.4a Slash 命令对账收口 + command.model 实现计划
 
+> **状态回填（2026-11-02，审查 T-14）**：本文件全部步骤已落地并随 CI 四绿合并，checkbox 已按实际完成情况勾选；权威状态以 `IMPLEMENTATION_PLAN.md` 中 10.4.4a 条为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 Gateway slash 命令处理与 Python 逐条对齐（6 项改代码、2 项核实等价），并全量实现 `command.model`，同时把 `message_handler` 包覆盖率从 56.8% 提到 ≥85%。
@@ -34,7 +36,7 @@
 **Files:**
 - Create: `internal/swarm/gateway/message_handler/fake_agent_server_test.go`
 
-- [ ] **Step 1: 写辅助文件（本文件本身不写断言，只提供基建）**
+- [x] **Step 1: 写辅助文件（本文件本身不写断言，只提供基建）**
 
 ```go
 package message_handler
@@ -206,12 +208,12 @@ func waitNoticeContaining(t *testing.T, mh *MessageHandler, substr string) *sche
 }
 ```
 
-- [ ] **Step 2: 编译验证（此时无测试引用，只需能编译）**
+- [x] **Step 2: 编译验证（此时无测试引用，只需能编译）**
 
 Run: `go build ./internal/swarm/gateway/message_handler/ && go vet ./internal/swarm/gateway/message_handler/`
 Expected: 无输出、退出码 0
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/swarm/gateway/message_handler/fake_agent_server_test.go
@@ -226,7 +228,7 @@ git commit -m "test(message_handler): 新增假 AgentServer 测试替身"
 - Modify: `internal/swarm/gateway/message_handler/slash_cmd.go:243-254`
 - Test: `internal/swarm/gateway/message_handler/slash_cmd_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 在 `slash_cmd_test.go` 的 `TestSendChannelNotice` 之后追加：
 
@@ -250,12 +252,12 @@ func TestSendChannelNotice_Params为空对象(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `go test -run 'TestSendChannelNotice_Params为空对象' ./internal/swarm/gateway/message_handler/ -v`
 Expected: FAIL，`params 应为空对象 {}`（实际为 `null` 或空字节）
 
-- [ ] **Step 3: 改实现**
+- [x] **Step 3: 改实现**
 
 把 `slash_cmd.go` 中 `noticeMsg` 字面量改成（新增 `Params` 一行）：
 
@@ -275,12 +277,12 @@ Expected: FAIL，`params 应为空对象 {}`（实际为 `null` 或空字节）
 	}
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `go test -run 'TestSendChannelNotice' ./internal/swarm/gateway/message_handler/ -v`
 Expected: PASS（两条用例都过）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/swarm/gateway/message_handler/slash_cmd.go internal/swarm/gateway/message_handler/slash_cmd_test.go
@@ -296,7 +298,7 @@ git commit -m "fix(message_handler): sendChannelNotice 补 params={} 对齐 Pyth
 - Modify: `internal/swarm/gateway/message_handler/command_parser/slash_command.go`（末尾追加导出函数）
 - Test: `internal/swarm/gateway/message_handler/slash_cmd_test.go`、`command_parser/slash_command_test.go`
 
-- [ ] **Step 1: 先加 `ParsedControlActionString`（Python `parsed.action.value`）**
+- [x] **Step 1: 先加 `ParsedControlActionString`（Python `parsed.action.value`）**
 
 在 `command_parser/slash_command.go` 的「全局变量」区追加：
 
@@ -333,7 +335,7 @@ func ParsedControlActionString(a ParsedControlAction) string {
 }
 ```
 
-- [ ] **Step 2: 写失败测试（state 副作用）**
+- [x] **Step 2: 写失败测试（state 副作用）**
 
 在 `slash_cmd_test.go` 追加：
 
@@ -356,12 +358,12 @@ func TestHandleChannelControl_Skills不创建渠道状态(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 跑测试确认失败**
+- [x] **Step 3: 跑测试确认失败**
 
 Run: `go test -run 'TestHandleChannelControl_Skills不创建渠道状态' ./internal/swarm/gateway/message_handler/ -v`
 Expected: FAIL，`skills_ok 路径不得创建 channel state`（实际为 1）
 
-- [ ] **Step 4: 重写 `handleChannelControl`**
+- [x] **Step 4: 重写 `handleChannelControl`**
 
 把 `slash_cmd.go` 中 `handleChannelControl` 整体替换为：
 
@@ -469,12 +471,12 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 
 注意：原函数末尾的 `logger.Info(... channel_control_handled ...)` 整段删除（日志已上移）。
 
-- [ ] **Step 5: 跑本包全部测试**
+- [x] **Step 5: 跑本包全部测试**
 
 Run: `go test ./internal/swarm/gateway/message_handler/... 2>&1 | tail -20`
 Expected: PASS。若 `TestHandleChannelControl_非控制文本` 之类因顺序变化失败，逐条核对：非受控渠道现在在解析前就返回 `false`，与 Python 一致。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/swarm/gateway/message_handler/slash_cmd.go internal/swarm/gateway/message_handler/slash_cmd_test.go internal/swarm/gateway/message_handler/command_parser/slash_command.go
@@ -488,7 +490,7 @@ git commit -m "fix(message_handler): handleChannelControl 顺序/提前返回/�
 **Files:**
 - Test: `internal/swarm/gateway/message_handler/slash_cmd_test.go`
 
-- [ ] **Step 1: 写测试**
+- [x] **Step 1: 写测试**
 
 追加：
 
@@ -553,12 +555,12 @@ func TestSkillsSlashNotice_五种文案形态(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试**
+- [x] **Step 2: 跑测试**
 
 Run: `go test -run 'TestSkillsSlashNotice_五种文案形态' ./internal/swarm/gateway/message_handler/ -v`
 Expected: 5 个 subtest 全 PASS。若有失败，说明 A3/A4 的「等价」结论不成立，**停下来回到 spec 修正**，不要改生产代码迁就测试。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/swarm/gateway/message_handler/slash_cmd_test.go
@@ -573,7 +575,7 @@ git commit -m "test(message_handler): 锁定 /skills list 五种文案形态（A
 - Modify: `internal/swarm/gateway/message_handler/slash_cmd.go:331-410`
 - Test: `internal/swarm/gateway/message_handler/slash_cmd_test.go`
 
-- [ ] **Step 1: 写失败测试（时序）**
+- [x] **Step 1: 写失败测试（时序）**
 
 追加：
 
@@ -649,12 +651,12 @@ func TestBranchSlashNotice_成功回填字段(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `go test -run 'TestBranchSlashNotice' ./internal/swarm/gateway/message_handler/ -v`
 Expected: `TestBranchSlashNotice_取消先于通知` FAIL，`取消必须同步完成（异步实现下此处为 0）` 实际 0
 
-- [ ] **Step 3: 改实现**
+- [x] **Step 3: 改实现**
 
 `branchSlashNotice` 末尾把异步取消改为同步，并在成功分支补日志：
 
@@ -699,12 +701,12 @@ Expected: `TestBranchSlashNotice_取消先于通知` FAIL，`取消必须同步�
 	}
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `go test -run 'TestBranchSlashNotice|TestHandleChannelControl_BranchOK' ./internal/swarm/gateway/message_handler/ -v`
 Expected: 全 PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/swarm/gateway/message_handler/slash_cmd.go internal/swarm/gateway/message_handler/slash_cmd_test.go
@@ -719,7 +721,7 @@ git commit -m "fix(message_handler): /branch 取消改同步 + 补成功/拒绝�
 - Modify: `internal/swarm/gateway/message_handler/slash_cmd.go:438-519`
 - Test: `internal/swarm/gateway/message_handler/slash_cmd_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加：
 
@@ -799,12 +801,12 @@ func TestRewindSlashNotice_兜底失败(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认基线**
+- [x] **Step 2: 跑测试确认基线**
 
 Run: `go test -run 'TestRewindSlashNotice' ./internal/swarm/gateway/message_handler/ -v`
 Expected: `TestRewindSlashNotice_E2A成功` PASS（说明现状已对），另两条 PASS。这一条测试是**形态锁定**而非先失败：A5 的兜底删除在 `result.ContentPreview` 为空时才生效，E2A 成功路径本来就用 payload 值。
 
-- [ ] **Step 3: 改实现（删兜底 + 补日志）**
+- [x] **Step 3: 改实现（删兜底 + 补日志）**
 
 把 `rewindSlashNotice` 的 E2A 成功分支替换为：
 
@@ -857,12 +859,12 @@ Expected: `TestRewindSlashNotice_E2A成功` PASS（说明现状已对），另�
 		turn, preview, result.RemovedRecords, result.RemainingRecords)})
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `go test -run 'TestRewindSlash' ./internal/swarm/gateway/message_handler/ -v`
 Expected: 全 PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/swarm/gateway/message_handler/slash_cmd.go internal/swarm/gateway/message_handler/slash_cmd_test.go
@@ -877,7 +879,7 @@ git commit -m "fix(message_handler): /rewind 删 preview 兜底 + 补成功日�
 - Modify: `internal/swarm/server/handle_command.go:245-274`
 - Create: `internal/swarm/server/handle_command_model_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `internal/swarm/server/handle_command_model_test.go`：
 
@@ -997,12 +999,12 @@ func TestMaskModelEnvForLog(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `go test -run 'TestHandleCommandModel|TestMaskModelEnvForLog' ./internal/swarm/server/ -v`
 Expected: 编译失败或 `maskModelEnvForLog` undefined
 
-- [ ] **Step 3: 改实现**
+- [x] **Step 3: 改实现**
 
 `handle_command.go` 顶部 import 增加（保持分组）：
 
@@ -1214,12 +1216,12 @@ func getenvOr(key, def string) string {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `go test -run 'TestHandleCommandModel|TestMaskModelEnvForLog' ./internal/swarm/server/ -v`
 Expected: 全 PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/swarm/server/handle_command.go internal/swarm/server/handle_command_model_test.go
@@ -1234,7 +1236,7 @@ git commit -m "feat(server): command.model 三分支全量实现（掩码 + os.e
 - Modify: `IMPLEMENTATION_PLAN.md:698`
 - Modify: `docs/superpowers/specs/2026-10-31-slash-command-10.4.4a-design.md`（补 D7）
 
-- [ ] **Step 1: spec 补 D7**
+- [x] **Step 1: spec 补 D7**
 
 在 spec 第五节表格 `D6` 行后追加：
 
@@ -1242,7 +1244,7 @@ git commit -m "feat(server): command.model 三分支全量实现（掩码 + os.e
 | D7 | `command.model` 的 `target`/`model` 为 JSON `null` 时 Go 得空串，Python `str(None)` 得 `"None"` | 无实际调用方会传 null；为对齐需实现 Python `str()` 语义，收益为零 |
 ```
 
-- [ ] **Step 2: 计划表插入两行并给 10.3.24 加回填标记**
+- [x] **Step 2: 计划表插入两行并给 10.3.24 加回填标记**
 
 在 `IMPLEMENTATION_PLAN.md` 第 698 行（`| 10.4.4 | 🔄 | ...`）**之后**插入：
 
@@ -1255,7 +1257,7 @@ git commit -m "feat(server): command.model 三分支全量实现（掩码 + os.e
 
 在 10.3.24 行末尾追加：`；⤴️ /sandbox 命令面来源 10.4.4b`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add IMPLEMENTATION_PLAN.md docs/superpowers/specs/2026-10-31-slash-command-10.4.4a-design.md
@@ -1266,27 +1268,27 @@ git commit -m "docs(plan): 10.4.4 拆分为 10.4.4a/10.4.4b 并同步进度"
 
 ### Task 9: 覆盖率与全量回归
 
-- [ ] **Step 1: 目标包覆盖率**
+- [x] **Step 1: 目标包覆盖率**
 
 Run: `go test -cover ./internal/swarm/gateway/message_handler/ ./internal/swarm/gateway/message_handler/command_parser/ ./internal/swarm/server/`
 Expected: `message_handler` ≥85%，`command_parser` ≥94%，`server` 不低于改动前
 
-- [ ] **Step 2: 逐函数核对三个 E2A 函数**
+- [x] **Step 2: 逐函数核对三个 E2A 函数**
 
 Run: `go test -coverprofile=/tmp/cov44a.out ./internal/swarm/gateway/message_handler/ >/dev/null && go tool cover -func=/tmp/cov44a.out | grep -E "skillsSlashNotice|branchSlashNotice|rewindSlashNotice"`
 Expected: 三者均 ≥80%（`skillsSlashNotice` 应接近 100%）
 
-- [ ] **Step 3: 全量回归（必须带 CI 同款标签）**
+- [x] **Step 3: 全量回归（必须带 CI 同款标签）**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./... 2>&1 | grep -E "^(FAIL|ok.*FAIL)" | head -20`
 Expected: 无 FAIL 行
 
-- [ ] **Step 4: 静态检查**
+- [x] **Step 4: 静态检查**
 
 Run: `go vet ./... && gofmt -l internal/swarm/gateway/message_handler internal/swarm/server`
 Expected: vet 无输出，gofmt 无文件列表
 
-- [ ] **Step 5: Commit（若上一步有格式修复）**
+- [x] **Step 5: Commit（若上一步有格式修复）**
 
 ```bash
 git add internal/swarm/gateway/message_handler/slash_cmd.go internal/swarm/server/handle_command.go

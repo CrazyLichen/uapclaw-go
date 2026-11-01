@@ -30,6 +30,13 @@ type InteractionOutput struct {
 	ID string `json:"id"`
 	// Value 交互携带的值
 	Value any `json:"value"`
+	// Kind 交互种类判别式（M-11）。
+	//
+	// "latest_input" 表示「等待用户最近一次输入」占位交互：Python 侧用裸元组
+	// (node_id, value) 表达，前端解析器认不出元组因而不会弹任何框。Go 若沿用统一
+	// 结构体且不带判别式，前端会把 {id, value} 当成权限审批兜底，凭空弹一个
+	// 空问题的「本次允许/总是允许/拒绝」框。omitempty 保证其余交互的报文一字不变。
+	Kind string `json:"kind,omitempty"`
 }
 
 // WorkflowInteraction 工作流交互，通过 GraphInterrupt 暂停工作流图执行。
@@ -57,6 +64,12 @@ type AgentInteraction struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+// InteractionKindLatestInput user_latest_input 占位交互的种类判别式（M-11）。
+//
+// 该交互只是「图挂起等用户输入」的信号，不是需要用户点击的卡片；前端转换器
+// 见到它就跳过（对齐 Python 用元组表达、转换器认不出的效果）。
+const InteractionKindLatestInput = "latest_input"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -124,7 +137,11 @@ func (w *WorkflowInteraction) WaitUserInputs(ctx context.Context, value any) (an
 
 	nodeID := getExecutableID(w.session)
 	payload := InteractionOutput{ID: nodeID, Value: value}
-	_ = writeInteractionOutput(w.session, InteractionType, w.idx, payload)
+	if err := writeInteractionOutput(ctx, w.session, InteractionType, w.idx, payload); err != nil {
+		// T-11：Python 是 await output_writer.write(...)，写失败先于 GraphInterrupt 上抛；
+		// 吞掉会让图挂起等一个前端永远不会展示的输入。
+		return nil, err
+	}
 
 	logger.Info(logComponent).
 		Str("action", "workflow_interaction_interrupt").
@@ -155,8 +172,13 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 
 	// 无缓存，需要中断
 	nodeID := getExecutableID(w.session)
-	payload := InteractionOutput{ID: nodeID, Value: value}
-	_ = writeInteractionOutput(w.session, InteractionType, w.idx, payload)
+	// M-11：流输出带 Kind 判别式，前端据此跳过（对齐 Python 元组形状「认不出」的效果）
+	streamPayload := InteractionOutput{ID: nodeID, Value: value, Kind: InteractionKindLatestInput}
+	if err := writeInteractionOutput(ctx, w.session, InteractionType, w.idx, streamPayload); err != nil {
+		return nil, err
+	}
+	// M-11：中断值不带真实 value（Python 为 (node_id, None)），恢复流程按 ns 定位节点
+	interruptPayload := InteractionOutput{ID: nodeID, Kind: InteractionKindLatestInput}
 
 	logger.Info(logComponent).
 		Str("action", "workflow_latest_input_interrupt").
@@ -168,7 +190,7 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 		Value: stream.OutputSchema{
 			Type:    InteractionType,
 			Index:   w.idx,
-			Payload: payload,
+			Payload: interruptPayload,
 		},
 		Resumable: true,
 		NS:        nodeID,
@@ -218,7 +240,9 @@ func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, 
 
 	nodeID := getExecutableID(a.session)
 	payload := InteractionOutput{ID: nodeID, Value: value}
-	_ = writeInteractionOutput(a.session, InteractionType, a.idx, payload)
+	if err := writeInteractionOutput(ctx, a.session, InteractionType, a.idx, payload); err != nil {
+		return nil, err
+	}
 
 	logger.Info(logComponent).
 		Str("action", "agent_interaction_interrupt").

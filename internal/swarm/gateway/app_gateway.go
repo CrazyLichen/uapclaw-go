@@ -588,21 +588,28 @@ func (s *AppGatewayServer) Stop() error {
 
 	// 11.26：停止 A2A 通道并注销（对齐 Python L1651-1652
 	// await a2a_channel.stop() + unregister_channel）
+	//
+	// S-04：A2A 与 WebChannel 各用独立超时 ctx。原实现共用同一个 5s ctx，
+	// A2A 一旦吃满预算，WebChannel 拿到的就是已过期 ctx，优雅停机退化为强制关闭。
 	if s.a2aChannel != nil {
-		if err := s.a2aChannel.Stop(ctx); err != nil {
+		a2aCtx, a2aCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		if err := s.a2aChannel.Stop(a2aCtx); err != nil {
 			logger.Warn(logComponent).Err(err).Msg("failed to stop A2A channel")
 		}
+		a2aCancel()
 		if s.channelMgr != nil {
 			s.channelMgr.UnregisterChannel(s.a2aChannel.ChannelID())
 		}
 	}
 
-	// 关闭 WebChannel
-	if err := s.webChannel.Stop(ctx); err != nil {
+	// 关闭 WebChannel（独立 ctx，不受 A2A 停机耗时影响）
+	webCtx, webCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	if err := s.webChannel.Stop(webCtx); err != nil {
 		logger.Error(logComponent).
 			Err(err).
 			Msg("failed to close WebChannel")
 	}
+	webCancel()
 
 	// 停止出站派发循环（对齐 Python channel_manager.stop_dispatch()）
 	if s.channelMgr != nil {

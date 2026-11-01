@@ -307,3 +307,20 @@ pregel.PanicGraphInterrupt(pregel.Interrupt{
 依据：`task.py:36-38` 的 `PendingNode` 与 `engine.py:191-198` 的 `create_state` 都落在 8.9 名下，但 8.3b/8.3c 无它们无法编译；8.6 spec §「后续依赖」已提出同一结论，本节只做确认（不改计划表其他行）。
 
 > 2026-11-01 调整：8.5 提前到 8.3 之前（8.5 只依赖已完成的 `Message`，而 8.3 的 `PregelNode` 必须先有 Router 接口）。原文保留。
+
+## 交付边界（2026-11-02 审查补充，M-09）
+
+本节交付范围**只有 tracer 一跳**：`internal/agentcore/session/tracer/handler.go` 的
+`case *pregel.GraphInterrupt` 把 span 标为 `Interrupted` 且不写 `span.Error`。
+
+**尚未交付**（属 8.3b，`internal/agentcore/graph/` 目前只有 `pregel` 包、无引擎/执行器）：
+
+- 节点任务边界的 `recover` —— `PanicGraphInterrupt` 是 `panic()` 实现，全仓当前
+  **没有任何生产侧 recover 点**，`internal/agentcore/session/` 下唯一的 recover 是
+  `stream/queue.go` 的 channel 关闭兜底，与中断无关；
+- `panic → recover → tracer` 的端到端链路；
+- `Pregel.Run` 顶层把中断转成 `{"__interrupt__": ...}`。
+
+8.3b 的验收项因此**必须包含**：`case *pregel.GraphInterrupt` 的 `recover` 实现
++ 一条「节点 panic GraphInterrupt → 引擎 recover → tracer 记录 Interrupted 且
+`span.Error == nil`」的端到端用例（tracer 单测已由 M-09 补齐零值断言）。

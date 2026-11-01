@@ -367,7 +367,7 @@ func Test端到端_入站拦截器短路(t *testing.T) {
 	route := &RouteConfig{
 		Path:      "/acp",
 		ChannelID: "acp",
-		InboundInterceptor: func(ws *websocket.Conn, data map[string]any) bool {
+		InboundInterceptor: func(_ context.Context, ws *websocket.Conn, data map[string]any) bool {
 			intercepted <- struct{}{}
 			return true // 短路
 		},
@@ -582,7 +582,7 @@ func TestSend_出站拦截器短路(t *testing.T) {
 	done := make(chan struct{}, 1)
 	route := &RouteConfig{
 		Path: "/tui", ChannelID: "tui",
-		OutboundInterceptor: func(ws *websocket.Conn, data map[string]any) bool {
+		OutboundInterceptor: func(_ context.Context, ws *websocket.Conn, data map[string]any) bool {
 			return true // 短路出站
 		},
 		ForwardMethods:               map[string]bool{"chat.send": true},

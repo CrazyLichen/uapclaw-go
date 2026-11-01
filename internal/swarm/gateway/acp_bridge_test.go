@@ -391,7 +391,7 @@ func TestAcpBridge_PendingRPCDeferEndTurn(t *testing.T) {
 		},
 	}
 	// OutboundIntercept 签名是 (ws, data{"raw": msg})：
-	if !h.bridge.OutboundIntercept(nil, map[string]any{"raw": outMsg}) {
+	if !h.bridge.OutboundIntercept(context.Background(), nil, map[string]any{"raw": outMsg}) {
 		t.Fatal("output_request should be intercepted")
 	}
 	h.bridge.mu.Lock()
@@ -412,7 +412,7 @@ func TestAcpBridge_PendingRPCDeferEndTurn(t *testing.T) {
 	}
 	// 工具响应回流 → inbound_intercept → dispatch acp.tool_response → pending 清零 → maybe finalize
 	resp := map[string]any{"jsonrpc": "2.0", "id": "tool-1", "result": map[string]any{"outcome": "selected", "optionId": "o1"}}
-	if !h.bridge.InboundIntercept(nil, resp) {
+	if !h.bridge.InboundIntercept(context.Background(), nil, resp) {
 		t.Fatal("jsonrpc response should be intercepted")
 	}
 	if len(h.dispatched) != 2 {
@@ -440,7 +440,7 @@ func TestAcpBridge_PendingRPCDeferEndTurn(t *testing.T) {
 func TestAcpBridge_InboundInterceptUnknownResponse(t *testing.T) {
 	h := newAcpBridgeHarness()
 	resp := map[string]any{"jsonrpc": "2.0", "id": "unknown-1", "result": map[string]any{}}
-	if !h.bridge.InboundIntercept(nil, resp) {
+	if !h.bridge.InboundIntercept(context.Background(), nil, resp) {
 		t.Fatal("unknown response should be intercepted (soft-ignored)")
 	}
 	if len(h.dispatched) != 0 {
@@ -451,10 +451,10 @@ func TestAcpBridge_InboundInterceptUnknownResponse(t *testing.T) {
 // TestAcpBridge_InboundInterceptNonResponse 非 JSON-RPC 响应帧 → false。
 func TestAcpBridge_InboundInterceptNonResponse(t *testing.T) {
 	h := newAcpBridgeHarness()
-	if h.bridge.InboundIntercept(nil, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "x"}) {
+	if h.bridge.InboundIntercept(context.Background(), nil, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "x"}) {
 		t.Error("request frame should not be intercepted by InboundIntercept")
 	}
-	if h.bridge.InboundIntercept(nil, map[string]any{"jsonrpc": "2.0", "method": "notify"}) {
+	if h.bridge.InboundIntercept(context.Background(), nil, map[string]any{"jsonrpc": "2.0", "method": "notify"}) {
 		t.Error("notification frame should not be intercepted")
 	}
 }
@@ -469,7 +469,7 @@ func TestAcpBridge_Cleanup(t *testing.T) {
 		EventType: schema.EventTypeChatToolResult,
 		Payload:   map[string]any{"event_type": "acp.output_request", "jsonrpc": raw},
 	}
-	h.bridge.OutboundIntercept(nil, map[string]any{"raw": outMsg})
+	h.bridge.OutboundIntercept(context.Background(), nil, map[string]any{"raw": outMsg})
 	h.bridge.mu.Lock()
 	cnt := h.bridge.pendingRPCCountBySession["s1"]
 	h.bridge.mu.Unlock()

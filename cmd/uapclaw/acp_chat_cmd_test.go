@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"syscall"
 	"context"
 	"errors"
 	"fmt"
@@ -508,23 +509,37 @@ func TestNewAcpChatCmd_解析dotenv旗标(t *testing.T) {
 	}
 }
 
-// TestRunAcpChat_关闭期间中断 close 阶段被信号打断 → 130（对齐 Python KeyboardInterrupt），
-// 但响应文本已打印不可回退。
-func TestRunAcpChat_关闭期间中断(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	deps, buf := fakeAcpChatDeps(validAcpAgentsRaw(), nil, nil, "done")
-	deps.chat = func(_ context.Context, _ *acp.AcpStdioClient, _ string) (string, error) {
-		cancel() // 模拟回复到手后按下 Ctrl-C
-		return "done", nil
+// TestRunAcpChat_关闭期间收到信号 覆盖 M-14 的信号区分：
+// SIGINT → 130（Ctrl-C），SIGTERM → 143（容器/systemd 停止），响应文本已打印不可回退。
+func TestRunAcpChat_关闭期间收到信号(t *testing.T) {
+	cases := []struct {
+		name string
+		sig  syscall.Signal
+		want int
+	}{
+		{"SIGINT", syscall.SIGINT, exitCodeInterrupted},
+		{"SIGTERM", syscall.SIGTERM, exitCodeTerminated},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			acpChatSignal.Store(int32(tc.sig))
+			defer acpChatSignal.Store(0)
 
-	if got := runAcpChat(ctx, deps, "codex", "hi"); got != exitCodeInterrupted {
-		t.Errorf("码 = %d, want %d", got, exitCodeInterrupted)
-	}
-	if buf.String() != "done\n" {
-		t.Errorf("stdout = %q, 期望已打印回复", buf.String())
+			deps, buf := fakeAcpChatDeps(validAcpAgentsRaw(), nil, nil, "done")
+			deps.chat = func(_ context.Context, _ *acp.AcpStdioClient, _ string) (string, error) {
+				cancel() // 模拟回复到手后收到终止信号
+				return "done", nil
+			}
+
+			if got := runAcpChat(ctx, deps, "codex", "hi"); got != tc.want {
+				t.Errorf("码 = %d, want %d", got, tc.want)
+			}
+			if buf.String() != "done\n" {
+				t.Errorf("stdout = %q, 期望已打印回复", buf.String())
+			}
+		})
 	}
 }
 

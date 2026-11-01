@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"context"
 	"testing"
 
 	"github.com/gorilla/websocket"
@@ -53,11 +54,11 @@ func TestRouteBinding_回调签名对齐Python(t *testing.T) {
 		Path:      "/acp",
 		ChannelID: "acp",
 		// Python: inbound_interceptor(ws, data: dict) -> bool
-		InboundInterceptor: func(ws *websocket.Conn, data map[string]any) bool {
+		InboundInterceptor: func(_ context.Context, ws *websocket.Conn, data map[string]any) bool {
 			return ws == nil && data == nil
 		},
 		// Python: outbound_interceptor(msg, ws) -> bool（Go 以 {"raw": msg} 包裹帧传入）
-		OutboundInterceptor: func(ws *websocket.Conn, data map[string]any) bool {
+		OutboundInterceptor: func(_ context.Context, ws *websocket.Conn, data map[string]any) bool {
 			_, hasRaw := data["raw"]
 			return ws == nil && hasRaw
 		},
@@ -68,10 +69,10 @@ func TestRouteBinding_回调签名对齐Python(t *testing.T) {
 		// Python: install(channel) -> None
 		Install: func(server any) {},
 	}
-	if !rb.InboundInterceptor(nil, nil) {
-		t.Error("InboundInterceptor(nil, nil) 应返回 true（测试桩语义）")
+	if !rb.InboundInterceptor(context.Background(), nil, nil) {
+		t.Error("InboundInterceptor(ctx, nil, nil) 应返回 true（测试桩语义）")
 	}
-	if !rb.OutboundInterceptor(nil, map[string]any{"raw": 1}) {
+	if !rb.OutboundInterceptor(context.Background(), nil, map[string]any{"raw": 1}) {
 		t.Error("OutboundInterceptor 应能读到包裹帧的 raw 键")
 	}
 	rb.CleanupHandler(nil)

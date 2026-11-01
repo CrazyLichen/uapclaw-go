@@ -170,7 +170,7 @@ func TestOutputWriter_WriteInteraction(t *testing.T) {
 	ctx := context.Background()
 	w := NewOutputStreamWriter(emitter)
 
-	if err := w.WriteInteraction("__interaction__", 0, "hello"); err != nil {
+	if err := w.WriteInteraction(context.Background(), "__interaction__", 0, "hello"); err != nil {
 		t.Fatalf("WriteInteraction 失败: %v", err)
 	}
 
