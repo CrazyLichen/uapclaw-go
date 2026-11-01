@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,12 +105,131 @@ func TestSpawnPayloadBuilder_BuildMemberContext(t *testing.T) {
 	assert.Equal(t, database.NewDatabaseConfig(), result.DBConfig)
 }
 
-// TestSpawnPayloadBuilder_BuildMemberMessagerConfig_未实现 测试返回 nil（TODO 占位）
-func TestSpawnPayloadBuilder_BuildMemberMessagerConfig_未实现(t *testing.T) {
+// TestSpawnPayloadBuilder_BuildMemberMessagerConfig_无leader配置 测试 leader 传输配置
+// 缺失时返回 nil（无基准无从派生，对齐 Python payload.py L90-92）
+func TestSpawnPayloadBuilder_BuildMemberMessagerConfig_无leader配置(t *testing.T) {
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{Role: atschema.TeamRoleLeader}
 	b := agent.NewSpawnPayloadBuilder(spec, ctx)
 	assert.Nil(t, b.BuildMemberMessagerConfig("t1"))
+}
+
+// TestSpawnPayloadBuilder_BuildMemberMessagerConfig_端口分配 测试端口稳定分配与步长递增
+func TestSpawnPayloadBuilder_BuildMemberMessagerConfig_端口分配(t *testing.T) {
+	spec := atschema.NewTeamAgentSpec()
+	leaderCfg := &atschema.MessagerTransportConfig{
+		Backend:             "inprocess",
+		TeamName:            "t",
+		PubsubPublishAddr:   "tcp://127.0.0.1:16001",
+		PubsubSubscribeAddr: "tcp://127.0.0.1:16002",
+		Metadata:            map[string]any{"pubsub_bind": "tcp://127.0.0.1:16003", "k": "v"},
+	}
+	ctx := atschema.TeamRuntimeContext{
+		Role:           atschema.TeamRoleLeader,
+		MemberName:     "team_leader",
+		MessagerConfig: leaderCfg,
+	}
+	b := agent.NewSpawnPayloadBuilder(spec, ctx)
+
+	first := b.BuildMemberMessagerConfig("alice")
+	assert.NotNil(t, first)
+	assert.Equal(t, "alice", first.NodeID)
+	assert.Equal(t, "tcp://127.0.0.1:16000", first.DirectAddr)
+	// pubsub 地址沿用 leader
+	assert.Equal(t, leaderCfg.PubsubPublishAddr, first.PubsubPublishAddr)
+	assert.Equal(t, leaderCfg.PubsubSubscribeAddr, first.PubsubSubscribeAddr)
+	// metadata 剔除 pubsub_bind，其余保留
+	assert.NotContains(t, first.Metadata, "pubsub_bind")
+	assert.Equal(t, "v", first.Metadata["k"])
+	// 不改动 leader 配置本身（结构体拷贝）
+	assert.Contains(t, leaderCfg.Metadata, "pubsub_bind")
+
+	// 第二个成员按步长递增
+	second := b.BuildMemberMessagerConfig("bob")
+	assert.NotNil(t, second)
+	assert.Equal(t, "tcp://127.0.0.1:16010", second.DirectAddr)
+
+	// 同名成员复用稳定端口
+	again := b.BuildMemberMessagerConfig("alice")
+	assert.NotNil(t, again)
+	assert.Equal(t, first.DirectAddr, again.DirectAddr)
+}
+
+// TestSpawnPayloadBuilder_BuildMemberMessagerConfig_自定义基准与步长 测试 metadata 覆盖默认值
+func TestSpawnPayloadBuilder_BuildMemberMessagerConfig_自定义基准与步长(t *testing.T) {
+	spec := atschema.NewTeamAgentSpec()
+	spec.Metadata = map[string]any{
+		"teammate_base_port":   float64(20000),
+		"teammate_port_offset": "5",
+	}
+	ctx := atschema.TeamRuntimeContext{
+		Role:           atschema.TeamRoleLeader,
+		MessagerConfig: &atschema.MessagerTransportConfig{Backend: "inprocess", TeamName: "t"},
+	}
+	b := agent.NewSpawnPayloadBuilder(spec, ctx)
+
+	first := b.BuildMemberMessagerConfig("alice")
+	assert.Equal(t, "tcp://127.0.0.1:20000", first.DirectAddr)
+	second := b.BuildMemberMessagerConfig("bob")
+	assert.Equal(t, "tcp://127.0.0.1:20005", second.DirectAddr)
+}
+
+// TestSpawnPayloadBuilder_BuildMemberMessagerConfig_数值字段归一 测试 metadata
+// 里不同数值类型（int/int64/float64/json.Number/字符串/非法值）都能被正确读取。
+// YAML/JSON 反序列化产生的类型不固定，Python 靠动态类型，Go 需显式归一。
+func TestSpawnPayloadBuilder_BuildMemberMessagerConfig_数值字段归一(t *testing.T) {
+	cases := []struct {
+		name     string
+		value    any
+		expectOK bool
+		wantAddr string
+	}{
+		{"int", 21000, true, "tcp://127.0.0.1:21000"},
+		{"int32", int32(22000), true, "tcp://127.0.0.1:22000"},
+		{"int64", int64(23000), true, "tcp://127.0.0.1:23000"},
+		{"float64", float64(24000), true, "tcp://127.0.0.1:24000"},
+		{"float32", float32(25000), true, "tcp://127.0.0.1:25000"},
+		{"jsonNumber", json.Number("26000"), true, "tcp://127.0.0.1:26000"},
+		{"数值字符串", " 27000 ", true, "tcp://127.0.0.1:27000"},
+		{"非法字符串", "not-a-number", false, "tcp://127.0.0.1:16000"},
+		{"bool", true, false, "tcp://127.0.0.1:16000"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			spec := atschema.NewTeamAgentSpec()
+			spec.Metadata = map[string]any{"teammate_base_port": c.value}
+			ctx := atschema.TeamRuntimeContext{
+				Role:           atschema.TeamRoleLeader,
+				MessagerConfig: &atschema.MessagerTransportConfig{Backend: "inprocess", TeamName: "t"},
+			}
+			b := agent.NewSpawnPayloadBuilder(spec, ctx)
+			got := b.BuildMemberMessagerConfig("alice")
+			if got == nil {
+				t.Fatal("应返回非 nil 配置")
+			}
+			assert.Equal(t, c.wantAddr, got.DirectAddr)
+		})
+	}
+}
+
+// TestSpawnPayloadBuilder_BuildSpawnPayload_含transport 测试 coord.transport 序列化。
+// Python: transport = member_transport.model_dump(mode="json")
+func TestSpawnPayloadBuilder_BuildSpawnPayload_含transport(t *testing.T) {
+	spec := atschema.NewTeamAgentSpec()
+	ctx := atschema.TeamRuntimeContext{
+		Role:           atschema.TeamRoleTeammate,
+		MemberName:     "alice",
+		MessagerConfig: &atschema.MessagerTransportConfig{Backend: "inprocess", TeamName: "t"},
+	}
+	b := agent.NewSpawnPayloadBuilder(spec, ctx)
+
+	payload := b.BuildSpawnPayload(ctx, "hi")
+	coord, ok := payload["coordination"].(map[string]any)
+	assert.True(t, ok)
+	transport, ok := coord["transport"].(map[string]any)
+	assert.True(t, ok, "leader 配置存在时 transport 应序列化为 map")
+	assert.Equal(t, "alice", transport["node_id"])
+	assert.Equal(t, "tcp://127.0.0.1:16000", transport["direct_addr"])
 }
 
 // TestSpawnPayloadBuilder_BuildSpawnConfig 测试返回 SpawnAgentConfig

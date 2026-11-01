@@ -1392,8 +1392,16 @@ func (a *TeamAgent) SessionController() types.SessionController {
 // TeamBackendAccessor 返回 TeamBackend 访问器。
 // 满足 types.InfraAccessor 接口。
 // *tools.TeamBackend 直接满足 types.TeamBackendAccessor（编译期检查）。
+//
+// 显式判空后再返回：直接 return a.TeamBackend() 会把 nil *TeamBackend 装进
+// 接口，调用方 backendAccessor != nil 判定为真，随后解引用 nil 接收者 panic
+// （typed-nil 陷阱）。Python 侧属性为 None 时判空天然成立。
 func (a *TeamAgent) TeamBackendAccessor() types.TeamBackendAccessor {
-	return a.TeamBackend()
+	tb := a.TeamBackend()
+	if tb == nil {
+		return nil
+	}
+	return tb
 }
 
 // WorkspaceManager 返回工作空间管理器。

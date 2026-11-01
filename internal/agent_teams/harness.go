@@ -15,8 +15,11 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -348,38 +351,98 @@ func (h *TeamHarness) Abort(ctx context.Context) error { return nil }
 // RunStreaming 从底层 Agent 流式输出 chunk。
 // Python: TeamHarness.run_streaming(inputs, session_id, team_session)
 //
-// 分支 1（teamSession 为 nil 且非 initialPlanMode）：直接调 runner.RunAgentStreaming。
-// M-17 实装（deepAgent→BaseAgent 编译期断言 deep_agent.go:195 已满足）。
-// 分支 2（有 teamSession）：⤵️ 待 plan-mode 种子化（_prepare_agent_session +
-// _ensure_initial_plan_mode）回填。
+// 分支 1（teamSession 为 nil 且非 initialPlanMode）：直接以 session_id 调
+// runner.RunAgentStreaming。
+// 分支 2（有 teamSession，或 initialPlanMode）：先显式准备子 AgentSession
+// （team.plan 需要把 Leader DeepAgent 种子化进 plan 模式），再以该会话
+// 调 runner.RunAgentStreaming。
 func (h *TeamHarness) RunStreaming(ctx context.Context, inputs map[string]any, sessionID string, teamSession any) (<-chan stream.Schema, error) {
-	// 分支 1: teamSession == nil && !h.initialPlanMode → Runner.run_agent_streaming
 	if teamSession == nil && !h.initialPlanMode {
-		if h.deepAgent == nil {
-			ch := make(chan stream.Schema)
-			close(ch)
-			return ch, nil
-		}
-		// Python: Runner.run_agent_streaming(self._deep_agent, inputs, session=session_id)
-		// DeepAgent 实现 BaseAgent（编译期断言），断言失败理论不可能
-		baseAgent, ok := h.deepAgent.(agentinterfaces.BaseAgent)
-		if !ok {
-			logger.Warn(logComponent).
-				Str("member_name", h.memberName).
-				Msg("TeamHarness.RunStreaming: deepAgent does not implement BaseAgent, returning empty stream")
-			ch := make(chan stream.Schema)
-			close(ch)
-			return ch, nil
-		}
-		return runner.RunAgentStreaming(ctx, runner.ByAgent(baseAgent), inputs, runner.BySessionID(sessionID), nil, nil, nil)
+		return h.streamWithSessionRef(ctx, inputs, runner.BySessionID(sessionID))
 	}
 
-	// 分支 2: ⤵️ 待 plan-mode 种子化回填——
-	// Python: agent_session = await self._prepare_agent_session(inputs, session_id, team_session)
-	// 然后 Runner.run_agent_streaming(self._deep_agent, inputs, session=agent_session)
+	agentSess := h.prepareAgentSession(ctx, inputs, sessionID, teamSession)
+	if agentSess == nil {
+		return closedChunkChan(), nil
+	}
+	return h.streamWithSessionRef(ctx, inputs, runner.BySession(agentSess))
+}
+
+// streamWithSessionRef 以给定会话引用调用 Runner 的流式执行。
+func (h *TeamHarness) streamWithSessionRef(ctx context.Context, inputs map[string]any, sessionRef runner.SessionRef) (<-chan stream.Schema, error) {
+	if h.deepAgent == nil {
+		return closedChunkChan(), nil
+	}
+	// DeepAgent 实现 BaseAgent（编译期断言），断言失败理论不可能
+	baseAgent, ok := h.deepAgent.(agentinterfaces.BaseAgent)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("member_name", h.memberName).
+			Msg("TeamHarness.RunStreaming: deepAgent does not implement BaseAgent, returning empty stream")
+		return closedChunkChan(), nil
+	}
+	return runner.RunAgentStreaming(ctx, runner.ByAgent(baseAgent), inputs, sessionRef, nil, nil, nil)
+}
+
+// prepareAgentSession 为底层 Agent 准备本轮使用的会话。
+// Python: TeamHarness._prepare_agent_session(inputs, session_id, team_session)（harness.py L303-330）
+//
+// 顺序：取 card → 优先从团队会话派生（不共享流写入器）→ PreRun(inputs)
+// → 记录活跃会话 → 种子化初始 plan 模式。任一环节失败返回 nil，由调用方
+// 退化为空流（对齐 Python 异常向上抛出前的空转语义，不吞 panic）。
+func (h *TeamHarness) prepareAgentSession(ctx context.Context, inputs map[string]any, sessionID string, teamSession any) *session.Session {
+	var card *agentschema.AgentCard
+	if h.deepAgent != nil {
+		card = h.deepAgent.Card()
+	}
+
+	var agentSess *session.Session
+	if ts, ok := teamSession.(*session.AgentTeamSession); ok && ts != nil {
+		// Python: team_session.create_agent_session(card=card, share_stream_writer=False)
+		agentSess = ts.CreateAgentSession(card, "", false)
+	} else {
+		// Python: create_agent_session(session_id=session_id, card=card)
+		agentSess = session.CreateAgentSession(sessionID, card, nil)
+	}
+	if agentSess == nil {
+		return nil
+	}
+
+	if err := agentSess.PreRun(ctx, inputs); err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("member_name", h.memberName).
+			Msg("TeamHarness.prepareAgentSession: agent session pre_run failed")
+		return nil
+	}
+	h.activeAgentSession = agentSess
+	h.ensureInitialPlanMode(agentSess)
+	return agentSess
+}
+
+// ensureInitialPlanMode 首次以 team.plan Leader 身份运行时把 Agent 切入 plan 模式。
+// Python: TeamHarness._ensure_initial_plan_mode(session)
+func (h *TeamHarness) ensureInitialPlanMode(agentSess sessioninterfaces.SessionFacade) {
+	if !h.isInitialTeamPlanLeader() || h.initialPlanModeSeeded {
+		return
+	}
+	state := h.deepAgent.LoadState(agentSess)
+	if state == nil || state.PlanMode.Mode != "plan" {
+		h.deepAgent.SwitchMode(agentSess, "plan")
+	}
+	h.initialPlanModeSeeded = true
+}
+
+// isInitialTeamPlanLeader 判断是否为需要种子化 plan 模式的 Leader。
+// Python: TeamHarness._is_initial_team_plan_leader()
+func (h *TeamHarness) isInitialTeamPlanLeader() bool {
+	return h.initialPlanMode && h.role == string(atschema.TeamRoleLeader)
+}
+
+// closedChunkChan 返回已关闭的空 chunk 通道。
+func closedChunkChan() <-chan stream.Schema {
 	ch := make(chan stream.Schema)
 	close(ch)
-	return ch, nil
+	return ch
 }
 
 // FindRails 返回挂载在底层 Agent 上的指定类型 Rails。

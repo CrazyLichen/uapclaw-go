@@ -2,6 +2,9 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -34,6 +37,15 @@ type SpawnPayloadBuilder struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const (
+	// defaultTeammateBasePort 队友直连端口基准。
+	// Python: meta.get("teammate_base_port", 16000)
+	defaultTeammateBasePort = 16000
+	// defaultTeammatePortOffset 队友端口分配步长。
+	// Python: meta.get("teammate_port_offset", 10)
+	defaultTeammatePortOffset = 10
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -63,9 +75,16 @@ func (b *SpawnPayloadBuilder) BuildSpawnPayload(ctx atschema.TeamRuntimeContext,
 		leaderMemberName = teamSpec.LeaderMemberName
 	}
 
-	// TODO(#9.65): 构建成员消息配置 memberTransport = b.BuildMemberMessagerConfig(ctx.MemberName)
-	// 当 MessagerTransportConfig 实现后，序列化为 map
-	var transport map[string]any = nil
+	// 成员消息传输配置：
+	// Python: member_transport = self.build_member_messager_config(ctx.member_name)
+	// 序列化为 map 等价于 Python model_dump(mode="json")——走 JSON 往返，
+	// 与本文件其它 dump 路径一致。
+	var transport map[string]any
+	if mt := b.BuildMemberMessagerConfig(ctx.MemberName); mt != nil {
+		if raw, err := json.Marshal(mt); err == nil {
+			_ = json.Unmarshal(raw, &transport)
+		}
+	}
 
 	coordination := map[string]any{
 		"team_name":          teamName,
@@ -102,11 +121,49 @@ func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberS
 }
 
 // BuildMemberMessagerConfig 为指定成员分配稳定的传输配置。
-// Python: SpawnPayloadBuilder.build_member_messager_config(member_name)
+// Python: SpawnPayloadBuilder.build_member_messager_config(member_name)（payload.py L88-114）
 //
-// TODO(#9.65): MessagerTransportConfig 深拷贝和端口分配实现后替换
+// 语义：
+//   - leader 传输配置缺失（ctx.MessagerConfig == nil）时返回 nil：无基准就无从派生
+//   - 端口从 spec.metadata["teammate_base_port"]（默认 16000）起，
+//     每个新成员按 "teammate_port_offset"（默认 10）递增；同名成员复用同一端口
+//   - direct_addr 固定 tcp://127.0.0.1:{port}，pubsub 收发地址沿用 leader
+//   - metadata 浅拷贝后剔除 pubsub_bind（成员不占用 leader 的订阅绑定端口）
 func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) *atschema.MessagerTransportConfig {
-	return nil
+	leaderCfg := b.ctx.MessagerConfig
+	if leaderCfg == nil {
+		return nil
+	}
+
+	basePort := defaultTeammateBasePort
+	portOffset := defaultTeammatePortOffset
+	if v, ok := messagerIntField(b.spec.Metadata["teammate_base_port"]); ok {
+		basePort = v
+	}
+	if v, ok := messagerIntField(b.spec.Metadata["teammate_port_offset"]); ok {
+		portOffset = v
+	}
+
+	portBase, exists := b.memberPortMap[memberName]
+	if !exists {
+		portBase = basePort + b.teammatePortCounter*portOffset
+		b.teammatePortCounter++
+		b.memberPortMap[memberName] = portBase
+	}
+
+	metadata := make(map[string]any, len(leaderCfg.Metadata))
+	for k, v := range leaderCfg.Metadata {
+		metadata[k] = v
+	}
+	delete(metadata, "pubsub_bind")
+
+	out := *leaderCfg
+	out.NodeID = memberName
+	out.DirectAddr = fmt.Sprintf("tcp://127.0.0.1:%d", portBase)
+	out.PubsubPublishAddr = leaderCfg.PubsubPublishAddr
+	out.PubsubSubscribeAddr = leaderCfg.PubsubSubscribeAddr
+	out.Metadata = metadata
+	return &out
 }
 
 // BuildSpawnConfig 构建 SpawnAgentConfig。
@@ -159,5 +216,39 @@ func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) 
 			"spec":    specMap,
 			"context": ctxMap,
 		},
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// messagerIntField 把 metadata 中的数值字段转成 int。
+//
+// YAML/JSON 反序列化后数值可能是 int / int64 / float64 / json.Number / string，
+// Python 侧靠动态类型直接参与算术再格式化，Go 需显式归一。
+// 无法转换时返回 false，调用方保留默认值。
+func messagerIntField(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int32:
+		return int(n), true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	case float32:
+		return int(n), true
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return int(i), true
+		}
+		return 0, false
+	case string:
+		if i, err := strconv.Atoi(strings.TrimSpace(n)); err == nil {
+			return i, true
+		}
+		return 0, false
+	default:
+		return 0, false
 	}
 }
