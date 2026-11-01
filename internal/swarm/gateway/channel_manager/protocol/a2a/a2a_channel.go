@@ -97,6 +97,13 @@ const (
 	startProbeWindow = 200 * time.Millisecond
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// a2aChannelBaseChannelAssert 编译期断言：A2AChannel 必须实现 channel_manager.BaseChannel。
+// 任一方法签名漂移（Config/Start/Stop/Send/OnMessage/IsRunning/ChannelID/ChannelType）
+// 都会在此处直接编译失败，而非等到注册点变更后运行时才暴露。
+var _ cm.BaseChannel = (*A2AChannel)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ConfigFromEnv 从环境变量构造通道配置。
