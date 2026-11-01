@@ -10,6 +10,14 @@ internal/common/crypto/aes_gcm.go
 # workspace/init.go — 依赖文件系统特定路径（~/.uapclaw/），init 阶段路径可能不存在
 internal/common/workspace/init.go
 
+# ── 2026-11-01 file-api 迁移（file-api 实现移至 channels/web，本文件仅改路由挂载 1 处） ──
+# app_gateway.go — 网关进程装配与生命周期：剩余未覆盖语句全部是故障注入分支
+# （HTTP/WS 监听失败、http.Server.Shutdown 失败、fsnotify 热重载回调、
+#   cron/heartbeat/A2A 子服务启动失败、ACP 桥的消息闭包），需为
+# http.Server / fsnotify / 各子服务注入故障才能触达，属「依赖外部运行环境」类豁免。
+# 本次已顺带补测至 77%（配置分支 / 出站发布 / 连接重试 / 空配置装配），非纯格式改动。
+internal/swarm/gateway/app_gateway.go
+
 # ── 以下为代码声明顺序重排（声明区移动/var→const/分隔线添加），未改变逻辑行为 ──
 # 历史覆盖率不足，本次仅格式调整，后续迭代补充测试
 

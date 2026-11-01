@@ -1,8 +1,9 @@
 package agent_teams
 
 import (
-	"os"
 	"path/filepath"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -38,13 +39,16 @@ func ResetHome() {
 }
 
 // GetHome 返回 openjiuwen 本地状态的根目录。
+//
+// 默认值为数据根 WorkspaceDir()（约定 ~/.uapclaw）：对齐 Python 侧
+// jiuwenswarm/agents/harness/team/bootstrap.py 在启动时调用
+// configure_openjiuwen_home(get_user_workspace_dir()) 的效果。
 // Python: get_openjiuwen_home()
 func GetHome() string {
 	if configuredHome != "" {
 		return configuredHome
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".openjiuwen")
+	return workspace.WorkspaceDir()
 }
 
 // GetAgentTeamsHome 返回 agent_teams 状态的根目录。

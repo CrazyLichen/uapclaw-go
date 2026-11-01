@@ -254,8 +254,8 @@ func TestTeamAgentSpec_ResolveDBConfig_默认(t *testing.T) {
 	if dbCfg.DBType != database.DatabaseTypeSQLite {
 		t.Errorf("期望 sqlite, 实际=%q", dbCfg.DBType)
 	}
-	// SQLite 且 connection_string 为空时，应自动填充
-	expected := filepath.Join(tmpDir, "agent_teams", "team.db")
+	// SQLite 且 connection_string 为空时，应自动填充（目录名带前导点，对齐 Python .agent_teams）
+	expected := filepath.Join(tmpDir, ".agent_teams", "team.db")
 	if dbCfg.ConnectionString != expected {
 		t.Errorf("期望 connection_string=%q, 实际=%q", expected, dbCfg.ConnectionString)
 	}
@@ -311,9 +311,9 @@ func TestTeamAgentSpec_ResolveDBConfig_SQLite自动填充路径(t *testing.T) {
 	if !ok {
 		t.Fatal("期望 DatabaseConfig")
 	}
-	// 验证路径以 agent_teams/team.db 结尾
-	if !strings.HasSuffix(dbCfg.ConnectionString, "agent_teams"+string(filepath.Separator)+"team.db") {
-		t.Errorf("connection_string 应以 agent_teams/team.db 结尾, 实际=%q", dbCfg.ConnectionString)
+	// 验证路径以 .agent_teams/team.db 结尾
+	if !strings.HasSuffix(dbCfg.ConnectionString, ".agent_teams"+string(filepath.Separator)+"team.db") {
+		t.Errorf("connection_string 应以 .agent_teams/team.db 结尾, 实际=%q", dbCfg.ConnectionString)
 	}
 }
 

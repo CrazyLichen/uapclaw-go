@@ -16,7 +16,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	gwa2a "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/protocol/a2a"
+	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
@@ -108,27 +110,6 @@ func TestAppGatewayServer_Stop(t *testing.T) {
 	// 验证 Stop 不崩溃（httpServer 为 nil 的情况）
 	err := gs.Stop()
 	assert.NoError(t, err)
-}
-
-func TestSPAHandler(t *testing.T) {
-	handler := newSPAHandler(frontendDist)
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	client := server.Client()
-	client.Timeout = 2 * time.Second
-
-	// 测试根路径
-	resp, err := client.Get(server.URL + "/")
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	_ = resp.Body.Close()
-
-	// 测试 index.html
-	resp, err = client.Get(server.URL + "/index.html")
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	_ = resp.Body.Close()
 }
 
 func TestDefaultHostPort(t *testing.T) {
@@ -373,4 +354,57 @@ func TestNewAppGatewayServer_A2A默认关闭(t *testing.T) {
 	cfg, ok := s.a2aChannel.Config().(gwa2a.A2AChannelConfig)
 	require.True(t, ok, "Config 类型 = %T", s.a2aChannel.Config())
 	assert.False(t, cfg.Enabled, "未设 env 时应关闭")
+}
+
+// ────────────── 覆盖率补齐：配置读取/出站发布/连接重试（file-api 迁移同批） ──────────────
+
+// TestDefaultHostPort_配置文件 覆盖 config.yaml gateway.host / gateway.port 分支
+func TestDefaultHostPort_配置文件(t *testing.T) {
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	require.NoError(t, os.WriteFile(cfgFile, []byte("gateway:\n  host: 10.0.0.5\n  port: 19100\n"), 0o644))
+	cfg, err := config.New(cfgFile)
+	require.NoError(t, err)
+	_, err = cfg.Load()
+	require.NoError(t, err)
+	t.Setenv("UAPCLAW_GATEWAY_HOST", "")
+	t.Setenv("UAPCLAW_GATEWAY_PORT", "")
+	assert.Equal(t, "10.0.0.5", defaultHost(cfg))
+	assert.Equal(t, 19100, defaultPort(cfg))
+}
+
+// TestMakeConfigRawReader 覆盖 nil 配置与正常读取两条分支
+func TestMakeConfigRawReader(t *testing.T) {
+	assert.Nil(t, makeConfigRawReader(nil)(), "nil 配置应返回 nil")
+
+	cfg, err := config.New("")
+	require.NoError(t, err)
+	assert.NotNil(t, makeConfigRawReader(cfg)(), "正常配置应返回原始 map")
+}
+
+// TestAckMessagePublisher_PublishRobotMessages 覆盖 connection.ack 出站发布
+func TestAckMessagePublisher_PublishRobotMessages(t *testing.T) {
+	pub := ackMessagePublisher{mh: mh.NewMessageHandler(nil)}
+	assert.NoError(t, pub.PublishRobotMessages(context.Background(), &schema.Message{}))
+}
+
+// TestConnectWithRetry_上下文取消即放弃 覆盖失败重试与最终返回错误
+func TestConnectWithRetry_上下文取消即放弃(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	client := routing.NewAgentClient(transport.NewChannelTransport())
+	err := connectWithRetry(ctx, client, 2, time.Millisecond)
+	assert.Error(t, err, "上下文取消后重试耗尽应返回错误")
+}
+
+// TestNewAppGatewayServer_Nil配置 覆盖 cfg == nil 的装配分支
+func TestNewAppGatewayServer_Nil配置(t *testing.T) {
+	t.Setenv("A2A_SERVER_ENABLED", "")
+	gs, err := NewAppGatewayServer(nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, gs)
+	assert.NotNil(t, gs.router, "空配置也应完成路由装配")
+	assert.Nil(t, gs.reloader, "空配置不创建热重载器")
+	require.NoError(t, gs.Stop())
 }

@@ -3,12 +3,9 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"io/fs"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +17,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
+	webapp "github.com/uapclaw/uapclaw-go/internal/swarm/channels/web"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	gwa2a "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/protocol/a2a"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
@@ -690,54 +688,14 @@ func (s *AppGatewayServer) setupRouter() {
 	// WebSocket 路由
 	r.Get("/ws", s.webChannel.HandleWebSocket)
 
-	// 文件 API 路由
-	r.Route("/file-api", func(r chi.Router) {
-		r.Get("/file-content", HandleFileContentGet)
-		r.Post("/file-content", HandleFileContentPost)
-		r.Get("/list-files", HandleListFiles)
-		r.Get("/list-markdown", HandleListMarkdown)
-		r.Get("/download", HandleFileDownload)
-		r.Get("/ws-debug-config", HandleWsDebugConfigGet)
-		r.Post("/ws-debug-config", HandleWsDebugConfigPost)
-		r.Post("/rebuild-agent-data", HandleRebuildAgentData)
-	})
+	// 文件 API 与静态资源：实现位于 channels/web（对齐 Python channels/web/app_web.py），
+	// 本层只做挂载，保持单进程单端口。
+	r.Mount("/file-api", webapp.FileAPIRouter())
 
 	// 静态文件（SPA fallback）
-	spaHandler := newSPAHandler(frontendDist)
-	r.HandleFunc("/*", spaHandler.ServeHTTP)
+	r.HandleFunc("/*", webapp.SPAHandler().ServeHTTP)
 
 	s.router = r
-}
-
-// newSPAHandler 创建 SPA 静态文件处理器。
-//
-// 从嵌入的 FS 中读取文件，未匹配时回退到 index.html。
-func newSPAHandler(efs fs.FS) http.Handler {
-	// 去掉 "dist" 前缀目录
-	sub, err := fs.Sub(efs, "channel_manager/web/frontend/dist")
-	if err != nil {
-		log.Fatalf("创建前端 FS 子目录失败: %v", err)
-	}
-	fileServer := http.FileServer(http.FS(sub))
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-
-		// 尝试读取文件
-		if path != "/" && !strings.HasPrefix(path, "/assets/") {
-			// 检查文件是否存在
-			filePath := strings.TrimPrefix(path, "/")
-			if filePath == "" {
-				filePath = "index.html"
-			}
-			if _, err := fs.Stat(sub, filePath); err != nil {
-				// 文件不存在，回退到 index.html（SPA 路由）
-				r.URL.Path = "/"
-			}
-		}
-
-		fileServer.ServeHTTP(w, r)
-	})
 }
 
 // zerologMiddleware zerolog 请求日志中间件。

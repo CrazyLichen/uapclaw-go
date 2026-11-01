@@ -370,10 +370,12 @@ func CronJobsPath() string {
 	return filepath.Join(WorkspaceDir(), "agent", "home", "cron_jobs.json")
 }
 
-// AgentTeamsHomeDir 返回 Agent Teams 主目录：WorkspaceDir()/agent_teams。
-// Python: get_agent_teams_home()
+// AgentTeamsHomeDir 返回 Agent Teams 主目录：WorkspaceDir()/.agent_teams。
+//
+// 目录名带前导点，对齐 Python openjiuwen get_agent_teams_home()：
+// jiuwenswarm 启动时把 openjiuwen home 配置为数据根，团队状态位于 <data>/.agent_teams。
 func AgentTeamsHomeDir() string {
-	return filepath.Join(WorkspaceDir(), "agent_teams")
+	return filepath.Join(WorkspaceDir(), ".agent_teams")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

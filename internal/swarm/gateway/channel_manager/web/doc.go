@@ -19,8 +19,8 @@
 //	├── config_apply.go     # 配置写入逻辑（ApplyConfigPayload、NotifyConfigSavedOnce）
 //	├── web_connect.go      # WebChannel 核心（WS 服务端 + 连接管理 + 两层消息架构）
 //	├── web_handlers.go     # RPC 分发器和方法处理器（RegisterWebHandlers）
-//	├── web_normalize.go    # 消息标准化（NormalizeGatewayMessage + MakeNormAndForward）
-//	└── frontend/           # React 前端源码和构建产物
+//	└── web_normalize.go    # 消息标准化（NormalizeGatewayMessage + MakeNormAndForward）
 //
 // 对应 Python 代码：jiuwenswarm/gateway/channel_manager/web/
+// （前端源码与静态/文件服务在 channels/web，对齐 Python channels/web/）
 package web

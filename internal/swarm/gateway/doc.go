@@ -1,7 +1,8 @@
 // Package gateway 提供 Gateway 服务器，负责接收外部请求并路由到 AgentServer。
 //
-// Gateway 是 uapclaw 的统一入口，同时提供 WebSocket RPC 端点、
-// 静态文件服务和文件操作 HTTP API。通过 Transport 抽象与 AgentServer 通信。
+// Gateway 是 uapclaw 的统一入口，提供 WebSocket RPC 端点、静态文件服务和文件操作
+// HTTP API。通过 Transport 抽象与 AgentServer 通信。静态文件与 /file-api/* 的实现
+// 位于 channels/web（对齐 Python channels/web/app_web.py），本包只做挂载。
 //
 // 配置热重载机制：
 //   - API 触发：WebHandler config.set/config.save_all → NotifyConfigSavedOnce → onConfigSavedImpl
@@ -23,8 +24,6 @@
 //	├── route_config.go     # RouteConfig/GatewayServerConfig + binding 工厂链（BuildACPRouteBinding / BuildRouteConfigMap，对齐 Python L723-752）
 //	├── config_push.go      # 配置热重载回调（onConfigSavedImpl）
 //	├── config_env_map.go   # 配置键→环境变量映射 + browserRuntimeKeys
-//	├── embed.go            # go:embed 前端静态资源
-//	├── file_api.go         # /file-api/* HTTP 路由处理
 //	├── cron/               # 定时任务调度（11.10：CronSchedulerService 事件堆 + CronController）
 //	├── hooks/              # Gateway Hook（11.13：GatewayHookHandler 4 事件）
 //	├── heartbeat/          # 心跳服务（11.11：GatewayHeartbeatService 旁路定时器）

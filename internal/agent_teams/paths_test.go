@@ -1,6 +1,10 @@
 package agent_teams
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -55,6 +59,21 @@ func TestGetHome_自定义Home(t *testing.T) {
 	home := GetHome()
 	if home != "/custom/home" {
 		t.Errorf("GetHome() = %q, want %q", home, "/custom/home")
+	}
+}
+
+// TestGetHome_默认数据根 未配置时 home 应为数据根
+// 对齐 Python: bootstrap.py 启动时 configure_openjiuwen_home(get_user_workspace_dir())
+func TestGetHome_默认数据根(t *testing.T) {
+	origHome := configuredHome
+	defer func() { configuredHome = origHome }()
+
+	ResetHome()
+	if got, want := GetHome(), workspace.WorkspaceDir(); got != want {
+		t.Errorf("GetHome() = %q, want %q（数据根）", got, want)
+	}
+	if got, want := GetAgentTeamsHome(), workspace.WorkspaceDir()+"/.agent_teams"; got != want {
+		t.Errorf("GetAgentTeamsHome() = %q, want %q", got, want)
 	}
 }
 
