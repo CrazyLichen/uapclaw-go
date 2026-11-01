@@ -390,7 +390,6 @@ func (m *ChannelManager) Buffer() []Message {
 	return append(make([]Message, 0, len(m.buffer)), m.buffer...)
 }
 
-
 // Snapshot 导出全部通道快照。
 //
 // 语义要点（逐条对齐 channels.py:76-86）：
