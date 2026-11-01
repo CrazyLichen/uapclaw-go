@@ -230,6 +230,78 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 	s.False(secondSentAt.IsZero(), "第二条消息发送时间应被记录")
 }
 
+// TestTeamAutoBuild_自然语言需求触发建队 验证"用户只说人话，模型自己建队"。
+//
+// 关键行为契约：用户不需要说"建个团队"。leader 的系统提示词（leader_workflow.md
+// 第 2 步）要求它先 build_team 再拉成员，本用例锁住这条——任何让提示词失效的改动
+// （section 未注入、rail 未挂载、模板被改坏）都会让 team.member 消失。
+func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建队() {
+	conn, _, err := websocket.DefaultDialer.Dial(
+		fmt.Sprintf("ws://127.0.0.1:%d/ws", s.wsPort), nil)
+	s.Require().NoError(err, "WS 拨号失败")
+	defer conn.Close()
+
+	sessionID := fmt.Sprintf("sess_auto_%d", time.Now().UnixNano())
+	// 纯自然语言需求：不提 build_team、不提 spawn_member
+	s.Require().NoError(s.sendChatSend(conn, "req-auto-1", sessionID,
+		"帮我做一个登录页：前端表单校验、后端接口、再加一版单元测试。这种三个方向都要有人负责的活，你安排"))
+
+	var (
+		memberCreated bool
+		toolNames     []string
+		sawFinal      bool
+	)
+	deadline := time.Now().Add(10 * time.Minute)
+	idle := 0
+	for time.Now().Before(deadline) {
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		_, raw, err := conn.ReadMessage()
+		if err != nil {
+			idle++
+			if idle >= 12 {
+				break
+			}
+			continue
+		}
+		idle = 0
+
+		var frame map[string]any
+		if json.Unmarshal(raw, &frame) != nil {
+			continue
+		}
+		payload, _ := frame["payload"].(map[string]any)
+		switch realEventName(frame) {
+		case "chat.tool_call":
+			if tc, ok := payload["tool_call"].(map[string]any); ok {
+				name, _ := tc["name"].(string)
+				// 流式增量帧会带空 name（见 doc.go「流式工具调用聚合」），
+				// 只记录非空 name，避免断言被噪声干扰
+				if name != "" {
+					toolNames = append(toolNames, name)
+					s.T().Logf("工具调用: %s", name)
+				}
+			}
+		case "chat.tool_result":
+			if ok, _ := payload["success"].(bool); ok {
+				memberCreated = true
+			}
+		case "team.member":
+			memberCreated = true
+			s.T().Logf("收到 team.member: %v", payload["event"])
+		case "chat.final":
+			sawFinal = true
+		}
+		if memberCreated {
+			break
+		}
+	}
+
+	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v", toolNames, memberCreated, sawFinal)
+	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员")
+	// 建队链路的第一跳必须是 build_team（提示词 leader_workflow.md 第 2 步）
+	s.Contains(toolNames, "team.build_team", "leader 应先调用 build_team 组建团队")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // sendChatSend 发送一条 chat.send 请求帧。

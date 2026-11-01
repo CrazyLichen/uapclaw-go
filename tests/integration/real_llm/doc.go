@@ -29,6 +29,22 @@
 //
 // 运行方式: go test -tags="sqlite_fts5 test integration llm" ./tests/integration/real_llm/...
 //
+// 已知缺口（2026-11-01 定位，未修）
+//
+// 流式工具调用聚合缺失：真实模型的 tool_call 增量帧被逐帧当作完整调用上报，
+// 例：
+//
+//	{"arguments":"/","name":"","tool_call_id":""}
+//	{"arguments":"Test","name":"","tool_call_id":""}
+//	{"arguments":{"...":...},"name":"list_members","tool_call_id":"call_00_..."}
+//
+// 后果：模型本要调 build_team（参数被拆成 "/"、"Test"、"}"…），但从未形成完整
+// 调用；只有个别完整帧的工具被执行。表现为团队模式下 leader 不建队、
+// send_message 缺失、首轮迟迟没有 chat.final。
+//
+// 相关逻辑：foundation/llm/schema/message_chunk.go 的 mergeToolCalls 只提供
+// 合并能力，流式路径未在发事件前聚合。
+//
 // 文件目录：
 //
 //	real_llm/
