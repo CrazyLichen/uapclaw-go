@@ -35,6 +35,16 @@ type StaticRouter struct {
 	targets []string
 }
 
+// BarrierRouter 汇聚路由（N→1），产出 BarrierMessage。
+//
+// target 不是节点名，而是 barrier 通道的合成路由键 "barrier:a&b->c"
+// （channels.py:155-164）；sender 由 BarrierChannel 收下作为 OR 组判据。
+// Python: pregel/router.py:49-56
+type BarrierRouter struct {
+	// targets 目标 barrier 通道路由键列表
+	targets []string
+}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期接口断言：SelectorFunc 必须满足 Selector。
@@ -43,12 +53,21 @@ var _ Selector = SelectorFunc(nil)
 // 编译期接口断言：StaticRouter 必须满足 Router。
 var _ Router = (*StaticRouter)(nil)
 
+// 编译期接口断言：BarrierRouter 必须满足 Router。
+var _ Router = (*BarrierRouter)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStaticRouter 构造静态扇出路由。
 // Python: StaticRouter(targets)（router.py:14-15）
 func NewStaticRouter(targets ...string) *StaticRouter {
 	return &StaticRouter{targets: append([]string(nil), targets...)}
+}
+
+// NewBarrierRouter 构造汇聚路由。
+// Python: BarrierRouter(targets)（router.py:52-53）
+func NewBarrierRouter(targets ...string) *BarrierRouter {
+	return &BarrierRouter{targets: append([]string(nil), targets...)}
 }
 
 // Select 实现 Selector：调用被适配的函数。
@@ -60,6 +79,16 @@ func (f SelectorFunc) Select(ctx context.Context, state any) ([]string, error) {
 // Python: router.py:17-18
 func (r *StaticRouter) Dispatch(_ context.Context, sourceNode string) ([]Message, error) {
 	return buildTriggerMessages(sourceNode, r.targets), nil
+}
+
+// Dispatch 产出 N→1 汇聚消息。
+// Python: router.py:55-56
+func (r *BarrierRouter) Dispatch(_ context.Context, sourceNode string) ([]Message, error) {
+	msgs := make([]Message, 0, len(r.targets))
+	for _, target := range r.targets {
+		msgs = append(msgs, NewBarrierMessage(sourceNode, target))
+	}
+	return msgs, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

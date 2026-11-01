@@ -109,3 +109,39 @@ func TestNewStaticRouter_复制入参(t *testing.T) {
 		t.Errorf("targets 被外部改写：%q, %q，期望 \"A\", \"B\"", msgs[0].Target, msgs[1].Target)
 	}
 }
+
+// TestBarrierRouter_产出汇聚消息 target 是 barrier 通道的合成路由键。
+// Python: BarrierRouter([barrier.key])（builder.py:49），键格式见 channels.py:155-164
+func TestBarrierRouter_产出汇聚消息(t *testing.T) {
+	const key = "barrier:(a|b)&c->d"
+	msgs, err := NewBarrierRouter(key).Dispatch(context.Background(), "a")
+	if err != nil {
+		t.Fatalf("Dispatch 返回错误：%v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("len(msgs) = %d，期望 1", len(msgs))
+	}
+	if msgs[0].Kind() != KindBarrier {
+		t.Errorf("Kind() = %q，期望 %q", msgs[0].Kind(), KindBarrier)
+	}
+	if msgs[0].Sender != "a" {
+		t.Errorf("Sender = %q，期望 \"a\"（BarrierChannel 用它判 OR 组）", msgs[0].Sender)
+	}
+	if msgs[0].Target != key {
+		t.Errorf("Target = %q，期望 %q", msgs[0].Target, key)
+	}
+}
+
+// TestBarrierRouter_零目标 空 targets 产出非 nil 空切片。
+func TestBarrierRouter_零目标(t *testing.T) {
+	msgs, err := NewBarrierRouter().Dispatch(context.Background(), "a")
+	if err != nil {
+		t.Fatalf("Dispatch 返回错误：%v", err)
+	}
+	if msgs == nil {
+		t.Fatalf("msgs = nil，期望非 nil 空切片")
+	}
+	if len(msgs) != 0 {
+		t.Errorf("len(msgs) = %d，期望 0", len(msgs))
+	}
+}
