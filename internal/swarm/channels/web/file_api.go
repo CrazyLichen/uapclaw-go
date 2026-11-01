@@ -285,7 +285,7 @@ func HandleListFiles(w http.ResponseWriter, r *http.Request) {
 		files = append(files, fileEntry{
 			Name:        entry.Name(),
 			Path:        relToDataRoot(filepath.Join(absDir, entry.Name())),
-			IsMarkdown:  entry.IsDir() == false && isMarkdownName(entry.Name()),
+			IsMarkdown:  !entry.IsDir() && isMarkdownName(entry.Name()),
 			IsDirectory: entry.IsDir(),
 		})
 	}
