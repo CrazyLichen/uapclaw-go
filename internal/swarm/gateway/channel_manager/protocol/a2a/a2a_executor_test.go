@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	sdka2a "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
@@ -163,5 +164,69 @@ func TestCancel_产出取消状态(t *testing.T) {
 
 	if len(kinds) == 0 || kinds[len(kinds)-1] != "status:TASK_STATE_CANCELED" {
 		t.Errorf("Cancel 事件序列 = %v", kinds)
+	}
+}
+
+// TestCancel_不清pending且终态可唤醒 R2-a 回归：Cancel 不得删除 pending，
+// 否则 Execute 永久阻塞（SDK 的取消不会结束 detached 执行）
+func TestCancel_不清pending且终态可唤醒(t *testing.T) {
+	ch := NewA2AChannel(A2AChannelConfig{Enabled: false, ChannelID: "a2a"})
+	ch.OnMessage(func(*schema.Message) bool { return true }) // 不自动回包，由测试手动投递
+
+	ec := &a2asrv.ExecutorContext{
+		TaskID: "task-r2", ContextID: "ctx-r2",
+		Message: sdka2a.NewMessage(sdka2a.MessageRoleUser, sdka2a.NewTextPart("hi")),
+	}
+
+	done := make(chan []string, 1)
+	go func() { done <- collectEvents(executorFor(ch).Execute(context.Background(), ec)) }()
+
+	// 等待 Execute 完成派发（pending 建立）
+	deadline := time.After(2 * time.Second)
+	for {
+		ch.mu.RLock()
+		_, exists := ch.pending["task-r2"]
+		ch.mu.RUnlock()
+		if exists {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("Execute 未建立 pending")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+
+	// Cancel 不应清理 pending
+	collectEvents(executorFor(ch).Cancel(context.Background(), ec))
+	ch.mu.RLock()
+	_, exists := ch.pending["task-r2"]
+	ch.mu.RUnlock()
+	if !exists {
+		t.Fatal("Cancel 不应清理 pending（否则 Execute 永久阻塞）")
+	}
+
+	// 终态到达 → Execute 应退出并清理 pending
+	if err := ch.Send(context.Background(), &schema.Message{
+		ID: "task-r2", Type: schema.MessageTypeEvent, EventType: schema.EventTypeChatFinal,
+		Payload: map[string]any{"content": "done", "is_complete": true},
+	}); err != nil {
+		t.Fatalf("Send 失败: %v", err)
+	}
+
+	select {
+	case kinds := <-done:
+		if last := kinds[len(kinds)-1]; last != "status:TASK_STATE_COMPLETED" {
+			t.Errorf("终态 = %q, 期望 status:TASK_STATE_COMPLETED（序列 %v）", last, kinds)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Execute 未在终态后退出（goroutine 泄漏）")
+	}
+
+	ch.mu.RLock()
+	_, exists = ch.pending["task-r2"]
+	ch.mu.RUnlock()
+	if exists {
+		t.Error("Execute 退出后应清理 pending")
 	}
 }

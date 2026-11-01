@@ -111,10 +111,13 @@ func (e *a2aExecutor) Execute(ctx context.Context, ec *a2asrv.ExecutorContext) i
 
 // Cancel 响应客户端取消请求。
 //
+// 这里**不清理 pending**：对齐 Python cancel (L164-176)——只发 CANCELED 状态并关闭事件队列，
+// pending 由 Execute 的 defer 清理。a2asrv 的取消是「往活跃执行队列投递取消事件」，且 execution
+// 跑在 detached context 上不会因取消而结束（internal/taskexec/local_manager.go L51-52）；
+// 若在此删除 pending，A2AChannel.Send 将再也匹配不到该任务，Execute 会永久阻塞在 <-pending.C()。
 // Python: _A2AAgentExecutor.cancel (L164-176)
 func (e *a2aExecutor) Cancel(_ context.Context, ec *a2asrv.ExecutorContext) iter.Seq2[sdka2a.Event, error] {
 	return func(yield func(sdka2a.Event, error) bool) {
-		defer e.ch.ClearPendingRequest(string(ec.TaskID))
 		// 任务尚未建档时先补 Task（a2asrv 要求首事件为 Task/Message，偏差 D1）
 		if ec.StoredTask == nil && ec.Message != nil {
 			if !yield(sdka2a.NewSubmittedTask(ec, ec.Message), nil) {
