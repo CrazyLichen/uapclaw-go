@@ -269,3 +269,5 @@ Stop : 逆序
 3. monitor 的 `team.member`/`team.message` 分类事件未推送，team 用例改以 `team.runtime_ready` + `chat.tool_result(success)` 作为"团队已建立且成员已 spawn"的等价锚点。
 
 **副作用修复**：team 用例的成员技能/记忆目录在未设根路径时落进程 CWD，套件期间切换到临时目录避免污染仓库。
+
+**CI**：run `41302573807` 四绿（Build 3m57s / Integration 5m05s / Unit Test 10m05s / Lint 2m06s）。
