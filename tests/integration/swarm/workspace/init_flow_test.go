@@ -13,6 +13,7 @@ import (
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -151,6 +152,113 @@ func (s *InitFlowSuite) TestInit_config内容() {
 
 	s.Require().Equal("en", cfg.Get("preferred_language"))
 	s.Require().NotNil(cfg.Get("models.defaults"), "models.defaults 应可解析")
+}
+
+// TestPrompt_选择编号1 对齐 Python test_prompt_select_chinese。
+func (s *InitFlowSuite) TestPrompt_选择编号1() {
+	s.withPTY("1\n")
+	result, err := workspace.Init(workspace.InitOption{})
+	s.Require().NoError(err)
+	s.Require().False(result.Cancelled)
+	s.Require().Equal("zh", s.readPreferredLanguage())
+}
+
+// TestPrompt_选择编号2 对齐 Python test_prompt_select_english。
+func (s *InitFlowSuite) TestPrompt_选择编号2() {
+	s.withPTY("2\n")
+	result, err := workspace.Init(workspace.InitOption{})
+	s.Require().NoError(err)
+	s.Require().False(result.Cancelled)
+	s.Require().Equal("en", s.readPreferredLanguage())
+}
+
+// TestPrompt_别名zh 对齐 Python test_prompt_select_zh_alias。
+func (s *InitFlowSuite) TestPrompt_别名zh() {
+	s.withPTY("zh\n")
+	result, err := workspace.Init(workspace.InitOption{})
+	s.Require().NoError(err)
+	s.Require().False(result.Cancelled)
+	s.Require().Equal("zh", s.readPreferredLanguage())
+}
+
+// TestPrompt_别名en 对齐 Python test_prompt_select_en_alias。
+func (s *InitFlowSuite) TestPrompt_别名en() {
+	s.withPTY("en\n")
+	result, err := workspace.Init(workspace.InitOption{})
+	s.Require().NoError(err)
+	s.Require().False(result.Cancelled)
+	s.Require().Equal("en", s.readPreferredLanguage())
+}
+
+// TestPrompt_取消no 对齐 Python test_prompt_cancel_with_no。
+func (s *InitFlowSuite) TestPrompt_取消no() {
+	s.withPTY("no\n")
+	s.requireCancelledWithoutWorkspace()
+}
+
+// TestPrompt_取消n 对齐 Python test_prompt_cancel_with_n。
+func (s *InitFlowSuite) TestPrompt_取消n() {
+	s.withPTY("n\n")
+	s.requireCancelledWithoutWorkspace()
+}
+
+// TestPrompt_取消q 对齐 Python test_prompt_cancel_with_q。
+func (s *InitFlowSuite) TestPrompt_取消q() {
+	s.withPTY("q\n")
+	s.requireCancelledWithoutWorkspace()
+}
+
+// TestPrompt_非法输入 对齐 Python test_prompt_invalid_input_returns_none。
+func (s *InitFlowSuite) TestPrompt_非法输入() {
+	s.withPTY("xyz\n")
+	s.requireCancelledWithoutWorkspace()
+}
+
+// TestInit_取消不落盘 对齐 Python test_init_user_workspace_cancel_language_selection。
+func (s *InitFlowSuite) TestInit_取消不落盘() {
+	s.withPTY("q\n")
+	s.requireCancelledWithoutWorkspace()
+}
+
+// TestInit_覆盖前拒绝 对齐 Python test_main_cancelled_init。
+// force 模式下对 overwrite 确认答 no，原工作区保持不动。
+func (s *InitFlowSuite) TestInit_覆盖前拒绝() {
+	s.forceNonInteractive()
+	_, err := workspace.Init(workspace.InitOption{Language: "zh"})
+	s.Require().NoError(err)
+	sentinel := filepath.Join(s.wsDir, "sentinel.txt")
+	s.Require().NoError(os.WriteFile(sentinel, []byte("keep"), 0o644))
+
+	s.withPTY("no\n")
+	result, err := workspace.Init(workspace.InitOption{Language: "zh", Overwrite: true})
+	s.Require().NoError(err)
+	s.Require().True(result.Cancelled, "overwrite 确认答 no 时应取消")
+	s.Require().FileExists(sentinel)
+}
+
+// ──────────────────────────── 非导出函数（PTY） ────────────────────────────
+
+// withPTY 打开 PTY、装上 stdin、写入 input，环境不支持时 Skip。
+func (s *InitFlowSuite) withPTY(input string) {
+	s.T().Helper()
+	master, slave, err := testhelpers.OpenPTY()
+	if err != nil {
+		s.T().Skipf("当前环境不支持 PTY：%v", err)
+	}
+	s.T().Cleanup(func() {
+		_ = master.Close()
+		_ = slave.Close()
+	})
+	testhelpers.WithPTYStdin(s.T(), slave)
+	testhelpers.WritePTYInput(s.T(), master, input)
+}
+
+// requireCancelledWithoutWorkspace 断言取消且未创建工作区。
+func (s *InitFlowSuite) requireCancelledWithoutWorkspace() {
+	result, err := workspace.Init(workspace.InitOption{})
+	s.Require().NoError(err)
+	s.Require().True(result.Cancelled, "应取消初始化")
+	s.Require().NoDirExists(filepath.Join(s.wsDir, "config"))
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
