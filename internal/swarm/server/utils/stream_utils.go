@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -180,6 +181,11 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		name, _ := toolInfo["name"].(string)
 		callID, _ := toolInfo["tool_call_id"].(string)
 		if name == "" && callID == "" {
+			return nil
+		}
+		// S-48: arguments 未闭合的帧也不下发。真实模型把参数按 JSON 片段流式输出，
+		// 只有拼完才是合法 JSON；未闭合说明还有后续增量，前端/执行侧拿到会解析失败。
+		if args, ok := toolInfo["arguments"].(string); ok && args != "" && !json.Valid([]byte(args)) {
 			return nil
 		}
 		return map[string]any{
