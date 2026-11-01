@@ -150,14 +150,17 @@ func (s *TeamDialogSuite) TearDownSuite() {
 // 首条 chat.send(mode=team) 未结束时发出第二条，验证服务端不互斥、
 // Leader 能建队并 spawn 成员、两条请求各自被受理且各有回复。
 //
-// 与 Python 的差异（已登记）：Python 断言出现 team.member/team.message
-// （monitor 分类事件）；Go 侧 monitor 的成员/消息分类事件尚未推送，
-// 本用例改以 team.runtime_ready + chat.tool_result(success) 作为
-// "团队已建立且成员已 spawn" 的等价锚点。
+// 断言口径与 Python 原用例一致：出现 team.member 或 team.message
+// （monitor 分类事件），且两条 chat.send 在首条流未结束时都被受理。
+//
+// 触发链（与 Python 一致）：spawn_member 只写成员记录 → send_message 的
+// _auto_start_members 启动成员 → 发布 MemberSpawnedEvent → TeamMonitor
+// 转 MonitorEvent → TeamMonitorHandler 归类为 team.member 推给前端。
 func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 	s.MockLLM.ResetCalls()
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("team.spawn_member", `{"member_name":"teammate-itest"}`),
+		mockllm.CreateToolCallResponse("team.send_message", `{"to":"teammate-itest","content":"请汇报你的工具清单"}`),
 		mockllm.CreateTextResponse("第一条消息的响应"),
 		mockllm.CreateTextResponse("第二条消息的响应"),
 	)
@@ -180,6 +183,7 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 		firstFinalAfter bool
 		firstFinalTime  time.Time
 		secondSent      bool
+		sawCategory     bool
 	)
 
 	deadline := time.Now().Add(120 * time.Second)
@@ -209,6 +213,11 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 		case teamFrameID(frame) == "req-team-2" && teamAccepted(frame):
 			secondAccepted = true
 		}
+		// Python 原断言：出现 team.member 或 team.message（monitor 分类事件）
+		if name := teamEventName(frame); name == "team.member" || name == "team.message" {
+			sawCategory = true
+			s.T().Logf("收到分类事件: %s", name)
+		}
 		switch teamEventName(frame) {
 		case "team.runtime_ready":
 			runtimeReady = true
@@ -237,6 +246,7 @@ func (s *TeamDialogSuite) TestTeamContinuousDialog() {
 
 	s.T().Logf("观测: firstAccepted=%v runtimeReady=%v memberSpawned=%v secondAccepted=%v firstFinalAfter=%v llmCalls=%d",
 		firstAccepted, runtimeReady, memberSpawned, secondAccepted, firstFinalAfter, s.MockLLM.InvokeCallCount())
+	s.True(sawCategory, "应收到 team.member 或 team.message 分类事件（对齐 Python 原断言）")
 	s.True(firstAccepted, "首条 chat.send 应被受理")
 	s.True(runtimeReady, "应收到 team.runtime_ready（团队已建立）")
 	s.True(memberSpawned, "Leader 应成功 spawn 成员（chat.tool_result success）")

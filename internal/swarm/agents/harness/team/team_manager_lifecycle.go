@@ -52,14 +52,10 @@ func (m *TeamManager) CommitRuntimeReady(sessionID string, teamName string) {
 //
 // 调用方在 CommitRuntimeReady 之后调用此方法，自动启动监控和演进 watcher。
 // 此方法不在 CommitRuntimeReady 内部调用，避免死锁。
-func (m *TeamManager) OnRuntimeReady(ctx context.Context, sessionID string, teamAgent *agent.TeamAgent, hideDM bool) {
-	if teamAgent == nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Msg("OnRuntimeReady: teamAgent is nil, skipping monitor start")
-		return
-	}
-
+func (m *TeamManager) OnRuntimeReady(ctx context.Context, sessionID string, teamName string, hideDM bool) {
 	// 对齐 Python: ensure_monitor_for_active_runtime(channel_id, session_id, team_name, hide_dm)
-	if err := m.EnsureMonitor(ctx, sessionID, teamAgent, hideDM); err != nil {
+	// monitor 由 runtime 池按 (team_name, session_id) 解析，无需调用方持有 TeamAgent
+	if err := m.EnsureMonitor(ctx, sessionID, teamName, hideDM); err != nil {
 		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
 			Msg("OnRuntimeReady: EnsureMonitor failed")
 	}

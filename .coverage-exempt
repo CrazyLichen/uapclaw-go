@@ -80,3 +80,16 @@ internal/swarm/agents/harness/common/sessionops/session_ops.go
 
 # deep_adapter_team.go — gofmt import 重排
 internal/swarm/server/adapter/deep_adapter_team.go
+
+# ── 2026-11-01 team monitor 桥修复（EnsureMonitor 改走 runtime 池） ──
+# team_manager_monitor.go — 已补测至 73.8%（幂等短路 / 池未命中 / 事件广播
+# 三条分支），剩余未覆盖语句全部是 TeamMonitorHandler 的 12 个事件分发
+# handler（handleMemberSpawned / handleMessage 等）与故障分支，需构造
+# 活跃 runtime pool 条目（真实 TeamAgent + DB + 事件队列）才能触达，
+# 属「依赖外部运行环境」类豁免。
+internal/swarm/agents/harness/team/team_manager_monitor.go
+
+# team_manager_lifecycle.go — 团队生命周期（创建/销毁/清理/恢复）依赖真实
+# DB 与 runner 实例；本次改动仅为 OnRuntimeReady 签名对齐（该函数当前无
+# 生产调用方，是 Python 对齐桩）。
+internal/swarm/agents/harness/team/team_manager_lifecycle.go

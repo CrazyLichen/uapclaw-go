@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/monitor"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -196,9 +195,11 @@ func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGrou
 //	Python: 7. tm.register_monitor(session_id, monitor_handler)
 //	Python: 8. if monitor_handler.is_running: asyncio.create_task(_consume_monitor_events(...))
 //
-// Go 差异：Python 通过 Runner.get_agent_team_monitor 获取 TeamMonitor，
-// Go 端直接通过 TeamAgent 创建 TeamMonitor（省略 Runner 桥接层）。
-func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamAgent *agent.TeamAgent, hideDM bool) error {
+// 步骤 3 走 runtime.GetAgentTeamMonitor——等价 Python 的 Runner.get_agent_team_monitor：
+// 由 TeamRuntimeManager 按 (team_name, session_id) 从运行时池解析活跃 TeamAgent 并
+// 现场构造 monitor。原实现绕过该桥、改从本结构体的 teamAgents 表取 agent，而该表只在
+// CreateTeam（生产零调用方）里写入，导致 agent 恒 nil、monitor 永不启动。
+func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamName string, hideDM bool) error {
 	// Python 步骤 2: 检查是否已有 handler 且 is_running → 提前返回
 	m.mu.Lock()
 	existing := m.teamMonitors[sessionID]
@@ -207,20 +208,19 @@ func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamA
 		return nil
 	}
 
-	// Python 步骤 3-4: 从 TeamAgent 获取 TeamBackend → db → 创建 TeamMonitor
-	backend := teamAgent.TeamBackend()
-	if backend == nil {
-		return fmt.Errorf("team_agent 没有 team_backend")
-	}
-	db := backend.DB()
-	teamName := backend.TeamName()
-
-	// Python 步骤 4: 创建 TeamMonitor
-	mon, err := monitor.CreateMonitor(teamAgent, db, teamName, sessionID, hideDM)
+	// Python 步骤 3: 从运行时池解析 monitor（Runner.get_agent_team_monitor 等价桥）
+	mon, err := runtime.GetAgentTeamMonitor(ctx, teamName, sessionID, hideDM)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Str("team_name", teamName).
-			Msg("failed to create TeamMonitor")
-		return fmt.Errorf("创建 TeamMonitor 失败: %w", err)
+			Msg("failed to get TeamMonitor from runtime pool")
+		return fmt.Errorf("获取 TeamMonitor 失败: %w", err)
+	}
+
+	// Python 步骤 4: monitor 为 nil → 记录并返回（运行时未激活/无 backend）
+	if mon == nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
+			Msg("no active team runtime, cannot start monitor")
+		return nil
 	}
 
 	// Python 步骤 5: 创建 handler

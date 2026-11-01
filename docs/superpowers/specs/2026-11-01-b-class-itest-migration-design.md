@@ -252,7 +252,7 @@ Stop : 逆序
 | 1 | `team.error: nil pointer` | `TeamBackendAccessor()` 把 nil 指针装进接口（typed-nil） | `team_agent.go` 显式判空 |
 | 2 | TeamBackend 恒 nil | `BuildMemberMessagerConfig` 是 `TODO(#9.65)` 桩，恒返 nil → messager 空 → 不装配 backend | 按 Python `payload.py:88-114` 实现（端口基准 16000/步长 10/同名复用/metadata 剔除 `pubsub_bind`），并补 `BuildSpawnPayload` 的 transport 序列化 |
 | 3 | 有 `team.runtime_ready` 但 LLM 零调用 | `TeamHarness.RunStreaming` 分支 2 是空流桩 | 实现 `_prepare_agent_session` + `_ensure_initial_plan_mode`（派生 AgentSession → PreRun → plan 种子化） |
-| 4 | 无 `team.member`/`team.message` | monitor 的分类事件未推送 | **未修**，登记为待回填 |
+| 4 | 无 `team.member`/`team.message` | monitor 未启动：`ensureMonitorForActiveRuntime` 用 `tm.GetTeamAgent(sessionID)` 取 agent，而该表只有零调用方的 `CreateTeam` 会写；另 spawn 后没人触发 `startup`，无 `MemberSpawnedEvent` 可推 | 对齐 Python 分层：`EnsureMonitor` 改走 `runtime.GetAgentTeamMonitor`（等价 `Runner.get_agent_team_monitor`，按 (team,session) 从运行时池解析）；用例补 `team.send_message` 步骤触发 `_auto_start_members`→`MemberSpawnedEvent`→monitor |
 
 **用例落地**：17 个 Go 测试方法
 
@@ -266,7 +266,7 @@ Stop : 逆序
 
 1. Go 工作区布局与 Python 不同：`Prepare` 不创建 `agent/home`、`agent/skills`、`agent/memory`（Python `conftest.py:165-174` 期望），技能目录挂在 `agent/workspace/skills`。用例按 Go 实际布局断言并在注释标注。
 2. `uapclaw init` 子命令仍是桩（打印「尚未实现」），用例改由库层 `workspace.Init` 覆盖。
-3. monitor 的 `team.member`/`team.message` 分类事件未推送，team 用例改以 `team.runtime_ready` + `chat.tool_result(success)` 作为"团队已建立且成员已 spawn"的等价锚点。
+3. ~~monitor 分类事件未推送~~ **已修复（2026-11-01 追加）**：EnsureMonitor 改走 `runtime.GetAgentTeamMonitor` 桥，测试断言升回 Python 原样（`team.member` 实测出现）。触发链：`spawn_member` 只写记录 → `send_message` 的 `_auto_start_members` 启动成员 → `MemberSpawnedEvent` → `TeamMonitor` → 分类 `team.member`。
 
 **副作用修复**：team 用例的成员技能/记忆目录在未设根路径时落进程 CWD，套件期间切换到临时目录避免污染仓库。
 

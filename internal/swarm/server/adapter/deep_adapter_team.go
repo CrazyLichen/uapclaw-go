@@ -555,16 +555,9 @@ func (d *DeepAdapter) processTeamMessageStream(ctx context.Context, req *agentsc
 func (d *DeepAdapter) ensureMonitorForActiveRuntime(ctx context.Context, channelID, sessionID, teamName string, hideDM bool) {
 	tm := team.GetTeamManager(channelID)
 
-	// 通过 TeamAgent 获取并启动 monitor
-	teamAgent := tm.GetTeamAgent(sessionID)
-	if teamAgent == nil {
-		logger.Warn(logComponent).
-			Str("session_id", sessionID).Str("team_name", teamName).
-			Msg("ensureMonitorForActiveRuntime: no TeamAgent, cannot start monitor")
-		return
-	}
-
-	if err := tm.EnsureMonitor(ctx, sessionID, teamAgent, hideDM); err != nil {
+	// monitor 由 runtime 池按 (team_name, session_id) 解析活跃 TeamAgent 后构造，
+	// 对齐 Python Runner.get_agent_team_monitor（不再从 TeamManager 自查 agent 表）
+	if err := tm.EnsureMonitor(ctx, sessionID, teamName, hideDM); err != nil {
 		logger.Warn(logComponent).Err(err).
 			Str("session_id", sessionID).Str("team_name", teamName).
 			Msg("ensureMonitorForActiveRuntime: EnsureMonitor failed")
