@@ -7,3 +7,12 @@
 # stream_utils.go — 纯 chunk→事件映射函数集（ParseStreamChunk 等），无独立集成入口；
 # 其行为由 swarm/gateway 集成套件间接覆盖，单测覆盖在 internal/swarm/server/utils。
 internal/swarm/server/utils/stream_utils.go
+
+# tool_call.go — ToolCall 数据结构与选项构造函数（无 IO、无装配），无独立集成入口；
+# 聚合语义由 model_clients 单测（缺省 type 增量帧）覆盖，真 LLM 侧由 team 套件验证。
+internal/agentcore/foundation/llm/schema/tool_call.go
+
+# deep_adapter_team.go — 团队适配器单文件数千行，本次改动仅为 tool_call 分支的
+# 碎片帧守卫；该分支需真实模型流式帧才能触发，由 llm tag 的 team 套件覆盖
+# （不入集成门禁），单测在 deep_adapter_team_chunktomap_test.go。
+internal/swarm/server/adapter/deep_adapter_team.go

@@ -533,6 +533,52 @@ func TestGenerateSpeech_不支持(t *testing.T) {
 	}
 }
 
+func TestTranscribeAudio_不支持(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.TranscribeAudio(context.Background(), "audio.wav")
+	if err == nil {
+		t.Error("TranscribeAudio 应返回不支持错误")
+	}
+	if !strings.Contains(err.Error(), "does not support audio transcription") {
+		t.Errorf("错误信息 = %q, 应包含 'does not support audio transcription'", err.Error())
+	}
+}
+
+// TestSupportsKVCacheRelease 验证 InferenceAffinity 声明支持 KV Cache 释放。
+func TestSupportsKVCacheRelease(t *testing.T) {
+	client := &InferenceAffinityModelClient{}
+	if !client.SupportsKVCacheRelease() {
+		t.Error("SupportsKVCacheRelease 应为 true")
+	}
+}
+
+// TestStream_非法APIBase返回错误 验证请求构建失败时 Stream 直接返回错误而非挂起。
+func TestStream_非法APIBase返回错误(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "://bad-url"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.Stream(context.Background(),
+		model_clients.NewMessagesParam(llmschema.NewUserMessage("hi")),
+		model_clients.WithStreamCustomHeaders(map[string]string{"X-Test": "1"}),
+		model_clients.WithStreamTracerRecordData(func(map[string]any) {}),
+	)
+	if err == nil {
+		t.Error("非法 APIBase 下 Stream 应返回错误")
+	}
+}
+
 func TestGenerateVideo_不支持(t *testing.T) {
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
