@@ -1768,4 +1768,14 @@ cd /home/opensource/uapclaw-gateway && git status --short && git add internal/ag
 7. **偏差注释齐全**：`grep -n "偏差 D-" channels.go` 至少命中 D-1/D-2/D-3/D-4/D-5/D-6/D-7/D-8/D-9 九处（D-10/D-11 属跨节与不可达分支，记在 spec 与 8.9b 回填点）。
 8. **声明顺序**：结构体→全局变量→导出函数→非导出函数，接口在结构体区最前（规范 2）。
 9. **`Channel` 接口归属**：8.3 行已补归属说明，8.5/8.6 spec 已补去向，计划表顺序注记出现两行。
-10. **交棒提醒已写进注释**：`Buffer()` 的"必须先复制"纪律出现在 `channels.go` 注释里，不能只写在 spec。
+10. **`Buffer()` 语义**：返回副本（D-9 实施后修订，见文件末尾「执行修订」），注释里写清"Go 切片无法复刻 Python 活视图别名"的理由，不能只写在 spec。
+
+---
+
+## 执行修订（实施期间，2026-11-01）
+
+1. **`ChannelManager.Buffer()` 由「返回内部切片引用」改为「返回内容副本」**（spec D-9 同步修订）。
+   原因：Go 切片赋值只复制 `{ptr,len,cap}` 头，元素数据共享而长度不共享 —— `Flush` 的 `clear` 会把旧视图清零（旧视图 len 仍在、元素全零 ⇒ 存档出幽灵 `Message`），`append` 是否与内部互相覆盖取决于 cap。Python 的 list 别名是活视图（`clear` 后 len 归零），Go 无法等价复刻。
+   落地：方法体改 `append(make([]Message, 0, len(m.buffer)), m.buffer...)`；用例 `TestChannelManager_Buffer引用语义` → `TestChannelManager_Buffer返回副本`（断言改副本不污染内部、内部增长不回灌、Flush 后旧副本完好）。
+2. **远端并行线导致推送被拒一次**：`pull --rebase` 整合 11 笔 team/itest 提交后重推，8 笔提交 hash 全变（`9e0a9f5a..490eb425` → `5d0d07c2..2a296a50`），内容未变；rebase 后重跑全量 `exit=0`、296 包零 FAIL。
+3. **Task 7 Step 5「格式修正提交」未执行**：`gofmt -l -w` 无输出，无差异可提交。

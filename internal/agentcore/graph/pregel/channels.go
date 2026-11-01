@@ -370,15 +370,26 @@ func (m *ChannelManager) Consume(nodeName string) {
 	delete(m.readyNodes, nodeName)
 }
 
-// Buffer 返回内部 buffer 切片**引用**（对齐 Python 直接读 self.buffer 的别名语义，
-// 偏差 D-9）。
+// Buffer 返回 buffer 内容的**副本**。
 //
-// 调用方纪律：需要"buffer + 额外消息"时**必须**先复制
-// （`append(append([]Message(nil), m.Buffer()...), extras...)`），不得直接 append
-// 到返回值上——Python 的 `pending_buffer.extend(...)` 实际改写了管理器内部状态，
-// 那是别名副作用，Go 侧不许复刻。
+// 偏差 D-9（2026-11-01 实施后修订）：原设计想对齐 Python「直接读 self.buffer」的
+// 别名语义，但 Go 的切片是「冻结的 len + 共享底层数组」，交出去之后有两个坏形态：
+//   - Flush 的 clear 会把旧视图的元素清零——旧视图看着还有 N 条，实际全是零值
+//     Message（kind 为空），存档进检查点后恢复时会重放幽灵消息；
+//   - 后续 append 是否与内部 buffer 互相覆盖取决于 cap，同一份代码在不同数据量下
+//     行为不同。
+//
+// Python 的 list 别名是活视图（clear 后 len 归零），Go 无法等价复刻，故改为返回
+// 副本：调用方怎么写都安全。需要「buffer + 额外消息」时直接 append 到副本即可：
+//
+//	pending := append(m.Buffer(), succeedMessages...)
+//
+// 同包内若确实需要活视图，直接读字段 m.buffer 并在读完立即复制，不必经此方法。
 // Python: engine.py:180（self.manager.buffer）
-func (m *ChannelManager) Buffer() []Message { return m.buffer }
+func (m *ChannelManager) Buffer() []Message {
+	return append(make([]Message, 0, len(m.buffer)), m.buffer...)
+}
+
 
 // Snapshot 导出全部通道快照。
 //

@@ -585,17 +585,45 @@ func TestChannelManager_重复键汇聚僵尸(t *testing.T) {
 	}
 }
 
-// TestChannelManager_Buffer引用语义 Buffer 返回内部切片引用（偏差 D-9 的交棒约束）。
-func TestChannelManager_Buffer引用语义(t *testing.T) {
-	m := NewChannelManager(nil)
+// TestChannelManager_Buffer返回副本 取到的是快照副本：改它不污染内部、内部增长不回灌、
+// Flush 后旧副本仍是完好的快照（偏差 D-9 实施后修订）。
+func TestChannelManager_Buffer返回副本(t *testing.T) {
+	m := NewChannelManager([]Channel{NewTriggerChannel("b"), NewTriggerChannel("d")})
 	m.BufferMessage(NewTriggerMessage("a", "b"))
+
 	buf := m.Buffer()
-	if len(buf) != 1 {
-		t.Fatalf("buffer 长度 = %d，期望 1", len(buf))
+	if len(buf) != 1 || buf[0].Sender != "a" || buf[0].Kind() != KindTrigger {
+		t.Fatalf("副本内容 = %+v，期望 1 条 a→b 且 kind=trigger", buf)
 	}
+
+	// 改副本不污染内部
 	buf[0] = NewTriggerMessage("x", "y")
-	if got := m.Buffer()[0].Sender; got != "x" {
-		t.Fatalf("Buffer 应返回内部切片引用，实际见到 %q", got)
+	if got := m.Buffer()[0].Sender; got != "a" {
+		t.Fatalf("改副本污染了内部 buffer，实际 %q", got)
+	}
+
+	// 内部增长不回灌旧副本
+	m.BufferMessage(NewTriggerMessage("c", "d"))
+	if len(buf) != 1 {
+		t.Fatalf("旧副本长度 = %d，期望 1（副本不随内部增长）", len(buf))
+	}
+
+	// 往副本 append 不影响内部长度
+	buf = append(buf, NewTriggerMessage("e", "d"))
+	if got := len(m.Buffer()); got != 2 {
+		t.Fatalf("对副本 append 影响了内部，内部长度 = %d，期望 2", got)
+	}
+
+	// Flush 清空内部后，旧副本仍是完好快照（不再是「len 还在、元素全零」）
+	old := m.Buffer()
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if len(old) != 2 || old[0].Sender != "a" || old[0].Kind() != KindTrigger {
+		t.Fatalf("Flush 后旧副本被污染：%+v", old)
+	}
+	if !m.IsEmpty() {
+		t.Fatal("Flush 后内部 buffer 应为空")
 	}
 }
 

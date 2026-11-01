@@ -195,7 +195,7 @@ type ChannelManager struct {
 | `(*ChannelManager) Consume(nodeName string)` | `:63-74` | 未知节点直接 return；对每个 `IsReady()` 通道调 `Consume()`；从就绪集删除 |
 | `(*ChannelManager) Snapshot() map[string][]ChannelSnapshot` | `:76-86` | 跳过 `pregel.End`；每节点按 `nodeToChannels` 顺序取**全部**通道快照（空占位保留）；整节点全空则不存 |
 | `(*ChannelManager) Restore(snapshot map[string][]ChannelSnapshot)` | `:88-101` | 三类静默忽略（D-5）；长度相等才按下标 zip；跳过空快照；恢复后 ready 则加就绪集 |
-| `(*ChannelManager) Buffer() []Message` | 直接读 `self.buffer` | 返回**内部切片引用**（对齐 Python 别名语义，D-9）；8.3c 必须先复制再 append |
+| `(*ChannelManager) Buffer() []Message` | 直接读 `self.buffer` | 返回**内容副本**（D-9 实施后修订：Go 切片无法复刻 Python list 的活视图别名，交出去会产出「len 还在、元素全零」的幽灵快照）；8.3c 直接 `append(m.Buffer(), extras...)` 即可 |
 | `(*TriggerChannel) Accept/Consume/Snapshot/Restore/IsReady/Key/NodeName` | `:109-126` | `Accept` 仅认 `Kind()==KindTrigger` |
 | `(*BarrierChannel) Accept/Consume/Snapshot/Restore/IsReady/Key/NodeName` | `:147-189` | `Accept` 仅认 `Kind()==KindBarrier` 且 sender 首次出现；`Key()` 返回合成键、`NodeName()` 返回 name |
 
@@ -254,7 +254,7 @@ func makeBarrierRouterKey(name string, groups []map[string]struct{}) string
 | D-6 | `BarrierChannel` 空组保留（永久不就绪，不 panic） | 同上。与 8.3 的 nil-router panic 纪律不同：那里是 typed-nil 必然 panic 的假防御，这里是构图错误导致的确定性死锁，属 Python 语义 | 注释标注「构图错误 ⇒ 该组永不满足」；8.1/8.3a 构造路径不会产生空组 |
 | D-7 | 重复通道 key 后者覆盖 | 忠实复刻（`channels.py:26-28` 两个索引独立写） | 注释标注「前者在 nodeToChannels 中成僵尸」 |
 | D-8 | 无锁 | Python 无锁；唯一使用者单协程串行调用 | 包文档 + 类型注释写明并发假设；测试用 `-race` 跑但不加并发用例 |
-| D-9 | 构造期深复制 + 逐组去重；`Buffer()` 暴露内部切片 | Python `expected_groups` 存引用（无消费者依赖可变性，同 8.5 D-5）；Python 用 `Set` 故重复元素天然消失，Go 用 `[]string` 入参须显式去重；`Buffer()` 对齐 `self.buffer` 别名语义 | 8.3c **必须**先复制再 append（Python `pending_buffer = self.manager.buffer; pending_buffer.extend(...)` 直接改了管理器内部状态，Go 侧不得复刻该别名副作用） |
+| D-9 | 构造期深复制 + 逐组去重；`Buffer()` 返回**副本**（实施后修订） | Python `expected_groups` 存引用（无消费者依赖可变性，同 8.5 D-5）；Python 用 `Set` 故重复元素天然消失，Go 用 `[]string` 入参须显式去重。`Buffer()` 原拟对齐 `self.buffer` 的别名语义，**实测不可行**：Go 切片是「冻结的 len + 共享底层数组」，`Flush` 的 `clear` 会清零旧视图（旧视图 len 仍在、元素全零 ⇒ 幽灵消息），`append` 是否互相覆盖取决于 cap | `Buffer()` 内部 `append(make([]Message,0,len), m.buffer...)`；8.3c 直接 `append(m.Buffer(), succeedMessages...)`。同包内需活视图时直读 `m.buffer` 并立即复制 |
 | D-10 | 快照往返保真推迟 8.9b | `Message.kind` 非导出，JSON 反序列化得到零值 kind，任何通道都会拒收 | 本节只处理内存对象；8.9b 序列化须用 `NewTriggerMessage`/`NewBarrierMessage` 重建 kind（已记 ⤵️ 回填点） |
 | D-11 | 不复刻 `hasattr(channel, 'restore')` 分支 | `channels.py:97`；`Channel` ABC 已声明该抽象方法，Go 接口天然保证实现齐全 ⇒ 该分支在 Python 侧也不可达 | 无需注释 |
 
@@ -386,7 +386,7 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test" -race ./...   # 全量 294 包零
 - **8.3c**（`PregelLoop`）：
   - `NewChannelManager(graph.channels)` 在 loop 构造期调用；
   - `Flush()` 的 error 须穿出 `RunStep` 并触发 `_save_state_on_error`（Python 是 ValueError 自然上抛）；
-  - `_save_state_on_error` 里 `pending_buffer = Buffer()` 后**必须** `append(append([]Message(nil), buf...), succeedMessages...)`，不得直接 `append` 到返回切片上（D-9）；
+  - `_save_state_on_error` 里 `pending := append(m.Buffer(), succeedMessages...)` 即可（`Buffer()` 已返回副本，不会再碰内部切片；D-9 实施后修订）；
   - 首跑必须 `BufferMessage(NewTriggerMessage(Start, Start))` + `Flush()`（`engine.py:59-60`），否则 START 节点永不被激活。
 - **8.9 / 8.9b**（`GraphState` / serde）：`channel_values` 的类型为 `map[string][]ChannelSnapshot`，序列化时 `Message.kind` 须用构造函数重建（D-10，本轮 ⤵️ 回填点）。
 - **8.1**（`PregelGraph.compile`）：barrier 的 `expected_groups` 由 `_resolve_barrier_groups`（`graph.py:159-215`）算出，本节只消费结果，不参与 CNF 分组推导。
