@@ -2,6 +2,7 @@ package pregel
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -143,5 +144,126 @@ func TestBarrierRouter_零目标(t *testing.T) {
 	}
 	if len(msgs) != 0 {
 		t.Errorf("len(msgs) = %d，期望 0", len(msgs))
+	}
+}
+
+// TestConditionalRouter_单目标 selector 返回单目标 → 1 条 Trigger 消息。
+// Python: router.py:44-46（isinstance(targets, str) 的归一化在 Go 侧上移到调用方，偏差 D3）
+func TestConditionalRouter_单目标(t *testing.T) {
+	r := NewConditionalRouter(SelectorFunc(func(_ context.Context, _ any) ([]string, error) {
+		return []string{"D"}, nil
+	}))
+	msgs, err := r.Dispatch(context.Background(), "A")
+	if err != nil {
+		t.Fatalf("Dispatch 返回错误：%v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("len(msgs) = %d，期望 1", len(msgs))
+	}
+	if msgs[0].Sender != "A" || msgs[0].Target != "D" {
+		t.Errorf("msg = %+v，期望 Sender=\"A\" Target=\"D\"", msgs[0])
+	}
+	if msgs[0].Kind() != KindTrigger {
+		t.Errorf("Kind() = %q，期望 %q", msgs[0].Kind(), KindTrigger)
+	}
+}
+
+// TestConditionalRouter_多目标 多目标保序。
+func TestConditionalRouter_多目标(t *testing.T) {
+	targets := []string{"E", "F", "G"}
+	r := NewConditionalRouter(SelectorFunc(func(_ context.Context, _ any) ([]string, error) {
+		return targets, nil
+	}))
+	msgs, err := r.Dispatch(context.Background(), "A")
+	if err != nil {
+		t.Fatalf("Dispatch 返回错误：%v", err)
+	}
+	if len(msgs) != len(targets) {
+		t.Fatalf("len(msgs) = %d，期望 %d", len(msgs), len(targets))
+	}
+	for i, want := range targets {
+		if msgs[i].Target != want {
+			t.Errorf("msgs[%d].Target = %q，期望 %q", i, msgs[i].Target, want)
+		}
+	}
+}
+
+// TestConditionalRouter_零目标 空目标产出非 nil 空切片。
+func TestConditionalRouter_零目标(t *testing.T) {
+	r := NewConditionalRouter(SelectorFunc(func(_ context.Context, _ any) ([]string, error) {
+		return nil, nil
+	}))
+	msgs, err := r.Dispatch(context.Background(), "A")
+	if err != nil {
+		t.Fatalf("Dispatch 返回错误：%v", err)
+	}
+	if msgs == nil {
+		t.Fatalf("msgs = nil，期望非 nil 空切片")
+	}
+	if len(msgs) != 0 {
+		t.Errorf("len(msgs) = %d，期望 0", len(msgs))
+	}
+}
+
+// TestConditionalRouter_selector收到nilState 记录 Python 事实基线：
+// state 恒为 None（router.py:37），「注入/不注入」两分支行为等价（偏差 D2）。
+func TestConditionalRouter_selector收到nilState(t *testing.T) {
+	var gotState any = "sentinel"
+	r := NewConditionalRouter(SelectorFunc(func(_ context.Context, state any) ([]string, error) {
+		gotState = state
+		return []string{"D"}, nil
+	}))
+	if _, err := r.Dispatch(context.Background(), "A"); err != nil {
+		t.Fatalf("Dispatch 返回错误：%v", err)
+	}
+	if gotState != nil {
+		t.Errorf("state = %v，期望 nil", gotState)
+	}
+}
+
+// TestConditionalRouter_ctx透传 ctx 原样传给 selector。
+func TestConditionalRouter_ctx透传(t *testing.T) {
+	type ctxKey string
+	key := ctxKey("trace")
+	ctx := context.WithValue(context.Background(), key, "abc")
+
+	var got any
+	r := NewConditionalRouter(SelectorFunc(func(gotCtx context.Context, _ any) ([]string, error) {
+		got = gotCtx.Value(key)
+		return nil, nil
+	}))
+	if _, err := r.Dispatch(ctx, "A"); err != nil {
+		t.Fatalf("Dispatch 返回错误：%v", err)
+	}
+	if got != "abc" {
+		t.Errorf("ctx 值 = %v，期望 \"abc\"", got)
+	}
+}
+
+// TestConditionalRouter_selector返错原样上抛 错误不得包装（偏差 D6）：
+// 8.3b/8.3c 需要靠 errors.As 识别 *pregel.GraphInterrupt。
+func TestConditionalRouter_selector返错原样上抛(t *testing.T) {
+	errSentinel := errors.New("selector 失败")
+	r := NewConditionalRouter(SelectorFunc(func(_ context.Context, _ any) ([]string, error) {
+		return nil, errSentinel
+	}))
+	msgs, err := r.Dispatch(context.Background(), "A")
+	if err != errSentinel {
+		t.Errorf("err = %v，期望原样返回哨兵错误（不得包装）", err)
+	}
+	if msgs != nil {
+		t.Errorf("msgs = %v，期望 nil", msgs)
+	}
+}
+
+// TestConditionalRouter_selector为nil 在 Dispatch 阶段报错（对齐 Python
+// 到 dispatch 才 inspect.signature(None) 抛 TypeError 的时机）。
+func TestConditionalRouter_selector为nil(t *testing.T) {
+	msgs, err := NewConditionalRouter(nil).Dispatch(context.Background(), "A")
+	if err == nil {
+		t.Fatalf("err = nil，期望非 nil")
+	}
+	if msgs != nil {
+		t.Errorf("msgs = %v，期望 nil", msgs)
 	}
 }

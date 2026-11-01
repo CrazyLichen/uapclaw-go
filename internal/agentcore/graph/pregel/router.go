@@ -1,6 +1,9 @@
 package pregel
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -45,6 +48,14 @@ type BarrierRouter struct {
 	targets []string
 }
 
+// ConditionalRouter 条件路由：由 selector 决定目标，产出 TriggerMessage。
+// Python: pregel/router.py:26-46
+type ConditionalRouter struct {
+	// selector 选择器；nil 时 Dispatch 返回 error（对齐 Python 在 dispatch
+	// 阶段才 inspect.signature(None) 抛 TypeError 的时机）
+	selector Selector
+}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期接口断言：SelectorFunc 必须满足 Selector。
@@ -55,6 +66,9 @@ var _ Router = (*StaticRouter)(nil)
 
 // 编译期接口断言：BarrierRouter 必须满足 Router。
 var _ Router = (*BarrierRouter)(nil)
+
+// 编译期接口断言：ConditionalRouter 必须满足 Router。
+var _ Router = (*ConditionalRouter)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -68,6 +82,12 @@ func NewStaticRouter(targets ...string) *StaticRouter {
 // Python: BarrierRouter(targets)（router.py:52-53）
 func NewBarrierRouter(targets ...string) *BarrierRouter {
 	return &BarrierRouter{targets: append([]string(nil), targets...)}
+}
+
+// NewConditionalRouter 构造条件路由。
+// Python: ConditionalRouter(selector)（router.py:29-30）
+func NewConditionalRouter(selector Selector) *ConditionalRouter {
+	return &ConditionalRouter{selector: selector}
 }
 
 // Select 实现 Selector：调用被适配的函数。
@@ -89,6 +109,22 @@ func (r *BarrierRouter) Dispatch(_ context.Context, sourceNode string) ([]Messag
 		msgs = append(msgs, NewBarrierMessage(sourceNode, target))
 	}
 	return msgs, nil
+}
+
+// Dispatch 由 selector 决定目标并产出触发消息。
+//
+// 纪律：state 恒传 nil（spec §1.3）；selector 的 error 原样上抛，不包装——
+// 8.3b 需要区分 GraphInterrupt 与普通 error，包装会破坏 errors.As。
+// Python: router.py:32-46
+func (r *ConditionalRouter) Dispatch(ctx context.Context, sourceNode string) ([]Message, error) {
+	if r.selector == nil {
+		return nil, fmt.Errorf("条件路由未设置 selector，节点=%s", sourceNode)
+	}
+	targets, err := r.selector.Select(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return buildTriggerMessages(sourceNode, targets), nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
