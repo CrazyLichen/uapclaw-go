@@ -333,7 +333,29 @@ func (ch *A2AChannel) Start(_ context.Context) error {
 	logger.Info(logComponent).
 		Str("url", fmt.Sprintf("http://%s%s", addr, ch.cfg.RPCPath)).
 		Msg("A2A channel started")
+
+	// 常驻监视：探活窗口之后 Serve 仍可能失败（监听被关闭等），
+	// 对齐 Python app_gateway.py L1111-1124 的 a2a_task.add_done_callback 语义
+	go ch.watchServe(errCh)
 	return nil
+}
+
+// watchServe 常驻读取 Serve 返回值，运行期异常时降级运行态并记 Error。
+//
+// 正常关闭（Stop → Shutdown 使 Serve 返回 http.ErrServerClosed）保持静默。
+func (ch *A2AChannel) watchServe(errCh <-chan error) {
+	err, ok := <-errCh
+	if !ok {
+		return
+	}
+	if err == nil || errors.Is(err, http.ErrServerClosed) {
+		return
+	}
+	ch.running.Store(false)
+	logger.Error(logComponent).
+		Err(err).
+		Str("addr", fmt.Sprintf("%s:%d", ch.cfg.Host, ch.cfg.Port)).
+		Msg("A2A server stopped unexpectedly")
 }
 
 // newMux 组装三条路由：JSON-RPC / Agent Card / Extended Agent Card。

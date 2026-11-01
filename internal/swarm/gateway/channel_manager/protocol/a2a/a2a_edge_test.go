@@ -2,6 +2,8 @@ package a2a
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"testing"
 
 	sdka2a "github.com/a2aproject/a2a-go/v2/a2a"
@@ -165,5 +167,53 @@ func TestMapA2APartsToParams_nilPart(t *testing.T) {
 	})
 	if query != "x" || len(files) != 0 {
 		t.Errorf("query=%q files=%v", query, files)
+	}
+}
+
+// TestWatchServe_异常降级运行期 Serve 失败 → running=false（R4）
+func TestWatchServe_异常降级(t *testing.T) {
+	ch := NewA2AChannel(testConfig(19100))
+	ch.running.Store(true)
+
+	errCh := make(chan error, 1)
+	errCh <- errors.New("accept failed")
+	ch.watchServe(errCh)
+
+	if ch.IsRunning() {
+		t.Error("运行期 Serve 失败后应降级为非运行态")
+	}
+}
+
+// TestWatchServe_正常关闭静默 http.ErrServerClosed 不改状态（R4）
+func TestWatchServe_正常关闭静默(t *testing.T) {
+	ch := NewA2AChannel(testConfig(19100))
+	ch.running.Store(true)
+
+	errCh := make(chan error, 1)
+	errCh <- http.ErrServerClosed
+	ch.watchServe(errCh)
+
+	if !ch.IsRunning() {
+		t.Error("正常关闭不应改写运行态")
+	}
+}
+
+// TestWatchServe_通道关闭与nil 直接返回不 panic
+func TestWatchServe_通道关闭与nil(t *testing.T) {
+	ch := NewA2AChannel(testConfig(19100))
+	ch.running.Store(true)
+
+	closed := make(chan error)
+	close(closed)
+	ch.watchServe(closed)
+	if !ch.IsRunning() {
+		t.Error("通道关闭不应改状态")
+	}
+
+	nilErr := make(chan error, 1)
+	nilErr <- nil
+	ch.watchServe(nilErr)
+	if !ch.IsRunning() {
+		t.Error("nil 错误不应改状态")
 	}
 }

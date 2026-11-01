@@ -133,6 +133,9 @@ curl -sS "http://127.0.0.1:19100/.well-known/agent-card.json"
 | `-32006` | `INVALID_AGENT_RESPONSE` | 执行器首事件非 Task/Message（Go 侧已用 `NewSubmittedTask` 规避） |
 | `-32700` | `PARSE_ERROR` | 非法 JSON |
 
+补注：同一 `taskId` 的**并发**提交由 SDK 执行层拒绝（`task execution is already in progress`，`a2asrv/internal/taskexec/local_manager.go`），
+不会进入通道层；顺序复用同一 `taskId`（多轮对话）是合法路径。
+
 ## 8. 停止语义
 
 通道 `Stop` 会：关闭 HTTP 服务 → 向所有在途请求投递 `chat.error`（`payload={"error":"a2a channel stopped","is_complete":true}`）→ 清空 pending →
