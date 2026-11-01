@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -413,7 +414,81 @@ func (s *SkillManagerSuite) TestTeamSkillsHub_Install拒绝zip_path穿越() {
 	s.True(os.IsNotExist(statErr), "不得产生越界文件")
 }
 
+// TestMarketplaceInstall_真实git克隆与安装
+// 对齐 Python 中被删除的 TestGitMethods/TestSyncMarketplaceRepos 的真实语义：
+// 以本地 git 仓库为 marketplace 源，走完整 gitClone → 复制 → state 记录 → 卸载链路。
+func (s *SkillManagerSuite) TestMarketplaceInstall_真实git克隆与安装() {
+	repoDir := s.T().TempDir()
+	s.initMarketplaceRepo(repoDir, "market-skill")
+
+	add, err := s.mgr.HandleSkillsMarketplaceAdd(s.Ctx, map[string]any{
+		"name": "local-market",
+		"url":  "file://" + repoDir,
+	})
+	s.Require().NoError(err)
+	s.True(toBool(add["success"]), "添加 marketplace 应成功: %v", add)
+
+	install, err := s.mgr.HandleSkillsInstall(s.Ctx, map[string]any{"spec": "market-skill@local-market"})
+	s.Require().NoError(err)
+	s.True(toBool(install["success"]), "安装应成功: %v", install["detail"])
+
+	// 技能复制到本地 skills 目录
+	_, statErr := os.Stat(filepath.Join(s.workspace, "skills", "market-skill", "SKILL.md"))
+	s.Require().NoError(statErr, "技能应复制到本地 skills 目录")
+
+	// marketplace 仓库被真实克隆（覆盖 gitClone）
+	cloneDir := filepath.Join(s.workspace, "skills", "_marketplace", "local-market")
+	_, statErr = os.Stat(filepath.Join(cloneDir, "skills", "market-skill", "SKILL.md"))
+	s.Require().NoError(statErr, "marketplace 仓库应被克隆: %s", cloneDir)
+
+	// installed_plugins 记录含完整 commit SHA
+	plugins := s.mgr.GetInstalledPlugins()
+	s.Require().Len(plugins, 1)
+	s.Equal("market-skill", plugins[0]["name"])
+	s.Equal("local-market", plugins[0]["marketplace"])
+	commit := toString(plugins[0]["commit"])
+	s.Len(commit, 40, "commit 应为完整 SHA-1: %q", commit)
+
+	// 重复安装未 force 应失败（dest 已存在）
+	duplicate, err := s.mgr.HandleSkillsInstall(s.Ctx, map[string]any{"spec": "market-skill@local-market"})
+	s.Require().NoError(err)
+	s.False(toBool(duplicate["success"]), "重复安装未 force 应失败")
+	s.Contains(toString(duplicate["detail"]), "已存在")
+
+	// 卸载
+	uninstall, err := s.mgr.HandleSkillsUninstall(s.Ctx, map[string]any{"name": "market-skill"})
+	s.Require().NoError(err)
+	s.True(toBool(uninstall["success"]), "卸载应成功: %v", uninstall["detail"])
+	_, statErr = os.Stat(filepath.Join(s.workspace, "skills", "market-skill"))
+	s.True(os.IsNotExist(statErr), "卸载后技能目录应消失")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// initMarketplaceRepo 在 dir 初始化含 skills/<plugin>/SKILL.md 的 git 仓库
+func (s *SkillManagerSuite) initMarketplaceRepo(dir, plugin string) {
+	s.Require().NoError(os.MkdirAll(filepath.Join(dir, "skills", plugin), 0o755))
+	md := "---\nname: " + plugin + "\ndescription: marketplace 技能\nversion: 2.0.0\n---\nbody\n"
+	s.Require().NoError(os.WriteFile(filepath.Join(dir, "skills", plugin, "SKILL.md"), []byte(md), 0o600))
+
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=itest", "GIT_AUTHOR_EMAIL=itest@example.com",
+			"GIT_COMMITTER_NAME=itest", "GIT_COMMITTER_EMAIL=itest@example.com",
+			// 本地 file:// 克隆时放行任意目录，避免 safe.directory 拦截
+			"GIT_CONFIG_COUNT=1",
+			"GIT_CONFIG_KEY_0=safe.directory",
+			"GIT_CONFIG_VALUE_0=*",
+		)
+		out, err := cmd.CombinedOutput()
+		s.Require().NoError(err, "git %s 失败: %s", strings.Join(args, " "), string(out))
+	}
+	runGit("init", "-b", "main")
+	runGit("add", ".")
+	runGit("commit", "-m", "init marketplace")
+}
 
 // buildSkillZip 构造 <name>/SKILL.md 结构的 zip 字节
 func buildSkillZip(skillName string) []byte {
