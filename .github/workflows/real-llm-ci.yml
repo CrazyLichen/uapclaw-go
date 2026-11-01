@@ -10,10 +10,10 @@
 #     LLM_API_KEY 缺失时 prompt-capture 套件直接 Fatal（fail-not-skip）
 #   - 提示词捕获测试（Task 5 成果）纳入每日运行
 #
-# 运行范围：tests/integration/real_llm/ 全部 12 套件
+# 运行范围：tests/integration/real_llm/ 全部 14 套件
 # （system_prompt_capture / llm_invoke / ask_user_rail / task_planning /
 #   deep_agent_e2e / interrupt_stream / skill_real_system / memory_rail /
-#   subagent / code_agent / todo / ltm）
+#   subagent / code_agent / todo / ltm / dreaming / team_continuous）
 #
 # 密钥配置：GitHub secret LLM_API_KEY（仓库 Settings → Secrets and variables → Actions）
 
@@ -75,7 +75,7 @@ jobs:
           # （对齐 Python RUN_REAL_LLM_TESTS=1 语义，未设为 1 时这些套件 Skip）
           RUN_REAL_LLM_TESTS: "1"
         run: |
-          echo "运行真实 LLM 集成测试（12 套件）..."
+          echo "运行真实 LLM 集成测试（14 套件）..."
           go test -mod=mod -tags "sqlite_fts5 test integration llm" \
             -v \
             -timeout 75m \
