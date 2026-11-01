@@ -64,7 +64,12 @@ func (e EntityOrDeclaration) Name() string {
 	return ""
 }
 
-// EntityTypeID 获取实体类型 ID
+// EntityTypeID 获取实体类型 ID。
+//
+// M-10: 仅 EntityDeclaration 携带 entity_type_id（Python 的 Entity 没有该字段），
+// 因此持有 Entity 时返回 0 表示"不适用"而非"类型 0"。当前调用链
+// （ParseAllRelations → DeclareEntities）对 Entity 项直接沿用其已有 UUID，
+// 不会走 declareSingleEntity，故此返回值无消费者依赖。
 func (e EntityOrDeclaration) EntityTypeID() int {
 	if e.Decl != nil {
 		return e.Decl.EntityTypeID

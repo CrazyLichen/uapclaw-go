@@ -180,8 +180,13 @@ const (
 	//
 	// Python: self.time_till_next_gc = 300
 	defaultGCTime = 300
-	// defaultSearchMinScoreEntity 默认实体搜索最低分数
-	defaultSearchMinScoreEntity = 0.02
+	// defaultSearchMinScoreRelation 默认关系搜索最低分数
+	//
+	// Python: SearchConfig(min_score=0.02)（graph_memory/base.py:144、218）
+	// 注意：entity 不用本常量——Python 的 entity 默认是
+	// SearchConfig(rank_config=WeightedRankConfig())，即 SearchConfig 默认的
+	// min_score=0.3 + Weighted 排序，见 newEntitySearchConfig。
+	defaultSearchMinScoreRelation = 0.02
 	// defaultSearchMinScoreEpisode 默认片段搜索最低分数
 	defaultSearchMinScoreEpisode = 0.025
 )
@@ -205,8 +210,8 @@ func NewGraphMemory(dbConfig *graph.GraphConfig, opts ...GraphMemoryOption) (*Gr
 		UserLocks:                 make(map[string]*sync.Mutex),
 		searchStrategies: map[string]*searchStrategyTuple{
 			"default": {
-				EntityConfig:   config.NewSearchConfig(),
-				RelationConfig: newSearchConfigWithMinScore(defaultSearchMinScoreEntity),
+				EntityConfig:   newEntitySearchConfig(),
+				RelationConfig: newSearchConfigWithMinScore(defaultSearchMinScoreRelation),
 				EpisodeConfig:  newSearchConfigWithMinScore(defaultSearchMinScoreEpisode),
 			},
 		},
@@ -363,12 +368,14 @@ func (gm *GraphMemory) RegisterSearchStrategy(
 
 	entityConf := searchEntity
 	if entityConf == nil {
-		// 对齐 Python: Entity 默认 MinScore = defaultSearchMinScoreEntity (0.02)，而非 SearchConfig 默认的 0.3
-		entityConf = newSearchConfigWithMinScore(defaultSearchMinScoreEntity)
+		// 对齐 Python: SearchConfig(rank_config=WeightedRankConfig())
+		// （graph_memory/base.py:218）→ min_score 取 SearchConfig 默认 0.3 + Weighted 排序
+		entityConf = newEntitySearchConfig()
 	}
 	relationConf := searchRelation
 	if relationConf == nil {
-		relationConf = newSearchConfigWithMinScore(defaultSearchMinScoreEntity)
+		// 对齐 Python: SearchConfig(min_score=0.02)
+		relationConf = newSearchConfigWithMinScore(defaultSearchMinScoreRelation)
 	}
 	episodeConf := searchEpisode
 	if episodeConf == nil {
@@ -864,6 +871,18 @@ func ReplaceOneSideOfRelation(side string, relation *graph.Relation, tgtUUID str
 func newSearchConfigWithMinScore(minScore float64) *config.SearchConfig {
 	sc := config.NewSearchConfig()
 	sc.MinScore = minScore
+	return sc
+}
+
+// newEntitySearchConfig 创建实体搜索默认配置。
+//
+// 对齐 Python: SearchConfig(rank_config=WeightedRankConfig())
+// （graph_memory/base.py:144、218）——min_score 保留 SearchConfig 默认 0.3，
+// 排序使用 WeightedRankConfig（name_dense/content_dense/content_sparse 加权）。
+// 注意与 relation(0.02) / episode(0.025) 的默认值不同。
+func newEntitySearchConfig() *config.SearchConfig {
+	sc := config.NewSearchConfig()
+	sc.RankConfig = graph.NewWeightedRankConfig()
 	return sc
 }
 

@@ -2,12 +2,14 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 
@@ -81,7 +83,43 @@ func TestAgentTool_Invoke_未找到Agent(t *testing.T) {
 		"description":   "test",
 	}, tool.WithToolSession(&mockSessionFacade{}))
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.Contains(t, err.Error(), "未找到")
+}
+
+// TestAgentTool_Invoke_错误码统一 M-12：Python 5 个失败点统一抛
+// StatusCode.TOOL_TASK_TOOL_INVOKED（182505），且模板占位符为 {reason}
+// （传 error_msg 会渲染成 <missing:reason> 并丢失原因）。
+func TestAgentTool_Invoke_错误码统一(t *testing.T) {
+	cases := []struct {
+		name   string
+		inputs map[string]any
+		opts   []tool.ToolOption
+	}{
+		{"缺 subagent_type", map[string]any{"prompt": "hi"}, nil},
+		{"缺 prompt", map[string]any{"subagent_type": "reviewer"}, nil},
+		{"无会话", map[string]any{"subagent_type": "reviewer", "prompt": "hi"}, nil},
+		{
+			"agent 未找到",
+			map[string]any{"subagent_type": "missing", "prompt": "hi"},
+			[]tool.ToolOption{tool.WithToolSession(&mockSessionFacade{})},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			card := tool.NewToolCardWithID("agent_tool_test", "Agent", "测试", nil, nil)
+			at := NewAgentTool(card, nil, []*types.AgentDefinition{{Name: "reviewer"}})
+			_, err := at.Invoke(context.Background(), c.inputs, c.opts...)
+			if err == nil {
+				t.Fatal("应返回错误")
+			}
+			var baseErr *exception.BaseError
+			if !errors.As(err, &baseErr) {
+				t.Fatalf("错误类型不是 *exception.BaseError: %T", err)
+			}
+			assert.Equal(t, exception.StatusToolTaskToolInvoked.Code(), baseErr.Code())
+			assert.NotContains(t, err.Error(), "<missing:", "占位符必须被 reason 填充")
+		})
+	}
 }
 
 // TestAgentTool_Invoke_自定义Agent列表 测试可用 Agent 列表

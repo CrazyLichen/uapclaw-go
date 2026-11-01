@@ -585,8 +585,13 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 // buildExternalMemoryRail 构建外接记忆护栏。
 // 对齐 Python: _build_external_memory_rail() — 委托 swarm memory 包 builder
 // （user_id/scope_id 默认 __default__ 由 builder 处理，偏差 #4 修正后不再回退 agentName）
+//
+// S-11: 必须传 d.configBase（完整配置）而非 d.configCache（react 段快照）——
+// memory.engine / memory.external 是 config.yaml 顶级段键，Python 侧用的是
+// get_config()（interface_deep.py:5328-5331）；传 react 段会使
+// GetMemoryEngine 恒回落 builtin，ExternalMemoryRail 永不启用。
 func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
-	return commmem.BuildExternalMemoryRail(d.configCache, d.workspaceDir)
+	return commmem.BuildExternalMemoryRail(d.configBase, d.workspaceDir)
 }
 
 // handleMemoryRailByConfig 按配置注册/注销 MemoryRail。
@@ -650,8 +655,9 @@ func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string)
 // handleExternalMemoryRailByConfig 按配置注册/注销 ExternalMemoryRail。
 // 对齐 Python: _handle_external_memory_rail_by_config()
 // engine 为 "external" 或 "both" 时注册，否则注销。
+// S-11: 与 buildExternalMemoryRail 一致，配置判定必须读 configBase（完整配置）。
 func (d *DeepAdapter) handleExternalMemoryRailByConfig(ctx context.Context) {
-	if commmem.IsExternalMemoryEnabled(d.configCache) {
+	if commmem.IsExternalMemoryEnabled(d.configBase) {
 		if !d.externalMemoryRailRegistered {
 			rail := d.buildExternalMemoryRail()
 			if rail != nil {

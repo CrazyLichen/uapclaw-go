@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	ceservice "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -76,6 +77,14 @@ type ContextEvolutionRail struct {
 	agent agentinterfaces.BaseAgent
 	// currentQuery 当前迭代的查询（beforeTaskIteration 保存，afterTaskIteration 使用）
 	currentQuery string
+
+	// pendingTools 待注册的工具（下一轮迭代 flush）
+	// 对齐 Python: ContextEvolutionRail._pending_tools（语义为工具实例列表，
+	// Python 侧用 List[Any] 仅因其无类型系统；Go 用具体类型 [ ]tool.Tool）。
+	pendingTools []tool.Tool
+	// toolsApplied 待注册工具是否已 flush 到 agent
+	// 对齐 Python: ContextEvolutionRail._tools_applied
+	toolsApplied bool
 }
 
 // ContextEvolutionRailOption 构造选项函数。
@@ -211,6 +220,14 @@ func (r *ContextEvolutionRail) CurrentQuery() string { return r.currentQuery }
 
 // AgentRef 返回 Agent 引用。
 func (r *ContextEvolutionRail) AgentRef() agentinterfaces.BaseAgent { return r.agent }
+
+// PendingTools 返回待注册的工具列表（下一轮迭代 flush）。
+// 对齐 Python: ContextEvolutionRail.pending_tools 属性。
+func (r *ContextEvolutionRail) PendingTools() []tool.Tool { return r.pendingTools }
+
+// ToolsApplied 返回待注册工具是否已 flush 到 agent。
+// 对齐 Python: ContextEvolutionRail.tools_applied 属性。
+func (r *ContextEvolutionRail) ToolsApplied() bool { return r.toolsApplied }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -384,7 +401,11 @@ func (r *ContextEvolutionRail) afterTaskIteration(ctx context.Context, cbcRaw an
 	}
 
 	// 3. 自动总结（对齐 Python 221-243 行）
-	// Python 注释：only support matts_mode = "none", because other matts_mode need to call multiple invoke
+	// Python 条件只有 `auto_summarize and _current_query`；Go 多两个判断均为防御性：
+	//   - autoSummarizeMattsMode == "none"：对齐 Python 注释 "only support matts_mode = none,
+	//     because other matts_mode need to call multiple invoke"；
+	//   - memoryService != nil：Python 在 memory_service 为 None 时会走到
+	//     _summarize_trajectories 抛 AttributeError，Go 提前短路避免 nil 崩溃。
 	if r.autoSummarize && r.autoSummarizeMattsMode == "none" && r.currentQuery != "" && r.memoryService != nil {
 		trajectory := r.extractTrajectory(cbc)
 		if trajectory != "" {

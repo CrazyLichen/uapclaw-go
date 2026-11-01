@@ -185,4 +185,11 @@ type KernelHost interface {
 	// M-30: 对齐 Python host.state.pending_user_query——kernel 启动时
 	// 注入成员记忆用（memory lookup 的 query 种子）。
 	PendingUserQuery() string
+	// DispatcherBlueprint 返回 Dispatcher 使用的 blueprint。
+	// M-02: 对齐 Python kernel.setup() 从 self._host.blueprint 取值，
+	// 避免 Setup 显式传参与 host 内部状态产生两份来源。
+	DispatcherBlueprint() DispatcherBlueprint
+	// DispatcherInfra 返回 Dispatcher 使用的 infra。
+	// M-02: 对齐 Python kernel.setup() 从 self._host.infra 取值。
+	DispatcherInfra() DispatcherInfra
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -719,10 +720,17 @@ func resolveUserTextForMemory(cbc *agentinterfaces.AgentCallbackContext) string 
 		}
 	}
 
-	// Python: logger.warning("[ExternalMemoryRail] Cannot resolve user text for memory. ...")
+	// Python: logger.warning("[ExternalMemoryRail] Cannot resolve user text for memory. "
+	//         f"session_id={session_id}, trace_id={trace_id}, has_query=..., has_messages=...")
+	// trace_id 在 Python 是 id(ctx) % 10000（对象身份，非链路追踪 ID）；
+	// Go 无对象 id，用指针串等价表达"区分不同回调上下文实例"的语义。
 	logger.Warn(logComponent).
 		Str("event_type", "external_memory_rail_resolve_user_text").
 		Str("input_kind", inputs.EventKind()).
+		Str("session_id", resolveInputsSessionID(inputs)).
+		Str("ctx_ptr", fmt.Sprintf("%p", cbc)).
+		Bool("has_query", hasQueryInput(inputs)).
+		Bool("has_messages", hasMessagesInput(inputs)).
 		Msg("failed to resolve user text from callback context")
 
 	return ""
@@ -737,9 +745,14 @@ func extractAssistantOutput(cbc *agentinterfaces.AgentCallbackContext) string {
 	inputs := cbc.Inputs()
 	invokeInputs, ok := inputs.(*agentinterfaces.InvokeInputs)
 	if !ok {
+		// Python: if not hasattr(ctx.inputs, "result"): 记 warning（result missing）后返回 ""
+		logger.Warn(logComponent).
+			Str("event_type", "external_memory_rail_extract_output_result_missing").
+			Str("session_id", resolveInputsSessionID(inputs)).
+			Msg("cannot extract assistant output: result missing")
 		return ""
 	}
-	// Python: if not hasattr(ctx.inputs, "result"): return ""
+	// Python: result 为 None 时不告警（`str(result) if result else ""` → ""）
 	if invokeInputs.Result == nil {
 		return ""
 	}
@@ -763,7 +776,45 @@ func extractAssistantOutput(cbc *agentinterfaces.AgentCallbackContext) string {
 		}
 	}
 
+	// Python: 解析失败记 warning 并输出 available_keys（Go map 无序，排序保证日志可比对）
+	logger.Warn(logComponent).
+		Str("event_type", "external_memory_rail_extract_output_keys_missed").
+		Str("session_id", invokeInputs.ConversationID).
+		Strs("available_keys", sortedKeysOf(invokeInputs.Result)).
+		Msg("cannot extract assistant output from result keys")
+
 	return ""
+}
+
+// resolveInputsSessionID 返回回调输入携带的会话标识。
+// 对齐 Python: getattr(ctx.inputs, "session_id", "unknown")
+func resolveInputsSessionID(inputs agentinterfaces.EventInputs) string {
+	if invokeInputs, ok := inputs.(*agentinterfaces.InvokeInputs); ok && invokeInputs.ConversationID != "" {
+		return invokeInputs.ConversationID
+	}
+	return "unknown"
+}
+
+// hasQueryInput 对齐 Python hasattr(ctx.inputs, "query")：仅 InvokeInputs 具备 Query 字段。
+func hasQueryInput(inputs agentinterfaces.EventInputs) bool {
+	_, ok := inputs.(*agentinterfaces.InvokeInputs)
+	return ok
+}
+
+// hasMessagesInput 对齐 Python hasattr(ctx.inputs, "messages")：仅 ModelCallInputs 具备 Messages 字段。
+func hasMessagesInput(inputs agentinterfaces.EventInputs) bool {
+	_, ok := inputs.(*agentinterfaces.ModelCallInputs)
+	return ok
+}
+
+// sortedKeysOf 返回 map 的排序键，保证日志输出稳定可比对。
+func sortedKeysOf(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // isBackgroundRun 判断是否为后台运行（心跳/cron）。

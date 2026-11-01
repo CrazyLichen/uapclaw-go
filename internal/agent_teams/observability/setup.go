@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -70,6 +71,9 @@ var (
 	monitorHandler *OtelTeamMonitorHandler
 	// monitorHandle AttachToTeamAgent 注册的事件监听句柄，用于 DetachFromTeamAgent 移除
 	monitorHandle *messager.EventListenerHandle
+	// registeredUnsubs 本次注册的注销动作清单，ShutdownObservability 逐条执行
+	// Python: _registered: list[tuple[event, callback]]
+	registeredUnsubs []func()
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -161,13 +165,13 @@ func InitObservability(config *ObservabilityConfig, opts ...ObservabilityOption)
 // ShutdownObservability 注销回调、flush span、重置全局状态。
 // Python: shutdown_observability()
 func ShutdownObservability() {
-	// Python: 注销回调
-	if callbackHandler != nil {
-		fw := getCallbackFramework()
-		if fw != nil {
-			fw.UnregisterNamespace(namespace)
-		}
+	// M-23: 逐个注销自己注册的回调，对齐 Python 的
+	// `for event, cb in _registered: framework.unregister_sync(event, cb)`。
+	// 不使用 UnregisterNamespace——那会清空整个命名空间，误杀他人注册的回调。
+	for _, off := range registeredUnsubs {
+		off()
 	}
+	registeredUnsubs = nil
 
 	// 退出前收口仍未结束的 team/task span。
 	// Python 无对应实现（直接丢弃 handler，未 End 的 span 被 SDK 静默丢弃）；
@@ -247,25 +251,37 @@ func wireCallbackHandlers(handler *OtelCallbackHandler) {
 		return
 	}
 	ns := cb.WithNamespace(namespace)
+	// M-23: 注册与注销在同一行上下文，避免"注册了忘注销"或"注销多了"的漂移。
+	track := func(off func()) { registeredUnsubs = append(registeredUnsubs, off) }
 
 	// LLM 回调（5 个）
 	// Python: LLMCallEvents.LLM_INVOKE_INPUT → handler.on_llm_invoke_input
 	fw.OnLLM(cb.LLMInvokeInput, handler.OnLLMInvokeInput, ns)
+	track(func() { fw.OffLLM(cb.LLMInvokeInput, handler.OnLLMInvokeInput) })
 	fw.OnLLM(cb.LLMStreamInput, handler.OnLLMStreamInput, ns)
+	track(func() { fw.OffLLM(cb.LLMStreamInput, handler.OnLLMStreamInput) })
 	fw.OnLLM(cb.LLMStreamOutput, handler.OnLLMStreamOutput, ns)
+	track(func() { fw.OffLLM(cb.LLMStreamOutput, handler.OnLLMStreamOutput) })
 	fw.OnLLM(cb.LLMInvokeOutput, handler.OnLLMInvokeOutput, ns)
+	track(func() { fw.OffLLM(cb.LLMInvokeOutput, handler.OnLLMInvokeOutput) })
 	fw.OnLLM(cb.LLMCallError, handler.OnLLMCallError, ns)
+	track(func() { fw.OffLLM(cb.LLMCallError, handler.OnLLMCallError) })
 
 	// Tool 回调（3 个）
 	// Python: ToolCallEvents.TOOL_CALL_STARTED → handler.on_tool_call_started
 	fw.OnTool(cb.ToolCallStarted, handler.OnToolCallStarted, ns)
+	track(func() { fw.OffTool(cb.ToolCallStarted, handler.OnToolCallStarted) })
 	fw.OnTool(cb.ToolCallFinished, handler.OnToolCallFinished, ns)
+	track(func() { fw.OffTool(cb.ToolCallFinished, handler.OnToolCallFinished) })
 	fw.OnTool(cb.ToolCallError, handler.OnToolCallError, ns)
+	track(func() { fw.OffTool(cb.ToolCallError, handler.OnToolCallError) })
 
 	// Agent 回调（2 个）
 	// Python: AgentEvents.AGENT_INVOKE_INPUT → handler.on_agent_invoke_input
 	fw.OnGlobalAgent(cb.GlobalAgentInvokeInput, handler.OnAgentInvokeInput, ns)
+	track(func() { fw.OffGlobalAgent(cb.GlobalAgentInvokeInput, handler.OnAgentInvokeInput) })
 	fw.OnGlobalAgent(cb.GlobalAgentInvokeOutput, handler.OnAgentInvokeOutput, ns)
+	track(func() { fw.OffGlobalAgent(cb.GlobalAgentInvokeOutput, handler.OnAgentInvokeOutput) })
 }
 
 // buildExporter 构建 span 导出器。
@@ -280,18 +296,28 @@ func buildExporter(config *ObservabilityConfig, override sdktrace.SpanExporter) 
 		return stdouttrace.New(stdouttrace.WithWriter(os.Stdout))
 	case "otlp_grpc":
 		// Python: OTLPSpanExporter(endpoint=config.endpoint, insecure=True)
+		// S-25: 默认 endpoint 带 scheme（http://host:port），而 grpc exporter 只接受
+		// host:port，必须剥离 scheme 与路径；insecure 保持与 Python 一致恒为 true。
+		hostPort, _, _ := parseOTLPEndpoint(config.Endpoint)
 		return otlptracegrpc.New(
 			context.Background(),
-			otlptracegrpc.WithEndpoint(config.Endpoint),
+			otlptracegrpc.WithEndpoint(hostPort),
 			otlptracegrpc.WithInsecure(),
 		)
 	case "otlp_http":
-		// Python: OTLPSpanExporter(endpoint=config.endpoint, insecure=True, headers=...)
-		return otlptracehttp.New(
-			context.Background(),
-			otlptracehttp.WithEndpoint(config.Endpoint),
-			otlptracehttp.WithInsecure(),
-		)
+		// Python: OTLPSpanExporter(endpoint=config.endpoint)（由 scheme 决定明文/TLS）
+		// S-25: v1.20 的 otlptracehttp 无 WithEndpointURL，WithEndpoint 又只接受 host:port，
+		// 传入带 scheme 的完整 URL 会拼出 http://http://host:port/v1/traces（非法）。
+		// 故手工拆分 scheme / host:port / path，语义与 Python 的完整 URL 一致。
+		hostPort, urlPath, insecure := parseOTLPEndpoint(config.Endpoint)
+		opts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(hostPort)}
+		if urlPath != "" && urlPath != "/" {
+			opts = append(opts, otlptracehttp.WithURLPath(urlPath))
+		}
+		if insecure {
+			opts = append(opts, otlptracehttp.WithInsecure())
+		}
+		return otlptracehttp.New(context.Background(), opts...)
 	default:
 		return nil, fmt.Errorf("不支持的导出器类型: %s", config.Exporter)
 	}
@@ -300,6 +326,26 @@ func buildExporter(config *ObservabilityConfig, override sdktrace.SpanExporter) 
 // isConsoleExporter 检查是否为 console 导出器。
 func isConsoleExporter(config *ObservabilityConfig) bool {
 	return config.Exporter == "console"
+}
+
+// parseOTLPEndpoint 将 endpoint 拆为 host:port / URL 路径 / 是否明文。
+//
+// 背景：默认配置是 "http://localhost:4317"（完整 URL，对齐 Python），
+// 而 Go 的 otlp exporter（v1.20）WithEndpoint 只接受 host:port。
+// 无 scheme 时按明文处理（对齐 Python grpc 分支的 insecure=True 默认）。
+func parseOTLPEndpoint(endpoint string) (hostPort, urlPath string, insecure bool) {
+	raw := strings.TrimSpace(endpoint)
+	insecure = true
+	if idx := strings.Index(raw, "://"); idx >= 0 {
+		scheme := strings.ToLower(raw[:idx])
+		raw = raw[idx+3:]
+		insecure = scheme != "https"
+	}
+	if idx := strings.Index(raw, "/"); idx >= 0 {
+		urlPath = raw[idx:]
+		raw = raw[:idx]
+	}
+	return raw, urlPath, insecure
 }
 
 // getCallbackFramework 懒加载 CallbackFramework 单例。

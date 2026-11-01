@@ -533,9 +533,8 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 	}
 
 	// 9.55: 设置协调角色 + 注册团队完成回调
-	// S-32: 对齐 Python kernel.setup(role)——从 host 获取 blueprint/infra，
-	// configure 后 Blueprint()/Infra() 已就绪，直接传真实值
-	a.coordination.Setup(runtimeCtx.Role, a.configurator.Blueprint(), a.configurator.Infra())
+	// S-32/M-02: 对齐 Python kernel.setup(role)——blueprint/infra 由 kernel 从 host 取
+	a.coordination.Setup(runtimeCtx.Role)
 
 	// 修复 S-04: 对齐 Python _register_team_completion_callbacks()
 	// 在 DeepAgent 完全构建后、dispatcher 存在时注册 TeamSkillRail 的完成回调
@@ -1678,6 +1677,34 @@ func (a *TeamAgent) SpawnedHandleNames() []string {
 // 与 Spec() *atschema.TeamAgentSpec 签名不同，避免冲突。
 func (a *TeamAgent) SpecAny() any {
 	return a.Spec()
+}
+
+// DispatcherBlueprint 返回 Dispatcher 使用的 blueprint。
+// M-02: 对齐 Python kernel.setup() 从 self._host.blueprint 取值。
+// 未 configure 或 blueprint 未就绪时返回 true-nil 接口（而非 typed-nil），
+// 否则 Setup 的 `bp == nil` 守卫会被绕过。
+func (a *TeamAgent) DispatcherBlueprint() types.DispatcherBlueprint {
+	if a.configurator == nil {
+		return nil
+	}
+	bp := a.configurator.Blueprint()
+	if bp == nil {
+		return nil
+	}
+	return bp
+}
+
+// DispatcherInfra 返回 Dispatcher 使用的 infra。
+// M-02: 对齐 Python kernel.setup() 从 self._host.infra 取值（同样规避 typed-nil）。
+func (a *TeamAgent) DispatcherInfra() types.DispatcherInfra {
+	if a.configurator == nil {
+		return nil
+	}
+	inf := a.configurator.Infra()
+	if inf == nil {
+		return nil
+	}
+	return inf
 }
 
 // onTeammateCreated 队友创建回调。

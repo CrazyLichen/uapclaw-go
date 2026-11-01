@@ -544,9 +544,15 @@ func (m *MilvusConnectorImpl) ListNamespaces(ctx context.Context) []string {
 	return namespaces
 }
 
-// Count 统计节点数量。
+// Count 统计节点数量（collection 总行数 / 指定 namespace 内的行数）。
 //
 // 对齐 Python: MilvusConnector.count(namespace)
+//
+// M-25（归档）：Python 全局分支用 collection.num_entities（服务端缓存统计，O(1)），
+// Go 因 milvusclient v2.6.5 的 entity.Collection 未暴露 num_entities，退化为
+// Query(id != "") 取 ResultCount（需回传整列 id）。当前双端均无调用者，
+// 且 count(*) 聚合改造无法在 CI 验证（需真实 Milvus），故保留现状。
+// 若将来出现调用方，可改用 Query(WithOutputFields("count(*)")) 聚合。
 func (m *MilvusConnectorImpl) Count(ctx context.Context, namespace string) int {
 	c, err := m.getClient(ctx, 0)
 	if err != nil {

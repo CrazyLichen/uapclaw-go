@@ -282,7 +282,7 @@ func (s *AgentServer) run(ctx context.Context) {
 	s.resetHarnessPackagesState()
 
 	// 2. 确保持久化检查点器就绪（对齐 Python agent_ws_server.py L443）
-	if err := adapter.EnsurePersistentCheckpointer(); err != nil {
+	if err := adapter.EnsurePersistentCheckpointer(ctx); err != nil {
 		logger.Error(logComponent).Err(err).Msg("persist checkpoint initializer failed")
 		// Python: raise RuntimeError，Go 侧记录错误但继续启动（best-effort）
 	}

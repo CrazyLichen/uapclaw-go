@@ -100,19 +100,21 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	}
 
 	// 步骤 3: 校验必填参数
-	// Python: if not subagent_type or not prompt: raise build_error(...)
+	// Python: if not subagent_type or not prompt: raise build_error(TOOL_TASK_TOOL_INVOKED, ...)
 	if subagentType == "" || prompt == "" {
 		return nil, exception.BuildError(
-			exception.StatusAgentToolExecutionError,
-			exception.WithParam("error_msg", "'subagent_type' 和 'prompt' 为必填参数"),
+			exception.StatusToolTaskToolInvoked,
+			exception.WithParam("reason", "'subagent_type' 和 'prompt' 为必填参数"),
 		)
 	}
 
 	// Python: if not isinstance(parent_session, Session): raise build_error(TOOL_TASK_TOOL_INVOKED)
+	// M-12: 统一用 TOOL_TASK_TOOL_INVOKED；模板占位符是 {reason}（codes_tool.go:147-149），
+	// 传 error_msg 会渲染成 <missing:reason> 并丢失原因文本。
 	if callOpts.Session == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolTaskToolInvoked,
-			exception.WithParam("error_msg", "Agent 工具需要有效的会话"),
+			exception.WithParam("reason", "Agent 工具需要有效的会话"),
 		)
 	}
 
@@ -122,8 +124,8 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	if !ok {
 		available := sortedKeys(t.customAgents)
 		return nil, exception.BuildError(
-			exception.StatusAgentToolNotFound,
-			exception.WithParam("error_msg", fmt.Sprintf("Agent 类型 '%s' 未找到。可用的自定义 Agent: %v", subagentType, available)),
+			exception.StatusToolTaskToolInvoked,
+			exception.WithParam("reason", fmt.Sprintf("Agent 类型 '%s' 未找到。可用的自定义 Agent: %v", subagentType, available)),
 		)
 	}
 
@@ -148,8 +150,8 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 			Err(err).
 			Msg("sub-agent creation failed")
 		return nil, exception.BuildError(
-			exception.StatusAgentToolExecutionError,
-			exception.WithParam("error_msg", fmt.Sprintf("自定义 Agent '%s' 创建失败: %v", subagentType, err)),
+			exception.StatusToolTaskToolInvoked,
+			exception.WithParam("reason", fmt.Sprintf("自定义 Agent '%s' 创建失败: %v", subagentType, err)),
 		)
 	}
 
@@ -187,8 +189,8 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 			Err(err).
 			Msg("sub-agent execution failed")
 		return nil, exception.BuildError(
-			exception.StatusAgentToolExecutionError,
-			exception.WithParam("error_msg", fmt.Sprintf("自定义 Agent '%s' 执行失败: %v", subagentType, err)),
+			exception.StatusToolTaskToolInvoked,
+			exception.WithParam("reason", fmt.Sprintf("自定义 Agent '%s' 执行失败: %v", subagentType, err)),
 		)
 	}
 

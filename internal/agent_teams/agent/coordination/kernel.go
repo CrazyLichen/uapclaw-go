@@ -93,12 +93,17 @@ func NewCoordinationKernel(host types.KernelHost) *CoordinationKernel {
 // 在 TeamAgent.configure() 确定角色后调用。
 // 先建 bus，再将 bus 作为 PollController 传给 dispatcher。
 // dispatcher.dispatch 在 Start() 时绑定回 bus 作为 wake callback，此处不绑定。
-// Python: CoordinationKernel.setup(role)
-func (k *CoordinationKernel) Setup(role schema.TeamRole, bp types.DispatcherBlueprint, inf types.DispatcherInfra, opts ...KernelOption) {
+// Python: CoordinationKernel.setup(*, role)
+//
+// M-02: blueprint/infra 从 host 获取（对齐 Python self._host.blueprint/infra），
+// 不再由调用方显式传入——避免调用方传的依赖与 host 内部状态成为两份来源。
+func (k *CoordinationKernel) Setup(role schema.TeamRole, opts ...KernelOption) {
 	// M-01: 对齐 Python kernel.py:55-69
 	// Python 从 host 获取 blueprint/infra，当 blueprint 或 infra 为 None 时抛 RuntimeError。
 	// Go 侧当 bp/inf 为 nil 时记录错误并返回，防止后续 nil pointer panic。
 	// 注意：签名不变（返回 void），调用方需检查 Setup 后 EventBus/Dispatcher 是否为 nil。
+	bp := k.host.DispatcherBlueprint()
+	inf := k.host.DispatcherInfra()
 	if bp == nil || inf == nil {
 		logger.Error(logComponent).
 			Bool("blueprint_nil", bp == nil).
@@ -212,7 +217,11 @@ func (k *CoordinationKernel) Start(ctx context.Context, sessionID string) {
 			existing, _ := backendAccessor.DB().Team().GetTeam(ctx, backendAccessor.TeamName())
 			if existing != nil {
 				members, _ := backendAccessor.ListMembers(ctx)
-				if members != nil && allMembersShutdown(members) {
+				// S-01: 走 shouldCleanTeam 而非裸条件——ListMembers 用 make([]T, 0, n)
+				// 返回非 nil 空切片，而 allMembersShutdown 对空切片恒为 true（空循环），
+				// 会把"只有 leader 的团队"误判成"全 SHUTDOWN"→ clean_team 删团队并
+				// DropCurSessionTables。Python kernel.py:130 `if non_leader_members and all(...)`。
+				if shouldCleanTeam(members) {
 					logger.Warn(logComponent).Str("team_name", backendAccessor.TeamName()).
 						Msg("team found with all teammates in SHUTDOWN — finalizing prior incomplete cleanup")
 					_, _ = backendAccessor.CleanTeam(ctx)
@@ -551,6 +560,7 @@ func (k *CoordinationKernel) publishTeamStandby(ctx context.Context) {
 }
 
 // allMembersShutdown 检查所有成员是否都是 SHUTDOWN 状态。
+// 注意：空切片会返回 true（空循环），调用方必须先用 shouldCleanTeam 判空。
 func allMembersShutdown(members []*database.TeamMember) bool {
 	for _, m := range members {
 		if m.Status != string(schema.MemberStatusShutdown) {
@@ -558,6 +568,15 @@ func allMembersShutdown(members []*database.TeamMember) bool {
 		}
 	}
 	return true
+}
+
+// shouldCleanTeam 判断启动时是否应清理团队（对齐 Python kernel.py:130 的真值语义）。
+//
+// Python: `if non_leader_members and all(m.status == SHUTDOWN for m in non_leader_members)`
+// —— 空列表为假，走 recover_team；Go 的 ListMembers 返回非 nil 空切片，
+// 因此必须显式判长度，否则"只有 leader 的团队"会被 clean_team 误删。
+func shouldCleanTeam(members []*database.TeamMember) bool {
+	return len(members) > 0 && allMembersShutdown(members)
 }
 
 // extractWorkspaceRemoteURL 从 spec 中提取工作空间远程 URL。

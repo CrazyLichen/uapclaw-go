@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -214,11 +216,13 @@ func (r *CodeAgentRail) Uninit(agent sainterfaces.BaseAgent) error {
 // Python: _get_current_agent_rails() 覆写 (interface_code.py L839-848)
 //
 // 逻辑：Uninit → Init，先注销旧 AgentTool，再重新加载并注册新 AgentTool。
-func (r *CodeAgentRail) Reload(agent sainterfaces.BaseAgent) error {
+// T-13: ctx 由调用方透传（当前 Init 未使用，但保留取消链，避免将来 Init 需要
+// IO/网络时天然退化为 Background）。
+func (r *CodeAgentRail) Reload(ctx context.Context, agent sainterfaces.BaseAgent) error {
 	if err := r.Uninit(agent); err != nil {
 		return fmt.Errorf("CodeAgentRail Reload Uninit 失败: %w", err)
 	}
-	if err := r.Init(context.Background(), agent); err != nil {
+	if err := r.Init(ctx, agent); err != nil {
 		return fmt.Errorf("CodeAgentRail Reload Init 失败: %w", err)
 	}
 	return nil
@@ -369,7 +373,12 @@ func buildAgentToolCard(customAgents []*types.AgentDefinition, agentID string) *
 
 	// 步骤 3: 构建 ToolCard
 	// Python: tool_id = f"agent_tool_{agent_id}" if agent_id else f"agent_tool_{uuid.uuid4().hex}"
+	// M-13: agentID 为空时必须补随机后缀——ToolCard id 是共享 ResourceMgr 的注册键，
+	// 固定串会让多实例互相覆盖（工具卡片属于 A、实际执行走 B）。
 	toolID := fmt.Sprintf("agent_tool_%s", agentID)
+	if agentID == "" {
+		toolID = fmt.Sprintf("agent_tool_%s", strings.ReplaceAll(uuid.New().String(), "-", ""))
+	}
 
 	description := strings.Join(lines, "\n")
 

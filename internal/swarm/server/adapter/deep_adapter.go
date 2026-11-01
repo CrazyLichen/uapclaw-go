@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -267,6 +268,10 @@ type ApprovalAnswer struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// persistentCheckpointerInitTimeout 持久化检查点器初始化超时上限。
+// SQLite 打开是磁盘 IO，卡住时不能无限占用全局初始化锁。
+const persistentCheckpointerInitTimeout = 30 * time.Second
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // persistentCheckpointerReady 持久化检查点器是否已就绪。
@@ -388,7 +393,7 @@ func NewDeepAdapter() *DeepAdapter {
 //	Python: 25. await self.load_user_rails()
 func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]any, mode string, subMode string) error {
 	// 步骤 1: set_checkpoint
-	if err := d.setCheckpoint(); err != nil {
+	if err := d.setCheckpoint(ctx); err != nil {
 		return fmt.Errorf("set_checkpoint 失败: %w", err)
 	}
 
@@ -1823,19 +1828,20 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 //
 // Python: interface_deep.py ensure_persistent_checkpointer() (line 393-424)
 //
-// 使用 double-check locking 模式保证只初始化一次。
+// 并发语义：初始化被包级互斥锁串行化（首次调用创建 SQLite 检查点器并设为全局默认），
+// 就绪标志的读与写全部在锁内完成——此前的"锁外快路径读普通 bool"是 data race
+// （与 ResetPersistentCheckpointer 的写并发），且 race detector 会直接报。
+// 初始化本身只发生一次；后续调用的代价是一次 mutex 加解锁（约 20ns），
+// 调用频率为"每次会话创建/删除"，无需快路径。
+//
 // 初始化步骤：
-//  1. 若已就绪则直接返回
-//  2. 加锁后再次检查（double-check）
-//  3. 调用 PersistenceCheckpointerProvider() 触发注册
+//  1. 加锁
+//  2. 若已就绪直接返回
+//  3. PersistenceCheckpointerProvider() 已由 init() 注册，无需显式调用
 //  4. 获取 checkpoint_dir，构造 SQLite 路径
-//  5. 通过 CheckpointerFactory.Create 创建 persistence 实例
+//  5. 通过 CheckpointerFactory.Create 创建 persistence 实例（带 30s 超时）
 //  6. SetDefaultCheckpointer 设为全局默认
-func EnsurePersistentCheckpointer() error {
-	if persistentCheckpointerReady {
-		return nil
-	}
-
+func EnsurePersistentCheckpointer(ctx context.Context) error {
 	persistentCheckpointerLock.Lock()
 	defer persistentCheckpointerLock.Unlock()
 
@@ -1851,8 +1857,13 @@ func EnsurePersistentCheckpointer() error {
 	dbPath := filepath.Join(checkpointDir, "checkpoint")
 
 	// 步骤 5-6: 创建 persistence checkpointer 并设为全局默认
+	// M-15: 打开 SQLite 属于磁盘 IO，必须受调用方 ctx 控制；这里再加 30s 上限，
+	// 避免初始化卡住时把后续所有会话创建/删除阻塞在全局锁上。
+	initCtx, cancel := context.WithTimeout(ctx, persistentCheckpointerInitTimeout)
+	defer cancel()
+
 	cp, err := checkpointer.CreateCheckpointer(
-		context.Background(),
+		initCtx,
 		checkpointer.CheckpointerFactoryConfig{
 			Type: "persistence",
 			Conf: map[string]any{
@@ -1917,12 +1928,17 @@ func (d *DeepAdapter) getSendPushFunc() func(ctx context.Context, msg map[string
 	return defaultSendPushFunc
 }
 
-// loadUserRails 动态加载用户自定义的 Rail 扩展。
-// 对齐 Python: load_user_rails() — 从配置中加载用户自定义 Rail 并注册到 harness。
-// Go 不支持 Python 的动态导入机制，当前为占位实现（仅记录日志）。
-// TODO(#9.63): 等用户自定义 Rail 扩展机制设计完成后实现
+// loadUserRails 用户自定义 Rail 扩展加载点。
+// Python: load_user_rails() —— 经 get_rail_manager() 从
+// {agent_workspace}/extensions/<name>/rail.py 动态 import 用户手写的 Python Rail
+// （common/plugins/rail_manager.py，约 550 行，含 import/校验/热重载/删除）。
+//
+// S-19（归档）：这是**语言边界**导致的不可移植项，不是待实现功能——
+// Go 是编译型语言，无法 import 用户现写的 .py；1:1 对齐需另立设计
+// （Go 原生扩展注册表或 plugin 机制），本轮不做。
+// 同一缺口在 team_manager_spec.go 的 rail_manager 扩展循环处也有引用。
 func (d *DeepAdapter) loadUserRails() {
-	logger.Debug(logComponent).Msg("loadUserRails: Go does not support dynamic import, user custom Rail extensions pending design")
+	logger.Debug(logComponent).Msg("loadUserRails: Python-only capability (dynamic import of user .py rails), no Go equivalent")
 }
 
 // parseApprovalAnswersFromAny 从 any 类型解析为 []ApprovalAnswer。
@@ -2069,8 +2085,9 @@ func isDir(path string) bool {
 //
 // Go 中 ensurePersistentCheckpointer 已同步化（SQLite 打开无需异步），
 // 检查点器通过 EnsurePersistentCheckpointer 全局绑定，DeepAgent 实例自动使用。
-func (d *DeepAdapter) setCheckpoint() error {
-	return EnsurePersistentCheckpointer()
+// M-15: ctx 透传（初始化内部有 30s 上限），使创建流程可被父请求取消。
+func (d *DeepAdapter) setCheckpoint(ctx context.Context) error {
+	return EnsurePersistentCheckpointer(ctx)
 }
 
 // buildModelFromEntry 根据单个模型条目的 model_client_config / model_config_obj 构建 Model 实例。

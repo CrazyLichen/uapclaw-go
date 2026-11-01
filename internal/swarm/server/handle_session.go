@@ -184,7 +184,7 @@ func (s *AgentServer) handleSessionDelete(ctx context.Context, request *schema.A
 	}
 
 	// Python: ensure_persistent_checkpointer（团队模式删除前确保持久化检查点器可用）
-	if cpErr := adapter.EnsurePersistentCheckpointer(); cpErr != nil {
+	if cpErr := adapter.EnsurePersistentCheckpointer(ctx); cpErr != nil {
 		logger.Error(logComponent).
 			Err(cpErr).
 			Str("request_id", request.RequestID).

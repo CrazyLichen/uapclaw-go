@@ -2,13 +2,22 @@ package rails
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+
+	// blank import 触发 local 包 init()：向 GlobalRegistry 注册 fs/shell/code 本地实现
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
 )
 
 // ──────────────────────────── 新建 ────────────────────────────
@@ -571,3 +580,120 @@ func TestPauseCond_WaitWithContext_正常恢复(t *testing.T) {
 
 var _ sainterfaces.AgentRail = (*JiuClawStreamEventRail)(nil)
 var _ sessioninterfaces.SessionFacade = (*fakeSession)(nil)
+
+// ──────────────────────────── TodoTool 懒创建（S-15） ────────────────────────────
+
+// fakeDeepConfigAgent 在 fakeBaseAgent 基础上暴露 DeepConfig（对齐 *harness.DeepAgent）。
+type fakeDeepConfigAgent struct {
+	*fakeBaseAgent
+	cfg *hschema.DeepAgentConfig
+}
+
+// DeepConfig 返回 DeepAgent 运行时配置。
+func (f *fakeDeepConfigAgent) DeepConfig() *hschema.DeepAgentConfig { return f.cfg }
+
+// newTestDeepConfig 构造带临时工作目录与本地 SysOperation 的 deep_config。
+func newTestDeepConfig(t *testing.T) (*hschema.DeepAgentConfig, string) {
+	t.Helper()
+	root := t.TempDir()
+	return &hschema.DeepAgentConfig{
+		Workspace: hworkspace.NewWorkspace(root, "cn"),
+		SysOperation: sysop.NewLocalSysOperation(sysop.NewSysOperationCard(
+			sysop.WithSysOpMode(sysop.OperationModeLocal),
+		)),
+		Language: "cn",
+		Card:     agentschema.NewAgentCard(),
+	}, root
+}
+
+// TestNewTodoToolFromDeepConfig_构造后可读写同一文件 验证从 deep_config 构造的句柄
+// 指向 {workspace}/todo/{session}/todo.json（与模型调用的 todo_modify 同一持久层）。
+func TestNewTodoToolFromDeepConfig_构造后可读写同一文件(t *testing.T) {
+	cfg, root := newTestDeepConfig(t)
+
+	loader := newTodoToolFromDeepConfig(cfg, "")
+	if loader == nil {
+		t.Fatal("正常 deep_config 应构造出 TodoTool")
+	}
+	saver, ok := loader.(interface {
+		SaveTodos(ctx context.Context, sessionID string, todos []hschema.TodoItem) error
+	})
+	if !ok {
+		t.Fatalf("构造出的 TodoTool 应支持 SaveTodos, got %T", loader)
+	}
+
+	// 预创建目录，避免依赖写接口的自动建目录行为
+	sessionDir := filepath.Join(root, "todo", "sess-1")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	todos := []hschema.TodoItem{{ID: "a", Content: "任务a", Status: hschema.TodoStatusPending}}
+	if err := saver.SaveTodos(context.Background(), "sess-1", todos); err != nil {
+		t.Fatalf("SaveTodos 失败: %v", err)
+	}
+
+	// 文件落到 workspace todo 节点下
+	if _, err := os.Stat(filepath.Join(sessionDir, "todo.json")); err != nil {
+		t.Errorf("todo.json 应写入 workspace todo 节点: %v", err)
+	}
+
+	got, err := loader.LoadTodos(context.Background(), "sess-1")
+	if err != nil {
+		t.Fatalf("LoadTodos 失败: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "a" {
+		t.Errorf("读回内容不符: %v", got)
+	}
+}
+
+// TestNewTodoToolFromDeepConfig_依赖缺失返回nil 验证防御分支（Python 返回 None）。
+func TestNewTodoToolFromDeepConfig_依赖缺失返回nil(t *testing.T) {
+	cfg, _ := newTestDeepConfig(t)
+
+	cases := []struct {
+		name string
+		cfg  *hschema.DeepAgentConfig
+	}{
+		{"nil 配置", nil},
+		{"workspace 为 nil", &hschema.DeepAgentConfig{SysOperation: cfg.SysOperation}},
+		{"sysOperation 为 nil", &hschema.DeepAgentConfig{Workspace: cfg.Workspace}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := newTodoToolFromDeepConfig(c.cfg, "cn"); got != nil {
+				t.Errorf("依赖缺失应返回 nil, got %T", got)
+			}
+		})
+	}
+}
+
+// TestGetTodoTool_懒创建并缓存 验证 rail 从 agent 的 deep_config 懒建并缓存（对齐 _get_todo_tool）。
+func TestGetTodoTool_懒创建并缓存(t *testing.T) {
+	cfg, _ := newTestDeepConfig(t)
+	rail := NewJiuClawStreamEventRail()
+	rail.deepAgent = &fakeDeepConfigAgent{fakeBaseAgent: &fakeBaseAgent{}, cfg: cfg}
+
+	first := rail.getTodoTool()
+	if first == nil {
+		t.Fatal("deep_config 齐全时应懒创建 TodoTool")
+	}
+	second := rail.getTodoTool()
+	if first != second {
+		t.Error("第二次调用应返回缓存的同一实例")
+	}
+}
+
+// TestGetTodoTool_非DeepAgent返回nil 验证 agent 不实现 deepConfigProvider 时返回 nil。
+func TestGetTodoTool_非DeepAgent返回nil(t *testing.T) {
+	rail := NewJiuClawStreamEventRail()
+	if got := rail.getTodoTool(); got != nil {
+		t.Errorf("deepAgent 为 nil 应返回 nil, got %T", got)
+	}
+
+	// fakeBaseAgent 无 DeepConfig() → 断言失败 → nil（对齐 Python rail 仅 DeepAgent 生效）
+	rail.deepAgent = &fakeBaseAgent{}
+	if got := rail.getTodoTool(); got != nil {
+		t.Errorf("非 DeepAgent 应返回 nil, got %T", got)
+	}
+}

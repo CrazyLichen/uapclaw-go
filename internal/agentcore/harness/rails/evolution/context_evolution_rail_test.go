@@ -11,7 +11,9 @@ import (
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	ceservice "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── mock 实现 ────────────────────────────
@@ -577,6 +579,45 @@ func TestAccessors(t *testing.T) {
 	assert.Equal(t, "", r.CurrentQuery())
 	assert.Nil(t, r.AgentRef())
 	assert.Equal(t, contextEvolutionPriority, r.Priority())
+}
+
+// TestAccessors_PendingTools 验证工具注册状态访问器（S-20）。
+// Python: ContextEvolutionRail.pending_tools / tools_applied 属性。
+func TestAccessors_PendingTools(t *testing.T) {
+	r := NewContextEvolutionRail(context.Background(), "alice", nil)
+
+	// 零值：未排队的工具 + 未 flush
+	assert.Empty(t, r.PendingTools())
+	assert.False(t, r.ToolsApplied())
+
+	// 赋值后可读（当前无生产写入方，仅验证访问器语义）
+	r.pendingTools = []tool.Tool{&fakeRailTool{name: "tool_a"}}
+	r.toolsApplied = true
+
+	assert.Len(t, r.PendingTools(), 1)
+	assert.Equal(t, "tool_a", r.PendingTools()[0].Card().Name)
+	assert.True(t, r.ToolsApplied())
+}
+
+// fakeRailTool 最小 tool.Tool 实现，仅供访问器测试使用。
+type fakeRailTool struct {
+	// name 工具名
+	name string
+}
+
+// Card 返回工具卡片。
+func (f *fakeRailTool) Card() *tool.ToolCard {
+	return &tool.ToolCard{BaseCard: commonschema.BaseCard{Name: f.name}}
+}
+
+// Invoke 空实现。
+func (f *fakeRailTool) Invoke(context.Context, map[string]any, ...tool.ToolOption) (map[string]any, error) {
+	return nil, nil
+}
+
+// Stream 空实现。
+func (f *fakeRailTool) Stream(context.Context, map[string]any, ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, nil
 }
 
 // ──────────────────────────── 导入检查 ────────────────────────────

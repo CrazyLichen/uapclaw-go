@@ -71,8 +71,7 @@ func TestEndToEnd_Kernel完整链路(t *testing.T) {
 		},
 	}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 	k.Start(context.Background(), "")
 
 	// 1. 验证 user_input → lifecycle.OnUserInput → DeliverInput
@@ -118,8 +117,7 @@ func TestEndToEnd_Teammate取消(t *testing.T) {
 		},
 	}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
-	k.Setup(schema.TeamRoleTeammate, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleTeammate)
 	k.Start(context.Background(), "")
 
 	// 发送 member_canceled 目标为自己
@@ -148,8 +146,7 @@ func TestEndToEnd_Teammate清理(t *testing.T) {
 		},
 	}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
-	k.Setup(schema.TeamRoleTeammate, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleTeammate)
 	k.Start(context.Background(), "")
 
 	k.Enqueue(types.CoordinationEvent{
@@ -174,8 +171,7 @@ func TestEndToEnd_HumanAgent轮询过滤(t *testing.T) {
 		},
 	}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleHumanAgent, memberName: "ha1"}
-	k.Setup(schema.TeamRoleHumanAgent, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleHumanAgent)
 
 	// Human-agent 不启用周期轮询，手动发 poll 事件
 	var mu sync.Mutex
@@ -216,8 +212,7 @@ func TestEndToEnd_TeamCompletion回调(t *testing.T) {
 		},
 	}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 	k.Start(context.Background(), "")
 
 	var mu sync.Mutex
@@ -258,8 +253,7 @@ func TestEndToEnd_共享节流映射(t *testing.T) {
 		},
 	}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 
 	// 在 Member handler 中写入值，StaleTask handler 应能读到
 	memberThrottle := k.Dispatcher().Member.StaleClaimThrottle()

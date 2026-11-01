@@ -153,6 +153,8 @@ func (m *TeamManager) ApplyTeamPlanMode(spec *atschema.TeamAgentSpec, requestMet
 //
 // 差异说明：Python L948-959 的 rail_manager 扩展 rail 循环，Go 无 get_rail_manager
 // 对应物（扩展 rail 加载机制属 10.5.7 ExtensionLoader 延后），空操作。
+// S-19: 与 DeepAdapter.loadUserRails 是同一缺口——Python 用 importlib 动态执行
+// 用户手写的 extensions/<name>/rail.py，Go 无等价能力（语言边界），需另立设计。
 func (m *TeamManager) BuildAgentCustomizer(
 	spec *atschema.TeamAgentSpec,
 	deepAgent interfaces.DeepAgentInterface,
@@ -244,6 +246,7 @@ func (m *TeamManager) BuildAgentCustomizer(
 			teamTrajectoryRegistry, sessionID)
 
 		// Python L948-959 rail_manager 扩展 rail 循环：Go 无对应机制（10.5.7 延后），空操作
+		// （S-19 语言边界：Python 动态执行用户 .py rail，Go 无等价能力）
 
 		// ── 步骤 f：member runtime tools（cron 11.10、SendFile 10.6.24b 已回填）──
 		mgr.RegisterMemberRuntimeTools(agent, sessionID, &capturedRequestID, &resolvedChannel, capturedRequestMetadata)

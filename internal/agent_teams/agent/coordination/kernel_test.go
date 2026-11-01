@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	schema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -35,6 +36,9 @@ type fakeKernelHost struct {
 	pendingInt   bool
 	role         schema.TeamRole
 	memberName   string
+	// bp/inf M-02: Setup 从 host 取依赖；为 nil 时按 role/memberName 惰性构造默认值
+	bp  types.DispatcherBlueprint
+	inf types.DispatcherInfra
 }
 
 func (f *fakeKernelHost) IsAgentReady() bool                                  { return f.agentReady }
@@ -87,7 +91,49 @@ func (f *fakeKernelHost) PublishTeamEvent(_ context.Context, _ string, _ map[str
 // PendingUserQuery M-30: KernelHost 接口新增方法的测试 stub
 func (f *fakeKernelHost) PendingUserQuery() string { return "" }
 
+// DispatcherBlueprint M-02: 未显式设置时按 role/memberName 构造默认 blueprint
+func (f *fakeKernelHost) DispatcherBlueprint() types.DispatcherBlueprint {
+	if f.bp != nil {
+		return f.bp
+	}
+	return &fakeDispatcherBlueprint{role: f.role, memberName: f.memberName}
+}
+
+// DispatcherInfra M-02: 未显式设置时返回默认 fake infra
+func (f *fakeKernelHost) DispatcherInfra() types.DispatcherInfra {
+	if f.inf != nil {
+		return f.inf
+	}
+	return &fakeDispatcherInfra{}
+}
+
 // ──────────────────────────── CoordinationKernel 测试 ────────────────────────────
+
+// TestShouldCleanTeam_空成员列表不清理 S-01 回归：
+// ListMembers 对"只有 leader 的团队"返回非 nil 空切片，此时必须判定不清理，
+// 否则会走 clean_team 删除团队并 DropCurSessionTables（Python 空列表走 recover_team）。
+func TestShouldCleanTeam_空成员列表不清理(t *testing.T) {
+	shutdown := &database.TeamMember{MemberName: "m1", Status: string(schema.MemberStatusShutdown)}
+	running := &database.TeamMember{MemberName: "m2", Status: string(schema.MemberStatusReady)}
+
+	cases := []struct {
+		name    string
+		members []*database.TeamMember
+		want    bool
+	}{
+		{"nil 切片", nil, false},
+		{"非 nil 空切片", make([]*database.TeamMember, 0, 3), false},
+		{"全部 SHUTDOWN", []*database.TeamMember{shutdown}, true},
+		{"存在非 SHUTDOWN", []*database.TeamMember{shutdown, running}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := shouldCleanTeam(c.members); got != c.want {
+				t.Errorf("shouldCleanTeam(%v) = %v, want %v", c.name, got, c.want)
+			}
+		})
+	}
+}
 
 func TestNewCoordinationKernel(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}
@@ -109,8 +155,7 @@ func TestNewCoordinationKernel(t *testing.T) {
 func TestCoordinationKernel_Setup(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 
 	if k.EventBus() == nil {
 		t.Error("setup 后 EventBus 不应为 nil")
@@ -123,11 +168,34 @@ func TestCoordinationKernel_Setup(t *testing.T) {
 	}
 }
 
+// nilBlueprintHost M-02: 强制 host 返回 nil blueprint 的测试替身。
+type nilBlueprintHost struct {
+	*fakeKernelHost
+}
+
+// DispatcherBlueprint 恒返回 nil（对齐 Python host.blueprint is None）。
+func (n *nilBlueprintHost) DispatcherBlueprint() types.DispatcherBlueprint { return nil }
+
+// TestCoordinationKernel_Setup_nilBlueprint不构造 M-02/M-01：
+// blueprint 缺失时必须记录错误并跳过构造（Python 抛 RuntimeError）。
+func TestCoordinationKernel_Setup_nilBlueprint不构造(t *testing.T) {
+	host := &nilBlueprintHost{&fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1"}}
+	k := NewCoordinationKernel(host)
+
+	k.Setup(schema.TeamRoleLeader)
+
+	if k.EventBus() != nil {
+		t.Error("blueprint 为 nil 时不应构造 EventBus")
+	}
+	if k.Dispatcher() != nil {
+		t.Error("blueprint 为 nil 时不应构造 Dispatcher")
+	}
+}
+
 func TestCoordinationKernel_Start(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 
 	k.Start(context.Background(), "")
 
@@ -153,8 +221,7 @@ func TestCoordinationKernel_Start无Setup(t *testing.T) {
 func TestCoordinationKernel_Pause(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 	k.Start(context.Background(), "")
 
 	k.Pause(context.Background())
@@ -178,8 +245,7 @@ func TestCoordinationKernel_Pause幂等(t *testing.T) {
 func TestCoordinationKernel_Stop(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 	k.Start(context.Background(), "")
 
 	k.Stop(context.Background())
@@ -210,8 +276,7 @@ func TestCoordinationKernel_Stop幂等(t *testing.T) {
 func TestCoordinationKernel_EnqueueUserInput(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 
 	var mu sync.Mutex
 	var receivedEvent types.CoordinationEvent
@@ -235,8 +300,7 @@ func TestCoordinationKernel_EnqueueUserInput(t *testing.T) {
 func TestCoordinationKernel_WakeMailboxIfInterruptCleared(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleTeammate, memberName: "worker1", agentReady: true, pendingInt: false}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
-	k.Setup(schema.TeamRoleTeammate, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleTeammate)
 
 	var mu sync.Mutex
 	var receivedEvent types.CoordinationEvent
@@ -260,8 +324,7 @@ func TestCoordinationKernel_WakeMailboxIfInterruptCleared(t *testing.T) {
 func TestCoordinationKernel_WakeMailbox_Leader跳过(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true, pendingInt: false}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 
 	var mu sync.Mutex
 	var received bool
@@ -284,8 +347,7 @@ func TestCoordinationKernel_WakeMailbox_Leader跳过(t *testing.T) {
 func TestCoordinationKernel_WakeMailbox_有中断跳过(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleTeammate, memberName: "worker1", agentReady: true, pendingInt: true}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleTeammate, memberName: "worker1"}
-	k.Setup(schema.TeamRoleTeammate, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleTeammate)
 
 	var mu sync.Mutex
 	var received bool
@@ -328,8 +390,7 @@ func TestWithTaskPollInterval(t *testing.T) {
 func TestCoordinationKernel_生命周期转换(t *testing.T) {
 	host := &fakeKernelHost{role: schema.TeamRoleLeader, memberName: "leader1", agentReady: true}
 	k := NewCoordinationKernel(host)
-	bp := &fakeDispatcherBlueprint{role: schema.TeamRoleLeader, memberName: "leader1"}
-	k.Setup(schema.TeamRoleLeader, bp, &fakeDispatcherInfra{})
+	k.Setup(schema.TeamRoleLeader)
 
 	// idle → running 启动后进入运行态
 	k.Start(context.Background(), "")

@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -119,6 +120,19 @@ func TestBuildAgentToolCard_空列表(t *testing.T) {
 	card := buildAgentToolCard(nil, "test_agent")
 	assert.Equal(t, "Agent", card.Name)
 	assert.Contains(t, card.Description, "Launch a new agent")
+}
+
+// TestBuildAgentToolCard_空agentID补随机后缀 M-13：
+// agentID 为空时必须生成唯一 id（Python: f"agent_tool_{uuid.uuid4().hex}"），
+// 否则多实例在共享 ResourceMgr 中互相覆盖。
+func TestBuildAgentToolCard_空agentID补随机后缀(t *testing.T) {
+	first := buildAgentToolCard(nil, "")
+	second := buildAgentToolCard(nil, "")
+
+	assert.True(t, strings.HasPrefix(first.ID, "agent_tool_"), "id 前缀 = %q", first.ID)
+	// "agent_tool_" + 32 位 hex
+	assert.Len(t, first.ID, len("agent_tool_")+32)
+	assert.NotEqual(t, first.ID, second.ID, "空 agentID 两次构造必须不同")
 }
 
 // TestBuildAgentToolCard_无WhenToUse时用Description 测试 WhenToUse fallback

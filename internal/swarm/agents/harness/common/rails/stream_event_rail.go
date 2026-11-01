@@ -6,6 +6,9 @@ import (
 	"sync"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -71,6 +74,15 @@ type inflightToolCallInfo struct {
 	sessionID string              // 关联的会话 ID
 }
 
+// deepConfigProvider 暴露 harness DeepAgent 的 deep_config（Python: da.deep_config）。
+//
+// 由 *harness.DeepAgent 实现（deep_agent.go 的 DeepConfig()）；ReActAgent 等不实现，
+// 类型断言失败时返回 nil——与 Python 侧 rail 只在 DeepAgent 路径生效一致。
+type deepConfigProvider interface {
+	// DeepConfig 返回 DeepAgent 的运行时配置（含 Workspace/SysOperation/Language/Card）
+	DeepConfig() *hschema.DeepAgentConfig
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -96,15 +108,13 @@ func (r *JiuClawStreamEventRail) Priority() int {
 }
 
 // Init Rail 初始化钩子，对齐 Python: init(self, agent)
+//
+// 仅保存 agent 引用；TodoTool 采用懒创建（对齐 Python `_get_todo_tool()`：
+// 首次发射 todo.updated 时才从 agent 的 deep_config 构造并缓存）。
 func (r *JiuClawStreamEventRail) Init(_ context.Context, agent sainterfaces.BaseAgent) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.deepAgent = agent
-	// 对齐 Python: 懒加载 TodoTool（从 agent 的 AbilityManager 查找）
-	// Python 中 TaskPlanningRail._find_todo_tool() 在需要时从 self.tools 查找
-	if r.todoTool == nil && agent != nil {
-		r.lazyLoadTodoTool(agent)
-	}
 	return nil
 }
 
@@ -232,10 +242,50 @@ func (r *JiuClawStreamEventRail) CollectCancelledToolUpdates(sessionID string) {
 }
 
 // SetTodoTool 设置共享的 TodoTool 实例，对齐 Python: _main_todo_tool
+//
+// 生产路径不再依赖显式注入：首次发射 todo.updated 时由 getTodoTool 懒创建。
+// 本方法仅供单测注入 fake（Python 无对应 API，不改变生产语义）。
 func (r *JiuClawStreamEventRail) SetTodoTool(loader todoToolLoader) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.todoTool = loader
+}
+
+// getTodoTool 返回主 Agent 的 TodoTool，首次调用时构造并缓存。
+//
+// 对齐 Python: _get_todo_tool()——刻意不复用 AbilityManager / ResourceMgr：
+//  1. 资源管理器是共享的，子 agent 会把自己的 todo 工具注册进去覆盖主 agent 条目，
+//     导致 load_todos 读到错误的 workspace 路径（Python docstring 原话）；
+//  2. Go 的 AbilityManager 只存 *tool.ToolCard，取不回 TodoTool 基类（LoadTodos 在基类上）；
+//  3. 主 agent 的 deep_config.workspace 在 init 时固定，用它构造的句柄路径稳定。
+//
+// 状态一致性靠文件：自建句柄与模型调用的 todo_modify 读写同一份
+// {workspace}/{session_id}/todo.json。
+func (r *JiuClawStreamEventRail) getTodoTool() todoToolLoader {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.todoTool != nil {
+		return r.todoTool
+	}
+	provider, ok := r.deepAgent.(deepConfigProvider)
+	if !ok {
+		return nil
+	}
+	r.todoTool = newTodoToolFromDeepConfig(provider.DeepConfig(), r.promptLanguageLocked())
+	return r.todoTool
+}
+
+// promptLanguageLocked 返回系统提示词语言，调用方需持有 r.mu。
+// 对齐 Python: getattr(da, "system_prompt_builder", None).language
+func (r *JiuClawStreamEventRail) promptLanguageLocked() string {
+	if r.deepAgent == nil {
+		return ""
+	}
+	builder := r.deepAgent.SystemPromptBuilder()
+	if builder == nil {
+		return ""
+	}
+	return builder.Language()
 }
 
 // ── 生命周期钩子 ──
@@ -370,10 +420,7 @@ func (r *JiuClawStreamEventRail) AfterToolCall(ctx context.Context, cbc *sainter
 		return nil
 	}
 	if todoToolNames[inputs.ToolName] {
-		r.mu.Lock()
-		loader := r.todoTool
-		r.mu.Unlock()
-		emitTodoUpdated(ctx, session, loader, convID)
+		emitTodoUpdated(ctx, session, r.getTodoTool(), convID)
 	}
 
 	return nil
@@ -464,20 +511,41 @@ func (pc *pauseCond) Resume() {
 	pc.cond.Broadcast()
 }
 
-// lazyLoadTodoTool 从 agent 的 AbilityManager 懒加载 TodoTool。
-// 对齐 Python: TaskPlanningRail._find_todo_tool() — 在需要时从已注册工具中查找。
-func (r *JiuClawStreamEventRail) lazyLoadTodoTool(agent sainterfaces.BaseAgent) {
-	am := agent.AbilityManager()
-	if am == nil {
-		return
+// newTodoToolFromDeepConfig 从 deep_config 构造 TodoTool。
+// 对齐 Python: _get_todo_tool() 的构造段——
+//
+//	TodoListTool(operation=deep_config.sys_operation,
+//	             workspace=deep_config.workspace.get_node_path(TODO),
+//	             language=deep_config.language or system_prompt_builder.language or "cn",
+//	             agent_id=da.card.id)
+//
+// 差异说明：Python 的 TodoTool 只使用 operation.fs()（todo.py:80），故 Go 传 FsOperation 等价。
+// 任一必需项缺失返回 nil（与 Python 返回 None 等价，调用方跳过事件发射）。
+func newTodoToolFromDeepConfig(cfg *hschema.DeepAgentConfig, fallbackLang string) todoToolLoader {
+	if cfg == nil || cfg.Workspace == nil || cfg.SysOperation == nil {
+		return nil
 	}
-	for _, ability := range am.List() {
-		if loader, ok := ability.(todoToolLoader); ok {
-			r.todoTool = loader
-			logger.Debug(logComponent).Str("ability_name", ability.AbilityName()).Msg("lazy loaded TodoTool successfully")
-			return
-		}
+	fs := cfg.SysOperation.Fs()
+	if fs == nil {
+		return nil
 	}
+	todoPath := cfg.Workspace.GetNodePath(workspace.WorkspaceNodeTODO)
+	if todoPath == nil || *todoPath == "" {
+		return nil
+	}
+	language := cfg.Language
+	if language == "" {
+		language = fallbackLang
+	}
+	if language == "" {
+		language = "cn"
+	}
+	agentID := ""
+	if cfg.Card != nil {
+		agentID = cfg.Card.ID
+	}
+	_, base := todo.CreateTodosTool(*todoPath, fs, language, agentID)
+	return &base
 }
 
 // resolveSessionID 解析会话 ID，空字符串回退到 "default"

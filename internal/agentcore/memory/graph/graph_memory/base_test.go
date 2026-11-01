@@ -269,6 +269,31 @@ func TestNewSearchConfigWithMinScore(t *testing.T) {
 	assert.Equal(t, 0.05, sc.MinScore)
 }
 
+// TestNewEntitySearchConfig_默认0点3加Weighted M-20：
+// Python 的 entity 默认是 SearchConfig(rank_config=WeightedRankConfig())，
+// 即 min_score=0.3 + Weighted 排序（不是 relation 的 0.02）。
+func TestNewEntitySearchConfig_默认0点3加Weighted(t *testing.T) {
+	sc := newEntitySearchConfig()
+	assert.NotNil(t, sc)
+	assert.Equal(t, 0.3, sc.MinScore)
+	assert.IsType(t, &graph.WeightedRankConfig{}, sc.RankConfig)
+}
+
+// TestNewGraphMemory_默认策略分数 M-20：default 策略
+// entity=0.3/Weighted、relation=0.02、episode=0.025（对齐 Python base.py:143-146）。
+func TestNewGraphMemory_默认策略分数(t *testing.T) {
+	gm, err := newTestGraphMemory()
+	if err != nil {
+		t.Fatalf("newTestGraphMemory 失败: %v", err)
+	}
+	def := gm.searchStrategies["default"]
+	assert.NotNil(t, def)
+	assert.Equal(t, 0.3, def.EntityConfig.MinScore)
+	assert.IsType(t, &graph.WeightedRankConfig{}, def.EntityConfig.RankConfig)
+	assert.Equal(t, 0.02, def.RelationConfig.MinScore)
+	assert.Equal(t, 0.025, def.EpisodeConfig.MinScore)
+}
+
 // TestReplaceOneSideOfRelation_首次出现 测试首次出现的延迟更新
 func TestReplaceOneSideOfRelation_首次出现(t *testing.T) {
 	state := NewGraphMemState()

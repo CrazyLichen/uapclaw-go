@@ -14,7 +14,7 @@ import (
 // provider 清空（engine 仍 both）应走禁用分支，不误注册
 func TestHandleExternalMemoryRailByConfig_provider清空后不注册(t *testing.T) {
 	d := NewDeepAdapter()
-	d.configCache = map[string]any{"memory": map[string]any{
+	d.configBase = map[string]any{"memory": map[string]any{
 		"engine":   "both",
 		"external": map[string]any{"provider": ""},
 	}}
@@ -33,7 +33,7 @@ func TestHandleExternalMemoryRailByConfig_provider清空后不注册(t *testing.
 func TestHandleExternalMemoryRailByConfig_启用但构建失败不注册(t *testing.T) {
 	d := NewDeepAdapter()
 	t.Setenv("MEM0_API_KEY", "") // 防 CI 环境泄漏
-	d.configCache = map[string]any{"memory": map[string]any{
+	d.configBase = map[string]any{"memory": map[string]any{
 		"engine": "both",
 		"external": map[string]any{
 			"provider": "mem0",
@@ -54,7 +54,7 @@ func TestHandleExternalMemoryRailByConfig_启用但构建失败不注册(t *test
 func TestHandleExternalMemoryRailByConfig_构建成功存字段(t *testing.T) {
 	d := NewDeepAdapter()
 	t.Setenv("MEM0_API_KEY", "test-key") // t.Setenv 测试结束自动恢复原值
-	d.configCache = map[string]any{"memory": map[string]any{
+	d.configBase = map[string]any{"memory": map[string]any{
 		"engine":   "both",
 		"external": map[string]any{"provider": "mem0"},
 	}}
@@ -84,7 +84,7 @@ func TestHandleExternalMemoryRailByConfig_热重载注销(t *testing.T) {
 	t.Setenv("MEM0_API_KEY", "test-key")
 
 	// 第一阶段：构建 rail 存字段
-	d.configCache = map[string]any{"memory": map[string]any{
+	d.configBase = map[string]any{"memory": map[string]any{
 		"engine":   "both",
 		"external": map[string]any{"provider": "mem0"},
 	}}
@@ -96,7 +96,7 @@ func TestHandleExternalMemoryRailByConfig_热重载注销(t *testing.T) {
 	d.externalMemoryRailRegistered = true
 
 	// 第二阶段：热重载清空 provider（engine 仍 both）
-	d.configCache = map[string]any{"memory": map[string]any{
+	d.configBase = map[string]any{"memory": map[string]any{
 		"engine":   "both",
 		"external": map[string]any{"provider": ""},
 	}}
@@ -117,7 +117,7 @@ func TestHandleExternalMemoryRailByConfig_engine切换builtin注销(t *testing.T
 	d := NewDeepAdapter()
 	t.Setenv("MEM0_API_KEY", "test-key")
 
-	d.configCache = map[string]any{"memory": map[string]any{
+	d.configBase = map[string]any{"memory": map[string]any{
 		"engine":   "both",
 		"external": map[string]any{"provider": "mem0"},
 	}}
@@ -125,12 +125,35 @@ func TestHandleExternalMemoryRailByConfig_engine切换builtin注销(t *testing.T
 	d.externalMemoryRailRegistered = true
 
 	// engine 切换为 builtin：IsExternalMemoryAllowed false → 注销
-	d.configCache = map[string]any{"memory": map[string]any{
+	d.configBase = map[string]any{"memory": map[string]any{
 		"engine":   "builtin",
 		"external": map[string]any{"provider": "mem0"},
 	}}
 	d.handleExternalMemoryRailByConfig(context.Background())
 	if d.externalMemoryRail != nil || d.externalMemoryRailRegistered {
 		t.Error("engine 切换 builtin 后应注销外接记忆 rail")
+	}
+}
+
+// TestHandleExternalMemoryRailByConfig_react段快照不参与判定
+// S-11 回归：memory 段只存在于 configCache（react 段快照）而 configBase 无该段时，
+// 必须判定为未启用——锁死"配置判定只能读完整配置"的契约，防止再次误传 configCache。
+func TestHandleExternalMemoryRailByConfig_react段快照不参与判定(t *testing.T) {
+	d := NewDeepAdapter()
+	t.Setenv("MEM0_API_KEY", "test-key")
+	// 只有 react 段快照里有 memory 配置（模拟修复前的错误入参）
+	d.configCache = map[string]any{"memory": map[string]any{
+		"engine":   "both",
+		"external": map[string]any{"provider": "mem0"},
+	}}
+	d.configBase = map[string]any{"react": map[string]any{}}
+
+	d.handleExternalMemoryRailByConfig(context.Background())
+
+	if d.externalMemoryRail != nil {
+		t.Error("configCache 中的 memory 段不应参与判定")
+	}
+	if d.externalMemoryRailRegistered {
+		t.Error("configCache 中的 memory 段不应触发注册")
 	}
 }

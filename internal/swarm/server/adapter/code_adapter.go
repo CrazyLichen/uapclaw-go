@@ -196,7 +196,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	c.deep.dreamingMode = "code"
 
 	// 步骤 1: set_checkpoint
-	if err := c.deep.setCheckpoint(); err != nil {
+	if err := c.deep.setCheckpoint(ctx); err != nil {
 		return fmt.Errorf("set_checkpoint 失败: %w", err)
 	}
 	// 步骤 2: instanceOverrides 初始化
@@ -451,7 +451,7 @@ func (c *CodeAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	// Python: _get_current_agent_rails() 覆写中追加 CodeAgentRail
 	if c.codeAgentRail != nil {
 		if car, ok := c.codeAgentRail.(*CodeAgentRail); ok && c.deep.instance != nil {
-			if err := car.Reload(c.deep.instance); err != nil {
+			if err := car.Reload(ctx, c.deep.instance); err != nil {
 				logger.Warn(logComponent).
 					Err(err).
 					Msg("CodeAgentRail Reload failed, continuing")
