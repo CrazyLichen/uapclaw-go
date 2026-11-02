@@ -1,6 +1,8 @@
 package extraction
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 
 	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/graph/extraction/prompts/cn"
@@ -244,5 +246,41 @@ func TestRecursiveReplace_无匹配(t *testing.T) {
 	replaced := recursiveReplace(data, nil, "title", "")
 	if replaced {
 		t.Error("无匹配时应返回 false")
+	}
+}
+
+// TestReadableSchema_按声明顺序与类型名 验证 list[EntityDeclaration]、无空注释、无尾换行。
+func TestReadableSchema_按声明顺序与类型名(t *testing.T) {
+	model := reflect.TypeOf(struct {
+		Entities []EntityDeclaration `json:"entities"`
+		Summary  string              `json:"summary"`
+	}{})
+
+	out, refs := ReadableSchema(model, "cn")
+	lines := strings.Split(out, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("行数 = %d, want 2（%q）", len(lines), out)
+	}
+	if !strings.HasPrefix(lines[0], "entities: list[EntityDeclaration]") {
+		t.Fatalf("第一行 = %q", lines[0])
+	}
+	if lines[1] != "summary: str" {
+		t.Fatalf("第二行 = %q, want %q", lines[1], "summary: str")
+	}
+	if strings.HasSuffix(out, "\n") {
+		t.Fatal("输出不应带尾换行")
+	}
+	if _, ok := refs["EntityDeclaration"]; !ok {
+		t.Fatalf("refDict 缺少 EntityDeclaration: %v", refs)
+	}
+}
+
+// TestReadableSchema_有描述才输出注释 验证空描述不留 "  # "。
+func TestReadableSchema_有描述才输出注释(t *testing.T) {
+	out, _ := ReadableSchema(reflect.TypeOf(EntityDeclaration{}), "cn")
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasSuffix(line, "  # ") {
+			t.Fatalf("空描述不应输出注释: %q", line)
+		}
 	}
 }

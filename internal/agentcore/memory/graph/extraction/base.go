@@ -1,7 +1,6 @@
 package extraction
 
 import (
-	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
@@ -65,46 +64,40 @@ func ResponseFormat(name string, schemaMap map[string]any) map[string]any {
 	}
 }
 
-// ReadableSchema 从输出模型生成 LLM 可读的类型定义字符串
+// ReadableSchema 从输出模型生成 LLM 可读的类型定义字符串。
 //
-// Python: MultilingualBaseModel.readable_schema()
+// 对齐 Python MultilingualBaseModel.readable_schema()：按 model_fields 声明顺序输出
+// `name: type` 与可选 `  # description`，并返回嵌套模型的属性表（$defs 语义）。
 func ReadableSchema(modelType reflect.Type, language string) (string, map[string]any) {
 	langMap := registry.MultilingualDescription[language]
 	if langMap == nil {
 		langMap = map[string]string{}
 	}
-
-	// 1. 提取 Schema
-	extractor := tool.StructSchemaExtractor{}
-	params, err := extractor.Extract(modelType)
-	if err != nil {
+	for modelType.Kind() == reflect.Pointer {
+		modelType = modelType.Elem()
+	}
+	if modelType.Kind() != reflect.Struct {
 		return "", nil
 	}
 
-	// 2. 替换多语言描述
-	replaced := ReplaceDescriptions(params, langMap)
-
-	// 3. 生成 JSON Schema
-	schemaMap := commonschema.ToJSONSchemaMap(replaced)
-
-	// 4. 递归替换：删除 title、删除 required、$ref → type 内联
-	recursiveReplace(schemaMap, nil, "title", "")
-	recursiveReplace(schemaMap, nil, "required", "")
-	// 在删除 $defs 之前提取 refDict
-	refDict := extractRefDict(schemaMap)
-	if defs, ok := schemaMap["$defs"].(map[string]any); ok {
-		refLookup := make(map[string]string, len(defs))
-		for key := range defs {
-			refLookup["#/$defs/"+key] = key
+	refDict := make(map[string]any)
+	lines := make([]string, 0, modelType.NumField())
+	for i := 0; i < modelType.NumField(); i++ {
+		field := modelType.Field(i)
+		if field.PkgPath != "" {
+			continue // 未导出字段
 		}
-		recursiveReplace(schemaMap, refLookup, "$ref", "type")
-		delete(schemaMap, "$defs")
+		name := jsonFieldName(field)
+		if name == "" {
+			continue
+		}
+		line := name + ": " + pythonTypeName(field.Type, refDict, langMap)
+		if desc := fieldDescription(field, langMap); desc != "" {
+			line += "  # " + desc
+		}
+		lines = append(lines, line)
 	}
-
-	// 5. 生成可读字符串（对齐 Python readable_schema 格式）
-	outStr := formatReadableSchema(schemaMap, "")
-
-	return outStr, refDict
+	return strings.Join(lines, "\n"), refDict
 }
 
 // StrictSchemaEnforce BFS 遍历 JSON Schema，对所有 type=object 节点设置 additionalProperties=false 和 required
@@ -236,96 +229,104 @@ func recursiveReplace(data any, lookup map[string]string, fromKey string, toKey 
 	return replaced
 }
 
-// formatReadableSchema 递归生成可读 Schema 字符串
-func formatReadableSchema(schema map[string]any, indent string) string {
-	var sb strings.Builder
-
-	typeName, _ := schema["type"].(string)
-
-	switch typeName {
-	case "object":
-		props, _ := schema["properties"].(map[string]any)
-		for propName, propVal := range props {
-			propMap, ok := propVal.(map[string]any)
-			if !ok {
-				continue
-			}
-			desc, _ := propMap["description"].(string)
-			propType := inferPythonType(propMap)
-			fmt.Fprintf(&sb, "%s%s: %s  # %s\n", indent, propName, propType, desc)
-			if propType == "dict" || propType == "list[dict]" {
-				nestedStr := formatReadableSchema(propMap, indent+"    ")
-				if nestedStr != "" {
-					sb.WriteString(nestedStr)
-				}
-			}
-		}
-	case "array":
-		items, _ := schema["items"].(map[string]any)
-		if items != nil {
-			nestedStr := formatReadableSchema(items, indent+"    ")
-			if nestedStr != "" {
-				sb.WriteString(nestedStr)
-			}
-		}
+// jsonFieldName 返回字段的 JSON 名；`json:"-"` 返回空串。
+func jsonFieldName(field reflect.StructField) string {
+	tag := field.Tag.Get("json")
+	if tag == "-" {
+		return ""
 	}
-
-	return sb.String()
+	name, _, _ := strings.Cut(tag, ",")
+	if name == "" {
+		name = field.Name
+	}
+	return name
 }
 
-// inferPythonType 从 JSON Schema 属性推断 Python 类型名
-func inferPythonType(prop map[string]any) string {
-	typeName, _ := prop["type"].(string)
-	switch typeName {
-	case "string":
+// fieldDescription 取字段 jsonschema tag 中的描述并做多语言替换。
+func fieldDescription(field reflect.StructField, langMap map[string]string) string {
+	tag := field.Tag.Get("jsonschema")
+	_, rest, ok := strings.Cut(tag, "description=")
+	if !ok {
+		return ""
+	}
+	return replacePlaceholders(rest, langMap)
+}
+
+// pythonTypeName 将 Go 类型映射为 Python 注解形态。
+// 对齐 Python: _to_json_types(annotation)，嵌套结构体同时登记到 refDict。
+func pythonTypeName(t reflect.Type, refDict map[string]any, langMap map[string]string) string {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.String:
 		return "str"
-	case "integer":
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return "int"
-	case "number":
+	case reflect.Float32, reflect.Float64:
 		return "float"
-	case "boolean":
+	case reflect.Bool:
 		return "bool"
-	case "array":
-		items, _ := prop["items"].(map[string]any)
-		if items != nil {
-			itemType := inferPythonType(items)
-			return "list[" + itemType + "]"
-		}
-		return "list"
-	case "object":
+	case reflect.Slice, reflect.Array:
+		return "list[" + pythonTypeName(t.Elem(), refDict, langMap) + "]"
+	case reflect.Map:
 		return "dict"
+	case reflect.Struct:
+		name := t.Name()
+		if name == "" {
+			return "dict"
+		}
+		if _, done := refDict[name]; !done {
+			refDict[name] = structProperties(t, langMap) // 先占位再填充，天然防递归
+		}
+		return name
 	default:
 		return "Any"
 	}
 }
 
-// extractRefDict 从 Schema 中提取引用定义
-func extractRefDict(schema map[string]any) map[string]any {
-	refDict := map[string]any{}
-	extractRefDictRecursive(schema, refDict)
-	return refDict
-}
-
-func extractRefDictRecursive(schema map[string]any, refDict map[string]any) {
-	props, _ := schema["properties"].(map[string]any)
-	if props == nil {
-		return
-	}
-	for _, propVal := range props {
-		propMap, ok := propVal.(map[string]any)
-		if !ok {
+// structProperties 生成嵌套模型的属性表（键为 JSON 字段名）。
+func structProperties(t reflect.Type, langMap map[string]string) map[string]any {
+	props := make(map[string]any, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.PkgPath != "" {
 			continue
 		}
-		defs, _ := propMap["$defs"].(map[string]any)
-		for defName, defVal := range defs {
-			defMap, ok := defVal.(map[string]any)
-			if ok {
-				// 对齐 Python: refDict = {key: val["properties"] for key, val in refs.items()}
-				if propsOnly, ok := defMap["properties"].(map[string]any); ok {
-					refDict[defName] = propsOnly
-				}
-			}
+		name := jsonFieldName(field)
+		if name == "" {
+			continue
 		}
-		extractRefDictRecursive(propMap, refDict)
+		item := map[string]any{"type": jsonSchemaType(field.Type)}
+		if desc := fieldDescription(field, langMap); desc != "" {
+			item["description"] = desc
+		}
+		props[name] = item
+	}
+	return props
+}
+
+// jsonSchemaType 返回 JSON Schema 类型名（用于 refDict 渲染）。
+func jsonSchemaType(t reflect.Type) string {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.String:
+		return "string"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "integer"
+	case reflect.Float32, reflect.Float64:
+		return "number"
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Slice, reflect.Array:
+		return "array"
+	case reflect.Struct, reflect.Map:
+		return "object"
+	default:
+		return "string"
 	}
 }
