@@ -179,6 +179,14 @@ Go 的 `resources/config.yaml:177-179` 只有 `context_engine_config.enable_kv_c
 
 **行为分界点**：trigger 回到绝对值需 `window ≥ 230000/0.85 ≈ 270588`；target 需 `window ≥ 160000/0.55 ≈ 290909`。因此 256K 窗口的模型也会被收紧（不再“完全一致”），290909 以上才与今天完全一致。这是选择 0.85/0.55 的必然结果，属预期行为变更。
 
+### 4.5 顺带修复：ceConfig 丢失 200 条 / 10 轮默认值
+
+Python 的 `ReActAgentConfig` 默认 `context_engine_config = ContextEngineConfig(max_context_message_num=200, default_window_round_num=10)`（`react_agent.py:197-202`），`_deep_agent_context_engine_config` 用 `model_copy(update=...)` 只改 `enable_kv_cache_release`，因此这两个默认值始终保留。
+
+Go 的 `deepAgentContextEngineConfig`（`deep_adapter.go:2041`）直接 `NewContextEngineConfig()` 并只填 `EnableKVCacheRelease`，返回的是**零值结构体**：`MaxContextMessageNum=0`（不限）、`DefaultWindowRoundNum=0`（不限）。而只要 yaml 里存在 `react.context_engine_config`（当前模板就有 `enable_kv_cache_release`），这条路径就生效——即 **Go 主 deep agent 今天实际没有 200 条消息上限和 10 轮窗口上限**，与 Python 不一致。
+
+本设计既然要把窗口值搬进这个结构体，就一并修正：在 `NewContextEngineConfig()` 之后显式设 `MaxContextMessageNum=200`、`DefaultWindowRoundNum=10`。这会收紧消息条数与轮数（属 parity 修复），需在 CHANGELOG 中写明。
+
 ## 5. 数据流与改动清单
 
 ```
@@ -196,7 +204,7 @@ Go 的 `resources/config.yaml:177-179` 只有 `context_engine_config.enable_kv_c
 | B2 | `web/web_handlers.go:960-1001` | `handleModelsList` 展平 map 补两字段（回填界面） |
 | B3 | `adapter/deep_adapter.go:2189` | `knownKeys` 加 `"max_input_tokens"` / `"max_output_tokens"` |
 | B4 | `adapter/deep_adapter.go:2128-2137` | `mcc["max_output_tokens"] > 0` → `llmschema.WithMaxTokens(n)` |
-| B5 | `adapter/deep_adapter.go:2028` `deepAgentContextEngineConfig` | 签名加 `configBase` 入参；遍历 `config.GetDefaultModels(configBase)` 收集 `model_client_config.max_input_tokens` → `result.ModelContextWindowTokens[model_name]`；`result.ModelName` = 当前生效模型名；读 `cecMap` 的 `compression_trigger_ratio` / `compression_target_ratio` → 新字段（D14） |
+| B5 | `adapter/deep_adapter.go:2028` `deepAgentContextEngineConfig` | 签名加 `configBase` 入参；遍历 `config.GetDefaultModels(configBase)` 收集 `model_client_config.max_input_tokens` → `result.ModelContextWindowTokens[model_name]`；`result.ModelName` = 当前生效模型名；读 `cecMap` 的 `compression_trigger_ratio` / `compression_target_ratio` → 新字段（D14）；同时修复丢失的默认值 `MaxContextMessageNum=200` / `DefaultWindowRoundNum=10`（§4.5） |
 | B6 | `common/rails/stream_event_emit.go:186-221` | 分母改从 agent 的 `ContextEngineConfig` 取（`ResolveContextMax(ceConfig.ModelName, ceConfig.ContextWindowTokens, ceConfig.ModelContextWindowTokens)`）；分子按 §6.5 的回退顺序取 `InputTokens` |
 | B7 | `context_engine/context/session_model_context.go:1058-1068` + `:1192` | `statMessages` 按 §6.5 的回退顺序取 `InputTokens`；`resolveContextMax` 已走 `ResolveContextMax`，无需改 |
 | B8 | `harness/rails/context_engineer/context_processor_rail.go:87-128`（`Init`） | **在 `MergeProcessors` 之后**遍历 `allProcessors`，对四个 processor（dialogue / current_round / round_level / full_compact）的阈值统一做 `min(绝对, ratio×window)` 收口（顺序要求见 §6.6；offloader 不参与，见 §6.1） |
@@ -419,6 +427,7 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 | 团队/子代理未覆盖 | 主 Agent 显示 32K、成员仍 200K | A3 列为同批交付；若拆分，需在文档与状态里标注「仅主 Agent 生效」 |
 | `mcc` 承载语义不属于它的字段 | 未来若把 `mcc` 整体透传请求，窗口值会被当请求参数发出 | B3 白名单 + 注释；`mcc` 当前无整体透传路径 |
 | 百分比口径变更 | 数值整体变小（不再含输出） | 属修正；CHANGELOG 说明 |
+| ceConfig 默认值修复（200 条 / 10 轮） | 上下文消息数与轮数开始受限，超长会话会更早触发压缩 | 属 parity 修复（Python 一直如此）；CHANGELOG 写明；如需放宽可在 yaml 里显式调大 |
 
 ## 12. 实施顺序（供计划阶段参考）
 
