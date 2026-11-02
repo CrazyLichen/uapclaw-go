@@ -124,8 +124,8 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	// 从配置读取 Web 通道参数
 	webCfg := web.WebChannelConfig{
 		Enabled: true,
-		Host:    defaultHost(cfg),
-		Port:    defaultPort(cfg),
+		Host:    defaultHost(),
+		Port:    defaultPort(),
 		Path:    "/ws",
 	}
 
@@ -434,10 +434,10 @@ func (s *AppGatewayServer) Start(ctx context.Context) error {
 	}
 
 	gwCfg := NewGatewayServerConfig()
-	if v := os.Getenv("GATEWAY_HOST"); v != "" {
+	if v := os.Getenv("UAPCLAW_GATEWAY_HOST"); v != "" {
 		gwCfg.Host = v
 	}
-	if v := os.Getenv("GATEWAY_PORT"); v != "" {
+	if v := os.Getenv("UAPCLAW_GATEWAY_PORT"); v != "" {
 		if p, err := strconv.Atoi(v); err == nil && p > 0 {
 			gwCfg.Port = p
 		}
@@ -769,42 +769,23 @@ func connectWithRetry(ctx context.Context, client *routing.AgentClient, maxRetri
 	return lastErr
 }
 
-// defaultHost 从配置获取默认监听地址。
-// 优先级：环境变量 UAPCLAW_GATEWAY_HOST > config.yaml gateway.host > 默认 127.0.0.1
-func defaultHost(cfg *config.Config) string {
-	if v := os.Getenv("UAPCLAW_GATEWAY_HOST"); v != "" {
+// defaultHost 返回 Web 通道的默认监听地址。
+// 优先级：命令行 --host（由 cmd 层写入环境变量）> 环境变量 UAPCLAW_WEB_HOST > 默认 127.0.0.1
+// Python: args.host or os.getenv("WEB_HOST", "127.0.0.1")（app_gateway.py:1807）
+func defaultHost() string {
+	if v := os.Getenv("UAPCLAW_WEB_HOST"); v != "" {
 		return v
-	}
-	if cfg != nil {
-		if v := cfg.Get("gateway.host"); v != nil {
-			if s, ok := v.(string); ok && s != "" {
-				return s
-			}
-		}
 	}
 	return "127.0.0.1"
 }
 
-// defaultPort 从配置获取默认监听端口。
-// 优先级：环境变量 UAPCLAW_GATEWAY_PORT > config.yaml gateway.port > 默认 19000
-func defaultPort(cfg *config.Config) int {
-	if v := os.Getenv("UAPCLAW_GATEWAY_PORT"); v != "" {
+// defaultPort 返回 Web 通道的默认监听端口。
+// 优先级：命令行 --port（由 cmd 层写入环境变量）> 环境变量 UAPCLAW_WEB_PORT > 默认 19000
+// Python: args.port or int(os.getenv("WEB_PORT", "19000"))（app_gateway.py:1808）
+func defaultPort() int {
+	if v := os.Getenv("UAPCLAW_WEB_PORT"); v != "" {
 		if p, err := strconv.Atoi(v); err == nil && p > 0 {
 			return p
-		}
-	}
-	if cfg != nil {
-		if v := cfg.Get("gateway.port"); v != nil {
-			switch p := v.(type) {
-			case int:
-				if p > 0 {
-					return p
-				}
-			case float64:
-				if p > 0 {
-					return int(p)
-				}
-			}
 		}
 	}
 	return 19000

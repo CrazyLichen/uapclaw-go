@@ -56,8 +56,6 @@ var requiredKeyPaths = []string{
 	"react.subagents.general_agent.enabled",
 	"react.subagents.code_agent.enabled",
 	"react.subagents.research_agent.enabled",
-	"gateway.host",
-	"gateway.port",
 	"gateway.session_map_scope",
 	"heartbeat.every",
 	"heartbeat.target",

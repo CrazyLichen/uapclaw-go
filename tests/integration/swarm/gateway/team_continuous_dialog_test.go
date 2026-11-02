@@ -106,7 +106,7 @@ models:
 
 	s.wsPort = s.pickFreePort()
 	s.saveAndSetenv("UAPCLAW_DATA_DIR", s.dataDir)
-	s.saveAndSetenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", s.wsPort))
+	s.saveAndSetenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", s.wsPort))
 	pathutil.ResetCache()
 
 	_, err = workspace.Init(workspace.InitOption{Language: "zh"})

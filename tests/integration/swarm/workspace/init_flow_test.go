@@ -258,7 +258,7 @@ func (s *InitFlowSuite) TestInit_链路_服务可启动() {
 	s.Require().NoError(err)
 
 	wsPort := s.pickFreePort()
-	s.saveAndSetenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", wsPort))
+	s.saveAndSetenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", wsPort))
 	pathutil.ResetCache()
 
 	cfg, err := config.New("")

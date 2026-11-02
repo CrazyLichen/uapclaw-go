@@ -43,17 +43,17 @@ func TestCreateBootstrapEnv(t *testing.T) {
 	if !strings.Contains(content, "UAPCLAW_INSTANCE=alice") {
 		t.Error("应包含 UAPCLAW_INSTANCE=alice")
 	}
-	if !strings.Contains(content, "AGENT_SERVER_PORT=") {
-		t.Error("应包含 AGENT_SERVER_PORT")
+	if !strings.Contains(content, "UAPCLAW_AGENT_SERVER_PORT=") {
+		t.Error("应包含 UAPCLAW_AGENT_SERVER_PORT")
 	}
-	if !strings.Contains(content, "WEB_PORT=") {
-		t.Error("应包含 WEB_PORT")
+	if !strings.Contains(content, "UAPCLAW_WEB_PORT=") {
+		t.Error("应包含 UAPCLAW_WEB_PORT")
 	}
-	if !strings.Contains(content, "GATEWAY_PORT=") {
-		t.Error("应包含 GATEWAY_PORT")
+	if !strings.Contains(content, "UAPCLAW_GATEWAY_PORT=") {
+		t.Error("应包含 UAPCLAW_GATEWAY_PORT")
 	}
-	if !strings.Contains(content, "FRONTEND_PORT=") {
-		t.Error("应包含 FRONTEND_PORT")
+	if !strings.Contains(content, "UAPCLAW_FRONTEND_PORT=") {
+		t.Error("应包含 UAPCLAW_FRONTEND_PORT")
 	}
 }
 
@@ -74,7 +74,7 @@ func TestCreateBootstrapEnv_端口值(t *testing.T) {
 
 	// 验证具体端口值
 	if !strings.Contains(content, "AGENT_SERVER_PORT=19092") {
-		t.Errorf("应包含 AGENT_SERVER_PORT=19092，内容: %s", content)
+		t.Errorf("应包含 UAPCLAW_AGENT_SERVER_PORT=19092，内容: %s", content)
 	}
 }
 
@@ -137,10 +137,10 @@ func TestCreateBootstrapEnv_部分端口(t *testing.T) {
 
 	// 存在的端口应写入
 	if !strings.Contains(content, "AGENT_SERVER_PORT=28092") {
-		t.Error("应包含 AGENT_SERVER_PORT=28092")
+		t.Error("应包含 UAPCLAW_AGENT_SERVER_PORT=28092")
 	}
 	// 不存在的端口不应出现
-	if strings.Contains(content, "WEB_PORT=") {
+	if strings.Contains(content, "UAPCLAW_WEB_PORT=") {
 		t.Error("缺失的端口不应写入")
 	}
 }

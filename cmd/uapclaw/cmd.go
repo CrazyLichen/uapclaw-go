@@ -251,13 +251,13 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	host, _ := cmd.Flags().GetString("host")
 	port, _ := cmd.Flags().GetInt("port")
 	if host != "" {
-		if err := os.Setenv("UAPCLAW_GATEWAY_HOST", host); err != nil {
-			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_GATEWAY_HOST 失败: %v\n", err)
+		if err := os.Setenv("UAPCLAW_WEB_HOST", host); err != nil {
+			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_WEB_HOST 失败: %v\n", err)
 		}
 	}
 	if port > 0 {
-		if err := os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port)); err != nil {
-			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_GATEWAY_PORT 失败: %v\n", err)
+		if err := os.Setenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", port)); err != nil {
+			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_WEB_PORT 失败: %v\n", err)
 		}
 	}
 
