@@ -40,6 +40,10 @@ export interface ModelEntry {
   is_default?: boolean;
   /** 可选别名，用于快捷切换模型（如 "mimo" → "xiaomi/mimo-v2-omni"） */
   alias?: string;
+  /** 输入上限（token）：该模型可接受的输入量，用作上下文窗口分母；0 表示未配置 */
+  max_input_tokens?: number;
+  /** 输出上限（token）：作为请求 max_tokens 的默认值；0 表示不限制 */
+  max_output_tokens?: number;
   /** 用于原子性重命名操作，指定原模型名 */
   original_model_name?: string;
   /**

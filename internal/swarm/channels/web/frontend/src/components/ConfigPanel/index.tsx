@@ -755,12 +755,16 @@ function MultiModelSection({
   const [addingNew, setAddingNew] = useState(false);
   const [newModel, setNewModel] = useState<ModelEntry>({
     model_name: "", api_base: "", api_key: "", model_provider: "OpenAI",
+    max_input_tokens: 0, max_output_tokens: 0,
   });
   const [localError, setLocalError] = useState<string | null>(null);
   const [validateToast, setValidateToast] = useState<{ show: boolean; success: boolean; message: string }>({ show: false, success: true, message: "" });
 
   const resetNewModelDraft = () => {
-    setNewModel({ model_name: "", api_base: "", api_key: "", model_provider: "OpenAI", alias: "" });
+    setNewModel({
+      model_name: "", api_base: "", api_key: "", model_provider: "OpenAI", alias: "",
+      max_input_tokens: 0, max_output_tokens: 0,
+    });
     setLocalError(null);
   };
 
@@ -862,6 +866,46 @@ function MultiModelSection({
       }
     }
     onModelsChange(copy);
+  };
+
+  /** 校验 token 类字段：必须是非负整数 */
+  const getTokenFieldError = (field: keyof ModelEntry, value: string): string | null => {
+    if (field !== "max_input_tokens" && field !== "max_output_tokens") return null;
+    if (value.trim() === "") return null;
+    if (!/^\d+$/.test(value.trim())) return "config.modelList.tokenNotInteger";
+    return null;
+  };
+
+  /** 数字输入更新：空串视为未配置（发送 0，后端 0 表示未配置） */
+  const updateModelNumber = (
+    idx: number,
+    field: "max_input_tokens" | "max_output_tokens",
+    raw: string,
+  ) => {
+    const errorKey = getTokenFieldError(field, raw);
+    if (errorKey) {
+      setLocalError(t(errorKey));
+      return;
+    }
+    setLocalError(null);
+    onClearExternalError?.();
+    const copy = [...models];
+    copy[idx] = { ...copy[idx], [field]: raw.trim() === "" ? 0 : Number(raw.trim()) };
+    onModelsChange(copy);
+  };
+
+  /** 新增草稿的数字输入处理 */
+  const handleNewModelNumber = (
+    field: "max_input_tokens" | "max_output_tokens",
+    raw: string,
+  ) => {
+    const errorKey = getTokenFieldError(field, raw);
+    if (errorKey) {
+      setLocalError(t(errorKey));
+      return;
+    }
+    setLocalError(null);
+    setNewModel((prev) => ({ ...prev, [field]: raw.trim() === "" ? 0 : Number(raw.trim()) }));
   };
 
   const removeModel = (idx: number) => {
@@ -990,7 +1034,10 @@ function MultiModelSection({
     onModelsChange([...models, entry]);
     setExpandedIdx(models.length); // 自动展开新增的条目
     setAddingNew(false);
-    setNewModel({ model_name: "", api_base: "", api_key: "", model_provider: "OpenAI", alias: "" });
+    setNewModel({
+      model_name: "", api_base: "", api_key: "", model_provider: "OpenAI", alias: "",
+      max_input_tokens: 0, max_output_tokens: 0,
+    });
   };
 
   return (
@@ -1120,6 +1167,25 @@ function MultiModelSection({
                       )}
                     </div>
                   ))}
+                  {/* 输入/输出上限（token；0 或留空 = 未配置） */}
+                  {([
+                    ["max_input_tokens", "config.modelList.maxInputTokens", "config.modelList.maxInputTokensPlaceholder"],
+                    ["max_output_tokens", "config.modelList.maxOutputTokens", "config.modelList.maxOutputTokensPlaceholder"],
+                  ] as const).map(([field, labelKey, placeholderKey]) => (
+                    <div key={field} className="flex items-center gap-2 text-xs">
+                      <label className="w-28 text-text-muted shrink-0">{t(labelKey)}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        inputMode="numeric"
+                        value={models[idx]?.[field] ?? ""}
+                        onChange={(e) => updateModelNumber(idx, field, e.target.value)}
+                        className="flex-1 rounded border border-border bg-bg px-2 py-1 text-text text-xs"
+                        placeholder={t(placeholderKey)}
+                      />
+                    </div>
+                  ))}
                   {/* is_default 勾选框 */}
                   <div className="flex items-center gap-2 text-xs">
                     <label className="w-28 text-text-muted shrink-0">{t("config.modelList.isDefault")}</label>
@@ -1165,6 +1231,24 @@ function MultiModelSection({
                     placeholder={field === "model_name" ? "e.g. gpt-4o" : field === "api_key" ? t("config.modelList.apiKeyPlaceholder") : ""}
                   />
                 )}
+              </div>
+            ))}
+            {([
+              ["max_input_tokens", "config.modelList.maxInputTokens", "config.modelList.maxInputTokensPlaceholder"],
+              ["max_output_tokens", "config.modelList.maxOutputTokens", "config.modelList.maxOutputTokensPlaceholder"],
+            ] as const).map(([field, labelKey, placeholderKey]) => (
+              <div key={field} className="flex items-center gap-2 text-xs">
+                <label className="w-28 text-text-muted shrink-0">{t(labelKey)}</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={newModel[field] ?? ""}
+                  onChange={(e) => handleNewModelNumber(field, e.target.value)}
+                  className="flex-1 rounded border border-border bg-bg px-2 py-1 text-text text-xs"
+                  placeholder={t(placeholderKey)}
+                />
               </div>
             ))}
             <div className="flex justify-end gap-2 pt-1">
