@@ -593,7 +593,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		TodoModifyFactory:   swarmtools.NewCompatibleTodoModifyTool,
 		AutoCreateWorkspace: false,                                             // Python: 硬编码 false
 		CompletionTimeout:   paramsFloat(config, "completion_timeout", 3600.0), // Python: config.get("completion_timeout", 3600.0)
-		ContextEngineConfig: d.deepAgentContextEngineConfig(config),            // Python: context_engine_config=_deep_agent_context_engine_config(config)
+		ContextEngineConfig: d.deepAgentContextEngineConfig(config, configBase), // Python: context_engine_config=_deep_agent_context_engine_config(config)
 	}
 	// 步骤 17 回填：SysOperation
 	params.SysOperation = sysOpInstance
@@ -2022,15 +2022,23 @@ func (d *DeepAdapter) resolveModelClientFromConfig(apiKey, apiBase, model string
 	return m.GetClient()
 }
 
-// deepAgentContextEngineConfig 从 react 配置构建上下文引擎配置。
+// deepAgentContextEngineConfig 从 react 配置与 models 段构建上下文引擎配置。
 // Python: _deep_agent_context_engine_config(react_cfg)
-// 仅根据 react.context_engine_config.enable_kv_cache_release 切换亲和开关；
-// 其余字段与 ReActAgentConfig 默认 context_engine_config 一致。
-func (d *DeepAdapter) deepAgentContextEngineConfig(config map[string]any) *ceschema.ContextEngineConfig {
-	if config == nil {
+//
+// 与 Python 保持同构：
+//   - Python 以 ReActAgentConfig().context_engine_config.model_copy(update=...) 起底，
+//     因此 max_context_message_num=200 / default_window_round_num=10 始终保留；
+//   - 仅切换 enable_kv_cache_release，其余字段取默认值。
+//
+// 本实现额外（设计 D4/D14）：
+//   - 把 models.defaults[].model_client_config.max_input_tokens 收集成
+//     model_context_window_tokens，供 ContextUtils.resolve_context_max 第 2 优先级命中；
+//   - 读取 compression_trigger_ratio / compression_target_ratio 供压缩阈值收口。
+func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[string]any) *ceschema.ContextEngineConfig {
+	if reactCfg == nil {
 		return nil
 	}
-	cecRaw, ok := config["context_engine_config"]
+	cecRaw, ok := reactCfg["context_engine_config"]
 	if !ok {
 		return nil
 	}
@@ -2038,13 +2046,71 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(config map[string]any) *cesch
 	if !ok {
 		return nil
 	}
+
 	// Python: 仅根据 enable_kv_cache_release 切换
 	result := ceschema.NewContextEngineConfig()
+	// 对齐 Python ReActAgentConfig 默认值，避免零值导致消息数/轮数不限（spec §4.5）
+	result.MaxContextMessageNum = 200
+	result.DefaultWindowRoundNum = 10
+
 	if v, ok := cecMap["enable_kv_cache_release"]; ok {
 		if b, ok := v.(bool); ok {
 			result.EnableKVCacheRelease = b
 		}
 	}
+	if f, ok := toRatio(cecMap["compression_trigger_ratio"]); ok {
+		result.CompressionTriggerRatio = f
+	}
+	if f, ok := toRatio(cecMap["compression_target_ratio"]); ok {
+		result.CompressionTargetRatio = f
+	}
+
+	// 收集各模型条目的输入上限（同模型多条目冲突时默认条目优先，设计 D10）
+	defaultModelName := ""
+	firstModelName := ""
+	for _, entry := range config.GetDefaultModels(configBase) {
+		mcc, _ := entry["model_client_config"].(map[string]any)
+		if mcc == nil {
+			continue
+		}
+		modelName, _ := mcc["model_name"].(string)
+		if modelName == "" {
+			continue
+		}
+		if firstModelName == "" {
+			firstModelName = modelName
+		}
+		isDefault, _ := entry["is_default"].(bool)
+		if isDefault && defaultModelName == "" {
+			defaultModelName = modelName
+		}
+		tokens, ok := toPositiveInt(mcc["max_input_tokens"])
+		if !ok {
+			continue
+		}
+		if prev, exists := result.ModelContextWindowTokens[modelName]; exists && prev != tokens {
+			if isDefault {
+				result.ModelContextWindowTokens[modelName] = tokens
+			}
+			logger.Warn(logComponent).
+				Str("model_name", modelName).
+				Int("kept", result.ModelContextWindowTokens[modelName]).
+				Int("ignored", tokens).
+				Msg("max_input_tokens 在同名模型条目间不一致，已按默认条目取值")
+			continue
+		}
+		result.ModelContextWindowTokens[modelName] = tokens
+	}
+
+	// 当前生效模型名：react.model_name 优先，其次默认条目，最后首个条目
+	if v, ok := reactCfg["model_name"].(string); ok && v != "" {
+		result.ModelName = v
+	} else if defaultModelName != "" {
+		result.ModelName = defaultModelName
+	} else {
+		result.ModelName = firstModelName
+	}
+
 	return &result
 }
 
@@ -2836,7 +2902,7 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 		Model:                  model,
 		Card:                   card,
 		SystemPrompt:           commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage()),
-		ContextEngineConfig:    d.deepAgentContextEngineConfig(config),
+		ContextEngineConfig:    d.deepAgentContextEngineConfig(config, d.configBase),
 		EnableTaskLoop:         d.resolveEnableTaskLoop(config, d.configBase),
 		MaxIterations:          paramsInt(config, "max_iterations", 15),
 		Subagents:              subagentSpecs,
@@ -2950,6 +3016,27 @@ func toPositiveInt(v any) (int, bool) {
 			return 0, false
 		}
 		return i, i > 0
+	default:
+		return 0, false
+	}
+}
+
+// toRatio 将任意数值或字符串解析为 (0,1] 区间的比例；不可解析或越界返回 (0,false)。
+//
+// 0 是合法语义（表示"不按比例缩放"），因此解析失败与 0 都返回 false，由调用方保持 0 值。
+func toRatio(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, n > 0 && n <= 1
+	case int:
+		f := float64(n)
+		return f, f > 0 && f <= 1
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(n), 64)
+		if err != nil {
+			return 0, false
+		}
+		return f, f > 0 && f <= 1
 	default:
 		return 0, false
 	}
