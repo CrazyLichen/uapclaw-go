@@ -22,6 +22,17 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// streamTaskEntry 流式任务登记项。
+//
+// 持有 requestID 仅用于日志与身份判定；context.CancelFunc 是函数值、不可比较，
+// 因此「槽里还是不是我」必须靠本结构体的指针相等来判断。
+type streamTaskEntry struct {
+	// requestID 该流式请求的标识
+	requestID string
+	// cancel 该请求 streamCtx 的取消函数
+	cancel context.CancelFunc
+}
+
 // AgentServer Agent 核心服务，对齐 Python AgentWebSocketServer，通过 AgentTransport 接口通信。
 //
 // Start() 非阻塞（内部起 goroutine 运行主循环），对齐 Python server.start() 风格。
@@ -39,8 +50,9 @@ type AgentServer struct {
 	// agentConfigService Agent 配置 CRUD 服务
 	// Python: self._agent_config_service = AgentConfigService(workspace_dir)
 	agentConfigService *runtime.AgentConfigService
-	// sessionStreamTasks 流式任务的取消函数映射（sessionID → CancelFunc）
-	sessionStreamTasks map[string]context.CancelFunc
+	// sessionStreamTasks 流式任务登记表（sessionID → 当前流任务 entry）
+	// 存 entry 指针而非裸 cancel：收尾需要按身份判定「槽里还是不是我」
+	sessionStreamTasks map[string]*streamTaskEntry
 	// sessionStreamTasksMu 保护 sessionStreamTasks 的读写锁
 	sessionStreamTasksMu sync.RWMutex
 	// running 是否正在运行
@@ -88,7 +100,7 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 		transport:          transport,
 		agentManager:       agentManager,
 		agentConfigService: agentConfigService,
-		sessionStreamTasks: make(map[string]context.CancelFunc),
+		sessionStreamTasks: make(map[string]*streamTaskEntry),
 		stopCh:             make(chan struct{}),
 	}
 }
@@ -367,40 +379,77 @@ func (s *AgentServer) startConsumeLoop(ctx context.Context) {
 	}
 }
 
-// registerStreamTask 注册流式任务的取消函数。
-func (s *AgentServer) registerStreamTask(sessionID string, cancel context.CancelFunc) {
+// registerStreamTask 注册流式任务并返回登记项。
+func (s *AgentServer) registerStreamTask(sessionID, requestID string, cancel context.CancelFunc) *streamTaskEntry {
+	entry := &streamTaskEntry{requestID: requestID, cancel: cancel}
 	s.sessionStreamTasksMu.Lock()
-	defer s.sessionStreamTasksMu.Unlock()
-	s.sessionStreamTasks[sessionID] = cancel
+	s.sessionStreamTasks[sessionID] = entry
+	s.sessionStreamTasksMu.Unlock()
 	logger.Debug(logComponent).
 		Str("session_id", sessionID).
+		Str("request_id", requestID).
 		Msg("stream task registered")
+	return entry
 }
 
-// cancelStreamTask 取消并移除指定会话的流式任务。
-func (s *AgentServer) cancelStreamTask(sessionID string) {
+// releaseStreamTask 释放登记项：仅当槽内仍是自己时才删除，永不调用 cancel。
+//
+// Python: agent_ws_server.py:1259-1261 —— if map.get(sid) is current_task: pop
+// （"仅清除自身，避免误删后续新任务"；Go 额外保证不会取消别人的 cancel）
+func (s *AgentServer) releaseStreamTask(sessionID string, entry *streamTaskEntry) {
 	s.sessionStreamTasksMu.Lock()
 	defer s.sessionStreamTasksMu.Unlock()
-	if cancel, ok := s.sessionStreamTasks[sessionID]; ok {
-		cancel()
-		delete(s.sessionStreamTasks, sessionID)
-		logger.Debug(logComponent).
-			Str("session_id", sessionID).
-			Msg("stream task cancelled")
+	cur, ok := s.sessionStreamTasks[sessionID]
+	if !ok || cur != entry {
+		// 槽已被 handleCancel 清空，或已被下一轮覆盖：不动别人的登记
+		return
 	}
+	delete(s.sessionStreamTasks, sessionID)
+	logger.Debug(logComponent).
+		Str("session_id", sessionID).
+		Str("request_id", entry.requestID).
+		Msg("stream task released")
+}
+
+// cancelStreamTask 取消并移除指定会话当前登记的流式任务。
+//
+// 只有 handleCancel（intent=cancel/supplement）与进程退出才会走到这里；
+// 请求自身的收尾用 releaseStreamTask，不能用本函数。
+func (s *AgentServer) cancelStreamTask(sessionID string) {
+	s.sessionStreamTasksMu.Lock()
+	entry, ok := s.sessionStreamTasks[sessionID]
+	if ok {
+		delete(s.sessionStreamTasks, sessionID)
+	}
+	s.sessionStreamTasksMu.Unlock()
+	if !ok {
+		return
+	}
+	entry.cancel()
+	logger.Debug(logComponent).
+		Str("session_id", sessionID).
+		Str("request_id", entry.requestID).
+		Msg("stream task cancelled")
 }
 
 // cancelAllStreamTasks 取消所有流式任务并清空映射。
 func (s *AgentServer) cancelAllStreamTasks() {
 	s.sessionStreamTasksMu.Lock()
-	defer s.sessionStreamTasksMu.Unlock()
-	for sessionID, cancel := range s.sessionStreamTasks {
-		cancel()
+	entries := make([]*streamTaskEntry, 0, len(s.sessionStreamTasks))
+	for sessionID, entry := range s.sessionStreamTasks {
+		entries = append(entries, entry)
 		logger.Debug(logComponent).
 			Str("session_id", sessionID).
+			Str("request_id", entry.requestID).
 			Msg("stream task cancelled")
 	}
-	s.sessionStreamTasks = make(map[string]context.CancelFunc)
+	s.sessionStreamTasks = make(map[string]*streamTaskEntry)
+	s.sessionStreamTasksMu.Unlock()
+
+	// 锁外取消：cancel 会唤醒下游 goroutine，持锁取消可能与其收尾路径互相等待
+	for _, entry := range entries {
+		entry.cancel()
+	}
 }
 
 // sendToGateway 通过传输通道发送数据到 Gateway 侧。
