@@ -32,3 +32,8 @@ internal/agent_teams/agent/stream_controller.go
 # team_runner.go — 团队运行器。已知豁免（见 .coverage-exempt）：真实团队运行期路径需
 # TeamHarness + agent 会话 + 存储；本次仅把清理 defer 的共享 ctx 拆成两步独立 ctx。
 internal/agent_teams/runtime/team_runner.go
+
+# ── 2026-11-02 2026-11-01 审查处置（T-15） ──
+# protocol.go — ACP JSON-RPC 标量归一化工具（id/sessionId 字符串化），纯函数、无 IO 与装配，
+# 集成层没有独立入口；本次改动为补齐整型族与浮点格式，由包内表驱动单测覆盖（100%）。
+internal/swarm/e2a/acp/protocol.go
