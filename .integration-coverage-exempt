@@ -113,3 +113,10 @@ internal/swarm/channels/web/file_api.go
 cmd/uapclaw/acp_cmd.go#L53-L53
 cmd/uapclaw/acp_cmd.go#L56-L56
 cmd/uapclaw/acp_cmd.go#L60-L60
+# ── 2026-11-02 记忆工具结果键名对齐 Python（json tag） ──
+# lite/types.go — 整文件只有 type 声明（无 func/var/const），go tool cover 不产生任何
+# 覆盖块，改动行永远判「未被执行」。本次改动只是给 7 个结果结构体字段补 json tag；
+# 键名形状由集成用例 tests/integration/agentcore/harness/rails/memory 的
+# TestMemoryRail_运行时RegisterRail后read_memory可真实读取 实断言
+# （results 必须是数组、渲染为 {'k': 'v'} 且不含 map[...]）。
+internal/agentcore/memory/lite/types.go

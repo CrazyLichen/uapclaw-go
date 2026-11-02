@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -213,6 +214,22 @@ func (s *MemoryRailSuite) TestMemoryRail_运行时RegisterRail后read_memory可�
 		"read_memory 应成功（注入缺失时为「工作空间未初始化」），实际: %+v", rres)
 	content, _ := rres["content"].(string)
 	s.Contains(content, "memory-rail-register-rail", "应读到写入的内容")
+
+	// 工具结果的文本渲染必须与 Python str(dict) 一致（{'k': 'v'}），
+	// 而不是 Go 的 map[...]；这是前端卡片与日志里直接可见的形态。
+	rendered := utils.PyStr(rres)
+	s.NotContains(rendered, "map[", "工具结果渲染不应出现 Go 的 map[...] 记法")
+	s.Contains(rendered, "'content':", "应渲染为 Python dict 形式")
+
+	// memory_search：检索不可用/无命中时 results 也必须是数组（Python 恒为 list）
+	searchTool := s.toolByName(agent, "memory_search")
+	sres, err := searchTool.Invoke(initCtx, map[string]any{"query": "集成标记"})
+	s.Require().NoError(err)
+	rawResults, ok := sres["results"]
+	s.Require().True(ok, "memory_search 结果必须含 results 键，实际: %+v", sres)
+	_, isSlice := rawResults.([]any)
+	s.True(isSlice, "results 必须是数组而非 null，实际 %T", rawResults)
+	s.NotContains(utils.PyStr(sres), "map[", "检索结果渲染同样不得出现 map[...]")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
