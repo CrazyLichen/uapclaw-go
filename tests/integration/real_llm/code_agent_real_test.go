@@ -94,9 +94,9 @@ func (s *CodeAgentRealSuite) SetupTest() {
 //   - 第二轮 slice 无 enter_plan_mode（一致）；未移植 assertIn
 //     ("todo_create")（模型行为自由度大，避免脆弱断言）
 //   - 第二轮后 plan_mode.mode=="normal"（一致）
-//   - 第二轮可能 interrupt：CodeAgent 工厂的 ConfirmInterruptRail 拦截
+//   - 两轮都可能 interrupt：CodeAgent 工厂的 ConfirmInterruptRail 拦截
 //     switch_mode（预期设计），按 Python 恢复测试的模式处理
-//     （InteractiveInput 确认 resume，见方法体内注释）
+//     （InteractiveInput 确认 resume，见 resumeInterrupts 注释）
 func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执行() {
 	s.skipUnlessRealLLMTests()
 	s.SkipIfNoRealLLM()
@@ -172,6 +172,11 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 			attempt+1, first)
 		s.Require().Less(attempt, 4, "第一轮连续 5 次返回缺 result_type 的空结果，中止")
 	}
+	// 第一轮同样可能被 ConfirmInterruptRail 拦截（模型调 switch_mode 复查计划时），
+	// 与第二轮同构处理：确认放行后 resume，直到拿到 answer。
+	// 夜间 CI 41500287993 实证首轮直接返回 interrupt，原实现只在第二轮兜底，
+	// 于是被误判成「没给出答复」。
+	first = s.resumeInterrupts(ctx, agent, sess, "第一轮", first)
 	testhelpers.AssertAnswerResult(s.T(), first)
 
 	// 对齐 Python: state_after_first.plan_mode 断言（mode 断言按生产链路修正，
@@ -227,22 +232,7 @@ func (s *CodeAgentRealSuite) TestCodeAgentReal_真实LLM_plan模式写入与执�
 	// Python 主测试（test_plan_mode_with_real_model_end_to_end）无此分支，
 	// 因其 @unittest.skip 从未运行——Go 首跑本地实测（2026-10-29）deepseek
 	// 在第二轮倾向调用 switch_mode("plan") 复查计划，被 rail 拦截为 interrupt。
-	for attempts := 0; ; attempts++ {
-		resultType, _ := second["result_type"].(string)
-		if resultType == "answer" {
-			break
-		}
-		s.Require().Equal("interrupt", resultType,
-			"第二轮结果应为 answer 或 interrupt（非 answer 的中间态只允许 interrupt），实际 %q", resultType)
-		interruptIDs, _ := second["interrupt_ids"].([]string)
-		s.Require().NotEmpty(interruptIDs, "interrupt 结果应携带 interrupt_ids")
-		s.Require().Less(attempts, 5, "interrupt 恢复轮次超过 5 次，中止防死循环")
-
-		interactiveInput := testhelpers.ConfirmInterrupt(interruptIDs[0], false)
-		second, err = agent.Invoke(ctx, map[string]any{"query": interactiveInput},
-			agentinterfaces.WithSession(sess))
-		s.Require().NoError(err, fmt.Sprintf("interrupt 恢复 Invoke 失败（第 %d 次）", attempts+1))
-	}
+	second = s.resumeInterrupts(ctx, agent, sess, "第二轮", second)
 	testhelpers.AssertAnswerResult(s.T(), second)
 
 	// 对齐 Python: second_call_slice 断言（第二轮不应再出现 enter_plan_mode）
@@ -278,5 +268,35 @@ func (s *CodeAgentRealSuite) realLLMTestsEnabled() bool {
 func (s *CodeAgentRealSuite) skipUnlessRealLLMTests() {
 	if !s.realLLMTestsEnabled() {
 		s.T().Skip("Real LLM 测试未启用。设置 RUN_REAL_LLM_TESTS=1 开启（对齐 Python 守卫）。")
+	}
+}
+
+// resumeInterrupts 消化 ConfirmInterruptRail 的 interrupt 中间态：确认放行后 resume，
+// 返回不再处于 interrupt 的结果。
+//
+// 真实 LLM 在 plan 模式会调 switch_mode 复查/切换模式，被 rail 拦截成 interrupt
+// （code_agent_factory.go 的有意设计）。两轮都观测到过：2026-10-29 本地是第二轮，
+// 夜间 CI 41500287993 是首轮。它属于合法的待确认中间态，不是「没给出答复」，
+// 按 Python test_plan_mode_ask_user_interrupt_and_resume 的恢复模式处理。
+// round 仅用于区分断言与日志文案。
+func (s *CodeAgentRealSuite) resumeInterrupts(
+	ctx context.Context, agent *harness.DeepAgent, sess *session.Session, round string, result map[string]any,
+) map[string]any {
+	for attempts := 0; ; attempts++ {
+		resultType, _ := result["result_type"].(string)
+		if resultType == "answer" {
+			return result
+		}
+		s.Require().Equal("interrupt", resultType,
+			"%s结果应为 answer 或 interrupt（非 answer 的中间态只允许 interrupt），实际 %q", round, resultType)
+		interruptIDs, _ := result["interrupt_ids"].([]string)
+		s.Require().NotEmpty(interruptIDs, "%s interrupt 结果应携带 interrupt_ids", round)
+		s.Require().Less(attempts, 5, "%s interrupt 恢复轮次超过 5 次，中止防死循环", round)
+
+		var err error
+		result, err = agent.Invoke(ctx, map[string]any{
+			"query": testhelpers.ConfirmInterrupt(interruptIDs[0], false),
+		}, agentinterfaces.WithSession(sess))
+		s.Require().NoError(err, "%s interrupt 恢复 Invoke 失败（第 %d 次）", round, attempts+1)
 	}
 }

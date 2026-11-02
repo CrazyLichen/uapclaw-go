@@ -161,6 +161,9 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		secondSentAt    time.Time
 		firstAcceptedAt time.Time
 		firstFinalAt    time.Time
+		// eventCounts 记录收到的每类帧数量，失败时用于区分「服务端一帧没发」
+		// 与「只发了思考/正文流但没进工具」。
+		eventCounts = map[string]int{}
 	)
 
 	deadline := time.Now().Add(8 * time.Minute)
@@ -171,7 +174,7 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			s.T().Logf("读帧中断，结束观测: %v", err)
+			s.T().Logf("读帧中断，结束观测（帧统计=%v）: %v", eventCounts, err)
 			break
 		}
 
@@ -179,6 +182,7 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		if json.Unmarshal(raw, &frame) != nil {
 			continue
 		}
+		eventCounts[realEventName(frame)]++
 		switch {
 		case realFrameID(frame) == "req-real-1" && realAccepted(frame):
 			if !firstAccepted {
@@ -223,8 +227,8 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		}
 	}
 
-	s.T().Logf("观测: firstAccepted=%v runtimeReady=%v memberSpawned=%v secondAccepted=%v firstFinal=%v sawMember=%v sawMessage=%v",
-		firstAccepted, runtimeReady, memberSpawned, secondAccepted, firstFinal, sawMember, sawMessage)
+	s.T().Logf("观测: firstAccepted=%v runtimeReady=%v memberSpawned=%v secondAccepted=%v firstFinal=%v sawMember=%v sawMessage=%v 帧统计=%v",
+		firstAccepted, runtimeReady, memberSpawned, secondAccepted, firstFinal, sawMember, sawMessage, eventCounts)
 	s.True(firstAccepted, "首条 chat.send 应被受理")
 	s.True(secondSent, "第二条消息应在首条流未结束时发出")
 	s.True(secondAccepted, "第二条 chat.send 应被受理（同 session 不互斥）")
@@ -271,6 +275,9 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 		toolNames     []string
 		sawFinal      bool
 		accepted      bool
+		// eventCounts 记录收到的每类帧数量：失败时靠它区分「服务端一帧没发」
+		// 与「只发了思考/正文流但没进工具」两类原因。
+		eventCounts = map[string]int{}
 	)
 	deadline := time.Now().Add(10 * time.Minute)
 	for time.Now().Before(deadline) {
@@ -282,7 +289,8 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 		_ = conn.SetReadDeadline(time.Now().Add(3 * time.Minute))
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			s.T().Logf("读帧中断，结束观测（工具序列=%v memberCreated=%v）: %v", toolNames, memberCreated, err)
+			s.T().Logf("读帧中断，结束观测（工具序列=%v memberCreated=%v 帧统计=%v）: %v",
+				toolNames, memberCreated, eventCounts, err)
 			break
 		}
 
@@ -291,12 +299,14 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 			continue
 		}
 		payload, _ := frame["payload"].(map[string]any)
+		evtName := realEventName(frame)
+		eventCounts[evtName]++
 		// 先记录受理帧：失败时用「受理了但没建队」与「压根没受理」区分
 		// 模型慢/不建队 和 服务端拒收 两类原因。
 		if realFrameID(frame) == "req-auto-1" && realAccepted(frame) {
 			accepted = true
 		}
-		switch realEventName(frame) {
+		switch evtName {
 		case "chat.tool_call":
 			if tc, ok := payload["tool_call"].(map[string]any); ok {
 				name, _ := tc["name"].(string)
@@ -326,7 +336,8 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 		}
 	}
 
-	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v accepted=%v", toolNames, memberCreated, sawFinal, accepted)
+	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v accepted=%v 帧统计=%v",
+		toolNames, memberCreated, sawFinal, accepted, eventCounts)
 	// 硬断言只锁确定性结果：客户端能观测到成员被真实创建。
 	//
 	// 不断言「工具序列里必须出现 build_team」。leader_workflow.md 第 2 步确实要求
@@ -335,8 +346,8 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 	// team_member 表，不校验 team_info 记录，与 Python 侧一致），夜间真实 LLM CI
 	// 因此两次假红（run 41326851160 / 41352864530），而建队结果本身是好的。
 	// 提示词是否生效由上面的 memberCreated 兜底：提示词/rail 坏掉时成员根本建不出来。
-	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员（accepted=%v sawFinal=%v 工具序列=%v）",
-		accepted, sawFinal, toolNames)
+	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员（accepted=%v sawFinal=%v 帧统计=%v 工具序列=%v）",
+		accepted, sawFinal, eventCounts, toolNames)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
