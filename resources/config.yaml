@@ -143,3 +143,101 @@ models:
         temperature: 0.95
       # 该条目是否为默认模型
       is_default: true
+
+# ReAct / 主 Agent 配置
+react:
+  # Agent 名称。代码默认：main_agent（adapter/deep_adapter.go:355-360）
+  agent_name: main_agent
+  # 任务循环总开关。代码默认：true（adapter/deep_adapter.go:2657-2663）
+  # 注意：为 true 时内层 ReAct 上限被置为 MaxInt（deep_agent.go:1548/1739），
+  #       下面 max_iterations 对主 deep agent 不生效，仅作用于 enable_task_loop=false 的路径
+  enable_task_loop: true
+  # 任务规划开关（独立于 task_loop）：为 true 才注册 todo_create/todo_list/todo_get/todo_modify
+  # 代码默认：true（adapter/deep_adapter.go:2668-2676）
+  enable_task_planning: true
+  # ReAct 最大迭代次数。代码默认：15（adapter/deep_adapter.go:575）
+  max_iterations: 100
+  # 模型名；留空则用 models 段默认条目
+  model_name: ""
+  # 技能模式：all / 指定列表（adapter/deep_adapter_rails.go:319）
+  skill_mode: all
+  # 子代理开关：仅显式 enabled: true 才启用（adapter/deep_adapter_config.go:175-178）
+  subagents:
+    general_agent:
+      enabled: true
+    code_agent:
+      enabled: false
+    research_agent:
+      enabled: false
+  # 输出分块（字符数）
+  answer_chunk_size: 500
+  stream_chunk_threshold: 50
+  stream_character_threshold: 2000
+  # 上下文工程配置
+  context_engine_config:
+    # 是否释放 KV 缓存
+    enable_kv_cache_release: false
+
+# 预定义 Agent 列表（agent 名 → 模型/技能/工作区/迭代上限）
+# 代码默认：max_iterations=200、completion_timeout=600、stable_base=true（team/config_loader.go:20-26）
+agents: {}
+
+# ACP 子代理配置（profile → command/args/cwd/env）
+# 代码读取：agents/harness/common/tools/acp_chat/client_cache.go:69
+# 未配置任何 profile 时 ACP 工具不可用（无代码默认）
+acp_agents: {}
+
+# 模式配置：agent（fast/plan）/ code / team
+modes:
+  agent:
+    # 快速模式
+    fast:
+      # 内置记忆开关；生效还需 memory.engine/mode 放行且 embed 段齐全
+      # 代码默认：false（memory/config.go:296-300）
+      memory:
+        enabled: true
+        # 主动记忆：true=模型自行静默记录；false=仅在用户明确要求时记录
+        # 代码默认：false（memory/config.go:303-310）
+        is_proactive: false
+    # 规划模式
+    plan:
+      memory:
+        enabled: true
+        # 规划模式启用主动记忆（prompts/sections/memory.go:268-277）
+        is_proactive: true
+  code:
+    # 动态 Rails：出现在列表中的 = 启用
+    rails: []
+    # 可用工具列表；留空表示不额外限制
+    tools: []
+  # 团队模式
+  team:
+    # 团队级共享记忆（跨成员读写同一份 TEAM_MEMORY.md）
+    # 代码默认：false（关闭时成员各自使用独立 MemoryRail）
+    memory:
+      enabled: false
+
+# 团队配置
+team:
+  # 团队标识，作为运行时身份键（TeamRuntimeManager 按 team_name + session_id 取活跃团队）
+  # 代码默认：team（team/config_loader.go:80-83）
+  team_name: uapclaw_team
+  # 生命周期：persistent / ephemeral。代码默认：persistent（team/config_loader.go:86）
+  lifecycle: persistent
+  # 成员模式。代码默认：build_mode（team/config_loader.go:87）
+  teammate_mode: build_mode
+  # 派生方式。代码默认：inprocess（team/config_loader.go:88）
+  spawn_mode: inprocess
+  # 是否启用 HITT（human-in-the-loop）。代码默认：true（team/config_loader.go:89）
+  enable_hitt: true
+  # 成员定义（agent 名 → 规格）
+  agents: {}
+  # 传输方式。代码默认：inprocess（team/config_loader.go:502-518）
+  transport:
+    type: inprocess
+  # 存储方式。代码默认：sqlite（team/config_loader.go:113-155）
+  storage:
+    type: sqlite
+  # 工作区
+  workspace:
+    enabled: true
