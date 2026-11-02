@@ -212,7 +212,7 @@ func TestTaskMemoryService_AddMemory_ACE_缺少内容(t *testing.T) {
 		// Content 为空
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "content and section")
+	assert.Contains(t, err.Error(), "requires content")
 }
 
 // TestTaskMemoryService_AddMemory_ReMe 验证 ReMe 算法的添加记忆。
@@ -848,4 +848,24 @@ func TestAddMemory_ReMe节点与Python对齐(t *testing.T) {
 	assert.True(t, hasNested, "metadata 缺少嵌套 metadata 段")
 	_, hasCreated := node.Metadata["created_at"]
 	assert.True(t, hasCreated, "metadata 缺少 created_at")
+}
+
+// TestAddMemory_Section缺省为general 验证不传 Section 时默认 general。
+func TestAddMemory_Section缺省为general(t *testing.T) {
+	svc, vs, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+
+	res, err := svc.AddMemory(context.Background(), "u1", AddMemoryRequest{Content: "hello"})
+	require.NoError(t, err)
+	assert.Contains(t, res.MemoryID, "_general-")
+	assert.Len(t, vs.nodes, 1)
+}
+
+// TestAddMemory_Content为空仍报错 验证必填校验未被放宽。
+func TestAddMemory_Content为空仍报错(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+
+	_, err = svc.AddMemory(context.Background(), "u1", AddMemoryRequest{})
+	assert.Error(t, err)
 }

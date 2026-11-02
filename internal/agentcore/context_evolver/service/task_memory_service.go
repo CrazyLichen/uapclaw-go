@@ -378,6 +378,11 @@ func (s *TaskMemoryService) Summarize(ctx context.Context, userID string, matts 
 
 // AddMemory 手动添加记忆。对齐 Python TaskMemoryService.add_memory(user_id, request)。
 func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req AddMemoryRequest) (*AddMemoryResult, error) {
+	// 对齐 Python AddMemoryRequest.section: str = "general" 的缺省值语义
+	if req.Section == "" {
+		req.Section = "general"
+	}
+
 	// 对齐 Python：logger.info("Adding manual %s memory for user=%s", ...)
 	logger.Info(logComponent).
 		Str("algorithm", s.summaryAlgorithm).
@@ -405,10 +410,11 @@ func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req Ad
 		}
 		node, memoryID = s.createReMeMemory(ctx, userID, req)
 	case "ACE":
-		if req.Content == "" || req.Section == "" {
+		// Section 已在入口归一化为 "general"，此处只需校验 content
+		if req.Content == "" {
 			return nil, exception.NewBaseError(
 				exception.StatusToolchainEvolvingMemoryAddExecutionError,
-				exception.WithMsg("ACE add_memory requires content and section"),
+				exception.WithMsg("ACE add_memory requires content"),
 			)
 		}
 		node, memoryID = s.createACEMemory(ctx, userID, req)
