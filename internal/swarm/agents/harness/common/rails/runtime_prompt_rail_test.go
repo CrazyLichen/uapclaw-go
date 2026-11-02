@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -129,7 +130,7 @@ func TestSetForceEnglish(t *testing.T) {
 func TestInjectTimeSection_中文(t *testing.T) {
 	rail := NewRuntimePromptRail("cn", "web")
 	builder := newMockBuilder()
-	rail.injectTimeSection(builder)
+	rail.injectTimeSection(builder, rail.snapshot())
 	section := builder.GetSection("time")
 	assert.NotNil(t, section)
 	assert.Equal(t, sectionTimePriority, section.Priority)
@@ -141,7 +142,7 @@ func TestInjectTimeSection_英文(t *testing.T) {
 	rail := NewRuntimePromptRail("cn", "web")
 	rail.SetForceEnglish(true)
 	builder := newMockBuilder()
-	rail.injectTimeSection(builder)
+	rail.injectTimeSection(builder, rail.snapshot())
 	section := builder.GetSection("time")
 	assert.NotNil(t, section)
 	assert.Contains(t, section.Content["cn"], "Time Description")
@@ -153,7 +154,7 @@ func TestInjectRuntimeSection(t *testing.T) {
 	rail.SetModelName("test-model")
 	rail.SetMode("agent.plan")
 	builder := newMockBuilder()
-	rail.injectRuntimeSection(builder, nil)
+	rail.injectRuntimeSection(builder, nil, rail.snapshot())
 	section := builder.GetSection("runtime")
 	assert.NotNil(t, section)
 	assert.Equal(t, sectionRuntimePriority, section.Priority)
@@ -164,13 +165,13 @@ func TestInjectBrowserToolPolicySection_条件(t *testing.T) {
 	// channel=web → 注入
 	rail := NewRuntimePromptRail("cn", "web")
 	builder := newMockBuilder()
-	rail.injectBrowserToolPolicySection(builder)
+	rail.injectBrowserToolPolicySection(builder, rail.snapshot())
 	assert.True(t, builder.HasSection("browser_tool_policy"))
 
 	// channel=tui → 不注入
 	rail2 := NewRuntimePromptRail("cn", "tui")
 	builder2 := newMockBuilder()
-	rail2.injectBrowserToolPolicySection(builder2)
+	rail2.injectBrowserToolPolicySection(builder2, rail2.snapshot())
 	assert.False(t, builder2.HasSection("browser_tool_policy"))
 }
 
@@ -179,22 +180,22 @@ func TestInjectGitStatusSection_条件(t *testing.T) {
 	// git_branch 为空 → 不注入
 	rail := NewRuntimePromptRail("cn", "web")
 	builder := newMockBuilder()
-	rail.injectGitStatusSection(builder, nil)
+	rail.injectGitStatusSection(builder, nil, rail.snapshot())
 	assert.False(t, builder.HasSection("git_status"))
 
 	// git_branch = "N/A" → 不注入（不在 git 仓库内）
 	builder2 := newMockBuilder()
-	rail.injectGitStatusSection(builder2, map[string]string{"git_branch": "N/A"})
+	rail.injectGitStatusSection(builder2, map[string]string{"git_branch": "N/A"}, rail.snapshot())
 	assert.False(t, builder2.HasSection("git_status"))
 
 	// git_branch = "HEAD" → 应注入（对齐 Python: detached HEAD fallback）
 	builder3 := newMockBuilder()
-	rail.injectGitStatusSection(builder3, map[string]string{"git_branch": "HEAD"})
+	rail.injectGitStatusSection(builder3, map[string]string{"git_branch": "HEAD"}, rail.snapshot())
 	assert.True(t, builder3.HasSection("git_status"))
 
 	// git_branch = "feature-branch" → 应注入
 	builder4 := newMockBuilder()
-	rail.injectGitStatusSection(builder4, map[string]string{"git_branch": "feature-branch"})
+	rail.injectGitStatusSection(builder4, map[string]string{"git_branch": "feature-branch"}, rail.snapshot())
 	assert.True(t, builder4.HasSection("git_status"))
 }
 
@@ -202,7 +203,7 @@ func TestInjectGitStatusSection_条件(t *testing.T) {
 func TestInjectEnvSection(t *testing.T) {
 	rail := NewRuntimePromptRail("cn", "web")
 	builder := newMockBuilder()
-	rail.injectEnvSection(builder)
+	rail.injectEnvSection(builder, rail.snapshot())
 	section := builder.GetSection("env")
 	assert.NotNil(t, section)
 	assert.Equal(t, sectionEnvPriority, section.Priority)
@@ -212,7 +213,7 @@ func TestInjectEnvSection(t *testing.T) {
 func TestInjectLanguageOutputSection(t *testing.T) {
 	rail := NewRuntimePromptRail("cn", "web")
 	builder := newMockBuilder()
-	rail.injectLanguageOutputSection(builder, nil)
+	rail.injectLanguageOutputSection(builder, nil, rail.snapshot())
 	section := builder.GetSection("language_output")
 	assert.NotNil(t, section)
 	assert.Equal(t, sectionLanguageOutputPriority, section.Priority)
@@ -295,4 +296,30 @@ func TestLanguageNames(t *testing.T) {
 	assert.Equal(t, "Chinese", languageNames["cn"])
 	assert.Equal(t, "Chinese", languageNames["zh"])
 	assert.Equal(t, "English", languageNames["en"])
+}
+
+// TestRuntimePromptRail_并发设置与调用 验证 Set* 与 BeforeModelCall 并发无竞态。
+func TestRuntimePromptRail_并发设置与调用(t *testing.T) {
+	rail := NewRuntimePromptRail("cn", "web")
+	// 不设置 builder：BeforeModelCall 取完快照后提前返回，
+	// 这样只验证 rail 字段的并发读写（builder 由每个 agent 各自持有）。
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(2)
+		go func(i int) {
+			defer wg.Done()
+			rail.SetLanguage([]string{"cn", "en"}[i%2])
+			rail.SetChannel([]string{"web", "tui"}[i%2])
+			rail.SetTrustedDirs([]string{"/tmp"})
+			rail.SetRuntimePaths("/tmp", "/tmp")
+			rail.SetModelName("m")
+			rail.SetMode("code")
+			rail.SetForceEnglish(i%2 == 0)
+		}(i)
+		go func() {
+			defer wg.Done()
+			_ = rail.BeforeModelCall(context.Background(), nil)
+		}()
+	}
+	wg.Wait()
 }
