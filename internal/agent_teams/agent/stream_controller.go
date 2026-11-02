@@ -391,9 +391,17 @@ func (sc *StreamController) CooperativeCancel(ctx context.Context) error {
 				Err(err).Msg("harness.Abort failed")
 		}
 	}
-	// 等待 goroutine 自然完成或超时
+	// 等待 goroutine 自然完成或超时。
+	// M-16：roundDone 由执行 goroutine 在 sc.mu 内清零，此处必须持锁取快照；
+	// 为 nil 表示已无在飞轮次，直接返回。
+	sc.mu.Lock()
+	done := sc.roundDone
+	sc.mu.Unlock()
+	if done == nil {
+		return nil
+	}
 	select {
-	case <-sc.roundDone:
+	case <-done:
 		return nil
 	case <-time.After(cooperativeAbortTimeout):
 		if sc.cancelRound != nil {
@@ -401,7 +409,7 @@ func (sc *StreamController) CooperativeCancel(ctx context.Context) error {
 		}
 		// 等待 goroutine 退出
 		select {
-		case <-sc.roundDone:
+		case <-done:
 		case <-ctx.Done():
 		}
 		return nil

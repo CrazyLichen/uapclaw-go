@@ -3,9 +3,9 @@
 package acp_test
 
 import (
-	"encoding/json"
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"

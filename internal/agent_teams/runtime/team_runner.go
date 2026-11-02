@@ -273,8 +273,8 @@ func RunTeamMember(
 	// 同 RunBaseTeamInvoke：清理 ctx 脱取消 + 超时，错误记录不吞。
 	defer func() {
 		// M-15：两步各用独立 ctx。原实现共用一个 30s 预算，慢存储下
-	// FinalizeMember 吃满后 PostRun 只剩残值 → checkpoint/终态落盘失败仅 Warn，
-	// 会话终态丢失（Python 的 finally 无超时，两步互不影响）。
+		// FinalizeMember 吃满后 PostRun 只剩残值 → checkpoint/终态落盘失败仅 Warn，
+		// 会话终态丢失（Python 的 finally 无超时，两步互不影响）。
 		func() {
 			cleanCtx, cancel := teamCleanupContext(ctx)
 			defer cancel()

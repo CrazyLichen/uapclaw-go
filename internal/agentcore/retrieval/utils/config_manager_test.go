@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"math"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"

@@ -171,8 +171,8 @@ func ConfigFromEnv(getenv func(string) string) A2AChannelConfig {
 		// M-03：默认值取 SDK 的 Version（"1.0"）。a2asrv 把请求 ctx 的协议版本钉死为
 		// a2a.Version 并做严格相等比较（a2asrv/intercepted_handler.go），卡片里写
 		// "1.0.0" 会让按卡片回填 A2A-Version 的第三方客户端一律被 -32009 拒绝。
-		ProtocolVersion:  orDefault(strings.TrimSpace(getenv("A2A_SERVER_PROTOCOL_VERSION")), string(sdka2a.Version)),
-		ChannelID:        defaultChannelID,
+		ProtocolVersion: orDefault(strings.TrimSpace(getenv("A2A_SERVER_PROTOCOL_VERSION")), string(sdka2a.Version)),
+		ChannelID:       defaultChannelID,
 		// 偏差 D9：品牌串映射 JiuwenClaw → UapClaw
 		AppName:        orDefault(strings.TrimSpace(getenv("A2A_SERVER_APP_NAME")), "UapClaw Gateway A2A Server"),
 		AppDescription: orDefault(strings.TrimSpace(getenv("A2A_SERVER_APP_DESCRIPTION")), "A2A ingress for UapClaw Gateway"),

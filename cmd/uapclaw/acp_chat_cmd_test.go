@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"syscall"
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 

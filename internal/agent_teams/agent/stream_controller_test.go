@@ -73,7 +73,7 @@ func TestNewStreamController_构造函数(t *testing.T) {
 	if sc.streamQueue != nil {
 		t.Error("streamQueue 应为 nil")
 	}
-	if sc.roundDone != nil {
+	if roundDoneSnapshot(sc) != nil {
 		t.Error("roundDone 应为 nil")
 	}
 }
@@ -476,10 +476,10 @@ func TestStreamController_DrainAgentTask(t *testing.T) {
 
 	_ = sc.DrainAgentTask(context.Background())
 
-	if len(sc.pendingInputs) != 0 {
+	if pendingInputsLen(sc) != 0 {
 		t.Error("pendingInputs 应被清除")
 	}
-	if len(sc.pendingInterruptResumes) != 0 {
+	if pendingResumesLen(sc) != 0 {
 		t.Error("pendingInterruptResumes 应被清除")
 	}
 }
@@ -547,7 +547,7 @@ func TestStreamController_DequeueValidInterruptResume(t *testing.T) {
 	if result := sc.dequeueValidInterruptResume(); result != nil {
 		t.Error("无效项应被丢弃")
 	}
-	if len(sc.pendingInterruptResumes) != 0 {
+	if pendingResumesLen(sc) != 0 {
 		t.Error("无效项应被移除")
 	}
 }
@@ -577,7 +577,7 @@ func TestStreamController_StartRound_无harness(t *testing.T) {
 	if err != nil {
 		t.Errorf("StartRound 不应返回错误: %v", err)
 	}
-	if sc.roundDone != nil {
+	if roundDoneSnapshot(sc) != nil {
 		t.Error("无 harness 时不应启动轮次")
 	}
 }
@@ -761,7 +761,7 @@ func TestStreamController_startRound_无队列(t *testing.T) {
 	sc := newTestStreamController()
 	// streamQueue 为 nil
 	sc.startRound(context.Background(), "test")
-	if sc.roundDone != nil {
+	if roundDoneSnapshot(sc) != nil {
 		t.Error("无 streamQueue 时不应启动轮次")
 	}
 }
@@ -773,7 +773,7 @@ func TestStreamController_startRound_正常启动(t *testing.T) {
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	sc.startRound(context.Background(), "hello")
-	if sc.roundDone == nil {
+	if roundDoneSnapshot(sc) == nil {
 		t.Fatal("roundDone 不应为 nil")
 	}
 
@@ -791,7 +791,7 @@ func TestStreamController_StartRound_有harness有队列(t *testing.T) {
 	if err != nil {
 		t.Errorf("StartRound 不应返回错误: %v", err)
 	}
-	if sc.roundDone == nil {
+	if roundDoneSnapshot(sc) == nil {
 		t.Fatal("roundDone 不应为 nil")
 	}
 
@@ -963,8 +963,8 @@ func TestStreamController_runOneRound_续轮pendingInputs(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	if len(sc.pendingInputs) != 0 {
-		t.Errorf("pendingInputs 应被消费, 剩余 %d", len(sc.pendingInputs))
+	if pendingInputsLen(sc) != 0 {
+		t.Errorf("pendingInputs 应被消费, 剩余 %d", pendingInputsLen(sc))
 	}
 }
 
@@ -979,8 +979,8 @@ func TestStreamController_runOneRound_续轮interruptResume(t *testing.T) {
 
 	sc.runOneRound(context.Background(), "first")
 
-	if len(sc.pendingInterruptResumes) != 0 {
-		t.Errorf("无效 interruptResume 应被丢弃, 剩余 %d", len(sc.pendingInterruptResumes))
+	if pendingResumesLen(sc) != 0 {
+		t.Errorf("无效 interruptResume 应被丢弃, 剩余 %d", pendingResumesLen(sc))
 	}
 }
 
@@ -1046,7 +1046,7 @@ func TestStreamController_runOneRound_cancelRequested(t *testing.T) {
 
 	sc.runOneRound(context.Background(), "first")
 
-	if len(sc.pendingInputs) != 1 {
+	if pendingInputsLen(sc) != 1 {
 		t.Error("cancelRequested 时不应消费 pendingInputs")
 	}
 	if wakeCalled {
@@ -1177,10 +1177,10 @@ func TestStreamController_DrainAgentTask_有飞行轮次(t *testing.T) {
 	// 等待轮次完成，避免与 goroutine 并发访问字段
 	waitRoundFinished(t, sc)
 
-	if len(sc.pendingInputs) != 0 {
+	if pendingInputsLen(sc) != 0 {
 		t.Error("pendingInputs 应被清除")
 	}
-	if len(sc.pendingInterruptResumes) != 0 {
+	if pendingResumesLen(sc) != 0 {
 		t.Error("pendingInterruptResumes 应被清除")
 	}
 }
@@ -1274,9 +1274,7 @@ func TestStreamController_QueuePendingInput_并发安全(t *testing.T) {
 	}
 	wg.Wait()
 
-	sc.mu.Lock()
-	got := len(sc.pendingInputs)
-	sc.mu.Unlock()
+	got := pendingInputsLen(sc)
 	if want := goroutines * perGoroutine; got != want {
 		t.Fatalf("pendingInputs 长度 = %d, want %d", got, want)
 	}
@@ -1296,4 +1294,28 @@ func waitRoundFinished(t *testing.T, sc *StreamController) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("轮次超时未完成")
+}
+
+// roundDoneSnapshot 在锁内取 roundDone 快照。
+//
+// M-16 后该字段由执行 goroutine 在 sc.mu 内清零/替换，测试也必须持锁读，
+// 否则 -race 会报「测试读 vs 执行写」。
+func roundDoneSnapshot(sc *StreamController) chan struct{} {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return sc.roundDone
+}
+
+// pendingInputsLen 在锁内读待处理输入条数（同上：执行 goroutine 会在锁内清空）。
+func pendingInputsLen(sc *StreamController) int {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return len(sc.pendingInputs)
+}
+
+// pendingResumesLen 在锁内读待处理中断恢复条数。
+func pendingResumesLen(sc *StreamController) int {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return len(sc.pendingInterruptResumes)
 }
