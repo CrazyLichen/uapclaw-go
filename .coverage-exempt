@@ -115,3 +115,11 @@ internal/agent_teams/runtime/team_runner.go
 # 用行级豁免而不是整文件豁免：该文件其余改动行（Steer/FollowUp 的 ctrl==nil 与 no-session
 # 两个错误分支）由 deep_agent_test.go 直接覆盖，后续改动仍按行判定。
 internal/agentcore/harness/deep_agent.go#L1041-L1041
+
+# ── 2026-11-02 模型配置前置校验（04e9fdee 引入，覆盖率门禁改口径后暴露） ──
+# deep_adapter.go#L2513-L2534：defaultModelClientConfig 读 ~/.uapclaw/config.yaml。
+# 路径经 path.getResolvedPaths 的 sync.Once 缓存，进程内无法用 t.Setenv("HOME") 重定向，
+# 属「依赖外部运行环境」（规则 3.2 第 2 类）；该函数的六个提前返回分支只能靠真实配置
+# 文件的正负样本覆盖，CI 环境没有也无法伪造。同文件其余改动行（hasValidModelConfig
+# 与 anyToConfigString）由 deep_adapter_test.go 覆盖。
+internal/swarm/server/adapter/deep_adapter.go#L2513-L2534

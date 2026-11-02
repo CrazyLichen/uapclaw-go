@@ -532,6 +532,10 @@ func TestAnyToConfigString_Python真值语义(t *testing.T) {
 		{"float 0", 0.0, ""},
 		{"float 非零", 1.5, "1.5"},
 		{"空切片", []string{}, ""},
+		{"uint 0", uint(0), ""},
+		{"非零 uint", uint(7), "7"},
+		{"空 map", map[string]any{}, ""},
+		{"空数组", [0]int{}, ""},
 	}
 	for _, c := range cases {
 		if got := anyToConfigString(c.in); got != c.want {

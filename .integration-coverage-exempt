@@ -96,3 +96,14 @@ internal/agent_teams/spawn/inprocess_handle.go
 # router.go — pregel 8.4/8.5 尚未接入（PregelLoop 不存在，New*Router 生产零调用方），
 # 集成层没有任何入口；改动行单测 100%（nil→error、显式空切片→END、typed-nil 三例）。
 internal/agentcore/graph/pregel/router.go
+
+# ── 2026-11-02 48h 审查处置（M-03/T-03/T-07） ──
+# channels.go — 通道抽象与 ChannelManager（就绪判定/CNF 汇聚/检查点快照）。与 router.go
+# 同一处境：PregelLoop 尚未实现（8.3b），生产零调用方，集成层没有任何入口；
+# 本批次改动行（Snapshot 空形状、nil 守卫）由 pregel 包内单测 100% 覆盖。
+internal/agentcore/graph/pregel/channels.go
+
+# file_api.go — file-api 的 5 个 HTTP handler 与路径白名单解析。tests/integration 下
+# 没有任何 file-api 用例（grep "file-api|HandleFileContent" 零命中），集成层无入口；
+# 本次改动行是纯路径解析 helper（resolveExistingPrefix），由 file_api_test.go 覆盖 92.3%。
+internal/swarm/channels/web/file_api.go
