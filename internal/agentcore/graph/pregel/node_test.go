@@ -106,3 +106,38 @@ func TestNewPregelNode_nilRouterPanics(t *testing.T) {
 	}()
 	NewPregelNode("A", NoopNodeFunc, &stubRouter{id: "r1"}, nil)
 }
+
+// TestAddRouter_追加保序 builder 在构图期按边声明顺序追加路由，节点侧必须保序。
+// Python: builder.py:49-68（nodes[src].routers.append(...) 保序）
+func TestAddRouter_追加保序(t *testing.T) {
+	n := NewPregelNode("A", NoopNodeFunc)
+	r1 := &stubRouter{id: "r1"}
+	r2 := &stubRouter{id: "r2"}
+	r3 := &stubRouter{id: "r3"}
+
+	n.addRouter(r1)
+	n.addRouter(r2)
+	n.addRouter(r3)
+
+	if len(n.routers) != 3 {
+		t.Fatalf("routers 长度 = %d，期望 3", len(n.routers))
+	}
+	if n.routers[0] != Router(r1) || n.routers[1] != Router(r2) || n.routers[2] != Router(r3) {
+		t.Errorf("追加顺序不符：%v", n.routers)
+	}
+	if n.name != "A" || n.fn == nil {
+		t.Errorf("追加路由影响了 name/fn：name=%q", n.name)
+	}
+}
+
+// TestAddRouter_nilPanics 追加 nil 路由与构造期同口径 panic。
+// 偏差 D4：Python 无此方法，直接 append(None) 要到 dispatch 才炸。
+func TestAddRouter_nilPanics(t *testing.T) {
+	n := NewPregelNode("A", NoopNodeFunc)
+	defer func() {
+		if recover() == nil {
+			t.Fatal("追加 nil 路由时期望 panic，未发生")
+		}
+	}()
+	n.addRouter(nil)
+}
