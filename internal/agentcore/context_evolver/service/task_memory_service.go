@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"strings"
+	"time"
 
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
@@ -902,27 +903,22 @@ func (s *TaskMemoryService) createReMeMemory(_ context.Context, userID string, r
 }
 
 // createACEMemory 创建 ACE 格式的记忆。
+// 对齐 Python: memory = ACEMemory(...); vector_node = memory.to_vector_node()
+// node_id = f"ace_{workspace_id}_{id}"，id = f"{section}-{md5(content)[:8]}"。
 func (s *TaskMemoryService) createACEMemory(_ context.Context, userID string, req AddMemoryRequest) (*schema.VectorNode, string) {
-	section := req.Section
-	if section == "" {
-		section = "general"
+	contentHash := md5.Sum([]byte(req.Content))
+	now := time.Now().UTC()
+	memory := ceschema.ACEMemory{
+		BaseMemory: ceschema.BaseMemory{WorkspaceID: userID},
+		// 4 字节 = 8 个 hex 字符，等价 Python hexdigest()[:8]
+		ID:        fmt.Sprintf("%s-%x", req.Section, contentHash[:4]),
+		Section:   req.Section,
+		Content:   req.Content,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
-
-	// 对齐 Python：生成 ID = section + MD5(content)
-	hash := md5.Sum([]byte(req.Content))
-	memoryID := fmt.Sprintf("%s_%x", section, hash[:8])
-
-	metadata := map[string]any{
-		"workspace_id": userID,
-		"algorithm":    "ACE",
-		"memory_type":  "manual",
-		"section":      section,
-		"helpful":      0,
-		"harmful":      0,
-		"neutral":      0,
-	}
-
-	return schema.NewVectorNode(memoryID, req.Content, nil, metadata), memoryID
+	node := memory.ToVectorNode()
+	return node, node.ID
 }
 
 // algoToPersistName 算法名到持久化名的映射。
