@@ -83,6 +83,7 @@
 | D11 | 全局覆盖键 | `ContextEngineConfig.ContextWindowTokens`（优先级 1）不使用，保持 0 | 用户明确不动 `react` 段的窗口键；该字段保留给未来运行时显式覆盖 |
 | D12 | 兜底链 | 保留内置表（三级）与 200000（四级） | 未配置窗口的老用户行为不变；避免「未填就没值」导致分母为 0 |
 | D13 | 模板基线 | `resources/config.yaml` 的 `react.context_engine_config` 整段对齐 Python 模板（含 `enabled: true` / `enable_reload: true` / 四段），再追加 2 个 ratio 键 | 见 §4.4：Go 模板缺失该段导致「压缩默认关闭 + processor yaml 未生效」双重偏差，属 parity 修复；不修则本次阈值改动在默认配置下休眠 |
+| D14 | 比例的传递通道 | Go 在 `ceschema.ContextEngineConfig` 新增 `CompressionTriggerRatio` / `CompressionTargetRatio`（float64，0 = 不启用），由 `deepAgentContextEngineConfig` 从 yaml 读入，rail 从 `reactCfg.ContextEngineConfig` 读取 | rail 只拿得到 `ReActAgentConfig`，拿不到原始 yaml；Python 侧 rail 直接读 `_config_cache`（`interface_deep.py:355`）因此不需要该字段。D4 的「不新增字段」仅指 token 值，比例必须新增 |
 
 ## 4. 配置契约
 
@@ -195,10 +196,10 @@ Go 的 `resources/config.yaml:177-179` 只有 `context_engine_config.enable_kv_c
 | B2 | `web/web_handlers.go:960-1001` | `handleModelsList` 展平 map 补两字段（回填界面） |
 | B3 | `adapter/deep_adapter.go:2189` | `knownKeys` 加 `"max_input_tokens"` / `"max_output_tokens"` |
 | B4 | `adapter/deep_adapter.go:2128-2137` | `mcc["max_output_tokens"] > 0` → `llmschema.WithMaxTokens(n)` |
-| B5 | `adapter/deep_adapter.go:2028` `deepAgentContextEngineConfig` | 签名加 `configBase` 入参；遍历 `config.GetDefaultModels(configBase)` 收集 `model_client_config.max_input_tokens` → `result.ModelContextWindowTokens[model_name]`；`result.ModelName` = 当前生效模型名 |
+| B5 | `adapter/deep_adapter.go:2028` `deepAgentContextEngineConfig` | 签名加 `configBase` 入参；遍历 `config.GetDefaultModels(configBase)` 收集 `model_client_config.max_input_tokens` → `result.ModelContextWindowTokens[model_name]`；`result.ModelName` = 当前生效模型名；读 `cecMap` 的 `compression_trigger_ratio` / `compression_target_ratio` → 新字段（D14） |
 | B6 | `common/rails/stream_event_emit.go:186-221` | 分母改从 agent 的 `ContextEngineConfig` 取（`ResolveContextMax(ceConfig.ModelName, ceConfig.ContextWindowTokens, ceConfig.ModelContextWindowTokens)`）；分子按 §6.5 的回退顺序取 `InputTokens` |
 | B7 | `context_engine/context/session_model_context.go:1058-1068` + `:1192` | `statMessages` 按 §6.5 的回退顺序取 `InputTokens`；`resolveContextMax` 已走 `ResolveContextMax`，无需改 |
-| B8 | `harness/rails/context_engineer/context_processor_rail.go:87-128`（`Init`） | **在 `MergeProcessors` 之后**遍历 `allProcessors`，对五个 processor 的阈值统一做 `min(绝对, ratio×window)` 收口（顺序要求见 §6.6） |
+| B8 | `harness/rails/context_engineer/context_processor_rail.go:87-128`（`Init`） | **在 `MergeProcessors` 之后**遍历 `allProcessors`，对四个 processor（dialogue / current_round / round_level / full_compact）的阈值统一做 `min(绝对, ratio×window)` 收口（顺序要求见 §6.6；offloader 不参与，见 §6.1） |
 
 ### 5.2 Go 多装配点（3 处）
 
@@ -247,18 +248,18 @@ trigger_effective = min(绝对 trigger, round(compression_trigger_ratio × windo
 target_effective  = min(绝对 target,  round(compression_target_ratio  × window))
 ```
 
-**参与收口的字段**（都与「整个上下文总量」同量纲）：
+**参与收口的字段**（都与「整个上下文总量」同量纲，已逐个核对触发代码）：
 
-| processor | 字段 |
-|---|---|
-| `MessageSummaryOffloader` | `tokens_threshold` |
-| `DialogueCompressor` | `tokens_threshold` |
-| `CurrentRoundCompressor` | `tokens_threshold` |
-| `RoundLevelCompressor` | `trigger_total_tokens` → trigger；`target_total_tokens` → target |
-| `FullCompactProcessor` | `trigger_total_tokens` → trigger |
+| processor | 字段 | 触发点 |
+|---|---|---|
+| `DialogueCompressor` | `tokens_threshold` | `dialogue_compressor.go:285`（总 token > 阈值） |
+| `CurrentRoundCompressor` | `tokens_threshold` | `current_round_compressor.go:612` |
+| `RoundLevelCompressor` | `trigger_total_tokens` → trigger；`target_total_tokens` → target | `round_level_compressor.go:329` / `:1400` |
+| `FullCompactProcessor` | `trigger_total_tokens` → trigger | `full_compact_processor.go:319` |
 
-**不参与收口的字段**（量纲不同，缩放会破坏语义）：
+**不参与收口的字段**：
 
+- `MessageSummaryOffloader.tokens_threshold`——代码注释明确它是「兼容字段，自适应压缩用 per-message 检查」（`message_summary_offloader.go:38`），语义不是总上下文量，缩放会误导。
 - `MessageSummaryOffloader.large_message_threshold`（单条消息阈值）
 - `DialogueCompressor.compression_target_tokens`、`CurrentRoundCompressor.compression_target_tokens`（单次压缩输出长度）
 - `current_round_compressor_config.min_selected_tokens_for_compression`（单轮选择下限）
@@ -354,7 +355,7 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 | B5 | 同上 | `ContextWindowTokens`（优先级 1）始终为 0，不被写入 |
 | B6 | `stream_event_emit_test.go` | 分母取 ceConfig 解析值（32K 用例）；分子优先 `InputTokens`，缺失回退 `TotalTokens`；`rate` 精度与 0 保护（分母 0 时不 panic） |
 | B7 | `session_model_context_test.go` `statMessages` | 有 `InputTokens` → 用它；`InputTokens=0` 但有 `TotalTokens` → 用 total；无 usage → 本地估算；`GetContextUsage` 的 `usage_percent` 与上述一致 |
-| B8 | `context_processor_rail_test.go` | window=32K/128K/256K/512K × 五个 processor 的最终阈值（对照 §6.3/§6.4）；ratio 缺省 → 等于绝对值；yaml 绝对值覆盖后**仍**被 min 收口（§6.6 顺序回归用例）；`target >= trigger` 兜底 + `Warn`；不参与收口的字段（`large_message_threshold` 等）值不变 |
+| B8 | `context_processor_rail_test.go` | window=32K/128K/256K/512K × 四个参与收口的 processor 最终阈值（对照 §6.3/§6.4）；ratio 缺省 → 等于绝对值；yaml 绝对值覆盖后**仍**被 min 收口（§6.6 顺序回归用例）；`target >= trigger` 兜底 + `Warn`；不参与收口的字段（`large_message_threshold` 等）值不变 |
 | A1 | `deep_adapter_test.go` | 冷启动（CreateInstance 路径）与热重载（`makeDeepAgentConfig`）产出同一 `ContextEngineConfig`；热重载后窗口值不丢 |
 | A2 | `deep_adapter_rails_test.go` | `enabled=true` 且 yaml 有四段 → rail 的 `userProcessors` 含 5 个 `ProcessorSpec`（含新增 `full_compact_processor_config`）；`enabled=false` → rail 不注册 |
 | A3 | `team/config_loader_test.go`、`team/runtime_inheritance_test.go` | 成员默认模型字典保留两键；成员 rail 的窗口解析与主 Agent 一致 |
