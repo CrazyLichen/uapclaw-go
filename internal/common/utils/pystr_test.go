@@ -12,6 +12,59 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// TestPyText_展示文本 验证工具结果展示口径：nil→空串、字符串原样、
+// 其余走紧凑 JSON（前端与日志里不再出现 map[...]）。
+func TestPyText_展示文本(t *testing.T) {
+	tests := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{"nil 为空串", nil, ""},
+		{"字符串不加引号", "file written", "file written"},
+		{"中文原样", "工作空间未初始化", "工作空间未初始化"},
+		{"空 map", map[string]any{}, "{}"},
+		{"map 转 JSON", map[string]any{"success": false, "error": "boom"}, `{"error":"boom","success":false}`},
+		{"bool 转 JSON", true, "true"},
+		{"数字转 JSON", 42, "42"},
+		{"浮点转 JSON", 1.5, "1.5"},
+		{"切片转 JSON", []any{"a", 1}, `["a",1]`},
+		{"结构体转 JSON", struct {
+			Name string `json:"name"`
+		}{Name: "x"}, `{"name":"x"}`},
+	}
+	for _, tt := range tests {
+		if got := PyText(tt.in); got != tt.want {
+			t.Errorf("%s: PyText(%v) = %q, want %q", tt.name, tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestPyText_不可序列化回退 验证 json.Marshal 失败时退回 fmt.Sprint（不 panic）
+func TestPyText_不可序列化回退(t *testing.T) {
+	ch := make(chan int)
+	if got := PyText(ch); got == "" {
+		t.Error("不可序列化值也应有兜底文本（fmt.Sprint）")
+	}
+}
+
+// TestPyText_嵌套结果 验证嵌套 map 输出为可解析 JSON（前端可直接 JSON.parse）
+func TestPyText_嵌套结果(t *testing.T) {
+	v := map[string]any{
+		"results": []any{
+			map[string]any{"path": "MEMORY.md", "start_line": 1},
+		},
+		"disabled": false,
+	}
+	got := PyText(v)
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
+		t.Fatalf("PyText 输出应是合法 JSON: %v（%s）", err, got)
+	}
+	assert.Equal(t, false, decoded["disabled"])
+}
+
 // TestPyStr_标量语义 验证 str() 语义：字符串不加引号、bool 大写、整数值浮点补 .0。
 // 对齐 Python: str("a")="a"、str(True)="True"、str(1.0)="1.0"、str(None)="None"
 func TestPyStr_标量语义(t *testing.T) {
@@ -39,66 +92,6 @@ func TestPyStr_标量语义(t *testing.T) {
 	}
 }
 
-// TestPyStr_容器等同repr 验证 str(container)==repr(container)：
-// map 渲染为 {'k': v}（不是 Go 的 map[k:v]），list 为 [a, b]。
-func TestPyStr_容器等同repr(t *testing.T) {
-	m := map[string]any{
-		"success": false,
-		"error":   "工作空间未初始化",
-		"count":   3,
-		"ok":      true,
-		"items":   []any{"a", 1},
-	}
-	got := PyStr(m)
-	want := `{'count': 3, 'error': '工作空间未初始化', 'items': ['a', 1], 'ok': True, 'success': False}`
-	assert.Equal(t, want, got)
-	assert.NotContains(t, got, "map[", "不得出现 Go 的 map[...] 记法")
-}
-
-// TestPyStr_空容器 验证空结果渲染为 {} 与 []（对应记忆检索无命中的形状）
-func TestPyStr_空容器(t *testing.T) {
-	assert.Equal(t, "{}", PyStr(map[string]any{}))
-	assert.Equal(t, "[]", PyStr([]any{}))
-	assert.Equal(t, `{'results': []}`, PyStr(map[string]any{"results": []any{}}))
-}
-
-// TestPyRepr_字符串引号规则 验证 repr 的引号选择与转义。
-// 对齐 Python: repr("a")="'a'"、含单引号且无双引号时用双引号包裹。
-func TestPyRepr_字符串引号规则(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{"普通", "ab", `'ab'`},
-		{"含单引号改用双引号", "a'b", `"a'b"`},
-		{"含双引号保持单引号", `a"b`, `'a"b'`},
-		{"换行转义", "a\nb", `'a\nb'`},
-		{"回车转义", "a\rb", `'a\rb'`},
-		{"制表转义", "a\tb", `'a\tb'`},
-		{"反斜杠转义", `a\b`, `'a\\b'`},
-	}
-	for _, tt := range tests {
-		if got := PyRepr(tt.in); got != tt.want {
-			t.Errorf("%s: PyRepr(%q) = %q, want %q", tt.name, tt.in, got, tt.want)
-		}
-	}
-}
-
-// TestPyRepr_嵌套容器 验证递归 repr 与 None 渲染
-func TestPyRepr_嵌套容器(t *testing.T) {
-	v := map[string]any{
-		"outer": map[string]any{"inner": []any{1, "x", nil}},
-	}
-	assert.Equal(t, `{'outer': {'inner': [1, 'x', None]}}`, PyRepr(v))
-}
-
-// TestPyStr_未知类型回退 验证非基础类型走 %v 兜底（不 panic）
-func TestPyStr_未知类型回退(t *testing.T) {
-	type custom struct{ Name string }
-	assert.Equal(t, "{PyStrTest}", PyStr(custom{Name: "PyStrTest"}))
-}
-
 // TestPyStr_全部整数族 覆盖各宽度整型（Python 只有一种 int，str 输出十进制）
 func TestPyStr_全部整数族(t *testing.T) {
 	cases := []struct {
@@ -121,7 +114,6 @@ func TestPyStr_全部整数族(t *testing.T) {
 }
 
 // TestPyStr_浮点记法 覆盖 Python str(float) 的 f/e 记法切换与 nan/inf 字面量。
-// 对齐 Python: str(1e17)="1e+17"、str(1e-5)="1e-05"、str(float("inf"))="inf"
 func TestPyStr_浮点记法(t *testing.T) {
 	cases := []struct {
 		in   float64
@@ -141,17 +133,11 @@ func TestPyStr_浮点记法(t *testing.T) {
 	}
 }
 
-// TestPyRepr_同时含两种引号 验证同时含单双引号时用单引号并转义单引号
-func TestPyRepr_同时含两种引号(t *testing.T) {
-	assert.Equal(t, `'a"b\'c'`, PyRepr(`a"b'c`))
-}
-
-// TestPyRepr_容器内非基础类型兜底 验证容器里出现结构体等非基础类型时
-// 走 %v 兜底（不 panic、不带 map[ 记法）
-func TestPyRepr_容器内非基础类型兜底(t *testing.T) {
-	type probe struct{ Name string }
-	got := PyStr(map[string]any{"probe": probe{Name: "x"}})
-	assert.Equal(t, "{'probe': {x}}", got)
+// TestPyStr_容器走兜底 验证 PyStr 只承诺标量：容器按 fmt.Sprint 输出
+//（展示场景请用 PyText，输出 JSON）
+func TestPyStr_容器走兜底(t *testing.T) {
+	got := PyStr(map[string]any{"a": 1})
+	assert.Contains(t, got, "a:1", "容器走 fmt.Sprint 兜底")
 }
 
 // TestPyStr_jsonNumber 验证 json.Number 的字面量还原（对齐 Python int/float 分野）：
@@ -173,10 +159,6 @@ func TestPyStr_jsonNumber(t *testing.T) {
 			t.Errorf("PyStr(json.Number %q) = %q, want %q", c.in, got, c.want)
 		}
 	}
-
-	// 容器内的 json.Number 同样走字面量还原
-	got := PyStr(map[string]any{"n": json.Number("1.0"), "big": json.Number("12345678901234567890")})
-	assert.Equal(t, "{'big': 12345678901234567890, 'n': 1.0}", got)
 }
 
 // TestIsPureIntegerLiteral 验证纯整数字面量判定（超界整数还原的守卫）

@@ -216,11 +216,10 @@ func (s *MemoryRailSuite) TestMemoryRail_运行时RegisterRail后read_memory可�
 	content, _ := rres["content"].(string)
 	s.Contains(content, "memory-rail-register-rail", "应读到写入的内容")
 
-	// 工具结果的文本渲染必须与 Python str(dict) 一致（{'k': 'v'}），
-	// 而不是 Go 的 map[...]；这是前端卡片与日志里直接可见的形态。
-	rendered := utils.PyStr(rres)
+	// 工具结果的展示文本是紧凑 JSON（前端可直接解析），不能是 Go 的 map[...]
+	rendered := utils.PyText(rres)
 	s.NotContains(rendered, "map[", "工具结果渲染不应出现 Go 的 map[...] 记法")
-	s.Contains(rendered, "'content':", "应渲染为 Python dict 形式")
+	s.Contains(rendered, `"content":`, "应渲染为 JSON 形式")
 
 	// memory_search：检索不可用/无命中时 results 也必须是数组（Python 恒为 list）
 	searchTool := s.toolByName(agent, "memory_search")
@@ -230,25 +229,23 @@ func (s *MemoryRailSuite) TestMemoryRail_运行时RegisterRail后read_memory可�
 	s.Require().True(ok, "memory_search 结果必须含 results 键，实际: %+v", sres)
 	_, isSlice := rawResults.([]any)
 	s.True(isSlice, "results 必须是数组而非 null，实际 %T", rawResults)
-	s.NotContains(utils.PyStr(sres), "map[", "检索结果渲染同样不得出现 map[...]")
+	s.NotContains(utils.PyText(sres), "map[", "检索结果渲染同样不得出现 map[...]")
 
-	// 兜底：工具结果里可能出现非基础类型（结构体），渲染不得 panic，
-	// 也不得退回 Go 的 map[...] 记法
+	// 嵌套结构：工具结果里可能出现结构体，渲染不得 panic、也不得退回 map[...]
 	type renderProbe struct {
-		Name string
+		Name string `json:"name"`
 	}
-	probeRendered := utils.PyStr(map[string]any{"probe": renderProbe{Name: "x"}})
-	s.Contains(probeRendered, "{x}", "非基础类型应走 %v 兜底")
-	s.NotContains(probeRendered, "map[", "兜底渲染同样不得出现 map[...]")
+	probeRendered := utils.PyText(map[string]any{"probe": renderProbe{Name: "x"}})
+	s.Contains(probeRendered, `"name":"x"`, "结构体应序列化为 JSON")
+	s.NotContains(probeRendered, "map[", "结构体渲染同样不得出现 map[...]")
 
-	// JSON 字面量：json.Number 需按 Python int/float 分野还原
-	// （整数字面原样，含超 int64 的超界字面；小数走 float 记法）
-	numRendered := utils.PyStr(map[string]any{
+	// JSON 数字字面量：json.Number 原样输出（超 int64 的超界整数不得被 Float64 化）
+	numRendered := utils.PyText(map[string]any{
 		"i":   json.Number("42"),
 		"big": json.Number("12345678901234567890"),
 		"f":   json.Number("1.0"),
 	})
-	s.Equal("{'big': 12345678901234567890, 'f': 1.0, 'i': 42}", numRendered)
+	s.Equal(`{"big":12345678901234567890,"f":1.0,"i":42}`, numRendered)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

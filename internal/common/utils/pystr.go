@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -19,18 +18,40 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// PyStr 对齐 Python 的 str()：
-//   - None（nil）→ "None"（调用方需要空串时自己判 nil，Python 的
-//     `"x" if v is not None else ""` 属于调用方语义）
-//   - str → 原样（不加引号）
-//   - bool → "True"/"False"
-//   - 数字 → Python 记法（整数值浮点补 ".0"；json.Number 走字面量还原）
-//   - dict/list/tuple → 走 PyRepr（Python 的 str(container) 等于 repr(container)）
-//   - 其他 → fmt.Sprintf("%v", v)
+// PyText 工具结果的展示文本（前端卡片 / 日志 / 会话历史 / ACP）。
 //
-// 用途：工具结果等「Python 侧会用 str(x) 落进文本」的位置。历史缺陷是直接
-// fmt.Sprintf("%v", result)，Go 对 map 打印成 `map[k:v]`，前端与日志里全是
-// `map[...]` 前缀，与 Python 的 `{'k': 'v'}` 完全不同。
+// 只用于「看」，不参与任何机器解析：想判断成功与否请读 raw_output 结构化字段，
+// 模型侧走的是 BuildToolMessageContent 的 JSON 通道，与本函数无关。因此这里
+// 选最省事且前端友好的形态，而不是复刻 Python 的字面量风格：
+//   - nil → ""（对齐 Python 的 `"" if result is not None else ""`）
+//   - string → 原样（不加引号）
+//   - 其余（map/struct/slice…）→ 紧凑 JSON，如 {"error":"...","success":false}
+//   - JSON 序列化失败 → fmt.Sprint 兜底
+//
+// 历史缺陷：这里曾是 fmt.Sprintf("%v")，Go 对 map 打印成 `map[k:v ...]`，
+// 工具卡片与日志里全是 `map[...]` 前缀。
+func PyText(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	if b, err := json.Marshal(v); err == nil {
+		return string(b)
+	}
+	return fmt.Sprint(v)
+}
+
+// PyStr 对齐 Python str() 的**标量**形态（检索串、提示词等参与语义的文本）。
+//
+//   - None（nil）→ "None"
+//   - str → 原样；bool → "True"/"False"
+//   - 数字 → Python 记法（整数值浮点补 ".0"；json.Number 走字面量还原）
+//   - 容器与其他类型 → fmt.Sprint 兜底（调用方只传标量；展示请用 PyText）
+//
+// int/float 的分野必须精确：str(1)="1" 与 str(1.0)="1.0" 在检索词表、抽取结果里
+// 是不同 token；json.Number 的超界整数也不能被 Float64 化成 1.2e+19。
 func PyStr(v any) string {
 	switch val := v.(type) {
 	case nil:
@@ -41,72 +62,62 @@ func PyStr(v any) string {
 		return pyBoolStr(val)
 	case json.Number:
 		return pyJSONNumberStr(val)
-	case map[string]any, []any:
-		return PyRepr(val)
 	default:
 		if s, ok := pyNumberStr(v); ok {
 			return s
 		}
-		return fmt.Sprintf("%v", v)
+		return fmt.Sprint(v)
 	}
 }
 
-// PyRepr 对齐 Python 的 repr()：字符串带引号、容器递归、None 输出 "None"。
+// PyFloatStr 还原 Python str(float) 记法：整数值补 ".0"，nan/inf 用 Python 字面量。
+func PyFloatStr(f float64) string {
+	if math.IsNaN(f) {
+		return "nan"
+	}
+	if math.IsInf(f, 1) {
+		return "inf"
+	}
+	if math.IsInf(f, -1) {
+		return "-inf"
+	}
+	abs := math.Abs(f)
+	// CPython float_repr 的 decpt 判定：abs ∈ [1e-4, 1e16) 用 f 记法
+	// （整数值补 ".0"），其余用 e 记法（1e+16 / 1e-05，指数两位）。
+	if abs == 0 || (abs >= 1e-4 && abs < 1e16) {
+		s := strconv.FormatFloat(f, 'f', -1, 64)
+		if !strings.Contains(s, ".") {
+			s += ".0"
+		}
+		return s
+	}
+	return strconv.FormatFloat(f, 'e', -1, 64)
+}
+
+// IsPureIntegerLiteral 判断是否为纯整数字面量（可选符号 + 全数字，无小数点/指数）。
 //
-// dict 的键按字典序遍历（Go map 无序，Python 按插入序）——输出稳定可比对，
-// 但键序与 Python 的插入序不保证一致。
-func PyRepr(v any) string {
-	var b strings.Builder
-	pyWriteRepr(&b, v)
-	return b.String()
+// 用于 json.Number 的超界整数还原：ParseInt 溢出后不能落到 Float64（会把
+// 12345678901234567890 变成 1.2345678901234567e+19），必须原样透传。
+func IsPureIntegerLiteral(s string) bool {
+	if s == "" {
+		return false
+	}
+	body := s
+	if body[0] == '+' || body[0] == '-' {
+		body = body[1:]
+	}
+	if body == "" {
+		return false
+	}
+	for _, r := range body {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// pyWriteRepr 递归写入 Python repr 形式。
-func pyWriteRepr(b *strings.Builder, v any) {
-	switch val := v.(type) {
-	case nil:
-		b.WriteString("None")
-	case string:
-		b.WriteString(pyStrRepr(val))
-	case bool:
-		b.WriteString(pyBoolStr(val))
-	case map[string]any:
-		keys := make([]string, 0, len(val))
-		for k := range val {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		b.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				b.WriteString(", ")
-			}
-			b.WriteString(pyStrRepr(k))
-			b.WriteString(": ")
-			pyWriteRepr(b, val[k])
-		}
-		b.WriteByte('}')
-	case json.Number:
-		b.WriteString(pyJSONNumberStr(val))
-	case []any:
-		b.WriteByte('[')
-		for i, item := range val {
-			if i > 0 {
-				b.WriteString(", ")
-			}
-			pyWriteRepr(b, item)
-		}
-		b.WriteByte(']')
-	default:
-		if s, ok := pyNumberStr(v); ok {
-			b.WriteString(s)
-			return
-		}
-		_, _ = fmt.Fprintf(b, "%v", v)
-	}
-}
 
 // pyBoolStr 对齐 Python str(bool)。
 func pyBoolStr(v bool) string {
@@ -116,39 +127,7 @@ func pyBoolStr(v bool) string {
 	return "False"
 }
 
-// pyStrRepr 对齐 Python repr(str)：默认单引号，字符串内只有单引号时改用双引号。
-func pyStrRepr(s string) string {
-	quote := byte('\'')
-	if strings.ContainsRune(s, '\'') && !strings.ContainsRune(s, '"') {
-		quote = '"'
-	}
-	var b strings.Builder
-	b.WriteByte(quote)
-	for _, r := range s {
-		switch r {
-		case '\\':
-			b.WriteString(`\\`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		case '\t':
-			b.WriteString(`\t`)
-		default:
-			if byte(r) == quote && r < 0x80 {
-				b.WriteByte('\\')
-			}
-			b.WriteRune(r)
-		}
-	}
-	b.WriteByte(quote)
-	return b.String()
-}
-
 // pyNumberStr 把 Go 数字类型转为 Python 记法文本；非数字类型返回 false。
-//
-// 浮点按 Python 的 f/e 记法切换（与 retrieval 侧 pyFloatStr 同源语义）：
-// abs ∈ [1e-4, 1e16) 用 f 记法且整数值补 ".0"，其余 e 记法。
 func pyNumberStr(v any) (string, bool) {
 	switch n := v.(type) {
 	case int:
@@ -196,49 +175,4 @@ func pyJSONNumberStr(n json.Number) string {
 		return PyFloatStr(f)
 	}
 	return lit
-}
-
-// IsPureIntegerLiteral 判断是否为纯整数字面量（可选符号 + 全数字，无小数点/指数）。
-//
-// 用于 json.Number 的超界整数还原：Atoi 溢出后不能落到 Float64（会把
-// 12345678901234567890 变成 1.2345678901234567e+19），必须原样透传。
-func IsPureIntegerLiteral(s string) bool {
-	if s == "" {
-		return false
-	}
-	body := s
-	if body[0] == '+' || body[0] == '-' {
-		body = body[1:]
-	}
-	if body == "" {
-		return false
-	}
-	for _, r := range body {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-// PyFloatStr 还原 Python str(float) 记法：整数值补 ".0"，nan/inf 用 Python 字面量。
-func PyFloatStr(f float64) string {
-	if math.IsNaN(f) {
-		return "nan"
-	}
-	if math.IsInf(f, 1) {
-		return "inf"
-	}
-	if math.IsInf(f, -1) {
-		return "-inf"
-	}
-	abs := math.Abs(f)
-	if abs == 0 || (abs >= 1e-4 && abs < 1e16) {
-		s := strconv.FormatFloat(f, 'f', -1, 64)
-		if !strings.Contains(s, ".") {
-			s += ".0"
-		}
-		return s
-	}
-	return strconv.FormatFloat(f, 'e', -1, 64)
 }

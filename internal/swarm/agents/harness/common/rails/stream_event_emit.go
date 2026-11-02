@@ -65,13 +65,10 @@ func emitToolResult(ctx context.Context, session sessioninterfaces.SessionFacade
 		return
 	}
 	rawOutput := structuredToolResultPayload(result)
-	// Python: "result": str(result)[:60000] if result is not None else ""
-	// 必须用 PyStr：fmt.Sprintf("%v") 会把 map 打印成 `map[k:v]`，前端与日志里
-	// 全是 `map[...]` 前缀，与 Python 的 `{'k': 'v'}` 完全不同。
-	resultText := ""
-	if result != nil {
-		resultText = truncateString(utils.PyStr(result), 60000)
-	}
+	// 展示文本：nil → ""、string 原样、其余紧凑 JSON。
+	// 曾是 fmt.Sprintf("%v")，Go 对 map 打印成 `map[k:v]`，前端与日志里全是
+	// `map[...]` 前缀；改用 utils.PyText（展示专用，不参与机器解析）。
+	resultText := truncateString(utils.PyText(result), 60000)
 	toolResultPayload := map[string]any{
 		"tool_name":    toolCallName(toolCall),
 		"tool_call_id": toolCallID(toolCall),

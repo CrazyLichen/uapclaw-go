@@ -166,10 +166,10 @@ func TestEmitToolResult_错误状态(t *testing.T) {
 	}
 }
 
-// TestEmitToolResult_结果按PythonStr渲染 回归：result 字段曾用
-// fmt.Sprintf("%v") 渲染，map 会打印成 `map[k:v ...]`，前端与日志里全是
-// `map[...]` 前缀；Python 是 str(dict) → {'k': 'v'}。
-func TestEmitToolResult_结果按PythonStr渲染(t *testing.T) {
+// TestEmitToolResult_结果转JSON 回归：result 字段曾用 fmt.Sprintf("%v") 渲染，
+// map 会打印成 `map[k:v ...]`，前端与日志里全是 `map[...]` 前缀；
+// 现在走 utils.PyText（展示专用）→ 紧凑 JSON，前端可直接 JSON.parse。
+func TestEmitToolResult_结果转JSON(t *testing.T) {
 	sess := &fakeSession{}
 	tc := llmschema.NewToolCall("tc-6", "read_memory", `{}`)
 	result := map[string]any{
@@ -183,7 +183,7 @@ func TestEmitToolResult_结果按PythonStr渲染(t *testing.T) {
 	payload, _ := sess.lastOutput().Payload.(map[string]any)
 	toolResultMap, _ := payload["tool_result"].(map[string]any)
 	got, _ := toolResultMap["result"].(string)
-	want := `{'error': '工作空间未初始化', 'ok': True, 'success': False}`
+	want := `{"error":"工作空间未初始化","ok":true,"success":false}`
 	if got != want {
 		t.Errorf("result = %q, want %q", got, want)
 	}
@@ -192,7 +192,7 @@ func TestEmitToolResult_结果按PythonStr渲染(t *testing.T) {
 	}
 }
 
-// TestEmitToolResult_nil结果为空串 对齐 Python: str(result) if result is not None else ""
+// TestEmitToolResult_nil结果为空串 对齐 Python: "result" 在 None 时为空串
 func TestEmitToolResult_nil结果为空串(t *testing.T) {
 	sess := &fakeSession{}
 	tc := llmschema.NewToolCall("tc-7", "read_memory", `{}`)
