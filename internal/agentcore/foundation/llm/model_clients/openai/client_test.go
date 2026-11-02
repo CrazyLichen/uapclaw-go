@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -982,5 +983,19 @@ func TestOpenAIModelClient_SupportsKVCacheRelease(t *testing.T) {
 	}
 	if client.SupportsKVCacheRelease() {
 		t.Error("OpenAI 客户端不应支持 KV Cache 释放")
+	}
+}
+
+// TestWrapError_PreservesCause 防错误链回归：包装后 errors.Is 仍可命中原始错误，
+// 且对用户可见的错误文案保持不变。
+func TestWrapError_PreservesCause(t *testing.T) {
+	c := &OpenAIModelClient{}
+	wrapped := c.WrapError("stream", context.Canceled)
+
+	if !errors.Is(wrapped, context.Canceled) {
+		t.Fatal("WrapError 应保留 cause，使 errors.Is 可命中 context.Canceled")
+	}
+	if !strings.Contains(wrapped.Error(), "OpenAI API async stream error") {
+		t.Fatalf("错误文案不得改变，实际: %s", wrapped.Error())
 	}
 }
