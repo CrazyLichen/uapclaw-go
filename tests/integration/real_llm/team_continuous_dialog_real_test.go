@@ -250,9 +250,13 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 
 // TestTeamAutoBuild_自然语言需求触发建队 验证"用户只说人话，模型自己建队"。
 //
-// 关键行为契约：用户不需要说"建个团队"。leader 的系统提示词（leader_workflow.md
-// 第 2 步）要求它先 build_team 再拉成员，本用例锁住这条——任何让提示词失效的改动
-// （section 未注入、rail 未挂载、模板被改坏）都会让 team.member 消失。
+// 关键行为契约：用户不需要说"建个团队"，leader 会自行拉人建队——引擎侧必须把
+// 建队/拉人链路打通到客户端可观测（成功 tool_result 或 team.member 事件）。
+// 提示词失效（section 未注入、rail 未挂载、模板被改坏）时成员根本建不出来，
+// 该契约随之失败；提示词文本本身另由 BuildTeamWorkflowSection 单测确定性覆盖。
+//
+// 不断言「必须先调用 build_team」：模型选哪条工具路径不是确定性契约，
+// 详见函数内注释。
 func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建队() {
 	conn, _, err := websocket.DefaultDialer.Dial(
 		fmt.Sprintf("ws://127.0.0.1:%d/ws", s.wsPort), nil)
@@ -317,11 +321,15 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 	}
 
 	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v", toolNames, memberCreated, sawFinal)
-	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员")
-	// 建队链路的第一跳必须是 build_team（提示词 leader_workflow.md 第 2 步）。
-	// chat.tool_call 的 name 取 ToolCall.Name（工具卡 Name="build_team"），
-	// 不是工具卡 ID "team.build_team"；两种写法都接受，避免依赖注册命名细节。
-	s.True(hasTeamBuildToolCall(toolNames), "leader 应先调用 build_team 组建团队，实际工具序列=%v", toolNames)
+	// 硬断言只锁确定性结果：客户端能观测到成员被真实创建。
+	//
+	// 不断言「工具序列里必须出现 build_team」。leader_workflow.md 第 2 步确实要求
+	// 先 build_team，但模型对工具路径的选择不是确定性契约：实测 deepseek-v4.1-flash
+	// 会跳过 build_team 直接 spawn_member 并成功建成员（TeamBackend.SpawnMember 只写
+	// team_member 表，不校验 team_info 记录，与 Python 侧一致），夜间真实 LLM CI
+	// 因此两次假红（run 41326851160 / 41352864530），而建队结果本身是好的。
+	// 提示词是否生效由上面的 memberCreated 兜底：提示词/rail 坏掉时成员根本建不出来。
+	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员（实际工具序列=%v）", toolNames)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -436,14 +444,4 @@ func isTeamBuildTool(name string) bool {
 	default:
 		return false
 	}
-}
-
-// hasTeamBuildToolCall 判断工具序列里是否出现 build_team。
-func hasTeamBuildToolCall(names []string) bool {
-	for _, name := range names {
-		if normalizeTeamToolName(name) == "build_team" {
-			return true
-		}
-	}
-	return false
 }
