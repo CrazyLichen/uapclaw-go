@@ -153,7 +153,12 @@ func setupHistoryTest(t *testing.T, sessionID string, history []any) string {
 
 	// 设置 UAPCLAW_DATA_DIR 并重置路径缓存（对齐 Python: set_user_workspace_dir）
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	// 先排空 history 队列并终止后台 worker，再重置路径缓存（防 race）
+	// 先排空两个异步队列再重置路径缓存（防 race）：history worker 与 metadata worker
+	// 都会在后台读 path 包的全局缓存，而 ResetCache 非并发安全。
+	// 本包其它用例跑真实消息流程会拉起 metadata worker，队列里可能留残留项，
+	// 不排空就会与 ResetCache 撞车（CI run 41509845639 报 DATA RACE：
+	// path.ResetCache 写 vs metadataWriteWorker→AgentSessionsDir 读）。
+	session.FlushMetadataQueue()
 	session.FlushHistoryQueue()
 	session.ResetHistoryWorker()
 	path.ResetCache()

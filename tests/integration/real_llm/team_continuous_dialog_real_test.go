@@ -88,6 +88,7 @@ models:
         api_key: %s
         api_base: %s
         client_id: real_llm_team
+        verify_ssl: false
       is_default: true
 `, s.RealModelConfig.ModelName, s.RealClientConfig.ClientProvider,
 		s.RealClientConfig.APIKey, s.RealClientConfig.APIBase)
