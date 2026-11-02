@@ -877,29 +877,32 @@ func (s *TaskMemoryService) createRBMemory(_ context.Context, userID string, req
 }
 
 // createReMeMemory 创建 ReMe 格式的记忆。
+// 对齐 Python: memory = ReMeMemory(...); vector_node = memory.to_vector_node()
+// node_id = f"reme_{workspace_id}_{md5(when_to_use)[:12]}"，嵌入内容为 when_to_use。
 func (s *TaskMemoryService) createReMeMemory(_ context.Context, userID string, req AddMemoryRequest) (*schema.VectorNode, string) {
 	whenToUse := ""
 	if req.WhenToUse != nil {
 		whenToUse = *req.WhenToUse
 	}
-
-	// 对齐 Python: memoryID = reme_{workspaceID}_{md5(when_to_use)[:12]}
-	contentHash := md5.Sum([]byte(whenToUse))
-	memoryID := fmt.Sprintf("reme_%s_%x", userID, contentHash[:6]) // 6 bytes = 12 hex chars
-
-	metadata := map[string]any{
-		"workspace_id": userID,
-		"algorithm":    s.summaryAlgorithm,
-		"memory_type":  "manual",
-		"score":        1.0,
-		"step_type":    "manual",
-		"confidence":   1.0,
-		"freq":         1,
-		"utility":      1,
-		"when_to_use":  whenToUse,
+	now := time.Now().UTC()
+	memory := ceschema.ReMeMemory{
+		BaseMemory: ceschema.BaseMemory{WorkspaceID: userID},
+		WhenToUse:  whenToUse,
+		Content:    req.Content,
+		Score:      1.0,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		Metadata: ceschema.ReMeMemoryMetadata{
+			Tags:       []string{},
+			StepType:   "manual",
+			ToolsUsed:  []string{},
+			Confidence: 1.0,
+			Freq:       1,
+			Utility:    1.0,
+		},
 	}
-
-	return schema.NewVectorNode(memoryID, req.Content, nil, metadata), memoryID
+	node := memory.ToVectorNode()
+	return node, node.ID
 }
 
 // createACEMemory 创建 ACE 格式的记忆。

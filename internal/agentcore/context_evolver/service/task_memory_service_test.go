@@ -823,3 +823,29 @@ func TestAddMemory_ACE节点与Python对齐(t *testing.T) {
 	_, hasUpdated := node.Metadata["updated_at"]
 	assert.True(t, hasUpdated, "metadata 缺少 updated_at")
 }
+
+// TestAddMemory_ReMe节点与Python对齐 验证 ReMe 节点类型、嵌入文本与嵌套 metadata。
+// Python: embedding_content = when_to_use；content 存进 metadata
+func TestAddMemory_ReMe节点与Python对齐(t *testing.T) {
+	svc, vs, err := newTestTaskMemoryService(WithSummaryAlgo("ReMe"))
+	require.NoError(t, err)
+
+	whenToUse := "when testing go code"
+	res, err := svc.AddMemory(context.Background(), "u1", AddMemoryRequest{
+		Content:   "use table tests",
+		WhenToUse: &whenToUse,
+	})
+	require.NoError(t, err)
+
+	raw, ok := vs.nodes[res.MemoryID]
+	require.True(t, ok, "未写入预期 node id，实际: %v", vs.nodes)
+	node, ok := raw.(*schema.VectorNode)
+	require.True(t, ok)
+	assert.Equal(t, "reme_memory", node.Metadata["type"])
+	assert.Equal(t, whenToUse, node.Content, "嵌入文本应为 when_to_use")
+	assert.Equal(t, "use table tests", node.Metadata["content"])
+	_, hasNested := node.Metadata["metadata"]
+	assert.True(t, hasNested, "metadata 缺少嵌套 metadata 段")
+	_, hasCreated := node.Metadata["created_at"]
+	assert.True(t, hasCreated, "metadata 缺少 created_at")
+}
