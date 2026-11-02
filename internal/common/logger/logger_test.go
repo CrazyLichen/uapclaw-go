@@ -3,6 +3,9 @@ package logger
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -678,5 +681,49 @@ func TestSetup_默认输出目录受数据目录控制(t *testing.T) {
 	want := filepath.Join(dataDir, "agent", ".logs")
 	if got := OutputDir(); got != want {
 		t.Errorf("默认 outputDir = %q, want %q", got, want)
+	}
+}
+
+// TestLogLine_整行形态 断言日志行符合 [时间] [INFO] [component] [file:line] msg k=v
+func TestLogLine_整行形态(t *testing.T) {
+	dir := t.TempDir()
+	resetGlobal()
+	if err := Setup(WithOutputDir(dir)); err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer Close()
+
+	_, _, callLine, _ := runtime.Caller(0)
+	Info(ComponentCommon).Str("key", "val").Msg("format probe")
+
+	data, err := os.ReadFile(filepath.Join(dir, "common.log"))
+	if err != nil {
+		t.Fatalf("读取 common.log 失败: %v", err)
+	}
+	// 只挑出本次探针那一行，避免 Setup 期间其他日志干扰
+	var line string
+	for _, l := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if strings.Contains(l, "format probe") {
+			line = l
+			break
+		}
+	}
+	if line == "" {
+		t.Fatalf("未找到探针日志行，文件内容: %q", string(data))
+	}
+
+	re := regexp.MustCompile(`^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] \[INFO\] \[common\] \[logger/logger_test\.go:(\d+)\] format probe key=val$`)
+	m := re.FindStringSubmatch(line)
+	if m == nil {
+		t.Fatalf("日志行不符合目标形态: %q", line)
+	}
+	// caller 行号必须落在本函数的 Msg 调用附近（不写死行号，避免改测试即翻红）
+	gotLine, convErr := strconv.Atoi(m[1])
+	if convErr != nil {
+		t.Fatalf("行号解析失败: %v", convErr)
+	}
+	// Info(...).Msg(...) 比 runtime.Caller(0) 晚 1~10 行
+	if gotLine < callLine+1 || gotLine > callLine+10 {
+		t.Errorf("caller 行号 = %d，期望落在 (%d, %d] 区间", gotLine, callLine+1, callLine+10)
 	}
 }
