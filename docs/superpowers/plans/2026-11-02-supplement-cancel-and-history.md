@@ -1128,6 +1128,13 @@ git commit -m "fix(llm/openai): WrapError 保留 cause，错误链可判定"
 
 ## Task 8: `ClearMessages` 只清本轮
 
+> **实施期更正（2026-11-02）**：本 Task 的前提「Go 会清掉历史」经实测不成立 ——
+> `messageBuffer.getBackInternal` 在 `withHistory=false` 时已把 size 夹到本轮长度，
+> `ClearMessages(false)` 与 Python `context.py:297-300` 等价。实际执行改为：
+> ① 语义不动；② 日志 `cleared_count` 记实际弹出条数（原记 `totalSize` 会打印 28，误导排查）；
+> ③ 保留下面两例作为「只清本轮」的行为锁定测试（改写注释为"行为锁定"）。
+> 详见提交 `fix(context_engine): cleared_count 记实际弹出条数，并锁定清本轮语义`。
+
 **Files:**
 - Modify: `internal/agentcore/context_engine/context/session_model_context.go:250-282`
 - Test: `internal/agentcore/context_engine/context/session_model_context_test.go`（追加）

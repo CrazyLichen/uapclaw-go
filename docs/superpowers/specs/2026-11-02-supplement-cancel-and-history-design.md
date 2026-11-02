@@ -27,7 +27,7 @@
 | D2 | ctx 取消被当普通错误上报：写 `result_type=error` → `chat.error` 帧 + `chat.error` 落 history | `react_invoke.go:560-570`、`uapclaw.go:331-333` | `react_agent.py:1549-1554`（`except Exception` 抓不到 `CancelledError`） |
 | D2b | 流式中途取消被吞成"正常结束"，半截回答被当作最终答复 | `openai/client.go:336-349` → `react_model_call.go:292-307` | Python 在 await 点抛 `CancelledError`，不产出 answer |
 | D3a | `ClearContextMessages` 执行两次（28 → 0） | `react_invoke.go:63-68` 与 `:445-451` | `react_agent.py:1435-1441` 只清一次 |
-| D3b | `ClearMessages(withHistory=false)` 清空整个 buffer（含历史前缀），且 `historyMessagesSize` 残留脏值 | `session_model_context.go:250-282` | `message_buffer.py:44-53` 只弹历史之后的部分 |
+| D3b | ~~`ClearMessages(withHistory=false)` 清空整个 buffer~~ **实施阶段更正：不成立**。`PopBack` 内部 `getBackInternal` 在 `withHistory=false` 时已把 size 夹到「本轮长度」，行为与 Python 等价；真实问题只是日志把 `totalSize` 当 `cleared_count`（历史 20 + 本轮 8 会打印 28），误导排查 | `session_model_context.go:250-282`（仅日志）、`message_buffer.go:311-352`（夹取） | `message_buffer.py:44-53`、`context.py:297-300` |
 | D3c | 取消清理与新一轮 `AddMessages` 无同步（已知限制，本次不修） | 同上 + `engine.go:96-113` | Python 单事件循环天然有序 |
 | D4 | 取消判定用 `==`/错误链，被 wrap 后失效 | `uapclaw.go:318`、`react_invoke.go:66/447` | — |
 | D5 | history 仅对 `team.message` 构造 extra，工具/usage/file 字段全丢 | `uapclaw.go:368-383` | `interface.py:1063/1102` 除 `event_type`/`content` 外全收 |
@@ -54,7 +54,7 @@ T3 旧轮 A 收尾: defer cancelStreamTask(sid) → 取到的已是 cancelB → 
 | D2 | 以 `ctx.Err()` 为主判据静默取消；**只静默 `context.Canceled`**，`DeadlineExceeded` 仍上报 | 用 `errors.Is(err, …)` 单独判定：`openai.WrapError` 用 `%v` 断链，且 agentcore 有 64 处 `%v` 包装点，不可靠 |
 | D2b | `callLLMStream` 循环结束后判 ctx，取消则返回 error | 改 `Stream` 签名加 error 通道：需改 4 个 client 实现与所有调用方，回归面过大 |
 | D3a | 删除 `Invoke` 内的清理，只保留 `invokeImpl` 内的一次 | — |
-| D3b | `ClearMessages(false)` 只弹「历史之后的部分」 | 维持现状 + 依赖下一轮 `LoadState → Rebuild` 捡回历史：属意外恢复，首轮取消即失效，且脏计数会污染压缩器判断 |
+| D3b | **不改语义**（原判断有误）：只把日志 `cleared_count` 改为实际弹出条数；另加 2 例行为锁定测试守住「只清本轮」 | 原计划改 `ClearMessages` 实现：实测 Go 的 `getBackInternal` 在 `withHistory=false` 时已夹取 size，改实现属于对不存在缺陷的改动，风险大于收益 |
 | D4 | 三处判定收敛到 `utils.Canceled(ctx)` | — |
 | D5 | 记录构造改为：全量 extra（除 `event_type`/`content`）+ `team.message` 叠加展平 + **保留嵌套 `event`** | ① 白名单只补工具字段：与 Python 结构性差异，新增事件要回补；② 改 `AppendHistoryRecord` 签名：会连锁影响 `swarmtools.SetSendFileHistoryFunc(session.AppendHistoryRecord)` 的函数值注入 |
 | D6 | `content` 取值加 `error` 兜底 | — |
@@ -70,7 +70,7 @@ T3 旧轮 A 收尾: defer cancelStreamTask(sid) → 取到的已是 cancelB → 
 | ④ | `internal/agentcore/single_agent/agents/react_invoke.go` | 删除 `Invoke` 内清理（D3a）；`streamProcess` 错误分支先判 `utils.Canceled` 并直接返回（D2）；`:447` 判定换 helper（D4） |
 | ⑤ | `internal/agentcore/single_agent/agents/react_model_call.go` | `callLLMStream` 循环后判 `utils.Canceled`，取消则 `return nil, ctx.Err()`（D2b） |
 | ⑥ | `internal/agentcore/foundation/llm/model_clients/openai/client.go` | `WrapError` 增加 `exception.WithCause(err)`（文案不变） |
-| ⑦ | `internal/agentcore/context_engine/context/session_model_context.go` | `ClearMessages` 按 `len(GetBack(0,true)) - len(GetBack(0,false))` 计算本轮长度后 `PopBack`（D3b） |
+| ⑦ | `internal/agentcore/context_engine/context/session_model_context.go` | `ClearMessages` 行为不变；仅把日志 `cleared_count` 改为 `len(PopBack(...))` 的实际弹出条数（D3b 更正后） |
 | ⑧ | `internal/swarm/server/runtime/uapclaw.go` | 全量 extra + team 叠加 + 保留嵌套 `event`（D5）；`content` 加 `error` 兜底（D6）；`:318` 换 helper（D4）；`:284-286` 传 `request.Metadata`（D7） |
 
 声明顺序、中文注释、`doc.go` 目录条目按项目规范同步。
