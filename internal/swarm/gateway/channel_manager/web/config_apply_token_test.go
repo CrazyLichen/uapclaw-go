@@ -145,3 +145,40 @@ func writeTokenFixture(t *testing.T) {
 		t.Fatalf("写 fixture 失败: %v", err)
 	}
 }
+
+// TestBuildModelsDefaultsFromFrontend_Token字段边界 覆盖空串与输出上限非法值分支
+func TestBuildModelsDefaultsFromFrontend_Token字段边界(t *testing.T) {
+	ctx := context.Background()
+	_ = useTokenConfigHome(t)
+
+	base := func() map[string]any {
+		return map[string]any{
+			"model_name": "qwen3-coder", "api_base": "https://example.com/v1",
+			"api_key": "sk-test", "model_provider": "OpenAI",
+		}
+	}
+
+	// 空串视为未配置
+	item := base()
+	item["max_input_tokens"] = ""
+	item["max_output_tokens"] = ""
+	got, err := buildModelsDefaultsFromFrontend(ctx, []any{item}, nil)
+	if err != nil {
+		t.Fatalf("空串不应报错: %v", err)
+	}
+	mcc, _ := got[0]["model_client_config"].(map[string]any)
+	if mcc["max_input_tokens"] != 0 || mcc["max_output_tokens"] != 0 {
+		t.Errorf("空串应写 0，实际 %v/%v", mcc["max_input_tokens"], mcc["max_output_tokens"])
+	}
+
+	// 输出上限非法值
+	for _, badVal := range []any{-5, "abc"} {
+		bad := base()
+		bad["max_output_tokens"] = badVal
+		if _, err := buildModelsDefaultsFromFrontend(ctx, []any{bad}, nil); err == nil {
+			t.Errorf("max_output_tokens=%v 应返回错误", badVal)
+		} else if _, ok := err.(*ConfigBadRequest); !ok {
+			t.Errorf("应为 *ConfigBadRequest，实际 %T", err)
+		}
+	}
+}

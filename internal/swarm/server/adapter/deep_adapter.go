@@ -3002,23 +3002,28 @@ func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 func toPositiveInt(v any) (int, bool) {
 	switch n := v.(type) {
 	case int:
-		return n, n > 0
+		if n > 0 {
+			return n, true
+		}
 	case int32:
-		return int(n), n > 0
+		if n > 0 {
+			return int(n), true
+		}
 	case int64:
-		return int(n), n > 0
+		if n > 0 {
+			return int(n), true
+		}
 	case float64:
-		i := int(n)
-		return i, i > 0
+		if i := int(n); i > 0 {
+			return i, true
+		}
 	case string:
 		i, err := strconv.Atoi(strings.TrimSpace(n))
-		if err != nil {
-			return 0, false
+		if err == nil && i > 0 {
+			return i, true
 		}
-		return i, i > 0
-	default:
-		return 0, false
 	}
+	return 0, false
 }
 
 // toRatio 将任意数值或字符串解析为 (0,1] 区间的比例；不可解析或越界返回 (0,false)。

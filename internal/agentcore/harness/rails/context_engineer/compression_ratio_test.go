@@ -71,9 +71,10 @@ func TestApplyCompressionRatios_比例缺省时保持绝对值(t *testing.T) {
 
 // TestApplyCompressionRatios_target不小于trigger时兜底 验证极窄窗口的兜底
 func TestApplyCompressionRatios_target不小于trigger时兜底(t *testing.T) {
+	// trigger 绝对值小、target 绝对值大：收口后 target(550) >= trigger(100) 触发兜底
 	specs := []ceiface.ProcessorSpec{
 		{Type: "RoundLevelCompressor", Config: &compressor.RoundLevelCompressorConfig{
-			TriggerTotalTokens: 1000, TargetTotalTokens: 2000}},
+			TriggerTotalTokens: 100, TargetTotalTokens: 1000}},
 	}
 	out := applyCompressionRatios(specs, 1000, 0.85, 0.55)
 	rl := out[0].Config.(*compressor.RoundLevelCompressorConfig)
@@ -92,5 +93,43 @@ func TestApplyCompressionRatios_offloader不参与(t *testing.T) {
 	mo := out[0].Config.(*offloader.MessageSummaryOffloaderConfig)
 	if mo.TokensThreshold != 60000 || mo.LargeMessageThreshold != 60000 {
 		t.Errorf("offloader 阈值不应被缩放，实际 %d/%d", mo.TokensThreshold, mo.LargeMessageThreshold)
+	}
+}
+
+// TestShrinkThreshold_边界 覆盖 ratio/window/absolute 的边界分支
+func TestShrinkThreshold_边界(t *testing.T) {
+	cases := []struct {
+		name     string
+		absolute int
+		window   int
+		ratio    float64
+		want     int
+	}{
+		{"ratio为0", 230000, 32000, 0, 230000},
+		{"window为0", 230000, 0, 0.85, 230000},
+		{"absolute为0", 0, 32000, 0.85, 0},
+		{"比例值更小", 230000, 32000, 0.85, 27200},
+		{"绝对值更小", 100000, 512000, 0.85, 100000},
+		{"比例值取整为0", 230000, 1, 0.1, 230000},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shrinkThreshold(tc.absolute, tc.window, tc.ratio); got != tc.want {
+				t.Errorf("shrinkThreshold(%d,%d,%v) = %d，期望 %d",
+					tc.absolute, tc.window, tc.ratio, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestUserProcessorTypes_返回注入顺序 覆盖访问器
+func TestUserProcessorTypes_返回注入顺序(t *testing.T) {
+	rail := NewContextProcessorRail(WithUserProcessors([]ceiface.ProcessorSpec{
+		{Type: "DialogueCompressor"},
+		{Type: "FullCompactProcessor"},
+	}))
+	got := rail.UserProcessorTypes()
+	if len(got) != 2 || got[0] != "DialogueCompressor" || got[1] != "FullCompactProcessor" {
+		t.Errorf("应返回注入顺序，实际 %v", got)
 	}
 }

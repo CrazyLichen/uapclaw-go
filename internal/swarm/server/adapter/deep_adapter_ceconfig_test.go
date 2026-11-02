@@ -102,3 +102,58 @@ func TestDeepAgentContextEngineConfig_同名模型冲突(t *testing.T) {
 		t.Errorf("默认条目优先应取 32000，实际 %d", got.ModelContextWindowTokens["m1"])
 	}
 }
+
+// TestToPositiveInt_各类型分支 覆盖 int/int32/int64/float64/string/非法值
+func TestToPositiveInt_各类型分支(t *testing.T) {
+	cases := []struct {
+		name   string
+		in     any
+		want   int
+		wantOK bool
+	}{
+		{"int", 32000, 32000, true},
+		{"int32", int32(8192), 8192, true},
+		{"int64", int64(4096), 4096, true},
+		{"float64", float64(2048), 2048, true},
+		{"string", "16000", 16000, true},
+		{"string带空格", " 1024 ", 1024, true},
+		{"字符串非法", "abc", 0, false},
+		{"零", 0, 0, false},
+		{"负数", -1, 0, false},
+		{"nil", nil, 0, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := toPositiveInt(tc.in)
+			if got != tc.want || ok != tc.wantOK {
+				t.Errorf("toPositiveInt(%v) = (%d,%v)，期望 (%d,%v)", tc.in, got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
+// TestToRatio_各类型分支 覆盖 float64/int/string/越界/非法值
+func TestToRatio_各类型分支(t *testing.T) {
+	cases := []struct {
+		name   string
+		in     any
+		want   float64
+		wantOK bool
+	}{
+		{"float64", 0.85, 0.85, true},
+		{"int", 1, 1, true},
+		{"string", "0.55", 0.55, true},
+		{"零", 0.0, 0, false},
+		{"超过1", 1.5, 0, false},
+		{"字符串非法", "abc", 0, false},
+		{"nil", nil, 0, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := toRatio(tc.in)
+			if ok != tc.wantOK || (ok && got != tc.want) {
+				t.Errorf("toRatio(%v) = (%v,%v)，期望 (%v,%v)", tc.in, got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
