@@ -287,6 +287,19 @@ var persistentCheckpointerLock sync.Mutex
 // 避免 adapter→server→adapter 循环依赖：adapter 包不导入 server 包。
 var defaultSendPushFunc func(ctx context.Context, msg map[string]any) error
 
+// placeholderAPIBase 占位 api_base 集合：命中即视为「模型未配置」。
+//
+// Python: interface_deep.py (_PLACEHOLDER_API_BASES)
+//
+//	_PLACEHOLDER_API_BASES = frozenset({"https://example.com/compatible-mode/v1"})
+//
+// 这是 resources/config.yaml 里的示例地址：用户没配真实服务时，若不做拦截，
+// 心跳/首次对话会真的向 example.com 发请求，报出底层网络错误而不是
+// 「模型未正确配置」。新增示例地址时须同步此集合。
+var placeholderAPIBase = map[string]struct{}{
+	"https://example.com/compatible-mode/v1": {},
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetDefaultSendPushFunc 设置默认推送函数。
@@ -2415,15 +2428,54 @@ func (d *DeepAdapter) applyModelToReactAgent(resolvedModel *llm.Model) {
 	d.model = resolvedModel
 }
 
-// hasValidModelConfig 检查请求的模型名是否有有效配置。
+// hasValidModelConfig 检查请求的模型是否有可用配置（凭据维度）。
 //
-// Python: JiuWenClawDeepAdapter._has_valid_model_config() (line ~4389)
+// Python: JiuWenClawDeepAdapter._has_valid_model_config() (interface_deep.py:3540-3580)
+//
+// 判定顺序与 Python 一致：
+//  1. 请求指定的模型在缓存中且凭据可用 → true
+//  2. 默认模型凭据可用 → true
+//  3. 缓存中任意模��凭据可用 → true
+//  4. 否则 false（调用方回 "模型未正确配置，请先配置模型信息"）
+//
+// 注意：仅「模型名存在于缓存」不足以判定可用——首次安装时 config.yaml 带着
+// api_base=https://example.com/compatible-mode/v1 的占位配置，旧实现会放行，
+// 于是心跳/首次对话真的向 example.com 发请求并报底层网络错误（2026-11-02 实测）。
 func (d *DeepAdapter) hasValidModelConfig(requestedModelName string) bool {
-	if requestedModelName == "" {
-		return true // 空字符串表示使用默认模型
+	// 1. 请求指定的模型
+	if requestedModelName != "" {
+		if m, ok := d.modelCache[requestedModelName]; ok && modelClientUsable(m) {
+			return true
+		}
 	}
-	_, ok := d.modelCache[requestedModelName]
-	return ok
+	// 2. 默认模型
+	if modelClientUsable(d.model) {
+		return true
+	}
+	// 3. 缓存中任意可用模型
+	for _, m := range d.modelCache {
+		if modelClientUsable(m) {
+			return true
+		}
+	}
+	return false
+}
+
+// modelClientUsable 判断模型客户端配置是否含可用凭据。
+//
+// Python: _mcc_looks_usable (interface_deep.py:292-296)：
+// api_key 非空 且 api_base 非空 且 api_base 不在占位符黑名单。
+func modelClientUsable(m *llm.Model) bool {
+	if m == nil || m.ClientConfig == nil {
+		return false
+	}
+	apiKey := strings.TrimSpace(m.ClientConfig.APIKey)
+	apiBase := strings.TrimSpace(m.ClientConfig.APIBase)
+	if apiKey == "" || apiBase == "" {
+		return false
+	}
+	_, isPlaceholder := placeholderAPIBase[apiBase]
+	return !isPlaceholder
 }
 
 // markSessionActive 递增 session 活跃任务计数。

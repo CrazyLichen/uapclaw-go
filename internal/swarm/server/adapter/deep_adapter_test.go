@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -363,21 +364,91 @@ func TestDeepAdapter_CreateInstance_config覆盖(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// TestHasValidModelConfig_空字符串 验证空字符串返回 true
-func TestHasValidModelConfig_空字符串(t *testing.T) {
+// usableTestModel 构造一个「凭据可用」的模型（真实 api_key + 非占位 api_base）。
+func usableTestModel() *llm.Model {
+	return &llm.Model{ClientConfig: &llmschema.ModelClientConfig{
+		APIKey:  "sk-test",
+		APIBase: "https://api.openai.com/v1",
+	}}
+}
+
+// TestHasValidModelConfig_未配置模型返回false 验证「什么都没配」时判定无效。
+//
+// 旧实现空字符串恒返回 true，导致首次安装（config.yaml 自带占位 api_base）被放行，
+// 心跳真的向 example.com 发请求并报底层网络错误。对齐 Python _has_valid_model_config：
+// 空模型名只表示「用默认模型」，仍需默认模型凭据可用。
+func TestHasValidModelConfig_未配置模型返回false(t *testing.T) {
 	d := NewDeepAdapter()
-	if !d.hasValidModelConfig("") {
-		t.Error("空字符串应返回 true（使用默认模型）")
+	if d.hasValidModelConfig("") {
+		t.Error("无任何可用模型时应返回 false（模型未正确配置）")
+	}
+	// 默认模型存在但凭据缺失，同样无效
+	d.model = &llm.Model{ClientConfig: &llmschema.ModelClientConfig{}}
+	if d.hasValidModelConfig("") {
+		t.Error("默认模型 api_key/api_base 为空时应返回 false")
 	}
 }
 
-// TestHasValidModelConfig_缓存中存在 验证缓存中存在的模型返回 true
+// TestHasValidModelConfig_默认模型可用返回true 验证空模型名 + 默认模型凭据可用。
+func TestHasValidModelConfig_默认模型可用返回true(t *testing.T) {
+	d := NewDeepAdapter()
+	d.model = usableTestModel()
+	if !d.hasValidModelConfig("") {
+		t.Error("默认模型凭据可用时应返回 true")
+	}
+}
+
+// TestHasValidModelConfig_缓存中存在 验证缓存中凭据可用的模型返回 true。
 func TestHasValidModelConfig_缓存中存在(t *testing.T) {
 	d := NewDeepAdapter()
-	// 模拟 modelCache 中存在模型
-	d.modelCache = map[string]*llm.Model{"gpt-4": nil}
+	d.modelCache = map[string]*llm.Model{"gpt-4": usableTestModel()}
 	if !d.hasValidModelConfig("gpt-4") {
-		t.Error("缓存中存在的模型应返回 true")
+		t.Error("缓存中凭据可用的模型应返回 true")
+	}
+}
+
+// TestHasValidModelConfig_占位或空凭据返回false 验证占位 api_base 与空凭据被判无效。
+//
+// Python: _mcc_looks_usable —— api_key 非空 && api_base 非空 &&
+// api_base 不在 _PLACEHOLDER_API_BASES（含 https://example.com/compatible-mode/v1）。
+func TestHasValidModelConfig_占位或空凭据返回false(t *testing.T) {
+	cases := map[string]*llm.Model{
+		"占位 api_base": {ClientConfig: &llmschema.ModelClientConfig{
+			APIKey:  "sk-test",
+			APIBase: "https://example.com/compatible-mode/v1",
+		}},
+		"空 api_key": {ClientConfig: &llmschema.ModelClientConfig{
+			APIBase: "https://api.openai.com/v1",
+		}},
+		"空 api_base": {ClientConfig: &llmschema.ModelClientConfig{
+			APIKey: "sk-test",
+		}},
+		"ClientConfig 为 nil": {},
+	}
+	for name, model := range cases {
+		d := NewDeepAdapter()
+		d.modelCache = map[string]*llm.Model{"m": model}
+		if d.hasValidModelConfig("m") {
+			t.Errorf("%s 应返回 false（凭据不可用）", name)
+		}
+	}
+	// nil 模型条目同样无效（旧用例曾把 nil 当「存在即有效」）
+	d := NewDeepAdapter()
+	d.modelCache = map[string]*llm.Model{"gpt-4": nil}
+	if d.hasValidModelConfig("gpt-4") {
+		t.Error("缓存中 nil 模型应返回 false")
+	}
+}
+
+// TestHasValidModelConfig_回退到缓存中任意可用模型 验证第 3 条回退（Python 同序）。
+func TestHasValidModelConfig_回退到缓存中任意可用模型(t *testing.T) {
+	d := NewDeepAdapter()
+	d.modelCache = map[string]*llm.Model{
+		"broken": {ClientConfig: &llmschema.ModelClientConfig{}},
+		"good":   usableTestModel(),
+	}
+	if !d.hasValidModelConfig("nonexistent") {
+		t.Error("指定模型不存在但缓存中另有可用模型时应返回 true")
 	}
 }
 
