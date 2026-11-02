@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
@@ -68,10 +68,10 @@ func TestContextProcessorRail_Init无窗口时保持绝对值(t *testing.T) {
 	reactCfg := saconfig.NewReActAgentConfig()
 	reactCfg.ModelNameVal = "unknown-model"
 	reactCfg.ContextEngineConfig = ceschema.ContextEngineConfig{
-		MaxContextMessageNum:     200,
-		DefaultWindowRoundNum:    10,
-		CompressionTriggerRatio:  0.85,
-		CompressionTargetRatio:   0.55,
+		MaxContextMessageNum:    200,
+		DefaultWindowRoundNum:   10,
+		CompressionTriggerRatio: 0.85,
+		CompressionTargetRatio:  0.55,
 	}
 
 	agent := &railCfgAgent{

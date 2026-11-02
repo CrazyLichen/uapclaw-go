@@ -591,8 +591,8 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
 		// todo_compat 兼容层注入（对齐 Python interface_deep.py:230 install_todo_modify_compat_patch 模块级 patch）
 		TodoModifyFactory:   swarmtools.NewCompatibleTodoModifyTool,
-		AutoCreateWorkspace: false,                                             // Python: 硬编码 false
-		CompletionTimeout:   paramsFloat(config, "completion_timeout", 3600.0), // Python: config.get("completion_timeout", 3600.0)
+		AutoCreateWorkspace: false,                                              // Python: 硬编码 false
+		CompletionTimeout:   paramsFloat(config, "completion_timeout", 3600.0),  // Python: config.get("completion_timeout", 3600.0)
 		ContextEngineConfig: d.deepAgentContextEngineConfig(config, configBase), // Python: context_engine_config=_deep_agent_context_engine_config(config)
 	}
 	// 步骤 17 回填：SysOperation
