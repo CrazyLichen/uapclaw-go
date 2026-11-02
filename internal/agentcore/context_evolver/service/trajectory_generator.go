@@ -93,16 +93,26 @@ type SummarizeTrajectoriesInput struct {
 	Score []int
 }
 
+// ToolCall 一条工具调用。
+type ToolCall struct {
+	// Name 工具名
+	Name string
+	// Args 工具参数（原始 JSON 字符串）
+	Args string
+}
+
 // Message 轨迹消息。
 type Message struct {
 	// Role 消息角色：user/assistant/tool
 	Role string
 	// Content 消息内容
 	Content string
-	// ToolName 工具名称（仅 tool 角色）
+	// ToolName 工具名称（兼容单工具调用写法）
 	ToolName string
-	// ToolArgs 工具参数（仅 tool 角色）
+	// ToolArgs 工具参数（兼容单工具调用写法）
 	ToolArgs string
+	// ToolCalls 一条 assistant 消息的多个工具调用（优先于 ToolName/ToolArgs）
+	ToolCalls []ToolCall
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -363,7 +373,11 @@ func FormatTrajectory(messages []Message) string {
 			if msg.Content != "" {
 				transcript = append(transcript, fmt.Sprintf("THOUGHT: %s", msg.Content))
 			}
-			if msg.ToolName != "" {
+			if len(msg.ToolCalls) > 0 {
+				for _, tc := range msg.ToolCalls {
+					transcript = append(transcript, fmt.Sprintf("ACTION: %s(%s)", tc.Name, tc.Args))
+				}
+			} else if msg.ToolName != "" {
 				transcript = append(transcript, fmt.Sprintf("ACTION: %s(%s)", msg.ToolName, msg.ToolArgs))
 			}
 		case "tool":

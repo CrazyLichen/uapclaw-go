@@ -9,8 +9,10 @@ import (
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -226,22 +228,88 @@ func (a *ContextEvolvingReActAgent) Execute(ctx context.Context, query string, s
 	inputs := map[string]any{
 		"query":           query,
 		"retrieval_query": rq,
-		"session_id":      sessionID,
 	}
 
-	result, err := a.invokeWithMemory(ctx, inputs)
+	// 对齐 Python run_trials: session = Session(card=agent.card)，显式传入内层 invoke
+	sess := session.NewSession(session.WithSessionID(sessionID))
+	if err := sess.PreRun(ctx, inputs); err != nil {
+		return nil, fmt.Errorf("创建试验会话失败: %w", err)
+	}
+	// 外部传入 session 时 invokeImpl 不做收尾，由本处负责
+	defer func() {
+		_ = sess.CloseStream()
+		_ = sess.Commit(ctx)
+	}()
+
+	result, err := a.invokeWithMemory(ctx, inputs, interfaces.WithSession(sess))
 	if err != nil {
 		return nil, err
 	}
 
 	answer, _ := result["output"].(string)
-	trajectory := formatTrajectoryFromResult(result)
 
 	return &cecontext.TrajectoryResult{
 		Answer:     answer,
 		Success:    true,
-		Trajectory: trajectory,
+		Trajectory: a.extractTrajectory(sessionID, query, answer),
 	}, nil
+}
+
+// extractTrajectory 从会话上下文提取并格式化轨迹。
+//
+// 对齐 Python run_trials:
+// context = agent.context_engine.get_context(session_id=..., context_id="default_context_id")
+// trajectory = format_trajectory(context.get_messages())
+func (a *ContextEvolvingReActAgent) extractTrajectory(sessionID, query, answer string) string {
+	fallback := fmt.Sprintf("USER: %s\nASSISTANT: %s", query, answer)
+	engine := a.ReActAgent.ContextEngine()
+	if engine == nil {
+		return fallback
+	}
+	mc := engine.GetContext("default_context_id", sessionID)
+	if mc == nil {
+		return fallback
+	}
+	msgs, err := mc.GetMessages(0, true)
+	if err != nil || len(msgs) == 0 {
+		return fallback
+	}
+	if out := service.FormatTrajectory(messagesToServiceMessages(msgs)); out != "" {
+		return out
+	}
+	return fallback
+}
+
+// messagesToServiceMessages 将上下文消息转换为轨迹格式化用的消息。
+func messagesToServiceMessages(msgs []llmschema.BaseMessage) []service.Message {
+	converted := make([]service.Message, 0, len(msgs))
+	for _, m := range msgs {
+		msg := service.Message{Role: trajectoryRole(m.GetRole()), Content: m.GetContent().Text()}
+		if am, ok := m.(*llmschema.AssistantMessage); ok {
+			for _, tc := range am.ToolCalls {
+				if tc == nil {
+					continue
+				}
+				msg.ToolCalls = append(msg.ToolCalls, service.ToolCall{Name: tc.Name, Args: tc.Arguments})
+			}
+		}
+		converted = append(converted, msg)
+	}
+	return converted
+}
+
+// trajectoryRole 将 RoleType 映射为轨迹角色名。
+func trajectoryRole(rt llmschema.RoleType) string {
+	switch rt {
+	case llmschema.RoleTypeUser:
+		return "user"
+	case llmschema.RoleTypeAssistant:
+		return "assistant"
+	case llmschema.RoleTypeTool:
+		return "tool"
+	default:
+		return "system"
+	}
 }
 
 // GetMemoryService 返回记忆服务。
@@ -386,17 +454,4 @@ func copyMap(m map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
-}
-
-// formatTrajectoryFromResult 从 Invoke 结果格式化轨迹文本。
-func formatTrajectoryFromResult(result map[string]any) string {
-	if result == nil {
-		return ""
-	}
-	// 简单提取 output 和 steps
-	output, _ := result["output"].(string)
-	if output != "" {
-		return fmt.Sprintf("USER: query\nASSISTANT: %s", output)
-	}
-	return ""
 }

@@ -11,6 +11,7 @@ import (
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -78,24 +79,6 @@ func TestCopyMap(t *testing.T) {
 
 	copied["query"] = "world"
 	assert.Equal(t, "hello", original["query"])
-}
-
-// TestFormatTrajectoryFromResult 验证轨迹格式化。
-func TestFormatTrajectoryFromResult(t *testing.T) {
-	result := map[string]any{
-		"output": "The answer is 42",
-	}
-	trajectory := formatTrajectoryFromResult(result)
-	assert.Contains(t, trajectory, "The answer is 42")
-}
-
-// TestFormatTrajectoryFromResult_空结果 验证空结果返回空字符串。
-func TestFormatTrajectoryFromResult_空结果(t *testing.T) {
-	trajectory := formatTrajectoryFromResult(nil)
-	assert.Equal(t, "", trajectory)
-
-	trajectory = formatTrajectoryFromResult(map[string]any{})
-	assert.Equal(t, "", trajectory)
 }
 
 // TestContextEvolvingReActAgent_MemoryCache 验证记忆缓存逻辑。
@@ -214,4 +197,36 @@ func TestNewContextEvolvingReActAgent_无APIKey报错(t *testing.T) {
 	_, err := NewContextEvolvingReActAgent(context.Background(), &agentschema.AgentCard{}, "u1",
 		nil, true, false, "none", nil, "", "", 0, "")
 	assert.Error(t, err)
+}
+
+// TestMessagesToServiceMessages_保留多工具调用 验证上下文消息按角色与工具调用转换。
+func TestMessagesToServiceMessages_保留多工具调用(t *testing.T) {
+	msgs := []llmschema.BaseMessage{
+		llmschema.NewUserMessage("Question: 1+1"),
+		&llmschema.AssistantMessage{
+			DefaultMessage: llmschema.DefaultMessage{
+				Role:    llmschema.RoleTypeAssistant,
+				Content: llmschema.NewTextContent("need calc"),
+			},
+			ToolCalls: []*llmschema.ToolCall{
+				{Name: "calc", Arguments: `{"x":1}`},
+				{Name: "echo", Arguments: `{"y":2}`},
+			},
+		},
+	}
+
+	got := messagesToServiceMessages(msgs)
+	require.Len(t, got, 2)
+	assert.Equal(t, "user", got[0].Role)
+	assert.Equal(t, "Question: 1+1", got[0].Content)
+	require.Len(t, got[1].ToolCalls, 2)
+	assert.Equal(t, "echo", got[1].ToolCalls[1].Name)
+}
+
+// TestExtractTrajectory_无上下文引擎时回退 验证回退文本使用真实 query（原实现是字面量）。
+func TestExtractTrajectory_无上下文引擎时回退(t *testing.T) {
+	agent := &ContextEvolvingReActAgent{
+		ReActAgent: agents.NewReActAgent(&agentschema.AgentCard{}, saconfig.NewReActAgentConfig()),
+	}
+	assert.Equal(t, "USER: hi\nASSISTANT: ok", agent.extractTrajectory("trial_0", "hi", "ok"))
 }

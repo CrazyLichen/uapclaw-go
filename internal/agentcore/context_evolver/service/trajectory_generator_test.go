@@ -459,3 +459,25 @@ func TestRunTrials_显式k优先(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, agent.calls, 2)
 }
+
+// TestFormatTrajectory_多工具调用 验证一条 assistant 消息输出多条 ACTION。
+func TestFormatTrajectory_多工具调用(t *testing.T) {
+	got := FormatTrajectory([]Message{
+		{Role: "user", Content: "Question: 1+1"},
+		{Role: "assistant", Content: "need calc", ToolCalls: []ToolCall{
+			{Name: "calc", Args: `{"x":1}`},
+			{Name: "echo", Args: `{"y":2}`},
+		}},
+		{Role: "tool", Content: "2"},
+	})
+	want := "USER: 1+1\nTHOUGHT: need calc\nACTION: calc({\"x\":1})\nACTION: echo({\"y\":2})\nOBSERVATION: 2"
+	assert.Equal(t, want, got)
+}
+
+// TestFormatTrajectory_兼容单工具字段 验证 ToolName/ToolArgs 写法仍生效。
+func TestFormatTrajectory_兼容单工具字段(t *testing.T) {
+	got := FormatTrajectory([]Message{
+		{Role: "assistant", ToolName: "calc", ToolArgs: `{"x":1}`},
+	})
+	assert.Equal(t, "ACTION: calc({\"x\":1})", got)
+}
