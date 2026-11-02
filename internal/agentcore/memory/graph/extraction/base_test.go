@@ -284,3 +284,135 @@ func TestReadableSchema_有描述才输出注释(t *testing.T) {
 		}
 	}
 }
+
+// TestReadableSchema_类型映射 验证各 Go 类型到 Python 注解的映射。
+func TestReadableSchema_类型映射(t *testing.T) {
+	type inner struct {
+		Name string `json:"name"`
+	}
+	model := reflect.TypeOf(struct {
+		Text    string            `json:"text"`
+		Count   int               `json:"count"`
+		Ratio   float64           `json:"ratio"`
+		Flag    bool              `json:"flag"`
+		Nested  inner             `json:"nested"`
+		List    []inner           `json:"list"`
+		Mapping map[string]int    `json:"mapping"`
+		Ignored string            `json:"-"`
+		hidden  string            `json:"hidden"`
+		Ptr     *inner            `json:"ptr"`
+		Extra   map[string]string `json:"extra"`
+	}{})
+
+	out, refs := ReadableSchema(model, "cn")
+	lines := strings.Split(out, "\n")
+	want := []string{
+		"text: str",
+		"count: int",
+		"ratio: float",
+		"flag: bool",
+		"nested: inner",
+		"list: list[inner]",
+		"mapping: dict",
+		"ptr: inner",
+		"extra: dict",
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("行数 = %d, want %d（%q）", len(lines), len(want), out)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("第 %d 行 = %q, want %q", i+1, lines[i], want[i])
+		}
+	}
+	if _, ok := refs["inner"]; !ok {
+		t.Fatalf("refDict 缺少 inner: %v", refs)
+	}
+}
+
+// TestReadableSchema_非结构体返回空 验证非结构体输入的安全兜底。
+func TestReadableSchema_非结构体返回空(t *testing.T) {
+	out, refs := ReadableSchema(reflect.TypeOf(42), "cn")
+	if out != "" || refs != nil {
+		t.Fatalf("非结构体应返回空，got out=%q refs=%v", out, refs)
+	}
+}
+
+// TestReadableSchema_指针与无tag字段 验证指针解引用、无 json tag 用字段名、未注册语言兜底。
+func TestReadableSchema_指针与无tag字段(t *testing.T) {
+	type inner struct {
+		Value uint8 `json:"value"`
+	}
+	type model struct {
+		NoTag   string
+		Ptr     *inner
+		Ch      chan int    `json:"ch"`
+		Matrix  [][]float32 `json:"matrix"`
+		NoJSON  string      `json:"-"`
+		private string
+	}
+	out, refs := ReadableSchema(reflect.TypeOf(&model{}), "unregistered-lang")
+	lines := strings.Split(out, "\n")
+	want := []string{
+		"NoTag: str",
+		"Ptr: inner",
+		"ch: Any",
+		"matrix: list[list[float]]",
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("行数 = %d, want %d（%q）", len(lines), len(want), out)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("第 %d 行 = %q, want %q", i+1, lines[i], want[i])
+		}
+	}
+	props, ok := refs["inner"].(map[string]any)
+	if !ok {
+		t.Fatalf("refDict[inner] 类型异常: %T", refs["inner"])
+	}
+	if got, _ := props["value"].(map[string]any)["type"].(string); got != "integer" {
+		t.Fatalf("inner.value type = %q, want integer", got)
+	}
+}
+
+// TestReadableSchema_匿名结构与嵌套类型 验证匿名结构体、嵌套字段类型与 refDict 细节。
+func TestReadableSchema_匿名结构与嵌套类型(t *testing.T) {
+	type inner struct {
+		Ratio  float32 `json:"ratio"`
+		Flag   bool    `json:"flag"`
+		Items  []int   `json:"items"`
+		Desc   string  `json:"desc" jsonschema:"description={{[ent_def_name]}}"`
+		hidden string
+	}
+	type model struct {
+		Anon  struct{ X int } `json:"anon"`
+		Inner inner           `json:"inner"`
+	}
+	out, refs := ReadableSchema(reflect.TypeOf(model{}), "cn")
+	lines := strings.Split(out, "\n")
+	if len(lines) != 2 || lines[0] != "anon: dict" || lines[1] != "inner: inner" {
+		t.Fatalf("输出不符: %q", out)
+	}
+	props, ok := refs["inner"].(map[string]any)
+	if !ok {
+		t.Fatalf("refDict[inner] 类型异常: %T", refs["inner"])
+	}
+	for name, wantType := range map[string]string{
+		"ratio": "number",
+		"flag":  "boolean",
+		"items": "array",
+		"desc":  "string",
+	} {
+		item, _ := props[name].(map[string]any)
+		if got, _ := item["type"].(string); got != wantType {
+			t.Fatalf("%s type = %q, want %q", name, got, wantType)
+		}
+	}
+	if _, exists := props["hidden"]; exists {
+		t.Fatal("未导出字段不应进入 refDict")
+	}
+	if _, exists := props["desc"].(map[string]any)["description"]; !exists {
+		t.Fatal("有描述字段应带 description")
+	}
+}

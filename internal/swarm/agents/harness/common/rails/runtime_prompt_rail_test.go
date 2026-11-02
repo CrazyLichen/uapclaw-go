@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
@@ -322,4 +323,42 @@ func TestRuntimePromptRail_并发设置与调用(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestRuntimePromptRail_BeforeModelCall注入全部节 验证入口快照与 7 个 inject 串联。
+func TestRuntimePromptRail_BeforeModelCall注入全部节(t *testing.T) {
+	rail := NewRuntimePromptRail("cn", "web")
+	rail.SetChannel("tui")
+	rail.SetTrustedDirs([]string{t.TempDir()})
+	builder := saprompt.NewSystemPromptBuilder()
+	rail.mu.Lock()
+	rail.builder = builder
+	rail.mu.Unlock()
+
+	if err := rail.BeforeModelCall(context.Background(), nil); err != nil {
+		t.Fatalf("BeforeModelCall 失败: %v", err)
+	}
+	if builder.Build() == "" {
+		t.Fatal("应注入至少一个提示节")
+	}
+}
+
+// TestRuntimePromptRail_Uninit清除注入 验证释放 builder 前移除所有 section。
+func TestRuntimePromptRail_Uninit清除注入(t *testing.T) {
+	rail := NewRuntimePromptRail("cn", "web")
+	builder := saprompt.NewSystemPromptBuilder()
+	rail.mu.Lock()
+	rail.builder = builder
+	rail.mu.Unlock()
+
+	require.NoError(t, rail.Uninit(nil))
+	if builder.Build() != "" {
+		t.Fatalf("Uninit 后应清除全部 section，实际: %q", builder.Build())
+	}
+	rail.mu.RLock()
+	hasBuilder := rail.builder != nil
+	rail.mu.RUnlock()
+	if hasBuilder {
+		t.Fatal("Uninit 后 builder 应为 nil")
+	}
 }

@@ -893,3 +893,16 @@ func TestLoadMemories_无持久化时直接返回(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, svc.LoadMemories(context.Background(), "u1"))
 }
+
+// TestLoadMemories_无数据时提前返回 验证空节点表直接返回（对齐 Python if not data: return）。
+func TestLoadMemories_无数据时提前返回(t *testing.T) {
+	svc, vs, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+	svc.persistenceHelper = cepersistence.NewMemoryPersistenceHelper(
+		cepersistence.WithPersistType("json"),
+		cepersistence.WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
+	)
+
+	require.NoError(t, svc.LoadMemories(context.Background(), "u1"))
+	assert.Equal(t, 0, vs.Count())
+}

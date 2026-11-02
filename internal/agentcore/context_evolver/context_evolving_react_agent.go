@@ -171,17 +171,7 @@ func (a *ContextEvolvingReActAgent) Invoke(ctx context.Context, inputs map[strin
 	if hasMattMode && mattsMode != "" {
 		groundTruth, _ := inputs["ground_truth"].(string)
 		// 对齐 Python: matts_k = inputs.get("matts_k", None)，缺省由 RunTrials 统一解析
-		mattsK := 0
-		switch v := inputs["matts_k"].(type) {
-		case int:
-			mattsK = v
-		case float64:
-			mattsK = int(v)
-		case json.Number:
-			if n, err := v.Int64(); err == nil {
-				mattsK = int(n)
-			}
-		}
+		mattsK := parseMattsK(inputs)
 
 		// 委托 MaTTS RunTrials（self 实现 AgentFlowService）
 		results, err := service.RunTrials(ctx, a, service.RunTrialsInput{
@@ -253,6 +243,22 @@ func (a *ContextEvolvingReActAgent) Execute(ctx context.Context, query string, s
 		Success:    true,
 		Trajectory: a.extractTrajectory(sessionID, query, answer),
 	}, nil
+}
+
+// parseMattsK 从 inputs 解析 matts_k，缺省返回 0 交由 RunTrials 读取配置。
+// 对齐 Python: matts_k = inputs.get("matts_k", None)。
+func parseMattsK(inputs map[string]any) int {
+	switch v := inputs["matts_k"].(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return int(n)
+		}
+	}
+	return 0
 }
 
 // extractTrajectory 从会话上下文提取并格式化轨迹。

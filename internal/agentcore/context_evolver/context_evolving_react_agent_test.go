@@ -2,6 +2,7 @@ package contextevolver
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -229,4 +230,36 @@ func TestExtractTrajectory_无上下文引擎时回退(t *testing.T) {
 		ReActAgent: agents.NewReActAgent(&agentschema.AgentCard{}, saconfig.NewReActAgentConfig()),
 	}
 	assert.Equal(t, "USER: hi\nASSISTANT: ok", agent.extractTrajectory("trial_0", "hi", "ok"))
+}
+
+// TestParseMattsK_兼容多种数值类型 验证 JSON 来源的 float64/json.Number 也能解析。
+func TestParseMattsK_兼容多种数值类型(t *testing.T) {
+	cases := []struct {
+		name   string
+		inputs map[string]any
+		want   int
+	}{
+		{"缺省", map[string]any{}, 0},
+		{"int", map[string]any{"matts_k": 3}, 3},
+		{"float64", map[string]any{"matts_k": float64(2)}, 2},
+		{"json.Number", map[string]any{"matts_k": json.Number("4")}, 4},
+		{"非法字符串", map[string]any{"matts_k": "x"}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, parseMattsK(tc.inputs))
+		})
+	}
+}
+
+// TestNewContextEvolvingReActAgent_带持久化参数 验证 persistType 透传。
+func TestNewContextEvolvingReActAgent_带持久化参数(t *testing.T) {
+	ceconfig.Set("API_KEY", "test-key")
+	defer ceconfig.Delete("API_KEY")
+
+	persistType := "json"
+	agent, err := NewContextEvolvingReActAgent(context.Background(), &agentschema.AgentCard{}, "u1",
+		nil, true, false, "none", &persistType, t.TempDir()+"/{algo_name}/{user_id}.json", "", 0, "")
+	require.NoError(t, err)
+	require.NotNil(t, agent.GetMemoryService())
 }
