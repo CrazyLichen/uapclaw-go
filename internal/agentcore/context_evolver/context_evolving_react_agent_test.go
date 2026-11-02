@@ -11,6 +11,9 @@ import (
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/service"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -150,7 +153,44 @@ func TestContextEvolvingReActAgent_AutoConfigure_有APIKey(t *testing.T) {
 	ceconfig.Set("API_KEY", "test-key-auto")
 	defer ceconfig.Delete("API_KEY")
 
-	agent := &ContextEvolvingReActAgent{}
+	agent := &ContextEvolvingReActAgent{
+		ReActAgent: agents.NewReActAgent(&agentschema.AgentCard{}, saconfig.NewReActAgentConfig()),
+	}
 	err := agent.AutoConfigure(context.Background())
 	require.NoError(t, err)
+}
+
+// TestAutoConfigure_不改动记忆服务 验证 AutoConfigure 只配置 Agent，不重建服务。
+func TestAutoConfigure_不改动记忆服务(t *testing.T) {
+	ceconfig.Set("API_KEY", "k")
+	ceconfig.Set("MODEL_NAME", "gpt-4o")
+	defer ceconfig.Delete("API_KEY")
+	defer ceconfig.Delete("MODEL_NAME")
+
+	before := &service.TaskMemoryService{}
+	agent := &ContextEvolvingReActAgent{
+		ReActAgent:    agents.NewReActAgent(&agentschema.AgentCard{}, saconfig.NewReActAgentConfig()),
+		memoryService: before,
+	}
+	require.NoError(t, agent.AutoConfigure(context.Background()))
+	assert.Same(t, before, agent.memoryService, "AutoConfigure 不应重建 memoryService")
+
+	cfg := agent.ReActAgent.Config().(*saconfig.ReActAgentConfig)
+	assert.Equal(t, "gpt-4o", cfg.ModelNameVal)
+	assert.Equal(t, 5, cfg.MaxIterations)
+}
+
+// TestAutoConfigure_默认模型为gpt4 验证未配置 MODEL_NAME 时用 Python 的默认值 gpt-4。
+func TestAutoConfigure_默认模型为gpt4(t *testing.T) {
+	ceconfig.Set("API_KEY", "k")
+	ceconfig.Delete("MODEL_NAME")
+	defer ceconfig.Delete("API_KEY")
+
+	agent := &ContextEvolvingReActAgent{
+		ReActAgent: agents.NewReActAgent(&agentschema.AgentCard{}, saconfig.NewReActAgentConfig()),
+	}
+	require.NoError(t, agent.AutoConfigure(context.Background()))
+
+	cfg := agent.ReActAgent.Config().(*saconfig.ReActAgentConfig)
+	assert.Equal(t, "gpt-4", cfg.ModelNameVal)
 }

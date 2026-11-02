@@ -3,6 +3,7 @@ package contextevolver
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
@@ -53,9 +54,12 @@ type ContextEvolvingReActAgent struct {
 	userID string
 	// injectMemoriesInContext 是否将记忆注入上下文
 	injectMemoriesInContext bool
-	// autoSummarize 是否自动总结
+	// autoSummarize 是否自动总结。
+	// 说明（对齐 Python）：该字段在 Python 与本实现中均只写不读，
+	// 真正的自动总结由 ContextEvolutionRail 承担。
 	autoSummarize bool
-	// autoSummarizeMattsMode 自动总结的 MaTTS 模式
+	// autoSummarizeMattsMode 自动总结的 MaTTS 模式。
+	// 说明：同 autoSummarize，仅保留参数兼容。
 	autoSummarizeMattsMode string
 	// lastRetrievedQuery 缓存上次检索的 query
 	lastRetrievedQuery string
@@ -67,18 +71,25 @@ type ContextEvolvingReActAgent struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// defaultContextEvolvingSystemPrompt 自动配置时使用的默认系统提示词。
+// Python: context_evolving_react_agent.py _auto_configure 中的 default_system_prompt
+const defaultContextEvolvingSystemPrompt = "You are a helpful assistant with access to a memory system. " +
+	"When relevant memories are provided in your context, use them to inform your responses. " +
+	"Always provide accurate, helpful answers based on both your knowledge and any retrieved memories."
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContextEvolvingReActAgent 创建带记忆检索能力的 ReActAgent。
-// 对齐 Python ContextEvolvingReActAgent.__init__(card, user_id, memory_service, ...)。
-// 双路径构造：memoryService 非 nil 时直接使用，否则用 persist 参数自建。
-// 返回 (*Agent, error) 因为构造时需要调用 LoadMemories。
+//
+// 对齐 Python ContextEvolvingReActAgent.__init__(card, user_id, memory_service, ...)：
+// 构造签名不含 config，父类使用默认 ReActAgentConfig（等价 Python super().__init__(card)），
+// 构造末尾调用 AutoConfigure 从环境配置模型客户端。
+// 返回 (*Agent, error) 因为构造期需要创建 memoryService 与 AutoConfigure。
 func NewContextEvolvingReActAgent(
 	ctx context.Context,
 	card *agentschema.AgentCard,
-	config *config.ReActAgentConfig,
 	userID string,
 	memoryService *service.TaskMemoryService,
 	injectMemoriesInContext bool,
@@ -105,8 +116,8 @@ func NewContextEvolvingReActAgent(
 		}
 	}
 
-	// 对齐 Python：创建父类 ReActAgent
-	reactAgent := agents.NewReActAgent(card, config)
+	// 对齐 Python: super().__init__(card) —— 父类使用默认配置
+	reactAgent := agents.NewReActAgent(card, config.NewReActAgentConfig())
 
 	agent := &ContextEvolvingReActAgent{
 		ReActAgent:              reactAgent,
@@ -128,6 +139,11 @@ func NewContextEvolvingReActAgent(
 		Bool("inject_in_context", injectMemoriesInContext).
 		Bool("auto_summarize", autoSummarize).
 		Msg("ContextEvolvingReActAgent initialized")
+
+	// 对齐 Python: self._auto_configure()
+	if autoCfgErr := agent.AutoConfigure(ctx); autoCfgErr != nil {
+		return nil, autoCfgErr
+	}
 
 	return agent, nil
 }
@@ -225,37 +241,48 @@ func (a *ContextEvolvingReActAgent) GetMemoryService() *service.TaskMemoryServic
 	return a.memoryService
 }
 
-// AutoConfigure 从 config 自动配置 Agent。对齐 Python Agent.auto_configure()。
-// 读取 API_KEY/API_BASE/MODEL_NAME/MODEL_PROVIDER 等配置，
-// 重新构建 ReActAgent 并更新记忆服务。
+// AutoConfigure 从配置自动配置 Agent 的模型客户端。
+//
+// 对齐 Python ContextEvolvingReActAgent._auto_configure()：
+// 新建 ReActAgentConfig → configure_model_client → configure_prompt_template →
+// configure_max_iterations(5) → self.configure(config)。
+// 注意：只配置 Agent，不改动 memoryService（Python 同样不碰）。
 func (a *ContextEvolvingReActAgent) AutoConfigure(ctx context.Context) error {
 	apiKey := ceconfig.GetString("API_KEY", "")
 	if apiKey == "" {
 		// 对齐 Python: if not api_key: return（静默跳过，不返回错误）
 		return nil
 	}
+	provider := ceconfig.GetString("MODEL_PROVIDER", "OpenAI")
 	apiBase := ceconfig.GetString("API_BASE", "https://api.openai.com/v1")
-	modelName := ceconfig.GetString("MODEL_NAME", "gpt-5.2")
+	modelName := ceconfig.GetString("MODEL_NAME", "gpt-4")
+
+	cfg := config.NewReActAgentConfig(
+		config.WithModelProvider(strings.ToLower(provider)),
+		config.WithAPIKey(apiKey),
+		config.WithAPIBase(apiBase),
+		config.WithModelName(modelName),
+		config.WithMaxIterations(5),
+		config.WithPromptTemplate([]map[string]any{
+			{"role": "system", "content": defaultContextEvolvingSystemPrompt},
+		}),
+	)
+	// 对齐 Python: self.configure(config) 为整体替换
+	if err := a.ReActAgent.Configure(ctx, cfg); err != nil {
+		return fmt.Errorf("AutoConfigure: 配置 Agent 失败: %w", err)
+	}
+	// Go 的 config.PromptTemplate 无消费方；Configure 会重建 promptBuilder，
+	// 因此必须在 Configure 之后把默认系统提示词落到 identity 节。
+	a.ReActAgent.AddPromptBuilderSection(
+		agents.IdentitySectionName,
+		defaultContextEvolvingSystemPrompt,
+		agents.IdentitySectionPriority,
+	)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("model_name", modelName).
 		Str("api_base", apiBase).
-		Msg("AutoConfigure: auto-configuring Agent from context_evolver config")
-
-	// 重新创建 TaskMemoryService（如果存在）
-	if a.memoryService != nil {
-		newSvc, err := service.NewTaskMemoryService(
-			service.WithLLMModel(modelName),
-			service.WithEmbeddingModel(ceconfig.GetString("EMBEDDING_MODEL", "text-embedding-3-small")),
-			service.WithAPIKey(apiKey),
-			service.WithAPIBase(apiBase),
-		)
-		if err != nil {
-			return fmt.Errorf("AutoConfigure: 创建 TaskMemoryService 失败: %w", err)
-		}
-		a.memoryService = newSvc
-	}
-
+		Msg("AutoConfigure: agent configured from context_evolver config")
 	return nil
 }
 
