@@ -1,6 +1,7 @@
 package rails
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -296,3 +297,12 @@ type testInterruptRequest struct{ msg string }
 
 func (r testInterruptRequest) GetMessage() string        { return r.msg }
 func (r testInterruptRequest) GetAutoConfirmKey() string { return "" }
+
+// TestExtractToolInterrupt_多错误包装 验证 errors.Join 包装也能识别。
+func TestExtractToolInterrupt_多错误包装(t *testing.T) {
+	exc := &saschema.ToolInterruptException{Request: testInterruptRequest{msg: "test"}}
+	joined := errors.Join(errors.New("other"), exc)
+	if got := extractToolInterrupt(joined); got == nil {
+		t.Fatal("errors.Join 包装的中断异常未被识别")
+	}
+}

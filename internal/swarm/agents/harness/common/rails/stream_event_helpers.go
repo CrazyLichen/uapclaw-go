@@ -169,6 +169,17 @@ func extractToolInterrupt(value any) *saschema.ToolInterruptException {
 			}
 		}
 	}
+	// errors.Join 等多错误包装（Go 特有形态）
+	if multi, ok := value.(interface{ Unwrap() []error }); ok {
+		for _, cause := range multi.Unwrap() {
+			if cause == nil {
+				continue
+			}
+			if result := extractToolInterrupt(cause); result != nil {
+				return result
+			}
+		}
+	}
 	return nil
 }
 
