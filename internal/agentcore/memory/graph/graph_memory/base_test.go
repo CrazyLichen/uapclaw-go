@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
@@ -2980,4 +2981,44 @@ func TestFetchRelevantEntities_有查询结果(t *testing.T) {
 	declarations := []extraction.EntityDeclaration{{Name: "Alice", EntityTypeID: 0}}
 	err := gm.fetchRelevantEntities(context.Background(), declarations, false, "user1", state)
 	assert.NoError(t, err)
+}
+
+// TestRelationDedupe_并发调用LLM 验证多条关系并发调用 LLM（最大并发 >= 2）。
+func TestRelationDedupe_并发调用LLM(t *testing.T) {
+	globalMockLLM.SetResponse(`{"duplicate_relations": []}`)
+	globalMockLLM.ResetConcurrency()
+	globalMockLLM.SetDelay(50 * time.Millisecond)
+	defer globalMockLLM.SetDelay(0)
+
+	gm, err := newTestGraphMemoryWithMockLLM()
+	require.NoError(t, err)
+	gm.DBBackend = &mockSearchGraphStore{SearchResult: map[string][]map[string]any{
+		graph.RelationCollection: {
+			{"uuid": "r1", "content": "existing relation", "lhs": "e1", "rhs": "e2", "distance": 0.3},
+		},
+	}}
+
+	state := NewGraphMemState()
+	state.Strategy.RecallRelation.TopK = 5
+	state.LookupTable.Entities["e1"] = entityShell("e1")
+	state.LookupTable.Entities["e2"] = entityShell("e2")
+
+	rels := make([]*graph.Relation, 0, 4)
+	for i := 0; i < 4; i++ {
+		lhs := fmt.Sprintf("l%d", i)
+		rhs := fmt.Sprintf("r%d", i)
+		state.LookupTable.Entities[lhs] = entityShell(lhs)
+		state.LookupTable.Entities[rhs] = entityShell(rhs)
+		rel := graph.NewRelation()
+		rel.LHS = entityShell(lhs)
+		rel.RHS = entityShell(rhs)
+		rel.Content = fmt.Sprintf("relation %d", i)
+		rels = append(rels, rel)
+	}
+	embeds := [][]float64{{0.1}, {0.2}, {0.3}, {0.4}}
+
+	require.NoError(t, gm.relationDedupe(context.Background(), "user1", "content", rels, embeds, state))
+	if got := globalMockLLM.MaxInFlight(); got < 2 {
+		t.Fatalf("最大并发 = %d，疑似串行执行", got)
+	}
 }
