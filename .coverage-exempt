@@ -123,3 +123,8 @@ internal/agentcore/harness/deep_agent.go#L1041-L1041
 # 文件的正负样本覆盖，CI 环境没有也无法伪造。同文件其余改动行（hasValidModelConfig
 # 与 anyToConfigString）由 deep_adapter_test.go 覆盖。
 internal/swarm/server/adapter/deep_adapter.go#L2513-L2534
+
+# cmd/uapclaw/cmd.go#L263：runAppCmd 是进程入口（启动 Gateway + AgentServer 并阻塞），
+# 单测无法执行，故该行对 applyWebAddrFlags 的调用无法被覆盖。
+# applyWebAddrFlags 本身的行为由 TestApplyWebAddrFlags 覆盖（含覆盖/不覆盖两条分支）。
+cmd/uapclaw/cmd.go#L263-L263

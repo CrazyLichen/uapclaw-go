@@ -107,3 +107,15 @@ internal/agentcore/graph/pregel/channels.go
 # 没有任何 file-api 用例（grep "file-api|HandleFileContent" 零命中），集成层无入口；
 # 本次改动行是纯路径解析 helper（resolveExistingPrefix），由 file_api_test.go 覆盖 92.3%。
 internal/swarm/channels/web/file_api.go
+
+# cmd/uapclaw/acp_cmd.go#L53/L56/L60：ACP 网关地址解析只读环境变量，属 CLI 解析路径，
+# 集成套件在进程内构造 adapter，不经过该函数。同名单测由 acp_cmd_test.go 覆盖。
+cmd/uapclaw/acp_cmd.go#L53-L53
+cmd/uapclaw/acp_cmd.go#L56-L56
+cmd/uapclaw/acp_cmd.go#L60-L60
+
+# internal/common/workspace/bootstrap.go#L27/L49/L86-L104：实例 bootstrap 的端口变量名映射，
+# 仅多实例部署时由 CLI 调用；集成套件直接构造 workspace，不走 bootstrap。单测覆盖 100%。
+internal/common/workspace/bootstrap.go#L27-L27
+internal/common/workspace/bootstrap.go#L49-L49
+internal/common/workspace/bootstrap.go#L86-L104
