@@ -47,7 +47,8 @@ uapclaw.exe app
 | `--dotenv <path>` | 指定 .env 文件（多实例隔离） |
 | `--name <name>` | 指定命名实例（多实例隔离，独立数据目录与端口） |
 | `--dist <path>` | 使用外部前端产物目录（默认用内嵌界面） |
-| `--version` | 打印版本 |
+
+查看版本：`./uapclaw --version`（根命令，`app` 子命令不带该参数）。
 
 示例：
 
