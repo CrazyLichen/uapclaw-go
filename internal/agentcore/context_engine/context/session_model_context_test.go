@@ -1537,3 +1537,62 @@ func TestCountDialogueRounds_单轮对话(t *testing.T) {
 		t.Errorf("单轮对话轮次 = %d, want 1", result)
 	}
 }
+
+// TestClearMessages_OnlyClearsCurrentRound 行为锁定：
+// withHistory=false 只清本轮新增消息，历史前缀必须保留。
+//
+// 对齐 Python message_buffer.py:44-53（pop_back 内部把 size 夹到"本轮长度"）。
+// 说明：曾误判此处"会清掉历史"，实测 Go 的 getBackInternal 已按 withHistory 夹取，
+// 与 Python 等价；本用例转为防止将来把该语义改坏。
+func TestClearMessages_OnlyClearsCurrentRound(t *testing.T) {
+	history := []llm_schema.BaseMessage{
+		llm_schema.NewUserMessage("历史1"),
+		llm_schema.NewAssistantMessage("历史2"),
+	}
+	mc := newTestSessionModelContext(func(o *testContextOpts) {
+		o.historyMessages = history
+	})
+	if _, err := mc.AddMessages(context.Background(), []llm_schema.BaseMessage{
+		llm_schema.NewUserMessage("本轮1"),
+		llm_schema.NewAssistantMessage("本轮2"),
+	}); err != nil {
+		t.Fatalf("AddMessages 失败: %v", err)
+	}
+
+	if err := mc.ClearMessages(context.Background(), false); err != nil {
+		t.Fatalf("ClearMessages 失败: %v", err)
+	}
+
+	if got := len(mc.messageBuffer.GetBack(0, true)); got != len(history) {
+		t.Fatalf("历史应保留 %d 条，实际 %d", len(history), got)
+	}
+	if got := len(mc.messageBuffer.GetBack(0, false)); got != 0 {
+		t.Fatalf("本轮应清空，实际剩 %d 条", got)
+	}
+}
+
+// TestClearMessages_HistorySizeConsistent 行为锁定：
+// 清理后 historyMessagesSize 必须与 buffer 长度自洽，新一轮消息立即可见。
+func TestClearMessages_HistorySizeConsistent(t *testing.T) {
+	mc := newTestSessionModelContext(func(o *testContextOpts) {
+		o.historyMessages = []llm_schema.BaseMessage{llm_schema.NewUserMessage("历史1")}
+	})
+	if _, err := mc.AddMessages(context.Background(), []llm_schema.BaseMessage{
+		llm_schema.NewUserMessage("本轮1"),
+	}); err != nil {
+		t.Fatalf("AddMessages 失败: %v", err)
+	}
+
+	if err := mc.ClearMessages(context.Background(), false); err != nil {
+		t.Fatalf("ClearMessages 失败: %v", err)
+	}
+
+	if _, err := mc.AddMessages(context.Background(), []llm_schema.BaseMessage{
+		llm_schema.NewUserMessage("新一轮"),
+	}); err != nil {
+		t.Fatalf("AddMessages 失败: %v", err)
+	}
+	if got := len(mc.messageBuffer.GetBack(0, false)); got != 1 {
+		t.Fatalf("清理后新一轮消息应立即可见，实际 %d 条", got)
+	}
+}

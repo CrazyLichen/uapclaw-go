@@ -248,10 +248,13 @@ func (mc *SessionModelContext) PopMessages(size int, withHistory bool) []llm_sch
 //
 // Python: SessionModelContext.clear_messages()
 func (mc *SessionModelContext) ClearMessages(ctx context.Context, withHistory bool, opts ...iface.Option) error {
-	// 弹出全部消息
+	// 弹出消息：withHistory=false 时 PopBack 只弹「历史之后的本轮部分」
+	// （对齐 Python context.py:297-300 → pop_messages(len(self), with_history=False)，
+	//  其内部 pop_back→get_back(size, with_history=False) 同样会把 size 夹到本轮长度）。
 	totalSize := mc.messageBuffer.Size()
+	clearedCount := 0
 	if totalSize > 0 {
-		mc.messageBuffer.PopBack(totalSize, withHistory)
+		clearedCount = len(mc.messageBuffer.PopBack(totalSize, withHistory))
 	}
 
 	// 重置卸载缓冲区
@@ -270,11 +273,13 @@ func (mc *SessionModelContext) ClearMessages(ctx context.Context, withHistory bo
 		Context:   mc,
 	})
 
+	// cleared_count 记「实际弹出了多少条」，不是清理前的 buffer 总长：
+	// 记总长会让 "历史 20 + 本轮 8" 的取消场景打印 28，误判成"把历史也清了"。
 	logger.Info(logComponent).
 		Str("event_type", "CONTEXT_CLEARED").
 		Str("context_id", mc.contextID).
 		Str("session_id", mc.sessionID).
-		Int("cleared_count", totalSize).
+		Int("cleared_count", clearedCount).
 		Msg("context messages cleared")
 
 	return nil
