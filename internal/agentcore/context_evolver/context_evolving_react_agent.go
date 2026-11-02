@@ -2,6 +2,7 @@ package contextevolver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -167,9 +168,17 @@ func (a *ContextEvolvingReActAgent) Invoke(ctx context.Context, inputs map[strin
 	mattsMode, hasMattMode := inputs["matts_mode"].(string)
 	if hasMattMode && mattsMode != "" {
 		groundTruth, _ := inputs["ground_truth"].(string)
-		mattsK := 3
-		if k, ok := inputs["matts_k"].(int); ok && k > 0 {
-			mattsK = k
+		// 对齐 Python: matts_k = inputs.get("matts_k", None)，缺省由 RunTrials 统一解析
+		mattsK := 0
+		switch v := inputs["matts_k"].(type) {
+		case int:
+			mattsK = v
+		case float64:
+			mattsK = int(v)
+		case json.Number:
+			if n, err := v.Int64(); err == nil {
+				mattsK = int(n)
+			}
 		}
 
 		// 委托 MaTTS RunTrials（self 实现 AgentFlowService）

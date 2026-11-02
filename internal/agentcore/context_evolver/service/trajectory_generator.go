@@ -210,7 +210,8 @@ func RunTrials(ctx context.Context, agent cecontext.AgentFlowService, params Run
 	} else {
 		mattsK = params.MattsK
 		if mattsK <= 0 {
-			mattsK = 3
+			// 对齐 Python: matts_k = int(memory_config.get("MATTS_DEFAULT_K", 3))
+			mattsK = ceconfig.GetInt("MATTS_DEFAULT_K", 3)
 		}
 		selfRefine = (params.MattsMode == "sequential" || params.MattsMode == "combined")
 	}

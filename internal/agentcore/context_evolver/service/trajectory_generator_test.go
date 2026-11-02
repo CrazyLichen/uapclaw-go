@@ -425,3 +425,37 @@ func TestSummarizeTrajectories_执行失败(t *testing.T) {
 	})
 	require.Error(t, err)
 }
+
+// TestRunTrials_默认试验数读配置 验证未传 matts_k 时读 MATTS_DEFAULT_K。
+func TestRunTrials_默认试验数读配置(t *testing.T) {
+	ceconfig.Set("MATTS_DEFAULT_K", 5)
+	defer ceconfig.Delete("MATTS_DEFAULT_K")
+
+	agent := &fakeAgentFlowService{answers: map[string]string{}, trajectories: map[string]string{}}
+	_, err := RunTrials(context.Background(), agent, RunTrialsInput{
+		Agent:     agent,
+		UserID:    "u1",
+		Question:  "q",
+		MattsK:    0,
+		MattsMode: "parallel",
+	})
+	require.NoError(t, err)
+	assert.Len(t, agent.calls, 5)
+}
+
+// TestRunTrials_显式k优先 验证显式 matts_k 覆盖配置。
+func TestRunTrials_显式k优先(t *testing.T) {
+	ceconfig.Set("MATTS_DEFAULT_K", 5)
+	defer ceconfig.Delete("MATTS_DEFAULT_K")
+
+	agent := &fakeAgentFlowService{answers: map[string]string{}, trajectories: map[string]string{}}
+	_, err := RunTrials(context.Background(), agent, RunTrialsInput{
+		Agent:     agent,
+		UserID:    "u1",
+		Question:  "q",
+		MattsK:    2,
+		MattsMode: "parallel",
+	})
+	require.NoError(t, err)
+	assert.Len(t, agent.calls, 2)
+}
