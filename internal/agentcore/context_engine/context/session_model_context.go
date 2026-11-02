@@ -1055,13 +1055,21 @@ func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages [
 	// 按角色计数消息数量
 	mc.countMessagesByRole(stat, messages)
 
-	// 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens
+	// 优先使用最后一条 AssistantMessage 的 usage_metadata：取输入侧 token，
+	// 与 context_max（模型输入上限）同量纲；输入侧缺失时回退总量。
 	// Python: usage_tokens = self._get_last_assistant_usage_tokens(messages)
 	// Python: 如果usage_tokens不为空则直接设置总Token数
 	for i := len(messages) - 1; i >= 0; i-- {
 		if am, ok := messages[i].(*llm_schema.AssistantMessage); ok {
-			if am.UsageMetadata != nil && am.UsageMetadata.TotalTokens > 0 {
-				stat.TotalTokens = am.UsageMetadata.TotalTokens
+			if am.UsageMetadata == nil {
+				continue
+			}
+			tokens := am.UsageMetadata.InputTokens
+			if tokens == 0 {
+				tokens = am.UsageMetadata.TotalTokens
+			}
+			if tokens > 0 {
+				stat.TotalTokens = tokens
 				return
 			}
 		}
