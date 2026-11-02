@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -431,8 +432,13 @@ func readHistoryFile(fpath string) ([]map[string]any, error) {
 }
 
 // writeHistoryFile 写入 history.json 全量记录。
+//
+// 序列化对齐 Python json.dumps(history, ensure_ascii=False, indent=2)
+// （session_history.py:103-105）：不转义 < > &（Go json.MarshalIndent 默认会把
+// 它们写成 \u003c/\u003e/\u0026，导致 `</heartbeat_user_task>` 这类文案在文件里
+// 变成转义串，人工排查/grep 都会踩坑）。统一走 utils.MarshalIndentNoEscape。
 func writeHistoryFile(fpath string, records []map[string]any) error {
-	data, err := json.MarshalIndent(records, "", "  ")
+	data, err := utils.MarshalIndentNoEscape(records)
 	if err != nil {
 		return err
 	}
