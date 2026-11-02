@@ -135,8 +135,9 @@ func NormalizeJSONRPCID(id any) string {
 // sessionId 传成数字时，Python 得到 "123"，Go 若只做 v.(string) 会得到空串，
 // 进而丢失会话归属或 userMessageId 回填。
 //
-// Deprecated: 与 NormalizeJSONRPCID 同实现，双名增加漂移面。新代码直接用
-// NormalizeJSONRPCID（T-15）。
+// 注意（T-15）：与 NormalizeJSONRPCID 同实现，双名增加漂移面——新代码请直接用
+// NormalizeJSONRPCID；此处不加 Deprecated 标记，避免既有调用点被 staticcheck 大面积
+// 告警牵连（迁移时机由后续重构统一安排）。
 func ScalarString(v any) string {
 	return NormalizeJSONRPCID(v)
 }
