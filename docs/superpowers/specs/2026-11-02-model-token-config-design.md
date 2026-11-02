@@ -33,6 +33,7 @@
 
 | 阈值 | 值 | 位置 |
 |---|---|---|
+| `MessageSummaryOffloader.TokensThreshold` | 10000（preset 默认；Python 模板覆盖为 60000） | `context_processor_rail.go:313-320` |
 | `DialogueCompressor.TokensThreshold` | 100000 | `context_processor_rail.go:325` |
 | `CurrentRoundCompressor.TokensThreshold` | 100000 | `context_processor_rail.go:341` |
 | `RoundLevelCompressor.TriggerTotalTokens` / `TargetTotalTokens` | 230000 / 160000 | `context_processor_rail.go:355-356` |
@@ -76,11 +77,12 @@
 | D5 | 让值「已知」 | `buildModelFromEntry` 的 `knownKeys` 加两键 + 两条消费分支 | 只加白名单＝键被彻底丢弃（既不入 Extra 也无分支消费），必须配消费分支 |
 | D6 | 百分比口径 | 分子 = `usage_metadata.input_tokens`，无 usage 时回退本地估算；分母 = `max_input_tokens` | 分子分母同量纲；本地估算本身是输入侧估算，两条回退路径一致。否决「分子保持 total_tokens」（长输出虚高，两条路径量纲不一致） |
 | D7 | 阈值规则 | `实际阈值 = min(yaml 绝对阈值, ratio × max_input_tokens)` | 只下调不放大。否决「严格按比例」（1M 窗口会从 230K 触发变 900K，属行为变更） |
-| D8 | 比例键 | 全局 2 键：`react.context_engine_config.compression_trigger_ratio`（0.9）、`compression_target_ratio`（0.625） | 压缩策略是 agent 级行为，不是模型属性；放 `mcc` 会随模型条目重复。否决 per-processor ratio（同一件事配 4~5 遍） |
+| D8 | 比例键 | 全局 2 键：`react.context_engine_config.compression_trigger_ratio`（0.85）、`compression_target_ratio`（0.55） | 压缩策略是 agent 级行为，不是模型属性；放 `mcc` 会随模型条目重复。否决 per-processor ratio（同一件事配 4~5 遍） |
 | D9 | processor 通道 | 修复 Go 主 Agent 四段读取（parity）+ 新增 `full_compact_processor_config` 段（Go 与 Python 同时新增） | FullCompact 当前无任何 yaml 通道，与「不硬编码」冲突 |
 | D10 | 多条目冲突 | 同 `model_name` 多条目时：`is_default=true` 优先，否则取首个非零值，值不一致打 `Warn` | 多 key 轮换场景下窗口应一致，不一致属配置错误但不应阻断启动 |
 | D11 | 全局覆盖键 | `ContextEngineConfig.ContextWindowTokens`（优先级 1）不使用，保持 0 | 用户明确不动 `react` 段的窗口键；该字段保留给未来运行时显式覆盖 |
 | D12 | 兜底链 | 保留内置表（三级）与 200000（四级） | 未配置窗口的老用户行为不变；避免「未填就没值」导致分母为 0 |
+| D13 | 模板基线 | `resources/config.yaml` 的 `react.context_engine_config` 整段对齐 Python 模板（含 `enabled: true` / `enable_reload: true` / 四段），再追加 2 个 ratio 键 | 见 §4.4：Go 模板缺失该段导致「压缩默认关闭 + processor yaml 未生效」双重偏差，属 parity 修复；不修则本次阈值改动在默认配置下休眠 |
 
 ## 4. 配置契约
 
@@ -129,11 +131,18 @@ models:
       is_default: true
 react:
   context_engine_config:
+    # 全段照抄 Python 模板 (jiuwenswarm/resources/config.yaml:269-303)，仅追加两个 ratio 键。
+    # 关键项如下，其余字段见 §4.4：
+    enabled: true
+    enable_reload: true
     enable_kv_cache_release: false
-    # 压缩水位比例（相对 max_input_tokens）；缺省 = 不按比例，仅用绝对阈值
-    compression_trigger_ratio: 0.9
-    compression_target_ratio: 0.625
-    # 各 processor 绝对阈值（天花板）；缺省 = 代码兜底默认
+    # 新增：压缩水位比例（相对 max_input_tokens）；缺省/0 = 不按比例，仅用绝对阈值
+    compression_trigger_ratio: 0.85
+    compression_target_ratio: 0.55
+    # 各 processor 绝对阈值（天花板），值取自 Python 模板
+    message_summary_offloader_config:
+      tokens_threshold: 60000
+      large_message_threshold: 60000
     dialogue_compressor_config:
       tokens_threshold: 100000
     current_round_compressor_config:
@@ -141,22 +150,33 @@ react:
     round_level_compressor_config:
       trigger_total_tokens: 230000
       target_total_tokens: 160000
-    # 新增段（session_memory 路径预设）
+    # 新增段（session_memory 路径预设），Python 侧当前无此段
     full_compact_processor_config:
       trigger_total_tokens: 180000
 ```
 
-### 4.3 比例默认值的来源
+### 4.4 模板基线与 Python 对齐（本设计的前置修复）
 
-现有 230000 / 180000 / 160000 隐含基准窗口 256K：
+Go 的 `resources/config.yaml:177-179` 只有 `context_engine_config.enable_kv_cache_release` 一个键，而 Python 的 `jiuwenswarm/resources/config.yaml:269-303` 有完整一段：`enabled: true`、`enable_reload: true` 和四段 processor 配置（`message_summary_offloader_config` / `dialogue_compressor_config` / `current_round_compressor_config` / `round_level_compressor_config`）。
 
-| 现值 | ÷256000 | 采用比例 |
-|---|---|---|
-| 230000 | 0.898 | `compression_trigger_ratio: 0.9` |
-| 180000 | 0.703 | 说明见 §6.4（FullCompact 用同一 trigger 比例） |
-| 160000 | 0.625 | `compression_target_ratio: 0.625` |
+这造成两个实际偏差：
 
-取 0.9 / 0.625 后，256K 窗口算得 230400 / 160000，与今天差 0.17%（已被绝对阈值 min 掉）。
+1. **默认开关相反**：Go 模板缺 `enabled` → `config.get` 缺省 `"false"` → `ContextProcessorRail` 不注册 → 压缩默认不跑；Python 模板 `enabled: true` → 默认跑。
+2. **preset 阈值被 yaml 覆盖的程度不同**：Python 部署里 yaml 覆盖了 preset（如 offloader `large_message_threshold` 10000 → 60000、`tokens_threshold` 60000），Go 主 Agent 不读 yaml → 一直用 preset 硬编码值。
+
+因此 T1 不是"加两个键"，而是**把 Python 模板的这一整段搬过来**（值逐字段照抄，仅追加 2 个 ratio 键），配合 A2 接通读取。前提是 `enabled: true` 也一并搬——否则本次所有阈值改动在默认配置下都是休眠的。
+
+### 4.3 比例取值的来源与影响
+
+比例取 `0.85` / `0.55`（用户指定），不是由现值反推。与现值的关系：
+
+| 现值 | ÷256000 | 采用比例 | 256K 窗口下的实际结果 |
+|---|---|---|---|
+| 230000 | 0.898 | `trigger: 0.85` | `min(230000, 217600) = 217600`（比今天提前 5.4%） |
+| 160000 | 0.625 | `target: 0.55` | `min(160000, 140800) = 140800`（比今天压得更深 12%） |
+| 180000 | 0.703 | 说明见 §6.4（FullCompact 复用 trigger 比例） | `min(180000, 217600) = 180000`（不变） |
+
+**行为分界点**：trigger 回到绝对值需 `window ≥ 230000/0.85 ≈ 270588`；target 需 `window ≥ 160000/0.55 ≈ 290909`。因此 256K 窗口的模型也会被收紧（不再“完全一致”），290909 以上才与今天完全一致。这是选择 0.85/0.55 的必然结果，属预期行为变更。
 
 ## 5. 数据流与改动清单
 
@@ -202,7 +222,7 @@ react:
 
 | # | 文件:位置 | 改动 |
 |---|---|---|
-| T1 | `resources/config.yaml:126-179` | 按 §4.2 增加 8 个键，带中文注释说明语义与「0 = 未知」 |
+| T1 | `resources/config.yaml:126-179` | 按 §4.2/§4.4 把 `react.context_engine_config` 整段对齐 Python 模板（`enabled: true` + `enable_reload: true` + 四段），并追加 2 个 ratio 键；models 段加两个 token 键 |
 
 ### 5.5 Python 同构改动（6 处）
 
@@ -227,6 +247,23 @@ trigger_effective = min(绝对 trigger, round(compression_trigger_ratio × windo
 target_effective  = min(绝对 target,  round(compression_target_ratio  × window))
 ```
 
+**参与收口的字段**（都与「整个上下文总量」同量纲）：
+
+| processor | 字段 |
+|---|---|
+| `MessageSummaryOffloader` | `tokens_threshold` |
+| `DialogueCompressor` | `tokens_threshold` |
+| `CurrentRoundCompressor` | `tokens_threshold` |
+| `RoundLevelCompressor` | `trigger_total_tokens` → trigger；`target_total_tokens` → target |
+| `FullCompactProcessor` | `trigger_total_tokens` → trigger |
+
+**不参与收口的字段**（量纲不同，缩放会破坏语义）：
+
+- `MessageSummaryOffloader.large_message_threshold`（单条消息阈值）
+- `DialogueCompressor.compression_target_tokens`、`CurrentRoundCompressor.compression_target_tokens`（单次压缩输出长度）
+- `current_round_compressor_config.min_selected_tokens_for_compression`（单轮选择下限）
+- 各种 `messages_to_keep` / `keep_recent_messages` / `*_pass_target_tokens`（消息条数或单阶段预算）
+
 ### 6.2 三层回退
 
 | 条件 | 结果 |
@@ -239,14 +276,22 @@ target_effective  = min(绝对 target,  round(compression_target_ratio  × windo
 
 | 窗口 | Dialogue（绝对 100000） | RoundLevel（绝对 230000 / 160000） | 对比今天 |
 |---|---|---|---|
-| 32K | 28800 | 28800 / 20000 | 以前永不触发 → 现在按窗口触发 |
-| 128K | 100000（ratio 值 115200 > 绝对，min 命中绝对） | 115200 / 80000 | 收紧 |
-| 256K | 100000 | 230000（ratio 值 230400 被 min 掉）/ 160000 | **完全一致** |
+| 32K | 27200 | 27200 / 17600 | 以前永不触发 → 现在按窗口触发 |
+| 128K | 100000（ratio 值 108800 > 绝对，min 命中绝对） | 108800 / 70400 | 收紧 |
+| 256K | 100000 | 217600 / 140800 | 收紧（触发早 5.4%，目标深 12%） |
+| 512K | 100000 | 230000 / 160000 | **完全一致** |
 | 1M | 100000 | 230000 / 160000 | **完全一致** |
 
 ### 6.4 FullCompact 的处理
 
-`FullCompactProcessor` 今天 `TriggerTotalTokens=180000`（约 0.7×256K），与 RoundLevel 的 0.9 不同比例。为保持单套 ratio 的设计，取 `min(180000, 0.9×window)`：256K 时 `min(180000, 230400)=180000` 与今天一致；小于 200K 窗口时按比例收紧。这是本设计中唯一「比例与现状略有偏差」的点，已在验算表中体现。
+`FullCompactProcessor` 今天 `TriggerTotalTokens=180000`（约 0.7×256K），与其他 processor 不同比例。为保持单套 ratio 的设计，取 `min(180000, 0.85×window)`：
+
+| 窗口 | 结果 | 对比今天 |
+|---|---|---|
+| 32K | 27200 | 收紧 |
+| 200K | 170000 | 收紧 |
+| 256K | 180000（ratio 值 217600 被 min 掉） | 一致 |
+| ≥212K | 180000 | 一致 |
 
 ### 6.5 百分比分子的回退顺序
 
@@ -259,7 +304,7 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 
 ### 6.6 推导与 yaml 覆盖的顺序要求
 
-阈值收口**必须在 `MergeProcessors` 之后**执行，原因：yaml 里的绝对阈值是「天花板」，需要参与 `min` 计算；若在 merge 之前推导，yaml 的原始值会在 merge 阶段直接覆盖已收口的结果，绕过 `min`（例：32K 窗口下用户写 `trigger_total_tokens: 50000`，正确结果是 `min(50000, 28800)=28800`，错误顺序会得到 50000）。
+阈值收口**必须在 `MergeProcessors` 之后**执行，原因：yaml 里的绝对阈值是「天花板」，需要参与 `min` 计算；若在 merge 之前推导，yaml 的原始值会在 merge 阶段直接覆盖已收口的结果，绕过 `min`（例：32K 窗口下用户写 `trigger_total_tokens: 50000`，正确结果是 `min(50000, 27200)=27200`，错误顺序会得到 50000）。
 
 因此 `Init` 的执行顺序为：`buildPresetProcessors`（默认值）→ `MergeProcessors`（合入 yaml 绝对阈值）→ 阈值收口（`min(绝对, ratio×window)`）。
 
@@ -279,11 +324,15 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 | `max_output_tokens` 未配置 | 不设 `MaxTokens`，维持请求级/服务端默认 |
 | 同 `model_name` 多条目窗口不一致 | `is_default` 优先，其次首个非零；不一致打 `Warn`（D10） |
 | 窗口小于 1 层系统提示词 | 不特判，压缩逻辑本就有 `minimalTokens` 保护（`round_level_compressor.go:1441`） |
+| `react.context_engine_config.enabled=false` | 整个 `ContextProcessorRail` 不注册（`deep_adapter_rails.go:935-957`），所有阈值与比例均不生效；窗口值仍影响 `context.usage` 显示 |
 
 ## 8. 兼容性
 
 - **老配置零改动**：不填两字段 → `ModelContextWindowTokens` 为空 → 走内置表/200000，与今天完全一致。
-- **老阈值**：不填 ratio → 绝对阈值生效，与今天完全一致。
+- **不填 ratio**：绝对阈值生效，与今天完全一致。
+- **填了 ratio（模板默认会写入）**：窗口 < 270588 的模型触发会提前、< 290909 的模型压缩目标会更深——这是 0.85/0.55 的预期结果，不是兼容性缺陷（见 §4.3 分界点）。
+- **压缩总开关**：本次把 `enabled: true` 写进模板（对齐 Python），压缩默认开启——这是**行为变更**（Go 现在默认不跑压缩），但属 parity 修复。用户仍可在界面关闭；关闭时本次阈值改动全部休眠。
+- **两端口径**：Python 已默认开启压缩且已有四段 yaml，Go 本次只是追平，不改 Python 的默认值。
 - **请求侧**：`max_output_tokens` 只是「模型配置兜底」，所有显式 `WithInvokeMaxTokens(...)` 调用优先级更高，不受影响。
 - **`react.context_engine_config.context_window_tokens`**（优先级 1）保持 0，语义不变。
 
@@ -297,7 +346,7 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 | `handleModelsList` | 两字段回填；配置缺失时不出现在结果里（前端显示空） |
 | `deepAgentContextEngineConfig` | 多条目收集成 map；同模型冲突按 D10；无模型段时不 panic；`configBase=nil` 回退 |
 | `buildModelFromEntry` | `max_output_tokens` → `MaxTokens`；`0` → nil；进 `Extra` 的键集合不含这两项 |
-| `ContextProcessorRail.Init` | window=32K/256K/1M 三档 × 五个 processor 的阈值；ratio 缺省时等于绝对值；`target>=trigger` 兜底 |
+| `ContextProcessorRail.Init` | window=32K/128K/256K/512K 四档 × 五个 processor 的阈值（对照 §6.3/§6.4）；ratio 缺省时等于绝对值；`target>=trigger` 兜底；yaml 绝对值覆盖后仍被 min 收口（§6.6） |
 | `ResolveContextMax` | 既有用例保持（4 级优先级不变） |
 | 百分比 | `input_tokens` 优先、回退 `total_tokens`、再回退本地估算 |
 
@@ -307,6 +356,7 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 
 - 链路：`web`（`models.replace_all` 写入 config.yaml）→ `swarm/server/adapter`（`deepAgentContextEngineConfig` 装配）→ `agentcore/context_engine`（`ResolveContextMax` + 中间件阈值）→ `agentcore/foundation/llm`（请求体 `max_tokens`）
 - 断言：写入 32K/8K → `context.usage` 事件 `context_max=32000`；prompt capture 里请求体 `max_tokens=8192`；`chat.usage_summary` 的 `context_window_tokens=32000`
+- 阈值断言用例的 fixture **必须显式写 `react.context_engine_config.enabled: true`**，否则 rail 不注册、阈值无从观测（`deep_adapter_rails.go:935`）
 - mock 只在边界（LLM HTTP 端点用 httptest），不 mock adapter / context engine
 
 ### 9.3 门禁
@@ -326,6 +376,8 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 | 风险 | 影响 | 缓解 |
 |---|---|---|
 | 小窗口模型压缩行为变化 | 用户可感知：更早压缩、早期上下文更早被摘要 | 属预期目标；yaml 里可按需把绝对阈值调大或把 ratio 设 0 关闭联动 |
+| 0.85/0.55 让 256K 档也收紧 | 触发早 5.4%、目标深 12%，不是纯粹「小窗口才变」 | 已在 §4.3 与 §6.3 明确写出分界点（270588 / 290909），避免误判为回归 |
+| 压缩由默认关变默认开 | 用户会突然开始看到压缩行为（更省 token，但早期上下文更早被摘要） | 属 parity 修复（Python 一直默认开）；在 CHANGELOG 与发布说明中显式写出，并提示可用界面开关关闭 |
 | Python 未同步 | 同一份 config.yaml 两种行为 | Python 改动与 Go 同批提交（§5.5） |
 | 团队/子代理未覆盖 | 主 Agent 显示 32K、成员仍 200K | A3 列为同批交付；若拆分，需在文档与状态里标注「仅主 Agent 生效」 |
 | `mcc` 承载语义不属于它的字段 | 未来若把 `mcc` 整体透传请求，窗口值会被当请求参数发出 | B3 白名单 + 注释；`mcc` 当前无整体透传路径 |
