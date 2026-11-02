@@ -135,3 +135,32 @@ func TestReadExtensionDirs_空段丢弃(t *testing.T) {
 		t.Errorf("dirs = %v, 期望 2（空段丢弃）", got)
 	}
 }
+
+// TestApplyWebAddrFlags 覆盖 --host/--port 写环境变量与空值不覆盖两条分支
+func TestApplyWebAddrFlags(t *testing.T) {
+	t.Setenv("UAPCLAW_WEB_HOST", "")
+	t.Setenv("UAPCLAW_WEB_PORT", "")
+
+	cmd := newAppCmd()
+	if err := cmd.Flags().Set("host", "0.0.0.0"); err != nil {
+		t.Fatalf("设置 host 失败: %v", err)
+	}
+	if err := cmd.Flags().Set("port", "19099"); err != nil {
+		t.Fatalf("设置 port 失败: %v", err)
+	}
+	applyWebAddrFlags(cmd)
+
+	if got := os.Getenv("UAPCLAW_WEB_HOST"); got != "0.0.0.0" {
+		t.Errorf("UAPCLAW_WEB_HOST = %q，期望 0.0.0.0", got)
+	}
+	if got := os.Getenv("UAPCLAW_WEB_PORT"); got != "19099" {
+		t.Errorf("UAPCLAW_WEB_PORT = %q，期望 19099", got)
+	}
+
+	// flag 为空时不覆盖已有值
+	t.Setenv("UAPCLAW_WEB_HOST", "keep-host")
+	applyWebAddrFlags(newAppCmd())
+	if got := os.Getenv("UAPCLAW_WEB_HOST"); got != "keep-host" {
+		t.Errorf("空 flag 不应覆盖环境变量，实际 %q", got)
+	}
+}
