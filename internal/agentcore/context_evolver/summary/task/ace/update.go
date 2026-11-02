@@ -611,7 +611,11 @@ func (o *ApplyDeltaOp) Execute(ctx context.Context, rc *cecontext.RuntimeContext
 		}
 	}
 	currentCount := len(playbook.Bullets())
+	// 对齐 Python: remove_count = max(0, add_count + current_count - self.max_bullets)
 	removeCount := addCount + currentCount - o.maxBullets
+	if removeCount < 0 {
+		removeCount = 0
+	}
 
 	// 对齐 Python: 按 score=helpful-harmful 升序排列，删除最低分
 	affectedBulletIDs := make(map[string]bool)

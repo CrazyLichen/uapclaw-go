@@ -80,3 +80,17 @@ func TestSafeJSONLoads_空对象(t *testing.T) {
 		t.Errorf("空 JSON 对象应有 0 个字段，实际 %d", len(got))
 	}
 }
+
+// TestSafeJSONLoads_多对象文本按Python语义失败 验证贪婪匹配导致解析失败。
+func TestSafeJSONLoads_多对象文本按Python语义失败(t *testing.T) {
+	if _, err := SafeJSONLoads(`{"a": 1} some noise {"b": 2}`); err == nil {
+		t.Fatal("多对象文本应解析失败（对齐 Python 贪婪匹配）")
+	}
+}
+
+// TestSafeJSONLoads_单对象文本可解析 验证常规路径不受影响。
+func TestSafeJSONLoads_单对象文本可解析(t *testing.T) {
+	if _, err := SafeJSONLoads(`{"a": 1}`); err != nil {
+		t.Fatalf("单对象解析失败: %v", err)
+	}
+}

@@ -20,8 +20,8 @@ var (
 	// 对齐 Python: (?s) DOTALL 标志使 . 匹配换行，非贪婪 .*? 匹配最短 JSON
 	reMarkdownCodeBlock = regexp.MustCompile(`(?s)` + "```(?:json)?\\s*(\\{.*?\\})\\s*```")
 	// reAnyJSONObject 提取任意 JSON 对象
-	// 对齐 Python: (?s) DOTALL + 非贪婪 .*? 避免跨对象贪婪匹配
-	reAnyJSONObject = regexp.MustCompile(`(?s)\{.*?\}`)
+	// 对齐 Python: utils.py:35 re.search(r'\{.*\}', text, re.DOTALL) —— 贪婪匹配
+	reAnyJSONObject = regexp.MustCompile(`(?s)\{.*\}`)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
