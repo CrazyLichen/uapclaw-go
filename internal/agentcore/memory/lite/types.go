@@ -39,21 +39,21 @@ type MemoryChunk struct {
 // SearchResult 搜索结果条目。对齐 Python MemoryIndexManager.search 返回的 dict
 type SearchResult struct {
 	// ID 分块标识
-	ID string
+	ID string `json:"id"`
 	// Path 文件相对路径
-	Path string
+	Path string `json:"path"`
 	// Source 来源
-	Source string
+	Source string `json:"source"`
 	// StartLine 起始行号
-	StartLine int
+	StartLine int `json:"start_line"`
 	// EndLine 结束行号
-	EndLine int
+	EndLine int `json:"end_line"`
 	// Snippet 内容片段
-	Snippet string
+	Snippet string `json:"snippet"`
 	// Score 相似度分数
-	Score float64
+	Score float64 `json:"score"`
 	// Citation 引用标记（如 path#L1-L10）
-	Citation string
+	Citation string `json:"citation"`
 }
 
 // FileEntry 文件索引条目。对齐 Python build_file_entry 返回的 dict
@@ -165,97 +165,97 @@ type CacheStatus struct {
 // MemorySearchResult 通用记忆搜索结果。对齐 Python memory_search_with_context 返回的 dict
 type MemorySearchResult struct {
 	// Results 搜索结果列表
-	Results []SearchResult
+	Results []SearchResult `json:"results"`
 	// Disabled 是否禁用
-	Disabled bool
+	Disabled bool `json:"disabled"`
 	// Error 错误信息
-	Error string
+	Error string `json:"error,omitempty"`
 	// Provider 提供者名称
-	Provider string
+	Provider string `json:"provider"`
 	// Model 模型名称
-	Model string
+	Model string `json:"model"`
 }
 
 // MemoryGetResult 通用记忆获取结果。对齐 Python memory_get_with_context 返回的 dict
 type MemoryGetResult struct {
 	// Path 文件路径
-	Path string
+	Path string `json:"path"`
 	// Text 文件内容
-	Text string
+	Text string `json:"text"`
 	// Disabled 是否禁用
-	Disabled bool
+	Disabled bool `json:"disabled"`
 	// Error 错误信息
-	Error string
+	Error string `json:"error,omitempty"`
 }
 
 // ReadMemoryResult 通用记忆读取结果。对齐 Python read_memory_with_context 返回的 dict
 type ReadMemoryResult struct {
 	// Success 是否成功
-	Success bool
+	Success bool `json:"success"`
 	// Path 文件路径
-	Path string
+	Path string `json:"path"`
 	// Content 文件内容
-	Content string
+	Content string `json:"content"`
 	// TotalLines 总行数
-	TotalLines int
+	TotalLines int `json:"totalLines"`
 	// StartLine 起始行号
-	StartLine int
+	StartLine int `json:"start_line"`
 	// EndLine 结束行号
-	EndLine int
+	EndLine int `json:"end_line"`
 	// Truncated 是否截断
-	Truncated bool
+	Truncated bool `json:"truncated"`
 	// Error 错误信息
-	Error string
+	Error string `json:"error,omitempty"`
 }
 
 // WriteMemoryResult 通用记忆写入结果。对齐 Python write_memory_with_context 返回的 dict
 type WriteMemoryResult struct {
 	// Success 是否成功
-	Success bool
+	Success bool `json:"success"`
 	// Path 文件路径
-	Path string
+	Path string `json:"path"`
 	// FullPath 完整路径
-	FullPath string
+	FullPath string `json:"fullPath"`
 	// Appended 是否追加
-	Appended bool
+	Appended bool `json:"appended"`
 	// FileExisted 文件是否已存在
-	FileExisted bool
+	FileExisted bool `json:"fileExisted"`
 	// Error 错误信息
-	Error string
+	Error string `json:"error,omitempty"`
 }
 
 // EditMemoryResult 通用记忆编辑结果。对齐 Python edit_memory_with_context 返回的 dict
 type EditMemoryResult struct {
 	// Success 是否成功
-	Success bool
+	Success bool `json:"success"`
 	// Path 文件路径
-	Path string
+	Path string `json:"path"`
 	// Replaced 被替换的文本
-	Replaced string
+	Replaced string `json:"replaced"`
 	// NewText 新文本
-	NewText string
+	NewText string `json:"new_text"`
 	// Error 错误信息
-	Error string
+	Error string `json:"error,omitempty"`
 }
 
 // CodingReadResult 编程记忆读取结果。对齐 Python coding_memory_read_with_context 返回的 dict
 type CodingReadResult struct {
 	// Success 是否成功
-	Success bool
+	Success bool `json:"success"`
 	// Path 文件路径
-	Path string
+	Path string `json:"path"`
 	// Content 文件内容
-	Content string
+	Content string `json:"content"`
 	// TotalLines 总行数
-	TotalLines int
+	TotalLines int `json:"totalLines"`
 	// StartLine 起始行号
-	StartLine int
+	StartLine int `json:"start_line"`
 	// EndLine 结束行号
-	EndLine int
+	EndLine int `json:"end_line"`
 	// Truncated 是否截断
-	Truncated bool
+	Truncated bool `json:"truncated"`
 	// Error 错误信息
-	Error string
+	Error string `json:"error,omitempty"`
 }
 
 // CodingEditResult 编程记忆编辑结果。对齐 Python coding_memory_edit_with_context 返回的 dict

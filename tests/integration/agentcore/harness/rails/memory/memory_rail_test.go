@@ -205,13 +205,13 @@ func (s *MemoryRailSuite) TestMemoryRail_运行时RegisterRail后read_memory可�
 		"content": "- 集成标记: memory-rail-register-rail\n",
 	})
 	s.Require().NoError(err)
-	s.Equal(true, wres["Success"], "write_memory 应成功，实际: %+v", wres)
+	s.Equal(true, wres["success"], "write_memory 应成功，实际: %+v", wres)
 
 	rres, err := readTool.Invoke(initCtx, map[string]any{"path": "MEMORY.md"})
 	s.Require().NoError(err)
-	s.Equal(true, rres["Success"],
+	s.Equal(true, rres["success"],
 		"read_memory 应成功（注入缺失时为「工作空间未初始化」），实际: %+v", rres)
-	content, _ := rres["Content"].(string)
+	content, _ := rres["content"].(string)
 	s.Contains(content, "memory-rail-register-rail", "应读到写入的内容")
 }
 

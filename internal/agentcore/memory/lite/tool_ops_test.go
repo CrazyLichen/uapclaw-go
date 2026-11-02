@@ -2,8 +2,10 @@ package lite
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -66,6 +68,37 @@ func TestMemorySearchWithContext_无Manager(t *testing.T) {
 	}
 	if !result.Disabled {
 		t.Error("Expected disabled=true")
+	}
+}
+
+// TestMemorySearchWithContext_空结果非nil切片 回归：Python 的 results 恒为
+// list（无命中是 []），Go 的 nil 切片会序列化成 "results": null —— 前端与模型
+// 看到 null 而不是空数组，无法区分"没命中"与"字段缺失"。
+func TestMemorySearchWithContext_空结果非nil切片(t *testing.T) {
+	ctx := context.Background()
+	toolCtx := &MemoryToolContext{}
+
+	result := MemorySearchWithContext(ctx, toolCtx, "test", nil, nil, "")
+	if result.Results == nil {
+		t.Fatal("不可用分支的 Results 也必须是空切片（对齐 Python 的 []）")
+	}
+	if len(result.Results) != 0 {
+		t.Errorf("Results 长度 = %d, want 0", len(result.Results))
+	}
+
+	// JSON 侧形状：results 必须是 [] 而不是 null
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	if !strings.Contains(string(data), `"results":[]`) {
+		t.Errorf("JSON 应包含 \"results\":[]，实际: %s", data)
+	}
+	if !strings.Contains(string(data), `"disabled":true`) {
+		t.Errorf("JSON 应包含 \"disabled\":true，实际: %s", data)
+	}
+	if strings.Contains(string(data), `"Results"`) {
+		t.Errorf("JSON 键名应为 Python 风格小写，实际: %s", data)
 	}
 }
 

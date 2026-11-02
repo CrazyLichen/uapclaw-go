@@ -70,13 +70,13 @@ func ValidateMemoryPath(path string, ws *workspace.Workspace) (bool, string) {
 // MemorySearchWithContext 语义搜索记忆。对齐 Python memory_search_with_context
 func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, query string, maxResults *int, minScore *float64, sessionKey string) *MemorySearchResult {
 	if toolCtx == nil {
-		return &MemorySearchResult{Disabled: true, Error: "记忆管理器不可用"}
+		return newDisabledSearchResult("记忆管理器不可用")
 	}
 	if !toolCtx.EnsureManager() {
-		return &MemorySearchResult{Disabled: true, Error: "记忆管理器不可用"}
+		return newDisabledSearchResult("记忆管理器不可用")
 	}
 	if toolCtx.Manager == nil {
-		return &MemorySearchResult{Disabled: true, Error: "记忆管理器未初始化"}
+		return newDisabledSearchResult("记忆管理器未初始化")
 	}
 	opts := SearchOpts{}
 	if maxResults != nil {
@@ -91,7 +91,12 @@ func MemorySearchWithContext(ctx context.Context, toolCtx *MemoryToolContext, qu
 	results, err := toolCtx.Manager.Search(ctx, query, opts)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("memory search failed")
-		return &MemorySearchResult{Disabled: true, Error: err.Error()}
+		return newDisabledSearchResult(err.Error())
+	}
+	// Python 侧 results 恒为 list（无命中是 []）；Go 的 nil 切片会序列化成
+	// "results": null，前端与模型看到的是 null 而不是空数组。
+	if results == nil {
+		results = []SearchResult{}
 	}
 	// 添加 citation 字段。对齐 Python: r["citation"] = f"{r['path']}#L{r['start_line']}"
 	for i := range results {
@@ -308,6 +313,18 @@ func EditMemoryWithContext(ctx context.Context, toolCtx *MemoryToolContext, path
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newDisabledSearchResult 构造「记忆检索不可用」结果。
+//
+// Python 对应分支返回 {"results": [], "disabled": True, "error": ...}，
+// 这里显式给空切片，避免 nil 切片被序列化成 null。
+func newDisabledSearchResult(errMsg string) *MemorySearchResult {
+	return &MemorySearchResult{
+		Results:  []SearchResult{},
+		Disabled: true,
+		Error:    errMsg,
+	}
+}
 
 // fsResultError 将 sys_operation 的失败结果转为 error。
 //
