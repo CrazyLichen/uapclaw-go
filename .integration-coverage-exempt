@@ -37,3 +37,9 @@ internal/agent_teams/runtime/team_runner.go
 # protocol.go — ACP JSON-RPC 标量归一化工具（id/sessionId 字符串化），纯函数、无 IO 与装配，
 # 集成层没有独立入口；本次改动为补齐整型族与浮点格式，由包内表驱动单测覆盖（100%）。
 internal/swarm/e2a/acp/protocol.go
+
+# ── 2026-11-02 v0.1.0 发布准备（启动提示 + 自动打开浏览器） ──
+# cmd.go — 主程序入口（package main）。tests/integration 无法 import main 包，
+# runAppCmd 会起真实监听并阻塞到信号，集成层没有可调用入口；本次新增的
+# buildAppURL/printAppBanner/shouldOpenBrowser/openBrowser 由 cmd/uapclaw 包内单测覆盖。
+cmd/uapclaw/cmd.go

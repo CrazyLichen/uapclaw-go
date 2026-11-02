@@ -561,6 +561,15 @@ func (s *AppGatewayServer) GetGatewayServer() *GatewayServer {
 	return s.gwServer
 }
 
+// Addr 返回 Web 通道监听地址（host:port），用于启动提示与诊断。
+// [Go 扩展] 供 CLI 打印"界面地址"并自动打开浏览器（Python 在 run() 内直接拼接）。
+func (s *AppGatewayServer) Addr() string {
+	if s.webChannel == nil {
+		return ""
+	}
+	return s.webChannel.Addr()
+}
+
 // Stop 优雅关闭 Gateway 服务器。
 //
 // 停止顺序：GatewayServer(19001) → InboundGatewayServer → WebChannel → MessageHandler → Transport → HTTP Server → CronScheduler。

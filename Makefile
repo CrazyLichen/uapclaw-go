@@ -1,4 +1,4 @@
-.PHONY: build build-cli web-build clean test test-integration test-llm test-e2e test-all lint proto-gen
+.PHONY: build build-cli web-build clean test test-integration test-llm test-e2e test-all lint proto-gen release
 
 # 项目名称
 BINARY_NAME=uapclaw
@@ -48,6 +48,45 @@ build-cli:
 # 运行测试
 test:
 	CGO_ENABLED=1 $(GOTEST) -v -tags "sqlite_fts5 test" ./...
+
+# ──────────────────────────── 发布打包 ────────────────────────────
+#
+# 产出 dist/ 下的两个分发包（解压即用：程序 + resources + vec0 扩展 + 快速开始）：
+#   dist/uapclaw-$(VERSION)-linux-amd64.tar.gz
+#   dist/uapclaw-$(VERSION)-windows-amd64.zip
+#   dist/sha256sums.txt
+#
+# 前置：Linux 需 gcc（CGO）；Windows 交叉编译需 x86_64-w64-mingw32-gcc（可 WIN_CC 覆盖）；
+# 打包 zip 用 python3 -m zipfile（不依赖 zip 命令）。同时执行 web-build，把前端打进二进制。
+DIST_DIR := $(CURDIR)/dist
+RELEASE_STAGE := $(DIST_DIR)/stage
+RELEASE_LDFLAGS := -s -w $(LDFLAGS)
+WIN_CC ?= x86_64-w64-mingw32-gcc
+
+release: web-build
+	@echo "打包 uapclaw $(VERSION)（linux-amd64 / windows-amd64）..."
+	rm -rf $(DIST_DIR)
+	mkdir -p $(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/third_party/sqlite-vec/linux-amd64
+	mkdir -p $(RELEASE_STAGE)/uapclaw-$(VERSION)-windows-amd64/third_party/sqlite-vec/windows-amd64
+	CGO_ENABLED=1 $(GOBUILD) -tags sqlite_fts5 -trimpath -ldflags "$(RELEASE_LDFLAGS)" \
+		-o $(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/uapclaw ./cmd/uapclaw/
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=$(WIN_CC) $(GOBUILD) -tags sqlite_fts5 -trimpath -ldflags "$(RELEASE_LDFLAGS)" \
+		-o $(RELEASE_STAGE)/uapclaw-$(VERSION)-windows-amd64/uapclaw.exe ./cmd/uapclaw/
+	cp -r resources $(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/
+	cp -r resources $(RELEASE_STAGE)/uapclaw-$(VERSION)-windows-amd64/
+	cp third_party/sqlite-vec/linux-amd64/vec0.so \
+		$(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/third_party/sqlite-vec/linux-amd64/
+	cp third_party/sqlite-vec/windows-amd64/vec0.dll \
+		$(RELEASE_STAGE)/uapclaw-$(VERSION)-windows-amd64/third_party/sqlite-vec/windows-amd64/
+	cp packaging/release/README.md packaging/release/start.sh $(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/
+	cp packaging/release/README.md packaging/release/start.bat $(RELEASE_STAGE)/uapclaw-$(VERSION)-windows-amd64/
+	chmod +x $(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/uapclaw \
+		$(RELEASE_STAGE)/uapclaw-$(VERSION)-linux-amd64/start.sh
+	tar -C $(RELEASE_STAGE) -czf $(DIST_DIR)/uapclaw-$(VERSION)-linux-amd64.tar.gz uapclaw-$(VERSION)-linux-amd64
+	cd $(RELEASE_STAGE) && python3 -m zipfile -c $(DIST_DIR)/uapclaw-$(VERSION)-windows-amd64.zip uapclaw-$(VERSION)-windows-amd64
+	cd $(DIST_DIR) && sha256sum uapclaw-$(VERSION)-linux-amd64.tar.gz uapclaw-$(VERSION)-windows-amd64.zip > sha256sums.txt
+	rm -rf $(RELEASE_STAGE)
+	@ls -lh $(DIST_DIR)
 
 # 运行测试（带覆盖率）
 test-cover:

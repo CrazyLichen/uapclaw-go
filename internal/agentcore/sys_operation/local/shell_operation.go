@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -191,7 +190,7 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = actualCwd
 	cmd.Env = envMapToSlice(execEnv)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	applyProcessGroup(cmd)
 
 	// 从 options 读取 encoding，对齐 Python：(options or {}).get("encoding", self._detect_shell_encoding())
 	encoding := defaultShellEncoding
@@ -364,7 +363,7 @@ func (s *LocalShellOperation) ExecuteCmdStream(ctx context.Context, command stri
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = actualCwd
 	cmd.Env = envMapToSlice(execEnv)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	applyProcessGroup(cmd)
 
 	// 从 options 读取 chunk_size 和 encoding，对齐 Python
 	chunkSize := defaultChunkSize
@@ -495,7 +494,7 @@ func (s *LocalShellOperation) ExecuteCmdBackground(ctx context.Context, command 
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = actualCwd
 	cmd.Env = envMapToSlice(execEnv)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	applyProcessGroup(cmd)
 
 	handler := NewAsyncProcessHandler(cmd, defaultChunkSize, defaultShellEncoding, 0)
 

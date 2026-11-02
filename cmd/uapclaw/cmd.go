@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -77,6 +80,61 @@ func readExtensionDirs(extVal any) []string {
 		result = append(result, p)
 	}
 	return result
+}
+
+// buildAppURL 把监听地址转换为浏览器可访问的 URL。
+// 监听 0.0.0.0 / :: / 空 host 时替换为 127.0.0.1（本机访问）。
+func buildAppURL(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "http://" + addr
+	}
+	switch host {
+	case "", "0.0.0.0", "::":
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port)
+}
+
+// printAppBanner 输出启动横幅。
+// 走 stdout：终端用户运行 uapclaw app 后可直接看到访问地址，
+// 不被 JSON 结构化日志淹没（日志走 stderr/文件）。
+func printAppBanner(appURL string) {
+	fmt.Fprintf(os.Stdout, "\n  UapClaw %s 已启动\n  界面地址: %s\n  按 Ctrl+C 停止服务\n\n", version.Version, appURL)
+}
+
+// shouldOpenBrowser 判断是否自动打开浏览器。
+// --no-browser 或 UAPCLAW_NO_BROWSER=1/true/yes/on 时关闭；服务端部署可用其禁用。
+func shouldOpenBrowser(cmd *cobra.Command) bool {
+	if cmd != nil {
+		if v, err := cmd.Flags().GetBool("no-browser"); err == nil && v {
+			return false
+		}
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("UAPCLAW_NO_BROWSER"))) {
+	case "1", "true", "yes", "on":
+		return false
+	}
+	return true
+}
+
+// openBrowser 用系统默认浏览器打开 URL。
+// 失败静默（无桌面环境 / 无 xdg-open 时不阻断服务），仅记 Debug 日志。
+func openBrowser(url string) {
+	var c *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		c = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		c = exec.Command("open", url)
+	default:
+		c = exec.Command("xdg-open", url)
+	}
+	if err := c.Start(); err != nil {
+		logger.Debug(logComponentGateway).Err(err).Str("url", url).Msg("failed to open browser")
+		return
+	}
+	_ = c.Wait()
 }
 
 // newRootCmd 创建根命令
@@ -168,6 +226,7 @@ Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 	cmd.Flags().String("host", "", "监听地址（默认 127.0.0.1）")
 	cmd.Flags().Int("port", 0, "监听端口（默认 19000）")
 	cmd.Flags().String("dist", "", "前端产物目录（默认：<数据根>/channels/web/frontend/dist，再回落内嵌资源；对齐 Python --dist）")
+	cmd.Flags().Bool("no-browser", false, "启动后不自动打开浏览器（也可用 UAPCLAW_NO_BROWSER=1）")
 	return cmd
 }
 
@@ -285,6 +344,13 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	if err := gs.Start(ctx); err != nil {
 		logger.Error(logComponentGateway).Err(err).Msg("failed to start AppGatewayServer")
 		return fmt.Errorf("启动 AppGatewayServer 失败: %w", err)
+	}
+
+	// 启动成功提示 + 自动打开浏览器（终端用户下载 release 后运行即可见界面）
+	appURL := buildAppURL(gs.Addr())
+	printAppBanner(appURL)
+	if shouldOpenBrowser(cmd) {
+		go openBrowser(appURL)
 	}
 
 	// 等待退出信号

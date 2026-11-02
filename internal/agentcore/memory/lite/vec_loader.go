@@ -22,15 +22,39 @@ const vec0InitFuncName = "sqlite3_vec_init"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ResolveVec0Path 解析 vec0.so 的路径。
-// Linux 下: third_party/sqlite-vec/linux-amd64/vec0.so
-// macOS 下: third_party/sqlite-vec/darwin-arm64/vec0.dylib
+// ResolveVec0Path 解析 vec0 扩展文件路径。
+//
+// 目录布局：third_party/sqlite-vec/<GOOS>-<GOARCH>/vec0.<ext>
+// Linux: vec0.so；macOS: vec0.dylib；Windows: vec0.dll。
+//
+// 查找顺序（与 path.ResourcesDir 一致，保证解压即用、可从任意目录启动）：
+//  1. 当前工作目录
+//  2. 可执行文件所在目录
+//  3. 可执行文件上一级目录（适配 zip 内 uapclaw/ 子目录布局）
+//
+// 全部不存在时返回 CWD 相对路径（调用方 os.Stat 后按降级处理）。
 func ResolveVec0Path() string {
 	ext := ".so"
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		ext = ".dylib"
+	case "windows":
+		ext = ".dll"
 	}
-	return filepath.Join("third_party", "sqlite-vec", runtime.GOOS+"-"+runtime.GOARCH, "vec0"+ext)
+	rel := filepath.Join("third_party", "sqlite-vec", runtime.GOOS+"-"+runtime.GOARCH, "vec0"+ext)
+	if _, err := os.Stat(rel); err == nil {
+		return rel
+	}
+	if execPath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(execPath)
+		for _, base := range []string{exeDir, filepath.Dir(exeDir)} {
+			candidate := filepath.Join(base, rel)
+			if _, statErr := os.Stat(candidate); statErr == nil {
+				return candidate
+			}
+		}
+	}
+	return rel
 }
 
 // IsVec0Available 检查 vec0.so 文件是否存在

@@ -15,7 +15,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -600,24 +599,9 @@ func runCommandBackground(command, workdir, shellType string) (int, string, stri
 	}
 }
 
-// applyStartNewSession 按 JW_START_NEW_SESSION env 决定是否启用新会话（进程组）。
-// Python: popen_kw["start_new_session"] = True（非 Windows 平台）
-// Go 对应 syscall.SysProcAttr{Setsid: true}。
-func applyStartNewSession(cmd *exec.Cmd) {
-	if runtime.GOOS == "windows" {
-		return
-	}
-	raw := strings.ToLower(strings.TrimSpace(os.Getenv(jwStartNewSessionEnv)))
-	if raw == "" {
-		raw = "true"
-	}
-	switch raw {
-	case "0", "false", "no", "off":
-		// 显式关闭
-	default:
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	}
-}
+// applyStartNewSession 的声明见 mcp_command_other.go（非 Windows 真实实现）
+// 与 mcp_command_windows.go（Windows 空实现）：SysProcAttr.Setsid 字段仅
+// 在 Unix 平台存在，放在公共文件会导致 Windows 交叉编译失败。
 
 // newMcpExecCommandTool 构造 mcp_exec_command 工具实例。
 // Python: @tool 装饰的 mcp_exec_command（description 逐字复制）
