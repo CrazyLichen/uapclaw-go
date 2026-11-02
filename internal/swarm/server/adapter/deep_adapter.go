@@ -2799,17 +2799,55 @@ func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.Promp
 }
 
 // makeDeepAgentConfig 构造 DeepAgentConfig 用于热重载。
-// Python: _make_deep_agent_config(model, config, agent_card, tool_cards, rails)
+//
+// Python: _make_deep_agent_config() (interface_deep.py L2245-2283)
+//
+// 必须与 CreateInstance 的 CreateDeepAgentParams 同源：Python 侧两条路径都带
+// workspace / sys_operation / tools / subagents / context_engine_config 等字段。
+// 历史缺陷是本函数只填 Model/Card/Prompt/Rails，于是 `agent.reload_config`
+// 热重载后 deepConfig.Workspace 与 deepConfig.SysOperation 变成 nil：
+//   - 下一轮 ensureInitialized 把 nil 注入所有 pending rail，SysOperationRail
+//     重建出的 fs 工具持有 nil op，read_file 执行即 nil 解引用 panic；
+//   - MemoryRail / initMemoryManager 判定「无 workspace」直接跳过。
 func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]any, card *agentschema.AgentCard, toolCards []*tool.ToolCard, railsList []sainterfaces.AgentRail) *hschema.DeepAgentConfig {
+	resolvedLanguage := d.resolveRuntimeLanguage()
+
+	// Python: Workspace(root_path=self._workspace_dir or "./", language=resolved_language)
+	workspaceRoot := d.workspaceDir
+	if workspaceRoot == "" {
+		workspaceRoot = "./"
+	}
+
+	// Python: configured_subagents, should_add_general_agent = self._build_configured_subagents(model, config, config_base)
+	subagentSpecs, shouldEnableGeneralAgent := d.buildConfiguredSubagents(config, d.configBase)
+	// Python: L2575-2577: should_add_general_agent and (sub_mode == "plan" or mode.startswith("agent"))
+	shouldEnableGeneralAgent = shouldEnableGeneralAgent && (d.subMode == "plan" || strings.HasPrefix(d.mode, "agent"))
+
 	return &hschema.DeepAgentConfig{
-		Model:          model,
-		Card:           card,
-		SystemPrompt:   commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage()),
-		EnableTaskLoop: d.resolveEnableTaskLoop(config, d.configBase),
-		MaxIterations:  paramsInt(config, "max_iterations", 15),
-		Language:       d.resolveRuntimeLanguage(),
-		PromptMode:     d.resolvePromptMode(nil),
-		Rails:          railsList, // 对齐 Python: rails=rails (interface_deep.py L2280)
+		Model:                  model,
+		Card:                   card,
+		SystemPrompt:           commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage()),
+		ContextEngineConfig:    d.deepAgentContextEngineConfig(config),
+		EnableTaskLoop:         d.resolveEnableTaskLoop(config, d.configBase),
+		MaxIterations:          paramsInt(config, "max_iterations", 15),
+		Subagents:              subagentSpecs,
+		AddGeneralPurposeAgent: shouldEnableGeneralAgent,
+		Tools:                  toolCards,
+		Workspace:              hworkspace.NewWorkspace(workspaceRoot, resolvedLanguage),
+		SysOperation:           d.sysOperation,
+		// Python 的 _make_deep_agent_config 未显式传 auto_create_workspace，
+		// 取 dataclass 默认值 True（与 CreateInstance 的硬编码 false 并列存在，
+		// 由 Python 侧自身决定）。Go 的 InitWorkspace 目前是占位实现，无副作用。
+		AutoCreateWorkspace: true,
+		CompletionTimeout:   paramsFloat(config, "completion_timeout", 3600.0),
+		Language:            resolvedLanguage,
+		PromptMode:          d.resolvePromptMode(nil),
+		Rails:               railsList, // 对齐 Python: rails=rails (interface_deep.py L2280)
+		VisionModelConfig:   d.visionModelConfig,
+		AudioModelConfig:    d.audioModelConfig,
+		// 注：EnableReadImageMultimodal 保持零值（false）。Python 热重载会回落默认
+		// True，但 Go 的 create 路径（CreateDeepAgentParams 未传）恒为 false，
+		// 中途中翻转会让 read_file 的图片多模态行为在会话内突变。
 	}
 }
 

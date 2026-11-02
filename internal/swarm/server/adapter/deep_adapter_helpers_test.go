@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -451,6 +452,65 @@ func TestMakeDeepAgentConfig_Rails赋值(t *testing.T) {
 	}
 	if len(cfgWithRails.Rails) != 2 {
 		t.Errorf("Rails 长度=%d, want 2", len(cfgWithRails.Rails))
+	}
+}
+
+// TestMakeDeepAgentConfig_带齐热重载必需字段 回归：热重载配置必须与
+// CreateInstance 的 CreateDeepAgentParams 同源，带上 workspace / sys_operation /
+// tools / subagents / vision / audio / completion_timeout。
+//
+// 回归背景：漏传 workspace + sys_operation 时，`agent.reload_config` 之后
+// deepConfig 这两个字段变 nil，下一轮 ensureInitialized 把它们注入所有 pending
+// rail —— SysOperationRail 重建出的 fs 工具持有 nil op，read_file 执行即
+// nil 解引用 panic，前端工具卡永久停在「执行中」。
+//
+// Python: _make_deep_agent_config（interface_deep.py L2245-2283）
+func TestMakeDeepAgentConfig_带齐热重载必需字段(t *testing.T) {
+	d := NewDeepAdapter()
+	d.configCache = map[string]any{}
+	d.configBase = map[string]any{}
+	d.workspaceDir = t.TempDir()
+	d.mode = "agent.fast"
+	op := sysop.NewLocalSysOperation(sysop.NewSysOperationCard(
+		sysop.WithSysOpMode(sysop.OperationModeLocal),
+	))
+	d.sysOperation = op
+	d.visionModelConfig = hschema.NewVisionModelConfig()
+	d.audioModelConfig = &hschema.AudioModelConfig{}
+	toolCard := tool.NewToolCard("t1", "工具1", nil, nil)
+
+	cfg := d.makeDeepAgentConfig(&llm.Model{},
+		map[string]any{"completion_timeout": 120.0},
+		agentschema.NewAgentCard(),
+		[]*tool.ToolCard{toolCard},
+		nil,
+	)
+	if cfg == nil {
+		t.Fatal("makeDeepAgentConfig 返回 nil")
+	}
+	if cfg.Workspace == nil {
+		t.Fatal("Workspace 不应为 nil（否则热重载后 rail 被注入 nil workspace）")
+	}
+	if cfg.Workspace.RootPath != d.workspaceDir {
+		t.Errorf("Workspace.RootPath = %q, want %q", cfg.Workspace.RootPath, d.workspaceDir)
+	}
+	if cfg.SysOperation == nil {
+		t.Error("SysOperation 不应为 nil（否则 fs 工具持有 nil op 而 panic）")
+	}
+	if len(cfg.Tools) != 1 || cfg.Tools[0] != toolCard {
+		t.Errorf("Tools 应原样带入入参 toolCards，实际 %v", cfg.Tools)
+	}
+	if cfg.CompletionTimeout != 120.0 {
+		t.Errorf("CompletionTimeout = %v, want 120", cfg.CompletionTimeout)
+	}
+	if cfg.VisionModelConfig == nil {
+		t.Error("VisionModelConfig 不应为 nil")
+	}
+	if cfg.AudioModelConfig == nil {
+		t.Error("AudioModelConfig 不应为 nil")
+	}
+	if cfg.Language == "" {
+		t.Error("Language 不应为空")
 	}
 }
 
