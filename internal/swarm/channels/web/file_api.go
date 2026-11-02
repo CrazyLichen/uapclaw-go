@@ -485,16 +485,40 @@ func resolveFilePath(userPath string) (string, error) {
 	}
 
 	full := filepath.Join(workspace.WorkspaceDir(), normalized)
-	// 对齐 Python Path.resolve()：存在时消解符号链接，不存在时退化为清理后的路径
-	resolved, err := filepath.EvalSymlinks(full)
-	if err != nil {
-		resolved = filepath.Clean(full)
-	}
+	resolved := resolveExistingPrefix(full)
 
 	if !isUnderAllowedRoot(resolved) {
 		return "", errPathForbidden
 	}
 	return resolved, nil
+}
+
+// resolveExistingPrefix 逐段解析符号链接：对"已存在的前缀"做 EvalSymlinks，
+// 不存在的尾部按字面拼接。对齐 Python Path.resolve(strict=False)——
+// 它只解析存在的前缀，缺的尾巴原样保留。
+//
+// 原实现"EvalSymlinks 失败就整体退化为 Clean"是错的：祖先是指向别处的符号链接、
+// 叶子还不存在时（"已存在链接祖先 + 新文件"），路径不会被解析到链接目标，
+// 白名单校验因此作用在字面路径上。当前 GET/POST 都要求文件已存在，暂不可利用，
+// 但语义已与 Python 不一致；一旦放开"新建文件"就是一条逃逸路径。
+func resolveExistingPrefix(full string) string {
+	cur := filepath.Clean(full)
+	rest := ""
+	for {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			if rest == "" {
+				return resolved
+			}
+			return filepath.Join(resolved, rest)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			// 已到根仍解析失败：退回字面路径（Clean 后），与原行为一致
+			return filepath.Clean(full)
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
+	}
 }
 
 // isUnderAllowedRoot 判断绝对路径是否落在 file-api 白名单根内。

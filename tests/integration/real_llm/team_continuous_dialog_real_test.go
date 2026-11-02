@@ -150,15 +150,17 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		"告诉我你有哪些工具，不要立刻开始任务"))
 
 	var (
-		firstAccepted  bool
-		secondAccepted bool
-		runtimeReady   bool
-		memberSpawned  bool
-		sawMember      bool
-		sawMessage     bool
-		firstFinal     bool
-		secondSent     bool
-		secondSentAt   time.Time
+		firstAccepted   bool
+		secondAccepted  bool
+		runtimeReady    bool
+		memberSpawned   bool
+		sawMember       bool
+		sawMessage      bool
+		firstFinal      bool
+		secondSent      bool
+		secondSentAt    time.Time
+		firstAcceptedAt time.Time
+		firstFinalAt    time.Time
 	)
 
 	deadline := time.Now().Add(8 * time.Minute)
@@ -181,7 +183,10 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		}
 		switch {
 		case realFrameID(frame) == "req-real-1" && realAccepted(frame):
-			firstAccepted = true
+			if !firstAccepted {
+				firstAccepted = true
+				firstAcceptedAt = time.Now()
+			}
 		case realFrameID(frame) == "req-real-2" && realAccepted(frame):
 			secondAccepted = true
 		}
@@ -198,7 +203,10 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		case "team.message":
 			sawMessage = true
 		case "chat.final":
-			firstFinal = true
+			if !firstFinal {
+				firstFinal = true
+				firstFinalAt = time.Now()
+			}
 		}
 
 		// 首条一被受理就发第二条：不依赖 team.runtime_ready（模型可能压根不建队），
@@ -226,7 +234,18 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 	// 建队链路本身由 TestTeamAutoBuild_自然语言需求触发建队 硬断言。
 	s.T().Logf("团队流程观测: runtimeReady=%v memberSpawned=%v sawMember=%v firstFinal=%v sawMessage=%v",
 		runtimeReady, memberSpawned, sawMember, firstFinal, sawMessage)
-	s.False(secondSentAt.IsZero(), "第二条消息发送时间应被记录")
+	// 并发证据：第二条必须在首条流结束之前发出（时间差 < 首条流时长）。
+	// 原断言 `secondSentAt 非零` 与 secondSent 同分支赋值，是纯推论，失败时还会
+	// 把"第一条没被受理"误报成"第二条没发出"。仅在两条都观测到时断言，避免模型
+	// 迟迟不收敛导致假红（收敛慢本身不是并发契约）。
+	if !firstAcceptedAt.IsZero() && !secondSentAt.IsZero() && !firstFinalAt.IsZero() {
+		s.Less(secondSentAt.Sub(firstAcceptedAt), firstFinalAt.Sub(firstAcceptedAt),
+			"第二条消息应在首条流结束前发出（实际：首条流 %v，第二条发出于 +%v）",
+			firstFinalAt.Sub(firstAcceptedAt), secondSentAt.Sub(firstAcceptedAt))
+	} else {
+		s.T().Logf("跳过并发时间断言：firstAcceptedAt=%v firstFinalAt=%v secondSentAt=%v",
+			firstAcceptedAt, firstFinalAt, secondSentAt)
+	}
 }
 
 // TestTeamAutoBuild_自然语言需求触发建队 验证"用户只说人话，模型自己建队"。

@@ -72,6 +72,37 @@ func TestResolveFilePath_符号链接逃逸(t *testing.T) {
 	assert.ErrorIs(t, err, errPathForbidden)
 }
 
+// TestResolveFilePath_链接前缀加不存在叶子 已存在的链接祖先必须被解析，即使叶子不存在。
+//
+// 对齐 Python Path.resolve(strict=False)：只解析存在的前缀。原实现"EvalSymlinks 失败
+// 就整体退化为 Clean"，会把 agent/linkdir/new.md 当成字面路径，链接目标没被解析。
+func TestResolveFilePath_链接前缀加不存在叶子(t *testing.T) {
+	dataDir := setupDataDir(t)
+	target := filepath.Join(dataDir, "agent", "workspace", "real")
+	require.NoError(t, os.MkdirAll(target, 0o755))
+	link := filepath.Join(dataDir, "agent", "linkdir")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("当前环境不支持符号链接: %v", err)
+	}
+
+	got, err := resolveFilePath("agent/linkdir/new.md")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(target, "new.md"), got, "链接祖先必须被解析到真实目录")
+}
+
+// TestResolveFilePath_链接前缀指向白名单外 不存在叶子也要按解析后的真实路径判越界。
+func TestResolveFilePath_链接前缀指向白名单外(t *testing.T) {
+	dataDir := setupDataDir(t)
+	outside := t.TempDir()
+	link := filepath.Join(dataDir, "agent", "escape-new")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("当前环境不支持符号链接: %v", err)
+	}
+
+	_, err := resolveFilePath("agent/escape-new/fresh.md")
+	assert.ErrorIs(t, err, errPathForbidden, "链接到白名单外时，不存在的新文件也必须被拒")
+}
+
 // TestHandleFileContentGet_返回原文 验证 text/plain 原文 + X-Original-Encoding。
 //
 // 对齐 Python: app_web.py L646-659（不是 JSON 包装）。
