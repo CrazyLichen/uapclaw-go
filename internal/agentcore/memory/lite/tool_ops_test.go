@@ -8,8 +8,41 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// fakeSearchManager 只实现搜索路径的最小记忆索引管理器。
+//
+// 用于验证「Manager 返回 nil 结果」被规整成空切片（Python 的 results 恒为 list）。
+type fakeSearchManager struct {
+	// results Search 返回值（刻意允许为 nil 切片）
+	results []SearchResult
+}
+
+func (f *fakeSearchManager) Initialize(context.Context) error { return nil }
+
+func (f *fakeSearchManager) Sync(context.Context, string, bool) error { return nil }
+
+func (f *fakeSearchManager) Search(context.Context, string, SearchOpts) ([]SearchResult, error) {
+	return f.results, nil
+}
+
+func (f *fakeSearchManager) ReadFile(context.Context, string, *int, *int) (*ReadFileResult, error) {
+	return &ReadFileResult{}, nil
+}
+
+func (f *fakeSearchManager) Status() *StatusResult {
+	return &StatusResult{Provider: "openai_compatible", Model: "text-embedding-v3"}
+}
+
+func (f *fakeSearchManager) LLM() *llm.Model { return nil }
+
+func (f *fakeSearchManager) Close() error { return nil }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestValidateMemoryPath_非法穿越 测试目录穿越
 func TestValidateMemoryPath_非法穿越(t *testing.T) {
@@ -219,5 +252,34 @@ func newTestWorkspace(t *testing.T, nodeNames ...string) *workspace.Workspace {
 	return &workspace.Workspace{
 		RootPath:    dir,
 		Directories: dirs,
+	}
+}
+
+// TestMemorySearchWithContext_Manager返回nil规整为空切片 回归：检索无命中时
+// Manager 返回 nil 切片，若不规整，JSON 里就是 "results": null（Python 是 []）。
+func TestMemorySearchWithContext_Manager返回nil规整为空切片(t *testing.T) {
+	toolCtx := &MemoryToolContext{}
+	toolCtx.Manager = &fakeSearchManager{results: nil}
+
+	result := MemorySearchWithContext(context.Background(), toolCtx, "记忆", nil, nil, "")
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if result.Disabled {
+		t.Error("Expected disabled=false")
+	}
+	if result.Results == nil {
+		t.Fatal("nil 结果应规整为空切片，否则 JSON 是 null")
+	}
+	if result.Provider != "openai_compatible" || result.Model != "text-embedding-v3" {
+		t.Errorf("provider/model = %q/%q", result.Provider, result.Model)
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("序列化失败: %v", err)
+	}
+	if !strings.Contains(string(data), `"results":[]`) {
+		t.Errorf("JSON 应包含 \"results\":[]，实际: %s", data)
 	}
 }

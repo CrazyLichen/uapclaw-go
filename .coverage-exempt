@@ -128,3 +128,17 @@ internal/swarm/server/adapter/deep_adapter.go#L2513-L2534
 # 单测无法执行，故该行对 applyWebAddrFlags 的调用无法被覆盖。
 # applyWebAddrFlags 本身的行为由 TestApplyWebAddrFlags 覆盖（含覆盖/不覆盖两条分支）。
 cmd/uapclaw/cmd.go#L263-L263
+
+# ── 2026-11-02 记忆工具结果键名对齐 Python（json tag） ──
+# lite/types.go — 本次改动只是给 7 个结果结构体的字段补 json tag（键名对齐 Python
+# dict：results/success/content/totalLines/start_line/...）。结构体字段与 tag 不是
+# 可执行语句，go tool cover 不为其产生覆盖块，门禁无法测量；序列化后的键名形状
+# 由 tool_ops_test.go 的 TestMemorySearchWithContext_空结果非nil切片 /
+# _Manager返回nil规整为空切片 用 json.Marshal 实断言（断言 "results":[] 且不出现大写键）。
+internal/agentcore/memory/lite/types.go#L40-L57
+internal/agentcore/memory/lite/types.go#L166-L177
+internal/agentcore/memory/lite/types.go#L180-L189
+internal/agentcore/memory/lite/types.go#L192-L209
+internal/agentcore/memory/lite/types.go#L212-L225
+internal/agentcore/memory/lite/types.go#L228-L239
+internal/agentcore/memory/lite/types.go#L242-L259
