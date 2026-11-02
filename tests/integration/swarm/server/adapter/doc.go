@@ -16,7 +16,8 @@
 //	adapter/
 //	├── doc.go                                  # 包文档（本文件）
 //	├── code_adapter_coding_memory_test.go      # CodingMemoryRail 装配级集成测试
-//	└── code_adapter_project_memory_test.go     # ProjectMemoryRail + explore/plan 子代理装配级集成测试
+//	├── code_adapter_project_memory_test.go     # ProjectMemoryRail + explore/plan 子代理装配级集成测试
+//	└── deep_adapter_reload_test.go             # 热重载后 DeepAgent 装配完整性（workspace/sys_operation/fs 工具）
 //
 // 隔离环境（UAPCLAW_DATA_DIR / MockLLM provider / ResourceMgr 收尾）由
 // tests/integration/testhelpers.NewAdapterTestEnv 提供

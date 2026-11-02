@@ -3,13 +3,19 @@
 package memory
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	memory "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
@@ -153,4 +159,77 @@ func (s *MemoryRailSuite) TestMemoryRail_Uninit清理工具和节() {
 	spb := agent.SystemPromptBuilder()
 	s.Require().NotNil(spb)
 	s.False(spb.HasSection(hsections.SectionMemory), "Uninit 后应移除 SectionMemory 节")
+}
+
+// TestMemoryRail_运行时RegisterRail后read_memory可真实读取 回归两条注册路径的差异：
+// RegisterRail（立即注册）跳过了 pending 循环，因此 DeepAgentRail 的
+// workspace / sys_operation 注入必须由它自己完成（Python: register_rail
+// deep_agent.py L1191-1193）。缺失时 MemoryRail 的 toolCtx.workspace 为 nil，
+// read_memory 恒返回「工作空间未初始化」。
+//
+// 与同文件其它用例的差异：它们都通过 CreateDeepAgentParams.Rails（pending 路）
+// 注册 rail，覆盖不到这条路径 —— 这正是该缺陷长期未被集成测试发现的原因。
+func (s *MemoryRailSuite) TestMemoryRail_运行时RegisterRail后read_memory可真实读取() {
+	root := s.T().TempDir()
+	ws := workspace.NewWorkspace(root, "cn")
+	s.Require().NoError(os.MkdirAll(root, 0o755))
+
+	sysOp, err := sys_operation.NewSysOperation(sys_operation.NewSysOperationCard(
+		sys_operation.WithSysOpMode(sys_operation.OperationModeLocal),
+		sys_operation.WithSysOpWorkConfig(&sys_operation.LocalWorkConfig{RestrictToSandbox: true}),
+	))
+	s.Require().NoError(err)
+
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("初始化完成"))
+	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
+		Workspace:     ws,
+		SysOperation:  sysOp,
+		MaxIterations: 3,
+	})
+	s.Require().NoError(err)
+
+	// ensureInitialized 返回的 ctx 携带 CwdState(workspace)，即 fs 沙箱根；
+	// 记忆工具读文件依赖它，直接用 s.Ctx 会被沙箱拒绝。
+	initCtx, err := agent.EnsureInitialized(s.Ctx)
+	s.Require().NoError(err)
+
+	// 关键：运行时注册（RegisterRail），而不是走 CreateDeepAgentParams.Rails
+	rail := memory.NewMemoryRail(nil, false)
+	s.Require().NoError(agent.RegisterRail(initCtx, rail))
+
+	writeTool := s.toolByName(agent, "write_memory")
+	readTool := s.toolByName(agent, "read_memory")
+
+	wres, err := writeTool.Invoke(initCtx, map[string]any{
+		"path":    "MEMORY.md",
+		"content": "- 集成标记: memory-rail-register-rail\n",
+	})
+	s.Require().NoError(err)
+	s.Equal(true, wres["Success"], "write_memory 应成功，实际: %+v", wres)
+
+	rres, err := readTool.Invoke(initCtx, map[string]any{"path": "MEMORY.md"})
+	s.Require().NoError(err)
+	s.Equal(true, rres["Success"],
+		"read_memory 应成功（注入缺失时为「工作空间未初始化」），实际: %+v", rres)
+	content, _ := rres["Content"].(string)
+	s.Contains(content, "memory-rail-register-rail", "应读到写入的内容")
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// toolByName 从 AbilityManager 取卡片、再从 ResourceMgr 取工具实例。
+// 记忆工具由 Rail 注册在全局 ResourceMgr 上，与 AbilityManager 的卡片同 ID。
+func (s *MemoryRailSuite) toolByName(agent *harness.DeepAgent, name string) tool.Tool {
+	s.T().Helper()
+	am := agent.AbilityManager()
+	s.Require().NotNil(am, "AbilityManager 不应为 nil")
+
+	raw := am.Get(name)
+	card, ok := raw.(*tool.ToolCard)
+	s.Require().True(ok, "工具 %s 应已注册到 AbilityManager，实际 %T", name, raw)
+
+	tools, err := runner.GetResourceMgr().GetTool([]string{card.ID})
+	s.Require().NoError(err)
+	s.Require().NotEmpty(tools, "ResourceMgr 应能取到工具实例: %s", card.ID)
+	return tools[0]
 }
