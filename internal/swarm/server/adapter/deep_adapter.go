@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -2134,6 +2135,11 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 			mConfigOpts = append(mConfigOpts, llmschema.WithTopP(f))
 		}
 	}
+	// max_output_tokens → 生成上限默认值。请求级显式传值时优先（base_client.go:320-342），
+	// 因此这里只作为"模型级默认值"，不覆盖调用方的 WithInvokeMaxTokens。
+	if n, ok := toPositiveInt(mcc["max_output_tokens"]); ok {
+		mConfigOpts = append(mConfigOpts, llmschema.WithMaxTokens(n))
+	}
 	mConfig := llmschema.NewModelRequestConfig(mConfigOpts...)
 
 	// 构建 ModelClientConfig：从 mcc 提取字段
@@ -2190,6 +2196,9 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 		"model_name": {}, "client_provider": {}, "api_key": {}, "api_base": {},
 		"timeout": {}, "max_retries": {}, "verify_ssl": {}, "ssl_cert": {},
 		"custom_headers": {}, "client_id": {},
+		// 输入/输出上限由本层显式消费（max_output_tokens→MaxTokens、max_input_tokens→窗口映射），
+		// 不能落进 client 的 Extra（设计 D5）
+		"max_input_tokens": {}, "max_output_tokens": {},
 	}
 	for k, v := range mcc {
 		if _, ok := knownKeys[k]; !ok {
@@ -2918,5 +2927,30 @@ func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 				logger.Info(logComponent).Msg("permissionRail created for first time (hot-reload triggered)")
 			}
 		}
+	}
+}
+
+// toPositiveInt 将任意数值或字符串转为正整数；非正数或不可解析返回 (0,false)。
+//
+// 用于把 yaml/前端传来的 token 上限（可能是 int、float64 或字符串）统一成 int。
+func toPositiveInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, n > 0
+	case int32:
+		return int(n), n > 0
+	case int64:
+		return int(n), n > 0
+	case float64:
+		i := int(n)
+		return i, i > 0
+	case string:
+		i, err := strconv.Atoi(strings.TrimSpace(n))
+		if err != nil {
+			return 0, false
+		}
+		return i, i > 0
+	default:
+		return 0, false
 	}
 }
