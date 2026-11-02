@@ -461,6 +461,15 @@ func getReactAgentConfig(agent sainterfaces.BaseAgent) *saconfig.ReActAgentConfi
 	return reactCfg
 }
 
+// UserProcessorTypes 返回用户自定义处理器类型列表（只读，供测试与诊断）。
+func (r *ContextProcessorRail) UserProcessorTypes() []string {
+	names := make([]string, 0, len(r.userProcessors))
+	for _, spec := range r.userProcessors {
+		names = append(names, spec.Type)
+	}
+	return names
+}
+
 // applyCompressionRatios 按上下文窗口与比例收口各处理器的总量阈值。
 //
 // 规则：阈值 = min(绝对阈值, round(ratio × window))，即只下调不放大。
