@@ -33,11 +33,16 @@ logging:
   full: info
 
 # Gateway 配置
+#
+# 注意本段的 host/port 只管 **Web 通道**的监听地址（Python 侧对应 WEB_HOST / WEB_PORT，
+# app_gateway.py:1807-1808 → WebChannelConfig）。GatewayServer 的多路由 WS 监听（默认
+# 127.0.0.1:19001）由环境变量 GATEWAY_HOST / GATEWAY_PORT 控制（app_gateway.go:438-448），
+# Python 侧同名（app_gateway.py:1059-1060），不读本段。
 gateway:
-  # 监听地址。环境变量 UAPCLAW_GATEWAY_HOST 优先。
+  # Web 通道监听地址。优先级：命令行 --host > 环境变量 UAPCLAW_GATEWAY_HOST > 本键
   # 代码默认：127.0.0.1（swarm/gateway/app_gateway.go:773-788）
   host: 127.0.0.1
-  # 监听端口。环境变量 UAPCLAW_GATEWAY_PORT 优先。
+  # Web 通道监听端口。优先级：命令行 --port > 环境变量 UAPCLAW_GATEWAY_PORT > 本键
   # 代码默认：19000（swarm/gateway/app_gateway.go:790-812）
   port: 19000
   # SessionMap 作用域：per_chat_bot（同 chat+bot 共享会话）/ per_chat_bot_user（按用户分会话）
