@@ -105,19 +105,26 @@ func FormatExistingRelations(relations []map[string]any, startIdx int, includeTi
 	for i, rel := range relations {
 		content := fmt.Sprintf("%v", rel["content"])
 
-		// 对齐 Python: include_time and valid_since != -1
-		if includeTime {
-			if validSince, ok := toInt64(rel["valid_since"]); ok && validSince != -1 {
-				offsetSince, _ := toInt8(rel["offset_since"])
-				if t, err := graph.LoadStoredTimeFromDB(validSince, offsetSince); err == nil {
-					content += fmt.Sprintf("\nvalid_since=%s", t.Format("2006-01-02T15:04:05Z07:00"))
-				}
+		// 对齐 Python: valid_since = rel.get("valid_since", 0)
+		validSince, ok := toInt64(rel["valid_since"])
+		if !ok {
+			validSince = 0
+		}
+		validUntil, ok := toInt64(rel["valid_until"])
+		if !ok {
+			validUntil = 0
+		}
+		if includeTime && validSince != -1 {
+			offsetSince, _ := toInt8(rel["offset_since"])
+			if t, err := graph.LoadStoredTimeFromDB(validSince, offsetSince); err == nil {
+				// 对齐 Python: content += f"\n{valid_since=}"（debug f-string 带 repr 引号）
+				content += fmt.Sprintf("\nvalid_since='%s'", t.Format("2006-01-02T15:04:05+00:00"))
 			}
-			if validUntil, ok := toInt64(rel["valid_until"]); ok && validUntil != -1 {
-				offsetUntil, _ := toInt8(rel["offset_until"])
-				if t, err := graph.LoadStoredTimeFromDB(validUntil, offsetUntil); err == nil {
-					content += fmt.Sprintf("\nvalid_until=%s", t.Format("2006-01-02T15:04:05Z07:00"))
-				}
+		}
+		if includeTime && validUntil != -1 {
+			offsetUntil, _ := toInt8(rel["offset_until"])
+			if t, err := graph.LoadStoredTimeFromDB(validUntil, offsetUntil); err == nil {
+				content += fmt.Sprintf("\nvalid_until='%s'", t.Format("2006-01-02T15:04:05+00:00"))
 			}
 		}
 
