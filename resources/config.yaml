@@ -138,6 +138,13 @@ models:
         verify_ssl: false
         # 附加请求头（JSON 字符串或映射）
         custom_headers: {}
+        # 输入上限（token）：该模型单次请求可接受的输入量，作为上下文窗口分母
+        # （ContextUtils.resolve_context_max 第 2 优先级）。0 / 缺省 = 未知，
+        # 回退内置模型表或 200000 兜底。
+        max_input_tokens: 0
+        # 输出上限（token）：作为请求 max_tokens 的默认值；请求级显式传值优先
+        # （model_clients/base_client.go:320-342）。0 / 缺省 = 不限制，交由服务端默认。
+        max_output_tokens: 0
       model_config_obj:
         # 采样温度。代码默认：0.95（default_models.go:187）
         temperature: 0.95
@@ -173,10 +180,70 @@ react:
   answer_chunk_size: 500
   stream_chunk_threshold: 50
   stream_character_threshold: 2000
-  # 上下文工程配置
+  # 上下文工程配置（对齐 Python jiuwenswarm/resources/config.yaml:269-303）
   context_engine_config:
+    # 压缩总开关：false 时整个 ContextProcessorRail 不注册（deep_adapter_rails.go:936）
+    enabled: true
+    # 允许模型通过 reload 提示重新取回已卸载的消息
+    enable_reload: true
     # 是否释放 KV 缓存
     enable_kv_cache_release: false
+    # 压缩水位比例（相对 max_input_tokens）：阈值 = min(下列绝对阈值, ratio × 输入上限)，
+    # 即只下调不放大。0 = 不按比例，仅用绝对阈值。
+    compression_trigger_ratio: 0.85
+    compression_target_ratio: 0.55
+    # 大消息卸载（per-message 语义，不参与比例缩放）
+    message_summary_offloader_config:
+      messages_threshold: null
+      tokens_threshold: 60000
+      large_message_threshold: 60000
+      offload_message_type: ["tool"]
+      protected_tool_names: ["read_file:*SKILL.md", "reload_original_context_messages"]
+      messages_to_keep: null
+      keep_last_round: false
+      customized_summary_prompt: null
+      enable_adaptive_compression: true
+      summary_max_tokens: 900
+      enable_precise_step: false
+      step_summary_max_context_messages: 8
+      content_max_chars_for_compression: 200000
+    # 对话级压缩（tokens_threshold 参与比例缩放）
+    dialogue_compressor_config:
+      messages_threshold: null
+      tokens_threshold: 100000
+      messages_to_keep: 10
+      keep_last_round: false
+      compression_target_tokens: 1800
+      offload_writeback_enabled: false
+    # 当前轮压缩（tokens_threshold 参与比例缩放）
+    current_round_compressor_config:
+      tokens_threshold: 100000
+      messages_to_keep: 3
+      min_selected_tokens_for_compression: 20000
+      compression_target_tokens: 4000
+      summary_merge_target_tokens: 4000
+      accumulated_summary_token_limit: 20000
+      summary_merge_min_blocks: 3
+      prior_context_window_size: 10
+      offload_writeback_enabled: false
+    # 轮次级压缩（trigger/target 参与比例缩放）
+    round_level_compressor_config:
+      rounds_threshold: 2
+      tokens_threshold: 230000
+      trigger_total_tokens: 230000
+      target_total_tokens: 160000
+      compression_call_max_tokens: 250000
+      keep_last_round: true
+      keep_recent_messages: 6
+      messages_to_keep: 6
+      first_pass_target_tokens: 30000
+      second_pass_target_tokens: 20000
+      third_pass_target_tokens: 10000
+      truncate_head_ratio: 0.2
+      offload_writeback_enabled: false
+    # 全量压缩（session_memory 路径预设；Python 侧当前无此段，待同构）
+    full_compact_processor_config:
+      trigger_total_tokens: 180000
 
 # 预定义 Agent 列表（agent 名 → 模型/技能/工作区/迭代上限）
 # 代码默认：max_iterations=200、completion_timeout=600、stable_base=true（team/config_loader.go:20-26）
