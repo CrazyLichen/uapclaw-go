@@ -122,11 +122,13 @@ func TestBuildModelsDefaultsFromFrontend_Token字段覆盖与保留(t *testing.T
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // useTokenConfigHome 把配置数据根指向临时目录，返回该目录。
-// 注入原理：config.New("") → pathutil.ConfigFile() = ConfigDir()/config.yaml。
+// 注入原理：WorkspaceDir() 优先取 UAPCLAW_DATA_DIR，ConfigDir() = WorkspaceDir()/config，
+// config.New("") → pathutil.ConfigFile() = ConfigDir()/config.yaml。
 func useTokenConfigHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	pathutil.SetUserHome(home)
+	t.Setenv("UAPCLAW_DATA_DIR", home)
+	pathutil.ResetCache()
 	t.Cleanup(pathutil.ResetCache)
 	return home
 }
