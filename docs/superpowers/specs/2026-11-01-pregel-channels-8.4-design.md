@@ -288,12 +288,12 @@ func makeBarrierRouterKey(name string, groups []map[string]struct{}) string
 
 ### 5.4 代价
 
-计划表 8.3 行的「`PregelNode` / `Channel ABC`」需追加归属说明（不删原文）；8.5 spec §9 与 8.6 spec 首段关于「`Channel` ABC 的 `Accept` 依赖 8.6 `Kind()`」的表述需追加去向。均属 §6 回填清单。
+计划表 8.3 行的「`PregelNode` / `Channel ABC`」需追加归属说明（不删原文）；8.5 spec §9 与 8.6 spec 首段关于「`Channel` ABC 的 `Accept` 依赖 8.6 `Kind()`」的表述需追加去向。均属 §6 回填清单。已兑现（2026-11-01）：8.3 只落 `PregelNode`（`pregel/node.go`），`Channel` 接口由本节提供。
 
 ## 6. 回填清单（只追加，不删旧内容）
 
 1. **`IMPLEMENTATION_PLAN.md` L504（8.4 行）**：`☐` → `✅`。保留原文「就绪节点集合 + `Buffer/Flush/GetReadyNodes/Consume` + `Snapshot`/`Restore`（跳过 END）+ BarrierChannel 的 CNF(AND-of-OR) 判定与 `barrier:...->name` 路由键」，追加 Go 事实：`channels.go`、`Channel` 接口落本节（方案 B）、`ChannelSnapshot` 单结构体、11 条偏差 D-1..D-11、覆盖率、设计文档路径。
-2. **`IMPLEMENTATION_PLAN.md` L503（8.3 行）**：追加「`Channel` ABC 已移入 8.4（2026-11-01 方案 B），本节只留 `PregelNode`」。
+2. **`IMPLEMENTATION_PLAN.md` L503（8.3 行）**：追加「`Channel` ABC 已移入 8.4（2026-11-01 方案 B），本节只留 `PregelNode`」。**已兑现（2026-11-01）**：8.3 行已追加该说明并置 ✅。
 3. **`IMPLEMENTATION_PLAN.md` 领域八表格后的顺序注记行**（L542）：追加新行，不改原注记——
    `> **8.x 实施顺序（2026-11-01 二次调整）**：8.5 → 8.4 → 8.3 → 8.8 → 8.3a → 8.9a → 8.3b → 8.3c → 8.9b（`Channel` 接口移入 8.4 后两节互不依赖，依据见 8.4 spec §5）。原注记保留。`
 4. **`docs/superpowers/specs/2026-11-01-pregel-router-8.5-design.md`**：

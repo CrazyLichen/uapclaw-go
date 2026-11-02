@@ -496,7 +496,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **8.x Pregel 图引擎** | — | | | |
 | 8.1 | ☐ | Graph 接口 + 构图实现 | `base.py`：`Graph`(7 方法，含 `GetNodes`) + `ExecutableGraph`(5 方法) + `Router` 类型别名；`graph.py`：`PregelGraph`(`StartNode/EndNode/AddNode/AddEdge/AddConditionalEdges/RegisterBranchTargets/Compile/Reset`，waits 屏障 + branches + branch_targets CNF 解析) + `CompiledGraph`(invoke 生命周期) + `Branch` | `openjiuwen/core/graph/base.py` · `graph.py` |
 | 8.2 | ☐ | ExecutableGraph / Executable | `ExecutableGraph`：`Invoke/Stream/Collect/Transform/Interrupt`；`Executable`：`OnInvoke/OnStream/OnCollect/OnTransform` + `SkipTrace/GraphInvoker/PostCommit/ComponentType` | `openjiuwen/core/graph/executable.py` |
-| 8.3 | ☐ | PregelNode / Channel ABC | `PregelNode`(name/func/routers) + `Channel` ABC(`Key`/`NodeName`/`IsReady`/`Accept`/`Consume`/`Snapshot`/`Restore`)；⤴️ `Channel` ABC 已移入 8.4（2026-11-01 方案 B：接口与两个实现同文件同测试，`Accept` 返回 bool、`Consume` 无返回值这些形状看完实现才定），本节只留 `PregelNode` | `openjiuwen/core/graph/pregel/base.py` |
+| 8.3 | ✅ | PregelNode / Channel ABC | ✅ Go 事实：`node.go` 提供 `NodeInput{Config InnerPregelConfig; State any}`（State 恒 nil 对齐 task.py:149；只能是 any——8.8 的 GraphState 全仓零实例化且 graph↔pregel 成编译期环）+ `NodeFunc func(ctx, NodeInput) error`（唯一出通道是 error，返回值不参与路由）+ `PregelNode{name/fn/routers}` 字段全非导出、指针使用 + `NewPregelNode(name, fn, routers...)`（fn/任一 router 为 nil 即 panic、复制入参切片）+ `addRouter`（承接 8.3a 的原地追加，Python 无此方法）+ `NoopNodeFunc`（对齐 lambda: None）；偏差 D1-D6 归档 spec §4（D1 不做形参名嗅探=8.5 D2 同源、D5 state 恒 any 属终态、D6 指针）；零日志对齐 base.py；`node.go` 覆盖率 100%；设计：docs/superpowers/specs/2026-11-01-pregel-node-8.3-design.md。`PregelNode`(name/func/routers) + `Channel` ABC(`Key`/`NodeName`/`IsReady`/`Accept`/`Consume`/`Snapshot`/`Restore`)；⤴️ `Channel` ABC 已移入 8.4（2026-11-01 方案 B：接口与两个实现同文件同测试，`Accept` 返回 bool、`Consume` 无返回值这些形状看完实现才定），本节只留 `PregelNode` | `openjiuwen/core/graph/pregel/base.py` |
 | 8.3a | ☐ | PregelBuilder | `AddNode`/`AddEdge`(1→N static、N→1 barrier 含 CNF 组)/`AddBranch`/`Build` | `openjiuwen/core/graph/pregel/builder.py` |
 | 8.3b | ☐ | TaskExecutorPool / NodeTask | FIRST_EXCEPTION 等待 + `_commit_failure`(GraphInterrupt→`__interrupt__`、异常→`__error__` 降级) + `CancelAll` + 签名反射注入 `config`/`state` | `openjiuwen/core/graph/pregel/task.py` |
 | 8.3c | ☐ | Pregel 调度引擎 | `PregelLoop.Init`(resume 恢复 channel/node_version/step/pending) + `RunStep`(ready→submit→wait_all→buffer→flush→after_step) + `_save_state_on_error` + `Pregel.Run`(顶层中断转 `{"__interrupt__": value}`) | `openjiuwen/core/graph/pregel/engine.py` |
@@ -542,6 +542,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 > **8.x 实施顺序（2026-11-01 调整）**：8.5 → 8.3 → 8.8 → 8.4 → 8.3a → 8.9a → 8.3b → 8.3c → 8.9b（8.5 自原路线前移：8.3 的 `PregelNode` 必须先有 Router 接口，而 8.5 只依赖已完成的 `Message`。依据见 8.5 spec §5）。
 >
 > **8.x 实施顺序（2026-11-01 二次调整）**：8.5 → 8.4 → 8.3 → 8.8 → 8.3a → 8.9a → 8.3b → 8.3c → 8.9b（`Channel` 接口随 8.4 落地后 8.4 与 8.3 互不依赖，故 8.4 前移；依据见 8.4 spec §5）。原注记保留。
+>
+> **8.x 实施顺序（2026-11-01 三次记录）**：8.3 已落地；9 节顺序仍为 8.5 → 8.4 → 8.3 → 8.8 → 8.3a → 8.9a → 8.3b → 8.3c → 8.9b。**本轮明确不处理** 8.3a 与 8.8 的位置问题（8.3a 的 `Build` 返回属 8.3c 的 `*Pregel`；8.8 的 `graph_state.GraphState` 为零实例化死类型且 `graph` 包尚未建立），事实留档见 8.3 spec §5。原注记保留。
 
 ---
 

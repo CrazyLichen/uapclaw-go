@@ -3,7 +3,7 @@
 > 对应实现计划：领域八 8.6（IMPLEMENTATION_PLAN.md L506）
 > Python 源码：`openjiuwen/core/graph/pregel/base.py` 第 10-43 行（`Interrupt` / `Message` / `TriggerMessage` / `BarrierMessage`）
 > 前置依赖：8.3d（`config.go` / `constants.go`，已 ✅）
-> 后续消费方：8.3（`Channel.Accept(msg Message)`）、8.4（`TriggerChannel`/`BarrierChannel` 的 `Kind()` 过滤）、8.5（三个 Router 构造消息）、8.3b（`NodeTask` 返回值、`PendingNode`）、8.3c（`ChannelManager.buffer` 重放）、8.9（`GraphState.pending_buffer` 快照）（2026-11-01 更新：`Channel` 接口最终归属 8.4 而非 8.3；`Kind()` 的过滤消费方已在 8.4 兑现）
+> 后续消费方：8.3（`Channel.Accept(msg Message)`）、8.4（`TriggerChannel`/`BarrierChannel` 的 `Kind()` 过滤）、8.5（三个 Router 构造消息）、8.3b（`NodeTask` 返回值、`PendingNode`）、8.3c（`ChannelManager.buffer` 重放）、8.9（`GraphState.pending_buffer` 快照）（2026-11-01 更新：`Channel` 接口最终归属 8.4 而非 8.3；`Kind()` 的过滤消费方已在 8.4 兑现）（2026-11-01 再更新：8.3 已落地 `pregel/node.go`，仅含 `NodeInput`/`NodeFunc`/`PregelNode`；`Channel` 接口最终归属 8.4，`Kind()` 的过滤消费方已全部兑现）
 > 章节顺序决策：**8.6 提前于 8.3/8.4/8.5**（已拍板方案 A）。理由：`Message` 是上述各节的共同类型，严格按编号先做 8.3 会因类型未定义无法编译
 
 ## 1. 流程位置与作用
