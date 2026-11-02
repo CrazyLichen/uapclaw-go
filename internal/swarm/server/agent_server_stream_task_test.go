@@ -114,3 +114,45 @@ func countingCancel() (context.CancelFunc, *int32) {
 	var n int32
 	return func() { atomic.AddInt32(&n, 1) }, &n
 }
+
+// TestRegisterStreamTask_OverwritesWithoutCancel 锁定单槽语义（对齐 Python
+// agent_ws_server.py:1172）：同 session 后注册覆盖先注册，覆盖时不触发任何 cancel。
+//
+// 已知限制：被覆盖的旧流此后无法被 cancelStreamTask 选中（注册处会打 warn）。
+// 本用例防止将来有人把 map 改成追加却忘了同步改 cancel 语义。
+func TestRegisterStreamTask_OverwritesWithoutCancel(t *testing.T) {
+	s := newTestAgentServer()
+
+	cancelA, hitsA := countingCancel()
+	entryA := s.registerStreamTask("sess-1", "req-A", cancelA)
+	cancelB, hitsB := countingCancel()
+	entryB := s.registerStreamTask("sess-1", "req-B", cancelB)
+
+	if got := atomic.LoadInt32(hitsA); got != 0 {
+		t.Fatalf("覆盖注册不得取消旧流，cancelA 实际被调用 %d 次", got)
+	}
+	if got := atomic.LoadInt32(hitsB); got != 0 {
+		t.Fatalf("注册不得取消新流，cancelB 实际被调用 %d 次", got)
+	}
+	s.sessionStreamTasksMu.RLock()
+	cur := s.sessionStreamTasks["sess-1"]
+	s.sessionStreamTasksMu.RUnlock()
+	if cur != entryB {
+		t.Fatalf("槽位应被新 entry 覆盖，实际 %+v", cur)
+	}
+
+	// cancelStreamTask 只能停到最新的那条
+	s.cancelStreamTask("sess-1")
+	if got := atomic.LoadInt32(hitsB); got != 1 {
+		t.Fatalf("cancelStreamTask 应取消新流，实际 %d 次", got)
+	}
+	if got := atomic.LoadInt32(hitsA); got != 0 {
+		t.Fatalf("旧流已不可达，不应被取消，实际 %d 次", got)
+	}
+
+	// 旧流收尾是 no-op（不得误删新流的痕迹、不得 panic）
+	s.releaseStreamTask("sess-1", entryA)
+	if len(s.sessionStreamTasks) != 0 {
+		t.Fatalf("表应为空（cancel 已删除），实际 %d 项", len(s.sessionStreamTasks))
+	}
+}

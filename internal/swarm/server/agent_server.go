@@ -380,11 +380,25 @@ func (s *AgentServer) startConsumeLoop(ctx context.Context) {
 }
 
 // registerStreamTask 注册流式任务并返回登记项。
+//
+// 单槽语义（对齐 Python agent_ws_server.py:1172）：同一 session 只保留最新一条，
+// 后注册会覆盖先注册。被覆盖的旧流此后无法被 cancelStreamTask 选中，
+// 因此这里补一条 warn 让"同一 session 两条流重叠"从静默变为可观测。
 func (s *AgentServer) registerStreamTask(sessionID, requestID string, cancel context.CancelFunc) *streamTaskEntry {
 	entry := &streamTaskEntry{requestID: requestID, cancel: cancel}
 	s.sessionStreamTasksMu.Lock()
+	prev, hasPrev := s.sessionStreamTasks[sessionID]
 	s.sessionStreamTasks[sessionID] = entry
 	s.sessionStreamTasksMu.Unlock()
+
+	if hasPrev && prev != nil && prev != entry {
+		logger.Warn(logComponent).
+			Str("session_id", sessionID).
+			Str("prev_request_id", prev.requestID).
+			Str("request_id", requestID).
+			Msg("stream task overwritten: previous stream is no longer cancellable")
+	}
+
 	logger.Debug(logComponent).
 		Str("session_id", sessionID).
 		Str("request_id", requestID).
