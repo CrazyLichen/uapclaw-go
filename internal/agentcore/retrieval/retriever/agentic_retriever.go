@@ -722,7 +722,6 @@ func tripleFactStr(triple common.TripleFact) string {
 	return strings.Join(triple[:], " ")
 }
 
-
 // metaString 取元数据中的字符串值（nil → ""；string 原值；其他标量 fmt.Sprint）。
 //
 // 对齐 Python metadata.get("doc_id") 的透传语义：自定义 store 写入 int 时 Python
