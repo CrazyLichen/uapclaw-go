@@ -585,7 +585,9 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 
 	harness := sc.resources.Harness
 	if harness != nil {
-		harness.InitCwdForRound()
+		// 每轮把 cwd 重置回工作空间根（对齐 Python init_cwd_for_round），
+		// 新 ctx 必须继续往下传，否则本轮工具仍读上一轮的 CwdState。
+		ctx = harness.InitCwdForRound(ctx)
 	}
 
 	_ = sc.updateStatus(ctx, atschema.MemberStatusReady)

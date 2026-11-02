@@ -3,6 +3,7 @@ package harness
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -198,6 +199,14 @@ var (
 	// 编译期接口检查
 	_ hinterfaces.DeepAgentInterface = (*DeepAgent)(nil)
 	_ agentinterfaces.BaseAgent      = (*DeepAgent)(nil)
+
+	// ErrNoActiveLoop 任务循环控制器已清理。
+	//
+	// 典型场景是轮次刚结束、controller 已被 forceCleanupController 回收，
+	// 此时投递运行中输入的调用方需要能区分"正常竞态"与真实故障。
+	ErrNoActiveLoop = errors.New("deep agent: 任务循环控制器未激活")
+	// ErrNoSession steer/follow_up 既无显式会话也无 loop 会话。
+	ErrNoSession = errors.New("deep agent: 无可用会话")
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -988,21 +997,34 @@ func (d *DeepAgent) ClearState(sess sessioninterfaces.SessionFacade, clearPersis
 
 // FollowUp 发布 FollowUp 事件到任务循环。
 // Python: DeepAgent.follow_up(msg, task_id, session) (line 2368)
-func (d *DeepAgent) FollowUp(ctx context.Context, msg string, taskID string, sess *session.Session) {
+//
+// 投递失败返回具名 error：Python 靠异常向上抛，Go 没有异常，只能走返回值，
+// 否则调用方无法区分"已送达"与"被丢弃"。
+func (d *DeepAgent) FollowUp(ctx context.Context, msg string, taskID string, sess *session.Session) error {
 	d.configMu.RLock()
 	ctrl := d.loopController
 	loopSess := d.loopSession
 	d.configMu.RUnlock()
 
 	if ctrl == nil {
-		return
+		logger.Warn(logComponent).
+			Str("event_type", "FOLLOWUP_DROPPED").
+			Str("reason", "no_active_loop").
+			Str("msg_preview", steerLogPreview(msg)).
+			Msg("follow up dropped: task loop controller is not active")
+		return ErrNoActiveLoop
 	}
 	sessToUse := sess
 	if sessToUse == nil {
 		sessToUse = loopSess
 	}
 	if sessToUse == nil {
-		return
+		logger.Warn(logComponent).
+			Str("event_type", "FOLLOWUP_DROPPED").
+			Str("reason", "no_session").
+			Str("msg_preview", steerLogPreview(msg)).
+			Msg("follow up dropped: neither arg session nor loop session is bound")
+		return ErrNoSession
 	}
 
 	// Python: FollowUpEvent.from_text(msg)
@@ -1014,12 +1036,17 @@ func (d *DeepAgent) FollowUp(ctx context.Context, msg string, taskID string, ses
 	// Python: controller.event_queue.publish_event_async(card.id, sess, event)
 	if err := ctrl.PublishEventAsync(ctx, sessToUse, event); err != nil {
 		logger.Error(logComponent).Err(err).Str("msg", msg).Msg("FollowUp failed to publish event")
+		return fmt.Errorf("follow up 发布失败: %w", err)
 	}
+	return nil
 }
 
 // Steer 发布 TaskInteraction 事件到任务循环。
 // Python: DeepAgent.steer(msg, session) (line 2400)
-func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session) {
+//
+// 投递失败返回具名 error（ErrNoActiveLoop / ErrNoSession / 发布错误）：
+// Python 靠异常传播，Go 必须走返回值，否则上层无法在输入没进去时回退。
+func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session) error {
 	d.configMu.RLock()
 	ctrl := d.loopController
 	loopSess := d.loopSession
@@ -1034,7 +1061,7 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 			Str("reason", "no_active_loop").
 			Str("msg_preview", steerLogPreview(msg)).
 			Msg("steer dropped: task loop controller is not active")
-		return
+		return ErrNoActiveLoop
 	}
 	s := sess
 	if s == nil {
@@ -1046,7 +1073,7 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 			Str("reason", "no_session").
 			Str("msg_preview", steerLogPreview(msg)).
 			Msg("steer dropped: neither arg session nor loop session is bound")
-		return
+		return ErrNoSession
 	}
 
 	// Python: TaskInteractionEvent(interaction=[TextDataFrame(text=msg)])
@@ -1063,9 +1090,10 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 	}
 	if err := ctrl.PublishEventAsync(ctx, s, event); err != nil {
 		logger.Warn(logComponent).Err(err).Str("msg", msg).Msg("Steer failed to publish TaskInteractionEvent")
-		return
+		return fmt.Errorf("steer 发布失败: %w", err)
 	}
 	logger.Debug(logComponent).Str("msg", msg).Msg("Steer: TaskInteractionEvent published")
+	return nil
 }
 
 // steerLogPreview 截断 steer 文本用于日志（rune 安全，最多 120 字符）。对齐 CJK 截断惯例。

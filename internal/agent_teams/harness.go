@@ -2,7 +2,10 @@ package agent_teams
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/rails"
@@ -16,11 +19,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -76,11 +82,21 @@ type TeamHarness struct {
 	memberName string
 	// initialPlanMode 初始计划模式
 	initialPlanMode bool
+	// mu 保护 activeAgentSession 与 initialPlanModeSeeded。
+	//
+	// 写点在轮次 goroutine（prepareAgentSession），读点在消息处理 goroutine
+	// （interactLoop ← StreamController.Steer）与协调内核的邮箱轮询
+	// （HasPendingInterrupt），两者之间没有任何队列或同步边，必须显式加锁。
+	// Python 是单线程 asyncio，赋值与读取天然串行，无对应结构。
+	mu sync.RWMutex
 	// initialPlanModeSeeded 初始计划模式是否已种子化
 	initialPlanModeSeeded bool
-	// activeAgentSession 活跃的 Agent 会话
-	// TODO(#9.session): AgentSession 类型
-	activeAgentSession any
+	// activeAgentSession 最近一次轮次使用的 Agent 会话。
+	//
+	// 语义是"最近一次"而非"活跃"：轮次结束后 DeepAgent.forceCleanupController
+	// 会把 loop_session 置 nil，而 HITL 应答恰好发生在轮次结束之后，
+	// 只能靠这里保留的引用读到中断状态（Python 的 _active_agent_session）。
+	activeAgentSession *session.Session
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -93,6 +109,13 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// errIncompatibleAgent 底层 deepAgent 不是 *harness.DeepAgent，无法投递运行中输入。
+	errIncompatibleAgent = errors.New("team harness: deepAgent 不是 *harness.DeepAgent")
+	// errNoActiveSession 没有可用于投递的 Agent 会话。
+	errNoActiveSession = errors.New("team harness: 无活跃 Agent 会话")
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -297,15 +320,69 @@ func (h *TeamHarness) Model() *llm.Model {
 
 // HasPendingInterrupt 返回 Agent 是否有待恢复的中断状态。
 // Python: TeamHarness.has_pending_interrupt()
-// TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) HasPendingInterrupt() bool { return false }
+//
+// Python 判据是 `session.get_state(INTERRUPTION_KEY) is not None`，
+// 中断状态由 single_agent 的 ToolInterruptHandler.Save 写进同一个会话。
+func (h *TeamHarness) HasPendingInterrupt() bool {
+	sess := h.interruptSession()
+	if sess == nil {
+		return false
+	}
+	val, err := sess.GetState(sessionstate.StringKey(agentschema.InterruptionKey))
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("member_name", h.memberName).
+			Msg("TeamHarness.HasPendingInterrupt: 读取中断状态失败")
+		return false
+	}
+	return interruptionStateOf(val) != nil
+}
 
 // IsPendingInterruptResumeValid 检查给定用户输入是否为有效中断恢复。
 // Python: TeamHarness.is_pending_interrupt_resume_valid(user_input)
+//
+// 判据：user_input.user_inputs 的键必须非空且全部落在
+// interrupted_tools[*].interrupt_requests 的键集合内（Python 用 issubset）。
 // ⤴️ 9.60 已实现 StreamController，此方法由 StreamController.IsValidInterruptResume 通过 resources.Harness 调用
-// TODO(#9.57): deepAgent 类型升级后实现具体逻辑
 func (h *TeamHarness) IsPendingInterruptResumeValid(userInput any) bool {
-	return false
+	in, ok := userInput.(*interaction.InteractiveInput)
+	if !ok || in == nil {
+		// Python: if not isinstance(user_input, InteractiveInput): return False
+		return false
+	}
+	sess := h.interruptSession()
+	if sess == nil {
+		return false
+	}
+	val, err := sess.GetState(sessionstate.StringKey(agentschema.InterruptionKey))
+	if err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("member_name", h.memberName).
+			Msg("TeamHarness.IsPendingInterruptResumeValid: 读取中断状态失败")
+		return false
+	}
+	st := interruptionStateOf(val)
+	if st == nil {
+		return false
+	}
+	pendingIDs := make(map[string]struct{}, len(st.InterruptedTools))
+	for _, entry := range st.InterruptedTools {
+		if entry == nil {
+			continue
+		}
+		for id := range entry.InterruptRequests {
+			pendingIDs[id] = struct{}{}
+		}
+	}
+	if len(pendingIDs) == 0 || len(in.UserInputs) == 0 {
+		return false
+	}
+	for id := range in.UserInputs {
+		if _, hit := pendingIDs[id]; !hit {
+			return false
+		}
+	}
+	return true
 }
 
 // PersistTeamDBState 持久化团队数据库状态。
@@ -328,14 +405,26 @@ func (h *TeamHarness) RequestCompletionPoll() {}
 // ⤴️ 9.60 已实现 StreamController，此方法由 StreamController 通过 wakeMailboxCb 回调
 func (h *TeamHarness) WakeMailboxIfInterruptCleared() {}
 
-// InitCwdForRound 从工作空间根目录初始化每轮工作目录。
-// Python: TeamHarness.init_cwd_for_round()
-// TODO(#9.57+9.35): 实现
-func (h *TeamHarness) InitCwdForRound() {}
+// InitCwdForRound 用工作空间根目录重建本轮的 cwd 状态，返回携带新状态的 ctx。
+// Python: TeamHarness.init_cwd_for_round() —— init_cwd(root, workspace=root)
+//
+// 为什么必须是 ctx 进/ctx 出：Python 的 init_cwd 写 contextvar，天然"本轮生效"；
+// Go 的 ctx 是值传递，不把新 ctx 交回调用方，工具执行仍会读上一轮的 CwdState，
+// 于是上一轮里的 cd 会跨轮残留（Python 每轮都会重置回 workspace 根）。
+// 这里不写 DeepAgent.cwdState：attachRunContexts 只在 ctx 缺 CwdState 时注入，
+// 传入的 ctx 优先，因此不影响其它轮次/其它 Agent 的隔离。
+func (h *TeamHarness) InitCwdForRound(ctx context.Context) context.Context {
+	ws := h.Workspace()
+	if ws == nil || ws.RootPath == "" {
+		return ctx
+	}
+	state := cwd.InitCwd(ws.RootPath, cwd.WithWorkspace(ws.RootPath))
+	return cwd.WithCwdState(ctx, state)
+}
 
 // Steer 转向指令到底层 Agent。
-// Python: TeamHarness.steer(content)
-// TODO(#9.57): deepAgent 类型升级后实现
+// Python: TeamHarness.steer(content) → await self._deep_agent.steer(content)
+// 已回填（#9.57）：转调 interactLoop，投递失败返回具名 error
 func (h *TeamHarness) Steer(ctx context.Context, content string) error {
 	return h.interactLoop(ctx, content, true)
 }
@@ -397,31 +486,29 @@ func (h *TeamHarness) streamWithSessionRef(ctx context.Context, inputs map[strin
 //
 // 原实现是 TODO(#9.57) 空桩，导致运行中到达的第二条 chat.send 被静默丢弃
 // （adapter → Interact → DeliverInput → StreamController.Steer → 这里 return nil）。
-// DeepAgentInterface 未声明 steer/follow_up（只有 RequestAbort），故此处按具体类型收窄；
-// 收窄失败记日志而不是静默吞掉，保证下次定位有线索。
+// DeepAgentInterface 未声明 steer/follow_up（只有 RequestAbort），故此处按具体类型收窄。
+// 失败分支返回具名 error（投递失败必须让上层可回退，见 M-02），日志保留供定位。
 func (h *TeamHarness) interactLoop(ctx context.Context, content string, steer bool) error {
 	d, ok := h.deepAgent.(*harness.DeepAgent)
-	if !ok {
+	if !ok || d == nil {
 		logger.Warn(logComponent).
 			Str("member_name", h.memberName).
 			Bool("steer", steer).
 			Msg("TeamHarness: deepAgent 不是 *harness.DeepAgent，输入无法投递")
-		return nil
+		return errIncompatibleAgent
 	}
-	sess, _ := h.activeAgentSession.(*session.Session)
+	sess := h.getActiveSession()
 	if sess == nil {
 		logger.Warn(logComponent).
 			Str("member_name", h.memberName).
 			Bool("steer", steer).
 			Msg("TeamHarness: 无活跃 Agent 会话，输入无法投递")
-		return nil
+		return errNoActiveSession
 	}
 	if steer {
-		d.Steer(ctx, content, sess)
-		return nil
+		return d.Steer(ctx, content, sess)
 	}
-	d.FollowUp(ctx, content, "", sess)
-	return nil
+	return d.FollowUp(ctx, content, "", sess)
 }
 
 // prepareAgentSession 为底层 Agent 准备本轮使用的会话。
@@ -454,22 +541,33 @@ func (h *TeamHarness) prepareAgentSession(ctx context.Context, inputs map[string
 			Msg("TeamHarness.prepareAgentSession: agent session pre_run failed")
 		return nil
 	}
-	h.activeAgentSession = agentSess
+	h.setActiveSession(agentSess)
 	h.ensureInitialPlanMode(agentSess)
 	return agentSess
 }
 
 // ensureInitialPlanMode 首次以 team.plan Leader 身份运行时把 Agent 切入 plan 模式。
 // Python: TeamHarness._ensure_initial_plan_mode(session)
+//
+// 锁内只做"是否已种子化"的判断与置位，LoadState/SwitchMode 在锁外调用
+// （避免持锁进入 DeepAgent 的内部锁）。
 func (h *TeamHarness) ensureInitialPlanMode(agentSess sessioninterfaces.SessionFacade) {
-	if !h.isInitialTeamPlanLeader() || h.initialPlanModeSeeded {
+	if !h.isInitialTeamPlanLeader() {
+		return
+	}
+	h.mu.RLock()
+	seeded := h.initialPlanModeSeeded
+	h.mu.RUnlock()
+	if seeded {
 		return
 	}
 	state := h.deepAgent.LoadState(agentSess)
 	if state == nil || state.PlanMode.Mode != "plan" {
 		h.deepAgent.SwitchMode(agentSess, "plan")
 	}
+	h.mu.Lock()
 	h.initialPlanModeSeeded = true
+	h.mu.Unlock()
 }
 
 // isInitialTeamPlanLeader 判断是否为需要种子化 plan 模式的 Leader。
@@ -500,14 +598,33 @@ func (h *TeamHarness) FindRails(railType reflect.Type) []any {
 }
 
 // RegisterRail 在运行中的 Agent 上注册额外 Rail。
-// Python: TeamHarness.register_rail(rail)
-// TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) RegisterRail(ctx context.Context, rail any) error { return nil }
+// Python: TeamHarness.register_rail(rail) → await self._deep_agent.register_rail(rail)
+//
+// DeepAgentInterface 已声明 AddRail，原 TODO(#9.57) 的"类型升级"前置条件已满足。
+func (h *TeamHarness) RegisterRail(_ context.Context, rail any) error {
+	r, ok := rail.(agentinterfaces.AgentRail)
+	if !ok || r == nil {
+		return fmt.Errorf("TeamHarness.RegisterRail: 不支持的 Rail 类型 %T", rail)
+	}
+	if h.deepAgent == nil {
+		return errIncompatibleAgent
+	}
+	h.deepAgent.AddRail(r)
+	return nil
+}
 
 // UnregisterRail 注销先前注册的 Rail。
-// Python: TeamHarness.unregister_rail(rail)
-// TODO(#9.57): deepAgent 类型升级后实现
-func (h *TeamHarness) UnregisterRail(ctx context.Context, rail any) error { return nil }
+// Python: TeamHarness.unregister_rail(rail) → await self._deep_agent.unregister_rail(rail)
+func (h *TeamHarness) UnregisterRail(ctx context.Context, rail any) error {
+	r, ok := rail.(agentinterfaces.AgentRail)
+	if !ok || r == nil {
+		return fmt.Errorf("TeamHarness.UnregisterRail: 不支持的 Rail 类型 %T", rail)
+	}
+	if h.deepAgent == nil {
+		return errIncompatibleAgent
+	}
+	return h.deepAgent.UnregisterRail(ctx, r)
+}
 
 // RegisterMemberTools 在底层 Agent 上注册团队记忆工具集。
 // Python: TeamHarness.register_member_tools(memory_manager)
@@ -530,6 +647,50 @@ func (h *TeamHarness) InjectMemberMemory(ctx context.Context, memoryManager *mem
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getActiveSession 读取最近一次轮次的 Agent 会话（并发安全）。
+func (h *TeamHarness) getActiveSession() *session.Session {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.activeAgentSession
+}
+
+// setActiveSession 记录本轮使用的 Agent 会话（并发安全）。
+func (h *TeamHarness) setActiveSession(sess *session.Session) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.activeAgentSession = sess
+}
+
+// interruptSession 返回用于读取中断状态的会话。
+// Python: TeamHarness._interrupt_session() → self._deep_agent.loop_session or self._active_agent_session
+//
+// 优先取 loop_session（与 Python 一致）；轮次结束时 forceCleanupController 会把它置 nil，
+// 而 HITL 应答恰好发生在"轮次已结束、等待用户输入"的时刻，所以必须回退到
+// 最近一次轮次的 Agent 会话，否则 HasPendingInterrupt 在真正需要的时刻恒为 false。
+func (h *TeamHarness) interruptSession() *session.Session {
+	if d, ok := h.deepAgent.(*harness.DeepAgent); ok && d != nil {
+		if loopSess := d.LoopSession(); loopSess != nil {
+			return loopSess
+		}
+	}
+	return h.getActiveSession()
+}
+
+// interruptionStateOf 把 GetState 的返回值收窄为中断状态。
+//
+// 返回 nil 表示"没有中断状态"，同时处理接口里存 typed-nil 的情况
+// （Python 的 `is not None` 对 None 与未设置是同一判定）。
+func interruptionStateOf(val any) *agentschema.ToolInterruptionState {
+	if val == nil {
+		return nil
+	}
+	st, ok := val.(*agentschema.ToolInterruptionState)
+	if !ok {
+		return nil
+	}
+	return st
+}
 
 // buildDeepAgentFromSpec 从 DeepAgentSpec 物化 DeepAgent 实例。
 // S-06: 对齐 Python DeepAgentSpec.build() (deep_agent_spec.py L461-515)

@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // mockDeepAgent 实现 DeepAgentInterface 的测试桩。
@@ -159,20 +160,22 @@ func TestTeamHarness_PersistDBState(t *testing.T) {
 		h.MarkTeamBuilt()
 		h.RequestCompletionPoll()
 		h.WakeMailboxIfInterruptCleared()
-		h.InitCwdForRound()
+		_ = h.InitCwdForRound(context.Background())
 	})
 }
 
-// TestTeamHarness_Steer 测试 Steer 占位返回 nil
+// TestTeamHarness_Steer 测试 Steer 在无底层 DeepAgent 时返回可判定的错误
+//
+// M-02：投递失败必须可被上层识别（原实现返回 nil，DeliverResult 恒为 success）。
 func TestTeamHarness_Steer(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.Steer(context.TODO(), "转向"))
+	assert.Error(t, h.Steer(context.TODO(), "转向"))
 }
 
-// TestTeamHarness_FollowUp 测试 FollowUp 占位返回 nil
+// TestTeamHarness_FollowUp 测试 FollowUp 在无底层 DeepAgent 时返回可判定的错误
 func TestTeamHarness_FollowUp(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.FollowUp(context.TODO(), "追加"))
+	assert.Error(t, h.FollowUp(context.TODO(), "追加"))
 }
 
 // TestTeamHarness_Abort 测试 Abort 占位返回 nil
@@ -192,16 +195,22 @@ func TestTeamHarness_RunStreaming(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// TestTeamHarness_RegisterRail 测试 RegisterRail 占位返回 nil
+// TestTeamHarness_RegisterRail 测试 RegisterRail 对非法入参返回错误
+//
+// 回填后该方法不再吞掉失败：rail 类型不符或缺少底层 Agent 都要报错，
+// 否则"运行中挂载 Rail 静默无效"无法定位。
 func TestTeamHarness_RegisterRail(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.RegisterRail(context.TODO(), nil))
+	assert.Error(t, h.RegisterRail(context.TODO(), nil))
+	// 类型正确但底层 Agent 缺失 → 同样报错
+	assert.Error(t, h.RegisterRail(context.TODO(), agentinterfaces.NewBaseRail()))
 }
 
-// TestTeamHarness_UnregisterRail 测试 UnregisterRail 占位返回 nil
+// TestTeamHarness_UnregisterRail 测试 UnregisterRail 对非法入参返回错误
 func TestTeamHarness_UnregisterRail(t *testing.T) {
 	h := agent_teams.NewTeamHarness(nil, nil, string(atschema.TeamRoleLeader), "", false)
-	assert.NoError(t, h.UnregisterRail(context.TODO(), nil))
+	assert.Error(t, h.UnregisterRail(context.TODO(), nil))
+	assert.Error(t, h.UnregisterRail(context.TODO(), agentinterfaces.NewBaseRail()))
 }
 
 // TestTeamHarness_RegisterMemberTools_Nil 测试 nil memoryManager 不 panic

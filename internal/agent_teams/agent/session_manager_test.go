@@ -109,6 +109,29 @@ func TestBindSession_重复绑定(t *testing.T) {
 	assert.Equal(t, "sess-2", agentteams.GetSessionID(ctx2))
 }
 
+// TestBindSession_ctx带其他会话的state 已存在但会话不同的 SessionState 必须被覆盖。
+//
+// M-07：只判"ctx 里有没有 state"不够——若带的是另一个会话（团队内多会话、
+// 成员上下文复用），沿用旧 ctx 会让 CreateCurSessionTables 用错 sessionID 拼表名。
+func TestBindSession_ctx带其他会话的state(t *testing.T) {
+	state := NewTeamAgentState()
+	configurator := NewAgentConfigurator(nil)
+	m := NewSessionManager(state, configurator, nil)
+
+	// 模拟上游注入的"别人的" SessionState
+	foreign := agentteams.InitSessionState()
+	foreign.SetSessionID("other-session")
+	ctx := agentteams.WithSessionState(context.Background(), foreign)
+
+	sess := newTestAgentTeamSession("target-session")
+	newCtx, err := m.BindSession(ctx, sess)
+	assert.NoError(t, err)
+	assert.Equal(t, "target-session", agentteams.GetSessionID(newCtx),
+		"必须覆盖为本次绑定的 sessionID，而不是沿用 ctx 里的旧会话")
+	// 外来 state 本身不被改写
+	assert.Equal(t, "other-session", foreign.GetSessionID())
+}
+
 // TestBindSession_字符串入参不存session M-29 收窄语义验证：
 // 非 *session.AgentTeamSession 输入（如 string sessionID）存 nil（对齐 Python None），
 // 但 sessionID 仍正常设置。

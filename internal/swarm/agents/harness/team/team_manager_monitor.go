@@ -2,6 +2,7 @@ package team
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -27,6 +28,15 @@ type streamTaskEntry struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// ErrNoActiveRuntime 运行时池里没有该 (team, session) 的活跃团队，无法构造 monitor。
+	//
+	// 返回哨兵而不是 nil：调用方（OnRuntimeReady / adapter）原本只判 error，
+	// "监控没起来"与"监控已启动"在上层完全等价，排障时无从区分。
+	// （Python 侧是在函数内记 warning 后 return，行为等价，只是可观测点不同。）
+	ErrNoActiveRuntime = errors.New("team manager: 无活跃团队运行时，monitor 未启动")
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -200,17 +210,27 @@ func (m *TeamManager) SetStreamTaskWaitGroup(sessionID string, wg *sync.WaitGrou
 // 现场构造 monitor。原实现绕过该桥、改从本结构体的 teamAgents 表取 agent，而该表只在
 // CreateTeam（生产零调用方）里写入，导致 agent 恒 nil、monitor 永不启动。
 func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamName string, hideDM bool) error {
-	// Python 步骤 2: 检查是否已有 handler 且 is_running → 提前返回
+	// Python 步骤 2-7 整段在 m.mu 内完成：check-then-act 必须原子。
+	//
+	// 原实现"锁内只读检查 → 锁外建 handler → 锁内覆盖"，同一 session 的两条
+	// chat.send 并发进入时会各自 Start 一个 handler、各自起一条消费 goroutine，
+	// 后者覆盖前者后，前者的消费 goroutine 永久阻塞在没人关闭的 eventQueue 上
+	// （每并发一次泄漏一条）。Python 靠单线程 asyncio 天然串行，Go 必须显式互斥。
+	//
+	// 代价（已知并接受）：持锁期间调用 runtime.GetAgentTeamMonitor（内含 DB 读）
+	// 与 handler.Start，会阻塞同进程其他 session 的 GetMonitor/RegisterMonitor/StopMonitor。
+	// GetAgentTeamMonitor 走的是 agent_teams/runtime 的 TeamRuntimeManager，
+	// 不会回读本结构体，无自锁风险。
 	m.mu.Lock()
-	existing := m.teamMonitors[sessionID]
-	m.mu.Unlock()
-	if existing != nil && existing.IsRunning() {
+	if existing := m.teamMonitors[sessionID]; existing != nil && existing.IsRunning() {
+		m.mu.Unlock()
 		return nil
 	}
 
 	// Python 步骤 3: 从运行时池解析 monitor（Runner.get_agent_team_monitor 等价桥）
 	mon, err := runtime.GetAgentTeamMonitor(ctx, teamName, sessionID, hideDM)
 	if err != nil {
+		m.mu.Unlock()
 		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Str("team_name", teamName).
 			Msg("failed to get TeamMonitor from runtime pool")
 		return fmt.Errorf("获取 TeamMonitor 失败: %w", err)
@@ -218,32 +238,37 @@ func (m *TeamManager) EnsureMonitor(ctx context.Context, sessionID string, teamN
 
 	// Python 步骤 4: monitor 为 nil → 记录并返回（运行时未激活/无 backend）
 	if mon == nil {
+		m.mu.Unlock()
 		logger.Warn(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
 			Msg("no active team runtime, cannot start monitor")
-		return nil
+		return ErrNoActiveRuntime
 	}
 
 	// Python 步骤 5: 创建 handler
 	handler := newTeamMonitorHandlerImpl(mon, sessionID)
 
 	// Python 步骤 6: 启动 handler
-	if err := handler.Start(ctx); err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).
+	if startErr := handler.Start(ctx); startErr != nil {
+		m.mu.Unlock()
+		logger.Warn(logComponent).Err(startErr).Str("session_id", sessionID).
 			Msg("TeamMonitorHandler start failed")
-		return fmt.Errorf("TeamMonitorHandler 启动失败: %w", err)
+		return fmt.Errorf("TeamMonitorHandler 启动失败: %w", startErr)
 	}
 
-	// Python 步骤 7: 注册到 teamMonitors
-	// S-04: RegisterMonitor 加锁后此处改锁内直写（sync.Mutex 不可重入）
-	m.mu.Lock()
+	// Python 步骤 7: 注册到 teamMonitors（持锁直写；sync.Mutex 不可重入，
+	// 不能转调 RegisterMonitor）
 	m.teamMonitors[sessionID] = handler
 	m.mu.Unlock()
+
 	logger.Info(logComponent).Str("session_id", sessionID).Str("team_name", teamName).
 		Msg("TeamMonitorHandler started successfully")
 
-	// Python 步骤 8: 启动事件消费 goroutine
-	// M-05 方案 A: 对齐 Python——_consume_monitor_events 是 asyncio.create_task 的
-	// detached 任务，不注册进 _stream_tasks（靠 monitor stop close event queue 自然退出）。
+	// Python 步骤 8: 启动事件消费 goroutine（必须在锁外启动）
+	//
+	// 对齐 Python——_consume_monitor_events 是 asyncio.create_task 的 detached 任务，
+	// 不注册进 _stream_tasks（靠 monitor stop close event queue 自然退出）。
+	// 消费者首帧就会回调 m.onEventBroadcast（adapter 注入，逻辑不受本文件控制），
+	// 在锁内启动会给它制造一段无谓的等锁窗口。
 	// T-08: 消费者生命周期与请求 ctx 解耦（对齐 Python detached 语义），传 Background ctx。
 	if handler.IsRunning() {
 		go m.consumeMonitorEvents(context.Background(), sessionID, handler)

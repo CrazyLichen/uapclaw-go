@@ -2,6 +2,7 @@ package team
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -23,13 +24,14 @@ func TestEnsureMonitor_已有运行中handler直接返回(t *testing.T) {
 // TestEnsureMonitor_运行时池无条目返回nil 验证 pool 未命中分支。
 //
 // 未激活的 (team, session) 在 runtime 池中查不到条目，GetAgentTeamMonitor
-// 返回 (nil, nil)，EnsureMonitor 必须按 Python 步骤 4 记日志后返回 nil，
-// 而不是 panic 或报错。
+// 返回 (nil, nil)。T-10 之后 EnsureMonitor 返回哨兵 errNoActiveRuntime，
+// 由调用方决定是否只是接受（两个生产调用方都只记 Warn 不中断）。
 func TestEnsureMonitor_运行时池无条目返回nil(t *testing.T) {
 	m := NewTeamManager()
 
-	if err := m.EnsureMonitor(context.Background(), "sess-not-active", "team-not-active", false); err != nil {
-		t.Fatalf("运行时池无条目时应返回 nil，实际: %v", err)
+	err := m.EnsureMonitor(context.Background(), "sess-not-active", "team-not-active", false)
+	if !errors.Is(err, ErrNoActiveRuntime) {
+		t.Fatalf("运行时池无条目时应返回 ErrNoActiveRuntime，实际: %v", err)
 	}
 	if m.teamMonitors["sess-not-active"] != nil {
 		t.Fatal("未启动 monitor 时不应注册 handler")

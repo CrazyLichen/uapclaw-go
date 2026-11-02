@@ -41,6 +41,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -57,6 +58,7 @@ import (
 	atevents "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema/events"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
+	harnesspkg "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -758,10 +760,16 @@ func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool
 	}
 	// Python: 运行中→steer/follow-up; 飞行中→入队; 否则→启动Agent
 	if a.streamController.IsAgentRunning() {
+		var deliveryErr error
 		if useSteer {
-			return a.streamController.Steer(ctx, fmt.Sprintf("%v", content))
+			deliveryErr = a.streamController.Steer(ctx, fmt.Sprintf("%v", content))
+		} else {
+			deliveryErr = a.streamController.FollowUp(ctx, fmt.Sprintf("%v", content))
 		}
-		return a.streamController.FollowUp(ctx, fmt.Sprintf("%v", content))
+		if deliveryErr != nil {
+			return a.degradeAtRoundBoundary(content, deliveryErr)
+		}
+		return nil
 	}
 	// M-16：判断与动作合并为一次持锁（EnqueueOrStart），对齐 Python 单线程下
 	// 「has_in_flight_round() + pending_inputs.append()」之间无 await 的原子性。
@@ -1281,6 +1289,27 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail interfaces.AgentRai
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// degradeAtRoundBoundary 把"轮次刚结束、controller 已回收"的投递失败降级为排队。
+//
+// M-02：`d.Steer/FollowUp` 现在会返回 ErrNoActiveLoop。这个错误出现在
+// "IsAgentRunning() 仍为真，但任务循环控制器已被 forceCleanupController 回收"
+// 的轮次切换窗口里——属正常竞态而非故障。Python 在同一窗口静默丢弃输入，
+// 这里改为降级投递到下一轮队列：消息不丢，也不给用户一个假错误。
+// 其余错误（会话缺失、发布失败）原样上抛，由调用方决定是否 failure。
+func (a *TeamAgent) degradeAtRoundBoundary(content any, deliveryErr error) error {
+	if !errors.Is(deliveryErr, harnesspkg.ErrNoActiveLoop) {
+		return deliveryErr
+	}
+	if a.streamController != nil {
+		a.streamController.QueuePendingInput(content)
+	}
+	logger.Info(logComponent).
+		Str("member_name", a.MemberName()).
+		Err(deliveryErr).
+		Msg("steer target loop already cleared; input queued for next round")
+	return nil
+}
 
 // sessionIDFromOptsOrCtx 解析本轮应绑定的 sessionID。
 //

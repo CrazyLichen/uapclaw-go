@@ -38,6 +38,9 @@ type InProcessSpawnHandle struct {
 	onUnhealthy func()
 	// shutdownRequested 是否已请求关闭
 	shutdownRequested bool
+	// forceKillTimeout ForceKill 等待协程退出的上限，零值取 defaultShutdownTimeout。
+	// 仅测试注入用（缩短超时以覆盖超时分支），生产路径保持零值。
+	forceKillTimeout time.Duration
 	// mu 保护并发访问
 	mu sync.Mutex
 }
@@ -155,6 +158,12 @@ func (h *InProcessSpawnHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 
 // ForceKill 强制终止：取消 goroutine 上下文，等待协程退出。
 // Python: InProcessSpawnHandle.force_kill
+//
+// 等待带超时：Python 的 task.cancel() 会在下一个 await 点强制抛出 CancelledError，
+// 即使被取消方没有显式检查；Go 的 ctx.Done() 只能通知，节点/LLM 调用不检查就永远不退出。
+// 成员的 runCtx 已经是 detached（WithoutCancel），ForceKill 是唯一停机手段，
+// 无超时会让 CleanupTeammate → 团队清理预算被彻底击穿。
+// 超时后不阻塞返回（Go 无法强杀协程），但必须留 Error 日志，否则"卡住的成员"无形。
 func (h *InProcessSpawnHandle) ForceKill() error {
 	h.mu.Lock()
 	h.shutdownRequested = true
@@ -164,9 +173,22 @@ func (h *InProcessSpawnHandle) ForceKill() error {
 		h.cancelCtx()
 	}
 
-	// 等待协程退出（无超时，对齐 Python await self._task）
 	if h.done != nil {
-		<-h.done
+		timeout := h.forceKillTimeout
+		if timeout <= 0 {
+			timeout = defaultShutdownTimeout
+		}
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		select {
+		case <-h.done:
+		case <-timer.C:
+			logger.Error(logComponent).
+				Str("process_id", h.processID).
+				Dur("timeout", timeout).
+				Msg("force kill timed out; inprocess task still running after cancel")
+			return fmt.Errorf("强制终止超时: %s（协程未响应取消）", h.processID)
+		}
 	}
 
 	logger.Info(logComponent).

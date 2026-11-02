@@ -832,23 +832,23 @@ func TestStreamController_StartRound_非字符串内容(t *testing.T) {
 	waitRoundFinished(t, sc)
 }
 
-// TestStreamController_Steer_有harness 测试有 harness 时 Steer。
+// TestStreamController_Steer_有harness 有 harness 但底层 Agent 缺失时错误必须透传。
+//
+// M-02：投递失败不再吞成 nil——否则上层 DeliverResult 恒为 success。
 func TestStreamController_Steer_有harness(t *testing.T) {
 	sc := newTestStreamController()
 	sc.resources.Harness = &agentteams.TeamHarness{}
-	err := sc.Steer(context.Background(), "turn left")
-	if err != nil {
-		t.Errorf("Steer 返回错误: %v", err)
+	if err := sc.Steer(context.Background(), "turn left"); err == nil {
+		t.Error("底层 Agent 缺失时 Steer 应返回错误")
 	}
 }
 
-// TestStreamController_FollowUp_有harness 测试有 harness 时 FollowUp。
+// TestStreamController_FollowUp_有harness 有 harness 但底层 Agent 缺失时错误必须透传。
 func TestStreamController_FollowUp_有harness(t *testing.T) {
 	sc := newTestStreamController()
 	sc.resources.Harness = &agentteams.TeamHarness{}
-	err := sc.FollowUp(context.Background(), "more info")
-	if err != nil {
-		t.Errorf("FollowUp 返回错误: %v", err)
+	if err := sc.FollowUp(context.Background(), "more info"); err == nil {
+		t.Error("底层 Agent 缺失时 FollowUp 应返回错误")
 	}
 }
 
