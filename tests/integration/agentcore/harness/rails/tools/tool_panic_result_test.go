@@ -9,9 +9,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -137,4 +139,33 @@ func (s *ToolPanicResultSuite) TestToolPanic_仍触发AfterToolCall() {
 	s.Equal(toolName, lastTool, "回调应看到被调用的工具名")
 	s.True(strings.Contains(lastErrMsg, "panic"),
 		"after 钩子应能看到 panic 异常，实际: %q", lastErrMsg)
+}
+
+// TestAbilityManagerExecute_工具panic返回错误结果 回归：能力层是工具调用的唯一
+// 执行入口，工具 panic 必须被转成 error 结果返回，不能让并行 goroutine 崩掉。
+//
+// 与 TestToolPanic_仍触发AfterToolCall 互补：那条断言上层 after 钩子被触发
+// （tool_result 的唯一入口），这条断言能力层 API 自身的兜底契约。
+// 同时让集成套件直接 import ability 包 —— 否则该包不进 -coverpkg，
+// 改动行覆盖率门禁会把它判成 0%。
+func (s *ToolPanicResultSuite) TestAbilityManagerExecute_工具panic返回错误结果() {
+	const toolName = "itest_ability_panic_tool"
+	card := tool.NewToolCardWithID(toolName, toolName, "总是 panic 的工具", nil, nil)
+
+	rm := s.GetResourceMgr()
+	s.Require().NotNil(rm)
+	s.Require().NoError(rm.AddTool(&panicInvokeTool{card: card}))
+	s.T().Cleanup(func() { _, _ = rm.RemoveTool([]string{card.ID}) })
+
+	am := ability.NewAbilityManager(rm)
+	am.Add(card)
+
+	results := am.Execute(s.Ctx, nil, []*llmschema.ToolCall{
+		llmschema.NewToolCall("itest-panic-call", toolName, `{}`),
+	}, nil, "")
+	s.Require().Len(results, 1)
+
+	err, ok := results[0].Result.(error)
+	s.Require().True(ok, "工具 panic 应转成 error 结果，实际 %T", results[0].Result)
+	s.Contains(err.Error(), "panic", "错误信息应含 panic 原因")
 }

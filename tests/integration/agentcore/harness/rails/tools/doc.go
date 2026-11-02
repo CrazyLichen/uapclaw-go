@@ -10,5 +10,5 @@
 //	tools/
 //	├── doc.go                    # 包文档
 //	├── tool_execution_test.go    # 工具注册与执行测试
-//	└── tool_panic_result_test.go # 工具 panic 后仍触发 AFTER_TOOL_CALL（tool_result 不丢）
+//	└── tool_panic_result_test.go # 工具 panic 后仍触发 AFTER_TOOL_CALL（tool_result 不丢）+ 能力层兜底
 package tools_test
