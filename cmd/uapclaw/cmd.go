@@ -233,19 +233,13 @@ Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 // applyWebAddrFlags 把 --host/--port 覆盖写入 Web 通道环境变量。
 //
 // 优先级对齐 Python：命令行参数 > 环境变量 > 默认值（app_gateway.py:1807-1808）。
-// 此时 logger 尚未初始化，写环境变量失败只能用 fmt.Fprintf(os.Stderr) 报告。
+// 写入失败不影响启动（变量名与取值均合法，实际不会失败），故忽略返回错误。
 func applyWebAddrFlags(cmd *cobra.Command) {
-	host, _ := cmd.Flags().GetString("host")
-	port, _ := cmd.Flags().GetInt("port")
-	if host != "" {
-		if err := os.Setenv("UAPCLAW_WEB_HOST", host); err != nil {
-			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_WEB_HOST 失败: %v\n", err)
-		}
+	if host, _ := cmd.Flags().GetString("host"); host != "" {
+		_ = os.Setenv("UAPCLAW_WEB_HOST", host)
 	}
-	if port > 0 {
-		if err := os.Setenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", port)); err != nil {
-			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_WEB_PORT 失败: %v\n", err)
-		}
+	if port, _ := cmd.Flags().GetInt("port"); port > 0 {
+		_ = os.Setenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", port))
 	}
 }
 
