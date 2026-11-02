@@ -1,0 +1,112 @@
+# 发布流水线：打 v* 标签即构建两个平台的发布包并创建 GitHub Release
+#
+# 产物：uapclaw-<version>-linux-amd64.tar.gz、uapclaw-<version>-windows-amd64.zip、
+#       sha256sums.txt（由 Makefile 的 release 目标统一产出）
+# 说明：Windows 版在 Linux 上用 mingw-w64 交叉编译（CGO + go-sqlite3），
+#       与本地 make release 完全一致，避免两套打包逻辑漂移。
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（不含 v，用于 workflow_dispatch 试跑）"
+        required: false
+        default: "0.0.0-dev"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: 设置 Node 环境（前端产物打入二进制）
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: internal/swarm/channels/web/frontend/package-lock.json
+
+      - name: 安装 Windows 交叉编译工具链
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
+
+      - name: 解析版本号
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "版本号: ${VERSION}"
+
+      - name: 构建发布包
+        run: make release VERSION="${{ steps.ver.outputs.version }}"
+
+      - name: 冒烟测试（Linux 包）
+        run: |
+          tar -xzf dist/uapclaw-*-linux-amd64.tar.gz -C /tmp
+          BIN=$(ls -d /tmp/uapclaw-*-linux-amd64)
+          "$BIN/uapclaw" --version
+          HOME=$(mktemp -d) "$BIN/uapclaw" app --no-browser > /tmp/app.out 2> /tmp/app.err &
+          APP_PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:19000/; then break; fi
+            sleep 1
+          done
+          curl -s -o /dev/null -w "index=%{http_code}\n" http://127.0.0.1:19000/
+          kill "$APP_PID" 2>/dev/null || true
+          cat /tmp/app.out
+
+      - name: 上传构建产物（试跑也保留）
+        uses: actions/upload-artifact@v4
+        with:
+          name: uapclaw-${{ steps.ver.outputs.version }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/sha256sums.txt
+          retention-days: 7
+
+      - name: 创建 GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          NOTES_FILE="packaging/release/RELEASE_NOTES_v${VERSION}.md"
+          ARGS=(--title "UapClaw v${VERSION}" --latest)
+          if [ -f "$NOTES_FILE" ]; then
+            ARGS+=(--notes-file "$NOTES_FILE")
+          else
+            ARGS+=(--generate-notes)
+          fi
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/uapclaw-"${VERSION}"-linux-amd64.tar.gz \
+            dist/uapclaw-"${VERSION}"-windows-amd64.zip \
+            dist/sha256sums.txt \
+            "${ARGS[@]}"
