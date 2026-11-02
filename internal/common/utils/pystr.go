@@ -99,7 +99,7 @@ func pyWriteRepr(b *strings.Builder, v any) {
 			b.WriteString(s)
 			return
 		}
-		b.WriteString(fmt.Sprintf("%v", v))
+		_, _ = fmt.Fprintf(b, "%v", v)
 	}
 }
 
