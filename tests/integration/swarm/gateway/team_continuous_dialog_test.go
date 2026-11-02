@@ -136,6 +136,19 @@ func (s *TeamDialogSuite) TearDownSuite() {
 	if s.agentServer != nil {
 		_ = s.agentServer.Stop()
 	}
+	// 先取消后台 ctx，再还原环境变量与路径缓存。
+	// 反序（先 restoreEnv 后 cancel）会让仍在运行的 team monitor / 落盘协程
+	// 用「默认 home」重新解析路径，撞出 unable to open database file
+	// （CI run 41513341744：本套件 kv_store 查询报该错，紧跟上一套件残留的
+	// context canceled 写入）。Cancel 幂等，基类 TearDownSuite 仍会再调一次。
+	s.Cancel()
+	// Stop()/ctx 取消只发信号不 join：team monitor、session 落盘等后台协程可能在
+	// 用例收尾后仍在写 agent/sessions，撞上 testing 的 TempDir 清理会报
+	// 「unlinkat ...: directory not empty」（CI 41504858262 实证）。
+	// 等目录树静默后再交给清理，避免把后台退出时序当成用例失败。
+	if !waitDirQuiesce(s.dataDir, 500*time.Millisecond, 5*time.Second) {
+		s.T().Logf("停机后 %s 仍在变化：后台协程未及时退出", s.dataDir)
+	}
 	if s.providerName != "" {
 		_ = model_clients.GetClientRegistry().Unregister(s.providerName, "llm")
 	}
@@ -145,13 +158,6 @@ func (s *TeamDialogSuite) TearDownSuite() {
 		_ = os.Chdir(s.origWd)
 	}
 	s.BaseIntegrationSuite.TearDownSuite()
-	// Stop()/ctx 取消只发信号不 join：team monitor、session 落盘等后台协程可能在
-	// 用例收尾后仍在写 agent/sessions，撞上 testing 的 TempDir 清理会报
-	// 「unlinkat ...: directory not empty」（CI 41504858262 实证）。
-	// 等目录树静默后再交给清理，避免把后台退出时序当成用例失败。
-	if !waitDirQuiesce(s.dataDir, 500*time.Millisecond, 5*time.Second) {
-		s.T().Logf("停机后 %s 仍在变化：后台协程未及时退出", s.dataDir)
-	}
 }
 
 // TestTeamContinuousDialog 对齐 Python test_team_continuous_dialog 场景：

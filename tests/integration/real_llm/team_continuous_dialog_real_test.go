@@ -123,6 +123,8 @@ func (s *TeamContinuousRealSuite) TearDownSuite() {
 	if s.agentServer != nil {
 		_ = s.agentServer.Stop()
 	}
+	// 注意：RealLLMSuite.SetupSuite 把 s.Ctx 换成了 Background，Cancel 已无实际作用，
+	// 后台协程只由 Stop() 收敛，因此这里不插入 Cancel（与基类行为一致）。
 	s.restoreEnv()
 	pathutil.ResetCache()
 	if s.origWd != "" {
