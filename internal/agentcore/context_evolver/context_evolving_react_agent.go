@@ -101,16 +101,20 @@ func NewContextEvolvingReActAgent(
 	milvusPort int,
 	milvusCollection string,
 ) (*ContextEvolvingReActAgent, error) {
-	// 对齐 Python：memoryService 为 nil 时用 persist 参数自建
+	// 对齐 Python：memory_service 为 None 时无条件自建（persist_type 为 None 表示纯内存）
 	var err error
-	if memoryService == nil && persistType != nil {
-		memoryService, err = service.NewTaskMemoryService(
-			service.WithPersistType(*persistType),
-			service.WithPersistPath(persistPath),
-			service.WithMilvusHost(milvusHost),
-			service.WithMilvusPort(milvusPort),
-			service.WithMilvusCollection(milvusCollection),
-		)
+	if memoryService == nil {
+		opts := []service.TaskMemoryServiceOption{}
+		if persistType != nil {
+			opts = append(opts,
+				service.WithPersistType(*persistType),
+				service.WithPersistPath(persistPath),
+				service.WithMilvusHost(milvusHost),
+				service.WithMilvusPort(milvusPort),
+				service.WithMilvusCollection(milvusCollection),
+			)
+		}
+		memoryService, err = service.NewTaskMemoryService(opts...)
 		if err != nil {
 			return nil, fmt.Errorf("创建 TaskMemoryService 失败: %w", err)
 		}

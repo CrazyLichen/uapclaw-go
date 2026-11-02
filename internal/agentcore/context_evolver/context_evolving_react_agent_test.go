@@ -194,3 +194,24 @@ func TestAutoConfigure_默认模型为gpt4(t *testing.T) {
 	cfg := agent.ReActAgent.Config().(*saconfig.ReActAgentConfig)
 	assert.Equal(t, "gpt-4", cfg.ModelNameVal)
 }
+
+// TestNewContextEvolvingReActAgent_双nil也创建服务 验证 service 为 nil 即创建（对齐 Python）。
+func TestNewContextEvolvingReActAgent_双nil也创建服务(t *testing.T) {
+	ceconfig.Set("API_KEY", "test-key")
+	defer ceconfig.Delete("API_KEY")
+
+	agent, err := NewContextEvolvingReActAgent(context.Background(), &agentschema.AgentCard{}, "u1",
+		nil, true, false, "none", nil, "", "", 0, "")
+	require.NoError(t, err)
+	assert.NotNil(t, agent.GetMemoryService(), "memoryService 不应为 nil")
+}
+
+// TestNewContextEvolvingReActAgent_无APIKey报错 验证无密钥时构造失败（对齐 Python 抛错）。
+func TestNewContextEvolvingReActAgent_无APIKey报错(t *testing.T) {
+	t.Setenv("API_KEY", "")
+	ceconfig.Delete("API_KEY")
+
+	_, err := NewContextEvolvingReActAgent(context.Background(), &agentschema.AgentCard{}, "u1",
+		nil, true, false, "none", nil, "", "", 0, "")
+	assert.Error(t, err)
+}
