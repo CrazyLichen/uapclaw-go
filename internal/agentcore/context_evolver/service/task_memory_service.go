@@ -481,8 +481,15 @@ func (s *TaskMemoryService) LoadMemories(ctx context.Context, userID string) err
 	algoName := algoToPersistName(s.summaryAlgorithm)
 	nodesDict, err := s.persistenceHelper.Load(ctx, userID, algoName)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("Failed to load memories from persistence")
-		return err
+		// 对齐 Python: load_memories 内部捕获异常，只记录日志不重新抛出
+		logger.Error(logComponent).
+			Str("user_id", userID).
+			Err(err).
+			Msg("Failed to load existing memories")
+		return nil
+	}
+	if len(nodesDict) == 0 {
+		return nil // 对齐 Python: if not data: return
 	}
 
 	loaded := 0
@@ -507,6 +514,12 @@ func (s *TaskMemoryService) LoadMemories(ctx context.Context, userID string) err
 			loaded++
 		}
 	}
+
+	// 对齐 Python: logger.info("Loaded %d memories into vector store (algo=%s)", count, algo_name)
+	logger.Info(logComponent).
+		Int("count", loaded).
+		Str("algo", algoName).
+		Msg("Loaded memories into vector store")
 
 	return nil
 }

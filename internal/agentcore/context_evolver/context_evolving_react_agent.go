@@ -117,12 +117,9 @@ func NewContextEvolvingReActAgent(
 		autoSummarizeMattsMode:  autoSummarizeMattsMode,
 	}
 
-	// 对齐 Python：构造时加载记忆
+	// 对齐 Python：构造时加载记忆（load_memories 内部吞掉异常，不影响构造）
 	if memoryService != nil {
-		if loadErr := memoryService.LoadMemories(ctx, userID); loadErr != nil {
-			logger.Error(logger.ComponentAgentCore).Err(loadErr).Msg("failed to load memory during initialization")
-			return nil, fmt.Errorf("加载记忆失败: %w", loadErr)
-		}
+		_ = memoryService.LoadMemories(ctx, userID)
 	}
 
 	// 对齐 Python：logger.info("ContextEvolvingReActAgent initialized for user=%s, inject_in_context=%s, auto_summarize=%s, persist_type=%s", ...)

@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -868,4 +869,27 @@ func TestAddMemory_Content为空仍报错(t *testing.T) {
 
 	_, err = svc.AddMemory(context.Background(), "u1", AddMemoryRequest{})
 	assert.Error(t, err)
+}
+
+// TestLoadMemories_加载失败不阻断 验证加载失败只记录日志、不返回错误（对齐 Python）。
+func TestLoadMemories_加载失败不阻断(t *testing.T) {
+	dir := t.TempDir()
+	brokenPath := filepath.Join(dir, "broken.json")
+	require.NoError(t, os.Mkdir(brokenPath, 0o755)) // 目录占用文件路径 → 读取必然失败
+
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+	svc.persistenceHelper = cepersistence.NewMemoryPersistenceHelper(
+		cepersistence.WithPersistType("json"),
+		cepersistence.WithPersistPath(brokenPath),
+	)
+
+	assert.NoError(t, svc.LoadMemories(context.Background(), "u1"))
+}
+
+// TestLoadMemories_无持久化时直接返回 验证未配置持久化时不报错。
+func TestLoadMemories_无持久化时直接返回(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+	assert.NoError(t, svc.LoadMemories(context.Background(), "u1"))
 }
