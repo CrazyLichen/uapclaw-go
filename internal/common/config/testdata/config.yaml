@@ -9,7 +9,6 @@ server:
 
 logging:
   level: "info"
-  format: "json"
   console_level: "info"
   common: "info"
   gateway: "info"

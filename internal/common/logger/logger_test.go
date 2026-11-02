@@ -552,7 +552,6 @@ func TestWithConfigFile(t *testing.T) {
 
 	yamlContent := `logging:
   level: "debug"
-  format: "json"
   console_level: "info"
   gateway: "debug"
   channel: "info"
