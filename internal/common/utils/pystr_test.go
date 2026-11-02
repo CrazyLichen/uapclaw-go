@@ -73,6 +73,7 @@ func TestPyRepr_字符串引号规则(t *testing.T) {
 		{"含单引号改用双引号", "a'b", `"a'b"`},
 		{"含双引号保持单引号", `a"b`, `'a"b'`},
 		{"换行转义", "a\nb", `'a\nb'`},
+		{"回车转义", "a\rb", `'a\rb'`},
 		{"制表转义", "a\tb", `'a\tb'`},
 		{"反斜杠转义", `a\b`, `'a\\b'`},
 	}
@@ -142,4 +143,12 @@ func TestPyStr_浮点记法(t *testing.T) {
 // TestPyRepr_同时含两种引号 验证同时含单双引号时用单引号并转义单引号
 func TestPyRepr_同时含两种引号(t *testing.T) {
 	assert.Equal(t, `'a"b\'c'`, PyRepr(`a"b'c`))
+}
+
+// TestPyRepr_容器内非基础类型兜底 验证容器里出现结构体等非基础类型时
+// 走 %v 兜底（不 panic、不带 map[ 记法）
+func TestPyRepr_容器内非基础类型兜底(t *testing.T) {
+	type probe struct{ Name string }
+	got := PyStr(map[string]any{"probe": probe{Name: "x"}})
+	assert.Equal(t, "{'probe': {x}}", got)
 }

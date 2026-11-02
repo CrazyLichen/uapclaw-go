@@ -230,6 +230,15 @@ func (s *MemoryRailSuite) TestMemoryRail_运行时RegisterRail后read_memory可�
 	_, isSlice := rawResults.([]any)
 	s.True(isSlice, "results 必须是数组而非 null，实际 %T", rawResults)
 	s.NotContains(utils.PyStr(sres), "map[", "检索结果渲染同样不得出现 map[...]")
+
+	// 兜底：工具结果里可能出现非基础类型（结构体），渲染不得 panic，
+	// 也不得退回 Go 的 map[...] 记法
+	type renderProbe struct {
+		Name string
+	}
+	probeRendered := utils.PyStr(map[string]any{"probe": renderProbe{Name: "x"}})
+	s.Contains(probeRendered, "{x}", "非基础类型应走 %v 兜底")
+	s.NotContains(probeRendered, "map[", "兜底渲染同样不得出现 map[...]")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
