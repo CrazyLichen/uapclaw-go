@@ -241,3 +241,70 @@ team:
   # 工作区
   workspace:
     enabled: true
+
+# 通道配置
+channels:
+  # Web 通道
+  web:
+    # 允许模型向用户发送文件。代码默认：false；归一化在 channels 存在时补 true
+    # （common/config/normalize.go:65-79）
+    # 注意：send_file_allowed 缺键或显式为 null 时，整个 channels.web 会被替换为
+    #      {send_file_allowed: true}，本段其他键会一并丢失，因此本段键必须写全
+    send_file_allowed: true
+  # ACP 通道
+  acp:
+    # 是否启用。代码默认：false
+    enabled: false
+    # 通道标识
+    channel_id: ""
+    # 默认会话 ID
+    default_session_id: ""
+
+# 权限配置
+permissions:
+  # 总开关；关闭时权限 rail 不注册。代码默认：false（adapter/deep_adapter_rails.go:806-809）
+  enabled: false
+  # 策略类型。代码默认：tiered_policy
+  schema: tiered_policy
+  # 权限模式。代码默认：normal
+  permission_mode: normal
+  # 工具级默认策略（工具名 → allow/ask/deny）
+  tools: {}
+  # 规则列表
+  rules: []
+  # 外部目录访问策略
+  external_directory:
+    enabled: false
+  # 拒绝时给模型的提示
+  deny_guidance_message: ""
+
+# Hooks 配置
+hooks:
+  # 全局禁用所有 hook。代码默认：false（common/hooks/config.go:133-140）
+  disable_all_hooks: false
+
+# MCP 服务配置（servers[].{name,enabled,transport,command,args,cwd,env,url,headers,timeout_s}）
+# enabled 缺省为 true（adapter/deep_adapter_mcp.go:186）
+mcp:
+  servers: []
+
+# 浏览器配置
+browser:
+  # Chrome 可执行文件路径（可为字符串或平台→路径的映射）
+  # 代码默认：空（由浏览器 runtime 自行探测，adapter/deep_adapter_config.go:890）
+  chrome_path: ""
+
+# 扩展配置
+extensions:
+  # 扩展目录列表，多个用 ';' 分隔。代码默认：空（cmd/uapclaw/cmd.go:60）
+  extension_dirs: ""
+
+# ──────────────────────────────────────────────────────────────
+# 以下段在当前版本尚未实现，配置后不会生效，故不提供键：
+#   telemetry        —— 可观测性未接入（observability 包不读 YAML）
+#   task_memory      —— 任务记忆服务未接入配置面
+#   tools            —— 工具总开关未实现
+#   email_settings   —— 仅 Web UI 环境变量映射，不读该段
+#   updater          —— 自动更新为桩实现
+# 待对应领域实现后在此补充。
+# ──────────────────────────────────────────────────────────────
