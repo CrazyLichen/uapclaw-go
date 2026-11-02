@@ -164,6 +164,9 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		// eventCounts 记录收到的每类帧数量，失败时用于区分「服务端一帧没发」
 		// 与「只发了思考/正文流但没进工具」。
 		eventCounts = map[string]int{}
+		// chatErrors 收集 chat.error 文案：错误终态下服务端不再补发 chat.final，
+		// 不记下来就只剩「没有 final」这种无信息量的结论。
+		chatErrors []string
 	)
 
 	deadline := time.Now().Add(8 * time.Minute)
@@ -183,6 +186,7 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 			continue
 		}
 		eventCounts[realEventName(frame)]++
+		payload, _ := frame["payload"].(map[string]any)
 		switch {
 		case realFrameID(frame) == "req-real-1" && realAccepted(frame):
 			if !firstAccepted {
@@ -209,6 +213,11 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 				firstFinal = true
 				firstFinalAt = time.Now()
 			}
+		case "chat.error":
+			// 错误也是本轮流的终态（服务端不补发 chat.final）：记下文案便于定位，
+			// 并让下面的等待提前收尾（run 41504922683 里两条消息各来一帧）。
+			chatErrors = append(chatErrors, realErrorMessage(payload))
+			s.T().Logf("收到 chat.error: %s", realErrorMessage(payload))
 		}
 
 		// 首条一被受理就发第二条：不依赖 team.runtime_ready（模型可能压根不建队），
@@ -221,14 +230,15 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 			secondSentAt = time.Now()
 		}
 		// 第二条被受理后，等首条收尾或最多再等 2 分钟——模型不建队时也可能一直没有
-		// chat.final，避免用例白等到 8 分钟上限。
-		if secondSent && secondAccepted && (firstFinal || time.Since(secondSentAt) > 2*time.Minute) {
+		// chat.final，避免用例白等到 8 分钟上限。错误帧同样意味着本轮已结束。
+		if secondSent && secondAccepted &&
+			(firstFinal || len(chatErrors) > 0 || time.Since(secondSentAt) > 2*time.Minute) {
 			break
 		}
 	}
 
-	s.T().Logf("观测: firstAccepted=%v runtimeReady=%v memberSpawned=%v secondAccepted=%v firstFinal=%v sawMember=%v sawMessage=%v 帧统计=%v",
-		firstAccepted, runtimeReady, memberSpawned, secondAccepted, firstFinal, sawMember, sawMessage, eventCounts)
+	s.T().Logf("观测: firstAccepted=%v runtimeReady=%v memberSpawned=%v secondAccepted=%v firstFinal=%v sawMember=%v sawMessage=%v chatErrors=%v 帧统计=%v",
+		firstAccepted, runtimeReady, memberSpawned, secondAccepted, firstFinal, sawMember, sawMessage, chatErrors, eventCounts)
 	s.True(firstAccepted, "首条 chat.send 应被受理")
 	s.True(secondSent, "第二条消息应在首条流未结束时发出")
 	s.True(secondAccepted, "第二条 chat.send 应被受理（同 session 不互斥）")
@@ -275,6 +285,7 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 		toolNames     []string
 		sawFinal      bool
 		accepted      bool
+		chatError     string
 		// eventCounts 记录收到的每类帧数量：失败时靠它区分「服务端一帧没发」
 		// 与「只发了思考/正文流但没进工具」两类原因。
 		eventCounts = map[string]int{}
@@ -328,16 +339,22 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 			s.T().Logf("收到 team.member: %v", payload["event"])
 		case "chat.final":
 			sawFinal = true
+		case "chat.error":
+			// chat.error 是本轮流的错误终态：服务端不再补发 chat.final，
+			// 不在这里收尾就会白等到 10 分钟上限（run 41504922683 实测 659s）。
+			// 同时把 error 文案带进断言，避免只剩「工具序列为空」这种无信息量的结论。
+			chatError = realErrorMessage(payload)
+			s.T().Logf("收到 chat.error: %s", chatError)
 		}
-		// chat.final 是本轮流的终点：模型直接作答而没建队时（真实观测过），
-		// 继续读到 10 分钟上限纯属白等，提前收尾并按观测结果断言。
-		if memberCreated || sawFinal {
+		// chat.final / chat.error 都是本轮流的终点：模型直接作答而没建队时
+		// （真实观测过），继续读到 10 分钟上限纯属白等，提前收尾并断言。
+		if memberCreated || sawFinal || chatError != "" {
 			break
 		}
 	}
 
-	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v accepted=%v 帧统计=%v",
-		toolNames, memberCreated, sawFinal, accepted, eventCounts)
+	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v accepted=%v chatError=%q 帧统计=%v",
+		toolNames, memberCreated, sawFinal, accepted, chatError, eventCounts)
 	// 硬断言只锁确定性结果：客户端能观测到成员被真实创建。
 	//
 	// 不断言「工具序列里必须出现 build_team」。leader_workflow.md 第 2 步确实要求
@@ -346,8 +363,8 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 	// team_member 表，不校验 team_info 记录，与 Python 侧一致），夜间真实 LLM CI
 	// 因此两次假红（run 41326851160 / 41352864530），而建队结果本身是好的。
 	// 提示词是否生效由上面的 memberCreated 兜底：提示词/rail 坏掉时成员根本建不出来。
-	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员（accepted=%v sawFinal=%v 帧统计=%v 工具序列=%v）",
-		accepted, sawFinal, eventCounts, toolNames)
+	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员（accepted=%v sawFinal=%v chatError=%q 帧统计=%v 工具序列=%v）",
+		accepted, sawFinal, chatError, eventCounts, toolNames)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -432,6 +449,17 @@ func realToolSucceeded(frame map[string]any) bool {
 	}
 	success, ok := payload["success"].(bool)
 	return ok && success
+}
+
+// realErrorMessage 取 chat.error 帧的错误文案。
+// 服务端按 Python 语义写在 payload.error（internal/swarm/server/utils/stream_utils.go），
+// 兼容 message 键以防具体分支换字段。
+func realErrorMessage(payload map[string]any) string {
+	if msg, _ := payload["error"].(string); msg != "" {
+		return msg
+	}
+	msg, _ := payload["message"].(string)
+	return msg
 }
 
 // realToolName 取 chat.tool_result payload 里的工具名。
