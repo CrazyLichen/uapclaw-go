@@ -164,18 +164,16 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 	)
 
 	deadline := time.Now().Add(8 * time.Minute)
-	idle := 0
 	for time.Now().Before(deadline) {
-		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		// 单帧最长等 2 分钟：真实模型首 token 常超过 30s。注意 gorilla/websocket 的
+		// 读错误是粘性的（conn.readErr 一旦置位，后续 ReadMessage 立刻返回同一错误），
+		// 「N 次 30s 重试」凑不出等待预算，唯一的等待窗口就是这里的 ReadDeadline。
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			idle++
-			if idle >= 6 {
-				break
-			}
-			continue
+			s.T().Logf("读帧中断，结束观测: %v", err)
+			break
 		}
-		idle = 0
 
 		var frame map[string]any
 		if json.Unmarshal(raw, &frame) != nil {
@@ -272,26 +270,32 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 		memberCreated bool
 		toolNames     []string
 		sawFinal      bool
+		accepted      bool
 	)
 	deadline := time.Now().Add(10 * time.Minute)
-	idle := 0
 	for time.Now().Before(deadline) {
-		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		// 单帧最长等 3 分钟：团队首轮提示词很长（leader workflow + 策略 + 工具表），
+		// 冷启动叠加模型首 token，实测首帧可能超过 30s；而 gorilla/websocket 的读错误
+		// 是粘性的（conn.readErr 一旦置位，后续 ReadMessage 立刻返回同一错误），
+		// 「12 次 30s 重试」实际只有一次 30s 预算——run 41497123635 里用例 30.7s 就
+		// 断言失败，但服务端当时仍在正常处理（紧接着的用例立刻收到 accepted）。
+		_ = conn.SetReadDeadline(time.Now().Add(3 * time.Minute))
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			idle++
-			if idle >= 12 {
-				break
-			}
-			continue
+			s.T().Logf("读帧中断，结束观测（工具序列=%v memberCreated=%v）: %v", toolNames, memberCreated, err)
+			break
 		}
-		idle = 0
 
 		var frame map[string]any
 		if json.Unmarshal(raw, &frame) != nil {
 			continue
 		}
 		payload, _ := frame["payload"].(map[string]any)
+		// 先记录受理帧：失败时用「受理了但没建队」与「压根没受理」区分
+		// 模型慢/不建队 和 服务端拒收 两类原因。
+		if realFrameID(frame) == "req-auto-1" && realAccepted(frame) {
+			accepted = true
+		}
 		switch realEventName(frame) {
 		case "chat.tool_call":
 			if tc, ok := payload["tool_call"].(map[string]any); ok {
@@ -315,12 +319,14 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 		case "chat.final":
 			sawFinal = true
 		}
-		if memberCreated {
+		// chat.final 是本轮流的终点：模型直接作答而没建队时（真实观测过），
+		// 继续读到 10 分钟上限纯属白等，提前收尾并按观测结果断言。
+		if memberCreated || sawFinal {
 			break
 		}
 	}
 
-	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v", toolNames, memberCreated, sawFinal)
+	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v accepted=%v", toolNames, memberCreated, sawFinal, accepted)
 	// 硬断言只锁确定性结果：客户端能观测到成员被真实创建。
 	//
 	// 不断言「工具序列里必须出现 build_team」。leader_workflow.md 第 2 步确实要求
@@ -329,7 +335,8 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 	// team_member 表，不校验 team_info 记录，与 Python 侧一致），夜间真实 LLM CI
 	// 因此两次假红（run 41326851160 / 41352864530），而建队结果本身是好的。
 	// 提示词是否生效由上面的 memberCreated 兜底：提示词/rail 坏掉时成员根本建不出来。
-	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员（实际工具序列=%v）", toolNames)
+	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员（accepted=%v sawFinal=%v 工具序列=%v）",
+		accepted, sawFinal, toolNames)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
