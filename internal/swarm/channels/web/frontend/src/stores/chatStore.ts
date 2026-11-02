@@ -88,6 +88,10 @@ interface ChatState {
   addMessage: (message: Message) => void;
   updateMessage: (id: string, updates: Partial<Message>) => void;
   appendStreamContent: (content: string, streamKey?: string) => void;
+  /** 追加思考（reasoning_content）片段：末尾思考块仍在流式时并入，否则新起一块 */
+  appendReasoning: (content: string) => void;
+  /** 结束当前思考块（正文到达 / 本轮结束时调用），结束后不再追加到该块 */
+  finishReasoning: () => void;
   startStreaming: (messageId: string, streamKey?: string) => void;
   stopStreaming: (streamKey?: string) => void;
   setProcessing: (status: boolean) => void;
@@ -194,16 +198,67 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   stopStreaming: (streamKey = 'default') => {
     const { currentStreamId } = get();
-    if (currentStreamId) {
-      set((state) => ({
-        messages: state.messages.map((msg) =>
-          msg.id === currentStreamId ? { ...msg, isStreaming: false } : msg
-        ),
+    set((state) => {
+      // 本轮结束时一并收尾未关闭的思考块（reasoning 与正文走不同事件，可能先断流）
+      let changed = false;
+      const messages = state.messages.map((msg) => {
+        const isCurrent = currentStreamId !== null && msg.id === currentStreamId;
+        if (!isCurrent && !(msg.isThinking && msg.isStreaming)) {
+          return msg;
+        }
+        changed = true;
+        return { ...msg, isStreaming: false };
+      });
+      if (!currentStreamId) {
+        return changed ? { messages } : {};
+      }
+      return {
+        messages,
         currentStreamId: null,
         currentStreamContent: '',
         streamBuffers: new Map(state.streamBuffers).set(streamKey, ''),
-      }));
-    }
+      };
+    });
+  },
+
+  appendReasoning: (content) => {
+    const text = typeof content === 'string' ? content : '';
+    if (!text) return;
+    set((state) => {
+      const last = state.messages[state.messages.length - 1];
+      // 末尾思考块仍在流式 → 并入（对齐 Python TUI appendThinkingChunk 的 lastEntry.kind==="thinking" 合并）
+      if (last && last.isThinking && last.isStreaming) {
+        return {
+          messages: state.messages.map((msg) =>
+            msg.id === last.id ? { ...msg, content: `${msg.content}${text}` } : msg
+          ),
+        };
+      }
+      // 否则新起一块：保证思考与工具卡片、正文的先后顺序不被合并打乱
+      const thinkingMessage: Message = {
+        id: `reasoning-${Date.now()}`,
+        role: 'assistant',
+        content: text,
+        timestamp: new Date().toISOString(),
+        isStreaming: true,
+        isThinking: true,
+      };
+      return { messages: [...state.messages, thinkingMessage] };
+    });
+  },
+
+  finishReasoning: () => {
+    set((state) => {
+      const last = state.messages[state.messages.length - 1];
+      if (!last || !last.isThinking || !last.isStreaming) {
+        return {};
+      }
+      return {
+        messages: state.messages.map((msg) =>
+          msg.id === last.id ? { ...msg, isStreaming: false } : msg
+        ),
+      };
+    });
   },
 
   setProcessing: (status) => {

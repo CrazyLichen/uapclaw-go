@@ -5,7 +5,13 @@ import { normalizeFinalContent } from '../utils/finalContent';
 export const HISTORY_GET_METHOD = 'history.get';
 export const HISTORY_MESSAGE_EVENT = 'history.message';
 
-/** 助手侧仅恢复这些事件；用户消息无 event_type，单独保留 */
+/**
+ * 助手侧仅恢复这些事件；用户消息无 event_type，单独保留。
+ *
+ * 注意：`chat.reasoning` / `llm_reasoning` 有意不在白名单内——对齐 Python TUI
+ * `mergeHistoryMessagesForRestore`（history-parser.ts）在恢复会话时丢弃思考片段；
+ * 思考块只在本次流式过程中展示，避免历史被大段推理淹没。
+ */
 const ALLOWED_ASSISTANT_EVENT_TYPES = new Set([
   'chat.final',
   'chat.tool_call',

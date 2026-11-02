@@ -403,6 +403,8 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const {
     addMessage,
     appendStreamContent,
+    appendReasoning,
+    finishReasoning,
     startStreaming,
     stopStreaming,
     updateMessage,
@@ -1128,6 +1130,9 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         const currentMode = useSessionStore.getState().mode;
         const content = typeof payload.content === 'string' ? payload.content : '';
 
+        // 正文到达即收尾当前思考块：下一段 reasoning 会另起一块，保持「思考→正文→工具」的真实顺序
+        finishReasoning();
+
         if (isHiddenTeamTeammateMessagePayload(currentMode, payload)) {
           const memberId = getTeamPayloadMemberName(payload);
           if (memberId) {
@@ -1182,6 +1187,13 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         if (!useChatStore.getState().isProcessing && !useChatStore.getState().isLoadingHistory) {
           setProcessing(true);
         }
+
+        // 思考内容落成独立「思考块」（对齐 Python TUI handleReasoning → appendThinkingChunk）。
+        // team 模式的成员输出走 team.member 事件单独渲染，此处不重复插入，避免同一段思考出现两次。
+        if (useSessionStore.getState().mode === 'team') return;
+        const content = typeof payload.content === 'string' ? payload.content : '';
+        if (!content) return;
+        appendReasoning(content);
       }),
       webClient.on('chat.final', ({ payload }) => {
         if (!shouldHandleSessionEvent(payload)) return;
@@ -1189,6 +1201,8 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         const currentMode = useSessionStore.getState().mode;
         const content = normalizeFinalContent(payload);
         finishContextCompressionTurn();
+        // 空正文的轮次（只有思考）也要收尾，避免思考块一直停留在「正在思考」
+        finishReasoning();
 
         // team 模式下，过滤成员输出，只保留外层 leader 回复。
         if (isHiddenTeamTeammateMessagePayload(currentMode, payload)) {
@@ -1534,6 +1548,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         setProcessing(isProcessingNow);
         if (!isProcessingNow) {
           setThinking(false);
+          finishReasoning();
           clearSubtasks();
 
           // 检查是否有等待的任务队列
@@ -2004,7 +2019,9 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     addToolCall,
     addToolResult,
     appendTeamMemberOutputDelta,
+    appendReasoning,
     appendStreamContent,
+    finishReasoning,
     clearSubtasks,
     finishContextCompressionTurn,
     handleConnectionAck,
