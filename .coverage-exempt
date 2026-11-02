@@ -108,3 +108,10 @@ internal/agent_teams/agent/session_manager.go
 #   属「依赖外部运行环境」类豁免。本次仅把清理 defer 里的单个共享 ctx 拆成两步独立 ctx
 #   （各 8 行），未新增业务分支；拆分后的两个闭包已由既有 runtime 用例覆盖。
 internal/agent_teams/runtime/team_runner.go
+
+# ── 2026-11-02 48h 审查处置（M-02） ──
+# deep_agent.go#L1041：FollowUp 的 publish 失败错误包装。构造该分支需要把 Controller 内部
+# eventQueue（未导出）替换成必定失败的实现，包内单测无法注入；集成层要触发需真实 MQ 故障。
+# 用行级豁免而不是整文件豁免：该文件其余改动行（Steer/FollowUp 的 ctrl==nil 与 no-session
+# 两个错误分支）由 deep_agent_test.go 直接覆盖，后续改动仍按行判定。
+internal/agentcore/harness/deep_agent.go#L1041-L1041

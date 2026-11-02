@@ -4,17 +4,23 @@
 # 豁免文件修改时仍会显示 📝 notice 提醒，但不会导致 CI 失败
 # 注意：能通过集成测试覆盖的代码，不得加入此列表
 
-# stream_utils.go — 纯 chunk→事件映射函数集（ParseStreamChunk 等），无独立集成入口；
-# 其行为由 swarm/gateway 集成套件间接覆盖，单测覆盖在 internal/swarm/server/utils。
+# ── 流式解析三件套（2026-11-02 复核，撤掉原「由集成套件间接覆盖」的错误理由） ──
+# 原理由称 stream_utils.go 的行为"由 swarm/gateway 集成套件间接覆盖"，实测
+# grep -r "ParseStreamChunk\|parseTypedChunkMap" tests/integration/ 只命中 real_llm/doc.go
+# 的一行注释，没有任何集成用例真的驱动这两条解析路径。理由已改为事实描述。
+
+# stream_utils.go — 纯 chunk→事件映射函数集（ParseStreamChunk 等），无 IO、无装配，
+# 集成层没有独立入口；改动行由包内单测覆盖（整文件 89.0%）。
 internal/swarm/server/utils/stream_utils.go
 
-# tool_call.go — ToolCall 数据结构与选项构造函数（无 IO、无装配），无独立集成入口；
-# 聚合语义由 model_clients 单测（缺省 type 增量帧）覆盖，真 LLM 侧由 team 套件验证。
+# tool_call.go — ToolCall 数据结构与 Option 构造函数（无 IO、无装配），无独立集成入口；
+# 增量帧聚合语义由 model_clients 单测（缺省 type 的增量帧）覆盖。
 internal/agentcore/foundation/llm/schema/tool_call.go
 
-# deep_adapter_team.go — 团队适配器单文件数千行，本次改动仅为 tool_call 分支的
-# 碎片帧守卫；该分支需真实模型流式帧才能触发，由 llm tag 的 team 套件覆盖
-# （不入集成门禁），单测在 deep_adapter_team_chunktomap_test.go。
+# deep_adapter_team.go — 团队适配器（4000+ 行，整文件集成覆盖 3.7%，结构性达不到阈值）。
+# 本次改动是把 tool_call 分支的"碎片帧守卫"整段删除（改为与 Python 一致的原样透传），
+# 该分支需真实模型流式帧才能触发：由 llm tag 的 team 套件 + 单测
+# deep_adapter_team_chunktomap_test.go（含"碎片帧原样透传"反向断言）覆盖。
 internal/swarm/server/adapter/deep_adapter_team.go
 
 # ── 2026-11-02 2026-11-01 审查处置（S-04/M-15/M-16/T-07） ──
@@ -64,3 +70,29 @@ internal/swarm/server/adapter/deep_adapter.go
 # json.MarshalIndent 换成 utils.MarshalIndentNoEscape（序列化对齐 Python
 # ensure_ascii=False），行为等价，由 session 包单测覆盖。
 internal/swarm/server/session/session_history.go
+
+# ── 2026-11-02 48h 审查处置（S-01/S-02/S-03/M-02/M-03/M-07/M-08） ──
+# 以下 5 个文件的改动行在集成层没有可达入口，改动行由包内单测覆盖（数字为实测）：
+
+# payload.go — SpawnPayloadBuilder 的端口分配器（纯结构体 + 计算，无 IO）。集成层
+# 走 in-process spawn，只用到 coordination/query 组装，不触碰 messager 端口分配路径；
+# 改动行单测覆盖 100%（含新增的并发分配用例，-race 下验证端口唯一性与稳定性）。
+internal/agent_teams/agent/payload.go
+
+# session_manager.go — BindSession 的 ctx 注入判定。该函数其余步骤依赖真实 TeamBackend
+# （建动态表 + Leader 配置持久化），集成层没有"团队会话绑定"入口；改动行单测 100%
+# （新增「ctx 带其他会话 state 时覆盖注入」用例）。
+internal/agent_teams/agent/session_manager.go
+
+# team_agent.go — TeamAgent 门面（整文件 46%，已知豁免见 .coverage-exempt）。集成层经
+# Swarm 入口间接使用，但不驱动 deliver_input 的轮次边界降级分支；该分支由
+# deliver_input_internal_test.go 2 例直接覆盖（ErrNoActiveLoop 入队 / 其他错误上抛）。
+internal/agent_teams/agent/team_agent.go
+
+# inprocess_handle.go — ForceKill 的等待超时分支需要"不响应取消的真实协程"，集成层
+# 无法构造；由包内单测注入 forceKillTimeout 覆盖（超时返回错误 / 正常退出两条路径）。
+internal/agent_teams/spawn/inprocess_handle.go
+
+# router.go — pregel 8.4/8.5 尚未接入（PregelLoop 不存在，New*Router 生产零调用方），
+# 集成层没有任何入口；改动行单测 100%（nil→error、显式空切片→END、typed-nil 三例）。
+internal/agentcore/graph/pregel/router.go
