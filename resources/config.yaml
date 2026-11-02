@@ -1,31 +1,57 @@
-# UapClaw 配置文件
-# 本文件为最小配置骨架，随领域实现逐步扩展
+# UapClaw 出厂配置模板
+#
+# 约定：
+#   1. 每个键的注释标出「环境变量覆盖名 / 代码默认值 / 默认值来源」，
+#      便于确认该键是否真的生效、默认行为是什么。
+#   2. ${VAR:-default} 形式的占位由代码在读取时展开，保留占位不要替换成示例值。
+#   3. 未在本文件出现的段意味着当前版本未实现（见文件末尾说明）。
 
-# 服务配置
-server:
-  # AgentServer 配置
-  agentserver:
-    host: "0.0.0.0"
-    port: 8765
-  # Gateway 配置
-  gateway:
-    host: "0.0.0.0"
-    port: 8766
+# 前端显示语言：zh（中文）/ en（英文）。代码默认：zh（team/config_loader.go:93-96）
+preferred_language: zh
 
 # 日志配置
 logging:
-  level: "info"
-  format: "json"
-  console_level: "info"
+  # 基础级别：debug/info/warn/error/fatal。环境变量 LOG_LEVEL 仅覆盖控制台级别
+  # 代码默认：info（logger/levels.go:133-137）
+  level: info
+  # 控制台级别。代码默认：跟随 level（logger/levels.go:151-153）
+  console_level: info
   # 各通道独立级别（未配置时跟随 level）
-  common: "info"
-  gateway: "info"
-  channel: "info"
-  agent_server: "info"
-  permissions: "info"
-  agent_core: "info"
-  full: "debug"
+  # common.log：基础设施层（config/workspace/utils 等）。代码默认：跟随 level
+  common: info
+  # gateway.log。代码默认：跟随 level
+  gateway: info
+  # channel.log。代码默认：跟随 level
+  channel: info
+  # agent_server.log（permissions 也会写入此文件）。代码默认：跟随 level
+  agent_server: info
+  # permissions.log。代码默认：跟随 level
+  permissions: info
+  # agent_core.log。代码默认：跟随 level
+  agent_core: info
+  # full.log 汇总文件。代码默认：跟随 level
+  full: info
 
-# 工作区配置
-workspace:
-  path: "~/.uapclaw"
+# Gateway 配置
+gateway:
+  # 监听地址。环境变量 UAPCLAW_GATEWAY_HOST 优先。
+  # 代码默认：127.0.0.1（swarm/gateway/app_gateway.go:773-788）
+  host: 127.0.0.1
+  # 监听端口。环境变量 UAPCLAW_GATEWAY_PORT 优先。
+  # 代码默认：19000（swarm/gateway/app_gateway.go:790-812）
+  port: 19000
+  # SessionMap 作用域：per_chat_bot（同 chat+bot 共享会话）/ per_chat_bot_user（按用户分会话）
+  # 代码默认：per_chat_bot（swarm/gateway/routing/session_map.go:74-80）
+  session_map_scope: per_chat_bot
+
+# 心跳配置
+heartbeat:
+  # 心跳间隔（秒）。环境变量：无。代码默认：60（swarm/gateway/app_gateway.go:216-222）
+  every: 3600
+  # 心跳结果回传通道（如 web）。代码默认：web（swarm/gateway/app_gateway.go:245-255）
+  target: web
+  # 心跳生效时段（本地时间），start <= now < end 时生效；留空表示全天生效
+  # 代码默认：不限制（swarm/gateway/app_gateway.go:206-212）
+  active_hours:
+    start: "08:00"
+    end: "22:00"
