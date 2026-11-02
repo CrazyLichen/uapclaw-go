@@ -155,5 +155,5 @@ func strVal(v any) string {
 // sessionId / messageId 等字段在 Python 侧一律经 str() 收敛，数字也能落成
 // "123"；strVal 只认 string，会让数字形态静默变空串。
 func strScalar(v any) string {
-	return acp.ScalarString(v)
+	return acp.NormalizeJSONRPCID(v)
 }

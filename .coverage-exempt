@@ -100,3 +100,11 @@ internal/swarm/agents/harness/team/team_manager_lifecycle.go
 # 语句是错误传播分支（建表失败、持久化失败），需注入失败的 SQL engine 才能
 # 触达，属「依赖外部运行环境」类豁免。
 internal/agent_teams/agent/session_manager.go
+
+# ── 2026-11-02 2026-11-01 审查处置（M-15） ──
+# team_runner.go — 团队运行器：剩余未覆盖语句全部是「真实团队运行期」路径
+# （RunTeamMember/RunTeamMemberStreaming 的 agent.Invoke、PreRun/PostRun 会话钩子、
+#   FinalizeMember 落库、流式队列消费），需真实 TeamHarness + agent 会话 + 存储才能触达，
+#   属「依赖外部运行环境」类豁免。本次仅把清理 defer 里的单个共享 ctx 拆成两步独立 ctx
+#   （各 8 行），未新增业务分支；拆分后的两个闭包已由既有 runtime 用例覆盖。
+internal/agent_teams/runtime/team_runner.go

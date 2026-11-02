@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1318,4 +1320,146 @@ func pendingResumesLen(sc *StreamController) int {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	return len(sc.pendingInterruptResumes)
+}
+
+// ──── M-16：EnqueueOrStart 与轮次结束标记 ────
+
+// TestStreamController_EnqueueOrStart_无在飞起新轮 无在飞轮次时直接起一轮。
+func TestStreamController_EnqueueOrStart_无在飞起新轮(t *testing.T) {
+	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
+	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.streamQueue = make(chan streambase.Schema, 10)
+
+	if started := sc.EnqueueOrStart(context.Background(), "hello"); !started {
+		t.Fatal("无在飞轮次时应启动新轮")
+	}
+	waitRoundFinished(t, sc)
+}
+
+// TestStreamController_EnqueueOrStart_在飞入队 有在飞轮次时只入队、不启动新轮。
+func TestStreamController_EnqueueOrStart_在飞入队(t *testing.T) {
+	sc := newTestStreamController()
+	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.streamQueue = make(chan streambase.Schema, 10)
+	// 手工构造「在飞但未结束」的轮次
+	inFlight := make(chan struct{})
+	sc.mu.Lock()
+	sc.roundDone = inFlight
+	sc.mu.Unlock()
+
+	if started := sc.EnqueueOrStart(context.Background(), "queued"); started {
+		t.Fatal("有在飞轮次时应只入队")
+	}
+	if got := pendingInputsLen(sc); got != 1 {
+		t.Errorf("待处理输入 = %d, want 1", got)
+	}
+	close(inFlight)
+}
+
+// TestStreamController_EnqueueOrStart_通道已关闭视为无在飞 roundDone 已关闭但未清零时按无在飞处理。
+func TestStreamController_EnqueueOrStart_通道已关闭视为无在飞(t *testing.T) {
+	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
+	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.streamQueue = make(chan streambase.Schema, 10)
+	closed := make(chan struct{})
+	close(closed)
+	sc.mu.Lock()
+	sc.roundDone = closed
+	sc.mu.Unlock()
+
+	if started := sc.EnqueueOrStart(context.Background(), "hello"); !started {
+		t.Fatal("roundDone 已关闭时应起新轮")
+	}
+	waitRoundFinished(t, sc)
+}
+
+// TestStreamController_markRoundFinished 标记本轮结束后 roundDone 为空。
+func TestStreamController_markRoundFinished(t *testing.T) {
+	sc := newTestStreamController()
+	sc.mu.Lock()
+	sc.roundDone = make(chan struct{})
+	sc.mu.Unlock()
+
+	sc.markRoundFinished()
+	if roundDoneSnapshot(sc) != nil {
+		t.Error("markRoundFinished 后 roundDone 应为 nil")
+	}
+	if sc.HasInFlightRound() {
+		t.Error("标记结束后不应有在飞轮次")
+	}
+}
+
+// TestStreamController_HasInFlightRound_已关闭通道 roundDone 已关闭时应判定为无在飞。
+func TestStreamController_HasInFlightRound_已关闭通道(t *testing.T) {
+	sc := newTestStreamController()
+	closed := make(chan struct{})
+	close(closed)
+	sc.mu.Lock()
+	sc.roundDone = closed
+	sc.mu.Unlock()
+
+	if sc.HasInFlightRound() {
+		t.Error("通道已关闭时不应判定为在飞")
+	}
+}
+
+// TestStreamController_EnqueueOrStart_nil接收者 nil 控制器直接返回 false。
+func TestStreamController_EnqueueOrStart_nil接收者(t *testing.T) {
+	var sc *StreamController
+	if sc.EnqueueOrStart(context.Background(), "x") {
+		t.Error("nil 接收者应返回 false")
+	}
+}
+
+// TestStreamController_runOneRound_完成轮询回调 无可续轮且配置了完成轮询回调时必须触发。
+func TestStreamController_runOneRound_完成轮询回调(t *testing.T) {
+	sc := newTestStreamControllerWithBlueprint("coder", atschema.TeamRoleTeammate)
+	sc.resources.Harness = &agentteams.TeamHarness{}
+	sc.streamQueue = make(chan streambase.Schema, 10)
+
+	polled := make(chan struct{}, 1)
+	sc.requestCompletionPollCb = func(context.Context) error {
+		select {
+		case polled <- struct{}{}:
+		default:
+		}
+		return nil
+	}
+
+	sc.startRound(context.Background(), "hello")
+	select {
+	case <-polled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("轮次结束后应触发完成轮询回调")
+	}
+	waitRoundFinished(t, sc)
+}
+
+// TestDetectTaskFailed_结构体载荷直读 生产端产出的 *ControllerOutputPayload 必须被识别。
+func TestDetectTaskFailed_结构体载荷直读(t *testing.T) {
+	mk := func(cop *cschema.ControllerOutputPayload) streambase.Schema {
+		return &streambase.OutputSchema{Payload: cop}
+	}
+
+	// 非 task_failed 类型 → nil
+	if err := detectTaskFailed(mk(&cschema.ControllerOutputPayload{Type: "other"})); err != nil {
+		t.Errorf("非 task_failed 不应报错，实际 %v", err)
+	}
+	// task_failed 且带文本帧 → 返回携带文本的错误
+	cop := &cschema.ControllerOutputPayload{
+		Type: taskFailedPayloadType,
+		Data: []cschema.DataFrame{&cschema.TextDataFrame{Text: "boom"}},
+	}
+	err := detectTaskFailed(mk(cop))
+	if err == nil {
+		t.Fatal("task_failed 应返回错误")
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Errorf("错误应携带文本，实际 %v", err)
+	}
+	// typed nil 指针 → nil（不 panic）
+	var nilCop *cschema.ControllerOutputPayload
+	if err := detectTaskFailed(&streambase.OutputSchema{Payload: nilCop}); err != nil {
+		t.Errorf("typed nil 载荷应返回 nil，实际 %v", err)
+	}
 }

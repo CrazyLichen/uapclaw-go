@@ -16,3 +16,19 @@ internal/agentcore/foundation/llm/schema/tool_call.go
 # 碎片帧守卫；该分支需真实模型流式帧才能触发，由 llm tag 的 team 套件覆盖
 # （不入集成门禁），单测在 deep_adapter_team_chunktomap_test.go。
 internal/swarm/server/adapter/deep_adapter_team.go
+
+# ── 2026-11-02 2026-11-01 审查处置（S-04/M-15/M-16/T-07） ──
+
+# a2a_channel.go — A2A 入站通道（HTTP 服务 + pending 配对）。集成层没有 A2A 客户端链路
+# （tests/integration 下无 A2A 用例），本次改动是停机顺序、终态保底槽与启停状态机，
+# 全部由包内单测覆盖（Start 幂等/非法路由/Stop 启动窗口/终态覆盖/队列满唤醒）。
+internal/swarm/gateway/channel_manager/protocol/a2a/a2a_channel.go
+
+# stream_controller.go — 团队轮次调度器。集成层 team 套件走的是 TeamAgent/Swarm 入口，
+# 不直接驱动 StreamController 的轮次收尾路径；本次改动为「判断+入队/判断+快照」合并持锁，
+# 由包内单测覆盖（EnqueueOrStart 三条分支、markRoundFinished、轮询回调）。
+internal/agent_teams/agent/stream_controller.go
+
+# team_runner.go — 团队运行器。已知豁免（见 .coverage-exempt）：真实团队运行期路径需
+# TeamHarness + agent 会话 + 存储；本次仅把清理 defer 的共享 ctx 拆成两步独立 ctx。
+internal/agent_teams/runtime/team_runner.go
