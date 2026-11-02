@@ -35,8 +35,8 @@ func TestCanceled(t *testing.T) {
 		t.Fatal("超时不应被判定为取消（需按错误上报，对齐 Python TimeoutError 属 Exception）")
 	}
 
-	if Canceled(nil) {
-		t.Fatal("nil ctx 不应判定为取消")
+	if Canceled(context.TODO()) {
+		t.Fatal("TODO ctx 不应判定为取消")
 	}
 }
 

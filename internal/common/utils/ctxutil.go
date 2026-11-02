@@ -22,10 +22,8 @@ import (
 //
 // 注意：不要用 errors.Is(err, context.Canceled) 替代本判定——LLM 客户端的
 // WrapError 历史上用 %v 拼串，错误链可能已断（见 openai/client.go）。
+// 调用方必须传非 nil ctx（Go 惯例）。
 func Canceled(ctx context.Context) bool {
-	if ctx == nil {
-		return false
-	}
 	return errors.Is(ctx.Err(), context.Canceled)
 }
 
