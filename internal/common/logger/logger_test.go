@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -725,5 +726,87 @@ func TestLogLine_整行形态(t *testing.T) {
 	// Info(...).Msg(...) 比 runtime.Caller(0) 晚 1~10 行
 	if gotLine < callLine+1 || gotLine > callLine+10 {
 		t.Errorf("caller 行号 = %d，期望落在 (%d, %d] 区间", gotLine, callLine+1, callLine+10)
+	}
+}
+
+// TestLogLine_文本形态仍脱敏 验证换成文本格式后敏感字段仍被掩码
+func TestLogLine_文本形态仍脱敏(t *testing.T) {
+	dir := t.TempDir()
+	resetGlobal()
+	if err := Setup(WithOutputDir(dir)); err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer Close()
+
+	Info(ComponentCommon).Str("password", "secret123").Msg("auth probe")
+
+	data, _ := os.ReadFile(filepath.Join(dir, "common.log"))
+	content := string(data)
+	if strings.Contains(content, "secret123") {
+		t.Errorf("敏感值未脱敏: %q", content)
+	}
+	if !strings.Contains(content, "******") {
+		t.Errorf("未出现掩码: %q", content)
+	}
+}
+
+// TestLogLine_换行被转义 验证消息里的换行不破坏「一行一条」
+func TestLogLine_换行被转义(t *testing.T) {
+	dir := t.TempDir()
+	resetGlobal()
+	if err := Setup(WithOutputDir(dir)); err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer Close()
+
+	Info(ComponentCommon).Msg("line1\nline2")
+
+	data, _ := os.ReadFile(filepath.Join(dir, "common.log"))
+	// 逐行扫描：包含 line1 的行必须恰好一条，且内容里的换行是字面量
+	var hits int
+	var hitLine string
+	for _, l := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if strings.Contains(l, "line1") {
+			hits++
+			hitLine = l
+		}
+	}
+	if hits != 1 {
+		t.Fatalf("期望恰好 1 行包含 line1，实际 %d 行: %q", hits, string(data))
+	}
+	if !strings.Contains(hitLine, `line1\nline2`) {
+		t.Errorf("换行未转义为字面量: %q", hitLine)
+	}
+}
+
+// TestConsole_NoColor 验证 NO_COLOR 环境变量关闭控制台着色
+func TestConsole_NoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("创建管道失败: %v", err)
+	}
+	os.Stderr = w
+
+	dir := t.TempDir()
+	resetGlobal()
+	if setupErr := Setup(WithOutputDir(dir)); setupErr != nil {
+		os.Stderr = origStderr
+		t.Fatalf("Setup 失败: %v", setupErr)
+	}
+	Info(ComponentCommon).Msg("color probe")
+	Close()
+
+	_ = w.Close()
+	os.Stderr = origStderr
+
+	out, _ := io.ReadAll(r)
+	if strings.Contains(string(out), "\x1b[") {
+		t.Errorf("NO_COLOR 下仍有着色序列: %q", string(out))
+	}
+	if !strings.Contains(string(out), "[INFO]") {
+		t.Errorf("控制台未输出级别栏: %q", string(out))
 	}
 }
