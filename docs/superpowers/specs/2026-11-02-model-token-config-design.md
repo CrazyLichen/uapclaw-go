@@ -338,30 +338,66 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 
 ## 9. 测试计划
 
+原则：**每个改动点都必须有对应测试**，不允许出现「改了但没断言」的项。下表按 §5 的编号逐一映射。
+
 ### 9.1 单元测试（Go）
 
-| 对象 | 用例 |
-|---|---|
-| `buildModelsDefaultsFromFrontend` | 两字段正常写入 mcc；非法值 → `ConfigBadRequest`；未填 → 不产生键 |
-| `handleModelsList` | 两字段回填；配置缺失时不出现在结果里（前端显示空） |
-| `deepAgentContextEngineConfig` | 多条目收集成 map；同模型冲突按 D10；无模型段时不 panic；`configBase=nil` 回退 |
-| `buildModelFromEntry` | `max_output_tokens` → `MaxTokens`；`0` → nil；进 `Extra` 的键集合不含这两项 |
-| `ContextProcessorRail.Init` | window=32K/128K/256K/512K 四档 × 五个 processor 的阈值（对照 §6.3/§6.4）；ratio 缺省时等于绝对值；`target>=trigger` 兜底；yaml 绝对值覆盖后仍被 min 收口（§6.6） |
-| `ResolveContextMax` | 既有用例保持（4 级优先级不变） |
-| 百分比 | `input_tokens` 优先、回退 `total_tokens`、再回退本地估算 |
+| 改动点 | 测试对象 / 文件 | 断言要点 |
+|---|---|---|
+| B1 | `config_apply_test.go` `buildModelsDefaultsFromFrontend` | 两字段正常写入 `mcc`；`"abc"` / `-1` / `0` 的行为（0 视为未配置、负数与非整数 → `ConfigBadRequest`）；未填时不产生键（保证老配置字节不变） |
+| B1 | 同上 + `mergeModelsForReplaceAll` | `origin_index` 命中且值未变时保留原始 YAML 值（含 `${...}` 占位符）；值变化时覆写；新增条目不产生 `origin_index` |
+| B1 | `web_handlers_test.go` `models.replace_all` | 端到端写盘：`config.yaml` 的 `models.defaults[0].model_client_config` 出现两键且类型为 int |
+| B2 | `web_handlers_test.go` `handleModelsList` | 两字段回填为数字；配置无该键时结果不含该字段（前端显示空）；`origin_index` 仍正确 |
+| B3 | `deep_adapter_test.go` `buildModelFromEntry` | 构造 `mcc` 含两键 → `ModelClientConfig.Extra` **不含**它们（白名单生效） |
+| B4 | 同上 | `max_output_tokens=8192` → `ModelRequestConfig.MaxTokens != nil && *==8192`；缺省/0 → `nil`；同时验证 `temperature`/`top_p` 未被破坏 |
+| B5 | `deep_adapter_test.go` `deepAgentContextEngineConfig` | 多条目 → `ModelContextWindowTokens` 完整 map；同 `model_name` 冲突按 D10（`is_default` 优先）+ `Warn`；`model_name` 为空跳过；`configBase=nil` 不 panic；`react` 段缺失返回 nil（保持现状） |
+| B5 | 同上 | `ContextWindowTokens`（优先级 1）始终为 0，不被写入 |
+| B6 | `stream_event_emit_test.go` | 分母取 ceConfig 解析值（32K 用例）；分子优先 `InputTokens`，缺失回退 `TotalTokens`；`rate` 精度与 0 保护（分母 0 时不 panic） |
+| B7 | `session_model_context_test.go` `statMessages` | 有 `InputTokens` → 用它；`InputTokens=0` 但有 `TotalTokens` → 用 total；无 usage → 本地估算；`GetContextUsage` 的 `usage_percent` 与上述一致 |
+| B8 | `context_processor_rail_test.go` | window=32K/128K/256K/512K × 五个 processor 的最终阈值（对照 §6.3/§6.4）；ratio 缺省 → 等于绝对值；yaml 绝对值覆盖后**仍**被 min 收口（§6.6 顺序回归用例）；`target >= trigger` 兜底 + `Warn`；不参与收口的字段（`large_message_threshold` 等）值不变 |
+| A1 | `deep_adapter_test.go` | 冷启动（CreateInstance 路径）与热重载（`makeDeepAgentConfig`）产出同一 `ContextEngineConfig`；热重载后窗口值不丢 |
+| A2 | `deep_adapter_rails_test.go` | `enabled=true` 且 yaml 有四段 → rail 的 `userProcessors` 含 5 个 `ProcessorSpec`（含新增 `full_compact_processor_config`）；`enabled=false` → rail 不注册 |
+| A3 | `team/config_loader_test.go`、`team/runtime_inheritance_test.go` | 成员默认模型字典保留两键；成员 rail 的窗口解析与主 Agent 一致 |
+| T1 | `internal/common/config/config_yaml_parity_test.go` | 模板含 `enabled: true`、`enable_reload`、四段、2 个 ratio、models 段 2 个 token 键；值与 Python 模板逐字段一致（读 `testdata` 快照对比） |
+| — | `context_utils_test.go` `ResolveContextMax` | 既有 4 级优先级用例全部保持通过（本次不改语义） |
 
-### 9.2 集成测试
+### 9.2 集成测试（`tests/integration/`）
 
-放 `tests/integration/`，须真实跨 ≥3 个 internal 二级子系统以满足 `cmd/integration-audit` 两层门禁（记忆：审计按调用跨度 + 覆盖交叉验证）：
+必须真实跨 ≥3 个 internal 二级子系统以满足 `cmd/integration-audit` 两层门禁：
 
-- 链路：`web`（`models.replace_all` 写入 config.yaml）→ `swarm/server/adapter`（`deepAgentContextEngineConfig` 装配）→ `agentcore/context_engine`（`ResolveContextMax` + 中间件阈值）→ `agentcore/foundation/llm`（请求体 `max_tokens`）
-- 断言：写入 32K/8K → `context.usage` 事件 `context_max=32000`；prompt capture 里请求体 `max_tokens=8192`；`chat.usage_summary` 的 `context_window_tokens=32000`
-- 阈值断言用例的 fixture **必须显式写 `react.context_engine_config.enabled: true`**，否则 rail 不注册、阈值无从观测（`deep_adapter_rails.go:935`）
-- mock 只在边界（LLM HTTP 端点用 httptest），不 mock adapter / context engine
+**用例 1：写入 → 落盘 → 回填（web 子系统内部闭环 + config）**
+- 调 `models.replace_all` 写入 `max_input_tokens=32000` / `max_output_tokens=8192`
+- 断言：磁盘 `config.yaml` 值正确、`models.list` 回填一致、`origin_index` 未错位
 
-### 9.3 门禁
+**用例 2：装配 → 显示（web → swarm/server/adapter → agentcore/context_engine）**
+- fixture：`enabled: true` + 模型 32K
+- 断言：`context.usage` 事件 `context_max=32000`；`chat.usage_summary` 的 `context_window_tokens=32000`、`usage_percent` 用 `input_tokens` 计算
+- 反向用例：不写 `max_input_tokens` → `context_max=200000`（兜底链未破）
 
-- 覆盖率 ≥85%，「改动行」门禁 85%/5%（记忆中的既有口径）
+**用例 3：阈值联动（adapter → context_engine processor）**
+- fixture：`enabled: true`、32K、ratio 0.85/0.55
+- 构造接近阈值的历史消息 → 断言 `RoundLevelCompressor` 在 27200 触发（而非 230000）、压缩后目标 17600；`MessageSummaryOffloader` 用 27200（yaml 的 60000 被 min 收口）
+- 关闭 `enabled` 的对照用例：同样历史下不发生压缩
+
+**用例 4：输出上限进请求体（adapter → agentcore/foundation/llm）**
+- 用 `httptest` 假 LLM 端点捕获请求体
+- 断言：`max_tokens=8192`；再构造一个显式 `WithInvokeMaxTokens(1024)` 的调用 → 请求体为 1024（请求级优先）
+
+约束：
+- mock 只在边界（LLM HTTP 端点），不 mock adapter / context engine / processor
+- 所有阈值用例的 fixture **必须显式 `react.context_engine_config.enabled: true`**，否则 rail 不注册、阈值无从观测（`deep_adapter_rails.go:935`）
+- 用例 3 与用例 4 需分属不同目录以形成独立覆盖，避免单一目录覆盖不足被第二层门禁判为灰区
+
+### 9.3 前端验证（F1-F3）
+
+仓库无前端单测框架（`package.json` 无 test script），验证方式：
+- `tsc --noEmit` + `vite build` 通过
+- 手工冒烟清单：填写 → 保存 → 刷新回显 → yaml 落盘值正确 → 非法值（负数/非数字）被拦并有提示 → 中英文文案都显示
+
+### 9.4 门禁
+
+- 覆盖率 ≥85%，「改动行」门禁 85%/5%
+- 触及 `internal/common/config`、`internal/swarm/gateway/...`、`internal/swarm/server/adapter`、`internal/agentcore/context_engine`、`internal/agentcore/harness/rails` 等包时，需保证这些包整体覆盖率不掉线
 - 远端 CI 四个 job 全绿（Build / Lint / Unit / Integration）
 
 ## 10. 不做（YAGNI）
@@ -385,11 +421,13 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 
 ## 12. 实施顺序（供计划阶段参考）
 
-1. 后端读写闭环（B1/B2/B3/B4 + T1）——不涉及行为，先跑通「配得上、读得出、回填得对」
-2. 装配层（B5 + A1）——窗口值进入 `ModelContextWindowTokens`，`context.usage` 分母随之正确
-3. 百分比口径（B6/B7）
-4. 阈值联动（B8 + A2 + D9 的 FullCompact 段）
-5. 多装配点补齐（A3）
-6. 前端渲染（F1/F2/F3）
-7. Python 同构（P1-P6）
-8. 测试补齐与 CI 全绿
+每步**随改随写单测**（§9.1 对应行），不留到最后补：
+
+1. 后端读写闭环（B1/B2/B3/B4 + T1）——不涉及行为，先跑通「配得上、读得出、回填得对」；配 §9.1 的 B1-B4、T1 行 + 集成用例 1
+2. 装配层（B5 + A1）——窗口值进入 `ModelContextWindowTokens`，`context.usage` 分母随之正确；配 B5/A1 行 + 集成用例 2
+3. 百分比口径（B6/B7）——配 B6/B7 行 + 集成用例 2 的口径断言
+4. 阈值联动（B8 + A2 + D9 的 FullCompact 段）——配 B8/A2 行 + 集成用例 3
+5. 多装配点补齐（A3）——配 A3 行
+6. 前端渲染（F1/F2/F3）——配 §9.3 冒烟清单
+7. Python 同构（P1-P6）——Python 侧测试同步补
+8. 全量回归 + CI 四绿（§9.4）
