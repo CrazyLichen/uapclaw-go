@@ -12,6 +12,7 @@ import (
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
@@ -331,4 +332,59 @@ func (s *DeepAgentStreamE2ESuite) TestStream_Steer注入() {
 	s.Require().NotNil(secondCall, "第 2 次调用记录应存在")
 	_, hasSQ := secondCall.Inputs["_steering_queue"]
 	s.True(hasSQ, "第 2 轮内层调用 inputs 应包含 _steering_queue")
+}
+
+// TestStream_工具结果事件为JSON文本 回归：tool_result 的 result 字段曾是
+// fmt.Sprintf("%v")，map 会渲染成 `map[...]`；现在走 utils.PyText → 紧凑 JSON。
+//
+// 与单测 TestEmitToolResult_结果转JSON 的分工：那条只钉 emitToolResult 的输出，
+// 这条钉「agent 跑一轮 → rail 发出事件 → 调用方在流里收到的形态」，防止有人在
+// 链路另一头改回 %v。
+func (s *DeepAgentStreamE2ESuite) TestStream_工具结果事件为JSON文本() {
+	ctx := s.Ctx
+
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("read_file", `{"path": "note.txt"}`),
+		mockllm.CreateTextResponse("完成"),
+	)
+
+	sess := s.NewTestSession("itest-pytext-stream")
+	s.Require().NoError(sess.PreRun(ctx))
+	defer sess.PostRun(ctx)
+
+	agent, err := s.NewDeepAgentForTest(ctx, hconfig.CreateDeepAgentParams{
+		ToolInstances: []tool.Tool{newReadFileTool()},
+		Rails:         []agentinterfaces.AgentRail{commrails.NewJiuClawStreamEventRail()},
+		MaxIterations: 3,
+	})
+	s.Require().NoError(err)
+
+	ch, err := agent.Stream(ctx, map[string]any{"query": "读取 note.txt"}, agentinterfaces.WithSession(sess))
+	s.Require().NoError(err, "Stream 不应返回错误")
+
+	var resultText string
+	for chunk := range ch {
+		var out stream.OutputSchema
+		switch v := chunk.(type) {
+		case stream.OutputSchema:
+			out = v
+		case *stream.OutputSchema:
+			if v == nil {
+				continue
+			}
+			out = *v
+		default:
+			continue
+		}
+		if out.Type != "tool_result" {
+			continue
+		}
+		payload, _ := out.Payload.(map[string]any)
+		toolResult, _ := payload["tool_result"].(map[string]any)
+		resultText, _ = toolResult["result"].(string)
+	}
+
+	s.Require().NotEmpty(resultText, "应在流里收到 tool_result 事件")
+	s.NotContains(resultText, "map[", "result 不应是 Go 的 map[...] 形态")
+	s.JSONEq(`{"content":"文件 note.txt 的内容: hello world"}`, resultText)
 }

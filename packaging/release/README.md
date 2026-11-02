@@ -84,7 +84,7 @@ third_party/
 | 现象 | 处理 |
 | --- | --- |
 | Linux 提示 `Permission denied` | `chmod +x uapclaw` |
-| 提示端口被占用 | 换端口：`./uapclaw app --port 19001`，或设 `UAPCLAW_GATEWAY_PORT` |
+| 提示端口被占用 | 换端口：`./uapclaw app --port 19001`，或设 `UAPCLAW_WEB_PORT` |
 | 浏览器没有自动打开 | 手动访问 <http://127.0.0.1:19000>；无桌面环境时加 `--no-browser` |
 | 界面返回 404 / 白屏 | 确认启动命令为 `uapclaw app`（`app` 子命令才带 Web 界面） |
 | 模型调用失败 | 到「配置」页检查 API Base / Key / 模型名，并用「校验」按钮验证 |

@@ -976,6 +976,13 @@ func handleModelsList() RPCHandlerFunc {
 				if v, ok := mcc["client_provider"].(string); ok {
 					flat["model_provider"] = v
 				}
+				// 输入/输出上限：0 表示未配置，不回填（前端显示为空）
+				if n, perr := parseInt(mcc["max_input_tokens"]); perr == nil && n > 0 {
+					flat["max_input_tokens"] = n
+				}
+				if n, perr := parseInt(mcc["max_output_tokens"]); perr == nil && n > 0 {
+					flat["max_output_tokens"] = n
+				}
 			}
 
 			// 从 model_config_obj 提取

@@ -718,6 +718,11 @@
       "onlyOneInGroup": "同模型名仅一个，自动默认",
       "apiKeyRequired": "API Key 为必填项，请填写后再保存",
       "apiKeyPlaceholder": "本地模型无需 API Key 可随意填写，如 sk-1234",
+      "maxInputTokens": "输入上限（token）",
+      "maxInputTokensPlaceholder": "如 32000，0 或留空表示未配置",
+      "maxOutputTokens": "输出上限（token）",
+      "maxOutputTokensPlaceholder": "如 8192，0 或留空表示不限制",
+      "tokenNotInteger": "请输入非负整数",
       "apiBaseRequired": "API Base URL 为必填项，请填写后再保存",
       "apiBaseUrlInvalid": "API Base URL 必须以 http:// 或 https:// 开头",
       "modelNameTooLong": "模型名称过长，请控制在 100 字符以内",
@@ -1212,6 +1217,10 @@
     "notPreviewable": "该文件无法预览，仅支持 Markdown/JSON（.md/.mdx/.json）文件"
   },
   "chatUi": {
+    "thinking": {
+      "streaming": "正在思考",
+      "done": "思考过程"
+    },
     "copyMessage": "复制消息",
     "stopReading": "停止朗读",
     "readMessage": "朗读消息",

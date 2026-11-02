@@ -151,14 +151,28 @@ func NewSanitizerWriter(underlying io.Writer, sanitizer *Sanitizer) io.Writer {
 
 // Write 实现 io.Writer 接口，写入前对内容进行脱敏。
 // 脱敏失败时直接写入原文，绝不因脱敏异常而阻止日志输出。
+//
+// 注意：脱敏会改变文本长度，但仍必须按 io.Writer 契约返回 len(p)，
+// 否则上层（zerolog）会把长度不一致判定为 short write 并丢弃该条日志。
 func (w *sanitizerWriter) Write(p []byte) (n int, err error) {
 	// 脱敏异常时直接写入原文
 	defer func() {
 		if r := recover(); r != nil {
-			n, err = w.underlying.Write(p)
+			n, err = w.writeRaw(p)
 		}
 	}()
 
 	sanitized := w.sanitizer.Sanitize(string(p))
-	return w.underlying.Write([]byte(sanitized))
+	if _, writeErr := w.underlying.Write([]byte(sanitized)); writeErr != nil {
+		return 0, writeErr
+	}
+	return len(p), nil
+}
+
+// writeRaw 写入原始字节（脱敏异常时的兜底路径），按 io.Writer 契约返回 len(p)。
+func (w *sanitizerWriter) writeRaw(p []byte) (int, error) {
+	if _, err := w.underlying.Write(p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }

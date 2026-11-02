@@ -719,6 +719,11 @@
       "onlyOneInGroup": "Only one in group, auto-default",
       "apiKeyRequired": "API Key is required, please fill it in before saving",
       "apiKeyPlaceholder": "Local models don't need an API Key — enter any value, e.g. sk-1234",
+      "maxInputTokens": "Max input tokens",
+      "maxInputTokensPlaceholder": "e.g. 32000; 0 or empty = unset",
+      "maxOutputTokens": "Max output tokens",
+      "maxOutputTokensPlaceholder": "e.g. 8192; 0 or empty = unlimited",
+      "tokenNotInteger": "Please enter a non-negative integer",
       "apiBaseRequired": "API Base URL is required, please fill it in before saving",
       "apiBaseUrlInvalid": "API Base URL must start with http:// or https://",
       "modelNameTooLong": "Model name is too long, please keep it under 100 characters",
@@ -1213,6 +1218,10 @@
     "notPreviewable": "This file cannot be previewed. Only Markdown/JSON (.md/.mdx/.json) files are supported."
   },
   "chatUi": {
+    "thinking": {
+      "streaming": "Thinking…",
+      "done": "Thought process"
+    },
     "copyMessage": "Copy message",
     "stopReading": "Stop reading",
     "readMessage": "Read message",

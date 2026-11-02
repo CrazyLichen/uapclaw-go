@@ -2,10 +2,12 @@ package gateway
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -23,8 +25,21 @@ import (
 )
 
 // newTestAppGatewayServer 创建测试用 AppGatewayServer
+// pickFreePort 申请一个当前空闲的 TCP 端口（监听后立即释放）
+func pickFreePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer func() { _ = l.Close() }()
+	addr, ok := l.Addr().(*net.TCPAddr)
+	require.True(t, ok, "监听地址应可转为 *net.TCPAddr")
+	return addr.Port
+}
+
 func newTestAppGatewayServer(t *testing.T) *AppGatewayServer {
 	t.Helper()
+	// 绑到空闲端口，避免与宿主机既有服务或其他用例抢默认的 19000
+	t.Setenv("UAPCLAW_WEB_PORT", strconv.Itoa(pickFreePort(t)))
 	cfg, err := config.New("")
 	require.NoError(t, err)
 	transport := transport.NewChannelTransport()
@@ -113,38 +128,35 @@ func TestAppGatewayServer_Stop(t *testing.T) {
 }
 
 func TestDefaultHostPort(t *testing.T) {
-	// 空配置使用默认值
-	assert.Equal(t, "127.0.0.1", defaultHost(nil))
-	assert.Equal(t, 19000, defaultPort(nil))
-
-	// 配置中的值
-	cfg, _ := config.New("")
-	assert.Equal(t, "127.0.0.1", defaultHost(cfg))
-	assert.Equal(t, 19000, defaultPort(cfg))
+	// 环境变量为空时使用默认值（与 Python 一致：不从 config.yaml 读取）
+	t.Setenv("UAPCLAW_WEB_HOST", "")
+	t.Setenv("UAPCLAW_WEB_PORT", "")
+	assert.Equal(t, "127.0.0.1", defaultHost())
+	assert.Equal(t, 19000, defaultPort())
 }
 
 func TestDefaultHost_环境变量优先(t *testing.T) {
-	_ = os.Setenv("UAPCLAW_GATEWAY_HOST", "0.0.0.0")
-	defer func() { _ = os.Unsetenv("UAPCLAW_GATEWAY_HOST") }()
-	assert.Equal(t, "0.0.0.0", defaultHost(nil))
+	_ = os.Setenv("UAPCLAW_WEB_HOST", "0.0.0.0")
+	defer func() { _ = os.Unsetenv("UAPCLAW_WEB_HOST") }()
+	assert.Equal(t, "0.0.0.0", defaultHost())
 }
 
 func TestDefaultPort_环境变量优先(t *testing.T) {
-	_ = os.Setenv("UAPCLAW_GATEWAY_PORT", "8080")
-	defer func() { _ = os.Unsetenv("UAPCLAW_GATEWAY_PORT") }()
-	assert.Equal(t, 8080, defaultPort(nil))
+	_ = os.Setenv("UAPCLAW_WEB_PORT", "8080")
+	defer func() { _ = os.Unsetenv("UAPCLAW_WEB_PORT") }()
+	assert.Equal(t, 8080, defaultPort())
 }
 
 func TestDefaultPort_环境变量无效(t *testing.T) {
-	_ = os.Setenv("UAPCLAW_GATEWAY_PORT", "not-a-number")
-	defer func() { _ = os.Unsetenv("UAPCLAW_GATEWAY_PORT") }()
-	assert.Equal(t, 19000, defaultPort(nil))
+	_ = os.Setenv("UAPCLAW_WEB_PORT", "not-a-number")
+	defer func() { _ = os.Unsetenv("UAPCLAW_WEB_PORT") }()
+	assert.Equal(t, 19000, defaultPort())
 }
 
 func TestDefaultPort_环境变量零值(t *testing.T) {
-	_ = os.Setenv("UAPCLAW_GATEWAY_PORT", "0")
-	defer func() { _ = os.Unsetenv("UAPCLAW_GATEWAY_PORT") }()
-	assert.Equal(t, 19000, defaultPort(nil))
+	_ = os.Setenv("UAPCLAW_WEB_PORT", "0")
+	defer func() { _ = os.Unsetenv("UAPCLAW_WEB_PORT") }()
+	assert.Equal(t, 19000, defaultPort())
 }
 
 func TestAppGatewayServer_StartStop(t *testing.T) {
@@ -168,8 +180,8 @@ func TestAppGatewayServer_OnConfigSaved(t *testing.T) {
 // → Stop 逆序。GATEWAY_PORT 用空闲端口 19099（t.Setenv 结束自动还原；0 会被
 // Atoi 的 p>0 拒绝）。
 func TestAppGatewayServer_空路由装配不panic(t *testing.T) {
-	t.Setenv("GATEWAY_HOST", "127.0.0.1")
-	t.Setenv("GATEWAY_PORT", "19099")
+	t.Setenv("UAPCLAW_GATEWAY_HOST", "127.0.0.1")
+	t.Setenv("UAPCLAW_GATEWAY_PORT", "19099")
 	gs := newTestAppGatewayServer(t)
 
 	require.NoError(t, gs.Start(context.Background()))
@@ -358,19 +370,22 @@ func TestNewAppGatewayServer_A2A默认关闭(t *testing.T) {
 
 // ────────────── 覆盖率补齐：配置读取/出站发布/连接重试（file-api 迁移同批） ──────────────
 
-// TestDefaultHostPort_配置文件 覆盖 config.yaml gateway.host / gateway.port 分支
-func TestDefaultHostPort_配置文件(t *testing.T) {
+// TestDefaultHostPort_忽略配置文件 验证监听地址/端口不再从 config.yaml 读取
+// （对齐 Python：只由命令行参数与环境变量决定）
+func TestDefaultHostPort_忽略配置文件(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(cfgFile, []byte("gateway:\n  host: 10.0.0.5\n  port: 19100\n"), 0o644))
 	cfg, err := config.New(cfgFile)
 	require.NoError(t, err)
-	_, err = cfg.Load()
-	require.NoError(t, err)
-	t.Setenv("UAPCLAW_GATEWAY_HOST", "")
-	t.Setenv("UAPCLAW_GATEWAY_PORT", "")
-	assert.Equal(t, "10.0.0.5", defaultHost(cfg))
-	assert.Equal(t, 19100, defaultPort(cfg))
+	if _, loadErr := cfg.Load(); loadErr != nil {
+		t.Fatalf("加载配置失败: %v", loadErr)
+	}
+	t.Setenv("UAPCLAW_WEB_HOST", "")
+	t.Setenv("UAPCLAW_WEB_PORT", "")
+	// 即使配置文件写了 gateway.host/port，也应返回默认值
+	assert.Equal(t, "127.0.0.1", defaultHost())
+	assert.Equal(t, 19000, defaultPort())
 }
 
 // TestMakeConfigRawReader 覆盖 nil 配置与正常读取两条分支

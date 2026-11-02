@@ -29,6 +29,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { parseTeamEventMessage } from './teamEventUtils';
 import { TeamMemberAvatar } from '../TeamMemberAvatar';
+import { ThinkingBlock } from './ThinkingBlock';
 
 export function MarkdownMessageBody({
   content,
@@ -317,6 +318,11 @@ export function MessageItem({
       stop();
     });
   }, [stopGeneratedAudio, stop]);
+
+  // 思考过程块（reasoning_content）：独立条目，先于正文/工具卡片按时间线展示
+  if (message.isThinking) {
+    return <ThinkingBlock content={content} isStreaming={Boolean(isStreaming)} />;
+  }
 
   // 工具调用/结果消息
   if (role === 'tool') {

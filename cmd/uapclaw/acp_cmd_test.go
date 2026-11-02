@@ -28,26 +28,26 @@ func TestResolveAcpGatewayURL(t *testing.T) {
 
 	// 3. env GATEWAY_URL
 	assert.Equal(t, "ws://envurl:3/acp",
-		resolveAcpGatewayURL("", "", mapEnv(map[string]string{"GATEWAY_URL": "ws://envurl:3/acp"})))
+		resolveAcpGatewayURL("", "", mapEnv(map[string]string{"UAPCLAW_GATEWAY_URL": "ws://envurl:3/acp"})))
 
 	// 4. host/port 组装默认
 	assert.Equal(t, "ws://127.0.0.1:19001/acp",
 		resolveAcpGatewayURL("", "", nil))
 	assert.Equal(t, "ws://10.0.0.1:20001/acp",
-		resolveAcpGatewayURL("", "", mapEnv(map[string]string{"GATEWAY_HOST": "10.0.0.1", "GATEWAY_PORT": "20001"})))
+		resolveAcpGatewayURL("", "", mapEnv(map[string]string{"UAPCLAW_GATEWAY_HOST": "10.0.0.1", "UAPCLAW_GATEWAY_PORT": "20001"})))
 
 	// 显式旗标压过 env
 	assert.Equal(t, "ws://explicit:1/acp",
 		resolveAcpGatewayURL("ws://explicit:1/acp", "ws://legacy:2/acp",
-			mapEnv(map[string]string{"GATEWAY_URL": "ws://envurl:3/acp"})))
+			mapEnv(map[string]string{"UAPCLAW_GATEWAY_URL": "ws://envurl:3/acp"})))
 	// 兼容旗标压过 env
 	assert.Equal(t, "ws://legacy:2/acp",
 		resolveAcpGatewayURL("", "ws://legacy:2/acp",
-			mapEnv(map[string]string{"GATEWAY_URL": "ws://envurl:3/acp"})))
+			mapEnv(map[string]string{"UAPCLAW_GATEWAY_URL": "ws://envurl:3/acp"})))
 	// env URL 压过 host/port
 	assert.Equal(t, "ws://envurl:3/acp",
 		resolveAcpGatewayURL("", "",
-			mapEnv(map[string]string{"GATEWAY_URL": "ws://envurl:3/acp", "GATEWAY_HOST": "10.0.0.1"})))
+			mapEnv(map[string]string{"UAPCLAW_GATEWAY_URL": "ws://envurl:3/acp", "UAPCLAW_GATEWAY_HOST": "10.0.0.1"})))
 }
 
 // TestNewAcpCmd_旗标注册 旗标与 RunE 接线。

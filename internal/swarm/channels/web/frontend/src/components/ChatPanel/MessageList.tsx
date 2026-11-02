@@ -160,7 +160,9 @@ function buildRenderItems(items: TimelineItem[], isTeamMode: boolean): RenderIte
       continue;
     }
 
-    if (item.message.role === 'user') {
+    // 思考块与用户消息一样独占一段：避免被 flushCurrentSegment 排到工具卡片之后，
+    // 保证「思考 → 正文/工具」的真实先后顺序
+    if (item.message.isThinking || item.message.role === 'user') {
       flushSegmentIfPresent();
       renderItems.push({
         type: 'message',

@@ -612,6 +612,30 @@ func buildModelsDefaultsFromFrontend(ctx context.Context, rawModels any, cryptoP
 			verifySSL = v
 		}
 
+		// max_input_tokens / max_output_tokens：0 表示未配置，可覆盖旧值。
+		// 与 Python 不同（Python 侧暂无此字段），本实现按设计 D2/D3 落位 model_client_config。
+		maxInputTokens := 0
+		if v, ok := itemMap["max_input_tokens"]; ok && v != nil && fmt.Sprint(v) != "" {
+			n, perr := parseInt(v)
+			if perr != nil || n < 0 {
+				return nil, &ConfigBadRequest{
+					Message: fmt.Sprintf("models[%d].max_input_tokens 必须是非负整数", idx),
+				}
+			}
+			maxInputTokens = n
+		}
+
+		maxOutputTokens := 0
+		if v, ok := itemMap["max_output_tokens"]; ok && v != nil && fmt.Sprint(v) != "" {
+			n, perr := parseInt(v)
+			if perr != nil || n < 0 {
+				return nil, &ConfigBadRequest{
+					Message: fmt.Sprintf("models[%d].max_output_tokens 必须是非负整数", idx),
+				}
+			}
+			maxOutputTokens = n
+		}
+
 		entry := map[string]any{
 			"model_client_config": map[string]any{
 				"model_name":      modelName,
@@ -620,6 +644,10 @@ func buildModelsDefaultsFromFrontend(ctx context.Context, rawModels any, cryptoP
 				"client_provider": modelProvider,
 				"timeout":         timeout,
 				"verify_ssl":      verifySSL,
+				// 输入上限（token）：上下文窗口分母来源；0 = 未配置
+				"max_input_tokens": maxInputTokens,
+				// 输出上限（token）：请求 max_tokens 默认值；0 = 不限制
+				"max_output_tokens": maxOutputTokens,
 			},
 			"model_config_obj": map[string]any{
 				"temperature": temperature,

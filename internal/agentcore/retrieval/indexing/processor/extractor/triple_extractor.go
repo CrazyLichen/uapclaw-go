@@ -2,11 +2,7 @@ package extractor
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"math"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -17,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -358,9 +355,9 @@ func (e *TripleExtractor) parseTriples(content, docID, chunkID string) ([]common
 			continue
 		}
 		triples = append(triples, common.Triple{
-			Subject:   strings.TrimSpace(pyStr(head[0])),
-			Predicate: strings.TrimSpace(pyStr(head[1])),
-			Object:    strings.TrimSpace(pyStr(head[2])),
+			Subject:   strings.TrimSpace(utils.PyStr(head[0])),
+			Predicate: strings.TrimSpace(utils.PyStr(head[1])),
+			Object:    strings.TrimSpace(utils.PyStr(head[2])),
 			// 对齐 metadata={"doc_id": doc_id, "chunk_id": chunk_id}
 			Metadata: map[string]any{"doc_id": docID, "chunk_id": chunkID},
 		})
@@ -387,106 +384,6 @@ func hasInvalidHeadItem(head []any) bool {
 		}
 	}
 	return false
-}
-
-// pyStr 对齐 Python str() 的字符串化（13.13 cellStr 同源语义，包内独立实现）。
-//
-// 仅做类型字符串化，不做 strip（对齐 str() 单步；strip 由 parseTriples
-// 统一 TrimSpace 三字段）。
-//
-// jsonrepair Value 数字三态全覆盖（探针实测）：
-//   - json.Number（合法 JSON 短路路径）：先 Atoi 整数字面原样，失败
-//     ParseFloat 走 pyFloatStr 记法还原（对齐 Python json.loads 的
-//     int/float 分野：str(1)="1"、str(1.0)="1.0"、str(1e16)="1e+16"）
-//   - float64（深修复路径小数）：pyFloatStr
-//   - int（深修复路径整数）：strconv.Itoa
-//
-// bool → "True"/"False"；string 原样；nil 不可达（hasInvalidHeadItem
-// 已滤 None）——防御保留返回 "None"；其余 fmt.Sprint。
-func pyStr(v any) string {
-	switch val := v.(type) {
-	case nil:
-		return "None"
-	case string:
-		return val
-	case bool:
-		if val {
-			return "True"
-		}
-		return "False"
-	case json.Number:
-		// 整数字面优先（Python int 无界，str 原样）；浮点字面走记法还原。
-		// 审查修复 S-02：超 int64 界（>9.22e18）的纯整数字面 Atoi 返回
-		// ErrRange 后漏到 Float64 被 e 记法化（"12345678901234567890" →
-		// "1.2345678901234568e+29"）——Python int 无界原样输出。修复：
-		// Atoi 失败后先判纯整数字面（可选符号+全数字）则原样返回字面量，
-		// 仅小数/指数记法走 Float64。
-		s := val.String()
-		if i, err := strconv.Atoi(s); err == nil {
-			_ = i
-			return s
-		}
-		if isPureIntegerLiteral(s) {
-			return s
-		}
-		if f, err := val.Float64(); err == nil {
-			return pyFloatStr(f)
-		}
-		return s
-	case float64:
-		return pyFloatStr(val)
-	case int:
-		return strconv.Itoa(val)
-	case int64:
-		return strconv.FormatInt(val, 10)
-	default:
-		return fmt.Sprint(v)
-	}
-}
-
-// pyFloatStr 还原 Python str(float) 记法（13.13 excel_value.go 同源语义，
-// 包内独立实现）。abs ∈ [1e-4, 1e16) 用 f 记法（整数值补 ".0"），
-// 其余 e 记法；nan/inf 特殊字面。
-func pyFloatStr(f float64) string {
-	if math.IsNaN(f) {
-		return "nan"
-	}
-	if math.IsInf(f, 1) {
-		return "inf"
-	}
-	if math.IsInf(f, -1) {
-		return "-inf"
-	}
-	abs := math.Abs(f)
-	if abs == 0 || (abs >= 1e-4 && abs < 1e16) {
-		s := strconv.FormatFloat(f, 'f', -1, 64)
-		if !strings.Contains(s, ".") {
-			s += ".0"
-		}
-		return s
-	}
-	return strconv.FormatFloat(f, 'e', -1, 64)
-}
-
-// isPureIntegerLiteral 判纯整数字面量：可选符号 + 全数字（无小数点/指数）。
-// 审查修复 S-02 辅助：Atoi 溢出的超界整数字面原样透传（Python int 无界）。
-func isPureIntegerLiteral(s string) bool {
-	if s == "" {
-		return false
-	}
-	body := s
-	if body[0] == '+' || body[0] == '-' {
-		body = body[1:]
-	}
-	if body == "" {
-		return false
-	}
-	for _, r := range body {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 // metadataTitle 读取 chunk 元数据 title（对齐 chunk.metadata.get("title", "")）。

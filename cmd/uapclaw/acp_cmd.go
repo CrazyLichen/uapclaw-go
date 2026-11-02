@@ -50,14 +50,14 @@ func resolveAcpGatewayURL(gatewayURL, agentServerURL string, getenv func(string)
 		return agentServerURL
 	}
 	if getenv != nil {
-		if v := getenv("GATEWAY_URL"); v != "" {
+		if v := getenv("UAPCLAW_GATEWAY_URL"); v != "" {
 			return v
 		}
-		host := getenv("GATEWAY_HOST")
+		host := getenv("UAPCLAW_GATEWAY_HOST")
 		if host == "" {
 			host = "127.0.0.1"
 		}
-		port := getenv("GATEWAY_PORT")
+		port := getenv("UAPCLAW_GATEWAY_PORT")
 		if port == "" {
 			port = "19001"
 		}

@@ -4,7 +4,8 @@
 //   - 多级别日志输出（debug/info/warn/error/fatal）
 //   - 分组件文件输出（common.log/gateway.log/channel.log/agent_server.log/permissions.log/agent_core.log）
 //   - 全量汇总文件输出（full.log）
-//   - 控制台彩色输出
+//   - 统一的文本行格式：[时间][级别][component][文件:行号] 描述 key=value
+//   - 控制台彩色输出（级别着色，遵循 NO_COLOR）
 //   - 日志文件轮转（lumberjack，默认 20MB/20 备份）
 //   - 敏感数据过滤（4 层正则 + 7 种模式，写入前自动脱敏）
 //   - 与 Config 集成（各通道独立级别配置，环境变量覆盖）
@@ -29,6 +30,7 @@
 //	logger/
 //	├── doc.go           # 包文档
 //	├── logger.go        # 核心结构体、Option 模式、Setup/组件级日志函数/Close
+//	├── format.go        # 文本格式化层（时间/级别/component/caller/消息转义）
 //	├── levels.go        # LogLevel 枚举、LoggingLevels 结构体、级别解析
 //	├── sanitizer.go     # 敏感数据脱敏（4 层正则 + 7 种模式 + SanitizerWriter）
 //	├── rotation.go      # RotationConfig + MutexWriter（包装 lumberjack）

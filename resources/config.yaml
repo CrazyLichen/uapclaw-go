@@ -1,31 +1,377 @@
-# UapClaw 配置文件
-# 本文件为最小配置骨架，随领域实现逐步扩展
+# UapClaw 出厂配置模板
+#
+# 约定：
+#   1. 每个键的注释标出「环境变量覆盖名 / 代码默认值 / 默认值来源」，
+#      便于确认该键是否真的生效、默认行为是什么。
+#   2. ${VAR:-default} 形式的占位由代码在读取时展开，保留占位不要替换成示例值。
+#   3. 未在本文件出现的段意味着当前版本未实现（见文件末尾说明）。
 
-# 服务配置
-server:
-  # AgentServer 配置
-  agentserver:
-    host: "0.0.0.0"
-    port: 8765
-  # Gateway 配置
-  gateway:
-    host: "0.0.0.0"
-    port: 8766
+# 前端显示语言：zh（中文）/ en（英文）。代码默认：zh（team/config_loader.go:93-96）
+preferred_language: zh
 
 # 日志配置
 logging:
-  level: "info"
-  format: "json"
-  console_level: "info"
+  # 基础级别：debug/info/warn/error/fatal。环境变量 LOG_LEVEL 仅覆盖控制台级别
+  # 代码默认：info（logger/levels.go:133-137）
+  level: info
+  # 控制台级别。代码默认：跟随 level（logger/levels.go:151-153）
+  console_level: info
   # 各通道独立级别（未配置时跟随 level）
-  common: "info"
-  gateway: "info"
-  channel: "info"
-  agent_server: "info"
-  permissions: "info"
-  agent_core: "info"
-  full: "debug"
+  # common.log：基础设施层（config/workspace/utils 等）。代码默认：跟随 level
+  common: info
+  # gateway.log。代码默认：跟随 level
+  gateway: info
+  # channel.log。代码默认：跟随 level
+  channel: info
+  # agent_server.log（permissions 也会写入此文件）。代码默认：跟随 level
+  agent_server: info
+  # permissions.log。代码默认：跟随 level
+  permissions: info
+  # agent_core.log。代码默认：跟随 level
+  agent_core: info
+  # full.log 汇总文件。代码默认：跟随 level
+  full: info
 
-# 工作区配置
-workspace:
-  path: "~/.uapclaw"
+# Gateway 配置
+#
+# 监听地址与端口不放在配置文件里（与 Python 一致，Python 只读命令行参数与环境变量）：
+#   Web 通道监听     —— UAPCLAW_WEB_HOST / UAPCLAW_WEB_PORT（默认 127.0.0.1:19000）
+#   GatewayServer WS —— UAPCLAW_GATEWAY_HOST / UAPCLAW_GATEWAY_PORT（默认 127.0.0.1:19001）
+#   AgentServer      —— UAPCLAW_AGENT_SERVER_HOST / UAPCLAW_AGENT_SERVER_PORT（默认 127.0.0.1:18092）
+# 其中 --host/--port 命令行参数优先，会被写入对应的 UAPCLAW_* 变量。
+gateway:
+  # SessionMap 作用域：per_chat_bot（同 chat+bot 共享会话）/ per_chat_bot_user（按用户分会话）
+  # 代码默认：per_chat_bot（swarm/gateway/routing/session_map.go:74-80）
+  session_map_scope: per_chat_bot
+
+# 心跳配置
+heartbeat:
+  # 心跳间隔（秒）。环境变量：无。代码默认：60（swarm/gateway/app_gateway.go:216-222）
+  every: 3600
+  # 心跳结果回传通道（如 web）。代码默认：web（swarm/gateway/app_gateway.go:245-255）
+  target: web
+  # 心跳生效时段（本地时间），start <= now < end 时生效；留空表示全天生效
+  # 代码默认：不限制（swarm/gateway/app_gateway.go:206-212）
+  active_hours:
+    start: "08:00"
+    end: "22:00"
+
+# 记忆系统配置
+#
+# 两个正交开关：
+#   engine — 挂载哪套 rail：builtin（内置）/ external（外接）/ both / none
+#   mode   — 内置记忆存储位置：local | cloud，不影响外接
+# 内置 rail 生效条件：engine ∈ {builtin,both} AND mode=local AND modes.agent.<mode>.memory.enabled=true
+# 外接 rail 生效条件：engine ∈ {external,both} AND external.provider 非空
+memory:
+  # 内置记忆存储位置。环境变量 MEMORY_MODE。代码默认：local（memory/config.go:313-324）
+  mode: local
+  # 记忆引擎总开关。环境变量 MEMORY_ENGINE。代码默认：builtin（memory/config.go:60-84）
+  engine: builtin
+  # 禁止记忆的内容定义；enabled=true 时按 patterns 过滤
+  # 代码默认：disabled（memory/forbidden.go:96-110）
+  forbidden_memory_definition:
+    enabled: false
+    patterns: []
+  # 外接记忆
+  external:
+    # 选哪家 provider，留空等于禁用外接。环境变量 MEMORY_EXTERNAL_PROVIDER
+    provider: ""
+    # 数据隔离标识（所有 provider 共用）。环境变量 MEMORY_USER_ID
+    # 代码默认：__default__（memory/external_memory_builder.go:36-46）
+    user_id: __default__
+    # 环境变量 MEMORY_SCOPE_ID。代码默认：__default__
+    scope_id: __default__
+    # 本地长期记忆（provider=openjiuwen 时生效），依赖顶层 embed 段提供 embedding
+    openjiuwen:
+      kv_type: shelve
+      kv_path: ""
+      vector_type: chroma
+      vector_persist_dir: ""
+      db_type: sqlite
+      db_path: ""
+    # 云端事实抽取（provider=mem0 时生效），api_key 必填
+    mem0:
+      # 环境变量 MEM0_API_KEY。代码默认：空（未配置即不可用）
+      api_key: ""
+      # 环境变量 MEM0_USER_ID。代码默认：uapclawswarm-user（external_memory_builder.go:19-22）
+      user_id: uapclawswarm-user
+      # 环境变量 MEM0_AGENT_ID。代码默认：uapclawswarm（external_memory_builder.go:19-22）
+      agent_id: uapclawswarm
+      # 搜索结果重排序（更准但更慢）。代码默认：true
+      rerank: true
+    # 字节上下文数据库（provider=openviking 时生效）
+    openviking:
+      endpoint: "http://127.0.0.1:1933"
+      api_key: ""
+      account: root
+      user: default
+
+# Embedding 配置（内置记忆与 CodingMemoryRail 依赖）。
+# 缺失时 MemoryRail 不创建并打 "no embed config" 告警（adapter/deep_adapter_rails.go:713-718）
+embed:
+  # 环境变量 EMBED_API_KEY。代码默认：空
+  embed_api_key: ""
+  # 环境变量 EMBED_API_BASE。代码默认：空
+  embed_base_url: ""
+  # 环境变量 EMBED_MODEL。代码默认：空（部分链路兜底 text-embedding-v3，adapter/code_adapter.go:1029）
+  embed_model: ""
+
+# 模型配置
+# 优先级：models.defaults（列表）> models.default（旧格式单对象）> 环境变量兜底
+# （common/config/default_models.go:36-70）。本模板走 defaults 列表，值全部取自环境变量，
+# 因此行为等价于环境变量兜底；请勿把 ${...} 替换成具体模型名，否则会覆盖环境变量链路。
+models:
+  defaults:
+    - model_client_config:
+        # 环境变量 API_BASE
+        api_base: ${API_BASE}
+        # 环境变量 API_KEY
+        api_key: ${API_KEY}
+        # 环境变量 MODEL_NAME
+        model_name: ${MODEL_NAME}
+        # 环境变量 MODEL_PROVIDER
+        client_provider: ${MODEL_PROVIDER}
+        # 单次请求超时（秒）。代码默认：1800（default_models.go:181）
+        timeout: 1800
+        # 是否校验服务端证书。代码默认：false（default_models.go:182）
+        verify_ssl: false
+        # 附加请求头（JSON 字符串或映射）
+        custom_headers: {}
+        # 输入上限（token）：该模型单次请求可接受的输入量，作为上下文窗口分母
+        # （ContextUtils.resolve_context_max 第 2 优先级）。0 / 缺省 = 未知，
+        # 回退内置模型表或 200000 兜底。
+        max_input_tokens: 0
+        # 输出上限（token）：作为请求 max_tokens 的默认值；请求级显式传值优先
+        # （model_clients/base_client.go:320-342）。0 / 缺省 = 不限制，交由服务端默认。
+        max_output_tokens: 0
+      model_config_obj:
+        # 采样温度。代码默认：0.95（default_models.go:187）
+        temperature: 0.95
+      # 该条目是否为默认模型
+      is_default: true
+
+# ReAct / 主 Agent 配置
+react:
+  # Agent 名称。代码默认：main_agent（adapter/deep_adapter.go:355-360）
+  agent_name: main_agent
+  # 任务循环总开关。代码默认：true（adapter/deep_adapter.go:2657-2663）
+  # 注意：为 true 时内层 ReAct 上限被置为 MaxInt（deep_agent.go:1548/1739），
+  #       下面 max_iterations 对主 deep agent 不生效，仅作用于 enable_task_loop=false 的路径
+  enable_task_loop: true
+  # 任务规划开关（独立于 task_loop）：为 true 才注册 todo_create/todo_list/todo_get/todo_modify
+  # 代码默认：true（adapter/deep_adapter.go:2668-2676）
+  enable_task_planning: true
+  # ReAct 最大迭代次数。代码默认：15（adapter/deep_adapter.go:575）
+  max_iterations: 100
+  # 模型名；留空则用 models 段默认条目
+  model_name: ""
+  # 技能模式：all / 指定列表（adapter/deep_adapter_rails.go:319）
+  skill_mode: all
+  # 子代理开关：仅显式 enabled: true 才启用（adapter/deep_adapter_config.go:175-178）
+  subagents:
+    general_agent:
+      enabled: true
+    code_agent:
+      enabled: false
+    research_agent:
+      enabled: false
+  # 输出分块（字符数）
+  answer_chunk_size: 500
+  stream_chunk_threshold: 50
+  stream_character_threshold: 2000
+  # 上下文工程配置（对齐 Python jiuwenswarm/resources/config.yaml:269-303）
+  context_engine_config:
+    # 压缩总开关：false 时整个 ContextProcessorRail 不注册（deep_adapter_rails.go:936）
+    enabled: true
+    # 允许模型通过 reload 提示重新取回已卸载的消息
+    enable_reload: true
+    # 是否释放 KV 缓存
+    enable_kv_cache_release: false
+    # 压缩水位比例（相对 max_input_tokens）：阈值 = min(下列绝对阈值, ratio × 输入上限)，
+    # 即只下调不放大。0 = 不按比例，仅用绝对阈值。
+    compression_trigger_ratio: 0.85
+    compression_target_ratio: 0.55
+    # 大消息卸载（per-message 语义，不参与比例缩放）
+    message_summary_offloader_config:
+      messages_threshold: null
+      tokens_threshold: 60000
+      large_message_threshold: 60000
+      offload_message_type: ["tool"]
+      protected_tool_names: ["read_file:*SKILL.md", "reload_original_context_messages"]
+      messages_to_keep: null
+      keep_last_round: false
+      customized_summary_prompt: null
+      enable_adaptive_compression: true
+      summary_max_tokens: 900
+      enable_precise_step: false
+      step_summary_max_context_messages: 8
+      content_max_chars_for_compression: 200000
+    # 对话级压缩（tokens_threshold 参与比例缩放）
+    dialogue_compressor_config:
+      messages_threshold: null
+      tokens_threshold: 100000
+      messages_to_keep: 10
+      keep_last_round: false
+      compression_target_tokens: 1800
+      offload_writeback_enabled: false
+    # 当前轮压缩（tokens_threshold 参与比例缩放）
+    current_round_compressor_config:
+      tokens_threshold: 100000
+      messages_to_keep: 3
+      min_selected_tokens_for_compression: 20000
+      compression_target_tokens: 4000
+      summary_merge_target_tokens: 4000
+      accumulated_summary_token_limit: 20000
+      summary_merge_min_blocks: 3
+      prior_context_window_size: 10
+      offload_writeback_enabled: false
+    # 轮次级压缩（trigger/target 参与比例缩放）
+    round_level_compressor_config:
+      rounds_threshold: 2
+      tokens_threshold: 230000
+      trigger_total_tokens: 230000
+      target_total_tokens: 160000
+      compression_call_max_tokens: 250000
+      keep_last_round: true
+      keep_recent_messages: 6
+      messages_to_keep: 6
+      first_pass_target_tokens: 30000
+      second_pass_target_tokens: 20000
+      third_pass_target_tokens: 10000
+      truncate_head_ratio: 0.2
+      offload_writeback_enabled: false
+    # 全量压缩（session_memory 路径预设；Python 侧当前无此段，待同构）
+    full_compact_processor_config:
+      trigger_total_tokens: 180000
+
+# 预定义 Agent 列表（agent 名 → 模型/技能/工作区/迭代上限）
+# 代码默认：max_iterations=200、completion_timeout=600、stable_base=true（team/config_loader.go:20-26）
+agents: {}
+
+# ACP 子代理配置（profile → command/args/cwd/env）
+# 代码读取：agents/harness/common/tools/acp_chat/client_cache.go:69
+# 未配置任何 profile 时 ACP 工具不可用（无代码默认）
+acp_agents: {}
+
+# 模式配置：agent（fast/plan）/ code / team
+modes:
+  agent:
+    # 快速模式
+    fast:
+      # 内置记忆开关；生效还需 memory.engine/mode 放行且 embed 段齐全
+      # 代码默认：false（memory/config.go:296-300）
+      memory:
+        enabled: true
+        # 主动记忆：true=模型自行静默记录；false=仅在用户明确要求时记录
+        # 代码默认：false（memory/config.go:303-310）
+        is_proactive: false
+    # 规划模式
+    plan:
+      memory:
+        enabled: true
+        # 规划模式启用主动记忆（prompts/sections/memory.go:268-277）
+        is_proactive: true
+  code:
+    # 动态 Rails：出现在列表中的 = 启用
+    rails: []
+    # 可用工具列表；留空表示不额外限制
+    tools: []
+  # 团队模式
+  team:
+    # 团队级共享记忆（跨成员读写同一份 TEAM_MEMORY.md）
+    # 代码默认：false（关闭时成员各自使用独立 MemoryRail）
+    memory:
+      enabled: false
+
+# 团队配置
+team:
+  # 团队标识，作为运行时身份键（TeamRuntimeManager 按 team_name + session_id 取活跃团队）
+  # 代码默认：team（team/config_loader.go:80-83）
+  team_name: uapclaw_team
+  # 生命周期：persistent / ephemeral。代码默认：persistent（team/config_loader.go:86）
+  lifecycle: persistent
+  # 成员模式。代码默认：build_mode（team/config_loader.go:87）
+  teammate_mode: build_mode
+  # 派生方式。代码默认：inprocess（team/config_loader.go:88）
+  spawn_mode: inprocess
+  # 是否启用 HITT（human-in-the-loop）。代码默认：true（team/config_loader.go:89）
+  enable_hitt: true
+  # 成员定义（agent 名 → 规格）
+  agents: {}
+  # 传输方式。代码默认：inprocess（team/config_loader.go:502-518）
+  transport:
+    type: inprocess
+  # 存储方式。代码默认：sqlite（team/config_loader.go:113-155）
+  storage:
+    type: sqlite
+  # 工作区
+  workspace:
+    enabled: true
+
+# 通道配置
+channels:
+  # Web 通道
+  web:
+    # 允许模型向用户发送文件。代码默认：false；归一化在 channels 存在时补 true
+    # （common/config/normalize.go:65-79）
+    # 注意：send_file_allowed 缺键或显式为 null 时，整个 channels.web 会被替换为
+    #      {send_file_allowed: true}，本段其他键会一并丢失，因此本段键必须写全
+    send_file_allowed: true
+  # ACP 通道
+  acp:
+    # 是否启用。代码默认：false
+    enabled: false
+    # 通道标识
+    channel_id: ""
+    # 默认会话 ID
+    default_session_id: ""
+
+# 权限配置
+permissions:
+  # 总开关；关闭时权限 rail 不注册。代码默认：false（adapter/deep_adapter_rails.go:806-809）
+  enabled: false
+  # 策略类型。代码默认：tiered_policy
+  schema: tiered_policy
+  # 权限模式。代码默认：normal
+  permission_mode: normal
+  # 工具级默认策略（工具名 → allow/ask/deny）
+  tools: {}
+  # 规则列表
+  rules: []
+  # 外部目录访问策略
+  external_directory:
+    enabled: false
+  # 拒绝时给模型的提示
+  deny_guidance_message: ""
+
+# Hooks 配置
+hooks:
+  # 全局禁用所有 hook。代码默认：false（common/hooks/config.go:133-140）
+  disable_all_hooks: false
+
+# MCP 服务配置（servers[].{name,enabled,transport,command,args,cwd,env,url,headers,timeout_s}）
+# enabled 缺省为 true（adapter/deep_adapter_mcp.go:186）
+mcp:
+  servers: []
+
+# 浏览器配置
+browser:
+  # Chrome 可执行文件路径（可为字符串或平台→路径的映射）
+  # 代码默认：空（由浏览器 runtime 自行探测，adapter/deep_adapter_config.go:890）
+  chrome_path: ""
+
+# 扩展配置
+extensions:
+  # 扩展目录列表，多个用 ';' 分隔。代码默认：空（cmd/uapclaw/cmd.go:60）
+  extension_dirs: ""
+
+# ──────────────────────────────────────────────────────────────
+# 以下段在当前版本尚未实现，配置后不会生效，故不提供键：
+#   telemetry        —— 可观测性未接入（observability 包不读 YAML）
+#   task_memory      —— 任务记忆服务未接入配置面
+#   tools            —— 工具总开关未实现
+#   email_settings   —— 仅 Web UI 环境变量映射，不读该段
+#   updater          —— 自动更新为桩实现
+# 待对应领域实现后在此补充。
+# ──────────────────────────────────────────────────────────────

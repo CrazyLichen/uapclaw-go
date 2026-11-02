@@ -1125,7 +1125,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	railsList = append(railsList, ci)
 
 	// 13: ContextProcessorRail（上下文处理器护栏）
-	cp := c.deep.buildContextProcessorRail()
+	cp := c.deep.buildContextProcessorRail(c.deep.configCache)
 	c.deep.contextProcessorRail = cp
 	railsList = append(railsList, cp)
 

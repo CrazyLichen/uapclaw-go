@@ -17,15 +17,6 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// portEnvMapping 端口类型到环境变量名的映射。
-// Python: jiuwenswarm/instance_manager/bootstrap.py port_env_mapping
-var portEnvMapping = map[string]string{
-	"agent_server": "AGENT_SERVER_PORT",
-	"web":          "WEB_PORT",
-	"gateway":      "GATEWAY_PORT",
-	"frontend":     "FRONTEND_PORT",
-}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateBootstrapEnv 为实例创建 bootstrap .env 文件。
@@ -33,7 +24,7 @@ var portEnvMapping = map[string]string{
 // 生成的 .env 文件包含：
 //   - UAPCLAW_DATA_DIR: 实例工作区路径
 //   - UAPCLAW_INSTANCE: 实例名称
-//   - 各端口变量：AGENT_SERVER_PORT, WEB_PORT, GATEWAY_PORT, FRONTEND_PORT
+//   - 各端口变量：UAPCLAW_AGENT_SERVER_PORT, UAPCLAW_WEB_PORT, UAPCLAW_GATEWAY_PORT, UAPCLAW_FRONTEND_PORT
 //
 // Python: jiuwenswarm/instance_manager/bootstrap.py create_bootstrap_env(config)
 func CreateBootstrapEnv(config *InstanceConfig) (string, error) {
@@ -55,7 +46,7 @@ func CreateBootstrapEnv(config *InstanceConfig) (string, error) {
 
 	// 添加端口变量
 	for _, pt := range PortTypes {
-		envName, ok := portEnvMapping[pt]
+		envName, ok := portEnvName(pt)
 		if !ok {
 			continue
 		}
@@ -91,4 +82,23 @@ func CreateBootstrapEnvForName(name string, workspace string) (string, error) {
 	}
 
 	return CreateBootstrapEnv(config)
+}
+
+// portEnvName 返回端口类型对应的环境变量名。
+// 变量名对齐 Python bootstrap.py 的 port_env_mapping，但统一加 UAPCLAW_ 前缀，
+// 必须与各组件实际读取点一致（web → UAPCLAW_WEB_PORT 等），
+// 否则 bootstrap 分配的端口不会被进程采纳，多实例仍会抢同一端口。
+func portEnvName(portType string) (string, bool) {
+	switch portType {
+	case "agent_server":
+		return "UAPCLAW_AGENT_SERVER_PORT", true
+	case "web":
+		return "UAPCLAW_WEB_PORT", true
+	case "gateway":
+		return "UAPCLAW_GATEWAY_PORT", true
+	case "frontend":
+		return "UAPCLAW_FRONTEND_PORT", true
+	default:
+		return "", false
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -419,12 +421,7 @@ func (am *AbilityManager) Execute(
 			wg.Add(1)
 			go func(idx int, toolCall *llmschema.ToolCall) {
 				defer wg.Done()
-				r, err := am.executeSingleToolCall(ctx, toolCall, sess, tag)
-				if err != nil {
-					results[idx] = errorToExecuteResult(err, toolCall.ID)
-				} else {
-					results[idx] = r
-				}
+				results[idx] = am.runToolCallSafely(ctx, nil, toolCall, sess, tag)
 			}(i, tc)
 		}
 		am.mu.RUnlock()
@@ -447,25 +444,7 @@ func (am *AbilityManager) Execute(
 		wg.Add(1)
 		go func(idx int, toolCall *llmschema.ToolCall, toolCtx *interfaces.AgentCallbackContext) {
 			defer wg.Done()
-			// 捕获 BeforeToolCall 中 raiseInterrupt 引发的 panic。
-			// raiseInterrupt 通过 panic 传播 ToolInterruptException，
-			// 在 goroutine 中必须 recover 否则进程崩溃。
-			defer func() {
-				if r := recover(); r != nil {
-					switch v := r.(type) {
-					case *agentschema.ToolInterruptException:
-						results[idx] = agentschema.ExecuteResult{Result: v}
-					case error:
-						results[idx] = errorToExecuteResult(v, toolCall.ID)
-					default:
-						results[idx] = errorToExecuteResult(
-							fmt.Errorf("工具执行 panic: %v", r),
-							toolCall.ID,
-						)
-					}
-				}
-			}()
-			results[idx] = am.railedExecuteSingleToolCall(ctx, toolCtx, toolCall, sess, tag)
+			results[idx] = am.runToolCallSafely(ctx, toolCtx, toolCall, sess, tag)
 		}(i, tc, toolCtxs[i])
 	}
 	am.mu.RUnlock()
@@ -487,6 +466,106 @@ func (am *AbilityManager) Execute(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// runToolCallSafely 在独立 goroutine 中执行单个工具调用，并兜底恢复 panic。
+//
+// 这是工具调用线程的唯一 panic 出口：
+//   - 工具实现里的 panic 已在下层 executeSingleToolCall 转成 error（走 rail 的
+//     异常路径，AFTER_TOOL_CALL 照常触发）；
+//   - 本函数兜的是更外层的缺陷：before/after 钩子、ForkForToolCall 之后的胶水
+//     代码、以及 executeSingleToolCall 进入 defer 之前的 nil 解引用（如 toolCall
+//     为 nil）。这些 panic 若在 goroutine 里放任不管，整个进程会崩。
+//   - raiseInterrupt 用 panic(cb.AbortError{Cause: ToolInterruptException}) 传播
+//     中断，必须原样还原成 ToolInterruptException 结果。
+//
+// cbc 为 nil 时走降级路径（不经过 Rail 包装）。
+func (am *AbilityManager) runToolCallSafely(
+	ctx context.Context,
+	cbc *interfaces.AgentCallbackContext,
+	toolCall *llmschema.ToolCall,
+	sess sessioninterfaces.SessionFacade,
+	tag string,
+) (res agentschema.ExecuteResult) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			res = recoverToolPanic(rec, toolCall)
+		}
+	}()
+
+	if cbc == nil {
+		r, err := am.executeSingleToolCall(ctx, toolCall, sess, tag)
+		if err != nil {
+			return errorToExecuteResult(err, toolCallIDOf(toolCall))
+		}
+		return r
+	}
+	return am.railedExecuteSingleToolCall(ctx, cbc, toolCall, sess, tag)
+}
+
+// recoverToolPanic 把 goroutine 里捕获的 panic 载荷转成 ExecuteResult，并记录日志。
+//
+// 日志分两级：中断（ToolInterruptException / AbortError）是 raiseInterrupt 与安全
+// 护栏的正常控制流，只记 Debug 且不带栈；其余 panic 是缺陷，记 Error 并带调用栈
+// ——这层若是静默，日志里只剩「executing tool call」，事后完全无从判断工具崩在哪。
+func recoverToolPanic(rec any, toolCall *llmschema.ToolCall) agentschema.ExecuteResult {
+	toolCallID := toolCallIDOf(toolCall)
+	toolName := ""
+	if toolCall != nil {
+		toolName = toolCall.Name
+	}
+
+	if isInterruptPanic(rec) {
+		logger.Debug(logComponent).
+			Str("event_type", "tool_interrupt_panic").
+			Str("tool_name", toolName).
+			Str("tool_call_id", toolCallID).
+			Msg("tool call interrupted via panic")
+		return errorToExecuteResult(panicToError(rec), toolCallID)
+	}
+
+	panicErr := panicToError(rec)
+	logger.Error(logComponent).
+		Str("event_type", "tool_panic_escalated").
+		Str("tool_name", toolName).
+		Str("tool_call_id", toolCallID).
+		Str("stack", string(debug.Stack())).
+		Err(panicErr).
+		Msg("tool call panicked outside tool body, converted to error result")
+	return errorToExecuteResult(panicErr, toolCallID)
+}
+
+// panicToError 把 panic 载荷统一成 error（error 型载荷原样保留以维持
+// errors.Is/As 语义，例如 ToolInterruptException）。
+func panicToError(rec any) error {
+	if e, ok := rec.(error); ok {
+		return e
+	}
+	return fmt.Errorf("工具执行 panic: %v", rec)
+}
+
+// isInterruptPanic 判断 panic 载荷是否属于中断控制流。
+// Python: raiseInterrupt 抛 ToolInterruptException；Go 用
+// panic(cb.AbortError{Cause: ToolInterruptException}) 模拟同样的异常传播。
+func isInterruptPanic(rec any) bool {
+	e, ok := rec.(error)
+	if !ok {
+		return false
+	}
+	var tie *agentschema.ToolInterruptException
+	if errors.As(e, &tie) {
+		return true
+	}
+	var abortErr *cb.AbortError
+	return errors.As(e, &abortErr)
+}
+
+// toolCallIDOf 取 tool_call id，toolCall 为 nil 时返回空串。
+func toolCallIDOf(toolCall *llmschema.ToolCall) string {
+	if toolCall == nil {
+		return ""
+	}
+	return toolCall.ID
+}
 
 // railedExecuteSingleToolCall 在 Rail 生命周期内执行单个工具调用。
 //
@@ -560,7 +639,17 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 
 	// 统一处理 Rail.Execute 返回的 error
 	if railErr != nil {
-		return errorToExecuteResult(railErr, toolCall.ID)
+		// 工具正常返回 error 时这里也会命中（下层 executeTool 已记 tool execution
+		// error），故用 Debug：只在排查时开启，避免每次失败工具都刷一条 Error。
+		// 未记录时 rail 层自身的失败（on_exception 后仍失败、钩子 return error）
+		// 在日志里是完全静默的。
+		logger.Debug(logComponent).
+			Str("event_type", "tool_rail_error").
+			Str("tool_name", toolCall.Name).
+			Str("tool_call_id", toolCallIDOf(toolCall)).
+			Err(railErr).
+			Msg("tool call failed inside rail wrapper")
+		return errorToExecuteResult(railErr, toolCallIDOf(toolCall))
 	}
 
 	// railErr == nil，从 inputs 读取 after 钩子可能改写的值（D4）
@@ -582,25 +671,51 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 // 返回 (agentschema.ExecuteResult, error)：
 //   - agentschema.ExecuteResult 承载正常结果（Result + ToolMsg）
 //   - error 承载异常（ToolInterruptException 或 AbilityExecutionError）
+//
+// 工具实现里的 panic（nil 解引用等）在本函数内统一转成 error 上抛：
+// 一旦让 panic 逃出调用方（能力层并行 goroutine / Rail 包装层），
+// AFTER_TOOL_CALL 就不会触发，stream_event_rail 不会发 tool_result，
+// 前端工具卡片永久停在「执行中」；而会话本身照常结束，用户无从判断。
+// 转成 error 后走的是正常异常路径：ON_TOOL_EXCEPTION → AFTER_TOOL_CALL → tool_result。
 func (am *AbilityManager) executeSingleToolCall(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) (agentschema.ExecuteResult, error) {
+) (result agentschema.ExecuteResult, err error) {
 	toolName := toolCall.Name
 
+	defer func() {
+		rec := recover()
+		if rec == nil {
+			return
+		}
+		result = agentschema.ExecuteResult{}
+		// 中断控制流（raiseInterrupt / 安全护栏的 cb.AbortError）原样上抛，
+		// 由调用方还原成 ToolInterruptException；其余 panic 是缺陷，记 Error。
+		if !isInterruptPanic(rec) {
+			logger.Error(logComponent).
+				Str("event_type", "tool_execution_panic").
+				Str("tool_name", toolName).
+				Str("tool_call_id", toolCallIDOf(toolCall)).
+				Str("stack", string(debug.Stack())).
+				Err(panicToError(rec)).
+				Msg("tool execution panicked, converted to error")
+		}
+		err = panicToError(rec)
+	}()
+
 	// 解析参数
-	toolArgs, err := ParseToolArguments(toolCall.Arguments)
-	if err != nil {
+	toolArgs, parseErr := ParseToolArguments(toolCall.Arguments)
+	if parseErr != nil {
 		logger.Error(logComponent).
 			Str("tool_name", toolName).
-			Err(err).
+			Err(parseErr).
 			Msg("tool received malformed parameters")
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityMalformedArguments,
 			toolCall.ID,
-			err.Error(),
+			parseErr.Error(),
 			exception.WithParam("tool_name", toolName),
 		)
 		return agentschema.ExecuteResult{}, execErr

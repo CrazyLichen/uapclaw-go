@@ -37,8 +37,6 @@ type ServerConfig struct {
 type LoggingConfig struct {
 	// Level 基础级别，默认 INFO
 	Level string `yaml:"level"`
-	// Format 输出格式：json / text
-	Format string `yaml:"format"`
 	// ConsoleLevel 控制台级别
 	ConsoleLevel string `yaml:"console_level"`
 	// Common common.log 级别（基础设施层）

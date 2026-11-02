@@ -775,12 +775,7 @@ func TestStreamController_startRound_正常启动(t *testing.T) {
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
 	sc.startRound(context.Background(), "hello")
-	if roundDoneSnapshot(sc) == nil {
-		t.Fatal("roundDone 不应为 nil")
-	}
-
-	// 等待轮次完成（无真实 harness，streamOneRound 直接返回成功）
-	waitRoundFinished(t, sc)
+	assertRoundStartedAndFinished(t, sc)
 }
 
 // TestStreamController_StartRound_有harness有队列 测试有 harness 和 streamQueue 时 StartRound 启动轮次。
@@ -793,11 +788,8 @@ func TestStreamController_StartRound_有harness有队列(t *testing.T) {
 	if err != nil {
 		t.Errorf("StartRound 不应返回错误: %v", err)
 	}
-	if roundDoneSnapshot(sc) == nil {
-		t.Fatal("roundDone 不应为 nil")
-	}
-
-	waitRoundFinished(t, sc)
+	// roundDone 会被轮次 goroutine 清空（M-16），允许「断言时已结束」
+	assertRoundStartedAndFinished(t, sc)
 }
 
 // TestStreamController_StartRound_长内容截断预览 测试长内容预览截断。
@@ -1296,6 +1288,25 @@ func waitRoundFinished(t *testing.T, sc *StreamController) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("轮次超时未完成")
+}
+
+// assertRoundStartedAndFinished 断言 startRound 启动的轮次能收敛。
+//
+// 不断言「瞬时快照非 nil」：roundDone 由轮次 goroutine 在结束时于锁内置空（M-16），
+// 而零值 TeamHarness 下轮次可能瞬间完成，断言瞬时值会随调度抖动假红（CI 实测过一次）。
+// 改为：等待收敛，且拿到快照时该快照必须已关闭（两种都代表正常完成）。
+func assertRoundStartedAndFinished(t *testing.T, sc *StreamController) {
+	t.Helper()
+	done := roundDoneSnapshot(sc)
+	waitRoundFinished(t, sc)
+	if done == nil {
+		return
+	}
+	select {
+	case <-done:
+	default:
+		t.Fatal("roundDone 应在轮次结束时关闭")
+	}
 }
 
 // roundDoneSnapshot 在锁内取 roundDone 快照。

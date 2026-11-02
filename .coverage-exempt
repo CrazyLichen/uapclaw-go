@@ -123,3 +123,21 @@ internal/agentcore/harness/deep_agent.go#L1041-L1041
 # 文件的正负样本覆盖，CI 环境没有也无法伪造。同文件其余改动行（hasValidModelConfig
 # 与 anyToConfigString）由 deep_adapter_test.go 覆盖。
 internal/swarm/server/adapter/deep_adapter.go#L2513-L2534
+
+# cmd/uapclaw/cmd.go#L263：runAppCmd 是进程入口（启动 Gateway + AgentServer 并阻塞），
+# 单测无法执行，故该行对 applyWebAddrFlags 的调用无法被覆盖。
+# applyWebAddrFlags 本身的行为由 TestApplyWebAddrFlags 覆盖（含覆盖/不覆盖两条分支）。
+cmd/uapclaw/cmd.go#L263-L263
+
+# ── 2026-11-02 记忆工具结果键名对齐 Python（json tag） ──
+# lite/types.go — 整文件只有 type 声明（无 func/var/const），go tool cover 不产生
+# 任何覆盖块，改动行永远判「未被执行」（门禁在 in_total==0 分支不认行级豁免）。
+# 本次改动只是给 7 个结果结构体字段补 json tag；序列化后的键名形状由
+# lite/tool_ops_test.go 的「空结果非nil切片」「Manager返回nil规整为空切片」两条
+# 用例用 json.Marshal 实断言（含 "results":[] 与"不出现大写键"）。
+internal/agentcore/memory/lite/types.go
+
+# lite/tool_ops.go#L79 — MemorySearchWithContext 的 `toolCtx.Manager == nil` 分支：
+# EnsureManager() 返回 true 当且仅当 Manager 非 nil（其余路径 return false），
+# 故该分支在 Go 侧不可达；保留是为了与 Python `if not ctx.manager` 结构一一对应。
+internal/agentcore/memory/lite/tool_ops.go#L79-L79

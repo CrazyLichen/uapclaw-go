@@ -9,7 +9,6 @@ server:
 
 logging:
   level: "info"
-  format: "json"
 
 workspace:
   path: "~/.uapclaw"

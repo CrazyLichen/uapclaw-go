@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +45,7 @@ import (
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -589,9 +591,9 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
 		// todo_compat 兼容层注入（对齐 Python interface_deep.py:230 install_todo_modify_compat_patch 模块级 patch）
 		TodoModifyFactory:   swarmtools.NewCompatibleTodoModifyTool,
-		AutoCreateWorkspace: false,                                             // Python: 硬编码 false
-		CompletionTimeout:   paramsFloat(config, "completion_timeout", 3600.0), // Python: config.get("completion_timeout", 3600.0)
-		ContextEngineConfig: d.deepAgentContextEngineConfig(config),            // Python: context_engine_config=_deep_agent_context_engine_config(config)
+		AutoCreateWorkspace: false,                                              // Python: 硬编码 false
+		CompletionTimeout:   paramsFloat(config, "completion_timeout", 3600.0),  // Python: config.get("completion_timeout", 3600.0)
+		ContextEngineConfig: d.deepAgentContextEngineConfig(config, configBase), // Python: context_engine_config=_deep_agent_context_engine_config(config)
 	}
 	// 步骤 17 回填：SysOperation
 	params.SysOperation = sysOpInstance
@@ -2020,15 +2022,23 @@ func (d *DeepAdapter) resolveModelClientFromConfig(apiKey, apiBase, model string
 	return m.GetClient()
 }
 
-// deepAgentContextEngineConfig 从 react 配置构建上下文引擎配置。
+// deepAgentContextEngineConfig 从 react 配置与 models 段构建上下文引擎配置。
 // Python: _deep_agent_context_engine_config(react_cfg)
-// 仅根据 react.context_engine_config.enable_kv_cache_release 切换亲和开关；
-// 其余字段与 ReActAgentConfig 默认 context_engine_config 一致。
-func (d *DeepAdapter) deepAgentContextEngineConfig(config map[string]any) *ceschema.ContextEngineConfig {
-	if config == nil {
+//
+// 与 Python 保持同构：
+//   - Python 以 ReActAgentConfig().context_engine_config.model_copy(update=...) 起底，
+//     因此 max_context_message_num=200 / default_window_round_num=10 始终保留；
+//   - 仅切换 enable_kv_cache_release，其余字段取默认值。
+//
+// 本实现额外（设计 D4/D14）：
+//   - 把 models.defaults[].model_client_config.max_input_tokens 收集成
+//     model_context_window_tokens，供 ContextUtils.resolve_context_max 第 2 优先级命中；
+//   - 读取 compression_trigger_ratio / compression_target_ratio 供压缩阈值收口。
+func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[string]any) *ceschema.ContextEngineConfig {
+	if reactCfg == nil {
 		return nil
 	}
-	cecRaw, ok := config["context_engine_config"]
+	cecRaw, ok := reactCfg["context_engine_config"]
 	if !ok {
 		return nil
 	}
@@ -2036,13 +2046,71 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(config map[string]any) *cesch
 	if !ok {
 		return nil
 	}
+
 	// Python: 仅根据 enable_kv_cache_release 切换
 	result := ceschema.NewContextEngineConfig()
+	// 对齐 Python ReActAgentConfig 默认值，避免零值导致消息数/轮数不限（spec §4.5）
+	result.MaxContextMessageNum = 200
+	result.DefaultWindowRoundNum = 10
+
 	if v, ok := cecMap["enable_kv_cache_release"]; ok {
 		if b, ok := v.(bool); ok {
 			result.EnableKVCacheRelease = b
 		}
 	}
+	if f, ok := toRatio(cecMap["compression_trigger_ratio"]); ok {
+		result.CompressionTriggerRatio = f
+	}
+	if f, ok := toRatio(cecMap["compression_target_ratio"]); ok {
+		result.CompressionTargetRatio = f
+	}
+
+	// 收集各模型条目的输入上限（同模型多条目冲突时默认条目优先，设计 D10）
+	defaultModelName := ""
+	firstModelName := ""
+	for _, entry := range config.GetDefaultModels(configBase) {
+		mcc, _ := entry["model_client_config"].(map[string]any)
+		if mcc == nil {
+			continue
+		}
+		modelName, _ := mcc["model_name"].(string)
+		if modelName == "" {
+			continue
+		}
+		if firstModelName == "" {
+			firstModelName = modelName
+		}
+		isDefault, _ := entry["is_default"].(bool)
+		if isDefault && defaultModelName == "" {
+			defaultModelName = modelName
+		}
+		tokens, ok := toPositiveInt(mcc["max_input_tokens"])
+		if !ok {
+			continue
+		}
+		if prev, exists := result.ModelContextWindowTokens[modelName]; exists && prev != tokens {
+			if isDefault {
+				result.ModelContextWindowTokens[modelName] = tokens
+			}
+			logger.Warn(logComponent).
+				Str("model_name", modelName).
+				Int("kept", result.ModelContextWindowTokens[modelName]).
+				Int("ignored", tokens).
+				Msg("max_input_tokens 在同名模型条目间不一致，已按默认条目取值")
+			continue
+		}
+		result.ModelContextWindowTokens[modelName] = tokens
+	}
+
+	// 当前生效模型名：react.model_name 优先，其次默认条目，最后首个条目
+	if v, ok := reactCfg["model_name"].(string); ok && v != "" {
+		result.ModelName = v
+	} else if defaultModelName != "" {
+		result.ModelName = defaultModelName
+	} else {
+		result.ModelName = firstModelName
+	}
+
 	return &result
 }
 
@@ -2133,6 +2201,11 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 			mConfigOpts = append(mConfigOpts, llmschema.WithTopP(f))
 		}
 	}
+	// max_output_tokens → 生成上限默认值。请求级显式传值时优先（base_client.go:320-342），
+	// 因此这里只作为"模型级默认值"，不覆盖调用方的 WithInvokeMaxTokens。
+	if n, ok := toPositiveInt(mcc["max_output_tokens"]); ok {
+		mConfigOpts = append(mConfigOpts, llmschema.WithMaxTokens(n))
+	}
 	mConfig := llmschema.NewModelRequestConfig(mConfigOpts...)
 
 	// 构建 ModelClientConfig：从 mcc 提取字段
@@ -2189,6 +2262,9 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 		"model_name": {}, "client_provider": {}, "api_key": {}, "api_base": {},
 		"timeout": {}, "max_retries": {}, "verify_ssl": {}, "ssl_cert": {},
 		"custom_headers": {}, "client_id": {},
+		// 输入/输出上限由本层显式消费（max_output_tokens→MaxTokens、max_input_tokens→窗口映射），
+		// 不能落进 client 的 Extra（设计 D5）
+		"max_input_tokens": {}, "max_output_tokens": {},
 	}
 	for k, v := range mcc {
 		if _, ok := knownKeys[k]; !ok {
@@ -2747,13 +2823,25 @@ func paramsFloat(m map[string]any, key string, defaultVal float64) float64 {
 
 // resolveEnableTaskLoop 解析是否启用任务循环。
 // Python: _resolve_enable_task_loop(config, config_base)
+//
+// skill_create=True 时强制启用：SkillCreateRail 依赖 AFTER_TASK_ITERATION 事件与
+// enqueue_follow_up()，单轮模式下无法工作（Python interface_deep.py:2215-2248）。
 func (d *DeepAdapter) resolveEnableTaskLoop(config map[string]any, configBase map[string]any) bool {
+	configured := true
 	if v, ok := config["enable_task_loop"]; ok {
 		if b, ok := v.(bool); ok {
-			return b
+			configured = b
 		}
 	}
-	return true
+	if team.GetSkillCreateEnabled(configBase) {
+		if !configured {
+			logger.Warn(logComponent).
+				Bool("configured_value", configured).
+				Msg("skill_create requires enable_task_loop, overriding user config")
+		}
+		return true
+	}
+	return configured
 }
 
 // resolveEnableTaskPlanning 解析是否启用任务规划。
@@ -2786,17 +2874,55 @@ func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.Promp
 }
 
 // makeDeepAgentConfig 构造 DeepAgentConfig 用于热重载。
-// Python: _make_deep_agent_config(model, config, agent_card, tool_cards, rails)
+//
+// Python: _make_deep_agent_config() (interface_deep.py L2245-2283)
+//
+// 必须与 CreateInstance 的 CreateDeepAgentParams 同源：Python 侧两条路径都带
+// workspace / sys_operation / tools / subagents / context_engine_config 等字段。
+// 历史缺陷是本函数只填 Model/Card/Prompt/Rails，于是 `agent.reload_config`
+// 热重载后 deepConfig.Workspace 与 deepConfig.SysOperation 变成 nil：
+//   - 下一轮 ensureInitialized 把 nil 注入所有 pending rail，SysOperationRail
+//     重建出的 fs 工具持有 nil op，read_file 执行即 nil 解引用 panic；
+//   - MemoryRail / initMemoryManager 判定「无 workspace」直接跳过。
 func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]any, card *agentschema.AgentCard, toolCards []*tool.ToolCard, railsList []sainterfaces.AgentRail) *hschema.DeepAgentConfig {
+	resolvedLanguage := d.resolveRuntimeLanguage()
+
+	// Python: Workspace(root_path=self._workspace_dir or "./", language=resolved_language)
+	workspaceRoot := d.workspaceDir
+	if workspaceRoot == "" {
+		workspaceRoot = "./"
+	}
+
+	// Python: configured_subagents, should_add_general_agent = self._build_configured_subagents(model, config, config_base)
+	subagentSpecs, shouldEnableGeneralAgent := d.buildConfiguredSubagents(config, d.configBase)
+	// Python: L2575-2577: should_add_general_agent and (sub_mode == "plan" or mode.startswith("agent"))
+	shouldEnableGeneralAgent = shouldEnableGeneralAgent && (d.subMode == "plan" || strings.HasPrefix(d.mode, "agent"))
+
 	return &hschema.DeepAgentConfig{
-		Model:          model,
-		Card:           card,
-		SystemPrompt:   commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage()),
-		EnableTaskLoop: d.resolveEnableTaskLoop(config, nil),
-		MaxIterations:  paramsInt(config, "max_iterations", 15),
-		Language:       d.resolveRuntimeLanguage(),
-		PromptMode:     d.resolvePromptMode(nil),
-		Rails:          railsList, // 对齐 Python: rails=rails (interface_deep.py L2280)
+		Model:                  model,
+		Card:                   card,
+		SystemPrompt:           commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage()),
+		ContextEngineConfig:    d.deepAgentContextEngineConfig(config, d.configBase),
+		EnableTaskLoop:         d.resolveEnableTaskLoop(config, d.configBase),
+		MaxIterations:          paramsInt(config, "max_iterations", 15),
+		Subagents:              subagentSpecs,
+		AddGeneralPurposeAgent: shouldEnableGeneralAgent,
+		Tools:                  toolCards,
+		Workspace:              hworkspace.NewWorkspace(workspaceRoot, resolvedLanguage),
+		SysOperation:           d.sysOperation,
+		// Python 的 _make_deep_agent_config 未显式传 auto_create_workspace，
+		// 取 dataclass 默认值 True（与 CreateInstance 的硬编码 false 并列存在，
+		// 由 Python 侧自身决定）。Go 的 InitWorkspace 目前是占位实现，无副作用。
+		AutoCreateWorkspace: true,
+		CompletionTimeout:   paramsFloat(config, "completion_timeout", 3600.0),
+		Language:            resolvedLanguage,
+		PromptMode:          d.resolvePromptMode(nil),
+		Rails:               railsList, // 对齐 Python: rails=rails (interface_deep.py L2280)
+		VisionModelConfig:   d.visionModelConfig,
+		AudioModelConfig:    d.audioModelConfig,
+		// 注：EnableReadImageMultimodal 保持零值（false）。Python 热重载会回落默认
+		// True，但 Go 的 create 路径（CreateDeepAgentParams 未传）恒为 false，
+		// 中途中翻转会让 read_file 的图片多模态行为在会话内突变。
 	}
 }
 
@@ -2867,5 +2993,56 @@ func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 				logger.Info(logComponent).Msg("permissionRail created for first time (hot-reload triggered)")
 			}
 		}
+	}
+}
+
+// toPositiveInt 将任意数值或字符串转为正整数；非正数或不可解析返回 (0,false)。
+//
+// 用于把 yaml/前端传来的 token 上限（可能是 int、float64 或字符串）统一成 int。
+func toPositiveInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		if n > 0 {
+			return n, true
+		}
+	case int32:
+		if n > 0 {
+			return int(n), true
+		}
+	case int64:
+		if n > 0 {
+			return int(n), true
+		}
+	case float64:
+		if i := int(n); i > 0 {
+			return i, true
+		}
+	case string:
+		i, err := strconv.Atoi(strings.TrimSpace(n))
+		if err == nil && i > 0 {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// toRatio 将任意数值或字符串解析为 (0,1] 区间的比例；不可解析或越界返回 (0,false)。
+//
+// 0 是合法语义（表示"不按比例缩放"），因此解析失败与 0 都返回 false，由调用方保持 0 值。
+func toRatio(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, n > 0 && n <= 1
+	case int:
+		f := float64(n)
+		return f, f > 0 && f <= 1
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(n), 64)
+		if err != nil {
+			return 0, false
+		}
+		return f, f > 0 && f <= 1
+	default:
+		return 0, false
 	}
 }

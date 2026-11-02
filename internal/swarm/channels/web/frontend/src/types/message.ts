@@ -57,6 +57,10 @@ export interface Message {
   toolResult?: ToolResult;
   // 是否正在流式输出
   isStreaming?: boolean;
+  // 是否为思考过程块（reasoning_content）。
+  // 对齐 Python TUI 的 kind:"thinking" entry：独立思考块，content 承载思考文本，
+  // 与助手正文、工具卡片按时间线交错展示。
+  isThinking?: boolean;
   usageSummary?: UsageSummary;
   // Harness message flag for special styling
   isHarnessMessage?: boolean;

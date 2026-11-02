@@ -166,11 +166,12 @@ func Setup(opts ...Option) error {
 		l.fullRotationWriter = NewRotatingWriter(
 			filepath.Join(l.outputDir, "full.log"), l.rotationCfg)
 		fullWriter := NewMutexWriter(l.fullRotationWriter)
-		sanitizedFullWriter := NewSanitizerWriter(fullWriter, l.sanitizer)
+		// 脱敏在 JSON 阶段完成，其后再渲染为文本行
+		sanitizedFullWriter := NewSanitizerWriter(newTextWriter(fullWriter, true), l.sanitizer)
 
 		// 创建控制台 writer（stderr：stdout 只承载业务输出，可安全管道消费）
 		// Python: logging.StreamHandler() 默认 stream=sys.stderr（setup_logger L1628）
-		l.consoleWriter = zerolog.ConsoleWriter{Out: os.Stderr}
+		l.consoleWriter = newTextWriter(os.Stderr, false)
 		sanitizedConsoleWriter := NewSanitizerWriter(&l.consoleWriter, l.sanitizer)
 
 		// 为每个组件创建 Logger
@@ -433,7 +434,8 @@ func (l *Logger) createComponentLogger(
 	// - AgentServer: 被 AgentServer 和 Permissions 共享，需要
 	// 但为统一处理，所有组件文件 writer 都使用 mutexWriter
 	compWriter := NewMutexWriter(compRotationWriter)
-	sanitizedCompWriter := NewSanitizerWriter(compWriter, l.sanitizer)
+	// 脱敏在 JSON 阶段完成，其后再渲染为文本行
+	sanitizedCompWriter := NewSanitizerWriter(newTextWriter(compWriter, true), l.sanitizer)
 
 	// 组装多目标 writer
 	var writers []io.Writer
@@ -453,10 +455,13 @@ func (l *Logger) createComponentLogger(
 	level := l.componentLevel(comp)
 
 	// 创建 zerolog.Logger
+	// Caller() 采集业务调用点：logger.Info(comp) 返回 event 后立即返回，
+	// Msg() 仍在业务帧执行，因此 zerolog 默认跳帧数即可定位到调用点
 	zl := zerolog.New(multiWriter).
 		Level(level.ToZerologLevel()).
 		With().
 		Timestamp().
+		Caller().
 		Str("component", comp.String()).
 		Logger()
 
@@ -475,7 +480,7 @@ func (l *Logger) getOrCreateAgentServerWriter(
 
 	// agent_server.log 被 AgentServer 和 Permissions 共享，需要 mutexWriter
 	agentServerWriter := NewMutexWriter(agentServerRotationWriter)
-	return NewSanitizerWriter(agentServerWriter, l.sanitizer)
+	return NewSanitizerWriter(newTextWriter(agentServerWriter, true), l.sanitizer)
 }
 
 // componentLevel 返回指定组件的日志级别。

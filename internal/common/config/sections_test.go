@@ -84,9 +84,6 @@ func TestGetLoggingConfig(t *testing.T) {
 	if logging.Level != "info" {
 		t.Errorf("期望 level = info，实际 %s", logging.Level)
 	}
-	if logging.Format != "json" {
-		t.Errorf("期望 format = json，实际 %s", logging.Format)
-	}
 	if logging.ConsoleLevel != "info" {
 		t.Errorf("期望 console_level = info，实际 %s", logging.ConsoleLevel)
 	}
@@ -125,7 +122,6 @@ func TestUpdateLoggingConfig(t *testing.T) {
 
 	err := cfg.UpdateLoggingConfig(&LoggingConfig{
 		Level:        "debug",
-		Format:       "text",
 		ConsoleLevel: "debug",
 		Common:       "debug",
 		Gateway:      "debug",
@@ -147,9 +143,6 @@ func TestUpdateLoggingConfig(t *testing.T) {
 	}
 	if logging.Level != "debug" {
 		t.Errorf("期望 debug，实际 %s", logging.Level)
-	}
-	if logging.Format != "text" {
-		t.Errorf("期望 text，实际 %s", logging.Format)
 	}
 }
 

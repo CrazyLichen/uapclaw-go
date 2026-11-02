@@ -2,16 +2,17 @@ package rails
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -64,10 +65,14 @@ func emitToolResult(ctx context.Context, session sessioninterfaces.SessionFacade
 		return
 	}
 	rawOutput := structuredToolResultPayload(result)
+	// 展示文本：nil → ""、string 原样、其余紧凑 JSON。
+	// 曾是 fmt.Sprintf("%v")，Go 对 map 打印成 `map[k:v]`，前端与日志里全是
+	// `map[...]` 前缀；改用 utils.PyText（展示专用，不参与机器解析）。
+	resultText := truncateString(utils.PyText(result), 60000)
 	toolResultPayload := map[string]any{
 		"tool_name":    toolCallName(toolCall),
 		"tool_call_id": toolCallID(toolCall),
-		"result":       truncateString(fmt.Sprintf("%v", result), 60000),
+		"result":       resultText,
 	}
 	if rawOutput != nil {
 		toolResultPayload["raw_output"] = rawOutput
@@ -183,8 +188,9 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 		return
 	}
 
-	// 获取模型名称，对齐 Python: agent._config.model_name
+	// 获取模型名称与上下文引擎配置，对齐 Python: agent._config.model_name
 	var modelName string
+	var ceConfig ceschema.ContextEngineConfig
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -194,18 +200,22 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 		if agent := cbCtx.Agent(); agent != nil {
 			if config := agent.Config(); config != nil {
 				modelName = config.ModelName()
+				ceConfig = config.GetContextEngineConfig()
 			}
 		}
 	}()
 
-	// 计算上下文窗口上限，对齐 Python: ContextUtils.resolve_context_max(model_name=model_name)
-	rawTotalTokens := cecontext.ResolveContextMax(modelName, 0, nil)
+	// 计算上下文窗口上限：优先级 fallback > 模型映射 > 内置表 > 200000。
+	// 对齐 Python: ContextUtils.resolve_context_max(model_name=model_name,
+	//                fallback_context_window_tokens=..., model_context_window_tokens=...)
+	rawTotalTokens := cecontext.ResolveContextMax(
+		modelName, ceConfig.ContextWindowTokens, ceConfig.ModelContextWindowTokens)
 
-	// 获取当前 token 用量，对齐 Python: ctx.inputs.response.usage_metadata.total_tokens
+	// 获取当前 token 用量：优先输入侧（与分母同量纲），回退总 token
 	var currentContextTokens int
 	if inputs := cbCtx.Inputs(); inputs != nil {
-		if mcInputs, ok := inputs.(*sainterfaces.ModelCallInputs); ok && mcInputs.Response != nil && mcInputs.Response.UsageMetadata != nil {
-			currentContextTokens = mcInputs.Response.UsageMetadata.TotalTokens
+		if mcInputs, ok := inputs.(*sainterfaces.ModelCallInputs); ok && mcInputs.Response != nil {
+			currentContextTokens = contextUsageTokensUsed(mcInputs.Response.UsageMetadata)
 		}
 	}
 
@@ -255,4 +265,18 @@ func formatTodosForFrontend(todosData []hschema.TodoItem) []map[string]any {
 		})
 	}
 	return result
+}
+
+// contextUsageTokensUsed 计算 context.usage 的分子：优先输入侧 token，回退总 token。
+//
+// 分母是模型输入上限（ResolveContextMax），分子必须同量纲，否则长输出场景百分比虚高。
+// Python 侧对应 usage_metadata.total_tokens（本实现按设计 D6 收窄为输入侧）。
+func contextUsageTokensUsed(usage *llmschema.UsageMetadata) int {
+	if usage == nil {
+		return 0
+	}
+	if usage.InputTokens > 0 {
+		return usage.InputTokens
+	}
+	return usage.TotalTokens
 }

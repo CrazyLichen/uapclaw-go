@@ -258,7 +258,7 @@ func (s *InitFlowSuite) TestInit_链路_服务可启动() {
 	s.Require().NoError(err)
 
 	wsPort := s.pickFreePort()
-	s.saveAndSetenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", wsPort))
+	s.saveAndSetenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", wsPort))
 	pathutil.ResetCache()
 
 	cfg, err := config.New("")
@@ -441,4 +441,29 @@ func (s *InitFlowSuite) restoreEnv() {
 		}
 	}
 	s.envBackup = nil
+}
+
+// TestBootstrapEnv_端口变量带UAPCLAW前缀 覆盖实例 bootstrap 的端口变量命名。
+// 变量名必须与 web/gateway/agent_server 组件的读取点一致，
+// 否则 bootstrap 分配的端口不会被采纳，多实例仍会抢同一端口。
+func (s *InitFlowSuite) TestBootstrapEnv_端口变量带UAPCLAW前缀() {
+	instDir := filepath.Join(s.dataRoot, "inst-bootstrap")
+	envPath, err := workspace.CreateBootstrapEnv(&workspace.InstanceConfig{
+		Name:      "inst-bootstrap",
+		Workspace: instDir,
+		Ports:     workspace.CalculateInstancePorts(1),
+	})
+	s.Require().NoError(err)
+
+	data, readErr := os.ReadFile(envPath)
+	s.Require().NoError(readErr)
+	content := string(data)
+	for _, name := range []string{
+		"UAPCLAW_AGENT_SERVER_PORT=",
+		"UAPCLAW_WEB_PORT=",
+		"UAPCLAW_GATEWAY_PORT=",
+		"UAPCLAW_FRONTEND_PORT=",
+	} {
+		s.Require().Contains(content, name, "bootstrap .env 应包含 %s", name)
+	}
 }

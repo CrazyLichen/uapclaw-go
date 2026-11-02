@@ -2,12 +2,13 @@ package parser
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/xuri/excelize/v2"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -89,45 +90,11 @@ func (cellBool) isCellValue() {}
 // isCellValue 密封标记实现（cellTime）。
 func (cellTime) isCellValue() {}
 
-// pyFloatStr 还原 Python str(float) 记法。
-//
-// Python repr 规则（CPython float_repr）：
-//   - abs ∈ [1e-4, 1e16) 用普通记法（最短往返），整数值补 ".0"
-//   - 其余用 e 记法（Python 风格：1e+16 / 1e-05，指数最少两位）
-//   - nan/inf/-inf 特殊字面
-//
-// Go strconv.FormatFloat('f'/'e', -1, 64) 同为最短往返算法，d 格式区域
-// 内与 Python repr 等价；e 记法 Go 指数也是两位（1e-05 同形）。
-func pyFloatStr(f float64) string {
-	if math.IsNaN(f) {
-		return "nan"
-	}
-	if math.IsInf(f, 1) {
-		return "inf"
-	}
-	if math.IsInf(f, -1) {
-		return "-inf"
-	}
-	abs := math.Abs(f)
-	// 零值与 [1e-4, 1e16) 走 f 记法（对齐 CPython decpt 判定：decpt > 16
-	// 或 decpt <= -4 才 e 记法；0.0 的 decpt=1 特例走 f）
-	if abs == 0 || (abs >= 1e-4 && abs < 1e16) {
-		s := strconv.FormatFloat(f, 'f', -1, 64)
-		// 整数值补 .0（Python "2.0" 风格；-0.0 保留负号）
-		if !strings.Contains(s, ".") {
-			s += ".0"
-		}
-		return s
-	}
-	// e 记法：Go "1e+16"/"1e-05" 与 Python 同形（指数两位、正号保留）
-	return strconv.FormatFloat(f, 'e', -1, 64)
-}
-
 // cellStr 对齐 Python _cell_str：None→""，str(value).strip()。
 //
 // 逐变体模拟 Python str()：
 //   - cellInt → 十进制
-//   - cellFloat → pyFloatStr
+//   - cellFloat → utils.PyFloatStr
 //   - cellBool → "True"/"False"
 //   - cellTime → Python str(datetime) 格式（微秒非 0 补 .%06d）
 //   - cellString → 原文（strip）
@@ -142,7 +109,7 @@ func cellStr(v cellValue) string {
 	case cellInt:
 		return strconv.Itoa(int(val))
 	case cellFloat:
-		return pyFloatStr(float64(val))
+		return utils.PyFloatStr(float64(val))
 	case cellBool:
 		if val {
 			return "True"

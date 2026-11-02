@@ -2,6 +2,7 @@ package logger
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -215,8 +216,9 @@ func TestSanitizerWriter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Write 失败: %v", err)
 	}
-	if n == 0 {
-		t.Error("期望写入字节数 > 0")
+	// io.Writer 契约：必须返回 len(p)，否则上层（zerolog）会判定 short write
+	if n != len(input) {
+		t.Errorf("期望返回 len(p)=%d，实际 %d", len(input), n)
 	}
 
 	got := buf.String()
@@ -243,5 +245,38 @@ func TestSanitizerWriter_普通文本(t *testing.T) {
 	}
 	if got := buf.String(); got != "普通日志消息" {
 		t.Errorf("期望普通文本不变，实际 %q", got)
+	}
+}
+
+// errWriter 始终返回错误的 writer，用于覆盖写入失败路径
+type errWriter struct{}
+
+// Write 始终失败
+func (errWriter) Write([]byte) (int, error) { return 0, errors.New("boom") }
+
+// TestSanitizerWriter_底层写失败 验证错误向上传播且返回 0
+func TestSanitizerWriter_底层写失败(t *testing.T) {
+	w := NewSanitizerWriter(errWriter{}, NewSanitizer())
+	n, err := w.Write([]byte("password=secret123"))
+	if err == nil {
+		t.Fatal("期望返回错误")
+	}
+	if n != 0 {
+		t.Errorf("期望 n=0，实际 %d", n)
+	}
+}
+
+// TestSanitizerWriter_writeRaw 覆盖脱敏异常兜底路径
+func TestSanitizerWriter_writeRaw(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewSanitizerWriter(&buf, NewSanitizer()).(*sanitizerWriter)
+	n, err := w.writeRaw([]byte("raw"))
+	if err != nil || n != 3 || buf.String() != "raw" {
+		t.Errorf("writeRaw 行为不符: n=%d err=%v buf=%q", n, err, buf.String())
+	}
+
+	w2 := NewSanitizerWriter(errWriter{}, NewSanitizer()).(*sanitizerWriter)
+	if n, err := w2.writeRaw([]byte("raw")); err == nil || n != 0 {
+		t.Errorf("底层失败时应返回 (0,err)，实际 n=%d err=%v", n, err)
 	}
 }

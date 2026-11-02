@@ -458,8 +458,15 @@ func (d *DeepAgent) RegisterCallback(ctx context.Context, event agentinterfaces.
 	return nil
 }
 
-// RegisterRail 注册 Rail。
-// Python: BaseAgent.register_rail(rail) (line 1187)
+// RegisterRail 立即注册 Rail（不排队，不走 ensureInitialized）。
+//
+// 与 pending 路径（AddRail → ensureInitialized）的关键差异：这条路跳过了
+// pending 循环，因此 DeepAgentRail 的 sys_operation / workspace 注入必须
+// 在这里自己做——否则运行期按模式注册的 rail（MemoryRail、
+// ExternalMemoryRail、SkillEvolutionRail 等）拿到的永远是 nil，
+// 表现为 read_memory 恒返回「工作空间未初始化」、fs 工具 nil 解引用。
+//
+// Python: BaseAgent.register_rail(rail) (deep_agent.py L1187-1196)
 func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRail, opts ...cb.CallbackOption) error {
 	d.railsMu.Lock()
 	// 检查是否为 TaskCompletionRail
@@ -467,6 +474,20 @@ func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRai
 		d.taskCompletionRail = tc
 	}
 	d.railsMu.Unlock()
+
+	// Python: if isinstance(rail, DeepAgentRail):
+	//   rail.set_sys_operation(self.deep_config.sys_operation)
+	//   rail.set_workspace(self.deep_config.workspace)
+	// 注入必须在 Init 之前：rail 的 Init 会用这两个引用构造工具上下文。
+	if provider, ok := r.(rails.DeepAgentRailProvider); ok {
+		d.configMu.RLock()
+		cfg := d.deepConfig
+		d.configMu.RUnlock()
+		if cfg != nil {
+			provider.SetSysOperation(cfg.SysOperation)
+			provider.SetWorkspace(cfg.Workspace)
+		}
+	}
 
 	if err := r.Init(ctx, d); err != nil {
 		return err

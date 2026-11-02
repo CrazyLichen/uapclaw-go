@@ -43,17 +43,17 @@ func TestCreateBootstrapEnv(t *testing.T) {
 	if !strings.Contains(content, "UAPCLAW_INSTANCE=alice") {
 		t.Error("应包含 UAPCLAW_INSTANCE=alice")
 	}
-	if !strings.Contains(content, "AGENT_SERVER_PORT=") {
-		t.Error("应包含 AGENT_SERVER_PORT")
+	if !strings.Contains(content, "UAPCLAW_AGENT_SERVER_PORT=") {
+		t.Error("应包含 UAPCLAW_AGENT_SERVER_PORT")
 	}
-	if !strings.Contains(content, "WEB_PORT=") {
-		t.Error("应包含 WEB_PORT")
+	if !strings.Contains(content, "UAPCLAW_WEB_PORT=") {
+		t.Error("应包含 UAPCLAW_WEB_PORT")
 	}
-	if !strings.Contains(content, "GATEWAY_PORT=") {
-		t.Error("应包含 GATEWAY_PORT")
+	if !strings.Contains(content, "UAPCLAW_GATEWAY_PORT=") {
+		t.Error("应包含 UAPCLAW_GATEWAY_PORT")
 	}
-	if !strings.Contains(content, "FRONTEND_PORT=") {
-		t.Error("应包含 FRONTEND_PORT")
+	if !strings.Contains(content, "UAPCLAW_FRONTEND_PORT=") {
+		t.Error("应包含 UAPCLAW_FRONTEND_PORT")
 	}
 }
 
@@ -74,7 +74,7 @@ func TestCreateBootstrapEnv_端口值(t *testing.T) {
 
 	// 验证具体端口值
 	if !strings.Contains(content, "AGENT_SERVER_PORT=19092") {
-		t.Errorf("应包含 AGENT_SERVER_PORT=19092，内容: %s", content)
+		t.Errorf("应包含 UAPCLAW_AGENT_SERVER_PORT=19092，内容: %s", content)
 	}
 }
 
@@ -137,10 +137,10 @@ func TestCreateBootstrapEnv_部分端口(t *testing.T) {
 
 	// 存在的端口应写入
 	if !strings.Contains(content, "AGENT_SERVER_PORT=28092") {
-		t.Error("应包含 AGENT_SERVER_PORT=28092")
+		t.Error("应包含 UAPCLAW_AGENT_SERVER_PORT=28092")
 	}
 	// 不存在的端口不应出现
-	if strings.Contains(content, "WEB_PORT=") {
+	if strings.Contains(content, "UAPCLAW_WEB_PORT=") {
 		t.Error("缺失的端口不应写入")
 	}
 }
@@ -163,5 +163,26 @@ func TestCreateBootstrapEnvForName_不存在(t *testing.T) {
 	// 验证文件存在
 	if _, err := os.Stat(envPath); err != nil {
 		t.Errorf("文件应存在: %v", err)
+	}
+}
+
+// TestPortEnvName 覆盖端口类型到环境变量名的映射（含未知类型）
+func TestPortEnvName(t *testing.T) {
+	cases := []struct {
+		portType string
+		want     string
+		ok       bool
+	}{
+		{"agent_server", "UAPCLAW_AGENT_SERVER_PORT", true},
+		{"web", "UAPCLAW_WEB_PORT", true},
+		{"gateway", "UAPCLAW_GATEWAY_PORT", true},
+		{"frontend", "UAPCLAW_FRONTEND_PORT", true},
+		{"unknown", "", false},
+	}
+	for _, tc := range cases {
+		got, ok := portEnvName(tc.portType)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("portEnvName(%q) = (%q,%v)，期望 (%q,%v)", tc.portType, got, ok, tc.want, tc.ok)
+		}
 	}
 }

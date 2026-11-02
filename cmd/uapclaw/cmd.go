@@ -230,6 +230,19 @@ Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 	return cmd
 }
 
+// applyWebAddrFlags 把 --host/--port 覆盖写入 Web 通道环境变量。
+//
+// 优先级对齐 Python：命令行参数 > 环境变量 > 默认值（app_gateway.py:1807-1808）。
+// 写入失败不影响启动（变量名与取值均合法，实际不会失败），故忽略返回错误。
+func applyWebAddrFlags(cmd *cobra.Command) {
+	if host, _ := cmd.Flags().GetString("host"); host != "" {
+		_ = os.Setenv("UAPCLAW_WEB_HOST", host)
+	}
+	if port, _ := cmd.Flags().GetInt("port"); port > 0 {
+		_ = os.Setenv("UAPCLAW_WEB_PORT", fmt.Sprintf("%d", port))
+	}
+}
+
 // runAppCmd 执行 app 子命令。
 //
 // 启动流程对齐 Python app.py / app_gateway.py：
@@ -246,20 +259,8 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// CLI 参数覆写环境变量（优先于配置文件）
-	// 注意：此时 logger 尚未初始化，使用 fmt.Fprintf(os.Stderr) 输出错误。
-	host, _ := cmd.Flags().GetString("host")
-	port, _ := cmd.Flags().GetInt("port")
-	if host != "" {
-		if err := os.Setenv("UAPCLAW_GATEWAY_HOST", host); err != nil {
-			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_GATEWAY_HOST 失败: %v\n", err)
-		}
-	}
-	if port > 0 {
-		if err := os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port)); err != nil {
-			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_GATEWAY_PORT 失败: %v\n", err)
-		}
-	}
+	// CLI 参数覆写环境变量（优先级最高，对齐 Python args.host / args.port）
+	applyWebAddrFlags(cmd)
 
 	// --dist 显式指定前端产物目录（对齐 Python app_web.py L985-991 的 --dist：
 	// 不存在/不是目录即启动失败，Python 为 SystemExit）。

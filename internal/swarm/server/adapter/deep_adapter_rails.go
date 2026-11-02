@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
@@ -20,6 +21,7 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hookscfg "github.com/uapclaw/uapclaw-go/internal/common/hooks"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
@@ -144,7 +146,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	}
 
 	// 步骤 12: contextProcessorRail — Python: _context_processor_rail
-	cp := d.buildContextProcessorRail()
+	cp := d.buildContextProcessorRail(d.configCache)
 	d.contextProcessorRail = cp
 	railsList = append(railsList, cp)
 
@@ -783,10 +785,35 @@ func (d *DeepAdapter) buildContextAssembleRail(mode string) sainterfaces.AgentRa
 	return cerails.NewContextAssembleRail()
 }
 
-// buildContextProcessorRail 构建上下文处理护栏。
-// Python: _build_context_processor_rail() (line 2196-2212)
-func (d *DeepAdapter) buildContextProcessorRail() sainterfaces.AgentRail {
-	return cerails.NewContextProcessorRail()
+// buildContextProcessorRail 构建上下文处理护栏，并把 yaml 里的 processor 配置透传进去。
+//
+// Python: _build_context_processor_rail(config) (interface_deep.py L346-395)
+//
+// 覆盖机制走 ProcessorSpec.ConfigOverrides（字段级部分覆盖），因此 yaml 里的绝对阈值会先
+// 合并进 preset，再在 rail.Init 中被比例收口（spec §6.6）。Python 只认四段，本实现额外
+// 支持 full_compact_processor_config（设计 D9，Python 侧待同构）。
+func (d *DeepAdapter) buildContextProcessorRail(reactCfg map[string]any) sainterfaces.AgentRail {
+	ctxCfg, _ := reactCfg["context_engine_config"].(map[string]any)
+	userProcessors := make([]ceiface.ProcessorSpec, 0, 5)
+	specs := []struct {
+		configKey string
+		typeName  string
+	}{
+		{"message_summary_offloader_config", "MessageSummaryOffloader"},
+		{"dialogue_compressor_config", "DialogueCompressor"},
+		{"current_round_compressor_config", "CurrentRoundCompressor"},
+		{"round_level_compressor_config", "RoundLevelCompressor"},
+		{"full_compact_processor_config", "FullCompactProcessor"},
+	}
+	for _, spec := range specs {
+		if m, _ := ctxCfg[spec.configKey].(map[string]any); len(m) > 0 {
+			userProcessors = append(userProcessors, ceiface.ProcessorSpec{
+				Type:            spec.typeName,
+				ConfigOverrides: utils.DeepCopyMap(m),
+			})
+		}
+	}
+	return cerails.NewContextProcessorRail(cerails.WithUserProcessors(userProcessors))
 }
 
 // buildPermissionRail 构建权限护栏。
@@ -937,7 +964,7 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 	contextEnabled, _ := contextEngineConfig["enabled"].(bool)
 	if contextEnabled {
 		if d.contextProcessorRail == nil {
-			d.contextProcessorRail = d.buildContextProcessorRail()
+			d.contextProcessorRail = d.buildContextProcessorRail(d.configCache)
 			if d.contextProcessorRail != nil && d.instance != nil {
 				if err := d.instance.RegisterRail(ctx, d.contextProcessorRail); err != nil {
 					logger.Error(logComponent).Err(err).Msg("Failed to register ContextProcessorRail")
@@ -1081,7 +1108,7 @@ func (d *DeepAdapter) updateAgentModeRails(ctx context.Context, mode string) {
 
 	// 5. ContextProcessorRail — agent 模式下按需注册
 	if d.contextProcessorRail == nil {
-		d.contextProcessorRail = d.buildContextProcessorRail()
+		d.contextProcessorRail = d.buildContextProcessorRail(d.configCache)
 		if d.contextProcessorRail != nil && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, d.contextProcessorRail); err != nil {
 				logger.Error(logComponent).Err(err).Msg("Failed to register ContextProcessorRail")
@@ -1488,7 +1515,7 @@ func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]
 	case "buildContextAssembleRail":
 		return d.buildContextAssembleRail(d.mode)
 	case "buildContextProcessorRail":
-		return d.buildContextProcessorRail()
+		return d.buildContextProcessorRail(d.configCache)
 	case "buildSkillEvolutionRail":
 		return d.buildSkillEvolutionRail()
 	case "buildWorktreeRail":

@@ -45,7 +45,7 @@
 //	├── pdf_parser.go    # PDFParser：PDF 双通道解析（文本+图片 caption）（13.12）
 //	├── docx_model.go    # docx stdlib 自研解析层：zip/rels/styles/块遍历/合并单元格/图片链（13.13）
 //	├── word_parser.go   # WordParser：DOCX markdown 转换（13.13）
-//	├── excel_value.go   # cellValue 密封 sum type + cellStr/pyFloatStr + excelize adapter（openpyxl 类型语义还原）（13.13）
+//	├── excel_value.go   # cellValue 密封 sum type + cellStr/utils.PyFloatStr + excelize adapter（openpyxl 类型语义还原）（13.13）
 //	├── excel_parser.go  # ExcelParser：行/列 Document 产出 + CSV/TSV（13.13）
 //	├── html_file_parser.go  # HTMLFileParser：本地 HTML 主内容/标题/文本净化共享工具链（13.14）
 //	├── web_page_parser.go   # WebPageParser：网页 URL 下载解析 + verify 密封 sum type + URL 正则（13.14）

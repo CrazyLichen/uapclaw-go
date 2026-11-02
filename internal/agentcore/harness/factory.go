@@ -158,6 +158,12 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	if params.CompletionTimeout > 0 {
 		config.CompletionTimeout = params.CompletionTimeout
 	}
+	// Python: factory.py L305-310「Forward extra kwargs to config fields」
+	// create_deep_agent(**kwargs) 把 context_engine_config 透传到 DeepAgentConfig；
+	// Go 侧无 kwargs 机制，需显式透传，否则适配器算出的窗口映射/比例/亲和开关会被静默丢弃。
+	if params.ContextEngineConfig != nil {
+		config.ContextEngineConfig = params.ContextEngineConfig
+	}
 
 	// ── 步骤 8：DeepAgent 实例化 ──
 	// Python: factory.py L356-357
