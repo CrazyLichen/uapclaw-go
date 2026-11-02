@@ -1,11 +1,12 @@
 // Package pregel 提供 Pregel 图引擎的配置、常量、超步调度信号、中断值与中断控制流。
 //
-// 本包是领域八的编译期最底层：构图（8.1）、节点与通道抽象（8.3）、
+// 本包是领域八的编译期最底层：构图（8.1）、节点描述体（8.3）、
 // 调度引擎（8.3b/8.3c）、通道管理（8.4）、顶点（8.11）、工作流（8.14）
 // 均依赖本包提供的保留节点名、终止态键、递归预算、配置归一化能力，
 // 以及超步之间传递调度消息的 Message、承载中断值的 Interrupt、承载中断跳转的
-// GraphInterrupt、产出调度消息的 Router，与落地这些消息并决定下一超步激活哪些
-// 节点的 Channel/ChannelManager（就绪判定 + CNF 汇聚 + 检查点快照）。
+// GraphInterrupt、产出调度消息的 Router、把执行体与出边绑在一起的 PregelNode，
+// 与落地这些消息并决定下一超步激活哪些节点的 Channel/ChannelManager
+// （就绪判定 + CNF 汇聚 + 检查点快照）。
 //
 // 配置以值类型结构体表达：字段零值等价于 Python TypedDict(total=False)
 // 的「键缺失/None」，因此不存在指针字段，调用方也无须判空。
@@ -31,6 +32,7 @@
 //	pregel/
 //	├── doc.go         # 包文档
 //	├── base.go        # Message/MessageKind/构造函数/Kind 与 Interrupt 值对象、GraphInterrupt 中断跳转
+//	├── node.go        # NodeInput/NodeFunc 与节点描述体 PregelNode（含 addRouter/NoopNodeFunc）
 //	├── channels.go    # Channel 接口 + ChannelSnapshot + Trigger/Barrier 通道 + ChannelManager
 //	├── router.go      # Router 接口 + Selector/SelectorFunc + Static/Barrier/Conditional 三个路由实现
 //	├── constants.go   # 保留节点名、终止态键、命名空间键名与分隔符
