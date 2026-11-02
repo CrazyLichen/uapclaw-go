@@ -56,6 +56,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -367,8 +368,12 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 			if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(invokeInputs) {
 				ch, err := d.runTaskLoopStream(ctx, invokeInputs, sess, streamModes)
 				if err != nil {
-					logger.Error(logComponent).Err(err).Msg("runTaskLoopStream start failed")
-					emitStreamError(outCh, err)
+					// ctx 取消不是错误：不写错误帧
+					// （对齐 Python：取消时 generator 终止，不产出 error 帧）
+					if !utils.Canceled(ctx) {
+						logger.Error(logComponent).Err(err).Msg("runTaskLoopStream start failed")
+						emitStreamError(outCh, err)
+					}
 					return err
 				}
 				for chunk := range ch {
@@ -381,8 +386,11 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 			} else {
 				ch, err := d.runSingleRoundStream(ctx, invokeInputs, sess, streamModes)
 				if err != nil {
-					logger.Error(logComponent).Err(err).Msg("runSingleRoundStream start failed")
-					emitStreamError(outCh, err)
+					// ctx 取消不是错误：不写错误帧（同上）
+					if !utils.Canceled(ctx) {
+						logger.Error(logComponent).Err(err).Msg("runSingleRoundStream start failed")
+						emitStreamError(outCh, err)
+					}
 					return err
 				}
 				for chunk := range ch {

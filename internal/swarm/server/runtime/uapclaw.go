@@ -355,6 +355,12 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		for chunk := range outCh {
 			if payload := chunk.Payload; payload != nil {
 				if eventType, _ := payload["event_type"].(string); eventType != "" {
+					// 取消后的错误帧一律丢弃（既不下发也不落 history）。
+					// 对齐 Python：取消（CancelledError）不产生 chat.error；Go 侧错误帧
+					// 源头分散（ReAct 收尾、task-loop 轮次结果、adapter 兜底），在这里统一收口。
+					if eventType == "chat.error" && utils.Canceled(ctx) {
+						continue
+					}
 					if shouldRecordHistory(eventType) {
 						// Python: 补传 mode
 						streamMode := ""

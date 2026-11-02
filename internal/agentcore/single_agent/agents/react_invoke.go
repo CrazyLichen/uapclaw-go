@@ -254,6 +254,16 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 	result map[string]any,
 	sess sessioninterfaces.SessionFacade,
 ) {
+	// ctx 已取消时不再写任何结果帧：对齐 Python —— 取消后 generator 终止，
+	// 既不会写 answer 也不会写 error，避免旧轮把"取消"当错误写进流与 history。
+	// 该守卫同时覆盖 DeepAgent 的 writeRoundResultToStream 路径。
+	if utils.Canceled(ctx) {
+		logger.Info(logComponent).
+			Str("event_type", "stream_result_skipped").
+			Msg("skip writing invoke result: request canceled")
+		return
+	}
+
 	resultType, _ := result["result_type"].(string)
 	if resultType == "interrupt" {
 		if _, hasInterruptIDs := result["interrupt_ids"]; hasInterruptIDs {
