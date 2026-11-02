@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -287,6 +288,13 @@ func (a *ReActAgent) callLLMStream(
 				chunkIndex++
 			}
 		}
+	}
+
+	// 取消判定：流可能因 ctx 取消而正常关闭（客户端只关通道、不回错误），
+	// 此时若继续返回累积消息，半截回答会被当成最终答复。
+	// 对齐 Python：取消发生在 await 点时抛 CancelledError，不会产出 answer。
+	if utils.Canceled(ctx) {
+		return nil, ctx.Err()
 	}
 
 	// 从累积 chunk 转换为最终 AssistantMessage（对齐 Python L791-802）
