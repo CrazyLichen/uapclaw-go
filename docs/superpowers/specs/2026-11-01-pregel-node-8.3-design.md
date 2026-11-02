@@ -106,6 +106,8 @@ type NodeFunc func(ctx context.Context, in NodeInput) error
 
 结论：`State any` 为终态，8.3 落地时不改、也不设回填点。将来若要接通图状态，唯一合法形态是「`State any` + 在 graph 层断言」（与 session 层断言 `Interrupt.Value` 同款纪律），而非在 pregel 内换具体类型。
 
+**接入状态（2026-11-01 实施后追记，非回填点）**：本节交付时 `NodeInput` 的两个字段**零读者、零写者**——`NewPregelNode`／`NodeInput{...}`／`NodeFunc(...)` 在全仓非测试代码中零调用，`node_test.go` 是唯一构造点，且只断言 `State == nil`。它此刻的价值只有两条：① 把 `NodeFunc` 的签名一次定死，避免 8.3b/8.11 返工；② 对齐 Python 的数据形状。真正的写入方是 8.3b 的 `NodeTask`（`Config` 由 `CreateInnerConfig` 派生并改写 `Ns`/`ParentNs`），真正的读取方是 8.11 的 `Vertex`。这类「字段先于消费者存在」的状态属于本节的有意设计，**不是缺陷、也不设 ⤴️ 回填标记**。
+
 ### 3.3 `PregelNode`
 
 ```go

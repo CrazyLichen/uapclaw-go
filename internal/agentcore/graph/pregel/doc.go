@@ -29,6 +29,12 @@
 //     GraphInterrupt 实现了 Error()（仅供日志），按 error 兜底会把中断当普通错误吞掉。
 //   - ChannelManager 无锁（对齐 Python 的 channels.py）：只允许超步循环所在
 //     goroutine 串行调用；节点任务在其他 goroutine 执行，但不得触碰 ChannelManager。
+//   - any 纪律：能给字段找到具体类型的一律收窄，用 any 必须就地写明理由。当前四处
+//     数据位都有理由——Message.Payload（Python 声明 Any 且调用点从不传值）、
+//     Interrupt.Value（session 层装箱，收窄即反向依赖）、Selector.Select 的 state
+//     与 NodeInput.State（Python 恒 None，且 graph_state.GraphState 属 graph 包，
+//     pregel 引用它即刻成环）。本包是叶子包：任何新增 import 都可能把 any 的
+//     「唯一正当理由」变成真实的编译期环，故新增 any 前先问「能不能不用 any」。
 //
 // 文件目录：
 //
