@@ -130,15 +130,14 @@ internal/swarm/server/adapter/deep_adapter.go#L2513-L2534
 cmd/uapclaw/cmd.go#L263-L263
 
 # ── 2026-11-02 记忆工具结果键名对齐 Python（json tag） ──
-# lite/types.go — 本次改动只是给 7 个结果结构体的字段补 json tag（键名对齐 Python
-# dict：results/success/content/totalLines/start_line/...）。结构体字段与 tag 不是
-# 可执行语句，go tool cover 不为其产生覆盖块，门禁无法测量；序列化后的键名形状
-# 由 tool_ops_test.go 的 TestMemorySearchWithContext_空结果非nil切片 /
-# _Manager返回nil规整为空切片 用 json.Marshal 实断言（断言 "results":[] 且不出现大写键）。
-internal/agentcore/memory/lite/types.go#L40-L57
-internal/agentcore/memory/lite/types.go#L166-L177
-internal/agentcore/memory/lite/types.go#L180-L189
-internal/agentcore/memory/lite/types.go#L192-L209
-internal/agentcore/memory/lite/types.go#L212-L225
-internal/agentcore/memory/lite/types.go#L228-L239
-internal/agentcore/memory/lite/types.go#L242-L259
+# lite/types.go — 整文件只有 type 声明（无 func/var/const），go tool cover 不产生
+# 任何覆盖块，改动行永远判「未被执行」（门禁在 in_total==0 分支不认行级豁免）。
+# 本次改动只是给 7 个结果结构体字段补 json tag；序列化后的键名形状由
+# lite/tool_ops_test.go 的「空结果非nil切片」「Manager返回nil规整为空切片」两条
+# 用例用 json.Marshal 实断言（含 "results":[] 与"不出现大写键"）。
+internal/agentcore/memory/lite/types.go
+
+# lite/tool_ops.go#L79 — MemorySearchWithContext 的 `toolCtx.Manager == nil` 分支：
+# EnsureManager() 返回 true 当且仅当 Manager 非 nil（其余路径 return false），
+# 故该分支在 Go 侧不可达；保留是为了与 Python `if not ctx.manager` 结构一一对应。
+internal/agentcore/memory/lite/tool_ops.go#L79-L79

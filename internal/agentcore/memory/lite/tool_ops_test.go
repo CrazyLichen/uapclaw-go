@@ -3,6 +3,7 @@ package lite
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,8 @@ import (
 type fakeSearchManager struct {
 	// results Search 返回值（刻意允许为 nil 切片）
 	results []SearchResult
+	// err Search 返回的错误
+	err error
 }
 
 func (f *fakeSearchManager) Initialize(context.Context) error { return nil }
@@ -27,7 +30,7 @@ func (f *fakeSearchManager) Initialize(context.Context) error { return nil }
 func (f *fakeSearchManager) Sync(context.Context, string, bool) error { return nil }
 
 func (f *fakeSearchManager) Search(context.Context, string, SearchOpts) ([]SearchResult, error) {
-	return f.results, nil
+	return f.results, f.err
 }
 
 func (f *fakeSearchManager) ReadFile(context.Context, string, *int, *int) (*ReadFileResult, error) {
@@ -281,5 +284,39 @@ func TestMemorySearchWithContext_Manager返回nil规整为空切片(t *testing.T
 	}
 	if !strings.Contains(string(data), `"results":[]`) {
 		t.Errorf("JSON 应包含 \"results\":[]，实际: %s", data)
+	}
+}
+
+// TestMemorySearchWithContext_nil上下文 覆盖 toolCtx 为 nil 的防御分支
+func TestMemorySearchWithContext_nil上下文(t *testing.T) {
+	result := MemorySearchWithContext(context.Background(), nil, "q", nil, nil, "")
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if !result.Disabled || result.Error == "" {
+		t.Errorf("nil 上下文应返回 disabled+error，实际: %+v", result)
+	}
+	if result.Results == nil {
+		t.Error("Results 应为空切片而非 nil")
+	}
+}
+
+// TestMemorySearchWithContext_检索失败 覆盖 Manager.Search 返回错误的分支
+func TestMemorySearchWithContext_检索失败(t *testing.T) {
+	toolCtx := &MemoryToolContext{}
+	toolCtx.Manager = &fakeSearchManager{err: errors.New("embedding 服务不可用")}
+
+	result := MemorySearchWithContext(context.Background(), toolCtx, "q", nil, nil, "")
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if !result.Disabled {
+		t.Error("检索失败应返回 disabled=true（对齐 Python except 分支）")
+	}
+	if !strings.Contains(result.Error, "embedding 服务不可用") {
+		t.Errorf("Error 应带上底层错误，实际: %q", result.Error)
+	}
+	if result.Results == nil {
+		t.Error("Results 应为空切片而非 nil")
 	}
 }
