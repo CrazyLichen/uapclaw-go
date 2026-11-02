@@ -1062,3 +1062,47 @@ func TestUpdateToolsForMode_正常注册(t *testing.T) {
 		t.Errorf("session_new ability count=%d, want 1（移除旧卡后重注册）", count)
 	}
 }
+
+// TestResolveEnableTaskLoop_SkillCreate覆盖 验证 skill_create=true 时强制启用 task loop
+// 对齐 Python interface_deep.py:2215-2248
+func TestResolveEnableTaskLoop_SkillCreate覆盖(t *testing.T) {
+	d := &DeepAdapter{}
+	cases := []struct {
+		name       string
+		config     map[string]any
+		configBase map[string]any
+		want       bool
+	}{
+		{
+			name:       "skill_create=true且用户关闭则强制开启",
+			config:     map[string]any{"enable_task_loop": false},
+			configBase: map[string]any{"evolution": map[string]any{"skill_create": true}},
+			want:       true,
+		},
+		{
+			name:       "skill_create=true且缺键默认开启",
+			config:     map[string]any{},
+			configBase: map[string]any{"evolution": map[string]any{"skill_create": true}},
+			want:       true,
+		},
+		{
+			name:       "skill_create=false则尊重用户关闭",
+			config:     map[string]any{"enable_task_loop": false},
+			configBase: map[string]any{"evolution": map[string]any{"skill_create": false}},
+			want:       false,
+		},
+		{
+			name:       "无skill_create配置则尊重用户关闭",
+			config:     map[string]any{"enable_task_loop": false},
+			configBase: map[string]any{},
+			want:       false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := d.resolveEnableTaskLoop(tc.config, tc.configBase); got != tc.want {
+				t.Errorf("resolveEnableTaskLoop = %v，期望 %v", got, tc.want)
+			}
+		})
+	}
+}

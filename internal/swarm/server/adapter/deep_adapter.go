@@ -44,6 +44,7 @@ import (
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -2747,13 +2748,25 @@ func paramsFloat(m map[string]any, key string, defaultVal float64) float64 {
 
 // resolveEnableTaskLoop 解析是否启用任务循环。
 // Python: _resolve_enable_task_loop(config, config_base)
+//
+// skill_create=True 时强制启用：SkillCreateRail 依赖 AFTER_TASK_ITERATION 事件与
+// enqueue_follow_up()，单轮模式下无法工作（Python interface_deep.py:2215-2248）。
 func (d *DeepAdapter) resolveEnableTaskLoop(config map[string]any, configBase map[string]any) bool {
+	configured := true
 	if v, ok := config["enable_task_loop"]; ok {
 		if b, ok := v.(bool); ok {
-			return b
+			configured = b
 		}
 	}
-	return true
+	if team.GetSkillCreateEnabled(configBase) {
+		if !configured {
+			logger.Warn(logComponent).
+				Bool("configured_value", configured).
+				Msg("skill_create requires enable_task_loop, overriding user config")
+		}
+		return true
+	}
+	return configured
 }
 
 // resolveEnableTaskPlanning 解析是否启用任务规划。
@@ -2792,7 +2805,7 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 		Model:          model,
 		Card:           card,
 		SystemPrompt:   commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage()),
-		EnableTaskLoop: d.resolveEnableTaskLoop(config, nil),
+		EnableTaskLoop: d.resolveEnableTaskLoop(config, d.configBase),
 		MaxIterations:  paramsInt(config, "max_iterations", 15),
 		Language:       d.resolveRuntimeLanguage(),
 		PromptMode:     d.resolvePromptMode(nil),
