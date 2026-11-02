@@ -17,6 +17,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
@@ -31,6 +32,7 @@ import (
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -55,6 +57,8 @@ type fakeAgentRail struct {
 	initCalled bool
 	// uninitCalled Uninit 是否被调用
 	uninitCalled bool
+	// initErr Init 返回的错误（非 nil 时模拟初始化失败）
+	initErr error
 }
 
 // fakeAgentRailWithType 带独立类型的模拟 Rail（用于 FindRailsByType 测试）
@@ -75,6 +79,20 @@ type fakeAgentRailWithCallbacks struct {
 	base agentinterfaces.BaseRail
 	// events 声明的回调事件列表
 	events []agentinterfaces.AgentCallbackEvent
+}
+
+// fakeDeepAgentRail fakeAgentRail 的变体：嵌入 rails.DeepAgentRail 以同时满足
+// rails.DeepAgentRailProvider（SetWorkspace / SetSysOperation），
+// 用于验证 RegisterRail 的依赖注入。
+type fakeDeepAgentRail struct {
+	// DeepAgentRail 提供 workspace / sys_operation 存取与默认回调
+	rails.DeepAgentRail
+	// initCalled Init 是否被调用
+	initCalled bool
+	// workspaceAtInit Init 时刻看到的 workspace（验证注入早于 Init）
+	workspaceAtInit *workspace.Workspace
+	// sysOperationAtInit Init 时刻看到的 sys_operation
+	sysOperationAtInit sysop.SysOperation
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -393,6 +411,63 @@ func TestDeepAgent_RegisterRail_正常注册(t *testing.T) {
 	if !fr.initCalled {
 		t.Error("RegisterRail 后 Rail.Init 未被调用")
 	}
+}
+
+// TestDeepAgent_RegisterRail_注入Workspace与SysOperation 验证「立即注册」路径
+// 会在 Init 之前给 DeepAgentRail 注入 workspace / sys_operation。
+//
+// 回归背景：RegisterRail 跳过了 pending 循环（注入只写在 ensureInitialized），
+// 导致运行期按模式注册的 MemoryRail 拿到 nil workspace，read_memory 恒返回
+// 「工作空间未初始化」。
+//
+// Python: register_rail 中的 set_sys_operation / set_workspace（deep_agent.py L1191-1193）
+func TestDeepAgent_RegisterRail_注入Workspace与SysOperation(t *testing.T) {
+	ws := workspace.NewWorkspace(t.TempDir(), "cn")
+	op := sysop.NewLocalSysOperation(sysop.NewSysOperationCard(
+		sysop.WithSysOpMode(sysop.OperationModeLocal),
+	))
+
+	d := newTestDeepAgent()
+	cfg := schema.NewDeepAgentConfig()
+	cfg.Workspace = ws
+	cfg.SysOperation = op
+	require.NoError(t, d.ConfigureDeepConfig(context.Background(), cfg))
+
+	rail := &fakeDeepAgentRail{}
+	require.NoError(t, d.RegisterRail(context.Background(), rail))
+
+	assert.True(t, rail.initCalled, "RegisterRail 后 Rail.Init 应被调用")
+	assert.Equal(t, ws, rail.workspaceAtInit, "Init 之前应已注入 workspace")
+	assert.Equal(t, op, rail.sysOperationAtInit, "Init 之前应已注入 sys_operation")
+}
+
+// TestDeepAgent_RegisterRail_配置缺字段时注入nil 验证 deep_config 缺
+// workspace / sys_operation 时不 panic（Python 侧 deep_config 恒非 nil，
+// Go 侧允许未配置，此时注入 nil 与 pending 路径行为一致）
+func TestDeepAgent_RegisterRail_配置缺字段时注入nil(t *testing.T) {
+	d := newTestDeepAgent()
+	require.NoError(t, d.ConfigureDeepConfig(context.Background(), schema.NewDeepAgentConfig()))
+
+	rail := &fakeDeepAgentRail{}
+	require.NoError(t, d.RegisterRail(context.Background(), rail))
+
+	assert.True(t, rail.initCalled, "RegisterRail 后 Rail.Init 应被调用")
+	assert.Nil(t, rail.workspaceAtInit, "未配置 workspace 时应注入 nil")
+	assert.Nil(t, rail.sysOperationAtInit, "未配置 sys_operation 时应注入 nil")
+}
+
+// TestDeepAgent_RegisterRail_Init失败向上返回错误 验证 Init 报错时错误上抛
+// 且不写入 registeredRails（避免半注册状态）
+func TestDeepAgent_RegisterRail_Init失败向上返回错误(t *testing.T) {
+	d := newTestDeepAgent()
+	boom := errors.New("init boom")
+	fr := &fakeAgentRail{initErr: boom}
+
+	err := d.RegisterRail(context.Background(), fr)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, boom)
+	assert.True(t, fr.initCalled, "Init 应被调用")
+	assert.Empty(t, d.registeredRails, "Init 失败时不应写入 registeredRails")
 }
 
 // TestDeepAgent_UnregisterRail 从已注册列表移除并调用 Uninit
@@ -1301,6 +1376,37 @@ func TestDeepAgent_EnsureInitialized_已初始化(t *testing.T) {
 	if err != nil {
 		t.Fatalf("已初始化时 EnsureInitialized 返回错误: %v", err)
 	}
+}
+
+// TestDeepAgent_EnsureInitialized_为pendingRail注入依赖 验证排队路径
+// （AddRail → ensureInitialized）同样在 Init 之前注入 workspace / sys_operation。
+//
+// 与 TestDeepAgent_RegisterRail_注入Workspace与SysOperation 对称：两条注册路径
+// 都必须注入，漏掉任意一条都会让 rail 拿到 nil（read_memory 报工作空间未初始化、
+// fs 工具 nil op panic）。
+//
+// Python: _ensure_initialized 中的 set_sys_operation / set_workspace（deep_agent.py L846-849）
+func TestDeepAgent_EnsureInitialized_为pendingRail注入依赖(t *testing.T) {
+	ws := workspace.NewWorkspace(t.TempDir(), "cn")
+	op := sysop.NewLocalSysOperation(sysop.NewSysOperationCard(
+		sysop.WithSysOpMode(sysop.OperationModeLocal),
+	))
+
+	d := newTestDeepAgent()
+	cfg := schema.NewDeepAgentConfig()
+	cfg.Workspace = ws
+	cfg.SysOperation = op
+	require.NoError(t, d.ConfigureDeepConfig(context.Background(), cfg))
+
+	rail := &fakeDeepAgentRail{}
+	d.AddRail(rail)
+
+	_, err := d.EnsureInitialized(context.Background())
+	require.NoError(t, err)
+
+	assert.True(t, rail.initCalled, "ensureInitialized 应消费 pending 队列并调用 Init")
+	assert.Equal(t, ws, rail.workspaceAtInit, "Init 之前应已注入 workspace")
+	assert.Equal(t, op, rail.sysOperationAtInit, "Init 之前应已注入 sys_operation")
 }
 
 // TestDeepAgent_Invoke_未配置 reactAgent 为 nil 时返回错误
@@ -2387,6 +2493,14 @@ var _ sessioninterfaces.SessionFacade = (*fakeSessionFacade)(nil)
 // Init 实现 AgentRail 接口
 func (r *fakeAgentRail) Init(_ context.Context, _ agentinterfaces.BaseAgent) error {
 	r.initCalled = true
+	return r.initErr
+}
+
+// Init 记录注入结果（用于验证 RegisterRail 在 Init 之前完成注入）
+func (r *fakeDeepAgentRail) Init(_ context.Context, _ agentinterfaces.BaseAgent) error {
+	r.initCalled = true
+	r.workspaceAtInit = r.Workspace()
+	r.sysOperationAtInit = r.SysOperation()
 	return nil
 }
 
