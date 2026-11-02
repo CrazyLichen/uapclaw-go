@@ -55,3 +55,91 @@ heartbeat:
   active_hours:
     start: "08:00"
     end: "22:00"
+
+# 记忆系统配置
+#
+# 两个正交开关：
+#   engine — 挂载哪套 rail：builtin（内置）/ external（外接）/ both / none
+#   mode   — 内置记忆存储位置：local | cloud，不影响外接
+# 内置 rail 生效条件：engine ∈ {builtin,both} AND mode=local AND modes.agent.<mode>.memory.enabled=true
+# 外接 rail 生效条件：engine ∈ {external,both} AND external.provider 非空
+memory:
+  # 内置记忆存储位置。环境变量 MEMORY_MODE。代码默认：local（memory/config.go:313-324）
+  mode: local
+  # 记忆引擎总开关。环境变量 MEMORY_ENGINE。代码默认：builtin（memory/config.go:60-84）
+  engine: builtin
+  # 禁止记忆的内容定义；enabled=true 时按 patterns 过滤
+  # 代码默认：disabled（memory/forbidden.go:96-110）
+  forbidden_memory_definition:
+    enabled: false
+    patterns: []
+  # 外接记忆
+  external:
+    # 选哪家 provider，留空等于禁用外接。环境变量 MEMORY_EXTERNAL_PROVIDER
+    provider: ""
+    # 数据隔离标识（所有 provider 共用）。环境变量 MEMORY_USER_ID
+    # 代码默认：__default__（memory/external_memory_builder.go:36-46）
+    user_id: __default__
+    # 环境变量 MEMORY_SCOPE_ID。代码默认：__default__
+    scope_id: __default__
+    # 本地长期记忆（provider=openjiuwen 时生效），依赖顶层 embed 段提供 embedding
+    openjiuwen:
+      kv_type: shelve
+      kv_path: ""
+      vector_type: chroma
+      vector_persist_dir: ""
+      db_type: sqlite
+      db_path: ""
+    # 云端事实抽取（provider=mem0 时生效），api_key 必填
+    mem0:
+      # 环境变量 MEM0_API_KEY。代码默认：空（未配置即不可用）
+      api_key: ""
+      # 环境变量 MEM0_USER_ID。代码默认：uapclawswarm-user（external_memory_builder.go:19-22）
+      user_id: uapclawswarm-user
+      # 环境变量 MEM0_AGENT_ID。代码默认：uapclawswarm（external_memory_builder.go:19-22）
+      agent_id: uapclawswarm
+      # 搜索结果重排序（更准但更慢）。代码默认：true
+      rerank: true
+    # 字节上下文数据库（provider=openviking 时生效）
+    openviking:
+      endpoint: "http://127.0.0.1:1933"
+      api_key: ""
+      account: root
+      user: default
+
+# Embedding 配置（内置记忆与 CodingMemoryRail 依赖）。
+# 缺失时 MemoryRail 不创建并打 "no embed config" 告警（adapter/deep_adapter_rails.go:713-718）
+embed:
+  # 环境变量 EMBED_API_KEY。代码默认：空
+  embed_api_key: ""
+  # 环境变量 EMBED_API_BASE。代码默认：空
+  embed_base_url: ""
+  # 环境变量 EMBED_MODEL。代码默认：空（部分链路兜底 text-embedding-v3，adapter/code_adapter.go:1029）
+  embed_model: ""
+
+# 模型配置
+# 优先级：models.defaults（列表）> models.default（旧格式单对象）> 环境变量兜底
+# （common/config/default_models.go:36-70）。本模板走 defaults 列表，值全部取自环境变量，
+# 因此行为等价于环境变量兜底；请勿把 ${...} 替换成具体模型名，否则会覆盖环境变量链路。
+models:
+  defaults:
+    - model_client_config:
+        # 环境变量 API_BASE
+        api_base: ${API_BASE}
+        # 环境变量 API_KEY
+        api_key: ${API_KEY}
+        # 环境变量 MODEL_NAME
+        model_name: ${MODEL_NAME}
+        # 环境变量 MODEL_PROVIDER
+        client_provider: ${MODEL_PROVIDER}
+        # 单次请求超时（秒）。代码默认：1800（default_models.go:181）
+        timeout: 1800
+        # 是否校验服务端证书。代码默认：false（default_models.go:182）
+        verify_ssl: false
+        # 附加请求头（JSON 字符串或映射）
+        custom_headers: {}
+      model_config_obj:
+        # 采样温度。代码默认：0.95（default_models.go:187）
+        temperature: 0.95
+      # 该条目是否为默认模型
+      is_default: true
