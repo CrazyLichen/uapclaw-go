@@ -206,5 +206,5 @@ func strVal(v any) string {
 // 会话别名解析读的是外部 sessionId，Python 侧经 str() 收敛，数字也能落成
 // "123"；strVal 只认 string，会让数字形态静默变空串。
 func strScalar(v any) string {
-	return e2aacp.ScalarString(v)
+	return e2aacp.NormalizeJSONRPCID(v)
 }

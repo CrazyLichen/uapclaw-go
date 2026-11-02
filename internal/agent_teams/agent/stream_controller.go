@@ -184,15 +184,53 @@ func (sc *StreamController) IsAgentRunning() bool {
 // Python: agent_task is not None and not agent_task.done()
 // Go: roundDone != nil 且未关闭
 func (sc *StreamController) HasInFlightRound() bool {
-	if sc.roundDone == nil {
+	// M-16：roundDone 由 startRound / markRoundFinished 在 sc.mu 内写入，
+	// 读侧必须同样持锁（原实现裸读，-race 必报）。
+	sc.mu.Lock()
+	done := sc.roundDone
+	sc.mu.Unlock()
+	if done == nil {
 		return false
 	}
 	select {
-	case <-sc.roundDone:
+	case <-done:
 		return false
 	default:
 		return true
 	}
+}
+
+// markRoundFinished 标记本轮结束（无可续轮时调用）。
+func (sc *StreamController) markRoundFinished() {
+	sc.mu.Lock()
+	sc.roundDone = nil
+	sc.mu.Unlock()
+}
+
+// EnqueueOrStart 原子地「入队等待下一轮」或「直接起一轮」。
+//
+// M-16：对齐 Python 单线程下 _has_in_flight_round() + pending_inputs.append() 的
+// 原子性（两行之间无 await）。Go 的等价物是把判断与动作放进同一次持锁：
+// 轮次在飞 → 追加到待处理队列；无在飞轮次 → 锁外起新轮。
+// 返回 true 表示已启动新轮次。
+func (sc *StreamController) EnqueueOrStart(ctx context.Context, content any) bool {
+	if sc == nil {
+		return false
+	}
+	sc.mu.Lock()
+	if sc.roundDone != nil {
+		select {
+		case <-sc.roundDone:
+			// 通道已关闭但尚未清零：视为无在飞（尾部正在收尾）
+		default:
+			sc.pendingInputs = append(sc.pendingInputs, content)
+			sc.mu.Unlock()
+			return false
+		}
+	}
+	sc.mu.Unlock()
+	sc.startRound(ctx, content)
+	return true
 }
 
 // QueuePendingInput 将输入加入下一轮排队队列（并发安全）。
@@ -353,9 +391,17 @@ func (sc *StreamController) CooperativeCancel(ctx context.Context) error {
 				Err(err).Msg("harness.Abort failed")
 		}
 	}
-	// 等待 goroutine 自然完成或超时
+	// 等待 goroutine 自然完成或超时。
+	// M-16：roundDone 由执行 goroutine 在 sc.mu 内清零，此处必须持锁取快照；
+	// 为 nil 表示已无在飞轮次，直接返回。
+	sc.mu.Lock()
+	done := sc.roundDone
+	sc.mu.Unlock()
+	if done == nil {
+		return nil
+	}
 	select {
-	case <-sc.roundDone:
+	case <-done:
 		return nil
 	case <-time.After(cooperativeAbortTimeout):
 		if sc.cancelRound != nil {
@@ -363,7 +409,7 @@ func (sc *StreamController) CooperativeCancel(ctx context.Context) error {
 		}
 		// 等待 goroutine 退出
 		select {
-		case <-sc.roundDone:
+		case <-done:
 		case <-ctx.Done():
 		}
 		return nil
@@ -496,9 +542,14 @@ func (sc *StreamController) startRound(ctx context.Context, content any) {
 	}
 	roundCtx, cancel := context.WithCancel(ctx)
 	sc.cancelRound = cancel
-	sc.roundDone = make(chan struct{})
+	// M-16：本轮 done 用局部变量持有，避免 runOneRound 尾部把 roundDone 置空后
+	// 本 goroutine 的 defer 关掉「下一轮」的 channel。
+	done := make(chan struct{})
+	sc.mu.Lock()
+	sc.roundDone = done
+	sc.mu.Unlock()
 	go func() {
-		defer close(sc.roundDone)
+		defer close(done)
 		defer sc.logRoundPanic()
 		sc.runOneRound(roundCtx, content)
 	}()
@@ -534,7 +585,9 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 
 	harness := sc.resources.Harness
 	if harness != nil {
-		harness.InitCwdForRound()
+		// 每轮把 cwd 重置回工作空间根（对齐 Python init_cwd_for_round），
+		// 新 ctx 必须继续往下传，否则本轮工具仍读上一轮的 CwdState。
+		ctx = harness.InitCwdForRound(ctx)
 	}
 
 	_ = sc.updateStatus(ctx, atschema.MemberStatusReady)
@@ -550,26 +603,30 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 			if sc.state.TeamCleaned {
 				logger.Info(logComponent).Str("member_name", sc.memberName()).
 					Msg("team_cleaned set; closing stream after round")
+				sc.markRoundFinished()
 				sc.CloseStream()
 				return
 			}
 
 			// Python: elif not cancelled and not _cancel_requested:
+			//
+			// M-16：判断「是否续轮」与「取走待处理输入」必须在同一次持锁内完成，
+			// 并与 EnqueueOrStart 的「判断+入队」互斥——两次分别加锁会留下窗口，
+			// 使落在快照之后、roundDone 清零之前的输入滞留在队列里没人消费。
 			sc.mu.Lock()
 			shouldContinue := !cancelled && !sc.cancelRequested
+			var drained []any
+			if shouldContinue && sc.streamQueue != nil {
+				drained = sc.pendingInputs
+				sc.pendingInputs = nil
+			}
+			sc.roundDone = nil
 			sc.mu.Unlock()
 			if shouldContinue {
 				nextResume := sc.dequeueValidInterruptResume()
-				sc.mu.Lock()
-				hasPending := len(sc.pendingInputs) > 0 && sc.streamQueue != nil
-				sc.mu.Unlock()
 				if nextResume != nil && sc.streamQueue != nil {
 					sc.startRound(ctx, nextResume)
-				} else if hasPending {
-					sc.mu.Lock()
-					drained := sc.pendingInputs
-					sc.pendingInputs = nil
-					sc.mu.Unlock()
+				} else if len(drained) > 0 && sc.streamQueue != nil {
 					combined := sc.combinePendingInputs(drained)
 					sc.startRound(ctx, combined)
 				} else {

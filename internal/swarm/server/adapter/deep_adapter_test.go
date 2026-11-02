@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -363,27 +364,200 @@ func TestDeepAdapter_CreateInstance_config覆盖(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// TestHasValidModelConfig_空字符串 验证空字符串返回 true
-func TestHasValidModelConfig_空字符串(t *testing.T) {
+// newModelConfigTestAdapter 构造用于模型配置判定的适配器，隔离外部 config.yaml。
+// 第 4 步兜底会读盘，若不置空会让判定结果依赖运行机器上的真实配置。
+func newModelConfigTestAdapter() *DeepAdapter {
 	d := NewDeepAdapter()
-	if !d.hasValidModelConfig("") {
-		t.Error("空字符串应返回 true（使用默认模型）")
+	d.defaultModelConfigReader = nil
+	return d
+}
+
+// usableTestModel 构造一个「凭据可用」的模型（真实 api_key + 非占位 api_base）。
+func usableTestModel() *llm.Model {
+	return &llm.Model{ClientConfig: &llmschema.ModelClientConfig{
+		APIKey:  "sk-test",
+		APIBase: "https://api.openai.com/v1",
+	}}
+}
+
+// TestHasValidModelConfig_未配置模型返回false 验证「什么都没配」时判定无效。
+//
+// 旧实现空字符串恒返回 true，导致首次安装（config.yaml 自带占位 api_base）被放行，
+// 心跳真的向 example.com 发请求并报底层网络错误。对齐 Python _has_valid_model_config：
+// 空模型名只表示「用默认模型」，仍需默认模型凭据可用。
+func TestHasValidModelConfig_未配置模型返回false(t *testing.T) {
+	d := newModelConfigTestAdapter()
+	if d.hasValidModelConfig("") {
+		t.Error("无任何可用模型时应返回 false（模型未正确配置）")
+	}
+	// 默认模型存在但凭据缺失，同样无效
+	d.model = &llm.Model{ClientConfig: &llmschema.ModelClientConfig{}}
+	if d.hasValidModelConfig("") {
+		t.Error("默认模型 api_key/api_base 为空时应返回 false")
 	}
 }
 
-// TestHasValidModelConfig_缓存中存在 验证缓存中存在的模型返回 true
+// TestHasValidModelConfig_默认模型可用返回true 验证空模型名 + 默认模型凭据可用。
+func TestHasValidModelConfig_默认模型可用返回true(t *testing.T) {
+	d := newModelConfigTestAdapter()
+	d.model = usableTestModel()
+	if !d.hasValidModelConfig("") {
+		t.Error("默认模型凭据可用时应返回 true")
+	}
+}
+
+// TestHasValidModelConfig_缓存中存在 验证缓存中凭据可用的模型返回 true。
 func TestHasValidModelConfig_缓存中存在(t *testing.T) {
-	d := NewDeepAdapter()
-	// 模拟 modelCache 中存在模型
-	d.modelCache = map[string]*llm.Model{"gpt-4": nil}
+	d := newModelConfigTestAdapter()
+	d.modelCache = map[string]*llm.Model{"gpt-4": usableTestModel()}
 	if !d.hasValidModelConfig("gpt-4") {
-		t.Error("缓存中存在的模型应返回 true")
+		t.Error("缓存中凭据可用的模型应返回 true")
+	}
+}
+
+// TestHasValidModelConfig_占位或空凭据返回false 验证占位 api_base 与空凭据被判无效。
+//
+// Python: _mcc_looks_usable —— api_key 非空 && api_base 非空 &&
+// api_base 不在 _PLACEHOLDER_API_BASES（含 https://example.com/compatible-mode/v1）。
+func TestHasValidModelConfig_占位或空凭据返回false(t *testing.T) {
+	cases := map[string]*llm.Model{
+		"占位 api_base": {ClientConfig: &llmschema.ModelClientConfig{
+			APIKey:  "sk-test",
+			APIBase: "https://example.com/compatible-mode/v1",
+		}},
+		"空 api_key": {ClientConfig: &llmschema.ModelClientConfig{
+			APIBase: "https://api.openai.com/v1",
+		}},
+		"空 api_base": {ClientConfig: &llmschema.ModelClientConfig{
+			APIKey: "sk-test",
+		}},
+		"ClientConfig 为 nil": {},
+	}
+	for name, model := range cases {
+		d := newModelConfigTestAdapter()
+		d.modelCache = map[string]*llm.Model{"m": model}
+		if d.hasValidModelConfig("m") {
+			t.Errorf("%s 应返回 false（凭据不可用）", name)
+		}
+	}
+	// nil 模型条目同样无效（旧用例曾把 nil 当「存在即有效」）
+	d := newModelConfigTestAdapter()
+	d.modelCache = map[string]*llm.Model{"gpt-4": nil}
+	if d.hasValidModelConfig("gpt-4") {
+		t.Error("缓存中 nil 模型应返回 false")
+	}
+}
+
+// TestHasValidModelConfig_回退到缓存中任意可用模型 验证第 3 条回退（Python 同序）。
+func TestHasValidModelConfig_回退到缓存中任意可用模型(t *testing.T) {
+	d := newModelConfigTestAdapter()
+	d.modelCache = map[string]*llm.Model{
+		"broken": {ClientConfig: &llmschema.ModelClientConfig{}},
+		"good":   usableTestModel(),
+	}
+	if !d.hasValidModelConfig("nonexistent") {
+		t.Error("指定模型不存在但缓存中另有可用模型时应返回 true")
+	}
+}
+
+// TestHasValidModelConfig_config兜底 验证第 4 步：内存里判定不出时读 config.yaml 兜底。
+//
+// Python 原文：
+//
+//	mcc = get_config().get("models", {}).get("default", {}).get("model_client_config", {})
+//	if isinstance(mcc, dict) and _mcc_looks_usable(mcc): return True
+func TestHasValidModelConfig_config兜底(t *testing.T) {
+	// 有效凭据 → true
+	d := newModelConfigTestAdapter()
+	d.defaultModelConfigReader = func() map[string]any {
+		return map[string]any{"api_key": "sk-config", "api_base": "https://api.deepseek.com/v1"}
+	}
+	if !d.hasValidModelConfig("") {
+		t.Error("config.yaml 有可用凭据时应返回 true")
+	}
+
+	// 占位 api_base → 无效
+	d = newModelConfigTestAdapter()
+	d.defaultModelConfigReader = func() map[string]any {
+		return map[string]any{"api_key": "sk-config", "api_base": "https://example.com/compatible-mode/v1"}
+	}
+	if d.hasValidModelConfig("") {
+		t.Error("config.yaml 仍是占位 api_base 时应返回 false")
+	}
+
+	// 缺 api_key → 无效
+	d = newModelConfigTestAdapter()
+	d.defaultModelConfigReader = func() map[string]any {
+		return map[string]any{"api_base": "https://api.deepseek.com/v1"}
+	}
+	if d.hasValidModelConfig("") {
+		t.Error("config.yaml 缺 api_key 时应返回 false")
+	}
+
+	// 读取失败（nil）→ 无效，且不 panic
+	d = newModelConfigTestAdapter()
+	d.defaultModelConfigReader = func() map[string]any { return nil }
+	if d.hasValidModelConfig("") {
+		t.Error("config.yaml 读取失败时应返回 false")
+	}
+
+	// 非字符串凭据：Python str(v or "") 会强转，等价可用
+	d = newModelConfigTestAdapter()
+	d.defaultModelConfigReader = func() map[string]any {
+		return map[string]any{"api_key": 123456, "api_base": "https://api.deepseek.com/v1"}
+	}
+	if !d.hasValidModelConfig("") {
+		t.Error("非字符串 api_key 应经 str() 语义强转后判定为可用")
+	}
+}
+
+// TestAnyToConfigString_Python真值语义 验证 str(v or "") 的假值收敛。
+//
+// Python `mcc.get("api_key", "") or ""`：None / "" / 0 / False 都当「空」，
+// 所以 api_key: 0 在 Python 侧等于未配置；非零数值则 str() 成字符串。
+func TestAnyToConfigString_Python真值语义(t *testing.T) {
+	cases := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{"nil", nil, ""},
+		{"空串", "", ""},
+		{"普通串", "sk-1", "sk-1"},
+		{"字符串 0", "0", "0"},
+		{"整数 0", 0, ""},
+		{"非零整数", 123456, "123456"},
+		{"false", false, ""},
+		{"true", true, "true"},
+		{"float 0", 0.0, ""},
+		{"float 非零", 1.5, "1.5"},
+		{"空切片", []string{}, ""},
+		{"uint 0", uint(0), ""},
+		{"非零 uint", uint(7), "7"},
+		{"空 map", map[string]any{}, ""},
+		{"空数组", [0]int{}, ""},
+	}
+	for _, c := range cases {
+		if got := anyToConfigString(c.in); got != c.want {
+			t.Errorf("%s: anyToConfigString(%#v) = %q, want %q", c.name, c.in, got, c.want)
+		}
+	}
+}
+
+// TestHasValidModelConfig_数值0凭据视为未配置 验证 api_key: 0 不被误判为可用。
+func TestHasValidModelConfig_数值0凭据视为未配置(t *testing.T) {
+	d := newModelConfigTestAdapter()
+	d.defaultModelConfigReader = func() map[string]any {
+		return map[string]any{"api_key": 0, "api_base": "https://api.deepseek.com/v1"}
+	}
+	if d.hasValidModelConfig("") {
+		t.Error("api_key 为 0（Python 假值）应视为未配置")
 	}
 }
 
 // TestHasValidModelConfig_缓存中不存在 验证缓存中不存在的模型返回 false
 func TestHasValidModelConfig_缓存中不存在(t *testing.T) {
-	d := NewDeepAdapter()
+	d := newModelConfigTestAdapter()
 	if d.hasValidModelConfig("nonexistent") {
 		t.Error("缓存中不存在的模型应返回 false")
 	}

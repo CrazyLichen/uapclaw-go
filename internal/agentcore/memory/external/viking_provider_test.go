@@ -862,8 +862,11 @@ func TestOpenVikingProvider_HandleToolCall_search回退limit(t *testing.T) {
 	}
 }
 
-// TestOpenVikingProvider_HandleToolCall_search不注入默认值 两者都缺时不写 top_k，与 Python 线上请求一致
-func TestOpenVikingProvider_HandleToolCall_search不注入默认值(t *testing.T) {
+// TestOpenVikingProvider_HandleToolCall_search显式默认值 两者都缺时显式写 10。
+//
+// T-13：原实现「不写 top_k」依赖服务端默认值与 Schema 描述（默认 10）恰好一致，
+// 一旦不一致就是静默漂移；现改为显式写出，与工具 Schema 的承诺对齐。
+func TestOpenVikingProvider_HandleToolCall_search显式默认值(t *testing.T) {
 	var got map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/search/find" {
@@ -877,7 +880,7 @@ func TestOpenVikingProvider_HandleToolCall_search不注入默认值(t *testing.T
 	if _, err := p.HandleToolCall(context.Background(), "viking_search", map[string]any{"query": "q"}); err != nil {
 		t.Fatalf("HandleToolCall() error = %v", err)
 	}
-	if _, ok := got["top_k"]; ok {
-		t.Fatalf("payload 不应包含 top_k，实际 = %v", got["top_k"])
+	if got["top_k"] != float64(defaultVikingTopK) {
+		t.Fatalf("payload[top_k] = %v，期望显式默认值 %d", got["top_k"], defaultVikingTopK)
 	}
 }

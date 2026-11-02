@@ -93,13 +93,33 @@ func NormalizeJSONRPCID(id any) string {
 	case string:
 		return strings.TrimSpace(v)
 	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64)
+		// T-15：用 'g'（最短往返）而非 'f'。'f' 会把 1e20 展开成
+		// "100000000000000000000"，而 Python str(1e20) 是 "1e+20"；两侧不一致会让
+		// 同一 id 在请求/响应算出不同字符串、pending 匹配失败。'g' 下 777 → "777"，
+		// 与 Python str(int) 一致。
+		return strconv.FormatFloat(v, 'g', -1, 64)
 	case float32:
-		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+		return strconv.FormatFloat(float64(v), 'g', -1, 32)
 	case int:
 		return strconv.Itoa(v)
+	case int8:
+		return strconv.FormatInt(int64(v), 10)
+	case int16:
+		return strconv.FormatInt(int64(v), 10)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
 	case int64:
 		return strconv.FormatInt(v, 10)
+	case uint:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return strconv.FormatUint(v, 10)
 	case json.Number:
 		return strings.TrimSpace(v.String())
 	case nil:
@@ -113,8 +133,11 @@ func NormalizeJSONRPCID(id any) string {
 //
 // 专供 sessionId / messageId 等「Python 侧用 str() 收敛」的字段使用：IDE 把
 // sessionId 传成数字时，Python 得到 "123"，Go 若只做 v.(string) 会得到空串，
-// 进而丢失会话归属或 userMessageId 回填。与 NormalizeJSONRPCID 共用类型分支，
-// 区别仅在语义命名（id 归一化 vs 通用标量字符串化）。
+// 进而丢失会话归属或 userMessageId 回填。
+//
+// 注意（T-15）：与 NormalizeJSONRPCID 同实现，双名增加漂移面——新代码请直接用
+// NormalizeJSONRPCID；此处不加 Deprecated 标记，避免既有调用点被 staticcheck 大面积
+// 告警牵连（迁移时机由后续重构统一安排）。
 func ScalarString(v any) string {
 	return NormalizeJSONRPCID(v)
 }

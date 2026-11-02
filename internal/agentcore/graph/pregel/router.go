@@ -91,7 +91,13 @@ func NewConditionalRouter(selector Selector) *ConditionalRouter {
 }
 
 // Select 实现 Selector：调用被适配的函数。
+//
+// nil 函数值自守：`NewConditionalRouter(SelectorFunc(nil))` 会造出非 nil 的接口值，
+// 绕过 Dispatch 里的 `r.selector == nil` 判断，直接调用会 panic。
 func (f SelectorFunc) Select(ctx context.Context, state any) ([]string, error) {
+	if f == nil {
+		return nil, fmt.Errorf("条件路由 selector 为 nil 函数值")
+	}
 	return f(ctx, state)
 }
 
@@ -115,6 +121,13 @@ func (r *BarrierRouter) Dispatch(_ context.Context, sourceNode string) ([]Messag
 //
 // 纪律：state 恒传 nil（spec §1.3）；selector 的 error 原样上抛，不包装——
 // 8.3b 需要区分 GraphInterrupt 与普通 error，包装会破坏 errors.As。
+//
+// 空目标语义分两态（对齐 Python router.py:44-46）：
+//   - nil：selector 没有返回值 → 判为构图错误并返回 error。Python 侧
+//     `for to in None` 直接 TypeError，是 fail-closed；Go 若把 nil 当成
+//     "边终止"，selector 漏 return 会表现为"图提前结束"，静默且无日志。
+//   - 非 nil 空切片：显式表示"无出边"（END）→ 零条消息。
+//
 // Python: router.py:32-46
 func (r *ConditionalRouter) Dispatch(ctx context.Context, sourceNode string) ([]Message, error) {
 	if r.selector == nil {
@@ -123,6 +136,9 @@ func (r *ConditionalRouter) Dispatch(ctx context.Context, sourceNode string) ([]
 	targets, err := r.selector.Select(ctx, nil)
 	if err != nil {
 		return nil, err
+	}
+	if targets == nil {
+		return nil, fmt.Errorf("条件路由 selector 未返回目标（nil），节点=%s", sourceNode)
 	}
 	return buildTriggerMessages(sourceNode, targets), nil
 }

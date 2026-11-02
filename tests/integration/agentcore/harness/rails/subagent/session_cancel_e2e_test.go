@@ -295,7 +295,7 @@ func (s *SessionCancelE2ESuite) TestSessionCancelE2E_场景4_多任务取消其�
 	s.Require().NoError(err)
 
 	// 等待 task b 完成（对齐 Python: await asyncio.sleep(0.5)）
-	s.Require().NoError(waitForTaskStatus(toolkit, taskBID, "completed", 5*time.Second),
+	s.Require().NoError(waitForTaskStatus(toolkit, taskBID, "completed", fastTaskWaitTimeout),
 		"等待 task b 完成超时")
 
 	statusMap := map[string]string{}
@@ -383,7 +383,7 @@ func (s *SessionCancelE2ESuite) TestSessionCancelE2E_场景6_取消已完成保�
 	taskID := rows[0].TaskID
 
 	// 快子代理：等任务完成
-	s.Require().NoError(waitForTaskStatus(toolkit, taskID, "completed", 5*time.Second),
+	s.Require().NoError(waitForTaskStatus(toolkit, taskID, "completed", fastTaskWaitTimeout),
 		"等待快速任务完成超时")
 	row, _ := toolkit.Get(taskID)
 	s.Require().Equal("completed", row.Status, "完成后状态应为 completed")
@@ -513,6 +513,11 @@ func (s *SessionCancelE2ESuite) setDescriptionBoundSubagents(
 		}
 	})
 }
+
+// fastTaskWaitTimeout 「快速子代理」完成状态的等待上限。
+// 断言的是最终状态（completed），不是耗时；CI 负载高时子代理 goroutine 调度 +
+// SQLite 落库可能明显超过 5s（2026-11-02 曾因此偶发超时假红），故留 20s 余量。
+const fastTaskWaitTimeout = 20 * time.Second
 
 // waitForTaskStatus 轮询等待指定任务达到目标状态。
 func waitForTaskStatus(toolkit *hsubagent.SessionToolkit, taskID, wantStatus string, timeout time.Duration) error {

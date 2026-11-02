@@ -245,6 +245,32 @@ func TestParseTypedChunkMap_主要分支(t *testing.T) {
 			wantEvt: "chat.tool_call",
 		},
 		{
+			// 事件层不再做碎片过滤（对齐 Python _parse_stream_chunk 的透传语义）：
+			// 增量帧由模型客户端的合并层（ToolCallDeltaOptions/mergeToolCalls）负责聚合，
+			// 到不了事件层；这里断言"原样透传"，防止守卫被重新加回来。
+			name:    "tool_call碎片帧→原样透传",
+			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"name": "", "tool_call_id": "", "arguments": "/"}}},
+			wantEvt: "chat.tool_call",
+		},
+		{
+			// 参数不是合法 JSON 的**完整**调用必须下发：模型输出单引号/尾逗号/被截断时，
+			// 旧守卫会把整条调用吞掉，前端只看到 result 没有调用卡片。
+			name:    "tool_call未闭合arguments→原样透传",
+			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"name": "build_team", "arguments": `{"name":`}}},
+			wantEvt: "chat.tool_call",
+		},
+		{
+			name:    "tool_call完整帧携带id→chat.tool_call",
+			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"name": "build_team", "tool_call_id": "call_00_x", "arguments": `{"name":"Team"}`}}},
+			wantEvt: "chat.tool_call",
+		},
+		{
+			// 只有 id 没有 name 的帧（首帧后补 id 场景）不能当作碎片丢弃
+			name:    "tool_call仅有id→chat.tool_call",
+			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"tool_call_id": "call_00_y", "arguments": "{}"}}},
+			wantEvt: "chat.tool_call",
+		},
+		{
 			name:    "error→chat.error",
 			chunk:   map[string]any{"type": "error", "payload": map[string]any{"error": "boom"}},
 			wantEvt: "chat.error",

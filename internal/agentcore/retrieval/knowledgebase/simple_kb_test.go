@@ -692,6 +692,33 @@ func TestSimpleKB_Retrieve并发懒创建(t *testing.T) {
 	assert.NotNil(t, kb.retriever)
 }
 
+// TestSimpleKB_只读路径并发安全 -race：S-05 契约固定用例。
+//
+// 组件在构造期通过 WithVectorStore 注入后不再替换（Set* 仅限构造期，见
+// BaseKnowledgeBase.mu 的契约说明），因此并发 Retrieve / GetStatistics 只应
+// 存在 retriever 懒创建的锁内写，不应出现 data race。
+func TestSimpleKB_只读路径并发安全(t *testing.T) {
+	vs, im := makeCompatiblePair()
+	kb, err := NewSimpleKnowledgeBase(
+		common.KnowledgeBaseConfig{KBID: "kb", IndexType: common.IndexTypeBM25},
+		nil, WithVectorStore(vs), WithIndexManager(im))
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, _ = kb.Retrieve(context.Background(), "q", nil)
+		}()
+		go func() {
+			defer wg.Done()
+			_, _ = kb.GetStatistics(context.Background())
+		}()
+	}
+	wg.Wait()
+}
+
 // TestSimpleKB_Retrieve检索错误冒泡 底层 retriever 错误原样返回。
 func TestSimpleKB_Retrieve检索错误冒泡(t *testing.T) {
 	boom := errors.New("retrieve boom")

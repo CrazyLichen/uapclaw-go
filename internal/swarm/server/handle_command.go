@@ -46,10 +46,10 @@ type modelCommandParams struct {
 // Python: params = request.params or {}；str(params.get(...) or "").strip()
 // 偏差 D7：Python str(None) == "None"，Go 的 JSON null 解到 string 为空串，
 // 该边界不复刻（无实际调用方会传 null）。
-func parseModelCommandParams(raw json.RawMessage) modelCommandParams {
+func parseModelCommandParams(raw json.RawMessage) (modelCommandParams, error) {
 	var p modelCommandParams
 	if len(raw) == 0 {
-		return p
+		return p, nil
 	}
 	var wire struct {
 		Action     string         `json:"action"`
@@ -57,18 +57,18 @@ func parseModelCommandParams(raw json.RawMessage) modelCommandParams {
 		Model      string         `json:"model"`
 		EnvUpdates map[string]any `json:"env_updates"`
 	}
+	// M-08：解析失败必须上抛，由调用方转成 ok=false + payload.error。
+	// 原实现只 Warn 后返回零值，零值 Action 会落进 default 分支并返回 ok=true，
+	// 把「env_updates 传成字符串」「model 传成数字」等客户端错误伪装成查询成功。
 	if err := json.Unmarshal(raw, &wire); err != nil {
-		logger.Warn(logComponent).
-			Err(err).
-			Msg("command.model failed to parse params")
-		return p
+		return p, err
 	}
 	return modelCommandParams{
 		Action:     wire.Action,
 		Target:     wire.Target,
 		Model:      wire.Model,
 		EnvUpdates: wire.EnvUpdates,
-	}
+	}, nil
 }
 
 // modelErrorResponse 构造 ok=false 的 command.model 响应并记录错误日志。
@@ -349,7 +349,11 @@ func (s *AgentServer) handleCommandDiff(_ context.Context, request *schema.Agent
 // 失败一律以 ok=false + payload.error 返回，**不返回 error**：返回 error 会被
 // handle_envelope.go 转成框架错误帧，与 Python 的 ok=false 响应不一致。
 func (s *AgentServer) handleCommandModel(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	params := parseModelCommandParams(request.Params)
+	params, err := parseModelCommandParams(request.Params)
+	if err != nil {
+		// Python: except Exception → ok=False, {"error": str(e)}
+		return modelErrorResponse(request, err.Error()), nil
+	}
 
 	switch params.Action {
 	case "add_model":

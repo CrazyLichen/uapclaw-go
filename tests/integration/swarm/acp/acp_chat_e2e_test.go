@@ -3,7 +3,9 @@
 package acp_test
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,9 +45,18 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	bin := filepath.Join(tmp, "fakeacp")
-	build := exec.Command("go", "build", "-o", bin, "./testdata/fakeacp/")
-	build.Env = append(os.Environ(), "GO111MODULE=on")
-	if _, err := build.CombinedOutput(); err == nil {
+	// T-09：只有 go 工具链缺失才允许跳过；fakeacp 编译错误一律硬失败，
+	// 否则一次笔误就能让 11 个用例整体静默 skip，CI 仍显示绿。
+	if _, lookErr := exec.LookPath("go"); lookErr != nil {
+		fmt.Fprintf(os.Stderr, "go toolchain unavailable, ACP suite skipped: %v\n", lookErr)
+	} else {
+		build := exec.Command("go", "build", "-o", bin, "./testdata/fakeacp/")
+		build.Env = append(os.Environ(), "GO111MODULE=on")
+		if out, err := build.CombinedOutput(); err != nil {
+			fmt.Fprintf(os.Stderr, "build fakeacp failed: %v\n%s\n", err, out)
+			_ = os.RemoveAll(tmp)
+			os.Exit(1)
+		}
 		fakeAcpBin = bin
 	}
 	code := m.Run()
@@ -62,7 +73,7 @@ func TestAcpChatToolSuite(t *testing.T) {
 func (s *AcpChatToolSuite) SetupSuite() {
 	s.BaseIntegrationSuite.SetupSuite()
 	if fakeAcpBin == "" {
-		s.T().Skip("go 工具链不可用，无法编译 testdata/fakeacp")
+		s.T().Skip("go 工具链不可用，无法编译 testdata/fakeacp（构建失败在 TestMain 已硬失败）")
 	}
 	s.root = s.T().TempDir()
 }
@@ -228,4 +239,82 @@ func (s *AcpChatToolSuite) invoke(cfg map[string]any, profile, message string, n
 	out, ok := res["result"].(string)
 	s.Require().True(ok, "result 应为字符串，实际 %T", res["result"])
 	return out
+}
+
+// TestFakeAcpPeer_原始报文契约 T-09：直接驱动假对端，按 ACP 规范字面量断言它发出的
+// session/update 帧。整套用例的其余断言都基于客户端聚合结果（"echo:xxx"），一旦两端
+// 同时把字段名写错仍会通过；本用例把「假对端必须发出规范报文」钉死。
+func TestFakeAcpPeer_原始报文契约(t *testing.T) {
+	if fakeAcpBin == "" {
+		t.Skip("go 工具链不可用，无法编译 testdata/fakeacp（构建失败在 TestMain 已硬失败）")
+	}
+
+	cmd := exec.Command(fakeAcpBin, "echo")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("取 stdin 失败: %v", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("取 stdout 失败: %v", err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("启动 fakeacp 失败: %v", err)
+	}
+	defer func() {
+		_ = stdin.Close()
+		_ = cmd.Wait()
+	}()
+
+	for _, req := range []string{
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}`,
+	} {
+		if _, err := fmt.Fprintln(stdin, req); err != nil {
+			t.Fatalf("写入请求失败: %v", err)
+		}
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	var update map[string]any
+	for scanner.Scan() {
+		var frame map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &frame); err != nil {
+			t.Fatalf("对端报文不是合法 JSON: %s", scanner.Text())
+		}
+		if method, _ := frame["method"].(string); method == "session/update" {
+			update = frame
+			break
+		}
+	}
+	if update == nil {
+		t.Fatal("未收到 session/update 帧")
+	}
+
+	params, _ := update["params"].(map[string]any)
+	if params == nil {
+		t.Fatalf("session/update 缺少 params: %v", update)
+	}
+	if sid, _ := params["sessionId"].(string); sid != "fake-echo-sess" {
+		t.Errorf("params.sessionId = %v，期望 fake-echo-sess", params["sessionId"])
+	}
+	body, _ := params["update"].(map[string]any)
+	if body == nil {
+		t.Fatalf("params.update 缺失: %v", params)
+	}
+	if kind, _ := body["sessionUpdate"].(string); kind != "agent_message_chunk" {
+		t.Errorf("update.sessionUpdate = %v，期望 agent_message_chunk", body["sessionUpdate"])
+	}
+	content, _ := body["content"].(map[string]any)
+	if content == nil {
+		t.Fatalf("update.content 缺失: %v", body)
+	}
+	if typ, _ := content["type"].(string); typ != "text" {
+		t.Errorf("content.type = %v，期望 text", content["type"])
+	}
+	if text, _ := content["text"].(string); !strings.Contains(text, "echo:hi") {
+		t.Errorf("content.text = %q，期望包含 echo:hi", text)
+	}
 }

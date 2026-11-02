@@ -432,8 +432,9 @@ func (c *SiliconFlowModelClient) parseStreamChunk(
 				tcDelta.ID,
 				tcDelta.Function.Name,
 				tcDelta.Function.Arguments,
-				llmschema.WithToolCallIndex(index),
-				llmschema.WithToolCallType(tcDelta.Type),
+				// 增量帧常在首帧之后缺省 type，由 ToolCallDeltaOptions 保持
+				// "function" 默认值，避免 mergeToolCalls 判定失效拆散同一次调用。
+				llmschema.ToolCallDeltaOptions(index, tcDelta.Type)...,
 			))
 		}
 	}

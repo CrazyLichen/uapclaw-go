@@ -16,6 +16,11 @@ import (
 // 平台绑定代码：按项目规范 3.2 第 3 条（硬件/OS 绑定）用 build tag 隔离，
 // 不纳入非 Windows 平台的覆盖率计算基线。
 
+// applyStartNewSession Windows 空实现。
+// Python: popen_kw["start_new_session"] = True 仅在非 Windows 平台设置
+// （command_tools.py 的 isWindows 判断），Windows 无进程组会话语义。
+func applyStartNewSession(_ *exec.Cmd) {}
+
 // availablePowershell 探测 PowerShell 可执行文件路径。
 // Python: _available_powershell
 func availablePowershell() string {

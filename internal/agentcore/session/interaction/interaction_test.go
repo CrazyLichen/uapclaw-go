@@ -365,7 +365,7 @@ func TestInterruptAgentExecute_无Checkpointer(t *testing.T) {
 // TestWriteInteractionOutput_manager为nil 测试 StreamWriterManager 为 nil 不 panic
 func TestWriteInteractionOutput_manager为nil(t *testing.T) {
 	session := newFakeInnerSession()
-	err := writeInteractionOutput(session, InteractionType, 0, "payload")
+	err := writeInteractionOutput(context.Background(), session, InteractionType, 0, "payload")
 	if err != nil {
 		t.Errorf("StreamWriterManager 为 nil 时应返回 nil，实际=%v", err)
 	}
@@ -375,7 +375,7 @@ func TestWriteInteractionOutput_manager为nil(t *testing.T) {
 func TestWriteInteractionOutput_有StreamWriterManager(t *testing.T) {
 	session := newFakeInnerSession()
 	session.swMgrValue = stream.NewStreamWriterManager(stream.NewStreamEmitter())
-	err := writeInteractionOutput(session, InteractionType, 0, "payload")
+	err := writeInteractionOutput(context.Background(), session, InteractionType, 0, "payload")
 	if err != nil {
 		t.Errorf("StreamWriterManager 存在时写入应成功，实际=%v", err)
 	}

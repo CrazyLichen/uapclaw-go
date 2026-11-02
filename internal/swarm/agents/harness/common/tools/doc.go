@@ -32,8 +32,8 @@
 //	├── mcp_search.go             # mcp_free_search + mcp_paid_search + 4 provider
 //	├── mcp_web_fetch.go          # mcp_fetch_webpage + Jina Reader 兜底
 //	├── mcp_command.go            # mcp_exec_command + 安全检查 + 后台进程
-//	├── mcp_command_windows.go    # Windows 专属 shell 探测（build tag 隔离）
-//	├── mcp_command_other.go      # 非 Windows 平台桩（build tag 隔离）
+//	├── mcp_command_windows.go    # Windows 专属 shell 探测 + 进程组空实现（build tag 隔离）
+//	├── mcp_command_other.go      # 非 Windows 平台进程组实现 + Windows 函数桩（build tag 隔离）
 //	└── todo_compat.go            # compatibleUpdateTodos + NewCompatibleTodoModifyTool
 //
 // 对应 Python 代码：jiuwenswarm/agents/harness/common/tools/

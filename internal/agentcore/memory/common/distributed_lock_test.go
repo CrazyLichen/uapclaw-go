@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -75,9 +76,10 @@ func TestDistributedLock_Release_非持有者不删(t *testing.T) {
 	}
 	// 另一个锁实例尝试释放（lockValue 不同，不应删除）
 	lock2 := NewDistributedLock(store, "test-lock")
-	// lock2 未 Acquire，lockValue 为空，Release 不应删除 lock1 的锁
-	if err := lock2.Release(context.Background()); err != nil {
-		t.Fatalf("lock2 Release 返回 error: %v", err)
+	// lock2 未 Acquire，Release 应直接返回 ErrLockNotHeld（T-05：不再用空值查一次存储），
+	// 且不得删除 lock1 的锁
+	if err := lock2.Release(context.Background()); !errors.Is(err, ErrLockNotHeld) {
+		t.Fatalf("lock2 Release 期望 ErrLockNotHeld，实际 %v", err)
 	}
 	// lock1 的锁仍应存在
 	val, _ := store.Get(context.Background(), "_lock/test-lock")
@@ -266,4 +268,24 @@ func TestDistributedLock_Release_锁被抢占不误删(t *testing.T) {
 		t.Fatalf("误删了他人持有的锁: got %q, want %q", string(val), lock2.lockValue)
 	}
 	_ = lock2.Release(ctx)
+}
+
+// TestDistributedLock_并发访问无竞态 -race：T-05 回归。
+//
+// 同一实例被并发调用时，lockValue 的读写必须在 mu 内完成；原实现裸读写，
+// -race 下必报。本用例只要求不触发 data race 且不 panic，语义正确性由其余用例覆盖。
+func TestDistributedLock_并发访问无竞态(t *testing.T) {
+	store := kv.NewInMemoryKVStore()
+	lock := NewDistributedLock(store, "race-lock")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = lock.Acquire(context.Background())
+			_ = lock.Release(context.Background())
+		}()
+	}
+	wg.Wait()
 }

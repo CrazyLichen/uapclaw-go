@@ -1,11 +1,26 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UAPClaw</title>
-</head>
-<body>
-  <p>前端构建产物未部署，请先执行 <code>npm run build</code> 生成 dist 目录内容。</p>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f7f9" />
+    <title>UapClaw</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <script type="module" crossorigin src="/assets/index-Bhfw_lZ_.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DAWqddMZ.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Theme initialization - default to light
+      (function() {
+        const theme = localStorage.getItem('theme') || 'light';
+        if (theme === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </body>
 </html>

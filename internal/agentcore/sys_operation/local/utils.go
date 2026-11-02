@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
@@ -511,22 +510,14 @@ func resolveCwd(ctx context.Context, cwdPath string) string {
 	return cwd.GetCwd(ctx)
 }
 
+// setProcessGroup 让子进程独立成组（平台实现在 proc_unix.go / proc_windows.go）。
 func (h *AsyncProcessHandler) setProcessGroup() {
-	if h.cmd.SysProcAttr == nil {
-		h.cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-	h.cmd.SysProcAttr.Setpgid = true
+	applyProcessGroup(h.cmd)
 }
 
+// killProcessTree 终止子进程树（平台实现在 proc_unix.go / proc_windows.go）。
 func (h *AsyncProcessHandler) killProcessTree() {
-	if h.cmd.Process == nil {
-		return
-	}
-	pid := h.cmd.Process.Pid
-	// 尝试终止整个进程组
-	_ = syscall.Kill(-pid, syscall.SIGTERM)
-	time.Sleep(100 * time.Millisecond)
-	_ = syscall.Kill(-pid, syscall.SIGKILL)
+	killProcessTreePlatform(h)
 }
 
 func (h *AsyncProcessHandler) waitProcess(ctx context.Context) error {

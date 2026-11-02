@@ -875,18 +875,38 @@ func TestDeepAgent_CreateSubagent_默认工厂(t *testing.T) {
 	}
 }
 
-// TestDeepAgent_FollowUp_无Controller LoopController 为 nil 时直接返回
+// TestDeepAgent_FollowUp_无Controller LoopController 为 nil 时返回 ErrNoActiveLoop
+//
+// M-02：投递失败必须可被调用方识别（原实现静默 return，上层无法回退）。
 func TestDeepAgent_FollowUp_无Controller(t *testing.T) {
 	d := newTestDeepAgent()
-	// 不 panic 即通过
-	d.FollowUp(context.Background(), "msg", "task-1", nil)
+	assert.ErrorIs(t, d.FollowUp(context.Background(), "msg", "task-1", nil), ErrNoActiveLoop)
 }
 
-// TestDeepAgent_Steer_无Controller LoopController 为 nil 时直接返回
+// TestDeepAgent_FollowUp_无会话 controller 在但显式会话与 loop 会话都为空 → ErrNoSession
+func TestDeepAgent_FollowUp_无会话(t *testing.T) {
+	d := newTestDeepAgent()
+	d.configMu.Lock()
+	d.loopController = &task_loop.TaskLoopController{}
+	d.loopSession = nil
+	d.configMu.Unlock()
+	assert.ErrorIs(t, d.FollowUp(context.Background(), "msg", "task-1", nil), ErrNoSession)
+}
+
+// TestDeepAgent_Steer_无Controller LoopController 为 nil 时返回 ErrNoActiveLoop
 func TestDeepAgent_Steer_无Controller(t *testing.T) {
 	d := newTestDeepAgent()
-	// 不 panic 即通过
-	d.Steer(context.Background(), "msg", nil)
+	assert.ErrorIs(t, d.Steer(context.Background(), "msg", nil), ErrNoActiveLoop)
+}
+
+// TestDeepAgent_Steer_无会话 controller 在但显式会话与 loop 会话都为空 → ErrNoSession
+func TestDeepAgent_Steer_无会话(t *testing.T) {
+	d := newTestDeepAgent()
+	d.configMu.Lock()
+	d.loopController = &task_loop.TaskLoopController{}
+	d.loopSession = nil
+	d.configMu.Unlock()
+	assert.ErrorIs(t, d.Steer(context.Background(), "msg", nil), ErrNoSession)
 }
 
 // TestDeepAgent_Abort_无协调器 无协调器时不 panic

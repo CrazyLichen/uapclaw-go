@@ -1,6 +1,7 @@
 package a2a
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -166,7 +168,12 @@ func TestHTTP_ExtendedCard(t *testing.T) {
 	}
 }
 
-// TestHTTP_流式SSE 帧序：artifactUpdate 早于终态 statusUpdate
+// TestHTTP_流式SSE 逐帧校验 SSE 契约（T-08）。
+//
+// 原实现用 io.ReadAll 整体读完再比子串先后：ReadAll 必须等连接关闭才返回，
+// 因此「是否逐帧 flush」完全测不到；spec §7 承诺的「首帧 append=false、
+// 末帧 lastChunk=true、Content-Type: text/event-stream」一条都没断言。
+// 改为 bufio.Scanner 逐帧读取并断言契约字段。
 func TestHTTP_流式SSE(t *testing.T) {
 	srv := httptest.NewServer(newTestChannel(t).newMux())
 	defer srv.Close()
@@ -176,21 +183,107 @@ func TestHTTP_流式SSE(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("A2A-Version", "1.0")
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("请求失败: %v", err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
-	text := string(raw)
 
-	if !strings.Contains(text, "artifactUpdate") {
-		t.Fatalf("SSE 缺 artifactUpdate: %s", text)
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/event-stream") {
+		t.Fatalf("Content-Type = %q，期望 text/event-stream", ct)
 	}
-	if !strings.Contains(text, "TASK_STATE_COMPLETED") {
-		t.Fatalf("SSE 缺终态: %s", text)
+
+	frames := scanSSEFrames(t, resp)
+
+	var artifactIdx []int
+	terminalIdx := -1
+	finalState := ""
+	for i, frame := range frames {
+		result, _ := frame["result"].(map[string]any)
+		if result == nil {
+			continue
+		}
+		if _, ok := result["artifactUpdate"]; ok {
+			artifactIdx = append(artifactIdx, i)
+		}
+		if status := statusUpdateState(result); status != "" {
+			finalState = status
+			terminalIdx = i
+		}
 	}
-	if strings.Index(text, "artifactUpdate") > strings.Index(text, "TASK_STATE_COMPLETED") {
-		t.Errorf("artifact 应早于终态: %s", text)
+
+	if len(artifactIdx) == 0 {
+		t.Fatalf("SSE 缺 artifactUpdate 帧，共 %d 帧", len(frames))
 	}
+	firstAppend, _, ok := artifactFlags(frames[artifactIdx[0]])
+	if !ok || firstAppend {
+		t.Errorf("首帧 artifactUpdate 的 append 应为 false，actual=%v", firstAppend)
+	}
+	_, lastChunk, ok := artifactFlags(frames[artifactIdx[len(artifactIdx)-1]])
+	if !ok || !lastChunk {
+		t.Errorf("末帧 artifactUpdate 的 lastChunk 应为 true，actual=%v", lastChunk)
+	}
+	if terminalIdx < 0 {
+		t.Fatalf("SSE 缺终态 statusUpdate")
+	}
+	if terminalIdx < artifactIdx[0] {
+		t.Errorf("artifact（帧 %d）应早于终态（帧 %d）", artifactIdx[0], terminalIdx)
+	}
+	if finalState != "TASK_STATE_COMPLETED" {
+		t.Errorf("终态 = %q，期望 TASK_STATE_COMPLETED", finalState)
+	}
+}
+
+// scanSSEFrames 逐行读取 SSE 流并解析每个 data: 帧为 map。
+func scanSSEFrames(t *testing.T, resp *http.Response) []map[string]any {
+	t.Helper()
+	var frames []map[string]any
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+		var frame map[string]any
+		if err := json.Unmarshal([]byte(payload), &frame); err != nil {
+			t.Fatalf("SSE 帧不是合法 JSON: %s (%v)", payload, err)
+		}
+		frames = append(frames, frame)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("读取 SSE 流失败: %v", err)
+	}
+	return frames
+}
+
+// artifactFlags 取 artifactUpdate 帧的 append / lastChunk 字段。
+func artifactFlags(frame map[string]any) (appendFlag bool, lastChunk bool, ok bool) {
+	result, _ := frame["result"].(map[string]any)
+	update, _ := result["artifactUpdate"].(map[string]any)
+	if update == nil {
+		return false, false, false
+	}
+	appendFlag, _ = update["append"].(bool)
+	lastChunk, _ = update["lastChunk"].(bool)
+	return appendFlag, lastChunk, true
+}
+
+// statusUpdateState 取 statusUpdate 帧的 task 状态字符串（非 statusUpdate 返回空）。
+func statusUpdateState(result map[string]any) string {
+	update, _ := result["statusUpdate"].(map[string]any)
+	if update == nil {
+		return ""
+	}
+	status, _ := update["status"].(map[string]any)
+	if status == nil {
+		return ""
+	}
+	state, _ := status["state"].(string)
+	return state
 }

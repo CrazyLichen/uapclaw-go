@@ -25,7 +25,7 @@ import (
 //
 // Python: openjiuwen/core/retrieval/simple_knowledge_base.py (SimpleKnowledgeBase)
 type SimpleKnowledgeBase struct {
-	// BaseKnowledgeBase 共享基座（13.26；值嵌入，13.8 HybridChunker 先例）
+	// BaseKnowledgeBase 共享基座（13.26；指针嵌入，13.8 HybridChunker 先例）
 	*BaseKnowledgeBase
 	// retriever 检索器（nil = 待懒创建；构造期可由调用方显式注入）
 	retriever retriever.Retriever

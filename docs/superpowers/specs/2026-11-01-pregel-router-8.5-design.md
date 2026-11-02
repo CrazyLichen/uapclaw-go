@@ -251,7 +251,7 @@ func buildTriggerMessages(sourceNode string, targets []string) []Message {
 |------|------|------|---------|
 | D1 | `async def dispatch` → `Dispatch(ctx, …) (…, error)` | Go 无协程/同步区分；错误必须走返回值 | 8.3b 调用点统一 `msgs, err := r.Dispatch(ctx, name)` |
 | D2 | 不复刻「形参名含 `state`」嗅探，改为恒传 `nil` | Go reflect 无法取形参名（只能取类型与元数，仓库 `NumIn()` 零命中）；且该值恒 nil、零读取，两分支行为等价 | 若将来真接通图状态，须先解决 `pregel ↛ graph` 的环，届时另开偏差 |
-| D3 | selector 返回 `[]string`，不做 `str → [str]` 归一化 | 静态类型下归一化是净损失；Python 的 `isinstance(targets, str)` 容错分支无测试覆盖 | 8.14 的包装器负责把单目标包成切片；若出现调用方遗漏，表现为编译期错误而非运行期静默 |
+| D3 | selector 返回 `[]string`，不做 `str → [str]` 归一化 | 静态类型下归一化是净损失：Go 让单目标 selector 在编译期就被迫写 `[]string{"D"}`，该分支整体消失。**（2026-11-02 勘误）** 原文写"Python 的 `isinstance(targets, str)` 容错分支无测试覆盖"，与事实不符——`tests/unit_tests/core/graph/test_pregel.py:131/161` 的 `pick_target` 返回裸字符串 `"D"`，并被 `test_conditional_routing`（:815）实际执行。依据改为"Go 类型收窄使该分支在编译期消失" | 8.14 的包装器负责把单目标包成切片；若出现调用方遗漏，表现为编译期错误而非运行期静默 |
 | D4 | `Dispatch` 的 `ctx` 在 Static/Barrier 中未使用 | 两者无阻塞点；保留形参以满足统一接口 | 用 `_ context.Context` 形参名显式标注 |
 | D5 | `targets` 构造时复制 | Python 存引用（`self.targets = targets`），可被外部改写；无消费者依赖可变性 | 测试用例 `TestNewStaticRouter_复制入参` 锁死 |
 | D6 | selector 返回 error 原样上抛，不 `fmt.Errorf("...: %w")` | 8.3b/8.3c 需要 `errors.As` 识别 `*pregel.GraphInterrupt`；加包装层会让中断判定失配 | 任意一层包装后必须用 `%w`，且 8.3b 侧用 `errors.As` 而非 `==` |
@@ -304,8 +304,10 @@ func buildTriggerMessages(sourceNode string, targets []string) []Message {
 | `TestConditionalRouter_selector收到nilState` | selector 内断言 `state == nil`（记录 Python 事实基线） |
 | `TestConditionalRouter_selector返错原样上抛` | 用哨兵 error 断言 `err == sentinel`（不是包装后），锁死 D6 |
 | `TestConditionalRouter_selector为nil` | 返回 error 且 `len(msgs)==0` |
+| `TestConditionalRouter_typedNil报错` | `SelectorFunc(nil)` 造出的 typed-nil 不得绕过 nil 守卫（M-03） |
+| `TestConditionalRouter_selector返回nil报错` | selector 返回 nil 目标 → error（fail-closed，对齐 Python None→TypeError） |
 | `TestConditionalRouter_ctx透传` | selector 内取 `ctx.Value(...)` 校验同一个 ctx |
-| `TestRouter_接口断言` | `var _ Router = (*XxxRouter)(nil)` 三行（编译期）+ `SelectorFunc` 满足 `Selector` |
+| （无独立用例） | 接口一致性由 `router.go` 的编译期 `var _ Router = (*XxxRouter)(nil)` 四行断言锁定，不单独建用例。<br/>（2026-11-02 同步：原表列的 `TestRouter_接口断言` 从未存在） |
 | `TestSelectorFunc` | 函数适配后调用转发正确 |
 
 ## 8. 实施顺序建议（供 writing-plans 展开）

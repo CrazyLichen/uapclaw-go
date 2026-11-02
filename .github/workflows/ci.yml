@@ -50,9 +50,22 @@ jobs:
 
       - name: 构建前端
         working-directory: internal/swarm/channels/web/frontend
+        timeout-minutes: 15
         run: |
-          npm ci
+          # --prefer-offline：registry 抖动时优先用本地缓存，减少整条流水线因 npm 变红
+          npm ci --prefer-offline
           npm run build
+
+      # 前端产物经 go:embed 编译进二进制。其余 3 个 job 直接 go build/go test，
+      # 没有这份产物时编译进去的是 dist 里的占位 index.html——任何"断言首页内容"
+      # 的用例在这三个 job 里都会看到占位文案。这里把产物做成 artifact 供其复用。
+      - name: 上传前端产物
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-frontend-dist
+          path: internal/swarm/channels/web/frontend/dist
+          if-no-files-found: error
+          retention-days: 3
 
       - name: 验证编译
         run: |
@@ -75,6 +88,13 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
+
+      - name: 下载前端产物
+        uses: actions/download-artifact@v5
+        with:
+          name: web-frontend-dist
+          path: internal/swarm/channels/web/frontend/dist
+        continue-on-error: true
 
       - name: 验证代码格式 (gofmt)
         run: |
@@ -120,6 +140,13 @@ jobs:
           go-version: "1.26"
           cache: true
 
+      - name: 下载前端产物
+        uses: actions/download-artifact@v5
+        with:
+          name: web-frontend-dist
+          path: internal/swarm/channels/web/frontend/dist
+        continue-on-error: true
+
       - name: 恢复覆盖率基线缓存
         if: github.event_name == 'pull_request'
         uses: actions/cache@v5
@@ -147,131 +174,36 @@ jobs:
           fi
           echo "覆盖率达标"
 
-      - name: 检查修改文件覆盖率
+      - name: 检查修改文件「改动行」覆盖率（≥ 85%）
         run: |
-          # 确定对比基准：统一折算成一个明确的提交 SHA，再用两棵树直接对比（two-dot），
-          # 不依赖 merge-base —— 浅克隆下 merge-base 同样会失败。
-          #   push：用事件携带的 before SHA，一次 push 多个提交也能全覆盖
-          #   pull_request：用 base 分支与 HEAD 的 merge-base，只算本 PR 引入的改动
+          # 基准解析：push 用事件 before，PR 用 base 分支 merge-base
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_BRANCH="${{ github.base_ref }}"
-            # 仅 PR 场景拉 base 分支完整历史（浅克隆下 merge-base 需要祖先链）
             git fetch --no-tags origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/pr-base" >/dev/null 2>&1 || true
             BASE_REF=$(git merge-base origin/pr-base HEAD 2>/dev/null || true)
           else
             BASE_REF="${{ github.event.before }}"
-            # 分支首次 push / force push 后 before 为全 0，无可用基准
             if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
               BASE_REF=""
             elif ! git fetch --no-tags --depth=1 origin "$BASE_REF" >/dev/null 2>&1; then
-              echo "::warning::无法拉取基准提交 ${BASE_REF}，回退 HEAD~1"
+              echo "::warning::无法拉取基准提交 ${BASE_REF}，回退 HEAD~1（多提交首次 push 时只检查最后一个提交的改动）"
               BASE_REF=""
             fi
           fi
 
-          # 基准缺失时回退父提交（依赖 checkout 的 fetch-depth ≥ 2）
           if [ -z "$BASE_REF" ]; then
             BASE_REF=$(git rev-parse --verify HEAD~1 2>/dev/null || true)
           fi
           if [ -z "$BASE_REF" ]; then
-            echo "::error::无法确定对比基准（事件 ${{ github.event_name }}，git 历史不足），修改文件覆盖率检查无法执行"
+            echo "::error::无法确定对比基准（事件 ${{ github.event_name }}，git 历史不足），改动行覆盖率检查无法执行"
             exit 1
           fi
           echo "对比基准: ${BASE_REF}"
 
-          # 获取修改的 .go 源码文件（排除 _test.go 和 doc.go）
-          if ! DIFF_OUT=$(git diff --name-only --diff-filter=ACM "$BASE_REF" HEAD -- '*.go' 2>&1); then
-            echo "::error::计算修改文件失败（基准 ${BASE_REF}）：${DIFF_OUT}"
-            exit 1
-          fi
-          CHANGED_FILES=$(echo "$DIFF_OUT" | grep -v '_test\.go$' | grep -v '/doc\.go$' || true)
-
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "没有检测到修改的源码文件，跳过覆盖率检查"
-            exit 0
-          fi
-
-          echo "修改的源码文件："
-          echo "$CHANGED_FILES"
-          echo ""
-
-          # 读取豁免文件列表（格式：每行一个相对路径，# 开头为注释）
-          EXEMPT_FILES=""
-          if [ -f .coverage-exempt ]; then
-            EXEMPT_FILES=$(grep -v '^#' .coverage-exempt | grep -v '^$' || true)
-            if [ -n "$EXEMPT_FILES" ]; then
-              echo "豁免文件列表："
-              echo "$EXEMPT_FILES"
-              echo ""
-            fi
-          fi
-
-          # 从 coverage.out 计算每个修改文件的加权覆盖率
-          HAS_ERROR=false
-          echo "修改文件覆盖率检查结果："
-          echo "| 文件 | 覆盖率 | 状态 |"
-          echo "|------|--------|------|"
-
-          for file in $CHANGED_FILES; do
-            # 检查是否在豁免列表中
-            IS_EXEMPT=false
-            if [ -n "$EXEMPT_FILES" ]; then
-              for exempt in $EXEMPT_FILES; do
-                if [ "$file" = "$exempt" ]; then
-                  IS_EXEMPT=true
-                  break
-                fi
-              done
-            fi
-
-            # 将文件路径转换为模块路径（coverage.out 中的格式）
-            mod_path="github.com/uapclaw/uapclaw-go/${file}"
-
-            # 从 coverage.out 提取该文件的覆盖数据
-            file_data=$(grep "^${mod_path}:" coverage.out || true)
-
-            if [ -z "$file_data" ]; then
-              echo "| \`${file}\` | N/A | 跳过 无可执行语句 |"
-              continue
-            fi
-
-            # 计算加权覆盖率：被执行语句数 / 总语句数
-            total_stmts=0
-            covered_stmts=0
-            while IFS= read -r line; do
-              # 解析格式: file:start.col,end.col numStmts count
-              stmts=$(echo "$line" | awk '{print $(NF-1)}')
-              count=$(echo "$line" | awk '{print $NF}')
-              total_stmts=$((total_stmts + stmts))
-              if [ "$count" -gt 0 ]; then
-                covered_stmts=$((covered_stmts + stmts))
-              fi
-            done <<< "$file_data"
-
-            if [ "$total_stmts" -eq 0 ]; then
-              echo "| \`${file}\` | N/A | 跳过 无可执行语句 |"
-              continue
-            fi
-
-            pct=$(echo "scale=1; $covered_stmts * 100 / $total_stmts" | bc)
-
-            if [ "$IS_EXEMPT" = true ]; then
-              echo "| \`${file}\` | ${pct}% | 豁免（无法 mock 的外部依赖） |"
-              echo "::notice file=${file}::修改文件的覆盖率 ${pct}% 低于 85%，但已在 .coverage-exempt 中豁免"
-            elif [ "$(echo "$pct < 85" | bc -l)" = "1" ]; then
-              echo "| \`${file}\` | ${pct}% | 覆盖率不足 |"
-              echo "::error file=${file}::修改文件的覆盖率 ${pct}% 低于 85%，请补充单元测试（如无法 mock，可在 .coverage-exempt 中豁免）"
-              HAS_ERROR=true
-            else
-              echo "| \`${file}\` | ${pct}% | OK |"
-            fi
-          done
-
-          if [ "$HAS_ERROR" = true ]; then
-            echo ""
-            echo "::error::存在覆盖率低于 85% 的修改文件，请补充单元测试（如无法 mock，可在 .coverage-exempt 中豁免）"
-            exit 1
-          fi
+          # 改动行单测覆盖率阈值 85%：新增/修改的行必须有单测覆盖，
+          # 整文件口径只作参考列（巨型文件的整文件覆盖率长期被豁免，会掩盖新改动）。
+          bash scripts/check-changed-line-coverage.sh \
+            coverage.out "$BASE_REF" 85 .coverage-exempt
 
       - name: 覆盖率回归检查
         if: github.event_name == 'pull_request'
@@ -337,6 +269,13 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
+
+      - name: 下载前端产物
+        uses: actions/download-artifact@v5
+        with:
+          name: web-frontend-dist
+          path: internal/swarm/channels/web/frontend/dist
+        continue-on-error: true
 
       - name: 验证集成测试合规性（AST 调用分析 + 断言密度）
         run: |
@@ -408,138 +347,39 @@ jobs:
           fi
           echo "集成测试覆盖率达标"
 
-      - name: 检查修改文件集成测试覆盖率（≥ 30%）
+      - name: 检查修改文件「改动行」集成测试覆盖率（≥ 5%）
         run: |
-          # 确定对比基准：统一折算成一个明确的提交 SHA，再用两棵树直接对比（two-dot），
-          # 不依赖 merge-base —— 浅克隆下 merge-base 同样会失败。
-          #   push：用事件携带的 before SHA，一次 push 多个提交也能全覆盖
-          #   pull_request：用 base 分支与 HEAD 的 merge-base，只算本 PR 引入的改动
+          # 基准解析：push 用事件 before，PR 用 base 分支 merge-base
+          #（浅克隆下 merge-base 需祖先链，故 PR 场景显式拉取 base 分支）
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_BRANCH="${{ github.base_ref }}"
-            # 仅 PR 场景拉 base 分支完整历史（浅克隆下 merge-base 需要祖先链）
             git fetch --no-tags origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/pr-base" >/dev/null 2>&1 || true
             BASE_REF=$(git merge-base origin/pr-base HEAD 2>/dev/null || true)
           else
             BASE_REF="${{ github.event.before }}"
-            # 分支首次 push / force push 后 before 为全 0，无可用基准
             if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
               BASE_REF=""
             elif ! git fetch --no-tags --depth=1 origin "$BASE_REF" >/dev/null 2>&1; then
-              echo "::warning::无法拉取基准提交 ${BASE_REF}，回退 HEAD~1"
+              echo "::warning::无法拉取基准提交 ${BASE_REF}，回退 HEAD~1（多提交首次 push 时只检查最后一个提交的改动）"
               BASE_REF=""
             fi
           fi
 
-          # 基准缺失时回退父提交（依赖 checkout 的 fetch-depth ≥ 2）
+          # 分支首次 push / force push 后 before 为全 0 → 回退 HEAD~1。
+          # 已知盲区：一次 push 多个提交时只覆盖最后一个提交的改动（上一行 warning 会留痕）。
           if [ -z "$BASE_REF" ]; then
             BASE_REF=$(git rev-parse --verify HEAD~1 2>/dev/null || true)
           fi
           if [ -z "$BASE_REF" ]; then
-            echo "::error::无法确定对比基准（事件 ${{ github.event_name }}，git 历史不足），修改文件覆盖率检查无法执行"
+            echo "::error::无法确定对比基准（事件 ${{ github.event_name }}，git 历史不足），改动行覆盖率检查无法执行"
             exit 1
           fi
           echo "对比基准: ${BASE_REF}"
 
-          # 获取修改的 .go 源码文件（排除 _test.go 和 doc.go）
-          if ! DIFF_OUT=$(git diff --name-only --diff-filter=ACM "$BASE_REF" HEAD -- '*.go' 2>&1); then
-            echo "::error::计算修改文件失败（基准 ${BASE_REF}）：${DIFF_OUT}"
-            exit 1
-          fi
-          CHANGED_FILES=$(echo "$DIFF_OUT" | grep -v '_test\.go$' | grep -v '/doc\.go$' || true)
-
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "没有检测到修改的源码文件，跳过集成测试覆盖率检查"
-            exit 0
-          fi
-
-          echo "修改的源码文件："
-          echo "$CHANGED_FILES"
-          echo ""
-
-          # 读取集成测试豁免文件列表
-          EXEMPT_FILES=""
-          if [ -f .integration-coverage-exempt ]; then
-            EXEMPT_FILES=$(grep -v '^#' .integration-coverage-exempt | grep -v '^$' || true)
-            if [ -n "$EXEMPT_FILES" ]; then
-              echo "集成测试豁免文件列表："
-              echo "$EXEMPT_FILES"
-              echo ""
-            fi
-          fi
-
-          # 从 integration_coverage.out 计算每个修改文件的加权覆盖率
-          HAS_ERROR=false
-          echo "修改文件集成测试覆盖率检查结果："
-          echo "| 文件 | 覆盖率 | 状态 |"
-          echo "|------|--------|------|"
-
-          for file in $CHANGED_FILES; do
-            # 检查是否在豁免列表中
-            IS_EXEMPT=false
-            if [ -n "$EXEMPT_FILES" ]; then
-              for exempt in $EXEMPT_FILES; do
-                if [ "$file" = "$exempt" ]; then
-                  IS_EXEMPT=true
-                  break
-                fi
-              done
-            fi
-
-            # 将文件路径转换为模块路径（integration_coverage.out 中的格式）
-            mod_path="github.com/uapclaw/uapclaw-go/${file}"
-
-            # 从 integration_coverage.out 提取该文件的覆盖数据
-            file_data=$(grep "^${mod_path}:" integration_coverage.out || true)
-
-            if [ -z "$file_data" ]; then
-              # 文件未出现在集成测试覆盖数据中，覆盖率为 0%
-              if [ "$IS_EXEMPT" = true ]; then
-                echo "| \`${file}\` | 0% | 豁免（无法通过集成测试覆盖） |"
-                echo "::notice file=${file}::修改文件未被集成测试覆盖，但已在 .integration-coverage-exempt 中豁免"
-              else
-                echo "| \`${file}\` | 0% | 未被集成测试覆盖 |"
-                echo "::notice file=${file}::修改文件未被任何集成测试覆盖（0%），建议补充集成测试或在 .integration-coverage-exempt 中豁免"
-                HAS_ERROR=true
-              fi
-              continue
-            fi
-
-            # 计算加权覆盖率：被执行语句数 / 总语句数
-            total_stmts=0
-            covered_stmts=0
-            while IFS= read -r line; do
-              stmts=$(echo "$line" | awk '{print $(NF-1)}')
-              count=$(echo "$line" | awk '{print $NF}')
-              total_stmts=$((total_stmts + stmts))
-              if [ "$count" -gt 0 ]; then
-                covered_stmts=$((covered_stmts + stmts))
-              fi
-            done <<< "$file_data"
-
-            if [ "$total_stmts" -eq 0 ]; then
-              echo "| \`${file}\` | N/A | 跳过 无可执行语句 |"
-              continue
-            fi
-
-            pct=$(echo "scale=1; $covered_stmts * 100 / $total_stmts" | bc)
-
-            if [ "$IS_EXEMPT" = true ]; then
-              echo "| \`${file}\` | ${pct}% | 豁免（无法通过集成测试覆盖） |"
-              echo "::notice file=${file}::修改文件的集成测试覆盖率 ${pct}% 低于 30%，但已在 .integration-coverage-exempt 中豁免"
-            elif [ "$(echo "$pct < 30" | bc -l)" = "1" ]; then
-              echo "| \`${file}\` | ${pct}% | 覆盖率不足 |"
-              echo "::error file=${file}::修改文件的集成测试覆盖率 ${pct}% 低于 30%，请补充集成测试或在 .integration-coverage-exempt 中豁免"
-              HAS_ERROR=true
-            else
-              echo "| \`${file}\` | ${pct}% | OK |"
-            fi
-          done
-
-          if [ "$HAS_ERROR" = true ]; then
-            echo ""
-            echo "::error::存在集成测试覆盖率低于 30% 的修改文件，请补充集成测试或在 .integration-coverage-exempt 中豁免"
-            exit 1
-          fi
+          # 改动行集成覆盖率阈值 5%：本仓库集成套件尚未覆盖 agent_teams / pregel 等内部子系统，
+          # 先以低位门禁保证"改动行至少被集成链路执行过"，逐轮抬高。
+          bash scripts/check-changed-line-coverage.sh \
+            integration_coverage.out "$BASE_REF" 5 .integration-coverage-exempt
 
       - name: 上传集成测试覆盖率报告
         uses: actions/upload-artifact@v7

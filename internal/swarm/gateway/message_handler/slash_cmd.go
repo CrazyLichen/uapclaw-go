@@ -36,7 +36,11 @@ import (
 // D1（有意偏差）：保留 Type/ReqMethod 双重前置守卫。Python 的三个发布方
 // （web publish_user_messages、cron、evolution autoAnswer）均发 type=req，
 // slash 文本只出现在 query/content，守卫等价且省一次解析。
-func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
+//
+// S-02：各分支的 RPC/通知尾巴一律经 runSlashAsync 甩到独立协程（对齐 Python 每个
+// 分支的 asyncio.create_task）。forwardLoop 是唯一消费 goroutine，同步执行会让
+// /branch、/rewind、/skills 的 600s unary RPC 阻塞全渠道入站派发。
+func (mh *MessageHandler) handleChannelControl(ctx context.Context, msg *schema.Message) bool {
 	// 仅处理请求消息
 	if msg.Type != schema.MessageTypeReq {
 		return false
@@ -75,7 +79,10 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 
 	// Python: L645-648 /skills list 走独立路径，且不创建 channel state
 	if parsed.Action == command_parser.ActionSkillsOK {
-		mh.skillsSlashNotice(msg)
+		// Python: asyncio.create_task(_skills_slash_notice)
+		mh.runSlashAsync(ctx, "skills", func(ctx context.Context) {
+			mh.skillsSlashNotice(ctx, msg)
+		})
 		logControlHandled(msg, channelType, parsed)
 		return true
 	}
@@ -87,7 +94,7 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 	switch parsed.Action {
 	case command_parser.ActionNewSessionOK:
 		// 11.7+11.13：SessionMap 轮转 + state 更新 + SessionStart hook
-		// Python: L654-667（全部在入口函数体内，收尾甩子函数）
+		// Python: L654-667（状态更新同步，收尾 create_task 甩子函数）
 		oldSID := state.SessionID
 		var newSID string
 		if p, c, b, u, ok := extractIdentityTuple(msg); ok && channelIDMatchesSessionMapTypes(msg.ChannelID) {
@@ -99,28 +106,51 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 		// 触发 SessionStart hook（fire-and-forget）
 		// Python: if self._gateway_hook_handler: asyncio.create_task(on_session_start(new_sid, source=channel_type))
 		mh.TriggerSessionStartHook(newSID, string(channelType))
-		// 收尾：异步取消旧会话 + 发变更通知
-		mh.newSessionCancelAndNotice(msg, oldSID, newSID)
+		// 收尾：异步取消旧会话 + 发变更通知（Python: create_task）
+		mh.runSlashAsync(ctx, "new_session", func(ctx context.Context) {
+			mh.newSessionCancelAndNotice(ctx, msg, oldSID, newSID)
+		})
 	case command_parser.ActionNewSessionBad:
-		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+		mh.runSlashAsync(ctx, "new_session_bad", func(context.Context) {
+			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+		})
 	case command_parser.ActionModeOK:
-		mh.modeChangeCancelAndNotice(msg, parsed)
+		mh.runSlashAsync(ctx, "mode", func(ctx context.Context) {
+			mh.modeChangeCancelAndNotice(ctx, msg, parsed)
+		})
 	case command_parser.ActionModeBad:
-		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+		mh.runSlashAsync(ctx, "mode_bad", func(context.Context) {
+			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+		})
 	case command_parser.ActionSwitchOK:
-		mh.modeChangeCancelAndNotice(msg, parsed)
+		mh.runSlashAsync(ctx, "switch", func(ctx context.Context) {
+			mh.modeChangeCancelAndNotice(ctx, msg, parsed)
+		})
 	case command_parser.ActionSwitchBad:
-		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+		mh.runSlashAsync(ctx, "switch_bad", func(context.Context) {
+			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+		})
 	case command_parser.ActionBranchOK:
-		mh.branchSlashNotice(msg, parsed)
+		mh.runSlashAsync(ctx, "branch", func(ctx context.Context) {
+			mh.branchSlashNotice(ctx, msg, parsed)
+		})
 	case command_parser.ActionRewindOK:
-		mh.rewindSlashConfirmPrompt(msg, parsed)
+		// 单纯发确认提示（无 RPC），Python 侧同为 create_task，保持一致
+		mh.runSlashAsync(ctx, "rewind_confirm_prompt", func(context.Context) {
+			mh.rewindSlashConfirmPrompt(msg, parsed)
+		})
 	case command_parser.ActionRewindBad:
-		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令，/rewind 须带正整数轮次编号，如 /rewind 2"})
+		mh.runSlashAsync(ctx, "rewind_bad", func(context.Context) {
+			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令，/rewind 须带正整数轮次编号，如 /rewind 2"})
+		})
 	case command_parser.ActionRewindConfirm:
-		mh.rewindSlashNotice(msg, parsed)
+		mh.runSlashAsync(ctx, "rewind", func(ctx context.Context) {
+			mh.rewindSlashNotice(ctx, msg, parsed)
+		})
 	case command_parser.ActionRewindCancel:
-		mh.sendChannelNotice(msg, map[string]any{"content": "[收到 /rewind cancel] 已取消回退操作。"})
+		mh.runSlashAsync(ctx, "rewind_cancel", func(context.Context) {
+			mh.sendChannelNotice(msg, map[string]any{"content": "[收到 /rewind cancel] 已取消回退操作。"})
+		})
 	default:
 		return false
 	}
@@ -134,10 +164,10 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 // Python: _new_session_cancel_and_notice (L575-591)：await 先取消完再发通知。
 // M-05: Go 原实现 go 异步导致取消未完成通知先到（顺序丢失），改同步对齐。
 // 状态更新（SessionMap 轮转/state.SessionID/hook）已上提至 handleChannelControl（D5 对齐）。
-func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, oldSID, newSID string) {
+func (mh *MessageHandler) newSessionCancelAndNotice(ctx context.Context, msg *schema.Message, oldSID, newSID string) {
 	// 取消旧会话（静默模式：publishInterruptResult=false）
 	if oldSID != "" {
-		mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, false)
+		mh.CancelAgentWorkForSession(ctx, msg, oldSID, false)
 	}
 
 	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], session_id 已变更为 %s", newSID)})
@@ -147,7 +177,7 @@ func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, oldSID,
 //
 // Python: _mode_change_cancel_and_notice (L593-613)：
 // 先取消当前会话任务（publishInterruptResult=false），再下发 mode 已变更提示。
-func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
+func (mh *MessageHandler) modeChangeCancelAndNotice(ctx context.Context, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	// 提前获取渠道状态（/switch 需要读取当前 mode）
 	state := mh.GetOrCreateChannelState(msg)
 
@@ -233,7 +263,7 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed 
 		// 导致取消未完成通知先到。CancelAgentWorkForSession 内部 SendRequest
 		// 有超时不会永久阻塞 forwardLoop。
 		if oldSID != "" {
-			mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, false)
+			mh.CancelAgentWorkForSession(ctx, msg, oldSID, false)
 		}
 		mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel)})
 	} else {
@@ -288,7 +318,7 @@ func (mh *MessageHandler) sendChannelNotice(msg *schema.Message, payload map[str
 //
 // Python: _skills_slash_notice (L885-937)：
 // 构造 SKILLS_LIST E2A → AgentClient.SendRequest → 格式化通知。
-func (mh *MessageHandler) skillsSlashNotice(msg *schema.Message) {
+func (mh *MessageHandler) skillsSlashNotice(ctx context.Context, msg *schema.Message) {
 	if mh.agentClient == nil || !mh.agentClient.IsConnected() {
 		mh.sendChannelNotice(msg, map[string]any{"error": "获取技能列表失败：AgentClient 未连接"})
 		return
@@ -317,7 +347,7 @@ func (mh *MessageHandler) skillsSlashNotice(msg *schema.Message) {
 	env := e2a.MessageToE2AOrFallback(skillsReq)
 	env.IsStream = false
 
-	resp, err := mh.agentClient.SendRequest(context.Background(), env)
+	resp, err := mh.agentClient.SendRequest(ctx, env)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "skills_slash_error").
@@ -357,7 +387,7 @@ func (mh *MessageHandler) skillsSlashNotice(msg *schema.Message) {
 //
 // Python: _branch_slash_notice (L939-1015)：
 // 构造 SESSION_FORK E2A → AgentClient.SendRequest → 格式化通知。
-func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
+func (mh *MessageHandler) branchSlashNotice(ctx context.Context, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	state := mh.GetOrCreateChannelState(msg)
 	sourceSID := state.SessionID
 	if sourceSID == "" {
@@ -365,10 +395,11 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 		return
 	}
 
+	// M-07: 请求侧保持用户原始输入（可为空串），默认标题只在通知展示时回退。
+	// Python: branch_name = parsed.branch_name or ""（空串照发），
+	// 服务端 session_ops 的规则是「title 非空直接用，否则由源会话标题派生 <标题> (Branch)」。
+	// 原实现预填 "Branched conversation" 会让服务端派生规则失效、多个无名分叉互相重名。
 	branchName := parsed.BranchName
-	if branchName == "" {
-		branchName = "Branched conversation"
-	}
 
 	if mh.agentClient == nil || !mh.agentClient.IsConnected() {
 		mh.sendChannelNotice(msg, map[string]any{"error": "分叉失败：AgentClient 未连接"})
@@ -395,7 +426,7 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 		e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1000.0),
 	)
 
-	resp, err := mh.agentClient.SendRequest(context.Background(), env)
+	resp, err := mh.agentClient.SendRequest(ctx, env)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "branch_slash_error").
@@ -431,6 +462,12 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 			forkTitle = t
 		}
 	}
+	// M-07: 展示层回退（Python: branch_name or "Branched conversation"），
+	// 请求参数与状态更新都不使用该默认值。
+	displayTitle := forkTitle
+	if displayTitle == "" {
+		displayTitle = "Branched conversation"
+	}
 
 	oldSID := state.SessionID
 	state.SessionID = forkSID
@@ -439,7 +476,7 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 	// （publish_interrupt_result 取默认 True）。原实现用 go 异步，通知会先于
 	// 取消完成发出，与 Python 顺序相反（M-05 同类问题，/branch 当初漏改）。
 	if oldSID != "" {
-		mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, true)
+		mh.CancelAgentWorkForSession(ctx, msg, oldSID, true)
 	}
 
 	// A2: Python L1001-1004 成功日志
@@ -450,7 +487,7 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 		Str("title", forkTitle).
 		Msg("/branch completed")
 
-	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /branch 指令] 已分叉会话「%s」，当前已切换到新会话。", forkTitle)})
+	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /branch 指令] 已分叉会话「%s」，当前已切换到新会话。", displayTitle)})
 }
 
 // rewindSlashConfirmPrompt 发送 /rewind 确认提示。
@@ -479,7 +516,7 @@ func (mh *MessageHandler) rewindSlashConfirmPrompt(msg *schema.Message, parsed c
 // E2A-first + fallback：构造 SESSION_REWIND E2A → AgentClient.SendRequest；
 // 失败/错误时 fallback 本地 sessionops.RewindSession 截断 history.json，
 // 通知带「（注意：上下文未同步截断）」。
-func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
+func (mh *MessageHandler) rewindSlashNotice(ctx context.Context, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	state := mh.GetOrCreateChannelState(msg)
 	targetSID := state.SessionID
 	if targetSID == "" {
@@ -492,8 +529,9 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 		turn = 1
 	}
 
-	// 先取消当前任务（Python: await 同步调用）
-	mh.CancelAgentWorkForSession(context.Background(), msg, targetSID, false)
+	// 先取消当前任务（Python: await 同步调用；publish_interrupt_result 取默认 True）
+	// M-06：原实现传 false，用户看不到中断结果与 cancelled_tools，与 /branch 自相矛盾。
+	mh.CancelAgentWorkForSession(ctx, msg, targetSID, true)
 
 	// E2A-first：转发到 AgentServer（原子性截断 history + context + checkpointer）
 	// AgentClient 未连接时直接走本地 fallback
@@ -511,7 +549,7 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 			e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1000.0),
 		)
 
-		resp, err := mh.agentClient.SendRequest(context.Background(), env)
+		resp, err := mh.agentClient.SendRequest(ctx, env)
 		if err != nil {
 			// Python: logger.warning + fall through to local fallback
 			logger.Warn(logComponent).
@@ -637,4 +675,25 @@ func extractTextFromParams(params json.RawMessage) string {
 		}
 	}
 	return ""
+}
+
+// runSlashAsync 以独立协程执行斜杠命令的 RPC/通知尾巴。
+//
+// S-02：对齐 Python 各分支的 asyncio.create_task。forwardLoop 是唯一消费
+// mh.userMessages 的 goroutine，同步执行会让 /branch、/rewind、/skills list 的
+// unary RPC（超时 600s，见 routing/agent_client.go）阻塞全渠道入站派发。
+// ctx 使用 forwardLoop 的 ctx，停机时可取消；panic 一律 recover，不带崩进程。
+func (mh *MessageHandler) runSlashAsync(ctx context.Context, action string, fn func(context.Context)) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error(logComponent).
+					Any("panic", r).
+					Str("event_type", "slash_command_panic").
+					Str("action", action).
+					Msg("slash command goroutine panic recovered")
+			}
+		}()
+		fn(ctx)
+	}()
 }

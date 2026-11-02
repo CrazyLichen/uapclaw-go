@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -61,8 +62,10 @@ const (
 	exitCodeSession = 1
 	// exitCodeConfig 配置错误（profile 缺失/规格非法/参数个数错）
 	exitCodeConfig = 2
-	// exitCodeInterrupted 被信号中断（对齐 Python KeyboardInterrupt → 130）
+	// exitCodeInterrupted 被 SIGINT 中断（对齐 Python KeyboardInterrupt → 130）
 	exitCodeInterrupted = 130
+	// exitCodeTerminated 被 SIGTERM 终止（对齐 Python 进程被 SIGTERM 杀死的 128+15）
+	exitCodeTerminated = 143
 	// envSkipDotenv 跳过 .env 加载的开关（品牌映射自 Python JIUWENCLAW_SKIP_DOTENV）
 	envSkipDotenv = "UAPCLAW_SKIP_DOTENV"
 	// logComponentAcpChat 冒烟入口日志组件（工具层归属 AgentServer，对齐 acpchat 包）
@@ -78,6 +81,15 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// acpChatSignal 记录进程收到的终止信号（取值 syscall.SIGINT / syscall.SIGTERM）。
+//
+// M-14：SIGTERM（容器/systemd 停止）不能被当成用户 Ctrl-C。原实现把两者都塞进
+// signal.NotifyContext，再靠 ctx.Err() != nil 一律返回 130：脚本会把优雅停机误判成
+// 用户中断，且回复已正常打印后收到 SIGTERM 也会把 0 翻成 130。
+var acpChatSignal atomic.Int32
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -103,8 +115,21 @@ profile 规格与 acp_chat 工具共用严格校验（args 必须是列表、env
 			if parent == nil {
 				parent = context.Background()
 			}
-			ctx, stop := signal.NotifyContext(parent, syscall.SIGINT, syscall.SIGTERM)
-			defer stop()
+			ctx, cancel := context.WithCancel(parent)
+			defer cancel()
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+			defer signal.Stop(sigCh)
+			go func() {
+				sig, ok := <-sigCh
+				if !ok {
+					return
+				}
+				if sysSig, isSys := sig.(syscall.Signal); isSys {
+					acpChatSignal.Store(int32(sysSig))
+				}
+				cancel()
+			}()
 
 			return runAcpChatArgs(ctx, defaultAcpChatDeps(), args, os.Stderr)
 		},
@@ -157,6 +182,33 @@ func exitCodeFor(err error) int {
 		return exitErr.code
 	}
 	return exitCodeSession
+}
+
+// acpChatSignalExitCode 返回已捕获信号对应的退出码（无信号返回 exitCodeOK）。
+//
+// M-14：SIGINT → 130（对齐 Python KeyboardInterrupt），SIGTERM → 143
+// （128+15，对齐 Python 进程被 SIGTERM 终止）。
+func acpChatSignalExitCode() int {
+	switch acpChatSignal.Load() {
+	case int32(syscall.SIGINT):
+		return exitCodeInterrupted
+	case int32(syscall.SIGTERM):
+		return exitCodeTerminated
+	default:
+		return exitCodeOK
+	}
+}
+
+// acpChatInterruptedCode 失败路径的中断码：优先按已捕获信号区分，
+// ctx 已取消但未捕获信号（父 ctx 取消等非信号来源）时回落到 130。
+func acpChatInterruptedCode(ctx context.Context) int {
+	if code := acpChatSignalExitCode(); code != exitCodeOK {
+		return code
+	}
+	if ctx.Err() != nil {
+		return exitCodeInterrupted
+	}
+	return exitCodeOK
 }
 
 // acpChatSkipDotenv 是否跳过 .env 加载（对齐 Python：strip() 后等于 "1"）。
@@ -256,9 +308,11 @@ func closeAcpChatClientWithTimeout(closer interface{ Close() error }, timeout ti
 // acpChatFailureCode 失败分支退出码：信号取消 → 130，否则 1（并记 Error 日志）。
 func acpChatFailureCode(ctx context.Context, stage string, err error) int {
 	if ctx.Err() != nil {
+		code := acpChatInterruptedCode(ctx)
 		logger.Warn(logComponentAcpChat).Str("stage", stage).Err(err).
+			Int("exit_code", code).
 			Msg("[acp-chat] interrupted by signal")
-		return exitCodeInterrupted
+		return code
 	}
 	logger.Error(logComponentAcpChat).Str("stage", stage).Err(err).
 		Msg("[acp-chat] ACP session failed")
@@ -312,13 +366,15 @@ func runAcpChat(ctx context.Context, deps acpChatDeps, profile, message string) 
 	}
 	fmt.Fprintln(deps.stdout, out)
 
-	// 正常路径：先关闭再决定退出码（对齐 Python finally 时序），
-	// 关闭阶段被信号打断仍按 130 退出（KeyboardInterrupt 语义）
+	// 正常路径：先关闭再决定退出码（对齐 Python finally 时序）。
+	// M-14：只有确实收到终止信号才改写退出码，且区分 SIGINT(130) / SIGTERM(143)；
+	// 回复已正常输出、随后进程被 SIGTERM 停掉时按 143 退出（Python 进程被信号杀死）。
 	closeAcpChatClientWithTimeout(client, closeTimeout)
 	closed = true
-	if ctx.Err() != nil {
-		logger.Warn(logComponentAcpChat).Msg("[acp-chat] interrupted during close")
-		return exitCodeInterrupted
+	if code := acpChatSignalExitCode(); code != exitCodeOK {
+		logger.Warn(logComponentAcpChat).Int("exit_code", code).
+			Msg("[acp-chat] interrupted during close")
+		return code
 	}
 	return exitCodeOK
 }

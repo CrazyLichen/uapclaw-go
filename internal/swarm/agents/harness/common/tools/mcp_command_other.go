@@ -2,12 +2,34 @@
 
 package tools
 
+import (
+	"os"
+	"os/exec"
+	"strings"
+	"syscall"
+)
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 //
-// 本文件为非 Windows 平台的 Windows 专属 shell 探测桩。
-// 这些函数仅在 resolveExecutionPlan 的 Windows 分支被引用；
-// 非 Windows 平台编译期替换为零值实现，使平台绑定代码不进入覆盖率基线
+// 本文件为非 Windows 平台的平台绑定实现与 Windows 专属函数桩。
+// 非 Windows 平台编译期替换为零值实现，使 Windows 绑定代码不进入覆盖率基线
 // （对齐项目规范 3.2：硬件/OS 绑定代码用 build tag 隔离）。
+
+// applyStartNewSession 按 JW_START_NEW_SESSION env 决定是否启用新会话（进程组）。
+// Python: popen_kw["start_new_session"] = True（非 Windows 平台）
+// Go 对应 syscall.SysProcAttr{Setsid: true}。
+func applyStartNewSession(cmd *exec.Cmd) {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv(jwStartNewSessionEnv)))
+	if raw == "" {
+		raw = "true"
+	}
+	switch raw {
+	case "0", "false", "no", "off":
+		// 显式关闭
+	default:
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	}
+}
 
 // availablePowershell 探测 PowerShell（非 Windows 恒空）。
 // Python: _available_powershell

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -22,11 +23,18 @@ import (
 //
 // 状态仅在 memberPortMap 和 teammatePortCounter，
 // 共同充当增量端口分配器：每个成员名获得稳定的端口分配。
+//
+// 并发纪律：mu 保护上面两个可变字段。
+// Python 侧是单线程 asyncio，串行调用天然安全；Go 侧 SpawnManager.OnTeammateUnhealthy
+// 为每个不健康成员起一条重启 goroutine，两条同时走到 BuildMemberMessagerConfig 就是
+// 并发写同一张 map——那是 runtime 的 fatal error（不可 recover，直接终止进程）。
 type SpawnPayloadBuilder struct {
 	// spec 团队 Agent 规格
 	spec atschema.TeamAgentSpec
 	// ctx 运行时上下文
 	ctx atschema.TeamRuntimeContext
+	// mu 保护 memberPortMap 与 teammatePortCounter
+	mu sync.Mutex
 	// memberPortMap 成员名到端口的稳定映射
 	memberPortMap map[string]int
 	// teammatePortCounter 队友端口计数器
@@ -144,12 +152,7 @@ func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) *atsc
 		portOffset = v
 	}
 
-	portBase, exists := b.memberPortMap[memberName]
-	if !exists {
-		portBase = basePort + b.teammatePortCounter*portOffset
-		b.teammatePortCounter++
-		b.memberPortMap[memberName] = portBase
-	}
+	portBase := b.assignPort(memberName, basePort, portOffset)
 
 	metadata := make(map[string]any, len(leaderCfg.Metadata))
 	for k, v := range leaderCfg.Metadata {
@@ -220,6 +223,23 @@ func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) 
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// assignPort 为成员分配稳定的直连端口（并发安全）。
+//
+// 同名成员返回首次分配的端口——重启必须复用同一端口，否则 peers 表里
+// 写死的 direct_addr 失效；新成员按首次出现顺序递增一个步长。
+// 查表与分配必须在同一把锁内完成，否则两次并发分配会拿到同一个 counter 值。
+func (b *SpawnPayloadBuilder) assignPort(memberName string, basePort, portOffset int) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if port, ok := b.memberPortMap[memberName]; ok {
+		return port
+	}
+	port := basePort + b.teammatePortCounter*portOffset
+	b.teammatePortCounter++
+	b.memberPortMap[memberName] = port
+	return port
+}
 
 // messagerIntField 把 metadata 中的数值字段转成 int。
 //

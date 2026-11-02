@@ -141,6 +141,11 @@ var (
 	}
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// defaultVikingTopK viking_search 的默认返回条数（与工具 Schema 承诺一致）。
+const defaultVikingTopK = 10
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewOpenVikingProvider 创建 OpenVikingProvider 实例。
@@ -461,14 +466,19 @@ func (p *OpenVikingProvider) handleVikingSearch(ctx context.Context, args map[st
 
 	// 结果条数：Schema 声明的是 top_k（默认 10），代码必须优先认它；
 	// limit 是历史参数名，保留作回退（Python 原实现只读 limit，导致 Schema 与实现不一致）。
-	// 两者都缺时不写入 payload，交由服务端按自身默认值处理，与 Python 的线上请求逐字节一致。
-	if v, ok := args["top_k"]; ok {
-		if topK := utils.IntVal(v); topK > 0 {
-			payload["top_k"] = topK
-		}
-	} else if limit := utils.IntVal(args["limit"]); limit > 0 {
-		payload["top_k"] = limit
+	//
+	// T-13：改为回退链 + 显式默认值。
+	// 原实现是 if/else if：top_k 存在但非正（0/负数）时既写不进 top_k、也不回退 limit；
+	// 两者都缺时又不写 payload，服务端默认值一旦不是 10，模型看到的行为与 Schema
+	// 承诺（默认 10）不符且无任何日志。现在显式写出 defaultVikingTopK，消除该漂移。
+	topK := utils.IntVal(args["top_k"])
+	if topK <= 0 {
+		topK = utils.IntVal(args["limit"])
 	}
+	if topK <= 0 {
+		topK = defaultVikingTopK
+	}
+	payload["top_k"] = topK
 
 	// 对齐 Python: resp = await asyncio.to_thread(self._client.post, "/api/v1/search/find", payload)
 	resp, err := p.client.post(ctx, "/api/v1/search/find", payload)
@@ -761,9 +771,6 @@ func (p *OpenVikingProvider) handleVikingAddResource(ctx context.Context, args m
 		"message":  "Resource queued for processing. Use viking_search after a moment to find it.",
 	}, nil
 }
-
-// truncStr 截断字符串到指定 rune 长度（CJK-safe）。
-// 对齐 Python: user_msg[:4000] — Python 按字符（rune）截断，Go 必须 按 rune 截断以避免破坏多字节字符
 
 // floatVal 从 map 值中提取 float64。
 func floatVal(v any) float64 {

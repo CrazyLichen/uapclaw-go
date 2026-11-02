@@ -17,6 +17,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// defaultInteractionMaxDepth 交互载荷递归的默认最大深度。
+//
+// Python 在 _find_interaction_payloads 内硬编码 `_depth > 8`；Go 把同一常量复用到
+// 桥接摊平递归（T-04），避免两处深度上限各自漂移。
+const defaultInteractionMaxDepth = 8
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PayloadToMap 把流 payload 统一桥接为 map[string]any。
@@ -31,26 +39,37 @@ import (
 // 注意：结构体若缺 json tag，往返后键名保持 Go 字段名（PascalCase），
 // 与 Python 小写字段名不一致——需要消费端按小写键读取的类型必须显式补 tag。
 func PayloadToMap(payload any) map[string]any {
+	m, _ := PayloadToMapChecked(payload)
+	return m
+}
+
+// PayloadToMapChecked 与 PayloadToMap 相同，但区分两类 nil：
+//   - payload 本身不是可桥接形态（string/数字/切片等）→ (nil, nil)，调用方按原语义处理；
+//   - 结构体桥接失败（marshal/unmarshal 出错）→ (nil, error)。
+//
+// T-03：调用方（流式 chunk 解析）据此丢弃该 chunk 并记 Error 日志，而不是把
+// nil 兜成空 map、产出 content="map[]" 的伪帧推给前端。
+func PayloadToMapChecked(payload any) (map[string]any, error) {
 	if payload == nil {
-		return nil
+		return nil, nil
 	}
 	if m, ok := payload.(map[string]any); ok {
-		return m
+		return m, nil
 	}
 	if tm, ok := payload.(interface{ ToMap() map[string]any }); ok {
-		return tm.ToMap()
+		return tm.ToMap(), nil
 	}
 
 	// 按形态判定：只桥接 struct / *struct；nil 指针返回 nil
 	rv := reflect.ValueOf(payload)
 	for rv.Kind() == reflect.Pointer {
 		if rv.IsNil() {
-			return nil
+			return nil, nil
 		}
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {
-		return nil
+		return nil, nil
 	}
 
 	b, err := json.Marshal(payload)
@@ -59,7 +78,7 @@ func PayloadToMap(payload any) map[string]any {
 			Err(err).
 			Str("payload_type", reflect.TypeOf(payload).String()).
 			Msg("PayloadToMap: payload marshal failed")
-		return nil
+		return nil, err
 	}
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
@@ -67,9 +86,9 @@ func PayloadToMap(payload any) map[string]any {
 			Err(err).
 			Str("payload_type", reflect.TypeOf(payload).String()).
 			Msg("PayloadToMap: payload unmarshal failed")
-		return nil
+		return nil, err
 	}
-	return m
+	return m, nil
 }
 
 // PayloadsToMaps 批量桥接 payload 切片，nil 元素会被跳过。
@@ -78,7 +97,23 @@ func PayloadToMap(payload any) map[string]any {
 // 同时承担 Python `_iter_interactions` 的嵌套列表展开职责（interrupt_helpers.py L342-348）：
 // 嵌套的 []any / []map[string]any 会被递归摊平，下游拿到的恒为平坦 []map[string]any。
 func PayloadsToMaps(items []any) []map[string]any {
+	return payloadsToMapsDepth(items, 0)
+}
+
+// payloadsToMapsDepth 带深度上限的摊平实现。
+//
+// T-04：Python 的 _iter_interactions 同样无条件递归，但上游 _find_interaction_payloads
+// 有 `_depth > 8` 兜底；Go 若不加限制，畸形自引用切片会直接栈溢出（fatal，不可 recover，
+// Python 只是 RecursionError）。深度上限复用 defaultInteractionMaxDepth，与
+// FindInteractionPayloads 的 MaxDepth 默认值同源。
+func payloadsToMapsDepth(items []any, depth int) []map[string]any {
 	if len(items) == 0 {
+		return nil
+	}
+	if depth > defaultInteractionMaxDepth {
+		logger.Warn(logComponent).
+			Int("max_depth", defaultInteractionMaxDepth).
+			Msg("PayloadsToMaps: nesting too deep, truncated")
 		return nil
 	}
 	result := make([]map[string]any, 0, len(items))
@@ -86,7 +121,7 @@ func PayloadsToMaps(items []any) []map[string]any {
 		switch nested := item.(type) {
 		case []any:
 			// 对齐 Python _iter_interactions 的嵌套列表展开
-			result = append(result, PayloadsToMaps(nested)...)
+			result = append(result, payloadsToMapsDepth(nested, depth+1)...)
 		case []map[string]any:
 			result = append(result, nested...)
 		default:

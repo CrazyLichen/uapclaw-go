@@ -3,6 +3,8 @@ package agent_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -153,6 +155,46 @@ func TestSpawnPayloadBuilder_BuildMemberMessagerConfig_端口分配(t *testing.T
 	again := b.BuildMemberMessagerConfig("alice")
 	assert.NotNil(t, again)
 	assert.Equal(t, first.DirectAddr, again.DirectAddr)
+}
+
+// TestSpawnPayloadBuilder_BuildMemberMessagerConfig_并发成员分配 并发分配不 panic 且端口互不重复。
+//
+// S-03：memberPortMap 无锁时，SpawnManager 为每个不健康成员各起一条重启 goroutine，
+// 两条同时进入这里就是 concurrent map writes（runtime fatal error，不可 recover）。
+// 用 -race 运行时该用例会报撕裂读写；不带 -race 时至少验证端口唯一性与稳定性。
+func TestSpawnPayloadBuilder_BuildMemberMessagerConfig_并发成员分配(t *testing.T) {
+	spec := atschema.NewTeamAgentSpec()
+	leaderCfg := &atschema.MessagerTransportConfig{Backend: "inprocess", TeamName: "t"}
+	ctx := atschema.TeamRuntimeContext{Role: atschema.TeamRoleLeader, MemberName: "team_leader", MessagerConfig: leaderCfg}
+	b := agent.NewSpawnPayloadBuilder(spec, ctx)
+
+	const members = 8
+	results := make([][]string, members)
+	var wg sync.WaitGroup
+	for i := 0; i < members; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			// 每个 goroutine 模拟同一成员被重复重启：同名两次必须拿到同一端口
+			for round := 0; round < 3; round++ {
+				cfg := b.BuildMemberMessagerConfig(fmt.Sprintf("member-%d", idx))
+				results[idx] = append(results[idx], cfg.DirectAddr)
+			}
+			// 同时模拟与已有成员发生交叉分配
+			b.BuildMemberMessagerConfig("member-0")
+		}(i)
+	}
+	wg.Wait()
+
+	portSet := make(map[string]int, members)
+	for idx, addrs := range results {
+		assert.Len(t, addrs, 3)
+		for _, addr := range addrs {
+			assert.Equal(t, addrs[0], addr, "成员 member-%d 的端口必须稳定", idx)
+		}
+		portSet[addrs[0]]++
+	}
+	assert.Len(t, portSet, members, "不同成员必须分配到不同端口，实际=%v", portSet)
 }
 
 // TestSpawnPayloadBuilder_BuildMemberMessagerConfig_自定义基准与步长 测试 metadata 覆盖默认值

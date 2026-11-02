@@ -39,6 +39,33 @@ func TestNewToolCall_WithOptions(t *testing.T) {
 	}
 }
 
+// TestToolCallDeltaOptions 验证增量帧 type 缺省时保留 "function" 默认值。
+//
+// 真实 SSE 只在首帧带 type，后续帧缺省；若把空串透传给 WithToolCallType，
+// mergeToolCalls 的同调用判定（两侧 type == "function"）失效，参数碎片会被
+// 拆成多个 ToolCall 逐个执行（真 LLM 团队模式下 leader 不建队的真因）。
+func TestToolCallDeltaOptions(t *testing.T) {
+	cases := []struct {
+		name     string
+		typ      string
+		wantType string
+	}{
+		{name: "缺省 type 保留 function", typ: "", wantType: "function"},
+		{name: "显式 type 生效", typ: "custom", wantType: "custom"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tc := NewToolCall("call_1", "build_team", `{"name":`, ToolCallDeltaOptions(3, c.typ)...)
+			if tc.Type != c.wantType {
+				t.Errorf("Type = %q, want %q", tc.Type, c.wantType)
+			}
+			if tc.Index != 3 {
+				t.Errorf("Index = %d, want 3", tc.Index)
+			}
+		})
+	}
+}
+
 // TestToolCall_ToOpenAIFormat 验证扁平格式转 OpenAI 嵌套格式。
 func TestToolCall_ToOpenAIFormat(t *testing.T) {
 	tc := NewToolCall("call_123", "get_weather", `{"city":"Beijing"}`, WithToolCallIndex(0))

@@ -272,21 +272,30 @@ func RunTeamMember(
 	// FinalizeMember/Unbind/PostRun 三步，Invoke panic 时同样执行。
 	// 同 RunBaseTeamInvoke：清理 ctx 脱取消 + 超时，错误记录不吞。
 	defer func() {
-		cleanCtx, cancel := teamCleanupContext(ctx)
-		defer cancel()
-		if err := FinalizeMember(cleanCtx, ag); err != nil {
-			logger.Warn(logComponent).Err(err).
-				Str("session_id", teamSession.GetSessionID()).
-				Msg("RunTeamMember: FinalizeMember failed during cleanup")
-		}
+		// M-15：两步各用独立 ctx。原实现共用一个 30s 预算，慢存储下
+		// FinalizeMember 吃满后 PostRun 只剩残值 → checkpoint/终态落盘失败仅 Warn，
+		// 会话终态丢失（Python 的 finally 无超时，两步互不影响）。
+		func() {
+			cleanCtx, cancel := teamCleanupContext(ctx)
+			defer cancel()
+			if err := FinalizeMember(cleanCtx, ag); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Str("session_id", teamSession.GetSessionID()).
+					Msg("RunTeamMember: FinalizeMember failed during cleanup")
+			}
+		}()
 		if teamRuntime != nil {
 			teamRuntime.UnbindTeamSession(teamSession.GetSessionID())
 		}
-		if err := teamSession.PostRun(cleanCtx); err != nil {
-			logger.Warn(logComponent).Err(err).
-				Str("session_id", teamSession.GetSessionID()).
-				Msg("RunTeamMember: PostRun failed during cleanup")
-		}
+		func() {
+			postCtx, postCancel := teamCleanupContext(ctx)
+			defer postCancel()
+			if err := teamSession.PostRun(postCtx); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Str("session_id", teamSession.GetSessionID()).
+					Msg("RunTeamMember: PostRun failed during cleanup")
+			}
+		}()
 	}()
 
 	return ag.Invoke(ctx, inputs, agentinterfaces.WithSession(teamSession))
@@ -323,21 +332,28 @@ func RunTeamMemberStreaming(
 	// S-75/M-51: cleanup 闭包——同 RunBaseTeamStreaming 模式，对齐
 	// Python 生成器 finally（team_runner.py L384-388：流耗尽后才清理）。
 	cleanup := func() {
-		cleanCtx, cancel := teamCleanupContext(ctx)
-		defer cancel()
-		if err := FinalizeMember(cleanCtx, ag); err != nil {
-			logger.Warn(logComponent).Err(err).
-				Str("session_id", teamSession.GetSessionID()).
-				Msg("RunTeamMemberStreaming: FinalizeMember failed during cleanup")
-		}
+		// M-15：两步独立预算（同 RunTeamMember）
+		func() {
+			cleanCtx, cancel := teamCleanupContext(ctx)
+			defer cancel()
+			if err := FinalizeMember(cleanCtx, ag); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Str("session_id", teamSession.GetSessionID()).
+					Msg("RunTeamMemberStreaming: FinalizeMember failed during cleanup")
+			}
+		}()
 		if teamRuntime != nil {
 			teamRuntime.UnbindTeamSession(teamSession.GetSessionID())
 		}
-		if err := teamSession.PostRun(cleanCtx); err != nil {
-			logger.Warn(logComponent).Err(err).
-				Str("session_id", teamSession.GetSessionID()).
-				Msg("RunTeamMemberStreaming: PostRun failed during cleanup")
-		}
+		func() {
+			postCtx, postCancel := teamCleanupContext(ctx)
+			defer postCancel()
+			if err := teamSession.PostRun(postCtx); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Str("session_id", teamSession.GetSessionID()).
+					Msg("RunTeamMemberStreaming: PostRun failed during cleanup")
+			}
+		}()
 	}
 
 	agentCh, streamErr := ag.Stream(ctx, inputs, agentinterfaces.WithSession(teamSession))

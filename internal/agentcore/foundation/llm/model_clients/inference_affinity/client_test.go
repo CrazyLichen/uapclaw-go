@@ -533,6 +533,52 @@ func TestGenerateSpeech_不支持(t *testing.T) {
 	}
 }
 
+func TestTranscribeAudio_不支持(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.TranscribeAudio(context.Background(), "audio.wav")
+	if err == nil {
+		t.Error("TranscribeAudio 应返回不支持错误")
+	}
+	if !strings.Contains(err.Error(), "does not support audio transcription") {
+		t.Errorf("错误信息 = %q, 应包含 'does not support audio transcription'", err.Error())
+	}
+}
+
+// TestSupportsKVCacheRelease 验证 InferenceAffinity 声明支持 KV Cache 释放。
+func TestSupportsKVCacheRelease(t *testing.T) {
+	client := &InferenceAffinityModelClient{}
+	if !client.SupportsKVCacheRelease() {
+		t.Error("SupportsKVCacheRelease 应为 true")
+	}
+}
+
+// TestStream_非法APIBase返回错误 验证请求构建失败时 Stream 直接返回错误而非挂起。
+func TestStream_非法APIBase返回错误(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "://bad-url"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.Stream(context.Background(),
+		model_clients.NewMessagesParam(llmschema.NewUserMessage("hi")),
+		model_clients.WithStreamCustomHeaders(map[string]string{"X-Test": "1"}),
+		model_clients.WithStreamTracerRecordData(func(map[string]any) {}),
+	)
+	if err == nil {
+		t.Error("非法 APIBase 下 Stream 应返回错误")
+	}
+}
+
 func TestGenerateVideo_不支持(t *testing.T) {
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -1630,5 +1676,43 @@ func TestBuildInferenceAffinityUsageMetadata_无费用(t *testing.T) {
 	}
 	if meta.TotalCost != 0 {
 		t.Errorf("TotalCost = %f, 期望 0", meta.TotalCost)
+	}
+}
+
+// TestParseStreamChunk_缺省type的增量帧可聚合 验证 InferenceAffinity 流式增量帧聚合。
+//
+// 真实 SSE 只在首帧带 type，后续帧缺省；若把空串透传给 WithToolCallType，
+// mergeToolCalls 的同调用判定失效，同一次调用的参数碎片会被拆成多个 ToolCall。
+func TestParseStreamChunk_缺省type的增量帧可聚合(t *testing.T) {
+	client := &InferenceAffinityModelClient{}
+	frames := []openai.ChunkToolCall{
+		{ID: "call_00_x", Type: "function", Function: openai.ChunkFunction{Name: "build_team", Arguments: `{"name":`}},
+		{Function: openai.ChunkFunction{Arguments: `"Team"}`}},
+	}
+
+	var accumulated *llmschema.AssistantMessageChunk
+	for i, frame := range frames {
+		chunk := &openai.ChatCompletionChunkResponse{
+			Choices: []openai.ChunkChoice{{Delta: &openai.ChunkDelta{ToolCalls: []openai.ChunkToolCall{frame}}}},
+		}
+		parsed := client.parseStreamChunk(chunk)
+		if parsed == nil {
+			t.Fatalf("第 %d 帧解析结果不应为 nil", i)
+		}
+		if got := parsed.ToolCalls[0].Type; got != "function" {
+			t.Fatalf("第 %d 帧 Type = %q, want %q", i, got, "function")
+		}
+		if accumulated == nil {
+			accumulated = parsed
+		} else {
+			accumulated = accumulated.Merge(parsed)
+		}
+	}
+
+	if len(accumulated.ToolCalls) != 1 {
+		t.Fatalf("增量帧应聚合为 1 个调用，实际 %d 个：%+v", len(accumulated.ToolCalls), accumulated.ToolCalls)
+	}
+	if got := accumulated.ToolCalls[0].Arguments; got != `{"name":"Team"}` {
+		t.Errorf("Arguments = %q，want %q", got, `{"name":"Team"}`)
 	}
 }

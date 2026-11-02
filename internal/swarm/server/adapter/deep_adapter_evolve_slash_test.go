@@ -135,6 +135,13 @@ func newEvolveTestAdapter(t *testing.T, skillsDir string, stub *stubEvolveLLMCli
 	d := NewDeepAdapter()
 	d.skillEvolutionRail = rail
 	d.defaultModelName = "test-model"
+	// 模型配置前置校验（对齐 Python _has_valid_model_config）要求凭据可用；
+	// 这些用例只测 slash/审批透传，需显式挂上可用模型，否则会被
+	// "模型未正确配置" 提前短路。
+	if model != nil {
+		d.model = model
+		d.modelCache = map[string]*llm.Model{"test-model": model}
+	}
 	return d
 }
 

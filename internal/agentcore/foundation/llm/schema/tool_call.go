@@ -66,6 +66,22 @@ func NewToolCall(id, name, arguments string, opts ...ToolCallOption) *ToolCall {
 	return tc
 }
 
+// ToolCallDeltaOptions 构造流式增量帧的 ToolCall 选项。
+//
+// 真实 OpenAI 兼容 SSE 只在首个 delta 携带 type（后续帧 omitempty 缺省），
+// 空串若透传给 WithToolCallType 会覆盖 NewToolCall 的 "function" 默认值，
+// 使 mergeToolCalls 的同调用判定（要求两侧 type == "function"）失效，
+// 同一次调用的参数碎片会被拆成多个 ToolCall 并逐个当工具执行。
+//
+// 对齐 Python: openai_model_client.py:745-751 流式解析把 type 硬编码为 "function"。
+func ToolCallDeltaOptions(index int, typ string) []ToolCallOption {
+	opts := []ToolCallOption{WithToolCallIndex(index)}
+	if typ == "" {
+		return opts
+	}
+	return append(opts, WithToolCallType(typ))
+}
+
 // ToOpenAIFormat 转换为 OpenAI API 嵌套格式 map。
 //
 // 输出格式：{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}

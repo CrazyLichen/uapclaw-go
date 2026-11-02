@@ -21,6 +21,14 @@ import (
 const (
 	// historyPageSize 历史记录每页大小，对齐 Python _HISTORY_PAGE_SIZE
 	historyPageSize = 20
+	// historyNotFoundError 历史不可用时的错误文案。
+	//
+	// 这是**协议约定串**，不是给人看的说明文字：Web 前端按它做白名单过滤
+	// （frontend/src/hooks/useWebSocket.ts:1566 用 includes 判定后静默吞掉，
+	// 因为「新会话尚无 history.json」是正常态）。一旦翻译成中文，白名单失配，
+	// 界面就会把正常态渲染成红色错误。必须与 Python
+	// agent_ws_server.py 的 "invalid page_idx or session history not found" 逐字一致。
+	historyNotFoundError = "invalid page_idx or session history not found"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -208,10 +216,11 @@ func (s *AgentServer) handleHistoryGetStream(_ context.Context, request *schema.
 	data := getConversationHistory(params.SessionID, params.PageIdx)
 	if data == nil {
 		// 参数无效或文件不存在，发送错误 chunk
+		// 文案必须是英文协议串（见 historyNotFoundError）：前端靠它识别「新会话正常态」
 		chunk := schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
 			map[string]any{
 				"event_type": "chat.error",
-				"error":      "获取历史记录失败：参数无效或会话不存在",
+				"error":      historyNotFoundError,
 			},
 			schema.WithChunkIsComplete(true),
 		)

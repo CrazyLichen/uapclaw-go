@@ -22,25 +22,23 @@ type fakeChannel struct {
 
 // sentFrame 一次 SendResFrame 调用的快照。
 type sentFrame struct {
-	reqID          string
-	ok             bool
-	payload        map[string]any
-	errMsg         string
-	code           string
-	includePayload bool
+	reqID   string
+	ok      bool
+	payload map[string]any
+	errMsg  string
+	code    string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SendResFrame 实现 ResponseSender，仅记录调用。
-func (f *fakeChannel) SendResFrame(_ *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string, includePayload bool) {
+func (f *fakeChannel) SendResFrame(_ *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string) {
 	f.calls = append(f.calls, sentFrame{
-		reqID:          reqID,
-		ok:             ok,
-		payload:        payload,
-		errMsg:         errMsg,
-		code:           code,
-		includePayload: includePayload,
+		reqID:   reqID,
+		ok:      ok,
+		payload: payload,
+		errMsg:  errMsg,
+		code:    code,
 	})
 }
 
@@ -214,7 +212,7 @@ func TestLocalHandlersAck(t *testing.T) {
 				t.Fatalf("SendResFrame 调用次数 = %d, 期望 1", len(server.calls))
 			}
 			call := server.calls[0]
-			if call.reqID != "req-ack-1" || !call.ok || !call.includePayload {
+			if call.reqID != "req-ack-1" || !call.ok {
 				t.Errorf("帧头不符: %+v", call)
 			}
 			for k, v := range tc.want {

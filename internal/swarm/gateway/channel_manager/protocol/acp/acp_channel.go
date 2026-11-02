@@ -1376,7 +1376,7 @@ func strVal(v any) string {
 // sessionId / messageId 在 Python 侧一律经 str() 收敛，数字也会变成 "123"；
 // strVal 只认 string，会把数字形态静默吞成空串。
 func strScalar(v any) string {
-	return e2aacp.ScalarString(v)
+	return e2aacp.NormalizeJSONRPCID(v)
 }
 
 // orStr 空串回退。

@@ -100,3 +100,26 @@ internal/swarm/agents/harness/team/team_manager_lifecycle.go
 # 语句是错误传播分支（建表失败、持久化失败），需注入失败的 SQL engine 才能
 # 触达，属「依赖外部运行环境」类豁免。
 internal/agent_teams/agent/session_manager.go
+
+# ── 2026-11-02 2026-11-01 审查处置（M-15） ──
+# team_runner.go — 团队运行器：剩余未覆盖语句全部是「真实团队运行期」路径
+# （RunTeamMember/RunTeamMemberStreaming 的 agent.Invoke、PreRun/PostRun 会话钩子、
+#   FinalizeMember 落库、流式队列消费），需真实 TeamHarness + agent 会话 + 存储才能触达，
+#   属「依赖外部运行环境」类豁免。本次仅把清理 defer 里的单个共享 ctx 拆成两步独立 ctx
+#   （各 8 行），未新增业务分支；拆分后的两个闭包已由既有 runtime 用例覆盖。
+internal/agent_teams/runtime/team_runner.go
+
+# ── 2026-11-02 48h 审查处置（M-02） ──
+# deep_agent.go#L1041：FollowUp 的 publish 失败错误包装。构造该分支需要把 Controller 内部
+# eventQueue（未导出）替换成必定失败的实现，包内单测无法注入；集成层要触发需真实 MQ 故障。
+# 用行级豁免而不是整文件豁免：该文件其余改动行（Steer/FollowUp 的 ctrl==nil 与 no-session
+# 两个错误分支）由 deep_agent_test.go 直接覆盖，后续改动仍按行判定。
+internal/agentcore/harness/deep_agent.go#L1041-L1041
+
+# ── 2026-11-02 模型配置前置校验（04e9fdee 引入，覆盖率门禁改口径后暴露） ──
+# deep_adapter.go#L2513-L2534：defaultModelClientConfig 读 ~/.uapclaw/config.yaml。
+# 路径经 path.getResolvedPaths 的 sync.Once 缓存，进程内无法用 t.Setenv("HOME") 重定向，
+# 属「依赖外部运行环境」（规则 3.2 第 2 类）；该函数的六个提前返回分支只能靠真实配置
+# 文件的正负样本覆盖，CI 环境没有也无法伪造。同文件其余改动行（hasValidModelConfig
+# 与 anyToConfigString）由 deep_adapter_test.go 覆盖。
+internal/swarm/server/adapter/deep_adapter.go#L2513-L2534

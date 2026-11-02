@@ -160,6 +160,10 @@ func GenerateAgentDataForWorkspace(workspaceDir string) error {
 	}
 	defer func() { _ = outFile.Close() }()
 
+	// 已知差异（无消费者，不改）：json.Encoder.Encode 会在末尾写一个换行，
+	// Python 的 app_web.py:127-130 用 write_text(json.dumps(...)) 没有尾换行。
+	// 前端 JSON 解析对尾换行无感；按仓库既有结论（"无消费者的字节一致性不改"）保留差异，
+	// 若将来做 golden 对拍，改成 json.Marshal + Write 即可对齐。
 	encoder := json.NewEncoder(outFile)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")

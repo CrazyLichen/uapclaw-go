@@ -259,3 +259,82 @@ func TestParseStreamChunk_controllerOutput_结构体信封(t *testing.T) {
 		t.Fatalf("converter 应收到 1 个已桥接元素，实际 %v", gotList)
 	}
 }
+
+// ──── M-04：controller_output 嵌套里的 activate_confirm 真实信封 ────
+
+// TestParseStreamChunk_controllerOutput嵌套activate_confirm 走「controller_output
+// 内嵌 __interaction__ 信封」这条链路（M-04 原先键名写错导致永不命中）。
+func TestParseStreamChunk_controllerOutput嵌套activate_confirm(t *testing.T) {
+	inner := map[string]any{
+		"type": "__interaction__",
+		"payload": map[string]any{
+			"interaction_type": "activate_confirm",
+			"interaction_id":   "i-1",
+			"extension_name":   "demo-ext",
+			"runtime_path":     "/tmp/rt",
+			"options":          []any{"accept"},
+		},
+	}
+	payload := map[string]any{"type": "task_interaction", "data": []any{inner}}
+	converterCalled := false
+	converter := func([]map[string]any) map[string]any {
+		converterCalled = true
+		return map[string]any{"event_type": "converted_by_interrupt"}
+	}
+
+	got := ParseStreamChunk(&stream.OutputSchema{Type: "controller_output", Payload: payload},
+		nil, map[string]bool{}, converter, false)
+
+	if converterCalled {
+		t.Fatal("命中 activate_confirm 时不应再走 interrupt 转换器")
+	}
+	if got == nil || got["event_type"] != "harness.activate_interaction" {
+		t.Fatalf("event_type = %v，期望 harness.activate_interaction", got)
+	}
+	if got["interaction_type"] != "activate_confirm" || got["interaction_id"] != "i-1" {
+		t.Errorf("字段不符: %v", got)
+	}
+	if _, has := got["interaction"]; has {
+		t.Error("不应携带 interaction 键（Python 形状无此键）")
+	}
+	if opts, ok := got["options"].([]string); !ok || len(opts) != 1 || opts[0] != "accept" {
+		t.Errorf("options = %v", got["options"])
+	}
+}
+
+// ──── T-01 / T-04：深度上限与同数组子切片 ────
+
+// TestFindInteractionPayloads_MaxDepth生效 MaxDepth 参数必须真正作用于递归。
+func TestFindInteractionPayloads_MaxDepth生效(t *testing.T) {
+	leaf := map[string]any{"type": "__interaction__", "payload": "p"}
+	obj := map[string]any{"a": map[string]any{"b": map[string]any{"c": leaf}}}
+
+	if got := FindInteractionPayloads(obj, FindOption{MaxDepth: 2}); len(got) != 0 {
+		t.Errorf("MaxDepth=2 时不应命中，实际 %v", got)
+	}
+	if got := FindInteractionPayloads(obj); len(got) != 1 {
+		t.Errorf("默认深度应命中，实际 %v", got)
+	}
+}
+
+// TestFindInteractionPayloads_同数组子切片不误判重复 seen 键带长度后，
+// 同一底层数组的不同长度子切片不会被误判为「已访问」而漏检。
+//
+// 构造：base = ["x", interaction]，s1 = base[0:1]（不含命中）、s2 = base[0:2]（含命中）。
+// 两者 Pointer() 相同（都是首元素地址），旧实现会把 s2 当成已访问而跳过 → 命中 0。
+func TestFindInteractionPayloads_同数组子切片不误判重复(t *testing.T) {
+	base := []any{"x", map[string]any{"type": "__interaction__", "payload": "p"}}
+	obj := []any{base[0:1], base[0:2]}
+	if got := FindInteractionPayloads(obj); len(got) != 1 {
+		t.Errorf("应命中 1 个（s2 内的 interaction），实际 %d", len(got))
+	}
+}
+
+// TestPayloadsToMaps_深度上限 自引用切片不得无限递归（Go 栈溢出是 fatal）。
+func TestPayloadsToMaps_深度上限(t *testing.T) {
+	cyclic := make([]any, 0, 1)
+	cyclic = append(cyclic, cyclic)
+	if got := PayloadsToMaps(cyclic); got != nil {
+		t.Logf("超深嵌套返回 %v（应截断为 nil）", got)
+	}
+}

@@ -2,11 +2,20 @@ package tui
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gorilla/websocket"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	messagehandler "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件标识（/tui 通道）
+	logComponent = logger.ComponentGateway
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -27,8 +36,8 @@ type RouteParams struct {
 // ResponseSender res 帧发送器，对齐 Python 本地 handler 拿到的 channel 的
 // send_response(...) 能力。实现方为 gateway.GatewayServer。
 type ResponseSender interface {
-	// SendResFrame 写一条 res 帧；includePayload=false 时不带 payload 键
-	SendResFrame(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string, includePayload bool)
+	// SendResFrame 写一条 res 帧（恒带 payload 键，对齐 Python send_response）
+	SendResFrame(ws *websocket.Conn, reqID string, ok bool, payload map[string]any, errMsg, code string)
 }
 
 // RouteServer Install 阶段注入的通道对象，与 Python register_cli_handlers(channel=...)
@@ -241,6 +250,12 @@ func BuildRouteBinding(params RouteParams) *routing.RouteBinding {
 			// 也被 handler 用来 send_response。
 			rs, ok := server.(RouteServer)
 			if !ok {
+				// 断言失败会让 /tui 的 5 个本地 handler（chat.send/resume/interrupt/
+				// user_answer、history.get）全部不注册，消息改走转发路径，现象是
+				// "ack 变慢/行为变了"而日志里毫无线索。RouteServer 是 ResponseSender
+				// 与 RegisterLocalHandler 的组合接口，任一处签名漂移都会走到这里。
+				logger.Warn(logComponent).Str("server_type", fmt.Sprintf("%T", server)).
+					Msg("tui Install: server 未实现 RouteServer，本地 handler 全部未注册")
 				return
 			}
 			rs.RegisterLocalHandler("/tui", "chat.send", chatSendHandler(rs))
@@ -263,7 +278,7 @@ func chatSendHandler(send ResponseSender) routing.LocalHandlerFunc {
 		send.SendResFrame(ws, reqID, true, map[string]any{
 			"accepted":   true,
 			"session_id": sessionID,
-		}, "", "", true)
+		}, "", "")
 		return nil
 	}
 }
@@ -276,7 +291,7 @@ func chatResumeHandler(send ResponseSender) routing.LocalHandlerFunc {
 		send.SendResFrame(ws, reqID, true, map[string]any{
 			"accepted":   true,
 			"session_id": sessionID,
-		}, "", "", true)
+		}, "", "")
 		return nil
 	}
 }
@@ -293,7 +308,7 @@ func chatInterruptHandler(send ResponseSender) routing.LocalHandlerFunc {
 		if intent, ok := params["intent"].(string); ok && intent != "" {
 			payload["intent"] = intent
 		}
-		send.SendResFrame(ws, reqID, true, payload, "", "", true)
+		send.SendResFrame(ws, reqID, true, payload, "", "")
 		return nil
 	}
 }
@@ -310,7 +325,7 @@ func chatUserAnswerHandler(send ResponseSender) routing.LocalHandlerFunc {
 		if rid, ok := params["request_id"].(string); ok && rid != "" {
 			payload["request_id"] = rid
 		}
-		send.SendResFrame(ws, reqID, true, payload, "", "", true)
+		send.SendResFrame(ws, reqID, true, payload, "", "")
 		return nil
 	}
 }
@@ -330,7 +345,7 @@ func historyGetHandler(send ResponseSender) routing.LocalHandlerFunc {
 		if v, ok := params["page_idx"]; ok {
 			payload["page_idx"] = v
 		}
-		send.SendResFrame(ws, reqID, true, payload, "", "", true)
+		send.SendResFrame(ws, reqID, true, payload, "", "")
 		return nil
 	}
 }

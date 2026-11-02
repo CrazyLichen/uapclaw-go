@@ -1,6 +1,7 @@
 package a2a
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+
+	sdka2a "github.com/a2aproject/a2a-go/v2/a2a"
 )
 
 // TestConfigFromEnv_默认值 对齐 Python A2AChannelConfig 默认值 (L23-35)
@@ -31,7 +34,9 @@ func TestConfigFromEnv_默认值(t *testing.T) {
 	if cfg.ExtendedCardPath != "/agent/authenticatedExtendedCard" {
 		t.Errorf("ExtendedCardPath = %q", cfg.ExtendedCardPath)
 	}
-	if cfg.ProtocolVersion != "1.0.0" {
+	// M-03：默认协议版本取 SDK 的 a2a.Version（"1.0"），与 a2asrv 的严格校验口径一致；
+	// 原默认 "1.0.0" 会让按卡片回填 A2A-Version 的第三方客户端一律被 -32009 拒绝。
+	if cfg.ProtocolVersion != string(sdka2a.Version) {
 		t.Errorf("ProtocolVersion = %q", cfg.ProtocolVersion)
 	}
 	if cfg.ChannelID != "a2a" {
@@ -338,4 +343,168 @@ func freePort(t *testing.T) int {
 	}
 	defer ln.Close()
 	return ln.Addr().(*net.TCPAddr).Port
+}
+
+// ──── T-07：路由校验与启停状态机 ────
+
+// TestValidateA2ARoutes 三条路由路径的合法性校验。
+func TestValidateA2ARoutes(t *testing.T) {
+	base := testConfig(19100)
+	if err := validateA2ARoutes(base); err != nil {
+		t.Fatalf("合法配置不应报错: %v", err)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*A2AChannelConfig)
+	}{
+		{"rpc 缺前导斜杠", func(c *A2AChannelConfig) { c.RPCPath = "a2a" }},
+		{"card 为空", func(c *A2AChannelConfig) { c.CardPath = "" }},
+		{"extended 为空", func(c *A2AChannelConfig) { c.ExtendedCardPath = "" }},
+		{"含空白", func(c *A2AChannelConfig) { c.RPCPath = "/a2 a" }},
+		{"路径重复", func(c *A2AChannelConfig) { c.ExtendedCardPath = base.RPCPath }},
+		{"花括号不配对", func(c *A2AChannelConfig) { c.RPCPath = "/a/{x" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base
+			tc.mutate(&cfg)
+			if err := validateA2ARoutes(cfg); err == nil {
+				t.Errorf("%s 应返回错误", tc.name)
+			}
+		})
+	}
+}
+
+// TestStart_非法路由返回错误且状态复位 配置写错时必须在监听前返错，并复位状态机。
+func TestStart_非法路由返回错误且状态复位(t *testing.T) {
+	cfg := testConfig(freePort(t))
+	cfg.RPCPath = "no-leading-slash"
+	ch := NewA2AChannel(cfg)
+
+	if err := ch.Start(context.Background()); err == nil {
+		t.Fatal("非法路由应返回错误")
+	}
+	ch.mu.Lock()
+	state := ch.state
+	ch.mu.Unlock()
+	if state != a2aStateIdle {
+		t.Errorf("状态应复位为 idle，实际 %v", state)
+	}
+	if ch.IsRunning() {
+		t.Error("不应进入运行态")
+	}
+}
+
+// TestStart_重复调用幂等 第二次 Start 直接返回 nil（幂等），不重复监听。
+func TestStart_重复调用幂等(t *testing.T) {
+	ch := NewA2AChannel(testConfig(freePort(t)))
+	if err := ch.Start(context.Background()); err != nil {
+		t.Fatalf("首次 Start 失败: %v", err)
+	}
+	defer func() { _ = ch.Stop(context.Background()) }()
+	if err := ch.Start(context.Background()); err != nil {
+		t.Errorf("重复 Start 应返回 nil，实际 %v", err)
+	}
+}
+
+// TestStop_启动窗口内到达 Stop 在 starting 阶段到达时把状态置 stopping 并交由 Start 收尾。
+func TestStop_启动窗口内到达(t *testing.T) {
+	ch := NewA2AChannel(testConfig(freePort(t)))
+	ch.mu.Lock()
+	ch.state = a2aStateStarting
+	ch.mu.Unlock()
+
+	if err := ch.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop 返回错误: %v", err)
+	}
+	ch.mu.Lock()
+	state := ch.state
+	ch.mu.Unlock()
+	if state != a2aStateStopping {
+		t.Errorf("状态应为 stopping，实际 %v", state)
+	}
+}
+
+// TestDeliverCanceled_未知请求 未注册的 requestID 调用时静默返回（不 panic）。
+func TestDeliverCanceled_未知请求(t *testing.T) {
+	ch := NewA2AChannel(testConfig(19100))
+	ch.deliverCanceled("not-exist")
+}
+
+// TestDeliverTerminal_覆盖旧值 终态槽满时用最新终态覆盖（M-01 保底语义）。
+func TestDeliverTerminal_覆盖旧值(t *testing.T) {
+	ch := NewA2AChannel(testConfig(19100))
+	ch.OnMessage(func(*schema.Message) bool { return true })
+	if _, err := ch.DispatchA2ARequest(context.Background(), "req-t", "s", "q", nil, nil); err != nil {
+		t.Fatalf("dispatch 失败: %v", err)
+	}
+	// 连续两条终态：第一条填槽，第二条触发「丢弃旧的、换新的」分支
+	for i := 0; i < 2; i++ {
+		if err := ch.Send(context.Background(), &schema.Message{
+			ID: "req-t", Type: schema.MessageTypeEvent, EventType: schema.EventTypeChatError,
+			Payload: map[string]any{"is_complete": true, "seq": i},
+		}); err != nil {
+			t.Fatalf("Send 失败: %v", err)
+		}
+	}
+	ch.mu.RLock()
+	pending := ch.pending["req-t"]
+	ch.mu.RUnlock()
+	if pending == nil {
+		t.Fatal("pending 应存在")
+	}
+	select {
+	case got := <-pending.Terminal():
+		if got.Payload["seq"] != 1 {
+			t.Errorf("终态槽应保留最新一条，实际 seq=%v", got.Payload["seq"])
+		}
+	default:
+		t.Error("终态槽应有值")
+	}
+}
+
+// TestDispatchA2ARequest_回调拒绝 回调返回 false 时清 pending 并返错（M-05）。
+func TestDispatchA2ARequest_回调拒绝(t *testing.T) {
+	ch := NewA2AChannel(testConfig(19100))
+	ch.OnMessage(func(*schema.Message) bool { return false })
+
+	if _, err := ch.DispatchA2ARequest(context.Background(), "req-r", "s", "q", nil, nil); err == nil {
+		t.Fatal("回调拒绝时应返回错误")
+	}
+	ch.mu.RLock()
+	_, exists := ch.pending["req-r"]
+	ch.mu.RUnlock()
+	if exists {
+		t.Error("回调拒绝后应清理 pending")
+	}
+}
+
+// TestStop_唤醒队列已满 主队列满时唤醒走告警分支，仍会写终态槽。
+func TestStop_唤醒队列已满(t *testing.T) {
+	ch := NewA2AChannel(testConfig(19100))
+	ch.OnMessage(func(*schema.Message) bool { return true })
+	pending, err := ch.DispatchA2ARequest(context.Background(), "req-full", "s", "q", nil, nil)
+	if err != nil {
+		t.Fatalf("dispatch 失败: %v", err)
+	}
+	// 填满主队列，使 Stop 的唤醒投递落到 default 分支
+	for i := 0; i < pendingBufferSize; i++ {
+		if err := ch.Send(context.Background(), &schema.Message{
+			ID: "req-full", Type: schema.MessageTypeEvent, EventType: schema.EventTypeChatDelta,
+			Payload: map[string]any{"content": "x"},
+		}); err != nil {
+			t.Fatalf("Send 失败: %v", err)
+		}
+	}
+	if err := ch.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop 失败: %v", err)
+	}
+	select {
+	case got := <-pending.Terminal():
+		if got.EventType != schema.EventTypeChatError {
+			t.Errorf("终态槽应为 shutdown 唤醒，实际 %v", got.EventType)
+		}
+	default:
+		t.Error("主队列满时终态槽仍应收到唤醒")
+	}
 }

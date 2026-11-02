@@ -83,8 +83,7 @@ func ParseStreamChunk(
 				tcDelta.ID,
 				tcDelta.Function.Name,
 				tcDelta.Function.Arguments,
-				llmschema.WithToolCallIndex(index),
-				llmschema.WithToolCallType(tcDelta.Type),
+				llmschema.ToolCallDeltaOptions(index, tcDelta.Type)...,
 			))
 		}
 	}

@@ -267,6 +267,33 @@ func TestHandleHistoryGetStream_基本(t *testing.T) {
 	}
 }
 
+// TestHandleHistoryGetStream_错误文案是英文协议串 锁定 chat.error 的 error 文案。
+//
+// 前端 useWebSocket.ts:1566 用 includes('invalid page_idx or session history not found')
+// 把「新会话尚无历史」当正常态静默吞掉；文案一旦被本地化（历史事故：曾译成
+// "获取历史记录失败：参数无效或会话不存在"），白名单失配，界面就会把正常态
+// 渲染成红色错误。这里刻意断言字面英文而非 historyNotFoundError 常量，
+// 确保「常量被改名/改值」同样会被测出来。
+func TestHandleHistoryGetStream_错误文案是英文协议串(t *testing.T) {
+	s, _ := newTestServer()
+
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodHistoryGet,
+		json.RawMessage(`{"session_id":"sess_not_exist","page_idx":1}`))
+
+	chunks, err := s.handleHistoryGetStream(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleHistoryGetStream 返回错误: %v", err)
+	}
+	if len(chunks) != 1 {
+		t.Fatalf("应返回 1 个错误 chunk, 实际: %d", len(chunks))
+	}
+	got, _ := chunks[0].Payload["error"].(string)
+	const want = "invalid page_idx or session history not found"
+	if got != want {
+		t.Errorf("chat.error 文案必须与 Python 逐字一致（前端按此串白名单过滤）:\n got=%q\nwant=%q", got, want)
+	}
+}
+
 // TestGetConversationHistory_参数校验 验证参数校验逻辑，对齐 Python get_conversation_history。
 func TestGetConversationHistory_参数校验(t *testing.T) {
 	// 空 session_id

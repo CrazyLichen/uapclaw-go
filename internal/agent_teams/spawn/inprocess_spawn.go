@@ -62,8 +62,8 @@ func SetRunTeamMemberFunc(fn RunTeamMemberFn) {
 // 核心逻辑：
 //  1. 调用工厂创建并配置 teammate
 //  2. 准备输入（initialMessage 为空时使用默认消息）
-//  3. 启动 goroutine 运行 Agent（对齐 Python: asyncio.create_task）
-//     goroutine 内部调用 Runner.RunAgentTeam，当前 TODO(#9.85) 占位
+//  3. 启动 goroutine 运行 Agent（对齐 Python: asyncio.create_task）——
+//     已回填（#9.85）：goroutine 内调用 runTeamMemberFunc 执行成员任务
 //  4. 包装 InProcessSpawnHandle 返回
 func InProcessSpawn(
 	ctx context.Context,

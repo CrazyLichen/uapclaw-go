@@ -114,7 +114,8 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				}()
 
 				// 步骤1: 处理 slash 命令（仅受控渠道）
-				if mh.handleChannelControl(msg) {
+				// S-02：把 forwardLoop 的 ctx 传下去，命令内的 RPC 在独立协程执行
+				if mh.handleChannelControl(ctx, msg) {
 					return
 				}
 

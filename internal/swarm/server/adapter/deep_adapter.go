@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -121,6 +122,10 @@ type DeepAdapter struct {
 	// 对齐 Python 继承中 self._update_runtime_config() 的动态分派。
 	// 修复 S-17: Go 无继承多态，通过函数指针实现等价的动态分派。
 	runtimeConfigUpdater func(ctx context.Context, config *runtimeConfig)
+	// defaultModelConfigReader 从 config.yaml 读 models.default.model_client_config。
+	// [Go 适配] 对齐 Python _has_valid_model_config 第 4 步的 get_config() 兜底；
+	// 抽成函数字段便于单测注入（Python 侧靠模块级 get_config 缓存，无法在测试中替换）。
+	defaultModelConfigReader func() map[string]any
 
 	// ─── ⤵️ 10.6.3-10: 轨道（Rails）───
 
@@ -287,6 +292,19 @@ var persistentCheckpointerLock sync.Mutex
 // 避免 adapter→server→adapter 循环依赖：adapter 包不导入 server 包。
 var defaultSendPushFunc func(ctx context.Context, msg map[string]any) error
 
+// placeholderAPIBase 占位 api_base 集合：命中即视为「模型未配置」。
+//
+// Python: interface_deep.py (_PLACEHOLDER_API_BASES)
+//
+//	_PLACEHOLDER_API_BASES = frozenset({"https://example.com/compatible-mode/v1"})
+//
+// 这是 resources/config.yaml 里的示例地址：用户没配真实服务时，若不做拦截，
+// 心跳/首次对话会真的向 example.com 发请求，报出底层网络错误而不是
+// 「模型未正确配置」。新增示例地址时须同步此集合。
+var placeholderAPIBase = map[string]struct{}{
+	"https://example.com/compatible-mode/v1": {},
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetDefaultSendPushFunc 设置默认推送函数。
@@ -357,6 +375,8 @@ func NewDeepAdapter() *DeepAdapter {
 	// 默认指向 DeepAdapter 自身的 updateRuntimeConfig 方法
 	// CodeAdapter 在构造后覆写此字段实现子类行为（修复 S-17）
 	d.runtimeConfigUpdater = d.updateRuntimeConfig
+	// 模型配置兜底读取器：对齐 Python _has_valid_model_config 第 4 步读 config.yaml
+	d.defaultModelConfigReader = defaultModelClientConfig
 	return d
 }
 
@@ -2415,15 +2435,140 @@ func (d *DeepAdapter) applyModelToReactAgent(resolvedModel *llm.Model) {
 	d.model = resolvedModel
 }
 
-// hasValidModelConfig 检查请求的模型名是否有有效配置。
+// hasValidModelConfig 检查请求的模型是否有可用配置（凭据维度）。
 //
-// Python: JiuWenClawDeepAdapter._has_valid_model_config() (line ~4389)
+// Python: JiuWenClawDeepAdapter._has_valid_model_config() (interface_deep.py:3540-3580)
+//
+// 判定顺序与 Python 逐条一致：
+//  1. 请求指定的模型在缓存中且凭据可用 → true
+//  2. 默认模型凭据可用 → true
+//  3. 缓存中任意模型凭据可用 → true
+//  4. config.yaml 的 models.default.model_client_config 凭据可用 → true
+//  5. 否则 false（调用方回 "模型未正确配置，请先配置模型信息"）
+//
+// 注意：仅「模型名存在于缓存」不足以判定可用——首次安装时 config.yaml 带着
+// api_base=https://example.com/compatible-mode/v1 的占位配置，旧实现会放行，
+// 于是心跳/首次对话真的向 example.com 发请求并报底层网络错误（2026-11-02 实测）。
 func (d *DeepAdapter) hasValidModelConfig(requestedModelName string) bool {
-	if requestedModelName == "" {
-		return true // 空字符串表示使用默认模型
+	// 1. 请求指定的模型
+	if requestedModelName != "" {
+		if m, ok := d.modelCache[requestedModelName]; ok && modelClientUsable(m) {
+			return true
+		}
 	}
-	_, ok := d.modelCache[requestedModelName]
-	return ok
+	// 2. 默认模型
+	if modelClientUsable(d.model) {
+		return true
+	}
+	// 3. 缓存中任意可用模型
+	for _, m := range d.modelCache {
+		if modelClientUsable(m) {
+			return true
+		}
+	}
+	// 4. config.yaml 兜底（Python: get_config().get("models", {}).get("default", {})...）
+	//    仅在前三步都判定不出可用模型时才读盘，避免每请求一次文件 IO。
+	if d.defaultModelConfigReader != nil && modelClientConfigUsable(d.defaultModelConfigReader()) {
+		return true
+	}
+	return false
+}
+
+// modelClientUsable 判断模型对象上的客户端配置是否含可用凭据。
+//
+// Python: _mcc_obj_looks_usable (interface_deep.py:3546-3553)：
+// 先 isinstance(ModelClientConfig)，再交给 _mcc_looks_usable。
+func modelClientUsable(m *llm.Model) bool {
+	if m == nil || m.ClientConfig == nil {
+		return false
+	}
+	return modelClientConfigUsable(map[string]any{
+		"api_key":  m.ClientConfig.APIKey,
+		"api_base": m.ClientConfig.APIBase,
+	})
+}
+
+// modelClientConfigUsable 判断 model_client_config 字典是否含可用凭据。
+//
+// Python: _mcc_looks_usable (interface_deep.py:292-296)：
+// api_key 非空 且 api_base 非空 且 api_base 不在占位符黑名单（均先 strip）。
+// Python 用 str(...) 强转后 strip，Go 侧对非字符串值等价用 fmt.Sprint。
+func modelClientConfigUsable(mcc map[string]any) bool {
+	if mcc == nil {
+		return false
+	}
+	apiKey := strings.TrimSpace(anyToConfigString(mcc["api_key"]))
+	apiBase := strings.TrimSpace(anyToConfigString(mcc["api_base"]))
+	if apiKey == "" || apiBase == "" {
+		return false
+	}
+	_, isPlaceholder := placeholderAPIBase[apiBase]
+	return !isPlaceholder
+}
+
+// defaultModelClientConfig 从 config.yaml 读取 models.default.model_client_config。
+//
+// Python: get_config().get("models", {}).get("default", {}).get("model_client_config", {})
+// 任何一层缺失或读取失败都返回 nil（Python 侧 try/except 仅 Warn，不阻断请求）。
+func defaultModelClientConfig() map[string]any {
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
+	if err != nil {
+		return nil
+	}
+	data, err := cfg.Load()
+	if err != nil {
+		return nil
+	}
+	models, ok := data["models"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	def, ok := models["default"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	mcc, ok := def["model_client_config"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return mcc
+}
+
+// anyToConfigString 复刻 Python `str(v or "")` 语义。
+//
+// 注意假值处理：Python 的 `v or ""` 会把 None / "" / 0 / False / 空容器统一变成 ""，
+// 所以 api_key: 0 在 Python 侧是「未配置」。这里按 kind 判零值，
+// 其余类型走 fmt.Sprint（等价 str()）。
+func anyToConfigString(v any) string {
+	if v == nil {
+		return ""
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.String:
+		return rv.String()
+	case reflect.Bool:
+		if !rv.Bool() {
+			return ""
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if rv.Int() == 0 {
+			return ""
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if rv.Uint() == 0 {
+			return ""
+		}
+	case reflect.Float32, reflect.Float64:
+		if rv.Float() == 0 {
+			return ""
+		}
+	case reflect.Map, reflect.Slice, reflect.Array:
+		if rv.Len() == 0 {
+			return ""
+		}
+	}
+	return fmt.Sprint(v)
 }
 
 // markSessionActive 递增 session 活跃任务计数。

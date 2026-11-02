@@ -49,7 +49,8 @@ type KnowledgeBase interface {
 }
 
 // 编译期断言：BaseKnowledgeBase 满足模板方法与 Config 部分。
-// （5 抽象方法未实现——完整 KnowledgeBase 断言由 13.27 SimpleKnowledgeBase 承接）
+// （5 个抽象方法由子类实现，基座不提供默认实现；完整 KnowledgeBase 断言由
+// 13.27 SimpleKnowledgeBase 承接）
 var _ interface {
 	ParseFiles(ctx context.Context, filePaths []string, opts ...KBOption) ([]reranker.Document, error)
 	ParseURLs(ctx context.Context, urls []string, opts ...KBOption) ([]reranker.Document, error)
@@ -73,11 +74,15 @@ type closeable interface {
 }
 
 type BaseKnowledgeBase struct {
-	// mu 保护可被 Set* 并发替换的字段（vectorStore/indexManager）。
+	// mu 保护 SetVectorStore / SetIndexManager 的写入与 getter 读取。
 	//
-	// Python 靠 GIL 让 `kb.vector_store = vs` 原子生效；Go 的裸指针赋值与并发
-	// Retrieve/ValidateIndex 读取构成 data race（-race 可复现），故读写两侧统一走
-	// RLock/Lock。其余字段仅构造期写入，无需保护。
+	// S-05 契约（与实现一致）：Set* **仅允许在构造期或发布给其他 goroutine 之前调用**。
+	// 发布之后业务方法（Retrieve/AddDocuments/GetStatistics 等）直接裸读
+	// vectorStore/indexManager 以求零锁开销，运行期替换会与这些裸读构成 data race。
+	// 若将来确需运行期替换，必须先把业务方法改为「方法开头快照 getter」再放开限制。
+	//
+	// Python 侧靠 GIL 让 `kb.vector_store = vs` 原子生效，没有该前提，故 Go 在此
+	// 显式收窄调用时机（全仓生产代码当前零 Set* 调用，仅测试覆盖）。
 	mu sync.RWMutex
 	// strictValidation 严格校验开关（Python strict_validation，默认 true）
 	strictValidation bool
@@ -196,6 +201,8 @@ func (b *BaseKnowledgeBase) IndexManager() indexer.Indexer { return b.indexManag
 
 // SetVectorStore 构造后替换读侧组件（Python kb.vector_store = vs 显式对应物）。
 //
+// S-05：**仅限构造期/发布前调用**——业务方法对 vectorStore 是裸读，发布后再替换
+// 会构成 data race（详见 BaseKnowledgeBase.mu 的契约说明）。
 // 赋值后双组件非空时触发 postAssignValidation（对齐 Python __setattr__）。
 func (b *BaseKnowledgeBase) SetVectorStore(vs vector_store.VectorStore) error {
 	b.mu.Lock()
@@ -209,6 +216,8 @@ func (b *BaseKnowledgeBase) SetVectorStore(vs vector_store.VectorStore) error {
 }
 
 // SetIndexManager 构造后替换写侧组件（Python kb.index_manager = im 显式对应物）。
+//
+// S-05：与 SetVectorStore 同一契约——仅限构造期/发布前调用。
 func (b *BaseKnowledgeBase) SetIndexManager(im indexer.Indexer) error {
 	b.mu.Lock()
 	b.indexManager = im

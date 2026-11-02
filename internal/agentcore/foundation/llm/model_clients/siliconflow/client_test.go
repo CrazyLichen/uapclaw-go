@@ -1604,3 +1604,41 @@ func TestExtractCostFromUsage_无费用信息(t *testing.T) {
 		t.Errorf("无 cost 字段时应返回 0, 实际 inputCost=%f, outputCost=%f, totalCost=%f", inputCost, outputCost, totalCost)
 	}
 }
+
+// TestParseStreamChunk_缺省type的增量帧可聚合 验证 SiliconFlow 流式增量帧聚合。
+//
+// 真实 SSE 只在首帧带 type，后续帧缺省；若把空串透传给 WithToolCallType，
+// mergeToolCalls 的同调用判定失效，同一次调用的参数碎片会被拆成多个 ToolCall。
+func TestParseStreamChunk_缺省type的增量帧可聚合(t *testing.T) {
+	client := &SiliconFlowModelClient{}
+	frames := []openai.ChunkToolCall{
+		{ID: "call_00_x", Type: "function", Function: openai.ChunkFunction{Name: "build_team", Arguments: `{"name":`}},
+		{Function: openai.ChunkFunction{Arguments: `"Team"}`}},
+	}
+
+	var accumulated *llmschema.AssistantMessageChunk
+	for i, frame := range frames {
+		chunk := &openai.ChatCompletionChunkResponse{
+			Choices: []openai.ChunkChoice{{Delta: &openai.ChunkDelta{ToolCalls: []openai.ChunkToolCall{frame}}}},
+		}
+		parsed := client.parseStreamChunk(chunk)
+		if parsed == nil {
+			t.Fatalf("第 %d 帧解析结果不应为 nil", i)
+		}
+		if got := parsed.ToolCalls[0].Type; got != "function" {
+			t.Fatalf("第 %d 帧 Type = %q, want %q", i, got, "function")
+		}
+		if accumulated == nil {
+			accumulated = parsed
+		} else {
+			accumulated = accumulated.Merge(parsed)
+		}
+	}
+
+	if len(accumulated.ToolCalls) != 1 {
+		t.Fatalf("增量帧应聚合为 1 个调用，实际 %d 个：%+v", len(accumulated.ToolCalls), accumulated.ToolCalls)
+	}
+	if got := accumulated.ToolCalls[0].Arguments; got != `{"name":"Team"}` {
+		t.Errorf("Arguments = %q，want %q", got, `{"name":"Team"}`)
+	}
+}

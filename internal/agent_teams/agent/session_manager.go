@@ -107,11 +107,17 @@ func (m *SessionManager) BindSession(
 	// Python: _reset_session_id_token() + set_session_id(session.get_session_id())
 	m.sessionState.SetSessionID(sessionID)
 
-	// 注入 SessionState 到 context（如果尚未注入）
+	// 注入 SessionState 到 context。
 	// Python: contextvars 自动生效
 	// Go: 需要显式 WithSessionState 返回新 ctx
+	//
+	// M-07：不能只判"有没有"，还要判"是不是同一个会话"。
+	// 调用方 ctx 可能已带另一个 SessionState（团队内多会话、成员上下文复用），
+	// 此时若直接沿用 ctx，CreateCurSessionTables 会用**旧** sessionID 拼表名，
+	// 正是 S-45 想修的那个 bug 的另一种触发形态。
+	// 契约：BindSession 必须假定 ctx 里的 state 不可信。
 	newCtx := ctx
-	if agentteams.SessionStateFromCtx(ctx) == nil {
+	if current := agentteams.SessionStateFromCtx(ctx); current == nil || current.GetSessionID() != sessionID {
 		newCtx = agentteams.WithSessionState(ctx, m.sessionState)
 	}
 

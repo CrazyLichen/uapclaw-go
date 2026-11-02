@@ -1606,6 +1606,13 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 		if sub, ok := payload["tool_call"].(map[string]any); ok {
 			toolInfo = sub
 		}
+		// 原样透传，与 stream_utils.ParseStreamChunk 的同名分支、以及 Python
+		// interface_deep._parse_stream_chunk 保持一致。
+		//
+		// 历史上这里（及通用路径）各有一份"丢弃增量碎片"的守卫，根因是模型客户端
+		// 的增量帧没有被合并（17b55eb8 用 ToolCallDeltaOptions 修复）；合并修好后
+		// 碎片到不了事件层，而"arguments 非合法 JSON 就不下发"会把模型输出的
+		// 非严格 JSON 的合法调用整条吞掉。守卫已删除，防线放在合并层单测。
 		return map[string]any{"event_type": "chat.tool_call", "tool_call": toolInfo}
 
 	case "tool_update":
@@ -1754,30 +1761,9 @@ func parseInteractionPayloadUtils(interactions []any) map[string]any {
 		if !ok {
 			continue
 		}
-		if m["interaction_type"] == "activate_confirm" {
-			extRuntimePath := teamHelperStrFromAny(m["extension_runtime_path"])
-			if extRuntimePath == "" {
-				extRuntimePath = teamHelperStrFromAny(m["runtime_path"])
-			}
-			options := []string{"accept", "reject"}
-			if opts, ok := m["options"].([]any); ok && len(opts) > 0 {
-				options = make([]string, 0, len(opts))
-				for _, o := range opts {
-					if s, ok := o.(string); ok {
-						options = append(options, s)
-					}
-				}
-			}
-			return map[string]any{
-				"event_type":             "harness.activate_interaction",
-				"interaction_type":       "activate_confirm",
-				"interaction_id":         teamHelperStrFromAny(m["interaction_id"]),
-				"extension_name":         teamHelperStrFromAny(m["extension_name"]),
-				"runtime_path":           teamHelperStrFromAny(m["runtime_path"]),
-				"session_runtime_path":   teamHelperStrFromAny(m["session_runtime_path"]),
-				"extension_runtime_path": extRuntimePath,
-				"options":                options,
-			}
+		// M-04：三份重复实现收口到 utils.ParseActivateConfirm（键名/事件名以 Python 为准）
+		if event, hit := utils.ParseActivateConfirm(m); hit {
+			return event
 		}
 	}
 	// Python: return convert_interactions_to_ask_user_question([payload])

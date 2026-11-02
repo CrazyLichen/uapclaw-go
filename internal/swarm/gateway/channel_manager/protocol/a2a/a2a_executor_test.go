@@ -167,9 +167,11 @@ func TestCancel_产出取消状态(t *testing.T) {
 	}
 }
 
-// TestCancel_不清pending且终态可唤醒 R2-a 回归：Cancel 不得删除 pending，
-// 否则 Execute 永久阻塞（SDK 的取消不会结束 detached 执行）
-func TestCancel_不清pending且终态可唤醒(t *testing.T) {
+// TestCancel_唤醒Execute并收尾CANCELED M-02 回归：Cancel 向该请求投递合成终态
+// （chat.interrupt_result），被唤醒的 Execute 立即以 CANCELED 收尾并清理 pending。
+// 修复前 Cancel 只 yield CANCELED、不唤醒 Execute，执行协程与 pending 条目会一直挂到
+// 内部任务自行结束（SDK 的取消不会结束 detached 执行）。
+func TestCancel_唤醒Execute并收尾CANCELED(t *testing.T) {
 	ch := NewA2AChannel(A2AChannelConfig{Enabled: false, ChannelID: "a2a"})
 	ch.OnMessage(func(*schema.Message) bool { return true }) // 不自动回包，由测试手动投递
 
@@ -197,34 +199,20 @@ func TestCancel_不清pending且终态可唤醒(t *testing.T) {
 		}
 	}
 
-	// Cancel 不应清理 pending
+	// Cancel 投递合成终态 → Execute 立即以 CANCELED 收尾
 	collectEvents(executorFor(ch).Cancel(context.Background(), ec))
-	ch.mu.RLock()
-	_, exists := ch.pending["task-r2"]
-	ch.mu.RUnlock()
-	if !exists {
-		t.Fatal("Cancel 不应清理 pending（否则 Execute 永久阻塞）")
-	}
-
-	// 终态到达 → Execute 应退出并清理 pending
-	if err := ch.Send(context.Background(), &schema.Message{
-		ID: "task-r2", Type: schema.MessageTypeEvent, EventType: schema.EventTypeChatFinal,
-		Payload: map[string]any{"content": "done", "is_complete": true},
-	}); err != nil {
-		t.Fatalf("Send 失败: %v", err)
-	}
 
 	select {
 	case kinds := <-done:
-		if last := kinds[len(kinds)-1]; last != "status:TASK_STATE_COMPLETED" {
-			t.Errorf("终态 = %q, 期望 status:TASK_STATE_COMPLETED（序列 %v）", last, kinds)
+		if last := kinds[len(kinds)-1]; last != "status:TASK_STATE_CANCELED" {
+			t.Errorf("终态 = %q, 期望 status:TASK_STATE_CANCELED（序列 %v）", last, kinds)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("Execute 未在终态后退出（goroutine 泄漏）")
+		t.Fatal("Cancel 后 Execute 未退出（goroutine 泄漏）")
 	}
 
 	ch.mu.RLock()
-	_, exists = ch.pending["task-r2"]
+	_, exists := ch.pending["task-r2"]
 	ch.mu.RUnlock()
 	if exists {
 		t.Error("Execute 退出后应清理 pending")
