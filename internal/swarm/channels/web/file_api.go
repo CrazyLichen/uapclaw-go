@@ -504,21 +504,18 @@ func resolveFilePath(userPath string) (string, error) {
 func resolveExistingPrefix(full string) string {
 	cur := filepath.Clean(full)
 	rest := ""
-	for {
+	for cur != filepath.Dir(cur) {
 		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
 			if rest == "" {
 				return resolved
 			}
 			return filepath.Join(resolved, rest)
 		}
-		parent := filepath.Dir(cur)
-		if parent == cur {
-			// 已到根仍解析失败：退回字面路径（Clean 后），与原行为一致
-			return filepath.Clean(full)
-		}
 		rest = filepath.Join(filepath.Base(cur), rest)
-		cur = parent
+		cur = filepath.Dir(cur)
 	}
+	// 走到根仍解析失败（文件系统根恒存在，实际不可达）：退回字面路径，与原行为一致
+	return filepath.Join(cur, rest)
 }
 
 // isUnderAllowedRoot 判断绝对路径是否落在 file-api 白名单根内。
