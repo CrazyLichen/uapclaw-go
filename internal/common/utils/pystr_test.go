@@ -134,7 +134,7 @@ func TestPyStr_浮点记法(t *testing.T) {
 }
 
 // TestPyStr_容器走兜底 验证 PyStr 只承诺标量：容器按 fmt.Sprint 输出
-//（展示场景请用 PyText，输出 JSON）
+// （展示场景请用 PyText，输出 JSON）
 func TestPyStr_容器走兜底(t *testing.T) {
 	got := PyStr(map[string]any{"a": 1})
 	assert.Contains(t, got, "a:1", "容器走 fmt.Sprint 兜底")
