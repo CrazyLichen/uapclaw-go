@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -196,21 +195,14 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		if sub, ok := payload["tool_call"].(map[string]any); ok {
 			toolInfo = sub
 		}
-		// S-47: 丢弃流式增量碎片。真实模型的 SSE 会把同一次调用拆成多帧
-		// （name/tool_call_id 为空、arguments 是一段 JSON 片段），Python 在
-		// llm_controller._invoke_llm_stream 里先累加再一次性产出完整消息，
-		// 流式期间不写 tool_call。Go 若逐帧透传，前端会收到大量空名调用，
-		// 且真正的调用（如 build_team）可能永远凑不齐。
-		name, _ := toolInfo["name"].(string)
-		callID, _ := toolInfo["tool_call_id"].(string)
-		if name == "" && callID == "" {
-			return nil
-		}
-		// S-48: arguments 未闭合的帧也不下发。真实模型把参数按 JSON 片段流式输出，
-		// 只有拼完才是合法 JSON；未闭合说明还有后续增量，前端/执行侧拿到会解析失败。
-		if args, ok := toolInfo["arguments"].(string); ok && args != "" && !json.Valid([]byte(args)) {
-			return nil
-		}
+		// 原样透传，对齐 Python interface_deep._parse_stream_chunk 的 tool_call 分支
+		// （只取 payload["tool_call"]，不做任何字段过滤）。
+		//
+		// 历史：S-47/S-48 曾在此丢弃"增量碎片"（name/id 双空、arguments 不是合法 JSON）。
+		// 根因其实是模型客户端的增量帧没有被合并（17b55eb8 用 ToolCallDeltaOptions 修复），
+		// 合并修好后碎片到不了事件层，而"arguments 非合法 JSON"这条守卫会把
+		// 模型输出单引号/尾逗号/被截断的**合法调用**整条吞掉，前端表现为
+		// "有 tool_result 没有 tool_call 卡片"。防线已下沉到合并层单测。
 		return map[string]any{
 			"event_type": "chat.tool_call",
 			"tool_call":  toolInfo,

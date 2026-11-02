@@ -245,15 +245,19 @@ func TestParseTypedChunkMap_主要分支(t *testing.T) {
 			wantEvt: "chat.tool_call",
 		},
 		{
-			// 真实 SSE 的增量帧：name/tool_call_id 双空、arguments 为 JSON 碎片
-			name:    "tool_call碎片帧→nil",
+			// 事件层不再做碎片过滤（对齐 Python _parse_stream_chunk 的透传语义）：
+			// 增量帧由模型客户端的合并层（ToolCallDeltaOptions/mergeToolCalls）负责聚合，
+			// 到不了事件层；这里断言"原样透传"，防止守卫被重新加回来。
+			name:    "tool_call碎片帧→原样透传",
 			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"name": "", "tool_call_id": "", "arguments": "/"}}},
-			wantNil: true,
+			wantEvt: "chat.tool_call",
 		},
 		{
-			name:    "tool_call未闭合arguments→nil",
+			// 参数不是合法 JSON 的**完整**调用必须下发：模型输出单引号/尾逗号/被截断时，
+			// 旧守卫会把整条调用吞掉，前端只看到 result 没有调用卡片。
+			name:    "tool_call未闭合arguments→原样透传",
 			chunk:   map[string]any{"type": "tool_call", "payload": map[string]any{"tool_call": map[string]any{"name": "build_team", "arguments": `{"name":`}}},
-			wantNil: true,
+			wantEvt: "chat.tool_call",
 		},
 		{
 			name:    "tool_call完整帧携带id→chat.tool_call",
