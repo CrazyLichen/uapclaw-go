@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -582,25 +584,65 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 // 返回 (agentschema.ExecuteResult, error)：
 //   - agentschema.ExecuteResult 承载正常结果（Result + ToolMsg）
 //   - error 承载异常（ToolInterruptException 或 AbilityExecutionError）
+//
+// 工具实现里的 panic（nil 解引用等）在本函数内统一转成 error 上抛：
+// 一旦让 panic 逃出调用方（能力层并行 goroutine / Rail 包装层），
+// AFTER_TOOL_CALL 就不会触发，stream_event_rail 不会发 tool_result，
+// 前端工具卡片永久停在「执行中」；而会话本身照常结束，用户无从判断。
+// 转成 error 后走的是正常异常路径：ON_TOOL_EXCEPTION → AFTER_TOOL_CALL → tool_result。
 func (am *AbilityManager) executeSingleToolCall(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) (agentschema.ExecuteResult, error) {
+) (result agentschema.ExecuteResult, err error) {
 	toolName := toolCall.Name
 
+	defer func() {
+		rec := recover()
+		if rec == nil {
+			return
+		}
+		result = agentschema.ExecuteResult{}
+		// raiseInterrupt / 安全护栏用 cb.AbortError 承载中断，属于正常控制流，
+		// 必须原样上抛给调用方还原成 ToolInterruptException；其余 panic 是缺陷。
+		var abortErr *cb.AbortError
+		if e, ok := rec.(error); ok && errors.As(e, &abortErr) {
+			err = e
+			return
+		}
+		if e, ok := rec.(error); ok {
+			logger.Error(logComponent).
+				Str("event_type", "tool_execution_panic").
+				Str("tool_name", toolName).
+				Str("tool_call_id", toolCall.ID).
+				Str("stack", string(debug.Stack())).
+				Err(e).
+				Msg("tool execution panicked, converted to error")
+			err = e
+			return
+		}
+		logger.Error(logComponent).
+			Str("event_type", "tool_execution_panic").
+			Str("tool_name", toolName).
+			Str("tool_call_id", toolCall.ID).
+			Str("stack", string(debug.Stack())).
+			Any("panic", rec).
+			Msg("tool execution panicked with non-error value, converted to error")
+		err = fmt.Errorf("工具执行 panic: %v", rec)
+	}()
+
 	// 解析参数
-	toolArgs, err := ParseToolArguments(toolCall.Arguments)
-	if err != nil {
+	toolArgs, parseErr := ParseToolArguments(toolCall.Arguments)
+	if parseErr != nil {
 		logger.Error(logComponent).
 			Str("tool_name", toolName).
-			Err(err).
+			Err(parseErr).
 			Msg("tool received malformed parameters")
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityMalformedArguments,
 			toolCall.ID,
-			err.Error(),
+			parseErr.Error(),
 			exception.WithParam("tool_name", toolName),
 		)
 		return agentschema.ExecuteResult{}, execErr

@@ -3,6 +3,7 @@ package ability
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,6 +36,22 @@ func (f *fakeTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOpt
 	return f.result, f.err
 }
 func (f *fakeTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
+	return nil, tool.ErrStreamNotSupported
+}
+
+// panicTool 在 Invoke 中按指定载荷 panic，用于验证工具 panic 被转成 error。
+type panicTool struct {
+	// card 工具卡片
+	card *tool.ToolCard
+	// value panic 载荷（字符串 / error / *callback.AbortError）
+	value any
+}
+
+func (p *panicTool) Card() *tool.ToolCard { return p.card }
+func (p *panicTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
+	panic(p.value)
+}
+func (p *panicTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.ErrStreamNotSupported
 }
 
@@ -682,6 +699,70 @@ func TestAbilityManager_Execute_工具执行错误(t *testing.T) {
 	}
 	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
+	}
+}
+
+// TestAbilityManager_ExecuteSingleToolCall_panic转error 回归：工具实现内部
+// panic 必须被转成 error 上抛。
+//
+// 回归背景：panic 逃出 executeSingleToolCall 时，Rail 包装层的
+// AFTER_TOOL_CALL 不触发，stream_event_rail 不发 tool_result，前端工具卡片
+// 永久停在「执行中」（read_file 在 sys_operation 为 nil 时即 nil 解引用 panic）。
+func TestAbilityManager_ExecuteSingleToolCall_panic转error(t *testing.T) {
+	toolCard := tool.NewToolCard("boom_tool", "panic工具", nil, nil)
+	pt := &panicTool{card: toolCard, value: "boom"}
+	frm := newTestResourceMgr(map[string]tool.Tool{toolCard.ID: pt}, nil, nil)
+	am := NewAbilityManager(frm)
+	am.Add(toolCard)
+
+	_, err := am.executeSingleToolCall(context.Background(),
+		llmschema.NewToolCall("call_boom", "boom_tool", `{}`), nil, "")
+
+	if err == nil {
+		t.Fatal("工具 panic 应转成 error 上抛")
+	}
+	if !strings.Contains(err.Error(), "panic") || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("错误信息应含 panic 原因，实际: %v", err)
+	}
+}
+
+// TestAbilityManager_ExecuteSingleToolCall_panicError原样上抛 回归：以 error
+// 为载荷的 panic（如 runtime.Error、缺陷包装的 error）应原样上抛，
+// 保留 errors.Is/As 语义（否则链路上无法识别具体错误类型）。
+func TestAbilityManager_ExecuteSingleToolCall_panicError原样上抛(t *testing.T) {
+	toolCard := tool.NewToolCard("boom_err_tool", "error panic工具", nil, nil)
+	boom := errors.New("磁盘炸了")
+	pt := &panicTool{card: toolCard, value: boom}
+	frm := newTestResourceMgr(map[string]tool.Tool{toolCard.ID: pt}, nil, nil)
+	am := NewAbilityManager(frm)
+	am.Add(toolCard)
+
+	_, err := am.executeSingleToolCall(context.Background(),
+		llmschema.NewToolCall("call_boom_err", "boom_err_tool", `{}`), nil, "")
+
+	if !errors.Is(err, boom) {
+		t.Fatalf("error 型 panic 应原样上抛，实际: %v", err)
+	}
+}
+
+// TestAbilityManager_ExecuteSingleToolCall_中断panic保持中断语义 回归：
+// raiseInterrupt / 安全护栏用 cb.AbortError 承载中断，recover 后必须仍能
+// 通过 errors.As 取到 ToolInterruptException，否则 ask_user 与权限确认链路
+// 会退化成普通工具错误。
+func TestAbilityManager_ExecuteSingleToolCall_中断panic保持中断语义(t *testing.T) {
+	toolCard := tool.NewToolCard("boom_interrupt_tool", "中断工具", nil, nil)
+	interrupt := &agentschema.ToolInterruptException{}
+	pt := &panicTool{card: toolCard, value: callback.NewAbortError("工具执行已中断", interrupt)}
+	frm := newTestResourceMgr(map[string]tool.Tool{toolCard.ID: pt}, nil, nil)
+	am := NewAbilityManager(frm)
+	am.Add(toolCard)
+
+	_, err := am.executeSingleToolCall(context.Background(),
+		llmschema.NewToolCall("call_boom_int", "boom_interrupt_tool", `{}`), nil, "")
+
+	var tie *agentschema.ToolInterruptException
+	if !errors.As(err, &tie) {
+		t.Fatalf("中断 panic 应保留 ToolInterruptException 语义，实际: %v", err)
 	}
 }
 
