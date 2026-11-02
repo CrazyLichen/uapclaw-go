@@ -113,9 +113,3 @@ internal/swarm/channels/web/file_api.go
 cmd/uapclaw/acp_cmd.go#L53-L53
 cmd/uapclaw/acp_cmd.go#L56-L56
 cmd/uapclaw/acp_cmd.go#L60-L60
-
-# internal/common/workspace/bootstrap.go#L27/L49/L86-L104：实例 bootstrap 的端口变量名映射，
-# 仅多实例部署时由 CLI 调用；集成套件直接构造 workspace，不走 bootstrap。单测覆盖 100%。
-internal/common/workspace/bootstrap.go#L27-L27
-internal/common/workspace/bootstrap.go#L49-L49
-internal/common/workspace/bootstrap.go#L86-L104
