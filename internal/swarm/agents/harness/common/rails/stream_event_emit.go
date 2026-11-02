@@ -2,7 +2,6 @@ package rails
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
@@ -12,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -64,10 +64,17 @@ func emitToolResult(ctx context.Context, session sessioninterfaces.SessionFacade
 		return
 	}
 	rawOutput := structuredToolResultPayload(result)
+	// Python: "result": str(result)[:60000] if result is not None else ""
+	// 必须用 PyStr：fmt.Sprintf("%v") 会把 map 打印成 `map[k:v]`，前端与日志里
+	// 全是 `map[...]` 前缀，与 Python 的 `{'k': 'v'}` 完全不同。
+	resultText := ""
+	if result != nil {
+		resultText = truncateString(utils.PyStr(result), 60000)
+	}
 	toolResultPayload := map[string]any{
 		"tool_name":    toolCallName(toolCall),
 		"tool_call_id": toolCallID(toolCall),
-		"result":       truncateString(fmt.Sprintf("%v", result), 60000),
+		"result":       resultText,
 	}
 	if rawOutput != nil {
 		toolResultPayload["raw_output"] = rawOutput
