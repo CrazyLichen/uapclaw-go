@@ -220,11 +220,6 @@ func (a *ContextEvolvingReActAgent) Execute(ctx context.Context, query string, s
 		"session_id":      sessionID,
 	}
 
-	// 对齐 Python: llm_temperature 设置
-	if cfg.LLMTemperature != 0 {
-		inputs["llm_temperature"] = cfg.LLMTemperature
-	}
-
 	result, err := a.invokeWithMemory(ctx, inputs)
 	if err != nil {
 		return nil, err
@@ -322,12 +317,9 @@ func (a *ContextEvolvingReActAgent) invokeWithMemory(ctx context.Context, inputs
 		retrievalQuery = rq
 	}
 
-	// 对齐 Python: llm_temperature 设置
-	// 从 inputs 中读取 llm_temperature（由 ParallelScalingOp 通过 AgentFlowOption 传入）
-	// TODO(#9.82): ReActAgent.Invoke 支持读取 llm_temperature 传给 Model.Generate
-	if llmTemp, ok := inputs["llm_temperature"]; ok {
-		_ = llmTemp // 当前 ReActAgent 不支持动态温度，待后续集成
-	}
+	// 说明：Python 的 RB MaTTS 通过直接改写 llm.temperature 实现多样性
+	// （retrieve/task/reasoning_bank/matts.py:52-90）；Go 的 agent-flow 路径无等价通道，
+	// 故不提供 llm_temperature 入参（原实现读取后丢弃，属静默失效）。
 
 	// 对齐 Python：1. 检索记忆（带缓存）
 	var memoryString string

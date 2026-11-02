@@ -220,9 +220,3 @@ func TestAgentFlowOption_WithRetrievalQuery(t *testing.T) {
 	WithRetrievalQuery("test query")(cfg)
 	assert.Equal(t, "test query", cfg.RetrievalQuery)
 }
-
-func TestAgentFlowOption_WithLLMTemperature(t *testing.T) {
-	cfg := &AgentFlowConfig{}
-	WithLLMTemperature(0.8)(cfg)
-	assert.Equal(t, 0.8, cfg.LLMTemperature)
-}

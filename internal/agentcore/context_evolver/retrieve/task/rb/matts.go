@@ -155,11 +155,9 @@ func (o *ParallelScalingOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 		return nil
 	}
 
-	// 对齐 Python: llm.temperature = self.temperature
-	// Go: 通过 AgentFlow 传递 llm_temperature，Agent 内部 LLM 调用时读取
-	llmTempKey := "llm_temperature"
-	originalTemp := rc.Get(llmTempKey)
-	rc.Set(llmTempKey, o.temperature)
+	// 说明：Python 通过 llm.temperature = self.temperature 实现多样性
+	// （retrieve/task/reasoning_bank/matts.py:52-90）；Go 的 agent-flow 路径无 llm 句柄，
+	// 暂无等价通道，o.temperature 仅保留在结构体中供后续接入。
 
 	trajectories := make([]*trajectoryData, 0, o.k)
 	for i := 0; i < o.k; i++ {
@@ -172,7 +170,6 @@ func (o *ParallelScalingOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 		// 对齐 Python: llm.temperature = self.temperature + retrieval_query=query
 		result, err := agentFlow.Execute(ctx, query, sessionID,
 			cecontext.WithRetrievalQuery(query),
-			cecontext.WithLLMTemperature(o.temperature),
 		)
 		if err != nil {
 			logger.Warn(logComponent).Int("index", i).Err(err).Msg("Parallel trajectory failed, skipping")
@@ -196,10 +193,6 @@ func (o *ParallelScalingOp) Execute(ctx context.Context, rc *cecontext.RuntimeCo
 	// 存入 RuntimeContext
 	rc.Set("parallel_trajectories", trajectories)
 	rc.Set("scaling_factor", o.k)
-
-	// 对齐 Python: llm.temperature = original_temp
-	// Go: 恢复原始温度设置
-	rc.Set(llmTempKey, originalTemp)
 
 	logger.Info(logComponent).Int("count", len(trajectories)).Msg("Generated trajectories")
 
