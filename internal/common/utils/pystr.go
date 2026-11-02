@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -23,7 +24,7 @@ import (
 //     `"x" if v is not None else ""` 属于调用方语义）
 //   - str → 原样（不加引号）
 //   - bool → "True"/"False"
-//   - 数字 → Python 记法（整数值浮点补 ".0"）
+//   - 数字 → Python 记法（整数值浮点补 ".0"；json.Number 走字面量还原）
 //   - dict/list/tuple → 走 PyRepr（Python 的 str(container) 等于 repr(container)）
 //   - 其他 → fmt.Sprintf("%v", v)
 //
@@ -38,6 +39,8 @@ func PyStr(v any) string {
 		return val
 	case bool:
 		return pyBoolStr(val)
+	case json.Number:
+		return pyJSONNumberStr(val)
 	case map[string]any, []any:
 		return PyRepr(val)
 	default:
@@ -85,6 +88,8 @@ func pyWriteRepr(b *strings.Builder, v any) {
 			pyWriteRepr(b, val[k])
 		}
 		b.WriteByte('}')
+	case json.Number:
+		b.WriteString(pyJSONNumberStr(val))
 	case []any:
 		b.WriteByte('[')
 		for i, item := range val {
@@ -167,16 +172,57 @@ func pyNumberStr(v any) (string, bool) {
 	case uint64:
 		return strconv.FormatUint(n, 10), true
 	case float32:
-		return pyFloatStr(float64(n)), true
+		return PyFloatStr(float64(n)), true
 	case float64:
-		return pyFloatStr(n), true
+		return PyFloatStr(n), true
 	default:
 		return "", false
 	}
 }
 
-// pyFloatStr 还原 Python str(float) 记法：整数值补 ".0"，nan/inf 用 Python 字面量。
-func pyFloatStr(f float64) string {
+// pyJSONNumberStr 还原 json.Number 的 Python str() 形态。
+//
+// 整数字面原样输出（Python int 无界，含超出 int64 的超界字面），
+// 仅小数/指数字面走 PyFloatStr。
+func pyJSONNumberStr(n json.Number) string {
+	lit := n.String()
+	if _, err := strconv.ParseInt(lit, 10, 64); err == nil {
+		return lit
+	}
+	if IsPureIntegerLiteral(lit) {
+		return lit
+	}
+	if f, err := n.Float64(); err == nil {
+		return PyFloatStr(f)
+	}
+	return lit
+}
+
+// IsPureIntegerLiteral 判断是否为纯整数字面量（可选符号 + 全数字，无小数点/指数）。
+//
+// 用于 json.Number 的超界整数还原：Atoi 溢出后不能落到 Float64（会把
+// 12345678901234567890 变成 1.2345678901234567e+19），必须原样透传。
+func IsPureIntegerLiteral(s string) bool {
+	if s == "" {
+		return false
+	}
+	body := s
+	if body[0] == '+' || body[0] == '-' {
+		body = body[1:]
+	}
+	if body == "" {
+		return false
+	}
+	for _, r := range body {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// PyFloatStr 还原 Python str(float) 记法：整数值补 ".0"，nan/inf 用 Python 字面量。
+func PyFloatStr(f float64) string {
 	if math.IsNaN(f) {
 		return "nan"
 	}

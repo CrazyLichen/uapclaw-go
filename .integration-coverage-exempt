@@ -120,3 +120,14 @@ cmd/uapclaw/acp_cmd.go#L60-L60
 # TestMemoryRail_运行时RegisterRail后read_memory可真实读取 实断言
 # （results 必须是数组、渲染为 {'k': 'v'} 且不含 map[...]）。
 internal/agentcore/memory/lite/types.go
+
+# ── 2026-11-02 收敛重复的 Python 格式化助手到 utils ──
+# 下列 3 个文件本次改动是「删掉包内私有 pyStr/pyFloatStr/isPureIntegerLiteral，
+# 调用点改调 utils.PyStr / utils.PyFloatStr」。这些包（抽取器 / 表格解析 / agentic
+# 检索）在集成层没有入口：tests/integration 只 import 了 retrieval/embedding，
+# 因此它们根本不在 -coverpkg 里（整文件显示 "-"），改动行必然判 0%。
+# 语义由各包单测逐条覆盖（pyStr 数字三态、超界整数字面、f/e 记法、cellStr 全族），
+# utils 侧另有 pystr_test.go 覆盖同一批锚点。
+internal/agentcore/retrieval/indexing/processor/extractor/triple_extractor.go
+internal/agentcore/retrieval/indexing/processor/parser/excel_value.go
+internal/agentcore/retrieval/retriever/agentic_retriever.go

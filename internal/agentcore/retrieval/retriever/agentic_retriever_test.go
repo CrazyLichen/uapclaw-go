@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 测试桩 ────────────────────────────
@@ -621,7 +622,7 @@ func TestRead_pyStr浮点与大整数(t *testing.T) {
 	r := newGenericRetriever(t, llm)
 	results := r.read(context.Background(), "q", []common.RetrievalResult{{Text: "doc", Score: 1}}, nil)
 	require.Len(t, results, 2)
-	assert.Equal(t, "0.5", results[0][2])                            // json.Number "0.5" → Atoi 失败非整数字面 → Float64 → pyFloatStr("0.5")
+	assert.Equal(t, "0.5", results[0][2])                            // json.Number "0.5" → Atoi 失败非整数字面 → Float64 → utils.PyFloatStr("0.5")
 	assert.Equal(t, "123456789012345678901234567890", results[1][2]) // 超界整数字面原样（Python int 无界）
 }
 
@@ -920,46 +921,46 @@ func TestRead_pyStr字符串与纯整数字面(t *testing.T) {
 // TestPyStr_分支表 同包直调 pyStr 覆盖残余分支（float64/int/int64/
 // json.Number 病态非数字/nil/bool）。
 func TestPyStr_分支表(t *testing.T) {
-	assert.Equal(t, "None", pyStr(nil))
-	assert.Equal(t, "True", pyStr(true))
-	assert.Equal(t, "False", pyStr(false))
-	assert.Equal(t, "abc", pyStr("abc"))
-	assert.Equal(t, "42", pyStr(42))                  // int
-	assert.Equal(t, "-7", pyStr(int64(-7)))           // int64
-	assert.Equal(t, "+42", pyStr(json.Number("+42"))) // json.Number 符号整数 Atoi 成功原样
-	assert.Equal(t, "0.5", pyStr(0.5))                // float64 → pyFloatStr
-	assert.Equal(t, "2.0", pyStr(2.0))                // float64 整数值补 .0
+	assert.Equal(t, "None", utils.PyStr(nil))
+	assert.Equal(t, "True", utils.PyStr(true))
+	assert.Equal(t, "False", utils.PyStr(false))
+	assert.Equal(t, "abc", utils.PyStr("abc"))
+	assert.Equal(t, "42", utils.PyStr(42))                  // int
+	assert.Equal(t, "-7", utils.PyStr(int64(-7)))           // int64
+	assert.Equal(t, "+42", utils.PyStr(json.Number("+42"))) // json.Number 符号整数 Atoi 成功原样
+	assert.Equal(t, "0.5", utils.PyStr(0.5))                // float64 → pyFloatStr
+	assert.Equal(t, "2.0", utils.PyStr(2.0))                // float64 整数值补 .0
 	// json.Number 病态非数字（Repair 后仍非数字字面）
-	assert.Equal(t, "abc", pyStr(json.Number("abc")))
+	assert.Equal(t, "abc", utils.PyStr(json.Number("abc")))
 	// json.Number 溢出整数（Atoi 失败 → isPureIntegerLiteral 命中）
-	assert.Equal(t, "99999999999999999999", pyStr(json.Number("99999999999999999999")))
+	assert.Equal(t, "99999999999999999999", utils.PyStr(json.Number("99999999999999999999")))
 	// json.Number 病态：非纯整数字面也非合法 float（Float64 失败原样）
-	assert.Equal(t, "1.2.3", pyStr(json.Number("1.2.3")))
+	assert.Equal(t, "1.2.3", utils.PyStr(json.Number("1.2.3")))
 }
 
 // TestPyFloatStr_边界表 同包直调 pyFloatStr：nan/inf/科学记法/补 .0。
 func TestPyFloatStr_边界表(t *testing.T) {
-	assert.Equal(t, "nan", pyFloatStr(math.NaN()))
-	assert.Equal(t, "inf", pyFloatStr(math.Inf(1)))
-	assert.Equal(t, "-inf", pyFloatStr(math.Inf(-1)))
-	assert.Equal(t, "1e+16", pyFloatStr(1e16))    // e 记法上界
-	assert.Equal(t, "1e-05", pyFloatStr(1e-5))    // e 记法下界
-	assert.Equal(t, "0.0", pyFloatStr(0.0))       // 零 f 记法补 .0
-	assert.Equal(t, "0.0001", pyFloatStr(1e-4))   // f 记法下界
-	assert.Equal(t, "1862.0", pyFloatStr(1862.0)) // f 记法整数值补 .0
+	assert.Equal(t, "nan", utils.PyFloatStr(math.NaN()))
+	assert.Equal(t, "inf", utils.PyFloatStr(math.Inf(1)))
+	assert.Equal(t, "-inf", utils.PyFloatStr(math.Inf(-1)))
+	assert.Equal(t, "1e+16", utils.PyFloatStr(1e16))    // e 记法上界
+	assert.Equal(t, "1e-05", utils.PyFloatStr(1e-5))    // e 记法下界
+	assert.Equal(t, "0.0", utils.PyFloatStr(0.0))       // 零 f 记法补 .0
+	assert.Equal(t, "0.0001", utils.PyFloatStr(1e-4))   // f 记法下界
+	assert.Equal(t, "1862.0", utils.PyFloatStr(1862.0)) // f 记法整数值补 .0
 }
 
 // TestIsPureIntegerLiteral_边界表 同包直调：符号/非数字/空串边界。
 func TestIsPureIntegerLiteral_边界表(t *testing.T) {
-	assert.True(t, isPureIntegerLiteral("123"))
-	assert.True(t, isPureIntegerLiteral("+123"))
-	assert.True(t, isPureIntegerLiteral("-123"))
-	assert.False(t, isPureIntegerLiteral(""))
-	assert.False(t, isPureIntegerLiteral("+"))
-	assert.False(t, isPureIntegerLiteral("-"))
-	assert.False(t, isPureIntegerLiteral("1.5"))
-	assert.False(t, isPureIntegerLiteral("1e5"))
-	assert.False(t, isPureIntegerLiteral("12a"))
+	assert.True(t, utils.IsPureIntegerLiteral("123"))
+	assert.True(t, utils.IsPureIntegerLiteral("+123"))
+	assert.True(t, utils.IsPureIntegerLiteral("-123"))
+	assert.False(t, utils.IsPureIntegerLiteral(""))
+	assert.False(t, utils.IsPureIntegerLiteral("+"))
+	assert.False(t, utils.IsPureIntegerLiteral("-"))
+	assert.False(t, utils.IsPureIntegerLiteral("1.5"))
+	assert.False(t, utils.IsPureIntegerLiteral("1e5"))
+	assert.False(t, utils.IsPureIntegerLiteral("12a"))
 }
 
 // TestPyTruthy_分支表 同包直调：nil/bool/数值/json.Number/其余 truthy。

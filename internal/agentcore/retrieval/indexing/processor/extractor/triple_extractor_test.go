@@ -15,6 +15,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -349,8 +350,8 @@ func TestPyStr_类型字符串化(t *testing.T) {
 		{nil, "None"},    // 不可达防御分支
 	}
 	for _, c := range cases {
-		if got := pyStr(c.in); got != c.want {
-			t.Errorf("pyStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
+		if got := utils.PyStr(c.in); got != c.want {
+			t.Errorf("utils.PyStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
 		}
 	}
 }
@@ -370,8 +371,8 @@ func TestPyStr_jsonNumber(t *testing.T) {
 		{json.Number("0.0001"), "0.0001"},
 	}
 	for _, c := range cases {
-		if got := pyStr(c.in); got != c.want {
-			t.Errorf("pyStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
+		if got := utils.PyStr(c.in); got != c.want {
+			t.Errorf("utils.PyStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
 		}
 	}
 }
@@ -389,13 +390,13 @@ func TestPyStr_jsonNumber超int64界(t *testing.T) {
 		{json.Number("9223372036854775808"), "9223372036854775808"},     // MaxInt64+1 恰超界
 	}
 	for _, c := range cases {
-		if got := pyStr(c.in); got != c.want {
-			t.Errorf("pyStr(%v) 应为 %q（整数字面原样），实际 %q", c.in, c.want, got)
+		if got := utils.PyStr(c.in); got != c.want {
+			t.Errorf("utils.PyStr(%v) 应为 %q（整数字面原样），实际 %q", c.in, c.want, got)
 		}
 	}
 	// 小数/指数记法仍走 Float64 记法还原（不受 S-02 修复影响）
-	if got := pyStr(json.Number("1.5e300")); got != "1.5e+300" {
-		t.Errorf("pyStr(1.5e300) 应为 \"1.5e+300\"，实际 %q", got)
+	if got := utils.PyStr(json.Number("1.5e300")); got != "1.5e+300" {
+		t.Errorf("utils.PyStr(1.5e300) 应为 \"1.5e+300\"，实际 %q", got)
 	}
 }
 
@@ -760,8 +761,8 @@ func TestTruncateContent_截断分支(t *testing.T) {
 
 // TestPyStr_int64字段 覆盖补充：深修复路径 int64 分支防御
 func TestPyStr_int64字段(t *testing.T) {
-	if got := pyStr(int64(99)); got != "99" {
-		t.Errorf("pyStr(int64(99)) 应为 \"99\"，实际 %q", got)
+	if got := utils.PyStr(int64(99)); got != "99" {
+		t.Errorf("utils.PyStr(int64(99)) 应为 \"99\"，实际 %q", got)
 	}
 }
 
@@ -798,8 +799,8 @@ func TestPyFloatStr_特殊字面(t *testing.T) {
 		{1.5e16, "1.5e+16"},            // 上界外 e 记法
 	}
 	for _, c := range cases {
-		if got := pyFloatStr(c.in); got != c.want {
-			t.Errorf("pyFloatStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
+		if got := utils.PyFloatStr(c.in); got != c.want {
+			t.Errorf("utils.PyFloatStr(%v) 应为 %q，实际 %q", c.in, c.want, got)
 		}
 	}
 }

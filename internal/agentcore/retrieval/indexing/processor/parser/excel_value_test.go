@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // TestPyFloatStr 测试 Python str(float) 记法还原。
@@ -31,19 +33,19 @@ func TestPyFloatStr(t *testing.T) {
 		{math.Copysign(0, -1), "-0.0"}, // Go -0.0 常量折叠成正零，用 Copysign 构造真负零
 	}
 	for _, c := range cases {
-		if got := pyFloatStr(c.in); got != c.want {
-			t.Errorf("pyFloatStr(%v) = %q, want %q", c.in, got, c.want)
+		if got := utils.PyFloatStr(c.in); got != c.want {
+			t.Errorf("utils.PyFloatStr(%v) = %q, want %q", c.in, got, c.want)
 		}
 	}
 	// NaN/Inf（Python 输出 nan/inf/-inf）
-	if got := pyFloatStr(math.NaN()); got != "nan" {
-		t.Errorf("pyFloatStr(NaN) = %q, want nan", got)
+	if got := utils.PyFloatStr(math.NaN()); got != "nan" {
+		t.Errorf("utils.PyFloatStr(NaN) = %q, want nan", got)
 	}
-	if got := pyFloatStr(math.Inf(1)); got != "inf" {
-		t.Errorf("pyFloatStr(+Inf) = %q, want inf", got)
+	if got := utils.PyFloatStr(math.Inf(1)); got != "inf" {
+		t.Errorf("utils.PyFloatStr(+Inf) = %q, want inf", got)
 	}
-	if got := pyFloatStr(math.Inf(-1)); got != "-inf" {
-		t.Errorf("pyFloatStr(-Inf) = %q, want -inf", got)
+	if got := utils.PyFloatStr(math.Inf(-1)); got != "-inf" {
+		t.Errorf("utils.PyFloatStr(-Inf) = %q, want -inf", got)
 	}
 }
 

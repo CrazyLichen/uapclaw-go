@@ -10,8 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -24,6 +22,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -634,7 +633,7 @@ func (a *AgenticRetriever) read(ctx context.Context, query string, passages []co
 		}
 		var fact common.TripleFact
 		for j, elem := range triple {
-			fact[j] = pyStr(elem)
+			fact[j] = commonutils.PyStr(elem)
 		}
 		triples = append(triples, fact)
 	}
@@ -723,91 +722,6 @@ func tripleFactStr(triple common.TripleFact) string {
 	return strings.Join(triple[:], " ")
 }
 
-// pyStr 标量转 Python str() 形态（读取侧复刻，偏差 §8-9）。
-//
-// 13.17 extractor 包 pyStr 同源语义（私有复刻，不动 extractor 公开面——
-// 读取侧/写入侧管线分立，13.23 pyAnyStr 先例）：
-//   - nil → "None"；bool → "True"/"False"；string 原样
-//   - json.Number（合法 JSON 短路路径）：整数字面原样，浮点走 pyFloatStr
-//   - float64（深修复路径小数）：pyFloatStr；int/int64：十进制
-func pyStr(v any) string {
-	switch val := v.(type) {
-	case nil:
-		return "None"
-	case string:
-		return val
-	case bool:
-		if val {
-			return "True"
-		}
-		return "False"
-	case json.Number:
-		s := val.String()
-		if _, err := strconv.Atoi(s); err == nil {
-			return s
-		}
-		if isPureIntegerLiteral(s) {
-			return s
-		}
-		if f, err := val.Float64(); err == nil {
-			return pyFloatStr(f)
-		}
-		return s
-	case float64:
-		return pyFloatStr(val)
-	case int:
-		return strconv.Itoa(val)
-	case int64:
-		return strconv.FormatInt(val, 10)
-	default:
-		return fmt.Sprint(v)
-	}
-}
-
-// pyFloatStr 还原 Python str(float) 记法（13.17 pyFloatStr 同源复刻）。
-// abs ∈ [1e-4, 1e16) 用 f 记法（整数值补 ".0"），其余 e 记法；
-// nan/inf 特殊字面。
-func pyFloatStr(f float64) string {
-	if math.IsNaN(f) {
-		return "nan"
-	}
-	if math.IsInf(f, 1) {
-		return "inf"
-	}
-	if math.IsInf(f, -1) {
-		return "-inf"
-	}
-	abs := math.Abs(f)
-	if abs == 0 || (abs >= 1e-4 && abs < 1e16) {
-		s := strconv.FormatFloat(f, 'f', -1, 64)
-		if !strings.Contains(s, ".") {
-			s += ".0"
-		}
-		return s
-	}
-	return strconv.FormatFloat(f, 'e', -1, 64)
-}
-
-// isPureIntegerLiteral 判纯整数字面量：可选符号 + 全数字（无小数点/指数）。
-// 13.17 同源复刻：Atoi 溢出的超界整数字面原样透传（Python int 无界）。
-func isPureIntegerLiteral(s string) bool {
-	if s == "" {
-		return false
-	}
-	body := s
-	if body[0] == '+' || body[0] == '-' {
-		body = body[1:]
-	}
-	if body == "" {
-		return false
-	}
-	for _, r := range body {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
 
 // metaString 取元数据中的字符串值（nil → ""；string 原值；其他标量 fmt.Sprint）。
 //

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 
@@ -151,4 +152,68 @@ func TestPyRepr_容器内非基础类型兜底(t *testing.T) {
 	type probe struct{ Name string }
 	got := PyStr(map[string]any{"probe": probe{Name: "x"}})
 	assert.Equal(t, "{'probe': {x}}", got)
+}
+
+// TestPyStr_jsonNumber 验证 json.Number 的字面量还原（对齐 Python int/float 分野）：
+// 整数字面原样（含超界），小数/指数走 float 记法。
+func TestPyStr_jsonNumber(t *testing.T) {
+	cases := []struct {
+		in   json.Number
+		want string
+	}{
+		{"42", "42"},
+		{"-7", "-7"},
+		{"12345678901234567890", "12345678901234567890"}, // 超 int64，Python int 无界
+		{"1.5", "1.5"},
+		{"1.0", "1.0"},
+		{"1.5e300", "1.5e+300"},
+	}
+	for _, c := range cases {
+		if got := PyStr(c.in); got != c.want {
+			t.Errorf("PyStr(json.Number %q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+
+	// 容器内的 json.Number 同样走字面量还原
+	got := PyStr(map[string]any{"n": json.Number("1.0"), "big": json.Number("12345678901234567890")})
+	assert.Equal(t, "{'big': 12345678901234567890, 'n': 1.0}", got)
+}
+
+// TestIsPureIntegerLiteral 验证纯整数字面量判定（超界整数还原的守卫）
+func TestIsPureIntegerLiteral(t *testing.T) {
+	yes := []string{"0", "42", "-7", "+7", "12345678901234567890"}
+	no := []string{"", "-", "+", "1.5", "1e5", "1.", ".5", "0x10", "abc", "1 "}
+	for _, s := range yes {
+		if !IsPureIntegerLiteral(s) {
+			t.Errorf("IsPureIntegerLiteral(%q) = false, want true", s)
+		}
+	}
+	for _, s := range no {
+		if IsPureIntegerLiteral(s) {
+			t.Errorf("IsPureIntegerLiteral(%q) = true, want false", s)
+		}
+	}
+}
+
+// TestPyFloatStr 验证 str(float) 记法（与 retrieval 侧 excel_value / 抽取器同源）
+func TestPyFloatStr(t *testing.T) {
+	cases := []struct {
+		in   float64
+		want string
+	}{
+		{3.5, "3.5"},
+		{2, "2.0"},
+		{math.Copysign(0, -1), "-0.0"},
+		{1e15, "1000000000000000.0"},
+		{1e16, "1e+16"},
+		{1e-5, "1e-05"},
+		{math.NaN(), "nan"},
+		{math.Inf(1), "inf"},
+		{math.Inf(-1), "-inf"},
+	}
+	for _, c := range cases {
+		if got := PyFloatStr(c.in); got != c.want {
+			t.Errorf("PyFloatStr(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
 }

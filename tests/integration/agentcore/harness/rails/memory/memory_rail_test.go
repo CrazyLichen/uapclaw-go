@@ -3,6 +3,7 @@
 package memory
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -239,6 +240,15 @@ func (s *MemoryRailSuite) TestMemoryRail_运行时RegisterRail后read_memory可�
 	probeRendered := utils.PyStr(map[string]any{"probe": renderProbe{Name: "x"}})
 	s.Contains(probeRendered, "{x}", "非基础类型应走 %v 兜底")
 	s.NotContains(probeRendered, "map[", "兜底渲染同样不得出现 map[...]")
+
+	// JSON 字面量：json.Number 需按 Python int/float 分野还原
+	// （整数字面原样，含超 int64 的超界字面；小数走 float 记法）
+	numRendered := utils.PyStr(map[string]any{
+		"i":   json.Number("42"),
+		"big": json.Number("12345678901234567890"),
+		"f":   json.Number("1.0"),
+	})
+	s.Equal("{'big': 12345678901234567890, 'f': 1.0, 'i': 42}", numRendered)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
