@@ -530,8 +530,22 @@ func TestChannelManager_GetReadyNodes升序(t *testing.T) {
 // TestChannelManager_Consume未知节点 未知节点无操作、不 panic。
 // Python: channels.py:64-65
 func TestChannelManager_Consume未知节点(t *testing.T) {
-	m := NewChannelManager([]Channel{NewTriggerChannel("a")})
+	a := NewTriggerChannel("a")
+	m := NewChannelManager([]Channel{a})
+	m.BufferMessage(NewTriggerMessage("src", a.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+
+	// 负向：未知节点不得影响真实节点的就绪状态（原用例在空 manager 上断言，删掉
+	// Consume 函数体也照样通过）
 	m.Consume("ghost")
+	if got := m.GetReadyNodes(); len(got) != 1 || got[0] != "a" {
+		t.Fatalf("就绪集 = %v，期望 [a]（未知节点不应影响其它节点）", got)
+	}
+
+	// 正向：Consume 真实节点确实使其离开就绪集
+	m.Consume("a")
 	if got := m.GetReadyNodes(); len(got) != 0 {
 		t.Fatalf("就绪集 = %v，期望空", got)
 	}
@@ -653,10 +667,9 @@ func TestChannelManager_Flush只重算状态改变的节点(t *testing.T) {
 	m.Consume("collect")
 
 	// 直接改通道内部状态，制造"已收满但 Accept 返 false"的场景
+	// （原处另有一条「Restore 通道不应影响管理器就绪集」的断言，属恒真：管理器
+	// 就绪集只有 Flush 会重算，删掉以免误以为是有效证据。）
 	bar.Restore(ChannelSnapshot{Received: []string{"A", "B"}})
-	if got := m.GetReadyNodes(); len(got) != 0 {
-		t.Fatalf("Restore 通道不应影响管理器就绪集，实际 %v", got)
-	}
 
 	m.BufferMessage(NewBarrierMessage("A", bar.Key()))
 	if err := m.Flush(); err != nil {
@@ -759,6 +772,9 @@ func TestChannelManager_Restore长度不匹配静默(t *testing.T) {
 	if got := m.GetReadyNodes(); len(got) != 0 {
 		t.Fatalf("长度不匹配时应静默跳过，就绪集实际 %v", got)
 	}
+	// 注：这条断言能抓住"退化成 min 循环"的回归（min 循环会把单元素快照灌进 barrier，
+	// IsReady 立刻为 true）；它抓不到"Restore 整体空转"，那种回归由长度匹配的
+	// Restore 用例（TestChannelManager_Restore恢复就绪）负责。
 	if bar.IsReady() {
 		t.Fatal("长度不匹配时不应调用通道的 Restore")
 	}
@@ -786,13 +802,21 @@ func TestChannelManager_Restore空快照跳过(t *testing.T) {
 	bar := NewBarrierChannel("collect", [][]string{{"A"}})
 	m := NewChannelManager([]Channel{bar})
 
+	// 先让通道真正收满一个信号（received={A}），再喂空快照。
+	// 若"空快照直接跳过"的守卫被删掉，Restore 会把 received 重建为空 map，
+	// IsReady 立刻变 false —— 用既有状态才能观测到"没有调用 Restore"。
+	m.BufferMessage(NewBarrierMessage("A", bar.Key()))
+	if err := m.Flush(); err != nil {
+		t.Fatalf("Flush 返回错误：%v", err)
+	}
+	if !bar.IsReady() {
+		t.Fatal("前置条件失败：barrier 应收满并就绪")
+	}
+
 	m.Restore(map[string][]ChannelSnapshot{"collect": {{}}})
 
-	if bar.IsReady() {
-		t.Fatal("空快照不应使通道就绪")
-	}
-	if got := m.GetReadyNodes(); len(got) != 0 {
-		t.Fatalf("就绪集 = %v，期望空", got)
+	if !bar.IsReady() {
+		t.Fatal("空快照不应调用通道的 Restore（已有 received 被清空）")
 	}
 }
 

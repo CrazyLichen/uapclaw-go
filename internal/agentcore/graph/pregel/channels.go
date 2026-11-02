@@ -102,9 +102,12 @@ type BarrierChannel struct {
 //   - readyNodes：就绪节点集合（GetReadyNodes 排序后输出，偏差 D-4）
 //   - buffer：待 Flush 的消息
 //
-// 并发纪律（偏差 D-8）：无锁，对齐 Python。唯一使用者是 PregelLoop，它在超步循环
-// 所在 goroutine 内串行调用本类型全部方法；节点任务在其他 goroutine 执行，但
-// 不得触碰 ChannelManager。
+// 并发纪律（偏差 D-8）：无锁，对齐 Python。
+//
+// 约定（尚未接入）：计划由 8.3b 的 PregelLoop 在超步循环所在 goroutine 内串行调用
+// 本类型全部方法；节点任务在其他 goroutine 执行，但不得触碰 ChannelManager。
+// 注意 PregelLoop 目前不存在，本类型在生产代码中零调用方——接入时若改用并发调用，
+// 必须先补锁，现有注释不构成并发安全保证。
 //
 // Python: channels.py:13-101
 type ChannelManager struct {
@@ -168,7 +171,11 @@ func (c *TriggerChannel) Consume() {
 // Snapshot 导出消息列表副本（保序）。
 // Python: channels.py:122-123
 func (c *TriggerChannel) Snapshot() ChannelSnapshot {
-	return ChannelSnapshot{Messages: append([]Message(nil), c.messages...)}
+	// 返回非 nil 空切片：与 BarrierChannel.Snapshot 保持同一空形状（JSON []）。
+	// 用 append(nil, ...) 会在空时得到 nil（JSON null），"Trigger 空 + Barrier 非空"
+	// 的混合节点会把 null 原样写进检查点，8.9b 反序列化虽能容忍，但属未登记偏差。
+	msgs := make([]Message, 0, len(c.messages))
+	return ChannelSnapshot{Messages: append(msgs, c.messages...)}
 }
 
 // Restore 用快照替换消息列表副本。

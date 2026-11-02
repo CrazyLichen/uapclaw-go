@@ -191,7 +191,7 @@ func TestConditionalRouter_多目标(t *testing.T) {
 // TestConditionalRouter_零目标 空目标产出非 nil 空切片。
 func TestConditionalRouter_零目标(t *testing.T) {
 	r := NewConditionalRouter(SelectorFunc(func(_ context.Context, _ any) ([]string, error) {
-		return nil, nil
+		return []string{}, nil
 	}))
 	msgs, err := r.Dispatch(context.Background(), "A")
 	if err != nil {
@@ -202,6 +202,38 @@ func TestConditionalRouter_零目标(t *testing.T) {
 	}
 	if len(msgs) != 0 {
 		t.Errorf("len(msgs) = %d，期望 0", len(msgs))
+	}
+}
+
+// TestConditionalRouter_selector返回nil报错 nil 目标视为构图错误（fail-closed）。
+//
+// 对齐 Python：`for to in None` 抛 TypeError；Go 若把 nil 当作 END，
+// selector 漏 return 会静默让图提前结束。
+func TestConditionalRouter_selector返回nil报错(t *testing.T) {
+	r := NewConditionalRouter(SelectorFunc(func(_ context.Context, _ any) ([]string, error) {
+		return nil, nil
+	}))
+	msgs, err := r.Dispatch(context.Background(), "A")
+	if err == nil {
+		t.Fatalf("err = nil，期望非 nil（nil 目标必须判为构图错误）")
+	}
+	if msgs != nil {
+		t.Errorf("msgs = %v，期望 nil", msgs)
+	}
+}
+
+// TestConditionalRouter_typedNil报错 typed-nil（SelectorFunc(nil)）不得绕过 nil 守卫。
+func TestConditionalRouter_typedNil报错(t *testing.T) {
+	r := NewConditionalRouter(SelectorFunc(nil))
+	if r == nil {
+		t.Fatal("NewConditionalRouter 返回 nil")
+	}
+	msgs, err := r.Dispatch(context.Background(), "A")
+	if err == nil {
+		t.Fatalf("err = nil，期望非 nil（typed-nil selector 不得 panic 或静默）")
+	}
+	if msgs != nil {
+		t.Errorf("msgs = %v，期望 nil", msgs)
 	}
 }
 
@@ -230,7 +262,7 @@ func TestConditionalRouter_ctx透传(t *testing.T) {
 	var got any
 	r := NewConditionalRouter(SelectorFunc(func(gotCtx context.Context, _ any) ([]string, error) {
 		got = gotCtx.Value(key)
-		return nil, nil
+		return []string{}, nil
 	}))
 	if _, err := r.Dispatch(ctx, "A"); err != nil {
 		t.Fatalf("Dispatch 返回错误：%v", err)

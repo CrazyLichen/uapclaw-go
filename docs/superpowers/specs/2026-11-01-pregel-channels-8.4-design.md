@@ -348,7 +348,7 @@ func makeBarrierRouterKey(name string, groups []map[string]struct{}) string
 | `TestChannelManager_Consume未知节点` | 无操作、不 panic |
 | `TestChannelManager_GetReadyNodes升序` | 多节点就绪，返回严格升序（D-4） |
 | `TestChannelManager_重复键后者覆盖` | 两个同 Key 通道 → `keyToChannel` 指向后者；`nodeToChannels` 保留两个（D-7） |
-| `TestChannelManager_Buffer引用语义` | `Buffer()` 返回内部切片（改元素可见），锁死 D-9 交棒约束 |
+| `TestChannelManager_Buffer返回副本` | `Buffer()` 返回副本（改副本不污染内部、内部增长不回灌、Flush 后旧副本完好），锁死 D-9 交棒约束。<br/>（2026-11-02 同步：`ab93f705` 已由"返回内部切片"改为"返回副本"，用例名随之改） |
 | `TestTriggerChannel_拒绝汇聚消息` | `Kind()==KindBarrier` → `Accept` 返 false、不 ready |
 | `TestBarrierChannel_拒绝触发消息` | `Kind()==KindTrigger` → false、不 ready |
 | `TestTriggerChannel_零值消息被拒` | 零值 `Message{}`（kind 空串）→ 两通道都拒收（承接 8.6 的判别式纪律） |
