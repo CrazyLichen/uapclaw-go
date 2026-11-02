@@ -141,3 +141,17 @@ func TestAddRouter_nilPanics(t *testing.T) {
 	}()
 	n.addRouter(nil)
 }
+
+// TestNoopNodeFunc_返nil 空节点函数恒返回 nil，且不因入参取值而改变；用于 START/END 占位。
+// Python: builder.py:18-19（add_node(START, lambda: None, [])）
+func TestNoopNodeFunc_返nil(t *testing.T) {
+	cases := []NodeInput{
+		{},
+		{Config: InnerPregelConfig{PregelConfig: PregelConfig{Ns: "wf", SessionID: "s1"}}},
+	}
+	for _, in := range cases {
+		if err := NoopNodeFunc(context.Background(), in); err != nil {
+			t.Errorf("NoopNodeFunc 返回错误：%v", err)
+		}
+	}
+}
