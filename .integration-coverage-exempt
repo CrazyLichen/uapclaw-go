@@ -51,3 +51,16 @@ cmd/uapclaw/cmd.go
 # 本次改动仅为 chat.error 协议串常量（行为不变），由 handle_history_test.go 7 例覆盖，
 # 其中「错误文案是英文协议串」用例锁定该契约。
 internal/swarm/server/handle_history.go
+
+# ── 2026-11-02 模型配置前置校验 + history 写盘转义 ──
+# deep_adapter.go — Agent 适配器（数千行装配/会话编排）。本次改动仅新增
+# hasValidModelConfig 的重载与 modelClientUsable 纯判定（无 IO、无装配），
+# 由 adapter 包单测覆盖（占位 api_base / 空凭据 / nil 模型 / 回退分支 6 例）；
+# 文件整体集成覆盖基线本就 12.7%，真实覆盖需完整 agent 会话 + 真实模型服务。
+internal/swarm/server/adapter/deep_adapter.go
+
+# session_history.go — history.json 读写与写队列。集成层不直接驱动该文件
+# （经 AgentServer → runtime 间接调用，仅 history.get 读路径）；本次改动仅把
+# json.MarshalIndent 换成 utils.MarshalIndentNoEscape（序列化对齐 Python
+# ensure_ascii=False），行为等价，由 session 包单测覆盖。
+internal/swarm/server/session/session_history.go
