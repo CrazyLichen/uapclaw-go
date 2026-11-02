@@ -663,8 +663,10 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 	}
 
 	// 恢复消息
+	// 状态可能来自同进程直传（具体类型）或 checkpointer 落盘后的 JSON 反序列化形态，
+	// 两种形态都要还原，否则进程重启后上下文会静默消失。
 	if messagesVal, exists := stateMap["messages"]; exists {
-		if messages, ok := messagesVal.([]llm_schema.BaseMessage); ok {
+		if messages := messagesFromState(messagesVal); messages != nil {
 			if err := ValidateMessages(messages); err != nil {
 				logger.Error(logComponent).
 					Str("event_type", "CONTEXT_LOAD_STATE_VALIDATE_ERROR").
@@ -675,12 +677,19 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 			}
 			EnsureContextMessageIDs(messages)
 			mc.messageBuffer.Rebuild(messages)
+		} else if messagesVal != nil {
+			// 形态无法识别时显式告警，避免"恢复成功但上下文为空"的静默丢数据
+			logger.Warn(logComponent).
+				Str("event_type", "CONTEXT_LOAD_STATE_UNRECOGNIZED_MESSAGES").
+				Str("context_id", mc.contextID).
+				Str("source_type", fmt.Sprintf("%T", messagesVal)).
+				Msg("state messages could not be restored")
 		}
 	}
 
 	// 恢复卸载消息缓冲区
 	if offloadVal, exists := stateMap["offload_messages"]; exists {
-		if offloadMessages, ok := offloadVal.(map[string][]llm_schema.BaseMessage); ok {
+		if offloadMessages := offloadMessagesFromState(offloadVal); offloadMessages != nil {
 			mc.offloadMessageBuffer = NewOffloadMessageBuffer(offloadMessages)
 			mc.offloadMessageBuffer.SetSysOperation(mc.sysOperation)
 			workspaceDir := mc.WorkspaceDir()
@@ -705,7 +714,7 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 
 	// 恢复压缩历史
 	if historyVal, exists := stateMap["compression_history"]; exists {
-		if history, ok := historyVal.([]map[string]any); ok {
+		if history := compressionHistoryFromState(historyVal); history != nil {
 			mc.stateRecorder.LoadHistory(history)
 		}
 	}
