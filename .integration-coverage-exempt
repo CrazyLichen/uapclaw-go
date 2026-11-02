@@ -43,3 +43,11 @@ internal/swarm/e2a/acp/protocol.go
 # runAppCmd 会起真实监听并阻塞到信号，集成层没有可调用入口；本次新增的
 # buildAppURL/printAppBanner/shouldOpenBrowser/openBrowser 由 cmd/uapclaw 包内单测覆盖。
 cmd/uapclaw/cmd.go
+
+# ── 2026-11-02 v0.1.1 历史误报修复 ──
+# handle_history.go — AgentServer 的 history.get 处理器 + 可恢复记录判定/分页（纯函数）。
+# 集成层没有 history.get 入口（tests/integration 不驱动该 RPC，也不落地 sessions 目录），
+# 属「单子系统处理器」而非跨子系统链路，按项目规范 7 应留在包内单测；
+# 本次改动仅为 chat.error 协议串常量（行为不变），由 handle_history_test.go 7 例覆盖，
+# 其中「错误文案是英文协议串」用例锁定该契约。
+internal/swarm/server/handle_history.go
