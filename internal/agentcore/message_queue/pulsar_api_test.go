@@ -2,6 +2,7 @@ package message_queue
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,10 +34,10 @@ type fakeConsumer struct {
 	messages []pulsarMessageAPI
 	// idx 当前消费位置
 	idx int
-	// receiveErr 接收错误
+	// receiveErr 接收错误（只返回一次）
 	receiveErr error
-	// ackCount Ack 调用次数
-	ackCount int
+	// ackCount Ack 调用次数（消费 goroutine 写、测试 goroutine 读，须原子）
+	ackCount atomic.Int64
 	// closed Close 调用次数
 	closed int
 }
@@ -91,9 +92,12 @@ func (p *fakeProducer) Close() { p.closed++ }
 
 // Receive 实现 pulsarConsumerAPI。
 // 无待收消息时阻塞到 ctx 到期，模拟真实 SDK 的阻塞语义。
+// receiveErr 只返回一次，便于验证「出错后继续循环」且不刷爆日志。
 func (c *fakeConsumer) Receive(ctx context.Context) (pulsarMessageAPI, error) {
 	if c.receiveErr != nil {
-		return nil, c.receiveErr
+		err := c.receiveErr
+		c.receiveErr = nil
+		return nil, err
 	}
 	if c.idx >= len(c.messages) {
 		<-ctx.Done()
@@ -106,7 +110,7 @@ func (c *fakeConsumer) Receive(ctx context.Context) (pulsarMessageAPI, error) {
 
 // Ack 实现 pulsarConsumerAPI。
 func (c *fakeConsumer) Ack(msg pulsarMessageAPI) error {
-	c.ackCount++
+	c.ackCount.Add(1)
 	return nil
 }
 

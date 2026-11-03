@@ -4,8 +4,10 @@ import (
 	"container/list"
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/drunner/dmessage_queue"
@@ -88,6 +90,11 @@ const DefaultSubscriptionName = "default"
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentAgentCore
+
+// receiveTimeout 单次 Receive 的超时时间。
+//
+// Python: consumer.receive(timeout_millis=1000)
+const receiveTimeout = time.Second
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -367,10 +374,91 @@ func newPulsarSubscription(topic string, consumer pulsarConsumerAPI) *PulsarSubs
 // consumeLoop 消费循环主逻辑。
 //
 // Python: PulsarSubscription._consume_loop() L64-83
-// 完整实现在 Task 11。
 func (s *PulsarSubscription) consumeLoop(ctx context.Context) {
 	defer close(s.done)
-	<-ctx.Done()
+
+	for s.active.Load() {
+		recvCtx, cancel := context.WithTimeout(ctx, receiveTimeout)
+		msg, err := s.consumer.Receive(recvCtx)
+		cancel()
+
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				// 对齐 pulsar.Timeout: continue
+				continue
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			logger.Error(logComponent).
+				Str("event_type", "mq_pulsar_receive_error").
+				Str("topic", s.topic).
+				Err(err).
+				Msg("pulsar receive failed")
+			continue
+		}
+
+		decoded, err := dmessage_queue.DeserializeMessage(msg.Payload())
+		if err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "mq_pulsar_deserialize_error").
+				Str("topic", s.topic).
+				Err(err).
+				Msg("pulsar message deserialize failed")
+			continue
+		}
+
+		payload, err := dmessage_queue.MessageToMap(decoded)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "mq_pulsar_message_to_map_error").
+				Str("topic", s.topic).
+				Err(err).
+				Msg("pulsar message to map failed")
+			continue
+		}
+
+		logger.Info(logComponent).
+			Str("event_type", "mq_pulsar_message_received").
+			Str("topic", s.topic).
+			Str("message_id", decoded.GetMessageID()).
+			Str("message_class", fmt.Sprint(payload["__class__"])).
+			Str("message_type", fmt.Sprint(payload["type"])).
+			Msg("received message")
+
+		if err := s.callHandler(ctx, payload); err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "mq_pulsar_handler_error").
+				Str("topic", s.topic).
+				Err(err).
+				Msg("pulsar message handler failed")
+			// 对齐 Python 异常路径：不 acknowledge，触发重投
+			continue
+		}
+
+		if err := s.consumer.Ack(msg); err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "mq_pulsar_ack_error").
+				Str("topic", s.topic).
+				Err(err).
+				Msg("pulsar message ack failed")
+		}
+	}
+}
+
+// callHandler 调用已注册的处理器；未注册时返回 nil。
+//
+// Python: if self._handler: await self._handler(payload)
+func (s *PulsarSubscription) callHandler(ctx context.Context, payload map[string]any) error {
+	s.handlerMu.RLock()
+	handler := s.handler
+	s.handlerMu.RUnlock()
+
+	if handler == nil {
+		return nil
+	}
+	_, err := handler(ctx, payload)
+	return err
 }
 
 // produceMessage 发布消息的内部实现。

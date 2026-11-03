@@ -3,6 +3,7 @@ package message_queue
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -294,6 +295,133 @@ func TestDeactivate_未激活无副作用(t *testing.T) {
 	sub.Deactivate()
 
 	assert.Equal(t, 0, consumer.closed)
+}
+
+// TestCallHandler_未设置返回nil 测试未注册处理器时不报错。
+//
+// Python: if self._handler: await self._handler(payload)
+func TestCallHandler_未设置返回nil(t *testing.T) {
+	sub := newPulsarSubscription("topic.a", &fakeConsumer{})
+
+	assert.NoError(t, sub.callHandler(context.Background(), map[string]any{}))
+}
+
+// TestConsumeLoop_handler收到完整消息map 测试传整条消息而非 payload 字段（偏差 D7）。
+func TestConsumeLoop_handler收到完整消息map(t *testing.T) {
+	msg := dmessage_queue.NewDmqRequestMessage(map[string]any{"q": "hi"})
+	msg.MessageID = "mid-1"
+	msg.ReplyTopic = "reply.t"
+	data, err := dmessage_queue.SerializeMessage(msg)
+	require.NoError(t, err)
+
+	consumer := &fakeConsumer{messages: []pulsarMessageAPI{&fakeMessage{payload: data}}}
+	sub := newPulsarSubscription("topic.a", consumer)
+
+	received := make(chan map[string]any, 1)
+	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
+		received <- payload
+		return nil, nil
+	})
+
+	sub.Activate()
+	defer sub.Deactivate()
+
+	select {
+	case payload := <-received:
+		assert.Equal(t, "DmqRequestMessage", payload["__class__"])
+		assert.Equal(t, "reply.t", payload["reply_topic"])
+		assert.Equal(t, "mid-1", payload["message_id"])
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler 未被调用")
+	}
+}
+
+// TestConsumeLoop_成功后ack 测试处理后确认消息。
+func TestConsumeLoop_成功后ack(t *testing.T) {
+	msg := dmessage_queue.NewDmqRequestMessage(map[string]any{"q": "hi"})
+	data, err := dmessage_queue.SerializeMessage(msg)
+	require.NoError(t, err)
+
+	consumer := &fakeConsumer{messages: []pulsarMessageAPI{&fakeMessage{payload: data}}}
+	sub := newPulsarSubscription("topic.a", consumer)
+
+	handled := make(chan struct{}, 1)
+	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
+		handled <- struct{}{}
+		return nil, nil
+	})
+
+	sub.Activate()
+	defer sub.Deactivate()
+
+	select {
+	case <-handled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler 未被调用")
+	}
+
+	require.Eventually(t, func() bool { return consumer.ackCount.Load() > 0 }, 2*time.Second, 10*time.Millisecond,
+		"消息未被 ack")
+}
+
+// TestConsumeLoop_handler报错不ack 测试对齐 Python 异常路径不 acknowledge。
+func TestConsumeLoop_handler报错不ack(t *testing.T) {
+	msg := dmessage_queue.NewDmqRequestMessage(map[string]any{"q": "hi"})
+	data, err := dmessage_queue.SerializeMessage(msg)
+	require.NoError(t, err)
+
+	consumer := &fakeConsumer{messages: []pulsarMessageAPI{&fakeMessage{payload: data}}}
+	sub := newPulsarSubscription("topic.a", consumer)
+
+	handled := make(chan struct{}, 1)
+	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
+		handled <- struct{}{}
+		return nil, assert.AnError
+	})
+
+	sub.Activate()
+	defer sub.Deactivate()
+
+	select {
+	case <-handled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler 未被调用")
+	}
+
+	// 留出处理窗口，确认没有 ack
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, int64(0), consumer.ackCount.Load())
+}
+
+// TestConsumeLoop_反序列化失败不ack 测试坏消息不确认。
+func TestConsumeLoop_反序列化失败不ack(t *testing.T) {
+	consumer := &fakeConsumer{messages: []pulsarMessageAPI{&fakeMessage{payload: []byte("not-json")}}}
+	sub := newPulsarSubscription("topic.a", consumer)
+	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
+		return nil, nil
+	})
+
+	sub.Activate()
+	time.Sleep(100 * time.Millisecond)
+	sub.Deactivate()
+
+	assert.Equal(t, int64(0), consumer.ackCount.Load())
+}
+
+// TestConsumeLoop_接收错误继续循环 测试非超时错误不退出循环（对齐 logger.exception 后继续）。
+func TestConsumeLoop_接收错误继续循环(t *testing.T) {
+	consumer := &fakeConsumer{receiveErr: assert.AnError}
+	sub := newPulsarSubscription("topic.a", consumer)
+	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
+		return nil, nil
+	})
+
+	sub.Activate()
+	time.Sleep(100 * time.Millisecond)
+	sub.Deactivate()
+
+	assert.False(t, sub.IsActive())
+	assert.Equal(t, int64(0), consumer.ackCount.Load())
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
