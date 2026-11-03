@@ -291,15 +291,15 @@ func TestReadableSchema_类型映射(t *testing.T) {
 		Name string `json:"name"`
 	}
 	model := reflect.TypeOf(struct {
-		Text    string            `json:"text"`
-		Count   int               `json:"count"`
-		Ratio   float64           `json:"ratio"`
-		Flag    bool              `json:"flag"`
-		Nested  inner             `json:"nested"`
-		List    []inner           `json:"list"`
-		Mapping map[string]int    `json:"mapping"`
-		Ignored string            `json:"-"`
-		hidden  string            `json:"hidden"`
+		Text    string         `json:"text"`
+		Count   int            `json:"count"`
+		Ratio   float64        `json:"ratio"`
+		Flag    bool           `json:"flag"`
+		Nested  inner          `json:"nested"`
+		List    []inner        `json:"list"`
+		Mapping map[string]int `json:"mapping"`
+		Ignored string         `json:"-"`
+		hidden  string
 		Ptr     *inner            `json:"ptr"`
 		Extra   map[string]string `json:"extra"`
 	}{})
