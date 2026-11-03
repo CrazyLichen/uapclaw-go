@@ -138,3 +138,9 @@ internal/agentcore/retrieval/retriever/agentic_retriever.go
 # （tests/integration/real_llm）覆盖真实调用语义。本行仅把 d.model 换成 modelSnapshot()
 # 快照，行为不变。
 internal/swarm/server/adapter/deep_adapter_evolution.go#L551-L551
+
+# ── 2026-11-03 usage 用例：tests/ 夹具不在集成插桩范围 ──
+# mock_client.go — 集成共享夹具（tests/ 下、非 _test.go）。集成 job 的 -coverpkg
+# 只含 internal/ 子系统，tests/ 目录不插桩，改动行必然判 0%。该文件不承载生产
+# 逻辑，行为由使用它的集成用例（如 SessionUsageIsolationSuite）断言。
+tests/integration/mockllm/mock_client.go
