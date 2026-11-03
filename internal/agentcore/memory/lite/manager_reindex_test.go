@@ -149,3 +149,27 @@ func newReindexTestManager(t *testing.T) (*memoryIndexManager, func()) {
 		ClearMemoryManagerCache()
 	}
 }
+
+// TestRunReindex_meta写实例值 回归：meta 必须记**实例**值（mock），而不是 settings 的
+// openai_compatible。否则下次启动判定不出「provider 换了」，永远不重建索引。
+// 对齐 Python _run_reindex（manager.py:611）：meta["provider"] = self.provider.id。
+func TestRunReindex_meta写实例值(t *testing.T) {
+	m, cleanup := newReindexTestManager(t)
+	defer cleanup()
+
+	m.provider = &fakeEmbedProvider{id: "mock", model: "mock", dims: 128}
+	if err := m.runReindex(context.Background(), "unit"); err != nil {
+		t.Fatalf("runReindex 失败: %v", err)
+	}
+
+	meta, err := m.readMeta()
+	if err != nil {
+		t.Fatalf("读 meta 失败: %v", err)
+	}
+	if meta["provider"] != "mock" || meta["model"] != "mock" {
+		t.Errorf("meta 应记实例值 mock/mock，实际 %v/%v", meta["provider"], meta["model"])
+	}
+	if meta["segmenter"] != segmenterID() {
+		t.Errorf("meta.segmenter = %v, want %v", meta["segmenter"], segmenterID())
+	}
+}

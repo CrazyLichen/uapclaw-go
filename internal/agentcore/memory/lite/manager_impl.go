@@ -831,12 +831,21 @@ func (m *memoryIndexManager) runReindex(ctx context.Context, reason string) erro
 			return err
 		}
 	}
+	// provider/model 记实例值（Python: self.provider.id / self.provider.model）。
+	// 记配置值会让「mock 降级 → 配置未变」永远判定不出需要重建。
+	providerID, providerModel := "", ""
+	if m.provider != nil {
+		providerID = m.provider.ID()
+		providerModel = m.provider.Model()
+	}
 	meta := map[string]any{
-		"provider":     m.settings.Provider,
-		"model":        m.settings.Model,
+		"provider":     providerID,
+		"model":        providerModel,
 		"providerKey":  m.providerKey,
 		"chunkTokens":  m.settings.Chunking.Tokens,
 		"chunkOverlap": m.settings.Chunking.Overlap,
+		// segmenter 记录分词器版本；变化即触发重建（C）
+		"segmenter": segmenterID(),
 	}
 	if m.vectorAvailable && m.vectorDims != nil {
 		meta["vectorDims"] = *m.vectorDims
