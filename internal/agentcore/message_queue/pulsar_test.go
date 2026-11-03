@@ -258,6 +258,44 @@ func TestGetOrCreateProducer_建producer失败(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestActivate_幂等 测试重复 Activate 只起一条消费 goroutine。
+func TestActivate_幂等(t *testing.T) {
+	consumer := &fakeConsumer{}
+	sub := newPulsarSubscription("topic.a", consumer)
+
+	sub.Activate()
+	sub.Activate()
+
+	assert.True(t, sub.IsActive())
+
+	sub.Deactivate()
+	assert.False(t, sub.IsActive())
+}
+
+// TestDeactivate_关闭consumer并退出goroutine 测试同步等待消费循环结束。
+func TestDeactivate_关闭consumer并退出goroutine(t *testing.T) {
+	consumer := &fakeConsumer{}
+	sub := newPulsarSubscription("topic.a", consumer)
+
+	sub.Activate()
+	sub.Deactivate()
+
+	assert.False(t, sub.IsActive())
+	assert.Equal(t, 1, consumer.closed)
+}
+
+// TestDeactivate_未激活无副作用 测试幂等。
+//
+// Python: deactivate() 首行 if not self._active: return
+func TestDeactivate_未激活无副作用(t *testing.T) {
+	consumer := &fakeConsumer{}
+	sub := newPulsarSubscription("topic.a", consumer)
+
+	sub.Deactivate()
+
+	assert.Equal(t, 0, consumer.closed)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newTestQueue 构造一个注入了 fake client 的队列（跳过 Start 的真实建连）。

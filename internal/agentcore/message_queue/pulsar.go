@@ -299,15 +299,55 @@ func (s *PulsarSubscription) SetMessageHandler(handler func(ctx context.Context,
 // Activate 激活订阅，启动消费 goroutine（幂等）。
 //
 // Python: PulsarSubscription.activate() L35-39
-// 完整实现在 Task 10。
-func (s *PulsarSubscription) Activate() {}
+func (s *PulsarSubscription) Activate() {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
 
-// Deactivate 停用订阅，关闭消费者（幂等）。
+	if s.active.Load() {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	s.done = make(chan struct{})
+	s.active.Store(true)
+
+	go s.consumeLoop(ctx)
+
+	logger.Info(logComponent).
+		Str("event_type", "mq_pulsar_subscription_activated").
+		Str("topic", s.topic).
+		Msg("pulsar subscription activated")
+}
+
+// Deactivate 停用订阅，同步等待消费 goroutine 退出（幂等）。
 //
 // Python: PulsarSubscription.deactivate() L41-59
-// 完整实现在 Task 10。
+// Go 接口无 ctx/error 返回（偏差 D3），改为同步阻塞，最长等待一个 receive 超时周期。
 func (s *PulsarSubscription) Deactivate() {
+	s.stateMu.Lock()
+	if !s.active.Load() {
+		s.stateMu.Unlock()
+		return
+	}
+	s.active.Store(false)
+	cancel := s.cancel
+	done := s.done
+	s.stateMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	// 关闭消费者以解除阻塞中的 Receive
 	s.consumer.Close()
+	if done != nil {
+		<-done
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "mq_pulsar_subscription_deactivated").
+		Str("topic", s.topic).
+		Msg("pulsar subscription deactivated")
 }
 
 // IsActive 返回订阅是否活跃。实现 SubscriptionBase 接口。
@@ -322,6 +362,15 @@ func newPulsarSubscription(topic string, consumer pulsarConsumerAPI) *PulsarSubs
 		consumer: consumer,
 		done:     make(chan struct{}),
 	}
+}
+
+// consumeLoop 消费循环主逻辑。
+//
+// Python: PulsarSubscription._consume_loop() L64-83
+// 完整实现在 Task 11。
+func (s *PulsarSubscription) consumeLoop(ctx context.Context) {
+	defer close(s.done)
+	<-ctx.Done()
 }
 
 // produceMessage 发布消息的内部实现。
