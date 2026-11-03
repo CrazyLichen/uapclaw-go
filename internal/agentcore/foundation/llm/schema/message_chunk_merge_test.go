@@ -1,6 +1,9 @@
 package schema
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // TestMergeToolCalls_真实流式增量序列 用真 LLM 抓到的增量帧验证聚合语义。
 //
@@ -27,5 +30,31 @@ func TestMergeToolCalls_真实流式增量序列(t *testing.T) {
 	}
 	if calls[0].Name != "list_members" || calls[0].ID != "call_00_x" {
 		t.Fatalf("name/id 应取非空侧，实际 name=%q id=%q", calls[0].Name, calls[0].ID)
+	}
+}
+
+// TestMerge_StreamError 锁定流中断错误在增量合并中的传播：
+// 错误一旦出现就不能被后续内容掩盖，否则消费方会当成正常结束。
+func TestMerge_StreamError(t *testing.T) {
+	cause := errors.New("unexpected EOF")
+
+	// 右侧带错误 → 合并结果带错误
+	left := NewAssistantMessageChunk("半截内容")
+	right := NewAssistantMessageChunk("", WithChunkStreamError(cause))
+	merged := left.Merge(right)
+	if merged.StreamError == nil {
+		t.Fatal("Merge 应保留右侧的 StreamError")
+	}
+
+	// 左侧带错误、右侧是普通内容 → 错误不能被冲掉
+	merged = right.Merge(NewAssistantMessageChunk("后续内容"))
+	if merged.StreamError == nil {
+		t.Fatal("StreamError 不应被后续 chunk 掩盖")
+	}
+
+	// 都无错误 → 结果无错误
+	clean := NewAssistantMessageChunk("a").Merge(NewAssistantMessageChunk("b"))
+	if clean.StreamError != nil {
+		t.Fatalf("无错误时不应凭空产生 StreamError: %v", clean.StreamError)
 	}
 }

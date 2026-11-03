@@ -21,6 +21,7 @@
 //	├── reloader.go       # fsnotify 热重载：Reloader/OnReload/Start/Stop
 //	├── merge.go          # 配置迁移：DeepMerge/MigrateFromTemplate
 //	├── default_models.go # 默认模型列表：GetDefaultModels/InferIsDefault
+//	├── values.go         # 数值读取：Float/Int（兼容 YAML int 与 JSON float64）
 //	├── doc.go            # 包文档
 //	└── testdata/         # 测试数据
 //	    ├── config.yaml       # 示例配置

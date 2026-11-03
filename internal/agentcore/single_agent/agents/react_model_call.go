@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
@@ -255,6 +256,14 @@ func (a *ReActAgent) callLLMStream(
 	var accumulated *llmschema.AssistantMessageChunk
 	chunkIndex := 0
 	for chunk := range chunkCh {
+		// 流中断哨兵：模型客户端读 SSE 失败时投递，通道随后关闭。
+		// 必须优先于合并判断——否则半截 tool_call 会被当成完整调用执行，
+		// 表现为"参数 JSON 非法"这种误导性报错（Python: raise MODEL_CALL_FAILED）。
+		// 错误日志由客户端 FailStream 统一打点（带 model_provider/is_stream），此处不重复。
+		if chunk != nil && chunk.StreamError != nil {
+			return nil, chunk.StreamError
+		}
+
 		// 使用 Merge 增量合并（对齐 Python __add__ 语义）
 		if accumulated == nil {
 			accumulated = chunk
@@ -357,13 +366,17 @@ func logLLMResponse(aiMsg *llmschema.AssistantMessage) {
 	contentLen := len(aiMsg.Content.Text())
 	tcCount := len(aiMsg.ToolCalls)
 
+	// finish_reason 必须记录：工具参数 JSON 非法时，它是区分"输出被上限
+	// 截断"（length）与"模型自己拼错 JSON"（stop/tool_calls）的唯一线索。
+	//
 	// reasoning_len 必须记录：思考内容不进正文，界面「有没有思考」只取决于端点
 	// 是否回 delta.reasoning_content。为 0 说明模型/端点没吐思维链；大于 0 而
 	// 界面没有思考块，则缺口在流式写入、适配层或前端渲染。
 	event := logger.Info(logComponent).
 		Int("content_len", contentLen).
 		Int("reasoning_len", len(aiMsg.ReasoningContent)).
-		Int("tool_call_count", tcCount)
+		Int("tool_call_count", tcCount).
+		Str("finish_reason", aiMsg.FinishReason)
 	if aiMsg.UsageMetadata != nil {
 		event = event.
 			Int("input_tokens", aiMsg.UsageMetadata.InputTokens).
@@ -372,9 +385,22 @@ func logLLMResponse(aiMsg *llmschema.AssistantMessage) {
 	event.Msg("[LLM] <<< response")
 
 	for _, tc := range aiMsg.ToolCalls {
+		argsValid := json.Valid([]byte(tc.Arguments))
 		logger.Info(logComponent).
 			Str("tool_name", tc.Name).
+			Int("args_len", len(tc.Arguments)).
+			Bool("args_valid", argsValid).
 			Str("args", tc.Arguments).
 			Msg("[LLM]   tool_call")
+		// 非法参数单独告警：正常调用不该命中，命中即说明模型输出不可用，
+		// 后续 AbilityManager 会把解析错误回灌给模型重试。
+		if !argsValid {
+			logger.Warn(logComponent).
+				Str("event_type", "tool_call_args_invalid").
+				Str("tool_name", tc.Name).
+				Str("finish_reason", aiMsg.FinishReason).
+				Int("args_len", len(tc.Arguments)).
+				Msg("[LLM]   tool_call arguments are not valid JSON")
+		}
 	}
 }

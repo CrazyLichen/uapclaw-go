@@ -1,6 +1,7 @@
 package ability
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -125,6 +126,38 @@ func TestParseToolArguments_无法修复(t *testing.T) {
 	_, err := ParseToolArguments(input)
 	if err == nil {
 		t.Fatal("应返回错误")
+	}
+}
+
+// 截断（模型输出到上限/流被切断）是"写长文件"场景最常见的参数失败形态：
+// 报错必须带出 json 的语法诊断，否则只剩一坨原文，无法判断根因。
+func TestParseToolArguments_截断参数带语法诊断(t *testing.T) {
+	input := `{"file_path": "C:\\Users\\Administrator\\index.html", "content": "<!DOCTYPE html>`
+	_, err := ParseToolArguments(input)
+	if err == nil {
+		t.Fatal("应返回错误")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "无效的工具调用参数 JSON") {
+		t.Errorf("错误信息缺少前缀, 实际 %q", msg)
+	}
+	if !strings.Contains(msg, "unexpected end of JSON input") {
+		t.Errorf("错误信息缺少 json 语法诊断, 实际 %q", msg)
+	}
+	if !strings.Contains(msg, "原始参数") {
+		t.Errorf("错误信息缺少原始参数, 实际 %q", msg)
+	}
+}
+
+// 非法转义同样是模型侧常见问题，诊断需指出具体位置。
+func TestParseToolArguments_非法转义带语法诊断(t *testing.T) {
+	input := `{"file_path": "C:\Users\a.html"}`
+	_, err := ParseToolArguments(input)
+	if err == nil {
+		t.Fatal("应返回错误")
+	}
+	if !strings.Contains(err.Error(), "invalid character") {
+		t.Errorf("错误信息缺少 json 语法诊断, 实际 %q", err.Error())
 	}
 }
 

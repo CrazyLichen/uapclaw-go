@@ -15,7 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	secrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/security"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	configutil "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
@@ -279,7 +279,8 @@ func ResolveModelConfig(config map[string]any) (mcc map[string]any, mco map[stri
 func BuildEvolutionLLM(config map[string]any) (*llm.Model, string) {
 	mcc, mco, modelName := ResolveModelConfig(config)
 	temperature := 0.95
-	if t, ok := mco["temperature"].(float64); ok {
+	// 双类型兼容：YAML 把 `temperature: 1` 解成 int
+	if t, ok := configutil.Float(mco, "temperature"); ok {
 		temperature = t
 	}
 	requestConfig := llmschema.NewModelRequestConfig(
@@ -292,7 +293,8 @@ func BuildEvolutionLLM(config map[string]any) (*llm.Model, string) {
 	apiBase := mapStrField(mcc, "api_base")
 
 	var clientConfigOpts []llmschema.ModelClientConfigOption
-	if t, ok := mcc["timeout"].(float64); ok {
+	// 双类型兼容：YAML `timeout: 1800` 解出 int，只认 float64 会静默回落 60s
+	if t, ok := configutil.Float(mcc, "timeout"); ok && t > 0 {
 		clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(t))
 	}
 	if v, ok := mcc["verify_ssl"].(bool); ok {
@@ -676,7 +678,7 @@ func getBoolEnv(key string) (value bool, ok bool) {
 // teamLoadConfig 加载默认 config.yaml。
 // 对齐 Python: get_config()（含 _normalize_config 后处理——2026-10-28 审查接线）
 func teamLoadConfig() (map[string]any, error) {
-	c, err := config.New("", config.WithNormalize(config.NormalizeConfig))
+	c, err := configutil.New("", configutil.WithNormalize(configutil.NormalizeConfig))
 	if err != nil {
 		return nil, err
 	}
@@ -749,7 +751,7 @@ func customHeadersToStringMap(v any) map[string]string {
 		return result
 	}
 	if s, ok := v.(string); ok && s != "" {
-		parsed := config.ParseCustomHeaders(s)
+		parsed := configutil.ParseCustomHeaders(s)
 		if parsed == nil {
 			return nil
 		}

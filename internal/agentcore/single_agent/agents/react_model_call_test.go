@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -62,6 +63,49 @@ func TestCallLLMStream_NotCanceledReturnsMessage(t *testing.T) {
 	if msg == nil || msg.Content.Text() != "完整" {
 		t.Fatalf("应返回累积内容，实际 %+v", msg)
 	}
+}
+
+// TestCallLLMStream_流中断上抛 验证中断哨兵 chunk 会终止本轮并返回错误：
+// 否则半截内容（尤其是半截 tool_call）会被当成完整回答继续执行。
+//
+// 对齐 Python：异步生成器在流读取异常时 raise MODEL_CALL_FAILED。
+func TestCallLLMStream_流中断上抛(t *testing.T) {
+	cause := errors.New("unexpected EOF")
+	model := newFakeLLMModel(t, &fakeStreamClient{chunks: []*llmschema.AssistantMessageChunk{
+		llmschema.NewAssistantMessageChunk("半截"),
+		llmschema.NewAssistantMessageChunk("", llmschema.WithChunkStreamError(cause)),
+	}})
+
+	msg, err := (&ReActAgent{}).callLLMStream(context.Background(), model, "mock-model", nil, nil, nil, nil)
+	if err == nil {
+		t.Fatalf("流中断应返回错误，实际 msg=%+v", msg)
+	}
+	if !errors.Is(err, cause) {
+		t.Fatalf("错误应可 Is 到原始原因, 实际 %v", err)
+	}
+}
+
+// TestLogLLMResponse_非法工具参数可诊断 验证非法参数分支可执行且不 panic，
+// 同时覆盖 nil 入参与带 usage 的响应（日志本身不做断言，靠行级覆盖托底）。
+func TestLogLLMResponse_非法工具参数可诊断(t *testing.T) {
+	logLLMResponse(nil)
+
+	msg := llmschema.NewAssistantMessage("")
+	msg.FinishReason = "length"
+	msg.ToolCalls = []*llmschema.ToolCall{
+		llmschema.NewToolCall("call-1", "write_file", `{"file_path": "C:\\a.html", "content": "<html>`),
+	}
+	logLLMResponse(msg)
+
+	usage := &llmschema.UsageMetadata{InputTokens: 10, OutputTokens: 20}
+	msg.UsageMetadata = usage
+	logLLMResponse(msg)
+
+	valid := llmschema.NewAssistantMessage("")
+	valid.ToolCalls = []*llmschema.ToolCall{
+		llmschema.NewToolCall("call-2", "read_file", `{"file_path": "C:\\a.html"}`),
+	}
+	logLLMResponse(valid)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

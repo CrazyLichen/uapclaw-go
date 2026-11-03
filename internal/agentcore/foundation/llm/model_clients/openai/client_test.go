@@ -999,3 +999,54 @@ func TestWrapError_PreservesCause(t *testing.T) {
 		t.Fatalf("错误文案不得改变，实际: %s", wrapped.Error())
 	}
 }
+
+// TestOpenAIModelClient_Stream_中断上抛 验证"流被切断不再被当成正常结束"：
+// 服务端写完半截 SSE 就断开（没有终止 chunk），客户端必须发出带 StreamError 的
+// 哨兵 chunk，让上层能按 MODEL_CALL_FAILED 处理，而不是把半截内容当完整回答。
+func TestOpenAIModelClient_Stream_中断上抛(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("响应不支持 hijack，无法构造中断场景")
+			return
+		}
+		conn, buf, err := hj.Hijack()
+		if err != nil {
+			t.Errorf("hijack 失败: %v", err)
+			return
+		}
+		// 手工写响应头 + 一个合法 chunked 段，然后不发终止段直接断开：
+		// 客户端读到的就是 "unexpected EOF" 这类读错误。
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n")
+		payload := `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"gpt-4","choices":[{"index":0,"delta":{"content":"半截"},"finish_reason":null}]}` + "\n\n"
+		_, _ = buf.WriteString(fmt.Sprintf("%x\r\n%s\r\n", len(payload), payload))
+		_ = buf.Flush()
+		_ = conn.Close()
+	}))
+	defer server.Close()
+
+	client := newTestClientWithServer(server, nil)
+	chunkChan, err := client.Stream(context.Background(), model_clients.NewTextMessagesParam("Hi"))
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	var sawError error
+	content := ""
+	for chunk := range chunkChan {
+		if chunk.StreamError != nil {
+			sawError = chunk.StreamError
+			continue
+		}
+		content += chunk.Content.Text()
+	}
+	if sawError == nil {
+		t.Fatal("流中断必须通过 StreamError 上抛，实际未收到")
+	}
+	if !strings.Contains(sawError.Error(), "181001") {
+		t.Errorf("中断错误应带 MODEL_CALL_FAILED(181001), 实际 %v", sawError)
+	}
+	if content != "半截" {
+		t.Errorf("已收到的内容应保留, 实际 %q", content)
+	}
+}

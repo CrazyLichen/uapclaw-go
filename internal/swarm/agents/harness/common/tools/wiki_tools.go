@@ -593,14 +593,9 @@ func getDefaultWikiModel() (*llm.Model, error) {
 		llmschema.WithClientID("wiki_default_model"),
 	}
 	// 数值字段双类型兼容：本仓 YAML 库整数解出为 int（JSON 恒 float64），
-	// 两种来源都要能透传（对齐 buildModelFromEntry 的 switch 模式）。
-	if v, ok := clientConfig["timeout"]; ok {
-		switch n := v.(type) {
-		case float64:
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(n))
-		case int:
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(float64(n)))
-		}
+	// 两种来源都要能透传（YAML int / JSON float64），统一走 config.Float。
+	if n, ok := config.Float(clientConfig, "timeout"); ok && n > 0 {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(n))
 	}
 	if v, ok := clientConfig["verify_ssl"].(bool); ok {
 		clientConfigOpts = append(clientConfigOpts, llmschema.WithVerifySSL(v))
@@ -608,13 +603,8 @@ func getDefaultWikiModel() (*llm.Model, error) {
 	// 对齐 Python ModelClientConfig(**client_config) 全字段透传——
 	// max_retries / ssl_cert / custom_headers 此前漏映射（2026-10-28 审查 M-01），
 	// 配置了内部网关鉴权头或自签 CA 证书的部署会以错误参数调用模型。
-	if v, ok := clientConfig["max_retries"]; ok {
-		switch n := v.(type) {
-		case float64:
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithMaxRetries(int(n)))
-		case int:
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithMaxRetries(n))
-		}
+	if n, ok := config.Int(clientConfig, "max_retries"); ok {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithMaxRetries(n))
 	}
 	if v, ok := clientConfig["ssl_cert"].(string); ok && v != "" {
 		clientConfigOpts = append(clientConfigOpts, llmschema.WithSSLCert(v))

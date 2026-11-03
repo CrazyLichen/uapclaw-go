@@ -151,6 +151,30 @@ func NewBaseClientEmbed(
 	return e, nil
 }
 
+// RequestTimeout 解析本次请求生效的超时秒数（方法级 > 模型客户端配置）。
+//
+// 返回 nil 表示两级都没配，由 http 客户端兜底默认值（60s）。
+//
+// Python: OpenAIModelClient._create_async_openai_client()
+//
+//	final_timeout = timeout if timeout is not None else self.model_client_config.timeout
+//
+// 历史缺陷：openai/siliconflow/intellirouter 只把 params.Timeout（方法级，ReAct 路径
+// 从不传）交给 http 客户端，配置里的 model_client_config.timeout（Web 配置默认 1800）
+// 只被打进日志、从未生效，实际恒为 60s。而 Go 的 http.Client.Timeout 覆盖**响应体
+// 读取全程**，长流式生成（写整页 HTML 这类）会在第 60 秒被硬切断，表现为工具参数
+// JSON 半截、finish_reason 缺失，且没有任何 error 上抛。
+func (e *BaseClientEmbed) RequestTimeout(override *float64) *float64 {
+	if override != nil && *override > 0 {
+		return override
+	}
+	if e != nil && e.ClientConfig != nil && e.ClientConfig.Timeout > 0 {
+		timeout := e.ClientConfig.Timeout
+		return &timeout
+	}
+	return nil
+}
+
 // ValidateConfig 校验模型客户端配置参数。
 //
 // 校验规则：

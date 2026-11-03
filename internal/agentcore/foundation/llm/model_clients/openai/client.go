@@ -124,7 +124,7 @@ func (c *OpenAIModelClient) Invoke(
 		c.ClientConfig.APIKey,
 		reqParams,
 		httpHeaders,
-		params.Timeout,
+		c.RequestTimeout(params.Timeout),
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
 	)
@@ -268,7 +268,7 @@ func (c *OpenAIModelClient) Stream(
 		c.ClientConfig.APIKey,
 		reqParams,
 		httpHeaders,
-		params.Timeout,
+		c.RequestTimeout(params.Timeout),
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
 	)
@@ -336,14 +336,8 @@ func (c *OpenAIModelClient) Stream(
 				return
 			}
 			if err != nil {
-				// Python: P5: Stream 错误记录完整上下文
-				_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
-					Event:         callback.LLMCallError,
-					ModelName:     modelName,
-					ModelProvider: c.ClientConfig.ClientProvider,
-					IsStream:      true,
-					Error:         err,
-				})
+				// Python: P5: Stream 错误记录完整上下文 + raise MODEL_CALL_FAILED
+				c.FailStream(ctx, chunkChan, modelName, err)
 				return
 			}
 
@@ -500,6 +494,49 @@ func (c *OpenAIModelClient) WrapError(method string, err error) error {
 		// 保留 cause：文案不变，但 errors.Is 可命中原始错误（如 context.Canceled）
 		exception.WithCause(err),
 	)
+}
+
+// FailStream 上报流读取中断：Error 日志 + LLM_CALL_ERROR 回调 + 向通道投递哨兵 chunk。
+//
+// 调用后由调用方 return，defer 里的 close(chunkChan) 让消费方读到哨兵再结束。
+//
+// Python: openai_model_client._stream 的 except 分支——先 trigger(LLM_CALL_ERROR)，
+// 再 llm_logger.error("... async stream error.", event_type=LLM_CALL_ERROR, ...)，
+// 最后 raise build_error(StatusCode.MODEL_CALL_FAILED, ...)。
+//
+// 两个容易漏的点：
+//  1. 必须自行打日志。Go 的 TriggerLLM 只是把事件派发给注册的观察者（默认只有
+//     agent_teams 的 OTel handler，且仅在开启 tracing 的团队模式注册），单 agent
+//     会话里等于空转——此前这条错误既不上抛也不落日志，表现为"流悄悄断在半截"。
+//  2. 必须把错误交给消费方。channel 装不下 error，用 StreamError 哨兵 chunk 承载，
+//     否则半截 tool_call 会被当成完整调用去执行（参数 JSON 半截 → 工具报参数非法）。
+func (c *OpenAIModelClient) FailStream(
+	ctx context.Context,
+	chunkChan chan<- *llmschema.AssistantMessageChunk,
+	modelName string,
+	err error,
+) {
+	logger.Error(logComponent).
+		Str("event_type", "LLM_CALL_ERROR").
+		Str("model_name", modelName).
+		Str("model_provider", c.ClientConfig.ClientProvider).
+		Bool("is_stream", true).
+		Err(err).
+		Msg("LLM async stream error")
+
+	_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMCallError,
+		ModelName:     modelName,
+		ModelProvider: c.ClientConfig.ClientProvider,
+		IsStream:      true,
+		Error:         err,
+	})
+
+	select {
+	case chunkChan <- llmschema.NewAssistantMessageChunk("",
+		llmschema.WithChunkStreamError(c.WrapError("stream", err))):
+	case <-ctx.Done():
+	}
 }
 
 // HandleHTTPError 处理非 200 HTTP 响应。

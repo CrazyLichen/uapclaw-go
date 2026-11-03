@@ -534,3 +534,62 @@ func TestGetModelName_全部为空(t *testing.T) {
 		t.Errorf("GetModelName() = %q, want %q", got, "BaseModelClient")
 	}
 }
+
+// TestRequestTimeout_方法级优先 验证方法级 timeout 覆盖配置 timeout。
+func TestRequestTimeout_方法级优先(t *testing.T) {
+	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4"))
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "k", "https://api.example.com/v1",
+		llmschema.WithVerifySSL(false), llmschema.WithTimeout(1800))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := NewBaseClientEmbed(mc, cc)
+
+	override := 90.0
+	got := e.RequestTimeout(&override)
+	if got == nil || *got != 90.0 {
+		t.Fatalf("方法级 timeout 应优先, 实际 %v", got)
+	}
+}
+
+// TestRequestTimeout_配置生效 验证配置里的 timeout 真正参与请求
+// （历史缺陷：只打日志、实际恒为 60s 默认值，长流式生成会被硬切断）。
+func TestRequestTimeout_配置生效(t *testing.T) {
+	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4"))
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "k", "https://api.example.com/v1",
+		llmschema.WithVerifySSL(false), llmschema.WithTimeout(1800))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := NewBaseClientEmbed(mc, cc)
+
+	got := e.RequestTimeout(nil)
+	if got == nil || *got != 1800.0 {
+		t.Fatalf("应取配置 timeout=1800, 实际 %v", got)
+	}
+}
+
+// TestRequestTimeout_未配置走SDK默认 验证未显式配置时取 ModelClientConfig 的默认 60s，
+// 只有 ClientConfig 缺失时才交由 http 客户端兜底（返回 nil）。
+func TestRequestTimeout_未配置走SDK默认(t *testing.T) {
+	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4"))
+	cc, err := llmschema.NewModelClientConfig("OpenAI", "k", "https://api.example.com/v1",
+		llmschema.WithVerifySSL(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := NewBaseClientEmbed(mc, cc)
+
+	if got := e.RequestTimeout(nil); got == nil || *got != 60.0 {
+		t.Fatalf("未显式配置时应取默认 60s, 实际 %v", got)
+	}
+	zero := 0.0
+	if got := e.RequestTimeout(&zero); got == nil || *got != 60.0 {
+		t.Fatalf("方法级 0 应视为未配置并回落到 60s, 实际 %v", got)
+	}
+
+	bare := &BaseClientEmbed{}
+	if got := bare.RequestTimeout(nil); got != nil {
+		t.Fatalf("ClientConfig 缺失时应返回 nil, 实际 %v", *got)
+	}
+}

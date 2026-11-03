@@ -2195,21 +2195,19 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 	name, _ := mcc["model_name"].(string)
 
 	// 构建 ModelRequestConfig
+	// 数值字段统一走 config.Float：YAML 把 `temperature: 1` / `top_p: 1` 解成 int，
+	// 只认 float64 会把整数写法静默丢掉（历史坑，见 config/values.go）。
 	temperature := 0.95
-	if v, ok := mco["temperature"]; ok {
-		if f, ok := v.(float64); ok {
-			temperature = f
-		}
+	if f, ok := config.Float(mco, "temperature"); ok {
+		temperature = f
 	}
 	// Python: 只在配置中有 top_p 时才设置，不设默认值
 	mConfigOpts := []llmschema.ModelRequestConfigOption{
 		llmschema.WithModelName(name),
 		llmschema.WithTemperature(temperature),
 	}
-	if v, ok := mco["top_p"]; ok {
-		if f, ok := v.(float64); ok {
-			mConfigOpts = append(mConfigOpts, llmschema.WithTopP(f))
-		}
+	if f, ok := config.Float(mco, "top_p"); ok {
+		mConfigOpts = append(mConfigOpts, llmschema.WithTopP(f))
 	}
 	// max_output_tokens → 生成上限默认值。请求级显式传值时优先（base_client.go:320-342），
 	// 因此这里只作为"模型级默认值"，不覆盖调用方的 WithInvokeMaxTokens。
@@ -2227,10 +2225,10 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 	apiBase, _ := mcc["api_base"].(string)
 
 	clientConfigOpts := make([]llmschema.ModelClientConfigOption, 0)
-	if v, ok := mcc["timeout"]; ok {
-		if f, ok := v.(float64); ok {
-			clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(f))
-		}
+	// timeout 必须双类型兼容：YAML `timeout: 1800` 解出 int，只认 float64 会
+	// 静默回落到 ModelClientConfig 默认 60s，长流式生成会被 http.Client 硬切断。
+	if f, ok := config.Float(mcc, "timeout"); ok && f > 0 {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithTimeout(f))
 	}
 	if v, ok := mcc["max_retries"]; ok {
 		switch n := v.(type) {
@@ -2956,10 +2954,9 @@ func paramsInt(params map[string]any, key string, defaultVal int) int {
 
 // paramsFloat 从配置映射中获取浮点数值，不存在时返回默认值
 func paramsFloat(m map[string]any, key string, defaultVal float64) float64 {
-	if v, ok := m[key]; ok {
-		if f, ok := v.(float64); ok {
-			return f
-		}
+	// 双类型兼容：YAML 整数解出 int（如 completion_timeout: 3600）
+	if f, ok := config.Float(m, key); ok {
+		return f
 	}
 	return defaultVal
 }
@@ -3144,30 +3141,13 @@ func (d *DeepAdapter) updatePermissionRail(configBase map[string]any) {
 //
 // 用于把 yaml/前端传来的 token 上限（可能是 int、float64 或字符串）统一成 int。
 func toPositiveInt(v any) (int, bool) {
-	switch n := v.(type) {
-	case int:
-		if n > 0 {
-			return n, true
-		}
-	case int32:
-		if n > 0 {
-			return int(n), true
-		}
-	case int64:
-		if n > 0 {
-			return int(n), true
-		}
-	case float64:
-		if i := int(n); i > 0 {
-			return i, true
-		}
-	case string:
-		i, err := strconv.Atoi(strings.TrimSpace(n))
-		if err == nil && i > 0 {
-			return i, true
-		}
+	// 数值转换统一走 config.IntValue（int 族/float 族/json.Number/数字字符串），
+	// 这里只额外表达"<=0 视同未配置"这一层语义。
+	n, ok := config.IntValue(v)
+	if !ok || n <= 0 {
+		return 0, false
 	}
-	return 0, false
+	return n, true
 }
 
 // toRatio 将任意数值或字符串解析为 (0,1] 区间的比例；不可解析或越界返回 (0,false)。

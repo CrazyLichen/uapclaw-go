@@ -13,6 +13,15 @@ package schema
 // Python: openjiuwen/core/foundation/llm/schema/message_chunk.py (AssistantMessageChunk)
 type AssistantMessageChunk struct {
 	AssistantMessage
+	// StreamError 流读取阶段的错误（非 EOF 的中断）。
+	//
+	// 只做内存传递，不进 JSON、不参与内容合并：消费方（ReAct 的 callLLMStream）
+	// 一旦看到非 nil，就把本轮视为失败。没有它，连接被切断与"模型正常说完"在
+	// 调用方看来完全一样，半截 tool_call 会被当成完整调用去执行。
+	//
+	// Python 对应：异步生成器在 except 分支 raise MODEL_CALL_FAILED（生成器可直接
+	// 抛异常，Go 的 channel 装不下 error，故用哨兵 chunk 承载）。
+	StreamError error `json:"-"`
 }
 
 // ToolMessageChunk 工具返回流式消息块，用于 SSE 流式场景中增量合并工具响应片段。
@@ -74,6 +83,14 @@ func WithChunkCompletionTokenIDs(ids []int) AssistantMessageChunkOption {
 // WithChunkLogprobs 设置流式消息块的对数概率信息。
 func WithChunkLogprobs(logprobs any) AssistantMessageChunkOption {
 	return func(c *AssistantMessageChunk) { c.Logprobs = logprobs }
+}
+
+// WithChunkStreamError 标记该 chunk 承载流中断错误（不再承载内容）。
+//
+// 模型客户端在 SSE 读取失败时发出这样一个哨兵 chunk 再关闭通道，
+// 使"连接被切断"与"正常结束"在消费方可以区分。
+func WithChunkStreamError(err error) AssistantMessageChunkOption {
+	return func(c *AssistantMessageChunk) { c.StreamError = err }
 }
 
 // NewAssistantMessageChunk 创建助手流式消息块。
@@ -192,6 +209,12 @@ func (c *AssistantMessageChunk) Merge(other *AssistantMessageChunk) *AssistantMe
 		mergedMetadata = other.Metadata
 	}
 
+	// stream_error: 任一侧非空即保留（错误一旦发生不会被后续内容掩盖）
+	mergedStreamError := c.StreamError
+	if other.StreamError != nil {
+		mergedStreamError = other.StreamError
+	}
+
 	return &AssistantMessageChunk{
 		AssistantMessage: AssistantMessage{
 			DefaultMessage: DefaultMessage{
@@ -209,6 +232,7 @@ func (c *AssistantMessageChunk) Merge(other *AssistantMessageChunk) *AssistantMe
 			CompletionTokenIDs: mergedCompletionTokenIDs,
 			Logprobs:           mergedLogprobs,
 		},
+		StreamError: mergedStreamError,
 	}
 }
 

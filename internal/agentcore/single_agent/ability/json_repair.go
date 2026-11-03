@@ -97,9 +97,13 @@ func RepairToolArgumentsJSON(arguments string) *string {
 
 // ParseToolArguments 将工具调用参数解析为 map[string]any。
 // 先尝试 json.Unmarshal；失败后尝试 Repair + 再次 Unmarshal；
-// 仍失败则返回错误，包含原始 JSON 和错误信息。
+// 仍失败则返回错误，包含 json 语法诊断、原始 JSON 和错误信息。
 //
 // Python: AbilityManager._parse_tool_arguments
+//
+// 语法诊断（如 "unexpected end of JSON input"、"invalid character 'U' in
+// string escape code"）必须带出：缺了它只剩原始参数，日志里根本分不清是
+// 被输出上限截断、转义非法还是混入了控制字符，模型也拿不到可自纠的提示。
 func ParseToolArguments(arguments string) (map[string]any, error) {
 	if arguments == "" {
 		return nil, nil
@@ -107,7 +111,8 @@ func ParseToolArguments(arguments string) (map[string]any, error) {
 
 	// 先尝试直接解析
 	var result map[string]any
-	if err := json.Unmarshal([]byte(arguments), &result); err == nil {
+	unmarshalErr := json.Unmarshal([]byte(arguments), &result)
+	if unmarshalErr == nil {
 		return result, nil
 	}
 
@@ -121,5 +126,7 @@ func ParseToolArguments(arguments string) (map[string]any, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("无效的工具调用参数 JSON: 原始参数: %q", arguments)
+	// Python: f"Invalid tool arguments JSON: {exc}. Raw arguments: {arguments!r}"
+	return nil, fmt.Errorf(
+		"无效的工具调用参数 JSON: %v. 原始参数: %q", unmarshalErr, arguments)
 }

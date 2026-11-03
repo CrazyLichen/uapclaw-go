@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -166,15 +167,47 @@ func mapsEqual(a, b map[string]any) bool {
 	return true
 }
 
-// toFloat64 尝试将值转换为 float64。
+// toFloat64 把配置中的数值字面量转成 float64。
+//
+// 覆盖 YAML 与 JSON 两条解码链的所有整数/浮点形态：yaml.v3 把整数字面量解成
+// int（超界的为 int64/uint64），encoding/json 恒为 float64，带 UseNumber 时是
+// json.Number。只认 float64 的旧实现会让 `timeout: 1800` 这类整数写法被静默
+// 丢弃（见 values.go 中 Float 的说明）。
+//
+// 只做数值形态转换，不吞字符串：quoted "1800" 是否算数字由调用方决定，
+// 避免把类型写错（字符串 vs 数字）悄悄抹平。
 func toFloat64(v any) (float64, bool) {
 	switch val := v.(type) {
 	case int:
 		return float64(val), true
+	case int8:
+		return float64(val), true
+	case int16:
+		return float64(val), true
+	case int32:
+		return float64(val), true
 	case int64:
+		return float64(val), true
+	case uint:
+		return float64(val), true
+	case uint8:
+		return float64(val), true
+	case uint16:
+		return float64(val), true
+	case uint32:
+		return float64(val), true
+	case uint64:
+		return float64(val), true
+	case float32:
 		return float64(val), true
 	case float64:
 		return val, true
+	case json.Number:
+		f, err := val.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return f, true
 	default:
 		return 0, false
 	}

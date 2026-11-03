@@ -182,7 +182,7 @@ func (c *InferenceAffinityModelClient) Stream(
 		c.ClientConfig.APIKey,
 		reqParams,
 		httpHeaders,
-		params.Timeout,
+		c.RequestTimeout(params.Timeout),
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
 	)
@@ -248,13 +248,7 @@ func (c *InferenceAffinityModelClient) Stream(
 				return
 			}
 			if err != nil {
-				_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
-					Event:         callback.LLMCallError,
-					ModelName:     modelName,
-					ModelProvider: c.ClientConfig.ClientProvider,
-					IsStream:      true,
-					Error:         err,
-				})
+				c.FailStream(ctx, chunkChan, modelName, err)
 				return
 			}
 

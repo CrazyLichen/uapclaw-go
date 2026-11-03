@@ -54,3 +54,60 @@ func TestBuildModelFromEntry_输出上限(t *testing.T) {
 		t.Errorf("未配置时 MaxTokens 应为 nil，实际 %d", *m2.ModelConfig.MaxTokens)
 	}
 }
+
+// TestBuildModelFromEntry_超时与采样参数 锁定 YAML 整数形态的数值字段不被丢弃。
+//
+// 回归背景：配置由 yaml.v3 解码进 map[string]any，`timeout: 1800` 解出的是 int，
+// 而历史实现只做 `v.(float64)` 断言 → 整数值被静默丢弃，ModelClientConfig 回落到
+// 默认 60s，长流式生成（写整页 HTML 之类）会被 http.Client.Timeout 硬切断，
+// 表现为工具参数 JSON 半截。temperature/top_p 同为该坑。
+func TestBuildModelFromEntry_超时与采样参数(t *testing.T) {
+	d := &DeepAdapter{}
+
+	base := func() map[string]any {
+		return map[string]any{
+			"model_name":      "qwen3-coder",
+			"api_base":        "https://example.com/v1",
+			"api_key":         "sk-test",
+			"client_provider": "OpenAI",
+			"verify_ssl":      false,
+		}
+	}
+
+	// YAML 整数形态
+	intMCC := base()
+	intMCC["timeout"] = 1800
+	m, err := d.buildModelFromEntry(intMCC, map[string]any{"temperature": 1, "top_p": 1})
+	if err != nil {
+		t.Fatalf("构建失败: %v", err)
+	}
+	if m.ClientConfig.Timeout != 1800 {
+		t.Errorf("整数 timeout 应生效为 1800, 实际 %v", m.ClientConfig.Timeout)
+	}
+	if m.ModelConfig.Temperature != 1 {
+		t.Errorf("整数 temperature 应生效为 1, 实际 %v", m.ModelConfig.Temperature)
+	}
+	if m.ModelConfig.TopP == nil || *m.ModelConfig.TopP != 1 {
+		t.Errorf("整数 top_p 应生效为 1, 实际 %v", m.ModelConfig.TopP)
+	}
+
+	// float64 形态（JSON 来源）
+	floatMCC := base()
+	floatMCC["timeout"] = 900.5
+	m2, err := d.buildModelFromEntry(floatMCC, map[string]any{"temperature": 0.3})
+	if err != nil {
+		t.Fatalf("构建失败: %v", err)
+	}
+	if m2.ClientConfig.Timeout != 900.5 {
+		t.Errorf("浮点 timeout 应生效为 900.5, 实际 %v", m2.ClientConfig.Timeout)
+	}
+
+	// 未配置 → 保持 ModelClientConfig 默认 60s
+	m3, err := d.buildModelFromEntry(base(), map[string]any{})
+	if err != nil {
+		t.Fatalf("构建失败: %v", err)
+	}
+	if m3.ClientConfig.Timeout != 60 {
+		t.Errorf("未配置时应为默认 60s, 实际 %v", m3.ClientConfig.Timeout)
+	}
+}

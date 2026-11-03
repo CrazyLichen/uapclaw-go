@@ -267,7 +267,7 @@ func (c *IntelliRouterModelClient) Stream(
 		c.ClientConfig.APIKey,
 		reqParams,
 		httpHeaders,
-		params.Timeout,
+		c.RequestTimeout(params.Timeout),
 		c.ClientConfig.VerifySSL,
 		c.ClientConfig.SSLCert,
 	)
@@ -314,12 +314,9 @@ func (c *IntelliRouterModelClient) Stream(
 				return
 			}
 			if err != nil {
-				// Python: 路由层 SSE 错误走日志，非回调
-				logger.Error(logComponent).
-					Str("model_name", modelName).
-					Str("model_provider", "IntelliRouter").
-					Err(err).
-					Msg("IntelliRouter stream SSE read error.")
+				// 中断必须上抛（Python: 生成器 raise MODEL_CALL_FAILED），
+				// FailStream 内部已记录 Error 日志，不再重复打点。
+				c.FailStream(ctx, chunkChan, modelName, err)
 				return
 			}
 
