@@ -171,14 +171,14 @@ func TestRegisterTools_MCP工具筛选(t *testing.T) {
 	agent, err := ctx.CreateStageAgent("plan", "规划", nil, 2)
 	require.NoError(t, err)
 
-	// 工厂为空
-	require.Error(t, ctx.RegisterTools(agent, []string{"web_search"}))
+	// 工厂为空：可选工具跳过（不阻断阶段）
+	require.NoError(t, ctx.RegisterTools(agent, []string{"web_search"}))
+	assert.Nil(t, agent.AbilityManager().Get("web_search"))
 
-	// 工厂有工具但不含目标
+	// 工厂有工具但不含目标：同样跳过
 	deps.MCPToolsFactory = func() []tool.Tool { return []tool.Tool{&fakeStageTool{name: "other_tool"}} }
-	err = ctx.RegisterTools(agent, []string{"web_search"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "不在 MCP 工具列表中")
+	require.NoError(t, ctx.RegisterTools(agent, []string{"web_search"}))
+	assert.Nil(t, agent.AbilityManager().Get("web_search"))
 
 	// 命中
 	deps.MCPToolsFactory = func() []tool.Tool {

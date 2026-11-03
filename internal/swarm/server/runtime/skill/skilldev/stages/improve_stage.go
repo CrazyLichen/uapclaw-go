@@ -2,13 +2,14 @@ package stages
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 )
 
@@ -75,7 +76,7 @@ const ImproveSystemPrompt = `你是一个 Skill 优化专家。根据用户反�
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 IMPROVE 阶段逻辑。
-func (h *ImproveStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
+func (h *ImproveStageHandler) Execute(ctx context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	if len(sctx.State.FeedbackHistory) == 0 {
 		return nil, fmt.Errorf("IMPROVE 阶段缺少反馈历史，请先完成 REVIEW 阶段")
 	}
@@ -99,7 +100,9 @@ func (h *ImproveStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 		"message": fmt.Sprintf("正在根据反馈进行第 %d 轮改进...", sctx.State.Iteration+1),
 	})
 
-	h.runImproveAgent(sctx, latestFeedback, report)
+	if err := h.runImproveAgent(ctx, sctx, latestFeedback, report); err != nil {
+		return nil, err
+	}
 
 	sctx.State.Iteration++
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{
@@ -110,15 +113,83 @@ func (h *ImproveStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// runImproveAgent 调用 Agent 分析反馈并修改 skill 文件。
+// runImproveAgent 调用阶段 Agent 根据反馈改写 SKILL.md。
 //
-// 待实现: 接入 create_stage_agent + Runner.run_agent，实现文件级改进
-func (h *ImproveStageHandler) runImproveAgent(_ *skilldev.SkillDevContext, _ map[string]any, _ string) {
-	// 待实现:
-	// 待实现：读取技能文件 skillContent := readSkillFiles(filepath.Join(sctx.Workspace, "skill"))
-	// 待实现：创建改进Agent agent, err := sctx.CreateStageAgent("improve", ImproveSystemPrompt.format(...), []string{"file_read", "file_write"}, 25)
-	// await Runner.run_agent(agent, {"task": "根据反馈改进 Skill"})
-	logger.Warn(logComponent).Msg("[ImproveStage] runImproveAgent not implemented, skipping improvement")
+// 对齐 Python: ImproveStageHandler._run_improve_agent(ctx, feedback, report)
+// 上游该方法仍是占位（直接跳过改进），这里按注释伪代码接入 Agent：
+// 拼接 ImproveSystemPrompt（iteration/feedback/report/skill_content）→ 调模型 →
+// 剥离围栏 → 保证 frontmatter → 覆盖写回 skill/SKILL.md。
+func (h *ImproveStageHandler) runImproveAgent(
+	ctx context.Context,
+	sctx *skilldev.SkillDevContext,
+	feedback map[string]any,
+	report string,
+) error {
+	skillDir := filepath.Join(sctx.Workspace, "skill")
+	existing := readSkillFiles(skillDir)
+
+	feedbackJSON, _ := json.Marshal(feedback)
+	systemPrompt := ImproveSystemPrompt
+	systemPrompt = strings.ReplaceAll(systemPrompt, "{iteration}", strconv.Itoa(sctx.State.Iteration+1))
+	systemPrompt = strings.ReplaceAll(systemPrompt, "{feedback}", string(feedbackJSON))
+	systemPrompt = strings.ReplaceAll(systemPrompt, "{report}", report)
+	systemPrompt = strings.ReplaceAll(systemPrompt, "{skill_content}", existing)
+
+	text, err := sctx.RunStageAgent(
+		ctx,
+		"improve",
+		systemPrompt,
+		[]string{"file_read", "file_write"},
+		25,
+		"根据反馈改进当前技能，输出改进后的完整 SKILL.md 内容（含 frontmatter）。",
+	)
+	if err != nil {
+		return err
+	}
+
+	content := skilldev.StripCodeFences(text)
+	if strings.TrimSpace(content) == "" {
+		return fmt.Errorf("IMPROVE 阶段模型未输出改进内容")
+	}
+	content = ensureImprovedSkillMD(existing, content)
+
+	skillMDPath := filepath.Join(skillDir, "SKILL.md")
+	if writeErr := os.WriteFile(skillMDPath, []byte(content), 0o644); writeErr != nil {
+		return fmt.Errorf("写入改进后的 SKILL.md 失败: %w", writeErr)
+	}
+
+	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{
+		"message":   fmt.Sprintf("第 %d 轮改进已写回 SKILL.md", sctx.State.Iteration+1),
+		"iteration": sctx.State.Iteration + 1,
+	})
+	return nil
+}
+
+// ensureImprovedSkillMD 保证改进结果带 frontmatter。
+//
+// 模型只输出正文时，沿用原 SKILL.md 的 frontmatter，避免校验失败又把流程打回 GENERATE。
+func ensureImprovedSkillMD(existing, improved string) string {
+	if strings.HasPrefix(strings.TrimSpace(improved), "---") {
+		return improved
+	}
+	fm := extractFrontmatterBlock(existing)
+	if fm == "" {
+		return improved
+	}
+	return fm + "\n" + improved
+}
+
+// extractFrontmatterBlock 提取 SKILL.md 的 frontmatter 原文（含首尾 ---）。
+func extractFrontmatterBlock(content string) string {
+	trimmed := strings.TrimSpace(content)
+	if !strings.HasPrefix(trimmed, "---") {
+		return ""
+	}
+	rest := trimmed[3:]
+	if idx := strings.Index(rest, "\n---"); idx >= 0 {
+		return "---" + rest[:idx+4]
+	}
+	return ""
 }
 
 // readSkillFiles 读取当前 skill 目录下所有文件内容。

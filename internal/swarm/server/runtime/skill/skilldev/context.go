@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"errors"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -88,6 +92,9 @@ const (
 //
 // 阶段处理器沿用 Python 侧的工具命名（file_read/file_write/shell），
 // Go 工具注册名为 read_file/write_file/bash，此处做一次显式映射。
+// errStageToolOptional 表示可选工具（MCP 搜索等）当前不可用，注册时可跳过。
+var errStageToolOptional = errors.New("可选阶段工具不可用")
+
 var stageToolNameAliases = map[string]string{
 	"file_read":  "read_file",
 	"file_write": "write_file",
@@ -158,6 +165,12 @@ func (c *SkillDevContext) CreateStageAgent(
 	tools []string,
 	maxIterations int,
 ) (*agents.ReActAgent, error) {
+	if c.Deps == nil {
+		return nil, fmt.Errorf("阶段依赖 deps 未注入，无法创建阶段 Agent")
+	}
+	if strings.TrimSpace(c.Deps.ModelName) == "" {
+		return nil, fmt.Errorf("阶段模型名称为空，无法创建阶段 Agent")
+	}
 	if maxIterations <= 0 {
 		maxIterations = defaultStageMaxIterations
 	}
@@ -187,6 +200,22 @@ func (c *SkillDevContext) CreateStageAgent(
 	)
 
 	agent := agents.NewReActAgent(card, cfg)
+
+	// 系统提示词与上下文引擎：NewReActAgent 不会自动创建 ContextEngine，
+	// 缺省时 initContext 返回 nil → 用户消息不会进入模型上下文（prompt 为空）。
+	agent.AddPromptBuilderSection("identity", systemPrompt, 10)
+	ceConfig := ceschema.NewContextEngineConfig()
+	ceConfig.MaxContextMessageNum = 200
+	if cfg.ContextEngineConfig.MaxContextMessageNum > 0 {
+		ceConfig = cfg.ContextEngineConfig
+	}
+	var ceOpts []ceinterface.ContextEngineOption
+	if sysOpCard := c.Deps.SysOpConfig; sysOpCard != nil {
+		if op, opErr := sysop.NewSysOperation(sysOpCard); opErr == nil {
+			ceOpts = append(ceOpts, ceinterface.WithEngineSysOperation(op))
+		}
+	}
+	agent.SetContextEngine(context_engine.NewContextEngine(ceConfig, ceOpts...))
 
 	// 预构造模型注入：ReActAgent.getLLM 只读扁平字段（ModelProvider/APIKey/APIBase）且不传
 	// client_id，无法表达 timeout/重试/SSL/自定义头；阶段 Agent 以 model_client_config 为准，
@@ -247,6 +276,13 @@ func (c *SkillDevContext) RegisterTools(agent *agents.ReActAgent, toolNames []st
 		}
 
 		stageTool, err := c.buildStageTool(toolName, agent.Card().GetID())
+		if errors.Is(err, errStageToolOptional) {
+			logger.Warn(logComponent).
+				Str("task_id", c.TaskID).
+				Str("tool", toolName).
+				Msg("[SkillDevContext] optional stage tool unavailable, skipping")
+			continue
+		}
 		if err != nil {
 			logger.Error(logComponent).
 				Str("task_id", c.TaskID).
@@ -408,7 +444,7 @@ func (c *SkillDevContext) buildStageTool(toolName, agentID string) (tool.Tool, e
 	}
 
 	if c.Deps.MCPToolsFactory == nil {
-		return nil, fmt.Errorf("阶段工具 %s 未在内置工具中，且 MCP 工具工厂为空", toolName)
+		return nil, fmt.Errorf("%w: %s（MCP 工具工厂为空）", errStageToolOptional, toolName)
 	}
 	for _, mcpTool := range c.Deps.MCPToolsFactory() {
 		if mcpTool == nil || mcpTool.Card() == nil {
@@ -418,7 +454,7 @@ func (c *SkillDevContext) buildStageTool(toolName, agentID string) (tool.Tool, e
 			return mcpTool, nil
 		}
 	}
-	return nil, fmt.Errorf("阶段工具 %s 不在 MCP 工具列表中", toolName)
+	return nil, fmt.Errorf("%w: %s（不在 MCP 工具列表中）", errStageToolOptional, toolName)
 }
 
 // stageCfgStr 读取字符串字段（缺失或类型不符返回空串）。

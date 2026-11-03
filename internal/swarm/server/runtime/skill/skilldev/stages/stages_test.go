@@ -3,12 +3,18 @@ package stages
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 )
 
@@ -18,6 +24,65 @@ import (
 func newTestContext(state *skilldev.SkillDevState, workspace string) *skilldev.SkillDevContext {
 	ch := make(chan skilldev.SkillDevEvent, 64)
 	return skilldev.NewSkillDevContext("test-task", nil, state, workspace, ch)
+}
+
+// stageMockLLMClient 阶段单测用模型客户端（显式实现全部方法，避免嵌入 nil 接口 panic）。
+type stageMockLLMClient struct{ reply string }
+
+func (m *stageMockLLMClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	return llmschema.NewAssistantMessage(m.reply), nil
+}
+
+func (m *stageMockLLMClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *stageMockLLMClient) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *stageMockLLMClient) GenerateSpeech(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *stageMockLLMClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *stageMockLLMClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *stageMockLLMClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+
+func (m *stageMockLLMClient) SupportsKVCacheRelease() bool { return false }
+
+// newMockStageContext 构造带 mock 模型的阶段上下文（模型固定返回 reply）。
+func newMockStageContext(t *testing.T, state *skilldev.SkillDevState, workspace, reply string) *skilldev.SkillDevContext {
+	t.Helper()
+
+	provider := fmt.Sprintf("stage_unit_%d", time.Now().UnixNano())
+	model_clients.GetClientRegistry().Register(provider, "llm",
+		func(_ *llmschema.ModelRequestConfig, _ *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+			return &stageMockLLMClient{reply: reply}, nil
+		})
+	t.Cleanup(func() { _ = model_clients.GetClientRegistry().Unregister(provider, "llm") })
+
+	deps := &skilldev.SkillDevDeps{
+		ModelName: "mock-model",
+		ModelClientConfig: map[string]any{
+			"client_provider": provider,
+			"client_id":       provider + "_id",
+			"api_key":         "test-key",
+			"api_base":        "http://127.0.0.1:1",
+		},
+		SysOpConfig: sysop.NewSysOperationCard(
+			sysop.WithSysOpWorkConfig(&sysop.LocalWorkConfig{RestrictToSandbox: false}),
+		),
+	}
+	return skilldev.NewSkillDevContext("test-task", deps, state, workspace, make(chan skilldev.SkillDevEvent, 64))
 }
 
 // ──────────────────────────── StageResult 测试 ────────────────────────────
@@ -118,7 +183,8 @@ func TestPlanStageHandler_Execute(t *testing.T) {
 	state.Plan = nil
 
 	workspace := t.TempDir()
-	sctx := newTestContext(state, workspace)
+	sctx := newMockStageContext(t, state, workspace,
+		`{"skill_name": "translation-skill", "description": "中英互译技能", "directory_structure": {"SKILL.md": "主指令文件"}}`)
 	result, err := handler.Execute(context.Background(), sctx)
 	if err != nil {
 		t.Fatalf("Execute 失败: %v", err)
@@ -129,8 +195,8 @@ func TestPlanStageHandler_Execute(t *testing.T) {
 	if state.Plan == nil {
 		t.Fatal("Plan 不应为 nil")
 	}
-	if state.Plan["skill_name"] != "placeholder-skill" {
-		t.Errorf("期望 skill_name='placeholder-skill', 实际=%v", state.Plan["skill_name"])
+	if state.Plan["skill_name"] != "translation-skill" {
+		t.Errorf("期望 skill_name='translation-skill', 实际=%v", state.Plan["skill_name"])
 	}
 }
 
@@ -318,7 +384,8 @@ func TestGenerateStageHandler_Execute(t *testing.T) {
 
 	workspace := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(workspace, "skill"), 0o755)
-	sctx := newTestContext(state, workspace)
+	sctx := newMockStageContext(t, state, workspace,
+		"---\nname: test-skill\ndescription: 测试技能\n---\n# Test Skill\n")
 
 	result, err := handler.Execute(context.Background(), sctx)
 	if err != nil {
@@ -328,7 +395,14 @@ func TestGenerateStageHandler_Execute(t *testing.T) {
 		t.Errorf("期望 NextStage=%s, 实际=%s", skilldev.SkillDevStageValidate, result.NextStage)
 	}
 
-	// 验证占位文件已创建
+	// 验证文件已按模型输出创建
+	skillMD, readErr := os.ReadFile(filepath.Join(workspace, "skill", "SKILL.md"))
+	if readErr != nil {
+		t.Fatalf("读取 SKILL.md 失败: %v", readErr)
+	}
+	if !strings.Contains(string(skillMD), "description: 测试技能") {
+		t.Errorf("SKILL.md 应包含模型输出内容，实际: %s", string(skillMD))
+	}
 	if _, err := os.Stat(filepath.Join(workspace, "skill", "SKILL.md")); os.IsNotExist(err) {
 		t.Error("SKILL.md 未创建")
 	}
@@ -503,7 +577,11 @@ func TestImproveStageHandler_Execute(t *testing.T) {
 	state.EvalResults = map[string]any{"report": "评测报告"}
 
 	workspace := t.TempDir()
-	sctx := newTestContext(state, workspace)
+	_ = os.MkdirAll(filepath.Join(workspace, "skill"), 0o755)
+	_ = os.WriteFile(filepath.Join(workspace, "skill", "SKILL.md"),
+		[]byte("---\nname: test-skill\ndescription: 旧描述\n---\n# V1\n"), 0o644)
+	sctx := newMockStageContext(t, state, workspace,
+		"---\nname: test-skill\ndescription: 改进后的技能\n---\n# V2\n")
 
 	result, err := handler.Execute(context.Background(), sctx)
 	if err != nil {
@@ -514,6 +592,13 @@ func TestImproveStageHandler_Execute(t *testing.T) {
 	}
 	if state.Iteration != 1 {
 		t.Errorf("期望 iteration=1, 实际=%d", state.Iteration)
+	}
+	improved, readErr := os.ReadFile(filepath.Join(workspace, "skill", "SKILL.md"))
+	if readErr != nil {
+		t.Fatalf("读取 SKILL.md 失败: %v", readErr)
+	}
+	if !strings.Contains(string(improved), "改进后的技能") || !strings.Contains(string(improved), "# V2") {
+		t.Errorf("SKILL.md 应被改进内容覆盖，实际: %s", string(improved))
 	}
 }
 
@@ -963,7 +1048,7 @@ func TestEvaluateStage_gradeAllEvals(t *testing.T) {
 	_ = os.MkdirAll(baselineDir, 0o755)
 
 	sctx := newTestContext(state, workspace)
-	handler.gradeAllEvals(sctx, iterDir)
+	handler.gradeAllEvals(context.Background(), sctx, iterDir)
 
 	// 验证 grading.json 已写入
 	for _, config := range []string{"with_skill", "baseline"} {
@@ -1107,7 +1192,7 @@ func TestEvaluateStage_analyzePatterns(t *testing.T) {
 	sctx := newTestContext(state, "/tmp")
 	benchmark := &skilldev.Benchmark{SkillName: "test"}
 
-	notes := handler.analyzePatterns(sctx, benchmark)
+	notes := handler.analyzePatterns(context.Background(), sctx, benchmark)
 	if len(notes) == 0 {
 		t.Error("应返回至少一条占位 note")
 	}

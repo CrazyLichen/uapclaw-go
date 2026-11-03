@@ -5,13 +5,19 @@ package server_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	_ "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/local"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 	_ "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev/stages"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -19,36 +25,114 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// SkillDevPipelineSuite 覆盖技能开发流水线的编排层：阶段推进、挂起点、恢复与检查点。
+// SkillDevPipelineSuite 覆盖技能开发流水线的编排层：阶段推进、挂起点、恢复、
+// 检查点，以及 PLAN/GENERATE/IMPROVE/EVALUATE/DESC_OPTIMIZE 接入阶段 Agent 后的
+// 真实内容流转（SKILL.md 版本变化、描述被优化）。
 //
-// 重要事实（决定了覆盖边界）：各 LLM 阶段的内部实现仍是占位
-// （skilldev/context.go:CreateStageAgent 返回「尚未接入 openjiuwen，待实现」，
-// plan/generate/evaluate/improve/desc_optimize 均返回占位数据）。
-// 因此本套件只断言**确定性的编排行为**（阶段序列、挂起、恢复、持久化、产物文件存在），
-// 不断言技能内容质量；等 create_stage_agent 接通后再补多轮迭代的内容级断言。
+// 模型由按 prompt 关键字分派的 mock 客户端提供，保证多阶段、多轮次可确定复现。
 type SkillDevPipelineSuite struct {
 	isuite.BaseIntegrationSuite
 	// tmpDir 每测试隔离根目录
 	tmpDir string
 	// taskID 测试任务标识
 	taskID string
+	// calls 各分支调用计数（用于断言阶段真的调用了模型）
+	calls map[string]int
+}
+
+// pipelineMockClient 按 prompt 关键字分派的模型客户端。
+type pipelineMockClient struct {
+	// replyFor 根据用户 prompt 返回模型输出
+	replyFor func(prompt string) string
+	// calls 分派计数
+	calls map[string]int
+}
+
+// Invoke 依据最后一条用户消息分派响应。
+func (m *pipelineMockClient) Invoke(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	prompt := lastUserPrompt(messages)
+	return llmschema.NewAssistantMessage(m.replyFor(prompt)), nil
+}
+
+// Stream 未实现。
+func (m *pipelineMockClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+// GenerateImage 未实现。
+func (m *pipelineMockClient) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+// GenerateSpeech 未实现。
+func (m *pipelineMockClient) GenerateSpeech(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+// GenerateVideo 未实现。
+func (m *pipelineMockClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+// TranscribeAudio 未实现。
+func (m *pipelineMockClient) TranscribeAudio(_ context.Context, _ string, _ ...llmschema.TranscribeAudioOption) (*llmschema.TranscriptionResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+// Release 无需释放。
+func (m *pipelineMockClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+
+// SupportsKVCacheRelease 不支持。
+func (m *pipelineMockClient) SupportsKVCacheRelease() bool { return false }
+
+// lastUserPrompt 取最后一条用户消息文本（兼容 dict / 对象 / 纯文本三种入参）。
+func lastUserPrompt(messages model_clients.MessagesParam) string {
+	prompt := ""
+	for _, dict := range messages.Dicts() {
+		if role, _ := dict["role"].(string); role != "user" {
+			continue
+		}
+		if raw, ok := dict["content"]; ok && raw != nil {
+			if v := fmt.Sprintf("%v", raw); v != "" {
+				prompt = v
+			}
+		}
+	}
+	if prompt != "" {
+		return prompt
+	}
+
+	for _, msg := range messages.Messages() {
+		if msg.GetRole() != llmschema.RoleTypeUser {
+			continue
+		}
+		if content := msg.GetContent(); content.IsText() && content.Text() != "" {
+			prompt = content.Text()
+		}
+	}
+	if prompt != "" {
+		return prompt
+	}
+	return messages.Text()
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// TestSkillDevPipelineSuite 运行技能开发流水线编排测试。
+// TestSkillDevPipelineSuite 运行技能开发流水线集成测试。
 func TestSkillDevPipelineSuite(t *testing.T) {
 	suite.Run(t, new(SkillDevPipelineSuite))
 }
 
 // TestPipeline_挂起恢复与检查点 INIT/PLAN 执行后在 PLAN_CONFIRM 挂起并落检查点，
-// 恢复后继续推进到 GENERATE/VALIDATE。
+// 恢复后经 GENERATE/VALIDATE/TEST_DESIGN/TEST_RUN/EVALUATE 到 REVIEW 挂起，
+// 且 SKILL.md 由模型真实生成（可通过校验）。
 func (s *SkillDevPipelineSuite) TestPipeline_挂起恢复与检查点() {
 	ctx := s.Ctx
-	_, pipeline := s.newPipeline()
+	pipeline := s.newPipeline()
 
-	// 第一段：跑到 PLAN_CONFIRM 挂起
-	events := s.drain(ctx, pipeline, func() (<-chan skilldev.SkillDevEvent, error) {
+	events := s.drain(ctx, func() (<-chan skilldev.SkillDevEvent, error) {
 		return pipeline.Run(ctx)
 	})
 	s.Require().NotEmpty(events, "应产生阶段事件")
@@ -56,98 +140,191 @@ func (s *SkillDevPipelineSuite) TestPipeline_挂起恢复与检查点() {
 	s.Equal("plan_confirm", s.firstConfirmType(events), "第一个挂起点应请求计划确认")
 	s.FileExists(s.stateFile(), "挂起时应写入检查点 state.json")
 
-	// 第二轮：确认计划 → 继续执行（当前生成器为占位，末段由迭代上限收敛，故用宽松收集）
-	events = s.drainLenient(ctx, func() (<-chan skilldev.SkillDevEvent, error) {
+	events = s.drain(ctx, func() (<-chan skilldev.SkillDevEvent, error) {
 		return pipeline.Resume(ctx, map[string]any{"plan": pipeline.State.Plan})
 	})
 	s.Require().NotEmpty(events)
-	s.True(s.hasStageChanged(events, skilldev.SkillDevStageGenerate), "应执行过 GENERATE 阶段")
-	s.True(s.hasStageChanged(events, skilldev.SkillDevStageValidate), "应执行过 VALIDATE 阶段")
-	s.FileExists(filepath.Join(s.workspaceDir(), "skill", "SKILL.md"), "GENERATE 阶段应产出 SKILL.md 占位文件")
+	s.True(s.hasStageChanged(events, skilldev.SkillDevStageGenerate), "应执行过 GENERATE")
+	s.True(s.hasStageChanged(events, skilldev.SkillDevStageEvaluate), "应执行过 EVALUATE")
+	s.Equal(skilldev.SkillDevStageReview, pipeline.State.Stage, "应在 REVIEW 挂起")
+	s.Equal("review", s.firstConfirmType(events))
+	s.Contains(s.readSkillMD(), "description: 演示技能", "SKILL.md 应是模型生成内容")
+	s.Contains(s.readSkillMD(), "# Demo V1", "GENERATE 应写入第一版正文")
 
-	// 检查点内容可反序列化
 	state := s.loadState()
-	s.Equal(s.taskID, state.TaskID)
-	s.NotEqual(skilldev.SkillDevStageInit, state.Stage, "检查点阶段应已推进")
+	s.Equal(skilldev.SkillDevStageReview, state.Stage, "检查点阶段应为 REVIEW")
+	s.Equal(0, state.Iteration, "首轮迭代计数应为 0")
 }
 
-// TestPipeline_生成器占位时由迭代上限兜底 当前 GENERATE 产出占位 SKILL.md，
-// VALIDATE 必然失败并回退 GENERATE，流水线靠 maxPipelineIterations 兜底退出，
-// 不会挂死。等 skilldev.CreateStageAgent 接通后本用例应改为「推进到 REVIEW 挂起」。
-func (s *SkillDevPipelineSuite) TestPipeline_生成器占位时由迭代上限兜底() {
+// TestPipeline_改进一轮后内容变化 REVIEW 恢复（improve）后 IMPROVE 改写 SKILL.md，
+// 迭代计数 +1，并再次进入 REVIEW 等待审阅。
+func (s *SkillDevPipelineSuite) TestPipeline_改进一轮后内容变化() {
 	ctx := s.Ctx
-	_, pipeline := s.newPipeline()
+	pipeline := s.newPipeline()
 
-	// 推进到 PLAN_CONFIRM
-	s.drain(ctx, pipeline, func() (<-chan skilldev.SkillDevEvent, error) {
-		return pipeline.Run(ctx)
+	s.runToReview(ctx, pipeline)
+	s.Contains(s.readSkillMD(), "# Demo V1")
+
+	s.drain(ctx, func() (<-chan skilldev.SkillDevEvent, error) {
+		return pipeline.Resume(ctx, map[string]any{"action": "improve", "feedback": map[string]any{"comment": "补充失败处理"}})
 	})
-	s.Require().Equal(skilldev.SkillDevStagePlanConfirm, pipeline.State.Stage)
 
-	// 恢复后收集事件直到 channel 关闭（不因 error 事件提前失败）
-	ch, err := pipeline.Resume(ctx, map[string]any{"plan": pipeline.State.Plan})
-	s.Require().NoError(err)
+	s.Equal(1, pipeline.State.Iteration, "IMPROVE 应使迭代计数 +1")
+	s.Equal(skilldev.SkillDevStageReview, pipeline.State.Stage, "改进后应再次进入 REVIEW")
+	skillMD := s.readSkillMD()
+	s.Contains(skillMD, "# Demo V2", "SKILL.md 应被改进内容覆盖")
+	s.Contains(skillMD, "补充失败处理", "改进内容应体现反馈")
+	s.Equal(1, s.calls["improve"], "应真实调用一次改进 Agent")
+}
 
-	deadline := time.After(30 * time.Second)
-	sawValidateFail := false
-	for {
-		select {
-		case evt, ok := <-ch:
-			if !ok {
-				goto done
-			}
-			if evt.EventType == skilldev.SkillDevEventTypeValidateResult {
-				if valid, _ := evt.Payload["valid"].(bool); !valid {
-					sawValidateFail = true
-				}
-			}
-		case <-deadline:
-			s.FailNow("流水线未在超时内退出（可能挂死）")
-		case <-ctx.Done():
-			s.FailNow("上下文已取消")
-		}
-	}
-done:
-	s.True(sawValidateFail, "VALIDATE 应对占位 SKILL.md 报告校验失败")
-	s.Equal(skilldev.SkillDevStageError, pipeline.State.Stage, "占位生成器下流水线应以 ERROR 收敛")
-	s.Require().NotNil(pipeline.State.Error)
-	s.Contains(*pipeline.State.Error, "最大迭代次数", "应由迭代上限兜底而非无限循环")
+// TestPipeline_打包与描述优化 REVIEW 选择打包后进入 DESC_OPTIMIZE_CONFIRM，
+// 选择优化后描述被改写并进入 COMPLETED。
+func (s *SkillDevPipelineSuite) TestPipeline_打包与描述优化() {
+	ctx := s.Ctx
+	pipeline := s.newPipeline()
+
+	s.runToReview(ctx, pipeline)
+
+	events := s.drain(ctx, func() (<-chan skilldev.SkillDevEvent, error) {
+		return pipeline.Resume(ctx, map[string]any{"action": "package"})
+	})
+	s.True(s.hasStageChanged(events, skilldev.SkillDevStagePackage), "应执行过 PACKAGE")
+	s.Equal(skilldev.SkillDevStageDescOptimizeConfirm, pipeline.State.Stage, "应在 DESC_OPTIMIZE_CONFIRM 挂起")
+
+	s.drain(ctx, func() (<-chan skilldev.SkillDevEvent, error) {
+		return pipeline.Resume(ctx, map[string]any{"action": "optimize"})
+	})
+	s.Equal(skilldev.SkillDevStageCompleted, pipeline.State.Stage, "描述优化后应进入 COMPLETED")
+	s.Contains(s.readSkillMD(), "用户提到表格、导出、清洗数据时使用", "description 应被优化结果替换")
+	s.GreaterOrEqual(s.calls["desc_gen"], 1, "应调用触发查询生成 Agent")
+	s.GreaterOrEqual(s.calls["desc_improve"], 1, "应调用描述改进 Agent")
 }
 
 // TestPipeline_非挂起点Resume报错 非挂起阶段调用 Resume 应返回错误（对齐 Python 语义）。
 func (s *SkillDevPipelineSuite) TestPipeline_非挂起点Resume报错() {
 	ctx := s.Ctx
-	_, pipeline := s.newPipeline()
+	pipeline := s.newPipeline()
 
 	pipeline.State.Stage = skilldev.SkillDevStageGenerate
 	_, err := pipeline.Resume(ctx, map[string]any{})
 	s.Require().Error(err, "非挂起阶段 Resume 应失败")
 }
 
-// ──────────────────────────── 非导函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // SetupTest 每用例独立任务与目录。
 func (s *SkillDevPipelineSuite) SetupTest() {
 	s.tmpDir = s.T().TempDir()
 	s.taskID = "task-itest-001"
+	s.calls = map[string]int{}
 }
 
-// newPipeline 构造带真实磁盘 StateStore/WorkspaceProvider 的流水线。
-func (s *SkillDevPipelineSuite) newPipeline() (*skilldev.SkillDevDeps, *skilldev.SkillDevPipeline) {
+// newPipeline 构造带分派 mock 模型的流水线（真实磁盘 StateStore / WorkspaceProvider）。
+func (s *SkillDevPipelineSuite) newPipeline() *skilldev.SkillDevPipeline {
+	s.T().Helper()
+
+	client := &pipelineMockClient{replyFor: s.dispatch, calls: s.calls}
+	provider := fmt.Sprintf("skilldev_pipeline_itest_%d", time.Now().UnixNano())
+	model_clients.GetClientRegistry().Register(provider, "llm",
+		func(_ *llmschema.ModelRequestConfig, _ *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+			return client, nil
+		})
+	s.T().Cleanup(func() { _ = model_clients.GetClientRegistry().Unregister(provider, "llm") })
+
 	deps := &skilldev.SkillDevDeps{
-		ModelName:         "mock-model",
+		ModelName: "mock-model",
+		ModelClientConfig: map[string]any{
+			"client_provider": provider,
+			"client_id":       provider + "_id",
+			"api_key":         "test-key",
+			"api_base":        "http://127.0.0.1:1",
+		},
 		StateStore:        skilldev.NewStateStore(filepath.Join(s.tmpDir, "tasks")),
 		WorkspaceProvider: skilldev.NewWorkspaceProvider(filepath.Join(s.tmpDir, "workspaces")),
+		SysOpConfig: sysop.NewSysOperationCard(
+			sysop.WithSysOpWorkConfig(&sysop.LocalWorkConfig{RestrictToSandbox: false}),
+		),
 	}
 	state := skilldev.NewSkillDevState(s.taskID)
 	state.Input = map[string]any{"query": "生成一个处理 CSV 的技能"}
-	return deps, skilldev.NewSkillDevPipeline(s.taskID, state, deps)
+	return skilldev.NewSkillDevPipeline(s.taskID, state, deps)
 }
 
-// drain 启动流水线并收集全部事件（带超时保护）。
+// dispatch 按 prompt 关键字返回固定模型输出。
+func (s *SkillDevPipelineSuite) dispatch(prompt string) string {
+	switch {
+	case strings.Contains(prompt, "触发测试查询 JSON 数组"):
+		s.calls["desc_gen"]++
+		return `[{"query": "帮我处理这个 CSV 文件", "should_trigger": true},
+{"query": "把这张表格导出成 JSON", "should_trigger": true},
+{"query": "清洗这批数据并统计", "should_trigger": true},
+{"query": "帮我写一个排序算法", "should_trigger": false},
+{"query": "画一个饼图", "should_trigger": false},
+{"query": "给我讲讲 HTTP 协议", "should_trigger": false}]`
+	case strings.Contains(prompt, "JSON 布尔数组"):
+		s.calls["desc_eval"]++
+		// 首轮（train+test）全部判定失败 → 触发描述改进；改进后判定全部正确 → 收敛
+		if s.calls["desc_eval"] <= 2 {
+			return answerArray(prompt, false)
+		}
+		return answerArray(prompt, true)
+	case strings.Contains(prompt, "请输出新的 description"):
+		s.calls["desc_improve"]++
+		return "<new_description>处理 CSV 与 JSON 数据文件，用户提到表格、导出、清洗数据时使用</new_description>"
+	case strings.Contains(prompt, "benchmark 数据"):
+		s.calls["analyst"]++
+		return `["技能在基础场景通过", "样本量偏小"]`
+	case strings.Contains(prompt, "配置："):
+		s.calls["grader"]++
+		return `{"expectations":[{"text":"输出包含结果","passed":true,"evidence":"transcript 中出现结果"}],"pass_rate":1.0}`
+	case strings.Contains(prompt, "根据反馈改进当前技能"):
+		s.calls["improve"]++
+		return "---\nname: demo-skill\ndescription: 演示技能\n---\n# Demo V2\n补充失败处理：遇到解析错误时输出诊断信息。\n"
+	case strings.Contains(prompt, "本次只生成文件"):
+		s.calls["generate"]++
+		return "---\nname: demo-skill\ndescription: 演示技能\n---\n# Demo V1\n读取 CSV 并输出统计结果。\n"
+	default:
+		s.calls["plan"]++
+		return `{"skill_name":"demo-skill","description":"演示技能","purpose":"处理 CSV",
+"directory_structure":{"SKILL.md":"主指令文件"},"test_strategy":{"approach":"基础场景"}}`
+	}
+}
+
+// answerArray 按 prompt 中的查询数量返回等长布尔数组。
+func answerArray(prompt string, value bool) string {
+	start := strings.LastIndex(prompt, "[")
+	end := strings.LastIndex(prompt, "]")
+	if start < 0 || end <= start {
+		return fmt.Sprintf("[%t]", value)
+	}
+	var queries []string
+	if err := json.Unmarshal([]byte(prompt[start:end+1]), &queries); err != nil {
+		return fmt.Sprintf("[%t]", value)
+	}
+	answers := make([]string, len(queries))
+	for i := range answers {
+		answers[i] = fmt.Sprintf("%t", value)
+	}
+	return "[" + strings.Join(answers, ",") + "]"
+}
+
+// runToReview 推进到 REVIEW 挂起点（两次 Resume）。
+func (s *SkillDevPipelineSuite) runToReview(ctx context.Context, pipeline *skilldev.SkillDevPipeline) {
+	s.T().Helper()
+
+	s.drain(ctx, func() (<-chan skilldev.SkillDevEvent, error) {
+		return pipeline.Run(ctx)
+	})
+	s.Require().Equal(skilldev.SkillDevStagePlanConfirm, pipeline.State.Stage)
+	s.drain(ctx, func() (<-chan skilldev.SkillDevEvent, error) {
+		return pipeline.Resume(ctx, map[string]any{"plan": pipeline.State.Plan})
+	})
+	s.Require().Equal(skilldev.SkillDevStageReview, pipeline.State.Stage)
+}
+
+// drain 启动流水线并收集全部事件（带超时保护，error 事件直接失败）。
 func (s *SkillDevPipelineSuite) drain(
 	ctx context.Context,
-	_ *skilldev.SkillDevPipeline,
 	start func() (<-chan skilldev.SkillDevEvent, error),
 ) []skilldev.SkillDevEvent {
 	s.T().Helper()
@@ -156,7 +333,7 @@ func (s *SkillDevPipelineSuite) drain(
 	s.Require().NoError(err)
 	s.Require().NotNil(ch)
 
-	deadline := time.After(30 * time.Second)
+	deadline := time.After(60 * time.Second)
 	var events []skilldev.SkillDevEvent
 	for {
 		select {
@@ -166,36 +343,6 @@ func (s *SkillDevPipelineSuite) drain(
 			}
 			events = append(events, evt)
 			s.NotEqual(skilldev.SkillDevEventTypeError, evt.EventType, "流水线不应产生 error 事件: %v", evt.Payload)
-		case <-deadline:
-			s.FailNow("流水线事件收集超时")
-			return events
-		case <-ctx.Done():
-			s.FailNow("上下文已取消")
-			return events
-		}
-	}
-}
-
-// drainLenient 收集事件但不因 error 事件失败（用于当前占位阶段的收敛路径）。
-func (s *SkillDevPipelineSuite) drainLenient(
-	ctx context.Context,
-	start func() (<-chan skilldev.SkillDevEvent, error),
-) []skilldev.SkillDevEvent {
-	s.T().Helper()
-
-	ch, err := start()
-	s.Require().NoError(err)
-	s.Require().NotNil(ch)
-
-	deadline := time.After(30 * time.Second)
-	var events []skilldev.SkillDevEvent
-	for {
-		select {
-		case evt, ok := <-ch:
-			if !ok {
-				return events
-			}
-			events = append(events, evt)
 		case <-deadline:
 			s.FailNow("流水线事件收集超时")
 			return events
@@ -239,6 +386,14 @@ func (s *SkillDevPipelineSuite) stateFile() string {
 // workspaceDir 返回任务工作区根目录。
 func (s *SkillDevPipelineSuite) workspaceDir() string {
 	return filepath.Join(s.tmpDir, "workspaces", s.taskID)
+}
+
+// readSkillMD 读取工作区内生成的 SKILL.md。
+func (s *SkillDevPipelineSuite) readSkillMD() string {
+	s.T().Helper()
+	data, err := os.ReadFile(filepath.Join(s.workspaceDir(), "skill", "SKILL.md"))
+	s.Require().NoError(err)
+	return string(data)
 }
 
 // loadState 读取并反序列化检查点。
