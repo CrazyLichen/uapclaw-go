@@ -3,8 +3,12 @@
 package memory
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -14,9 +18,12 @@ import (
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	memory "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	lite "github.com/uapclaw/uapclaw-go/internal/agentcore/memory/lite"
+	apiEmbedding "github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -175,6 +182,10 @@ func (s *MemoryRailSuite) TestMemoryRail_运行时RegisterRail后read_memory可�
 	root := s.T().TempDir()
 	ws := workspace.NewWorkspace(root, "cn")
 	s.Require().NoError(os.MkdirAll(root, 0o755))
+	// memory 节点目录：用例先落盘记忆文件，manager 首次检索时全量索引
+	if memDir := ws.GetNodePath("memory"); memDir != nil {
+		s.Require().NoError(os.MkdirAll(*memDir, 0o755))
+	}
 
 	sysOp, err := sys_operation.NewSysOperation(sys_operation.NewSysOperationCard(
 		sys_operation.WithSysOpMode(sys_operation.OperationModeLocal),
@@ -265,4 +276,123 @@ func (s *MemoryRailSuite) toolByName(agent *harness.DeepAgent, name string) tool
 	s.Require().NoError(err)
 	s.Require().NotEmpty(tools, "ResourceMgr 应能取到工具实例: %s", card.ID)
 	return tools[0]
+}
+
+// TestMemory_中文检索命中_真实索引 端到端：真实 Workspace + LocalSysOperation（沙箱）
+// + 真实 sqlite/FTS + httptest 词袋 embedding。
+//
+// 这条用例钉的是「进程重启后已有记忆文件」这条生产路径：manager 初始化即全量索引，
+// 文件读取走 sys_operation 的沙箱校验（沙箱根来自 ctx 的 CwdState —— 历史 P0：
+// manager 用 context.Background() 初始化时，这里会被判「在沙箱根目录之外」，索引永远为空）。
+func (s *MemoryRailSuite) TestMemory_中文检索命中_真实索引() {
+	mgr, runCtx := s.newSandboxedManager(map[string]string{
+		"MEMORY.md": "- VDS15800 支持手动组网模式，默认关闭\n",
+	})
+	defer lite.ClearMemoryManagerCache()
+
+	// 纯中文查询：未分词时 FTS5 的 unicode61 把「支持手动组网模式」当一个 token，
+	// 「组网」匹配不到；分词后 token 对齐才命中。
+	results, err := mgr.Search(runCtx, "组网", lite.SearchOpts{MinScore: 0.01})
+	s.Require().NoError(err)
+	s.Require().NotEmpty(results, "中文查询应命中（分词/索引/token 对齐任一环节坏了都会空）")
+	s.Contains(results[0].Path, "MEMORY.md")
+}
+
+// TestMemory_分词降级仍可英文检索 分词器不可用时退回「正则切分 + OR」，
+// 记忆检索整体仍可用（中文退化为仅靠向量召回）。
+func (s *MemoryRailSuite) TestMemory_分词降级仍可英文检索() {
+	s.T().Setenv("UAPCLAW_DISABLE_SEGMENTER", "1")
+
+	mgr, runCtx := s.newSandboxedManager(map[string]string{
+		"MEMORY.md": "- VDS15800 支持手动组网模式\n",
+	})
+	defer lite.ClearMemoryManagerCache()
+
+	results, err := mgr.Search(runCtx, "VDS15800", lite.SearchOpts{MinScore: 0.01})
+	s.Require().NoError(err)
+	s.NotEmpty(results, "降级后英文/数字 token 仍应命中（正则切分 + OR）")
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newBagEmbeddingServer 启动 OpenAI 兼容的词袋 embedding 端点。
+//
+// 复用 recall 用例的确定性词袋向量（同一 token 落同一维），不依赖真实 API。
+func newBagEmbeddingServer(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Input any `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var texts []string
+		switch v := req.Input.(type) {
+		case string:
+			texts = []string{v}
+		case []any:
+			for _, item := range v {
+				if str, ok := item.(string); ok {
+					texts = append(texts, str)
+				}
+			}
+		}
+		data := make([]map[string]any, 0, len(texts))
+		for i, txt := range texts {
+			data = append(data, map[string]any{"index": i, "embedding": recallBagOfWordsVector(txt)})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// newSandboxedManager 构造「真实 sqlite + 沙箱 sys_operation + httptest embedding」的
+// 记忆管理器，并把记忆文件先落盘（模拟进程重启后已有记忆）。
+func (s *MemoryRailSuite) newSandboxedManager(files map[string]string) (lite.MemoryIndexManager, context.Context) {
+	s.T().Helper()
+
+	root := s.T().TempDir()
+	ws := workspace.NewWorkspace(root, "cn")
+	nodePath := ws.GetNodePath("memory")
+	s.Require().NotNil(nodePath, "Workspace 应包含 memory 节点")
+	memDir := *nodePath
+	s.Require().NoError(os.MkdirAll(memDir, 0o755))
+	for name, body := range files {
+		s.Require().NoError(os.WriteFile(filepath.Join(memDir, name), []byte(body), 0o644))
+	}
+
+	sysOp, err := sys_operation.NewSysOperation(sys_operation.NewSysOperationCard(
+		sys_operation.WithSysOpMode(sys_operation.OperationModeLocal),
+		sys_operation.WithSysOpWorkConfig(&sys_operation.LocalWorkConfig{RestrictToSandbox: true}),
+	))
+	s.Require().NoError(err)
+
+	settings := lite.CreateMemorySettings(memDir, nil)
+	settings.Sync.Watch = false
+	settings.Sync.IntervalMinutes = 0
+
+	// 沙箱根来自 ctx 的 CwdState：不传就等于「路径在沙箱根目录之外」
+	runCtx := cwd.WithCwdState(s.Ctx, cwd.InitCwd(root, cwd.WithWorkspace(root)))
+
+	mgr, err := lite.GetMemoryIndexManager(lite.MemoryManagerParams{
+		AgentID:   "itest_memory_zh",
+		Workspace: ws,
+		Settings:  settings,
+		EmbeddingConfig: &apiEmbedding.EmbeddingConfig{
+			ModelName: "bag-of-words",
+			BaseURL:   newBagEmbeddingServer(s.T()),
+			APIKey:    "test-key",
+		},
+		SysOperation: sysOp,
+		NodeName:     "memory",
+		Ctx:          runCtx,
+	})
+	s.Require().NoError(err)
+	return mgr, runCtx
 }
