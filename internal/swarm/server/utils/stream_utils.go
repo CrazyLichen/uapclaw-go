@@ -560,16 +560,31 @@ func ParseInteractionPayload(payload map[string]any, converter InteractionConver
 
 // AccumulateUsage 累加 usage 信息。
 // Python: usage_accumulator 的累加逻辑 (line 4580-4610)
+//
+// payload 支持两种形态：
+//   - 嵌套：生产端 llm_usage（react_model_call.go）写的是
+//     {"usage_metadata": {...}, "result_type": "answer"}，Python 侧同样读嵌套
+//     （interface_deep.py L4723-4736 usage_meta = payload.get("usage_metadata")）；
+//   - 平铺：兼容既有 chunk 形状，仅在无 usage_metadata 时使用。
+//
+// 只读平铺键会让累加值恒为 0，chat.usage_summary 被 usage.TotalTokens > 0
+// 门禁整条吞掉（2026-11-03 集成用例 SessionUsageIsolationSuite 锁定）。
 func AccumulateUsage(usage *UsageAccumulator, payload map[string]any) {
 	if payload == nil || usage == nil {
 		return
 	}
-	usage.InputTokens += ExtractIntFromPayload(payload, "input_tokens")
-	usage.OutputTokens += ExtractIntFromPayload(payload, "output_tokens")
-	usage.TotalTokens += ExtractIntFromPayload(payload, "total_tokens")
-	usage.InputCost += ExtractFloatFromPayload(payload, "input_cost")
-	usage.OutputCost += ExtractFloatFromPayload(payload, "output_cost")
-	usage.TotalCost += ExtractFloatFromPayload(payload, "total_cost")
+	source := payload
+	if nested, ok := payload["usage_metadata"]; ok && nested != nil {
+		if meta := PayloadToMap(nested); meta != nil {
+			source = meta
+		}
+	}
+	usage.InputTokens += ExtractIntFromPayload(source, "input_tokens")
+	usage.OutputTokens += ExtractIntFromPayload(source, "output_tokens")
+	usage.TotalTokens += ExtractIntFromPayload(source, "total_tokens")
+	usage.InputCost += ExtractFloatFromPayload(source, "input_cost")
+	usage.OutputCost += ExtractFloatFromPayload(source, "output_cost")
+	usage.TotalCost += ExtractFloatFromPayload(source, "total_cost")
 }
 
 // ExtractStringFromPayload 从 payload 提取字符串值。

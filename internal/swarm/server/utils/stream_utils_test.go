@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
@@ -506,6 +507,49 @@ func TestAccumulateUsage_累加(t *testing.T) {
 func TestAccumulateUsage_nil(t *testing.T) {
 	AccumulateUsage(nil, map[string]any{"input_tokens": 100}) // 不 panic
 	AccumulateUsage(&UsageAccumulator{}, nil)                 // 不 panic
+}
+
+// TestAccumulateUsage_嵌套usageMetadata 验证 llm_usage 的真实形状能被累加。
+//
+// 生产端 react_model_call.go 写的是 {"usage_metadata": {...}, "result_type": "answer"}，
+// Python 侧读嵌套（interface_deep.py L4723-4736）；只读平铺键会得到 0，
+// 进而因 usage.TotalTokens > 0 门禁导致 chat.usage_summary 整条丢失。
+func TestAccumulateUsage_嵌套usageMetadata(t *testing.T) {
+	usage := &UsageAccumulator{}
+	AccumulateUsage(usage, map[string]any{
+		"usage_metadata": map[string]any{
+			"input_tokens":  1000,
+			"output_tokens": 100,
+			"total_tokens":  1100,
+			"input_cost":    0.01,
+			"output_cost":   0.02,
+			"total_cost":    0.03,
+		},
+		"result_type": "answer",
+	})
+	if usage.InputTokens != 1000 || usage.OutputTokens != 100 || usage.TotalTokens != 1100 {
+		t.Errorf("嵌套 usage_metadata 应被累加，实际 %+v", *usage)
+	}
+	if usage.TotalCost != 0.03 {
+		t.Errorf("TotalCost 期望 0.03, 实际 %f", usage.TotalCost)
+	}
+}
+
+// TestAccumulateUsage_嵌套结构体usageMetadata 验证 usage_metadata 为
+// *llmschema.UsageMetadata 结构体时（未经 JSON 化的内存形态）同样能累加。
+func TestAccumulateUsage_嵌套结构体usageMetadata(t *testing.T) {
+	usage := &UsageAccumulator{}
+	AccumulateUsage(usage, map[string]any{
+		"usage_metadata": &llmschema.UsageMetadata{
+			ModelName:    "mock-model",
+			InputTokens:  120,
+			OutputTokens: 20,
+			TotalTokens:  140,
+		},
+	})
+	if usage.InputTokens != 120 || usage.TotalTokens != 140 {
+		t.Errorf("结构体形态 usage_metadata 应被累加，实际 %+v", *usage)
+	}
 }
 
 func TestExtractStringFromPayload(t *testing.T) {
