@@ -11,6 +11,7 @@ import (
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -31,8 +32,20 @@ func newAgentsTestServer(t *testing.T) *AgentServer {
 	t.Helper()
 	tmpDir := t.TempDir()
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+
+	// 先刷盘并停掉上一个用例遗留的异步 worker，避免 ResetCache 与 worker 读路径缓存并发。
+	session.FlushMetadataQueue()
+	session.FlushHistoryQueue()
+	session.ResetHistoryWorker()
+	session.ClearAllSessionMetadataCache()
 	pathutil.ResetCache()
-	t.Cleanup(pathutil.ResetCache)
+	t.Cleanup(func() {
+		session.FlushMetadataQueue()
+		session.FlushHistoryQueue()
+		session.ResetHistoryWorker()
+		session.ClearAllSessionMetadataCache()
+		pathutil.ResetCache()
+	})
 
 	if err := os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755); err != nil {
 		t.Fatalf("创建配置目录失败: %v", err)
