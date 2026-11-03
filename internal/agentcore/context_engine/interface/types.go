@@ -377,20 +377,23 @@ func NewContextWindow() *ContextWindow {
 //
 // 统计逻辑：
 //   - 按角色计数消息数（system/user/assistant/tool）
-//   - 优先使用最后一条 AssistantMessage 的 usage_metadata 输入侧 token 作为 total_tokens
+//   - 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens 作为 total_tokens
 //   - 若无 usage_metadata，则逐条计算 token（TiktokenCounter 或 fallback 字符串长度/4）
 //
-// 口径与 SessionModelContext.statMessages 保持一致（InputTokens 优先、为 0 回退
-// TotalTokens）：上下文占用应与模型输入上限同量纲，TotalTokens 会把本次生成也算进去。
-// Python 侧代码用 total_tokens，但 docstring/行内注释写的是 input_tokens（自身矛盾），
-// 这里统一采用文档意图（c25114d6 的决策），两处实现必须同改。
+// 口径取 total_tokens（输入 + 输出）：本轮输出会在下一轮作为历史重新发给模型，
+// 因此「下一轮真实上下文占用」应把输出也算进去（2026-11-03 决策，对齐 Python
+// _stat_messages 的 total_tokens）。
+// 该口径**不参与压缩判定**——各 processor 通过 mc.TokenCounter() 自行计数
+// （见 compressor/*.go 的 CountMessagesTokens），这里只服务 context.usage 展示。
+//
+// 口径与 SessionModelContext.statMessages 保持一致（两处必须同改）。
 //
 // Python: Context._stat_messages(stat, messages)
 func (s *ContextStats) StatMessages(messages []llm_schema.BaseMessage, tokenCounter token.TokenCounter) {
 	s.TotalMessages = len(messages)
 
-	// 优先使用最后一条 AssistantMessage 的 usage_metadata（输入侧 token）
-	if usageTokens := getLastAssistantUsageInputTokens(messages); usageTokens > 0 {
+	// 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens
+	if usageTokens := getLastAssistantUsageTokens(messages); usageTokens > 0 {
 		s.TotalTokens = usageTokens
 		return
 	}
@@ -429,18 +432,14 @@ func (s *ContextStats) StatTools(tools []schema.ToolInfoInterface, tokenCounter 
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// getLastAssistantUsageInputTokens 获取最后一条 AssistantMessage 的输入侧 token。
+// getLastAssistantUsageTokens 获取最后一条 AssistantMessage 的 usage_metadata.total_tokens。
 //
-// 优先 InputTokens（与 context_max 同量纲），为 0 时回退 TotalTokens（兼容只上报
-// 总量的 provider）。返回 0 表示未找到有效的 usage_metadata。
-func getLastAssistantUsageInputTokens(messages []llm_schema.BaseMessage) int {
+// 返回 0 表示未找到有效的 usage_metadata（调用方回退到逐条计数）。
+func getLastAssistantUsageTokens(messages []llm_schema.BaseMessage) int {
 	for i := len(messages) - 1; i >= 0; i-- {
 		am, ok := messages[i].(*llm_schema.AssistantMessage)
 		if !ok || am.UsageMetadata == nil {
 			continue
-		}
-		if am.UsageMetadata.InputTokens > 0 {
-			return am.UsageMetadata.InputTokens
 		}
 		if am.UsageMetadata.TotalTokens > 0 {
 			return am.UsageMetadata.TotalTokens

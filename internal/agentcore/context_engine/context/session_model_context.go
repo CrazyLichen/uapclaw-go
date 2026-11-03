@@ -1069,8 +1069,12 @@ func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages [
 	// 按角色计数消息数量
 	mc.countMessagesByRole(stat, messages)
 
-	// 优先使用最后一条 AssistantMessage 的 usage_metadata：取输入侧 token，
-	// 与 context_max（模型输入上限）同量纲；输入侧缺失时回退总量。
+	// 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens。
+	//
+	// 口径取 total_tokens（输入 + 输出）：本轮输出会在下一轮作为历史重新发给模型，
+	// 「下一轮真实上下文占用」应把输出也算进去（2026-11-03 决策，对齐 Python
+	// _stat_messages 的 total_tokens）。该口径只服务 context.usage 展示，不参与
+	// 压缩判定——processor 通过 mc.TokenCounter() 自行计数。
 	//
 	// 口径与 interface.ContextStats.StatMessages 保持一致（两处必须同改，
 	// 否则 context.usage 与 ContextStats 会对同一条 usage 给出不同数字）。
@@ -1081,11 +1085,7 @@ func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages [
 			if am.UsageMetadata == nil {
 				continue
 			}
-			tokens := am.UsageMetadata.InputTokens
-			if tokens == 0 {
-				tokens = am.UsageMetadata.TotalTokens
-			}
-			if tokens > 0 {
+			if tokens := am.UsageMetadata.TotalTokens; tokens > 0 {
 				stat.TotalTokens = tokens
 				return
 			}

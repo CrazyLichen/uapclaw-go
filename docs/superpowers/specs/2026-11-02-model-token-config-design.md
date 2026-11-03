@@ -1,7 +1,7 @@
 # 模型 Token 配置可配化（max_input_tokens / max_output_tokens）设计
 
 - 日期：2026-11-02
-- 状态：待评审
+- 状态：待评审（2026-11-03 修订：D6 百分比分子改为 `total_tokens`，见 §6.5）
 - 关联问题：模型配置界面只有基础信息，无输入/输出 token 配置；上下文窗口固定显示 200K；后端值硬编码
 
 ## 1. 背景
@@ -75,7 +75,7 @@
 | D3 | 语义 | `max_input_tokens` = 输入侧可用额度（作分母）；`max_output_tokens` = 输出上限 | 两个上限各自独立，不互相推导；直接对应厂商文档的两个数字 |
 | D4 | 运行时落点 | 不新增结构体字段：`ContextEngineConfig.ModelContextWindowTokens[model_name]`、`ModelRequestConfig.MaxTokens` | 既有字段语义正好匹配，无需扩展 `ContextEngineConfig` |
 | D5 | 让值「已知」 | `buildModelFromEntry` 的 `knownKeys` 加两键 + 两条消费分支 | 只加白名单＝键被彻底丢弃（既不入 Extra 也无分支消费），必须配消费分支 |
-| D6 | 百分比口径 | 分子 = `usage_metadata.input_tokens`，无 usage 时回退本地估算；分母 = `max_input_tokens` | 分子分母同量纲；本地估算本身是输入侧估算，两条回退路径一致。否决「分子保持 total_tokens」（长输出虚高，两条路径量纲不一致） |
+| D6 | 百分比口径 | **2026-11-03 修订**：分子 = `usage_metadata.total_tokens`（输入+输出），无 usage 时回退本地估算；分母 = `max_input_tokens` | 本轮输出会在下一轮作为历史重新发给模型，`total_tokens` 才代表「下一轮真实上下文占用」；原「输入侧」口径已推翻（当年理由见 §6.5 修订说明） |
 | D7 | 阈值规则 | `实际阈值 = min(yaml 绝对阈值, ratio × max_input_tokens)` | 只下调不放大。否决「严格按比例」（1M 窗口会从 230K 触发变 900K，属行为变更） |
 | D8 | 比例键 | 全局 2 键：`react.context_engine_config.compression_trigger_ratio`（0.85）、`compression_target_ratio`（0.55） | 压缩策略是 agent 级行为，不是模型属性；放 `mcc` 会随模型条目重复。否决 per-processor ratio（同一件事配 4~5 遍） |
 | D9 | processor 通道 | 修复 Go 主 Agent 四段读取（parity）+ 新增 `full_compact_processor_config` 段（Go 与 Python 同时新增） | FullCompact 当前无任何 yaml 通道，与「不硬编码」冲突 |
@@ -205,7 +205,7 @@ Go 的 `deepAgentContextEngineConfig`（`deep_adapter.go:2041`）直接 `NewCont
 | B3 | `adapter/deep_adapter.go:2189` | `knownKeys` 加 `"max_input_tokens"` / `"max_output_tokens"` |
 | B4 | `adapter/deep_adapter.go:2128-2137` | `mcc["max_output_tokens"] > 0` → `llmschema.WithMaxTokens(n)` |
 | B5 | `adapter/deep_adapter.go:2028` `deepAgentContextEngineConfig` | 签名加 `configBase` 入参；遍历 `config.GetDefaultModels(configBase)` 收集 `model_client_config.max_input_tokens` → `result.ModelContextWindowTokens[model_name]`；`result.ModelName` = 当前生效模型名；读 `cecMap` 的 `compression_trigger_ratio` / `compression_target_ratio` → 新字段（D14）；同时修复丢失的默认值 `MaxContextMessageNum=200` / `DefaultWindowRoundNum=10`（§4.5） |
-| B6 | `common/rails/stream_event_emit.go:186-221` | 分母改从 agent 的 `ContextEngineConfig` 取（`ResolveContextMax(ceConfig.ModelName, ceConfig.ContextWindowTokens, ceConfig.ModelContextWindowTokens)`）；分子按 §6.5 的回退顺序取 `InputTokens` |
+| B6 | `common/rails/stream_event_emit.go:186-221` | 分母改从 agent 的 `ContextEngineConfig` 取（`ResolveContextMax(ceConfig.ModelName, ceConfig.ContextWindowTokens, ceConfig.ModelContextWindowTokens)`）；分子按 §6.5 的回退顺序取 `TotalTokens`（2026-11-03 修订） |
 | B7 | `context_engine/context/session_model_context.go:1058-1068` + `:1192` | `statMessages` 按 §6.5 的回退顺序取 `InputTokens`；`resolveContextMax` 已走 `ResolveContextMax`，无需改 |
 | B8 | `harness/rails/context_engineer/context_processor_rail.go:87-128`（`Init`） | **在 `MergeProcessors` 之后**遍历 `allProcessors`，对四个 processor（dialogue / current_round / round_level / full_compact）的阈值统一做 `min(绝对, ratio×window)` 收口（顺序要求见 §6.6；offloader 不参与，见 §6.1） |
 
@@ -241,7 +241,7 @@ Go 的 `deepAgentContextEngineConfig`（`deep_adapter.go:2041`）直接 `NewCont
 | P2 | 同文件 `_models_list`（L1023-1055） | 回填两字段 |
 | P3 | `jiuwenswarm/server/runtime/agent_adapter/interface_deep.py:309-320` | `_deep_agent_context_engine_config` 收 `max_input_tokens` → `model_context_window_tokens` |
 | P4 | 同文件 `:1482-1490` `_build_model_from_entry` | `mcc.max_output_tokens` → `ModelRequestConfig(max_tokens=...)` |
-| P5 | 同文件 `:4927-4966`、`_emit_context_usage` | 分子改 `input_tokens`；分母取 DeepAgent 返回值 |
+| P5 | 同文件 `:4927-4966`、`_emit_context_usage` | 分子取 `total_tokens`（2026-11-03 修订）；分母取 DeepAgent 返回值 |
 | P6 | `openjiuwen/core/context_engine/processor/context_processor_rail.py` 等 | 五段 yaml 通道 + `min(绝对, ratio×window)` 推导 |
 
 Python 侧需同一批次提交，否则两端行为分叉（同一份 config.yaml 在两个实现下表现不同）。
@@ -302,14 +302,22 @@ target_effective  = min(绝对 target,  round(compression_target_ratio  × windo
 | 256K | 180000（ratio 值 217600 被 min 掉） | 一致 |
 | ≥212K | 180000 | 一致 |
 
-### 6.5 百分比分子的回退顺序
+### 6.5 百分比分子的回退顺序（2026-11-03 修订）
 
 ```
-input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首选）
-             → UsageMetadata.TotalTokens            // 有 usage 但 InputTokens 为 0（部分兼容端点只回 total）
-             → 本地 token 计数（输入侧估算）          // 无 usage_metadata
+tokens_used = UsageMetadata.TotalTokens             // 有真实 usage 时（输入+输出）
+            → 本地 token 计数（输入侧估算）          // 无 usage_metadata（或 TotalTokens 为 0）
 分母固定为 window（§6.2 解析结果），不再用 200000 常量。
 ```
+
+**修订说明**：原口径（D6）取 `InputTokens`，理由是"分子分母同量纲、避免长输出虚高"。
+2026-11-03 用户裁决改为 `total_tokens`：本轮输出会在下一轮作为历史重新发给模型，
+所以「下一轮真实占用」必须包含输出；只算输入会系统性低估上下文压力。
+三处口径必须一致：`ContextStats.StatMessages`、`SessionModelContext.statMessages`、
+`stream_event_emit.contextUsageTokensUsed`。
+
+该口径**不参与压缩判定**：各 processor 通过 `mc.TokenCounter()` 自行计数
+（`compressor/*.go` 的 `CountMessagesTokens`），与 usage_metadata 无关。
 
 ### 6.6 推导与 yaml 覆盖的顺序要求
 
@@ -361,7 +369,7 @@ input_tokens = UsageMetadata.InputTokens            // 有真实 usage 时（首
 | B4 | 同上 | `max_output_tokens=8192` → `ModelRequestConfig.MaxTokens != nil && *==8192`；缺省/0 → `nil`；同时验证 `temperature`/`top_p` 未被破坏 |
 | B5 | `deep_adapter_test.go` `deepAgentContextEngineConfig` | 多条目 → `ModelContextWindowTokens` 完整 map；同 `model_name` 冲突按 D10（`is_default` 优先）+ `Warn`；`model_name` 为空跳过；`configBase=nil` 不 panic；`react` 段缺失返回 nil（保持现状） |
 | B5 | 同上 | `ContextWindowTokens`（优先级 1）始终为 0，不被写入 |
-| B6 | `stream_event_emit_test.go` | 分母取 ceConfig 解析值（32K 用例）；分子优先 `InputTokens`，缺失回退 `TotalTokens`；`rate` 精度与 0 保护（分母 0 时不 panic） |
+| B6 | `stream_event_emit_test.go` | 分母取 ceConfig 解析值（32K 用例）；分子取 `TotalTokens`（2026-11-03 修订）；`rate` 精度与 0 保护（分母 0 时不 panic） |
 | B7 | `session_model_context_test.go` `statMessages` | 有 `InputTokens` → 用它；`InputTokens=0` 但有 `TotalTokens` → 用 total；无 usage → 本地估算；`GetContextUsage` 的 `usage_percent` 与上述一致 |
 | B8 | `context_processor_rail_test.go` | window=32K/128K/256K/512K × 四个参与收口的 processor 最终阈值（对照 §6.3/§6.4）；ratio 缺省 → 等于绝对值；yaml 绝对值覆盖后**仍**被 min 收口（§6.6 顺序回归用例）；`target >= trigger` 兜底 + `Warn`；不参与收口的字段（`large_message_threshold` 等）值不变 |
 | A1 | `deep_adapter_test.go` | 冷启动（CreateInstance 路径）与热重载（`makeDeepAgentConfig`）产出同一 `ContextEngineConfig`；热重载后窗口值不丢 |

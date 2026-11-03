@@ -32,9 +32,9 @@ type usageStubModelContext struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// TestEmitContextUsage_分母取ceConfig分子取输入侧 验证 context.usage 的口径：
-// 分母来自 ContextEngineConfig.ModelContextWindowTokens，分子取 UsageMetadata.InputTokens。
-func TestEmitContextUsage_分母取ceConfig分子取输入侧(t *testing.T) {
+// TestEmitContextUsage_分母取ceConfig分子取总量 验证 context.usage 的口径：
+// 分母来自 ContextEngineConfig.ModelContextWindowTokens，分子取 UsageMetadata.TotalTokens。
+func TestEmitContextUsage_分母取ceConfig分子取总量(t *testing.T) {
 	reactCfg := saconfig.NewReActAgentConfig()
 	reactCfg.ModelNameVal = "mock-model"
 	reactCfg.ContextEngineConfig.ModelContextWindowTokens = map[string]int{"mock-model": 32000}
@@ -56,6 +56,6 @@ func TestEmitContextUsage_分母取ceConfig分子取输入侧(t *testing.T) {
 	payload, ok := out.Payload.(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, 32000, payload["context_max"], "分母应取模型窗口映射")
-	assert.Equal(t, 8000, payload["tokens_used"], "分子应取 input_tokens")
-	assert.InDelta(t, 25.0, payload["rate"], 1e-6)
+	assert.Equal(t, 8200, payload["tokens_used"], "分子应取 total_tokens（输入+输出）")
+	assert.InDelta(t, 25.625, payload["rate"], 1e-6)
 }
