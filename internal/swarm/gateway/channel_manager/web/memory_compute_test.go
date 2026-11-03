@@ -2,9 +2,15 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,4 +66,49 @@ func TestHandleMemoryCompute_采集失败返回错误(t *testing.T) {
 	payload, err := handleMemoryCompute()(context.Background(), nil, "")
 	require.Error(t, err)
 	require.Nil(t, payload)
+}
+
+// TestMemoryCompute_真实WS返回四字段 真 WebChannel + 真 dispatcher + 真采集。
+func TestMemoryCompute_真实WS返回四字段(t *testing.T) {
+	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil, nil)
+	RegisterWebHandlers(&WebHandlersBindParams{Channel: wc})
+	require.NoError(t, wc.Start(context.Background()))
+	defer func() { _ = wc.Stop(context.Background()) }()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", wc.HandleWebSocket)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	reqFrame := ReqFrame{Type: "req", ID: "mem-1", Method: "memory.compute"}
+	reqData, err := reqFrame.Encode()
+	require.NoError(t, err)
+	require.NoError(t, conn.WriteMessage(websocket.TextMessage, reqData))
+
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, respData, err := conn.ReadMessage()
+	require.NoError(t, err)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(respData, &resp))
+	require.Equal(t, "res", resp["type"])
+	require.Equal(t, true, resp["ok"])
+
+	payload, ok := resp["payload"].(map[string]any)
+	require.True(t, ok, "payload 应为 map，实际 %T", resp["payload"])
+
+	for _, key := range []string{"rss_mb", "total_mb", "available_mb"} {
+		value, isNum := payload[key].(float64)
+		require.True(t, isNum, "%s 应为 number，实际 %T", key, payload[key])
+		require.Greater(t, value, 0.0, "%s 应大于 0", key)
+	}
+	usedPercent, isNum := payload["used_percent"].(float64)
+	require.True(t, isNum, "used_percent 应为 number，实际 %T", payload["used_percent"])
+	require.GreaterOrEqual(t, usedPercent, 0.0)
+	require.LessOrEqual(t, usedPercent, 100.0)
 }

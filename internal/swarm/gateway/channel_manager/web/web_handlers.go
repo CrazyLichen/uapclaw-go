@@ -314,7 +314,8 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("path.set", stubHandler("path.set", map[string]any{"ok": true}))
 
 	// ─── 内存信息 ───
-	d.Register("memory.compute", stubHandler("memory.compute", map[string]any{"rss": 0, "total": 0}))
+	// Python: _memory_compute (app_web_handlers.py L1414-1427)，psutil 真实采集
+	d.Register("memory.compute", handleMemoryCompute())
 
 	// ─── 语言配置 ───
 	d.Register("locale.get_conf", stubHandler("locale.get_conf", map[string]any{"preferred_language": "zh"}))
