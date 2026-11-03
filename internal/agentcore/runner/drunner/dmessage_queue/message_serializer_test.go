@@ -1,0 +1,111 @@
+package dmessage_queue
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/message_queue"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// TestMessageToMap_请求注入class 测试写侧注入 __class__ 与全字段。
+//
+// Python: _serialize_payload 对 BaseModel 产出 {"__class__": 类名, ...字段}
+func TestMessageToMap_请求注入class(t *testing.T) {
+	msg := NewDmqRequestMessage(map[string]any{"q": "hi"})
+	msg.MessageID = "mid-1"
+	msg.ReplyTopic = "reply.topic"
+	msg.RequestID = "rid-1"
+	msg.EnableStream = true
+
+	got, err := MessageToMap(msg)
+	require.NoError(t, err)
+
+	assert.Equal(t, "DmqRequestMessage", got["__class__"])
+	assert.Equal(t, "mid-1", got["message_id"])
+	assert.Equal(t, "INPUT", got["type"])
+	assert.Equal(t, "reply.topic", got["reply_topic"])
+	assert.Equal(t, "rid-1", got["request_id"])
+	assert.Equal(t, true, got["enable_stream"])
+	assert.Equal(t, map[string]any{"q": "hi"}, got["payload"])
+}
+
+// TestMessageToMap_响应全字段 测试响应消息字段完整。
+func TestMessageToMap_响应全字段(t *testing.T) {
+	msg := NewDmqResponseMessage(map[string]any{"a": 1.0})
+	msg.Seq = 3
+	msg.LastChunk = true
+	msg.ResultType = ResultTypeError
+
+	got, err := MessageToMap(msg)
+	require.NoError(t, err)
+
+	assert.Equal(t, "DmqResponseMessage", got["__class__"])
+	assert.Equal(t, "OUTPUT", got["type"])
+	assert.Equal(t, "ERROR", got["result_type"])
+	assert.Equal(t, 3, got["seq"])
+	assert.Equal(t, true, got["last_chunk"])
+}
+
+// TestSerializePayload_datetime 测试 time.Time 编成 __type__ 包装。
+//
+// Python: _json_serializer 对 datetime 返回 {"__type__": "datetime", "value": isoformat()}
+func TestSerializePayload_datetime(t *testing.T) {
+	ts := time.Date(2026, 11, 3, 1, 2, 3, 0, time.UTC)
+
+	got, err := serializePayload(ts, 0)
+	require.NoError(t, err)
+
+	m, ok := got.(map[string]any)
+	require.True(t, ok, "期望 map，实际 %T", got)
+	assert.Equal(t, "datetime", m["__type__"])
+	assert.Equal(t, "2026-11-03T01:02:03Z", m["value"])
+}
+
+// TestSerializePayload_嵌套递归 测试 map/list 递归转换。
+func TestSerializePayload_嵌套递归(t *testing.T) {
+	in := map[string]any{
+		"outer": []any{
+			map[string]any{"inner": "v"},
+		},
+	}
+
+	got, err := serializePayload(in, 0)
+	require.NoError(t, err)
+
+	m, ok := got.(map[string]any)
+	require.True(t, ok)
+	list, ok := m["outer"].([]any)
+	require.True(t, ok)
+	inner, ok := list[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "v", inner["inner"])
+}
+
+// TestSerializePayload_深度超限报错 测试超过 10 层报错。
+//
+// Python: raise RecursionError(f"Payload nested too deep (> {MAX_RECURSE_DEPTH})")
+func TestSerializePayload_深度超限报错(t *testing.T) {
+	_, err := serializePayload("v", MaxRecurseDepth+1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nested too deep")
+}
+
+// TestMessageToMap_非Dmq类型报错 测试偏差 D6：非 Dmq 类型 fail fast。
+//
+// Python 是发出去、对面 Unknown payload class 才炸；Go 在发送前就报错。
+func TestMessageToMap_非Dmq类型报错(t *testing.T) {
+	_, err := MessageToMap(newPlainQueueMessage())
+	require.Error(t, err)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newPlainQueueMessage 构造一个非 Dmq 的普通 QueueMessage，用于 D6 用例。
+func newPlainQueueMessage() *message_queue.QueueMessage {
+	return message_queue.NewQueueMessage(nil)
+}
