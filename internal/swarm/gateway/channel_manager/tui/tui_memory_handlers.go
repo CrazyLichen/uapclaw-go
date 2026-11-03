@@ -6,9 +6,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	memoryrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memoryrpc"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	memoryrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memoryrpc"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 )
 
