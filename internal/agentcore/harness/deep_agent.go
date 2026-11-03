@@ -2235,6 +2235,14 @@ func resultFromStreamChunk(chunk stream.Schema, outputParts *[]string) map[strin
 func (d *DeepAgent) registerRailSelective(ctx context.Context, r agentinterfaces.AgentRail) {
 	callbacks := r.GetCallbacks()
 
+	// 必须透传 rail 优先级：回调框架按优先级降序执行（同优先级按注册时间），
+	// 缺省 0 会让排序退化为注册顺序——AgentModeRail(85) 的设计前提是
+	// 「TaskPlanningRail(90) 先注入、本 Rail 后移除其节」，优先级丢失后
+	// 后注册的 TaskPlanningRail（如模式切回 plan 时的重注册）会跑到
+	// AgentModeRail 之后，todo 节加了没人删（2026-11-03）。
+	// Python: register_rail → register_callback(callback, priority=rail.priority)
+	priorityOpt := cb.WithPriority(r.Priority())
+
 	for event, callback := range callbacks {
 		if bridgeEvents[event] {
 			// 桥接事件 → 注册到内层 ReActAgent
@@ -2242,14 +2250,14 @@ func (d *DeepAgent) registerRailSelective(ctx context.Context, r agentinterfaces
 			reactAgent := d.reactAgent
 			d.configMu.RUnlock()
 			if reactAgent != nil {
-				reactAgent.CallbackManager().RegisterCallback(ctx, event, callback)
+				reactAgent.CallbackManager().RegisterCallback(ctx, event, callback, priorityOpt)
 			}
 			continue
 		}
 
 		if outerOnlyEvents[event] || deepEvents[event] {
 			// 外层/Deep 事件 → 注册到外层 DeepAgent
-			d.callbackManager.RegisterCallback(ctx, event, callback)
+			d.callbackManager.RegisterCallback(ctx, event, callback, priorityOpt)
 			continue
 		}
 
@@ -2257,7 +2265,7 @@ func (d *DeepAgent) registerRailSelective(ctx context.Context, r agentinterfaces
 		logger.Warn(logComponent).
 			Str("event", string(event)).
 			Msg("unknown rail event, registering to outer DeepAgent")
-		d.callbackManager.RegisterCallback(ctx, event, callback)
+		d.callbackManager.RegisterCallback(ctx, event, callback, priorityOpt)
 	}
 }
 

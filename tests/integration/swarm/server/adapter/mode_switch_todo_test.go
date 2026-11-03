@@ -13,6 +13,7 @@ import (
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -22,17 +23,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ModeSwitchTodoSuite 观测「规划模式 → 性能模式」切换后 todo 相关内容的残留情况。
+// ModeSwitchTodoSuite 「规划模式 ↔ 性能模式」切换的全链路回归。
 //
-// 切换语义（deep_adapter_rails.go:1140 updateAgentModeRails）：
-// 离开 plan 模式时注销 TaskPlanningRail，其 Uninit 会移除 todo 工具与
-// SectionTodo 提示词节。但切模式不会清理会话上下文，历史里由
-// TaskPlanningRail 注入的进度提醒与 todo 工具结果仍会留在发给模型的 messages 中。
-//
-// 本套件记录三类观测量，用于判断是否存在「提示词说能用 todo、实际没有工具」的不一致：
-//  1. 系统提示词是否含 todo 指令节（section）
-//  2. 会话上下文是否含 todo 进度提醒 / 任务记录（history）
-//  3. 性能模式下 todo_create 是否仍可执行（tool 注册）
+// 覆盖三类断言（全部对照代码写死期望值，不允许凭观测反推）：
+//  1. 提示词：plan 指令节的注入/移除、todo 节的移除、无重复拼段
+//  2. 工具注册：todo 工具随模式注册/注销、session_* 工具随模式卸载/注册、
+//     模式切换工具常驻
+//  3. 行为：plan 模式硬调 todo_create 被拦截、性能模式 todo_create 执行失败
 type ModeSwitchTodoSuite struct {
 	isuite.BaseIntegrationSuite
 	// env 每测试隔离的集成环境（数据目录 / MockLLM provider / env 备份）
@@ -42,28 +39,33 @@ type ModeSwitchTodoSuite struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// modeSwitchSessionID 本用例会话 ID（todo.json 落在 todo/<session_id>/ 下）
+	// modeSwitchSessionID 本套件会话 ID（todo.json 落在 todo/<session_id>/ 下）
 	modeSwitchSessionID = "sess_mode_switch"
 	// modeSwitchTodoArgs 待办入参
 	modeSwitchTodoArgs = `{"tasks":[{"id":"plan-task",` +
 		`"content":"完成需求分析",` +
 		`"activeForm":"正在完成需求分析",` +
 		`"description":"梳理需求边界并输出结论"}]}`
-	// todoSectionMarker 系统提示词中 todo 指令节的特征文本
+	// todoSectionMarker todo 指令节特征文本（sections/todo.go todoSystemPromptCN）
 	todoSectionMarker = "使用 todo 工具（todo_create"
-	// progressReminderMarker 进度提醒消息的特征文本
-	progressReminderMarker = "以下是当前任务规划中所有任务的内容和状态"
+	// planModeMarker plan 指令节特征文本（sections/agent_mode.go planModePromptCN）
+	planModeMarker = "Plan 模式已激活"
+	// planHiddenToolMarker plan 模式工具拦截文案（agent_mode.go:349）
+	planHiddenToolMarker = "在 plan 模式下已隐藏"
 )
 
-// watchedSections 观测用的关注节（接口没有 GetAllSections，只能按名单探）。
-var watchedSections = []string{
-	"todo", "mode_instructions", "session_tools", "task_tool", "tools",
-	"runtime", "workspace", "context", "response", "identity", "skills",
-}
+// sessionToolNames multi-session 工具（updateToolsForMode 注册 / plan 模式卸载）
+var sessionToolNames = []string{"session_cancel", "session_list", "session_new"}
+
+// modeSwitchToolNames AgentModeRail 常驻注册的模式切换工具
+var modeSwitchToolNames = []string{"enter_plan_mode", "exit_plan_mode", "switch_mode"}
+
+// todoToolNames todo 工具全集
+var todoToolNames = []string{"todo_create", "todo_get", "todo_list", "todo_modify"}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// TestModeSwitchTodoSuite 启动模式切换观测套件。
+// TestModeSwitchTodoSuite 启动模式切换回归套件。
 func TestModeSwitchTodoSuite(t *testing.T) {
 	suite.Run(t, new(ModeSwitchTodoSuite))
 }
@@ -73,31 +75,162 @@ func (s *ModeSwitchTodoSuite) SetupTest() {
 	s.env = testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_mode_switch_itest")
 }
 
-// TestPlan到性能模式_todo残留观测 走完整链路：plan 模式建待办 → 切 agent 模式 → 观测三处残留。
-func (s *ModeSwitchTodoSuite) TestPlan到性能模式_todo残留观测() {
+// TestPlan到性能模式_语义完整 主链路：plan 模式 todo_create 被拦截（完整
+// plan 语义）→ 切性能模式 todo 节消失、工具注销、硬调失败、无重复拼段。
+func (s *ModeSwitchTodoSuite) TestPlan到性能模式_语义完整() {
 	s.env.WriteConfigYAML(s.T(), "")
 
 	d := adapter.NewDeepAdapter()
 	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
-	// ── 第 1 轮：规划模式，模型创建待办 ──
+	// ── 第 1 轮：规划模式，模型创建待办（工具已注册，可执行） ──
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("todo_create", modeSwitchTodoArgs),
 		mockllm.CreateTextResponse("规划完成。"),
 	)
 	planEvents := s.runTurn(d, "req-plan-1", "agent.plan", "把需求拆成待办")
-	s.Require().True(hasEvent(planEvents, "todo.updated"),
-		"规划模式下 todo_create 应产生 todo.updated，实际事件: %v", eventTypes(planEvents))
-	s.observe("【规划模式】", d.Instance(), planEvents)
+	// 完整 plan 语义（产品决策）：plan 模式 todo 工具对模型硬性屏蔽，
+	// 硬调被拒、不产生 todo.updated（任务栏在规划模式不新增条目）
+	s.Require().False(hasEvent(planEvents, "todo.updated"),
+		"规划模式 todo_create 应被拦截，实际事件: %v", eventTypes(planEvents))
+	s.Require().Contains(toolResultFor(planEvents, "todo_create"),
+		planHiddenToolMarker, "规划模式 todo_create 应被拒绝")
 
-	// ── 第 2 轮：切到性能模式，再让模型调用 todo_create ──
+	inst := d.Instance()
+	sb := inst.SystemPromptBuilder()
+	s.Require().NotNil(sb)
+	s.False(sb.HasSection("todo"), "规划模式 plan 分支应移除 todo 节")
+	s.True(sb.HasSection("mode_instructions"), "plan 分支应注入 mode_instructions 节")
+	planSystem := s.lastSystemPrompt()
+	s.NotContains(planSystem, todoSectionMarker, "规划模式实发提示词不应含 todo 指令")
+	s.Contains(planSystem, planModeMarker, "规划模式实发提示词应含 plan 指令")
+	s.ElementsMatch(todoToolNames, registeredTodoTools(inst), "规划模式 todo 工具应已注册")
+
+	// ── 第 2 轮：切到性能模式，模型再调 todo_create ──
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("todo_create", modeSwitchTodoArgs),
 		mockllm.CreateTextResponse("执行完成。"),
 	)
-	agentEvents := s.runTurn(d, "req-agent-2", "agent", "继续执行")
-	s.observe("【性能模式】", d.Instance(), agentEvents)
+	agentEvents := s.runTurn(d, "req-agent-2", "agent.fast", "继续执行")
+
+	inst = d.Instance()
+	sb = inst.SystemPromptBuilder()
+	s.Require().NotNil(sb)
+	s.False(sb.HasSection("todo"), "性能模式 TaskPlanningRail 已注销，todo 节不应存在")
+	s.Empty(registeredTodoTools(inst), "性能模式 todo 工具应全部注销")
+	s.False(sb.HasSection("mode_instructions"), "非 plan 模式应移除 mode_instructions 节")
+
+	agentSystem := s.lastSystemPrompt()
+	s.NotContains(agentSystem, todoSectionMarker, "性能模式实发提示词不应含 todo 指令")
+	s.NotContains(agentSystem, planModeMarker, "性能模式实发提示词不应含 plan 指令")
+	s.Empty(toolResultFor(agentEvents, "todo_create"),
+		"性能模式 todo_create 已注销，工具结果应为空（执行失败），实际: %s",
+		toolResultFor(agentEvents, "todo_create"))
+
+	// 提示词不得重复拼段（双 rail 实例残留会导致整段重复与膨胀）
+	heads := headings(agentSystem)
+	s.Equal(len(heads), len(uniqueStrings(heads)), "系统提示词一级标题不应重复: %v", heads)
+	s.LessOrEqual(len(agentSystem), len(planSystem)+100,
+		"性能模式提示词长度不应超过规划模式（todo 节更少），plan=%d agent=%d",
+		len(planSystem), len(agentSystem))
+}
+
+// TestPlan模式_plan分支完整生效 断言 D1 置位后 AgentModeRail 的 plan 语义。
+func (s *ModeSwitchTodoSuite) TestPlan模式_plan分支完整生效() {
+	s.env.WriteConfigYAML(s.T(), "")
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("todo_create", modeSwitchTodoArgs),
+		mockllm.CreateTextResponse("计划已写好。"),
+	)
+	events := s.runTurn(d, "req-plan-semantics", "agent.plan", "先规划再执行")
+
+	inst := d.Instance()
+	sb := inst.SystemPromptBuilder()
+	s.Require().NotNil(sb)
+	s.True(sb.HasSection("mode_instructions"), "plan 分支应注入 mode_instructions 节")
+	s.Contains(s.lastSystemPrompt(), planModeMarker, "实发提示词应含 plan 指令")
+	s.False(sb.HasSection("todo"), "plan 分支应移除 todo 节")
+
+	// todo 工具已注册但对模型硬性屏蔽：硬调被 BeforeToolCall 拒绝
+	s.NotEmpty(registeredTodoTools(inst), "todo 工具应已注册（plan 只是对模型隐藏）")
+	s.True(containsToolResult(events, planHiddenToolMarker),
+		"todo_create 应被拒绝且文案含「在 plan 模式下已隐藏」，事件: %v", eventTypes(events))
+
+	for _, name := range sessionToolNames {
+		s.False(hasAbility(inst, name), "plan 模式应卸载 %s", name)
+	}
+}
+
+// TestAgent模式_多会话语义 断言切到性能模式后的工具注册与提示词状态。
+func (s *ModeSwitchTodoSuite) TestAgent模式_多会话语义() {
+	s.env.WriteConfigYAML(s.T(), "")
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	// 第 1 轮 plan 铺垫（让切换真实发生）
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("好。"))
+	_ = s.runTurn(d, "req-agent-sem-1", "agent.plan", "你好")
+
+	// 第 2 轮切 agent
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("收到。"))
+	_ = s.runTurn(d, "req-agent-sem-2", "agent.fast", "继续")
+
+	inst := d.Instance()
+	sb := inst.SystemPromptBuilder()
+	s.Require().NotNil(sb)
+	s.False(sb.HasSection("mode_instructions"), "非 plan 模式应移除 mode_instructions 节")
+	s.False(sb.HasSection("todo"), "性能模式不应有 todo 节")
+	system := s.lastSystemPrompt()
+	s.NotContains(system, planModeMarker, "实发提示词不应含 plan 指令")
+	s.NotContains(system, todoSectionMarker, "实发提示词不应含 todo 指令")
+
+	for _, name := range sessionToolNames {
+		s.True(hasAbility(inst, name), "性能模式应注册 %s（updateToolsForMode）", name)
+	}
+	for _, name := range modeSwitchToolNames {
+		s.True(hasAbility(inst, name), "AgentModeRail 注册的 %s 应常驻在册", name)
+	}
+}
+
+// Test模式反复切换_状态稳定 断言 plan↔agent 四轮往返后状态无漂移。
+func (s *ModeSwitchTodoSuite) Test模式反复切换_状态稳定() {
+	s.env.WriteConfigYAML(s.T(), "")
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	steps := []string{"agent.plan", "agent.fast", "agent.plan", "agent.fast"}
+	var agentLens []int
+	for i, mode := range steps {
+		s.MockLLM.SetResponses(mockllm.CreateTextResponse(fmt.Sprintf("第%d轮完成。", i+1)))
+		_ = s.runTurn(d, fmt.Sprintf("req-stab-%d", i+1), mode, "继续")
+
+		sb := d.Instance().SystemPromptBuilder()
+		s.Require().NotNil(sb)
+		s.False(sb.HasSection("todo"), "第%d轮(%s)不应有 todo 节", i+1, mode)
+
+		sys := s.lastSystemPrompt()
+		s.NotContains(sys, todoSectionMarker, "第%d轮实发提示词不应含 todo 指令", i+1)
+		heads := headings(sys)
+		s.Equal(len(heads), len(uniqueStrings(heads)), "第%d轮系统提示词标题不应重复: %v", i+1, heads)
+		if mode == "agent.fast" {
+			agentLens = append(agentLens, len(sys))
+		}
+	}
+
+	// 两次 agent 轮提示词长度应几乎一致（无累计膨胀；容忍 workspace 节小幅波动）
+	s.Len(agentLens, 2, "应收集到两轮 agent 提示词长度")
+	s.LessOrEqual(absDiff(agentLens[0], agentLens[1]), 500,
+		"两次性能模式轮的提示词长度应稳定: %v", agentLens)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -134,103 +267,7 @@ func (s *ModeSwitchTodoSuite) runTurn(d *adapter.DeepAdapter, requestID, mode, q
 	return events
 }
 
-// observe 打印四类观测量：提示词节注册、模型实收提示词、上下文残留、todo 工具注册与执行结果。
-func (s *ModeSwitchTodoSuite) observe(label string, inst *harness.DeepAgent, events []map[string]any) {
-	s.T().Helper()
-
-	// 1. 提示词构建器当前注册了哪些节（直接看构建器，不看拼出来的字符串）
-	if inst != nil {
-		if sb := inst.SystemPromptBuilder(); sb != nil {
-			present := make([]string, 0, len(watchedSections))
-			for _, name := range watchedSections {
-				if sb.HasSection(name) {
-					present = append(present, name)
-				}
-			}
-			s.T().Logf("%s 提示词节: hasTodo=%v 命中的关注节=%v",
-				label, sb.HasSection("todo"), present)
-
-			if sec := sb.GetSection("todo"); sec != nil {
-				content := sec.Content[sb.Language()]
-				s.T().Logf("%s todo 节语言=%s 内容长度=%d",
-					label, sb.Language(), len(content))
-			}
-		}
-
-		// 2. AbilityManager 里还注册着哪些 todo 工具
-		todoTools := make([]string, 0, 4)
-		if am := inst.AbilityManager(); am != nil {
-			for _, ability := range am.List() {
-				name := ability.AbilityName()
-				if strings.HasPrefix(name, "todo_") {
-					todoTools = append(todoTools, name)
-				}
-			}
-		}
-		sort.Strings(todoTools)
-		s.T().Logf("%s 已注册 todo 工具: %v", label, todoTools)
-	}
-
-	rec := s.lastCallMessages()
-	if rec.IsEmpty() {
-		s.T().Logf("%s 未捕获到模型调用", label)
-		return
-	}
-
-	var systemText string
-	var userTexts []string
-	for _, m := range rec.Messages() {
-		text := strings.TrimSpace(m.GetContent().Text())
-		if text == "" {
-			continue
-		}
-		if m.GetRole() == llmschema.RoleTypeSystem {
-			systemText = text
-			continue
-		}
-		userTexts = append(userTexts, text)
-	}
-
-	s.T().Logf("%s 系统提示词长度=%d，含 todo 指令节=%v",
-		label, len(systemText), strings.Contains(systemText, todoSectionMarker))
-	s.T().Logf("%s 系统提示词一级标题: %v", label, headings(systemText))
-
-	reminderHits := 0
-	taskRecordHits := 0
-	for _, text := range userTexts {
-		if strings.Contains(text, progressReminderMarker) {
-			reminderHits++
-		}
-		if strings.Contains(text, "完成需求分析") {
-			taskRecordHits++
-		}
-	}
-	s.T().Logf("%s 上下文中：进度提醒=%d 条，含任务记录的消息=%d 条，消息总数=%d",
-		label, reminderHits, taskRecordHits, len(rec.Messages()))
-
-	for _, evt := range events {
-		if evt["event_type"] != "chat.tool_result" {
-			continue
-		}
-		result, _ := evt["tool_result"].(map[string]any)
-		if result == nil || result["tool_name"] != "todo_create" {
-			continue
-		}
-		s.T().Logf("%s todo_create 工具结果: success=%v status=%v result=%v",
-			label, result["success"], result["status"],
-			truncateForLog(fmt.Sprintf("%v", result["result"]), 300))
-	}
-
-	if hasEvent(events, "todo.updated") {
-		s.T().Logf("%s 收到 todo.updated（说明工具执行成功并刷新了任务栏）", label)
-	} else {
-		s.T().Logf("%s 未收到 todo.updated（工具可能未注册或执行失败），事件序列=%v",
-			label, eventTypes(events))
-	}
-}
-
-// lastCallMessages 返回最近一次模型调用的入参（优先流式记录，回退到 Invoke 记录）。
-//
+// lastCallMessages 返回最近一次模型调用的入参（优先流式记录）。
 // Web/适配器链路走 Stream，MockLLM 的 Invoke 记录因此为空，必须读 streamCalls。
 func (s *ModeSwitchTodoSuite) lastCallMessages() model_clients.MessagesParam {
 	s.T().Helper()
@@ -243,16 +280,45 @@ func (s *ModeSwitchTodoSuite) lastCallMessages() model_clients.MessagesParam {
 	return model_clients.MessagesParam{}
 }
 
-// headings 提取系统提示词中的一级标题，用于观察每轮是否有节重复拼入。
-func headings(text string) []string {
-	out := make([]string, 0, 32)
-	for _, line := range strings.Split(text, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "## ") {
-			out = append(out, strings.TrimPrefix(trimmed, "## "))
+// lastSystemPrompt 返回最近一次模型调用实收的系统提示词。
+func (s *ModeSwitchTodoSuite) lastSystemPrompt() string {
+	s.T().Helper()
+	rec := s.lastCallMessages()
+	if rec.IsEmpty() {
+		return ""
+	}
+	for _, m := range rec.Messages() {
+		if m.GetRole() == llmschema.RoleTypeSystem {
+			return m.GetContent().Text()
 		}
 	}
+	return ""
+}
+
+// registeredTodoTools 返回 AbilityManager 中已注册的 todo 工具名（升序）。
+func registeredTodoTools(inst *harness.DeepAgent) []string {
+	out := make([]string, 0, 4)
+	if am := inst.AbilityManager(); am != nil {
+		for _, ability := range am.List() {
+			if name := ability.AbilityName(); strings.HasPrefix(name, "todo_") {
+				out = append(out, name)
+			}
+		}
+	}
+	sort.Strings(out)
 	return out
+}
+
+// hasAbility 判断 AbilityManager 中是否存在指定名工具。
+func hasAbility(inst *harness.DeepAgent, name string) bool {
+	if am := inst.AbilityManager(); am != nil {
+		for _, ability := range am.List() {
+			if ability.AbilityName() == name {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasEvent 判断事件序列中是否存在指定 event_type。
@@ -276,11 +342,63 @@ func eventTypes(events []map[string]any) []string {
 	return out
 }
 
-// truncateForLog 截断日志文本，避免整段提示词刷屏。
-func truncateForLog(text string, limit int) string {
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
+// toolResultFor 返回指定工具的 tool_result 文本（未找到返回空串）。
+func toolResultFor(events []map[string]any, toolName string) string {
+	for _, evt := range events {
+		if evt["event_type"] != "chat.tool_result" || evt["tool_name"] != toolName {
+			continue
+		}
+		result, _ := evt["result"].(string)
+		return result
 	}
-	return string(runes[:limit]) + "..."
+	return ""
 }
+
+// containsToolResult 判断事件序列中是否有 tool_result 文本包含 marker。
+func containsToolResult(events []map[string]any, marker string) bool {
+	for _, evt := range events {
+		if evt["event_type"] != "chat.tool_result" {
+			continue
+		}
+		if strings.Contains(fmt.Sprintf("%v", evt["result"]), marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// headings 提取系统提示词中的一级标题，用于观察每轮是否有节重复拼入。
+func headings(text string) []string {
+	out := make([]string, 0, 32)
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## ") {
+			out = append(out, strings.TrimPrefix(trimmed, "## "))
+		}
+	}
+	return out
+}
+
+// uniqueStrings 去重保序。
+func uniqueStrings(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// absDiff 两数之差（非负）。
+func absDiff(a, b int) int {
+	if a > b {
+		return a - b
+	}
+	return b - a
+}
+
+// 编译期引用占位：saprompt 在断言具体 builder 类型时使用（保留扩展位）。
+var _ = saprompt.PromptSection{}
