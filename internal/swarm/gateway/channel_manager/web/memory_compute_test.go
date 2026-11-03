@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,6 +54,40 @@ func TestHandleMemoryCompute_真实采集四字段(t *testing.T) {
 	require.LessOrEqual(t, usedPercent, 100.0)
 
 	require.LessOrEqual(t, rssMB, totalMB, "进程 RSS 不应超过系统总内存")
+}
+
+// TestHandleMemoryCompute_进程RSS采集失败 覆盖 defaultCollectMemory 第一段错误分支。
+func TestHandleMemoryCompute_进程RSS采集失败(t *testing.T) {
+	orig := processRSSBytes
+	defer func() { processRSSBytes = orig }()
+	processRSSBytes = func() (uint64, error) {
+		return 0, errors.New("rss failed")
+	}
+
+	_, err := handleMemoryCompute()(context.Background(), nil, "")
+	require.ErrorContains(t, err, "rss failed")
+}
+
+// TestHandleMemoryCompute_系统内存采集失败 覆盖 defaultCollectMemory 第二段错误分支。
+func TestHandleMemoryCompute_系统内存采集失败(t *testing.T) {
+	orig := systemVirtualMemory
+	defer func() { systemVirtualMemory = orig }()
+	systemVirtualMemory = func() (*mem.VirtualMemoryStat, error) {
+		return nil, errors.New("vm failed")
+	}
+
+	_, err := handleMemoryCompute()(context.Background(), nil, "")
+	require.ErrorContains(t, err, "vm failed")
+}
+
+// TestHandleMemoryCompute_进程不存在 覆盖 defaultProcessRSSBytes 的 NewProcess 错误分支。
+func TestHandleMemoryCompute_进程不存在(t *testing.T) {
+	orig := currentPID
+	defer func() { currentPID = orig }()
+	currentPID = func() int { return -1 }
+
+	_, err := handleMemoryCompute()(context.Background(), nil, "")
+	require.Error(t, err)
 }
 
 // TestHandleMemoryCompute_采集失败返回错误 覆盖 gopsutil 错误分支。

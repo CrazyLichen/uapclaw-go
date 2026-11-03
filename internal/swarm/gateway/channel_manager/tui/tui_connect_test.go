@@ -114,19 +114,21 @@ func TestBuildRouteBinding(t *testing.T) {
 	}
 }
 
-// TestBuildRouteBinding_Install注册5个handler Install 在 RouteServer 上注册 5 个本地 handler。
-func TestBuildRouteBinding_Install注册5个handler(t *testing.T) {
+// TestBuildRouteBinding_Install注册10个handler Install 在 RouteServer 上注册 10 个本地 handler
+// （5 个 chat/history ack + 5 个记忆 RPC memory.list/edit/status/toggle/open）。
+func TestBuildRouteBinding_Install注册10个handler(t *testing.T) {
 	rb := BuildRouteBinding(RouteParams{})
 	server := &fakeChannel{}
 	rb.Install(server)
 
-	for _, m := range []string{"chat.send", "chat.interrupt", "chat.resume", "chat.user_answer", "history.get"} {
+	for _, m := range []string{"chat.send", "chat.interrupt", "chat.resume", "chat.user_answer", "history.get",
+		"memory.list", "memory.edit", "memory.status", "memory.toggle", "memory.open"} {
 		if _, ok := server.handlers[m]; !ok {
 			t.Errorf("Install 后缺少 %s handler", m)
 		}
 	}
-	if len(server.handlers) != 5 {
-		t.Errorf("注册 handler 数 = %d, 期望 5", len(server.handlers))
+	if len(server.handlers) != 10 {
+		t.Errorf("注册 handler 数 = %d, 期望 10", len(server.handlers))
 	}
 	for _, p := range server.paths {
 		if p != "/tui" {
