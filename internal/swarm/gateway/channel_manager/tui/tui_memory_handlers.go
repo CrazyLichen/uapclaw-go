@@ -1,5 +1,22 @@
 package tui
 
+import (
+	"context"
+	"fmt"
+
+	"github.com/gorilla/websocket"
+
+	memoryrpc "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memoryrpc"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// memoryHandlerFunc 统一记忆 RPC handler 签名（mode 对 edit/open 无意义但保持同形）
+type memoryHandlerFunc func(ctx context.Context, workspace, mode string, params map[string]any) map[string]any
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -7,7 +24,78 @@ const (
 	memoryRPCErrorCode = "INTERNAL_ERROR"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// memoryHandlers 方法 → handler 映射。
+//
+// 生产填充 memoryrpc 实现；测试可替换单项以覆盖 error/panic 分支。
+var memoryHandlers = map[string]memoryHandlerFunc{
+	"memory.list": func(ctx context.Context, ws, mode string, params map[string]any) map[string]any {
+		return memoryrpc.HandleMemoryList(ctx, ws, mode, params)
+	},
+	"memory.edit": func(ctx context.Context, ws, _ string, params map[string]any) map[string]any {
+		return memoryrpc.HandleMemoryEdit(ctx, ws, params)
+	},
+	"memory.status": func(ctx context.Context, ws, mode string, params map[string]any) map[string]any {
+		return memoryrpc.HandleMemoryStatus(ctx, ws, mode, params)
+	},
+	"memory.toggle": func(ctx context.Context, ws, mode string, params map[string]any) map[string]any {
+		return memoryrpc.HandleMemoryToggle(ctx, ws, mode, params)
+	},
+	"memory.open": func(ctx context.Context, ws, _ string, params map[string]any) map[string]any {
+		return memoryrpc.HandleMemoryOpen(ctx, ws, params)
+	},
+}
+
+// memoryProjectDirMethods 需要解析并注入 project_dir 的方法。
+//
+// Python: _memory_toggle 不解析 project_dir，其余四个解析。
+var memoryProjectDirMethods = map[string]bool{
+	"memory.list":   true,
+	"memory.edit":   true,
+	"memory.status": true,
+	"memory.open":   true,
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// memoryLocalHandler 构造记忆 RPC 的本地 handler。
+//
+// Python: tui_connect.py 的 _memory_list/_memory_edit/_memory_status/_memory_toggle/_memory_open
+//
+// 与 Python 一致：handler 自己发 res 帧并恒返回 nil——gateway 对返回 error 的本地
+// handler 会二次包装成 "handler error: ..."（gateway_server.go），与 Python 文案不符。
+func memoryLocalHandler(send ResponseSender, method string) routing.LocalHandlerFunc {
+	return func(ws *websocket.Conn, reqID string, params map[string]any, _ string) error {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logger.Error(logComponent).
+					Str("method", method).
+					Any("recover", recovered).
+					Msg("memory rpc panic recovered")
+				send.SendResFrame(ws, reqID, false, nil, fmt.Sprintf("%v", recovered), memoryRPCErrorCode)
+			}
+		}()
+
+		methodParams := params
+		if memoryProjectDirMethods[method] {
+			methodParams = withProjectDir(params, resolveProjectDir(params))
+		}
+
+		result := memoryHandlers[method](context.Background(), workspace.AgentWorkspaceDir(), memoryMode(params), methodParams)
+		if errMsg, failed := result["error"].(string); failed && errMsg != "" {
+			logger.Warn(logComponent).
+				Str("method", method).
+				Str("error", errMsg).
+				Msg("memory rpc failed")
+			send.SendResFrame(ws, reqID, false, nil, errMsg, memoryRPCErrorCode)
+			return nil
+		}
+
+		send.SendResFrame(ws, reqID, true, result, "", "")
+		return nil
+	}
+}
 
 // memoryMode 取请求 mode，缺省 "plan"。
 //
