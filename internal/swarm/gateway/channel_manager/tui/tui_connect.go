@@ -263,6 +263,10 @@ func BuildRouteBinding(params RouteParams) *routing.RouteBinding {
 			rs.RegisterLocalHandler("/tui", "chat.interrupt", chatInterruptHandler(rs))
 			rs.RegisterLocalHandler("/tui", "chat.user_answer", chatUserAnswerHandler(rs))
 			rs.RegisterLocalHandler("/tui", "history.get", historyGetHandler(rs))
+			// 记忆 RPC（对齐 Python tui_connect.py L1903-1907）
+			for method := range memoryHandlers {
+				rs.RegisterLocalHandler("/tui", method, memoryLocalHandler(rs, method))
+			}
 		},
 	}
 }

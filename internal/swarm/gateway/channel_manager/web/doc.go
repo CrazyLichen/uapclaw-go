@@ -17,6 +17,7 @@
 //	├── doc.go              # 包文档
 //	├── frame.go            # 帧协议类型定义和编解码
 //	├── config_apply.go     # 配置写入逻辑（ApplyConfigPayload、NotifyConfigSavedOnce）
+//	├── memory_compute.go   # memory.compute：进程/系统内存采集（gopsutil，对齐 Python _memory_compute）
 //	├── web_connect.go      # WebChannel 核心（WS 服务端 + 连接管理 + 两层消息架构）
 //	├── web_handlers.go     # RPC 分发器和方法处理器（RegisterWebHandlers）
 //	└── web_normalize.go    # 消息标准化（NormalizeGatewayMessage + MakeNormAndForward）

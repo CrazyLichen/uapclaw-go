@@ -12,8 +12,9 @@
 // 文件目录：
 //
 //	tui/
-//	├── doc.go          # 包文档
-//	└── tui_connect.go  # RouteParams/ResponseSender/RouteServer + 两个转发集合 + BuildRouteBinding + 5 个本地 handler
+//	├── doc.go                   # 包文档
+//	├── tui_memory_handlers.go   # 记忆 RPC 本地 handler（memory.list/edit/status/toggle/open，薄封装 memoryrpc）
+//	└── tui_connect.go           # RouteParams/ResponseSender/RouteServer + 两个转发集合 + BuildRouteBinding + 本地 handler 注册
 //
 // 对应 Python 代码：jiuwenswarm/gateway/channel_manager/tui/tui_connect.py
 package tui
