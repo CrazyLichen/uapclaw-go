@@ -2300,12 +2300,18 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 //
 // cache/nameToKeys 由调用方提供并独占（构建期间不对外发布），
 // 避免直接写 d.modelCache 与并发读取打擂台。
+//
+// 返回值 defaultOrder 按 config 出现顺序记录「带纯 model_name 键」的模型名。
+// 默认模型必须按该顺序取第一个（对齐 Python `for name in self._model_name_to_keys`
+// 的 dict 插入序）：Go 直接 range map 是随机序，多模型并存时默认模型会随进程漂移。
 func (d *DeepAdapter) buildModelCacheFromDefaults(
 	configBase map[string]any,
 	cache map[string]*llm.Model,
 	nameToKeys map[string][]string,
-) {
+) (defaultOrder []string, orderedKeys []string) {
 	nameCounter := make(map[string]int)
+	defaultOrder = make([]string, 0, 4)
+	orderedKeys = make([]string, 0, 4)
 
 	defaults := config.GetDefaultModels(configBase)
 	for _, entry := range defaults {
@@ -2335,11 +2341,13 @@ func (d *DeepAdapter) buildModelCacheFromDefaults(
 			continue
 		}
 		cache[cacheKey] = m
+		orderedKeys = append(orderedKeys, cacheKey)
 		nameToKeys[modelName] = append(nameToKeys[modelName], cacheKey)
 
 		// 同时用纯 model_name 作为 key 指向 is_default=true 的条目
 		if isDefault, _ := entry["is_default"].(bool); isDefault {
 			cache[modelName] = m
+			defaultOrder = append(defaultOrder, modelName)
 		}
 
 		alias, _ := entry["alias"].(string)
@@ -2349,6 +2357,7 @@ func (d *DeepAdapter) buildModelCacheFromDefaults(
 			}
 		}
 	}
+	return defaultOrder, orderedKeys
 }
 
 // buildModelCacheLegacy 回退到旧格式（models.default / react 段）构建单条目缓存。
@@ -2426,7 +2435,7 @@ func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any, cache map
 func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
 	cache := make(map[string]*llm.Model)
 	nameToKeys := make(map[string][]string)
-	d.buildModelCacheFromDefaults(configBase, cache, nameToKeys)
+	defaultOrder, orderedKeys := d.buildModelCacheFromDefaults(configBase, cache, nameToKeys)
 	if len(cache) == 0 {
 		d.buildModelCacheLegacy(configBase, cache)
 	}
@@ -2437,17 +2446,19 @@ func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
 		return nil
 	}
 
-	// 优先取 is_default=true 的条目（纯 model_name key），否则取第一个
+	// 优先取 is_default=true 的条目（纯 model_name key），按 config 顺序取第一个。
+	// 不能用 map range：Go 的 range 顺序随机，多模型并存时默认模型会随进程漂移，
+	// Python 侧 `_model_name_to_keys` 是插入序字典，等价于「列表里第一个 default 条目」。
 	defaultName := ""
-	for name := range nameToKeys {
+	for _, name := range defaultOrder {
 		if _, ok := cache[name]; ok {
 			defaultName = name
 			break
 		}
 	}
 	if defaultName == "" {
-		// 回退：取第一个 #index key
-		for key := range cache {
+		// 回退：取第一个 #index key（同样按 config 顺序，避免随机）
+		for _, key := range orderedKeys {
 			if strings.Contains(key, "#") {
 				defaultName = key
 				break

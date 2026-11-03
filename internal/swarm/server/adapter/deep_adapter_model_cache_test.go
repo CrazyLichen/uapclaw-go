@@ -192,3 +192,32 @@ func TestUnmarkSessionActive_归零清理rail(t *testing.T) {
 		t.Error("归零后会话不应活跃")
 	}
 }
+
+// TestCreateModel_多模型默认按配置顺序 覆盖默认模型选择不依赖 map 随机序。
+//
+// 背景：读取侧 config.InferIsDefault 按 model_name 分组推断，不同名的条目标会
+// 全部变成 is_default=true，因此「默认模型」实际由 models.defaults 的出现顺序
+// 决定（Python `_create_model` 遍历 `_model_name_to_keys` 的插入序）。
+// Go 早期用 range map 选择默认名，多模型并存时默认模型会随进程漂移，
+// 本用例重复构建多次以覆盖随机序分支。
+func TestCreateModel_多模型默认按配置顺序(t *testing.T) {
+	for i := 0; i < 20; i++ {
+		d := NewDeepAdapter()
+		configBase := map[string]any{
+			"models": map[string]any{
+				"defaults": []any{
+					modelEntry("m1", 8000, true, ""),
+					modelEntry("m2", 8000, true, ""),
+				},
+			},
+		}
+
+		model := d.createModel(configBase)
+		if model == nil {
+			t.Fatalf("第 %d 次：createModel 应返回默认模型", i)
+		}
+		if got := model.ModelConfig.ModelName; got != "m1" {
+			t.Fatalf("第 %d 次：默认模型应为列表首个条目 m1，实际 %s", i, got)
+		}
+	}
+}
