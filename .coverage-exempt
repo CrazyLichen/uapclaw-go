@@ -207,3 +207,7 @@ internal/agentcore/sys_operation/local/encoding_other.go
 # runtime.GOOS 运行期常量，CI linux 上不可达，Windows 语义由 GetACP 平台
 # 实现与 wine 冒烟验证（非 Windows 分支由 detectShellEncoding 单测覆盖）。
 internal/agentcore/sys_operation/local/shell_operation.go#L863-L868
+
+# 2026-11-03 switchModeForState：SwitchMode 失败仅告警不阻断，单测无法稳定构造
+# checkpointer 故障，告警块豁免（防御分支已由 TestSwitchModeForState 覆盖其余路径）
+internal/swarm/server/adapter/deep_adapter_rails.go#L1010-L1015

@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
@@ -1104,5 +1105,31 @@ func TestResolveEnableTaskLoop_SkillCreate覆盖(t *testing.T) {
 				t.Errorf("resolveEnableTaskLoop = %v，期望 %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestSwitchModeForState 验证 switchModeForState 的防御分支与完整链路。
+// 2026-11-03：web 切模式时经此函数把 mode 同步进 agent 状态机。
+func TestSwitchModeForState(t *testing.T) {
+	d := NewDeepAdapter()
+
+	// 空 sessionID（CreateInstance 阶段）应直接跳过，不触发任何 session 生命周期
+	d.switchModeForState(context.Background(), "", "plan")
+
+	// instance 为 nil 时 SwitchMode 内部直接返回
+	d.switchModeForState(context.Background(), "sess-x", "plan")
+
+	// 完整链路：真实 DeepAgent + 真实 session 生命周期（plan → normal 往返幂等）
+	agent := harness.NewDeepAgent(agentschema.NewAgentCard())
+	d.instance = agent
+	d.switchModeForState(context.Background(), "sess-switch-mode-state", "plan")
+	d.switchModeForState(context.Background(), "sess-switch-mode-state", "normal")
+
+	loaded := session.CreateAgentSession("sess-switch-mode-state", agent.Card(), nil)
+	if err := loaded.PreRun(context.Background()); err != nil {
+		t.Fatalf("PreRun: %v", err)
+	}
+	if state := agent.LoadState(loaded); state.PlanMode.Mode != "normal" {
+		t.Errorf("往返后 plan 状态应为 normal，实际 %q", state.PlanMode.Mode)
 	}
 }
