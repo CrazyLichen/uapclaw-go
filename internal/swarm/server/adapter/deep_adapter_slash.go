@@ -78,7 +78,7 @@ func (d *DeepAdapter) ensureEvolutionRailForSlash(mode string) string {
 	if mode != "agent.plan" {
 		return "当前模式下演进功能不可用，仅 agent.plan 模式支持。"
 	}
-	evolutionConfig, _ := d.configCache["evolution"].(map[string]any)
+	evolutionConfig, _ := d.configCacheSnapshot()["evolution"].(map[string]any)
 	enabled, _ := evolutionConfig["enabled"].(bool)
 	if !enabled {
 		return "演进功能未启用。"

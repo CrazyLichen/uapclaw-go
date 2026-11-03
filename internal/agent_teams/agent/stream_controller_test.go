@@ -12,6 +12,7 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
@@ -1472,5 +1473,19 @@ func TestDetectTaskFailed_结构体载荷直读(t *testing.T) {
 	var nilCop *cschema.ControllerOutputPayload
 	if err := detectTaskFailed(&streambase.OutputSchema{Payload: nilCop}); err != nil {
 		t.Errorf("typed nil 载荷应返回 nil，实际 %v", err)
+	}
+}
+
+// TestResolveCompletionTimeout_配置优先与缺省回落 验证 M-06：
+// 单轮超时取 DeepAgentConfig.CompletionTimeout（缺省 600s），不再硬编码 3600s。
+func TestResolveCompletionTimeout_配置优先与缺省回落(t *testing.T) {
+	if got := resolveCompletionTimeout(nil); got != 600*time.Second {
+		t.Errorf("nil 配置 = %v, want 600s（Python 默认值）", got)
+	}
+	if got := resolveCompletionTimeout(&hschema.DeepAgentConfig{CompletionTimeout: 0}); got != 600*time.Second {
+		t.Errorf("零值 = %v, want 600s", got)
+	}
+	if got := resolveCompletionTimeout(&hschema.DeepAgentConfig{CompletionTimeout: 120}); got != 120*time.Second {
+		t.Errorf("配置 120s 时 = %v, want 120s", got)
 	}
 }

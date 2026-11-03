@@ -204,7 +204,10 @@ func TestMergeProcessors_基础合并(t *testing.T) {
 		},
 	}
 
-	result := MergeProcessors(base, overrides, nil, nil)
+	result, err := MergeProcessors(base, overrides, nil, nil)
+	if err != nil {
+		t.Fatalf("MergeProcessors 返回错误: %v", err)
+	}
 	if len(result) != 2 {
 		t.Fatalf("结果长度 = %d, want 2", len(result))
 	}
@@ -240,7 +243,10 @@ func TestMergeProcessors_追加新processor(t *testing.T) {
 		{Type: "NewProcessor", Config: &testConfig{TokensThreshold: 5000}},
 	}
 
-	result := MergeProcessors(base, overrides, nil, nil)
+	result, err := MergeProcessors(base, overrides, nil, nil)
+	if err != nil {
+		t.Fatalf("MergeProcessors 返回错误: %v", err)
+	}
 	if len(result) != 2 {
 		t.Fatalf("结果长度 = %d, want 2", len(result))
 	}
@@ -249,14 +255,7 @@ func TestMergeProcessors_追加新processor(t *testing.T) {
 	}
 }
 
-func TestMergeProcessors_无base时dict覆盖应panic(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Error("无 base 时 dict 覆盖应 panic")
-		}
-	}()
-
+func TestMergeProcessors_无base时dict覆盖返回错误并跳过(t *testing.T) {
 	overrides := []ceiface.ProcessorSpec{
 		{
 			Type:            "NewProcessor",
@@ -264,7 +263,15 @@ func TestMergeProcessors_无base时dict覆盖应panic(t *testing.T) {
 		},
 	}
 
-	MergeProcessors(nil, overrides, nil, nil)
+	// 降级语义：不 panic、跳过该处理器、返回聚合错误（对齐 Python 可降级错误，
+	// 区别是 Python 整条 rail 降级为 None，Go 只丢这一个处理器）。
+	result, err := MergeProcessors(nil, overrides, nil, nil)
+	if err == nil {
+		t.Fatal("无 base 的 dict 覆盖应返回错误")
+	}
+	if len(result) != 0 {
+		t.Fatalf("违规处理器应被跳过，结果长度 = %d, want 0", len(result))
+	}
 }
 
 func TestMergeProcessors_完整配置替换(t *testing.T) {
@@ -277,7 +284,10 @@ func TestMergeProcessors_完整配置替换(t *testing.T) {
 		{Type: "DialogueCompressor", Config: replacementCfg},
 	}
 
-	result := MergeProcessors(base, overrides, nil, nil)
+	result, err := MergeProcessors(base, overrides, nil, nil)
+	if err != nil {
+		t.Fatalf("MergeProcessors 返回错误: %v", err)
+	}
 	cfg, ok := result[0].Config.(*testConfig)
 	if !ok {
 		t.Fatal("Config 类型断言失败")

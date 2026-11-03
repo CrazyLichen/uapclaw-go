@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
@@ -146,7 +147,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	}
 
 	// 步骤 12: contextProcessorRail — Python: _context_processor_rail
-	cp := d.buildContextProcessorRail(d.configCache)
+	cp := d.buildContextProcessorRail(d.configCacheSnapshot())
 	d.contextProcessorRail = cp
 	railsList = append(railsList, cp)
 
@@ -317,8 +318,8 @@ func (d *DeepAdapter) buildSkillRailWithIncludeTools(includeTools bool) (rail sa
 // Python: _resolve_skill_mode(config)
 func (d *DeepAdapter) resolveSkillMode() string {
 	rawSkillMode := skillrails.SkillModeAll // 默认值
-	if d.configCache != nil {
-		if sm, ok := d.configCache["skill_mode"]; ok {
+	if cache := d.configCacheSnapshot(); cache != nil {
+		if sm, ok := cache["skill_mode"]; ok {
 			if s, ok := sm.(string); ok {
 				rawSkillMode = s
 			}
@@ -337,13 +338,14 @@ func (d *DeepAdapter) resolveSkillMode() string {
 // buildSkillEvolutionRail 构建技能演进护栏。
 // ✅ 已回填：SkillEvolutionRail（对齐 Python: _build_skill_evolution_rail()）
 func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
-	if d.model == nil {
+	model := d.modelSnapshot()
+	if model == nil {
 		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: model is nil, skipping")
 		return nil
 	}
 
 	// 读取 evolution 配置
-	evolutionConfig, _ := d.configCache["evolution"].(map[string]any)
+	evolutionConfig, _ := d.configCacheSnapshot()["evolution"].(map[string]any)
 	enabled, _ := evolutionConfig["enabled"].(bool)
 	if !enabled {
 		return nil
@@ -397,7 +399,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 
 	rail := evolution.NewSkillEvolutionRail(
 		[]string{skillsDir},
-		d.model,
+		model,
 		modelName,
 		d.resolveRuntimeLanguage(),
 		opts...,
@@ -437,26 +439,18 @@ func (d *DeepAdapter) buildSkillCreateRail() sainterfaces.AgentRail {
 }
 
 // getSkillsDir 获取技能目录路径。
-// 对齐 Python: _get_skills_dir() — 从 workspace 或 config 中获取
+// 对齐 Python: get_agent_skills_dir() → agent workspace 下的 skills 子目录。
+//
+// 原实现优先读 react.skills_dir，但该键在出厂模板与 Python 侧均不存在
+// （Python 直接调用 get_agent_skills_dir()），属无人消费的死分支，已删除。
 func (d *DeepAdapter) getSkillsDir() string {
-	// 优先从 config 读取
-	if d.configCache != nil {
-		if dir, ok := d.configCache["skills_dir"].(string); ok && dir != "" {
-			return dir
-		}
-	}
-	// fallback: workspace 下的 skills 子目录
-	wsDir := d.getAgentWorkspaceDir()
-	if wsDir != "" {
-		return wsDir + "/skills"
-	}
-	return ""
+	return workspace.AgentSkillsDir()
 }
 
 // getLanguage 获取语言设置。
 func (d *DeepAdapter) getLanguage() string {
-	if d.configCache != nil {
-		if lang, ok := d.configCache["language"].(string); ok && lang != "" {
+	if cache := d.configCacheSnapshot(); cache != nil {
+		if lang, ok := cache["language"].(string); ok && lang != "" {
 			return lang
 		}
 	}
@@ -464,23 +458,32 @@ func (d *DeepAdapter) getLanguage() string {
 }
 
 // getSkillCreateEnabled 获取是否启用技能创建。
-// 对齐 Python: _get_skill_create_enabled()
+//
+// Python: _get_skill_create_enabled(config) (interface_deep.py:268-280)
+// 顺序：环境变量 SKILL_CREATE 优先 → react.evolution.skill_create → 默认 false。
+// 原实现读的是 skill_create_enabled 且默认 true，与 Python 不一致：
+// 模板里的 react.evolution.skill_create 因此完全不生效。
 func (d *DeepAdapter) getSkillCreateEnabled() bool {
-	if d.configCache != nil {
-		if enabled, ok := d.configCache["skill_create_enabled"].(bool); ok {
-			return enabled
+	if env := os.Getenv("SKILL_CREATE"); env != "" {
+		switch strings.ToLower(env) {
+		case "true", "1", "yes":
+			return true
+		default:
+			return false
 		}
 	}
-	return true // 默认启用
+	evolutionConfig, _ := d.configCacheSnapshot()["evolution"].(map[string]any)
+	enabled, _ := evolutionConfig["skill_create"].(bool)
+	return enabled
 }
 
 // getMinTeamMembersForCreate 获取创建团队技能的最小团队成员数。
 func (d *DeepAdapter) getMinTeamMembersForCreate() int {
-	if d.configCache != nil {
-		if min, ok := d.configCache["min_team_members_for_create"].(float64); ok {
+	if cache := d.configCacheSnapshot(); cache != nil {
+		if min, ok := cache["min_team_members_for_create"].(float64); ok {
 			return int(min)
 		}
-		if min, ok := d.configCache["min_team_members_for_create"].(int); ok {
+		if min, ok := cache["min_team_members_for_create"].(int); ok {
 			return min
 		}
 	}
@@ -545,7 +548,7 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 
 		// Python: embed_config = config.get("embed")
 		// 注意：embed 是 config.yaml 顶级段（非 react 段），对齐 Python get_config().get("embed")
-		embedConfig, _ := d.configBase["embed"].(map[string]any)
+		embedConfig, _ := d.configBaseSnapshot()["embed"].(map[string]any)
 		if embedConfig == nil {
 			logger.Warn(logComponent).
 				Msg("MemoryRail creation failed: no embed config")
@@ -593,7 +596,7 @@ func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 // get_config()（interface_deep.py:5328-5331）；传 react 段会使
 // GetMemoryEngine 恒回落 builtin，ExternalMemoryRail 永不启用。
 func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
-	return commmem.BuildExternalMemoryRail(d.configBase, d.workspaceDir)
+	return commmem.BuildExternalMemoryRail(d.configBaseSnapshot(), d.workspaceDir)
 }
 
 // handleMemoryRailByConfig 按配置注册/注销 MemoryRail。
@@ -605,17 +608,18 @@ func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 // config.yaml 顶级段键（Python get_config() 返回完整顶级配置），
 // 此处必须传 d.configBase 而非 d.configCache（react 段快照）。
 func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string) {
+	configBase := d.configBaseSnapshot()
 
 	// Python: if get_memory_mode(config) == "local":
-	if commmem.GetMemoryMode(d.configBase) == "local" {
+	if commmem.GetMemoryMode(configBase) == "local" {
 		// Python: builtin_on = is_builtin_memory_allowed(config) and is_memory_enabled(mode, config)
-		builtinOn := commmem.IsBuiltinMemoryAllowed(d.configBase) && commmem.IsMemoryEnabled(mode, d.configBase)
+		builtinOn := commmem.IsBuiltinMemoryAllowed(configBase) && commmem.IsMemoryEnabled(mode, configBase)
 
 		if builtinOn {
 			// 开启记忆
 			if d.memoryRail != nil {
 				// Python: cur_memory_type = is_proactive_memory(mode, config)
-				curProactive := commmem.IsProactiveMemory(mode, d.configBase)
+				curProactive := commmem.IsProactiveMemory(mode, configBase)
 				if d.isProactiveMemory != nil && *d.isProactiveMemory != curProactive {
 					// 当前记忆类型（主动/被动）和之前注册的不一致，注销后重建
 					if d.instance != nil {
@@ -659,7 +663,7 @@ func (d *DeepAdapter) handleMemoryRailByConfig(ctx context.Context, mode string)
 // engine 为 "external" 或 "both" 时注册，否则注销。
 // S-11: 与 buildExternalMemoryRail 一致，配置判定必须读 configBase（完整配置）。
 func (d *DeepAdapter) handleExternalMemoryRailByConfig(ctx context.Context) {
-	if commmem.IsExternalMemoryEnabled(d.configBase) {
+	if commmem.IsExternalMemoryEnabled(d.configBaseSnapshot()) {
 		if !d.externalMemoryRailRegistered {
 			rail := d.buildExternalMemoryRail()
 			if rail != nil {
@@ -701,6 +705,7 @@ func (d *DeepAdapter) handleExternalMemoryRailByConfig(ctx context.Context) {
 // buildMemoryRailWithMode 构建带 mode 上下文的 MemoryRail（设置 isProactive）。
 // Python: _build_memory_rail(mode) 中会调用 is_proactive_memory(mode, config)
 func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRail {
+	configBase := d.configBaseSnapshot()
 	var rail sainterfaces.AgentRail
 	func() {
 		defer func() {
@@ -711,7 +716,7 @@ func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRai
 		}()
 
 		// embed 为 config.yaml 顶级段（对齐 Python get_config().get("embed")）
-		embedConfig, _ := d.configBase["embed"].(map[string]any)
+		embedConfig, _ := configBase["embed"].(map[string]any)
 		if embedConfig == nil {
 			logger.Warn(logComponent).Msg("buildMemoryRailWithMode: no embed config")
 			return
@@ -724,7 +729,7 @@ func (d *DeepAdapter) buildMemoryRailWithMode(mode string) sainterfaces.AgentRai
 		}
 		modelName, _ := embedConfig["embed_model"].(string)
 
-		isProactive := commmem.IsProactiveMemory(mode, d.configBase)
+		isProactive := commmem.IsProactiveMemory(mode, configBase)
 		d.isProactiveMemory = &isProactive
 
 		ec := &embedding.EmbeddingConfig{
@@ -813,7 +818,93 @@ func (d *DeepAdapter) buildContextProcessorRail(reactCfg map[string]any) sainter
 			})
 		}
 	}
-	return cerails.NewContextProcessorRail(cerails.WithUserProcessors(userProcessors))
+
+	opts := []cerails.ContextProcessorRailOption{cerails.WithUserProcessors(userProcessors)}
+	// session_memory 开关：对齐 Python _build_context_processor_rail 的
+	// _resolve_session_memory_config(context_engine_cfg) → ContextProcessorRail(session_memory=...)。
+	// 传了就启用 session_memory preset（三件套），未传则走默认 4 个处理器。
+	if smCfg, ok := resolveSessionMemoryConfig(ctxCfg); ok {
+		opts = append(opts, cerails.WithSessionMemoryConfig(smCfg))
+	}
+	return cerails.NewContextProcessorRail(opts...)
+}
+
+// resolveSessionMemoryConfig 解析 context_engine_config 里的 session memory 配置。
+//
+// Python: _resolve_session_memory_config (interface_deep.py:334-343)
+//
+//	raw = cfg.get("session_memory_config") or cfg.get("session_memory")
+//	True → {}（全默认）；dict → 原样；其余视为关闭
+//
+// 返回 (配置, 是否启用)。
+func resolveSessionMemoryConfig(ctxCfg map[string]any) (*cecontext.SessionMemoryConfig, bool) {
+	if ctxCfg == nil {
+		return nil, false
+	}
+	raw := firstTruthyValue(ctxCfg["session_memory_config"], ctxCfg["session_memory"])
+	switch v := raw.(type) {
+	case nil:
+		return nil, false
+	case bool:
+		// True → 使用默认配置；False 已被 firstTruthyValue 过滤
+		cfg := cecontext.NewSessionMemoryConfig()
+		return &cfg, v
+	case map[string]any:
+		cfg, err := cecontext.SessionMemoryConfigFromMap(v)
+		if err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Msg("invalid session_memory_config, session memory disabled")
+			return nil, false
+		}
+		return &cfg, true
+	default:
+		logger.Warn(logComponent).
+			Str("type", fmt.Sprintf("%T", v)).
+			Msg("session_memory_config must be bool or dict, session memory disabled")
+		return nil, false
+	}
+}
+
+// firstTruthyValue 复刻 Python `a or b` 的取值语义（None/False/空串/空容器视为假）。
+func firstTruthyValue(values ...any) any {
+	for _, v := range values {
+		switch t := v.(type) {
+		case nil:
+			continue
+		case bool:
+			if t {
+				return v
+			}
+		case string:
+			if t != "" {
+				return v
+			}
+		case map[string]any:
+			if len(t) > 0 {
+				return v
+			}
+		case []any:
+			if len(t) > 0 {
+				return v
+			}
+		case int:
+			if t != 0 {
+				return v
+			}
+		case int64:
+			if t != 0 {
+				return v
+			}
+		case float64:
+			if t != 0 {
+				return v
+			}
+		default:
+			return v
+		}
+	}
+	return nil
 }
 
 // buildPermissionRail 构建权限护栏。
@@ -853,9 +944,10 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 		Msg("permission rail tools_config keys and rail tool_names")
 
 	// Python: logger.info("[InterruptHelpers] Building PermissionInterruptRail with tool_names=%s llm=%s model_name=%s", ...)
+	permissionModel := d.modelSnapshot()
 	logger.Info(logComponent).
 		Strs("tool_names", toolNames).
-		Bool("llm", d.model != nil).
+		Bool("llm", permissionModel != nil).
 		Str("model_name", modelName).
 		Msg("Building PermissionInterruptRail")
 
@@ -872,7 +964,7 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 	workspaceRoot := workspace.WorkspaceDir()
 
 	rail := harnesssecurity.BuildPermissionInterruptRail(
-		permissionConfig, nil, host, workspaceRoot, d.model, modelName,
+		permissionConfig, nil, host, workspaceRoot, permissionModel, modelName,
 		func(config map[string]any, engine *harnesssecurity.PermissionEngine, toolNames []string, llmModel *llm.Model, mn string, h *harnesssecurity.ToolPermissionHost) sainterfaces.AgentRail {
 			return secrail.NewPermissionInterruptRail(config, engine, toolNames, llmModel, mn, h)
 		},
@@ -905,7 +997,7 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 
 	// 1. TaskPlanningRail — plan 模式下注册
 	if d.taskPlanningRail == nil {
-		rail := d.buildTaskPlanningRail(d.configCache, d.resolveRuntimeLanguage())
+		rail := d.buildTaskPlanningRail(d.configCacheSnapshot(), d.resolveRuntimeLanguage())
 		if rail != nil && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, rail); err != nil {
 				logger.Error(logComponent).Err(err).Msg("Failed to register TaskPlanningRail")
@@ -960,11 +1052,12 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 	}
 
 	// 6. ContextProcessorRail — 按配置启用/禁用
-	contextEngineConfig, _ := d.configCache["context_engine_config"].(map[string]any)
+	cache := d.configCacheSnapshot()
+	contextEngineConfig, _ := cache["context_engine_config"].(map[string]any)
 	contextEnabled, _ := contextEngineConfig["enabled"].(bool)
 	if contextEnabled {
 		if d.contextProcessorRail == nil {
-			d.contextProcessorRail = d.buildContextProcessorRail(d.configCache)
+			d.contextProcessorRail = d.buildContextProcessorRail(cache)
 			if d.contextProcessorRail != nil && d.instance != nil {
 				if err := d.instance.RegisterRail(ctx, d.contextProcessorRail); err != nil {
 					logger.Error(logComponent).Err(err).Msg("Failed to register ContextProcessorRail")
@@ -984,7 +1077,7 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 	}
 
 	// 7. SkillEvolutionRail — 按 evolution 配置注册/注销
-	evolutionConfig, _ := d.configCache["evolution"].(map[string]any)
+	evolutionConfig, _ := cache["evolution"].(map[string]any)
 	evolutionEnabled, _ := evolutionConfig["enabled"].(bool)
 	if evolutionEnabled {
 		if d.skillEvolutionRail == nil {
@@ -1108,7 +1201,7 @@ func (d *DeepAdapter) updateAgentModeRails(ctx context.Context, mode string) {
 
 	// 5. ContextProcessorRail — agent 模式下按需注册
 	if d.contextProcessorRail == nil {
-		d.contextProcessorRail = d.buildContextProcessorRail(d.configCache)
+		d.contextProcessorRail = d.buildContextProcessorRail(d.configCacheSnapshot())
 		if d.contextProcessorRail != nil && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, d.contextProcessorRail); err != nil {
 				logger.Error(logComponent).Err(err).Msg("Failed to register ContextProcessorRail")
@@ -1150,10 +1243,11 @@ func (d *DeepAdapter) updatePromptForMode(mode string) {
 // getPermissionsSnapshot 返回当前权限配置快照。
 // Python: get_permissions_snapshot = lambda: get_config().get("permissions", {}) (interrupt_helpers.py L215)
 func (d *DeepAdapter) getPermissionsSnapshot() map[string]any {
-	if d.configCache == nil {
+	cache := d.configCacheSnapshot()
+	if cache == nil {
 		return map[string]any{}
 	}
-	perm, _ := d.configCache["permissions"].(map[string]any)
+	perm, _ := cache["permissions"].(map[string]any)
 	if perm == nil {
 		return map[string]any{}
 	}
@@ -1509,13 +1603,13 @@ func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]
 	case "buildAvatarRail":
 		return d.buildAvatarRail()
 	case "buildTaskPlanningRail":
-		return d.buildTaskPlanningRail(d.configCache, d.resolveRuntimeLanguage())
+		return d.buildTaskPlanningRail(d.configCacheSnapshot(), d.resolveRuntimeLanguage())
 	case "buildSubagentRail":
 		return d.buildSubagentRail()
 	case "buildContextAssembleRail":
 		return d.buildContextAssembleRail(d.mode)
 	case "buildContextProcessorRail":
-		return d.buildContextProcessorRail(d.configCache)
+		return d.buildContextProcessorRail(d.configCacheSnapshot())
 	case "buildSkillEvolutionRail":
 		return d.buildSkillEvolutionRail()
 	case "buildWorktreeRail":

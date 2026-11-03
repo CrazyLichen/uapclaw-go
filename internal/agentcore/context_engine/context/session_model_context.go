@@ -1071,6 +1071,9 @@ func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages [
 
 	// 优先使用最后一条 AssistantMessage 的 usage_metadata：取输入侧 token，
 	// 与 context_max（模型输入上限）同量纲；输入侧缺失时回退总量。
+	//
+	// 口径与 interface.ContextStats.StatMessages 保持一致（两处必须同改，
+	// 否则 context.usage 与 ContextStats 会对同一条 usage 给出不同数字）。
 	// Python: usage_tokens = self._get_last_assistant_usage_tokens(messages)
 	// Python: 如果usage_tokens不为空则直接设置总Token数
 	for i := len(messages) - 1; i >= 0; i-- {

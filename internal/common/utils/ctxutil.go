@@ -20,10 +20,16 @@ import (
 // 只认 context.Canceled：DeadlineExceeded 仍须按错误上报
 // （Python 的 TimeoutError 是 Exception 会被上报，CancelledError 不会）。
 //
-// 注意：不要用 errors.Is(err, context.Canceled) 替代本判定——LLM 客户端的
-// WrapError 历史上用 %v 拼串，错误链可能已断（见 openai/client.go）。
-// 调用方必须传非 nil ctx（Go 惯例）。
+// 语义边界：
+//   - 这是"本次上下文是否被取消"的判定，不是"任意 error 是否由取消引起"。
+//     不要传入 LLM 客户端包装后的 error 来调用本函数——那种场景请用
+//     errors.Is(err, context.Canceled)（WrapError 已改为 WithCause 保留错误链，
+//     见 openai/client.go）。
+//   - ctx 为 nil 时返回 false（公共工具函数，不要求调用方保证非 nil）。
 func Canceled(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
 	return errors.Is(ctx.Err(), context.Canceled)
 }
 

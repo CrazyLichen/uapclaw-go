@@ -43,10 +43,14 @@ var (
 
 // newTextWriter 构建文本格式化 writer。
 //
-// noColor 为 true 时不着色（写文件时使用）；NO_COLOR 环境变量非空时强制不着色。
+// noColor 为 true 时不着色（写文件时使用）；控制台是否着色由 colorEnabled 决定。
 // 输出形态：[时间] [级别] [component] [文件:行号] 描述 key=value
+//
+// 性能说明：zerolog.ConsoleWriter 每行都要做「JSON 解码 → 重新渲染」，比 JSON
+// 直写慢一个量级；流式 chunk、工具增量这类高频日志会被放大。当前没有量化数据，
+// 作为文本化的已知成本记录在案；若后续出现日志热点，再按 event 采样或分流处理。
 func newTextWriter(out io.Writer, noColor bool) zerolog.ConsoleWriter {
-	useColor := !noColor && os.Getenv("NO_COLOR") == ""
+	useColor := !noColor && colorEnabled()
 	return zerolog.ConsoleWriter{
 		Out:     out,
 		NoColor: !useColor,
@@ -64,6 +68,27 @@ func newTextWriter(out io.Writer, noColor bool) zerolog.ConsoleWriter {
 		FormatPartValueByName: formatPartValue,
 		FormatCaller:          formatCaller,
 		FormatMessage:         formatMessage,
+	}
+}
+
+// colorEnabled 判定是否启用 ANSI 着色。
+//
+// 策略：默认无色（与 Python 完全一致），仅当显式设置 FORCE_COLOR 且未设置
+// NO_COLOR 时着色。这样文件/管道/supervisor 场景天然干净，无需 isatty 探测
+// ——/dev/null 也是字符设备，ModeCharDevice 会把它误判成终端。
+func colorEnabled() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	v := strings.TrimSpace(os.Getenv("FORCE_COLOR"))
+	if v == "" {
+		return false
+	}
+	switch strings.ToLower(v) {
+	case "0", "false":
+		return false
+	default:
+		return true
 	}
 }
 

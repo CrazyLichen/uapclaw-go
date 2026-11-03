@@ -94,7 +94,7 @@ func TestWriteRuntimeStateYAML(t *testing.T) {
 // Python: _update_runtime_config()
 func TestUpdateRuntimeConfig_全部字段(t *testing.T) {
 	d := NewDeepAdapter()
-	d.configCache = map[string]any{"preferred_language": "en"}
+	d.configBase = map[string]any{"preferred_language": "en"}
 	ctx := t.Context()
 
 	config := &runtimeConfig{
@@ -134,7 +134,7 @@ func TestUpdateRuntimeConfig_nil配置(t *testing.T) {
 // Python: resolved_channel = str(runtime_config.channel_id or self._resolve_prompt_channel(session_id) or "web")
 func TestUpdateRuntimeConfig_无ChannelID时从SessionID解析(t *testing.T) {
 	d := NewDeepAdapter()
-	d.configCache = map[string]any{"preferred_language": "en"}
+	d.configBase = map[string]any{"preferred_language": "en"}
 	ctx := t.Context()
 
 	config := &runtimeConfig{
@@ -158,7 +158,7 @@ func TestUpdateRuntimeConfig_无ChannelID时从SessionID解析(t *testing.T) {
 // Python: if self._runtime_prompt_rail: self._runtime_prompt_rail.set_language(resolved_language) ...
 func TestUpdateRuntimeConfig_RuntimePromptRailSetter(t *testing.T) {
 	d := NewDeepAdapter()
-	d.configCache = map[string]any{"preferred_language": "en"}
+	d.configBase = map[string]any{"preferred_language": "en"}
 	ctx := t.Context()
 
 	rail := commrails.NewRuntimePromptRail("cn", "web")
@@ -349,7 +349,7 @@ func TestIsSubagentExplicitlyEnabled_配置中不存在(t *testing.T) {
 func TestResolveRuntimeLanguage_有配置(t *testing.T) {
 	d := NewDeepAdapter()
 	// 配置 preferred_language=en → resolveRuntimeLanguage 返回 "en"
-	d.configCache = map[string]any{"preferred_language": "en"}
+	d.configBase = map[string]any{"preferred_language": "en"}
 	if got := d.resolveRuntimeLanguage(); got != "en" {
 		t.Errorf("resolveRuntimeLanguage() = %q, want %q", got, "en")
 	}
@@ -378,7 +378,7 @@ func TestResolveRuntimeLanguage_非字符串(t *testing.T) {
 // Python: _resolve_prompt_language() 读 preferred_language
 func TestResolvePromptLanguage_有配置(t *testing.T) {
 	d := NewDeepAdapter()
-	d.configCache = map[string]any{"preferred_language": "en"}
+	d.configBase = map[string]any{"preferred_language": "en"}
 	if got := d.resolvePromptLanguage(); got != "en" {
 		t.Errorf("resolvePromptLanguage() = %q, want %q", got, "en")
 	}

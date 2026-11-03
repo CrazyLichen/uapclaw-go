@@ -416,9 +416,9 @@ func TestGetLastAssistantUsageTokens_无AssistantMessage(t *testing.T) {
 	messages := []llm_schema.BaseMessage{
 		llm_schema.NewUserMessage("hello"),
 	}
-	result := getLastAssistantUsageTokens(messages)
+	result := getLastAssistantUsageInputTokens(messages)
 	if result != 0 {
-		t.Errorf("getLastAssistantUsageTokens() = %d, 期望 0", result)
+		t.Errorf("getLastAssistantUsageInputTokens() = %d, 期望 0", result)
 	}
 }
 
@@ -428,9 +428,26 @@ func TestGetLastAssistantUsageTokens_有UsageMetadata(t *testing.T) {
 		llm_schema.WithAssistantUsageMetadata(&llm_schema.UsageMetadata{TotalTokens: 200}),
 	)
 	messages := []llm_schema.BaseMessage{am}
-	result := getLastAssistantUsageTokens(messages)
+	result := getLastAssistantUsageInputTokens(messages)
 	if result != 200 {
-		t.Errorf("getLastAssistantUsageTokens() = %d, 期望 200", result)
+		t.Errorf("getLastAssistantUsageInputTokens() = %d, 期望 200", result)
+	}
+}
+
+// TestGetLastAssistantUsageInputTokens_优先InputTokens 测试输入侧优先、总量回退的口径
+func TestGetLastAssistantUsageInputTokens_优先InputTokens(t *testing.T) {
+	am := llm_schema.NewAssistantMessage("回复",
+		llm_schema.WithAssistantUsageMetadata(&llm_schema.UsageMetadata{InputTokens: 120, TotalTokens: 200}),
+	)
+	if got := getLastAssistantUsageInputTokens([]llm_schema.BaseMessage{am}); got != 120 {
+		t.Errorf("getLastAssistantUsageInputTokens() = %d, 期望 120（优先 InputTokens）", got)
+	}
+
+	amNoInput := llm_schema.NewAssistantMessage("回复",
+		llm_schema.WithAssistantUsageMetadata(&llm_schema.UsageMetadata{TotalTokens: 200}),
+	)
+	if got := getLastAssistantUsageInputTokens([]llm_schema.BaseMessage{amNoInput}); got != 200 {
+		t.Errorf("getLastAssistantUsageInputTokens() = %d, 期望 200（InputTokens 为 0 回退 TotalTokens）", got)
 	}
 }
 
@@ -443,9 +460,9 @@ func TestGetLastAssistantUsageTokens_多条AssistantMessage取最后一条(t *te
 		llm_schema.WithAssistantUsageMetadata(&llm_schema.UsageMetadata{TotalTokens: 300}),
 	)
 	messages := []llm_schema.BaseMessage{am1, am2}
-	result := getLastAssistantUsageTokens(messages)
+	result := getLastAssistantUsageInputTokens(messages)
 	if result != 300 {
-		t.Errorf("getLastAssistantUsageTokens() = %d, 期望 300（取最后一条）", result)
+		t.Errorf("getLastAssistantUsageInputTokens() = %d, 期望 300（取最后一条）", result)
 	}
 }
 

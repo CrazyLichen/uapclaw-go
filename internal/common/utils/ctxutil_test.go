@@ -38,6 +38,11 @@ func TestCanceled(t *testing.T) {
 	if Canceled(context.TODO()) {
 		t.Fatal("TODO ctx 不应判定为取消")
 	}
+
+	// nil ctx 不得 panic（公共工具函数不要求调用方保证非 nil）
+	if Canceled(nil) {
+		t.Fatal("nil ctx 应返回 false")
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

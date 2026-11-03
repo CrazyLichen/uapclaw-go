@@ -104,7 +104,7 @@ type BarrierChannel struct {
 //
 // 并发纪律（偏差 D-8）：无锁，对齐 Python。
 //
-// 约定（尚未接入）：计划由 8.3b 的 PregelLoop 在超步循环所在 goroutine 内串行调用
+// 约定（尚未接入）：计划由 8.3c 的 PregelLoop 在超步循环所在 goroutine 内串行调用
 // 本类型全部方法；节点任务在其他 goroutine 执行，但不得触碰 ChannelManager。
 // 注意 PregelLoop 目前不存在，本类型在生产代码中零调用方——接入时若改用并发调用，
 // 必须先补锁，现有注释不构成并发安全保证。

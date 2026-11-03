@@ -1,6 +1,7 @@
 package context_engineer
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -90,12 +91,16 @@ func MergeConfigWithOverrides(baseConfig iface.ProcessorConfig, overrides map[st
 //
 // 3. 遍历 overrides 列表中不在 base 的项，追加
 // 4. 对合并后的 Config，如果 Model/ModelClient 为 nil，回填 modelConfig/modelClientConfig
+//
+// 与 Python 的差异：Python 遇到"dict 覆盖命中不了 preset"会抛 ValueError，由调用方
+// 的 try/except 把整条 rail 降级为 None。Go 这里改为"跳过该处理器 + 返回聚合错误"，
+// 调用方记 Warn 后继续使用其余处理器——既保留 Python 的"不崩"，又不牺牲其它压缩器。
 func MergeProcessors(
 	base []iface.ProcessorSpec,
 	overrides []iface.ProcessorSpec,
 	modelConfig *llmschema.ModelRequestConfig,
 	modelClientConfig *llmschema.ModelClientConfig,
-) []iface.ProcessorSpec {
+) ([]iface.ProcessorSpec, error) {
 	// 构建 override map
 	overrideMap := make(map[string]iface.ProcessorSpec, len(overrides))
 	for _, spec := range overrides {
@@ -107,11 +112,16 @@ func MergeProcessors(
 
 	// 构建合并结果
 	var result []iface.ProcessorSpec
+	var errs []error
 
 	for _, baseSpec := range base {
 		if overrideSpec, ok := overrideMap[baseSpec.Type]; ok {
 			baseOverrideKeys[baseSpec.Type] = true
-			mergedCfg := buildMergedConfig(baseSpec.Type, baseSpec.Config, overrideSpec, modelConfig, modelClientConfig)
+			mergedCfg, err := buildMergedConfig(baseSpec.Type, baseSpec.Config, overrideSpec, modelConfig, modelClientConfig)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
 			result = append(result, iface.ProcessorSpec{
 				Type:            baseSpec.Type,
 				Config:          mergedCfg,
@@ -125,7 +135,11 @@ func MergeProcessors(
 	// 追加不在 base 中的 override 项
 	for _, overrideSpec := range overrides {
 		if !baseOverrideKeys[overrideSpec.Type] {
-			mergedCfg := buildMergedConfig(overrideSpec.Type, nil, overrideSpec, modelConfig, modelClientConfig)
+			mergedCfg, err := buildMergedConfig(overrideSpec.Type, nil, overrideSpec, modelConfig, modelClientConfig)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
 			result = append(result, iface.ProcessorSpec{
 				Type:            overrideSpec.Type,
 				Config:          mergedCfg,
@@ -134,7 +148,7 @@ func MergeProcessors(
 		}
 	}
 
-	return result
+	return result, errors.Join(errs...)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -148,7 +162,7 @@ func buildMergedConfig(
 	overrideSpec iface.ProcessorSpec,
 	modelConfig *llmschema.ModelRequestConfig,
 	modelClientConfig *llmschema.ModelClientConfig,
-) iface.ProcessorConfig {
+) (iface.ProcessorConfig, error) {
 	var mergedCfg iface.ProcessorConfig
 
 	if baseCfg != nil {
@@ -165,11 +179,11 @@ func buildMergedConfig(
 	} else {
 		// 无 base config
 		if len(overrideSpec.ConfigOverrides) > 0 {
-			// Python 会 raise ValueError，Go 中用 panic 表达同样的约束
-			panic(fmt.Sprintf(
-				"Processor '%s' does not exist in preset and cannot create config from dict. "+
-					"Please ensure this processor is included in the preset, "+
-					"or pass a complete ProcessorConfig object.", key))
+			// Python 抛 ValueError（被调用方 try/except 降级）；Go 返回 error，
+			// 由 MergeProcessors 跳过该处理器并聚合上报。
+			return nil, fmt.Errorf(
+				"processor '%s' does not exist in preset and cannot create config from dict",
+				key)
 		}
 		mergedCfg = overrideSpec.Config
 	}
@@ -179,7 +193,7 @@ func buildMergedConfig(
 		fillModelDefaults(mergedCfg, modelConfig, modelClientConfig)
 	}
 
-	return mergedCfg
+	return mergedCfg, nil
 }
 
 // fillModelDefaults 对合并后的 Config 回填 Model/ModelClient 字段。
@@ -242,6 +256,17 @@ func snakeToPascal(s string) string {
 // setFieldValue 通过 reflect 设置字段值，处理类型兼容性。
 func setFieldValue(field reflect.Value, val any) {
 	if !field.CanSet() {
+		return
+	}
+
+	// yaml 里的 null → Go 侧 nil。Python 的 dict merge 会把 None 原样交给
+	// pydantic（Optional 字段合法），Go 用反射搬运时必须先拦住：
+	// reflect.ValueOf(nil) 是零值 Value，调用 .Type() 会直接 panic
+	// （出厂模板 message_summary_offloader_config 的 messages_threshold: null 即触发）。
+	//
+	// 语义选择：跳过而非置零——Go 标量无法区分"未设置"与"显式清零"，
+	// 置零会把 preset 的默认阈值一并抹掉；跳过则保持 preset 默认值。
+	if val == nil {
 		return
 	}
 

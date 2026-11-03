@@ -242,8 +242,23 @@ react:
       truncate_head_ratio: 0.2
       offload_writeback_enabled: false
     # 全量压缩（session_memory 路径预设；Python 侧当前无此段，待同构）
+    # 注意：该段只有在 context_engine_config.session_memory_config 启用时才会
+    # 真正挂载 FullCompactProcessor；默认路径下配置可解析但会被激活集过滤。
     full_compact_processor_config:
       trigger_total_tokens: 180000
+  # 在线技能自演进（对齐 Python 模板 react.evolution）
+  # 代码读取：deep_adapter_rails.go:346（enabled）、:987（plan 模式注册/注销）、
+  #          runtime_inheritance.go（auto_scan/skill_create）、web_handlers.go（skill_create）
+  evolution:
+    # 是否启用在线 Skills 自演进
+    enabled: true
+    # 每轮对话后自动扫描（建议先用手动 /evolve）
+    auto_scan: false
+    # 注册 SkillCreateRail（单 agent）与 TeamSkillCreateRail（leader）
+    skill_create: false
+    # Skill 根目录（模板对齐项：Go 侧取 workspace.AgentSkillsDir()、
+    # Python 侧用 get_agent_skills_dir()，两端代码均未消费本键）
+    skill_base_dir: "agent/skills"
 
 # 预定义 Agent 列表（agent 名 → 模型/技能/工作区/迭代上限）
 # 代码默认：max_iterations=200、completion_timeout=600、stable_base=true（team/config_loader.go:20-26）

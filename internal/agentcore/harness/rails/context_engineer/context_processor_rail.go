@@ -62,9 +62,35 @@ const (
 	// contextProcessorRailPriority ContextProcessorRail 优先级
 	// Python: ContextProcessorRail.priority = 85
 	contextProcessorRailPriority = 85
+
+	// 默认 preset 的处理器类型
+	// Python: ContextProcessorRail._build_preset_processors (session_memory=False)
+	defaultProcessorOffloader    = "MessageSummaryOffloader"
+	defaultProcessorDialogue     = "DialogueCompressor"
+	defaultProcessorCurrentRound = "CurrentRoundCompressor"
+	defaultProcessorRoundLevel   = "RoundLevelCompressor"
+
+	// session_memory preset 的处理器类型
+	// Python: ContextProcessorRail._build_preset_processors (session_memory=True)
+	sessionMemoryProcessorToolResultBudget = "ToolResultBudgetProcessor"
+	sessionMemoryProcessorMicroCompact     = "MicroCompactProcessor"
+	sessionMemoryProcessorFullCompact      = "FullCompactProcessor"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// allPresetProcessorTypes preset 覆盖的全部处理器类型集合。
+// 用于区分"preset 内建类型"与"用户自定义处理器"：前者受 mode 激活集过滤，
+// 后者始终保留。
+var allPresetProcessorTypes = map[string]struct{}{
+	defaultProcessorOffloader:              {},
+	defaultProcessorDialogue:               {},
+	defaultProcessorCurrentRound:           {},
+	defaultProcessorRoundLevel:             {},
+	sessionMemoryProcessorToolResultBudget: {},
+	sessionMemoryProcessorMicroCompact:     {},
+	sessionMemoryProcessorFullCompact:      {},
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -105,17 +131,31 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 		baseProcessors = r.buildPresetProcessors(modelConfig, modelClientConfig)
 	}
 
-	allProcessors := MergeProcessors(
+	allProcessors, mergeErr := MergeProcessors(
 		baseProcessors,
 		r.userProcessors,
 		modelConfig,
 		modelClientConfig,
 	)
+	if mergeErr != nil {
+		// Python 对应场景是 ValueError 被 _build_context_processor_rail 的 try/except
+		// 捕获后降级；Go 在这里降级为"跳过该处理器、其余继续"，避免 panic 终止进程。
+		logger.Warn(logComponent).
+			Err(mergeErr).
+			Msg("context processor merge partially failed, offending processors skipped")
+	}
+
+	// 激活集过滤：base 同时包含默认与 session_memory 两条分支的默认配置
+	// （只为让 yaml 覆盖能命中类型），真正生效的集合由 session_memory 开关决定。
+	if r.preset {
+		allProcessors = r.filterActiveProcessors(allProcessors)
+	}
 
 	// 阈值收口：必须在 MergeProcessors 之后，否则 yaml 里的绝对值会绕开 min（spec §6.6）。
 	// Python 侧无对应实现（设计与 Python 的差异点，见 spec §6.1）。
-	if reactCfg := getReactAgentConfig(agent); reactCfg != nil {
-		ce := reactCfg.ContextEngineConfig
+	// 复用上面已取到的 config，避免二次类型断言（原实现重复调 getReactAgentConfig）。
+	if config != nil {
+		ce := config.ContextEngineConfig
 		window := cecontext.ResolveContextMax(ce.ModelName, ce.ContextWindowTokens, ce.ModelContextWindowTokens)
 		allProcessors = applyCompressionRatios(
 			allProcessors, window, ce.CompressionTriggerRatio, ce.CompressionTargetRatio)
@@ -273,53 +313,78 @@ func WithSessionMemoryConfig(cfg *cecontext.SessionMemoryConfig) ContextProcesso
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// buildPresetProcessors 构建预设默认处理器列表。
+// buildPresetProcessors 构建"全量已知处理器的默认配置"（两条 preset 分支的并集）。
 //
 // Python: ContextProcessorRail._build_preset_processors(model_config, model_client_config)
-// 根据 session_memory 是否启用选择不同的预设路径。
+// 根据 session_memory 是否启用选择不同的预设路径。Go 把两条分支都构造成 base，
+// 目的是让 yaml 里任何已知 processor 段都能在 MergeProcessors 中命中类型并做字段覆盖；
+// 合并后再由 filterActiveProcessors 按 session_memory 开关筛出真正生效的集合。
 func (r *ContextProcessorRail) buildPresetProcessors(
 	modelConfig *llmschema.ModelRequestConfig,
 	modelClientConfig *llmschema.ModelClientConfig,
 ) []ceiface.ProcessorSpec {
+	specs := make([]ceiface.ProcessorSpec, 0, 7)
+	specs = append(specs, defaultPresetProcessors(modelConfig, modelClientConfig)...)
+	specs = append(specs, sessionMemoryPresetProcessors(modelConfig, modelClientConfig)...)
+	return specs
+}
+
+// filterActiveProcessors 按 session_memory 开关过滤激活集。
+//
+// 规则（对齐 Python 两条 preset 分支互斥）：
+//   - session_memory 关闭 → 只保留默认 4 个处理器；
+//   - session_memory 开启 → 只保留 ToolResultBudget/MicroCompact/FullCompact；
+//   - 未知类型（用户自定义处理器）始终保留；
+//   - 用户的 yaml 覆盖落在被过滤掉的 preset 上时打 Warn，避免"配置静默失效"。
+func (r *ContextProcessorRail) filterActiveProcessors(specs []ceiface.ProcessorSpec) []ceiface.ProcessorSpec {
+	active := map[string]struct{}{}
 	if r.sessionMemoryEnabled {
-		// session memory 启用时的预设
-		// Python: ContextProcessorRail._build_preset_processors (session_memory=True)
-		// 三个处理器均无参构造（Python L157-172），pydantic 自动填默认值。
-		// Go 端等价性说明：
-		//   - ToolResultBudgetProcessorConfig：Validate 先调 applyDefaults()
-		//     自愈填默认（TokensThreshold=50000 等），裸字面量安全；
-		//   - MicroCompact/FullCompact：Validate 无自愈，裸字面量会漏
-		//     TriggerThreshold/TriggerTotalTokens 等必填字段导致初始化失败
-		//     （"初始化处理器类型失败"错误），必须用 New*Config 构造器
-		return []ceiface.ProcessorSpec{
-			{
-				Type:   "ToolResultBudgetProcessor",
-				Config: &offloader.ToolResultBudgetProcessorConfig{},
-			},
-			{
-				Type:   "MicroCompactProcessor",
-				Config: compressor.NewMicroCompactProcessorConfig(),
-			},
-			{
-				Type: "FullCompactProcessor",
-				// NewFullCompactProcessorConfig 携带全部默认值，再按 preset
-				// 覆盖模型配置字段（Python: FullCompactProcessorConfig(model=...,
-				// model_client=...) 其余字段走 pydantic 默认）
-				Config: func() *compressor.FullCompactProcessorConfig {
-					cfg := compressor.NewFullCompactProcessorConfig()
-					cfg.Model = modelConfig
-					cfg.ModelClient = modelClientConfig
-					return cfg
-				}(),
-			},
-		}
+		active[sessionMemoryProcessorToolResultBudget] = struct{}{}
+		active[sessionMemoryProcessorMicroCompact] = struct{}{}
+		active[sessionMemoryProcessorFullCompact] = struct{}{}
+	} else {
+		active[defaultProcessorOffloader] = struct{}{}
+		active[defaultProcessorDialogue] = struct{}{}
+		active[defaultProcessorCurrentRound] = struct{}{}
+		active[defaultProcessorRoundLevel] = struct{}{}
 	}
 
-	// 默认预设（对齐 Python 非 session_memory 路径）
-	// 显式覆盖值严格对齐 Python _build_preset_processors 中的参数
+	userTypes := make(map[string]struct{}, len(r.userProcessors))
+	for _, spec := range r.userProcessors {
+		userTypes[spec.Type] = struct{}{}
+	}
+
+	out := make([]ceiface.ProcessorSpec, 0, len(specs))
+	for _, spec := range specs {
+		if _, isPreset := allPresetProcessorTypes[spec.Type]; !isPreset {
+			// 非 preset 类型（用户自定义处理器）原样保留
+			out = append(out, spec)
+			continue
+		}
+		if _, ok := active[spec.Type]; ok {
+			out = append(out, spec)
+			continue
+		}
+		if _, overridden := userTypes[spec.Type]; overridden {
+			logger.Warn(logComponent).
+				Str("processor", spec.Type).
+				Bool("session_memory_enabled", r.sessionMemoryEnabled).
+				Msg("processor config ignored: not in active preset for current mode")
+		}
+	}
+	return out
+}
+
+// defaultPresetProcessors 构造默认（非 session_memory）preset。
+//
+// 显式覆盖值严格对齐 Python _build_preset_processors 中的参数。
+func defaultPresetProcessors(
+	modelConfig *llmschema.ModelRequestConfig,
+	modelClientConfig *llmschema.ModelClientConfig,
+) []ceiface.ProcessorSpec {
 	return []ceiface.ProcessorSpec{
 		{
-			Type: "MessageSummaryOffloader",
+			Type: defaultProcessorOffloader,
 			Config: &offloader.MessageSummaryOffloaderConfig{
 				LargeMessageThreshold: 10000, // Python: large_message_threshold=10000 (覆盖默认1000)
 				OffloadMessageTypes:   []string{"tool"},
@@ -330,7 +395,7 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 			},
 		},
 		{
-			Type: "DialogueCompressor",
+			Type: defaultProcessorDialogue,
 			Config: &compressor.DialogueCompressorConfig{
 				TokensThreshold:         100000, // Python: tokens_threshold=100000 (覆盖默认10000)
 				MessagesToKeep:          10,     // Python: messages_to_keep=10
@@ -341,7 +406,7 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 			},
 		},
 		{
-			Type: "CurrentRoundCompressor",
+			Type: defaultProcessorCurrentRound,
 			// 用 NewCurrentRoundCompressorConfig 构造以携带默认值
 			// （对齐 Python pydantic Field(default=...) 自动填默认——
 			// 结构体字面量会漏 MinSelectedTokensForCompression 等字段导致
@@ -356,7 +421,7 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 			}(),
 		},
 		{
-			Type: "RoundLevelCompressor",
+			Type: defaultProcessorRoundLevel,
 			// 用 NewRoundLevelCompressorConfig 构造以携带默认值（对齐
 			// Python pydantic 自动填默认，防止 CompressionCallMaxTokens 等
 			// 字段漏设导致 Validate 失败），再按 preset 覆盖指定字段
@@ -365,6 +430,44 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 				cfg.TriggerTotalTokens = 230000
 				cfg.TargetTotalTokens = 160000
 				cfg.KeepRecentMessages = 6 // Python: keep_recent_messages=6 (覆盖默认0)
+				cfg.Model = modelConfig
+				cfg.ModelClient = modelClientConfig
+				return cfg
+			}(),
+		},
+	}
+}
+
+// sessionMemoryPresetProcessors 构造 session_memory 启用时的 preset。
+//
+// Python: ContextProcessorRail._build_preset_processors (session_memory=True)
+// 三个处理器均无参构造（Python L157-172），pydantic 自动填默认值。
+// Go 端等价性说明：
+//   - ToolResultBudgetProcessorConfig：Validate 先调 applyDefaults()
+//     自愈填默认（TokensThreshold=50000 等），裸字面量安全；
+//   - MicroCompact/FullCompact：Validate 无自愈，裸字面量会漏
+//     TriggerThreshold/TriggerTotalTokens 等必填字段导致初始化失败
+//     （"初始化处理器类型失败"错误），必须用 New*Config 构造器
+func sessionMemoryPresetProcessors(
+	modelConfig *llmschema.ModelRequestConfig,
+	modelClientConfig *llmschema.ModelClientConfig,
+) []ceiface.ProcessorSpec {
+	return []ceiface.ProcessorSpec{
+		{
+			Type:   sessionMemoryProcessorToolResultBudget,
+			Config: &offloader.ToolResultBudgetProcessorConfig{},
+		},
+		{
+			Type:   sessionMemoryProcessorMicroCompact,
+			Config: compressor.NewMicroCompactProcessorConfig(),
+		},
+		{
+			Type: sessionMemoryProcessorFullCompact,
+			// NewFullCompactProcessorConfig 携带全部默认值，再按 preset
+			// 覆盖模型配置字段（Python: FullCompactProcessorConfig(model=...,
+			// model_client=...) 其余字段走 pydantic 默认）
+			Config: func() *compressor.FullCompactProcessorConfig {
+				cfg := compressor.NewFullCompactProcessorConfig()
 				cfg.Model = modelConfig
 				cfg.ModelClient = modelClientConfig
 				return cfg
@@ -468,6 +571,11 @@ func (r *ContextProcessorRail) UserProcessorTypes() []string {
 		names = append(names, spec.Type)
 	}
 	return names
+}
+
+// SessionMemoryEnabled 返回是否启用 session memory 预设（只读，供测试与诊断）。
+func (r *ContextProcessorRail) SessionMemoryEnabled() bool {
+	return r.sessionMemoryEnabled
 }
 
 // applyCompressionRatios 按上下文窗口与比例收口各处理器的总量阈值。

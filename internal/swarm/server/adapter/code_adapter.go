@@ -176,7 +176,7 @@ func NewCodeAdapter() *CodeAdapter {
 //	Python: 10. self._agent_workspace_dir = str(get_agent_workspace_dir())
 //	Python: 11. self._dreaming_mode = "code"
 //	Python: 12. model = self._create_model(config_base)
-//	13. ⤵️ A2X / 11.10: _try_init_a2x_client（回填点，code 模式不初始化）
+//	13. ⤵️ A2X / 10.6.22: _try_init_a2x_client（回填点，code 模式不初始化）
 //	Python: 14. agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
 //	Python: 15. tool_cards = await self._get_tool_cards(agent_card.id)
 //	Python: 16. rails_list = self._build_agent_rails(config, config_base, mode="code")
@@ -224,7 +224,6 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	// Go 的 getToolCards 从 c.deep.configBase 字段读取（acp_agents）。
 	// DeepAdapter.CreateInstance 步骤 6 有此赋值（deep_adapter.go:412），
 	// CodeAdapter 重写后曾遗漏，导致 getToolCards 读取 acp_agents 时恒为 nil
-	c.deep.configBase = configBase
 
 	// 步骤 3.5: load_dotenv（对齐 Python: load_dotenv(dotenv_path=get_env_file(), override=True)）
 	if err := dotenv.Load(workspace.EnvFile()); err != nil {
@@ -236,23 +235,24 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	c.deep.refreshMultimodalConfigs(configBase)
 
 	// 步骤 5-6: 读取 react 配置段，缓存到 configCache
+	// 构建局部副本后一次性发布（发布后不可变，读侧可并发访问）。
+	reactCache := make(map[string]any)
 	if reactRaw, ok := configBase["react"]; ok {
 		if reactMap, ok := reactRaw.(map[string]any); ok {
-			c.deep.configCache = make(map[string]any, len(reactMap))
+			reactCache = make(map[string]any, len(reactMap))
 			for k, v := range reactMap {
-				c.deep.configCache[k] = v
+				reactCache[k] = v
 			}
 		}
-	} else {
-		c.deep.configCache = make(map[string]any)
 	}
+	c.deep.setConfigSnapshots(reactCache, configBase)
 
 	// 步骤 7: agentName（完整版：优先 overrides，其次 configCache）
 	if v, ok := c.deep.instanceOverrides["agent_name"]; ok {
 		if s, ok := v.(string); ok {
 			c.deep.agentName = s
 		}
-	} else if v, ok := c.deep.configCache["agent_name"]; ok {
+	} else if v, ok := reactCache["agent_name"]; ok {
 		if s, ok := v.(string); ok {
 			c.deep.agentName = s
 		}
@@ -263,7 +263,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 		if s, ok := v.(string); ok {
 			c.deep.projectDir = s
 		}
-	} else if v, ok := c.deep.configCache["project_dir"]; ok {
+	} else if v, ok := reactCache["project_dir"]; ok {
 		if s, ok := v.(string); ok {
 			c.deep.projectDir = s
 		}
@@ -272,7 +272,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	// 步骤 9: workspaceDir 优先使用 projectDir
 	if c.deep.projectDir != "" {
 		c.deep.workspaceDir = c.deep.projectDir
-	} else if v, ok := c.deep.configCache["workspace_dir"]; ok {
+	} else if v, ok := reactCache["workspace_dir"]; ok {
 		if s, ok := v.(string); ok && s != "" {
 			c.deep.workspaceDir = s
 		}
@@ -287,9 +287,10 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	c.deep.agentWorkspaceDir = workspace.AgentWorkspaceDir()
 
 	// 步骤 12: model = d.createModel(configBase) — 不传多模态配置
-	c.deep.model = c.deep.createModel(configBase)
+	// createModel 内部构建完再发布（stateMu 保护），此处不要再直接赋值 d.model。
+	c.deep.createModel(configBase)
 
-	// 步骤 13: ⤵️ A2X / 11.10: code 模式不初始化 A2X 客户端
+	// 步骤 13: ⤵️ A2X / 10.6.22: code 模式不初始化 A2X 客户端
 
 	// 步骤 14: agentCard = AgentCard(name=agent_name, id='jiuwenswarm')
 	// Python: agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
@@ -305,7 +306,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 16: rails_list = _build_agent_rails(config, configBase, mode="code")
 	// CodeAdapter 完全重写 buildAgentRails，对齐 Python 固定 rails + 动态 rails
-	railsList := c.buildCodeAgentRails(c.deep.configCache, configBase)
+	railsList := c.buildCodeAgentRails(reactCache, configBase)
 
 	// 步骤 17: sys_operation = _create_sys_operation()
 	// Python: sys_operation = self._create_sys_operation()
@@ -317,7 +318,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 
 	// 步骤 18: configured_subagents = _build_configured_subagents(model, config, config_base)
 	// Python: configured_subagents, _should_add_general = self._build_configured_subagents(model, config, config_base)
-	subagentSpecs, _ := c.buildConfiguredSubagents(c.deep.configCache, configBase)
+	subagentSpecs, _ := c.buildConfiguredSubagents(reactCache, configBase)
 
 	// 步骤 19: create_deep_agent(...)
 	// Python: self._instance = create_deep_agent(model, card, system_prompt=build_code_system_prompt(), ...)
@@ -326,14 +327,14 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	resolvedLanguage := c.resolveRuntimeLanguage()
 
 	params := harness_config.CreateDeepAgentParams{
-		Model:               c.deep.model,
+		Model:               c.deep.modelSnapshot(),
 		Card:                agentCard,
 		SystemPrompt:        systemPrompt,
 		ToolCards:           toolCards,
 		Subagents:           subagentSpecs,
 		Rails:               railsList,
-		EnableTaskLoop:      c.deep.resolveEnableTaskLoop(c.deep.configCache, configBase),
-		MaxIterations:       paramsInt(c.deep.configCache, "max_iterations", 15),
+		EnableTaskLoop:      c.deep.resolveEnableTaskLoop(reactCache, configBase),
+		MaxIterations:       paramsInt(reactCache, "max_iterations", 15),
 		Workspace:           hworkspace.NewWorkspace(c.deep.workspaceDir, resolvedLanguage),
 		Language:            resolvedLanguage,
 		EnableTaskPlanning:  true, // Python: 硬编码 true
@@ -789,12 +790,12 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// ── 固定挂载：explore_agent ──
 	// Python: explore_agent 始终启用
 	exploreParams := &hschema.SubagentCreateParams{
-		Model:         c.deep.model,
+		Model:         c.deep.modelSnapshot(),
 		Language:      resolvedLanguage,
 		Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
 		MaxIterations: exploreMaxIterations,
 	}
-	exploreCfg := subagents.BuildExploreAgentConfig(c.deep.model, exploreParams)
+	exploreCfg := subagents.BuildExploreAgentConfig(c.deep.modelSnapshot(), exploreParams)
 	if exploreCfg != nil {
 		// Python: factory_kwargs = {"auto_create_workspace": False}
 		// 注：Go 的 SubAgentConfig 没有 AutoCreateWorkspace 字段，
@@ -809,12 +810,12 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// ── 固定挂载：plan_agent ──
 	// Python: plan_agent 始终启用
 	planParams := &hschema.SubagentCreateParams{
-		Model:         c.deep.model,
+		Model:         c.deep.modelSnapshot(),
 		Language:      resolvedLanguage,
 		Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
 		MaxIterations: planMaxIterations,
 	}
-	planCfg := subagents.BuildPlanAgentConfig(c.deep.model, planParams)
+	planCfg := subagents.BuildPlanAgentConfig(c.deep.modelSnapshot(), planParams)
 	if planCfg != nil {
 		// Python: factory_kwargs = {"auto_create_workspace": False}
 		if planCfg.FactoryKwargs == nil {
@@ -828,12 +829,12 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// Python: code_agent 按配置启用
 	if c.isSubagentExplicitlyEnabled(subagentsCfg, "code_agent") {
 		codeParams := &hschema.SubagentCreateParams{
-			Model:         c.deep.model,
+			Model:         c.deep.modelSnapshot(),
 			Language:      resolvedLanguage,
 			Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
 			MaxIterations: 15,
 		}
-		codeCfg := subagents.BuildCodeAgentConfig(c.deep.model, codeParams)
+		codeCfg := subagents.BuildCodeAgentConfig(c.deep.modelSnapshot(), codeParams)
 		if codeCfg != nil {
 			// Python: factory_kwargs = {"auto_create_workspace": False}
 			if codeCfg.FactoryKwargs == nil {
@@ -864,7 +865,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// Python: research_agent 继承自 DeepAdapter
 	if c.isSubagentExplicitlyEnabled(subagentsCfg, "research_agent") {
 		params := c.deep.buildResearchSubagentParams(config, configBase)
-		cfg := subagents.BuildResearchAgentConfig(c.deep.model, params)
+		cfg := subagents.BuildResearchAgentConfig(c.deep.modelSnapshot(), params)
 		if cfg != nil {
 			specs = append(specs, cfg)
 		}
@@ -949,8 +950,8 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 		case "acp_chat":
 			// Python: _build_acp_chat_tool（L1037-1043）——getToolCards 步骤 10 同构
 			// ⤴️ 10.6.24d 回填点②：acp_agents 非空时注册（空时 Python 返回 None → 跳过）
-			if acpCfg, ok := c.deep.configBase["acp_agents"].(map[string]any); ok && len(acpCfg) > 0 {
-				acpChat := acpchat.NewAcpChatTool(c.deep.configBase)
+			if acpCfg, ok := c.deep.configBaseSnapshot()["acp_agents"].(map[string]any); ok && len(acpCfg) > 0 {
+				acpChat := acpchat.NewAcpChatTool(c.deep.configBaseSnapshot())
 				for _, at := range acpChat.GetTools() {
 					if existing, gerr := runner.GetResourceMgr().GetTool([]string{at.Card().ID}); gerr != nil || len(existing) == 0 {
 						if aerr := runner.GetResourceMgr().AddTool(at); aerr != nil {
@@ -980,10 +981,10 @@ func (c *CodeAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 // getCodeModeTools 从 configBase 中读取 modes.code.tools 配置
 func (c *CodeAdapter) getCodeModeTools() []string {
-	if c.deep.configCache == nil {
+	if c.deep.configCacheSnapshot() == nil {
 		return nil
 	}
-	modes, ok := c.deep.configCache["modes"].(map[string]any)
+	modes, ok := c.deep.configCacheSnapshot()["modes"].(map[string]any)
 	if !ok {
 		return nil
 	}
@@ -1012,7 +1013,7 @@ func (c *CodeAdapter) getCodeModeTools() []string {
 // 注意：读 configBase 顶层（对齐 Python config.get("embed")），不是 react 段的 configCache
 // ——默认 config.yaml 顶层即有 embed 段（resources/config.yaml L350）。
 func (c *CodeAdapter) resolveEmbeddingConfig() *embedding.EmbeddingConfig {
-	embedRaw, ok := c.deep.configBase["embed"]
+	embedRaw, ok := c.deep.configBaseSnapshot()["embed"]
 	if !ok {
 		return nil
 	}
@@ -1125,7 +1126,7 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 	railsList = append(railsList, ci)
 
 	// 13: ContextProcessorRail（上下文处理器护栏）
-	cp := c.deep.buildContextProcessorRail(c.deep.configCache)
+	cp := c.deep.buildContextProcessorRail(c.deep.configCacheSnapshot())
 	c.deep.contextProcessorRail = cp
 	railsList = append(railsList, cp)
 
@@ -1277,7 +1278,7 @@ func (c *CodeAdapter) buildProjectMemoryRail() *commonrails.ProjectMemoryRail {
 	projectMemoryDir := ""
 	if c.deep.uapswarmProjectMemoryDir != "" {
 		projectMemoryDir = c.deep.uapswarmProjectMemoryDir
-	} else if v, ok := c.deep.configCache["project_memory_dir"]; ok {
+	} else if v, ok := c.deep.configCacheSnapshot()["project_memory_dir"]; ok {
 		if s, ok := v.(string); ok && s != "" {
 			projectMemoryDir = s
 		}
@@ -1353,7 +1354,7 @@ func (c *CodeAdapter) projectMemoryAdditionalDirectories() []string {
 	if raw, ok := c.deep.instanceOverrides["project_memory_additional_directories"]; ok {
 		return flattenStringDirs(raw)
 	}
-	if pmCfg, ok := c.deep.configCache["project_memory"].(map[string]any); ok {
+	if pmCfg, ok := c.deep.configCacheSnapshot()["project_memory"].(map[string]any); ok {
 		if raw, ok := pmCfg["additional_directories"]; ok {
 			return flattenStringDirs(raw)
 		}
@@ -1435,7 +1436,7 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *l
 	toolNames := collectOptionalToolTags(permissionConfig)
 	// 如果调用方未传 llm/modelName，使用 DeepAdapter 的默认值
 	if llmModel == nil {
-		llmModel = c.deep.model
+		llmModel = c.deep.modelSnapshot()
 	}
 	if modelName == "" {
 		modelName = extractModelName(configBase)
@@ -1571,10 +1572,11 @@ func (c *CodeAdapter) ConfigureTeamMemberAgent(
 	if reactConfig == nil {
 		reactConfig = make(map[string]any)
 	}
-	c.deep.configCache = make(map[string]any, len(reactConfig))
+	newCache := make(map[string]any, len(reactConfig))
 	for k, v := range reactConfig {
-		c.deep.configCache[k] = v
+		newCache[k] = v
 	}
+	c.deep.setConfigSnapshots(newCache, configBase)
 
 	// Python: self._instance = agent
 	c.deep.instance = agent

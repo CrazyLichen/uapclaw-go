@@ -156,3 +156,58 @@ func TestRegisterStreamTask_OverwritesWithoutCancel(t *testing.T) {
 		t.Fatalf("表应为空（cancel 已删除），实际 %d 项", len(s.sessionStreamTasks))
 	}
 }
+
+// TestBeginStreamTask_CancelsOwnContextAndReleasesSlot 验证 M-01：
+// 收尾后自己的子 ctx 必须被 cancel（否则泄漏父 ctx children 项），且槽位释放。
+func TestBeginStreamTask_CancelsOwnContextAndReleasesSlot(t *testing.T) {
+	s := newTestAgentServer()
+	streamCtx, finish := s.beginStreamTask(context.Background(), "sess-1", "req-1")
+
+	select {
+	case <-streamCtx.Done():
+		t.Fatal("收尾前不应被取消")
+	default:
+	}
+
+	finish()
+
+	select {
+	case <-streamCtx.Done():
+	default:
+		t.Fatal("收尾后子 ctx 必须被 cancel")
+	}
+	s.sessionStreamTasksMu.RLock()
+	_, ok := s.sessionStreamTasks["sess-1"]
+	s.sessionStreamTasksMu.RUnlock()
+	if ok {
+		t.Error("收尾后槽位应被释放")
+	}
+}
+
+// TestBeginStreamTask_OverwrittenCancelsOnlyOwnContext 旧流收尾只取消自己的 ctx。
+func TestBeginStreamTask_OverwrittenCancelsOnlyOwnContext(t *testing.T) {
+	s := newTestAgentServer()
+	ctxA, finishA := s.beginStreamTask(context.Background(), "sess-1", "req-A")
+	ctxB, finishB := s.beginStreamTask(context.Background(), "sess-1", "req-B")
+
+	finishA()
+
+	select {
+	case <-ctxA.Done():
+	default:
+		t.Fatal("旧流收尾后自己的 ctx 应被取消")
+	}
+	select {
+	case <-ctxB.Done():
+		t.Fatal("旧流收尾不得取消新流的 ctx")
+	default:
+	}
+
+	s.sessionStreamTasksMu.RLock()
+	cur := s.sessionStreamTasks["sess-1"]
+	s.sessionStreamTasksMu.RUnlock()
+	if cur == nil || cur.requestID != "req-B" {
+		t.Fatalf("槽位应仍是 req-B，实际 %+v", cur)
+	}
+	finishB()
+}

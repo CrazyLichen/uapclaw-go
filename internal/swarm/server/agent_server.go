@@ -379,6 +379,25 @@ func (s *AgentServer) startConsumeLoop(ctx context.Context) {
 	}
 }
 
+// beginStreamTask 创建流式请求的子 ctx 并登记任务，返回收尾函数。
+//
+// 收尾顺序：先按身份释放登记项，再无条件 cancel 本次子 ctx。
+// Python 的 asyncio.Task 完成即自身终结、自动从父任务集合移除；Go 的
+// context.WithCancel 必须显式 cancel 才会从父 ctx 的 children 表摘除，
+// 否则每次正常完成的流式请求都会泄漏一个子 context（go vet 的 lostcancel
+// 不会报，因为 cancel 作为实参传给了 registerStreamTask）。
+//
+// 这里的 cancel 只作用于本请求自己的 ctx，不会像旧实现那样按 sessionID
+// 查槽位误取消下一轮；cancel 幂等，handleCancel 提前取消后再调也是 no-op。
+func (s *AgentServer) beginStreamTask(ctx context.Context, sessionID, requestID string) (context.Context, func()) {
+	streamCtx, cancel := context.WithCancel(ctx)
+	entry := s.registerStreamTask(sessionID, requestID, cancel)
+	return streamCtx, func() {
+		s.releaseStreamTask(sessionID, entry)
+		cancel()
+	}
+}
+
 // registerStreamTask 注册流式任务并返回登记项。
 //
 // 单槽语义（对齐 Python agent_ws_server.py:1172）：同一 session 只保留最新一条，
