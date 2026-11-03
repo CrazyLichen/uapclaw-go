@@ -221,3 +221,33 @@ func TestCreateModel_多模型默认按配置顺序(t *testing.T) {
 		}
 	}
 }
+
+// TestCreateModel_默认条目无效时回退首个index 覆盖 defaultOrder 为空时的 #index 回退分支。
+//
+// 构造同名两条目：默认位（组内首个）条目凭据非法被跳过，plain key 缺失 →
+// defaultOrder 为空，createModel 必须回退到首个可用的 #index key。
+func TestCreateModel_默认条目无效时回退首个index(t *testing.T) {
+	d := NewDeepAdapter()
+
+	invalid := modelEntry("m-same", 8000, true, "")
+	invalid["model_client_config"].(map[string]any)["api_key"] = ""
+	configBase := map[string]any{
+		"models": map[string]any{
+			"defaults": []any{
+				invalid,
+				modelEntry("m-same", 8000, false, ""),
+			},
+		},
+	}
+
+	model := d.createModel(configBase)
+	if model == nil {
+		t.Fatal("应回退到可用的 #index 条目，而不是返回 nil")
+	}
+	if got := model.ModelConfig.ModelName; got != "m-same" {
+		t.Errorf("回退模型应为 m-same，实际 %s", got)
+	}
+	if got := d.ModelCache()["m-same#1"]; got == nil {
+		t.Error("可用条目应按 m-same#1 写入缓存")
+	}
+}

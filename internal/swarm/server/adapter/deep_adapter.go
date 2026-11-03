@@ -1643,9 +1643,8 @@ func (d *DeepAdapter) cancelPendingTodos(ctx context.Context, sessionID string) 
 	if d.streamEventRail == nil {
 		return nil
 	}
-	// formatTodosForFrontend 是 commrails 包非导出函数；
-	// 本地等价实现 formatTodosForFrontendLocal（映射逻辑逐字对齐 stream_event_emit.go:234）
-	return formatTodosForFrontendLocal(updatedTodos)
+	// 复用 commrails 的共享实现（stream_event_emit.go），避免映射逻辑两处漂移
+	return commrails.FormatTodosForFrontend(updatedTodos)
 }
 
 // HandleUserAnswer 处理用户回答（evolution 审批或权限审批）。
@@ -1916,34 +1915,6 @@ func EnsurePersistentCheckpointer(ctx context.Context) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// formatTodosForFrontendLocal 前端 Todo 格式化（本地等价实现，
-// 对齐 commrails.formatTodosForFrontend —— 该函数非导出无法跨包引用）。
-func formatTodosForFrontendLocal(todosData []hschema.TodoItem) []map[string]any {
-	statusMapping := map[hschema.TodoStatus]string{
-		hschema.TodoStatusPending:    "pending",
-		hschema.TodoStatusInProgress: "in_progress",
-		hschema.TodoStatusCompleted:  "completed",
-	}
-
-	result := make([]map[string]any, 0, len(todosData))
-	for _, item := range todosData {
-		if item.Status == hschema.TodoStatusCancelled {
-			continue
-		}
-		statusStr, ok := statusMapping[item.Status]
-		if !ok {
-			statusStr = item.Status.String()
-		}
-		result = append(result, map[string]any{
-			"id":         item.ID,
-			"content":    item.Content,
-			"activeForm": item.ActiveForm,
-			"status":     statusStr,
-		})
-	}
-	return result
-}
 
 // getSendPushFunc 获取推送函数。优先使用实例级 sendPushFunc，回退到 defaultSendPushFunc。
 func (d *DeepAdapter) getSendPushFunc() func(ctx context.Context, msg map[string]any) error {
@@ -2465,14 +2436,6 @@ func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
 			}
 		}
 	}
-	if defaultName == "" {
-		// 最后回退：取第一个 key
-		for key := range cache {
-			defaultName = key
-			break
-		}
-	}
-
 	model := cache[defaultName]
 	d.publishModelState(model, cache, nameToKeys, defaultName)
 
