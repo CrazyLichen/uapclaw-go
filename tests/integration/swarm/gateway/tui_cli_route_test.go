@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -481,4 +482,106 @@ func (s *CliRouteFullChainSuite) assertCommonRoundtrip(reqID, sessionID, mode st
 			s.Require().Contains(p["content"], "CLI 全链路响应", "final 内容应为 mock 预设文本")
 		}
 	}
+}
+
+// sendReq 发送任意 method 的 req 帧
+func (s *CliRouteFullChainSuite) sendReq(conn *websocket.Conn, reqID, method string, params map[string]any) {
+	frame := map[string]any{
+		"type":   "req",
+		"id":     reqID,
+		"method": method,
+		"params": params,
+	}
+	data, err := json.Marshal(frame)
+	s.Require().NoError(err)
+	s.Require().NoError(conn.WriteMessage(websocket.TextMessage, data))
+}
+
+// readRes 读指定 reqID 的 res 帧
+func (s *CliRouteFullChainSuite) readRes(conn *websocket.Conn, reqID string) map[string]any {
+	return s.readFrameUntil(conn, 10*time.Second, func(f map[string]any) bool {
+		return f["type"] == "res" && f["id"] == reqID
+	})
+}
+
+// TestMemoryStatusFullChain /tui 本地 handler 返回真实记忆统计。
+func (s *CliRouteFullChainSuite) TestMemoryStatusFullChain() {
+	agentWorkspace := filepath.Join(os.Getenv("UAPCLAW_DATA_DIR"), "agent", "workspace")
+	req := s.Require()
+	req.NoError(os.MkdirAll(filepath.Join(agentWorkspace, "memory"), 0o755))
+	req.NoError(os.WriteFile(filepath.Join(agentWorkspace, "memory", "auto_one.md"), []byte("# one\n"), 0o644))
+	req.NoError(os.WriteFile(filepath.Join(agentWorkspace, "memory", "auto_two.md"), []byte("# two\n"), 0o644))
+	// 项目记忆发现要求项目根有 marker（.git/.uapclaw/go.mod 等，见 FindProjectRoot），
+	// 临时目录没有 → 补 .uapclaw marker 使 agentWorkspace 成为项目根
+	req.NoError(os.MkdirAll(filepath.Join(agentWorkspace, ".uapclaw"), 0o755))
+	req.NoError(os.WriteFile(filepath.Join(agentWorkspace, "UAPCLAWSWARM.md"), []byte("# project\n"), 0o644))
+
+	conn := s.dialWS()
+	defer conn.Close()
+
+	s.sendReq(conn, "mem-status-1", "memory.status", map[string]any{"detailed": true})
+	res := s.readRes(conn, "mem-status-1")
+	req.Equal(true, res["ok"], "memory.status 应成功，帧: %v", res)
+
+	payload, ok := res["payload"].(map[string]any)
+	req.True(ok, "payload 应为 map")
+	req.Equal("plan", payload["current_mode"], "未传 mode 时应为 plan（Python 缺省）")
+	req.Contains(payload, "storage_mode")
+	req.Contains(payload, "enabled")
+
+	autoMemory, ok := payload["auto_memory"].(map[string]any)
+	req.True(ok, "auto_memory 应为 map")
+	// 与测试顺序无关的等值断言：断言时重数磁盘上的 md 文件（同 suite 的
+	// memory.list 用例会向同一目录写入 list_target.md）
+	diskCount := 0
+	entries, readErr := os.ReadDir(filepath.Join(agentWorkspace, "memory"))
+	req.NoError(readErr)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
+			diskCount++
+		}
+	}
+	req.Equal(float64(diskCount), autoMemory["files_count"], "auto_memory.files_count 应与磁盘 md 数一致")
+
+	projectMemory, ok := payload["project_memory"].(map[string]any)
+	req.True(ok, "project_memory 应为 map")
+	req.GreaterOrEqual(projectMemory["files_count"].(float64), float64(1), "应发现项目记忆文件")
+
+	_, isArray := payload["large_files"].([]any)
+	req.True(isArray, "large_files 应为数组")
+}
+
+// TestMemoryListFullChain /tui 本地 handler 列出记忆文件。
+func (s *CliRouteFullChainSuite) TestMemoryListFullChain() {
+	agentWorkspace := filepath.Join(os.Getenv("UAPCLAW_DATA_DIR"), "agent", "workspace")
+	req := s.Require()
+	req.NoError(os.MkdirAll(filepath.Join(agentWorkspace, "memory"), 0o755))
+	target := filepath.Join(agentWorkspace, "memory", "list_target.md")
+	req.NoError(os.WriteFile(target, []byte("# target\n"), 0o644))
+
+	conn := s.dialWS()
+	defer conn.Close()
+
+	s.sendReq(conn, "mem-list-1", "memory.list", map[string]any{"include_project": false})
+	res := s.readRes(conn, "mem-list-1")
+	req.Equal(true, res["ok"], "memory.list 应成功，帧: %v", res)
+
+	payload, ok := res["payload"].(map[string]any)
+	req.True(ok, "payload 应为 map")
+	req.Equal("plan", payload["mode"], "mode 应回显 plan")
+
+	files, ok := payload["files"].([]any)
+	req.True(ok, "files 应为数组")
+	found := false
+	for _, item := range files {
+		fileMap, isMap := item.(map[string]any)
+		if !isMap {
+			continue
+		}
+		if fileMap["path"] == target {
+			found = true
+			req.Equal("auto", fileMap["kind"], "workspace/memory 下的文件 kind 应为 auto")
+		}
+	}
+	req.True(found, "files 应包含 %s", target)
 }
