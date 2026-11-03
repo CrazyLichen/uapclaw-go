@@ -177,6 +177,17 @@ func TestHandleAgents_写操作同步重载(t *testing.T) {
 	}
 	assertAgentsApplied(t, disableResp, true)
 
+	enableResp, err := s.handleAgentsEnable(ctx, newAgentsTestRequest(t, schema.ReqMethodAgentsEnable, map[string]any{
+		"name": "test-agent",
+	}))
+	if err != nil {
+		t.Fatalf("agents.enable 返回错误: %v", err)
+	}
+	if !enableResp.OK {
+		t.Fatalf("agents.enable 失败: %#v", enableResp.Payload)
+	}
+	assertAgentsApplied(t, enableResp, true)
+
 	deleteResp, err := s.handleAgentsDelete(ctx, newAgentsTestRequest(t, schema.ReqMethodAgentsDelete, map[string]any{
 		"name": "test-agent",
 	}))
@@ -219,5 +230,95 @@ func TestReloadAgentsConfig_未初始化返回错误(t *testing.T) {
 	s.agentManager = runtime.NewAgentManager()
 	if err := s.reloadAgentsConfig(context.Background()); err == nil {
 		t.Fatal("config 为 nil 时应返回错误")
+	}
+}
+
+// createAgentsTestAgent 创建一个可用于后续写操作的自定义 agent。
+func createAgentsTestAgent(t *testing.T, s *AgentServer, name string) {
+	t.Helper()
+	resp, err := s.handleAgentsCreate(context.Background(), newAgentsTestRequest(t, schema.ReqMethodAgentsCreate, map[string]any{
+		"name":        name,
+		"description": "测试 agent",
+		"prompt":      "你是测试 agent",
+		"location":    "project",
+	}))
+	if err != nil {
+		t.Fatalf("agents.create 返回错误: %v", err)
+	}
+	if !resp.OK {
+		t.Fatalf("agents.create 失败: %#v", resp.Payload)
+	}
+}
+
+// TestHandleAgentsUpdate_重载失败回填 覆盖 update 的 reload 失败分支。
+func TestHandleAgentsUpdate_重载失败回填(t *testing.T) {
+	s := newAgentsTestServer(t)
+	createAgentsTestAgent(t, s, "test-agent")
+	s.agentManager = nil
+
+	resp, err := s.handleAgentsUpdate(context.Background(), newAgentsTestRequest(t, schema.ReqMethodAgentsUpdate, map[string]any{
+		"name":        "test-agent",
+		"description": "更新后的描述",
+	}))
+	if err != nil {
+		t.Fatalf("agents.update 返回错误: %v", err)
+	}
+	assertAgentsApplied(t, resp, false)
+	if reloadErr, _ := resp.Payload["reload_error"].(string); reloadErr == "" {
+		t.Error("重载失败时 payload.reload_error 不应为空")
+	}
+}
+
+// TestHandleAgentsDelete_重载失败回填 覆盖 delete 的 reload 失败分支。
+func TestHandleAgentsDelete_重载失败回填(t *testing.T) {
+	s := newAgentsTestServer(t)
+	createAgentsTestAgent(t, s, "test-agent")
+	s.agentManager = nil
+
+	resp, err := s.handleAgentsDelete(context.Background(), newAgentsTestRequest(t, schema.ReqMethodAgentsDelete, map[string]any{
+		"name": "test-agent",
+	}))
+	if err != nil {
+		t.Fatalf("agents.delete 返回错误: %v", err)
+	}
+	assertAgentsApplied(t, resp, false)
+	if reloadErr, _ := resp.Payload["reload_error"].(string); reloadErr == "" {
+		t.Error("重载失败时 payload.reload_error 不应为空")
+	}
+}
+
+// TestHandleAgentsSetEnabled_重载失败回填 覆盖 enable/disable 的 reload 失败分支。
+func TestHandleAgentsSetEnabled_重载失败回填(t *testing.T) {
+	s := newAgentsTestServer(t)
+	createAgentsTestAgent(t, s, "test-agent")
+	s.agentManager = nil
+
+	resp, err := s.handleAgentsDisable(context.Background(), newAgentsTestRequest(t, schema.ReqMethodAgentsDisable, map[string]any{
+		"name": "test-agent",
+	}))
+	if err != nil {
+		t.Fatalf("agents.disable 返回错误: %v", err)
+	}
+	assertAgentsApplied(t, resp, false)
+	if reloadErr, _ := resp.Payload["reload_error"].(string); reloadErr == "" {
+		t.Error("重载失败时 payload.reload_error 不应为空")
+	}
+}
+
+// TestReloadAgentsConfig_配置加载失败 覆盖 s.config.Load() 的错误分支。
+func TestReloadAgentsConfig_配置加载失败(t *testing.T) {
+	tmpDir := t.TempDir()
+	badPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(badPath, []byte("react: [unclosed"), 0o600); err != nil {
+		t.Fatalf("写入非法配置失败: %v", err)
+	}
+	cfg, err := config.New(badPath)
+	if err != nil {
+		t.Fatalf("创建配置实例失败: %v", err)
+	}
+
+	s := &AgentServer{config: cfg, agentManager: runtime.NewAgentManager()}
+	if err := s.reloadAgentsConfig(context.Background()); err == nil {
+		t.Fatal("配置解析失败时应返回错误")
 	}
 }
