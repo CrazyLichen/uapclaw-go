@@ -8,6 +8,7 @@ import (
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/offloader"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
@@ -161,6 +162,11 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 
 	config.ContextProcessors = allProcessors
 	r.allProcessors = allProcessors
+
+	// 热重载跟随：把新配置与新处理器规格推给上下文引擎，由下一次 CreateContext
+	// （用户轮次入口）应用到池内的老上下文。Python 无此行为——其 create_context
+	// 命中池子时忽略 processors，老会话不会跟随（见 Go 侧增强说明）。
+	pushRuntimeConfig(agent, config.ContextEngineConfig, allProcessors)
 
 	// 获取 systemPromptBuilder 引用
 	// Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder", None)
@@ -534,6 +540,46 @@ func (r *ContextProcessorRail) maybeScheduleSessionMemoryUpdate(
 	}
 
 	r.sessionMemoryMgr.MaybeScheduleUpdate(ctx, sess, mc, workspaceDir)
+}
+
+// pushRuntimeConfig 把热重载后的引擎配置与处理器规格推给上下文引擎。
+//
+// 引擎不可用（非 ReActAgent 形态 / 引擎未实现可选能力）时静默跳过并打 Debug，
+// 不影响 rail 初始化本身。
+func pushRuntimeConfig(agent sainterfaces.BaseAgent, config ceschema.ContextEngineConfig, specs []ceiface.ProcessorSpec) {
+	engine := resolveContextEngine(agent)
+	if engine == nil {
+		logger.Debug(logComponent).Msg("context engine unavailable, skip runtime config push")
+		return
+	}
+	applier, ok := engine.(runtimeConfigApplier)
+	if !ok {
+		logger.Debug(logComponent).Msg("context engine does not support runtime config refresh")
+		return
+	}
+	applier.ApplyRuntimeConfig(config, specs)
+}
+
+// resolveContextEngine 从 agent 上取上下文引擎（DeepAgent → 内层 ReActAgent）。
+func resolveContextEngine(agent sainterfaces.BaseAgent) ceiface.ContextEngine {
+	if agent == nil {
+		return nil
+	}
+	if deepAgent, ok := agent.(hinterfaces.DeepAgentInterface); ok {
+		if inner := deepAgent.ReactAgent(); inner != nil {
+			agent = inner
+		}
+	}
+	if provider, ok := agent.(interface{ ContextEngine() ceiface.ContextEngine }); ok {
+		return provider.ContextEngine()
+	}
+	return nil
+}
+
+// runtimeConfigApplier 上下文引擎的可选能力：接收热重载后的配置与处理器实例。
+type runtimeConfigApplier interface {
+	// ApplyRuntimeConfig 暂存新的引擎配置与处理器规格
+	ApplyRuntimeConfig(config ceschema.ContextEngineConfig, specs []ceiface.ProcessorSpec)
 }
 
 // getReactAgentConfig 从 BaseAgent 获取 ReActAgentConfig。

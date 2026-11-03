@@ -88,6 +88,16 @@ func (b *ContextMessageBuffer) Size() int {
 	return len(b.contextMessages)
 }
 
+// SetMaxSize 更新缓冲区消息数上限（热重载刷新配置时使用）。
+//
+// 只改上限、不立即裁剪：缩小时由既有 ifNeedResize 在超过 2 倍上限时收割，
+// 与构造时的行为一致，避免热重载瞬间批量丢消息。
+func (b *ContextMessageBuffer) SetMaxSize(maxBufferSize int) {
+	b.mu.Lock()
+	b.maxBufferSize = maxBufferSize
+	b.mu.Unlock()
+}
+
 // AddBack 追加消息到缓冲区尾部，然后检查是否需要自动裁剪。
 //
 // Python: ContextMessageBuffer.add_back

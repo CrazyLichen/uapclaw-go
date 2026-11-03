@@ -2,8 +2,13 @@ package context_engine
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
@@ -35,6 +40,22 @@ type contextEngine struct {
 	contextPool map[string]iface.ModelContext
 	// mu 保护 contextPool 的读写锁
 	mu sync.RWMutex
+	// pendingConfig 待落地的引擎配置（由 rail 热重载推送）
+	pendingConfig schema.ContextEngineConfig
+	// pendingSpecs 待落地的处理器规格
+	pendingSpecs []iface.ProcessorSpec
+	// pendingFingerprint 待落地配置的内容指纹
+	pendingFingerprint string
+	// appliedFingerprint 已应用到上下文池的配置指纹
+	appliedFingerprint string
+}
+
+// runtimeConfigApplier 可选能力：接收热重载后的引擎配置与处理器实例。
+//
+// 只有 SessionModelContext 实现；测试用 mock 可不实现（此时跳过刷新）。
+type runtimeConfigApplier interface {
+	// ApplyRuntimeConfig 刷新上下文级配置并替换处理器实例
+	ApplyRuntimeConfig(config schema.ContextEngineConfig, processors []iface.ContextProcessor)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -78,6 +99,37 @@ func NewContextEngine(config schema.ContextEngineConfig, opts ...iface.ContextEn
 	}
 }
 
+// ApplyRuntimeConfig 推送热重载后的引擎配置与处理器规格。
+//
+// 只暂存期望值，真正落地发生在下一次 CreateContext（用户轮次入口），
+// 因此对正在执行的轮次零影响。同一份配置重复推送按内容指纹去重，不会重建。
+//
+// 与 Python 的差异：Python 命中上下文池时忽略 processors，老会话不跟随；
+// 本实现会把待生效配置在下次建上下文时应用到池内所有上下文（Go 侧增强）。
+func (ce *contextEngine) ApplyRuntimeConfig(config schema.ContextEngineConfig, specs []iface.ProcessorSpec) {
+	fingerprint := runtimeConfigFingerprint(config, specs)
+
+	ce.mu.Lock()
+	ce.pendingConfig = config
+	ce.pendingSpecs = specs
+	ce.pendingFingerprint = fingerprint
+	ce.mu.Unlock()
+}
+
+// PendingFingerprint 返回已推送但尚未落地的配置指纹（诊断与测试用）。
+func (ce *contextEngine) PendingFingerprint() string {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+	return ce.pendingFingerprint
+}
+
+// AppliedFingerprint 返回已应用到上下文池的配置指纹（诊断与测试用）。
+func (ce *contextEngine) AppliedFingerprint() string {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+	return ce.appliedFingerprint
+}
+
 // CreateContext 创建或获取上下文。
 //
 // 若 fullContextID 已在池中，返回已有实例并刷新会话引用和状态。
@@ -98,6 +150,8 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 	// 全程使用写锁，消除 check-then-act 竞态条件
 	// Python 因 asyncio 单线程不存在此问题，Go 多 goroutine 需要全程写锁保证原子性
 	ce.mu.Lock()
+	// 热重载的配置在此落地（轮次入口），保证池内老上下文与新上下文口径一致
+	ce.applyPendingLocked()
 	if mc, ok := ce.contextPool[fullContextID]; ok {
 		ce.mu.Unlock()
 		mc.SetSessionRef(sess)
@@ -344,6 +398,90 @@ func (ce *contextEngine) SaveContexts(ctx context.Context, sess sessioninterface
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// applyPendingLocked 把暂存的热重载配置落地到引擎与池内全部上下文。
+//
+// 调用方必须持有 ce.mu 写锁。任一处理器创建失败时整批放弃：不替换任何上下文、
+// 不推进 appliedFingerprint，下一次 CreateContext 会自动重试（指纹仍不一致），
+// 期间老上下文继续使用旧实例，不打断对话。
+func (ce *contextEngine) applyPendingLocked() {
+	if ce.pendingFingerprint == "" || ce.pendingFingerprint == ce.appliedFingerprint {
+		return
+	}
+
+	instances := make([]iface.ContextProcessor, 0, len(ce.pendingSpecs))
+	for _, spec := range ce.pendingSpecs {
+		p, err := ce.createProcessor(spec.Type, spec.Config)
+		if err != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "context_runtime_config_apply_failed").
+				Str("processor_type", spec.Type).
+				Err(err).
+				Msg("failed to rebuild context processors, keep previous instances")
+			return
+		}
+		instances = append(instances, p)
+	}
+
+	contextMaxBefore := cecontext.ResolveContextMax(
+		ce.config.ModelName, ce.config.ContextWindowTokens, ce.config.ModelContextWindowTokens)
+
+	refreshed := 0
+	for _, mc := range ce.contextPool {
+		applier, ok := mc.(runtimeConfigApplier)
+		if !ok {
+			continue
+		}
+		applier.ApplyRuntimeConfig(ce.pendingConfig, instances)
+		refreshed++
+	}
+
+	ce.config = ce.pendingConfig
+	ce.appliedFingerprint = ce.pendingFingerprint
+	contextMaxAfter := cecontext.ResolveContextMax(
+		ce.config.ModelName, ce.config.ContextWindowTokens, ce.config.ModelContextWindowTokens)
+
+	logger.Info(logComponent).
+		Str("event_type", "context_runtime_config_applied").
+		Str("fingerprint", shortFingerprint(ce.appliedFingerprint)).
+		Int("processors", len(instances)).
+		Int("contexts", refreshed).
+		Int("context_max_before", contextMaxBefore).
+		Int("context_max_after", contextMaxAfter).
+		Str("model_name", ce.config.ModelName).
+		Msg("context runtime config applied to existing contexts")
+}
+
+// runtimeConfigFingerprint 计算引擎配置与处理器规格的内容指纹。
+//
+// encoding/json 对结构体按字段序、对 map 按 key 排序，结果稳定；因此同一份配置
+// 每次算出的指纹一致，可以用于"配置没变就不重建"的去重判断。
+func runtimeConfigFingerprint(config schema.ContextEngineConfig, specs []iface.ProcessorSpec) string {
+	payload := struct {
+		Config schema.ContextEngineConfig `json:"config"`
+		Specs  []iface.ProcessorSpec      `json:"specs"`
+	}{Config: config, Specs: specs}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		// 序列化失败时退化为唯一值：宁可多重建一次，也不能静默不生效
+		logger.Warn(logComponent).
+			Err(err).
+			Str("event_type", "context_runtime_config_fingerprint_failed").
+			Msg("failed to compute runtime config fingerprint, force rebuild")
+		return fmt.Sprintf("unserializable-%d", time.Now().UnixNano())
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// shortFingerprint 截断指纹用于日志展示。
+func shortFingerprint(fingerprint string) string {
+	if len(fingerprint) <= 8 {
+		return fingerprint
+	}
+	return fingerprint[:8]
+}
 
 // createProcessor 通过工厂创建处理器实例。
 //

@@ -194,6 +194,46 @@ func NewSessionModelContext(
 	return mc
 }
 
+// ApplyRuntimeConfig 用热重载后的引擎配置刷新上下文级原料，并替换处理器实例。
+//
+// 唯一写入口：只在 ContextEngine 应用待生效配置时调用。消息、卸载句柄、
+// compress_level 等会话产物一律不动，只更新「由引擎配置派生」的字段，
+// 使 ContextMaxTokens() 与压缩处理器阈值保持同一口径。
+//
+// 处理器实例由调用方（ContextEngine）按新 specs 构造后传入，本方法不负责创建。
+func (mc *SessionModelContext) ApplyRuntimeConfig(config ceschema.ContextEngineConfig, processors []iface.ContextProcessor) {
+	mc.modelName = config.ModelName
+	mc.contextWindowTokens = config.ContextWindowTokens
+	mc.modelContextWindowTokens = config.ModelContextWindowTokens
+	mc.enableReload = config.EnableReload
+	mc.defaultWindowSize = config.DefaultWindowMessageNum
+	mc.defaultDialogueRound = config.DefaultWindowRoundNum
+	mc.messageBuffer.SetMaxSize(config.MaxContextMessageNum)
+	mc.processors = processors
+
+	logger.Info(logComponent).
+		Str("event_type", "SESSION_MODEL_CONTEXT_REFRESHED").
+		Str("session_id", mc.sessionID).
+		Str("context_id", mc.contextID).
+		Str("model_name", mc.modelName).
+		Int("processor_count", len(processors)).
+		Int("context_max", mc.resolveContextMax()).
+		Msg("SessionModelContext runtime config refreshed")
+}
+
+// Processors 返回当前处理器实例切片（只读，供诊断与测试断言）。
+func (mc *SessionModelContext) Processors() []iface.ContextProcessor {
+	return mc.processors
+}
+
+// ContextMaxTokens 返回当前生效的上下文窗口上限（诊断与测试用）。
+//
+// 取值为 modelName / contextWindowTokens / modelContextWindowTokens 三者现算结果，
+// 热重载刷新上述原料后本方法立即反映新窗口。
+func (mc *SessionModelContext) ContextMaxTokens() int {
+	return mc.resolveContextMax()
+}
+
 // Len 返回上下文消息数量。
 //
 // Python: SessionModelContext.len()
