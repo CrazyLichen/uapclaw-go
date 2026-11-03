@@ -137,6 +137,22 @@ func (s *AgentServer) getAgentConfigService(workspaceDir string) *runtime.AgentC
 	return s.agentConfigService
 }
 
+// reloadAgentsConfig 同步重载所有 Agent 配置。
+// Python: await self._agent_manager.reload_agents_config(get_config(), None)
+func (s *AgentServer) reloadAgentsConfig(ctx context.Context) error {
+	if s.agentManager == nil {
+		return fmt.Errorf("agentManager 未初始化")
+	}
+	if s.config == nil {
+		return fmt.Errorf("配置未初始化")
+	}
+	configData, err := s.config.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+	return s.agentManager.ReloadAgentsConfig(ctx, configData, nil)
+}
+
 // handleAgentsList 处理 agents.list 请求。
 // Python: _handle_agents_list
 func (s *AgentServer) handleAgentsList(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
@@ -271,6 +287,10 @@ func (s *AgentServer) handleAgentsCreate(ctx context.Context, request *schema.Ag
 		applied = false
 		reloadError = err.Error()
 		logger.Warn(logComponent).Err(err).Str("agent_name", agent.Name).Msg("agents.create update config failed")
+	} else if reloadErr := s.reloadAgentsConfig(ctx); reloadErr != nil {
+		applied = false
+		reloadError = reloadErr.Error()
+		logger.Warn(logComponent).Err(reloadErr).Str("agent_name", agent.Name).Msg("agents.create reload failed")
 	}
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -344,17 +364,27 @@ func (s *AgentServer) handleAgentsUpdate(ctx context.Context, request *schema.Ag
 		), nil
 	}
 
+	applied := true
+	reloadError := ""
+	if reloadErr := s.reloadAgentsConfig(ctx); reloadErr != nil {
+		applied = false
+		reloadError = reloadErr.Error()
+		logger.Warn(logComponent).Err(reloadErr).Str("agent_name", name).Msg("agents.update reload failed")
+	}
+
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"agent":     agentDefinitionToMap(agent),
-			"generated": generated,
+			"agent":        agentDefinitionToMap(agent),
+			"generated":    generated,
+			"applied":      applied,
+			"reload_error": reloadError,
 		}),
 	), nil
 }
 
 // handleAgentsDelete 处理 agents.delete 请求。
 // Python: _handle_agents_delete
-func (s *AgentServer) handleAgentsDelete(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (s *AgentServer) handleAgentsDelete(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var params agentsDeleteParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -397,6 +427,10 @@ func (s *AgentServer) handleAgentsDelete(_ context.Context, request *schema.Agen
 		applied = false
 		reloadError = rmErr.Error()
 		logger.Warn(logComponent).Err(rmErr).Str("agent_name", name).Msg("agents.delete delete config failed")
+	} else if reloadErr := s.reloadAgentsConfig(ctx); reloadErr != nil {
+		applied = false
+		reloadError = reloadErr.Error()
+		logger.Warn(logComponent).Err(reloadErr).Str("agent_name", name).Msg("agents.delete reload failed")
 	}
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -410,14 +444,14 @@ func (s *AgentServer) handleAgentsDelete(_ context.Context, request *schema.Agen
 
 // handleAgentsEnable 处理 agents.enable 请求。
 // Python: _handle_agents_set_enabled(ws, request, send_lock, True)
-func (s *AgentServer) handleAgentsEnable(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	return s.handleAgentsSetEnabled(request, true)
+func (s *AgentServer) handleAgentsEnable(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return s.handleAgentsSetEnabled(ctx, request, true)
 }
 
 // handleAgentsDisable 处理 agents.disable 请求。
 // Python: _handle_agents_set_enabled(ws, request, send_lock, False)
-func (s *AgentServer) handleAgentsDisable(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	return s.handleAgentsSetEnabled(request, false)
+func (s *AgentServer) handleAgentsDisable(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return s.handleAgentsSetEnabled(ctx, request, false)
 }
 
 // handleAgentsToolsList 处理 agents.tools_list 请求。
@@ -438,7 +472,7 @@ func (s *AgentServer) handleAgentsToolsList(_ context.Context, request *schema.A
 
 // handleAgentsSetEnabled 处理 agents.enable/disable 请求。
 // Python: _handle_agents_set_enabled(ws, request, send_lock, enabled)
-func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabled bool) (*schema.AgentResponse, error) {
+func (s *AgentServer) handleAgentsSetEnabled(ctx context.Context, request *schema.AgentRequest, enabled bool) (*schema.AgentResponse, error) {
 	var params agentsEnableParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -489,6 +523,10 @@ func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabl
 		applied = false
 		reloadError = err.Error()
 		logger.Warn(logComponent).Err(err).Str("agent_name", name).Bool("enabled", enabled).Msg("agents set enabled state failed")
+	} else if reloadErr := s.reloadAgentsConfig(ctx); reloadErr != nil {
+		applied = false
+		reloadError = reloadErr.Error()
+		logger.Warn(logComponent).Err(reloadErr).Str("agent_name", name).Bool("enabled", enabled).Msg("agents.set_enabled reload failed")
 	}
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
