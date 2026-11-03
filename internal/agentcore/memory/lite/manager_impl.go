@@ -187,11 +187,18 @@ func (m *memoryIndexManager) Sync(ctx context.Context, reason string, force bool
 	// 捕获调用方 CwdState：后续后台同步（watch/interval）用它重建 ctx。
 	m.captureCwdState(ctx)
 
-	needsFullReindex := force || m.shouldFullReindex()
-
-	if needsFullReindex {
-		logger.Info(logComponent).Str("reason", reason).Msg("performing full index rebuild")
-		return m.runReindex(ctx)
+	// 重建判定收敛到 needsReindex（A/B/C 三处共用），force 时跳过判定。
+	// Python: needs_full_reindex = force or await self._should_full_reindex()
+	needReindex, reindexReason := m.needsReindex()
+	if force {
+		needReindex, reindexReason = true, "forced"
+	}
+	if needReindex {
+		logger.Info(logComponent).
+			Str("event_type", "memory_reindex_triggered").
+			Str("reason", reindexReason).
+			Msg("performing full index rebuild")
+		return m.runReindex(ctx, reindexReason)
 	}
 
 	logger.Debug(logComponent).Str("reason", reason).Msg("incremental sync")
@@ -734,32 +741,85 @@ func (m *memoryIndexManager) loadVectorExtension() error {
 	return nil
 }
 
-// shouldFullReindex 检查是否需要全量重建。对齐 Python _should_full_reindex
-func (m *memoryIndexManager) shouldFullReindex() bool {
-	row := m.db.QueryRow("SELECT value FROM meta WHERE key = ?", metaKey)
+// readMeta 读取索引元数据。缺失或解析失败时返回 error（调用方视为需要重建）。
+func (m *memoryIndexManager) readMeta() (map[string]any, error) {
 	var value string
-	if err := row.Scan(&value); err != nil {
-		return true
+	if err := m.db.QueryRow("SELECT value FROM meta WHERE key = ?", metaKey).Scan(&value); err != nil {
+		return nil, err
 	}
 	var meta map[string]any
 	if err := json.Unmarshal([]byte(value), &meta); err != nil {
-		return true
+		return nil, err
 	}
-	// Python: 检查 provider 和 model 是否变化
-	if meta["provider"] != m.settings.Provider {
-		return true
+	return meta, nil
+}
+
+// needsReindex 统一重建判定 —— A（provider）/ B（向量维度）/ C（分词器）三处共用这一入口，
+// 避免三份 if 各自漂移。
+//
+// 对齐 Python _should_full_reindex（manager.py:587）：比对 provider / model / chunkTokens。
+// ⚠️ 差异：Python 比对的是 self.provider.id（**实例值**），这里保持一致；历史 Go 实现比对
+// settings 里的配置值，导致「embed 缺 key 静默降级为 mock」后，补好 key 也永不重建。
+// 新增两项：segmenter（C，词典/分词器变化）与 vectorDims（B，维度变化初筛）。
+//
+// 原因取值：meta_missing / provider_unavailable / provider_changed / model_changed
+// / chunking_changed / segmenter_changed / vector_dims_changed
+func (m *memoryIndexManager) needsReindex() (bool, string) {
+	meta, err := m.readMeta()
+	if err != nil {
+		return true, "meta_missing"
 	}
-	if meta["model"] != m.settings.Model {
-		return true
+	if m.provider == nil {
+		logger.Error(logComponent).
+			Str("event_type", "memory_reindex_triggered").
+			Str("reason", "provider_unavailable").
+			Msg("embedding provider unavailable, reindexing text only")
+		return true, "provider_unavailable"
 	}
+	// Python: if meta.get("provider") != self.provider.id: return True
+	if meta["provider"] != m.provider.ID() {
+		return true, "provider_changed"
+	}
+	// Python: if meta.get("model") != self.provider.model: return True
+	if meta["model"] != m.provider.Model() {
+		return true, "model_changed"
+	}
+	// Python: if meta.get("chunkTokens") != settings.chunking.get("tokens"): return True
 	if meta["chunkTokens"] != m.settings.Chunking.Tokens {
-		return true
+		return true, "chunking_changed"
 	}
-	return false
+	// Go 扩展：分词器/词典版本变化（C）
+	if meta["segmenter"] != segmenterID() {
+		return true, "segmenter_changed"
+	}
+	// Go 扩展：向量维度变化初筛（B）。真实维度由 ensureVectorTable 解析 sqlite_master 兜底。
+	if dims, ok := metaInt(meta, "vectorDims"); ok && dims != m.provider.Dims() {
+		return true, "vector_dims_changed"
+	}
+	return false, ""
+}
+
+// metaInt 从 meta 取整数值（JSON 反序列化后数字是 float64）。
+func metaInt(meta map[string]any, key string) (int, bool) {
+	switch v := meta[key].(type) {
+	case float64:
+		return int(v), true
+	case int:
+		return v, true
+	default:
+		return 0, false
+	}
 }
 
 // runReindex 全量重建。对齐 Python _run_reindex
-func (m *memoryIndexManager) runReindex(ctx context.Context) error {
+//
+// reason 只用于日志（provider_changed / vector_dims_changed / segmenter_changed …），
+// 便于用户一眼看出"为什么这次要重建"。
+func (m *memoryIndexManager) runReindex(ctx context.Context, reason string) error {
+	logger.Info(logComponent).
+		Str("event_type", "memory_reindex_triggered").
+		Str("reason", reason).
+		Msg("running full reindex")
 	if containsSource(m.settings.Sources, "memory") {
 		if err := m.syncMemoryFiles(ctx); err != nil {
 			return err
