@@ -477,12 +477,14 @@ func TestParseStreamChunk_defaultFallback_空payload(t *testing.T) {
 func TestAccumulateUsage(t *testing.T) {
 	usage := &UsageAccumulator{}
 	AccumulateUsage(usage, map[string]any{
-		"input_tokens":  100,
-		"output_tokens": 50,
-		"total_tokens":  150,
-		"input_cost":    0.01,
-		"output_cost":   0.02,
-		"total_cost":    0.03,
+		"usage_metadata": map[string]any{
+			"input_tokens":  100,
+			"output_tokens": 50,
+			"total_tokens":  150,
+			"input_cost":    0.01,
+			"output_cost":   0.02,
+			"total_cost":    0.03,
+		},
 	})
 	if usage.InputTokens != 100 {
 		t.Errorf("InputTokens 期望 100, 实际 %d", usage.InputTokens)
@@ -497,16 +499,38 @@ func TestAccumulateUsage(t *testing.T) {
 
 func TestAccumulateUsage_累加(t *testing.T) {
 	usage := &UsageAccumulator{}
-	AccumulateUsage(usage, map[string]any{"input_tokens": 100})
-	AccumulateUsage(usage, map[string]any{"input_tokens": 50})
+	AccumulateUsage(usage, map[string]any{"usage_metadata": map[string]any{"input_tokens": 100}})
+	AccumulateUsage(usage, map[string]any{"usage_metadata": map[string]any{"input_tokens": 50}})
 	if usage.InputTokens != 150 {
 		t.Errorf("累加 InputTokens 期望 150, 实际 %d", usage.InputTokens)
 	}
 }
 
+// TestAccumulateUsage_无usageMetadata不计入 锁定 Python 侧口径：
+// usage_meta = payload.get("usage_metadata", {})，payload 顶层 token 键不参与累加。
+// 平铺形状（payload 顶层直接放 input_tokens）是历史错误形状，必须落 0 而不是
+// 悄悄累加，避免同一字段出现两套口径。
+func TestAccumulateUsage_无usageMetadata不计入(t *testing.T) {
+	usage := &UsageAccumulator{}
+	AccumulateUsage(usage, map[string]any{"input_tokens": 100, "total_tokens": 150})
+	if usage.InputTokens != 0 || usage.TotalTokens != 0 {
+		t.Errorf("无 usage_metadata 时不应累加顶层 token 键，实际 %+v", *usage)
+	}
+}
+
 func TestAccumulateUsage_nil(t *testing.T) {
-	AccumulateUsage(nil, map[string]any{"input_tokens": 100}) // 不 panic
-	AccumulateUsage(&UsageAccumulator{}, nil)                 // 不 panic
+	AccumulateUsage(nil, map[string]any{"usage_metadata": map[string]any{"input_tokens": 100}}) // 不 panic
+	AccumulateUsage(&UsageAccumulator{}, nil)                                                   // 不 panic
+}
+
+// TestAccumulateUsage_非法usageMetadata 验证 usage_metadata 为非桥接形态
+// （字符串等）时安全跳过：不 panic，也不累加。
+func TestAccumulateUsage_非法usageMetadata(t *testing.T) {
+	usage := &UsageAccumulator{}
+	AccumulateUsage(usage, map[string]any{"usage_metadata": "not-a-map"})
+	if usage.InputTokens != 0 || usage.TotalTokens != 0 {
+		t.Errorf("非法 usage_metadata 不应累加，实际 %+v", *usage)
+	}
 }
 
 // TestAccumulateUsage_嵌套usageMetadata 验证 llm_usage 的真实形状能被累加。

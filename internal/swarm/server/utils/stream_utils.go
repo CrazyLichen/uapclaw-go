@@ -558,26 +558,29 @@ func ParseInteractionPayload(payload map[string]any, converter InteractionConver
 	}
 }
 
-// AccumulateUsage 累加 usage 信息。
-// Python: usage_accumulator 的累加逻辑 (line 4580-4610)
+// AccumulateUsage 累加 llm_usage chunk 的用量。
+// Python: interface_deep.py L4723-4736
 //
-// payload 支持两种形态：
-//   - 嵌套：生产端 llm_usage（react_model_call.go）写的是
-//     {"usage_metadata": {...}, "result_type": "answer"}，Python 侧同样读嵌套
-//     （interface_deep.py L4723-4736 usage_meta = payload.get("usage_metadata")）；
-//   - 平铺：兼容既有 chunk 形状，仅在无 usage_metadata 时使用。
+//	usage_meta = chunk.payload.get("usage_metadata", {})
+//	usage_accumulator[token] += usage_meta.get(token, 0)
 //
-// 只读平铺键会让累加值恒为 0，chat.usage_summary 被 usage.TotalTokens > 0
-// 门禁整条吞掉（2026-11-03 集成用例 SessionUsageIsolationSuite 锁定）。
+// 生产端 llm_usage（react_model_call.go）写的是嵌套形状
+// {"usage_metadata": {...}, "result_type": "answer"}；payload 顶层没有 token 键，
+// 因此必须读嵌套，否则累加值恒为 0、chat.usage_summary 被
+// usage.TotalTokens > 0 门禁整条吞掉（2026-11-03 集成用例
+// SessionUsageIsolationSuite 锁定）。usage_metadata 既可能是 map（JSON 往返后），
+// 也可能是 *llmschema.UsageMetadata（内存直传），统一走 PayloadToMap 桥接。
 func AccumulateUsage(usage *UsageAccumulator, payload map[string]any) {
 	if payload == nil || usage == nil {
 		return
 	}
-	source := payload
-	if nested, ok := payload["usage_metadata"]; ok && nested != nil {
-		if meta := PayloadToMap(nested); meta != nil {
-			source = meta
-		}
+	nested, ok := payload["usage_metadata"]
+	if !ok || nested == nil {
+		return
+	}
+	source := PayloadToMap(nested)
+	if source == nil {
+		return
 	}
 	usage.InputTokens += ExtractIntFromPayload(source, "input_tokens")
 	usage.OutputTokens += ExtractIntFromPayload(source, "output_tokens")

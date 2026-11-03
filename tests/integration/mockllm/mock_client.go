@@ -21,9 +21,6 @@ type MockResponse struct {
 	Text string
 	// ToolCalls 工具调用响应列表
 	ToolCalls []*llmschema.ToolCall
-	// Usage 本次响应上报的 token 用量（nil 时用仅含 model_name 的空用量）。
-	// 真实端点只在末帧回 usage，因此这里挂在响应粒度上。
-	Usage *llmschema.UsageMetadata
 	// Err 模拟错误
 	Err error
 }
@@ -44,7 +41,6 @@ type InvokeRecord struct {
 //   - 预设响应队列，按调用顺序依次消费
 //   - 队列耗尽后返回默认文本响应
 //   - 记录调用历史（InvokeCallCount / GetInvokeCall / LastInvokeCall）
-//   - 记录流式调用历史（StreamCallCount / GetStreamCall / LastStreamCall）
 //   - 并发安全（sync.Mutex 保护）
 //   - 支持注册到 ClientRegistry（Factory 方法）
 type MockModelClient struct {
@@ -52,7 +48,6 @@ type MockModelClient struct {
 	responses   []MockResponse
 	callCount   int
 	invokeCalls []InvokeRecord
-	streamCalls []InvokeRecord
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -88,22 +83,6 @@ func NewMockModelClient(responses ...MockResponse) *MockModelClient {
 // 对齐 Python: create_text_response(content, model_name, finish_reason)
 func CreateTextResponse(content string) MockResponse {
 	return MockResponse{Text: content}
-}
-
-// CreateTextResponseWithUsage 创建带 token 用量的纯文本预设响应。
-//
-// 真实端点在末帧上报 usage；usage_summary 类断言需要确定性的 token 数，
-// 因此把用量挂在响应上，由 Stream 填入 chunk.UsageMetadata。
-func CreateTextResponseWithUsage(content string, inputTokens, outputTokens int) MockResponse {
-	return MockResponse{
-		Text: content,
-		Usage: &llmschema.UsageMetadata{
-			ModelName:    defaultMockModelName,
-			InputTokens:  inputTokens,
-			OutputTokens: outputTokens,
-			TotalTokens:  inputTokens + outputTokens,
-		},
-	}
 }
 
 // CreateToolCallResponse 创建工具调用预设响应。
@@ -196,13 +175,10 @@ func (m *MockModelClient) Invoke(_ context.Context, messages model_clients.Messa
 
 // Stream 实现 BaseModelClient.Stream，将预设响应作为单个 chunk 发出。
 // 对齐 Python: MockLLMModel.stream(messages, ...) — 单次 yield 整个 chunk
-//
-// 记录本次请求的 messages（usage_summary / prompt 隔离类断言需要看到模型实际收到的历史）。
-func (m *MockModelClient) Stream(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+func (m *MockModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
 	m.mu.Lock()
 	resp := m.getNextResponseLocked()
 	m.callCount++
-	m.streamCalls = append(m.streamCalls, InvokeRecord{InvokeCount: m.callCount, Messages: messages})
 	m.mu.Unlock()
 
 	if resp.Err != nil {
@@ -214,7 +190,7 @@ func (m *MockModelClient) Stream(_ context.Context, messages model_clients.Messa
 	if len(resp.ToolCalls) > 0 {
 		chunk.ToolCalls = resp.ToolCalls
 	}
-	chunk.UsageMetadata = m.usageMetadataFor(resp)
+	chunk.UsageMetadata = &llmschema.UsageMetadata{ModelName: defaultMockModelName}
 	ch <- chunk
 	close(ch)
 
@@ -264,7 +240,6 @@ func (m *MockModelClient) SetResponses(responses ...MockResponse) *MockModelClie
 	m.responses = responses
 	m.callCount = 0
 	m.invokeCalls = nil
-	m.streamCalls = nil
 	return m
 }
 
@@ -341,33 +316,6 @@ func (m *MockModelClient) LastInvokeCall() *InvokeRecord {
 	return &m.invokeCalls[len(m.invokeCalls)-1]
 }
 
-// StreamCallCount 返回 Stream 被调用的总次数（与 Invoke 共用 callCount）。
-func (m *MockModelClient) StreamCallCount() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return len(m.streamCalls)
-}
-
-// GetStreamCall 返回第 i 次 Stream 调用的记录（0-indexed）。
-func (m *MockModelClient) GetStreamCall(i int) *InvokeRecord {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if i < 0 || i >= len(m.streamCalls) {
-		return nil
-	}
-	return &m.streamCalls[i]
-}
-
-// LastStreamCall 返回最近一次 Stream 调用的记录。
-func (m *MockModelClient) LastStreamCall() *InvokeRecord {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.streamCalls) == 0 {
-		return nil
-	}
-	return &m.streamCalls[len(m.streamCalls)-1]
-}
-
 // ResetCalls 清空调用历史和计数，同时清空响应队列。
 // 对齐 Python: MockLLMModel.set_responses([]) 的重置语义
 func (m *MockModelClient) ResetCalls() {
@@ -375,7 +323,6 @@ func (m *MockModelClient) ResetCalls() {
 	defer m.mu.Unlock()
 	m.callCount = 0
 	m.invokeCalls = nil
-	m.streamCalls = nil
 }
 
 // --- ClientRegistry 注册 ---
@@ -408,19 +355,13 @@ func (m *MockModelClient) getNextResponseLocked() MockResponse {
 // 对齐 Python: create_text_response / create_tool_call_response 的构造逻辑。
 func (m *MockModelClient) buildAssistantMessage(resp MockResponse) *llmschema.AssistantMessage {
 	opts := []llmschema.AssistantMessageOption{
-		llmschema.WithAssistantUsageMetadata(m.usageMetadataFor(resp)),
+		llmschema.WithAssistantUsageMetadata(&llmschema.UsageMetadata{
+			ModelName: defaultMockModelName,
+		}),
 	}
 	if len(resp.ToolCalls) > 0 {
 		opts = append(opts, llmschema.WithToolCalls(resp.ToolCalls))
 		opts = append(opts, llmschema.WithFinishReason("tool_calls"))
 	}
 	return llmschema.NewAssistantMessage(resp.Text, opts...)
-}
-
-// usageMetadataFor 返回本次响应应上报的用量：优先用预设值，缺省为仅含 model_name 的空用量。
-func (m *MockModelClient) usageMetadataFor(resp MockResponse) *llmschema.UsageMetadata {
-	if resp.Usage != nil {
-		return resp.Usage
-	}
-	return &llmschema.UsageMetadata{ModelName: defaultMockModelName}
 }

@@ -161,3 +161,11 @@ internal/swarm/server/adapter/code_adapter.go#L953-L954
 internal/swarm/server/adapter/code_adapter.go#L1575-L1579
 internal/swarm/server/adapter/deep_adapter_evolution.go#L551-L551
 internal/swarm/server/adapter/deep_adapter_tools.go#L294-L294
+
+# ── 集成测试共享夹具（2026-11-03 usage 用例） ──
+# mock_client.go — tests/ 下的集成夹具，两个覆盖率 job 都不对其插桩：
+#   - Unit Test job 不带 integration tag，`//go:build integration` 文件不参与编译；
+#   - Integration Test job 用 -coverpkg 限定 internal/ 子系统，tests/ 目录不在插桩范围。
+# 因此任何夹具改动都会被判「改动行覆盖率 0%」。该文件只被 tests/integration 用例使用，
+# 不承载生产逻辑；夹具行为由使用它的集成用例断言。
+tests/integration/mockllm/mock_client.go
