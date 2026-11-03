@@ -407,8 +407,14 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		cbc.SetModelContext(modelCtx)
 
 		// Python: L1317-1326: 在 invoke 入口构建 system prompt
-		// 用渲染后的 prompt 更新 identity section（替换 Configure 时的模板名）
-		renderedPrompt := a.promptBuilder.Build()
+		// 用渲染后的 prompt 更新 identity section（替换 Configure 时的模板名）。
+		//
+		// 渲染源必须是 config.prompt_template（固定模板），不能是 promptBuilder：
+		// Python 用 _build_rendered_system_prompt(self._config.prompt_template)
+		// （react_agent.py L582-601）；若从 builder 渲染，上一轮写回 identity 的
+		// 全文会被再次包含，逐轮自我嵌套膨胀（2026-11-03：模式切换后 identity
+		// 3990→10921、系统提示词整段重复即此因）。
+		renderedPrompt := a.buildRenderedSystemPrompt()
 		if renderedPrompt != "" {
 			a.AddPromptBuilderSection(identitySection, renderedPrompt, identitySectionPriority)
 		}
@@ -754,6 +760,29 @@ func (a *ReActAgent) reactLoop(
 	}
 
 	return iterResult, nil
+}
+
+// buildRenderedSystemPrompt 从配置的 PromptTemplate 渲染系统提示词（固定源）。
+// Python: _build_rendered_system_prompt (react_agent.py L582-601)。
+// 只取 role=system 且内容非空的消息，按序拼接——渲染源绝不能用
+// promptBuilder，否则上一轮写回 identity 的全文会被再次包含，逐轮自我嵌套。
+func (a *ReActAgent) buildRenderedSystemPrompt() string {
+	cfg := a.config
+	if cfg == nil {
+		return ""
+	}
+	parts := make([]string, 0, len(cfg.PromptTemplate))
+	for _, msg := range cfg.PromptTemplate {
+		role, _ := msg["role"].(string)
+		if role != "system" {
+			continue
+		}
+		content, _ := msg["content"].(string)
+		if content != "" {
+			parts = append(parts, content)
+		}
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // executeToolCalls 执行工具调用列表。
