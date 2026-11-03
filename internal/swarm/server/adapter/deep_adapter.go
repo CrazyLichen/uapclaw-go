@@ -3070,6 +3070,8 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 // getCurrentAgentRails 获取当前 Agent Rails（热重载时使用）。
 // Python: _get_current_agent_rails(config, config_base)
 func (d *DeepAdapter) getCurrentAgentRails(config map[string]any, configBase map[string]any) []sainterfaces.AgentRail {
+	// 就地更新演进 rail（不重建、不重新注册），对齐 Python :2314-2328
+	d.updateSkillEvolutionRail(config)
 	return d.buildAgentRails(config, configBase, d.mode)
 }
 

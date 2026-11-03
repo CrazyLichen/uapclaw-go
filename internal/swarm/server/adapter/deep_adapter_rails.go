@@ -328,6 +328,38 @@ func (d *DeepAdapter) resolveSkillMode() string {
 	return skillrails.SkillModeAll
 }
 
+// evolutionAutoScan 计算 auto_scan：环境变量优先，其次 config，缺省关闭。
+// 对齐 Python: interface_deep.py:1951-1955 与 2317-2328
+// （注意 rail 构造默认值为 true，必须显式传入，不能省略）
+func evolutionAutoScan(config map[string]any) bool {
+	if env := os.Getenv("EVOLUTION_AUTO_SCAN"); env != "" {
+		switch strings.ToLower(strings.TrimSpace(env)) {
+		case "true", "1", "yes":
+			return true
+		default:
+			return false
+		}
+	}
+	evolutionConfig, _ := config["evolution"].(map[string]any)
+	as, _ := evolutionConfig["auto_scan"].(bool)
+	return as
+}
+
+// updateSkillEvolutionRail 热重载时就地更新演进 rail 的 LLM 与 auto_scan。
+// Python: _get_current_agent_rails 顶部（interface_deep.py:2314-2328）——
+// 该 rail 不重建、不重新注册，只换 LLM 与开关。
+func (d *DeepAdapter) updateSkillEvolutionRail(config map[string]any) {
+	if d.skillEvolutionRail == nil {
+		return
+	}
+	d.skillEvolutionRail.UpdateLLM(d.modelSnapshot(), d.defaultModelName)
+	d.skillEvolutionRail.SetAutoScan(evolutionAutoScan(config))
+	logger.Info(logComponent).
+		Str("model", d.defaultModelName).
+		Bool("auto_scan", d.skillEvolutionRail.AutoScan()).
+		Msg("SkillEvolutionRail hot-updated in place")
+}
+
 // buildSkillEvolutionRail 构建技能演进护栏。
 // 对齐 Python: _build_skill_evolution_rail() (interface_deep.py:1948-1968)
 //

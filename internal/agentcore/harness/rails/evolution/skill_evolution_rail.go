@@ -73,6 +73,8 @@ type SkillEvolutionRail struct {
 	disabledSkills []string
 	// language 语言（"cn" 或 "en"）
 	language string
+	// modelName 当前 LLM 模型名（构造与 UpdateLLM 时同步），供排障与断言
+	modelName string
 	// evalInterval 评估间隔
 	evalInterval int
 	// evolutionTimeoutSec 后台演化超时秒数
@@ -188,6 +190,7 @@ func NewSkillEvolutionRail(
 	r := &SkillEvolutionRail{
 		skillsDir:                skillsDir,
 		language:                 language,
+		modelName:                model,
 		autoScan:                 true,
 		autoSave:                 true,
 		evalInterval:             defaultEvalInterval,
@@ -375,6 +378,10 @@ func (r *SkillEvolutionRail) AutoSave() bool { return r.autoSave }
 // SetAutoSave 设置是否自动保存。
 // Python: SkillEvolutionRail.auto_save = value
 func (r *SkillEvolutionRail) SetAutoSave(v bool) { r.autoSave = v }
+
+// ModelName 返回当前 LLM 模型名。
+// 注：Python 无对应访问器，属 Go 侧可观测性补充（测试需断言就地更新是否生效）。
+func (r *SkillEvolutionRail) ModelName() string { return r.modelName }
 
 // ApprovalRuntime 返回审批运行时。
 // Python: SkillEvolutionRail.approval_runtime (property) — 延迟重建
@@ -1048,6 +1055,7 @@ func (r *SkillEvolutionRail) ShouldHintSimplifyOrRebuild(skillName string) bool 
 //
 // 对齐 Python: SkillEvolutionRail.update_llm(llm, model)
 func (r *SkillEvolutionRail) UpdateLLM(llmModel *llm.Model, model string) {
+	r.modelName = model
 	r.evolver.UpdateLLM(llmModel, model)
 	r.scorer.UpdateLLM(llmModel, model)
 	if r.keywordExtractor != nil {
