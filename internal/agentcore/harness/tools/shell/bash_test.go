@@ -3,10 +3,28 @@
 package shell
 
 import (
+	"encoding/json"
 	"testing"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestBashInput_未传Timeout 测试输入未带 timeout 时解码为 0 且回落默认 300 秒。
+// 回归：缺失 key 解码为 0，曾被钳制成 1 秒，导致所有未传 timeout 的命令
+// 1 秒即超时（Python inputs.get("timeout", 300) 取 300）。
+func TestBashInput_未传Timeout(t *testing.T) {
+	var input BashInput
+	payload := `{"command":"curl -s -i http://127.0.0.1:19000/","description":"获取首页"}`
+	if err := json.Unmarshal([]byte(payload), &input); err != nil {
+		t.Fatalf("unmarshal 失败: %v", err)
+	}
+	if input.Timeout != 0 {
+		t.Fatalf("未传 timeout 应解码为 0，got %d", input.Timeout)
+	}
+	if got := resolveBashTimeout(input.Timeout); got != bashDefaultTimeout {
+		t.Errorf("未传 timeout 应回落 %d 秒，got %d", bashDefaultTimeout, got)
+	}
+}
 
 // TestMakeSudoNoninteractive 测试注入 sudo -n
 func TestMakeSudoNoninteractive(t *testing.T) {
@@ -31,17 +49,17 @@ func TestResolveBashTimeout_正常值(t *testing.T) {
 	}
 }
 
-// TestResolveBashTimeout_零值 测试零超时值
+// TestResolveBashTimeout_零值 测试零超时值回落默认 300 秒
 func TestResolveBashTimeout_零值(t *testing.T) {
-	if resolveBashTimeout(0) != 1 {
-		t.Errorf("0 应钳制为 1")
+	if got := resolveBashTimeout(0); got != bashDefaultTimeout {
+		t.Errorf("0 应按默认 %d 处理，got %d", bashDefaultTimeout, got)
 	}
 }
 
-// TestResolveBashTimeout_负值 测试负超时值
+// TestResolveBashTimeout_负值 测试负超时值回落默认 300 秒
 func TestResolveBashTimeout_负值(t *testing.T) {
-	if resolveBashTimeout(-5) != 1 {
-		t.Errorf("负值应钳制为 1")
+	if got := resolveBashTimeout(-5); got != bashDefaultTimeout {
+		t.Errorf("负值应按默认 %d 处理，got %d", bashDefaultTimeout, got)
 	}
 }
 

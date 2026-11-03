@@ -23,7 +23,7 @@ import (
 type BashInput struct {
 	// Command 要执行的命令（必需）
 	Command string `json:"command"`
-	// Timeout 超时秒数，默认 300，上限 3600
+	// Timeout 超时秒数，0 表示调用方未传（取默认 300），上限 3600
 	Timeout int `json:"timeout"`
 	// Description 命令描述
 	Description string `json:"description"`
@@ -45,8 +45,8 @@ type BashInput struct {
 const logComponent = logger.ComponentAgentCore
 
 const (
-	// bashDefaultTimeout 默认超时秒数。
-	// Python: BashTool._resolve_timeout default=300
+	// bashDefaultTimeout 未传 timeout 时的默认超时秒数。
+	// Python: BashTool._parse_inputs inputs.get("timeout", 300)
 	bashDefaultTimeout = 300
 
 	// bashDefaultMaxOutputChars 默认最大输出字符数，0=无限制。
@@ -306,8 +306,14 @@ func makeSudoNoninteractive(command string) string {
 
 // resolveBashTimeout 解析并钳制超时值。
 // Python: BashTool._resolve_timeout (bash/_tool.py L99-110)
+// 调用方未传 timeout 时该值为 0，按默认 300 秒处理；显式传 0/负值同样视为未传。
+// 与 Python 的差异：Python inputs.get("timeout", 300) 只对「缺 key」取 300，
+// 显式传 0 会被钳成 1 秒——1 秒对任何真实命令都是误杀，故 Go 统一按未传处理。
 func resolveBashTimeout(rawValue int) int {
 	timeout := rawValue
+	if timeout <= 0 {
+		timeout = bashDefaultTimeout
+	}
 	maxTimeout := 3600
 	if v := os.Getenv("BASH_TOOL_MAX_TIMEOUT_SECONDS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
@@ -316,9 +322,6 @@ func resolveBashTimeout(rawValue int) int {
 	}
 	if maxTimeout < 1 {
 		maxTimeout = 1
-	}
-	if timeout < 1 {
-		timeout = 1
 	}
 	if timeout > maxTimeout {
 		timeout = maxTimeout

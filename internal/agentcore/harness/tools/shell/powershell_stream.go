@@ -21,7 +21,7 @@ import (
 type PowerShellStreamInput struct {
 	// Command 要执行的命令（必需）
 	Command string `json:"command"`
-	// Timeout 超时秒数，默认 300，上限 3600
+	// Timeout 超时秒数，0 表示调用方未传（取默认 300），上限 3600
 	Timeout int `json:"timeout"`
 	// Workdir 工作目录
 	Workdir string `json:"workdir"`
