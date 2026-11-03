@@ -810,14 +810,11 @@ func (m *memoryIndexManager) needsReindex() (bool, string) {
 
 // metaInt 从 meta 取整数值（JSON 反序列化后数字是 float64）。
 func metaInt(meta map[string]any, key string) (int, bool) {
-	switch v := meta[key].(type) {
-	case float64:
-		return int(v), true
-	case int:
-		return v, true
-	default:
+	v, ok := meta[key].(float64)
+	if !ok {
 		return 0, false
 	}
+	return int(v), true
 }
 
 // runReindex 全量重建。对齐 Python _run_reindex
@@ -885,7 +882,6 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 			continue
 		}
 		if err := m.indexFile(ctx, entry, "memory"); err != nil {
-			fmt.Printf("[DBG] indexFile err=%v path=%q\n", err, entry.Path)
 			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("indexfile failed")
 		}
 	}

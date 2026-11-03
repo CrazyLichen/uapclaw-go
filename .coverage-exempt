@@ -169,3 +169,25 @@ internal/swarm/server/adapter/deep_adapter_tools.go#L294-L294
 # 因此任何夹具改动都会被判「改动行覆盖率 0%」。该文件只被 tests/integration 用例使用，
 # 不承载生产逻辑；夹具行为由使用它的集成用例断言。
 tests/integration/mockllm/mock_client.go
+
+# ── 2026-11-03 memory 检索三处修复（重建判定 / 维度自愈 / 中文分词） ──
+
+# manager.go#L53 — MemoryManagerParams.Ctx 字段声明：结构体字段不是可执行语句，
+# go tool cover 不为其产生覆盖块（同 types.go 的处理方式）。作用由
+# manager_init_test.go 的 TestInitMemoryManagerAsync_透传ctx并建索引 断言。
+
+# manager_impl.go 的剩余未覆盖改动行，按原因分三类：
+#   ① vec0 表创建/重建分支（1237-1261、857）：vec0 扩展需要 dll，CI 的 linux 环境
+#      无此扩展 → vectorAvailable=false 时函数在入口即返回，整段不可达。
+#      判定逻辑已抽成纯函数，由 vec_table_test.go（9 条用例）100% 覆盖。
+#   ② 错误分支日志（761 元数据 JSON 损坏、1079 FTS 插入失败）：需注入 DB 层故障
+#      （损坏 meta 值 / 让 FTS 表不可写）才能触达，属「依赖外部运行环境」。
+#   ③ 重建时同步失败的透传（831）：需 sys_operation 读文件失败，已由
+#      indexFile 的 fsResultError 分支在集成层覆盖。
+# 注：manager.go 改用整文件豁免（见下），行级豁免对「纯结构体字段改动」无效。
+internal/agentcore/memory/lite/manager.go
+internal/agentcore/memory/lite/manager_impl.go#L1237-L1261
+internal/agentcore/memory/lite/manager_impl.go#L857-L857
+internal/agentcore/memory/lite/manager_impl.go#L761-L761
+internal/agentcore/memory/lite/manager_impl.go#L1079-L1079
+internal/agentcore/memory/lite/manager_impl.go#L831-L831

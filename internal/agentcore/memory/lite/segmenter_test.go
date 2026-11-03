@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 )
 
 // TestSegmentForFTS_过滤规则 用真实词典验证：空格/标点被过滤、英文小写化、停用词被过滤。
@@ -56,5 +57,32 @@ func TestJoinSegments(t *testing.T) {
 	}
 	if got := joinSegments(nil); got != "" {
 		t.Errorf("joinSegments(nil) = %q, want 空串", got)
+	}
+}
+
+// TestInitMemorySegmenterAsync_后台预热 预热是异步的，必须有界等待
+func TestInitMemorySegmenterAsync_后台预热(t *testing.T) {
+	InitMemorySegmenterAsync()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if seg, err := ensureSegmenter(); err == nil && seg != nil {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("分词器预热超时")
+}
+
+// TestLoadSegmenter_降级开关 UAPCLAW_DISABLE_SEGMENTER=1 时直接返回不可用
+func TestLoadSegmenter_降级开关(t *testing.T) {
+	t.Setenv("UAPCLAW_DISABLE_SEGMENTER", "1")
+
+	seg, err := loadSegmenter()
+	if seg != nil || err == nil {
+		t.Fatalf("降级开关开启时应返回 (nil, err)，实际 (%v, %v)", seg, err)
+	}
+	if !errors.Is(err, errSegmenterUnavailable) {
+		t.Errorf("err = %v, want errSegmenterUnavailable", err)
 	}
 }
