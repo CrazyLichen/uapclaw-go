@@ -71,13 +71,13 @@ type MessageQueueBase interface {
 // Python: openjiuwen/core/runner/message_queue_base.py (QueueMessage)
 type QueueMessage struct {
 	// MessageID 消息唯一标识
-	MessageID string
+	MessageID string `json:"message_id"`
 	// Payload 消息载荷
-	Payload map[string]any
+	Payload map[string]any `json:"payload"`
 	// ErrorCode 错误码
-	ErrorCode int
+	ErrorCode int `json:"error_code"`
 	// ErrorMsg 错误信息
-	ErrorMsg string
+	ErrorMsg string `json:"error_msg"`
 }
 
 // InvokeQueueMessage 同步消息，发布后等待处理完成。

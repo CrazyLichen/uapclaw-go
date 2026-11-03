@@ -2,10 +2,12 @@ package message_queue
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -126,4 +128,24 @@ func TestQueueMessageBase_接口getter(t *testing.T) {
 	// 通过接口调用
 	var base QueueMessageBase = im
 	assert.Equal(t, "msg-2", base.GetMessageID())
+}
+
+// TestQueueMessage_JSONTag 测试 QueueMessage 序列化使用下划线键名。
+//
+// 对齐 Python QueueMessage 的 message_id/payload/error_code/error_msg 字段名；
+// Pulsar wire 序列化依赖该键名，否则 Python 端 model_validate 取不到 message_id。
+func TestQueueMessage_JSONTag(t *testing.T) {
+	msg := NewQueueMessage(map[string]any{"k": "v"})
+	msg.MessageID = "mid-1"
+
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(data, &got))
+
+	for _, key := range []string{"message_id", "payload", "error_code", "error_msg"} {
+		assert.Contains(t, got, key, "缺少键 %q，实际输出: %s", key, string(data))
+	}
+	assert.Equal(t, "mid-1", got["message_id"])
 }
