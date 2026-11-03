@@ -38,10 +38,29 @@ Python 的 list 不携带元素类型，`payload["todos"]` 取出即可迭代，
 **决策**
 
 1. 生产端保持 `[]map[string]any`：它是更精确的 Go 表达，可读性优于 `[]any`。
-2. 消费端两处（`stream_utils` / `parseTypedChunkMap`）同时接受 `[]any` 与 `[]map[string]any`。
+2. 消费端只改一处：`server/utils/stream_utils.go` 的 `todo.updated` 分支同时接受 `[]any` 与 `[]map[string]any`。
 3. 用 type switch，不引入反射：目前只有这两种真实形态；未知形态**记录日志**暴露出来，而不是继续静默兜成空列表。
-4. ACP 侧（`e2a/acp/acp_tool_updates.go:305`）**不改**：它的 payload 来自已解析事件（`acp_channel.go:1096` `payload := msg.Payload`），其中 `todos` 早已是 `[]any`，从未出问题。
-5. 前端**零改动**：两种 Go 类型 `json.Marshal` 后是同一串 JSON，前端 `Array.isArray` 判断不受影响。
+4. `parseTypedChunkMap` 的 `case "todo.updated"` 是**死代码**：函数开头的 `strings.Contains(chunkType, ".")` 已对 `todo.updated` 提前 return（值原样透传，不做类型断言），team 路径本就不受影响。该分支删除，并在 dotted 分支补注释。
+5. ACP 侧（`e2a/acp/acp_tool_updates.go:305`）**不改**：它的 payload 来自已解析事件（`acp_channel.go:1096` `payload := msg.Payload`），其中 `todos` 早已是 `[]any`，从未出问题。
+6. 前端**零改动**：两种 Go 类型 `json.Marshal` 后是同一串 JSON，前端 `Array.isArray` 判断不受影响。
+
+### 3.1 为什么 team 路径不需要修
+
+`parseTypedChunkMap`（`deep_adapter_team.go:1500`）的分派顺序是：
+
+```go
+if strings.Contains(chunkType, ".") {     // "todo.updated" 命中
+    result := map[string]any{"event_type": chunkType}
+    for k, v := range payload {
+        result[k] = serializeValueAny(v)  // 只转 time.Time，其余原样
+    }
+    return result
+}
+switch chunkType {
+case "todo.updated":                      // 永不可达
+```
+
+`serializeValueAny`（`deep_adapter_team.go:1785`）原样返回非时间值，因此 team 链路上的 `todos` 保持 `[]map[string]any`，但下游没有任何 Go 侧类型断言，最终直接 JSON 序列化给前端——功能正常。该分支自移植起就不可达（Python `_parse_typed_chunk` 同样把 `if "." in chunk_type: return` 写在 `switch` 之前）。
 
 ## 4. 改动清单
 
@@ -67,25 +86,30 @@ func ExtractAnySliceFromPayload(payload map[string]any, key string) ([]any, bool
 | `[]map[string]any` | `(逐个装箱为 []any, true)` |
 | 其他（string / map / 结构体等） | `(nil, false)` |
 
-### 4.2 两个消费点
+### 4.2 消费点改造（`server/utils/stream_utils.go`）
 
-`server/utils/stream_utils.go` 的 `todo.updated` 分支、`server/adapter/deep_adapter_team.go` 的 `parseTypedChunkMap` 的 `todo.updated` 分支，均改为（同包内直接调用，适配器包加 `utils.` 前缀）：
+`todo.updated` 分支改为（同包内直接调用助手）：
 
 ```go
 todos, ok := ExtractAnySliceFromPayload(payload, "todos")
 if !ok {
     logger.Warn(logComponent).
         Str("event_type", "todo.updated").
-        Str("field", "todos").
-        Str("field_type", fmt.Sprintf("%T", payload["todos"])).
-        Msg("todo.updated payload todos 形态未知，按空列表下发")
+        Str("key", "todos").
+        Str("actual_type", fmt.Sprintf("%T", payload["todos"])).
+        Msg("todo.updated todos type assertion failed, using empty list")
     todos = []any{}
 }
 ```
 
-两处各自持有所在包的 `logComponent`（`server/utils` → `ComponentGateway`，`server/adapter` → `ComponentAgentServer`），日志能区分来源。
+日志字段与同文件既有 `ExtractIntFromPayload` / `ExtractFloatFromPayload` 的 Warn 保持一致（`key` + `actual_type`），便于按字段检索。
 
-### 4.3 回滚上一轮工作区的多余改动
+### 4.3 删除 team 侧死分支（`server/adapter/deep_adapter_team.go`）
+
+1. 删除 `parseTypedChunkMap` 中不可达的 `case "todo.updated":`（约 8 行，含其兜底 `[]any{}`）。
+2. 在 `strings.Contains(chunkType, ".")` 分支处补注释：带点号的事件类型（含 `todo.updated`）走这里原样透传，值不归一化，下游按 JSON 直出。
+
+### 4.4 回滚上一轮工作区的多余改动
 
 | 文件 | 处置 |
 |---|---|
@@ -93,7 +117,7 @@ if !ok {
 | `internal/common/utils/doc.go` | 回滚 |
 | `internal/swarm/e2a/acp/acp_tool_updates.go` + `_test.go` | 回滚（ACP 未坏） |
 | `internal/swarm/server/utils/stream_utils.go` | 替换为 4.1/4.2 版本 |
-| `internal/swarm/server/adapter/deep_adapter_team.go` | 替换为 4.2 版本 |
+| `internal/swarm/server/adapter/deep_adapter_team.go` | 替换为 4.3 版本（删死分支） |
 | `tests/integration/swarm/server/adapter/todo_panel_test.go` | **保留**（真实链路回归用例，与本方案兼容） |
 
 ## 5. 测试策略
@@ -101,7 +125,7 @@ if !ok {
 | 层级 | 文件 | 用例 |
 |---|---|---|
 | 单测 | `server/utils/stream_utils_test.go` | `[]any`（已有）、`[]map[string]any`（已有）、未知形态 → 空列表 + 不 panic（新增）、缺键（已有）、键为 nil（新增） |
-| 单测 | `server/adapter/deep_adapter_team_chunktomap_test.go` | 新增 `todo.updated` 的 `[]map` / `[]any` / 未知形态 三例（该函数现有单测零 todo 覆盖） |
+| 单测 | `server/adapter/deep_adapter_team_chunktomap_test.go` | 新增 1 例：typed 形状的 `todo.updated` 走 dotted 前缀分支、`todos` 原样保留（锁定"删除死分支后行为不变"） |
 | 集成 | `tests/integration/swarm/server/adapter/todo_panel_test.go` | MockLLM 真调 `todo_create` → 断言事件非空、元素为 `map[string]any`、`todo.json` 真落盘 |
 | 门禁 | — | 改动行覆盖 ≥85%、`-race`、`integration-audit -verify` 两层门禁 |
 
