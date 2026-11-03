@@ -261,14 +261,16 @@ react:
       offload_file_prefix: "ToolResultBudgetProcessor"
       tool_name_allowlist: []
   # 在线技能自演进（对齐 Python 模板 react.evolution）
-  # 代码读取：deep_adapter_rails.go:346（enabled）、:987（plan 模式注册/注销）、
+  # 代码读取：deep_adapter_rails.go（enabled 门控在调用方）、updatePlanModeRails、
   #          runtime_inheritance.go（auto_scan/skill_create）、web_handlers.go（skill_create）
+  # 注：auto_save 固定 false（需审批），sharing 未接线（Python adapter 同样不接），
+  #     两者不再作为配置键暴露。
   evolution:
     # 是否启用在线 Skills 自演进
     enabled: true
-    # 每轮对话后自动扫描（建议先用手动 /evolve）
+    # 每轮对话后自动扫描（缺省 false，对齐 Python；可用 EVOLUTION_AUTO_SCAN=true/1/yes 覆盖）
     auto_scan: false
-    # 注册 SkillCreateRail（单 agent）与 TeamSkillCreateRail（leader）
+    # 注册单 Agent SkillCreateRail（阈值检测 → 提议创建新技能）
     skill_create: false
     # Skill 根目录（模板对齐项：Go 侧取 workspace.AgentSkillsDir()、
     # Python 侧用 get_agent_skills_dir()，两端代码均未消费本键）

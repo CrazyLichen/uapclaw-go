@@ -363,7 +363,8 @@ func (d *DeepAdapter) updateSkillEvolutionRail(config map[string]any) {
 // buildSkillEvolutionRail 构建技能演进护栏。
 // 对齐 Python: _build_skill_evolution_rail() (interface_deep.py:1948-1968)
 //
-// 返回具体类型：调用方无需类型断言，避免断言失败时静默丢弃注册。
+// 与 Python 一致：本函数不判 evolution.enabled（门控在调用方），
+// 不接 sharing 配置，auto_save 恒 false（需审批），auto_scan 缺省关闭。
 func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 	model := d.modelSnapshot()
 	if model == nil {
@@ -371,28 +372,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 		return nil
 	}
 
-	// 读取 evolution 配置
-	evolutionConfig, _ := d.configCacheSnapshot()["evolution"].(map[string]any)
-	enabled, _ := evolutionConfig["enabled"].(bool)
-	if !enabled {
-		return nil
-	}
-
-	// 读取 auto_scan
-	autoScan := true
-	if as, ok := evolutionConfig["auto_scan"].(bool); ok {
-		autoScan = as
-	}
-	// 环境变量覆盖
-	if envAS := os.Getenv("EVOLUTION_AUTO_SCAN"); envAS != "" {
-		autoScan = strings.ToLower(envAS) == "true"
-	}
-
-	// auto_save 默认 false（需要审批）
-	autoSave := false
-	if as, ok := evolutionConfig["auto_save"].(bool); ok {
-		autoSave = as
-	}
+	cache := d.configCacheSnapshot()
 
 	// 禁用技能列表
 	var disabledSkills []string
@@ -407,21 +387,15 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 		return nil
 	}
 
+	// model_name 兜底链：默认模型 → config.model_name → 模板默认值
 	modelName := d.defaultModelName
 	if modelName == "" {
+		if v, ok := cache["model_name"].(string); ok && v != "" {
+			modelName = v
+		}
+	}
+	if modelName == "" {
 		modelName = "qwen-max"
-	}
-
-	opts := []evolution.SkillEvolutionRailOption{
-		evolution.WithAutoScan(autoScan),
-		evolution.WithAutoSave(autoSave),
-		evolution.WithDisabledSkillsSet(disabledSkills),
-	}
-
-	// sharing 配置
-	sharingConfig, _ := evolutionConfig["sharing"].(map[string]any)
-	if sharingConfig != nil {
-		opts = append(opts, evolution.WithSharingConfigMap(sharingConfig))
 	}
 
 	rail := evolution.NewSkillEvolutionRail(
@@ -429,10 +403,17 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 		model,
 		modelName,
 		d.resolveRuntimeLanguage(),
-		opts...,
+		evolution.WithAutoScan(evolutionAutoScan(cache)),
+		// auto_save 恒 false：rail 构造默认 true（skill_evolution_rail.go:192），
+		// 省略该选项等于放开审批，必须显式传 false。
+		evolution.WithAutoSave(false),
+		evolution.WithDisabledSkillsSet(disabledSkills),
 	)
 
-	logger.Info(logComponent).Msg("SkillEvolutionRail created")
+	logger.Info(logComponent).
+		Str("model", modelName).
+		Bool("auto_scan", rail.AutoScan()).
+		Msg("SkillEvolutionRail created")
 	return rail
 }
 
