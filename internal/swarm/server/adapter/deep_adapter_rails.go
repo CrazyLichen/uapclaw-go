@@ -1642,7 +1642,13 @@ func (d *DeepAdapter) buildDynamicRail(methodName string, configBase map[string]
 	case "buildContextProcessorRail":
 		return d.buildContextProcessorRail(d.configCacheSnapshot())
 	case "buildSkillEvolutionRail":
-		return d.buildSkillEvolutionRail()
+		rail := d.buildSkillEvolutionRail()
+		// 动态路径（code 模式 rails 配置点名）只负责构建并登记字段；
+		// 注册由本次 CreateDeepAgent 装配完成，装配后不变量成立。
+		if rail != nil {
+			d.skillEvolutionRail = rail
+		}
+		return rail
 	case "buildWorktreeRail":
 		// CodeAdapter 专有，DeepAdapter 不实现
 		return nil

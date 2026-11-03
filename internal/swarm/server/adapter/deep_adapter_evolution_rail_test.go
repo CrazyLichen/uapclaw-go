@@ -193,3 +193,24 @@ func TestBuildSkillCreateRail_启用返回单Agent版(t *testing.T) {
 		t.Fatal("builder 不得写字段，由调用方在注册成功后赋值")
 	}
 }
+
+// TestBuildDynamicRail_写字段 动态路径构建演进 rail 后必须登记字段。
+func TestBuildDynamicRail_写字段(t *testing.T) {
+	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
+	pathutil.ResetCache()
+	d := NewDeepAdapter()
+	d.setConfigSnapshots(map[string]any{"evolution": map[string]any{"enabled": true}}, map[string]any{})
+	d.model = usableTestModel()
+	d.defaultModelName = "test-model"
+
+	rail := d.buildDynamicRail("buildSkillEvolutionRail", map[string]any{})
+	if rail == nil {
+		t.Fatal("动态路径应构建出 rail")
+	}
+	if d.skillEvolutionRail == nil {
+		t.Fatal("动态路径必须把实例登记到字段，否则注册后无人可追踪")
+	}
+	if d.skillEvolutionRail != rail {
+		t.Fatal("字段与返回值必须是同一实例")
+	}
+}
