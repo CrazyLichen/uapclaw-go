@@ -9,7 +9,9 @@
 // 文件目录：
 //
 //	server/
-//	├── doc.go                 # 包文档
-//	├── skill_manager_test.go  # SkillManager 集成测试（路径穿越/导入卸载/marketplace/团队共享/启停可见性）
-//	└── adapter/               # AgentServer 适配层集成测试
+//	├── doc.go                      # 包文档
+//	├── history_roundtrip_test.go   # 会话历史往返集成测试
+//	├── skill_manager_test.go       # SkillManager 集成测试（路径穿越/导入卸载/marketplace/团队共享/启停可见性）
+//	├── skilldev_pipeline_test.go   # SkillDev 流水线编排测试（挂起/恢复/检查点）
+//	└── adapter/                    # AgentServer 适配层集成测试
 package server_test

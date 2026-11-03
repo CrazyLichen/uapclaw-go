@@ -234,6 +234,13 @@ func CreateBackgroundTask(ctx context.Context, fn func(ctx context.Context) erro
 			// Python: handle.set_manager_task(task) → _ready.set()
 			// TaskManager 路径下 managerTask 已同步设置，立即就绪
 			close(handle.ready)
+			// 镜像 TaskManager 任务的完成信号到 handle.done。
+			// manager 路径不经过 Start()，若不镜像则 Done() 永不关闭，
+			// 使 DrainPendingHostEvents(wait=true) 一直白等到超时（生产默认 600s）。
+			go func() {
+				<-task.done
+				close(handle.done)
+			}()
 			return handle, nil
 		}
 	}
