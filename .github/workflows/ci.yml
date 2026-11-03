@@ -86,7 +86,12 @@ jobs:
       - name: 设置 Go 环境
         uses: actions/setup-go@v6
         with:
-          go-version: "1.26"
+          # 固定补丁版，与 golangci-lint v2.12.2 二进制的构建版本（go1.26.9）对齐。
+          # 用浮动 "1.26" 时 runner 一旦升到 go1.26.10，staticcheck 读不到新版导出数据，
+          # 丢失「t.Fatal 不返回」的事实，会把仓库里 168 个 _test.go、470 处
+          # `if x == nil { t.Fatal(...) }` 全判成 SA5011 误报（2026-11-03 实测：
+          # 本地用同版本 lint 跑同一份代码 0 命中）。升级 lint 版本后可同步放开此固定。
+          go-version: "1.26.9"
           cache: true
 
       - name: 下载前端产物
