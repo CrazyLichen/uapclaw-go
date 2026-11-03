@@ -1,6 +1,7 @@
 package dmessage_queue
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -108,4 +109,24 @@ func TestMessageToMap_非Dmq类型报错(t *testing.T) {
 // newPlainQueueMessage 构造一个非 Dmq 的普通 QueueMessage，用于 D6 用例。
 func newPlainQueueMessage() *message_queue.QueueMessage {
 	return message_queue.NewQueueMessage(nil)
+}
+
+// TestSerializeMessage_产出合法JSON 测试序列化结果是带 __class__ 的 JSON 字节。
+func TestSerializeMessage_产出合法JSON(t *testing.T) {
+	msg := NewDmqRequestMessage(map[string]any{"q": "hi"})
+	msg.MessageID = "mid-1"
+
+	data, err := SerializeMessage(msg)
+	require.NoError(t, err)
+
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(data, &decoded), "产出不是合法 JSON: %s", string(data))
+	assert.Equal(t, "DmqRequestMessage", decoded["__class__"])
+	assert.Equal(t, "mid-1", decoded["message_id"])
+}
+
+// TestSerializeMessage_非Dmq类型报错 测试序列化阶段的 fail fast。
+func TestSerializeMessage_非Dmq类型报错(t *testing.T) {
+	_, err := SerializeMessage(newPlainQueueMessage())
+	require.Error(t, err)
 }

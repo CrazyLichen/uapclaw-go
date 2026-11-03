@@ -1,6 +1,7 @@
 package dmessage_queue
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -79,6 +80,17 @@ func MessageToMap(msg message_queue.QueueMessageBase) (map[string]any, error) {
 			exception.WithParam("reason", "unsupported message type for pulsar wire"),
 		)
 	}
+}
+
+// SerializeMessage 将 Dmq 消息序列化为 wire 字节。
+//
+// Python: message_serializer.serialize_message(msg)
+func SerializeMessage(msg message_queue.QueueMessageBase) ([]byte, error) {
+	asMap, err := MessageToMap(msg)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(asMap)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
