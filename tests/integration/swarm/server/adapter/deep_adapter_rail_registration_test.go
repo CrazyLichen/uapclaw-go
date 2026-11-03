@@ -34,9 +34,12 @@ func TestRailRegistrationSuite(t *testing.T) {
 }
 
 // TestSlashFirstMessage_EvolutionRailRegistered 会话首条消息为 /evolve_list 时
-// 演进 rail 必须被注册（当前实现只建不注册，改动前必红）。
+// 演进 rail 必须被注册（改动前懒加载只建不注册，必红）。
+//
+// 冷启动用 agent 模式：此时计划模式尚未进入，字段为 nil；首条消息走 slash 分支
+// 懒加载，若只建不注册，随后的 updatePlanModeRails 会因字段非 nil 而跳过注册。
 func (s *RailRegistrationSuite) TestSlashFirstMessage_EvolutionRailRegistered() {
-	d := s.newAdapter("agent.plan", evolutionExtra(true, false, false))
+	d := s.newAdapter("agent", evolutionExtra(true, false, false))
 	s.Require().Equal(0, s.countEvolutionRails(d), "冷启动不应注册演进 rail")
 
 	req := schema.NewAgentRequest("req-slash", "itest-channel", schema.ReqMethodChatSend,

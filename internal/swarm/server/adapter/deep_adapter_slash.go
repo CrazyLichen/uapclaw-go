@@ -41,27 +41,27 @@ func (d *DeepAdapter) handleSlashCommand(ctx context.Context, query string, sess
 	// /evolve 精确匹配（== "/evolve" 或前缀 "/evolve "），防止 /evolveXXX 误命中
 	switch {
 	case strings.HasPrefix(stripped, "/evolve_simplify"):
-		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
 		return d.handleEvolveSimplifyCommand(ctx, stripped, sessionID)
 	case strings.HasPrefix(stripped, "/evolve_rebuild"):
-		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
 		return d.handleEvolveRebuildCommand(ctx, stripped, sessionID)
 	case strings.HasPrefix(stripped, "/evolve_rollback"):
-		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
 		return d.handleEvolveRollbackCommand(ctx, stripped, sessionID)
 	case strings.HasPrefix(stripped, "/evolve_list"):
-		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
 		return d.handleEvolveListCommand(ctx, stripped, sessionID)
 	case stripped == "/evolve" || strings.HasPrefix(stripped, "/evolve "):
-		if errMsg := d.ensureEvolutionRailForSlash(mode); errMsg != "" {
+		if errMsg := d.ensureEvolutionRailForSlash(ctx, mode); errMsg != "" {
 			return map[string]any{"output": errMsg, "result_type": "error"}, nil
 		}
 		return d.handleEvolveCommand(ctx, stripped, sessionID)
@@ -70,11 +70,13 @@ func (d *DeepAdapter) handleSlashCommand(ctx context.Context, query string, sess
 	}
 }
 
-// ensureEvolutionRailForSlash 检查演进功能可用性，必要时懒加载 SkillEvolutionRail。
-// Python: _ensure_evolution_rail_for_slash() (interface_deep.py L4285-4303)
+// ensureEvolutionRailForSlash 检查演进功能可用性，必要时懒加载并注册 SkillEvolutionRail。
+// Python: _ensure_evolution_rail_for_slash() (interface_deep.py:4286-4303)
 //
-// 返回空字符串表示可用，非空表示错误信息。
-func (d *DeepAdapter) ensureEvolutionRailForSlash(mode string) string {
+// 与 Python 的偏差（有意）：Python 只构建不注册，导致会话首条消息为 /evolve* 时
+// 该实例永不注册、被动演进全灭。这里在构建后立即注册，维持
+// 「字段非 nil ⇒ 已注册」的不变量。
+func (d *DeepAdapter) ensureEvolutionRailForSlash(ctx context.Context, mode string) string {
 	if mode != "agent.plan" {
 		return "当前模式下演进功能不可用，仅 agent.plan 模式支持。"
 	}
@@ -83,9 +85,17 @@ func (d *DeepAdapter) ensureEvolutionRailForSlash(mode string) string {
 	if !enabled {
 		return "演进功能未启用。"
 	}
-	// 懒加载：如果 rail 为 nil，尝试构建（注册在组 5 补齐）
 	if d.skillEvolutionRail == nil {
-		d.skillEvolutionRail = d.buildSkillEvolutionRail()
+		rail := d.buildSkillEvolutionRail()
+		if rail != nil {
+			if d.instance != nil {
+				if err := d.instance.RegisterRail(ctx, rail); err != nil {
+					logger.Error(logComponent).Err(err).Msg("Failed to register SkillEvolutionRail (slash)")
+					return "演进功能初始化失败。"
+				}
+			}
+			d.skillEvolutionRail = rail
+		}
 	}
 	if d.skillEvolutionRail == nil {
 		return "演进功能初始化失败。"
