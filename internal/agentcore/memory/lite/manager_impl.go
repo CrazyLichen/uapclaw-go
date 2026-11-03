@@ -703,7 +703,11 @@ func (m *memoryIndexManager) initializeProvider(ctx context.Context) error {
 	m.provider = provider
 	// Python: self.provider_key = f"{self.provider.id}:{self.provider.model}"
 	m.providerKey = fmt.Sprintf("%s:%s", m.provider.ID(), m.provider.Model())
-	logger.Info(logComponent).Str("provider", m.settings.Provider).Str("model", m.settings.Model).Msg("embedding provider initialized")
+	// 打实际实例值：settings 里永远是配置值，mock 降级时会把排查者误导成"已配置"
+	logger.Info(logComponent).
+		Str("provider", provider.ID()).
+		Str("model", provider.Model()).
+		Msg("embedding provider initialized")
 	return nil
 }
 

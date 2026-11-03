@@ -88,6 +88,9 @@ func NewMemoryRail(embeddingConfig *embedding.EmbeddingConfig, isProactive bool)
 //
 // Python: MemoryRail.init(agent)
 func (r *MemoryRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
+	// 中文分词词典加载实测 843ms，后台预热，避免落在用户第一次 memory_search 上
+	lite.InitMemorySegmenterAsync()
+
 	// 获取 systemPromptBuilder
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
