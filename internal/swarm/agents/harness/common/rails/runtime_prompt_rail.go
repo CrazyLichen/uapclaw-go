@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -33,6 +34,8 @@ import (
 // Python: RuntimePromptRail(DeepAgentRail) — runtime_prompt_rail.py (385 行)
 type RuntimePromptRail struct {
 	rails.DeepAgentRail
+	// mu 保护下列可变字段。rail 实例跨会话共享，Set* 与 BeforeModelCall 会并发访问。
+	mu sync.RWMutex
 	// language 每次请求的语言
 	language string
 	// channel 每次请求的频道
@@ -52,6 +55,26 @@ type RuntimePromptRail struct {
 	// builder 系统提示词构建器引用，Init 时从 Agent 获取，Uninit 时置 nil
 	// Python: self.system_prompt_builder
 	builder saprompt.SystemPromptBuilderInterface
+}
+
+// runtimePromptSnapshot BeforeModelCall 入口读取的字段快照。
+type runtimePromptSnapshot struct {
+	// language 每次请求的语言
+	language string
+	// channel 每次请求的频道
+	channel string
+	// trustedDirs 每次请求的可信目录
+	trustedDirs []string
+	// cwd 每次请求的当前工作目录
+	cwd string
+	// projectDir 每次请求的项目目录
+	projectDir string
+	// modelName 每次请求的模型名称
+	modelName string
+	// mode 每次请求的运行模式
+	mode string
+	// forceEnglish 强制英文
+	forceEnglish bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -116,24 +139,32 @@ func NewRuntimePromptRail(language, channel string) *RuntimePromptRail {
 // SetLanguage 每次请求更新语言。
 // Python: RuntimePromptRail.set_language(language)
 func (r *RuntimePromptRail) SetLanguage(language string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.language = language
 }
 
 // SetChannel 每次请求更新频道。
 // Python: RuntimePromptRail.set_channel(channel)
 func (r *RuntimePromptRail) SetChannel(channel string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.channel = channel
 }
 
 // SetTrustedDirs 每次请求更新可信目录。
 // Python: RuntimePromptRail.set_trusted_dirs(trusted_dirs)
 func (r *RuntimePromptRail) SetTrustedDirs(dirs []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.trustedDirs = dirs
 }
 
 // SetRuntimePaths 每次请求更新当前工作目录和项目目录。
 // Python: RuntimePromptRail.set_runtime_paths(cwd, project_dir)
 func (r *RuntimePromptRail) SetRuntimePaths(cwd, projectDir string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.cwd = strings.TrimSpace(cwd)
 	r.projectDir = strings.TrimSpace(projectDir)
 }
@@ -141,33 +172,44 @@ func (r *RuntimePromptRail) SetRuntimePaths(cwd, projectDir string) {
 // SetModelName 每次请求更新模型名称，作为文件读取失败时的兜底。
 // Python: RuntimePromptRail.set_model_name(model_name)
 func (r *RuntimePromptRail) SetModelName(modelName string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.modelName = modelName
 }
 
 // SetMode 每次请求更新运行模式，作为文件读取失败时的兜底。
 // Python: RuntimePromptRail.set_mode(mode)
 func (r *RuntimePromptRail) SetMode(mode string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.mode = mode
 }
 
 // SetForceEnglish 强制英文 section，无视 language 字段（code 模式）。
 // Python: RuntimePromptRail.set_force_english(force)
 func (r *RuntimePromptRail) SetForceEnglish(force bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.forceEnglish = force
 }
 
 // Init 从 Agent 获取 system_prompt_builder 引用并存储。
 // Python: RuntimePromptRail.init(agent)
 func (r *RuntimePromptRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
-	if agent != nil {
-		r.builder = agent.SystemPromptBuilder()
+	if agent == nil {
+		return nil
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.builder = agent.SystemPromptBuilder()
 	return nil
 }
 
 // Uninit 清除注入的 section 并释放 builder 引用。
 // Python: RuntimePromptRail.uninit(agent)
 func (r *RuntimePromptRail) Uninit(_ agentinterfaces.BaseAgent) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.builder != nil {
 		r.builder.RemoveSection("time")
 		r.builder.RemoveSection("runtime")
@@ -184,11 +226,9 @@ func (r *RuntimePromptRail) Uninit(_ agentinterfaces.BaseAgent) error {
 // BeforeModelCall 模型调用前动态注入运行时状态 PromptSection。
 // Python: RuntimePromptRail.before_model_call(ctx)
 func (r *RuntimePromptRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 优先使用 Init 时存储的 builder（对齐 Python: self.system_prompt_builder）
-	builder := r.builder
-	if builder == nil && cbc != nil {
-		builder = cbc.Agent().SystemPromptBuilder()
-	}
+	// 入口一次性取字段快照，避免与并发 Set* 交叉读到半更新值
+	snap := r.snapshot()
+	builder := r.builderOf(cbc)
 	if builder == nil {
 		return nil
 	}
@@ -198,25 +238,25 @@ func (r *RuntimePromptRail) BeforeModelCall(_ context.Context, cbc *agentinterfa
 	runtimeState := readRuntimeStateYAML()
 
 	// ── time 节 ──
-	r.injectTimeSection(builder)
+	r.injectTimeSection(builder, snap)
 
 	// ── runtime section（读 YAML fallback setter）──
-	r.injectRuntimeSection(builder, runtimeState)
+	r.injectRuntimeSection(builder, runtimeState, snap)
 
 	// ── language_output 节 ──
-	r.injectLanguageOutputSection(builder, runtimeState)
+	r.injectLanguageOutputSection(builder, runtimeState, snap)
 
 	// ── env 节 ──
-	r.injectEnvSection(builder)
+	r.injectEnvSection(builder, snap)
 
 	// ── git_status section（条件）──
-	r.injectGitStatusSection(builder, runtimeState)
+	r.injectGitStatusSection(builder, runtimeState, snap)
 
 	// ── browser_tool_policy section（条件）──
-	r.injectBrowserToolPolicySection(builder)
+	r.injectBrowserToolPolicySection(builder, snap)
 
 	// ── trusted_dirs_policy section（条件）──
-	r.injectTrustedDirsPolicySection(builder)
+	r.injectTrustedDirsPolicySection(builder, snap)
 
 	return nil
 }
@@ -325,8 +365,8 @@ func FirstNonEmpty(vals ...string) string {
 }
 
 // injectTimeSection 注入 time PromptSection。
-func (r *RuntimePromptRail) injectTimeSection(builder saprompt.SystemPromptBuilderInterface) {
-	if !r.forceEnglish && r.language == "cn" {
+func (r *RuntimePromptRail) injectTimeSection(builder saprompt.SystemPromptBuilderInterface, snap runtimePromptSnapshot) {
+	if !snap.forceEnglish && snap.language == "cn" {
 		// Python L129-134: cn 模式下 cn/en 都填中文内容
 		timeContentCN := "# 时间说明\n\n" +
 			"- 当用户询问\u201c最新、当前、今年、本年、实时、近期\u201d等信息并需要搜索时，" +
@@ -350,16 +390,16 @@ func (r *RuntimePromptRail) injectTimeSection(builder saprompt.SystemPromptBuild
 }
 
 // injectRuntimeSection 注入 runtime PromptSection。
-func (r *RuntimePromptRail) injectRuntimeSection(builder saprompt.SystemPromptBuilderInterface, runtimeState map[string]string) {
+func (r *RuntimePromptRail) injectRuntimeSection(builder saprompt.SystemPromptBuilderInterface, runtimeState map[string]string, snap runtimePromptSnapshot) {
 	// 使用入口处传入的 runtimeState，不再重复读取 YAML
 	// Python L148-155: runtime_state 只读取一次，所有字段共用
 
-	model := FirstNonEmpty(runtimeState["model"], r.modelName, "unknown")
-	mde := FirstNonEmpty(runtimeState["mode"], r.mode, "unknown")
-	languageVal := FirstNonEmpty(runtimeState["language"], r.language, "unknown")
-	channel := FirstNonEmpty(runtimeState["channel"], r.channel, "unknown")
+	model := FirstNonEmpty(runtimeState["model"], snap.modelName, "unknown")
+	mde := FirstNonEmpty(runtimeState["mode"], snap.mode, "unknown")
+	languageVal := FirstNonEmpty(runtimeState["language"], snap.language, "unknown")
+	channel := FirstNonEmpty(runtimeState["channel"], snap.channel, "unknown")
 
-	if !r.forceEnglish && r.language == "cn" {
+	if !snap.forceEnglish && snap.language == "cn" {
 		// Python L163-171: 一比一复制
 		runtimeContent := "# 运行时状态\n\n" +
 			fmt.Sprintf("- 当前模型：%s\n", model) +
@@ -392,10 +432,10 @@ func (r *RuntimePromptRail) injectRuntimeSection(builder saprompt.SystemPromptBu
 }
 
 // injectLanguageOutputSection 注入 language_output PromptSection。
-func (r *RuntimePromptRail) injectLanguageOutputSection(builder saprompt.SystemPromptBuilderInterface, runtimeState map[string]string) {
+func (r *RuntimePromptRail) injectLanguageOutputSection(builder saprompt.SystemPromptBuilderInterface, runtimeState map[string]string, snap runtimePromptSnapshot) {
 	// Python L191-205: 一比一复制逻辑
 	builder.RemoveSection("language_output")
-	languageVal := FirstNonEmpty(runtimeState["language"], r.language, "unknown")
+	languageVal := FirstNonEmpty(runtimeState["language"], snap.language, "unknown")
 	languageName, ok := languageNames[languageVal]
 	if !ok {
 		languageName = languageVal
@@ -415,7 +455,7 @@ func (r *RuntimePromptRail) injectLanguageOutputSection(builder saprompt.SystemP
 }
 
 // injectEnvSection 注入 env PromptSection。
-func (r *RuntimePromptRail) injectEnvSection(builder saprompt.SystemPromptBuilderInterface) {
+func (r *RuntimePromptRail) injectEnvSection(builder saprompt.SystemPromptBuilderInterface, snap runtimePromptSnapshot) {
 	// Python L208-212: 对齐平台检测
 	osType := runtime.GOOS
 	shellPath := os.Getenv("SHELL")
@@ -427,7 +467,7 @@ func (r *RuntimePromptRail) injectEnvSection(builder saprompt.SystemPromptBuilde
 	// Python: platform.release() → syscall.Uname().Release
 	osVersion := getOSVersion()
 
-	if !r.forceEnglish && r.language == "cn" {
+	if !snap.forceEnglish && snap.language == "cn" {
 		// Python L214-237: 一比一复制
 		envContent := "# 运行环境\n\n" +
 			fmt.Sprintf("- 当前运行平台：`%s`\n", osType) +
@@ -489,7 +529,7 @@ func (r *RuntimePromptRail) injectEnvSection(builder saprompt.SystemPromptBuilde
 }
 
 // injectGitStatusSection 注入 git_status PromptSection（条件）。
-func (r *RuntimePromptRail) injectGitStatusSection(builder saprompt.SystemPromptBuilderInterface, runtimeState map[string]string) {
+func (r *RuntimePromptRail) injectGitStatusSection(builder saprompt.SystemPromptBuilderInterface, runtimeState map[string]string, snap runtimePromptSnapshot) {
 	// Python L271-300: 一比一复制逻辑
 	builder.RemoveSection("git_status")
 	gitBranch := strings.TrimSpace(runtimeState["git_branch"])
@@ -534,10 +574,10 @@ func (r *RuntimePromptRail) injectGitStatusSection(builder saprompt.SystemPrompt
 }
 
 // injectBrowserToolPolicySection 注入 browser_tool_policy PromptSection（条件）。
-func (r *RuntimePromptRail) injectBrowserToolPolicySection(builder saprompt.SystemPromptBuilderInterface) {
+func (r *RuntimePromptRail) injectBrowserToolPolicySection(builder saprompt.SystemPromptBuilderInterface, snap runtimePromptSnapshot) {
 	// Python L302-319: 一比一复制逻辑
 	builder.RemoveSection("browser_tool_policy")
-	if r.channel != "web" {
+	if snap.channel != "web" {
 		return
 	}
 	// Python L304-313: 一比一复制
@@ -558,16 +598,16 @@ func (r *RuntimePromptRail) injectBrowserToolPolicySection(builder saprompt.Syst
 }
 
 // injectTrustedDirsPolicySection 注入 trusted_dirs_policy PromptSection（条件）。
-func (r *RuntimePromptRail) injectTrustedDirsPolicySection(builder saprompt.SystemPromptBuilderInterface) {
+func (r *RuntimePromptRail) injectTrustedDirsPolicySection(builder saprompt.SystemPromptBuilderInterface, snap runtimePromptSnapshot) {
 	// Python L321-385: 一比一复制逻辑
 	builder.RemoveSection("trusted_dirs_policy")
-	if r.channel != "tui" {
+	if snap.channel != "tui" {
 		return
 	}
-	dirs := existingDirs(r.trustedDirs)
-	currentDir := existingDir(r.cwd)
+	dirs := existingDirs(snap.trustedDirs)
+	currentDir := existingDir(snap.cwd)
 	if currentDir == "" {
-		currentDir = existingDir(r.projectDir)
+		currentDir = existingDir(snap.projectDir)
 	}
 	if currentDir == "" && len(dirs) > 0 {
 		currentDir = dirs[0]
@@ -590,7 +630,7 @@ func (r *RuntimePromptRail) injectTrustedDirsPolicySection(builder saprompt.Syst
 		enDirsDisplay = cnDirsDisplay
 	}
 
-	if !r.forceEnglish && r.language == "cn" {
+	if !snap.forceEnglish && snap.language == "cn" {
 		// Python L340-354: 一比一复制
 		trustedDirsContent := "# 工作目录策略\n\n" +
 			fmt.Sprintf("- 系统目录（不要在其中查找或运行项目文件）：%s\n", workspaceDir) +
@@ -779,4 +819,33 @@ func runGit(ctx context.Context, dir string, args ...string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// snapshot 在读锁内一次性拷贝可变字段。
+func (r *RuntimePromptRail) snapshot() runtimePromptSnapshot {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	dirs := make([]string, len(r.trustedDirs))
+	copy(dirs, r.trustedDirs)
+	return runtimePromptSnapshot{
+		language:     r.language,
+		channel:      r.channel,
+		trustedDirs:  dirs,
+		cwd:          r.cwd,
+		projectDir:   r.projectDir,
+		modelName:    r.modelName,
+		mode:         r.mode,
+		forceEnglish: r.forceEnglish,
+	}
+}
+
+// builderOf 返回注入用的系统提示词构建器；rail 上未设置时回退到回调上下文的 Agent。
+func (r *RuntimePromptRail) builderOf(cbc *agentinterfaces.AgentCallbackContext) saprompt.SystemPromptBuilderInterface {
+	r.mu.RLock()
+	builder := r.builder
+	r.mu.RUnlock()
+	if builder == nil && cbc != nil {
+		builder = cbc.Agent().SystemPromptBuilder()
+	}
+	return builder
 }

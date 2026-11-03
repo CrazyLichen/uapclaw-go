@@ -19,7 +19,8 @@
 //	├── deps.go           # SkillDevDeps：最小外部依赖定义
 //	├── store.go          # StateStore：任务状态持久化（本地文件实现）
 //	├── workspace.go      # WorkspaceProvider：工作区目录管理
-//	├── context.go        # SkillDevContext：阶段执行上下文（emit/agent 创建）
+//	├── context.go        # SkillDevContext：阶段执行上下文（emit/agent 创建/工具注册）
+//	├── stage_agent_run.go # 阶段 Agent 单次执行与输出清洗（RunStageAgent/StripCodeFences）
 //	├── pipeline.go       # SkillDevPipeline：确定性状态机编排器（Run/Resume/checkpoint）
 //	├── service.go        # SkillDevService：无状态服务入口（Handle 分发/7 个方法 handler）
 //	└── stages/           # 阶段处理器实现

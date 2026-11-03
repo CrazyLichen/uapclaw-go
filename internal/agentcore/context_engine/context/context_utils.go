@@ -277,3 +277,107 @@ func messageToMap(msg llm_schema.BaseMessage) map[string]any {
 	}
 	return result
 }
+
+// ──────────────────────────── 状态还原 ────────────────────────────
+
+// decodeMessageValue 将状态中的单条消息还原为 BaseMessage。
+//
+// 兼容两种形态：
+//   - 具体消息类型（同进程内上下文状态直传，Python: Message 对象）
+//   - map[string]any（经 checkpointer 落盘后 JSON 反序列化的形态，进程重启场景）
+//
+// 后者按 role 重新反序列化到具体类型，复用各消息类型的 UnmarshalJSON
+// （Content 的 string/多模态分片、AssistantMessage 的 tool_calls、ToolMessage 的 tool_call_id）。
+func decodeMessageValue(raw any) llm_schema.BaseMessage {
+	if msg, ok := raw.(llm_schema.BaseMessage); ok {
+		return msg
+	}
+	fields, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	roleText, _ := fields["role"].(string)
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return nil
+	}
+	switch strings.ToLower(roleText) {
+	case "user":
+		msg := &llm_schema.UserMessage{}
+		if err := json.Unmarshal(data, msg); err != nil {
+			return nil
+		}
+		return msg
+	case "assistant":
+		msg := &llm_schema.AssistantMessage{}
+		if err := json.Unmarshal(data, msg); err != nil {
+			return nil
+		}
+		return msg
+	case "tool":
+		msg := &llm_schema.ToolMessage{}
+		if err := json.Unmarshal(data, msg); err != nil {
+			return nil
+		}
+		return msg
+	case "system":
+		msg := &llm_schema.SystemMessage{}
+		if err := json.Unmarshal(data, msg); err != nil {
+			return nil
+		}
+		return msg
+	}
+	return nil
+}
+
+// messagesFromState 从状态值还原消息列表，无法识别的元素丢弃。
+// Python: SessionModelContext.load_state() 直接使用 messages 列表（无序列化还原步骤）
+func messagesFromState(value any) []llm_schema.BaseMessage {
+	switch v := value.(type) {
+	case []llm_schema.BaseMessage:
+		return v
+	case []any:
+		messages := make([]llm_schema.BaseMessage, 0, len(v))
+		for _, item := range v {
+			if msg := decodeMessageValue(item); msg != nil {
+				messages = append(messages, msg)
+			}
+		}
+		return messages
+	}
+	return nil
+}
+
+// offloadMessagesFromState 从状态值还原卸载消息缓冲区，兼容具体类型与 JSON 反序列化形态。
+func offloadMessagesFromState(value any) map[string][]llm_schema.BaseMessage {
+	result := make(map[string][]llm_schema.BaseMessage)
+	switch v := value.(type) {
+	case map[string][]llm_schema.BaseMessage:
+		return v
+	case map[string]any:
+		for handle, listVal := range v {
+			if messages := messagesFromState(listVal); messages != nil {
+				result[handle] = messages
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+// compressionHistoryFromState 从状态值还原压缩历史，兼容具体类型与 JSON 反序列化形态。
+func compressionHistoryFromState(value any) []map[string]any {
+	switch v := value.(type) {
+	case []map[string]any:
+		return v
+	case []any:
+		history := make([]map[string]any, 0, len(v))
+		for _, item := range v {
+			if record, ok := item.(map[string]any); ok {
+				history = append(history, record)
+			}
+		}
+		return history
+	}
+	return nil
+}

@@ -499,7 +499,8 @@ func (d *DeepAdapter) getRecentMessages(sessionID string) []llmschema.BaseMessag
 // Python: _call_model_for_recap() (line 5611-5663)
 // 不传 system prompt，prompt 作为最后一条 user message。
 func (d *DeepAdapter) callModelForRecap(ctx context.Context, messages []llmschema.BaseMessage, prompt string) (string, error) {
-	if d.model == nil {
+	recapModel := d.modelSnapshot()
+	if recapModel == nil {
 		logger.Error(logComponent).Msg("callModelForRecap: no model instance available")
 		return "", nil
 	}
@@ -547,7 +548,7 @@ func (d *DeepAdapter) callModelForRecap(ctx context.Context, messages []llmschem
 	recapMessages = append(recapMessages, llmschema.NewUserMessage(prompt))
 
 	// 调用模型，对齐 Python: model.invoke(messages, max_tokens=300, temperature=0)
-	result, err := d.model.Invoke(ctx, model_clients.NewMessagesParam(recapMessages...),
+	result, err := recapModel.Invoke(ctx, model_clients.NewMessagesParam(recapMessages...),
 		model_clients.WithInvokeMaxTokens(300),
 		model_clients.WithInvokeTemperature(0),
 	)

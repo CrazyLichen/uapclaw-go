@@ -16,6 +16,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -60,12 +61,10 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 	})
 
 	// ③ 执行真实逻辑
+	// 注：取消时的上下文清理只在 invokeImpl 内部做一次（对齐 Python
+	// react_agent.py:1435-1441 的 except CancelledError 分支），此处不再重复清理。
 	result, err := a.invokeImpl(ctx, inputs, opts...)
 	if err != nil {
-		// context.Canceled 时清除上下文消息
-		if ctx.Err() == context.Canceled {
-			a.ClearContextMessages(ctx, agentOpts.Session)
-		}
 		if _, ok := err.(*exception.BaseError); ok {
 			return nil, err
 		}
@@ -255,6 +254,16 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 	result map[string]any,
 	sess sessioninterfaces.SessionFacade,
 ) {
+	// ctx 已取消时不再写任何结果帧：对齐 Python —— 取消后 generator 终止，
+	// 既不会写 answer 也不会写 error，避免旧轮把"取消"当错误写进流与 history。
+	// 该守卫同时覆盖 DeepAgent 的 writeRoundResultToStream 路径。
+	if utils.Canceled(ctx) {
+		logger.Info(logComponent).
+			Str("event_type", "stream_result_skipped").
+			Msg("skip writing invoke result: request canceled")
+		return
+	}
+
 	resultType, _ := result["result_type"].(string)
 	if resultType == "interrupt" {
 		if _, hasInterruptIDs := result["interrupt_ids"]; hasInterruptIDs {
@@ -283,6 +292,14 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// shouldReportStreamError 判断 streamProcess 是否应把错误写入流。
+//
+// ctx 取消不是错误：对齐 Python react_agent.py:1549-1554 —— `except Exception`
+// 抓不到 asyncio.CancelledError，因此取消时不会产生 chat.error 帧、也不会落 history。
+func shouldReportStreamError(ctx context.Context, err error) bool {
+	return err != nil && !utils.Canceled(ctx)
+}
 
 // invokeImpl 非流式调用的真实逻辑。
 //
@@ -442,9 +459,11 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		return loopErr
 	})
 
-	// 合并错误判断：context.Canceled 时清除上下文消息
+	// 合并错误判断：ctx 取消时清除本轮上下文消息（对齐 Python CancelledError 分支，
+	// 只清「本轮」——withHistory=false 保留历史前缀）。
+	// 这是取消路径唯一的一次清理；Invoke 包装层不再重复清理。
 	if err != nil {
-		if ctx.Err() == context.Canceled {
+		if utils.Canceled(ctx) {
 			a.ClearContextMessages(ctx, sess)
 		}
 		return nil, err
@@ -561,6 +580,14 @@ func (a *ReActAgent) innerStream(
 		// 走完整 Invoke（对齐 Python: self.invoke(inputs, session, _streaming=True)）
 		result, err := a.Invoke(ctx, inputs, opts...)
 		if err != nil {
+			// ctx 取消不是错误：不写错误帧、不落 history
+			// （对齐 Python react_agent.py:1549-1554 —— except Exception 抓不到 CancelledError）
+			if !shouldReportStreamError(ctx, err) {
+				logger.Info(logComponent).
+					Str("event_type", "stream_canceled").
+					Msg("stream invoke canceled by caller")
+				return
+			}
 			// 错误结果写入流
 			logger.Error(logComponent).Err(err).Str("event_type", "LLM_CALL_ERROR").Msg("streamProcess invoke error")
 			a.WriteInvokeResultToStream(ctx, map[string]any{

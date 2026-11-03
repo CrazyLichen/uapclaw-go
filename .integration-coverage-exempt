@@ -131,3 +131,10 @@ internal/agentcore/memory/lite/types.go
 internal/agentcore/retrieval/indexing/processor/extractor/triple_extractor.go
 internal/agentcore/retrieval/indexing/processor/parser/excel_value.go
 internal/agentcore/retrieval/retriever/agentic_retriever.go
+
+# ── 2026-11-03 48h 审查处置 ──
+# deep_adapter_evolution#L551 — callModelForRecap 的模型调用。集成 job 使用 MockLLM，
+# 该路径直接对 llm.Model 发起真实 HTTP 请求，不会经过 Mock；由 real-llm workflow
+# （tests/integration/real_llm）覆盖真实调用语义。本行仅把 d.model 换成 modelSnapshot()
+# 快照，行为不变。
+internal/swarm/server/adapter/deep_adapter_evolution.go#L551-L551

@@ -122,8 +122,8 @@ func TestAgentServer_StreamTaskTracking(t *testing.T) {
 	cancelled2 := false
 	cancel2 := func() { cancelled2 = true }
 
-	s.registerStreamTask("sess-1", cancel1)
-	s.registerStreamTask("sess-2", cancel2)
+	s.registerStreamTask("sess-1", "req-1", cancel1)
+	s.registerStreamTask("sess-2", "req-2", cancel2)
 
 	// 取消单个任务
 	s.cancelStreamTask("sess-1")

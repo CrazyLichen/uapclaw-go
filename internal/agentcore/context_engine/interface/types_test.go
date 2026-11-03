@@ -434,6 +434,27 @@ func TestGetLastAssistantUsageTokens_有UsageMetadata(t *testing.T) {
 	}
 }
 
+// TestGetLastAssistantUsageTokens_取TotalTokens 测试口径为输入+输出总量
+func TestGetLastAssistantUsageTokens_取TotalTokens(t *testing.T) {
+	// InputTokens/OutputTokens 都填上，TotalTokens 必须原样返回（不可取输入侧）
+	am := llm_schema.NewAssistantMessage("回复",
+		llm_schema.WithAssistantUsageMetadata(&llm_schema.UsageMetadata{
+			InputTokens: 120, OutputTokens: 80, TotalTokens: 200,
+		}),
+	)
+	if got := getLastAssistantUsageTokens([]llm_schema.BaseMessage{am}); got != 200 {
+		t.Errorf("getLastAssistantUsageTokens() = %d, 期望 200（输入+输出总量）", got)
+	}
+
+	// 只上报 InputTokens、未上报总量的 provider 视为无 usage（回退逐条计数）
+	amNoTotal := llm_schema.NewAssistantMessage("回复",
+		llm_schema.WithAssistantUsageMetadata(&llm_schema.UsageMetadata{InputTokens: 120}),
+	)
+	if got := getLastAssistantUsageTokens([]llm_schema.BaseMessage{amNoTotal}); got != 0 {
+		t.Errorf("getLastAssistantUsageTokens() = %d, 期望 0（无 TotalTokens 视为缺失）", got)
+	}
+}
+
 // TestGetLastAssistantUsageTokens_多条AssistantMessage取最后一条 测试取最后一条
 func TestGetLastAssistantUsageTokens_多条AssistantMessage取最后一条(t *testing.T) {
 	am1 := llm_schema.NewAssistantMessage("回复1",

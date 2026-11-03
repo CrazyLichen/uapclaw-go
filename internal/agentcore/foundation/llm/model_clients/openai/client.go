@@ -497,6 +497,8 @@ func (c *OpenAIModelClient) WrapError(method string, err error) error {
 	return exception.NewBaseError(
 		exception.StatusModelCallFailed,
 		exception.WithMsg(fmt.Sprintf("OpenAI API async %s error: %s", method, errDetail)),
+		// 保留 cause：文案不变，但 errors.Is 可命中原始错误（如 context.Canceled）
+		exception.WithCause(err),
 	)
 }
 

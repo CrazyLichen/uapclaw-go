@@ -103,6 +103,40 @@ func TestDeepAgentContextEngineConfig_同名模型冲突(t *testing.T) {
 	}
 }
 
+// TestDeepAgentContextEngineConfig_非默认条目被忽略 默认条目先出现时，
+// 后出现的非默认条目应被忽略（日志 kept/ignored 分支）。
+func TestDeepAgentContextEngineConfig_非默认条目被忽略(t *testing.T) {
+	d := &DeepAdapter{}
+	reactCfg := map[string]any{"context_engine_config": map[string]any{}}
+	configBase := map[string]any{
+		"models": map[string]any{
+			"defaults": []any{
+				map[string]any{
+					"model_client_config": map[string]any{
+						"model_name": "m2", "api_base": "https://a/v1",
+						"api_key": "k1", "client_provider": "OpenAI", "max_input_tokens": 32000,
+					},
+					"is_default": true,
+				},
+				map[string]any{
+					"model_client_config": map[string]any{
+						"model_name": "m2", "api_base": "https://b/v1",
+						"api_key": "k2", "client_provider": "OpenAI", "max_input_tokens": 8000,
+					},
+					"is_default": false,
+				},
+			},
+		},
+	}
+	got := d.deepAgentContextEngineConfig(reactCfg, configBase)
+	if got == nil {
+		t.Fatal("不应返回 nil")
+	}
+	if got.ModelContextWindowTokens["m2"] != 32000 {
+		t.Errorf("非默认条目应被忽略，窗口应保持 32000，实际 %d", got.ModelContextWindowTokens["m2"])
+	}
+}
+
 // TestToPositiveInt_各类型分支 覆盖 int/int32/int64/float64/string/非法值
 func TestToPositiveInt_各类型分支(t *testing.T) {
 	cases := []struct {

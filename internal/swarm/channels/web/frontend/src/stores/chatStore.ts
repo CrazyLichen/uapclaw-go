@@ -24,6 +24,16 @@ const TOOL_TIMEOUT_MS = 12_000_000;
 const EVOLUTION_STATUS_END_VISIBLE_MS = 3_000;
 let evolutionStatusClearTimer: ReturnType<typeof setTimeout> | null = null;
 
+// localIdSeq 本地 id 自增序号。
+// 仅用 Date.now() 在多路流/重放/极快切换时会撞同一毫秒，React key 复用导致
+// 思考块内容串台；时间戳 + 自增序号可保证同毫秒内也唯一。
+let localIdSeq = 0;
+
+function nextLocalId(prefix: string): string {
+  localIdSeq += 1;
+  return `${prefix}-${Date.now()}-${localIdSeq}`;
+}
+
 function computeTimeoutAt(baseIso: string): string {
   return new Date(Date.parse(baseIso) + TOOL_TIMEOUT_MS).toISOString();
 }
@@ -236,7 +246,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       // 否则新起一块：保证思考与工具卡片、正文的先后顺序不被合并打乱
       const thinkingMessage: Message = {
-        id: `reasoning-${Date.now()}`,
+        id: nextLocalId('reasoning'),
         role: 'assistant',
         content: text,
         timestamp: new Date().toISOString(),
@@ -670,7 +680,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       currentStreamId ??
       (lastMessage?.role === 'assistant' ? lastMessage.id : null);
     if (!targetId) {
-      const msgId = `file-${Date.now()}`;
+      const msgId = nextLocalId('file');
       set((state) => ({
         messages: [
           ...state.messages,

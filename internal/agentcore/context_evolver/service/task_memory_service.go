@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"strings"
+	"time"
 
 	ceconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/config"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_evolver/core/context"
@@ -377,6 +378,11 @@ func (s *TaskMemoryService) Summarize(ctx context.Context, userID string, matts 
 
 // AddMemory 手动添加记忆。对齐 Python TaskMemoryService.add_memory(user_id, request)。
 func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req AddMemoryRequest) (*AddMemoryResult, error) {
+	// 对齐 Python AddMemoryRequest.section: str = "general" 的缺省值语义
+	if req.Section == "" {
+		req.Section = "general"
+	}
+
 	// 对齐 Python：logger.info("Adding manual %s memory for user=%s", ...)
 	logger.Info(logComponent).
 		Str("algorithm", s.summaryAlgorithm).
@@ -404,10 +410,11 @@ func (s *TaskMemoryService) AddMemory(ctx context.Context, userID string, req Ad
 		}
 		node, memoryID = s.createReMeMemory(ctx, userID, req)
 	case "ACE":
-		if req.Content == "" || req.Section == "" {
+		// Section 已在入口归一化为 "general"，此处只需校验 content
+		if req.Content == "" {
 			return nil, exception.NewBaseError(
 				exception.StatusToolchainEvolvingMemoryAddExecutionError,
-				exception.WithMsg("ACE add_memory requires content and section"),
+				exception.WithMsg("ACE add_memory requires content"),
 			)
 		}
 		node, memoryID = s.createACEMemory(ctx, userID, req)
@@ -474,8 +481,15 @@ func (s *TaskMemoryService) LoadMemories(ctx context.Context, userID string) err
 	algoName := algoToPersistName(s.summaryAlgorithm)
 	nodesDict, err := s.persistenceHelper.Load(ctx, userID, algoName)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("Failed to load memories from persistence")
-		return err
+		// 对齐 Python: load_memories 内部捕获异常，只记录日志不重新抛出
+		logger.Error(logComponent).
+			Str("user_id", userID).
+			Err(err).
+			Msg("Failed to load existing memories")
+		return nil
+	}
+	if len(nodesDict) == 0 {
+		return nil // 对齐 Python: if not data: return
 	}
 
 	loaded := 0
@@ -500,6 +514,12 @@ func (s *TaskMemoryService) LoadMemories(ctx context.Context, userID string) err
 			loaded++
 		}
 	}
+
+	// 对齐 Python: logger.info("Loaded %d memories into vector store (algo=%s)", count, algo_name)
+	logger.Info(logComponent).
+		Int("count", loaded).
+		Str("algo", algoName).
+		Msg("Loaded memories into vector store")
 
 	return nil
 }
@@ -876,53 +896,51 @@ func (s *TaskMemoryService) createRBMemory(_ context.Context, userID string, req
 }
 
 // createReMeMemory 创建 ReMe 格式的记忆。
+// 对齐 Python: memory = ReMeMemory(...); vector_node = memory.to_vector_node()
+// node_id = f"reme_{workspace_id}_{md5(when_to_use)[:12]}"，嵌入内容为 when_to_use。
 func (s *TaskMemoryService) createReMeMemory(_ context.Context, userID string, req AddMemoryRequest) (*schema.VectorNode, string) {
 	whenToUse := ""
 	if req.WhenToUse != nil {
 		whenToUse = *req.WhenToUse
 	}
-
-	// 对齐 Python: memoryID = reme_{workspaceID}_{md5(when_to_use)[:12]}
-	contentHash := md5.Sum([]byte(whenToUse))
-	memoryID := fmt.Sprintf("reme_%s_%x", userID, contentHash[:6]) // 6 bytes = 12 hex chars
-
-	metadata := map[string]any{
-		"workspace_id": userID,
-		"algorithm":    s.summaryAlgorithm,
-		"memory_type":  "manual",
-		"score":        1.0,
-		"step_type":    "manual",
-		"confidence":   1.0,
-		"freq":         1,
-		"utility":      1,
-		"when_to_use":  whenToUse,
+	now := time.Now().UTC()
+	memory := ceschema.ReMeMemory{
+		BaseMemory: ceschema.BaseMemory{WorkspaceID: userID},
+		WhenToUse:  whenToUse,
+		Content:    req.Content,
+		Score:      1.0,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		Metadata: ceschema.ReMeMemoryMetadata{
+			Tags:       []string{},
+			StepType:   "manual",
+			ToolsUsed:  []string{},
+			Confidence: 1.0,
+			Freq:       1,
+			Utility:    1.0,
+		},
 	}
-
-	return schema.NewVectorNode(memoryID, req.Content, nil, metadata), memoryID
+	node := memory.ToVectorNode()
+	return node, node.ID
 }
 
 // createACEMemory 创建 ACE 格式的记忆。
+// 对齐 Python: memory = ACEMemory(...); vector_node = memory.to_vector_node()
+// node_id = f"ace_{workspace_id}_{id}"，id = f"{section}-{md5(content)[:8]}"。
 func (s *TaskMemoryService) createACEMemory(_ context.Context, userID string, req AddMemoryRequest) (*schema.VectorNode, string) {
-	section := req.Section
-	if section == "" {
-		section = "general"
+	contentHash := md5.Sum([]byte(req.Content))
+	now := time.Now().UTC()
+	memory := ceschema.ACEMemory{
+		BaseMemory: ceschema.BaseMemory{WorkspaceID: userID},
+		// 4 字节 = 8 个 hex 字符，等价 Python hexdigest()[:8]
+		ID:        fmt.Sprintf("%s-%x", req.Section, contentHash[:4]),
+		Section:   req.Section,
+		Content:   req.Content,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
-
-	// 对齐 Python：生成 ID = section + MD5(content)
-	hash := md5.Sum([]byte(req.Content))
-	memoryID := fmt.Sprintf("%s_%x", section, hash[:8])
-
-	metadata := map[string]any{
-		"workspace_id": userID,
-		"algorithm":    "ACE",
-		"memory_type":  "manual",
-		"section":      section,
-		"helpful":      0,
-		"harmful":      0,
-		"neutral":      0,
-	}
-
-	return schema.NewVectorNode(memoryID, req.Content, nil, metadata), memoryID
+	node := memory.ToVectorNode()
+	return node, node.ID
 }
 
 // algoToPersistName 算法名到持久化名的映射。

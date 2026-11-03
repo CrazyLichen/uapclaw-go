@@ -1720,6 +1720,16 @@ func (gm *GraphMemory) handleRelationDedupe(ctx context.Context, userID string, 
 func (gm *GraphMemory) relationDedupe(ctx context.Context, userID string, content string, relations []*graph.Relation, relationEmbedResults [][]float64, state *GraphMemState) error {
 	var dedupeRelationTasks []DedupeRelationTask
 
+	// relationDedupeCall 一次关系去重的 LLM 调用（阶段一收集，阶段二并发执行）
+	type relationDedupeCall struct {
+		relation        *graph.Relation
+		existingRelMaps []map[string]any
+		kwargs          map[string]any
+		tmpl            *prompt.PromptTemplate
+		outputModel     map[string]any
+	}
+	var calls []relationDedupeCall
+
 	for i, newRelation := range relations {
 		if i >= len(relationEmbedResults) {
 			break
@@ -1801,18 +1811,45 @@ func (gm *GraphMemory) relationDedupe(ctx context.Context, userID string, conten
 				state.History, "", state.Prompting.Language, 2,
 			)
 
-			response, err := gm.InvokeLLM(ctx, kwargs, tmpl, outputModel)
-			if err != nil {
-				logger.Warn(logComponent).Err(err).Str("relation", newRelation.Name).Msg("Graph Memory: relation dedup LLM failed")
-				continue
-			}
-
-			dedupeRelationTasks = append(dedupeRelationTasks, DedupeRelationTask{
-				Relation:          newRelation,
-				ExistingRelations: existingRelMaps,
-				Response:          assistantContent(response),
+			// 对齐 Python: asyncio.create_task(self._invoke_llm(...)) —— 先收集后并发
+			calls = append(calls, relationDedupeCall{
+				relation:        newRelation,
+				existingRelMaps: existingRelMaps,
+				kwargs:          kwargs,
+				tmpl:            tmpl,
+				outputModel:     outputModel,
 			})
 		}
+	}
+
+	// 对齐 Python: await asyncio.wait(state.tasks) —— 并发执行，结果按索引保序
+	responses := make([]string, len(calls))
+	var wg sync.WaitGroup
+	for i := range calls {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			response, err := gm.InvokeLLM(ctx, calls[idx].kwargs, calls[idx].tmpl, calls[idx].outputModel)
+			if err != nil {
+				// 对齐 Python postprocess_graph_objects.py:170-178：单条失败只记录
+				logger.Warn(logComponent).Err(err).Str("relation", calls[idx].relation.Name).
+					Msg("Graph Memory: relation dedup LLM failed")
+				return
+			}
+			responses[idx] = assistantContent(response)
+		}(i)
+	}
+	wg.Wait()
+
+	for i := range calls {
+		if responses[i] == "" {
+			continue
+		}
+		dedupeRelationTasks = append(dedupeRelationTasks, DedupeRelationTask{
+			Relation:          calls[i].relation,
+			ExistingRelations: calls[i].existingRelMaps,
+			Response:          responses[i],
+		})
 	}
 
 	ParseRelationUUIDsToRemove(dedupeRelationTasks, state)

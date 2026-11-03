@@ -136,6 +136,19 @@ func (s *TeamDialogSuite) TearDownSuite() {
 	if s.agentServer != nil {
 		_ = s.agentServer.Stop()
 	}
+	// 先取消后台 ctx，再还原环境变量与路径缓存。
+	// 反序（先 restoreEnv 后 cancel）会让仍在运行的 team monitor / 落盘协程
+	// 用「默认 home」重新解析路径，撞出 unable to open database file
+	// （CI run 41513341744：本套件 kv_store 查询报该错，紧跟上一套件残留的
+	// context canceled 写入）。Cancel 幂等，基类 TearDownSuite 仍会再调一次。
+	s.Cancel()
+	// Stop()/ctx 取消只发信号不 join：team monitor、session 落盘等后台协程可能在
+	// 用例收尾后仍在写 agent/sessions，撞上 testing 的 TempDir 清理会报
+	// 「unlinkat ...: directory not empty」（CI 41504858262 实证）。
+	// 等目录树静默后再交给清理，避免把后台退出时序当成用例失败。
+	if !waitDirQuiesce(s.dataDir, 500*time.Millisecond, 5*time.Second) {
+		s.T().Logf("停机后 %s 仍在变化：后台协程未及时退出", s.dataDir)
+	}
 	if s.providerName != "" {
 		_ = model_clients.GetClientRegistry().Unregister(s.providerName, "llm")
 	}
@@ -387,4 +400,42 @@ func (s *TeamDialogSuite) restoreEnv() {
 		}
 	}
 	s.envBackup = nil
+}
+
+// waitDirQuiesce 等待目录树停止变化：连续 quiet 时长无变化即视为静默，
+// 最多等 max。返回是否在 max 内观察到静默。
+func waitDirQuiesce(root string, quiet, max time.Duration) bool {
+	deadline := time.Now().Add(max)
+	last := dirSignature(root)
+	stableSince := time.Now()
+	for time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+		cur := dirSignature(root)
+		if cur != last {
+			last = cur
+			stableSince = time.Now()
+			continue
+		}
+		if time.Since(stableSince) >= quiet {
+			return true
+		}
+	}
+	return false
+}
+
+// dirSignature 汇总目录树的文件数与最新修改时间，用于判定「仍在写盘」。
+func dirSignature(root string) string {
+	count := 0
+	var latest int64
+	_ = filepath.Walk(root, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		count++
+		if ts := info.ModTime().UnixNano(); ts > latest {
+			latest = ts
+		}
+		return nil
+	})
+	return fmt.Sprintf("%d/%d", count, latest)
 }

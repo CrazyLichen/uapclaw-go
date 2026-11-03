@@ -33,8 +33,8 @@ func TestNewSessionMemoryConfig(t *testing.T) {
 	if cfg.ToolMin != 3 {
 		t.Errorf("ToolMin 期望 3，实际 %d", cfg.ToolMin)
 	}
-	if cfg.UpdateMode != "direct_replace" {
-		t.Errorf("UpdateMode 期望 direct_replace，实际 %q", cfg.UpdateMode)
+	if cfg.UpdateMode != "agent_edit" {
+		t.Errorf("UpdateMode 期望 agent_edit（对齐 Python 默认），实际 %q", cfg.UpdateMode)
 	}
 	if cfg.DirectReplaceMaxRetries != 2 {
 		t.Errorf("DirectReplaceMaxRetries 期望 2，实际 %d", cfg.DirectReplaceMaxRetries)
@@ -392,23 +392,22 @@ func TestSessionMemoryAgentUpdater_SetPrimeNotesFn(t *testing.T) {
 
 // ──────────────────────────── SessionMemoryManager 测试 ────────────────────────────
 
-// TestNewSessionMemoryManager_direct_replace模式 测试默认模式创建
+// TestNewSessionMemoryManager_direct_replace模式 测试 direct_replace 模式创建
 func TestNewSessionMemoryManager_direct_replace模式(t *testing.T) {
 	cfg := NewSessionMemoryConfig()
+	cfg.UpdateMode = "direct_replace"
 	mgr := NewSessionMemoryManager(cfg)
 	if mgr == nil {
 		t.Fatal("NewSessionMemoryManager 不应返回 nil")
 	}
-	// 默认 direct_replace 模式，updater 应为 SessionMemoryDirectUpdater
 	if _, ok := mgr.updater.(*SessionMemoryDirectUpdater); !ok {
-		t.Error("默认模式应为 SessionMemoryDirectUpdater")
+		t.Error("direct_replace 模式应为 SessionMemoryDirectUpdater")
 	}
 }
 
 // TestNewSessionMemoryManager_agent_edit模式 测试 agent_edit 模式创建
 func TestNewSessionMemoryManager_agent_edit模式(t *testing.T) {
 	cfg := NewSessionMemoryConfig()
-	cfg.UpdateMode = "agent_edit"
 	mgr := NewSessionMemoryManager(cfg)
 	if _, ok := mgr.updater.(*SessionMemoryAgentUpdater); !ok {
 		t.Error("agent_edit 模式应为 SessionMemoryAgentUpdater")
@@ -429,6 +428,7 @@ func TestSessionMemoryManager_Shutdown(t *testing.T) {
 // TestSessionMemoryManager_BindModelDefaults 测试透传绑定模型配置
 func TestSessionMemoryManager_BindModelDefaults(t *testing.T) {
 	cfg := NewSessionMemoryConfig()
+	cfg.UpdateMode = "direct_replace"
 	mgr := NewSessionMemoryManager(cfg)
 
 	modelConfig := &llm_schema.ModelRequestConfig{ModelName: "test-model"}
@@ -468,6 +468,7 @@ func TestSessionMemoryManager_CollectContextWindow_参数为nil(t *testing.T) {
 // TestSessionMemoryManager_UpdateInheritedSystemPrompt 测试更新继承系统提示词
 func TestSessionMemoryManager_UpdateInheritedSystemPrompt(t *testing.T) {
 	cfg := NewSessionMemoryConfig()
+	cfg.UpdateMode = "direct_replace"
 	mgr := NewSessionMemoryManager(cfg)
 
 	messages := []llm_schema.BaseMessage{

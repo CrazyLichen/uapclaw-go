@@ -41,7 +41,7 @@
 
 ## 3. 目标输出形态
 
-控制台与所有日志文件使用同一格式（控制台额外带级别着色）：
+控制台与所有日志文件使用同一格式（默认无色；设 `FORCE_COLOR=1` 且未设 `NO_COLOR` 时控制台带级别着色）：
 
 ```
 [2026-11-02 10:31:20.123] [INFO] [common] [config/loader.go:88] config loaded path=/home/u/.uapclaw/config/config.yaml
@@ -86,7 +86,7 @@
 |---|---|---|
 | `newTextWriter(out io.Writer, noColor bool) zerolog.ConsoleWriter` | 组装定制项：`PartsOrder=[time,level,component,caller,message]`、`FieldsExclude=["component"]` | 两个调用方分别传 `os.Stderr,false`（控制台）与 `fileWriter,true`（文件） |
 | `formatTimestamp(v any) string` | Unix 毫秒 → `[2026-11-02 10:31:20.123]` | 兼容 `json.Number` / `float64` / `int64`；字符串形态按 RFC3339 解析；**无法解析或缺失时返回空串**，由 `ConsoleWriter` 跳过该栏（不输出半截括号） |
-| `formatLevel(v any) string` | `info` → `[INFO]`（控制台按级别着色） | 未知级别原样大写；遵循 `NO_COLOR` 环境变量（Setup 时读取一次） |
+| `formatLevel(v any) string` | `info` → `[INFO]`（显式 `FORCE_COLOR` 且无 `NO_COLOR` 时着色） | 未知级别原样大写；默认无色对齐 Python，避免文件/管道日志混入 ANSI（Setup 时读取一次） |
 | `formatPartValue(v any, _ string) string` | `component` → `[common]` | 非字符串值走 `fmt.Sprint` |
 | `formatCaller(v any) string` | `/abs/path/pkg/file.go:88` → `[pkg/file.go:88]` | 路径段 <2 时返回原文；空值返回 `""` |
 | `formatMessage(v any) string` | 消息正文 | `\n`→`\\n`、`\r`→`\\r`、`\t`→`\\t`，保证一行一条 |
@@ -244,7 +244,7 @@ react:
 | 单元（logger） | 端到端正则断言整行形态 `^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] \[INFO\] \[common\] \[logger/logger_test\.go:\d+\] .+$`；caller 行号用 `runtime.Caller(0)` 定位区间断言（不写死行号） |
 | 单元（脱敏） | `.Str("password","secret123")` → 文件中不含明文且含 `******` |
 | 单元（单行） | `.Msg("a\nb")` → 文件中只有一行且含字面 `a\nb` |
-| 单元（NO_COLOR） | `NO_COLOR=1` → stderr 无 `\x1b[` |
+| 单元（颜色） | 默认无色；`FORCE_COLOR=1` → 有 `\x1b[`；`FORCE_COLOR=1` + `NO_COLOR=1` → 无 `\x1b[` |
 | 单元（config） | parity 三条（存在性 / 值一致 / 可解析） |
 | 单元（D-1） | 3 条 skill_create 与 enable_task_loop 组合 |
 | 回归 | `go build ./...`、`gofmt -l`、`staticcheck`、`go test ./...` |

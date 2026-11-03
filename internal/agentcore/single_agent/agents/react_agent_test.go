@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -37,6 +38,8 @@ type fakeContextEngine struct {
 // fakeModelContext 模拟 ModelContext
 type fakeModelContext struct {
 	messages []llmschema.BaseMessage
+	// clearCalls ClearMessages 调用次数（D3a 断言用）
+	clearCalls int
 }
 
 // fakeSessionFacade mock SessionFacade（最简实现）
@@ -1229,6 +1232,7 @@ func (f *fakeModelContext) SetMessages(msgs []llmschema.BaseMessage, _ bool) { f
 func (f *fakeModelContext) PopMessages(_ int, _ bool) []llmschema.BaseMessage { return nil }
 
 func (f *fakeModelContext) ClearMessages(_ context.Context, _ bool, _ ...ceinterface.Option) error {
+	f.clearCalls++
 	f.messages = nil
 	return nil
 }
@@ -2636,4 +2640,50 @@ func TestReActAgent_SystemPromptBuilder_nil(t *testing.T) {
 	agent := NewReActAgent(card, nil)
 	agent.SetPromptBuilder(nil)
 	assert.Nil(t, agent.SystemPromptBuilder())
+}
+
+// TestShouldReportStreamError 防 D2 回归：取消态下任何错误都不上报；未取消时照常上报。
+//
+// 对齐 Python react_agent.py:1549-1554 —— except Exception 抓不到 asyncio.CancelledError，
+// 因此取消不会产生 chat.error 帧；Go 用 ctx 状态表达同一语义。
+func TestShouldReportStreamError(t *testing.T) {
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	errBoom := errors.New("boom")
+
+	cases := []struct {
+		name string
+		ctx  context.Context
+		err  error
+		want bool
+	}{
+		{"取消+错误_不上报", canceledCtx, errBoom, false},
+		{"取消+无错误_不上报", canceledCtx, nil, false},
+		{"正常+错误_上报", context.Background(), errBoom, true},
+		{"正常+无错误_不上报", context.Background(), nil, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := shouldReportStreamError(c.ctx, c.err); got != c.want {
+				t.Fatalf("shouldReportStreamError=%v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// TestInvoke_ClearsContextMessagesOnce 防 D3a 回归：取消路径只允许清理一次。
+func TestInvoke_ClearsContextMessagesOnce(t *testing.T) {
+	fmc := &fakeModelContext{}
+	agent := newTestAgent("clear_once")
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	sess := session.NewSession(session.WithSessionID("sess-clear"))
+	_, _ = agent.Invoke(ctx, map[string]any{}, interfaces.WithSession(sess))
+
+	if fmc.clearCalls != 1 {
+		t.Fatalf("取消路径应只清理 1 次，实际 %d 次", fmc.clearCalls)
+	}
 }

@@ -392,6 +392,20 @@ func (s *ContextEngineE2ESuite) TestSessionModelContext_Statistic() {
 	s.Equal(1, stat.AssistantMessages)
 }
 
+// TestStatContextWindow_分子取TotalTokens 验证预留门面 StatContextWindow 的统计口径
+// （即 ContextStats.StatMessages）与 SessionModelContext 一致：usage 取输入+输出总量。
+func (s *ContextEngineE2ESuite) TestStatContextWindow_分子取TotalTokens() {
+	w := iface.NewContextWindow()
+	am := llm_schema.NewAssistantMessage("回答")
+	am.UsageMetadata = &llm_schema.UsageMetadata{InputTokens: 100, OutputTokens: 20, TotalTokens: 120}
+	w.ContextMessages = []llm_schema.BaseMessage{am}
+
+	context_engine.StatContextWindow(w, newMockTokenCounter())
+
+	s.Equal(1, w.Statistic.TotalMessages)
+	s.Equal(120, w.Statistic.TotalTokens, "分子应取 total_tokens（输入+输出），而非仅输入侧")
+}
+
 // TestSessionModelContext_ClearMessages 测试清空消息
 func (s *ContextEngineE2ESuite) TestSessionModelContext_ClearMessages() {
 	config := ceschema.NewContextEngineConfig()

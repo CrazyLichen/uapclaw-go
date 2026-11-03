@@ -59,7 +59,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/sessionctx"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools"
 	harnesspkg "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
@@ -81,11 +80,13 @@ import (
 // 可充当 Leader 或 Teammate：
 //   - Leader：分发任务、协调成员、管理团队生命周期
 //   - Teammate：执行具体任务、与 Leader/其他成员协作
+//
+// 内层 DeepAgent 不由本结构体直接持有：对齐 Python `TeamAgent._harness`
+// （team_agent.py:120-124「不要绕过 harness 直接找 DeepAgent」），
+// 统一通过 configurator / TeamHarness 访问。
 type TeamAgent struct {
 	// card Agent 身份卡片
 	card *agentschema.AgentCard
-	// deepAgent 内层 DeepAgent 实例（TODO(#9.57): AgentConfigurator 构建后赋值）
-	deepAgent hinterfaces.DeepAgentInterface
 	// configurator Agent 配置器
 	configurator *AgentConfigurator
 	// state 可变运行时状态

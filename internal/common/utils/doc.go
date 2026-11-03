@@ -19,6 +19,7 @@
 //	├── pool.go           # 引用计数连接池：RefCountedResource + TransportPool + ResourcePool[T]
 //	├── strval.go         # 字符串值转换：StrVal + StrValFromMap + StrValDefault
 //	├── truncate.go       # 字符级截断：TruncateRunes（CJK 安全）
+//	├── ctxutil.go        # 上下文判定：Canceled（只认 context.Canceled）
 //	├── pyjson.go         # Python json.dumps 语义对齐序列化：MarshalNoEscape + MarshalIndentNoEscape
 //	└── pystr.go          # 文本化：PyText（展示用紧凑 JSON）+ PyStr/PyFloatStr（Python str() 标量语义）
 //

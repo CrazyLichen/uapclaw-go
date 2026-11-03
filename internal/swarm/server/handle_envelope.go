@@ -370,12 +370,10 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 		sessionID = *request.SessionID
 	}
 
-	// 1. 创建子 context + cancel
-	streamCtx, cancel := context.WithCancel(ctx)
-
-	// 2. 注册流式任务
-	s.registerStreamTask(sessionID, cancel)
-	defer s.cancelStreamTask(sessionID)
+	// 1-3. 创建子 context + 注册流式任务，收尾统一走 finish
+	// （先按身份清理登记项，再 cancel 回收本次子 ctx，见 beginStreamTask）。
+	streamCtx, finish := s.beginStreamTask(ctx, sessionID, request.RequestID)
+	defer finish()
 
 	// 3. 解析 mode + 获取 Agent
 	mode, subMode := applyResolvedModeToRequest(request)

@@ -59,8 +59,8 @@ type VectorStoreService interface {
 // 解耦 Op 与具体 Agent 实现的依赖。
 type AgentFlowService interface {
 	// Execute 执行一次 Agent 推理，返回轨迹结果。
-	// opts 可传入 RetrievalQuery、LLMTemperature 等 AgentFlowOption。
-	// 对齐 Python: invoke_inputs = {"query": ..., "retrieval_query": ..., "llm_temperature": ...}
+	// opts 可传入 RetrievalQuery 等 AgentFlowOption。
+	// 对齐 Python: invoke_inputs = {"query": ..., "retrieval_query": ...}
 	Execute(ctx context.Context, query string, sessionID string, opts ...AgentFlowOption) (*TrajectoryResult, error)
 }
 
@@ -69,9 +69,6 @@ type AgentFlowConfig struct {
 	// RetrievalQuery 记忆检索使用的查询；空字符串时默认使用 query。
 	// 对齐 Python: invoke_inputs["retrieval_query"] = question
 	RetrievalQuery string
-	// LLMTemperature LLM 生成温度；0 表示未设置，使用模型默认值。
-	// 对齐 Python: llm.temperature = self.temperature
-	LLMTemperature float64
 }
 
 // AgentFlowOption Agent 执行选项函数。
@@ -124,11 +121,6 @@ type ServiceContext struct {
 // WithRetrievalQuery 设置记忆检索查询。
 func WithRetrievalQuery(q string) AgentFlowOption {
 	return func(c *AgentFlowConfig) { c.RetrievalQuery = q }
-}
-
-// WithLLMTemperature 设置 LLM 生成温度。
-func WithLLMTemperature(t float64) AgentFlowOption {
-	return func(c *AgentFlowConfig) { c.LLMTemperature = t }
 }
 
 // NewServiceContext 创建空的服务上下文。

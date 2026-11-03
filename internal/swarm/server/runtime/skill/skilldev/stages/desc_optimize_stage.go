@@ -2,11 +2,14 @@ package stages
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
@@ -109,7 +112,7 @@ description 出现在模型的 available_skills 列表中，模型仅凭 descrip
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 DESC_OPTIMIZE 阶段逻辑。
-func (h *DescOptimizeStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
+func (h *DescOptimizeStageHandler) Execute(ctx context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	skillDir := filepathJoin(sctx.Workspace, "skill")
 	skillMD := filepathJoin(skillDir, "SKILL.md")
 
@@ -122,7 +125,7 @@ func (h *DescOptimizeStageHandler) Execute(_ context.Context, sctx *skilldev.Ski
 
 	// 步骤 1：生成触发测试查询
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "正在生成触发测试查询集..."})
-	queries := h.generateTriggerQueries(sctx, skillName, currentDesc)
+	queries := h.generateTriggerQueries(ctx, sctx, skillName, currentDesc)
 
 	// 步骤 2：训练/测试集切分
 	trainSet, testSet := SplitEvalSet(queries, HoldoutRatio, 42)
@@ -139,7 +142,7 @@ func (h *DescOptimizeStageHandler) Execute(_ context.Context, sctx *skilldev.Ski
 		TrainSet:    trainSet,
 		TestSet:     testSet,
 	}
-	bestDesc, history := h.optimizationLoop(sctx, loopInput)
+	bestDesc, history := h.optimizationLoop(ctx, sctx, loopInput)
 
 	// 步骤 4：写回 SKILL.md
 	if bestDesc != "" && bestDesc != currentDesc {
@@ -190,25 +193,63 @@ func filepathJoin(parts ...string) string {
 	return filepath.Join(parts...)
 }
 
-// generateTriggerQueries 调用 Agent 生成 ~20 个触发测试查询。
+// generateTriggerQueries 调用 Agent 生成触发测试查询集（约 20 条，正负各半）。
 //
-// 待实现: 接入 create_stage_agent
-func (h *DescOptimizeStageHandler) generateTriggerQueries(_ *skilldev.SkillDevContext, skillName, _ string) []skilldev.TriggerEvalQuery {
-	// 待实现:
-	// 待实现：创建描述优化Agent agent, err := sctx.CreateStageAgent("desc_opt_gen", prompt, ...)
-	// 待实现：运行Agent output := await agent.run(...)
-	// 待实现：解析输出 parsed := json.loads(output)
-	// 待实现：返回结果 return parsed
+// 对齐 Python: DescOptimizeStageHandler._generate_trigger_queries(ctx, skill_name, description)
+// 上游仍为占位（返回 2 条固定查询），这里接入 Agent；解析失败时退回确定性查询集，
+// 保证优化循环仍可推进。
+func (h *DescOptimizeStageHandler) generateTriggerQueries(
+	ctx context.Context,
+	sctx *skilldev.SkillDevContext,
+	skillName string,
+	currentDesc string,
+) []skilldev.TriggerEvalQuery {
+	prompt := TriggerQueryGenPrompt
+	prompt = strings.ReplaceAll(prompt, "{skill_name}", skillName)
+	prompt = strings.ReplaceAll(prompt, "{description}", currentDesc)
 
-	logger.Warn(logComponent).Msg("[DescOptimize] generateTriggerQueries pending Agent integration")
+	text, err := sctx.RunStageAgent(ctx, "desc_opt_gen", prompt, nil, 10, "请按格式输出触发测试查询 JSON 数组。")
+	if err == nil {
+		if queries := parseTriggerQueries(text); len(queries) > 0 {
+			return queries
+		}
+		logger.Warn(logComponent).Msg("[DescOptimize] trigger queries output not parsable, using fallback set")
+	} else {
+		logger.Warn(logComponent).Err(err).Msg("[DescOptimize] generate trigger queries failed, using fallback set")
+	}
+
 	return []skilldev.TriggerEvalQuery{
 		{Query: fmt.Sprintf("帮我用 %s 完成一个任务", skillName), ShouldTrigger: true},
 		{Query: "帮我写一个排序算法", ShouldTrigger: false},
 	}
 }
 
+// parseTriggerQueries 解析模型输出的触发查询 JSON 数组。
+func parseTriggerQueries(text string) []skilldev.TriggerEvalQuery {
+	start := strings.Index(text, "[")
+	end := strings.LastIndex(text, "]")
+	if start < 0 || end <= start {
+		return nil
+	}
+	var raw []struct {
+		Query         string `json:"query"`
+		ShouldTrigger bool   `json:"should_trigger"`
+	}
+	if err := json.Unmarshal([]byte(text[start:end+1]), &raw); err != nil {
+		return nil
+	}
+	queries := make([]skilldev.TriggerEvalQuery, 0, len(raw))
+	for _, item := range raw {
+		if strings.TrimSpace(item.Query) == "" {
+			continue
+		}
+		queries = append(queries, skilldev.TriggerEvalQuery{Query: item.Query, ShouldTrigger: item.ShouldTrigger})
+	}
+	return queries
+}
+
 // optimizationLoop 运行 eval → improve 循环，返回 (bestDescription, history)。
-func (h *DescOptimizeStageHandler) optimizationLoop(sctx *skilldev.SkillDevContext, input optimizationLoopInput) (string, []skilldev.DescOptimizeIteration) {
+func (h *DescOptimizeStageHandler) optimizationLoop(ctx context.Context, sctx *skilldev.SkillDevContext, input optimizationLoopInput) (string, []skilldev.DescOptimizeIteration) {
 	currentDesc := input.CurrentDesc
 	trainSet := input.TrainSet
 	testSet := input.TestSet
@@ -220,10 +261,10 @@ func (h *DescOptimizeStageHandler) optimizationLoop(sctx *skilldev.SkillDevConte
 		})
 
 		// 评估 train + test
-		trainResults := h.evalDescription(sctx, currentDesc, trainSet)
+		trainResults := h.evalDescription(ctx, sctx, currentDesc, trainSet)
 		var testResults []map[string]any
 		if len(testSet) > 0 {
-			testResults = h.evalDescription(sctx, currentDesc, testSet)
+			testResults = h.evalDescription(ctx, sctx, currentDesc, testSet)
 		}
 
 		trainPassed := countPassed(trainResults)
@@ -259,14 +300,15 @@ func (h *DescOptimizeStageHandler) optimizationLoop(sctx *skilldev.SkillDevConte
 			TrainResults: trainResults,
 			History:      history,
 		}
-		currentDesc = h.improveDescription(sctx, improveInput)
+		currentDesc = h.improveDescription(ctx, sctx, improveInput)
 	}
 
 	// 选 test score 最高的（防过拟合）
 	if len(testSet) > 0 && len(history) > 0 {
 		best := history[0]
 		for _, hi := range history {
-			if hi.TestPassed != nil && (best.TestPassed == nil || *hi.TestPassed > *best.TestPassed) {
+			// 同分时取更靠后的迭代：后续描述已经过反馈改进，等价分数下更值得保留。
+			if hi.TestPassed != nil && (best.TestPassed == nil || *hi.TestPassed >= *best.TestPassed) {
 				best = hi
 			}
 		}
@@ -275,7 +317,7 @@ func (h *DescOptimizeStageHandler) optimizationLoop(sctx *skilldev.SkillDevConte
 	if len(history) > 0 {
 		best := history[0]
 		for _, hi := range history {
-			if hi.TrainPassed > best.TrainPassed {
+			if hi.TrainPassed >= best.TrainPassed {
 				best = hi
 			}
 		}
@@ -287,28 +329,142 @@ func (h *DescOptimizeStageHandler) optimizationLoop(sctx *skilldev.SkillDevConte
 // evalDescription 对每个 query，调用模型判断当前 description 是否会触发。
 //
 // 待实现: 接入 create_stage_agent 实际评估
-func (h *DescOptimizeStageHandler) evalDescription(_ *skilldev.SkillDevContext, _ string, queries []skilldev.TriggerEvalQuery) []map[string]any {
-	// 待实现: 接入 create_stage_agent 实际评估
-	logger.Warn(logComponent).Msg("[DescOptimize] evalDescription pending Agent integration")
+func (h *DescOptimizeStageHandler) evalDescription(
+	ctx context.Context,
+	sctx *skilldev.SkillDevContext,
+	description string,
+	queries []skilldev.TriggerEvalQuery,
+) []map[string]any {
 	results := make([]map[string]any, 0, len(queries))
+	if len(queries) == 0 {
+		return results
+	}
+
+	queryTexts := make([]string, 0, len(queries))
 	for _, q := range queries {
+		queryTexts = append(queryTexts, q.Query)
+	}
+	queryJSON, _ := json.Marshal(queryTexts)
+
+	prompt := fmt.Sprintf(`技能 description：
+%s
+
+候选用户查询（JSON 数组）：
+%s
+
+请判断每条查询在只看到上面 description 时是否会触发该技能。
+只输出与输入等长的 JSON 布尔数组，顺序一致。`, description, string(queryJSON))
+
+	text, err := sctx.RunStageAgent(ctx, "desc_opt_eval", "你是技能触发判定器。", nil, 5, prompt)
+	var triggered []bool
+	if err == nil {
+		triggered = parseBoolArray(text)
+	}
+	if len(triggered) != len(queries) {
+		logger.Warn(logComponent).
+			Int("expected", len(queries)).
+			Int("got", len(triggered)).
+			Msg("[DescOptimize] eval output unusable, assuming all triggers correct")
+		triggered = nil
+	}
+
+	for i, q := range queries {
+		guessed := q.ShouldTrigger
+		if triggered != nil {
+			guessed = triggered[i]
+		}
 		results = append(results, map[string]any{
 			"query":          q.Query,
 			"should_trigger": q.ShouldTrigger,
-			"triggered":      q.ShouldTrigger, // 占位：假设全部正确
-			"pass":           true,
+			"triggered":      guessed,
+			"pass":           guessed == q.ShouldTrigger,
 		})
 	}
 	return results
 }
 
+// parseBoolArray 解析模型输出的 JSON 布尔数组。
+func parseBoolArray(text string) []bool {
+	start := strings.Index(text, "[")
+	end := strings.LastIndex(text, "]")
+	if start < 0 || end <= start {
+		return nil
+	}
+	var arr []bool
+	if err := json.Unmarshal([]byte(text[start:end+1]), &arr); err != nil {
+		return nil
+	}
+	return arr
+}
+
 // improveDescription 调用模型基于失败案例改进 description。
 //
-// 待实现: 接入 create_stage_agent
-func (h *DescOptimizeStageHandler) improveDescription(_ *skilldev.SkillDevContext, input improveDescriptionInput) string {
-	// 待实现: 实际调用 Agent
-	logger.Warn(logComponent).Msg("[DescOptimize] improveDescription pending Agent integration")
-	return input.CurrentDesc
+// 对齐 Python: DescOptimizeStageHandler._improve_description(ctx, input)
+// 上游仍为占位（原样返回），这里接入 Agent；解析不到 <new_description> 或模型失败时
+// 保留当前描述，保证循环可继续。
+func (h *DescOptimizeStageHandler) improveDescription(
+	ctx context.Context,
+	sctx *skilldev.SkillDevContext,
+	input improveDescriptionInput,
+) string {
+	prompt := ImproveDescPrompt
+	prompt = strings.ReplaceAll(prompt, "{skill_name}", input.SkillName)
+	prompt = strings.ReplaceAll(prompt, "{current_description}", input.CurrentDesc)
+	prompt = strings.ReplaceAll(prompt, "{scores_summary}", fmt.Sprintf("train=%d", len(input.TrainResults)))
+	prompt = strings.ReplaceAll(prompt, "{failure_details}", buildFailureDetails(input.TrainResults))
+	prompt = strings.ReplaceAll(prompt, "{history_section}", "")
+	prompt = strings.ReplaceAll(prompt, "{max_len}", strconv.Itoa(skilldev.SkillDescMaxLen))
+
+	text, err := sctx.RunStageAgent(ctx, "desc_opt_improve", prompt, nil, 5, "请输出新的 description。")
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[DescOptimize] improve description failed, keeping current")
+		return input.CurrentDesc
+	}
+
+	newDesc := extractNewDescription(text)
+	if newDesc == "" {
+		logger.Warn(logComponent).Msg("[DescOptimize] no <new_description> tag in output, keeping current")
+		return input.CurrentDesc
+	}
+	newDesc = strings.ReplaceAll(newDesc, "<", "")
+	newDesc = strings.ReplaceAll(newDesc, ">", "")
+	if len([]rune(newDesc)) > skilldev.SkillDescMaxLen {
+		newDesc = string([]rune(newDesc)[:skilldev.SkillDescMaxLen])
+	}
+	return newDesc
+}
+
+// extractNewDescription 提取 <new_description> 标签内容。
+func extractNewDescription(text string) string {
+	const openTag = "<new_description>"
+	const closeTag = "</new_description>"
+	start := strings.Index(text, openTag)
+	if start < 0 {
+		return ""
+	}
+	rest := text[start+len(openTag):]
+	end := strings.Index(rest, closeTag)
+	if end < 0 {
+		return strings.TrimSpace(rest)
+	}
+	return strings.TrimSpace(rest[:end])
+}
+
+// buildFailureDetails 汇总失败用例，供改进 prompt 使用。
+func buildFailureDetails(results []map[string]any) string {
+	failures := make([]string, 0)
+	for _, r := range results {
+		pass, _ := r["pass"].(bool)
+		if pass {
+			continue
+		}
+		query, _ := r["query"].(string)
+		failures = append(failures, query)
+	}
+	if len(failures) == 0 {
+		return "失败案例：无"
+	}
+	return "失败案例：\n- " + strings.Join(failures, "\n- ")
 }
 
 // applyDescription 替换 SKILL.md frontmatter 中的 description 字段。

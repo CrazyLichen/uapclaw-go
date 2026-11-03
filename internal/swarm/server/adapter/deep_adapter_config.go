@@ -169,6 +169,7 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 // Python: _build_configured_subagents() — Deep 模式下只直接构建
 // research/browser/custom 子代理，explore/plan 通过 code_agent 间接注入
 func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase map[string]any) ([]hschema.SubagentSpec, bool) {
+	model, _, _ := d.modelsSnapshot()
 	var specs []hschema.SubagentSpec
 
 	// Python: 按 subagents 配置段构建
@@ -180,7 +181,7 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// ── research_agent: 配置控制，需 enabled:true 才启用（默认禁用）──
 	if d.isSubagentExplicitlyEnabled(subagentsCfg, "research_agent") {
 		params := d.buildResearchSubagentParams(config, configBase)
-		cfg := subagents.BuildResearchAgentConfig(d.model, params)
+		cfg := subagents.BuildResearchAgentConfig(model, params)
 		if cfg != nil {
 			specs = append(specs, cfg)
 		}
@@ -213,7 +214,7 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 			}
 		}
 		params := d.buildBrowserSubagentParams(config, browserAgentCfg)
-		cfg := subagents.BuildBrowserAgentConfig(d.model, params)
+		cfg := subagents.BuildBrowserAgentConfig(model, params)
 		if cfg != nil {
 			specs = append(specs, cfg)
 		}
@@ -273,6 +274,7 @@ func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema
 		return nil
 	}
 	customAgents := d.configLister.ListCustomAgents()
+	model, modelCache, _ := d.modelsSnapshot()
 
 	var result []hschema.SubagentSpec
 	// Python: for agent_def in agent_service.list_agents():
@@ -287,7 +289,7 @@ func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema
 		}
 
 		// Python: custom_spec = _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
-		spec := agentDefToSubagentConfig(agentDef, d.model, d.modelCache, d.toolCards)
+		spec := agentDefToSubagentConfig(agentDef, model, modelCache, d.toolCards)
 		if spec != nil {
 			result = append(result, spec)
 			logger.Info(logComponent).
@@ -600,7 +602,7 @@ func (d *DeepAdapter) updateSendFileTools(ctx context.Context, config *runtimeCo
 
 	// Python L2995-2997: send_file_enabled = channels[channel].send_file_allowed（缺省 False）
 	sendFileEnabled := false
-	if channelsRaw, ok := d.configBase["channels"]; ok {
+	if channelsRaw, ok := d.configBaseSnapshot()["channels"]; ok {
 		if channelsMap, ok := channelsRaw.(map[string]any); ok {
 			if chRaw, ok := channelsMap[channel]; ok {
 				if chMap, ok := chRaw.(map[string]any); ok {
@@ -672,7 +674,9 @@ func (d *DeepAdapter) updateSendFileTools(ctx context.Context, config *runtimeCo
 // Python: _resolve_prompt_language() — 读取 preferred_language，默认 "zh"
 func (d *DeepAdapter) resolvePromptLanguage() string {
 	// Python: config_base.get("preferred_language", "zh")
-	if v, ok := d.configCache["preferred_language"]; ok {
+	// 注意是 config.yaml 顶级键（模板第 10 行），不是 react 段；
+	// 读 configCache 会永远取不到值并回落默认语言（对齐修正）。
+	if v, ok := d.configBaseSnapshot()["preferred_language"]; ok {
 		if s, ok := v.(string); ok && s != "" {
 			return strings.TrimSpace(strings.ToLower(s))
 		}

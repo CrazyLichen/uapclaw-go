@@ -262,3 +262,22 @@ func containsSubstr(s, substr string) bool {
 	}
 	return false
 }
+
+// TestFormatExistingRelations_时间字段格式 验证缺键默认 0、带引号、+00:00。
+func TestFormatExistingRelations_时间字段格式(t *testing.T) {
+	got := FormatExistingRelations([]map[string]any{{"content": "rel"}}, 1, true)
+	want := "1. rel\nvalid_since='1970-01-01T00:00:00+00:00'\nvalid_until='1970-01-01T00:00:00+00:00'"
+	if got != want {
+		t.Fatalf("输出不符\n got=%q\nwant=%q", got, want)
+	}
+}
+
+// TestFormatExistingRelations_负一不输出时间 验证 valid_since=-1 时跳过。
+func TestFormatExistingRelations_负一不输出时间(t *testing.T) {
+	got := FormatExistingRelations([]map[string]any{
+		{"content": "rel", "valid_since": int64(-1), "valid_until": int64(-1)},
+	}, 1, true)
+	if got != "1. rel" {
+		t.Fatalf("输出不符: %q", got)
+	}
+}

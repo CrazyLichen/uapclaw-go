@@ -145,6 +145,14 @@ type SessionMemoryManager struct {
 // sessionMemoryStateKey 会话记忆运行时状态键
 const sessionMemoryStateKey = "__session_memory__"
 
+// 会话记忆更新模式（对齐 Python Literal["agent_edit", "direct_replace"]）
+const (
+	// sessionMemoryUpdateModeAgentEdit 由专用 ReActAgent 编辑笔记
+	sessionMemoryUpdateModeAgentEdit = "agent_edit"
+	// sessionMemoryUpdateModeDirectReplace 直接调用 LLM 重写整篇笔记
+	sessionMemoryUpdateModeDirectReplace = "direct_replace"
+)
+
 // defaultSessionMemoryTemplate 默认会话记忆 Markdown 模板。
 //
 // Python: DEFAULT_SESSION_MEMORY_TEMPLATE
@@ -316,14 +324,97 @@ the template structure, NOT content to be edited or removed.
 // NewSessionMemoryConfig 创建默认会话记忆配置。
 //
 // 默认值：TriggerTokens=10000, TriggerAddTokens=5000, ToolMin=3,
-// 更新模式="direct_replace", 直接替换最大重试次数=2
+// 更新模式="agent_edit", 直接替换最大重试次数=2
+// 对齐 Python: SessionMemoryConfig (session_memory_manager.py:204-211)。
 func NewSessionMemoryConfig() SessionMemoryConfig {
 	return SessionMemoryConfig{
 		TriggerTokens:           10000,
 		TriggerAddTokens:        5000,
 		ToolMin:                 3,
-		UpdateMode:              "direct_replace",
+		UpdateMode:              sessionMemoryUpdateModeAgentEdit,
 		DirectReplaceMaxRetries: 2,
+	}
+}
+
+// SessionMemoryConfigFromMap 从 yaml 配置字典构造 SessionMemoryConfig。
+//
+// Python: ContextProcessorRail.__init__ → SessionMemoryConfig(**session_memory)
+// 键名对齐 pydantic 字段名（注意 Python 字段是 tool_min_，带尾下划线）。
+//
+// model / model_client 是嵌套结构，从 YAML dict 构造需要额外的 schema 解析，
+// 当前不支持：解析时忽略，实际使用时由 Rail.Init 的 SetModelDefaults 绑定
+// agent 当前模型（Python 在 model is None 时同样这么做）。
+func SessionMemoryConfigFromMap(raw map[string]any) (SessionMemoryConfig, error) {
+	cfg := NewSessionMemoryConfig()
+
+	if v, ok := raw["trigger_tokens"]; ok {
+		n, err := sessionMemoryInt(v, "trigger_tokens")
+		if err != nil {
+			return cfg, err
+		}
+		cfg.TriggerTokens = n
+	}
+	if v, ok := raw["trigger_add_tokens"]; ok {
+		n, err := sessionMemoryInt(v, "trigger_add_tokens")
+		if err != nil {
+			return cfg, err
+		}
+		cfg.TriggerAddTokens = n
+	}
+	// Python 字段名带尾下划线；同时接受不带下划线的写法，避免用户踩坑。
+	if v, ok := raw["tool_min_"]; ok {
+		n, err := sessionMemoryInt(v, "tool_min_")
+		if err != nil {
+			return cfg, err
+		}
+		cfg.ToolMin = n
+	} else if v, ok := raw["tool_min"]; ok {
+		n, err := sessionMemoryInt(v, "tool_min")
+		if err != nil {
+			return cfg, err
+		}
+		cfg.ToolMin = n
+	}
+	if v, ok := raw["update_mode"]; ok {
+		s, ok := v.(string)
+		if !ok {
+			return cfg, fmt.Errorf("session_memory_config.update_mode 必须是字符串，当前类型 %T", v)
+		}
+		cfg.UpdateMode = s
+	}
+	if v, ok := raw["direct_replace_max_retries"]; ok {
+		n, err := sessionMemoryInt(v, "direct_replace_max_retries")
+		if err != nil {
+			return cfg, err
+		}
+		cfg.DirectReplaceMaxRetries = n
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+// sessionMemoryInt 把 YAML 解出的数值（int / int64 / float64）转成 int。
+func sessionMemoryInt(v any, key string) (int, error) {
+	switch n := v.(type) {
+	case int:
+		return n, nil
+	case int32:
+		return int(n), nil
+	case int64:
+		return int(n), nil
+	case float32:
+		return int(n), nil
+	case float64:
+		// YAML 整数在部分解析路径下会解成 float64，仅接受整数值
+		if n != float64(int(n)) {
+			return 0, fmt.Errorf("session_memory_config.%s 必须是整数，当前值 %v", key, n)
+		}
+		return int(n), nil
+	default:
+		return 0, fmt.Errorf("session_memory_config.%s 必须是整数，当前类型 %T", key, v)
 	}
 }
 
@@ -341,7 +432,7 @@ func (c SessionMemoryConfig) Validate() error {
 	if c.ToolMin <= 0 {
 		return fmt.Errorf("ToolMin 必须 > 0，当前值: %d", c.ToolMin)
 	}
-	if c.UpdateMode != "agent_edit" && c.UpdateMode != "direct_replace" {
+	if c.UpdateMode != sessionMemoryUpdateModeAgentEdit && c.UpdateMode != sessionMemoryUpdateModeDirectReplace {
 		return fmt.Errorf("UpdateMode 必须是 \"agent_edit\" 或 \"direct_replace\"，当前值: %q", c.UpdateMode)
 	}
 	return nil
@@ -571,7 +662,7 @@ func (u *SessionMemoryAgentUpdater) Invoke(ctx context.Context, opts SessionMemo
 func NewSessionMemoryManager(config SessionMemoryConfig) *SessionMemoryManager {
 	var updater SessionMemoryUpdater
 	switch config.UpdateMode {
-	case "agent_edit":
+	case sessionMemoryUpdateModeAgentEdit:
 		updater = NewSessionMemoryAgentUpdater(config)
 	default:
 		updater = NewSessionMemoryDirectUpdater(config)

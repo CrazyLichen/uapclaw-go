@@ -809,3 +809,60 @@ func TestConsole_NoColor(t *testing.T) {
 		t.Errorf("控制台未输出级别栏: %q", string(out))
 	}
 }
+
+// consoleProbe 启动一次控制台日志并返回 stderr 捕获内容。
+func consoleProbe(t *testing.T) string {
+	t.Helper()
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("创建管道失败: %v", err)
+	}
+	os.Stderr = w
+
+	resetGlobal()
+	if setupErr := Setup(WithOutputDir(t.TempDir())); setupErr != nil {
+		os.Stderr = origStderr
+		t.Fatalf("Setup 失败: %v", setupErr)
+	}
+	Info(ComponentCommon).Msg("color probe")
+	Close()
+
+	_ = w.Close()
+	os.Stderr = origStderr
+	out, _ := io.ReadAll(r)
+	return string(out)
+}
+
+// TestConsole_默认无色 默认不输出 ANSI（对齐 Python，避免文件/管道日志混入转义）。
+func TestConsole_默认无色(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "")
+	out := consoleProbe(t)
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("默认应无色，实际带转义: %q", out)
+	}
+	if !strings.Contains(out, "[INFO]") {
+		t.Errorf("控制台未输出级别栏: %q", out)
+	}
+}
+
+// TestConsole_FORCE_COLOR开启着色 显式开启后才着色。
+func TestConsole_FORCE_COLOR开启着色(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+	out := consoleProbe(t)
+	if !strings.Contains(out, "\x1b[") {
+		t.Errorf("FORCE_COLOR=1 应输出着色序列: %q", out)
+	}
+}
+
+// TestConsole_NO_COLOR否决FORCE_COLOR NO_COLOR 优先级更高。
+func TestConsole_NO_COLOR否决FORCE_COLOR(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("FORCE_COLOR", "1")
+	out := consoleProbe(t)
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("NO_COLOR 应否决 FORCE_COLOR: %q", out)
+	}
+}

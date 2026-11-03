@@ -2,12 +2,12 @@ package stages
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 )
 
@@ -93,7 +93,7 @@ ALWAYS use this exact template:
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 GENERATE 阶段逻辑。
-func (h *GenerateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
+func (h *GenerateStageHandler) Execute(ctx context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	plan := sctx.State.Plan
 	if plan == nil {
 		return nil, fmt.Errorf("GENERATE 阶段缺少 plan，请先完成 PLAN 阶段")
@@ -108,7 +108,10 @@ func (h *GenerateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 		"files_done":  0,
 	})
 
-	generatedFiles := h.generateAllFiles(sctx, skillDir, generationOrder)
+	generatedFiles, err := h.generateAllFiles(ctx, sctx, skillDir, generationOrder)
+	if err != nil {
+		return nil, err
+	}
 
 	// 获取 skill_name
 	skillName := "skill"
@@ -175,31 +178,97 @@ func (h *GenerateStageHandler) resolveGenerationOrder(plan map[string]any) []gen
 
 // generateAllFiles 逐文件调用 Agent 生成内容。
 //
-// 待实现: 接入 create_stage_agent + 逐文件生成逻辑
-func (h *GenerateStageHandler) generateAllFiles(_ *skilldev.SkillDevContext, skillDir string, generationOrder []generationItem) []string {
-	// 待实现:
-	// 待实现：创建生成Agent Python: agent, err := sctx.CreateStageAgent("generate", GenerateSystemPrompt, []string{"file_read", "file_write"}, 30)
-	// 待实现：逐文件生成 Python: for idx, item := range generationOrder {
-	//     Python: os.MkdirAll(filepath.Dir(filepath.Join(skillDir, item.FilePath)), 0o755)
-	//     Python: content := await generateSingleFile(agent, sctx, item.FilePath, item.Role)
-	//     Python: os.WriteFile(filepath.Join(skillDir, item.FilePath), []byte(content), 0o644)
-	//     Python: sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{
-	//         "message":     fmt.Sprintf("已生成: %s", item.FilePath),
-	//         "files_done":  idx + 1,
-	//         "files_total": len(generationOrder),
-	//     })
-	// }
-
-	logger.Warn(logComponent).Msg("[GenerateStage] generateAllFiles not implemented, creating placeholder file")
-	generated := make([]string, 0, len(generationOrder))
-	for _, item := range generationOrder {
-		fullPath := filepath.Join(skillDir, item.FilePath)
-		_ = os.MkdirAll(filepath.Dir(fullPath), 0o755)
-		content := fmt.Sprintf("# %s\n\n<!-- 待实现: 由 Agent 生成，职责：%s -->\n", item.FilePath, item.Role)
-		_ = os.WriteFile(fullPath, []byte(content), 0o644)
-		generated = append(generated, item.FilePath)
+// 对齐 Python: GenerateStageHandler._generate_all_files(ctx, skill_dir, generation_order)
+// 上游该方法仍是占位（直接写「待实现」文件），这里按注释伪代码接入 Agent：
+// 单个 Agent 复用，逐文件构造 prompt → 调模型 → 剥离代码围栏 → 落盘。
+func (h *GenerateStageHandler) generateAllFiles(
+	ctx context.Context,
+	sctx *skilldev.SkillDevContext,
+	skillDir string,
+	generationOrder []generationItem,
+) ([]string, error) {
+	agent, err := sctx.CreateStageAgent("generate", GenerateSystemPrompt, []string{"file_read", "file_write"}, 30)
+	if err != nil {
+		return nil, err
 	}
-	return generated
+
+	planJSON, _ := json.Marshal(sctx.State.Plan)
+	generated := make([]string, 0, len(generationOrder))
+
+	for idx, item := range generationOrder {
+		fullPath := filepath.Join(skillDir, item.FilePath)
+		if mkErr := os.MkdirAll(filepath.Dir(fullPath), 0o755); mkErr != nil {
+			return nil, fmt.Errorf("创建 %s 目录失败: %w", item.FilePath, mkErr)
+		}
+
+		prompt := buildFilePrompt(string(planJSON), item, generated)
+		text, invokeErr := sctx.InvokeStageAgent(ctx, "generate", agent, prompt)
+		if invokeErr != nil {
+			return nil, invokeErr
+		}
+
+		content := skilldev.StripCodeFences(text)
+		if strings.TrimSpace(content) == "" {
+			return nil, fmt.Errorf("模型未输出 %s 的内容", item.FilePath)
+		}
+		content = ensureFileFrontmatter(sctx.State.Plan, item.FilePath, content)
+
+		if writeErr := os.WriteFile(fullPath, []byte(content), 0o644); writeErr != nil {
+			return nil, fmt.Errorf("写入 %s 失败: %w", item.FilePath, writeErr)
+		}
+		generated = append(generated, item.FilePath)
+
+		sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{
+			"message":     fmt.Sprintf("已生成: %s", item.FilePath),
+			"files_done":  idx + 1,
+			"files_total": len(generationOrder),
+		})
+	}
+	return generated, nil
+}
+
+// buildFilePrompt 构造单文件生成 prompt（对齐 Python _generate_single_file 的入参语义）。
+func buildFilePrompt(planJSON string, item generationItem, generated []string) string {
+	done := "无"
+	if len(generated) > 0 {
+		done = strings.Join(generated, "、")
+	}
+	return fmt.Sprintf(`技能开发计划：
+%s
+
+本次只生成文件：%s
+该文件职责：%s
+已生成文件：%s
+
+要求：
+1. 只输出该文件的完整内容，不要任何解释、不要 Markdown 代码围栏
+2. SKILL.md 必须以 YAML frontmatter 开头，包含 name（kebab-case）与 description 两个字段
+3. 正文使用祈使句式，SKILL.md 控制在 500 行以内`, planJSON, item.FilePath, item.Role, done)
+}
+
+// ensureFileFrontmatter 保证 SKILL.md 带可校验的 frontmatter。
+//
+// VALIDATE 阶段要求 name + description，模型偶发漏写时按计划补齐，避免
+// GENERATE ↔ VALIDATE 反复回退到迭代上限。
+func ensureFileFrontmatter(plan map[string]any, filePath, content string) string {
+	if !strings.EqualFold(filePath, "SKILL.md") {
+		return content
+	}
+	if strings.HasPrefix(strings.TrimSpace(content), "---") {
+		return content
+	}
+
+	name := "generated-skill"
+	if v, ok := plan["skill_name"].(string); ok && strings.TrimSpace(v) != "" {
+		name = strings.TrimSpace(v)
+	}
+	description := name
+	if v, ok := plan["description"].(string); ok && strings.TrimSpace(v) != "" {
+		description = strings.TrimSpace(v)
+	}
+	description = strings.ReplaceAll(description, "<", "")
+	description = strings.ReplaceAll(description, ">", "")
+	return fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n%s", name, description, content)
 }
 
 // validateScripts 验证生成的 Python 脚本语法正确性。

@@ -62,9 +62,13 @@ const (
 	// identitySection identity 区段名称
 	// Python: _IDENTITY_SECTION = "identity"
 	identitySection = "identity"
+	// IdentitySectionName identity 区段名称（导出，供外部包配置系统提示词）
+	IdentitySectionName = identitySection
 	// identitySectionPriority identity 区段优先级
 	// Python: _IDENTITY_SECTION_PRIORITY = 10
 	identitySectionPriority = 10
+	// IdentitySectionPriority identity 区段优先级（导出，供外部包配置系统提示词）
+	IdentitySectionPriority = identitySectionPriority
 	// skillsSection skills 区段名称
 	// Python: _SKILLS_SECTION = "skills"
 	skillsSection = "skills"

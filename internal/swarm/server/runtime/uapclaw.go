@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
@@ -283,7 +284,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 	}
 	session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 		"user", uc.extractQuery(request), float64(time.Now().UnixMilli())/1000,
-		"", nil, nil, userMode)
+		"", nil, request.Metadata, userMode)
 
 	// 5. 构建 inputs
 	inputs, memoryMode, rawQuery := uc.BuildInputs(request)
@@ -314,8 +315,9 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		defer close(outCh)
 		chunkCh, streamErr := a.ProcessMessageStreamImpl(ctx, request, inputs)
 		if streamErr != nil {
-			// Python: except asyncio.CancelledError：取消不作为错误
-			if streamErr == context.Canceled || streamErr == context.DeadlineExceeded {
+			// Python: except asyncio.CancelledError：取消不作为错误（不落 history、不发帧）。
+			// 注意只能以 ctx 状态判定：WrapError 曾用 %v 断链，errors.Is(err, …) 不可靠。
+			if utils.Canceled(ctx) {
 				return
 			}
 			// Python: append_history_record(event_type="chat.error", ...)
@@ -353,6 +355,12 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		for chunk := range outCh {
 			if payload := chunk.Payload; payload != nil {
 				if eventType, _ := payload["event_type"].(string); eventType != "" {
+					// 取消后的错误帧一律丢弃（既不下发也不落 history）。
+					// 对齐 Python：取消（CancelledError）不产生 chat.error；Go 侧错误帧
+					// 源头分散（ReAct 收尾、task-loop 轮次结果、adapter 兜底），在这里统一收口。
+					if eventType == "chat.error" && utils.Canceled(ctx) {
+						continue
+					}
 					if shouldRecordHistory(eventType) {
 						// Python: 补传 mode
 						streamMode := ""
@@ -364,20 +372,10 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 						if streamMode == "" {
 							streamMode = "unknown"
 						}
-						// Python: team.message 展开 event 字段到 extra
-						var extraFields map[string]any
-						if eventType == "team.message" {
-							if event, ok := payload["event"]; ok {
-								if eventData, ok := event.(map[string]any); ok {
-									extraFields = make(map[string]any)
-									for k, v := range eventData {
-										if k != "type" && k != "timestamp" && k != "content" {
-											extraFields[k] = v
-										}
-									}
-								}
-							}
-						}
+						// Python: extra_fields = payload 去掉 event_type/content 后的全部字段
+						// （对齐 interface.py:1063/1102；team.message 额外展平 event 子字段）
+						extraFields := payloadExtras(payload)
+						extraFields = mergeTeamEventExtras(extraFields, payload)
 						session.AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 							"assistant", extractChunkContent(payload), float64(time.Now().UnixMilli())/1000,
 							eventType, extraFields, nil, streamMode)
@@ -920,12 +918,55 @@ func (uc *UapClaw) extractIntent(request *schema.AgentRequest) string {
 	return "cancel"
 }
 
-// extractChunkContent 从 chunk payload 中提取 content。
-func extractChunkContent(payload map[string]any) string {
-	if content, ok := payload["content"]; ok {
-		if cStr, ok := content.(string); ok {
-			return cStr
+// payloadExtras 构造 history 记录的附加字段。
+//
+// 对齐 Python: interface.py:1063/1102 —— 取 payload 中除 event_type/content 外的全部字段。
+// 注意保留 team.message 的嵌套 event（前端 extractTeamEventRecord 一级回退依赖它）。
+func payloadExtras(payload map[string]any) map[string]any {
+	extra := make(map[string]any, len(payload))
+	for k, v := range payload {
+		if k == "event_type" || k == "content" {
+			continue
 		}
+		extra[k] = v
+	}
+	return extra
+}
+
+// mergeTeamEventExtras 把 team.message 的 event 子字段展平到 extra 顶层。
+//
+// 对齐 Python: interface.py:1064-1070 —— event 里的 type/timestamp/content 不展平
+// （它们属于事件元信息，且嵌套 event 已整体保留）。
+func mergeTeamEventExtras(extra, payload map[string]any) map[string]any {
+	if extra == nil || payload == nil {
+		return extra
+	}
+	eventType, _ := payload["event_type"].(string)
+	if eventType != "team.message" {
+		return extra
+	}
+	eventData, ok := payload["event"].(map[string]any)
+	if !ok {
+		return extra
+	}
+	for k, v := range eventData {
+		if k == "type" || k == "timestamp" || k == "content" {
+			continue
+		}
+		extra[k] = v
+	}
+	return extra
+}
+
+// extractChunkContent 从 chunk payload 中提取 history 记录的 content。
+//
+// Python: interface.py:1085 —— payload.get("content") or payload.get("error") or ""
+func extractChunkContent(payload map[string]any) string {
+	if content, ok := payload["content"].(string); ok && content != "" {
+		return content
+	}
+	if errText, ok := payload["error"].(string); ok {
+		return errText
 	}
 	return ""
 }

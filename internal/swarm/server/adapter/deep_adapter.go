@@ -95,12 +95,24 @@ type DeepAdapter struct {
 	configBase map[string]any
 	// activeSessionIDs 会话活跃计数（Counter 语义，允许并发同 session）
 	activeSessionIDs map[string]int
+	// sessionMu 保护 activeSessionIDs。
+	// 请求路径并发 mark/unmark，AbortOnGatewayDisconnect 与 otherActiveSessions 会
+	// 全表遍历；无锁时"遍历 + 写入"并发触发 runtime fatal
+	// （concurrent map iteration and map write，recover 不住）。
+	sessionMu sync.Mutex
 	// interactionConverter 交互 payload 转换函数，注入到 utils.ParseStreamChunk。
 	// Python: lazy import convert_interactions_to_ask_user_question
 	interactionConverter utils.InteractionConverterFunc
 
 	// ─── 模型与配置 ───
 
+	// stateMu 保护模型/配置状态（model/modelCache/modelNameToKeys/modelClientConfig/
+	// modelRequestConfig/defaultModelName/configCache/configBase）。
+	//
+	// 纪律：写侧必须"构建完再发布"（先建局部 map，再在锁内整体替换），发布后的
+	// map 视为不可变；读侧统一走 snapshot 助手。这样 reload 与请求并发时不会出现
+	// "一边 range 一边写 map" 的 fatal。
+	stateMu sync.RWMutex
 	// model Model 实例
 	model *llm.Model
 	// modelClientConfig 模型客户端配置
@@ -215,16 +227,16 @@ type DeepAdapter struct {
 	// skillManager 技能管理器（已回填 10.3.19-20）
 	skillManager *skill.SkillManager
 	// a2xClient A2X 客户端
-	// ⤵️ A2X / 11.10
+	// ⤵️ A2X / 10.6.22
 	a2xClient any
 	// a2xConfig A2X 配置
-	// ⤵️ A2X / 11.10
+	// ⤵️ A2X / 10.6.22
 	a2xConfig map[string]any
 	// a2xBlankServiceID A2X blank 服务 ID
-	// ⤵️ A2X / 11.10
+	// ⤵️ A2X / 10.6.22
 	a2xBlankServiceID string
 	// a2xBlankDataset A2X blank 数据集
-	// ⤵️ A2X / 11.10
+	// ⤵️ A2X / 10.6.22
 	a2xBlankDataset string
 	// cronRuntime Cron 运行时桥接（11.10 已回填）
 	// Python: self._cron_runtime = CronRuntimeBridge()
@@ -354,7 +366,8 @@ func (d *DeepAdapter) SetConfigLister(lister AgentConfigLister) {
 // Python: self._model_cache (interface_deep.py L543)
 // AgentTool 通过类型断言获取，拿不到则 fallback nil。
 func (d *DeepAdapter) ModelCache() map[string]*llm.Model {
-	return d.modelCache
+	_, cache, _ := d.modelsSnapshot()
+	return cache
 }
 
 // NewDeepAdapter 创建 DeepAdapter 实例。
@@ -377,8 +390,9 @@ func NewDeepAdapter() *DeepAdapter {
 	// 默认指向 DeepAdapter 自身的 updateRuntimeConfig 方法
 	// CodeAdapter 在构造后覆写此字段实现子类行为（修复 S-17）
 	d.runtimeConfigUpdater = d.updateRuntimeConfig
-	// 模型配置兜底读取器：对齐 Python _has_valid_model_config 第 4 步读 config.yaml
-	d.defaultModelConfigReader = defaultModelClientConfig
+	// 模型配置兜底读取器：对齐 Python _has_valid_model_config 第 4 步。
+	// 优先读已发布的 configBase 快照，未初始化时才回退读盘（见 T-07）。
+	d.defaultModelConfigReader = d.defaultModelClientConfigFromConfigBase
 	return d
 }
 
@@ -451,28 +465,26 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 
 	// 步骤 6: _refresh_multimodal_configs(configBase)
-	d.configBase = configBase
 	d.refreshMultimodalConfigs(configBase)
 
 	// 步骤 7-8: 读取 react 配置段，缓存到 configCache
 	// Python: config = config_base.get("react", {}).copy(); self._config_cache = config.copy()
+	// 先构建局部副本，再一次性发布（发布后不可变，读侧可安全并发访问）。
 	var config map[string]any
+	newCache := make(map[string]any)
 	if reactRaw, ok := configBase["react"]; ok {
 		if reactMap, ok := reactRaw.(map[string]any); ok {
 			config = make(map[string]any, len(reactMap))
 			for k, v := range reactMap {
 				config[k] = v
-			}
-			d.configCache = make(map[string]any, len(reactMap))
-			for k, v := range reactMap {
-				d.configCache[k] = v
+				newCache[k] = v
 			}
 		}
 	}
 	if config == nil {
 		config = make(map[string]any)
-		d.configCache = make(map[string]any)
 	}
+	d.setConfigSnapshots(newCache, configBase)
 
 	// 步骤 9: agentName
 	// Python: self._agent_name = overrides.get("agent_name", config.get("agent_name", "main_agent"))
@@ -530,10 +542,11 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	d.subMode = subMode
 
 	// 步骤 12: model = d.createModel(configBase)
-	d.model = d.createModel(configBase)
+	// createModel 内部构建完再发布（stateMu 保护），调用方不要再直接赋值 d.model。
+	d.createModel(configBase)
 
 	// 步骤 13: _try_init_a2x_client(configBase)
-	// ⤵️ A2X / 11.10: A2X 客户端初始化
+	// ⤵️ A2X / 10.6.22: A2X 客户端初始化
 
 	// 步骤 14: agentCard = AgentCard(name=agent_name, id='jiuwenswarm')
 	// Python: agent_card = AgentCard(name=self._agent_name, id='uapclaw')
@@ -572,7 +585,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	systemPrompt := commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage())
 
 	params := harness_config.CreateDeepAgentParams{
-		Model:                  d.model,
+		Model:                  d.modelSnapshot(),
 		Card:                   agentCard,
 		SystemPrompt:           systemPrompt,
 		ToolCards:              toolCards,
@@ -638,7 +651,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	})
 
 	// 步骤 22: _sync_a2x_runtime_state()
-	// ⤵️ A2X / 11.10: A2X 运行时状态同步
+	// ⤵️ A2X / 10.6.22: A2X 运行时状态同步
 
 	// 步骤 23: d.registeredMCPServerIDs.clear()
 	d.registeredMCPServerIDs = make(map[string]bool)
@@ -726,22 +739,20 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	}
 
 	// 步骤 3-4: 读取 react 配置段，更新 configCache
+	// 构建局部副本 → 一次性发布，避免与并发读侧争用同一张 map。
 	var config map[string]any
+	newCache := make(map[string]any)
 	if reactRaw, ok := configBase["react"]; ok {
 		if reactMap, ok := reactRaw.(map[string]any); ok {
 			config = make(map[string]any, len(reactMap))
 			for k, v := range reactMap {
 				config[k] = v
-			}
-			d.configCache = make(map[string]any, len(reactMap))
-			for k, v := range reactMap {
-				d.configCache[k] = v
+				newCache[k] = v
 			}
 		}
 	}
 	if config == nil {
 		config = make(map[string]any)
-		d.configCache = make(map[string]any)
 	}
 
 	// 对齐 Python L2710: if "agent_name" in self._instance_overrides: self._agent_name = ...
@@ -752,15 +763,15 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	}
 
 	// 步骤 5: _refresh_multimodal_configs(configBase)
-	d.configBase = configBase
+	d.setConfigSnapshots(newCache, configBase)
 	d.refreshMultimodalConfigs(configBase)
 
-	// 步骤 6-7: 重建模型
-	d.model = d.createModel(configBase)
+	// 步骤 6-7: 重建模型（createModel 内部构建完再发布，不直接赋值字段）
+	d.createModel(configBase)
 
 	// 步骤 7.5: A2X 重载 + 状态同步
-	// ⤵️ A2X / 11.10: _try_init_a2x_client(configBase, reload=True)
-	// ⤵️ A2X / 11.10: _sync_a2x_runtime_state()
+	// ⤵️ A2X / 10.6.22: _try_init_a2x_client(configBase, reload=True)
+	// ⤵️ A2X / 10.6.22: _sync_a2x_runtime_state()
 
 	// 步骤 8: _get_current_agent_rails(config, configBase)
 	// Python: rails_list = self._get_current_agent_rails(config, config_base)
@@ -802,7 +813,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 		agentschema.WithAgentName(d.agentName),
 		agentschema.WithAgentID("uapclaw"),
 	)
-	deepCfg := d.makeDeepAgentConfig(d.model, config, agentCard, newToolCards, railsList)
+	deepCfg := d.makeDeepAgentConfig(d.modelSnapshot(), config, agentCard, newToolCards, railsList)
 	if cfgErr := d.instance.ConfigureDeepConfig(ctx, deepCfg); cfgErr != nil {
 		return fmt.Errorf("DeepAgent ConfigureDeepConfig 失败: %w", cfgErr)
 	}
@@ -1372,7 +1383,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				"event_type": "chat.usage_summary",
 				"session_id": sessionID,
 				"usage":      usageSubObj,
-				"model":      d.defaultModelName,
+				"model":      d.defaultModelNameSnapshot(),
 			}
 			// 对齐 Python: 从 DeepAgent.get_context_usage 获取 usage_percent/context_window_tokens
 			if d.instance != nil {
@@ -1813,15 +1824,7 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	//   对应 Python: for sid in active: self._stream_event_rail.abort(sid)
 	// ⤵️ 10.6.3-10: streamEventRail abort 所有活跃 session
 	if d.streamEventRail != nil {
-		// 快照收集所有活跃 session ID
-		var activeSIDs []string
-		for sid, count := range d.activeSessionIDs {
-			if count > 0 {
-				activeSIDs = append(activeSIDs, sid)
-			}
-		}
-		_ = activeSIDs // 已在下方使用
-		for _, sid := range activeSIDs {
+		for _, sid := range d.activeSessionIDSnapshot() {
 			d.streamEventRail.Abort(sid)
 		}
 	}
@@ -2090,13 +2093,20 @@ func (d *DeepAdapter) deepAgentContextEngineConfig(reactCfg, configBase map[stri
 		}
 		if prev, exists := result.ModelContextWindowTokens[modelName]; exists && prev != tokens {
 			if isDefault {
+				// 默认条目覆盖同名模型：先记录旧值再写回，否则 kept/ignored 会打成同一数字
 				result.ModelContextWindowTokens[modelName] = tokens
+				logger.Warn(logComponent).
+					Str("model_name", modelName).
+					Int("previous", prev).
+					Int("applied", tokens).
+					Msg("max_input_tokens 在同名模型条目间不一致，默认条目覆盖了先前取值")
+				continue
 			}
 			logger.Warn(logComponent).
 				Str("model_name", modelName).
-				Int("kept", result.ModelContextWindowTokens[modelName]).
+				Int("kept", prev).
 				Int("ignored", tokens).
-				Msg("max_input_tokens 在同名模型条目间不一致，已按默认条目取值")
+				Msg("max_input_tokens 在同名模型条目间不一致，非默认条目被忽略")
 			continue
 		}
 		result.ModelContextWindowTokens[modelName] = tokens
@@ -2289,8 +2299,14 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 //
 // key 使用 {model_name}#{index} 格式以支持同名模型共存。
 // 同时记录 modelNameToKeys 映射以便按 model_name 查找。
-func (d *DeepAdapter) buildModelCacheFromDefaults(configBase map[string]any) {
-	d.modelNameToKeys = make(map[string][]string)
+//
+// cache/nameToKeys 由调用方提供并独占（构建期间不对外发布），
+// 避免直接写 d.modelCache 与并发读取打擂台。
+func (d *DeepAdapter) buildModelCacheFromDefaults(
+	configBase map[string]any,
+	cache map[string]*llm.Model,
+	nameToKeys map[string][]string,
+) {
 	nameCounter := make(map[string]int)
 
 	defaults := config.GetDefaultModels(configBase)
@@ -2320,18 +2336,18 @@ func (d *DeepAdapter) buildModelCacheFromDefaults(configBase map[string]any) {
 				Msg("skipping invalid model entry")
 			continue
 		}
-		d.modelCache[cacheKey] = m
-		d.modelNameToKeys[modelName] = append(d.modelNameToKeys[modelName], cacheKey)
+		cache[cacheKey] = m
+		nameToKeys[modelName] = append(nameToKeys[modelName], cacheKey)
 
 		// 同时用纯 model_name 作为 key 指向 is_default=true 的条目
 		if isDefault, _ := entry["is_default"].(bool); isDefault {
-			d.modelCache[modelName] = m
+			cache[modelName] = m
 		}
 
 		alias, _ := entry["alias"].(string)
 		if alias != "" && alias != modelName {
-			if _, exists := d.modelCache[alias]; !exists {
-				d.modelCache[alias] = m
+			if _, exists := cache[alias]; !exists {
+				cache[alias] = m
 			}
 		}
 	}
@@ -2340,7 +2356,7 @@ func (d *DeepAdapter) buildModelCacheFromDefaults(configBase map[string]any) {
 // buildModelCacheLegacy 回退到旧格式（models.default / react 段）构建单条目缓存。
 //
 // Python: JiuWenClawDeepAdapter._build_model_cache_legacy() (line 1535-1560)
-func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any) {
+func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any, cache map[string]*llm.Model) {
 	modelsSection, _ := configBase["models"].(map[string]any)
 	reactSection, _ := configBase["react"].(map[string]any)
 
@@ -2400,35 +2416,40 @@ func (d *DeepAdapter) buildModelCacheLegacy(configBase map[string]any) {
 			Msg("skipping invalid model entry(legacy)")
 		return
 	}
-	d.modelCache[modelName] = m
+	cache[modelName] = m
 }
 
 // createModel 从配置创建 Model 实例并构建模型缓存。
 //
 // Python: JiuWenClawDeepAdapter._create_model() (line 1562-1593)
+//
+// 构建期间只操作局部 map，全部就绪后在 stateMu 内整体发布，
+// 保证并发读侧不会看到"半成品 map"。
 func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
-	d.modelCache = make(map[string]*llm.Model)
-	d.buildModelCacheFromDefaults(configBase)
-	if len(d.modelCache) == 0 {
-		d.buildModelCacheLegacy(configBase)
+	cache := make(map[string]*llm.Model)
+	nameToKeys := make(map[string][]string)
+	d.buildModelCacheFromDefaults(configBase, cache, nameToKeys)
+	if len(cache) == 0 {
+		d.buildModelCacheLegacy(configBase, cache)
 	}
 
-	if len(d.modelCache) == 0 {
+	if len(cache) == 0 {
 		logger.Error(logComponent).Msg("No valid model entries found in config")
+		d.publishModelState(nil, cache, nameToKeys, "")
 		return nil
 	}
 
 	// 优先取 is_default=true 的条目（纯 model_name key），否则取第一个
 	defaultName := ""
-	for name := range d.modelNameToKeys {
-		if _, ok := d.modelCache[name]; ok {
+	for name := range nameToKeys {
+		if _, ok := cache[name]; ok {
 			defaultName = name
 			break
 		}
 	}
 	if defaultName == "" {
 		// 回退：取第一个 #index key
-		for key := range d.modelCache {
+		for key := range cache {
 			if strings.Contains(key, "#") {
 				defaultName = key
 				break
@@ -2437,25 +2458,101 @@ func (d *DeepAdapter) createModel(configBase map[string]any) *llm.Model {
 	}
 	if defaultName == "" {
 		// 最后回退：取第一个 key
-		for key := range d.modelCache {
+		for key := range cache {
 			defaultName = key
 			break
 		}
 	}
 
-	d.defaultModelName = defaultName
-	d.model = d.modelCache[defaultName]
-	if d.model != nil {
-		d.modelClientConfig = d.model.ClientConfig
-		d.modelRequestConfig = d.model.ModelConfig
-	}
+	model := cache[defaultName]
+	d.publishModelState(model, cache, nameToKeys, defaultName)
 
 	logger.Info(logComponent).
-		Str("default_model_name", d.defaultModelName).
-		Int("model_cache_size", len(d.modelCache)).
+		Str("default_model_name", defaultName).
+		Int("model_cache_size", len(cache)).
 		Msg("model cache build completed")
 
+	return model
+}
+
+// publishModelState 原子发布模型状态。
+//
+// cache/nameToKeys 在发布后视为不可变：写侧只能构建新 map 再整体替换，
+// 不能就地修改已发布的 map，否则并发 range 会 fatal。
+func (d *DeepAdapter) publishModelState(
+	model *llm.Model,
+	cache map[string]*llm.Model,
+	nameToKeys map[string][]string,
+	defaultName string,
+) {
+	var clientCfg *llmschema.ModelClientConfig
+	var requestCfg *llmschema.ModelRequestConfig
+	if model != nil {
+		clientCfg = model.ClientConfig
+		requestCfg = model.ModelConfig
+	}
+	d.stateMu.Lock()
+	d.model = model
+	d.modelCache = cache
+	d.modelNameToKeys = nameToKeys
+	d.defaultModelName = defaultName
+	d.modelClientConfig = clientCfg
+	d.modelRequestConfig = requestCfg
+	d.stateMu.Unlock()
+}
+
+// modelsSnapshot 返回模型与两张缓存 map 的一致快照。
+func (d *DeepAdapter) modelsSnapshot() (*llm.Model, map[string]*llm.Model, map[string][]string) {
+	d.stateMu.RLock()
+	defer d.stateMu.RUnlock()
+	return d.model, d.modelCache, d.modelNameToKeys
+}
+
+// modelSnapshot 返回当前模型实例快照。
+func (d *DeepAdapter) modelSnapshot() *llm.Model {
+	d.stateMu.RLock()
+	defer d.stateMu.RUnlock()
 	return d.model
+}
+
+// defaultModelNameSnapshot 返回默认模型名快照。
+func (d *DeepAdapter) defaultModelNameSnapshot() string {
+	d.stateMu.RLock()
+	defer d.stateMu.RUnlock()
+	return d.defaultModelName
+}
+
+// configCacheSnapshot 返回 react 配置段缓存快照（发布后不可变）。
+func (d *DeepAdapter) configCacheSnapshot() map[string]any {
+	d.stateMu.RLock()
+	defer d.stateMu.RUnlock()
+	return d.configCache
+}
+
+// configBaseSnapshot 返回完整配置快照（发布后不可变）。
+func (d *DeepAdapter) configBaseSnapshot() map[string]any {
+	d.stateMu.RLock()
+	defer d.stateMu.RUnlock()
+	return d.configBase
+}
+
+// setConfigSnapshots 原子发布配置快照（configCache/configBase）。
+func (d *DeepAdapter) setConfigSnapshots(configCache, configBase map[string]any) {
+	d.stateMu.Lock()
+	d.configCache = configCache
+	d.configBase = configBase
+	d.stateMu.Unlock()
+}
+
+// setAppliedModel 记录请求实际使用的模型（stateMu 保护）。
+func (d *DeepAdapter) setAppliedModel(model *llm.Model) {
+	d.stateMu.Lock()
+	d.model = model
+	if model != nil {
+		d.modelClientConfig = model.ClientConfig
+		d.modelRequestConfig = model.ModelConfig
+	}
+	d.stateMu.Unlock()
 }
 
 // resolveModelForRequest 根据请求中的 model_name 参数查找对应模型。
@@ -2474,22 +2571,23 @@ func (d *DeepAdapter) resolveModelForRequest(req *schema.AgentRequest) *llm.Mode
 		}
 	}
 	if requested == "" {
-		return d.model
+		return d.modelSnapshot()
 	}
 
+	model, cache, nameToKeys := d.modelsSnapshot()
 	// 精确匹配（#index 格式或纯 model_name key）
-	if m, ok := d.modelCache[requested]; ok {
+	if m, ok := cache[requested]; ok {
 		return m
 	}
 
 	// 回退：按纯 model_name 查找 is_default=true 的条目
-	if _, ok := d.modelNameToKeys[requested]; ok {
-		if m, ok := d.modelCache[requested]; ok {
+	if _, ok := nameToKeys[requested]; ok {
+		if m, ok := cache[requested]; ok {
 			return m
 		}
 	}
 
-	return d.model
+	return model
 }
 
 // applyModelToReactAgent 将解析后的模型应用到 ReActAgent 并同步 adapter 模型字段。
@@ -2506,9 +2604,7 @@ func (d *DeepAdapter) applyModelToReactAgent(resolvedModel *llm.Model) {
 		}
 	}
 	// Python: _apply_model_to_react_agent 中同步 adapter 字段
-	d.modelRequestConfig = resolvedModel.ModelConfig
-	d.modelClientConfig = resolvedModel.ClientConfig
-	d.model = resolvedModel
+	d.setAppliedModel(resolvedModel)
 }
 
 // hasValidModelConfig 检查请求的模型是否有可用配置（凭据维度）。
@@ -2526,24 +2622,26 @@ func (d *DeepAdapter) applyModelToReactAgent(resolvedModel *llm.Model) {
 // api_base=https://example.com/compatible-mode/v1 的占位配置，旧实现会放行，
 // 于是心跳/首次对话真的向 example.com 发请求并报底层网络错误（2026-11-02 实测）。
 func (d *DeepAdapter) hasValidModelConfig(requestedModelName string) bool {
+	// 快照一次，后续三次判定用同一份视图，避免中途被 reload 换掉。
+	model, cache, _ := d.modelsSnapshot()
 	// 1. 请求指定的模型
 	if requestedModelName != "" {
-		if m, ok := d.modelCache[requestedModelName]; ok && modelClientUsable(m) {
+		if m, ok := cache[requestedModelName]; ok && modelClientUsable(m) {
 			return true
 		}
 	}
 	// 2. 默认模型
-	if modelClientUsable(d.model) {
+	if modelClientUsable(model) {
 		return true
 	}
 	// 3. 缓存中任意可用模型
-	for _, m := range d.modelCache {
+	for _, m := range cache {
 		if modelClientUsable(m) {
 			return true
 		}
 	}
-	// 4. config.yaml 兜底（Python: get_config().get("models", {}).get("default", {})...）
-	//    仅在前三步都判定不出可用模型时才读盘，避免每请求一次文件 IO。
+	// 4. 配置兜底（Python: get_config().get("models", {}).get("default", {})...）
+	//    仅在前三步都判定不出可用模型时才走，避免每请求一次文件 IO。
 	if d.defaultModelConfigReader != nil && modelClientConfigUsable(d.defaultModelConfigReader()) {
 		return true
 	}
@@ -2595,6 +2693,12 @@ func defaultModelClientConfig() map[string]any {
 	if err != nil {
 		return nil
 	}
+	return modelClientConfigFromBase(data)
+}
+
+// modelClientConfigFromBase 从完整配置字典里取 models.default.model_client_config。
+// 任一层缺失返回 nil（Python 侧 try/except 仅 Warn，不阻断请求）。
+func modelClientConfigFromBase(data map[string]any) map[string]any {
 	models, ok := data["models"].(map[string]any)
 	if !ok {
 		return nil
@@ -2608,6 +2712,19 @@ func defaultModelClientConfig() map[string]any {
 		return nil
 	}
 	return mcc
+}
+
+// defaultModelClientConfigFromConfigBase 优先从 adapter 已发布的 configBase 快照取配置，
+// 仅在快照为空（未初始化）时回退读盘。
+//
+// 对齐 Python：get_config() 是进程级缓存，_has_valid_model_config 第 4 步不会每次读盘。
+// Go 的 configBase 在 CreateInstance / ReloadAgentConfig 时已加载并随配置保存刷新，
+// 等价于该缓存；避免心跳/首启等"配置未就绪"场景每次都解析 YAML。
+func (d *DeepAdapter) defaultModelClientConfigFromConfigBase() map[string]any {
+	if mcc := modelClientConfigFromBase(d.configBaseSnapshot()); mcc != nil {
+		return mcc
+	}
+	return defaultModelClientConfig()
 }
 
 // anyToConfigString 复刻 Python `str(v or "")` 语义。
@@ -2653,7 +2770,9 @@ func anyToConfigString(v any) string {
 // Counter 语义：允许并发同 session（如 supplement 同时旧任务还在），
 // 避免第一个任务结束时驱逐第二个。
 func (d *DeepAdapter) markSessionActive(sessionID string) {
+	d.sessionMu.Lock()
 	d.activeSessionIDs[sessionID]++
+	d.sessionMu.Unlock()
 }
 
 // unmarkSessionActive 递减 session 活跃任务计数，归零时移除。
@@ -2661,14 +2780,19 @@ func (d *DeepAdapter) markSessionActive(sessionID string) {
 // Python: _unmark_session_active() (line 580-599)
 // 归零时清理 StreamEventRail 的 per-session 状态，防止长期运行内存泄漏。
 func (d *DeepAdapter) unmarkSessionActive(sessionID string) {
+	d.sessionMu.Lock()
 	count := d.activeSessionIDs[sessionID]
-	if count <= 1 {
+	needCleanup := count <= 1
+	if needCleanup {
 		delete(d.activeSessionIDs, sessionID)
-		if d.streamEventRail != nil {
-			d.streamEventRail.CleanupSession(sessionID)
-		}
 	} else {
 		d.activeSessionIDs[sessionID] = count - 1
+	}
+	d.sessionMu.Unlock()
+
+	// rail 清理放在锁外：避免把外部组件的耗时操作塞进计数表临界区。
+	if needCleanup && d.streamEventRail != nil {
+		d.streamEventRail.CleanupSession(sessionID)
 	}
 }
 
@@ -2676,6 +2800,8 @@ func (d *DeepAdapter) unmarkSessionActive(sessionID string) {
 //
 // Python: _is_session_active() (line 601-603)
 func (d *DeepAdapter) isSessionActive(sessionID string) bool {
+	d.sessionMu.Lock()
+	defer d.sessionMu.Unlock()
 	return d.activeSessionIDs[sessionID] > 0
 }
 
@@ -2683,6 +2809,8 @@ func (d *DeepAdapter) isSessionActive(sessionID string) bool {
 //
 // Python: _other_active_sessions() (line 605-610)
 func (d *DeepAdapter) otherActiveSessions(sessionID string) int {
+	d.sessionMu.Lock()
+	defer d.sessionMu.Unlock()
 	total := 0
 	for sid, count := range d.activeSessionIDs {
 		if sid != sessionID {
@@ -2690,6 +2818,21 @@ func (d *DeepAdapter) otherActiveSessions(sessionID string) int {
 		}
 	}
 	return total
+}
+
+// activeSessionIDSnapshot 返回当前活跃 session ID 列表（计数 > 0）。
+//
+// 遍历必须在锁内完成，取值后立刻释放，调用方在锁外做 abort 等耗时操作。
+func (d *DeepAdapter) activeSessionIDSnapshot() []string {
+	d.sessionMu.Lock()
+	defer d.sessionMu.Unlock()
+	ids := make([]string, 0, len(d.activeSessionIDs))
+	for sid, count := range d.activeSessionIDs {
+		if count > 0 {
+			ids = append(ids, sid)
+		}
+	}
+	return ids
 }
 
 // cancelSchedulerRunningTasks 取消 TaskScheduler 运行中的任务。
@@ -2894,7 +3037,8 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 	}
 
 	// Python: configured_subagents, should_add_general_agent = self._build_configured_subagents(model, config, config_base)
-	subagentSpecs, shouldEnableGeneralAgent := d.buildConfiguredSubagents(config, d.configBase)
+	configBase := d.configBaseSnapshot()
+	subagentSpecs, shouldEnableGeneralAgent := d.buildConfiguredSubagents(config, configBase)
 	// Python: L2575-2577: should_add_general_agent and (sub_mode == "plan" or mode.startswith("agent"))
 	shouldEnableGeneralAgent = shouldEnableGeneralAgent && (d.subMode == "plan" || strings.HasPrefix(d.mode, "agent"))
 
@@ -2902,8 +3046,8 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 		Model:                  model,
 		Card:                   card,
 		SystemPrompt:           commonprompt.BuildAgentIdentityPrompt(d.resolvePromptLanguage()),
-		ContextEngineConfig:    d.deepAgentContextEngineConfig(config, d.configBase),
-		EnableTaskLoop:         d.resolveEnableTaskLoop(config, d.configBase),
+		ContextEngineConfig:    d.deepAgentContextEngineConfig(config, configBase),
+		EnableTaskLoop:         d.resolveEnableTaskLoop(config, configBase),
 		MaxIterations:          paramsInt(config, "max_iterations", 15),
 		Subagents:              subagentSpecs,
 		AddGeneralPurposeAgent: shouldEnableGeneralAgent,

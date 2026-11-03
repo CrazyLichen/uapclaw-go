@@ -173,11 +173,7 @@ func (s *FileKVStore) Get(_ context.Context, key string) ([]byte, error) {
 		}
 
 		// 反序列化并解包（对齐 Python：get() 解包 exclusive dict）
-		var entry fileEntry
-		if err := json.Unmarshal(raw, &entry); err != nil {
-			return err
-		}
-		decoded, err := base64.StdEncoding.DecodeString(entry.Value)
+		decoded, err := decodeFileEntry(raw)
 		if err != nil {
 			return err
 		}
@@ -392,7 +388,7 @@ func (p *filePipeline) Exists(_ context.Context, key string) error {
 }
 
 // Execute 提交并执行管道中的所有操作，返回各操作的结果。
-// Python: ShelveStore：pipeline get 返回原始 JSON 字节（不解包），pipeline set 是普通 set（非 exclusive）。
+// Python: ShelveStore：pipeline set 是普通 set（非 exclusive）；pipeline get 与 get 一致返回裸值。
 // 执行后管道被清空，可复用。
 func (p *filePipeline) Execute(_ context.Context) ([]PipelineResult, error) {
 	if len(p.ops) == 0 {
@@ -430,10 +426,17 @@ func (p *filePipeline) Execute(_ context.Context) ([]PipelineResult, error) {
 			case "get":
 				raw := b.Get([]byte(op.key))
 				if raw != nil {
-					// 不解包，返回原始 JSON 字节的拷贝
-					valCopy := make([]byte, len(raw))
-					copy(valCopy, raw)
-					results = append(results, PipelineResult{Op: "get", Key: op.key, Value: valCopy})
+					// 与 Get 保持一致：解包 fileEntry，返回调用方 Set 时的原始字节。
+					// 不解包会让 pipeline 读到 base64 包装的 JSON，持久化检查点恢复时
+					// 格式标签解析失败并静默丢状态（fileEntry 是 Go 侧扩展的包装格式，
+					// Python ShelveStore 的 pipeline get 之所以能直接拿到裸值，
+					// 是因为其 set 不额外包装）。
+					decoded, err := decodeFileEntry(raw)
+					if err != nil {
+						results = append(results, PipelineResult{Op: "get", Key: op.key, Err: err})
+						continue
+					}
+					results = append(results, PipelineResult{Op: "get", Key: op.key, Value: decoded})
 				} else {
 					results = append(results, PipelineResult{Op: "get", Key: op.key, Value: nil})
 				}
@@ -458,4 +461,17 @@ func encodeFileEntry(value []byte, expiryAt int64) ([]byte, error) {
 		ExpiryAt: expiryAt,
 	}
 	return json.Marshal(entry)
+}
+
+// decodeFileEntry 将 bbolt 中存储的 fileEntry JSON 字节还原为调用方写入的原始字节。
+// Get 与 pipeline get 共用，保证两条读取路径语义一致（Python: ShelveStore.get 解包 exclusive dict）。
+func decodeFileEntry(raw []byte) ([]byte, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	var entry fileEntry
+	if err := json.Unmarshal(raw, &entry); err != nil {
+		return nil, err
+	}
+	return base64.StdEncoding.DecodeString(entry.Value)
 }

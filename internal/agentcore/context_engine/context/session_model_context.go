@@ -248,10 +248,13 @@ func (mc *SessionModelContext) PopMessages(size int, withHistory bool) []llm_sch
 //
 // Python: SessionModelContext.clear_messages()
 func (mc *SessionModelContext) ClearMessages(ctx context.Context, withHistory bool, opts ...iface.Option) error {
-	// 弹出全部消息
+	// 弹出消息：withHistory=false 时 PopBack 只弹「历史之后的本轮部分」
+	// （对齐 Python context.py:297-300 → pop_messages(len(self), with_history=False)，
+	//  其内部 pop_back→get_back(size, with_history=False) 同样会把 size 夹到本轮长度）。
 	totalSize := mc.messageBuffer.Size()
+	clearedCount := 0
 	if totalSize > 0 {
-		mc.messageBuffer.PopBack(totalSize, withHistory)
+		clearedCount = len(mc.messageBuffer.PopBack(totalSize, withHistory))
 	}
 
 	// 重置卸载缓冲区
@@ -270,11 +273,13 @@ func (mc *SessionModelContext) ClearMessages(ctx context.Context, withHistory bo
 		Context:   mc,
 	})
 
+	// cleared_count 记「实际弹出了多少条」，不是清理前的 buffer 总长：
+	// 记总长会让 "历史 20 + 本轮 8" 的取消场景打印 28，误判成"把历史也清了"。
 	logger.Info(logComponent).
 		Str("event_type", "CONTEXT_CLEARED").
 		Str("context_id", mc.contextID).
 		Str("session_id", mc.sessionID).
-		Int("cleared_count", totalSize).
+		Int("cleared_count", clearedCount).
 		Msg("context messages cleared")
 
 	return nil
@@ -658,8 +663,10 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 	}
 
 	// 恢复消息
+	// 状态可能来自同进程直传（具体类型）或 checkpointer 落盘后的 JSON 反序列化形态，
+	// 两种形态都要还原，否则进程重启后上下文会静默消失。
 	if messagesVal, exists := stateMap["messages"]; exists {
-		if messages, ok := messagesVal.([]llm_schema.BaseMessage); ok {
+		if messages := messagesFromState(messagesVal); messages != nil {
 			if err := ValidateMessages(messages); err != nil {
 				logger.Error(logComponent).
 					Str("event_type", "CONTEXT_LOAD_STATE_VALIDATE_ERROR").
@@ -670,12 +677,19 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 			}
 			EnsureContextMessageIDs(messages)
 			mc.messageBuffer.Rebuild(messages)
+		} else if messagesVal != nil {
+			// 形态无法识别时显式告警，避免"恢复成功但上下文为空"的静默丢数据
+			logger.Warn(logComponent).
+				Str("event_type", "CONTEXT_LOAD_STATE_UNRECOGNIZED_MESSAGES").
+				Str("context_id", mc.contextID).
+				Str("source_type", fmt.Sprintf("%T", messagesVal)).
+				Msg("state messages could not be restored")
 		}
 	}
 
 	// 恢复卸载消息缓冲区
 	if offloadVal, exists := stateMap["offload_messages"]; exists {
-		if offloadMessages, ok := offloadVal.(map[string][]llm_schema.BaseMessage); ok {
+		if offloadMessages := offloadMessagesFromState(offloadVal); offloadMessages != nil {
 			mc.offloadMessageBuffer = NewOffloadMessageBuffer(offloadMessages)
 			mc.offloadMessageBuffer.SetSysOperation(mc.sysOperation)
 			workspaceDir := mc.WorkspaceDir()
@@ -700,7 +714,7 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 
 	// 恢复压缩历史
 	if historyVal, exists := stateMap["compression_history"]; exists {
-		if history, ok := historyVal.([]map[string]any); ok {
+		if history := compressionHistoryFromState(historyVal); history != nil {
 			mc.stateRecorder.LoadHistory(history)
 		}
 	}
@@ -1055,8 +1069,15 @@ func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages [
 	// 按角色计数消息数量
 	mc.countMessagesByRole(stat, messages)
 
-	// 优先使用最后一条 AssistantMessage 的 usage_metadata：取输入侧 token，
-	// 与 context_max（模型输入上限）同量纲；输入侧缺失时回退总量。
+	// 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens。
+	//
+	// 口径取 total_tokens（输入 + 输出）：本轮输出会在下一轮作为历史重新发给模型，
+	// 「下一轮真实上下文占用」应把输出也算进去（2026-11-03 决策，对齐 Python
+	// _stat_messages 的 total_tokens）。该口径只服务 context.usage 展示，不参与
+	// 压缩判定——processor 通过 mc.TokenCounter() 自行计数。
+	//
+	// 口径与 interface.ContextStats.StatMessages 保持一致（两处必须同改，
+	// 否则 context.usage 与 ContextStats 会对同一条 usage 给出不同数字）。
 	// Python: usage_tokens = self._get_last_assistant_usage_tokens(messages)
 	// Python: 如果usage_tokens不为空则直接设置总Token数
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -1064,11 +1085,7 @@ func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages [
 			if am.UsageMetadata == nil {
 				continue
 			}
-			tokens := am.UsageMetadata.InputTokens
-			if tokens == 0 {
-				tokens = am.UsageMetadata.TotalTokens
-			}
-			if tokens > 0 {
+			if tokens := am.UsageMetadata.TotalTokens; tokens > 0 {
 				stat.TotalTokens = tokens
 				return
 			}

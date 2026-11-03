@@ -562,6 +562,38 @@ func TestCreateBackgroundTask_ManagerTaskWait(t *testing.T) {
 	}
 }
 
+// TestCreateBackgroundTask_ManagerTaskDoneClosed 测试 TaskManager 路径下 Done() 在任务结束后关闭。
+//
+// 回归守卫：manager 路径不经过 Start()，若未镜像完成信号，Done() 永不关闭，
+// 导致 EvolutionRail.DrainPendingHostEvents(wait=true) 白等到超时（生产默认 600s）。
+func TestCreateBackgroundTask_ManagerTaskDoneClosed(t *testing.T) {
+	_ = GetTaskManager() // 确保走 TaskManager 路径
+
+	released := make(chan struct{})
+	handle, err := CreateBackgroundTask(context.Background(), func(ctx context.Context) error {
+		<-released
+		return nil
+	}, "test-mgr-done", "test-group")
+	if err != nil {
+		t.Fatalf("CreateBackgroundTask() error = %v", err)
+	}
+
+	// 任务未结束前 Done 不应关闭
+	select {
+	case <-handle.Done():
+		t.Fatal("任务未完成时 Done() 不应关闭")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(released)
+
+	select {
+	case <-handle.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("任务完成后 Done() 应关闭（manager 路径需镜像完成信号）")
+	}
+}
+
 // TestStartBackgroundTask_GoroutineWait 测试 StartBackgroundTask  goroutine 路径时 Wait 不阻塞
 func TestStartBackgroundTask_GoroutineWait(t *testing.T) {
 	handle := StartBackgroundTask(func(ctx context.Context) error {

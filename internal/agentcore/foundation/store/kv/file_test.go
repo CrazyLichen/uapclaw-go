@@ -688,18 +688,15 @@ func TestFileKVStore_Pipeline_混合操作(t *testing.T) {
 		t.Errorf("results[0] = {Op: %q, Key: %q}, 期望 {Op: %q, Key: %q}", results[0].Op, results[0].Key, "set", "new_key")
 	}
 
-	// 验证 Get 结果（Pipeline Get 不解包，返回原始 JSON 字节）
+	// 验证 Get 结果（Pipeline Get 与 Get 一致：解包 fileEntry，返回写入时的裸值）
 	if results[1].Op != "get" {
 		t.Errorf("results[1].Op = %q, 期望 %q", results[1].Op, "get")
 	}
 	if results[1].Value == nil {
 		t.Error("Get existing key 返回 nil")
-	} else {
-		// 验证是 JSON 格式（不解包）
-		var entry fileEntry
-		if err := json.Unmarshal(results[1].Value, &entry); err != nil {
-			t.Errorf("Pipeline Get 返回值不是有效 JSON: %v", err)
-		}
+	} else if string(results[1].Value) != "old_value" {
+		// 不解包会让持久化检查点恢复读到 base64 包装的 JSON，格式标签解析失败后静默丢状态
+		t.Errorf("Pipeline Get 返回 %q, 期望 %q", string(results[1].Value), "old_value")
 	}
 
 	// 验证 Exists 结果
@@ -763,6 +760,39 @@ func TestFileKVStore_Pipeline_空操作(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Errorf("空 Pipeline Execute 返回 %d 条结果, 期望 0 条", len(results))
+	}
+}
+
+// TestFileKVStore_损坏条目返回错误 验证底层 fileEntry 损坏时 Get 与 Pipeline Get 都报错，
+// 而不是静默返回 nil（静默会让持久化检查点恢复误判为「无状态」）。
+func TestFileKVStore_损坏条目返回错误(t *testing.T) {
+	store := newTestFileKVStore(t)
+	ctx := context.Background()
+
+	// 绕过 Set 的编码，直接写入非法 JSON
+	if err := store.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket([]byte(store.bucketName)).Put([]byte("broken"), []byte("{not-json"))
+	}); err != nil {
+		t.Fatalf("写入损坏条目失败: %v", err)
+	}
+
+	if _, err := store.Get(ctx, "broken"); err == nil {
+		t.Error("Get 读取损坏条目应返回错误")
+	}
+
+	pipe := store.Pipeline(ctx)
+	_ = pipe.Get(ctx, "broken")
+	results, err := pipe.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Pipeline Execute 返回错误: %v", err)
+	}
+	if len(results) != 1 || results[0].Err == nil {
+		t.Errorf("Pipeline Get 读取损坏条目应在结果中带错误，实际 %+v", results)
+	}
+
+	// 空字节直接解码为 nil，调用方据此区分「无此键」
+	if decoded, err := decodeFileEntry(nil); decoded != nil || err != nil {
+		t.Errorf("decodeFileEntry(nil) = (%v, %v), 期望 (nil, nil)", decoded, err)
 	}
 }
 

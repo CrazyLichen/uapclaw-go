@@ -291,7 +291,7 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime(ctx context.Context) {
 	//   1. 无 api_key → 不注册任何音频工具
 	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
 	//   3. 有完整配置 → 全部音频工具
-	audioDedicated := DedicatedMultimodalModelConfigured(d.configBase, "audio")
+	audioDedicated := DedicatedMultimodalModelConfigured(d.configBaseSnapshot(), "audio")
 	if !audioDedicated {
 		// 情况1: 无独立音频 key → 不注册任何音频工具
 		if d.audioToolsRegistered {
@@ -595,7 +595,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//   1. 无 api_key → 不注册任何音频工具
 	//   2. 有 api_key 但 audio_model_config 为 None → 仅注册 audio_metadata
 	//   3. 有完整配置 → 全部音频工具
-	audioDedicated := DedicatedMultimodalModelConfigured(d.configBase, "audio")
+	audioDedicated := DedicatedMultimodalModelConfigured(d.configBaseSnapshot(), "audio")
 	if !audioDedicated {
 		// 情况1: 无独立音频 key → 不注册任何音频工具
 	} else if d.audioModelConfig == nil {
@@ -699,8 +699,8 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//         Python: Runner.resource_mgr.add_tool(acp_chat)
 	//     Python: tool_cards.append(acp_chat.card)
 	// ⤴️ 10.6.24d 回填点①：acp_agents 配置检查 + 注册 + append
-	if acpCfg, ok := d.configBase["acp_agents"].(map[string]any); ok && len(acpCfg) > 0 {
-		acpChat := acpchat.NewAcpChatTool(d.configBase)
+	if acpCfg, ok := d.configBaseSnapshot()["acp_agents"].(map[string]any); ok && len(acpCfg) > 0 {
+		acpChat := acpchat.NewAcpChatTool(d.configBaseSnapshot())
 		for _, at := range acpChat.GetTools() {
 			if existing, gerr := runner.GetResourceMgr().GetTool([]string{at.Card().ID}); gerr != nil || len(existing) == 0 {
 				if aerr := runner.GetResourceMgr().AddTool(at); aerr != nil {

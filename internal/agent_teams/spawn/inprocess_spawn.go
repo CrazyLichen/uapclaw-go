@@ -94,6 +94,11 @@ func InProcessSpawn(
 	// ctx.Done 立即返回，defer FinalizeRound 把 streamQueue 置 nil，随后轮次产出的
 	// chunk 全被丢弃（表现为成员零输出、零回信）。这里用 WithoutCancel 切断取消传播，
 	// 保留 trace/session 等值；需要中止时走 handle.Cancel()/Close()。
+	//
+	// 注意 WithoutCancel 会一并清掉 Deadline——**这是刻意为之**：持久团队
+	// （lifecycle=persistent）的成员需要长期存活等消息，spawn 级一刀切超时会误杀。
+	// 成员的单轮超时由 StreamController 按 DeepAgentConfig.CompletionTimeout
+	// （缺省 600s）控制，与 Python 一致（create_task 本身没有 spawn 级 timeout）。
 	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	// S-39: 对齐 Python inprocess_spawn.py L70-74 set_session_id(session_id)
 	// 把 sessionID 注入 runCtx，teammate goroutine 内部 GetSessionID(ctx) 可读取

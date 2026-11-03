@@ -20,14 +20,14 @@ import (
 
 // clearA2xRuntimeState 清除 A2X 运行时状态。
 // Python: _clear_a2x_runtime_state() (line 612-636)。
-// ⤵️ A2X / 11.10: 清除 A2X 运行时状态
+// ⤵️ A2X / 10.6.22: 清除 A2X 运行时状态
 func (d *DeepAdapter) clearA2xRuntimeState() {
 	logger.Info(logComponent).Msg("clearA2xRuntimeState pending backfill")
 }
 
 // closeA2xClient 关闭 A2X 客户端。
 // Python: _close_a2x_client() (line 638-653)。
-// ⤵️ A2X / 11.10: 关闭 A2X 客户端
+// ⤵️ A2X / 10.6.22: 关闭 A2X 客户端
 func (d *DeepAdapter) closeA2xClient() error {
 	logger.Info(logComponent).Msg("closeA2xClient pending backfill")
 	return nil
@@ -35,7 +35,7 @@ func (d *DeepAdapter) closeA2xClient() error {
 
 // initA2xClient 初始化 A2X 客户端。
 // Python: _init_a2x_client() (line 655-691)。
-// ⤵️ A2X / 11.10: 初始化 A2X 客户端
+// ⤵️ A2X / 10.6.22: 初始化 A2X 客户端
 func (d *DeepAdapter) initA2xClient(ctx context.Context, configBase map[string]any) error {
 	logger.Info(logComponent).Msg("initA2xClient pending backfill")
 	return nil
@@ -43,7 +43,7 @@ func (d *DeepAdapter) initA2xClient(ctx context.Context, configBase map[string]a
 
 // tryInitA2xClient 尝试初始化 A2X 客户端。
 // Python: _try_init_a2x_client() (line 693-706)。
-// ⤵️ A2X / 11.10: 尝试初始化 A2X 客户端
+// ⤵️ A2X / 10.6.22: 尝试初始化 A2X 客户端
 func (d *DeepAdapter) tryInitA2xClient(ctx context.Context, configBase map[string]any) error {
 	logger.Info(logComponent).Msg("tryInitA2xClient pending backfill")
 	return nil
@@ -51,7 +51,7 @@ func (d *DeepAdapter) tryInitA2xClient(ctx context.Context, configBase map[strin
 
 // syncA2xRuntimeState 同步 A2X 运行时状态。
 // Python: _sync_a2x_runtime_state() (line 708-743)。
-// ⤵️ A2X / 11.10: 同步 A2X 运行时状态
+// ⤵️ A2X / 10.6.22: 同步 A2X 运行时状态
 func (d *DeepAdapter) syncA2xRuntimeState() error {
 	logger.Info(logComponent).Msg("syncA2xRuntimeState pending backfill")
 	return nil

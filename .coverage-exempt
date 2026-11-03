@@ -141,3 +141,23 @@ internal/agentcore/memory/lite/types.go
 # EnsureManager() 返回 true 当且仅当 Manager 非 nil（其余路径 return false），
 # 故该分支在 Go 侧不可达；保留是为了与 Python `if not ctx.manager` 结构一一对应。
 internal/agentcore/memory/lite/tool_ops.go#L79-L79
+
+# ── 2026-11-03 48h 审查处置（快照助手替换直连字段） ──
+# 以下改动行只是把 `d.model` / `d.configCache` 换成快照助手（`modelSnapshot()` 等），
+# 调用点本身位于「需要真实 harness/agent 装配才能进入」的路径：
+#   code_adapter#L242-L244   CodeAdapter.CreateInstance 的 react 段缓存构造
+#   code_adapter#L832-L837   CodeAdapter 动态 rails 的子代理构建分支
+#   code_adapter#L868-L868   CodeAdapter research 子代理构建
+#   code_adapter#L953-L954   ACP 服务注册（需真实 ACP 子进程）
+#   code_adapter#L1575-L1579 ConfigureTeamMemberAgent（需活跃团队运行时）
+#   deep_adapter_evolution#L551  callModelForRecap 的模型调用（真实 LLM HTTP，
+#                                由 tests/integration/real_llm 覆盖）
+#   deep_adapter_tools#L294      syncMultimodalToolsForRuntime 音频工具同步
+#                                （需 instance.ReactAgent 的真实 harness 装配）
+internal/swarm/server/adapter/code_adapter.go#L242-L244
+internal/swarm/server/adapter/code_adapter.go#L832-L837
+internal/swarm/server/adapter/code_adapter.go#L868-L868
+internal/swarm/server/adapter/code_adapter.go#L953-L954
+internal/swarm/server/adapter/code_adapter.go#L1575-L1579
+internal/swarm/server/adapter/deep_adapter_evolution.go#L551-L551
+internal/swarm/server/adapter/deep_adapter_tools.go#L294-L294

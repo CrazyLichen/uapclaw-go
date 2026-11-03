@@ -10,6 +10,10 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-02-model-token-config-design.md`（决策 D1-D14、改动点 B1-B8/A1-A3/F1-F3/T1/P1-P6）
 
+> **2026-11-03 修订**：Task 6/7 的分子口径由 `input_tokens` 改为 `total_tokens`
+> （本轮输出下一轮会重发，占用应含输出）。下方历史代码片段保留原样仅作记录，
+> 以设计稿 §6.5 修订说明为准。
+
 **执行注意（项目规则）**
 - 所有 Go 注释中文；文件内声明顺序：接口/结构体 → 枚举 → 常量 → 全局变量 → 导出函数 → 非导出函数
 - 每个包新增文件必须同步该目录 `doc.go` 的文件目录树
@@ -29,8 +33,8 @@
 | `internal/swarm/gateway/channel_manager/web/config_apply.go` | 前端 flat → YAML 嵌套时解析两个 token 字段 |
 | `internal/swarm/gateway/channel_manager/web/web_handlers.go` | `models.list` 回填两个字段 |
 | `internal/swarm/server/adapter/deep_adapter.go` | 白名单、`MaxTokens` 映射、`deepAgentContextEngineConfig` 收集窗口与比例 |
-| `internal/swarm/agents/harness/common/rails/stream_event_emit.go` | `context.usage` 分母取 ceConfig、分子取 `input_tokens` |
-| `internal/agentcore/context_engine/context/session_model_context.go` | `statMessages` 分子取 `input_tokens` |
+| `internal/swarm/agents/harness/common/rails/stream_event_emit.go` | `context.usage` 分母取 ceConfig、分子取 `total_tokens`（2026-11-03 修订） |
+| `internal/agentcore/context_engine/context/session_model_context.go` | `statMessages` 分子取 `total_tokens`（2026-11-03 修订） |
 | `internal/agentcore/harness/rails/context_engineer/context_processor_rail.go` | 新增阈值收口纯函数 + `Init` 接线 |
 | `internal/swarm/server/adapter/deep_adapter_rails.go` | processor rail 读取 yaml 五段 |
 | `resources/config.yaml` | 模板整段对齐 Python + 两个 token 键 + 两个 ratio 键 |

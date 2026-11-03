@@ -69,13 +69,13 @@ const AnalystSystemPrompt = `你是一个 Benchmark 分析师。分析所有评�
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 EVALUATE 阶段逻辑。
-func (h *EvaluateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
+func (h *EvaluateStageHandler) Execute(ctx context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	iteration := sctx.State.Iteration
 	iterDir := filepath.Join(sctx.Workspace, "evals", fmt.Sprintf("iteration-%d", iteration))
 
 	// --- Step 1: Grader 评分 ---
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "正在对测试结果进行评分..."})
-	h.gradeAllEvals(sctx, iterDir)
+	h.gradeAllEvals(ctx, sctx, iterDir)
 
 	// --- Step 2: Benchmark 聚合 ---
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "正在聚合 benchmark 统计..."})
@@ -83,7 +83,7 @@ func (h *EvaluateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 
 	// --- Step 3: Analyst 分析 ---
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "正在分析评测模式..."})
-	analystNotes := h.analyzePatterns(sctx, benchmark)
+	analystNotes := h.analyzePatterns(ctx, sctx, benchmark)
 	benchmark.Notes = analystNotes
 
 	// 持久化
@@ -109,7 +109,7 @@ func (h *EvaluateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 // gradeAllEvals 为每个 eval 的 with_skill / baseline 结果执行评分。
 //
 // 待实现: 接入 create_stage_agent，用 GraderSystemPrompt 调用 Agent
-func (h *EvaluateStageHandler) gradeAllEvals(sctx *skilldev.SkillDevContext, iterDir string) {
+func (h *EvaluateStageHandler) gradeAllEvals(ctx context.Context, sctx *skilldev.SkillDevContext, iterDir string) {
 	evals := sctx.State.Evals
 	if evals == nil {
 		return
@@ -136,27 +136,7 @@ func (h *EvaluateStageHandler) gradeAllEvals(sctx *skilldev.SkillDevContext, ite
 				continue
 			}
 
-			// 待实现: 实际调用 Agent 评分
-			// 待实现：创建评分Agent agent, err := sctx.CreateStageAgent("grader", GraderSystemPrompt, ...)
-			// 待实现：读取评分记录 transcript := os.ReadFile(filepath.Join(runDir, "transcript.md"))
-			// 待实现：调用Agent评分 grading := await agent.grade(expectations, transcript, filepath.Join(runDir, "outputs"))
-
-			gradingExpectations := make([]skilldev.GradingExpectation, 0)
-			for _, exp := range expectations {
-				expStr, _ := exp.(string)
-				gradingExpectations = append(gradingExpectations, skilldev.GradingExpectation{
-					Text:     expStr,
-					Passed:   false,
-					Evidence: "待 Agent 实现",
-				})
-			}
-
-			grading := skilldev.GradingResult{
-				Expectations: gradingExpectations,
-				PassRate:     0.0,
-				PassedCount:  0,
-				FailedCount:  len(expectations),
-			}
+			grading := h.gradeOneRun(ctx, sctx, runDir, expectations, evalName, config)
 
 			gradingData, _ := json.MarshalIndent(grading.ToDict(), "", "  ")
 			_ = os.WriteFile(filepath.Join(runDir, "grading.json"), gradingData, 0o644)
@@ -334,14 +314,154 @@ func (h *EvaluateStageHandler) aggregateBenchmark(sctx *skilldev.SkillDevContext
 // analyzePatterns 分析 benchmark 结果，发现隐藏模式。
 //
 // 待实现: 接入 create_stage_agent，用 AnalystSystemPrompt 调用 Agent
-func (h *EvaluateStageHandler) analyzePatterns(_ *skilldev.SkillDevContext, _ *skilldev.Benchmark) []string {
-	// 待实现: 实际调用 Agent
-	// 待实现：创建分析Agent agent, err := sctx.CreateStageAgent("analyst", AnalystSystemPrompt, ...)
-	// 待实现：调用Agent分析 notes := await agent.analyze(json.dumps(benchmark.ToDict()))
-	// 待实现：解析结果 return json.loads(notes)
+func (h *EvaluateStageHandler) analyzePatterns(ctx context.Context, sctx *skilldev.SkillDevContext, benchmark *skilldev.Benchmark) []string {
+	if len(benchmark.Runs) == 0 {
+		return []string{"本次没有可评测的运行记录（TEST_RUN 未产生真实执行结果）"}
+	}
 
-	logger.Warn(logComponent).Msg("[EvaluateStage] analyzePatterns pending Agent integration")
-	return []string{"评测分析 Agent 尚未接入"}
+	benchmarkJSON, _ := json.Marshal(benchmark.ToDict())
+	text, err := sctx.RunStageAgent(
+		ctx,
+		"analyst",
+		AnalystSystemPrompt,
+		[]string{"file_read"},
+		10,
+		fmt.Sprintf("请分析以下 benchmark 数据并输出 JSON 字符串数组：\n%s", string(benchmarkJSON)),
+	)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("[EvaluateStage] analyst agent failed, falling back to empty notes")
+		return nil
+	}
+
+	notes := parseStringArray(text)
+	if len(notes) == 0 {
+		logger.Warn(logComponent).Msg("[EvaluateStage] analyst output not parsable, falling back to empty notes")
+	}
+	return notes
+}
+
+// gradeOneRun 调用 Grader Agent 为单个运行结果评分。
+//
+// 对齐 Python: EvaluateStageHandler._grade_single_run(ctx, expectations, transcript, outputs_dir)
+// 模型需返回 JSON：{"expectations":[{"text","passed","evidence"}],"pass_rate","passed_count","failed_count"}；
+// 解析失败时退回「全部未通过 + 待复核」的确定性结果，避免整条流水线中断。
+func (h *EvaluateStageHandler) gradeOneRun(
+	ctx context.Context,
+	sctx *skilldev.SkillDevContext,
+	runDir string,
+	expectations []any,
+	evalName string,
+	config string,
+) skilldev.GradingResult {
+	transcript := ""
+	if data, err := os.ReadFile(filepath.Join(runDir, "transcript.md")); err == nil {
+		transcript = string(data)
+	}
+	outputsDir := filepath.Join(runDir, "outputs")
+
+	expTexts := make([]string, 0, len(expectations))
+	for _, exp := range expectations {
+		if expStr, ok := exp.(string); ok {
+			expTexts = append(expTexts, expStr)
+		}
+	}
+	expJSON, _ := json.Marshal(expTexts)
+
+	prompt := fmt.Sprintf("用例：%s\n配置：%s\n断言：%s\n执行记录：\n%s\n输出目录：%s",
+		evalName, config, string(expJSON), transcript, outputsDir)
+
+	text, err := sctx.RunStageAgent(ctx, "grader", GraderSystemPrompt, []string{"file_read"}, 10, prompt)
+	if err == nil {
+		if grading, ok := parseGradingResult(text, expTexts); ok {
+			return grading
+		}
+		logger.Warn(logComponent).
+			Str("eval", evalName).
+			Str("config", config).
+			Msg("[EvaluateStage] grader output not parsable, using fallback grading")
+	} else {
+		logger.Warn(logComponent).
+			Str("eval", evalName).
+			Str("config", config).
+			Err(err).
+			Msg("[EvaluateStage] grader agent failed, using fallback grading")
+	}
+
+	fallback := make([]skilldev.GradingExpectation, 0, len(expTexts))
+	for _, expStr := range expTexts {
+		fallback = append(fallback, skilldev.GradingExpectation{
+			Text:     expStr,
+			Passed:   false,
+			Evidence: "评分未完成",
+		})
+	}
+	return skilldev.GradingResult{
+		Expectations: fallback,
+		PassRate:     0,
+		PassedCount:  0,
+		FailedCount:  len(fallback),
+	}
+}
+
+// parseGradingResult 解析 Grader Agent 的 JSON 输出。
+func parseGradingResult(text string, expTexts []string) (skilldev.GradingResult, bool) {
+	start := strings.Index(text, "{")
+	end := strings.LastIndex(text, "}")
+	if start < 0 || end <= start {
+		return skilldev.GradingResult{}, false
+	}
+	var raw struct {
+		Expectations []struct {
+			Text     string `json:"text"`
+			Passed   bool   `json:"passed"`
+			Evidence string `json:"evidence"`
+		} `json:"expectations"`
+		PassRate    float64 `json:"pass_rate"`
+		PassedCount int     `json:"passed_count"`
+		FailedCount int     `json:"failed_count"`
+	}
+	if err := json.Unmarshal([]byte(text[start:end+1]), &raw); err != nil {
+		return skilldev.GradingResult{}, false
+	}
+
+	grading := skilldev.GradingResult{PassRate: raw.PassRate, PassedCount: raw.PassedCount, FailedCount: raw.FailedCount}
+	for _, item := range raw.Expectations {
+		grading.Expectations = append(grading.Expectations, skilldev.GradingExpectation{
+			Text:     item.Text,
+			Passed:   item.Passed,
+			Evidence: item.Evidence,
+		})
+	}
+	if len(grading.Expectations) == 0 {
+		return skilldev.GradingResult{}, false
+	}
+	if grading.PassedCount == 0 && grading.FailedCount == 0 {
+		for _, exp := range grading.Expectations {
+			if exp.Passed {
+				grading.PassedCount++
+			} else {
+				grading.FailedCount++
+			}
+		}
+		if len(expTexts) > 0 {
+			grading.PassRate = float64(grading.PassedCount) / float64(len(grading.Expectations))
+		}
+	}
+	return grading, true
+}
+
+// parseStringArray 解析模型输出的 JSON 字符串数组。
+func parseStringArray(text string) []string {
+	start := strings.Index(text, "[")
+	end := strings.LastIndex(text, "]")
+	if start < 0 || end <= start {
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal([]byte(text[start:end+1]), &arr); err != nil {
+		return nil
+	}
+	return arr
 }
 
 // readJSONMap 读取 JSON 文件为 map[string]any。

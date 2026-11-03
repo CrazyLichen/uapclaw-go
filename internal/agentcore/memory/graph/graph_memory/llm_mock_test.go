@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -23,12 +24,52 @@ type mutableMockLLMClient struct {
 	mu           sync.Mutex
 	invokeResult *llmschema.AssistantMessage
 	invokeErr    error
+	// delay 每次 Invoke 的模拟耗时
+	delay time.Duration
+	// inFlight 当前并发数
+	inFlight int
+	// maxInFlight 观测到的最大并发数
+	maxInFlight int
 }
 
 func (m *mutableMockLLMClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 	m.mu.Lock()
+	delay := m.delay
+	m.inFlight++
+	if m.inFlight > m.maxInFlight {
+		m.maxInFlight = m.inFlight
+	}
+	m.mu.Unlock()
+
+	if delay > 0 {
+		time.Sleep(delay)
+	}
+
+	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.inFlight--
 	return m.invokeResult, m.invokeErr
+}
+
+// SetDelay 设置模拟耗时。
+func (m *mutableMockLLMClient) SetDelay(d time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.delay = d
+}
+
+// ResetConcurrency 重置并发观测。
+func (m *mutableMockLLMClient) ResetConcurrency() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.inFlight, m.maxInFlight = 0, 0
+}
+
+// MaxInFlight 返回观测到的最大并发数。
+func (m *mutableMockLLMClient) MaxInFlight() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.maxInFlight
 }
 
 func (m *mutableMockLLMClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {

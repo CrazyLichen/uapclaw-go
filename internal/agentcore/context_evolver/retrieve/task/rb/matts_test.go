@@ -528,31 +528,6 @@ func TestSelfContrastMemoryOp_LLM未注册(t *testing.T) {
 	assert.Contains(t, err.Error(), "LLM not configured")
 }
 
-// TestParallelScalingOp_温度保存恢复 测试 LLM 温度保存和恢复
-func TestParallelScalingOp_温度保存恢复(t *testing.T) {
-	sc := cecontext.NewServiceContext()
-	af := &fakeAgentFlowService{
-		results: map[string]*cecontext.TrajectoryResult{
-			"parallel_0": {Answer: "answer", Steps: []any{"s"}, Success: true},
-		},
-	}
-	sc.RegisterAgentFlow(af)
-
-	op := NewParallelScalingOp(sc, 1, 0.95)
-	rc := cecontext.NewRuntimeContext()
-	rc.Set("query", "test query")
-	rc.Set("user_id", "user1")
-	rc.Set("llm_temperature", 0.3)
-
-	err := op.Execute(context.Background(), rc)
-	require.NoError(t, err)
-
-	// 温度应恢复为原始值
-	restoredTemp, ok := cecontext.GetTyped[float64](rc, "llm_temperature")
-	require.True(t, ok)
-	assert.InDelta(t, 0.3, restoredTemp, 0.01)
-}
-
 // TestBestOfNOp_LLM调用失败 测试 LLM 评估调用失败时回退到第一条轨迹
 func TestBestOfNOp_LLM调用失败(t *testing.T) {
 	sc := cecontext.NewServiceContext()

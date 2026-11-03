@@ -88,6 +88,7 @@ models:
         api_key: %s
         api_base: %s
         client_id: real_llm_team
+        verify_ssl: false
       is_default: true
 `, s.RealModelConfig.ModelName, s.RealClientConfig.ClientProvider,
 		s.RealClientConfig.APIKey, s.RealClientConfig.APIBase)
@@ -122,6 +123,8 @@ func (s *TeamContinuousRealSuite) TearDownSuite() {
 	if s.agentServer != nil {
 		_ = s.agentServer.Stop()
 	}
+	// 注意：RealLLMSuite.SetupSuite 把 s.Ctx 换成了 Background，Cancel 已无实际作用，
+	// 后台协程只由 Stop() 收敛，因此这里不插入 Cancel（与基类行为一致）。
 	s.restoreEnv()
 	pathutil.ResetCache()
 	if s.origWd != "" {
@@ -161,26 +164,32 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 		secondSentAt    time.Time
 		firstAcceptedAt time.Time
 		firstFinalAt    time.Time
+		// eventCounts 记录收到的每类帧数量，失败时用于区分「服务端一帧没发」
+		// 与「只发了思考/正文流但没进工具」。
+		eventCounts = map[string]int{}
+		// chatErrors 收集 chat.error 文案：错误终态下服务端不再补发 chat.final，
+		// 不记下来就只剩「没有 final」这种无信息量的结论。
+		chatErrors []string
 	)
 
 	deadline := time.Now().Add(8 * time.Minute)
-	idle := 0
 	for time.Now().Before(deadline) {
-		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		// 单帧最长等 2 分钟：真实模型首 token 常超过 30s。注意 gorilla/websocket 的
+		// 读错误是粘性的（conn.readErr 一旦置位，后续 ReadMessage 立刻返回同一错误），
+		// 「N 次 30s 重试」凑不出等待预算，唯一的等待窗口就是这里的 ReadDeadline。
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			idle++
-			if idle >= 6 {
-				break
-			}
-			continue
+			s.T().Logf("读帧中断，结束观测（帧统计=%v）: %v", eventCounts, err)
+			break
 		}
-		idle = 0
 
 		var frame map[string]any
 		if json.Unmarshal(raw, &frame) != nil {
 			continue
 		}
+		eventCounts[realEventName(frame)]++
+		payload, _ := frame["payload"].(map[string]any)
 		switch {
 		case realFrameID(frame) == "req-real-1" && realAccepted(frame):
 			if !firstAccepted {
@@ -207,6 +216,11 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 				firstFinal = true
 				firstFinalAt = time.Now()
 			}
+		case "chat.error":
+			// 错误也是本轮流的终态（服务端不补发 chat.final）：记下文案便于定位，
+			// 并让下面的等待提前收尾（run 41504922683 里两条消息各来一帧）。
+			chatErrors = append(chatErrors, realErrorMessage(payload))
+			s.T().Logf("收到 chat.error: %s", realErrorMessage(payload))
 		}
 
 		// 首条一被受理就发第二条：不依赖 team.runtime_ready（模型可能压根不建队），
@@ -219,14 +233,15 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 			secondSentAt = time.Now()
 		}
 		// 第二条被受理后，等首条收尾或最多再等 2 分钟——模型不建队时也可能一直没有
-		// chat.final，避免用例白等到 8 分钟上限。
-		if secondSent && secondAccepted && (firstFinal || time.Since(secondSentAt) > 2*time.Minute) {
+		// chat.final，避免用例白等到 8 分钟上限。错误帧同样意味着本轮已结束。
+		if secondSent && secondAccepted &&
+			(firstFinal || len(chatErrors) > 0 || time.Since(secondSentAt) > 2*time.Minute) {
 			break
 		}
 	}
 
-	s.T().Logf("观测: firstAccepted=%v runtimeReady=%v memberSpawned=%v secondAccepted=%v firstFinal=%v sawMember=%v sawMessage=%v",
-		firstAccepted, runtimeReady, memberSpawned, secondAccepted, firstFinal, sawMember, sawMessage)
+	s.T().Logf("观测: firstAccepted=%v runtimeReady=%v memberSpawned=%v secondAccepted=%v firstFinal=%v sawMember=%v sawMessage=%v chatErrors=%v 帧统计=%v",
+		firstAccepted, runtimeReady, memberSpawned, secondAccepted, firstFinal, sawMember, sawMessage, chatErrors, eventCounts)
 	s.True(firstAccepted, "首条 chat.send 应被受理")
 	s.True(secondSent, "第二条消息应在首条流未结束时发出")
 	s.True(secondAccepted, "第二条 chat.send 应被受理（同 session 不互斥）")
@@ -250,9 +265,13 @@ func (s *TeamContinuousRealSuite) TestTeamContinuousDialog_真实调用() {
 
 // TestTeamAutoBuild_自然语言需求触发建队 验证"用户只说人话，模型自己建队"。
 //
-// 关键行为契约：用户不需要说"建个团队"。leader 的系统提示词（leader_workflow.md
-// 第 2 步）要求它先 build_team 再拉成员，本用例锁住这条——任何让提示词失效的改动
-// （section 未注入、rail 未挂载、模板被改坏）都会让 team.member 消失。
+// 关键行为契约：用户不需要说"建个团队"，leader 会自行拉人建队——引擎侧必须把
+// 建队/拉人链路打通到客户端可观测（成功 tool_result 或 team.member 事件）。
+// 提示词失效（section 未注入、rail 未挂载、模板被改坏）时成员根本建不出来，
+// 该契约随之失败；提示词文本本身另由 BuildTeamWorkflowSection 单测确定性覆盖。
+//
+// 不断言「必须先调用 build_team」：模型选哪条工具路径不是确定性契约，
+// 详见函数内注释。
 func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建队() {
 	conn, _, err := websocket.DefaultDialer.Dial(
 		fmt.Sprintf("ws://127.0.0.1:%d/ws", s.wsPort), nil)
@@ -268,27 +287,40 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 		memberCreated bool
 		toolNames     []string
 		sawFinal      bool
+		accepted      bool
+		chatError     string
+		// eventCounts 记录收到的每类帧数量：失败时靠它区分「服务端一帧没发」
+		// 与「只发了思考/正文流但没进工具」两类原因。
+		eventCounts = map[string]int{}
 	)
 	deadline := time.Now().Add(10 * time.Minute)
-	idle := 0
 	for time.Now().Before(deadline) {
-		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		// 单帧最长等 3 分钟：团队首轮提示词很长（leader workflow + 策略 + 工具表），
+		// 冷启动叠加模型首 token，实测首帧可能超过 30s；而 gorilla/websocket 的读错误
+		// 是粘性的（conn.readErr 一旦置位，后续 ReadMessage 立刻返回同一错误），
+		// 「12 次 30s 重试」实际只有一次 30s 预算——run 41497123635 里用例 30.7s 就
+		// 断言失败，但服务端当时仍在正常处理（紧接着的用例立刻收到 accepted）。
+		_ = conn.SetReadDeadline(time.Now().Add(3 * time.Minute))
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			idle++
-			if idle >= 12 {
-				break
-			}
-			continue
+			s.T().Logf("读帧中断，结束观测（工具序列=%v memberCreated=%v 帧统计=%v）: %v",
+				toolNames, memberCreated, eventCounts, err)
+			break
 		}
-		idle = 0
 
 		var frame map[string]any
 		if json.Unmarshal(raw, &frame) != nil {
 			continue
 		}
 		payload, _ := frame["payload"].(map[string]any)
-		switch realEventName(frame) {
+		evtName := realEventName(frame)
+		eventCounts[evtName]++
+		// 先记录受理帧：失败时用「受理了但没建队」与「压根没受理」区分
+		// 模型慢/不建队 和 服务端拒收 两类原因。
+		if realFrameID(frame) == "req-auto-1" && realAccepted(frame) {
+			accepted = true
+		}
+		switch evtName {
 		case "chat.tool_call":
 			if tc, ok := payload["tool_call"].(map[string]any); ok {
 				name, _ := tc["name"].(string)
@@ -310,18 +342,32 @@ func (s *TeamContinuousRealSuite) TestTeamAutoBuild_自然语言需求触发建�
 			s.T().Logf("收到 team.member: %v", payload["event"])
 		case "chat.final":
 			sawFinal = true
+		case "chat.error":
+			// chat.error 是本轮流的错误终态：服务端不再补发 chat.final，
+			// 不在这里收尾就会白等到 10 分钟上限（run 41504922683 实测 659s）。
+			// 同时把 error 文案带进断言，避免只剩「工具序列为空」这种无信息量的结论。
+			chatError = realErrorMessage(payload)
+			s.T().Logf("收到 chat.error: %s", chatError)
 		}
-		if memberCreated {
+		// chat.final / chat.error 都是本轮流的终点：模型直接作答而没建队时
+		// （真实观测过），继续读到 10 分钟上限纯属白等，提前收尾并断言。
+		if memberCreated || sawFinal || chatError != "" {
 			break
 		}
 	}
 
-	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v", toolNames, memberCreated, sawFinal)
-	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员")
-	// 建队链路的第一跳必须是 build_team（提示词 leader_workflow.md 第 2 步）。
-	// chat.tool_call 的 name 取 ToolCall.Name（工具卡 Name="build_team"），
-	// 不是工具卡 ID "team.build_team"；两种写法都接受，避免依赖注册命名细节。
-	s.True(hasTeamBuildToolCall(toolNames), "leader 应先调用 build_team 组建团队，实际工具序列=%v", toolNames)
+	s.T().Logf("工具序列=%v memberCreated=%v sawFinal=%v accepted=%v chatError=%q 帧统计=%v",
+		toolNames, memberCreated, sawFinal, accepted, chatError, eventCounts)
+	// 硬断言只锁确定性结果：客户端能观测到成员被真实创建。
+	//
+	// 不断言「工具序列里必须出现 build_team」。leader_workflow.md 第 2 步确实要求
+	// 先 build_team，但模型对工具路径的选择不是确定性契约：实测 deepseek-v4.1-flash
+	// 会跳过 build_team 直接 spawn_member 并成功建成员（TeamBackend.SpawnMember 只写
+	// team_member 表，不校验 team_info 记录，与 Python 侧一致），夜间真实 LLM CI
+	// 因此两次假红（run 41326851160 / 41352864530），而建队结果本身是好的。
+	// 提示词是否生效由上面的 memberCreated 兜底：提示词/rail 坏掉时成员根本建不出来。
+	s.True(memberCreated, "自然语言团队需求下，leader 应自行建队并创建成员（accepted=%v sawFinal=%v chatError=%q 帧统计=%v 工具序列=%v）",
+		accepted, sawFinal, chatError, eventCounts, toolNames)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -408,6 +454,17 @@ func realToolSucceeded(frame map[string]any) bool {
 	return ok && success
 }
 
+// realErrorMessage 取 chat.error 帧的错误文案。
+// 服务端按 Python 语义写在 payload.error（internal/swarm/server/utils/stream_utils.go），
+// 兼容 message 键以防具体分支换字段。
+func realErrorMessage(payload map[string]any) string {
+	if msg, _ := payload["error"].(string); msg != "" {
+		return msg
+	}
+	msg, _ := payload["message"].(string)
+	return msg
+}
+
 // realToolName 取 chat.tool_result payload 里的工具名。
 func realToolName(payload map[string]any) string {
 	name, _ := payload["tool_name"].(string)
@@ -436,14 +493,4 @@ func isTeamBuildTool(name string) bool {
 	default:
 		return false
 	}
-}
-
-// hasTeamBuildToolCall 判断工具序列里是否出现 build_team。
-func hasTeamBuildToolCall(names []string) bool {
-	for _, name := range names {
-		if normalizeTeamToolName(name) == "build_team" {
-			return true
-		}
-	}
-	return false
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -91,10 +92,10 @@ const PlanSystemPrompt = `你是一个 Skill 架构师。根据用户需求，�
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 PLAN 阶段逻辑。
-func (h *PlanStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
+func (h *PlanStageHandler) Execute(ctx context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "正在分析需求并生成开发计划..."})
 
-	plan, err := h.generatePlan(sctx)
+	plan, err := h.generatePlan(ctx, sctx)
 	if err != nil {
 		return nil, fmt.Errorf("生成开发计划失败: %w", err)
 	}
@@ -106,42 +107,82 @@ func (h *PlanStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevCon
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// generatePlan 调用 ReActAgent 生成 plan JSON。
+// generatePlan 调用阶段 Agent 生成 plan JSON。
 //
-// 待实现: 接入 create_stage_agent + Runner.run_agent，流式推送 AGENT_THINKING 事件
-func (h *PlanStageHandler) generatePlan(sctx *skilldev.SkillDevContext) (map[string]any, error) {
-	// 待实现:
-	// 待实现：创建规划Agent agent, err := sctx.CreateStageAgent("plan", PlanSystemPrompt, []string{"web_search"}, 15)
-	// 待实现：构建消息 messages := h.buildMessages(sctx)
-	// 待实现：流式生成 planText := ""
-	// 待实现：流式推送 async for chunk in agent.stream(messages):
-	// 待实现：推送思考事件 sctx.Emit(skilldev.SkillDevEventTypeAgentThinking, map[string]any{"delta": chunk.Content})
-	// 待实现：拼接内容 planText += chunk.Content
-	// 待实现：解析计划 plan = parsePlanJSON(planText)
-	// 待实现：差量分析 if sctx.State.ExistingSkillMD != nil {
-	// 待实现：设置差量 plan["diff_analysis"] = "待实现: 差量分析"
-	// 待实现：返回计划 return plan
-
-	logger.Warn(logComponent).Msg("[PlanStage] generatePlan not implemented, returning placeholder plan")
-	query := ""
-	if q, ok := sctx.State.Input["query"].(string); ok {
-		query = q
+// 对齐 Python: PlanStageHandler._generate_plan(ctx)
+// 上游 _generate_plan 仍是占位（返回 placeholder plan），这里按注释伪代码接入 Agent：
+// 构造 PLAN 消息 → 调模型 → 容错解析 JSON → 有既有 SKILL.md 时补差量分析。
+func (h *PlanStageHandler) generatePlan(ctx context.Context, sctx *skilldev.SkillDevContext) (map[string]any, error) {
+	messages := h.buildMessages(sctx)
+	userPrompt := ""
+	for _, msg := range messages {
+		if msg["role"] == "user" {
+			userPrompt = msg["content"]
+		}
 	}
-	return map[string]any{
-		"skill_name":   "placeholder-skill",
-		"display_name": "占位 Skill",
-		"description":  fmt.Sprintf("根据需求『%s』生成的 skill（待实现）", query),
-		"purpose":      "待实现",
-		"directory_structure": map[string]any{
-			"SKILL.md": "主指令文件",
-		},
-		"key_decisions": []any{},
-		"test_strategy": map[string]any{
-			"approach":           "待实现",
-			"test_cases_outline": []any{},
-		},
-		"estimated_complexity": "medium",
-	}, nil
+
+	planText, err := sctx.RunStageAgent(ctx, "plan", PlanSystemPrompt, []string{"web_search"}, 15, userPrompt)
+	if err != nil {
+		return nil, err
+	}
+	sctx.Emit(skilldev.SkillDevEventTypeAgentThinking, map[string]any{"delta": planText})
+
+	plan, err := parsePlanJSON(planText)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("task_id", sctx.TaskID).
+			Err(err).
+			Msg("[PlanStage] parse plan json failed")
+		return nil, err
+	}
+
+	if sctx.State.ExistingSkillMD != nil {
+		plan["diff_analysis"] = buildDiffAnalysis(plan, *sctx.State.ExistingSkillMD)
+	}
+	if plan["directory_structure"] == nil {
+		plan["directory_structure"] = map[string]any{"SKILL.md": "主指令文件"}
+	}
+	return plan, nil
+}
+
+// buildDiffAnalysis 生成「已有技能 → 新计划」的差量说明。
+//
+// Python: plan["diff_analysis"]（上游标为待实现，此处给出可读的字段级对比）
+func buildDiffAnalysis(plan map[string]any, existingSkillMD string) string {
+	newName, _ := plan["skill_name"].(string)
+	newDesc, _ := plan["description"].(string)
+
+	oldName, oldDesc := parseSkillFrontmatterFields(existingSkillMD)
+	parts := make([]string, 0, 2)
+	parts = append(parts, fmt.Sprintf("原技能名：%s；新技能名：%s", oldName, newName))
+	parts = append(parts, fmt.Sprintf("原描述：%s；新描述：%s", oldDesc, newDesc))
+	return strings.Join(parts, "\n")
+}
+
+// parseSkillFrontmatterFields 从 SKILL.md 文本中提取 name/description。
+func parseSkillFrontmatterFields(content string) (string, string) {
+	fmRe := regexp.MustCompile(`(?s)^---\n(.*?)\n---`)
+	match := fmRe.FindStringSubmatch(content)
+	if match == nil {
+		return "", ""
+	}
+	name := ""
+	description := ""
+	for _, line := range strings.Split(match[1], "\n") {
+		kv := strings.SplitN(line, ":", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(kv[0])
+		value := strings.TrimSpace(kv[1])
+		switch key {
+		case "name":
+			name = value
+		case "description":
+			description = value
+		}
+	}
+	return name, description
 }
 
 // buildMessages 构造发送给 PLAN Agent 的消息列表。

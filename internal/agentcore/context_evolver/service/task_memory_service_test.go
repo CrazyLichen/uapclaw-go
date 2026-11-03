@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -211,7 +213,7 @@ func TestTaskMemoryService_AddMemory_ACE_缺少内容(t *testing.T) {
 		// Content 为空
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "content and section")
+	assert.Contains(t, err.Error(), "requires content")
 }
 
 // TestTaskMemoryService_AddMemory_ReMe 验证 ReMe 算法的添加记忆。
@@ -797,4 +799,110 @@ func TestVectorStore(t *testing.T) {
 	require.NoError(t, err)
 	vs := svc.VectorStore()
 	assert.NotNil(t, vs)
+}
+
+// TestAddMemory_ACE节点与Python对齐 验证 ACE 手工记忆的 node ID、type 与时间戳。
+// Python: ACEMemory.to_vector_node() → node_id=f"ace_{workspace_id}_{id}"
+func TestAddMemory_ACE节点与Python对齐(t *testing.T) {
+	svc, vs, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+
+	res, err := svc.AddMemory(context.Background(), "u1", AddMemoryRequest{Content: "hello", Section: "general"})
+	require.NoError(t, err)
+
+	h := md5.Sum([]byte("hello"))
+	want := fmt.Sprintf("ace_u1_general-%x", h[:4])
+	assert.Equal(t, want, res.MemoryID)
+
+	raw, ok := vs.nodes[want]
+	require.True(t, ok, "未写入预期 node id，实际: %v", vs.nodes)
+	node, ok := raw.(*schema.VectorNode)
+	require.True(t, ok)
+	assert.Equal(t, "ace_memory", node.Metadata["type"])
+	_, hasCreated := node.Metadata["created_at"]
+	assert.True(t, hasCreated, "metadata 缺少 created_at")
+	_, hasUpdated := node.Metadata["updated_at"]
+	assert.True(t, hasUpdated, "metadata 缺少 updated_at")
+}
+
+// TestAddMemory_ReMe节点与Python对齐 验证 ReMe 节点类型、嵌入文本与嵌套 metadata。
+// Python: embedding_content = when_to_use；content 存进 metadata
+func TestAddMemory_ReMe节点与Python对齐(t *testing.T) {
+	svc, vs, err := newTestTaskMemoryService(WithSummaryAlgo("ReMe"))
+	require.NoError(t, err)
+
+	whenToUse := "when testing go code"
+	res, err := svc.AddMemory(context.Background(), "u1", AddMemoryRequest{
+		Content:   "use table tests",
+		WhenToUse: &whenToUse,
+	})
+	require.NoError(t, err)
+
+	raw, ok := vs.nodes[res.MemoryID]
+	require.True(t, ok, "未写入预期 node id，实际: %v", vs.nodes)
+	node, ok := raw.(*schema.VectorNode)
+	require.True(t, ok)
+	assert.Equal(t, "reme_memory", node.Metadata["type"])
+	assert.Equal(t, whenToUse, node.Content, "嵌入文本应为 when_to_use")
+	assert.Equal(t, "use table tests", node.Metadata["content"])
+	_, hasNested := node.Metadata["metadata"]
+	assert.True(t, hasNested, "metadata 缺少嵌套 metadata 段")
+	_, hasCreated := node.Metadata["created_at"]
+	assert.True(t, hasCreated, "metadata 缺少 created_at")
+}
+
+// TestAddMemory_Section缺省为general 验证不传 Section 时默认 general。
+func TestAddMemory_Section缺省为general(t *testing.T) {
+	svc, vs, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+
+	res, err := svc.AddMemory(context.Background(), "u1", AddMemoryRequest{Content: "hello"})
+	require.NoError(t, err)
+	assert.Contains(t, res.MemoryID, "_general-")
+	assert.Len(t, vs.nodes, 1)
+}
+
+// TestAddMemory_Content为空仍报错 验证必填校验未被放宽。
+func TestAddMemory_Content为空仍报错(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+
+	_, err = svc.AddMemory(context.Background(), "u1", AddMemoryRequest{})
+	assert.Error(t, err)
+}
+
+// TestLoadMemories_加载失败不阻断 验证加载失败只记录日志、不返回错误（对齐 Python）。
+func TestLoadMemories_加载失败不阻断(t *testing.T) {
+	dir := t.TempDir()
+	brokenPath := filepath.Join(dir, "broken.json")
+	require.NoError(t, os.Mkdir(brokenPath, 0o755)) // 目录占用文件路径 → 读取必然失败
+
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+	svc.persistenceHelper = cepersistence.NewMemoryPersistenceHelper(
+		cepersistence.WithPersistType("json"),
+		cepersistence.WithPersistPath(brokenPath),
+	)
+
+	assert.NoError(t, svc.LoadMemories(context.Background(), "u1"))
+}
+
+// TestLoadMemories_无持久化时直接返回 验证未配置持久化时不报错。
+func TestLoadMemories_无持久化时直接返回(t *testing.T) {
+	svc, _, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+	assert.NoError(t, svc.LoadMemories(context.Background(), "u1"))
+}
+
+// TestLoadMemories_无数据时提前返回 验证空节点表直接返回（对齐 Python if not data: return）。
+func TestLoadMemories_无数据时提前返回(t *testing.T) {
+	svc, vs, err := newTestTaskMemoryService(WithSummaryAlgo("ACE"))
+	require.NoError(t, err)
+	svc.persistenceHelper = cepersistence.NewMemoryPersistenceHelper(
+		cepersistence.WithPersistType("json"),
+		cepersistence.WithPersistPath(t.TempDir()+"/{algo_name}/{user_id}.json"),
+	)
+
+	require.NoError(t, svc.LoadMemories(context.Background(), "u1"))
+	assert.Equal(t, 0, vs.Count())
 }

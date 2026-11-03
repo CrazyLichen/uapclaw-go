@@ -211,7 +211,7 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 	rawTotalTokens := cecontext.ResolveContextMax(
 		modelName, ceConfig.ContextWindowTokens, ceConfig.ModelContextWindowTokens)
 
-	// 获取当前 token 用量：优先输入侧（与分母同量纲），回退总 token
+	// 获取当前 token 用量：usage_metadata.total_tokens（输入+输出，代表下一轮真实占用）
 	var currentContextTokens int
 	if inputs := cbCtx.Inputs(); inputs != nil {
 		if mcInputs, ok := inputs.(*sainterfaces.ModelCallInputs); ok && mcInputs.Response != nil {
@@ -267,16 +267,14 @@ func formatTodosForFrontend(todosData []hschema.TodoItem) []map[string]any {
 	return result
 }
 
-// contextUsageTokensUsed 计算 context.usage 的分子：优先输入侧 token，回退总 token。
+// contextUsageTokensUsed 计算 context.usage 的分子：usage_metadata.total_tokens。
 //
-// 分母是模型输入上限（ResolveContextMax），分子必须同量纲，否则长输出场景百分比虚高。
-// Python 侧对应 usage_metadata.total_tokens（本实现按设计 D6 收窄为输入侧）。
+// 取 total_tokens（输入 + 输出）而非仅输入侧：本轮输出会在下一轮作为历史重新
+// 发给模型，所以「下一轮真实占用」应把输出算进去（2026-11-03 决策，取代原
+// 设计 D6 的输入侧口径，与 Python usage_metadata.total_tokens 一致）。
 func contextUsageTokensUsed(usage *llmschema.UsageMetadata) int {
 	if usage == nil {
 		return 0
-	}
-	if usage.InputTokens > 0 {
-		return usage.InputTokens
 	}
 	return usage.TotalTokens
 }

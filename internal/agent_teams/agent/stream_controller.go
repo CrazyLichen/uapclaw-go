@@ -11,6 +11,7 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -672,6 +673,17 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 	}()
 }
 
+// resolveCompletionTimeout 解析成员单轮完成超时。
+//
+// 取 DeepAgentConfig.CompletionTimeout（秒，Python DeepAgentSpec 默认 600），
+// 配置缺失或非正数时回落到 hschema.DefaultCompletionTimeout。
+func resolveCompletionTimeout(cfg *hschema.DeepAgentConfig) time.Duration {
+	if cfg != nil && cfg.CompletionTimeout > 0 {
+		return time.Duration(cfg.CompletionTimeout * float64(time.Second))
+	}
+	return time.Duration(hschema.DefaultCompletionTimeout * float64(time.Second))
+}
+
 // executeRound 执行状态机。
 // Python: StreamController._execute_round(message)
 // 状态转换：STARTING → RUNNING → (COMPLETING→COMPLETED | CANCELLED | TIMED_OUT | FAILED) → IDLE
@@ -686,9 +698,14 @@ func (sc *StreamController) executeRound(ctx context.Context, message any) {
 	}
 
 	// Python: asyncio.wait_for(coro, timeout=completion_timeout)
-	// ⤵️ TODO: completion_timeout 应从 DeepAgentConfig.CompletionTimeout 读取，暂用默认 3600s
-	completionTimeout := 3600 * time.Second
-	timeoutCtx, cancelTimeout := context.WithTimeout(ctx, completionTimeout)
+	// 超时取成员 DeepAgent 配置的 CompletionTimeout（缺省 600s，对齐
+	// Python DeepAgentSpec.completion_timeout 默认值）；原实现硬编码 3600s，
+	// 与配置脱节且比 Python 宽松 6 倍。
+	var deepCfg *hschema.DeepAgentConfig
+	if sc.resources != nil && sc.resources.Harness != nil {
+		deepCfg = sc.resources.Harness.DeepConfig()
+	}
+	timeoutCtx, cancelTimeout := context.WithTimeout(ctx, resolveCompletionTimeout(deepCfg))
 	defer cancelTimeout()
 
 	err := sc.runRetryingStream(timeoutCtx, message)

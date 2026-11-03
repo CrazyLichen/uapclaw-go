@@ -1,6 +1,7 @@
 package rails
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -296,3 +297,29 @@ type testInterruptRequest struct{ msg string }
 
 func (r testInterruptRequest) GetMessage() string        { return r.msg }
 func (r testInterruptRequest) GetAutoConfirmKey() string { return "" }
+
+// TestExtractToolInterrupt_多错误包装 验证 errors.Join 包装也能识别。
+func TestExtractToolInterrupt_多错误包装(t *testing.T) {
+	exc := &saschema.ToolInterruptException{Request: testInterruptRequest{msg: "test"}}
+	joined := errors.Join(errors.New("other"), exc)
+	if got := extractToolInterrupt(joined); got == nil {
+		t.Fatal("errors.Join 包装的中断异常未被识别")
+	}
+}
+
+// multiErrWithNil 含 nil 元素的多错误包装，用于覆盖跳过分支。
+type multiErrWithNil struct{ errs []error }
+
+func (m multiErrWithNil) Error() string { return "multi" }
+func (m multiErrWithNil) Unwrap() []error {
+	return m.errs
+}
+
+// TestExtractToolInterrupt_多错误含nil 验证 nil 元素被跳过、后续错误仍可识别。
+func TestExtractToolInterrupt_多错误含nil(t *testing.T) {
+	exc := &saschema.ToolInterruptException{Request: testInterruptRequest{msg: "test"}}
+	wrapped := multiErrWithNil{errs: []error{nil, exc}}
+	if got := extractToolInterrupt(wrapped); got == nil {
+		t.Fatal("含 nil 的多错误包装未被识别")
+	}
+}
