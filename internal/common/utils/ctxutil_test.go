@@ -40,7 +40,9 @@ func TestCanceled(t *testing.T) {
 	}
 
 	// nil ctx 不得 panic（公共工具函数不要求调用方保证非 nil）
-	if Canceled(nil) {
+	// 用类型化 nil 变量传参，规避 SA1012 对 nil 字面量的静态检查。
+	var nilCtx context.Context
+	if Canceled(nilCtx) {
 		t.Fatal("nil ctx 应返回 false")
 	}
 }

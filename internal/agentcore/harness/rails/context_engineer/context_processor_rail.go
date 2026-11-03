@@ -153,13 +153,11 @@ func (r *ContextProcessorRail) Init(_ context.Context, agent sainterfaces.BaseAg
 
 	// 阈值收口：必须在 MergeProcessors 之后，否则 yaml 里的绝对值会绕开 min（spec §6.6）。
 	// Python 侧无对应实现（设计与 Python 的差异点，见 spec §6.1）。
-	// 复用上面已取到的 config，避免二次类型断言（原实现重复调 getReactAgentConfig）。
-	if config != nil {
-		ce := config.ContextEngineConfig
-		window := cecontext.ResolveContextMax(ce.ModelName, ce.ContextWindowTokens, ce.ModelContextWindowTokens)
-		allProcessors = applyCompressionRatios(
-			allProcessors, window, ce.CompressionTriggerRatio, ce.CompressionTargetRatio)
-	}
+	// 复用上面已取到的 config（已在函数入口判非 nil），避免二次类型断言。
+	ce := config.ContextEngineConfig
+	window := cecontext.ResolveContextMax(ce.ModelName, ce.ContextWindowTokens, ce.ModelContextWindowTokens)
+	allProcessors = applyCompressionRatios(
+		allProcessors, window, ce.CompressionTriggerRatio, ce.CompressionTargetRatio)
 
 	config.ContextProcessors = allProcessors
 	r.allProcessors = allProcessors
