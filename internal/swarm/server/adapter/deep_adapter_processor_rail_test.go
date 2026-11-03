@@ -9,14 +9,15 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// TestBuildContextProcessorRail_读取yaml五段 验证 adapter 把 yaml 的 processor 配置传给 rail
-func TestBuildContextProcessorRail_读取yaml五段(t *testing.T) {
+// TestBuildContextProcessorRail_读取yaml六段 验证 adapter 把 yaml 的 processor 配置传给 rail
+func TestBuildContextProcessorRail_读取yaml六段(t *testing.T) {
 	d := &DeepAdapter{}
 	reactCfg := map[string]any{
 		"context_engine_config": map[string]any{
-			"dialogue_compressor_config":    map[string]any{"tokens_threshold": 50000},
-			"round_level_compressor_config": map[string]any{"trigger_total_tokens": 120000},
-			"full_compact_processor_config": map[string]any{"trigger_total_tokens": 90000},
+			"dialogue_compressor_config":          map[string]any{"tokens_threshold": 50000},
+			"round_level_compressor_config":       map[string]any{"trigger_total_tokens": 120000},
+			"full_compact_processor_config":       map[string]any{"trigger_total_tokens": 90000},
+			"tool_result_budget_processor_config": map[string]any{"tokens_threshold": 1000},
 		},
 	}
 	rail := d.buildContextProcessorRail(reactCfg)
@@ -29,7 +30,7 @@ func TestBuildContextProcessorRail_读取yaml五段(t *testing.T) {
 	}
 	names := ceRail.UserProcessorTypes()
 	sort.Strings(names)
-	want := []string{"DialogueCompressor", "FullCompactProcessor", "RoundLevelCompressor"}
+	want := []string{"DialogueCompressor", "FullCompactProcessor", "RoundLevelCompressor", "ToolResultBudgetProcessor"}
 	if len(names) != len(want) {
 		t.Fatalf("应为 %v，实际 %v", want, names)
 	}

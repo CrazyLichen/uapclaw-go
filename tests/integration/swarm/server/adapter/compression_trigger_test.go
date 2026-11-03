@@ -23,18 +23,19 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// CompressionTriggerSuite 验证小窗口（max_input_tokens=262）下的压缩链路契约：
-//  1. started 事件 duration_ms 为 0（旧实现 EndedAt 零值负溢出成 -9223372036854）；
-//  2. before 只统计窗口内对话消息（不含 system prompt 与工具 schema）；
-//  3. context_max 等于配置的窗口值（262），不是兜底 200000；
-//  4. completed 事件的 compact_summary 是轮级记忆块标记（压缩确实发生过）。
+// CompressionTriggerSuite 验证各上下文处理器「触发判据」的真实链路契约：
+//  1. RoundLevelCompressor：started 事件 duration_ms 为 0（旧实现 EndedAt 零值负溢出）、
+//     before 只统计窗口内对话消息、context_max 等于配置窗口、completed 产出记忆块；
+//  2. DialogueCompressor / CurrentRoundCompressor：add_messages 判据触发；
+//  3. ToolResultBudgetProcessor：session_memory 预设下按「轮内工具结果预算」触发。
 //
-// 对应 Python：RoundLevelCompressor.on_get_context_window / ProcessorStateRecorder.build_state
+// 对应 Python：RoundLevelCompressor.on_get_context_window /
+// ProcessorStateRecorder.build_state / 各处理器 trigger_add_messages。
 type CompressionTriggerSuite struct {
 	isuite.BaseIntegrationSuite
 	// env 每测试隔离的集成环境（数据目录 / MockLLM provider / env 备份）
 	env *testhelpers.AdapterTestEnv
-	// client 记录模型入参的脚本客户端
+	// client 记录模型入参并按脚本返回响应的客户端
 	client *compressionScriptClient
 }
 
@@ -58,11 +59,24 @@ type compressionState struct {
 	compactSummary string
 }
 
-// compressionScriptClient 记录模型入参并返回固定摘要文本的模型客户端。
+// scriptStep 一次模型调用的预设响应（文本或工具调用二选一）。
+type scriptStep struct {
+	// text 回复正文
+	text string
+	// toolName 工具调用名（非空时按工具调用返回）
+	toolName string
+	// toolArgs 工具调用参数（JSON 字符串）
+	toolArgs string
+}
+
+// compressionScriptClient 按脚本返回响应并记录每次调用的入参。
 type compressionScriptClient struct {
+	// MockModelClient 复用其余接口方法（GenerateImage/Release 等）
 	*mockllm.MockModelClient
-	// mu 保护 streams
+	// mu 保护 script / streams
 	mu sync.Mutex
+	// script 待消费的响应脚本
+	script []scriptStep
 	// streams 每次 Stream 调用收到的消息参数
 	streams []model_clients.MessagesParam
 }
@@ -83,32 +97,10 @@ func (s *CompressionTriggerSuite) SetupTest() {
 	registry.Register(s.env.Provider, "llm", s.client.Factory())
 }
 
-// Stream 覆写流式调用：记录入参，返回一段会被当作压缩摘要的文本。
-func (c *compressionScriptClient) Stream(
-	_ context.Context,
-	messages model_clients.MessagesParam,
-	_ ...model_clients.StreamOption,
-) (<-chan *llmschema.AssistantMessageChunk, error) {
-	c.mu.Lock()
-	c.streams = append(c.streams, messages)
-	c.mu.Unlock()
-
-	ch := make(chan *llmschema.AssistantMessageChunk, 1)
-	ch <- llmschema.NewAssistantMessageChunk("用户在打招呼")
-	close(ch)
-	return ch, nil
-}
-
-// Factory 返回本客户端的注册工厂。
-func (c *compressionScriptClient) Factory() model_clients.ClientFactory {
-	return func(_ *llmschema.ModelRequestConfig, _ *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
-		return c, nil
-	}
-}
-
-// TestWindow262_started事件duration与before口径 window=262 时的 started/完成事件契约。
+// TestWindow262_started事件duration与before口径 window=262 时 RoundLevelCompressor 的契约。
 func (s *CompressionTriggerSuite) TestWindow262_started事件duration与before口径() {
-	s.writeWindowConfig(262)
+	s.writeConfig(262, "")
+	s.setScript(scriptStep{text: "用户在打招呼"})
 
 	d := adapter.NewDeepAdapter()
 	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
@@ -145,10 +137,59 @@ func (s *CompressionTriggerSuite) TestWindow262_started事件duration与before�
 	s.Greater(len(first[0].GetContent().Text()), 1000, "system prompt 不应被压缩/清空")
 }
 
+// TestAddMessages路径_Dialogue与当轮压缩触发 验证 add_messages 判据下两个压缩器都会触发。
+func (s *CompressionTriggerSuite) TestAddMessages路径_Dialogue与当轮压缩触发() {
+	// 窗口 10 → 比例收口后 Dialogue/CurrentRound 阈值只有几 token，助手消息回填即触发
+	s.writeConfig(10, `    dialogue_compressor_config:
+      messages_to_keep: 1
+    current_round_compressor_config:
+      messages_to_keep: 1
+`)
+	s.setScript(scriptStep{text: "用户在打招呼"})
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	states := s.runTurn(d, "sess_compress_add", "req-c-2", "你好")
+	processors := collectProcessors(states)
+	s.Contains(processors, "DialogueCompressor", "add_messages 路径应触发 DialogueCompressor")
+	s.Contains(processors, "CurrentRoundCompressor", "add_messages 路径应触发 CurrentRoundCompressor")
+}
+
+// TestToolResultBudget触发 session_memory 预设下轮内工具结果超预算应触发卸载。
+func (s *CompressionTriggerSuite) TestToolResultBudget触发() {
+	s.writeConfig(262, `    session_memory: true
+    tool_result_budget_processor_config:
+      tokens_threshold: 1
+      large_message_threshold: 1
+`)
+	s.setScript(
+		scriptStep{toolName: "todo_list", toolArgs: "{}"},
+		scriptStep{text: "已查看任务列表"},
+	)
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	states := s.runTurn(d, "sess_compress_trb", "req-c-3", "看看任务列表")
+	processors := collectProcessors(states)
+	s.Contains(processors, "ToolResultBudgetProcessor",
+		"轮内工具结果超过预算时应触发 ToolResultBudgetProcessor")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// writeWindowConfig 写入 max_input_tokens 指定的配置。
-func (s *CompressionTriggerSuite) writeWindowConfig(maxInput int) {
+// setScript 设置模型响应脚本。
+func (s *CompressionTriggerSuite) setScript(steps ...scriptStep) {
+	s.client.mu.Lock()
+	s.client.script = steps
+	s.client.mu.Unlock()
+}
+
+// writeConfig 写入配置；extraEngine 为 context_engine_config 下追加的缩进行。
+func (s *CompressionTriggerSuite) writeConfig(maxInput int, extraEngine string) {
 	s.T().Helper()
 	yaml := fmt.Sprintf(`models:
   defaults:
@@ -166,7 +207,7 @@ react:
     enabled: true
     compression_trigger_ratio: 0.85
     compression_target_ratio: 0.55
-`, s.env.Provider, maxInput)
+%s`, s.env.Provider, maxInput, extraEngine)
 	s.Require().NoError(os.WriteFile(
 		filepath.Join(s.env.DataDir, "config", "config.yaml"), []byte(yaml), 0o644))
 }
@@ -204,6 +245,66 @@ func (s *CompressionTriggerSuite) runTurn(
 		states = append(states, parseCompressionState(chunk.Payload))
 	}
 	return states
+}
+
+// Stream 覆写流式调用：按脚本返回文本或工具调用，并记录入参。
+func (c *compressionScriptClient) Stream(
+	_ context.Context,
+	messages model_clients.MessagesParam,
+	_ ...model_clients.StreamOption,
+) (<-chan *llmschema.AssistantMessageChunk, error) {
+	c.mu.Lock()
+	step := scriptStep{text: "用户在打招呼"}
+	if len(c.script) > 0 {
+		step = c.script[0]
+		c.script = c.script[1:]
+	}
+	c.streams = append(c.streams, messages)
+	c.mu.Unlock()
+
+	chunk := llmschema.NewAssistantMessageChunk(step.text)
+	if step.toolName != "" {
+		chunk.ToolCalls = []*llmschema.ToolCall{
+			llmschema.NewToolCall("call_probe", step.toolName, step.toolArgs),
+		}
+	}
+	ch := make(chan *llmschema.AssistantMessageChunk, 1)
+	ch <- chunk
+	close(ch)
+	return ch, nil
+}
+
+// Factory 返回本客户端的注册工厂。
+func (c *compressionScriptClient) Factory() model_clients.ClientFactory {
+	return func(_ *llmschema.ModelRequestConfig, _ *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+		return c, nil
+	}
+}
+
+// calls 返回已记录的模型调用副本。
+func (c *compressionScriptClient) calls() []model_clients.MessagesParam {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]model_clients.MessagesParam, len(c.streams))
+	copy(out, c.streams)
+	return out
+}
+
+// collectProcessors 提取事件中出现过的处理器类型（去重，保持出现顺序）。
+func collectProcessors(states []compressionState) []string {
+	seen := make(map[string]struct{}, len(states))
+	out := make([]string, 0, len(states))
+	for _, state := range states {
+		if state.processor == "" {
+			continue
+		}
+		if _, ok := seen[state.processor]; ok {
+			continue
+		}
+		seen[state.processor] = struct{}{}
+		out = append(out, state.processor)
+	}
+	return out
 }
 
 // parseCompressionState 把 payload 映射为结构体，兼容 JSON 往返后的数值类型。
@@ -244,13 +345,4 @@ func intField(payload map[string]any, key string) int64 {
 		}
 	}
 	return 0
-}
-
-// calls 返回已记录的模型调用副本。
-func (c *compressionScriptClient) calls() []model_clients.MessagesParam {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	out := make([]model_clients.MessagesParam, len(c.streams))
-	copy(out, c.streams)
-	return out
 }

@@ -796,7 +796,9 @@ func (d *DeepAdapter) buildContextAssembleRail(mode string) sainterfaces.AgentRa
 //
 // 覆盖机制走 ProcessorSpec.ConfigOverrides（字段级部分覆盖），因此 yaml 里的绝对阈值会先
 // 合并进 preset，再在 rail.Init 中被比例收口（spec §6.6）。Python 只认四段，本实现额外
-// 支持 full_compact_processor_config（设计 D9，Python 侧待同构）。
+// 支持 full_compact_processor_config（设计 D9，Python 侧待同构）与
+// tool_result_budget_processor_config（session_memory 预设下的轮内工具结果预算，
+// 此前只吃默认值、yaml 无法调参）。
 func (d *DeepAdapter) buildContextProcessorRail(reactCfg map[string]any) sainterfaces.AgentRail {
 	ctxCfg, _ := reactCfg["context_engine_config"].(map[string]any)
 	userProcessors := make([]ceiface.ProcessorSpec, 0, 5)
@@ -809,6 +811,7 @@ func (d *DeepAdapter) buildContextProcessorRail(reactCfg map[string]any) sainter
 		{"current_round_compressor_config", "CurrentRoundCompressor"},
 		{"round_level_compressor_config", "RoundLevelCompressor"},
 		{"full_compact_processor_config", "FullCompactProcessor"},
+		{"tool_result_budget_processor_config", "ToolResultBudgetProcessor"},
 	}
 	for _, spec := range specs {
 		if m, _ := ctxCfg[spec.configKey].(map[string]any); len(m) > 0 {
