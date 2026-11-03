@@ -1019,7 +1019,7 @@ func TestOpenAIModelClient_Stream_中断上抛(t *testing.T) {
 		// 客户端读到的就是 "unexpected EOF" 这类读错误。
 		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n")
 		payload := `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"gpt-4","choices":[{"index":0,"delta":{"content":"半截"},"finish_reason":null}]}` + "\n\n"
-		_, _ = buf.WriteString(fmt.Sprintf("%x\r\n%s\r\n", len(payload), payload))
+		_, _ = fmt.Fprintf(buf, "%x\r\n%s\r\n", len(payload), payload)
 		_ = buf.Flush()
 		_ = conn.Close()
 	}))
