@@ -109,9 +109,11 @@
 
 ### 组 3：skill_create 完整对齐（问题③）
 
-**新增** `internal/agentcore/harness/rails/skills/skill_create_rail.go`（对齐 `openjiuwen/harness/rails/skills/skill_create_rail.py`，166 行）
+**新增** `internal/agentcore/harness/rails/evolution/skill_create_rail.go`（对齐 `openjiuwen/harness/rails/skills/skill_create_rail.py`，166 行）
 
-- 类型 `SkillCreateRail`，嵌入 `evolution.EvolutionRail`（`evolution.NewEvolutionRail(ext, opts...)`，`evolution_trigger=NONE`），`Priority()` 返回 85；
+> 包位置说明：Python 把单版与团队版都放在 `rails/skills/`，但 Go 侧团队版 `TeamSkillCreateRail` 已归入 `rails/evolution/`；新 rail 与之同包可复用 `getLoopController` / `loopController` / `EvolutionRail` 基类，避免复制接口与类型断言逻辑，故随兄弟文件放在 `rails/evolution/`。
+
+- 类型 `SkillCreateRail`，嵌入 `*EvolutionRail`（`NewEvolutionRail(ext, WithEvolutionTrigger(TriggerNone))`），`Priority()` 返回 85，同包内复用 `getLoopController`；
 - 字段：`skillsDir`、`language`、`autoTrigger`、`toolCallThreshold=10`、`toolDiversityThreshold=5`、`proposalSent`；
 - 行为：
   - `OnBeforeInvoke` 重置 `proposalSent`；
@@ -119,12 +121,12 @@
   - 其余 `EvolutionExtension` 方法为空实现（`AllowEvolutionTrigger` 返回 true，`SnapshotForEvolution`/`RunEvolution` 空）；
 - 文案常量 CN/EN **一比一复刻** `skill_create_rail.py:22-46`；
 - 导出只读访问器 `AutoTrigger() bool`（测试与排障用）；
-- 同目录 `doc.go` 补文件条目（规则 1），补单测（规则 3）。
+- `evolution/doc.go` 补文件条目（规则 1），补单测（规则 3）。
 
 **adapter 侧**
 
-- `buildSkillCreateRail` 改为构建 `*skillrails.SkillCreateRail`：先判 `getSkillCreateEnabled()`，关闭时 `return nil` 且不写字段；`autoTrigger` 恒 `true`；不再读 `min_team_members_for_create`（Python 无此参数）；不在 builder 内写字段；
-- 字段类型 `deep_adapter.go:187` 改为 `*skillrails.SkillCreateRail`；
+- `buildSkillCreateRail` 改为构建 `*evolution.SkillCreateRail`：先判 `getSkillCreateEnabled()`，关闭时 `return nil` 且不写字段；`autoTrigger` 恒 `true`；不再读 `min_team_members_for_create`（Python 无此参数）；不在 builder 内写字段；
+- 字段类型 `deep_adapter.go:187` 改为 `*evolution.SkillCreateRail`；
 - `updatePlanModeRails` 步骤 8 改为：enabled 且字段 nil → build → 注册成功才写字段；enabled 关且字段非 nil → 注销并置 nil（对齐 `interface_deep.py:2825-2845`）；
 - `updateAgentModeRails` 的注销分支保持逻辑不变（类型随字段变更）；
 - 删除死函数 `findSkillCreateRail`（`deep_adapter_team.go:62-78`，全项目无调用方且引用旧类型）。
@@ -184,8 +186,8 @@ func (d *DeepAdapter) getCurrentAgentRails(config, configBase map[string]any) []
 | ② | adapter `deep_adapter_rails_test.go` | `TestUpdateSkillEvolutionRail_环境变量优先` | `EVOLUTION_AUTO_SCAN=1` 覆盖 config 的 `auto_scan: false` |
 | ② | adapter `deep_adapter_rails_test.go` | `TestGetCurrentAgentRails_不重建演进rail` | 预热字段后调用，字段指针不变（就地更新路径生效） |
 | ③ | adapter `deep_adapter_rails_test.go` | `TestBuildSkillCreateRail_未启用` | `skill_create=false` → 返回 nil、字段保持 nil |
-| ③ | adapter `deep_adapter_rails_test.go` | `TestBuildSkillCreateRail_启用返回单Agent版` | 类型为 `*skills.SkillCreateRail`、`AutoTrigger()` 为真、字段仍为 nil（由调用方写） |
-| ③ | rails/skills `skill_create_rail_test.go` | `TestSkillCreateRail_阈值不足不提议`、`_满足阈值只提议一次`、`_BeforeInvoke重置提议标记`、`_无Controller时告警不入队`、`_CN与EN文案含skillsDir` | 5 个用例覆盖阈值/一次性/文案/降级路径 |
+| ③ | adapter `deep_adapter_rails_test.go` | `TestBuildSkillCreateRail_启用返回单Agent版` | 类型为 `*evolution.SkillCreateRail`、`AutoTrigger()` 为真、字段仍为 nil（由调用方写） |
+| ③ | rails/evolution `skill_create_rail_test.go` | `TestSkillCreateRail_阈值不足不提议`、`_满足阈值只提议一次`、`_BeforeInvoke重置提议标记`、`_无Controller时告警不入队`、`_CN与EN文案含skillsDir` | 5 个用例覆盖阈值/一次性/文案/降级路径 |
 | ④ | adapter `deep_adapter_rails_test.go` | `TestBuildSkillEvolutionRail_参数矩阵`（子测试） | 缺 `auto_scan` → `AutoScan()==false`；env `1`/`yes` → true；`auto_save: true` 被忽略 → `AutoSave()==false`；`sharing.enabled: true` 被忽略 → `IsSharingEnabled()==false`；`model_name` 兜底链 → `ModelName()` |
 | ⑤ | adapter `deep_adapter_slash_test.go` | `TestEnsureEvolutionRailForSlash_错误分支` | 非 plan 模式 / `enabled=false` / 构建失败（model nil）三种情况返回对应文案，且字段不被写入 |
 | ⑥ | adapter `deep_adapter_rails_test.go` | `TestGetCurrentAgentRails_仅skill重建其余复用` | 预热 5 个字段为具体实例后调用：返回列表含这 5 个**同指针**实例 + 新建的 skillRail；不含 streamEvent / taskPlanning / subagent / runtimePrompt / responsePrompt |
@@ -199,7 +201,7 @@ func (d *DeepAdapter) getCurrentAgentRails(config, configBase map[string]any) []
 | ①② | `TestPlanMessage_EvolutionRailRegistered` | 计划模式消息后命中 `*evolution.SkillEvolutionRail` 恰好 1 个；再发一条计划消息仍为 1 个（幂等，不重复注册） |
 | ② | `TestHotReload_EvolutionRailInPlace` | 记录命中指针 → `ReloadAgentConfig` 更换默认模型 → 同一指针仍命中 1 个且 `ModelName()` 已更新（证明未重建） |
 | ⑤ | `TestSlashFirstMessage_EvolutionRailRegistered` | 全新实例首条消息为 `/evolve_list` → 命中 1 个（改动前为空，**预期先红**） |
-| ③ | `TestSkillCreate_EnabledRegistersSingleAgentRail` | `skill_create=true` → 命中 `*skills.SkillCreateRail`、未命中 `*evolution.TeamSkillCreateRail` |
+| ③ | `TestSkillCreate_EnabledRegistersSingleAgentRail` | `skill_create=true` → 命中 `*evolution.SkillCreateRail`、未命中 `*evolution.TeamSkillCreateRail` |
 | ③ | `TestSkillCreate_DisabledThenHotEnabled` | `false` → 未命中；热重载改为 `true` 后下一条计划消息命中（覆盖"事后打开也生效"） |
 | ③ | `TestSkillCreate_ThresholdEnqueuesFollowUp`（可选） | 脚本化 ≥10 次工具调用、≥5 种工具 → follow_up 入队；若 mock 编排成本过高，本项降级为单测覆盖阈值，集成仅保留注册类型断言 |
 | ⑥ | `TestHotReload_PreservesStatefulRails` | 记录 `*rails.TaskPlanningRail` 与 `*commrails.JiuClawStreamEventRail` 的命中指针 → `ReloadAgentConfig` → 指针不变（证明未重建）；同时 skillRail 指针变为新实例（证明唯一重建项生效） |
