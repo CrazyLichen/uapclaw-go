@@ -31,6 +31,7 @@
 //	├── skill_evolution_rail.go         # SkillEvolutionRail 单 Agent 技能演进护栏（Priority=80）+ Sharing 集成
 //	├── team_skill_evolution_rail.go    # TeamSkillEvolutionRail 团队技能演进护栏（Priority=80）+ Slash 命令集成
 //	├── team_skill_create_rail.go     # TeamSkillCreateRail 团队技能创建护栏（检测 spawn_member 阈值→提议创建技能）
+//	├── skill_create_rail.go          # SkillCreateRail 单 Agent 技能创建护栏（Priority=85+工具阈值检测→follow_up）
 //	└── helpers.go                      # 辅助函数：splitResponseTokenFields / normalizeSkillNames / normalizeMemberRole 等
 //
 // 对应 Python 代码：openjiuwen/harness/rails/evolution/
