@@ -165,7 +165,7 @@ func emitTodoUpdated(ctx context.Context, session sessioninterfaces.SessionFacad
 		logger.Debug(logComponent).Err(err).Msg("Failed to load todos")
 		return
 	}
-	todos := formatTodosForFrontend(todosData)
+	todos := FormatTodosForFrontend(todosData)
 	if err := session.WriteStream(ctx, &stream.OutputSchema{
 		Type:    "todo.updated",
 		Index:   0,
@@ -238,10 +238,11 @@ func emitContextUsage(ctx context.Context, cbCtx *sainterfaces.AgentCallbackCont
 	}
 }
 
-// formatTodosForFrontend 将 TodoItem 列表格式化为前端兼容格式，对齐 Python: _format_todos_for_frontend
+// FormatTodosForFrontend 将 TodoItem 列表格式化为前端兼容格式，对齐 Python: _format_todos_for_frontend
 //
 // 映射内部 TodoStatus 到前端 status 字符串，过滤已取消项。
-func formatTodosForFrontend(todosData []hschema.TodoItem) []map[string]any {
+// 导出供 adapter 等跨包消费方复用，避免各自复制一份映射逻辑。
+func FormatTodosForFrontend(todosData []hschema.TodoItem) []map[string]any {
 	statusMapping := map[hschema.TodoStatus]string{
 		hschema.TodoStatusPending:    "pending",
 		hschema.TodoStatusInProgress: "in_progress",
