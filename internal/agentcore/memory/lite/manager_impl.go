@@ -1057,10 +1057,18 @@ func (m *memoryIndexManager) indexChunkWithTx(ctx context.Context, db dbExecutor
 		return err
 	}
 
-	// FTS5 全文搜索索引写入
+	// FTS5 全文搜索索引写入。
+	//
+	// 写入的是**分词后**的文本（空格拼接）：FTS 表是 contentless，文本本来由我们填，
+	// 可以与 chunks.text（原文，供 snippet/citation/memory_get 展示）分离。
+	// 分词器不可用时退回原文，检索侧同时退回「正则切分 + OR」。
 	if m.ftsAvailable && rowid > 0 {
+		ftsText := joinSegments(segmentForFTS(chunk.Text))
+		if ftsText == "" {
+			ftsText = chunk.Text
+		}
 		_, err := db.Exec(fmt.Sprintf("INSERT OR REPLACE INTO %s (rowid, id, path, source, text) VALUES (?, ?, ?, ?, ?)", ftsTable),
-			rowid, chunkID, filePath, source, chunk.Text)
+			rowid, chunkID, filePath, source, ftsText)
 		if err != nil {
 			logger.Debug(logComponent).Err(err).Msg("failed to insert FTS5")
 		}
