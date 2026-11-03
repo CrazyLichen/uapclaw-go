@@ -123,7 +123,10 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12
-          args: --modules-download-mode=mod --timeout=5m
+          # 10m：Lint 作业固定 go1.26.9 后，首次运行需要为新工具链重建构建缓存
+          # （setup-go 的 cache key 含 go.sum + 版本），冷缓存实测 5m 会超时
+          # （golangci-lint exit code 4）。缓存热后单次约 1~2 分钟。
+          args: --modules-download-mode=mod --timeout=10m
 
   # ──────────────────────────── Unit Test ────────────────────────────
 
