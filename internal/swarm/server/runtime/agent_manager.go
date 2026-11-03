@@ -394,12 +394,13 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 			// 将 map[string]string 转为 map[string]any 以匹配 adapter 接口签名
 			envAny := stringMapToAny(envOverrides)
 			if err := entry.agent.ReloadAgentConfig(configPayload, envAny); err != nil {
-				// Python: 不中断，仅 warn
+				// Python: agent_manager.py:327-330 直接 await，异常向外传播并中断后续 agent。
 				logger.Warn(logComponent).
 					Err(err).
 					Str("channel_id", chKey).
 					Str("cache_key", entry.cacheKey).
 					Msg("[AgentManager] agent reload_agent_config failed")
+				return fmt.Errorf("channel %s cache %s reload agent config failed: %w", chKey, entry.cacheKey, err)
 			}
 		}
 

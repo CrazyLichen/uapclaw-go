@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -562,4 +564,31 @@ func TestMakeAgentCacheKey_各组合(t *testing.T) {
 		key := makeAgentCacheKey(tt.mode, tt.subMode, tt.projectDir)
 		assert.True(t, strings.HasPrefix(key, tt.wantPrefix), "key=%s, wantPrefix=%s", key, tt.wantPrefix)
 	}
+}
+
+// fakeReloadAdapter 仅覆盖 ReloadAgentConfig 的测试适配器。
+type fakeReloadAdapter struct {
+	adapter.AgentAdapter
+	err error
+}
+
+// ReloadAgentConfig 返回预设错误。
+func (f *fakeReloadAdapter) ReloadAgentConfig(context.Context, map[string]any, map[string]any) error {
+	return f.err
+}
+
+// TestReloadAgentsConfig_单Agent失败返回错误 验证单 agent 重载失败会向上传播，
+// 而不是 Warn 后继续（对齐 Python agent_manager.py:308-340）。
+func TestReloadAgentsConfig_单Agent失败返回错误(t *testing.T) {
+	am := NewAgentManager()
+	uc := NewUapClaw()
+	uc.adapter = &fakeReloadAdapter{err: errors.New("reload boom")}
+	am.PreSetAgent("web", "agent.plan", uc, "agent", "plan", "")
+
+	err := am.ReloadAgentsConfig(context.Background(), map[string]any{}, nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reload boom")
+	assert.Contains(t, err.Error(), "web")
+	assert.Contains(t, err.Error(), "agent.plan")
 }
