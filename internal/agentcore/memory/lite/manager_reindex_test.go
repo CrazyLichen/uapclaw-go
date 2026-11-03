@@ -53,7 +53,8 @@ func TestNeedsReindex_表驱动(t *testing.T) {
 			"provider":    "mock",
 			"model":       "mock",
 			"chunkTokens": float64(256),
-			"segmenter":   "none",
+			// 用当前分词器标识，保证「全一致」基线真的全一致
+			"segmenter": segmenterID(),
 		}
 		for k, v := range over {
 			meta[k] = v
@@ -80,7 +81,7 @@ func TestNeedsReindex_表驱动(t *testing.T) {
 		{"provider 从 mock 换成真模型", baseMeta(nil), "openai_compatible", "text-embedding-v3", true, "provider_changed"},
 		{"model 变化", baseMeta(nil), "mock", "other-model", true, "model_changed"},
 		{"chunkTokens 变化", baseMeta(map[string]any{"chunkTokens": float64(128)}), "mock", "mock", true, "chunking_changed"},
-		{"segmenter 变化", baseMeta(map[string]any{"segmenter": "gse-zh_s@v1.3.1"}), "mock", "mock", true, "segmenter_changed"},
+		{"segmenter 变化", baseMeta(map[string]any{"segmenter": "stale-segmenter"}), "mock", "mock", true, "segmenter_changed"},
 		{"vectorDims 变化", baseMeta(map[string]any{"vectorDims": float64(128)}), "mock", "mock", true, "vector_dims_changed"},
 	}
 	for _, tc := range cases {
