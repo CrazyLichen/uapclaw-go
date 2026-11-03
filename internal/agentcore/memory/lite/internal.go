@@ -105,22 +105,41 @@ func EnsureDir(path string) error {
 	return os.MkdirAll(path, 0o755)
 }
 
-// BuildFTSQuery 构建 FTS5 查询。对齐 Python build_fts_query — 真实实现
-// 将查询文本分词后用 OR 连接，每个词用双引号包裹
+// BuildFTSQuery 构建 FTS5 MATCH 表达式。
+//
+// 对齐 Python build_fts_query（internal 层），并按本项目决策调整连接符：
+//   - 优先走分词（与索引侧 segmentForFTS 共用，token 必须对齐）
+//   - 多 token 用 AND：文本侧只占 0.3 权重，语义召回由向量侧（0.7）兜底，
+//     这里要的是精确命中
+//   - 最多 maxFTSTokens 个 token，避免长查询被 AND 卡死召回
+//
+// ⚠️ 与 Python 的差异：Python 用 OR；分词器不可用时本函数退回 OR（旧行为），
+// 因为那时中文没有整词 token，用 AND 会导致查询完全落空。
 func BuildFTSQuery(query string) string {
 	cleaned := strings.TrimSpace(query)
 	if cleaned == "" {
 		return ""
 	}
-	tokens := regexp.MustCompile(`[\p{L}\p{N}_]+`).FindAllString(cleaned, 10)
+
+	tokens := segmentForFTS(cleaned)
+	op := " AND "
+	if len(tokens) == 0 {
+		// 降级：分词器不可用 → 沿用旧的正则切分 + OR
+		tokens = regexp.MustCompile(`[\p{L}\p{N}_]+`).FindAllString(cleaned, maxFTSTokens)
+		op = " OR "
+	}
 	if len(tokens) == 0 {
 		return ""
 	}
+	if len(tokens) > maxFTSTokens {
+		tokens = tokens[:maxFTSTokens]
+	}
+
 	parts := make([]string, len(tokens))
 	for i, t := range tokens {
 		parts[i] = `"` + t + `"`
 	}
-	return strings.Join(parts, " OR ")
+	return strings.Join(parts, op)
 }
 
 // BM25RankToScore BM25 排名转相似度分数。对齐 Python bm25_rank_to_score — 真实实现
