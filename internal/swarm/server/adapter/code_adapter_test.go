@@ -529,6 +529,72 @@ func TestCodeAdapterBuildConfiguredSubagents_BrowserRuntime未开启(t *testing.
 	}
 }
 
+// TestCodeAdapterBuildConfiguredSubagents_CodeAgentMaxIterations 验证 code_agent
+// 迭代上限按 code_agent.max_iterations → react.max_iterations → 15 回退。
+func TestCodeAdapterBuildConfiguredSubagents_CodeAgentMaxIterations(t *testing.T) {
+	tests := []struct {
+		name     string
+		reactMax int
+		codeCfg  map[string]any
+		want     int
+	}{
+		{
+			name:     "子段优先",
+			reactMax: 20,
+			codeCfg:  map[string]any{"enabled": true, "max_iterations": 7},
+			want:     7,
+		},
+		{
+			name:     "回退react",
+			reactMax: 20,
+			codeCfg:  map[string]any{"enabled": true},
+			want:     20,
+		},
+		{
+			name:     "回退默认15",
+			reactMax: 0,
+			codeCfg:  map[string]any{"enabled": true},
+			want:     15,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newCodeAdapterWithModel(t)
+			config := map[string]any{
+				"subagents": map[string]any{"code_agent": tt.codeCfg},
+			}
+			if tt.reactMax > 0 {
+				config["max_iterations"] = tt.reactMax
+			}
+
+			specs, _ := c.buildConfiguredSubagents(config, map[string]any{})
+			code := findSubagentSpecByName(specs, subagents.CodeAgentFactoryName)
+			if code == nil {
+				t.Fatal("code_agent 未装配")
+			}
+			if code.MaxIterations != tt.want {
+				t.Errorf("code_agent MaxIterations = %d, want %d", code.MaxIterations, tt.want)
+			}
+		})
+	}
+}
+
+// TestCodeAdapterBuildConfiguredSubagents_ResearchAgent保留 锁定 Go 有意保留的
+// code 模式 research_agent（Python interface_code.py:659-757 未注册该子代理）。
+func TestCodeAdapterBuildConfiguredSubagents_ResearchAgent保留(t *testing.T) {
+	c := newCodeAdapterWithModel(t)
+	specs, _ := c.buildConfiguredSubagents(map[string]any{
+		"subagents": map[string]any{
+			"research_agent": map[string]any{"enabled": true},
+		},
+	}, map[string]any{})
+
+	if got := findSubagentSpecByName(specs, subagents.ResearchAgentFactoryName); got == nil {
+		t.Fatal("Go 有意保留的 code 模式 research_agent 不应被移除")
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newCodeAdapterWithModel 构造带可用模型的 CodeAdapter。

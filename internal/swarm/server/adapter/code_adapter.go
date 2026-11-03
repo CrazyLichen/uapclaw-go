@@ -784,6 +784,7 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	defaultMaxIterations := parseIntAny(config["max_iterations"], 15)
 	exploreAgentCfg, _ := subagentsCfg["explore_agent"].(map[string]any)
 	planAgentCfg, _ := subagentsCfg["plan_agent"].(map[string]any)
+	codeAgentCfg, _ := subagentsCfg["code_agent"].(map[string]any)
 	exploreMaxIterations := parseIntAny(exploreAgentCfg["max_iterations"], defaultMaxIterations)
 	planMaxIterations := parseIntAny(planAgentCfg["max_iterations"], defaultMaxIterations)
 
@@ -829,10 +830,12 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// Python: code_agent 按配置启用
 	if c.isSubagentExplicitlyEnabled(subagentsCfg, "code_agent") {
 		codeParams := &hschema.SubagentCreateParams{
-			Model:         c.deep.modelSnapshot(),
-			Language:      resolvedLanguage,
-			Workspace:     hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
-			MaxIterations: 15,
+			Model:     c.deep.modelSnapshot(),
+			Language:  resolvedLanguage,
+			Workspace: hworkspace.NewWorkspace(workspaceDir, resolvedLanguage),
+			// Python: interface_code.py:718-722
+			// parse_int(code_agent_cfg.get("max_iterations"), react_cfg.get("max_iterations", 15))
+			MaxIterations: parseIntAny(codeAgentCfg["max_iterations"], defaultMaxIterations),
 		}
 		codeCfg := subagents.BuildCodeAgentConfig(c.deep.modelSnapshot(), codeParams)
 		if codeCfg != nil {
@@ -868,7 +871,8 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 
 	// ── 按配置启用：research_agent ──
-	// Python: research_agent 继承自 DeepAdapter
+	// 有意的 Go 额外能力：Python code 模式（interface_code.py:659-757）不注册 research_agent。
+	// 测试 TestCodeAdapterBuildConfiguredSubagents_ResearchAgent保留 锁定该行为。
 	if c.isSubagentExplicitlyEnabled(subagentsCfg, "research_agent") {
 		params := c.deep.buildResearchSubagentParams(config, configBase)
 		cfg := subagents.BuildResearchAgentConfig(c.deep.modelSnapshot(), params)
