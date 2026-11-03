@@ -29,7 +29,7 @@ import (
 //  1. 提示词：plan 指令节的注入/移除、todo 节的移除、无重复拼段
 //  2. 工具注册：todo 工具随模式注册/注销、session_* 工具随模式卸载/注册、
 //     模式切换工具常驻
-//  3. 行为：plan 模式硬调 todo_create 被拦截、性能模式 todo_create 执行失败
+//  3. 行为：规划模式 todo_create 可执行（方案 A）、性能模式 todo_create 执行失败
 type ModeSwitchTodoSuite struct {
 	isuite.BaseIntegrationSuite
 	// env 每测试隔离的集成环境（数据目录 / MockLLM provider / env 备份）
@@ -90,12 +90,12 @@ func (s *ModeSwitchTodoSuite) TestPlan到性能模式_语义完整() {
 		mockllm.CreateTextResponse("规划完成。"),
 	)
 	planEvents := s.runTurn(d, "req-plan-1", "agent.plan", "把需求拆成待办")
-	// 完整 plan 语义（产品决策）：plan 模式 todo 工具对模型硬性屏蔽，
-	// 硬调被拒、不产生 todo.updated（任务栏在规划模式不新增条目）
-	s.Require().False(hasEvent(planEvents, "todo.updated"),
-		"规划模式 todo_create 应被拦截，实际事件: %v", eventTypes(planEvents))
+	// 方案 A（产品决策）：todo 工具不在 hiddenInPlan——规划阶段正是建待办的
+	// 时机，todo_create 应执行成功并刷新任务栏；todo 指令节仍被 plan 分支移除
+	s.Require().True(hasEvent(planEvents, "todo.updated"),
+		"规划模式 todo_create 应产生 todo.updated，实际事件: %v", eventTypes(planEvents))
 	s.Require().Contains(toolResultFor(planEvents, "todo_create"),
-		planHiddenToolMarker, "规划模式 todo_create 应被拒绝")
+		"Successfully created", "规划模式 todo_create 应执行成功")
 
 	inst := d.Instance()
 	sb := inst.SystemPromptBuilder()
@@ -157,10 +157,9 @@ func (s *ModeSwitchTodoSuite) TestPlan模式_plan分支完整生效() {
 	s.Contains(s.lastSystemPrompt(), planModeMarker, "实发提示词应含 plan 指令")
 	s.False(sb.HasSection("todo"), "plan 分支应移除 todo 节")
 
-	// todo 工具已注册但对模型硬性屏蔽：硬调被 BeforeToolCall 拒绝
-	s.NotEmpty(registeredTodoTools(inst), "todo 工具应已注册（plan 只是对模型隐藏）")
-	s.True(containsToolResult(events, planHiddenToolMarker),
-		"todo_create 应被拒绝且文案含「在 plan 模式下已隐藏」，事件: %v", eventTypes(events))
+	// 方案 A：todo 工具不在 hiddenInPlan，规划模式可建待办；session_* 仍屏蔽
+	s.NotEmpty(registeredTodoTools(inst), "todo 工具应已注册")
+	s.True(hasEvent(events, "todo.updated"), "规划模式 todo_create 应成功并刷新任务栏")
 
 	for _, name := range sessionToolNames {
 		s.False(hasAbility(inst, name), "plan 模式应卸载 %s", name)

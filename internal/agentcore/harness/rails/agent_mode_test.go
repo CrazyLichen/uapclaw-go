@@ -196,10 +196,10 @@ func TestIsPlanFile(t *testing.T) {
 func TestHiddenInPlan(t *testing.T) {
 	t.Parallel()
 
-	// hiddenInPlan 应包含所有 todo 和 session 工具
-	for k := range todoToolNames {
-		assert.Contains(t, hiddenInPlan, k, "hiddenInPlan 应包含 todo 工具 %q", k)
-	}
+	// 2026-11-03 产品决策：todo 工具不进 hiddenInPlan（规划阶段可建待办），
+	// 仅 session 工具被屏蔽
+	assert.NotContains(t, hiddenInPlan, "todo_create")
+	assert.NotContains(t, hiddenInPlan, "todo_list")
 	for k := range sessionToolNames {
 		assert.Contains(t, hiddenInPlan, k, "hiddenInPlan 应包含 session 工具 %q", k)
 	}
@@ -223,10 +223,12 @@ func TestHiddenInNormal(t *testing.T) {
 func TestDefaultPlanModeAllowedTools(t *testing.T) {
 	t.Parallel()
 
+	// 2026-11-03 方案 A：todo 工具加入默认白名单（规划阶段可建待办）
 	expected := []string{
 		"switch_mode", "enter_plan_mode", "exit_plan_mode",
 		"ask_user", "task_tool", "read_file", "grep",
 		"list_files", "glob", "bash", "write_file", "edit_file",
+		"todo_create", "todo_list", "todo_get", "todo_modify",
 	}
 	for _, name := range expected {
 		assert.Contains(t, defaultPlanModeAllowedTools, name, "默认白名单应包含 %q", name)
@@ -323,7 +325,8 @@ func TestAgentModeRail_BeforeModelCall_Plan模式注入ModeInstructions(t *testi
 	for i, t := range inputs.Tools {
 		toolNames[i] = t.GetName()
 	}
-	assert.NotContains(t, toolNames, "todo_create")
+	// 方案 A：todo 工具对模型可见（规划阶段可建待办）；session 工具仍隐藏
+	assert.Contains(t, toolNames, "todo_create")
 	assert.NotContains(t, toolNames, "sessions_list")
 	assert.Contains(t, toolNames, "bash")
 }
@@ -704,7 +707,8 @@ func TestAgentModeRail_BeforeToolCall_已跳过工具放行(t *testing.T) {
 	assert.Nil(t, inputs.ToolResult)
 }
 
-// TestAgentModeRail_BeforeToolCall_HiddenInPlan工具拦截 验证 plan 模式下 hiddenInPlan 工具被拦截
+// TestAgentModeRail_BeforeToolCall_HiddenInPlan工具拦截 验证 plan 模式下
+// hiddenInPlan 工具（session_*）被拦截；2026-11-03 方案 A 后 todo 工具放行。
 func TestAgentModeRail_BeforeToolCall_HiddenInPlan工具拦截(t *testing.T) {
 	t.Parallel()
 
@@ -716,7 +720,8 @@ func TestAgentModeRail_BeforeToolCall_HiddenInPlan工具拦截(t *testing.T) {
 	r.agent = agent
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
-	inputs := &agentinterfaces.ToolCallInputs{ToolName: "todo_create"}
+	// session 工具仍被拦截
+	inputs := &agentinterfaces.ToolCallInputs{ToolName: "sessions_list"}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 
 	err := r.BeforeToolCall(context.Background(), cbc)
@@ -724,6 +729,13 @@ func TestAgentModeRail_BeforeToolCall_HiddenInPlan工具拦截(t *testing.T) {
 
 	v, _ := cbc.GetExtra(extraSkipToolKey)
 	assert.Equal(t, true, v)
+
+	// todo 工具放行（方案 A：规划阶段可建待办）
+	todoInputs := &agentinterfaces.ToolCallInputs{ToolName: "todo_create"}
+	todoCbc := agentinterfaces.NewAgentCallbackContext(agent, todoInputs, nil)
+	require.NoError(t, r.BeforeToolCall(context.Background(), todoCbc))
+	skip, _ := todoCbc.GetExtra(extraSkipToolKey)
+	assert.NotEqual(t, true, skip, "todo_create 在 plan 模式应放行")
 }
 
 // TestAgentModeRail_BeforeToolCall_Git只读放行 验证 plan 模式下 git 只读操作放行

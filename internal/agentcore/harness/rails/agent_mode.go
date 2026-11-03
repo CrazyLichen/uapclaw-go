@@ -75,12 +75,6 @@ const (
 // _ 编译时验证 AgentModeRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*AgentModeRail)(nil)
 
-// todoToolNames todo 工具名称集合
-// Python: L44: _TODO_TOOL_NAMES
-var todoToolNames = map[string]struct{}{
-	"todo_create": {}, "todo_list": {}, "todo_modify": {},
-}
-
 // sessionToolNames session 工具名称集合
 // Python: L45: _SESSION_TOOL_NAMES
 var sessionToolNames = map[string]struct{}{
@@ -117,6 +111,8 @@ var defaultPlanModeAllowedTools = map[string]struct{}{
 	"switch_mode": {}, "enter_plan_mode": {}, "exit_plan_mode": {},
 	"ask_user": {}, "task_tool": {}, "read_file": {}, "grep": {},
 	"list_files": {}, "glob": {}, "bash": {}, "write_file": {}, "edit_file": {},
+	// 2026-11-03 方案 A：todo 工具放行（规划阶段建待办），对齐 hiddenInPlan 的放开
+	"todo_create": {}, "todo_list": {}, "todo_get": {}, "todo_modify": {},
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -468,11 +464,14 @@ func (r *AgentModeRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func init() {
-	// 构建 hiddenInPlan = todoToolNames ∪ sessionToolNames
-	hiddenInPlan = make(map[string]struct{}, len(todoToolNames)+len(sessionToolNames))
-	for k := range todoToolNames {
-		hiddenInPlan[k] = struct{}{}
-	}
+	// 构建 hiddenInPlan = sessionToolNames。
+	//
+	// 2026-11-03 产品决策：todo 工具不进 hiddenInPlan（偏离 Python——
+	// Python 的 _HIDDEN_IN_PLAN = todo ∪ session）。todo 本质是"规划与执行
+	// 之间的任务跟踪"，规划阶段正是建待办的时机；若屏蔽，web 两个模式
+	// （plan 拦截 / agent.fast 注销）模型都无法创建待办，任务栏失去数据来源。
+	// session_* 工具（多会话派生）在规划阶段仍屏蔽。
+	hiddenInPlan = make(map[string]struct{}, len(sessionToolNames))
 	for k := range sessionToolNames {
 		hiddenInPlan[k] = struct{}{}
 	}
