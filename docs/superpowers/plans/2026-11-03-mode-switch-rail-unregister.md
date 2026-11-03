@@ -497,7 +497,211 @@ git commit -m "test(integration): 模式切换用例从观测改为断言
 
 ---
 
-## Task 4: 本地全量门禁
+## Task 4: 其他模式差异点全覆盖用例（提示词与工具注册逐一对照代码）
+
+对 `updatePlanModeRails` / `updateAgentModeRails` / `AgentModeRail` / `updateToolsForMode` 的每个模式差异点各配一条可观测断言：**提示词特征文本 + AbilityManager 工具名**必须与代码意图完全一致。
+
+断言依据（全部来自代码，不允许凭感觉写期望值）：
+
+| 差异点 | 代码 | 断言 |
+|---|---|---|
+| plan 指令节 | `sections/agent_mode.go:17`（`planModePromptCN`）+ `BuildPlanModeSection`（节名 `mode_instructions`） | `HasSection("mode_instructions")`=true；实发提示词含 `Plan 模式已激活` |
+| plan 分支移除节 | `agent_mode.go:289-290` | `HasSection("todo")`=false |
+| todo 工具硬性屏蔽 | `agent_mode.go:346-350`（文案 `[AgentModeRail] 工具「%s」在 plan 模式下已隐藏。`） | 模型硬调 todo_create → tool_result 含该文案、无 `todo.updated` |
+| session_* 工具 | `updatePlanModeRails:1011-1025`（卸载）/ `updateToolsForMode`（agent.fast 注册 `session_new/session_cancel/session_list`） | plan 无、agent 有（AbilityManager） |
+| 模式切换工具 | `agent_mode.go:170-188`（`switch_mode/enter_plan_mode/exit_plan_mode` 常驻注册） | 两种模式都在册 |
+| 非 plan 移除 mode_instructions | `agent_mode.go:257` | agent 轮 `HasSection("mode_instructions")`=false、提示词不含 plan 指令 |
+| 反复切换稳定 | `updateAgentModeRails` 注销 / `updatePlanModeRails` 重注册（`d.taskPlanningRail == nil` 分支） | 4 轮 plan↔agent，节状态一致、提示词长度不累计膨胀、标题无重复 |
+
+**Files:**
+- Modify: `tests/integration/swarm/server/adapter/mode_switch_todo_test.go`
+
+- [ ] **Step 1: 追加常量与辅助函数**
+
+在常量区追加：
+
+```go
+const (
+	// planModeMarker plan 指令节特征文本（sections/agent_mode.go planModePromptCN）
+	planModeMarker = "Plan 模式已激活"
+	// planHiddenToolMarker plan 模式工具拦截文案（agent_mode.go:349）
+	planHiddenToolMarker = "在 plan 模式下已隐藏"
+)
+
+// sessionToolNames multi-session 工具（updateToolsForMode 注册 / plan 模式卸载）
+var sessionToolNames = []string{"session_cancel", "session_list", "session_new"}
+
+// modeSwitchToolNames AgentModeRail 常驻注册的模式切换工具
+var modeSwitchToolNames = []string{"enter_plan_mode", "exit_plan_mode", "switch_mode"}
+```
+
+在辅助函数区追加：
+
+```go
+// hasAbility 判断 AbilityManager 中是否存在指定名工具。
+func hasAbility(inst *harness.DeepAgent, name string) bool {
+	if am := inst.AbilityManager(); am != nil {
+		for _, ability := range am.List() {
+			if ability.AbilityName() == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// containsToolResult 判断事件序列中是否有 tool_result 文本包含 marker。
+func containsToolResult(events []map[string]any, marker string) bool {
+	for _, evt := range events {
+		if evt["event_type"] != "chat.tool_result" {
+			continue
+		}
+		if result, ok := evt["tool_result"].(map[string]any); ok {
+			if strings.Contains(fmt.Sprintf("%v", result["result"]), marker) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// absDiff 两数之差（非负）。
+func absDiff(a, b int) int {
+	if a > b {
+		return a - b
+	}
+	return b - a
+}
+```
+
+- [ ] **Step 2: 追加三条用例**
+
+```go
+// TestPlan模式_plan分支完整生效 断言 D1 置位后 AgentModeRail 的 plan 语义。
+func (s *ModeSwitchTodoSuite) TestPlan模式_plan分支完整生效() {
+	s.env.WriteConfigYAML(s.T(), "")
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("todo_create", modeSwitchTodoArgs),
+		mockllm.CreateTextResponse("计划已写好。"),
+	)
+	events := s.runTurn(d, "req-plan-semantics", "agent.plan", "先规划再执行")
+
+	inst := d.Instance()
+	sb := inst.SystemPromptBuilder()
+	s.Require().NotNil(sb)
+	s.True(sb.HasSection("mode_instructions"), "plan 分支应注入 mode_instructions 节")
+	s.Contains(s.lastSystemPrompt(), planModeMarker, "实发提示词应含 plan 指令")
+	s.False(sb.HasSection("todo"), "plan 分支应移除 todo 节")
+
+	// todo 工具已注册但对模型硬性屏蔽：硬调被 BeforeToolCall 拒绝
+	s.NotEmpty(registeredTodoTools(inst), "todo 工具应已注册（plan 只是对模型隐藏）")
+	s.False(hasEvent(events, "todo.updated"), "plan 模式下 todo_create 被拦截，不应产生 todo.updated")
+	s.True(containsToolResult(events, planHiddenToolMarker),
+		"todo_create 应被拒绝且文案含「在 plan 模式下已隐藏」，事件: %v", eventTypes(events))
+
+	for _, name := range sessionToolNames {
+		s.False(hasAbility(inst, name), "plan 模式应卸载 %s", name)
+	}
+}
+
+// TestAgent模式_多会话语义 断言切到性能模式后的工具注册与提示词状态。
+func (s *ModeSwitchTodoSuite) TestAgent模式_多会话语义() {
+	s.env.WriteConfigYAML(s.T(), "")
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	// 第 1 轮 plan 铺垫（让切换真实发生）
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("好。"))
+	_ = s.runTurn(d, "req-agent-sem-1", "agent.plan", "你好")
+
+	// 第 2 轮切 agent
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("收到。"))
+	_ = s.runTurn(d, "req-agent-sem-2", "agent", "继续")
+
+	inst := d.Instance()
+	sb := inst.SystemPromptBuilder()
+	s.Require().NotNil(sb)
+	s.False(sb.HasSection("mode_instructions"), "非 plan 模式应移除 mode_instructions 节")
+	s.False(sb.HasSection("todo"), "性能模式不应有 todo 节")
+	system := s.lastSystemPrompt()
+	s.NotContains(system, planModeMarker, "实发提示词不应含 plan 指令")
+	s.NotContains(system, todoSectionMarker, "实发提示词不应含 todo 指令")
+
+	for _, name := range sessionToolNames {
+		s.True(hasAbility(inst, name), "性能模式应注册 %s（updateToolsForMode）", name)
+	}
+	for _, name := range modeSwitchToolNames {
+		s.True(hasAbility(inst, name), "AgentModeRail 注册的 %s 应常驻在册", name)
+	}
+}
+
+// Test模式反复切换_状态稳定 断言 plan↔agent 四轮往返后状态无漂移。
+func (s *ModeSwitchTodoSuite) Test模式反复切换_状态稳定() {
+	s.env.WriteConfigYAML(s.T(), "")
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	steps := []string{"agent.plan", "agent", "agent.plan", "agent"}
+	var agentLens []int
+	for i, mode := range steps {
+		s.MockLLM.SetResponses(mockllm.CreateTextResponse(fmt.Sprintf("第%d轮完成。", i+1)))
+		_ = s.runTurn(d, fmt.Sprintf("req-stab-%d", i+1), mode, "继续")
+
+		sb := d.Instance().SystemPromptBuilder()
+		s.Require().NotNil(sb)
+		s.False(sb.HasSection("todo"), "第%d轮(%s)不应有 todo 节", i+1, mode)
+
+		sys := s.lastSystemPrompt()
+		s.NotContains(sys, todoSectionMarker, "第%d轮实发提示词不应含 todo 指令", i+1)
+		heads := headings(sys)
+		s.Equal(len(heads), len(uniqueStrings(heads)), "第%d轮系统提示词标题不应重复: %v", i+1, heads)
+		if mode == "agent" {
+			agentLens = append(agentLens, len(sys))
+		}
+	}
+
+	// 两次 agent 轮提示词长度应几乎一致（无累计膨胀；容忍 workspace 节小幅波动）
+	s.Len(agentLens, 2, "应收集到两轮 agent 提示词长度")
+	s.LessOrEqual(absDiff(agentLens[0], agentLens[1]), 500,
+		"两次性能模式轮的提示词长度应稳定: %v", agentLens)
+}
+```
+
+- [ ] **Step 3: 跑全部模式切换用例**
+
+```bash
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" \
+  ./tests/integration/swarm/server/adapter/ -run "TestModeSwitchTodoSuite" -count=1 -v 2>&1 | tail -40
+```
+Expected: 4 条用例（含 Task 3 的语义完整用例）全 PASS。
+
+**失败处置对照**：
+- `plan 分支应注入 mode_instructions` 失败 → D1 未生效或 SwitchMode 写入的 state 未被 AgentModeRail 读到（查 `LoadState(sess)` 与 checkpointer 路径）。
+- `性能模式应注册 session_new` 失败 → `updateToolsForMode` 前置条件不满足（`config.RequestID`/`SessionID`/`modelClientConfig`），对照 `deep_adapter_config.go:145`。
+- `提示词长度应稳定` 失败 → 仍有 rail 新旧双跑，回到 Task 1 查缓存注销路径。
+
+- [ ] **Step 4: 提交**
+
+```bash
+git add tests/integration/swarm/server/adapter/mode_switch_todo_test.go
+git commit -m "test(integration): 模式差异点全覆盖——提示词与工具注册对照代码断言
+
+plan 指令节注入/移除、todo 工具 plan 拦截文案、session_* 工具随模式
+注册/卸载、模式切换工具常驻、四轮往返后节状态与提示词长度稳定。"
+```
+
+---
+
+## Task 5: 本地全量门禁
 
 - [ ] **Step 1: 单测 + 覆盖率**
 
@@ -546,7 +750,7 @@ Expected: 违规 0。
 
 ---
 
-## Task 5: 推送并确认 CI 四绿
+## Task 6: 推送并确认 CI 四绿
 
 - [ ] **Step 1: fetch 对齐后推送分支**
 
