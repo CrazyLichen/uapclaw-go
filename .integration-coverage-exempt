@@ -144,3 +144,16 @@ internal/swarm/server/adapter/deep_adapter_evolution.go#L551-L551
 # 只含 internal/ 子系统，tests/ 目录不插桩，改动行必然判 0%。该文件不承载生产
 # 逻辑，行为由使用它的集成用例（如 SessionUsageIsolationSuite）断言。
 tests/integration/mockllm/mock_client.go
+
+# ── 2026-11-03 memory 检索三处修复 ──
+
+# manager.go — 本次只新增 MemoryManagerParams.Ctx 一个结构体字段。字段声明不是可执行
+# 语句，go tool cover 不产生覆盖块（门禁在 in_total==0 分支不认行级豁免，同 types.go）。
+# 作用由单测 TestInitMemoryManagerAsync_透传ctx并建索引 与集成
+# TestMemory_中文检索命中_真实索引 双向断言。
+internal/agentcore/memory/lite/manager.go
+
+# vec_table.go — 纯函数（parseVecTableDims / needVecTableRebuild），唯一调用点是
+# ensureVectorTable，而该函数在无 vec0 扩展的环境（CI linux）入口即返回 →
+# 集成层永不执行。语义由 vec_table_test.go 9 条用例覆盖（含维度变化重建判定）。
+internal/agentcore/memory/lite/vec_table.go
