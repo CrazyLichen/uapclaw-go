@@ -434,10 +434,19 @@ func (m *memoryIndexManager) Status() *StatusResult {
 	vecEnabled := m.settings.Store.Vector.Enabled
 	cacheEnabled := m.settings.Cache.Enabled
 
+	// provider/model 取实际实例（Python: self.provider.id / self.provider.model）。
+	// 曾取 settings 值：embed 缺 key 时 CreateEmbeddingProvider 会静默降级成 mock，
+	// 而 status 仍报 openai_compatible/text-embedding-v3，导致排查时误判"检索已配置"。
+	providerID, providerModel := "", ""
+	if m.provider != nil {
+		providerID = m.provider.ID()
+		providerModel = m.provider.Model()
+	}
+
 	return &StatusResult{
 		Available:    true,
-		Provider:     m.settings.Provider,
-		Model:        m.settings.Model,
+		Provider:     providerID,
+		Model:        providerModel,
 		Files:        fileCount,
 		Chunks:       chunkCount,
 		SourceCounts: sourceCounts,

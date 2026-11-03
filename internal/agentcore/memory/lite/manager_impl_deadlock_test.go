@@ -134,3 +134,51 @@ func runWithTimeout(t *testing.T, name string, fn func() error) {
 		t.Fatalf("%s 超时 %v，疑似在事务内二次获取连接导致自锁", name, deadlockGuardTimeout)
 	}
 }
+
+// TestStatus_报真实Provider而非配置值 回归：embed 缺 key 时 CreateEmbeddingProvider
+// 会静默降级成 mock，而 status 曾取 settings 的 provider/model，于是 memory_search
+// 依然返回 provider=openai_compatible/model=text-embedding-v3，排查时误以为
+// 「检索已按配置生效」，实际跑的是随机向量。
+//
+// Python: status() 返回 self.provider.id / self.provider.model（实例值）。
+func TestStatus_报真实Provider而非配置值(t *testing.T) {
+	root := t.TempDir()
+	ws := workspace.NewWorkspace(root, "cn")
+	nodePath := ws.GetNodePath("memory")
+	if nodePath == nil {
+		t.Fatal("Workspace 应包含 memory 节点")
+	}
+	memDir := *nodePath
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatalf("创建 memory 目录失败: %v", err)
+	}
+
+	settings := CreateMemorySettings(memDir, nil)
+	settings.Sync.Watch = false
+	settings.Sync.IntervalMinutes = 0
+
+	// EmbeddingConfig 为 nil → 降级 mock（与缺 embed key 的真实场景一致）
+	mgr, err := GetMemoryIndexManager(MemoryManagerParams{
+		AgentID:         "unit_status_provider",
+		Workspace:       ws,
+		Settings:        settings,
+		EmbeddingConfig: nil,
+		NodeName:        "memory",
+	})
+	if err != nil {
+		t.Fatalf("初始化 manager 失败: %v", err)
+	}
+	defer func() {
+		_ = mgr.Close()
+		ClearMemoryManagerCache()
+	}()
+
+	status := mgr.Status()
+	if status == nil || !status.Available {
+		t.Fatalf("Status 应可用，实际: %+v", status)
+	}
+	if status.Provider != "mock" || status.Model != "mock" {
+		t.Errorf("status 应报实际降级后的 provider/model=mock，实际: %q/%q（配置值是 %q/%q）",
+			status.Provider, status.Model, settings.Provider, settings.Model)
+	}
+}
