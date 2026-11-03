@@ -403,3 +403,46 @@ func absDiff(a, b int) int {
 
 // 编译期引用占位：saprompt 在断言具体 builder 类型时使用（保留扩展位）。
 var _ = saprompt.PromptSection{}
+
+// TestPlan模式_写入工具拦截 验证规划模式的运行时写入约束（段 3c/3d）：
+// write_file 写非 plan 文件被拒、bash 的 git 写被拒、bash 普通命令放行
+// （bash 写文件不受路径校验是 Python 同款设计边界，靠提示词约束）。
+func (s *ModeSwitchTodoSuite) TestPlan模式_写入工具拦截() {
+	s.env.WriteConfigYAML(s.T(), "")
+
+	d := adapter.NewDeepAdapter()
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.T().Cleanup(func() { _ = d.Cleanup() })
+
+	// 第 1 轮：模型试图写非 plan 文件 → 应被路径校验拒绝
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("write_file",
+			`{"file_path":"/tmp/evil-escape.txt","content":"越权写入"}`),
+		mockllm.CreateTextResponse("好的。"),
+	)
+	events := s.runTurn(d, "req-plan-write-1", "agent.plan", "帮我写个文件")
+	result := toolResultFor(events, "write_file")
+	s.Contains(result, "仅能用于计划文件",
+		"write_file 写非 plan 文件应被拒绝，实际工具结果: %q", result)
+
+	// 第 2 轮：bash 执行 git 写 → 应被 git 写正则拒绝
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("bash",
+			`{"command":"cd /tmp/repo && git add -A && git commit -m x"}`),
+		mockllm.CreateTextResponse("好的。"),
+	)
+	events = s.runTurn(d, "req-plan-write-2", "agent.plan", "提交一下代码")
+	result = toolResultFor(events, "bash")
+	s.Contains(result, "禁止执行 git 写操作",
+		"bash 的 git 写操作应被拒绝，实际工具结果: %q", result)
+
+	// 第 3 轮：bash 普通只读命令 → 放行（设计边界：bash 写文件运行时不拦，对齐 Python）
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("bash", `{"command":"echo hello > /tmp/plan-mode-boundary.txt"}`),
+		mockllm.CreateTextResponse("好的。"),
+	)
+	events = s.runTurn(d, "req-plan-write-3", "agent.plan", "输出点内容")
+	result = toolResultFor(events, "bash")
+	s.NotEmpty(result, "bash 普通命令应放行（对齐 Python 只拦 git 写），实际工具结果: %q", result)
+	s.NotContains(result, "AgentModeRail", "bash 普通命令不应被 rail 拒绝")
+}
