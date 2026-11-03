@@ -979,15 +979,39 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 	return rail
 }
 
-// updateRailsForMode 按模式注册/注销 Rail。
+// updateRailsForMode 按模式注册/注销 Rail，并把 mode 同步进 agent 状态机。
 // Python: _update_rails_for_mode() (line 2754-2896)
-func (d *DeepAdapter) updateRailsForMode(ctx context.Context, mode string) {
+func (d *DeepAdapter) updateRailsForMode(ctx context.Context, mode, sessionID string) {
 	// Python: if mode == "agent.plan": await self._update_plan_mode_rails()
 	// Python: else: await self._update_agent_mode_rails(mode)
 	if mode == "agent.plan" {
 		d.updatePlanModeRails(ctx)
+		d.switchModeForState(ctx, sessionID, "plan")
 	} else {
 		d.updateAgentModeRails(ctx, mode)
+		d.switchModeForState(ctx, sessionID, "normal")
+	}
+}
+
+// switchModeForState 把请求携带的 mode 同步进 agent 状态机
+// （DeepAgentState.PlanMode.Mode），使 AgentModeRail 的 plan 分支真正生效。
+//
+// 注意：这是对 Python 的有意偏离——Python web 链路只在 code 模式调 switch_mode
+// （agent_ws_server.py:1145-1150），agent.plan 的状态从不置位，plan 分支实际
+// 休眠。本次按产品决策让 web 规划模式完整生效（plan 指令节 + 隐藏 todo/session
+// 工具 + 工具白名单拦截）。
+//
+// sessionID 为空（CreateInstance 阶段）跳过；SwitchMode 自带同模式幂等
+// （deep_agent.go:975），每条消息重复调用无副作用。失败仅告警不阻断请求。
+func (d *DeepAdapter) switchModeForState(ctx context.Context, sessionID, planMode string) {
+	if sessionID == "" {
+		return
+	}
+	if err := d.SwitchMode(ctx, sessionID, planMode); err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("session_id", sessionID).
+			Str("plan_mode", planMode).
+			Msg("switch plan state failed, continuing")
 	}
 }
 

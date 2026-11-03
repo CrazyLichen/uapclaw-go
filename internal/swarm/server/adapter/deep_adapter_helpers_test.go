@@ -1242,8 +1242,8 @@ func TestDeepAdapter_ReloadAgentConfig_未初始化(t *testing.T) {
 // TestUpdateRailsForMode 测试按模式切换 Rails。
 func TestUpdateRailsForMode(t *testing.T) {
 	d := NewDeepAdapter()
-	d.updateRailsForMode(context.Background(), "agent.plan")
-	d.updateRailsForMode(context.Background(), "agent.fast")
+	d.updateRailsForMode(context.Background(), "agent.plan", "")
+	d.updateRailsForMode(context.Background(), "agent.fast", "")
 }
 
 // TestUpdatePromptForMode 测试按模式更新提示词。
