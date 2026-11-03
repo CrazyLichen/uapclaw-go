@@ -1541,3 +1541,32 @@ func TestExtractCodeFromArgs_command键(t *testing.T) {
 		t.Errorf("expected command content, got %q", result)
 	}
 }
+
+// TestParseMessages_基础字段与工具调用 验证 ParseMessages 把 BaseMessage 转为 OpenAI 风格 map。
+func TestParseMessages_基础字段与工具调用(t *testing.T) {
+	msgs := []llmschema.BaseMessage{
+		makeBaseMsg("user", "你好"),
+		&llmschema.AssistantMessage{
+			DefaultMessage: *llmschema.NewDefaultMessage(llmschema.RoleTypeAssistant, ""),
+			ToolCalls: []*llmschema.ToolCall{
+				{ID: "call_1", Name: "read_file", Arguments: `{"path":"a"}`, Type: "function"},
+			},
+		},
+	}
+
+	got := ParseMessages(msgs)
+	if len(got) != 2 {
+		t.Fatalf("期望 2 条消息，实际 %d", len(got))
+	}
+	if got[0]["role"] != "user" || got[0]["content"] != "你好" {
+		t.Fatalf("用户消息映射错误: %v", got[0])
+	}
+	calls, ok := got[1]["tool_calls"].([]map[string]any)
+	if !ok || len(calls) != 1 || calls[0]["name"] != "read_file" {
+		t.Fatalf("tool_calls 映射错误: %v", got[1])
+	}
+
+	if empty := ParseMessages(nil); len(empty) != 0 {
+		t.Fatalf("nil 输入应返回空切片，实际 %v", empty)
+	}
+}

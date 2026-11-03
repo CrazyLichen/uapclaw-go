@@ -88,13 +88,13 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// errStageToolOptional 表示可选工具（MCP 搜索等）当前不可用，注册时可跳过。
-var errStageToolOptional = errors.New("可选阶段工具不可用")
-
 // stageToolNameAliases 阶段工具白名单别名 → 生产工具名。
 //
 // 阶段处理器沿用 Python 侧的工具命名（file_read/file_write/shell），
 // Go 工具注册名为 read_file/write_file/bash，此处做一次显式映射。
+// errStageToolOptional 表示可选工具（MCP 搜索等）当前不可用，注册时可跳过。
+var errStageToolOptional = errors.New("可选阶段工具不可用")
+
 var stageToolNameAliases = map[string]string{
 	"file_read":  "read_file",
 	"file_write": "write_file",

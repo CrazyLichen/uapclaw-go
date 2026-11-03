@@ -211,3 +211,9 @@ internal/agentcore/sys_operation/local/shell_operation.go#L863-L868
 # 2026-11-03 switchModeForState：SwitchMode 失败仅告警不阻断，单测无法稳定构造
 # checkpointer 故障，告警块豁免（防御分支已由 TestSwitchModeForState 覆盖其余路径）
 internal/swarm/server/adapter/deep_adapter_rails.go#L1010-L1015
+
+# ── 2026-11-04 注释规范整理：去重后调用共享实现 ──
+# team_skill_evolution_rail.go#L1328-L1328 — 去重后调用共享 extractToolContentFromInputs，
+# 等价的本地副本删除；所在函数 recordPresentedExperienceDetail 原本即无单测覆盖，
+# 行为由 extractToolContentFromInputs 的单测（两条 rail 共用）保证。
+internal/agentcore/harness/rails/evolution/team_skill_evolution_rail.go#L1328-L1328
