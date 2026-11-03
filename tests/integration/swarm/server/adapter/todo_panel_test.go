@@ -42,7 +42,7 @@ const (
 	todoPanelTaskID = "task-req-analysis"
 	// todoPanelTaskContent 待办任务内容（断言任务栏文案）
 	todoPanelTaskContent = "完成需求分析"
-	// todoPanelTaskActiveForm 待办任务进行中表述
+	// todoPanelTaskActiveForm 预置待办的进行中表述
 	todoPanelTaskActiveForm = "正在完成需求分析"
 	// todoPanelTaskArgs todo_create 的工具入参
 	todoPanelTaskArgs = `{"tasks":[{"id":"task-req-analysis",` +
@@ -63,41 +63,64 @@ func (s *TodoPanelSuite) SetupTest() {
 	s.env = testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_todo_panel_itest")
 }
 
-// TestTodoCreate_任务栏收到非空todos 断言 todo_create 之后前端能拿到任务项。
-func (s *TodoPanelSuite) TestTodoCreate_任务栏收到非空todos() {
+// TestTodoPanel_任务栏展示既有待办 断言性能模式下任务栏能收到 todo.json 中的既有任务。
+//
+// 2026-11-03 完整 plan 语义上线后的产品形态：规划模式 todo 工具被硬性屏蔽、
+// 性能模式 TaskPlanningRail 注销——web 两个模式模型都无法再创建待办，任务栏
+// 的数据来源是 todo.json 中的既有任务（由 enter_plan_mode 流程或其他入口写入）。
+// 本用例预置 todo.json，模型硬调 todo_create（已注销，执行失败），断言
+// StreamEventRail 仍读取文件并把非空任务以 []any 发给前端。
+func (s *TodoPanelSuite) TestTodoPanel_任务栏展示既有待办() {
 	s.env.WriteConfigYAML(s.T(), "")
+
+	// 预置既有任务（enter_plan_mode 流程写入的形态）
+	todoDir := filepath.Join(s.env.DataDir, "agent", "workspace", "todo", todoPanelSessionID)
+	if err := os.MkdirAll(todoDir, 0o755); err != nil {
+		s.Require().NoError(err)
+	}
+	seed, err := json.MarshalIndent([]map[string]any{{
+		"id":         todoPanelTaskID,
+		"content":    todoPanelTaskContent,
+		"activeForm": todoPanelTaskActiveForm,
+		"status":     "in_progress",
+	}}, "", "  ")
+	s.Require().NoError(err)
+	s.Require().NoError(os.WriteFile(filepath.Join(todoDir, "todo.json"), seed, 0o644))
 
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("todo_create", todoPanelTaskArgs),
-		mockllm.CreateTextResponse("待办已创建，开始执行。"),
+		mockllm.CreateTextResponse("继续执行。"),
 	)
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.fast", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
-	todos := s.runAndCollectTodos(d, "req-todo-panel-1", "请把任务拆成待办：完成需求分析。")
-	s.Require().NotEmpty(todos, "todo_create 之后必须收到非空 todos（空列表即前端「暂无任务」）")
-	s.Require().Len(todos, 1, "todo_create 创建 1 个任务")
+	todos, toolResult := s.runAndCollectTodos(d, "req-todo-panel-1", "请把任务拆成待办：完成需求分析。")
+
+	// 新语义：性能模式 todo 工具已注销，硬调执行失败（结果为空）
+	s.Empty(toolResult, "性能模式 todo_create 已注销，工具结果应为空（执行失败）")
+
+	// 任务栏仍收到 todo.json 中的非空任务
+	s.Require().NotEmpty(todos, "todo.updated 必须携带非空 todos（空列表即前端「暂无任务」）")
+	s.Require().Len(todos, 1)
 
 	item, ok := todos[0].(map[string]any)
 	s.Require().True(ok, "todo 项应为 map[string]any，实际 %T", todos[0])
 	s.Equal(todoPanelTaskID, item["id"])
 	s.Equal(todoPanelTaskContent, item["content"])
 	s.Equal(todoPanelTaskActiveForm, item["activeForm"], "进行中项展示 activeForm")
-	s.Equal("in_progress", item["status"], "todo_create 首个任务应为 in_progress")
-
-	// 反向佐证：工具真的落盘了（不是 mock 出来的假事件）
-	s.assertTodoFilePersisted()
+	s.Equal("in_progress", item["status"])
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// runAndCollectTodos 跑一轮流式对话，返回 todo.updated 事件里的 todos 列表。
-func (s *TodoPanelSuite) runAndCollectTodos(d *adapter.DeepAdapter, requestID, query string) []any {
+// runAndCollectTodos 跑一轮流式对话，返回 todo.updated 事件里的 todos 列表
+// 与 todo_create 的工具结果文本。
+func (s *TodoPanelSuite) runAndCollectTodos(d *adapter.DeepAdapter, requestID, query string) ([]any, string) {
 	s.T().Helper()
 
-	params, err := json.Marshal(map[string]any{"mode": "agent.plan"})
+	params, err := json.Marshal(map[string]any{"mode": "agent.fast"})
 	s.Require().NoError(err)
 
 	sid := todoPanelSessionID
@@ -115,6 +138,7 @@ func (s *TodoPanelSuite) runAndCollectTodos(d *adapter.DeepAdapter, requestID, q
 	s.Require().NoError(streamErr, "ProcessMessageStreamImpl 不应返回启动错误")
 
 	var todos []any
+	toolResult := ""
 	seen := false
 	seenTypes := make([]string, 0, 16)
 	for chunk := range chunkCh {
@@ -124,6 +148,12 @@ func (s *TodoPanelSuite) runAndCollectTodos(d *adapter.DeepAdapter, requestID, q
 		eventType, _ := chunk.Payload["event_type"].(string)
 		seenTypes = append(seenTypes, eventType)
 		s.T().Logf("event=%s payload=%v", eventType, chunk.Payload)
+		if eventType == "chat.tool_result" {
+			if name, _ := chunk.Payload["tool_name"].(string); name == "todo_create" {
+				toolResult, _ = chunk.Payload["result"].(string)
+			}
+			continue
+		}
 		if eventType != "todo.updated" {
 			continue
 		}
@@ -135,19 +165,5 @@ func (s *TodoPanelSuite) runAndCollectTodos(d *adapter.DeepAdapter, requestID, q
 		todos = list
 	}
 	s.Require().True(seen, "工具调用后必须发出 todo.updated 事件，实际事件序列: %v", seenTypes)
-	return todos
-}
-
-// assertTodoFilePersisted 断言待办已真实写入 todo/<session_id>/todo.json。
-func (s *TodoPanelSuite) assertTodoFilePersisted() {
-	s.T().Helper()
-
-	filePath := filepath.Join(s.env.DataDir, "agent", "workspace", "todo", todoPanelSessionID, "todo.json")
-	data, err := os.ReadFile(filePath)
-	s.Require().NoError(err, "todo_create 应把待办写入 %s", filePath)
-
-	var items []map[string]any
-	s.Require().NoError(json.Unmarshal(data, &items), "todo.json 应为 JSON 数组")
-	s.Require().Len(items, 1)
-	s.Equal(todoPanelTaskContent, items[0]["content"], "落盘内容应与工具入参一致")
+	return todos, toolResult
 }
