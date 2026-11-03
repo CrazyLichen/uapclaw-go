@@ -617,3 +617,37 @@ func TestChunkToMap_NilControllerOutputPayload(t *testing.T) {
 		t.Errorf("nil payload 应返回 nil，实际 %v", m)
 	}
 }
+
+// TestParseTypedChunkMap_TodoUpdated_点号前缀透传 锁定 todo.updated 的实际分派路径。
+//
+// chunkType 含点号 → 走 dotted 前缀分支原样透传（不归一化、不做类型断言），
+// 删除其下不可达的 case "todo.updated" 后行为必须保持不变。
+func TestParseTypedChunkMap_TodoUpdated_点号前缀透传(t *testing.T) {
+	chunk := map[string]any{
+		"type": "todo.updated",
+		"payload": map[string]any{
+			"todos": []map[string]any{
+				{"id": "1", "content": "任务1", "status": "in_progress"},
+				{"id": "2", "content": "任务2", "status": "pending"},
+			},
+		},
+	}
+
+	got := parseTypedChunkMap(chunk)
+	if got == nil {
+		t.Fatal("todo.updated 不应返回 nil")
+	}
+	if got["event_type"] != "todo.updated" {
+		t.Fatalf("event_type = %v, want todo.updated", got["event_type"])
+	}
+	todos, ok := got["todos"].([]map[string]any)
+	if !ok {
+		t.Fatalf("todos 类型 = %T, want []map[string]any（dotted 分支原样透传）", got["todos"])
+	}
+	if len(todos) != 2 {
+		t.Fatalf("len(todos) = %d, want 2", len(todos))
+	}
+	if todos[0]["id"] != "1" {
+		t.Errorf("todos[0][id] = %v, want 1", todos[0]["id"])
+	}
+}

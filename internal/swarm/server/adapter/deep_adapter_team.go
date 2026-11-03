@@ -1505,6 +1505,10 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 	}
 
 	// Python: if isinstance(chunk_type, str) and "." in chunk_type:
+	//
+	// 带点号的事件类型（含 todo.updated）统一在此原样透传：值不做归一化，
+	// 下游直接 JSON 序列化给前端。因此下面的 switch 不可能命中带点号的类型
+	// （历史上曾有一个不可达的 case "todo.updated"，2026-11-03 删除）。
 	if strings.Contains(chunkType, ".") {
 		// Python: chat.{chunk_type} 前缀 + payload 键透传（serialize）
 		if len(payload) > 0 {
@@ -1690,13 +1694,6 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 			"is_processing": true,
 			"current_task":  "thinking",
 		}
-
-	case "todo.updated":
-		var todos any = []any{}
-		if td, ok := payload["todos"].([]any); ok {
-			todos = td
-		}
-		return map[string]any{"event_type": "todo.updated", "todos": todos}
 
 	case "context.usage":
 		rate := 0.0
