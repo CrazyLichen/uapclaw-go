@@ -172,24 +172,18 @@ func TestGetSkillCreateEnabled_对齐Python(t *testing.T) {
 	}
 }
 
-// TestGetLanguageAndMinTeamMembers_配置读取 覆盖配置命中与缺省值。
-func TestGetLanguageAndMinTeamMembers_配置读取(t *testing.T) {
+// TestGetLanguage_配置读取 覆盖配置命中与缺省值。
+//
+// 注：min_team_members_for_create 随单 Agent SkillCreateRail 移植一并移除
+// （Python 的 SkillCreateRail 无此参数），相关断言同步删除。
+func TestGetLanguage_配置读取(t *testing.T) {
 	d := NewDeepAdapter()
 	if got := d.getLanguage(); got != "cn" {
 		t.Errorf("缺省语言 = %q, want cn", got)
 	}
-	if got := d.getMinTeamMembersForCreate(); got != 2 {
-		t.Errorf("缺省最小成员数 = %d, want 2", got)
-	}
 
-	d.setConfigSnapshots(map[string]any{
-		"language":                    "en",
-		"min_team_members_for_create": float64(4),
-	}, nil)
+	d.setConfigSnapshots(map[string]any{"language": "en"}, nil)
 	if got := d.getLanguage(); got != "en" {
 		t.Errorf("language = %q, want en", got)
-	}
-	if got := d.getMinTeamMembersForCreate(); got != 4 {
-		t.Errorf("min_team_members_for_create = %d, want 4", got)
 	}
 }

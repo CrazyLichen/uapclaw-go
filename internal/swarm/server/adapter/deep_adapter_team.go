@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"time"
 
@@ -57,24 +56,6 @@ func (d *DeepAdapter) findTeamSkillRail(requestID, channelID string) *coreevolut
 		return rail
 	}
 	return team.FindTeamSkillRailAcrossManagers(requestID)
-}
-
-// findSkillCreateRail 查找 TeamSkillCreateRail。
-// 对齐 Python: _find_skill_create_rail()
-func (d *DeepAdapter) findSkillCreateRail() *coreevolution.TeamSkillCreateRail {
-	if d.skillCreateRail != nil {
-		return d.skillCreateRail
-	}
-	// 在 instance 的已注册 rails 中查找
-	if d.instance != nil {
-		found := d.instance.FindRailsByType(reflect.TypeOf(&coreevolution.TeamSkillCreateRail{}))
-		if len(found) > 0 {
-			if r, ok := found[0].(*coreevolution.TeamSkillCreateRail); ok {
-				return r
-			}
-		}
-	}
-	return nil
 }
 
 // handleTeamSkillEvolveApproval 处理 team skill 演进审批。

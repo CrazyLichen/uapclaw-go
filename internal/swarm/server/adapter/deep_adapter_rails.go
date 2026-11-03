@@ -417,32 +417,30 @@ func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 	return rail
 }
 
-// buildSkillCreateRail 构建技能创建护栏。
-// 对齐 Python: _build_skill_create_rail() (line 2011-2050)
-// Python: TeamSkillCreateRail(EvolutionRail, skills_dir=..., language=..., auto_trigger=..., min_team_members_for_create=...)
-func (d *DeepAdapter) buildSkillCreateRail() sainterfaces.AgentRail {
+// buildSkillCreateRail 构建单 Agent 技能创建护栏。
+// 对齐 Python: _build_skill_create_rail() (interface_deep.py:1972-1997)
+//
+// Python 语义：skill_create 未启用时返回 None 且不写字段；启用时 auto_trigger 恒 True。
+func (d *DeepAdapter) buildSkillCreateRail() *evolution.SkillCreateRail {
+	if !d.getSkillCreateEnabled() {
+		logger.Debug(logComponent).Msg("skill_create disabled by config, skipping SkillCreateRail")
+		return nil
+	}
+
 	skillsDir := d.getSkillsDir()
 	if skillsDir == "" {
 		logger.Warn(logComponent).Msg("buildSkillCreateRail: skillsDir is empty, skipping creation")
 		return nil
 	}
 
-	language := d.getLanguage()
-	autoTrigger := d.getSkillCreateEnabled()
-	minMembers := d.getMinTeamMembersForCreate()
-
-	rail := evolution.NewTeamSkillCreateRail(skillsDir,
-		evolution.WithTeamSkillCreateAutoTrigger(autoTrigger),
-		evolution.WithTeamSkillCreateMinTeamMembers(minMembers),
-		evolution.WithTeamSkillCreateLanguage(language),
+	rail := evolution.NewSkillCreateRail(skillsDir,
+		evolution.WithSkillCreateAutoTrigger(true),
+		evolution.WithSkillCreateLanguage(d.getLanguage()),
 	)
-
-	d.skillCreateRail = rail
 	logger.Info(logComponent).
 		Str("skills_dir", skillsDir).
-		Bool("auto_trigger", autoTrigger).
-		Int("min_team_members", minMembers).
-		Msg("TeamSkillCreateRail created")
+		Bool("auto_trigger", rail.AutoTrigger()).
+		Msg("SkillCreateRail created")
 	return rail
 }
 
@@ -483,19 +481,6 @@ func (d *DeepAdapter) getSkillCreateEnabled() bool {
 	evolutionConfig, _ := d.configCacheSnapshot()["evolution"].(map[string]any)
 	enabled, _ := evolutionConfig["skill_create"].(bool)
 	return enabled
-}
-
-// getMinTeamMembersForCreate 获取创建团队技能的最小团队成员数。
-func (d *DeepAdapter) getMinTeamMembersForCreate() int {
-	if cache := d.configCacheSnapshot(); cache != nil {
-		if min, ok := cache["min_team_members_for_create"].(float64); ok {
-			return int(min)
-		}
-		if min, ok := cache["min_team_members_for_create"].(int); ok {
-			return min
-		}
-	}
-	return 2 // 默认值
 }
 
 // buildStreamEventRail 构建流事件护栏。
@@ -1140,17 +1125,29 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 		}
 	}
 
-	// 8. SkillCreateRail — plan 模式下注册
-	// Python: skill_create_enabled = _get_skill_create_enabled(self._config_cache)
-	if d.skillCreateRail == nil {
-		rail := d.buildSkillCreateRail()
-		if rail != nil && d.instance != nil {
-			if err := d.instance.RegisterRail(ctx, rail); err != nil {
-				logger.Error(logComponent).Err(err).Msg("Failed to register TeamSkillCreateRail")
-			} else {
-				logger.Info(logComponent).Msg("TeamSkillCreateRail registered (plan mode)")
+	// 8. SkillCreateRail — 计划模式按 skill_create 配置注册/注销
+	// 对齐 Python: interface_deep.py:2825-2845
+	// 不变量：字段非 nil ⇒ 已注册，故仅注册成功才写字段。
+	if d.getSkillCreateEnabled() {
+		if d.skillCreateRail == nil {
+			rail := d.buildSkillCreateRail()
+			if rail != nil && d.instance != nil {
+				if err := d.instance.RegisterRail(ctx, rail); err != nil {
+					logger.Error(logComponent).Err(err).Msg("Failed to register SkillCreateRail")
+				} else {
+					d.skillCreateRail = rail
+					logger.Info(logComponent).Msg("SkillCreateRail registered (plan mode)")
+				}
 			}
 		}
+	} else if d.skillCreateRail != nil {
+		if d.instance != nil {
+			if err := d.instance.UnregisterRail(ctx, d.skillCreateRail); err != nil {
+				logger.Error(logComponent).Err(err).Msg("Failed to unregister SkillCreateRail")
+			}
+		}
+		d.skillCreateRail = nil
+		logger.Info(logComponent).Msg("SkillCreateRail unregistered (skill_create=false)")
 	}
 
 	// 9. SubagentRail — plan 模式下注册

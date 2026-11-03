@@ -156,3 +156,40 @@ func TestBuildSkillEvolutionRail_参数矩阵(t *testing.T) {
 		}
 	})
 }
+
+// TestBuildSkillCreateRail_未启用 未开启时返回 nil 且不写字段。
+func TestBuildSkillCreateRail_未启用(t *testing.T) {
+	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
+	pathutil.ResetCache()
+	d := NewDeepAdapter()
+	d.setConfigSnapshots(map[string]any{"evolution": map[string]any{"skill_create": false}}, map[string]any{})
+
+	if rail := d.buildSkillCreateRail(); rail != nil {
+		t.Fatalf("skill_create=false 应返回 nil，实际 %T", rail)
+	}
+	if d.skillCreateRail != nil {
+		t.Fatal("builder 不得写字段")
+	}
+}
+
+// TestBuildSkillCreateRail_启用返回单Agent版 启用时构建单 Agent 版且 auto_trigger 为真。
+func TestBuildSkillCreateRail_启用返回单Agent版(t *testing.T) {
+	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
+	pathutil.ResetCache()
+	d := NewDeepAdapter()
+	d.setConfigSnapshots(map[string]any{
+		"evolution": map[string]any{"skill_create": true},
+		"language":  "cn",
+	}, map[string]any{})
+
+	rail := d.buildSkillCreateRail()
+	if rail == nil {
+		t.Fatal("skill_create=true 应构建 rail")
+	}
+	if !rail.AutoTrigger() {
+		t.Fatal("auto_trigger 必须恒为 true（Python :1988）")
+	}
+	if d.skillCreateRail != nil {
+		t.Fatal("builder 不得写字段，由调用方在注册成功后赋值")
+	}
+}
