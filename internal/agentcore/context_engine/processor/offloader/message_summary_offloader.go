@@ -292,14 +292,30 @@ func (mso *MessageSummaryOffloader) ProcessorType() string { return "MessageSumm
 //
 // 触发条件：新添加的消息中，是否存在符合条件的消息（角色匹配 + 大小超阈值 + 非已卸载 + 非受保护工具）。
 //
+// 统计口径：per-message 语义——只逐条判断本次新增消息的大小是否超过 LargeMessageThreshold，
+// 不看总 token、不看 system prompt 与工具 schema。日志字段 path=add_messages /
+// message_index / message_role / size 说明是哪条消息触发的卸载。
+//
 // Python: MessageSummaryOffloader.trigger_add_messages()
 func (mso *MessageSummaryOffloader) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	contextMessages, _ := mc.GetMessages(0, true)
 	allMessages := append(contextMessages, messagesToAdd...)
-	for _, msg := range messagesToAdd {
-		if mso.shouldOffloadMessage(msg, mc, allMessages) {
-			return true, nil
+	for index, msg := range messagesToAdd {
+		if !mso.shouldOffloadMessage(msg, mc, allMessages) {
+			continue
 		}
+		logger.Info(logComponent).
+			Str("event_type", "MessageSummaryOffloader_triggered").
+			Str("processor_type", mso.ProcessorType()).
+			Str("path", "add_messages").
+			Int("buffer", len(contextMessages)).
+			Int("adding", len(messagesToAdd)).
+			Int("message_index", index).
+			Str("message_role", msg.GetRole().String()).
+			Int("size", mso.messageSize(msg, mc)).
+			Int("threshold", mso.config.LargeMessageThreshold).
+			Msg("message size exceeded offload threshold")
+		return true, nil
 	}
 	return false, nil
 }

@@ -346,6 +346,45 @@ func TestBuildState_无AfterMessages(t *testing.T) {
 	}
 }
 
+// TestBuildState_started状态duration为零 验证未结束状态不再负溢出
+//
+// 回归：started 事件 EndedAt 为零值，旧实现 EndedAt.Sub(StartedAt) 溢出成
+// MinInt64/1e6 = -9223372036854，payload 里 duration_ms 变成天文负值。
+func TestBuildState_started状态duration为零(t *testing.T) {
+	recorder := newTestRecorder(nil, 10)
+
+	state := recorder.BuildState(ProcessorStateInput{
+		OperationID:    "op-started",
+		Status:         schema.CompressionStarted,
+		Phase:          schema.PhaseGetContextWindow,
+		BeforeMessages: []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")},
+		StartedAt:      time.Now(),
+		ContextMax:     262,
+	})
+
+	if state.DurationMs != 0 {
+		t.Errorf("started 状态 DurationMs = %d，期望 0", state.DurationMs)
+	}
+}
+
+// TestDurationMillis_边界 覆盖未结束、时钟倒序、正常三种情况
+func TestDurationMillis_边界(t *testing.T) {
+	start := time.Now()
+
+	if got := durationMillis(start, time.Time{}); got != 0 {
+		t.Errorf("EndedAt 为零值时 = %d，期望 0", got)
+	}
+	if got := durationMillis(time.Time{}, start); got != 0 {
+		t.Errorf("StartedAt 为零值时 = %d，期望 0", got)
+	}
+	if got := durationMillis(start, start.Add(-time.Second)); got != 0 {
+		t.Errorf("时钟倒序时 = %d，期望 0", got)
+	}
+	if got := durationMillis(start, start.Add(2*time.Second)); got != 2000 {
+		t.Errorf("正常耗时 = %d，期望 2000", got)
+	}
+}
+
 // TestBuildState_无Processor 测试无处理器时 Processor 为空
 func TestBuildState_无Processor(t *testing.T) {
 	recorder := newTestRecorder(nil, 10)

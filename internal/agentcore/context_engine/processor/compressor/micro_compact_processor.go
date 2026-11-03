@@ -116,6 +116,9 @@ func (mcp *MicroCompactProcessor) ProcessorType() string {
 //  1. 消息列表构成一个完整的 API 轮次
 //  2. 某个可压缩工具的 ToolMessage 数量超过 triggerThreshold + keepRecentPerTool
 //
+// 统计口径：按「每个工具名的 ToolMessage 条数」判断，不看 token、不看 system/tools；
+// 日志字段 path=add_messages / messages / reason 说明是「工具结果条数超限」触发。
+//
 // Python: MicroCompactProcessor.trigger_add_messages()
 func (mcp *MicroCompactProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
@@ -123,7 +126,18 @@ func (mcp *MicroCompactProcessor) TriggerAddMessages(_ context.Context, mc iface
 	if !mcp.IsAPIRound(allMessages) {
 		return false, nil
 	}
-	return mcp.hasAnyToolExceedThreshold(allMessages), nil
+	if !mcp.hasAnyToolExceedThreshold(allMessages) {
+		return false, nil
+	}
+	logger.Info(logComponent).
+		Str("event_type", "MicroCompactProcessor_triggered").
+		Str("path", "add_messages").
+		Str("reason", "tool_result_count_exceeded").
+		Int("messages", len(allMessages)).
+		Int("trigger_threshold", mcp.mcpConfig.TriggerThreshold).
+		Int("keep_recent_per_tool", mcp.mcpConfig.KeepRecentPerTool).
+		Msg("tool result count exceeded micro compact threshold")
+	return true, nil
 }
 
 // OnAddMessages 执行微压缩，将旧 ToolMessage 内容替换为清除标记。

@@ -152,6 +152,9 @@ func (c *ToolResultBudgetProcessorConfig) GetModel() *llm_schema.ModelRequestCon
 //
 // 触发条件：存在轮次内工具结果 Token 总数超过预算。
 //
+// 统计口径：按「单个 API 轮次内 ToolMessage 的 token 合计」判断，不看整窗 token、
+// 不看 system prompt 与工具 schema。日志字段 path=add_messages / rounds 说明超限轮次数。
+//
 // Python: ToolResultBudgetProcessor.trigger_add_messages()
 func (p *ToolResultBudgetProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
@@ -159,7 +162,12 @@ func (p *ToolResultBudgetProcessor) TriggerAddMessages(_ context.Context, mc ifa
 	exceededRounds := p.roundBudgetExceeded(allMessages, mc)
 	if len(exceededRounds) > 0 {
 		logger.Info(logComponent).
+			Str("event_type", "ToolResultBudgetProcessor_triggered").
 			Str("processor_type", p.ProcessorType()).
+			Str("path", "add_messages").
+			Int("messages", len(allMessages)).
+			Int("rounds", len(exceededRounds)).
+			Int("threshold", p.config.TokensThreshold).
 			Msg("round tool results exceed budget, triggering offload")
 		return true, nil
 	}

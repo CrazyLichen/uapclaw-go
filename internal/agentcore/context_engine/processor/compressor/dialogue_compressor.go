@@ -263,6 +263,11 @@ func (dc *DialogueCompressor) ProcessorType() string { return "DialogueCompresso
 //
 // 前置条件：MessagesToKeep > 0 && 总消息数 < MessagesToKeep → 直接返回 false
 //
+// 统计口径：只算「缓冲区消息 + 本次新增」的条数与 token，
+// 不含 system prompt 与工具 schema；两个阈值先到先判。
+// 日志字段 path=add_messages / buffer / adding / message_size / tokens 便于与
+// get_context_window 口径区分（后者含 system+tools）。
+//
 // Python: DialogueCompressor.trigger_add_messages()
 func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	messageSize := mc.Len() + len(messagesToAdd)
@@ -270,6 +275,9 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 	if dc.messageNumThreshold > 0 && messageSize > dc.messageNumThreshold {
 		logger.Info(logComponent).
 			Str("event_type", "DialogueCompressor_triggered").
+			Str("path", "add_messages").
+			Int("buffer", mc.Len()).
+			Int("adding", len(messagesToAdd)).
 			Int("message_size", messageSize).
 			Int("threshold", dc.messageNumThreshold).
 			Msg("context message count exceeded threshold")
@@ -285,6 +293,8 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 	if tokens > dc.tokenThreshold {
 		logger.Info(logComponent).
 			Str("event_type", "DialogueCompressor_triggered").
+			Str("path", "add_messages").
+			Int("messages", len(allMsgs)).
 			Int("tokens", tokens).
 			Int("threshold", dc.tokenThreshold).
 			Msg("context tokens exceeded threshold")

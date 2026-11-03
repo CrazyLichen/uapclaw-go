@@ -323,8 +323,14 @@ func (rlc *RoundLevelCompressor) TriggerAddMessages(ctx context.Context, mc ifac
 	allMessages := append(allMsgs, messagesToAdd...)
 	totalTokens := rlc.countContextWindowTokens(nil, allMessages, nil, mc)
 	if totalTokens > rlc.triggerTotalTokens {
+		// 该判据只统计「缓冲区已有消息 + 本次待加入消息」，不含 system/tools；
+		// buffer/adding/roles 是区分它与 get_context_window 判据的唯一线索。
 		logger.Info(logComponent).
 			Str("event_type", "RoundLevelCompressor_triggered").
+			Str("path", "add_messages").
+			Int("buffer", len(allMsgs)).
+			Int("adding", len(messagesToAdd)).
+			Strs("roles", messageRoles(allMessages)).
 			Int("total_tokens", totalTokens).
 			Int("trigger_total_tokens", rlc.triggerTotalTokens).
 			Msg("context tokens exceeded trigger threshold")
@@ -379,7 +385,27 @@ func (rlc *RoundLevelCompressor) OnAddMessages(ctx context.Context, mc iface.Mod
 // Python: RoundLevelCompressor.trigger_get_context_window()
 func (rlc *RoundLevelCompressor) TriggerGetContextWindow(ctx context.Context, mc iface.ModelContext, cw iface.ContextWindow, _ ...iface.Option) (bool, error) {
 	totalTokens := rlc.countContextWindowTokens(cw.SystemMessages, cw.ContextMessages, cw.Tools, mc)
-	return totalTokens > rlc.triggerTotalTokens, nil
+	if totalTokens > rlc.triggerTotalTokens {
+		// 与 add_messages 判据同款日志：口径含 system + tools + 对话，
+		// 分项相加恒等于 total_tokens，避免「before 只有 70 为何触发」的误读。
+		systemTokens, contextTokens, toolTokens := rlc.contextWindowTokenBreakdown(
+			cw.SystemMessages, cw.ContextMessages, mc, totalTokens)
+		logger.Info(logComponent).
+			Str("event_type", "RoundLevelCompressor_triggered").
+			Str("path", "get_context_window").
+			Int("system_messages", len(cw.SystemMessages)).
+			Int("context_messages", len(cw.ContextMessages)).
+			Int("tools", len(cw.Tools)).
+			Int("system_tokens", systemTokens).
+			Int("context_tokens", contextTokens).
+			Int("tool_tokens", toolTokens).
+			Int("total_tokens", totalTokens).
+			Int("trigger_total_tokens", rlc.triggerTotalTokens).
+			Int("target_total_tokens", rlc.targetTotalTokens).
+			Msg("context tokens exceeded trigger threshold")
+		return true, nil
+	}
+	return false, nil
 }
 
 // OnGetContextWindow 执行轮级压缩并更新上下文窗口。
@@ -1534,6 +1560,56 @@ func (rlc *RoundLevelCompressor) countContextWindowTokens(
 		total += processor.EstimateContentTokens(rlc.serializeTool(tool))
 	}
 	return total
+}
+
+// contextWindowTokenBreakdown 拆分「system / 对话 / 工具」三档 Token，仅供日志诊断。
+//
+// total 直接复用触发判据的计数结果，保证日志与判据同源；system 与对话分别单独计数，
+// 工具部分用差值反推，三者相加恒等于 total（CountMessages 的 +3 固定开销在两项都非空时抵掉）。
+// 计数失败时对应分项记为 0，不影响触发判定。
+func (rlc *RoundLevelCompressor) contextWindowTokenBreakdown(
+	systemMessages []llm_schema.BaseMessage,
+	contextMessages []llm_schema.BaseMessage,
+	mc iface.ModelContext,
+	total int,
+) (systemTokens, contextTokens, toolTokens int) {
+	tokenCounter := mc.TokenCounter()
+	counted := 0
+	if tokenCounter != nil {
+		modelName := rlc.getModelName()
+		if len(systemMessages) > 0 {
+			if n, err := tokenCounter.CountMessages(systemMessages, modelName); err == nil {
+				systemTokens = n
+				counted++
+			}
+		}
+		if len(contextMessages) > 0 {
+			if n, err := tokenCounter.CountMessages(contextMessages, modelName); err == nil {
+				contextTokens = n
+				counted++
+			}
+		}
+	}
+
+	messageTokens := systemTokens + contextTokens
+	// 两次独立计数各带一次 +3，合并计数只带一次；仅两项都成功计入时才抵消
+	if counted == 2 {
+		messageTokens -= 3
+	}
+	toolTokens = total - messageTokens
+	if toolTokens < 0 {
+		toolTokens = 0
+	}
+	return systemTokens, contextTokens, toolTokens
+}
+
+// messageRoles 返回消息角色序列，用于触发日志区分「缓冲区已有」与「本次新增」。
+func messageRoles(messages []llm_schema.BaseMessage) []string {
+	roles := make([]string, 0, len(messages))
+	for _, msg := range messages {
+		roles = append(roles, msg.GetRole().String())
+	}
+	return roles
 }
 
 // countContextWindowFixedTokens 计算固定部分（system + tools）的 Token 数。

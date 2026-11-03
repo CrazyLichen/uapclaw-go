@@ -208,7 +208,9 @@ func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.C
 	}
 
 	// e. 设置 DurationMs
-	state.DurationMs = int(input.EndedAt.Sub(input.StartedAt).Milliseconds())
+	// started 等未结束状态的 EndedAt 是零值，直接相减会负向溢出成 MinInt64/1e6，
+	// 统一走 durationMillis：未结束或时钟倒序一律记 0。
+	state.DurationMs = durationMillis(input.StartedAt, input.EndedAt)
 
 	// f. 设置 Summary
 	state.Summary = r.buildSummary(summaryInput{
@@ -239,6 +241,24 @@ func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.C
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// durationMillis 计算处理器耗时（毫秒）。
+//
+// started 等中间态尚未有结束时间（EndedAt 为零值），此时返回 0；
+// 结束时间早于开始时间（时钟回拨）同样返回 0，避免溢出成 -9223372036854。
+//
+// Python: ContextProcessorStateRecorder.build_state() 中 duration_ms 仅在
+// ended_at 存在时计算，未结束时为 0。
+func durationMillis(startedAt, endedAt time.Time) int {
+	if startedAt.IsZero() || endedAt.IsZero() {
+		return 0
+	}
+	ms := endedAt.Sub(startedAt).Milliseconds()
+	if ms < 0 {
+		return 0
+	}
+	return int(ms)
+}
 
 // buildMetric 构建压缩指标快照。
 //

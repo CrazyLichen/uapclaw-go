@@ -140,6 +140,9 @@ func (mo *MessageOffloader) ProcessorType() string { return "MessageOffloader" }
 //  2. MessagesThreshold != nil && 总消息数 > MessagesThreshold → 检查候选 → true/false
 //  3. 总 Token 数 > TokensThreshold → 检查候选 → true/false
 //
+// 统计口径：条数/token 均只算「缓冲区消息 + 本次新增」，不含 system prompt 与工具 schema；
+// 只有存在可卸载候选（角色匹配且未被保护）时才算触发。日志字段 path=add_messages 用于区分口径。
+//
 // Python: MessageOffloader.trigger_add_messages()
 func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	cfg := mo.config
@@ -156,7 +159,11 @@ func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.Model
 			return false, nil
 		}
 		logger.Info(logComponent).
+			Str("event_type", "MessageOffloader_triggered").
 			Str("processor_type", mo.ProcessorType()).
+			Str("path", "add_messages").
+			Int("buffer", len(allMsgs)).
+			Int("adding", len(messagesToAdd)).
 			Int("message_size", messageSize).
 			Int("threshold", *cfg.MessagesThreshold).
 			Msg("context message count exceeded threshold, triggering offload")
@@ -175,7 +182,10 @@ func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.Model
 				return false, nil
 			}
 			logger.Info(logComponent).
+				Str("event_type", "MessageOffloader_triggered").
 				Str("processor_type", mo.ProcessorType()).
+				Str("path", "add_messages").
+				Int("messages", messageSize).
 				Int("tokens", tokens).
 				Int("threshold", cfg.TokensThreshold).
 				Msg("context tokens exceeded threshold, triggering offload")

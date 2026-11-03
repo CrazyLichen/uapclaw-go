@@ -2,6 +2,7 @@ package compressor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -389,6 +390,72 @@ func TestRoundLevelCompressor_TriggerGetContextWindow_低于阈值(t *testing.T)
 	}
 	if triggered {
 		t.Error("Token 数低于阈值时不应触发")
+	}
+}
+
+// ──────────────────────────── 触发日志分项测试 ────────────────────────────
+
+// TestRoundLevelCompressor_ContextWindowTokenBreakdown 验证日志分项拆分：
+// 三项相加恒等于 total（合并计数的 +3 固定开销在两项都非空时抵掉）。
+func TestRoundLevelCompressor_ContextWindowTokenBreakdown(t *testing.T) {
+	cfg := validRoundLevelCompressorConfig()
+	rlc := newRLCWithModel(cfg, &rlcFakeBaseModelClient{})
+
+	sys := []llm_schema.BaseMessage{llm_schema.NewSystemMessage("system")}
+	ctx := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+
+	// 两项都非空：10 + 10 - 3 = 17 为消息合计，工具 5
+	mc := &fakeModelContext{tokenCounter: &fakeTokenCounter{count: 10}}
+	s0, c0, t0 := rlc.contextWindowTokenBreakdown(sys, ctx, mc, 22)
+	if s0 != 10 || c0 != 10 || t0 != 5 {
+		t.Errorf("分项 = (%d,%d,%d)，期望 (10,10,5)", s0, c0, t0)
+	}
+
+	// 仅对话：不抵消 +3
+	s1, c1, t1 := rlc.contextWindowTokenBreakdown(nil, ctx, mc, 15)
+	if s1 != 0 || c1 != 10 || t1 != 5 {
+		t.Errorf("仅对话分项 = (%d,%d,%d)，期望 (0,10,5)", s1, c1, t1)
+	}
+
+	// 无 TokenCounter：消息分项全 0，工具取 total
+	mcNil := &fakeModelContext{}
+	s2, c2, t2 := rlc.contextWindowTokenBreakdown(sys, ctx, mcNil, 30)
+	if s2 != 0 || c2 != 0 || t2 != 30 {
+		t.Errorf("无计数器分项 = (%d,%d,%d)，期望 (0,0,30)", s2, c2, t2)
+	}
+
+	// 计数失败：分项退化 0，工具取 total
+	mcErr := &fakeModelContext{tokenCounter: &fakeTokenCounter{err: errors.New("boom")}}
+	s3, c3, t3 := rlc.contextWindowTokenBreakdown(sys, ctx, mcErr, 30)
+	if s3 != 0 || c3 != 0 || t3 != 30 {
+		t.Errorf("计数失败分项 = (%d,%d,%d)，期望 (0,0,30)", s3, c3, t3)
+	}
+
+	// 差值小于 0 时工具记 0
+	_, _, t4 := rlc.contextWindowTokenBreakdown(sys, ctx, mc, 0)
+	if t4 != 0 {
+		t.Errorf("工具差值 = %d，期望 0（不得为负）", t4)
+	}
+}
+
+// TestMessageRoles 验证角色序列用于区分缓冲区与新增消息
+func TestMessageRoles(t *testing.T) {
+	roles := messageRoles([]llm_schema.BaseMessage{
+		llm_schema.NewUserMessage("a"),
+		llm_schema.NewAssistantMessage("b"),
+		llm_schema.NewUserMessage("c"),
+	})
+	want := []string{"user", "assistant", "user"}
+	if len(roles) != len(want) {
+		t.Fatalf("roles = %v，期望 %v", roles, want)
+	}
+	for i := range want {
+		if roles[i] != want[i] {
+			t.Errorf("roles[%d] = %q，期望 %q", i, roles[i], want[i])
+		}
+	}
+	if got := messageRoles(nil); len(got) != 0 {
+		t.Errorf("空消息应返回空切片，实际 %v", got)
 	}
 }
 

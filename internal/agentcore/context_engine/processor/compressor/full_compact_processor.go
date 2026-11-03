@@ -308,6 +308,9 @@ func (fcp *FullCompactProcessor) ProcessorType() string {
 //
 // 触发条件：消息列表构成完整 API 轮次 && 上下文 Token 数 > TriggerTotalTokens
 //
+// 统计口径：token 只算「缓冲区消息 + 本次新增」，不含 system prompt 与工具 schema；
+// 日志字段 path=add_messages / messages / tokens 便于与 get_context_window 口径区分。
+//
 // Python: FullCompactProcessor.trigger_add_messages()
 func (fcp *FullCompactProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	allMsgs, _ := mc.GetMessages(0, true)
@@ -316,8 +319,17 @@ func (fcp *FullCompactProcessor) TriggerAddMessages(_ context.Context, mc iface.
 		return false, nil
 	}
 	tokens := fcp.countContextWindowTokens(mc, candidateMessages)
-	triggered := tokens > fcp.fcpConfig.TriggerTotalTokens
-	return triggered, nil
+	if tokens <= fcp.fcpConfig.TriggerTotalTokens {
+		return false, nil
+	}
+	logger.Info(logComponent).
+		Str("event_type", "FullCompactProcessor_triggered").
+		Str("path", "add_messages").
+		Int("messages", len(candidateMessages)).
+		Int("tokens", tokens).
+		Int("threshold", fcp.fcpConfig.TriggerTotalTokens).
+		Msg("context tokens exceeded full compact threshold")
+	return true, nil
 }
 
 // OnAddMessages 执行全量压缩，主入口。

@@ -599,6 +599,9 @@ func (crc *CurrentRoundCompressor) ProcessorType() string { return "CurrentRound
 // 触发条件：合并后的上下文 Token 数 > TokensThreshold。
 // 前置条件：总消息数 < MessagesToKeep → 直接返回 false。
 //
+// 统计口径：只算「缓冲区消息 + 本次新增」的 token，不含 system prompt 与工具 schema；
+// 日志字段 path=add_messages / buffer / adding / tokens 用于与 get_context_window 口径区分。
+//
 // Python: CurrentRoundCompressor.trigger_add_messages()
 func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	messageSize := mc.Len() + len(messagesToAdd)
@@ -612,6 +615,9 @@ func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc if
 	if tokens > crc.tokenThreshold {
 		logger.Info(logComponent).
 			Str("event_type", "CurrentRoundCompressor_triggered").
+			Str("path", "add_messages").
+			Int("buffer", mc.Len()).
+			Int("adding", len(messagesToAdd)).
 			Int("tokens", tokens).
 			Int("threshold", crc.tokenThreshold).
 			Msg("context tokens exceeded threshold")
