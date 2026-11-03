@@ -191,3 +191,19 @@ internal/agentcore/memory/lite/manager_impl.go#L857-L857
 internal/agentcore/memory/lite/manager_impl.go#L761-L761
 internal/agentcore/memory/lite/manager_impl.go#L1079-L1079
 internal/agentcore/memory/lite/manager_impl.go#L831-L831
+
+# ── 2026-11-03 Windows 编码修复（GetACP + 子进程/文件 GBK 解码） ──
+# encoding_windows.go — Windows 平台绑定（golang.org/x/sys/windows GetACP），
+# CI linux 无法编译执行，覆盖率恒 0；真实验证依赖 Windows 环境（wine 冒烟/用户端）。
+# 检测语义由 encoding_other.go 占位 + detectShellEncoding 单测（环境变量分支）覆盖。
+internal/agentcore/sys_operation/local/encoding_windows.go
+
+# encoding_other.go — 非 Windows 占位实现（返回空常量），唯一调用点在
+# detectShellEncoding 的 Windows 分支内，linux 上不可达（runtime.GOOS 常量分支，
+# 编译期即消除）。
+internal/agentcore/sys_operation/local/encoding_other.go
+
+# shell_operation.go#L863-L868 — detectShellEncoding 的 Windows 分支：
+# runtime.GOOS 运行期常量，CI linux 上不可达，Windows 语义由 GetACP 平台
+# 实现与 wine 冒烟验证（非 Windows 分支由 detectShellEncoding 单测覆盖）。
+internal/agentcore/sys_operation/local/shell_operation.go#L863-L868

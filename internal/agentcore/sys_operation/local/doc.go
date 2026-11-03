@@ -17,7 +17,9 @@
 //	├── file_lock_windows.go # Windows 平台文件锁实现（LockFileEx + 轮询超时）
 //	├── proc_unix.go         # Unix 平台进程组实现（Setpgid + 信号终止进程组）
 //	├── proc_windows.go      # Windows 平台进程树终止实现（taskkill /T /F）
-//	└── utils.go             # 公共工具（AsyncProcessHandler + OperationUtils + StreamEvent/StreamEventType）
+//	├── encoding_windows.go  # Windows 平台 ANSI 代码页检测（GetACP → cp936 等）
+//	├── encoding_other.go    # 非 Windows 平台代码页检测占位（返回空）
+//	└── utils.go             # 公共工具（AsyncProcessHandler + decodeOutput 编码解码 + OperationUtils）
 //
 // 对应 Python 代码：openjiuwen/core/sys_operation/local/
 package local

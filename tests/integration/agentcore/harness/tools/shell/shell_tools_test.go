@@ -4,6 +4,8 @@ package shell
 
 import (
 	"context"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -38,7 +40,10 @@ func TestShellToolsSuite(t *testing.T) {
 // SetupSuite 初始化测试套件。
 func (s *ShellToolsSuite) SetupSuite() {
 	s.AgentSuite.SetupSuite()
-	op, err := sys_operation.NewSysOperation(nil)
+	// 空白名单：默认白名单不含 printf/sleep 等测试需要的命令首词
+	card := sys_operation.NewSysOperationCard()
+	card.WorkConfig = &sys_operation.LocalWorkConfig{}
+	op, err := sys_operation.NewSysOperation(card)
 	s.Require().NoError(err)
 	s.op = op
 	s.permCfg = shelltools.NewPermissionConfig(shelltools.PermissionModeBypass, nil, nil)
@@ -106,4 +111,77 @@ func (s *ShellToolsSuite) TestPowerShell_未传Timeout_不报1秒超时() {
 		content, _ := data["content"].(string)
 		s.True(strings.Contains(content, "itest_ps_ok"))
 	}
+}
+
+// TestBash_GBK输出按系统编码解码 模拟中文 Windows：不传 encoding 时子进程
+// GBK 输出应按系统编码解码为正确中文。
+// 回归：handler 曾直接把原始字节当 UTF-8（scanner.Text()），中文 Windows 上
+// cmd 的 GBK 输出全部乱码（如「不是内部或外部命令」显示为乱码）。
+// Linux 分支用 LANG=zh_CN.GBK 触发同一条 detectShellEncoding→GBK 解码链路；
+// Windows 分支走真实 GetACP 检测。
+func (s *ShellToolsSuite) TestBash_GBK输出按系统编码解码() {
+	bashTool := shelltools.NewBashTool(s.op, "cn", "itest-agent", s.permCfg)
+	var inputs map[string]any
+
+	if runtime.GOOS == "windows" {
+		inputs = map[string]any{
+			"command":     "echo 中文测试",
+			"description": "集成测试：Windows GetACP 检测解码",
+		}
+	} else {
+		s.T().Setenv("LANG", "zh_CN.GBK")
+		inputs = map[string]any{
+			// printf 八进制转义输出 "你好" 的 GBK 字节
+			"command":     "printf '\\304\\343\\272\\303 GBK'",
+			"description": "集成测试：GBK 输出按系统编码解码",
+		}
+	}
+
+	res, err := bashTool.Invoke(context.Background(), inputs)
+	s.Require().NoError(err)
+	s.Require().Equal(true, res["success"], "实际结果: %v", res)
+
+	data, ok := res["data"].(map[string]any)
+	s.Require().True(ok)
+	content, _ := data["content"].(string)
+	want := "你好"
+	if runtime.GOOS == "windows" {
+		want = "中文测试"
+	}
+	s.Contains(content, want, "GBK 输出应解码为正确中文，实际: %q", content)
+}
+
+// TestExecuteCmd_显式GBK编码解码 直接驱动 ExecuteCmd 并显式传 encoding=gbk，
+// 锁定 options.encoding 覆盖系统检测的语义（对齐 Python
+// options.get("encoding", detect())）。
+func (s *ShellToolsSuite) TestExecuteCmd_显式GBK编码解码() {
+	if runtime.GOOS == "windows" {
+		s.T().Skip("Linux 用 printf 八进制转义制造 GBK 字节，Windows 上跳过")
+	}
+	res, err := s.op.Shell().ExecuteCmd(
+		context.Background(),
+		`printf '\304\343\272\303 explicit'`,
+		sys_operation.WithShellOptions(map[string]any{"encoding": "gbk"}),
+	)
+	s.Require().NoError(err)
+	s.Require().True(res.IsSuccess(), "实际结果: %v", res)
+	s.Require().NotNil(res.Data)
+	s.Contains(res.Data.Stdout, "你好 explicit")
+}
+
+// TestFsReadFile_GBK编码 fs text 模式按 encoding 参数解码 GBK 文件。
+// 回归：read_file 曾直接 string(content) 忽略 encoding，读 GBK 文件乱码。
+func (s *ShellToolsSuite) TestFsReadFile_GBK编码() {
+	tmpDir := s.T().TempDir()
+	gbkPath := tmpDir + "/gbk.txt"
+	// "你好文件" 的 GBK 字节
+	gbkHello := []byte{0xC4, 0xE3, 0xBA, 0xC3, 0xCE, 0xC4, 0xBC, 0xFE}
+	s.Require().NoError(os.WriteFile(gbkPath, gbkHello, 0o644))
+
+	res, err := s.op.Fs().ReadFile(context.Background(), gbkPath,
+		sys_operation.WithFsMode("text"), sys_operation.WithFsEncoding("gbk"))
+	s.Require().NoError(err)
+	s.Require().True(res.IsSuccess(), "实际结果: %v", res)
+	s.Require().NotNil(res.Data)
+	s.Contains(res.Data.Content, "你好文件")
 }

@@ -157,3 +157,13 @@ internal/agentcore/memory/lite/manager.go
 # ensureVectorTable，而该函数在无 vec0 扩展的环境（CI linux）入口即返回 →
 # 集成层永不执行。语义由 vec_table_test.go 9 条用例覆盖（含维度变化重建判定）。
 internal/agentcore/memory/lite/vec_table.go
+
+# ── 2026-11-03 Windows 编码修复（GetACP + 子进程/文件 GBK 解码） ──
+# encoding_windows.go — Windows 平台绑定（GetACP），CI linux 无法编译执行。
+internal/agentcore/sys_operation/local/encoding_windows.go
+
+# encoding_other.go — 非 Windows 占位实现，唯一调用点在 Windows 分支内（不可达）。
+internal/agentcore/sys_operation/local/encoding_other.go
+
+# shell_operation.go#L863-L868 — detectShellEncoding 的 Windows 分支（linux 不可达）。
+internal/agentcore/sys_operation/local/shell_operation.go#L863-L868

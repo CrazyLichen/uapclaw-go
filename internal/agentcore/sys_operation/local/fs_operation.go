@@ -126,8 +126,11 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 	}
 
 	// 行范围处理
+	// Python: text 模式用 aiofiles.open(encoding=encoding) 按编码解码；
+	// Go 曾直接 string(content) 忽略 encoding，读 GBK 文件乱码。
 	textContent := string(content)
 	if o.Mode == "text" {
+		textContent = decodeOutput(content, o.Encoding)
 		lines := strings.Split(textContent, "\n")
 		if o.Head > 0 {
 			if o.Head < len(lines) {
@@ -136,7 +139,7 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 			textContent = strings.Join(lines, "\n")
 		} else if o.Tail > 0 {
 			// Python: _read_tail: 反向 seek 读取，避免大文件 OOM
-			tailLines, tailErr := readTail(resolvedPath, o.Tail)
+			tailLines, tailErr := readTail(resolvedPath, o.Tail, o.Encoding)
 			if tailErr != nil {
 				return f.createErrorResult(methodName, fmt.Sprintf("tail read failed: %s", tailErr), startTime), nil
 			}
@@ -206,12 +209,26 @@ func (f *LocalFsOperation) ReadFileStream(ctx context.Context, path string, opts
 			chunkSize = sysop.DefaultReadStreamChunkSize
 		}
 
+		// text 模式按 encoding 解码（Python: byte_buffer.decode(encoding)），
+		// bytes 模式保持原始字节。
 		data := string(content)
+		if o.Mode != "bytes" {
+			data = decodeOutput(content, o.Encoding)
+		}
 		index := 0
-		for offset := 0; offset < len(data); offset += chunkSize {
+		// 循环变量 offset 直接跳到上块终点 end：text 模式 end 会因 rune
+		// 边界回退，若仍按 chunkSize 步进会在块间重复/丢字节
+		for offset := 0; offset < len(data); {
 			end := offset + chunkSize
 			if end > len(data) {
 				end = len(data)
+			}
+			// text 模式回退到 rune 边界，避免多字节字符被从中间切断
+			//（Python 逐字符解码天然不截断，Go 按字节切块必须补齐该语义）
+			if o.Mode != "bytes" {
+				for end < len(data) && (data[end]&0xC0) == 0x80 {
+					end--
+				}
 			}
 			chunk := data[offset:end]
 			isLast := end >= len(data)
@@ -228,6 +245,7 @@ func (f *LocalFsOperation) ReadFileStream(ctx context.Context, path string, opts
 				},
 			}
 			index++
+			offset = end
 		}
 	}()
 
@@ -917,8 +935,9 @@ func getEncoder(encName string) *encoding.Encoder {
 
 // readTail 从文件末尾反向读取最后 tail 行。
 // Python: _read_tail(file_path, tail, encoding) (L1461-1532):
-// 从文件末尾反向 seek 读取，避免大文件全文加载导致 OOM
-func readTail(filePath string, tail int) ([]string, error) {
+// 从文件末尾反向 seek 读取，避免大文件全文加载导致 OOM。
+// 行内容按 encoding 解码（Python byte_buffer.decode(encoding)）。
+func readTail(filePath string, tail int, encoding string) ([]string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
@@ -976,11 +995,11 @@ func readTail(filePath string, tail int) ([]string, error) {
 		}
 	}
 
-	// 过滤空行
+	// 过滤空行并按 encoding 解码
 	var result []string
 	for _, l := range lines {
 		if l != "" {
-			result = append(result, l)
+			result = append(result, decodeOutput([]byte(l), encoding))
 		}
 	}
 

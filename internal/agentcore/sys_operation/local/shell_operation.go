@@ -193,14 +193,15 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 	applyProcessGroup(cmd)
 
 	// 从 options 读取 encoding，对齐 Python：(options or {}).get("encoding", self._detect_shell_encoding())
-	encoding := defaultShellEncoding
+	// 缺省用系统检测值（中文 Windows 为 cp936，子进程 GBK 输出才能正确解码）
+	encoding := detectShellEncoding()
 	if o.Options != nil {
 		if enc, ok := o.Options["encoding"].(string); ok && enc != "" {
 			encoding = enc
 		}
 	}
 	if encoding == "" {
-		encoding = detectShellEncoding()
+		encoding = defaultShellEncoding
 	}
 
 	// 创建进程处理器
@@ -366,8 +367,9 @@ func (s *LocalShellOperation) ExecuteCmdStream(ctx context.Context, command stri
 	applyProcessGroup(cmd)
 
 	// 从 options 读取 chunk_size 和 encoding，对齐 Python
+	// encoding 缺省用系统检测值（对齐 options.get("encoding", self._detect_shell_encoding())）
 	chunkSize := defaultChunkSize
-	encoding := defaultShellEncoding
+	encoding := detectShellEncoding()
 	if o.Options != nil {
 		if cs, ok := o.Options["chunk_size"].(int); ok && cs > 0 {
 			chunkSize = cs
@@ -377,7 +379,7 @@ func (s *LocalShellOperation) ExecuteCmdStream(ctx context.Context, command stri
 		}
 	}
 	if encoding == "" {
-		encoding = detectShellEncoding()
+		encoding = defaultShellEncoding
 	}
 
 	handler := NewAsyncProcessHandler(cmd, chunkSize, encoding, timeout)
@@ -855,9 +857,15 @@ func intPtr(v int) *int { return &v }
 
 // detectShellEncoding 检测 Shell 输出编码。
 // Python: ShellOperation._detect_shell_encoding：locale.getpreferredencoding(False)。
+// Windows 直接取系统 ANSI 代码页（GetACP，中文系统为 cp936）；非 Windows 读取
+// 环境变量 LC_ALL > LC_CTYPE > LANG 并提取编码部分，如 en_US.UTF-8 → UTF-8。
 func detectShellEncoding() string {
-	// Go 标准库没有 locale.getpreferredencoding 等价函数
-	// 在 Linux/macOS 上读取环境变量 LC_ALL > LC_CTYPE > LANG
+	if runtime.GOOS == "windows" {
+		if acp := systemANSICodePage(); acp != "" {
+			return acp
+		}
+		return defaultShellEncoding
+	}
 	for _, envKey := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
 		if val := os.Getenv(envKey); val != "" {
 			// 提取编码部分，如 en_US.UTF-8 → UTF-8

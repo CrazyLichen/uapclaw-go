@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +11,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	textencoding "golang.org/x/text/encoding/ianaindex"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -165,7 +168,8 @@ func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 		defer wg.Done()
 		scanner := bufio.NewScanner(stdoutPipe)
 		for scanner.Scan() {
-			stdoutBuf.WriteString(scanner.Text())
+			// 按检测到的编码解码（Windows 中文系统 cmd 输出为 GBK）
+			stdoutBuf.WriteString(decodeOutput(scanner.Bytes(), h.encoding))
 			stdoutBuf.WriteByte('\n')
 		}
 	}()
@@ -174,7 +178,7 @@ func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 		defer wg.Done()
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
-			stderrBuf.WriteString(scanner.Text())
+			stderrBuf.WriteString(decodeOutput(scanner.Bytes(), h.encoding))
 			stderrBuf.WriteByte('\n')
 		}
 	}()
@@ -186,32 +190,43 @@ func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 		close(collectDone)
 	}()
 
-	// 等待进程完成或超时
-	waitErr := h.waitProcess(ctx)
+	// cmd.Wait() 会在进程退出后关闭管道，必须等收集协程读完再调，
+	// 否则读协程未读走的尾部输出会被截断（竞态：间歇性空输出/丢尾部）。
+	waitCh := make(chan error, 1)
+	go func() { waitCh <- h.cmd.Wait() }()
 
-	// 等待收集完成，加 30 秒 grace period 超时保护
+	// 等待收集完成或超时；超时/取消时先 kill 进程树，管道 EOF 后收集自然完成
+	timedOut := false
 	select {
 	case <-collectDone:
-	case <-time.After(30 * time.Second):
-		logger.Warn(logComponent).
-			Str("event_type", "INVOKE_COLLECT_TIMEOUT").
-			Msg("timed out waiting 30s for output collection")
+	case <-ctx.Done():
+		timedOut = true
+		h.killProcessTree()
+		select {
+		case <-collectDone:
+		case <-time.After(30 * time.Second):
+			logger.Warn(logComponent).
+				Str("event_type", "INVOKE_COLLECT_TIMEOUT").
+				Msg("timed out waiting 30s for output collection after kill")
+		}
 	}
+	waitErr := <-waitCh
 
 	data := &InvokeData{
 		Stdout: stdoutBuf.String(),
 		Stderr: stderrBuf.String(),
 	}
 
-	if waitErr != nil {
+	if timedOut {
 		if ctx.Err() == context.DeadlineExceeded {
 			data.ExitCode = -1
 			data.Exception = fmt.Errorf("执行超时 %d 秒", h.overallTimeout)
-			// kill 进程树
-			h.killProcessTree()
 		} else {
+			data.ExitCode = -1
 			data.Exception = waitErr
 		}
+	} else if waitErr != nil {
+		data.Exception = waitErr
 	} else {
 		data.ExitCode = h.cmd.ProcessState.ExitCode()
 	}
@@ -266,7 +281,7 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 		for scanner.Scan() {
 			queue <- StreamEvent{
 				Type:      StreamEventTypeStdout,
-				Data:      scanner.Text() + "\n",
+				Data:      decodeOutput(scanner.Bytes(), h.encoding) + "\n",
 				Timestamp: time.Now(),
 			}
 		}
@@ -287,7 +302,7 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 		for scanner.Scan() {
 			queue <- StreamEvent{
 				Type:      StreamEventTypeStderr,
-				Data:      scanner.Text() + "\n",
+				Data:      decodeOutput(scanner.Bytes(), h.encoding) + "\n",
 				Timestamp: time.Now(),
 			}
 		}
@@ -520,29 +535,36 @@ func (h *AsyncProcessHandler) killProcessTree() {
 	killProcessTreePlatform(h)
 }
 
-func (h *AsyncProcessHandler) waitProcess(ctx context.Context) error {
-	done := make(chan error, 1)
-	go func() {
-		done <- h.cmd.Wait()
-	}()
-
-	select {
-	case err := <-done:
-		return err
-	case <-ctx.Done():
-		h.killProcessTree()
-		return ctx.Err()
+// decodeOutput 把子进程的原始输出字节按指定编码解码为字符串。
+// Python: asyncio 子进程输出 bytes.decode(encoding)；encoding 缺省为
+// _detect_shell_encoding()（中文 Windows 返回 cp936）。
+// UTF-8 系直通；GBK 系用 x/text 解码（GBK 解码器即 cp936，gb2312 是其子集）；
+// 其余编码名经 ianaindex 解析，解析或解码失败时原样返回（与旧行为一致）。
+func decodeOutput(raw []byte, encName string) string {
+	if len(raw) == 0 {
+		return ""
 	}
-}
-
-func readPipe(r io.Reader, encoding string) <-chan string {
-	ch := make(chan string, 64)
-	go func() {
-		defer close(ch)
-		scanner := bufio.NewScanner(r)
-		for scanner.Scan() {
-			ch <- scanner.Text() + "\n"
+	switch strings.ToLower(strings.TrimSpace(encName)) {
+	case "", "utf-8", "utf8":
+		return string(raw)
+	case "gbk", "cp936", "gb2312", "ms936":
+		if out, err := simplifiedchinese.GBK.NewDecoder().Bytes(raw); err == nil {
+			return string(out)
 		}
-	}()
-	return ch
+	case "gb18030", "cp54936":
+		if out, err := simplifiedchinese.GB18030.NewDecoder().Bytes(raw); err == nil {
+			return string(out)
+		}
+	case "big5", "cp950":
+		if out, err := traditionalchinese.Big5.NewDecoder().Bytes(raw); err == nil {
+			return string(out)
+		}
+	default:
+		if e, err := textencoding.MIME.Encoding(strings.ToLower(strings.TrimSpace(encName))); err == nil && e != nil {
+			if out, err := e.NewDecoder().Bytes(raw); err == nil {
+				return string(out)
+			}
+		}
+	}
+	return string(raw)
 }
