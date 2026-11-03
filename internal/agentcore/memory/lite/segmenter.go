@@ -40,8 +40,9 @@ var (
 	// errSegmenterUnavailable 分词器不可用（已降级为不切分）
 	errSegmenterUnavailable = errors.New("memory segmenter unavailable")
 
-	// segOnce 保证词典只加载一次（实测 843ms）
-	segOnce sync.Once
+	// segOnce 保证词典只加载一次（实测 843ms）。
+	// 用指针是为了让单测能重置它而不复制 sync.Once（govet copylocks）。
+	segOnce = &sync.Once{}
 	// segInst 分词器实例；nil 表示不可用
 	segInst segmenterHandle
 	// segmenterLoadFn 加载函数（单测可替换）
@@ -117,6 +118,9 @@ func loadSegmenter() (segmenterHandle, error) {
 //
 // 写入 meta：从 "none" 变回版本号（或反之）都会触发一次全量重建。
 func segmenterID() string {
+	if os.Getenv(segmenterDisableEnv) == "1" {
+		return "none"
+	}
 	seg, err := ensureSegmenter()
 	if err != nil || seg == nil {
 		return "none"
@@ -129,6 +133,10 @@ func segmenterID() string {
 // 处理链：gse.Cut → 小写 → 去掉空白/纯标点 → 去重保序。
 // 分词器不可用时返回 nil，调用方降级为「原文 + 正则切分 + OR」。
 func segmentForFTS(text string) []string {
+	// 降级开关在调用时判定：线上紧急规避无需重启进程
+	if os.Getenv(segmenterDisableEnv) == "1" {
+		return nil
+	}
 	seg, err := ensureSegmenter()
 	if err != nil || seg == nil {
 		return nil

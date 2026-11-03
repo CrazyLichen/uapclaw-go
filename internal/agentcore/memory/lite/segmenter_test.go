@@ -39,7 +39,7 @@ func TestSegmentForFTS_不可用返回nil(t *testing.T) {
 	defer func() { segmenterLoadFn, segOnce, segInst = prevFn, prevOnce, prevInst }()
 
 	segmenterLoadFn = func() (segmenterHandle, error) { return nil, errors.New("dict load failed") }
-	segOnce = sync.Once{}
+	segOnce = &sync.Once{}
 	segInst = nil
 
 	if got := segmentForFTS("组网"); got != nil {

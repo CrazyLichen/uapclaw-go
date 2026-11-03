@@ -77,7 +77,7 @@ func TestBuildFTSQuery_降级回OR(t *testing.T) {
 	prevFn, prevOnce, prevInst := segmenterLoadFn, segOnce, segInst
 	defer func() { segmenterLoadFn, segOnce, segInst = prevFn, prevOnce, prevInst }()
 	segmenterLoadFn = func() (segmenterHandle, error) { return nil, errors.New("offline") }
-	segOnce = sync.Once{}
+	segOnce = &sync.Once{}
 	segInst = nil
 
 	got := BuildFTSQuery("VDS15800 组网")
