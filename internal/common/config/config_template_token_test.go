@@ -27,6 +27,7 @@ func TestResourcesConfigTemplate_Token与压缩段(t *testing.T) {
 		"current_round_compressor_config",
 		"round_level_compressor_config",
 		"full_compact_processor_config",
+		"tool_result_budget_processor_config",
 	}
 	for _, key := range required {
 		if !strings.Contains(text, key) {

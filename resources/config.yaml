@@ -250,6 +250,16 @@ react:
     # 真正挂载 FullCompactProcessor；默认路径下配置可解析但会被激活集过滤。
     full_compact_processor_config:
       trigger_total_tokens: 180000
+    # 工具结果预算（session_memory 路径预设；仅在 context_engine_config.session_memory_config
+    # 启用时才挂载 ToolResultBudgetProcessor；默认路径下配置可解析但会被激活集过滤）
+    # 语义：按「单个 API 轮次内 ToolMessage 的 token 合计」判断，超预算后从最大的
+    # 工具结果开始卸载；tokens_threshold 只看轮内工具结果，不参与比例缩放。
+    tool_result_budget_processor_config:
+      tokens_threshold: 50000
+      large_message_threshold: 10000
+      trim_size: 3000
+      offload_file_prefix: "ToolResultBudgetProcessor"
+      tool_name_allowlist: []
   # 在线技能自演进（对齐 Python 模板 react.evolution）
   # 代码读取：deep_adapter_rails.go:346（enabled）、:987（plan 模式注册/注销）、
   #          runtime_inheritance.go（auto_scan/skill_create）、web_handlers.go（skill_create）

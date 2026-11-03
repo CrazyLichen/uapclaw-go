@@ -1,10 +1,12 @@
 package adapter
 
 import (
+	"path/filepath"
 	"sort"
 	"testing"
 
 	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -37,6 +39,48 @@ func TestBuildContextProcessorRail_读取yaml六段(t *testing.T) {
 	for i, n := range want {
 		if names[i] != n {
 			t.Errorf("第 %d 项应为 %s，实际 %s", i, n, names[i])
+		}
+	}
+}
+
+// TestBuildContextProcessorRail_出厂模板段全部接线 验证 resources/config.yaml 里的每个
+// processor 段都能被 adapter 映射为 user processor：往模板加段却忘了加映射会在此失败。
+func TestBuildContextProcessorRail_出厂模板段全部接线(t *testing.T) {
+	cfg, err := config.New(filepath.Join("..", "..", "..", "..", "resources", "config.yaml"))
+	if err != nil {
+		t.Fatalf("构造配置对象失败: %v", err)
+	}
+	data, err := cfg.Load()
+	if err != nil {
+		t.Fatalf("加载出厂模板失败: %v", err)
+	}
+	reactCfg, _ := data["react"].(map[string]any)
+	if reactCfg == nil {
+		t.Fatal("出厂模板缺少 react 段")
+	}
+
+	d := &DeepAdapter{}
+	ceRail, ok := d.buildContextProcessorRail(reactCfg).(*cerails.ContextProcessorRail)
+	if !ok {
+		t.Fatalf("类型应为 *ContextProcessorRail")
+	}
+
+	names := ceRail.UserProcessorTypes()
+	sort.Strings(names)
+	want := []string{
+		"CurrentRoundCompressor",
+		"DialogueCompressor",
+		"FullCompactProcessor",
+		"MessageSummaryOffloader",
+		"RoundLevelCompressor",
+		"ToolResultBudgetProcessor",
+	}
+	if len(names) != len(want) {
+		t.Fatalf("模板段映射 = %v, want %v", names, want)
+	}
+	for i, name := range want {
+		if names[i] != name {
+			t.Errorf("第 %d 项 = %s, want %s", i, names[i], name)
 		}
 	}
 }

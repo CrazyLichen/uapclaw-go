@@ -50,6 +50,7 @@ func buildFactoryUserProcessors(ctxCfg map[string]any) []ceiface.ProcessorSpec {
 		{"current_round_compressor_config", "CurrentRoundCompressor"},
 		{"round_level_compressor_config", "RoundLevelCompressor"},
 		{"full_compact_processor_config", "FullCompactProcessor"},
+		{"tool_result_budget_processor_config", "ToolResultBudgetProcessor"},
 	}
 	out := make([]ceiface.ProcessorSpec, 0, len(specs))
 	for _, spec := range specs {
@@ -150,6 +151,46 @@ func TestSessionMemoryPreset_ActiveSetIsThree(t *testing.T) {
 	}
 	if got["RoundLevelCompressor"] {
 		t.Error("session_memory 路径不应激活默认 preset 的 RoundLevelCompressor")
+	}
+}
+
+// TestFactoryTemplatePresetMerge_ToolResultBudgetConfigFromTemplate 锁定模板接线：
+// session_memory 路径下 ToolResultBudgetProcessor 的阈值应来自出厂模板，而不是零值/默认兜底。
+func TestFactoryTemplatePresetMerge_ToolResultBudgetConfigFromTemplate(t *testing.T) {
+	ctxCfg := loadFactoryContextEngineConfig(t)
+	rail := NewContextProcessorRail(WithUserProcessors(buildFactoryUserProcessors(ctxCfg)))
+
+	base := rail.buildPresetProcessors(nil, nil)
+	merged, err := MergeProcessors(base, rail.userProcessors, nil, nil)
+	if err != nil {
+		t.Fatalf("出厂模板合并不应报错: %v", err)
+	}
+
+	var cfg *offloader.ToolResultBudgetProcessorConfig
+	for _, spec := range merged {
+		if spec.Type != "ToolResultBudgetProcessor" {
+			continue
+		}
+		typed, ok := spec.Config.(*offloader.ToolResultBudgetProcessorConfig)
+		if !ok {
+			t.Fatalf("配置类型 = %T, want *ToolResultBudgetProcessorConfig", spec.Config)
+		}
+		cfg = typed
+	}
+	if cfg == nil {
+		t.Fatal("合并结果缺少 ToolResultBudgetProcessor")
+	}
+	if cfg.TokensThreshold != 50000 {
+		t.Errorf("TokensThreshold = %d, want 50000（模板值未生效）", cfg.TokensThreshold)
+	}
+	if cfg.LargeMessageThreshold != 10000 {
+		t.Errorf("LargeMessageThreshold = %d, want 10000（模板值未生效）", cfg.LargeMessageThreshold)
+	}
+	if cfg.TrimSize != 3000 {
+		t.Errorf("TrimSize = %d, want 3000（模板值未生效）", cfg.TrimSize)
+	}
+	if cfg.OffloadFilePrefix != "ToolResultBudgetProcessor" {
+		t.Errorf("OffloadFilePrefix = %q, want ToolResultBudgetProcessor", cfg.OffloadFilePrefix)
 	}
 }
 
