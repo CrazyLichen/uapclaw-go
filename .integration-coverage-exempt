@@ -167,3 +167,15 @@ internal/agentcore/sys_operation/local/encoding_other.go
 
 # shell_operation.go#L863-L868 — detectShellEncoding 的 Windows 分支（linux 不可达）。
 internal/agentcore/sys_operation/local/shell_operation.go#L863-L868
+
+# ── 2026-11-04 注释规范/去重整理 ──
+
+# audio.go — 音频工具参数 Schema 构造函数（纯数据拼装，无 IO、无装配），集成层
+# 没有独立入口；本次把三份重复 Schema 合并为 buildAudioInputParams，行为由
+# prompts/tools 包单测覆盖（整文件 96.9%）。
+internal/agentcore/harness/prompts/tools/audio.go
+
+# trajectory/types.go — 轨迹数据结构与消息转换（ToMessages 等），集成套件不直接
+# 驱动该入口；本次把重复的 baseMessageToMap 下沉为 llmschema.BaseMessageToMap，
+# 行为由 schema 包单测与 signal 包 ParseMessages 用例覆盖（内部调用同一函数）。
+internal/evolving/trajectory/types.go
