@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/drunner/dmessage_queue"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/message_queue"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -204,9 +205,15 @@ func (q *MessageQueuePulsar) Stop(ctx context.Context) error {
 // Subscribe 创建 topic 订阅。
 //
 // Python: MessageQueuePulsar.subscribe(topic) L126-139
+// Python 用 try/except 包住全部步骤（含 _validate_running），统一转成订阅错误。
 func (q *MessageQueuePulsar) Subscribe(topic string) (message_queue.SubscriptionBase, error) {
 	if !q.running.Load() {
-		return nil, errQueueNotRunning
+		return nil, exception.BuildError(
+			exception.StatusMessageQueueTopicSubscriptionError,
+			exception.WithCause(errQueueNotRunning),
+			exception.WithParam("topic", topic),
+			exception.WithParam("reason", errQueueNotRunning),
+		)
 	}
 
 	q.mu.Lock()
@@ -218,7 +225,12 @@ func (q *MessageQueuePulsar) Subscribe(topic string) (message_queue.Subscription
 
 	consumer, err := q.client.Subscribe(topic, DefaultSubscriptionName)
 	if err != nil {
-		return nil, err
+		return nil, exception.BuildError(
+			exception.StatusMessageQueueTopicSubscriptionError,
+			exception.WithCause(err),
+			exception.WithParam("topic", topic),
+			exception.WithParam("reason", err),
+		)
 	}
 
 	sub := newPulsarSubscription(topic, consumer)
