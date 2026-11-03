@@ -131,8 +131,8 @@ func (s *ShellToolsSuite) TestBash_GBK输出按系统编码解码() {
 	} else {
 		s.T().Setenv("LANG", "zh_CN.GBK")
 		inputs = map[string]any{
-			// printf 八进制转义输出 "你好" 的 GBK 字节
-			"command":     "printf '\\304\\343\\272\\303 GBK'",
+			// base64 解码输出 "你好" 的 GBK 字节（不依赖 shell printf 方言）
+			"command":     "echo xOO6wyBHQks= | base64 -d",
 			"description": "集成测试：GBK 输出按系统编码解码",
 		}
 	}
@@ -156,11 +156,12 @@ func (s *ShellToolsSuite) TestBash_GBK输出按系统编码解码() {
 // options.get("encoding", detect())）。
 func (s *ShellToolsSuite) TestExecuteCmd_显式GBK编码解码() {
 	if runtime.GOOS == "windows" {
-		s.T().Skip("Linux 用 printf 八进制转义制造 GBK 字节，Windows 上跳过")
+		s.T().Skip("Linux 用 base64 -d 制造 GBK 字节，Windows 上跳过")
 	}
 	res, err := s.op.Shell().ExecuteCmd(
 		context.Background(),
-		`printf '\304\343\272\303 explicit'`,
+		// base64 解码输出 "你好 explicit" 的 GBK 字节（不依赖 shell printf 方言）
+		"echo xOO6wyBleHBsaWNpdA== | base64 -d",
 		sys_operation.WithShellOptions(map[string]any{"encoding": "gbk"}),
 	)
 	s.Require().NoError(err)

@@ -128,7 +128,7 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 	// 行范围处理
 	// Python: text 模式用 aiofiles.open(encoding=encoding) 按编码解码；
 	// Go 曾直接 string(content) 忽略 encoding，读 GBK 文件乱码。
-	textContent := string(content)
+	var textContent string
 	if o.Mode == "text" {
 		textContent = decodeOutput(content, o.Encoding)
 		lines := strings.Split(textContent, "\n")
