@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -113,10 +114,24 @@ func TestParseStreamChunk_contentChunk_空白内容(t *testing.T) {
 }
 
 func TestParseStreamChunk_answer_默认(t *testing.T) {
-	output := makeOutput("answer", map[string]any{"content": "最终答案"})
+	output := makeOutput("answer", map[string]any{"output": "最终答案"})
 	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["event_type"] != "chat.final" {
 		t.Errorf("期望 chat.final, 实际 %v", result["event_type"])
+	}
+	if result["content"] != "最终答案" {
+		t.Errorf("期望 content='最终答案', 实际 %v", result["content"])
+	}
+}
+
+// answer 载荷缺少 output 时 Python 取 `payload.get("output", {})` → content=""，
+// 直接返回 None（不下发空答案）。此前 Go 用 fmt 打出 "<nil>" 当内容，凭空造出
+// 一条 chat.final，前端会看到字面量 <nil>。
+func TestParseStreamChunk_answer_缺output不下发(t *testing.T) {
+	output := makeOutput("answer", map[string]any{"content": "最终答案"})
+	result := ParseStreamChunk(output, nil, nil, nil, false)
+	if result != nil {
+		t.Errorf("缺 output 应返回 nil, 实际 %v", result)
 	}
 }
 
@@ -241,6 +256,43 @@ func TestParseStreamChunk_toolResult_rawOutput回退(t *testing.T) {
 	result := ParseStreamChunk(output, nil, nil, nil, false)
 	if result["raw_output"] != "raw data" {
 		t.Errorf("raw_output 应回退到 rawOutput, 实际 %v", result["raw_output"])
+	}
+}
+
+func TestParseStreamChunk_toolResult_空result保持空串(t *testing.T) {
+	// 工具执行失败时 result 就是空串（对齐 Python result_info.get("result", ...) 命中键），
+	// 不能回退成整体 map 的字符串，否则前端会渲染出 map[result:… tool_name:…]。
+	output := makeOutput("tool_result", map[string]any{
+		"tool_result": map[string]any{
+			"result":       "",
+			"tool_name":    "write_file",
+			"tool_call_id": "call-1",
+		},
+	})
+	result := ParseStreamChunk(output, nil, nil, nil, false)
+	if result["result"] != "" {
+		t.Errorf("空 result 应保持空串, 实际 %v", result["result"])
+	}
+	if result["tool_name"] != "write_file" {
+		t.Errorf("期望 tool_name='write_file', 实际 %v", result["tool_name"])
+	}
+}
+
+func TestParseStreamChunk_toolResult_result键缺失回退整体(t *testing.T) {
+	// Python: result_info.get("result", str(result_info)) —— 只有键缺失才回退；
+	// 回退文本走 PyText（紧凑 JSON），不再是 fmt 的 map[k:v] 形态。
+	output := makeOutput("tool_result", map[string]any{
+		"tool_result": map[string]any{
+			"tool_name": "write_file",
+		},
+	})
+	result := ParseStreamChunk(output, nil, nil, nil, false)
+	resultText, ok := result["result"].(string)
+	if !ok || !strings.Contains(resultText, `"tool_name":"write_file"`) {
+		t.Errorf("result 键缺失时应回退为紧凑 JSON, 实际 %v", result["result"])
+	}
+	if strings.HasPrefix(resultText, "map[") {
+		t.Errorf("回退文本不应是 map[...] 形态, 实际 %v", resultText)
 	}
 }
 

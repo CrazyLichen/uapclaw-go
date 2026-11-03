@@ -586,7 +586,7 @@ func TestParseStreamChunk_各种类型(t *testing.T) {
 		{"controller_output_task_failed", "controller_output", map[string]any{"type": "task_failed", "error": "fail"}, false, "chat.error"},
 		{"controller_output_default", "controller_output", map[string]any{"type": "other"}, false, "chat.delta"},
 		{"content_chunk", "content_chunk", map[string]any{"content": "text"}, false, "chat.delta"},
-		{"answer", "answer", map[string]any{"content": "final"}, false, "chat.final"},
+		{"answer", "answer", map[string]any{"output": "final"}, false, "chat.final"},
 		{"tool_call", "tool_call", map[string]any{"name": "tool1"}, false, "chat.tool_call"},
 		{"tool_update", "tool_update", map[string]any{"status": "running"}, false, "chat.tool_update"},
 		{"tool_result", "tool_result", map[string]any{"result": "ok"}, false, "chat.tool_result"},

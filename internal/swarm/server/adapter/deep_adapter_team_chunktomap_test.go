@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"strings"
 	"testing"
 
 	ateamschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -361,6 +362,32 @@ func TestParseTypedChunkMap_team命名空间直传(t *testing.T) {
 	}
 	if mc, _ := got["member_count"].(float64); mc != 3.0 {
 		t.Fatalf("member_count = %v, 期望 3.0", got["member_count"])
+	}
+}
+
+// TestParseTypedChunkMap_toolResult_result语义 锁定 team 路径与通用路径
+// （stream_utils.ParseStreamChunk）口径一致：result 键存在即采用（空串合法），
+// 只有键缺失才回退，且回退文本是紧凑 JSON 而不是 fmt 的 map[k:v]。
+func TestParseTypedChunkMap_toolResult_result语义(t *testing.T) {
+	empty := parseTypedChunkMap(map[string]any{
+		"type": "tool_result",
+		"payload": map[string]any{"tool_result": map[string]any{
+			"result":       "",
+			"tool_name":    "write_file",
+			"tool_call_id": "call-1",
+		}},
+	})
+	if empty["result"] != "" {
+		t.Errorf("空 result 应保持空串, 实际 %v", empty["result"])
+	}
+
+	missing := parseTypedChunkMap(map[string]any{
+		"type":    "tool_result",
+		"payload": map[string]any{"tool_result": map[string]any{"tool_name": "write_file"}},
+	})
+	text, _ := missing["result"].(string)
+	if !strings.Contains(text, `"tool_name":"write_file"`) || strings.HasPrefix(text, "map[") {
+		t.Errorf("result 键缺失时应回退为紧凑 JSON, 实际 %v", missing["result"])
 	}
 }
 

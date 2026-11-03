@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -176,7 +177,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 			content, _ = output["output"].(string)
 			isChunked, _ = output["chunked"].(bool)
 		} else {
-			content = fmt.Sprintf("%v", payload["output"])
+			content = commonutils.PyText(payload["output"])
 		}
 		if content == "" || strings.TrimSpace(content) == "" {
 			return nil
@@ -214,7 +215,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		if sub, ok := payload["tool_update"].(map[string]any); ok {
 			updatePayload = sub
 		} else {
-			updatePayload = map[string]any{"content": fmt.Sprintf("%v", payload["tool_update"])}
+			updatePayload = map[string]any{"content": commonutils.PyText(payload["tool_update"])}
 		}
 		ret := map[string]any{"event_type": "chat.tool_update"}
 		for k, v := range updatePayload {
@@ -228,10 +229,19 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		if sub, ok := payload["tool_result"].(map[string]any); ok {
 			resultInfo = sub
 		}
-		// M-01: 对齐 Python result_info.get("result", str(result_info)) fallback
-		resultVal := ExtractStringFromPayload(resultInfo, "result")
-		if resultVal == "" {
-			resultVal = fmt.Sprintf("%v", resultInfo)
+		// 对齐 Python result_info.get("result", str(result_info))：
+		// 键存在即采用（空串也是合法结果——工具执行失败时 result 就是 ""），
+		// 只有键缺失才回退整体字符串。此前按"空串"回退，导致失败工具的结果
+		// 被渲染成 map[result: tool_call_id:… tool_name:…]，把内部结构泄漏到前端。
+		resultVal := ""
+		if rawResult, ok := resultInfo["result"]; ok {
+			if s, isString := rawResult.(string); isString {
+				resultVal = s
+			} else {
+				resultVal = commonutils.PyText(rawResult)
+			}
+		} else {
+			resultVal = commonutils.PyText(resultInfo)
 		}
 		result := map[string]any{
 			"result": resultVal,
@@ -270,7 +280,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		// Python: L5118-5124
 		errorMsg := ExtractStringFromPayload(payload, "error")
 		if errorMsg == "" {
-			errorMsg = fmt.Sprintf("%v", payload)
+			errorMsg = commonutils.PyText(payload)
 		}
 		return map[string]any{
 			"event_type": "chat.error",
@@ -345,10 +355,10 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		// Python: interface_deep._parse_stream_chunk L5182-5208
 		content := ExtractStringFromPayload(payload, "content")
 		if content == "" {
-			content = fmt.Sprintf("%v", payload["content"])
+			content = commonutils.PyText(payload["content"])
 		}
 		if content == "" {
-			content = fmt.Sprintf("%v", payload)
+			content = commonutils.PyText(payload)
 		}
 		stage := ExtractStringFromPayload(payload, "stage")
 		if stage == "" {
@@ -492,7 +502,7 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		// payload 为空 → 作为 content
 		return map[string]any{
 			"event_type": "chat." + chunkType,
-			"content":    fmt.Sprintf("%v", payload),
+			"content":    commonutils.PyText(payload),
 		}
 	}
 }

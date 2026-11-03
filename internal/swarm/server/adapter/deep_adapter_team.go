@@ -20,6 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonutils "github.com/uapclaw/uapclaw-go/internal/common/utils"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	evolutionlogic "github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter/evolution/logic"
@@ -1514,7 +1515,7 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 			return result
 		}
 		// Python: return {"event_type": chunk_type, "content": str(payload)}
-		return map[string]any{"event_type": chunkType, "content": fmt.Sprintf("%v", payload)}
+		return map[string]any{"event_type": chunkType, "content": commonutils.PyText(payload)}
 	}
 
 	switch chunkType {
@@ -1643,7 +1644,7 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 			if res, ok := info["result"]; ok {
 				resultPayload["result"] = res
 			} else {
-				resultPayload["result"] = fmt.Sprintf("%v", info)
+				resultPayload["result"] = commonutils.PyText(info)
 			}
 			if tn, ok := info["tool_name"].(string); ok && tn != "" {
 				resultPayload["tool_name"] = tn
@@ -1668,7 +1669,7 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 				}
 			}
 		} else {
-			resultPayload["result"] = fmt.Sprintf("%v", resultInfo)
+			resultPayload["result"] = commonutils.PyText(resultInfo)
 		}
 		result := map[string]any{"event_type": "chat.tool_result"}
 		for k, v := range resultPayload {
@@ -1677,9 +1678,9 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 		return result
 
 	case "error":
-		errorMsg := fmt.Sprintf("%v", payload)
+		errorMsg := commonutils.PyText(payload)
 		if m, ok := payload["error"]; ok {
-			errorMsg = fmt.Sprintf("%v", m)
+			errorMsg = commonutils.PyText(m)
 		}
 		return map[string]any{"event_type": "chat.error", "error": errorMsg}
 
@@ -1747,7 +1748,7 @@ func parseTypedChunkMap(chunk map[string]any) map[string]any {
 		return result
 	}
 	// Python: return {"event_type": f"chat.{chunk_type}", "content": str(payload)}
-	return map[string]any{"event_type": "chat." + chunkType, "content": fmt.Sprintf("%v", payload)}
+	return map[string]any{"event_type": "chat." + chunkType, "content": commonutils.PyText(payload)}
 }
 
 // parseInteractionPayloadUtils 对齐 Python utils 层 _parse_interaction_payload(interactions)
