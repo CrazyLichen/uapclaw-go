@@ -15,19 +15,19 @@ type DmqRequestMessage struct {
 	// QueueMessage 基础消息字段
 	message_queue.QueueMessage
 	// Type 消息类型（INPUT / STOP），默认 INPUT
-	Type DMessageType
+	Type DMessageType `json:"type"`
 	// ReplyTopic 响应回写 topic
-	ReplyTopic string
+	ReplyTopic string `json:"reply_topic"`
 	// RequestID 请求唯一标识
-	RequestID string
+	RequestID string `json:"request_id"`
 	// SenderID 发送方标识
-	SenderID string
+	SenderID string `json:"sender_id"`
 	// ReceiverID 接收方标识
-	ReceiverID string
+	ReceiverID string `json:"receiver_id"`
 	// EnableStream 是否启用流式响应
-	EnableStream bool
+	EnableStream bool `json:"enable_stream"`
 	// ExpireAt 过期时间戳（秒级浮点），可选
-	ExpireAt *float64
+	ExpireAt *float64 `json:"expire_at"`
 }
 
 // DmqResponseMessage 分布式响应消息。
@@ -37,21 +37,21 @@ type DmqResponseMessage struct {
 	// QueueMessage 基础消息字段
 	message_queue.QueueMessage
 	// Type 消息类型，默认 OUTPUT
-	Type DMessageType
+	Type DMessageType `json:"type"`
 	// ResultType 结果类型（MESSAGE / ERROR），默认 MESSAGE
-	ResultType ResultType
+	ResultType ResultType `json:"result_type"`
 	// RequestID 请求唯一标识，与请求对应
-	RequestID string
+	RequestID string `json:"request_id"`
 	// SenderID 发送方标识
-	SenderID string
+	SenderID string `json:"sender_id"`
 	// ReceiverID 接收方标识
-	ReceiverID string
+	ReceiverID string `json:"receiver_id"`
 	// Seq 流式分片序号
-	Seq int
+	Seq int `json:"seq"`
 	// LastChunk 是否为流式最后一片
-	LastChunk bool
+	LastChunk bool `json:"last_chunk"`
 	// ExpireAt 过期时间戳（秒级浮点），可选
-	ExpireAt *float64
+	ExpireAt *float64 `json:"expire_at"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

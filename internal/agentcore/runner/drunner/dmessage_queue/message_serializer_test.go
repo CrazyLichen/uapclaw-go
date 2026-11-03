@@ -130,3 +130,103 @@ func TestSerializeMessage_非Dmq类型报错(t *testing.T) {
 	_, err := SerializeMessage(newPlainQueueMessage())
 	require.Error(t, err)
 }
+
+// TestDeserializeMessage_请求往返 测试序列化→反序列化字段全等。
+func TestDeserializeMessage_请求往返(t *testing.T) {
+	orig := NewDmqRequestMessage(map[string]any{"q": "hi"})
+	orig.MessageID = "mid-1"
+	orig.ReplyTopic = "reply.t"
+	orig.RequestID = "rid-1"
+	orig.SenderID = "s1"
+	orig.ReceiverID = "r1"
+	orig.EnableStream = true
+
+	data, err := SerializeMessage(orig)
+	require.NoError(t, err)
+
+	got, err := DeserializeMessage(data)
+	require.NoError(t, err)
+
+	req, ok := got.(*DmqRequestMessage)
+	require.True(t, ok, "期望 *DmqRequestMessage，实际 %T", got)
+	assert.Equal(t, "mid-1", req.MessageID)
+	assert.Equal(t, "reply.t", req.ReplyTopic)
+	assert.Equal(t, "rid-1", req.RequestID)
+	assert.Equal(t, "s1", req.SenderID)
+	assert.Equal(t, "r1", req.ReceiverID)
+	assert.True(t, req.EnableStream)
+	assert.Equal(t, "hi", req.Payload["q"])
+}
+
+// TestDeserializeMessage_响应往返 测试响应类型与流式字段。
+func TestDeserializeMessage_响应往返(t *testing.T) {
+	orig := NewDmqResponseMessage(map[string]any{"a": "b"})
+	orig.Seq = 7
+	orig.LastChunk = true
+
+	data, err := SerializeMessage(orig)
+	require.NoError(t, err)
+
+	got, err := DeserializeMessage(data)
+	require.NoError(t, err)
+
+	resp, ok := got.(*DmqResponseMessage)
+	require.True(t, ok, "期望 *DmqResponseMessage，实际 %T", got)
+	assert.Equal(t, 7, resp.Seq)
+	assert.True(t, resp.LastChunk)
+	assert.Equal(t, "b", resp.Payload["a"])
+}
+
+// TestDeserializeMessage_补默认值 测试缺 type/result_type 时补默认值。
+//
+// Python: pydantic 字段默认值 DMessageType.OUTPUT / ResultType.MESSAGE
+func TestDeserializeMessage_补默认值(t *testing.T) {
+	raw := []byte(`{"__class__":"DmqResponseMessage","message_id":"m1","payload":{}}`)
+
+	got, err := DeserializeMessage(raw)
+	require.NoError(t, err)
+
+	resp, ok := got.(*DmqResponseMessage)
+	require.True(t, ok)
+	assert.Equal(t, DMessageTypeOutput, resp.Type)
+	assert.Equal(t, ResultTypeMessage, resp.ResultType)
+}
+
+// TestDeserializeMessage_补请求默认值 测试缺 type 时补 INPUT。
+func TestDeserializeMessage_补请求默认值(t *testing.T) {
+	raw := []byte(`{"__class__":"DmqRequestMessage","message_id":"m1","payload":{}}`)
+
+	got, err := DeserializeMessage(raw)
+	require.NoError(t, err)
+
+	req, ok := got.(*DmqRequestMessage)
+	require.True(t, ok)
+	assert.Equal(t, DMessageTypeInput, req.Type)
+}
+
+// TestDeserializeMessage_未知类名报错 测试对齐 Python ValueError。
+//
+// Python: raise ValueError(f"Unknown payload class: {class_name}")
+func TestDeserializeMessage_未知类名报错(t *testing.T) {
+	_, err := DeserializeMessage([]byte(`{"__class__":"UnknownThing"}`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown payload class: UnknownThing")
+}
+
+// TestDeserializeMessage_嵌套payload保留map 测试偏差 D4：内层不重建类型。
+func TestDeserializeMessage_嵌套payload保留map(t *testing.T) {
+	raw := []byte(`{"__class__":"DmqResponseMessage","payload":{"__class__":"OutputSchema","content":"x"}}`)
+
+	got, err := DeserializeMessage(raw)
+	require.NoError(t, err)
+
+	resp, ok := got.(*DmqResponseMessage)
+	require.True(t, ok)
+	assert.Equal(t, "OutputSchema", resp.Payload["__class__"])
+}
+
+// TestDeserializeMessage_坏JSON报错 测试非法字节返回错误。
+func TestDeserializeMessage_坏JSON报错(t *testing.T) {
+	_, err := DeserializeMessage([]byte("not-json"))
+	require.Error(t, err)
+}

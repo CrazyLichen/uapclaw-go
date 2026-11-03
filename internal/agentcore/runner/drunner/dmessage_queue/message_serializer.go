@@ -93,6 +93,46 @@ func SerializeMessage(msg message_queue.QueueMessageBase) ([]byte, error) {
 	return json.Marshal(asMap)
 }
 
+// DeserializeMessage 将 wire 字节反序列化为强类型 Dmq 消息。
+//
+// Python: message_serializer.deserialize_message(data)
+// payload 内部不做类型重建（偏差 D4），__class__ 键原样保留在 map 中，
+// 因此 Go 收进来再发出去，wire 仍与 Python 兼容。
+func DeserializeMessage(data []byte) (message_queue.QueueMessageBase, error) {
+	var probe struct {
+		Class string `json:"__class__"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return nil, err
+	}
+
+	switch probe.Class {
+	case "DmqRequestMessage":
+		var msg DmqRequestMessage
+		if err := json.Unmarshal(data, &msg); err != nil {
+			return nil, err
+		}
+		if msg.Type == "" {
+			msg.Type = DMessageTypeInput
+		}
+		return &msg, nil
+	case "DmqResponseMessage":
+		var msg DmqResponseMessage
+		if err := json.Unmarshal(data, &msg); err != nil {
+			return nil, err
+		}
+		if msg.Type == "" {
+			msg.Type = DMessageTypeOutput
+		}
+		if msg.ResultType == "" {
+			msg.ResultType = ResultTypeMessage
+		}
+		return &msg, nil
+	default:
+		return nil, fmt.Errorf("unknown payload class: %s", probe.Class)
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // serializePayload 递归处理 payload 值，注入 datetime 特例并做深度检查。
