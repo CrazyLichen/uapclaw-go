@@ -63,12 +63,20 @@ func (c *SkillDevContext) InvokeStageAgent(
 // ReActAgent.Invoke 的返回是 map（键随实现而定），这里按 output/response/content
 // 优先级取字符串，取不到时退化为整体格式化。
 func extractStageOutput(result map[string]any) string {
+	found := false
 	for _, key := range []string{"output", "response", "content", "result"} {
-		if v, ok := result[key]; ok {
-			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				return s
-			}
+		v, ok := result[key]
+		if !ok {
+			continue
 		}
+		found = true
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	if found {
+		// 命中已知键但非字符串/为空：视为无有效输出，避免把 map 打印成文件内容
+		return ""
 	}
 	return strings.TrimSpace(fmt.Sprintf("%v", result))
 }

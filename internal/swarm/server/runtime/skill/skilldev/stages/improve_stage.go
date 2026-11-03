@@ -127,6 +127,10 @@ func (h *ImproveStageHandler) runImproveAgent(
 ) error {
 	skillDir := filepath.Join(sctx.Workspace, "skill")
 	existing := readSkillFiles(skillDir)
+	existingMD := ""
+	if data, readErr := os.ReadFile(filepath.Join(skillDir, "SKILL.md")); readErr == nil {
+		existingMD = string(data)
+	}
 
 	feedbackJSON, _ := json.Marshal(feedback)
 	systemPrompt := ImproveSystemPrompt
@@ -151,7 +155,7 @@ func (h *ImproveStageHandler) runImproveAgent(
 	if strings.TrimSpace(content) == "" {
 		return fmt.Errorf("IMPROVE 阶段模型未输出改进内容")
 	}
-	content = ensureImprovedSkillMD(existing, content)
+	content = ensureImprovedSkillMD(existingMD, content)
 
 	skillMDPath := filepath.Join(skillDir, "SKILL.md")
 	if writeErr := os.WriteFile(skillMDPath, []byte(content), 0o644); writeErr != nil {
