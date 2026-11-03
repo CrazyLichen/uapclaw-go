@@ -344,6 +344,50 @@ func TestParseStreamChunk_todoUpdated_无todos(t *testing.T) {
 	}
 }
 
+// TestParseStreamChunk_todoUpdated_结构体切片todos 覆盖生产端真实 payload 形态。
+//
+// stream_event_emit.formatTodosForFrontend 产出 []map[string]any，
+// 只断言 []any 时该 payload 会被吞成空列表，前端任务栏表现为「永远暂无任务」。
+func TestParseStreamChunk_todoUpdated_结构体切片todos(t *testing.T) {
+	output := makeOutput("todo.updated", map[string]any{
+		"todos": []map[string]any{
+			{"id": "1", "content": "任务1", "activeForm": "执行任务1", "status": "in_progress"},
+			{"id": "2", "content": "任务2", "activeForm": "执行任务2", "status": "pending"},
+		},
+	})
+	result := ParseStreamChunk(output, nil, nil, nil, false)
+	if result["event_type"] != "todo.updated" {
+		t.Fatalf("期望 todo.updated, 实际 %v", result["event_type"])
+	}
+	todos, ok := result["todos"].([]any)
+	if !ok {
+		t.Fatalf("todos 类型 = %T, want []any", result["todos"])
+	}
+	if len(todos) != 2 {
+		t.Fatalf("期望 todos 列表长度 2, 实际 %v", result["todos"])
+	}
+	first, isMap := todos[0].(map[string]any)
+	if !isMap || first["id"] != "1" || first["status"] != "in_progress" {
+		t.Errorf("todos[0] = %v, want map[id:1 status:in_progress]", todos[0])
+	}
+}
+
+// TestParseStreamChunk_todoUpdated_非法形态 未知形态不得 panic，按空列表下发（并打 Warn）。
+func TestParseStreamChunk_todoUpdated_非法形态(t *testing.T) {
+	output := makeOutput("todo.updated", map[string]any{"todos": "not-a-list"})
+	result := ParseStreamChunk(output, nil, nil, nil, false)
+	if result["event_type"] != "todo.updated" {
+		t.Fatalf("期望 todo.updated, 实际 %v", result["event_type"])
+	}
+	todos, ok := result["todos"].([]any)
+	if !ok {
+		t.Fatalf("todos 类型 = %T, want []any", result["todos"])
+	}
+	if len(todos) != 0 {
+		t.Errorf("非法形态应下发空列表, 实际 %v", todos)
+	}
+}
+
 func TestParseStreamChunk_contextUsage(t *testing.T) {
 	usage := &UsageAccumulator{}
 	output := makeOutput("context.usage", map[string]any{

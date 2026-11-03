@@ -296,9 +296,19 @@ func ParseStreamChunk(output *stream.OutputSchema, usage *UsageAccumulator, emit
 		}
 
 	case "todo.updated":
-		// Python: L5133-5135: 提取 todos 列表
-		todos, _ := payload["todos"].([]any)
-		if todos == nil {
+		// Python: L5133-5135: 提取 todos 列表。
+		//
+		// Python 的 list 不携带元素类型，payload["todos"] 直接可用；Go 里同一字段
+		// 可能是 []any（JSON 反序列化）或 []map[string]any（formatTodosForFrontend
+		// 直接构造），只断言 []any 会让后者被兜成空列表——前端任务栏因此永远
+		// 显示「暂无任务」（2026-11-03 修复）。
+		todos, ok := ExtractAnySliceFromPayload(payload, "todos")
+		if !ok {
+			logger.Warn(logComponent).
+				Str("event_type", "todo.updated").
+				Str("key", "todos").
+				Str("actual_type", fmt.Sprintf("%T", payload["todos"])).
+				Msg("todo.updated todos type assertion failed, using empty list")
 			todos = []any{}
 		}
 		return map[string]any{
