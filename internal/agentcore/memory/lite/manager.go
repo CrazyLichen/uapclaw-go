@@ -45,6 +45,12 @@ type MemoryManagerParams struct {
 	NodeName string
 	// LLM LLM 实例。对齐 Python manager.llm
 	LLM *llm.Model
+	// Ctx 初始化用的上下文。
+	//
+	// 必须传调用方 ctx：Initialize 会立刻做一次全量索引，文件读取走
+	// sys_operation 的沙箱校验，而沙箱根来自 ctx 里的 CwdState。
+	// 传 Background 会导致「路径在沙箱根目录之外，访问被拒绝」→ 索引永远为空。
+	Ctx context.Context
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

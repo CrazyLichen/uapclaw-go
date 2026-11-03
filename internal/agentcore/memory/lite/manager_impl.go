@@ -610,7 +610,12 @@ func getMemoryIndexManager(params MemoryManagerParams) (MemoryIndexManager, erro
 		llm:                 params.LLM,
 	}
 
-	if err := mgr.Initialize(context.Background()); err != nil {
+	// 用调用方 ctx 初始化：首次全量索引要读文件，沙箱根来自 ctx 的 CwdState
+	initCtx := params.Ctx
+	if initCtx == nil {
+		initCtx = context.Background()
+	}
+	if err := mgr.Initialize(initCtx); err != nil {
 		logger.Error(logComponent).Err(err).Msg("initializationmemorymanager failed")
 		return nil, err
 	}
@@ -880,6 +885,7 @@ func (m *memoryIndexManager) syncMemoryFiles(ctx context.Context) error {
 			continue
 		}
 		if err := m.indexFile(ctx, entry, "memory"); err != nil {
+			fmt.Printf("[DBG] indexFile err=%v path=%q\n", err, entry.Path)
 			logger.Error(logComponent).Err(err).Str("path", entry.Path).Msg("indexfile failed")
 		}
 	}

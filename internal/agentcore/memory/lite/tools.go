@@ -39,6 +39,7 @@ func InitMemoryManagerAsync(ctx context.Context, ws *workspace.Workspace, agentI
 		EmbeddingConfig: embeddingConfig,
 		SysOperation:    sysOp,
 		NodeName:        "memory",
+		Ctx:             ctx,
 	}
 	mgr, err := GetMemoryIndexManager(params)
 	if err != nil {
