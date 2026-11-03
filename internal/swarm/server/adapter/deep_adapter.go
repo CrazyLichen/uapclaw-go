@@ -3078,12 +3078,46 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 	}
 }
 
-// getCurrentAgentRails 获取当前 Agent Rails（热重载时使用）。
-// Python: _get_current_agent_rails(config, config_base)
+// getCurrentAgentRails 获取热重载时需要重新装配的 rail 列表。
+// Python: _get_current_agent_rails(config, config_base) (interface_deep.py:2304-2352)
+//
+// 与 buildAgentRails 的冷启动语义完全不同：
+//  1. 就地更新：仅演进 rail（换 LLM 与 auto_scan），实例与注册状态不动；
+//  2. 新建：仅 skillRail；
+//  3. 复用现有实例重新 init：contextAssemble / contextProcessor / memory / avatar / permission；
+//  4. 其余 rail（runtimePrompt/responsePrompt/streamEvent/taskPlanning/security/heartbeat/
+//     subagent/filesystem/evolution/skillCreate 等）不进列表，保持原实例与原注册状态。
+//     全量重建会清空 StreamEventRail 的 abortRequested 与 TaskPlanningRail 的 usageRecords。
 func (d *DeepAdapter) getCurrentAgentRails(config map[string]any, configBase map[string]any) []sainterfaces.AgentRail {
-	// 就地更新演进 rail（不重建、不重新注册），对齐 Python :2314-2328
+	// 1. 就地更新演进 rail（不重建、不重新注册），对齐 Python :2314-2328
 	d.updateSkillEvolutionRail(config)
-	return d.buildAgentRails(config, configBase, d.mode)
+
+	// 2. 唯一新建项：skillRail（include_tools 取决于 profile，靠重建切换）
+	d.skillRail = d.buildSkillRailWithIncludeTools(d.skillIncludeToolsForProfile(d.instanceOverrides))
+
+	// 3. 复用现有实例（非 nil 才入列；同实例传给 configure 后只重跑 Init，对象不变）
+	railsList := make([]sainterfaces.AgentRail, 0, 6)
+	if d.skillRail != nil {
+		railsList = append(railsList, d.skillRail)
+	}
+	if d.contextAssembleRail != nil {
+		railsList = append(railsList, d.contextAssembleRail)
+	}
+	if d.contextProcessorRail != nil {
+		railsList = append(railsList, d.contextProcessorRail)
+	}
+	if d.memoryRail != nil {
+		railsList = append(railsList, d.memoryRail)
+	}
+	if d.avatarRail != nil {
+		railsList = append(railsList, d.avatarRail)
+	}
+	if d.permissionRail != nil {
+		railsList = append(railsList, d.permissionRail)
+	}
+
+	logger.Info(logComponent).Int("rails_count", len(railsList)).Msg("getCurrentAgentRails completed")
+	return railsList
 }
 
 // extractTextContent 从 payload 提取文本内容。

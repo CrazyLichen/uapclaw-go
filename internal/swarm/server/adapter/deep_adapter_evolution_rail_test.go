@@ -3,8 +3,11 @@ package adapter
 import (
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	coreevolution "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/evolution"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 )
 
 // TestBuildAgentRails_不构建演进与创建rail 冷启动装配不得构建两条按模式注册的 rail，
@@ -212,5 +215,59 @@ func TestBuildDynamicRail_写字段(t *testing.T) {
 	}
 	if d.skillEvolutionRail != rail {
 		t.Fatal("字段与返回值必须是同一实例")
+	}
+}
+
+// TestGetCurrentAgentRails_仅skill重建其余复用 热重载只新建 skillRail，
+// 其余 5 个 rail 复用现有实例，有状态 rail 不进列表。
+func TestGetCurrentAgentRails_仅skill重建其余复用(t *testing.T) {
+	t.Setenv("UAPCLAW_DATA_DIR", t.TempDir())
+	pathutil.ResetCache()
+	d := NewDeepAdapter()
+	d.setConfigSnapshots(map[string]any{
+		"evolution": map[string]any{"enabled": true, "auto_scan": false},
+	}, map[string]any{})
+	d.model = usableTestModel()
+	d.defaultModelName = "test-model"
+	d.instanceOverrides = map[string]any{}
+
+	reused := []sainterfaces.AgentRail{
+		rails.NewHeartbeatRail(),
+		rails.NewHeartbeatRail(),
+		rails.NewHeartbeatRail(),
+		rails.NewHeartbeatRail(),
+		rails.NewHeartbeatRail(),
+	}
+	d.contextAssembleRail = reused[0]
+	d.contextProcessorRail = reused[1]
+	d.memoryRail = reused[2]
+	d.avatarRail = reused[3]
+	d.permissionRail = reused[4]
+
+	railsList := d.getCurrentAgentRails(map[string]any{}, map[string]any{})
+
+	if d.skillRail == nil {
+		t.Fatal("skillRail 应被重建")
+	}
+	for i, want := range reused {
+		found := false
+		for _, r := range railsList {
+			if r == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("复用实例 #%d 应出现在热重载列表中", i)
+		}
+	}
+	// 有状态 rail 不得入列（否则会被重建并丢内存状态）
+	for _, r := range railsList {
+		if _, ok := r.(*rails.TaskPlanningRail); ok {
+			t.Fatal("TaskPlanningRail 不得进入热重载列表")
+		}
+		if _, ok := r.(*commrails.JiuClawStreamEventRail); ok {
+			t.Fatal("StreamEventRail 不得进入热重载列表")
+		}
 	}
 }
