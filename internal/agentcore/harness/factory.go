@@ -582,8 +582,15 @@ func addDefaultRails(
 		logger.Debug(logComponent).Msg("SysOperationRail added")
 	}
 
-	// TaskPlanningRail — 仅当 enable_task_planning=True 时添加
-	if params.EnableTaskPlanning && !alreadyProvidedByType(userProvidedTypes, nil) {
+	// TaskPlanningRail — 仅当 enable_task_planning=True 时添加。
+	//
+	// 2026-11-03 修复：此前传 nil（alreadyProvidedByType 对 nil 恒返回 false），
+	// 即便调用方（DeepAdapter.buildRails）已通过 params.Rails 提供了
+	// TaskPlanningRail，这里仍会再追加一个——形成双实例：adapter 持有的
+	// 引用注销的是 A，而 factory 的 B 无人引用、永远注销不掉，切到
+	// 非 plan 模式后 B 的 BeforeModelCall 每轮把 todo 提示词节加回来，
+	// 与 A 的 Uninit 已删除的 todo 工具形成「提示词说能用、工具已没了」。
+	if params.EnableTaskPlanning && !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&rails.TaskPlanningRail{})) {
 		modelSelMap := make(map[*llm.Model]string, len(params.ModelSelection))
 		for _, entry := range params.ModelSelection {
 			if entry.Model != nil {

@@ -34,6 +34,18 @@ type InvokeRecord struct {
 	Messages model_clients.MessagesParam
 }
 
+// StreamRecord 记录一次 Stream 调用的入参。
+//
+// 独立于 InvokeRecord：流式路径（web/adapter 的 ProcessMessageStreamImpl）只走 Stream，
+// 若与 Invoke 共用同一份记录，会把「Invoke 调用次数」的语义污染掉。
+// 用途：断言模型实际收到的系统提示词与会话上下文（如提示词节是否残留）。
+type StreamRecord struct {
+	// CallCount 流式调用序号（从 1 开始）
+	CallCount int
+	// Messages 本次调用传入的消息参数
+	Messages model_clients.MessagesParam
+}
+
 // MockModelClient 集成测试专用的 LLM Mock 客户端。
 // 对齐 Python tests/unit_tests/fixtures/mock_llm.py:MockLLMModel
 //
@@ -41,6 +53,7 @@ type InvokeRecord struct {
 //   - 预设响应队列，按调用顺序依次消费
 //   - 队列耗尽后返回默认文本响应
 //   - 记录调用历史（InvokeCallCount / GetInvokeCall / LastInvokeCall）
+//   - 记录流式入参（StreamCallCount / GetStreamCall / LastStreamCall）
 //   - 并发安全（sync.Mutex 保护）
 //   - 支持注册到 ClientRegistry（Factory 方法）
 type MockModelClient struct {
@@ -48,6 +61,8 @@ type MockModelClient struct {
 	responses   []MockResponse
 	callCount   int
 	invokeCalls []InvokeRecord
+	streamCalls []StreamRecord
+	streamCount int
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -175,10 +190,14 @@ func (m *MockModelClient) Invoke(_ context.Context, messages model_clients.Messa
 
 // Stream 实现 BaseModelClient.Stream，将预设响应作为单个 chunk 发出。
 // 对齐 Python: MockLLMModel.stream(messages, ...) — 单次 yield 整个 chunk
-func (m *MockModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+//
+// 入参 messages 会记录到 streamCalls，供用例断言「模型实际收到的提示词」。
+func (m *MockModelClient) Stream(_ context.Context, messages model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
 	m.mu.Lock()
 	resp := m.getNextResponseLocked()
 	m.callCount++
+	m.streamCount++
+	m.streamCalls = append(m.streamCalls, StreamRecord{CallCount: m.streamCount, Messages: messages})
 	m.mu.Unlock()
 
 	if resp.Err != nil {
@@ -316,6 +335,33 @@ func (m *MockModelClient) LastInvokeCall() *InvokeRecord {
 	return &m.invokeCalls[len(m.invokeCalls)-1]
 }
 
+// StreamCallCount 返回 Stream 被调用的总次数。
+func (m *MockModelClient) StreamCallCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.streamCount
+}
+
+// GetStreamCall 返回第 i 次 Stream 调用的记录（0-indexed）。
+func (m *MockModelClient) GetStreamCall(i int) *StreamRecord {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if i < 0 || i >= len(m.streamCalls) {
+		return nil
+	}
+	return &m.streamCalls[i]
+}
+
+// LastStreamCall 返回最近一次 Stream 调用的记录。
+func (m *MockModelClient) LastStreamCall() *StreamRecord {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.streamCalls) == 0 {
+		return nil
+	}
+	return &m.streamCalls[len(m.streamCalls)-1]
+}
+
 // ResetCalls 清空调用历史和计数，同时清空响应队列。
 // 对齐 Python: MockLLMModel.set_responses([]) 的重置语义
 func (m *MockModelClient) ResetCalls() {
@@ -323,6 +369,8 @@ func (m *MockModelClient) ResetCalls() {
 	defer m.mu.Unlock()
 	m.callCount = 0
 	m.invokeCalls = nil
+	m.streamCalls = nil
+	m.streamCount = 0
 }
 
 // --- ClientRegistry 注册 ---
