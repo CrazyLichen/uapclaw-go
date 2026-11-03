@@ -169,6 +169,10 @@ react:
   # 技能模式：all / 指定列表（adapter/deep_adapter_rails.go:319）
   skill_mode: all
   # 子代理开关：仅显式 enabled: true 才启用（adapter/deep_adapter_config.go:175-178）
+  # code 模式：explore_agent / plan_agent 恒挂载，enabled 不生效，仅 max_iterations 生效；
+  #            code_agent / research_agent 按 enabled 启用。
+  # browser_agent：由 PLAYWRIGHT_RUNTIME_MCP_ENABLED / BROWSER_RUNTIME_MCP_ENABLED 控制，
+  #                本段只覆盖 max_iterations 等参数。
   subagents:
     general_agent:
       enabled: true
