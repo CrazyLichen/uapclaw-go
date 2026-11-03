@@ -653,6 +653,37 @@ func ExtractFloatFromPayload(payload map[string]any, key string) float64 {
 	}
 }
 
+// ExtractAnySliceFromPayload 从 payload 提取列表字段，收敛为 []any。
+//
+// payload 里的 list 在进程内有两种形态：
+//   - []any：JSON 反序列化产物（跨进程 chunk、落盘重放、测试夹具）；
+//   - []map[string]any：业务代码直接构造（todo.updated 的 todos 由
+//     stream_event_emit.formatTodosForFrontend 产出）。
+//
+// 只断言 []any 会把后者整块吞成空列表（前端右侧任务栏「永远暂无任务」）；
+// 只断言 []map[string]any 又会让前者塌陷。两条路径都真实存在，故两者都接受。
+//
+// 返回 ok=false 表示键存在、值非 nil，但不是上述两种形态——调用方据此记
+// Warn，避免再次静默降级为空列表。
+func ExtractAnySliceFromPayload(payload map[string]any, key string) ([]any, bool) {
+	v, ok := payload[key]
+	if !ok || v == nil {
+		return []any{}, true
+	}
+	switch items := v.(type) {
+	case []any:
+		return items, true
+	case []map[string]any:
+		out := make([]any, len(items))
+		for i, item := range items {
+			out[i] = item
+		}
+		return out, true
+	default:
+		return nil, false
+	}
+}
+
 // SerializeValue 将非 JSON 原生值序列化为前端安全的 payload。
 // Python: _serialize_value(value) (stream_utils.py L472-483)
 func SerializeValue(value any) any {

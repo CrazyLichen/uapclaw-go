@@ -801,3 +801,49 @@ func TestFindInteractionPayload_无匹配(t *testing.T) {
 		t.Errorf("无匹配应返回 nil, 实际 %v", result)
 	}
 }
+
+// TestExtractAnySliceFromPayload 覆盖 payload 列表字段的两种真实形态与非法形态。
+//
+// payload 里的 list 在进程内有两种类型：JSON 反序列化得到 []any，
+// 业务代码直接构造得到 []map[string]any（如 todo.updated 的 todos）。
+// 只断言其中一种都会让另一种整块丢失。
+func TestExtractAnySliceFromPayload(t *testing.T) {
+	anyItems := []any{map[string]any{"id": "1"}}
+	mapItems := []map[string]any{{"id": "1"}, {"id": "2"}}
+
+	tests := []struct {
+		name    string
+		payload map[string]any
+		wantLen int
+		wantOK  bool
+		wantID  string
+	}{
+		{name: "键缺失", payload: map[string]any{}, wantLen: 0, wantOK: true},
+		{name: "值为nil", payload: map[string]any{"todos": nil}, wantLen: 0, wantOK: true},
+		{name: "any切片", payload: map[string]any{"todos": anyItems}, wantLen: 1, wantOK: true, wantID: "1"},
+		{name: "结构体切片", payload: map[string]any{"todos": mapItems}, wantLen: 2, wantOK: true, wantID: "1"},
+		{name: "非法形态", payload: map[string]any{"todos": "not-a-list"}, wantLen: 0, wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := ExtractAnySliceFromPayload(tt.payload, "todos")
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
+			}
+			if len(got) != tt.wantLen {
+				t.Fatalf("len(got) = %d, want %d", len(got), tt.wantLen)
+			}
+			if tt.wantID == "" {
+				return
+			}
+			first, isMap := got[0].(map[string]any)
+			if !isMap {
+				t.Fatalf("got[0] 类型 = %T, want map[string]any", got[0])
+			}
+			if first["id"] != tt.wantID {
+				t.Errorf("got[0][id] = %v, want %v", first["id"], tt.wantID)
+			}
+		})
+	}
+}
