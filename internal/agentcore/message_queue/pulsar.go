@@ -272,8 +272,21 @@ func (q *MessageQueuePulsar) Unsubscribe(ctx context.Context, topic string) erro
 // Produce 发布消息到指定 topic。
 //
 // Python: MessageQueuePulsar.produce_message(topic, message) L151-177
+// Python 用 try/except 包住全部步骤（含 _validate_running），统一转成生产错误。
 func (q *MessageQueuePulsar) Produce(ctx context.Context, topic string, msg message_queue.QueueMessageBase) error {
-	return q.produceMessage(ctx, topic, msg)
+	if err := q.produceMessage(ctx, topic, msg); err != nil {
+		if _, ok := err.(*exception.BaseError); ok {
+			return err
+		}
+		return exception.BuildError(
+			exception.StatusMessageQueueTopicMessageProductionError,
+			exception.WithCause(err),
+			exception.WithParam("topic", topic),
+			exception.WithParam("message", msg),
+			exception.WithParam("reason", err),
+		)
+	}
+	return nil
 }
 
 // SetMessageHandler 设置消息处理回调。实现 SubscriptionBase 接口。
@@ -345,10 +358,11 @@ func (q *MessageQueuePulsar) produceMessage(ctx context.Context, topic string, m
 	return nil
 }
 
-// getOrCreateProducer 获取或创建 topic 对应的 producer。
+// getOrCreateProducer 获取或创建 topic 对应的 producer，带 LRU 淘汰。
 //
 // Python: MessageQueuePulsar._get_or_create_producer(topic) L179-208
-// 完整 LRU 淘汰在 Task 9 补。
+// 单锁内完成全部判断与创建（偏差 D2：取消 Python 的双检快路径，
+// 因其无锁读 map 在 Go 属数据竞争）。
 func (q *MessageQueuePulsar) getOrCreateProducer(topic string) (pulsarProducerAPI, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -357,6 +371,24 @@ func (q *MessageQueuePulsar) getOrCreateProducer(topic string) (pulsarProducerAP
 		q.producerOrder.MoveToBack(elem)
 		return elem.Value.(*producerEntry).producer, nil
 	}
+
+	if len(q.producers) >= q.maxProducers {
+		if front := q.producerOrder.Front(); front != nil {
+			evicted := front.Value.(*producerEntry)
+			q.producerOrder.Remove(front)
+			delete(q.producers, evicted.topic)
+			evicted.producer.Close()
+			logger.Debug(logComponent).
+				Str("event_type", "mq_pulsar_producer_evicted").
+				Str("topic", evicted.topic).
+				Msg("LRU producer evicted")
+		}
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "mq_pulsar_producer_creating").
+		Str("topic", topic).
+		Msg("creating new producer")
 
 	producer, err := q.client.CreateProducer(topic)
 	if err != nil {

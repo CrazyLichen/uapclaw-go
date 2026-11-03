@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/drunner/dmessage_queue"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/message_queue"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -153,6 +154,108 @@ func TestUnsubscribe_关闭consumer(t *testing.T) {
 	require.NoError(t, q.Unsubscribe(context.Background(), "topic.a"))
 
 	assert.Equal(t, 1, client.consumer.closed)
+}
+
+// TestProduce_未启动报错 测试错误码为 MESSAGE_QUEUE_TOPIC_MESSAGE_PRODUCTION_ERROR。
+func TestProduce_未启动报错(t *testing.T) {
+	q := NewMessageQueuePulsar(config.NewPulsarConfig("pulsar://localhost:6650"))
+
+	err := q.Produce(context.Background(), "topic.a", newTestRequest())
+	require.Error(t, err)
+
+	baseErr, ok := err.(*exception.BaseError)
+	require.True(t, ok, "期望 *exception.BaseError，实际 %T", err)
+	assert.Equal(t, "MESSAGE_QUEUE_TOPIC_MESSAGE_PRODUCTION_ERROR", baseErr.Status().Name())
+}
+
+// TestProduce_partitionKey为messageID 测试 partitionKey 传 message_id。
+//
+// Python: producer.send(content, partition_key=message.message_id)
+func TestProduce_partitionKey为messageID(t *testing.T) {
+	client := &fakeClient{producer: &fakeProducer{}, consumer: &fakeConsumer{}}
+	q := newTestQueue(client)
+
+	msg := dmessage_queue.NewDmqRequestMessage(map[string]any{"q": "hi"})
+	msg.MessageID = "mid-42"
+
+	require.NoError(t, q.Produce(context.Background(), "topic.a", msg))
+
+	require.Len(t, client.producer.sentKeys, 1)
+	assert.Equal(t, "mid-42", client.producer.sentKeys[0])
+	// 发送内容必须是 wire 字节（含 __class__ 标记）
+	assert.Contains(t, client.producer.sentPayloads[0], "DmqRequestMessage")
+}
+
+// TestProduce_发送失败报错 测试发送错误被包装成生产错误。
+func TestProduce_发送失败报错(t *testing.T) {
+	client := &fakeClient{producer: &fakeProducer{sendErr: assert.AnError}, consumer: &fakeConsumer{}}
+	q := newTestQueue(client)
+
+	err := q.Produce(context.Background(), "topic.a", newTestRequest())
+	require.Error(t, err)
+
+	baseErr, ok := err.(*exception.BaseError)
+	require.True(t, ok, "期望 *exception.BaseError，实际 %T", err)
+	assert.Equal(t, "MESSAGE_QUEUE_TOPIC_MESSAGE_PRODUCTION_ERROR", baseErr.Status().Name())
+}
+
+// TestProduce_非Dmq类型报错 测试偏差 D6 在网络层透传。
+func TestProduce_非Dmq类型报错(t *testing.T) {
+	client := &fakeClient{producer: &fakeProducer{}, consumer: &fakeConsumer{}}
+	q := newTestQueue(client)
+
+	err := q.Produce(context.Background(), "topic.a", message_queue.NewQueueMessage(nil))
+	require.Error(t, err)
+
+	baseErr, ok := err.(*exception.BaseError)
+	require.True(t, ok, "期望 *exception.BaseError，实际 %T", err)
+	assert.Equal(t, "MESSAGE_QUEUE_TOPIC_MESSAGE_PRODUCTION_ERROR", baseErr.Status().Name())
+}
+
+// TestGetOrCreateProducer_复用同一producer 测试同 topic 不重复创建。
+func TestGetOrCreateProducer_复用同一producer(t *testing.T) {
+	client := &fakeClient{producer: &fakeProducer{}, consumer: &fakeConsumer{}}
+	q := newTestQueue(client)
+
+	_, err := q.getOrCreateProducer("topic.a")
+	require.NoError(t, err)
+	_, err = q.getOrCreateProducer("topic.a")
+	require.NoError(t, err)
+
+	assert.Len(t, client.topics, 1)
+}
+
+// TestGetOrCreateProducer_LRU淘汰最旧 测试超过容量淘汰最久未用。
+//
+// Python: OrderedDict.popitem(last=False) + move_to_end
+func TestGetOrCreateProducer_LRU淘汰最旧(t *testing.T) {
+	client := &fakeClient{producer: &fakeProducer{}, consumer: &fakeConsumer{}}
+	q := newTestQueue(client)
+	q.maxProducers = 2
+
+	for _, topic := range []string{"t1", "t2"} {
+		_, err := q.getOrCreateProducer(topic)
+		require.NoError(t, err)
+	}
+	// 访问 t1，使其成为最近使用
+	_, err := q.getOrCreateProducer("t1")
+	require.NoError(t, err)
+	// 创建 t3，应淘汰最久未用的 t2
+	_, err = q.getOrCreateProducer("t3")
+	require.NoError(t, err)
+
+	assert.NotContains(t, q.producers, "t2")
+	assert.Contains(t, q.producers, "t1")
+	assert.Equal(t, 1, client.producer.closed)
+}
+
+// TestGetOrCreateProducer_建producer失败 测试建 producer 失败透传错误。
+func TestGetOrCreateProducer_建producer失败(t *testing.T) {
+	client := &fakeClient{producerErr: assert.AnError}
+	q := newTestQueue(client)
+
+	_, err := q.getOrCreateProducer("topic.a")
+	require.Error(t, err)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
