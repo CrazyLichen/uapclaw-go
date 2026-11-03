@@ -329,8 +329,10 @@ func (d *DeepAdapter) resolveSkillMode() string {
 }
 
 // buildSkillEvolutionRail 构建技能演进护栏。
-// ✅ 已回填：SkillEvolutionRail（对齐 Python: _build_skill_evolution_rail()）
-func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
+// 对齐 Python: _build_skill_evolution_rail() (interface_deep.py:1948-1968)
+//
+// 返回具体类型：调用方无需类型断言，避免断言失败时静默丢弃注册。
+func (d *DeepAdapter) buildSkillEvolutionRail() *evolution.SkillEvolutionRail {
 	model := d.modelSnapshot()
 	if model == nil {
 		logger.Warn(logComponent).Msg("buildSkillEvolutionRail: model is nil, skipping")
@@ -1097,20 +1099,19 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 	}
 
 	// 7. SkillEvolutionRail — 按 evolution 配置注册/注销
+	// 对齐 Python: interface_deep.py:2809-2822
+	// 不变量：字段非 nil ⇒ 已注册。故只有 RegisterRail 成功才写字段。
 	evolutionConfig, _ := cache["evolution"].(map[string]any)
 	evolutionEnabled, _ := evolutionConfig["enabled"].(bool)
 	if evolutionEnabled {
 		if d.skillEvolutionRail == nil {
 			rail := d.buildSkillEvolutionRail()
-			if rail != nil {
-				var ok bool
-				d.skillEvolutionRail, ok = rail.(*evolution.SkillEvolutionRail)
-				if ok && d.skillEvolutionRail != nil && d.instance != nil {
-					if err := d.instance.RegisterRail(ctx, d.skillEvolutionRail); err != nil {
-						logger.Error(logComponent).Err(err).Msg("Failed to register SkillEvolutionRail")
-					} else {
-						logger.Info(logComponent).Msg("SkillEvolutionRail registered (plan mode)")
-					}
+			if rail != nil && d.instance != nil {
+				if err := d.instance.RegisterRail(ctx, rail); err != nil {
+					logger.Error(logComponent).Err(err).Msg("Failed to register SkillEvolutionRail")
+				} else {
+					d.skillEvolutionRail = rail
+					logger.Info(logComponent).Msg("SkillEvolutionRail registered (plan mode)")
 				}
 			}
 		}

@@ -83,14 +83,9 @@ func (d *DeepAdapter) ensureEvolutionRailForSlash(mode string) string {
 	if !enabled {
 		return "演进功能未启用。"
 	}
-	// 懒加载：如果 rail 为 nil，尝试构建
+	// 懒加载：如果 rail 为 nil，尝试构建（注册在组 5 补齐）
 	if d.skillEvolutionRail == nil {
-		rail := d.buildSkillEvolutionRail()
-		if rail != nil {
-			if r, ok := rail.(*evolution.SkillEvolutionRail); ok {
-				d.skillEvolutionRail = r
-			}
-		}
+		d.skillEvolutionRail = d.buildSkillEvolutionRail()
 	}
 	if d.skillEvolutionRail == nil {
 		return "演进功能初始化失败。"
