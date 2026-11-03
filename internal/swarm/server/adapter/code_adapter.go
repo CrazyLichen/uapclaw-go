@@ -856,10 +856,16 @@ func (c *CodeAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 
 	// ── 按配置启用：browser_agent ──
-	// Python: browser_agent 按配置启用
-	// ⤵️ browser_agent: BuildBrowserAgentConfig 签名已变更，需要 SubagentCreateParams
-	// 暂时跳过，等 browser 功能实现时回填
-	// TODO: c.isSubagentExplicitlyEnabled(subagentsCfg, "browser_agent") — 待 browser 功能实现时回填
+	// Python: interface_code.py:731-760
+	browserAgentCfg, _ := subagentsCfg["browser_agent"].(map[string]any)
+	if c.deep.browserRuntimeEnabled() {
+		if cfg := c.deep.buildBrowserSubagentSpec(c.deep.modelSnapshot(), config, configBase, browserAgentCfg); cfg != nil {
+			specs = append(specs, cfg)
+		}
+	} else if subagentsCfg != nil && len(browserAgentCfg) > 0 {
+		logger.Info(logComponent).
+			Msg("browser_agent config detected but browser runtime is not enabled; skipping browser subagent registration")
+	}
 
 	// ── 按配置启用：research_agent ──
 	// Python: research_agent 继承自 DeepAdapter

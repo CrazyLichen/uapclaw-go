@@ -193,29 +193,7 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// 未启用但配置了 browser_agent → 跳过并记录日志
 	browserAgentCfg, _ := subagentsCfg["browser_agent"].(map[string]any)
 	if d.browserRuntimeEnabled() {
-		// Python: if not str(os.getenv("BROWSER_DRIVER") or "").strip():
-		//   os.environ["BROWSER_DRIVER"] = "managed"
-		if strings.TrimSpace(os.Getenv("BROWSER_DRIVER")) == "" {
-			// Python os.environ 赋值无错误返回；Setenv 失败仅影响默认值兜底，不阻断
-			_ = os.Setenv("BROWSER_DRIVER", "managed")
-			logger.Info(logComponent).
-				Msg("browser subagent enabled without BROWSER_DRIVER; defaulting to managed mode")
-		}
-		// Python: if not str(os.getenv("BROWSER_MANAGED_BINARY") or "").strip():
-		//   chrome_path = self._resolve_managed_browser_binary_from_config()
-		//   if chrome_path: os.environ["BROWSER_MANAGED_BINARY"] = chrome_path
-		if strings.TrimSpace(os.Getenv("BROWSER_MANAGED_BINARY")) == "" {
-			if chromePath := d.resolveManagedBrowserBinaryFromConfig(configBase); chromePath != "" {
-				// Python os.environ 赋值无错误返回；Setenv 失败仅影响默认值兜底，不阻断
-				_ = os.Setenv("BROWSER_MANAGED_BINARY", chromePath)
-				logger.Info(logComponent).
-					Str("binary", chromePath).
-					Msg("using browser.chrome_path for managed browser")
-			}
-		}
-		params := d.buildBrowserSubagentParams(config, browserAgentCfg)
-		cfg := subagents.BuildBrowserAgentConfig(model, params)
-		if cfg != nil {
+		if cfg := d.buildBrowserSubagentSpec(model, config, configBase, browserAgentCfg); cfg != nil {
 			specs = append(specs, cfg)
 		}
 	} else if subagentsCfg != nil && len(browserAgentCfg) > 0 {
@@ -952,6 +930,44 @@ func (d *DeepAdapter) buildBrowserSubagentParams(config map[string]any, browserA
 		// Python: workspace=self._workspace_dir or "./"
 		Workspace: hworkspace.NewWorkspace(d.workspaceDir, resolvedLanguage),
 	}
+}
+
+// buildBrowserSubagentSpec 构建 browser 子代理规格。
+// Python: interface_deep.py:912-948 / interface_code.py:731-760
+//
+// 调用方需先确认 browser runtime 已启用。本函数负责：
+//  1. BROWSER_DRIVER 缺省注入 managed；
+//  2. BROWSER_MANAGED_BINARY 从 browser.chrome_path 解析；
+//  3. max_iterations 两级回退（browser_agent.max_iterations → react.max_iterations → 15）；
+//  4. 调用 BuildBrowserAgentConfig。
+func (d *DeepAdapter) buildBrowserSubagentSpec(
+	model *llm.Model,
+	config map[string]any,
+	configBase map[string]any,
+	browserAgentCfg map[string]any,
+) *hschema.SubAgentConfig {
+	// Python: if not str(os.getenv("BROWSER_DRIVER") or "").strip():
+	//   os.environ["BROWSER_DRIVER"] = "managed"
+	if strings.TrimSpace(os.Getenv("BROWSER_DRIVER")) == "" {
+		// Python os.environ 赋值无错误返回；Setenv 失败仅影响默认值兜底，不阻断
+		_ = os.Setenv("BROWSER_DRIVER", "managed")
+		logger.Info(logComponent).
+			Msg("browser subagent enabled without BROWSER_DRIVER; defaulting to managed mode")
+	}
+	// Python: if not str(os.getenv("BROWSER_MANAGED_BINARY") or "").strip():
+	//   chrome_path = self._resolve_managed_browser_binary_from_config()
+	//   if chrome_path: os.environ["BROWSER_MANAGED_BINARY"] = chrome_path
+	if strings.TrimSpace(os.Getenv("BROWSER_MANAGED_BINARY")) == "" {
+		if chromePath := d.resolveManagedBrowserBinaryFromConfig(configBase); chromePath != "" {
+			// Python os.environ 赋值无错误返回；Setenv 失败仅影响默认值兜底，不阻断
+			_ = os.Setenv("BROWSER_MANAGED_BINARY", chromePath)
+			logger.Info(logComponent).
+				Str("binary", chromePath).
+				Msg("using browser.chrome_path for managed browser")
+		}
+	}
+	params := d.buildBrowserSubagentParams(config, browserAgentCfg)
+	return subagents.BuildBrowserAgentConfig(model, params)
 }
 
 // firstNonEmptyStr 返回第一个非空字符串（对齐 Python 的 `a or b` 短路语义）。

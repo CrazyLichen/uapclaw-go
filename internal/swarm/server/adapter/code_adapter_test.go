@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	commrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
@@ -475,4 +477,81 @@ func TestUpdateRailsForMode_不因canonicalMode回落Deep分支(t *testing.T) {
 			t.Fatalf("%q: 不应回落到 DeepAdapter.updateAgentModeRails（ContextAssembleRail 被创建）", mode)
 		}
 	}
+}
+
+// TestCodeAdapterBuildConfiguredSubagents_BrowserAgent 验证 browser runtime 开启时
+// 装配 browser_agent，并注入 BROWSER_DRIVER / BROWSER_MANAGED_BINARY 默认值。
+func TestCodeAdapterBuildConfiguredSubagents_BrowserAgent(t *testing.T) {
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "true")
+	t.Setenv("BROWSER_RUNTIME_MCP_ENABLED", "")
+	t.Setenv("BROWSER_DRIVER", "")
+	t.Setenv("BROWSER_MANAGED_BINARY", "")
+
+	c := newCodeAdapterWithModel(t)
+	specs, _ := c.buildConfiguredSubagents(map[string]any{
+		"max_iterations": 20,
+		"subagents": map[string]any{
+			"browser_agent": map[string]any{"max_iterations": 7},
+		},
+	}, map[string]any{
+		"browser": map[string]any{"chrome_path": "/opt/chrome"},
+	})
+
+	browser := findSubagentSpecByName(specs, subagents.BrowserAgentFactoryName)
+	if browser == nil {
+		t.Fatal("browser runtime 开启时应装配 browser_agent")
+	}
+	if browser.MaxIterations != 7 {
+		t.Errorf("browser_agent MaxIterations = %d, want 7", browser.MaxIterations)
+	}
+	if got := os.Getenv("BROWSER_DRIVER"); got != "managed" {
+		t.Errorf("BROWSER_DRIVER = %q, want %q", got, "managed")
+	}
+	if got := os.Getenv("BROWSER_MANAGED_BINARY"); got != "/opt/chrome" {
+		t.Errorf("BROWSER_MANAGED_BINARY = %q, want %q", got, "/opt/chrome")
+	}
+}
+
+// TestCodeAdapterBuildConfiguredSubagents_BrowserRuntime未开启 验证 runtime 关闭时不装配。
+func TestCodeAdapterBuildConfiguredSubagents_BrowserRuntime未开启(t *testing.T) {
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "false")
+	t.Setenv("BROWSER_RUNTIME_MCP_ENABLED", "")
+
+	c := newCodeAdapterWithModel(t)
+	specs, _ := c.buildConfiguredSubagents(map[string]any{
+		"subagents": map[string]any{
+			"browser_agent": map[string]any{"enabled": true},
+		},
+	}, map[string]any{})
+
+	if got := findSubagentSpecByName(specs, subagents.BrowserAgentFactoryName); got != nil {
+		t.Fatal("browser runtime 未开启时不应装配 browser_agent")
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newCodeAdapterWithModel 构造带可用模型的 CodeAdapter。
+func newCodeAdapterWithModel(t *testing.T) *CodeAdapter {
+	t.Helper()
+	c := NewCodeAdapter()
+	if model := c.deep.createModel(map[string]any{
+		"models": map[string]any{
+			"defaults": []any{modelEntry("m1", 8000, true, "")},
+		},
+	}); model == nil {
+		t.Fatal("测试模型构建失败")
+	}
+	return c
+}
+
+// findSubagentSpecByName 按 AgentCard 名称查找子代理规格。
+func findSubagentSpecByName(specs []hschema.SubagentSpec, name string) *hschema.SubAgentConfig {
+	for _, spec := range specs {
+		cfg, ok := spec.(*hschema.SubAgentConfig)
+		if ok && cfg.AgentCard != nil && cfg.AgentCard.GetName() == name {
+			return cfg
+		}
+	}
+	return nil
 }

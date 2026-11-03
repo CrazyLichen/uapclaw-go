@@ -1,8 +1,10 @@
 package adapter
 
 import (
+	"os"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 
@@ -78,4 +80,37 @@ func TestCodeAdapterBuildPermissionRail_默认模型回退(t *testing.T) {
 	}
 	// 只验证 llmModel==nil 分支被执行且不 panic；具体 rail 构造依赖权限 schema
 	_ = c.buildPermissionRail(configBase, nil, "")
+}
+
+// TestDeepAdapterBuildConfiguredSubagents_BrowserAgent 锁定 Deep 模式 browser 装配行为，
+// 作为 buildBrowserSubagentSpec 抽取前后的特征测试。
+func TestDeepAdapterBuildConfiguredSubagents_BrowserAgent(t *testing.T) {
+	t.Setenv("PLAYWRIGHT_RUNTIME_MCP_ENABLED", "true")
+	t.Setenv("BROWSER_RUNTIME_MCP_ENABLED", "")
+	t.Setenv("BROWSER_DRIVER", "")
+	t.Setenv("BROWSER_MANAGED_BINARY", "")
+
+	d := newAdapterWithModel(t)
+	specs, _ := d.buildConfiguredSubagents(map[string]any{
+		"max_iterations": 20,
+		"subagents": map[string]any{
+			"browser_agent": map[string]any{"max_iterations": 7},
+		},
+	}, map[string]any{
+		"browser": map[string]any{"chrome_path": "/opt/chrome"},
+	})
+
+	browser := findSubagentSpecByName(specs, subagents.BrowserAgentFactoryName)
+	if browser == nil {
+		t.Fatal("Deep 模式 browser runtime 开启时应装配 browser_agent")
+	}
+	if browser.MaxIterations != 7 {
+		t.Errorf("browser_agent MaxIterations = %d, want 7", browser.MaxIterations)
+	}
+	if got := os.Getenv("BROWSER_DRIVER"); got != "managed" {
+		t.Errorf("BROWSER_DRIVER = %q, want %q", got, "managed")
+	}
+	if got := os.Getenv("BROWSER_MANAGED_BINARY"); got != "/opt/chrome" {
+		t.Errorf("BROWSER_MANAGED_BINARY = %q, want %q", got, "/opt/chrome")
+	}
 }
