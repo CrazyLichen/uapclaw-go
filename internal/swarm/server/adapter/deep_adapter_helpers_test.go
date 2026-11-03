@@ -655,6 +655,9 @@ func TestParseStreamChunk_askUser去重(t *testing.T) {
 }
 
 // TestAccumulateUsage 测试 usage 累加。
+//
+// 累加口径已改为只读嵌套 usage_metadata（对齐 llm_usage 事件形状），
+// 扁平 token 键不再参与累加。
 func TestAccumulateUsage(t *testing.T) {
 	usage := &utils.UsageAccumulator{}
 
@@ -664,14 +667,22 @@ func TestAccumulateUsage(t *testing.T) {
 		t.Error("nil payload 不应累加")
 	}
 
+	// 扁平键（旧形状）不再累加
+	utils.AccumulateUsage(usage, map[string]any{"input_tokens": 100, "output_tokens": 50, "total_tokens": 150})
+	if usage.TotalTokens != 0 {
+		t.Errorf("扁平键不应累加, total=%d", usage.TotalTokens)
+	}
+
 	// 正常累加
 	utils.AccumulateUsage(usage, map[string]any{
-		"input_tokens":  100,
-		"output_tokens": 50,
-		"total_tokens":  150,
-		"input_cost":    0.01,
-		"output_cost":   0.02,
-		"total_cost":    0.03,
+		"usage_metadata": map[string]any{
+			"input_tokens":  100,
+			"output_tokens": 50,
+			"total_tokens":  150,
+			"input_cost":    0.01,
+			"output_cost":   0.02,
+			"total_cost":    0.03,
+		},
 	})
 	if usage.InputTokens != 100 || usage.OutputTokens != 50 || usage.TotalTokens != 150 {
 		t.Errorf("token 累加不正确: input=%d, output=%d, total=%d", usage.InputTokens, usage.OutputTokens, usage.TotalTokens)
@@ -682,8 +693,12 @@ func TestAccumulateUsage(t *testing.T) {
 func TestAccumulateUsage_多次累加(t *testing.T) {
 	usage := &utils.UsageAccumulator{}
 
-	utils.AccumulateUsage(usage, map[string]any{"input_tokens": 100, "output_tokens": 50, "total_tokens": 150})
-	utils.AccumulateUsage(usage, map[string]any{"input_tokens": 200, "output_tokens": 100, "total_tokens": 300})
+	utils.AccumulateUsage(usage, map[string]any{"usage_metadata": map[string]any{
+		"input_tokens": 100, "output_tokens": 50, "total_tokens": 150,
+	}})
+	utils.AccumulateUsage(usage, map[string]any{"usage_metadata": map[string]any{
+		"input_tokens": 200, "output_tokens": 100, "total_tokens": 300,
+	}})
 
 	if usage.InputTokens != 300 {
 		t.Errorf("InputTokens = %d, want 300", usage.InputTokens)

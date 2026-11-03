@@ -357,8 +357,12 @@ func logLLMResponse(aiMsg *llmschema.AssistantMessage) {
 	contentLen := len(aiMsg.Content.Text())
 	tcCount := len(aiMsg.ToolCalls)
 
+	// reasoning_len 必须记录：思考内容不进正文，界面「有没有思考」只取决于端点
+	// 是否回 delta.reasoning_content。为 0 说明模型/端点没吐思维链；大于 0 而
+	// 界面没有思考块，则缺口在流式写入、适配层或前端渲染。
 	event := logger.Info(logComponent).
 		Int("content_len", contentLen).
+		Int("reasoning_len", len(aiMsg.ReasoningContent)).
 		Int("tool_call_count", tcCount)
 	if aiMsg.UsageMetadata != nil {
 		event = event.
