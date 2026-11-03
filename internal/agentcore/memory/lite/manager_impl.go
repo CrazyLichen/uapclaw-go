@@ -1216,17 +1216,34 @@ func (m *memoryIndexManager) ensureVectorTable(dims int) bool {
 	if m.vectorDims != nil && *m.vectorDims == dims {
 		return true
 	}
-	if m.vectorDims != nil && *m.vectorDims != dims {
-		_, _ = m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", vectorTable))
+
+	// 已存在表的**真实维度**只能从建表语句解析（vec0 没有维度系统表）。
+	// 旧实现只比进程内的 m.vectorDims：新进程该字段为 nil，
+	// CREATE VIRTUAL TABLE IF NOT EXISTS 对旧维度表是空操作 → 新维度向量写不进去。
+	var existingSQL string
+	_ = m.db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", vectorTable,
+	).Scan(&existingSQL)
+
+	oldDims, _ := parseVecTableDims(existingSQL)
+	if needVecTableRebuild(existingSQL, dims) {
+		if existingSQL != "" {
+			_, _ = m.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", vectorTable))
+			logger.Warn(logComponent).
+				Str("event_type", "memory_vector_table_recreated").
+				Int("old_dims", oldDims).
+				Int("new_dims", dims).
+				Msg("vector table dims mismatch, recreating")
+		}
+		if _, err := m.db.Exec(fmt.Sprintf("CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(embedding float[%d])", vectorTable, dims)); err != nil {
+			m.vectorAvailable = false
+			m.vectorError = err.Error()
+			return false
+		}
+		logger.Info(logComponent).Int("dims", dims).Msg("vec0 virtual table created")
 	}
-	_, err := m.db.Exec(fmt.Sprintf("CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(embedding float[%d])", vectorTable, dims))
-	if err != nil {
-		m.vectorAvailable = false
-		m.vectorError = err.Error()
-		return false
-	}
+
 	m.vectorDims = &dims
-	logger.Info(logComponent).Int("dims", dims).Msg("vec0 virtual table created")
 	return true
 }
 
