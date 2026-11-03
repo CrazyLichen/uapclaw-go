@@ -182,18 +182,11 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 
 	// ─── 不在冷启动时挂载的 Rail（由 updateRailsForMode 按需注册） ───
 
-	// skillEvolutionRail — 仅构建实例存储到字段，不注册
-	// Python: SkillEvolutionRail 不在冷启动时挂载，由 _update_rails_for_mode 按 mode 按需注册/注销
-	evolve := d.buildSkillEvolutionRail()
-	if evolve != nil {
-		if rail, ok := evolve.(*evolution.SkillEvolutionRail); ok {
-			d.skillEvolutionRail = rail
-		}
-	}
-
-	// skillCreateRail — 仅构建实例存储到字段，不注册
-	// Python: SkillCreateRail 由 _update_rails_for_mode 按 mode 按需注册/注销
-	_ = d.buildSkillCreateRail()
+	// skillEvolutionRail / skillCreateRail — 冷启动既不构建也不注册。
+	// 两条 rail 的字段语义是「非 nil ⇒ 已注册」，构建提前写字段会让
+	// updatePlanModeRails 的判空条件恒为假、注册分支被跳过。
+	// Python: interface_deep.py:2158「SkillEvolutionRail 不在冷启动时挂载」，
+	// 字段保持 None，仅在 _update_plan_mode_rails / _ensure_evolution_rail_for_slash 内赋值。
 
 	// memoryRail — 冷启动不构建（对齐 Python：_memory_rail 仅在
 	// _handle_memory_rail_by_config 内构建，冷启动只置 None）。
