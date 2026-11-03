@@ -2,7 +2,7 @@
 
 > 状态：待评审
 > 日期：2026-11-04
-> 范围：DeepAdapter 中技能演进/技能创建两条 rail 的构建与注册生命周期、热重载配置同步、单 Agent SkillCreateRail 移植
+> 范围：DeepAdapter 中技能演进/技能创建两条 rail 的构建与注册生命周期、热重载配置同步与 rail 复用策略、单 Agent SkillCreateRail 移植
 > Python 参考：`jiuwenswarm/server/runtime/agent_adapter/interface_deep.py`、`jiuwenswarm/server/runtime/agent_adapter/interface_code.py`、
 > `openjiuwen/harness/rails/skills/skill_create_rail.py`、`openjiuwen/harness/rails/evolution/skill_evolution_rail.py`
 >
@@ -12,9 +12,11 @@
 
 用户反馈"演进 rail 好像只是默认创建了，但没有注册"。核对 Go 与 Python 两侧后确认：这条 rail 的注册状态在 Go 侧被一个双重语义的字段承载，冷启动/热重载会提前填充它，导致"计划模式注册"分支的判空条件恒为假而被跳过；同时同源的 `SkillCreateRail` 还缺 `skill_create` 门控、且挂的是团队版而非单 Agent 版。
 
-本设计一次性修掉注册链路上的 5 个问题，并确立一条可验证的不变量。
+追查过程中又发现热重载路径整体没有对齐：Python 用两个职责不同的函数（`_build_agent_rails` / `_get_current_agent_rails`）分别处理冷启动与热重载，Go 只有一个 `buildAgentRails`，热重载时全量重建 12~17 个 rail，把 Python 明确保留的有状态 rail 一并重置。
 
-## 二、五个问题（根因 / 所属流程 / 证据）
+本设计一次性修掉 6 个问题，并确立一条可验证的不变量。
+
+## 二、六个问题（根因 / 所属流程 / 证据）
 
 ### 问题① 冷启动构建 rail，注册分支靠"字段为 nil"判断是否已注册
 
@@ -54,6 +56,27 @@
 - **证据**：`handleSlashCommand`（Go `deep_adapter.go:890` / Python `:4438`）**先于** `updateRuntimeConfig`（Go `:954` / Python `:4475`）。`/evolve*` 五条命令都先调 `ensureEvolutionRailForSlash`（`deep_adapter_slash.go:39-70`），该函数只 build + 写字段、**不注册**（`:88-93`，Python `:4291-4296` 同）。若 slash 结果不含 `followup_prompt`（`/evolve_list`、`/evolve_simplify` 等），Python `:4450-4457` / Go 对应分支直接 return，`_update_runtime_config` 根本不跑；即便继续走，`updatePlanModeRails` 因字段已非 nil 也会跳过注册。
 - **影响**：会话首条 plan 消息若是 `/evolve*`，该实例永久处于"建了没注册"——`/evolve` 手动链路仍可用（斜杠处理直接调 rail 方法，不需要回调），但被动链路全灭（`AfterInvoke` 自动扫描、`chat.evolution_status` 推送、审批事件）。
 - **性质**：Python 亦存在，属对 Python 缺陷的有意修正（见第七节）。
+
+### 问题⑥ 热重载复用了冷启动的全量构建函数（Python 是两个函数）
+
+- **所属流程**：配置热重载流程（`ReloadAgentConfig`）
+- **根因**：Python 把两件事拆成两个函数 —— `_build_agent_rails`（冷启动，构建约 12 项交给首次 `configure`）与 `_get_current_agent_rails`（热重载，`interface_deep.py:2304-2352`）。Go 只有一个 `buildAgentRails`，`getCurrentAgentRails` 实际是它的一行委托（`deep_adapter.go:3072-3074`），热重载因此走了完整冷启动列表。
+- **数量差异**：Python 热重载返回 6 项（其中仅 1 项新建），Go 返回 12~17 项且全部新建。
+
+| 侧 | 热重载时涉及的对象 |
+|---|---|
+| Python（`:2330-2352`） | 新建：`skill_rail`；复用现有实例：`context_assemble`、`context_processor`、`memory`、`avatar`、`permission`；就地更新：`skill_evolution`（另 permission 先 `update_config`） |
+| Go（`buildAgentRails:50-232`） | 新建：runtimePrompt、filesystem(条件)、skill、responsePrompt、streamEvent、taskPlanning、security、heartbeat、avatar、subagent、permission、contextProcessor、contextAssemble(条件)，以及 plan 专属 agentMode、mcp、progressiveTool、userHook |
+
+- **后果**：`hotReloadRails`（`deep_agent.go:1517-1531`）按类型把旧实例移入 `staleRails`、新实例进 `pendingRails`，下次 `ensureInitialized` 重新 `Init` 并注册 → 有状态 rail 的状态归零：
+  - `StreamEventRail`：`abortRequested` / `mainSessions`（`stream_event_rail.go:45-51`）丢"流中停止"标记与主会话引用；
+  - `TaskPlanningRail`：`todosCache` / `toolCallCounts` / `usageRecords`（`task_planning.go:49-58`）丢待办缓存与模型用量统计；
+  - `SubagentRail`、`McpRail`、`ProgressiveToolRail` 的重建副作用待实施时逐个核实。
+- **对齐语义**（Python 的四条规则，作为组 7 的验收口径）：
+  1. 就地更新 `skill_evolution`；
+  2. 仅 `skill_rail` 新建；
+  3. 复用现有实例重新 init：`context_assemble`、`context_processor`、`memory`、`avatar`、`permission`；
+  4. 其余 rail（runtime_prompt / response_prompt / stream_event / task_planning / security / heartbeat / subagent / filesystem / evolution / skill_create）完全不动。
 
 ## 三、核心不变量
 
@@ -132,6 +155,23 @@
 
 - 构建后写 `d.skillEvolutionRail`；注册由同一次 `CreateDeepAgent` 装配完成；code 模式首条消息由 `CodeAdapter.updateRailsForMode`（`code_adapter.go:577-582`）注销并置 nil，闭环。
 
+### 组 7：拆分冷启动与热重载的 rail 装配（问题⑥）
+
+`deep_adapter.go` 的 `getCurrentAgentRails`（`:3072-3074`）从"委托 `buildAgentRails`"改为独立实现，逐条对齐 `interface_deep.py:2304-2352`：
+
+```go
+func (d *DeepAdapter) getCurrentAgentRails(config, configBase map[string]any) []sainterfaces.AgentRail
+```
+
+1. **就地更新**：`d.updateSkillEvolutionRail(config)`（组 2 引入）—— 对齐 `:2314-2328`；
+2. **唯一新建**：`d.skillRail = d.buildSkillRailWithIncludeTools(d.skillIncludeToolsForProfile(d.instanceOverrides))` —— 对齐 `:2330-2333`；
+3. **复用现有实例**（非 nil 才入列，传入 configure 后由 `hotReloadRails` 重新 init，对象不变）：`contextAssembleRail`、`contextProcessorRail`、`memoryRail`、`avatarRail`、`permissionRail` —— 对齐 `:2340-2352`；
+4. **不再重建的 rail**：runtimePrompt、responsePrompt、streamEvent、taskPlanning、security、heartbeat、subagent、filesystem/sysop、agentMode、mcp、progressiveTool、userHook —— 对齐"不进 `rails_list`"语义，保持原实例与原注册状态；
+5. `permissionRail` 的 `update_config` 仍由 reload 步骤 10 的 `updatePermissionRail`（`deep_adapter.go:807-808`）承担（Python 在 `:2338` 内联调用，二者都在 `configure` 之前执行，效果等价）；
+6. filesystem 在 ACP profile 下置 nil 的逻辑保留在 reload 步骤 8.6（`deep_adapter.go:791-799`），与 Python `:2335-2336` 等价。
+
+**验证前提**：实施时需逐个确认第 4 类中 Go-only 的 `McpRail`、`ProgressiveToolRail`、`UserHookRail`、`AgentModeRail` 没有依赖"重载时重建"的行为；若发现某个确实需要按配置刷新，改为在 reload 里就地更新，而不是退回全量重建。
+
 ## 五、测试与验收
 
 ### 单元测试（每个问题均有对应用例）
@@ -148,6 +188,7 @@
 | ③ | rails/skills `skill_create_rail_test.go` | `TestSkillCreateRail_阈值不足不提议`、`_满足阈值只提议一次`、`_BeforeInvoke重置提议标记`、`_无Controller时告警不入队`、`_CN与EN文案含skillsDir` | 5 个用例覆盖阈值/一次性/文案/降级路径 |
 | ④ | adapter `deep_adapter_rails_test.go` | `TestBuildSkillEvolutionRail_参数矩阵`（子测试） | 缺 `auto_scan` → `AutoScan()==false`；env `1`/`yes` → true；`auto_save: true` 被忽略 → `AutoSave()==false`；`sharing.enabled: true` 被忽略 → `IsSharingEnabled()==false`；`model_name` 兜底链 → `ModelName()` |
 | ⑤ | adapter `deep_adapter_slash_test.go` | `TestEnsureEvolutionRailForSlash_错误分支` | 非 plan 模式 / `enabled=false` / 构建失败（model nil）三种情况返回对应文案，且字段不被写入 |
+| ⑥ | adapter `deep_adapter_rails_test.go` | `TestGetCurrentAgentRails_仅skill重建其余复用` | 预热 5 个字段为具体实例后调用：返回列表含这 5 个**同指针**实例 + 新建的 skillRail；不含 streamEvent / taskPlanning / subagent / runtimePrompt / responsePrompt |
 
 ### 集成测试
 
@@ -161,8 +202,9 @@
 | ③ | `TestSkillCreate_EnabledRegistersSingleAgentRail` | `skill_create=true` → 命中 `*skills.SkillCreateRail`、未命中 `*evolution.TeamSkillCreateRail` |
 | ③ | `TestSkillCreate_DisabledThenHotEnabled` | `false` → 未命中；热重载改为 `true` 后下一条计划消息命中（覆盖"事后打开也生效"） |
 | ③ | `TestSkillCreate_ThresholdEnqueuesFollowUp`（可选） | 脚本化 ≥10 次工具调用、≥5 种工具 → follow_up 入队；若 mock 编排成本过高，本项降级为单测覆盖阈值，集成仅保留注册类型断言 |
+| ⑥ | `TestHotReload_PreservesStatefulRails` | 记录 `*rails.TaskPlanningRail` 与 `*commrails.JiuClawStreamEventRail` 的命中指针 → `ReloadAgentConfig` → 指针不变（证明未重建）；同时 skillRail 指针变为新实例（证明唯一重建项生效） |
 
-实施顺序建议：先写 ⑤ 的集成用例跑一次留红灯证据（当前 HEAD 必失败），再按组 1-6 修改。
+实施顺序建议：先写 ⑤ 的集成用例跑一次留红灯证据（当前 HEAD 必失败），再按组 1-7 修改。
 
 ### 验收
 
@@ -170,9 +212,9 @@
 
 ## 六、非目标
 
-- `getCurrentAgentRails` 从"全量重建 14+ rail"收敛到 Python 的 6 项白名单（`interface_deep.py:2340-2352`）—— 影响面独立，另开议题验证后再动；
 - `ExternalMemoryRail` 的注册标志模式改造（现状已用独立标志闭环，不受本次影响）；
-- rail 层 sharing 能力（`WithSharingConfigMap`）本身，仅断开 adapter 接线。
+- rail 层 sharing 能力（`WithSharingConfigMap`）本身，仅断开 adapter 接线；
+- `CodeAdapter` 的 `updateRailsForMode`（`code_adapter.go:552-600`）保持现状：它本就已对齐 `interface_code.py:770-792`（只注销 TaskPlanning/SkillEvolution + 缺失则重建 Subagent/ProjectMemory/CodingMemory）。
 
 ## 七、偏离记录
 
@@ -187,4 +229,5 @@
 - 字段类型变更影响 4 处引用 + 1 个死函数，编译期全覆盖；
 - 新 rail 在 `EnableTaskLoop=false`（单轮模式）下不工作，与 Python 一致（`skill_create_rail.py:93-99` 同样 Warn 丢弃）；
 - 若单版 rail 移植引入回归，可通过配置 `evolution.skill_create=false` 立即停用（改造后该键真正生效）；
-- 全部改动可按组拆分提交，组 1/2/4/5 与组 3/6 解耦，组 3 可独立回滚。
+- 组 7 改变热重载装配面：被"复用重新 init"的 5 个 rail 会重跑 `Init`（与 Python 同），`Uninit`/`Init` 幂等性需在集成用例里回归；若某个 Go-only rail 确认依赖重载重建，按第四节组 7 的兜底方案改为就地更新，而不是回退全量重建；
+- 全部改动可按组拆分提交，组 1/2/4/5 与组 3/6/7 解耦，组 3 可独立回滚。
