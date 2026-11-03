@@ -117,9 +117,9 @@ func SpawnProcess(
 	return handle, nil
 }
 
-// getSelfExecutable 获取当前主二进制的路径，用于启动子进程。
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// getSelfExecutable 获取当前主二进制的路径，用于启动子进程。
 func getSelfExecutable() (string, error) {
 	return os.Executable()
 }

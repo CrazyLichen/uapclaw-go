@@ -38,6 +38,7 @@ type FsOperation interface {
 	ListTools() []*tool.ToolCard
 }
 
+// FsOptions 文件系统操作的可选项集合：读取范围、编码、写入行为与权限等。
 type FsOptions struct {
 	// Mode 读取/写入模式：text / bytes
 	Mode string
@@ -91,12 +92,14 @@ type FsOptions struct {
 	Options map[string]any
 }
 
+// BaseFsOperation 文件系统操作的公共基座，复用 BaseOperation 的结果封装与日志。
 type BaseFsOperation struct {
 	BaseOperation
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// FsOption 文件系统操作选项的构造器。
 type FsOption func(*FsOptions)
 
 // ──────────────────────────── 常量 ────────────────────────────

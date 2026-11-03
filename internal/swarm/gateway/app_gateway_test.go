@@ -24,7 +24,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
-// newTestAppGatewayServer 创建测试用 AppGatewayServer
 // pickFreePort 申请一个当前空闲的 TCP 端口（监听后立即释放）
 func pickFreePort(t *testing.T) int {
 	t.Helper()

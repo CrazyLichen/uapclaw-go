@@ -2350,7 +2350,7 @@ func TestRoundLevelCompressor_SaveState(t *testing.T) {
 	}
 }
 
-// TestRoundLevelCompressorConfig_Validate_TruncateHeadRatio越界 TruncateHeadRatio 不在 (0,1) 报错
+// TestRoundLevelCompressorConfig_Validate_TruncateHeadRatio0值 TruncateHeadRatio=0 报错
 func TestRoundLevelCompressorConfig_Validate_TruncateHeadRatio0值(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
 	cfg.TruncateHeadRatio = 0.0

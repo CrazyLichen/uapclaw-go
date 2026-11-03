@@ -12,11 +12,6 @@ import (
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
-// PowerShell 检测
-
-// powershellTokens PowerShell 检测令牌。
-// Python: _POWERSHELL_TOKENS。
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -25,6 +20,8 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// powershellTokens PowerShell 检测令牌。
+// Python: _POWERSHELL_TOKENS。
 var powershellTokens = []string{
 	"powershell ", "powershell.exe ", "pwsh ", "pwsh.exe ",
 	"get-childitem", "set-location", "remove-item", "test-path",

@@ -59,6 +59,7 @@ Principles:
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// BuildTaskToolSection 构建任务工具提示节（task 工具使用规范）。
 func BuildTaskToolSection(lang string) saprompt.PromptSection {
 	var content string
 	if lang == "en" {

@@ -237,10 +237,13 @@ type DescOptimizeIteration struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// SkillDevStage 技能开发阶段名（init/draft/optimize/test 等）。
 type SkillDevStage string
 
+// SkillDevTaskMode 技能开发任务模式（新建/修改等）。
 type SkillDevTaskMode string
 
+// SkillDevEventType 技能开发事件类型，用于流式推送与状态机流转。
 type SkillDevEventType string
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -435,6 +438,7 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewSkillDevState 创建处于 init 阶段、create 模式的初始任务状态。
 func NewSkillDevState(taskID string) *SkillDevState {
 	now := nowISO()
 	return &SkillDevState{
@@ -486,6 +490,7 @@ func (s *SkillDevState) ToCheckpointDict() map[string]any {
 	}
 }
 
+// FromCheckpointDict 从检查点字典重建任务状态（缺省字段回落到默认值）。
 func FromCheckpointDict(data map[string]any) *SkillDevState {
 	state := &SkillDevState{
 		TaskID:    getStr(data, "task_id"),
@@ -547,6 +552,7 @@ func (es *EvalSet) ToDict() map[string]any {
 	}
 }
 
+// NewEvalSetFromDict 从字典构造评测集，逐个解析 evals 用例。
 func NewEvalSetFromDict(data map[string]any) *EvalSet {
 	skillName, _ := data["skill_name"].(string)
 	evalsData, _ := data["evals"].([]any)
@@ -664,6 +670,7 @@ func (d *DescOptimizeIteration) ToDict() map[string]any {
 	return result
 }
 
+// ComputeTodos 按当前阶段与任务模式计算待办列表：已完成阶段折叠、当前阶段展开。
 func ComputeTodos(currentStage SkillDevStage, mode *SkillDevTaskMode) []map[string]string {
 	groups := stageGroups
 	if mode != nil {
@@ -708,6 +715,7 @@ func ComputeTodos(currentStage SkillDevStage, mode *SkillDevTaskMode) []map[stri
 	return result
 }
 
+// GenerateTaskID 生成任务标识：sd_<秒级时间戳>_<8 位随机十六进制>。
 func GenerateTaskID() string {
 	ts := time.Now().Unix()
 	b := make([]byte, 4)
@@ -716,6 +724,7 @@ func GenerateTaskID() string {
 	return fmt.Sprintf("sd_%d_%s", ts, randStr)
 }
 
+// DetermineTaskMode 依据入参判定任务模式：带 existing_skill 为修改，带 resources 为新建含资源。
 func DetermineTaskMode(params map[string]any) SkillDevTaskMode {
 	if _, ok := params["existing_skill"]; ok {
 		return SkillDevTaskModeModify
@@ -726,6 +735,7 @@ func DetermineTaskMode(params map[string]any) SkillDevTaskMode {
 	return SkillDevTaskModeCreate
 }
 
+// CalcStats 计算样本统计量（均值/标准差/最值），保留 4 位小数对齐 Python round(x, 4)。
 func CalcStats(values []float64) MetricStats {
 	n := len(values)
 	if n == 0 {

@@ -60,6 +60,7 @@ type BaseShellOperation struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ShellType Shell 类型枚举，决定执行命令时使用的解释器。
 type ShellType int
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -98,6 +99,7 @@ func (s ShellType) String() string {
 	}
 }
 
+// ParseShellType 把 shell 名称解析为枚举，无法识别时返回 ShellTypeAuto。
 func ParseShellType(s string) ShellType {
 	switch s {
 	case "auto":
@@ -115,6 +117,7 @@ func ParseShellType(s string) ShellType {
 	}
 }
 
+// NewShellOptions 应用选项构造 ShellOptions。
 func NewShellOptions(opts ...ShellOption) *ShellOptions {
 	o := &ShellOptions{Timeout: 300, Grace: 3.0}
 	for _, opt := range opts {

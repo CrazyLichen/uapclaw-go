@@ -123,7 +123,7 @@ func (f *fakeDeepAgentForTaskPlanning) FindRailsByType(_ ...reflect.Type) []agen
 	return nil
 }
 
-// UnregisterRail 实现 DeepAgentInterface 接口
+// AddRail 实现 DeepAgentInterface 接口（M-02 新增方法的测试桩）。
 func (f *fakeDeepAgentForTaskPlanning) AddRail(_ agentinterfaces.AgentRail) {} // M-02: 接口新增 AddRail 的测试桩
 
 func (f *fakeDeepAgentForTaskPlanning) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
@@ -1635,7 +1635,7 @@ func (f *fakeDeepAgentWithAm) FindRailsByType(_ ...reflect.Type) []agentinterfac
 	return nil
 }
 
-// UnregisterRail 实现 DeepAgentInterface 接口
+// AddRail 实现 DeepAgentInterface 接口（M-02 新增方法的测试桩）。
 func (f *fakeDeepAgentWithAm) AddRail(_ agentinterfaces.AgentRail) {} // M-02: 接口新增 AddRail 的测试桩
 
 func (f *fakeDeepAgentWithAm) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {

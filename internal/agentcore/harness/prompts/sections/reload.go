@@ -43,6 +43,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// BuildReloadSection 构建重载提示节（告知技能/记忆变更后可重新加载）。
 func BuildReloadSection(lang string) saprompt.PromptSection {
 	var hint string
 	if lang == "en" {

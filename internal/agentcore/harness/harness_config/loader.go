@@ -13,6 +13,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ResolvedSection 已解析的内联段：段名 + 优先级 + 按语言索引的正文。
 type ResolvedSection struct {
 	// Name 段名称
 	Name string
@@ -22,6 +23,7 @@ type ResolvedSection struct {
 	Content map[string]string
 }
 
+// ResolvedFileSection 已解析的文件型段：落盘文件名 + 按语言索引的正文。
 type ResolvedFileSection struct {
 	// Filename 文件名，如 "AGENT.md"
 	Filename string
@@ -29,6 +31,7 @@ type ResolvedFileSection struct {
 	Content map[string]string
 }
 
+// ResolvedHarnessConfig 解析结果：校验后的配置本体，加上拆分好的段内容与来源路径。
 type ResolvedHarnessConfig struct {
 	// Config 解析后的 HarnessConfig（已校验）
 	Config *HarnessConfig
@@ -42,11 +45,13 @@ type ResolvedHarnessConfig struct {
 	SourcePath string
 }
 
+// HarnessConfigLoader harness_config.yaml 的加载器（无状态，方法直接挂在值类型上）。
 type HarnessConfigLoader struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var varPlaceholderRegexp = regexp.MustCompile(`\{\{\s*(\w+)\s*\}\}`)

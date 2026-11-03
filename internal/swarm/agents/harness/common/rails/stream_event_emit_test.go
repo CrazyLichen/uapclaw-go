@@ -345,7 +345,7 @@ func TestFormatTodosForFrontend_状态映射(t *testing.T) {
 		{ID: "2", Content: "任务2", ActiveForm: "已完成", Status: hschema.TodoStatusCompleted},
 		{ID: "3", Content: "任务3", ActiveForm: "已取消", Status: hschema.TodoStatusCancelled},
 	}
-	result := formatTodosForFrontend(todos)
+	result := FormatTodosForFrontend(todos)
 
 	if len(result) != 2 {
 		t.Errorf("结果数量 = %d, want 2（取消项已过滤）", len(result))
@@ -356,7 +356,7 @@ func TestFormatTodosForFrontend_状态映射(t *testing.T) {
 }
 
 func TestFormatTodosForFrontend_空列表(t *testing.T) {
-	result := formatTodosForFrontend([]hschema.TodoItem{})
+	result := FormatTodosForFrontend([]hschema.TodoItem{})
 	if len(result) != 0 {
 		t.Errorf("结果数量 = %d, want 0", len(result))
 	}
@@ -366,7 +366,7 @@ func TestFormatTodosForFrontend_全部取消(t *testing.T) {
 	todos := []hschema.TodoItem{
 		{ID: "1", Content: "任务1", ActiveForm: "取消", Status: hschema.TodoStatusCancelled},
 	}
-	result := formatTodosForFrontend(todos)
+	result := FormatTodosForFrontend(todos)
 	if len(result) != 0 {
 		t.Errorf("结果数量 = %d, want 0（全部取消）", len(result))
 	}

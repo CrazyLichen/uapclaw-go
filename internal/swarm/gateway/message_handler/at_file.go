@@ -20,11 +20,11 @@ import (
 // defaultInlineFileSizeLimit 默认内联文件大小限制（128KB）
 const defaultInlineFileSizeLimit = 128 * 1024
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // atFilePattern 匹配 @path 或 @"quoted path" 的正则
 // Python: re.compile(r'(?P<prefix>(?:^|(?<=\s)))@(?:"(?P<quoted>[^"]+)"|(?P<plain>[^\s#]+))(?:#[^#\s]*)?')
 // 使用 regexp2 支持 lookbehind (?<=\s)，命名组用 .NET 语法 (?<name>...) 而非 Python (?P<name>...)
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 var atFilePattern = regexp2.MustCompile(
 	`(?<prefix>(?:^|(?<=\s)))@(?:"(?<quoted>[^"]+)"|(?<plain>[^\s#]+))(?:#[^#\s]*)?`,
 	0,
@@ -211,11 +211,11 @@ func ResolveStructuredAttachments(content string, attachments []map[string]any, 
 	return ResolveAtFileReferences(mergedContent, cwd, 0)
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // resolveReferencePath 解析引用路径（相对/绝对/~/）
 //
 // Python: _resolve_reference_path (L1438-1444)。
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 func resolveReferencePath(rawPath, cwd string) string {
 	if strings.HasPrefix(rawPath, "~/") {
 		home, _ := os.UserHomeDir()

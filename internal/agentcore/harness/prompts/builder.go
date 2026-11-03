@@ -12,6 +12,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// SystemPromptBuilder 在 single_agent 构建器之上叠加 harness 的提示词模式，决定节的取舍。
 type SystemPromptBuilder struct {
 	*saprompt.SystemPromptBuilder
 	// mode 提示词模式

@@ -56,7 +56,7 @@ var globalRegistryOnce sync.Once
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// Register 向全局注册表添加 harness_config 信息
+// RegisterConfig 向全局注册表添加 harness_config 信息。
 func RegisterConfig(info HarnessConfigInfo) {
 	getGlobalRegistry().Register(info)
 }

@@ -127,7 +127,7 @@ func (f *fakeBaseAgentTeam) SetUapswarmAdapterMode(string)    {}
 var _ agentinterfaces.BaseAgent = (*fakeBaseAgentTeam)(nil)
 var _ harnessinterfaces.DeepAgentInterface = (*fakeBaseAgentTeam)(nil)
 
-// fakeAbilityManagerTeam 方法实现
+// Add 实现能力注册接口，记录被添加的能力。
 func (f *fakeAbilityManagerTeam) Add(ability cschema.Ability) agentschema.AddAbilityResult {
 	f.added = append(f.added, ability.AbilityName())
 	return agentschema.AddAbilityResult{}

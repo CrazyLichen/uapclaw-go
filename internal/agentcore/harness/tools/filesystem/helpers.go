@@ -17,7 +17,6 @@ import (
 
 // ImageExtensions 图片文件扩展名集合
 // Python: ReadFileTool._IMAGE_EXTENSIONS (filesystem.py L279)
-
 var ImageExtensions = map[string]bool{
 	".png":  true,
 	".jpg":  true,

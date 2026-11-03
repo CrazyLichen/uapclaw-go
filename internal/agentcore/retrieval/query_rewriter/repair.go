@@ -37,10 +37,9 @@ const (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// fillTemplate 只替换模板中显式 {key} 占位符，其他花括号不动
-// （JSON 示例不触发 str.format KeyError，Python _fill_template）。
+// templateKV 模板占位符替换的有序键值对。
 //
-// T-03：kv 为有序键值对切片（对齐 Python **kwargs 按声明序迭代——
+// T-03：用切片而非 map（对齐 Python **kwargs 按声明序迭代——
 // history 先替换、query 后替换，后值可包含已被前值引入的 {key} 占位符；
 // map 迭代序随机会 50% 概率破坏该替换顺序语义）。
 type templateKV struct {
@@ -48,6 +47,8 @@ type templateKV struct {
 	value string
 }
 
+// fillTemplate 只替换模板中显式 {key} 占位符，其他花括号不动
+// （JSON 示例不触发 str.format KeyError，Python _fill_template）。
 func fillTemplate(template string, kv ...templateKV) string {
 	out := template
 	for _, pair := range kv {

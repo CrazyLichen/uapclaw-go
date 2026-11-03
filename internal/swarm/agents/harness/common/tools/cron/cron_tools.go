@@ -57,14 +57,16 @@ type CronTools struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// routeCtxKey 路由上下文 key（ctx values 传递，对齐 Python ContextVar）
+// routeCtxKeyType routeCtxKey 的类型（空结构体，仅用于区分 ctx key）。
 type routeCtxKeyType struct{}
 
+// routeCtxKey 路由上下文 key（ctx values 传递，对齐 Python ContextVar）。
 var routeCtxKey = routeCtxKeyType{}
 
-// runtimeCronCtxKey 运行时 cron 上下文 key（对齐 Python _bind_runtime_cron_context 的 ContextVar 组）
+// runtimeCronCtxKeyType runtimeCronCtxKey 的类型（空结构体，仅用于区分 ctx key）。
 type runtimeCronCtxKeyType struct{}
 
+// runtimeCronCtxKey 运行时 cron 上下文 key（对齐 Python _bind_runtime_cron_context 的 ContextVar 组）。
 var runtimeCronCtxKey = runtimeCronCtxKeyType{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────

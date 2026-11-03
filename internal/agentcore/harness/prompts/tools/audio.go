@@ -29,6 +29,18 @@ var audioQuestionAnsweringDescription = map[string]string{
 	"en": "Understand audio content and answer questions about speech or general audio.",
 }
 
+// audioPathOrURLDesc 音频路径/URL 参数的双语描述（三个音频工具共用）。
+var audioPathOrURLDesc = map[string]string{
+	"cn": "本地音频路径或公网 http(s) 音频 URL，不支持 sandbox-only 路径",
+	"en": "Local audio path or public http(s) audio URL; sandbox-only paths are not supported",
+}
+
+// audioQuestionDesc 音频问答问题的双语描述。
+var audioQuestionDesc = map[string]string{
+	"cn": "要基于音频内容回答的问题",
+	"en": "Question to answer based on the audio content",
+}
+
 // audioMetadataDescription audio_metadata 工具双语描述
 var audioMetadataDescription = map[string]string{
 	"cn": "识别音频时长，并在配置了 ACR 信息时尝试识别歌曲标题、歌手和发布时间。",
@@ -39,76 +51,24 @@ var audioMetadataDescription = map[string]string{
 
 // GetAudioTranscriptionMetadataProviderInputParams 构建工具的参数 Schema
 func GetAudioTranscriptionMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
-	p := map[string]map[string]string{
-		"audio_path_or_url": {"cn": "本地音频路径或公网 http(s) 音频 URL，不支持 sandbox-only 路径", "en": "Local audio path or public http(s) audio URL; sandbox-only paths are not supported"},
-	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"audio_path_or_url": map[string]any{"type": "string", "description": d("audio_path_or_url")},
-		},
-		"required": []any{"audio_path_or_url"},
-	}
+	return buildAudioInputParams(language, map[string]map[string]string{
+		"audio_path_or_url": audioPathOrURLDesc,
+	}, []any{"audio_path_or_url"})
 }
 
 // GetAudioQuestionAnsweringMetadataProviderInputParams 构建工具的参数 Schema
 func GetAudioQuestionAnsweringMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
-	p := map[string]map[string]string{
-		"audio_path_or_url": {"cn": "本地音频路径或公网 http(s) 音频 URL，不支持 sandbox-only 路径", "en": "Local audio path or public http(s) audio URL; sandbox-only paths are not supported"},
-		"question":          {"cn": "要基于音频内容回答的问题", "en": "Question to answer based on the audio content"},
-	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"audio_path_or_url": map[string]any{"type": "string", "description": d("audio_path_or_url")},
-			"question":          map[string]any{"type": "string", "description": d("question")},
-		},
-		"required": []any{"audio_path_or_url", "question"},
-	}
+	return buildAudioInputParams(language, map[string]map[string]string{
+		"audio_path_or_url": audioPathOrURLDesc,
+		"question":          audioQuestionDesc,
+	}, []any{"audio_path_or_url", "question"})
 }
 
 // GetAudioMetadataMetadataProviderInputParams 构建工具的参数 Schema
 func GetAudioMetadataMetadataProviderInputParams(language string) map[string]any {
-	lang := language
-	if lang != "cn" && lang != "en" {
-		lang = "cn"
-	}
-	p := map[string]map[string]string{
-		"audio_path_or_url": {"cn": "本地音频路径或公网 http(s) 音频 URL，不支持 sandbox-only 路径", "en": "Local audio path or public http(s) audio URL; sandbox-only paths are not supported"},
-	}
-	d := func(key string) string {
-		if v, ok := p[key][lang]; ok {
-			return v
-		}
-		return p[key]["cn"]
-	}
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"audio_path_or_url": map[string]any{"type": "string", "description": d("audio_path_or_url")},
-		},
-		"required": []any{"audio_path_or_url"},
-	}
+	return buildAudioInputParams(language, map[string]map[string]string{
+		"audio_path_or_url": audioPathOrURLDesc,
+	}, []any{"audio_path_or_url"})
 }
 
 func (p *AudioTranscriptionMetadataProvider) GetName() string { return "audio_transcription" }
@@ -145,6 +105,30 @@ func (p *AudioMetadataMetadataProvider) GetInputParams(language string) map[stri
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildAudioInputParams 按语言生成音频工具的参数 Schema。
+//
+// props 为「参数名 → 双语描述」，required 为必填参数（顺序与 Python 声明一致）；
+// 非法语言回落到中文，某个参数缺该语言描述时同样回落中文。
+func buildAudioInputParams(language string, props map[string]map[string]string, required []any) map[string]any {
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
+	properties := make(map[string]any, len(props))
+	for key, desc := range props {
+		text, ok := desc[lang]
+		if !ok {
+			text = desc["cn"]
+		}
+		properties[key] = map[string]any{"type": "string", "description": text}
+	}
+	return map[string]any{
+		"type":       "object",
+		"properties": properties,
+		"required":   required,
+	}
+}
 
 func init() {
 	RegisterToolProvider(&AudioTranscriptionMetadataProvider{})

@@ -86,10 +86,10 @@ var browserRuntimeKeys = map[string]bool{
 	"VISION_API_KEY":    true,
 }
 
-// BuildEnvMap 收集 configSetEnvMap 中各环境变量的当前值。
-// Python: {env_key: os.getenv(env_key) for env_key in _CONFIG_SET_ENV_MAP.values()}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// BuildEnvMap 收集 configSetEnvMap 中各环境变量的当前值。
+// Python: {env_key: os.getenv(env_key) for env_key in _CONFIG_SET_ENV_MAP.values()}
 func BuildEnvMap() map[string]any {
 	env := make(map[string]any, len(configSetEnvMap))
 	for _, envKey := range configSetEnvMap {

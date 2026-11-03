@@ -22,6 +22,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// RouteStrategy 路由策略接口，从候选部署端点中挑出一个。
 type RouteStrategy interface {
 	// Select 从健康的部署端点中选择一个。
 	// modelName 用于按模型名筛选匹配的端点。
@@ -29,6 +30,7 @@ type RouteStrategy interface {
 	Select(deployments []*Deployment, modelName string, ctx *RoutingContext) (*Deployment, error)
 }
 
+// RoutingContext 路由上下文，承载端到端请求中与路由决策相关的信息。
 type RoutingContext struct {
 	// SessionID 会话标识，用于 Session 亲和性路由。
 	// 同一个 SessionID 优先路由到之前用过的 deployment（软亲和性）。
@@ -37,6 +39,7 @@ type RoutingContext struct {
 	Kwargs map[string]any
 }
 
+// Deployment 单个模型部署端点：上半部分为配置项，下半部分为运行时健康状态。
 type Deployment struct {
 	// ID 部署端点唯一标识
 	ID string
@@ -71,6 +74,7 @@ type sessionEntry struct {
 	lastUsed     time.Time
 }
 
+// ReliableRouter 可靠路由器：维护部署索引、按策略选点、失败重试与冷却。
 type ReliableRouter struct {
 	deployments    []*Deployment
 	strategy       RouteStrategy
@@ -89,6 +93,7 @@ type ReliableRouter struct {
 	healthChecker *HealthChecker
 }
 
+// HealthCheckResult 单个部署端点的一次健康探测结果。
 type HealthCheckResult struct {
 	DeploymentID string
 	IsHealthy    bool
@@ -97,6 +102,7 @@ type HealthCheckResult struct {
 	Timestamp    time.Time
 }
 
+// HealthChecker 后台健康检查器，按固定间隔探测部署端点并缓存最近结果。
 type HealthChecker struct {
 	deployments      []*Deployment
 	checkInterval    time.Duration
@@ -108,17 +114,21 @@ type HealthChecker struct {
 	mu               sync.RWMutex
 }
 
+// SimpleShuffleStrategy 简单随机打乱策略，在候选端点中等概率抽取一个。
 type SimpleShuffleStrategy struct{}
 
+// RoundRobinStrategy 轮询策略，按调用次序依次选择端点。
 type RoundRobinStrategy struct {
 	counter uint64
 }
 
+// LowestLatencyStrategy 最低延迟策略，按平均延迟排序后取最优（保留部分探索）。
 type LowestLatencyStrategy struct {
 	// ExplorationRatio 探索比率（默认 0.1，即 10% 请求用于探索新端点）
 	ExplorationRatio float64
 }
 
+// AdaptiveStrategy 自适应策略：按健康度、Token 用量、RPM 与延迟加权打分后选点。
 type AdaptiveStrategy struct {
 	// TokenThreshold token 用量阈值
 	TokenThreshold float64

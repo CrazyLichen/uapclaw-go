@@ -50,6 +50,7 @@ type CodeOption func(*CodeOptions)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewCodeOptions 应用选项构造 CodeOptions。
 func NewCodeOptions(opts ...CodeOption) *CodeOptions {
 	o := &CodeOptions{Language: "python", Timeout: 300}
 	for _, opt := range opts {

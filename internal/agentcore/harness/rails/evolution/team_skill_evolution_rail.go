@@ -1256,9 +1256,11 @@ func (r *TeamSkillEvolutionRail) detectExperienceDetailRead(ctx context.Context,
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// teamExtractToolContent 提取工具调用返回内容（独立于 SkillEvolutionRail.extractToolContent）。
-// 对齐 Python: TeamSkillEvolutionRail._extract_tool_content(inputs)
-func teamExtractToolContent(inputs *agentinterfaces.ToolCallInputs) string {
+// extractToolContentFromInputs 从工具调用结果中提取内容文本。
+//
+// 两条演进 rail（SkillEvolutionRail / TeamSkillEvolutionRail）共用同一套提取顺序：
+// result["data"] 子字段 → result 顶层 → ToolMsg 内容 → result 字符串。
+func extractToolContentFromInputs(inputs *agentinterfaces.ToolCallInputs) string {
 	result := inputs.ToolResult
 	if result != nil {
 		// Python: data = getattr(result, "data", None); if isinstance(data, dict): ...
@@ -1323,7 +1325,7 @@ func (r *TeamSkillEvolutionRail) recordPresentedExperienceDetail(ctx context.Con
 		return
 	}
 
-	content := teamExtractToolContent(inputs)
+	content := extractToolContentFromInputs(inputs)
 	recordIDs := teamExtractPresentedRecordIDs(content)
 	if len(recordIDs) == 0 {
 		return

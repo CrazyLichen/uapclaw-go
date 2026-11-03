@@ -64,8 +64,10 @@ type ModelProvider func(ctx context.Context, modelID string) (model_clients.Base
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// TagMatchStrategy 标签匹配策略：判定资源是否命中给定标签集合。
 type TagMatchStrategy int
 
+// TagUpdateStrategy 标签更新策略：判定新标签如何写入已有标签集合。
 type TagUpdateStrategy int
 
 // Tag 标签类型别名。

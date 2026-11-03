@@ -703,7 +703,6 @@ func TestGetInstalledNames_有数据(t *testing.T) {
 	}
 }
 
-// TestToBool 验证 toBool 转换
 // TestToIntPtr 验证 toIntPtr 转换
 func TestToIntPtr(t *testing.T) {
 	tests := []struct {

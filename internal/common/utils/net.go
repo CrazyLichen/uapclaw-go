@@ -27,7 +27,6 @@ import (
 
 // urlPattern 匹配以 scheme:// 开头的 URL 字符串。
 // Python: _URL_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
-
 var urlPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -37,7 +36,6 @@ var urlPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`)
 // 通过向公共 DNS（8.8.8.8:80）发起 UDP 连接来检测出口 IP，
 // 不实际发送数据，仅利用 socket 获取本地地址。
 // 如果检测失败，回退到 "127.0.0.1"。
-
 func GetLocalIP() string {
 	conn, err := net.DialTimeout("udp4", "8.8.8.8:80", 0)
 	if err != nil {

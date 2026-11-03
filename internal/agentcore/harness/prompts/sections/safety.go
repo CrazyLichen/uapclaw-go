@@ -36,6 +36,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// BuildSafetySection 构建安全约束提示节（同时提供中英文文案）。
 func BuildSafetySection() saprompt.PromptSection {
 	return saprompt.PromptSection{
 		Name:     SectionSafety,

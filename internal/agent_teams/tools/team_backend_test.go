@@ -1199,7 +1199,7 @@ func TestCancelMember_成员不存在(t *testing.T) {
 	}
 }
 
-// TestSpawnMember_已存在 已存在的成员应返回失败
+// TestSpawnMember_已存在成员 重复创建同名成员应返回失败
 func TestSpawnMember_已存在成员(t *testing.T) {
 	tb := newTestTeamBackend()
 	ctx := context.Background()

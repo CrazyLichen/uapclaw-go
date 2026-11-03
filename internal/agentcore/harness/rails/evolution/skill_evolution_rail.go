@@ -2007,47 +2007,10 @@ func (r *SkillEvolutionRail) detectExperienceDetailRead(inputs *agentinterfaces.
 	return r.skillForExperienceDetailFile(filePath)
 }
 
-// extractToolContent 提取工具调用返回内容。
+// extractToolContent 提取工具调用返回内容，复用包内共享实现。
 // 对齐 Python: SkillEvolutionRail._extract_tool_content(inputs)
 func (r *SkillEvolutionRail) extractToolContent(inputs *agentinterfaces.ToolCallInputs) string {
-	result := inputs.ToolResult
-	if result != nil {
-		// Python: data = getattr(result, "data", None); if isinstance(data, dict): ...
-		// 先检查 result["data"] 中间层，再直接从 result 取
-		if resultMap, ok := result.(map[string]any); ok {
-			// 优先从 data 子字段取
-			if dataField, ok := resultMap["data"].(map[string]any); ok {
-				if content, ok := dataField["skill_content"].(string); ok && content != "" {
-					return content
-				}
-				if content, ok := dataField["content"].(string); ok && content != "" {
-					return content
-				}
-			}
-			// data 子字段不存在或未命中，回退到直接从 result 取
-			if content, ok := resultMap["skill_content"].(string); ok && content != "" {
-				return content
-			}
-			if content, ok := resultMap["content"].(string); ok && content != "" {
-				return content
-			}
-		}
-	}
-
-	// Python: tool_msg = inputs.tool_msg; if tool_msg is not None and hasattr(tool_msg, "content"): return tool_msg.content
-	if inputs.ToolMsg != nil {
-		content := inputs.ToolMsg.GetContent().String()
-		if content != "" {
-			return content
-		}
-	}
-
-	if result != nil {
-		if content, ok := result.(string); ok && content != "" {
-			return content
-		}
-	}
-	return ""
+	return extractToolContentFromInputs(inputs)
 }
 
 // extractPresentedRecordIDs 从内容中提取经验记录 ID。

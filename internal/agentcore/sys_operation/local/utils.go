@@ -22,6 +22,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// StreamEvent 命令执行过程中产生的一条流式事件（stdout/stderr/exit/error）。
 type StreamEvent struct {
 	// Type 事件类型
 	Type StreamEventType
@@ -33,6 +34,7 @@ type StreamEvent struct {
 	Timestamp time.Time
 }
 
+// InvokeData 一次同步执行的结果汇总（stdout/stderr/退出码/异常）。
 type InvokeData struct {
 	// Stdout 标准输出
 	Stdout string
@@ -44,6 +46,7 @@ type InvokeData struct {
 	Exception error
 }
 
+// AsyncProcessHandler 异步子进程句柄：负责流式读取输出、超时控制与进程状态保护。
 type AsyncProcessHandler struct {
 	// cmd 子进程命令
 	cmd *exec.Cmd
@@ -57,6 +60,7 @@ type AsyncProcessHandler struct {
 	mu sync.Mutex
 }
 
+// OperationUtils 平台操作工具函数的命名空间（无状态，仅提供方法分组）。
 type OperationUtils struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────

@@ -1478,7 +1478,6 @@ func (c *CodeAdapter) buildPermissionRail(configBase map[string]any, llmModel *l
 	return rail
 }
 
-// buildWorktreeRail 构建工作树护栏。
 // MergeMemberMcpConfigs 将启用的 code 模式 MCP 配置合并到团队成员 Agent。
 // Python: JiuwenClawCodeAdapter.merge_member_mcp_configs() (interface_code.py L1045-1072)
 func (c *CodeAdapter) MergeMemberMcpConfigs(agent *harness.DeepAgent, configBase map[string]any) int {

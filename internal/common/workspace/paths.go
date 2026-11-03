@@ -39,7 +39,6 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // UserHomeDir 获取用户主目录。
-
 func UserHomeDir() string {
 	return path.UserHomeDir()
 }
@@ -183,7 +182,6 @@ func AgentTeamsHomeDir() string {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // logFallbackIfNeeded 检查 path 包的回退状态并补日志。
-
 func logFallbackIfNeeded() {
 	if fallbackLogged {
 		return

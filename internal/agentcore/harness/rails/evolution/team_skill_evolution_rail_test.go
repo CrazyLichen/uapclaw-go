@@ -365,25 +365,25 @@ func TestTeamExtractToolContent_各种输入(t *testing.T) {
 	inputs := &agentinterfaces.ToolCallInputs{
 		ToolResult: map[string]any{"skill_content": "hello world"},
 	}
-	assert.Equal(t, "hello world", teamExtractToolContent(inputs))
+	assert.Equal(t, "hello world", extractToolContentFromInputs(inputs))
 
 	// map 类型结果含 content
 	inputs2 := &agentinterfaces.ToolCallInputs{
 		ToolResult: map[string]any{"content": "fallback content"},
 	}
-	assert.Equal(t, "fallback content", teamExtractToolContent(inputs2))
+	assert.Equal(t, "fallback content", extractToolContentFromInputs(inputs2))
 
 	// .data 中间层含 skill_content（对齐 Python: getattr(result, "data", None)）
 	inputs5 := &agentinterfaces.ToolCallInputs{
 		ToolResult: map[string]any{"data": map[string]any{"skill_content": "from data layer"}},
 	}
-	assert.Equal(t, "from data layer", teamExtractToolContent(inputs5))
+	assert.Equal(t, "from data layer", extractToolContentFromInputs(inputs5))
 
 	// .data 中间层含 content
 	inputs6 := &agentinterfaces.ToolCallInputs{
 		ToolResult: map[string]any{"data": map[string]any{"content": "data content"}},
 	}
-	assert.Equal(t, "data content", teamExtractToolContent(inputs6))
+	assert.Equal(t, "data content", extractToolContentFromInputs(inputs6))
 
 	// .data 优先于顶层字段
 	inputs7 := &agentinterfaces.ToolCallInputs{
@@ -392,7 +392,7 @@ func TestTeamExtractToolContent_各种输入(t *testing.T) {
 			"skill_content": "top level",
 		},
 	}
-	assert.Equal(t, "data wins", teamExtractToolContent(inputs7))
+	assert.Equal(t, "data wins", extractToolContentFromInputs(inputs7))
 
 	// .data 不是 dict 时回退到顶层
 	inputs8 := &agentinterfaces.ToolCallInputs{
@@ -401,17 +401,17 @@ func TestTeamExtractToolContent_各种输入(t *testing.T) {
 			"skill_content": "top level fallback",
 		},
 	}
-	assert.Equal(t, "top level fallback", teamExtractToolContent(inputs8))
+	assert.Equal(t, "top level fallback", extractToolContentFromInputs(inputs8))
 
 	// string 类型结果
 	inputs3 := &agentinterfaces.ToolCallInputs{
 		ToolResult: "direct string result",
 	}
-	assert.Equal(t, "direct string result", teamExtractToolContent(inputs3))
+	assert.Equal(t, "direct string result", extractToolContentFromInputs(inputs3))
 
 	// nil 结果
 	inputs4 := &agentinterfaces.ToolCallInputs{}
-	assert.Equal(t, "", teamExtractToolContent(inputs4))
+	assert.Equal(t, "", extractToolContentFromInputs(inputs4))
 }
 
 // ─── Options 测试 ───

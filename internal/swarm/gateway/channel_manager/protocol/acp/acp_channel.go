@@ -964,7 +964,7 @@ func (ch *AcpChannel) sessionHasPendingClientRpcs(sessionID string) bool {
 	return ch.sessionHasPendingClientRpcsLocked(sid)
 }
 
-// sessionHasPendingClientRpcs 锁内版（sendJsonrpcMessage 持 ch.mu 段调用；
+// sessionHasPendingClientRpcsLocked 锁内版（sendJsonrpcMessage 持 ch.mu 段调用；
 // Go sync.Mutex 不可重入——Python 无锁语义可直接调，Go 侧拆两版）。
 func (ch *AcpChannel) sessionHasPendingClientRpcsLocked(sid string) bool {
 	for _, entry := range ch.pendingRPCSessionByID {

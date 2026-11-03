@@ -48,7 +48,6 @@ const (
 
 // disallowedForSubagents 禁止传递给子 Agent 的工具名集合。
 // Python: DISALLOWED_FOR_SUBAGENTS (code_agent_rail.py L28-31)
-
 var disallowedForSubagents map[string]bool
 
 // displayToInternal 显示名→内部名映射。

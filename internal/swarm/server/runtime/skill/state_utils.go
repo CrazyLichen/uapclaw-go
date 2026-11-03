@@ -324,10 +324,10 @@ func NormalizeState(state map[string]any, existingLocalSkillNames map[string]boo
 	state["local_skills"] = anySliceToMapSlice(state["local_skills"])
 }
 
-// getAgentSkillsDir 返回 Agent 技能目录路径
-// Python: jiuwenswarm.common.utils.get_agent_skills_dir()
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// getAgentSkillsDir 返回 Agent 技能目录路径
+// Python: jiuwenswarm.common.utils.get_agent_skills_dir()
 func getAgentSkillsDir() string {
 	return workspace.AgentSkillsDir()
 }

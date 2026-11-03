@@ -57,6 +57,7 @@ and ask them to wait for subsequent system notifications or the next round of in
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// BuildSessionToolsSection 构建会话工具提示节（历史检索工具的用法）。
 func BuildSessionToolsSection(lang string) saprompt.PromptSection {
 	var content string
 	if lang == "en" {

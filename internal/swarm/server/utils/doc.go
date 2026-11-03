@@ -8,6 +8,7 @@
 //	utils/
 //	├── doc.go              # 包文档
 //	├── stream_utils.go     # ParseStreamChunk + UsageAccumulator + InteractionConverterFunc + 10 helper 纯函数
+//	├── payload_bridge.go   # PayloadToMap/PayloadToMapChecked/PayloadsToMaps + 递归摊平 helper
 //	├── utils.go            # GetChatID + IsTeamParams
 //	├── diff_service.go     # DiffService + GetTurnDiffs/GetFilesToRestore + 12 helper
 //

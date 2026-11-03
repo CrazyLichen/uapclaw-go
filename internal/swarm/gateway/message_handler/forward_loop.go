@@ -696,11 +696,6 @@ func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
 	}
 }
 
-// processStream 流式处理：发送请求并持续读取响应 chunk。
-//
-// Python: process_stream (L2559-2648)：
-// 新增 emitProcessingStatus 参数、hasProcessingStatusFalse 追踪、
-// 演化块处理、cancelled final、processing_status=false 通知。
 // processStreamWithEntry 使用外部预构造的 entry 执行流式处理，消除 nil entry 时间窗口。
 func (mh *MessageHandler) processStreamWithEntry(streamCtx context.Context, streamCancel context.CancelFunc, entry *streamTaskEntry, msg *schema.Message, envelope *e2a.E2AEnvelope, emitProcessingStatus bool) {
 	mh.processStreamCore(streamCtx, streamCancel, entry, msg, envelope, emitProcessingStatus)
@@ -717,7 +712,11 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 	mh.processStreamCore(streamCtx, streamCancel, entry, msg, envelope, emitProcessingStatus)
 }
 
-// processStreamCore 流式处理核心逻辑。
+// processStreamCore 流式处理：发送请求并持续读取响应 chunk。
+//
+// Python: process_stream (L2559-2648)：
+// 新增 emitProcessingStatus 参数、hasProcessingStatusFalse 追踪、
+// 演化块处理、cancelled final、processing_status=false 通知。
 func (mh *MessageHandler) processStreamCore(streamCtx context.Context, streamCancel context.CancelFunc, entry *streamTaskEntry, msg *schema.Message, envelope *e2a.E2AEnvelope, emitProcessingStatus bool) {
 	requestID := envelope.RequestID
 	channelID := msg.ChannelID

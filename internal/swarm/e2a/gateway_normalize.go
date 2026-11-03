@@ -18,8 +18,10 @@ type responseNormConfig struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// AgentFieldOption E2A 请求字段的写入选项（键值对直接落到信封 map）。
 type AgentFieldOption func(map[string]any)
 
+// ResponseNormOption E2A 响应归一化的可选项。
 type ResponseNormOption func(*responseNormConfig)
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -41,6 +43,7 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// MessageToLegacyAgentDict 把内部 Message 摊平成旧版 Agent 请求的 map 形状。
 func MessageToLegacyAgentDict(msg *schema.Message) map[string]any {
 	rmVal := reqMethodToString(msg.ReqMethod)
 
@@ -71,6 +74,7 @@ func MessageToLegacyAgentDict(msg *schema.Message) map[string]any {
 	return out
 }
 
+// BuildFallbackE2A 用旧版请求 map 构造兜底信封（归一化失败时保留原始载荷）。
 func BuildFallbackE2A(legacy map[string]any) *E2AEnvelope {
 	legacy = legacyPayloadWithinLimit(copyMap(legacy))
 
@@ -102,6 +106,7 @@ func BuildFallbackE2A(legacy map[string]any) *E2AEnvelope {
 	return env
 }
 
+// MessageToE2A 把内部 Message 归一化为 E2A 信封。
 func MessageToE2A(msg *schema.Message) (*E2AEnvelope, error) {
 	params := map[string]any{}
 	if msg.Params != nil {
@@ -166,6 +171,7 @@ func MessageToE2A(msg *schema.Message) (*E2AEnvelope, error) {
 	return EnvelopeFromMap(d), nil
 }
 
+// MessageToE2AOrFallback 归一化失败或 request_id 为空时退回旧版协议信封，保证消息不丢。
 func MessageToE2AOrFallback(msg *schema.Message) *E2AEnvelope {
 	env, err := MessageToE2A(msg)
 	if err != nil {
@@ -231,6 +237,7 @@ func WithFieldMetadata(v map[string]any) AgentFieldOption {
 	return func(d map[string]any) { d["metadata"] = v }
 }
 
+// E2AFromAgentFields 用函数式选项逐字段构造 E2A 信封（缺省字段留空值）。
 func E2AFromAgentFields(requestID string, opts ...AgentFieldOption) *E2AEnvelope {
 	d := map[string]any{
 		"request_id": requestID,
@@ -243,16 +250,10 @@ func E2AFromAgentFields(requestID string, opts ...AgentFieldOption) *E2AEnvelope
 	for _, opt := range opts {
 		opt(d)
 	}
-	// 确保 params 为 map[string]any
-	if p, ok := d["params"]; ok {
-		if m, ok := p.(map[string]any); ok {
-			// 已是 map，无需处理
-			_ = m
-		}
-	}
 	return EnvelopeFromMap(d)
 }
 
+// ChannelContextForChannelReply 复制通道上下文并剔除内部键，供回包复用。
 func ChannelContextForChannelReply(env *E2AEnvelope) map[string]any {
 	ctx := make(map[string]any)
 	if env.ChannelContext != nil {
@@ -271,6 +272,7 @@ func WithNormTimestamp(ts string) ResponseNormOption {
 	return func(c *responseNormConfig) { c.timestamp = ts }
 }
 
+// E2AResponseFromAgentResponse 把 Agent 完整响应包装为 E2A 响应（非流式）。
 func E2AResponseFromAgentResponse(resp *schema.AgentResponse, responseID string, sequence int, opts ...ResponseNormOption) *E2AResponse {
 	cfg := &responseNormConfig{}
 	for _, opt := range opts {
@@ -347,6 +349,7 @@ func E2AResponseFromAgentResponse(resp *schema.AgentResponse, responseID string,
 	}
 }
 
+// E2AResponseFromAgentChunk 把流式响应分片包装为 E2A 响应（isStream 标记流式片段）。
 func E2AResponseFromAgentChunk(chunk *schema.AgentResponseChunk, responseID string, sequence int, isStream bool, opts ...ResponseNormOption) *E2AResponse {
 	cfg := &responseNormConfig{}
 	for _, opt := range opts {
@@ -481,6 +484,7 @@ func E2AResponseFromAgentChunk(chunk *schema.AgentResponseChunk, responseID stri
 	}
 }
 
+// E2AResponseToAgentResponse 把 E2A 响应解包回内部 AgentResponse（供本地消费方使用）。
 func E2AResponseToAgentResponse(e2a *E2AResponse) (*schema.AgentResponse, error) {
 	rid := e2a.RequestID
 	ch := e2a.Channel

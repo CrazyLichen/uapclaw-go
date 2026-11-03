@@ -178,6 +178,7 @@ All tasks will be executed using the Agent's default model.
 // modelSelection 为预构建的模型列表字符串（可为空）。
 // 若非空则追加模型选择提示词，否则追加"无模型选择"提示词。
 
+// BuildTodoSection 构建 todo 提示节（todo 使用规范 + 可选的模型选择提示）。
 func BuildTodoSection(modelSelection string, lang string) *saprompt.PromptSection {
 	var content string
 	if lang == "en" {

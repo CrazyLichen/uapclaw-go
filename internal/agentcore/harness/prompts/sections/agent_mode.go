@@ -200,12 +200,12 @@ func BuildPlanModeSection(planFilePath string, planExists bool, lang string) sap
 	}
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // buildEnterPlanModeStatus 构建 enter_plan_mode 状态描述。
 //
 // Python: _build_enter_plan_mode_status() L200-223 + L309
 // 三状态分支：planFilePath 是否非空判断 enter_plan_mode 是否已调用
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 func buildEnterPlanModeStatus(planFilePath string, lang string) string {
 	if lang == "en" {
 		if planFilePath != "" {

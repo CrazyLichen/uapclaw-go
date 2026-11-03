@@ -13,6 +13,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ShellProcessRegistry 按会话登记运行中的 Shell 进程与 stdin 管道，支持按会话取消。
 type ShellProcessRegistry struct {
 	// mu 互斥锁，保护 processes 和 cancelledSessions
 	mu sync.Mutex
@@ -55,6 +56,7 @@ var DefaultRegistry = NewShellProcessRegistry()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewShellProcessRegistry 创建空的 Shell 进程注册表。
 func NewShellProcessRegistry() *ShellProcessRegistry {
 	return &ShellProcessRegistry{
 		processes:         make(map[string]map[*os.Process]struct{}),
@@ -291,22 +293,27 @@ func TerminateShellProcess(proc *os.Process) bool {
 	return terminateShellProcessPlatform(proc)
 }
 
+// RegisterShellProcess 登记会话下的子进程，供取消时统一终止。
 func RegisterShellProcess(sessionID string, proc *os.Process) {
 	DefaultRegistry.Register(sessionID, proc)
 }
 
+// UnregisterShellProcess 移除已结束的子进程登记。
 func UnregisterShellProcess(sessionID string, proc *os.Process) {
 	DefaultRegistry.Unregister(sessionID, proc)
 }
 
+// KillShellProcessesForSession 终止会话内登记的所有子进程，返回终止数量。
 func KillShellProcessesForSession(sessionID string) int {
 	return DefaultRegistry.KillSession(sessionID)
 }
 
+// KillShellProcessesForSessionTree 终止会话内的进程树（含派生子进程），返回终止数量。
 func KillShellProcessesForSessionTree(sessionID string) int {
 	return DefaultRegistry.KillSessionTree(sessionID)
 }
 
+// ConsumeShellSessionCancelled 取出并清除会话的取消标记。
 func ConsumeShellSessionCancelled(sessionID string) bool {
 	return DefaultRegistry.ConsumeCancelled(sessionID)
 }
@@ -317,6 +324,7 @@ func SetShellSessionID(ctx context.Context, sessionID string) context.Context {
 	return context.WithValue(ctx, shellSessionIDKey{}, sessionID)
 }
 
+// GetShellSessionID 从 context 读取 Shell 会话 ID，未设置时返回空串。
 func GetShellSessionID(ctx context.Context) string {
 	if v, ok := ctx.Value(shellSessionIDKey{}).(string); ok {
 		return v

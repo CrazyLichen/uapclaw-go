@@ -248,7 +248,6 @@ When operating today's session logs file, please use ` + "`{today_date}.md`" + `
 //
 // mode 支持 "proactive"、"inactive"、"read_only"。
 // todayDate 为当前日期字符串（格式 YYYY-MM-DD），仅在 proactive 模式下使用。
-
 func BuildMemorySection(mode string, todayDate string, lang string) saprompt.PromptSection {
 	var parts []string
 

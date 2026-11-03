@@ -110,7 +110,7 @@ type GraphMemPrompting struct {
 	EntityDedupeLanguage string
 }
 
-// EntityMerge 实体合并信息
+// deferredRelationUpdate 关系延迟更新条目：待写入的关系、字段与新值。
 //
 // Python: relation_deferred_updates: dict[str, list[tuple[Relation, str, str]]]
 type deferredRelationUpdate struct {

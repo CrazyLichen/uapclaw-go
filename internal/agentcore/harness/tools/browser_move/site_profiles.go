@@ -81,7 +81,6 @@ const (
 // builtinSiteProfiles 内置浏览器站点配置文件。
 //
 // Python: BUILTIN_SITE_PROFILES (site_profiles.py L16-57)
-
 var builtinSiteProfiles = []map[string]any{
 	{
 		"id":      "books_to_scrape",

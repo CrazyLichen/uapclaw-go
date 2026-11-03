@@ -610,3 +610,39 @@ func TestContentPart_混合多模态(t *testing.T) {
 		t.Errorf("Parts()[3] video_url 不正确")
 	}
 }
+
+// ────────────────────── BaseMessageToMap 测试 ──────────────────────
+
+// TestBaseMessageToMap 覆盖空消息、普通字段与 AssistantMessage 的 tool_calls 输出。
+func TestBaseMessageToMap(t *testing.T) {
+	if got := BaseMessageToMap(nil); len(got) != 0 {
+		t.Fatalf("nil 消息应返回空 map，实际 %v", got)
+	}
+
+	user := NewUserMessage("你好", WithMessageName("alice"), WithMetadata(map[string]any{"k": "v"}))
+	got := BaseMessageToMap(user)
+	if got["role"] != "user" || got["content"] != "你好" || got["name"] != "alice" {
+		t.Fatalf("基础字段映射错误: %v", got)
+	}
+	if _, ok := got["metadata"]; !ok {
+		t.Fatalf("元数据未输出: %v", got)
+	}
+	if _, ok := got["tool_calls"]; ok {
+		t.Fatalf("用户消息不应输出 tool_calls: %v", got)
+	}
+
+	assistant := &AssistantMessage{
+		DefaultMessage: *NewDefaultMessage(RoleTypeAssistant, ""),
+		ToolCalls: []*ToolCall{
+			{ID: "call_1", Name: "read_file", Arguments: `{"path":"a"}`, Type: "function", Index: 2},
+		},
+	}
+	m := BaseMessageToMap(assistant)
+	calls, ok := m["tool_calls"].([]map[string]any)
+	if !ok || len(calls) != 1 {
+		t.Fatalf("tool_calls 映射错误: %v", m)
+	}
+	if calls[0]["name"] != "read_file" || calls[0]["id"] != "call_1" || calls[0]["index"] != 2 {
+		t.Fatalf("tool_calls 字段错误: %v", calls[0])
+	}
+}

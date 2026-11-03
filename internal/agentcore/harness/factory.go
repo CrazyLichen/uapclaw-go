@@ -231,7 +231,6 @@ func ResetFreeSearchRuntimeFlags() {
 // normalizeTools 将 ToolCard 列表和 Tool 实例列表统一规范化，
 // 合并为 ToolCard 列表和 Tool 实例列表，同时过滤被禁用的 free_search 工具。
 // Python: _normalize_tools(tools: List[Tool | ToolCard])
-
 func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (normalizedCards []*tool.ToolCard, mergedInstances []tool.Tool) {
 	// 纯 ToolCard 直接加入 normalizedCards
 	for _, tc := range toolCards {

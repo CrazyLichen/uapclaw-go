@@ -8,6 +8,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// BaseMessage 消息基接口，统一角色、内容、名称与元数据的读写入口。
 type BaseMessage interface {
 	// GetRole 获取消息角色
 	GetRole() RoleType
@@ -63,6 +64,7 @@ type ContentPart struct {
 	VideoURL *VideoURL `json:"video_url,omitempty"`
 }
 
+// MessageContent 消息内容容器：纯文本走 text，多模态走 parts，两者互斥。
 type MessageContent struct {
 	// text 纯文本内容（多模态时为空）
 	text string
@@ -70,6 +72,7 @@ type MessageContent struct {
 	parts []ContentPart
 }
 
+// DefaultMessage 通用消息实现，是各类角色消息的公共载体。
 type DefaultMessage struct {
 	// Role 消息角色
 	Role RoleType `json:"role"`
@@ -81,18 +84,22 @@ type DefaultMessage struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
+// UserMessage 用户消息，复用 DefaultMessage 的字段与行为。
 type UserMessage struct {
 	DefaultMessage
 }
 
+// SystemMessage 系统消息，复用 DefaultMessage 的字段与行为。
 type SystemMessage struct {
 	DefaultMessage
 }
 
+// MessageOption 构造 DefaultMessage 时的可选项，用于注入角色、内容等字段。
 type MessageOption func(*DefaultMessage)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// RoleType 消息角色枚举，取值与 OpenAI role 字段一一对应。
 type RoleType int
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -161,10 +168,12 @@ func (r *RoleType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// NewTextContent 构造纯文本消息内容。
 func NewTextContent(text string) MessageContent {
 	return MessageContent{text: text}
 }
 
+// NewMultiModalContent 构造多模态消息内容。
 func NewMultiModalContent(parts ...ContentPart) MessageContent {
 	return MessageContent{parts: parts}
 }
@@ -228,6 +237,7 @@ func WithMultiModalContent(parts ...ContentPart) MessageOption {
 	return func(m *DefaultMessage) { m.Content = NewMultiModalContent(parts...) }
 }
 
+// NewDefaultMessage 构造通用消息，opts 可覆盖名称、元数据与多模态内容。
 func NewDefaultMessage(role RoleType, content string, opts ...MessageOption) *DefaultMessage {
 	msg := &DefaultMessage{
 		Role:    role,
@@ -239,16 +249,61 @@ func NewDefaultMessage(role RoleType, content string, opts ...MessageOption) *De
 	return msg
 }
 
+// NewUserMessage 构造用户消息。
 func NewUserMessage(content string, opts ...MessageOption) *UserMessage {
 	msg := NewDefaultMessage(RoleTypeUser, content, opts...)
 	return &UserMessage{DefaultMessage: *msg}
 }
 
+// NewSystemMessage 构造系统消息。
 func NewSystemMessage(content string, opts ...MessageOption) *SystemMessage {
 	msg := NewDefaultMessage(RoleTypeSystem, content, opts...)
 	return &SystemMessage{DefaultMessage: *msg}
 }
 
+// BaseMessageToMap 把 BaseMessage 转成 map 表示（OpenAI 风格）。
+//
+// BaseMessage 接口没有 ToMap 方法，只能从接口字段手工构建；
+// 供轨迹构建、会话信号等消费方复用，避免 role/content/tool_calls 映射多处漂移。
+// AssistantMessage 额外输出扁平格式的 tool_calls。
+func BaseMessageToMap(msg BaseMessage) map[string]any {
+	if msg == nil {
+		return map[string]any{}
+	}
+	result := map[string]any{
+		"role":    msg.GetRole().String(),
+		"content": msg.GetContent().String(),
+	}
+	if name := msg.GetName(); name != "" {
+		result["name"] = name
+	}
+	if meta := msg.GetMetadata(); len(meta) > 0 {
+		result["metadata"] = meta
+	}
+	if am, ok := msg.(*AssistantMessage); ok && len(am.ToolCalls) > 0 {
+		calls := make([]map[string]any, 0, len(am.ToolCalls))
+		for _, tc := range am.ToolCalls {
+			tcMap := map[string]any{
+				"name":      tc.Name,
+				"arguments": tc.Arguments,
+			}
+			if tc.ID != "" {
+				tcMap["id"] = tc.ID
+			}
+			if tc.Type != "" {
+				tcMap["type"] = tc.Type
+			}
+			if tc.Index > 0 {
+				tcMap["index"] = tc.Index
+			}
+			calls = append(calls, tcMap)
+		}
+		result["tool_calls"] = calls
+	}
+	return result
+}
+
+// UnmarshalMessage 先读 role 再按类型反序列化，返回对应的具体消息。
 func UnmarshalMessage(data []byte) (BaseMessage, error) {
 	var peek struct {
 		Role string `json:"role"`

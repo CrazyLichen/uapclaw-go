@@ -102,14 +102,14 @@ func TestCancelPendingTodos_全链路标记cancelled(t *testing.T) {
 }
 
 // TestFormatTodosForFrontendLocal_过滤cancelled 验证前端格式化的过滤与映射。
-// 对齐 commrails.formatTodosForFrontend (stream_event_emit.go:234)
+// 对齐 commrails.FormatTodosForFrontend (stream_event_emit.go)
 func TestFormatTodosForFrontendLocal_过滤cancelled(t *testing.T) {
 	todos := []hschema.TodoItem{
 		{ID: "1", Content: "a", Status: hschema.TodoStatusPending},
 		{ID: "2", Content: "b", Status: hschema.TodoStatusCancelled},
 		{ID: "3", Content: "c", Status: hschema.TodoStatusCompleted},
 	}
-	got := formatTodosForFrontendLocal(todos)
+	got := commrails.FormatTodosForFrontend(todos)
 	if len(got) != 2 {
 		t.Fatalf("应过滤 cancelled 剩 2: %v", got)
 	}
@@ -126,7 +126,7 @@ func TestFormatTodosForFrontendLocal_进行中状态(t *testing.T) {
 	todos := []hschema.TodoItem{
 		{ID: "9", Content: "x", ActiveForm: "正在做 x", Status: hschema.TodoStatusInProgress},
 	}
-	got := formatTodosForFrontendLocal(todos)
+	got := commrails.FormatTodosForFrontend(todos)
 	if len(got) != 1 || got[0]["status"] != "in_progress" {
 		t.Fatalf("in_progress 映射异常: %v", got)
 	}
@@ -137,7 +137,7 @@ func TestFormatTodosForFrontendLocal_进行中状态(t *testing.T) {
 
 // TestFormatTodosForFrontendLocal_空列表 验证空列表返回空切片非 nil。
 func TestFormatTodosForFrontendLocal_空列表(t *testing.T) {
-	got := formatTodosForFrontendLocal(nil)
+	got := commrails.FormatTodosForFrontend(nil)
 	if len(got) != 0 {
 		t.Errorf("空列表应返回空: %v", got)
 	}

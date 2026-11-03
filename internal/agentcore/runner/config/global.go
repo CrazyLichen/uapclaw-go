@@ -48,10 +48,10 @@ var (
 	globalConfigMu sync.RWMutex
 )
 
-// SetRunnerConfig 设置全局 Runner 配置。
-// Python: set_runner_config(cfg)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// SetRunnerConfig 设置全局 Runner 配置。
+// Python: set_runner_config(cfg)
 func SetRunnerConfig(cfg *RunnerConfig) {
 	globalConfigMu.Lock()
 	defer globalConfigMu.Unlock()
@@ -91,13 +91,13 @@ func GetRunnerConfig() *RunnerConfig {
 	return globalConfig
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // cloneDefaultConfig 深拷贝 DEFAULT_RUNNER_CONFIG。
 //
 // Python: DEFAULT_RUNNER_CONFIG.model_copy(deep=True)
 // InstanceID 保留原值（深拷贝语义，非重新生成）。
 // 使用 deepcopy 库确保 CheckpointerConfig.Conf 等 map[string]any 字段也被深拷贝。
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 func cloneDefaultConfig() *RunnerConfig {
 	result := deepcopy.Copy(DEFAULT_RUNNER_CONFIG)
 	return result.(*RunnerConfig)

@@ -13,6 +13,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// DataContainer 会话数据容器：按 key 读取、原子更新、可序列化落盘。
 type DataContainer interface {
 	// Get 获取数据，key 可选过滤，nil 返回全部数据
 	Get(key any) map[string]any
@@ -22,6 +23,7 @@ type DataContainer interface {
 	Dump() (any, error)
 }
 
+// StateAccessor 会话状态访问抽象，供 AgentSessionContainer 委托与重建。
 type StateAccessor interface {
 	// UpdateState 更新状态数据
 	UpdateState(data map[string]any)
@@ -33,6 +35,7 @@ type StateAccessor interface {
 	PreRun(ctx context.Context, inputs ...map[string]any) error
 }
 
+// SharingPolicy 会话数据对外共享时的权限与字段白名单。
 type SharingPolicy struct {
 	// Permission 授予的权限级别，当前仅支持只读
 	Permission Permission
@@ -40,6 +43,7 @@ type SharingPolicy struct {
 	FieldScopes map[string]struct{}
 }
 
+// AgentSessionContainer 以委托方式持有真实会话，构造期可为空，由 SetSession/Load 注入。
 type AgentSessionContainer struct {
 	// session 被委托的会话实例，初始为 nil
 	// 通过 SetSession 注入，或通过 Load 创建
@@ -53,6 +57,7 @@ type factoryEntry struct {
 	loader ContainerLoader
 }
 
+// DataContainerFactory 数据容器工厂：按容器类型注册构造器与反序列化加载器。
 type DataContainerFactory struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
@@ -68,6 +73,7 @@ type ContainerOption func(DataContainer)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// Permission 会话数据共享权限级别枚举。
 type Permission int
 
 // ──────────────────────────── 常量 ────────────────────────────

@@ -242,7 +242,7 @@ func (d *ConversationSignalDetector) Detect(msgs []map[string]any) []*EvolutionS
 func ParseMessages(messages []llmschema.BaseMessage) []map[string]any {
 	result := make([]map[string]any, 0, len(messages))
 	for _, msg := range messages {
-		result = append(result, baseMessageToMap(msg))
+		result = append(result, llmschema.BaseMessageToMap(msg))
 	}
 	return result
 }
@@ -396,7 +396,7 @@ func (d *ConversationSignalDetector) ConvertTrajectoryToMessages(traj *trajector
 				continue
 			}
 			for _, msg := range llmDetail.Messages {
-				msgMap := baseMessageToMap(msg)
+				msgMap := llmschema.BaseMessageToMap(msg)
 				messages = append(messages, msgMap)
 				if tcSlice := getToolCalls(msgMap); len(tcSlice) > 0 {
 					for _, tc := range tcSlice {
@@ -459,48 +459,6 @@ func MatchFailureKeywords(content string) bool {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// baseMessageToMap 将 BaseMessage 转换为 map[string]any 表示。
-//
-// BaseMessage 接口没有 ToMap/ToDict 方法，需要从接口字段手动构建。
-// Python: BaseMessage.model_dump() 或 OpenAI dict 格式。
-func baseMessageToMap(msg llmschema.BaseMessage) map[string]any {
-	if msg == nil {
-		return map[string]any{}
-	}
-	result := map[string]any{
-		"role":    msg.GetRole().String(),
-		"content": msg.GetContent().String(),
-	}
-	if name := msg.GetName(); name != "" {
-		result["name"] = name
-	}
-	if meta := msg.GetMetadata(); len(meta) > 0 {
-		result["metadata"] = meta
-	}
-	// AssistantMessage 特有字段：tool_calls（使用内部扁平格式，与 getToolCalls 兼容）
-	if am, ok := msg.(*llmschema.AssistantMessage); ok && len(am.ToolCalls) > 0 {
-		calls := make([]map[string]any, 0, len(am.ToolCalls))
-		for _, tc := range am.ToolCalls {
-			tcMap := map[string]any{
-				"name":      tc.Name,
-				"arguments": tc.Arguments,
-			}
-			if tc.ID != "" {
-				tcMap["id"] = tc.ID
-			}
-			if tc.Type != "" {
-				tcMap["type"] = tc.Type
-			}
-			if tc.Index > 0 {
-				tcMap["index"] = tc.Index
-			}
-			calls = append(calls, tcMap)
-		}
-		result["tool_calls"] = calls
-	}
-	return result
-}
 
 // findFailureKeywordIndex 返回内容中失败关键词的位置。
 // Python: _FAILURE_KEYWORDS 中 error(?!\s*=\s*None) 的负向前瞻语义：
@@ -893,7 +851,7 @@ func (d *ConversationSignalDetector) detectCollaborationSignals(traj *trajectory
 				continue
 			}
 			for _, msg := range llmDetail.Messages {
-				msgMap := baseMessageToMap(msg)
+				msgMap := llmschema.BaseMessageToMap(msg)
 				if tcSlice := getToolCalls(msgMap); len(tcSlice) > 0 {
 					if detected := d.detectSkillFromToolCalls(tcSlice); detected != "" {
 						skillReadHistory = append(skillReadHistory, skillReadEntry{idx, detected})

@@ -186,7 +186,7 @@ func (t *Trajectory) ToMessages() []map[string]any {
 		}
 		// Messages 是 []llmschema.BaseMessage，需要逐个转换
 		for _, msg := range llmDetail.Messages {
-			messages = append(messages, baseMessageToMap(msg))
+			messages = append(messages, llmschema.BaseMessageToMap(msg))
 		}
 		// Response 已是 map[string]any，检查是否含 role 或 content 键
 		if llmDetail.Response != nil {
@@ -201,45 +201,3 @@ func (t *Trajectory) ToMessages() []map[string]any {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// baseMessageToMap 将 BaseMessage 转换为 map[string]any 表示。
-//
-// BaseMessage 接口没有 ToMap/ToDict 方法，需要从接口字段手动构建。
-// Python: BaseMessage.model_dump() 或 OpenAI dict 格式。
-func baseMessageToMap(msg llmschema.BaseMessage) map[string]any {
-	if msg == nil {
-		return map[string]any{}
-	}
-	result := map[string]any{
-		"role":    msg.GetRole().String(),
-		"content": msg.GetContent().String(),
-	}
-	if name := msg.GetName(); name != "" {
-		result["name"] = name
-	}
-	if meta := msg.GetMetadata(); len(meta) > 0 {
-		result["metadata"] = meta
-	}
-	// AssistantMessage 特有字段：tool_calls（使用内部扁平格式）
-	if am, ok := msg.(*llmschema.AssistantMessage); ok && len(am.ToolCalls) > 0 {
-		calls := make([]map[string]any, 0, len(am.ToolCalls))
-		for _, tc := range am.ToolCalls {
-			tcMap := map[string]any{
-				"name":      tc.Name,
-				"arguments": tc.Arguments,
-			}
-			if tc.ID != "" {
-				tcMap["id"] = tc.ID
-			}
-			if tc.Type != "" {
-				tcMap["type"] = tc.Type
-			}
-			if tc.Index > 0 {
-				tcMap["index"] = tc.Index
-			}
-			calls = append(calls, tcMap)
-		}
-		result["tool_calls"] = calls
-	}
-	return result
-}
