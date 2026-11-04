@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -2923,4 +2925,58 @@ func TestReActAgent_afterReactIteration_firesOnToolRound(t *testing.T) {
 		t.Fatalf("reactLoop 返回错误: %v", err)
 	}
 	assert.Equal(t, 1, fireCount)
+}
+
+// ──────────────────────────── A-11: system prompt 为空仍保留 skills section ────────────────────────────
+
+// writeDemoSkill 在临时目录写入一个最小技能，返回技能根目录。
+func writeDemoSkill(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	skillDir := filepath.Join(root, "demo-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("创建技能目录失败: %v", err)
+	}
+	content := "---\nname: demo-skill\ndescription: 演示技能\n---\n\n# demo-skill\n"
+	if err := os.WriteFile(filepath.Join(skillDir, skills.SkillFileName), []byte(content), 0o644); err != nil {
+		t.Fatalf("写入 SKILL.md 失败: %v", err)
+	}
+	return root
+}
+
+// TestReActAgent_skillSection_保留于空系统提示词 验证 system prompt 为空时技能小节仍注入
+func TestReActAgent_skillSection_保留于空系统提示词(t *testing.T) {
+	agent := newTestAgent("skill_section_keep")
+	agent.SetAbilityManager(newStubAbilityManager())
+	agent.skillUtil = skills.NewSkillUtil("")
+	if err := agent.skillUtil.RegisterSkills([]string{writeDemoSkill(t)}, false); err != nil {
+		t.Fatalf("注册技能失败: %v", err)
+	}
+	if !agent.skillUtil.HasSkill() {
+		t.Fatal("技能未注册成功")
+	}
+
+	agent.updateSkillPromptBuilderSection(context.Background())
+
+	assert.Contains(t, agent.promptBuilder.Build(), "demo-skill")
+}
+
+// TestReActAgent_skillSection_无技能时移除 验证无技能时移除小节
+func TestReActAgent_skillSection_无技能时移除(t *testing.T) {
+	agent := newTestAgent("skill_section_remove")
+	agent.SetAbilityManager(newStubAbilityManager())
+	agent.skillUtil = skills.NewSkillUtil("")
+
+	agent.updateSkillPromptBuilderSection(context.Background())
+
+	assert.NotContains(t, agent.promptBuilder.Build(), "demo-skill")
+}
+
+// TestReActAgent_skillSection_nilSkillUtil 验证 skillUtil 为 nil 时不 panic
+func TestReActAgent_skillSection_nilSkillUtil(t *testing.T) {
+	agent := newTestAgent("skill_section_nil")
+	agent.skillUtil = nil
+	assert.NotPanics(t, func() {
+		agent.updateSkillPromptBuilderSection(context.Background())
+	})
 }

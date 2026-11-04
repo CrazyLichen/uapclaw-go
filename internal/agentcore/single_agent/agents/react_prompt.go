@@ -184,13 +184,15 @@ func (a *ReActAgent) SystemPromptBuilder() prompts.SystemPromptBuilderInterface 
 
 // updateSkillPromptBuilderSection 更新技能提示词区段。
 //
-// 在 invoke 入口阶段，根据已注册技能更新 prompt_builder 的 skills section。
-// 如果渲染后的系统提示词为空、skillUtil 为 nil 或无已注册技能，则移除 skills section。
-// 否则将技能提示词注入 skills section（priority=90）。
+// 技能小节是否注入只由「是否有已注册技能」决定：渲染后的系统提示词为空时
+// 不得静默移除 skills section（否则 register_skill 后 agent 看不到已注册技能）。
 //
-// Python: ReActAgent._update_skill_prompt_builder_section(rendered_system_prompt)
-func (a *ReActAgent) updateSkillPromptBuilderSection(ctx context.Context, renderedSystemPrompt string) {
-	if renderedSystemPrompt == "" || a.skillUtil == nil || !a.skillUtil.HasSkill() {
+// Python: ReActAgent._update_skill_prompt_builder_section()
+func (a *ReActAgent) updateSkillPromptBuilderSection(ctx context.Context) {
+	if a.skillUtil == nil {
+		return
+	}
+	if !a.skillUtil.HasSkill() {
 		a.promptBuilder.RemoveSection(skillsSection)
 		return
 	}
