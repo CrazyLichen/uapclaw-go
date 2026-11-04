@@ -469,17 +469,21 @@ func TryStartPgCluster(ctx context.Context) bool {
 // 失败则 TryStartPgCluster → 回退 systemctl/service start → 启动后指数退避等待
 // 就绪（init 0.4s / max 2.0s / backoff 1.45 / max 30s / 每 5s 日志）。
 func EnsurePostgresqlForLeader(ctx context.Context, configBase map[string]any) {
+	// 只有 leader 负责拉起数据库，其他角色直接放行。
 	if RuntimeRole(configBase) != "leader" {
 		return
 	}
+	// 取出 team 配置，没有配置时用空表顶上，方便后面统一判断存储类型。
 	teamCfg, _ := configBase["team"].(map[string]any)
 	if teamCfg == nil {
 		teamCfg = map[string]any{}
 	}
+	// 存储不是 PostgreSQL 的团队不涉及本地实例，什么都不用做。
 	if !IsPostgresqlStorage(teamCfg) {
 		return
 	}
 
+	// 先解析连接地址并试连一次，能连上说明服务已在跑，直接返回。
 	host, port := ExtractPgEndpoint(teamCfg)
 	if IsPgAvailable(ctx, host, port) {
 		return
@@ -488,6 +492,8 @@ func EnsurePostgresqlForLeader(ctx context.Context, configBase map[string]any) {
 	logger.Warn(logComponent).Str("host", host).Int("port", port).
 		Msg("[TeamManager] PostgreSQL not reachable, attempting auto-start as leader")
 
+	// 连不上就尝试自动拉起服务：先按 Debian/Ubuntu 的集群方式启动，
+	// 失败再依次尝试 systemctl 和 service 两种通用做法。
 	started := TryStartPgCluster(ctx)
 	if !started {
 		for _, cmd := range [][]string{
@@ -500,6 +506,7 @@ func EnsurePostgresqlForLeader(ctx context.Context, configBase map[string]any) {
 			}
 		}
 	}
+	// 所有启动方式都失败时不再挣扎，只记告警，把问题留给后面真正连库时暴露。
 	if !started {
 		logger.Warn(logComponent).
 			Msg("[TeamManager] PostgreSQL auto-start command failed, will continue and rely on DB connect error")
@@ -510,6 +517,8 @@ func EnsurePostgresqlForLeader(ctx context.Context, configBase map[string]any) {
 		Float64("max_sec", pgPostStartReadyMaxSec).
 		Msg("[TeamManager] start command returned OK; waiting for connections")
 
+	// 启动命令返回成功只代表进程拉起来了，还要等端口真正可连：
+	// 每轮探测一次，间隔从 init 开始按 backoff 放大到 max，总时长不超过 max_sec。
 	deadline := time.Now().Add(time.Duration(pgPostStartReadyMaxSec * float64(time.Second)))
 	sleepFor := pgPostStartReadyInitSleep
 	waitStart := time.Now()
@@ -545,6 +554,7 @@ func EnsurePostgresqlForLeader(ctx context.Context, configBase map[string]any) {
 		sleepFor = math.Min(sleepFor*pgPostStartReadyBackoff, pgPostStartReadyMaxSleep)
 	}
 
+	// 等到超时还是连不上，记一条告警就返回，由后续真正的连接过程报错。
 	logger.Warn(logComponent).Str("host", host).Int("port", port).
 		Float64("max_sec", pgPostStartReadyMaxSec).
 		Msg("[TeamManager] PostgreSQL start attempted but endpoint still not ready")

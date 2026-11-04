@@ -71,6 +71,7 @@ func NewKVMigrator(kvStore kv.BaseKVStore, kvRegistry *operation.OperationRegist
 //
 // Python: KVMigrator.try_migrate(entity_key, operations)
 func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operations []operation.Operation) error {
+	// 只认固定的全局实体 key，传进来别的值说明调用方用错了，直接报错退出。
 	if entityKey != KVEntityKey {
 		logger.Error(logComponent).Str("entity_key", entityKey).Str("expected_key", KVEntityKey).
 			Msg("unsupported entity_key")
@@ -84,6 +85,7 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 		return nil
 	}
 
+	// 操作的版本号必须从小到大排列，否则后面按版本筛待执行项时会漏跑或乱序。
 	if !validateOperationsOrder(operations) {
 		logger.Error(logComponent).Msg("schema_version not in ascending order")
 		return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
@@ -91,11 +93,13 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 		)
 	}
 
+	// 读出库里记录的当前版本，后面用它判断哪些操作已经跑过。
 	currentVersion, err := m.getCurrentVersion(ctx)
 	if err != nil {
 		return err
 	}
 
+	// 当前版本已经追上（甚至超过）最后一个操作时，整批迁移都不必执行。
 	lastOpVersion := operations[len(operations)-1].SchemaVersion()
 	if currentVersion != nil && *currentVersion >= lastOpVersion {
 		logger.Info(logComponent).Int("current_version", *currentVersion).Int("last_op_version", lastOpVersion).
@@ -103,6 +107,7 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 		return nil
 	}
 
+	// 只保留版本号高于当前版本的操作为待执行项；一个都不剩就提前返回。
 	pendingOps := filterPendingOperations(operations, currentVersion)
 	if len(pendingOps) == 0 {
 		return nil
@@ -110,12 +115,14 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 
 	logger.Info(logComponent).Int("pending_count", len(pendingOps)).Msg("found pending operations")
 
+	// 动手前先给现有数据做一份备份，备份失败就不再往下走。
 	backupKey, err := m.createBackup(ctx, currentVersion)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("failed to create KV backup")
 		return err
 	}
 
+	// 按版本顺序逐个执行；只要有一个失败，就回滚到刚才的备份并把错误抛出去。
 	lastVersion := currentVersion
 	for idx, op := range pendingOps {
 		logger.Info(logComponent).Int("idx", idx+1).Int("total", len(pendingOps)).
@@ -139,6 +146,7 @@ func (m *KVMigrator) TryMigrate(ctx context.Context, entityKey string, operation
 			Msg("operation executed successfully")
 	}
 
+	// 全部执行成功后再把版本号推进到最后一个操作的版本，然后清掉备份文件。
 	if lastVersion != nil && (currentVersion == nil || *lastVersion != *currentVersion) {
 		if err := m.updateVersion(ctx, *lastVersion); err != nil {
 			return err

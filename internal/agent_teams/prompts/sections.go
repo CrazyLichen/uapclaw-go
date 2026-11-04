@@ -626,11 +626,15 @@ func hittSectionTeammateAnonymousEN() string {
 // hittSectionHumanAgentEN Human-Agent 英文 HITT 协作规则。
 // Python: _hitt_section_human_agent_en(names, self_name) (openjiuwen/agent_teams/prompts/sections.py)
 func hittSectionHumanAgentEN(names []string, selfName string) string {
+	// 先把人类成员名单格式化成一段清单，后文直接嵌进提示词里。
 	roster := formatHumanAgentRoster(names, "en")
+	// 如果当前 agent 有名字，顺带告诉它自己在团队里该被怎么称呼。
 	peers := ""
 	if selfName != "" {
 		peers = "Your member_name is `" + selfName + "`.\n"
 	}
+	// 正文是一整段英文提示词，依次讲身份边界、输入来源、可用工具和言行约束；
+	// 这里是逐段拼接，文案与上游 Python 保持一致，不要翻译或改写。
 	return "# HITT — You are your controller's avatar on this team\n\n" +
 		roster + ".\n" +
 		peers +

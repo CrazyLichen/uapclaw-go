@@ -209,6 +209,7 @@ func BuildAcpToolCallUpdate(payload map[string]any, cache map[string]map[string]
 // BuildAcpToolResultUpdate 构造 tool_call_update session/update。
 // Python: build_acp_tool_result_update (L192-263)
 func BuildAcpToolResultUpdate(payload map[string]any, cache map[string]map[string]any) map[string]any {
+	// 先取出工具执行结果：不同上游可能用 result 或 content 两个字段，都没有就当成空串。
 	result := payload["result"]
 	if result == nil {
 		result = payload["content"]
@@ -216,6 +217,7 @@ func BuildAcpToolResultUpdate(payload map[string]any, cache map[string]map[strin
 			result = ""
 		}
 	}
+	// 找到这次调用的 ID，并把之前 tool_call 阶段存进缓存的展示信息取出来备用。
 	toolCallID := resolveToolCallID(payload)
 	var cached map[string]any
 	if cache != nil && toolCallID != "" {
@@ -224,6 +226,7 @@ func BuildAcpToolResultUpdate(payload map[string]any, cache map[string]map[strin
 			cached = map[string]any{}
 		}
 	}
+	// 工具名逐级兜底：先是载荷里的直给字段，再是内嵌的 toolCall 对象，最后才用缓存里记下的名字。
 	toolName := firstNonEmptyStr(payload["tool_name"], payload["name"])
 	if toolName == "" {
 		if tc, ok := payload["toolCall"].(map[string]any); ok {
@@ -239,13 +242,16 @@ func BuildAcpToolResultUpdate(payload map[string]any, cache map[string]map[strin
 			arguments = tc["arguments"]
 		}
 	}
+	// 原始输出用于判断是不是终端类工具；能解析出终端 ID 的话，内容块要按终端格式拼。
 	rawOutput := firstNonNil(payload["rawOutput"], payload["raw_output"])
 	terminalID := extractTerminalID(rawOutput)
 
+	// 搭出 tool_call_update 的骨架，后面的字段按实际拿到的信息逐个补。
 	update := map[string]any{
 		"sessionUpdate": "tool_call_update",
 		"toolCallId":    toolCallID,
 	}
+	// 有正常结果且不是终端输出时才回填结果文本，避免和终端内容重复展示。
 	if result != nil && result != "" && terminalID == "" {
 		update["result"] = result
 	}
@@ -257,6 +263,7 @@ func BuildAcpToolResultUpdate(payload map[string]any, cache map[string]map[strin
 			update[key] = v
 		}
 	}
+	// 交给统一的描述器算出标题、类型、状态等展示字段，再覆盖到 update 上。
 	title := firstNonEmptyStr(payload["title"], strAny(update["title"]))
 	kind := firstNonEmptyStr(payload["kind"], strAny(update["kind"]))
 	descriptor := BuildAcpToolDescriptor(toolName,
@@ -269,6 +276,7 @@ func BuildAcpToolResultUpdate(payload map[string]any, cache map[string]map[strin
 			update[key] = v
 		}
 	}
+	// 组装展示内容：终端类输出走终端内容块，其他情况把结果文本转成普通内容块。
 	content := buildTerminalContentBlocks(terminalID)
 	if len(content) == 0 {
 		content = buildContentBlocks(result)

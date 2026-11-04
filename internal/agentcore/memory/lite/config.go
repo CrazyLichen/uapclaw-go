@@ -124,6 +124,9 @@ func IsMemoryEnabled() bool {
 
 // CreateMemorySettings 创建默认记忆配置。对齐 Python create_memory_settings
 func CreateMemorySettings(workspaceDir string, overrides map[string]any) *MemorySettings {
+	// 先把一套开箱即用的默认值摆好：用 OpenAI 兼容的向量模型做召回，
+	// 检索时向量与关键词混合打分，结果落在本地 memory.db，并开启后台同步和缓存。
+	// 下面这些数字都是调过的常用值，调用方不特别指定时就按这套跑。
 	s := &MemorySettings{
 		Provider:   "openai_compatible",
 		Model:      "text-embedding-v3",
@@ -162,6 +165,9 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 		},
 	}
 
+	// 再用调用方传进来的 overrides 逐项覆盖默认值。
+	// 只认下面列举的这些键，认不出的键直接忽略；某个键的值类型对不上也跳过，
+	// 这样配置写错时只是不生效，不会把整套默认值打乱。
 	for key, value := range overrides {
 		switch key {
 		case "provider":
@@ -176,6 +182,8 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 			if v, ok := value.(string); ok {
 				s.Fallback = v
 			}
+		// sources / extra_paths 是字符串列表：调用方可能给强类型切片，
+		// 也可能给从 JSON 或 YAML 解出来的通用切片，两种形态都要接住。
 		case "sources":
 			if v, ok := value.([]string); ok {
 				s.Sources = v
@@ -200,6 +208,9 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 				}
 				s.ExtraPaths = strs
 			}
+		// 剩下几个键对应成组的配置（分块、检索、存储、同步、缓存），
+		// 传进来是一层小 map，这里把认识的字段逐个挑出来覆盖，
+		// 没给的字段就继续沿用上面的默认值。
 		case "chunking":
 			if v, ok := value.(map[string]any); ok {
 				if v2, ok := v["tokens"].(float64); ok {
@@ -286,5 +297,6 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 		}
 	}
 
+	// 覆盖处理完毕，返回最终配置。
 	return s
 }

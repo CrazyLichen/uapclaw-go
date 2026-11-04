@@ -181,7 +181,7 @@ func TestNewGraphKnowledgeBase_构造(t *testing.T) {
 	assert.Nil(t, kb.tripleRetriever)
 }
 
-// ──────────────────────────── AddDocuments ────────────────────────────
+// ──────────────────────────── AddDocuments 新增文档 ────────────────────────────
 
 // TestGraphKB_AddDocuments_图索引 对齐 test_add_documents_with_graph：
 // 建 chunk + triple 两个索引，抽一次三元组，triple 索引 use_caption 硬编码 true。
@@ -314,7 +314,7 @@ func TestGraphKB_ParseFiles(t *testing.T) {
 	assert.Equal(t, 1, p.calls)
 }
 
-// ──────────────────────────── Retrieve ────────────────────────────
+// ──────────────────────────── Retrieve 检索文档 ────────────────────────────
 
 // TestGraphKB_Retrieve_图路径 图路径分派到注入的检索器，参数透传
 // （对齐 test_retrieve_with_graph：patch GraphRetriever 后断言被调用）。
@@ -460,7 +460,7 @@ func TestGraphKB_SetGraphRetriever_复位(t *testing.T) {
 	assert.NotSame(t, first, second)
 }
 
-// ──────────────────────────── Delete / Update / Statistics / Close ────────────────────────────
+// ──────────────────────────── 删除 / 更新 / 统计 / 关闭 ────────────────────────────
 
 // secondDeleteFalseIndexer 首次删除 true、后续 false（chunk 成功 / triple 失败）。
 type secondDeleteFalseIndexer struct {

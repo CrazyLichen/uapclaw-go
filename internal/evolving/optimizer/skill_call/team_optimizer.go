@@ -262,10 +262,12 @@ func (o *TeamSkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoC
 //
 // Python: TeamSkillExperienceOptimizer.generate_user_patch(trajectory, skill_name, user_intent)
 func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, traj *trajectory.Trajectory, skillName string, userIntent string) (*checkpointing.EvolutionRecord, error) {
+	// 先给描述、角色和工作流摘要一个占位值，后面能从轨迹里解析出来再覆盖。
 	description := "team-skill"
 	rolesSummary := "N/A"
 	workflowSummary := "N/A"
 
+	// 把整条团队轨迹压成一段文字，再从里面找出现过的角色名和工作流线索。
 	summary := signal.BuildTeamTrajectorySummary(traj)
 	if strings.Contains(summary, "spawn_member") {
 		roleMentions := regexp.MustCompile(`role[_-]?([a-z]+)`).FindAllStringSubmatch(summary, -1)
@@ -288,14 +290,17 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 		workflowSummary = "Present in trajectory"
 	}
 
+	// 读取现有技能内容和历史演进摘要，作为给模型的参考材料。
 	skillContent := o.loadSkillContent(ctx, skillName)
 	existingEvolutions := o.loadExistingEvolutionsSummary(ctx, skillName)
 
+	// 按当前语言挑选提示词模板，没有对应语言就用英文兜底。
 	promptTemplate := UserPatchPrompt[o.language]
 	if promptTemplate == "" {
 		promptTemplate = UserPatchPromptEN
 	}
 
+	// 拼出正式提示词；同时准备一份内容更短的兜底提示词，供模型输出解析失败时再问一次。
 	prompt := formatTemplate(promptTemplate,
 		"skill_name", skillName,
 		"description", description,
@@ -316,6 +321,7 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 		"user_intent", truncateString(userIntent, UserIntentRetryChars),
 	)
 
+	// 调用模型生成 patch 并计时；失败时打一条警告，然后把错误交给上层处理。
 	t0 := time.Now()
 	raw, err := o.callLLM(ctx, prompt, retryPrompt, &o.recordLLMPolicy, func(text string) bool {
 		return signal.ParseTeamModelJSON(text) != nil
@@ -329,11 +335,13 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 		return nil, err
 	}
 
+	// 解析模型返回的 JSON，拿不到结果就当作本轮失败。
 	parsed, lastError := parsePatchResponse(raw)
 	if parsed == nil {
 		return nil, fmt.Errorf("TeamSkillExperienceOptimizer 响应无法解析: %s", lastError)
 	}
 
+	// 模型认为不需要改动（或明确要求跳过）时，返回 nil 表示本轮不产生记录。
 	elapsed := time.Since(t0).Seconds()
 	needPatch, _ := parsed["need_patch"].(bool)
 	action := getStrFromAny(parsed["action"], "")
@@ -345,12 +353,14 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 		return nil, nil
 	}
 
+	// 取出要写入的小节和内容；内容为空说明模型没给出有效结果，直接报错。
 	section := getStrFromAny(parsed["section"], "Instructions")
 	content := getStrFromAny(parsed["content"], "")
 	if strings.TrimSpace(content) == "" {
 		return nil, fmt.Errorf("TeamSkill 用户 patch 响应内容为空")
 	}
 
+	// 记录本次 patch 概况，并封装成可落库的演进记录返回（置信度固定 0.6）。
 	logger.Info(logComponent).
 		Str("section", section).
 		Int("content_len", len(content)).
@@ -377,6 +387,7 @@ func (o *TeamSkillExperienceOptimizer) GenerateUserPatch(ctx context.Context, tr
 //
 // Python: TeamSkillExperienceOptimizer.generate_trajectory_patch(...)
 func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Context, traj *trajectory.Trajectory, skillName string, currentSkillContent string, trajectoryIssues []map[string]string) (*checkpointing.EvolutionRecord, error) {
+	// 把团队轨迹压成摘要，并把待改进问题列表转成 JSON 文本；没有问题就写 N/A。
 	summary := signal.BuildTeamTrajectorySummary(traj)
 	issuesText := "N/A"
 	if len(trajectoryIssues) > 0 {
@@ -384,8 +395,10 @@ func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Conte
 		issuesText = string(data)
 	}
 
+	// 读取该技能已有的演进记录，避免重复提同样的修改。
 	existingEvolutions := o.loadExistingEvolutionsSummary(ctx, skillName)
 
+	// 打印本次输入规模，便于排查提示词过长的问题。
 	logger.Info(logComponent).
 		Str("skill_name", skillName).
 		Int("summary_len", len(summary)).
@@ -393,11 +406,13 @@ func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Conte
 		Int("issues_len", len(issuesText)).
 		Msg("[TeamSkillOptimizer] trajectory_patch")
 
+	// 按语言选模板，缺失时用英文模板兜底。
 	promptTemplate := TrajectoryPatchPrompt[o.language]
 	if promptTemplate == "" {
 		promptTemplate = TrajectoryPatchPromptEN
 	}
 
+	// 正式提示词尽量保留完整内容；重试版对技能内容、轨迹和问题都做截断，控制长度。
 	prompt := formatTemplate(promptTemplate,
 		"skill_content", truncateString(currentSkillContent, 15000),
 		"existing_evolutions", existingEvolutions,
@@ -412,6 +427,7 @@ func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Conte
 		"trajectory_issues", truncateString(issuesText, TrajectoryIssuesRetryChars),
 	)
 
+	// 调用模型生成 patch 并计时，失败时记录警告并返回错误。
 	t0 := time.Now()
 	raw, err := o.callLLM(ctx, prompt, retryPrompt, &o.recordLLMPolicy, func(text string) bool {
 		return signal.ParseTeamModelJSON(text) != nil
@@ -425,11 +441,13 @@ func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Conte
 		return nil, err
 	}
 
+	// 解析模型返回的 JSON，拿不到结果就报错。
 	parsed, lastError := parsePatchResponse(raw)
 	if parsed == nil {
 		return nil, fmt.Errorf("TeamSkillExperienceOptimizer 响应无法解析: %s", lastError)
 	}
 
+	// 模型判断无需修改时，本轮不产出记录。
 	elapsed := time.Since(t0).Seconds()
 	needPatch, _ := parsed["need_patch"].(bool)
 	if !needPatch {
@@ -440,12 +458,14 @@ func (o *TeamSkillExperienceOptimizer) GenerateTrajectoryPatch(ctx context.Conte
 		return nil, nil
 	}
 
+	// 取出目标小节和内容，空内容视为无效输出。
 	section := getStrFromAny(parsed["section"], "Workflow")
 	content := getStrFromAny(parsed["content"], "")
 	if strings.TrimSpace(content) == "" {
 		return nil, fmt.Errorf("TeamSkill 轨迹 patch 响应内容为空")
 	}
 
+	// 记录 patch 概况，并封装成演进记录返回（置信度固定 0.6）。
 	logger.Info(logComponent).
 		Str("section", section).
 		Int("content_len", len(content)).

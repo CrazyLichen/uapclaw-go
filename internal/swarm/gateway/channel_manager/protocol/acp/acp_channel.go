@@ -1093,6 +1093,8 @@ func (ch *AcpChannel) finalizeSessionPrompts(sessionID, stopReason string) {
 // 返回 true = final（调用方清 ctx）。
 // 锁纪律：c 可变字段的读写持 ch.mu（timer 回调并发）；写帧在锁外（stdoutMu 自守）。
 func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message, c *acpRequestCtx) bool {
+	// 先把消息体和会话 ID 准备好：消息体为空就换成一个空 map，
+	// 免得后面取值时判空；消息自己没带 sessionID 时，退回用这次请求记下的那个。
 	payload := msg.Payload
 	if payload == nil {
 		payload = map[string]any{}
@@ -1103,6 +1105,8 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 		sessionID = c.SessionID
 	}
 
+	// 第一种：模型吐出的流式文字片段。把它转成 ACP 的增量更新发出去，
+	// 顺带补一条 token 用量；空片段直接丢掉，这轮还没结束，继续等后面的片段。
 	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatDelta {
 		text := strVal(payload["content"])
 		if text == "" {
@@ -1123,6 +1127,8 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 		return false
 	}
 
+	// 第二种：思考过程、工具调用及结果、待办变化、子任务进展这类过程事件。
+	// 它们都走同一套转换，转得出来就推给客户端，同样不算本轮结束。
 	if msg.Type == schema.MessageTypeEvent && (msg.EventType == schema.EventTypeChatReasoning ||
 		msg.EventType == schema.EventTypeChatToolCall || msg.EventType == schema.EventTypeChatToolUpdate ||
 		msg.EventType == schema.EventTypeChatToolResult || msg.EventType == schema.EventTypeTodoUpdated ||
@@ -1138,6 +1144,10 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 		return false
 	}
 
+	// 第三种：本轮回答正式收尾。先把最终文本和用量补发出去，
+	// 再看之前有没有收到过「已空闲」信号：收到过就真正结束这次请求，
+	// 但如果还有客户端发起的调用没回来，就先记下结束原因、等它们回来再收；
+	// 没收到过空闲信号，就只把等待用的定时器撤掉，继续等空闲信号。
 	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatFinal {
 		c.SawChatFinal = true
 		update := e2aacp.BuildAcpFinalTextUpdate(payload, &c.State)
@@ -1167,6 +1177,8 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 		return false
 	}
 
+	// 第四种：跑出错了。尽量从消息里取原始错误文本，取不到就用一句通用提示，
+	// 按 JSON-RPC 的错误帧回给客户端，并结束这次请求。
 	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatError {
 		jsonrpcID := c.JSONRPCID
 		ch.mu.Unlock()
@@ -1182,6 +1194,7 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 		return true
 	}
 
+	// 第五种：用户中断成功了。以「已取消」作为结束原因回结果，这次请求到此为止。
 	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatInterruptResult {
 		jsonrpcID := c.JSONRPCID
 		userMessageID := c.UserMessageID
@@ -1191,6 +1204,9 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 		return true
 	}
 
+	// 第六种：处理状态的心跳。说「正在处理」就把等待用的定时器撤掉；
+	// 说「已经空闲」则分三种情况——还有客户端调用没回来就记下原因等它，
+	// 还有最终文本没到就安排一个短暂等待，都没有就立刻按正常结束收尾。
 	if msg.Type == schema.MessageTypeEvent {
 		if msg.EventType == schema.EventTypeChatProcessingStatus {
 			update := e2aacp.BuildAcpSessionUpdate(msg, payload, &c.State)
@@ -1232,6 +1248,8 @@ func (ch *AcpChannel) sendJsonrpcMessage(_ context.Context, msg *schema.Message,
 		return false
 	}
 
+	// 第七种：普通应答。带 accepted=true 说明只是受理了、后面还有消息，继续等；
+	// 否则就当正常结束，回一个结束结果。再往下都不匹配的，一律按失败兜底。
 	if msg.Type == schema.MessageTypeRes && msg.OK {
 		accepted, _ := payload["accepted"].(bool)
 		jsonrpcID := c.JSONRPCID

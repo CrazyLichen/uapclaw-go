@@ -145,7 +145,7 @@ func TestInterrupt_零值(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GraphInterrupt ────────────────────────────
+// ──────────────────────────── GraphInterrupt 图执行中断 ────────────────────────────
 
 // TestGraphInterrupt_Error 错误文案对齐 Python str(value)。
 // Python: pregel/base.py:20 super().__init__(str(value))

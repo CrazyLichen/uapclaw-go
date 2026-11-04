@@ -53,7 +53,7 @@ func (f *fakeKB) Config() common.KnowledgeBaseConfig {
 // 编译期断言：fakeKB 完整实现 KnowledgeBase
 var _ KnowledgeBase = (*fakeKB)(nil)
 
-// ──────────────────────────── RetrieveMultiKB ────────────────────────────
+// ──────────────────────────── RetrieveMultiKB 多知识库联合检索 ────────────────────────────
 
 // TestRetrieveMultiKB_空列表 对齐 test_retrieve_multi_kb_empty_list。
 func TestRetrieveMultiKB_空列表(t *testing.T) {
@@ -117,7 +117,7 @@ func TestRetrieveMultiKB_Limit真值链(t *testing.T) {
 		&common.RetrievalConfig{TopK: 0}, nil), 5)
 }
 
-// ──────────────────────────── RetrieveMultiKBWithSource ────────────────────────────
+// ──────────────────────────── RetrieveMultiKBWithSource 联合检索并带来源 ────────────────────────────
 
 // TestRetrieveMultiKBWithSource_聚合 对齐 test_retrieve_multi_kb_with_source。
 func TestRetrieveMultiKBWithSource_聚合(t *testing.T) {

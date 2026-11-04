@@ -91,21 +91,25 @@ func (o *SkillExperienceOptimizer) SelectSignals(signals []*signal.EvolutionSign
 //
 // Python: SkillExperienceOptimizer.generate_records(ctx)
 func (o *SkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoCtx *experience.EvolutionContext) ([]checkpointing.EvolutionRecord, error) {
+	// 没有任何信号说明这轮没什么可学的，直接返回空结果。
 	if len(evoCtx.Signals) == 0 {
 		return nil, nil
 	}
 
+	// 准备提示词素材：对话片段、信号 JSON、已有记录摘要和技能内容。
 	conversationSnippet := buildConversationSnippet(evoCtx.Messages, 30, 300, o.language)
 	signalsJSON, _ := json.Marshal(signalValuesToDicts(evoCtx.Signals))
 	descSummary := buildExistingSummary(evoCtx.ExistingDescRecords, "description")
 	bodySummary := buildExistingSummary(evoCtx.ExistingBodyRecords, "body")
 	skillContent := summarizeSkillContent(evoCtx.SkillContent)
 
+	// 按语言决定"无已有记录"的占位文案。
 	defaultExistingSummary := "无已有记录"
 	if o.language == "en" {
 		defaultExistingSummary = "No existing records"
 	}
 
+	// 拼正式提示词（完整素材）和重试提示词（各字段都截短，防止超长）。
 	prompt := formatTemplate(SkillExperienceGeneratePrompt[o.language],
 		"skill_content", skillContent,
 		"signals_json", string(signalsJSON),
@@ -124,6 +128,7 @@ func (o *SkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoCtx *
 		"user_query", truncateOrDefault(evoCtx.UserQuery, 500, o.language, "无", "None"),
 	)
 
+	// 调用模型生成草案，失败时记录错误并返回。
 	logger.Info(logComponent).
 		Str("skill_name", evoCtx.SkillName).
 		Msg("[SkillExperienceOptimizer] calling LLM")
@@ -137,11 +142,13 @@ func (o *SkillExperienceOptimizer) GenerateRecords(ctx context.Context, evoCtx *
 		return nil, err
 	}
 
+	// 记下这批记录的来源信号，并把所有信号合成统一上下文，供后续封装使用。
 	source := evoCtx.Signals[0].SignalType
 	mergedContext := buildContextFromValues(evoCtx.Signals)
 	var textRecords []checkpointing.EvolutionRecord
 	var scriptRecords []checkpointing.EvolutionRecord
 
+	// 逐条筛查草案：明确跳过的和内容为空的不生成记录，脚本类最多 1 条、文本类最多 2 条。
 	for _, draft := range drafts {
 		patch := draft.Patch
 		if patch.Action == "skip" {

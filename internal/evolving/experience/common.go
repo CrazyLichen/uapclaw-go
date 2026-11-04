@@ -112,6 +112,7 @@ func ExecuteSimplifyActions(
 	skillName string,
 	actions []map[string]any,
 ) map[string]int {
+	// 结果计数器：按删除、合并、改写、保留、出错五类分别统计，最后一起返回。
 	counts := map[string]int{
 		"deleted": 0,
 		"merged":  0,
@@ -120,11 +121,13 @@ func ExecuteSimplifyActions(
 		"errors":  0,
 	}
 
+	// 逐条处理整理动作：先取出动作类型和目标记录 ID，再按类型分派。
 	for _, action := range actions {
 		actionType := getStrFromAny(action, "action", "KEEP")
 		recordID := getStrFromAny(action, "record_id", "")
 
 		switch actionType {
+		// 删除：删掉这一条记录，删成功才算一次删除，其余情况记为出错。
 		case "DELETE":
 			deleted, err := store.DeleteRecords(ctx, skillName, []string{recordID})
 			if err != nil {
@@ -141,6 +144,7 @@ func ExecuteSimplifyActions(
 				counts["errors"]++
 			}
 
+		// 合并：把这些记录合成一条新内容，同时按 merge_remove_ids 删掉被并入的旧记录。
 		case "MERGE":
 			mergeRemoveIDs := getStrSliceFromAny(action, "merge_remove_ids")
 			newContent := getStrFromAny(action, "new_content", "")
@@ -159,6 +163,7 @@ func ExecuteSimplifyActions(
 				counts["errors"]++
 			}
 
+		// 改写：用新的内容和新的评分覆盖原记录，评分没给就保持原值。
 		case "REFINE":
 			newContent := getStrFromAny(action, "new_content", "")
 			newScore := getFloatPtrFromAny(action, "new_score")
@@ -177,9 +182,11 @@ func ExecuteSimplifyActions(
 				counts["errors"]++
 			}
 
+		// 保留：什么都不做，只计一个保留数。
 		case "KEEP":
 			counts["kept"]++
 
+		// 认不出的动作类型：记一条告警，并算作一次出错。
 		default:
 			logger.Warn(logComponent).
 				Str("action_type", actionType).
@@ -188,6 +195,7 @@ func ExecuteSimplifyActions(
 		}
 	}
 
+	// 全部处理完，打一条汇总日志并把各类计数交给调用方。
 	logger.Info(logComponent).
 		Str("skill", skillName).
 		Int("deleted", counts["deleted"]).

@@ -190,7 +190,7 @@ func TestMessageFromGatewayEvent_未知会话与事件名(t *testing.T) {
 	}))
 }
 
-// ──────────────────────────── ensureGatewayConnection / sendToGateway / readerLoop ────────────────────────────
+// ──────────────────────────── 网关连接：建连 / 发送 / 读循环 ────────────────────────────
 
 // TestEnsureGatewayConnection_连接建立与幂等 起本地 WS 服务验证连接建立 +
 // 幂等复连 + sendToGateway 出站 + req_method 缺失错误。

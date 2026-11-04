@@ -261,7 +261,7 @@ func TestNewSimpleKnowledgeBase_检索器显式传入(t *testing.T) {
 	assert.Same(t, r, kb.retriever)
 }
 
-// ──────────────────────────── AddDocuments ────────────────────────────
+// ──────────────────────────── AddDocuments 新增文档 ────────────────────────────
 
 // TestSimpleKB_AddDocuments成功 对齐 test_add_documents_success。
 func TestSimpleKB_AddDocuments成功(t *testing.T) {
@@ -400,7 +400,7 @@ func TestSimpleKB_AddDocuments分块错误(t *testing.T) {
 	assert.Equal(t, 0, im.buildCalls)
 }
 
-// ──────────────────────────── DeleteDocuments ────────────────────────────
+// ──────────────────────────── DeleteDocuments 删除文档 ────────────────────────────
 
 // TestSimpleKB_DeleteDocuments成功 对齐 test_delete_documents_success。
 func TestSimpleKB_DeleteDocuments成功(t *testing.T) {
@@ -436,7 +436,7 @@ func TestSimpleKB_DeleteDocuments无索引管理器(t *testing.T) {
 	assert.Contains(t, be.Message(), "index_manager is required")
 }
 
-// ──────────────────────────── UpdateDocuments ────────────────────────────
+// ──────────────────────────── UpdateDocuments 更新文档 ────────────────────────────
 
 // TestSimpleKB_UpdateDocuments成功 对齐 test_update_documents_success + 不对称断言。
 func TestSimpleKB_UpdateDocuments成功(t *testing.T) {
@@ -516,7 +516,7 @@ func TestSimpleKB_UpdateDocuments索引错误(t *testing.T) {
 	assert.Contains(t, err.Error(), "update boom")
 }
 
-// ──────────────────────────── GetStatistics ────────────────────────────
+// ──────────────────────────── GetStatistics 读取知识库统计 ────────────────────────────
 
 // TestSimpleKB_GetStatistics成功 对齐 test_get_statistics_success。
 func TestSimpleKB_GetStatistics成功(t *testing.T) {
@@ -560,7 +560,7 @@ func TestSimpleKB_GetStatistics错误冒泡(t *testing.T) {
 	assert.Contains(t, err.Error(), "boom")
 }
 
-// ──────────────────────────── Retrieve ────────────────────────────
+// ──────────────────────────── Retrieve 检索文档 ────────────────────────────
 
 // fakeEmbed 固定向量的嵌入桩（懒创建 vector 分支所需）。
 type fakeEmbed struct{}

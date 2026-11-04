@@ -207,7 +207,9 @@ func dispatchShellMethod(shellOp ShellOperation, ctx context.Context, methodName
 
 // dispatchFsMethod 分发 FS 操作方法调用
 func dispatchFsMethod(fsOp FsOperation, ctx context.Context, methodName string, params map[string]any) (map[string]any, error) {
+	// 按方法名分发到不同的文件操作：每个分支从参数里取出需要的字段，调用后把结果结构转成 map。
 	switch methodName {
+	// 读文件：只需要路径，可选 text/bytes 模式；写文件则在路径之外还要一份内容。
 	case "read_file":
 		path, _ := params["path"].(string)
 		var opts []FsOption
@@ -228,6 +230,7 @@ func dispatchFsMethod(fsOp FsOperation, ctx context.Context, methodName string, 
 			return nil, err
 		}
 		return structToMap(r), nil
+	// 目录列举：列文件和列目录都只用到 path 一个参数，二者底层实现不同。
 	case "list_files":
 		path, _ := params["path"].(string)
 		r, err := fsOp.ListFiles(ctx, path)
@@ -242,6 +245,7 @@ func dispatchFsMethod(fsOp FsOperation, ctx context.Context, methodName string, 
 			return nil, err
 		}
 		return structToMap(r), nil
+	// 搜索：需要目录和文件名 pattern 两个参数。
 	case "search_files":
 		path, _ := params["path"].(string)
 		pattern, _ := params["pattern"].(string)
@@ -250,6 +254,7 @@ func dispatchFsMethod(fsOp FsOperation, ctx context.Context, methodName string, 
 			return nil, err
 		}
 		return structToMap(r), nil
+	// 上传与下载：在本地路径和远端路径之间一对一搬运文件。
 	case "upload_file":
 		localPath, _ := params["local_path"].(string)
 		targetPath, _ := params["target_path"].(string)
@@ -266,6 +271,7 @@ func dispatchFsMethod(fsOp FsOperation, ctx context.Context, methodName string, 
 			return nil, err
 		}
 		return structToMap(r), nil
+	// 流式读、流式上传、流式下载：拿到结果通道后，把里面所有分片依次收进切片，一次性返回。
 	case "read_file_stream":
 		path, _ := params["path"].(string)
 		var opts []FsOption
@@ -305,6 +311,7 @@ func dispatchFsMethod(fsOp FsOperation, ctx context.Context, methodName string, 
 			results = append(results, r)
 		}
 		return map[string]any{"chunks": results}, nil
+	// 方法名不在支持范围内，直接返回错误，由调用方转成失败结果。
 	default:
 		return nil, fmt.Errorf("未知的 fs 方法: %s", methodName)
 	}

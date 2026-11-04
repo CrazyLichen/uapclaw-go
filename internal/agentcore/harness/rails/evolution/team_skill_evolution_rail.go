@@ -1602,10 +1602,12 @@ func (r *TeamSkillEvolutionRail) teamAppendUniqueSignal(signals *[]*signal.Evolu
 // dumpTrajectoryDebug 将轨迹写入 JSON 调试文件。
 // Python: TeamSkillEvolutionRail._dump_trajectory_debug(trajectory)
 func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory) {
+	// 没有轨迹就没什么可导出的。
 	if traj == nil {
 		return
 	}
 
+	// 确定导出目录：优先用配置的目录，否则放到演进库父目录下的 _debug 子目录。
 	debugDir := r.trajectoriesDir
 	if debugDir == "" && len(r.evolutionStore.BaseDirs()) > 0 {
 		debugDir = filepath.Join(filepath.Dir(r.evolutionStore.BaseDirs()[0]), "_debug")
@@ -1614,11 +1616,13 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 		return
 	}
 
+	// 目录不存在就先建出来，建不出来只能放弃本次导出。
 	if err := os.MkdirAll(debugDir, 0o755); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] failed to create debug directory")
 		return
 	}
 
+	// 文件名带时间戳和执行 ID 前 8 位，方便区分不同批次、不同执行。
 	ts := time.Now().Format("20060102_150405")
 	execID := traj.ExecutionID
 	if len(execID) > 8 {
@@ -1626,6 +1630,7 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 	}
 	path := filepath.Join(debugDir, fmt.Sprintf("trajectory_%s_%s.json", ts, execID))
 
+	// 落盘用的精简结构：只留排查需要的字段，避免把整份明细都写出去。
 	type stepEntry struct {
 		Kind            string         `json:"kind"`
 		ToolName        string         `json:"tool_name,omitempty"`
@@ -1635,6 +1640,7 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 		Meta            map[string]any `json:"meta,omitempty"`
 	}
 
+	// 逐个步骤转换：工具调用留下名字和参数/结果的前 500 字，模型调用留下响应的前 300 字。
 	stepsData := make([]stepEntry, 0, len(traj.Steps))
 	for _, step := range traj.Steps {
 		entry := stepEntry{Kind: string(step.Kind)}
@@ -1670,6 +1676,7 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 		stepsData = append(stepsData, entry)
 	}
 
+	// 组装顶层对象：执行标识、会话来源、步骤总数以及刚整理好的步骤列表。
 	dump := map[string]any{
 		"execution_id": traj.ExecutionID,
 		"session_id":   traj.SessionID,
@@ -1678,12 +1685,14 @@ func (r *TeamSkillEvolutionRail) dumpTrajectoryDebug(traj *trajectory.Trajectory
 		"steps":        stepsData,
 	}
 
+	// 序列化成带缩进的 JSON，方便人直接打开阅读。
 	data, err := json.MarshalIndent(dump, "", "  ")
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] trajectory JSON serialization failed")
 		return
 	}
 
+	// 写入文件；无论成败都留一条日志，便于确认调试文件到底有没有生成。
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("[TeamSkillEvolutionRail] trajectory write failed")
 		return

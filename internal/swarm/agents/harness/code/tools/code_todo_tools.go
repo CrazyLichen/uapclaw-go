@@ -139,7 +139,10 @@ func CodeTodoCardBuilder(name, toolID, language, agentID string) *tool.ToolCard 
 //
 // Python: CODE_TODO_TOOL_PROMPTS[name]
 func codeTodoPrompt(name string) (string, map[string]any) {
+	// 本函数就是一张查表：按工具名返回它的中文描述和对应的参数结构。
+	// 参数结构都是 JSON Schema 的形式，告诉模型调用该工具时能填哪些字段、哪些必填。
 	switch name {
+	// 新建待办：一次性给出一组里程碑，每个都要有 id、内容、进行时描述和说明。
 	case "todo_create":
 		return codeTodoCreateDescription, map[string]any{
 			"type": "object",
@@ -163,12 +166,14 @@ func codeTodoPrompt(name string) (string, map[string]any) {
 			},
 			"required": []any{"todos"},
 		}
+	// 列出全部待办：不需要任何入参。
 	case "todo_list":
 		return codeTodoListDescription, map[string]any{
 			"type":       "object",
 			"properties": map[string]any{},
 			"required":   []any{},
 		}
+	// 查看单条待办：只传待办 id。
 	case "todo_get":
 		return codeTodoGetDescription, map[string]any{
 			"type": "object",
@@ -177,6 +182,8 @@ func codeTodoPrompt(name string) (string, map[string]any) {
 			},
 			"required": []any{"id"},
 		}
+	// 修改待办：action 决定是改、删、取消还是插入，
+	// 批量更新用 todos，按位置插入还要额外给 todo_data（目标 id 加待插入条目）。
 	case "todo_modify":
 		return codeTodoModifyDescription, map[string]any{
 			"type": "object",
@@ -222,6 +229,7 @@ func codeTodoPrompt(name string) (string, map[string]any) {
 			},
 			"required": []any{"action"},
 		}
+	// 名字不在上面几个之内，属于未知工具，返回空值让调用方自行处理。
 	default:
 		return "", nil
 	}

@@ -531,10 +531,12 @@ var legacyFieldDescriptions = map[string]map[string]string{
 
 // GetCronJobInputParams 构建 cron job 对象的参数 Schema
 func GetCronJobInputParams(language string) map[string]any {
+	// 语言只认中英两种，传进来其他值一律按中文处理。
 	lang := language
 	if lang != "cn" && lang != "en" {
 		lang = "cn"
 	}
+	// 小助手：按字段 key 取当前语言的描述文案，取不到就退回中文那份。
 	d := func(key string) string {
 		if v, ok := cronFieldDescriptions[key][lang]; ok {
 			return v
@@ -542,6 +544,12 @@ func GetCronJobInputParams(language string) map[string]any {
 		return cronFieldDescriptions[key]["cn"]
 	}
 
+	// 返回的是一张宽松的参数表：顶层放 job 的基本字段，往下依次是
+	//   schedule —— 什么时候跑（一次性 / 固定间隔 / cron 表达式）；
+	//   payload  —— 到点后交给助手做什么；
+	//   delivery —— 结果往哪里送；
+	// 其余直挂顶层的键是兼容旧写法的便捷字段。
+	// 每个字段的说明文案都由上面的 d(key) 按语言取，不在这里硬编码。
 	return map[string]any{
 		"type":                 "object",
 		"required":             []any{},

@@ -822,20 +822,25 @@ func updateProgressFromWorkerResult(
 	sessionID, requestID string,
 	parsed map[string]any,
 ) {
+	// 没有会话 ID 或者解析结果为空，就没有可更新的对象，直接退出。
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" || parsed == nil {
 		return
 	}
+	// 取出该会话的进度状态（没有则新建），顺带记下这次是哪个请求。
 	progressState := s.getProgressState(sid)
 	if requestID != "" {
 		progressState.RequestID = requestID
 	}
 
+	// Worker 通常把进度放在嵌套的 progress 字段里；拿不到就退回用顶层字段。
 	progressPayload := map[string]any{}
 	if pp, ok := parsed["progress"].(map[string]any); ok {
 		progressPayload = pp
 	}
 
+	// 先看结果里有没有明确的状态；没写就靠 ok、是否达到迭代上限、有无错误来推断，
+	// 实在判断不出的一律当作「部分完成」。
 	status := NormalizeProgressStatus(
 		firstNonEmpty(parsed["status"], parsed["task_status"]),
 	)
@@ -852,6 +857,7 @@ func updateProgressFromWorkerResult(
 	}
 	progressState.Status = status
 
+	// 已完成和剩余步骤都做清洗（去空、截断、最多留 8 条），非空才覆盖旧值。
 	completedSteps := cleanProgressItems(
 		firstNonEmpty(progressPayload["completed_steps"], parsed["completed_steps"]),
 		8,
@@ -868,6 +874,7 @@ func updateProgressFromWorkerResult(
 		progressState.RemainingSteps = remainingSteps
 	}
 
+	// 下一步描述只保留前 220 个字符，避免把大段文字塞进进度面板。
 	nextStep := strings.TrimSpace(
 		fmt.Sprintf("%v", firstNonEmpty(progressPayload["next_step"], parsed["next_step"])),
 	)
@@ -875,6 +882,7 @@ func updateProgressFromWorkerResult(
 		progressState.NextStep = trimText(nextStep, 220)
 	}
 
+	// 完成依据和缺失要求也一并收集，供后续判断任务是否真的做完。
 	completionEvidence := cleanProgressItems(
 		firstNonEmpty(progressPayload["completion_evidence"], parsed["completion_evidence"]),
 		6,
@@ -891,6 +899,7 @@ func updateProgressFromWorkerResult(
 		progressState.MissingRequirements = missingRequirements
 	}
 
+	// 记录最后一次看到的页面地址、标题和截图，方便下一次提示里带上现场信息。
 	url, title := extractPageSnapshot(parsed)
 	if url != "" {
 		progressState.LastPageURL = url
@@ -903,6 +912,7 @@ func updateProgressFromWorkerResult(
 		progressState.LastScreenshot = screenshot
 	}
 
+	// 保存 Worker 的最终答复文本；如果任务成功但上面没给出完成依据，就用它兜底。
 	finalText := strings.TrimSpace(fmt.Sprintf("%v", parsed["final"]))
 	if finalText != "" {
 		progressState.LastWorkerFinal = trimText(finalText, 1200)

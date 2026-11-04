@@ -57,6 +57,7 @@ var ruleMutableKeys = map[string]bool{
 // 入参 params 为已解析的请求参数字典（从 json.RawMessage 解析而来）。
 // 返回 (ok, payload)：ok=true 时 payload 为响应数据，ok=false 时 payload 含 error/code。
 func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (ok bool, payload map[string]any) {
+	// 兜底保护：分发过程中任何地方 panic，都转成 INTERNAL_ERROR 响应返回，不让调用方直接崩掉。
 	defer func() {
 		if rec := recover(); rec != nil {
 			logger.Error(logComponent).
@@ -71,7 +72,9 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		}
 	}()
 
+	// 按方法名分发，每个分支自己完成参数校验、执行操作、组装结果或错误。
 	switch reqMethod {
+	// 工具级权限的整体读写：get 直接返回当前配置，set 用新表整表覆盖。
 	case "permissions.tools.get":
 		return true, GetPermissionsTools()
 
@@ -85,6 +88,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		}
 		return true, map[string]any{"ok": true}
 
+	// 只改一个工具：工具名和 level 都必须给，返回更新后的完整工具表。
 	case "permissions.tools.update":
 		if params == nil {
 			return false, errPayload("params must be object", "BAD_REQUEST")
@@ -102,6 +106,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		}
 		return true, result
 
+	// 删除一个工具：配置里没有这个键时返回 NOT_FOUND，删成功后回传最新的工具表。
 	case "permissions.tools.delete":
 		if params == nil {
 			return false, errPayload("params must be object", "BAD_REQUEST")
@@ -124,6 +129,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		}
 		return true, GetPermissionsTools()
 
+	// 规则列表读取与新增：create 会补 id、检查 tools/pattern 必填项并归一化，返回落盘后的规则。
 	case "permissions.rules.get":
 		return true, GetPermissionsRules()
 
@@ -141,6 +147,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		}
 		return true, map[string]any{"rule": stored}
 
+	// 按 id 局部更新规则：patch 只能改白名单字段，id 为空或规则不存在都会报错。
 	case "permissions.rules.update":
 		if params == nil {
 			return false, errPayload("params must be object", "BAD_REQUEST")
@@ -156,6 +163,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		}
 		return true, map[string]any{"rule": merged}
 
+	// 按 id 删除规则：没匹配到任何一条时返回 NOT_FOUND。
 	case "permissions.rules.delete":
 		if params == nil {
 			return false, errPayload("params must be object", "BAD_REQUEST")
@@ -175,6 +183,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		}
 		return true, map[string]any{"ok": true}
 
+	// 审批覆盖项：只有读取和删除，delete 按 id 定位，找不到返回 NOT_FOUND。
 	case "permissions.approval_overrides.get":
 		return true, GetPermissionsApprovalOverrides()
 
@@ -197,6 +206,7 @@ func DispatchPermissionsConfigRequest(reqMethod string, params map[string]any) (
 		}
 		return true, map[string]any{"ok": true}
 
+	// 方法名不在支持范围内，统一按 BAD_REQUEST 返回。
 	default:
 		return false, errPayload("unknown permissions req_method", "BAD_REQUEST")
 	}

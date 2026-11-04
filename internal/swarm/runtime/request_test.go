@@ -413,7 +413,7 @@ func chatSendRequest(t *testing.T, sessionID string, params map[string]any) *sch
 	}
 }
 
-// ──────────────────────────── prepare_chat_turn ────────────────────────────
+// ──────────────────────────── prepare_chat_turn 组装对话轮次 ────────────────────────────
 
 // TestPrepareChatTurn_默认work_mode与元数据回写 验证 tui 渠道默认 work_mode=code、
 // 同步元数据后回写 project_dir，以及 persist_session 锁定告警分支。

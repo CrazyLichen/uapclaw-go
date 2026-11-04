@@ -1013,7 +1013,7 @@ func TestProcessMessageStreamImpl_team分支6步(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── /evolve_rollback（S-04）────────────────────────────
+// ──────────────────────────── /evolve_rollback 回滚斜杠命令（S-04）────────────────────────────
 
 // archiveSkillTwice 为 skill 生成两个主体归档版本（archive/SKILL.v*.md）。
 func archiveSkillTwice(t *testing.T, rail *coreevolution.SkillEvolutionRail, skillName string) {

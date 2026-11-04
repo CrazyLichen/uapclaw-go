@@ -778,6 +778,8 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 // Python: 方法：upload_file, upload_file_stream, download_file, download_file_stream,
 // list_files, list_directories, search_files 等工具方法。
 func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
+	// 读文件两个工具：read_file 一次性读完，read_file_stream 是它的流式版本，
+	// 参数几乎一样，只有 chunk_size 的含义不同（流式版表示每批读取的缓冲大小）。
 	readFileParams := []*schema.Param{
 		{Name: "path", Description: "Full or relative path to the file to read (required).", Type: schema.ParamTypeString, Required: true},
 		{Name: "mode", Description: `Reading mode - "text" (line-based, default) or "bytes" (raw bytes).`, Type: schema.ParamTypeString, Default: "text",
@@ -804,6 +806,8 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 		{Name: "options", Description: "Extended configuration options (dict, optional).", Type: schema.ParamTypeObject, Nullable: true},
 	}
 
+	// 写文件：可控制覆盖还是追加、前后是否自动补换行、文件不存在时是否创建，
+	// 以及 Unix 下的文件权限，其余是文本模式相关选项。
 	writeFileParams := []*schema.Param{
 		{Name: "path", Description: "Full or relative path to the file to write (required).", Type: schema.ParamTypeString, Required: true},
 		{Name: "content", Description: "Data to write to the file (string for text mode, bytes for binary mode).", Type: schema.ParamTypeString, Required: true},
@@ -818,6 +822,8 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 		{Name: "options", Description: "Extended configuration options (dict, optional).", Type: schema.ParamTypeObject, Nullable: true},
 	}
 
+	// 上传两个工具：都是把本地路径搬到目标路径，参数完全一致；
+	// 普通版 chunk_size 默认 0（不限），流式版默认 1MB，用于跨文件系统分块搬运。
 	uploadFileParams := []*schema.Param{
 		{Name: "local_path", Description: "Local source file path (required, e.g. /tmp/local_file.txt).", Type: schema.ParamTypeString, Required: true},
 		{Name: "target_path", Description: "Upload destination path (required, e.g. /mnt/storage/file.txt or sandbox:/opt/bucket/file.txt).", Type: schema.ParamTypeString, Required: true},
@@ -838,6 +844,8 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 		{Name: "options", Description: "Extended configuration options (dict, optional).", Type: schema.ParamTypeObject, Nullable: true},
 	}
 
+	// 下载两个工具：方向与上传相反，从源路径取回到本地路径，参数也与上传对称；
+	// 流式版同样默认按 1MB 分块。
 	downloadFileParams := []*schema.Param{
 		{Name: "source_path", Description: "Source file path (required, e.g. /mnt/storage/file.txt or sandbox:/opt/bucket/file.txt).", Type: schema.ParamTypeString, Required: true},
 		{Name: "local_path", Description: "Local destination file path (required, e.g. /home/user/downloads/file.txt).", Type: schema.ParamTypeString, Required: true},
@@ -858,6 +866,7 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 		{Name: "options", Description: "Extended configuration options (dict, optional).", Type: schema.ParamTypeObject, Nullable: true},
 	}
 
+	// 列文件：支持递归及最大深度限制，可按名称、修改时间、大小排序，并能按扩展名筛选。
 	listFilesParams := []*schema.Param{
 		{Name: "path", Description: "Target parent directory path (required).", Type: schema.ParamTypeString, Required: true},
 		{Name: "recursive", Description: "Whether to list files in subdirectories recursively. Defaults to False.", Type: schema.ParamTypeBoolean, Default: false},
@@ -870,6 +879,7 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 		{Name: "options", Description: "Extended configuration options (dict, optional).", Type: schema.ParamTypeObject, Nullable: true},
 	}
 
+	// 列目录：只返回子目录，所以比 list_files 少一个扩展名筛选参数，其余排序和递归选项相同。
 	listDirectoriesParams := []*schema.Param{
 		{Name: "path", Description: "Target parent directory path (required).", Type: schema.ParamTypeString, Required: true},
 		{Name: "recursive", Description: "Whether to list subdirectories recursively. Defaults to False.", Type: schema.ParamTypeBoolean, Default: false},
@@ -880,6 +890,7 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 		{Name: "options", Description: "Extended configuration options (dict, optional).", Type: schema.ParamTypeObject, Nullable: true},
 	}
 
+	// 搜索文件：在指定目录下按文件名 pattern 匹配，可额外给出排除模式过滤结果。
 	searchFilesParams := []*schema.Param{
 		{Name: "path", Description: "Base directory path to start the search (required).", Type: schema.ParamTypeString, Required: true},
 		{Name: "pattern", Description: "Search pattern to match file names.", Type: schema.ParamTypeString, Required: true},
@@ -887,6 +898,7 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 			Items: &schema.Param{Type: schema.ParamTypeString}},
 	}
 
+	// 把上面声明的参数表逐个包装成工具卡片返回；description 沿用 Python 原文，不做翻译。
 	return []*tool.ToolCard{
 		tool.NewToolCard("read_file",
 			"Asynchronously read file with specified mode and parameters.",

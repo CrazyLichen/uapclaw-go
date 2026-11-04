@@ -124,10 +124,13 @@ func BuildSkillApprovalEvent(
 	language string,
 	isSharedRecords bool,
 ) *stream.OutputSchema {
+	// 按语言决定文案用中文还是英文，下面所有文字都跟着这个开关走。
 	en := isEn(language)
 
+	// 一条记录对应一个问题，先按记录数把容器开好。
 	questions := make([]map[string]any, 0, len(records))
 
+	// 标题要区分场景：来自共享经验库的和普通技能演进的叫法不一样。
 	var header string
 	if isSharedRecords {
 		if en {
@@ -143,12 +146,14 @@ func BuildSkillApprovalEvent(
 		}
 	}
 
+	// 逐条记录生成一个问题：正文超过 1000 字就截断，避免弹窗被撑爆。
 	for _, record := range records {
 		content := record.Change.Content
 		if len(content) > 1000 {
 			content = content[:1000]
 		}
 
+		// 问题正文要写清是哪个技能、改的是哪一块、具体内容是什么。
 		var question string
 		if en {
 			question = fmt.Sprintf(
@@ -162,6 +167,7 @@ func BuildSkillApprovalEvent(
 			)
 		}
 
+		// 每条只给两个选项：接收就保留这条经验，拒绝就丢掉。
 		var options []map[string]string
 		if en {
 			options = []map[string]string{
@@ -175,6 +181,7 @@ func BuildSkillApprovalEvent(
 			}
 		}
 
+		// 把这个问题按统一的问答结构攒进列表，单个问题不做多选。
 		questions = append(questions, map[string]any{
 			"question":     question,
 			"header":       header,
@@ -183,6 +190,8 @@ func BuildSkillApprovalEvent(
 		})
 	}
 
+	// 组装附加元信息：标明这是审批事件、属于哪个技能哪个请求；
+	// 如果是共享经验，再补上来源和共享标记，供前端区分展示。
 	var sourceVal *string
 	if isSharedRecords {
 		s := "experience_sharing"
@@ -199,6 +208,7 @@ func BuildSkillApprovalEvent(
 		meta["is_shared_records"] = "true"
 	}
 
+	// 最终产出给前端的事件：类型是「向用户提问」，带上请求 ID、元信息和所有问题。
 	return &stream.OutputSchema{
 		Type:  "chat.ask_user_question",
 		Index: 0,
@@ -216,13 +226,17 @@ func BuildSimplifyApprovalEvent(
 	actions []map[string]any,
 	language string,
 ) *stream.OutputSchema {
+	// 同样先定语言，后面所有提示文字都按这个来。
 	en := isEn(language)
 
+	// 生成操作预览前先限流，最多只列 10 条，免得弹窗太长。
 	previewParts := make([]string, 0, len(actions))
 	limit := len(actions)
 	if limit > 10 {
 		limit = 10
 	}
+	// 每条操作抽三项：动作类型、记录 ID、理由，缺的用 ? 或空串占位。
+	// 例如「- **DELETE** `abc`: 内容重复」这样一行，拼起来就是给用户看的预览。
 	for i := 0; i < limit; i++ {
 		action := actions[i]
 		act := "?"
@@ -247,6 +261,7 @@ func BuildSimplifyApprovalEvent(
 	}
 	preview := strings.Join(previewParts, "\n")
 
+	// 把预览拼进问句，并说明一共多少条操作，最后问用户要不要执行。
 	var question string
 	if en {
 		question = fmt.Sprintf(
@@ -260,6 +275,7 @@ func BuildSimplifyApprovalEvent(
 		)
 	}
 
+	// 标题固定为精简审批。
 	var header string
 	if en {
 		header = "Skill Simplify Approval"
@@ -267,6 +283,7 @@ func BuildSimplifyApprovalEvent(
 		header = "Skill 精简审批"
 	}
 
+	// 选项只有执行和取消两个，跟技能审批保持一致。
 	var options []map[string]string
 	if en {
 		options = []map[string]string{
@@ -280,6 +297,7 @@ func BuildSimplifyApprovalEvent(
 		}
 	}
 
+	// 精简审批只有一个问题，直接包进问题列表返回。
 	return &stream.OutputSchema{
 		Type:  "chat.ask_user_question",
 		Index: 0,

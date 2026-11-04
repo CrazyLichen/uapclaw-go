@@ -87,17 +87,21 @@ func RetrieveMultiKB(ctx context.Context, kbs []KnowledgeBase,
 // Python: simple_knowledge_base.py retrieve_multi_kb_with_source
 func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 	query string, config *common.RetrievalConfig, topK *int) ([]common.MultiKBRetrievalResult, error) {
+	// 没有知识库可查，直接返回空结果。
 	if len(kbs) == 0 {
 		return []common.MultiKBRetrievalResult{}, nil
 	}
 
+	// 并发检索所有知识库，拿到与 kbs 一一对应的结果切片（单个库失败只留空）。
 	allResults := retrieveMultiKBGather(ctx, kbs, query, config, "retrieve_multi_kb_with_source")
 
+	// merged 以文本为键做去重聚合，order 记住文本首次出现的顺序。
 	merged := make(map[string]*multiKBEntry)
 	var order []string
 	for i := range kbs {
 		kbID := kbs[i].Config().KBID
 		for _, r := range allResults[i] {
+			// 元数据可能是 nil，先兜底成空 map；再解析原始分字段，类型不对就整条中止。
 			meta := r.Metadata
 			if meta == nil {
 				meta = map[string]any{}
@@ -112,6 +116,7 @@ func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 				return nil, err
 			}
 
+			// 首次遇到这段文本就新建聚合项；再次遇到则把分数和原始分按最大值合并。
 			entry, exists := merged[r.Text]
 			if !exists {
 				entry = &multiKBEntry{
@@ -146,10 +151,12 @@ func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 					}
 				}
 			}
+			// 无论新旧，都把当前知识库计入来源集合（set 自动去重）。
 			entry.kbIDs[kbID] = struct{}{}
 		}
 	}
 
+	// 按最终分数从高到低稳定排序，再按上限截取。
 	ranked := make([]string, len(order))
 	copy(ranked, order)
 	sort.SliceStable(ranked, func(i, j int) bool {
@@ -157,6 +164,7 @@ func RetrieveMultiKBWithSource(ctx context.Context, kbs []KnowledgeBase,
 	})
 	ranked = pyTake(ranked, multiKBLimit(topK, config))
 
+	// 组装返回结构：来源库 ID 排好序，原始分只有取到值时才回填。
 	out := make([]common.MultiKBRetrievalResult, 0, len(ranked))
 	for _, text := range ranked {
 		e := merged[text]

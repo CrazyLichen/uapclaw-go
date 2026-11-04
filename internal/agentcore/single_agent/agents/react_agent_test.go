@@ -2751,7 +2751,7 @@ func TestInvoke_CancelPersistsSanitizedContext(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── A-01: after_react_iteration / boundary force_finish ────────────────────────────
+// ──────────────────────────── A-01: ReAct 迭代后的边界强制收尾 ────────────────────────────
 
 // scriptedMu 保护脚本队列
 var scriptedMu sync.Mutex

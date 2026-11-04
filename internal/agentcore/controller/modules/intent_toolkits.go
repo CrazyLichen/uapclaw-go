@@ -252,7 +252,17 @@ func (t *IntentToolkits) lowConfidenceIntent(confidence float64) (*schema.Intent
 // initToolSchemaChoices 初始化 8 个 OpenAI Tool Schema。
 // Python: IntentToolkits.__init__ 中 self._tool_schema_choices 赋值
 func (t *IntentToolkits) initToolSchemaChoices() {
+	// 这里一次性登记 8 个工具描述，交给模型做「意图判别」：模型看完用户的话，
+	// 挑一个工具并把参数填好，我们就知道用户想对任务做哪种操作。
+	// 每个工具都遵循 OpenAI function 的格式，其中三个约定值得留意：
+	//   1. confidence 是模型给自己这次判断打的把握分（0 到 1），分数低时
+	//      调用方会把动作降级成更保守的处理，所以所有工具都把它列为必填；
+	//   2. required 列出模型必须给出的参数，缺了就算这次判断不合格；
+	//   3. additionalProperties 固定为 false，禁止模型自己发明参数名。
+	// 注意：下面 description 等英文字符串是直接发给模型的协议内容，
+	// 要保持英文原样，不能翻译或改动。
 	t.toolSchemaChoices = map[string]map[string]any{
+		// create_task：用户想开始一件全新的任务时使用。
 		"create_task": {
 			"type": "function",
 			"function": map[string]any{
@@ -279,6 +289,7 @@ func (t *IntentToolkits) initToolSchemaChoices() {
 				},
 			},
 		},
+		// pause_task：用户想让正在跑的任务先停一下（之后还能继续）时使用。
 		"pause_task": {
 			"type": "function",
 			"function": map[string]any{
@@ -301,6 +312,7 @@ func (t *IntentToolkits) initToolSchemaChoices() {
 				},
 			},
 		},
+		// cancel_task：用户想彻底终止或放弃某个任务时使用。
 		"cancel_task": {
 			"type": "function",
 			"function": map[string]any{
@@ -323,6 +335,7 @@ func (t *IntentToolkits) initToolSchemaChoices() {
 				},
 			},
 		},
+		// resume_task：用户想接着做之前暂停或中断过的任务时使用。
 		"resume_task": {
 			"type": "function",
 			"function": map[string]any{
@@ -345,6 +358,7 @@ func (t *IntentToolkits) initToolSchemaChoices() {
 				},
 			},
 		},
+		// unknown_task：用户意图说不清、拿不准时使用，会反问用户以澄清。
 		"unknown_task": {
 			"type": "function",
 			"function": map[string]any{
@@ -367,6 +381,7 @@ func (t *IntentToolkits) initToolSchemaChoices() {
 				},
 			},
 		},
+		// create_dependent_task：新任务要等另外几个任务做完才能开始时使用。
 		"create_dependent_task": {
 			"type": "function",
 			"function": map[string]any{
@@ -394,6 +409,7 @@ func (t *IntentToolkits) initToolSchemaChoices() {
 				},
 			},
 		},
+		// modify_task：用户想改掉已有任务的要求或描述时使用（会生成一个新版本）。
 		"modify_task": {
 			"type": "function",
 			"function": map[string]any{
@@ -420,6 +436,7 @@ func (t *IntentToolkits) initToolSchemaChoices() {
 				},
 			},
 		},
+		// supplement_task：用户想给已有任务再补一些信息、但不改原始描述时使用。
 		"supplement_task": {
 			"type": "function",
 			"function": map[string]any{

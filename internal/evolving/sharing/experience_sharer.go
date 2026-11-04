@@ -227,16 +227,19 @@ func (es *ExperienceSharer) DiscardPendingUploads(skillName string) int {
 //
 // Python: ExperienceSharer.flush_pending_uploads()
 func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName string) (UploadResult, error) {
+	// 先加锁把该技能的待上传队列整个取走并清空，避免上传期间又有新经验挤进同一批。
 	es.mu.Lock()
 	experiences := es.pendingUploads[skillName]
 	delete(es.pendingUploads, skillName)
 	delete(es.pendingKeys, skillName)
 	es.mu.Unlock()
 
+	// 队列为空就没有要传的，直接按成功返回。
 	if len(experiences) == 0 {
 		return UploadResult{OK: true}, nil
 	}
 
+	// 把经验打成一个共享包并补齐技能 ID；拿不到 ID 就无法上传，记录原因后返回失败。
 	bundle := MakeSharedSkillBundle(skillName, experiences, "", "")
 	es.syncSkillPackage(ctx, bundle, skillName)
 
@@ -249,6 +252,7 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 		return UploadResult{OK: false, Reason: reason}, fmt.Errorf("skill_id unavailable for skill %s", skillName)
 	}
 
+	// 准备重试状态（次数、上次结果和错误），随后进入最多 maxUploadRetries 次的循环。
 	attempt := 0
 	lastResult := UploadResult{OK: false, Reason: "upload not attempted"}
 	var lastErr error
@@ -264,6 +268,7 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 				Str("skill_id", bundle.SkillID).
 				Err(err).
 				Msg("[ExperienceSharer] upload attempt error")
+			// 还有重试机会就按指数退避等一会儿；等待期间上下文取消则立即返回。
 			if attempt < es.maxUploadRetries && es.backoffBaseSecs > 0 {
 				delay := es.backoffBaseSecs * math.Pow(2, float64(attempt-1))
 				select {
@@ -274,6 +279,7 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 			}
 			continue
 		}
+		// 上传成功：先把 bundle 镜像到本地缓存（镜像失败只告警），再返回成功结果。
 		if result.OK {
 			if mirrorErr := es.mirrorBundle(bundle, "uploaded"); mirrorErr != nil {
 				logger.Warn(logComponent).
@@ -290,6 +296,7 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 			return result, nil
 		}
 
+		// 上传被拒绝：不可重试的立即失败，可重试的退避后再来一轮。
 		lastResult = result
 		lastErr = nil
 		logger.Warn(logComponent).
@@ -313,6 +320,7 @@ func (es *ExperienceSharer) FlushPendingUploads(ctx context.Context, skillName s
 		}
 	}
 
+	// 重试次数用尽：记录最终原因，返回最后一次的错误（没有错误就现造一个）。
 	logger.Error(logComponent).
 		Str("skill", skillName).
 		Str("skill_id", bundle.SkillID).
