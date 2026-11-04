@@ -35,7 +35,7 @@
 - Create: `internal/swarm/runtime/events.go`
 - Test: `internal/swarm/runtime/events_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package runtime
@@ -75,12 +75,12 @@ func TestRuntimeEvent_FromAgentResponse(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ -run TestRuntimeEvent`
 Expected: FAIL `undefined: Control` / `undefined: RuntimeEvent`
 
-- [ ] **Step 3: 实现 events.go**
+- [x] **Step 3: 实现 events.go**
 
 ```go
 package runtime
@@ -188,12 +188,12 @@ func (e *RuntimeEvent) EventType() string {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ -run TestRuntimeEvent -v`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/runtime/events.go internal/swarm/runtime/events_test.go
@@ -203,6 +203,11 @@ git commit -m "feat(runtime): 新增 RuntimeEvent（Control/FromAgentResponse/To
 ---
 
 ### Task 2: `runtime/request.go` 补 7 函数 + mode 解析三合一
+
+> **进度（2026-11-04）**：mode 三合一与工程目录解析已完成并提交（`df4c45fd`、`ac51eeff`）；
+> 剩余 `SyncChatRequestMetadata` / `PrepareChatTurn` / `CancelRequest` 待做（与 Task 4 的
+> `AgentRuntime` 强耦合，随 Task 4 一起落）。
+
 
 **Files:**
 - Modify: `internal/swarm/runtime/request.go`
