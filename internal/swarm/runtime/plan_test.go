@@ -268,3 +268,23 @@ func TestInjectActivationReminder(t *testing.T) {
 	require.True(t, len(got) > len("原始query"))
 	require.Equal(t, "原始query", got[len(got)-len("原始query"):], "原 query 必须原样在尾部")
 }
+
+// TestPlanModeController_ActiveSessions与IsExited 验证活跃集合快照与退出记忆查询。
+func TestPlanModeController_ActiveSessions与IsExited(t *testing.T) {
+	c := NewPlanModeController()
+	require.Empty(t, c.ActiveSessions())
+
+	c.markActive("s1")
+	snapshot := c.ActiveSessions()
+	require.Contains(t, snapshot, "s1")
+	// 快照隔离：外部修改不影响内部集合
+	delete(snapshot, "s1")
+	require.Contains(t, c.ActiveSessions(), "s1")
+
+	require.False(t, c.IsExited("s1"))
+	c.markExited("s1")
+	require.True(t, c.IsExited("s1"))
+	c.ResetSession("s1")
+	require.False(t, c.IsExited("s1"))
+	require.Empty(t, c.ActiveSessions())
+}

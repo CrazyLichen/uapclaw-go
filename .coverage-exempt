@@ -230,3 +230,10 @@ tests/integration/testhelpers/context.go
 # 同为本次改动的 factory.go 改动行覆盖率 100%（集成）/ 单测覆盖
 # TestDeepAgent_createReactAgent_迭代上限语义 等用例驱动。
 internal/agentcore/harness/harness_config/params.go
+
+# ── 2026-11-04 S3 Plan/Runtime 层对齐：handle_envelope.go 拆为 handle_message.go + handle_chat.go ──
+# handle_message.go#L96-L252 — 纯 ReqMethod 分发 switch（原 handle_envelope.go 内容按计划
+# 「只搬方法、不改方法体」迁入）。每个 case 都要求对应 handler 的依赖齐备（配置热重载、
+# 会话目录、扩展注册表、调度器等），单测无法逐个触达；各 handler 的行为信号由其自身
+# 的 *_test.go 与集成链路承担，此处仅豁免路由分支本身。
+internal/swarm/server/handle_message.go#L96-L252

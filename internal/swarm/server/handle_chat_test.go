@@ -143,3 +143,36 @@ func readFrame(t *testing.T, tr *transport.ChannelTransport) map[string]any {
 func parseUnaryFrame(frame map[string]any) (*schema.AgentResponse, error) {
 	return e2a.ParseAgentServerWireUnary(frame)
 }
+
+// TestHandleUnaryImpl_特殊方法分流 验证 4 个前置 return 分支各自写出响应帧。
+func TestHandleUnaryImpl_特殊方法分流(t *testing.T) {
+	methods := []schema.ReqMethod{
+		schema.ReqMethodInitialize,
+		schema.ReqMethodSessionCreate,
+		schema.ReqMethodSessionFork,
+		schema.ReqMethodACPToolResponse,
+	}
+	for _, method := range methods {
+		t.Run(string(method), func(t *testing.T) {
+			s, tr := newTestServer()
+			req := &schema.AgentRequest{
+				RequestID: "req-special", ChannelID: "web",
+				ReqMethod: method, Params: json.RawMessage(`{}`),
+			}
+			s.handleUnaryImpl(context.Background(), req)
+			frame := readFrame(t, tr)
+			require.NotNil(t, frame, "特殊方法必须写出响应帧")
+		})
+	}
+}
+
+// TestSendKeepalive_写出心跳帧 验证心跳帧编码与发送。
+func TestSendKeepalive_写出心跳帧(t *testing.T) {
+	s, tr := newTestServer()
+	s.sendKeepalive("req-keepalive", "web")
+
+	frame := readFrame(t, tr)
+	body, _ := frame["body"].(map[string]any)
+	delta, _ := body["delta"].(map[string]any)
+	require.Equal(t, "keepalive", delta["event_type"])
+}
