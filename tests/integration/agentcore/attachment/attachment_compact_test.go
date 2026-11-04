@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // CompactSuite 覆盖 IT-3 基线回退与 IT-5 重启恢复。
@@ -24,7 +25,7 @@ func TestCompactSuite(t *testing.T) { suite.Run(t, new(CompactSuite)) }
 // Python: has_history_snapshot 为 false 时 render_history_snapshot。
 func (s *CompactSuite) TestIT3_基线丢失回退快照() {
 	m := prompts.NewManager()
-	mc := newContext(s.T(), "s1")
+	mc := testhelpers.NewTestContext(s.T(), "s1")
 	_, _ = m.AddSection("s1", "mode", "A", prompts.AttachmentRuntime, "test.rail")
 	s.Require().NoError(m.Sync(context.Background(), mc))
 
@@ -41,7 +42,7 @@ func (s *CompactSuite) TestIT3_基线丢失回退快照() {
 
 // TestIT5_重启后不重复投递 验证新 Manager 从历史账本恢复、不重复投递。
 func (s *CompactSuite) TestIT5_重启后不重复投递() {
-	mc := newContext(s.T(), "s1")
+	mc := testhelpers.NewTestContext(s.T(), "s1")
 	m1 := prompts.NewManager()
 	_, _ = m1.AddSection("s1", "mode", "A", prompts.AttachmentRuntime, "test.rail")
 	s.Require().NoError(m1.Sync(context.Background(), mc))

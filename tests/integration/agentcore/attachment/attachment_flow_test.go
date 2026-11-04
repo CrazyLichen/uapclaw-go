@@ -10,6 +10,7 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // FlowSuite 覆盖 IT-1 全链路与 IT-2 顺序契约。
@@ -25,7 +26,7 @@ func TestFlowSuite(t *testing.T) { suite.Run(t, new(FlowSuite)) }
 // Python: sync_to_context 三种投递形态。
 func (s *FlowSuite) TestIT1_SnapshotDeltaRemoved() {
 	m := prompts.NewManager()
-	mc := newContext(s.T(), "s1")
+	mc := testhelpers.NewTestContext(s.T(), "s1")
 
 	_, err := m.AddSection("s1", "mode_instructions", "A", prompts.AttachmentRuntime, "test.rail")
 	s.Require().NoError(err)
@@ -58,7 +59,7 @@ func (s *FlowSuite) TestIT1_SnapshotDeltaRemoved() {
 // TestIT2_顺序契约与幂等 验证附件消息恒在用户消息之前，且同轮双 Sync 不重复。
 func (s *FlowSuite) TestIT2_顺序契约与幂等() {
 	m := prompts.NewManager()
-	mc := newContext(s.T(), "s1")
+	mc := testhelpers.NewTestContext(s.T(), "s1")
 
 	_, _ = m.AddSection("s1", "mode", "A", prompts.AttachmentRuntime, "test.rail")
 	s.Require().NoError(m.Sync(context.Background(), mc))

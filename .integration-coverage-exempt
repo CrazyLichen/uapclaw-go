@@ -179,3 +179,9 @@ internal/agentcore/harness/prompts/tools/audio.go
 # 驱动该入口；本次把重复的 baseMessageToMap 下沉为 llmschema.BaseMessageToMap，
 # 行为由 schema 包单测与 signal 包 ParseMessages 用例覆盖（内部调用同一函数）。
 internal/evolving/trajectory/types.go
+
+# ── 2026-11-04 Prompt Attachment 地基（S1）──
+# testhelpers/context.go：集成测试助手。CI 的 COVER_PKGS 只枚举 internal/* 前缀，
+# tests/integration/testhelpers 不在 coverpkg 内故不被插桩；其自身逻辑由
+# tests/integration/agentcore/attachment 的 IT-1~IT-7 调用驱动。
+tests/integration/testhelpers/context.go

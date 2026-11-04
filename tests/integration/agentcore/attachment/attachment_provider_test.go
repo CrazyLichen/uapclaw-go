@@ -12,6 +12,7 @@ import (
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
 )
 
 // ProviderSuite 覆盖 IT-4 投影矩阵、IT-6 隔离、IT-7 跨轮插入。
@@ -25,7 +26,7 @@ func TestProviderSuite(t *testing.T) { suite.Run(t, new(ProviderSuite)) }
 // TestIT4_投影矩阵且历史不变 验证百炼换 System、Anthropic 保持 User，历史始终 User。
 func (s *ProviderSuite) TestIT4_投影矩阵且历史不变() {
 	m := prompts.NewManager()
-	mc := newContext(s.T(), "s1")
+	mc := testhelpers.NewTestContext(s.T(), "s1")
 	_, _ = m.AddSection("s1", "mode", "A", prompts.AttachmentRuntime, "test.rail")
 	s.Require().NoError(m.Sync(context.Background(), mc))
 
@@ -55,8 +56,8 @@ func (s *ProviderSuite) TestIT4_投影矩阵且历史不变() {
 // TestIT6_多会话隔离 验证两会话并发写入互不串味。
 func (s *ProviderSuite) TestIT6_多会话隔离() {
 	m := prompts.NewManager()
-	c1 := newContext(s.T(), "s1")
-	c2 := newContext(s.T(), "s2")
+	c1 := testhelpers.NewTestContext(s.T(), "s1")
+	c2 := testhelpers.NewTestContext(s.T(), "s2")
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -79,7 +80,7 @@ func (s *ProviderSuite) TestIT6_多会话隔离() {
 // TestIT7_跨轮插入增量 锁定消息顺序：[snapshot][user1][assistant][delta][user2]。
 func (s *ProviderSuite) TestIT7_跨轮插入增量() {
 	m := prompts.NewManager()
-	mc := newContext(s.T(), "s1")
+	mc := testhelpers.NewTestContext(s.T(), "s1")
 
 	_, _ = m.AddSection("s1", "mode", "A", prompts.AttachmentRuntime, "test.rail")
 	s.Require().NoError(m.Sync(context.Background(), mc))

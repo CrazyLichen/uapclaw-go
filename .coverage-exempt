@@ -217,3 +217,9 @@ internal/swarm/server/adapter/deep_adapter_rails.go#L1010-L1015
 # 等价的本地副本删除；所在函数 recordPresentedExperienceDetail 原本即无单测覆盖，
 # 行为由 extractToolContentFromInputs 的单测（两条 rail 共用）保证。
 internal/agentcore/harness/rails/evolution/team_skill_evolution_rail.go#L1328-L1328
+
+# ── 2026-11-04 Prompt Attachment 地基（S1）──
+# testhelpers/context.go：带 integration 标签的测试助手（SessionFacade mock + 真实
+# ContextEngine 构造）。单元测试（无 integration 标签）不编译该文件，故恒为 0%；
+# 其行为由集成用例 IT-1~IT-7 全量驱动（见 tests/integration/agentcore/attachment）。
+tests/integration/testhelpers/context.go
