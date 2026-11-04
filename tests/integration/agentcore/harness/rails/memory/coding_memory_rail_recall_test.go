@@ -18,6 +18,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	memrail "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -66,6 +67,9 @@ const (
 	recallPollInterval = 10 * time.Millisecond
 	// recallSettleDelay 确认降级分支稳定的观察窗口（预取 goroutine 早已结束）
 	recallSettleDelay = 300 * time.Millisecond
+	// codingMemoryContextSection 动态记忆附件节名
+	// （Python: CodingMemoryRail 的 _DYNAMIC_MEMORY_SECTION = "coding_memory_context"）
+	codingMemoryContextSection = "coding_memory_context"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -298,32 +302,52 @@ func (s *CodingMemoryRailRecallSuite) newRecallEnv(
 	return rail, agent
 }
 
+// memoryContent 返回记忆 rail 最近一次投递的内容。
+//
+// S2 起动态召回改走历史附件（对齐上游 CodingMemoryRail._upsert_dynamic_memory_attachment，
+// section=coding_memory_context），静态说明仍留在系统提示词 SectionMemory 节。
+// 因此先读附件，再回落系统提示词节。
+func (s *CodingMemoryRailRecallSuite) memoryContent(agent *harness.DeepAgent) string {
+	s.T().Helper()
+	if mgr := agent.PromptAttachments(); mgr != nil {
+		items, err := mgr.ListByFilter(hprompts.AttachmentFilter{Section: codingMemoryContextSection})
+		s.Require().NoError(err)
+		if len(items) > 0 && items[0].Content != "" {
+			return items[0].Content
+		}
+	}
+	if sec := agent.SystemPromptBuilder().GetSection(hsections.SectionMemory); sec != nil {
+		return sec.Content["cn"]
+	}
+	return ""
+}
+
 // driveUntilRecall 驱动 BeforeInvoke + BeforeModelCall，轮询等待召回全文注入完成。
 //
 // 召回在 BeforeInvoke 中以 goroutine 预取，BeforeModelCall 非阻塞检查，
-// 因此必须轮询到 SectionMemory 出现召回标题（不能依赖固定 sleep）。
+// 因此必须轮询到召回标题出现（不能依赖固定 sleep）。
 func (s *CodingMemoryRailRecallSuite) driveUntilRecall(
 	rail *memrail.CodingMemoryRail,
 	agent *harness.DeepAgent,
 	query string,
 ) string {
 	s.T().Helper()
+	// 动态记忆按会话维度投递到附件：必须带 session，否则 rail 拿不到 sessionID 会静默丢弃
+	sess := s.NewTestSession("recall-session")
 	cbc := agentinterfaces.NewAgentCallbackContext(agent,
-		&agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(query)}, nil)
+		&agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(query)}, sess)
 	s.Require().NoError(rail.BeforeInvoke(s.Ctx, cbc))
 
 	var content string
 	for i := 0; i < recallPollAttempts; i++ {
 		s.Require().NoError(rail.BeforeModelCall(s.Ctx, cbc))
-		if sec := agent.SystemPromptBuilder().GetSection(hsections.SectionMemory); sec != nil {
-			content = sec.Content["cn"]
-		}
+		content = s.memoryContent(agent)
 		if strings.Contains(content, "## 已加载的相关记忆") {
 			return content
 		}
 		time.Sleep(recallPollInterval)
 	}
-	s.FailNow("等待召回全文注入超时", "SectionMemory 内容: %s", content)
+	s.FailNow("等待召回全文注入超时", "记忆内容: %s", content)
 	return content
 }
 
@@ -338,16 +362,16 @@ func (s *CodingMemoryRailRecallSuite) driveUntilDegradeIndex(
 	query string,
 ) string {
 	s.T().Helper()
+	// 动态记忆按会话维度投递到附件：必须带 session，否则 rail 拿不到 sessionID 会静默丢弃
+	sess := s.NewTestSession("recall-session")
 	cbc := agentinterfaces.NewAgentCallbackContext(agent,
-		&agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(query)}, nil)
+		&agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(query)}, sess)
 	s.Require().NoError(rail.BeforeInvoke(s.Ctx, cbc))
 
 	var content string
 	for i := 0; i < recallPollAttempts; i++ {
 		s.Require().NoError(rail.BeforeModelCall(s.Ctx, cbc))
-		if sec := agent.SystemPromptBuilder().GetSection(hsections.SectionMemory); sec != nil {
-			content = sec.Content["cn"]
-		}
+		content = s.memoryContent(agent)
 		if strings.Contains(content, "## 当前记忆索引") {
 			break
 		}
@@ -357,8 +381,5 @@ func (s *CodingMemoryRailRecallSuite) driveUntilDegradeIndex(
 	// 预取 goroutine 早已结束，再驱动一次确认仍为索引分支
 	time.Sleep(recallSettleDelay)
 	s.Require().NoError(rail.BeforeModelCall(s.Ctx, cbc))
-	if sec := agent.SystemPromptBuilder().GetSection(hsections.SectionMemory); sec != nil {
-		content = sec.Content["cn"]
-	}
-	return content
+	return s.memoryContent(agent)
 }

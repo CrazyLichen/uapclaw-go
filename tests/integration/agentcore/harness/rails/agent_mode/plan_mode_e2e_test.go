@@ -12,6 +12,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	agentmode "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -117,11 +118,13 @@ func (s *PlanModeE2ESuite) TestPlanModeE2E_PlanModeSection注入() {
 
 	sess.PostRun(s.Ctx)
 
-	// 验证 plan mode 下 SectionModeInstructions 注入
-	spb := agent.SystemPromptBuilder()
-	s.Require().NotNil(spb)
-	s.True(spb.HasSection(hsections.SectionModeInstructions),
-		"plan mode 应有 SectionModeInstructions 节")
+	// 验证 plan mode 下 plan 指引已投递（S2 起走历史附件，不再写系统提示词节）
+	mgr := agent.PromptAttachments()
+	s.Require().NotNil(mgr, "DeepAgent 应注入动态提示词管理器")
+	items, err := mgr.ListByFilter(hprompts.AttachmentFilter{Section: hsections.SectionModeInstructions})
+	s.Require().NoError(err)
+	s.NotEmpty(items, "plan mode 应投递 mode_instructions 附件")
+	s.NotEmpty(items[0].Content, "plan 指引附件内容不应为空")
 }
 
 // TestPlanModeE2E_PlanModeState持久化 测试 PlanModeState 状态持久化到 Session。
@@ -239,11 +242,16 @@ func (s *PlanModeE2ESuite) TestPlanModeE2E_PlanMode正常模式隐藏Plan工具(
 
 	sess.PostRun(s.Ctx)
 
-	// 正常模式不应有 SectionModeInstructions
+	// 正常模式不应有 SectionModeInstructions 节，且不应残留 plan 指引附件
 	spb := agent.SystemPromptBuilder()
 	s.Require().NotNil(spb)
 	s.False(spb.HasSection(hsections.SectionModeInstructions),
 		"正常模式不应有 SectionModeInstructions 节")
+	if mgr := agent.PromptAttachments(); mgr != nil {
+		items, listErr := mgr.ListByFilter(hprompts.AttachmentFilter{Section: hsections.SectionModeInstructions})
+		s.Require().NoError(listErr)
+		s.Empty(items, "正常模式应清空 mode_instructions 附件")
+	}
 }
 
 // TestPlanModeE2E_PlanModeStateToDict 测试 PlanModeState.ToDict 序列化。
