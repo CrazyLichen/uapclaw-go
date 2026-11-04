@@ -185,3 +185,10 @@ internal/evolving/trajectory/types.go
 # tests/integration/testhelpers 不在 coverpkg 内故不被插桩；其自身逻辑由
 # tests/integration/agentcore/attachment 的 IT-1~IT-7 调用驱动。
 tests/integration/testhelpers/context.go
+
+# ── 2026-11-04 默认模式对齐上游 agent（normal）──
+# agent_manager.go L802-L815：「mode 缺省 → agent」分支只在内部调用方构造无 mode
+# 的 AgentRequest 时进入；网关/ACP/Web 都在 params 里 setdefault("mode")
+# （app_gateway.py:1650 的 default_mode），集成层恒不走该分支。
+# 行为由 agent_manager_test.go 的 TestResolveModeFromRequest 覆盖。
+internal/swarm/server/runtime/agent_manager.go#L802-L815
