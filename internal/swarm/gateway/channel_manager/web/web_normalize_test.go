@@ -230,19 +230,24 @@ func TestMakeNormAndForward_非转发方法有Metadata(t *testing.T) {
 	assert.False(t, result)
 }
 
-// TestParseMode_有mode 测试 params 中有 mode
+// TestParseMode_有mode 验证合法 canonical 直通（对齐 Mode.from_raw）
 func TestParseMode_有mode(t *testing.T) {
-	assert.Equal(t, schema.Mode("BUILD"), parseMode(map[string]any{"mode": "BUILD"}))
+	assert.Equal(t, schema.ModeAgentWorkPlan, parseMode("agent.work.plan"))
+	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode("agent.work.normal"))
 }
 
-// TestParseMode_无mode 测试 params 中无 mode
-func TestParseMode_无mode(t *testing.T) {
-	assert.Equal(t, schema.ModeAgentWorkPlan, parseMode(map[string]any{}))
+// TestParseMode_legacy归一 验证旧 canonical 归一（agent.plan → agent.work.plan）
+func TestParseMode_legacy归一(t *testing.T) {
+	assert.Equal(t, schema.ModeAgentWorkPlan, parseMode("agent.plan"))
+	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode("agent"))
 }
 
-// TestParseMode_nilParams 测试 params 为 nil
-func TestParseMode_nilParams(t *testing.T) {
-	assert.Equal(t, schema.ModeAgentWorkPlan, parseMode(nil))
+// TestParseMode_缺省与非法 验证缺省/非法值回落 agent.work.normal（不再是 plan）
+func TestParseMode_缺省与非法(t *testing.T) {
+	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode(nil))
+	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode(""))
+	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode("BUILD"))
+	assert.Equal(t, schema.ModeAgentWorkNormal, parseMode([]any{"agent"}))
 }
 
 // TestBuildUserMessage_带Query 测试带 query 参数构造

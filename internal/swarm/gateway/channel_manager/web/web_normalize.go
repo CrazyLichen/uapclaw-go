@@ -213,6 +213,9 @@ func NormalizeGatewayMessage(msg *schema.Message) *schema.Message {
 	paramsJSON, _ := json.Marshal(params)
 
 	// 构建标准化后的新消息
+	// 身份字段（provider/chat_id/bot_id/user_id/app_id）必须透传：受控渠道判定
+	// （_resolve_control_channel_type）与会话路由全部依赖它们，丢失会让 IM 消息
+	// 退化成"未知渠道"、控制指令被当普通对话转发。
 	return &schema.Message{
 		ID:        msg.ID,
 		Type:      msg.Type,
@@ -227,6 +230,11 @@ func NormalizeGatewayMessage(msg *schema.Message) *schema.Message {
 		StreamSeq: msg.StreamSeq,
 		StreamID:  msg.StreamID,
 		Metadata:  msg.Metadata,
+		Provider:  msg.Provider,
+		ChatID:    msg.ChatID,
+		BotID:     msg.BotID,
+		UserID:    msg.UserID,
+		AppID:     msg.AppID,
 	}
 }
 
@@ -291,7 +299,7 @@ func BuildUserMessage(reqID, method string, params map[string]any, sessionID str
 		Timestamp: float64(time.Now().UnixMilli()) / 1000.0,
 		OK:        true,
 		ReqMethod: reqMethod,
-		Mode:      parseMode(params),
+		Mode:      parseMode(params["mode"]),
 		Metadata:  map[string]any{"method": method, "query": query},
 	}
 }
@@ -300,12 +308,9 @@ func BuildUserMessage(reqID, method string, params map[string]any, sessionID str
 
 // parseMode 从 params 解析运行模式。
 //
-// Python: WebChannel._parse_mode，默认 Mode.AGENT_PLAN。
-func parseMode(params map[string]any) schema.Mode {
-	if params != nil {
-		if mode, ok := params["mode"].(string); ok && mode != "" {
-			return schema.Mode(mode)
-		}
-	}
-	return schema.ModeAgentWorkPlan
+// Python: WebChannel._parse_mode (web_connect.py:2356-2358)：
+// `Mode.from_raw(raw_mode, default=Mode.AGENT_WORK_NORMAL)`——先经 DEPRECATION_MAP
+// 归一旧 canonical，缺省/非法值回落 agent.work.normal（plan 是运行期状态，不是缺省档）。
+func parseMode(rawMode any) schema.Mode {
+	return schema.ModeFromRaw(rawMode, schema.ModeAgentWorkNormal)
 }

@@ -131,13 +131,15 @@
 
 审计：`go run ./cmd/integration-audit -verify`（目录跨度、有效测试密度、覆盖交叉验证）。
 
-## 7. 已知偏差（规则 9.6，需确认）
+## 7. 偏差处置（规则 9.6）
 
-| # | 偏差 | Python 依据 | Go 现状 | 处置 |
+2026-11-04 决定：**D1、D2 纳入本期实施**；**D3 转领域二十七**（`IMPLEMENTATION_PLAN.md` 27-A 批次 B0-B11，独立任务）。
+
+| # | 偏差 | Python 依据 | Go 现状 | 本期处置 |
 | --- | --- | --- | --- | --- |
-| D1 | `_get_channel_default_state` 的 session_id 生成位置 | 0.2.5 已移出：`_get_channel_default_state` 返回 `None`，由 `_allocate_channel_session`（`message_handler.py:950+`）分配并落库 | Go 仍在 `getChannelDefaultState` 内 `GenerateChannelSessionID`（0.2.0 形状） | **本期保留**。移植 `_allocate_channel_session` 属渠道会话分配专项（含 persist_session/项目绑定），单独任务；回收条件＝该专项落地 |
-| D2 | `send_channel_notice` 入参形状 | Python `send_channel_notice(user_infos, channel_id, reply_session_id, text)`（文本） | Go `sendChannelNotice(msg, payload)`（结构化 payload） | 本期不改（跨 30+ 调用点）；`ModeChangeCancelParams` 的 `user_infos/channel_id` 字段在 Go 侧由 msg 派生 |
-| D3 | 文件级拆分（既有） | `WebChannel` 单类内含 `_handle_raw_message` / `_parse_mode` 等 | `web.BuildUserMessage`、`web.HandleMessage` 为包级导出函数 | 本期不重构，登记结构债；`parseMode` 因本次触及，按 `_parse_mode` 对齐 |
+| D1 | `_get_channel_default_state` 的 session_id 生成位置 | 0.2.5 已移出：返回 `None`，由 `_allocate_channel_session`（`:951-994`）分配并落库，`_ensure_inbound_session`（`:1012-1026`）在 `_apply_channel_state` 之后调用（`:4966-4967`） | `getChannelDefaultState` 内 `GenerateChannelSessionID` | **实施**：四方法 + `_sticky_channel_state_types` + `_pending_alloc_state_key` + `_apply_channel_state` 的 else 分支与 team 成员守卫；复用 `ReqMethodSessionCreate`（`server/handle_chat.go:52`）与 `acp_alias.go:32` 的调用写法 |
+| D2 | `send_channel_notice` 入参形状 | `send_channel_notice(user_infos, channel_id, session_id, text_or_payload)`（`:1085-1123`），`user_infos` 就地构造（`:1987-1992`） | `sendChannelNotice(msg, payload)`；`schema.Message` 无 `AppID`/`BotID` | **实施**：`Message` 补 `AppID`/`BotID`；入口构造 `userInfos`；28 个调用点改签名 |
+| D3 | web 包文件级拆分（38 py / 19,789 行 ↔ 8 go / 8,514 行） | `gateway/channel_manager/web/` 全量 | 子集移植 + `frame.go`/`memory_compute.go`/`config_apply.go` 三个上游无对应物的模块 | **转 27-A**（B0-B11，28-33 人日）；`parseMode` 因本期触及，先按 `_parse_mode` 对齐，B1 合并文件时随迁 |
 
 ## 8. 验收
 

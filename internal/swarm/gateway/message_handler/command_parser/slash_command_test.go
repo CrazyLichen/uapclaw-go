@@ -383,8 +383,9 @@ func TestValidModeLines(t *testing.T) {
 			t.Errorf("%q 应在 ValidModeLines 中", line)
 		}
 	}
-	if len(ValidModeLines) != len(expected) {
-		t.Errorf("ValidModeLines 应有 %d 项，实际：%d", len(expected), len(ValidModeLines))
+	// 词表对齐上游 ModeSubcommand 全量 19 项（旧成员 + 8 个新 canonical）
+	if len(ValidModeLines) != 19 {
+		t.Errorf("ValidModeLines 应有 19 项，实际：%d", len(ValidModeLines))
 	}
 }
 
@@ -454,8 +455,14 @@ func TestModeSubcommandString(t *testing.T) {
 	if got := ModeSubcommandString(ModeAgent); got != "agent" {
 		t.Errorf("ModeSubcommandString(ModeAgent) = %q, want %q", got, "agent")
 	}
-	if got := ModeSubcommandString(ModeCodePlan); got != "agent.code.plan" {
-		t.Errorf("ModeSubcommandString(ModeCodePlan) = %q, want %q", got, "agent.code.plan")
+	if got := ModeSubcommandString(ModeCodePlan); got != "code.plan" {
+		t.Errorf("ModeSubcommandString(ModeCodePlan) = %q, want %q", got, "code.plan")
+	}
+	if got := ModeSubcommandString(ModeCodePlanFull); got != "agent.code.plan" {
+		t.Errorf("ModeSubcommandString(ModeCodePlanFull) = %q, want %q", got, "agent.code.plan")
+	}
+	if got := ModeSubcommandString(ModeTeamWorkNormal); got != "team.work.normal" {
+		t.Errorf("ModeSubcommandString(ModeTeamWorkNormal) = %q, want %q", got, "team.work.normal")
 	}
 }
 

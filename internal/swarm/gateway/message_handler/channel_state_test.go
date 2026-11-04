@@ -13,60 +13,90 @@ import (
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
 
-// TestChannelModeString 测试 ChannelMode 字符串转换
-func TestChannelModeString(t *testing.T) {
-	tests := map[ChannelMode]string{
-		ChannelModeAgentWorkPlan:   "agent.work.plan",
-		ChannelModeAgentWorkNormal: "agent.work.normal",
-		ChannelModeCodePlan:        "agent.code.plan",
-		ChannelModeCodeNormal:      "agent.code.normal",
-		ChannelModeCodeTeam:        "team.code.normal",
-		ChannelModeTeam:            "team",
+// TestChannelModeValues 验证 18 个成员值与上游 ChannelMode(str, Enum) 一致
+func TestChannelModeValues(t *testing.T) {
+	cases := []struct {
+		mode ChannelMode
+		want string
+	}{
+		{ChannelModeAgent, "agent"},
+		{ChannelModeAgentPlan, "agent.plan"},
+		{ChannelModeAgentFast, "agent.fast"},
+		{ChannelModeCodePlan, "code.plan"},
+		{ChannelModeCodeNormal, "code.normal"},
+		{ChannelModeCodeTeam, "code.team"},
+		{ChannelModeTeam, "team"},
+		{ChannelModeTeamPlan, "team.plan.normal"},
+		{ChannelModeTeamPlanNormal, "team.plan.normal"},
+		{ChannelModeTeamPlanCode, "team.plan.code"},
+		{ChannelModeAgentWorkNormal, "agent.work.normal"},
+		{ChannelModeAgentWorkPlan, "agent.work.plan"},
+		{ChannelModeAgentCodeNormal, "agent.code.normal"},
+		{ChannelModeAgentCodePlan, "agent.code.plan"},
+		{ChannelModeTeamWorkNormal, "team.work.normal"},
+		{ChannelModeTeamWorkPlan, "team.work.plan"},
+		{ChannelModeTeamCodeNormal, "team.code.normal"},
+		{ChannelModeTeamCodePlan, "team.code.plan"},
 	}
-	for mode, expected := range tests {
-		if got := ChannelModeString(mode); got != expected {
-			t.Errorf("ChannelModeString(%v) = %q, want %q", mode, got, expected)
+	for _, c := range cases {
+		if string(c.mode) != c.want {
+			t.Errorf("ChannelMode(%q) = %q, want %q", string(c.mode), string(c.mode), c.want)
 		}
 	}
 }
 
-// TestParseChannelMode 测试 ChannelMode 解析
-func TestParseChannelMode(t *testing.T) {
-	tests := map[string]ChannelMode{
+// TestChannelModeFromStr 验证归一：新 canonical 直通、legacy 归一到 canonical、未知兜底 agent
+func TestChannelModeFromStr(t *testing.T) {
+	cases := map[string]ChannelMode{
 		"agent.work.plan":   ChannelModeAgentWorkPlan,
 		"agent.work.normal": ChannelModeAgentWorkNormal,
-		"agent.code.plan":   ChannelModeCodePlan,
-		"agent.code.normal": ChannelModeCodeNormal,
-		"team.code.normal":  ChannelModeCodeTeam,
-		"team":              ChannelModeTeam,
-		// 大小写无关
-		"AGENT.PLAN":  ChannelModeAgentWorkPlan,
-		" Code.Plan ": ChannelModeCodePlan,
+		"agent.code.plan":   ChannelModeAgentCodePlan,
+		"agent.code.normal": ChannelModeAgentCodeNormal,
+		"team.code.normal":  ChannelModeTeamCodeNormal,
+		"team":              ChannelModeTeamWorkNormal,
+		"team.work.plan":    ChannelModeTeamWorkPlan,
+		// 大小写与空白
+		"  AGENT.PLAN  ": ChannelModeAgentWorkPlan,
+		" Code.Plan ":    ChannelModeAgentCodePlan,
+		// legacy 归一
+		"agent":      ChannelModeAgentWorkNormal,
+		"agent.plan": ChannelModeAgentWorkPlan,
+		"code":       ChannelModeAgentCodeNormal,
 	}
-	for input, expected := range tests {
-		if got := ParseChannelMode(input); got != expected {
-			t.Errorf("ParseChannelMode(%q) = %v, want %v", input, got, expected)
+	for input, want := range cases {
+		if got := channelModeFromStr(input); got != want {
+			t.Errorf("channelModeFromStr(%q) = %q, want %q", input, got, want)
 		}
 	}
 
-	// 非法值返回默认
-	if got := ParseChannelMode("unknown"); got != ChannelModeAgentWorkPlan {
-		t.Errorf("ParseChannelMode(unknown) = %v, want ChannelModeAgentWorkPlan", got)
+	// 未知值兜底 ChannelMode.AGENT（对齐 Python `return ChannelMode.AGENT`）
+	for _, input := range []string{"unknown", "", "   ", "team-foo"} {
+		if got := channelModeFromStr(input); got != ChannelModeAgent {
+			t.Errorf("channelModeFromStr(%q) = %q, want agent", input, got)
+		}
 	}
 }
 
-// TestIsValidChannelMode 测试 ChannelMode 有效性判断
-func TestIsValidChannelMode(t *testing.T) {
-	valid := []string{"agent.work.plan", "agent.work.normal", "agent.code.plan", "agent.code.normal", "team.code.normal", "team"}
+// TestValidModeInputs 验证 /mode 白名单 25 项（对齐 _VALID_MODE_INPUTS）
+func TestValidModeInputs(t *testing.T) {
+	if len(validModeInputs) != 25 {
+		t.Fatalf("validModeInputs 共 %d 项，want 25", len(validModeInputs))
+	}
+	valid := []string{
+		"agent.work.normal", "agent.work.plan", "agent.code.normal", "agent.code.plan",
+		"team.work.normal", "team.work.plan", "team.code.normal", "team.code.plan", "team.design",
+		"agent", "agent.plan", "agent.fast", "code", "code.normal", "code.plan", "code.team",
+		"team", "team.plan.normal", "team.plan.code",
+		"team.plan", "team.code", "team.work", "team.normal", "agent.work", "agent.code",
+	}
 	for _, v := range valid {
-		if !IsValidChannelMode(v) {
-			t.Errorf("%q 应为合法 ChannelMode", v)
+		if !isValidModeInput(v) {
+			t.Errorf("%q 应在 /mode 白名单内", v)
 		}
 	}
-	invalid := []string{"unknown", "agent", "code", ""}
-	for _, v := range invalid {
-		if IsValidChannelMode(v) {
-			t.Errorf("%q 应为非法 ChannelMode", v)
+	for _, v := range []string{"", "unknown", "plan", "fast", "team.nonsense"} {
+		if isValidModeInput(v) {
+			t.Errorf("%q 不应在 /mode 白名单内", v)
 		}
 	}
 }
@@ -81,9 +111,9 @@ func TestApplyChannelState_受控渠道(t *testing.T) {
 	// 应用渠道状态
 	mh.ApplyChannelState(msg)
 
-	// 验证 session_id 已注入
-	if msg.SessionID == "" {
-		t.Error("受控渠道消息应有 session_id 注入")
+	// 0.2.5 起网关不再本地造 session_id，改由 EnsureInboundSession 经 session.create 分配
+	if msg.SessionID != "" {
+		t.Errorf("未分配真实会话前 session_id 应为空，实际：%q", msg.SessionID)
 	}
 
 	// 验证 mode 已注入到 params
@@ -93,8 +123,8 @@ func TestApplyChannelState_受控渠道(t *testing.T) {
 	}
 	if mode, ok := params["mode"]; !ok {
 		t.Error("params 中应有 mode 字段")
-	} else if mode != "agent.work.plan" {
-		t.Errorf("mode 应为 agent.plan，实际：%v", mode)
+	} else if mode != "agent.work.normal" {
+		t.Errorf("mode 应为 agent.work.normal，实际：%v", mode)
 	}
 }
 

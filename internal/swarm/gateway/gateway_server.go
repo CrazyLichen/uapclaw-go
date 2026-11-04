@@ -674,15 +674,18 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		if route.ChannelID == "tui" {
 			defaultMode = schema.ModeCodeNormal
 		}
-		mode := schema.ParseMode(strVal(params["mode"]), defaultMode)
+		// Python: mode = Mode.from_raw(params.get("mode"), default=default_mode)
+		mode := schema.ModeFromRaw(params["mode"], defaultMode)
 
 		// params 拷贝 + setdefault("mode")（对齐 L649-651）
 		paramsCopy := make(map[string]any, len(params))
 		for k, v := range params {
 			paramsCopy[k] = v
 		}
-		if _, has := paramsCopy["mode"]; !has {
-			paramsCopy["mode"] = mode.String()
+		// Python: if not isinstance(params.get("mode"), str): params["mode"] = mode.value
+		// 非字符串（数组/对象/数字）一律用解析结果覆盖，避免脏值透传到 AgentServer。
+		if _, isStr := paramsCopy["mode"].(string); !isStr {
+			paramsCopy["mode"] = string(mode)
 		}
 
 		// metadata：method + 可选 cwd（对齐 L653-657）

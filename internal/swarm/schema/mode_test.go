@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-// TestAllModes_数量 验证 AllModes 返回全部 10 个枚举值（4 agent + 4 team + design + 裸 team）
+// TestAllModes_数量 验证 AllModes 返回全部 18 个枚举值（10 canonical + 8 legacy）
 func TestAllModes_数量(t *testing.T) {
 	modes := AllModes()
-	if len(modes) != 10 {
-		t.Fatalf("AllModes() 返回 %d 个模式，want 10", len(modes))
+	if len(modes) != 18 {
+		t.Fatalf("AllModes() 返回 %d 个模式，want 18", len(modes))
 	}
 }
 
@@ -47,7 +47,7 @@ func TestAllModes_包含全部(t *testing.T) {
 	}
 }
 
-// TestParseMode_合法值 验证全部 6 个标准值解析正确
+// TestModeFromRaw_合法值 验证全部 6 个标准值解析正确
 func TestParseMode_合法值(t *testing.T) {
 	tests := []struct {
 		input string
@@ -61,14 +61,14 @@ func TestParseMode_合法值(t *testing.T) {
 		{"team", ModeTeamWorkNormal},
 	}
 	for _, tt := range tests {
-		got := ParseMode(tt.input, ModeAgentWorkPlan)
+		got := ModeFromRaw(tt.input, ModeAgentWorkPlan)
 		if got != tt.want {
-			t.Errorf("ParseMode(%q, ModeAgentWorkPlan) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("ModeFromRaw(%q, ModeAgentWorkPlan) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
 
-// TestParseMode_大小写与空白 验证 strip + lower 后正确解析
+// TestModeFromRaw_大小写与空白 验证 strip + lower 后正确解析
 func TestParseMode_大小写与空白(t *testing.T) {
 	tests := []struct {
 		input string
@@ -81,14 +81,14 @@ func TestParseMode_大小写与空白(t *testing.T) {
 		{"  TEAM  ", ModeTeamWorkNormal},
 	}
 	for _, tt := range tests {
-		got := ParseMode(tt.input, ModeAgentWorkPlan)
+		got := ModeFromRaw(tt.input, ModeAgentWorkPlan)
 		if got != tt.want {
-			t.Errorf("ParseMode(%q, ModeAgentWorkPlan) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("ModeFromRaw(%q, ModeAgentWorkPlan) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
 
-// TestParseMode_非法值回退 验证非法字符串回退到 default
+// TestModeFromRaw_非法值回退 验证非法字符串回退到 default
 func TestParseMode_非法值回退(t *testing.T) {
 	invalidInputs := []string{
 		"invalid",
@@ -99,37 +99,37 @@ func TestParseMode_非法值回退(t *testing.T) {
 		"agent/plan",
 	}
 	for _, input := range invalidInputs {
-		got := ParseMode(input, ModeCodeNormal)
+		got := ModeFromRaw(input, ModeCodeNormal)
 		if got != ModeCodeNormal {
-			t.Errorf("ParseMode(%q, ModeCodeNormal) = %q, want ModeCodeNormal", input, got)
+			t.Errorf("ModeFromRaw(%q, ModeCodeNormal) = %q, want ModeCodeNormal", input, got)
 		}
 	}
 }
 
-// TestParseMode_空字符串回退 验证空/纯空白回退到 default
+// TestModeFromRaw_空字符串回退 验证空/纯空白回退到 default
 func TestParseMode_空字符串回退(t *testing.T) {
 	blankInputs := []string{"", "   ", "\t", "\n", "  \t\n  "}
 	for _, input := range blankInputs {
-		got := ParseMode(input, ModeAgentWorkPlan)
+		got := ModeFromRaw(input, ModeAgentWorkPlan)
 		if got != ModeAgentWorkPlan {
-			t.Errorf("ParseMode(%q, ModeAgentWorkPlan) = %q, want ModeAgentWorkPlan", input, got)
+			t.Errorf("ModeFromRaw(%q, ModeAgentWorkPlan) = %q, want ModeAgentWorkPlan", input, got)
 		}
 	}
 }
 
-// TestParseMode_默认值参数 验证不同 default 参数生效
+// TestModeFromRaw_默认值参数 验证不同 default 参数生效
 func TestParseMode_默认值参数(t *testing.T) {
 	// 非法值 + ModeCodeNormal 默认 → ModeCodeNormal
-	if got := ParseMode("invalid", ModeCodeNormal); got != ModeCodeNormal {
-		t.Errorf("ParseMode(%q, ModeCodeNormal) = %q, want ModeCodeNormal", "invalid", got)
+	if got := ModeFromRaw("invalid", ModeCodeNormal); got != ModeCodeNormal {
+		t.Errorf("ModeFromRaw(%q, ModeCodeNormal) = %q, want ModeCodeNormal", "invalid", got)
 	}
 	// 非法值 + ModeTeam 默认 → ModeTeam
-	if got := ParseMode("invalid", ModeTeam); got != ModeTeam {
-		t.Errorf("ParseMode(%q, ModeTeam) = %q, want ModeTeam", "invalid", got)
+	if got := ModeFromRaw("invalid", ModeTeam); got != ModeTeam {
+		t.Errorf("ModeFromRaw(%q, ModeTeam) = %q, want ModeTeam", "invalid", got)
 	}
 	// 空字符串 + ModeAgentWorkNormal 默认 → ModeAgentWorkNormal
-	if got := ParseMode("", ModeAgentWorkNormal); got != ModeAgentWorkNormal {
-		t.Errorf("ParseMode(%q, ModeAgentWorkNormal) = %q, want ModeAgentWorkNormal", "", got)
+	if got := ModeFromRaw("", ModeAgentWorkNormal); got != ModeAgentWorkNormal {
+		t.Errorf("ModeFromRaw(%q, ModeAgentWorkNormal) = %q, want ModeAgentWorkNormal", "", got)
 	}
 }
 
@@ -256,5 +256,91 @@ func TestMode常量值与Python对齐(t *testing.T) {
 	// 验证测试覆盖全部 6 个常量
 	if len(tests) != 6 {
 		t.Errorf("Python 对齐测试覆盖 %d 个常量，want 10", len(tests))
+	}
+}
+
+// TestModeFromRaw_非字符串回退 验证非字符串入参直接回落 default（Python from_raw 语义）
+func TestModeFromRaw_非字符串回退(t *testing.T) {
+	cases := []any{nil, 42, []any{"agent"}, map[string]any{"m": "agent"}, true}
+	for _, in := range cases {
+		if got := ModeFromRaw(in, ModeAgentWorkNormal); got != ModeAgentWorkNormal {
+			t.Errorf("ModeFromRaw(%#v) = %q, want agent.work.normal", in, got)
+		}
+	}
+}
+
+// TestModeFromRaw_Mode直入 验证传入 Mode 值原样返回
+func TestModeFromRaw_Mode直入(t *testing.T) {
+	if got := ModeFromRaw(ModeAgent, ModeAgentWorkNormal); got != ModeAgent {
+		t.Errorf("ModeFromRaw(ModeAgent) = %q, want agent", got)
+	}
+}
+
+// TestModeFromRaw_Legacy归一 验证 legacy 串经 DEPRECATION_MAP 归一（对齐上游 from_raw 契约）
+func TestModeFromRaw_Legacy归一(t *testing.T) {
+	cases := map[string]Mode{
+		"agent":          ModeAgentWorkNormal,
+		"agent.plan":     ModeAgentWorkPlan,
+		"agent.fast":     ModeAgentWorkNormal,
+		"plan":           ModeAgentWorkNormal,
+		"fast":           ModeAgentWorkNormal,
+		"code.plan":      ModeAgentCodePlan,
+		"code.normal":    ModeAgentCodeNormal,
+		"code.team":      ModeTeamCodeNormal,
+		"team":           ModeTeamWorkNormal,
+		"team.plan":      ModeTeamWorkPlan,
+		"team.plan.code": ModeTeamCodePlan,
+	}
+	for in, want := range cases {
+		if got := ModeFromRaw(in, ModeAgentWorkNormal); got != want {
+			t.Errorf("ModeFromRaw(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestToRuntimeMode_折叠表 验证 legacy 成员的运行时串折叠（上游 test_mode_to_runtime_mode 契约）
+func TestToRuntimeMode_折叠表(t *testing.T) {
+	cases := map[Mode]string{
+		ModeAgent:            "agent",
+		ModeAgentPlan:        "agent",
+		ModeAgentFast:        "agent",
+		ModeCodePlanLegacy:   "code.plan",
+		ModeCodeNormalLegacy: "code.normal",
+		ModeCodeTeamLegacy:   "code.team",
+		ModeTeam:             "team",
+		ModeTeamPlanNormal:   "team.plan.normal",
+		ModeTeamPlanCode:     "team.plan.code",
+		ModeAgentWorkNormal:  "agent.work.normal",
+		ModeAgentWorkPlan:    "agent.work.plan",
+		ModeAgentCodeNormal:  "agent.code.normal",
+		ModeAgentCodePlan:    "agent.code.plan",
+		ModeTeamWorkNormal:   "team.work.normal",
+		ModeTeamWorkPlan:     "team.work.plan",
+		ModeTeamCodeNormal:   "team.code.normal",
+		ModeTeamCodePlan:     "team.code.plan",
+	}
+	for m, want := range cases {
+		if got := m.ToRuntimeMode(); got != want {
+			t.Errorf("%q.ToRuntimeMode() = %q, want %q", string(m), got, want)
+		}
+	}
+}
+
+// TestIsNewCanonicalMode 验证新三段 canonical 集合判定（NEW_CANONICAL_MODES 9 项）
+func TestIsNewCanonicalMode(t *testing.T) {
+	valid := []string{
+		"agent.work.normal", "agent.work.plan", "agent.code.normal", "agent.code.plan",
+		"team.work.normal", "team.work.plan", "team.code.normal", "team.code.plan", "team.design",
+	}
+	for _, m := range valid {
+		if !IsNewCanonicalMode(m) {
+			t.Errorf("IsNewCanonicalMode(%q) = false, want true", m)
+		}
+	}
+	invalid := []string{"", "agent", "agent.plan", "code.normal", "team", "team.plan.normal", "unknown"}
+	for _, m := range invalid {
+		if IsNewCanonicalMode(m) {
+			t.Errorf("IsNewCanonicalMode(%q) = true, want false", m)
+		}
 	}
 }

@@ -153,6 +153,26 @@ func (m *SessionMap) GetSessionID(provider, chatID, botID, userID string, rotate
 	return sid
 }
 
+// SetSessionID 写入身份键对应的 agent session_id。
+//
+// Python: set_session_id (L157-175)：strip 后不允许空值；相同值幂等不写盘。
+func (m *SessionMap) SetSessionID(provider, chatID, botID, userID, sessionID string) error {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" {
+		return fmt.Errorf("session_id is required")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := makeKey(m.scope, provider, chatID, botID, userID)
+	if m.mapping[key] == sid {
+		return nil
+	}
+	m.mapping[key] = sid
+	m.save()
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newSessionMapAt 指定存储路径的构造（测试与 NewSessionMapAtForTest 共用）。

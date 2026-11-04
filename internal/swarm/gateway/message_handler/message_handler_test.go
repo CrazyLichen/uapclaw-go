@@ -290,6 +290,16 @@ func TestCancelAllStreamTasks(t *testing.T) {
 // ──────────────────────────── 非导出函数测试 ────────────────────────────
 
 // createTestMessageHandlerWithTransport 创建带 AgentClient 的测试 MessageHandler
+
+// testUserInfos 构造测试用回包身份（对齐生产 handleChannelControl 顶部构造）。
+func testUserInfos(msg *schema.Message) userInfos {
+	appID := msg.AppID
+	if appID == "" {
+		appID = msg.BotID
+	}
+	return userInfos{ID: msg.ID, MetaData: msg.Metadata, AppID: appID, BotID: msg.BotID}
+}
+
 func createTestMessageHandlerWithTransport() *MessageHandler {
 	transport := transport.NewChannelTransport()
 	agentClient := routing.NewAgentClient(transport)

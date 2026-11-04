@@ -37,21 +37,25 @@ func TestGetChannelDefaultState_读配置(t *testing.T) {
 				"default_session_id": "sid-from-config",
 				"default_mode":       "agent.code.normal",
 			},
+			"wecom_nosid": map[string]any{
+				"default_mode": "team.code.normal",
+			},
 		}}
 	}, func(string, map[string]any) {})
 
 	state := mh.getChannelDefaultState("feishu_test")
 	assert.Equal(t, "sid-from-config", state.SessionID)
-	assert.Equal(t, ChannelModeCodeNormal, state.Mode)
+	assert.Equal(t, ChannelModeAgentCodeNormal, state.Mode)
 
-	// 配置里无 default_session_id → 生成一个
-	state = mh.getChannelDefaultState("feishu_test")
-	assert.NotEmpty(t, state.SessionID)
+	// 配置里无 default_session_id → 返回空（0.2.5 起由 session.create 分配，不再本地生成）
+	state = mh.getChannelDefaultState("wecom_nosid")
+	assert.Empty(t, state.SessionID)
+	assert.Equal(t, ChannelModeTeamCodeNormal, state.Mode)
 
-	// 渠道不在配置中 → 走兜底
+	// 渠道不在配置中 → mode 兜底 "agent" → agent.work.normal，session 为空
 	state = mh.getChannelDefaultState("wecom_other")
-	assert.NotEmpty(t, state.SessionID)
-	assert.Equal(t, ChannelModeAgentWorkPlan, state.Mode)
+	assert.Empty(t, state.SessionID)
+	assert.Equal(t, ChannelModeAgentWorkNormal, state.Mode)
 }
 
 // TestSaveChannelStateToConfig 覆盖回调缺失/状态缺失/正常写回三条分支。
@@ -69,7 +73,7 @@ func TestSaveChannelStateToConfig(t *testing.T) {
 
 	// 状态存在 → 写回 default_session_id / default_mode
 	mh.statesMu.Lock()
-	mh.channelStates["feishu_test"] = &ChannelControlState{SessionID: "sid-1", Mode: ChannelModeCodePlan}
+	mh.channelStates["feishu_test"] = &ChannelControlState{SessionID: "sid-1", Mode: ChannelModeAgentCodePlan}
 	mh.statesMu.Unlock()
 	mh.saveChannelStateToConfig("feishu_test")
 	require.NotNil(t, gotUpdate)
@@ -77,9 +81,10 @@ func TestSaveChannelStateToConfig(t *testing.T) {
 	assert.Equal(t, "agent.code.plan", gotUpdate["default_mode"])
 }
 
-// TestChannelModeString_非法值 覆盖未知模式的兜底（对齐 ParseChannelMode 的 agent.plan 回落）。
-func TestChannelModeString_非法值(t *testing.T) {
-	assert.Equal(t, "agent.work.plan", ChannelModeString(ChannelMode(99)))
+// TestChannelModeFromStr_非法值 覆盖未知模式的兜底（对齐 channel_mode_from_str 的 AGENT 回落）。
+func TestChannelModeFromStr_非法值(t *testing.T) {
+	assert.Equal(t, ChannelModeAgent, channelModeFromStr("99"))
+	assert.Equal(t, "agent", string(channelModeFromStr("99")))
 }
 
 // TestGetGatewayHookHandlerForTest 覆盖 hook handler 只读访问器。

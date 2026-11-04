@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -16,6 +17,48 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// userInfos 控制指令回包所需的路由身份（Python: _handle_channel_control 顶部就地构造的 dict）。
+type userInfos struct {
+	// ID 消息 ID（Python user_infos['id'] = msg.id）
+	ID string
+	// MetaData 消息元数据（Python user_infos['meta_data'] = msg.metadata）
+	MetaData map[string]any
+	// AppID 应用标识（Python app_id or bot_id or ""）
+	AppID string
+	// BotID 机器人标识（Python bot_id or ""）
+	BotID string
+}
+
+// modeSwitchParams /mode 分发所需的具名参数（Python: handle_mode_switch 的关键字参数）。
+type modeSwitchParams struct {
+	// State 渠道控制状态（就地落定 mode）
+	State *ChannelControlState
+	// UserInfos 回包路由身份
+	UserInfos userInfos
+	// ChannelID 渠道标识
+	ChannelID string
+	// ReplySessionID 回包会话
+	ReplySessionID string
+	// Msg 入站消息（取消链路需要）
+	Msg *schema.Message
+}
+
+// modeChangeCancelParams mode 切换取消并发通知所需的具名参数。
+//
+// Python: ModeChangeCancelParams（message_handler.py:297-305）
+type modeChangeCancelParams struct {
+	// UserInfos 回包路由身份
+	UserInfos userInfos
+	// ChannelID 渠道标识
+	ChannelID string
+	// ReplySessionID 回包会话
+	ReplySessionID string
+	// OldSID 旧会话（用于取消）
+	OldSID string
+	// NewModeLabel 新模式标签
+	NewModeLabel string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -23,6 +66,26 @@ import (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// validModeInputs /mode 合法输入集合（25 项）。
+//
+// Python: _VALID_MODE_INPUTS = NEW_CANONICAL_MODES | DEPRECATION_MAP.keys() | MODE_ALIASES.keys()
+// （message_handler.py:99-101）。逐项列全，避免与上游漂移。
+var validModeInputs = map[string]bool{
+	// NEW_CANONICAL_MODES（9）
+	"agent.work.normal": true, "agent.work.plan": true,
+	"agent.code.normal": true, "agent.code.plan": true,
+	"team.work.normal": true, "team.work.plan": true,
+	"team.code.normal": true, "team.code.plan": true,
+	"team.design": true,
+	// DEPRECATION_MAP（10）
+	"agent": true, "agent.plan": true, "agent.fast": true,
+	"code": true, "code.normal": true, "code.plan": true, "code.team": true,
+	"team": true, "team.plan.normal": true, "team.plan.code": true,
+	// MODE_ALIASES（6）
+	"team.plan": true, "team.code": true, "team.work": true,
+	"team.normal": true, "agent.work": true, "agent.code": true,
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -41,6 +104,18 @@ import (
 // 分支的 asyncio.create_task）。forwardLoop 是唯一消费 goroutine，同步执行会让
 // /branch、/rewind、/skills 的 600s unary RPC 阻塞全渠道入站派发。
 func (mh *MessageHandler) handleChannelControl(ctx context.Context, msg *schema.Message) bool {
+	// Python: user_infos 在函数最顶部就地构造（L1987-1992）
+	appID := msg.AppID
+	if appID == "" {
+		appID = msg.BotID
+	}
+	infos := userInfos{
+		ID:       msg.ID,
+		MetaData: msg.Metadata,
+		AppID:    appID,
+		BotID:    msg.BotID,
+	}
+
 	// 仅处理请求消息
 	if msg.Type != schema.MessageTypeReq {
 		return false
@@ -81,7 +156,7 @@ func (mh *MessageHandler) handleChannelControl(ctx context.Context, msg *schema.
 	if parsed.Action == command_parser.ActionSkillsOK {
 		// Python: asyncio.create_task(_skills_slash_notice)
 		mh.runSlashAsync(ctx, "skills", func(ctx context.Context) {
-			mh.skillsSlashNotice(ctx, msg)
+			mh.skillsSlashNotice(ctx, infos, msg)
 		})
 		logControlHandled(msg, channelType, parsed)
 		return true
@@ -93,63 +168,122 @@ func (mh *MessageHandler) handleChannelControl(ctx context.Context, msg *schema.
 	// 按 action 分发
 	switch parsed.Action {
 	case command_parser.ActionNewSessionOK:
-		// 11.7+11.13：SessionMap 轮转 + state 更新 + SessionStart hook
-		// Python: L654-667（状态更新同步，收尾 create_task 甩子函数）
+		// Python: L2028-2060——先清空 session_id，再经 session.create 分配真实会话；
+		// 失败时回滚 session_id 并下发「创建新会话失败」，不转发给 Agent。
 		oldSID := state.SessionID
-		var newSID string
-		if p, c, b, u, ok := extractIdentityTuple(msg); ok && channelIDMatchesSessionMapTypes(msg.ChannelID) {
-			newSID = mh.sessionMap.GetSessionID(p, c, b, u, true) // rotate=true
-		} else {
-			newSID = GenerateChannelSessionID(string(channelType))
+		state.SessionID = ""
+		newSID, allocErr := mh.allocateChannelSession(ctx, msg, state, false)
+		if allocErr != nil {
+			state.SessionID = oldSID
+			logger.Error(logComponent).
+				Err(allocErr).
+				Str("channel_id", msg.ChannelID).
+				Str("msg_id", msg.ID).
+				Msg("create new session failed")
+			mh.runSlashAsync(ctx, "new_session_bad", func(context.Context) {
+				mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": "创建新会话失败，请稍后重试"})
+			})
+			logControlHandled(msg, channelType, parsed)
+			return true
 		}
-		state.SessionID = newSID
 		// 触发 SessionStart hook（fire-and-forget）
 		// Python: if self._gateway_hook_handler: asyncio.create_task(on_session_start(new_sid, source=channel_type))
 		mh.TriggerSessionStartHook(newSID, string(channelType))
 		// 收尾：异步取消旧会话 + 发变更通知（Python: create_task）
 		mh.runSlashAsync(ctx, "new_session", func(ctx context.Context) {
-			mh.newSessionCancelAndNotice(ctx, msg, oldSID, newSID)
+			mh.newSessionCancelAndNotice(ctx, infos, msg, oldSID, newSID)
 		})
 	case command_parser.ActionNewSessionBad:
 		mh.runSlashAsync(ctx, "new_session_bad", func(context.Context) {
-			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+			mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, "非法指令")
 		})
 	case command_parser.ActionModeOK:
-		mh.runSlashAsync(ctx, "mode", func(ctx context.Context) {
-			mh.modeChangeCancelAndNotice(ctx, msg, parsed)
+		// Python: return self.handle_mode_switch(...)（同步就地落定状态）
+		mh.handleModeSwitch(ctx, parsed.ModeSubcommand, modeSwitchParams{
+			State:          state,
+			UserInfos:      infos,
+			ChannelID:      msg.ChannelID,
+			ReplySessionID: msg.SessionID,
+			Msg:            msg,
 		})
 	case command_parser.ActionModeBad:
 		mh.runSlashAsync(ctx, "mode_bad", func(context.Context) {
-			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+			mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, "非法指令")
 		})
 	case command_parser.ActionSwitchOK:
-		mh.runSlashAsync(ctx, "switch", func(ctx context.Context) {
-			mh.modeChangeCancelAndNotice(ctx, msg, parsed)
-		})
+		// Python: SWITCH_OK 内联在 _handle_channel_control（L2163-2210）
+		var targetMode ChannelMode
+		switch parsed.SwitchSubcommand {
+		case "plan":
+			// agent 下 plan / fast 已合并：/switch plan 保持 agent.work.normal
+			if agentWorkModes[string(state.Mode)] {
+				targetMode = ChannelModeAgentWorkNormal
+			} else if codeModes[string(state.Mode)] {
+				targetMode = ChannelModeAgentCodePlan
+			}
+		case "fast":
+			if agentWorkModes[string(state.Mode)] {
+				targetMode = ChannelModeAgentWorkNormal
+			}
+		case "normal":
+			if codeModes[string(state.Mode)] {
+				targetMode = ChannelModeAgentCodeNormal
+			}
+		case "team":
+			if codeModes[string(state.Mode)] {
+				targetMode = ChannelModeTeamCodeNormal
+			}
+		}
+		if targetMode == "" {
+			mh.runSlashAsync(ctx, "switch_bad", func(context.Context) {
+				mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, "非法指令")
+			})
+			logControlHandled(msg, channelType, parsed)
+			return true
+		}
+		prevMode := state.Mode
+		prevSID := state.SessionID
+		state.Mode = targetMode
+		label := string(state.Mode)
+		if prevMode != state.Mode {
+			mh.runSlashAsync(ctx, "switch", func(ctx context.Context) {
+				mh.modeChangeCancelAndNotice(ctx, modeChangeCancelParams{
+					UserInfos:      infos,
+					ChannelID:      msg.ChannelID,
+					ReplySessionID: msg.SessionID,
+					OldSID:         prevSID,
+					NewModeLabel:   label,
+				}, msg)
+			})
+		} else {
+			mh.runSlashAsync(ctx, "switch_noop", func(context.Context) {
+				mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, buildModeChangeNoticeText(label))
+			})
+		}
 	case command_parser.ActionSwitchBad:
 		mh.runSlashAsync(ctx, "switch_bad", func(context.Context) {
-			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+			mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, "非法指令")
 		})
 	case command_parser.ActionBranchOK:
 		mh.runSlashAsync(ctx, "branch", func(ctx context.Context) {
-			mh.branchSlashNotice(ctx, msg, parsed)
+			mh.branchSlashNotice(ctx, infos, msg, parsed)
 		})
 	case command_parser.ActionRewindOK:
 		// 单纯发确认提示（无 RPC），Python 侧同为 create_task，保持一致
 		mh.runSlashAsync(ctx, "rewind_confirm_prompt", func(context.Context) {
-			mh.rewindSlashConfirmPrompt(msg, parsed)
+			mh.rewindSlashConfirmPrompt(infos, msg, parsed)
 		})
 	case command_parser.ActionRewindBad:
 		mh.runSlashAsync(ctx, "rewind_bad", func(context.Context) {
-			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令，/rewind 须带正整数轮次编号，如 /rewind 2"})
+			mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, "非法指令，/rewind 须带正整数轮次编号，如 /rewind 2")
 		})
 	case command_parser.ActionRewindConfirm:
 		mh.runSlashAsync(ctx, "rewind", func(ctx context.Context) {
-			mh.rewindSlashNotice(ctx, msg, parsed)
+			mh.rewindSlashNotice(ctx, infos, msg, parsed)
 		})
 	case command_parser.ActionRewindCancel:
 		mh.runSlashAsync(ctx, "rewind_cancel", func(context.Context) {
-			mh.sendChannelNotice(msg, map[string]any{"content": "[收到 /rewind cancel] 已取消回退操作。"})
+			mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, "[收到 /rewind cancel] 已取消回退操作。")
 		})
 	default:
 		return false
@@ -161,115 +295,83 @@ func (mh *MessageHandler) handleChannelControl(ctx context.Context, msg *schema.
 
 // newSessionCancelAndNotice /new_session 收尾：取消旧会话 + 发变更通知。
 //
-// Python: _new_session_cancel_and_notice (L575-591)：await 先取消完再发通知。
-// M-05: Go 原实现 go 异步导致取消未完成通知先到（顺序丢失），改同步对齐。
-// 状态更新（SessionMap 轮转/state.SessionID/hook）已上提至 handleChannelControl（D5 对齐）。
-func (mh *MessageHandler) newSessionCancelAndNotice(ctx context.Context, msg *schema.Message, oldSID, newSID string) {
+// Python: _new_session_cancel_and_notice (L1862-1878)：先取消再通知。
+// 状态更新（session.create 分配/hook）已上提至 handleChannelControl（对齐 L2028-2060）。
+func (mh *MessageHandler) newSessionCancelAndNotice(ctx context.Context, infos userInfos, msg *schema.Message, oldSID, newSID string) {
 	// 取消旧会话（静默模式：publishInterruptResult=false）
 	if oldSID != "" {
 		mh.CancelAgentWorkForSession(ctx, msg, oldSID, false)
 	}
 
-	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], session_id 已变更为 %s", newSID)})
+	mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID,
+		fmt.Sprintf("[收到 CLI 指令], session_id 已变更为 %s", newSID))
 }
 
-// modeChangeCancelAndNotice 处理 /mode 和 /switch 命令。
+// handleModeSwitch 校验并应用 /mode 指令切换运行模式。
 //
-// Python: _mode_change_cancel_and_notice (L593-613)：
-// 先取消当前会话任务（publishInterruptResult=false），再下发 mode 已变更提示。
-func (mh *MessageHandler) modeChangeCancelAndNotice(ctx context.Context, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
-	// 提前获取渠道状态（/switch 需要读取当前 mode）
-	state := mh.GetOrCreateChannelState(msg)
-
-	// 确定新模式
-	var newMode ChannelMode
-	switch parsed.Action {
-	case command_parser.ActionModeOK:
-		// S-01: 对齐 Python L715-730 的 8 路一级映射。
-		// 原实现直接 ParseChannelMode(mode_subcommand)，但 "agent"/"code"/"team"
-		// 三个一级值不在 ParseChannelMode 词表内会回落 AgentPlan，导致
-		// /mode code 误映射 AGENT_PLAN、/mode team 误映射 AGENT_PLAN。
-		switch parsed.ModeSubcommand {
-		case "agent":
-			newMode = ChannelModeAgentWorkPlan
-		case "code":
-			newMode = ChannelModeCodeNormal
-		case "team":
-			newMode = ChannelModeTeam
-		default:
-			// 二级值（agent.plan/agent.fast/code.plan/code.normal/code.team）
-			newMode = ParseChannelMode(parsed.ModeSubcommand)
-		}
-	case command_parser.ActionSwitchOK:
-		// Python: 根据当前 state.Mode 判断模式家族，再决定目标模式
-		currentMode := state.Mode
-		switch parsed.SwitchSubcommand {
-		case "plan":
-			switch currentMode {
-			case ChannelModeAgentWorkPlan, ChannelModeAgentWorkNormal:
-				newMode = ChannelModeAgentWorkPlan
-			case ChannelModeCodePlan, ChannelModeCodeNormal, ChannelModeCodeTeam:
-				newMode = ChannelModeCodePlan
-			default:
-				// 当前模式不在任何支持 /switch plan 的家族中，发送"非法指令"通知
-				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
-				return
-			}
-		case "fast":
-			switch currentMode {
-			case ChannelModeAgentWorkPlan, ChannelModeAgentWorkNormal:
-				newMode = ChannelModeAgentWorkNormal
-			default:
-				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
-				return
-			}
-		case "normal":
-			switch currentMode {
-			case ChannelModeCodePlan, ChannelModeCodeNormal, ChannelModeCodeTeam:
-				newMode = ChannelModeCodeNormal
-			default:
-				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
-				return
-			}
-		case "team":
-			switch currentMode {
-			case ChannelModeCodePlan, ChannelModeCodeNormal, ChannelModeCodeTeam:
-				newMode = ChannelModeCodeTeam
-			default:
-				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
-				return
-			}
-		default:
-			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
-			return
-		}
-	default:
+// Python: handle_mode_switch (L1902-1982)，步骤逐条对齐：
+//  1. 白名单校验（_VALID_MODE_INPUTS，25 项）：未命中 → Warn + 「非法指令」+ 返回
+//  2. 记录旧状态 → state.mode = channel_mode_from_str(mode_str)
+//  3. Info 日志（channel、old→new、old_sid）
+//  4. 状态变化 → 取消旧会话 + 变更通知；未变化 → 仅变更通知
+func (mh *MessageHandler) handleModeSwitch(ctx context.Context, modeStr string, params modeSwitchParams) {
+	raw := strings.TrimSpace(strings.ToLower(modeStr))
+	if !isValidModeInput(raw) {
+		logger.Warn(logComponent).
+			Str("mode_str", modeStr).
+			Str("channel_id", params.ChannelID).
+			Str("session_id", params.ReplySessionID).
+			Msg("handle_mode_switch: invalid directive")
+		mh.sendChannelNotice(params.UserInfos, params.ChannelID, params.ReplySessionID, "非法指令")
 		return
 	}
-
-	// 更新渠道状态
-	oldMode := state.Mode
-	oldSID := state.SessionID
-	state.Mode = newMode
-
-	modeLabel := ChannelModeString(newMode)
-
-	if oldMode != newMode {
-		// 模式确实变更：先取消当前会话任务（静默模式）
-		// M-01: 对齐 Python L734-743——_mode_change_cancel_and_notice 内部
-		// 无 hasActiveStreamTaskForSession 守卫，只要 old_sid 非空就取消
-		// （AgentServer 侧可能有网关不可见的派发工作）。
-		// M-05: Python 为 await 同步调用（先取消完再发通知）；Go 原实现 go 异步
-		// 导致取消未完成通知先到。CancelAgentWorkForSession 内部 SendRequest
-		// 有超时不会永久阻塞 forwardLoop。
-		if oldSID != "" {
-			mh.CancelAgentWorkForSession(ctx, msg, oldSID, false)
-		}
-		mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel)})
-	} else {
-		// 模式未变更：仅通知
-		mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel)})
+	oldMode := params.State.Mode
+	oldSID := params.State.SessionID
+	params.State.Mode = channelModeFromStr(modeStr)
+	newLabel := string(params.State.Mode)
+	logger.Info(logComponent).
+		Str("channel_id", params.ChannelID).
+		Str("mode_str", modeStr).
+		Str("new_mode", newLabel).
+		Str("old_sid", oldSID).
+		Msg("handle_mode_switch: mode switched")
+	if oldMode != params.State.Mode {
+		mh.runSlashAsync(ctx, "mode", func(ctx context.Context) {
+			mh.modeChangeCancelAndNotice(ctx, modeChangeCancelParams{
+				UserInfos:      params.UserInfos,
+				ChannelID:      params.ChannelID,
+				ReplySessionID: params.ReplySessionID,
+				OldSID:         oldSID,
+				NewModeLabel:   newLabel,
+			}, params.Msg)
+		})
+		return
 	}
+	mh.runSlashAsync(ctx, "mode_noop", func(context.Context) {
+		mh.sendChannelNotice(params.UserInfos, params.ChannelID, params.ReplySessionID,
+			buildModeChangeNoticeText(newLabel))
+	})
+}
+
+// modeChangeCancelAndNotice 取消当前会话任务并下发 mode 变更提示。
+//
+// Python: _mode_change_cancel_and_notice (L1880-1896)：
+// 先取消当前会话任务（publishInterruptResult=false），再下发 mode 已变更提示。
+func (mh *MessageHandler) modeChangeCancelAndNotice(ctx context.Context, params modeChangeCancelParams, msg *schema.Message) {
+	// M-01: Python 无 hasActiveStreamTaskForSession 守卫，只要 old_sid 非空就取消
+	// （AgentServer 侧可能有网关不可见的派发工作）。
+	if params.OldSID != "" {
+		mh.CancelAgentWorkForSession(ctx, msg, params.OldSID, false)
+	}
+	mh.sendChannelNotice(params.UserInfos, params.ChannelID, params.ReplySessionID,
+		buildModeChangeNoticeText(params.NewModeLabel))
+}
+
+// buildModeChangeNoticeText 构造 mode 变更提示文案。
+//
+// Python: _build_mode_change_notice_text (L1898-1900)
+func buildModeChangeNoticeText(modeLabel string) string {
+	return fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel)
 }
 
 // logControlHandled 记录 channel_control_handled 兼容事件。
@@ -292,35 +394,55 @@ func logControlHandled(msg *schema.Message, channelType channel_manager.ChannelT
 // Python: _send_channel_notice (L347-379)：
 // event_type 为 CHAT_FINAL，payload 确保补齐 is_complete: true。
 // 传 string 时调用方应包装为 {"content": text}，此处仅接受 map[string]any。
-func (mh *MessageHandler) sendChannelNotice(msg *schema.Message, payload map[string]any) {
-	// 确保 is_complete 字段存在
+func (mh *MessageHandler) sendChannelNotice(infos userInfos, channelID, sessionID string, textOrPayload any) {
+	// Python: str → {"content": text, "is_complete": True}；dict → 副本 + setdefault
+	var payload map[string]any
+	switch v := textOrPayload.(type) {
+	case map[string]any:
+		payload = make(map[string]any, len(v)+1)
+		for k, val := range v {
+			payload[k] = val
+		}
+	case string:
+		payload = map[string]any{"content": v}
+	default:
+		payload = map[string]any{"content": fmt.Sprint(v)}
+	}
 	if _, has := payload["is_complete"]; !has {
 		payload["is_complete"] = true
 	}
 
 	noticeMsg := &schema.Message{
-		ID:              msg.ID,
+		ID:              infos.ID,
 		Type:            schema.MessageTypeEvent,
-		ChannelID:       msg.ChannelID,
-		SessionID:       msg.SessionID,
+		ChannelID:       channelID,
+		SessionID:       sessionID,
 		Params:          json.RawMessage(`{}`),
 		Timestamp:       schema.NowTimestamp(),
 		OK:              true,
 		EventType:       schema.EventTypeChatFinal,
 		Payload:         payload,
-		Metadata:        msg.Metadata,
+		Metadata:        infos.MetaData,
+		AppID:           infos.AppID,
 		EnableStreaming: true,
 	}
 	mh.PublishRobotMessages(noticeMsg)
+}
+
+// isValidModeInput 判断 /mode 入参是否在白名单内。
+//
+// Python: `if mode_str not in _VALID_MODE_INPUTS`（message_handler.py:1931）
+func isValidModeInput(modeStr string) bool {
+	return validModeInputs[modeStr]
 }
 
 // skillsSlashNotice 处理 /skills list 命令。
 //
 // Python: _skills_slash_notice (L885-937)：
 // 构造 SKILLS_LIST E2A → AgentClient.SendRequest → 格式化通知。
-func (mh *MessageHandler) skillsSlashNotice(ctx context.Context, msg *schema.Message) {
+func (mh *MessageHandler) skillsSlashNotice(ctx context.Context, infos userInfos, msg *schema.Message) {
 	if mh.agentClient == nil || !mh.agentClient.IsConnected() {
-		mh.sendChannelNotice(msg, map[string]any{"error": "获取技能列表失败：AgentClient 未连接"})
+		mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": "获取技能列表失败：AgentClient 未连接"})
 		return
 	}
 
@@ -353,7 +475,7 @@ func (mh *MessageHandler) skillsSlashNotice(ctx context.Context, msg *schema.Mes
 			Str("event_type", "skills_slash_error").
 			Err(err).
 			Msg("/skills list request failed")
-		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("获取技能列表失败：%v", err)})
+		mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": fmt.Sprintf("获取技能列表失败：%v", err)})
 		return
 	}
 
@@ -367,7 +489,7 @@ func (mh *MessageHandler) skillsSlashNotice(ctx context.Context, msg *schema.Mes
 		} else {
 			noticePayload = map[string]any{"data": nil}
 		}
-		mh.sendChannelNotice(msg, noticePayload)
+		mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, noticePayload)
 	} else {
 		errMsg := ""
 		if resp.Payload != nil {
@@ -376,9 +498,9 @@ func (mh *MessageHandler) skillsSlashNotice(ctx context.Context, msg *schema.Mes
 			}
 		}
 		if errMsg != "" {
-			mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("获取技能列表失败: %s", errMsg)})
+			mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": fmt.Sprintf("获取技能列表失败: %s", errMsg)})
 		} else {
-			mh.sendChannelNotice(msg, map[string]any{"error": "获取技能列表失败"})
+			mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": "获取技能列表失败"})
 		}
 	}
 }
@@ -387,11 +509,11 @@ func (mh *MessageHandler) skillsSlashNotice(ctx context.Context, msg *schema.Mes
 //
 // Python: _branch_slash_notice (L939-1015)：
 // 构造 SESSION_FORK E2A → AgentClient.SendRequest → 格式化通知。
-func (mh *MessageHandler) branchSlashNotice(ctx context.Context, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
+func (mh *MessageHandler) branchSlashNotice(ctx context.Context, infos userInfos, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	state := mh.GetOrCreateChannelState(msg)
 	sourceSID := state.SessionID
 	if sourceSID == "" {
-		mh.sendChannelNotice(msg, map[string]any{"error": "当前无活跃会话，无法分叉"})
+		mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": "当前无活跃会话，无法分叉"})
 		return
 	}
 
@@ -402,7 +524,7 @@ func (mh *MessageHandler) branchSlashNotice(ctx context.Context, msg *schema.Mes
 	branchName := parsed.BranchName
 
 	if mh.agentClient == nil || !mh.agentClient.IsConnected() {
-		mh.sendChannelNotice(msg, map[string]any{"error": "分叉失败：AgentClient 未连接"})
+		mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": "分叉失败：AgentClient 未连接"})
 		return
 	}
 
@@ -432,7 +554,7 @@ func (mh *MessageHandler) branchSlashNotice(ctx context.Context, msg *schema.Mes
 			Str("event_type", "branch_slash_error").
 			Err(err).
 			Msg("/branch request failed")
-		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("分叉失败：%v", err)})
+		mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": fmt.Sprintf("分叉失败：%v", err)})
 		return
 	}
 
@@ -448,7 +570,7 @@ func (mh *MessageHandler) branchSlashNotice(ctx context.Context, msg *schema.Mes
 			Str("event_type", "branch_slash_rejected").
 			Str("session_id", sourceSID).
 			Msgf("/branch rejected: %s", errMsg)
-		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("分叉失败：%s", errMsg)})
+		mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": fmt.Sprintf("分叉失败：%s", errMsg)})
 		return
 	}
 
@@ -487,14 +609,14 @@ func (mh *MessageHandler) branchSlashNotice(ctx context.Context, msg *schema.Mes
 		Str("title", forkTitle).
 		Msg("/branch completed")
 
-	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /branch 指令] 已分叉会话「%s」，当前已切换到新会话。", displayTitle)})
+	mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, fmt.Sprintf("[收到 /branch 指令] 已分叉会话「%s」，当前已切换到新会话。", displayTitle))
 }
 
 // rewindSlashConfirmPrompt 发送 /rewind 确认提示。
 //
 // Python: _rewind_slash_confirm_prompt (L1017-1045)：
 // 两步确认：先发送确认提示，不立即执行。
-func (mh *MessageHandler) rewindSlashConfirmPrompt(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
+func (mh *MessageHandler) rewindSlashConfirmPrompt(infos userInfos, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	turn := parsed.RewindTurn
 	if turn == 0 {
 		turn = 1
@@ -507,7 +629,7 @@ func (mh *MessageHandler) rewindSlashConfirmPrompt(msg *schema.Message, parsed c
 			"请回复 /rewind confirm %d 确认，或 /rewind cancel 取消。\n"+
 			"注意：回退不影响手动编辑的文件或通过 bash 执行的命令。",
 		turn, turn, turn, turn)
-	mh.sendChannelNotice(msg, map[string]any{"content": content})
+	mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, content)
 }
 
 // rewindSlashNotice 处理 /rewind 命令（用户已确认）。
@@ -516,11 +638,11 @@ func (mh *MessageHandler) rewindSlashConfirmPrompt(msg *schema.Message, parsed c
 // E2A-first + fallback：构造 SESSION_REWIND E2A → AgentClient.SendRequest；
 // 失败/错误时 fallback 本地 sessionops.RewindSession 截断 history.json，
 // 通知带「（注意：上下文未同步截断）」。
-func (mh *MessageHandler) rewindSlashNotice(ctx context.Context, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
+func (mh *MessageHandler) rewindSlashNotice(ctx context.Context, infos userInfos, msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	state := mh.GetOrCreateChannelState(msg)
 	targetSID := state.SessionID
 	if targetSID == "" {
-		mh.sendChannelNotice(msg, map[string]any{"error": "当前无活跃会话，无法回退"})
+		mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": "当前无活跃会话，无法回退"})
 		return
 	}
 
@@ -581,7 +703,7 @@ func (mh *MessageHandler) rewindSlashNotice(ctx context.Context, msg *schema.Mes
 				Int("turn_index", turn).
 				Bool("rewind_context", rewindContext).
 				Msg("/rewind completed via E2A")
-			mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。", turn, preview, removed, remaining)})
+			mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, fmt.Sprintf("[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。", turn, preview, removed, remaining))
 			return
 		} else {
 			// AgentServer 返回错误 — fall through to local fallback
@@ -598,7 +720,7 @@ func (mh *MessageHandler) rewindSlashNotice(ctx context.Context, msg *schema.Mes
 		TurnIndex: turn,
 	})
 	if err != nil {
-		mh.sendChannelNotice(msg, map[string]any{"error": fmt.Sprintf("回退失败：%v", err)})
+		mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"error": fmt.Sprintf("回退失败：%v", err)})
 		return
 	}
 	// A5: Python L1117 只取 result["content_preview"]，无兜底。
@@ -612,7 +734,7 @@ func (mh *MessageHandler) rewindSlashNotice(ctx context.Context, msg *schema.Mes
 		Int("remaining_records", result.RemainingRecords).
 		Int("removed_records", result.RemovedRecords).
 		Msg("/rewind completed via local fallback")
-	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf(
+	mh.sendChannelNotice(infos, msg.ChannelID, msg.SessionID, map[string]any{"content": fmt.Sprintf(
 		"[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。（注意：上下文未同步截断）",
 		turn, preview, result.RemovedRecords, result.RemainingRecords)})
 }

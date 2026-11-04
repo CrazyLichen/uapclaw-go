@@ -27,6 +27,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
@@ -585,3 +586,174 @@ func (s *CliRouteFullChainSuite) TestMemoryListFullChain() {
 	}
 	req.True(found, "files 应包含 %s", target)
 }
+
+// ──────────────────────────── mode 缺省语义对齐用例（24.13）────────────────────────────
+
+// testChannelID mode 对齐用例统一使用的渠道标识（控制状态复合键依赖它）。
+const testChannelID = "feishu_itest_mode"
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// TestIMChannelDefaultMode IM 渠道入站不带 mode 时，缺省档必须是 agent（normal）。
+//
+// 修复前：getChannelDefaultState 缺省 agent.work.plan → params.mode=plan →
+// AgentServer 会话被置 plan → AgentModeRail 白名单拒绝工具（本次 P0 的直接证据）。
+func (s *CliRouteFullChainSuite) TestIMChannelDefaultMode() {
+	s.resetModeRecorder()
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("IM 缺省 mode 响应"))
+
+	msg := schema.NewReqMessage(testChannelID, "", schema.ReqMethodChatSend,
+		json.RawMessage(`{"query":"你好"}`), schema.WithProvider("feishu"))
+	s.Require().NoError(s.inboundServer.HandleMessage(s.Ctx, msg))
+
+	s.waitModeCount(1)
+	// 断言①：工厂收到 manager mode=agent（不是 code、更不是 plan）
+	s.Equal("agent/", s.lastRecordedMode(), "IM 缺省轮次的 manager mode 应为 agent")
+	// 断言②：会话元数据里的 canonical mode 不是 plan
+	s.NotEqual("agent.work.plan", s.sessionModeOf(msg), "缺省 mode 不得落到 plan")
+}
+
+// TestModeSlashAgent /mode agent 归一为 agent.work.normal（0.2.5 plan/fast 合并语义）。
+func (s *CliRouteFullChainSuite) TestModeSlashAgent() {
+	s.settleModeRecorder()
+	s.resetModeRecorder()
+
+	s.sendFeishuControl("/mode agent", "req-mode-agent")
+
+	s.Eventually(func() bool {
+		return s.channelModeOf() == "agent.work.normal"
+	}, 5*time.Second, 20*time.Millisecond, "/mode agent 应落 agent.work.normal，实际 %s", s.channelModeOf())
+	// 断言②：控制指令被消费，不产生工厂调用
+	s.Equal(0, s.modeCount(), "控制指令不应转发给 AgentServer")
+}
+
+// TestSwitchPlanSemantics agent 族 plan/fast 已合并：/switch plan 保持 normal；
+// 当前已是 plan 时退回 normal（上游 _SWITCH_AGENT_WORK_MODES 同时含两值的直接结果）。
+func (s *CliRouteFullChainSuite) TestSwitchPlanSemantics() {
+	s.settleModeRecorder()
+	s.resetModeRecorder()
+
+	// ① 显式入口 /mode agent.work.plan 进入 plan
+	s.sendFeishuControl("/mode agent.work.plan", "req-mode-plan")
+	s.Eventually(func() bool {
+		return s.channelModeOf() == "agent.work.plan"
+	}, 5*time.Second, 20*time.Millisecond, "/mode agent.work.plan 应落 plan")
+
+	// ② plan 态 /switch plan 退回 normal
+	s.sendFeishuControl("/switch plan", "req-switch-plan")
+	s.Eventually(func() bool {
+		return s.channelModeOf() == "agent.work.normal"
+	}, 5*time.Second, 20*time.Millisecond, "plan 态 /switch plan 应退回 normal")
+
+	// ③ normal 态 /switch plan 为 no-op（仍 normal）
+	s.sendFeishuControl("/switch plan", "req-switch-plan-2")
+	s.Never(func() bool {
+		return s.channelModeOf() != "agent.work.normal"
+	}, 300*time.Millisecond, 20*time.Millisecond, "normal 态 /switch plan 应保持 normal")
+	s.Equal(0, s.modeCount(), "控制指令不应转发给 AgentServer")
+}
+
+// TestModeWhitelist /mode 白名单 25 项生效：team.work.normal 接受，未知名拒绝且不改状态。
+func (s *CliRouteFullChainSuite) TestModeWhitelist() {
+	s.settleModeRecorder()
+	s.resetModeRecorder()
+
+	s.sendFeishuControl("/mode team.work.normal", "req-mode-team")
+	s.Eventually(func() bool {
+		return s.channelModeOf() == "team.work.normal"
+	}, 5*time.Second, 20*time.Millisecond, "/mode team.work.normal 应被白名单接受")
+
+	s.sendFeishuControl("/mode nonsense", "req-mode-bad")
+	s.Never(func() bool {
+		return s.channelModeOf() != "team.work.normal"
+	}, 300*time.Millisecond, 20*time.Millisecond, "非法 /mode 不应改变状态")
+	s.Equal(0, s.modeCount(), "控制指令不应转发给 AgentServer")
+}
+
+// TestUnknownTeamModeRejected mode 以 team 开头但不是已知 Team 模式的 chat.send
+// 必须回 chat.error 且不转发（上游 issue #4168：否则客户端永久等待）。
+func (s *CliRouteFullChainSuite) TestUnknownTeamModeRejected() {
+	s.settleModeRecorder()
+	s.resetModeRecorder()
+
+	msg := schema.NewReqMessage(testChannelID, "", schema.ReqMethodChatSend,
+		json.RawMessage(`{"query":"hi","mode":"team.nonsense"}`), schema.WithProvider("feishu"))
+	s.Require().NoError(s.inboundServer.HandleMessage(s.Ctx, msg))
+
+	// 断言①：不进入转发链路（工厂零记录）
+	s.Never(func() bool { return s.modeCount() > 0 },
+		500*time.Millisecond, 20*time.Millisecond, "未知 team.* 不应转发给 AgentServer")
+	// 断言②：不分配会话、不写会话元数据
+	s.Empty(s.sessionModeOf(msg), "被拒绝的请求不应写入会话元数据")
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resetModeRecorder 清空工厂 mode 记录（每用例独立）。
+func (s *CliRouteFullChainSuite) resetModeRecorder() {
+	s.modeRecorder.mu.Lock()
+	s.modeRecorder.modes = nil
+	s.modeRecorder.mu.Unlock()
+}
+
+// settleModeRecorder 等待在途轮次收敛（记录数 300ms 内不再变化）。
+func (s *CliRouteFullChainSuite) settleModeRecorder() {
+	prev := -1
+	for i := 0; i < 100; i++ {
+		cur := s.modeCount()
+		if cur == prev {
+			return
+		}
+		prev = cur
+		time.Sleep(30 * time.Millisecond)
+	}
+}
+
+// waitModeCount 等待工厂 mode 记录达到 n 条（异步 forward loop 收敛点）。
+func (s *CliRouteFullChainSuite) waitModeCount(n int) {
+	s.Eventually(func() bool {
+		return s.modeCount() >= n
+	}, 15*time.Second, 20*time.Millisecond, "等待第 %d 次工厂调用超时（实际 %d）", n, s.modeCount())
+}
+
+// modeCount 返回工厂 mode 记录条数。
+func (s *CliRouteFullChainSuite) modeCount() int {
+	s.modeRecorder.mu.Lock()
+	defer s.modeRecorder.mu.Unlock()
+	return len(s.modeRecorder.modes)
+}
+
+// sendFeishuChat 经入站网关投递一条 IM 普通对话（触发 AgentServer 建实例）。
+func (s *CliRouteFullChainSuite) sendFeishuChat(reqID string) {
+	msg := schema.NewReqMessage(testChannelID, "", schema.ReqMethodChatSend,
+		json.RawMessage(`{"query":"hi"}`), schema.WithProvider("feishu"))
+	s.Require().NoError(s.inboundServer.HandleMessage(s.Ctx, msg))
+}
+
+// sendFeishuControl 经入站网关投递一条 IM 控制指令。
+func (s *CliRouteFullChainSuite) sendFeishuControl(text, reqID string) {
+	// 同时给 content/query：入站归一可能只保留 query，而控制指令文本取二者之一
+	payload, _ := json.Marshal(map[string]any{"content": text, "query": text})
+	msg := schema.NewReqMessage(testChannelID, "", schema.ReqMethodChatSend,
+		payload, schema.WithProvider("feishu"))
+	s.Require().NoError(s.inboundServer.HandleMessage(s.Ctx, msg))
+}
+
+// channelModeOf 读取 feishu 渠道当前控制状态里的 mode（复合键 feishu:""）。
+func (s *CliRouteFullChainSuite) channelModeOf() string {
+	probe := schema.NewReqMessage(testChannelID, "", schema.ReqMethodChatSend,
+		json.RawMessage(`{}`), schema.WithProvider("feishu"))
+	return string(s.msgHandler.GetOrCreateChannelState(probe).Mode)
+}
+
+// sessionModeOf 读取会话元数据里的 mode（未落盘时返回空串）。
+func (s *CliRouteFullChainSuite) sessionModeOf(msg *schema.Message) string {
+	if msg.SessionID == "" {
+		return ""
+	}
+	meta := session.GetSessionMetadata(msg.SessionID)
+	mode, _ := meta["mode"].(string)
+	return mode
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

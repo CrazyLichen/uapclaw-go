@@ -56,6 +56,30 @@ const (
 	ModeCodeNormal Mode = "agent.code.normal"
 	// ModeCodeTeam code 团队模式（权威值 team.code.normal）
 	ModeCodeTeam Mode = "team.code.normal"
+
+	// ─── legacy 成员（对齐 Python Mode 的历史成员，值即旧 canonical） ───
+	//
+	// Python: openjiuwen_protocol.message.Mode 保留 AGENT/AGENT_PLAN/AGENT_FAST 等
+	// 历史成员以兼容旧持久化反解析；`from_raw` 会经 DEPRECATION_MAP 折叠到新
+	// canonical，故这些值只能由"直接构造"产生（如 ACP 入站 `Mode.AGENT`）。
+	// 本仓 ModeFromRaw 同样先 CanonicalizeMode，因此 legacy 成员不会被解析产出。
+
+	// ModeAgent 代理模式（legacy，值 agent）
+	ModeAgent Mode = "agent"
+	// ModeAgentPlan 代理规划模式（legacy，值 agent.plan）
+	ModeAgentPlan Mode = "agent.plan"
+	// ModeAgentFast 代理快速模式（legacy，值 agent.fast）
+	ModeAgentFast Mode = "agent.fast"
+	// ModeCodePlanLegacy code 规划（legacy，值 code.plan）
+	ModeCodePlanLegacy Mode = "code.plan"
+	// ModeCodeNormalLegacy code 常态（legacy，值 code.normal）
+	ModeCodeNormalLegacy Mode = "code.normal"
+	// ModeCodeTeamLegacy code 团队（legacy，值 code.team）
+	ModeCodeTeamLegacy Mode = "code.team"
+	// ModeTeamPlanNormal 团队规划（legacy，值 team.plan.normal）
+	ModeTeamPlanNormal Mode = "team.plan.normal"
+	// ModeTeamPlanCode 团队代码规划（legacy，值 team.plan.code）
+	ModeTeamPlanCode Mode = "team.plan.code"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -77,7 +101,22 @@ var newCanonicalModeSegments = map[string][3]string{
 	"team.design":       {"team", "design", "normal"},
 }
 
-// modeLookup 字符串值到 Mode 枚举的查找表，用于 ParseMode/IsValidMode 的 O(1) 查找。
+// runtimeModeLegacyCollapse legacy 成员 → 运行时串的折叠表。
+//
+// 契约来自上游单测 tests/unit_tests/evolution/test_message.py:136-158：
+// `agent.plan`/`agent.fast` 的运行时串都是 "agent"（0.2.5 起 plan/fast 与 agent 合并），
+// 其余 legacy 成员原样返回，新三段 canonical 原样返回。
+var runtimeModeLegacyCollapse = map[Mode]string{
+	ModeAgentPlan:        "agent",
+	ModeAgentFast:        "agent",
+	ModeTeamPlanNormal:   "team.plan.normal",
+	ModeTeamPlanCode:     "team.plan.code",
+	ModeCodePlanLegacy:   "code.plan",
+	ModeCodeNormalLegacy: "code.normal",
+	ModeCodeTeamLegacy:   "code.team",
+}
+
+// modeLookup 字符串值到 Mode 枚举的查找表，用于 ModeFromRaw/IsValidMode 的 O(1) 查找。
 var modeLookup map[string]Mode
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -269,7 +308,7 @@ var deprecatedModes = map[string]string{
 	"code.plan":        "agent.code.plan",
 	"code.team":        "team.code.normal",
 	"team":             "team.work.normal",
-	"team.plan.normal": "team.work.normal",
+	"team.plan.normal": "team.work.plan",
 	"team.plan.code":   "team.code.plan",
 }
 
@@ -353,15 +392,34 @@ func AllModes() []Mode {
 		ModeTeamDesign,
 		// 裸 team（历史形式，仍作为合法值保留）
 		ModeTeam,
+		// legacy 成员（对齐 Python Mode 历史成员；解析路径不可达，仅供直接构造）
+		ModeAgent,
+		ModeAgentPlan,
+		ModeAgentFast,
+		ModeCodePlanLegacy,
+		ModeCodeNormalLegacy,
+		ModeCodeTeamLegacy,
+		ModeTeamPlanNormal,
+		ModeTeamPlanCode,
 	}
 }
 
-// ParseMode 从字符串解析 Mode，非法值回退到 default。
-// Python: Mode.from_raw(raw_mode, default) 语义：
-// 先对输入做 strip + lower 标准化，再查找合法值；
-// 空字符串或未识别值均返回 default。
-func ParseMode(s string, defaultVal Mode) Mode {
-	// 先 canonicalize：入站可能是历史串（code.normal / agent.plan），查表只认权威值。
+// ModeFromRaw 从原始入参解析 Mode，非法/非字符串/空值回退到 default。
+//
+// Python: openjiuwen_protocol.message.Mode.from_raw(raw_mode, default=None)。
+// 与 Python 逐条对应：
+//  1. 已是 Mode → 原样返回（Go 的 Mode 是 string 类型，同值即同枚举）
+//  2. 非字符串 → default
+//  3. strip + lower 后为空 → default
+//  4. 查表（经 DEPRECATION_MAP 归一），未命中 → default
+func ModeFromRaw(rawMode any, defaultVal Mode) Mode {
+	if m, ok := rawMode.(Mode); ok {
+		return m
+	}
+	s, ok := rawMode.(string)
+	if !ok {
+		return defaultVal
+	}
 	normalized := CanonicalizeMode(s)
 	if normalized == "" {
 		return defaultVal
@@ -370,6 +428,15 @@ func ParseMode(s string, defaultVal Mode) Mode {
 		return m
 	}
 	return defaultVal
+}
+
+// IsNewCanonicalMode 判断模式串是否属于新三段命名 canonical 集合。
+//
+// Python: gateway/common/mode_matrix.py NEW_CANONICAL_MODES（9 个，含 team.design）。
+// 只按原文查表，不做别名/弃用映射。
+func IsNewCanonicalMode(mode string) bool {
+	_, ok := newCanonicalModeSegments[strings.ToLower(strings.TrimSpace(mode))]
+	return ok
 }
 
 // IsValidMode 判断字符串是否为合法的 Mode 值。
@@ -389,8 +456,13 @@ func (m Mode) GoString() string {
 }
 
 // ToRuntimeMode 返回模式的运行时字符串值。
-// Python: Mode.to_runtime_mode()，返回枚举的字符串值本身。
+//
+// Python: Mode.to_runtime_mode()——legacy 成员先折叠（`agent.*` → "agent"），
+// 新三段 canonical 原样返回；下游 `acp_connect.py:1596` 用它注入 params["mode"]。
 func (m Mode) ToRuntimeMode() string {
+	if s, ok := runtimeModeLegacyCollapse[m]; ok {
+		return s
+	}
 	return string(m)
 }
 

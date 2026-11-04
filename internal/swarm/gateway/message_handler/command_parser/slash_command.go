@@ -88,6 +88,28 @@ const (
 	ModeCodeNormal
 	// ModeCodeTeam 代码团队模式
 	ModeCodeTeam
+	// ModeAgentPlan 代理规划（历史值）
+	ModeAgentPlan
+	// ModeAgentFast 代理快速（历史值）
+	ModeAgentFast
+	// ModeTeamPlan 团队规划别名（历史值）
+	ModeTeamPlan
+	// ModeTeamPlanNormal 团队规划（历史值）
+	ModeTeamPlanNormal
+	// ModeTeamPlanCode 团队代码规划（历史值）
+	ModeTeamPlanCode
+	// ModeCodePlanFull code 规划 canonical（agent.code.plan）
+	ModeCodePlanFull
+	// ModeCodeNormalFull code 常态 canonical（agent.code.normal）
+	ModeCodeNormalFull
+	// ModeTeamWorkNormal 团队工作常态 canonical
+	ModeTeamWorkNormal
+	// ModeTeamWorkPlan 团队工作规划 canonical
+	ModeTeamWorkPlan
+	// ModeTeamCodeNormal 团队代码常态 canonical
+	ModeTeamCodeNormal
+	// ModeTeamCodePlan 团队代码规划 canonical
+	ModeTeamCodePlan
 )
 
 const (
@@ -142,15 +164,31 @@ var gatewaySlashCommandStrings = map[GatewaySlashCommand]string{
 	SlashRewind:     "/rewind",
 }
 
+// modeSubcommandStrings /mode 子命令词表（19 项）。
+//
+// Python: ModeSubcommand（slash_command.py:39-61）——旧成员保留 + 8 个新三段
+// canonical 成员，`_VALID_MODE_LINES` 由整表派生。Go 逐项对齐，避免
+// `/mode team.work.normal` 之类被误判「非法指令」。
 var modeSubcommandStrings = map[ModeSubcommand]string{
 	ModeAgent:           "agent",
 	ModeCode:            "code",
 	ModeTeam:            "team",
+	ModeAgentPlan:       "agent.plan",
+	ModeAgentFast:       "agent.fast",
+	ModeCodePlan:        "code.plan",
+	ModeCodeNormal:      "code.normal",
+	ModeCodeTeam:        "code.team",
+	ModeTeamPlan:        "team.plan",
+	ModeTeamPlanNormal:  "team.plan.normal",
+	ModeTeamPlanCode:    "team.plan.code",
 	ModeAgentWorkPlan:   "agent.work.plan",
 	ModeAgentWorkNormal: "agent.work.normal",
-	ModeCodePlan:        "agent.code.plan",
-	ModeCodeNormal:      "agent.code.normal",
-	ModeCodeTeam:        "team.code.normal",
+	ModeCodePlanFull:    "agent.code.plan",
+	ModeCodeNormalFull:  "agent.code.normal",
+	ModeTeamWorkNormal:  "team.work.normal",
+	ModeTeamWorkPlan:    "team.work.plan",
+	ModeTeamCodeNormal:  "team.code.normal",
+	ModeTeamCodePlan:    "team.code.plan",
 }
 
 var switchSubcommandStrings = map[SwitchSubcommand]string{

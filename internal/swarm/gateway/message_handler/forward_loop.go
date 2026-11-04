@@ -122,6 +122,24 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				// 步骤2: 注入渠道状态（session_id / mode）
 				mh.ApplyChannelState(msg)
 
+				// 步骤2b: 受控通道无正式会话时分配真实会话
+				// Python: await self._ensure_inbound_session(msg)（L4967）
+				if err := mh.EnsureInboundSession(ctx, msg); err != nil {
+					logger.Error(logComponent).
+						Err(err).
+						Str("msg_id", msg.ID).
+						Str("channel_id", msg.ChannelID).
+						Msg("ensure inbound session failed")
+					return
+				}
+
+				// 步骤2c: 未知 team.* mode 拒绝（mode 只有经过步骤2才可知）
+				// Python: if self._is_unknown_team_mode_send(msg): reject + continue（L4994-4997）
+				if mh.IsUnknownTeamModeSend(msg) {
+					mh.RejectUnknownTeamModeSend(msg)
+					return
+				}
+
 				// 步骤3: Gateway hook: UserPromptSubmit（11.13 回填）
 				// Python: L2188-2197（失败仅 Debug 日志，不阻塞转发）
 				mh.forwardLoopStep3UserPromptSubmit(ctx, msg)
@@ -580,7 +598,7 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 		if err := json.Unmarshal(agentMsg.Params, &paramsMap); err == nil {
 			if _, hasMode := paramsMap["mode"]; !hasMode {
 				state := mh.GetOrCreateChannelState(msg)
-				paramsMap["mode"] = ChannelModeString(state.Mode)
+				paramsMap["mode"] = string(state.Mode)
 				if updated, err := json.Marshal(paramsMap); err == nil {
 					agentMsg.Params = json.RawMessage(updated)
 				}
@@ -971,7 +989,7 @@ func (mh *MessageHandler) extractRuntimeParams(msg *schema.Message, paramsMap ma
 	// 从 channelStates 补充 mode
 	if _, hasMode := runtimeParams["mode"]; !hasMode {
 		state := mh.GetOrCreateChannelState(msg)
-		runtimeParams["mode"] = ChannelModeString(state.Mode)
+		runtimeParams["mode"] = string(state.Mode)
 	}
 
 	return runtimeParams

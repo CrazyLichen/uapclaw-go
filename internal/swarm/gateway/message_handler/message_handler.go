@@ -76,6 +76,9 @@ type MessageHandler struct {
 	statesMu sync.RWMutex
 	// channelStates 渠道状态映射：channelKey → state
 	channelStates map[string]*ChannelControlState
+	// pendingAllocStateKey 待分配会话的状态键：消息 ID → channelKey
+	// Python: _pending_alloc_state_key（小艺入站分配真实会话后写回同一状态）
+	pendingAllocStateKey map[string]string
 
 	// mu 互斥锁
 	mu sync.Mutex
@@ -196,6 +199,7 @@ func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 		streamMetadata:              make(map[string]map[string]any),
 		streamModes:                 make(map[string]string),
 		channelStates:               make(map[string]*ChannelControlState),
+		pendingAllocStateKey:        make(map[string]string),
 		pendingEvolutionApproval:    make(map[string]string),
 		queuedSupplementInput:       make(map[string]map[string]any),
 		sessionEvolutionInProgress:  make(map[string]bool),
