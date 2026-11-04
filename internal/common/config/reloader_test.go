@@ -63,7 +63,9 @@ func TestReloader_防抖(t *testing.T) {
 	_, _ = cfg.Load()
 
 	reloader, _ := NewReloader(cfg)
-	reloader.debounce = 200 * time.Millisecond // 短防抖方便测试
+	// 防抖窗口取 1s：写文件与 fsnotify 事件投递在 CI 高负载下可能被拉长数百毫秒，
+	// 窗口过窄会把「本应合并的连续写」拆成两批而假红（200ms 窗口曾实测出现 2 次回调）。
+	reloader.debounce = 1 * time.Second
 
 	var reloadCount int32
 	reloader.OnReload(func(data map[string]any) {
@@ -73,14 +75,14 @@ func TestReloader_防抖(t *testing.T) {
 	_ = reloader.Start()
 	defer func() { _ = reloader.Stop() }()
 
-	// 快速连续修改 3 次
+	// 快速连续修改 3 次（总跨度约 60ms，远小于防抖窗口）
 	for i := 0; i < 3; i++ {
 		_ = os.WriteFile(cfgPath, []byte("key: updated\n"), 0o644)
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 
-	// 等待防抖结束
-	time.Sleep(500 * time.Millisecond)
+	// 等待防抖结束（1s 窗口 + 余量，覆盖 CI 调度抖动）
+	time.Sleep(2500 * time.Millisecond)
 
 	// 防抖应该合并为 1 次回调
 	count := atomic.LoadInt32(&reloadCount)
