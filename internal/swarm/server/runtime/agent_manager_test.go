@@ -460,7 +460,7 @@ func TestAgentManager_Cleanup(t *testing.T) {
 	assert.Empty(t, am.clientCapabilitiesByChannel)
 }
 
-// --- resolveModeFromRequest 请求模式解析 ---
+// --- ResolveAgentRequestMode 请求模式解析（已迁 runtime 包） ---
 
 func TestResolveModeFromRequest(t *testing.T) {
 	tests := []struct {

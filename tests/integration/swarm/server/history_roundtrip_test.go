@@ -148,7 +148,7 @@ func (s *HistoryRoundtripSuite) TearDownTest() {
 	pathutil.ResetCache()
 }
 
-// SetupSuite 启动进程内 AgentServer（history.get 走真实 handleEnvelope 分发）。
+// SetupSuite 启动进程内 AgentServer（history.get 走真实 handleMessage 分发）。
 func (s *HistoryRoundtripSuite) SetupSuite() {
 	s.BaseIntegrationSuite.SetupSuite()
 	cfg, err := config.New("")

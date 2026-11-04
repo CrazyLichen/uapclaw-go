@@ -107,7 +107,7 @@ func (s *StartWiringSuite) TestWiring_CodeAdapter真跑后启动Dreaming() {
 // TestWiring_DeepAdapter真跑后启动Dreaming 测试 agent 模式 adapter 全链路接线。
 //
 // 生产链路（对齐 Python interface.py:_adapter_mode_for_request 与 Go
-// resolveModeFromRequest）把 "agent.work.plan" 拆成 mode="agent" + subMode="plan"，
+// ResolveAgentRequestMode）把 "agent.work.plan" 拆成 mode="agent" + subMode="plan"，
 // 因此 CreateInstance 收到的 mode 恒为 "agent"：dreamingMode="agent"、
 // 配置键 memory.dreaming.agent、环境变量 DREAMING_AGENT_ENABLED，
 // 输出目录为 <DataDir>/agent/workspace/memory。
