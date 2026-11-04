@@ -366,6 +366,12 @@ git commit -m "refactor(runtime): 补 request.py 函数并对齐 mode 解析（�
 
 ### Task 3: `PlanStateAccessor` 解耦 + `ActiveSessions`
 
+> **进度（2026-11-04, commit 6e1bbd6a）**：已完成 —— controller 无参构造、运行期 accessor、
+> `ActiveSessions()`、adapter 删 4 个 plan 符号 + `controlEvents` 字段并新增 `PlanStateAccessor()`、
+> 删除 `resolveRequestQuery`（单通道）。**当前运行期 plan 同步处于断点**：adapter 侧已移除、
+> `AgentRuntime`（Task 4）与 `handle_chat`（Task 7）尚未接线，集成用例附件模式/plan_state 预期红。
+
+
 **Files:**
 - Modify: `internal/swarm/runtime/plan.go:64-100`（接口）、`118-135`（构造函数）、`132-215`（EnsureState）、`225-245`（CheckPostProcessExit）
 - Modify: `internal/swarm/server/adapter/deep_adapter_plan.go`
