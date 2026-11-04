@@ -91,6 +91,11 @@ type AgentOptions struct {
 	// StreamModes 流式输出模式（可选）
 	// Python: stream(inputs, session, stream_modes) 的 stream_modes 参数
 	StreamModes []stream.StreamMode
+	// StreamLifecycleOwner 由 stream 层把自己声明为「生命周期所有者」。
+	// 置位后 invoke 不再处理中断/异常的上下文清洗与 finally 清理，全部交给
+	// stream 侧统一处理（避免双份 save/commit，且 commit 失败能补偿）。
+	// Python: invoke(..., _stream_lifecycle_owner=True)
+	StreamLifecycleOwner bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -107,6 +112,15 @@ type AgentOption func(*AgentOptions)
 // WithSession 设置会话选项。
 func WithSession(sess sessioninterfaces.SessionFacade) AgentOption {
 	return func(o *AgentOptions) { o.Session = sess }
+}
+
+// WithStreamLifecycleOwner 声明本次 invoke 的生命周期由 stream 层拥有。
+//
+// 仅 stream 内部调用链使用；普通 Invoke 调用方不应传。
+//
+// Python: ReActAgent._inner_stream → invoke(..., _stream_lifecycle_owner=True)
+func WithStreamLifecycleOwner() AgentOption {
+	return func(o *AgentOptions) { o.StreamLifecycleOwner = true }
 }
 
 // WithStreamModes 设置流式模式选项。

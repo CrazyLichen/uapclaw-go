@@ -370,9 +370,12 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	// abortPersisted 标记中断路径是否已完成「清洗 + 持久化 + commit」，
 	// 避免 finally 里重复 save/commit（对齐 Python abort_persisted）。
 	abortPersisted := false
+	// streamLifecycleOwner 为真时，上下文清洗与 finally 清理都归 stream 侧所有，
+	// 本次 invoke 一律不碰（上游 _stream_lifecycle_owner 语义）。
+	streamLifecycleOwner := agentOpts.StreamLifecycleOwner
 
 	// Python: try/finally: cleanup 始终执行（无论 FireLifecycle 是否返回错误）
-	if needCleanup {
+	if needCleanup && !streamLifecycleOwner {
 		defer func() {
 			if !abortPersisted {
 				a.saveContexts(ctx, sess)
@@ -497,6 +500,10 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	//
 	// Python: react_agent.py L3263-3281 —— CancelledError 与 Exception 各用一个 marker。
 	if err != nil {
+		if streamLifecycleOwner {
+			// 生命周期归 stream：不在这里清洗/持久化，由 stream 侧统一处理
+			return nil, err
+		}
 		if utils.Canceled(ctx) {
 			abortPersisted = a.handleContextAbort(ctx, sess, "[Request cancelled by user]")
 		} else {
@@ -590,8 +597,8 @@ func (a *ReActAgent) innerStream(
 
 	// streamProcess: 在后台执行 invoke，结果写入 session stream
 	streamProcess := func() {
-		// abortPersisted 已由 invokeImpl 的中断/异常路径完成清洗+持久化，
-		// finally 里不得重复 save/commit（对齐 Python abort_persisted 抑制语义）。
+		// abortPersisted 记录中断/异常路径是否已完成清洗+持久化+commit，
+		// 置真后 finally 不再重复 save/commit（对齐 Python abort_persisted）。
 		abortPersisted := false
 		defer func() {
 			// finally: 清理（对齐 Python L1555-1560）
@@ -618,19 +625,23 @@ func (a *ReActAgent) innerStream(
 			}
 		}()
 
-		// 走完整 Invoke（对齐 Python: self.invoke(inputs, session, _streaming=True)）
-		result, err := a.Invoke(ctx, inputs, opts...)
+		// 走完整 Invoke（对齐 Python: self.invoke(..., _stream_lifecycle_owner=True)）
+		// 生命周期归 stream：invoke 侧不再清洗/持久化，由这里统一处理。
+		invokeOpts := append(append([]interfaces.AgentOption{}, opts...), interfaces.WithStreamLifecycleOwner())
+		result, err := a.Invoke(ctx, inputs, invokeOpts...)
 		if err != nil {
-			// invokeImpl 已在本轮失败时清洗并持久化上下文（handleContextAbort）
-			abortPersisted = a.contextEngine != nil
 			// ctx 取消不是错误：不写错误帧、不落 history
 			// （对齐 Python react_agent.py:1549-1554 —— except Exception 抓不到 CancelledError）
 			if !shouldReportStreamError(ctx, err) {
+				// Python: except CancelledError → marker=[Request cancelled by user]
+				abortPersisted = a.handleContextAbort(ctx, sess, "[Request cancelled by user]")
 				logger.Info(logComponent).
 					Str("event_type", "stream_canceled").
 					Msg("stream invoke canceled by caller")
 				return
 			}
+			// Python: except BaseError / except Exception → marker=[Request interrupted by an unexpected error]
+			abortPersisted = a.handleContextAbort(ctx, sess, "[Request interrupted by an unexpected error]")
 			// 错误结果写入流
 			logger.Error(logComponent).Err(err).Str("event_type", "LLM_CALL_ERROR").Msg("streamProcess invoke error")
 			a.WriteInvokeResultToStream(ctx, map[string]any{

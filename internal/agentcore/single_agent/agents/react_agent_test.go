@@ -3176,3 +3176,27 @@ func TestReActAgent_imageUnsupported_continueLoop(t *testing.T) {
 	assert.True(t, fmc.containsContent("[Vision Input Unsupported]"),
 		"拒图后应把降级提示写入上下文")
 }
+
+// TestInvoke_StreamLifecycleOwner_不处理中断 验证 stream 归属时 invoke 不清洗上下文
+//
+// 上游 _stream_lifecycle_owner=True 时 invoke 直接 re-raise，由 stream 侧统一
+// 清洗+持久化；若 invoke 也处理，就会出现双份 save/commit（commit 失败无法补偿）。
+func TestInvoke_StreamLifecycleOwner_不处理中断(t *testing.T) {
+	fmc := &fakeModelContext{messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hello")}}
+	agent := newTestAgent("stream_owner")
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	sess := session.NewSession(session.WithSessionID("sess-stream-owner"))
+	_, _ = agent.Invoke(ctx, map[string]any{"query": "hello"},
+		interfaces.WithSession(sess), interfaces.WithStreamLifecycleOwner())
+
+	if fmc.containsContent("[Request cancelled by user]") {
+		t.Fatal("stream 归属时 invoke 不应再补取消 marker（由 stream 侧负责）")
+	}
+	if fmc.clearCalls != 0 {
+		t.Fatalf("stream 归属时不应清空上下文，实际 ClearMessages %d 次", fmc.clearCalls)
+	}
+}
