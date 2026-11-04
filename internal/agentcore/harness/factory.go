@@ -136,8 +136,6 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	if params.TaskLoopNoProgressGuard != nil {
 		config.TaskLoopNoProgressGuard = *params.TaskLoopNoProgressGuard
 	}
-	config.SkillBudgetMaxSkills = params.SkillBudgetMaxSkills
-	config.SkillBudgetMaxTotalChars = params.SkillBudgetMaxTotalChars
 	// Python: subagents=effective_subagents or None（空列表 → nil）
 	if len(effectiveSubagents) > 0 {
 		config.Subagents = effectiveSubagents

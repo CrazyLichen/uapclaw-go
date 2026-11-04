@@ -949,6 +949,7 @@ func TestApplySkillBudget(t *testing.T) {
 		{Name: "pdf-reader", Description: "read pdf files"},
 	}
 
+	// 关键词排序：query 的 read/pdf/file 与 pdf-reader 重叠最多
 	got := applySkillBudget(skills, "read a pdf file", 2, 0)
 	if len(got) != 2 {
 		t.Fatalf("maxSkills=2 时返回 %d 个技能", len(got))
@@ -957,15 +958,61 @@ func TestApplySkillBudget(t *testing.T) {
 		t.Fatalf("与 query 重叠度最高的技能应排首位，实际 %q", got[0].Name)
 	}
 
-	// 字符预算生效：预算极小则几乎全丢，但不得截断单个技能内容
-	got = applySkillBudget(skills, "read a pdf file", 0, 10)
-	if len(got) > 2 {
-		t.Fatalf("字符预算应限制技能数，实际 %d", len(got))
+	// 字符软上限：只算 description，且至少保留 1 个（不返回空列表）
+	got = applySkillBudget(skills, "read a pdf file", 0, 1)
+	if len(got) != 1 {
+		t.Fatalf("软上限应只保留 1 个技能，实际 %d 个", len(got))
 	}
 
-	// 不限预算时原样返回
+	// 不限预算时原样返回（不重排）
 	got = applySkillBudget(skills, "read a pdf file", 0, 0)
 	if len(got) != 3 {
 		t.Fatalf("未配置预算时应返回全部技能，实际 %d", len(got))
+	}
+	if got[0].Name != "excel" {
+		t.Fatalf("未配置预算时不应重排，实际首位 %q", got[0].Name)
+	}
+
+	// 等分时按技能名排序，保证确定性
+	tie := []*skillpkg.Skill{
+		{Name: "zeta", Description: "nothing here"},
+		{Name: "alpha", Description: "nothing here"},
+	}
+	got = applySkillBudget(tie, "unrelated query", 1, 0)
+	if len(got) != 1 || got[0].Name != "alpha" {
+		t.Fatalf("同分应按技能名升序，实际 %v", got[0].Name)
+	}
+}
+
+// TestExtractSkillKeywords 关键词提取：停用词、短词、标点过滤
+func TestExtractSkillKeywords(t *testing.T) {
+	kw := extractSkillKeywords("Read the PDF-reader files, a test")
+	for _, banned := range []string{"the", "a"} {
+		if kw[banned] {
+			t.Fatalf("%q 不应作为关键词（停用词或过短）", banned)
+		}
+	}
+	// "test" 不在上游停用词表里，长度 > 2，故是合法关键词
+	for _, want := range []string{"read", "pdfreader", "files", "test"} {
+		if !kw[want] {
+			t.Fatalf("缺少关键词 %q，实际 %v", want, kw)
+		}
+	}
+}
+
+// TestExtractQueryFromMessages 倒序取最后一条非空用户消息
+func TestExtractQueryFromMessages(t *testing.T) {
+	msgs := []llmschema.BaseMessage{
+		llmschema.NewSystemMessage("sys"),
+		llmschema.NewUserMessage("first"),
+		llmschema.NewAssistantMessage("a1"),
+		llmschema.NewUserMessage("  latest query  "),
+		llmschema.NewAssistantMessage("a2"),
+	}
+	if got := extractQueryFromMessages(msgs); got != "latest query" {
+		t.Fatalf("应取最后一条用户消息并去空白，实际 %q", got)
+	}
+	if got := extractQueryFromMessages([]llmschema.BaseMessage{llmschema.NewSystemMessage("s")}); got != "" {
+		t.Fatalf("无用户消息时应返回空串，实际 %q", got)
 	}
 }

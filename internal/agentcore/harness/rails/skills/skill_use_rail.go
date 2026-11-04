@@ -9,10 +9,12 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
@@ -370,10 +372,13 @@ func (r *SkillUseRail) BeforeInvoke(ctx context.Context, _ *agentinterfaces.Agen
 // BeforeModelCall 构建 skills section 并注入 systemPromptBuilder。
 // Python: SkillUseRail.before_model_call() L359-372
 func (r *SkillUseRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 记录当前查询：技能预算按与查询的关键词重叠度排序
+	// 记录当前查询：技能预算按与查询的关键词重叠度排序。
+	// 上游从**本次模型调用的 messages** 里倒序找最后一条 UserMessage（follow-up /
+	// steering / 附件注入后 messages 尾部才是真实查询，inputs.Query 可能是旧值）。
+	// Python: SkillUseRail._extract_query_from_messages() L657-669
 	if cbc != nil {
-		if inputs, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs); ok && inputs.Query != nil {
-			r.currentQuery = inputs.Query.PlainText()
+		if inputs, ok := cbc.Inputs().(*agentinterfaces.ModelCallInputs); ok && inputs != nil {
+			r.currentQuery = extractQueryFromMessages(inputs.Messages)
 		}
 	}
 	if r.systemPromptBuilder == nil {
@@ -891,60 +896,146 @@ func normalizeSkillDirs(skillsDir []string) []string {
 //
 // Python: SkillUseRail._apply_skill_budget()
 func applySkillBudget(skills []*skillpkg.Skill, query string, maxSkills, maxTotalChars int) []*skillpkg.Skill {
+	if len(skills) == 0 {
+		return skills
+	}
 	if maxSkills <= 0 && maxTotalChars <= 0 {
 		return skills
 	}
-	queryWords := skillKeywordSet(query)
+
+	// 有 query 时按关键词重叠度排序（同分按技能名，保证确定性）；无 query 保持原序。
 	ranked := make([]*skillpkg.Skill, len(skills))
 	copy(ranked, skills)
-	sort.SliceStable(ranked, func(i, j int) bool {
-		return skillOverlapScore(ranked[i], queryWords) > skillOverlapScore(ranked[j], queryWords)
-	})
+	if query != "" {
+		keywords := extractSkillKeywords(query)
+		type scored struct {
+			score int
+			skill *skillpkg.Skill
+		}
+		items := make([]scored, 0, len(ranked))
+		for _, skill := range ranked {
+			if skill == nil {
+				continue
+			}
+			text := strings.ToLower(skill.Name + " " + skill.Description)
+			score := 0
+			for kw := range keywords {
+				if strings.Contains(text, kw) {
+					score++
+				}
+			}
+			items = append(items, scored{score: score, skill: skill})
+		}
+		sort.SliceStable(items, func(i, j int) bool {
+			if items[i].score != items[j].score {
+				return items[i].score > items[j].score
+			}
+			return items[i].skill.Name < items[j].skill.Name
+		})
+		ranked = ranked[:0]
+		for _, it := range items {
+			ranked = append(ranked, it.skill)
+		}
+	}
 
-	out := make([]*skillpkg.Skill, 0, len(ranked))
-	totalChars := 0
-	for _, s := range ranked {
-		if s == nil {
+	// 数量硬上限
+	if maxSkills > 0 && len(ranked) > maxSkills {
+		dropped := ranked[maxSkills:]
+		ranked = ranked[:maxSkills]
+		names := make([]string, 0, len(dropped))
+		for _, s := range dropped {
+			names = append(names, s.Name)
+		}
+		logger.Info(logger.ComponentAgentCore).
+			Int("dropped", len(dropped)).
+			Int("max_skills", maxSkills).
+			Str("names", strings.Join(names, ", ")).
+			Msg("[SkillUseRail] skills dropped due to max_skills")
+	}
+
+	// 字符软上限：只算 description，整块丢弃，且至少保留 1 个（最相关的那个即使
+	// 单独超预算也保留），保证技能小节不会变成空列表。
+	//
+	// Python: SkillUseRail._apply_skill_budget() L599-634
+	if maxTotalChars > 0 {
+		totalChars := 0
+		for _, s := range ranked {
+			totalChars += len([]rune(s.Description))
+		}
+		for len(ranked) > 1 && totalChars > maxTotalChars {
+			last := ranked[len(ranked)-1]
+			ranked = ranked[:len(ranked)-1]
+			totalChars -= len([]rune(last.Description))
+			logger.Info(logger.ComponentAgentCore).
+				Str("skill", last.Name).
+				Int("max_total_chars", maxTotalChars).
+				Int("remaining_chars", totalChars).
+				Msg("[SkillUseRail] skill dropped to stay under max_total_chars")
+		}
+		if len(ranked) > 0 && totalChars > maxTotalChars {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("skill", ranked[0].Name).
+				Int("max_total_chars", maxTotalChars).
+				Int("total_chars", totalChars).
+				Msg("[SkillUseRail] single skill exceeds max_total_chars, keeping it to avoid empty section")
+		}
+	}
+	return ranked
+}
+
+// skillStopWords 关键词提取的停用词（与上游 _STOP_WORDS 一致）。
+//
+// Python: SkillUseRail._STOP_WORDS (L636-646)
+var skillStopWords = map[string]bool{
+	"the": true, "a": true, "an": true, "is": true, "are": true, "was": true,
+	"were": true, "be": true, "been": true, "being": true, "to": true, "of": true,
+	"and": true, "or": true, "in": true, "on": true, "at": true, "by": true,
+	"for": true, "with": true, "as": true, "this": true, "that": true,
+	"these": true, "those": true, "it": true, "its": true, "from": true,
+	"have": true, "has": true, "had": true, "do": true, "does": true, "did": true,
+	"will": true, "would": true, "could": true, "should": true, "may": true,
+	"might": true, "can": true, "shall": true, "you": true, "your": true,
+	"we": true, "our": true, "i": true, "my": true, "he": true, "she": true,
+	"they": true, "them": true, "their": true, "what": true, "which": true,
+	"who": true, "when": true, "where": true, "why": true, "how": true,
+	"all": true, "each": true, "every": true, "both": true, "few": true,
+	"more": true, "most": true, "other": true, "some": true, "such": true,
+	"no": true, "nor": true, "not": true, "only": true, "own": true,
+	"same": true, "so": true,
+}
+
+// extractSkillKeywords 提取小写字母数字关键词（去停用词、长度 > 2）。
+//
+// Python: SkillUseRail._extract_keywords() (L646-654)：按空白切分后丢弃非
+// 字母数字字符，故 "pdf-reader" → "pdfreader"。
+func extractSkillKeywords(text string) map[string]bool {
+	keywords := make(map[string]bool)
+	for _, token := range strings.Fields(strings.ToLower(text)) {
+		cleaned := strings.Map(func(r rune) rune {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) {
+				return r
+			}
+			return -1
+		}, token)
+		if cleaned == "" || skillStopWords[cleaned] || len([]rune(cleaned)) <= 2 {
 			continue
 		}
-		if maxSkills > 0 && len(out) >= maxSkills {
-			break
-		}
-		size := len([]rune(s.Name)) + len([]rune(s.Description))
-		if maxTotalChars > 0 && totalChars+size > maxTotalChars {
-			break
-		}
-		out = append(out, s)
-		totalChars += size
+		keywords[cleaned] = true
 	}
-	return out
+	return keywords
 }
 
-// skillKeywordSet 由 query 构建小写关键词集合（长度 >= 2 的字母数字/中文片段）。
-func skillKeywordSet(text string) map[string]bool {
-	set := make(map[string]bool)
-	for _, w := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
-		isAlphaNum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
-		isCJK := r >= 0x4e00 && r <= 0x9fff
-		return !isAlphaNum && !isCJK
-	}) {
-		if len([]rune(w)) >= 2 {
-			set[w] = true
+// extractQueryFromMessages 从本次模型调用的消息里倒序取最后一条非空用户消息。
+//
+// Python: SkillUseRail._extract_query_from_messages() (L657-669)
+func extractQueryFromMessages(messages []llmschema.BaseMessage) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if _, ok := messages[i].(*llmschema.UserMessage); !ok {
+			continue
+		}
+		if text := strings.TrimSpace(messages[i].GetContent().Text()); text != "" {
+			return text
 		}
 	}
-	return set
-}
-
-// skillOverlapScore 计算技能与 query 的关键词重叠数。
-func skillOverlapScore(s *skillpkg.Skill, queryWords map[string]bool) int {
-	if s == nil {
-		return 0
-	}
-	score := 0
-	for w := range skillKeywordSet(s.Name + " " + s.Description) {
-		if queryWords[w] {
-			score++
-		}
-	}
-	return score
+	return ""
 }

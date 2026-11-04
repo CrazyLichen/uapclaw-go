@@ -299,8 +299,10 @@ func (d *DeepAdapter) buildSkillRailWithIncludeTools(includeTools bool) (rail sa
 			enableImageMultimodal = b
 		}
 	}
-	// 技能提示词预算（可选，缺省不限）
-	// Python: skill_budget_max_skills / skill_budget_max_total_chars
+	// 技能提示词预算（可选，缺省不限）。
+	// Python: DeepAgentConfig.skill_budget_max_skills / ..._max_total_chars，由
+	// harness/factory.py 传给 SkillUseRail；Go 侧 rail 在 adapter 构造，故这两项
+	// 配置走 instance_overrides（同名键）而不是 DeepAgentConfig。
 	maxSkills := 0
 	if v, ok := d.instanceOverrides["skill_budget_max_skills"]; ok {
 		if n, isInt := v.(int); isInt {
