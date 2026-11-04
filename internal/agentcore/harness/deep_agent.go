@@ -2417,6 +2417,15 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 
 		for coord.ShouldContinue() {
 			outerRound++
+			if result, exceeded := outerRoundsExceededResult(outerRound); exceeded {
+				logLoop("round=%d exceeded max_outer_rounds=%d, forcing stop", "", outerRound, maxOuterRounds)
+				select {
+				case outCh <- result:
+				case <-ctx.Done():
+					return
+				}
+				break
+			}
 
 			// 排空 follow-up，合并到 state 缓冲（对齐 Python line 2026-2040）
 			newFollowUps := ctrl.DrainFollowUp()
@@ -3226,4 +3235,25 @@ func (d *DeepAgent) buildTaskLoopEvaluators(taskCompRail *rails.TaskCompletionRa
 			task_loop.NewNoProgressAnswerEvaluator(guard.MaxConsecutiveEmptyAnswers, guard.MinAnswerChars))
 	}
 	return evaluators
+}
+
+// maxOuterRounds 外层任务循环的轮次硬上限。
+//
+// 评估器可能一个都没配置（LoopCoordinator.ShouldContinue 恒真），这是防无限循环的最后兜底。
+//
+// Python: deep_agent.py L2665（max_outer_rounds = 50）
+const maxOuterRounds = 50
+
+// outerRoundsExceededResult 判断外层轮次是否超限，超限时返回显式错误结果。
+//
+// Python: deep_agent.py L2667-2677
+func outerRoundsExceededResult(outerRound int) (map[string]any, bool) {
+	if outerRound <= maxOuterRounds {
+		return nil, false
+	}
+	return map[string]any{
+		"output":      "Task loop stopped after exceeding the maximum number of outer rounds (50). This usually indicates the model is not making observable progress.",
+		"result_type": "error",
+		"stop_reason": "MaxOuterRounds",
+	}, true
 }

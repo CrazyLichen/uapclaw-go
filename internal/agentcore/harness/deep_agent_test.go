@@ -4172,3 +4172,23 @@ func TestEmitStreamError_nil不投递(t *testing.T) {
 	emitStreamError(outCh, nil)
 	assert.Len(t, outCh, 0)
 }
+
+// ──────────────────────────── A-08-3: 外层轮次硬上限 ────────────────────────────
+
+// TestOuterRoundsExceededResult 验证第 51 轮产出 MaxOuterRounds 错误结果
+func TestOuterRoundsExceededResult(t *testing.T) {
+	if _, exceeded := outerRoundsExceededResult(50); exceeded {
+		t.Fatal("第 50 轮不应超限")
+	}
+	result, exceeded := outerRoundsExceededResult(51)
+	if !exceeded {
+		t.Fatal("第 51 轮应超限")
+	}
+	if result["result_type"] != "error" {
+		t.Fatalf("result_type=%v，期望 error", result["result_type"])
+	}
+	if result["stop_reason"] != "MaxOuterRounds" {
+		t.Fatalf("stop_reason=%v，期望 MaxOuterRounds", result["stop_reason"])
+	}
+	assert.Contains(t, result["output"], "maximum number of outer rounds (50)")
+}
