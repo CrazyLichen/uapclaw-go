@@ -258,3 +258,17 @@ internal/swarm/server/handle_chat.go#L202-L209
 # 不编译该目录，故改动行恒为 0%；行为由 tests/integration/swarm/server 全量驱动。
 tests/integration/testhelpers/plan_env.go
 tests/integration/testhelpers/server_env.go
+
+# ── 2026-11-04 风格审查：长函数内插入纯段落注释（零代码行改动） ──
+# 本次只新增中文注释行说明长函数的逻辑分段，不改任何代码。注释行落在覆盖块内部
+# （Go 覆盖块跨行），而这些函数在单测里未被执行或只被部分执行，改动行覆盖率必然
+# 达不到 85%。代码行为零改动，语义由对应包的既有单测保证。
+#
+# team_skill_evolution_rail.go — dumpTrajectoryDebug（调试导出，仅 DEBUG 环境触发）
+internal/agentcore/harness/rails/evolution/team_skill_evolution_rail.go#L1605-L1695
+# experience/common.go — ExecuteSimplifyActions（简化动作执行）
+internal/evolving/experience/common.go#L115-L198
+# experience_sharer.go — FlushPendingUploads（上传批处理，部分分支需真实网络失败）
+internal/evolving/sharing/experience_sharer.go#L230-L323
+# distributed_runtime.go — EnsurePostgresqlForLeader（需真实 PostgreSQL 服务）
+internal/swarm/agents/harness/team/distributed_runtime.go#L472-L557

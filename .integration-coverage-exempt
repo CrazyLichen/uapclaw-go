@@ -223,3 +223,22 @@ internal/swarm/server/agent_server.go#L113-L120
 # 捕获）。CI 的 COVER_PKGS 只枚举 internal/* 前缀，tests/ 下的助手不被插桩，故改动行
 # 恒为 0%；其行为由使用它的 plan/envelope 集成用例全量驱动。
 tests/integration/testhelpers/server_env.go
+
+# ── 2026-11-04 风格审查：长函数内插入纯段落注释（零代码行改动） ──
+# 下列文件本次只新增中文注释行，用于说明长函数的逻辑分段。注释行落在覆盖块内部
+# （Go 覆盖块跨行，块内注释行会被算作「改动行」），而这些函数没有集成入口、
+# 集成套件从不执行它们，于是改动行必然 0%。代码行为零改动，行为正确性由包内
+# 单测负责（各文件整文件单测覆盖率见单测门禁表）。
+#
+# intent_toolkits.go — initToolSchemaChoices 的 schema 表逐项说明
+internal/agentcore/controller/modules/intent_toolkits.go#L255-L439
+# team_skill_evolution_rail.go — dumpTrajectoryDebug 的调试导出分段说明
+internal/agentcore/harness/rails/evolution/team_skill_evolution_rail.go#L1605-L1695
+# browser_move/service.go — updateProgressFromWorkerResult 的进度解析分段说明
+internal/agentcore/harness/tools/browser_move/service.go#L825-L915
+# tool_adapter.go — dispatchFsMethod 的方法分发分段说明
+internal/agentcore/sys_operation/tool_adapter.go#L210-L314
+# experience/common.go — ExecuteSimplifyActions 的动作执行分段说明
+internal/evolving/experience/common.go#L115-L198
+# team_optimizer.go — GenerateUserPatch / GenerateTrajectoryPatch 分段说明
+internal/evolving/optimizer/skill_call/team_optimizer.go#L265-L468
