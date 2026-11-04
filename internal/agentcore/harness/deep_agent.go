@@ -3210,9 +3210,7 @@ func permissionsSectionToMap(perm *hsecurity.PermissionsSection) map[string]any 
 // 任务完成 rail 产出的评估器在前，无进展守卫按配置追加在后（OR 语义：先命中先停）。
 //
 // Python: DeepAgent._build_task_loop_evaluators() (deep_agent.py L2279-2311)
-func (d *DeepAgent) buildTaskLoopEvaluators(taskCompRail interface {
-	BuildEvaluators() []task_loop.StopConditionEvaluator
-}) []task_loop.StopConditionEvaluator {
+func (d *DeepAgent) buildTaskLoopEvaluators(taskCompRail *rails.TaskCompletionRail) []task_loop.StopConditionEvaluator {
 	var evaluators []task_loop.StopConditionEvaluator
 	if taskCompRail != nil {
 		evaluators = taskCompRail.BuildEvaluators()
