@@ -115,9 +115,9 @@ var languageNames = map[string]string{"cn": "Chinese", "zh": "Chinese", "en": "E
 // modeDisplayMap 模式显示名称映射。
 // Python: _MODE_DISPLAY_MAP (interface_deep.py L427-431)
 var modeDisplayMap = map[string]map[string]string{
-	"agent.plan": {"cn": "规划模式", "en": "Planning Mode"},
-	"agent.fast": {"cn": "性能模式", "en": "Performance Mode"},
-	"team":       {"cn": "集群模式", "en": "Cluster Mode"},
+	"agent.work.plan":   {"cn": "规划模式", "en": "Planning Mode"},
+	"agent.work.normal": {"cn": "性能模式", "en": "Performance Mode"},
+	"team":              {"cn": "集群模式", "en": "Cluster Mode"},
 }
 
 // _ 编译时验证 RuntimePromptRail 满足 AgentRail 接口

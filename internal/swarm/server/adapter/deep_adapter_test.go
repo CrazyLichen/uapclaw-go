@@ -261,11 +261,11 @@ func TestParseParams(t *testing.T) {
 	})
 
 	t.Run("有效JSON", func(t *testing.T) {
-		m := parseParams(json.RawMessage(`{"query":"hello","mode":"agent.plan"}`))
+		m := parseParams(json.RawMessage(`{"query":"hello","mode":"agent.work.plan"}`))
 		if m["query"] != "hello" {
 			t.Errorf("query = %v, want hello", m["query"])
 		}
-		if m["mode"] != "agent.plan" {
+		if m["mode"] != "agent.work.plan" {
 			t.Errorf("mode = %v, want agent.plan", m["mode"])
 		}
 	})
@@ -299,16 +299,16 @@ func TestDeepAdapter_CreateInstance_默认值(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
 
-	// 不传 config，mode="agent.plan"
-	err := d.CreateInstance(ctx, nil, "agent.plan", "")
+	// 不传 config，mode="agent.work.plan"
+	err := d.CreateInstance(ctx, nil, "agent.work.plan", "")
 	if err != nil {
 		t.Fatalf("CreateInstance error: %v", err)
 	}
-	if d.mode != "agent.plan" {
-		t.Errorf("mode = %q, want %q", d.mode, "agent.plan")
+	if d.mode != "agent.work.plan" {
+		t.Errorf("mode = %q, want %q", d.mode, "agent.work.plan")
 	}
-	if d.dreamingMode != "agent.plan" {
-		t.Errorf("dreamingMode = %q, want %q", d.dreamingMode, "agent.plan")
+	if d.dreamingMode != "agent.work.plan" {
+		t.Errorf("dreamingMode = %q, want %q", d.dreamingMode, "agent.work.plan")
 	}
 }
 
@@ -320,8 +320,8 @@ func TestDeepAdapter_CreateInstance_dreamingMode(t *testing.T) {
 		mode      string
 		wantDream string
 	}{
-		{"agent.plan", "agent.plan"},
-		{"agent.fast", "agent.fast"},
+		{"agent.work.plan", "agent.work.plan"},
+		{"agent.work.normal", "agent.work.normal"},
 		{"code", "agent"}, // 非 "agent" 前缀 → 默认 "agent"
 		{"", "agent"},     // 空 mode → 默认 "agent"
 		{"team", "agent"}, // 非 "agent" 前缀 → 默认 "agent"
@@ -350,7 +350,7 @@ func TestDeepAdapter_CreateInstance_config覆盖(t *testing.T) {
 		"agent_name":  "custom_agent",
 		"project_dir": "/tmp/project",
 	}
-	err := d.CreateInstance(ctx, config, "agent.plan", "")
+	err := d.CreateInstance(ctx, config, "agent.work.plan", "")
 	if err != nil {
 		t.Fatalf("CreateInstance error: %v", err)
 	}
@@ -611,7 +611,7 @@ func TestDeepAdapter_CancelSchedulerRunningTasks_Nil安全(t *testing.T) {
 // metadata 注入 request_id、mode 透传
 func TestDeepAdapter_BindRuntimeCronContext_绑定语义(t *testing.T) {
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(),
-		"  ", "sess-1", map[string]any{"k": "v"}, "req-9", "agent.plan")
+		"  ", "sess-1", map[string]any{"k": "v"}, "req-9", "agent.work.plan")
 
 	rcc := cronbridge.FromRuntimeCronContext(ctx)
 	if rcc.ChannelID != "web" {
@@ -626,7 +626,7 @@ func TestDeepAdapter_BindRuntimeCronContext_绑定语义(t *testing.T) {
 	if rcc.Metadata["k"] != "v" {
 		t.Errorf("原 metadata 应保留: %v", rcc.Metadata["k"])
 	}
-	if rcc.Mode != "agent.plan" {
+	if rcc.Mode != "agent.work.plan" {
 		t.Errorf("mode = %q", rcc.Mode)
 	}
 }

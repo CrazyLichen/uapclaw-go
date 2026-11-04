@@ -33,8 +33,8 @@ func TestAllModes_包含全部(t *testing.T) {
 		seen[m] = true
 	}
 	allConstants := []Mode{
-		ModeAgentPlan,
-		ModeAgentFast,
+		ModeAgentWorkPlan,
+		ModeAgentWorkNormal,
 		ModeCodePlan,
 		ModeCodeNormal,
 		ModeCodeTeam,
@@ -53,17 +53,17 @@ func TestParseMode_合法值(t *testing.T) {
 		input string
 		want  Mode
 	}{
-		{"agent.plan", ModeAgentPlan},
-		{"agent.fast", ModeAgentFast},
+		{"agent.work.plan", ModeAgentWorkPlan},
+		{"agent.work.normal", ModeAgentWorkNormal},
 		{"code.plan", ModeCodePlan},
 		{"code.normal", ModeCodeNormal},
 		{"code.team", ModeCodeTeam},
 		{"team", ModeTeam},
 	}
 	for _, tt := range tests {
-		got := ParseMode(tt.input, ModeAgentPlan)
+		got := ParseMode(tt.input, ModeAgentWorkPlan)
 		if got != tt.want {
-			t.Errorf("ParseMode(%q, ModeAgentPlan) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("ParseMode(%q, ModeAgentWorkPlan) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
@@ -74,16 +74,16 @@ func TestParseMode_大小写与空白(t *testing.T) {
 		input string
 		want  Mode
 	}{
-		{"  AGENT.PLAN  ", ModeAgentPlan},
-		{"AGENT.FAST", ModeAgentFast},
+		{"  AGENT.WORK.PLAN  ", ModeAgentWorkPlan},
+		{"AGENT.WORK.NORMAL", ModeAgentWorkNormal},
 		{" CODE.NORMAL ", ModeCodeNormal},
 		{"CODE.TEAM", ModeCodeTeam},
 		{"  TEAM  ", ModeTeam},
 	}
 	for _, tt := range tests {
-		got := ParseMode(tt.input, ModeAgentPlan)
+		got := ParseMode(tt.input, ModeAgentWorkPlan)
 		if got != tt.want {
-			t.Errorf("ParseMode(%q, ModeAgentPlan) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("ParseMode(%q, ModeAgentWorkPlan) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
@@ -110,9 +110,9 @@ func TestParseMode_非法值回退(t *testing.T) {
 func TestParseMode_空字符串回退(t *testing.T) {
 	blankInputs := []string{"", "   ", "\t", "\n", "  \t\n  "}
 	for _, input := range blankInputs {
-		got := ParseMode(input, ModeAgentPlan)
-		if got != ModeAgentPlan {
-			t.Errorf("ParseMode(%q, ModeAgentPlan) = %q, want ModeAgentPlan", input, got)
+		got := ParseMode(input, ModeAgentWorkPlan)
+		if got != ModeAgentWorkPlan {
+			t.Errorf("ParseMode(%q, ModeAgentWorkPlan) = %q, want ModeAgentWorkPlan", input, got)
 		}
 	}
 }
@@ -127,9 +127,9 @@ func TestParseMode_默认值参数(t *testing.T) {
 	if got := ParseMode("invalid", ModeTeam); got != ModeTeam {
 		t.Errorf("ParseMode(%q, ModeTeam) = %q, want ModeTeam", "invalid", got)
 	}
-	// 空字符串 + ModeAgentFast 默认 → ModeAgentFast
-	if got := ParseMode("", ModeAgentFast); got != ModeAgentFast {
-		t.Errorf("ParseMode(%q, ModeAgentFast) = %q, want ModeAgentFast", "", got)
+	// 空字符串 + ModeAgentWorkNormal 默认 → ModeAgentWorkNormal
+	if got := ParseMode("", ModeAgentWorkNormal); got != ModeAgentWorkNormal {
+		t.Errorf("ParseMode(%q, ModeAgentWorkNormal) = %q, want ModeAgentWorkNormal", "", got)
 	}
 }
 
@@ -137,8 +137,8 @@ func TestParseMode_默认值参数(t *testing.T) {
 func TestIsValidMode(t *testing.T) {
 	// 合法值
 	validModes := []string{
-		"agent.plan",
-		"agent.fast",
+		"agent.work.plan",
+		"agent.work.normal",
 		"code.plan",
 		"code.normal",
 		"code.team",
@@ -167,8 +167,8 @@ func TestIsValidMode(t *testing.T) {
 
 // TestMode_String 验证 String() 返回原始字符串值
 func TestMode_String(t *testing.T) {
-	if got := ModeAgentPlan.String(); got != "agent.plan" {
-		t.Errorf("ModeAgentPlan.String() = %q, want %q", got, "agent.plan")
+	if got := ModeAgentWorkPlan.String(); got != "agent.work.plan" {
+		t.Errorf("ModeAgentWorkPlan.String() = %q, want %q", got, "agent.work.plan")
 	}
 	if got := ModeCodeNormal.String(); got != "code.normal" {
 		t.Errorf("ModeCodeNormal.String() = %q, want %q", got, "code.normal")
@@ -180,8 +180,8 @@ func TestMode_String(t *testing.T) {
 
 // TestMode_GoString 验证 GoString() 格式
 func TestMode_GoString(t *testing.T) {
-	if got := ModeAgentPlan.GoString(); got != `schema.Mode("agent.plan")` {
-		t.Errorf("ModeAgentPlan.GoString() = %q, want %q", got, `schema.Mode("agent.plan")`)
+	if got := ModeAgentWorkPlan.GoString(); got != `schema.Mode("agent.work.plan")` {
+		t.Errorf("ModeAgentWorkPlan.GoString() = %q, want %q", got, `schema.Mode("agent.work.plan")`)
 	}
 	if got := ModeTeam.GoString(); got != `schema.Mode("team")` {
 		t.Errorf("ModeTeam.GoString() = %q, want %q", got, `schema.Mode("team")`)
@@ -194,8 +194,8 @@ func TestMode_ToRuntimeMode(t *testing.T) {
 		mode Mode
 		want string
 	}{
-		{ModeAgentPlan, "agent.plan"},
-		{ModeAgentFast, "agent.fast"},
+		{ModeAgentWorkPlan, "agent.work.plan"},
+		{ModeAgentWorkNormal, "agent.work.normal"},
 		{ModeCodePlan, "code.plan"},
 		{ModeCodeNormal, "code.normal"},
 		{ModeCodeTeam, "code.team"},
@@ -211,8 +211,8 @@ func TestMode_ToRuntimeMode(t *testing.T) {
 // TestMode_JSON序列化往返 验证 JSON marshal/unmarshal 往返一致
 func TestMode_JSON序列化往返(t *testing.T) {
 	modes := []Mode{
-		ModeAgentPlan,
-		ModeAgentFast,
+		ModeAgentWorkPlan,
+		ModeAgentWorkNormal,
 		ModeCodePlan,
 		ModeCodeNormal,
 		ModeCodeTeam,
@@ -242,8 +242,8 @@ func TestMode常量值与Python对齐(t *testing.T) {
 		got  Mode
 		want string
 	}{
-		{ModeAgentPlan, "agent.plan"},
-		{ModeAgentFast, "agent.fast"},
+		{ModeAgentWorkPlan, "agent.work.plan"},
+		{ModeAgentWorkNormal, "agent.work.normal"},
 		{ModeCodePlan, "code.plan"},
 		{ModeCodeNormal, "code.normal"},
 		{ModeCodeTeam, "code.team"},

@@ -51,7 +51,7 @@ func TestGetChannelDefaultState_读配置(t *testing.T) {
 	// 渠道不在配置中 → 走兜底
 	state = mh.getChannelDefaultState("wecom_other")
 	assert.NotEmpty(t, state.SessionID)
-	assert.Equal(t, ChannelModeAgentPlan, state.Mode)
+	assert.Equal(t, ChannelModeAgentWorkPlan, state.Mode)
 }
 
 // TestSaveChannelStateToConfig 覆盖回调缺失/状态缺失/正常写回三条分支。
@@ -79,7 +79,7 @@ func TestSaveChannelStateToConfig(t *testing.T) {
 
 // TestChannelModeString_非法值 覆盖未知模式的兜底（对齐 ParseChannelMode 的 agent.plan 回落）。
 func TestChannelModeString_非法值(t *testing.T) {
-	assert.Equal(t, "agent.plan", ChannelModeString(ChannelMode(99)))
+	assert.Equal(t, "agent.work.plan", ChannelModeString(ChannelMode(99)))
 }
 
 // TestGetGatewayHookHandlerForTest 覆盖 hook handler 只读访问器。

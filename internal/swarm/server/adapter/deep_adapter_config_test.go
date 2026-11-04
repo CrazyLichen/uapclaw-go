@@ -59,7 +59,7 @@ func TestWriteRuntimeStateYAML(t *testing.T) {
 	d.modelRequestConfig = llmschema.NewModelRequestConfig(llmschema.WithModelName("qwen-max"))
 	d.agentName = "test_agent"
 
-	d.writeRuntimeStateYAML(t.Context(), "agent.plan", "cn", "web", "/tmp/project")
+	d.writeRuntimeStateYAML(t.Context(), "agent.work.plan", "cn", "web", "/tmp/project")
 
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
@@ -105,7 +105,7 @@ func TestUpdateRuntimeConfig_全部字段(t *testing.T) {
 		ProjectDir:   "/tmp/project",
 		WorkspaceDir: "/tmp/workspace",
 		SessionID:    "feishu_s1",
-		Mode:         "agent.plan",
+		Mode:         "agent.work.plan",
 		RequestID:    "req-001",
 		ChannelID:    "feishu",
 		TrustedDirs:  []string{"/tmp/trusted"},
@@ -141,7 +141,7 @@ func TestUpdateRuntimeConfig_无ChannelID时从SessionID解析(t *testing.T) {
 	config := &runtimeConfig{
 		CWD:       "/tmp/cwd",
 		SessionID: "acp_s1", // 前缀为 acp
-		Mode:      "agent.fast",
+		Mode:      "agent.work.normal",
 	}
 	d.updateRuntimeConfig(ctx, config)
 
@@ -167,7 +167,7 @@ func TestUpdateRuntimeConfig_RuntimePromptRailSetter(t *testing.T) {
 
 	config := &runtimeConfig{
 		CWD:         "/tmp/cwd",
-		Mode:        "agent.plan",
+		Mode:        "agent.work.plan",
 		TrustedDirs: []string{"/tmp/trusted1", "/tmp/trusted2"},
 	}
 	d.updateRuntimeConfig(ctx, config)
@@ -175,7 +175,7 @@ func TestUpdateRuntimeConfig_RuntimePromptRailSetter(t *testing.T) {
 	// 验证 setter 被调用：通过 BeforeModelCall 副效应间接验证
 	// rail 的 language 应为 "en"（resolveRuntimeLanguage 标准化后）
 	// rail 的 channel 应为 "web"（无 ChannelID，无 SessionID → fallback "web"）
-	// rail 的 mode 应为 "agent.plan"
+	// rail 的 mode 应为 "agent.work.plan"
 	// 注：字段未导出，无法直接断言，通过 runtime_state.yaml 间接验证
 	configDir := workspace.ConfigDir()
 	yamlPath := filepath.Join(configDir, "runtime_state.yaml")
@@ -622,7 +622,7 @@ func TestUpdateSessionTools_nil配置(t *testing.T) {
 // Python: if not (session_id.startswith("heartbeat") or session_id.startswith("cron"))
 func TestUpdateSessionTools_前缀跳过(t *testing.T) {
 	d := NewDeepAdapter()
-	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "s", nil, "r", "agent.plan")
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "s", nil, "r", "agent.work.plan")
 
 	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "heartbeat_s1"})
 	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "cron_job_x"})
@@ -642,7 +642,7 @@ func TestUpdateSessionTools_无绑定(t *testing.T) {
 func TestUpdateSessionTools_instance未初始化降级(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
-		map[string]any{"k": "v"}, "req-1", "agent.plan")
+		map[string]any{"k": "v"}, "req-1", "agent.work.plan")
 
 	// BuildTools 走默认 backend（GetBackend 懒加载，全局无注入时仍可解析），
 	// 构建出非空工具集后命中 instance nil 守卫 → 降级返回，不 panic
@@ -660,7 +660,7 @@ func TestUpdateSessionTools_正常注册(t *testing.T) {
 	d.instance = harness.NewDeepAgent(card)
 
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "feishu", "sess-9",
-		map[string]any{"chat_type": "group"}, "req-9", "agent.plan")
+		map[string]any{"chat_type": "group"}, "req-9", "agent.work.plan")
 	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "feishu_sess-9"})
 
 	// 断言 1：统一 cron 工具已注册到 AbilityManager（name="cron"）
@@ -744,7 +744,7 @@ func TestUpdateSendFileTools_开关三态(t *testing.T) {
 	// 缺省（无 channels 配置）→ false → 不注册
 	d := newSendFileTestAdapter(t, nil)
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
-		map[string]any{"k": "v"}, "req-1", "agent.plan")
+		map[string]any{"k": "v"}, "req-1", "agent.work.plan")
 	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
 	if d.sendFileToolkit != nil {
 		t.Error("未配置 send_file_allowed 时 toolkit 应为 nil")
@@ -779,7 +779,7 @@ func TestUpdateSendFileTools_已注册复用(t *testing.T) {
 		"web": map[string]any{"send_file_allowed": true},
 	})
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
-		map[string]any{"k": "v"}, "req-1", "agent.plan")
+		map[string]any{"k": "v"}, "req-1", "agent.work.plan")
 	cfg1 := &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"}
 	d.updateSendFileTools(ctx, cfg1)
 	tk1 := d.sendFileToolkit
@@ -787,7 +787,7 @@ func TestUpdateSendFileTools_已注册复用(t *testing.T) {
 	// 二次调用（改 requestID，channel 保持 web——config 未带 ChannelID 时
 	// resolvePromptChannel("sess-2") 回退 web，命中已启用的 web 开关）
 	ctx2 := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-2",
-		map[string]any{"k": "v2"}, "req-2", "agent.plan")
+		map[string]any{"k": "v2"}, "req-2", "agent.work.plan")
 	d.updateSendFileTools(ctx2, &runtimeConfig{SessionID: "sess-2", RequestID: "req-2"})
 	if d.sendFileToolkit != tk1 {
 		t.Error("二次调用应复用同一 toolkit 实例")
@@ -843,7 +843,7 @@ func TestUpdateSendFileTools_heartbeat会话(t *testing.T) {
 		"heartbeat": map[string]any{"send_file_allowed": true},
 	})
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "heartbeat_s1",
-		nil, "req-h", "agent.plan")
+		nil, "req-h", "agent.work.plan")
 	// heartbeat 前缀：cron 块跳过，send_file 块仍执行
 	d.updateSessionTools(ctx, &runtimeConfig{SessionID: "heartbeat_s1", RequestID: "req-h"})
 	if d.sendFileToolkit == nil {
@@ -873,7 +873,7 @@ func TestUpdateSendFileTools_channel三级fallback(t *testing.T) {
 		"web":    map[string]any{"send_file_allowed": false},
 	})
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "", "feishu_x",
-		nil, "req-f", "agent.plan")
+		nil, "req-f", "agent.work.plan")
 	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "feishu_x", RequestID: "req-f"})
 	if d.sendFileToolkit == nil {
 		t.Error("feishu 渠道启用时 toolkit 应非 nil")
@@ -897,7 +897,7 @@ func TestUpdateSendFileTools_缺RequestID(t *testing.T) {
 		"web": map[string]any{"send_file_allowed": true},
 	})
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
-		nil, "req-1", "agent.plan")
+		nil, "req-1", "agent.work.plan")
 	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: ""})
 	if d.sendFileToolkit != nil {
 		t.Error("缺 requestID 应跳过")
@@ -915,7 +915,7 @@ func TestUpdateSendFileTools_跨实例残留(t *testing.T) {
 		"web": map[string]any{"send_file_allowed": true},
 	})
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
-		nil, "req-1", "agent.plan")
+		nil, "req-1", "agent.work.plan")
 
 	// 首次注册
 	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
@@ -957,7 +957,7 @@ func TestUpdateSendFileTools_instance未初始化(t *testing.T) {
 		"channels": map[string]any{"web": map[string]any{"send_file_allowed": true}},
 	}
 	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-1",
-		nil, "req-1", "agent.plan")
+		nil, "req-1", "agent.work.plan")
 	// 不应 panic
 	d.updateSendFileTools(ctx, &runtimeConfig{SessionID: "sess-1", RequestID: "req-1"})
 }
@@ -999,7 +999,7 @@ func TestBuildModelFromEntry_customHeaders透传(t *testing.T) {
 // ──────────────────────────── updateToolsForMode 测试（10.6.24c） ────────────────────────────
 
 // TestUpdateToolsForMode_非agentFast直接返回 mode 不匹配时不注册（不 panic）
-// Python: if mode != "agent.fast": return
+// Python: if mode != "agent.work.normal": return
 func TestUpdateToolsForMode_非agentFast直接返回(t *testing.T) {
 	d := NewDeepAdapter()
 	// code/team 模式不注册（不 panic 即可——instance nil 守卫）
@@ -1011,11 +1011,11 @@ func TestUpdateToolsForMode_非agentFast直接返回(t *testing.T) {
 func TestUpdateToolsForMode_三条件守卫(t *testing.T) {
 	d := NewDeepAdapter()
 	// 缺 requestID
-	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "agent.fast", SessionID: "s"})
+	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "agent.work.normal", SessionID: "s"})
 	// 缺 sessionID
-	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "agent.fast", RequestID: "r"})
+	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "agent.work.normal", RequestID: "r"})
 	// 缺 modelClientConfig
-	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "agent.fast", SessionID: "s", RequestID: "r"})
+	d.updateToolsForMode(t.Context(), &runtimeConfig{Mode: "agent.work.normal", SessionID: "s", RequestID: "r"})
 }
 
 // TestUpdateToolsForMode_instance未初始化降级 三条件齐但 instance nil
@@ -1023,8 +1023,8 @@ func TestUpdateToolsForMode_三条件守卫(t *testing.T) {
 func TestUpdateToolsForMode_instance未初始化降级(t *testing.T) {
 	d := NewDeepAdapter()
 	d.modelClientConfig = &llmschema.ModelClientConfig{}
-	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "s", nil, "r", "agent.fast")
-	d.updateToolsForMode(ctx, &runtimeConfig{Mode: "agent.fast", SessionID: "s", RequestID: "r"})
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "s", nil, "r", "agent.work.normal")
+	d.updateToolsForMode(ctx, &runtimeConfig{Mode: "agent.work.normal", SessionID: "s", RequestID: "r"})
 }
 
 // TestUpdateToolsForMode_正常注册 全链路：移除旧卡+注册三工具到 AbilityManager
@@ -1037,8 +1037,8 @@ func TestUpdateToolsForMode_正常注册(t *testing.T) {
 	)
 	d.instance = harness.NewDeepAgent(card)
 
-	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-ms", nil, "req-ms", "agent.fast")
-	d.updateToolsForMode(ctx, &runtimeConfig{Mode: "agent.fast", SessionID: "sess-ms", RequestID: "req-ms"})
+	ctx := cronbridge.BindRuntimeCronContext(t.Context(), "web", "sess-ms", nil, "req-ms", "agent.work.normal")
+	d.updateToolsForMode(ctx, &runtimeConfig{Mode: "agent.work.normal", SessionID: "sess-ms", RequestID: "req-ms"})
 
 	// 三工具卡已注册到 AbilityManager
 	names := map[string]bool{}
@@ -1052,7 +1052,7 @@ func TestUpdateToolsForMode_正常注册(t *testing.T) {
 	}
 
 	// 幂等：二次调用移除旧卡再注册（不重复）
-	d.updateToolsForMode(ctx, &runtimeConfig{Mode: "agent.fast", SessionID: "sess-ms", RequestID: "req-ms"})
+	d.updateToolsForMode(ctx, &runtimeConfig{Mode: "agent.work.normal", SessionID: "sess-ms", RequestID: "req-ms"})
 	count := 0
 	for _, a := range d.instance.AbilityManager().List() {
 		if a.AbilityName() == "session_new" {

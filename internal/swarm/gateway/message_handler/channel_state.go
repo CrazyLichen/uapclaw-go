@@ -30,10 +30,10 @@ type ChannelMode int
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// ChannelModeAgentPlan agent.plan 模式
-	ChannelModeAgentPlan ChannelMode = iota
-	// ChannelModeAgentFast agent.fast 模式
-	ChannelModeAgentFast
+	// ChannelModeAgentWorkPlan agent.plan 模式
+	ChannelModeAgentWorkPlan ChannelMode = iota
+	// ChannelModeAgentWorkNormal agent.fast 模式
+	ChannelModeAgentWorkNormal
 	// ChannelModeCodePlan code.plan 模式
 	ChannelModeCodePlan
 	// ChannelModeCodeNormal code.normal 模式
@@ -48,12 +48,12 @@ const (
 
 // channelModeStrings 渠道模式字符串映射
 var channelModeStrings = map[ChannelMode]string{
-	ChannelModeAgentPlan:  "agent.plan",
-	ChannelModeAgentFast:  "agent.fast",
-	ChannelModeCodePlan:   "code.plan",
-	ChannelModeCodeNormal: "code.normal",
-	ChannelModeCodeTeam:   "code.team",
-	ChannelModeTeam:       "team",
+	ChannelModeAgentWorkPlan:   "agent.work.plan",
+	ChannelModeAgentWorkNormal: "agent.work.normal",
+	ChannelModeCodePlan:        "code.plan",
+	ChannelModeCodeNormal:      "code.normal",
+	ChannelModeCodeTeam:        "code.team",
+	ChannelModeTeam:            "team",
 }
 
 // channelModeLookup 渠道模式反向查找表
@@ -75,7 +75,7 @@ func ChannelModeString(m ChannelMode) string {
 	if s, ok := channelModeStrings[m]; ok {
 		return s
 	}
-	return "agent.plan"
+	return "agent.work.plan"
 }
 
 // ParseChannelMode 解析字符串为 ChannelMode
@@ -84,7 +84,7 @@ func ParseChannelMode(s string) ChannelMode {
 	if m, ok := channelModeLookup[s]; ok {
 		return m
 	}
-	return ChannelModeAgentPlan
+	return ChannelModeAgentWorkPlan
 }
 
 // IsValidChannelMode 判断字符串是否为合法的渠道模式
@@ -206,7 +206,7 @@ func (mh *MessageHandler) getChannelDefaultState(channelID string) *ChannelContr
 					if s, ok := chConfig["default_session_id"].(string); ok && s != "" {
 						sid = s
 					}
-					mode := ChannelModeAgentPlan
+					mode := ChannelModeAgentWorkPlan
 					if m, ok := chConfig["default_mode"].(string); ok && m != "" {
 						mode = ParseChannelMode(m)
 					}
@@ -225,7 +225,7 @@ func (mh *MessageHandler) getChannelDefaultState(channelID string) *ChannelContr
 	sid := GenerateChannelSessionID(channelID)
 	return &ChannelControlState{
 		SessionID: sid,
-		Mode:      ChannelModeAgentPlan,
+		Mode:      ChannelModeAgentWorkPlan,
 	}
 }
 

@@ -54,7 +54,7 @@ type runtimeConfig struct {
 	// SessionID 会话标识
 	// Python: session_id
 	SessionID string
-	// Mode 运行模式，默认 "agent.plan"
+	// Mode 运行模式，默认 "agent.work.plan"
 	// Python: mode
 	Mode string
 	// RequestID 请求标识
@@ -447,8 +447,8 @@ func (d *DeepAdapter) resolveRuntimeLanguage() string {
 // updateToolsForMode 按 mode 注册/卸载 multi-session 工具。
 // Python: _update_tools_for_mode (interface_deep.py L2935-2964)。
 func (d *DeepAdapter) updateToolsForMode(ctx context.Context, config *runtimeConfig) {
-	if config == nil || config.Mode != "agent.fast" {
-		return // Python L2939: if mode != "agent.fast": return
+	if config == nil || config.Mode != "agent.work.normal" {
+		return // Python L2939: if mode != "agent.work.normal": return
 	}
 	if config.RequestID == "" || config.SessionID == "" || d.modelClientConfig == nil {
 		return // Python L2941: if not (request_id and session_id and self._model_client_config is not None)

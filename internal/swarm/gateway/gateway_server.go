@@ -668,7 +668,7 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		s.clientsMu.Unlock()
 
 		// default_mode：tui → code.normal，其余 → agent.plan（对齐 L645）
-		defaultMode := schema.ModeAgentPlan
+		defaultMode := schema.ModeAgentWorkPlan
 		if route.ChannelID == "tui" {
 			defaultMode = schema.ModeCodeNormal
 		}

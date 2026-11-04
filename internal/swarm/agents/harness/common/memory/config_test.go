@@ -155,40 +155,12 @@ func TestMemorySettings_overrides透传(t *testing.T) {
 	}
 }
 
-// TestResolveModeMemory_三形态 对齐 Python _resolve_mode_memory
-func TestResolveModeMemory_三形态(t *testing.T) {
-	cfg := map[string]any{
-		"modes": map[string]any{
-			"agent": map[string]any{
-				"plan": map[string]any{"memory": map[string]any{"enabled": true}},
-			},
-			"code": map[string]any{"memory": map[string]any{"enabled": false}},
-		},
-	}
-	if m := ResolveModeMemory("agent.plan", cfg); m["enabled"] != true {
-		t.Errorf("agent.plan 解析失败: %v", m)
-	}
-	if m := ResolveModeMemory("plan", cfg); m["enabled"] != true {
-		t.Errorf("bare plan 应归 agent 命名空间: %v", m)
-	}
-	if m := ResolveModeMemory("code", cfg); m["enabled"] != false {
-		t.Errorf("code 解析失败: %v", m)
-	}
-	if m := ResolveModeMemory("nonexistent", cfg); len(m) != 0 {
-		t.Errorf("不存在应返回空 map")
-	}
-	if m := ResolveModeMemory("", cfg); len(m) != 0 {
-		t.Errorf("空 token 应返回空 map")
-	}
-}
-
+// TestResolveModeMemory_三形态 对齐 Python _resolve_mode_memory（plan/fast 合并后读 modes.agent）
 // TestIsMemoryEnabled 对齐 Python is_memory_enabled
 func TestIsMemoryEnabled(t *testing.T) {
 	cfg := map[string]any{
 		"modes": map[string]any{
-			"agent": map[string]any{
-				"plan": map[string]any{"memory": map[string]any{"enabled": true}},
-			},
+			"agent": map[string]any{"memory": map[string]any{"enabled": true}},
 		},
 	}
 	if !IsMemoryEnabled("plan", cfg) {
@@ -203,16 +175,14 @@ func TestIsMemoryEnabled(t *testing.T) {
 func TestIsProactiveMemory(t *testing.T) {
 	cfg := map[string]any{
 		"modes": map[string]any{
-			"agent": map[string]any{
-				"plan": map[string]any{"memory": map[string]any{"is_proactive": true}},
-			},
+			"agent": map[string]any{"memory": map[string]any{"is_proactive": true}},
 		},
 	}
 	if !IsProactiveMemory("plan", cfg) {
 		t.Errorf("plan 应主动")
 	}
-	if IsProactiveMemory("fast", cfg) {
-		t.Errorf("fast 未配置应非主动")
+	if !IsProactiveMemory("fast", cfg) {
+		t.Errorf("fast 已合并到 agent，应同样主动")
 	}
 }
 

@@ -560,7 +560,7 @@ func TestHandleMemoryStatus_基本块(t *testing.T) {
 
 // TestHandleMemoryStatus_配置驱动基本块 测试配置各字段生效
 func TestHandleMemoryStatus_配置驱动基本块(t *testing.T) {
-	setupToggleEnv(t, "modes:\n  agent:\n    plan:\n      memory:\n        enabled: true\n        is_proactive: true\nmemory:\n  forbidden_memory_definition:\n    enabled: true\n")
+	setupToggleEnv(t, "modes:\n  agent:\n    memory:\n      enabled: true\n      is_proactive: true\nmemory:\n  forbidden_memory_definition:\n    enabled: true\n")
 	res := HandleMemoryStatus(context.Background(), "/ws", "plan", map[string]any{})
 	assert.Equal(t, true, res["enabled"])
 	assert.Equal(t, true, res["proactive"])
@@ -781,7 +781,7 @@ func TestUpdateModeMemoryConfig_写回失败(t *testing.T) {
 	tmp := t.TempDir()
 	cfgDir := filepath.Join(tmp, "config")
 	assert.NoError(t, os.MkdirAll(cfgDir, 0o755))
-	assert.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("modes:\n  agent:\n    plan:\n      memory:\n        enabled: true\n"), 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("modes:\n  agent:\n    memory:\n      enabled: true\n"), 0o644))
 	t.Setenv("UAPCLAW_DATA_DIR", tmp)
 	t.Setenv("UAPCLAW_HOME", filepath.Join(tmp, "home"))
 	pathutil.ResetCache()

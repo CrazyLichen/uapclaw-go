@@ -154,7 +154,7 @@ type DeepAdapter struct {
 	taskPlanningRail *rails.TaskPlanningRail
 	// contextAssembleRail 上下文组装护栏
 	contextAssembleRail sainterfaces.AgentRail
-	// contextAssembleMode 当前上下文组装模式（"agent.plan" / "agent.fast"）
+	// contextAssembleMode 当前上下文组装模式（"agent.work.plan" / "agent.work.normal"）
 	// 值已赋，按模式切换逻辑待 10.6.3-10
 	contextAssembleMode string
 	// contextProcessorRail 上下文处理护栏
@@ -841,7 +841,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 //	Python: 3. if not self._has_valid_model_config(_req_model): return error response
 //	Python: 4. session_id = request.session_id or "default"
 //	Python: 5. query = request.params.get("query", "")
-//	Python: 6. mode = request.params.get("mode", "agent.plan")
+//	Python: 6. mode = request.params.get("mode", "agent.work.plan")
 //	Python: 7. slash_result = await self._handle_slash_command(query, session_id, mode)
 //	Python: 8. if slash_result: handle approval_chunks or content
 //	Python: 9. cron_context_tokens = self._bind_runtime_cron_context(...)
@@ -883,7 +883,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 
 	// 步骤 5-6: 提取 query/mode
 	query := paramsString(params, "query", "")
-	mode := paramsString(params, "mode", "agent.plan")
+	mode := paramsString(params, "mode", "agent.work.plan")
 
 	// 步骤 7-8: slash 命令处理
 	// Python: slash_result = await self._handle_slash_command(query, session_id, mode)
@@ -1010,7 +1010,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 //	Python: 3. if not self._has_valid_model_config(_req_model): yield error chunk; return
 //	Python: 4. session_id = request.session_id or "default"
 //	Python: 5. query = request.params.get("query", "")
-//	Python: 6. mode = request.params.get("mode", "agent.plan")
+//	Python: 6. mode = request.params.get("mode", "agent.work.plan")
 //	Python: 7. if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
 //	Python: 8. if mode == "auto_harness": → auto_harness 分流
 //	Python: 9. slash_result = await self._handle_slash_command(query, session_id, mode)
@@ -1057,7 +1057,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	}
 
 	// 步骤 5-6: 提取 query/mode
-	mode := paramsString(params, "mode", "agent.plan")
+	mode := paramsString(params, "mode", "agent.work.plan")
 
 	// 步骤 7: team 模式分流
 	// Python: if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream

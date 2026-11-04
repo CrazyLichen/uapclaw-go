@@ -84,7 +84,7 @@ func TestApplyResolvedModeToRequest(t *testing.T) {
 		},
 		{
 			name:     "agent.plan模式",
-			params:   json.RawMessage(`{"mode": "agent.plan"}`),
+			params:   json.RawMessage(`{"mode": "agent.work.plan"}`),
 			wantMode: "agent",
 			wantSub:  "plan",
 		},

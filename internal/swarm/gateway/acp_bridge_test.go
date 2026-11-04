@@ -130,7 +130,7 @@ func TestAcpBridge_SessionPromptDispatch(t *testing.T) {
 	if m.ReqMethod != schema.ReqMethodChatSend {
 		t.Errorf("ReqMethod = %v, want chat.send", m.ReqMethod)
 	}
-	if m.Mode != schema.ModeAgentPlan {
+	if m.Mode != schema.ModeAgentWorkPlan {
 		t.Errorf("Mode = %v, want agent.plan", m.Mode)
 	}
 	if m.ChannelID != "acp" {

@@ -70,7 +70,7 @@ func TestTenantAgentPool_ProcessMessage_透传(t *testing.T) {
 	req := &schema.AgentRequest{
 		RequestID: "test-req-pm",
 		ChannelID: "test-ch-pm",
-		Params:    []byte(`{"mode": "agent.plan"}`),
+		Params:    []byte(`{"mode": "agent.work.plan"}`),
 	}
 
 	// 验证 ProcessMessage 能正确委托到 AgentManager.ProcessMessage
@@ -115,7 +115,7 @@ func TestTenantAgentPool_ProcessMessageStream_透传(t *testing.T) {
 	req := &schema.AgentRequest{
 		RequestID: "test-req-pms",
 		ChannelID: "test-ch-pms",
-		Params:    []byte(`{"mode": "agent.plan"}`),
+		Params:    []byte(`{"mode": "agent.work.plan"}`),
 		IsStream:  true,
 	}
 

@@ -388,7 +388,7 @@ func (bk *cronToolsBackend) Wake(ctx context.Context, text string, cronCtx *agen
 		resolvedMode = cronCtx.Mode
 	}
 	if resolvedMode == "" {
-		resolvedMode = "agent.fast"
+		resolvedMode = "agent.work.normal"
 	}
 	params := map[string]any{
 		"query":   text,
@@ -606,7 +606,7 @@ func extractLegacyParams(payload map[string]any, cronCtx *agentcron.CronToolCont
 		modeResolved = strVal(data["mode"])
 	}
 	if strings.TrimSpace(modeResolved) == "" {
-		modeResolved = "agent.fast"
+		modeResolved = "agent.work.normal"
 	}
 	out["mode"] = strings.ToLower(strings.TrimSpace(modeResolved))
 	return out, nil

@@ -237,12 +237,12 @@ func TestParseMode_有mode(t *testing.T) {
 
 // TestParseMode_无mode 测试 params 中无 mode
 func TestParseMode_无mode(t *testing.T) {
-	assert.Equal(t, schema.ModeAgentPlan, parseMode(map[string]any{}))
+	assert.Equal(t, schema.ModeAgentWorkPlan, parseMode(map[string]any{}))
 }
 
 // TestParseMode_nilParams 测试 params 为 nil
 func TestParseMode_nilParams(t *testing.T) {
-	assert.Equal(t, schema.ModeAgentPlan, parseMode(nil))
+	assert.Equal(t, schema.ModeAgentWorkPlan, parseMode(nil))
 }
 
 // TestBuildUserMessage_带Query 测试带 query 参数构造

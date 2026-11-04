@@ -614,7 +614,7 @@ func resolveMode(request *schema.AgentRequest) (mode, subMode string) {
 		}
 	}
 	if modeText == "" {
-		modeText = "agent.plan"
+		modeText = "agent.work.plan"
 	}
 	parts := strings.SplitN(modeText, ".", 2)
 	mode = parts[0]
@@ -652,7 +652,7 @@ func resolveMode(request *schema.AgentRequest) (mode, subMode string) {
 //
 // 完整对齐 Python resolve_agent_request_mode + _apply_resolved_mode_to_request：
 //  1. strip + lower 输入
-//  2. 空值默认 "agent.plan"
+//  2. 空值默认 "agent.work.plan"
 //  3. team.plan → mode="code", subMode="team"（团队规划模式）
 //  4. team subMode 白名单 {nil, "plan"}
 //  5. code subMode 白名单 {"plan", "normal", "team"}
@@ -677,7 +677,15 @@ func applyResolvedModeToRequest(request *schema.AgentRequest) (mode, subMode str
 		}
 	}
 	if modeText == "" {
-		modeText = "agent.plan"
+		modeText = "agent.work.plan"
+	}
+
+	// 新三段 canonical 短路（对齐 Python resolve_new_canonical_mode）：
+	// environment/state 已内嵌在串里，按第一个点拆会把 agent.work.plan 拆成
+	// (agent, work.plan)，导致适配器选型与状态机错乱。
+	if managerMode, sub, canonical, ok := schema.ResolveNewCanonicalMode(modeText); ok {
+		writeCanonicalMode(params, canonical, request)
+		return managerMode, sub
 	}
 
 	// 按 "." 拆分

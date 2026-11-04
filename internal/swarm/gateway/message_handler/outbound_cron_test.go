@@ -268,7 +268,7 @@ func TestHandleCronPushPayload_create模式覆盖(t *testing.T) {
 	mh.SetCronController(cc)
 	// 模拟 stream mode 已记录
 	mh.streamMu.Lock()
-	mh.streamModes["req-1"] = "agent.plan"
+	mh.streamModes["req-1"] = "agent.work.plan"
 	mh.streamMu.Unlock()
 
 	mh.handleCronPushPayload(map[string]any{
@@ -279,7 +279,7 @@ func TestHandleCronPushPayload_create模式覆盖(t *testing.T) {
 	if !cc.created {
 		t.Fatal("create action should route")
 	}
-	if cc.lastCreateParams["mode"] != "agent.plan" {
+	if cc.lastCreateParams["mode"] != "agent.work.plan" {
 		t.Errorf("stream mode should override, got %v", cc.lastCreateParams["mode"])
 	}
 	drainRobotMessages(mh, 100*time.Millisecond)

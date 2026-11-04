@@ -378,7 +378,7 @@ func TestMatchSessionMode(t *testing.T) {
 	sessionDir := filepath.Join(dir, "sess_1")
 	require.NoError(t, os.MkdirAll(sessionDir, 0o755))
 
-	meta := map[string]any{"mode": "agent.plan"}
+	meta := map[string]any{"mode": "agent.work.plan"}
 	data, _ := json.Marshal(meta)
 	require.NoError(t, os.WriteFile(filepath.Join(sessionDir, "metadata.json"), data, 0o644))
 

@@ -191,7 +191,7 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(ctx context.Context, msg *sc
 		// /mode code 误映射 AGENT_PLAN、/mode team 误映射 AGENT_PLAN。
 		switch parsed.ModeSubcommand {
 		case "agent":
-			newMode = ChannelModeAgentPlan
+			newMode = ChannelModeAgentWorkPlan
 		case "code":
 			newMode = ChannelModeCodeNormal
 		case "team":
@@ -206,8 +206,8 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(ctx context.Context, msg *sc
 		switch parsed.SwitchSubcommand {
 		case "plan":
 			switch currentMode {
-			case ChannelModeAgentPlan, ChannelModeAgentFast:
-				newMode = ChannelModeAgentPlan
+			case ChannelModeAgentWorkPlan, ChannelModeAgentWorkNormal:
+				newMode = ChannelModeAgentWorkPlan
 			case ChannelModeCodePlan, ChannelModeCodeNormal, ChannelModeCodeTeam:
 				newMode = ChannelModeCodePlan
 			default:
@@ -217,8 +217,8 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(ctx context.Context, msg *sc
 			}
 		case "fast":
 			switch currentMode {
-			case ChannelModeAgentPlan, ChannelModeAgentFast:
-				newMode = ChannelModeAgentFast
+			case ChannelModeAgentWorkPlan, ChannelModeAgentWorkNormal:
+				newMode = ChannelModeAgentWorkNormal
 			default:
 				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
 				return

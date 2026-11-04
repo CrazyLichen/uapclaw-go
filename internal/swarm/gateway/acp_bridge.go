@@ -212,7 +212,7 @@ func (b *AcpGatewayBridge) HandleJsonrpcRequest(ctx context.Context, ws *websock
 			Timestamp: schema.NowTimestamp(),
 			OK:        true,
 			ReqMethod: schema.ReqMethodChatSend,
-			Mode:      schema.ModeAgentPlan,
+			Mode:      schema.ModeAgentWorkPlan,
 			Metadata:  map[string]any{"acp": map[string]any{"jsonrpc_id": rpcID, "method": method}},
 		}
 		if err := b.dispatchMessage(ctx, msg); err != nil {

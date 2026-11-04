@@ -78,10 +78,10 @@ const (
 	ModeCode
 	// ModeTeam 团队模式
 	ModeTeam
-	// ModeAgentPlan 代理规划模式
-	ModeAgentPlan
-	// ModeAgentFast 代理快速模式
-	ModeAgentFast
+	// ModeAgentWorkPlan 代理规划模式
+	ModeAgentWorkPlan
+	// ModeAgentWorkNormal 代理快速模式
+	ModeAgentWorkNormal
 	// ModeCodePlan 代码规划模式
 	ModeCodePlan
 	// ModeCodeNormal 代码普通模式
@@ -143,14 +143,14 @@ var gatewaySlashCommandStrings = map[GatewaySlashCommand]string{
 }
 
 var modeSubcommandStrings = map[ModeSubcommand]string{
-	ModeAgent:      "agent",
-	ModeCode:       "code",
-	ModeTeam:       "team",
-	ModeAgentPlan:  "agent.plan",
-	ModeAgentFast:  "agent.fast",
-	ModeCodePlan:   "code.plan",
-	ModeCodeNormal: "code.normal",
-	ModeCodeTeam:   "code.team",
+	ModeAgent:           "agent",
+	ModeCode:            "code",
+	ModeTeam:            "team",
+	ModeAgentWorkPlan:   "agent.work.plan",
+	ModeAgentWorkNormal: "agent.work.normal",
+	ModeCodePlan:        "code.plan",
+	ModeCodeNormal:      "code.normal",
+	ModeCodeTeam:        "code.team",
 }
 
 var switchSubcommandStrings = map[SwitchSubcommand]string{

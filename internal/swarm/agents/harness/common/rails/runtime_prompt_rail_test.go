@@ -116,8 +116,8 @@ func TestSetModelName(t *testing.T) {
 // TestSetMode 测试 SetMode
 func TestSetMode(t *testing.T) {
 	rail := NewRuntimePromptRail("cn", "web")
-	rail.SetMode("agent.plan")
-	assert.Equal(t, "agent.plan", rail.mode)
+	rail.SetMode("agent.work.plan")
+	assert.Equal(t, "agent.work.plan", rail.mode)
 }
 
 // TestSetForceEnglish 测试 SetForceEnglish
@@ -153,7 +153,7 @@ func TestInjectTimeSection_英文(t *testing.T) {
 func TestInjectRuntimeSection(t *testing.T) {
 	rail := NewRuntimePromptRail("cn", "web")
 	rail.SetModelName("test-model")
-	rail.SetMode("agent.plan")
+	rail.SetMode("agent.work.plan")
 	builder := newMockBuilder()
 	rail.injectRuntimeSection(builder, nil, rail.snapshot())
 	section := builder.GetSection("runtime")
@@ -261,7 +261,7 @@ func TestFirstNonEmpty(t *testing.T) {
 func TestWriteRuntimeStateYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	// 写入 runtime_state.yaml 到 ConfigDir
-	WriteRuntimeStateYAML(context.Background(), "test-model", "agent.plan", "cn", "web", "test-agent", tmpDir)
+	WriteRuntimeStateYAML(context.Background(), "test-model", "agent.work.plan", "cn", "web", "test-agent", tmpDir)
 	yamlPath := filepath.Join(workspace.ConfigDir(), "runtime_state.yaml")
 	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
 		t.Log("runtime_state.yaml 未写入 ConfigDir（正常，ConfigDir 可能不是 tmpDir）")
@@ -286,9 +286,9 @@ func TestReadRuntimeStateYAML(t *testing.T) {
 
 // TestModeDisplayMap 测试 modeDisplayMap
 func TestModeDisplayMap(t *testing.T) {
-	assert.Equal(t, "规划模式", modeDisplayMap["agent.plan"]["cn"])
-	assert.Equal(t, "Planning Mode", modeDisplayMap["agent.plan"]["en"])
-	assert.Equal(t, "性能模式", modeDisplayMap["agent.fast"]["cn"])
+	assert.Equal(t, "规划模式", modeDisplayMap["agent.work.plan"]["cn"])
+	assert.Equal(t, "Planning Mode", modeDisplayMap["agent.work.plan"]["en"])
+	assert.Equal(t, "性能模式", modeDisplayMap["agent.work.normal"]["cn"])
 	assert.Equal(t, "Cluster Mode", modeDisplayMap["team"]["en"])
 }
 

@@ -170,7 +170,7 @@ func TestExtractRuntimeParams(t *testing.T) {
 	// params 全缺 → 从 metadata 取 cwd，从 state 取 mode
 	got := mh.extractRuntimeParams(msg, map[string]any{})
 	assert.Equal(t, "/tmp/work", got["cwd"])
-	assert.Equal(t, "agent.plan", got["mode"])
+	assert.Equal(t, "agent.work.plan", got["mode"])
 
 	// params 显式提供 mode → 不覆盖
 	got = mh.extractRuntimeParams(msg, map[string]any{

@@ -1252,7 +1252,7 @@ func TestAcpGateway_LegacyRequestForwarded(t *testing.T) {
 
 	sendAcpJSON(t, conn, map[string]any{
 		"type": "req", "id": "req-3", "method": "chat.send",
-		"params": map[string]any{"session_id": "sess-3", "content": "hello", "mode": "agent.fast"},
+		"params": map[string]any{"session_id": "sess-3", "content": "hello", "mode": "agent.work.normal"},
 	})
 	msg := rec.next(t)
 	if msg.ID != "req-3" || msg.ChannelID != "acp" || msg.SessionID != "sess-3" {
@@ -1266,7 +1266,7 @@ func TestAcpGateway_LegacyRequestForwarded(t *testing.T) {
 	if params["content"] != "hello" {
 		t.Errorf("params.content = %v", params["content"])
 	}
-	if msg.Mode != schema.ModeAgentFast {
+	if msg.Mode != schema.ModeAgentWorkNormal {
 		t.Errorf("mode = %v, want agent.fast", msg.Mode)
 	}
 	assertNoFrame(t, conn, 300*time.Millisecond, "acp early-return should not ack")

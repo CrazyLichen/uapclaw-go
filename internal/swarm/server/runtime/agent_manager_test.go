@@ -225,7 +225,7 @@ func TestAgentManager_ProcessMessage_GetAgent委托(t *testing.T) {
 	req := &schema.AgentRequest{
 		RequestID: "test-req-1",
 		ChannelID: "web",
-		Params:    []byte(`{"mode": "agent.plan"}`),
+		Params:    []byte(`{"mode": "agent.work.plan"}`),
 	}
 
 	// 验证 GetAgent 能正确解析 mode
@@ -469,11 +469,11 @@ func TestResolveModeFromRequest(t *testing.T) {
 		wantSub  string
 	}{
 		{"nil params", "", "agent", ""},
-		{"empty json", `{}`, "agent", "plan"}, // mode 为空时默认 "agent.plan"
-		{"agent.plan", `{"mode": "agent.plan"}`, "agent", "plan"},
+		{"empty json", `{}`, "agent", "plan"}, // mode 为空时默认 "agent.work.plan"
+		{"agent.work.plan", `{"mode": "agent.work.plan"}`, "agent", "plan"},
 		{"code.normal", `{"mode": "code.normal"}`, "code", "normal"},
 		{"code only", `{"mode": "code"}`, "code", ""},
-		{"empty mode defaults to agent.plan", `{"mode": ""}`, "agent", "plan"}, // 空 mode 默认 "agent.plan"
+		{"empty mode defaults to agent.plan", `{"mode": ""}`, "agent", "plan"}, // 空 mode 默认 "agent.work.plan"
 	}
 
 	for _, tt := range tests {
@@ -583,12 +583,12 @@ func TestReloadAgentsConfig_单Agent失败返回错误(t *testing.T) {
 	am := NewAgentManager()
 	uc := NewUapClaw()
 	uc.adapter = &fakeReloadAdapter{err: errors.New("reload boom")}
-	am.PreSetAgent("web", "agent.plan", uc, "agent", "plan", "")
+	am.PreSetAgent("web", "agent.work.plan", uc, "agent", "plan", "")
 
 	err := am.ReloadAgentsConfig(context.Background(), map[string]any{}, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "reload boom")
 	assert.Contains(t, err.Error(), "web")
-	assert.Contains(t, err.Error(), "agent.plan")
+	assert.Contains(t, err.Error(), "agent.work.plan")
 }

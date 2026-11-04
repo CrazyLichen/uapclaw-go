@@ -16,12 +16,12 @@ import (
 // TestChannelModeString 测试 ChannelMode 字符串转换
 func TestChannelModeString(t *testing.T) {
 	tests := map[ChannelMode]string{
-		ChannelModeAgentPlan:  "agent.plan",
-		ChannelModeAgentFast:  "agent.fast",
-		ChannelModeCodePlan:   "code.plan",
-		ChannelModeCodeNormal: "code.normal",
-		ChannelModeCodeTeam:   "code.team",
-		ChannelModeTeam:       "team",
+		ChannelModeAgentWorkPlan:   "agent.work.plan",
+		ChannelModeAgentWorkNormal: "agent.work.normal",
+		ChannelModeCodePlan:        "code.plan",
+		ChannelModeCodeNormal:      "code.normal",
+		ChannelModeCodeTeam:        "code.team",
+		ChannelModeTeam:            "team",
 	}
 	for mode, expected := range tests {
 		if got := ChannelModeString(mode); got != expected {
@@ -33,14 +33,14 @@ func TestChannelModeString(t *testing.T) {
 // TestParseChannelMode 测试 ChannelMode 解析
 func TestParseChannelMode(t *testing.T) {
 	tests := map[string]ChannelMode{
-		"agent.plan":  ChannelModeAgentPlan,
-		"agent.fast":  ChannelModeAgentFast,
-		"code.plan":   ChannelModeCodePlan,
-		"code.normal": ChannelModeCodeNormal,
-		"code.team":   ChannelModeCodeTeam,
-		"team":        ChannelModeTeam,
+		"agent.work.plan":   ChannelModeAgentWorkPlan,
+		"agent.work.normal": ChannelModeAgentWorkNormal,
+		"code.plan":         ChannelModeCodePlan,
+		"code.normal":       ChannelModeCodeNormal,
+		"code.team":         ChannelModeCodeTeam,
+		"team":              ChannelModeTeam,
 		// 大小写无关
-		"AGENT.PLAN":  ChannelModeAgentPlan,
+		"AGENT.PLAN":  ChannelModeAgentWorkPlan,
 		" Code.Plan ": ChannelModeCodePlan,
 	}
 	for input, expected := range tests {
@@ -50,14 +50,14 @@ func TestParseChannelMode(t *testing.T) {
 	}
 
 	// 非法值返回默认
-	if got := ParseChannelMode("unknown"); got != ChannelModeAgentPlan {
-		t.Errorf("ParseChannelMode(unknown) = %v, want ChannelModeAgentPlan", got)
+	if got := ParseChannelMode("unknown"); got != ChannelModeAgentWorkPlan {
+		t.Errorf("ParseChannelMode(unknown) = %v, want ChannelModeAgentWorkPlan", got)
 	}
 }
 
 // TestIsValidChannelMode 测试 ChannelMode 有效性判断
 func TestIsValidChannelMode(t *testing.T) {
-	valid := []string{"agent.plan", "agent.fast", "code.plan", "code.normal", "code.team", "team"}
+	valid := []string{"agent.work.plan", "agent.work.normal", "code.plan", "code.normal", "code.team", "team"}
 	for _, v := range valid {
 		if !IsValidChannelMode(v) {
 			t.Errorf("%q 应为合法 ChannelMode", v)
@@ -93,7 +93,7 @@ func TestApplyChannelState_受控渠道(t *testing.T) {
 	}
 	if mode, ok := params["mode"]; !ok {
 		t.Error("params 中应有 mode 字段")
-	} else if mode != "agent.plan" {
+	} else if mode != "agent.work.plan" {
 		t.Errorf("mode 应为 agent.plan，实际：%v", mode)
 	}
 }

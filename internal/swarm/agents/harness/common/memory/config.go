@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -247,9 +248,12 @@ func CreateMemorySettings(workspaceDir string, overrides map[string]any) *Memory
 }
 
 // ResolveModeMemory 定位 modes 下指定 mode 的 memory 块。
-// 对齐 Python _resolve_mode_memory（config.py L188-221）：
-// "agent.plan"/"agent.fast" → modes.agent.plan；"plan"/"fast"（bare）→ 归 agent 命名空间；
-// "code" → modes.code；找不到返回空 map（调用方视为禁用）
+//
+// Python: _resolve_mode_memory（config.py:370-400）。plan/fast 合并后 agent 族统一读
+// modes.agent；code 族读 modes.code：
+//   - "agent" / "agent.work.*" / 历史 "agent.plan"、"agent.fast"、"plan"、"fast" → modes.agent
+//   - "code" / "code.*" / "agent.code.*" / "team.code.*" → modes.code
+//   - "team.work.*" 等无对应节点 → 空 map（调用方视为禁用）
 func ResolveModeMemory(mode string, cfg map[string]any) map[string]any {
 	modesCfg, _ := cfg["modes"].(map[string]any)
 	if modesCfg == nil {
@@ -262,25 +266,14 @@ func ResolveModeMemory(mode string, cfg map[string]any) map[string]any {
 	}
 
 	var node map[string]any
-	if strings.Contains(token, ".") {
-		// 含点号（如 "agent.plan"）→ modes.agent.plan
-		parts := strings.SplitN(token, ".", 2)
-		top, _ := modesCfg[parts[0]].(map[string]any)
-		if top == nil {
-			return map[string]any{}
-		}
-		node, _ = top[parts[1]].(map[string]any)
-	} else if token == "code" {
+	switch {
+	case schema.IsCodeProfileMode(token):
 		node, _ = modesCfg["code"].(map[string]any)
-	} else {
-		// 不含点号（如 "plan"/"fast"）→ modes.agent.<plan|fast>（interface_deep 主入口命名空间）
-		agentNode, _ := modesCfg["agent"].(map[string]any)
-		if agentNode == nil {
-			return map[string]any{}
-		}
-		node, _ = agentNode[token].(map[string]any)
+	case schema.IsAgentMode(token):
+		node, _ = modesCfg["agent"].(map[string]any)
+	default:
+		return map[string]any{}
 	}
-
 	if node == nil {
 		return map[string]any{}
 	}
@@ -292,7 +285,7 @@ func ResolveModeMemory(mode string, cfg map[string]any) map[string]any {
 }
 
 // IsMemoryEnabled 检查指定 mode 下内置记忆是否启用。
-// 对齐 Python is_memory_enabled（config.py L223-236）：读 modes.agent.<plan|fast>.memory.enabled
+// 对齐 Python is_memory_enabled：读 modes.agent.memory.enabled（plan/fast 已合并）
 func IsMemoryEnabled(mode string, cfg map[string]any) bool {
 	mem := ResolveModeMemory(mode, cfg)
 	enabled, _ := mem["enabled"].(bool)

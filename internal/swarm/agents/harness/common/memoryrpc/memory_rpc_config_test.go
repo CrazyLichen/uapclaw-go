@@ -83,14 +83,13 @@ func TestHandleMemoryToggle_模式级开关(t *testing.T) {
 	assert.NoError(t, err)
 	modes, _ := data["modes"].(map[string]any)
 	agent, _ := modes["agent"].(map[string]any)
-	plan, _ := agent["plan"].(map[string]any)
-	memory, _ := plan["memory"].(map[string]any)
+	memory, _ := agent["memory"].(map[string]any)
 	assert.Equal(t, true, memory["enabled"])
 }
 
 // TestHandleMemoryToggle_主动记忆开关 测试 memory_proactive + 其他字段保留
 func TestHandleMemoryToggle_主动记忆开关(t *testing.T) {
-	setupToggleEnv(t, "modes:\n  agent:\n    plan:\n      memory:\n        enabled: true\n        is_proactive: true\n")
+	setupToggleEnv(t, "modes:\n  agent:\n    memory:\n      enabled: true\n      is_proactive: true\n")
 	res := HandleMemoryToggle(context.Background(), "/ws", "plan", map[string]any{"key": "memory_proactive"})
 	assert.Equal(t, true, res["old_value"])
 	assert.Equal(t, false, res["new_value"])
@@ -100,8 +99,7 @@ func TestHandleMemoryToggle_主动记忆开关(t *testing.T) {
 	data, _ := cfg.Load()
 	modes := data["modes"].(map[string]any)
 	agent := modes["agent"].(map[string]any)
-	plan := agent["plan"].(map[string]any)
-	memory := plan["memory"].(map[string]any)
+	memory := agent["memory"].(map[string]any)
 	assert.Equal(t, false, memory["is_proactive"])
 	assert.Equal(t, true, memory["enabled"]) // 其他字段不被破坏
 }
@@ -143,13 +141,13 @@ func TestUpdateMemoryForbiddenEnabledInConfig_自动建段(t *testing.T) {
 // TestUpdateModeMemoryConfig_多级创建 测试 modes.agent.{mode}.memory 自动创建
 func TestUpdateModeMemoryConfig_多级创建(t *testing.T) {
 	setupToggleEnv(t, "")
+	// plan/fast 合并后 agent 族统一写 modes.agent.memory
 	assert.NoError(t, updateModeMemoryConfig("fast", "enabled", true))
 
 	cfg, _ := config.New("")
 	data, _ := cfg.Load()
 	modes := data["modes"].(map[string]any)
 	agent := modes["agent"].(map[string]any)
-	fast := agent["fast"].(map[string]any)
-	memory := fast["memory"].(map[string]any)
+	memory := agent["memory"].(map[string]any)
 	assert.Equal(t, true, memory["enabled"])
 }

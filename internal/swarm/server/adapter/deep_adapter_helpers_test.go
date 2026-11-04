@@ -208,7 +208,7 @@ func TestBuildRecapPrompt_有memory(t *testing.T) {
 func TestDeepAdapter_HandleSlashCommand_非斜杠命令(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
-	result, err := d.handleSlashCommand(ctx, "hello", "s1", "agent.plan")
+	result, err := d.handleSlashCommand(ctx, "hello", "s1", "agent.work.plan")
 	if result != nil || err != nil {
 		t.Errorf("非斜杠命令应返回 nil, nil")
 	}
@@ -218,7 +218,7 @@ func TestDeepAdapter_HandleSlashCommand_非斜杠命令(t *testing.T) {
 func TestDeepAdapter_HandleSlashCommand_空查询(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
-	result, err := d.handleSlashCommand(ctx, "", "s1", "agent.plan")
+	result, err := d.handleSlashCommand(ctx, "", "s1", "agent.work.plan")
 	if result != nil || err != nil {
 		t.Errorf("空查询应返回 nil, nil")
 	}
@@ -228,7 +228,7 @@ func TestDeepAdapter_HandleSlashCommand_空查询(t *testing.T) {
 func TestDeepAdapter_HandleSlashCommand_未知斜杠命令(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
-	result, err := d.handleSlashCommand(ctx, "/unknown", "s1", "agent.plan")
+	result, err := d.handleSlashCommand(ctx, "/unknown", "s1", "agent.work.plan")
 	if result != nil || err != nil {
 		t.Errorf("未知斜杠命令应返回 nil, nil")
 	}
@@ -470,7 +470,7 @@ func TestMakeDeepAgentConfig_带齐热重载必需字段(t *testing.T) {
 	d.configCache = map[string]any{}
 	d.configBase = map[string]any{}
 	d.workspaceDir = t.TempDir()
-	d.mode = "agent.fast"
+	d.mode = "agent.work.normal"
 	op := sysop.NewLocalSysOperation(sysop.NewSysOperationCard(
 		sysop.WithSysOpMode(sysop.OperationModeLocal),
 	))
@@ -517,7 +517,7 @@ func TestMakeDeepAgentConfig_带齐热重载必需字段(t *testing.T) {
 // TestGetCurrentAgentRails 测试获取当前 Agent Rails。
 func TestGetCurrentAgentRails(t *testing.T) {
 	d := NewDeepAdapter()
-	d.mode = "agent.plan"
+	d.mode = "agent.work.plan"
 	config := map[string]any{}
 	configBase := map[string]any{}
 	result := d.getCurrentAgentRails(config, configBase)
@@ -758,7 +758,7 @@ func TestDeepAdapter_HandleHeartbeat_注入query(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
 
-	params, _ := json.Marshal(map[string]any{"mode": "agent.plan"})
+	params, _ := json.Marshal(map[string]any{"mode": "agent.work.plan"})
 	sid := "heartbeat_session_1"
 	req := schema.NewAgentRequest("req-1", "ch-1", schema.ReqMethod("chat.send"), params,
 		schema.WithAgentSessionID(sid),
@@ -1242,14 +1242,14 @@ func TestDeepAdapter_ReloadAgentConfig_未初始化(t *testing.T) {
 // TestUpdateRailsForMode 测试按模式切换 Rails。
 func TestUpdateRailsForMode(t *testing.T) {
 	d := NewDeepAdapter()
-	d.updateRailsForMode(context.Background(), "agent.plan", "")
-	d.updateRailsForMode(context.Background(), "agent.fast", "")
+	d.updateRailsForMode(context.Background(), "agent.work.plan", "")
+	d.updateRailsForMode(context.Background(), "agent.work.normal", "")
 }
 
 // TestUpdatePromptForMode 测试按模式更新提示词。
 func TestUpdatePromptForMode(t *testing.T) {
 	d := NewDeepAdapter()
-	d.updatePromptForMode("agent.plan")
+	d.updatePromptForMode("agent.work.plan")
 }
 
 // TestDeepAdapter_A2x占位函数 测试 A2X 占位函数不 panic。
@@ -1356,7 +1356,7 @@ func TestDeepAdapter_HandleSlashCommand_evolve前缀(t *testing.T) {
 	}
 	// agent.plan + evolution 未启用 → 返回 "演进功能未启用。" 错误
 	for _, query := range tests {
-		result, err := d.handleSlashCommand(ctx, query, "s1", "agent.plan")
+		result, err := d.handleSlashCommand(ctx, query, "s1", "agent.work.plan")
 		if err != nil {
 			t.Errorf("handleSlashCommand(%q) 意外返回 error: %v", query, err)
 		}
@@ -1373,7 +1373,7 @@ func TestDeepAdapter_HandleSlashCommand_evolve前缀(t *testing.T) {
 
 	// 非 agent.plan 模式 → 返回 "agent 模式下演进功能不可用。" 错误
 	for _, query := range tests {
-		result, _ := d.handleSlashCommand(ctx, query, "s1", "agent.fast")
+		result, _ := d.handleSlashCommand(ctx, query, "s1", "agent.work.normal")
 		if result == nil {
 			t.Errorf("handleSlashCommand(%q, agent.fast) 应返回错误信息，得到 nil", query)
 		}

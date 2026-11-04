@@ -426,7 +426,7 @@ func TestUpdateRuntimeConfig_接线acp刷新(t *testing.T) {
 	// deep 侧
 	d := newAcpTestAdapter(t)
 	d.updateRuntimeConfig(context.Background(), &runtimeConfig{
-		Mode: "agent.plan", ChannelID: "acp", SessionID: "sess-1", RequestID: "req-1",
+		Mode: "agent.work.plan", ChannelID: "acp", SessionID: "sess-1", RequestID: "req-1",
 		RequestMetadata: map[string]any{
 			"acp_client_capabilities": map[string]any{"fs": true},
 		},

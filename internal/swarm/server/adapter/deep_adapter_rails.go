@@ -74,7 +74,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	// 步骤 2: filesystemRail — Python: conditional insert at 1
 	filesystemEnabled := d.filesystemRailEnabledForProfile(d.instanceOverrides)
 	if filesystemEnabled {
-		readOnly := mode == "agent.plan"
+		readOnly := mode == "agent.work.plan"
 		fs := d.buildFilesystemRail(readOnly)
 		if fs != nil {
 			d.filesystemRail = fs
@@ -154,7 +154,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	// ─── Go 独有 Rail（Python 中不存在或不同） ───
 
 	// agentModeRail — plan 模式约束（Go 独有）
-	if mode == "agent.plan" {
+	if mode == "agent.work.plan" {
 		am := d.buildAgentModeRail(nil)
 		if am != nil {
 			railsList = append(railsList, am)
@@ -978,9 +978,9 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 // updateRailsForMode 按模式注册/注销 Rail，并把 mode 同步进 agent 状态机。
 // Python: _update_rails_for_mode() (line 2754-2896)
 func (d *DeepAdapter) updateRailsForMode(ctx context.Context, mode, sessionID string) {
-	// Python: if mode == "agent.plan": await self._update_plan_mode_rails()
+	// Python: if mode == "agent.work.plan": await self._update_plan_mode_rails()
 	// Python: else: await self._update_agent_mode_rails(mode)
-	if mode == "agent.plan" {
+	if mode == "agent.work.plan" {
 		d.updatePlanModeRails(ctx)
 		d.switchModeForState(ctx, sessionID, "plan")
 	} else {
@@ -1053,15 +1053,15 @@ func (d *DeepAdapter) updatePlanModeRails(ctx context.Context) {
 	d.handleExternalMemoryRailByConfig(ctx)
 
 	// 5. ContextAssembleRail — plan 模式专属实例
-	if d.contextAssembleRail == nil || d.contextAssembleMode != "agent.plan" {
+	if d.contextAssembleRail == nil || d.contextAssembleMode != "agent.work.plan" {
 		if d.contextAssembleRail != nil && d.instance != nil {
 			if err := d.instance.UnregisterRail(ctx, d.contextAssembleRail); err != nil {
 				logger.Error(logComponent).Err(err).Msg("Failed to unregister ContextAssembleRail")
 			}
 			d.contextAssembleRail = nil
 		}
-		d.contextAssembleRail = d.buildContextAssembleRail("agent.plan")
-		d.contextAssembleMode = "agent.plan"
+		d.contextAssembleRail = d.buildContextAssembleRail("agent.work.plan")
+		d.contextAssembleMode = "agent.work.plan"
 		if d.contextAssembleRail != nil && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, d.contextAssembleRail); err != nil {
 				logger.Error(logComponent).Err(err).Msg("Failed to register ContextAssembleRail")
@@ -1214,15 +1214,15 @@ func (d *DeepAdapter) updateAgentModeRails(ctx context.Context, mode string) {
 	d.handleExternalMemoryRailByConfig(ctx)
 
 	// 4. ContextAssembleRail — agent.fast 模式专属实例
-	if d.contextAssembleRail == nil || d.contextAssembleMode == "agent.plan" {
+	if d.contextAssembleRail == nil || d.contextAssembleMode == "agent.work.plan" {
 		if d.contextAssembleRail != nil && d.instance != nil {
 			if err := d.instance.UnregisterRail(ctx, d.contextAssembleRail); err != nil {
 				logger.Error(logComponent).Err(err).Msg("Failed to unregister ContextAssembleRail")
 			}
 			d.contextAssembleRail = nil
 		}
-		d.contextAssembleRail = d.buildContextAssembleRail("agent.fast")
-		d.contextAssembleMode = "agent.fast"
+		d.contextAssembleRail = d.buildContextAssembleRail("agent.work.normal")
+		d.contextAssembleMode = "agent.work.normal"
 		if d.contextAssembleRail != nil && d.instance != nil {
 			if err := d.instance.RegisterRail(ctx, d.contextAssembleRail); err != nil {
 				logger.Error(logComponent).Err(err).Msg("Failed to register ContextAssembleRail")

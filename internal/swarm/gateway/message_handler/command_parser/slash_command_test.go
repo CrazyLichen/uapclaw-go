@@ -69,7 +69,7 @@ func TestParseChannelControlText_Mode(t *testing.T) {
 	// 合法 /mode 行
 	validModes := []string{
 		"/mode agent", "/mode code", "/mode team",
-		"/mode agent.plan", "/mode agent.fast",
+		"/mode agent.work.plan", "/mode agent.work.normal",
 		"/mode code.plan", "/mode code.normal", "/mode code.team",
 	}
 	for _, text := range validModes {
@@ -375,7 +375,7 @@ func TestFormatSkillsListForNotice_超出maxItems(t *testing.T) {
 func TestValidModeLines(t *testing.T) {
 	expected := []string{
 		"/mode agent", "/mode code", "/mode team",
-		"/mode agent.plan", "/mode agent.fast",
+		"/mode agent.work.plan", "/mode agent.work.normal",
 		"/mode code.plan", "/mode code.normal", "/mode code.team",
 	}
 	for _, line := range expected {

@@ -285,11 +285,11 @@ func TestModeChange_一级映射(t *testing.T) {
 		subcommand string
 		wantMode   ChannelMode
 	}{
-		{subcommand: "agent", wantMode: ChannelModeAgentPlan},
+		{subcommand: "agent", wantMode: ChannelModeAgentWorkPlan},
 		{subcommand: "code", wantMode: ChannelModeCodeNormal},
 		{subcommand: "team", wantMode: ChannelModeTeam},
-		{subcommand: "agent.plan", wantMode: ChannelModeAgentPlan},
-		{subcommand: "agent.fast", wantMode: ChannelModeAgentFast},
+		{subcommand: "agent.work.plan", wantMode: ChannelModeAgentWorkPlan},
+		{subcommand: "agent.work.normal", wantMode: ChannelModeAgentWorkNormal},
 		{subcommand: "code.plan", wantMode: ChannelModeCodePlan},
 		{subcommand: "code.normal", wantMode: ChannelModeCodeNormal},
 		{subcommand: "code.team", wantMode: ChannelModeCodeTeam},
@@ -406,15 +406,15 @@ func TestSwitchMode_模式家族映射(t *testing.T) {
 		wantInvalid bool
 	}{
 		// agent 家族 → /switch plan → agent.plan
-		{name: "agent_plan_切换plan", currentMode: ChannelModeAgentPlan, switchCmd: "plan", wantMode: ChannelModeAgentPlan},
-		{name: "agent_fast_切换plan", currentMode: ChannelModeAgentFast, switchCmd: "plan", wantMode: ChannelModeAgentPlan},
+		{name: "agent_plan_切换plan", currentMode: ChannelModeAgentWorkPlan, switchCmd: "plan", wantMode: ChannelModeAgentWorkPlan},
+		{name: "agent_fast_切换plan", currentMode: ChannelModeAgentWorkNormal, switchCmd: "plan", wantMode: ChannelModeAgentWorkPlan},
 		// code 家族 → /switch plan → code.plan
 		{name: "code_plan_切换plan", currentMode: ChannelModeCodePlan, switchCmd: "plan", wantMode: ChannelModeCodePlan},
 		{name: "code_normal_切换plan", currentMode: ChannelModeCodeNormal, switchCmd: "plan", wantMode: ChannelModeCodePlan},
 		{name: "code_team_切换plan", currentMode: ChannelModeCodeTeam, switchCmd: "plan", wantMode: ChannelModeCodePlan},
 		// agent 家族 → /switch fast → agent.fast
-		{name: "agent_plan_切换fast", currentMode: ChannelModeAgentPlan, switchCmd: "fast", wantMode: ChannelModeAgentFast},
-		{name: "agent_fast_切换fast", currentMode: ChannelModeAgentFast, switchCmd: "fast", wantMode: ChannelModeAgentFast},
+		{name: "agent_plan_切换fast", currentMode: ChannelModeAgentWorkPlan, switchCmd: "fast", wantMode: ChannelModeAgentWorkNormal},
+		{name: "agent_fast_切换fast", currentMode: ChannelModeAgentWorkNormal, switchCmd: "fast", wantMode: ChannelModeAgentWorkNormal},
 		// code 家族 /switch fast → 非法
 		{name: "code_normal_切换fast_非法", currentMode: ChannelModeCodeNormal, switchCmd: "fast", wantInvalid: true},
 		// code 家族 → /switch normal → code.normal
@@ -422,13 +422,13 @@ func TestSwitchMode_模式家族映射(t *testing.T) {
 		{name: "code_normal_切换normal", currentMode: ChannelModeCodeNormal, switchCmd: "normal", wantMode: ChannelModeCodeNormal},
 		{name: "code_team_切换normal", currentMode: ChannelModeCodeTeam, switchCmd: "normal", wantMode: ChannelModeCodeNormal},
 		// agent 家族 /switch normal → 非法
-		{name: "agent_plan_切换normal_非法", currentMode: ChannelModeAgentPlan, switchCmd: "normal", wantInvalid: true},
+		{name: "agent_plan_切换normal_非法", currentMode: ChannelModeAgentWorkPlan, switchCmd: "normal", wantInvalid: true},
 		// code 家族 → /switch team → code.team
 		{name: "code_plan_切换team", currentMode: ChannelModeCodePlan, switchCmd: "team", wantMode: ChannelModeCodeTeam},
 		{name: "code_normal_切换team", currentMode: ChannelModeCodeNormal, switchCmd: "team", wantMode: ChannelModeCodeTeam},
 		{name: "code_team_切换team", currentMode: ChannelModeCodeTeam, switchCmd: "team", wantMode: ChannelModeCodeTeam},
 		// agent 家族 /switch team → 非法
-		{name: "agent_fast_切换team_非法", currentMode: ChannelModeAgentFast, switchCmd: "team", wantInvalid: true},
+		{name: "agent_fast_切换team_非法", currentMode: ChannelModeAgentWorkNormal, switchCmd: "team", wantInvalid: true},
 		// team 模式 /switch fast → 非法
 		{name: "team_切换fast_非法", currentMode: ChannelModeTeam, switchCmd: "fast", wantInvalid: true},
 		// team 模式 /switch normal → 非法

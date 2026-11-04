@@ -318,7 +318,7 @@ func TestCodeAdapter_CreateInstance_agentWorkspaceDir路径(t *testing.T) {
 
 	c := NewCodeAdapter()
 	ctx := t.Context()
-	if err := c.CreateInstance(ctx, map[string]any{}, "agent.plan", ""); err != nil {
+	if err := c.CreateInstance(ctx, map[string]any{}, "agent.work.plan", ""); err != nil {
 		t.Fatalf("CreateInstance error: %v", err)
 	}
 
@@ -348,7 +348,7 @@ func TestCodeAdapter_CreateInstance_configBase已缓存(t *testing.T) {
 
 	c := NewCodeAdapter()
 	ctx := t.Context()
-	if err := c.CreateInstance(ctx, map[string]any{}, "agent.plan", ""); err != nil {
+	if err := c.CreateInstance(ctx, map[string]any{}, "agent.work.plan", ""); err != nil {
 		t.Fatalf("CreateInstance error: %v", err)
 	}
 

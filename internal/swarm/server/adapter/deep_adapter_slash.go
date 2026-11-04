@@ -77,7 +77,7 @@ func (d *DeepAdapter) handleSlashCommand(ctx context.Context, query string, sess
 // 该实例永不注册、被动演进全灭。这里在构建后立即注册，维持
 // 「字段非 nil ⇒ 已注册」的不变量。
 func (d *DeepAdapter) ensureEvolutionRailForSlash(ctx context.Context, mode string) string {
-	if mode != "agent.plan" {
+	if mode != "agent.work.plan" {
 		return "当前模式下演进功能不可用，仅 agent.plan 模式支持。"
 	}
 	evolutionConfig, _ := d.configCacheSnapshot()["evolution"].(map[string]any)

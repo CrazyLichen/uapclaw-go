@@ -887,7 +887,7 @@ func TestProcessMessageStreamImpl_非流式审批块透传(t *testing.T) {
 	card := newEvolveTestAgentCard("nonstream-agent")
 	d.instance = harness.NewDeepAgent(card)
 
-	params, _ := json.Marshal(map[string]any{"query": "/evolve ns-skill 记录经验", "mode": "agent.plan"})
+	params, _ := json.Marshal(map[string]any{"query": "/evolve ns-skill 记录经验", "mode": "agent.work.plan"})
 	req := sschema.NewAgentRequest("req-ns-1", "ch-ns-1", sschema.ReqMethod("chat.send"), params,
 		sschema.WithAgentSessionID("web_sess-ns-1"))
 

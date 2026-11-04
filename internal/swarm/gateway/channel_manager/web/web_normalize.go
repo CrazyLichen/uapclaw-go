@@ -307,5 +307,5 @@ func parseMode(params map[string]any) schema.Mode {
 			return schema.Mode(mode)
 		}
 	}
-	return schema.ModeAgentPlan
+	return schema.ModeAgentWorkPlan
 }

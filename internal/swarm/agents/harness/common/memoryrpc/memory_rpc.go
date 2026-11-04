@@ -15,6 +15,7 @@ import (
 	utilpath "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
 	projectmemory "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/project_memory"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -738,9 +739,10 @@ func scanMDFiles(dir, kind, workspace string, projectDir string) []map[string]an
 }
 
 // isCodeMode 判断是否 code 模式（status 特判用）。
-// Python: _is_code_mode (L194-195)：mode.startswith("code")
+//
+// Python: _is_code_mode（memory_rpc.py:247-250）：code 族前缀 + 新 canonical agent.code.* / team.code.*
 func isCodeMode(mode string) bool {
-	return strings.HasPrefix(mode, "code")
+	return schema.IsCodeProfileMode(mode) || strings.HasPrefix(mode, "code")
 }
 
 // loadConfigMap 读取全局 config（不缓存，每次现读）。
@@ -759,12 +761,27 @@ func loadConfigMap() map[string]any {
 	return data
 }
 
-// updateModeMemoryConfig 更新 modes.agent.{mode}.memory.{field} 并写回。
-// Python: _update_mode_memory_config (memory_rpc.py L447-456)：
-// round-trip 写回 modes→agent→{mode}→memory→{field}。
+// updateModeMemoryConfig 更新 modes.<agent|code>.memory.{field} 并写回。
+//
+// Python: _update_mode_memory_config（memory_rpc.py:580-603）。plan/fast 合并后
+// agent 族统一写 modes.agent，code 族写 modes.code；其它模式无独立节点，仅告警不写。
 // T-11: config.yaml 不存在时 Go 自动创建写入（Python ruamel 抛 FileNotFoundError
 // 由注册层转 ok=False）——Go 行为更健壮，有意增强，M-05 round-trip 实现延续该语义。
 func updateModeMemoryConfig(mode, field string, value bool) error {
+	target := ""
+	switch {
+	case schema.IsCodeProfileMode(mode):
+		target = "code"
+	case schema.IsAgentMode(mode):
+		target = "agent"
+	default:
+		logger.Warn(logComponent).
+			Str("event_type", "memory_toggle_mode_without_node").
+			Str("mode", mode).
+			Str("field", field).
+			Msg("mode has no dedicated memory config node, skip write")
+		return nil
+	}
 	cfg, err := config.New("")
 	if err != nil {
 		return err
@@ -773,7 +790,7 @@ func updateModeMemoryConfig(mode, field string, value bool) error {
 		return err
 	}
 	// M-05: SetRoundTrip（yaml.v3 Node 保注释）替代 Set（yaml.Marshal 全量重写丢注释）
-	return cfg.SetRoundTrip("modes.agent."+mode+".memory."+field, value)
+	return cfg.SetRoundTrip("modes."+target+".memory."+field, value)
 }
 
 // updateMemoryForbiddenEnabledInConfig 更新 memory.forbidden_memory_definition.enabled 并写回。

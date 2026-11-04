@@ -103,7 +103,7 @@ func TestExtractLegacyParams嵌套全量(t *testing.T) {
 	if out["description"] != "task" || out["targets"] != "web" {
 		t.Errorf("payload/delivery mapping: %v", out)
 	}
-	if out["mode"] != "agent.fast" {
+	if out["mode"] != "agent.work.normal" {
 		t.Errorf("default mode = %v, want agent.fast", out["mode"])
 	}
 	if out["name"] != "n" || out["id"] != "j1" {
@@ -182,23 +182,23 @@ func TestExtractLegacyParamsMode三级解析(t *testing.T) {
 	// context.mode 优先
 	out, _ := extractLegacyParams(map[string]any{
 		"schedule": map[string]any{"expr": "0 0 9 * * * *"},
-	}, &agentcron.CronToolContext{Mode: "agent.plan"}, true)
-	if out["mode"] != "agent.plan" {
+	}, &agentcron.CronToolContext{Mode: "agent.work.plan"}, true)
+	if out["mode"] != "agent.work.plan" {
 		t.Errorf("context mode should win, got %v", out["mode"])
 	}
 	// data.mode 次之
 	out, _ = extractLegacyParams(map[string]any{
 		"schedule": map[string]any{"expr": "0 0 9 * * * *"},
-		"mode":     "agent.fast",
+		"mode":     "agent.work.normal",
 	}, nil, true)
-	if out["mode"] != "agent.fast" {
+	if out["mode"] != "agent.work.normal" {
 		t.Errorf("data mode should be used, got %v", out["mode"])
 	}
 	// 兜底 agent.fast
 	out, _ = extractLegacyParams(map[string]any{
 		"schedule": map[string]any{"expr": "0 0 9 * * * *"},
 	}, nil, true)
-	if out["mode"] != "agent.fast" {
+	if out["mode"] != "agent.work.normal" {
 		t.Errorf("default mode = %v", out["mode"])
 	}
 }
@@ -285,7 +285,7 @@ func TestWake校验(t *testing.T) {
 func TestWake正常路径(t *testing.T) {
 	pub := &fakeUserPublisher{}
 	backend := &cronToolsBackend{tools: newTestTools(t, nil), userPublisher: pub}
-	cronCtx := &agentcron.CronToolContext{ChannelID: "feishu", SessionID: "s", Mode: "agent.plan"}
+	cronCtx := &agentcron.CronToolContext{ChannelID: "feishu", SessionID: "s", Mode: "agent.work.plan"}
 	result, err := backend.Wake(context.Background(), "hello", cronCtx, "")
 	if err != nil {
 		t.Fatal(err)
@@ -308,7 +308,7 @@ func TestWake正常路径(t *testing.T) {
 	if err := json.Unmarshal(msg.Params, &params); err != nil {
 		t.Fatal(err)
 	}
-	if params["query"] != "hello" || params["mode"] != "agent.plan" {
+	if params["query"] != "hello" || params["mode"] != "agent.work.plan" {
 		t.Errorf("params: %v", params)
 	}
 }
@@ -317,7 +317,7 @@ func TestWake正常路径(t *testing.T) {
 func TestWakeMode参数(t *testing.T) {
 	pub := &fakeUserPublisher{}
 	backend := &cronToolsBackend{tools: newTestTools(t, nil), userPublisher: pub}
-	cronCtx := &agentcron.CronToolContext{ChannelID: "web", SessionID: "s", Mode: "agent.plan"}
+	cronCtx := &agentcron.CronToolContext{ChannelID: "web", SessionID: "s", Mode: "agent.work.plan"}
 	if _, err := backend.Wake(context.Background(), "hi", cronCtx, "agent.deep"); err != nil {
 		t.Fatal(err)
 	}
@@ -541,13 +541,13 @@ func TestGlobal注入(t *testing.T) {
 // TestBindRuntimeCronContext 运行时上下文绑定（对齐 Python 4 个 ContextVar）
 func TestBindRuntimeCronContext(t *testing.T) {
 	ctx := BindRuntimeCronContext(context.Background(), "feishu", "sess-1",
-		map[string]any{"chat_type": "group"}, "req-9", "agent.plan")
+		map[string]any{"chat_type": "group"}, "req-9", "agent.work.plan")
 
 	rc, ok := ctx.Value(runtimeCronCtxKey).(*RuntimeCronContext)
 	if !ok || rc == nil {
 		t.Fatal("runtime cron context should be bound")
 	}
-	if rc.ChannelID != "feishu" || rc.SessionID != "sess-1" || rc.Mode != "agent.plan" {
+	if rc.ChannelID != "feishu" || rc.SessionID != "sess-1" || rc.Mode != "agent.work.plan" {
 		t.Errorf("context = %+v", rc)
 	}
 	// metadata 注入 request_id（原 metadata 保留）
