@@ -939,58 +939,28 @@ func (s *PlanStateSuite) TestIT_S2_13_跨会话排队占位透传() {
 }
 ```
 
-- [ ] **Step 3.5: 写测试助手 `plan_env_test.go`（骨架）**
+- [ ] **Step 3.5: 写测试助手 `plan_env_test.go`**
 
-```go
-//go:build integration
+操作（不臆造构造参数，直接复制既有样板）：
 
-package attachment_mode
+1. 打开 `tests/integration/swarm/server/adapter/deep_adapter_rail_registration_test.go`，把其中"建 env → 建 DeepAdapter → 注入 mockllm"的构造函数整体复制到新文件 `plan_env_test.go`（`//go:build integration`），改名为 `newPlanEnv`
+2. 打开 `tests/integration/swarm/server/adapter/code_adapter_coding_memory_test.go`，同样复制一份改名为 `newCodeEnv`（IT-S2-11 用）
+3. 在同一文件补以下查询方法（全部基于已构造好的 adapter 与会话对象实现，不引入新抽象）：
 
-import (
-	"context"
-	"testing"
-
-	"github.com/stretchr/testify/require"
-
-	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
-)
-
-// planEnv 计划模式端到端环境（Adapter + mockllm + 事件采集）。
-type planEnv struct {
-	t      *testing.T
-	adapter AdapterUnderTest // 由既有 adapter 构造助手返回，字段名按实际类型调整
-	events []string
-	queries []string
-}
-
-// newPlanEnv 建环境并注册 MockLLM 脚本（默认返回纯文本，不调工具）。
-func newPlanEnv(t *testing.T) *planEnv {
-	t.Helper()
-	env := testhelpers.NewAdapterTestEnv(t, nil, "s2plan")
-	_ = env
-	// 按 tests/integration/swarm/server/adapter/deep_adapter_rail_registration_test.go
-	// 的构造流程创建 DeepAdapter 并注入 MockLLM；成功后回填 adapter 字段。
-	return &planEnv{t: t}
-}
-
-// SendPlanRequest 发一条 chat 请求（mode/entry source/query）。
-func (e *planEnv) SendPlanRequest(sessionID, query, entrySource string) {
-	// 构造 schema.AgentRequest{ReqMethod:"chat.send", Params:{mode, plan_entry_source, query}}，
-	// 走 adapter 的请求入口；采集控制事件与模型实际收到的 query 前缀。
-	require.NotEmpty(e.t, sessionID)
-}
-
-// PlanMode 读取会话 plan 模式（normal/plan/空）。
-func (e *planEnv) PlanMode(sessionID string) string { return "" }
-
-// HasControlEvent 是否收到某控制事件。
-func (e *planEnv) HasControlEvent(eventType string) bool { return false }
-
-// Controller 暴露控制器（IT-S2-13 用）。
-func (e *planEnv) Controller() *swruntime.PlanModeController { return nil }
-```
-
-> 以上骨架的**方法体需按既有 adapter 构造与事件采集方式补全**（`deep_adapter_rail_registration_test.go` 与 `code_adapter_coding_memory_test.go` 是两份可直接参考的样板）；断言方法（`HistoryHasAttachment`/`SystemPromptHasSection`/`ToolVisible`/`CountRailsByType`/`ExtractTrajectory`/`LLMSpans`/`AttrPrefixValue`）按同名语义在同一文件内实现。
+| 方法 | 实现要点 |
+| --- | --- |
+| `SendPlanRequest(sid, query, entrySource)` | 构造 `schema.AgentRequest{ReqMethod:"chat.send"}`，params 写 `mode/plan_entry_source/query`，走 adapter 请求入口 |
+| `SendNonChatMethod(sid, method)` | 同上但 `ReqMethod=method` |
+| `PreExit(sid)` / `PreSeedSlug(sid, slug)` | 直接调用控制器/状态存储预置（`markExited` 走导出的 `ResetSession` 不行时，用两次请求制造该状态） |
+| `PlanMode(sid)` | 读 `deep.LoadState(sess).PlanMode.Mode` |
+| `PlanSlug(sid)` | 读 `deep.LoadState(sess).PlanMode.PlanSlug` |
+| `HasControlEvent(t)` | 从事件采集切片里查 `event_type` |
+| `ModelSawQueryPrefix(p)` | 从 mockllm 记录的请求 messages 里取最后一条 user content，判断前缀 |
+| `OriginalQuery(sid)` | 读请求 params 的 `plan_reminder_original_query` |
+| `HistoryHasAttachment(section)` / `SystemPromptHasSection(name)` / `ToolVisible(name)` | 分别查会话历史附件、mockllm 记录的 system 文本、工具列表 |
+| `CountRailsByType(t)` | 遍历 `instance.Rails()` 按类型名计数 |
+| `HistoryHasAttachmentFrom(section, source, kind)` | 查附件对象的 source/kind |
+| `LastAttachmentIsRemoval(section)` | 最后一条附件消息内容含移除标记 |
 
 > `newPlanEnv` 是测试包内的构造助手，放在 `plan_env_test.go`：用 `testhelpers.NewAdapterTestEnv` + `mockllm` 建 DeepAdapter，暴露 `SendPlanRequest/PlanMode/ModelSawQueryPrefix/HasControlEvent/Controller` 等方法。**必须放 `_test.go` 文件**（审计要求目录内非 doc.go 文件都调用 `suite.Run`）。
 
