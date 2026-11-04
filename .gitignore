@@ -1,6 +1,8 @@
 # 构建产物
 bin/
-dist/
+# 打包目录（根锚定：仅忽略 make release 在仓库根生成的 dist；
+# 前端 internal/.../frontend/dist 由该目录下 .gitignore 自行决定，产物入库）
+/dist/
 # 编译产物二进制（根锚定——非锚定会误匹配 cmd/uapclaw/ 目录）
 /uapclaw
 *.out

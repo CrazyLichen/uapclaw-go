@@ -1,10 +1,16 @@
-# OpenJiuwen Web Frontend
+# UapClaw Web Frontend
 
-AI coding assistant web UI built with React + TypeScript + Tailwind CSS, with design inspired by JiuwenClaw.
+AI coding assistant web UI built with React + TypeScript + Tailwind CSS, with an openJiuwen-inspired design language, rebranded for UapClaw.
 
 ## Features
 
 ### Implemented
+
+#### 🎬 Design
+- **Workflow canvas**: user prompt → Brief → Storyboard → character and scene specs →
+  R2V clips → compose, with per-node editing and re-runs
+- **Agents**: one Director, plus leaf DeepAgents per node
+- **Docs**: [`docs/en/Design.md`](../../../../docs/en/Design.md)
 
 #### 💬 Chat
 - **Real-time conversation**: WebSocket bidirectional communication with streaming output
@@ -65,7 +71,7 @@ AI coding assistant web UI built with React + TypeScript + Tailwind CSS, with de
 ### Install Dependencies
 
 ```bash
-cd jiuwenswarm/channels/web/frontend
+cd internal/swarm/channels/web/frontend
 npm install
 ```
 
@@ -98,8 +104,8 @@ Open http://localhost:5173
 ### Start Backend
 
 ```bash
-cd jiuwenswarm
-PORT=19000 python -m jiuwenswarm.api.app
+make serve # run make web-build first to generate the frontend bundle
+
 ```
 
 ## Backend API Requirements
@@ -191,7 +197,7 @@ Common events:
 
 When running `npm run dev`, the frontend writes `/ws` requests and responses to a local log file for debugging:
 
-- Log file: `jiuwenswarm/channels/web/frontend/logs/ws-dev.log`
+- Log file: `internal/swarm/channels/web/frontend/logs/ws-dev.log`
 - One JSON object per line (JSONL)
 - Directions:
   - `payload.direction = "outgoing"`: Frontend `req` messages
@@ -211,7 +217,7 @@ If you only see `lifecycle error/close (code=1006)`, the backend is likely not r
 ## Project Structure
 
 ```
-jiuwenswarm/channels/web/frontend/
+internal/swarm/channels/web/frontend/
 ├── public/
 │   └── logo.png           # App logo
 ├── src/

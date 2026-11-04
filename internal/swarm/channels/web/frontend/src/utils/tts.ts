@@ -11,7 +11,7 @@ interface TtsResponse {
   error?: string;
 }
 
-const TTS_STOP_EVENT = 'uapclaw-tts-stop';
+const TTS_STOP_EVENT = 'jiuwen-tts-stop';
 const CODE_BLOCK_RE = /```[\s\S]*?```/g;
 const INLINE_CODE_RE = /`[^`]+`/g;
 const MEDIA_BRACE_RE = /MEDIA:\{[^}]*\}/gi;

@@ -1,12 +1,7 @@
-import { useTranslation } from 'react-i18next';
 import { TeamMemberAvatar } from '../TeamMemberAvatar';
-import {
-  getMemberDisplayName,
-  getMemberStatusDotClass,
-  getMemberStatusKey,
-  getMemberStatusLabel,
-  type TeamMember,
-} from './shared';
+import FrameTimeIcon from '../../assets/work-mode/frame-time.svg?react';
+import { LoadingSpinner } from '../ui/LoadingSpinner/LoadingSpinner';
+import { getMemberAvatarIdentity, getMemberAvatarKey, getMemberExpertHint, getMemberPlainName, getMemberStatusKey, type TeamMember } from './shared';
 
 interface TaskProgress {
   completed: number;
@@ -17,62 +12,82 @@ export function MemberListItem({
   member,
   selected,
   compact,
+  showIdleStatus = false,
   onClick,
   taskProgress,
 }: {
   member: TeamMember;
   selected?: boolean;
   compact?: boolean;
+  showIdleStatus?: boolean;
   onClick?: () => void;
   taskProgress?: TaskProgress;
 }) {
-  const { t } = useTranslation();
-  const displayName = getMemberDisplayName(member);
-  const statusLabel = getMemberStatusLabel(member);
+  const displayName = getMemberPlainName(member);
   const statusKey = getMemberStatusKey(member);
 
-  const progressPercent = taskProgress && taskProgress.total > 0
-    ? Math.round((taskProgress.completed / taskProgress.total) * 100)
-    : 0;
+  const progressPercent =
+    taskProgress && taskProgress.total > 0 ? Math.round((taskProgress.completed / taskProgress.total) * 100) : 0;
   const radius = 14;
   const strokeWidth = 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
 
+  const isRunning = statusKey === 'running';
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-lg text-left transition-colors ${
-        compact ? 'p-2' : 'p-3'
-      } ${
+      data-testid="team-area-member-item"
+      data-variant={member.member_id}
+      className={`flex w-full items-center gap-3 rounded-md text-left  ${compact ? 'p-2' : 'px-[8px] py-[9px]'} ${
         selected
-          ? 'border border-accent bg-accent-subtle'
+          ? 'border border-transparent bg-[var(--color-tool-tab-active-bg)]'
           : 'border border-transparent hover:bg-secondary'
       }`}
     >
-      <div className="relative shrink-0">
+      <div className="relative shrink-0" data-testid="team-area-member-item-avatar">
         <TeamMemberAvatar
-          member={member.member_id}
+          member={getMemberAvatarKey(member)}
+          identity={getMemberAvatarIdentity(member)}
           alt={displayName}
-          className={`${compact ? 'h-8 w-8' : 'h-10 w-10'} rounded-full`}
+          className="h-8 w-8 rounded-full"
           imageClassName="rounded-full"
         />
-        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card ${getMemberStatusDotClass(member)}`} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={`${compact ? 'text-xs' : 'text-sm'} truncate font-medium text-text`}>
+          <span
+            className={`${compact ? 'text-xs' : 'text-sm'} truncate font-semibold text-text`}
+            title={displayName}
+            data-testid="team-area-member-item-name"
+          >
             {displayName}
           </span>
         </div>
-        {!compact && member.mode && (
-          <div className="mt-0.5 truncate text-xs text-text-muted">
-            {t('team.runningMode', { mode: member.mode })}
+        {/* 第二行固定给 member_id：display name 由 leader 起，同队重名很常见
+            （三个"通用协作专员"），而 @ 时要敲的正是 id。形态与输入框的 @ 下拉
+            一致，两处对得上。主行因此用不消歧的纯展示名，避免和这里重复。 */}
+        <div
+          className="mt-0.5 truncate text-xs text-[var(--color-team-member-item-id-text)]"
+          data-testid="team-area-member-item-id"
+        >
+          @{member.member_id}
+        </div>
+        {getMemberExpertHint(member) && (
+          <div className="mt-0.5 truncate text-xs text-text-muted" data-testid="team-area-member-item-expert">
+            ★ {getMemberExpertHint(member)}
           </div>
         )}
       </div>
-      {taskProgress && taskProgress.total > 0 ? (
+      {compact ? (
+        isRunning && !showIdleStatus ? (
+          <LoadingSpinner />
+        ) : (
+          <FrameTimeIcon className="w-4 h-4 text-text-meta" />
+        )
+      ) : taskProgress && taskProgress.total > 0 ? (
         <div className="shrink-0 relative">
           <svg width="32" height="32" className="shrink-0">
             <circle
@@ -80,7 +95,7 @@ export function MemberListItem({
               cy="16"
               r={radius}
               fill="none"
-              stroke="var(--border)"
+              stroke="var(--color-border-default)"
               strokeWidth={strokeWidth}
             />
             <circle
@@ -88,7 +103,7 @@ export function MemberListItem({
               cy="16"
               r={radius}
               fill="none"
-              stroke="var(--accent)"
+              stroke="var(--color-action-primary)"
               strokeWidth={strokeWidth}
               strokeLinecap="round"
               strokeDasharray={circumference}
@@ -96,18 +111,17 @@ export function MemberListItem({
               transform="rotate(-90 16 16)"
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-text">
+          <span
+            className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-text"
+            data-testid="team-area-member-item-progress-count"
+          >
             {taskProgress.completed}/{taskProgress.total}
           </span>
         </div>
+      ) : isRunning && !showIdleStatus ? (
+        <LoadingSpinner />
       ) : (
-        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
-          statusKey === 'running'
-            ? 'bg-accent-subtle text-accent'
-            : 'bg-secondary text-muted'
-        }`}>
-          {statusLabel}
-        </span>
+        <FrameTimeIcon className="w-4 h-4 shrink-0 text-text-meta" />
       )}
     </button>
   );

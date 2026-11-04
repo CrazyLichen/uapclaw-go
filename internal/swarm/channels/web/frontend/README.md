@@ -1,10 +1,15 @@
-# OpenJiuwen Web 前端
+# UapClaw Web 前端
 
-基于 React + TypeScript + Tailwind CSS 构建的 AI 编程助手 Web 界面，设计风格参考 JiuwenClaw。
+基于 React + TypeScript + Tailwind CSS 构建的 AI 编程助手 Web 界面，风格参考 openJiuwen 设计语言，品牌与配色按 UapClaw 定制。
 
 ## 功能特性
 
 ### 已实现功能
+
+#### 🎬 设计
+- **工作流画布**：用户提示 → 简报 → 分镜 → 角色与场景设定 → R2V 镜头 → 合成，支持逐节点修改与重跑
+- **智能体**：唯一的 Director，以及各节点 Leaf DeepAgent
+- 文档见 [`docs/zh/设计.md`](../../../../docs/zh/设计.md)
 
 #### 💬 聊天交互
 - **实时对话**：WebSocket 双向通信，支持流式输出
@@ -47,6 +52,15 @@
 - **语音朗读**：鼠标悬停在 AI 回复上显示朗读按钮（TTS）
 - **打断演示**：语音输入时可随时打断 AI 处理
 
+## RSI 插件优化
+
+1. 在插件市场安装所需插件，再在 RSI「创建实验」的「初始插件」中选择它。这里只选择单个插件作为初始 Harness，不会隐式使用聊天中选中的全部插件。
+2. 前端复用 `rsi.task.create` 的可选 `package_id`。省略时沿用当前 Harness／原生基线的原有回退逻辑；显式选择不存在的插件会报错，不会悄悄换成其他基线。
+3. 服务把插件及其资源复制到任务私有目录。优化后的 Prompt、Skill、Tool、Rail 注册表会同步进插件声明，再通过同一个 `DeepAgent.load_plugin()` 校验、评测和加载。
+4. 发布后使用现有 `rsi.harness.install` 安装优化产物。新会话恢复该版本；已加载同名原插件的会话先替换再加载，失败时恢复旧版本。不会覆盖插件市场的原始包，拒绝的候选不会自动安装。
+
+当前隔离评测不支持插件的 MCP 依赖，选择这类插件会在训练前明确报错。
+
 ## 技术栈
 
 - **框架**：React 18 + TypeScript
@@ -65,7 +79,7 @@
 ### 安装依赖
 
 ```bash
-cd jiuwenswarm/channels/web/frontend
+cd internal/swarm/channels/web/frontend
 npm install
 ```
 
@@ -98,8 +112,8 @@ npm run dev
 ### 启动后端
 
 ```bash
-cd jiuwenswarm
-PORT=19000 python -m jiuwenswarm.api.app
+make serve # 首次需先 make web-build 生成前端产物
+
 ```
 
 ## 后端 API 要求
@@ -191,7 +205,7 @@ PORT=19000 python -m jiuwenswarm.api.app
 
 `npm run dev` 时，前端会把 `/ws` 的请求与响应写入本地日志文件，用于排查通信问题：
 
-- 日志文件：`jiuwenswarm/channels/web/frontend/logs/ws-dev.log`
+- 日志文件：`internal/swarm/channels/web/frontend/logs/ws-dev.log`
 - 每行一条 JSON（JSONL）
 - 记录方向：
   - `payload.direction = "outgoing"`：前端发送的 `req`
@@ -211,7 +225,7 @@ PORT=19000 python -m jiuwenswarm.api.app
 ## 项目结构
 
 ```
-jiuwenswarm/channels/web/frontend/
+internal/swarm/channels/web/frontend/
 ├── public/
 │   └── logo.png           # 应用 Logo
 ├── src/

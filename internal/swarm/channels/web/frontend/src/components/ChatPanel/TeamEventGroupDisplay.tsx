@@ -2,20 +2,16 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ListChecks, MessageSquareText, Wrench } from 'lucide-react';
 import { Message, type TodoItem } from '../../types';
-import {
-  type ParsedTeamEvent,
-  parseTeamEventMessage,
-} from './teamEventUtils';
+import { type ParsedTeamEvent, parseTeamEventMessage } from './teamEventUtils';
 import { isTeamLeaderMember } from '../../utils/teamMemberAvatar';
 import { openTeamPanel } from '../../features/teamPanelState';
-import teamProcessIcon from '../../assets/team-process.svg';
+import { isReachableTeamMemberStatus } from '../../features/teamMemberDeparture';
+import TeamProcessIcon from '../../assets/team-process.svg?react';
 import { TeamMemberAvatar } from '../TeamMemberAvatar';
-import { useSessionStore } from '../../stores';
-import type {
-  TeamMemberExecutionEvent,
-  TeamTask,
-  TeamTaskEvent,
-} from '../../stores/sessionStore';
+import { useChatStore, useSessionStore } from '../../stores';
+import type { TeamMemberExecutionEvent, TeamTask, TeamTaskEvent } from '../../stores/sessionStore';
+import { groupByWorkflowRun } from '../teamArea/runGrouping';
+import { RunGroupHeader } from '../teamArea/RunGroupHeader';
 
 type ActivityStatus = TeamTask['status'] | TodoItem['status'];
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -32,6 +28,9 @@ interface AgentTeamActivityCardProps {
 interface TeamMemberLike {
   member_id: string;
   name?: string;
+  status?: string;
+  /** 镜像的 swarmflow worker 带 run id；真实队友无此字段。 */
+  workflow_run_id?: string;
 }
 
 interface MemberActivity {
@@ -103,7 +102,7 @@ function getTaskStatusLabel(status: ActivityStatus, t: Translate): string {
 }
 
 function isRunningTaskStatus(status: ActivityStatus): boolean {
-  return status === 'claimed' || status === 'in_progress' || status === 'plan_approved';
+  return status === 'in_progress' || status === 'planning' || status === 'in_review';
 }
 
 function getMemberName(memberId: string, members: TeamMemberLike[]): string {
@@ -114,38 +113,15 @@ function isVisibleTeamMember(memberId?: string): memberId is string {
   return Boolean(memberId) && memberId !== 'user' && !isTeamLeaderMember(memberId);
 }
 
-function collectMemberIds(
-  events: ParsedTeamEvent[],
-  tasks: TeamTask[],
-  todos: TodoItem[],
-  taskEvents: TeamTaskEvent[],
-  executionEvents: TeamMemberExecutionEvent[]
-): string[] {
-  const ids = new Set<string>();
-  events.forEach((event) => {
-    if (isVisibleTeamMember(event.fromMember)) ids.add(event.fromMember);
-  });
-  tasks.forEach((task) => {
-    if (isVisibleTeamMember(task.assignee)) ids.add(task.assignee);
-  });
-  todos.forEach((todo) => {
-    if (isVisibleTeamMember(todo.claimedBy)) ids.add(todo.claimedBy);
-  });
-  taskEvents.forEach((event) => {
-    if (isVisibleTeamMember(event.assignee)) ids.add(event.assignee);
-    if (isVisibleTeamMember(event.member_id)) ids.add(event.member_id);
-  });
-  executionEvents.forEach((event) => {
-    if (isVisibleTeamMember(event.member_id)) ids.add(event.member_id);
-  });
-  return Array.from(ids);
+function isActiveTeamMember(member: TeamMemberLike): boolean {
+  return isVisibleTeamMember(member.member_id) && isReachableTeamMemberStatus(member.status);
 }
 
 function pickTaskActivity(
   memberId: string,
   tasks: TeamTask[],
   todos: TodoItem[],
-  t: Translate
+  t: Translate,
 ): ActivityCandidate | null {
   const taskCandidates: TaskCandidate[] = [
     ...tasks
@@ -184,28 +160,25 @@ function getLatestTask(candidates: TaskCandidate[]): TaskCandidate | undefined {
 function buildTaskActivity(task: TaskCandidate, t: Translate): ActivityCandidate {
   const statusLabel = getTaskStatusLabel(task.status, t);
   return {
-    summary: t('chatUi.teamActivity.summary.task', { status: statusLabel, content: compactText(task.title) }),
+    summary: compactText(task.title),
     statusLabel,
     timestamp: task.timestamp,
   };
 }
 
-function pickMessageActivity(
-  memberId: string,
-  eventItems: TeamEventItem[],
-  t: Translate
-): ActivityCandidate | null {
+function pickMessageActivity(memberId: string, eventItems: TeamEventItem[], t: Translate): ActivityCandidate | null {
   const latest = getLatestByTimestamp(
-    eventItems.filter(({ event }) => event.fromMember === memberId),
-    ({ event, message }) => toEventTime(event, message)
+    eventItems.filter(({ event }) => event.fromMember === memberId || event.toMember === memberId),
+    ({ event, message }) => toEventTime(event, message),
   );
   if (!latest) {
     return null;
   }
 
+  const isReceived = latest.event.toMember === memberId;
   return {
-    summary: t('chatUi.teamActivity.summary.message', { content: compactText(latest.event.content || latest.event.type) }),
-    statusLabel: t('chatUi.teamActivity.status.message'),
+    summary: compactText(latest.event.content || latest.event.type),
+    statusLabel: isReceived ? t('chatUi.teamActivity.status.receivedMessage') : t('chatUi.teamActivity.status.message'),
     timestamp: toEventTime(latest.event, latest.message),
   };
 }
@@ -213,11 +186,11 @@ function pickMessageActivity(
 function pickToolActivity(
   memberId: string,
   executionEvents: TeamMemberExecutionEvent[],
-  t: Translate
+  t: Translate,
 ): ActivityCandidate | null {
   const latest = getLatestByTimestamp(
     executionEvents.filter((event) => event.member_id === memberId && event.kind !== 'final'),
-    (event) => event.timestamp
+    (event) => event.timestamp,
   );
   if (!latest) {
     return null;
@@ -231,26 +204,27 @@ function pickToolActivity(
   };
 }
 
-function getExecutionActivityLabel(event: TeamMemberExecutionEvent, t: Translate): Pick<ActivityCandidate, 'summary' | 'statusLabel'> {
+function getExecutionActivityLabel(
+  event: TeamMemberExecutionEvent,
+  t: Translate,
+): Pick<ActivityCandidate, 'summary' | 'statusLabel'> {
   const content = event.content || event.tool_name || event.title;
   if (event.kind === 'file') {
     return {
-      summary: t('chatUi.teamActivity.summary.file', { content: compactText(content) }),
+      summary: compactText(content),
       statusLabel: t('chatUi.teamActivity.status.file'),
     };
   }
   return {
-    summary: t('chatUi.teamActivity.summary.tool', { content: compactText(content) }),
-    statusLabel: event.kind === 'tool_call'
-      ? t('chatUi.teamActivity.status.executingTool')
-      : t('chatUi.teamActivity.status.toolCall'),
+    summary: compactText(content),
+    statusLabel:
+      event.kind === 'tool_call'
+        ? t('chatUi.teamActivity.status.executingTool')
+        : t('chatUi.teamActivity.status.toolCall'),
   };
 }
 
-function getLatestByTimestamp<T>(
-  items: T[],
-  getTimestamp: (item: T) => number
-): T | undefined {
+function getLatestByTimestamp<T>(items: T[], getTimestamp: (item: T) => number): T | undefined {
   return items.reduce<T | undefined>((latest, item) => {
     if (!latest || getTimestamp(item) > getTimestamp(latest)) {
       return item;
@@ -266,8 +240,7 @@ function parseTeamEventItems(messages: Message[]): TeamEventItem[] {
 }
 
 function compareRecentActivity(a: MemberActivity, b: MemberActivity): number {
-  return b.timestamp - a.timestamp
-    || a.displayName.localeCompare(b.displayName, undefined, { numeric: true });
+  return b.timestamp - a.timestamp || a.displayName.localeCompare(b.displayName, undefined, { numeric: true });
 }
 
 function buildMemberActivities(
@@ -275,18 +248,11 @@ function buildMemberActivities(
   members: TeamMemberLike[],
   tasks: TeamTask[],
   todos: TodoItem[],
-  taskEvents: TeamTaskEvent[],
   executionEvents: TeamMemberExecutionEvent[],
-  t: Translate
+  t: Translate,
 ): MemberActivity[] {
   const eventItems = parseTeamEventItems(messages);
-  const memberIds = collectMemberIds(
-    eventItems.map((item) => item.event),
-    tasks,
-    todos,
-    taskEvents,
-    executionEvents
-  );
+  const memberIds = members.filter(isActiveTeamMember).map((member) => member.member_id);
 
   return memberIds
     .map((memberId) => {
@@ -295,7 +261,13 @@ function buildMemberActivities(
       const toolActivity = pickToolActivity(memberId, executionEvents, t);
       const selected = pickLatestActivity([toolActivity, messageActivity, taskActivity]);
       if (!selected) {
-        return null;
+        return {
+          memberId,
+          displayName: getMemberName(memberId, members),
+          statusLabel: t('chatUi.teamActivity.status.idle'),
+          summary: '',
+          timestamp: 0,
+        };
       }
       return {
         memberId,
@@ -305,7 +277,6 @@ function buildMemberActivities(
         timestamp: selected.timestamp,
       };
     })
-    .filter((activity): activity is MemberActivity => activity !== null)
     .sort(compareRecentActivity);
 }
 
@@ -319,23 +290,14 @@ function buildMemberCompletionSummaries(
   tasks: TeamTask[],
   todos: TodoItem[],
   taskEvents: TeamTaskEvent[],
-  executionEvents: TeamMemberExecutionEvent[]
+  executionEvents: TeamMemberExecutionEvent[],
 ): MemberActivityWithCounts[] {
   const eventItems = parseTeamEventItems(messages);
-  const memberIds = collectMemberIds(
-    eventItems.map((item) => item.event),
-    tasks,
-    todos,
-    taskEvents,
-    executionEvents
-  );
+  const memberIds = members.filter(isActiveTeamMember).map((member) => member.member_id);
 
   return memberIds
     .map((memberId) => {
       const counts = countMemberActivity(memberId, eventItems, tasks, todos, taskEvents, executionEvents);
-      if (counts.taskCount + counts.messageCount + counts.toolCount === 0) {
-        return null;
-      }
       const latestTimestamp = getLatestMemberTimestamp(memberId, eventItems, tasks, todos, taskEvents, executionEvents);
 
       return {
@@ -347,7 +309,6 @@ function buildMemberCompletionSummaries(
         counts,
       };
     })
-    .filter((activity): activity is MemberActivityWithCounts => activity !== null)
     .sort(compareRecentActivity);
 }
 
@@ -357,7 +318,7 @@ function countMemberActivity(
   tasks: TeamTask[],
   todos: TodoItem[],
   taskEvents: TeamTaskEvent[],
-  executionEvents: TeamMemberExecutionEvent[]
+  executionEvents: TeamMemberExecutionEvent[],
 ): MemberCounts {
   return {
     taskCount: countMemberTasks(memberId, tasks, todos, taskEvents),
@@ -366,12 +327,7 @@ function countMemberActivity(
   };
 }
 
-function countMemberTasks(
-  memberId: string,
-  tasks: TeamTask[],
-  todos: TodoItem[],
-  taskEvents: TeamTaskEvent[]
-): number {
+function countMemberTasks(memberId: string, tasks: TeamTask[], todos: TodoItem[], taskEvents: TeamTaskEvent[]): number {
   const taskIds = new Set<string>();
   tasks.forEach((task) => {
     if (task.assignee === memberId) {
@@ -397,24 +353,18 @@ function getLatestMemberTimestamp(
   tasks: TeamTask[],
   todos: TodoItem[],
   taskEvents: TeamTaskEvent[],
-  executionEvents: TeamMemberExecutionEvent[]
+  executionEvents: TeamMemberExecutionEvent[],
 ): number {
   const timestamps = [
     ...eventItems
       .filter(({ event }) => event.fromMember === memberId)
       .map(({ event, message }) => toEventTime(event, message)),
-    ...tasks
-      .filter((task) => task.assignee === memberId)
-      .map(toTaskTime),
-    ...todos
-      .filter((todo) => todo.claimedBy === memberId)
-      .map((todo) => toTodoTime(todo.updatedAt)),
+    ...tasks.filter((task) => task.assignee === memberId).map(toTaskTime),
+    ...todos.filter((todo) => todo.claimedBy === memberId).map((todo) => toTodoTime(todo.updatedAt)),
     ...taskEvents
       .filter((event) => event.assignee === memberId || event.member_id === memberId)
       .map((event) => event.timestamp || 0),
-    ...executionEvents
-      .filter((event) => event.member_id === memberId)
-      .map((event) => event.timestamp || 0),
+    ...executionEvents.filter((event) => event.member_id === memberId).map((event) => event.timestamp || 0),
   ];
 
   return Math.max(0, ...timestamps);
@@ -423,25 +373,22 @@ function getLatestMemberTimestamp(
 function pickLatestActivity(activities: Array<ActivityCandidate | null>): ActivityCandidate | null {
   const latest = getLatestByTimestamp(
     activities.filter((activity): activity is ActivityCandidate => activity !== null),
-    (activity) => activity.timestamp
+    (activity) => activity.timestamp,
   );
   return latest || null;
 }
 
-function sortActivitiesByMember<T extends MemberActivity>(
-  activities: T[],
-  members: TeamMemberLike[]
-): T[] {
-  const orderedIds = members
-    .map((member) => member.member_id)
-    .filter(isVisibleTeamMember);
+function sortActivitiesByMember<T extends MemberActivity>(activities: T[], members: TeamMemberLike[]): T[] {
+  const orderedIds = members.map((member) => member.member_id).filter(isVisibleTeamMember);
   const order = new Map(orderedIds.map((memberId, index) => [memberId, index]));
   return [...activities].sort((a, b) => {
     const aOrder = order.get(a.memberId) ?? Number.MAX_SAFE_INTEGER;
     const bOrder = order.get(b.memberId) ?? Number.MAX_SAFE_INTEGER;
-    return aOrder - bOrder
-      || a.displayName.localeCompare(b.displayName, undefined, { numeric: true })
-      || a.timestamp - b.timestamp;
+    return (
+      aOrder - bOrder ||
+      a.displayName.localeCompare(b.displayName, undefined, { numeric: true }) ||
+      a.timestamp - b.timestamp
+    );
   });
 }
 
@@ -466,16 +413,31 @@ function MemberCountSummary({ counts }: { counts: MemberCounts }) {
   const { t } = useTranslation();
 
   return (
-    <span className="team-event-member-counts">
-      <span className="team-event-member-count" title={t('chatUi.teamActivity.counts.tasks')}>
+    <span className="team-event-member-counts" data-testid="chat-panel-team-event-member-counts">
+      <span
+        className="team-event-member-count"
+        data-testid="chat-panel-team-event-member-count"
+        data-variant="tasks"
+        title={t('chatUi.teamActivity.counts.tasks')}
+      >
         <ListChecks aria-hidden="true" />
         {counts.taskCount}
       </span>
-      <span className="team-event-member-count" title={t('chatUi.teamActivity.counts.messages')}>
+      <span
+        className="team-event-member-count"
+        data-testid="chat-panel-team-event-member-count"
+        data-variant="messages"
+        title={t('chatUi.teamActivity.counts.messages')}
+      >
         <MessageSquareText aria-hidden="true" />
         {counts.messageCount}
       </span>
-      <span className="team-event-member-count" title={t('chatUi.teamActivity.counts.tools')}>
+      <span
+        className="team-event-member-count"
+        data-testid="chat-panel-team-event-member-count"
+        data-variant="tools"
+        title={t('chatUi.teamActivity.counts.tools')}
+      >
         <Wrench aria-hidden="true" />
         {counts.toolCount}
       </span>
@@ -501,28 +463,31 @@ function AgentTeamHeader({
     <button
       type="button"
       className="team-event-group-summary"
+      data-testid="chat-panel-team-event-group-summary"
       onClick={onToggle}
       aria-expanded={expanded}
     >
-      <span className="team-event-group-summary__main">
-        <span className="team-event-group-summary__icon" aria-hidden="true">
-          <img src={teamProcessIcon} alt="" />
+      <span className="team-event-group-summary__main" data-testid="chat-panel-team-event-group-summary-main">
+        <span
+          className="team-event-group-summary__icon"
+          aria-hidden="true"
+          data-testid="chat-panel-team-event-group-summary-icon"
+        >
+          <TeamProcessIcon aria-hidden />
         </span>
-        <span className="team-event-group-summary__title">
+        <span className="team-event-group-summary__title" data-testid="chat-panel-team-event-group-summary-title">
           {buildProgressLabel(memberCount, isProcessing, t)}
         </span>
       </span>
       {isProcessing && (
-        <span className="team-event-group-summary__spinner" aria-hidden="true" />
-      )}
-      {isProcessing && (
-        <span className="team-event-group-summary__activity">
-          {buildActivityText(currentActivity, t)}
+        <span className="team-event-group-summary__activity" data-testid="chat-panel-team-event-group-summary-activity">
+          ｜ {buildActivityText(currentActivity, t)}
         </span>
       )}
       <span
         className="team-event-group-summary__chevron"
         aria-hidden="true"
+        data-testid="chat-panel-team-event-group-summary-open-chat"
         title={t('chatUi.teamActivity.openGroupChatTitle')}
         onClick={(event) => {
           event.stopPropagation();
@@ -545,29 +510,89 @@ export function AgentTeamActivityCard({
 }: AgentTeamActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useTranslation();
-  const { teamMembers } = useSessionStore();
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const teamMembers = useSessionStore((s) => s.runtimes[activeSessionId ?? '']?.teamMembers ?? []);
   const members = teamMembers as TeamMemberLike[];
-  const activities = useMemo(
-    () => {
-      if (!isProcessing) {
-        return buildMemberCompletionSummaries(messages, members, tasks, todos, taskEvents, executionEvents);
-      }
-      return buildMemberActivities(messages, members, tasks, todos, taskEvents, executionEvents, t);
-    },
-    [messages, members, tasks, todos, taskEvents, executionEvents, isProcessing, t]
+  const workflowRuns = useSessionStore((s) => s.runtimes[activeSessionId ?? '']?.workflowRuns ?? []);
+  const { activities, activeCount } = useMemo(() => {
+    const count = members.filter(isActiveTeamMember).length;
+    if (!isProcessing) {
+      const acts = buildMemberCompletionSummaries(messages, members, tasks, todos, taskEvents, executionEvents);
+      return { activities: acts, activeCount: count };
+    }
+    const acts = buildMemberActivities(messages, members, tasks, todos, executionEvents, t);
+    return { activities: acts, activeCount: count };
+    }, [messages, members, tasks, todos, taskEvents, executionEvents, isProcessing, t]);
+  // 镜像 worker 按 run 分组；真实队友（无 workflow_run_id）平铺。先按名册排序再分组，
+  // 组内与组间都沿用名册顺序（groupByWorkflowRun 按首见顺序稳定成组）。
+  const sortedActivities = useMemo(
+    () => sortActivitiesByMember(activities, members),
+    [activities, members],
   );
+  const runIdByMember = useMemo(
+    () => new Map(members.map((member) => [member.member_id, member.workflow_run_id])),
+    [members],
+  );
+  const groupedActivities = useMemo(() => {
+    const { ungrouped, groups } = groupByWorkflowRun(
+      sortedActivities.map((activity) => ({ ...activity, workflow_run_id: runIdByMember.get(activity.memberId) })),
+      workflowRuns,
+    );
+    return { ungrouped, groups };
+  }, [sortedActivities, runIdByMember, workflowRuns]);
 
   if (activities.length === 0) {
     return null;
   }
 
-  const currentActivity = activities[0];
+  const currentActivity = activities.find((a) => a.timestamp > 0);
+
+  const renderActivityRow = (activity: MemberActivity) => (
+    <button
+      key={activity.memberId}
+      type="button"
+      className="team-event-group-row team-event-group-row--activity"
+      data-testid="chat-panel-team-event-group-row"
+      data-variant={activity.memberId}
+      onClick={() => openMemberDetail(activity.memberId)}
+    >
+      <div className="team-event-group-row__avatar" data-testid="chat-panel-team-event-group-row-avatar">
+        <TeamMemberAvatar member={activity.memberId} className="h-7 w-7" />
+      </div>
+      <div className="team-event-group-row__main" data-testid="chat-panel-team-event-group-row-main">
+        <div className="team-event-group-row__meta" data-testid="chat-panel-team-event-group-row-meta">
+          <span className="team-event-group-row__member" data-testid="chat-panel-team-event-group-row-member">
+            {activity.displayName}
+          </span>
+          {activity.counts ? (
+            <MemberCountSummary counts={activity.counts} />
+          ) : (
+            <span
+              className="team-event-group-chip team-event-group-chip--status"
+              data-testid="chat-panel-team-event-group-chip"
+              data-variant="status"
+            >
+              {activity.statusLabel}
+            </span>
+          )}
+        </div>
+        {!activity.counts && (
+          <div
+            className="team-event-group-row__content"
+            data-testid="chat-panel-team-event-group-row-content"
+          >
+            {activity.summary}
+          </div>
+        )}
+      </div>
+    </button>
+  );
 
   return (
-    <div className="chat-active-team-group animate-rise">
-      <div className="team-event-group team-event-group--activity">
+    <div className="chat-active-team-group animate-rise" data-testid="chat-panel-team-activity-card">
+      <div className="team-event-group team-event-group--activity" data-testid="chat-panel-team-event-group">
         <AgentTeamHeader
-          memberCount={activities.length}
+          memberCount={activeCount}
           expanded={expanded}
           isProcessing={isProcessing}
           currentActivity={currentActivity}
@@ -575,35 +600,21 @@ export function AgentTeamActivityCard({
           onOpenGroupChat={() => openTeamPanel('team', 'group')}
         />
         {expanded && (
-          <div className="team-event-group-list team-event-group-list--activity">
-            {sortActivitiesByMember(activities, members).map((activity) => (
-              <button
-                key={activity.memberId}
-                type="button"
-                className="team-event-group-row team-event-group-row--activity"
-                onClick={() => openMemberDetail(activity.memberId)}
-              >
-                <div className="team-event-group-row__avatar">
-                  <TeamMemberAvatar member={activity.memberId} className="h-7 w-7" />
-                </div>
-                <div className="team-event-group-row__main">
-                  <div className="team-event-group-row__meta">
-                    <span className="team-event-group-row__member">{activity.displayName}</span>
-                    {activity.counts ? (
-                      <MemberCountSummary counts={activity.counts} />
-                    ) : (
-                      <span className="team-event-group-chip team-event-group-chip--status">
-                        {activity.statusLabel}
-                      </span>
-                    )}
-                  </div>
-                  {!activity.counts && (
-                    <div className="team-event-group-row__content">
-                      {activity.summary}
-                    </div>
-                  )}
-                </div>
-              </button>
+          <div
+            className="team-event-group-list team-event-group-list--activity"
+            data-testid="chat-panel-team-event-group-list"
+          >
+            {groupedActivities.ungrouped.map(renderActivityRow)}
+            {groupedActivities.groups.map((group) => (
+              <div key={group.runId}>
+                <RunGroupHeader
+                  name={group.name}
+                  shortId={group.shortId}
+                  status={group.status}
+                  runId={group.runId}
+                />
+                {group.items.map(renderActivityRow)}
+              </div>
             ))}
           </div>
         )}

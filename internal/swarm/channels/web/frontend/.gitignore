@@ -1,4 +1,6 @@
+# 依赖与开发日志不入库
 node_modules/
-dist/
-!dist/index.html
 *.log
+
+# dist/ 有意不做忽略：源码与构建产物双轨入库，
+# clone 后直接 go build 即可得到带前端的二进制（CI 仍会 npm ci && npm run build 重建）。
