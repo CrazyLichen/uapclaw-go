@@ -237,10 +237,16 @@ func (a *ContextEvolvingReActAgent) Execute(ctx context.Context, query string, s
 	}
 
 	answer, _ := result["output"].(string)
+	success := trajectorySuccess(result)
+	if !success {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("output", answer).
+			Msg("[ContextEvolvingReActAgent] inner result marked as error")
+	}
 
 	return &cecontext.TrajectoryResult{
 		Answer:     answer,
-		Success:    true,
+		Success:    success,
 		Trajectory: a.extractTrajectory(sessionID, query, answer),
 	}, nil
 }
@@ -460,4 +466,20 @@ func copyMap(m map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
+}
+
+// trajectorySuccess 判断内层 invoke 结果是否应记为成功轨迹。
+//
+// ReAct 循环在「空回答 / 迭代耗尽 / provider 错误」时会返回 result_type=error
+// 且 output 携带说明文案；若一律置 Success=true，失败轨迹会被当作成功样本
+// 喂进演进数据。
+func trajectorySuccess(result map[string]any) bool {
+	if result == nil {
+		return false
+	}
+	resultType, ok := result["result_type"].(string)
+	if !ok {
+		return true
+	}
+	return !strings.EqualFold(resultType, "error")
 }

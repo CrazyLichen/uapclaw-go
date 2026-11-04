@@ -263,3 +263,25 @@ func TestNewContextEvolvingReActAgent_带持久化参数(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, agent.GetMemoryService())
 }
+
+// TestTrajectorySuccess 内层 result_type=error 时不记为成功轨迹
+func TestTrajectorySuccess(t *testing.T) {
+	cases := []struct {
+		name   string
+		result map[string]any
+		want   bool
+	}{
+		{"answer", map[string]any{"output": "ok", "result_type": "answer"}, true},
+		{"error", map[string]any{"output": "模型未返回有效内容", "result_type": "error"}, false},
+		{"ERROR 大写", map[string]any{"output": "x", "result_type": "ERROR"}, false},
+		{"无 result_type 兼容", map[string]any{"output": "ok"}, true},
+		{"nil", nil, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := trajectorySuccess(c.result); got != c.want {
+				t.Fatalf("trajectorySuccess=%v, want %v", got, c.want)
+			}
+		})
+	}
+}
