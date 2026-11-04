@@ -15,7 +15,6 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	schema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -457,20 +456,15 @@ func NewDeepAgentConfig() *DeepAgentConfig {
 
 // ResolveInnerReactMaxIterations 解析内层 ReAct 循环的迭代上限。
 //
-// 0（未配置）表示不限（math.MaxInt）；>0 原样使用，即使启用了外层 task loop；
-// 负数属无效配置，按未配置处理并告警。
+// 0（未配置）表示不限（math.MaxInt）；其余值（含负数）原样透传，即使启用了
+// 外层 task loop。负数不做降级——与上游一致：上游只判 `is None`，显式值原样用。
 //
-// Python: resolve_inner_react_max_iterations() (harness/schema/config.py)
+// Python: resolve_inner_react_max_iterations() (harness/schema/config.py:174-182)
 func (c *DeepAgentConfig) ResolveInnerReactMaxIterations() int {
-	if c.MaxIterations > 0 {
-		return c.MaxIterations
+	if c.MaxIterations == 0 {
+		return math.MaxInt
 	}
-	if c.MaxIterations < 0 {
-		logger.Warn(logger.ComponentAgentCore).
-			Int("max_iterations", c.MaxIterations).
-			Msg("negative max_iterations treated as unbounded")
-	}
-	return math.MaxInt
+	return c.MaxIterations
 }
 
 // EffectiveCompletionTimeout 返回有效的完成超时秒数，0 取默认值

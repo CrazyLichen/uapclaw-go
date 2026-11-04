@@ -677,9 +677,12 @@ func TestVideoModelConfigJSON(t *testing.T) {
 
 // TestDeepAgentConfig_ResolveInnerReactMaxIterations 验证 0 → 不限、正数原样、负数按不限
 func TestDeepAgentConfig_ResolveInnerReactMaxIterations(t *testing.T) {
+	// 0 = 未配置 = 不限（对应上游 None → sys.maxsize）
 	assert.Equal(t, math.MaxInt, (&DeepAgentConfig{}).ResolveInnerReactMaxIterations())
+	// 显式值原样透传，与 enable_task_loop 无关
 	assert.Equal(t, 7, (&DeepAgentConfig{MaxIterations: 7}).ResolveInnerReactMaxIterations())
-	assert.Equal(t, math.MaxInt, (&DeepAgentConfig{MaxIterations: -3}).ResolveInnerReactMaxIterations())
+	// 负数同样透传：上游只判 None，不做降级（不去猜"配置笔误"）
+	assert.Equal(t, -3, (&DeepAgentConfig{MaxIterations: -3}).ResolveInnerReactMaxIterations())
 }
 
 // TestNewDeepAgentConfig_MaxIterations未配置 验证默认不再预置 15

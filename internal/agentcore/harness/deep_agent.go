@@ -1592,13 +1592,7 @@ func (d *DeepAgent) hotReloadModel(ctx context.Context, config *hschema.DeepAgen
 	// 内层 ReAct 迭代上限：未配置=不限，显式配置优先（与 task loop 无关）
 	// Python: _bind_inner_react_max_iterations() (deep_agent.py L250-263)
 	newReactConfig.MaxIterations = config.ResolveInnerReactMaxIterations()
-	if config.MaxIterations > 0 {
-		logger.Info(logComponent).
-			Int("max_iterations", newReactConfig.MaxIterations).
-			Msg("[DeepAgent] inner ReAct max_iterations configured")
-	} else {
-		logger.Info(logComponent).Msg("[DeepAgent] inner ReAct max_iterations unbounded (default)")
-	}
+	logInnerReactMaxIterations(config.MaxIterations, newReactConfig.MaxIterations)
 
 	if config.ContextEngineConfig != nil {
 		newReactConfig.ContextEngineConfig = *config.ContextEngineConfig
@@ -1787,13 +1781,7 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 	// 内层 ReAct 迭代上限：未配置=不限，显式配置优先（与 task loop 无关）
 	// Python: _bind_inner_react_max_iterations() (deep_agent.py L250-263)
 	reactConfig.MaxIterations = cfg.ResolveInnerReactMaxIterations()
-	if cfg.MaxIterations > 0 {
-		logger.Info(logComponent).
-			Int("max_iterations", reactConfig.MaxIterations).
-			Msg("[DeepAgent] inner ReAct max_iterations configured")
-	} else {
-		logger.Info(logComponent).Msg("[DeepAgent] inner ReAct max_iterations unbounded (default)")
-	}
+	logInnerReactMaxIterations(cfg.MaxIterations, reactConfig.MaxIterations)
 
 	if cfg.ContextEngineConfig != nil {
 		reactConfig.ContextEngineConfig = *cfg.ContextEngineConfig
@@ -3262,4 +3250,15 @@ func outerRoundsExceededResult(outerRound int) (map[string]any, bool) {
 		"result_type": "error",
 		"stop_reason": "MaxOuterRounds",
 	}, true
+}
+
+// logInnerReactMaxIterations 记录内层 ReAct 上限的解析结果（文案与上游逐字一致）。
+//
+// Python: _bind_inner_react_max_iterations() (deep_agent.py:248-263)
+func logInnerReactMaxIterations(configured, resolved int) {
+	if configured == 0 {
+		logger.Info(logComponent).Msg("[DeepAgent] inner ReAct max_iterations=unbounded (default)")
+		return
+	}
+	logger.Info(logComponent).Msgf("[DeepAgent] inner ReAct max_iterations=%d (configured)", resolved)
 }
