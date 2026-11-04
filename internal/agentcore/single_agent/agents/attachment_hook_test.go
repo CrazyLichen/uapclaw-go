@@ -6,6 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 )
 
@@ -33,4 +36,32 @@ func TestSetPromptAttachmentManager(t *testing.T) {
 	require.NotNil(t, a.promptAttachments)
 	a.SetPromptAttachmentManager(nil)
 	require.Nil(t, a.promptAttachments)
+}
+
+// TestAttachmentWindowOptions_按provider挂投影 覆盖 nil 分支与百炼/Anthropic 两种投影。
+func TestAttachmentWindowOptions_按provider挂投影(t *testing.T) {
+	m := prompts.NewManager()
+
+	require.Nil(t, attachmentWindowOptions(nil, nil, "s1"))
+	require.Nil(t, attachmentWindowOptions(m, nil, "s1"))
+	require.Nil(t, attachmentWindowOptions(m, &llm.Model{}, "s1"))
+
+	bailian := &llm.Model{ClientConfig: &llmschema.ModelClientConfig{ClientProvider: "dashscope"}}
+	opts := attachmentWindowOptions(m, bailian, "s1")
+	require.Len(t, opts, 1)
+
+	window := ceiface.NewContextWindow()
+	window.ContextMessages = []llmschema.BaseMessage{
+		llmschema.NewUserMessage("<system-reminder>x</system-reminder>", llmschema.WithMetadata(map[string]any{
+			prompts.MetadataKeyAttachmentHistory: true,
+			prompts.MetadataKeySessionID:         "s1",
+		})),
+	}
+	projected := ceiface.WindowMutatorsFromOption(opts...)[0](window)
+	require.IsType(t, &llmschema.SystemMessage{}, projected.ContextMessages[0], "dashscope 应换 System")
+
+	anthropic := &llm.Model{ClientConfig: &llmschema.ModelClientConfig{ClientProvider: "anthropic"}}
+	opts = attachmentWindowOptions(m, anthropic, "s1")
+	projected = ceiface.WindowMutatorsFromOption(opts...)[0](window)
+	require.IsType(t, &llmschema.UserMessage{}, projected.ContextMessages[0], "anthropic 保持 User")
 }

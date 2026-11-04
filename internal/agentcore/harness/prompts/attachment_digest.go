@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"sort"
 )
 
 // canonicalJSON 输出键排序、无空白、不转义 HTML 的 JSON。
@@ -60,15 +59,5 @@ func stateBySection(items []*Attachment) map[string]string {
 		}
 		out[item.Section] = HashPromptAttachment(item)
 	}
-	return out
-}
-
-// sortedSections 返回排序后的 section 列表（日志与断言稳定用）。
-func sortedSections(state map[string]string) []string {
-	out := make([]string, 0, len(state))
-	for k := range state {
-		out = append(out, k)
-	}
-	sort.Strings(out)
 	return out
 }
