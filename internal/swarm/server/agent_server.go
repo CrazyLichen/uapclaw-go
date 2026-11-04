@@ -50,6 +50,8 @@ type AgentServer struct {
 	agentManager *runtime.AgentManager
 	// agentRuntime 运行时编排（Align: Python runtime/service.py AgentRuntime）
 	agentRuntime *swruntime.AgentRuntime
+	// planController 计划模式控制器（进程内唯一，对齐 Python _SERVER_PLAN_CONTROLLER）
+	planController *swruntime.PlanModeController
 	// agentConfigService Agent 配置 CRUD 服务
 	// Python: self._agent_config_service = AgentConfigService(workspace_dir)
 	agentConfigService *runtime.AgentConfigService
@@ -107,8 +109,10 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 		stopCh:             make(chan struct{}),
 	}
 	// 控制事件走 push 通道（对齐 Python _send_runtime_event 的 plan_mode_exited 分支）
+	server.planController = swruntime.NewPlanModeController()
 	server.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
-		Manager: agentManager,
+		Manager:        agentManager,
+		PlanController: server.planController,
 		OnControlEvent: func(ev *swruntime.RuntimeEvent) {
 			// 控制事件推送失败只影响前端状态刷新，记日志不阻断运行时
 			if pushErr := server.SendPush(context.Background(), map[string]any{
@@ -395,7 +399,7 @@ func (s *AgentServer) startConsumeLoop(ctx context.Context) {
 				Str("request_id", envelope.RequestID).
 				Str("method", envelope.Method).
 				Msg("E2A request envelope received")
-			go s.handleEnvelope(ctx, envelope)
+			go s.handleMessage(ctx, envelope)
 		}
 	}
 }
@@ -516,15 +520,23 @@ func (s *AgentServer) cancelAllStreamTasks() {
 // 原先裸 `ct.RecvCh() <- data` 绕过锁保护，Close 后 send on closed channel panic。
 //
 // TODO(Transport): AgentTransport 接口增加服务端方法后消除类型断言。
-func (s *AgentServer) sendToGateway(data []byte) {
+//
+// 返回 false 表示 transport 已关闭或接收缓冲已满（对齐 Python _send_runtime_event
+// "发送失败即停止流" 的语义）。
+func (s *AgentServer) sendToGateway(data []byte) bool {
+	if s.transport == nil {
+		logger.Warn(logComponent).Msg("sendToGateway failed: no transport")
+		return false
+	}
 	if ct, ok := s.transport.(*transport.ChannelTransport); ok {
-		ct.TrySendToRecvCh(data)
-		return
+		return ct.TrySendToRecvCh(data)
 	}
 	// 将来 WebSocketTransport 走 Send 路径
 	if err := s.transport.Send(context.Background(), data); err != nil {
 		logger.Warn(logComponent).Err(err).Msg("failed to send to Gateway")
+		return false
 	}
+	return true
 }
 
 // TODO(#stub): stub 方法（对齐 Python）

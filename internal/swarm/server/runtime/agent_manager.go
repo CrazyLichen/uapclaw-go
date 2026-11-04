@@ -226,28 +226,6 @@ func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode stri
 	return nil
 }
 
-// ResetSessionPlanState 清理指定会话在全部实例上的计划模式记忆。
-//
-// Python: AgentServer 删除会话时调用 plan_mode_controller.reset_session
-func (am *AgentManager) ResetSessionPlanState(channelID, sessionID string) {
-	if am == nil || sessionID == "" {
-		return
-	}
-	channelKey := normalizeChannelID(channelID)
-	am.mu.RLock()
-	entries := am.agents[channelKey]
-	targets := make([]*UapClawSwarm, 0, len(entries))
-	for _, entry := range entries {
-		if entry != nil && entry.agent != nil {
-			targets = append(targets, entry.agent)
-		}
-	}
-	am.mu.RUnlock()
-	for _, agent := range targets {
-		agent.ResetPlanSession(sessionID)
-	}
-}
-
 // Initialize 初始化 AgentManager。
 // Python: AgentManager.initialize(channel_id, extra_config) -> dict|None。
 // 非 ACP 通道返回 nil；ACP 通道记录能力、重置 agents、以 code 模式创建并返回 capabilities。
@@ -818,10 +796,22 @@ func resolveWorkspaceDirFromRequest(request *schema.AgentRequest) string {
 // GetChatAgent 按 mode/subMode/projectDir 取聊天 agent（runtime.AgentManagerPort 实现）。
 //
 // Python: runtime/request.py prepare_chat_turn 中的 get_agent_for_request（简化版，无原子准入）。
+// GetChatAgent 返回按 mode/subMode/projectDir 选中（必要时创建）的聊天 agent。
 func (am *AgentManager) GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string) (swruntime.ChatAgentPort, error) {
 	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, subMode)
 	if err != nil {
 		return nil, err
 	}
 	return agent, nil
+}
+
+// GetChatAgentNoWait 非阻塞返回符合条件的既有 agent（不存在时返回 nil）。
+//
+// Python: AgentManager.get_agent_nowait
+func (am *AgentManager) GetChatAgentNoWait(channelID, mode, projectDir, subMode string) swruntime.ChatAgentPort {
+	agent := am.GetAgentNoWait(channelID, mode, projectDir, subMode)
+	if agent == nil {
+		return nil
+	}
+	return agent
 }

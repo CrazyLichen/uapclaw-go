@@ -57,6 +57,8 @@ type PlanStateResult struct {
 	Events []ControlEvent
 	// Query 改写后的 query（未改写时等于入参）
 	Query string
+	// ModeOverride 需要回写 params.mode 的权威串（仅阻断进入分支非空）
+	ModeOverride string
 }
 
 // PlanStateAccessor plan 状态读写入口（运行期由调用方传入，对齐上游
@@ -309,6 +311,43 @@ func InjectActivationReminder(query string) string {
 	return planActivationReminder + query
 }
 
+// ApplyPlanResult 把状态同步结果回写到请求参数（query 提醒与 mode 阻断）。
+//
+// Python: ensure_state 直接改写 request.params["query"]/["mode"]；Go 用返回值
+// 传递，由调用方在此统一回写，保证 BuildInputs 之前 params 已是最终值。
+func ApplyPlanResult(req *schema.AgentRequest, res PlanStateResult) {
+	if req == nil {
+		return
+	}
+	params := parseRequestParams(req)
+	changed := false
+	if res.ModeOverride != "" {
+		params["mode"] = res.ModeOverride
+		changed = true
+	}
+	if res.Entered && res.Query != "" {
+		original, _ := params["query"].(string)
+		params[PlanReminderOriginalQueryKey] = original
+		params["query"] = res.Query
+		changed = true
+	}
+	if changed {
+		writeRequestParams(req, params)
+	}
+}
+
+// ApplyCanonicalMode 把请求的权威 mode 串写回 params["mode"]。
+//
+// Python: check_post_process_exit 首步 `request.params["mode"] = resolved.canonical_mode`
+func ApplyCanonicalMode(req *schema.AgentRequest) {
+	if req == nil {
+		return
+	}
+	params := parseRequestParams(req)
+	params["mode"] = ResolveRequestRuntimeModeFromRequest(req).CanonicalMode
+	writeRequestParams(req, params)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isSingleAgentMode 判断是否单 agent 模式（agent 族或 code 族；team 族不参与）。
@@ -318,7 +357,8 @@ func isSingleAgentMode(canonical string) bool {
 
 // blockEntry 阻断进入：清 slug、发退出事件。
 //
-// Python: ensure_state 的 blocked 分支——此时状态已是 normal，只需清 slug 并下发退出事件。
+// Python: ensure_state 的 blocked 分支——此时状态已是 normal，只需清 slug、
+// 回写 params.mode 为退出模式并下发退出事件。
 func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, resolved ResolvedMode, res PlanStateResult, acc PlanStateAccessor) (PlanStateResult, error) {
 	st, err := acc.LoadPlanState(ctx, sessionID)
 	if err != nil {
@@ -333,6 +373,7 @@ func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, r
 	}
 	res.Entered = false
 	res.Restored = false
+	res.ModeOverride = resolved.NormalMode
 	res.Events = append(res.Events, ControlEvent{EventType: PlanModeExitedEvent, Mode: resolved.NormalMode})
 	return res, nil
 }

@@ -18,22 +18,10 @@ type planStateStore struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// PlanStateAccessor 返回 plan 状态读写入口（由 UapClawSwarm 调用控制器时传入）。
+// PlanStateAccessor 返回 plan 状态读写入口（由 AgentRuntime 调用控制器时传入）。
 //
 // Python: PlanModeController.open_state_session(agent, session_id) 的 Go 侧适配。
 func (d *DeepAdapter) PlanStateAccessor() swruntime.PlanStateAccessor { return &planStateStore{d: d} }
-
-// PlanController 返回计划模式控制器（未初始化时为 nil）。
-func (d *DeepAdapter) PlanController() *swruntime.PlanModeController { return d.planController }
-
-// ResetPlanSession 清理会话级的计划状态记忆。
-//
-// Python: PlanModeController.reset_session（删除会话时调用）
-func (d *DeepAdapter) ResetPlanSession(sessionID string) {
-	if d.planController != nil {
-		d.planController.ResetSession(sessionID)
-	}
-}
 
 // openPlanSession 打开（或复用）会话，供状态读写使用。
 //

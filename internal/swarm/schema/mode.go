@@ -162,6 +162,63 @@ func IsAgentMode(mode string) bool {
 	}
 }
 
+// ResolveNewCanonicalModeText 同 ResolveNewCanonicalMode，但只按原文查新三段表。
+//
+// Python: resolve_new_canonical_mode 用 canonicalize_mode_text（只解析别名，不套
+// DEPRECATION_MAP）；legacy 串（agent/code/team.plan.normal…）必须交给调用方自己的
+// 分支处理，不能被提前折叠成新 canonical。
+func ResolveNewCanonicalModeText(text string) (managerMode, subMode, canonical string, ok bool) {
+	segments, found := newCanonicalModeSegments[text]
+	if !found {
+		return "", "", "", false
+	}
+	role, environment, state := segments[0], segments[1], segments[2]
+	switch {
+	case role == "team" && environment == "code":
+		return "code", "team", text, true
+	case environment == "code":
+		return "code", state, text, true
+	case state == "plan":
+		return role, "plan", text, true
+	default:
+		return role, "", text, true
+	}
+}
+
+// CanonicalizeModeText 归一 mode 文本：小写去空白 → 空值回落 agent → 只解析 MODE_ALIASES。
+//
+// Python: gateway/common/mode_matrix.py canonicalize_mode_text（不套 DEPRECATION_MAP，
+// 保留 agent / code / team.plan.normal 等 legacy 串原文）。
+func CanonicalizeModeText(raw string) string {
+	t := strings.ToLower(strings.TrimSpace(raw))
+	if t == "" {
+		return "agent"
+	}
+	if mapped, ok := modeAliases[t]; ok {
+		return mapped
+	}
+	return t
+}
+
+// IsWebComposableMode 判断 mode 是否参与 Web 的 mode + work_mode 组合。
+//
+// Python: gateway/common/mode_matrix.py WEB_COMPOSABLE_MODES
+func IsWebComposableMode(modeText string) bool {
+	_, ok := webComposableModes[modeText]
+	return ok
+}
+
+// ComposeWebMode 把 Web 的 mode + work_mode 组合成后端三元组。
+//
+// Python: gateway/common/mode_matrix.py compose_web_mode（_WEB_MODE_TABLE）
+func ComposeWebMode(modeText, workMode string) (managerMode, subMode, canonical string, ok bool) {
+	entry, found := webComposeTable[[2]string{modeText, workMode}]
+	if !found {
+		return "", "", "", false
+	}
+	return entry[0], entry[1], entry[2], true
+}
+
 // ResolveNewCanonicalMode 把新三段 canonical 模式解析为 (managerMode, subMode, canonical)。
 //
 // Python: gateway/common/mode_matrix.py resolve_new_canonical_mode。
@@ -212,12 +269,38 @@ var deprecatedModes = map[string]string{
 	"code.plan":        "agent.code.plan",
 	"code.team":        "team.code.normal",
 	"team":             "team.work.normal",
-	"team.plan.normal": "team.work.plan",
+	"team.plan.normal": "team.work.normal",
 	"team.plan.code":   "team.code.plan",
 }
 
-// CanonicalizeMode 把任意入站模式串 canonicalize 到新三段命名。
+// webComposableModes Web 的 mode + work_mode 组合支持的 mode 取值。
 //
+// Python: gateway/common/mode_matrix.py WEB_COMPOSABLE_MODES
+var webComposableModes = map[string]struct{}{
+	"agent":             {},
+	"agent.plan":        {},
+	"team":              {},
+	"agent.work.normal": {},
+	"agent.work.plan":   {},
+}
+
+// webComposeTable (mode, work_mode) → (managerMode, subMode, canonicalMode)。
+//
+// Python: gateway/common/mode_matrix.py _WEB_MODE_TABLE。
+// code profile 的单 agent 组合只在 legacy mode 上提供；新三段 agent.work.* 自带
+// work profile，不再参与 code 组合。
+var webComposeTable = map[[2]string][3]string{
+	{"agent", "work"}:             {"agent", "", "agent"},
+	{"agent.plan", "work"}:        {"agent", "plan", "agent.plan"},
+	{"agent", "code"}:             {"code", "normal", "code.normal"},
+	{"agent.plan", "code"}:        {"code", "plan", "code.plan"},
+	{"team", "work"}:              {"team", "", "team"},
+	{"team", "code"}:              {"code", "team", "code.team"},
+	{"agent.work.normal", "work"}: {"agent", "", "agent.work.normal"},
+	{"agent.work.plan", "work"}:   {"agent", "plan", "agent.work.plan"},
+}
+
+// CanonicalizeMode 把任意入站模式串 canonicalize 到新三段命名。//
 // Python: gateway/common/mode_matrix.py canonicalize_mode_text（别名 → 弃用映射 →
 // 未命中原样返回）。与 NormalizeMode 的区别：本函数不做"未知串回落默认"，
 // 只做确定的迁移映射。

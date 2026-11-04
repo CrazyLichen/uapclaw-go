@@ -22,6 +22,8 @@ type PrepareChatTurnFunc func(
 type AgentRuntimeDeps struct {
 	// Manager agent 实例管理器
 	Manager AgentManagerPort
+	// PlanController 计划模式控制器（nil 时新建，server 生命周期内唯一）
+	PlanController *PlanModeController
 	// OnControlEvent 控制事件回调（nil 时仅记日志）
 	OnControlEvent func(*RuntimeEvent)
 	// Prepare 聊天轮次准备（nil 时用 PrepareChatTurn）
@@ -40,6 +42,8 @@ type AgentRuntime struct {
 	closed bool
 	// manager agent 实例管理器
 	manager AgentManagerPort
+	// planController 计划模式控制器（runtime 持有，对齐上游 self._plan_controller）
+	planController *PlanModeController
 	// onControlEvent 控制事件回调
 	onControlEvent func(*RuntimeEvent)
 	// prepare 聊天轮次准备（可注入）
@@ -52,12 +56,22 @@ type AgentRuntime struct {
 //
 // Python: AgentRuntime.__init__
 func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
+	controller := deps.PlanController
+	if controller == nil {
+		controller = NewPlanModeController()
+	}
 	return &AgentRuntime{
 		manager:        deps.Manager,
+		planController: controller,
 		onControlEvent: deps.OnControlEvent,
 		prepare:        deps.Prepare,
 	}
 }
+
+// PlanController 返回运行时持有的计划模式控制器。
+//
+// Python: AgentRuntime.plan_controller
+func (r *AgentRuntime) PlanController() *PlanModeController { return r.planController }
 
 // Start 幂等启动（不接管 Runner/checkpointer 生命周期）。
 //
@@ -117,20 +131,20 @@ func UsesSessionRuntime(req *schema.AgentRequest) bool {
 // Python: AgentRuntime.invoke → _invoke_started（service.py:1694/1786）
 func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]*RuntimeEvent, error) {
 	req = NormalizeRequest(req)
-	_, _, agent, err := r.prepareTurn(ctx, req)
+	_, subMode, agent, err := r.prepareTurn(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	enabled := r.planEnabled(req, agent)
+	enabled := r.planEnabled(req)
 	if enabled {
-		r.ensurePlanState(ctx, req, agent)
+		r.ensurePlanState(ctx, req, subMode, agent)
 	}
 
 	resp, execErr := agent.ProcessMessage(ctx, req)
 
 	// 执行后检查工具触发的 plan 退出（对齐 Python check_post_process_exit）
 	if enabled {
-		r.checkPlanExit(ctx, req, agent)
+		r.checkPlanExit(ctx, req, subMode, agent)
 	}
 	if execErr != nil {
 		return nil, execErr
@@ -147,19 +161,19 @@ func (r *AgentRuntime) Stream(
 	onEvent func(*RuntimeEvent) bool,
 ) error {
 	req = NormalizeRequest(req)
-	_, _, agent, err := r.prepareTurn(ctx, req)
+	_, subMode, agent, err := r.prepareTurn(ctx, req)
 	if err != nil {
 		return err
 	}
-	enabled := r.planEnabled(req, agent)
+	enabled := r.planEnabled(req)
 	if enabled {
-		r.ensurePlanState(ctx, req, agent)
+		r.ensurePlanState(ctx, req, subMode, agent)
 	}
 
 	ch, streamErr := agent.ProcessMessageStream(ctx, req)
 	if streamErr != nil {
 		if enabled {
-			r.checkPlanExit(ctx, req, agent)
+			r.checkPlanExit(ctx, req, subMode, agent)
 		}
 		return streamErr
 	}
@@ -170,7 +184,7 @@ func (r *AgentRuntime) Stream(
 	}
 	// 流结束：退出事件在 channel 关闭前发出（对齐 Python generator finally 里的 yield）
 	if enabled {
-		r.checkPlanExit(ctx, req, agent)
+		r.checkPlanExit(ctx, req, subMode, agent)
 	}
 	return nil
 }
@@ -188,14 +202,14 @@ func (r *AgentRuntime) prepareTurn(
 	if r.manager == nil {
 		return "", "", nil, errors.New("agent runtime manager is nil")
 	}
-	return PrepareChatTurn(ctx, r.manager, req, req.ChannelID)
+	return PrepareChatTurn(ctx, r.manager, req, req.ChannelID, true)
 }
 
 // planEnabled 判定本轮是否参与 plan 状态同步。
 //
 // Python: service.py:1859 `if not readonly_goal_get` + PlanModeController.should_sync
-func (r *AgentRuntime) planEnabled(req *schema.AgentRequest, agent ChatAgentPort) bool {
-	if req == nil || agent == nil || agent.PlanController() == nil {
+func (r *AgentRuntime) planEnabled(req *schema.AgentRequest) bool {
+	if req == nil || r.planController == nil {
 		return false
 	}
 	resolved := ResolveRequestRuntimeModeFromRequest(req)
@@ -209,23 +223,27 @@ func (r *AgentRuntime) planEnabled(req *schema.AgentRequest, agent ChatAgentPort
 	return ShouldSync(req.ReqMethod.String())
 }
 
-// ensurePlanState 同步本轮 plan 状态并下发进入事件。
+// ensurePlanState 同步本轮 plan 状态，回写 query/mode 并下发进入事件。
 //
-// Python: PlanModeController.ensure_state（service.py:1861）
-func (r *AgentRuntime) ensurePlanState(ctx context.Context, req *schema.AgentRequest, agent ChatAgentPort) {
-	res, err := agent.PlanController().EnsureState(ctx, planRequestOf(req), agent.PlanStateAccessor())
+// Python: PlanModeController.ensure_state（service.py:1861）——上游直接改写
+// request.params，Go 由控制器返回结果后在此回写，保证 BuildInputs 之前生效。
+func (r *AgentRuntime) ensurePlanState(ctx context.Context, req *schema.AgentRequest, subMode string, agent ChatAgentPort) {
+	res, err := r.planController.EnsureState(ctx, planRequestOf(req, subMode), agent.PlanStateAccessor())
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("ensure plan state failed")
 		return
 	}
+	ApplyPlanResult(req, res)
 	r.emitControlEvents(req, res.Events)
 }
 
 // checkPlanExit 检测工具触发的 plan 退出并下发事件。
 //
-// Python: PlanModeController.check_post_process_exit（service.py:1911）
-func (r *AgentRuntime) checkPlanExit(ctx context.Context, req *schema.AgentRequest, agent ChatAgentPort) {
-	events, err := agent.PlanController().CheckPostProcessExit(ctx, planRequestOf(req), agent.PlanStateAccessor())
+// Python: PlanModeController.check_post_process_exit（service.py:1911）——
+// 首步把 canonical mode 回写 params，再判定是否退出。
+func (r *AgentRuntime) checkPlanExit(ctx context.Context, req *schema.AgentRequest, subMode string, agent ChatAgentPort) {
+	ApplyCanonicalMode(req)
+	events, err := r.planController.CheckPostProcessExit(ctx, planRequestOf(req, subMode), agent.PlanStateAccessor())
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("check plan post process failed")
 		return
@@ -251,7 +269,7 @@ func (r *AgentRuntime) emitControlEvents(req *schema.AgentRequest, events []Cont
 }
 
 // planRequestOf 把请求投影为控制器入参。
-func planRequestOf(req *schema.AgentRequest) PlanRequest {
+func planRequestOf(req *schema.AgentRequest, subMode string) PlanRequest {
 	params := parseRequestParams(req)
 	resolved := ResolveRequestRuntimeModeFromRequest(req)
 	sid := ""
@@ -268,7 +286,7 @@ func planRequestOf(req *schema.AgentRequest) PlanRequest {
 	return PlanRequest{
 		SessionID:           sid,
 		Mode:                resolved.CanonicalMode,
-		SubMode:             "",
+		SubMode:             subMode,
 		ReqMethod:           reqMethod,
 		EntrySource:         entry,
 		IsInterruptResume:   params["resume"] == true,

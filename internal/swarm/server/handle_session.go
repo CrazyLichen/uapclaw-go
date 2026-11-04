@@ -260,7 +260,7 @@ func (s *AgentServer) handleSessionDelete(ctx context.Context, request *schema.A
 	session.RemoveSessionMetadataCache(target)
 
 	// 清理计划模式会话记忆（退出记忆 / 会话锁），对齐 Python service.reset_session
-	s.agentManager.ResetSessionPlanState(channelID, target)
+	s.planController.ResetSession(target)
 
 	logger.Info(logComponent).
 		Str("session_id", target).

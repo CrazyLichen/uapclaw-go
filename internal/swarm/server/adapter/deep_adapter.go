@@ -46,7 +46,6 @@ import (
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -273,8 +272,6 @@ type DeepAdapter struct {
 	// 替代原 globalSendPushFunc 全局变量，实现实例级隔离。
 	// 避免 adapter→server→adapter 循环依赖：adapter 包不导入 server 包。
 	sendPushFunc func(ctx context.Context, msg map[string]any) error
-	// planController 计划模式状态机，对齐 Python runtime/plan.py
-	planController *swruntime.PlanModeController
 }
 
 // ApprovalAnswer 审批回答条目，从前端 WebSocket 消息解析。
@@ -396,9 +393,6 @@ func NewDeepAdapter() *DeepAdapter {
 	// 模型配置兜底读取器：对齐 Python _has_valid_model_config 第 4 步。
 	// 优先读已发布的 configBase 快照，未初始化时才回退读盘（见 T-07）。
 	d.defaultModelConfigReader = d.defaultModelClientConfigFromConfigBase
-	// 计划模式控制器：状态存储绑定到本适配器实例
-	// Python: self._plan_state_controller = PlanModeController(...)
-	d.planController = swruntime.NewPlanModeController()
 	return d
 }
 

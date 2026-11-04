@@ -4,14 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -21,8 +18,6 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// keepaliveInterval 流式心跳间隔
-	keepaliveInterval = 10 * time.Second
 	// acpChannelID ACP 通道标识
 	acpChannelID = "acp"
 	// errCodeNotImplemented 未实现错误码
@@ -37,10 +32,10 @@ const (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// handleEnvelope 处理单个 E2A 请求信封，对齐 Python AgentWebSocketServer._handle_message。
+// handleMessage 处理单个 E2A 请求信封，对齐 Python AgentWebSocketServer._handle_message。
 //
 // 流程：E2AEnvelope → AgentRequest → switch 分发 → writeResponse 写入 RecvCh。
-func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvelope) {
+func (s *AgentServer) handleMessage(ctx context.Context, envelope *e2a.E2AEnvelope) {
 	// 1. 转为 AgentRequest
 	request, err := e2a.E2AToAgentRequest(envelope)
 	if err != nil {
@@ -271,232 +266,29 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 	}
 }
 
-// handleUnary 处理非流式请求，对齐 Python _handle_unary。
-//
-// 特殊方法拦截 → 解析 mode → 获取 Agent → 调用 ProcessMessage → writeResponse。
-// Python: handleUnary 通过 AgentManager 获取 agent，然后直接调用 agent 方法。
-func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequest) {
-	// 1. 特殊方法拦截
-	switch request.ReqMethod {
-	case schema.ReqMethodInitialize:
-		resp, err := s.handleInitialize(ctx, request)
-		if err != nil {
-			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "INITIALIZE_ERROR")
-			return
-		}
-		s.writeResponse(request.RequestID, request.ChannelID, resp)
-		return
-	case schema.ReqMethodSessionCreate:
-		resp, err := s.handleSessionCreate(ctx, request)
-		if err != nil {
-			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "SESSION_CREATE_ERROR")
-			return
-		}
-		s.writeResponse(request.RequestID, request.ChannelID, resp)
-		return
-	case schema.ReqMethodSessionFork:
-		resp, err := s.handleSessionFork(ctx, request)
-		if err != nil {
-			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "SESSION_FORK_ERROR")
-			return
-		}
-		s.writeResponse(request.RequestID, request.ChannelID, resp)
-		return
-	case schema.ReqMethodACPToolResponse:
-		resp, err := s.handleACPToolResponse(ctx, request)
-		if err != nil {
-			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "ACP_TOOL_RESPONSE_ERROR")
-			return
-		}
-		s.writeResponse(request.RequestID, request.ChannelID, resp)
-		return
-	}
-
-	// 2-6. 交给 AgentRuntime（选 agent → ensure_state → 执行 → check_exit → 控制事件）
-	// Python: agent_ws_server.py:3941 _handle_unary_impl → runtime.invoke(...)
-	events, err := s.agentRuntime.Invoke(ctx, request)
-	if err != nil {
-		logger.Error(logComponent).
-			Err(err).
-			Str("request_id", request.RequestID).
-			Msg("agent failed to process request")
-		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_PROCESS_ERROR")
-		return
-	}
-	for _, ev := range events {
-		if ev.Payload == nil {
-			continue
-		}
-		s.writeResponse(request.RequestID, request.ChannelID, &schema.AgentResponse{
-			RequestID: ev.RequestID,
-			ChannelID: ev.ChannelID,
-			OK:        ev.OK,
-			Payload:   ev.Payload,
-		})
-	}
-}
-
-// handleStream 处理流式请求，对齐 Python _handle_stream。
-//
-// 创建子 context → 注册流式任务 → 心跳 goroutine → 获取 Agent → 逐 chunk 写入 RecvCh。
-// Python: handleStream 通过 AgentManager 获取 agent，然后直接调用 agent 流式方法。
-func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentRequest) {
-	sessionID := ""
-	if request.SessionID != nil {
-		sessionID = *request.SessionID
-	}
-
-	// 1-3. 创建子 context + 注册流式任务，收尾统一走 finish
-	// （先按身份清理登记项，再 cancel 回收本次子 ctx，见 beginStreamTask）。
-	streamCtx, finish := s.beginStreamTask(ctx, sessionID, request.RequestID)
-	defer finish()
-
-	// 3-8. 交给 AgentRuntime（选 agent → ensure_state → 流式执行 → check_exit → 控制事件）
-	// Python: agent_ws_server.py:4654 _handle_stream_impl → runtime.stream(...)
-	keepalive := NewStreamKeepalive(func() {
-		s.sendKeepalive(request.RequestID, request.ChannelID)
-	}, keepaliveInterval)
-	keepalive.Start()
-
-	chunkCount := 0
-	streamErr := s.agentRuntime.Stream(streamCtx, request, func(ev *swruntime.RuntimeEvent) bool {
-		// 控制事件独立走 push 帧，不占 sequence、不重置 keepalive
-		// Python: agent_ws_server.py:4714 `if event.event_type == PLAN_MODE_EXITED_EVENT_TYPE`
-		if ev.EventType() == swruntime.PlanModeExitedEvent {
-			_ = s.SendPush(streamCtx, map[string]any{
-				"channel_id": ev.ChannelID,
-				"session_id": ev.SessionID,
-				"payload":    ev.Payload,
-			})
-			return true
-		}
-		chunkCount++
-		keepalive.NotifyActivity(ev.IsComplete)
-		s.writeChunk(request.RequestID, request.ChannelID, ev.ToChunk(), chunkCount, true)
-		return true
-	})
-
-	keepalive.SignalStop()
-	keepalive.Stop()
-
-	if streamErr != nil {
-		logger.Error(logComponent).
-			Err(streamErr).
-			Str("request_id", request.RequestID).
-			Msg("agent stream processing failed")
-		s.writeErrorResponse(request.RequestID, request.ChannelID, streamErr.Error(), "AGENT_STREAM_ERROR")
-		return
-	}
-
-	logger.Debug(logComponent).
-		Str("request_id", request.RequestID).
-		Int("chunk_count", chunkCount).
-		Msg("stream processing completed")
-}
-
-// handleCancel 处理取消/中断请求，对齐 Python _handle_cancel。
-//
-// 三级 fallback 策略（对齐 Python _handle_cancel L1061-1110）：
-// 1. GetAgentNoWait(channelID, mode) — 按 mode 查找已有 agent
-// 2. GetAgentNoWait(channelID, "", projectDir) — 不限 mode，按 projectDir 查任何已有 agent
-// 3. GetAgent(channelID, mode, projectDir) — 阻塞创建（fallback 兜底）
-func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentRequest) {
-	sessionID := ""
-	if request.SessionID != nil {
-		sessionID = *request.SessionID
-	}
-
-	// 1. 取消流式 goroutine（对齐 Python：仅 cancel/supplement 时取消流式任务，pause/resume 不取消）
-	// 提取 intent，对齐 Python agent_ws_server.py L983-1001: if intent in ("cancel", "supplement"): stream_task.cancel()
-	// intent 为空时保持向后兼容，默认取消
-	intent := ""
-	var params map[string]any
-	if request.Params != nil {
-		if json.Unmarshal(request.Params, &params) == nil {
-			if i, ok := params["intent"].(string); ok {
-				intent = i
-			}
-		}
-	}
-	if intent == "cancel" || intent == "supplement" || intent == "" {
-		s.cancelStreamTask(sessionID)
-	}
-
-	// 2. 获取 Agent（三级 fallback，对齐 Python _handle_cancel）
-	// 主流路径：纯读取 mode（不修改 request），对齐 Python request.params.get("mode", "") + resolve_agent_request_mode
-	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(request)
-	projectDir := swruntime.ResolveCancelProjectDir(request)
-
-	var agent *runtime.UapClawSwarm
-
-	// 第1级：按 mode 查找已有 agent
-	if mode != "" {
-		agent = s.agentManager.GetAgentNoWait(request.ChannelID, mode, projectDir, subMode)
-	}
-
-	// 第2级：按 projectDir 查找任何已有 agent（不限 mode）
-	if agent == nil {
-		agent = s.agentManager.GetAgentNoWait(request.ChannelID, "", projectDir, "")
-		logger.Warn(logComponent).
-			Str("request_id", request.RequestID).
-			Str("channel_id", request.ChannelID).
-			Str("mode", mode).
-			Msg("cancel: no existing agent by mode, trying without mode filter")
-	}
-
-	// 第3级：fallback 创建（阻塞），对齐 Python _apply_resolved_mode_to_request 兜底
-	// 此时才回写 canonical mode（上游 apply_resolved_mode_to_request 会改 params）
-	if agent == nil {
-		logger.Warn(logComponent).
-			Str("request_id", request.RequestID).
-			Str("channel_id", request.ChannelID).
-			Msg("cancel: no existing agent found, fallback creation")
-		mode, subMode = swruntime.ApplyResolvedModeToRequest(request, "")
-		var err error
-		agent, err = s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
-		if err != nil {
-			logger.Error(logComponent).
-				Err(err).
-				Str("request_id", request.RequestID).
-				Msg("cancel: fallback agent creation failed")
-			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_GET_ERROR")
-			return
-		}
-	}
-
-	// 3. 调用 ProcessMessage（对齐 Python: agent.process_message(request) → CHAT_CANCEL 分支 → _process_interrupt）
-	resp, err := agent.ProcessMessage(ctx, request)
-	if err != nil {
-		logger.Error(logComponent).
-			Err(err).
-			Str("request_id", request.RequestID).
-			Msg("agent interrupt processing failed")
-		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_INTERRUPT_ERROR")
-		return
-	}
-	s.writeResponse(request.RequestID, request.ChannelID, resp)
-}
-
 // writeResponse 构造 E2AResponse wire 通过 sendToGateway 发送。
-func (s *AgentServer) writeResponse(requestID, channelID string, resp *schema.AgentResponse) {
+//
+// 返回 false 表示编码失败或 transport 已关闭/缓冲满（对齐 Python
+// _send_runtime_event 的 "发送失败即停止流" 语义）。
+func (s *AgentServer) writeResponse(requestID, channelID string, resp *schema.AgentResponse) bool {
 	wire := e2a.EncodeAgentResponseForWire(resp, requestID, 0)
 	data, err := json.Marshal(wire)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("response JSON coding failed")
-		return
+		return false
 	}
-	s.sendToGateway(data)
+	return s.sendToGateway(data)
 }
 
 // writeChunk 构造 E2AResponse chunk wire 通过 sendToGateway 发送。
-func (s *AgentServer) writeChunk(requestID, channelID string, chunk *schema.AgentResponseChunk, sequence int, isStream bool) {
+func (s *AgentServer) writeChunk(requestID, channelID string, chunk *schema.AgentResponseChunk, sequence int, isStream bool) bool {
 	wire := e2a.EncodeAgentChunkForWire(chunk, requestID, sequence, isStream)
 	data, err := json.Marshal(wire)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("request_id", requestID).Int("sequence", sequence).Msg("streaming chunk JSON encode failed")
-		return
+		return false
 	}
-	s.sendToGateway(data)
+	return s.sendToGateway(data)
 }
 
 // sendKeepalive 构造 keepalive chunk 通过 sendToGateway 发送。
@@ -506,13 +298,7 @@ func (s *AgentServer) sendKeepalive(requestID, channelID string) {
 			"event_type": "keepalive",
 		},
 	)
-	wire := e2a.EncodeAgentChunkForWire(chunk, requestID, -1, true)
-	data, err := json.Marshal(wire)
-	if err != nil {
-		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("keepalive JSON coding failed")
-		return
-	}
-	s.sendToGateway(data)
+	s.writeChunk(requestID, channelID, chunk, -1, true)
 }
 
 // writeErrorResponse 构造错误 AgentResponse 写入 RecvCh。

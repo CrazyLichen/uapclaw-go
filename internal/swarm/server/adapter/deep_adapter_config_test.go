@@ -1111,22 +1111,20 @@ func TestResolveEnableTaskLoop_SkillCreate覆盖(t *testing.T) {
 
 // TestPlanControllerEnsureState 验证控制器接入后的状态写入（替换已删除的 switchModeForState）。
 //
-// S2：plan 状态写入归 runtime.PlanModeController，adapter 只提供状态存储。
+// S3：控制器归 AgentRuntime 持有，adapter 只提供状态存储（PlanStateAccessor）。
 func TestPlanControllerEnsureState(t *testing.T) {
 	d := NewDeepAdapter()
-	if d.PlanController() == nil {
-		t.Fatal("planController 未初始化")
-	}
+	controller := swruntime.NewPlanModeController()
 
 	// 空 sessionID / 非 plan 请求：不应写状态（EnsureState 内部守卫）
-	if _, err := d.PlanController().EnsureState(context.Background(), swruntime.PlanRequest{}, d.PlanStateAccessor()); err != nil {
+	if _, err := controller.EnsureState(context.Background(), swruntime.PlanRequest{}, d.PlanStateAccessor()); err != nil {
 		t.Fatalf("EnsureState 空请求: %v", err)
 	}
 
 	// 完整链路：真实 DeepAgent + 真实 session，显式进入 plan 后应写入 plan 状态
 	agent := harness.NewDeepAgent(agentschema.NewAgentCard())
 	d.instance = agent
-	_, err := d.PlanController().EnsureState(context.Background(), swruntime.PlanRequest{
+	_, err := controller.EnsureState(context.Background(), swruntime.PlanRequest{
 		SessionID:   "sess-plan-state",
 		Mode:        "agent.work.plan",
 		ReqMethod:   "chat.send",

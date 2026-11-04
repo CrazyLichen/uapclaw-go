@@ -56,8 +56,8 @@ func makeTestEnvelope(method string, isStream bool) *e2a.E2AEnvelope {
 	return env
 }
 
-// TestHandleEnvelope_UnknownMethod_Unary 验证未命中 switch + IsStream=false → 走 handleUnary。
-func TestHandleEnvelope_UnknownMethod_Unary(t *testing.T) {
+// TestHandleMessage_UnknownMethod_Unary 验证未命中 switch + IsStream=false → 走 handleUnary。
+func TestHandleMessage_UnknownMethod_Unary(t *testing.T) {
 	s, transport := newTestServer()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -71,8 +71,8 @@ func TestHandleEnvelope_UnknownMethod_Unary(t *testing.T) {
 		t.Fatalf("获取接收通道失败: %v", err)
 	}
 
-	// 在 goroutine 中调用 handleEnvelope
-	go s.handleEnvelope(ctx, env)
+	// 在 goroutine 中调用 handleMessage
+	go s.handleMessage(ctx, env)
 
 	// 从 RecvCh 读取响应
 	select {
@@ -93,8 +93,8 @@ func TestHandleEnvelope_UnknownMethod_Unary(t *testing.T) {
 	}
 }
 
-// TestHandleEnvelope_UnknownMethod_Stream 验证未命中 switch + IsStream=true → 走 handleStream。
-func TestHandleEnvelope_UnknownMethod_Stream(t *testing.T) {
+// TestHandleMessage_UnknownMethod_Stream 验证未命中 switch + IsStream=true → 走 handleStream。
+func TestHandleMessage_UnknownMethod_Stream(t *testing.T) {
 	s, transport := newTestServer()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -107,7 +107,7 @@ func TestHandleEnvelope_UnknownMethod_Stream(t *testing.T) {
 		t.Fatalf("获取接收通道失败: %v", err)
 	}
 
-	go s.handleEnvelope(ctx, env)
+	go s.handleMessage(ctx, env)
 
 	// 从 RecvCh 读取流式响应（至少收到 stub chunk + terminal chunk）
 	chunkCount := 0
@@ -126,8 +126,8 @@ func TestHandleEnvelope_UnknownMethod_Stream(t *testing.T) {
 	}
 }
 
-// TestHandleEnvelope_SessionList 验证命中 switch → handleSessionList。
-func TestHandleEnvelope_SessionList(t *testing.T) {
+// TestHandleMessage_SessionList 验证命中 switch → handleSessionList。
+func TestHandleMessage_SessionList(t *testing.T) {
 	s, transport := newTestServer()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -139,7 +139,7 @@ func TestHandleEnvelope_SessionList(t *testing.T) {
 		t.Fatalf("获取接收通道失败: %v", err)
 	}
 
-	go s.handleEnvelope(ctx, env)
+	go s.handleMessage(ctx, env)
 
 	select {
 	case data := <-recvCh:
@@ -161,8 +161,8 @@ func TestHandleEnvelope_SessionList(t *testing.T) {
 	}
 }
 
-// TestHandleEnvelope_ChatCancel 验证 chat.interrupt → handleCancel。
-func TestHandleEnvelope_ChatCancel(t *testing.T) {
+// TestHandleMessage_ChatCancel 验证 chat.interrupt → handleCancel。
+func TestHandleMessage_ChatCancel(t *testing.T) {
 	s, transport := newTestServer()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -174,7 +174,7 @@ func TestHandleEnvelope_ChatCancel(t *testing.T) {
 		t.Fatalf("获取接收通道失败: %v", err)
 	}
 
-	go s.handleEnvelope(ctx, env)
+	go s.handleMessage(ctx, env)
 
 	select {
 	case data := <-recvCh:
@@ -307,9 +307,9 @@ func TestInjectACPCapabilities_无来源不注入(t *testing.T) {
 	}
 }
 
-// TestHandleEnvelope_BeforeChatHookParams回写 测试扩展修改 params 写回 request.Params
+// TestHandleMessage_BeforeChatHookParams回写 测试扩展修改 params 写回 request.Params
 // （对齐 Python agent_ws_server.py _trigger_before_chat_request_hook：params 非 dict 归一化 + ctx 触发）
-func TestHandleEnvelope_BeforeChatHookParams回写(t *testing.T) {
+func TestHandleMessage_BeforeChatHookParams回写(t *testing.T) {
 	// 注册扩展回调：验证钩子被触发且拿到 params map
 	extensions.ResetInstance()
 	fw := callback.NewCallbackFramework()
@@ -342,7 +342,7 @@ func TestHandleEnvelope_BeforeChatHookParams回写(t *testing.T) {
 		t.Fatalf("获取接收通道失败: %v", err)
 	}
 
-	go s.handleEnvelope(ctx, env)
+	go s.handleMessage(ctx, env)
 
 	// 钩子应被触发（chat.send 命中门控）
 	select {
@@ -362,8 +362,8 @@ func TestHandleEnvelope_BeforeChatHookParams回写(t *testing.T) {
 	}
 }
 
-// TestHandleEnvelope_BeforeChatHook_非聊天方法不触发 验证门控（session.list 不触发钩子）
-func TestHandleEnvelope_BeforeChatHook_非聊天方法不触发(t *testing.T) {
+// TestHandleMessage_BeforeChatHook_非聊天方法不触发 验证门控（session.list 不触发钩子）
+func TestHandleMessage_BeforeChatHook_非聊天方法不触发(t *testing.T) {
 	extensions.ResetInstance()
 	fw := callback.NewCallbackFramework()
 	reg, _ := extensions.CreateInstance(fw, map[string]any{}, nil)
@@ -384,7 +384,7 @@ func TestHandleEnvelope_BeforeChatHook_非聊天方法不触发(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取接收通道失败: %v", err)
 	}
-	go s.handleEnvelope(ctx, env)
+	go s.handleMessage(ctx, env)
 	select {
 	case <-recvCh:
 	case <-time.After(2 * time.Second):
@@ -396,9 +396,9 @@ func TestHandleEnvelope_BeforeChatHook_非聊天方法不触发(t *testing.T) {
 	}
 }
 
-// TestHandleEnvelope_BeforeChatHook_Params非对象清洗 测试 params 为 JSON 数组时归一化为空 map
+// TestHandleMessage_BeforeChatHook_Params非对象清洗 测试 params 为 JSON 数组时归一化为空 map
 // （对齐 Python agent_ws_server.py L1044-1046：非 dict 时 request.params = {}）
-func TestHandleEnvelope_BeforeChatHook_Params非对象清洗(t *testing.T) {
+func TestHandleMessage_BeforeChatHook_Params非对象清洗(t *testing.T) {
 	extensions.ResetInstance()
 	fw := callback.NewCallbackFramework()
 	reg, _ := extensions.CreateInstance(fw, map[string]any{}, nil)
@@ -431,7 +431,7 @@ func TestHandleEnvelope_BeforeChatHook_Params非对象清洗(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取接收通道失败: %v", err)
 	}
-	go s.handleEnvelope(ctx, env)
+	go s.handleMessage(ctx, env)
 
 	// 钩子应收到清洗后的空 map（而非数组）
 	select {
