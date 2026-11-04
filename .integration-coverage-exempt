@@ -192,3 +192,8 @@ tests/integration/testhelpers/context.go
 # （app_gateway.py:1650 的 default_mode），集成层恒不走该分支。
 # 行为由 agent_manager_test.go 的 TestResolveModeFromRequest 覆盖。
 internal/swarm/server/runtime/agent_manager.go#L802-L815
+
+# ── 2026-11-04 上游 A 组同步：CreateDeepAgentParams 新增守卫/技能预算字段 ──
+# params.go 为纯参数结构体（99 行、0 个函数、无可执行语句），集成覆盖剖面中
+# 不存在该文件的行；字段语义由 factory.go 装配链路验证（该文件改动行 100% OK）。
+internal/agentcore/harness/harness_config/params.go
