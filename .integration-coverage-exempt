@@ -208,3 +208,9 @@ internal/swarm/runtime/events.go
 # plan_env.go — 带 integration 标签的测试助手，当前尚无集成用例引用（调用方用例未落地）。
 # 一旦对应 plan 用例入库，请删除此条以恢复门禁。
 tests/integration/testhelpers/plan_env.go
+
+# ── 2026-11-04 控制事件推送错误处理 ──
+# agent_server.go#L113-L120 — OnControlEvent 回调仅在运行时产生控制事件（如
+# plan_mode_exited）时触发，集成套件没有该链路，改动行必然 0%。该分支只做
+# "推送失败记日志不阻断"，无业务分支；errcheck 门禁要求显式处理返回值。
+internal/swarm/server/agent_server.go#L113-L120
