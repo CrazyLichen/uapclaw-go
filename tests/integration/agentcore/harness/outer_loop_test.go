@@ -782,6 +782,10 @@ func (s *OuterLoopSuite) createTaskLoopAgent(
 		MaxIterations:     10,
 		CompletionTimeout: 30.0,
 		ToolInstances:     []tool.Tool{dummyTool.Tool()},
+		// 受控 agent 每轮返回同一段短答案（"ok:<query>"），会命中默认启用的
+		// 无进展守卫（连续 3 轮短答案即停）。本套用例验证的是 follow-up/steering
+		// 的循环机制，故显式关闭守卫；守卫本身在 task_loop 单测覆盖。
+		TaskLoopNoProgressGuard: &hschema.TaskLoopNoProgressGuardConfig{Enabled: false},
 	})
 	s.Require().NoError(err, "创建 DeepAgent 失败")
 

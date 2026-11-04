@@ -44,8 +44,14 @@ type CreateDeepAgentParams struct {
 	EnableAsyncSubagent bool
 	// AddGeneralPurposeAgent 添加通用目的子 Agent
 	AddGeneralPurposeAgent bool
-	// MaxIterations 每次 invoke 的最大 ReAct 迭代次数
+	// MaxIterations 每次 invoke 的最大 ReAct 迭代次数（0 表示不限）
 	MaxIterations int
+	// TaskLoopNoProgressGuard 任务循环无进展守卫，nil 时使用默认（启用 / 3 / 20）
+	TaskLoopNoProgressGuard *hschema.TaskLoopNoProgressGuardConfig
+	// SkillBudgetMaxSkills 技能提示词最大技能数，0 表示不限
+	SkillBudgetMaxSkills int
+	// SkillBudgetMaxTotalChars 技能提示词字符总预算，0 表示不限
+	SkillBudgetMaxTotalChars int
 	// Workspace 工作空间，nil 时创建默认
 	Workspace *workspace.Workspace
 	// Skills 技能定义列表
