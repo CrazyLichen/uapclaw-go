@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -4201,5 +4202,35 @@ func TestDeepAgent_registerRailSelective_迭代与用户消息桥接(t *testing.
 	}
 	if d.callbackManager.HasHooks(agentinterfaces.CallbackAfterReactIteration) {
 		t.Fatal("after_react_iteration 不应注册到外层 DeepAgent")
+	}
+}
+
+// TestDeepAgent_buildTaskLoopEvaluators_零值阈值回退 验证只开开关不填阈值时回退到 3/80
+//
+// 上游 _build_task_loop_evaluators 对「配置对象缺字段」的回退是
+// max_consecutive_empty_answers=3 / min_answer_chars=80（config.py 鸭子类型分支）；
+// 若不回退，Go 零值会让「1 轮任意短答案」就停循环。
+func TestDeepAgent_buildTaskLoopEvaluators_零值阈值回退(t *testing.T) {
+	d := newTestDeepAgent()
+	cfg := &schema.DeepAgentConfig{
+		TaskLoopNoProgressGuard: schema.TaskLoopNoProgressGuardConfig{Enabled: true},
+	}
+	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
+		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
+	}
+
+	evals := d.buildTaskLoopEvaluators()
+	if len(evals) != 1 {
+		t.Fatalf("应只有无进展守卫一个评估器，实际 %d 个", len(evals))
+	}
+	// 30 字符答案：< 80 视为短答案（若回退成 20 则会被当成"有内容"）
+	short := map[string]any{"result_type": "answer", "output": strings.Repeat("x", 30)}
+	for i := 0; i < 2; i++ {
+		if evals[0].ShouldStop(task_loop.StopEvaluationContext{LastResult: short}) {
+			t.Fatalf("第 %d 轮不应停止（阈值 3）", i+1)
+		}
+	}
+	if !evals[0].ShouldStop(task_loop.StopEvaluationContext{LastResult: short}) {
+		t.Fatal("第 3 轮短答案应触发停止（max_consecutive_empty_answers 回退 3）")
 	}
 }

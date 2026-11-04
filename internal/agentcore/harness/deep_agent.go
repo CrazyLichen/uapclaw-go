@@ -2656,14 +2656,13 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 	existingCtrl := d.loopController
 	boundID := d.boundSessionID
 	coord := d.loopCoordinator
-	taskCompRail := d.taskCompletionRail
 	d.configMu.RUnlock()
 
 	// 复用已有控制器（session_id 匹配）
 	if existingCtrl != nil && boundID == sessionID {
 		if coord == nil {
 			// 构建评估器（任务完成 rail 的评估器 + 无进展守卫）
-			coord = task_loop.NewLoopCoordinator(d.buildTaskLoopEvaluators(taskCompRail))
+			coord = task_loop.NewLoopCoordinator(d.buildTaskLoopEvaluators())
 			d.configMu.Lock()
 			d.loopCoordinator = coord
 			d.configMu.Unlock()
@@ -2678,7 +2677,7 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 	}
 
 	// 构建评估器（任务完成 rail 的评估器 + 无进展守卫）
-	coord = task_loop.NewLoopCoordinator(d.buildTaskLoopEvaluators(taskCompRail))
+	coord = task_loop.NewLoopCoordinator(d.buildTaskLoopEvaluators())
 	coord.Reset()
 
 	queues := task_loop.NewLoopQueues(64)
@@ -3213,22 +3212,36 @@ func permissionsSectionToMap(perm *hsecurity.PermissionsSection) map[string]any 
 // 任务完成 rail 产出的评估器在前，无进展守卫按配置追加在后（OR 语义：先命中先停）。
 //
 // Python: DeepAgent._build_task_loop_evaluators() (deep_agent.py L2279-2311)
-func (d *DeepAgent) buildTaskLoopEvaluators(taskCompRail *rails.TaskCompletionRail) []task_loop.StopConditionEvaluator {
+func (d *DeepAgent) buildTaskLoopEvaluators() []task_loop.StopConditionEvaluator {
 	var evaluators []task_loop.StopConditionEvaluator
-	if taskCompRail != nil {
-		evaluators = taskCompRail.BuildEvaluators()
+	if d.taskCompletionRail != nil {
+		evaluators = taskCompRailEvaluators(d.taskCompletionRail)
 	}
-	d.configMu.RLock()
-	var guard hschema.TaskLoopNoProgressGuardConfig
-	if d.deepConfig != nil {
-		guard = d.deepConfig.TaskLoopNoProgressGuard
+	if d.deepConfig == nil {
+		return evaluators
 	}
-	d.configMu.RUnlock()
-	if guard.Enabled {
-		evaluators = append(evaluators,
-			task_loop.NewNoProgressAnswerEvaluator(guard.MaxConsecutiveEmptyAnswers, guard.MinAnswerChars))
+	guard := d.deepConfig.TaskLoopNoProgressGuard
+	if !guard.Enabled {
+		return evaluators
 	}
+	// 阈值取上游的"鸭子类型回退"默认（3 / 80）：只开开关不填阈值时不至于退化成
+	// 「1 轮任意短答案即停」。上游 DeepAgentConfig 构造默认是 3/20，回退分支是 3/80，
+	// 这里按回退分支对齐（config.py:2563-2581）。
+	maxConsecutive := guard.MaxConsecutiveEmptyAnswers
+	if maxConsecutive <= 0 {
+		maxConsecutive = 3
+	}
+	minChars := guard.MinAnswerChars
+	if minChars <= 0 {
+		minChars = 80
+	}
+	evaluators = append(evaluators, task_loop.NewNoProgressAnswerEvaluator(maxConsecutive, minChars))
 	return evaluators
+}
+
+// taskCompRailEvaluators 取任务完成 rail 产出的评估器。
+func taskCompRailEvaluators(rail *rails.TaskCompletionRail) []task_loop.StopConditionEvaluator {
+	return rail.BuildEvaluators()
 }
 
 // maxOuterRounds 外层任务循环的轮次硬上限。
