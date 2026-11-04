@@ -250,7 +250,7 @@ react:
 func (s *HotReloadSuite) newAdapter() *adapter.DeepAdapter {
 	s.T().Helper()
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
 }
@@ -259,7 +259,7 @@ func (s *HotReloadSuite) newAdapter() *adapter.DeepAdapter {
 func (s *HotReloadSuite) runTurn(d *adapter.DeepAdapter, sessionID, requestID, query string) {
 	s.T().Helper()
 
-	params, err := json.Marshal(map[string]any{"mode": "agent.plan"})
+	params, err := json.Marshal(map[string]any{"mode": "agent.work.plan"})
 	s.Require().NoError(err)
 	sid := sessionID
 	req := &schema.AgentRequest{

@@ -124,7 +124,7 @@ func (s *DeepAdapterEvolutionSuite) newAdapterWithEvolution(enabled bool) *adapt
 	s.env.WriteConfigYAML(s.T(), reactExtra)
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
 }
@@ -133,7 +133,7 @@ func (s *DeepAdapterEvolutionSuite) newAdapterWithEvolution(enabled bool) *adapt
 func (s *DeepAdapterEvolutionSuite) newChatRequest(query string) *schema.AgentRequest {
 	return schema.NewAgentRequest(
 		"req-chat", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": query, "mode": "agent.plan"}),
+		s.jsonParams(map[string]any{"query": query, "mode": "agent.work.plan"}),
 		schema.WithAgentSessionID("itest-evolve"),
 	)
 }

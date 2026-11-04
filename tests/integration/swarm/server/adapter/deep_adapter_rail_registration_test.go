@@ -44,7 +44,7 @@ func (s *RailRegistrationSuite) TestSlashFirstMessage_EvolutionRailRegistered() 
 	s.Require().Equal(0, s.countEvolutionRails(d), "冷启动不应注册演进 rail")
 
 	req := schema.NewAgentRequest("req-slash", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": "/evolve_list", "mode": "agent.plan"}),
+		s.jsonParams(map[string]any{"query": "/evolve_list", "mode": "agent.work.plan"}),
 		schema.WithAgentSessionID("itest-rail"))
 	_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
 	s.Require().NoError(err)
@@ -103,7 +103,7 @@ func (s *RailRegistrationSuite) TestPlanMessage_EvolutionRailRegistered() {
 
 	for i := 0; i < 2; i++ {
 		req := schema.NewAgentRequest("req-plan", "itest-channel", schema.ReqMethodChatSend,
-			s.jsonParams(map[string]any{"query": "你好", "mode": "agent.plan"}),
+			s.jsonParams(map[string]any{"query": "你好", "mode": "agent.work.plan"}),
 			schema.WithAgentSessionID("itest-rail"))
 		_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
 		s.Require().NoError(err)
@@ -113,7 +113,7 @@ func (s *RailRegistrationSuite) TestPlanMessage_EvolutionRailRegistered() {
 
 // TestHotReload_EvolutionRailInPlace 热重载不重建演进 rail，只刷新开关。
 func (s *RailRegistrationSuite) TestHotReload_EvolutionRailInPlace() {
-	d := s.newAdapter("agent.plan", evolutionExtra(true, false, false))
+	d := s.newAdapter("agent.work.plan", evolutionExtra(true, false, false))
 	found := d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.SkillEvolutionRail{}))
 	s.Require().Len(found, 1, "计划模式冷启动后应已注册演进 rail")
 	before, ok := found[0].(*coreevolution.SkillEvolutionRail)
@@ -133,10 +133,10 @@ func (s *RailRegistrationSuite) TestHotReload_EvolutionRailInPlace() {
 
 // TestHotReload_PreservesStatefulRails 有状态 rail 不得被热重载重建。
 func (s *RailRegistrationSuite) TestHotReload_PreservesStatefulRails() {
-	d := s.newAdapter("agent.plan", evolutionExtra(true, false, false))
+	d := s.newAdapter("agent.work.plan", evolutionExtra(true, false, false))
 
 	req := schema.NewAgentRequest("req-plan", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": "你好", "mode": "agent.plan"}),
+		s.jsonParams(map[string]any{"query": "你好", "mode": "agent.work.plan"}),
 		schema.WithAgentSessionID("itest-rail"))
 	_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
 	s.Require().NoError(err)
@@ -154,7 +154,7 @@ func (s *RailRegistrationSuite) TestHotReload_PreservesStatefulRails() {
 
 // TestSkillCreate_EnabledRegistersSingleAgentRail skill_create=true 挂单 Agent 版。
 func (s *RailRegistrationSuite) TestSkillCreate_EnabledRegistersSingleAgentRail() {
-	d := s.newAdapter("agent.plan", evolutionExtra(true, false, true))
+	d := s.newAdapter("agent.work.plan", evolutionExtra(true, false, true))
 	s.Equal(1, len(d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.SkillCreateRail{}))),
 		"应注册单 Agent SkillCreateRail")
 	s.Equal(0, len(d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.TeamSkillCreateRail{}))),
@@ -163,7 +163,7 @@ func (s *RailRegistrationSuite) TestSkillCreate_EnabledRegistersSingleAgentRail(
 
 // TestSkillCreate_DisabledThenHotEnabled 关闭时不注册，热重载打开后生效。
 func (s *RailRegistrationSuite) TestSkillCreate_DisabledThenHotEnabled() {
-	d := s.newAdapter("agent.plan", evolutionExtra(true, false, false))
+	d := s.newAdapter("agent.work.plan", evolutionExtra(true, false, false))
 	s.Equal(0, len(d.Instance().FindRailsByType(reflect.TypeOf(&coreevolution.SkillCreateRail{}))),
 		"skill_create=false 不应注册")
 
@@ -171,7 +171,7 @@ func (s *RailRegistrationSuite) TestSkillCreate_DisabledThenHotEnabled() {
 	s.Require().NoError(d.ReloadAgentConfig(s.Ctx, nil, nil))
 
 	req := schema.NewAgentRequest("req-plan", "itest-channel", schema.ReqMethodChatSend,
-		s.jsonParams(map[string]any{"query": "你好", "mode": "agent.plan"}),
+		s.jsonParams(map[string]any{"query": "你好", "mode": "agent.work.plan"}),
 		schema.WithAgentSessionID("itest-rail"))
 	_, err := d.ProcessMessageImpl(s.Ctx, req, nil)
 	s.Require().NoError(err)

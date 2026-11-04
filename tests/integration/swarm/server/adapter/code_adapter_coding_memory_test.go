@@ -131,7 +131,7 @@ func (s *CodeAdapterCodingMemorySuite) newCodeAdapter() *adapter.CodeAdapter {
 	c := adapter.NewCodeAdapter()
 	s.Require().NoError(c.CreateInstance(s.Ctx, map[string]any{
 		"project_dir": filepath.Join(s.env.DataDir, "myproj"),
-	}, "agent.plan", ""))
+	}, "agent.work.plan", ""))
 	s.T().Cleanup(func() { _ = c.Cleanup() })
 	return c
 }
@@ -211,7 +211,7 @@ func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_记忆Section注入() 
 	// ProcessMessageImpl 完整装配链入口（先例 real_llm/system_prompt_capture_test.go）
 	params, _ := json.Marshal(map[string]any{
 		"query": "查询记忆",
-		"mode":  "agent.plan",
+		"mode":  "agent.work.plan",
 		"files": map[string]any{},
 	})
 	req := swarmschema.NewAgentRequest(
@@ -262,7 +262,7 @@ func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_写记忆全流程() {
 
 	params, _ := json.Marshal(map[string]any{
 		"query": "记住：测试优先跑聚焦用例",
-		"mode":  "agent.plan",
+		"mode":  "agent.work.plan",
 		"files": map[string]any{},
 	})
 	req := swarmschema.NewAgentRequest(

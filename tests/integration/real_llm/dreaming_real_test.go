@@ -45,7 +45,7 @@ func (s *DreamingRealSuite) TestDreamingReal_真实LLM扫一次() {
 	s.writeRealConfig(env.DataDir)
 
 	for _, sid := range []string{"sess-001", "sess-002", "sess-003"} {
-		env.PlantSession(s.T(), sid, "agent.plan", 5)
+		env.PlantSession(s.T(), sid, "agent.work.plan", 5)
 	}
 
 	outDir := env.OutputDir("memory")

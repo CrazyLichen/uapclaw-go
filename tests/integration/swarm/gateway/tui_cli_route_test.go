@@ -175,7 +175,7 @@ func (s *CliRouteFullChainSuite) TestChatSendFullChain_显式agentPlan() {
 	s.modeRecorder.modes = nil
 	s.modeRecorder.mu.Unlock()
 
-	s.assertCommonRoundtrip("req-agent-plan", "sess_agent_plan", "agent.plan")
+	s.assertCommonRoundtrip("req-agent-plan", "sess_agent_plan", "agent.work.plan")
 
 	// 断言③：mock 命中（方法体内直接断言，同时满足 integration-audit
 	// 有效测试判定——共享 helper 内的断言不在本方法 AST 内）

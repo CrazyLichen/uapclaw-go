@@ -93,7 +93,7 @@ func (s *TodoPanelSuite) TestTodoPanel_任务栏展示既有待办() {
 	)
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.fast", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.normal", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	todos, toolResult := s.runAndCollectTodos(d, "req-todo-panel-1", "请把任务拆成待办：完成需求分析。")
@@ -120,7 +120,7 @@ func (s *TodoPanelSuite) TestTodoPanel_任务栏展示既有待办() {
 func (s *TodoPanelSuite) runAndCollectTodos(d *adapter.DeepAdapter, requestID, query string) ([]any, string) {
 	s.T().Helper()
 
-	params, err := json.Marshal(map[string]any{"mode": "agent.fast"})
+	params, err := json.Marshal(map[string]any{"mode": "agent.work.normal"})
 	s.Require().NoError(err)
 
 	sid := todoPanelSessionID

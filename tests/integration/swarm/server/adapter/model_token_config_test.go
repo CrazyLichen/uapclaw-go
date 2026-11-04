@@ -84,7 +84,7 @@ func (s *ModelTokenConfigSuite) TestContextWindow_FromModelEntry() {
 	s.writeEnvConfig(32000, 8192, true)
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	deepCfg := d.Instance().DeepConfig()
@@ -110,7 +110,7 @@ func (s *ModelTokenConfigSuite) TestMaxOutputTokens_IntoModelConfig() {
 	s.writeEnvConfig(32000, 8192, true)
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	model, ok := d.ModelCache()["mock-model"]
@@ -125,7 +125,7 @@ func (s *ModelTokenConfigSuite) TestCompressionThresholds_ShrinkByWindow() {
 	s.writeEnvConfig(32000, 8192, true)
 
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 
 	reactAgent := d.Instance().ReactAgent()

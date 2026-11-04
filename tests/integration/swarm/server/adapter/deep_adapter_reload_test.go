@@ -49,7 +49,7 @@ func (s *DeepAdapterReloadSuite) SetupTest() {
 // newDeepAdapter 构造 DeepAdapter 并执行 CreateInstance 装配链，挂 Cleanup 收尾。
 func (s *DeepAdapterReloadSuite) newDeepAdapter() *adapter.DeepAdapter {
 	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.plan", ""))
+	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
 	s.T().Cleanup(func() { _ = d.Cleanup() })
 	return d
 }

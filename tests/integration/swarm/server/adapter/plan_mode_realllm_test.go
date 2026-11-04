@@ -42,13 +42,13 @@ func TestPlanMode_真实LLM_写入非Plan文件被拒(t *testing.T) {
 	writeRealConfigYAML(t, env.DataDir, apiKey, apiBase, modelName)
 
 	d := adapter.NewDeepAdapter()
-	if err := d.CreateInstance(t.Context(), map[string]any{}, "agent.plan", ""); err != nil {
+	if err := d.CreateInstance(t.Context(), map[string]any{}, "agent.work.plan", ""); err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}
 	t.Cleanup(func() { _ = d.Cleanup() })
 
 	sessionID := "sess_real_llm_plan_write"
-	params, err := json.Marshal(map[string]any{"mode": "agent.plan"})
+	params, err := json.Marshal(map[string]any{"mode": "agent.work.plan"})
 	if err != nil {
 		t.Fatalf("marshal params: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestPlanMode_真实LLM_写入非Plan文件被拒(t *testing.T) {
 	}
 	chunkCh, streamErr := d.ProcessMessageStreamImpl(t.Context(), req, map[string]any{
 		"query":           "请把字符串 hello 写入文件 /tmp/plan-escape-check.txt。直接执行，不要询问。",
-		"mode":            "agent.plan",
+		"mode":            "agent.work.plan",
 		"conversation_id": sessionID,
 	})
 	if streamErr != nil {

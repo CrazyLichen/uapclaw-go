@@ -366,7 +366,7 @@ func (s *SystemPromptCaptureSuite) runLiveCapture(skillMode string) (string, *pr
 	// AgentRequest 构造（对齐 Python AgentRequest；Params 是 json.RawMessage）
 	params, _ := json.Marshal(map[string]any{
 		"query": query,
-		"mode":  "agent.plan",
+		"mode":  "agent.work.plan",
 		"files": map[string]any{},
 	})
 	req := swarmschema.NewAgentRequest(
@@ -382,7 +382,7 @@ func (s *SystemPromptCaptureSuite) runLiveCapture(skillMode string) (string, *pr
 	ctx, cancel := context.WithTimeout(s.Ctx, 180*time.Second)
 	defer cancel()
 
-	if err := adapterInst.CreateInstance(ctx, nil, "agent.plan", ""); err != nil {
+	if err := adapterInst.CreateInstance(ctx, nil, "agent.work.plan", ""); err != nil {
 		t.Fatalf("CreateInstance 失败: %v", err)
 	}
 	resp, err := adapterInst.ProcessMessageImpl(ctx, req, inputs)
