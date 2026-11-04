@@ -1,9 +1,11 @@
 package local
 
 import (
-	"bufio"
+	"bytes"
 	"context"
+
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	textencoding "golang.org/x/text/encoding/ianaindex"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -63,6 +66,24 @@ type AsyncProcessHandler struct {
 // OperationUtils 平台操作工具函数的命名空间（无状态，仅提供方法分组）。
 type OperationUtils struct{}
 
+// lockedBuffer 并发安全的输出缓冲：os/exec 的 copy 协程写入，主协程在超时早退后读取。
+type lockedBuffer struct {
+	// mu 保护 buf
+	mu sync.Mutex
+	// buf 已写入的原始字节
+	buf bytes.Buffer
+}
+
+// chunkDecoder 流式分块解码器：跨块的半个多字节字符留到下一块再解码。
+//
+// Python: AsyncProcessHandler._reader 用 codecs.getincrementaldecoder 达到同样效果。
+type chunkDecoder struct {
+	// encoding 目标编码
+	encoding string
+	// pending 上一块末尾不完整的多字节字节
+	pending []byte
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // StreamEventType 流式事件类型枚举。
@@ -93,7 +114,10 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var safePathPattern = regexp.MustCompile(`[^\w.-]`)
+var (
+	// safePathPattern 文件名安全字符集合
+	safePathPattern = regexp.MustCompile(`[^\w.-]`)
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -129,6 +153,45 @@ func NewAsyncProcessHandler(cmd *exec.Cmd, chunkSize int, encoding string, timeo
 	}
 }
 
+// Write 追加一块输出（os/exec 的 copy 协程调用）。
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+// Bytes 返回当前已写入的全部字节副本。
+func (b *lockedBuffer) Bytes() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]byte(nil), b.buf.Bytes()...)
+}
+
+// decode 解码一块原始字节；末尾不完整的半个多字节字符留到下一块。
+func (d *chunkDecoder) decode(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	data := raw
+	if len(d.pending) > 0 {
+		data = append(append([]byte(nil), d.pending...), raw...)
+		d.pending = nil
+	}
+	out, rest := decodeComplete(data, d.encoding)
+	d.pending = rest
+	return out
+}
+
+// flush 冲出残留的不完整字节（流结束时按原样输出，不丢字节）。
+func (d *chunkDecoder) flush() string {
+	if len(d.pending) == 0 {
+		return ""
+	}
+	raw := d.pending
+	d.pending = nil
+	return decodeOutput(raw, d.encoding)
+}
+
 // Invoke 同步执行子进程，等待完成后返回输出数据。
 func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 	h.mu.Lock()
@@ -141,15 +204,12 @@ func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 	// 设置进程组隔离
 	h.setProcessGroup()
 
-	// 创建管道
-	stdoutPipe, err := h.cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("创建 stdout 管道失败: %w", err)
-	}
-	stderrPipe, err := h.cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("创建 stderr 管道失败: %w", err)
-	}
+	// 输出交给 os/exec 托管：Wait 会等内部 io.Copy 协程把管道读到 EOF 再返回，
+	// 因此不会出现「读协程尚未调度就被 Wait 关闭管道」的空输出/丢尾。
+	// Python: invoke 里独立 _drain 任务读满 EOF 后再取 buffer。
+	var stdoutBuf, stderrBuf lockedBuffer
+	h.cmd.Stdout = &stdoutBuf
+	h.cmd.Stderr = &stderrBuf
 
 	// 启动进程
 	if err := h.cmd.Start(); err != nil {
@@ -163,76 +223,43 @@ func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 		defer cancel()
 	}
 
-	// 并行收集 stdout/stderr
-	var stdoutBuf, stderrBuf strings.Builder
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		scanner := bufio.NewScanner(stdoutPipe)
-		for scanner.Scan() {
-			// 按检测到的编码解码（Windows 中文系统 cmd 输出为 GBK）
-			stdoutBuf.WriteString(decodeOutput(scanner.Bytes(), h.encoding))
-			stdoutBuf.WriteByte('\n')
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		scanner := bufio.NewScanner(stderrPipe)
-		for scanner.Scan() {
-			stderrBuf.WriteString(decodeOutput(scanner.Bytes(), h.encoding))
-			stderrBuf.WriteByte('\n')
-		}
-	}()
-
-	// collectDone 在两个收集协程都完成后关闭
-	collectDone := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(collectDone)
-	}()
-
-	// cmd.Wait() 会在进程退出后关闭管道，必须等收集协程读完再调，
-	// 否则读协程未读走的尾部输出会被截断（竞态：间歇性空输出/丢尾部）。
 	waitCh := make(chan error, 1)
 	go func() { waitCh <- h.cmd.Wait() }()
 
-	// 等待收集完成或超时；超时/取消时先 kill 进程树，管道 EOF 后收集自然完成
+	// 等待进程退出或超时；超时/取消时先 kill 进程树，让管道 EOF 后 Wait 自然返回
 	timedOut := false
+	var waitErr error
 	select {
-	case <-collectDone:
+	case waitErr = <-waitCh:
 	case <-ctx.Done():
 		timedOut = true
 		h.killProcessTree()
 		select {
-		case <-collectDone:
+		case waitErr = <-waitCh:
 		case <-time.After(30 * time.Second):
 			logger.Warn(logComponent).
 				Str("event_type", "INVOKE_COLLECT_TIMEOUT").
-				Msg("timed out waiting 30s for output collection after kill")
+				Msg("timed out waiting 30s for process exit after kill")
 		}
 	}
-	waitErr := <-waitCh
 
 	data := &InvokeData{
-		Stdout: stdoutBuf.String(),
-		Stderr: stderrBuf.String(),
+		Stdout: decodeOutput(stdoutBuf.Bytes(), h.encoding),
+		Stderr: decodeOutput(stderrBuf.Bytes(), h.encoding),
+	}
+	if h.cmd.ProcessState != nil {
+		data.ExitCode = h.cmd.ProcessState.ExitCode()
 	}
 
 	if timedOut {
+		data.ExitCode = -1
 		if ctx.Err() == context.DeadlineExceeded {
-			data.ExitCode = -1
 			data.Exception = fmt.Errorf("执行超时 %d 秒", h.overallTimeout)
 		} else {
-			data.ExitCode = -1
 			data.Exception = waitErr
 		}
 	} else if waitErr != nil {
 		data.Exception = waitErr
-	} else {
-		data.ExitCode = h.cmd.ProcessState.ExitCode()
 	}
 
 	return data, nil
@@ -272,56 +299,67 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 
 	// 内部 queue channel，reader goroutine 写入，主协程消费
 	queue := make(chan StreamEvent, 128)
+	// done 消费者退出信号：reader/exit 协程据此提前收工，避免 channel 堵塞泄漏
+	done := make(chan struct{})
+	var doneOnce sync.Once
+	stop := func() { doneOnce.Do(func() { close(done) }) }
 
-	// reader goroutine: 读 pipe → 写 queue
+	send := func(ev StreamEvent) bool {
+		select {
+		case queue <- ev:
+			return true
+		case <-done:
+			return false
+		}
+	}
+
+	// reader goroutine: 读 pipe → 解码 → 写 queue（按 chunkSize 字节分块，不按行）
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// stdout 读取
-	go func() {
+	readStream := func(r io.Reader, streamType StreamEventType) {
 		defer wg.Done()
-		scanner := bufio.NewScanner(stdoutPipe)
-		scanner.Buffer(make([]byte, h.chunkSize), h.chunkSize)
-		for scanner.Scan() {
-			queue <- StreamEvent{
-				Type:      StreamEventTypeStdout,
-				Data:      decodeOutput(scanner.Bytes(), h.encoding) + "\n",
-				Timestamp: time.Now(),
+		dec := &chunkDecoder{encoding: h.encoding}
+		buf := make([]byte, h.chunkSize)
+		for {
+			n, readErr := r.Read(buf)
+			if n > 0 {
+				if text := dec.decode(buf[:n]); text != "" {
+					if !send(StreamEvent{Type: streamType, Data: text, Timestamp: time.Now()}) {
+						return
+					}
+				}
+			}
+			if readErr != nil {
+				if readErr != io.EOF {
+					send(StreamEvent{
+						Type:      StreamEventTypeError,
+						Data:      fmt.Sprintf("%s 读取错误: %v", streamType, readErr),
+						Timestamp: time.Now(),
+					})
+					return
+				}
+				// 流结束：冲出解码器里剩余的半个字符
+				if tail := dec.flush(); tail != "" {
+					send(StreamEvent{Type: streamType, Data: tail, Timestamp: time.Now()})
+				}
+				return
 			}
 		}
-		if err := scanner.Err(); err != nil {
-			queue <- StreamEvent{
-				Type:      StreamEventTypeError,
-				Data:      fmt.Sprintf("stdout 读取错误: %v", err),
-				Timestamp: time.Now(),
-			}
-		}
-	}()
+	}
 
-	// stderr 读取
-	go func() {
-		defer wg.Done()
-		scanner := bufio.NewScanner(stderrPipe)
-		scanner.Buffer(make([]byte, h.chunkSize), h.chunkSize)
-		for scanner.Scan() {
-			queue <- StreamEvent{
-				Type:      StreamEventTypeStderr,
-				Data:      decodeOutput(scanner.Bytes(), h.encoding) + "\n",
-				Timestamp: time.Now(),
-			}
-		}
-		if err := scanner.Err(); err != nil {
-			queue <- StreamEvent{
-				Type:      StreamEventTypeError,
-				Data:      fmt.Sprintf("stderr 读取错误: %v", err),
-				Timestamp: time.Now(),
-			}
-		}
-	}()
+	go readStream(stdoutPipe, StreamEventTypeStdout)
+	go readStream(stderrPipe, StreamEventTypeStderr)
 
-	// reader 完成后关闭 queue，并等 cmd.Wait() 发送 EXIT 事件
+	// reader 完成后等进程退出并发送 EXIT 事件
 	go func() {
 		wg.Wait()
+		select {
+		case <-done:
+			// 消费者已放弃：终止进程，避免 Wait 永久阻塞
+			h.killProcessTree()
+		default:
+		}
 		exitCode := 0
 		if waitErr := h.cmd.Wait(); waitErr != nil {
 			if exitErr, ok := waitErr.(*exec.ExitError); ok {
@@ -330,18 +368,20 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 				exitCode = -1
 			}
 		}
-		queue <- StreamEvent{
+		if send(StreamEvent{
 			Type:      StreamEventTypeExit,
 			Data:      fmt.Sprintf("%d", exitCode),
 			ExitCode:  exitCode,
 			Timestamp: time.Now(),
+		}) {
+			close(queue)
 		}
-		close(queue)
 	}()
 
 	// 主协程：select 循环消费 queue，支持超时和 context 取消
 	go func() {
 		defer close(ch)
+		defer stop()
 
 		// 超时 ticker（1 秒间隔检查）
 		var ticker *time.Ticker
@@ -358,7 +398,12 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 					// queue 关闭，所有事件已处理完毕
 					return
 				}
-				ch <- event
+				select {
+				case ch <- event:
+				case <-ctx.Done():
+					h.killProcessTree()
+					return
+				}
 				// EXIT 事件表示流结束
 				if event.Type == StreamEventTypeExit {
 					return
@@ -372,10 +417,13 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 						Int("overall_timeout", h.overallTimeout).
 						Msg("streaming execution timed out")
 					h.killProcessTree()
-					ch <- StreamEvent{
+					select {
+					case ch <- StreamEvent{
 						Type:      StreamEventTypeError,
 						Data:      fmt.Sprintf("执行超时 %d 秒", h.overallTimeout),
 						Timestamp: time.Now(),
+					}:
+					default:
 					}
 					return
 				}
@@ -385,10 +433,13 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 					Str("event_type", "STREAM_CANCELLED").
 					Msg("streaming execution cancelled")
 				h.killProcessTree()
-				ch <- StreamEvent{
+				select {
+				case ch <- StreamEvent{
 					Type:      StreamEventTypeError,
 					Data:      "执行被取消",
 					Timestamp: time.Now(),
+				}:
+				default:
 				}
 				return
 			}
@@ -539,6 +590,99 @@ func (h *AsyncProcessHandler) killProcessTree() {
 	killProcessTreePlatform(h)
 }
 
+// decodeComplete 解码整块字节，末尾不完整的多字节序列作为 rest 返回。
+//
+// Python 用 codecs 的增量解码器保留半个字符；Go 侧显式算「末尾不完整字节数」：
+// 单字节系（UTF-8）看起始字节，双字节系（GBK/Big5 等）按字节对扫描。
+func decodeComplete(raw []byte, encName string) (string, []byte) {
+	hold := incompleteTailLen(raw, encName)
+	data := raw[:len(raw)-hold]
+	out, err := decodeStrict(data, encName)
+	if err != nil {
+		return decodeOutput(raw, encName), nil
+	}
+	return out, append([]byte(nil), raw[len(raw)-hold:]...)
+}
+
+// incompleteTailLen 返回末尾不完整多字节序列的字节数（0 表示完整）。
+func incompleteTailLen(raw []byte, encName string) int {
+	switch strings.ToLower(strings.TrimSpace(encName)) {
+	case "", "utf-8", "utf8":
+		return incompleteUTF8Tail(raw)
+	case "gbk", "cp936", "gb2312", "ms936", "gb18030", "cp54936", "big5", "cp950":
+		return incompleteDoubleByteTail(raw)
+	default:
+		return 0
+	}
+}
+
+// incompleteUTF8Tail 返回末尾半个 UTF-8 字符的字节数。
+func incompleteUTF8Tail(raw []byte) int {
+	for i := 0; i < utf8.UTFMax && i < len(raw); i++ {
+		b := raw[len(raw)-1-i]
+		if !utf8.RuneStart(b) {
+			continue
+		}
+		want := 1
+		switch {
+		case b&0xF8 == 0xF0:
+			want = 4
+		case b&0xF0 == 0xE0:
+			want = 3
+		case b&0xE0 == 0xC0:
+			want = 2
+		}
+		if want > i+1 {
+			return i + 1
+		}
+		return 0
+	}
+	return 0
+}
+
+// incompleteDoubleByteTail 返回末尾半个双字节字符（GBK/Big5 系）的字节数。
+func incompleteDoubleByteTail(raw []byte) int {
+	i := 0
+	for i < len(raw) {
+		if raw[i] < 0x80 {
+			i++
+			continue
+		}
+		if i+1 >= len(raw) {
+			return 1
+		}
+		i += 2
+	}
+	return 0
+}
+
+// decodeStrict 严格解码：字节序列非法时返回 error；编码名无法识别时按原文直通。
+func decodeStrict(raw []byte, encName string) (string, error) {
+	if len(raw) == 0 {
+		return "", nil
+	}
+	switch strings.ToLower(strings.TrimSpace(encName)) {
+	case "", "utf-8", "utf8":
+		return string(raw), nil
+	case "gbk", "cp936", "gb2312", "ms936":
+		out, err := simplifiedchinese.GBK.NewDecoder().Bytes(raw)
+		return string(out), err
+	case "gb18030", "cp54936":
+		out, err := simplifiedchinese.GB18030.NewDecoder().Bytes(raw)
+		return string(out), err
+	case "big5", "cp950":
+		out, err := traditionalchinese.Big5.NewDecoder().Bytes(raw)
+		return string(out), err
+	default:
+		e, err := textencoding.MIME.Encoding(strings.ToLower(strings.TrimSpace(encName)))
+		if err != nil || e == nil {
+			return string(raw), nil
+		}
+		out, decErr := e.NewDecoder().Bytes(raw)
+		return string(out), decErr
+	}
+}
+
 // decodeOutput 把子进程的原始输出字节按指定编码解码为字符串。
 // Python: asyncio 子进程输出 bytes.decode(encoding)；encoding 缺省为
 // _detect_shell_encoding()（中文 Windows 返回 cp936）。
@@ -548,27 +692,8 @@ func decodeOutput(raw []byte, encName string) string {
 	if len(raw) == 0 {
 		return ""
 	}
-	switch strings.ToLower(strings.TrimSpace(encName)) {
-	case "", "utf-8", "utf8":
-		return string(raw)
-	case "gbk", "cp936", "gb2312", "ms936":
-		if out, err := simplifiedchinese.GBK.NewDecoder().Bytes(raw); err == nil {
-			return string(out)
-		}
-	case "gb18030", "cp54936":
-		if out, err := simplifiedchinese.GB18030.NewDecoder().Bytes(raw); err == nil {
-			return string(out)
-		}
-	case "big5", "cp950":
-		if out, err := traditionalchinese.Big5.NewDecoder().Bytes(raw); err == nil {
-			return string(out)
-		}
-	default:
-		if e, err := textencoding.MIME.Encoding(strings.ToLower(strings.TrimSpace(encName))); err == nil && e != nil {
-			if out, err := e.NewDecoder().Bytes(raw); err == nil {
-				return string(out)
-			}
-		}
+	if out, err := decodeStrict(raw, encName); err == nil {
+		return out
 	}
 	return string(raw)
 }

@@ -82,6 +82,19 @@ func TestDetectShellEncoding_Linux(t *testing.T) {
 // gbkHelloBytes "你好" 的 GBK 编码字节
 var gbkHelloBytes = []byte{0xC4, 0xE3, 0xBA, 0xC3}
 
+const (
+	// helperModeLarge 大量行输出模式
+	helperModeLarge = "large"
+	// helperModeLongLine 超长单行输出模式
+	helperModeLongLine = "longline"
+	// helperLargeLines 大输出行数
+	helperLargeLines = 400
+	// helperLineWidth 每行字节数（含换行）
+	helperLineWidth = 512
+	// helperLongLineBytes 超长单行字节数
+	helperLongLineBytes = 200000
+)
+
 // TestHelperProcess 子进程辅助入口（经典 os/exec helper 模式）：
 // 通过环境变量 GO_HELPER_PROCESS=1 + GO_HELPER_MODE 控制输出内容，
 // 避免依赖外部命令（cat/printf），跨平台且不受系统命令环境影响。
@@ -97,6 +110,16 @@ func TestHelperProcess(t *testing.T) {
 		_, _ = os.Stdout.WriteString("中文utf8")
 	case "stream":
 		_, _ = os.Stdout.Write(append(bytes.Clone(gbkHelloBytes), []byte(" stream")...))
+	case helperModeLarge:
+		// 逐行写满 helperLargeLines 行，总量超过管道缓冲（64KB）
+		line := bytes.Repeat([]byte("x"), helperLineWidth-1)
+		line = append(line, '\n')
+		for i := 0; i < helperLargeLines; i++ {
+			_, _ = os.Stdout.Write(line)
+		}
+	case helperModeLongLine:
+		// 单行超长输出：验证读取端不按行、不丢字节
+		_, _ = os.Stdout.Write(bytes.Repeat([]byte("y"), helperLongLineBytes))
 	}
 	os.Exit(0)
 }
