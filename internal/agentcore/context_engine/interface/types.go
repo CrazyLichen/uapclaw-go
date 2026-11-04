@@ -220,6 +220,8 @@ type ContextWindow struct {
 	Tools []schema.ToolInfoInterface `json:"tools"`
 	// Statistic 统计信息（值类型，零值始终可用，与 Python ContextStats() 默认实例对齐）
 	Statistic ContextStats `json:"statistic"`
+	// Mutators 本次请求的窗口投影链（由 GetContextWindow 应用，不参与序列化）
+	Mutators []WindowMutator `json:"-"`
 }
 
 // ContextEngineOption ContextEngine 构造器选项函数

@@ -567,6 +567,16 @@ func (mc *SessionModelContext) GetContextWindow(
 		}
 	}
 
+	// 7.5 应用窗口投影链（本次请求有效，不改历史）
+	for _, mutate := range iface.WindowMutatorsFromOption(opts...) {
+		if mutate == nil {
+			continue
+		}
+		if projected := mutate(window); projected != nil {
+			window = projected
+		}
+	}
+
 	// 8. 统计上下文窗口
 	mc.statContextWindow(window)
 
