@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -1057,6 +1058,10 @@ func TestReActAgent_StreamImpl_有LLM(t *testing.T) {
 
 // fakeModelClient 模拟 BaseModelClient
 type fakeModelClient struct {
+	// script 按轮次返回的脚本响应（优先于 invokeResult）
+	script []*llmschema.AssistantMessage
+	// scriptIdx 当前脚本下标（多轮共享同一客户端时递增）
+	scriptIdx *int
 	// invokeResult 非流式调用返回结果
 	invokeResult *llmschema.AssistantMessage
 	// invokeErr 非流式调用返回错误
@@ -1161,6 +1166,20 @@ func newAgentWithCustomFakeLLM(name string, fakeClient *fakeModelClient) *ReActA
 func (f *fakeModelClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 	if f.invokeErr != nil {
 		return nil, f.invokeErr
+	}
+	// 脚本模式：按轮次弹出，越界后固定返回最后一条
+	if len(f.script) > 0 {
+		idx := 0
+		if f.scriptIdx != nil {
+			idx = *f.scriptIdx
+		}
+		if idx >= len(f.script) {
+			idx = len(f.script) - 1
+		}
+		if f.scriptIdx != nil {
+			*f.scriptIdx = idx + 1
+		}
+		return f.script[idx], nil
 	}
 	if f.invokeResult != nil {
 		return f.invokeResult, nil
@@ -2699,4 +2718,209 @@ func TestInvoke_ClearsContextMessagesOnce(t *testing.T) {
 	if fmc.clearCalls != 1 {
 		t.Fatalf("取消路径应只清理 1 次，实际 %d 次", fmc.clearCalls)
 	}
+}
+
+// ──────────────────────────── A-01: after_react_iteration / boundary force_finish ────────────────────────────
+
+// scriptedMu 保护脚本队列
+var scriptedMu sync.Mutex
+
+// scriptedScript 待下发脚本响应
+var scriptedScript []*llmschema.AssistantMessage
+
+// scriptedOnce 脚本客户端注册单例
+var scriptedOnce sync.Once
+
+// scriptedProvider 脚本化客户端 provider 名
+var scriptedProvider = "fake_scripted_provider"
+
+// initScriptedModelClient 注册脚本化 fake 客户端（每次构造读取脚本快照）。
+func initScriptedModelClient() {
+	scriptedOnce.Do(func() {
+		model_clients.GetClientRegistry().Register(scriptedProvider, "llm",
+			func(*llmschema.ModelRequestConfig, *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+				scriptedMu.Lock()
+				defer scriptedMu.Unlock()
+				return &fakeModelClient{script: scriptedScript, scriptIdx: new(int)}, nil
+			},
+		)
+	})
+}
+
+// newAgentWithScriptedModel 构造按轮次返回脚本响应的 agent。
+func newAgentWithScriptedModel(script []*llmschema.AssistantMessage, maxIterations int) *ReActAgent {
+	scriptedMu.Lock()
+	scriptedScript = script
+	scriptedMu.Unlock()
+	initScriptedModelClient()
+
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("scripted_agent"),
+		agentschema.WithAgentDescription("脚本模型"),
+	)
+	cfg := saconfig.NewReActAgentConfig(
+		saconfig.WithModelClient(scriptedProvider, "", "", "test-model"),
+		saconfig.WithMaxIterations(maxIterations),
+	)
+	agent := NewReActAgent(card, cfg)
+	model, err := llm.NewModel(
+		&llmschema.ModelClientConfig{ClientProvider: scriptedProvider, ClientID: scriptedProvider},
+		&llmschema.ModelRequestConfig{ModelName: "test-model"},
+	)
+	if err != nil {
+		panic(err)
+	}
+	agent.llm = model
+	return agent
+}
+
+// newLoopCBC 构造 reactLoop 需要的回调上下文与会话。
+func newLoopCBC(t *testing.T, agent *ReActAgent, sessionID string) (*interfaces.AgentCallbackContext, *session.Session) {
+	t.Helper()
+	sess := session.NewSession(session.WithSessionID(sessionID))
+	cbc := interfaces.NewAgentCallbackContext(agent,
+		&interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}, sess)
+	return cbc, sess
+}
+
+// containsContent 判断上下文中是否出现指定内容片段。
+func (f *fakeModelContext) containsContent(substr string) bool {
+	for _, m := range f.messages {
+		if strings.Contains(m.GetContent().String(), substr) {
+			return true
+		}
+	}
+	return false
+}
+
+// stubAbilityManager 最小可用的能力管理器：Execute 直接返回带 ToolMsg 的成功结果，
+// 不触达真实工具与资源管理器。
+type stubAbilityManager struct{}
+
+// newStubAbilityManager 创建能力管理器桩。
+func newStubAbilityManager() *stubAbilityManager { return &stubAbilityManager{} }
+
+// Add 空实现。
+func (s *stubAbilityManager) Add(cschema.Ability) agentschema.AddAbilityResult {
+	return agentschema.AddAbilityResult{}
+}
+
+// AddMany 空实现。
+func (s *stubAbilityManager) AddMany([]cschema.Ability) []agentschema.AddAbilityResult { return nil }
+
+// Remove 空实现。
+func (s *stubAbilityManager) Remove(string) cschema.Ability { return nil }
+
+// RemoveMany 空实现。
+func (s *stubAbilityManager) RemoveMany([]string) []cschema.Ability { return nil }
+
+// Get 空实现。
+func (s *stubAbilityManager) Get(string) cschema.Ability { return nil }
+
+// List 空实现。
+func (s *stubAbilityManager) List() []cschema.Ability { return nil }
+
+// ListToolInfo 空实现（脚本模型不依赖工具列表）。
+func (s *stubAbilityManager) ListToolInfo(context.Context, []string, ...string) ([]cschema.ToolInfoInterface, error) {
+	return nil, nil
+}
+
+// Execute 返回带 ToolMsg 的成功结果。
+func (s *stubAbilityManager) Execute(
+	_ context.Context,
+	_ *interfaces.AgentCallbackContext,
+	toolCalls []*llmschema.ToolCall,
+	_ sessioninterfaces.SessionFacade,
+	_ string,
+) []agentschema.ExecuteResult {
+	results := make([]agentschema.ExecuteResult, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		results = append(results, agentschema.ExecuteResult{
+			Result:  map[string]any{"ok": true},
+			ToolMsg: llmschema.NewToolMessage(tc.ID, "ok"),
+		})
+	}
+	return results
+}
+
+// SetContextEngine 空实现。
+func (s *stubAbilityManager) SetContextEngine(ceinterface.ContextEngine) {}
+
+// ReorderTools 空实现。
+func (s *stubAbilityManager) ReorderTools([]string) {}
+
+// toolCallAssistant 构造带单个 tool_call 的 assistant 消息。
+func toolCallAssistant() *llmschema.AssistantMessage {
+	msg := llmschema.NewAssistantMessage("")
+	msg.ToolCalls = []*llmschema.ToolCall{{ID: "call_1", Name: "read_file", Arguments: "{}"}}
+	return msg
+}
+
+// TestReActAgent_reactLoop_boundaryForceFinish 验证最后一轮 after_react_iteration 的 force_finish 不被丢弃
+func TestReActAgent_reactLoop_boundaryForceFinish(t *testing.T) {
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{toolCallAssistant()}, 1)
+	agent.SetAbilityManager(newStubAbilityManager())
+	fmc := &fakeModelContext{}
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	cbc, sess := newLoopCBC(t, agent, "loop_boundary_ff_sess")
+
+	expected := map[string]any{"output": "graceful abort", "result_type": "answer"}
+	agent.CallbackManager().RegisterCallback(context.Background(),
+		interfaces.CallbackAfterReactIteration,
+		func(_ context.Context, railCtx any) error {
+			if c, ok := railCtx.(*interfaces.AgentCallbackContext); ok {
+				c.RequestForceFinish(expected)
+			}
+			return nil
+		})
+
+	result, err := agent.reactLoop(context.Background(), cbc, sess, fmc, 0)
+	if err != nil {
+		t.Fatalf("reactLoop 返回错误: %v", err)
+	}
+	assert.Equal(t, expected, result)
+}
+
+// TestReActAgent_reactLoop_maxIterationsResultFields 验证耗尽预算时的错误结果字段
+func TestReActAgent_reactLoop_maxIterationsResultFields(t *testing.T) {
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{toolCallAssistant()}, 1)
+	agent.SetAbilityManager(newStubAbilityManager())
+	fmc := &fakeModelContext{}
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	cbc, sess := newLoopCBC(t, agent, "loop_max_fields_sess")
+
+	result, err := agent.reactLoop(context.Background(), cbc, sess, fmc, 0)
+	if err != nil {
+		t.Fatalf("reactLoop 返回错误: %v", err)
+	}
+	assert.Equal(t, "error", result["result_type"])
+	assert.Equal(t, "Max iterations reached without completion", result["output"])
+	assert.Equal(t, "max_iterations", result["termination_reason"])
+	assert.Equal(t, true, result["truncated_by_max_iterations"])
+	assert.Equal(t, 1, result["max_iterations"])
+	assert.Equal(t, 1, result["iterations_used"])
+	assert.Equal(t, false, result["finalization_attempted"])
+	assert.Equal(t, false, result["finalization_succeeded"])
+}
+
+// TestReActAgent_afterReactIteration_firesOnToolRound 验证工具轮结束时事件恰好触发一次
+func TestReActAgent_afterReactIteration_firesOnToolRound(t *testing.T) {
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{toolCallAssistant()}, 1)
+	agent.SetAbilityManager(newStubAbilityManager())
+	fmc := &fakeModelContext{}
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	cbc, sess := newLoopCBC(t, agent, "loop_fire_sess")
+
+	fireCount := 0
+	agent.CallbackManager().RegisterCallback(context.Background(),
+		interfaces.CallbackAfterReactIteration,
+		func(_ context.Context, _ any) error {
+			fireCount++
+			return nil
+		})
+
+	if _, err := agent.reactLoop(context.Background(), cbc, sess, fmc, 0); err != nil {
+		t.Fatalf("reactLoop 返回错误: %v", err)
+	}
+	assert.Equal(t, 1, fireCount)
 }

@@ -34,7 +34,7 @@ type AgentRail interface {
 	// Uninit Rail 注销钩子（注销时调用，用于工具清理等）
 	Uninit(agent BaseAgent) error
 
-	// ── 10 个生命周期钩子方法 ──
+	// ── 12 个生命周期钩子方法 ──
 
 	// BeforeInvoke invoke 开始前
 	BeforeInvoke(ctx context.Context, cbc *AgentCallbackContext) error
@@ -58,6 +58,8 @@ type AgentRail interface {
 	AfterToolCall(ctx context.Context, cbc *AgentCallbackContext) error
 	// OnToolException 工具执行异常
 	OnToolException(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterReactIteration 内层 ReAct 单次迭代完全成功后（模型 + 全部工具 + ToolMessage 均已写入）
+	AfterReactIteration(ctx context.Context, cbc *AgentCallbackContext) error
 
 	// GetCallbacks 提取已覆盖的钩子方法映射，供 RegisterRail 批量注册。
 	GetCallbacks() map[AgentCallbackEvent]cb.PerAgentCallbackFunc
@@ -325,6 +327,9 @@ const (
 	CallbackAfterToolCall AgentCallbackEvent = "after_tool_call"
 	// CallbackOnToolException 工具执行异常
 	CallbackOnToolException AgentCallbackEvent = "on_tool_exception"
+	// CallbackAfterReactIteration 内层 ReAct 单次迭代完全成功后（模型 + 全部工具 + ToolMessage 均已写入）
+	// Python: AgentCallbackEvent.AFTER_REACT_ITERATION
+	CallbackAfterReactIteration AgentCallbackEvent = "after_react_iteration"
 )
 
 const (
@@ -355,20 +360,21 @@ const (
 // ErrSteeringQueueFull steering 队列已满
 var ErrSteeringQueueFull = errors.New("steering 队列已满")
 
-// BaseEventMethodMap 基础事件→方法名映射（8个，不含 task-iteration）。
+// BaseEventMethodMap 基础事件→方法名映射（9个，不含 task-iteration）。
 //
 // Python: EVENT_METHOD_MAP (openjiuwen/core/single_agent/rail/base.py L434-442)
-// 注意：Python 的 EVENT_METHOD_MAP 含 10 个事件（含 task-iteration），
-// Go 核心层将 10 个事件均定义在接口中，此映射仅用于 DeepAgentRail.get_callbacks 分层。
+// 注意：Python 的 EVENT_METHOD_MAP 亦含 after_react_iteration，
+// 此映射仅用于 DeepAgentRail.get_callbacks 分层。
 var BaseEventMethodMap = map[AgentCallbackEvent]string{
-	CallbackBeforeInvoke:     "BeforeInvoke",
-	CallbackAfterInvoke:      "AfterInvoke",
-	CallbackBeforeModelCall:  "BeforeModelCall",
-	CallbackAfterModelCall:   "AfterModelCall",
-	CallbackOnModelException: "OnModelException",
-	CallbackBeforeToolCall:   "BeforeToolCall",
-	CallbackAfterToolCall:    "AfterToolCall",
-	CallbackOnToolException:  "OnToolException",
+	CallbackBeforeInvoke:        "BeforeInvoke",
+	CallbackAfterInvoke:         "AfterInvoke",
+	CallbackBeforeModelCall:     "BeforeModelCall",
+	CallbackAfterModelCall:      "AfterModelCall",
+	CallbackOnModelException:    "OnModelException",
+	CallbackBeforeToolCall:      "BeforeToolCall",
+	CallbackAfterToolCall:       "AfterToolCall",
+	CallbackOnToolException:     "OnToolException",
+	CallbackAfterReactIteration: "AfterReactIteration",
 }
 
 // DeepEventMethodMap DeepAgent 扩展事件→方法名映射（2个 task-iteration hooks）。
@@ -815,6 +821,11 @@ func (r *BaseRail) AfterToolCall(_ context.Context, _ *AgentCallbackContext) err
 // OnToolException 默认 no-op。
 func (r *BaseRail) OnToolException(_ context.Context, _ *AgentCallbackContext) error { return nil }
 
+// AfterReactIteration 默认 no-op。
+func (r *BaseRail) AfterReactIteration(_ context.Context, _ *AgentCallbackContext) error {
+	return nil
+}
+
 // GetCallbacks 返回空映射（默认无钩子覆盖）。
 func (r *BaseRail) GetCallbacks() map[AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return make(map[AgentCallbackEvent]cb.PerAgentCallbackFunc)
@@ -848,6 +859,7 @@ func AllCallbackEvents() []AgentCallbackEvent {
 		CallbackBeforeToolCall,
 		CallbackAfterToolCall,
 		CallbackOnToolException,
+		CallbackAfterReactIteration,
 	}
 }
 

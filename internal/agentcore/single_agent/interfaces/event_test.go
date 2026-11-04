@@ -21,6 +21,7 @@ func TestAgentCallbackEvent_事件值对齐Python(t *testing.T) {
 		{CallbackBeforeToolCall, "before_tool_call"},
 		{CallbackAfterToolCall, "after_tool_call"},
 		{CallbackOnToolException, "on_tool_exception"},
+		{CallbackAfterReactIteration, "after_react_iteration"},
 	}
 	for _, tt := range tests {
 		if string(tt.got) != tt.want {
@@ -43,11 +44,11 @@ func TestAgentCallbackEvent_GoString(t *testing.T) {
 	}
 }
 
-// TestAllCallbackEvents 验证 AllCallbackEvents 返回全部 11 个事件（含 on_user_message）
+// TestAllCallbackEvents 验证 AllCallbackEvents 返回全部 12 个事件（含 on_user_message / after_react_iteration）
 func TestAllCallbackEvents(t *testing.T) {
 	events := AllCallbackEvents()
-	if len(events) != 11 {
-		t.Fatalf("AllCallbackEvents() 返回 %d 个事件，want 11", len(events))
+	if len(events) != 12 {
+		t.Fatalf("AllCallbackEvents() 返回 %d 个事件，want 12", len(events))
 	}
 
 	// 验证无重复
@@ -82,6 +83,7 @@ func TestAgentCallbackEvent_事件值即方法名(t *testing.T) {
 		CallbackBeforeToolCall:      "before_tool_call",
 		CallbackAfterToolCall:       "after_tool_call",
 		CallbackOnToolException:     "on_tool_exception",
+		CallbackAfterReactIteration: "after_react_iteration",
 	}
 	for event, methodName := range methodNames {
 		if string(event) != methodName {

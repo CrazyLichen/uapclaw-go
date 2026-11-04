@@ -66,6 +66,9 @@ func TestBaseRail_所有钩子为NoOp(t *testing.T) {
 	if err := r.AfterTaskIteration(ctx, nil); err != nil {
 		t.Fatalf("AfterTaskIteration 返回错误: %v", err)
 	}
+	if err := r.AfterReactIteration(ctx, nil); err != nil {
+		t.Fatalf("AfterReactIteration 返回错误: %v", err)
+	}
 }
 
 // TestBaseRail_InitUninit为NoOp 测试 Init 和 Uninit 均返回 nil。

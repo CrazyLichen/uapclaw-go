@@ -679,6 +679,15 @@ func (a *ReActAgent) reactLoop(
 			Int("max_iterations", maxIter).
 			Msg("ReAct iteration")
 
+		// 轮首消费：上一轮 after_react_iteration 钩子请求的 force_finish。
+		// Python: react_agent.py L3100-3108 —— 让优雅中止在下一轮轮首生效，
+		// 而不是先白跑一次模型调用才被消费。
+		if finish := cbc.ConsumeForceFinish(); finish != nil {
+			a.saveContexts(ctx, sess)
+			iterResult = finish.Result
+			break
+		}
+
 		// steering 注入
 		if steeringMsgs := cbc.DrainSteering(); len(steeringMsgs) > 0 && modelCtx != nil {
 			_ = syncPromptAttachments(ctx, a.promptAttachments, modelCtx)
@@ -755,12 +764,42 @@ func (a *ReActAgent) reactLoop(
 			break
 		}
 		// ⤵️ 6.11: Workflow 中断检测
+
+		// 单轮完全成功（模型响应 + 全部工具结果 + ToolMessage 均已写入）后触发。
+		// Python: react_agent.py L3241 —— rails（如快照 rail）据此捕获安全状态；
+		// 该钩子也是 boundary force_finish 的来源，故必须在轮末而不是轮首触发。
+		if fireErr := cbc.Fire(ctx, interfaces.CallbackAfterReactIteration); fireErr != nil {
+			logger.Warn(logComponent).
+				Str("event", string(interfaces.CallbackAfterReactIteration)).
+				Err(fireErr).
+				Msg("after_react_iteration callback errored")
+		}
 	}
 
 	if iterResult == nil {
-		// Python: for-else: max iterations 时执行 save_contexts
+		// Python: for-else（react_agent.py L3243-3252）——预算耗尽时先消费最后一轮
+		// after_react_iteration 设置的 force_finish（如优雅中止），否则落 max_iterations 错误。
+		// Python: await self.context_engine.save_contexts(session)
 		a.saveContexts(ctx, sess)
-		iterResult = map[string]any{"output": "达到最大迭代次数仍未完成", "result_type": "error"}
+		if finish := cbc.ConsumeForceFinish(); finish != nil {
+			iterResult = finish.Result
+		} else {
+			iterResult = map[string]any{
+				"output":                      "Max iterations reached without completion",
+				"result_type":                 "error",
+				"termination_reason":          "max_iterations",
+				"iterations_used":             maxIter,
+				"truncated_by_max_iterations": true,
+				"max_iterations":              maxIter,
+				"finalization_attempted":      false,
+				"finalization_succeeded":      false,
+			}
+			logger.Warn(logComponent).
+				Int("iterations_used", maxIter).
+				Int("max_iterations", maxIter).
+				Str("strategy", "error").
+				Msg("ReAct iteration limit reached")
+		}
 	}
 
 	if invokeInputs, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok {
