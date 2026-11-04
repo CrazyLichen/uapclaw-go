@@ -25,6 +25,8 @@ type Manager struct {
 	histMu sync.Mutex
 	// items session → section → item
 	items map[string]map[string]*Attachment
+	// language 渲染语言（cn/en）
+	language string
 }
 
 // AttachmentUpdate 允许修改的字段，nil 表示不改。
@@ -56,7 +58,9 @@ var unsafeIDPattern = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)
 
 // NewManager 创建管理器。
 func NewManager() *Manager {
-	return &Manager{items: map[string]map[string]*Attachment{}}
+	// 偏差说明：上游构造函数默认 language="en"，本项目提示词语言缺省为 cn，
+	// 由 DeepAgent/Adapter 在装配时通过 SetLanguage 覆写。
+	return &Manager{items: map[string]map[string]*Attachment{}, language: "cn"}
 }
 
 // AddSection 新增或覆盖一个 section。
