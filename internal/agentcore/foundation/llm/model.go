@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -271,6 +272,23 @@ func (m *Model) Stream(
 	out := make(chan *llmschema.AssistantMessageChunk)
 	go func() {
 		defer close(out)
+		// 包装层兜底：钩子 panic 不能带走整个进程，转 StreamError 哨兵交给消费方，
+		// 语义等价于 Python 生成器内抛异常被消费方 except 接住。
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Error(logComponent).
+					Str("event_type", "llm_stream_panic").
+					Str("layer", "model").
+					Str("stack", string(debug.Stack())).
+					Err(fmt.Errorf("%v", rec)).
+					Msg("stream wrapper panicked, converted to stream error")
+				select {
+				case out <- llmschema.NewAssistantMessageChunk("",
+					llmschema.WithChunkStreamError(fmt.Errorf("stream wrapper panic: %v", rec))):
+				case <-ctx.Done():
+				}
+			}
+		}()
 		for chunk := range chunkChan {
 			// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn，per item）
 			if transformed := fw.TransformLLMIOOutput(ctx, callback.LLMStreamOutput, chunk); transformed != nil {
@@ -303,7 +321,22 @@ func (m *Model) Stream(
 				},
 			})
 
-			out <- chunk
+			select {
+			case out <- chunk:
+			case <-ctx.Done():
+				// 消费方放弃读取：必须排空内层，让客户端 goroutine 走到自己的
+				// defer 收尾（关闭 resp.Body），否则连接与 goroutine 一起泄漏。
+				drained := 0
+				for range chunkChan {
+					drained++
+				}
+				logger.Info(logComponent).
+					Str("event_type", "llm_stream_consumer_abandoned").
+					Str("layer", "model").
+					Int("drained", drained).
+					Msg("consumer abandoned stream, drained remaining chunks")
+				return
+			}
 		}
 	}()
 

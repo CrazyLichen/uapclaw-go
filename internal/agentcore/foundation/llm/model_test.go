@@ -810,3 +810,78 @@ func TestWithClient(t *testing.T) {
 	WithClient(client)(m)
 	assert.Equal(t, client, m.client)
 }
+
+// ──────────────────────────── A-03: 流式异常必须把流消费干净 ────────────────────────────
+
+// TestModel_Stream_consumerAbandonDrains 验证消费方放弃读取时生产端被排空、不悬挂
+func TestModel_Stream_consumerAbandonDrains(t *testing.T) {
+	inner := make(chan *llmschema.AssistantMessageChunk)
+	producerDone := make(chan struct{})
+	go func() {
+		defer close(producerDone)
+		defer close(inner)
+		for i := 0; i < 200; i++ {
+			inner <- llmschema.NewAssistantMessageChunk("c")
+		}
+	}()
+
+	model := &Model{
+		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
+		client:            &mockModelClient{streamChan: inner},
+		callbackFramework: callback.NewCallbackFramework(),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	out, err := model.Stream(ctx, model_clients.NewTextMessagesParam("hi"))
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+	<-out    // 只读一个 chunk
+	cancel() // 消费方放弃
+
+	select {
+	case <-producerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("生产端未在消费方放弃后收尾（goroutine/连接泄漏）")
+	}
+}
+
+// TestModel_Stream_wrapperPanicConvertsToStreamError 验证包装层 panic 转成 StreamError
+func TestModel_Stream_wrapperPanicConvertsToStreamError(t *testing.T) {
+	inner := make(chan *llmschema.AssistantMessageChunk, 1)
+	inner <- llmschema.NewAssistantMessageChunk("x")
+	close(inner)
+
+	fw := callback.NewCallbackFramework()
+	// TransformLLMIOOutput 钩子 panic：包装层必须 recover 并投递哨兵
+	fw.RegisterLLMTransformIO(callback.LLMStreamInput, callback.LLMStreamOutput, nil,
+		func(_ context.Context, _ callback.LLMCallEventType, _ any) any {
+			panic("boom")
+		})
+
+	model := &Model{
+		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
+		ClientConfig:      mustNewClientConfig("OpenAI", "key", "http://localhost"),
+		client:            &mockModelClient{streamChan: inner},
+		callbackFramework: fw,
+	}
+
+	out, err := model.Stream(context.Background(), model_clients.NewTextMessagesParam("hi"))
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	var gotErr error
+	for chunk := range out {
+		if chunk != nil && chunk.StreamError != nil {
+			gotErr = chunk.StreamError
+		}
+	}
+	if gotErr == nil {
+		t.Fatal("包装层 panic 应转成 StreamError 哨兵")
+	}
+	assert.Contains(t, gotErr.Error(), "stream wrapper panic")
+}

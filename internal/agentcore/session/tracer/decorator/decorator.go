@@ -2,6 +2,8 @@ package decorator
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -9,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -82,6 +85,11 @@ type TracedWorkflow struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -163,8 +171,38 @@ func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.M
 	out := make(chan *llmschema.AssistantMessageChunk)
 	go func() {
 		defer close(out)
+		// 包装层兜底：tracer 钩子 panic 不能带走进程，转 StreamError 哨兵交给消费方
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Error(logComponent).
+					Str("event_type", "llm_stream_panic").
+					Str("layer", "tracer").
+					Str("stack", string(debug.Stack())).
+					Err(fmt.Errorf("%v", rec)).
+					Msg("stream tracer wrapper panicked, converted to stream error")
+				select {
+				case out <- llmschema.NewAssistantMessageChunk("",
+					llmschema.WithChunkStreamError(fmt.Errorf("stream wrapper panic: %v", rec))):
+				case <-ctx.Done():
+				}
+			}
+		}()
 		for chunk := range chunkChan {
-			out <- chunk
+			select {
+			case out <- chunk:
+			case <-ctx.Done():
+				// 消费方放弃读取：排空内层，避免本层与内层 goroutine 同时挂住
+				drained := 0
+				for range chunkChan {
+					drained++
+				}
+				logger.Info(logComponent).
+					Str("event_type", "llm_stream_consumer_abandoned").
+					Str("layer", "tracer").
+					Int("drained", drained).
+					Msg("consumer abandoned traced stream, drained remaining chunks")
+				return
+			}
 		}
 		// 流结束，触发 TraceLLMEnd
 		c.tracer.TriggerAgent(ctx, tracer.TraceLLMEnd, &tracer.TriggerParams{

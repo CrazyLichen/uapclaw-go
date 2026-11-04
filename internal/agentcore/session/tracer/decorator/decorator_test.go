@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -816,5 +817,44 @@ func TestTracedModelClient_Invoke_回调触发TraceLLMRequest(t *testing.T) {
 		}
 	} else {
 		t.Fatalf("期望 lastData 包含 llm_params，实际: %v", lastData)
+	}
+}
+
+// TestTracedModelClient_Stream_consumerAbandonDrains 验证消费方放弃时 tracer 包装层排空内层
+func TestTracedModelClient_Stream_consumerAbandonDrains(t *testing.T) {
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
+
+	inner := make(chan *llmschema.AssistantMessageChunk)
+	producerDone := make(chan struct{})
+	go func() {
+		defer close(producerDone)
+		defer close(inner)
+		for i := 0; i < 200; i++ {
+			inner <- llmschema.NewAssistantMessageChunk("c")
+		}
+	}()
+
+	client := &TracedModelClient{
+		inner:        &fakeModelClient{streamChan: inner},
+		tracer:       tr,
+		agentSpan:    agentSpan,
+		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	out, err := client.Stream(ctx, model_clients.NewTextMessagesParam("hi"))
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+	<-out
+	cancel()
+
+	select {
+	case <-producerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("tracer 包装层未在消费方放弃后排空内层（goroutine 泄漏）")
 	}
 }

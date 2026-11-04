@@ -335,6 +335,17 @@ func (a *ReActAgent) callLLMStream(
 		// 表现为"参数 JSON 非法"这种误导性报错（Python: raise MODEL_CALL_FAILED）。
 		// 错误日志由客户端 FailStream 统一打点（带 model_provider/is_stream），此处不重复。
 		if chunk != nil && chunk.StreamError != nil {
+			// 对齐 Python: async for _chunk in stream_iter —— 异常路径也必须把剩余流消费完，
+			// 否则包装层/客户端 goroutine 与 HTTP 连接会被挂住。
+			drained := 0
+			for range chunkCh {
+				drained++
+			}
+			logger.Debug(logComponent).
+				Str("event_type", "llm_stream_error_drained").
+				Int("drained", drained).
+				Err(chunk.StreamError).
+				Msg("drained remaining stream after error")
 			return nil, chunk.StreamError
 		}
 
