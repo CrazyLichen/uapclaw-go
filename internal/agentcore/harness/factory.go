@@ -550,8 +550,14 @@ func addDefaultRails(
 	userProvidedTypes := make(map[reflect.Type]bool)
 	for _, r := range params.Rails {
 		rt := reflect.TypeOf(r)
-		if rt != nil {
-			userProvidedTypes[rt] = true
+		if rt == nil {
+			continue
+		}
+		userProvidedTypes[rt] = true
+		// 嵌入覆盖（Go 侧的「子类」）：如 CodeTaskPlanningRail 内嵌 *TaskPlanningRail，
+		// 对应 Python isinstance 判定应视为已提供该 rail，避免工厂再追加一份基类实例。
+		for _, embedded := range embeddedRailTypes(rt) {
+			userProvidedTypes[embedded] = true
 		}
 	}
 
@@ -648,6 +654,42 @@ func alreadyProvidedByType(typeMap map[reflect.Type]bool, target reflect.Type) b
 	}
 	// 字符串名称回退：当前未实现
 	return false
+}
+
+// embeddedRailTypes 递归返回结构体（含指针）里的匿名嵌入字段类型。
+//
+// 用于把「内嵌基类」的覆盖式 Rail 视作已提供基类类型，
+// 等价 Python 子类 isinstance 判定。
+func embeddedRailTypes(t reflect.Type) []reflect.Type {
+	seen := map[reflect.Type]bool{}
+	var result []reflect.Type
+	var walk func(reflect.Type)
+	walk = func(cur reflect.Type) {
+		if cur == nil {
+			return
+		}
+		for cur.Kind() == reflect.Ptr {
+			cur = cur.Elem()
+		}
+		if cur.Kind() != reflect.Struct || seen[cur] {
+			return
+		}
+		seen[cur] = true
+		for i := 0; i < cur.NumField(); i++ {
+			field := cur.Field(i)
+			if !field.Anonymous {
+				continue
+			}
+			fieldType := field.Type
+			if fieldType.Kind() != reflect.Ptr {
+				fieldType = reflect.PtrTo(fieldType)
+			}
+			result = append(result, fieldType)
+			walk(fieldType)
+		}
+	}
+	walk(t)
+	return result
 }
 
 // hasVerificationAgent 检查子代理列表中是否包含 verification_agent。

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -405,4 +407,23 @@ func ensureResourceMgr() *resourcesmanager.ResourceMgr {
 	// GetResourceMgr 内部通过 getRunner() 懒初始化，
 	// 首次调用会自动创建 Runner 及 ResourceMgr 实例
 	return runner.GetResourceMgr()
+}
+
+// ──────────────────────────── embeddedRailTypes 测试 ────────────────────────────
+
+// embeddedTaskPlanningRail 内嵌 TaskPlanningRail 的覆盖式 rail（模拟 code 变体）。
+type embeddedTaskPlanningRail struct {
+	*rails.TaskPlanningRail
+}
+
+// TestEmbeddedRailTypes_识别内嵌基类 验证内嵌覆盖被视作已提供基类类型。
+func TestEmbeddedRailTypes_识别内嵌基类(t *testing.T) {
+	rail := &embeddedTaskPlanningRail{TaskPlanningRail: rails.NewTaskPlanningRail()}
+	types := embeddedRailTypes(reflect.TypeOf(rail))
+	assert.Contains(t, types, reflect.TypeOf(&rails.TaskPlanningRail{}))
+
+	// 自身不会被列为内嵌类型；nil 类型安全返回空
+	assert.NotContains(t, embeddedRailTypes(reflect.TypeOf(rails.NewTaskPlanningRail())),
+		reflect.TypeOf(&rails.TaskPlanningRail{}))
+	assert.Empty(t, embeddedRailTypes(nil))
 }

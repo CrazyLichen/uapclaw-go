@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -49,8 +50,10 @@ type TaskPlanningRail struct {
 	listToolCallInterval int
 	// toolCallCounts 会话级工具调用计数
 	toolCallCounts map[string]int
-	// todosCache 会话级待办缓存
+	// todosCache 会话级待办缓存（受 todosMu 保护）
 	todosCache map[string][]hschema.TodoItem
+	// todosMu 保护 todosCache
+	todosMu sync.Mutex
 	// modelSelection 模型选择映射：Model → 描述
 	modelSelection map[*llm.Model]string
 	// modelIDToModel 模型 ID → Model 实例映射
@@ -66,6 +69,9 @@ type TaskPlanningRail struct {
 	// todoModifyFactory todo_modify 工具工厂（nil 时原生构造）
 	// swarm 层 todo_compat 兼容层注入点，等价 Python install_todo_modify_compat_patch()
 	todoModifyFactory todo.TodoModifyToolFactory
+	// todoCardBuilder todo 工具卡片构建器（nil 时走注册表默认文案）
+	// code 模式注入 CC 对齐文案，等价 Python CodeTodo*Tool 子类覆盖卡片
+	todoCardBuilder todo.TodoCardBuilder
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -91,6 +97,11 @@ var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 // WithInjectPrompt 设置是否注入常驻 todo 提示节（默认 false，对齐上游）。
 func WithInjectPrompt(inject bool) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.injectPrompt = inject }
+}
+
+// WithTodoCardBuilder 注入 todo 工具卡片构建器（code 模式用 CC 对齐文案）。
+func WithTodoCardBuilder(builder todo.TodoCardBuilder) TaskPlanningOption {
+	return func(r *TaskPlanningRail) { r.todoCardBuilder = builder }
 }
 
 // WithEnableProgressRepeat 设置是否注入周期性进度提醒
@@ -229,7 +240,7 @@ func (r *TaskPlanningRail) Init(_ context.Context, agent agentinterfaces.BaseAge
 		return nil
 	}
 
-	allTools, todoToolBase := todo.CreateTodosToolWithModifyFactory(workspaceDir, fsOp.Fs(), language, agentID, r.todoModifyFactory)
+	allTools, todoToolBase := todo.CreateTodosToolWithCardBuilder(workspaceDir, fsOp.Fs(), language, agentID, r.todoCardBuilder, r.todoModifyFactory)
 	r.todoTool = &todoToolBase
 
 	resourceMgr := runner.GetResourceMgr()
@@ -325,50 +336,8 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 		sb.RemoveSection(sections.SectionTodo)
 	}
 
-	// Python: L167-168: 若无模型选择配置则跳过模型切换
-	if len(r.modelSelection) == 0 {
-		return nil
-	}
-
-	// Python: L170-171: 首次调用时捕获 defaultLLM
-	switcher, ok := cbc.Agent().(modelSwitcher)
-	if !ok {
-		logger.Warn(logComponent).
-			Str("event_type", "task_planning_before_model_call_skip").
-			Str("agent_type", fmt.Sprintf("%T", cbc.Agent())).
-			Msg("agent does not implement modelSwitcher interface, skipping model switch")
-		return nil
-	}
-
-	if r.defaultLLM == nil {
-		llmModel, err := switcher.GetLLM()
-		if err == nil && llmModel != nil {
-			r.defaultLLM = llmModel
-		}
-	}
-
-	// Python: L173: 获取 in_progress 任务的 selected_model_id
-	selectedModelID := r.getInProgressModelID(ctx, cbc)
-
-	// Python: L175-178: 根据 selected_model_id 查找目标模型
-	var targetModel *llm.Model
-	if selectedModelID != "" {
-		if m, found := r.modelIDToModel[selectedModelID]; found {
-			targetModel = m
-		}
-	}
-	if targetModel == nil {
-		targetModel = r.defaultLLM
-	}
-
-	// Python: L180-185: 切换模型
-	if targetModel != nil {
-		switcher.SetLLM(targetModel)
-		logger.Debug(logComponent).
-			Str("event_type", "task_planning_model_switched").
-			Str("selected_model_id", selectedModelID).
-			Msg("TaskPlanningRail switched model")
-	}
+	// Python: L167-185: 按 in_progress 任务切换模型（缓存读；code rail 用 freshLoad）
+	r.SwitchModelIfNeeded(ctx, cbc, false)
 
 	return nil
 }
@@ -391,7 +360,9 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 					Str("event_type", "task_planning_after_tool_call_refresh_failed").
 					Msg("failed to refresh todos cache")
 			} else {
+				r.todosMu.Lock()
 				r.todosCache[sessionID] = todos
+				r.todosMu.Unlock()
 			}
 		}
 	}
@@ -514,7 +485,9 @@ func (r *TaskPlanningRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.A
 	sessionID := sess.GetSessionID()
 
 	// Python: L275-278: 清理 todos 缓存
+	r.todosMu.Lock()
 	delete(r.todosCache, sessionID)
+	r.todosMu.Unlock()
 
 	// Python: L279-281: 清理工具调用计数
 	delete(r.toolCallCounts, sessionID)
@@ -551,7 +524,103 @@ func (r *TaskPlanningRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 	return callbacks
 }
 
+// SwitchModelIfNeeded 按 in_progress 待办的 selected_model_id 切换模型。
+//
+// freshLoad=true 时每次都从存储重读待办（code rail 行为，对齐
+// CodeTaskPlanningRail._get_fresh_in_progress_model_id），否则读缓存。
+//
+// Python: TaskPlanningRail.before_model_call L167-185
+func (r *TaskPlanningRail) SwitchModelIfNeeded(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, freshLoad bool) {
+	if len(r.modelSelection) == 0 || cbc == nil || cbc.Agent() == nil {
+		return
+	}
+	switcher, ok := cbc.Agent().(modelSwitcher)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("event_type", "task_planning_before_model_call_skip").
+			Str("agent_type", fmt.Sprintf("%T", cbc.Agent())).
+			Msg("agent does not implement modelSwitcher interface, skipping model switch")
+		return
+	}
+	if r.defaultLLM == nil {
+		llmModel, err := switcher.GetLLM()
+		if err == nil && llmModel != nil {
+			r.defaultLLM = llmModel
+		}
+	}
+
+	var selectedModelID string
+	if freshLoad {
+		selectedModelID = r.getFreshInProgressModelID(ctx, cbc)
+	} else {
+		selectedModelID = r.getInProgressModelID(ctx, cbc)
+	}
+
+	var targetModel *llm.Model
+	if selectedModelID != "" {
+		if m, found := r.modelIDToModel[selectedModelID]; found {
+			targetModel = m
+		}
+	}
+	if targetModel == nil {
+		targetModel = r.defaultLLM
+	}
+	if targetModel != nil {
+		switcher.SetLLM(targetModel)
+		logger.Debug(logComponent).
+			Str("event_type", "task_planning_model_switched").
+			Str("selected_model_id", selectedModelID).
+			Msg("TaskPlanningRail switched model")
+	}
+}
+
+// HasTodoTool 是否已注册 todo 工具基类。
+func (r *TaskPlanningRail) HasTodoTool() bool { return r.todoTool != nil }
+
+// InjectPromptEnabled 是否注入常驻 todo 提示节。
+func (r *TaskPlanningRail) InjectPromptEnabled() bool { return r.injectPrompt }
+
+// BindTodoTool 绑定 todo 工具基类（自定义装配/子类 rail 单测注入用）。
+func (r *TaskPlanningRail) BindTodoTool(t *todo.TodoTool) { r.todoTool = t }
+
+// LoadTodosFresh 从存储重读会话待办并刷新缓存。
+//
+// Python: CodeTaskPlanningRail._load_fresh_todos
+func (r *TaskPlanningRail) LoadTodosFresh(ctx context.Context, sessionID string) []hschema.TodoItem {
+	if r.todoTool == nil || sessionID == "" {
+		return nil
+	}
+	todos, err := r.todoTool.LoadTodos(ctx, sessionID)
+	if err != nil {
+		logger.Debug(logComponent).
+			Str("event_type", "task_planning_load_fresh_todos_failed").
+			Str("session_id", sessionID).
+			Msg("failed to load fresh todos")
+		return nil
+	}
+	r.todosMu.Lock()
+	r.todosCache[sessionID] = todos
+	r.todosMu.Unlock()
+	return todos
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getFreshInProgressModelID 从存储重读待办后取 in_progress 任务的 selected_model_id。
+//
+// Python: CodeTaskPlanningRail._get_fresh_in_progress_model_id
+func (r *TaskPlanningRail) getFreshInProgressModelID(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) string {
+	sess := cbc.Session()
+	if sess == nil {
+		return ""
+	}
+	for _, item := range r.LoadTodosFresh(ctx, sess.GetSessionID()) {
+		if item.Status == hschema.TodoStatusInProgress {
+			return item.SelectedModelID
+		}
+	}
+	return ""
+}
 
 func (r *TaskPlanningRail) getInProgressModelID(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) string {
 	sess := cbc.Session()
@@ -564,14 +633,18 @@ func (r *TaskPlanningRail) getInProgressModelID(ctx context.Context, cbc *agenti
 	sessionID := sess.GetSessionID()
 
 	// 优先使用缓存
+	r.todosMu.Lock()
 	todos, cached := r.todosCache[sessionID]
+	r.todosMu.Unlock()
 	if !cached {
 		loaded, err := r.todoTool.LoadTodos(ctx, sessionID)
 		if err != nil {
 			return ""
 		}
 		todos = loaded
+		r.todosMu.Lock()
 		r.todosCache[sessionID] = todos
+		r.todosMu.Unlock()
 	}
 
 	// Python: L314-317: 查找 in_progress 任务

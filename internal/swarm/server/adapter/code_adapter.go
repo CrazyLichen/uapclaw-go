@@ -33,6 +33,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	codeprompt "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/prompt"
+	coderails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/code/rails"
 	commonrails "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails"
 	projectmemory "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/rails/project_memory"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
@@ -77,6 +78,9 @@ type CodeAdapter struct {
 	worktreeRail sainterfaces.AgentRail
 	// codeAgentRail Code 模式专有护栏
 	codeAgentRail sainterfaces.AgentRail
+	// codeTaskPlanningRail code 模式 todo 护栏（CC 对齐文案 + 10/10 提醒）
+	// Python: _code_task_planning_rail = _build_code_task_planning_rail()
+	codeTaskPlanningRail *coderails.CodeTaskPlanningRail
 
 	// ─── Code 模式配置 ───
 
@@ -1146,6 +1150,13 @@ func (c *CodeAdapter) buildCodeAgentRails(config map[string]any, configBase map[
 		railsList = append(railsList, car)
 	}
 
+	// 15: CodeTaskPlanningRail（code 模式 todo 护栏：CC 文案 + 10/10 提醒）
+	// Python: _RailBuildInfo("_code_task_planning_rail", self._build_code_task_planning_rail)
+	if ctp := c.buildCodeTaskPlanningRail(); ctp != nil {
+		c.codeTaskPlanningRail = ctp
+		railsList = append(railsList, ctp)
+	}
+
 	// ─── 动态 Rails — 从 config.yaml::modes.code.rails 读取 ───
 	// Python: for rail_name in configured_rails
 	c.appendDynamicRails(configBase, &railsList)
@@ -1252,6 +1263,14 @@ func (c *CodeAdapter) buildCodeAgentRail() *CodeAgentRail {
 		return nil
 	}
 	return NewCodeAgentRail(c.deep.workspaceDir, c.deep.configLister)
+}
+
+// buildCodeTaskPlanningRail 构建 code 模式 todo 护栏。
+//
+// Python: JiuwenClawCodeAdapter._build_code_task_planning_rail()（interface_code.py:2160）
+// 注册 todo 工具但不注入 openjiuwen 静态 todo 系统提示词，并按 10/10 节奏追加提醒附件。
+func (c *CodeAdapter) buildCodeTaskPlanningRail() *coderails.CodeTaskPlanningRail {
+	return coderails.NewCodeTaskPlanningRail(c.resolveRuntimeLanguage())
 }
 
 // buildLspRail 构建 LSP 护栏。

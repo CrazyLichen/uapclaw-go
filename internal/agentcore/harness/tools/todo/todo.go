@@ -95,6 +95,11 @@ type TodoInsertData struct {
 // Python 无此类型（机制差异显式化），Go 用函数注入替代继承覆盖。
 type TodoModifyToolFactory func(todoTool TodoTool, language, agentID string) tool.Tool
 
+// TodoCardBuilder 生成 todo 工具卡片。
+// code 模式以此注入 CC 对齐的 description/input_params，
+// 等价 Python CodeTodoCreateTool 等子类覆盖 _build_code_todo_card()。
+type TodoCardBuilder func(name, toolID, language, agentID string) *tool.ToolCard
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -255,6 +260,11 @@ func (t *TodoTool) CleanupSession(sessionID string) {
 // Python: TodoCreateTool.__init__
 func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_create", "TodoCreateTool", language, nil, agentID)
+	return NewTodoCreateToolWithCard(todoTool, card)
+}
+
+// NewTodoCreateToolWithCard 用给定卡片构造 todo_create（code 模式以 CC 对齐文案覆盖注册表默认文案）。
+func NewTodoCreateToolWithCard(todoTool TodoTool, card *tool.ToolCard) tool.Tool {
 
 	fn := func(ctx context.Context, input TodoCreateInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// Python: TodoCreateTool.invoke 的 try/except 异常包装
@@ -366,6 +376,11 @@ func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 // Python: TodoListTool.__init__
 func NewTodoListTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_list", "TodoListTool", language, nil, agentID)
+	return NewTodoListToolWithCard(todoTool, card)
+}
+
+// NewTodoListToolWithCard 用给定卡片构造 todo_list（code 模式以 CC 对齐文案覆盖注册表默认文案）。
+func NewTodoListToolWithCard(todoTool TodoTool, card *tool.ToolCard) tool.Tool {
 
 	fn := func(ctx context.Context, _ TodoListInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// Python: TodoListTool.invoke 的 try/except 异常包装
@@ -431,6 +446,11 @@ func NewTodoListTool(todoTool TodoTool, language, agentID string) tool.Tool {
 // Python: TodoGetTool.__init__
 func NewTodoGetTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_get", "TodoGetTool", language, nil, agentID)
+	return NewTodoGetToolWithCard(todoTool, card)
+}
+
+// NewTodoGetToolWithCard 用给定卡片构造 todo_get（code 模式以 CC 对齐文案覆盖注册表默认文案）。
+func NewTodoGetToolWithCard(todoTool TodoTool, card *tool.ToolCard) tool.Tool {
 
 	fn := func(ctx context.Context, input TodoGetInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// Python: TodoGetTool.invoke 的 try/except 异常包装
@@ -500,6 +520,12 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 // status=deleted/delete payload 映射（等价 Python 子类覆盖 _update_todos）。
 func NewTodoModifyToolWithUpdateFn(todoTool TodoTool, language, agentID string, updateFn func(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.TodoItem, string, error)) tool.Tool {
 	card, _ := tools.BuildToolCard("todo_modify", "TodoModifyTool", language, nil, agentID)
+	return NewTodoModifyToolWithCardAndUpdateFn(todoTool, card, updateFn)
+}
+
+// NewTodoModifyToolWithCardAndUpdateFn 用给定卡片构造 todo_modify
+// （code 模式以 CC 对齐文案覆盖注册表默认文案）。
+func NewTodoModifyToolWithCardAndUpdateFn(todoTool TodoTool, card *tool.ToolCard, updateFn func(todos []hschema.TodoItem, updates []map[string]any) ([]hschema.TodoItem, string, error)) tool.Tool {
 
 	fn := func(ctx context.Context, input TodoModifyInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// Python: TodoModifyTool.invoke 的 try/except 异常包装
@@ -609,18 +635,45 @@ func NewTodoModifyToolWithUpdateFn(todoTool TodoTool, language, agentID string, 
 // CreateTodosToolWithModifyFactory 创建全部待办事项工具集，todo_modify 项由工厂构造。
 // modifyFactory 为 nil 时等价 CreateTodosTool（modify 项走原生 NewTodoModifyTool）。
 func CreateTodosToolWithModifyFactory(workspace string, fs sys_operation.FsOperation, language, agentID string, modifyFactory TodoModifyToolFactory) ([]tool.Tool, TodoTool) {
+	return CreateTodosToolWithCardBuilder(workspace, fs, language, agentID, nil, modifyFactory)
+}
+
+// CreateTodosToolWithCardBuilder 创建全部待办事项工具集，卡片可整体定制。
+// cardBuilder 为 nil 时走注册表默认文案；modifyFactory 为 nil 时走原生 update 分派。
+//
+// 对应 Python：CodeTodo*Tool 子类通过 _build_code_todo_card 覆盖卡片。
+func CreateTodosToolWithCardBuilder(
+	workspace string,
+	fs sys_operation.FsOperation,
+	language, agentID string,
+	cardBuilder TodoCardBuilder,
+	modifyFactory TodoModifyToolFactory,
+) ([]tool.Tool, TodoTool) {
 	lockManager := NewTodoLockManager()
 	todoTool := newTodoTool(workspace, fs, lockManager)
+	if cardBuilder == nil {
+		return buildTodosTools(todoTool, language, agentID, modifyFactory), todoTool
+	}
+	modifyCard := cardBuilder("todo_modify", "TodoModifyTool", language, agentID)
 	var modifyTool tool.Tool
-	if modifyFactory != nil {
+	switch {
+	case modifyFactory != nil:
 		modifyTool = modifyFactory(todoTool, language, agentID)
-	} else {
+	case modifyCard != nil:
+		modifyTool = NewTodoModifyToolWithCardAndUpdateFn(todoTool, modifyCard, nil)
+	default:
 		modifyTool = NewTodoModifyTool(todoTool, language, agentID)
 	}
 	toolsList := []tool.Tool{
-		NewTodoCreateTool(todoTool, language, agentID),
-		NewTodoListTool(todoTool, language, agentID),
-		NewTodoGetTool(todoTool, language, agentID),
+		pickTodoTool(cardBuilder("todo_create", "TodoCreateTool", language, agentID),
+			func(card *tool.ToolCard) tool.Tool { return NewTodoCreateToolWithCard(todoTool, card) },
+			func() tool.Tool { return NewTodoCreateTool(todoTool, language, agentID) }),
+		pickTodoTool(cardBuilder("todo_list", "TodoListTool", language, agentID),
+			func(card *tool.ToolCard) tool.Tool { return NewTodoListToolWithCard(todoTool, card) },
+			func() tool.Tool { return NewTodoListTool(todoTool, language, agentID) }),
+		pickTodoTool(cardBuilder("todo_get", "TodoGetTool", language, agentID),
+			func(card *tool.ToolCard) tool.Tool { return NewTodoGetToolWithCard(todoTool, card) },
+			func() tool.Tool { return NewTodoGetTool(todoTool, language, agentID) }),
 		modifyTool,
 	}
 	return toolsList, todoTool
@@ -639,6 +692,30 @@ func CancelTodos(todos []hschema.TodoItem, ids []string) ([]hschema.TodoItem, st
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildTodosTools 按注册表默认文案构建整套 todo 工具。
+func buildTodosTools(todoTool TodoTool, language, agentID string, modifyFactory TodoModifyToolFactory) []tool.Tool {
+	var modifyTool tool.Tool
+	if modifyFactory != nil {
+		modifyTool = modifyFactory(todoTool, language, agentID)
+	} else {
+		modifyTool = NewTodoModifyTool(todoTool, language, agentID)
+	}
+	return []tool.Tool{
+		NewTodoCreateTool(todoTool, language, agentID),
+		NewTodoListTool(todoTool, language, agentID),
+		NewTodoGetTool(todoTool, language, agentID),
+		modifyTool,
+	}
+}
+
+// pickTodoTool 卡片非空时用卡片构造，否则回落注册表默认构造。
+func pickTodoTool(card *tool.ToolCard, withCard func(*tool.ToolCard) tool.Tool, fallback func() tool.Tool) tool.Tool {
+	if card == nil {
+		return fallback()
+	}
+	return withCard(card)
+}
 
 // newTodoTool 创建待办事项工具基类。
 // Python: TodoTool.__init__

@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // TestNewTodoModifyToolWithUpdateFn_注入生效 验证工厂注入原语的构造与卡片。
@@ -140,5 +141,54 @@ func TestCancelTodos_导出包装(t *testing.T) {
 	}
 	if msg == "" {
 		t.Error("CancelTodos 消息为空")
+	}
+}
+
+// TestCreateTodosToolWithCardBuilder_自定义卡片 验证四件套全部走注入卡片。
+func TestCreateTodosToolWithCardBuilder_自定义卡片(t *testing.T) {
+	params, perr := cschema.ParseJSONSchemaMap(map[string]any{
+		"type":       "object",
+		"properties": map[string]any{},
+		"required":   []any{},
+	})
+	if perr != nil {
+		t.Fatalf("构造参数 schema 失败: %v", perr)
+	}
+	builder := func(name, toolID, language, agentID string) *tool.ToolCard {
+		return tool.NewToolCardWithID(toolID+"_"+agentID, name, "自定义 "+name, params, nil)
+	}
+	list, _ := CreateTodosToolWithCardBuilder(t.TempDir(), NewMockFsOperation(), "cn", "a1", builder, nil)
+	if len(list) != 4 {
+		t.Fatalf("工具数量 = %d, want 4", len(list))
+	}
+	for _, item := range list {
+		if !strings.Contains(item.Card().Description, "自定义 ") {
+			t.Errorf("%s 描述未使用注入卡片: %s", item.Card().Name, item.Card().Description)
+		}
+	}
+}
+
+// TestCreateTodosToolWithCardBuilder_空构建器回落默认 验证 nil 构建器走注册表文案。
+func TestCreateTodosToolWithCardBuilder_空构建器回落默认(t *testing.T) {
+	list, todoTool := CreateTodosToolWithCardBuilder(t.TempDir(), NewMockFsOperation(), "cn", "a1", nil, nil)
+	if len(list) != 4 {
+		t.Fatalf("工具数量 = %d, want 4", len(list))
+	}
+	if todoTool.GetFilePath("s1") == "" {
+		t.Error("TodoTool 基类未初始化")
+	}
+	if list[0].Card().Name != "todo_create" {
+		t.Errorf("首个工具 = %q, want todo_create", list[0].Card().Name)
+	}
+}
+
+// TestPickTodoTool_卡片为空回落 验证卡片缺失时的回落分支。
+func TestPickTodoTool_卡片为空回落(t *testing.T) {
+	called := false
+	got := pickTodoTool(nil,
+		func(_ *tool.ToolCard) tool.Tool { return nil },
+		func() tool.Tool { called = true; return nil })
+	if got != nil || !called {
+		t.Error("卡片为空时必须走回落构造")
 	}
 }
