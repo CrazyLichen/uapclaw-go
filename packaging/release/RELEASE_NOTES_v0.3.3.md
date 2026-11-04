@@ -42,4 +42,4 @@
 - 无配置项改名或删除，旧 `config.yaml` 可直接使用；S1 地基不改变现有提示词行为
 - **Web 控制台后端契约尚未补齐（重要）**：新前端调用 163 个 RPC，Go 后端目前实现约 75 个；而 `models.*` / `cron.job.*` / `heartbeat.job.*` 等命名已随上游变化。聊天主链路的请求方法（`chat.send` / `history.get` / `session.list`）与核心事件（`chat.delta` / `chat.reasoning` / `chat.final` / `chat.processing_status` / `connection.ack`）都在，但上游新增的 `runtime.accepted` / `chat.output_phase` 等时序事件尚未发出。结果：**对话可用，配置保存、项目管理、设计器、轨迹面板等会报「方法未注册」，部分时序展示（输入盖章时间、输出阶段）会降级**。对应补齐工作是 IMPLEMENTATION_PLAN 领域二十七，完成前不建议把本版 Web 控制台当作完整形态对外分发
 - 需要回到 v0.3.2 的旧界面时无需回退二进制：`git checkout v0.3.2` 后在该版本的前端目录执行 `npm ci && npm run build`，用 `--dist <该 dist 目录>` 启动，或把产物放到 `<数据根>/channels/web/frontend/dist`（工作区产物优先于内置产物）
-- 发布包体积因前端产物一并入仓而增大（前端 dist 由约 23MB 增至 30MB，压缩后约增 6MB）
+- 发布包体积基本持平：前端 dist 虽由约 23MB 增至 30MB，但新版构建产物压缩率更好，Linux/Windows 包各约 49MB（较 v0.3.2 略小约 0.9MB）
