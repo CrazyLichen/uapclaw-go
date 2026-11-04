@@ -593,3 +593,18 @@ func TestReloadAgentsConfig_单Agent失败返回错误(t *testing.T) {
 	assert.Contains(t, err.Error(), "web")
 	assert.Contains(t, err.Error(), "agent.work.plan")
 }
+
+// --- GetChatAgentNoWait 聊天 agent 窄接口 ---
+
+// TestAgentManager_GetAgentChatNoWait 覆盖 runtime.AgentManagerPort 的空/命中两分支。
+func TestAgentManager_GetAgentChatNoWait(t *testing.T) {
+	am := NewAgentManager()
+
+	assert.Nil(t, am.GetChatAgentNoWait("web", "agent", "", ""), "未创建时应返回 nil")
+
+	created, err := am.GetChatAgent(context.Background(), "web", "agent", "", "")
+	require.NoError(t, err)
+	require.NotNil(t, created)
+
+	assert.Same(t, created, am.GetChatAgentNoWait("web", "agent", "", ""))
+}

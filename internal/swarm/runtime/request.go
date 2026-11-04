@@ -419,11 +419,8 @@ func PrepareChatTurn(
 
 	// 6. 同步会话元数据（Python: admit_request 内的 metadata_sync）
 	if syncMetadata {
-		modeForMetadata := canonicalMode
-		if modeForMetadata == "" {
-			modeForMetadata = mode
-		}
-		projectDir = SyncChatRequestMetadata(req, projectDir, modeForMetadata, explicitModeProvided, requestUserID(req))
+		// ApplyResolvedModeToRequest 已把 canonical mode 写回 params，此处只读
+		projectDir = SyncChatRequestMetadata(req, projectDir, canonicalMode, explicitModeProvided, requestUserID(req))
 		if sid != "" {
 			// Python: 权限准入通过后重读 metadata（供 persist_session 判定）
 			sessionMetadata = session.GetSessionMetadata(sid)
@@ -444,9 +441,8 @@ func PrepareChatTurn(
 		req.Metadata["project_dir"] = projectDir
 	} else {
 		delete(params, "project_dir")
-		if req.Metadata != nil {
-			delete(req.Metadata, "project_dir")
-		}
+		// delete 对 nil map 安全：无工程身份时同步清理 metadata 里的旧值
+		delete(req.Metadata, "project_dir")
 	}
 	writeRequestParams(req, params)
 

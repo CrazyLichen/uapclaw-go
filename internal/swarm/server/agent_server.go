@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"sync"
+	"time"
 
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
@@ -70,6 +71,8 @@ type AgentServer struct {
 	stopCh chan struct{}
 	// agentFactoryOverride Agent 创建工厂覆盖（测试注入 mock，避免 createAgent 触发真实 LLM 初始化）
 	agentFactoryOverride runtime.AgentFactory
+	// streamKeepaliveInterval 流式心跳间隔（默认 keepaliveInterval，测试可缩短）
+	streamKeepaliveInterval time.Duration
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -101,12 +104,13 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	// Python: self._agent_manager = AgentManager()（在 __init__ 中创建）
 	agentManager := runtime.NewAgentManager()
 	server := &AgentServer{
-		config:             cfg,
-		transport:          transport,
-		agentManager:       agentManager,
-		agentConfigService: agentConfigService,
-		sessionStreamTasks: make(map[string]*streamTaskEntry),
-		stopCh:             make(chan struct{}),
+		config:                  cfg,
+		transport:               transport,
+		agentManager:            agentManager,
+		agentConfigService:      agentConfigService,
+		sessionStreamTasks:      make(map[string]*streamTaskEntry),
+		stopCh:                  make(chan struct{}),
+		streamKeepaliveInterval: keepaliveInterval,
 	}
 	// 控制事件走 push 通道（对齐 Python _send_runtime_event 的 plan_mode_exited 分支）
 	server.planController = swruntime.NewPlanModeController()

@@ -237,3 +237,24 @@ internal/agentcore/harness/harness_config/params.go
 # 会话目录、扩展注册表、调度器等），单测无法逐个触达；各 handler 的行为信号由其自身
 # 的 *_test.go 与集成链路承担，此处仅豁免路由分支本身。
 internal/swarm/server/handle_message.go#L96-L252
+
+# ── 2026-11-04 S3 Plan/Runtime 层对齐：handle_chat.go 恒真/兼容分支 ──
+# L40-L43 handleInitialize 当前实现恒返回 nil error（内部已把初始化失败降级为默认
+# capabilities），错误分支仅为签名约定保留；L64-L67 handleACPToolResponse 同理
+# （未知/迟到响应只记 Info，不上抛）。两者与 Python 一致，未来真要上抛时由新用例接管。
+internal/swarm/server/handle_chat.go#L40-L43
+internal/swarm/server/handle_chat.go#L64-L67
+# L140-L143 控制事件分流：控制事件正常走 AgentRuntime 的 on_control_event 回调，
+# 此分支对齐上游 agent_ws_server.py:4711-4716 对自定义 Runtime 的兼容路径，Go 的
+# Runtime 是具体类型故单测无法构造；plan_mode_exited 推送由集成用例 IT-S3-2 覆盖。
+internal/swarm/server/handle_chat.go#L140-L143
+# L202-L209 取消链路 agent.ProcessMessage 错误分支：UapClawSwarm 内部对取消请求做
+# 三层兜底（interrupt_result / 团队取消），单测构造不出错误返回；链路可达性由
+# handle_cancel 的兜底响应用例与 supplement/cancel 集成用例覆盖。
+internal/swarm/server/handle_chat.go#L202-L209
+
+# ── 2026-11-04 S3：testhelpers 的 plan_env/server_env ──
+# 带 integration 标签的测试助手（AgentServer 入口驱动 + push 帧捕获）。单元测试
+# 不编译该目录，故改动行恒为 0%；行为由 tests/integration/swarm/server 全量驱动。
+tests/integration/testhelpers/plan_env.go
+tests/integration/testhelpers/server_env.go

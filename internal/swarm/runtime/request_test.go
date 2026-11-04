@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -86,6 +87,8 @@ func TestResolveAgentRequestMode(t *testing.T) {
 		{"agent + work_mode=code 下沉 code", "agent", "code", "code", "normal", "code.normal"},
 		{"agent.plan + work_mode=code", "agent.plan", "code", "code", "plan", "code.plan"},
 		{"code + work_mode=work 回升 agent", "code", "work", "agent", "", "agent"},
+		{"code.normal + work_mode=code 保持 code", "code.normal", "code", "code", "normal", "code.normal"},
+		{"code.normal + work_mode=work 回升 agent", "code.normal", "work", "agent", "", "agent"},
 		{"team 族 work", "team", "work", "team", "", "team"},
 	}
 	for _, tc := range cases {
@@ -383,6 +386,8 @@ type stubManager struct {
 	nowait ChatAgentPort
 	// agent GetChatAgent 的返回值
 	agent ChatAgentPort
+	// agentErr GetChatAgent 的错误
+	agentErr error
 	// created 记录 GetChatAgent 调用次数
 	created int
 }
@@ -390,7 +395,7 @@ type stubManager struct {
 // GetChatAgent 记录创建次数并返回 agent
 func (m *stubManager) GetChatAgent(_ context.Context, _, _, _, _ string) (ChatAgentPort, error) {
 	m.created++
-	return m.agent, nil
+	return m.agent, m.agentErr
 }
 
 // GetChatAgentNoWait 返回预置 agent（可为 nil）
@@ -406,4 +411,202 @@ func chatSendRequest(t *testing.T, sessionID string, params map[string]any) *sch
 		RequestID: "req-cancel", ChannelID: "web", SessionID: &sid,
 		ReqMethod: schema.ReqMethodChatSend, Params: raw,
 	}
+}
+
+// ──────────────────────────── prepare_chat_turn ────────────────────────────
+
+// TestPrepareChatTurn_默认work_mode与元数据回写 验证 tui 渠道默认 work_mode=code、
+// 同步元数据后回写 project_dir，以及 persist_session 锁定告警分支。
+//
+// Python: jiuwenswarm/runtime/request.py prepare_chat_turn（L361-575）
+func TestPrepareChatTurn_默认work_mode与元数据回写(t *testing.T) {
+	setupRuntimeSessionDir(t)
+	sid := "sess-prepare-1"
+	agent := &fakePlanAgent{}
+	mgr := &stubManager{agent: agent}
+	req := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.normal"})
+
+	mode, subMode, got, err := PrepareChatTurn(context.Background(), mgr, req, "tui", true)
+	require.NoError(t, err)
+	require.Equal(t, "agent", mode)
+	require.Equal(t, "", subMode)
+	require.Same(t, agent, got)
+	require.Equal(t, 1, mgr.created)
+
+	params := parseRequestParams(req)
+	require.Equal(t, "code", params["work_mode"], "tui 渠道缺省 work_mode=code")
+	require.Equal(t, "agent.work.normal", params["mode"])
+	require.NotContains(t, params, "project_dir", "无工程目录时应清除 params 中的键")
+
+	session.FlushMetadataQueue()
+	meta := session.GetSessionMetadata(sid)
+	require.Equal(t, "agent.work.normal", meta["mode"])
+	require.Equal(t, "code", meta["work_mode"])
+}
+
+// TestPrepareChatTurn_persistSession锁定告警 会话创建期锁定的 persist_session 不被后续轮次改写。
+func TestPrepareChatTurn_persistSession锁定告警(t *testing.T) {
+	setupRuntimeSessionDir(t)
+	sid := "sess-prepare-lock"
+
+	// 首轮不带 persist 标记，锁定为 false
+	first := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.normal"})
+	_, _, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, first, "web", true)
+	require.NoError(t, err)
+	session.FlushMetadataQueue()
+
+	// 第二轮请求要求开启：仅告警，params 以锁定的 false 为准
+	second := chatSendRequest(t, sid, map[string]any{
+		"mode":                         "agent.work.normal",
+		"persist_session":              true,
+		"eternal_conversation_enabled": true,
+	})
+	_, _, _, err = PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, second, "web", true)
+	require.NoError(t, err)
+	require.Equal(t, false, parseRequestParams(second)["eternal_conversation_enabled"],
+		"persist_session 为会话创建期身份，本轮值仅告警")
+
+	session.FlushMetadataQueue()
+	require.NotEqual(t, true, session.GetSessionMetadata(sid)["persist_session"])
+}
+
+// TestPrepareChatTurn_继承会话锁定的mode 验证内部轮次（无显式 mode）沿用会话 mode。
+func TestPrepareChatTurn_继承会话锁定的mode(t *testing.T) {
+	setupRuntimeSessionDir(t)
+	sid := "sess-prepare-2"
+	seed := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.plan", "work_mode": "work"})
+	SyncChatRequestMetadata(seed, "", "agent.work.plan", true, "")
+	session.FlushMetadataQueue()
+
+	req := chatSendRequest(t, sid, map[string]any{})
+	req.ReqMethod = schema.ReqMethodHeartbeatGetConf
+	_, _, agent, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "web", false)
+	require.NoError(t, err)
+	require.NotNil(t, agent)
+
+	params := parseRequestParams(req)
+	require.Equal(t, "agent.work.plan", params["mode"], "无显式 mode 时继承会话锁定值")
+	require.Equal(t, "agent.work.plan", params[PreviousSessionModeKey])
+	require.Equal(t, "work", params["work_mode"])
+}
+
+// TestPrepareChatTurn_不同步元数据回落锁定工程 验证 sync_metadata=false 时只读回退。
+func TestPrepareChatTurn_不同步元数据回落锁定工程(t *testing.T) {
+	setupRuntimeSessionDir(t)
+	sid := "sess-prepare-3"
+	seed := chatSendRequest(t, sid, map[string]any{"mode": "agent.work.normal", "project_dir": "/tmp/locked"})
+	SyncChatRequestMetadata(seed, "/tmp/locked", "agent.work.normal", true, "")
+	session.FlushMetadataQueue()
+
+	req := chatSendRequest(t, sid, map[string]any{})
+	_, _, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "web", false)
+	require.NoError(t, err)
+	require.Equal(t, "/tmp/locked", parseRequestParams(req)["project_dir"])
+}
+
+// TestPrepareChatTurn_请求work_mode优先 验证请求自带 work_mode 不被渠道默认覆盖。
+func TestPrepareChatTurn_请求work_mode优先(t *testing.T) {
+	setupRuntimeSessionDir(t)
+	req := chatSendRequest(t, "sess-prepare-4", map[string]any{"mode": "agent", "work_mode": "work"})
+	mode, subMode, _, err := PrepareChatTurn(context.Background(), &stubManager{agent: &fakePlanAgent{}}, req, "tui", false)
+	require.NoError(t, err)
+	require.Equal(t, "agent", mode)
+	require.Equal(t, "", subMode)
+	require.Equal(t, "work", parseRequestParams(req)["work_mode"])
+}
+
+// TestPrepareChatTurn_取agent失败 验证构造 agent 失败时错误上抛。
+func TestPrepareChatTurn_取agent失败(t *testing.T) {
+	setupRuntimeSessionDir(t)
+	mgr := &stubManager{agentErr: errors.New("boom")}
+	req := chatSendRequest(t, "sess-prepare-5", map[string]any{"mode": "agent"})
+
+	_, _, _, err := PrepareChatTurn(context.Background(), mgr, req, "web", false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "boom")
+}
+
+// ──────────────────────────── 辅助函数边界 ────────────────────────────
+
+// TestDefaultWorkModeForChannel 渠道默认 work_mode：tui → code，其余 work。
+func TestDefaultWorkModeForChannel(t *testing.T) {
+	require.Equal(t, "code", defaultWorkModeForChannel("tui"))
+	require.Equal(t, "code", defaultWorkModeForChannel(" TUI "))
+	require.Equal(t, "work", defaultWorkModeForChannel("web"))
+	require.Equal(t, "work", defaultWorkModeForChannel(""))
+}
+
+// TestRequestUserID user_id 依次取 Metadata、params。
+func TestRequestUserID(t *testing.T) {
+	require.Equal(t, "", requestUserID(nil))
+	require.Equal(t, "", requestUserID(&schema.AgentRequest{}))
+	require.Equal(t, "u-meta", requestUserID(&schema.AgentRequest{
+		Metadata: map[string]any{"user_id": "u-meta"},
+		Params:   json.RawMessage(`{"user_id":"u-param"}`),
+	}))
+	require.Equal(t, "u-param", requestUserID(&schema.AgentRequest{
+		Params: json.RawMessage(`{"user_id":"u-param"}`),
+	}))
+}
+
+// TestLegacyPersistSession 旧式 eternal_conversation_enabled 取值归一。
+func TestLegacyPersistSession(t *testing.T) {
+	require.Nil(t, legacyPersistSession(nil))
+	require.Nil(t, legacyPersistSession("maybe"))
+	require.Nil(t, legacyPersistSession(1))
+
+	yes := legacyPersistSession(" YES ")
+	require.NotNil(t, yes)
+	require.True(t, *yes)
+
+	off := legacyPersistSession("off")
+	require.NotNil(t, off)
+	require.False(t, *off)
+
+	truthy := legacyPersistSession(true)
+	require.NotNil(t, truthy)
+	require.True(t, *truthy)
+}
+
+// TestCancelRequest_autoHarness需新建 验证 auto_harness 归一为 agent 且 allowCreate 路径。
+func TestCancelRequest_autoHarness需新建(t *testing.T) {
+	agent := &fakePlanAgent{}
+	mgr := &stubManager{agent: agent}
+	req := chatSendRequest(t, "sess-cancel-3", map[string]any{"mode": "auto_harness"})
+
+	resp, err := CancelRequest(context.Background(), mgr, req, true)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, 1, mgr.created)
+	require.Equal(t, []string{"execute"}, agent.calls)
+}
+
+// TestCancelRequest_新建失败上抛 验证 allowCreate 创建 agent 失败时返回错误。
+func TestCancelRequest_新建失败上抛(t *testing.T) {
+	mgr := &stubManager{agentErr: errors.New("create failed")}
+	req := chatSendRequest(t, "sess-cancel-4", map[string]any{"mode": "agent"})
+
+	_, err := CancelRequest(context.Background(), mgr, req, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "create failed")
+}
+
+// TestCancelRequest_新建返回空 验证创建成功但 agent 为空时的兜底错误。
+func TestCancelRequest_新建返回空(t *testing.T) {
+	mgr := &stubManager{}
+	req := chatSendRequest(t, "sess-cancel-5", map[string]any{"mode": "agent"})
+
+	_, err := CancelRequest(context.Background(), mgr, req, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Failed to get agent for cancel request")
+}
+
+// TestSyncChatRequestMetadata_attachOnly无锁定目录 被动订阅未锁定工程时返回入参目录。
+func TestSyncChatRequestMetadata_attachOnly无锁定目录(t *testing.T) {
+	setupRuntimeSessionDir(t)
+	req := chatSendRequest(t, "sess-attach-new", map[string]any{TeamAttachOnlyParam: true})
+
+	require.Equal(t, "/tmp/fallback", SyncChatRequestMetadata(req, "/tmp/fallback", "agent.work.normal", true, ""))
+	session.FlushMetadataQueue()
+	require.Empty(t, session.GetSessionMetadata("sess-attach-new"), "attach-only 不写任何元数据")
 }

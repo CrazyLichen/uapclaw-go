@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
@@ -14,6 +15,11 @@ import (
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// keepaliveInterval 流式心跳间隔（对齐 Python _StreamKeepalive 默认 10s）
+	keepaliveInterval = 10 * time.Second
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -122,14 +128,21 @@ func (s *AgentServer) handleStreamImpl(ctx context.Context, request *schema.Agen
 	defer finish()
 
 	// 4. 心跳
+	interval := s.streamKeepaliveInterval
+	if interval <= 0 {
+		interval = keepaliveInterval
+	}
 	keepalive := NewStreamKeepalive(func() {
 		s.sendKeepalive(request.RequestID, request.ChannelID)
-	}, keepaliveInterval)
+	}, interval)
 	keepalive.Start()
 
 	// 5-6. 流式执行：控制事件不占 sequence、不重置心跳
 	chunkCount := 0
 	streamErr := s.agentRuntime.Stream(ctx, request, func(ev *swruntime.RuntimeEvent) bool {
+		// 控制事件正常经 AgentRuntime 的 on_control_event 回调直接推 push 帧；
+		// 此处分流对齐上游 _handle_stream_impl 对自定义 Runtime 的兼容分支
+		// （agent_ws_server.py:4711-4716）。
 		if ev.EventType() == swruntime.PlanModeExitedEvent {
 			s.sendRuntimeEvent(ev, true, chunkCount)
 			return true
@@ -207,20 +220,13 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 //
 // Python: agent_ws_server.py:5024 _send_runtime_event
 func (s *AgentServer) sendRuntimeEvent(ev *swruntime.RuntimeEvent, streaming bool, sequence int) bool {
-	if ev == nil {
-		return true
-	}
 	if ev.EventType() == swruntime.PlanModeExitedEvent {
-		if err := s.SendPush(context.Background(), map[string]any{
+		// SendPush 内部按 Python 语义吞掉所有发送异常并记日志，这里不重复处理错误
+		_ = s.SendPush(context.Background(), map[string]any{
 			"channel_id": ev.ChannelID,
 			"session_id": ev.SessionID,
 			"payload":    ev.Payload,
-		}); err != nil {
-			logger.Warn(logComponent).
-				Str("session_id", ev.SessionID).
-				Err(err).
-				Msg("send plan control event push failed")
-		}
+		})
 		return true
 	}
 	if streaming {

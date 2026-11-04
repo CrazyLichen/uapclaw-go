@@ -222,3 +222,62 @@ func TestAgentServer_ConsumeEnvelope(t *testing.T) {
 		t.Errorf("Stop 失败: %v", err)
 	}
 }
+
+// ──────────────────────────── 访问器与写出通道 ────────────────────────────
+
+// fakeSendTransport 非 ChannelTransport 的传输桩（走 Send 路径）。
+type fakeSendTransport struct {
+	// sent 发送次数
+	sent int
+}
+
+// Send 记录发送次数
+func (f *fakeSendTransport) Send(_ context.Context, _ []byte) error {
+	f.sent++
+	return nil
+}
+
+// Recv 返回空接收通道
+func (f *fakeSendTransport) Recv() (<-chan []byte, error) {
+	return make(chan []byte), nil
+}
+
+// Close 无操作
+func (f *fakeSendTransport) Close() error { return nil }
+
+// TestAgentServer_PlanControllerAccessor 服务端持有的计划模式控制器/managers 可被取用。
+func TestAgentServer_PlanControllerAccessor(t *testing.T) {
+	s := newTestAgentServer()
+	if s.PlanController() == nil {
+		t.Fatal("PlanController() 不应返回 nil")
+	}
+	if s.PlanController() != s.planController {
+		t.Fatal("PlanController() 应返回服务端持有的同一实例")
+	}
+	if s.AgentManager() == nil {
+		t.Fatal("AgentManager() 不应返回 nil")
+	}
+	if s.AgentManager() != s.agentManager {
+		t.Fatal("AgentManager() 应返回服务端持有的同一实例")
+	}
+}
+
+// TestSendToGateway_无transport 无传输时不 panic 且返回 false。
+func TestSendToGateway_无transport(t *testing.T) {
+	s := &AgentServer{}
+	if s.sendToGateway([]byte(`{}`)) {
+		t.Fatal("无 transport 时发送应返回 false")
+	}
+}
+
+// TestSendToGateway_非通道传输走Send 非 ChannelTransport 走 Send 接口并返回 true。
+func TestSendToGateway_非通道传输走Send(t *testing.T) {
+	ft := &fakeSendTransport{}
+	s := &AgentServer{transport: ft}
+	if !s.sendToGateway([]byte(`{}`)) {
+		t.Fatal("Send 成功时应返回 true")
+	}
+	if ft.sent != 1 {
+		t.Fatalf("Send 调用次数 = %d，want 1", ft.sent)
+	}
+}
