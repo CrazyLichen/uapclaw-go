@@ -99,26 +99,32 @@ func TrimPromptToLastUser(prompt []llmschema.BaseMessage) []llmschema.BaseMessag
 
 ## 5. 测试
 
-单测：
+### 5.1 集成测试（验收主体，消息传递级）
+
+目录：`tests/integration/agentcore/attachment/`（追加文件）与 `tests/integration/swarm/server/adapter/attachment_mode/`（轨迹/观测用例）。
+模拟方式：真实请求 → adapter/agent → MockLLM 记录窗口 → 抽取轨迹/观测数据后断言。
+
+| 编号 | 场景与模拟方式 | 跨子系统 | 关键断言 |
+| --- | --- | --- | --- |
+| IT-S3-1 | 轨迹切分：一轮 chat（产生 snapshot 附件）后抽轨迹 | evolving + context_engine + prompts | 轨迹消息里**保留**附件消息（可复现）；"本轮用户输入"是真实 query 文本；附件不作为切片起点、不被当作 user turn 内容 |
+| IT-S3-2 | 观测输入归类：`client_provider=dashscope`（附件投影为 System）跑一轮 | observability + context_engine + prompts | `gen_ai.system_instructions` 只含真 system prompt；附件内容归入 chat history |
+| IT-S3-3 | 观测结构化标注：同上一轮的结构化输出 | observability + prompts | 附件那条 system 消息带 `openjiuwen.kind=prompt_attachment_history` 与 `mode ∈ {snapshot,delta}` |
+| IT-S3-4 | 压缩折掉 snapshot：制造"附件 snapshot 被摘要替换"后触发一次变更 | context_engine + prompts + session | 变更消息 `mode == snapshot`，内容含全部活跃 section（不发 orphan delta） |
+| IT-S3-5 | 压缩只丢 delta：基线仍在时触发变更 | 同上 | `mode == delta`，只含变化节 |
+| IT-S3-6 | rewind 后重建：rewind 到更早 turn，再产生一次变更 | session(sessionops) + context_engine + prompts | 首次 Sync 发 snapshot；历史消息顺序为 `[附件][用户]` |
+| IT-S3-7 | 摘要不污染账本：压缩生成摘要消息 | context_engine + prompts | 摘要消息不带附件 marker；后续 `state` 不被摘要改写 |
+
+### 5.2 单元测试
 
 | 用例 | 断言 |
 | --- | --- |
 | `IsPromptAttachmentUser` | marker 命中 / 仅内容含 `<system-reminder>` 命中 / 普通消息不命中 |
-| `IsPromptAttachmentHistory` | 需 marker + mode；mode 非法不命中 |
-| `TrimPromptToLastUser` | 附件在最后一条真实用户消息之后时被裁掉；附件不得成为切片起点 |
-
-集成（`tests/integration/agentcore/attachment/` 追加，复用既有 helper）：
-
-| 编号 | 用例 | 断言 |
-| --- | --- | --- |
-| IT-S3-1 | 压缩折掉 snapshot | 下次变更 `mode == snapshot`，内容含全部活跃 section |
-| IT-S3-2 | 压缩只丢 delta | 下次变更 `mode == delta`，只含变化节 |
-| IT-S3-3 | rewind 后重建 | rewind 到更早 turn 后首次 Sync 发 snapshot |
-| IT-S3-4 | 摘要消息不污染账本 | 压缩生成的摘要消息不带 marker，`state` 不被改写 |
+| `IsPromptAttachmentHistory` | 需 marker + `mode ∈ {snapshot,delta}`；缺失或非法不命中 |
+| `TrimPromptToLastUser` | 附件在最后一条真实 user 之后被裁掉；附件不得成为切片起点 |
 
 ## 6. 验收
 
-1. 单测 + 4 例集成测试全绿（`-race`）
+1. 单测 + **7 例集成测试**（IT-S3-1~7，消息传递级）全绿（`-race`）
 2. `integration-audit -verify` 通过；改动行覆盖率 ≥85%
 3. CI 四 job 全绿
 

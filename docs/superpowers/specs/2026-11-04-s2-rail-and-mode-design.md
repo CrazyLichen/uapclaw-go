@@ -234,35 +234,41 @@ code 工具文案：新增 `internal/swarm/agents/harness/code/tools/code_todo_t
 
 ## 7. 测试
 
-单测（`internal/swarm/runtime/`）：
+### 7.1 集成测试（验收主体）
 
-| 用例 | 断言 |
+目录：`tests/integration/swarm/server/adapter/attachment_mode/`（沿用 `testhelpers.NewAdapterTestEnv` + `mockllm`）。
+每例均为**消息传递级模拟**：构造 `chat.send` 请求 → `DeepAdapter/CodeAdapter` → rails → MockLLM 记录**模型实际收到的窗口**。
+
+| 编号 | 场景与模拟方式 | 跨子系统 | 关键断言 |
+| --- | --- | --- | --- |
+| IT-S2-1 | 新串正向：请求 `mode=agent.work.plan`，MockLLM 返回纯文本 | gateway 常量 + adapter + rails + context_engine | 历史出现 plan 附件（`mode=snapshot`）；模型窗口的 system 里**无** `MODE_INSTRUCTIONS` 节；`state.plan_mode.mode == "plan"` |
+| IT-S2-2 | 旧串失效：请求 `mode=agent.plan` | 同上 | 归一到 normal（`state.plan_mode.mode == "normal"`），不产生 plan 附件，请求不报错 |
+| IT-S2-3 | 显式进入：`mode=agent.work.plan` + `plan_entry_source=plan_toggle`，且预置该会话在 `exitedSessions` | runtime + adapter + session | 进入 plan；`exitedSessions` 被清；**发给模型的 query 以 `<system-reminder>` 开头**，原 query 存进 `PLAN_REMINDER_ORIGINAL_QUERY_KEY` |
+| IT-S2-4 | 非显式 + 退出记忆：预置 `exitedSessions`，`mode=plan` 且无 `plan_entry_source` | runtime + adapter | 阻断：state 保持 normal；控制事件含 `PLAN_MODE_EXITED`；本轮模型窗口无 plan 附件 |
+| IT-S2-5 | `plan_slug` 残留阻断：预置 `plan_slug` 且 state=normal，`mode=plan` 无 entry source | runtime + session + adapter | 阻断并**清空 slug**、强制 normal、发 `PLAN_MODE_EXITED` |
+| IT-S2-6 | 退出后不被拉回：①显式进 plan ②`mode=agent.work.normal` 一轮 ③`mode=plan` 无 entry source | runtime + adapter + context_engine | ②发退出事件且出现"移除"delta；③仍为 normal |
+| IT-S2-7 | 跳过矩阵：team 请求 / interrupt 续答 / 非 chat 方法各一轮 | runtime + adapter | 三者 state 均未被改写、无控制事件 |
+| IT-S2-8 | rail 幂等：同一 agent 连续 3 次 plan 请求，再切 normal，再切 plan | adapter + rails | plan rail 实例数恒为 1；normal 期间 plan 专属 rail 不在集合里；二次切 plan 不重复挂 |
+| IT-S2-9 | plan 指引投递：plan 模式一轮 + 退出后一轮 | rails(agent_mode) + context_engine | 进入轮：附件 `source=agent_core.agent_mode_rail`、system 无该节；退出轮：出现 delta 移除 `mode_instructions` |
+| IT-S2-10 | todo 默认不注入：chat 一轮 | rails(task_planning) + context_engine | system prompt 无 todo 节；工具列表仍含 `todo_create/list/get/modify` |
+| IT-S2-11 | code 提醒节奏：code 模式 12 轮纯文本对话（不调用 todo 工具），第 13 轮模拟一次 `todo_create` 调用 | CodeAdapter + rails + context_engine | 第 11 轮出现 `task_reminder` 附件（`kind=todo_reminder`）；第 12 轮不新增（内容未变）；调用工具后计数重置，之后需再满 10 轮才提醒 |
+| IT-S2-12 | 其他消费方：分别跑 task_completion（goal 激活）/ progressive / skills / memory / context_assemble 各一轮 | 5 组 rails + context_engine | 各自附件出现且 `source`/`kind` 与表 §5.5 一致；system prompt 中对应节消失 |
+| IT-S2-13 | 跨会话占位：plan 会话中调用 `SessionMessageRequiresQueue` | runtime | 返回 false（透传）并打 Warn；断言"未实现"不静默假装已排队 |
+
+### 7.2 单元测试（分支级补充）
+
+| 模块 | 用例 |
 | --- | --- |
-| 进入 plan（非显式） | state 变 plan、slug 清空、active 记录、query 被前置提醒且原 query 已存 |
-| 退出 plan | state 变 normal、发 `PLAN_MODE_EXITED`、记入 exited |
-| 退出后普通消息 | 不被拉回 plan、无事件 |
-| 显式进入 | 清 exited 记忆、允许进入 |
-| `plan_slug` 残留 | 阻断、清 slug、强制 normal、发事件 |
-| team / 非 single / interrupt / 非 chat 方法 | 一律不写 state |
-| `ResetSession` | 两条记忆清空 |
-
-单测（rails）：todo 默认不注入节、code 提醒节奏 10/10、提醒内容不变不产生 delta、LRU 淘汰。
-单测（模式串）：slash 解析、channel_state、memory 映射、cron 默认值全部用新串。
-
-集成（`tests/integration/swarm/` 或 `agentcore/` 新目录，≥3 子系统）：
-
-| 编号 | 用例 | 跨子系统 |
-| --- | --- | --- |
-| IT-S2-1 | 一轮进入 plan → 模型窗口含 plan 附件、系统提示无 MODE_INSTRUCTIONS 节 | adapter + rails + context_engine |
-| IT-S2-2 | 退出 plan 后下一条普通消息不回 plan，历史里出现移除 delta | adapter + runtime + context_engine |
-| IT-S2-3 | 残留计划文件阻断：不进入 plan、发事件、slug 被清 | runtime + session + adapter |
-| IT-S2-4 | code 模式：卸载 TaskPlanningRail、挂 CodeTaskPlanningRail，10 轮后出现 task_reminder | rails + context_engine + session |
-| IT-S2-5 | 模式串端到端：`agent.work.plan` 请求走 plan 分支，旧串不再被识别 | gateway + adapter + runtime |
+| `runtime` controller | 7 道守卫逐条（team/非 single/非 chat/interrupt/MayHold/IsExplicitEntry/plan_slug）、`ResetSession`、`ShouldSync` |
+| `runtime/request` | `ResolveRequestRuntimeMode` 对三段/两段/裸串的归一 |
+| `rails/task_planning` | `InjectPrompt=false` 不产生节；`true` 仍可注入（开关可逆） |
+| `code/rails` | 提醒状态机：10/10 节奏、内容不变不重复、LRU 淘汰、`OnUserMessage` 恢复顺序 |
+| 模式串 | slash 解析、`channel_state`、memory 映射、cron 默认值全部新串 |
 
 ## 8. 验收
 
 1. `go build ./...`、受影响包 `-race` 单测全绿
-2. 5 例集成测试全绿，`integration-audit -verify` 通过
+2. **13 例集成测试**（IT-S2-1~13，消息传递级）全绿，`integration-audit -verify` 通过
 3. 改动行覆盖率 ≥85%（CI 门禁）
 4. CI 四 job 全绿
 5. 全仓 `grep -r "agent.plan\|agent.fast"` 仅剩测试中"旧串不被识别"的负向断言
