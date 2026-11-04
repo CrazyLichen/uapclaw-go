@@ -228,7 +228,10 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 
 ## 垂直领域划分
 
-按 **12 大垂直领域** 组织，每个领域自底向上完整实现，可独立验证。
+按 **29 大垂直领域** 组织，每个领域自底向上完整实现，可独立验证。
+
+- **领域一 ~ 十四**：基线上游（jiuwenswarm 0.2.0 / openjiuwen 0.1.13）的迁移实现。
+- **领域十五 ~ 二十九**：2026-11-04 上游同步扩充（jiuwenswarm 0.2.5.beta1 / openjiuwen 0.1.20），依据 `docs/sync/`；行为缺陷不在其中，见 [`docs/sync/defect-plan-2026-11-04.md`](docs/sync/defect-plan-2026-11-04.md)。
 
 ---
 
@@ -804,6 +807,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 12.10 | ☐ | Web UI 启动 | `uapclaw web` | `jiuwenswarm/channels/web/app_web.py` |
 | 12.11 | ☐ | 工作区初始化 | `uapclaw init` | `jiuwenswarm/init_workspace.py` |
 | 12.12 | ☐ | 服务启动器 | `uapclaw start` | `jiuwenswarm/start_services.py` |
+| 12.13 | ☐ | 自动更新器 | 版本检测与升级 | `jiuwenswarm/common/updater.py` · `upgrade_executor.py` |
 
 ---
 
@@ -887,4 +891,337 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 14.14 | ⤵️ | tune 旧版调参 | 处置待裁（与 agent_evolving 9.70-9.72 功能重叠，倾向跳过） | `openjiuwen/dev_tools/tune/` |
 
 **验证点**：devtools agent_builder 工具面可用：NL 多轮对话 → 澄清 → DSL 产出
-| 12.13 | ☐ | 自动更新器 | 版本检测与升级 | `jiuwenswarm/common/updater.py` · `upgrade_executor.py` |
+
+---
+
+## 上游同步扩充说明（领域十五 ~ 二十九）
+
+> **来源**：`docs/sync/README.md`（上游 jiuwenswarm `a2abceccf` / agent-core `5a35c39f` 快照）与两份提交清单。
+> **分工**：本节只收「Go 完全没有对应实现」的新模块与新能力；已迁移子系统的行为缺陷不进本节，见 [`docs/sync/defect-plan-2026-11-04.md`](docs/sync/defect-plan-2026-11-04.md)。
+> **状态约定**：全部标 ☐ —— 但每个步骤**开工前必须先核查 Go 是否已有部分实现**（上游同一能力常有多次提交，早期片段可能已在领域一~十四落地）；核实后把已具备的部分回填到对应旧章节并注明 ⤴️。
+> **优先级建议**：十五（协议层，被 I/H 组缺陷与后续所有外部 agent 能力依赖）→ 十九/二十一（安全与运行形态）→ 二十二（可观测性，E2E 断言依赖）→ 十六/十七/十八（体量最大的新模块）→ 二十/二十三/二十四/二十五 → 二十六/二十七/二十八/二十九。
+
+---
+
+## 领域十五：第三方 Harness 协议与外部 Agent 接入
+
+> 上游把第三方 CLI agent（Claude Code / Codex / DeepSeek Harness / Gemini）从"团队内部特例"提升为协议层：agent-core 新增 `harness_protocol`（传输契约）与 `harness_providers`（provider 实现），jiuwenswarm 增补 external-cli 配置面板与 runtime manifest 安装。
+> Go 现状：只有 `internal/agentcore/harness`（内部 rail/DeepAgent）与 `internal/swarm/agents/harness`（原生团队 harness），**无协议层、无外部进程 provider**。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 15.1 | ☐ | 协议数据模型 | `HarnessModel`/`ToolSpec`/`ToolResult`/`State`/`Result`/`Error` 与 JSON 编解码容错（未知字段保留） | `internal/agentcore/harness_protocol/` ← `openjiuwen/harness_protocol/{models,tools,results,state,errors}.py` |
+| 15.2 | ☐ | 事件与流 | 事件 kind 全集、增量流（partial/message/tool_call/tool_result）、终止语义、顺序保证 | 同上 ← `harness_protocol/{events,stream}.py` |
+| 15.3 | ☐ | 交互与钩子 | `Interaction`（审批/提问）、`Hook`、按 kind 应答、应答只回给发起方 | 同上 ← `harness_protocol/{interactions,hooks}.py` |
+| 15.4 | ☐ | 检查点与序列化 | checkpoint 结构、跨进程序列化（`jsonsafe`）、会话 ID/轮次锚定 | 同上 ← `harness_protocol/{checkpoints,serialization}.py` |
+| 15.5 | ☐ | provider 基座与工厂 | `BaseProvider`、工厂注册（entry-point 等价：编译期注册表）、`inputs`/`io_adapter`、`mcp_naming`、`stream` 适配 | `internal/agentcore/harness_providers/` ← `harness_providers/{base,factory,inputs,io_adapter,mcp_naming,stream,jsonsafe}.py` |
+| 15.6 | ☐ | native provider | 把现有 NativeHarness 适配到协议表面（公开 harness protocol），支持 in-process dispatch | 同上 ← `harness_providers/native/` |
+| 15.7 | ☐ | claude code provider | stdio 子进程/SDK、session resume、in-process MCP、permission prompt 工具、请求 span 配对、失败分类 | 同上 ← `harness_providers/claudecode/` |
+| 15.8 | ☐ | codex provider | 动态工具、审批默认绕过、host prompt 追加、压缩开关、PID 探测（Windows 安全）、team tools 走动态工具 | 同上 ← `harness_providers/codex/` |
+| 15.9 | ☐ | dsh provider | DeepSeek Harness SDK 接入 + MCP + 认证回退 | 同上 ← `harness_providers/dsh/` |
+| 15.10 | ☐ | telemetry 桥 | 第三方模型请求作为协议事件上报（破坏性语义）、tool facts 取 provider 自身遥测、auth 重试可见 | 同上 ← `harness_providers/telemetry/` |
+| 15.11 | ☐ | 轨迹适配 | provider 事件 → 统一轨迹 span（与领域二十二 schema 对齐） | 同上 ← `harness_providers/trajectory.py` |
+| 15.12 | ☐ | skills 与工作区约定 | portable skills 复制、`cwd/workspace/project_root` 三分离、外部成员 workspace meta 暴露 | 同上 ← `harness_providers/skills.py` · `openjiuwen/agent_teams/.../external_cli*` |
+| 15.13 | ☐ | 外部 CLI 成员生命周期 | spawn 时校验 SDK/display_name、配置往返（config round-trip）、auth fallback、模型切换、失败诊断、会话清理 | `internal/agent_teams/runtime/externalcli/` ← `openjiuwen/agent_teams/`（external-cli 相关） · `jiuwenswarm/agents/.../external_cli*` |
+| 15.14 | ☐ | AgentTemplate 清单 | manifest identity 扁平化、AgentTemplate card、异步加载器、团队成员快照加载 | `internal/agentcore/harness/template/` ← `openjiuwen/harness/template/`（template/plugin 系列） |
+| 15.15 | ☐ | templates & plugins | 模板/插件的创建、加载、执行；插件热换模型后工具不消失 | `internal/agentcore/harness/plugin/` ← `openjiuwen/harness/...` |
+| 15.16 | ☐ | 团队集成 | `spawn_teammate` 合并 external_cli、调度模式内联成员跑外部 CLI、worktree 隔离、第三方面板配置 | `internal/agent_teams/spawn/` · `internal/swarm/server` ← `jiuwenswarm/gateway/channel_manager/web`（external-cli handlers） |
+| 15.17 | ☐ | 测试 | 协议一致性单测（编解码/事件序）+ 假 CLI 进程集成（stdio 双工）+ 失败恢复（崩溃/鉴权失败/超时） | `tests/integration/agentcore/harness_protocol/` |
+
+**验证点**：一次对话可由外部 CLI provider 完成，事件、工具结果、审批与轨迹四路可观测且可恢复。
+
+---
+
+## 领域十六：Symphony 技能交响（技能图谱与能力编排）
+
+> 全新模块。agent-core `openjiuwen/symphony`（207 文件 / 5.2 万行）负责技能图谱、Agentic 检索、编排与经验沉淀；jiuwenswarm 侧负责 UI 事件、增量构建与"先检索后编排"工具链。
+> Go 现状：零实现（`rg symphony internal/` 无命中）。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 16.1 | ☐ | 模型与接口层 | Skill/Capability/Graph/Recipe/Pack 数据结构、接口定义、JGF 序列化 | `internal/agentcore/symphony/{models,interfaces,shared}/` ← `openjiuwen/symphony/{models,interfaces,shared}/` |
+| 16.2 | ☐ | 技能图谱存储与操作 | 节点/边 CRUD、原子批量变更、原子替换、按 module 分组索引 | 同上 ← `openjiuwen/symphony/graph_engine.py` |
+| 16.3 | ☐ | 增量/全量构建 | 指纹与关系缓存、断点续构建、JSONL 记录保留、重建恢复、构建进度事件 | 同上 ← `openjiuwen/symphony/flow/` |
+| 16.4 | ☐ | 技能发现与索引 | 目录扫描（Windows 路径/Unicode 名称）、禁用开关、索引与前端一致性、重建触发条件 | 同上 ← `openjiuwen/symphony/discovery/` |
+| 16.5 | ☐ | 检索 | BM25 + embedding 混合、Agentic 检索（先检索后编排）、依赖感知检索、集群模式不全量注入 | 同上 ← `openjiuwen/symphony/retrieval/` · `openjiuwen/symphony/agent/` |
+| 16.6 | ☐ | 编排 | `symphony_compose_graph` 工具、双向束搜索、候选补齐、HITL 追问、超时与预算、失败透传 | 同上 ← `openjiuwen/symphony/orchestration/` |
+| 16.7 | ☐ | 执行运行时 | 算子执行、并行、阶段/进度事件、runtime 生命周期 | 同上 ← `openjiuwen/symphony/runtime.py` |
+| 16.8 | ☐ | 经验沉淀 | experience 模块：轨迹→经验→SkillPack、经验蒸馏、执行证据驱动图谱更新、经验复用跨会话/跨技能 | 同上 ← `openjiuwen/symphony/experience/` |
+| 16.9 | ☐ | 评估 | 能力指纹、两两 Skill 等价分组、SkillPack 成员校验与历史 recipe 兼容 | 同上 ← `openjiuwen/symphony/evaluation/` |
+| 16.10 | ☐ | 观测 | 构建进度、耗时、失败原因、trace 关联 | 同上 ← `openjiuwen/symphony/observation/` |
+| 16.11 | ☐ | 与 AgentServer / Web 集成 | 工具暴露（单 agent / team / swarm 模式）、图谱事件 → web 团队事件、JGF 流程图输出、技能总谱页签 | `internal/swarm/server` · `internal/swarm/channels/web` ← `jiuwenswarm/server/...symphony*` · `jiuwenswarm/channels/web` |
+| 16.12 | ☐ | 测试 | 图谱构建（含坏技能隔离）、增量等价于全量、检索质量基线、编排产物断言、HITL 往返 | `tests/integration/agentcore/symphony/` |
+
+**验证点**：给定技能库，可增量构图、按需求检索并编排成图执行，执行经验可沉淀回图谱。
+
+---
+
+## 领域十七：RSI 递归自我改进
+
+> 全新模块。`openjiuwen/rsi`（363 文件 / 9.7 万行）：artifact 优化服务流、证据驱动 harness 演进、PUCT（对齐 `agentdescent==0.4.6` 内部实现）、评审与两阶段晋级。jiuwenswarm 侧提供实验开关、任务生命周期与 AgentServer 服务域。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 17.1 | ☐ | 基础 schema / 事件 / 用量 | `rsi` 数据契约、事件 kind、token 用量累计（缺计数时保留累计值） | `internal/evolving/rsi/{schema,events,usage}.go` ← `openjiuwen/rsi/{schema,events,usage}.py` |
+| 17.2 | ☐ | artifact 优化服务流 | artifact 提供方契约、优化包安装/浏览/预览、文件与版本管理、任务内生命周期 | 同上 ← `openjiuwen/rsi/artifact_rsi/` |
+| 17.3 | ☐ | PUCT program artifact provider | PUCT 搜索（对齐 agentdescent 语义）、候选打分、solved 阈值提前停止 | 同上 ← `openjiuwen/rsi/artifact_rsi/` |
+| 17.4 | ☐ | harness 演进 | 证据驱动 harness 演进、单 harness 引擎事件、epoch 树、非回归门（全局）、连续两阶段评分 | 同上 ← `openjiuwen/rsi/harness_rsi/` |
+| 17.5 | ☐ | paper pipeline | paper 上传/评分/评审证据链、报告渲染（tex/pdf）、宽松校验 | 同上 ← `openjiuwen/rsi/`（paper 系列） |
+| 17.6 | ☐ | 评估 agent | LLM judge（评分规则/自然语言 rubric）、JSON verdict 恢复、嵌套证据、并发与请求预算 | 同上 ← `openjiuwen/rsi/`（evaluator 系列） |
+| 17.7 | ☐ | 任务生命周期 | 取消/终结持久化、资源清理隔离、Windows 路径预算、协作式终止 | 同上 |
+| 17.8 | ☐ | 技能与插件 | native skill rails 准备、plugin 注册与加载、技能查询入口 | 同上 |
+| 17.9 | ☐ | AgentServer 服务域 | RSI 服务端入口、调度、网关注册、实验特性开关、前端契约（节点进度/失败原因） | `internal/swarm/server/runtime/rsi/` ← `jiuwenswarm/server/...rsi*` |
+| 17.10 | ☐ | 测试 | 引擎事件序、晋级门拒绝路径、judge 解析容错、取消后不残留 | `tests/integration/evolving/rsi/` |
+
+**验证点**：给定基线 harness 与任务集，可产出候选 artifact、评分、晋级或拒绝，全过程事件可回放。
+
+---
+
+## 领域十八：CUA 桌面自动化引擎
+
+> 全新模块。`jiuwenswarm/cua_engine`（259 文件 / 1.48 万行）：原生协议 + 三平台驱动 + 无障碍观察 + MCP 运行时，作为子代理接入。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 18.1 | ☐ | 协议与类型 | 原生协议、类型、错误、身份、路径解析 | `internal/agentcore/cua/{protocol,types,errors}.go` ← `jiuwenswarm/cua_engine/src/computer_use/{protocol,types,errors,_identity,paths}.py` |
+| 18.2 | ☐ | 驱动执行器 | 子进程驱动协议、超时、退出码与错误映射 | 同上 ← `cua_engine/src/computer_use/{driver_exec,execution}/` |
+| 18.3 | ☐ | macOS 驱动 | 基础对象与窗口边界、界面读取、输入控制、视觉反馈 | 同上 ← `cua_engine/src/computer_use/`（macos 驱动） |
+| 18.4 | ☐ | Windows 驱动 | 界面读取（UIA）与输入控制 | 同上 ← `cua_engine/src/computer_use/`（windows 驱动） |
+| 18.5 | ☐ | 无障碍观察 | 观察树构建、展示/裁剪、与模型视图的映射 | 同上 ← `cua_engine/src/computer_use/observation/` |
+| 18.6 | ☐ | MCP 运行时 | 内置 MCP 命令集、native semantics | 同上 ← `cua_engine/src/computer_use/{mcp,native_semantics}.py` |
+| 18.7 | ☐ | 后端与沙箱 | backends 适配（本地 / jiuwenbox） | 同上 ← `cua_engine/backends/` |
+| 18.8 | ☐ | 桌面技能包 | skills 内容与安装位置 | 同上 ← `cua_engine/skills/` |
+| 18.9 | ☐ | 子代理接入 | cua 子代理注册、工具暴露、与 deep agent 协同、失败回收 | `internal/agentcore/harness/subagents/cua.go` ← `openjiuwen/harness/subagents/`（cua 相关） |
+| 18.10 | ☐ | 测试 | 三平台单测（驱动可 fake）、协议往返、失败降级 | `tests/integration/agentcore/cua/` |
+
+**验证点**：在 macOS/Windows 上完成一次「读屏 → 决策 → 点击/输入 → 校验」闭环。
+
+---
+
+## 领域十九：AgentOS 运行形态与独立 Gateway / 企业运行时
+
+> 上游将 `gateway/` 从包内提升为独立可发布包（510 文件 / 13.5 万行），并新增 AgentOS（YuanRong）沙箱、registry、ADX、SSH、企业配额等运行时能力。Go 侧 `internal/swarm/gateway` 已存在，但缺少 AgentOS 与企业分支能力。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 19.1 | ☐ | gateway 协议解耦 | gateway-protocol 外部契约、E2A/接口依赖改造、路径类依赖收敛 | `internal/swarm/gateway/protocol/` ← `gateway/`（protocol 相关） |
+| 19.2 | ☐ | 鉴权 | IAM、token、HttpOnly cookie、OAuth、Web/TUI 同源鉴权、鉴权关闭时 X-User-Id 回退 | `internal/swarm/gateway/auth/` ← `gateway/auth/` |
+| 19.3 | ☐ | registry 客户端 | 注册/注销、地址快照、CAS 清理陈旧沙箱、空闲 agent 注销 | `internal/swarm/gateway/registry/` ← `gateway/`（registry） |
+| 19.4 | ☐ | AgentOS Router | `3rdagent.switch`、SSH 南向路由、channel 端口分配、3rd-agent Web UI 代理、ADX 路由 | `internal/swarm/gateway/agentos/` ← `gateway/`（agentos router） |
+| 19.5 | ☐ | YuanRong 沙箱生命周期 | create/delete（inline runtime_spec）、预热、空闲回收、函数入口 loop 统一、失败清理 | `internal/swarm/gateway/agentos/yuanrong/` ← `jiuwenswarm/agents/...` · `gateway/` |
+| 19.6 | ☐ | SSH 通道 | 临时密钥签发、sshd 就绪探测、user_id 透传、断连清理可配置超时 | 同上 ← `gateway/channel_manager`（ssh） |
+| 19.7 | ☐ | ADX ingress | 一体机部署入口、经 Environment API 路由 agent | `internal/swarm/gateway/adx/` ← `gateway/`（adx） |
+| 19.8 | ☐ | etcd 配置下发 | config_poll 轮询、agent/tool 沙箱设置、多节点仅管理节点启动 | `internal/swarm/gateway/config_poll/` ← `gateway/config_poll/` |
+| 19.9 | ☐ | 企业运行时 | team quota、membership、control store、路由绑定、企业特性握手、连接器广场 | `internal/swarm/gateway/enterprise/` · `internal/swarm/extensions/enterprise/` ← `jiuwenswarm/enterprise/` · `gateway/enterprise/` |
+| 19.10 | ☐ | 部署形态 | systemd / nohup 回退、分布式多机、gateway 单实例锁、一键部署 DAG、源码修订暴露 | `packaging/` · `cmd/` ← `jiuwenswarm/start_services.py` · `Makefile` · `Dockerfile.claw` |
+| 19.11 | ☐ | 测试 | 鉴权矩阵、registry 生命周期、沙箱创建失败回滚、多节点配置一致性 | `tests/integration/swarm/gateway/` |
+
+**验证点**：网关在无本地沙箱的部署形态下可拉起远端 AgentOS 沙箱并完成一次对话与文件读写。
+
+---
+
+## 领域二十：Process-CLI 与 Runtime SDK
+
+> 上游新增"单 Agent 一次性机器执行"入口（`channels/process_cli`，30+ 文件）与 Runtime Public API，配套 Python/TypeScript SDK，用于 CI/脚本化调用。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 20.1 | ☐ | Runtime Public API | agent_definition、run_context、session_catalog、model_catalog、permission_catalog、tool_allowlist、mode_catalog、cron | `internal/swarm/runtime/` ← `jiuwenswarm/runtime/*.py` |
+| 20.2 | ☐ | 一次性执行协议 | machine_entry/machine_io/machine_policy/machine_result/machine_signals、JSON 契约、退出码契约 | `internal/swarm/channels/processcli/` ← `jiuwenswarm/channels/process_cli/*.py` |
+| 20.3 | ☐ | REPL 与命令 | repl、commands、control_commands、ui、render、model_options、prompt | 同上 |
+| 20.4 | ☐ | 双工与实时输入 | duplex_protocol/duplex_input/duplex_control、live_input/live_layout、steer 绑定当前执行 | 同上 |
+| 20.5 | ☐ | 会话与持久化 | session_entry/session_guard/persistence、跨进程续聊、同会话并发互斥、退出前落盘 | 同上 |
+| 20.6 | ☐ | 宿主工具回调 | host_tools、client_tools（客户端工具暂停-回填）、client-attachments | 同上 ← `jiuwenswarm/runtime/client_tools.py` |
+| 20.7 | ☐ | 权限与策略 | machine_policy、非交互拒绝授权、shell 不得绕过文件授权、运行级能力控制 | 同上 ← `channels/process_cli/{permissions,machine_policy}.py` |
+| 20.8 | ☐ | SDK | Python SDK + TypeScript SDK（会话/模型/规划/状态/权限命令、事件流） | `sdks/` ← `jiuwenswarm/sdks/` |
+| 20.9 | ☐ | 诊断与输出 | 非交互输出精简、诊断日志落盘、思考分段不重复 | 同上 ← `channels/process_cli/diagnostics.py` |
+| 20.10 | ☐ | 测试 | 一次性执行端到端（真子进程）、跨进程续聊、并发拒绝、退出码断言 | `tests/integration/swarm/processcli/` |
+
+**验证点**：`uapclaw exec --json` 可一次性完成单 agent 任务并输出结构化结果，SDK 可复用同一会话续聊。
+
+---
+
+## 领域二十一：权限模式与智能审批
+
+> 上游权限体系经历"加入→整体回滚→重做"：最终形态是权限引擎与产品权限模型解耦、三档模式（Full Access / Auto / Strict）、三层规则（Global/User/Session）、智能审批队列与 A4P 预授权。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 21.1 | ☐ | 权限引擎解耦 | engine 与 product model 分离、目录重构、`SessionPermissionStore` | `internal/agentcore/harness/security/permission_engine/` ← `openjiuwen/harness/security/permission_engine/` |
+| 21.2 | ☐ | 权限模式 | Full/Auto/Strict 枚举、会话级持久化、网络保护、模式切换 RPC | 同上 ← `permission_engine/`（modes） |
+| 21.3 | ☐ | 规则层次 | 全局/用户/会话三层、规则落盘去重、路径抽取修正、"仅本次生效" | 同上 ← `permission_engine/`（rules） |
+| 21.4 | ☐ | 智能审批 | 规则放行判定、审批事务、主 agent 审批队列、快照与工作目录对齐 | `internal/swarm/server/permissions/` ← `jiuwenswarm/agentserver/...permissions*` |
+| 21.5 | ☐ | 审批交互 | WebUI 卡片（title/body 一致）、Code 模式审批、控制权交接与恢复、拒绝只生效一次 | 同上 · `internal/swarm/channels/web` ← `jiuwenswarm/channels/web` |
+| 21.6 | ☐ | guardrail 收编 | 命令行安全检查统一入口、bash 复合命令、通配非 ASCII、完整命令展示、内置规则生效 | `internal/agentcore/harness/rails/security/` ← `openjiuwen/core/security/guardrail/` · `harness/rails/security/` |
+| 21.7 | ☐ | A4P 预授权 | 会话/定时任务预授权、无需新增授权的申请过滤、read scope 校验 | `internal/swarm/server/a4p/` ← `jiuwenswarm/agentserver/...a4p*`（外部 `a4p` 包） |
+| 21.8 | ☐ | 隔离语义审查 | 安全审计、隔离语义审查、文件交付边界 | 同上 ← `openjiuwen/harness/security/` |
+| 21.9 | ☐ | 团队权限 | Team 权限 rail、leader 仲裁 ASK、成员权限继承、项目目录透传 | `internal/agent_teams/rails/` ← `openjiuwen/agent_teams/`（permission） |
+| 21.10 | ☐ | 测试 | 三模式 × 三层规则矩阵、审批中断恢复、绕过用例（大小写/复合/中文） | `tests/integration/agentcore/security/` |
+
+**验证点**：三档模式下同一危险命令分别放行/弹窗/拒绝，策略可持久化且可审计。
+
+---
+
+## 领域二十二：可观测性与 Trajectory v2
+
+> 上游 observability 与 trajectory 经历破坏性重构：span-level schema 统一版本、OTel/GenAI semconv 对齐、内容寻址归档 v2、团队泳道与 TTFT/TTFB。
+> Go 现状：`internal/evolving/trajectory` 与 `internal/agent_teams/observability` 为基线版本，无 OTel 全局埋点与归档 v2。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 22.1 | ☐ | OTel 全局埋点 | httpx/requests/aiohttp/fastapi 自动埋点、W3C traceparent 传播、进程级开关 | `internal/common/otel/` ← `openjiuwen/core/...otel*` · `openjiuwen/extensions/observability/` |
+| 22.2 | ☐ | OTLP 文件导出 | 标准 OTLP JSON 文件 exporter、枚举编码为整数、属性截断策略 | 同上 ← `openjiuwen/harness/observability/` |
+| 22.3 | ☐ | span 层级 | agent → round → llm/tool → subagent、team root、成员工具 span、按 session 注册根 span | `internal/agentcore/harness/observability/` · `internal/agent_teams/observability/` ← 同上 |
+| 22.4 | ☐ | GenAI 属性 | 请求/响应消息、工具参数与结果、cache usage、retrieval 属性、压缩提示词不入对话链 | 同上 |
+| 22.5 | ☐ | 时延指标 | TTFT（仅 token chunk）/TTFB/inter-token → usage_metadata；未观测请求标记 | 同上 ← `harness/observability/` |
+| 22.6 | ☐ | trajectory schema v2 | 单一 span-level 版本、事件 kind 闭集、epoch 基线、restated 内容按内容寻址共享 | `internal/evolving/trajectory/` ← `openjiuwen/agent_evolving/trajectory/` |
+| 22.7 | ☐ | 归档 v2 | 内容寻址归档、分页保留 + checkpoint、JSONL zip 导入导出、超期清理 | 同上 |
+| 22.8 | ☐ | 上下文链重建 | 压缩按 step 归属、reasoning 按 `reasoning_content`、跳过 compaction 轮次、离线演进/RL 消费统一 | 同上 |
+| 22.9 | ☐ | 团队视图 | 成员泳道、定时调度轨迹、token 成本时间线、诊断页面契约 | `internal/swarm/channels/web/trajectory/` ← `jiuwenswarm/channels/web` |
+| 22.10 | ☐ | 归因与奖励 | attribution：Fast Reward、交付物选择、证据链、任务解析、字段窗口工具 | `internal/evolving/attribution/` ← `openjiuwen/agent_evolving/attribution/` |
+| 22.11 | ☐ | 测试 | span 树断言、归档 round-trip、TTFT 语义、导入非法归档报错 | `tests/integration/evolving/trajectory/` |
+
+**验证点**：一次团队会话产出可导入导出的 v2 轨迹，span 树与 OTLP 导出可被标准工具消费。
+
+---
+
+## 领域二十三：LLM 协议与多模态
+
+> 上游 LLM 层新增 Anthropic 客户端、Responses API、thinking/reasoning effort、模型组路由、显式缓存、OpenAI 账号 OAuth；多模态从"图片开关"扩展为按模型声明能力。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 23.1 | ☐ | Anthropic 客户端 | Messages API、thinking、mid-conversation system turns、温度与 top_p 互斥、max_tokens | `internal/agentcore/foundation/llm/model_clients/anthropic/` ← `model_clients/anthropic_model_client.py` |
+| 23.2 | ☐ | Responses API | api_key 配置走 Responses、流式 function arguments、usage reasoning_tokens | 同上（openai 客户端 extensions） ← `model_clients/openai_model_client.py` |
+| 23.3 | ☐ | 思考与推理强度 | `thinking` 开关、`reasoning_effort`/`extra_body` 透传、DeepSeek V4 参数注入、Zhipu 禁用思考兼容 | 同上 ← `model_clients/` · `jiuwenswarm/llm_provider_compat_patch.py` |
+| 23.4 | ☐ | 模型组与路由 | 模型组配置与策略、团队成员指定模型、路由模型命名、失败回退与日志 | `internal/agentcore/foundation/llm/model_group/` ← `openjiuwen/core/foundation/llm/`（model group） |
+| 23.5 | ☐ | 显式缓存 | OpenRouter anthropic/qwen 显式缓存、cache 创建用量解析 | 同上 ← `model_clients/openai_model_client.py` |
+| 23.6 | ☐ | OpenAI 账号 OAuth | 设备码轮询与瞬态重试、鉴权方式选择 | 同上 ← `model_clients/openai_account_model_client.py` |
+| 23.7 | ☐ | 能力声明 | 按模型声明 `supports_vision`、模态探测（超时/拒绝识别）、图像原生输入与 vision 工具解耦 | `internal/agentcore/foundation/llm/schema/` · `harness/tools/multimodal/` ← `openjiuwen/harness/`（modality probe） |
+| 23.8 | ☐ | 多模态内容 | 图片附件、PDF 输入与内容分析、视频生成与聊天交付、附件作为系统/用户消息注入 | `internal/agentcore/harness/tools/multimodal/` ← `jiuwenswarm/agents/...` · `openjiuwen/harness/tools/` |
+| 23.9 | ☐ | 全双工音视频 | TTS/ASR、语音-Agent 任务管理、vllm omni、双工配置 | `internal/swarm/extensions/duplex/` ← `jiuwenswarm/extensions/`（多模态音视频） |
+| 23.10 | ☐ | 网关兼容 | SSE-only 网关的非流式 invoke、OpenAI 兼容层、错误码透传 | 同上 ← `jiuwenswarm/llm_sse_patch.py` |
+
+**验证点**：同一套 agent 配置可切换到 Anthropic/Responses 模型并正确产出思考、用量与多模态输入。
+
+---
+
+## 领域二十四：Context 与 Memory 演进
+
+> 上游上下文从"压缩器集合"扩展为"主动上下文 + 异步会话记忆 + 上下文演进（ContextEvolution/Metis/TTSE）"；记忆新增外部 provider（lakebase、jiuwen_memory 2.0）与 daily memory 注入。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 24.1 | ☐ | 主动上下文 | GitCode 服务拉取、规则式整理、采集进度、前端初始化 | `internal/agentcore/harness/personal_context/` ← `openjiuwen/harness/personal_context/` |
+| 24.2 | ☐ | 异步会话记忆 | session memory processor 异步化、取消安全 | `internal/agentcore/context_engine/processor/` ← `openjiuwen/core/context_engine/` |
+| 24.3 | ☐ | 上下文管理能力 | 集合管理、进度查询、上下文浏览 API | `internal/swarm/server` ← `jiuwenswarm/server` |
+| 24.4 | ☐ | ContextEvolution + Metis | 语境演进框架、Metis 任务记忆、三级协作（l1-l3） | `internal/agentcore/context_evolver/`（9.82 已有 P1-P7 基础，本节补 Metis/l1-l3 与 quickstart rail） ← `openjiuwen/extensions/context_evolver/` · `core/operator/context_evolve_call/metis.py` |
+| 24.5 | ☐ | TTSE | BM25/Chroma 索引持久化、consult retrieve 模式、embedding 不可用降级、规则归因 | `internal/evolving/ttse/` ← `openjiuwen/agent_evolving/ttse/` · `harness/rails/evolution/ttse_rail.py` |
+| 24.6 | ☐ | 外部记忆 provider | lakebase、jiuwen_memory 2.0（可信身份）、mem2.0 契约、服务端与 SDK 行为统一 | `internal/agentcore/memory/external/` ← `openjiuwen/core/memory/external/` |
+| 24.7 | ☐ | daily memory | 今日/昨日记忆自动注入系统提示、敏感信息过滤配置 | 同上 ← `openjiuwen/harness/rails/memory/` |
+| 24.8 | ☐ | 记忆 rail 挂载 | JiuwenMemoryRail、coding memory 落工作区、team 记忆生成 | `internal/agent_teams/rails/memory/` ← `openjiuwen/harness/rails/memory/jiuwen_memory_rail.py` |
+| 24.9 | ☐ | 测试 | 外部 provider 契约、降级路径、注入顺序、索引重建 | `tests/integration/agentcore/memory/` |
+| 24.10 | ✅ | Prompt Attachment 地基（S1） | manager（存储/渲染/哈希增量/更新族）+ `ContextWindow` mutator 链 + ReAct 三处装订点 + provider 矩阵；7 例集成测试（IT-1~IT-7）；设计 `docs/superpowers/specs/2026-11-04-prompt-attachment-foundation-design.md` | `internal/agentcore/harness/prompts/attachment_*.go` ← `openjiuwen/harness/prompts/prompt_attachment_manager.py` |
+
+**验证点**：外部记忆服务可用/不可用两种形态下对话均可正常进行，且记忆可检索、可注入、可审计。
+
+---
+
+## 领域二十五：Team / Swarm 调度与协作
+
+> 上游团队从"leader 手工派活"演进为"调度模式 + 任务板状态机 + 验证者返工 + fork/checkpoint + 工作组隔离"。体量最大（`agent_teams` 583 文件 / 10.5 万行）。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 25.1 | ☐ | Harness 表面统一 | NativeHarness 生命周期事件、中断恢复、TeamHarness/StreamController 对齐、多轮 invoke 生命周期 | `internal/agent_teams/runtime/` ← `openjiuwen/agent_teams/`（harness 表面） |
+| 25.2 | ☐ | 调度模式 | scheduled dispatch 运行时、review voting、会话级 bootstrap 开关、团队空闲标记、round-idle 对账 | 同上 ← `openjiuwen/agent_teams/`（scheduler） |
+| 25.3 | ☐ | 验证者与返工 | verify gate、临时 reviewer harness、review fail 重规划、reviewer 反馈透传 | 同上 ← `openjiuwen/agent_teams/`（reviewer） |
+| 25.4 | ☐ | 任务板语义 | condition-named 状态机、task revisions、reassign/cancel/edit 信号、one-active-claim、verify_task | 同上 ← `openjiuwen/agent_teams/`（task board） |
+| 25.5 | ☐ | fork 与 checkpoint | 五种 fork 模式、命名 checkpoint、fork identity 转换、cold resume、WAL/journal 按 run_id 分片 | 同上 ← `openjiuwen/agent_teams/`（checkpoint） |
+| 25.6 | ☐ | 会话与消息 | 群聊、跨会话消息、`team.mq.publish` 混合事件、成员 roster、消息/任务内容溢出落盘 | `internal/agent_teams/messager/` ← `openjiuwen/agent_teams/` · `jiuwenswarm/server` |
+| 25.7 | ☐ | worktree 隔离 | 项目目录锚定、session 归属、随团队清理、成员注册校验、串行创建 | `internal/agent_teams/team_workspace/` ← `openjiuwen/agent_teams/` |
+| 25.8 | ☐ | subagent 工具族 | spawn/wait/list/send_input/close/resume、closed 后可恢复、与 team 打通 | `internal/agentcore/harness/subagents/` ← `openjiuwen/harness/subagents/` |
+| 25.9 | ☐ | 专家与组织 | AgentGroup、专家团、组织 id 冲突后缀、BM25 专家检索、模板 worker、按需加载成员 | `internal/agent_teams/registry/` · `internal/swarm/extensions/` ← `openjiuwen/agent_teams/` · `jiuwenswarm/agents/` |
+| 25.10 | ☐ | 团队技能 | 共享 skill library、技能声明、渐进式工具暴露、技能链接视图下线 | `internal/agent_teams/rails/` ← `openjiuwen/agent_teams/` |
+| 25.11 | ☐ | 测试 | 调度模式端到端（MockLLM）、任务板并发、fork/恢复、worktree 清理 | `tests/integration/agent_teams/` |
+
+**验证点**：调度模式下团队可自主认领/评审/返工直至收敛，中断后可 cold resume。
+
+---
+
+## 领域二十六：渠道与客户端扩展
+
+> 上游渠道从 Web/IM 扩展到 browser extension、IDE、desktop、process-cli，并把 ACP/A2A 能力补齐（client-tools、interrupts、swarmchat）。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 26.1 | ☐ | IM 平台补齐 | Slack、Telegram、Discord、企微、钉钉、百度网盘 connector、WhatsApp / 小艺既有缺口 | `internal/swarm/gateway/channel_manager/im_platforms/` ← `gateway/channel_manager/im_platforms/` |
+| 26.2 | ☐ | 浏览器通道 | browser extension 作为 channel、内置 Playwright MCP 0.0.78、headless/headed 并行隔离、批量表单、页面归属与完成判定 | `internal/swarm/channels/browser/` ← `jiuwenswarm/channels/browser/` |
+| 26.3 | ☐ | IDE 通道 | IDE 插件协议与通道 | `internal/swarm/channels/ide/` ← `jiuwenswarm/channels/ide/` |
+| 26.4 | ☐ | Desktop 通道 | 桌面端通道 | `internal/swarm/channels/desktop/` ← `jiuwenswarm/channels/desktop/` |
+| 26.5 | ☐ | CLI 通道化 | `uapclaw chat` 独立 channel、`/cli` 路由、网关优雅断开与 session rebind | `internal/swarm/channels/cli/` ← `jiuwenswarm/channels/cli/` · `jiuwenswarm/cli/` |
+| 26.6 | ☐ | A2A 演进 | reasoning/answer 分离、artifact `last_chunk`、客户端提前停止时关闭远端流 | `internal/swarm/channels/protocol/a2a/` ← `jiuwenswarm/gateway/channel_manager/protocol/a2a/` |
+| 26.7 | ☐ | client-tools / interrupts | 客户端工具暂停-回填、`interrupt_id` 回显与按 kind 计数、swarmchat 消息类型 | `internal/swarm/gateway/` · `internal/agentcore/runner/interrupt/` ← `jiuwenswarm/server` · `openjiuwen/harness_protocol/interactions.py` |
+| 26.8 | ☐ | 渠道鉴权与用户态 | `--user-id` 透传、Web/TUI WS 握手 user_id、渠道级 token、第三方 agent 切换 | `internal/swarm/gateway/` ← `jiuwenswarm/gateway/` |
+| 26.9 | ☐ | 测试 | 每渠道入站/出站契约、断线重连补发、多应用同会话 | `tests/integration/swarm/channels/` |
+
+**验证点**：新增渠道可在不改 agent 侧代码的前提下完成一次完整对话与文件交付。
+
+---
+
+## 领域二十七：Web 控制台后端契约
+
+> 上游 Web 端新增 1508 个文件（前端重构 + 多面板）。Go 只承接**后端契约**与前端产物托管，前端源码不在本仓库。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 27.1 | ☐ | Code 模式 | 前端 MVP 后端、git 状态按轮次索引、last-turn 审核、按轮 diff 统计、work/code 双模式 | `internal/swarm/channels/web/codemode/` ← `jiuwenswarm/channels/web` · `jiuwenswarm/agents/...aipc*` |
+| 27.2 | ☐ | Goal | goal 流式（is_stream）、失败文案、历史写入、目标与计划模式互斥 | `internal/swarm/channels/web/goal/` ← `jiuwenswarm/server` · `jiuwenswarm/channels/web` |
+| 27.3 | ☐ | 轨迹面板 | token 成本时间线、成员泳道、错误原因、上下文压缩标记 | 同上 ← `jiuwenswarm/channels/web`（trajectory） |
+| 27.4 | ☐ | 配置面板 | `/config` 交互面板、模型增删改、多模态开关、实验特性开关、API Key 长度 2048 | 同上 ← `jiuwenswarm/gateway/channel_manager/web` |
+| 27.5 | ☐ | 技能与市场 | 技能广场/我的技能/插件市场/MCP 市场、Hub 缓存与四类资产统一列表 | 同上 ← `jiuwenswarm/server`（marketplace/skills） |
+| 27.6 | ☐ | 会话导航 | 归档/恢复/删除、ephemeral/fork 会话、项目维度归档、会话侧边栏数据 | 同上 ← `jiuwenswarm/server`（session） |
+| 27.7 | ☐ | 心跳与定时任务面板 | 执行与聊天会话统一、未读标记、模式/模型选择、抽屉交互契约 | 同上 ← `jiuwenswarm/channels/web` |
+| 27.8 | ☐ | 富媒体 | 图片附件与多模态对话、artifact 预览/下载、SVG 渲染、文件卡片 | 同上 ← `jiuwenswarm/channels/web` · `jiuwenswarm/server` |
+| 27.9 | ☐ | 前端产物托管 | dist 构建与嵌入、低版本内核 polyfill、同端口 HTTP 就绪探针 | `internal/swarm/channels/web/dist.go` ← `jiuwenswarm/channels/web/frontend` |
+| 27.10 | ☐ | 测试 | RPC 契约快照（现有 file-api 对齐方式）、事件流顺序、断线补发 | `tests/integration/swarm/web/` |
+
+**验证点**：Web 端所有面板依赖的 RPC 与事件均可用，且与 Python 契约字段一致。
+
+---
+
+## 领域二十八：CLI / TUI 与技能生态
+
+> 上游 TUI 已从"内嵌面板"变为独立 channel，命令族与渲染大幅扩充；技能侧新增全量创建（skill-omni-creation）、内置 skill-creator/swarmskill-creator、市场与经验分发。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 28.1 | ☐ | TUI 命令族 | `/config`、`/permissions`、`/recap`、`/statusline`、`/mode`、`/rewind`、`/btw`、`/review`、`/simplify`、`/keybindings`、`/switch-cc` | `internal/swarm/gateway/channel_manager/tui/` ← `jiuwenswarm/gateway/channel_manager/tui/` |
+| 28.2 | ☐ | TUI 渲染 | 工具渲染、日志折叠、流式思考分段、英文状态文案、多窗口 | `internal/swarm/channels/tui/` ← `jiuwenswarm/channels/tui/` |
+| 28.3 | ☐ | chat 入口 | `uapclaw chat`、keepalive、Ctrl+C 语义、dotenv 早期解析保护 | `cmd/uapclaw` ← `jiuwenswarm/cli/main.py` |
+| 28.4 | ☐ | 技能全量创建 | skill-omni-creation 流程、知识转技能、产物位置 | `internal/swarm/server/runtime/skill/omni.go` ← `jiuwenswarm/agents/...skill*` |
+| 28.5 | ☐ | 内置技能 | skill-creator、swarmskill-creator、预置办公技能、内置白名单、中英展示 | `resources/agent/skills/` ← `jiuwenswarm/resources/` |
+| 28.6 | ☐ | 技能分发 | 经验增强分发、多源聚合搜索、SkillHub 推荐、去重 | `internal/swarm/server/runtime/skill/dispatch.go` ← `jiuwenswarm/server`（skill dispatch） |
+| 28.7 | ☐ | 技能发布 | 我的技能、发布、版本、来源标识、卸载按 slug | 同上 ← `jiuwenswarm/server`（skills） |
+| 28.8 | ☐ | 测试 | 命令解析与渲染快照、技能安装/卸载、市场安装契约 | `tests/integration/swarm/tui/` |
+
+**验证点**：TUI 覆盖上游命令族，技能可从市场安装并在对话中被检索分发。
+
+---
+
+## 领域二十九：交付与运维
+
+> 上游更名 `workswarm`、新增诊断与保留策略、改造部署与打包。这些改动不改核心语义，但直接影响交付物。
+
+| 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
+|------|------|------|------|-----------------|
+| 29.1 | ☐ | 品牌与包名 | `workswarm` 命名、欢迎页/文案、版本号与源码修订暴露 | `cmd/` · `internal/common/version/` ← `jiuwenswarm/pyproject.toml` · `jiuwenswarm/common/version.py` |
+| 29.2 | ☐ | 诊断 | 活进程诊断、findings/suggestions、诊断 agent 选择 | `internal/swarm/diagnosis/` ← `jiuwenswarm/diagnosis/` |
+| 29.3 | ☐ | 保留策略 | 会话/轨迹无限保留、超期清理、Team/休眠会话库清理 | `internal/swarm/server/session/` ← `jiuwenswarm/runtime/session*` |
+| 29.4 | ☐ | 进程诊断 | SIGUSR1 异步状态 dump、`debug --skip-build`、端口回显 | `cmd/uapclaw` ← `jiuwenswarm/debug_launcher.py` |
+| 29.5 | ☐ | 打包与签名 | Windows 签名、内置插件打包、`make stop` | `packaging/` · `Makefile` ← `jiuwenswarm/scripts/` |
+| 29.6 | ☐ | 配置迁移 | `config_version`、模板迁移、启动时补缺失字段 | `internal/common/config/` ← `jiuwenswarm/common/config.py` |
+| 29.7 | ☐ | 部署 | systemd 回退 nohup、分布式多机、单管理节点、一键部署 | `packaging/` · `scripts/` ← `jiuwenswarm/scripts/` · `Makefile` |
+| 29.8 | ☐ | 测试 | 配置迁移幂等、保留策略边界、打包冒烟（wine 跨平台） | `tests/e2e/` |
+
+**验证点**：交付包在 Linux/Windows 均可启动，旧配置可无损迁移。
