@@ -272,3 +272,10 @@ internal/evolving/experience/common.go#L115-L198
 internal/evolving/sharing/experience_sharer.go#L230-L323
 # distributed_runtime.go — EnsurePostgresqlForLeader（需真实 PostgreSQL 服务）
 internal/swarm/agents/harness/team/distributed_runtime.go#L472-L557
+
+# ── 2026-11-04 context_evolver 轨迹成功判定 ──
+# context_evolving_react_agent.go L240-L246 — 调用点（invoke 返回后构造
+# TrajectoryResult）。该分支要真实跑一次带错误结果的 invoke，需完整 LLM + 记忆
+# 服务装配，单测成本过高；判定逻辑本身（L476-L485 trajectorySuccess）由
+# TestTrajectorySuccess 五例 100% 覆盖。
+internal/agentcore/context_evolver/context_evolving_react_agent.go#L240-L246

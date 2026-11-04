@@ -534,6 +534,17 @@ func TestWithStreamModes(t *testing.T) {
 	assert.Equal(t, modes, o.StreamModes)
 }
 
+// TestWithStreamLifecycleOwner 验证 stream 生命周期归属选项
+func TestWithStreamLifecycleOwner(t *testing.T) {
+	o := &AgentOptions{}
+	WithStreamLifecycleOwner()(o)
+	assert.True(t, o.StreamLifecycleOwner)
+
+	// 默认不置位：普通 Invoke 调用方不受影响
+	defaults := &AgentOptions{}
+	assert.False(t, defaults.StreamLifecycleOwner)
+}
+
 // TestNewAgentOptions 验证 NewAgentOptions 构建函数
 func TestNewAgentOptions(t *testing.T) {
 	sess := session.NewSession(session.WithSessionID("test_sess"))

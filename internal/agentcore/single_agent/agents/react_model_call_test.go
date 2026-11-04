@@ -424,3 +424,58 @@ func TestMessagesContainImageInput_宽口径(t *testing.T) {
 		})
 	}
 }
+
+// TestIterExceptionErrorValues_所有分支 覆盖 string/error/嵌套容器/标量/超深
+func TestIterExceptionErrorValues_所有分支(t *testing.T) {
+	cases := []struct {
+		name     string
+		value    any
+		wantLen  int
+		contains string
+	}{
+		{"字符串", "invalid_image_input", 1, "invalid_image_input"},
+		{"空字符串", "", 0, ""},
+		{"错误值", errors.New("boom"), 1, "boom"},
+		{"嵌套 map", map[string]any{"a": map[string]any{"b": "deep"}}, 1, "deep"},
+		{"[]any", []any{"one", "two"}, 2, "two"},
+		{"[]string", []string{"x", ""}, 1, "x"},
+		{"标量", 400, 1, "400"},
+		{"nil", nil, 0, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := iterExceptionErrorValues(c.value, 0)
+			if len(got) != c.wantLen {
+				t.Fatalf("got %v（长度 %d），want 长度 %d", got, len(got), c.wantLen)
+			}
+			if c.contains != "" {
+				joined := strings.Join(got, "|")
+				if !strings.Contains(joined, c.contains) {
+					t.Fatalf("应包含 %q，实际 %v", c.contains, got)
+				}
+			}
+		})
+	}
+}
+
+// TestExtractExceptionErrorValues_Params与错误链 覆盖 Params 展开与 Unwrap 链
+func TestExtractExceptionErrorValues_Params与错误链(t *testing.T) {
+	inner := errors.New("inner: unsupported image")
+	wrapped := fmt.Errorf("wrap: %w", inner)
+	values := extractExceptionErrorValues(wrapped)
+	joined := strings.Join(values, "\n")
+	if !strings.Contains(joined, "wrap:") || !strings.Contains(joined, "unsupported image") {
+		t.Fatalf("错误链两侧文本都应被抽出，实际 %v", values)
+	}
+
+	withParams := exception.NewBaseError(exception.StatusModelCallFailed,
+		exception.WithMsg("bad request"),
+		exception.WithParams(map[string]any{"provider_code": "image_input_unsupported"}))
+	joined = strings.Join(extractExceptionErrorValues(withParams), "\n")
+	if !strings.Contains(joined, "image_input_unsupported") {
+		t.Fatalf("Params 值应被抽出，实际 %v", joined)
+	}
+	if !isImageInputUnsupportedError(withParams) {
+		t.Fatal("Params 里的结构化 code 应被识别为拒图")
+	}
+}
