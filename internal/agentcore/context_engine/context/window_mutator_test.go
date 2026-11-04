@@ -75,3 +75,17 @@ func TestWindowMutatorsFromOption_nil与空(t *testing.T) {
 	require.Nil(t, ceiface.WindowMutatorsFromOption())
 	require.Empty(t, ceiface.WindowMutatorsFromOption(ceiface.WithWindowMutators()))
 }
+
+// TestGetContextWindow_Mutator返回nil与空项 覆盖 nil 跳过与 nil 返回两条防御分支。
+func TestGetContextWindow_Mutator返回nil与空项(t *testing.T) {
+	mc := newSessionModelContextForMutator(t)
+	_, err := mc.AddMessages(context.Background(), []llmschema.BaseMessage{llmschema.NewUserMessage("hi")})
+	require.NoError(t, err)
+
+	drop := func(w *ceiface.ContextWindow) *ceiface.ContextWindow { return nil }
+	window, err := mc.GetContextWindow(context.Background(), nil, nil, 0, 0,
+		ceiface.WithWindowMutators(nil, drop))
+	require.NoError(t, err)
+	require.NotNil(t, window, "mutator 返回 nil 时应保留原窗口")
+	require.Len(t, window.GetMessages(), 1)
+}

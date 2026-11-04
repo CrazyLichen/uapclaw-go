@@ -89,3 +89,28 @@ func TestNormalizeRemoved_去重与归一(t *testing.T) {
 	got := normalizeRemoved([]string{"a", "a", "b c"})
 	require.Equal(t, []string{"a", "b_c"}, got)
 }
+
+// TestRenderSnapshot_整体截断 验证超过 48000 字符时整体截断（覆盖 truncateRunes）。
+func TestRenderSnapshot_整体截断(t *testing.T) {
+	m := NewManager()
+	items := make([]*Attachment, 0, 5)
+	for i := 0; i < 5; i++ {
+		items = append(items, &Attachment{
+			Section:     string(rune('a' + i)),
+			Kind:        AttachmentText,
+			Content:     strings.Repeat("y", MaxAttachmentChars-1),
+			ContentKind: "text/plain",
+		})
+	}
+	out := m.RenderSnapshot(items)
+	require.Contains(t, out, "[Prompt attachments truncated: rendered content exceeded max_rendered_chars.]")
+	require.LessOrEqual(t, len([]rune(out)), MaxRenderedChars+64)
+}
+
+// TestSetLanguage_空值忽略 验证空语言不覆盖当前值。
+func TestSetLanguage_空值忽略(t *testing.T) {
+	m := NewManager()
+	m.SetLanguage("en")
+	m.SetLanguage("")
+	require.Equal(t, "en", m.Language())
+}

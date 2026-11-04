@@ -12,7 +12,7 @@
 //
 //	attachment/
 //	├── doc.go                        # 包文档
-//	├── context_helper.go             # SessionFacade mock + 真实 ContextEngine 构造
+//	├── context_helper_test.go        # SessionFacade mock + 真实 ContextEngine 构造（测试助手）
 //	├── attachment_flow_test.go       # IT-1 全链路 + IT-2 顺序契约
 //	├── attachment_compact_test.go    # IT-3 压缩回退 + IT-5 重启恢复
 //	└── attachment_provider_test.go   # IT-4 投影矩阵 + IT-6 隔离 + IT-7 跨轮插入

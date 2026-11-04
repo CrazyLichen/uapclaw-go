@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -65,3 +66,30 @@ func TestAttachmentWindowOptions_按provider挂投影(t *testing.T) {
 	projected = ceiface.WindowMutatorsFromOption(opts...)[0](window)
 	require.IsType(t, &llmschema.UserMessage{}, projected.ContextMessages[0], "anthropic 保持 User")
 }
+
+// failHistory 故意失败的 HistoryContext，用于覆盖同步失败告警分支。
+type failHistory struct{}
+
+// SessionID 返回固定会话 id
+func (f *failHistory) SessionID() string { return "s1" }
+
+// GetMessages 故意失败
+func (f *failHistory) GetMessages(int, bool) ([]llmschema.BaseMessage, error) {
+	return nil, errFailHistory
+}
+
+// AddMessages 故意失败
+func (f *failHistory) AddMessages(context.Context, []llmschema.BaseMessage, ...ceiface.Option) ([]llmschema.BaseMessage, error) {
+	return nil, errFailHistory
+}
+
+// TestSyncPromptAttachments_同步失败只告警 验证失败不向调用方传播。
+func TestSyncPromptAttachments_同步失败只告警(t *testing.T) {
+	m := prompts.NewManager()
+	_, err := m.AddSection("s1", "mode", "A", prompts.AttachmentRuntime, "test.rail")
+	require.NoError(t, err)
+	require.NoError(t, syncPromptAttachments(context.Background(), m, &failHistory{}))
+}
+
+// errFailHistory 测试用错误
+var errFailHistory = errors.New("history unavailable")

@@ -13,11 +13,11 @@ import (
 //
 // Python: ReActAgent._sync_prompt_attachments（react_agent.py:1148-1180）。
 // 失败只告警：附件投递不得阻断模型调用。
-func syncPromptAttachments(ctx context.Context, m *prompts.Manager, modelCtx ceiface.ModelContext) error {
-	if m == nil || modelCtx == nil {
+func syncPromptAttachments(ctx context.Context, m *prompts.Manager, hc prompts.HistoryContext) error {
+	if m == nil || hc == nil {
 		return nil
 	}
-	if err := m.Sync(ctx, modelCtx); err != nil {
+	if err := m.Sync(ctx, hc); err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "prompt_attachment_sync_failed").
 			Err(err).
