@@ -1,14 +1,33 @@
 package runtime
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// AgentManagerPort 运行时需要的 manager 能力（由 server 层实现，避免反向依赖）。
+type AgentManagerPort interface {
+	// GetChatAgent 按 mode/subMode/projectDir 取聊天 agent
+	GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string) (ChatAgentPort, error)
+}
+
+// ChatAgentPort 运行时需要的 agent 能力。
+type ChatAgentPort interface {
+	// ProcessMessage 非流式执行
+	ProcessMessage(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error)
+	// ProcessMessageStream 流式执行
+	ProcessMessageStream(ctx context.Context, req *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error)
+	// PlanStateAccessor 返回 plan 状态读写入口
+	PlanStateAccessor() PlanStateAccessor
+}
 
 // ResolvedMode 请求模式解析结果。
 type ResolvedMode struct {
@@ -278,4 +297,84 @@ func ResolveCancelProjectDir(req *schema.AgentRequest) string {
 		return strings.TrimSpace(v)
 	}
 	return ""
+}
+
+// PrepareChatTurn 解析会话语义并选出一个 agent。
+//
+// Python: jiuwenswarm/runtime/request.py prepare_chat_turn（L361-577）。
+// 偏差（⤵️）：sync_metadata 写入（Go 的 SessionMetadataUpdate 尚无 project_dir/
+// work_mode/model/last_user_message_at 字段）、get_agent_for_request 原子准入、
+// wait_for_session_prewarm 未移植；此处按 sync_metadata=false 的只读形态执行。
+func PrepareChatTurn(
+	ctx context.Context,
+	mgr AgentManagerPort,
+	req *schema.AgentRequest,
+	channelID string,
+) (mode, subMode string, agent ChatAgentPort, err error) {
+	params := parseRequestParams(req)
+	rawMode, _ := params["mode"].(string)
+	explicitModeProvided := strings.TrimSpace(rawMode) != ""
+
+	sid := ""
+	if req != nil && req.SessionID != nil {
+		sid = strings.TrimSpace(*req.SessionID)
+	}
+
+	// 1. 会话已锁定的 mode/work_mode 继承（内部轮次含 heartbeat 不带显式 mode）
+	runtimeWorkMode := ""
+	if sid != "" {
+		meta := session.GetSessionMetadata(sid)
+		if storedMode, ok := meta["mode"].(string); ok && strings.TrimSpace(storedMode) != "" {
+			storedMode = strings.TrimSpace(storedMode)
+			params[PreviousSessionModeKey] = storedMode
+			if !explicitModeProvided {
+				params["mode"] = storedMode
+			}
+		}
+		if wm, ok := meta["work_mode"].(string); ok {
+			if n := strings.ToLower(strings.TrimSpace(wm)); n == "code" || n == "work" {
+				runtimeWorkMode = n
+			}
+		}
+	}
+	// 2. 请求自带 work_mode
+	if runtimeWorkMode == "" {
+		if wm, ok := params["work_mode"].(string); ok {
+			if n := strings.ToLower(strings.TrimSpace(wm)); n == "code" || n == "work" {
+				runtimeWorkMode = n
+			}
+		}
+	}
+	// 3. 渠道默认（Python: default_work_mode_for_channel —— tui→code，其余 work）
+	if runtimeWorkMode == "" {
+		if strings.EqualFold(strings.TrimSpace(channelID), "tui") {
+			runtimeWorkMode = "code"
+		} else {
+			runtimeWorkMode = "work"
+		}
+		logger.Warn(logComponent).
+			Str("channel_id", channelID).
+			Str("session_id", sid).
+			Str("work_mode", runtimeWorkMode).
+			Msg("runtime request has no work_mode; defaulting by channel")
+	}
+	params["work_mode"] = runtimeWorkMode
+	writeRequestParams(req, params)
+
+	// 4. 解析 mode 并回写 canonical
+	mode, subMode = ApplyResolvedModeToRequest(req, runtimeWorkMode)
+	agentMode := mode
+	if agentMode == "auto_harness" {
+		agentMode = "agent"
+	}
+
+	// 5. 工程身份（agent/code 的 projectless 轮次不回落 cwd）
+	projectDir := ResolveRequestProjectDir(req, agentMode != "agent" && agentMode != "code")
+
+	// 6. 取 agent（⤵️ 上游为 get_agent_for_request 原子准入 + 预热等待）
+	agent, err = mgr.GetChatAgent(ctx, channelID, agentMode, subMode, projectDir)
+	if err != nil {
+		return "", "", nil, err
+	}
+	return mode, subMode, agent, nil
 }

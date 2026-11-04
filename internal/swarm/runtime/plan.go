@@ -59,8 +59,9 @@ type PlanStateResult struct {
 	Query string
 }
 
-// PlanStateStore plan 状态读写（由 adapter 适配 DeepAgent 状态机）。
-type PlanStateStore interface {
+// PlanStateAccessor plan 状态读写入口（运行期由调用方传入，对齐上游
+// ensure_state(request, mode, sub_mode, agent) 的 agent 参数）。
+type PlanStateAccessor interface {
 	// LoadPlanState 读取会话 plan 状态
 	LoadPlanState(ctx context.Context, sessionID string) (PlanState, error)
 	// SavePlanState 保存会话 plan 状态
@@ -75,8 +76,6 @@ type PlanStateStore interface {
 //
 // Python: jiuwenswarm/runtime/plan.py PlanModeController
 type PlanModeController struct {
-	// store plan 状态读写
-	store PlanStateStore
 	// mu 保护记忆与锁表
 	mu sync.Mutex
 	// locks 会话级串行锁
@@ -115,10 +114,11 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewPlanModeController 创建控制器。
-func NewPlanModeController(store PlanStateStore) *PlanModeController {
+// NewPlanModeController 创建控制器（不绑定状态存储）。
+//
+// Python: PlanModeController.__init__（无参）
+func NewPlanModeController() *PlanModeController {
 	return &PlanModeController{
-		store:  store,
 		locks:  map[string]*sync.Mutex{},
 		active: map[string]struct{}{},
 		exited: map[string]struct{}{},
@@ -129,7 +129,7 @@ func NewPlanModeController(store PlanStateStore) *PlanModeController {
 //
 // Python: PlanModeController.ensure_state（runtime/plan.py:176-259）。
 // 返回的 Query 是可能被前置提醒改写后的文本，调用方需回写请求。
-func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest) (PlanStateResult, error) {
+func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest, acc PlanStateAccessor) (PlanStateResult, error) {
 	res := PlanStateResult{Query: req.Query}
 	resolved := ResolveRequestRuntimeMode(req.Mode, req.SubMode)
 	if resolved.IsTeam || req.SessionID == "" {
@@ -156,7 +156,7 @@ func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest) (
 	lock.Lock()
 	defer lock.Unlock()
 
-	st, err := c.store.LoadPlanState(ctx, req.SessionID)
+	st, err := acc.LoadPlanState(ctx, req.SessionID)
 	if err != nil {
 		return res, err
 	}
@@ -172,13 +172,13 @@ func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest) (
 		case c.isExited(req.SessionID):
 			// 退出记忆是一次性令牌：命中即消费
 			c.clearExited(req.SessionID)
-			return c.blockEntry(ctx, req.SessionID, resolved, res)
+			return c.blockEntry(ctx, req.SessionID, resolved, res, acc)
 		case st.PlanSlug != "":
-			return c.blockEntry(ctx, req.SessionID, resolved, res)
+			return c.blockEntry(ctx, req.SessionID, resolved, res, acc)
 		}
 	}
 
-	if err := c.store.SwitchPlanMode(ctx, req.SessionID, target); err != nil {
+	if err := acc.SwitchPlanMode(ctx, req.SessionID, target); err != nil {
 		return res, err
 	}
 	if previous == modePlan && target == modeNormal {
@@ -192,12 +192,12 @@ func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest) (
 		// Python: 进入后清空残留 plan_slug（阻断分支之外的兜底）
 		if st.PlanSlug != "" {
 			st.PlanSlug = ""
-			if err := c.store.SavePlanState(ctx, req.SessionID, st); err != nil {
+			if err := acc.SavePlanState(ctx, req.SessionID, st); err != nil {
 				return res, err
 			}
 		}
 	}
-	if err := c.store.CommitSession(ctx, req.SessionID); err != nil {
+	if err := acc.CommitSession(ctx, req.SessionID); err != nil {
 		return res, err
 	}
 	if res.Entered {
@@ -222,12 +222,12 @@ func (c *PlanModeController) IsExited(sessionID string) bool { return c.isExited
 // CheckPostProcessExit 执行后检测工具触发的退出。
 //
 // Python: PlanModeController.check_post_process_exit
-func (c *PlanModeController) CheckPostProcessExit(ctx context.Context, req PlanRequest) ([]ControlEvent, error) {
+func (c *PlanModeController) CheckPostProcessExit(ctx context.Context, req PlanRequest, acc PlanStateAccessor) ([]ControlEvent, error) {
 	resolved := ResolveRequestRuntimeMode(req.Mode, req.SubMode)
 	if req.SessionID == "" || resolved.IsTeam || !resolved.IsPlan {
 		return nil, nil
 	}
-	st, err := c.store.LoadPlanState(ctx, req.SessionID)
+	st, err := acc.LoadPlanState(ctx, req.SessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -272,6 +272,19 @@ func (c *PlanModeController) IsActive(sessionID string) bool {
 	return ok
 }
 
+// ActiveSessions 返回当前处于 plan 的会话集合快照。
+//
+// Python: jiuwenswarm/server/agent_ws_server.py get_plan_active_sessions()
+func (c *PlanModeController) ActiveSessions() map[string]struct{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[string]struct{}, len(c.active))
+	for sid := range c.active {
+		out[sid] = struct{}{}
+	}
+	return out
+}
+
 // SessionMessageRequiresQueue 判断会话是否要求跨会话消息排队。
 //
 // 上游 runtime/plan.py:252-261 的步骤（Go 侧尚无 cross-session 消息链路，暂不实现）：
@@ -306,16 +319,16 @@ func isSingleAgentMode(canonical string) bool {
 // blockEntry 阻断进入：清 slug、发退出事件。
 //
 // Python: ensure_state 的 blocked 分支——此时状态已是 normal，只需清 slug 并下发退出事件。
-func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, resolved ResolvedMode, res PlanStateResult) (PlanStateResult, error) {
-	st, err := c.store.LoadPlanState(ctx, sessionID)
+func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, resolved ResolvedMode, res PlanStateResult, acc PlanStateAccessor) (PlanStateResult, error) {
+	st, err := acc.LoadPlanState(ctx, sessionID)
 	if err != nil {
 		return res, err
 	}
 	st.PlanSlug = ""
-	if err := c.store.SavePlanState(ctx, sessionID, st); err != nil {
+	if err := acc.SavePlanState(ctx, sessionID, st); err != nil {
 		return res, err
 	}
-	if err := c.store.CommitSession(ctx, sessionID); err != nil {
+	if err := acc.CommitSession(ctx, sessionID); err != nil {
 		return res, err
 	}
 	res.Entered = false

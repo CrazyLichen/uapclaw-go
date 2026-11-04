@@ -1119,7 +1119,7 @@ func TestPlanControllerEnsureState(t *testing.T) {
 	}
 
 	// 空 sessionID / 非 plan 请求：不应写状态（EnsureState 内部守卫）
-	if _, err := d.PlanController().EnsureState(context.Background(), swruntime.PlanRequest{}); err != nil {
+	if _, err := d.PlanController().EnsureState(context.Background(), swruntime.PlanRequest{}, d.PlanStateAccessor()); err != nil {
 		t.Fatalf("EnsureState 空请求: %v", err)
 	}
 
@@ -1131,7 +1131,7 @@ func TestPlanControllerEnsureState(t *testing.T) {
 		Mode:        "agent.work.plan",
 		ReqMethod:   "chat.send",
 		EntrySource: swruntime.PlanEntrySourcePlanToggle,
-	})
+	}, d.PlanStateAccessor())
 	if err != nil {
 		t.Fatalf("EnsureState: %v", err)
 	}

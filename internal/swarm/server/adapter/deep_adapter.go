@@ -275,10 +275,6 @@ type DeepAdapter struct {
 	sendPushFunc func(ctx context.Context, msg map[string]any) error
 	// planController 计划模式状态机，对齐 Python runtime/plan.py
 	planController *swruntime.PlanModeController
-	// controlMu 保护 controlEvents
-	controlMu sync.Mutex
-	// controlEvents 会话级控制事件缓冲（server 层 Drain 下发）
-	controlEvents map[string][]swruntime.ControlEvent
 }
 
 // ApprovalAnswer 审批回答条目，从前端 WebSocket 消息解析。
@@ -402,8 +398,7 @@ func NewDeepAdapter() *DeepAdapter {
 	d.defaultModelConfigReader = d.defaultModelClientConfigFromConfigBase
 	// 计划模式控制器：状态存储绑定到本适配器实例
 	// Python: self._plan_state_controller = PlanModeController(...)
-	d.planController = swruntime.NewPlanModeController(&planStateStore{d: d})
-	d.controlEvents = map[string][]swruntime.ControlEvent{}
+	d.planController = swruntime.NewPlanModeController()
 	return d
 }
 
@@ -892,8 +887,8 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		sessionID = *req.SessionID
 	}
 
-	// 步骤 5-6: 提取 query/mode（inputs 兜底，见 resolveRequestQuery）
-	query := resolveRequestQuery(params, inputs)
+	// 步骤 5-6: 提取 query/mode（query 唯一事实源为 params）
+	query := paramsString(params, "query", "")
 	mode := paramsString(params, "mode", "agent")
 
 	// 步骤 7-8: slash 命令处理
@@ -973,15 +968,8 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		ProjectDir:      projectDir,
 	})
 
-	// 步骤 17.5: plan 状态机（对齐 Python runtime/plan.py ensure_state）
-	// 放在 update_runtime_config 之后：此时 agent 已 Configure，状态读写不会提前创建会话。
-	// 进入 plan 时本轮 query 被前置约束提醒，原 query 存 params 键可还原。
-	query = d.ensurePlanState(ctx, req, sessionID, mode, query, params)
-	if query != "" && inputs != nil {
-		inputs["query"] = query
-	}
-	// 执行后检查工具触发的 plan 退出（对齐 Python check_post_process_exit）
-	defer d.checkPlanPostProcess(ctx, req, sessionID, mode, params)
+	// 步骤 17.5（已上移）：plan 状态同步归 AgentRuntime（对齐上游 runtime/service.py），
+	// adapter 不再读写 plan 状态，也不再用原始 query 覆盖 inputs["query"]（信封由 BuildInputs 生成）。
 
 	// 步骤 18: Runner.run_agent(agent=d.instance, inputs=inputs)
 	// Python: result = await Runner.run_agent(agent=self._instance, inputs=inputs)
@@ -1077,8 +1065,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		sessionID = *req.SessionID
 	}
 
-	// 步骤 5-6: 提取 query/mode（inputs 兜底，见 resolveRequestQuery）
-	query := resolveRequestQuery(params, inputs)
+	// 步骤 5-6: 提取 mode（query 由 AgentRuntime 在 params 上改写，adapter 不再读写）
 	mode := paramsString(params, "mode", "agent")
 
 	// 步骤 7: team 模式分流
@@ -1229,13 +1216,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		ProjectDir:      streamProjectDir,
 	})
 
-	// 步骤 17.5: plan 状态机（对齐 Python runtime/plan.py ensure_state）
-	// 放在 update_runtime_config 之后：此时 agent 已 Configure，状态读写不会提前创建会话。
-	query = d.ensurePlanState(ctx, req, sessionID, mode, query, params)
-	if query != "" && inputs != nil {
-		inputs["query"] = query
-	}
-	defer d.checkPlanPostProcess(ctx, req, sessionID, mode, params)
+	// 步骤 17.5（已上移）：同非流式路径，plan 同步与 query 改写由 AgentRuntime 负责。
 
 	// 步骤 18: Runner.RunAgentStreaming(agent=d.instance, inputs=inputs)
 	// Python: async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):
@@ -2887,25 +2868,6 @@ func paramsString(params map[string]any, key string, defaultVal string) string {
 		return defaultVal
 	}
 	return s
-}
-
-// resolveRequestQuery 取本轮用户输入的 query，params 优先、inputs 回落。
-//
-// Python 侧 query 只存在于 request.params（ensure_state 读 request.params["query"]）。
-// Go 的进程内调用方允许只把 query 放 inputs（Runner 入口），二者必须等价：否则
-// 进入 plan 的那一轮 ensurePlanState 会拿到空串，把「提醒 + 原 query」改写成
-// 只有提醒，用户原文整条丢失。
-func resolveRequestQuery(params, inputs map[string]any) string {
-	if q := paramsString(params, "query", ""); q != "" {
-		return q
-	}
-	if inputs == nil {
-		return ""
-	}
-	if q, ok := inputs["query"].(string); ok {
-		return q
-	}
-	return ""
 }
 
 // parseStringSlice 从 params 中取字符串切片值。

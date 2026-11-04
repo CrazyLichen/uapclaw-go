@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeStore 内存实现 PlanStateStore。
+// fakeStore 内存实现 PlanStateAccessor。
 type fakeStore struct {
 	modes    map[string]string
 	slugs    map[string]string
@@ -40,12 +40,35 @@ func (f *fakeStore) SwitchPlanMode(_ context.Context, sid, mode string) error {
 // CommitSession 提交
 func (f *fakeStore) CommitSession(_ context.Context, _ string) error { f.commits++; return nil }
 
+// testController 把 fakeStore 绑定为运行期 accessor，保持用例只传 (ctx, req)。
+//
+// 生产路径由 AgentRuntime 传入真实 accessor（对齐上游 ensure_state(..., agent)）。
+type testController struct {
+	*PlanModeController
+	acc PlanStateAccessor
+}
+
+// newTestController 创建带测试 accessor 的控制器。
+func newTestController(store PlanStateAccessor) *testController {
+	return &testController{PlanModeController: NewPlanModeController(), acc: store}
+}
+
+// EnsureState 两参形态（测试专用，透传 acc）。
+func (t *testController) EnsureState(ctx context.Context, req PlanRequest) (PlanStateResult, error) {
+	return t.PlanModeController.EnsureState(ctx, req, t.acc)
+}
+
+// CheckPostProcessExit 两参形态（测试专用，透传 acc）。
+func (t *testController) CheckPostProcessExit(ctx context.Context, req PlanRequest) ([]ControlEvent, error) {
+	return t.PlanModeController.CheckPostProcessExit(ctx, req, t.acc)
+}
+
 // TestEnsureState_显式进入并改写query 验证 plan_toggle 进入、清记忆、前置提醒。
 //
 // Python: ensure_state 的进入分支 + inject_activation_reminder
 func TestEnsureState_显式进入并改写query(t *testing.T) {
 	store := newFakeStore()
-	c := NewPlanModeController(store)
+	c := newTestController(store)
 	c.markExited("s1")
 
 	res, err := c.EnsureState(context.Background(), PlanRequest{
@@ -67,7 +90,7 @@ func TestEnsureState_显式进入并改写query(t *testing.T) {
 func TestEnsureState_非显式进入被阻断(t *testing.T) {
 	store := newFakeStore()
 	store.modes["s1"] = "normal"
-	c := NewPlanModeController(store)
+	c := newTestController(store)
 	c.markExited("s1")
 
 	res, err := c.EnsureState(context.Background(), PlanRequest{
@@ -88,7 +111,7 @@ func TestEnsureState_planSlug阻断(t *testing.T) {
 	store := newFakeStore()
 	store.modes["s1"] = "normal"
 	store.slugs["s1"] = "old-plan"
-	c := NewPlanModeController(store)
+	c := newTestController(store)
 
 	res, err := c.EnsureState(context.Background(), PlanRequest{
 		SessionID: "s1", Mode: "agent.work.plan", ReqMethod: "chat.send",
@@ -104,7 +127,7 @@ func TestEnsureState_planSlug阻断(t *testing.T) {
 func TestEnsureState_退出计划并发事件(t *testing.T) {
 	store := newFakeStore()
 	store.modes["s1"] = "plan"
-	c := NewPlanModeController(store)
+	c := newTestController(store)
 	c.markActive("s1")
 
 	res, err := c.EnsureState(context.Background(), PlanRequest{
@@ -128,7 +151,7 @@ func TestEnsureState_跳过矩阵(t *testing.T) {
 	}
 	for _, req := range requests {
 		store := newFakeStore()
-		c := NewPlanModeController(store)
+		c := newTestController(store)
 		_, err := c.EnsureState(context.Background(), req)
 		require.NoError(t, err)
 		require.Empty(t, store.switches, "请求 %+v 不应写状态", req)
@@ -141,7 +164,7 @@ func TestEnsureState_跳过矩阵(t *testing.T) {
 func TestEnsureState_同模式幂等(t *testing.T) {
 	store := newFakeStore()
 	store.modes["s1"] = "plan"
-	c := NewPlanModeController(store)
+	c := newTestController(store)
 
 	res, err := c.EnsureState(context.Background(), PlanRequest{
 		SessionID: "s1", Mode: "agent.work.plan", ReqMethod: "chat.send", Query: "继续",
@@ -158,7 +181,7 @@ func TestEnsureState_同模式幂等(t *testing.T) {
 // Python: target==normal 且非 code-single 且 may_hold_state()==false → 直接返回
 func TestEnsureState_正常轮次无状态时跳过(t *testing.T) {
 	store := newFakeStore()
-	c := NewPlanModeController(store)
+	c := newTestController(store)
 
 	_, err := c.EnsureState(context.Background(), PlanRequest{
 		SessionID: "s1", Mode: "agent.work.normal", ReqMethod: "chat.send",
@@ -172,7 +195,7 @@ func TestEnsureState_正常轮次无状态时跳过(t *testing.T) {
 func TestEnsureState_previousSessionMode允许持有状态(t *testing.T) {
 	store := newFakeStore()
 	store.modes["s1"] = "plan"
-	c := NewPlanModeController(store)
+	c := newTestController(store)
 
 	res, err := c.EnsureState(context.Background(), PlanRequest{
 		SessionID: "s1", Mode: "agent.work.normal", ReqMethod: "chat.send",
@@ -189,7 +212,7 @@ func TestEnsureState_previousSessionMode允许持有状态(t *testing.T) {
 func TestCheckPostProcessExit(t *testing.T) {
 	store := newFakeStore()
 	store.modes["s1"] = "normal"
-	c := NewPlanModeController(store)
+	c := newTestController(store)
 	c.markActive("s1")
 
 	events, err := c.CheckPostProcessExit(context.Background(), PlanRequest{
@@ -206,7 +229,7 @@ func TestCheckPostProcessExit(t *testing.T) {
 func TestCheckPostProcessExit_仍在plan时不发事件(t *testing.T) {
 	store := newFakeStore()
 	store.modes["s1"] = "plan"
-	c := NewPlanModeController(store)
+	c := newTestController(store)
 
 	events, err := c.CheckPostProcessExit(context.Background(), PlanRequest{
 		SessionID: "s1", Mode: "agent.work.plan", ReqMethod: "chat.send",
@@ -217,7 +240,7 @@ func TestCheckPostProcessExit_仍在plan时不发事件(t *testing.T) {
 
 // TestResetSession 验证删除会话清空两条记忆与锁。
 func TestResetSession(t *testing.T) {
-	c := NewPlanModeController(newFakeStore())
+	c := NewPlanModeController()
 	c.markActive("s1")
 	c.markExited("s1")
 	_ = c.LockFor("s1")
@@ -233,7 +256,7 @@ func TestResetSession(t *testing.T) {
 
 // TestSessionMessageRequiresQueue 占位实现必须透传 false。
 func TestSessionMessageRequiresQueue(t *testing.T) {
-	c := NewPlanModeController(newFakeStore())
+	c := NewPlanModeController()
 	c.markActive("s1")
 	require.False(t, c.SessionMessageRequiresQueue("s1"))
 }
