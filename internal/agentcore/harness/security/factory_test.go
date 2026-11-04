@@ -15,6 +15,8 @@ import (
 
 // fakeRail 用于测试的假 Rail，实现 agentinterfaces.AgentRail
 type fakeRail struct {
+	// BaseRail 嵌入提供接口默认实现（含 AfterReactIteration 等可选钩子）
+	agentinterfaces.BaseRail
 	engine *PermissionEngine
 	host   *ToolPermissionHost
 }
@@ -60,10 +62,6 @@ func (f *fakeRail) OnToolException(_ context.Context, _ *agentinterfaces.AgentCa
 	return nil
 }
 
-// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
-func (f *fakeRail) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
-	return nil
-}
 func (f *fakeRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return nil
 }

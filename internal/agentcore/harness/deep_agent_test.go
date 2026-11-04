@@ -51,8 +51,8 @@ type fakeSessionFacade struct {
 
 // fakeAgentRail 用于测试的模拟 Rail
 type fakeAgentRail struct {
-	// base 嵌入 BaseRail 获得默认实现
-	base agentinterfaces.BaseRail
+	// BaseRail 嵌入提供接口默认实现（含 AfterReactIteration 等可选钩子）
+	agentinterfaces.BaseRail
 	// initCalled Init 是否被调用
 	initCalled bool
 	// uninitCalled Uninit 是否被调用
@@ -63,20 +63,20 @@ type fakeAgentRail struct {
 
 // fakeAgentRailWithType 带独立类型的模拟 Rail（用于 FindRailsByType 测试）
 type fakeAgentRailWithType struct {
-	// base 嵌入 BaseRail 获得默认实现
-	base agentinterfaces.BaseRail
+	// BaseRail 嵌入提供接口默认实现（含 AfterReactIteration 等可选钩子）
+	agentinterfaces.BaseRail
 }
 
 // fakeAgentRailWithType2 另一个独立类型的模拟 Rail
 type fakeAgentRailWithType2 struct {
-	// base 嵌入 BaseRail 获得默认实现
-	base agentinterfaces.BaseRail
+	// BaseRail 嵌入提供接口默认实现（含 AfterReactIteration 等可选钩子）
+	agentinterfaces.BaseRail
 }
 
 // fakeAgentRailWithCallbacks 带回调声明的模拟 Rail
 type fakeAgentRailWithCallbacks struct {
-	// base 嵌入 BaseRail 获得默认实现
-	base agentinterfaces.BaseRail
+	// BaseRail 嵌入提供接口默认实现（含 AfterReactIteration 等可选钩子）
+	agentinterfaces.BaseRail
 	// events 声明的回调事件列表
 	events []agentinterfaces.AgentCallbackEvent
 }
@@ -2555,7 +2555,7 @@ func (r *fakeAgentRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb
 
 // Priority 实现 AgentRail 接口
 func (r *fakeAgentRail) Priority() int {
-	return r.base.Priority()
+	return r.BaseRail.Priority()
 }
 
 // BeforeInvoke 实现 AgentRail 接口
@@ -2612,11 +2612,6 @@ func (r *fakeAgentRail) OnToolException(_ context.Context, _ *agentinterfaces.Ag
 	return nil
 }
 
-// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
-func (r *fakeAgentRail) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
-	return nil
-}
-
 // 确认 fakeAgentRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*fakeAgentRail)(nil)
 
@@ -2629,7 +2624,6 @@ func (r *fakeAgentRailWithType) Init(_ context.Context, _ agentinterfaces.BaseAg
 func (r *fakeAgentRailWithType) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
 
 // Priority 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) Priority() int { return r.base.Priority() }
 
 // BeforeInvoke 实现 AgentRail 接口
 func (r *fakeAgentRailWithType) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
@@ -2681,11 +2675,6 @@ func (r *fakeAgentRailWithType) OnToolException(_ context.Context, _ *agentinter
 	return nil
 }
 
-// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
-func (r *fakeAgentRailWithType) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
-	return nil
-}
-
 // GetCallbacks 实现 AgentRail 接口
 func (r *fakeAgentRailWithType) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return nil
@@ -2707,7 +2696,6 @@ func (r *fakeAgentRailWithType2) Init(_ context.Context, _ agentinterfaces.BaseA
 func (r *fakeAgentRailWithType2) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
 
 // Priority 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) Priority() int { return r.base.Priority() }
 
 // BeforeInvoke 实现 AgentRail 接口
 func (r *fakeAgentRailWithType2) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
@@ -2759,11 +2747,6 @@ func (r *fakeAgentRailWithType2) OnToolException(_ context.Context, _ *agentinte
 	return nil
 }
 
-// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
-func (r *fakeAgentRailWithType2) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
-	return nil
-}
-
 // GetCallbacks 实现 AgentRail 接口
 func (r *fakeAgentRailWithType2) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return nil
@@ -2785,7 +2768,6 @@ func (r *fakeAgentRailWithCallbacks) Init(_ context.Context, _ agentinterfaces.B
 func (r *fakeAgentRailWithCallbacks) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
 
 // Priority 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) Priority() int { return r.base.Priority() }
 
 // BeforeInvoke 实现 AgentRail 接口
 func (r *fakeAgentRailWithCallbacks) OnUserMessage(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
@@ -2838,11 +2820,6 @@ func (r *fakeAgentRailWithCallbacks) AfterToolCall(_ context.Context, _ *agentin
 
 // OnToolException 实现 AgentRail 接口
 func (r *fakeAgentRailWithCallbacks) OnToolException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
-	return nil
-}
-
-// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
-func (r *fakeAgentRailWithCallbacks) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
@@ -4191,4 +4168,38 @@ func TestOuterRoundsExceededResult(t *testing.T) {
 		t.Fatalf("stop_reason=%v，期望 MaxOuterRounds", result["stop_reason"])
 	}
 	assert.Contains(t, result["output"], "maximum number of outer rounds (50)")
+}
+
+// TestDeepAgent_registerRailSelective_迭代与用户消息桥接 验证内层触发的事件被桥接到内层 manager
+//
+// after_react_iteration 与 on_user_message 都由内层 ReActAgent 触发；若注册到外层
+// DeepAgent，rail 永远收不到（上游 _BRIDGE_EVENTS 把这两条显式列为桥接事件）。
+func TestDeepAgent_registerRailSelective_迭代与用户消息桥接(t *testing.T) {
+	d := newTestDeepAgent()
+
+	cfg := schema.NewDeepAgentConfig()
+	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
+		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
+	}
+
+	fr := &fakeAgentRailWithCallbacks{
+		events: []agentinterfaces.AgentCallbackEvent{
+			agentinterfaces.CallbackAfterReactIteration,
+			agentinterfaces.CallbackOnUserMessage,
+		},
+	}
+	if err := d.RegisterRail(context.Background(), fr); err != nil {
+		t.Fatalf("RegisterRail 返回错误: %v", err)
+	}
+
+	inner := d.reactAgent.CallbackManager()
+	if !inner.HasHooks(agentinterfaces.CallbackAfterReactIteration) {
+		t.Fatal("after_react_iteration 应桥接到内层 ReActAgent（否则 rail 收不到）")
+	}
+	if !inner.HasHooks(agentinterfaces.CallbackOnUserMessage) {
+		t.Fatal("on_user_message 应桥接到内层 ReActAgent")
+	}
+	if d.callbackManager.HasHooks(agentinterfaces.CallbackAfterReactIteration) {
+		t.Fatal("after_react_iteration 不应注册到外层 DeepAgent")
+	}
 }

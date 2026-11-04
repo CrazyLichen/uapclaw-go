@@ -183,14 +183,20 @@ var (
 		agentinterfaces.CallbackBeforeToolCall:   true,
 		agentinterfaces.CallbackAfterToolCall:    true,
 		agentinterfaces.CallbackOnToolException:  true,
+		// 下列三个事件由**内层** ReActAgent 触发，必须注册到内层 callback manager，
+		// 否则经 DeepAgent.register_rail 注册的 rail 永远收不到（会落到「unknown
+		// rail event」兜底分支被注册到外层）。
+		// Python: _BRIDGE_EVENTS 的 AFTER_REACT_ITERATION / ON_USER_MESSAGE /
+		// BEFORE_STEERING_DRAIN 三条，各带同样理由的注释。
+		agentinterfaces.CallbackAfterReactIteration: true,
+		agentinterfaces.CallbackOnUserMessage:       true,
 	}
 
 	// outerOnlyEvents 仅注册到外层 DeepAgent 的事件集合
 	// Python: _OUTER_ONLY_EVENTS
 	outerOnlyEvents = map[agentinterfaces.AgentCallbackEvent]bool{
-		agentinterfaces.CallbackBeforeInvoke:  true,
-		agentinterfaces.CallbackAfterInvoke:   true,
-		agentinterfaces.CallbackOnUserMessage: true,
+		agentinterfaces.CallbackBeforeInvoke: true,
+		agentinterfaces.CallbackAfterInvoke:  true,
 	}
 
 	// deepEvents DeepAgent 扩展事件集合
