@@ -799,7 +799,7 @@ func stringMapToAny(m map[string]string) map[string]any {
 }
 
 // resolveModeFromRequest 从请求中解析 mode。
-// Python: AgentManager.process_message 中 params.get("mode", "agent.work.plan")
+// Python: AgentManager._resolve_request_owner_mode 中 params.get("mode", "agent")
 func resolveModeFromRequest(request *schema.AgentRequest) (mode, subMode string) {
 	if request.Params == nil {
 		return "agent", ""
@@ -810,7 +810,8 @@ func resolveModeFromRequest(request *schema.AgentRequest) (mode, subMode string)
 	}
 	modeFull, _ := params["mode"].(string)
 	if modeFull == "" {
-		modeFull = "agent.work.plan"
+		// 上游默认 "agent"（normal），plan 是会话运行期状态而非默认档
+		modeFull = "agent"
 	}
 	// 新三段 canonical 短路（对齐 Python resolve_new_canonical_mode）：
 	// environment/state 已内嵌，按第一个点拆会得到 subMode="work.plan"。

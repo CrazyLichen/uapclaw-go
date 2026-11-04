@@ -469,11 +469,11 @@ func TestResolveModeFromRequest(t *testing.T) {
 		wantSub  string
 	}{
 		{"nil params", "", "agent", ""},
-		{"empty json", `{}`, "agent", "plan"}, // mode 为空时默认 "agent.work.plan"
+		{"empty json", `{}`, "agent", ""}, // mode 为空时默认 "agent"（normal）
 		{"agent.work.plan", `{"mode": "agent.work.plan"}`, "agent", "plan"},
 		{"agent.code.normal", `{"mode": "agent.code.normal"}`, "code", "normal"},
 		{"code only", `{"mode": "code"}`, "code", "normal"},
-		{"empty mode defaults to agent.plan", `{"mode": ""}`, "agent", "plan"}, // 空 mode 默认 "agent.work.plan"
+		{"empty mode defaults to agent", `{"mode": ""}`, "agent", ""}, // 空 mode 默认 "agent"（normal）
 	}
 
 	for _, tt := range tests {

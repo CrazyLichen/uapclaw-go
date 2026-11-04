@@ -119,6 +119,10 @@ func TestAppendHistoryRecord_ChannelMetadata(t *testing.T) {
 	// 用 UAPCLAW_DATA_DIR + ResetCache 隔离数据根（与本包既有测试一致的路径覆盖方式；
 	// workspace.SetUserHome 不足以覆盖 AgentSessionsDir 的解析结果）
 	origDataDir, hadDataDir := os.LookupEnv(pathutil.EnvDataDir)
+	// 先建临时目录：t.Cleanup 是 LIFO，TempDir 的 RemoveAll 要先注册，
+	// 后注册的 flush 清理才会在它之前执行（否则异步队列可能在 RemoveAll
+	// 之后写文件，报 "directory not empty" 假红）。
+	dataDir := t.TempDir()
 	t.Cleanup(func() {
 		session.FlushMetadataQueue()
 		session.FlushHistoryQueue()
@@ -129,7 +133,7 @@ func TestAppendHistoryRecord_ChannelMetadata(t *testing.T) {
 		}
 		pathutil.ResetCache()
 	})
-	if err := os.Setenv(pathutil.EnvDataDir, t.TempDir()); err != nil {
+	if err := os.Setenv(pathutil.EnvDataDir, dataDir); err != nil {
 		t.Fatalf("设置数据目录失败: %v", err)
 	}
 	pathutil.ResetCache()

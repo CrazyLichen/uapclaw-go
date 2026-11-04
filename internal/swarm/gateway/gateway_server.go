@@ -667,8 +667,10 @@ func (s *GatewayServer) handleRawMessage(ctx context.Context, ws *websocket.Conn
 		}
 		s.clientsMu.Unlock()
 
-		// default_mode：tui → code.normal，其余 → agent.plan（对齐 L645）
-		defaultMode := schema.ModeAgentWorkPlan
+		// default_mode：tui → code.normal，其余 → agent（normal）
+		// （对齐 app_gateway.py:1650 `Mode.CODE_NORMAL if channel_id == "tui" else Mode.AGENT`；
+		// plan 是会话运行期状态，不是网关默认档）
+		defaultMode := schema.ModeAgentWorkNormal
 		if route.ChannelID == "tui" {
 			defaultMode = schema.ModeCodeNormal
 		}

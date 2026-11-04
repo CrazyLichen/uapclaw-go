@@ -668,7 +668,7 @@ func embeddedRailTypes(t reflect.Type) []reflect.Type {
 		if cur == nil {
 			return
 		}
-		for cur.Kind() == reflect.Ptr {
+		for cur.Kind() == reflect.Pointer {
 			cur = cur.Elem()
 		}
 		if cur.Kind() != reflect.Struct || seen[cur] {
@@ -681,8 +681,8 @@ func embeddedRailTypes(t reflect.Type) []reflect.Type {
 				continue
 			}
 			fieldType := field.Type
-			if fieldType.Kind() != reflect.Ptr {
-				fieldType = reflect.PtrTo(fieldType)
+			if fieldType.Kind() != reflect.Pointer {
+				fieldType = reflect.PointerTo(fieldType)
 			}
 			result = append(result, fieldType)
 			walk(fieldType)
