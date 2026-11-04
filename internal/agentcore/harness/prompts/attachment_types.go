@@ -113,8 +113,6 @@ const (
 
 	// MetadataKeyMessageOrigin 消息来源标记（对齐上游 _openjiuwen_message_origin）
 	MetadataKeyMessageOrigin = "_openjiuwen_message_origin"
-	// MetadataKeyMessageSourceKind 消息来源细分（对齐上游 _openjiuwen_message_source_kind）
-	MetadataKeyMessageSourceKind = "_openjiuwen_message_source_kind"
 	// MessageOriginExternalUser 外部真实用户输入
 	MessageOriginExternalUser = "external_user"
 )

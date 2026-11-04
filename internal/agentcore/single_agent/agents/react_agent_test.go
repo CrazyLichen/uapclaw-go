@@ -2980,3 +2980,60 @@ func TestReActAgent_skillSection_nilSkillUtil(t *testing.T) {
 		agent.updateSkillPromptBuilderSection(context.Background())
 	})
 }
+
+// ──────────────────────────── A-07: 空回答重试一次再失败 ────────────────────────────
+
+// TestReActAgent_emptyResponse_retryThenAnswer 验证空回答重试一次后返回真实答案
+func TestReActAgent_emptyResponse_retryThenAnswer(t *testing.T) {
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{
+		llmschema.NewAssistantMessage(""),
+		llmschema.NewAssistantMessage("真实答案"),
+	}, 3)
+	fmc := &fakeModelContext{}
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	cbc, sess := newLoopCBC(t, agent, "empty_retry_sess")
+
+	result, err := agent.reactLoop(context.Background(), cbc, sess, fmc, 0)
+	if err != nil {
+		t.Fatalf("reactLoop 返回错误: %v", err)
+	}
+	assert.Equal(t, "真实答案", result["output"])
+	assert.Equal(t, "answer", result["result_type"])
+	assert.True(t, fmc.containsContent("[EMPTY_RESPONSE]"), "重试前应注入 [EMPTY_RESPONSE] 提示")
+}
+
+// TestReActAgent_emptyResponse_twoEmptiesFail 验证连续两空返回 error
+func TestReActAgent_emptyResponse_twoEmptiesFail(t *testing.T) {
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{
+		llmschema.NewAssistantMessage(""),
+		llmschema.NewAssistantMessage("   \n"),
+	}, 3)
+	fmc := &fakeModelContext{}
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	cbc, sess := newLoopCBC(t, agent, "empty_fail_sess")
+
+	result, err := agent.reactLoop(context.Background(), cbc, sess, fmc, 0)
+	if err != nil {
+		t.Fatalf("reactLoop 返回错误: %v", err)
+	}
+	assert.Equal(t, "error", result["result_type"])
+	assert.Equal(t, emptyResponseMsg, result["output"])
+	assert.Equal(t, false, result["reasoning_present"])
+}
+
+// TestReActAgent_emptyResponse_lastIterationNoRetry 验证最后一轮不重试直接失败
+func TestReActAgent_emptyResponse_lastIterationNoRetry(t *testing.T) {
+	agent := newAgentWithScriptedModel([]*llmschema.AssistantMessage{
+		llmschema.NewAssistantMessage(""),
+	}, 1)
+	fmc := &fakeModelContext{}
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	cbc, sess := newLoopCBC(t, agent, "empty_last_sess")
+
+	result, err := agent.reactLoop(context.Background(), cbc, sess, fmc, 0)
+	if err != nil {
+		t.Fatalf("reactLoop 返回错误: %v", err)
+	}
+	assert.Equal(t, "error", result["result_type"])
+	assert.False(t, fmc.containsContent("[EMPTY_RESPONSE]"), "最后一轮不应注入重试提示")
+}

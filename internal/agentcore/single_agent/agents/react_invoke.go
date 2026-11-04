@@ -25,6 +25,18 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+const (
+	// emptyResponseMsg 空响应最终错误的用户可见文案
+	// Python: EMPTY_RESPONSE_MSG (react_agent.py L125)
+	emptyResponseMsg = "模型未返回有效内容（空响应），请重试或检查上下文。"
+	// emptyResponseMaxRetries 空响应重试次数上限
+	// Python: EMPTY_RESPONSE_MAX_RETRIES (react_agent.py L126)
+	emptyResponseMaxRetries = 1
+	// emptyResponseNotice 重试前注入的提示消息
+	// Python: _EMPTY_RESPONSE_NOTICE (react_agent.py L127-130)
+	emptyResponseNotice = "[EMPTY_RESPONSE] The previous turn had no content and no tool_calls. Reply with user-visible content or a tool call."
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -672,6 +684,8 @@ func (a *ReActAgent) reactLoop(
 	}
 
 	var iterResult map[string]any
+	// emptyResponseRetries 空回答重试计数（循环级，跨轮累加而非每轮重置）
+	emptyResponseRetries := 0
 	for iteration := startIteration; iteration < maxIter; iteration++ {
 		// Python: L1355: 迭代计数日志
 		logger.Info(logComponent).
@@ -719,9 +733,49 @@ func (a *ReActAgent) reactLoop(
 				continue
 			}
 			content := ""
+			finishReason := ""
+			reasoningPresent := false
 			if aiMsg != nil {
 				content = aiMsg.Content.Text()
+				finishReason = aiMsg.FinishReason
+				reasoningPresent = aiMsg.ReasoningContent != ""
 			}
+
+			// 空回答（无正文且无 tool_calls）：重试一次把提示塞进上下文；仍空则判失败。
+			// 上游旧行为会把空响应当作成功的 "answer"，导致本轮以空答案结束。
+			// Python: react_agent.py L3167-3196
+			if strings.TrimSpace(content) == "" {
+				if emptyResponseRetries < emptyResponseMaxRetries && iteration+1 < maxIter {
+					emptyResponseRetries++
+					if modelCtx != nil {
+						_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{
+							llmschema.NewUserMessage(emptyResponseNotice, llmschema.WithMetadata(map[string]any{
+								llmschema.MetadataKeyMessageSourceKind: "empty_response",
+							})),
+						})
+					}
+					logger.Info(logComponent).
+						Int("retry", emptyResponseRetries).
+						Int("max_retries", emptyResponseMaxRetries).
+						Int("iteration", iteration+1).
+						Bool("reasoning_present", reasoningPresent).
+						Msg("empty no-tool turn, retrying")
+					continue
+				}
+				a.saveContexts(ctx, sess)
+				shownFinishReason := finishReason
+				if shownFinishReason == "" {
+					shownFinishReason = "null"
+				}
+				iterResult = map[string]any{
+					"output":            emptyResponseMsg,
+					"result_type":       "error",
+					"finish_reason":     shownFinishReason,
+					"reasoning_present": reasoningPresent,
+				}
+				break
+			}
+
 			a.saveContexts(ctx, sess)
 			iterResult = map[string]any{"output": content, "result_type": "answer"}
 			break

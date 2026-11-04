@@ -115,6 +115,13 @@ const (
 	RoleTypeTool
 )
 
+const (
+	// MetadataKeyMessageSourceKind 消息来源细分（query / steering / empty_response / attachment 等）
+	//
+	// Python: OPENJIUWEN_MESSAGE_SOURCE_KIND_METADATA (core/foundation/llm/schema/message.py:12)
+	MetadataKeyMessageSourceKind = "_openjiuwen_message_source_kind"
+)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var roleTypeStrings = [...]string{
