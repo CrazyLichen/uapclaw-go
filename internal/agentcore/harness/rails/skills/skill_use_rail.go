@@ -56,6 +56,12 @@ type SkillUseRail struct {
 	disabledSkills map[string]struct{}
 	// evolutionStore 可选演进存储
 	evolutionStore *checkpointing.EvolutionStore
+	// maxSkills 技能提示词最大技能数（0 表示不限）
+	maxSkills int
+	// maxTotalChars 技能提示词字符总预算（0 表示不限）
+	maxTotalChars int
+	// currentQuery 当前轮用户查询（用于技能预算的关键词排序）
+	currentQuery string
 
 	// ── 运行时状态 ──
 	// skills 当前已加载技能列表
@@ -145,6 +151,16 @@ func NewSkillUseRail(skillsDir []string, opts ...SkillUseRailOption) *SkillUseRa
 	}
 
 	return r
+}
+
+// WithSkillBudget 设置技能提示词预算。
+//
+// Python: SkillUseRail(max_skills=..., max_total_chars=...)
+func WithSkillBudget(maxSkills, maxTotalChars int) SkillUseRailOption {
+	return func(r *SkillUseRail) {
+		r.maxSkills = maxSkills
+		r.maxTotalChars = maxTotalChars
+	}
 }
 
 // WithSkillMode 设置技能模式
@@ -354,6 +370,12 @@ func (r *SkillUseRail) BeforeInvoke(ctx context.Context, _ *agentinterfaces.Agen
 // BeforeModelCall 构建 skills section 并注入 systemPromptBuilder。
 // Python: SkillUseRail.before_model_call() L359-372
 func (r *SkillUseRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	// 记录当前查询：技能预算按与查询的关键词重叠度排序
+	if cbc != nil {
+		if inputs, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs); ok && inputs.Query != nil {
+			r.currentQuery = inputs.Query.PlainText()
+		}
+	}
 	if r.systemPromptBuilder == nil {
 		return nil
 	}
@@ -746,8 +768,10 @@ func (r *SkillUseRail) buildSkillsSection() *saprompt.PromptSection {
 // buildAllModeSection 构建 all 模式 PromptSection。
 // Python: SkillUseRail._build_skills_section() all 分支
 func (r *SkillUseRail) buildAllModeSection() *saprompt.PromptSection {
+	// 预算裁剪：按与当前查询的关键词重叠度排序后整块丢弃低排名技能
+	skills := applySkillBudget(r.skills, r.currentQuery, r.maxSkills, r.maxTotalChars)
 	var bodyLines []string
-	for idx, skill := range r.skills {
+	for idx, skill := range skills {
 		bodyLines = append(bodyLines, sections.BuildSkillLine(
 			idx,
 			skill.Name,
@@ -859,4 +883,68 @@ func normalizeSkillDirs(skillsDir []string) []string {
 	}
 
 	return normalized
+}
+
+// applySkillBudget 按与当前 query 的关键词重叠度排序，并按数量/字符预算整块丢弃技能。
+//
+// 丢弃以「整个技能」为粒度，绝不截断到半截文本——半截说明会让模型误用技能。
+//
+// Python: SkillUseRail._apply_skill_budget()
+func applySkillBudget(skills []*skillpkg.Skill, query string, maxSkills, maxTotalChars int) []*skillpkg.Skill {
+	if maxSkills <= 0 && maxTotalChars <= 0 {
+		return skills
+	}
+	queryWords := skillKeywordSet(query)
+	ranked := make([]*skillpkg.Skill, len(skills))
+	copy(ranked, skills)
+	sort.SliceStable(ranked, func(i, j int) bool {
+		return skillOverlapScore(ranked[i], queryWords) > skillOverlapScore(ranked[j], queryWords)
+	})
+
+	out := make([]*skillpkg.Skill, 0, len(ranked))
+	totalChars := 0
+	for _, s := range ranked {
+		if s == nil {
+			continue
+		}
+		if maxSkills > 0 && len(out) >= maxSkills {
+			break
+		}
+		size := len([]rune(s.Name)) + len([]rune(s.Description))
+		if maxTotalChars > 0 && totalChars+size > maxTotalChars {
+			break
+		}
+		out = append(out, s)
+		totalChars += size
+	}
+	return out
+}
+
+// skillKeywordSet 由 query 构建小写关键词集合（长度 >= 2 的字母数字/中文片段）。
+func skillKeywordSet(text string) map[string]bool {
+	set := make(map[string]bool)
+	for _, w := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		isAlphaNum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		isCJK := r >= 0x4e00 && r <= 0x9fff
+		return !isAlphaNum && !isCJK
+	}) {
+		if len([]rune(w)) >= 2 {
+			set[w] = true
+		}
+	}
+	return set
+}
+
+// skillOverlapScore 计算技能与 query 的关键词重叠数。
+func skillOverlapScore(s *skillpkg.Skill, queryWords map[string]bool) int {
+	if s == nil {
+		return 0
+	}
+	score := 0
+	for w := range skillKeywordSet(s.Name + " " + s.Description) {
+		if queryWords[w] {
+			score++
+		}
+	}
+	return score
 }

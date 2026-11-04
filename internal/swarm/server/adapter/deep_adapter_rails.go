@@ -299,12 +299,27 @@ func (d *DeepAdapter) buildSkillRailWithIncludeTools(includeTools bool) (rail sa
 			enableImageMultimodal = b
 		}
 	}
+	// 技能提示词预算（可选，缺省不限）
+	// Python: skill_budget_max_skills / skill_budget_max_total_chars
+	maxSkills := 0
+	if v, ok := d.instanceOverrides["skill_budget_max_skills"]; ok {
+		if n, isInt := v.(int); isInt {
+			maxSkills = n
+		}
+	}
+	maxTotalChars := 0
+	if v, ok := d.instanceOverrides["skill_budget_max_total_chars"]; ok {
+		if n, isInt := v.(int); isInt {
+			maxTotalChars = n
+		}
+	}
 	rail = skillrails.NewSkillUseRail(
 		[]string{skillsDir},
 		skillrails.WithSkillMode(skillMode),
 		skillrails.WithIncludeTools(includeTools),
 		skillrails.WithEnableImageMultimodal(enableImageMultimodal),
 		skillrails.WithDisabledSkills(disabled),
+		skillrails.WithSkillBudget(maxSkills, maxTotalChars),
 	)
 	logger.Info(logComponent).
 		Str("skill_mode", skillMode).

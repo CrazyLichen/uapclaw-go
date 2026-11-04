@@ -938,3 +938,34 @@ func TestWithEnableImageMultimodal(t *testing.T) {
 	assert.NotNil(t, r.enableImageMultimodal)
 	assert.True(t, *r.enableImageMultimodal)
 }
+
+// ──────────────────────────── A-08-4: 技能提示词预算 ────────────────────────────
+
+// TestApplySkillBudget 验证按关键词重叠排序并按数量/字符预算整块丢弃
+func TestApplySkillBudget(t *testing.T) {
+	skills := []*skillpkg.Skill{
+		{Name: "excel", Description: "spreadsheet helper"},
+		{Name: "unrelated", Description: "cooking recipes"},
+		{Name: "pdf-reader", Description: "read pdf files"},
+	}
+
+	got := applySkillBudget(skills, "read a pdf file", 2, 0)
+	if len(got) != 2 {
+		t.Fatalf("maxSkills=2 时返回 %d 个技能", len(got))
+	}
+	if got[0].Name != "pdf-reader" {
+		t.Fatalf("与 query 重叠度最高的技能应排首位，实际 %q", got[0].Name)
+	}
+
+	// 字符预算生效：预算极小则几乎全丢，但不得截断单个技能内容
+	got = applySkillBudget(skills, "read a pdf file", 0, 10)
+	if len(got) > 2 {
+		t.Fatalf("字符预算应限制技能数，实际 %d", len(got))
+	}
+
+	// 不限预算时原样返回
+	got = applySkillBudget(skills, "read a pdf file", 0, 0)
+	if len(got) != 3 {
+		t.Fatalf("未配置预算时应返回全部技能，实际 %d", len(got))
+	}
+}
