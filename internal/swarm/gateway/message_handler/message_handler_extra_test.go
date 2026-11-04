@@ -23,7 +23,7 @@ func TestSetOutboundPipeline(t *testing.T) {
 	require.NotNil(t, mh.getConfigRaw)
 	require.NotNil(t, mh.updateChannelInConfig)
 
-	mh.updateChannelInConfig("feishu_test", map[string]any{"default_mode": "code.normal"})
+	mh.updateChannelInConfig("feishu_test", map[string]any{"default_mode": "agent.code.normal"})
 	assert.Equal(t, "feishu_test", called)
 }
 
@@ -35,7 +35,7 @@ func TestGetChannelDefaultState_读配置(t *testing.T) {
 		return map[string]any{"channels": map[string]any{
 			"feishu_test": map[string]any{
 				"default_session_id": "sid-from-config",
-				"default_mode":       "code.normal",
+				"default_mode":       "agent.code.normal",
 			},
 		}}
 	}, func(string, map[string]any) {})
@@ -74,7 +74,7 @@ func TestSaveChannelStateToConfig(t *testing.T) {
 	mh.saveChannelStateToConfig("feishu_test")
 	require.NotNil(t, gotUpdate)
 	assert.Equal(t, "sid-1", gotUpdate["default_session_id"])
-	assert.Equal(t, "code.plan", gotUpdate["default_mode"])
+	assert.Equal(t, "agent.code.plan", gotUpdate["default_mode"])
 }
 
 // TestChannelModeString_非法值 覆盖未知模式的兜底（对齐 ParseChannelMode 的 agent.plan 回落）。

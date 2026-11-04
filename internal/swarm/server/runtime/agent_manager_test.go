@@ -251,7 +251,7 @@ func TestAgentManager_ProcessMessageStream_GetAgent委托(t *testing.T) {
 	req := &schema.AgentRequest{
 		RequestID: "test-req-2",
 		ChannelID: "web",
-		Params:    []byte(`{"mode": "code.normal"}`),
+		Params:    []byte(`{"mode": "agent.code.normal"}`),
 		IsStream:  true,
 	}
 
@@ -471,8 +471,8 @@ func TestResolveModeFromRequest(t *testing.T) {
 		{"nil params", "", "agent", ""},
 		{"empty json", `{}`, "agent", "plan"}, // mode 为空时默认 "agent.work.plan"
 		{"agent.work.plan", `{"mode": "agent.work.plan"}`, "agent", "plan"},
-		{"code.normal", `{"mode": "code.normal"}`, "code", "normal"},
-		{"code only", `{"mode": "code"}`, "code", ""},
+		{"agent.code.normal", `{"mode": "agent.code.normal"}`, "code", "normal"},
+		{"code only", `{"mode": "code"}`, "code", "normal"},
 		{"empty mode defaults to agent.plan", `{"mode": ""}`, "agent", "plan"}, // 空 mode 默认 "agent.work.plan"
 	}
 

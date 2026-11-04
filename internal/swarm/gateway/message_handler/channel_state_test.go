@@ -18,9 +18,9 @@ func TestChannelModeString(t *testing.T) {
 	tests := map[ChannelMode]string{
 		ChannelModeAgentWorkPlan:   "agent.work.plan",
 		ChannelModeAgentWorkNormal: "agent.work.normal",
-		ChannelModeCodePlan:        "code.plan",
-		ChannelModeCodeNormal:      "code.normal",
-		ChannelModeCodeTeam:        "code.team",
+		ChannelModeCodePlan:        "agent.code.plan",
+		ChannelModeCodeNormal:      "agent.code.normal",
+		ChannelModeCodeTeam:        "team.code.normal",
 		ChannelModeTeam:            "team",
 	}
 	for mode, expected := range tests {
@@ -35,9 +35,9 @@ func TestParseChannelMode(t *testing.T) {
 	tests := map[string]ChannelMode{
 		"agent.work.plan":   ChannelModeAgentWorkPlan,
 		"agent.work.normal": ChannelModeAgentWorkNormal,
-		"code.plan":         ChannelModeCodePlan,
-		"code.normal":       ChannelModeCodeNormal,
-		"code.team":         ChannelModeCodeTeam,
+		"agent.code.plan":   ChannelModeCodePlan,
+		"agent.code.normal": ChannelModeCodeNormal,
+		"team.code.normal":  ChannelModeCodeTeam,
 		"team":              ChannelModeTeam,
 		// 大小写无关
 		"AGENT.PLAN":  ChannelModeAgentWorkPlan,
@@ -57,7 +57,7 @@ func TestParseChannelMode(t *testing.T) {
 
 // TestIsValidChannelMode 测试 ChannelMode 有效性判断
 func TestIsValidChannelMode(t *testing.T) {
-	valid := []string{"agent.work.plan", "agent.work.normal", "code.plan", "code.normal", "code.team", "team"}
+	valid := []string{"agent.work.plan", "agent.work.normal", "agent.code.plan", "agent.code.normal", "team.code.normal", "team"}
 	for _, v := range valid {
 		if !IsValidChannelMode(v) {
 			t.Errorf("%q 应为合法 ChannelMode", v)
@@ -120,7 +120,7 @@ func TestApplyChannelState_modeSetdefault(t *testing.T) {
 	mh := createTestMessageHandler()
 
 	// 创建消息，params 中已有 mode
-	msg := schema.NewReqMessage("feishu_test", "", schema.ReqMethodChatSend, json.RawMessage(`{"mode":"code.plan"}`))
+	msg := schema.NewReqMessage("feishu_test", "", schema.ReqMethodChatSend, json.RawMessage(`{"mode":"agent.code.plan"}`))
 
 	mh.ApplyChannelState(msg)
 
@@ -129,7 +129,7 @@ func TestApplyChannelState_modeSetdefault(t *testing.T) {
 	if err := json.Unmarshal(msg.Params, &params); err != nil {
 		t.Fatalf("解析 params 失败：%v", err)
 	}
-	if mode := params["mode"]; mode != "code.plan" {
+	if mode := params["mode"]; mode != "agent.code.plan" {
 		t.Errorf("已有 mode 不应被覆盖，实际：%v", mode)
 	}
 }

@@ -1061,7 +1061,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 	// 步骤 7: team 模式分流
 	// Python: if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
-	if mode == "team" || mode == "team.plan" || mode == "code.team" {
+	if schema.IsTeamMode(mode) {
 		// S-07: 对齐 Python L4549-4561——team 分支 6 步运行时设置
 		// （原实现直接进 processTeamMessageStream，模型不切换、language/channel 不解析、
 		//   prompt_rail 不配置、runtime_state.yaml 不更新）

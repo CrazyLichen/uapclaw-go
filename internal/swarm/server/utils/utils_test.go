@@ -172,7 +172,7 @@ func TestIsTeamParams_mode为teamPlan(t *testing.T) {
 }
 
 func TestIsTeamParams_mode为codeTeam(t *testing.T) {
-	result := IsTeamParams(map[string]any{"mode": "code.team"})
+	result := IsTeamParams(map[string]any{"mode": "team.code.normal"})
 	if !result {
 		t.Error("mode=code.team 应返回 true")
 	}

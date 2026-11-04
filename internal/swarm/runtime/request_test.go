@@ -17,12 +17,12 @@ func TestResolveRequestRuntimeMode(t *testing.T) {
 	}{
 		{"三段 plan", "agent.work.plan", "", "agent.work.plan", true, false},
 		{"三段 normal", "agent.work.normal", "", "agent.work.normal", false, false},
-		{"code plan", "code.plan", "", "code.plan", true, false},
-		{"code team", "code.team", "", "code.team", false, true},
+		{"code plan", "agent.code.plan", "", "agent.code.plan", true, false},
+		{"code team", "team.code.normal", "", "team.code.normal", false, true},
 		{"裸 subMode plan", "", "plan", "agent.work.plan", true, false},
 		{"裸 subMode normal", "", "normal", "agent.work.normal", false, false},
-		{"旧两段串失效", "agent." + "plan", "", "agent.work.normal", false, false},
-		{"team 族", "team", "", "team", false, true},
+		{"旧两段串 canonicalize", "agent." + "plan", "", "agent.work.plan", true, false},
+		{"team 族", "team", "", "team.work.normal", false, true},
 		{"team 带子模式", "team.work.plan", "", "team.work.plan", true, true},
 	}
 	for _, c := range cases {

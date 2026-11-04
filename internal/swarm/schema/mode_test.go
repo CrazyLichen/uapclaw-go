@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-// TestAllModes_数量 验证 AllModes 返回全部 6 个枚举值
+// TestAllModes_数量 验证 AllModes 返回全部 10 个枚举值（4 agent + 4 team + design + 裸 team）
 func TestAllModes_数量(t *testing.T) {
 	modes := AllModes()
-	if len(modes) != 6 {
-		t.Fatalf("AllModes() 返回 %d 个模式，want 6", len(modes))
+	if len(modes) != 10 {
+		t.Fatalf("AllModes() 返回 %d 个模式，want 10", len(modes))
 	}
 }
 
@@ -55,10 +55,10 @@ func TestParseMode_合法值(t *testing.T) {
 	}{
 		{"agent.work.plan", ModeAgentWorkPlan},
 		{"agent.work.normal", ModeAgentWorkNormal},
-		{"code.plan", ModeCodePlan},
-		{"code.normal", ModeCodeNormal},
-		{"code.team", ModeCodeTeam},
-		{"team", ModeTeam},
+		{"agent.code.plan", ModeCodePlan},
+		{"agent.code.normal", ModeCodeNormal},
+		{"team.code.normal", ModeCodeTeam},
+		{"team", ModeTeamWorkNormal},
 	}
 	for _, tt := range tests {
 		got := ParseMode(tt.input, ModeAgentWorkPlan)
@@ -78,7 +78,7 @@ func TestParseMode_大小写与空白(t *testing.T) {
 		{"AGENT.WORK.NORMAL", ModeAgentWorkNormal},
 		{" CODE.NORMAL ", ModeCodeNormal},
 		{"CODE.TEAM", ModeCodeTeam},
-		{"  TEAM  ", ModeTeam},
+		{"  TEAM  ", ModeTeamWorkNormal},
 	}
 	for _, tt := range tests {
 		got := ParseMode(tt.input, ModeAgentWorkPlan)
@@ -139,9 +139,9 @@ func TestIsValidMode(t *testing.T) {
 	validModes := []string{
 		"agent.work.plan",
 		"agent.work.normal",
-		"code.plan",
-		"code.normal",
-		"code.team",
+		"agent.code.plan",
+		"agent.code.normal",
+		"team.code.normal",
 		"team",
 	}
 	for _, v := range validModes {
@@ -154,8 +154,7 @@ func TestIsValidMode(t *testing.T) {
 	invalidModes := []string{
 		"",
 		"invalid",
-		"AGENT.PLAN",
-		" agent.plan ",
+		"nonexistent.mode",
 		"nonexistent",
 	}
 	for _, v := range invalidModes {
@@ -170,8 +169,8 @@ func TestMode_String(t *testing.T) {
 	if got := ModeAgentWorkPlan.String(); got != "agent.work.plan" {
 		t.Errorf("ModeAgentWorkPlan.String() = %q, want %q", got, "agent.work.plan")
 	}
-	if got := ModeCodeNormal.String(); got != "code.normal" {
-		t.Errorf("ModeCodeNormal.String() = %q, want %q", got, "code.normal")
+	if got := ModeCodeNormal.String(); got != "agent.code.normal" {
+		t.Errorf("ModeCodeNormal.String() = %q, want %q", got, "agent.code.normal")
 	}
 	if got := ModeTeam.String(); got != "team" {
 		t.Errorf("ModeTeam.String() = %q, want %q", got, "team")
@@ -196,9 +195,9 @@ func TestMode_ToRuntimeMode(t *testing.T) {
 	}{
 		{ModeAgentWorkPlan, "agent.work.plan"},
 		{ModeAgentWorkNormal, "agent.work.normal"},
-		{ModeCodePlan, "code.plan"},
-		{ModeCodeNormal, "code.normal"},
-		{ModeCodeTeam, "code.team"},
+		{ModeCodePlan, "agent.code.plan"},
+		{ModeCodeNormal, "agent.code.normal"},
+		{ModeCodeTeam, "team.code.normal"},
 		{ModeTeam, "team"},
 	}
 	for _, tt := range tests {
@@ -244,9 +243,9 @@ func TestMode常量值与Python对齐(t *testing.T) {
 	}{
 		{ModeAgentWorkPlan, "agent.work.plan"},
 		{ModeAgentWorkNormal, "agent.work.normal"},
-		{ModeCodePlan, "code.plan"},
-		{ModeCodeNormal, "code.normal"},
-		{ModeCodeTeam, "code.team"},
+		{ModeCodePlan, "agent.code.plan"},
+		{ModeCodeNormal, "agent.code.normal"},
+		{ModeCodeTeam, "team.code.normal"},
 		{ModeTeam, "team"},
 	}
 	for _, tt := range tests {
@@ -256,6 +255,6 @@ func TestMode常量值与Python对齐(t *testing.T) {
 	}
 	// 验证测试覆盖全部 6 个常量
 	if len(tests) != 6 {
-		t.Errorf("Python 对齐测试覆盖 %d 个常量，want 6", len(tests))
+		t.Errorf("Python 对齐测试覆盖 %d 个常量，want 10", len(tests))
 	}
 }

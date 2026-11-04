@@ -78,7 +78,7 @@ func TestApplyResolvedModeToRequest(t *testing.T) {
 		},
 		{
 			name:     "code.normal模式",
-			params:   json.RawMessage(`{"mode": "code.normal"}`),
+			params:   json.RawMessage(`{"mode": "agent.code.normal"}`),
 			wantMode: "code",
 			wantSub:  "normal",
 		},

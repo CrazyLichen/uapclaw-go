@@ -148,9 +148,9 @@ var modeSubcommandStrings = map[ModeSubcommand]string{
 	ModeTeam:            "team",
 	ModeAgentWorkPlan:   "agent.work.plan",
 	ModeAgentWorkNormal: "agent.work.normal",
-	ModeCodePlan:        "code.plan",
-	ModeCodeNormal:      "code.normal",
-	ModeCodeTeam:        "code.team",
+	ModeCodePlan:        "agent.code.plan",
+	ModeCodeNormal:      "agent.code.normal",
+	ModeCodeTeam:        "team.code.normal",
 }
 
 var switchSubcommandStrings = map[SwitchSubcommand]string{

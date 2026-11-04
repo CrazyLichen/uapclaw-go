@@ -70,7 +70,7 @@ func TestParseChannelControlText_Mode(t *testing.T) {
 	validModes := []string{
 		"/mode agent", "/mode code", "/mode team",
 		"/mode agent.work.plan", "/mode agent.work.normal",
-		"/mode code.plan", "/mode code.normal", "/mode code.team",
+		"/mode agent.code.plan", "/mode agent.code.normal", "/mode team.code.normal",
 	}
 	for _, text := range validModes {
 		result := ParseChannelControlText(text)
@@ -376,7 +376,7 @@ func TestValidModeLines(t *testing.T) {
 	expected := []string{
 		"/mode agent", "/mode code", "/mode team",
 		"/mode agent.work.plan", "/mode agent.work.normal",
-		"/mode code.plan", "/mode code.normal", "/mode code.team",
+		"/mode agent.code.plan", "/mode agent.code.normal", "/mode team.code.normal",
 	}
 	for _, line := range expected {
 		if !ValidModeLines[line] {
@@ -454,8 +454,8 @@ func TestModeSubcommandString(t *testing.T) {
 	if got := ModeSubcommandString(ModeAgent); got != "agent" {
 		t.Errorf("ModeSubcommandString(ModeAgent) = %q, want %q", got, "agent")
 	}
-	if got := ModeSubcommandString(ModeCodePlan); got != "code.plan" {
-		t.Errorf("ModeSubcommandString(ModeCodePlan) = %q, want %q", got, "code.plan")
+	if got := ModeSubcommandString(ModeCodePlan); got != "agent.code.plan" {
+		t.Errorf("ModeSubcommandString(ModeCodePlan) = %q, want %q", got, "agent.code.plan")
 	}
 }
 

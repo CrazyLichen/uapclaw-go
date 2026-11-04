@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"strings"
-
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -21,14 +19,6 @@ var metadataChatIDKeys = []string{
 	"wecom_chat_id",
 	"dingtalk_chat_id",
 	"xiaoyi_session_id",
-}
-
-// teamModeValues IsTeamParams 匹配的 mode 值集合。
-// Python: is_team_params 中的 {"team", "team.plan", "code.team"}
-var teamModeValues = map[string]bool{
-	"team":      true,
-	"team.plan": true,
-	"code.team": true,
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -76,8 +66,8 @@ func IsTeamParams(params map[string]any) bool {
 	if !ok {
 		return false
 	}
-	normalized := strings.TrimSpace(strings.ToLower(modeStr))
-	return teamModeValues[normalized]
+	// Python: is_team_params 中的 {"team", "team.plan", "code.team"}（canonicalize 后判定）
+	return schema.IsTeamMode(modeStr)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

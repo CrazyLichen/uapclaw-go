@@ -267,7 +267,7 @@ func ResolveModeMemory(mode string, cfg map[string]any) map[string]any {
 
 	var node map[string]any
 	switch {
-	case schema.IsCodeProfileMode(token):
+	case schema.IsCodeProfileMode(token) || token == "code" || strings.HasPrefix(token, "code."):
 		node, _ = modesCfg["code"].(map[string]any)
 	case schema.IsAgentMode(token):
 		node, _ = modesCfg["agent"].(map[string]any)

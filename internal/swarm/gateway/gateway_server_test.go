@@ -174,7 +174,7 @@ func Test端到端_握手ack与req转发(t *testing.T) {
 		"params": map[string]any{
 			"session_id": "s1",
 			"cwd":        "/tmp",
-			"mode":       "code.normal",
+			"mode":       "agent.code.normal",
 			"query":      "hi",
 		},
 	}
@@ -203,7 +203,7 @@ func Test端到端_握手ack与req转发(t *testing.T) {
 	// params 中 mode 已 setdefault
 	var params map[string]any
 	require.NoError(t, json.Unmarshal(got.Params, &params))
-	assert.Equal(t, "code.normal", params["mode"])
+	assert.Equal(t, "agent.code.normal", params["mode"])
 }
 
 func Test端到端_sessionID回退reqID(t *testing.T) {

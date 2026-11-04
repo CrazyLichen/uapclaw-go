@@ -96,7 +96,7 @@ func TestTenantAgentPool_ProcessMessage_请求字段日志(t *testing.T) {
 	req := &schema.AgentRequest{
 		RequestID: "req-log-1",
 		ChannelID: "ch-log-1",
-		Params:    []byte(`{"mode": "code.normal"}`),
+		Params:    []byte(`{"mode": "agent.code.normal"}`),
 	}
 
 	mode, subMode := resolveModeFromRequest(req)

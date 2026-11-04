@@ -114,7 +114,7 @@ func TestEnsureState_退出计划并发事件(t *testing.T) {
 // TestEnsureState_跳过矩阵 验证 team/非 chat 方法/中断续答/非单 agent 不写状态。
 func TestEnsureState_跳过矩阵(t *testing.T) {
 	requests := []PlanRequest{
-		{SessionID: "s1", Mode: "code.team", ReqMethod: "chat.send"},
+		{SessionID: "s1", Mode: "team.code.normal", ReqMethod: "chat.send"},
 		{SessionID: "s1", Mode: "team", ReqMethod: "chat.send"},
 		{SessionID: "s1", Mode: "agent.work.plan", ReqMethod: "session.list"},
 		{SessionID: "s1", Mode: "agent.work.plan", ReqMethod: "chat.send", IsInterruptResume: true},

@@ -35,7 +35,7 @@ func TestResolveProjectDir_三级回退(t *testing.T) {
 func TestMemoryMode_缺省为plan(t *testing.T) {
 	require.Equal(t, "plan", memoryMode(map[string]any{}))
 	require.Equal(t, "plan", memoryMode(map[string]any{"mode": ""}))
-	require.Equal(t, "code.normal", memoryMode(map[string]any{"mode": "code.normal"}))
+	require.Equal(t, "agent.code.normal", memoryMode(map[string]any{"mode": "agent.code.normal"}))
 }
 
 // TestWithProjectDir_不修改入参且命中时注入副本 对齐 Python {**params, ...}。
@@ -104,12 +104,12 @@ func TestMemoryLocalHandler_成功帧透传payload(t *testing.T) {
 
 	sender := &fakeResSender{}
 	handler := memoryLocalHandler(sender, "memory.list")
-	require.NoError(t, handler(nil, "req-1", map[string]any{"mode": "code.normal", "cwd": "/proj"}, "sess_1"))
+	require.NoError(t, handler(nil, "req-1", map[string]any{"mode": "agent.code.normal", "cwd": "/proj"}, "sess_1"))
 
 	frame := sender.lastFrame(t)
 	require.True(t, frame.ok)
 	require.Empty(t, frame.errMsg)
-	require.Equal(t, "code.normal", frame.payload["echo_mode"])
+	require.Equal(t, "agent.code.normal", frame.payload["echo_mode"])
 	require.Equal(t, "/proj", frame.payload["echo_project"], "list 应注入 project_dir")
 }
 

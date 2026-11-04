@@ -69,12 +69,12 @@ func TestCodeAdapter_CreateInstance_mode存储(t *testing.T) {
 	c := NewCodeAdapter()
 	ctx := t.Context()
 
-	err := c.CreateInstance(ctx, nil, "code.plan", "plan")
+	err := c.CreateInstance(ctx, nil, "agent.code.plan", "plan")
 	if err != nil {
 		t.Fatalf("CreateInstance error: %v", err)
 	}
-	if c.deep.mode != "code.plan" {
-		t.Errorf("mode = %q, want %q", c.deep.mode, "code.plan")
+	if c.deep.mode != "agent.code.plan" {
+		t.Errorf("mode = %q, want %q", c.deep.mode, "agent.code.plan")
 	}
 	if c.deep.subMode != "plan" {
 		t.Errorf("subMode = %q, want %q", c.deep.subMode, "plan")
@@ -463,11 +463,11 @@ func TestProjectMemoryAdditionalDirectories_三级回退(t *testing.T) {
 }
 
 // TestUpdateRailsForMode_不因canonicalMode回落Deep分支 回归（S-01）：
-// 真实入参是 "code.normal"/"code.plan"/"code.team"（handle_envelope 回写 canonical
+// 真实入参是 "agent.code.normal"/"agent.code.plan"/"team.code.normal"（handle_envelope 回写 canonical
 // 串），旧门控 `mode != "code"` 恒真，会把 code 会话交给 DeepAdapter 的 agent 分支
 // 处理（卸载 SubagentRail 且永不重建）。此处以「Deep 分支产生的 rail 字段」为观察点。
 func TestUpdateRailsForMode_不因canonicalMode回落Deep分支(t *testing.T) {
-	for _, mode := range []string{"code", "code.normal", "code.plan", "code.team"} {
+	for _, mode := range []string{"code", "agent.code.normal", "agent.code.plan", "team.code.normal"} {
 		c := NewCodeAdapter()
 		c.updateRailsForMode(context.Background(), mode)
 		if c.deep.contextProcessorRail != nil {

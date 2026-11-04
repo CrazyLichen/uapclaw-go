@@ -266,7 +266,7 @@ func TestUapClaw_GenerateRecap(t *testing.T) {
 
 func TestUapClaw_SwitchMode(t *testing.T) {
 	uc := NewUapClaw()
-	err := uc.SwitchMode(context.Background(), "sess-1", "code.normal")
+	err := uc.SwitchMode(context.Background(), "sess-1", "agent.code.normal")
 	assert.NoError(t, err)
 }
 
@@ -403,7 +403,7 @@ func TestExtractStringWithFallback(t *testing.T) {
 func TestAdapterModeForRequest(t *testing.T) {
 	uc := NewUapClaw()
 	// 有 mode 参数
-	params := map[string]any{"mode": "code.normal"}
+	params := map[string]any{"mode": "agent.code.normal"}
 	paramsJSON, _ := json.Marshal(params)
 	req := schema.NewAgentRequest("r1", "web", schema.ReqMethodChatSend, paramsJSON)
 	assert.Equal(t, "code", uc.adapterModeForRequest(req))

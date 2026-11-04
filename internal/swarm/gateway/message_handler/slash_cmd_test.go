@@ -269,7 +269,7 @@ func TestModeChangeCancelAndNotice(t *testing.T) {
 
 	parsed := command_parser.ParsedChannelControl{
 		Action:         command_parser.ActionModeOK,
-		ModeSubcommand: "code.normal",
+		ModeSubcommand: "agent.code.normal",
 	}
 	mh.modeChangeCancelAndNotice(context.Background(), msg, parsed)
 
@@ -290,9 +290,9 @@ func TestModeChange_一级映射(t *testing.T) {
 		{subcommand: "team", wantMode: ChannelModeTeam},
 		{subcommand: "agent.work.plan", wantMode: ChannelModeAgentWorkPlan},
 		{subcommand: "agent.work.normal", wantMode: ChannelModeAgentWorkNormal},
-		{subcommand: "code.plan", wantMode: ChannelModeCodePlan},
-		{subcommand: "code.normal", wantMode: ChannelModeCodeNormal},
-		{subcommand: "code.team", wantMode: ChannelModeCodeTeam},
+		{subcommand: "agent.code.plan", wantMode: ChannelModeCodePlan},
+		{subcommand: "agent.code.normal", wantMode: ChannelModeCodeNormal},
+		{subcommand: "team.code.normal", wantMode: ChannelModeCodeTeam},
 	}
 	for _, tt := range tests {
 		t.Run(tt.subcommand, func(t *testing.T) {

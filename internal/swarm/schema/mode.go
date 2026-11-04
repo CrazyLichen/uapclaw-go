@@ -28,20 +28,34 @@ const (
 	ModeAgentWorkPlan Mode = "agent.work.plan"
 	// ModeAgentWorkNormal agent-work 常态模式
 	ModeAgentWorkNormal Mode = "agent.work.normal"
-
-	// ─── code 族 ───
-
-	// ModeCodePlan 代码规划模式
-	ModeCodePlan Mode = "code.plan"
-	// ModeCodeNormal 代码常态模式
-	ModeCodeNormal Mode = "code.normal"
-	// ModeCodeTeam 代码团队模式
-	ModeCodeTeam Mode = "code.team"
+	// ModeAgentCodePlan agent-code 规划模式
+	ModeAgentCodePlan Mode = "agent.code.plan"
+	// ModeAgentCodeNormal agent-code 常态模式
+	ModeAgentCodeNormal Mode = "agent.code.normal"
 
 	// ─── team 族 ───
 
-	// ModeTeam 团队运行时模式
+	// ModeTeamWorkNormal 团队 work 常态模式
+	ModeTeamWorkNormal Mode = "team.work.normal"
+	// ModeTeamWorkPlan 团队 work 规划模式
+	ModeTeamWorkPlan Mode = "team.work.plan"
+	// ModeTeamCodeNormal 团队 code 常态模式
+	ModeTeamCodeNormal Mode = "team.code.normal"
+	// ModeTeamCodePlan 团队 code 规划模式
+	ModeTeamCodePlan Mode = "team.code.plan"
+	// ModeTeamDesign 设计师团队模式
+	ModeTeamDesign Mode = "team.design"
+	// ModeTeam 裸 team（等价 team.work.normal 的旧形式）
 	ModeTeam Mode = "team"
+
+	// ─── code 族（保留历史常量名，值已升级为新 canonical） ───
+
+	// ModeCodePlan code 规划模式（权威值 agent.code.plan）
+	ModeCodePlan Mode = "agent.code.plan"
+	// ModeCodeNormal code 常态模式（权威值 agent.code.normal）
+	ModeCodeNormal Mode = "agent.code.normal"
+	// ModeCodeTeam code 团队模式（权威值 team.code.normal）
+	ModeCodeTeam Mode = "team.code.normal"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -100,7 +114,7 @@ var singleAgentCanonicalModes = map[string]struct{}{
 //
 // Python: mode_matrix.is_plan_mode
 func IsPlanMode(mode string) bool {
-	_, ok := planCanonicalModes[strings.ToLower(strings.TrimSpace(mode))]
+	_, ok := planCanonicalModes[CanonicalizeMode(mode)]
 	return ok
 }
 
@@ -108,7 +122,7 @@ func IsPlanMode(mode string) bool {
 //
 // Python: mode_matrix.is_team_mode
 func IsTeamMode(mode string) bool {
-	_, ok := teamCanonicalModes[strings.ToLower(strings.TrimSpace(mode))]
+	_, ok := teamCanonicalModes[CanonicalizeMode(mode)]
 	return ok
 }
 
@@ -118,22 +132,16 @@ func IsTeamMode(mode string) bool {
 // agent.code.normal）再查表；本项目 code 族暂保留 code.* 形式（见 spec §5.1 偏差说明），
 // 因此额外接受 code profile 族的模式。
 func IsSingleAgentMode(mode string) bool {
-	t := strings.ToLower(strings.TrimSpace(mode))
-	if _, ok := singleAgentCanonicalModes[t]; ok {
-		return true
-	}
-	return IsCodeProfileMode(t)
+	_, ok := singleAgentCanonicalModes[CanonicalizeMode(mode)]
+	return ok
 }
 
 // IsCodeProfileMode 判断是否 code profile 族（旧 code.* 与新 agent.code.* / team.code.*）。
 //
 // Python: gateway/common/mode_matrix.py is_code_profile_mode
 func IsCodeProfileMode(mode string) bool {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "code", "code.normal", "code.plan", "code.team",
-		"team.plan.code",
-		"agent.code.normal", "agent.code.plan",
-		"team.code.normal", "team.code.plan":
+	switch CanonicalizeMode(mode) {
+	case "agent.code.normal", "agent.code.plan", "team.code.normal", "team.code.plan":
 		return true
 	default:
 		return false
@@ -144,12 +152,14 @@ func IsCodeProfileMode(mode string) bool {
 //
 // Python: gateway/common/mode_matrix.py is_agent_mode
 func IsAgentMode(mode string) bool {
-	t := strings.ToLower(strings.TrimSpace(mode))
-	switch t {
-	case "agent", "plan", "fast", "agent.plan", "agent.fast":
+	// Python: memory/config.py is_agent_mode（字面集合，含历史 bare plan/fast）
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "agent", "agent.plan", "agent.fast", "plan", "fast",
+		"agent.work.normal", "agent.work.plan":
 		return true
+	default:
+		return false
 	}
-	return strings.HasPrefix(t, "agent.work.")
 }
 
 // ResolveNewCanonicalMode 把新三段 canonical 模式解析为 (managerMode, subMode, canonical)。
@@ -160,7 +170,7 @@ func IsAgentMode(mode string) bool {
 //   - agent/team.code.* → ("code", <state>)
 //   - *.work.plan  → (<role>, "plan")；*.work.normal → (<role>, "")
 func ResolveNewCanonicalMode(raw string) (managerMode, subMode, canonical string, ok bool) {
-	text := strings.ToLower(strings.TrimSpace(raw))
+	text := CanonicalizeMode(raw)
 	segments, found := newCanonicalModeSegments[text]
 	if !found {
 		return "", "", "", false
@@ -178,23 +188,67 @@ func ResolveNewCanonicalMode(raw string) (managerMode, subMode, canonical string
 	}
 }
 
+// modeAliases 历史简写 → 完整 canonical。
+//
+// Python: gateway/common/mode_matrix.py MODE_ALIASES
+var modeAliases = map[string]string{
+	"team.plan":   "team.plan.normal",
+	"team.code":   "code.team",
+	"team.work":   "team.work.normal",
+	"team.normal": "team.work.normal",
+	"agent.work":  "agent.work.normal",
+	"agent.code":  "agent.code.normal",
+}
+
+// deprecatedModes 旧 canonical → 新 canonical 的静默映射。
+//
+// Python: gateway/common/mode_matrix.py DEPRECATION_MAP
+var deprecatedModes = map[string]string{
+	"agent":            "agent.work.normal",
+	"agent.plan":       "agent.work.plan",
+	"agent.fast":       "agent.work.normal",
+	"code":             "agent.code.normal",
+	"code.normal":      "agent.code.normal",
+	"code.plan":        "agent.code.plan",
+	"code.team":        "team.code.normal",
+	"team":             "team.work.normal",
+	"team.plan.normal": "team.work.plan",
+	"team.plan.code":   "team.code.plan",
+}
+
+// CanonicalizeMode 把任意入站模式串 canonicalize 到新三段命名。
+//
+// Python: gateway/common/mode_matrix.py canonicalize_mode_text（别名 → 弃用映射 →
+// 未命中原样返回）。与 NormalizeMode 的区别：本函数不做"未知串回落默认"，
+// 只做确定的迁移映射。
+func CanonicalizeMode(raw string) string {
+	t := strings.ToLower(strings.TrimSpace(raw))
+	if mapped, ok := modeAliases[t]; ok {
+		t = mapped
+	}
+	if mapped, ok := deprecatedModes[t]; ok {
+		return mapped
+	}
+	return t
+}
+
 // NormalizeMode 把入站 mode 串归一到权威值，未知串回落 agent.work.normal。
 //
 // 上游以三段串为唯一权威值（2826a9d23 模式合并），两段串（agent.plan/agent.fast）
 // 全量切换后不再识别。合法集合 = 新三段 canonical + code 族 + 裸 team。
 func NormalizeMode(raw string) Mode {
-	t := strings.ToLower(strings.TrimSpace(raw))
+	t := CanonicalizeMode(raw)
 	if t == "" {
 		return ModeAgentWorkNormal
 	}
-	if _, _, _, ok := ResolveNewCanonicalMode(t); ok {
+	if _, ok := planCanonicalModes[t]; ok {
 		return Mode(t)
 	}
-	if IsCodeProfileMode(t) {
+	if _, ok := teamCanonicalModes[t]; ok {
 		return Mode(t)
 	}
-	if t == string(ModeTeam) {
-		return ModeTeam
+	if _, ok := singleAgentCanonicalModes[t]; ok {
+		return Mode(t)
 	}
 	return ModeAgentWorkNormal
 }
@@ -203,14 +257,18 @@ func NormalizeMode(raw string) Mode {
 // 用于遍历清理等场景。
 func AllModes() []Mode {
 	return []Mode{
-		// agent 族
-		ModeAgentWorkPlan,
+		// agent 族（work / code 两个 environment）
 		ModeAgentWorkNormal,
-		// code 族
-		ModeCodePlan,
-		ModeCodeNormal,
-		ModeCodeTeam,
+		ModeAgentWorkPlan,
+		ModeAgentCodeNormal,
+		ModeAgentCodePlan,
 		// team 族
+		ModeTeamWorkNormal,
+		ModeTeamWorkPlan,
+		ModeTeamCodeNormal,
+		ModeTeamCodePlan,
+		ModeTeamDesign,
+		// 裸 team（历史形式，仍作为合法值保留）
 		ModeTeam,
 	}
 }
@@ -220,7 +278,8 @@ func AllModes() []Mode {
 // 先对输入做 strip + lower 标准化，再查找合法值；
 // 空字符串或未识别值均返回 default。
 func ParseMode(s string, defaultVal Mode) Mode {
-	normalized := strings.TrimSpace(strings.ToLower(s))
+	// 先 canonicalize：入站可能是历史串（code.normal / agent.plan），查表只认权威值。
+	normalized := CanonicalizeMode(s)
 	if normalized == "" {
 		return defaultVal
 	}
@@ -232,7 +291,7 @@ func ParseMode(s string, defaultVal Mode) Mode {
 
 // IsValidMode 判断字符串是否为合法的 Mode 值。
 func IsValidMode(s string) bool {
-	_, ok := modeLookup[s]
+	_, ok := modeLookup[CanonicalizeMode(s)]
 	return ok
 }
 

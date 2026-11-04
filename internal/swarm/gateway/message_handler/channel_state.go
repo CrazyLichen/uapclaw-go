@@ -50,9 +50,9 @@ const (
 var channelModeStrings = map[ChannelMode]string{
 	ChannelModeAgentWorkPlan:   "agent.work.plan",
 	ChannelModeAgentWorkNormal: "agent.work.normal",
-	ChannelModeCodePlan:        "code.plan",
-	ChannelModeCodeNormal:      "code.normal",
-	ChannelModeCodeTeam:        "code.team",
+	ChannelModeCodePlan:        "agent.code.plan",
+	ChannelModeCodeNormal:      "agent.code.normal",
+	ChannelModeCodeTeam:        "team.code.normal",
 	ChannelModeTeam:            "team",
 }
 
@@ -80,9 +80,11 @@ func ChannelModeString(m ChannelMode) string {
 
 // ParseChannelMode 解析字符串为 ChannelMode
 func ParseChannelMode(s string) ChannelMode {
-	s = strings.TrimSpace(strings.ToLower(s))
-	if m, ok := channelModeLookup[s]; ok {
-		return m
+	// 先按 canonical 查表（入站可能是历史串），再回落到原串（如裸 team 仍映射 team 模式）。
+	for _, key := range []string{schema.CanonicalizeMode(s), strings.TrimSpace(strings.ToLower(s))} {
+		if m, ok := channelModeLookup[key]; ok {
+			return m
+		}
 	}
 	return ChannelModeAgentWorkPlan
 }

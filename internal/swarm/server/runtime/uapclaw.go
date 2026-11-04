@@ -659,8 +659,7 @@ func isTeamMode(request *schema.AgentRequest) bool {
 		return true
 	}
 	if mode, ok := params["mode"].(string); ok {
-		modeLower := strings.TrimSpace(strings.ToLower(mode))
-		return modeLower == "team" || modeLower == "team.plan" || modeLower == "code.team"
+		return schema.IsTeamMode(mode)
 	}
 	return false
 }
@@ -859,13 +858,13 @@ func (uc *UapClaw) adapterModeForRequest(request *schema.AgentRequest) string {
 	params := parseRequestParams(request)
 	if modeVal, ok := params["mode"]; ok {
 		if modeStr, ok := modeVal.(string); ok && modeStr != "" {
+			// 三段 canonical 按串语义解析（code environment → code 适配器）
+			if managerMode, _, _, ok := schema.ResolveNewCanonicalMode(modeStr); ok {
+				return managerMode
+			}
 			modeText := strings.TrimSpace(strings.ToLower(modeStr))
 			// team.plan 映射为 code 模式
 			if modeText == "team.plan" {
-				return "code"
-			}
-			// code.* 映射为 code 模式
-			if strings.HasPrefix(modeText, "code.") {
 				return "code"
 			}
 			parts := strings.SplitN(modeText, ".", 2)

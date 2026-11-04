@@ -176,10 +176,10 @@ func TestExtractRuntimeParams(t *testing.T) {
 	got = mh.extractRuntimeParams(msg, map[string]any{
 		"cwd":          "/explicit",
 		"trusted_dirs": []any{"/a"},
-		"mode":         "code.normal",
+		"mode":         "agent.code.normal",
 	})
 	assert.Equal(t, "/explicit", got["cwd"])
-	assert.Equal(t, "code.normal", got["mode"])
+	assert.Equal(t, "agent.code.normal", got["mode"])
 	assert.NotNil(t, got["trusted_dirs"])
 
 	// nil 值不算提供
@@ -253,7 +253,7 @@ func TestHandleChatCancel_pause(t *testing.T) {
 	_, mh := newFakeAgentServer(t, chatSendReplies())
 
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatCancel,
-		json.RawMessage(`{"intent":"pause","mode":"code.normal"}`), schema.WithProvider("feishu"))
+		json.RawMessage(`{"intent":"pause","mode":"agent.code.normal"}`), schema.WithProvider("feishu"))
 
 	mh.handleChatCancel(context.Background(), msg)
 
@@ -466,7 +466,7 @@ func TestSendInterruptToAgent(t *testing.T) {
 	f, mh := newFakeAgentServer(t, chatSendReplies())
 
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatCancel,
-		json.RawMessage(`{"mode":"code.normal"}`), schema.WithProvider("feishu"))
+		json.RawMessage(`{"mode":"agent.code.normal"}`), schema.WithProvider("feishu"))
 
 	mh.sendInterruptToAgent(context.Background(), msg, "pause")
 	assert.Equal(t, 1, f.methodCount(string(schema.ReqMethodChatCancel)))
@@ -478,7 +478,7 @@ func TestSendInterruptToAgent_发送失败(t *testing.T) {
 	f.closeTransport()
 
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatCancel,
-		json.RawMessage(`{"mode":"code.normal"}`), schema.WithProvider("feishu"))
+		json.RawMessage(`{"mode":"agent.code.normal"}`), schema.WithProvider("feishu"))
 
 	mh.sendInterruptToAgent(context.Background(), msg, "pause") // 不 panic 即可
 }
