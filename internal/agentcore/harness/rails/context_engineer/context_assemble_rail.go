@@ -2,7 +2,6 @@ package context_engineer
 
 import (
 	"context"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
@@ -179,9 +178,7 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 
 		if len(files) > 0 {
 			contextSection := sections.BuildContextSection(files, lang)
-			if !deliverContext(cbc, &contextSection, lang) {
-				r.systemPromptBuilder.AddSection(contextSection)
-			}
+			r.systemPromptBuilder.AddSection(contextSection)
 		} else {
 			r.systemPromptBuilder.RemoveSection(sections.SectionContext)
 		}
@@ -189,15 +186,14 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
 	}
 
-	// 注入节到系统提示词构建器（有管理器时投递为附件）
-	if !deliverContext(cbc, &workspaceSection, lang) {
-		r.systemPromptBuilder.AddSection(workspaceSection)
-	}
+	// 注入节到系统提示词构建器
+	// 上游 context_assemble_rail.py 只把 context.heartbeat 投递为附件（_ATTACHMENT_CONTEXT_SECTIONS），
+	// workspace 节已改为「不注入提示词」，context 文件拆分为 system/disabled/attachment 三组；
+	// Go 侧仍是单一 context 节 + workspace 节的历史结构，故此处保持 add_section（结构差异见 S2 计划文档「已知缺口」）。
+	r.systemPromptBuilder.AddSection(workspaceSection)
 
 	if toolsSection != nil {
-		if !deliverContext(cbc, toolsSection, lang) {
-			r.systemPromptBuilder.AddSection(*toolsSection)
-		}
+		r.systemPromptBuilder.AddSection(*toolsSection)
 	} else {
 		r.systemPromptBuilder.RemoveSection(sections.SectionTools)
 	}
@@ -214,13 +210,4 @@ func (r *ContextAssembleRail) GetCallbacks() map[sainterfaces.AgentCallbackEvent
 	}
 
 	return callbacks
-}
-
-// deliverContext 把 context 段投递为历史附件（无管理器时返回 false 由调用方回落 section）。
-func deliverContext(cbc *sainterfaces.AgentCallbackContext, section *saprompt.PromptSection, lang string) bool {
-	if cbc == nil || cbc.Session() == nil {
-		return false
-	}
-	return hprompts.Deliver(cbc.Agent(), cbc.Session().GetSessionID(), section,
-		hprompts.AttachmentRuntime, "agent_core.context_assemble_rail", lang)
 }

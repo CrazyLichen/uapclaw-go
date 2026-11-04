@@ -143,13 +143,10 @@ func (r *TaskCompletionRail) BeforeModelCall(_ context.Context, cbc *agentinterf
 
 	lang := builder.Language()
 	section := sections.BuildCompletionSignalSection(r.completionPromise, lang)
-	sessionID := ""
-	if cbc.Session() != nil {
-		sessionID = cbc.Session().GetSessionID()
-	}
-	if !DeliverAttachment(cbc.Agent(), sessionID, &section, AttachmentKindRuntime, "agent_core.task_completion_rail", lang) {
-		builder.AddSection(section)
-	}
+	// 完成信号节是稳定系统提示词，上游走 add_section
+	// Python: builder.add_section(section)（task_completion_rail.py:321）
+	// 动态的 goal 协议节才走附件（_sync_goal_protocol_prompt:354，Go 侧尚无 goal 运行态）
+	builder.AddSection(section)
 
 	logger.Debug(logComponent).
 		Str("event_type", "task_completion_before_model_call").

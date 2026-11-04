@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"os"
 	"path/filepath"
 	"sort"
@@ -363,18 +362,10 @@ func (r *SkillUseRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.A
 		r.systemPromptBuilder.RemoveSection(sections.SectionSkills)
 		return nil
 	}
-	sessionID := ""
-	var agentRef any
-	if cbc != nil {
-		agentRef = cbc.Agent()
-		if cbc.Session() != nil {
-			sessionID = cbc.Session().GetSessionID()
-		}
-	}
-	lang := r.systemPromptBuilder.Language()
-	if !hprompts.Deliver(agentRef, sessionID, section, hprompts.AttachmentSkill, "agent_core.skill_use_rail", lang) {
-		r.systemPromptBuilder.AddSection(*section)
-	}
+	// skills 节是稳定系统提示词，上游走 add_section
+	// Python: self.system_prompt_builder.add_section(skills_section)（skill_use_rail.py:505）
+	// 动态的「技能变更/演进经验」才走附件（_update_runtime_skill_attachment:760，Go 侧未移植该子特性）
+	r.systemPromptBuilder.AddSection(*section)
 	return nil
 }
 
