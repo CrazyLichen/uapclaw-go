@@ -367,14 +367,22 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		}
 	}
 
+	// abortPersisted 标记中断路径是否已完成「清洗 + 持久化 + commit」，
+	// 避免 finally 里重复 save/commit（对齐 Python abort_persisted）。
+	abortPersisted := false
+
 	// Python: try/finally: cleanup 始终执行（无论 FireLifecycle 是否返回错误）
 	if needCleanup {
 		defer func() {
-			a.saveContexts(ctx, sess)
+			if !abortPersisted {
+				a.saveContexts(ctx, sess)
+			}
 			// Python: session.close_stream() + session.commit()
 			if as, ok := sess.(*session.Session); ok {
 				_ = as.CloseStream()
-				_ = as.Commit(ctx)
+				if !abortPersisted {
+					_ = as.Commit(ctx)
+				}
 			}
 		}()
 	}
@@ -484,12 +492,15 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		return loopErr
 	})
 
-	// 合并错误判断：ctx 取消时清除本轮上下文消息（对齐 Python CancelledError 分支，
-	// 只清「本轮」——withHistory=false 保留历史前缀）。
-	// 这是取消路径唯一的一次清理；Invoke 包装层不再重复清理。
+	// 中断/异常路径：清洗本轮上下文（保留用户提问与完整 tool 对、丢弃半截 tool 块、
+	// 结尾补 marker）后持久化，使下一轮同 session 能从本轮继续而不是回退到旧检查点。
+	//
+	// Python: react_agent.py L3263-3281 —— CancelledError 与 Exception 各用一个 marker。
 	if err != nil {
 		if utils.Canceled(ctx) {
-			a.ClearContextMessages(ctx, sess)
+			abortPersisted = a.handleContextAbort(ctx, sess, "[Request cancelled by user]")
+		} else {
+			abortPersisted = a.handleContextAbort(ctx, sess, "[Request interrupted by an unexpected error]")
 		}
 		return nil, err
 	}
@@ -579,15 +590,20 @@ func (a *ReActAgent) innerStream(
 
 	// streamProcess: 在后台执行 invoke，结果写入 session stream
 	streamProcess := func() {
+		// abortPersisted 已由 invokeImpl 的中断/异常路径完成清洗+持久化，
+		// finally 里不得重复 save/commit（对齐 Python abort_persisted 抑制语义）。
+		abortPersisted := false
 		defer func() {
 			// finally: 清理（对齐 Python L1555-1560）
-			if needCleanup {
+			if needCleanup && !abortPersisted {
 				a.saveContexts(ctx, sess)
 			}
 			// Python: if self.is_agent_session: session.close_stream() + session.commit()
 			if isAgentSess {
 				_ = agentSess.CloseStream()
-				_ = agentSess.Commit(ctx)
+				if !abortPersisted {
+					_ = agentSess.Commit(ctx)
+				}
 			}
 		}()
 
@@ -605,6 +621,8 @@ func (a *ReActAgent) innerStream(
 		// 走完整 Invoke（对齐 Python: self.invoke(inputs, session, _streaming=True)）
 		result, err := a.Invoke(ctx, inputs, opts...)
 		if err != nil {
+			// invokeImpl 已在本轮失败时清洗并持久化上下文（handleContextAbort）
+			abortPersisted = a.contextEngine != nil
 			// ctx 取消不是错误：不写错误帧、不落 history
 			// （对齐 Python react_agent.py:1549-1554 —— except Exception 抓不到 CancelledError）
 			if !shouldReportStreamError(ctx, err) {
@@ -1020,4 +1038,99 @@ func iterMultimodalImageItems(toolResult any) []map[string]any {
 // hasImagePrefix 检查 dataURL 是否以 data:image/ 开头。
 func hasImagePrefix(dataURL string) bool {
 	return len(dataURL) >= 11 && dataURL[:11] == "data:image/"
+}
+
+// sanitizeAbortedTurnMessages 返回被中断轮次的 LLM 安全前缀。
+//
+// 规则：保留用户消息与完整的 assistant/tool 对；丢弃未完成的 tool_call 块（assistant +
+// 半截 tool 消息一起丢）与孤立 ToolMessage；结尾若为 UserMessage 则补一条 marker 形式的
+// AssistantMessage，避免出现「只有提问没有回复」的非法尾。
+//
+// Python: ReActAgent._sanitize_cancelled_turn_messages() (react_agent.py L3721-3788)
+func sanitizeAbortedTurnMessages(messages []llmschema.BaseMessage, marker string) []llmschema.BaseMessage {
+	kept := make([]llmschema.BaseMessage, 0, len(messages))
+	for i := 0; i < len(messages); {
+		msg := messages[i]
+		if am, ok := msg.(*llmschema.AssistantMessage); ok && len(am.ToolCalls) > 0 {
+			needed := make(map[string]bool, len(am.ToolCalls))
+			for _, tc := range am.ToolCalls {
+				if tc != nil && tc.ID != "" {
+					needed[tc.ID] = true
+				}
+			}
+			found := make(map[string]*llmschema.ToolMessage, len(needed))
+			j := i + 1
+			for ; j < len(messages); j++ {
+				tm, isTool := messages[j].(*llmschema.ToolMessage)
+				if !isTool {
+					break
+				}
+				found[tm.ToolCallID] = tm
+			}
+			complete := len(needed) > 0
+			for id := range needed {
+				if found[id] == nil {
+					complete = false
+					break
+				}
+			}
+			if complete {
+				kept = append(kept, am)
+				for _, tc := range am.ToolCalls {
+					if tc != nil && found[tc.ID] != nil {
+						kept = append(kept, found[tc.ID])
+					}
+				}
+			}
+			i = j
+			continue
+		}
+		if _, isTool := msg.(*llmschema.ToolMessage); isTool {
+			// 孤立 tool 结果（前面没有对应 tool_calls）：丢弃
+			i++
+			continue
+		}
+		kept = append(kept, msg)
+		i++
+	}
+	if n := len(kept); n > 0 {
+		if _, isUser := kept[n-1].(*llmschema.UserMessage); isUser {
+			kept = append(kept, llmschema.NewAssistantMessage(marker))
+		}
+	}
+	return kept
+}
+
+// handleContextAbort 取消/异常后清洗并持久化本轮上下文。
+//
+// 返回 true 表示已持久化（调用方据此抑制 finally 里的重复 save/commit）。
+// 外部传入的 agent session 也要 commit：正常路径由调用方 commit，但异常路径走不到。
+//
+// Python: ReActAgent._handle_context_abort() (react_agent.py L3593-3624)
+func (a *ReActAgent) handleContextAbort(
+	ctx context.Context,
+	sess sessioninterfaces.SessionFacade,
+	marker string,
+) bool {
+	if a.contextEngine == nil || sess == nil {
+		return false
+	}
+	sessionID := sess.GetSessionID()
+	mc := a.contextEngine.GetContext("default_context", sessionID)
+	if mc != nil {
+		if current, readErr := mc.GetMessages(0, false); readErr == nil && len(current) > 0 {
+			mc.SetMessages(sanitizeAbortedTurnMessages(current, marker), false)
+		}
+	}
+	a.saveContexts(ctx, sess)
+	if as, ok := sess.(*session.Session); ok {
+		if commitErr := as.Commit(ctx); commitErr != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "context_abort_commit_failed").
+				Err(commitErr).
+				Msg("commit session after abort failed")
+			return false
+		}
+	}
+	return true
 }

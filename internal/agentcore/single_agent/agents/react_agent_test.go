@@ -2705,20 +2705,28 @@ func TestShouldReportStreamError(t *testing.T) {
 	}
 }
 
-// TestInvoke_ClearsContextMessagesOnce 防 D3a 回归：取消路径只允许清理一次。
-func TestInvoke_ClearsContextMessagesOnce(t *testing.T) {
-	fmc := &fakeModelContext{}
-	agent := newTestAgent("clear_once")
+// TestInvoke_CancelPersistsSanitizedContext 取消路径改为「清洗 + 持久化」而非清空本轮。
+//
+// Python: react_agent.py L3263-3268（_handle_context_abort，marker=[Request cancelled by user]）
+func TestInvoke_CancelPersistsSanitizedContext(t *testing.T) {
+	fmc := &fakeModelContext{messages: []llmschema.BaseMessage{llmschema.NewUserMessage("hello")}}
+	agent := newTestAgent("cancel_persist")
 	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	sess := session.NewSession(session.WithSessionID("sess-clear"))
-	_, _ = agent.Invoke(ctx, map[string]any{}, interfaces.WithSession(sess))
+	sess := session.NewSession(session.WithSessionID("sess-cancel"))
+	_, _ = agent.Invoke(ctx, map[string]any{"query": "hello"}, interfaces.WithSession(sess))
 
-	if fmc.clearCalls != 1 {
-		t.Fatalf("取消路径应只清理 1 次，实际 %d 次", fmc.clearCalls)
+	if fmc.clearCalls != 0 {
+		t.Fatalf("取消路径不应再整轮清空，实际 ClearMessages 调用 %d 次", fmc.clearCalls)
+	}
+	if !fmc.containsContent("[Request cancelled by user]") {
+		t.Fatal("取消路径应补 [Request cancelled by user] marker")
+	}
+	if !fmc.containsContent("hello") {
+		t.Fatal("取消路径必须保留本轮用户提问")
 	}
 }
 
@@ -3036,4 +3044,55 @@ func TestReActAgent_emptyResponse_lastIterationNoRetry(t *testing.T) {
 	}
 	assert.Equal(t, "error", result["result_type"])
 	assert.False(t, fmc.containsContent("[EMPTY_RESPONSE]"), "最后一轮不应注入重试提示")
+}
+
+// ──────────────────────────── A-10: 中断上下文清洗 ────────────────────────────
+
+// TestSanitizeAbortedTurnMessages 验证被中断轮次的清洗规则
+func TestSanitizeAbortedTurnMessages(t *testing.T) {
+	marker := "[Request cancelled by user]"
+	user := llmschema.NewUserMessage("read a.txt")
+
+	assistantWithTools := llmschema.NewAssistantMessage("")
+	assistantWithTools.ToolCalls = []*llmschema.ToolCall{{ID: "c1", Name: "read_file"}}
+
+	completeTool := llmschema.NewToolMessage("c1", "content")
+
+	t.Run("完整 tool 对保留", func(t *testing.T) {
+		got := sanitizeAbortedTurnMessages(
+			[]llmschema.BaseMessage{user, assistantWithTools, completeTool}, marker)
+		assert.Len(t, got, 3)
+		_, isUser := got[0].(*llmschema.UserMessage)
+		assert.True(t, isUser)
+		_, isAssistant := got[1].(*llmschema.AssistantMessage)
+		assert.True(t, isAssistant)
+		_, isTool := got[2].(*llmschema.ToolMessage)
+		assert.True(t, isTool)
+	})
+
+	t.Run("半截 tool 块整块丢弃并补 marker", func(t *testing.T) {
+		got := sanitizeAbortedTurnMessages(
+			[]llmschema.BaseMessage{user, assistantWithTools}, marker)
+		assert.Len(t, got, 2)
+		_, isUser := got[0].(*llmschema.UserMessage)
+		assert.True(t, isUser)
+		am, isAssistant := got[1].(*llmschema.AssistantMessage)
+		assert.True(t, isAssistant)
+		assert.Equal(t, marker, am.Content.Text())
+	})
+
+	t.Run("孤立 tool 消息丢弃", func(t *testing.T) {
+		got := sanitizeAbortedTurnMessages(
+			[]llmschema.BaseMessage{user, completeTool}, marker)
+		assert.Len(t, got, 2)
+		am, isAssistant := got[1].(*llmschema.AssistantMessage)
+		assert.True(t, isAssistant)
+		assert.Equal(t, marker, am.Content.Text())
+	})
+
+	t.Run("结尾非 user 消息不补 marker", func(t *testing.T) {
+		got := sanitizeAbortedTurnMessages(
+			[]llmschema.BaseMessage{user, llmschema.NewAssistantMessage("done")}, marker)
+		assert.Len(t, got, 2)
+	})
 }
