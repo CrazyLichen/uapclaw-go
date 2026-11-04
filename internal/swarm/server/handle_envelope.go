@@ -106,6 +106,8 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		resp, err = s.handleSessionRename(ctx, request)
 	case schema.ReqMethodSessionSwitch:
 		resp, err = s.handleSessionSwitch(ctx, request)
+	case schema.ReqMethodSessionPlanStatus:
+		resp, err = s.handleSessionPlanStatus(ctx, request)
 	case schema.ReqMethodSessionDelete:
 		resp, err = s.handleSessionDelete(ctx, request)
 	case schema.ReqMethodSessionRewind:
@@ -351,9 +353,10 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 
 	// 3-8. 交给 AgentRuntime（选 agent → ensure_state → 流式执行 → check_exit → 控制事件）
 	// Python: agent_ws_server.py:4654 _handle_stream_impl → runtime.stream(...)
-	heartbeatDone := make(chan struct{})
-	heartbeatTrigger := make(chan struct{}, 1)
-	go s.runKeepalive(streamCtx, request.RequestID, request.ChannelID, heartbeatDone, heartbeatTrigger)
+	keepalive := NewStreamKeepalive(func() {
+		s.sendKeepalive(request.RequestID, request.ChannelID)
+	}, keepaliveInterval)
+	keepalive.Start()
 
 	chunkCount := 0
 	streamErr := s.agentRuntime.Stream(streamCtx, request, func(ev *swruntime.RuntimeEvent) bool {
@@ -368,16 +371,13 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 			return true
 		}
 		chunkCount++
-		select {
-		case heartbeatTrigger <- struct{}{}:
-		default:
-		}
+		keepalive.NotifyActivity(ev.IsComplete)
 		s.writeChunk(request.RequestID, request.ChannelID, ev.ToChunk(), chunkCount, true)
 		return true
 	})
 
-	close(heartbeatTrigger)
-	<-heartbeatDone
+	keepalive.SignalStop()
+	keepalive.Stop()
 
 	if streamErr != nil {
 		logger.Error(logComponent).
@@ -427,7 +427,7 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(request)
 	projectDir := swruntime.ResolveCancelProjectDir(request)
 
-	var agent *runtime.UapClaw
+	var agent *runtime.UapClawSwarm
 
 	// 第1级：按 mode 查找已有 agent
 	if mode != "" {
@@ -513,38 +513,6 @@ func (s *AgentServer) sendKeepalive(requestID, channelID string) {
 		return
 	}
 	s.sendToGateway(data)
-}
-
-// runKeepalive 运行心跳 goroutine，每 keepaliveInterval 发送一次 keepalive。
-// 收到 heartbeatTrigger 信号时重置计时器。关闭 heartbeatTrigger 时退出。
-func (s *AgentServer) runKeepalive(ctx context.Context, requestID, channelID string, done chan<- struct{}, trigger <-chan struct{}) {
-	defer close(done)
-	timer := time.NewTimer(keepaliveInterval)
-	defer timer.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case _, ok := <-trigger:
-			if !ok {
-				// trigger 通道关闭，退出
-				return
-			}
-			// 收到真实数据，重置计时器
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(keepaliveInterval)
-		case <-timer.C:
-			// 发送 keepalive
-			s.sendKeepalive(requestID, channelID)
-			timer.Reset(keepaliveInterval)
-		}
-	}
 }
 
 // writeErrorResponse 构造错误 AgentResponse 写入 RecvCh。

@@ -163,7 +163,7 @@ func TestHTTP_ExtendedCard(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("状态码 = %d, body=%s", resp.StatusCode, raw)
 	}
-	if !strings.Contains(string(raw), `"name":"UapClaw Gateway A2A Server"`) {
+	if !strings.Contains(string(raw), `"name":"UapClawSwarm Gateway A2A Server"`) {
 		t.Errorf("extended card 内容 = %s", raw)
 	}
 }

@@ -9,7 +9,9 @@
 //	server/
 //	├── doc.go                 # 包文档
 //	├── agent_server.go        # AgentServer 结构体、生命周期、消费循环、流式任务管理
-//	├── handle_envelope.go     # 主分发逻辑：handleEnvelope/handleUnary/handleStream/handleCancel 及辅助函数
+//	├── handle_envelope.go     # 主分发逻辑：handleMessage/handleUnary/handleStream/handleCancel 及辅助函数
+//	├── keepalive.go           # StreamKeepalive 流式心跳（Start/NotifyActivity/SignalStop/Stop）
+//	├── handle_session_plan.go # session.plan_status 只读查询（live 优先、metadata 兜底）
 //	├── handle_session.go      # Session 管理 handler（list/create/delete/rename/switch/rewind/fork）
 //	├── handle_command.go      # Command 系列 handler（add_dir/chrome/compact/context/recap/diff/model/mcp/sandbox/resume/session/status）
 //	├── handle_team.go         # Team handler（delete/snapshot/history_get）
@@ -22,7 +24,7 @@
 //	├── handle_config.go       # Config（配置） handler（cache_clear/reload_config）
 //	├── handle_initialize.go   # Initialize（初始化）+ ACP handler（initialize/acp_tool_response）
 //	├── adapter/               # Agent 适配器（Code/Deep/Factory）
-//	├── runtime/               # Agent 运行时（AgentManager/UapClaw）
+//	├── runtime/               # Agent 运行时（AgentManager/UapClawSwarm）
 //	└── session/               # 会话管理子包（history/metadata/manager/rename/startup）
 //
 // 对应 Python 代码：jiuwenswarm/server/agent_server.py

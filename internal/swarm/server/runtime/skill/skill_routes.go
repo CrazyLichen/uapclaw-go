@@ -90,7 +90,7 @@ var (
 		schema.ReqMethodSkilldevFileRead: true,
 	}
 
-	// SkillRoutes skills.* 请求方法 → handler 函数映射（导出，供 UapClaw 调用）。
+	// SkillRoutes skills.* 请求方法 → handler 函数映射（导出，供 UapClawSwarm 调用）。
 	SkillRoutes = map[schema.ReqMethod]SkillHandler{
 		schema.ReqMethodSkillsList:                  (*SkillManager).HandleSkillsList,
 		schema.ReqMethodSkillsInstalled:             (*SkillManager).HandleSkillsInstalled,
@@ -124,7 +124,7 @@ var (
 		schema.ReqMethodSkillsEvolutionSave:         (*SkillManager).HandleSkillsEvolutionSave,
 	}
 
-	// PluginRoutes plugins.* 请求方法 → handler 函数映射（导出，供 UapClaw 调用）。
+	// PluginRoutes plugins.* 请求方法 → handler 函数映射（导出，供 UapClawSwarm 调用）。
 	PluginRoutes = map[schema.ReqMethod]SkillHandler{
 		schema.ReqMethodPluginsList:      (*SkillManager).HandlePluginsList,
 		schema.ReqMethodPluginsInstall:   (*SkillManager).HandlePluginsInstall,

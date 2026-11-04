@@ -23,7 +23,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// fakeAdapter AgentAdapter mock，用于 UapClaw 测试。
+// fakeAdapter AgentAdapter mock，用于 UapClawSwarm 测试。
 type fakeAdapter struct {
 	mu              sync.Mutex
 	createErr       error
@@ -328,14 +328,14 @@ func TestUapClaw_GetInstance(t *testing.T) {
 }
 
 func TestUapClaw_GetInstance_未初始化(t *testing.T) {
-	uc := &UapClaw{}
+	uc := &UapClawSwarm{}
 	if inst := uc.GetInstance(); inst != nil {
-		t.Error("未初始化 UapClaw GetInstance() 应返回 nil")
+		t.Error("未初始化 UapClawSwarm GetInstance() 应返回 nil")
 	}
 }
 
 func TestUapClaw_GetInstance_nil适配器(t *testing.T) {
-	uc := &UapClaw{adapter: nil}
+	uc := &UapClawSwarm{adapter: nil}
 	if inst := uc.GetInstance(); inst != nil {
 		t.Error("adapter 为 nil 时 GetInstance() 应返回 nil")
 	}

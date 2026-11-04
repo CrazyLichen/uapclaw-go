@@ -166,7 +166,7 @@ func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any
 			chunkCh <- eventToChunk(evt, requestID, channelID)
 		}
 
-		// Python: UapClaw._handle_skilldev_request 的 try/except 兜底
+		// Python: UapClawSwarm._handle_skilldev_request 的 try/except 兜底
 		// Pipeline 协程内的致命错误通过 runErr 传播到此处
 		if pipeline.runErr != nil {
 			logger.Error(logComponent).
@@ -232,7 +232,7 @@ func (s *SkillDevService) handleRespond(ctx context.Context, params map[string]a
 			chunkCh <- eventToChunk(evt, requestID, channelID)
 		}
 
-		// Python: UapClaw._handle_skilldev_request 的 try/except 兜底
+		// Python: UapClawSwarm._handle_skilldev_request 的 try/except 兜底
 		if pipeline.runErr != nil {
 			logger.Error(logComponent).
 				Str("task_id", taskID).

@@ -1,12 +1,12 @@
 // Package runtime 提供 AgentServer 运行时管理组件。
 //
-// 包含 UapClaw（Agent 门面）、AgentManager（Agent 实例管理器）、
+// 包含 UapClawSwarm（Agent 门面）、AgentManager（Agent 实例管理器）、
 // AgentManager（Agent 实例管理器）、TenantAgentPool（AgentManager 单例管理器）、
 // AgentConfigService（Agent 配置 CRUD）等运行时组件，
 // 负责 Agent 实例的并发执行控制、任务调度、请求路由和配置管理。
 //
 // AgentManager（10.3.12）使用两层嵌套 map（channel_key → cache_key → agentEntry）
-// 管理 UapClaw 实例，支持按通道/模式自动创建、GetAgentNoWait 三级模糊查找、
+// 管理 UapClawSwarm 实例，支持按通道/模式自动创建、GetAgentNoWait 三级模糊查找、
 // 配置热重载、Agent 重建和取消在途任务。对齐 Python AgentManager。
 //
 // TenantAgentPool（10.3.14）是 AgentManager 的单例包装器，提供 GetInstance/ResetInstance
@@ -16,7 +16,7 @@
 //
 //	runtime/
 //	├── doc.go                # 包文档
-//	├── uapclaw.go            # UapClaw Agent 门面（10.3.2 回填已完成，⤵️ Team后续请求/TeamManager 10.6.19-23）
+//	├── interface.go          # UapClawSwarm Agent 门面（对齐 interface.py）（10.3.2 回填已完成，⤵️ Team后续请求/TeamManager 10.6.19-23）
 //	├── build_user_prompt.go  # BuildUserPrompt 用户 prompt 包装
 //	├── build_inputs.go       # BuildInputs adapter 输入构建
 //	├── agent_manager.go      # AgentManager Agent 实例管理器（10.3.12 已实现）

@@ -13,8 +13,8 @@ func TestBuildAgentCard(t *testing.T) {
 		Port:            19100,
 		RPCPath:         "/a2a",
 		ProtocolVersion: "1.0.0",
-		AppName:         "UapClaw Gateway A2A Server",
-		AppDescription:  "A2A ingress for UapClaw Gateway",
+		AppName:         "UapClawSwarm Gateway A2A Server",
+		AppDescription:  "A2A ingress for UapClawSwarm Gateway",
 		AppVersion:      "0.1.0",
 	}
 	card := BuildAgentCard(&cfg)
@@ -49,7 +49,7 @@ func TestBuildAgentCard(t *testing.T) {
 	if skill.ID != "chat" || skill.Name != "chat" {
 		t.Errorf("skill = %+v", skill)
 	}
-	if skill.Description != "Send user prompt to UapClaw via Gateway" {
+	if skill.Description != "Send user prompt to UapClawSwarm via Gateway" {
 		t.Errorf("skill description = %q", skill.Description)
 	}
 	if len(skill.Tags) != 3 || skill.Tags[2] != "uapclawswarm" {

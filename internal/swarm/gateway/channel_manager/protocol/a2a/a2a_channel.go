@@ -173,9 +173,9 @@ func ConfigFromEnv(getenv func(string) string) A2AChannelConfig {
 		// "1.0.0" 会让按卡片回填 A2A-Version 的第三方客户端一律被 -32009 拒绝。
 		ProtocolVersion: orDefault(strings.TrimSpace(getenv("A2A_SERVER_PROTOCOL_VERSION")), string(sdka2a.Version)),
 		ChannelID:       defaultChannelID,
-		// 偏差 D9：品牌串映射 JiuwenClaw → UapClaw
-		AppName:        orDefault(strings.TrimSpace(getenv("A2A_SERVER_APP_NAME")), "UapClaw Gateway A2A Server"),
-		AppDescription: orDefault(strings.TrimSpace(getenv("A2A_SERVER_APP_DESCRIPTION")), "A2A ingress for UapClaw Gateway"),
+		// 偏差 D9：品牌串映射 JiuwenClaw → UapClawSwarm
+		AppName:        orDefault(strings.TrimSpace(getenv("A2A_SERVER_APP_NAME")), "UapClawSwarm Gateway A2A Server"),
+		AppDescription: orDefault(strings.TrimSpace(getenv("A2A_SERVER_APP_DESCRIPTION")), "A2A ingress for UapClawSwarm Gateway"),
 		AppVersion:     orDefault(strings.TrimSpace(getenv("A2A_SERVER_APP_VERSION")), "0.1.0"),
 	}
 

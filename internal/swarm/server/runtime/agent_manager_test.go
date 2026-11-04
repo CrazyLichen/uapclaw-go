@@ -216,8 +216,8 @@ func TestAgentManager_GetClientCapabilities_有数据时返回拷贝(t *testing.
 }
 
 // --- ProcessMessage 消息处理 ---
-// 注意：ProcessMessage/Stream 会调用 UapClaw.ProcessMessage/Stream，
-// 而 UapClaw.CreateInstance 会创建真实的 DeepAgent → LLM 调用。
+// 注意：ProcessMessage/Stream 会调用 UapClawSwarm.ProcessMessage/Stream，
+// 而 UapClawSwarm.CreateInstance 会创建真实的 DeepAgent → LLM 调用。
 // 因此这里仅验证 GetAgent 委托逻辑（即 GetAgent 能正确解析 mode 并创建 agent），
 // 实际 ProcessMessage 的端到端测试由集成测试覆盖。
 

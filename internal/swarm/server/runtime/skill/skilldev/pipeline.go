@@ -29,7 +29,7 @@ type SkillDevPipeline struct {
 	// deps 外部依赖
 	deps *SkillDevDeps
 	// runErr goroutine 内设置的错误，调用方在 channel close 后读取。
-	// Python: raise RuntimeError → 穿过 Service → UapClaw try/except 兜底。
+	// Python: raise RuntimeError → 穿过 Service → UapClawSwarm try/except 兜底。
 	// channel close 保证 happens-before，无数据竞争。
 	runErr error
 }

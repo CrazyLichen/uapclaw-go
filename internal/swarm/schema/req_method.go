@@ -78,6 +78,8 @@ const (
 	ReqMethodSessionCreate ReqMethod = "session.create"
 	// ReqMethodSessionSwitch 切换会话
 	ReqMethodSessionSwitch ReqMethod = "session.switch"
+	// ReqMethodSessionPlanStatus 只读查询会话是否处于计划模式
+	ReqMethodSessionPlanStatus ReqMethod = "session.plan_status"
 	// ReqMethodSessionDelete 删除会话
 	ReqMethodSessionDelete ReqMethod = "session.delete"
 	// ReqMethodSessionRename 重命名会话

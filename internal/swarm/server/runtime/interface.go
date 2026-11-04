@@ -27,13 +27,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// UapClaw Agent 统一门面。
+// UapClawSwarm Agent 统一门面。
 //
 // 提供：SDK 适配器路由、统一对外 API、公共编排
 // （session 队列、Skills 路由、heartbeat、流式包装）。
 //
 // Python: jiuwenswarm/server/runtime/agent_adapter/interface.py (JiuWenClaw)
-type UapClaw struct {
+type UapClawSwarm struct {
 	// adapter SDK 适配器（延迟初始化，ensureAdapter 时创建）。
 	adapter adapter.AgentAdapter
 
@@ -105,12 +105,12 @@ func WithCreateInstanceSubMode(subMode string) CreateInstanceOption {
 	return func(c *createInstanceConfig) { c.subMode = subMode }
 }
 
-// NewUapClaw 创建 UapClaw 实例。
+// NewUapClaw 创建 UapClawSwarm 实例。
 //
 // Python: JiuWenClaw.__init__()
-func NewUapClaw() *UapClaw {
+func NewUapClaw() *UapClawSwarm {
 	appCtx, appCancel := context.WithCancel(context.Background())
-	return &UapClaw{
+	return &UapClawSwarm{
 		sessionManager:     session.NewSessionManager(),
 		skillManager:       skill.NewSkillManager(workspace.AgentWorkspaceDir()),
 		agentConfigService: NewAgentConfigService(workspace.WorkspaceDir()),
@@ -122,7 +122,7 @@ func NewUapClaw() *UapClaw {
 // ResetPlanSession 清理指定会话的计划模式记忆（删除会话时调用）。
 //
 // Python: service.py:3071 `plan_mode_controller.reset_session(session_id)`
-func (uc *UapClaw) ResetPlanSession(sessionID string) {
+func (uc *UapClawSwarm) ResetPlanSession(sessionID string) {
 	if uc == nil || uc.adapter == nil || sessionID == "" {
 		return
 	}
@@ -136,7 +136,7 @@ func (uc *UapClaw) ResetPlanSession(sessionID string) {
 // ProcessMessage 处理非流式 Agent 请求。
 //
 // Python: JiuWenClaw.process_message(request)
-func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (uc *UapClawSwarm) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// Python: logger.info：请求日志
 	sessionIDForLog := ""
 	if request.SessionID != nil {
@@ -255,7 +255,7 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 // ProcessMessageStream 处理流式 Agent 请求。
 //
 // Python: JiuWenClaw.process_message_stream(request)
-func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+func (uc *UapClawSwarm) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	// Python: logger.info：流式请求日志
 	sessionIDForLog := ""
 	if request.SessionID != nil {
@@ -456,7 +456,7 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 // ProcessInterrupt 处理中断请求。
 //
 // Python: JiuWenClaw._process_interrupt(request)
-func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (uc *UapClawSwarm) ProcessInterrupt(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	intent := uc.extractIntent(request)
 	sessionID := session.NormalizeSessionID(uc.extractSessionID(request))
 
@@ -493,7 +493,7 @@ func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRe
 
 // GetContextUsage 获取上下文使用量。
 // Python: JiuWenClaw.get_context_usage(session_id) → adapter.GetContextUsage
-func (uc *UapClaw) GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error) {
+func (uc *UapClawSwarm) GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error) {
 	a, err := uc.ensureAdapter("agent")
 	if err != nil {
 		return map[string]any{"usage": 0, "limit": 0}, err
@@ -507,7 +507,7 @@ func (uc *UapClaw) GetContextUsage(ctx context.Context, sessionID string) (map[s
 
 // CompressContext 压缩上下文。
 // Python: JiuWenClaw.compress_context(session_id, return_state=True) → adapter.CompressContext
-func (uc *UapClaw) CompressContext(ctx context.Context, sessionID string) (map[string]any, error) {
+func (uc *UapClawSwarm) CompressContext(ctx context.Context, sessionID string) (map[string]any, error) {
 	a, err := uc.ensureAdapter("agent")
 	if err != nil {
 		return map[string]any{"ok": false, "compressed": false}, err
@@ -523,7 +523,7 @@ func (uc *UapClaw) CompressContext(ctx context.Context, sessionID string) (map[s
 
 // GenerateRecap 生成会话回顾。
 // Python: JiuWenClaw.generate_recap(session_id) → adapter.GenerateRecap
-func (uc *UapClaw) GenerateRecap(ctx context.Context, sessionID string) (map[string]any, error) {
+func (uc *UapClawSwarm) GenerateRecap(ctx context.Context, sessionID string) (map[string]any, error) {
 	a, err := uc.ensureAdapter("agent")
 	if err != nil {
 		return map[string]any{"status": "failed", "error": err.Error()}, err
@@ -539,7 +539,7 @@ func (uc *UapClaw) GenerateRecap(ctx context.Context, sessionID string) (map[str
 // 流程：preRun → switchMode → loadState → updateState → postRun
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
-func (uc *UapClaw) SwitchMode(ctx context.Context, sessionID, subMode string) error {
+func (uc *UapClawSwarm) SwitchMode(ctx context.Context, sessionID, subMode string) error {
 	if uc.adapter == nil {
 		return nil
 	}
@@ -549,7 +549,7 @@ func (uc *UapClaw) SwitchMode(ctx context.Context, sessionID, subMode string) er
 // CreateInstance 创建 Agent 实例。
 //
 // Python: JiuWenClaw.create_instance(config=None, *, mode="agent", sub_mode=None)
-func (uc *UapClaw) CreateInstance(opts ...CreateInstanceOption) error {
+func (uc *UapClawSwarm) CreateInstance(opts ...CreateInstanceOption) error {
 	cfg := defaultCreateInstanceConfig()
 	for _, o := range opts {
 		o(&cfg)
@@ -566,7 +566,7 @@ func (uc *UapClaw) CreateInstance(opts ...CreateInstanceOption) error {
 		Str("sdk", adapter.ResolveSDKChoice()).
 		Str("mode", cfg.mode).
 		Str("sub_mode", cfg.subMode).
-		Msg("UapClaw Agent instance created")
+		Msg("UapClawSwarm Agent instance created")
 	// 启动 dreaming 后台任务（对齐 Python: interface.py:319-322）
 	if dreamer, ok := a.(adapter.DreamingController); ok {
 		go func() {
@@ -581,7 +581,7 @@ func (uc *UapClaw) CreateInstance(opts ...CreateInstanceOption) error {
 // ReloadAgentConfig 重载 Agent 配置。
 //
 // Python: JiuWenClaw.reload_agent_config(config_base, env_overrides)
-func (uc *UapClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map[string]any) error {
+func (uc *UapClawSwarm) ReloadAgentConfig(configBase map[string]any, envOverrides map[string]any) error {
 	uc.adapterMu.Lock()
 	a := uc.adapter
 	uc.adapterMu.Unlock()
@@ -609,7 +609,7 @@ func (uc *UapClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map
 // CancelInflightWork 取消在途任务。
 //
 // Python: JiuWenClaw.cancel_inflight_work(log_prefix)
-func (uc *UapClaw) CancelInflightWork(reason string) error {
+func (uc *UapClawSwarm) CancelInflightWork(reason string) error {
 	_ = uc.sessionManager.CancelAllSessionTasks(context.Background(), reason)
 	uc.adapterMu.Lock()
 	a := uc.adapter
@@ -633,7 +633,7 @@ func (uc *UapClaw) CancelInflightWork(reason string) error {
 // Cleanup 清理资源。
 //
 // Python: JiuWenClaw.cleanup()
-func (uc *UapClaw) Cleanup() error {
+func (uc *UapClawSwarm) Cleanup() error {
 	uc.adapterMu.Lock()
 	a := uc.adapter
 	uc.adapter = nil
@@ -647,7 +647,7 @@ func (uc *UapClaw) Cleanup() error {
 // GetInstance 获取底层 DeepAgent 实例。
 //
 // Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
-func (uc *UapClaw) GetInstance() *harness.DeepAgent {
+func (uc *UapClawSwarm) GetInstance() *harness.DeepAgent {
 	if uc == nil || uc.adapter == nil {
 		return nil
 	}
@@ -695,7 +695,7 @@ func isAutoHarnessResume(request *schema.AgentRequest) bool {
 
 // processTeamInterrupt 处理 Team 模式中断请求。
 // Python: JiuWenClaw._process_team_interrupt()
-func (uc *UapClaw) processTeamInterrupt(
+func (uc *UapClawSwarm) processTeamInterrupt(
 	ctx context.Context,
 	request *schema.AgentRequest,
 	intent string,
@@ -769,7 +769,7 @@ func (uc *UapClaw) processTeamInterrupt(
 
 // cancelTeamWorkForSession 终止当前 session 的 Team runtime（若存在）。
 // Python: JiuWenClaw._cancel_team_work_for_session()
-func (uc *UapClaw) cancelTeamWorkForSession(sessionID string, channelID string, logPrefix string) bool {
+func (uc *UapClawSwarm) cancelTeamWorkForSession(sessionID string, channelID string, logPrefix string) bool {
 	// ⤵️ 10.6.19-23: get_team_manager + terminate_session_runtime
 	// T09: CodeAdapter 缺少 configure_team_member_agent，Team 模式下 code 成员 Agent 无法正确配置
 	// Python: teamManager := getTeamManager(channelID)
@@ -782,7 +782,7 @@ func (uc *UapClaw) cancelTeamWorkForSession(sessionID string, channelID string, 
 }
 
 // ensureAdapter 确保 SDK adapter 已初始化，幂等。
-func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
+func (uc *UapClawSwarm) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	uc.adapterMu.Lock()
 	defer uc.adapterMu.Unlock()
 	if uc.adapter != nil {
@@ -810,7 +810,7 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	logger.Info(logComponent).
 		Str("sdk", adapter.ResolveSDKChoice()).
 		Str("mode", mode).
-		Msg("UapClaw adapter initialized")
+		Msg("UapClawSwarm adapter initialized")
 	return a, nil
 }
 
@@ -822,7 +822,7 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 // MCP 工具工厂注入 swarmtools.GetMcpTools。
 //
 // Python: JiuWenClaw._get_skilldev_service (interface.py:247-279)
-func (uc *UapClaw) ensureSkillDevService() (*skilldev.SkillDevService, error) {
+func (uc *UapClawSwarm) ensureSkillDevService() (*skilldev.SkillDevService, error) {
 	uc.skilldevMu.Lock()
 	defer uc.skilldevMu.Unlock()
 	if uc.skilldevService != nil {
@@ -863,13 +863,13 @@ func (uc *UapClaw) ensureSkillDevService() (*skilldev.SkillDevService, error) {
 	svc := skilldev.NewSkillDevService(deps)
 	uc.skilldevService = svc
 	logger.Info(logComponent).
-		Msg("UapClaw SkillDevService initialized with full deps")
+		Msg("UapClawSwarm SkillDevService initialized with full deps")
 	return svc, nil
 }
 
 // adapterModeForRequest 从请求参数中提取 adapter mode。
 // Python: _adapter_mode_for_request：strip+lower + team.plan→code + code.*→code。
-func (uc *UapClaw) adapterModeForRequest(request *schema.AgentRequest) string {
+func (uc *UapClawSwarm) adapterModeForRequest(request *schema.AgentRequest) string {
 	params := parseRequestParams(request)
 	if modeVal, ok := params["mode"]; ok {
 		if modeStr, ok := modeVal.(string); ok && modeStr != "" {
@@ -890,7 +890,7 @@ func (uc *UapClaw) adapterModeForRequest(request *schema.AgentRequest) string {
 }
 
 // extractSessionID 从请求中提取 sessionID 字符串。
-func (uc *UapClaw) extractSessionID(request *schema.AgentRequest) string {
+func (uc *UapClawSwarm) extractSessionID(request *schema.AgentRequest) string {
 	if request.SessionID != nil {
 		return *request.SessionID
 	}
@@ -898,7 +898,7 @@ func (uc *UapClaw) extractSessionID(request *schema.AgentRequest) string {
 }
 
 // extractQuery 从请求参数中提取 query 字段。
-func (uc *UapClaw) extractQuery(request *schema.AgentRequest) string {
+func (uc *UapClawSwarm) extractQuery(request *schema.AgentRequest) string {
 	params := parseRequestParams(request)
 	if q, ok := params["query"]; ok {
 		if qStr, ok := q.(string); ok {
@@ -909,7 +909,7 @@ func (uc *UapClaw) extractQuery(request *schema.AgentRequest) string {
 }
 
 // extractResponseContent 从响应中提取 content。
-func (uc *UapClaw) extractResponseContent(resp *schema.AgentResponse) string {
+func (uc *UapClawSwarm) extractResponseContent(resp *schema.AgentResponse) string {
 	if resp.Payload == nil {
 		return ""
 	}
@@ -922,7 +922,7 @@ func (uc *UapClaw) extractResponseContent(resp *schema.AgentResponse) string {
 }
 
 // extractIntent 从请求参数中提取 intent（默认 "cancel"）。
-func (uc *UapClaw) extractIntent(request *schema.AgentRequest) string {
+func (uc *UapClawSwarm) extractIntent(request *schema.AgentRequest) string {
 	params := parseRequestParams(request)
 	if intent, ok := params["intent"]; ok {
 		if intentStr, ok := intent.(string); ok && intentStr != "" {
@@ -996,7 +996,7 @@ func shouldRecordHistory(eventType string) bool {
 }
 
 // handleSkillsRequest 处理 skills.* 请求。
-func (uc *UapClaw) handleSkillsRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (uc *UapClawSwarm) handleSkillsRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	if uc.skillManager == nil {
 		return nil, nil
 	}
@@ -1043,7 +1043,7 @@ func (uc *UapClaw) handleSkillsRequest(ctx context.Context, request *schema.Agen
 // handleSkillDevRequest 处理 skilldev.* 请求（非流式）。
 //
 // 消费 chunk channel，收集所有 payload 后打包为 AgentResponse。
-func (uc *UapClaw) handleSkillDevRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (uc *UapClawSwarm) handleSkillDevRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	if !skill.IsSkillDevMethod(request.ReqMethod) {
 		return nil, nil
 	}
@@ -1071,7 +1071,7 @@ func (uc *UapClaw) handleSkillDevRequest(ctx context.Context, request *schema.Ag
 }
 
 // handlePluginsRequest 处理 plugins.* 请求。
-func (uc *UapClaw) handlePluginsRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (uc *UapClawSwarm) handlePluginsRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	if uc.skillManager == nil {
 		return nil, nil
 	}
@@ -1099,7 +1099,7 @@ func (uc *UapClaw) handlePluginsRequest(ctx context.Context, request *schema.Age
 // handleSkillDevStreamRequest 处理 skilldev.* 流式请求。
 //
 // Handle 现在直接返回 chunk channel，此处只需追加终止哨兵。
-func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+func (uc *UapClawSwarm) handleSkillDevStreamRequest(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	svc, err := uc.ensureSkillDevService()
 	if err != nil {
 		ch := make(chan *schema.AgentResponseChunk, 1)
@@ -1142,7 +1142,7 @@ func truncateStr(s string, maxLen int) string {
 }
 
 // PlanController 返回计划模式控制器（adapter 未提供时为 nil）。
-func (uc *UapClaw) PlanController() *swruntime.PlanModeController {
+func (uc *UapClawSwarm) PlanController() *swruntime.PlanModeController {
 	provider, ok := uc.adapter.(interface {
 		PlanController() *swruntime.PlanModeController
 	})
@@ -1153,7 +1153,7 @@ func (uc *UapClaw) PlanController() *swruntime.PlanModeController {
 }
 
 // PlanStateAccessor 返回 plan 状态读写入口。
-func (uc *UapClaw) PlanStateAccessor() swruntime.PlanStateAccessor {
+func (uc *UapClawSwarm) PlanStateAccessor() swruntime.PlanStateAccessor {
 	provider, ok := uc.adapter.(interface {
 		PlanStateAccessor() swruntime.PlanStateAccessor
 	})
@@ -1166,7 +1166,7 @@ func (uc *UapClaw) PlanStateAccessor() swruntime.PlanStateAccessor {
 // PlanModeSnapshot 只读当前会话 plan 模式（不做任何状态写入）。
 //
 // Python: DeepAgentState.plan_mode（session.plan_status 用）
-func (uc *UapClaw) PlanModeSnapshot(ctx context.Context, sessionID string) (string, bool) {
+func (uc *UapClawSwarm) PlanModeSnapshot(ctx context.Context, sessionID string) (string, bool) {
 	acc := uc.PlanStateAccessor()
 	if acc == nil || sessionID == "" {
 		return "", false

@@ -31,8 +31,8 @@ func BuildAgentCard(cfg *A2AChannelConfig) *sdka2a.AgentCard {
 		Skills: []sdka2a.AgentSkill{{
 			ID:   "chat",
 			Name: "chat",
-			// 偏差 D9：品牌串映射 JiuwenClaw → UapClaw / jiuwenswarm → uapclawswarm
-			Description: "Send user prompt to UapClaw via Gateway",
+			// 偏差 D9：品牌串映射 JiuwenClaw → UapClawSwarm / jiuwenswarm → uapclawswarm
+			Description: "Send user prompt to UapClawSwarm via Gateway",
 			Tags:        []string{"chat", "gateway", "uapclawswarm"},
 			Examples:    []string{"Hello", "Summarize this"},
 			InputModes:  []string{"text/plain"},

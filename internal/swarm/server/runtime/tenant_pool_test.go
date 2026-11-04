@@ -75,8 +75,8 @@ func TestTenantAgentPool_ProcessMessage_透传(t *testing.T) {
 	}
 
 	// 验证 ProcessMessage 能正确委托到 AgentManager.ProcessMessage
-	// AgentManager.ProcessMessage 会调用 GetAgent → UapClaw.ProcessMessage
-	// 由于 UapClaw.CreateInstance 需要 LLM，这里仅验证参数解析路径
+	// AgentManager.ProcessMessage 会调用 GetAgent → UapClawSwarm.ProcessMessage
+	// 由于 UapClawSwarm.CreateInstance 需要 LLM，这里仅验证参数解析路径
 	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(req)
 	assert.Equal(t, "agent", mode)
 	assert.Equal(t, "plan", subMode)

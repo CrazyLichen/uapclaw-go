@@ -25,7 +25,7 @@ import (
 
 // AgentManager Agent 实例管理器（10.3.12）。
 //
-// 管理 UapClaw 实例的创建、获取和配置重载。
+// 管理 UapClawSwarm 实例的创建、获取和配置重载。
 // 使用两层嵌套 map：channel_key → cache_key → agentEntry。
 // Python: jiuwenswarm/server/runtime/agent_manager.py
 type AgentManager struct {
@@ -59,8 +59,8 @@ type AgentManager struct {
 // agentEntry Agent 实例条目，记录元数据。
 // Python: setattr(agent, "_jiuwenswarm_agent_cache_key/mode/sub_mode/project_dir", ...)
 type agentEntry struct {
-	// agent UapClaw 实例
-	agent *UapClaw
+	// agent UapClawSwarm 实例
+	agent *UapClawSwarm
 	// cacheKey 缓存键
 	cacheKey string
 	// mode 运行模式
@@ -84,9 +84,9 @@ type agentCreateParamsEntry struct {
 	cacheKey string
 }
 
-// AgentFactory 创建 Agent 实例的工厂函数，返回 (*UapClaw, error)。
+// AgentFactory 创建 Agent 实例的工厂函数，返回 (*UapClawSwarm, error)。
 // 生产环境使用默认的 NewUapClaw + CreateInstance；测试环境可注入 mock 工厂跳过真实 LLM 初始化。
-type AgentFactory func(config map[string]any, mode, subMode string) (*UapClaw, error)
+type AgentFactory func(config map[string]any, mode, subMode string) (*UapClawSwarm, error)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -118,7 +118,7 @@ func (am *AgentManager) SetAgentFactory(factory AgentFactory) {
 // PreSetAgent 预注册 Agent 实例到指定 channel 和 cacheKey。
 // 用于测试或特殊初始化路径，跳过 createAgent 工厂调用。
 // Python: 外部创建 agent 后 setattr 并放入 self.agents 的场景。
-func (am *AgentManager) PreSetAgent(channelID, cacheKey string, agent *UapClaw, mode, subMode, projectDir string) {
+func (am *AgentManager) PreSetAgent(channelID, cacheKey string, agent *UapClawSwarm, mode, subMode, projectDir string) {
 	channelKey := normalizeChannelID(channelID)
 	entry := &agentEntry{
 		agent:      agent,
@@ -137,7 +137,7 @@ func (am *AgentManager) PreSetAgent(channelID, cacheKey string, agent *UapClaw, 
 
 // GetAgent 获取 Agent 实例，不存在则自动创建。
 // Python: AgentManager.get_agent：异步，自动创建。
-func (am *AgentManager) GetAgent(ctx context.Context, channelID, mode, projectDir, subMode string) (*UapClaw, error) {
+func (am *AgentManager) GetAgent(ctx context.Context, channelID, mode, projectDir, subMode string) (*UapClawSwarm, error) {
 	// Python: L238-242: normalize → cacheKey → 查找
 	channelKey := normalizeChannelID(channelID)
 	modeKey := normalizeMode(mode)
@@ -173,7 +173,7 @@ func (am *AgentManager) GetAgent(ctx context.Context, channelID, mode, projectDi
 // GetAgentNoWait 获取已有 Agent 实例，不自动创建。
 // Python: AgentManager.get_agent_nowait：同步，不创建。
 // 找不到时返回 nil。
-func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode string) *UapClaw {
+func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode string) *UapClawSwarm {
 	// Python: L278-279: normalize channel
 	channelKey := normalizeChannelID(channelID)
 
@@ -236,7 +236,7 @@ func (am *AgentManager) ResetSessionPlanState(channelID, sessionID string) {
 	channelKey := normalizeChannelID(channelID)
 	am.mu.RLock()
 	entries := am.agents[channelKey]
-	targets := make([]*UapClaw, 0, len(entries))
+	targets := make([]*UapClawSwarm, 0, len(entries))
 	for _, entry := range entries {
 		if entry != nil && entry.agent != nil {
 			targets = append(targets, entry.agent)
@@ -544,7 +544,7 @@ func (am *AgentManager) RecreateAgent(ctx context.Context, channelID string, imm
 func (am *AgentManager) CancelAllInflightWork(ctx context.Context, reason string) error {
 	// Python: L186-191: 遍历所有 agents 调用 cancel_inflight_work(reason)
 	am.mu.RLock()
-	var agentsCopy []*UapClaw
+	var agentsCopy []*UapClawSwarm
 	for _, chAgents := range am.agents {
 		for _, entry := range chAgents {
 			agentsCopy = append(agentsCopy, entry.agent)
@@ -590,7 +590,7 @@ func (am *AgentManager) Cleanup() error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultAgentFactory 默认 Agent 工厂：NewUapClaw + CreateInstance。
-func defaultAgentFactory(config map[string]any, mode, subMode string) (*UapClaw, error) {
+func defaultAgentFactory(config map[string]any, mode, subMode string) (*UapClawSwarm, error) {
 	agent := NewUapClaw()
 	if err := agent.CreateInstance(
 		WithCreateInstanceConfig(config),
@@ -604,7 +604,7 @@ func defaultAgentFactory(config map[string]any, mode, subMode string) (*UapClaw,
 
 // createAgent 创建 Agent 实例。
 // Python: AgentManager._create_agent
-func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string, config map[string]any, subMode, cacheKey string) (*UapClaw, error) {
+func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string, config map[string]any, subMode, cacheKey string) (*UapClawSwarm, error) {
 	// Python: L108-113: 1. 注入最新 env overrides
 	am.mu.RLock()
 	envOverrides := am.latestEnvOverrides
@@ -643,7 +643,7 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 		Str("project_dir", projectDir).
 		Msg("[AgentManager] creating Agent")
 
-	// Python: L129-130: 3. 创建 UapClaw + CreateInstance（通过工厂函数）
+	// Python: L129-130: 3. 创建 UapClawSwarm + CreateInstance（通过工厂函数）
 	am.mu.RLock()
 	factory := am.createAgentFactory
 	am.mu.RUnlock()

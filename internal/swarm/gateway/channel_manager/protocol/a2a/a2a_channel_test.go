@@ -42,9 +42,9 @@ func TestConfigFromEnv_默认值(t *testing.T) {
 	if cfg.ChannelID != "a2a" {
 		t.Errorf("ChannelID = %q", cfg.ChannelID)
 	}
-	// 偏差 D9：品牌串映射 JiuwenClaw → UapClaw
-	if cfg.AppName != "UapClaw Gateway A2A Server" ||
-		cfg.AppDescription != "A2A ingress for UapClaw Gateway" ||
+	// 偏差 D9：品牌串映射 JiuwenClaw → UapClawSwarm
+	if cfg.AppName != "UapClawSwarm Gateway A2A Server" ||
+		cfg.AppDescription != "A2A ingress for UapClawSwarm Gateway" ||
 		cfg.AppVersion != "0.1.0" {
 		t.Errorf("App* = %q / %q / %q", cfg.AppName, cfg.AppDescription, cfg.AppVersion)
 	}
@@ -330,7 +330,7 @@ func testConfig(port int) A2AChannelConfig {
 		RPCPath: "/a2a", CardPath: "/.well-known/agent-card.json",
 		ExtendedCardPath: "/agent/authenticatedExtendedCard",
 		ProtocolVersion:  "1.0.0", ChannelID: "a2a",
-		AppName: "UapClaw Gateway A2A Server", AppDescription: "d", AppVersion: "0.1.0",
+		AppName: "UapClawSwarm Gateway A2A Server", AppDescription: "d", AppVersion: "0.1.0",
 	}
 }
 

@@ -163,7 +163,7 @@ func TestAgentServer_ConsumeEnvelope(t *testing.T) {
 	transport := transport.NewChannelTransport()
 	s := NewAgentServer(cfg, transport)
 	// 注入 mock Agent 工厂，避免 createAgent → CreateInstance → LLM nil panic
-	s.SetAgentFactoryForTest(func(config map[string]any, mode, subMode string) (*runtime.UapClaw, error) {
+	s.SetAgentFactoryForTest(func(config map[string]any, mode, subMode string) (*runtime.UapClawSwarm, error) {
 		return runtime.NewUapClaw(), nil
 	})
 
