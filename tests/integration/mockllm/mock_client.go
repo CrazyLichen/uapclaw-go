@@ -23,6 +23,14 @@ type MockResponse struct {
 	ToolCalls []*llmschema.ToolCall
 	// Err 模拟错误
 	Err error
+	// FinishReason 指定的 finish_reason（为空时按既有规则推导：有 tool_calls 则 tool_calls）
+	FinishReason string
+	// UsageCode usage_metadata.code（非 0 表示 provider 返回错误响应）
+	UsageCode int
+	// UsageErrMsg usage_metadata.err_msg（provider 错误文案）
+	UsageErrMsg string
+	// OutputTokens usage_metadata.output_tokens（输出 token 计数）
+	OutputTokens int
 }
 
 // InvokeRecord 记录一次 Invoke 调用，用于测试断言。
@@ -154,6 +162,30 @@ func CreateJSONResponse(data map[string]any) MockResponse {
 // CreateErrorResponse 创建错误预设响应。
 func CreateErrorResponse(err error) MockResponse {
 	return MockResponse{Err: err}
+}
+
+// CreateProviderErrorResponse 创建「provider 错误响应」预设。
+//
+// 与 CreateErrorResponse 的区别：后者模拟传输层直接返回 error（Invoke 返回 err），
+// 前者模拟 HTTP 200 但响应体带错误语义（finish_reason=error + usage.code != 0），
+// 用于覆盖调用方对「错误响应」而非「错误」的判定链路。
+func CreateProviderErrorResponse(code int, errMsg string) MockResponse {
+	return MockResponse{
+		FinishReason: "error",
+		UsageCode:    code,
+		UsageErrMsg:  errMsg,
+	}
+}
+
+// CreateOutputLimitResponse 创建「输出上限命中且无正文」预设。
+//
+// finish_reason=length 且 content 为空：推理模型把输出预算花在思维链上，
+// 调用方应把这种空响应判定为模型调用失败。
+func CreateOutputLimitResponse(outputTokens int) MockResponse {
+	return MockResponse{
+		FinishReason: "length",
+		OutputTokens: outputTokens,
+	}
 }
 
 // Invoke 实现 BaseModelClient.Invoke，按序消费预设响应队列。
@@ -404,8 +436,14 @@ func (m *MockModelClient) getNextResponseLocked() MockResponse {
 func (m *MockModelClient) buildAssistantMessage(resp MockResponse) *llmschema.AssistantMessage {
 	opts := []llmschema.AssistantMessageOption{
 		llmschema.WithAssistantUsageMetadata(&llmschema.UsageMetadata{
-			ModelName: defaultMockModelName,
+			ModelName:    defaultMockModelName,
+			Code:         resp.UsageCode,
+			ErrMsg:       resp.UsageErrMsg,
+			OutputTokens: resp.OutputTokens,
 		}),
+	}
+	if resp.FinishReason != "" {
+		opts = append(opts, llmschema.WithFinishReason(resp.FinishReason))
 	}
 	if len(resp.ToolCalls) > 0 {
 		opts = append(opts, llmschema.WithToolCalls(resp.ToolCalls))

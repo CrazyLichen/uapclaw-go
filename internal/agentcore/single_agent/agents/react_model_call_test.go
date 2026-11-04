@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -242,6 +244,71 @@ func TestRaiseForModelResponseError_错误文案(t *testing.T) {
 		t.Fatal("期望返回 provider 错误")
 	}
 	assert.Contains(t, err.Error(), "provider response error: code=0, finish_reason=error, message=boom")
+}
+
+// TestRaiseForModelResponseError_结构化详情 验证结构化字段落在 details 而非 params。
+//
+// Python: raise_error(..., details={...}) (react_agent.py L2039/L2052) —— details 是
+// rail 与前端可见的结构化详情容器，params 只参与模板消息占位符渲染，两者语义不同。
+func TestRaiseForModelResponseError_结构化详情(t *testing.T) {
+	// 输出上限命中：details 携带 finish_reason 与 output_tokens
+	limitMsg := llmschema.NewAssistantMessage("")
+	limitMsg.FinishReason = "length"
+	limitMsg.UsageMetadata = &llmschema.UsageMetadata{OutputTokens: 4096}
+	err := raiseForModelResponseError(limitMsg)
+	be := &exception.BaseError{}
+	if !errors.As(err, &be) {
+		t.Fatalf("期望 *exception.BaseError，实际 %T", err)
+	}
+	limitDetails, ok := be.Details().(map[string]any)
+	if !ok {
+		t.Fatalf("details 期望 map[string]any，实际 %T", be.Details())
+	}
+	assert.Equal(t, "length", limitDetails["finish_reason"])
+	assert.Equal(t, 4096, limitDetails["output_tokens"])
+
+	// provider 错误：details 携带 provider_code / finish_reason / provider_message
+	providerMsg := llmschema.NewAssistantMessage("boom")
+	providerMsg.FinishReason = "error"
+	err = raiseForModelResponseError(providerMsg)
+	be = &exception.BaseError{}
+	if !errors.As(err, &be) {
+		t.Fatalf("期望 *exception.BaseError，实际 %T", err)
+	}
+	providerDetails, ok := be.Details().(map[string]any)
+	if !ok {
+		t.Fatalf("details 期望 map[string]any，实际 %T", be.Details())
+	}
+	assert.Equal(t, 0, providerDetails["provider_code"])
+	assert.Equal(t, "error", providerDetails["finish_reason"])
+	assert.Equal(t, "boom", providerDetails["provider_message"])
+}
+
+// TestRaiseForModelResponseError_中文错误文案按字符截断 验证 500 上限按字符计数。
+//
+// 上游 error_message[:500] 切的是字符；Go 按字节切会切断多字节字符产出乱码。
+func TestRaiseForModelResponseError_中文错误文案按字符截断(t *testing.T) {
+	// "模型调用超限" 是 6 个字符，重复 100 次 = 600 个字符，超过 500 上限
+	input := strings.Repeat("模型调用超限", 100)
+	msg := llmschema.NewAssistantMessage(input)
+	msg.FinishReason = "failed"
+	err := raiseForModelResponseError(msg)
+	be := &exception.BaseError{}
+	if !errors.As(err, &be) {
+		t.Fatalf("期望 *exception.BaseError，实际 %T", err)
+	}
+	details, ok := be.Details().(map[string]any)
+	if !ok {
+		t.Fatalf("details 期望 map[string]any，实际 %T", be.Details())
+	}
+	shown, ok := details["provider_message"].(string)
+	if !ok {
+		t.Fatalf("provider_message 期望 string，实际 %T", details["provider_message"])
+	}
+	assert.Equal(t, 500, utf8.RuneCountInString(shown))
+	assert.True(t, utf8.ValidString(shown), "截断结果必须是合法 UTF-8")
+	// 前 500 个字符原样保留（不是前 500 字节，也不是补省略号）
+	assert.Equal(t, string([]rune(input)[:500]), shown)
 }
 
 // ──────────────────────────── A-08-2: 拒图识别与降级 ────────────────────────────

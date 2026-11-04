@@ -7,7 +7,9 @@
 // （model_backup_rail_test.go，跨 agents + rail + interfaces +
 // foundation/llm + model_clients 子系统）、failover 后完整 ReAct
 // 工具循环（model_backup_react_loop_test.go，额外跨 foundation/tool +
-// ability + common/schema 子系统，验证切换模型后工具分发/执行/结果回填）。
+// ability + common/schema 子系统，验证切换模型后工具分发/执行/结果回填）、
+// 模型响应错误判定（provider_error_test.go，跨 agents + foundation/llm +
+// model_clients + common/exception 子系统，验证错误响应/输出上限转异常与文案截断）。
 //
 // 文件目录：
 //
@@ -15,6 +17,7 @@
 //	├── doc.go                         # 包文档
 //	├── model_backup_rail_test.go      # ModelBackupRail failover 集成测试（对齐 Python test_model_backup_rail.py）
 //	├── model_backup_react_loop_test.go # failover 后 ReAct 工具循环集成测试（对齐 Python 主用例工具链路）
+//	├── provider_error_test.go         # 模型响应错误判定集成测试（provider 错误响应 / 输出上限无答案）
 //	└── skills/
 //	    ├── doc.go                    # 技能测试包文档
 //	    ├── skill_lifecycle_test.go   # SkillUtil 生命周期

@@ -250,7 +250,8 @@ func raiseForModelResponseError(msg *llmschema.AssistantMessage) error {
 			exception.WithMsg(fmt.Sprintf(
 				"model hit its output limit (finish_reason=%s, output_tokens=%d) before producing an answer or a tool call",
 				finishReason, outputTokens)),
-			exception.WithParams(map[string]any{
+			// Python: raise_error(..., details={...}) —— 结构化详情走 details 而非 params
+			exception.WithDetails(map[string]any{
 				"finish_reason": finishReason,
 				"output_tokens": outputTokens,
 			}),
@@ -263,10 +264,9 @@ func raiseForModelResponseError(msg *llmschema.AssistantMessage) error {
 	if providerMessage == "" {
 		providerMessage = content
 	}
-	shownMessage := providerMessage
-	if len(shownMessage) > 500 {
-		shownMessage = shownMessage[:500]
-	}
+	// 上游 error_message[:500] 是「字符」切片；Go 字符串按字节切会把多字节字符劈成
+	// 两半产出乱码，故按 rune 截断（provider 中文错误文案是常见情形）。
+	shownMessage := utils.TruncateRunes(providerMessage, 500)
 	shownFinishReason := finishReason
 	if shownFinishReason == "" {
 		shownFinishReason = "unknown"
@@ -279,7 +279,8 @@ func raiseForModelResponseError(msg *llmschema.AssistantMessage) error {
 		exception.WithMsg(fmt.Sprintf(
 			"provider response error: code=%d, finish_reason=%s, message=%s",
 			code, shownFinishReason, detail)),
-		exception.WithParams(map[string]any{
+		// Python: raise_error(..., details={...})
+		exception.WithDetails(map[string]any{
 			"provider_code":    code,
 			"finish_reason":    shownFinishReason,
 			"provider_message": shownMessage,
