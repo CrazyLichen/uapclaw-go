@@ -214,3 +214,12 @@ tests/integration/testhelpers/plan_env.go
 # plan_mode_exited）时触发，集成套件没有该链路，改动行必然 0%。该分支只做
 # "推送失败记日志不阻断"，无业务分支；errcheck 门禁要求显式处理返回值。
 internal/swarm/server/agent_server.go#L113-L120
+
+# ── 2026-11-04 S3：会话删除时清理 plan 会话记忆 ──
+# handle_session.go#L263 由 SessionLifecycleSuite（tests/integration/swarm/server）
+# 的创建 → plan_status → 删除链路真实驱动，无需豁免。
+
+# server_env.go — 与 plan_env.go 同源的集成测试助手（AgentServer 入口驱动 + push 帧
+# 捕获）。CI 的 COVER_PKGS 只枚举 internal/* 前缀，tests/ 下的助手不被插桩，故改动行
+# 恒为 0%；其行为由使用它的 plan/envelope 集成用例全量驱动。
+tests/integration/testhelpers/server_env.go
