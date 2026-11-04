@@ -56,7 +56,6 @@ func makeTestEnvelope(method string, isStream bool) *e2a.E2AEnvelope {
 	return env
 }
 
-
 // TestHandleEnvelope_UnknownMethod_Unary 验证未命中 switch + IsStream=false → 走 handleUnary。
 func TestHandleEnvelope_UnknownMethod_Unary(t *testing.T) {
 	s, transport := newTestServer()
