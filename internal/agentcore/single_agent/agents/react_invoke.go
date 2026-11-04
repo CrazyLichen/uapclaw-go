@@ -849,8 +849,20 @@ func (a *ReActAgent) reactLoop(
 		// ⤵️ 6.11: Workflow 中断检测
 
 		// 单轮完全成功（模型响应 + 全部工具结果 + ToolMessage 均已写入）后触发。
-		// Python: react_agent.py L3241 —— rails（如快照 rail）据此捕获安全状态；
-		// 该钩子也是 boundary force_finish 的来源，故必须在轮末而不是轮首触发。
+		//
+		// 触发范围与上游严格一致：只有完整工具轮触发一次（一个迭代内 N 个
+		// tool_call 也只 fire 一次），任何 break path（答案轮、force-finish、
+		// HITL、workflow 中断）都不触发。上游 rail/base.py 事件枚举 docstring
+		// 明确写 "Only fires on fully successful iterations, not on any break
+		// path"；react_agent.py L3239-3241 的触发行也落在 tool_calls 分支内，
+		// 无工具调用的答案分支在其之前就 break 了。
+		//
+		// 语义理由：消费者（如 SnapshotRail）要的是「可回滚的安全状态」——上下文
+		// 尾部是完整的 assistant(tool_calls) + ToolMessage 对，快照不会出现
+		// tool_calls 悬空；答案轮结束即整次 invoke 结束，由 after_invoke 覆盖。
+		// 该钩子同时是 boundary force_finish 的来源，故放在轮末而非轮首。
+		//
+		// Python: react_agent.py L3239-3241
 		if fireErr := cbc.Fire(ctx, interfaces.CallbackAfterReactIteration); fireErr != nil {
 			logger.Warn(logComponent).
 				Str("event", string(interfaces.CallbackAfterReactIteration)).
