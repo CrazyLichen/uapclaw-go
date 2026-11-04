@@ -3,6 +3,7 @@ package skilldev
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -174,4 +175,46 @@ func TestInvokeStageAgent_调用失败(t *testing.T) {
 	if _, err := sctx.InvokeStageAgent(context.Background(), "plan", agent, "q"); err == nil {
 		t.Fatal("期望调用失败错误，实际 nil")
 	}
+}
+
+// TestStageResultText 阶段返回 result_type=error 时必须上抛（不能把错误文案当内容）
+func TestStageResultText(t *testing.T) {
+	t.Run("error 且带文案", func(t *testing.T) {
+		text, err := stageResultText(map[string]any{
+			"output":      "模型未返回有效内容（空响应），请重试或检查上下文。",
+			"result_type": "error",
+		}, "generate")
+		if err == nil {
+			t.Fatal("result_type=error 应返回错误")
+		}
+		if text != "" {
+			t.Fatalf("出错时不应返回文本，实际 %q", text)
+		}
+		if !strings.Contains(err.Error(), "generate") {
+			t.Fatalf("错误应包含阶段名，实际 %v", err)
+		}
+	})
+
+	t.Run("error 且无文案", func(t *testing.T) {
+		if _, err := stageResultText(map[string]any{"result_type": "error"}, "evaluate"); err == nil {
+			t.Fatal("无文案的 error 结果也应返回错误")
+		}
+	})
+
+	t.Run("answer 正常取文本", func(t *testing.T) {
+		text, err := stageResultText(map[string]any{"output": "内容", "result_type": "answer"}, "generate")
+		if err != nil {
+			t.Fatalf("answer 不应报错: %v", err)
+		}
+		if text != "内容" {
+			t.Fatalf("应取 output，实际 %q", text)
+		}
+	})
+
+	t.Run("无 result_type 兼容旧行为", func(t *testing.T) {
+		text, err := stageResultText(map[string]any{"output": "内容"}, "generate")
+		if err != nil || text != "内容" {
+			t.Fatalf("无 result_type 时应原样返回，实际 (%q, %v)", text, err)
+		}
+	})
 }

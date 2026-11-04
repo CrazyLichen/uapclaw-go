@@ -53,18 +53,21 @@ func (c *SkillDevContext) InvokeStageAgent(
 			Msg("[SkillDevContext] stage agent invoke failed")
 		return "", fmt.Errorf("阶段 %s 模型调用失败: %w", stageName, err)
 	}
-	// 阶段结果显式标记为 error 时必须上抛：ReAct 循环在"空回答/迭代耗尽"等场景
-	// 会返回 result_type=error 且 output 携带说明文案，直接取 output 会把失败当成功。
+	return stageResultText(result, stageName)
+}
+
+// stageResultText 解析阶段 Agent 的返回值。
+//
+// result_type=error 时必须上抛：ReAct 循环在「空回答 / 迭代耗尽」等场景会返回
+// result_type=error 且 output 携带说明文案，直接取 output 会把失败当成功。
+//
+// Python: 阶段 Agent 的返回同样带 result_type，调用方按类型判定失败。
+func stageResultText(result map[string]any, stageName string) (string, error) {
 	if resultType, ok := result["result_type"].(string); ok && strings.EqualFold(resultType, "error") {
 		msg := extractStageOutput(result)
 		if msg == "" {
 			msg = "阶段未返回可用内容"
 		}
-		logger.Warn(logComponent).
-			Str("task_id", c.TaskID).
-			Str("stage", stageName).
-			Str("output", msg).
-			Msg("[SkillDevContext] stage agent returned error result")
 		return "", fmt.Errorf("阶段 %s 返回错误结果: %s", stageName, msg)
 	}
 	return extractStageOutput(result), nil

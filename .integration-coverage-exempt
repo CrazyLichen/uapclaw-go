@@ -197,3 +197,9 @@ internal/swarm/server/runtime/agent_manager.go#L802-L815
 # params.go 为纯参数结构体（99 行、0 个函数、无可执行语句），集成覆盖剖面中
 # 不存在该文件的行；字段语义由 factory.go 装配链路验证（该文件改动行 100% OK）。
 internal/agentcore/harness/harness_config/params.go
+
+# ── 2026-11-04 Runtime 事件抽象（并发会话的 runtime 重构）──
+# events.go — RuntimeEvent 数据类型与转换器（Control/FromAgentResponse/ToDict/EventType），
+# 无 IO、无独立集成入口；Runtime 接线（service.go）尚无集成用例驱动该文件。
+# 事件构造与类型映射由 events_test.go 单测 100% 覆盖。接入集成链路后应删除此条。
+internal/swarm/runtime/events.go
