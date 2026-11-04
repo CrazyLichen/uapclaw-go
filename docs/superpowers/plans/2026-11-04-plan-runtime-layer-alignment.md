@@ -1284,3 +1284,61 @@ CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/s
 go run ./cmd/integration-audit -verify
 ```
 再加：`grep -rn 'UapClaw\b\|handleEnvelope\|resolveMode\|DrainControlEvents' internal tests cmd` 为 0；推送 main 后 CI 四 job 全绿。
+
+---
+
+## 附录 A：剩余收尾工作（2026-11-04 交接）
+
+> 当前状态：Task 1-3、4（最小接线）、5、6、8 已完成并本地提交（未推送）。以下三项待做，
+> 做完再一次性推 main 跑 CI（用户 2026-11-04 决定）。
+
+### A.1 Task 10 脚手架清理（必须删，规则 8）
+
+现状：`tests/integration/testhelpers/plan_env.go` 的 `syncPlanState`/`checkPlanExit`/`recordEvents`
+与 `tests/integration/swarm/server/adapter/mode_switch_todo_test.go` 的 `runTurn` 里，按
+`AgentRuntime` 的步骤手工补了 plan 同步（因为这两个 IT 直连 adapter）。
+
+目标：从 **AgentServer 入口** 驱动，删掉这段模拟。
+
+步骤：
+1. testhelpers 新增 `ServerEnv`（`NewAgentServer(cfg, transport.NewChannelTransport())` +
+   `Start(ctx)` + `SendPush` 捕获）：暴露 `Send(method, params, sessionID)` 与
+   `Frames()`（读 transport `RecvCh`）；`Push()` 返回最近一次 push payload。
+2. `plan_env.go`：删除 `syncPlanState`/`checkPlanExit`/`recordEvents`/`lastEnsureQuery`/`events` 字段，
+   `Send` 改走 `ServerEnv`；`Events()` 改读 `Push()` 里的 `payload`。
+3. `mode_switch_todo_test.go`：`runTurn` 删除手工 `EnsureState`/`CheckPostProcessExit`，
+   改走 `ServerEnv.Send`。
+4. 验收：`grep -rn "syncPlanState\|checkPlanExit\|lastEnsureQuery" tests/` 为 0；
+   `go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/...` 全绿。
+
+### A.2 Task 2c 欠账：`CancelRequest`
+
+Python `jiuwenswarm/runtime/request.py:578-652`：`cancel_request(agent_manager, request, allow_create=False)`
+→ 先 `get_agent_for_session_nowait`，取不到且 `allow_create` 才 `get_agent`；随后
+`agent.process_message(request)`。
+
+Go 现状：`handle_envelope.go` 的 `handleCancel` 内联三层 fallback（`GetAgentNoWait` ×2 → `GetAgent`）。
+落点：`internal/swarm/runtime/request.go` 新增 `CancelRequest(ctx, mgr, req, allowCreate)`，把三层
+fallback 上移；`handleCancel` 改为调用它。`AgentManagerPort` 需补 `GetAgentNoWait(channelID, mode, projectDir, subMode)`。
+
+### A.3 Task 2c 欠账：`SyncChatRequestMetadata`
+
+Python `jiuwenswarm/runtime/request.py:152-266`：写 `mode/model/project_dir/project_id/cron_id/
+user_id/last_user_message_at/work_mode/persist_session`，并有 attach-only 只读分支。
+
+Go 阻塞点：`session.SessionMetadataUpdate` 只有 `Mode/ChannelID/UserID/Title/ChannelMetadata/TeamName`。
+需先扩字段（`ProjectDir *string`、`WorkMode *string`、`Model *string`、`LastUserMessageAt *float64`），
+再实现 `SyncChatRequestMetadata` 并在 `PrepareChatTurn` 的 `syncMetadata=true` 路径调用。
+
+### A.4 推送前必做
+
+```bash
+export GOPROXY=https://goproxy.cn,direct
+CGO_ENABLED=1 go build -tags sqlite_fts5 ./...
+CGO_ENABLED=1 go vet -tags "sqlite_fts5 test integration" ./...
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/...
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/...
+go run ./cmd/integration-audit -verify
+grep -rn "syncPlanState\|checkPlanExit\|lastEnsureQuery\|DrainControlEvents\|resolveRequestQuery\|UapClaw\b" internal tests cmd
+```
+最后一条为 0 才可推送；推送后盯 CI 四 job 全绿（Build / Unit / Integration / Lint）。
