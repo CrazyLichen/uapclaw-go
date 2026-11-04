@@ -3,6 +3,7 @@
 package attachment_mode
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -36,16 +37,18 @@ func (s *PlanStateSuite) TestIT_S2_3_显式进入改写query() {
 	})
 
 	s.Equal("plan", s.env.PlanMode(itSession))
-	// 模型收到的本轮用户输入被前置约束提醒，原 query 原样保留在尾部
+	// 模型收到的本轮用户输入（JSON 信封内的 content）被前置约束提醒，原 query 原样保留在尾部
 	rewritten := ""
 	for _, msg := range s.env.LastMessages() {
-		if strings.Contains(msg.GetContent().Text(), "帮我重构权限模块") {
-			rewritten = msg.GetContent().Text()
+		content := userEnvelopeContent(msg.GetContent().Text())
+		if strings.Contains(content, "帮我重构权限模块") {
+			rewritten = content
 		}
 	}
 	s.Require().NotEmpty(rewritten, "模型窗口里必须能看到原 query")
 	s.Contains(rewritten, "<system-reminder>")
 	s.Contains(rewritten, "Plan mode is active")
+	s.True(strings.HasSuffix(rewritten, "帮我重构权限模块"), "原 query 必须原样保留在提醒之后")
 }
 
 // TestIT_S2_4_退出记忆阻断 验证 check_post_process_exit 记的退出记忆阻断非显式进入。
@@ -117,12 +120,29 @@ func (s *PlanStateSuite) TestIT_S2_7_跳过矩阵() {
 func (s *PlanStateSuite) TestIT_S2_13_跨会话排队占位透传() {
 	s.env.Send(itSession, planMode, "计划", map[string]any{"plan_entry_source": "plan_toggle"})
 
-	controller := s.env.Controller().PlanController()
+	controller := s.env.PlanController()
 	s.Require().NotNil(controller)
 	s.False(controller.SessionMessageRequiresQueue(itSession), "占位实现必须透传 false")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// userEnvelopeContent 从 BuildUserPrompt 的 JSON 信封里取出 content；非信封原样返回。
+func userEnvelopeContent(text string) string {
+	start := strings.Index(text, "{")
+	if start < 0 {
+		return text
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(text[start:]), &envelope); err != nil {
+		return text
+	}
+	content, _ := envelope["content"].(string)
+	if content == "" {
+		return text
+	}
+	return content
+}
 
 // SetupTest 每例隔离环境。
 func (s *PlanStateSuite) SetupTest() {

@@ -5,6 +5,7 @@ package testhelpers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,46 +18,51 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	swarmschema "github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	srvruntime "github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// PlanAdapter 计划模式集成测试所需的最小适配器能力（DeepAdapter / CodeAdapter 均满足）。
-type PlanAdapter interface {
-	// ProcessMessageImpl 走完整请求链路
-	ProcessMessageImpl(ctx context.Context, req *swarmschema.AgentRequest, inputs map[string]any) (*swarmschema.AgentResponse, error)
-	// Instance 返回装配后的 DeepAgent
-	Instance() *harness.DeepAgent
-}
-
-// PlanEnv 计划模式（S2/S3）集成测试环境。
+// PlanEnv 计划模式（S3）集成测试环境。
 //
-// 与 AdapterTestEnv 的关系：复用隔离三件套 + MockLLM provider 注册，
-// 额外提供「发一轮 chat → 读 plan 状态 / 控制事件 / 模型实收窗口」的断言助手。
+// 复用隔离三件套 + MockLLM provider 注册，从 **AgentServer 入口** 驱动请求
+// （分发 → AgentRuntime → adapter），不再手工补 plan 同步与 query 回写；
+// 断言助手覆盖「发一轮 chat → 读 plan 状态 / 控制事件 / 模型实收窗口」。
 type PlanEnv struct {
 	// T 测试句柄
 	T *testing.T
 	// Env 底层隔离环境（DataDir / Provider）
 	Env *AdapterTestEnv
-	// Adapter 受测适配器
-	Adapter PlanAdapter
-	// Deep 仅 agent 族适配器可用（提供 plan 控制器与控制事件读取）
-	Deep *adapter.DeepAdapter
+	// Server 进程内 AgentServer 环境（E2A 投递 + 帧收集）
+	Server *ServerEnv
+	// Agent 最近一次被工厂创建的 agent（供实例级断言）
+	Agent *srvruntime.UapClawSwarm
 	// Mock 模型桩（与 BaseIntegrationSuite.MockLLM 同一实例）
 	Mock *mockllm.MockModelClient
 	// ChannelID 请求渠道
 	ChannelID string
-	// events 控制事件缓冲（IT 直连 adapter 时由本助手模拟 AgentRuntime 的发射）
-	events map[string][]swruntime.ControlEvent
-	// eventsMu 保护 events
-	eventsMu sync.Mutex
-	// lastEnsureQuery EnsureState 改写后的 query（供 Send 回写）
-	lastEnsureQuery string
+	// ProjectDir 工程目录（非空时每轮请求都带上，保证 agent 缓存键稳定）
+	ProjectDir string
+	// WorkMode work / code（非空时每轮请求都带上，决定 agent 族）
+	WorkMode string
+	// FactoryMode 传给 CreateInstance 的模式（空=沿用 manager 解析值）。
+	//
+	// code 族的 IT 配置把 modes.code.tools 置空以精简用例，若沿用 "code" 会拿不到
+	// todo 工具；基线用例一直用 "agent" 读 modes.agent，这里保持一致。
+	FactoryMode string
+	// agentMu 保护 Agent / 最近一轮 agent 标识的并发读写
+	agentMu sync.Mutex
+	// lastMode 最近一轮解析出的一级模式
+	lastMode string
+	// lastSubMode 最近一轮解析出的子模式
+	lastSubMode string
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -65,102 +71,46 @@ const (
 	planEnvChannel = "itest-channel"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewPlanEnv 构建 agent 族（DeepAdapter）测试环境。
+// NewPlanEnv 构建 agent 族测试环境（AgentServer 入口驱动）。
 func NewPlanEnv(t *testing.T, mock *mockllm.MockModelClient, prefix string) *PlanEnv {
 	t.Helper()
 	env := NewAdapterTestEnv(t, mock, prefix)
-	env.WriteConfigYAML(t, "")
-	d := adapter.NewDeepAdapter()
-	if err := d.CreateInstance(context.Background(), map[string]any{}, "agent", ""); err != nil {
-		t.Fatalf("创建 DeepAdapter 失败: %v", err)
-	}
-	t.Cleanup(func() { _ = d.Cleanup() })
-	return &PlanEnv{T: t, Env: env, Adapter: d, Deep: d, Mock: mock, ChannelID: planEnvChannel}
+	return newPlanEnvWithEnv(t, env, mock, "", "work")
 }
 
-// NewCodePlanEnv 构建 code 族（CodeAdapter）测试环境。
+// NewCodePlanEnv 构建 code 族测试环境（project_dir 指向临时工程）。
 func NewCodePlanEnv(t *testing.T, mock *mockllm.MockModelClient, prefix string) *PlanEnv {
 	t.Helper()
 	env := NewAdapterTestEnv(t, mock, prefix)
-	env.WriteConfigYAML(t, "")
-	c := adapter.NewCodeAdapter()
-	if err := c.CreateInstance(context.Background(), map[string]any{
-		"project_dir": filepath.Join(env.DataDir, "myproj"),
-	}, "agent", ""); err != nil {
-		t.Fatalf("创建 CodeAdapter 失败: %v", err)
-	}
-	t.Cleanup(func() { _ = c.Cleanup() })
-	return &PlanEnv{T: t, Env: env, Adapter: c, Mock: mock, ChannelID: planEnvChannel}
+	return newPlanEnvWithEnv(t, env, mock, filepath.Join(env.DataDir, "myproj"), "code")
 }
 
-// Send 发送一轮 chat.send 请求。
+// Send 发送一轮 chat.send 请求（非流式）。
 //
 // extra 会合并进 params（如 plan_entry_source / sub_mode / resume）。
 func (e *PlanEnv) Send(sessionID, mode, query string, extra map[string]any) *swarmschema.AgentResponse {
 	e.T.Helper()
-	params := map[string]any{
-		"query":           query,
-		"mode":            mode,
-		"conversation_id": sessionID,
-	}
-	for k, v := range extra {
-		params[k] = v
-	}
-	raw, err := json.Marshal(params)
-	if err != nil {
-		e.T.Fatalf("序列化 params 失败: %v", err)
-	}
-	req := swarmschema.NewAgentRequest(
-		"req-"+sessionID, e.ChannelID, swarmschema.ReqMethodChatSend, raw,
-		swarmschema.WithAgentSessionID(sessionID),
-	)
-	inputs := map[string]any{
-		"conversation_id": sessionID,
-		"query":           query,
-		"channel":         e.ChannelID,
-		"language":        "zh",
-	}
-	// IT 直连 adapter：按 AgentRuntime.Invoke 的步骤补 plan 同步与 query 改写
-	// （⤵️ Task 10 迁移到 server 入口后删除这段模拟）
-	planEvents := e.syncPlanState(sessionID, req, mode, query)
-	if newQuery := e.lastEnsureQuery; newQuery != "" && newQuery != query {
-		params["query"] = newQuery
-		if rawUpdated, mErr := json.Marshal(params); mErr == nil {
-			req.Params = rawUpdated
-		}
-		inputs["query"] = newQuery
-	}
-	resp, err := e.Adapter.ProcessMessageImpl(context.Background(), req, inputs)
-	e.recordEvents(sessionID, planEvents)
-	e.recordEvents(sessionID, e.checkPlanExit(sessionID, req, mode))
-	if err != nil {
-		e.T.Fatalf("ProcessMessageImpl 失败: %v", err)
-	}
-	return resp
+	requestID := e.send(sessionID, mode, query, extra, false)
+	return e.Server.AwaitUnary(requestID)
+}
+
+// SendStream 以流式方式发送一轮 chat.send，返回收到的全部 chunk。
+func (e *PlanEnv) SendStream(sessionID, mode, query string, extra map[string]any) []*swarmschema.AgentResponseChunk {
+	e.T.Helper()
+	requestID := e.send(sessionID, mode, query, extra, true)
+	return e.Server.AwaitStreamEnd(requestID)
 }
 
 // SendNonChat 以非 chat 方法发送请求（验证跳过矩阵）。
 func (e *PlanEnv) SendNonChat(sessionID, method, mode string) {
 	e.T.Helper()
-	raw, err := json.Marshal(map[string]any{"query": "x", "mode": mode})
-	if err != nil {
-		e.T.Fatalf("序列化 params 失败: %v", err)
-	}
-	req := swarmschema.NewAgentRequest(
-		"req-nonchat-"+sessionID, e.ChannelID, swarmschema.ReqMethod(method), raw,
-		swarmschema.WithAgentSessionID(sessionID),
-	)
-	inputs := map[string]any{
-		"conversation_id": sessionID,
-		"query":           "x",
-		"channel":         e.ChannelID,
-		"language":        "zh",
-	}
-	if _, err := e.Adapter.ProcessMessageImpl(context.Background(), req, inputs); err != nil {
-		e.T.Fatalf("非 chat 请求失败: %v", err)
-	}
+	params := map[string]any{"query": "x", "mode": mode, "conversation_id": sessionID}
+	requestID := e.Server.Send(method, params, sessionID, false)
+	e.Server.AwaitUnary(requestID)
 }
 
 // PlanMode 读取会话持久化的 plan 模式（空串表示尚未写过状态）。
@@ -170,60 +120,6 @@ func (e *PlanEnv) PlanMode(sessionID string) string {
 	return mode
 }
 
-// syncPlanState 按 AgentRuntime.Invoke 的第一步同步 plan 状态（IT 直连 adapter 时的模拟）。
-func (e *PlanEnv) syncPlanState(sessionID string, req *swarmschema.AgentRequest, mode, query string) []swruntime.ControlEvent {
-	if e.Deep == nil || e.Deep.PlanController() == nil {
-		return nil
-	}
-	// 中断续答不参与 plan 同步（对齐 AgentRuntime.planEnabled 的 resume 守卫）
-	var params map[string]any
-	if err := json.Unmarshal(req.Params, &params); err == nil {
-		if resume, ok := params["resume"].(bool); ok && resume {
-			return nil
-		}
-	}
-	res, err := e.Deep.PlanController().EnsureState(context.Background(), swruntime.PlanRequest{
-		SessionID: sessionID,
-		Mode:      mode,
-		ReqMethod: req.ReqMethod.String(),
-		Query:     query,
-	}, e.Deep.PlanStateAccessor())
-	if err != nil {
-		e.T.Fatalf("EnsureState 失败: %v", err)
-	}
-	e.lastEnsureQuery = res.Query
-	return res.Events
-}
-
-// checkPlanExit 按 AgentRuntime.Invoke 的执行后步骤检测 plan 退出。
-func (e *PlanEnv) checkPlanExit(sessionID string, req *swarmschema.AgentRequest, mode string) []swruntime.ControlEvent {
-	if e.Deep == nil || e.Deep.PlanController() == nil {
-		return nil
-	}
-	events, err := e.Deep.PlanController().CheckPostProcessExit(context.Background(), swruntime.PlanRequest{
-		SessionID: sessionID,
-		Mode:      mode,
-		ReqMethod: req.ReqMethod.String(),
-	}, e.Deep.PlanStateAccessor())
-	if err != nil {
-		e.T.Fatalf("CheckPostProcessExit 失败: %v", err)
-	}
-	return events
-}
-
-// recordEvents 记录控制事件。
-func (e *PlanEnv) recordEvents(sessionID string, events []swruntime.ControlEvent) {
-	if len(events) == 0 {
-		return
-	}
-	e.eventsMu.Lock()
-	defer e.eventsMu.Unlock()
-	if e.events == nil {
-		e.events = map[string][]swruntime.ControlEvent{}
-	}
-	e.events[sessionID] = append(e.events[sessionID], events...)
-}
-
 // PlanSlug 读取会话持久化的 plan 文件短名。
 func (e *PlanEnv) PlanSlug(sessionID string) string {
 	e.T.Helper()
@@ -231,41 +127,54 @@ func (e *PlanEnv) PlanSlug(sessionID string) string {
 	return slug
 }
 
-// Events 取出并清空会话控制事件。
-func (e *PlanEnv) Events(sessionID string) []map[string]any {
+// Events 返回 push 帧里的控制事件（event_type + mode）。
+func (e *PlanEnv) Events(_ string) []map[string]any {
 	e.T.Helper()
-	if e.Deep == nil {
-		e.T.Fatal("只有 agent 族适配器提供控制事件")
-	}
-	e.eventsMu.Lock()
-	raw := append([]swruntime.ControlEvent(nil), e.events[sessionID]...)
-	delete(e.events, sessionID)
-	e.eventsMu.Unlock()
-	out := make([]map[string]any, 0, len(raw))
-	for _, ev := range raw {
-		out = append(out, map[string]any{"event_type": ev.EventType, "mode": ev.Mode})
+	out := []map[string]any{}
+	for _, push := range e.Server.Pushes() {
+		payload := PushPayload(push)
+		if payload == nil {
+			continue
+		}
+		out = append(out, map[string]any{
+			"event_type": payload["event_type"],
+			"mode":       payload["mode"],
+		})
 	}
 	return out
 }
 
-// HasEvent 判断会话事件里是否出现指定 event_type。
-func (e *PlanEnv) HasEvent(sessionID, eventType string) bool {
+// HasEvent 判断 push 帧里是否出现指定 event_type。
+func (e *PlanEnv) HasEvent(_ string, eventType string) bool {
 	e.T.Helper()
-	for _, ev := range e.Events(sessionID) {
-		if ev["event_type"] == eventType {
+	for _, push := range e.Server.Pushes() {
+		payload := PushPayload(push)
+		if payload == nil {
+			continue
+		}
+		if payload["event_type"] == eventType {
 			return true
 		}
 	}
 	return false
 }
 
-// Controller 返回计划模式控制器（agent 族专用）。
-func (e *PlanEnv) Controller() *adapter.DeepAdapter { return e.Deep }
+// Inst 返回装配后的 DeepAgent 实例（实例级断言用）。
+func (e *PlanEnv) Inst() *harness.DeepAgent {
+	e.T.Helper()
+	return e.inst()
+}
+
+// PlanController 返回服务端的计划模式控制器（进程内唯一，对齐 Python _SERVER_PLAN_CONTROLLER）。
+func (e *PlanEnv) PlanController() *swruntime.PlanModeController {
+	e.T.Helper()
+	return e.Server.Server.PlanController()
+}
 
 // HasSection 判断系统提示词构建器里是否存在某节。
 func (e *PlanEnv) HasSection(name string) bool {
 	e.T.Helper()
-	inst := e.Adapter.Instance()
+	inst := e.inst()
 	if inst == nil || inst.SystemPromptBuilder() == nil {
 		return false
 	}
@@ -275,7 +184,7 @@ func (e *PlanEnv) HasSection(name string) bool {
 // ToolVisible 判断工具是否已注册到 AbilityManager。
 func (e *PlanEnv) ToolVisible(name string) bool {
 	e.T.Helper()
-	inst := e.Adapter.Instance()
+	inst := e.inst()
 	if inst == nil || inst.AbilityManager() == nil {
 		return false
 	}
@@ -371,8 +280,8 @@ func (e *PlanEnv) CountAttachmentsContaining(substr string) int {
 // SeedState 预置会话 plan 状态（模拟历史残留 plan_slug / 已退出等场景）。
 func (e *PlanEnv) SeedState(sessionID, mode, planSlug string) {
 	e.T.Helper()
+	inst := e.inst()
 	sess := e.sessionFacade(sessionID)
-	inst := e.Adapter.Instance()
 	state := inst.LoadState(sess)
 	state.PlanMode.Mode = mode
 	state.PlanMode.PlanSlug = planSlug
@@ -385,10 +294,10 @@ func (e *PlanEnv) SeedState(sessionID, mode, planSlug string) {
 // SwitchMode 直接切会话状态（模拟 exit_plan_mode 工具的效果）。
 func (e *PlanEnv) SwitchMode(sessionID, mode string) {
 	e.T.Helper()
-	if e.Deep == nil {
-		e.T.Fatal("只有 agent 族适配器可切模式")
+	if e.Agent == nil {
+		e.T.Fatal("agent 尚未创建")
 	}
-	if err := e.Deep.SwitchMode(context.Background(), sessionID, mode); err != nil {
+	if err := e.Agent.SwitchMode(context.Background(), sessionID, mode); err != nil {
 		e.T.Fatalf("SwitchMode 失败: %v", err)
 	}
 }
@@ -396,14 +305,15 @@ func (e *PlanEnv) SwitchMode(sessionID, mode string) {
 // MarkExitedByPostProcess 走 check_post_process_exit 记录退出记忆（一次性令牌）。
 func (e *PlanEnv) MarkExitedByPostProcess(sessionID, mode string) []swruntime.ControlEvent {
 	e.T.Helper()
-	if e.Deep == nil {
-		e.T.Fatal("只有 agent 族适配器有 plan 控制器")
+	agent := e.agentRef()
+	if agent == nil {
+		e.T.Fatal("agent 尚未创建")
 	}
-	events, err := e.Deep.PlanController().CheckPostProcessExit(context.Background(), swruntime.PlanRequest{
+	events, err := e.PlanController().CheckPostProcessExit(context.Background(), swruntime.PlanRequest{
 		SessionID: sessionID,
 		Mode:      mode,
 		ReqMethod: "chat.send",
-	}, e.Deep.PlanStateAccessor())
+	}, agent.PlanStateAccessor())
 	if err != nil {
 		e.T.Fatalf("CheckPostProcessExit 失败: %v", err)
 	}
@@ -413,7 +323,7 @@ func (e *PlanEnv) MarkExitedByPostProcess(sessionID, mode string) []swruntime.Co
 // RailCount 返回实例上指定类型的 rail 数量。
 func (e *PlanEnv) RailCount(railType reflect.Type) int {
 	e.T.Helper()
-	inst := e.Adapter.Instance()
+	inst := e.inst()
 	if inst == nil {
 		return 0
 	}
@@ -423,7 +333,7 @@ func (e *PlanEnv) RailCount(railType reflect.Type) int {
 // AttachmentOf 返回管理器里指定 section 的附件（不存在返回 nil）。
 func (e *PlanEnv) AttachmentOf(sessionID, section string) *hprompts.Attachment {
 	e.T.Helper()
-	inst := e.Adapter.Instance()
+	inst := e.inst()
 	if inst == nil || inst.PromptAttachments() == nil {
 		return nil
 	}
@@ -440,10 +350,10 @@ func (e *PlanEnv) AttachmentOf(sessionID, section string) *hprompts.Attachment {
 	return items[0]
 }
 
-// AttachmentCounts 返回管理器里全部附件（按 section）。
+// Attachments 返回管理器里全部附件（按 session）。
 func (e *PlanEnv) Attachments(sessionID string) []*hprompts.Attachment {
 	e.T.Helper()
-	inst := e.Adapter.Instance()
+	inst := e.inst()
 	if inst == nil || inst.PromptAttachments() == nil {
 		return nil
 	}
@@ -454,16 +364,150 @@ func (e *PlanEnv) Attachments(sessionID string) []*hprompts.Attachment {
 	return items
 }
 
+// WriteRawConfig 覆盖写入 config.yaml（需要自定义 react/modes 段时使用）。
+func (e *PlanEnv) WriteRawConfig(content string) {
+	e.T.Helper()
+	if err := os.WriteFile(filepath.Join(e.Env.DataDir, "config", "config.yaml"), []byte(content), 0o644); err != nil {
+		e.T.Fatalf("写 config.yaml 失败: %v", err)
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newPlanEnvWithEnv 在既有隔离环境上启动 AgentServer 并接上捕获工厂。
+func newPlanEnvWithEnv(t *testing.T, env *AdapterTestEnv, mock *mockllm.MockModelClient, projectDir, workMode string) *PlanEnv {
+	t.Helper()
+	env.WriteConfigYAML(t, "")
+	cfg, err := config.New("")
+	if err != nil {
+		t.Fatalf("加载配置失败: %v", err)
+	}
+	if _, err := cfg.Load(); err != nil {
+		t.Fatalf("读取 config.yaml 失败: %v", err)
+	}
+
+	planEnv := &PlanEnv{
+		T: t, Env: env, Mock: mock,
+		ChannelID: planEnvChannel, ProjectDir: projectDir, WorkMode: workMode,
+	}
+	planEnv.Server = NewServerEnv(t, cfg, func(agentConfig map[string]any, mode, subMode string) (*srvruntime.UapClawSwarm, error) {
+		merged := map[string]any{}
+		for k, v := range agentConfig {
+			merged[k] = v
+		}
+		agent := srvruntime.NewUapClaw()
+		instanceMode := mode
+		if override := planEnv.factoryMode(); override != "" {
+			instanceMode = override
+		}
+		if err := agent.CreateInstance(
+			srvruntime.WithCreateInstanceConfig(merged),
+			srvruntime.WithCreateInstanceMode(instanceMode),
+			srvruntime.WithCreateInstanceSubMode(subMode),
+		); err != nil {
+			return nil, fmt.Errorf("创建 agent 失败: %w", err)
+		}
+		planEnv.agentMu.Lock()
+		planEnv.Agent = agent
+		planEnv.agentMu.Unlock()
+		return agent, nil
+	})
+	planEnv.Server.ChannelID = planEnvChannel
+
+	// 预创建 agent：实例级断言（SeedState / Inst）在首轮请求之前也要可用。
+	agentMode := "agent"
+	if workMode == "code" {
+		agentMode = "code"
+	}
+	planEnv.FactoryMode = agentMode
+	if workMode == "code" {
+		planEnv.FactoryMode = "agent"
+	}
+	if _, err := planEnv.Server.Server.AgentManager().GetAgent(
+		context.Background(), planEnvChannel, agentMode, projectDir, ""); err != nil {
+		t.Fatalf("预创建 agent 失败: %v", err)
+	}
+	return planEnv
+}
+
+// send 组装并投递一轮 chat.send。
+func (e *PlanEnv) send(sessionID, mode, query string, extra map[string]any, isStream bool) string {
+	e.T.Helper()
+	params := map[string]any{
+		"query":           query,
+		"mode":            mode,
+		"conversation_id": sessionID,
+		"channel":         e.ChannelID,
+		"language":        "zh",
+	}
+	for k, v := range extra {
+		params[k] = v
+	}
+	if e.ProjectDir != "" {
+		params["project_dir"] = e.ProjectDir
+	}
+	if e.WorkMode != "" {
+		params["work_mode"] = e.WorkMode
+	}
+	e.trackMode(params)
+	return e.Server.Send(string(swarmschema.ReqMethodChatSend), params, sessionID, isStream)
+}
+
+// factoryMode 返回 CreateInstance 应使用的模式覆盖值。
+func (e *PlanEnv) factoryMode() string {
+	e.agentMu.Lock()
+	defer e.agentMu.Unlock()
+	return e.FactoryMode
+}
+
+// trackMode 记录本轮解析出的 (mode, subMode)，供 Inst 定位实际承接的 agent。
+func (e *PlanEnv) trackMode(params map[string]any) {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return
+	}
+	req := &swarmschema.AgentRequest{ChannelID: e.ChannelID, Params: raw}
+	resolved := swruntime.ResolveRequestRuntimeModeFromRequest(req)
+	e.agentMu.Lock()
+	e.lastMode, e.lastSubMode = resolved.ManagerMode, resolved.SubMode
+	e.agentMu.Unlock()
+}
+
+// agentRef 返回最近一轮请求实际使用的 agent。
+//
+// 注意：Go 的 agent 缓存键含 sub_mode，plan 与 normal 轮会是不同实例
+// （见计划「已知偏差」），因此实例级断言必须按本轮 mode/subMode 取。
+func (e *PlanEnv) agentRef() *srvruntime.UapClawSwarm {
+	e.agentMu.Lock()
+	mode, subMode := e.lastMode, e.lastSubMode
+	fallback := e.Agent
+	e.agentMu.Unlock()
+	if mode != "" {
+		if agent := e.Server.Server.AgentManager().GetAgentNoWait(e.ChannelID, mode, e.ProjectDir, subMode); agent != nil {
+			return agent
+		}
+	}
+	return fallback
+}
+
+// inst 返回装配后的 DeepAgent 实例。
+func (e *PlanEnv) inst() *harness.DeepAgent {
+	e.T.Helper()
+	agent := e.agentRef()
+	if agent == nil {
+		return nil
+	}
+	return agent.GetInstance()
+}
 
 // planState 读取会话 plan 状态（模式 + 计划短名）。
 func (e *PlanEnv) planState(sessionID string) (string, string) {
 	e.T.Helper()
-	sess := e.sessionFacade(sessionID)
-	inst := e.Adapter.Instance()
+	inst := e.inst()
 	if inst == nil {
 		e.T.Fatal("实例未就绪")
 	}
+	sess := e.sessionFacade(sessionID)
 	state := inst.LoadState(sess)
 	return state.PlanMode.Mode, state.PlanMode.PlanSlug
 }
@@ -471,7 +515,7 @@ func (e *PlanEnv) planState(sessionID string) (string, string) {
 // sessionFacade 预置/复用会话门面（LoadState 需要）。
 func (e *PlanEnv) sessionFacade(sessionID string) *session.Session {
 	e.T.Helper()
-	inst := e.Adapter.Instance()
+	inst := e.inst()
 	if inst == nil {
 		e.T.Fatal("实例未就绪")
 	}
@@ -496,12 +540,4 @@ func (e *PlanEnv) lastMessagesParam() model_clients.MessagesParam {
 		return rec.Messages
 	}
 	return model_clients.MessagesParam{}
-}
-
-// WriteRawConfig 覆盖写入 config.yaml（需要自定义 react/modes 段时使用）。
-func (e *PlanEnv) WriteRawConfig(content string) {
-	e.T.Helper()
-	if err := os.WriteFile(filepath.Join(e.Env.DataDir, "config", "config.yaml"), []byte(content), 0o644); err != nil {
-		e.T.Fatalf("写 config.yaml 失败: %v", err)
-	}
 }

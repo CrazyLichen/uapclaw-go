@@ -229,6 +229,13 @@ func (s *AgentServer) AgentManager() *runtime.AgentManager {
 	return s.agentManager
 }
 
+// PlanController 返回服务端持有的计划模式控制器。
+//
+// Python: agent_ws_server.py 模块级 _SERVER_PLAN_CONTROLLER（get_plan_active_sessions 同源）
+func (s *AgentServer) PlanController() *swruntime.PlanModeController {
+	return s.planController
+}
+
 // Transport 返回传输通道实例，供 handler 写入响应。
 func (s *AgentServer) Transport() transport.AgentTransport {
 	return s.transport

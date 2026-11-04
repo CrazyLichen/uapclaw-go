@@ -32,8 +32,13 @@ func (s *AgentServer) handleSessionPlanStatus(ctx context.Context, request *sche
 		return planStatusErrorResponse(request, "session_id is required", "BAD_REQUEST"), nil
 	}
 
-	// Python: get_session_metadata(cache_bust=True, enable_writeback=False)
+	// Python: get_session_metadata(cache_bust=True, enable_writeback=False)。
+	// 先强制读盘（避免用本进程陈旧缓存覆盖 Gateway 刚写入的状态）；磁盘尚无文件时
+	// 回退内存缓存——元数据写入是异步队列，同一轮 chat 刚结束时存在短暂未落盘窗口。
 	meta := session.ReadSessionMetadata(session.GetSessionsDir(), sid)
+	if len(meta) == 0 {
+		meta = session.GetSessionMetadata(sid)
+	}
 	if len(meta) == 0 {
 		return planStatusErrorResponse(request, "session not found", "NOT_FOUND"), nil
 	}

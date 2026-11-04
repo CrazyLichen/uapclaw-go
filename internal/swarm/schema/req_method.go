@@ -432,6 +432,7 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodSessionRewindAndRestore,
 		ReqMethodSessionRewindContext,
 		ReqMethodSessionRestoreFiles,
+		ReqMethodSessionPlanStatus,
 		// 历史
 		ReqMethodHistoryGet,
 		ReqMethodHistoryListTurns,

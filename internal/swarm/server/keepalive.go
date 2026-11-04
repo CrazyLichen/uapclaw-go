@@ -10,7 +10,7 @@ import (
 // StreamKeepalive 流式心跳：空闲超时发 keepalive，收到真实 chunk 或 terminal 后重置/停止。
 //
 // Python: jiuwenswarm/server/agent_ws_server.py:699 StreamKeepalive
-type StreamKeepalive struct {	// send 发送一次 keepalive
+type StreamKeepalive struct { // send 发送一次 keepalive
 	send func()
 	// interval 空闲间隔
 	interval time.Duration

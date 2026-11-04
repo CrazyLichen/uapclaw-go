@@ -3,7 +3,6 @@
 package adapter_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -15,9 +14,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
@@ -34,8 +30,8 @@ import (
 //  3. 行为：规划模式硬调 todo_create 被拦截、性能模式 todo_create 执行失败
 type ModeSwitchTodoSuite struct {
 	isuite.BaseIntegrationSuite
-	// env 每测试隔离的集成环境（数据目录 / MockLLM provider / env 备份）
-	env *testhelpers.AdapterTestEnv
+	// env 每测试隔离的集成环境（AgentServer 入口驱动 + MockLLM provider）
+	env *testhelpers.PlanEnv
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -72,26 +68,20 @@ func TestModeSwitchTodoSuite(t *testing.T) {
 	suite.Run(t, new(ModeSwitchTodoSuite))
 }
 
-// SetupTest 每个测试方法前构建隔离环境。
+// SetupTest 每个测试方法前构建隔离环境（AgentServer 入口驱动）。
 func (s *ModeSwitchTodoSuite) SetupTest() {
-	s.env = testhelpers.NewAdapterTestEnv(s.T(), s.MockLLM, "mock_mode_switch_itest")
+	s.env = testhelpers.NewPlanEnv(s.T(), s.MockLLM, "mock_mode_switch_itest")
 }
 
 // TestPlan到性能模式_语义完整 主链路：plan 模式 todo_create 被拦截（完整
 // plan 语义）→ 切性能模式 todo 节消失、工具注销、硬调失败、无重复拼段。
 func (s *ModeSwitchTodoSuite) TestPlan到性能模式_语义完整() {
-	s.env.WriteConfigYAML(s.T(), "")
-
-	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
-	s.T().Cleanup(func() { _ = d.Cleanup() })
-
 	// ── 第 1 轮：规划模式，模型创建待办（工具已注册，可执行） ──
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("todo_create", modeSwitchTodoArgs),
 		mockllm.CreateTextResponse("规划完成。"),
 	)
-	planEvents := s.runTurn(d, "req-plan-1", "agent.work.plan", "把需求拆成待办")
+	planEvents := s.runTurn("agent.work.plan", "把需求拆成待办")
 	// 规划模式语义（对齐 Python）：todo 工具在 hiddenInPlan——硬调被拒、
 	// 不产生 todo.updated，任务栏数据来源为 todo.json 既有任务
 	s.Require().False(hasEvent(planEvents, "todo.updated"),
@@ -99,7 +89,7 @@ func (s *ModeSwitchTodoSuite) TestPlan到性能模式_语义完整() {
 	s.Require().Contains(toolResultFor(planEvents, "todo_create"),
 		planHiddenToolMarker, "规划模式 todo_create 应被拒绝")
 
-	inst := d.Instance()
+	inst := s.env.Inst()
 	sb := inst.SystemPromptBuilder()
 	s.Require().NotNil(sb)
 	s.False(sb.HasSection("todo"), "规划模式 plan 分支应移除 todo 节")
@@ -115,9 +105,9 @@ func (s *ModeSwitchTodoSuite) TestPlan到性能模式_语义完整() {
 		mockllm.CreateToolCallResponse("todo_create", modeSwitchTodoArgs),
 		mockllm.CreateTextResponse("执行完成。"),
 	)
-	agentEvents := s.runTurn(d, "req-agent-2", "agent.work.normal", "继续执行")
+	agentEvents := s.runTurn("agent.work.normal", "继续执行")
 
-	inst = d.Instance()
+	inst = s.env.Inst()
 	sb = inst.SystemPromptBuilder()
 	s.Require().NotNil(sb)
 	s.False(sb.HasSection("todo"), "性能模式不注入 todo 静态节")
@@ -140,19 +130,13 @@ func (s *ModeSwitchTodoSuite) TestPlan到性能模式_语义完整() {
 
 // TestPlan模式_plan分支完整生效 断言 D1 置位后 AgentModeRail 的 plan 语义。
 func (s *ModeSwitchTodoSuite) TestPlan模式_plan分支完整生效() {
-	s.env.WriteConfigYAML(s.T(), "")
-
-	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
-	s.T().Cleanup(func() { _ = d.Cleanup() })
-
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("todo_create", modeSwitchTodoArgs),
 		mockllm.CreateTextResponse("计划已写好。"),
 	)
-	events := s.runTurn(d, "req-plan-semantics", "agent.work.plan", "先规划再执行")
+	events := s.runTurn("agent.work.plan", "先规划再执行")
 
-	inst := d.Instance()
+	inst := s.env.Inst()
 	sb := inst.SystemPromptBuilder()
 	s.Require().NotNil(sb)
 	s.False(sb.HasSection("mode_instructions"), "plan 指引走历史附件")
@@ -172,21 +156,15 @@ func (s *ModeSwitchTodoSuite) TestPlan模式_plan分支完整生效() {
 
 // TestAgent模式_多会话语义 断言切到性能模式后的工具注册与提示词状态。
 func (s *ModeSwitchTodoSuite) TestAgent模式_多会话语义() {
-	s.env.WriteConfigYAML(s.T(), "")
-
-	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
-	s.T().Cleanup(func() { _ = d.Cleanup() })
-
 	// 第 1 轮 plan 铺垫（让切换真实发生）
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("好。"))
-	_ = s.runTurn(d, "req-agent-sem-1", "agent.work.plan", "你好")
+	_ = s.runTurn("agent.work.plan", "你好")
 
 	// 第 2 轮切 agent
 	s.MockLLM.SetResponses(mockllm.CreateTextResponse("收到。"))
-	_ = s.runTurn(d, "req-agent-sem-2", "agent.work.normal", "继续")
+	_ = s.runTurn("agent.work.normal", "继续")
 
-	inst := d.Instance()
+	inst := s.env.Inst()
 	sb := inst.SystemPromptBuilder()
 	s.Require().NotNil(sb)
 	s.False(sb.HasSection("mode_instructions"), "非 plan 模式应移除 mode_instructions 节")
@@ -205,19 +183,13 @@ func (s *ModeSwitchTodoSuite) TestAgent模式_多会话语义() {
 
 // Test模式反复切换_状态稳定 断言 plan↔agent 四轮往返后状态无漂移。
 func (s *ModeSwitchTodoSuite) Test模式反复切换_状态稳定() {
-	s.env.WriteConfigYAML(s.T(), "")
-
-	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
-	s.T().Cleanup(func() { _ = d.Cleanup() })
-
 	steps := []string{"agent.work.plan", "agent.work.normal", "agent.work.plan", "agent.work.normal"}
 	var agentLens []int
 	for i, mode := range steps {
 		s.MockLLM.SetResponses(mockllm.CreateTextResponse(fmt.Sprintf("第%d轮完成。", i+1)))
-		_ = s.runTurn(d, fmt.Sprintf("req-stab-%d", i+1), mode, "继续")
+		_ = s.runTurn(mode, "继续")
 
-		sb := d.Instance().SystemPromptBuilder()
+		sb := s.env.Inst().SystemPromptBuilder()
 		s.Require().NotNil(sb)
 		s.False(sb.HasSection("todo"), "第%d轮(%s)不应有 todo 节", i+1, mode)
 
@@ -266,48 +238,12 @@ func (s *ModeSwitchTodoSuite) planAttachment(inst *harness.DeepAgent) *hprompts.
 	return items[0]
 }
 
-// runTurn 跑一轮流式对话并收集事件 payload。
-func (s *ModeSwitchTodoSuite) runTurn(d *adapter.DeepAdapter, requestID, mode, query string) []map[string]any {
+// runTurn 跑一轮流式对话并收集事件 payload（AgentServer 入口驱动）。
+func (s *ModeSwitchTodoSuite) runTurn(mode, query string) []map[string]any {
 	s.T().Helper()
-
-	params, err := json.Marshal(map[string]any{"mode": mode, "query": query})
-	s.Require().NoError(err)
-
-	sid := modeSwitchSessionID
-	req := &schema.AgentRequest{
-		RequestID: requestID,
-		ChannelID: "web",
-		SessionID: &sid,
-		Params:    params,
-		IsStream:  true,
-	}
-	// 按 AgentRuntime.Stream 的步骤补 plan 同步与 query 改写（IT 直连 adapter）
-	planReq := swruntime.PlanRequest{
-		SessionID: modeSwitchSessionID,
-		Mode:      mode,
-		ReqMethod: "chat.send",
-		Query:     query,
-	}
-	res, ensureErr := d.PlanController().EnsureState(s.Ctx, planReq, d.PlanStateAccessor())
-	s.Require().NoError(ensureErr)
-	if res.Query != "" && res.Query != query {
-		query = res.Query
-		params, err = json.Marshal(map[string]any{"mode": mode, "query": query})
-		s.Require().NoError(err)
-		req.Params = params
-	}
-	defer func() {
-		_, _ = d.PlanController().CheckPostProcessExit(s.Ctx, planReq, d.PlanStateAccessor())
-	}()
-	chunkCh, streamErr := d.ProcessMessageStreamImpl(s.Ctx, req, map[string]any{
-		"query":           query,
-		"mode":            mode,
-		"conversation_id": modeSwitchSessionID,
-	})
-	s.Require().NoError(streamErr, "ProcessMessageStreamImpl 不应返回启动错误")
-
-	events := make([]map[string]any, 0, 32)
-	for chunk := range chunkCh {
+	chunks := s.env.SendStream(modeSwitchSessionID, mode, query, nil)
+	events := make([]map[string]any, 0, len(chunks))
+	for _, chunk := range chunks {
 		if chunk == nil || chunk.Payload == nil {
 			continue
 		}
@@ -456,19 +392,13 @@ var _ = saprompt.PromptSection{}
 // write_file 写非 plan 文件被拒、bash 的 git 写被拒、bash 普通命令放行
 // （bash 写文件不受路径校验是 Python 同款设计边界，靠提示词约束）。
 func (s *ModeSwitchTodoSuite) TestPlan模式_写入工具拦截() {
-	s.env.WriteConfigYAML(s.T(), "")
-
-	d := adapter.NewDeepAdapter()
-	s.Require().NoError(d.CreateInstance(s.Ctx, map[string]any{}, "agent.work.plan", ""))
-	s.T().Cleanup(func() { _ = d.Cleanup() })
-
 	// 第 1 轮：模型试图写非 plan 文件 → 应被路径校验拒绝
 	s.MockLLM.SetResponses(
 		mockllm.CreateToolCallResponse("write_file",
 			`{"file_path":"/tmp/evil-escape.txt","content":"越权写入"}`),
 		mockllm.CreateTextResponse("好的。"),
 	)
-	events := s.runTurn(d, "req-plan-write-1", "agent.work.plan", "帮我写个文件")
+	events := s.runTurn("agent.work.plan", "帮我写个文件")
 	result := toolResultFor(events, "write_file")
 	s.Contains(result, "仅能用于计划文件",
 		"write_file 写非 plan 文件应被拒绝，实际工具结果: %q", result)
@@ -479,7 +409,7 @@ func (s *ModeSwitchTodoSuite) TestPlan模式_写入工具拦截() {
 			`{"command":"cd /tmp/repo && git add -A && git commit -m x"}`),
 		mockllm.CreateTextResponse("好的。"),
 	)
-	events = s.runTurn(d, "req-plan-write-2", "agent.work.plan", "提交一下代码")
+	events = s.runTurn("agent.work.plan", "提交一下代码")
 	result = toolResultFor(events, "bash")
 	s.Contains(result, "禁止执行 git 写操作",
 		"bash 的 git 写操作应被拒绝，实际工具结果: %q", result)
@@ -489,7 +419,7 @@ func (s *ModeSwitchTodoSuite) TestPlan模式_写入工具拦截() {
 		mockllm.CreateToolCallResponse("bash", `{"command":"echo hello > /tmp/plan-mode-boundary.txt"}`),
 		mockllm.CreateTextResponse("好的。"),
 	)
-	events = s.runTurn(d, "req-plan-write-3", "agent.work.plan", "输出点内容")
+	events = s.runTurn("agent.work.plan", "输出点内容")
 	result = toolResultFor(events, "bash")
 	s.NotEmpty(result, "bash 普通命令应放行（对齐 Python 只拦 git 写），实际工具结果: %q", result)
 	s.NotContains(result, "AgentModeRail", "bash 普通命令不应被 rail 拒绝")

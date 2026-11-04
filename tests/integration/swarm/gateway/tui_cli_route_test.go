@@ -214,7 +214,7 @@ func (s *CliRouteFullChainSuite) TestChatSendFullChain_默认codeNormal() {
 //
 // mode 记录是 tui 默认 mode 注入（gateway_server.go L508-522 setdefault
 // code.normal）的直接断言证据。
-func (s *CliRouteFullChainSuite) recordingAgentFactory(config map[string]any, mode, subMode string) (*runtime.UapClaw, error) {
+func (s *CliRouteFullChainSuite) recordingAgentFactory(config map[string]any, mode, subMode string) (*runtime.UapClawSwarm, error) {
 	s.modeRecorder.mu.Lock()
 	s.modeRecorder.modes = append(s.modeRecorder.modes, mode+"/"+subMode)
 	s.modeRecorder.mu.Unlock()
