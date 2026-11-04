@@ -664,6 +664,367 @@ git commit -m "feat(prompts): attachment 存储（归一化/过期/稳定排序/
 
 ---
 
+### Task 2B: 补齐上游剩余方法（update / remove_by_id / replace_source / file reference / prompt section）
+
+> 方法级对齐核查补齐：Python `PromptAttachmentManager` 还有 7 个公开方法未在 Task 2 实现，
+> 本任务全部补齐，并加 `remove_by_filter` 的破坏性守卫（上游 `_validate_destructive_filter`）。
+
+**Files:**
+- Modify: `internal/agentcore/harness/prompts/attachment_store.go`
+- Test: `internal/agentcore/harness/prompts/attachment_store_update_test.go`
+
+- [ ] **Step 1: 写失败测试**
+
+```go
+package prompts
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+)
+
+func TestManager_UpdateByID_保留不可变字段(t *testing.T) {
+	m := NewManager()
+	a, _ := m.AddSection("s1", "mode", "A", AttachmentRuntime, "src.a")
+	priority := 7
+	content := "A2"
+	updated, err := m.UpdateByID(a.ID, AttachmentUpdate{Priority: &priority, Content: &content})
+	require.NoError(t, err)
+	require.Equal(t, a.CreatedAt, updated.CreatedAt)
+	require.Equal(t, a.ID, updated.ID)
+	require.Equal(t, a.SessionID, updated.SessionID)
+	require.Equal(t, 7, updated.Priority)
+	require.Equal(t, "A2", updated.Content)
+	require.Equal(t, sha256Hex("A2"), updated.ContentSHA256)
+
+	_, err = m.UpdateByID("missing", AttachmentUpdate{})
+	require.Error(t, err, "不存在应报错（对齐上游 KeyError）")
+}
+
+func TestManager_RemoveByID与过滤器守卫(t *testing.T) {
+	m := NewManager()
+	a, _ := m.AddSection("s1", "mode", "A", AttachmentRuntime, "src")
+	ok, err := m.RemoveByID(a.ID, "")
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = m.RemoveByID(a.ID, "")
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	_, err = m.RemoveByFilter(AttachmentFilter{})
+	require.Error(t, err, "无过滤器且未 AllowAll 必须拒绝")
+	n, err := m.RemoveByFilter(AttachmentFilter{AllowAll: true})
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, n, 0)
+}
+
+func TestManager_UpdateContent与Metadata(t *testing.T) {
+	m := NewManager()
+	a, _ := m.AddSection("s1", "mode", "A", AttachmentRuntime, "src")
+	kind := AttachmentText
+	got, err := m.UpdateContentByID(a.ID, "B", "", &kind)
+	require.NoError(t, err)
+	require.Equal(t, "B", got.Content)
+	require.Equal(t, AttachmentText, got.Kind)
+
+	got, err = m.UpdateMetadataByID(a.ID, map[string]any{"k": "v"}, "", true)
+	require.NoError(t, err)
+	require.Equal(t, "v", got.Metadata["k"])
+	require.Equal(t, "mode", got.Metadata["section"], "合并不得丢已有键")
+
+	got, err = m.UpdateMetadataByID(a.ID, map[string]any{"only": 1}, "", false)
+	require.NoError(t, err)
+	require.NotContains(t, got.Metadata, "k", "merge=false 应整体替换（随后补 section/source）")
+}
+
+func TestManager_ReplaceSource与FileReference(t *testing.T) {
+	m := NewManager()
+	_, _ = m.AddSection("s1", "a", "A", AttachmentRuntime, "old.src")
+	items := []*Attachment{
+		{Section: "a", Content: "A2", Kind: AttachmentRuntime, ContentKind: "text/plain"},
+		{Section: "b", Content: "B", Kind: AttachmentRuntime, ContentKind: "text/plain"},
+	}
+	added, err := m.ReplaceSource("new.src", items, "s1")
+	require.NoError(t, err)
+	require.Len(t, added, 2)
+	all, _ := m.Collect("s1")
+	for _, item := range all {
+		require.Equal(t, "new.src", item.Source)
+		require.Equal(t, "s1", item.SessionID)
+	}
+
+	ref, err := m.AddFileReference("s1", "/tmp/a.md", "", "", "")
+	require.NoError(t, err)
+	require.Equal(t, AttachmentFile, ref.Kind)
+	require.Equal(t, "text/markdown", ref.ContentKind)
+	require.Equal(t, "/tmp/a.md", ref.Metadata["file_path"])
+	require.Contains(t, ref.Content, "File reference: /tmp/a.md")
+	require.Equal(t, "file_reference", ref.Source)
+}
+
+func TestManager_AddFromPromptSection(t *testing.T) {
+	m := NewManager()
+	section := &saprompt.PromptSection{Name: "mode_instructions", Content: map[string]string{"cn": "中文", "en": "EN"}, Priority: 84}
+	got, err := m.AddFromPromptSection("s1", section, AttachmentRuntime, "agent_core.agent_mode_rail", "cn")
+	require.NoError(t, err)
+	require.Equal(t, "中文", got.Content)
+	require.Equal(t, 84, got.Priority)
+	require.Equal(t, "mode_instructions", got.Section)
+
+	empty := &saprompt.PromptSection{Name: "x", Content: map[string]string{"cn": "   "}}
+	got, err = m.AddFromPromptSection("s1", empty, AttachmentRuntime, "src", "cn")
+	require.NoError(t, err)
+	require.Nil(t, got, "空白内容应返回 nil（对齐上游）")
+}
+```
+
+- [ ] **Step 2: 运行确认失败**
+
+Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run 'TestManager_Update|TestManager_RemoveByID|TestManager_ReplaceSource|TestManager_AddFromPromptSection' -v`
+Expected: FAIL — `m.UpdateByID undefined` 等
+
+- [ ] **Step 3: 写实现（追加到 `attachment_store.go`）**
+
+```go
+// AttachmentUpdate 允许修改的字段，nil 表示不改。
+//
+// Python: PromptAttachmentUpdate（exclude_unset 语义）
+type AttachmentUpdate struct {
+	Kind        *AttachmentKind
+	Content     *string
+	Priority    *int
+	Source      *string
+	ExpiresAt   *string
+	Metadata    map[string]any
+	ContentKind *string
+}
+
+// UpdateByID 按 id 更新；id/section/session/created_at 不可变。
+//
+// Python: update_by_id（不存在抛 KeyError → Go 返回 error）
+func (m *Manager) UpdateByID(id string, u AttachmentUpdate) (*Attachment, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	sessionID, section, current, ok := m.findByIDUnlocked(id)
+	if !ok {
+		return nil, fmt.Errorf("prompt attachment not found: %s", id)
+	}
+	next := *current
+	if u.Kind != nil {
+		next.Kind = *u.Kind
+	}
+	if u.Content != nil {
+		next.Content = *u.Content
+	}
+	if u.Priority != nil {
+		next.Priority = *u.Priority
+	}
+	if u.Source != nil {
+		next.Source = *u.Source
+	}
+	if u.ExpiresAt != nil {
+		next.ExpiresAt = *u.ExpiresAt
+	}
+	if u.ContentKind != nil {
+		next.ContentKind = *u.ContentKind
+	}
+	if u.Metadata != nil {
+		next.Metadata = u.Metadata
+	}
+	next.ID = current.ID
+	next.Section = current.Section
+	next.SessionID = current.SessionID
+	next.CreatedAt = current.CreatedAt
+	next.UpdatedAt = utcNow()
+	next.ContentSHA256 = sha256Hex(next.Content)
+	if next.Metadata == nil {
+		next.Metadata = map[string]any{}
+	}
+	next.Metadata["section"] = next.Section
+	if next.Source != "" {
+		if _, ok := next.Metadata["source"]; !ok {
+			next.Metadata["source"] = next.Source
+		}
+	}
+	m.items[sessionID][section] = &next
+	cp := next
+	return &cp, nil
+}
+
+// RemoveByID 按 id 删除，sessionID 非空时校验归属。
+//
+// Python: remove_by_id
+func (m *Manager) RemoveByID(id, sessionID string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	foundSession, section, _, ok := m.findByIDUnlocked(id)
+	if !ok {
+		return false, nil
+	}
+	if sessionID != "" && foundSession != sessionID {
+		return false, nil
+	}
+	delete(m.items[foundSession], section)
+	if len(m.items[foundSession]) == 0 {
+		delete(m.items, foundSession)
+	}
+	return true, nil
+}
+
+// UpdateContentByID 只改内容（可带 content_kind）。
+//
+// Python: update_content_by_id
+func (m *Manager) UpdateContentByID(id, content, sessionID string, contentKind *string) (*Attachment, error) {
+	if current, err := m.GetByID(id, sessionID); err != nil || current == nil {
+		return nil, fmt.Errorf("prompt attachment not found: %s", id)
+	}
+	return m.UpdateByID(id, AttachmentUpdate{Content: &content, ContentKind: contentKind})
+}
+
+// UpdateMetadataByID 更新 metadata；merge=false 时整体替换。
+//
+// Python: update_metadata_by_id
+func (m *Manager) UpdateMetadataByID(id string, metadata map[string]any, sessionID string, merge bool) (*Attachment, error) {
+	current, err := m.GetByID(id, sessionID)
+	if err != nil || current == nil {
+		return nil, fmt.Errorf("prompt attachment not found: %s", id)
+	}
+	next := map[string]any{}
+	if merge {
+		for k, v := range current.Metadata {
+			next[k] = v
+		}
+	}
+	for k, v := range metadata {
+		next[k] = v
+	}
+	return m.UpdateByID(id, AttachmentUpdate{Metadata: next})
+}
+
+// ReplaceSource 先删同来源再整体重写。
+//
+// Python: replace_source
+func (m *Manager) ReplaceSource(source string, items []*Attachment, sessionID string) ([]*Attachment, error) {
+	if _, err := m.RemoveByFilter(AttachmentFilter{Source: source, SessionID: sessionID}); err != nil {
+		return nil, err
+	}
+	added := make([]*Attachment, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		sid := item.SessionID
+		if sessionID != "" {
+			sid = sessionID
+		}
+		got, err := m.AddSection(sid, item.Section, item.Content, item.Kind, source,
+			WithAttachmentPriority(item.Priority),
+			WithAttachmentMetadata(item.Metadata),
+			WithAttachmentContentKind(item.ContentKind),
+			WithAttachmentExpiresAt(item.ExpiresAt))
+		if err != nil {
+			return nil, err
+		}
+		added = append(added, got)
+	}
+	return added, nil
+}
+
+// AddFileReference 以文件引用形式新增一段（content 为摘要或路径）。
+//
+// Python: add_file_reference
+func (m *Manager) AddFileReference(sessionID, filePath, summary, section, source string) (*Attachment, error) {
+	meta := map[string]any{"file_path": filePath}
+	if section == "" {
+		section = "file_" + safeIDPart(filePath, "file")
+	}
+	if source == "" {
+		source = "file_reference"
+	}
+	content := summary
+	if content == "" {
+		content = "File reference: " + filePath
+	}
+	return m.AddSection(sessionID, section, content, AttachmentFile, source,
+		WithAttachmentMetadata(meta), WithAttachmentContentKind("text/markdown"))
+}
+
+// AddFromPromptSection 从 PromptSection 迁移一段（rail 改造入口）。
+//
+// Python: PromptAttachmentContextWriter.add_from_prompt_section
+func (m *Manager) AddFromPromptSection(sessionID string, section *saprompt.PromptSection, kind AttachmentKind, source, language string, opts ...AttachmentOption) (*Attachment, error) {
+	if section == nil {
+		return nil, nil
+	}
+	content := strings.TrimSpace(section.Content[language])
+	if content == "" {
+		for _, v := range section.Content {
+			if strings.TrimSpace(v) != "" {
+				content = v
+				break
+			}
+		}
+	}
+	if content == "" {
+		return nil, nil
+	}
+	allOpts := opts
+	if section.Priority != 0 {
+		allOpts = append(allOpts, WithAttachmentPriority(section.Priority))
+	}
+	return m.AddSection(sessionID, section.Name, content, kind, source, allOpts...)
+}
+
+// findByIDUnlocked 定位 item（调用方持锁）。
+func (m *Manager) findByIDUnlocked(id string) (string, string, *Attachment, bool) {
+	for sid, bucket := range m.items {
+		for section, item := range bucket {
+			if item != nil && item.ID == id {
+				return sid, section, item, true
+			}
+		}
+	}
+	return "", "", nil, false
+}
+```
+
+同时：
+
+1. `attachment_types.go` 的 `AttachmentFilter` 增加字段：
+
+```go
+	// AllowAll 允许无过滤条件的破坏性操作（对齐上游 allow_all）
+	AllowAll bool
+```
+
+2. `RemoveByFilter` 开头加守卫：
+
+```go
+	if f.SessionID == "" && f.Section == "" && f.Kind == "" && f.Source == "" && !f.AllowAll {
+		return 0, fmt.Errorf("destructive prompt attachment operation requires at least one filter")
+	}
+```
+
+3. `attachment_store.go` 的 import 增加 `"fmt"`、`"strings"`、`saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"`。
+   注意：`WithAttachmentPriority(0)` 会把优先级设成 0，因此 `AddFromPromptSection` 只在 `section.Priority != 0` 时追加选项（与上游 `priority=getattr(prompt_section, "priority", 100) if priority is None else priority` 等价，缺省 100）。
+
+- [ ] **Step 4: 运行确认通过**
+
+Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run 'TestManager_' -v`
+Expected: PASS（Task 2 的 4 个 + 本任务 5 个）
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add internal/agentcore/harness/prompts/attachment_types.go internal/agentcore/harness/prompts/attachment_store.go internal/agentcore/harness/prompts/attachment_store_update_test.go
+git commit -m "feat(prompts): 补齐 attachment update/remove/replace/file-reference/prompt-section 方法"
+```
+
+---
+
 ### Task 3: 渲染（三态 + 两级截断）
 
 **Files:**

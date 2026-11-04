@@ -19,5 +19,4 @@
 //	├── attachment_render.go   # snapshot/delta/removed 渲染与两级截断
 //	├── attachment_delivery.go # 历史同步（快照/增量/基线回退）
 //	└── attachment_mutator.go  # provider 矩阵与窗口投影
-//
 package prompts
