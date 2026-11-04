@@ -2,6 +2,7 @@ package context_engineer
 
 import (
 	"context"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
@@ -178,7 +179,9 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 
 		if len(files) > 0 {
 			contextSection := sections.BuildContextSection(files, lang)
-			r.systemPromptBuilder.AddSection(contextSection)
+			if !deliverContext(cbc, &contextSection, lang) {
+				r.systemPromptBuilder.AddSection(contextSection)
+			}
 		} else {
 			r.systemPromptBuilder.RemoveSection(sections.SectionContext)
 		}
@@ -207,4 +210,13 @@ func (r *ContextAssembleRail) GetCallbacks() map[sainterfaces.AgentCallbackEvent
 	}
 
 	return callbacks
+}
+
+// deliverContext 把 context 段投递为历史附件（无管理器时返回 false 由调用方回落 section）。
+func deliverContext(cbc *sainterfaces.AgentCallbackContext, section *saprompt.PromptSection, lang string) bool {
+	if cbc == nil || cbc.Session() == nil {
+		return false
+	}
+	return hprompts.Deliver(cbc.Agent(), cbc.Session().GetSessionID(), section,
+		hprompts.AttachmentRuntime, "agent_core.context_assemble_rail", lang)
 }

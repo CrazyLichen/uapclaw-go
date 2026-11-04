@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"os"
 	"path/filepath"
 	"sort"
@@ -353,15 +354,26 @@ func (r *SkillUseRail) BeforeInvoke(ctx context.Context, _ *agentinterfaces.Agen
 
 // BeforeModelCall 构建 skills section 并注入 systemPromptBuilder。
 // Python: SkillUseRail.before_model_call() L359-372
-func (r *SkillUseRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+func (r *SkillUseRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.systemPromptBuilder == nil {
 		return nil
 	}
 	section := r.buildSkillsSection()
-	if section != nil {
-		r.systemPromptBuilder.AddSection(*section)
-	} else {
+	if section == nil {
 		r.systemPromptBuilder.RemoveSection(sections.SectionSkills)
+		return nil
+	}
+	sessionID := ""
+	var agentRef any
+	if cbc != nil {
+		agentRef = cbc.Agent()
+		if cbc.Session() != nil {
+			sessionID = cbc.Session().GetSessionID()
+		}
+	}
+	lang := r.systemPromptBuilder.Language()
+	if !hprompts.Deliver(agentRef, sessionID, section, hprompts.AttachmentSkill, "agent_core.skill_use_rail", lang) {
+		r.systemPromptBuilder.AddSection(*section)
 	}
 	return nil
 }

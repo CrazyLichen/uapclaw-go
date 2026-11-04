@@ -41,6 +41,8 @@ type TaskPlanningRail struct {
 	tools []tool.Tool
 	// todoTool TodoTool 基类，供 LoadTodos/SaveTodos/CleanupSession 调用
 	todoTool *todo.TodoTool
+	// injectPrompt 是否注入常驻 todo 提示节（默认 false，对齐上游 inject_prompt=False）
+	injectPrompt bool
 	// enableProgressRepeat 是否注入周期性进度提醒
 	enableProgressRepeat bool
 	// listToolCallInterval 进度提醒的工具调用间隔次数
@@ -85,6 +87,11 @@ const (
 var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithInjectPrompt 设置是否注入常驻 todo 提示节（默认 false，对齐上游）。
+func WithInjectPrompt(inject bool) TaskPlanningOption {
+	return func(r *TaskPlanningRail) { r.injectPrompt = inject }
+}
 
 // WithEnableProgressRepeat 设置是否注入周期性进度提醒
 func WithEnableProgressRepeat(enable bool) TaskPlanningOption {
@@ -303,14 +310,18 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 		return nil
 	}
 
-	// Python: L157-165: 注入 todo 提示词节
+	// Python: L157-165: 注入 todo 提示词节（inject_prompt=False 时只注册工具，不注入）
 	lang := sb.Language()
-	modelSelStr := r.buildModelSelectionString()
-	section := sections.BuildTodoSection(modelSelStr, lang)
-	if section != nil {
-		sb.AddSection(*section)
+	if r.injectPrompt {
+		modelSelStr := r.buildModelSelectionString()
+		section := sections.BuildTodoSection(modelSelStr, lang)
+		if section != nil {
+			sb.AddSection(*section)
+		} else {
+			// Python: L165: section 为 nil 时移除旧 todo 节
+			sb.RemoveSection(sections.SectionTodo)
+		}
 	} else {
-		// Python: L165: section 为 nil 时移除旧 todo 节
 		sb.RemoveSection(sections.SectionTodo)
 	}
 

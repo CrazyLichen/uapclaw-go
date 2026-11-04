@@ -415,17 +415,22 @@ func TestTaskPlanningRail_Uninit_移除提示词节(t *testing.T) {
 func TestTaskPlanningRail_BeforeModelCall_注入提示词(t *testing.T) {
 	t.Parallel()
 
+	// 默认 inject_prompt=false：只注册工具，不注入常驻节（对齐上游）
 	r := NewTaskPlanningRail()
 	agent := newFakeBaseAgent()
 	builder := agent.SystemPromptBuilder()
-
 	inputs := &agentinterfaces.ModelCallInputs{}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
+	require.NoError(t, r.BeforeModelCall(context.Background(), cbc))
+	assert.False(t, builder.HasSection(sections.SectionTodo), "默认不应注入 todo 节")
 
-	err := r.BeforeModelCall(context.Background(), cbc)
-	require.NoError(t, err)
-	// 验证 todo 节已被注入
-	assert.True(t, builder.HasSection(sections.SectionTodo))
+	// 开关打开时仍可注入（语义可逆）
+	r2 := NewTaskPlanningRail(WithInjectPrompt(true))
+	agent2 := newFakeBaseAgent()
+	builder2 := agent2.SystemPromptBuilder()
+	cbc2 := agentinterfaces.NewAgentCallbackContext(agent2, &agentinterfaces.ModelCallInputs{}, nil)
+	require.NoError(t, r2.BeforeModelCall(context.Background(), cbc2))
+	assert.True(t, builder2.HasSection(sections.SectionTodo), "开关打开应注入 todo 节")
 }
 
 // TestTaskPlanningRail_BeforeModelCall_模型切换 验证 mock modelSwitcher，SetLLM 被调用

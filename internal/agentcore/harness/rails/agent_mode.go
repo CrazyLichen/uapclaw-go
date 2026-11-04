@@ -3,6 +3,7 @@ package rails
 import (
 	"context"
 	"fmt"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"os"
 	"regexp"
 
@@ -242,6 +243,16 @@ func (r *AgentModeRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	return nil
 }
 
+// attachmentManager 返回会话级动态提示词管理器（未注入时为 nil）。
+//
+// Python: self.attachment_manager（DeepAgent 共享给内层 ReActAgent 与各 rail）
+func (r *AgentModeRail) attachmentManager() *hprompts.Manager {
+	if provider, ok := r.agent.(interface{ PromptAttachments() *hprompts.Manager }); ok {
+		return provider.PromptAttachments()
+	}
+	return nil
+}
+
 // BeforeModelCall 注入 MODE_INSTRUCTIONS 并在 plan 模式下过滤隐藏工具。
 //
 // Python: AgentModeRail.before_model_call() L151-196
@@ -252,8 +263,12 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 
 	if planState.Mode != hschema.AgentModePlan.String() {
 		// 非 plan 模式
-		// Python: L162: 移除 MODE_INSTRUCTIONS 节
-		if r.systemPromptBuilder != nil {
+		// Python: L162: 移除 MODE_INSTRUCTIONS 节（有管理器时清空附件，产生移除 delta）
+		if mgr := r.attachmentManager(); mgr != nil && sess != nil {
+			if _, err := mgr.ClearSection(sess.GetSessionID(), sections.SectionModeInstructions); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("clear mode_instructions attachment failed")
+			}
+		} else if r.systemPromptBuilder != nil {
 			r.systemPromptBuilder.RemoveSection(sections.SectionModeInstructions)
 		}
 
@@ -279,8 +294,16 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 	// Python: L176-182: 构建 plan 模式提示词节
 	section := sections.BuildPlanModeSection(planFilePath, planExists, r.language)
 
-	// Python: L183: 添加节
-	if r.systemPromptBuilder != nil {
+	// Python: L183: 添加节（有管理器时投递为历史附件，无管理器回落 section）
+	if mgr := r.attachmentManager(); mgr != nil && sess != nil {
+		if _, err := mgr.AddFromPromptSection(sess.GetSessionID(), &section, hprompts.AttachmentRuntime,
+			"agent_core.agent_mode_rail", r.language, hprompts.WithAttachmentContentKind("text/markdown")); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("agent_mode attachment failed, fallback to section")
+			if r.systemPromptBuilder != nil {
+				r.systemPromptBuilder.AddSection(section)
+			}
+		}
+	} else if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.AddSection(section)
 	}
 

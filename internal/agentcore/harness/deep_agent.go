@@ -74,6 +74,8 @@ type DeepAgent struct {
 	// callbackManager 回调管理器
 	callbackManager *agentinterfaces.AgentCallbackManager
 
+	// attachments 会话级动态提示词管理器（S1/S2：plan 指引、todo 提醒等走历史附件）
+	attachments *hprompts.Manager
 	// reactAgent 内层 ReActAgent
 	reactAgent *agents.ReActAgent
 
@@ -215,12 +217,19 @@ var (
 // NewDeepAgent 创建 DeepAgent 实例。
 // Python: DeepAgent.__init__(card) (line 126)
 func NewDeepAgent(card *agentschema.AgentCard) *DeepAgent {
-	return &DeepAgent{
+	d := &DeepAgent{
 		card:            card,
 		abilityManager:  ability.NewAbilityManager(runner.GetResourceMgr()),
 		callbackManager: agentinterfaces.NewAgentCallbackManager(card.ID),
+		attachments:     hprompts.NewManager(),
 	}
+	return d
 }
+
+// PromptAttachments 返回会话级动态提示词管理器。
+//
+// Python: DeepAgent.prompt_attachment_manager
+func (d *DeepAgent) PromptAttachments() *hprompts.Manager { return d.attachments }
 
 // ConfigureDeepConfig 配置 DeepAgent（使用 DeepAgentConfig）。
 // 首次调用执行 initialConfigure，后续调用执行 hotReconfigure。
@@ -1849,6 +1858,9 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 
 	// 保存 builder 引用
 	d.systemPromptBuilder = promptBuilder
+
+	// 注入会话级动态提示词管理器：ReAct 在写用户消息前与建窗口前同步
+	agent.SetPromptAttachmentManager(d.attachments)
 
 	return agent
 }

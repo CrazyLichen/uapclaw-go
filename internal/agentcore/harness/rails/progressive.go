@@ -298,8 +298,18 @@ func (r *ProgressiveToolRail) BeforeModelCall(ctx context.Context, cbc *agentint
 	navigationSection := r.buildNavigationSection(ctx, sess)
 	rulesSection := r.buildProgressiveToolRulesSection()
 
-	builder.AddSection(navigationSection)
-	builder.AddSection(rulesSection)
+	// 动态提示词走 attachment（无管理器时回落 section）
+	agentRef := cbc.Agent()
+	sessionID := ""
+	if sess != nil {
+		sessionID = sess.GetSessionID()
+	}
+	if !DeliverAttachment(agentRef, sessionID, &navigationSection, AttachmentKindTool, "agent_core.progressive_tool_rail", builder.Language()) {
+		builder.AddSection(navigationSection)
+	}
+	if !DeliverAttachment(agentRef, sessionID, &rulesSection, AttachmentKindTool, "agent_core.progressive_tool_rail", builder.Language()) {
+		builder.AddSection(rulesSection)
+	}
 
 	// 步骤 2：过滤 inputs.Tools
 	inputs := cbc.Inputs()

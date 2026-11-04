@@ -143,7 +143,13 @@ func (r *TaskCompletionRail) BeforeModelCall(_ context.Context, cbc *agentinterf
 
 	lang := builder.Language()
 	section := sections.BuildCompletionSignalSection(r.completionPromise, lang)
-	builder.AddSection(section)
+	sessionID := ""
+	if cbc.Session() != nil {
+		sessionID = cbc.Session().GetSessionID()
+	}
+	if !DeliverAttachment(cbc.Agent(), sessionID, &section, AttachmentKindRuntime, "agent_core.task_completion_rail", lang) {
+		builder.AddSection(section)
+	}
 
 	logger.Debug(logComponent).
 		Str("event_type", "task_completion_before_model_call").
