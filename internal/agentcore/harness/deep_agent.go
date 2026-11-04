@@ -2509,6 +2509,18 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 		if stopReason != "" {
 			logLoop("loop stopped by: %s", "", stopReason)
 		}
+		// 无进展守卫触发：产出显式错误结果，避免上层把"连续空轮"当成功收尾
+		// Python: deep_agent.py L2757-2768
+		if stopReason == "NoProgressAnswerEvaluator" {
+			select {
+			case outCh <- map[string]any{
+				"output":      "Task loop stopped after repeated empty or near-empty no-tool answers. This indicates the model is not making observable progress.",
+				"result_type": "error",
+				"stop_reason": stopReason,
+			}:
+			case <-ctx.Done():
+			}
+		}
 	}()
 
 	return outCh, nil
@@ -2647,13 +2659,8 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 	// 复用已有控制器（session_id 匹配）
 	if existingCtrl != nil && boundID == sessionID {
 		if coord == nil {
-			// 构建评估器
-			var evaluators []task_loop.StopConditionEvaluator
-			if taskCompRail != nil {
-				// ⤴️ 9.12 回填：taskCompletionRail.BuildEvaluators()
-				evaluators = taskCompRail.BuildEvaluators()
-			}
-			coord = task_loop.NewLoopCoordinator(evaluators)
+			// 构建评估器（任务完成 rail 的评估器 + 无进展守卫）
+			coord = task_loop.NewLoopCoordinator(d.buildTaskLoopEvaluators(taskCompRail))
 			d.configMu.Lock()
 			d.loopCoordinator = coord
 			d.configMu.Unlock()
@@ -2667,13 +2674,8 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 		d.forceCleanupController(ctx)
 	}
 
-	// 构建评估器
-	var evaluators []task_loop.StopConditionEvaluator
-	if taskCompRail != nil {
-		// ⤴️ 9.12 回填：taskCompletionRail.BuildEvaluators()
-		evaluators = taskCompRail.BuildEvaluators()
-	}
-	coord = task_loop.NewLoopCoordinator(evaluators)
+	// 构建评估器（任务完成 rail 的评估器 + 无进展守卫）
+	coord = task_loop.NewLoopCoordinator(d.buildTaskLoopEvaluators(taskCompRail))
 	coord.Reset()
 
 	queues := task_loop.NewLoopQueues(64)
@@ -3201,4 +3203,29 @@ func permissionsSectionToMap(perm *hsecurity.PermissionsSection) map[string]any 
 		return make(map[string]any)
 	}
 	return result
+}
+
+// buildTaskLoopEvaluators 构建外层任务循环的停止条件评估器。
+//
+// 任务完成 rail 产出的评估器在前，无进展守卫按配置追加在后（OR 语义：先命中先停）。
+//
+// Python: DeepAgent._build_task_loop_evaluators() (deep_agent.py L2279-2311)
+func (d *DeepAgent) buildTaskLoopEvaluators(taskCompRail interface {
+	BuildEvaluators() []task_loop.StopConditionEvaluator
+}) []task_loop.StopConditionEvaluator {
+	var evaluators []task_loop.StopConditionEvaluator
+	if taskCompRail != nil {
+		evaluators = taskCompRail.BuildEvaluators()
+	}
+	d.configMu.RLock()
+	var guard hschema.TaskLoopNoProgressGuardConfig
+	if d.deepConfig != nil {
+		guard = d.deepConfig.TaskLoopNoProgressGuard
+	}
+	d.configMu.RUnlock()
+	if guard.Enabled {
+		evaluators = append(evaluators,
+			task_loop.NewNoProgressAnswerEvaluator(guard.MaxConsecutiveEmptyAnswers, guard.MinAnswerChars))
+	}
+	return evaluators
 }

@@ -182,6 +182,20 @@ type SubagentCreateParams struct {
 	RestrictToWorkDir *bool
 }
 
+// TaskLoopNoProgressGuardConfig 任务循环无进展守卫配置。
+//
+// 连续若干轮「有 answer 但内容过短」即判定模型没有实质进展，停止任务循环。
+//
+// Python: TaskLoopNoProgressGuardConfig (harness/schema/config.py)
+type TaskLoopNoProgressGuardConfig struct {
+	// Enabled 是否启用
+	Enabled bool `json:"enabled"`
+	// MaxConsecutiveEmptyAnswers 连续短答案轮次阈值
+	MaxConsecutiveEmptyAnswers int `json:"max_consecutive_empty_answers"`
+	// MinAnswerChars 视为有实质内容的最小字符数
+	MinAnswerChars int `json:"min_answer_chars"`
+}
+
 // DeepAgentConfig DeepAgent 运行时配置中枢
 type DeepAgentConfig struct {
 	// Model 预构建的 LLM 模型实例
@@ -200,6 +214,8 @@ type DeepAgentConfig struct {
 	AddGeneralPurposeAgent bool `json:"add_general_purpose_agent"`
 	// MaxIterations 内层 ReAct 单次 invoke 的迭代上限，0（未配置）表示不限
 	MaxIterations int `json:"max_iterations,omitempty"`
+	// TaskLoopNoProgressGuard 任务循环无进展守卫
+	TaskLoopNoProgressGuard TaskLoopNoProgressGuardConfig `json:"task_loop_no_progress_guard"`
 	// Subagents 子 Agent 规格列表，支持 *SubAgentConfig 和 *DeepAgent
 	// Python: subagents: Optional[List[SubAgentConfig | DeepAgent]] = None
 	Subagents []SubagentSpec `json:"-"`
@@ -428,6 +444,7 @@ func NewDeepAgentConfig() *DeepAgentConfig {
 	return &DeepAgentConfig{
 		AutoCreateWorkspace:           true,
 		EnableReadImageMultimodal:     true,
+		TaskLoopNoProgressGuard:       TaskLoopNoProgressGuardConfig{Enabled: true, MaxConsecutiveEmptyAnswers: 3, MinAnswerChars: 20},
 		CompletionTimeout:             DefaultCompletionTimeout,
 		ProgressiveToolMaxLoadedTools: DefaultProgressiveToolMax,
 		Language:                      DefaultLanguage,

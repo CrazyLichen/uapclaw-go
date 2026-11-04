@@ -1,6 +1,9 @@
 package task_loop
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -435,4 +438,60 @@ func TestCustomPredicateEvaluator_ImportStateReset(t *testing.T) {
 	e := &CustomPredicateEvaluator{}
 	e.ImportState(map[string]any{"key": "value"})
 	e.Reset()
+}
+
+// ──────────────────────────── A-08-1: 无进展停止评估器 ────────────────────────────
+
+// TestNoProgressAnswerEvaluator_ShouldStop 验证连续短答案触发停止、长答案与 error 清零
+func TestNoProgressAnswerEvaluator_ShouldStop(t *testing.T) {
+	e := NewNoProgressAnswerEvaluator(3, 20)
+	short := map[string]any{"result_type": "answer", "output": "ok"}
+
+	for i := 0; i < 2; i++ {
+		if e.ShouldStop(StopEvaluationContext{LastResult: short}) {
+			t.Fatalf("第 %d 轮不应停止", i+1)
+		}
+	}
+	if !e.ShouldStop(StopEvaluationContext{LastResult: short}) {
+		t.Fatal("连续 3 轮短答案应停止")
+	}
+	if e.Name() != "NoProgressAnswerEvaluator" {
+		t.Fatalf("Name()=%q，期望 NoProgressAnswerEvaluator", e.Name())
+	}
+
+	// 长答案清零
+	e.Reset()
+	if e.ShouldStop(StopEvaluationContext{LastResult: short}) {
+		t.Fatal("第 1 轮不应停止")
+	}
+	long := map[string]any{"result_type": "answer", "output": strings.Repeat("x", 30)}
+	if e.ShouldStop(StopEvaluationContext{LastResult: long}) {
+		t.Fatal("长答案不应触发停止")
+	}
+	if e.ShouldStop(StopEvaluationContext{LastResult: short}) {
+		t.Fatal("长答案后计数应已清零")
+	}
+
+	// error 结果不计入
+	e.Reset()
+	if e.ShouldStop(StopEvaluationContext{LastResult: map[string]any{"result_type": "error", "output": ""}}) {
+		t.Fatal("error 结果不应累加计数")
+	}
+}
+
+// TestNoProgressAnswerEvaluator_StateRoundTrip 验证状态导出/导入
+func TestNoProgressAnswerEvaluator_StateRoundTrip(t *testing.T) {
+	e := NewNoProgressAnswerEvaluator(3, 20)
+	short := map[string]any{"result_type": "answer", "output": "ok"}
+	e.ShouldStop(StopEvaluationContext{LastResult: short})
+
+	state := e.ExportState()
+	other := NewNoProgressAnswerEvaluator(3, 20)
+	other.ImportState(state)
+	if other.ShouldStop(StopEvaluationContext{LastResult: short}) {
+		t.Fatal("导入计数 1 后第 1 轮（累计 2）不应停止")
+	}
+	if !other.ShouldStop(StopEvaluationContext{LastResult: short}) {
+		t.Fatal("导入计数 1 后第 2 轮（累计 3）应停止")
+	}
 }

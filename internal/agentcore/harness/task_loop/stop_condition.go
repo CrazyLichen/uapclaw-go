@@ -1,6 +1,11 @@
 package task_loop
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -91,6 +96,21 @@ type CustomPredicateEvaluator struct {
 	name string
 	// predicate 自定义判断函数
 	predicate func(ctx StopEvaluationContext) bool
+}
+
+// NoProgressAnswerEvaluator 连续多轮"有 answer 但内容过短"时判定无进展。
+//
+// 计数是"最近连续轮"：result_type=answer 且内容长度 < minAnswerChars 才累加，
+// 其他情况立即清零；达到阈值即停。stop_reason 直接用类型名。
+//
+// Python: NoProgressAnswerEvaluator (harness/schema/stop_condition.py)
+type NoProgressAnswerEvaluator struct {
+	// maxConsecutiveEmptyAnswers 连续短答案轮次阈值
+	maxConsecutiveEmptyAnswers int
+	// minAnswerChars 视为"有实质内容"的最小字符数
+	minAnswerChars int
+	// consecutiveEmptyAnswers 当前连续计数
+	consecutiveEmptyAnswers int
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -358,3 +378,66 @@ func toInt(v any) int {
 		return 0
 	}
 }
+
+// NewNoProgressAnswerEvaluator 创建无进展停止评估器。
+//
+// Python: NoProgressAnswerEvaluator.__init__
+func NewNoProgressAnswerEvaluator(maxConsecutiveEmptyAnswers, minAnswerChars int) *NoProgressAnswerEvaluator {
+	if maxConsecutiveEmptyAnswers < 1 {
+		maxConsecutiveEmptyAnswers = 1
+	}
+	if minAnswerChars < 0 {
+		minAnswerChars = 0
+	}
+	return &NoProgressAnswerEvaluator{
+		maxConsecutiveEmptyAnswers: maxConsecutiveEmptyAnswers,
+		minAnswerChars:             minAnswerChars,
+	}
+}
+
+// ShouldStop 连续短答案达到阈值时返回 true。
+func (e *NoProgressAnswerEvaluator) ShouldStop(ctx StopEvaluationContext) bool {
+	resultType, _ := ctx.LastResult["result_type"].(string)
+	output, _ := ctx.LastResult["output"].(string)
+	outputLen := len([]rune(strings.TrimSpace(output)))
+
+	if strings.ToLower(strings.TrimSpace(resultType)) == "answer" && outputLen < e.minAnswerChars {
+		e.consecutiveEmptyAnswers++
+	} else {
+		e.consecutiveEmptyAnswers = 0
+	}
+
+	if e.consecutiveEmptyAnswers >= e.maxConsecutiveEmptyAnswers {
+		logger.Info(logComponent).
+			Int("iteration", ctx.Iteration).
+			Int("output_len", outputLen).
+			Int("consecutive_empty_answers", e.consecutiveEmptyAnswers).
+			Int("max_consecutive_empty_answers", e.maxConsecutiveEmptyAnswers).
+			Int("min_answer_chars", e.minAnswerChars).
+			Msg("no progress answer guard triggered")
+		return true
+	}
+	return false
+}
+
+// Name 返回评估器名称（同时作为 stop_reason）。
+func (e *NoProgressAnswerEvaluator) Name() string { return "NoProgressAnswerEvaluator" }
+
+// ExportState 导出连续计数用于持久化。
+func (e *NoProgressAnswerEvaluator) ExportState() map[string]any {
+	return map[string]any{
+		"consecutive_empty_answers":     e.consecutiveEmptyAnswers,
+		"max_consecutive_empty_answers": e.maxConsecutiveEmptyAnswers,
+		"min_answer_chars":              e.minAnswerChars,
+	}
+}
+
+// ImportState 从持久化状态恢复连续计数。
+func (e *NoProgressAnswerEvaluator) ImportState(data map[string]any) {
+	if v, ok := data["consecutive_empty_answers"].(int); ok && v > 0 {
+		e.consecutiveEmptyAnswers = v
+	}
+}
+
+// Reset 重置连续计数。
+func (e *NoProgressAnswerEvaluator) Reset() { e.consecutiveEmptyAnswers = 0 }
