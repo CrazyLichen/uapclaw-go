@@ -118,6 +118,20 @@ func NewUapClaw() *UapClaw {
 	}
 }
 
+// ResetPlanSession 清理指定会话的计划模式记忆（删除会话时调用）。
+//
+// Python: service.py:3071 `plan_mode_controller.reset_session(session_id)`
+func (uc *UapClaw) ResetPlanSession(sessionID string) {
+	if uc == nil || uc.adapter == nil || sessionID == "" {
+		return
+	}
+	resetter, ok := uc.adapter.(interface{ ResetPlanSession(string) })
+	if !ok {
+		return
+	}
+	resetter.ResetPlanSession(sessionID)
+}
+
 // ProcessMessage 处理非流式 Agent 请求。
 //
 // Python: JiuWenClaw.process_message(request)

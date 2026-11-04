@@ -259,6 +259,9 @@ func (s *AgentServer) handleSessionDelete(ctx context.Context, request *schema.A
 	// 清理内存缓存，对齐 Python remove_session_metadata_cache()
 	session.RemoveSessionMetadataCache(target)
 
+	// 清理计划模式会话记忆（退出记忆 / 会话锁），对齐 Python service.reset_session
+	s.agentManager.ResetSessionPlanState(channelID, target)
+
 	logger.Info(logComponent).
 		Str("session_id", target).
 		Msg("session deleted")

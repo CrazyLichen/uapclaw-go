@@ -225,6 +225,28 @@ func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode stri
 	return nil
 }
 
+// ResetSessionPlanState 清理指定会话在全部实例上的计划模式记忆。
+//
+// Python: AgentServer 删除会话时调用 plan_mode_controller.reset_session
+func (am *AgentManager) ResetSessionPlanState(channelID, sessionID string) {
+	if am == nil || sessionID == "" {
+		return
+	}
+	channelKey := normalizeChannelID(channelID)
+	am.mu.RLock()
+	entries := am.agents[channelKey]
+	targets := make([]*UapClaw, 0, len(entries))
+	for _, entry := range entries {
+		if entry != nil && entry.agent != nil {
+			targets = append(targets, entry.agent)
+		}
+	}
+	am.mu.RUnlock()
+	for _, agent := range targets {
+		agent.ResetPlanSession(sessionID)
+	}
+}
+
 // Initialize 初始化 AgentManager。
 // Python: AgentManager.initialize(channel_id, extra_config) -> dict|None。
 // 非 ACP 通道返回 nil；ACP 通道记录能力、重置 agents、以 code 模式创建并返回 capabilities。
