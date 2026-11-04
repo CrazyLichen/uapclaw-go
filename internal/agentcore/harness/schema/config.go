@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"log"
 	"math"
 	"os"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	schema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -466,7 +466,9 @@ func (c *DeepAgentConfig) ResolveInnerReactMaxIterations() int {
 		return c.MaxIterations
 	}
 	if c.MaxIterations < 0 {
-		log.Printf("[config] negative max_iterations=%d treated as unbounded", c.MaxIterations)
+		logger.Warn(logger.ComponentAgentCore).
+			Int("max_iterations", c.MaxIterations).
+			Msg("negative max_iterations treated as unbounded")
 	}
 	return math.MaxInt
 }
