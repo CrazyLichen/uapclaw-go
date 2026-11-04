@@ -56,46 +56,6 @@ func makeTestEnvelope(method string, isStream bool) *e2a.E2AEnvelope {
 	return env
 }
 
-// TestResolveRequestProjectDir 验证项目目录解析。
-func TestResolveRequestProjectDir(t *testing.T) {
-	tests := []struct {
-		name    string
-		request *schema.AgentRequest
-		want    string
-	}{
-		{
-			name:    "从params读取project_dir",
-			request: schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, json.RawMessage(`{"project_dir": "/tmp/project"}`)),
-			want:    "/tmp/project",
-		},
-		{
-			name: "从metadata读取project_dir",
-			request: schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, json.RawMessage(`{}`),
-				schema.WithAgentMetadata(map[string]any{"project_dir": "/tmp/meta-project"}),
-			),
-			want: "/tmp/meta-project",
-		},
-		{
-			name:    "params优先于metadata",
-			request: schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, json.RawMessage(`{"project_dir": "/tmp/params"}`)),
-			want:    "/tmp/params",
-		},
-		{
-			name:    "无workspace_dir返回空",
-			request: schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, json.RawMessage(`{}`)),
-			want:    "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := resolveRequestProjectDir(tt.request)
-			if got != tt.want {
-				t.Errorf("resolveRequestProjectDir() = %q, 期望 %q", got, tt.want)
-			}
-		})
-	}
-}
 
 // TestHandleEnvelope_UnknownMethod_Unary 验证未命中 switch + IsStream=false → 走 handleUnary。
 func TestHandleEnvelope_UnknownMethod_Unary(t *testing.T) {

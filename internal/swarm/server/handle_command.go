@@ -193,7 +193,7 @@ func (s *AgentServer) handleCommandCompact(ctx context.Context, request *schema.
 	if mode == "auto_harness" {
 		mode = "agent"
 	}
-	projectDir := resolveRequestProjectDir(request)
+	projectDir := swruntime.ResolveRequestProjectDir(request, true)
 
 	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
@@ -229,7 +229,7 @@ func (s *AgentServer) handleCommandContext(ctx context.Context, request *schema.
 	if mode == "auto_harness" {
 		mode = "agent"
 	}
-	projectDir := resolveRequestProjectDir(request)
+	projectDir := swruntime.ResolveRequestProjectDir(request, true)
 
 	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
@@ -265,7 +265,7 @@ func (s *AgentServer) handleCommandRecap(ctx context.Context, request *schema.Ag
 	if mode == "auto_harness" {
 		mode = "agent"
 	}
-	projectDir := resolveRequestProjectDir(request)
+	projectDir := swruntime.ResolveRequestProjectDir(request, true)
 
 	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {

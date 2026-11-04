@@ -144,3 +144,66 @@ func TestApplyResolvedModeToRequest_默认值(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveRequestProjectDir 验证工程目录解析（上游 5 级 fallback + projectless 开关）。
+func TestResolveRequestProjectDir(t *testing.T) {
+	cases := []struct {
+		name    string
+		req     *schema.AgentRequest
+		include bool
+		want    string
+	}{
+		{
+			name:    "params project_dir 优先",
+			req:     &schema.AgentRequest{Params: json.RawMessage(`{"project_dir": "/tmp/p","cwd":"/tmp/c"}`)},
+			include: false,
+			want:    "/tmp/p",
+		},
+		{
+			name:    "metadata project_dir",
+			req:     &schema.AgentRequest{Metadata: map[string]any{"project_dir": "/tmp/m"}},
+			include: false,
+			want:    "/tmp/m",
+		},
+		{
+			name:    "projectless 不回落 cwd",
+			req:     &schema.AgentRequest{Params: json.RawMessage(`{"cwd": "/tmp/c"}`)},
+			include: false,
+			want:    "",
+		},
+		{
+			name:    "legacy 回落 cwd",
+			req:     &schema.AgentRequest{Params: json.RawMessage(`{"cwd": "/tmp/c"}`)},
+			include: true,
+			want:    "/tmp/c",
+		},
+		{
+			name:    "legacy 回落 trusted_dirs 首项",
+			req:     &schema.AgentRequest{Params: json.RawMessage(`{"trusted_dirs": ["/tmp/t1","/tmp/t2"]}`)},
+			include: true,
+			want:    "/tmp/t1",
+		},
+		{
+			name:    "全空",
+			req:     &schema.AgentRequest{Params: json.RawMessage(`{}`)},
+			include: true,
+			want:    "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, ResolveRequestProjectDir(tc.req, tc.include))
+		})
+	}
+}
+
+// TestResolveCancelProjectDir 验证取消请求的工程键解析（无注册表时回落会话 metadata）。
+func TestResolveCancelProjectDir(t *testing.T) {
+	req := &schema.AgentRequest{Params: json.RawMessage(`{"project_dir": "/tmp/p"}`)}
+	require.Equal(t, "/tmp/p", ResolveCancelProjectDir(req))
+
+	sid := "no-such-session"
+	empty := &schema.AgentRequest{SessionID: &sid, Params: json.RawMessage(`{}`)}
+	require.Equal(t, "", ResolveCancelProjectDir(empty))
+	require.Equal(t, "", ResolveCancelProjectDir(nil))
+}

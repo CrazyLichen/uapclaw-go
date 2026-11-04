@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -220,4 +221,61 @@ func ResolveAgentRequestModeFromRequest(req *schema.AgentRequest) (mode, subMode
 	workMode, _ := params["work_mode"].(string)
 	mode, subMode, _ = ResolveAgentRequestMode(params["mode"], workMode)
 	return mode, subMode
+}
+
+// ResolveRequestProjectDir 解析用于构造 agent 的稳定工程身份。
+//
+// Python: jiuwenswarm/runtime/request.py resolve_request_project_dir（L44-82）。
+// includeLegacyFallbacks=false 时（agent/code 的 projectless 轮次）不回落到
+// cwd/trusted_dirs，保持 cwd 动态以便 adapter 分配会话任务工作区。
+func ResolveRequestProjectDir(req *schema.AgentRequest, includeLegacyFallbacks bool) string {
+	params := parseRequestParams(req)
+	if v, ok := params["project_dir"].(string); ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	if req != nil && req.Metadata != nil {
+		if v, ok := req.Metadata["project_dir"].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	if !includeLegacyFallbacks {
+		return ""
+	}
+	if v, ok := params["cwd"].(string); ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	if req != nil && req.Metadata != nil {
+		if v, ok := req.Metadata["cwd"].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	if dirs, ok := params["trusted_dirs"].([]any); ok && len(dirs) > 0 {
+		if v, ok := dirs[0].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+// ResolveCancelProjectDir 解析传输无关的取消请求所需工程缓存键。
+//
+// Python: jiuwenswarm/runtime/request.py _resolve_cancel_project_dir（L84-149）。
+// 偏差：Go 尚无 project_id → project_dir 注册表（上游 project_store.get_project_dir_by_id），
+// 该分支记 ⤵️，其余分支（直接解析 + 会话 metadata）已对齐。
+func ResolveCancelProjectDir(req *schema.AgentRequest) string {
+	if direct := ResolveRequestProjectDir(req, true); direct != "" {
+		return direct
+	}
+	if req == nil || req.SessionID == nil {
+		return ""
+	}
+	sid := strings.TrimSpace(*req.SessionID)
+	if sid == "" {
+		return ""
+	}
+	meta := session.GetSessionMetadata(sid)
+	if v, ok := meta["project_dir"].(string); ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	return ""
 }

@@ -316,7 +316,7 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 	if mode == "auto_harness" {
 		mode = "agent"
 	}
-	projectDir := resolveRequestProjectDir(request)
+	projectDir := swruntime.ResolveRequestProjectDir(request, mode != "agent" && mode != "code")
 
 	// 3. 获取 Agent
 	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
@@ -377,7 +377,7 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 	if mode == "auto_harness" {
 		mode = "agent"
 	}
-	projectDir := resolveRequestProjectDir(request)
+	projectDir := swruntime.ResolveRequestProjectDir(request, mode != "agent" && mode != "code")
 
 	agent, err := s.agentManager.GetAgent(streamCtx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
@@ -471,7 +471,7 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 	// 2. 获取 Agent（三级 fallback，对齐 Python _handle_cancel）
 	// 主流路径：纯读取 mode（不修改 request），对齐 Python request.params.get("mode", "") + resolve_agent_request_mode
 	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(request)
-	projectDir := resolveRequestProjectDir(request)
+	projectDir := swruntime.ResolveCancelProjectDir(request)
 
 	var agent *runtime.UapClaw
 
@@ -591,70 +591,6 @@ func (s *AgentServer) runKeepalive(ctx context.Context, requestID, channelID str
 			timer.Reset(keepaliveInterval)
 		}
 	}
-}
-
-// resolveRequestProjectDir 从请求中读取项目目录，对齐 Python 5 级 fallback：
-//
-//  1. params["project_dir"]（参数中的项目目录）
-//  2. metadata["project_dir"]（元数据中的项目目录）
-//  3. params["cwd"]（参数中的工作目录）
-//  4. metadata["cwd"]（元数据中的工作目录）
-//  5. params["trusted_dirs"][0]（参数中的受信目录首项）
-func resolveRequestProjectDir(request *schema.AgentRequest) string {
-	var params map[string]any
-	if request.Params != nil {
-		_ = json.Unmarshal(request.Params, &params)
-	}
-
-	// 1. params["project_dir"]（参数中的项目目录）
-	if v, ok := params["project_dir"]; ok {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-
-	// 2. metadata["project_dir"]（元数据中的项目目录）
-	if request.Metadata != nil {
-		if v, ok := request.Metadata["project_dir"]; ok {
-			if s, ok := v.(string); ok && s != "" {
-				return s
-			}
-		}
-	}
-
-	// 3. params["cwd"]（参数中的工作目录）
-	if v, ok := params["cwd"]; ok {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-
-	// 4. metadata["cwd"]（元数据中的工作目录）
-	if request.Metadata != nil {
-		if v, ok := request.Metadata["cwd"]; ok {
-			if s, ok := v.(string); ok && s != "" {
-				return s
-			}
-		}
-	}
-
-	// 5. params["trusted_dirs"][0]（参数中的受信目录首项）
-	if v, ok := params["trusted_dirs"]; ok {
-		switch dirs := v.(type) {
-		case []any:
-			if len(dirs) > 0 {
-				if s, ok := dirs[0].(string); ok && s != "" {
-					return s
-				}
-			}
-		case []string:
-			if len(dirs) > 0 && dirs[0] != "" {
-				return dirs[0]
-			}
-		}
-	}
-
-	return ""
 }
 
 // writeErrorResponse 构造错误 AgentResponse 写入 RecvCh。
