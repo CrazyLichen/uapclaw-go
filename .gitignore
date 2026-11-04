@@ -28,8 +28,9 @@ vendor/
 # 但保留 sqlite-vec 预编译二进制
 !vendor/sqlite-vec/
 
-# 工具本地配置
-.codebuddy/
+# 工具本地配置（.codebuddy/rules 例外：项目规约需随仓库版本化）
+.codebuddy/*
+!.codebuddy/rules/
 
 # 日志文件
 *.log
