@@ -78,13 +78,21 @@ func TrimPromptToLastUser(prompt []llmschema.BaseMessage) []llmschema.BaseMessag
 
 - 若轨迹类型需要"用户轮次"标记（`TrajectoryStep` 上的 user 标记），同样用 `IsPromptAttachmentUser` 排除
 
-### 4.3 观测侧（`internal/agent_teams/observability/callback_handler.go`）
+### 4.3 观测侧（`internal/agent_teams/observability/callback_handler.go:356-368`）
 
-两处，语义与上游一致：
+**与上游的形态偏差（已核实）**：上游用新版 semconv 把请求拆成 `gen_ai.system_instructions` 与 chat history 两堆
+（`callback_handler.py:1718-1733`），并在结构化输出上打 `openjiuwen.kind`（`:1915-1930`）。
+本项目观测层是 OpenLLMetry 的**扁平形态** `gen_ai.prompt.<i>.role/content`，没有 `system_instructions` 属性。
 
-1. **请求输入分类**：把带 marker 的 `SystemMessage`（窗口投影后的形态）归入 chat history，**不得**写入 `gen_ai.system_instructions`
-2. **结构化输出标注**：`role == "system"` 且 `IsPromptAttachmentHistory` 为真时，在结构体里加
-   `openjiuwen: {kind: "prompt_attachment_history", mode: <snapshot|delta>}`，供下游区分"真 system prompt"与"附件"
+因此按等价语义落地：在消息条目上追加两个标注
+
+```
+gen_ai.prompt.<i>.openjiuwen.kind = "prompt_attachment_history"
+gen_ai.prompt.<i>.openjiuwen.mode = "snapshot" | "delta"
+```
+
+- 只有 `IsPromptAttachmentHistory` 为真（marker + 合法 mode）才标注，真 system prompt 不标注
+- 这样下游可区分"稳定系统提示"与"附件投影后的 system"，语义与上游一致，形态随我们的 semconv
 
 ### 4.4 账本一致性契约（测试锁定，不改实现）
 
@@ -107,8 +115,8 @@ func TrimPromptToLastUser(prompt []llmschema.BaseMessage) []llmschema.BaseMessag
 | 编号 | 场景与模拟方式 | 跨子系统 | 关键断言 |
 | --- | --- | --- | --- |
 | IT-S3-1 | 轨迹切分：一轮 chat（产生 snapshot 附件）后抽轨迹 | evolving + context_engine + prompts | 轨迹消息里**保留**附件消息（可复现）；"本轮用户输入"是真实 query 文本；附件不作为切片起点、不被当作 user turn 内容 |
-| IT-S3-2 | 观测输入归类：`client_provider=dashscope`（附件投影为 System）跑一轮 | observability + context_engine + prompts | `gen_ai.system_instructions` 只含真 system prompt；附件内容归入 chat history |
-| IT-S3-3 | 观测结构化标注：同上一轮的结构化输出 | observability + prompts | 附件那条 system 消息带 `openjiuwen.kind=prompt_attachment_history` 与 `mode ∈ {snapshot,delta}` |
+| IT-S3-2 | 观测标注：`client_provider=dashscope`（附件投影为 System）跑一轮 | observability + context_engine + prompts | 附件条目带 `openjiuwen.kind=prompt_attachment_history` 与 `mode` |
+| IT-S3-3 | 观测负向：普通对话（无附件） | observability + prompts | 真 system prompt 条目**不带** `openjiuwen.kind` |
 | IT-S3-4 | 压缩折掉 snapshot：制造"附件 snapshot 被摘要替换"后触发一次变更 | context_engine + prompts + session | 变更消息 `mode == snapshot`，内容含全部活跃 section（不发 orphan delta） |
 | IT-S3-5 | 压缩只丢 delta：基线仍在时触发变更 | 同上 | `mode == delta`，只含变化节 |
 | IT-S3-6 | rewind 后重建：rewind 到更早 turn，再产生一次变更 | session(sessionops) + context_engine + prompts | 首次 Sync 发 snapshot；历史消息顺序为 `[附件][用户]` |
