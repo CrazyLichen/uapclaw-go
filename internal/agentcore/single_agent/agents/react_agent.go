@@ -5,6 +5,7 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
@@ -49,6 +50,9 @@ type ReActAgent struct {
 	// skillUtil 技能工具（延迟初始化，Configure 时根据 sysOperationID 创建）
 	// Python: self._skill_util
 	skillUtil *skills.SkillUtil
+	// promptAttachments 动态提示词管理器（由 DeepAgent 注入，可空）
+	// Python: ReActAgent.prompt_attachment_manager
+	promptAttachments *hprompts.Manager
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -100,4 +104,12 @@ func NewReActAgent(
 	agent.hitlHandler = interrupt.NewToolInterruptHandler(agent)
 
 	return agent
+}
+
+// SetPromptAttachmentManager 注入动态提示词管理器（可为 nil）。
+//
+// Python: DeepAgent 把 prompt_attachment_manager 共享给内层 ReActAgent
+// （deep_agent.py:851）。
+func (a *ReActAgent) SetPromptAttachmentManager(m *hprompts.Manager) {
+	a.promptAttachments = m
 }

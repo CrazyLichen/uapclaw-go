@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -116,6 +117,17 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 	if enableKVRelease && supportsKVRelease {
 		contextWindowOpts = append(contextWindowOpts, ceinterface.WithModel(llmModel))
 	}
+	// 附件投影：仅当注入了 manager 时生效（对齐 Python _build_model_context_window 的 window_mutators）
+	if a.promptAttachments != nil && llmModel.ClientConfig != nil {
+		useSystemRole := hprompts.UsesSystemAttachmentRole(
+			llmModel.ClientConfig.ClientProvider,
+			extraString(llmModel.ClientConfig.Extra, "legacy_client_provider"),
+			extraString(llmModel.ClientConfig.Extra, "endpoint_profile"),
+			extraString(llmModel.ClientConfig.Extra, "api_mode"),
+		)
+		contextWindowOpts = append(contextWindowOpts, ceinterface.WithWindowMutators(
+			hprompts.BuildWindowMutator(sess.GetSessionID(), useSystemRole)))
+	}
 
 	var messages []llmschema.BaseMessage
 	var contextTools []cschema.ToolInfoInterface
@@ -129,6 +141,8 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 		if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
 			inputTools = inputs.Tools
 		}
+		// 附件同步：保证本轮模型看到最新动态提示词（对齐 Python _build_model_context_window）
+		_ = syncPromptAttachments(ctx, a.promptAttachments, modelCtx)
 		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, inputTools, 0, 0, contextWindowOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("获取上下文窗口失败: %w", err)
