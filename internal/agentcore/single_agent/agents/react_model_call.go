@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -13,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
@@ -180,26 +182,94 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 		modelName = a.config.ModelNameVal
 	}
 
+	var aiMsg *llmschema.AssistantMessage
+	var err error
 	if isStreaming {
-		aiMsg, err := a.callLLMStream(ctx, llmModel, modelName, messages, contextTools, sess, extraKVPairs)
-		if err != nil {
-			return nil, err
-		}
-		// 写回 Response（对齐 Python L803: ctx.inputs.response = ai_message）
-		if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
-			inputs.Response = aiMsg
-		}
-		return aiMsg, nil
+		aiMsg, err = a.callLLMStream(ctx, llmModel, modelName, messages, contextTools, sess, extraKVPairs)
+	} else {
+		aiMsg, err = a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools, extraKVPairs)
 	}
-	aiMsg, err := a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools, extraKVPairs)
 	if err != nil {
 		return nil, err
 	}
-	// 写回 Response（对齐 Python L758: ctx.inputs.response = ai_message）
+	// 写回 Response（对齐 Python: ctx.inputs.response = ai_message）
 	if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
 		inputs.Response = aiMsg
 	}
+	// 对齐 Python: self._raise_for_model_response_error(ai_message)
+	// —— 输出上限截断与 provider 错误响应都必须转成异常，不能当成功空答案返回。
+	if err := raiseForModelResponseError(aiMsg); err != nil {
+		return nil, err
+	}
 	return aiMsg, nil
+}
+
+// raiseForModelResponseError 把 provider 错误响应与"输出上限命中且无答案"转成异常。
+//
+// 两段判定（顺序不可颠倒；命中第一段即返回）：
+//  1. finish_reason ∈ {length, max_tokens} 且既无正文也无 tool_calls —— 推理模型把
+//     输出预算花在思维链上，把空响应当最终答案会让本轮以空 "answer" 结束。
+//  2. finish_reason ∈ {error, failed} 或 usage.code != 0 —— provider 返回了错误响应。
+//
+// 刻意不处理：length 且有正文（返回部分文本）、length 且有 tool_calls（照常执行工具）。
+//
+// Python: ReActAgent._raise_for_model_response_error() (react_agent.py L2021-2057)
+func raiseForModelResponseError(msg *llmschema.AssistantMessage) error {
+	if msg == nil {
+		return nil
+	}
+	finishReason := strings.ToLower(strings.TrimSpace(msg.FinishReason))
+	code := 0
+	outputTokens := 0
+	providerMessage := ""
+	if msg.UsageMetadata != nil {
+		code = msg.UsageMetadata.Code
+		outputTokens = msg.UsageMetadata.OutputTokens
+		providerMessage = msg.UsageMetadata.ErrMsg
+	}
+	content := msg.Content.Text()
+	noAnswer := len(msg.ToolCalls) == 0 && strings.TrimSpace(content) == ""
+
+	if (finishReason == "length" || finishReason == "max_tokens") && noAnswer {
+		return exception.NewBaseError(exception.StatusModelCallFailed,
+			exception.WithMsg(fmt.Sprintf(
+				"model hit its output limit (finish_reason=%s, output_tokens=%d) before producing an answer or a tool call",
+				finishReason, outputTokens)),
+			exception.WithParams(map[string]any{
+				"finish_reason": finishReason,
+				"output_tokens": outputTokens,
+			}),
+		)
+	}
+
+	if finishReason != "error" && finishReason != "failed" && code == 0 {
+		return nil
+	}
+	if providerMessage == "" {
+		providerMessage = content
+	}
+	shownMessage := providerMessage
+	if len(shownMessage) > 500 {
+		shownMessage = shownMessage[:500]
+	}
+	shownFinishReason := finishReason
+	if shownFinishReason == "" {
+		shownFinishReason = "unknown"
+	}
+	detail := shownMessage
+	if detail == "" {
+		detail = "provider returned no error detail"
+	}
+	return exception.NewBaseError(exception.StatusModelCallFailed,
+		exception.WithMsg(fmt.Sprintf(
+			"provider response error: code=%d, finish_reason=%s, message=%s",
+			code, shownFinishReason, detail)),
+		exception.WithParams(map[string]any{
+			"provider_code":    code,
+			"finish_reason":    shownFinishReason,
+			"provider_message": shownMessage,
+		}),
+	)
 }
 
 // callLLMInvoke 非流式 LLM 调用。

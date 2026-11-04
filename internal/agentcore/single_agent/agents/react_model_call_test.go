@@ -10,6 +10,8 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -171,4 +173,71 @@ func newFakeLLMModel(t *testing.T, client *fakeStreamClient) *llm.Model {
 		t.Fatalf("构造 llm.Model 失败: %v", err)
 	}
 	return m
+}
+
+// ──────────────────────────── A-06: 响应错误判定 ────────────────────────────
+
+// TestRaiseForModelResponseError 校验响应错误判定的两段逻辑
+func TestRaiseForModelResponseError(t *testing.T) {
+	cases := []struct {
+		name         string
+		finishReason string
+		content      string
+		toolCalls    int
+		usageCode    int
+		wantErr      bool
+	}{
+		{name: "length 且空内容", finishReason: "length", content: "", wantErr: true},
+		{name: "length 且空白内容", finishReason: "length", content: "   \n", wantErr: true},
+		{name: "max_tokens 且空内容", finishReason: "max_tokens", content: "", wantErr: true},
+		{name: "大写 LENGTH 且空内容", finishReason: "LENGTH", content: "", wantErr: true},
+		{name: "length 但有正文", finishReason: "length", content: "部分答案", wantErr: false},
+		{name: "length 但有工具调用", finishReason: "length", content: "", toolCalls: 1, wantErr: false},
+		{name: "正常 stop 空内容", finishReason: "stop", content: "", wantErr: false},
+		{name: "provider code 非 0", finishReason: "stop", content: "x", usageCode: 123, wantErr: true},
+		{name: "finish_reason=error", finishReason: "error", content: "x", wantErr: true},
+		{name: "finish_reason=failed", finishReason: "failed", content: "x", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := llmschema.NewAssistantMessage(tc.content)
+			msg.FinishReason = tc.finishReason
+			msg.UsageMetadata = &llmschema.UsageMetadata{Code: tc.usageCode}
+			for i := 0; i < tc.toolCalls; i++ {
+				msg.ToolCalls = append(msg.ToolCalls, &llmschema.ToolCall{ID: fmt.Sprintf("call_%d", i), Name: "read_file"})
+			}
+			err := raiseForModelResponseError(msg)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("期望返回错误，实际为 nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("期望成功，实际错误: %v", err)
+			}
+		})
+	}
+}
+
+// TestRaiseForModelResponseError_错误文案 验证错误文案与 Python 逐字一致
+func TestRaiseForModelResponseError_错误文案(t *testing.T) {
+	msg := llmschema.NewAssistantMessage("")
+	msg.FinishReason = "length"
+	msg.UsageMetadata = &llmschema.UsageMetadata{OutputTokens: 4096}
+
+	err := raiseForModelResponseError(msg)
+	if err == nil {
+		t.Fatal("期望返回错误")
+	}
+	assert.Contains(t, err.Error(),
+		"model hit its output limit (finish_reason=length, output_tokens=4096) before producing an answer or a tool call")
+
+	providerMsg := llmschema.NewAssistantMessage("boom")
+	providerMsg.FinishReason = "error"
+	err = raiseForModelResponseError(providerMsg)
+	if err == nil {
+		t.Fatal("期望返回 provider 错误")
+	}
+	assert.Contains(t, err.Error(), "provider response error: code=0, finish_reason=error, message=boom")
 }
