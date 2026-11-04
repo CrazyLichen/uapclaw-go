@@ -3,6 +3,7 @@
 package local
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -139,5 +140,149 @@ func TestChunkDecoder_残留字节收尾冲出(t *testing.T) {
 	}
 	if got := dec.flush(); got != "" {
 		t.Fatalf("收尾后不应再有残留，实际 %q", got)
+	}
+}
+
+// TestInvoke_超时kill 无输出子进程超时后被终止，返回超时异常。
+func TestInvoke_超时kill(t *testing.T) {
+	handler := NewAsyncProcessHandler(helperCommand(helperModeHang), defaultChunkSize, "", 1)
+
+	start := time.Now()
+	data, err := handler.Invoke(t.Context())
+	if err != nil {
+		t.Fatalf("Invoke 失败: %v", err)
+	}
+	if data.Exception == nil || !strings.Contains(data.Exception.Error(), "执行超时") {
+		t.Fatalf("应返回执行超时异常，实际: %v", data.Exception)
+	}
+	if elapsed := time.Since(start); elapsed > 4*time.Second {
+		t.Fatalf("超时链路耗时 %s，kill 未生效", elapsed)
+	}
+}
+
+// TestStream_消费者放弃后收尾 无人消费 + ctx 取消时读者/收尾协程都必须退出。
+func TestStream_消费者放弃后收尾(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	// chunkSize 64 → 3200 个事件，足以填满 queue(128)+ch(64)
+	handler := NewAsyncProcessHandler(helperCommand(helperModeLarge), 64, "", 10)
+
+	ch, err := handler.Stream(ctx)
+	if err != nil {
+		t.Fatalf("Stream 失败: %v", err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range ch {
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("取消后流未关闭（读者或收尾协程泄漏）")
+	}
+}
+
+// TestStream_超时且无人消费 缓冲满时超时错误事件走 default 分支，不阻塞收尾。
+func TestStream_超时且无人消费(t *testing.T) {
+	handler := NewAsyncProcessHandler(helperCommand(helperModeLarge), 256, "", 1)
+
+	ch, err := handler.Stream(t.Context())
+	if err != nil {
+		t.Fatalf("Stream 失败: %v", err)
+	}
+	time.Sleep(1500 * time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range ch {
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("超时后流未关闭")
+	}
+}
+
+// TestChunkDecoder_边界 空块、未知编码、半个 UTF-8 字符、纯续字节。
+func TestChunkDecoder_边界(t *testing.T) {
+	empty := &chunkDecoder{encoding: "gbk"}
+	if got := empty.decode(nil); got != "" {
+		t.Fatalf("空块应返回空串，实际 %q", got)
+	}
+
+	unknown := &chunkDecoder{encoding: "shift_jis"}
+	if got := unknown.decode([]byte("abc")); got != "abc" {
+		t.Fatalf("未知编码直通，实际 %q", got)
+	}
+
+	cases := []struct {
+		name   string
+		chunks [][]byte
+		want   string
+	}{
+		{"4字节半个", [][]byte{{0xF0, 0x9F}, {0x98, 0x80}}, "😀"},
+		{"3字节半个", [][]byte{{0xE4, 0xB8}, {0xAD}}, "中"},
+		{"2字节半个", [][]byte{{0xC3}, {0xA9}}, "é"},
+		{"纯续字节", [][]byte{{0x80}}, "\x80"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dec := &chunkDecoder{encoding: "utf-8"}
+			var got strings.Builder
+			for _, c := range tc.chunks {
+				got.WriteString(dec.decode(c))
+			}
+			got.WriteString(dec.flush())
+			if got.String() != tc.want {
+				t.Fatalf("解码结果 = %q，want %q", got.String(), tc.want)
+			}
+		})
+	}
+}
+
+// TestDecodeStrict_可解析编码 非 GBK 系编码经 ianaindex 解码。
+func TestDecodeStrict_可解析编码(t *testing.T) {
+	// shift_jis 的 "あ" = 0x82 0xA0
+	got, err := decodeStrict([]byte{0x82, 0xA0}, "shift_jis")
+	if err != nil {
+		t.Fatalf("shift_jis 解码失败: %v", err)
+	}
+	if got != "あ" {
+		t.Fatalf("解码结果 = %q，want あ", got)
+	}
+}
+
+// TestStream_超时无输出 无输出子进程超时后下发超时错误事件并关闭流。
+func TestStream_超时无输出(t *testing.T) {
+	handler := NewAsyncProcessHandler(helperCommand(helperModeHang), defaultChunkSize, "", 1)
+
+	ch, err := handler.Stream(t.Context())
+	if err != nil {
+		t.Fatalf("Stream 失败: %v", err)
+	}
+
+	var timeoutEvent bool
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case event, ok := <-ch:
+			if !ok {
+				if !timeoutEvent {
+					t.Fatal("应收到超时错误事件")
+				}
+				return
+			}
+			if event.Type == StreamEventTypeError && strings.Contains(event.Data, "执行超时") {
+				timeoutEvent = true
+			}
+		case <-deadline:
+			t.Fatal("等待超时事件超时")
+		}
 	}
 }

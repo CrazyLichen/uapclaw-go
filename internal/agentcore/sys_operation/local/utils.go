@@ -383,7 +383,8 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 		defer close(ch)
 		defer stop()
 
-		// 超时 ticker（1 秒间隔检查）
+		// 超时 ticker（1 秒间隔检查）；下游阻塞在发送时也要能检查超时，
+		// 故发送与收事件放在同一个 select 里（pending 暂存待发事件）。
 		var ticker *time.Ticker
 		if h.overallTimeout > 0 {
 			ticker = time.NewTicker(time.Second)
@@ -391,26 +392,39 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 		}
 		startTime := time.Now()
 
+		var pending *StreamEvent
 		for {
+			var sendCh chan StreamEvent
+			var sendEvent StreamEvent
+			if pending != nil {
+				sendCh, sendEvent = ch, *pending
+			}
+			// 有待发事件时不再从 queue 取新事件，避免覆盖 pending 丢块
+			var queueCh chan StreamEvent
+			if pending == nil {
+				queueCh = queue
+			}
+			var tickCh <-chan time.Time
+			if ticker != nil {
+				tickCh = ticker.C
+			}
+
 			select {
-			case event, ok := <-queue:
+			case sendCh <- sendEvent:
+				finished := sendEvent.Type == StreamEventTypeExit
+				pending = nil
+				if finished {
+					return
+				}
+
+			case event, ok := <-queueCh:
 				if !ok {
 					// queue 关闭，所有事件已处理完毕
 					return
 				}
-				select {
-				case ch <- event:
-				case <-ctx.Done():
-					h.killProcessTree()
-					return
-				}
-				// EXIT 事件表示流结束
-				if event.Type == StreamEventTypeExit {
-					return
-				}
+				pending = &event
 
-			case <-ticker.C:
-				// 检查 overallTimeout
+			case <-tickCh:
 				if h.overallTimeout > 0 && time.Since(startTime) > time.Duration(h.overallTimeout)*time.Second {
 					logger.Warn(logComponent).
 						Str("event_type", "STREAM_TIMEOUT").

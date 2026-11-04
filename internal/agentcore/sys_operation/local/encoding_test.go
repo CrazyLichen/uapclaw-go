@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -93,6 +94,8 @@ const (
 	helperLineWidth = 512
 	// helperLongLineBytes 超长单行字节数
 	helperLongLineBytes = 200000
+	// helperModeHang 无输出挂起模式
+	helperModeHang = "hang"
 )
 
 // TestHelperProcess 子进程辅助入口（经典 os/exec helper 模式）：
@@ -120,6 +123,9 @@ func TestHelperProcess(t *testing.T) {
 	case helperModeLongLine:
 		// 单行超长输出：验证读取端不按行、不丢字节
 		_, _ = os.Stdout.Write(bytes.Repeat([]byte("y"), helperLongLineBytes))
+	case helperModeHang:
+		// 长时间无输出：验证超时kill 链路
+		time.Sleep(5 * time.Second)
 	}
 	os.Exit(0)
 }
