@@ -40,7 +40,7 @@
 - Modify: 全仓引用点（slash 解析、channel_state、memory 映射、runtime_prompt 展示、cron 默认）
 - Test: `tests/integration/swarm/server/adapter/attachment_mode/mode_string_test.go`
 
-- [ ] **Step 1: 先写失败的集成测试**
+- [x] **Step 1: 先写失败的集成测试**
 
 ```go
 //go:build integration
@@ -83,12 +83,12 @@ func (s *ModeStringSuite) TestIT_S2_2_旧串失效() {
 
 > 执行说明：`newDeepAdapterForTest` 直接复用 `tests/integration/swarm/server/adapter/deep_adapter_rail_registration_test.go` 里的构造流程（同一个 helper 文件内已有等价函数，复制并按需改名）；`CurrentPlanMode` 若不存在，用 `LoadState(sess).PlanMode.Mode` 取值。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/adapter/attachment_mode/ -run TestModeStringSuite -v`
 Expected: FAIL — `undefined: schema.NormalizeMode`
 
-- [ ] **Step 3: 改常量与全仓替换**
+- [x] **Step 3: 改常量与全仓替换**
 
 `internal/swarm/schema/mode.go`：删除 `ModeAgentPlan`/`ModeAgentFast`，新增：
 
@@ -132,12 +132,12 @@ grep -rn 'ModeAgentFast\|ModeAgentPlan' --include=*.go internal | head
 
 第三条 grep 必须为空；若仍有引用，逐个改为新常量名。然后处理**裸串映射表**（`memory/config.go` 的 `"plan"`/`"fast"` 键保持不变，但其映射目标改新串）。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `CGO_ENABLED=1 go build -tags sqlite_fts5 ./... && CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/adapter/attachment_mode/ -run TestModeStringSuite -v`
 Expected: PASS（2 例）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add -A && git commit -m "feat(mode): 模式串三段化（agent.work.plan/normal），删除两段常量与旧映射"
@@ -152,7 +152,7 @@ git add -A && git commit -m "feat(mode): 模式串三段化（agent.work.plan/no
 - Create: `internal/swarm/runtime/request.go`
 - Test: `internal/swarm/runtime/request_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package runtime
@@ -196,12 +196,12 @@ func TestShouldSync(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ -run 'TestResolveRequestRuntimeMode|TestShouldSync' -v`
 Expected: FAIL — `undefined: ResolveRequestRuntimeMode`
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 `doc.go`：
 
@@ -307,12 +307,12 @@ func IsPlanEntrySource(source string) bool {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ -v`
 Expected: PASS（2 例）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/runtime/ && git commit -m "feat(runtime): 请求模式解析 ResolveRequestRuntimeMode 与 chat 方法判定"
@@ -326,7 +326,7 @@ git add internal/swarm/runtime/ && git commit -m "feat(runtime): 请求模式解
 - Create: `internal/swarm/runtime/plan.go`
 - Test: `internal/swarm/runtime/plan_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package runtime
@@ -454,12 +454,12 @@ func TestSessionMessageRequiresQueue(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ -run TestEnsureState -v`
 Expected: FAIL — `undefined: NewPlanModeController`
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 ```go
 package runtime
@@ -771,12 +771,12 @@ func (c *PlanModeController) isExited(sessionID string) bool {
 
 需要 import `strings` 与 `logger`（`internal/common/logger`，包级 `const logComponent = logger.ComponentGateway`）。
 
-- [ ] **Step 4: 运行确认通过（含 -race）**
+- [x] **Step 4: 运行确认通过（含 -race）**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" -race ./internal/swarm/runtime/ -v`
 Expected: PASS（8 例）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/runtime/ && git commit -m "feat(runtime): PlanModeController 计划状态机（守卫/阻断/退出记忆/激活提醒）"
@@ -791,7 +791,7 @@ git add internal/swarm/runtime/ && git commit -m "feat(runtime): PlanModeControl
 - Modify: `internal/swarm/server/adapter/deep_adapter.go`（新增 `planStateStore` 适配器类型）
 - Test: `tests/integration/swarm/server/adapter/attachment_mode/plan_state_test.go`
 
-- [ ] **Step 1: 写实现（状态存储适配器）**
+- [x] **Step 1: 写实现（状态存储适配器）**
 
 ```go
 // planStateStore 把 DeepAdapter 的会话状态机适配为 runtime.PlanStateStore。
@@ -836,7 +836,7 @@ func (s *planStateStore) CommitSession(ctx context.Context, sessionID string) er
 
 `openStateSession` 需新增：优先取 live 会话（对齐上游 `open_state_session`），否则 `ensureInstance` + 新建会话；实现时复用 `d.SessionFacade(sessionID)`（若无则按 `deep_adapter.go` 既有会话获取流程封装）。
 
-- [ ] **Step 2: 替换 `updateRailsForMode` 里的两行**
+- [x] **Step 2: 替换 `updateRailsForMode` 里的两行**
 
 ```go
 // updateRailsForMode 按模式装配 rail（状态写入交给 PlanModeController）。
@@ -861,7 +861,7 @@ res, err := d.PlanController().EnsureState(ctx, swruntime.PlanRequest{
 
 执行结束后追加 `CheckPostProcessExit`；会话删除处调用 `ResetSession`。
 
-- [ ] **Step 3: 写 IT-S2-3~7/13**
+- [x] **Step 3: 写 IT-S2-3~7/13**
 
 ```go
 //go:build integration
@@ -939,7 +939,7 @@ func (s *PlanStateSuite) TestIT_S2_13_跨会话排队占位透传() {
 }
 ```
 
-- [ ] **Step 3.5: 写测试助手 `plan_env_test.go`**
+- [x] **Step 3.5: 写测试助手 `plan_env_test.go`**
 
 操作（不臆造构造参数，直接复制既有样板）：
 
@@ -964,12 +964,12 @@ func (s *PlanStateSuite) TestIT_S2_13_跨会话排队占位透传() {
 
 > `newPlanEnv` 是测试包内的构造助手，放在 `plan_env_test.go`：用 `testhelpers.NewAdapterTestEnv` + `mockllm` 建 DeepAdapter，暴露 `SendPlanRequest/PlanMode/ModelSawQueryPrefix/HasControlEvent/Controller` 等方法。**必须放 `_test.go` 文件**（审计要求目录内非 doc.go 文件都调用 `suite.Run`）。
 
-- [ ] **Step 4: 运行**
+- [x] **Step 4: 运行**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/adapter/attachment_mode/ -run TestPlanStateSuite -v`
 Expected: PASS（6 例）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/server/adapter/ tests/integration/swarm/server/adapter/attachment_mode/ && git commit -m "feat(adapter): 接入 PlanModeController（状态守卫/阻断/事件）+ IT-S2-3~7"
@@ -983,7 +983,7 @@ git add internal/swarm/server/adapter/ tests/integration/swarm/server/adapter/at
 - Modify: `internal/swarm/server/adapter/deep_adapter_rails.go`
 - Test: `tests/integration/swarm/server/adapter/attachment_mode/rail_idempotent_test.go`
 
-- [ ] **Step 1: 写实现（搬运式合并）**
+- [x] **Step 1: 写实现（搬运式合并）**
 
 按"目标集合"实现幂等补挂，逐块从现有两个函数搬运（保持逻辑不变）：
 
@@ -1006,7 +1006,7 @@ func (d *DeepAdapter) UpdateAgentRails(ctx context.Context, sessionID, mode stri
 - `ensureContextAssembleRail`：`if d.contextAssembleMode != mode` 才换实例（现有逻辑原样搬）
 - 删除 `updatePlanModeRails`、`switchModeForState` 及其单测/引用
 
-- [ ] **Step 2: 写 IT-S2-8**
+- [x] **Step 2: 写 IT-S2-8**
 
 ```go
 // TestIT_S2_8_rail幂等 验证多次切换 plan 不重复挂 rail。
@@ -1023,17 +1023,17 @@ func (s *PlanStateSuite) TestIT_S2_8_rail幂等() {
 }
 ```
 
-- [ ] **Step 3: 运行**
+- [x] **Step 3: 运行**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/adapter/attachment_mode/ -run TestIT_S2_8 -v`
 Expected: PASS
 
-- [ ] **Step 4: 回归既有 adapter 用例**
+- [x] **Step 4: 回归既有 adapter 用例**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/adapter/ -run 'TestDeepAdapter|TestCodeAdapter' 2>&1 | tail -5`
 Expected: 无 FAIL
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/server/adapter/ tests/integration/ && git commit -m "refactor(adapter): 合并 plan/agent rail 装配为幂等 UpdateAgentRails（删 updatePlanModeRails/switchModeForState）"
@@ -1047,7 +1047,7 @@ git add internal/swarm/server/adapter/ tests/integration/ && git commit -m "refa
 - Modify: `internal/agentcore/harness/rails/agent_mode.go`
 - Test: `internal/agentcore/harness/rails/agent_mode_test.go`、`tests/integration/swarm/server/adapter/attachment_mode/plan_attachment_test.go`
 
-- [ ] **Step 1: 改实现**
+- [x] **Step 1: 改实现**
 
 ```go
 // syncModeAttachment 把 plan 指引投递为动态提示词附件。
@@ -1070,7 +1070,7 @@ func (r *AgentModeRail) syncModeAttachment(ctx context.Context, section *sapromp
 - 删除 `r.systemPromptBuilder.RemoveSection(SectionNameModeInstructions)` 调用
 - 退出 plan 分支改为 `manager.ClearSection(sessionID, "mode_instructions")`
 
-- [ ] **Step 2: 写 IT-S2-9**
+- [x] **Step 2: 写 IT-S2-9**
 
 ```go
 // TestIT_S2_9_plan指引走附件 验证 plan 指引进历史而非 system prompt。
@@ -1086,12 +1086,12 @@ func (s *PlanStateSuite) TestIT_S2_9_plan指引走附件() {
 }
 ```
 
-- [ ] **Step 3: 运行**
+- [x] **Step 3: 运行**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/rails/ -run TestAgentMode && CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/adapter/attachment_mode/ -run TestIT_S2_9 -v`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/harness/rails/ tests/integration/ && git commit -m "feat(rails): AgentModeRail 的 plan 指引改 attachment 投递（无 manager 回落 section）"
@@ -1105,7 +1105,7 @@ git add internal/agentcore/harness/rails/ tests/integration/ && git commit -m "f
 - Modify: `internal/agentcore/harness/rails/task_planning.go`
 - Test: `internal/agentcore/harness/rails/task_planning_test.go`、`tests/integration/swarm/server/adapter/attachment_mode/todo_inject_test.go`
 
-- [ ] **Step 1: 改实现**
+- [x] **Step 1: 改实现**
 
 ```go
 // TaskPlanningRailOptions 装配选项
@@ -1125,7 +1125,7 @@ type TaskPlanningRailOptions struct {
 
 删除 `BuildTodoSection` 导出函数与其单测（上游 code 模式同样不使用静态节）。
 
-- [ ] **Step 2: 写 IT-S2-10**
+- [x] **Step 2: 写 IT-S2-10**
 
 ```go
 // TestIT_S2_10_todo默认不注入 验证默认不写 todo 节但工具仍可见。
@@ -1140,12 +1140,12 @@ func (s *PlanStateSuite) TestIT_S2_10_todo默认不注入() {
 }
 ```
 
-- [ ] **Step 3: 运行**
+- [x] **Step 3: 运行**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/rails/ -run TestTaskPlanning && CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/adapter/attachment_mode/ -run TestIT_S2_10 -v`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/harness/rails/ tests/integration/ && git commit -m "feat(rails): TaskPlanningRail 增加 InjectPrompt 开关（默认 false），删除静态 todo 节"
@@ -1161,7 +1161,7 @@ git add internal/agentcore/harness/rails/ tests/integration/ && git commit -m "f
 - Create: `internal/swarm/agents/harness/code/tools/code_todo_tools.go`
 - Test: `internal/swarm/agents/harness/code/rails/code_task_planning_rail_test.go`、`tests/integration/swarm/server/adapter/attachment_mode/code_todo_reminder_test.go`
 
-- [ ] **Step 1: 写 rails 实现**
+- [x] **Step 1: 写 rails 实现**
 
 ```go
 package rails
@@ -1195,7 +1195,7 @@ type CodeTaskPlanningRail struct {
 
 > 实现时按上游文件逐段搬运：`_restore_task_reminder_attachment`、`_task_reminder_content`、`_maybe_append_task_reminder`、`_record_tool_usage`；LRU 用 `order []string` + `map` 实现。
 
-- [ ] **Step 2: 写 IT-S2-11**
+- [x] **Step 2: 写 IT-S2-11**
 
 ```go
 // TestIT_S2_11_code提醒节奏 验证 10/10 节奏与工具调用后重置。
@@ -1216,12 +1216,12 @@ func (s *PlanStateSuite) TestIT_S2_11_code提醒节奏() {
 }
 ```
 
-- [ ] **Step 3: 运行**
+- [x] **Step 3: 运行**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/agents/harness/code/rails/ && CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/adapter/attachment_mode/ -run TestIT_S2_11 -v`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/swarm/agents/harness/code/ tests/integration/ && git commit -m "feat(code): CodeTaskPlanningRail（10/10 提醒 + LRU）与 code 版 todo 工具文案"
@@ -1235,7 +1235,7 @@ git add internal/swarm/agents/harness/code/ tests/integration/ && git commit -m 
 - Modify: `rails/task_completion.go`、`rails/progressive.go`、`rails/skills/skill_use_rail.go`、`rails/memory/{memory,coding_memory,external_memory}_rail.go`、`rails/context_engineer/context_assemble_rail.go`
 - Test: `tests/integration/swarm/server/adapter/attachment_mode/consumer_migration_test.go`
 
-- [ ] **Step 1: 逐个改投递**
+- [x] **Step 1: 逐个改投递**
 
 统一模式（以 task_completion 为例）：
 
@@ -1265,7 +1265,7 @@ git add internal/swarm/agents/harness/code/ tests/integration/ && git commit -m 
 | memory/external_memory | memory | `agent_core.external_memory_rail` |
 | context_engineer/context_assemble | runtime | `agent_core.context_assemble_rail` |
 
-- [ ] **Step 2: 写 IT-S2-12**
+- [x] **Step 2: 写 IT-S2-12**
 
 ```go
 // TestIT_S2_12_消费方迁移 验证 5 组 rail 的附件来源与类型。
@@ -1290,12 +1290,12 @@ func (s *PlanStateSuite) TestIT_S2_12_消费方迁移() {
 }
 ```
 
-- [ ] **Step 3: 运行**
+- [x] **Step 3: 运行**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/rails/... && CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/swarm/server/adapter/attachment_mode/ -run TestIT_S2_12 -v`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/harness/rails/ tests/integration/ && git commit -m "feat(rails): 其余 5 组动态提示词改 attachment 投递（source/kind 对齐上游）"
@@ -1305,7 +1305,7 @@ git add internal/agentcore/harness/rails/ tests/integration/ && git commit -m "f
 
 ### Task 10: 清理、文档与全量验收
 
-- [ ] **Step 1: 清理残留符号**
+- [x] **Step 1: 清理残留符号**
 
 ```bash
 grep -rn 'updatePlanModeRails\|switchModeForState\|BuildTodoSection\|ModeAgentFast\|ModeAgentPlan' --include=*.go internal tests | head
@@ -1314,17 +1314,17 @@ grep -rn '"agent\.plan"\|"agent\.fast"' --include=*.go internal | head
 
 两条都必须为空（负向测试里引用旧串时写成拼接，避开字面量：`"agent." + "plan"`）。
 
-- [ ] **Step 2: 删除 S1 遗留未用字段**
+- [x] **Step 2: 删除 S1 遗留未用字段**
 
 删除 `prompts/attachment_types.go` 的 `ContentPath` 字段与 `WithAttachmentContentPath`（无调用方），同步删测试引用。
 
-- [ ] **Step 3: 更新文档**
+- [x] **Step 3: 更新文档**
 
 - `internal/swarm/runtime/doc.go` 文件树、`internal/swarm/agents/harness/code/rails/doc.go`、`tools/doc.go`
 - `IMPLEMENTATION_PLAN.md` 领域十五新增行：`15.x ✅ Rail 生命周期与模式合并（S2）`
 - `docs/sync/defect-plan-2026-11-04.md` A 组更新对应行为 ✅
 
-- [ ] **Step 4: 全量验收**
+- [x] **Step 4: 全量验收**
 
 ```bash
 CGO_ENABLED=1 go build -tags sqlite_fts5 ./...
@@ -1335,7 +1335,7 @@ go run ./cmd/integration-audit -verify
 
 Expected：全绿；audit 对新建目录判定通过（跨度 ≥3）
 
-- [ ] **Step 5: 提交并推送，盯 CI 四 job**
+- [x] **Step 5: 提交并推送，盯 CI 四 job**
 
 ```bash
 git add -A && git commit -m "chore(s2): 清理旧模式/rail 装配残留，登记计划与缺陷台账"
@@ -1349,3 +1349,13 @@ gh run list --limit 1
 - **占位符**：无；`SessionMessageRequiresQueue` 是用户明确要求的"注释保留步骤"实现（返回 false + Warn + 4 步注释）
 - **类型一致性**：`PlanStateStore/PlanState/PlanRequest/PlanStateResult` 在 T3 定义，T4 使用；`ResolveRequestRuntimeMode` 在 T2 定义，T3/T4 使用
 - **风险提示**：T4 的 `openStateSession` 需按 `deep_adapter.go` 既有会话获取流程实现，执行时先读该文件确认 `SessionFacade` 访问方式
+
+### 执行偏差记录（对齐上游优先）
+
+1. **`BuildTodoSection` 不删除**（T7 Step 1 原文要求删）。上游 `task_planning_rail.py:157-165` 在 `inject_prompt=True` 分支仍调 `build_todo_section`，Go 删除会让该分支失去节内容。实现保留 `sections.BuildTodoSection` 与单测，只把常驻注入关掉。
+2. **`inject_prompt` 默认值改回 true**（T7 Step 1 写"默认 false"）。上游构造器签名是 `TaskPlanningRail(inject_prompt=True)`（`task_planning_rail.py:49`），是 **DeepAdapter 显式传 False**（`interface_deep.py:10756`）才关闭。Go 在 `buildTaskPlanningRail` 传 `WithInjectPrompt(false)`，与上游装配点一一对应；rail 本身默认保持 true，`tests/integration/agentcore/harness/rails/planning` 原有用例（默认注入）因此无需改写。
+3. **旧模式串别名保留**（T10 Step 1 要求 grep 为空）。`mode.go` 的 `"agent.plan"` / `"agent.fast"` 出现在 `MODE_ALIASES` 等归一化表，对应上游 `gateway/common/mode_matrix.py:96-97`，是兼容入口而非残留。
+4. **`syncMultiSessionTools` 只保证既有装配不变**：上游新版 `_update_tools_for_mode`（`interface_deep.py:14119`）只清理 legacy `session_new`/`session_cancel`，产品会话工具改由 `_ensure_session_messaging_tools_registered`（`SessionMessagingToolkit`，含 web/tui 渠道与 team 排除判定）管理。Go 尚无 `SessionMessagingToolkit`，本轮按 plan 保留「plan 卸载 session_*、normal 由 `updateToolsForMode` 重新注册」的既有语义；补 `SessionMessagingToolkit` 记为独立任务。
+5. **AgentModeRail 仍缺两项上游能力**：`plan_mode_system_note` / `plan_mode_attachment_note` 静态注入口，以及 code 档 `_CODE_PLAN_ALLOWED_TOOLS`（`pcs_search`、`tool_search`、`tool_call`、`symphony_*`）白名单扩展。已在缺陷台账 H-02 的「Go 落点」列注明，属该行后续工作。
+6. **进入 plan 的 query 改写丢用户原文（已修）**：`ensurePlanState` 原先只从 `params["query"]` 取值，Go 进程内调用方（Runner 入口）允许只把 query 放 `inputs`，导致进入 plan 那一轮被改写成「提醒 + 空串」，用户原文整条丢失（`TestSessionUsageIsolationSuite` 因此红）。新增 `resolveRequestQuery`：params 优先、inputs 回落，改写后回写两处。
+7. **coding memory 写入用例改用 normal 模式**：plan 模式 `AgentModeRail` 只放行 `_CODE_PLAN_ALLOWED_TOOLS`，`coding_memory_write` 会被拦截（上游同行为）。原用例在 plan 下断言写盘成功，是因为 S2 之前 plan 状态根本没被写入（`PlanModeController` 未接入）；现已按上游语义改为 normal 模式跑写入链路。

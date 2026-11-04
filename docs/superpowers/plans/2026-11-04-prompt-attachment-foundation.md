@@ -40,7 +40,7 @@
 - Create: `internal/agentcore/harness/prompts/attachment_digest.go`
 - Test: `internal/agentcore/harness/prompts/attachment_digest_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package prompts
@@ -72,12 +72,12 @@ func TestCanonicalJSON_不转义HTML且无尾换行(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run 'TestHashPromptAttachment|TestCanonicalJSON' -v`
 Expected: FAIL — `undefined: Attachment` / `undefined: canonicalJSON`
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 `attachment_types.go`：
 
@@ -286,12 +286,12 @@ func sortedSections(state map[string]string) []string {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run 'TestHashPromptAttachment|TestCanonicalJSON' -v`
 Expected: PASS（3 个用例）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/harness/prompts/attachment_types.go internal/agentcore/harness/prompts/attachment_digest.go internal/agentcore/harness/prompts/attachment_digest_test.go
@@ -306,7 +306,7 @@ git commit -m "feat(prompts): attachment 类型与内容哈希（规范化 JSON�
 - Create: `internal/agentcore/harness/prompts/attachment_store.go`
 - Test: `internal/agentcore/harness/prompts/attachment_store_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package prompts
@@ -378,12 +378,12 @@ func TestManager_并发安全(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run 'TestSafeIDPart|TestManager_' -v`
 Expected: FAIL — `undefined: NewManager` 等
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 ```go
 package prompts
@@ -650,12 +650,12 @@ func (m *Manager) ClearAll() (int, error) {
 
 同时在 `attachment_store_test.go` 里补一行断言：`require.Equal(t, sha256Hex(a.Content), a.ContentSHA256)`（Step 1 已写入，直接复用 `sha256Hex`）。
 
-- [ ] **Step 4: 运行确认通过（含 -race）**
+- [x] **Step 4: 运行确认通过（含 -race）**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" -race ./internal/agentcore/harness/prompts/ -run 'TestSafeIDPart|TestManager_' -v`
 Expected: PASS（4 个用例，race 干净）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/harness/prompts/attachment_store.go internal/agentcore/harness/prompts/attachment_store_test.go
@@ -673,7 +673,7 @@ git commit -m "feat(prompts): attachment 存储（归一化/过期/稳定排序/
 - Modify: `internal/agentcore/harness/prompts/attachment_store.go`
 - Test: `internal/agentcore/harness/prompts/attachment_store_update_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package prompts
@@ -781,12 +781,12 @@ func TestManager_AddFromPromptSection(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run 'TestManager_Update|TestManager_RemoveByID|TestManager_ReplaceSource|TestManager_AddFromPromptSection' -v`
 Expected: FAIL — `m.UpdateByID undefined` 等
 
-- [ ] **Step 3: 写实现（追加到 `attachment_store.go`）**
+- [x] **Step 3: 写实现（追加到 `attachment_store.go`）**
 
 ```go
 // AttachmentUpdate 允许修改的字段，nil 表示不改。
@@ -1011,12 +1011,12 @@ func (m *Manager) findByIDUnlocked(id string) (string, string, *Attachment, bool
 3. `attachment_store.go` 的 import 增加 `"fmt"`、`"strings"`、`saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"`。
    注意：`WithAttachmentPriority(0)` 会把优先级设成 0，因此 `AddFromPromptSection` 只在 `section.Priority != 0` 时追加选项（与上游 `priority=getattr(prompt_section, "priority", 100) if priority is None else priority` 等价，缺省 100）。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run 'TestManager_' -v`
 Expected: PASS（Task 2 的 4 个 + 本任务 5 个）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/harness/prompts/attachment_types.go internal/agentcore/harness/prompts/attachment_store.go internal/agentcore/harness/prompts/attachment_store_update_test.go
@@ -1031,7 +1031,7 @@ git commit -m "feat(prompts): 补齐 attachment update/remove/replace/file-refer
 - Create: `internal/agentcore/harness/prompts/attachment_render.go`
 - Test: `internal/agentcore/harness/prompts/attachment_render_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package prompts
@@ -1081,12 +1081,12 @@ func TestRenderSnapshot_空内容返回空串(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run TestRender -v`
 Expected: FAIL — `(*Manager).RenderSnapshot undefined`
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 ```go
 package prompts
@@ -1200,12 +1200,12 @@ func truncateRunes(s string, limit int) string {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run TestRender -v`
 Expected: PASS（4 个用例）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/harness/prompts/attachment_render.go internal/agentcore/harness/prompts/attachment_render_test.go
@@ -1220,7 +1220,7 @@ git commit -m "feat(prompts): attachment 三态渲染与两级截断（文案逐
 - Create: `internal/agentcore/harness/prompts/attachment_delivery.go`
 - Test: `internal/agentcore/harness/prompts/attachment_delivery_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package prompts
@@ -1296,12 +1296,12 @@ func TestSync_基线丢失回退快照(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run TestSync -v`
 Expected: FAIL — `(*Manager).Sync undefined`
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 ```go
 package prompts
@@ -1441,12 +1441,12 @@ func pickSections(items []*Attachment, sections []string) []*Attachment {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run TestSync -v`
 Expected: PASS（3 个用例）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/harness/prompts/attachment_delivery.go internal/agentcore/harness/prompts/attachment_delivery_test.go
@@ -1463,7 +1463,7 @@ git commit -m "feat(prompts): attachment 历史同步（快照/增量/基线回�
 - Modify: `internal/agentcore/context_engine/context/session_model_context.go:568-575`（`mc.statContextWindow(window)` 之前）
 - Test: `internal/agentcore/context_engine/context/window_mutator_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package context
@@ -1510,12 +1510,12 @@ func newSessionModelContextForMutator(t *testing.T) *SessionModelContext {
 
 需在测试文件 import `ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"`。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/context_engine/context/ -run TestGetContextWindow_应用Mutator -v`
 Expected: FAIL — `undefined: ceiface.WithWindowMutators`
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 `interface/window.go`：
 
@@ -1576,12 +1576,12 @@ func WindowMutatorsFromOption(opts ...Option) []WindowMutator {
 	}
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/context_engine/... -run 'TestGetContextWindow' -v`
 Expected: PASS（含既有窗口用例不回归）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/context_engine/interface/window.go internal/agentcore/context_engine/interface/types.go internal/agentcore/context_engine/context/session_model_context.go internal/agentcore/context_engine/context/window_mutator_test.go
@@ -1596,7 +1596,7 @@ git commit -m "feat(context_engine): ContextWindow 增加 mutator 投影链（�
 - Modify: `internal/agentcore/harness/prompts/attachment_delivery.go`（追加函数）
 - Test: `internal/agentcore/harness/prompts/attachment_mutator_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package prompts
@@ -1645,12 +1645,12 @@ func TestBuildWindowMutator_只换附件消息(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run 'TestUsesSystemAttachmentRole|TestBuildWindowMutator' -v`
 Expected: FAIL — `undefined: UsesSystemAttachmentRole`
 
-- [ ] **Step 3: 写实现（追加到 `attachment_delivery.go`）**
+- [x] **Step 3: 写实现（追加到 `attachment_delivery.go`）**
 
 ```go
 // UsesSystemAttachmentRole 判断当前路由是否把附件投递为 SystemMessage。
@@ -1717,12 +1717,12 @@ func BuildWindowMutator(sessionID string, useSystemRole bool) ceiface.WindowMuta
 
 需要在 import 中补 `strings` 与 `ceiface`、`llmschema`。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/harness/prompts/ -run 'TestUsesSystemAttachmentRole|TestBuildWindowMutator' -v`
 Expected: PASS（2 个用例，第二个含 3 条断言）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/harness/prompts/attachment_delivery.go internal/agentcore/harness/prompts/attachment_mutator_test.go
@@ -1738,7 +1738,7 @@ git commit -m "feat(prompts): attachment 窗口投影与 provider 矩阵（百�
 - Modify: `internal/agentcore/single_agent/agents/react_invoke.go:450-458`、`:672-682`
 - Test: `internal/agentcore/single_agent/agents/attachment_hook_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 package agents
@@ -1761,12 +1761,12 @@ func TestSyncPromptAttachments_有管理器无上下文时跳过(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/single_agent/agents/ -run TestSyncPromptAttachments -v`
 Expected: FAIL — `undefined: syncPromptAttachments`
 
-- [ ] **Step 3: 写实现**
+- [x] **Step 3: 写实现**
 
 新增 `react_attachment.go`（同包）：
 
@@ -1826,12 +1826,12 @@ func (r *ReActAgent) SetPromptAttachmentManager(m *prompts.Manager) {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/agentcore/single_agent/... -run 'TestSyncPromptAttachments|TestReAct' -v`
 Expected: PASS（2 个新用例 + 既有 ReAct 用例不回归）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/single_agent/agents/react_attachment.go internal/agentcore/single_agent/agents/react_agent.go internal/agentcore/single_agent/agents/react_model_call.go internal/agentcore/single_agent/agents/react_invoke.go internal/agentcore/single_agent/agents/attachment_hook_test.go
@@ -1847,7 +1847,7 @@ git commit -m "feat(agents): ReAct 在写用户消息前与建窗口前同步 pr
 - Create: `tests/integration/agentcore/attachment/testrail.go`
 - Create: `tests/integration/agentcore/attachment/attachment_flow_test.go`
 
-- [ ] **Step 1: 建目录与上下文助手**
+- [x] **Step 1: 建目录与上下文助手**
 
 `doc.go`：
 
@@ -1947,7 +1947,7 @@ func newContext(t *testing.T, sessionID string) *cecontext.SessionModelContext {
 
 注：若 `CreateContext` 返回的是接口类型而非 `*SessionModelContext`，删除末尾的类型断言，直接把 `newContext` 返回类型改成 `iface.ModelContext`（`Sync`/`GetContextWindow`/`SetMessages` 都在该接口上）。
 
-- [ ] **Step 2: 写 IT-1 / IT-2**
+- [x] **Step 2: 写 IT-1 / IT-2**
 
 ```go
 //go:build integration
@@ -2020,12 +2020,12 @@ func (s *FlowSuite) TestIT2_顺序契约与幂等() {
 }
 ```
 
-- [ ] **Step 3: 运行**
+- [x] **Step 3: 运行**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/agentcore/attachment/ -run 'TestFlowSuite' -v`
 Expected: PASS（2 个用例）
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add tests/integration/agentcore/attachment/
@@ -2039,7 +2039,7 @@ git commit -m "test(integration): attachment IT-1 全链路 + IT-2 顺序契约"
 **Files:**
 - Create: `tests/integration/agentcore/attachment/attachment_compact_test.go`
 
-- [ ] **Step 1: 写两个用例**
+- [x] **Step 1: 写两个用例**
 
 ```go
 //go:build integration
@@ -2093,12 +2093,12 @@ func (s *CompactSuite) TestIT5_重启后不重复投递() {
 }
 ```
 
-- [ ] **Step 2: 运行**
+- [x] **Step 2: 运行**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/agentcore/attachment/ -run 'TestCompactSuite' -v`
 Expected: PASS（2 个用例）
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/agentcore/attachment/attachment_compact_test.go
@@ -2112,7 +2112,7 @@ git commit -m "test(integration): attachment IT-3 压缩回退 + IT-5 重启恢�
 **Files:**
 - Create: `tests/integration/agentcore/attachment/attachment_provider_test.go`
 
-- [ ] **Step 1: 写三个用例**
+- [x] **Step 1: 写三个用例**
 
 ```go
 //go:build integration
@@ -2207,12 +2207,12 @@ func (s *ProviderSuite) TestIT7_流式两轮之间插入增量() {
 
 > IT-7 等价于「流式两轮之间插入 delta」：`Sync` 的调用点与流式无关，流式回归由既有流式用例覆盖；本用例锁定消息插入位置与轮次顺序。
 
-- [ ] **Step 2: 运行（含 -race）**
+- [x] **Step 2: 运行（含 -race）**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" -race ./tests/integration/agentcore/attachment/ -v`
 Expected: PASS（7 个用例，race 干净）
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add tests/integration/agentcore/attachment/attachment_provider_test.go
@@ -2228,7 +2228,7 @@ git commit -m "test(integration): attachment IT-4 投影矩阵 + IT-6 隔离 + I
 - Modify: `IMPLEMENTATION_PLAN.md`（领域二十四新增 24.10 行）
 - Modify: `docs/sync/defect-plan-2026-11-04.md`（B 组新增 B-17 行）
 
-- [ ] **Step 1: 更新 doc.go 文件树**
+- [x] **Step 1: 更新 doc.go 文件树**
 
 在 `internal/agentcore/harness/prompts/doc.go` 的文件目录中加入：
 
@@ -2240,7 +2240,7 @@ git commit -m "test(integration): attachment IT-4 投影矩阵 + IT-6 隔离 + I
 //	└── attachment_delivery.go # 历史同步、窗口投影、provider 矩阵
 ```
 
-- [ ] **Step 2: 更新实现计划**
+- [x] **Step 2: 更新实现计划**
 
 在 `IMPLEMENTATION_PLAN.md` 领域二十四表格追加：
 
@@ -2248,7 +2248,7 @@ git commit -m "test(integration): attachment IT-4 投影矩阵 + IT-6 隔离 + I
 | 24.10 | ✅ | Prompt Attachment 地基（S1） | manager（存储/渲染/哈希增量）+ `ContextWindow` mutator 链 + ReAct 两处装订点 + provider 矩阵；7 例集成测试 | `internal/agentcore/harness/prompts/attachment_*.go` ← `openjiuwen/harness/prompts/prompt_attachment_manager.py` |
 ```
 
-- [ ] **Step 3: 更新缺陷台账**
+- [x] **Step 3: 更新缺陷台账**
 
 在 `docs/sync/defect-plan-2026-11-04.md` B 组表格末尾追加：
 
@@ -2256,7 +2256,7 @@ git commit -m "test(integration): attachment IT-4 投影矩阵 + IT-6 隔离 + I
 | B-17 | 动态提示词仍靠 system prompt 改写，无附件投递层（上游已迁移） | `958fd614` | `harness/prompts/attachment_*.go` | P1 | ✅ |
 ```
 
-- [ ] **Step 4: 全量验证**
+- [x] **Step 4: 全量验证**
 
 ```bash
 CGO_ENABLED=1 go build -tags sqlite_fts5 ./...
@@ -2267,7 +2267,7 @@ go run ./cmd/integration-audit -verify
 
 Expected：全部通过；audit 对 `tests/integration/agentcore/attachment` 判定通过（跨 4 个二级子系统）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/harness/prompts/doc.go IMPLEMENTATION_PLAN.md docs/sync/defect-plan-2026-11-04.md

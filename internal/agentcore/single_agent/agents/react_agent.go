@@ -106,6 +106,12 @@ func NewReActAgent(
 	return agent
 }
 
+// PromptAttachments 返回动态提示词管理器（可为 nil）。
+//
+// Python: ReActAgent.prompt_attachment_manager。桥接回调里 ctx.agent 是
+// ReActAgent 而非 DeepAgent，rail 需要它才能把动态提示词投递为历史附件。
+func (a *ReActAgent) PromptAttachments() *hprompts.Manager { return a.promptAttachments }
+
 // SetPromptAttachmentManager 注入动态提示词管理器（可为 nil）。
 //
 // Python: DeepAgent 把 prompt_attachment_manager 共享给内层 ReActAgent

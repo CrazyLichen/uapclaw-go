@@ -128,10 +128,18 @@ modes:
 // newCodeAdapter 构造 CodeAdapter 并执行 CreateInstance 装配链，
 // 挂 Cleanup 收尾。project_dir 指向 dataDir 下 myproj（目录按项目名用例需真实创建）。
 func (s *CodeAdapterCodingMemorySuite) newCodeAdapter() *adapter.CodeAdapter {
+	return s.newCodeAdapterWithMode(string(swarmschema.ModeAgentWorkPlan))
+}
+
+// newCodeAdapterWithMode 按指定模式构造 CodeAdapter。
+//
+// 模式决定 AgentModeRail 的工具白名单：plan 模式只放行只读工具（上游
+// _CODE_PLAN_ALLOWED_TOOLS 不含 coding_memory_write），写入类用例必须在 normal 模式跑。
+func (s *CodeAdapterCodingMemorySuite) newCodeAdapterWithMode(mode string) *adapter.CodeAdapter {
 	c := adapter.NewCodeAdapter()
 	s.Require().NoError(c.CreateInstance(s.Ctx, map[string]any{
 		"project_dir": filepath.Join(s.env.DataDir, "myproj"),
-	}, "agent.work.plan", ""))
+	}, mode, ""))
 	s.T().Cleanup(func() { _ = c.Cleanup() })
 	return c
 }
@@ -244,6 +252,9 @@ func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_记忆Section注入() 
 // 工具参数：path/content（coding_memory_tool.go Invoke 提取）；
 // content 须含合法 frontmatter（name/description/type 必填，type ∈
 // {user,feedback,project,reference}，frontmatter.go ValidateFrontmatter）。
+//
+// 用 normal 模式：plan 模式的 AgentModeRail 只放行 _CODE_PLAN_ALLOWED_TOOLS
+// （上游 interface_code.py:503），coding_memory_write 会被拦截，写不落盘。
 func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_写记忆全流程() {
 	s.writeConfigYaml(false)
 
@@ -258,11 +269,11 @@ func (s *CodeAdapterCodingMemorySuite) TestProcessMessage_写记忆全流程() {
 		mockllm.CreateTextResponse("记忆已保存。"),
 	)
 
-	c := s.newCodeAdapter()
+	c := s.newCodeAdapterWithMode(string(swarmschema.ModeAgentWorkNormal))
 
 	params, _ := json.Marshal(map[string]any{
 		"query": "记住：测试优先跑聚焦用例",
-		"mode":  "agent.work.plan",
+		"mode":  string(swarmschema.ModeAgentWorkNormal),
 		"files": map[string]any{},
 	})
 	req := swarmschema.NewAgentRequest(

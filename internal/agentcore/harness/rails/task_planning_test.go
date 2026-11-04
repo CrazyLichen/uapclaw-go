@@ -411,26 +411,26 @@ func TestTaskPlanningRail_Uninit_移除提示词节(t *testing.T) {
 
 // --- BeforeModelCall 测试 ---
 
-// TestTaskPlanningRail_BeforeModelCall_注入提示词 验证 AddSection 被调用
+// TestTaskPlanningRail_BeforeModelCall_注入提示词 验证开关语义可逆
 func TestTaskPlanningRail_BeforeModelCall_注入提示词(t *testing.T) {
 	t.Parallel()
 
-	// 默认 inject_prompt=false：只注册工具，不注入常驻节（对齐上游）
+	// 默认 inject_prompt=true（对齐上游构造器 TaskPlanningRail(inject_prompt=True)）
 	r := NewTaskPlanningRail()
 	agent := newFakeBaseAgent()
 	builder := agent.SystemPromptBuilder()
 	inputs := &agentinterfaces.ModelCallInputs{}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 	require.NoError(t, r.BeforeModelCall(context.Background(), cbc))
-	assert.False(t, builder.HasSection(sections.SectionTodo), "默认不应注入 todo 节")
+	assert.True(t, builder.HasSection(sections.SectionTodo), "默认应注入 todo 节")
 
-	// 开关打开时仍可注入（语义可逆）
-	r2 := NewTaskPlanningRail(WithInjectPrompt(true))
+	// 装配方关闭时只注册工具、不注入常驻节（Python: interface_deep.py:10756）
+	r2 := NewTaskPlanningRail(WithInjectPrompt(false))
 	agent2 := newFakeBaseAgent()
 	builder2 := agent2.SystemPromptBuilder()
 	cbc2 := agentinterfaces.NewAgentCallbackContext(agent2, &agentinterfaces.ModelCallInputs{}, nil)
 	require.NoError(t, r2.BeforeModelCall(context.Background(), cbc2))
-	assert.True(t, builder2.HasSection(sections.SectionTodo), "开关打开应注入 todo 节")
+	assert.False(t, builder2.HasSection(sections.SectionTodo), "开关关闭不应注入 todo 节")
 }
 
 // TestTaskPlanningRail_BeforeModelCall_模型切换 验证 mock modelSwitcher，SetLLM 被调用

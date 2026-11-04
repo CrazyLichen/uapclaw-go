@@ -154,7 +154,9 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	// ─── Go 独有 Rail（Python 中不存在或不同） ───
 
 	// agentModeRail — plan 模式约束（Go 独有）
-	if mode == "agent.work.plan" {
+	// 上游按「agent 族」注册（mode.startswith("agent")）：plan 是会话运行期状态，
+	// 不是另一种装配，否则普通模式创建的实例永远进不了 plan。
+	if sschema.IsAgentMode(mode) {
 		am := d.buildAgentModeRail(nil)
 		if am != nil {
 			railsList = append(railsList, am)
@@ -180,13 +182,13 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 		railsList = append(railsList, ca)
 	}
 
-	// ─── 不在冷启动时挂载的 Rail（由 updateRailsForMode 按需注册） ───
+	// ─── 不在冷启动时挂载的 Rail（由 UpdateAgentRails / updateRailsForMode 按需注册） ───
 
 	// skillEvolutionRail / skillCreateRail — 冷启动既不构建也不注册。
 	// 两条 rail 的字段语义是「非 nil ⇒ 已注册」，构建提前写字段会让
-	// updatePlanModeRails 的判空条件恒为假、注册分支被跳过。
+	// UpdateAgentRails / ensureSkillEvolutionRail 的判空条件恒为假、注册分支被跳过。
 	// Python: interface_deep.py:2158「SkillEvolutionRail 不在冷启动时挂载」，
-	// 字段保持 None，仅在 _update_plan_mode_rails / _ensure_evolution_rail_for_slash 内赋值。
+	// 字段保持 None，仅在 _update_agent_rails / _ensure_evolution_rail_for_slash 内赋值。
 
 	// memoryRail — 冷启动不构建（对齐 Python：_memory_rail 仅在
 	// _handle_memory_rail_by_config 内构建，冷启动只置 None）。
@@ -233,8 +235,14 @@ func (d *DeepAdapter) buildHeartbeatRail() *rails.HeartbeatRail {
 
 // buildTaskPlanningRail 构建任务规划护栏。
 // Python: _build_task_planning_rail() (line 1649-1710)
+//
+// inject_prompt=False：todo 体系改为「工具描述 + 按需提醒」，不再写常驻静态节
+// （Python: interface_deep.py:10756 `TaskPlanningRail(inject_prompt=False)`）。
 func (d *DeepAdapter) buildTaskPlanningRail(config map[string]any, language string) *rails.TaskPlanningRail {
-	return rails.NewTaskPlanningRail(rails.WithLanguage(language))
+	return rails.NewTaskPlanningRail(
+		rails.WithLanguage(language),
+		rails.WithInjectPrompt(false),
+	)
 }
 
 // buildFilesystemRail 构建文件系统护栏。
@@ -982,7 +990,7 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 func (d *DeepAdapter) UpdateAgentRails(ctx context.Context, sessionID, mode string) {
 	d.ensureTaskPlanningRail(ctx)
 	d.ensureSubagentRail(ctx)
-	d.syncMultiSessionTools()
+	d.syncMultiSessionTools(sschema.IsPlanMode(mode))
 	d.handleMemoryRailByConfig(ctx, "agent")
 	d.handleExternalMemoryRailByConfig(ctx)
 	d.ensureContextAssembleRail(ctx)
@@ -1035,12 +1043,16 @@ func (d *DeepAdapter) ensureSubagentRail(ctx context.Context) {
 	logger.Info(logComponent).Msg("SubagentRail registered")
 }
 
-// syncMultiSessionTools 清理历史遗留的 multi-session 临时工具。
+// syncMultiSessionTools 按模式同步 multi-session 工具可见性。
 //
-// Python: _update_tools_for_mode（interface_deep.py:14138-14150）。plan/fast 合并后
-// session_new / session_cancel 这类临时协程工具不再注册；session_list 等
-// 产品会话工具保留。
-func (d *DeepAdapter) syncMultiSessionTools() {
+// Python: _update_tools_for_mode（interface_deep.py:14138-14150）只清理临时协程工具；
+// Go 侧保留「plan 模式卸载 session_*、normal 由 updateToolsForMode 重新注册」的既有装配，
+// 保证两种模式的工具集合与原实现一致。
+func (d *DeepAdapter) syncMultiSessionTools(isPlan bool) {
+	if !isPlan {
+		// normal 模式的注册由 updateToolsForMode（步骤 7.4）负责，这里不重复处理
+		return
+	}
 	if d.instance == nil {
 		return
 	}
@@ -1050,9 +1062,11 @@ func (d *DeepAdapter) syncMultiSessionTools() {
 	}
 	for _, t := range am.List() {
 		name := t.AbilityName()
-		if name == "session_new" || name == "session_cancel" {
+		if strings.HasPrefix(name, "session_new") ||
+			strings.HasPrefix(name, "session_cancel") ||
+			strings.HasPrefix(name, "session_list") {
 			am.Remove(name)
-			logger.Info(logComponent).Str("tool_name", name).Msg("multi-session tool removed")
+			logger.Info(logComponent).Str("tool_name", name).Msg("multi-session tool removed (plan mode)")
 		}
 	}
 }

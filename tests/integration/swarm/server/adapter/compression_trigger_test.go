@@ -109,8 +109,16 @@ func (s *CompressionTriggerSuite) TestWindow262_started事件duration与before�
 	states := s.runTurn(d, "sess_compress_262", "req-c-1", "你好")
 	s.Require().NotEmpty(states, "小窗口下应至少产生 started 事件")
 
+	// S1 起动态提示词在模型调用前先 sync 进历史（add_messages 阶段），
+	// 因此 get_context_window 阶段不再是首个事件，按阶段定位。
 	started := states[0]
-	s.Equal("started", started.status, "首个事件应为 started")
+	for _, st := range states {
+		if st.status == "started" && st.phase == "get_context_window" {
+			started = st
+			break
+		}
+	}
+	s.Equal("started", started.status, "应存在 started 事件")
 	s.Equal("get_context_window", started.phase, "阶段应为 get_context_window")
 	s.Equal("RoundLevelCompressor", started.processor, "处理器应为 RoundLevelCompressor")
 	s.Equal(int64(0), started.durationMs, "started 事件 duration_ms 必须为 0（不得负溢出）")

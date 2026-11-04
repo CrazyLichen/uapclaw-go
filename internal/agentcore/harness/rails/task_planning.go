@@ -42,7 +42,8 @@ type TaskPlanningRail struct {
 	tools []tool.Tool
 	// todoTool TodoTool 基类，供 LoadTodos/SaveTodos/CleanupSession 调用
 	todoTool *todo.TodoTool
-	// injectPrompt 是否注入常驻 todo 提示节（默认 false，对齐上游 inject_prompt=False）
+	// injectPrompt 是否注入常驻 todo 提示节（默认 true，对齐上游构造器；
+	// jiuwenswarm adapter 装配时显式关闭）
 	injectPrompt bool
 	// enableProgressRepeat 是否注入周期性进度提醒
 	enableProgressRepeat bool
@@ -94,7 +95,11 @@ var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// WithInjectPrompt 设置是否注入常驻 todo 提示节（默认 false，对齐上游）。
+// WithInjectPrompt 设置是否注入常驻 todo 提示节。
+//
+// 默认 true，对齐上游构造器签名 `TaskPlanningRail(inject_prompt=True)`
+// （task_planning_rail.py:49）；jiuwenswarm 的 DeepAdapter 显式传 False
+// （interface_deep.py:10756），由 adapter 装配点负责关闭。
 func WithInjectPrompt(inject bool) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.injectPrompt = inject }
 }
@@ -141,10 +146,11 @@ func WithAgentID(id string) TaskPlanningOption {
 }
 
 // NewTaskPlanningRail 创建任务规划护栏实例。
-// Python: TaskPlanningRail.__init__()
+// Python: TaskPlanningRail.__init__()（inject_prompt 默认 True，由装配方按需关闭）
 func NewTaskPlanningRail(opts ...TaskPlanningOption) *TaskPlanningRail {
 	r := &TaskPlanningRail{
 		DeepAgentRail:        *NewDeepAgentRail(),
+		injectPrompt:         true,
 		listToolCallInterval: 20,
 		toolCallCounts:       make(map[string]int),
 		todosCache:           make(map[string][]hschema.TodoItem),

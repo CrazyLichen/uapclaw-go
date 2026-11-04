@@ -13,6 +13,7 @@ import (
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
@@ -101,10 +102,11 @@ func (s *ModeSwitchTodoSuite) TestPlan到性能模式_语义完整() {
 	sb := inst.SystemPromptBuilder()
 	s.Require().NotNil(sb)
 	s.False(sb.HasSection("todo"), "规划模式 plan 分支应移除 todo 节")
-	s.True(sb.HasSection("mode_instructions"), "plan 分支应注入 mode_instructions 节")
+	s.False(sb.HasSection("mode_instructions"), "plan 指引改走历史附件，不再注入系统提示词")
+	s.NotNil(s.planAttachment(inst), "plan 分支应投递 mode_instructions 附件")
 	planSystem := s.lastSystemPrompt()
 	s.NotContains(planSystem, todoSectionMarker, "规划模式实发提示词不应含 todo 指令")
-	s.Contains(planSystem, planModeMarker, "规划模式实发提示词应含 plan 指令")
+	s.Contains(s.windowText(), planModeMarker, "规划模式窗口（附件）应含 plan 指令")
 	s.ElementsMatch(todoToolNames, registeredTodoTools(inst), "规划模式 todo 工具应已注册")
 
 	// ── 第 2 轮：切到性能模式，模型再调 todo_create ──
@@ -117,24 +119,22 @@ func (s *ModeSwitchTodoSuite) TestPlan到性能模式_语义完整() {
 	inst = d.Instance()
 	sb = inst.SystemPromptBuilder()
 	s.Require().NotNil(sb)
-	s.False(sb.HasSection("todo"), "性能模式 TaskPlanningRail 已注销，todo 节不应存在")
-	s.Empty(registeredTodoTools(inst), "性能模式 todo 工具应全部注销")
-	s.False(sb.HasSection("mode_instructions"), "非 plan 模式应移除 mode_instructions 节")
+	s.False(sb.HasSection("todo"), "性能模式不注入 todo 静态节")
+	// S2：plan/fast 合并后 TaskPlanningRail 恒常驻，工具不再注销
+	s.ElementsMatch(todoToolNames, registeredTodoTools(inst), "性能模式 todo 工具仍常驻")
+	s.Nil(s.planAttachment(inst), "非 plan 模式应清除 mode_instructions 附件")
 
 	agentSystem := s.lastSystemPrompt()
 	s.NotContains(agentSystem, todoSectionMarker, "性能模式实发提示词不应含 todo 指令")
 	s.NotContains(agentSystem, planModeMarker, "性能模式实发提示词不应含 plan 指令")
-	s.Empty(toolResultFor(agentEvents, "todo_create"),
-		"性能模式 todo_create 已注销，工具结果应为空（执行失败），实际: %s",
-		toolResultFor(agentEvents, "todo_create"))
+	s.Contains(toolResultFor(agentEvents, "todo_create"), "Successfully created",
+		"性能模式 todo_create 应可正常执行，实际: %s", toolResultFor(agentEvents, "todo_create"))
 
 	// 提示词不得重复拼段（双 rail 实例残留会导致整段重复与膨胀）
 	heads := headings(agentSystem)
 	s.Equal(len(heads), len(uniqueStrings(heads)), "系统提示词一级标题不应重复: %v", heads)
+	// plan 指引改走附件后，系统提示词只差 workspace/todo 节，仅记录不设阈值
 	s.T().Logf("[SIZE] 规划模式=%d 性能模式=%d", len(planSystem), len(agentSystem))
-	s.LessOrEqual(len(agentSystem), len(planSystem)+100,
-		"性能模式提示词长度不应超过规划模式（todo 节更少），plan=%d agent=%d",
-		len(planSystem), len(agentSystem))
 }
 
 // TestPlan模式_plan分支完整生效 断言 D1 置位后 AgentModeRail 的 plan 语义。
@@ -154,8 +154,9 @@ func (s *ModeSwitchTodoSuite) TestPlan模式_plan分支完整生效() {
 	inst := d.Instance()
 	sb := inst.SystemPromptBuilder()
 	s.Require().NotNil(sb)
-	s.True(sb.HasSection("mode_instructions"), "plan 分支应注入 mode_instructions 节")
-	s.Contains(s.lastSystemPrompt(), planModeMarker, "实发提示词应含 plan 指令")
+	s.False(sb.HasSection("mode_instructions"), "plan 指引走历史附件")
+	s.NotNil(s.planAttachment(inst), "plan 分支应投递 mode_instructions 附件")
+	s.Contains(s.windowText(), planModeMarker, "实发窗口应含 plan 指令")
 	s.False(sb.HasSection("todo"), "plan 分支应移除 todo 节")
 
 	// todo 工具已注册但对模型硬性屏蔽：硬调被 BeforeToolCall 拒绝
@@ -235,6 +236,34 @@ func (s *ModeSwitchTodoSuite) Test模式反复切换_状态稳定() {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// windowText 返回最近一次模型调用实收的全部消息文本（含附件）。
+func (s *ModeSwitchTodoSuite) windowText() string {
+	s.T().Helper()
+	var b strings.Builder
+	for _, msg := range s.lastCallMessages().Messages() {
+		b.WriteString(msg.GetContent().Text())
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// planAttachment 返回 plan 指引附件（无则 nil）。
+func (s *ModeSwitchTodoSuite) planAttachment(inst *harness.DeepAgent) *hprompts.Attachment {
+	s.T().Helper()
+	if inst == nil || inst.PromptAttachments() == nil {
+		return nil
+	}
+	items, err := inst.PromptAttachments().ListByFilter(hprompts.AttachmentFilter{
+		SessionID: modeSwitchSessionID,
+		Section:   "mode_instructions",
+	})
+	s.Require().NoError(err)
+	if len(items) == 0 {
+		return nil
+	}
+	return items[0]
+}
 
 // runTurn 跑一轮流式对话并收集事件 payload。
 func (s *ModeSwitchTodoSuite) runTurn(d *adapter.DeepAdapter, requestID, mode, query string) []map[string]any {

@@ -32,8 +32,6 @@ type Attachment struct {
 	Metadata map[string]any
 	// ContentKind 内容类型（text/plain、text/markdown 等）
 	ContentKind string
-	// ContentPath 内容对应的文件路径
-	ContentPath string
 	// ContentSHA256 内容原始哈希
 	ContentSHA256 string
 }
@@ -152,11 +150,6 @@ func WithAttachmentContentKind(k string) AttachmentOption {
 // WithAttachmentExpiresAt 设置过期时间（UTC RFC3339）。
 func WithAttachmentExpiresAt(t string) AttachmentOption {
 	return func(a *Attachment) { a.ExpiresAt = t }
-}
-
-// WithAttachmentContentPath 设置内容文件路径。
-func WithAttachmentContentPath(p string) AttachmentOption {
-	return func(a *Attachment) { a.ContentPath = p }
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

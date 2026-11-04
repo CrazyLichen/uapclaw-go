@@ -1122,6 +1122,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 24.8 | ☐ | 记忆 rail 挂载 | JiuwenMemoryRail、coding memory 落工作区、team 记忆生成 | `internal/agent_teams/rails/memory/` ← `openjiuwen/harness/rails/memory/jiuwen_memory_rail.py` |
 | 24.9 | ☐ | 测试 | 外部 provider 契约、降级路径、注入顺序、索引重建 | `tests/integration/agentcore/memory/` |
 | 24.10 | ✅ | Prompt Attachment 地基（S1） | manager（存储/渲染/哈希增量/更新族）+ `ContextWindow` mutator 链 + ReAct 三处装订点 + provider 矩阵；7 例集成测试（IT-1~IT-7）；设计 `docs/superpowers/specs/2026-11-04-prompt-attachment-foundation-design.md` | `internal/agentcore/harness/prompts/attachment_*.go` ← `openjiuwen/harness/prompts/prompt_attachment_manager.py` |
+| 24.11 | ✅ | Rail 生命周期与模式合并（S2） | 模式串三段化 + `internal/swarm/runtime`（请求模式解析/`PlanModeController`）+ adapter 幂等 `UpdateAgentRails` + plan 指引与 todo 改附件（`InjectPrompt` 默认 false）+ `CodeTaskPlanningRail` 与 code todo 文案；13 例集成测试（IT-S2-1~13）；设计 `docs/superpowers/specs/2026-11-04-s2-rail-and-mode-design.md` | `internal/swarm/runtime/` · `internal/swarm/agents/harness/code/{rails,tools}/` ← `jiuwenswarm/runtime/{plan,request}.py` · `jiuwenswarm/agents/harness/code/rails/code_task_planning_rail.py` |
 
 **验证点**：外部记忆服务可用/不可用两种形态下对话均可正常进行，且记忆可检索、可注入、可审计。
 

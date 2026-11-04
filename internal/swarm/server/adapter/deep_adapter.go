@@ -892,8 +892,8 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		sessionID = *req.SessionID
 	}
 
-	// 步骤 5-6: 提取 query/mode
-	query := paramsString(params, "query", "")
+	// 步骤 5-6: 提取 query/mode（inputs 兜底，见 resolveRequestQuery）
+	query := resolveRequestQuery(params, inputs)
 	mode := paramsString(params, "mode", "agent.work.plan")
 
 	// 步骤 7-8: slash 命令处理
@@ -977,7 +977,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 放在 update_runtime_config 之后：此时 agent 已 Configure，状态读写不会提前创建会话。
 	// 进入 plan 时本轮 query 被前置约束提醒，原 query 存 params 键可还原。
 	query = d.ensurePlanState(ctx, req, sessionID, mode, query, params)
-	if query != "" {
+	if query != "" && inputs != nil {
 		inputs["query"] = query
 	}
 	// 执行后检查工具触发的 plan 退出（对齐 Python check_post_process_exit）
@@ -1077,8 +1077,8 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		sessionID = *req.SessionID
 	}
 
-	// 步骤 5-6: 提取 query/mode
-	query := paramsString(params, "query", "")
+	// 步骤 5-6: 提取 query/mode（inputs 兜底，见 resolveRequestQuery）
+	query := resolveRequestQuery(params, inputs)
 	mode := paramsString(params, "mode", "agent.work.plan")
 
 	// 步骤 7: team 模式分流
@@ -1232,7 +1232,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 17.5: plan 状态机（对齐 Python runtime/plan.py ensure_state）
 	// 放在 update_runtime_config 之后：此时 agent 已 Configure，状态读写不会提前创建会话。
 	query = d.ensurePlanState(ctx, req, sessionID, mode, query, params)
-	if query != "" {
+	if query != "" && inputs != nil {
 		inputs["query"] = query
 	}
 	defer d.checkPlanPostProcess(ctx, req, sessionID, mode, params)
@@ -2887,6 +2887,25 @@ func paramsString(params map[string]any, key string, defaultVal string) string {
 		return defaultVal
 	}
 	return s
+}
+
+// resolveRequestQuery 取本轮用户输入的 query，params 优先、inputs 回落。
+//
+// Python 侧 query 只存在于 request.params（ensure_state 读 request.params["query"]）。
+// Go 的进程内调用方允许只把 query 放 inputs（Runner 入口），二者必须等价：否则
+// 进入 plan 的那一轮 ensurePlanState 会拿到空串，把「提醒 + 原 query」改写成
+// 只有提醒，用户原文整条丢失。
+func resolveRequestQuery(params, inputs map[string]any) string {
+	if q := paramsString(params, "query", ""); q != "" {
+		return q
+	}
+	if inputs == nil {
+		return ""
+	}
+	if q, ok := inputs["query"].(string); ok {
+		return q
+	}
+	return ""
 }
 
 // parseStringSlice 从 params 中取字符串切片值。

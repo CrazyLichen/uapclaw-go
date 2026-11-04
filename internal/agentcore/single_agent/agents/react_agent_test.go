@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
@@ -91,6 +92,18 @@ func TestNewReActAgent_nilConfig(t *testing.T) {
 	agent := NewReActAgent(card, nil)
 	assert.NotNil(t, agent)
 	assert.Nil(t, agent.config)
+}
+
+// TestReActAgent_PromptAttachments 验证动态提示词管理器的注入与读取。
+//
+// Python: ReActAgent.prompt_attachment_manager（DeepAgent 创建内层 agent 时共享）
+func TestReActAgent_PromptAttachments(t *testing.T) {
+	agent := newTestAgent("prompt_attach")
+	assert.Nil(t, agent.PromptAttachments(), "未注入时应为 nil")
+
+	mgr := hprompts.NewManager()
+	agent.SetPromptAttachmentManager(mgr)
+	assert.Same(t, mgr, agent.PromptAttachments(), "应返回注入的同一个管理器")
 }
 
 // TestReActAgent_InvokeImpl_空输入 验证无 query 时不 panic

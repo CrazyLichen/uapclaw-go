@@ -98,8 +98,8 @@ func (s *TodoPanelSuite) TestTodoPanel_任务栏展示既有待办() {
 
 	todos, toolResult := s.runAndCollectTodos(d, "req-todo-panel-1", "请把任务拆成待办：完成需求分析。")
 
-	// 新语义：性能模式 todo 工具已注销，硬调执行失败（结果为空）
-	s.Empty(toolResult, "性能模式 todo_create 已注销，工具结果应为空（执行失败）")
+	// S2 新语义：plan/fast 合并后 TaskPlanningRail 恒常驻，todo 工具可正常执行
+	s.Contains(toolResult, "Successfully created", "性能模式 todo_create 应可正常执行，实际: %s", toolResult)
 
 	// 任务栏仍收到 todo.json 中的非空任务
 	s.Require().NotEmpty(todos, "todo.updated 必须携带非空 todos（空列表即前端「暂无任务」）")
