@@ -452,6 +452,11 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			// Python: _extract_user_text(user_input)
 			plainText := curInputs.Query.PlainText()
 			if plainText != "" && modelCtx != nil {
+				// on_user_message：每轮用户消息前触发一次（恢复附件状态等）
+				// Python: rail.on_user_message(ctx)
+				if fireErr := cbc.Fire(ctx, interfaces.CallbackOnUserMessage); fireErr != nil {
+					return fireErr
+				}
 				// 附件先落历史，保证顺序为 [附件变更][用户消息]
 				_ = syncPromptAttachments(ctx, a.promptAttachments, modelCtx)
 				_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage(plainText)})

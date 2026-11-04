@@ -19,6 +19,11 @@ type fakeRail struct {
 	host   *ToolPermissionHost
 }
 
+// OnUserMessage 满足 AgentRail 接口（默认空实现）。
+func (r *fakeRail) OnUserMessage(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func (f *fakeRail) Priority() int                                             { return 0 }

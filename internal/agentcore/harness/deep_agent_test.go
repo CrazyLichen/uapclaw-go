@@ -2521,6 +2521,10 @@ func (r *fakeAgentRail) Priority() int {
 }
 
 // BeforeInvoke 实现 AgentRail 接口
+func (r *fakeAgentRail) OnUserMessage(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
 func (r *fakeAgentRail) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
@@ -2640,6 +2644,10 @@ func (r *fakeAgentRailWithType) GetCallbacks() map[agentinterfaces.AgentCallback
 }
 
 // 确认 fakeAgentRailWithType 满足 AgentRail 接口
+func (r *fakeAgentRailWithType) OnUserMessage(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
 var _ agentinterfaces.AgentRail = (*fakeAgentRailWithType)(nil)
 
 // Init 实现 AgentRail 接口
@@ -2709,6 +2717,10 @@ func (r *fakeAgentRailWithType2) GetCallbacks() map[agentinterfaces.AgentCallbac
 }
 
 // 确认 fakeAgentRailWithType2 满足 AgentRail 接口
+func (r *fakeAgentRailWithType2) OnUserMessage(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
 var _ agentinterfaces.AgentRail = (*fakeAgentRailWithType2)(nil)
 
 // Init 实现 AgentRail 接口
@@ -2723,6 +2735,10 @@ func (r *fakeAgentRailWithCallbacks) Uninit(_ agentinterfaces.BaseAgent) error {
 func (r *fakeAgentRailWithCallbacks) Priority() int { return r.base.Priority() }
 
 // BeforeInvoke 实现 AgentRail 接口
+func (r *fakeAgentRailWithCallbacks) OnUserMessage(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
 func (r *fakeAgentRailWithCallbacks) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }

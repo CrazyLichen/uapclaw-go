@@ -188,8 +188,9 @@ var (
 	// outerOnlyEvents 仅注册到外层 DeepAgent 的事件集合
 	// Python: _OUTER_ONLY_EVENTS
 	outerOnlyEvents = map[agentinterfaces.AgentCallbackEvent]bool{
-		agentinterfaces.CallbackBeforeInvoke: true,
-		agentinterfaces.CallbackAfterInvoke:  true,
+		agentinterfaces.CallbackBeforeInvoke:  true,
+		agentinterfaces.CallbackAfterInvoke:   true,
+		agentinterfaces.CallbackOnUserMessage: true,
 	}
 
 	// deepEvents DeepAgent 扩展事件集合

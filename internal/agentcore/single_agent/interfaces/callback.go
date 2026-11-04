@@ -38,6 +38,8 @@ type AgentRail interface {
 
 	// BeforeInvoke invoke 开始前
 	BeforeInvoke(ctx context.Context, cbc *AgentCallbackContext) error
+	// OnUserMessage 用户消息写入历史前（每轮一次）
+	OnUserMessage(ctx context.Context, cbc *AgentCallbackContext) error
 	// AfterInvoke invoke 完成后
 	AfterInvoke(ctx context.Context, cbc *AgentCallbackContext) error
 	// BeforeTaskIteration 外层任务循环迭代开始前
@@ -147,6 +149,9 @@ type BaseRail struct {
 	// priority 执行优先级（数值越大越先执行），默认 50
 	priority int
 }
+
+// OnUserMessage 用户消息写入历史前的默认空实现。
+func (r *BaseRail) OnUserMessage(_ context.Context, _ *AgentCallbackContext) error { return nil }
 
 // RunContext 结构化运行时上下文（心跳等场景）。
 //
@@ -300,6 +305,8 @@ type HeartbeatReason string
 const (
 	// CallbackBeforeInvoke invoke 开始前
 	CallbackBeforeInvoke AgentCallbackEvent = "before_invoke"
+	// CallbackOnUserMessage 用户消息写入历史前（每轮一次）
+	CallbackOnUserMessage AgentCallbackEvent = "on_user_message"
 	// CallbackAfterInvoke invoke 完成后
 	CallbackAfterInvoke AgentCallbackEvent = "after_invoke"
 	// CallbackBeforeTaskIteration 外层任务循环迭代开始前
@@ -831,6 +838,7 @@ func (r *BaseRail) BuildCallbacks(entries ...callbackEntry) map[AgentCallbackEve
 func AllCallbackEvents() []AgentCallbackEvent {
 	return []AgentCallbackEvent{
 		CallbackBeforeInvoke,
+		CallbackOnUserMessage,
 		CallbackAfterInvoke,
 		CallbackBeforeTaskIteration,
 		CallbackAfterTaskIteration,
@@ -847,6 +855,7 @@ func AllCallbackEvents() []AgentCallbackEvent {
 func AllBaseCallbackEvents() []AgentCallbackEvent {
 	return []AgentCallbackEvent{
 		CallbackBeforeInvoke,
+		CallbackOnUserMessage,
 		CallbackAfterInvoke,
 		CallbackBeforeModelCall,
 		CallbackAfterModelCall,

@@ -43,11 +43,11 @@ func TestAgentCallbackEvent_GoString(t *testing.T) {
 	}
 }
 
-// TestAllCallbackEvents 验证 AllCallbackEvents 返回全部 10 个事件
+// TestAllCallbackEvents 验证 AllCallbackEvents 返回全部 11 个事件（含 on_user_message）
 func TestAllCallbackEvents(t *testing.T) {
 	events := AllCallbackEvents()
-	if len(events) != 10 {
-		t.Fatalf("AllCallbackEvents() 返回 %d 个事件，want 10", len(events))
+	if len(events) != 11 {
+		t.Fatalf("AllCallbackEvents() 返回 %d 个事件，want 11", len(events))
 	}
 
 	// 验证无重复
