@@ -189,6 +189,11 @@ func (r *UserHookRail) OnToolException(ctx context.Context, cbc *agentinterfaces
 	return nil
 }
 
+// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
+func (r *UserHookRail) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
 // AfterInvoke 对齐 Python after_invoke → HookEvent.STOP
 // 阻塞时 → SetExtra("_stop_hook_feedback", error)
 func (r *UserHookRail) AfterInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {

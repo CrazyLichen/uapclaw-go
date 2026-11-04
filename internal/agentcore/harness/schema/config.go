@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -196,7 +198,7 @@ type DeepAgentConfig struct {
 	EnableAsyncSubagent bool `json:"enable_async_subagent"`
 	// AddGeneralPurposeAgent 是否添加通用目的 Agent 作为子 Agent
 	AddGeneralPurposeAgent bool `json:"add_general_purpose_agent"`
-	// MaxIterations 单次调用最大 ReAct 迭代次数，0 表示使用默认值 15
+	// MaxIterations 内层 ReAct 单次 invoke 的迭代上限，0（未配置）表示不限
 	MaxIterations int `json:"max_iterations,omitempty"`
 	// Subagents 子 Agent 规格列表，支持 *SubAgentConfig 和 *DeepAgent
 	// Python: subagents: Optional[List[SubAgentConfig | DeepAgent]] = None
@@ -256,8 +258,6 @@ type DeepAgentConfig struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// DefaultMaxIterations 默认最大迭代次数
-	DefaultMaxIterations = 15
 	// DefaultCompletionTimeout 默认完成超时秒数
 	DefaultCompletionTimeout = 600.0
 	// DefaultProgressiveToolMax 默认渐进式工具最大加载数
@@ -423,24 +423,31 @@ func (AudioModelConfig) FromEnv() AudioModelConfig {
 }
 
 // NewDeepAgentConfig 创建带默认值的 DeepAgent 配置
-// Python: DeepAgentConfig 字段默认值（max_iterations=15, completion_timeout=600.0 等）
+// Python: DeepAgentConfig 字段默认值（max_iterations=None 表示不限，completion_timeout=600.0 等）
 func NewDeepAgentConfig() *DeepAgentConfig {
 	return &DeepAgentConfig{
 		AutoCreateWorkspace:           true,
 		EnableReadImageMultimodal:     true,
-		MaxIterations:                 DefaultMaxIterations,
 		CompletionTimeout:             DefaultCompletionTimeout,
 		ProgressiveToolMaxLoadedTools: DefaultProgressiveToolMax,
 		Language:                      DefaultLanguage,
 	}
 }
 
-// EffectiveMaxIterations 返回有效的最大迭代次数，0 取默认值
-func (c *DeepAgentConfig) EffectiveMaxIterations() int {
-	if c.MaxIterations == 0 {
-		return DefaultMaxIterations
+// ResolveInnerReactMaxIterations 解析内层 ReAct 循环的迭代上限。
+//
+// 0（未配置）表示不限（math.MaxInt）；>0 原样使用，即使启用了外层 task loop；
+// 负数属无效配置，按未配置处理并告警。
+//
+// Python: resolve_inner_react_max_iterations() (harness/schema/config.py)
+func (c *DeepAgentConfig) ResolveInnerReactMaxIterations() int {
+	if c.MaxIterations > 0 {
+		return c.MaxIterations
 	}
-	return c.MaxIterations
+	if c.MaxIterations < 0 {
+		log.Printf("[config] negative max_iterations=%d treated as unbounded", c.MaxIterations)
+	}
+	return math.MaxInt
 }
 
 // EffectiveCompletionTimeout 返回有效的完成超时秒数，0 取默认值

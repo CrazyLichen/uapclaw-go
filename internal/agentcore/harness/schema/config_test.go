@@ -2,8 +2,11 @@ package schema
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	sap_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -40,8 +43,8 @@ func TestNewDeepAgentConfig(t *testing.T) {
 	if cfg.AddGeneralPurposeAgent {
 		t.Error("AddGeneralPurposeAgent 应为 false")
 	}
-	if cfg.MaxIterations != DefaultMaxIterations {
-		t.Errorf("MaxIterations 应为 %d（默认值），实际为 %d", DefaultMaxIterations, cfg.MaxIterations)
+	if cfg.MaxIterations != 0 {
+		t.Errorf("MaxIterations 应为 0（未配置=不限），实际为 %d", cfg.MaxIterations)
 	}
 	if cfg.CompletionTimeout != DefaultCompletionTimeout {
 		t.Errorf("CompletionTimeout 应为 %v（默认值），实际为 %v", DefaultCompletionTimeout, cfg.CompletionTimeout)
@@ -78,21 +81,21 @@ func TestNewDeepAgentConfig(t *testing.T) {
 	}
 }
 
-// TestEffectiveMaxIterations 测试 EffectiveMaxIterations
-func TestEffectiveMaxIterations(t *testing.T) {
+// TestResolveInnerReactMaxIterations 测试内层 ReAct 迭代上限解析
+func TestResolveInnerReactMaxIterations(t *testing.T) {
 	cfg := NewDeepAgentConfig()
-	if got := cfg.EffectiveMaxIterations(); got != DefaultMaxIterations {
-		t.Errorf("EffectiveMaxIterations() = %d，期望 %d", got, DefaultMaxIterations)
+	if got := cfg.ResolveInnerReactMaxIterations(); got != math.MaxInt {
+		t.Errorf("ResolveInnerReactMaxIterations() = %d，期望 math.MaxInt", got)
 	}
 
 	cfg.MaxIterations = 20
-	if got := cfg.EffectiveMaxIterations(); got != 20 {
-		t.Errorf("EffectiveMaxIterations() = %d，期望 20", got)
+	if got := cfg.ResolveInnerReactMaxIterations(); got != 20 {
+		t.Errorf("ResolveInnerReactMaxIterations() = %d，期望 20", got)
 	}
 
 	cfg.MaxIterations = 1
-	if got := cfg.EffectiveMaxIterations(); got != 1 {
-		t.Errorf("EffectiveMaxIterations() = %d，期望 1", got)
+	if got := cfg.ResolveInnerReactMaxIterations(); got != 1 {
+		t.Errorf("ResolveInnerReactMaxIterations() = %d，期望 1", got)
 	}
 }
 
@@ -467,9 +470,6 @@ func TestAudioModelConfigJSON(t *testing.T) {
 
 // TestConstants 测试常量值
 func TestConstants(t *testing.T) {
-	if DefaultMaxIterations != 15 {
-		t.Errorf("DefaultMaxIterations = %d，期望 15", DefaultMaxIterations)
-	}
 	if DefaultCompletionTimeout != 600.0 {
 		t.Errorf("DefaultCompletionTimeout = %f，期望 600.0", DefaultCompletionTimeout)
 	}
@@ -671,4 +671,19 @@ func TestVideoModelConfigJSON(t *testing.T) {
 	if !decoded.ThinkingEnabled {
 		t.Error("ThinkingEnabled 应为 true")
 	}
+}
+
+// ──────────────────────────── A-05: 内层 ReAct 迭代上限语义 ────────────────────────────
+
+// TestDeepAgentConfig_ResolveInnerReactMaxIterations 验证 0 → 不限、正数原样、负数按不限
+func TestDeepAgentConfig_ResolveInnerReactMaxIterations(t *testing.T) {
+	assert.Equal(t, math.MaxInt, (&DeepAgentConfig{}).ResolveInnerReactMaxIterations())
+	assert.Equal(t, 7, (&DeepAgentConfig{MaxIterations: 7}).ResolveInnerReactMaxIterations())
+	assert.Equal(t, math.MaxInt, (&DeepAgentConfig{MaxIterations: -3}).ResolveInnerReactMaxIterations())
+}
+
+// TestNewDeepAgentConfig_MaxIterations未配置 验证默认不再预置 15
+func TestNewDeepAgentConfig_MaxIterations未配置(t *testing.T) {
+	cfg := NewDeepAgentConfig()
+	assert.Equal(t, 0, cfg.MaxIterations) // 0 = 未配置 = 不限
 }

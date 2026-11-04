@@ -59,6 +59,11 @@ func (f *fakeRail) AfterToolCall(_ context.Context, _ *agentinterfaces.AgentCall
 func (f *fakeRail) OnToolException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
+
+// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
+func (f *fakeRail) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
 func (f *fakeRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return nil
 }

@@ -57,10 +57,10 @@ func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreatePara
 	}
 
 	// 默认 MaxIterations
-	// Python: max_iterations=15
+	// Python: max_iterations=50
 	maxIterations := params.MaxIterations
 	if maxIterations == 0 {
-		maxIterations = 15
+		maxIterations = 50
 	}
 
 	// RestrictToWorkDir：*bool 指针，nil 时默认 true（对齐 Python 默认行为）

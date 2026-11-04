@@ -1583,11 +1583,15 @@ func (d *DeepAgent) hotReloadModel(ctx context.Context, config *hschema.DeepAgen
 		}
 	}
 
-	// 设置最大迭代次数
-	if config.EnableTaskLoop {
-		newReactConfig.MaxIterations = math.MaxInt
+	// 内层 ReAct 迭代上限：未配置=不限，显式配置优先（与 task loop 无关）
+	// Python: _bind_inner_react_max_iterations() (deep_agent.py L250-263)
+	newReactConfig.MaxIterations = config.ResolveInnerReactMaxIterations()
+	if config.MaxIterations > 0 {
+		logger.Info(logComponent).
+			Int("max_iterations", newReactConfig.MaxIterations).
+			Msg("[DeepAgent] inner ReAct max_iterations configured")
 	} else {
-		newReactConfig.MaxIterations = config.MaxIterations
+		logger.Info(logComponent).Msg("[DeepAgent] inner ReAct max_iterations unbounded (default)")
 	}
 
 	if config.ContextEngineConfig != nil {
@@ -1774,11 +1778,15 @@ func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 
 	reactConfig := saconfig.NewReActAgentConfig()
 
-	// 设置最大迭代次数
-	if cfg.EnableTaskLoop {
-		reactConfig.MaxIterations = math.MaxInt
+	// 内层 ReAct 迭代上限：未配置=不限，显式配置优先（与 task loop 无关）
+	// Python: _bind_inner_react_max_iterations() (deep_agent.py L250-263)
+	reactConfig.MaxIterations = cfg.ResolveInnerReactMaxIterations()
+	if cfg.MaxIterations > 0 {
+		logger.Info(logComponent).
+			Int("max_iterations", reactConfig.MaxIterations).
+			Msg("[DeepAgent] inner ReAct max_iterations configured")
 	} else {
-		reactConfig.MaxIterations = cfg.MaxIterations
+		logger.Info(logComponent).Msg("[DeepAgent] inner ReAct max_iterations unbounded (default)")
 	}
 
 	if cfg.ContextEngineConfig != nil {

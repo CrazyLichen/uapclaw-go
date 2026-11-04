@@ -1912,30 +1912,68 @@ func TestDeepAgent_saveState_NilState(t *testing.T) {
 	}
 }
 
-// TestDeepAgent_createReactAgent_启用任务循环 EnableTaskLoop 时 MaxIterations 为 math.MaxInt
-func TestDeepAgent_createReactAgent_启用任务循环(t *testing.T) {
-	card := agentschema.NewAgentCard(agentschema.WithAgentName("test-deep"))
-	d := NewDeepAgent(card)
+// TestDeepAgent_createReactAgent_迭代上限语义 验证未配置=不限、显式配置优先于 task loop
+//
+// Python: test_inner_react_max_iterations.py 的意图——未设置时内层 ReAct 不限，
+// 显式设置时即使 enable_task_loop=True 也原样生效。
+func TestDeepAgent_createReactAgent_迭代上限语义(t *testing.T) {
+	t.Run("未配置时不限", func(t *testing.T) {
+		card := agentschema.NewAgentCard(agentschema.WithAgentName("test-deep"))
+		d := NewDeepAgent(card)
 
-	cfg := schema.NewDeepAgentConfig()
-	cfg.EnableTaskLoop = true
-	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
-		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
-	}
+		cfg := schema.NewDeepAgentConfig()
+		cfg.EnableTaskLoop = true
+		if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
+			t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
+		}
 
-	// 验证 ReactConfig 的 MaxIterations
-	reactCfg := d.ReactConfig()
-	if reactCfg == nil {
-		t.Fatal("ReactConfig 返回 nil")
-	}
-	saCfg, ok := reactCfg.(*saconfig.ReActAgentConfig)
-	if !ok {
-		t.Fatal("ReactConfig 类型不匹配")
-	}
-	// math.MaxInt 在 64 位系统上是 9223372036854775807
-	if saCfg.MaxIterations != math.MaxInt {
-		t.Errorf("EnableTaskLoop 时 MaxIterations=%d，期望 math.MaxInt", saCfg.MaxIterations)
-	}
+		saCfg, ok := d.ReactConfig().(*saconfig.ReActAgentConfig)
+		if !ok {
+			t.Fatal("ReactConfig 类型不匹配")
+		}
+		if saCfg.MaxIterations != math.MaxInt {
+			t.Errorf("未配置时 MaxIterations=%d，期望 math.MaxInt", saCfg.MaxIterations)
+		}
+	})
+
+	t.Run("显式配置优先于任务循环", func(t *testing.T) {
+		card := agentschema.NewAgentCard(agentschema.WithAgentName("test-deep"))
+		d := NewDeepAgent(card)
+
+		cfg := schema.NewDeepAgentConfig()
+		cfg.EnableTaskLoop = true
+		cfg.MaxIterations = 7
+		if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
+			t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
+		}
+
+		saCfg, ok := d.ReactConfig().(*saconfig.ReActAgentConfig)
+		if !ok {
+			t.Fatal("ReactConfig 类型不匹配")
+		}
+		if saCfg.MaxIterations != 7 {
+			t.Errorf("显式配置时 MaxIterations=%d，期望 7（不得被 task loop 覆盖）", saCfg.MaxIterations)
+		}
+	})
+
+	t.Run("不启用任务循环时显式值同样生效", func(t *testing.T) {
+		card := agentschema.NewAgentCard(agentschema.WithAgentName("test-deep"))
+		d := NewDeepAgent(card)
+
+		cfg := schema.NewDeepAgentConfig()
+		cfg.MaxIterations = 12
+		if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
+			t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
+		}
+
+		saCfg, ok := d.ReactConfig().(*saconfig.ReActAgentConfig)
+		if !ok {
+			t.Fatal("ReactConfig 类型不匹配")
+		}
+		if saCfg.MaxIterations != 12 {
+			t.Errorf("MaxIterations=%d，期望 12", saCfg.MaxIterations)
+		}
+	})
 }
 
 // TestDeepAgent_needsWorkspaceInit 需要工作空间初始化的条件
@@ -2574,6 +2612,11 @@ func (r *fakeAgentRail) OnToolException(_ context.Context, _ *agentinterfaces.Ag
 	return nil
 }
 
+// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
+func (r *fakeAgentRail) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
 // 确认 fakeAgentRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*fakeAgentRail)(nil)
 
@@ -2635,6 +2678,11 @@ func (r *fakeAgentRailWithType) AfterToolCall(_ context.Context, _ *agentinterfa
 
 // OnToolException 实现 AgentRail 接口
 func (r *fakeAgentRailWithType) OnToolException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
+// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
+func (r *fakeAgentRailWithType) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
@@ -2708,6 +2756,11 @@ func (r *fakeAgentRailWithType2) AfterToolCall(_ context.Context, _ *agentinterf
 
 // OnToolException 实现 AgentRail 接口
 func (r *fakeAgentRailWithType2) OnToolException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
+// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
+func (r *fakeAgentRailWithType2) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
@@ -2785,6 +2838,11 @@ func (r *fakeAgentRailWithCallbacks) AfterToolCall(_ context.Context, _ *agentin
 
 // OnToolException 实现 AgentRail 接口
 func (r *fakeAgentRailWithCallbacks) OnToolException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
+	return nil
+}
+
+// AfterReactIteration 内层 ReAct 单次迭代完全成功后的空实现。
+func (r *fakeAgentRailWithCallbacks) AfterReactIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 

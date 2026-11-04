@@ -88,10 +88,10 @@ func CreateCodeAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 	}
 
 	// 5. 默认 MaxIterations
-	// Python: max_iterations=15
+	// Python: max_iterations=50
 	maxIterations := params.MaxIterations
 	if maxIterations == 0 {
-		maxIterations = 15
+		maxIterations = 50
 	}
 
 	// 6. RestrictToWorkDir：CodeAgent 默认 false（需要读写整个代码库）

@@ -51,10 +51,10 @@ func CreatePlanAgent(ctx context.Context, params *hschema.SubagentCreateParams) 
 	}
 
 	// 默认 MaxIterations
-	// Python: max_iterations=25
+	// Python: max_iterations=50
 	maxIterations := params.MaxIterations
 	if maxIterations == 0 {
-		maxIterations = 25
+		maxIterations = 50
 	}
 
 	// RestrictToWorkDir：PlanAgent 默认 false（区别于 ResearchAgent 的 true）

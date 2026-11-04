@@ -83,10 +83,10 @@ func CreateBrowserAgent(ctx context.Context, params *hschema.SubagentCreateParam
 	}
 
 	// 默认 MaxIterations
-	// Python: max_iterations=25（browser_agent 比 research_agent 需要更多迭代）
+	// Python: DEFAULT_BROWSER_AGENT_MAX_ITERATIONS=100（browser_agent 比 research_agent 需要更多迭代）
 	maxIterations := params.MaxIterations
 	if maxIterations == 0 {
-		maxIterations = 25
+		maxIterations = 100
 	}
 
 	// RestrictToWorkDir：browser agent 默认 false（浏览器操作不限制工作目录）
