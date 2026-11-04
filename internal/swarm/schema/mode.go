@@ -68,6 +68,63 @@ var modeLookup map[string]Mode
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// teamCanonicalModes 所有表示"集群"的 canonical 模式。
+//
+// Python: gateway/common/mode_matrix.py TEAM_CANONICAL_MODES
+var teamCanonicalModes = map[string]struct{}{
+	"team": {}, "team.plan.normal": {}, "code.team": {}, "team.plan.code": {},
+	"team.work.normal": {}, "team.work.plan": {},
+	"team.code.normal": {}, "team.code.plan": {}, "team.design": {},
+}
+
+// planCanonicalModes 所有表示"正处于 plan"的 canonical 模式。
+//
+// Python: gateway/common/mode_matrix.py PLAN_CANONICAL_MODES
+var planCanonicalModes = map[string]struct{}{
+	"agent.plan": {}, "code.plan": {},
+	"team.plan.normal": {}, "team.plan.code": {},
+	"agent.work.plan": {}, "agent.code.plan": {},
+	"team.work.plan": {}, "team.code.plan": {},
+}
+
+// singleAgentCanonicalModes 单 agent 流程允许的 canonical 模式。
+//
+// Python: gateway/common/mode_matrix.py SINGLE_AGENT_CANONICAL_MODES（code 族经
+// canonicalize 后落到 agent.code.*，本项目暂保留 code.* 形式，见 IsSingleAgentMode）。
+var singleAgentCanonicalModes = map[string]struct{}{
+	"agent.work.normal": {}, "agent.work.plan": {},
+	"agent.code.normal": {}, "agent.code.plan": {},
+}
+
+// IsPlanMode 判断 canonical 模式是否处于 plan。
+//
+// Python: mode_matrix.is_plan_mode
+func IsPlanMode(mode string) bool {
+	_, ok := planCanonicalModes[strings.ToLower(strings.TrimSpace(mode))]
+	return ok
+}
+
+// IsTeamMode 判断 canonical 模式是否为集群。
+//
+// Python: mode_matrix.is_team_mode
+func IsTeamMode(mode string) bool {
+	_, ok := teamCanonicalModes[strings.ToLower(strings.TrimSpace(mode))]
+	return ok
+}
+
+// IsSingleAgentMode 判断模式是否走单 agent 流程。
+//
+// Python: mode_matrix.is_single_agent_mode。偏差：上游先 canonicalize（code.normal →
+// agent.code.normal）再查表；本项目 code 族暂保留 code.* 形式（见 spec §5.1 偏差说明），
+// 因此额外接受 code profile 族的模式。
+func IsSingleAgentMode(mode string) bool {
+	t := strings.ToLower(strings.TrimSpace(mode))
+	if _, ok := singleAgentCanonicalModes[t]; ok {
+		return true
+	}
+	return IsCodeProfileMode(t)
+}
+
 // IsCodeProfileMode 判断是否 code profile 族（旧 code.* 与新 agent.code.* / team.code.*）。
 //
 // Python: gateway/common/mode_matrix.py is_code_profile_mode
@@ -124,14 +181,22 @@ func ResolveNewCanonicalMode(raw string) (managerMode, subMode, canonical string
 // NormalizeMode 把入站 mode 串归一到权威值，未知串回落 agent.work.normal。
 //
 // 上游以三段串为唯一权威值（2826a9d23 模式合并），两段串（agent.plan/agent.fast）
-// 全量切换后不再识别。
+// 全量切换后不再识别。合法集合 = 新三段 canonical + code 族 + 裸 team。
 func NormalizeMode(raw string) Mode {
-	switch m := Mode(strings.TrimSpace(raw)); m {
-	case ModeAgentWorkPlan, ModeAgentWorkNormal, ModeCodePlan, ModeCodeNormal, ModeCodeTeam, ModeTeam:
-		return m
-	default:
+	t := strings.ToLower(strings.TrimSpace(raw))
+	if t == "" {
 		return ModeAgentWorkNormal
 	}
+	if _, _, _, ok := ResolveNewCanonicalMode(t); ok {
+		return Mode(t)
+	}
+	if IsCodeProfileMode(t) {
+		return Mode(t)
+	}
+	if t == string(ModeTeam) {
+		return ModeTeam
+	}
+	return ModeAgentWorkNormal
 }
 
 // AllModes 返回所有 Mode 枚举值。
