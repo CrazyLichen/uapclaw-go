@@ -548,7 +548,7 @@ func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 // **不判 mode**：CodeAdapter 实例只由 factory 在 mode=="code" 时创建（team 成员同属
 // code 族），Python 侧同样不对 mode 设门控。历史缺陷：此处曾有 `if mode != "code"`
 // 门控，而真实入参是 canonical 串 "code.normal"/"code.plan"/"code.team"
-// （handle_envelope 的 writeCanonicalMode 回写），门控恒真 → 每条消息都回落到
+// （handle_message 的 writeCanonicalMode 回写），门控恒真 → 每条消息都回落到
 // DeepAdapter.updateAgentModeRails，卸载 SubagentRail 且永不重建。
 //
 // Code 模式：卸载 TaskPlanningRail/SkillEvolutionRail；对 SubagentRail/

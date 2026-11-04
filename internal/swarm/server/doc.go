@@ -2,14 +2,16 @@
 //
 // 从 transport.AgentTransport.Recv() 消费 E2AEnvelope，每个请求独立 goroutine 处理。
 // 流式任务通过 sessionStreamTasks 追踪，支持按会话取消。
-// 主分发逻辑在 handleEnvelope 中，按 ReqMethod switch 分发到具体 handler。
+// 主分发逻辑在 handleMessage 中，按 ReqMethod switch 分发到具体 handler；
+// chat 轮次编排（unary/stream/cancel）经由 runtime.AgentRuntime 执行。
 //
 // 文件目录：
 //
 //	server/
 //	├── doc.go                 # 包文档
 //	├── agent_server.go        # AgentServer 结构体、生命周期、消费循环、流式任务管理
-//	├── handle_envelope.go     # 主分发逻辑：handleMessage/handleUnary/handleStream/handleCancel 及辅助函数
+//	├── handle_message.go      # 主分发逻辑：handleMessage + 响应/片段写出（writeResponse/writeChunk/writeErrorResponse）
+//	├── handle_chat.go         # chat 入口：handleUnary(+Impl)/handleStream(+Impl)/handleCancel/sendRuntimeEvent
 //	├── keepalive.go           # StreamKeepalive 流式心跳（Start/NotifyActivity/SignalStop/Stop）
 //	├── handle_session_plan.go # session.plan_status 只读查询（live 优先、metadata 兜底）
 //	├── handle_session.go      # Session 管理 handler（list/create/delete/rename/switch/rewind/fork）

@@ -215,7 +215,7 @@ git commit -m "feat(runtime): 新增 RuntimeEvent（Control/FromAgentResponse/To
 - Modify: `internal/swarm/server/runtime/agent_manager.go:803-830`（删 `resolveModeFromRequest`）
 - Test: `internal/swarm/runtime/request_test.go`
 
-- [ ] **Step 1: 写失败测试（解析函数）**
+- [x] **Step 1: 写失败测试（解析函数）**
 
 ```go
 func TestResolveAgentRequestMode(t *testing.T) {
@@ -237,12 +237,12 @@ func TestResolveAgentRequestMode(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ -run TestResolveAgentRequestMode`
 Expected: FAIL `undefined: ResolveAgentRequestMode`
 
-- [ ] **Step 3: 实现解析 + 应用（节选，完整实现按上游 `runtime/request.py:266-360` 逐支迁移）**
+- [x] **Step 3: 实现解析 + 应用（节选，完整实现按上游 `runtime/request.py:266-360` 逐支迁移）**
 
 ```go
 // ResolveAgentRequestMode 解析 mode 为 manager mode、sub-mode 与 canonical mode。
@@ -316,7 +316,7 @@ func ApplyResolvedModeToRequest(req *schema.AgentRequest, workMode string) (mode
 
 同时实现 `ResolveRequestProjectDir`、`ResolveCancelProjectDir`、`SyncChatRequestMetadata`、`PrepareChatTurn`（见 Task 3）、`CancelRequest`（见 Task 4）。
 
-- [ ] **Step 4: 三处旧实现改调用（删除旧函数体）**
+- [x] **Step 4: 三处旧实现改调用（删除旧函数体）**
 
 `handle_envelope.go` 的 `resolveMode` / `applyResolvedModeToRequest` 与 `agent_manager.go` 的 `resolveModeFromRequest` 全部删除，调用点改为：
 
@@ -330,7 +330,7 @@ mode, subMode := swruntime.ApplyResolvedModeToRequest(request, "")
 mode, _ := swruntime.ResolveRequestRuntimeModeFromRequest(request) // 见 Step 5
 ```
 
-- [ ] **Step 5: 补请求视图辅助（同文件）**
+- [x] **Step 5: 补请求视图辅助（同文件）**
 
 ```go
 // ResolveRequestRuntimeModeFromRequest 从 request 解析权威模式（含 work_mode）。
@@ -349,12 +349,12 @@ func ResolveRequestRuntimeModeFromRequest(req *schema.AgentRequest) ResolvedMode
 }
 ```
 
-- [ ] **Step 6: 跑包内测试与受影响包**
+- [x] **Step 6: 跑包内测试与受影响包**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ ./internal/swarm/server/...`
 Expected: PASS（`resolveMode` 默认 `"plan"` 的旧断言同步改掉）
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add internal/swarm/runtime/request.go internal/swarm/runtime/request_test.go \
@@ -377,7 +377,7 @@ git commit -m "refactor(runtime): 补 request.py 函数并对齐 mode 解析（�
 - Modify: `internal/swarm/server/adapter/deep_adapter_plan.go`
 - Test: `internal/swarm/runtime/plan_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 type fakeAccessor struct {
@@ -407,12 +407,12 @@ func TestEnsureState_运行期注入Accessor(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ -run TestEnsureState_运行期注入Accessor`
 Expected: FAIL（`EnsureState` 参数数量不匹配 / `undefined: ActiveSessions`）
 
-- [ ] **Step 3: 改接口与方法签名**
+- [x] **Step 3: 改接口与方法签名**
 
 ```go
 // PlanStateAccessor plan 状态读写入口（运行期由调用方传入，对齐上游 ensure_state(request, mode, sub_mode, agent)）。
@@ -450,7 +450,7 @@ func (c *PlanModeController) CheckPostProcessExit(ctx context.Context, req PlanR
 func (c *PlanModeController) ActiveSessions() map[string]struct{}
 ```
 
-- [ ] **Step 4: adapter 侧改为 accessor 提供者**
+- [x] **Step 4: adapter 侧改为 accessor 提供者**
 
 `deep_adapter_plan.go`：`planStateStore` 保留（含 `openPlanSession`），`NewDeepAdapter` 里 `NewPlanModeController()` 不再传 store；暴露：
 
@@ -461,12 +461,12 @@ func (d *DeepAdapter) PlanStateAccessor() swruntime.PlanStateAccessor { return &
 
 同时删除 `ensurePlanState` / `checkPlanPostProcess` / `emitControlEvents` / `DrainControlEvents` / `controlEvents` 字段（见删除清单）。
 
-- [ ] **Step 5: 跑测试**
+- [x] **Step 5: 跑测试**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ ./internal/swarm/server/adapter/`
 Expected: PASS
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add internal/swarm/runtime/plan.go internal/swarm/runtime/plan_test.go internal/swarm/server/adapter/
@@ -481,7 +481,7 @@ git commit -m "refactor(runtime): PlanModeController 运行期注入 PlanStateAc
 - Create: `internal/swarm/runtime/service.go`
 - Test: `internal/swarm/runtime/service_test.go`
 
-- [ ] **Step 1: 写失败测试（步骤顺序）**
+- [x] **Step 1: 写失败测试（步骤顺序）**
 
 ```go
 type fakeAgent struct {
@@ -510,12 +510,12 @@ func TestAgentRuntime_Invoke_步骤顺序(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/ -run TestAgentRuntime_Invoke`
 Expected: FAIL `undefined: AgentRuntime`
 
-- [ ] **Step 3: 实现 service.go（Invoke/Stream + 五步）**
+- [x] **Step 3: 实现 service.go（Invoke/Stream + 五步）**
 
 ```go
 // AgentRuntime 运行时编排：选 agent、同步 plan 状态、执行、下发控制事件。
@@ -778,12 +778,12 @@ func planRequestOf(req *schema.AgentRequest, mode, subMode string) PlanRequest {
 
 `AgentManagerPort` / `PrepareChatTurnFunc` 为 runtime 包内的窄接口，避免 runtime → server 反向依赖；`UapClawSwarm` 在 server 层实现并注入。
 
-- [ ] **Step 4: 跑测试**
+- [x] **Step 4: 跑测试**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/runtime/`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/runtime/service.go internal/swarm/runtime/service_test.go
@@ -800,7 +800,7 @@ git commit -m "feat(runtime): 新增 AgentRuntime（Invoke/Stream 五步编排 +
 - Modify: `internal/swarm/server/handle_message.go`（分发）
 - Test: `internal/swarm/server/handle_session_plan_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 func TestHandleSessionPlanStatus(t *testing.T) {
@@ -811,12 +811,12 @@ func TestHandleSessionPlanStatus(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/server/ -run TestHandleSessionPlanStatus`
 Expected: FAIL `undefined: handleSessionPlanStatus`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 ```go
 // ReqMethodSessionPlanStatus 只读查询会话是否处于计划模式
@@ -846,12 +846,12 @@ func (s *AgentServer) handleSessionPlanStatus(ctx context.Context, request *sche
 }
 ```
 
-- [ ] **Step 4: 跑测试**
+- [x] **Step 4: 跑测试**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/server/ -run TestHandleSessionPlanStatus`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/schema/req_method.go internal/swarm/server/handle_session_plan.go \
@@ -869,7 +869,7 @@ git commit -m "feat(server): 补 session.plan_status 只读查询（live 优先�
 - Delete: `handle_envelope.go` 中的 `runKeepalive`
 - Test: `internal/swarm/server/keepalive_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```go
 func TestStreamKeepalive_NotifyActivity重置计时(t *testing.T) {
@@ -887,12 +887,12 @@ func TestStreamKeepalive_NotifyActivity重置计时(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/server/ -run TestStreamKeepalive`
 Expected: FAIL `undefined: NewStreamKeepalive`
 
-- [ ] **Step 3: 实现 keepalive.go（吸收现有 `runKeepalive` 的 timer 语义）**
+- [x] **Step 3: 实现 keepalive.go（吸收现有 `runKeepalive` 的 timer 语义）**
 
 ```go
 // StreamKeepalive 流式心跳：空闲超时发 keepalive，收到真实 chunk 或 terminal 后重置。
@@ -969,12 +969,12 @@ func (k *StreamKeepalive) Stop() {
 }
 ```
 
-- [ ] **Step 4: 跑测试**
+- [x] **Step 4: 跑测试**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/server/ -run TestStreamKeepalive`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/server/keepalive.go internal/swarm/server/keepalive_test.go
@@ -991,7 +991,7 @@ git commit -m "refactor(server): runKeepalive 改为 StreamKeepalive 类（Start
 - Modify: `internal/swarm/server/agent_server.go`（持有 `*runtime.AgentRuntime`）
 - Test: `internal/swarm/server/handle_chat_test.go`
 
-- [ ] **Step 1: 写失败测试（unary 走 runtime + 控制事件发 push）**
+- [x] **Step 1: 写失败测试（unary 走 runtime + 控制事件发 push）**
 
 ```go
 func TestHandleUnary_控制事件独立发帧(t *testing.T) {
@@ -1006,12 +1006,12 @@ func TestHandleUnary_控制事件独立发帧(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/server/ -run TestHandleUnary_控制事件`
 Expected: FAIL（仍走旧路径，无 push 帧）
 
-- [ ] **Step 3: 实现 handleUnaryImpl / handleStreamImpl（对齐上游步骤）**
+- [x] **Step 3: 实现 handleUnaryImpl / handleStreamImpl（对齐上游步骤）**
 
 ```go
 // handleUnaryImpl 非流式处理。
@@ -1079,12 +1079,12 @@ func (s *AgentServer) sendRuntimeEvent(ev *runtime.RuntimeEvent, streaming bool,
 
 `sendWireChunk`/`sendWireResponse` 由 `writeChunk`/`writeResponse` 改造为返回 `bool`（`sendToGateway` 透传 `TrySendToRecvCh` 结果）。
 
-- [ ] **Step 4: 跑测试与包内回归**
+- [x] **Step 4: 跑测试与包内回归**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/server/...`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/server/handle_chat.go internal/swarm/server/handle_message.go \
@@ -1101,7 +1101,7 @@ git commit -m "refactor(server): chat 入口改走 AgentRuntime，控制事件�
 - Rename: `uapclaw_test.go` → `interface_test.go`、`uapclaw_history_test.go` → `interface_history_test.go`
 - Modify: 全部引用（169 处）
 
-- [ ] **Step 1: 机械改名**
+- [x] **Step 1: 机械改名**
 
 ```bash
 git mv internal/swarm/server/runtime/uapclaw.go internal/swarm/server/runtime/interface.go
@@ -1112,7 +1112,7 @@ grep -rl 'UapClaw' --include='*.go' internal cmd tests | xargs sed -i 's/UapClaw
 
 > 先反向替换再到正向，避免 `UapClawSwarm` 被二次改名。执行后必须 `grep -rn 'UapClaw\b' internal tests cmd` 为 0。
 
-- [ ] **Step 2: 加 `PlanStateAccessor` 实现与 `PlanModeSnapshot`**
+- [x] **Step 2: 加 `PlanStateAccessor` 实现与 `PlanModeSnapshot`**
 
 ```go
 // PlanStateAccessor 返回 plan 状态读写入口。
@@ -1142,12 +1142,12 @@ func (uc *UapClawSwarm) PlanModeSnapshot(ctx context.Context, sessionID string) 
 }
 ```
 
-- [ ] **Step 3: 编译 + 测试**
+- [x] **Step 3: 编译 + 测试**
 
 Run: `CGO_ENABLED=1 go build -tags sqlite_fts5 ./... && CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/...`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add -A internal/swarm/server/runtime internal cmd tests
@@ -1163,7 +1163,7 @@ git commit -m "refactor(server): uapclaw.go→interface.go、UapClaw→UapClawSw
 - Modify: `internal/swarm/server/adapter/deep_adapter.go`（删字段与初始化）
 - Modify: `internal/swarm/server/adapter/deep_adapter_test.go` / `deep_adapter_config_test.go`（删相关用例）
 
-- [ ] **Step 1: 删除并改引用**
+- [x] **Step 1: 删除并改引用**
 
 删除：`ensurePlanState`、`checkPlanPostProcess`、`emitControlEvents`、`DrainControlEvents`、`controlEvents`/`controlMu` 字段及初始化。
 保留：`PlanStateAccessor()`、`planStateStore`（4 个方法）、`ResetPlanSession`。
@@ -1174,12 +1174,12 @@ grep -rn 'DrainControlEvents\|ensurePlanState\|checkPlanPostProcess\|emitControl
 
 Expected: 仅剩 `deep_adapter_plan.go` 内的 `ResetPlanSession` 引用 `d.planController`（保留）。
 
-- [ ] **Step 2: 编译 + 包内测试**
+- [x] **Step 2: 编译 + 包内测试**
 
 Run: `CGO_ENABLED=1 go build -tags sqlite_fts5 ./... && CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/server/adapter/`
 Expected: PASS
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add internal/swarm/server/adapter/
@@ -1197,11 +1197,11 @@ git commit -m "refactor(adapter): 删除 plan 状态机接入与控制事件缓�
 - Modify: `internal/swarm/runtime/doc.go`、`internal/swarm/server/doc.go`、`internal/swarm/server/runtime/doc.go`
 - Modify: `IMPLEMENTATION_PLAN.md`（24.12 行）、`docs/sync/defect-plan-2026-11-04.md`（H-02）
 
-- [ ] **Step 1: 迁移 IT-S2-3~7**
+- [x] **Step 1: 迁移 IT-S2-3~7**
 
 把 `SendPlanRequest` 走 `AgentServer.handleStream`（经 `testhelpers/plan_env.go` 的 env 提供 `AgentServer` 实例），断言改为「state.PlanMode + 控制事件帧」。
 
-- [ ] **Step 2: 新增信封完整性用例**
+- [x] **Step 2: 新增信封完整性用例**
 
 ```go
 // TestIT_S3_1_信封完整性 进 plan 首轮 user 消息同时含原文与信封字段。
@@ -1215,7 +1215,7 @@ func (s *PlanStateSuite) TestIT_S3_1_信封完整性() {
 }
 ```
 
-- [ ] **Step 3: 新增控制事件用例**
+- [x] **Step 3: 新增控制事件用例**
 
 ```go
 // TestIT_S3_2_退出事件下发 退出 plan 后客户端收到 plan_mode_exited 帧。
@@ -1229,7 +1229,7 @@ func (s *PlanStateSuite) TestIT_S3_2_退出事件下发() {
 }
 ```
 
-- [ ] **Step 4: 跑集成与审计**
+- [x] **Step 4: 跑集成与审计**
 
 Run:
 ```bash
@@ -1238,13 +1238,13 @@ go run ./cmd/integration-audit -verify
 ```
 Expected: PASS，审计 0 违规
 
-- [ ] **Step 5: 文档登记**
+- [x] **Step 5: 文档登记**
 
 - `doc.go` 文件树：新增 `service.go`、`events.go`；server 侧新增 `handle_message.go`/`handle_chat.go`/`keepalive.go`/`handle_session_plan.go`
 - `IMPLEMENTATION_PLAN.md` 领域二十四加 `24.12 ✅ Plan/Runtime 层对齐（S3）`
 - 缺陷台账 H-02 更新落点与状态
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add tests/integration internal/swarm/runtime/doc.go internal/swarm/server/doc.go \
@@ -1342,3 +1342,65 @@ go run ./cmd/integration-audit -verify
 grep -rn "syncPlanState\|checkPlanExit\|lastEnsureQuery\|DrainControlEvents\|resolveRequestQuery\|UapClaw\b" internal tests cmd
 ```
 最后一条为 0 才可推送；推送后盯 CI 四 job 全绿（Build / Unit / Integration / Lint）。
+
+---
+
+## 附录 B：2026-11-04 收尾执行记录（inline execution）
+
+> 执行方式：按 `superpowers:executing-plans`（inline，不派子 agent）。逐任务对照
+> `jiuwenswarm/runtime/{request,plan,service,events}.py`、
+> `jiuwenswarm/server/{agent_ws_server.py,handlers/session.py}`、
+> `gateway/common/mode_matrix.py` 复核并落地；先审核已完成的 Task 1~9，再补 A.1~A.3。
+
+### B.1 审核中发现并修正的偏差（Task 1~9 回看）
+
+| # | 问题 | 上游依据 | 处置 |
+|---|---|---|---|
+| 1 | plan 激活提醒只算不写：`PlanStateResult.Query` 被丢弃，`params["query"]` 与 `plan_reminder_original_query` 均未回写 → 提醒整段丢失，S3 目标 4 落空 | `plan.py:151-175 inject_activation_reminder` 直接改 `request.params` | 新增 `ApplyPlanResult`，`AgentRuntime.ensurePlanState` 回写 query + 原文键 |
+| 2 | 阻断进入分支未回写 `params["mode"]=exit_mode` | `plan.py:230-234` | `PlanStateResult.ModeOverride` + `ApplyPlanResult` |
+| 3 | `check_post_process_exit` 未把 canonical mode 回写 params | `plan.py:270-272` | 新增 `ApplyCanonicalMode`，`AgentRuntime.checkPlanExit` 首步调用 |
+| 4 | `ResolveAgentRequestMode` 用 `CanonicalizeMode` 做首步归一（含 DEPRECATION_MAP），且缺 `agent.plan` / `team.plan.normal` / `team.plan.code` 显式分支与末尾 work_mode 重折算 | `request.py:266-328`、`mode_matrix.canonicalize_mode_text` | 改用 alias-only 归一 + 三条 legacy 分支 + 末尾重折算；期望值由上游 `mode_matrix` 实算核对 |
+| 5 | `ApplyResolvedModeToRequest` / `ResolveRequestRuntimeModeFromRequest` 缺少 Web 组合分支（`mode+work_mode`），如 `agent.plan + code` 会丢 plan、`team + code` 会掉出 code-team | `mode_matrix.resolve_request_mode` + `_WEB_MODE_TABLE` | schema 新增 `CanonicalizeModeText/ResolveNewCanonicalModeText/IsWebComposableMode/ComposeWebMode`；runtime 新增 `resolveRequestMode` 先组合后 legacy |
+| 6 | 控制器归属与决策不符：controller 建在 adapter 上、`AgentRuntime` 无 `PlanController` | spec §6.0（AgentServer 持有、注入 runtime）；Python 模块级 `_SERVER_PLAN_CONTROLLER` | controller 上移到 `AgentServer` 并注入 `AgentRuntime`；删除 `adapter.planController/PlanController()/ResetPlanSession`、`UapClawSwarm.PlanController/ResetPlanSession`、`AgentManager.ResetSessionPlanState`（规则 8） |
+| 7 | `session.plan_status` 契约键错：返回 `plan_mode/mode`，前端读的是 `payload.in_plan`；且缺 BAD_REQUEST/NOT_FOUND、team 会话会被同 session 的 DeepAgent 默认 normal 误判 | `handlers/session.py:240-283`、`_combine_session_in_plan`、上游前端 `App.tsx` 读 `in_plan` | 改为 `{session_id, in_plan}` + 两类错误码 + team 忽略 live + 活跃集合判据 |
+| 8 | `session.plan_status` 常量未进 `AllReqMethods()` → `E2A_CONVERT_ERROR`（RPC 实际不可达） | — | 注册 `ReqMethodSessionPlanStatus` |
+| 9 | Task 7 未落：`sendRuntimeEvent` 不存在、`writeChunk/writeResponse` 无返回值、chunk 发送失败不停止流、控制事件占 sequence、流任务无条件登记 | `agent_ws_server.py:5024 _send_runtime_event`、`:4654 _handle_stream_impl` | 拆 `handle_message.go`/`handle_chat.go`；`sendToGateway/writeResponse/writeChunk` 返回 bool；发送失败 `Warn + 停止流`；控制事件用当前 `chunkCount`；登记条件改 `!UsesSessionRuntime` |
+| 10 | Task 4/5/6 无单测（覆盖率门禁风险） | 计划 Step 1 要求 | 补 `runtime/service_test.go`、`server/keepalive_test.go`、`server/handle_session_plan_test.go`、`runtime/request_test.go` 的 metadata/取消用例 |
+
+### B.2 A.1~A.3 执行结果
+
+- **A.1 脚手架清理**：新增 `tests/integration/testhelpers/server_env.go`（`ServerEnv`：E2A 信封投递 +
+  帧分类 + `AwaitUnary/AwaitStreamEnd/Pushes/LastPushPayload/PushPayload`）；`plan_env.go` 改为
+  **AgentServer 入口驱动**，删除 `syncPlanState/checkPlanExit/recordEvents/lastEnsureQuery/events`；
+  `mode_switch_todo_test.go` 的 `runTurn` 删除手工 `EnsureState/CheckPostProcessExit`，改走
+  `ServerEnv.SendStream`。新增 IT：`envelope_integrity_test.go`（IT-S3-1 信封完整性）、
+  `plan_event_test.go`（unary/stream 两例 `plan_mode_exited` + `session.plan_status` 一致性）。
+  验收：`grep -rn "syncPlanState\|checkPlanExit\|lastEnsureQuery" tests/` 为 0。
+- **A.2 `CancelRequest`**：`runtime/request.go` 新增（mode 命中 → 无 mode 兜底 → `allowCreate`
+  才新建），`handleCancel` 改为调它；`AgentManagerPort` 增 `GetChatAgentNoWait`（server 侧
+  `AgentManager.GetChatAgentNoWait`）。偏差 ⤵️：上游首步 `get_agent_for_session_nowait` 依赖
+  session→agent 注册表，Go 以 (channel,mode,subMode,projectDir) 为键、无该注册表，分支缺席。
+- **A.3 `SyncChatRequestMetadata`**：`session/session_request_metadata.go` 新增
+  `SyncSessionRequestMetadata`（project_dir/project_id/cron_id/user_id/channel_id/work_mode 首次锁定、
+  model/mode 显式覆盖、last_user_message_at 覆盖、last_message_at 仅 chat 轮次、persist_session
+  创建期锁定）；`runtime.SyncChatRequestMetadata` 负责请求级取值（attach-only 只读分支、
+  `model_name`/`eternal_conversation_enabled` 解析、跨会话方法判定）；`PrepareChatTurn(..., syncMetadata)`
+  在 `sync_metadata=true` 路径调用并回写 project_dir 到 params/metadata，随后做 persist_session 锁定告警。
+  偏差 ⤵️：`_repair_session_project_dir`、bound project_id 绑定、`is_agentos_workspace_fallback`
+  未移植（Go 无工程注册表 / AgentOS 工作区回退语义）。
+
+### B.3 本轮新增的已知偏差（写在此处避免重复讨论）
+
+1. **agent 缓存键含 sub_mode**：`plan` 与 `normal` 轮会命中不同 `UapClawSwarm` 实例，因此
+   `mode_instructions` 附件（per-agent 管理器）不跨模式共享。plan 状态本身持久化在会话状态里，
+   两轮都能读到正确状态；附件由每轮 `BeforeModelCall` 重新注入，功能不受影响。集成断言因此
+   按「本轮实际承接的 agent」取实例（`PlanEnv.Inst()`）。
+2. **code 族 IT 仍直连 CodeAdapter**：`TestIT_S2_11_code提醒节奏` 验证 code rail 提醒节奏，
+   与 plan/runtime 层无关；其配置显式把 `modes.code.tools` 置空，走 AgentServer 会拿不到 todo 工具
+   （`HasTodoTool=false` → 不再计数）。改为自建 `codeEnv` 直连，并在用例注释说明口径。
+3. **流任务登记始终执行**：上游只在 `targeted_expert or not uses_session_runtime` 时登记
+   `_session_stream_tasks`，取消走 adapter interrupt；Go 的取消链路依赖该登记
+   （`handleCancel → cancelStreamTask`），按上游条件收窄会让 supplement/cancel 在取消后
+   把 `chat.error` 写进历史（`TestSupplementInterruptSuite` 已复现），故始终登记。
+4. **`handle_session_plan` 磁盘优先 + 缓存兜底**：Python `cache_bust=True` 只读盘；Go 的 metadata
+   写入是异步队列，同一轮 chat 刚结束时存在短暂未落盘窗口，故磁盘为空时回退内存缓存。

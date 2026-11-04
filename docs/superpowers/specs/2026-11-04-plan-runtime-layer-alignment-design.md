@@ -302,3 +302,8 @@ go run ./cmd/integration-audit -verify
 3. **resume/outcome 三件套缺席**：Go 无 session message service，`_open_session_message_resume`、`_persist_repeated_session_question`、`TurnOutcomeTracker` 记 ⤵️。
 4. **admission 与预热**：`get_agent_for_request` 原子准入与 `wait_for_session_prewarm` 用 `GetAgent` 代替，记 ⤵️。
 5. **文件名拆分**：Python 单文件 `agent_ws_server.py`（1.2 万行）在 Go 拆为 `handle_message.go`/`handle_chat.go`/`keepalive.go`/`handle_session_plan.go`，方法名与步骤不变（用户确认的约定）。
+6. **agent 缓存键含 sub_mode**：Go `AgentManager` 以 (channel, mode, subMode, projectDir) 为键，`plan` 与 `normal` 轮命中不同 `UapClawSwarm`；`mode_instructions` 等 per-agent 附件不跨模式共享（plan 状态持久化在会话状态里，两轮读到的一致；附件每轮由 rail 重新注入）。集成断言按「本轮实际承接的 agent」取实例。
+7. **`session.plan_status` 磁盘优先 + 缓存兜底**：Python `cache_bust=True` 只读盘；Go 元数据写入是异步队列，同一轮 chat 刚结束存在短暂未落盘窗口，磁盘为空时回退内存缓存。
+8. **`cancel_request` 的 session→agent 查表缺席**：Go `AgentManager` 无 session 注册表，`get_agent_for_session_nowait` 分支未移植，其余三级 fallback 与 allowCreate 语义一致。
+9. **流任务登记始终执行**：上游 `_session_stream_tasks` 仅登记 `targeted_expert` 或非 session-runtime 请求，取消走 adapter interrupt；Go 的取消链路依赖该登记（`handleCancel` → `cancelStreamTask` 打断本次流 ctx），故**始终登记**，否则 supplement/cancel 会在取消后把 `chat.error` 写进历史（已由 `TestSupplementInterruptSuite` 复现）。
+10. **`prepare_chat_turn` 的准入细节**：`_repair_session_project_dir`、bound project_id 绑定、`is_agentos_workspace_fallback` 未移植（Go 无工程注册表 / AgentOS 工作区回退语义）。

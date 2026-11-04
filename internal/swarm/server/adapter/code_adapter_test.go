@@ -463,7 +463,7 @@ func TestProjectMemoryAdditionalDirectories_三级回退(t *testing.T) {
 }
 
 // TestUpdateRailsForMode_不因canonicalMode回落Deep分支 回归（S-01）：
-// 真实入参是 "agent.code.normal"/"agent.code.plan"/"team.code.normal"（handle_envelope 回写 canonical
+// 真实入参是 "agent.code.normal"/"agent.code.plan"/"team.code.normal"（handle_message 回写 canonical
 // 串），旧门控 `mode != "code"` 恒真，会把 code 会话交给 DeepAdapter 的 agent 分支
 // 处理（卸载 SubagentRail 且永不重建）。此处以「Deep 分支产生的 rail 字段」为观察点。
 func TestUpdateRailsForMode_不因canonicalMode回落Deep分支(t *testing.T) {

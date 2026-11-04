@@ -113,13 +113,13 @@ func (s *AgentServer) handleStreamImpl(ctx context.Context, request *schema.Agen
 	}
 	// 2. 归一化参数
 	request = swruntime.NormalizeRequest(request)
-	// 3. 仅 team/stateless 请求登记流任务（对齐上游
-	//    `if targeted_expert or not uses_session_runtime`）
-	if !swruntime.UsesSessionRuntime(request) {
-		streamCtx, finish := s.beginStreamTask(ctx, sessionID, request.RequestID)
-		ctx = streamCtx
-		defer finish()
-	}
+	// 3. 登记流任务（Go 的取消链路依赖该登记：handleCancel → cancelStreamTask 才能
+	//    打断本次流的 ctx。上游 `_session_stream_tasks` 只登记 targeted_expert/非
+	//    session-runtime 请求，但其取消走 adapter interrupt；Go 两者都要保留，
+	//    故此处始终登记，见 spec §13 偏差）
+	streamCtx, finish := s.beginStreamTask(ctx, sessionID, request.RequestID)
+	ctx = streamCtx
+	defer finish()
 
 	// 4. 心跳
 	keepalive := NewStreamKeepalive(func() {

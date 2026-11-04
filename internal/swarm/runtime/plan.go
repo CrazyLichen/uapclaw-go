@@ -134,7 +134,8 @@ func NewPlanModeController() *PlanModeController {
 func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest, acc PlanStateAccessor) (PlanStateResult, error) {
 	res := PlanStateResult{Query: req.Query}
 	resolved := ResolveRequestRuntimeMode(req.Mode, req.SubMode)
-	if resolved.IsTeam || req.SessionID == "" {
+	// 无状态存储（agent 未初始化实例 / 非 Deep 适配器）时跳过同步，不能空指针调用
+	if acc == nil || resolved.IsTeam || req.SessionID == "" {
 		return res, nil
 	}
 	if !isSingleAgentMode(resolved.CanonicalMode) {
@@ -226,7 +227,7 @@ func (c *PlanModeController) IsExited(sessionID string) bool { return c.isExited
 // Python: PlanModeController.check_post_process_exit
 func (c *PlanModeController) CheckPostProcessExit(ctx context.Context, req PlanRequest, acc PlanStateAccessor) ([]ControlEvent, error) {
 	resolved := ResolveRequestRuntimeMode(req.Mode, req.SubMode)
-	if req.SessionID == "" || resolved.IsTeam || !resolved.IsPlan {
+	if acc == nil || req.SessionID == "" || resolved.IsTeam || !resolved.IsPlan {
 		return nil, nil
 	}
 	st, err := acc.LoadPlanState(ctx, req.SessionID)

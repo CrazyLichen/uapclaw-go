@@ -348,7 +348,7 @@ func (s *AgentServer) handleCommandDiff(_ context.Context, request *schema.Agent
 //	其它/缺省    → {"current":MODEL_NAME 或 "unknown","available":["default-model"]}
 //
 // 失败一律以 ok=false + payload.error 返回，**不返回 error**：返回 error 会被
-// handle_envelope.go 转成框架错误帧，与 Python 的 ok=false 响应不一致。
+// handle_message.go 转成框架错误帧，与 Python 的 ok=false 响应不一致。
 func (s *AgentServer) handleCommandModel(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	params, err := parseModelCommandParams(request.Params)
 	if err != nil {

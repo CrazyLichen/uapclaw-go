@@ -9,7 +9,7 @@
 //	├── doc.go     # 包文档
 //	├── events.go  # RuntimeEvent 与响应/片段包装
 //	├── service.go # AgentRuntime（Invoke/Stream 编排、控制事件发射）
-//	├── request.go # 请求模式解析、工程目录解析、chat turn 准备
+//	├── request.go # 请求模式解析（含 Web 组合）、工程目录解析、metadata 同步、chat turn 准备、取消请求
 //	└── plan.go    # PlanModeController 计划状态机
 //
 // 对应 Python 代码：jiuwenswarm/runtime/（service.py / request.py / plan.py / events.py）
