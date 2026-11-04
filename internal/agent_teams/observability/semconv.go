@@ -23,6 +23,12 @@ const (
 	GenAIPrompt = "gen_ai.prompt"
 	// GenAICompletion gen_ai.completion 属性键
 	GenAICompletion = "gen_ai.completion"
+	// GenAIPromptAttachmentKind 附件消息条目类型标注（openjiuwen.kind）后缀
+	GenAIPromptAttachmentKind = "openjiuwen.kind"
+	// GenAIPromptAttachmentMode 附件消息交付模式标注（openjiuwen.mode）后缀
+	GenAIPromptAttachmentMode = "openjiuwen.mode"
+	// PromptAttachmentHistoryKind 附件历史条目类型值
+	PromptAttachmentHistoryKind = "prompt_attachment_history"
 	// GenAIUsagePromptTokens gen_ai.usage.prompt_tokens 属性键
 	GenAIUsagePromptTokens = "gen_ai.usage.prompt_tokens"
 	// GenAIUsageCompletionTokens gen_ai.usage.completion_tokens 属性键

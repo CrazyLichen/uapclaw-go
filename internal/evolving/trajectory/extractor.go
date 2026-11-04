@@ -251,8 +251,14 @@ func (e *TracerTrajectoryExtractor) buildLLMDetail(span *tracer.Span) *LLMCallDe
 			for _, msg := range ms {
 				role, _ := msg["role"].(string)
 				content, _ := msg["content"].(string)
+				// metadata 必须保留：附件消息身份（_openjiuwen_prompt_attachment_history）
+				// 与交付账本都靠它识别，丢了只能退化为内容嗅探
+				var opts []llmschema.MessageOption
+				if meta, ok := msg["metadata"].(map[string]any); ok && len(meta) > 0 {
+					opts = append(opts, llmschema.WithMetadata(meta))
+				}
 				baseMessages = append(baseMessages, llmschema.NewDefaultMessage(
-					parseRoleType(role), content,
+					parseRoleType(role), content, opts...,
 				))
 			}
 		}

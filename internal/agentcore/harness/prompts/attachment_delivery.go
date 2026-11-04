@@ -3,6 +3,7 @@ package prompts
 import (
 	"context"
 	"sort"
+	"strings"
 
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -170,4 +171,40 @@ func pickSections(items []*Attachment, sections []string) []*Attachment {
 		}
 	}
 	return out
+}
+
+// ──────────────────────────── 附件消息识别 ────────────────────────────
+
+// IsPromptAttachmentUser 判断消息是否为附件投递产生的伪用户消息。
+//
+// Python: agent_evolving/trajectory/messages.py:104-119 `_is_prompt_attachment_user`
+// 判定顺序：metadata 标记优先；其次内容含 "<system-reminder>"（兼容丢失 metadata 的形态）。
+func IsPromptAttachmentUser(msg llmschema.BaseMessage) bool {
+	if msg == nil {
+		return false
+	}
+	if meta := msg.GetMetadata(); meta != nil {
+		if marked, ok := meta[MetadataKeyAttachmentHistory].(bool); ok && marked {
+			return true
+		}
+	}
+	return strings.Contains(msg.GetContent().Text(), "<system-reminder>")
+}
+
+// IsPromptAttachmentHistory 判断是否为附件历史消息（marker + 合法 mode 双重判定）。
+//
+// 用于观测层区分「稳定系统提示」与「附件投影后的 system」。
+func IsPromptAttachmentHistory(msg llmschema.BaseMessage) bool {
+	if msg == nil {
+		return false
+	}
+	meta := msg.GetMetadata()
+	if meta == nil {
+		return false
+	}
+	if marked, ok := meta[MetadataKeyAttachmentHistory].(bool); !ok || !marked {
+		return false
+	}
+	mode, _ := meta[MetadataKeyMode].(string)
+	return mode == ModeSnapshot || mode == ModeDelta
 }

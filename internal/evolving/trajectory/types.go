@@ -175,6 +175,21 @@ func (d *ToolCallDetail) StepKind() StepKind { return StepKindTool }
 //
 // Python: Trajectory.to_messages()
 func (t *Trajectory) ToMessages() []map[string]any {
+	return t.toMessages(false)
+}
+
+// ToMessagesLocal 投影「本轮输入」视图：每个 LLM 步骤的 prompt 只保留最后一条真实用户消息起的片段。
+//
+// Python: trajectory_to_messages(..., invoke_local=True)
+// 附件消息仍保留在 LLMCallDetail.Messages（轨迹可复现），仅投影时裁掉前序轮次。
+func (t *Trajectory) ToMessagesLocal() []map[string]any {
+	return t.toMessages(true)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// toMessages 按 trim 选项投影消息列表。
+func (t *Trajectory) toMessages(trimToLastUser bool) []map[string]any {
 	messages := make([]map[string]any, 0)
 	for _, step := range t.Steps {
 		if step.Kind != StepKindLLM {
@@ -185,7 +200,11 @@ func (t *Trajectory) ToMessages() []map[string]any {
 			continue
 		}
 		// Messages 是 []llmschema.BaseMessage，需要逐个转换
-		for _, msg := range llmDetail.Messages {
+		source := llmDetail.Messages
+		if trimToLastUser {
+			source = TrimPromptToLastUser(source)
+		}
+		for _, msg := range source {
 			messages = append(messages, llmschema.BaseMessageToMap(msg))
 		}
 		// Response 已是 map[string]any，检查是否含 role 或 content 键

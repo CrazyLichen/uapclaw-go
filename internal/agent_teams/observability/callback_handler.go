@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -364,6 +365,13 @@ func (h *OtelCallbackHandler) openLlmSpan(ctx context.Context, data *cb.LLMCallE
 					attribute.String(fmt.Sprintf("%s.%d.role", GenAIPrompt, i), role),
 					attribute.String(fmt.Sprintf("%s.%d.content", GenAIPrompt, i), RedactPrompt(content, h.config)),
 				)
+				// 附件投影条目加 kind/mode 标注（真 system prompt 不标注）
+				if kind, mode := attachmentMarkOf(msg); kind != "" {
+					llmSpan.SetAttributes(
+						attribute.String(fmt.Sprintf("%s.%d.%s", GenAIPrompt, i, GenAIPromptAttachmentKind), kind),
+						attribute.String(fmt.Sprintf("%s.%d.%s", GenAIPrompt, i, GenAIPromptAttachmentMode), mode),
+					)
+				}
 			}
 		}
 	}
@@ -449,6 +457,41 @@ func recoverCallback(methodName string) {
 	if r := recover(); r != nil {
 		logger.Warn(logComponent).Any("error", r).Str("method", methodName).Msg("OTel callbackexception")
 	}
+}
+
+// attachmentMarkOf 返回附件消息的观测标注；非附件消息返回空。
+//
+// 上游在新版 semconv 下区分 gen_ai.system_instructions 与 chat history
+// （callback_handler.py:1718-1733 / 1915-1930）；本项目使用 OpenLLMetry 的
+// gen_ai.prompt.<i>.* 扁平属性，等价做法是在消息条目上加 kind/mode 标注。
+func attachmentMarkOf(msg any) (kind string, mode string) {
+	if msg == nil {
+		return "", ""
+	}
+	if base, ok := msg.(llmschema.BaseMessage); ok {
+		if !hprompts.IsPromptAttachmentHistory(base) {
+			return "", ""
+		}
+		raw, _ := base.GetMetadata()[hprompts.MetadataKeyMode].(string)
+		return PromptAttachmentHistoryKind, raw
+	}
+	// map 形态（llm_params 反序列化后的消息）
+	message, ok := msg.(map[string]any)
+	if !ok {
+		return "", ""
+	}
+	meta, ok := message["metadata"].(map[string]any)
+	if !ok {
+		return "", ""
+	}
+	if marked, _ := meta[hprompts.MetadataKeyAttachmentHistory].(bool); !marked {
+		return "", ""
+	}
+	raw, _ := meta[hprompts.MetadataKeyMode].(string)
+	if raw != hprompts.ModeSnapshot && raw != hprompts.ModeDelta {
+		return "", ""
+	}
+	return PromptAttachmentHistoryKind, raw
 }
 
 // coerceMessageContent 将 content（string 或 list）强制转换为扁平字符串。
