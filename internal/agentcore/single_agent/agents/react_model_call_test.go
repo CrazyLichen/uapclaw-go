@@ -360,3 +360,67 @@ func TestBuildImageInputUnsupportedMessage(t *testing.T) {
 	assert.Contains(t, msg.Content.Text(), "当前主模型或模型服务端点不支持图片输入")
 	assert.Contains(t, msg.Content.Text(), "pypdf")
 }
+
+// TestExtractExceptionErrorValues_嵌套错误体 验证嵌套 map/slice 里的 code 能被抽出来
+//
+// 上游 _iter_exception_error_values 对 dict/list 递归（深度 ≤ 8），provider 的
+// 错误体常是 {"error": {"code": "invalid_image_input"}} 这种嵌套结构。
+func TestExtractExceptionErrorValues_嵌套错误体(t *testing.T) {
+	err := exception.NewBaseError(exception.StatusModelCallFailed,
+		exception.WithMsg("OpenAI API HTTP 400: bad request"),
+		exception.WithDetails(map[string]any{
+			"error": map[string]any{
+				"code":    "invalid_image_input",
+				"message": "this model does not accept images",
+			},
+		}))
+
+	values := extractExceptionErrorValues(err)
+	joined := strings.Join(values, "\n")
+	if !strings.Contains(joined, "invalid_image_input") {
+		t.Fatalf("嵌套 code 应被抽出，实际值: %v", values)
+	}
+	if !isImageInputUnsupportedError(err) {
+		t.Fatal("嵌套错误体里的 code 应被识别为拒图")
+	}
+}
+
+// TestExtractExceptionErrorValues_深度上限 验证超过 8 层的嵌套不再展开
+func TestExtractExceptionErrorValues_深度上限(t *testing.T) {
+	var nested any = "deep_marker"
+	for i := 0; i < imageInputScanMaxDepth+3; i++ {
+		nested = map[string]any{"child": nested}
+	}
+	values := iterExceptionErrorValues(nested, 0)
+	for _, v := range values {
+		if strings.Contains(v, "deep_marker") {
+			t.Fatal("超过深度上限的值不应被展开")
+		}
+	}
+}
+
+// TestMessagesContainImageInput_宽口径 验证 type=image 与空 URL 的图片块同样命中
+//
+// 上游只认 "image_url"/"image" 键存在，不看 URL 是否为空。
+func TestMessagesContainImageInput_宽口径(t *testing.T) {
+	cases := []struct {
+		name string
+		part llmschema.ContentPart
+		want bool
+	}{
+		{"type=image_url 且 URL 非空", llmschema.ContentPart{
+			Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "data:image/png;base64,xx"}}, true},
+		{"type=image_url 但 URL 为空", llmschema.ContentPart{
+			Type: "image_url", ImageURL: &llmschema.ImageURL{}}, true},
+		{"type=image", llmschema.ContentPart{Type: "image"}, true},
+		{"纯文本块", llmschema.ContentPart{Type: "text", Text: "hi"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			msgs := []llmschema.BaseMessage{llmschema.NewUserMessage("", llmschema.WithMultiModalContent(c.part))}
+			if got := messagesContainImageInput(msgs); got != c.want {
+				t.Fatalf("messagesContainImageInput=%v, want %v", got, c.want)
+			}
+		})
+	}
+}

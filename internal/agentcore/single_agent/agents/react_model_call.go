@@ -506,6 +506,12 @@ func logLLMResponse(aiMsg *llmschema.AssistantMessage) {
 	}
 }
 
+const (
+	// imageInputScanMaxDepth 错误值/内容形状递归扫描的深度上限
+	// Python: _IMAGE_INPUT_SCAN_MAX_DEPTH = 8 (react_agent.py L114)
+	imageInputScanMaxDepth = 8
+)
+
 // imageInputUnsupportedCodes provider 拒图的结构化错误码（与上游逐一对应）。
 //
 // Python: _IMAGE_INPUT_UNSUPPORTED_ERROR_CODES (react_agent.py L131-138)
@@ -538,28 +544,70 @@ var imageInputUnsupportedPatterns = []string{
 	"vision is not supported",
 }
 
-// collectErrorTexts 收集错误链上所有可匹配文本。
+// iterExceptionErrorValues 递归展开一个值，产出所有可参与匹配的字符串。
 //
-// 对齐 Python _extract_exception_error_values：Python 抽 args/code/status_code/message/body
-// 与 response.json()/text；Go 对应 err.Error() + BaseError 的 Params/Details + Cause 链。
-func collectErrorTexts(err error) []string {
-	var texts []string
+// Python: ReActAgent._iter_exception_error_values() (react_agent.py L2100-2119)
+// 深度上限与上游一致（_IMAGE_INPUT_SCAN_MAX_DEPTH=8）。
+func iterExceptionErrorValues(value any, depth int) []string {
+	if depth > imageInputScanMaxDepth || value == nil {
+		return nil
+	}
+	switch v := value.(type) {
+	case string:
+		if v == "" {
+			return nil
+		}
+		return []string{v}
+	case error:
+		return []string{v.Error()}
+	case map[string]any:
+		var out []string
+		for _, child := range v {
+			out = append(out, iterExceptionErrorValues(child, depth+1)...)
+		}
+		return out
+	case []any:
+		var out []string
+		for _, child := range v {
+			out = append(out, iterExceptionErrorValues(child, depth+1)...)
+		}
+		return out
+	case []string:
+		var out []string
+		for _, child := range v {
+			if child != "" {
+				out = append(out, child)
+			}
+		}
+		return out
+	case nil:
+		return nil
+	default:
+		// 数字/布尔等标量：字符串化后参与匹配（上游对 int/float 同样 yield str）
+		return []string{fmt.Sprintf("%v", v)}
+	}
+}
+
+// extractExceptionErrorValues 收集错误对象上所有可匹配文本。
+//
+// Python: ReActAgent._extract_exception_error_values() (react_agent.py L2121-2144)。
+// 上游还抽 exc.response.status_code / response.json() / response.text——Go 侧异常
+// 没有 response 对象，等价载体是 BaseError 的 Params 与 Details，故在此展开，
+// 这是与上游的已知差异（覆盖面等价，取数位置不同）。
+func extractExceptionErrorValues(err error) []string {
+	var out []string
 	for err != nil {
-		texts = append(texts, err.Error())
+		out = append(out, err.Error())
 		var be *exception.BaseError
 		if errors.As(err, &be) {
 			for _, v := range be.Params() {
-				if s := fmt.Sprintf("%v", v); s != "" {
-					texts = append(texts, s)
-				}
+				out = append(out, iterExceptionErrorValues(v, 0)...)
 			}
-			if be.Details() != nil {
-				texts = append(texts, fmt.Sprintf("%v", be.Details()))
-			}
+			out = append(out, iterExceptionErrorValues(be.Details(), 0)...)
 		}
 		err = errors.Unwrap(err)
 	}
-	return texts
+	return out
 }
 
 // isImageInputUnsupportedError 判断错误是否属于「模型/端点不支持图片输入」。
@@ -569,7 +617,7 @@ func isImageInputUnsupportedError(err error) bool {
 	if err == nil {
 		return false
 	}
-	texts := collectErrorTexts(err)
+	texts := extractExceptionErrorValues(err)
 	lowered := make([]string, 0, len(texts))
 	for _, t := range texts {
 		lowered = append(lowered, strings.ToLower(t))
@@ -596,9 +644,14 @@ func isImageInputUnsupportedError(err error) bool {
 //
 // Python: ReActAgent._messages_contain_image_input()
 func messagesContainImageInput(messages []llmschema.BaseMessage) bool {
+	// 上游是 JSON 形状递归扫描（dict 里 type in (image, image_url) 或出现 image_url/
+	// image 键即算），因为 Python 的 content 可能是原始 dict/list。Go 的 MessageContent
+	// 已是强类型（text XOR parts），没有可递归的嵌套容器，等价判定退化为「扫 Parts：
+	// type 属于 image/image_url，或 ImageURL 字段存在」——注意上游只认键存在，不看
+	// URL 是否为空，这里保持同样的宽口径。
 	for _, m := range messages {
 		for _, part := range m.GetContent().Parts() {
-			if part.Type == "image_url" && part.ImageURL != nil && part.ImageURL.URL != "" {
+			if part.Type == "image" || part.Type == "image_url" || part.ImageURL != nil {
 				return true
 			}
 		}
