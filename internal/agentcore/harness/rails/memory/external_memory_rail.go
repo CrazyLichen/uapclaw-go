@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"reflect"
 	"sort"
 	"strings"
@@ -151,9 +152,10 @@ func (r *ExternalMemoryRail) Init(ctx context.Context, agent agentinterfaces.Bas
 	// 注册 Provider 工具
 	r.registerProviderTools(agent)
 
-	// 注入 Provider 的静态系统提示词块
+	// 注入 Provider 的静态系统提示词块（上游走 add_section，非附件）
 	// Python: prompt_block = self._provider.system_prompt_block()
 	//         if prompt_block: section = build_external_memory_section(prompt_block, language=lang)
+	//         if section: self.system_prompt_builder.add_section(section)
 	if r.systemPromptBuilder != nil {
 		promptBlock := r.provider.SystemPromptBlock()
 		if promptBlock != "" {
@@ -304,7 +306,7 @@ func (r *ExternalMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinte
 	invokeID := cbcRefID(cbc)
 	if r.prefetchInvokeID == invokeID && r.prefetchCache != nil {
 		rawContext := *r.prefetchCache
-		r.injectMemoryContext(rawContext)
+		r.injectMemoryContext(cbc, rawContext)
 		return nil
 	}
 
@@ -348,7 +350,7 @@ func (r *ExternalMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinte
 	r.prefetchCache = &rawContext
 	r.prefetchInvokeID = invokeID
 
-	r.injectMemoryContext(rawContext)
+	r.injectMemoryContext(cbc, rawContext)
 	return nil
 }
 
@@ -666,8 +668,8 @@ func (r *ExternalMemoryRail) registerProviderTools(agent agentinterfaces.BaseAge
 	}
 }
 
-// injectMemoryContext 将记忆上下文注入系统提示词。
-func (r *ExternalMemoryRail) injectMemoryContext(rawContext string) {
+// injectMemoryContext 将记忆上下文注入系统提示词（有管理器时投递为附件）。
+func (r *ExternalMemoryRail) injectMemoryContext(cbc *agentinterfaces.AgentCallbackContext, rawContext string) {
 	if rawContext == "" || r.systemPromptBuilder == nil {
 		return
 	}
@@ -680,7 +682,17 @@ func (r *ExternalMemoryRail) injectMemoryContext(rawContext string) {
 		Content:  map[string]string{lang: fenced},
 		Priority: 55,
 	}
-	r.systemPromptBuilder.AddSection(section)
+	sessionID := ""
+	var agentRef any
+	if cbc != nil {
+		agentRef = cbc.Agent()
+		if cbc.Session() != nil {
+			sessionID = cbc.Session().GetSessionID()
+		}
+	}
+	if !hprompts.Deliver(agentRef, sessionID, &section, hprompts.AttachmentMemory, "agent_core.external_memory_rail", lang) {
+		r.systemPromptBuilder.AddSection(section)
+	}
 }
 
 // resolveUserTextForMemory 从回调上下文中解析用户文本。

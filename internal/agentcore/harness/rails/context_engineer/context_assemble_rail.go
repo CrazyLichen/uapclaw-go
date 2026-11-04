@@ -189,11 +189,15 @@ func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterf
 		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
 	}
 
-	// 注入节到系统提示词构建器
-	r.systemPromptBuilder.AddSection(workspaceSection)
+	// 注入节到系统提示词构建器（有管理器时投递为附件）
+	if !deliverContext(cbc, &workspaceSection, lang) {
+		r.systemPromptBuilder.AddSection(workspaceSection)
+	}
 
 	if toolsSection != nil {
-		r.systemPromptBuilder.AddSection(*toolsSection)
+		if !deliverContext(cbc, toolsSection, lang) {
+			r.systemPromptBuilder.AddSection(*toolsSection)
+		}
 	} else {
 		r.systemPromptBuilder.RemoveSection(sections.SectionTools)
 	}

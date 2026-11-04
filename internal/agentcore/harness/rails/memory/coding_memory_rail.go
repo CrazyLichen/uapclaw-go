@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -87,6 +88,16 @@ const (
 
 	// memoryIndexMaxLines MEMORY.md 索引最大读取行数
 	memoryIndexMaxLines = 200
+
+	// dynamicMemorySection 动态记忆内容（索引/召回全文）的附件片段名
+	// Python: writer.add_section(section="coding_memory_context", ...)
+	dynamicMemorySection = "coding_memory_context"
+	// dynamicMemorySource 动态记忆附件来源
+	// Python: source="agent_core.coding_memory_rail"
+	dynamicMemorySource = "agent_core.coding_memory_rail"
+	// dynamicMemoryPriority 动态记忆附件优先级
+	// Python: priority=85
+	dynamicMemoryPriority = 85
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -292,15 +303,16 @@ func (r *CodingMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 	// 构建基础 section（行为指令）
 	section := sections.BuildCodingMemorySection(r.codingMemoryDir, readOnly, lang)
 
-	// 只读模式: 仅注入 MEMORY.md 索引
+	// 只读模式: 动态内容只注入 MEMORY.md 索引，行为指令仍在系统提示词
 	if readOnly {
-		index := r.readMemoryIndex(ctx)
-		if index != "" {
+		if index := r.readMemoryIndex(ctx); index != "" {
 			header := "## 当前记忆索引\n\n"
 			if lang == "en" {
 				header = "## Current memory index\n\n"
 			}
-			section.Content[lang] += "\n\n" + header + index
+			r.upsertDynamicMemoryAttachment(cbc, header+index)
+		} else {
+			r.clearDynamicMemoryAttachment(cbc)
 		}
 		spb.AddSection(section)
 		return nil
@@ -340,19 +352,21 @@ func (r *CodingMemoryRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 				rr.totalMemories,
 			)
 		}
-		section.Content[lang] += "\n\n" + header + rr.content + footer
+		r.upsertDynamicMemoryAttachment(cbc, header+rr.content+footer)
 	} else {
 		// 无召回结果 → 降级注入索引
-		index := r.readMemoryIndex(ctx)
-		if index != "" {
+		if index := r.readMemoryIndex(ctx); index != "" {
 			header := "## 当前记忆索引\n\n"
 			if lang == "en" {
 				header = "## Current memory index\n\n"
 			}
-			section.Content[lang] += "\n\n" + header + index
+			r.upsertDynamicMemoryAttachment(cbc, header+index)
+		} else {
+			r.clearDynamicMemoryAttachment(cbc)
 		}
 	}
 
+	// 行为指令节始终留在系统提示词（上游 add_section）
 	spb.AddSection(section)
 
 	logger.Info(logComponent).
@@ -381,6 +395,35 @@ func (r *CodingMemoryRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// upsertDynamicMemoryAttachment 写入（覆盖）动态记忆附件。
+//
+// Python: CodingMemoryRail._upsert_dynamic_memory_attachment(ctx, content)
+func (r *CodingMemoryRail) upsertDynamicMemoryAttachment(cbc *agentinterfaces.AgentCallbackContext, content string) {
+	if cbc == nil || content == "" {
+		return
+	}
+	sessionID := ""
+	if cbc.Session() != nil {
+		sessionID = cbc.Session().GetSessionID()
+	}
+	hprompts.DeliverText(cbc.Agent(), sessionID, dynamicMemorySection, content,
+		hprompts.AttachmentMemory, dynamicMemorySource, dynamicMemoryPriority)
+}
+
+// clearDynamicMemoryAttachment 清除动态记忆附件。
+//
+// Python: CodingMemoryRail._clear_dynamic_memory_attachment(ctx)
+func (r *CodingMemoryRail) clearDynamicMemoryAttachment(cbc *agentinterfaces.AgentCallbackContext) {
+	if cbc == nil {
+		return
+	}
+	sessionID := ""
+	if cbc.Session() != nil {
+		sessionID = cbc.Session().GetSessionID()
+	}
+	hprompts.ClearDeliveredSection(cbc.Agent(), sessionID, dynamicMemorySection)
+}
 
 // registerCodingMemoryTools 注册编程记忆工具到 agent。
 //

@@ -931,7 +931,7 @@ func TestInjectMemoryContext_空上下文(t *testing.T) {
 	rail.systemPromptBuilder = &noopSystemPromptBuilder{}
 
 	// 空字符串不应注入
-	rail.injectMemoryContext("")
+	rail.injectMemoryContext(nil, "")
 	// noopSystemPromptBuilder 的 AddSection 不会被调用（因为 rawContext 为空）
 }
 
@@ -940,7 +940,7 @@ func TestInjectMemoryContext_NilBuilder(t *testing.T) {
 	rail.systemPromptBuilder = nil
 
 	// nil builder 不应 panic
-	rail.injectMemoryContext("some context")
+	rail.injectMemoryContext(nil, "some context")
 }
 
 // ──────────────────────────── BeforeModelCall 补充测试 ────────────────────────────

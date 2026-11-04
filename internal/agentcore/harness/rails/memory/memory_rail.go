@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"sort"
 	"time"
 
@@ -212,19 +211,11 @@ func (r *MemoryRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.Age
 	cst := time.FixedZone("CST", 8*3600)
 	todayDate := time.Now().In(cst).Format("2006-01-02")
 
-	// 构建记忆节
+	// 构建记忆节（上游走 add_section：memory 节是稳定系统提示词，不是动态附件）
+	// Python: memory_section = build_memory_section(...)
+	//         if memory_section is not None: self.system_prompt_builder.add_section(memory_section)
 	memorySection := sections.BuildMemorySection(mode, todayDate, lang)
-	sessionID := ""
-	if cbc != nil && cbc.Session() != nil {
-		sessionID = cbc.Session().GetSessionID()
-	}
-	var agentRef any
-	if cbc != nil {
-		agentRef = cbc.Agent()
-	}
-	if !hprompts.Deliver(agentRef, sessionID, &memorySection, hprompts.AttachmentMemory, "agent_core.jiuwen_memory_rail", lang) {
-		r.systemPromptBuilder.AddSection(memorySection)
-	}
+	r.systemPromptBuilder.AddSection(memorySection)
 
 	logger.Info(logComponent).
 		Str("event_type", "memory_rail_before_model_call").

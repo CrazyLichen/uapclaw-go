@@ -4,8 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/embedding"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -217,4 +223,135 @@ func TestSetToSortedSlice(t *testing.T) {
 	if result[2] != "coding_memory_write" {
 		t.Errorf("result[2] = %q, want %q", result[2], "coding_memory_write")
 	}
+}
+
+// ──────────────────────────── 动态记忆附件测试 ────────────────────────────
+
+// fakeAttachmentSession 仅提供会话 ID 的 SessionFacade 桩。
+type fakeAttachmentSession struct {
+	sessioninterfaces.SessionFacade
+	// sessionID 会话标识
+	sessionID string
+}
+
+// GetSessionID 返回会话标识
+func (f *fakeAttachmentSession) GetSessionID() string { return f.sessionID }
+
+// fakeAttachmentAgent 仅实现 PromptAttachments 的 BaseAgent 桩。
+type fakeAttachmentAgent struct {
+	agentinterfaces.BaseAgent
+	// manager 动态提示词管理器
+	manager *hprompts.Manager
+}
+
+// PromptAttachments 返回管理器
+func (f *fakeAttachmentAgent) PromptAttachments() *hprompts.Manager { return f.manager }
+
+// recordingSystemPromptBuilder 记录 AddSection 调用的 SPM 桩。
+type recordingSystemPromptBuilder struct {
+	noopSystemPromptBuilder
+	// added 已注入的节名
+	added []string
+}
+
+// AddSection 记录节名
+func (r *recordingSystemPromptBuilder) AddSection(section saprompt.PromptSection) *saprompt.SystemPromptBuilder {
+	r.added = append(r.added, section.Name)
+	return nil
+}
+
+// TestCodingMemoryRail_BeforeModelCall_召回结果投递动态附件 验证召回正文走
+// coding_memory_context 附件（kind=memory、priority=85），行为指令仍留在系统提示词。
+//
+// Python: CodingMemoryRail.before_model_call → _upsert_dynamic_memory_attachment + add_section
+func TestCodingMemoryRail_BeforeModelCall_召回结果投递动态附件(t *testing.T) {
+	manager := hprompts.NewManager()
+	rail := NewCodingMemoryRail("", nil, "cn")
+	builder := &recordingSystemPromptBuilder{}
+	rail.systemPromptBuilder = builder
+	rail.recallResult = &recallResult{content: "记忆正文", totalMemories: 3}
+	rail.recallDone = make(chan struct{})
+	close(rail.recallDone)
+
+	cbc := agentinterfaces.NewAgentCallbackContext(
+		&fakeAttachmentAgent{manager: manager},
+		&agentinterfaces.InvokeInputs{RunKind: agentinterfaces.RunKindNormal},
+		&fakeAttachmentSession{sessionID: "sess-1"},
+	)
+
+	require.NoError(t, rail.BeforeModelCall(context.Background(), cbc))
+
+	items, err := manager.ListByFilter(hprompts.AttachmentFilter{SessionID: "sess-1"})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, dynamicMemorySection, items[0].Section)
+	require.Equal(t, hprompts.AttachmentMemory, items[0].Kind)
+	require.Equal(t, dynamicMemoryPriority, items[0].Priority)
+	require.Equal(t, dynamicMemorySource, items[0].Source)
+	require.Contains(t, items[0].Content, "记忆正文")
+	require.Contains(t, items[0].Content, "已加载的相关记忆")
+	require.Equal(t, []string{sections.SectionMemory}, builder.added, "行为指令必须留在系统提示词")
+}
+
+// TestCodingMemoryRail_BeforeModelCall_无内容清除附件 验证无召回且无索引时清除动态附件。
+func TestCodingMemoryRail_BeforeModelCall_无内容清除附件(t *testing.T) {
+	manager := hprompts.NewManager()
+	_, err := manager.AddSection("sess-1", dynamicMemorySection, "旧索引",
+		hprompts.AttachmentMemory, dynamicMemorySource)
+	require.NoError(t, err)
+
+	rail := NewCodingMemoryRail("", nil, "cn")
+	rail.systemPromptBuilder = &noopSystemPromptBuilder{}
+
+	cbc := agentinterfaces.NewAgentCallbackContext(
+		&fakeAttachmentAgent{manager: manager},
+		&agentinterfaces.InvokeInputs{RunKind: agentinterfaces.RunKindNormal},
+		&fakeAttachmentSession{sessionID: "sess-1"},
+	)
+
+	require.NoError(t, rail.BeforeModelCall(context.Background(), cbc))
+
+	items, err := manager.ListByFilter(hprompts.AttachmentFilter{SessionID: "sess-1"})
+	require.NoError(t, err)
+	require.Empty(t, items, "无动态内容时必须清除动态附件")
+}
+
+// TestCodingMemoryRail_BeforeModelCall_只读模式清除附件 验证只读分支无索引时也清附件。
+func TestCodingMemoryRail_BeforeModelCall_只读模式清除附件(t *testing.T) {
+	manager := hprompts.NewManager()
+	_, err := manager.AddSection("sess-1", dynamicMemorySection, "旧索引",
+		hprompts.AttachmentMemory, dynamicMemorySource)
+	require.NoError(t, err)
+
+	rail := NewCodingMemoryRail("", nil, "cn")
+	rail.systemPromptBuilder = &noopSystemPromptBuilder{}
+
+	cbc := agentinterfaces.NewAgentCallbackContext(
+		&fakeAttachmentAgent{manager: manager},
+		&agentinterfaces.InvokeInputs{RunKind: agentinterfaces.RunKindCron},
+		&fakeAttachmentSession{sessionID: "sess-1"},
+	)
+
+	require.NoError(t, rail.BeforeModelCall(context.Background(), cbc))
+
+	items, err := manager.ListByFilter(hprompts.AttachmentFilter{SessionID: "sess-1"})
+	require.NoError(t, err)
+	require.Empty(t, items)
+}
+
+// TestCodingMemoryRail_BeforeModelCall_无管理器不报错 验证无附件管理器时不 panic。
+func TestCodingMemoryRail_BeforeModelCall_无管理器不报错(t *testing.T) {
+	rail := NewCodingMemoryRail("", nil, "cn")
+	rail.systemPromptBuilder = &noopSystemPromptBuilder{}
+	rail.recallResult = &recallResult{content: "记忆正文", totalMemories: 1}
+	rail.recallDone = make(chan struct{})
+	close(rail.recallDone)
+
+	cbc := agentinterfaces.NewAgentCallbackContext(
+		&fakeAttachmentAgent{},
+		&agentinterfaces.InvokeInputs{RunKind: agentinterfaces.RunKindNormal},
+		&fakeAttachmentSession{sessionID: "sess-1"},
+	)
+
+	require.NoError(t, rail.BeforeModelCall(context.Background(), cbc))
 }
