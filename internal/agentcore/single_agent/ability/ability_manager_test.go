@@ -1300,3 +1300,112 @@ func TestAbilityManager_Execute_skipTool非bool值(t *testing.T) {
 	// echo 工具不存在实例，会返回 AbilityExecutionError，但不是 skip 结果
 	assert.True(t, isAbilityExecutionErrorInResult(results[0].Result), "工具应正常执行（非skip路径），因无实例返回错误")
 }
+
+// ──────────────────────────── A-02: before_tool_call force_finish 必须补 ToolMessage ────────────────────────────
+
+// TestAbilityManager_Execute_forceFinishProducesToolMessage 验证 before 钩子请求 ff 时仍产出 ToolMessage
+func TestAbilityManager_Execute_forceFinishProducesToolMessage(t *testing.T) {
+	mgr := interfaces.NewAgentCallbackManager("test_ff_toolmsg")
+	defer mgr.Clear()
+
+	expected := map[string]any{"output": "done_before_tool", "result_type": "answer"}
+	mgr.RegisterCallback(context.Background(), interfaces.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*interfaces.AgentCallbackContext)
+		cbc.RequestForceFinish(expected)
+		return nil
+	})
+
+	agent := &fakeRailAgentForAbility{cbMgr: mgr}
+	cbc := interfaces.NewAgentCallbackContext(agent, &interfaces.InvokeInputs{}, nil)
+
+	am := NewAbilityManager(nil)
+	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
+
+	results := am.Execute(context.Background(), cbc, []*llmschema.ToolCall{
+		{Name: "echo", Arguments: `{}`, ID: "tc1"},
+	}, nil, "")
+
+	assert.Len(t, results, 1)
+	if results[0].ToolMsg == nil {
+		t.Fatal("force_finish 短路后必须补 ToolMessage，否则 tool_calls 悬空")
+	}
+	assert.Equal(t, "tc1", results[0].ToolMsg.ToolCallID)
+	assert.True(t, cbc.HasForceFinishRequest(), "force_finish 应传播到父 ctx")
+	assert.Equal(t, expected, cbc.ConsumeForceFinish().Result)
+}
+
+// TestAbilityManager_Execute_parallelForceFinishUsesFirstIndex 验证并行场景取最小索引传播且补齐全部 ToolMessage
+func TestAbilityManager_Execute_parallelForceFinishUsesFirstIndex(t *testing.T) {
+	mgr := interfaces.NewAgentCallbackManager("test_ff_parallel")
+	defer mgr.Clear()
+
+	mgr.RegisterCallback(context.Background(), interfaces.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*interfaces.AgentCallbackContext)
+		inputs, ok := cbc.Inputs().(*interfaces.ToolCallInputs)
+		if !ok || inputs.ToolCall == nil {
+			return nil
+		}
+		if inputs.ToolCall.ID == "tc2" {
+			cbc.RequestForceFinish(map[string]any{"output": "mid", "result_type": "answer"})
+		}
+		return nil
+	})
+
+	agent := &fakeRailAgentForAbility{cbMgr: mgr}
+	cbc := interfaces.NewAgentCallbackContext(agent, &interfaces.InvokeInputs{}, nil)
+
+	am := NewAbilityManager(nil)
+	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
+
+	results := am.Execute(context.Background(), cbc, []*llmschema.ToolCall{
+		{Name: "echo", Arguments: `{}`, ID: "tc1"},
+		{Name: "echo", Arguments: `{}`, ID: "tc2"},
+		{Name: "echo", Arguments: `{}`, ID: "tc3"},
+	}, nil, "")
+
+	assert.Len(t, results, 3)
+	for i, want := range []string{"tc1", "tc2", "tc3"} {
+		if results[i].ToolMsg == nil {
+			t.Fatalf("第 %d 条 tool_call 缺少 ToolMessage", i)
+		}
+		assert.Equal(t, want, results[i].ToolMsg.ToolCallID)
+	}
+	finish := cbc.ConsumeForceFinish()
+	if finish == nil {
+		t.Fatal("父 ctx 应收到 force_finish")
+	}
+	assert.Equal(t, "mid", finish.Result["output"])
+}
+
+// TestAbilityManager_Execute_forceFinishPrefersInputs 验证 inputs 中已写入的 tool_result/tool_msg 优先
+func TestAbilityManager_Execute_forceFinishPrefersInputs(t *testing.T) {
+	mgr := interfaces.NewAgentCallbackManager("test_ff_inputs")
+	defer mgr.Clear()
+
+	mgr.RegisterCallback(context.Background(), interfaces.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*interfaces.AgentCallbackContext)
+		if inputs, ok := cbc.Inputs().(*interfaces.ToolCallInputs); ok {
+			inputs.ToolResult = "custom_result"
+			inputs.ToolMsg = llmschema.NewToolMessage(inputs.ToolCall.ID, "custom_msg")
+		}
+		cbc.RequestForceFinish(map[string]any{"output": "ff", "result_type": "answer"})
+		return nil
+	})
+
+	agent := &fakeRailAgentForAbility{cbMgr: mgr}
+	cbc := interfaces.NewAgentCallbackContext(agent, &interfaces.InvokeInputs{}, nil)
+
+	am := NewAbilityManager(nil)
+	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
+
+	results := am.Execute(context.Background(), cbc, []*llmschema.ToolCall{
+		{Name: "echo", Arguments: `{}`, ID: "tc1"},
+	}, nil, "")
+
+	assert.Len(t, results, 1)
+	assert.Equal(t, "custom_result", results[0].Result)
+	if results[0].ToolMsg == nil {
+		t.Fatal("ToolMsg 不应为 nil")
+	}
+	assert.Equal(t, "custom_msg", results[0].ToolMsg.GetContent().Text())
+}

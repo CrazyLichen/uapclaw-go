@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -451,14 +452,55 @@ func (am *AbilityManager) Execute(
 
 	wg.Wait()
 
-	// force-finish 信号传播：子 toolCtx → 父 cbc
-	// Python: Python: for tool_ctx in tool_contexts:
-	//   Python: ff = tool_ctx.consume_force_finish()
-	//   Python: if ff is not None: ctx.request_force_finish(ff.result); break
-	for _, toolCtx := range toolCtxs {
-		if ff := toolCtx.ConsumeForceFinish(); ff != nil {
-			cbc.RequestForceFinish(ff.Result)
-			break
+	// ① 先按 tool-call 顺序一次性收敛子 ctx 上的 force-finish。
+	//    ConsumeForceFinish 是清空式消费，每个 index 至多一条，全文唯一写 map 的地方。
+	// Python: execute() 末尾 for tool_ctx in tool_contexts 收敛后取 min(force_finish_requests)
+	finishByIndex := make(map[int]map[string]any, len(toolCtxs))
+	for i := range toolCtxs {
+		if ff := toolCtxs[i].ConsumeForceFinish(); ff != nil {
+			finishByIndex[i] = ff.Result
+		}
+	}
+	if len(finishByIndex) > 0 {
+		cbc.RequestForceFinish(finishByIndex[minFinishIndex(finishByIndex)])
+	}
+
+	// ② 结果处理（对齐 Python execute() 的 ①②③④ 分支）
+	for i := range results {
+		res := &results[i]
+		toolCall := toolCalls[i]
+
+		// 错误兜底：ToolMsg 缺失时用 Python 同款文案补（正常错误路径由
+		// errorToExecuteResult 产出，此处只兜异常构造遗漏的情形）
+		if res.ToolMsg == nil && res.Result != nil {
+			if err, ok := res.Result.(error); ok {
+				res.ToolMsg = llmschema.NewToolMessage(toolCallIDOf(toolCall),
+					"Ability execution error: "+err.Error())
+			}
+		}
+
+		// before/after 钩子请求了 force_finish：工具可能压根没执行，
+		// 必须补一条 ToolMessage，否则 assistant 的 tool_calls 在上下文里悬空，
+		// 下一轮请求会因"tool_calls 未被响应"被 provider 拒绝。
+		//
+		// Python: `result is None and has_force_finish_request` 与
+		// `isinstance(result, dict)` 两个分支（Go 侧短路后都是零值，故合并）。
+		if ffResult, hasFF := finishByIndex[i]; hasFF && res.ToolMsg == nil {
+			res.Result = ffResult
+			body, marshalErr := json.Marshal(ffResult)
+			if marshalErr != nil {
+				body = []byte("{}")
+			}
+			res.ToolMsg = llmschema.NewToolMessage(toolCallIDOf(toolCall), string(body))
+			// inputs 优先（after 钩子可能已写入 tool_result / tool_msg）
+			if inputs, ok := toolCtxs[i].Inputs().(*interfaces.ToolCallInputs); ok {
+				if inputs.ToolResult != nil {
+					res.Result = inputs.ToolResult
+				}
+				if inputs.ToolMsg != nil {
+					res.ToolMsg = inputs.ToolMsg
+				}
+			}
 		}
 	}
 
@@ -500,6 +542,19 @@ func (am *AbilityManager) runToolCallSafely(
 		return r
 	}
 	return am.railedExecuteSingleToolCall(ctx, cbc, toolCall, sess, tag)
+}
+
+// minFinishIndex 返回 force-finish 结果表中最小索引，用于按 tool-call 顺序取首个信号。
+//
+// Python: min(force_finish_requests)
+func minFinishIndex(m map[int]map[string]any) int {
+	minIdx := math.MaxInt
+	for k := range m {
+		if k < minIdx {
+			minIdx = k
+		}
+	}
+	return minIdx
 }
 
 // recoverToolPanic 把 goroutine 里捕获的 panic 载荷转成 ExecuteResult，并记录日志。
