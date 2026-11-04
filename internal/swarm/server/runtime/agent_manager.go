@@ -17,6 +17,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
 	e2aacp "github.com/uapclaw/uapclaw-go/internal/swarm/e2a/acp"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -338,7 +339,7 @@ func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.Agen
 	// Python: L439-456: 从 request 解析 channel_id/mode/workspace_dir → get_agent → agent.process_message
 	// Python: L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
 	channelID := request.ChannelID
-	mode, _ := resolveModeFromRequest(request)
+	mode, _ := swruntime.ResolveAgentRequestModeFromRequest(request)
 	projectDir := resolveWorkspaceDirFromRequest(request)
 
 	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, "")
@@ -362,7 +363,7 @@ func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schem
 	// Python: L468-487: 同 process_message 但流式
 	// Python: L445-449: sub_mode 不参与实例查找，行为差异由下游 adapter 处理
 	channelID := request.ChannelID
-	mode, _ := resolveModeFromRequest(request)
+	mode, _ := swruntime.ResolveAgentRequestModeFromRequest(request)
 	projectDir := resolveWorkspaceDirFromRequest(request)
 
 	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, "")
@@ -796,39 +797,6 @@ func stringMapToAny(m map[string]string) map[string]any {
 		result[k] = v
 	}
 	return result
-}
-
-// resolveModeFromRequest 从请求中解析 mode。
-// Python: AgentManager._resolve_request_owner_mode 中 params.get("mode", "agent")
-func resolveModeFromRequest(request *schema.AgentRequest) (mode, subMode string) {
-	if request.Params == nil {
-		return "agent", ""
-	}
-	var params map[string]any
-	if err := json.Unmarshal(request.Params, &params); err != nil {
-		return "agent", ""
-	}
-	modeFull, _ := params["mode"].(string)
-	if modeFull == "" {
-		// 上游默认 "agent"（normal），plan 是会话运行期状态而非默认档
-		modeFull = "agent"
-	}
-	// 新三段 canonical 短路（对齐 Python resolve_new_canonical_mode）：
-	// environment/state 已内嵌，按第一个点拆会得到 subMode="work.plan"。
-	if managerMode, sub, _, ok := schema.ResolveNewCanonicalMode(modeFull); ok {
-		return managerMode, sub
-	}
-
-	// Python: L441: mode = str(mode_full).split(".")[0]
-	parts := strings.SplitN(modeFull, ".", 2)
-	mode = parts[0]
-	if mode == "" {
-		mode = "agent"
-	}
-	if len(parts) > 1 {
-		subMode = parts[1]
-	}
-	return mode, subMode
 }
 
 // resolveWorkspaceDirFromRequest 从请求中解析 workspace_dir。

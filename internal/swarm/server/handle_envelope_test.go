@@ -56,65 +56,6 @@ func makeTestEnvelope(method string, isStream bool) *e2a.E2AEnvelope {
 	return env
 }
 
-// TestApplyResolvedModeToRequest 验证 mode 解析。
-func TestApplyResolvedModeToRequest(t *testing.T) {
-	tests := []struct {
-		name     string
-		params   json.RawMessage
-		wantMode string
-		wantSub  string
-	}{
-		{
-			name:     "空参数默认agent.plan",
-			params:   json.RawMessage(`{}`),
-			wantMode: "agent",
-			wantSub:  "plan",
-		},
-		{
-			name:     "nil参数默认agent.plan",
-			params:   nil,
-			wantMode: "agent",
-			wantSub:  "plan",
-		},
-		{
-			name:     "code.normal模式",
-			params:   json.RawMessage(`{"mode": "agent.code.normal"}`),
-			wantMode: "code",
-			wantSub:  "normal",
-		},
-		{
-			name:     "agent.plan模式",
-			params:   json.RawMessage(`{"mode": "agent.work.plan"}`),
-			wantMode: "agent",
-			wantSub:  "plan",
-		},
-		{
-			name:     "仅mode无subMode",
-			params:   json.RawMessage(`{"mode": "code"}`),
-			wantMode: "code",
-			wantSub:  "normal",
-		},
-		{
-			name:     "空mode字符串",
-			params:   json.RawMessage(`{"mode": ""}`),
-			wantMode: "agent",
-			wantSub:  "plan",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, tt.params)
-			mode, subMode := applyResolvedModeToRequest(req)
-			if mode != tt.wantMode {
-				t.Errorf("mode = %q, 期望 %q", mode, tt.wantMode)
-			}
-			if subMode != tt.wantSub {
-				t.Errorf("subMode = %q, 期望 %q", subMode, tt.wantSub)
-			}
-		})
-	}
-}
 
 // TestResolveRequestProjectDir 验证项目目录解析。
 func TestResolveRequestProjectDir(t *testing.T) {

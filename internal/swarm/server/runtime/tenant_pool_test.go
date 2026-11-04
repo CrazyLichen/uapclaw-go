@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -76,7 +77,7 @@ func TestTenantAgentPool_ProcessMessage_透传(t *testing.T) {
 	// 验证 ProcessMessage 能正确委托到 AgentManager.ProcessMessage
 	// AgentManager.ProcessMessage 会调用 GetAgent → UapClaw.ProcessMessage
 	// 由于 UapClaw.CreateInstance 需要 LLM，这里仅验证参数解析路径
-	mode, subMode := resolveModeFromRequest(req)
+	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(req)
 	assert.Equal(t, "agent", mode)
 	assert.Equal(t, "plan", subMode)
 
@@ -99,7 +100,7 @@ func TestTenantAgentPool_ProcessMessage_请求字段日志(t *testing.T) {
 		Params:    []byte(`{"mode": "agent.code.normal"}`),
 	}
 
-	mode, subMode := resolveModeFromRequest(req)
+	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(req)
 	assert.Equal(t, "code", mode)
 	assert.Equal(t, "normal", subMode)
 }
@@ -120,7 +121,7 @@ func TestTenantAgentPool_ProcessMessageStream_透传(t *testing.T) {
 	}
 
 	// 验证参数解析
-	mode, subMode := resolveModeFromRequest(req)
+	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(req)
 	assert.Equal(t, "agent", mode)
 	assert.Equal(t, "plan", subMode)
 
@@ -187,7 +188,7 @@ func TestTenantAgentPool_Context传递(t *testing.T) {
 	}
 
 	// 仅验证参数解析不 panic，端到端由集成测试覆盖
-	mode, subMode := resolveModeFromRequest(req)
+	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(req)
 	assert.Equal(t, "agent", mode)
 	assert.Equal(t, "", subMode)
 	_ = ctx

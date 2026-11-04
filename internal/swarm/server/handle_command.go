@@ -11,6 +11,7 @@ import (
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	commmem "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/memory"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
 )
@@ -188,7 +189,7 @@ func (s *AgentServer) handleCommandCompact(ctx context.Context, request *schema.
 	if request.SessionID != nil {
 		sessionID = *request.SessionID
 	}
-	mode, subMode := applyResolvedModeToRequest(request)
+	mode, subMode := swruntime.ApplyResolvedModeToRequest(request, "")
 	if mode == "auto_harness" {
 		mode = "agent"
 	}
@@ -224,7 +225,7 @@ func (s *AgentServer) handleCommandContext(ctx context.Context, request *schema.
 	if request.SessionID != nil {
 		sessionID = *request.SessionID
 	}
-	mode, subMode := applyResolvedModeToRequest(request)
+	mode, subMode := swruntime.ApplyResolvedModeToRequest(request, "")
 	if mode == "auto_harness" {
 		mode = "agent"
 	}
@@ -260,7 +261,7 @@ func (s *AgentServer) handleCommandRecap(ctx context.Context, request *schema.Ag
 	if request.SessionID != nil {
 		sessionID = *request.SessionID
 	}
-	mode, subMode := applyResolvedModeToRequest(request)
+	mode, subMode := swruntime.ApplyResolvedModeToRequest(request, "")
 	if mode == "auto_harness" {
 		mode = "agent"
 	}

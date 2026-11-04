@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 )
@@ -229,7 +230,7 @@ func TestAgentManager_ProcessMessage_GetAgent委托(t *testing.T) {
 	}
 
 	// 验证 GetAgent 能正确解析 mode
-	mode, subMode := resolveModeFromRequest(req)
+	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(req)
 	assert.Equal(t, "agent", mode)
 	assert.Equal(t, "plan", subMode)
 
@@ -255,7 +256,7 @@ func TestAgentManager_ProcessMessageStream_GetAgent委托(t *testing.T) {
 		IsStream:  true,
 	}
 
-	mode, subMode := resolveModeFromRequest(req)
+	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(req)
 	assert.Equal(t, "code", mode)
 	assert.Equal(t, "normal", subMode)
 
@@ -484,7 +485,7 @@ func TestResolveModeFromRequest(t *testing.T) {
 			} else {
 				req.Params = nil
 			}
-			mode, subMode := resolveModeFromRequest(req)
+			mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(req)
 			assert.Equal(t, tt.wantMode, mode)
 			assert.Equal(t, tt.wantSub, subMode)
 		})

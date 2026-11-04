@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
@@ -23,10 +23,6 @@ import (
 const (
 	// keepaliveInterval 流式心跳间隔
 	keepaliveInterval = 10 * time.Second
-	// defaultMode 默认模式
-	defaultMode = "agent"
-	// defaultSubMode 默认子模式
-	defaultSubMode = "plan"
 	// acpChannelID ACP 通道标识
 	acpChannelID = "acp"
 	// errCodeNotImplemented 未实现错误码
@@ -315,7 +311,7 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 	}
 
 	// 2. 解析 mode
-	mode, subMode := applyResolvedModeToRequest(request)
+	mode, subMode := swruntime.ApplyResolvedModeToRequest(request, "")
 	// Python: auto_harness 模式等同于 agent 模式
 	if mode == "auto_harness" {
 		mode = "agent"
@@ -376,7 +372,7 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 	defer finish()
 
 	// 3. 解析 mode + 获取 Agent
-	mode, subMode := applyResolvedModeToRequest(request)
+	mode, subMode := swruntime.ApplyResolvedModeToRequest(request, "")
 	// Python: auto_harness 模式等同于 agent 模式
 	if mode == "auto_harness" {
 		mode = "agent"
@@ -474,7 +470,7 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 
 	// 2. 获取 Agent（三级 fallback，对齐 Python _handle_cancel）
 	// 主流路径：纯读取 mode（不修改 request），对齐 Python request.params.get("mode", "") + resolve_agent_request_mode
-	mode, subMode := resolveMode(request)
+	mode, subMode := swruntime.ResolveAgentRequestModeFromRequest(request)
 	projectDir := resolveRequestProjectDir(request)
 
 	var agent *runtime.UapClaw
@@ -495,13 +491,13 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 	}
 
 	// 第3级：fallback 创建（阻塞），对齐 Python _apply_resolved_mode_to_request 兜底
-	// 此时才调用 applyResolvedModeToRequest（会回写 request.Params）
+	// 此时才回写 canonical mode（上游 apply_resolved_mode_to_request 会改 params）
 	if agent == nil {
 		logger.Warn(logComponent).
 			Str("request_id", request.RequestID).
 			Str("channel_id", request.ChannelID).
 			Msg("cancel: no existing agent found, fallback creation")
-		mode, subMode = applyResolvedModeToRequest(request)
+		mode, subMode = swruntime.ApplyResolvedModeToRequest(request, "")
 		var err error
 		agent, err = s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 		if err != nil {
@@ -594,162 +590,6 @@ func (s *AgentServer) runKeepalive(ctx context.Context, requestID, channelID str
 			s.sendKeepalive(requestID, channelID)
 			timer.Reset(keepaliveInterval)
 		}
-	}
-}
-
-// resolveMode 从 request 中纯读取并解析 mode/subMode，不修改 request。
-// Python: resolve_agent_request_mode(mode_param)
-func resolveMode(request *schema.AgentRequest) (mode, subMode string) {
-	if request.Params == nil {
-		return "agent", "plan"
-	}
-	var params map[string]any
-	if err := json.Unmarshal(request.Params, &params); err != nil {
-		return "agent", "plan"
-	}
-	modeText := ""
-	if modeVal, ok := params["mode"]; ok {
-		if s, ok := modeVal.(string); ok {
-			modeText = strings.TrimSpace(strings.ToLower(s))
-		}
-	}
-	if modeText == "" {
-		modeText = "agent.work.plan"
-	}
-	parts := strings.SplitN(modeText, ".", 2)
-	mode = parts[0]
-	if mode == "" {
-		mode = "agent"
-	}
-	defaultSubModes := map[string]string{
-		"agent": "plan",
-		"code":  "normal",
-	}
-	if len(parts) > 1 && parts[1] != "" {
-		subMode = parts[1]
-	} else {
-		if def, ok := defaultSubModes[mode]; ok {
-			subMode = def
-		}
-	}
-	// team 分支
-	if mode == "team" {
-		if subMode == "plan" {
-			mode = "code"
-			subMode = "team"
-		} else {
-			subMode = ""
-		}
-	}
-	// code subMode 合法值校验
-	if mode == "code" && subMode != "plan" && subMode != "normal" && subMode != "team" {
-		subMode = "normal"
-	}
-	return
-}
-
-// applyResolvedModeToRequest 从 params["mode"] 解析 mode、subMode 和 canonicalMode。
-//
-// 完整对齐 Python resolve_agent_request_mode + _apply_resolved_mode_to_request：
-//  1. strip + lower 输入
-//  2. 空值默认 "agent.work.plan"
-//  3. team.plan → mode="code", subMode="team"（团队规划模式）
-//  4. team subMode 白名单 {nil, "plan"}
-//  5. code subMode 白名单 {"plan", "normal", "team"}
-//  6. canonicalMode 回写到 request.Params["mode"]
-func applyResolvedModeToRequest(request *schema.AgentRequest) (mode, subMode string) {
-	if request.Params == nil {
-		mode, subMode = "agent", "plan"
-		return
-	}
-
-	var params map[string]any
-	if err := json.Unmarshal(request.Params, &params); err != nil {
-		mode, subMode = "agent", "plan"
-		return
-	}
-
-	// 读取并规范化 mode 文本
-	modeText := ""
-	if modeVal, ok := params["mode"]; ok {
-		if s, ok := modeVal.(string); ok {
-			modeText = strings.TrimSpace(strings.ToLower(s))
-		}
-	}
-	if modeText == "" {
-		modeText = "agent.work.plan"
-	}
-
-	// 新三段 canonical 短路（对齐 Python resolve_new_canonical_mode）：
-	// environment/state 已内嵌在串里，按第一个点拆会把 agent.work.plan 拆成
-	// (agent, work.plan)，导致适配器选型与状态机错乱。
-	if managerMode, sub, canonical, ok := schema.ResolveNewCanonicalMode(modeText); ok {
-		writeCanonicalMode(params, canonical, request)
-		return managerMode, sub
-	}
-
-	// 按 "." 拆分
-	parts := strings.SplitN(modeText, ".", 2)
-	mode = parts[0]
-	if mode == "" {
-		mode = "agent"
-	}
-
-	// team 分支：对齐 Python L199-206
-	if mode == "team" {
-		if len(parts) > 1 && parts[1] != "" {
-			subMode = parts[1]
-		}
-		// team subMode 合法值校验：仅允许 nil 和 "plan"
-		if subMode != "" && subMode != "plan" {
-			subMode = ""
-		}
-		canonicalMode := mode
-		if subMode != "" {
-			canonicalMode = mode + "." + subMode
-		}
-		// team.plan → code 模式，subMode="team"
-		if subMode == "plan" {
-			mode = "code"
-			subMode = "team"
-		}
-		// 回写 canonicalMode
-		writeCanonicalMode(params, canonicalMode, request)
-		return
-	}
-
-	// 非 team 分支：对齐 Python L208-216
-	defaultSubModes := map[string]string{
-		"agent": "plan",
-		"code":  "normal",
-	}
-	if len(parts) > 1 && parts[1] != "" {
-		subMode = parts[1]
-	} else {
-		if def, ok := defaultSubModes[mode]; ok {
-			subMode = def
-		}
-	}
-	// code subMode 合法值校验
-	if mode == "code" && subMode != "plan" && subMode != "normal" && subMode != "team" {
-		subMode = "normal"
-	}
-	// 规范化模式
-	canonicalMode := mode
-	if subMode != "" {
-		canonicalMode = mode + "." + subMode
-	}
-	// 回写 canonicalMode
-	writeCanonicalMode(params, canonicalMode, request)
-	return
-}
-
-// writeCanonicalMode 将解析后的 canonicalMode 回写到 request.Params["mode"]。
-// Python: request.params["mode"] = canonical_mode。
-func writeCanonicalMode(params map[string]any, canonicalMode string, request *schema.AgentRequest) {
-	params["mode"] = canonicalMode
-	if updated, err := json.Marshal(params); err == nil {
-		request.Params = json.RawMessage(updated)
 	}
 }
 
