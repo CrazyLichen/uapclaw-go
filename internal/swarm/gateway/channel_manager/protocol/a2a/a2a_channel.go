@@ -44,11 +44,11 @@ type A2AChannelConfig struct {
 	ProtocolVersion string
 	// ChannelID 通道标识
 	ChannelID string
-	// AppName Agent Card name
+	// AppName Agent Card 中的名称
 	AppName string
-	// AppDescription Agent Card description
+	// AppDescription Agent Card 中的描述
 	AppDescription string
-	// AppVersion Agent Card version
+	// AppVersion Agent Card 中的版本号
 	AppVersion string
 }
 

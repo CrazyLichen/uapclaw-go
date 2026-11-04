@@ -29,11 +29,11 @@ type PlanRequest struct {
 	SubMode string
 	// ReqMethod 请求方法（空串视为 chat）
 	ReqMethod string
-	// EntrySource plan_entry_source
+	// EntrySource 进入来源（Python 字段 plan_entry_source）
 	EntrySource string
 	// IsInterruptResume 是否中断续答请求
 	IsInterruptResume bool
-	// PreviousSessionMode previous_session_mode 参数
+	// PreviousSessionMode 上一次会话使用的模式（Python 字段 previous_session_mode）
 	PreviousSessionMode string
 	// Query 本轮用户输入（进入 plan 时会被前置提醒）
 	Query string

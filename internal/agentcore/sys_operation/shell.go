@@ -126,22 +126,27 @@ func NewShellOptions(opts ...ShellOption) *ShellOptions {
 	return o
 }
 
+// WithShellCwd 设置命令执行的工作目录。
 func WithShellCwd(cwd string) ShellOption {
 	return func(o *ShellOptions) { o.Cwd = cwd }
 }
 
+// WithShellTimeout 设置命令执行超时时间（秒）。
 func WithShellTimeout(timeout int) ShellOption {
 	return func(o *ShellOptions) { o.Timeout = timeout }
 }
 
+// WithShellEnvironment 设置命令执行时注入的环境变量。
 func WithShellEnvironment(env map[string]string) ShellOption {
 	return func(o *ShellOptions) { o.Environment = env }
 }
 
+// WithShellType 设置使用的 Shell 类型（auto/bash/sh/powershell）。
 func WithShellType(st ShellType) ShellOption {
 	return func(o *ShellOptions) { o.ShellType = st }
 }
 
+// WithShellOptions 设置透传给执行器的额外选项。
 func WithShellOptions(options map[string]any) ShellOption {
 	return func(o *ShellOptions) { o.Options = options }
 }

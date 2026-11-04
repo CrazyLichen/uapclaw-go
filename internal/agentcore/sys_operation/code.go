@@ -59,22 +59,27 @@ func NewCodeOptions(opts ...CodeOption) *CodeOptions {
 	return o
 }
 
+// WithCodeLanguage 设置执行代码所用的语言（默认 python）。
 func WithCodeLanguage(lang string) CodeOption {
 	return func(o *CodeOptions) { o.Language = lang }
 }
 
+// WithCodeTimeout 设置代码执行超时时间（秒）。
 func WithCodeTimeout(timeout int) CodeOption {
 	return func(o *CodeOptions) { o.Timeout = timeout }
 }
 
+// WithCodeEnvironment 设置代码执行时注入的环境变量。
 func WithCodeEnvironment(env map[string]string) CodeOption {
 	return func(o *CodeOptions) { o.Environment = env }
 }
 
+// WithCodeCwd 设置代码执行的工作目录。
 func WithCodeCwd(cwd string) CodeOption {
 	return func(o *CodeOptions) { o.Cwd = cwd }
 }
 
+// WithCodeOptions 设置透传给执行器的额外选项。
 func WithCodeOptions(options map[string]any) CodeOption {
 	return func(o *CodeOptions) { o.Options = options }
 }

@@ -232,14 +232,17 @@ func (c *MessageContent) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("MessageContent 反序列化失败: 既不是字符串也不是内容分片数组")
 }
 
+// WithMessageName 设置消息名称。
 func WithMessageName(name string) MessageOption {
 	return func(m *DefaultMessage) { m.Name = name }
 }
 
+// WithMetadata 设置消息的附加元数据。
 func WithMetadata(metadata map[string]any) MessageOption {
 	return func(m *DefaultMessage) { m.Metadata = metadata }
 }
 
+// WithMultiModalContent 把消息内容设置为多模态内容分片。
 func WithMultiModalContent(parts ...ContentPart) MessageOption {
 	return func(m *DefaultMessage) { m.Content = NewMultiModalContent(parts...) }
 }

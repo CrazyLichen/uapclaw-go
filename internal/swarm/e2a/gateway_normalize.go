@@ -209,30 +209,37 @@ func MessageToE2AOrFallback(msg *schema.Message) *E2AEnvelope {
 	return env
 }
 
+// WithFieldChannelID 设置信封的 channel_id 字段。
 func WithFieldChannelID(v string) AgentFieldOption {
 	return func(d map[string]any) { d["channel_id"] = v }
 }
 
+// WithFieldSessionID 设置信封的 session_id 字段。
 func WithFieldSessionID(v string) AgentFieldOption {
 	return func(d map[string]any) { d["session_id"] = v }
 }
 
+// WithFieldReqMethod 设置信封的 method 字段（请求方法名）。
 func WithFieldReqMethod(v string) AgentFieldOption {
 	return func(d map[string]any) { d["method"] = v }
 }
 
+// WithFieldParams 设置信封的 params 字段（请求参数）。
 func WithFieldParams(v map[string]any) AgentFieldOption {
 	return func(d map[string]any) { d["params"] = v }
 }
 
+// WithFieldIsStream 设置信封的 is_stream 字段（是否流式请求）。
 func WithFieldIsStream(v bool) AgentFieldOption {
 	return func(d map[string]any) { d["is_stream"] = v }
 }
 
+// WithFieldTimestamp 设置信封的 timestamp 字段。
 func WithFieldTimestamp(v float64) AgentFieldOption {
 	return func(d map[string]any) { d["timestamp"] = v }
 }
 
+// WithFieldMetadata 设置信封的 metadata 字段。
 func WithFieldMetadata(v map[string]any) AgentFieldOption {
 	return func(d map[string]any) { d["metadata"] = v }
 }
