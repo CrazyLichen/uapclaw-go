@@ -1125,7 +1125,9 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 24.9 | ☐ | 测试 | 外部 provider 契约、降级路径、注入顺序、索引重建 | `tests/integration/agentcore/memory/` |
 | 24.10 | ✅ | Prompt Attachment 地基（S1） | manager（存储/渲染/哈希增量/更新族）+ `ContextWindow` mutator 链 + ReAct 三处装订点 + provider 矩阵；7 例集成测试（IT-1~IT-7）；设计 `docs/superpowers/specs/2026-11-04-prompt-attachment-foundation-design.md` | `internal/agentcore/harness/prompts/attachment_*.go` ← `openjiuwen/harness/prompts/prompt_attachment_manager.py` |
 | 24.11 | ✅ | Rail 生命周期与模式合并（S2） | 模式串三段化 + `internal/swarm/runtime`（请求模式解析/`PlanModeController`）+ adapter 幂等 `UpdateAgentRails` + plan 指引与 todo 改附件（`InjectPrompt` 默认 false）+ `CodeTaskPlanningRail` 与 code todo 文案；13 例集成测试（IT-S2-1~13）；设计 `docs/superpowers/specs/2026-11-04-s2-rail-and-mode-design.md` | `internal/swarm/runtime/` · `internal/swarm/agents/harness/code/{rails,tools}/` ← `jiuwenswarm/runtime/{plan,request}.py` · `jiuwenswarm/agents/harness/code/rails/code_task_planning_rail.py` |
-| 24.12 | ✅ | Plan/Runtime 层对齐（S3） | `AgentRuntime`（`Invoke/Stream` 五步）+ `RuntimeEvent`（控制事件走 push）+ controller 运行期 `PlanStateAccessor` + `PrepareChatTurn`/`ResolveRequestProjectDir` 等 request.py 函数迁入 + `session.plan_status` RPC + `StreamKeepalive` + `interface.go`/`UapClawSwarm` 改名；剩 IT 迁 server 入口后清测试侧 plan 模拟脚手架 | `internal/swarm/runtime/{service,events,request,plan}.go` · `internal/swarm/server/{handle_message,handle_chat,handle_session_plan,keepalive}.go` · `internal/swarm/server/runtime/interface.go` ← `jiuwenswarm/runtime/{service,events,request,plan}.py` · `jiuwenswarm/server/agent_ws_server.py` |
+| 24.12 | ✅ | Plan/Runtime 层对齐（S3） | `AgentRuntime`（`Invoke/Stream` 五步）+ `RuntimeEvent`（控制事件走 push）+ controller 运行期 `PlanStateAccessor` + `PrepareChatTurn`/`ResolveRequestProjectDir` 等 request.py 函数迁入 + `session.plan_status` RPC + `StreamKeepalive` + `interface.go`/`UapClawSwarm` 改名；IT 已迁到 AgentServer 入口并清掉测试侧 plan 模拟脚手架（`testhelpers.ServerEnv`） | `internal/swarm/runtime/{service,events,request,plan}.go` · `internal/swarm/server/{handle_message,handle_chat,handle_session_plan,keepalive}.go` · `internal/swarm/server/runtime/interface.go` ← `jiuwenswarm/runtime/{service,events,request,plan}.py` · `jiuwenswarm/server/agent_ws_server.py` |
+
+| 24.13 | 🔄 | mode 缺省语义对齐（0.2.5 + 规则 9） | 缺省/兜底 mode 一律不指向 plan（`getChannelDefaultState`/`channelModeFromStr`/`web._parse_mode`/ACP `msg.Mode`/网关回填）；`ChannelMode` 改字符串枚举 18 成员、`ParseChannelMode`→`channelModeFromStr`（补 debug/warn 日志）；`schema.ParseMode`→`ModeFromRaw(any, Mode)` + 9 个 legacy 成员 + `ToRuntimeMode` 折叠表；按 9.3 拆出 `handleModeSwitch`、`/switch` 内联回 `handleChannelControl`；`/mode` 白名单 25 项；未知 `team.*` chat.send 守卫（`UNKNOWN_TEAM_MODE`）；D1 渠道会话分配（`_allocate_channel_session`/`_remember_alloc_state_key`/`_ensure_inbound_session` + `_apply_channel_state` 两分支）；D2 notice 签名归位 + `Message.AppID/BotID`。设计：docs/superpowers/specs/2026-11-04-mode-default-alignment-design.md | `internal/swarm/schema/mode.go` · `internal/swarm/gateway/message_handler/{channel_state,slash_cmd,forward_loop}.go` · `internal/swarm/gateway/{gateway_server,acp_bridge}.go` · `internal/swarm/gateway/channel_manager/web/web_normalize.go` ← `jiuwenswarm/gateway/message_handler/message_handler.py` · `jiuwenswarm/common/schema/message.py` · `jiuwenswarm/gateway/app_gateway.py` · `jiuwenswarm/gateway/channel_manager/{web,protocol/acp}/*.py` |
 
 **验证点**：外部记忆服务可用/不可用两种形态下对话均可正常进行，且记忆可检索、可注入、可审计。
 
@@ -1191,6 +1193,37 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 27.10 | ☐ | 测试 | RPC 契约快照（现有 file-api 对齐方式）、事件流顺序、断线补发 | `tests/integration/swarm/web/` |
 
 **验证点**：Web 端所有面板依赖的 RPC 与事件均可用，且与 Python 契约字段一致。
+
+### 27-A Web 后端结构对齐批次（2026-11-04 制定，按规则 9 执行）
+
+> 上表 27.1-27.10 是**功能维度**清单；本节是**执行维度**的批次划分（文件级 1:1 对齐 + 功能补齐），两者交叉引用。
+> 现状：上游 `gateway/channel_manager/web/` 38 个 py / 19,789 行 + `jiuwenswarm/channels/web/` 4 个 py / 3,033 行；
+> Go 侧对应 8 个 go / 8,514 行 + 5 个 go / 960 行。前端（`internal/swarm/channels/web/frontend`，1292 源码 + 249 dist）
+> 调用 163 个 RPC，Go 注册 75 个，且存在命名漂移（`models.*`→`models.get/upsert/delete` 等）。
+> 估算合计 **28-33 人日**（不含与前端联调往返）。**执行顺序**：24.13（mode 缺省语义）先落地，本域从 B0 起按批推进；每批单独任务、单独 CI 绿。
+
+| 批次 | 状态 | 内容 | 上游 | 估算 |
+|------|------|------|------|------|
+| B0 | ☐ | **RPC 契约矩阵 + 文件映射矩阵**：脚本扫前端 RPC 名 ↔ Go 注册表 ↔ 上游 handler 注册，产出 `docs/sync/web-rpc-matrix.md`；顺带修 `models.*`/`schedule.*`/`heartbeat.*` 命名漂移 | — | 0.5 人日 |
+| B1 | ☐ | `web_connect.py` 单一化：`web_connect.go`+`web_normalize.go`+`frame.go` 合并为 `web_connect.go`，**拆掉 frame DTO**（上游无 frame 类，全程 `dict`），方法归属回 `WebChannel` | `web_connect.py` 2,366 | 3 人日 |
+| B2 | ☐ | HTTP 路由/鉴权/超时/分发 | `web_http_routes.py`+`web_http_dispatch.py`+`web_http_auth.py`+`web_http_timeouts.py`+`http_routes/*` ≈ 1,554 | 2 人日 |
+| B3 | ☐ | 生命周期/投递/连接适配/传输熔断 | `lifecycle_handlers.py`+`web_channel_app.py`+`web_delivery_registry.py`+`ws_connection_adapter.py`+`transport_stall_guard.py` ≈ 786 | 1.5 人日 |
+| B4 | ☐ | 文件与目录面板 | `file_picker.py`+`directory_picker.py`+`enterprise_files.py`+`container_file_http.py` ≈ 2,485 | 3 人日 |
+| B5 | ☐ | git 状态与 diff | `git_diff_watcher.py`+`git_diff_status.py`+`git_ws_handler.py`+`project_git.py` ≈ 2,083 | 3 人日 |
+| B6 | ☐ | 分享与导出 | `personal_share_api.py`+`share_snapshot.py`+`share_image_export.py`+`http_routes/share_jobs.py` ≈ 1,366 | 2 人日 |
+| B7 | ☐ | 轨迹/诊断/invoke/ASR | `trajectory_http.py`+`diagnosis_http.py`+`trace_update.py`+`invoke.py`+`task_asr.py` ≈ 1,627 | 2.5 人日 |
+| B8 | ☐ | MCP/沙箱 OAuth/agentos_compat/designer | `mcp_app_sandbox_http.py`+`mcp_oauth_http.py`+`agentos_compat.py`+`designer_handlers.py` ≈ 370 | 1 人日 |
+| B9 | ☐ | `app_web_handlers.py`（6,580，占三分之一）再拆 3-4 批（`_memory_compute` 等就地归位） | `app_web_handlers.py` 6,580 | 6-8 人日 |
+| B10 | ☐ | `channels/web` 包对齐 | `app_web.py`+`hub_oauth.py`+`custom_agent_upload_http.py`+`share_image_export.py` ≈ 3,033 | 3 人日 |
+| B11 | ☐ | dist 重建一致性判据 + 低版本内核 polyfill + 同端口就绪探针 | — | 1 人日 |
+
+**已知结构债（B0 前须确认归属）**：
+
+| Go 模块 | 行数 | 上游对应物 | 处置 |
+|---------|------|-----------|------|
+| `web/frame.go`（`ReqFrame`/`ResFrame`/`EventFrame`/`DecodeFrame`） | 209 | **无**（上游用 `dict`） | B1 拆除 |
+| `web/memory_compute.go` | 89 | `app_web_handlers.py:3995 _memory_compute` | B9 归位 |
+| `web/config_apply.go` | 1,024 | **未确证**（`gateway/channel_manager/web/*.py` 无 `apply_config`；疑落 `lifecycle_handlers.py` 或 `app_web_handlers.py` 某段） | B0 定归属，B3/B9 归位 |
 
 ---
 

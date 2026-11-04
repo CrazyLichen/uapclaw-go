@@ -1404,3 +1404,63 @@ grep -rn "syncPlanState\|checkPlanExit\|lastEnsureQuery\|DrainControlEvents\|res
    把 `chat.error` 写进历史（`TestSupplementInterruptSuite` 已复现），故始终登记。
 4. **`handle_session_plan` 磁盘优先 + 缓存兜底**：Python `cache_bust=True` 只读盘；Go 的 metadata
    写入是异步队列，同一轮 chat 刚结束时存在短暂未落盘窗口，故磁盘为空时回退内存缓存。
+
+### B.4 2026-11-04 收尾第二轮（CI 转绿）
+
+> 执行方式：inline（`superpowers:executing-plans`）。上一轮推送后 CI 两 job 红灯，
+> 本轮只修“为什么红”，不改已验收的 plan/runtime 结构。
+
+#### B.4.1 集成 job 红灯：GBK 用例 stdout 为空（真实缺陷）
+
+CI `TestExecuteCmd_显式GBK编码解码` 偶发 `"" does not contain "你好 explicit"`，本地必过。
+根因是 `AsyncProcessHandler.Invoke` 仍是 `StdoutPipe()` + 启动后立即 `go cmd.Wait()`：
+`os/exec` 的 `Wait` 在进程退出即 `closeDescriptors(parentIOPipes)`，读协程尚未调度或
+未读完时整段输出丢失（进程退出越快越容易命中，`echo|base64 -d` 正是典型）。
+`stream()` 也有同类隐患：`scanner.Buffer(..., chunkSize)` 把 1024 字节当单行上限，
+长行触发 `ErrTooLong` 后子进程写满管道阻塞 → 只能等超时。
+
+处置（对齐上游 `sys_operation/local/utils.py`）：
+
+| 位置 | 上游做法 | Go 现状改法 |
+|---|---|---|
+| `Invoke` | `_drain` 任务读到 EOF 后再取 buffer | `cmd.Stdout/Stderr` 交给 os/exec 托管（`Wait` 会等 copy 协程读完），输出用 `lockedBuffer` 收集 |
+| `Stream` | `stream.read(chunk_size)` + `codecs` 增量解码器 | 按 `chunkSize` 原始字节分块 + `chunkDecoder`（半个多字节字符留在下一块），不再按行、不补 `\n` |
+| `Stream` 超时 | 每 0.1s 检查 elapsed | 待发事件 `pending` 暂存，`ch` 发送 / `queue` 收取 / 超时 tick / ctx 取消同在一个 select（原嵌套 select 在缓冲满时旁路超时） |
+
+回归用例：`invoke_output_test.go`（>64KB 输出连跑 10 轮、200KB 单行、跨块 GBK、
+超时 kill、消费者放弃收尾、超时无输出、chunkDecoder 边界）。
+
+#### B.4.2 单测 job 红灯：改动行覆盖率 59.6%
+
+| 文件 | 原状 | 处置 |
+|---|---|---|
+| `runtime/request.go` 59.6% | `PrepareChatTurn` 后半段、`CancelRequest` 三分支无测试 | 补 7 例（渠道默认 work_mode、会话 mode 继承、project_dir 回读/清键、persist_session 告警、取 agent 失败、auto_harness、新建失败/为空）；删两处不可达守卫 |
+| `schema/mode.go` 0% | 新 4 个函数只有 runtime 侧调用 | 补 `mode_web_compose_test.go`（解析/别名/组合表 4 组表驱动） |
+| `server/agent_server.go` 46.6% | `AgentManager/PlanController` 访问器、`sendToGateway` 两路 | 补访问器断言 + nil transport / 非 ChannelTransport 两路 |
+| `server/handle_chat.go` 70.4% | 特殊方法成功/失败、空 payload、发送失败停流、流错误帧、空闲心跳 | 逐分支补例；心跳间隔改为 `AgentServer.streamKeepaliveInterval`（默认 10s，测试缩短） |
+| `server/runtime/agent_manager.go` 0% | `GetChatAgentNoWait` 无测试 | 补空/命中两分支 |
+| `keepalive.go` 0% | `keepaliveInterval` 常量无覆盖块 | 常量移到 `handle_chat.go`（keepalive.go 回到仅结构体，diff 只剩注释） |
+| `testhelpers/{plan_env,server_env}.go` | tests/ 下助手不在 COVER_PKGS | 登记 `.coverage-exempt` + `.integration-coverage-exempt` |
+
+同时删除两处「恒不可达」代码（规则 8）：`sendRuntimeEvent` 的 nil 事件守卫与
+push 错误分支（`SendPush` 按 Python 语义内部吞错）。保留 `handle_stream_impl`
+的控制事件分流并注明上游兼容出处（`agent_ws_server.py:4711-4716`），登记行级豁免。
+
+#### B.4.3 集成改动行门禁补漏
+
+`handle_session.go:263`（`planController.ResetSession`）在集成剖面 0%：套件里没有删除
+会话的链路。新增 `tests/integration/swarm/server/session_lifecycle_test.go`
+（`SessionLifecycleSuite`：`session.create` → `session.plan_status` → `session.delete`，
+经 `testhelpers.ServerEnv` 走真实分发），该行集成覆盖 100%；`server_env.go` 登记
+集成豁免（tests/ 下助手不在 COVER_PKGS，恒 0%）。
+
+#### B.4.4 本地验收（推送前）
+
+```bash
+CGO_ENABLED=1 go build -tags sqlite_fts5 ./...
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./...                      # 302 包全 ok
+CGO_ENABLED=1 go test -tags "sqlite_fts5 test integration" ./tests/integration/...  # 61 目录全 ok
+bash scripts/check-changed-line-coverage.sh coverage.out  532395ff 85 .coverage-exempt             # 通过
+bash scripts/check-changed-line-coverage.sh integcov.out 532395ff 5  .integration-coverage-exempt # 通过
+go run ./cmd/integration-audit -verify                                    # 违规 0（62 目录：46 通过 / 16 豁免）
+```
