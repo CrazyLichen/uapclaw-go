@@ -56,7 +56,6 @@ func makeTestEnvelope(method string, isStream bool) *e2a.E2AEnvelope {
 	return env
 }
 
-
 // TestResolveRequestProjectDir 验证项目目录解析。
 func TestResolveRequestProjectDir(t *testing.T) {
 	tests := []struct {

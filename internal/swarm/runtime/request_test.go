@@ -119,10 +119,10 @@ func TestResolveRequestRuntimeModeFromRequest(t *testing.T) {
 // Python: resolve_agent_request_mode 空值 → ("agent", None, "agent")
 func TestApplyResolvedModeToRequest_默认值(t *testing.T) {
 	cases := []struct {
-		name         string
-		params       json.RawMessage
-		wantMode     string
-		wantSub      string
+		name          string
+		params        json.RawMessage
+		wantMode      string
+		wantSub       string
 		wantCanonical string
 	}{
 		{"空参数", json.RawMessage(`{}`), "agent", "", "agent"},
