@@ -1064,6 +1064,10 @@ type fakeModelClient struct {
 	script []*llmschema.AssistantMessage
 	// scriptIdx 当前脚本下标（多轮共享同一客户端时递增）
 	scriptIdx *int
+	// scriptErrs 按轮次返回的脚本错误（优先于 script，用于构造失败轮）
+	scriptErrs []error
+	// scriptErrIdx 脚本错误下标
+	scriptErrIdx *int
 	// invokeResult 非流式调用返回结果
 	invokeResult *llmschema.AssistantMessage
 	// invokeErr 非流式调用返回错误
@@ -1169,6 +1173,23 @@ func (f *fakeModelClient) Invoke(_ context.Context, _ model_clients.MessagesPara
 	if f.invokeErr != nil {
 		return nil, f.invokeErr
 	}
+	// 脚本错误模式：按轮次弹出
+	if len(f.scriptErrs) > 0 {
+		idx := 0
+		if f.scriptErrIdx != nil {
+			idx = *f.scriptErrIdx
+		}
+		if idx >= len(f.scriptErrs) {
+			idx = len(f.scriptErrs) - 1
+		}
+		if f.scriptErrIdx != nil {
+			*f.scriptErrIdx = idx + 1
+		}
+		if err := f.scriptErrs[idx]; err != nil {
+			return nil, err
+		}
+	}
+
 	// 脚本模式：按轮次弹出，越界后固定返回最后一条
 	if len(f.script) > 0 {
 		idx := 0
@@ -3095,4 +3116,63 @@ func TestSanitizeAbortedTurnMessages(t *testing.T) {
 			[]llmschema.BaseMessage{user, llmschema.NewAssistantMessage("done")}, marker)
 		assert.Len(t, got, 2)
 	})
+}
+
+// TestReActAgent_imageUnsupported_continueLoop 验证拒图后循环继续并产出提示
+func TestReActAgent_imageUnsupported_continueLoop(t *testing.T) {
+	scriptedMu.Lock()
+	scriptedScript = []*llmschema.AssistantMessage{llmschema.NewAssistantMessage("改用文本模式读取")}
+	scriptedErrs := []error{
+		errors.New("OpenAI API HTTP 400: image input is not supported"), // 第 1 轮：拒图
+		nil, // 第 2 轮：正常返回脚本答案
+	}
+	scriptedMu.Unlock()
+	initScriptedModelClient()
+
+	// 自定义注册第二个 provider，返回带脚本错误的客户端
+	var once sync.Once
+	providerErr := "fake_scripted_err_provider"
+	once.Do(func() {
+		model_clients.GetClientRegistry().Register(providerErr, "llm",
+			func(*llmschema.ModelRequestConfig, *llmschema.ModelClientConfig) (model_clients.BaseModelClient, error) {
+				return &fakeModelClient{
+					script:       scriptedScript,
+					scriptIdx:    new(int),
+					scriptErrs:   scriptedErrs,
+					scriptErrIdx: new(int),
+				}, nil
+			})
+	})
+
+	card := agentschema.NewAgentCard(agentschema.WithAgentName("image_unsupported"))
+	cfg := saconfig.NewReActAgentConfig(
+		saconfig.WithModelClient(providerErr, "", "", "test-model"),
+		saconfig.WithMaxIterations(3),
+	)
+	agent := NewReActAgent(card, cfg)
+	model, err := llm.NewModel(
+		&llmschema.ModelClientConfig{ClientProvider: providerErr, ClientID: providerErr},
+		&llmschema.ModelRequestConfig{ModelName: "test-model"},
+	)
+	if err != nil {
+		t.Fatalf("创建模型失败: %v", err)
+	}
+	agent.llm = model
+
+	fmc := &fakeModelContext{messages: []llmschema.BaseMessage{
+		llmschema.NewUserMessage("看这张图", llmschema.WithMultiModalContent(
+			llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "data:image/png;base64,xx"}},
+		)),
+	}}
+	agent.contextEngine = &fakeContextEngine{modelCtx: fmc}
+	cbc, sess := newLoopCBC(t, agent, "image_unsupported_sess")
+	cbc.SetModelContext(fmc)
+
+	result, loopErr := agent.reactLoop(context.Background(), cbc, sess, fmc, 0)
+	if loopErr != nil {
+		t.Fatalf("reactLoop 返回错误: %v", loopErr)
+	}
+	assert.Equal(t, "改用文本模式读取", result["output"])
+	assert.True(t, fmc.containsContent("[Vision Input Unsupported]"),
+		"拒图后应把降级提示写入上下文")
 }

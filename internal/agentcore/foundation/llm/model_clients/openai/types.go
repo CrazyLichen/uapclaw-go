@@ -109,6 +109,8 @@ type ChatCompletionChunkResponse struct {
 	Choices []ChunkChoice `json:"choices,omitempty"`
 	// Usage 用量信息（流式最后一个块或 stream_options.include_usage=true 时返回）
 	Usage *ResponseUsage `json:"usage,omitempty"`
+	// Error 流内错误事件（部分 provider 以 HTTP 200 + error 帧返回错误）
+	Error *ErrorDetail `json:"error,omitempty"`
 	// PromptTokenIDs vLLM 扩展：输入 token ID 列表（仅首个块携带）
 	PromptTokenIDs []int `json:"prompt_token_ids,omitempty"`
 }

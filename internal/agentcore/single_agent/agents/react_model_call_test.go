@@ -12,6 +12,8 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -240,4 +242,54 @@ func TestRaiseForModelResponseError_错误文案(t *testing.T) {
 		t.Fatal("期望返回 provider 错误")
 	}
 	assert.Contains(t, err.Error(), "provider response error: code=0, finish_reason=error, message=boom")
+}
+
+// ──────────────────────────── A-08-2: 拒图识别与降级 ────────────────────────────
+
+// TestIsImageInputUnsupportedError 验证 6 个 code 与 14 条 pattern 的识别
+func TestIsImageInputUnsupportedError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"文案 pattern", errors.New("OpenAI API HTTP 400: image input is not supported"), true},
+		{"否定式 pattern", errors.New("the model does not support image"), true},
+		{"结构化 code", exception.NewBaseError(exception.StatusModelCallFailed,
+			exception.WithMsg("OpenAI API HTTP 400: bad request"),
+			exception.WithParams(map[string]any{"provider_code": "invalid_image_input"})), true},
+		{"code 后缀匹配", errors.New("error_provider_invalid_image_input"), true},
+		{"openrouter 文案", errors.New("no endpoints found that support image input"), true},
+		{"无关错误", errors.New("rate limit exceeded"), false},
+		{"nil", nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isImageInputUnsupportedError(tc.err); got != tc.want {
+				t.Fatalf("isImageInputUnsupportedError=%v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMessagesContainImageInput 验证图片内容块识别
+func TestMessagesContainImageInput(t *testing.T) {
+	textOnly := []llmschema.BaseMessage{llmschema.NewUserMessage("hi")}
+	if messagesContainImageInput(textOnly) {
+		t.Fatal("纯文本消息不应判定含图片")
+	}
+	withImage := []llmschema.BaseMessage{llmschema.NewUserMessage("", llmschema.WithMultiModalContent(
+		llmschema.ContentPart{Type: "image_url", ImageURL: &llmschema.ImageURL{URL: "data:image/png;base64,xx"}},
+	))}
+	if !messagesContainImageInput(withImage) {
+		t.Fatal("含 image_url 的消息应判定含图片")
+	}
+}
+
+// TestBuildImageInputUnsupportedMessage 验证降级提示文案
+func TestBuildImageInputUnsupportedMessage(t *testing.T) {
+	msg := buildImageInputUnsupportedMessage()
+	assert.Contains(t, msg.Content.Text(), "[Vision Input Unsupported]")
+	assert.Contains(t, msg.Content.Text(), "当前主模型或模型服务端点不支持图片输入")
+	assert.Contains(t, msg.Content.Text(), "pypdf")
 }

@@ -353,6 +353,13 @@ func (c *OpenAIModelClient) Stream(
 				continue
 			}
 
+			// 流内错误帧：必须转成 StreamError，否则被 ParseStreamChunk 当空块丢弃
+			if chunkResp.Error != nil && chunkResp.Error.Message != "" {
+				c.FailStream(ctx, chunkChan, modelName, fmt.Errorf("stream error event: %s (code=%s, type=%s)",
+					chunkResp.Error.Message, chunkResp.Error.Code, chunkResp.Error.Type))
+				return
+			}
+
 			// 转换为 AssistantMessageChunk
 			chunk := ParseStreamChunk(&chunkResp, c.ModelConfig)
 			if chunk == nil {
@@ -557,6 +564,12 @@ func (c *OpenAIModelClient) HandleHTTPError(resp *http.Response) error {
 		return exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(fmt.Sprintf("OpenAI API HTTP %d: %s", resp.StatusCode, errResp.Error.Message)),
+			// 保留 provider 的结构化错误码：供上层做精确分类（如拒图识别）
+			exception.WithParams(map[string]any{
+				"http_status":   resp.StatusCode,
+				"provider_code": errResp.Error.Code,
+				"provider_type": errResp.Error.Type,
+			}),
 		)
 	}
 

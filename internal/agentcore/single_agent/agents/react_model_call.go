@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -190,6 +191,20 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 		aiMsg, err = a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools, extraKVPairs)
 	}
 	if err != nil {
+		// 拒图降级：请求里带了图、且错误属于「模型/端点不支持图片输入」时，
+		// 不抛错，而是造一条双语提示当 assistant 消息塞进上下文，让模型下一轮换方案。
+		// Python: react_agent.py L1850-1859（invoke）与 L1928-1936（stream）
+		if messagesContainImageInput(messages) && isImageInputUnsupportedError(err) {
+			degraded := buildImageInputUnsupportedMessage()
+			cbc.SetExtra("_last_image_unsupported", true)
+			if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
+				inputs.Response = degraded
+			}
+			logger.Info(logComponent).
+				Str("event_type", "image_input_unsupported").
+				Msg("model rejected image input, degrading to text guidance")
+			return degraded, nil
+		}
 		return nil, err
 	}
 	// 写回 Response（对齐 Python: ctx.inputs.response = ai_message）
@@ -488,4 +503,122 @@ func logLLMResponse(aiMsg *llmschema.AssistantMessage) {
 				Msg("[LLM]   tool_call arguments are not valid JSON")
 		}
 	}
+}
+
+// imageInputUnsupportedCodes provider 拒图的结构化错误码（与上游逐一对应）。
+//
+// Python: _IMAGE_INPUT_UNSUPPORTED_ERROR_CODES (react_agent.py L131-138)
+var imageInputUnsupportedCodes = []string{
+	"invalid_image_input",
+	"image_input_unsupported",
+	"unsupported_content_type",
+	"unsupported_image",
+	"unsupported_image_input",
+	"unsupported_message_content_type",
+}
+
+// imageInputUnsupportedPatterns provider 拒图的文案片段（与上游逐一对应）。
+//
+// Python: _IMAGE_INPUT_UNSUPPORTED_ERROR_PATTERNS (react_agent.py L139-153)
+var imageInputUnsupportedPatterns = []string{
+	"no endpoints found that support image input",
+	"does not accept images",
+	"does not support image",
+	"doesn't accept images",
+	"doesn't support image",
+	"do not support image",
+	"image input is not supported",
+	"image input not supported",
+	"image_url is not supported",
+	"images are not supported",
+	"multimodal input is not supported",
+	"not support image input",
+	"unsupported image",
+	"vision is not supported",
+}
+
+// collectErrorTexts 收集错误链上所有可匹配文本。
+//
+// 对齐 Python _extract_exception_error_values：Python 抽 args/code/status_code/message/body
+// 与 response.json()/text；Go 对应 err.Error() + BaseError 的 Params/Details + Cause 链。
+func collectErrorTexts(err error) []string {
+	var texts []string
+	for err != nil {
+		texts = append(texts, err.Error())
+		var be *exception.BaseError
+		if errors.As(err, &be) {
+			for _, v := range be.Params() {
+				if s := fmt.Sprintf("%v", v); s != "" {
+					texts = append(texts, s)
+				}
+			}
+			if be.Details() != nil {
+				texts = append(texts, fmt.Sprintf("%v", be.Details()))
+			}
+		}
+		err = errors.Unwrap(err)
+	}
+	return texts
+}
+
+// isImageInputUnsupportedError 判断错误是否属于「模型/端点不支持图片输入」。
+//
+// Python: ReActAgent._is_image_input_unsupported_error() (react_agent.py L2147-2164)
+func isImageInputUnsupportedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	texts := collectErrorTexts(err)
+	lowered := make([]string, 0, len(texts))
+	for _, t := range texts {
+		lowered = append(lowered, strings.ToLower(t))
+	}
+	normalizer := strings.NewReplacer("-", "_", " ", "_")
+	for _, v := range lowered {
+		normalized := normalizer.Replace(v)
+		for _, code := range imageInputUnsupportedCodes {
+			if normalized == code || strings.HasSuffix(normalized, "_"+code) {
+				return true
+			}
+		}
+	}
+	joined := strings.Join(lowered, "\n")
+	for _, pattern := range imageInputUnsupportedPatterns {
+		if strings.Contains(joined, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// messagesContainImageInput 判断请求消息里是否含图片内容块。
+//
+// Python: ReActAgent._messages_contain_image_input()
+func messagesContainImageInput(messages []llmschema.BaseMessage) bool {
+	for _, m := range messages {
+		for _, part := range m.GetContent().Parts() {
+			if part.Type == "image_url" && part.ImageURL != nil && part.ImageURL.URL != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// buildImageInputUnsupportedMessage 构造拒图降级提示消息（双语，文案照抄上游）。
+//
+// Python: ReActAgent._build_image_input_unsupported_message() (react_agent.py L2166-2186)
+func buildImageInputUnsupportedMessage() *llmschema.AssistantMessage {
+	return llmschema.NewAssistantMessage("[Vision Input Unsupported] The current model or endpoint does not support image input.\n" +
+		"当前主模型或模型服务端点不支持图片输入。\n\n" +
+		"Suggested alternatives / 建议替代方案：\n" +
+		"1. If reading a PDF, use `read_file` in text mode or use `pypdf`/`pdfplumber` " +
+		"to extract text and form fields directly, without rendering pages to images.\n" +
+		"   如果读取的是 PDF，请使用文本模式读取，或用 `pypdf` 提取文本和表单字段。\n" +
+		"2. If reading an image (JPG/PNG), describe what information you need and ask the " +
+		"user for a text transcription, or use an available OCR tool if one is configured.\n" +
+		"   如果读取的是图片，请描述所需信息并请用户提供文字转录。\n" +
+		"3. If the task absolutely requires vision, configure a `vision_model_config` " +
+		"with a vision-capable endpoint.\n" +
+		"   如果任务必须依赖视觉，请配置支持视觉输入的模型。")
 }

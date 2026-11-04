@@ -750,6 +750,17 @@ func (a *ReActAgent) reactLoop(
 			if cbc.HasPendingSteering() {
 				continue
 			}
+			// 视觉降级：上一轮仅因"不支持图片输入"失败时，把提示留在上下文里继续下一轮，
+			// 让模型看到错误并尝试文本替代方案（不是 break）。
+			// Python: react_agent.py L3160-3166
+			if v, ok := cbc.GetExtra("_last_image_unsupported"); ok {
+				if flagged, isBool := v.(bool); isBool && flagged {
+					cbc.SetExtra("_last_image_unsupported", false)
+					a.saveContexts(ctx, sess)
+					continue
+				}
+			}
+
 			content := ""
 			finishReason := ""
 			reasoningPresent := false
