@@ -110,11 +110,17 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	server.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
 		Manager: agentManager,
 		OnControlEvent: func(ev *swruntime.RuntimeEvent) {
-			server.SendPush(context.Background(), map[string]any{
+			// 控制事件推送失败只影响前端状态刷新，记日志不阻断运行时
+			if pushErr := server.SendPush(context.Background(), map[string]any{
 				"channel_id": ev.ChannelID,
 				"session_id": ev.SessionID,
 				"payload":    ev.Payload,
-			})
+			}); pushErr != nil {
+				logger.Warn(logComponent).
+					Str("session_id", ev.SessionID).
+					Err(pushErr).
+					Msg("send control event push failed")
+			}
 		},
 	})
 	return server

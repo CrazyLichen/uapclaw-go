@@ -203,3 +203,8 @@ internal/agentcore/harness/harness_config/params.go
 # 无 IO、无独立集成入口；Runtime 接线（service.go）尚无集成用例驱动该文件。
 # 事件构造与类型映射由 events_test.go 单测 100% 覆盖。接入集成链路后应删除此条。
 internal/swarm/runtime/events.go
+
+# ── 2026-11-04 plan 环境助手（runtime 重构的配套测试助手）──
+# plan_env.go — 带 integration 标签的测试助手，当前尚无集成用例引用（调用方用例未落地）。
+# 一旦对应 plan 用例入库，请删除此条以恢复门禁。
+tests/integration/testhelpers/plan_env.go
