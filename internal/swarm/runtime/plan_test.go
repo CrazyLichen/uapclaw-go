@@ -61,9 +61,12 @@ func TestEnsureState_显式进入并改写query(t *testing.T) {
 	require.Contains(t, res.Query, "帮我重构")
 }
 
-// TestEnsureState_非显式进入被阻断 验证退出记忆阻断并强制 normal。
+// TestEnsureState_非显式进入被阻断 验证退出记忆阻断、消费记忆并保持 normal。
+//
+// Python: ensure_state 的 blocked 分支（退出记忆命中即 discard）
 func TestEnsureState_非显式进入被阻断(t *testing.T) {
 	store := newFakeStore()
+	store.modes["s1"] = "normal"
 	c := NewPlanModeController(store)
 	c.markExited("s1")
 
@@ -75,12 +78,15 @@ func TestEnsureState_非显式进入被阻断(t *testing.T) {
 	require.Equal(t, "normal", store.modes["s1"])
 	require.Len(t, res.Events, 1)
 	require.Equal(t, PlanModeExitedEvent, res.Events[0].EventType)
+	require.Equal(t, "agent.work.normal", res.Events[0].Mode, "事件 mode 必须是退出后的普通模式")
 	require.Equal(t, "继续", res.Query, "阻断不应改写 query")
+	require.False(t, c.isExited("s1"), "退出记忆是一次性令牌，命中即消费")
 }
 
 // TestEnsureState_planSlug阻断 验证残留计划文件阻断并清 slug。
 func TestEnsureState_planSlug阻断(t *testing.T) {
 	store := newFakeStore()
+	store.modes["s1"] = "normal"
 	store.slugs["s1"] = "old-plan"
 	c := NewPlanModeController(store)
 
@@ -129,19 +135,52 @@ func TestEnsureState_跳过矩阵(t *testing.T) {
 	}
 }
 
-// TestEnsureState_同模式幂等 验证重复请求不重复提交。
+// TestEnsureState_同模式幂等 验证重复请求不重复提交、不重复注入提醒。
+//
+// Python: ensure_state 中 previous == target 时直接返回
 func TestEnsureState_同模式幂等(t *testing.T) {
 	store := newFakeStore()
 	store.modes["s1"] = "plan"
 	c := NewPlanModeController(store)
 
 	res, err := c.EnsureState(context.Background(), PlanRequest{
-		SessionID: "s1", Mode: "agent.work.plan", ReqMethod: "chat.send",
+		SessionID: "s1", Mode: "agent.work.plan", ReqMethod: "chat.send", Query: "继续",
 	})
 	require.NoError(t, err)
 	require.False(t, res.Entered)
 	require.Empty(t, store.switches)
-	require.True(t, c.IsActive("s1"), "已处于 plan 应重新记为 active")
+	require.Equal(t, 0, store.commits, "同模式不写状态也不提交")
+	require.Equal(t, "继续", res.Query, "已处于 plan 不应重复注入激活提醒")
+}
+
+// TestEnsureState_正常轮次无状态时跳过 验证 may_hold_state 守卫。
+//
+// Python: target==normal 且非 code-single 且 may_hold_state()==false → 直接返回
+func TestEnsureState_正常轮次无状态时跳过(t *testing.T) {
+	store := newFakeStore()
+	c := NewPlanModeController(store)
+
+	_, err := c.EnsureState(context.Background(), PlanRequest{
+		SessionID: "s1", Mode: "agent.work.normal", ReqMethod: "chat.send",
+	})
+	require.NoError(t, err)
+	require.Empty(t, store.switches, "会话不持有状态时不应写 normal")
+	require.Equal(t, 0, store.commits)
+}
+
+// TestEnsureState_previousSessionMode允许持有状态 验证上游 previous_session_mode 判据。
+func TestEnsureState_previousSessionMode允许持有状态(t *testing.T) {
+	store := newFakeStore()
+	store.modes["s1"] = "plan"
+	c := NewPlanModeController(store)
+
+	res, err := c.EnsureState(context.Background(), PlanRequest{
+		SessionID: "s1", Mode: "agent.work.normal", ReqMethod: "chat.send",
+		PreviousSessionMode: "agent.work.plan",
+	})
+	require.NoError(t, err)
+	require.True(t, res.Restored)
+	require.Equal(t, "normal", store.modes["s1"])
 }
 
 // TestCheckPostProcessExit 验证工具退出后发事件并记记忆。

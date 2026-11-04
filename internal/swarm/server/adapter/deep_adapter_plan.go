@@ -59,7 +59,9 @@ func (d *DeepAdapter) ensurePlanState(ctx context.Context, req *schema.AgentRequ
 		ReqMethod:         req.ReqMethod.String(),
 		EntrySource:       paramsString(params, swruntime.PlanEntrySourceKey, ""),
 		IsInterruptResume: params["resume"] == true || params["is_resume"] == true,
-		Query:             query,
+		// Python: params[_session_previous_mode]（会话已锁定的模式，用于 may_hold_state）
+		PreviousSessionMode: paramsString(params, swruntime.PreviousSessionModeKey, ""),
+		Query:               query,
 	})
 	if err != nil {
 		logger.Warn(logComponent).Err(err).

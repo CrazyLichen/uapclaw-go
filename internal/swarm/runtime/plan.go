@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -131,10 +132,23 @@ func NewPlanModeController(store PlanStateStore) *PlanModeController {
 func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest) (PlanStateResult, error) {
 	res := PlanStateResult{Query: req.Query}
 	resolved := ResolveRequestRuntimeMode(req.Mode, req.SubMode)
-	if resolved.IsTeam || req.SessionID == "" || req.IsInterruptResume || !ShouldSync(req.ReqMethod) {
+	if resolved.IsTeam || req.SessionID == "" {
 		return res, nil
 	}
 	if !isSingleAgentMode(resolved.CanonicalMode) {
+		return res, nil
+	}
+
+	target := modeNormal
+	if resolved.IsPlan {
+		target = modePlan
+	}
+	// Python: 非 code-single 且退回 normal 且会话不可能持有状态 → 不写状态
+	if !isCodeSingleMode(resolved.CanonicalMode, req.SubMode) && target == modeNormal &&
+		!c.MayHoldState(req.SessionID, req.PreviousSessionMode) {
+		return res, nil
+	}
+	if req.IsInterruptResume || !ShouldSync(req.ReqMethod) {
 		return res, nil
 	}
 
@@ -146,48 +160,64 @@ func (c *PlanModeController) EnsureState(ctx context.Context, req PlanRequest) (
 	if err != nil {
 		return res, err
 	}
-	target := modeNormal
-	if resolved.IsPlan {
-		target = modePlan
-	}
-	if st.Mode == target {
-		if target == modePlan {
-			c.markActive(req.SessionID)
-		}
+	previous := st.Mode
+	if previous == target {
 		return res, nil
 	}
 
 	if target == modePlan {
-		if IsPlanEntrySource(req.EntrySource) {
+		switch {
+		case IsPlanEntrySource(req.EntrySource):
 			c.clearExited(req.SessionID)
-		} else if c.isExited(req.SessionID) {
+		case c.isExited(req.SessionID):
+			// 退出记忆是一次性令牌：命中即消费
+			c.clearExited(req.SessionID)
 			return c.blockEntry(ctx, req.SessionID, resolved, res)
-		} else if st.PlanSlug != "" {
+		case st.PlanSlug != "":
 			return c.blockEntry(ctx, req.SessionID, resolved, res)
 		}
-		if err := c.store.SwitchPlanMode(ctx, req.SessionID, modePlan); err != nil {
-			return res, err
-		}
-		st.Mode, st.PlanSlug = modePlan, ""
-		if err := c.store.SavePlanState(ctx, req.SessionID, st); err != nil {
-			return res, err
-		}
-		c.markActive(req.SessionID)
-		res.Entered = true
-		res.Query = InjectActivationReminder(req.Query)
-	} else {
-		if err := c.store.SwitchPlanMode(ctx, req.SessionID, modeNormal); err != nil {
-			return res, err
-		}
+	}
+
+	if err := c.store.SwitchPlanMode(ctx, req.SessionID, target); err != nil {
+		return res, err
+	}
+	if previous == modePlan && target == modeNormal {
 		c.clearActive(req.SessionID)
 		res.Restored = true
-		res.Events = append(res.Events, ControlEvent{EventType: PlanModeExitedEvent, Mode: resolved.CanonicalMode})
+		res.Events = append(res.Events, ControlEvent{EventType: PlanModeExitedEvent, Mode: resolved.NormalMode})
+	}
+	if target == modePlan {
+		c.markActive(req.SessionID)
+		res.Entered = true
+		// Python: 进入后清空残留 plan_slug（阻断分支之外的兜底）
+		if st.PlanSlug != "" {
+			st.PlanSlug = ""
+			if err := c.store.SavePlanState(ctx, req.SessionID, st); err != nil {
+				return res, err
+			}
+		}
 	}
 	if err := c.store.CommitSession(ctx, req.SessionID); err != nil {
 		return res, err
 	}
+	if res.Entered {
+		res.Query = InjectActivationReminder(req.Query)
+	}
 	return res, nil
 }
+
+// MayHoldState 判断会话是否可能仍持有 plan 状态。
+//
+// Python: PlanModeController.may_hold_state
+func (c *PlanModeController) MayHoldState(sessionID, previousSessionMode string) bool {
+	if c.IsActive(sessionID) {
+		return true
+	}
+	return schema.IsPlanMode(schema.CanonicalizeMode(previousSessionMode))
+}
+
+// IsExited 会话是否刚显式退出过 plan（退出记忆仍未被消费）。
+func (c *PlanModeController) IsExited(sessionID string) bool { return c.isExited(sessionID) }
 
 // CheckPostProcessExit 执行后检测工具触发的退出。
 //
@@ -206,7 +236,7 @@ func (c *PlanModeController) CheckPostProcessExit(ctx context.Context, req PlanR
 	}
 	c.markExited(req.SessionID)
 	c.clearActive(req.SessionID)
-	return []ControlEvent{{EventType: PlanModeExitedEvent, Mode: resolved.CanonicalMode}}, nil
+	return []ControlEvent{{EventType: PlanModeExitedEvent, Mode: resolved.NormalMode}}, nil
 }
 
 // ResetSession 删除会话时清理记忆。
@@ -273,7 +303,9 @@ func isSingleAgentMode(canonical string) bool {
 	return schema.IsSingleAgentMode(canonical)
 }
 
-// blockEntry 阻断进入：清 slug、强制 normal、发退出事件。
+// blockEntry 阻断进入：清 slug、发退出事件。
+//
+// Python: ensure_state 的 blocked 分支——此时状态已是 normal，只需清 slug 并下发退出事件。
 func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, resolved ResolvedMode, res PlanStateResult) (PlanStateResult, error) {
 	st, err := c.store.LoadPlanState(ctx, sessionID)
 	if err != nil {
@@ -283,15 +315,23 @@ func (c *PlanModeController) blockEntry(ctx context.Context, sessionID string, r
 	if err := c.store.SavePlanState(ctx, sessionID, st); err != nil {
 		return res, err
 	}
-	if err := c.store.SwitchPlanMode(ctx, sessionID, modeNormal); err != nil {
-		return res, err
-	}
 	if err := c.store.CommitSession(ctx, sessionID); err != nil {
 		return res, err
 	}
 	res.Entered = false
-	res.Events = append(res.Events, ControlEvent{EventType: PlanModeExitedEvent, Mode: resolved.CanonicalMode})
+	res.Restored = false
+	res.Events = append(res.Events, ControlEvent{EventType: PlanModeExitedEvent, Mode: resolved.NormalMode})
 	return res, nil
+}
+
+// isCodeSingleMode 判断是否 code 单 agent 模式（不含 team）。
+//
+// Python: is_code_single = mode == "code" and sub_mode != "team"
+func isCodeSingleMode(canonical, subMode string) bool {
+	if strings.TrimSpace(subMode) == "team" {
+		return false
+	}
+	return canonical == "code" || strings.HasPrefix(canonical, "agent.code.")
 }
 
 // markActive 记录会话进入 plan。

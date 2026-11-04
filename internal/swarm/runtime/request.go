@@ -16,6 +16,8 @@ type ResolvedMode struct {
 	IsPlan bool
 	// IsTeam 是否团队模式
 	IsTeam bool
+	// NormalMode 退出 plan 后应回到的普通模式
+	NormalMode string
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -71,7 +73,19 @@ func ResolveRequestRuntimeMode(mode, subMode string) ResolvedMode {
 		CanonicalMode: canonical,
 		IsPlan:        schema.IsPlanMode(canonical),
 		IsTeam:        schema.IsTeamMode(canonical),
+		NormalMode:    baseModeWithoutPlan(canonical),
 	}
+}
+
+// baseModeWithoutPlan 返回退出 plan 后应回到的普通模式。
+//
+// Python: mode_matrix.base_mode_without_plan / _PLAN_EXIT_MODES
+// 新三段命名下 `x.y.plan` → `x.y.normal`；非 plan 串原样返回。
+func baseModeWithoutPlan(canonical string) string {
+	if strings.HasSuffix(canonical, ".plan") {
+		return strings.TrimSuffix(canonical, ".plan") + ".normal"
+	}
+	return canonical
 }
 
 // ShouldSync 判断请求是否参与 plan 状态同步。
