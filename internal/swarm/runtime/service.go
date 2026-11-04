@@ -1,0 +1,278 @@
+package runtime
+
+import (
+	"context"
+	"errors"
+	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// PrepareChatTurnFunc 选 agent 并返回 (mode, subMode, agent)，测试可注入。
+type PrepareChatTurnFunc func(
+	ctx context.Context,
+	req *schema.AgentRequest,
+	channelID string,
+) (mode, subMode string, agent ChatAgentPort, err error)
+
+// AgentRuntimeDeps AgentRuntime 依赖（构造注入）。
+type AgentRuntimeDeps struct {
+	// Manager agent 实例管理器
+	Manager AgentManagerPort
+	// OnControlEvent 控制事件回调（nil 时仅记日志）
+	OnControlEvent func(*RuntimeEvent)
+	// Prepare 聊天轮次准备（nil 时用 PrepareChatTurn）
+	Prepare PrepareChatTurnFunc
+}
+
+// AgentRuntime 运行时编排：选 agent、同步 plan 状态、执行、下发控制事件。
+//
+// Python: jiuwenswarm/runtime/service.py AgentRuntime
+type AgentRuntime struct {
+	// mu 保护生命周期字段
+	mu sync.Mutex
+	// started 是否已启动
+	started bool
+	// closed 是否已关闭
+	closed bool
+	// manager agent 实例管理器
+	manager AgentManagerPort
+	// onControlEvent 控制事件回调
+	onControlEvent func(*RuntimeEvent)
+	// prepare 聊天轮次准备（可注入）
+	prepare PrepareChatTurnFunc
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewAgentRuntime 创建运行时。
+//
+// Python: AgentRuntime.__init__
+func NewAgentRuntime(deps AgentRuntimeDeps) *AgentRuntime {
+	return &AgentRuntime{
+		manager:        deps.Manager,
+		onControlEvent: deps.OnControlEvent,
+		prepare:        deps.Prepare,
+	}
+}
+
+// Start 幂等启动（不接管 Runner/checkpointer 生命周期）。
+//
+// Python: AgentRuntime.start（service.py:655）
+func (r *AgentRuntime) Start() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return errors.New("agent runtime is closed")
+	}
+	if r.started {
+		logger.Warn(logComponent).Msg("agent runtime already started")
+		return nil
+	}
+	r.started = true
+	return nil
+}
+
+// Close 幂等关闭。
+//
+// Python: AgentRuntime.close
+func (r *AgentRuntime) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.closed = true
+	r.started = false
+	return nil
+}
+
+// NormalizeRequest 归一化请求（保证 Params 是合法 JSON map）。
+//
+// Python: AgentRuntime.normalize_request（service.py:3790）
+func NormalizeRequest(req *schema.AgentRequest) *schema.AgentRequest {
+	if req == nil {
+		return &schema.AgentRequest{}
+	}
+	writeRequestParams(req, parseRequestParams(req))
+	return req
+}
+
+// UsesSessionRuntime 判断请求是否走 session runtime 路径（team 与 stateless 不占用会话流槽）。
+//
+// Python: AgentRuntime.uses_session_runtime（service.py:3842）
+func UsesSessionRuntime(req *schema.AgentRequest) bool {
+	params := parseRequestParams(req)
+	if mode, ok := params["mode"].(string); ok && schema.IsTeamMode(mode) {
+		return false
+	}
+	if v, ok := params["stateless"].(bool); ok && v {
+		return false
+	}
+	return true
+}
+
+// Invoke 执行非流式 chat turn。
+//
+// Python: AgentRuntime.invoke → _invoke_started（service.py:1694/1786）
+func (r *AgentRuntime) Invoke(ctx context.Context, req *schema.AgentRequest) ([]*RuntimeEvent, error) {
+	req = NormalizeRequest(req)
+	_, _, agent, err := r.prepareTurn(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	enabled := r.planEnabled(req, agent)
+	if enabled {
+		r.ensurePlanState(ctx, req, agent)
+	}
+
+	resp, execErr := agent.ProcessMessage(ctx, req)
+
+	// 执行后检查工具触发的 plan 退出（对齐 Python check_post_process_exit）
+	if enabled {
+		r.checkPlanExit(ctx, req, agent)
+	}
+	if execErr != nil {
+		return nil, execErr
+	}
+	return []*RuntimeEvent{FromAgentResponse(resp)}, nil
+}
+
+// Stream 执行流式 chat turn；onEvent 返回 false 时停止消费。
+//
+// Python: AgentRuntime.stream → _stream_started（service.py:2183/2482）
+func (r *AgentRuntime) Stream(
+	ctx context.Context,
+	req *schema.AgentRequest,
+	onEvent func(*RuntimeEvent) bool,
+) error {
+	req = NormalizeRequest(req)
+	_, _, agent, err := r.prepareTurn(ctx, req)
+	if err != nil {
+		return err
+	}
+	enabled := r.planEnabled(req, agent)
+	if enabled {
+		r.ensurePlanState(ctx, req, agent)
+	}
+
+	ch, streamErr := agent.ProcessMessageStream(ctx, req)
+	if streamErr != nil {
+		if enabled {
+			r.checkPlanExit(ctx, req, agent)
+		}
+		return streamErr
+	}
+	for chunk := range ch {
+		if onEvent != nil && !onEvent(FromAgentResponseChunk(chunk)) {
+			break
+		}
+	}
+	// 流结束：退出事件在 channel 关闭前发出（对齐 Python generator finally 里的 yield）
+	if enabled {
+		r.checkPlanExit(ctx, req, agent)
+	}
+	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// prepareTurn 选 agent（对齐 _prepare_chat_turn + prepare_chat_turn）。
+func (r *AgentRuntime) prepareTurn(
+	ctx context.Context,
+	req *schema.AgentRequest,
+) (mode, subMode string, agent ChatAgentPort, err error) {
+	if r.prepare != nil {
+		return r.prepare(ctx, req, req.ChannelID)
+	}
+	if r.manager == nil {
+		return "", "", nil, errors.New("agent runtime manager is nil")
+	}
+	return PrepareChatTurn(ctx, r.manager, req, req.ChannelID)
+}
+
+// planEnabled 判定本轮是否参与 plan 状态同步。
+//
+// Python: service.py:1859 `if not readonly_goal_get` + PlanModeController.should_sync
+func (r *AgentRuntime) planEnabled(req *schema.AgentRequest, agent ChatAgentPort) bool {
+	if req == nil || agent == nil || agent.PlanController() == nil {
+		return false
+	}
+	resolved := ResolveRequestRuntimeModeFromRequest(req)
+	if resolved.IsTeam {
+		return false
+	}
+	params := parseRequestParams(req)
+	if resume, ok := params["resume"].(bool); ok && resume {
+		return false
+	}
+	return ShouldSync(req.ReqMethod.String())
+}
+
+// ensurePlanState 同步本轮 plan 状态并下发进入事件。
+//
+// Python: PlanModeController.ensure_state（service.py:1861）
+func (r *AgentRuntime) ensurePlanState(ctx context.Context, req *schema.AgentRequest, agent ChatAgentPort) {
+	res, err := agent.PlanController().EnsureState(ctx, planRequestOf(req), agent.PlanStateAccessor())
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Msg("ensure plan state failed")
+		return
+	}
+	r.emitControlEvents(req, res.Events)
+}
+
+// checkPlanExit 检测工具触发的 plan 退出并下发事件。
+//
+// Python: PlanModeController.check_post_process_exit（service.py:1911）
+func (r *AgentRuntime) checkPlanExit(ctx context.Context, req *schema.AgentRequest, agent ChatAgentPort) {
+	events, err := agent.PlanController().CheckPostProcessExit(ctx, planRequestOf(req), agent.PlanStateAccessor())
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("check plan post process failed")
+		return
+	}
+	r.emitControlEvents(req, events)
+}
+
+// emitControlEvents 把控制事件交给回调；无回调时记 Debug。
+//
+// Python: AgentRuntime._emit_control_events（service.py:4405，handler=None 分支）
+func (r *AgentRuntime) emitControlEvents(req *schema.AgentRequest, events []ControlEvent) {
+	for _, ce := range events {
+		ev := Control(req, map[string]any{"event_type": ce.EventType, "mode": ce.Mode})
+		if r.onControlEvent != nil {
+			r.onControlEvent(ev)
+			continue
+		}
+		logger.Debug(logComponent).
+			Str("event_type", ce.EventType).
+			Str("mode", ce.Mode).
+			Msg("control event without handler")
+	}
+}
+
+// planRequestOf 把请求投影为控制器入参。
+func planRequestOf(req *schema.AgentRequest) PlanRequest {
+	params := parseRequestParams(req)
+	resolved := ResolveRequestRuntimeModeFromRequest(req)
+	sid := ""
+	if req != nil && req.SessionID != nil {
+		sid = *req.SessionID
+	}
+	query, _ := params["query"].(string)
+	entry, _ := params[PlanEntrySourceKey].(string)
+	prev, _ := params[PreviousSessionModeKey].(string)
+	reqMethod := ""
+	if req != nil {
+		reqMethod = req.ReqMethod.String()
+	}
+	return PlanRequest{
+		SessionID:           sid,
+		Mode:                resolved.CanonicalMode,
+		SubMode:             "",
+		ReqMethod:           reqMethod,
+		EntrySource:         entry,
+		IsInterruptResume:   params["resume"] == true,
+		PreviousSessionMode: prev,
+		Query:               query,
+	}
+}

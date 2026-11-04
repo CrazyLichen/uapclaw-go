@@ -814,3 +814,14 @@ func resolveWorkspaceDirFromRequest(request *schema.AgentRequest) string {
 	}
 	return ""
 }
+
+// GetChatAgent 按 mode/subMode/projectDir 取聊天 agent（runtime.AgentManagerPort 实现）。
+//
+// Python: runtime/request.py prepare_chat_turn 中的 get_agent_for_request（简化版，无原子准入）。
+func (am *AgentManager) GetChatAgent(ctx context.Context, channelID, mode, subMode, projectDir string) (swruntime.ChatAgentPort, error) {
+	agent, err := am.GetAgent(ctx, channelID, mode, projectDir, subMode)
+	if err != nil {
+		return nil, err
+	}
+	return agent, nil
+}

@@ -310,50 +310,28 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 		return
 	}
 
-	// 2. 解析 mode
-	mode, subMode := swruntime.ApplyResolvedModeToRequest(request, "")
-	// Python: auto_harness 模式等同于 agent 模式
-	if mode == "auto_harness" {
-		mode = "agent"
-	}
-	projectDir := swruntime.ResolveRequestProjectDir(request, mode != "agent" && mode != "code")
-
-	// 3. 获取 Agent
-	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
+	// 2-6. 交给 AgentRuntime（选 agent → ensure_state → 执行 → check_exit → 控制事件）
+	// Python: agent_ws_server.py:3941 _handle_unary_impl → runtime.invoke(...)
+	events, err := s.agentRuntime.Invoke(ctx, request)
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
 			Str("request_id", request.RequestID).
-			Str("channel_id", request.ChannelID).
-			Str("mode", mode).
-			Msg("failed to get Agent")
-		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "GET_AGENT_ERROR")
-		return
-	}
-
-	// 4. code 模式 switchMode（排除 team 子模式，对齐 Python sub_mode != "team"）
-	if mode == "code" && subMode != "team" {
-		sid := ""
-		if request.SessionID != nil {
-			sid = *request.SessionID
-		}
-		_ = agent.SwitchMode(ctx, sid, subMode)
-	}
-
-	// 5. 调用 Agent
-	resp, err := agent.ProcessMessage(ctx, request)
-	if err != nil {
-		logger.Error(logComponent).
-			Err(err).
-			Str("request_id", request.RequestID).
-			Str("mode", mode).
 			Msg("agent failed to process request")
 		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_PROCESS_ERROR")
 		return
 	}
-
-	// 6. writeResponse 写入 RecvCh
-	s.writeResponse(request.RequestID, request.ChannelID, resp)
+	for _, ev := range events {
+		if ev.Payload == nil {
+			continue
+		}
+		s.writeResponse(request.RequestID, request.ChannelID, &schema.AgentResponse{
+			RequestID: ev.RequestID,
+			ChannelID: ev.ChannelID,
+			OK:        ev.OK,
+			Payload:   ev.Payload,
+		})
+	}
 }
 
 // handleStream 处理流式请求，对齐 Python _handle_stream。
@@ -371,68 +349,44 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 	streamCtx, finish := s.beginStreamTask(ctx, sessionID, request.RequestID)
 	defer finish()
 
-	// 3. 解析 mode + 获取 Agent
-	mode, subMode := swruntime.ApplyResolvedModeToRequest(request, "")
-	// Python: auto_harness 模式等同于 agent 模式
-	if mode == "auto_harness" {
-		mode = "agent"
-	}
-	projectDir := swruntime.ResolveRequestProjectDir(request, mode != "agent" && mode != "code")
-
-	agent, err := s.agentManager.GetAgent(streamCtx, request.ChannelID, mode, projectDir, subMode)
-	if err != nil {
-		logger.Error(logComponent).
-			Err(err).
-			Str("request_id", request.RequestID).
-			Str("channel_id", request.ChannelID).
-			Str("mode", mode).
-			Msg("failed to get Agent for stream request")
-		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "GET_AGENT_ERROR")
-		return
-	}
-
-	// 4. code 模式 switchMode（排除 team 子模式）
-	if mode == "code" && subMode != "team" {
-		sid := ""
-		if request.SessionID != nil {
-			sid = *request.SessionID
-		}
-		_ = agent.SwitchMode(streamCtx, sid, subMode)
-	}
-
-	// 5. 启动心跳 goroutine
+	// 3-8. 交给 AgentRuntime（选 agent → ensure_state → 流式执行 → check_exit → 控制事件）
+	// Python: agent_ws_server.py:4654 _handle_stream_impl → runtime.stream(...)
 	heartbeatDone := make(chan struct{})
 	heartbeatTrigger := make(chan struct{}, 1)
 	go s.runKeepalive(streamCtx, request.RequestID, request.ChannelID, heartbeatDone, heartbeatTrigger)
 
-	// 6. 调用 Agent 流式
-	ch, err := agent.ProcessMessageStream(streamCtx, request)
-	if err != nil {
-		logger.Error(logComponent).
-			Err(err).
-			Str("request_id", request.RequestID).
-			Str("mode", mode).
-			Msg("agent stream processing failed")
-		close(heartbeatTrigger)
-		<-heartbeatDone
-		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_STREAM_ERROR")
-		return
-	}
-
-	// 7. 逐 chunk 从 ch 读取
 	chunkCount := 0
-	for chunk := range ch {
+	streamErr := s.agentRuntime.Stream(streamCtx, request, func(ev *swruntime.RuntimeEvent) bool {
+		// 控制事件独立走 push 帧，不占 sequence、不重置 keepalive
+		// Python: agent_ws_server.py:4714 `if event.event_type == PLAN_MODE_EXITED_EVENT_TYPE`
+		if ev.EventType() == swruntime.PlanModeExitedEvent {
+			_ = s.SendPush(streamCtx, map[string]any{
+				"channel_id": ev.ChannelID,
+				"session_id": ev.SessionID,
+				"payload":    ev.Payload,
+			})
+			return true
+		}
 		chunkCount++
 		select {
 		case heartbeatTrigger <- struct{}{}:
 		default:
 		}
-		s.writeChunk(request.RequestID, request.ChannelID, chunk, chunkCount, true)
-	}
+		s.writeChunk(request.RequestID, request.ChannelID, ev.ToChunk(), chunkCount, true)
+		return true
+	})
 
-	// 8. 停止心跳，清理
 	close(heartbeatTrigger)
 	<-heartbeatDone
+
+	if streamErr != nil {
+		logger.Error(logComponent).
+			Err(streamErr).
+			Str("request_id", request.RequestID).
+			Msg("agent stream processing failed")
+		s.writeErrorResponse(request.RequestID, request.ChannelID, streamErr.Error(), "AGENT_STREAM_ERROR")
+		return
+	}
 
 	logger.Debug(logComponent).
 		Str("request_id", request.RequestID).

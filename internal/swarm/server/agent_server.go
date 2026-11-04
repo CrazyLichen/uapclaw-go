@@ -14,6 +14,7 @@ import (
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/session"
@@ -47,6 +48,8 @@ type AgentServer struct {
 	transport transport.AgentTransport
 	// agentManager Agent 实例管理器
 	agentManager *runtime.AgentManager
+	// agentRuntime 运行时编排（Align: Python runtime/service.py AgentRuntime）
+	agentRuntime *swruntime.AgentRuntime
 	// agentConfigService Agent 配置 CRUD 服务
 	// Python: self._agent_config_service = AgentConfigService(workspace_dir)
 	agentConfigService *runtime.AgentConfigService
@@ -95,7 +98,7 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 	agentConfigService := runtime.NewAgentConfigService(workspace.WorkspaceDir())
 	// Python: self._agent_manager = AgentManager()（在 __init__ 中创建）
 	agentManager := runtime.NewAgentManager()
-	return &AgentServer{
+	server := &AgentServer{
 		config:             cfg,
 		transport:          transport,
 		agentManager:       agentManager,
@@ -103,6 +106,18 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 		sessionStreamTasks: make(map[string]*streamTaskEntry),
 		stopCh:             make(chan struct{}),
 	}
+	// 控制事件走 push 通道（对齐 Python _send_runtime_event 的 plan_mode_exited 分支）
+	server.agentRuntime = swruntime.NewAgentRuntime(swruntime.AgentRuntimeDeps{
+		Manager: agentManager,
+		OnControlEvent: func(ev *swruntime.RuntimeEvent) {
+			server.SendPush(context.Background(), map[string]any{
+				"channel_id": ev.ChannelID,
+				"session_id": ev.SessionID,
+				"payload":    ev.Payload,
+			})
+		},
+	})
+	return server
 }
 
 // SetAgentFactoryForTest 设置 Agent 创建工厂覆盖（仅测试用）。

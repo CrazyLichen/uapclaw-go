@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/extensions"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -1138,4 +1139,41 @@ func truncateStr(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// PlanController 返回计划模式控制器（adapter 未提供时为 nil）。
+func (uc *UapClaw) PlanController() *swruntime.PlanModeController {
+	provider, ok := uc.adapter.(interface {
+		PlanController() *swruntime.PlanModeController
+	})
+	if !ok {
+		return nil
+	}
+	return provider.PlanController()
+}
+
+// PlanStateAccessor 返回 plan 状态读写入口。
+func (uc *UapClaw) PlanStateAccessor() swruntime.PlanStateAccessor {
+	provider, ok := uc.adapter.(interface {
+		PlanStateAccessor() swruntime.PlanStateAccessor
+	})
+	if !ok {
+		return nil
+	}
+	return provider.PlanStateAccessor()
+}
+
+// PlanModeSnapshot 只读当前会话 plan 模式（不做任何状态写入）。
+//
+// Python: DeepAgentState.plan_mode（session.plan_status 用）
+func (uc *UapClaw) PlanModeSnapshot(ctx context.Context, sessionID string) (string, bool) {
+	acc := uc.PlanStateAccessor()
+	if acc == nil || sessionID == "" {
+		return "", false
+	}
+	st, err := acc.LoadPlanState(ctx, sessionID)
+	if err != nil {
+		return "", false
+	}
+	return st.Mode, true
 }

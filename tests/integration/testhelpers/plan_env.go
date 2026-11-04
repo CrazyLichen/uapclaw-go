@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	model_clients "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -49,6 +50,12 @@ type PlanEnv struct {
 	Mock *mockllm.MockModelClient
 	// ChannelID 请求渠道
 	ChannelID string
+	// events 控制事件缓冲（IT 直连 adapter 时由本助手模拟 AgentRuntime 的发射）
+	events map[string][]swruntime.ControlEvent
+	// eventsMu 保护 events
+	eventsMu sync.Mutex
+	// lastEnsureQuery EnsureState 改写后的 query（供 Send 回写）
+	lastEnsureQuery string
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -115,7 +122,19 @@ func (e *PlanEnv) Send(sessionID, mode, query string, extra map[string]any) *swa
 		"channel":         e.ChannelID,
 		"language":        "zh",
 	}
+	// IT 直连 adapter：按 AgentRuntime.Invoke 的步骤补 plan 同步与 query 改写
+	// （⤵️ Task 10 迁移到 server 入口后删除这段模拟）
+	planEvents := e.syncPlanState(sessionID, req, mode, query)
+	if newQuery := e.lastEnsureQuery; newQuery != "" && newQuery != query {
+		params["query"] = newQuery
+		if rawUpdated, mErr := json.Marshal(params); mErr == nil {
+			req.Params = rawUpdated
+		}
+		inputs["query"] = newQuery
+	}
 	resp, err := e.Adapter.ProcessMessageImpl(context.Background(), req, inputs)
+	e.recordEvents(sessionID, planEvents)
+	e.recordEvents(sessionID, e.checkPlanExit(sessionID, req, mode))
 	if err != nil {
 		e.T.Fatalf("ProcessMessageImpl 失败: %v", err)
 	}
@@ -151,6 +170,60 @@ func (e *PlanEnv) PlanMode(sessionID string) string {
 	return mode
 }
 
+// syncPlanState 按 AgentRuntime.Invoke 的第一步同步 plan 状态（IT 直连 adapter 时的模拟）。
+func (e *PlanEnv) syncPlanState(sessionID string, req *swarmschema.AgentRequest, mode, query string) []swruntime.ControlEvent {
+	if e.Deep == nil || e.Deep.PlanController() == nil {
+		return nil
+	}
+	// 中断续答不参与 plan 同步（对齐 AgentRuntime.planEnabled 的 resume 守卫）
+	var params map[string]any
+	if err := json.Unmarshal(req.Params, &params); err == nil {
+		if resume, ok := params["resume"].(bool); ok && resume {
+			return nil
+		}
+	}
+	res, err := e.Deep.PlanController().EnsureState(context.Background(), swruntime.PlanRequest{
+		SessionID: sessionID,
+		Mode:      mode,
+		ReqMethod: req.ReqMethod.String(),
+		Query:     query,
+	}, e.Deep.PlanStateAccessor())
+	if err != nil {
+		e.T.Fatalf("EnsureState 失败: %v", err)
+	}
+	e.lastEnsureQuery = res.Query
+	return res.Events
+}
+
+// checkPlanExit 按 AgentRuntime.Invoke 的执行后步骤检测 plan 退出。
+func (e *PlanEnv) checkPlanExit(sessionID string, req *swarmschema.AgentRequest, mode string) []swruntime.ControlEvent {
+	if e.Deep == nil || e.Deep.PlanController() == nil {
+		return nil
+	}
+	events, err := e.Deep.PlanController().CheckPostProcessExit(context.Background(), swruntime.PlanRequest{
+		SessionID: sessionID,
+		Mode:      mode,
+		ReqMethod: req.ReqMethod.String(),
+	}, e.Deep.PlanStateAccessor())
+	if err != nil {
+		e.T.Fatalf("CheckPostProcessExit 失败: %v", err)
+	}
+	return events
+}
+
+// recordEvents 记录控制事件。
+func (e *PlanEnv) recordEvents(sessionID string, events []swruntime.ControlEvent) {
+	if len(events) == 0 {
+		return
+	}
+	e.eventsMu.Lock()
+	defer e.eventsMu.Unlock()
+	if e.events == nil {
+		e.events = map[string][]swruntime.ControlEvent{}
+	}
+	e.events[sessionID] = append(e.events[sessionID], events...)
+}
+
 // PlanSlug 读取会话持久化的 plan 文件短名。
 func (e *PlanEnv) PlanSlug(sessionID string) string {
 	e.T.Helper()
@@ -164,7 +237,10 @@ func (e *PlanEnv) Events(sessionID string) []map[string]any {
 	if e.Deep == nil {
 		e.T.Fatal("只有 agent 族适配器提供控制事件")
 	}
-	raw := e.Deep.DrainControlEvents(sessionID)
+	e.eventsMu.Lock()
+	raw := append([]swruntime.ControlEvent(nil), e.events[sessionID]...)
+	delete(e.events, sessionID)
+	e.eventsMu.Unlock()
 	out := make([]map[string]any, 0, len(raw))
 	for _, ev := range raw {
 		out = append(out, map[string]any{"event_type": ev.EventType, "mode": ev.Mode})
@@ -327,7 +403,7 @@ func (e *PlanEnv) MarkExitedByPostProcess(sessionID, mode string) []swruntime.Co
 		SessionID: sessionID,
 		Mode:      mode,
 		ReqMethod: "chat.send",
-	})
+	}, e.Deep.PlanStateAccessor())
 	if err != nil {
 		e.T.Fatalf("CheckPostProcessExit 失败: %v", err)
 	}

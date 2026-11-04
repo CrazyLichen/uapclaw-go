@@ -27,6 +27,8 @@ type ChatAgentPort interface {
 	ProcessMessageStream(ctx context.Context, req *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error)
 	// PlanStateAccessor 返回 plan 状态读写入口
 	PlanStateAccessor() PlanStateAccessor
+	// PlanController 返回计划模式控制器（可为 nil）
+	PlanController() *PlanModeController
 }
 
 // ResolvedMode 请求模式解析结果。

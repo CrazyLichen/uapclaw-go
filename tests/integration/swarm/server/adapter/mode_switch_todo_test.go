@@ -15,6 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
@@ -269,7 +270,7 @@ func (s *ModeSwitchTodoSuite) planAttachment(inst *harness.DeepAgent) *hprompts.
 func (s *ModeSwitchTodoSuite) runTurn(d *adapter.DeepAdapter, requestID, mode, query string) []map[string]any {
 	s.T().Helper()
 
-	params, err := json.Marshal(map[string]any{"mode": mode})
+	params, err := json.Marshal(map[string]any{"mode": mode, "query": query})
 	s.Require().NoError(err)
 
 	sid := modeSwitchSessionID
@@ -280,6 +281,24 @@ func (s *ModeSwitchTodoSuite) runTurn(d *adapter.DeepAdapter, requestID, mode, q
 		Params:    params,
 		IsStream:  true,
 	}
+	// 按 AgentRuntime.Stream 的步骤补 plan 同步与 query 改写（IT 直连 adapter）
+	planReq := swruntime.PlanRequest{
+		SessionID: modeSwitchSessionID,
+		Mode:      mode,
+		ReqMethod: "chat.send",
+		Query:     query,
+	}
+	res, ensureErr := d.PlanController().EnsureState(s.Ctx, planReq, d.PlanStateAccessor())
+	s.Require().NoError(ensureErr)
+	if res.Query != "" && res.Query != query {
+		query = res.Query
+		params, err = json.Marshal(map[string]any{"mode": mode, "query": query})
+		s.Require().NoError(err)
+		req.Params = params
+	}
+	defer func() {
+		_, _ = d.PlanController().CheckPostProcessExit(s.Ctx, planReq, d.PlanStateAccessor())
+	}()
 	chunkCh, streamErr := d.ProcessMessageStreamImpl(s.Ctx, req, map[string]any{
 		"query":           query,
 		"mode":            mode,
