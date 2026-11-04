@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1108,28 +1109,38 @@ func TestResolveEnableTaskLoop_SkillCreate覆盖(t *testing.T) {
 	}
 }
 
-// TestSwitchModeForState 验证 switchModeForState 的防御分支与完整链路。
-// 2026-11-03：web 切模式时经此函数把 mode 同步进 agent 状态机。
-func TestSwitchModeForState(t *testing.T) {
+// TestPlanControllerEnsureState 验证控制器接入后的状态写入（替换已删除的 switchModeForState）。
+//
+// S2：plan 状态写入归 runtime.PlanModeController，adapter 只提供状态存储。
+func TestPlanControllerEnsureState(t *testing.T) {
 	d := NewDeepAdapter()
+	if d.PlanController() == nil {
+		t.Fatal("planController 未初始化")
+	}
 
-	// 空 sessionID（CreateInstance 阶段）应直接跳过，不触发任何 session 生命周期
-	d.switchModeForState(context.Background(), "", "plan")
+	// 空 sessionID / 非 plan 请求：不应写状态（EnsureState 内部守卫）
+	if _, err := d.PlanController().EnsureState(context.Background(), swruntime.PlanRequest{}); err != nil {
+		t.Fatalf("EnsureState 空请求: %v", err)
+	}
 
-	// instance 为 nil 时 SwitchMode 内部直接返回
-	d.switchModeForState(context.Background(), "sess-x", "plan")
-
-	// 完整链路：真实 DeepAgent + 真实 session 生命周期（plan → normal 往返幂等）
+	// 完整链路：真实 DeepAgent + 真实 session，显式进入 plan 后应写入 plan 状态
 	agent := harness.NewDeepAgent(agentschema.NewAgentCard())
 	d.instance = agent
-	d.switchModeForState(context.Background(), "sess-switch-mode-state", "plan")
-	d.switchModeForState(context.Background(), "sess-switch-mode-state", "normal")
+	_, err := d.PlanController().EnsureState(context.Background(), swruntime.PlanRequest{
+		SessionID:   "sess-plan-state",
+		Mode:        "agent.work.plan",
+		ReqMethod:   "chat.send",
+		EntrySource: swruntime.PlanEntrySourcePlanToggle,
+	})
+	if err != nil {
+		t.Fatalf("EnsureState: %v", err)
+	}
 
-	loaded := session.CreateAgentSession("sess-switch-mode-state", agent.Card(), nil)
+	loaded := session.CreateAgentSession("sess-plan-state", agent.Card(), nil)
 	if err := loaded.PreRun(context.Background()); err != nil {
 		t.Fatalf("PreRun: %v", err)
 	}
-	if state := agent.LoadState(loaded); state.PlanMode.Mode != "normal" {
-		t.Errorf("往返后 plan 状态应为 normal，实际 %q", state.PlanMode.Mode)
+	if state := agent.LoadState(loaded); state.PlanMode.Mode != "plan" {
+		t.Errorf("进入 plan 后状态应为 plan，实际 %q", state.PlanMode.Mode)
 	}
 }

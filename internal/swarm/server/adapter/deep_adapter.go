@@ -46,6 +46,7 @@ import (
 	swarmtools "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools"
 	cronbridge "github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/common/tools/cron"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/agents/harness/team"
+	swruntime "github.com/uapclaw/uapclaw-go/internal/swarm/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/utils"
@@ -272,6 +273,12 @@ type DeepAdapter struct {
 	// 替代原 globalSendPushFunc 全局变量，实现实例级隔离。
 	// 避免 adapter→server→adapter 循环依赖：adapter 包不导入 server 包。
 	sendPushFunc func(ctx context.Context, msg map[string]any) error
+	// planController 计划模式状态机，对齐 Python runtime/plan.py
+	planController *swruntime.PlanModeController
+	// controlMu 保护 controlEvents
+	controlMu sync.Mutex
+	// controlEvents 会话级控制事件缓冲（server 层 Drain 下发）
+	controlEvents map[string][]swruntime.ControlEvent
 }
 
 // ApprovalAnswer 审批回答条目，从前端 WebSocket 消息解析。
@@ -393,6 +400,10 @@ func NewDeepAdapter() *DeepAdapter {
 	// 模型配置兜底读取器：对齐 Python _has_valid_model_config 第 4 步。
 	// 优先读已发布的 configBase 快照，未初始化时才回退读盘（见 T-07）。
 	d.defaultModelConfigReader = d.defaultModelClientConfigFromConfigBase
+	// 计划模式控制器：状态存储绑定到本适配器实例
+	// Python: self._plan_state_controller = PlanModeController(...)
+	d.planController = swruntime.NewPlanModeController(&planStateStore{d: d})
+	d.controlEvents = map[string][]swruntime.ControlEvent{}
 	return d
 }
 
@@ -962,6 +973,16 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		ProjectDir:      projectDir,
 	})
 
+	// 步骤 17.5: plan 状态机（对齐 Python runtime/plan.py ensure_state）
+	// 放在 update_runtime_config 之后：此时 agent 已 Configure，状态读写不会提前创建会话。
+	// 进入 plan 时本轮 query 被前置约束提醒，原 query 存 params 键可还原。
+	query = d.ensurePlanState(ctx, req, sessionID, mode, query, params)
+	if query != "" {
+		inputs["query"] = query
+	}
+	// 执行后检查工具触发的 plan 退出（对齐 Python check_post_process_exit）
+	defer d.checkPlanPostProcess(ctx, req, sessionID, mode, params)
+
 	// 步骤 18: Runner.run_agent(agent=d.instance, inputs=inputs)
 	// Python: result = await Runner.run_agent(agent=self._instance, inputs=inputs)
 	var result map[string]any
@@ -1057,6 +1078,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	}
 
 	// 步骤 5-6: 提取 query/mode
+	query := paramsString(params, "query", "")
 	mode := paramsString(params, "mode", "agent.work.plan")
 
 	// 步骤 7: team 模式分流
@@ -1206,6 +1228,14 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		CWD:             streamRequestCwd,
 		ProjectDir:      streamProjectDir,
 	})
+
+	// 步骤 17.5: plan 状态机（对齐 Python runtime/plan.py ensure_state）
+	// 放在 update_runtime_config 之后：此时 agent 已 Configure，状态读写不会提前创建会话。
+	query = d.ensurePlanState(ctx, req, sessionID, mode, query, params)
+	if query != "" {
+		inputs["query"] = query
+	}
+	defer d.checkPlanPostProcess(ctx, req, sessionID, mode, params)
 
 	// 步骤 18: Runner.RunAgentStreaming(agent=d.instance, inputs=inputs)
 	// Python: async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):

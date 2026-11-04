@@ -139,7 +139,7 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 
 	// 步骤 7: rail/tool 模式切换（仅 evolution 分支已实现）
 	// Python: await self._update_rails_for_mode(runtime_config.mode)
-	d.updateRailsForMode(ctx, config.Mode, config.SessionID)
+	d.UpdateAgentRails(ctx, config.SessionID, config.Mode)
 
 	// 步骤 7.4: 按模式更新 multi-session 工具（agent.fast）
 	// Python: await self._update_tools_for_mode(mode, session_id, request_id) (L3162)
