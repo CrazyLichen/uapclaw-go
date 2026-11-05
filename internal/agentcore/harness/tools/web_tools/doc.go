@@ -5,7 +5,7 @@
 // WebFetchWebpageTool（网页抓取），以及 HTTP 客户端、HTML 解析、调试输出等辅助功能。
 //
 // 工具在 Agent 会话中位于「LLM 决策 → 工具执行」层，提供「搜索→抓取→阅读」链路。
-// 注意：search_tools（工具发现）和 load_tool（工具加载）是不同的概念——它们搜索的是
+// 注意：tool_search（延迟工具发现）和 tool_call（延迟工具执行）是不同的概念——它们搜索的是
 // Agent 自身可用的工具，不涉及联网。
 //
 // 文件目录：
