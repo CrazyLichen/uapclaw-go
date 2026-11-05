@@ -186,7 +186,7 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentC
 	var aiMsg *llmschema.AssistantMessage
 	var err error
 	if isStreaming {
-		aiMsg, err = a.callLLMStream(ctx, llmModel, modelName, messages, contextTools, sess, extraKVPairs)
+		aiMsg, err = a.callLLMStream(ctx, cbc, llmModel, modelName, messages, contextTools, sess, extraKVPairs)
 	} else {
 		aiMsg, err = a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools, extraKVPairs)
 	}
@@ -317,8 +317,12 @@ func (a *ReActAgent) callLLMInvoke(
 }
 
 // callLLMStream 流式 LLM 调用。
+//
+// cbc 用于流式分片检查器与可见输出标志（对齐 Python: _railed_model_call 的 ctx）。
+// cbc 为 nil 时跳过这两项（仅测试会传 nil）。
 func (a *ReActAgent) callLLMStream(
 	ctx context.Context,
+	cbc *interfaces.AgentCallbackContext,
 	llmModel *llm.Model,
 	modelName string,
 	messages []llmschema.BaseMessage,
@@ -345,6 +349,10 @@ func (a *ReActAgent) callLLMStream(
 
 	var accumulated *llmschema.AssistantMessageChunk
 	chunkIndex := 0
+	// 每次流式调用开始时复位可见输出标志（对齐 Python: react_agent.py L1878）。
+	if cbc != nil {
+		cbc.SetModelVisibleOutputEmitted(false)
+	}
 	for chunk := range chunkCh {
 		// 流中断哨兵：模型客户端读 SSE 失败时投递，通道随后关闭。
 		// 必须优先于合并判断——否则半截 tool_call 会被当成完整调用执行，
@@ -372,8 +380,37 @@ func (a *ReActAgent) callLLMStream(
 			accumulated = accumulated.Merge(chunk)
 		}
 
+		// 流式分片检查器（对齐 Python: react_agent.py L1897-1905）：
+		// 在写流之前跑——被判为重复的文本不应再发给用户。
+		// 返回前必须排空 chunkCh，否则客户端 goroutine 卡在 send、连接不关。
+		if cbc != nil {
+			for _, inspector := range cbc.StreamChunkInspectors() {
+				if inspector == nil {
+					continue
+				}
+				if inspectErr := inspector(ctx, cbc, chunk); inspectErr != nil {
+					drained := 0
+					for range chunkCh {
+						drained++
+					}
+					logger.Debug(logComponent).
+						Str("event_type", "stream_chunk_inspector_aborted").
+						Int("drained", drained).
+						Err(inspectErr).
+						Msg("stream chunk inspector aborted the stream")
+					return nil, inspectErr
+				}
+			}
+		}
+
 		// 实时写入 session stream（对齐 Python railed_model_call L776-809）
 		// Python 先写 reasoning_content，再写 content
+		//
+		// 有可见内容即置位（对齐 Python: 在 write_stream 之前置位，与 session 是否存在无关）：
+		// 上层据此判断"已向用户吐字，瞬时失败不再重试"，避免重复输出。
+		if cbc != nil && (chunk.ReasoningContent != "" || chunk.Content.Text() != "") {
+			cbc.SetModelVisibleOutputEmitted(true)
+		}
 		if sess != nil {
 			if chunk.ReasoningContent != "" {
 				_ = sess.WriteStream(ctx, &stream.OutputSchema{

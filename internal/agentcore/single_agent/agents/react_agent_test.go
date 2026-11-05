@@ -932,7 +932,7 @@ func TestReActAgent_callLLMStream_空工具(t *testing.T) {
 	tools := []cschema.ToolInfoInterface{}
 	extra := map[string]any{"key": "value"}
 	sess := session.NewSession(session.WithSessionID("call_stream_empty_sess"))
-	_, _ = agent.callLLMStream(context.Background(), llmModel2, "qwen-max", messages, tools, sess, extra)
+	_, _ = agent.callLLMStream(context.Background(), nil, llmModel2, "qwen-max", messages, tools, sess, extra)
 }
 
 // TestReActAgent_callLLMInvoke_有LLMInstance 验证有 LLM 实例时执行调用
@@ -994,7 +994,7 @@ func TestReActAgent_callLLMStream_有LLMInstance(t *testing.T) {
 	tools := []cschema.ToolInfoInterface{}
 	extra := map[string]any{}
 	sess := session.NewSession(session.WithSessionID("call_stream_llm_sess"))
-	_, _ = agent.callLLMStream(context.Background(), llmModel2, "qwen-max", messages, tools, sess, extra)
+	_, _ = agent.callLLMStream(context.Background(), nil, llmModel2, "qwen-max", messages, tools, sess, extra)
 }
 
 // TestReActAgent_InvokeImpl_有LLM 验证有 LLM 实例时 InvokeImpl 执行更多分支
@@ -1885,7 +1885,7 @@ func TestReActAgent_callLLMStream_有工具(t *testing.T) {
 	sess := session.NewSession(session.WithSessionID("stream_tools_sess"))
 	extra := map[string]any{"key": "value"}
 
-	result, err := agent.callLLMStream(context.Background(), model, "test-model", messages, tools, sess, extra)
+	result, err := agent.callLLMStream(context.Background(), nil, model, "test-model", messages, tools, sess, extra)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
@@ -1914,7 +1914,7 @@ func TestReActAgent_callLLMStream_无Extra(t *testing.T) {
 	sess := session.NewSession(session.WithSessionID("stream_no_extra_sess"))
 	extra := map[string]any{}
 
-	result, err := agent.callLLMStream(context.Background(), model, "test-model", messages, tools, sess, extra)
+	result, err := agent.callLLMStream(context.Background(), nil, model, "test-model", messages, tools, sess, extra)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
@@ -1942,7 +1942,7 @@ func TestReActAgent_callLLMStream_nilSession(t *testing.T) {
 	tools := []cschema.ToolInfoInterface{}
 	extra := map[string]any{}
 
-	result, err := agent.callLLMStream(context.Background(), model, "test-model", messages, tools, nil, extra)
+	result, err := agent.callLLMStream(context.Background(), nil, model, "test-model", messages, tools, nil, extra)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
