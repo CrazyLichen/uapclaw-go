@@ -16,7 +16,7 @@
 
 **关于「不重抄函数体」:** 本计划不把上游函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
 
-**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**，后续从 Task 10 开始。
+**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**；**Task 10（health_check ×2 + cron.job.meta + updater ×4）已完成**（updater 按裁定仅保留 handler 回默认），后续从 Task 11 开始。
 
 **B1a 收口结论（两处遗留偏差已清零，详见 Task 7b）**：① 删除 `unaryHandler`/`wrapUnary`，59 个注册点一律原生 `methodHandler`，失败帧抬到帧级 `ok=false + error + code`；② 分发顺序改为上游四段式（`local_only` → `handler-before-callback`(`chat.send`) → 回调 → handler）。残留差异见 spec §10（错误文案语言、permissions 本地回退、CI 矩阵上游来源）。
 
@@ -1468,12 +1468,12 @@ git add -A && git commit -m "feat(web): 补齐九个 IM 平台配置读写 18 �
 | `updater.reset_source` | `:5837` | `updaterResetSource` |
 | `updater.set_conf` | `:5838` | `updaterSetConf` |
 
-- [ ] **Step 1: 读上游**
+- [x] **Step 1: 读上游**
 
 Run: `sed -n '4252,4270p;5820,5870p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
 要点（`_health_check_get_conf` 原文）：服务为 None → `ok=False, error="health_check service not available", code="SERVICE_UNAVAILABLE"`；异常 → `code="INTERNAL_ERROR"`。
 
-- [ ] **Step 2: 写失败测试**
+- [x] **Step 2: 写失败测试**
 
 ```go
 // TestHealthCheck_缺服务时返回SERVICE_UNAVAILABLE 验证错误码与文案对齐上游。
@@ -1492,24 +1492,47 @@ func TestHealthCheck_缺服务时返回SERVICE_UNAVAILABLE(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 实现并注册 7 个方法**
+- [x] **Step 3: 实现并注册 7 个方法**
 
 `health_check.*` 复用既有 `HeartbeatConfService`（Go 已有 `GetHeartbeatConf`/`SetHeartbeatConf`，上游 `hb.get_health_check_conf()` 同源，别名接入即可）；`cron.job.meta` 在 `CronJobController` 上补 `Meta() (map[string]any, error)` 并在 controller 实现（上游 `_cron_job_meta` 返回静态元数据）；`updater.*` 在 `UpdaterService` 接口上补 conf 面（`GetConf`/`SetConf`/`ResetSource`/`Upgrade`）。
 
-- [ ] **Step 4: 删除自造与漂移名**
+- [x] **Step 4: 删除自造与漂移名**
 
 ```bash
 grep -rn '"cron.job.disable"\|"cron.job.enable"\|"cron.job.run"\|"cron.job.status"\|"updater.cancel"\|"updater.install"\|"heartbeat.get_path"' --include=*.go internal/
 ```
 逐处删除注册与 handler，测试同步删断言。
 
-- [ ] **Step 5: 测试 + 矩阵 + 提交**
+- [x] **Step 5: 测试 + 矩阵 + 提交**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/...
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
 git add -A && git commit -m "feat(web): 补齐 health_check/cron.meta/updater 7 个方法；删除 7 个自造漂移名"
 ```
+
+---
+
+**实施记录（2026-11-05 完成；updater 按用户裁定只保留 handler 回默认）：**
+
+- `health_check.get_conf` / `set_conf`：与 `heartbeat.*` **共用同一对 handler**（上游 5839-5842 就是把两个名字注册到同一对函数）。
+  随之对齐三点：① get 的不可用文案改为 `"health_check service not available"`（上游两个注册名共用同一 handler，因此
+  `heartbeat.get_conf` 也是这个文案；set 仍为 `"heartbeat service not available"`，上游原文即不对称）；
+  ② set 补**飞书目标校验**（`target=="feishu"` 时要求每个 app 都有 `last_chat_id`/`chat_id`，否则回
+  `error=code="feishuNoTarget"`，`app_web_handlers.py:4290-4325`）；③ 写回段从 `heartbeat.*` 改为 **`health_check.*`**
+  （`update_health_check_in_config`，config.py:451-463），启动读侧改为「优先 health_check、回退 heartbeat」。
+  **偏差**：本仓不做上游 `migrate_legacy_heartbeat_probe_config` 的破坏性迁移（旧键保留，仅读侧兼容）。
+- `cron.job.meta`：`CronJobController` 加 `JobMetadata()`，`gateway/cron` 落 `CronJobMetadata()`
+  （`runtime/cron/models.py:172-180`）：modes 22 个（21 字面量 + `team.plan.normal`/`team.plan.code`，按 Python
+  `sorted()` 字典序）、`default_mode=agent`、default/default_team/max timeout = 3600/3600/259200。
+- `updater.get_conf/set_conf/reset_source/upgrade`：**只保留 handler，回默认**（用户裁定）。三个配置面回
+  `defaultUpdaterRuntimeConfig()`（`UpdaterService.get_runtime_config()` 的默认形态：gitcode/pypi、openJiuwen/jiuwenswarm、
+  timeout 20、pypi 镜像、空 token），`upgrade` 回 `{"state":"idle"}`。连同既有 `updater.check/download/get_status` 三个
+  stub，`updater.*` 全族在本仓是"能应答但不执行"——已登记 spec §10，恢复需移植 `gateway/common/updater.py`(578 行)。
+- `Step 4 删除自造名`：`cron.job.disable/enable/run/status`、`updater.cancel/install`、`heartbeat.get_path` 在
+  `385eb614` 已删，本批 grep 复核 0 命中。
+- 矩阵：`local` 缺口 29 → 22（本批 7 个）。
+
 
 ---
 

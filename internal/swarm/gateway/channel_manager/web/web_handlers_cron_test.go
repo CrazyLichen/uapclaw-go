@@ -104,6 +104,17 @@ func (f *fakeCronJobController) RunNow(jobID string) (string, error) {
 	return "run-123", nil
 }
 
+// JobMetadata 返回固定 schema 元数据（与 cron.CronJobMetadata 默认值一致）。
+func (f *fakeCronJobController) JobMetadata() map[string]any {
+	return map[string]any{
+		"modes":                        []string{"agent", "team"},
+		"default_mode":                 "agent",
+		"default_timeout_seconds":      3600,
+		"default_team_timeout_seconds": 3600,
+		"max_timeout_seconds":          259200,
+	}
+}
+
 // newCronTestDispatcher 构造注入 fake controller 的 dispatcher
 func newCronTestDispatcher(cc CronJobController) *WebChannel {
 	return RegisterWebHandlers(&WebHandlersBindParams{CronController: cc})

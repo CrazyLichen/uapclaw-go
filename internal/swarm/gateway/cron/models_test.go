@@ -2,8 +2,12 @@ package cron
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCronJobToDict 可选字段空值时省略
@@ -428,4 +432,22 @@ func TestModeAny(t *testing.T) {
 	if modeAny(123) != "agent" {
 		t.Error("non-string mode should default agent")
 	}
+}
+
+// TestCronJobMetadata_字段与上游一致 5 个字段、22 个 mode（已排序）、默认值与上限。
+func TestCronJobMetadata_字段与上游一致(t *testing.T) {
+	meta := CronJobMetadata()
+
+	assert.Equal(t, "agent", meta["default_mode"])
+	assert.Equal(t, 3600, meta["default_timeout_seconds"])
+	assert.Equal(t, 3600, meta["default_team_timeout_seconds"])
+	assert.Equal(t, 259200, meta["max_timeout_seconds"])
+
+	modes, ok := meta["modes"].([]string)
+	require.True(t, ok, "modes 应为 []string")
+	assert.Len(t, modes, 22, "CRON_JOB_MODES 共 22 个（21 字面量 + 2 个 mode_matrix 常量，去重后 22）")
+	assert.True(t, sort.StringsAreSorted(modes), "modes 必须按字典序与 Python sorted() 一致")
+	assert.Contains(t, modes, "team.plan.normal")
+	assert.Contains(t, modes, "team.plan.code")
+	assert.Contains(t, modes, "proactive.tick")
 }

@@ -109,6 +109,8 @@ type CronJobController interface {
 	PreviewJob(jobID string, count int) ([]map[string]any, error)
 	// RunNow 立即执行
 	RunNow(jobID string) (string, error)
+	// JobMetadata 返回任务 schema 元数据（cron.job.meta 用）
+	JobMetadata() map[string]any
 }
 
 // EventSender 事件推送回调，用于向 WebSocket 客户端推送事件帧。
@@ -146,6 +148,8 @@ const (
 	WsErrConflict = "CONFLICT"
 	// WsErrAgentUnavailable Agent 不可用
 	WsErrAgentUnavailable = "AGENT_UNAVAILABLE"
+	// wsErrFeishuNoTarget 飞书通道未配置推送目标（上游 error/code 同值）
+	wsErrFeishuNoTarget = "feishuNoTarget"
 )
 
 // logComponent 本文件日志组件
@@ -298,16 +302,22 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("locale.get_conf", stubHandler(wc, map[string]any{"preferred_language": "zh"}), false)
 	wc.registerMethod("locale.set_conf", stubHandler(wc, map[string]any{"ok": true}), false)
 
-	// ─── 心跳配置 ───
-	// 11.11 已回填：注入服务时接真实 handler（对齐 Python _heartbeat_get_conf/_set_conf/_get_path）
+	// ─── 探活配置（health_check，heartbeat.* 为上游 deprecated 别名） ───
+	// Python: app_web_handlers.py:5839-5842 把 health_check.* 与 heartbeat.* 注册到同一对 handler。
 	if heartbeatSvc != nil {
+		wc.registerMethod("health_check.get_conf", heartbeatGetConf(wc, heartbeatSvc), false)
+		wc.registerMethod("health_check.set_conf", heartbeatSetConf(wc, heartbeatSvc, agentClient), false)
 		wc.registerMethod("heartbeat.get_conf", heartbeatGetConf(wc, heartbeatSvc), false)
 		wc.registerMethod("heartbeat.set_conf", heartbeatSetConf(wc, heartbeatSvc, agentClient), false)
 	} else {
-		wc.registerMethod("heartbeat.get_conf", stubHandler(wc, map[string]any{
+		confStub := stubHandler(wc, map[string]any{
 			"every": 0, "target": "", "active_hours": map[string]any{},
-		}), false)
-		wc.registerMethod("heartbeat.set_conf", stubHandler(wc, map[string]any{"ok": true}), false)
+		})
+		setStub := stubHandler(wc, map[string]any{"ok": true})
+		wc.registerMethod("health_check.get_conf", confStub, false)
+		wc.registerMethod("health_check.set_conf", setStub, false)
+		wc.registerMethod("heartbeat.get_conf", confStub, false)
+		wc.registerMethod("heartbeat.set_conf", setStub, false)
 	}
 
 	// ─── 更新器 ───
@@ -315,6 +325,11 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("updater.check", updaterStub, false)
 	wc.registerMethod("updater.download", updaterStub, false)
 	wc.registerMethod("updater.get_status", updaterStub, false)
+	updaterDefaultConf := stubHandler(wc, defaultUpdaterRuntimeConfig())
+	wc.registerMethod("updater.get_conf", updaterDefaultConf, false)
+	wc.registerMethod("updater.set_conf", updaterDefaultConf, false)
+	wc.registerMethod("updater.reset_source", updaterDefaultConf, false)
+	wc.registerMethod("updater.upgrade", stubHandler(wc, map[string]any{"state": "idle"}), false)
 
 	// ─── 钩子 ───
 	wc.registerMethod("hooks.list", stubHandler(wc, map[string]any{"hooks": []any{}}), false)
@@ -358,6 +373,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 		wc.registerMethod("cron.job.toggle", cronJobToggle(wc, cc), false)
 		wc.registerMethod("cron.job.preview", cronJobPreview(wc, cc), false)
 		wc.registerMethod("cron.job.run_now", cronJobRunNow(wc, cc), false)
+		wc.registerMethod("cron.job.meta", cronJobMeta(wc, cc), false)
 	} else {
 		cronListStub := stubHandler(wc, map[string]any{"jobs": []any{}})
 		cronOkStub := stubHandler(wc, map[string]any{"ok": true})
@@ -365,6 +381,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 		wc.registerMethod("cron.job.create", cronOkStub, false)
 		wc.registerMethod("cron.job.update", cronOkStub, false)
 		wc.registerMethod("cron.job.delete", cronOkStub, false)
+		wc.registerMethod("cron.job.meta", stubHandler(wc, map[string]any{}), false)
 	}
 
 	// ─── 运行时 ───
@@ -2021,6 +2038,18 @@ func cronJobRunNow(wc *WebChannel, cc CronJobController) methodHandler {
 	}
 }
 
+// cronJobMeta 处理 cron.job.meta，返回任务 schema 元数据。
+// Python: _cron_job_meta (app_web_handlers.py:5111-5117) → CronController.job_metadata()。
+func cronJobMeta(wc *WebChannel, cc CronJobController) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
+		if cc == nil {
+			wc.sendResponse(ws, reqID, false, nil, "cron not available", WsErrInternalError)
+			return
+		}
+		wc.sendResponse(ws, reqID, true, cc.JobMetadata(), "", "")
+	}
+}
+
 // cronStrVal 安全取字符串。
 func cronStrVal(v any) string {
 	if s, ok := v.(string); ok {
@@ -2036,7 +2065,9 @@ func cronStrVal(v any) string {
 func heartbeatGetConf(wc *WebChannel, svc HeartbeatConfService) methodHandler {
 	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
 		if svc == nil {
-			wc.sendResponse(ws, reqID, false, nil, "heartbeat service not available", WsErrServiceUnavailable)
+			// 上游 health_check.get_conf 与 heartbeat.get_conf 共用同一 handler，
+			// 文案统一为 "health_check service not available"（app_web_handlers.py:4256）。
+			wc.sendResponse(ws, reqID, false, nil, "health_check service not available", WsErrServiceUnavailable)
 			return
 		}
 		wc.sendResponse(ws, reqID, true, svc.GetHeartbeatConf(), "", "")
@@ -2100,6 +2131,22 @@ func heartbeatSetConf(wc *WebChannel, svc HeartbeatConfService, ac *routing.Agen
 			// 非 map → nil（不更新保持旧值）
 		}
 
+		// 目标渠道是飞书时先检测是否有可用推送目标（多应用要求每个 app 都有）
+		if target != nil && *target == "feishu" {
+			hasTarget, checkErr := feishuHasPushTarget()
+			if checkErr != nil {
+				logger.Debug(logComponent).
+					Err(checkErr).
+					Msg("[health_check.set_conf] 飞书目标检测异常")
+				wc.sendResponse(ws, reqID, false, nil, checkErr.Error(), WsErrInternalError)
+				return
+			}
+			if !hasTarget {
+				wc.sendResponse(ws, reqID, false, nil, "feishuNoTarget", wsErrFeishuNoTarget)
+				return
+			}
+		}
+
 		if err := svc.SetHeartbeatConf(every, target, activeHours); err != nil {
 			// 对齐 Python except ValueError → BAD_REQUEST
 			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrBadRequest)
@@ -2108,7 +2155,7 @@ func heartbeatSetConf(wc *WebChannel, svc HeartbeatConfService, ac *routing.Agen
 		payload := svc.GetHeartbeatConf()
 
 		// 写回 config.yaml（对齐 L1553-1557 try/Warn：失败仅 Warn 不阻断响应）
-		if err := updateHeartbeatInConfig(payload); err != nil {
+		if err := updateHealthCheckInConfig(payload); err != nil {
 			logger.Warn(logComponent).
 				Err(err).
 				Msg("[heartbeat.set_conf] 写回 config.yaml 失败")
@@ -2140,6 +2187,38 @@ func heartbeatAnyToFloat(v any) (float64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported type: %T", v)
 	}
+}
+
+// feishuHasPushTarget 判断飞书通道是否已配置推送目标。
+//
+// Python: _health_check_set_conf 的 target=="feishu" 检测（app_web_handlers.py:4290-4325）：
+// 多应用模式要求每个 app 都有 last_chat_id 或 chat_id；旧平铺格式看顶层同名字段。
+func feishuHasPushTarget() (bool, error) {
+	cfg, err := config.New("")
+	if err != nil {
+		return false, fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+	raw, err := cfg.Raw()
+	if err != nil {
+		return false, fmt.Errorf("加载配置失败: %w", err)
+	}
+	chCfg := mapSection(raw, "channels", "feishu")
+	apps, _ := chCfg["apps"].([]any)
+	if len(apps) > 0 {
+		for _, item := range apps {
+			app, isMap := item.(map[string]any)
+			if !isMap {
+				return false, nil
+			}
+			if strings.TrimSpace(strOrEmpty(app["last_chat_id"])) == "" &&
+				strings.TrimSpace(strOrEmpty(app["chat_id"])) == "" {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+	return strings.TrimSpace(strOrEmpty(chCfg["last_chat_id"])) != "" ||
+		strings.TrimSpace(strOrEmpty(chCfg["chat_id"])) != "", nil
 }
 
 // clearAgentConfigCache 写回 config.yaml 后清 Agent 侧缓存。
@@ -2638,10 +2717,12 @@ func updateDefaultModelsInConfig(models []map[string]any) error {
 	return nil
 }
 
-// updateHeartbeatInConfig 只更新 heartbeat 段并写回。
+// updateHealthCheckInConfig 只更新 health_check 段的 every/target/active_hours 并写回。
+//
+// Python: update_health_check_in_config (gateway/common/config.py:451-463)。
 // Python: update_heartbeat_in_config (common/config.py L152-164)。
 // 逐键条件写回（if "every" in payload ...），SetRoundTrip 保注释（M-05 先例）。
-func updateHeartbeatInConfig(payload map[string]any) error {
+func updateHealthCheckInConfig(payload map[string]any) error {
 	cfg, err := config.New("")
 	if err != nil {
 		return fmt.Errorf("创建配置管理器失败: %w", err)
@@ -2651,18 +2732,18 @@ func updateHeartbeatInConfig(payload map[string]any) error {
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
 	if v, ok := payload["every"]; ok {
-		if err := cfg.SetRoundTrip("heartbeat.every", v); err != nil {
-			return fmt.Errorf("写入 heartbeat.every 失败: %w", err)
+		if err := cfg.SetRoundTrip("health_check.every", v); err != nil {
+			return fmt.Errorf("写入 health_check.every 失败: %w", err)
 		}
 	}
 	if v, ok := payload["target"]; ok {
-		if err := cfg.SetRoundTrip("heartbeat.target", v); err != nil {
-			return fmt.Errorf("写入 heartbeat.target 失败: %w", err)
+		if err := cfg.SetRoundTrip("health_check.target", v); err != nil {
+			return fmt.Errorf("写入 health_check.target 失败: %w", err)
 		}
 	}
 	if v, ok := payload["active_hours"]; ok {
-		if err := cfg.SetRoundTrip("heartbeat.active_hours", v); err != nil {
-			return fmt.Errorf("写入 heartbeat.active_hours 失败: %w", err)
+		if err := cfg.SetRoundTrip("health_check.active_hours", v); err != nil {
+			return fmt.Errorf("写入 health_check.active_hours 失败: %w", err)
 		}
 	}
 	return nil
@@ -3613,4 +3694,28 @@ func mapSection(root map[string]any, keys ...string) map[string]any {
 		cur = next
 	}
 	return cur
+}
+
+// defaultUpdaterRuntimeConfig 返回升级服务的默认运行时配置。
+//
+// ⤵️ 升级子系统（gateway/common/updater.py，578 行）本期未移植：updater.* 一律回
+// 上游 UpdaterService.get_runtime_config() 的默认形态（updater.py:137-155 / 515-570），
+// 前端 UpdatePanel 可正常渲染，但"检查更新/下载/升级"不会真正执行。
+func defaultUpdaterRuntimeConfig() map[string]any {
+	return map[string]any{
+		"enabled":                    true,
+		"desktop_release_api_type":   "gitcode",
+		"release_api_type":           "pypi",
+		"install_mode":               "pip",
+		"repo_owner":                 "openJiuwen",
+		"repo_name":                  "jiuwenswarm",
+		"release_api_url":            "",
+		"asset_name_pattern":         "",
+		"asset_name_pattern_windows": "",
+		"asset_name_pattern_macos":   "",
+		"asset_name_pattern_linux":   "JiuwenSwarm-{version}.tar.gz",
+		"timeout_seconds":            20,
+		"pypi_mirror":                "https://mirrors.aliyun.com/pypi",
+		"access_token":               "",
+	}
 }

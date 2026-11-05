@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestControllerNormalizeTargets targets 归一化矩阵
@@ -411,4 +413,13 @@ func TestControllerRunNow(t *testing.T) {
 	if nEvents != 2 {
 		t.Errorf("run_now should enqueue 2 events, got %d", nEvents)
 	}
+}
+
+// TestCronControllerJobMetadata 控制器门面转发到 CronJobMetadata（对齐 Python job_metadata）。
+func TestCronControllerJobMetadata(t *testing.T) {
+	c := NewCronController(nil, nil)
+
+	meta := c.JobMetadata()
+	assert.Equal(t, "agent", meta["default_mode"])
+	assert.Equal(t, 259200, meta["max_timeout_seconds"])
 }

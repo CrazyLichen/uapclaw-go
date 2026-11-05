@@ -191,7 +191,9 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 	s.cronScheduler = cronScheduler
 
 	// 步骤4.6：Heartbeat 心跳服务装配（11.11，对齐 Python app_gateway.py L867-912）
-	// 1) 读 config heartbeat 段（对齐 L867-891）
+	// 1) 读探活配置段：优先 health_check（新版），回退 heartbeat（旧版）
+	//    对齐 Python migrate_legacy_heartbeat_probe_config 的"新段优先"读语义
+	//    （gateway/common/config.py:466-500）；本仓不做破坏性迁移，仅读侧兼容。
 	var heartbeatCfgMap map[string]any
 	if cfg != nil {
 		data, err := cfg.Load()
@@ -199,6 +201,8 @@ func NewAppGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (
 			logger.Warn(logComponent).
 				Err(err).
 				Msg("failed to read heartbeat config, using defaults")
+		} else if hb, ok := data["health_check"].(map[string]any); ok {
+			heartbeatCfgMap = hb
 		} else if hb, ok := data["heartbeat"].(map[string]any); ok {
 			heartbeatCfgMap = hb
 		}

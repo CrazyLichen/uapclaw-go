@@ -312,3 +312,8 @@ internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L1790-L1799
 # 由 workspace 解析，测试进程下不可能失败（同 config.New 其他调用点的既有口径）。
 internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L3569-L3571
 internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L3587-L3589
+
+# ── 2026-11-05 27-A B1b-3 探活配置 ──
+# app_web_handlers.go L2198-L2200 — feishuHasPushTarget 里 config.New("") 失败分支。
+# 默认路径由 workspace 解析，测试进程下不可能失败（同既有 config.New 调用点口径）。
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L2198-L2200
