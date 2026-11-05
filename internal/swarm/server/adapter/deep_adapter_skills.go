@@ -45,11 +45,9 @@ func (d *DeepAdapter) RefreshSkillRails(ctx context.Context) error {
 	// Python: _clear_skill_session_baseline (interface_deep.py:11261-11274)；
 	// 无活跃会话时本就是 no-op（上游 getattr(instance, "_loop_session", None) 为 None 直接 return）
 	if d.instance != nil {
-		// Python: getattr(self._instance, "_loop_session", None)（None 时直接 return）
-		// 用具体指针判空：*session.Session(nil) 装进接口后 != nil，会让判空失效
-		if sess := d.instance.LoopSession(); sess != nil {
-			rail.ClearSessionBaseline(sess)
-		}
+		// 会话判空交给 rail（ClearSessionBaseline 内部按 typed-nil 安全返回），
+		// 与 Python "loop_session 为 None 直接 return" 等价
+		rail.ClearSessionBaseline(d.instance.LoopSession())
 	}
 
 	logger.Info(logComponent).

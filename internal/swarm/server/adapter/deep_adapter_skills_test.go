@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	harness "github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	skillrails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/skills"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -103,4 +104,12 @@ func TestSkillScanDirs_忽略空字符串(t *testing.T) {
 	for _, dir := range dirs {
 		assert.NotEmpty(t, dir)
 	}
+}
+
+// TestRefreshSkillRails_未绑定会话时安全返回 实例存在但无活跃会话时不得 panic
+// （typed-nil 会话由 rail 的 isNilSession 兜底）
+func TestRefreshSkillRails_未绑定会话时安全返回(t *testing.T) {
+	rail := skillrails.NewSkillUseRail([]string{t.TempDir()})
+	d := &DeepAdapter{skillRail: rail, instance: &harness.DeepAgent{}}
+	require.NoError(t, d.RefreshSkillRails(context.Background()))
 }

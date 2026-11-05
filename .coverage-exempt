@@ -360,9 +360,3 @@ internal/agentcore/harness/prompts/tools/skill_tool.go#L15-L24
 # 所在分支要求完整 CodeAdapter 装配（agent card/configBase/沙箱路径齐全），
 # 与 deep 侧同一接线已由 TestGetToolCards_SkillToolkit接线 覆盖。
 internal/swarm/server/adapter/code_adapter.go#L954
-
-# deep_adapter_skills.go 的 RefreshSkillRails：①ReloadSkills 失败仅告警的分支——rail 只有
-# 扫描根为空时才报错，而刷新前总会填入 workspace 根，单测无法构造；②清会话基线分支需要
-# 已绑定会话的真实 DeepAgent，由集成链路（hot_reload 的 config.save_all、技能安装/卸载）覆盖。
-internal/swarm/server/adapter/deep_adapter_skills.go#L40-L42
-internal/swarm/server/adapter/deep_adapter_skills.go#L47-L52
