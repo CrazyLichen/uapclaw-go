@@ -260,12 +260,8 @@ type DeepAgentConfig struct {
 	ModelSelection []ModelSelectionEntry `json:"model_selection,omitempty"`
 	// ProgressiveToolEnabled 是否启用渐进式工具暴露
 	ProgressiveToolEnabled bool `json:"progressive_tool_enabled"`
-	// ProgressiveToolAlwaysVisibleTools 渐进式工具中始终可见的工具列表
-	ProgressiveToolAlwaysVisibleTools []string `json:"progressive_tool_always_visible_tools,omitempty"`
-	// ProgressiveToolDefaultVisibleTools 渐进式工具中默认可见的工具列表
-	ProgressiveToolDefaultVisibleTools []string `json:"progressive_tool_default_visible_tools,omitempty"`
-	// ProgressiveToolMaxLoadedTools 渐进式工具最大加载工具数，0 表示使用默认值 12
-	ProgressiveToolMaxLoadedTools int `json:"progressive_tool_max_loaded_tools,omitempty"`
+	// ToolSearchLimit tool_search 默认结果条数（有效范围 1..20），0 表示使用默认值 5
+	ToolSearchLimit int `json:"tool_search_limit,omitempty"`
 	// DefaultMode 默认 Agent 执行模式
 	DefaultMode AgentMode `json:"default_mode,omitempty"`
 	// Permissions 权限策略配置
@@ -281,8 +277,8 @@ type DeepAgentConfig struct {
 const (
 	// DefaultCompletionTimeout 默认完成超时秒数
 	DefaultCompletionTimeout = 600.0
-	// DefaultProgressiveToolMax 默认渐进式工具最大加载数
-	DefaultProgressiveToolMax = 12
+	// DefaultToolSearchLimit tool_search 默认结果条数（对齐上游 5）
+	DefaultToolSearchLimit = 5
 	// DefaultLanguage 默认语言
 	DefaultLanguage = "cn"
 	// DefaultOpenAIBaseURL 默认 OpenAI 基础地址
@@ -447,12 +443,12 @@ func (AudioModelConfig) FromEnv() AudioModelConfig {
 // Python: DeepAgentConfig 字段默认值（max_iterations=None 表示不限，completion_timeout=600.0 等）
 func NewDeepAgentConfig() *DeepAgentConfig {
 	return &DeepAgentConfig{
-		AutoCreateWorkspace:           true,
-		EnableReadImageMultimodal:     true,
-		TaskLoopNoProgressGuard:       TaskLoopNoProgressGuardConfig{Enabled: true, MaxConsecutiveEmptyAnswers: 3, MinAnswerChars: 20},
-		CompletionTimeout:             DefaultCompletionTimeout,
-		ProgressiveToolMaxLoadedTools: DefaultProgressiveToolMax,
-		Language:                      DefaultLanguage,
+		AutoCreateWorkspace:       true,
+		EnableReadImageMultimodal: true,
+		TaskLoopNoProgressGuard:   TaskLoopNoProgressGuardConfig{Enabled: true, MaxConsecutiveEmptyAnswers: 3, MinAnswerChars: 20},
+		CompletionTimeout:         DefaultCompletionTimeout,
+		ToolSearchLimit:           DefaultToolSearchLimit,
+		Language:                  DefaultLanguage,
 	}
 }
 
@@ -483,14 +479,6 @@ func (c *DeepAgentConfig) EffectiveLanguage() string {
 		return DefaultLanguage
 	}
 	return c.Language
-}
-
-// EffectiveProgressiveToolMaxLoadedTools 返回有效的渐进式工具最大加载数，0 取默认值
-func (c *DeepAgentConfig) EffectiveProgressiveToolMaxLoadedTools() int {
-	if c.ProgressiveToolMaxLoadedTools == 0 {
-		return DefaultProgressiveToolMax
-	}
-	return c.ProgressiveToolMaxLoadedTools
 }
 
 // EffectiveRestrictToWorkDir 返回有效的 RestrictToWorkDir 值

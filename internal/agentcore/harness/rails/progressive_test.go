@@ -2,705 +2,599 @@ package rails
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/tool_discovery"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// TestNewProgressiveToolRail 验证构造函数正确初始化各字段
-func TestNewProgressiveToolRail(t *testing.T) {
-	config := schema.NewDeepAgentConfig()
-	config.ProgressiveToolDefaultVisibleTools = []string{"read_file", "bash"}
-	config.ProgressiveToolAlwaysVisibleTools = []string{"search_tools", "load_tools"}
-	config.ProgressiveToolMaxLoadedTools = 20
-
-	rail := NewProgressiveToolRail(config)
-
-	assert.Equal(t, 90, rail.Priority())
-	assert.Equal(t, 20, rail.maxLoadedTools)
-	assert.Contains(t, rail.defaultVisible, "read_file")
-	assert.Contains(t, rail.defaultVisible, "bash")
-	assert.Contains(t, rail.alwaysVisible, "search_tools")
-	assert.Contains(t, rail.alwaysVisible, "load_tools")
-	assert.Empty(t, rail.metaToolNames)
-	assert.Empty(t, rail.ownedToolNames)
-	assert.Empty(t, rail.ownedToolIDs)
-	assert.Nil(t, rail.cachedAllTools)
+// progressiveFakeAbilityManager 测试用能力管理器（只实现 rail 需要的能力）。
+type progressiveFakeAbilityManager struct {
+	// cards 工具卡片注册表
+	cards map[string]*tool.ToolCard
+	// revision 注册版本
+	revision int
+	// executeResults Execute 的固定返回
+	executeResults []agentschema.ExecuteResult
+	// executeCalls Execute 调用次数
+	executeCalls int
 }
 
-// TestNewProgressiveToolRail_默认值 验证默认配置下的行为
-func TestNewProgressiveToolRail_默认值(t *testing.T) {
-	config := schema.NewDeepAgentConfig()
-	rail := NewProgressiveToolRail(config)
-
-	assert.Equal(t, 12, rail.maxLoadedTools)
-	assert.Empty(t, rail.defaultVisible)
-	assert.Empty(t, rail.alwaysVisible)
+// newProgressiveFakeAbilityManager 创建测试用能力管理器。
+func newProgressiveFakeAbilityManager() *progressiveFakeAbilityManager {
+	return &progressiveFakeAbilityManager{cards: make(map[string]*tool.ToolCard)}
 }
 
-// ──────────────────────────── 搜索评分 ────────────────────────────
-
-// TestSearchTools_精确匹配 验证精确名称匹配得最高分
-func TestSearchTools_精确匹配(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("read_file", "读取文件内容", nil),
-		cschema.NewToolInfo("write_file", "写入文件内容", nil),
-		cschema.NewToolInfo("bash", "执行 shell 命令", nil),
+// Add 注册能力。
+func (f *progressiveFakeAbilityManager) Add(ability cschema.Ability) agentschema.AddAbilityResult {
+	card, ok := ability.(*tool.ToolCard)
+	if !ok {
+		return agentschema.AddAbilityResult{Name: ability.AbilityName(), Added: false}
 	}
-
-	results, err := rail.searchTools(context.Background(), "read_file", 10, 1)
-	require.NoError(t, err)
-	require.Len(t, results, 1)
-	assert.Equal(t, "read_file", results[0]["name"])
-}
-
-// TestSearchTools_部分匹配 验证名称包含查询得较高分
-func TestSearchTools_部分匹配(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("read_file", "读取文件内容", nil),
-		cschema.NewToolInfo("write_file", "写入文件内容", nil),
-		cschema.NewToolInfo("bash", "执行 shell 命令", nil),
+	if _, exists := f.cards[card.Name]; exists {
+		return agentschema.AddAbilityResult{Name: card.Name, Added: false}
 	}
-
-	results, err := rail.searchTools(context.Background(), "file", 10, 1)
-	require.NoError(t, err)
-	assert.Len(t, results, 2)
+	f.cards[card.Name] = card
+	f.revision++
+	return agentschema.AddAbilityResult{Name: card.Name, Added: true}
 }
 
-// TestSearchTools_描述匹配 验证描述包含查询得分
-func TestSearchTools_描述匹配(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("tool_a", "PDF 文档处理工具", nil),
-		cschema.NewToolInfo("tool_b", "表格数据处理工具", nil),
+// AddMany 批量注册。
+func (f *progressiveFakeAbilityManager) AddMany(abilities []cschema.Ability) []agentschema.AddAbilityResult {
+	results := make([]agentschema.AddAbilityResult, 0, len(abilities))
+	for _, ability := range abilities {
+		results = append(results, f.Add(ability))
 	}
-
-	results, err := rail.searchTools(context.Background(), "pdf", 10, 1)
-	require.NoError(t, err)
-	require.Len(t, results, 1)
-	assert.Equal(t, "tool_a", results[0]["name"])
+	return results
 }
 
-// TestSearchTools_空查询 验证空查询返回空结果
-func TestSearchTools_空查询(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("tool_a", "工具 A", nil),
-	}
-
-	results, err := rail.searchTools(context.Background(), "", 10, 1)
-	require.NoError(t, err)
-	assert.Nil(t, results)
-}
-
-// TestSearchTools_限制数量 验证 limit 参数生效
-func TestSearchTools_限制数量(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("file_read", "读取", nil),
-		cschema.NewToolInfo("file_write", "写入", nil),
-		cschema.NewToolInfo("file_edit", "编辑", nil),
-	}
-
-	results, err := rail.searchTools(context.Background(), "file", 2, 1)
-	require.NoError(t, err)
-	assert.Len(t, results, 2)
-}
-
-// TestSearchTools_详情级别 验证 detail_level 控制返回字段
-func TestSearchTools_详情级别(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	params := map[string]any{
-		"properties": map[string]any{
-			"path": map[string]any{"type": "string"},
-		},
-	}
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("read_file", "读取文件", params),
-	}
-
-	// detail_level=1: 只有 name + description
-	results1, err := rail.searchTools(context.Background(), "read_file", 1, 1)
-	require.NoError(t, err)
-	require.Len(t, results1, 1)
-	assert.NotContains(t, results1[0], "parameter_summary")
-	assert.NotContains(t, results1[0], "parameters")
-
-	// detail_level=2：追加 parameter_summary
-	results2, err := rail.searchTools(context.Background(), "read_file", 1, 2)
-	require.NoError(t, err)
-	require.Len(t, results2, 1)
-	assert.Contains(t, results2[0], "parameter_summary")
-	assert.NotContains(t, results2[0], "parameters")
-
-	// detail_level=3：追加 parameters
-	results3, err := rail.searchTools(context.Background(), "read_file", 1, 3)
-	require.NoError(t, err)
-	require.Len(t, results3, 1)
-	assert.Contains(t, results3[0], "parameter_summary")
-	assert.Contains(t, results3[0], "parameters")
-}
-
-// TestSearchTools_排除元工具 验证搜索结果不包含元工具
-func TestSearchTools_排除元工具(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.metaToolNames = map[string]struct{}{
-		"search_tools": {},
-		"load_tools":   {},
-	}
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("search_tools", "搜索工具", nil),
-		cschema.NewToolInfo("load_tools", "加载工具", nil),
-		cschema.NewToolInfo("read_file", "读取文件", nil),
-	}
-
-	results, err := rail.searchTools(context.Background(), "tools", 10, 1)
-	require.NoError(t, err)
-	for _, r := range results {
-		assert.NotEqual(t, "search_tools", r["name"])
-		assert.NotEqual(t, "load_tools", r["name"])
-	}
-}
-
-// TestSearchTools_token匹配 验证 token 级匹配
-func TestSearchTools_token匹配(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("pdf_reader", "读取 PDF 文件内容", nil),
-	}
-
-	results, err := rail.searchTools(context.Background(), "pdf read", 10, 1)
-	require.NoError(t, err)
-	assert.Len(t, results, 1)
-}
-
-// ──────────────────────────── 可见工具管理 ────────────────────────────
-
-// TestGetVisibleTools_无会话 验证 session 为 nil 返回空
-func TestGetVisibleTools_无会话(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	assert.Nil(t, rail.getVisibleTools(nil))
-}
-
-// TestGetVisibleTools_正常读取 验证从会话状态读取可见工具列表
-func TestGetVisibleTools_正常读取(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	sess := newMockSession()
-	sess.state[visibleToolsKey] = []string{"read_file", "bash"}
-
-	result := rail.getVisibleTools(sess)
-	assert.Equal(t, []string{"read_file", "bash"}, result)
-}
-
-// TestSetVisibleTools_正常写入 验证写入去重保序
-func TestSetVisibleTools_正常写入(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	sess := newMockSession()
-
-	rail.setVisibleTools(sess, []string{"bash", "read_file", "bash", "edit_file"})
-
-	result := rail.getVisibleTools(sess)
-	assert.Equal(t, []string{"bash", "read_file", "edit_file"}, result)
-}
-
-// TestInitVisibleTools_首次初始化 验证首次调用正确设置可见工具
-func TestInitVisibleTools_首次初始化(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.alwaysVisible = map[string]struct{}{"search_tools": {}, "load_tools": {}}
-	sess := newMockSession()
-
-	rail.initVisibleTools(sess, map[string]struct{}{"read_file": {}, "bash": {}})
-
-	result := rail.getVisibleTools(sess)
-	assert.NotEmpty(t, result)
-	resultSet := toSet(result)
-	assert.Contains(t, resultSet, "search_tools")
-	assert.Contains(t, resultSet, "load_tools")
-	assert.Contains(t, resultSet, "read_file")
-	assert.Contains(t, resultSet, "bash")
-}
-
-// TestInitVisibleTools_已初始化跳过 验证重复调用不覆盖已有状态
-func TestInitVisibleTools_已初始化跳过(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	sess := newMockSession()
-
-	rail.setVisibleTools(sess, []string{"tool_a"})
-
-	rail.initVisibleTools(sess, map[string]struct{}{"tool_b": {}})
-
-	result := rail.getVisibleTools(sess)
-	assert.Equal(t, []string{"tool_a"}, result)
-}
-
-// ──────────────────────────── loadTools 工具加载 ────────────────────────────
-
-// TestLoadTools_无会话 验证 session 为 nil 返回错误信息
-func TestLoadTools_无会话(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-
-	result, err := rail.loadTools(context.Background(), nil, []string{"read_file"}, false)
-	require.NoError(t, err)
-	assert.Equal(t, "session is required for load_tools", result["message"])
-}
-
-// TestLoadTools_合并模式 验证默认合并模式
-func TestLoadTools_合并模式(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.maxLoadedTools = 20
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("read_file", "读取文件", nil),
-		cschema.NewToolInfo("write_file", "写入文件", nil),
-		cschema.NewToolInfo("bash", "执行命令", nil),
-	}
-	sess := newMockSession()
-	rail.setVisibleTools(sess, []string{"read_file"})
-
-	result, err := rail.loadTools(context.Background(), sess, []string{"write_file"}, false)
-	require.NoError(t, err)
-
-	visibleTools, ok := result["visible_tools"].([]string)
-	require.True(t, ok)
-	assert.Contains(t, visibleTools, "read_file")
-	assert.Contains(t, visibleTools, "write_file")
-}
-
-// TestLoadTools_替换模式 验证 replace=true 替换可见集合
-func TestLoadTools_替换模式(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.maxLoadedTools = 20
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("read_file", "读取文件", nil),
-		cschema.NewToolInfo("write_file", "写入文件", nil),
-		cschema.NewToolInfo("bash", "执行命令", nil),
-	}
-	sess := newMockSession()
-	rail.setVisibleTools(sess, []string{"read_file"})
-
-	result, err := rail.loadTools(context.Background(), sess, []string{"write_file"}, true)
-	require.NoError(t, err)
-
-	visibleTools, ok := result["visible_tools"].([]string)
-	require.True(t, ok)
-	assert.NotContains(t, visibleTools, "read_file")
-	assert.Contains(t, visibleTools, "write_file")
-}
-
-// TestLoadTools_超限截断 验证超过 maxLoadedTools 时截断
-func TestLoadTools_超限截断(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.maxLoadedTools = 2
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("read_file", "读取文件", nil),
-		cschema.NewToolInfo("write_file", "写入文件", nil),
-		cschema.NewToolInfo("bash", "执行命令", nil),
-	}
-	sess := newMockSession()
-
-	result, err := rail.loadTools(context.Background(), sess, []string{"read_file", "write_file", "bash"}, false)
-	require.NoError(t, err)
-
-	visibleTools, ok := result["visible_tools"].([]string)
-	require.True(t, ok)
-	assert.Len(t, visibleTools, 2)
-
-	skippedTools, ok := result["skipped_tools"].([]string)
-	require.True(t, ok)
-	assert.NotEmpty(t, skippedTools)
-}
-
-// TestLoadTools_不存在的工具 验证请求不存在的工具被跳过
-func TestLoadTools_不存在的工具(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.maxLoadedTools = 20
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("read_file", "读取文件", nil),
-	}
-	sess := newMockSession()
-
-	result, err := rail.loadTools(context.Background(), sess, []string{"nonexistent_tool"}, false)
-	require.NoError(t, err)
-
-	skippedTools, ok := result["skipped_tools"].([]string)
-	require.True(t, ok)
-	assert.Contains(t, skippedTools, "nonexistent_tool")
-}
-
-// ──────────────────────────── 工具分组 ────────────────────────────
-
-// TestToolGroupForNavigation 验证工具分组推断
-func TestToolGroupForNavigation(t *testing.T) {
-	tests := []struct {
-		name     string
-		desc     string
-		expected string
-	}{
-		{"read_file", "读取文件", "runtime"},
-		{"write_file", "写入文件", "runtime"},
-		{"bash", "执行命令", "runtime"},
-		{"code_execute", "执行代码", "runtime"},
-		{"pdf_reader", "读取PDF", "runtime"}, // "read" in name matches runtime first
-		{"invoice_parser", "解析发票", "document"},
-		{"pdf_process", "处理PDF文档", "document"},
-		{"xlsx_generate", "生成表格", "spreadsheet"},
-		{"xlsx_writer", "写入表格", "runtime"},     // "write" in name matches runtime first
-		{"excel_reader", "读取Excel", "runtime"}, // "read" in name matches runtime first
-		{"list_skill", "列出技能", "skill"},
-		{"general_tool", "通用工具", "general"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			info := cschema.NewToolInfo(tc.name, tc.desc, nil)
-			result := toolGroupForNavigation(info)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
-// TestToolGroupToCN 验证分组中文翻译
-func TestToolGroupToCN(t *testing.T) {
-	assert.Equal(t, "技能", toolGroupToCN("skill"))
-	assert.Equal(t, "运行时", toolGroupToCN("runtime"))
-	assert.Equal(t, "文档", toolGroupToCN("document"))
-	assert.Equal(t, "表格", toolGroupToCN("spreadsheet"))
-	assert.Equal(t, "通用", toolGroupToCN("general"))
-	assert.Equal(t, "通用", toolGroupToCN("unknown"))
-}
-
-// TestToolSummaryForNavigation 验证导航摘要提取
-func TestToolSummaryForNavigation(t *testing.T) {
-	info := cschema.NewToolInfo("test", "这是一个工具描述\n第二行", nil)
-	summary := toolSummaryForNavigation(info)
-	assert.Equal(t, "这是一个工具描述", summary)
-}
-
-// TestToolSummaryForNavigation_空描述 验证空描述返回默认文本
-func TestToolSummaryForNavigation_空描述(t *testing.T) {
-	info := cschema.NewToolInfo("test", "", nil)
-	summary := toolSummaryForNavigation(info)
-	assert.Equal(t, "暂无摘要。", summary)
-}
-
-// TestToolSummaryForNavigation_截断 验证超长摘要被截断
-func TestToolSummaryForNavigation_截断(t *testing.T) {
-	longDesc := make([]byte, 200)
-	for i := range longDesc {
-		longDesc[i] = 'a'
-	}
-	info := cschema.NewToolInfo("test", string(longDesc), nil)
-	summary := toolSummaryForNavigation(info)
-	assert.LessOrEqual(t, len(summary), 160)
-}
-
-// ──────────────────────────── 参数处理 ────────────────────────────
-
-// TestParametersSummary 验证参数摘要
-func TestParametersSummary(t *testing.T) {
-	assert.Equal(t, "no parameters", parametersSummary(nil))
-	assert.Equal(t, "empty schema", parametersSummary(map[string]any{}))
-
-	params := map[string]any{
-		"properties": map[string]any{
-			"path":  map[string]any{"type": "string"},
-			"count": map[string]any{"type": "integer"},
-		},
-	}
-	summary := parametersSummary(params)
-	assert.Contains(t, summary, "fields:")
-	assert.Contains(t, summary, "path")
-	assert.Contains(t, summary, "count")
-}
-
-// TestParametersToText 验证参数搜索文本
-func TestParametersToText(t *testing.T) {
-	params := map[string]any{
-		"properties": map[string]any{
-			"path": map[string]any{"type": "string"},
-		},
-	}
-	text := parametersToText(params)
-	assert.Contains(t, text, "fields:")
-	assert.Contains(t, text, "path")
-}
-
-// ──────────────────────────── 辅助函数 ────────────────────────────
-
-// TestToSet 验证切片转 set
-func TestToSet(t *testing.T) {
-	s := toSet([]string{"a", "b", "a", "c"})
-	assert.Len(t, s, 3)
-	assert.Contains(t, s, "a")
-	assert.Contains(t, s, "b")
-	assert.Contains(t, s, "c")
-}
-
-// TestDedupPreserveOrder 验证去重保序
-func TestDedupPreserveOrder(t *testing.T) {
-	result := dedupPreserveOrder([]string{"c", "a", "b", "a", "c"})
-	assert.Equal(t, []string{"c", "a", "b"}, result)
-}
-
-// TestDedupPreserveOrder_空输入 验证空输入
-func TestDedupPreserveOrder_空输入(t *testing.T) {
-	result := dedupPreserveOrder(nil)
-	assert.Empty(t, result)
-}
-
-// TestBuildToolSummary 验证工具摘要构建
-func TestBuildToolSummary(t *testing.T) {
-	info := cschema.NewToolInfo("test", "测试工具", map[string]any{
-		"properties": map[string]any{
-			"input": map[string]any{"type": "string"},
-		},
-	})
-
-	s1 := buildToolSummary(info, 1)
-	assert.Equal(t, "test", s1["name"])
-	assert.Equal(t, "测试工具", s1["description"])
-	assert.NotContains(t, s1, "parameter_summary")
-	assert.NotContains(t, s1, "parameters")
-
-	s2 := buildToolSummary(info, 2)
-	assert.Contains(t, s2, "parameter_summary")
-
-	s3 := buildToolSummary(info, 3)
-	assert.Contains(t, s3, "parameters")
-}
-
-// ──────────────────────────── GetCallbacks 回调注册 ────────────────────────────
-
-// TestProgressiveToolRail_GetCallbacks 验证回调映射包含 BeforeInvoke 和 BeforeModelCall
-func TestProgressiveToolRail_GetCallbacks(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	callbacks := rail.GetCallbacks()
-
-	assert.Contains(t, callbacks, agentinterfaces.CallbackBeforeInvoke)
-	assert.Contains(t, callbacks, agentinterfaces.CallbackBeforeModelCall)
-	assert.Contains(t, callbacks, agentinterfaces.CallbackBeforeTaskIteration)
-	assert.Contains(t, callbacks, agentinterfaces.CallbackAfterTaskIteration)
-}
-
-// ──────────────────────────── BeforeModelCall 工具过滤 ────────────────────────────
-
-// TestBeforeModelCall_工具过滤 验证 BeforeModelCall 正确过滤不可见工具
-func TestBeforeModelCall_工具过滤(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.alwaysVisible = map[string]struct{}{"search_tools": {}, "load_tools": {}}
-	rail.metaToolNames = map[string]struct{}{"search_tools": {}, "load_tools": {}}
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("search_tools", "搜索工具", nil),
-		cschema.NewToolInfo("load_tools", "加载工具", nil),
-		cschema.NewToolInfo("read_file", "读取文件", nil),
-		cschema.NewToolInfo("bash", "执行命令", nil),
-	}
-
-	sess := newMockSession()
-	rail.setVisibleTools(sess, []string{"read_file"})
-
-	tools := []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("search_tools", "搜索工具", nil),
-		cschema.NewToolInfo("load_tools", "加载工具", nil),
-		cschema.NewToolInfo("read_file", "读取文件", nil),
-		cschema.NewToolInfo("bash", "执行命令", nil),
-		cschema.NewToolInfo("write_file", "写入文件", nil),
-	}
-	modelInputs := &agentinterfaces.ModelCallInputs{
-		Tools: tools,
-	}
-
-	agent := newFakeBaseAgent()
-	cbc := agentinterfaces.NewAgentCallbackContext(agent, modelInputs, sess)
-
-	err := rail.BeforeModelCall(context.Background(), cbc)
-	require.NoError(t, err)
-
-	filtered := modelInputs.Tools
-	names := make([]string, len(filtered))
-	for i, t := range filtered {
-		names[i] = t.GetName()
-	}
-
-	assert.Contains(t, names, "search_tools")
-	assert.Contains(t, names, "load_tools")
-	assert.Contains(t, names, "read_file")
-	assert.NotContains(t, names, "bash")
-	assert.NotContains(t, names, "write_file")
-}
-
-// TestBeforeModelCall_alwaysVisible 验证 always_visible 工具始终通过过滤
-func TestBeforeModelCall_alwaysVisible(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.alwaysVisible = map[string]struct{}{"bash": {}}
-	rail.metaToolNames = map[string]struct{}{}
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("bash", "执行命令", nil),
-	}
-
-	sess := newMockSession()
-
-	tools := []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("bash", "执行命令", nil),
-		cschema.NewToolInfo("write_file", "写入文件", nil),
-	}
-	modelInputs := &agentinterfaces.ModelCallInputs{
-		Tools: tools,
-	}
-
-	agent := newFakeBaseAgent()
-	cbc := agentinterfaces.NewAgentCallbackContext(agent, modelInputs, sess)
-
-	err := rail.BeforeModelCall(context.Background(), cbc)
-	require.NoError(t, err)
-
-	filtered := modelInputs.Tools
-	names := make([]string, len(filtered))
-	for i, t := range filtered {
-		names[i] = t.GetName()
-	}
-	assert.Contains(t, names, "bash")
-	assert.NotContains(t, names, "write_file")
-}
-
-// ──────────────────────────── 导航条目构建 ────────────────────────────
-
-// TestBuildNavigationEntries 验证导航条目包含 baseline 和 loaded 工具
-func TestBuildNavigationEntries(t *testing.T) {
-	rail := NewProgressiveToolRail(schema.NewDeepAgentConfig())
-	rail.alwaysVisible = map[string]struct{}{"search_tools": {}}
-	rail.defaultVisible = map[string]struct{}{"read_file": {}}
-	rail.cachedAllTools = []cschema.ToolInfoInterface{
-		cschema.NewToolInfo("read_file", "读取文件", nil),
-		cschema.NewToolInfo("bash", "执行命令", nil),
-		cschema.NewToolInfo("write_file", "写入文件", nil),
-	}
-
-	sess := newMockSession()
-	rail.setVisibleTools(sess, []string{"write_file"})
-
-	entries := rail.buildNavigationEntries(sess, "cn")
-	assert.NotEmpty(t, entries)
-	joined := strings.Join(entries, " ")
-	assert.Contains(t, joined, "read_file")
-	assert.Contains(t, joined, "write_file")
-}
-
-// ──────────────────────────── Mock 实现 ────────────────────────────
-
-// mockSession 简单的 SessionFacade mock
-type mockSession struct {
-	state map[string]any
-}
-
-func newMockSession() *mockSession {
-	return &mockSession{state: make(map[string]any)}
-}
-
-func (m *mockSession) GetSessionID() string { return "test-session" }
-
-func (m *mockSession) UpdateState(data map[string]any) {
-	for k, v := range data {
-		m.state[k] = v
-	}
-}
-
-func (m *mockSession) GetState(key state.StateKey) (any, error) {
-	if key.Type() == state.StateKeyString {
-		path := key.String()
-		// StateKey.String() 格式为 "StateKey(path)"
-		const prefix = "StateKey("
-		const suffix = ")"
-		if strings.HasPrefix(path, prefix) && strings.HasSuffix(path, suffix) {
-			path = path[len(prefix) : len(path)-len(suffix)]
-		}
-		val, ok := m.state[path]
-		if !ok {
-			return nil, nil
-		}
-		return val, nil
-	}
-	return nil, nil
-}
-
-func (m *mockSession) DumpState() map[string]any                        { return m.state }
-func (m *mockSession) WriteStream(_ context.Context, _ any) error       { return nil }
-func (m *mockSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
-func (m *mockSession) GetEnv(_ string, _ ...any) any                    { return nil }
-func (m *mockSession) Interact(_ context.Context, _ any) error          { return nil }
-func (m *mockSession) ClearSession(_ context.Context)                   {}
-
-// 编译时验证 mockSession 满足 SessionFacade 接口
-var _ sessioninterfaces.SessionFacade = (*mockSession)(nil)
-
-// fakeBaseAgent 满足 BaseAgent 接口的测试 mock
-type fakeBaseAgent struct {
-	cbMgr   *agentinterfaces.AgentCallbackManager
-	builder *saprompt.SystemPromptBuilder
-}
-
-func newFakeBaseAgent() *fakeBaseAgent {
-	return &fakeBaseAgent{
-		cbMgr:   agentinterfaces.NewAgentCallbackManager("test-agent"),
-		builder: saprompt.NewSystemPromptBuilder(),
-	}
-}
-
-func (f *fakeBaseAgent) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
-	return nil
-}
-func (f *fakeBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
-	return nil, nil
-}
-func (f *fakeBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
-	return nil, nil
-}
-func (f *fakeBaseAgent) Card() *agentschema.AgentCard {
-	return &agentschema.AgentCard{
-		BaseCard: cschema.BaseCard{ID: "test-agent", Name: "TestAgent"},
-	}
-}
-func (f *fakeBaseAgent) Config() agentinterfaces.AgentConfig                     { return nil }
-func (f *fakeBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
-func (f *fakeBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager  { return f.cbMgr }
-func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
-	if f.builder == nil {
+// Remove 移除能力。
+func (f *progressiveFakeAbilityManager) Remove(name string) cschema.Ability {
+	card, ok := f.cards[name]
+	if !ok {
 		return nil
 	}
-	return f.builder
+	delete(f.cards, name)
+	return card
 }
-func (f *fakeBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
-	return nil
+
+// RemoveMany 批量移除。
+func (f *progressiveFakeAbilityManager) RemoveMany(names []string) []cschema.Ability {
+	results := make([]cschema.Ability, 0, len(names))
+	for _, name := range names {
+		results = append(results, f.Remove(name))
+	}
+	return results
 }
-func (f *fakeBaseAgent) RegisterRail(_ context.Context, _ agentinterfaces.AgentRail, _ ...cb.CallbackOption) error {
-	return nil
-}
-func (f *fakeBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
+
+// Get 按名查询。
+func (f *progressiveFakeAbilityManager) Get(name string) cschema.Ability {
+	if card, ok := f.cards[name]; ok {
+		return card
+	}
 	return nil
 }
 
-// 10.6.19 接口面扩展桩（Uapswarm 访问器；AbilityManager/SystemPromptBuilder 已有实现）
-func (f *fakeBaseAgent) UapswarmProjectDir() string       { return "" }
-func (f *fakeBaseAgent) SetUapswarmProjectDir(string)     {}
-func (f *fakeBaseAgent) UapswarmCodeProjectDir() string   { return "" }
-func (f *fakeBaseAgent) SetUapswarmCodeProjectDir(string) {}
-func (f *fakeBaseAgent) UapswarmAdapterMode() string      { return "" }
-func (f *fakeBaseAgent) SetUapswarmAdapterMode(string)    {}
+// List 列出全部能力。
+func (f *progressiveFakeAbilityManager) List() []cschema.Ability {
+	abilities := make([]cschema.Ability, 0, len(f.cards))
+	for _, card := range f.cards {
+		abilities = append(abilities, card)
+	}
+	return abilities
+}
 
-// 编译时验证
-var _ agentinterfaces.BaseAgent = (*fakeBaseAgent)(nil)
+// ListToolInfo 列出工具 schema。
+func (f *progressiveFakeAbilityManager) ListToolInfo(_ context.Context, names []string, _ ...string) ([]cschema.ToolInfoInterface, error) {
+	infos := make([]cschema.ToolInfoInterface, 0, len(f.cards))
+	for _, card := range f.cards {
+		infos = append(infos, card.ToolInfo())
+	}
+	return infos, nil
+}
+
+// Execute 执行工具调用（返回固定结果）。
+func (f *progressiveFakeAbilityManager) Execute(
+	_ context.Context,
+	_ *agentinterfaces.AgentCallbackContext,
+	_ []*llmschema.ToolCall,
+	_ sessioninterfaces.SessionFacade,
+	_ string,
+) []agentschema.ExecuteResult {
+	f.executeCalls++
+	return f.executeResults
+}
+
+// SetContextEngine 空实现。
+func (f *progressiveFakeAbilityManager) SetContextEngine(_ ceinterface.ContextEngine) {}
+
+// ReorderTools 空实现。
+func (f *progressiveFakeAbilityManager) ReorderTools(_ []string) {}
+
+// RegistryRevision 返回注册版本。
+func (f *progressiveFakeAbilityManager) RegistryRevision() int { return f.revision }
+
+// progressiveFakeSession 测试用会话门面。
+type progressiveFakeSession struct {
+	// id 会话 id
+	id string
+	// stateMap 状态表
+	stateMap map[string]any
+}
+
+// newProgressiveFakeSession 创建测试会话。
+func newProgressiveFakeSession(id string) *progressiveFakeSession {
+	return &progressiveFakeSession{id: id, stateMap: make(map[string]any)}
+}
+
+// GetSessionID 返回会话 id。
+func (f *progressiveFakeSession) GetSessionID() string { return f.id }
+
+// UpdateState 合并写入状态。
+func (f *progressiveFakeSession) UpdateState(data map[string]any) {
+	for key, value := range data {
+		f.stateMap[key] = value
+	}
+}
+
+// GetState 读取状态。
+func (f *progressiveFakeSession) GetState(key state.StateKey) (any, error) {
+	return f.stateMap[key.String()], nil
+}
+
+// DumpState 导出状态。
+func (f *progressiveFakeSession) DumpState() map[string]any { return f.stateMap }
+
+// WriteStream 空实现。
+func (f *progressiveFakeSession) WriteStream(_ context.Context, _ any) error { return nil }
+
+// WriteCustomStream 空实现。
+func (f *progressiveFakeSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
+
+// GetEnv 返回 nil。
+func (f *progressiveFakeSession) GetEnv(_ string, _ ...any) any { return nil }
+
+// Interact 空实现。
+func (f *progressiveFakeSession) Interact(_ context.Context, _ any) error { return nil }
+
+// ClearSession 空实现。
+func (f *progressiveFakeSession) ClearSession(_ context.Context) {}
+
+// progressiveFakeAttachmentManager 测试用附件管理器。
+type progressiveFakeAttachmentManager struct {
+	// sections 已写入附件（按 section 名覆盖）
+	sections map[string]*prompts.Attachment
+	// snapshot 是否已有历史快照
+	snapshot bool
+}
+
+// newProgressiveFakeAttachmentManager 创建测试附件管理器。
+func newProgressiveFakeAttachmentManager() *progressiveFakeAttachmentManager {
+	return &progressiveFakeAttachmentManager{sections: make(map[string]*prompts.Attachment)}
+}
+
+// AddSection 写入附件。
+func (f *progressiveFakeAttachmentManager) AddSection(
+	sessionID, section, content string,
+	kind prompts.AttachmentKind,
+	source string,
+	opts ...prompts.AttachmentOption,
+) (*prompts.Attachment, error) {
+	item := &prompts.Attachment{
+		SessionID: sessionID,
+		Section:   section,
+		Content:   content,
+		Kind:      kind,
+		Source:    source,
+		Metadata:  make(map[string]any),
+	}
+	for _, opt := range opts {
+		opt(item)
+	}
+	f.sections[section] = item
+	return item, nil
+}
+
+// Find 查询附件。
+func (f *progressiveFakeAttachmentManager) Find(_, section, _ string) *prompts.Attachment {
+	return f.sections[section]
+}
+
+// HasHistorySnapshot 返回是否有历史快照。
+func (f *progressiveFakeAttachmentManager) HasHistorySnapshot(_ string) bool { return f.snapshot }
+
+// newRail 创建测试用 rail。
+func newProgressiveRail(progressive bool) *ProgressiveToolRail {
+	return NewProgressiveToolRail(&schema.DeepAgentConfig{ProgressiveToolEnabled: progressive})
+}
+
+// newDeferredCard 构造 deferred 卡片。
+func newProgressiveDeferredCard(name, description string) *tool.ToolCard {
+	card := &tool.ToolCard{}
+	card.Name = name
+	card.Description = description
+	card.Exposure = tool.ToolExposureDeferred
+	card.SetExposureDeclared(true)
+	return card
+}
+
+// TestCollectDeferredToolDescriptions_只取deferred且排除元工具 验证目录收集规则。
+func TestCollectDeferredToolDescriptions_只取deferred且排除元工具(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+
+	directCard := &tool.ToolCard{}
+	directCard.Name = "read_file"
+	directCard.Exposure = tool.ToolExposureDirect
+	manager.cards["read_file"] = directCard
+
+	metaCard := &tool.ToolCard{}
+	metaCard.Name = "tool_search"
+	metaCard.Exposure = tool.ToolExposureDirect
+	manager.cards["tool_search"] = metaCard
+
+	manager.cards["xlsx_read"] = newProgressiveDeferredCard("xlsx_read", "读取 Excel")
+	rail.metaToolNames = map[string]struct{}{"tool_search": {}, "tool_call": {}}
+
+	got := rail.collectDeferredToolDescriptions(manager)
+	if len(got) != 1 || got["xlsx_read"] != "读取 Excel" {
+		t.Fatalf("只应收录 deferred 且非元工具，got %v", got)
+	}
+}
+
+// TestResolveProgressiveDiscovery_本地化与别名 验证 display 与 aliases 解析。
+func TestResolveProgressiveDiscovery_本地化与别名(t *testing.T) {
+	card := newProgressiveDeferredCard("xlsx_read", "fallback")
+	card.Properties = map[string]any{
+		progressiveDiscoveryProperty: map[string]any{
+			"display": map[string]any{"cn": "读取表格", "en": "read spreadsheet"},
+			"aliases": []any{"excel", "xlsx"},
+		},
+	}
+	extra, display := resolveProgressiveDiscovery(card, "cn")
+	if display != "读取表格" {
+		t.Fatalf("中文 display 应命中，got %s", display)
+	}
+	for _, want := range []string{"read spreadsheet", "读取表格", "excel", "xlsx"} {
+		if !strings.Contains(extra, want) {
+			t.Fatalf("额外检索文本缺 %s：%s", want, extra)
+		}
+	}
+	if _, fallback := resolveProgressiveDiscovery(card, "jp"); fallback != "" {
+		t.Fatalf("未知语言不应命中本地化，got %s", fallback)
+	}
+}
+
+// TestEnsureToolSearchIndex_指纹变化触发重建 验证双判据复用。
+func TestEnsureToolSearchIndex_指纹变化触发重建(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	card := newProgressiveDeferredCard("t1", "旧描述")
+	manager.cards["t1"] = card
+	rail.toolSearchRegistry = manager
+
+	rail.ensureToolSearchIndex()
+	first := rail.toolSearchIndex
+	rail.ensureToolSearchIndex()
+	if rail.toolSearchIndex != first {
+		t.Fatal("未变化时不应重建")
+	}
+
+	card.Description = "新描述"
+	rail.ensureToolSearchIndex()
+	if rail.toolSearchIndex == first {
+		t.Fatal("描述变化后应重建")
+	}
+}
+
+// TestSearchTools_授权写回会话 验证检索结果与授权落库。
+func TestSearchTools_授权写回会话(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	manager.cards["xlsx_read"] = newProgressiveDeferredCard("xlsx_read", "读取 Excel 表格")
+	rail.toolSearchRegistry = manager
+
+	session := newProgressiveFakeSession("s1")
+	results, err := rail.searchTools(context.Background(), "excel", 5, session)
+	if err != nil {
+		t.Fatalf("搜索失败: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("应命中 1 个工具，got %d", len(results))
+	}
+	names := rail.getDiscoveredTools(session)
+	if len(names) != 1 || names[0] != "xlsx_read" {
+		t.Fatalf("授权名单应写入会话，got %v", names)
+	}
+	if rail.getDiscoveredToolFingerprints(session)["xlsx_read"] == "" {
+		t.Fatal("授权指纹应写入会话")
+	}
+	trace, _ := rail.getTrace(session)
+	if len(trace) != 1 || trace[0]["action"] != "tool_search" {
+		t.Fatalf("应记录搜索轨迹，got %v", trace)
+	}
+}
+
+// TestSetDiscoveredTools_合并与裁剪 验证授权表合并去重与指纹裁剪。
+func TestSetDiscoveredTools_合并与裁剪(t *testing.T) {
+	rail := newProgressiveRail(true)
+	session := newProgressiveFakeSession("s1")
+	rail.setDiscoveredTools(session, []string{"a", "a", "b"}, map[string]string{"a": "fp-a", "b": "fp-b", "c": "fp-c"})
+	names := rail.getDiscoveredTools(session)
+	if len(names) != 2 {
+		t.Fatalf("应去重为 2 项，got %v", names)
+	}
+	fingerprints := rail.getDiscoveredToolFingerprints(session)
+	if len(fingerprints) != 2 || fingerprints["c"] != "" {
+		t.Fatalf("指纹应裁剪到名单内，got %v", fingerprints)
+	}
+
+	rail.invalidateDiscoveredTools(session, map[string]struct{}{"a": {}})
+	if len(rail.getDiscoveredTools(session)) != 1 {
+		t.Fatalf("失效后应只剩 1 项，got %v", rail.getDiscoveredTools(session))
+	}
+}
+
+// TestSyncDeferredToolAttachment_首轮未变不发附件 验证首轮静默。
+func TestSyncDeferredToolAttachment_首轮未变不发附件(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	manager.cards["a"] = newProgressiveDeferredCard("a", "工具A")
+	rail.toolSearchRegistry = manager
+	session := newProgressiveFakeSession("s1")
+	attachments := newProgressiveFakeAttachmentManager()
+
+	err := rail.syncDeferredToolAttachment(context.Background(), session, attachments, map[string]string{"a": "工具A"})
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if len(attachments.sections) != 0 {
+		t.Fatalf("首轮未变化不应写附件，got %d", len(attachments.sections))
+	}
+}
+
+// TestSyncDeferredToolAttachment_新增发delta 验证目录变化推送。
+func TestSyncDeferredToolAttachment_新增发delta(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	manager.cards["a"] = newProgressiveDeferredCard("a", "工具A")
+	manager.cards["b"] = newProgressiveDeferredCard("b", "工具B")
+	rail.toolSearchRegistry = manager
+	session := newProgressiveFakeSession("s1")
+	attachments := newProgressiveFakeAttachmentManager()
+	attachments.snapshot = true
+
+	rail.ensureInitialDeferredCatalog(session, manager)
+	if err := rail.syncDeferredToolAttachment(context.Background(), session, attachments, map[string]string{"a": "工具A"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rail.syncDeferredToolAttachment(context.Background(), session, attachments,
+		map[string]string{"a": "工具A", "b": "工具B"}); err != nil {
+		t.Fatal(err)
+	}
+
+	item := attachments.sections[deferredToolAttachmentSection]
+	if item == nil {
+		t.Fatal("应写入附件")
+	}
+	if !strings.Contains(item.Content, "新增") || !strings.Contains(item.Content, "b") {
+		t.Fatalf("delta 应含新增段，got %s", item.Content)
+	}
+	if item.Metadata["catalog_mode"] != "delta" {
+		t.Fatalf("mode 应为 delta，got %v", item.Metadata["catalog_mode"])
+	}
+}
+
+// TestSyncDeferredToolAttachment_连续十次后发快照 验证快照兜底。
+func TestSyncDeferredToolAttachment_连续十次后发快照(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	rail.toolSearchRegistry = manager
+	session := newProgressiveFakeSession("s1")
+	attachments := newProgressiveFakeAttachmentManager()
+	attachments.snapshot = true
+
+	catalog := map[string]string{"tool_0": "工具0"}
+	rail.ensureInitialDeferredCatalog(session, manager)
+	if err := rail.syncDeferredToolAttachment(context.Background(), session, attachments, catalog); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= fullSnapshotInterval; i++ {
+		catalog["tool_"+strconv.Itoa(i)] = "工具"
+		if err := rail.syncDeferredToolAttachment(context.Background(), session, attachments, catalog); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if mode := attachments.sections[deferredToolAttachmentSection].Metadata["catalog_mode"]; mode != "snapshot" {
+		t.Fatalf("连续 delta 达上限后应发快照，got %v", mode)
+	}
+}
+
+// TestCallDiscoveredTool_未授权拒绝 验证校验顺序第一位。
+func TestCallDiscoveredTool_未授权拒绝(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	manager.cards["xlsx_read"] = newProgressiveDeferredCard("xlsx_read", "读取 Excel")
+	rail.toolSearchRegistry = manager
+	session := newProgressiveFakeSession("s1")
+
+	result, err := rail.callDiscoveredTool(context.Background(), "xlsx_read", nil, session, nil)
+	if err != nil {
+		t.Fatalf("拒绝应作为结果返回: %v", err)
+	}
+	if result.Success() {
+		t.Fatal("未授权应失败")
+	}
+	if !strings.Contains(result.Err().Error(), "must be returned by tool_search") {
+		t.Fatalf("文案不符: %v", result.Err())
+	}
+}
+
+// TestCallDiscoveredTool_指纹变化要求重搜 验证变更即失效。
+func TestCallDiscoveredTool_指纹变化要求重搜(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	manager.cards["xlsx_read"] = newProgressiveDeferredCard("xlsx_read", "读取 Excel")
+	rail.toolSearchRegistry = manager
+	session := newProgressiveFakeSession("s1")
+	rail.setDiscoveredTools(session, []string{"xlsx_read"}, map[string]string{"xlsx_read": "stale"})
+
+	result, err := rail.callDiscoveredTool(context.Background(), "xlsx_read", nil, session, nil)
+	if err != nil {
+		t.Fatalf("不应返回 error: %v", err)
+	}
+	if !strings.Contains(result.Err().Error(), "has changed; search it again") {
+		t.Fatalf("文案不符: %v", result.Err())
+	}
+	if len(rail.getDiscoveredTools(session)) != 0 {
+		t.Fatal("授权应被失效")
+	}
+}
+
+// TestCallDiscoveredTool_成功转发 验证嵌套执行与结果转发。
+func TestCallDiscoveredTool_成功转发(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	card := newProgressiveDeferredCard("xlsx_read", "读取 Excel")
+	manager.cards["xlsx_read"] = card
+	manager.executeResults = []agentschema.ExecuteResult{{
+		Result:  map[string]any{"sheet": "S1"},
+		ToolMsg: llmschema.NewToolMessage("call-1:target", "渲染结果"),
+	}}
+	rail.toolSearchRegistry = manager
+	session := newProgressiveFakeSession("s1")
+	rail.setDiscoveredTools(session, []string{"xlsx_read"},
+		map[string]string{"xlsx_read": toolFingerprintOf(card)})
+
+	cbc := agentinterfaces.NewAgentCallbackContext(nil, &agentinterfaces.ToolCallInputs{
+		ToolCall: llmschema.NewToolCall("call-1", "tool_call", `{}`),
+		ToolName: "tool_call",
+	}, session)
+	result, err := rail.callDiscoveredTool(context.Background(), "xlsx_read", map[string]any{"sheet": "S1"}, session, cbc)
+	if err != nil {
+		t.Fatalf("不应报错: %v", err)
+	}
+	if !result.Success() {
+		t.Fatalf("应成功，got %v", result.Err())
+	}
+	if manager.executeCalls != 1 {
+		t.Fatalf("应嵌套执行一次，got %d", manager.executeCalls)
+	}
+	if result.RenderedText() != "渲染结果" {
+		t.Fatalf("应转发目标渲染文本，got %s", result.RenderedText())
+	}
+}
+
+// TestFilterModelCallTools_只留meta与direct 验证顶层过滤。
+func TestFilterModelCallTools_只留meta与direct(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	directCard := &tool.ToolCard{}
+	directCard.Name = "read_file"
+	directCard.Exposure = tool.ToolExposureDirect
+	manager.cards["read_file"] = directCard
+	manager.cards["xlsx_read"] = newProgressiveDeferredCard("xlsx_read", "读取 Excel")
+	rail.metaToolNames = map[string]struct{}{"tool_search": {}, "tool_call": {}}
+
+	inputs := &agentinterfaces.ModelCallInputs{Tools: []cschema.ToolInfoInterface{
+		directCard.ToolInfo(),
+		manager.cards["xlsx_read"].ToolInfo(),
+	}}
+	if err := rail.filterModelCallTools(inputs, manager); err != nil {
+		t.Fatal(err)
+	}
+	if len(inputs.Tools) != 1 || inputs.Tools[0].GetName() != "read_file" {
+		t.Fatalf("只应保留 direct，got %v", inputs.Tools)
+	}
+}
+
+// TestInit_元工具显式direct 验证元工具注册与曝光锁定。
+func TestInit_元工具显式direct(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	agent := &progressiveFakeInitAgent{abilityManager: manager}
+	if err := rail.Init(context.Background(), agent); err != nil {
+		t.Fatalf("Init 失败: %v", err)
+	}
+	for _, name := range []string{"tool_search", "tool_call"} {
+		card, ok := manager.cards[name]
+		if !ok {
+			t.Fatalf("应注册元工具 %s", name)
+		}
+		if card.EffectiveExposure() != tool.ToolExposureDirect {
+			t.Fatalf("元工具须 direct，got %s", card.EffectiveExposure())
+		}
+		if declared, ok := card.GetExposureDeclared(); !ok || !declared {
+			t.Fatalf("元工具应锁定曝光声明")
+		}
+	}
+	if len(rail.metaToolNames) != 2 {
+		t.Fatalf("元工具名集合应为 2，got %v", rail.metaToolNames)
+	}
+}
+
+// TestUninit_不移除他人注册 验证 ownership 判定。
+func TestUninit_不移除他人注册(t *testing.T) {
+	rail := newProgressiveRail(true)
+	manager := newProgressiveFakeAbilityManager()
+	agent := &progressiveFakeInitAgent{abilityManager: manager}
+	if err := rail.Init(context.Background(), agent); err != nil {
+		t.Fatal(err)
+	}
+	// 模拟他人接管同名工具
+	replacement := &tool.ToolCard{}
+	replacement.Name = "tool_search"
+	replacement.ID = "other-owner"
+	manager.cards["tool_search"] = replacement
+
+	if err := rail.Uninit(agent); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := manager.cards["tool_search"]; !exists {
+		t.Fatal("他人接管的同名工具不得被移除")
+	}
+	if _, exists := manager.cards["tool_call"]; exists {
+		t.Fatal("自有元工具应被移除")
+	}
+}
+
+// getTrace 读取会话里的发现轨迹（测试助手）。
+func (r *ProgressiveToolRail) getTrace(sess sessioninterfaces.SessionFacade) ([]map[string]any, error) {
+	raw, err := sess.GetState(state.StringKey(discoveryTraceKey))
+	if err != nil {
+		return nil, err
+	}
+	trace, _ := raw.([]map[string]any)
+	return trace, nil
+}
+
+// toolFingerprintOf 计算卡片指纹（测试助手）。
+func toolFingerprintOf(card *tool.ToolCard) string {
+	return tool_discovery.ToolFingerprint(card.ToolInfo())
+}
+
+// progressiveFakeInitAgent 测试用 BaseAgent（只提供 AbilityManager/Card）。
+type progressiveFakeInitAgent struct {
+	agentinterfaces.BaseAgent
+	// abilityManager 能力管理器
+	abilityManager agentinterfaces.AbilityManagerInterface
+}
+
+// AbilityManager 返回能力管理器。
+func (f *progressiveFakeInitAgent) AbilityManager() agentinterfaces.AbilityManagerInterface {
+	return f.abilityManager
+}
+
+// Card 返回 Agent 卡片。
+func (f *progressiveFakeInitAgent) Card() *agentschema.AgentCard { return nil }

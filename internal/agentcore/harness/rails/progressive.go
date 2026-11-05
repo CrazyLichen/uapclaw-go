@@ -2,11 +2,15 @@ package rails
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
+	"sync"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/tool_discovery"
@@ -15,38 +19,76 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ProgressiveToolRail 渐进式工具发现和可调用工具过滤 Rail。
+// deferredToolDocument BM25 索引的文档单元：可调用 schema + 仅检索用文本。
 //
-// 在大工具集场景下，通过 search_tools/load_tools 元工具实现渐进式工具暴露：
-//   - BeforeInvoke：缓存全量工具清单 + 初始化会话可见工具
-//   - BeforeModelCall：注入导航节+规则节到系统提示词，并过滤 inputs.Tools 为仅可见工具
+// Python: _DeferredToolDocument
+type deferredToolDocument struct {
+	// info 模型可见工具 schema
+	info cschema.ToolInfoInterface
+	// extraSearchText 仅参与检索的额外文本（本地化 display + aliases）
+	extraSearchText string
+	// displayDescription 目录摘要使用的本地化描述
+	displayDescription string
+}
+
+// ProgressiveToolRail 渐进式工具发现与延迟工具目录 Rail。
 //
-// Python: ProgressiveToolRail (openjiuwen/harness/rails/progressive_tool_rail.py)
+// 大工具集场景下，deferred 工具不进顶层 tools，只把目录摘要写进系统提示词；
+// 模型用 tool_search 发现（返回完整 schema），用固定 tool_call 执行。
+//
+// Python: openjiuwen/harness/rails/progressive_tool_rail.py (ProgressiveToolRail)
 type ProgressiveToolRail struct {
 	DeepAgentRail
+	// mu 保护索引替换、缓存与卡片映射
+	mu sync.Mutex
 	// config DeepAgent 运行时配置
 	config *schema.DeepAgentConfig
-	// defaultVisible 默认可见工具名称集合
-	defaultVisible map[string]struct{}
-	// alwaysVisible 始终可见工具名称集合
-	alwaysVisible map[string]struct{}
-	// maxLoadedTools 最大加载工具数
-	maxLoadedTools int
-	// metaToolNames 元工具名称集合（search_tools, load_tools）
+	// metaToolNames 元工具名称集合（tool_search/tool_call）
 	metaToolNames map[string]struct{}
-	// ownedToolNames 本 Rail 注册到 ability_manager 的工具名称集合
-	ownedToolNames map[string]struct{}
-	// ownedToolIDs 本 Rail 注册到 resource_mgr 的工具 ID 集合
-	ownedToolIDs map[string]struct{}
-	// cachedAllTools 缓存的全量工具清单
-	cachedAllTools []cschema.ToolInfoInterface
+	// ownedToolCards 本 Rail 注册且仍持有的卡片（name → card）
+	ownedToolCards map[string]*tool.ToolCard
+	// cachedAllToolInfos 全量工具清单缓存
+	cachedAllToolInfos []cschema.ToolInfoInterface
+	// toolSearchIndex BM25 索引（不可变实例，变化时整体替换）
+	toolSearchIndex *tool_discovery.BM25ToolIndex
+	// toolSearchIndexRevision 建索引时的注册版本
+	toolSearchIndexRevision int
+	// toolSearchRegistry 注册表引用（rail 自持，供索引与目录读取）
+	toolSearchRegistry agentinterfaces.AbilityManagerInterface
+}
+
+// promptAttachmentProvider 提供会话级动态提示词管理器。
+//
+// 由 harness.DeepAgent 实现（PromptAttachments）。
+type promptAttachmentProvider interface {
+	// PromptAttachments 返回动态提示词管理器
+	PromptAttachments() *prompts.Manager
+}
+
+// attachmentManager 目录附件所需的最小能力。
+//
+// Python: PromptAttachmentManager（add_section / list_by_filter / has_history_snapshot）
+type attachmentManager interface {
+	// AddSection 写入或覆盖附件
+	AddSection(sessionID, section, content string, kind prompts.AttachmentKind, source string, opts ...prompts.AttachmentOption) (*prompts.Attachment, error)
+	// Find 查询指定 section/source 的附件（无则 nil）
+	Find(sessionID, section, source string) *prompts.Attachment
+	// HasHistorySnapshot 判断会话历史是否已有完整快照
+	HasHistorySnapshot(sessionID string) bool
+}
+
+// managerAdapter 把 prompts.Manager 适配为 rail 需要的附件能力。
+type managerAdapter struct {
+	// manager 附件管理器
+	manager *prompts.Manager
+	// history 会话历史上下文（用于快照判定）
+	history prompts.HistoryContext
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -54,23 +96,34 @@ type ProgressiveToolRail struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// progressiveToolRailPriority ProgressiveToolRail 优先级
+	// progressiveToolRailPriority Rail 优先级
 	progressiveToolRailPriority = 90
 
-	// visibleToolsKey 会话状态键：可见工具名称列表
-	visibleToolsKey = "__progressive_visible_tool_names__"
-	// discoveryTraceKey 会话状态键：工具发现轨迹
+	// discoveredToolsKey 会话状态键：已授权工具名
+	discoveredToolsKey = "__progressive_discovered_tool_names__"
+	// discoveredToolFingerprintsKey 会话状态键：授权时的 schema 指纹
+	discoveredToolFingerprintsKey = "__progressive_discovered_tool_fingerprints__"
+	// discoveryTraceKey 会话状态键：发现轨迹
 	discoveryTraceKey = "__progressive_tool_discovery_trace__"
+	// deferredToolCatalogStateKey 会话状态键：目录快照与版本
+	deferredToolCatalogStateKey = "__progressive_deferred_tool_catalog__"
 
-	// 搜索评分权重
-	scoreExactMatch    = 100
-	scoreNameContains  = 40
-	scoreDescContains  = 25
-	scoreHaystackMatch = 10
-	scoreTokenMatch    = 3
-
-	// 导航工具摘要最大长度
-	navigationSummaryMaxLen = 160
+	// deferredToolAttachmentSection 目录附件的 section 名
+	deferredToolAttachmentSection = "progressive_deferred_tools"
+	// deferredToolAttachmentSource 目录附件的来源标识
+	deferredToolAttachmentSource = "progressive_tool_rail"
+	// deferredToolCatalogMetadataKey 附件 metadata：目录内容
+	deferredToolCatalogMetadataKey = "catalog_tools"
+	// deferredToolCatalogFingerprintsMetadataKey 附件 metadata：目录指纹
+	deferredToolCatalogFingerprintsMetadataKey = "catalog_fingerprints"
+	// deferredToolRegistryRevisionMetadataKey 附件 metadata：注册版本
+	deferredToolRegistryRevisionMetadataKey = "registry_revision"
+	// fullSnapshotInterval 连续 delta 上限，达到后改发全量快照
+	fullSnapshotInterval = 10
+	// nestedToolCallKey 嵌套调用标记（写在回调上下文 Extra 上）
+	nestedToolCallKey = "__progressive_nested_tool_call__"
+	// progressiveDiscoveryProperty 卡片扩展属性键：发现元数据
+	progressiveDiscoveryProperty = "progressive_discovery"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -78,803 +131,597 @@ const (
 // _ 编译时验证 ProgressiveToolRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*ProgressiveToolRail)(nil)
 
-// navigationBaselineTools 导航中始终包含的基础工具名集合
-var navigationBaselineTools = map[string]struct{}{
-	"code": {}, "read_file": {}, "bash": {}, "list_skill": {}, "pdf": {}, "xlsx": {},
-}
-
-// toolGroupOrder 工具分组排序权重
-var toolGroupOrder = map[string]int{
-	"skill":       0,
-	"runtime":     1,
-	"document":    2,
-	"spreadsheet": 3,
-	"general":     9,
-}
-
-// toolGroupCN 工具分组中文映射
-var toolGroupCN = map[string]string{
-	"skill":       "技能",
-	"runtime":     "运行时",
-	"document":    "文档",
-	"spreadsheet": "表格",
-	"general":     "通用",
-}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewProgressiveToolRail 创建 ProgressiveToolRail 实例。
 //
 // Python: ProgressiveToolRail.__init__(config)
 func NewProgressiveToolRail(config *schema.DeepAgentConfig) *ProgressiveToolRail {
-	r := &ProgressiveToolRail{
+	rail := &ProgressiveToolRail{
 		DeepAgentRail:  *NewDeepAgentRail(),
 		config:         config,
-		defaultVisible: toSet(config.ProgressiveToolDefaultVisibleTools),
-		alwaysVisible:  toSet(config.ProgressiveToolAlwaysVisibleTools),
-		maxLoadedTools: config.EffectiveProgressiveToolMaxLoadedTools(),
 		metaToolNames:  make(map[string]struct{}),
-		ownedToolNames: make(map[string]struct{}),
-		ownedToolIDs:   make(map[string]struct{}),
-		cachedAllTools: nil,
+		ownedToolCards: make(map[string]*tool.ToolCard),
 	}
-	r.WithPriority(progressiveToolRailPriority)
-	return r
+	rail.WithPriority(progressiveToolRailPriority)
+	return rail
 }
 
-// Init 注册渐进式元工具到 resource_mgr 和 ability_manager。
+// Init 注册两个元工具（显式 direct），保存注册表引用，不建索引。
 //
-// Python: ProgressiveToolRail.init(agent)
+// Python: ProgressiveToolRail.init
 func (r *ProgressiveToolRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) error {
-	language := r.config.EffectiveLanguage()
+	language := r.catalogLanguage()
 	agentID := ""
 	if card := agent.Card(); card != nil {
 		agentID = card.ID
 	}
 
-	// 步骤 1：创建元工具
-	searchTool := tool_discovery.NewSearchToolsTool(
-		r.searchTools,
-		r.appendTrace,
-		language,
-		agentID,
-	)
-	loadTool := tool_discovery.NewLoadToolsTool(
-		r.loadTools,
-		language,
-		agentID,
-	)
-	tools := []tool.Tool{searchTool, loadTool}
+	searchTool := tool_discovery.NewToolSearchTool(r.searchTools, language, agentID, r.toolSearchLimit())
+	callTool := tool_discovery.NewToolCallTool(language, agentID)
+	callTool.SetDispatch(r.dispatchToolCall)
 
-	// 步骤 2：收集元工具名称
-	r.metaToolNames = make(map[string]struct{})
-	for _, t := range tools {
-		r.metaToolNames[t.Card().Name] = struct{}{}
-	}
+	metaNames := map[string]struct{}{}
+	owned := map[string]*tool.ToolCard{}
 
-	// 步骤 3：注册到 resource_mgr
-	resourceMgr := runner.GetResourceMgr()
-	for _, t := range tools {
-		func(t tool.Tool) {
-			defer func() {
-				if rec := recover(); rec != nil {
-					logger.Warn(logComponent).
-						Str("event_type", "progressive_rail_init").
-						Str("tool_id", t.Card().ID).
-						Str("tool_name", t.Card().Name).
-						Msgf("failed to register tool to resource_mgr: %v", rec)
-				}
-			}()
-			existing, err := resourceMgr.GetTool([]string{t.Card().ID})
-			if err != nil || len(existing) == 0 {
-				if addErr := resourceMgr.AddTool(t); addErr != nil {
-					logger.Warn(logComponent).
-						Str("event_type", "progressive_rail_init").
-						Str("tool_id", t.Card().ID).
-						Err(addErr).
-						Msg("failed to register tool to resource_mgr")
-				} else {
-					r.ownedToolIDs[t.Card().ID] = struct{}{}
-				}
-			}
-		}(t)
-	}
+	abilityManager := agent.AbilityManager()
+	r.mu.Lock()
+	r.toolSearchRegistry = abilityManager
+	r.mu.Unlock()
 
-	// 步骤 4：注册到 ability_manager
-	am := agent.AbilityManager()
-	if am != nil {
-		for _, t := range tools {
-			func(t tool.Tool) {
-				defer func() {
-					if rec := recover(); rec != nil {
-						logger.Warn(logComponent).
-							Str("event_type", "progressive_rail_init").
-							Str("tool_name", t.Card().Name).
-							Msgf("failed to register tool to ability_manager: %v", rec)
-					}
-				}()
-				result := am.Add(t.Card())
-				if result.Added {
-					r.ownedToolNames[t.Card().Name] = struct{}{}
-				}
-			}(t)
+	for _, card := range []*tool.ToolCard{searchTool.Card(), callTool.Card()} {
+		// 元工具始终直接可调用，防止被渐进策略误藏
+		card.Exposure = tool.ToolExposureDirect
+		card.SetExposureDeclared(true)
+		metaNames[card.Name] = struct{}{}
+		if abilityManager == nil {
+			continue
+		}
+		if result := abilityManager.Add(card); result.Added {
+			owned[card.Name] = card
 		}
 	}
 
-	logger.Info(logComponent).
-		Str("event_type", "progressive_rail_init").
-		Strs("meta_tool_names", setToSortedSlice(r.metaToolNames)).
-		Msg("ProgressiveToolRail initialized")
+	r.mu.Lock()
+	r.metaToolNames = metaNames
+	r.ownedToolCards = owned
+	r.mu.Unlock()
 
+	r.registerToolResources(searchTool, callTool)
 	return nil
 }
 
-// Uninit 移除本 Rail 注册的元工具。
+// FinalizeStartupAsync 先物化惰性 schema，再建首份 BM25 索引。
 //
-// Python: ProgressiveToolRail.uninit(agent)
+// 必须等所有 startup rail 注册完工具后调用。
+//
+// Python: ProgressiveToolRail.finalize_startup_async
+func (r *ProgressiveToolRail) FinalizeStartupAsync(ctx context.Context, agent agentinterfaces.BaseAgent) error {
+	abilityManager := agent.AbilityManager()
+	if abilityManager == nil {
+		return nil
+	}
+	r.mu.Lock()
+	r.toolSearchRegistry = abilityManager
+	r.mu.Unlock()
+
+	if _, err := abilityManager.ListToolInfo(ctx, nil); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "progressive_finalize_startup").
+			Err(err).
+			Msg("failed to materialize startup tool schemas")
+	}
+	r.rebuildToolSearchIndex(r.collectDeferredToolDocuments(abilityManager))
+	return nil
+}
+
+// Uninit 按 ownership 移除元工具并清空缓存。
+//
+// Python: ProgressiveToolRail.uninit
 func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
-	am := agent.AbilityManager()
-	if am != nil {
-		for name := range r.ownedToolNames {
-			func(name string) {
-				defer func() {
-					if rec := recover(); rec != nil {
-						logger.Warn(logComponent).
-							Str("event_type", "progressive_rail_uninit").
-							Str("tool_name", name).
-							Msgf("failed to remove tool from ability_manager: %v", rec)
-					}
-				}()
-				am.Remove(name)
-			}(name)
+	abilityManager := agent.AbilityManager()
+	if abilityManager != nil {
+		r.mu.Lock()
+		owned := make(map[string]*tool.ToolCard, len(r.ownedToolCards))
+		for name, card := range r.ownedToolCards {
+			owned[name] = card
+		}
+		r.mu.Unlock()
+		for name, card := range owned {
+			current := abilityManager.Get(name)
+			// 名称已被他人重新注册时不得卸载对方的工具
+			if current != nil && current.AbilityID() != card.ID {
+				continue
+			}
+			abilityManager.Remove(name)
 		}
 	}
 
-	// Python: 从 ResourceMgr 移除已注册工具
-	resourceMgr := runner.GetResourceMgr()
-	if resourceMgr != nil {
-		for toolID := range r.ownedToolIDs {
-			func(toolID string) {
-				defer func() {
-					if rec := recover(); rec != nil {
-						logger.Warn(logComponent).
-							Str("event_type", "progressive_rail_uninit").
-							Str("tool_id", toolID).
-							Msgf("failed to remove tool from resource_mgr: %v", rec)
-					}
-				}()
-				_, _ = resourceMgr.RemoveTool([]string{toolID})
-			}(toolID)
-		}
-	}
-
-	r.ownedToolNames = make(map[string]struct{})
-	r.ownedToolIDs = make(map[string]struct{})
-	r.metaToolNames = make(map[string]struct{})
-	r.cachedAllTools = nil
-
-	logger.Info(logComponent).
-		Str("event_type", "progressive_rail_uninit").
-		Msg("ProgressiveToolRail unregistered")
-
+	r.mu.Lock()
+	r.ownedToolCards = nil
+	r.metaToolNames = nil
+	r.cachedAllToolInfos = nil
+	r.toolSearchIndex = nil
+	r.toolSearchIndexRevision = 0
+	r.toolSearchRegistry = nil
+	r.mu.Unlock()
 	return nil
 }
 
-// BeforeInvoke 缓存全量工具清单并初始化会话可见工具。
+// BeforeInvoke 缓存全量工具清单并冻结会话初始目录。
 //
-// Python: ProgressiveToolRail.before_invoke(ctx)
-func (r *ProgressiveToolRail) BeforeInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 步骤 1：缓存全量工具清单
-	infos, err := r.listToolInfos(ctx, cbc.Agent())
+// Python: before_invoke
+func (r *ProgressiveToolRail) BeforeInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	abilityManager := r.abilityManagerFrom(cbc)
+	if abilityManager == nil {
+		return nil
+	}
+	infos, err := abilityManager.ListToolInfo(context.Background(), nil)
 	if err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "progressive_before_invoke").
 			Err(err).
-			Msg("failed to get full tool inventory")
+			Msg("failed to list tool infos")
 	}
-	r.cachedAllTools = infos
-
-	// 步骤 2：初始化会话可见工具
-	sess := cbc.Session()
-	r.initVisibleTools(sess, r.defaultVisible)
-
-	logger.Info(logComponent).
-		Str("event_type", "progressive_before_invoke").
-		Int("total_tools", len(infos)).
-		Msg("ProgressiveToolRail BeforeInvoke completed")
-
+	r.mu.Lock()
+	r.cachedAllToolInfos = infos
+	r.mu.Unlock()
+	r.ensureInitialDeferredCatalog(cbc.Session(), abilityManager)
 	return nil
 }
 
-// BeforeModelCall 注入导航+规则节到系统提示词，并过滤可调用工具。
+// BeforeModelCall 注入规则节、同步目录附件、过滤顶层工具。
 //
-// Python: ProgressiveToolRail.before_model_call(ctx)
+// Python: before_model_call
 func (r *ProgressiveToolRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	sess := cbc.Session()
+	abilityManager := r.abilityManagerFrom(cbc)
+	if abilityManager == nil {
+		return nil
+	}
+	builder := cbc.Agent().SystemPromptBuilder()
+	if builder == nil {
+		return errors.New("ProgressiveToolRail requires agent.system_prompt_builder")
+	}
+	initial := r.ensureInitialDeferredCatalog(cbc.Session(), abilityManager)
+	builder.AddSection(sections.BuildProgressiveToolRulesSection(initial))
 
-	// 步骤 1：获取 SystemPromptBuilder 并注入导航+规则节
-	builder := r.getPromptBuilder(cbc)
+	if err := r.syncDeferredToolAttachment(
+		ctx,
+		cbc.Session(),
+		r.attachments(cbc),
+		r.collectDeferredToolDescriptions(abilityManager),
+	); err != nil {
+		return err
+	}
 
-	navigationSection := r.buildNavigationSection(ctx, sess)
-	rulesSection := r.buildProgressiveToolRulesSection()
-
-	// 导航/规则节是稳定系统提示词，上游走 add_section
-	// Python: builder.add_section(rules_section)（progressive_tool_rail.py:242）
-	// 动态的「延迟工具目录」才走附件（_sync_deferred_tool_attachment，Go 侧未移植该子特性）
-	builder.AddSection(navigationSection)
-	builder.AddSection(rulesSection)
-
-	// 步骤 2：过滤 inputs.Tools
-	inputs := cbc.Inputs()
-	modelInputs, ok := inputs.(*agentinterfaces.ModelCallInputs)
+	inputs, ok := cbc.Inputs().(*agentinterfaces.ModelCallInputs)
 	if !ok {
-		logger.Info(logComponent).
-			Str("event_type", "progressive_before_model_call").
-			Str("inputs_kind", inputs.EventKind()).
-			Msg("inputs is not ModelCallInputs, skipping tool filtering")
+		return nil
+	}
+	return r.filterModelCallTools(inputs, abilityManager)
+}
+
+// BeforeToolCall 只放行 direct 与「嵌套标记 + 已授权」的调用。
+//
+// Python: before_tool_call
+func (r *ProgressiveToolRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	toolName := toolNameOf(cbc)
+	if toolName == "" || r.isMetaTool(toolName) {
 		return nil
 	}
 
-	tools := modelInputs.Tools
-	if tools == nil {
-		logger.Info(logComponent).
-			Str("event_type", "progressive_before_model_call").
-			Msg("inputs.Tools is nil, skipping filtering")
+	session := cbc.Session()
+	nested, _ := cbc.GetExtra(nestedToolCallKey)
+	card := r.lookupCard(cbc, toolName)
+	if card == nil {
+		if nested == true && containsString(r.getDiscoveredTools(session), toolName) && r.isCachedTool(toolName) {
+			return nil
+		}
+		rejectToolCall(cbc, "Unknown tool '"+toolName+"'.")
 		return nil
 	}
-
-	// 步骤 3：计算可见工具集合
-	sessionVisible := toSet(r.getVisibleTools(sess))
-	baselineVisible := r.alwaysVisible
-	metaVisible := r.metaToolNames
-
-	// 步骤 4：过滤
-	var filtered []cschema.ToolInfoInterface
-	for _, t := range tools {
-		name := t.GetName()
-		if name == "" {
-			continue
-		}
-		if _, ok := metaVisible[name]; ok {
-			filtered = append(filtered, t)
-			continue
-		}
-		if _, ok := baselineVisible[name]; ok {
-			filtered = append(filtered, t)
-			continue
-		}
-		if _, ok := sessionVisible[name]; ok {
-			filtered = append(filtered, t)
-			continue
-		}
+	if card.EffectiveExposure() == tool.ToolExposureDirect {
+		return nil
 	}
-
-	logger.Info(logComponent).
-		Str("event_type", "progressive_before_model_call").
-		Int("before_count", len(tools)).
-		Int("after_count", len(filtered)).
-		Msg("ProgressiveToolRail BeforeModelCall tool filtering completed")
-
-	modelInputs.Tools = filtered
+	if nested == true && containsString(r.getDiscoveredTools(session), toolName) {
+		return nil
+	}
+	rejectToolCall(cbc, "Deferred tool '"+toolName+"' must be found with tool_search before it can be called.")
 	return nil
 }
 
-// GetCallbacks 覆盖基类回调映射，增加 BeforeInvoke + BeforeModelCall。
+// GetCallbacks 注册 BeforeInvoke / BeforeModelCall / BeforeToolCall。
 //
-// Python: ProgressiveToolRail 隐式覆盖 before_invoke + before_model_call
+// Python: ProgressiveToolRail 隐式覆盖对应钩子
 func (r *ProgressiveToolRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
-
 	callbacks[agentinterfaces.CallbackBeforeInvoke] = func(ctx context.Context, railCtx any) error {
 		return r.BeforeInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
 	}
 	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
 		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
 	}
-
+	callbacks[agentinterfaces.CallbackBeforeToolCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeToolCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
 	return callbacks
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// searchTools 搜索缓存工具清单，按名称/描述/参数文本模糊匹配。
+// collectDeferredToolDocuments 构造 deferred 目录文档（含仅检索用的额外文本）。
 //
-// Python: ProgressiveToolRail._search_tools(query, limit, detail_level)
-func (r *ProgressiveToolRail) searchTools(_ context.Context, query string, limit int, detailLevel int) ([]map[string]any, error) {
-	query = strings.TrimSpace(strings.ToLower(query))
-	if query == "" {
+// Python: _list_registered_deferred_tool_documents
+func (r *ProgressiveToolRail) collectDeferredToolDocuments(abilityManager agentinterfaces.AbilityManagerInterface) []deferredToolDocument {
+	if abilityManager == nil {
+		return nil
+	}
+	language := r.catalogLanguage()
+	documents := make([]deferredToolDocument, 0)
+	for _, ability := range abilityManager.List() {
+		card, ok := ability.(*tool.ToolCard)
+		if !ok {
+			continue
+		}
+		if r.isMetaTool(card.Name) {
+			continue
+		}
+		if card.EffectiveExposure() != tool.ToolExposureDeferred {
+			continue
+		}
+		extra, display := resolveProgressiveDiscovery(card, language)
+		description := display
+		if description == "" {
+			description = card.Description
+		}
+		documents = append(documents, deferredToolDocument{
+			info:               card.ToolInfo(),
+			extraSearchText:    extra,
+			displayDescription: description,
+		})
+	}
+	return documents
+}
+
+// collectDeferredToolDescriptions 返回按名排序的 deferred 目录摘要。
+//
+// Python: _collect_deferred_tool_descriptions
+func (r *ProgressiveToolRail) collectDeferredToolDescriptions(abilityManager agentinterfaces.AbilityManagerInterface) map[string]string {
+	descriptions := make(map[string]string)
+	for _, document := range r.collectDeferredToolDocuments(abilityManager) {
+		if name := document.info.GetName(); name != "" {
+			descriptions[name] = document.displayDescription
+		}
+	}
+	return descriptions
+}
+
+// collectDeferredFingerprints 读取当前目录指纹（按名排序）。
+//
+// Python: _collect_deferred_tool_fingerprints
+func (r *ProgressiveToolRail) collectDeferredFingerprints() map[string]string {
+	fingerprints := make(map[string]string)
+	for _, document := range r.collectDeferredToolDocuments(r.abilityManager()) {
+		if name := document.info.GetName(); name != "" {
+			fingerprints[name] = tool_discovery.ToolFingerprint(document.info)
+		}
+	}
+	return fingerprints
+}
+
+// rebuildToolSearchIndex 重建 BM25 索引并记录注册版本。
+//
+// Python: _rebuild_tool_search_index
+func (r *ProgressiveToolRail) rebuildToolSearchIndex(documents []deferredToolDocument) {
+	infos := make([]cschema.ToolInfoInterface, 0, len(documents))
+	extras := make([]string, 0, len(documents))
+	for _, document := range documents {
+		infos = append(infos, document.info)
+		extras = append(extras, document.extraSearchText)
+	}
+	index := tool_discovery.BuildBM25ToolIndex(infos, extras)
+
+	r.mu.Lock()
+	r.toolSearchIndex = index
+	r.toolSearchIndexRevision = registryRevisionOf(r.toolSearchRegistry)
+	r.mu.Unlock()
+}
+
+// ensureToolSearchIndex 仅在目录或注册版本变化时重建。
+//
+// Python: _ensure_tool_search_index
+func (r *ProgressiveToolRail) ensureToolSearchIndex() {
+	abilityManager := r.abilityManager()
+	documents := r.collectDeferredToolDocuments(abilityManager)
+	infos := make([]cschema.ToolInfoInterface, 0, len(documents))
+	extras := make([]string, 0, len(documents))
+	for _, document := range documents {
+		infos = append(infos, document.info)
+		extras = append(extras, document.extraSearchText)
+	}
+	fingerprint := tool_discovery.Fingerprint(infos, extras)
+
+	r.mu.Lock()
+	reusable := r.toolSearchIndex != nil &&
+		r.toolSearchIndex.SourceFingerprint() == fingerprint &&
+		r.toolSearchIndexRevision == registryRevisionOf(abilityManager)
+	r.mu.Unlock()
+	if reusable {
+		return
+	}
+	r.rebuildToolSearchIndex(documents)
+}
+
+// searchTools 检索并授权命中工具。
+//
+// Python: _search_tools
+func (r *ProgressiveToolRail) searchTools(
+	_ context.Context,
+	query string,
+	limit int,
+	sess sessioninterfaces.SessionFacade,
+) ([]map[string]any, error) {
+	normalized := strings.ToLower(strings.TrimSpace(query))
+	if normalized == "" {
 		return nil, nil
 	}
+	r.ensureToolSearchIndex()
 
-	allTools := r.getRealToolInfos()
-	type scoredItem struct {
-		score int
-		tool  cschema.ToolInfoInterface
-	}
-	var scored []scoredItem
+	r.mu.Lock()
+	index := r.toolSearchIndex
+	r.mu.Unlock()
 
-	for _, t := range allTools {
-		name := t.GetName()
-		description := t.GetDescription()
-		parameters := t.GetParameters()
-
-		haystack := strings.Join([]string{
-			strings.ToLower(name),
-			strings.ToLower(description),
-			strings.ToLower(parametersToText(parameters)),
-		}, " ")
-
-		score := 0
-		lowerName := strings.ToLower(name)
-		lowerDesc := strings.ToLower(description)
-
-		if query == lowerName {
-			score += scoreExactMatch
-		}
-		if strings.Contains(lowerName, query) {
-			score += scoreNameContains
-		}
-		if strings.Contains(lowerDesc, query) {
-			score += scoreDescContains
-		}
-		if strings.Contains(haystack, query) {
-			score += scoreHaystackMatch
-		}
-
-		for _, token := range strings.Fields(query) {
-			if token != "" && strings.Contains(haystack, token) {
-				score += scoreTokenMatch
-			}
-		}
-
-		if score > 0 {
-			scored = append(scored, scoredItem{score: score, tool: t})
-		}
+	var matched []cschema.ToolInfoInterface
+	if index != nil {
+		matched = index.Search(normalized, limit)
 	}
 
-	// 按 score 降序、name 升序排序
-	sort.SliceStable(scored, func(i, j int) bool {
-		if scored[i].score != scored[j].score {
-			return scored[i].score > scored[j].score
+	names := make([]string, 0, len(matched))
+	fingerprints := make(map[string]string, len(matched))
+	for _, info := range matched {
+		if info.GetName() == "" {
+			continue
 		}
-		return scored[i].tool.GetName() < scored[j].tool.GetName()
+		names = append(names, info.GetName())
+		fingerprints[info.GetName()] = tool_discovery.ToolFingerprint(info)
+	}
+	r.authorizeDiscoveredTools(sess, names, fingerprints)
+	r.appendTrace(sess, map[string]any{
+		"action":  "tool_search",
+		"query":   normalized,
+		"limit":   limit,
+		"matched": names,
 	})
 
-	effectiveLimit := limit
-	if effectiveLimit < 1 {
-		effectiveLimit = 1
+	results := make([]map[string]any, 0, len(matched))
+	for _, info := range matched {
+		results = append(results, map[string]any{
+			"name":        info.GetName(),
+			"description": info.GetDescription(),
+			"parameters":  info.GetParameters(),
+		})
 	}
-	if effectiveLimit > len(scored) {
-		effectiveLimit = len(scored)
-	}
-
-	matched := make([]scoredItem, effectiveLimit)
-	copy(matched, scored[:effectiveLimit])
-
-	results := make([]map[string]any, len(matched))
-	for i, item := range matched {
-		results[i] = buildToolSummary(item.tool, detailLevel)
-	}
-
 	return results, nil
 }
 
-// loadTools 将指定工具标记为当前会话可调用。
+// callDiscoveredTool 经 AbilityManager 嵌套执行一个已发现的 deferred 工具。
 //
-// Python: ProgressiveToolRail._load_tools(session, tool_names, replace)
-func (r *ProgressiveToolRail) loadTools(_ context.Context, sess sessioninterfaces.SessionFacade, toolNames []string, replace bool) (map[string]any, error) {
-	if sess == nil {
-		return map[string]any{
-			"loaded_tools":  []string{},
-			"visible_tools": []string{},
-			"skipped_tools": toolNames,
-			"message":       "session is required for load_tools",
-		}, nil
-	}
-
-	allTools := r.getRealToolInfos()
-	availableNames := make(map[string]struct{}, len(allTools))
-	for _, t := range allTools {
-		availableNames[t.GetName()] = struct{}{}
-	}
-
-	// 步骤 1：校验请求的工具名称
-	requested := make([]string, 0, len(toolNames))
-	for _, name := range toolNames {
-		trimmed := strings.TrimSpace(name)
-		if trimmed != "" {
-			requested = append(requested, trimmed)
-		}
-	}
-
-	var validNames []string
-	var skippedNames []string
-	for _, name := range requested {
-		if _, ok := r.alwaysVisible[name]; ok {
-			validNames = append(validNames, name)
-			continue
-		}
-		if _, ok := availableNames[name]; ok {
-			validNames = append(validNames, name)
-		} else {
-			skippedNames = append(skippedNames, name)
-		}
-	}
-
-	// 步骤 2：计算新的可见集合
-	currentVisible := r.getVisibleTools(sess)
-
-	var nextVisible []string
-	if replace {
-		nextVisible = dedupPreserveOrder(validNames)
-	} else {
-		nextVisible = dedupPreserveOrder(append(currentVisible, validNames...))
-	}
-
-	// 步骤 3：超限截断
-	if len(nextVisible) > r.maxLoadedTools {
-		overflow := nextVisible[r.maxLoadedTools:]
-		skippedNames = append(skippedNames, overflow...)
-		nextVisible = nextVisible[:r.maxLoadedTools]
-	}
-
-	r.setVisibleTools(sess, nextVisible)
-
-	// 步骤 4：记录轨迹
-	r.appendTrace(sess, map[string]any{
-		"action":         "load_tools",
-		"requested":      requested,
-		"loaded":         validNames,
-		"visible_before": currentVisible,
-		"visible_after":  nextVisible,
-		"skipped":        skippedNames,
-		"replace":        replace,
-	})
-
-	// 步骤 5：返回结果
-	visibleStr := "(none)"
-	if len(nextVisible) > 0 {
-		visibleStr = strings.Join(nextVisible, ", ")
-	}
-	return map[string]any{
-		"loaded_tools":  validNames,
-		"visible_tools": nextVisible,
-		"skipped_tools": skippedNames,
-		"message":       fmt.Sprintf("loaded %d tool(s), visible now: %s", len(validNames), visibleStr),
-	}, nil
-}
-
-// listToolInfos 获取 Agent 上注册的所有工具信息。
+// 五道校验：非空 → 已授权 → 仍注册 → 仍为 deferred → 指纹未变。
 //
-// Python: ProgressiveToolRail._list_tool_infos(agent)
-func (r *ProgressiveToolRail) listToolInfos(ctx context.Context, agent agentinterfaces.BaseAgent) ([]cschema.ToolInfoInterface, error) {
-	am := agent.AbilityManager()
-	if am == nil {
-		return nil, nil
+// Python: _call_discovered_tool
+func (r *ProgressiveToolRail) callDiscoveredTool(
+	ctx context.Context,
+	name string,
+	args map[string]any,
+	sess sessioninterfaces.SessionFacade,
+	cbc *agentinterfaces.AgentCallbackContext,
+) (*tool_discovery.RelayedToolOutput, error) {
+	target := strings.TrimSpace(name)
+	if target == "" {
+		return nil, errors.New("tool_call requires a non-empty tool name.")
 	}
-	infos, err := am.ListToolInfo(ctx, nil)
+	if !containsString(r.getDiscoveredTools(sess), target) {
+		return rejectedToolOutput("Deferred tool '" + target + "' must be returned by tool_search before it can be called."), nil
+	}
+	card := r.lookupCard(cbc, target)
+	if card == nil {
+		return rejectedToolOutput("Deferred tool '" + target + "' is no longer registered."), nil
+	}
+	if card.EffectiveExposure() != tool.ToolExposureDeferred {
+		return rejectedToolOutput("Tool '" + target + "' is not a deferred search result."), nil
+	}
+	if fingerprints := r.getDiscoveredToolFingerprints(sess); fingerprints != nil {
+		expected := fingerprints[target]
+		if expected == "" {
+			return rejectedToolOutput("Deferred tool '" + target + "' must be searched again before it can be called."), nil
+		}
+		current := tool_discovery.ToolFingerprint(card.ToolInfo())
+		if current != expected {
+			r.invalidateDiscoveredTools(sess, map[string]struct{}{target: {}})
+			return rejectedToolOutput("Deferred tool '" + target + "' has changed; search it again before calling it."), nil
+		}
+	}
+	if cbc == nil {
+		return nil, errors.New("tool_call requires an active agent callback context")
+	}
+	r.appendTrace(sess, map[string]any{"action": "tool_call", "name": target})
+
+	outerID := "tool_call"
+	if inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs); ok && inputs.ToolCall != nil && inputs.ToolCall.ID != "" {
+		outerID = inputs.ToolCall.ID
+	}
+	arguments, err := json.Marshal(args)
 	if err != nil {
-		logger.Warn(logComponent).
-			Str("event_type", "progressive_list_tool_infos").
-			Err(err).
-			Msg("failed to get tool info list")
-		return nil, err
+		arguments = []byte("{}")
 	}
-	return infos, nil
+	targetCall := &llmschema.ToolCall{
+		ID:        outerID + ":target",
+		Type:      "function",
+		Name:      target,
+		Arguments: string(arguments),
+	}
+
+	cbc.SetExtra(nestedToolCallKey, true)
+	defer cbc.DeleteExtra(nestedToolCallKey)
+
+	results := r.abilityManagerFrom(cbc).Execute(ctx, cbc, []*llmschema.ToolCall{targetCall}, sess, "")
+	if len(results) == 0 || results[0].ToolMsg == nil {
+		return rejectedToolOutput("Deferred tool '" + target + "' returned no execution result."), nil
+	}
+	result := results[0]
+	rendered := result.ToolMsg.Content.Text()
+	payload := map[string]any{"name": target, "result": result.Result}
+	return tool_discovery.NewRelayedToolOutput(true, rendered, payload, nil), nil
 }
 
-// getRealToolInfos 返回缓存中非元工具的工具清单。
-//
-// Python: ProgressiveToolRail._get_real_tool_infos()
-func (r *ProgressiveToolRail) getRealToolInfos() []cschema.ToolInfoInterface {
-	var result []cschema.ToolInfoInterface
-	for _, t := range r.cachedAllTools {
-		if _, ok := r.metaToolNames[t.GetName()]; !ok {
-			result = append(result, t)
-		}
+// dispatchToolCall 分发 tool_call（回调上下文由工具侧注入）。
+func (r *ProgressiveToolRail) dispatchToolCall(
+	ctx context.Context,
+	name string,
+	args map[string]any,
+	callbackContext tool.ToolCallbackContext,
+) (any, error) {
+	cbc, ok := callbackContext.(*agentinterfaces.AgentCallbackContext)
+	if !ok {
+		return nil, errors.New("tool_call requires an active agent callback context")
 	}
-	return result
+	return r.callDiscoveredTool(ctx, name, args, cbc.Session(), cbc)
 }
 
-// buildNavigationSection 构建工具导航节。
-//
-// Python: ProgressiveToolRail._build_navigation_section(session)
-func (r *ProgressiveToolRail) buildNavigationSection(_ context.Context, sess sessioninterfaces.SessionFacade) saprompt.PromptSection {
-	language := r.config.EffectiveLanguage()
-	entriesCN := r.buildNavigationEntries(sess, "cn")
-	entriesEN := r.buildNavigationEntries(sess, "en")
-
-	// 构建中英双语导航节
-	sectionCN := sections.BuildNavigationSection(entriesCN, "cn")
-	sectionEN := sections.BuildNavigationSection(entriesEN, "en")
-
-	// 合并为双语言 PromptSection
-	merged := saprompt.PromptSection{
-		Name:     sections.SectionToolNavigation,
-		Priority: 70,
-		Content:  make(map[string]string),
-	}
-	for k, v := range sectionCN.Content {
-		merged.Content[k] = v
-	}
-	for k, v := range sectionEN.Content {
-		merged.Content[k] = v
-	}
-	if language == "en" {
-		if _, ok := merged.Content["en"]; !ok {
-			merged.Content["en"] = ""
-		}
-	} else {
-		if _, ok := merged.Content["cn"]; !ok {
-			merged.Content["cn"] = ""
-		}
-	}
-
-	return merged
+// rejectedToolOutput 构造失败结果（供模型读取的拒绝文案）。
+func rejectedToolOutput(message string) *tool_discovery.RelayedToolOutput {
+	return tool_discovery.NewRelayedToolOutput(false, "", nil, errors.New(message))
 }
 
-// buildProgressiveToolRulesSection 构建渐进式工具规则节。
+// filterModelCallTools 把模型可见工具收敛为 meta ∪ direct。
 //
-// Python: ProgressiveToolRail._build_progressive_tool_rules_section()
-func (r *ProgressiveToolRail) buildProgressiveToolRulesSection() saprompt.PromptSection {
-	language := r.config.EffectiveLanguage()
-	sectionCN := sections.BuildProgressiveToolRulesSection("cn")
-	sectionEN := sections.BuildProgressiveToolRulesSection("en")
-
-	merged := saprompt.PromptSection{
-		Name:     sections.SectionProgressiveToolRules,
-		Priority: 75,
-		Content:  make(map[string]string),
+// Python: before_model_call 的工具过滤段
+func (r *ProgressiveToolRail) filterModelCallTools(
+	inputs *agentinterfaces.ModelCallInputs,
+	abilityManager agentinterfaces.AbilityManagerInterface,
+) error {
+	if inputs == nil || inputs.Tools == nil {
+		return nil
 	}
-	for k, v := range sectionCN.Content {
-		merged.Content[k] = v
-	}
-	for k, v := range sectionEN.Content {
-		merged.Content[k] = v
-	}
-	if language == "en" {
-		if _, ok := merged.Content["en"]; !ok {
-			merged.Content["en"] = ""
-		}
-	} else {
-		if _, ok := merged.Content["cn"]; !ok {
-			merged.Content["cn"] = ""
-		}
-	}
-
-	return merged
-}
-
-// buildNavigationEntries 构建导航条目列表。
-//
-// Python: ProgressiveToolRail._build_navigation_entries(session, language)
-func (r *ProgressiveToolRail) buildNavigationEntries(sess sessioninterfaces.SessionFacade, language string) []string {
-	allTools := r.getRealToolInfos()
-	loaded := toSet(r.getVisibleTools(sess))
-	baseline := make(map[string]struct{})
-	for k := range r.alwaysVisible {
-		baseline[k] = struct{}{}
-	}
-	for k := range r.defaultVisible {
-		baseline[k] = struct{}{}
-	}
-
-	var entries []string
-	seen := make(map[string]struct{})
-
-	// 按 group rank + name 排序
-	sortedTools := make([]cschema.ToolInfoInterface, len(allTools))
-	copy(sortedTools, allTools)
-	sort.SliceStable(sortedTools, func(i, j int) bool {
-		ri := toolGroupRank(sortedTools[i])
-		rj := toolGroupRank(sortedTools[j])
-		if ri != rj {
-			return ri < rj
-		}
-		return sortedTools[i].GetName() < sortedTools[j].GetName()
-	})
-
-	for _, t := range sortedTools {
-		name := t.GetName()
+	filtered := make([]cschema.ToolInfoInterface, 0, len(inputs.Tools))
+	for _, info := range inputs.Tools {
+		name := info.GetName()
 		if name == "" {
 			continue
 		}
-		if _, ok := seen[name]; ok {
+		if r.isMetaTool(name) {
+			filtered = append(filtered, info)
 			continue
 		}
-		// 决定是否包含
-		if _, ok := baseline[name]; !ok {
-			if _, ok2 := loaded[name]; !ok2 {
-				if _, ok3 := navigationBaselineTools[name]; !ok3 {
-					continue
-				}
-			}
+		if card := lookupCardByName(abilityManager, name); card != nil && card.EffectiveExposure() == tool.ToolExposureDirect {
+			filtered = append(filtered, info)
 		}
-		seen[name] = struct{}{}
-
-		summary := toolSummaryForNavigation(t)
-		group := toolGroupForNavigation(t)
-
-		var status string
-		var groupLabel string
-		if language == "en" {
-			if _, ok := loaded[name]; ok {
-				status = "callable"
-			} else if _, ok2 := r.alwaysVisible[name]; ok2 {
-				status = "callable"
-			} else {
-				status = "navigation-only"
-			}
-			groupLabel = group
-		} else {
-			if _, ok := loaded[name]; ok {
-				status = "可调用"
-			} else if _, ok2 := r.alwaysVisible[name]; ok2 {
-				status = "可调用"
-			} else {
-				status = "仅导航"
-			}
-			groupLabel = toolGroupToCN(group)
-		}
-
-		entries = append(entries, sections.BuildNavigationEntry(name, groupLabel, status, summary, language))
 	}
-
-	return entries
+	inputs.Tools = filtered
+	return nil
 }
 
-// getVisibleTools 读取当前会话可见工具名称列表。
+// rejectToolCall 阻断执行并向模型返回可读结果。
 //
-// Python: ProgressiveToolRail._get_visible_tools(session)
-func (r *ProgressiveToolRail) getVisibleTools(sess sessioninterfaces.SessionFacade) []string {
+// Python: _reject_tool_call
+func rejectToolCall(cbc *agentinterfaces.AgentCallbackContext, message string) {
+	cbc.SetExtra("_skip_tool", true)
+	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
+	if !ok {
+		return
+	}
+	callID := "unknown-tool-call"
+	if inputs.ToolCall != nil && inputs.ToolCall.ID != "" {
+		callID = inputs.ToolCall.ID
+	}
+	inputs.ToolResult = map[string]any{"error": message}
+	inputs.ToolMsg = llmschema.NewToolMessage(callID, message)
+}
+
+// toolNameOf 读取回调上下文里的工具名。
+func toolNameOf(cbc *agentinterfaces.AgentCallbackContext) string {
+	if cbc == nil {
+		return ""
+	}
+	inputs, ok := cbc.Inputs().(*agentinterfaces.ToolCallInputs)
+	if !ok {
+		return ""
+	}
+	if inputs.ToolName != "" {
+		return inputs.ToolName
+	}
+	if inputs.ToolCall != nil {
+		return inputs.ToolCall.Name
+	}
+	return ""
+}
+
+// registerToolResources 把元工具实例注册到进程级 ResourceMgr。
+func (r *ProgressiveToolRail) registerToolResources(tools ...tool.Tool) {
+	resourceMgr := runner.GetResourceMgr()
+	if resourceMgr == nil {
+		return
+	}
+	for _, candidate := range tools {
+		card := candidate.Card()
+		if existing, err := resourceMgr.GetTool([]string{card.ID}); err == nil && len(existing) > 0 {
+			continue
+		}
+		if err := resourceMgr.AddTool(candidate); err != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "progressive_rail_init").
+				Str("tool_id", card.ID).
+				Err(err).
+				Msg("failed to register tool to resource_mgr")
+		}
+	}
+}
+
+// getDiscoveredTools 读取已授权工具名。
+//
+// Python: _get_discovered_tools
+func (r *ProgressiveToolRail) getDiscoveredTools(sess sessioninterfaces.SessionFacade) []string {
 	if sess == nil {
 		return nil
 	}
-	val, err := sess.GetState(state.StringKey(visibleToolsKey))
+	raw, err := sess.GetState(state.StringKey(discoveredToolsKey))
 	if err != nil {
 		return nil
 	}
-	if val == nil {
+	values, ok := raw.([]string)
+	if !ok {
 		return nil
 	}
-	// 期望 []any 或 []string
-	switch v := val.(type) {
-	case []string:
-		result := make([]string, 0, len(v))
-		for _, s := range v {
-			trimmed := strings.TrimSpace(s)
-			if trimmed != "" {
-				result = append(result, trimmed)
-			}
-		}
-		return result
-	case []any:
-		result := make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				trimmed := strings.TrimSpace(s)
-				if trimmed != "" {
-					result = append(result, trimmed)
-				}
-			}
-		}
-		return result
-	default:
+	return values
+}
+
+// getDiscoveredToolFingerprints 读取授权指纹；无记录返回 nil（对齐上游 Optional）。
+//
+// Python: _get_discovered_tool_fingerprints
+func (r *ProgressiveToolRail) getDiscoveredToolFingerprints(sess sessioninterfaces.SessionFacade) map[string]string {
+	if sess == nil {
 		return nil
 	}
+	raw, err := sess.GetState(state.StringKey(discoveredToolFingerprintsKey))
+	if err != nil {
+		return nil
+	}
+	typed, ok := raw.(map[string]string)
+	if !ok {
+		return nil
+	}
+	return typed
 }
 
-// setVisibleTools 持久化当前会话可见工具名称列表。
+// setDiscoveredTools 写入授权名单与指纹（只保留名单内的指纹）。
 //
-// Python: ProgressiveToolRail._set_visible_tools(session, names)
-func (r *ProgressiveToolRail) setVisibleTools(sess sessioninterfaces.SessionFacade, names []string) {
+// Python: _set_discovered_tools
+func (r *ProgressiveToolRail) setDiscoveredTools(sess sessioninterfaces.SessionFacade, names []string, fingerprints map[string]string) {
 	if sess == nil {
 		return
 	}
-	normalized := dedupPreserveOrder(names)
-	sess.UpdateState(map[string]any{visibleToolsKey: normalized})
-}
-
-// initVisibleTools 初始化会话可见工具状态（仅执行一次）。
-//
-// Python: ProgressiveToolRail._init_visible_tools(session, default_visible_tools)
-func (r *ProgressiveToolRail) initVisibleTools(sess sessioninterfaces.SessionFacade, defaultVisible map[string]struct{}) {
-	if sess == nil {
-		return
-	}
-
-	// 已初始化则跳过
-	val, err := sess.GetState(state.StringKey(visibleToolsKey))
-	if err == nil && val != nil {
-		switch v := val.(type) {
-		case []string:
-			if len(v) >= 0 {
-				return
-			}
-		case []any:
-			if v != nil {
-				return
-			}
-		}
-	}
-
-	// 合并 always_visible + default_visible（对齐 Python: [*always_visible, *default_visible]）
-	// 先收集 always（保证排序稳定），再收集 default
-	alwaysSlice := setToSortedSlice(r.alwaysVisible)
-	defaultSlice := setToSortedSlice(defaultVisible)
-	var initial []string
-	initial = append(initial, alwaysSlice...)
-	initial = append(initial, defaultSlice...)
-	initial = dedupPreserveOrder(initial)
-
-	sess.UpdateState(map[string]any{
-		visibleToolsKey:   initial,
-		discoveryTraceKey: []any{},
-	})
-}
-
-// appendTrace 追加工具发现轨迹到会话状态。
-//
-// Python: ProgressiveToolRail._append_trace(session, event)
-func (r *ProgressiveToolRail) appendTrace(sess sessioninterfaces.SessionFacade, event map[string]any) {
-	if sess == nil {
-		return
-	}
-	val, err := sess.GetState(state.StringKey(discoveryTraceKey))
-	var trace []any
-	if err == nil && val != nil {
-		if t, ok := val.([]any); ok {
-			trace = t
-		}
-	}
-	trace = append(trace, event)
-	sess.UpdateState(map[string]any{discoveryTraceKey: trace})
-}
-
-// getPromptBuilder 获取 SystemPromptBuilder。
-//
-// Python: ProgressiveToolRail._get_prompt_builder(ctx)
-func (r *ProgressiveToolRail) getPromptBuilder(cbc *agentinterfaces.AgentCallbackContext) saprompt.SystemPromptBuilderInterface {
-	agent := cbc.Agent()
-	if agent == nil {
-		logger.Error(logComponent).
-			Str("event_type", "progressive_get_prompt_builder").
-			Msg("ProgressiveToolRail requires cbc.Agent() to be non-nil")
-		panic("ProgressiveToolRail requires ctx.agent to exist")
-	}
-	builder := agent.SystemPromptBuilder()
-	if builder == nil {
-		logger.Error(logComponent).
-			Str("event_type", "progressive_get_prompt_builder").
-			Msg("ProgressiveToolRail requires agent.SystemPromptBuilder() to be non-nil")
-		panic("ProgressiveToolRail requires agent.SystemPromptBuilder() to exist")
-	}
-	return builder
-}
-
-// toSet 将字符串切片转为 set
-func toSet(names []string) map[string]struct{} {
-	s := make(map[string]struct{}, len(names))
-	for _, name := range names {
-		s[name] = struct{}{}
-	}
-	return s
-}
-
-// setToSortedSlice 将 set 转为排序后的切片（用于日志）
-func setToSortedSlice(s map[string]struct{}) []string {
-	result := make([]string, 0, len(s))
-	for k := range s {
-		result = append(result, k)
-	}
-	sort.Strings(result)
-	return result
-}
-
-// dedupPreserveOrder 去重并保持顺序
-func dedupPreserveOrder(names []string) []string {
+	deduped := make([]string, 0, len(names))
 	seen := make(map[string]struct{}, len(names))
-	result := make([]string, 0, len(names))
 	for _, name := range names {
 		trimmed := strings.TrimSpace(name)
 		if trimmed == "" {
@@ -884,157 +731,556 @@ func dedupPreserveOrder(names []string) []string {
 			continue
 		}
 		seen[trimmed] = struct{}{}
-		result = append(result, trimmed)
+		deduped = append(deduped, trimmed)
 	}
-	return result
+	merged := r.getDiscoveredToolFingerprints(sess)
+	if merged == nil {
+		merged = map[string]string{}
+	}
+	for name, fingerprint := range fingerprints {
+		if name != "" && fingerprint != "" {
+			merged[name] = fingerprint
+		}
+	}
+	kept := make(map[string]string, len(deduped))
+	for _, name := range deduped {
+		if fingerprint, ok := merged[name]; ok {
+			kept[name] = fingerprint
+		}
+	}
+	sess.UpdateState(map[string]any{
+		discoveredToolsKey:            deduped,
+		discoveredToolFingerprintsKey: kept,
+	})
 }
 
-// toolSummaryForNavigation 返回工具的导航摘要行。
+// authorizeDiscoveredTools 把命中工具并入授权名单。
 //
-// Python: ProgressiveToolRail._tool_summary_for_navigation(tool)
-func toolSummaryForNavigation(t cschema.ToolInfoInterface) string {
-	description := strings.TrimSpace(t.GetDescription())
-	if description == "" {
-		return "暂无摘要。"
+// Python: _authorize_discovered_tools
+func (r *ProgressiveToolRail) authorizeDiscoveredTools(sess sessioninterfaces.SessionFacade, names []string, fingerprints map[string]string) {
+	if sess == nil {
+		return
 	}
-	line := description
-	if idx := strings.IndexByte(line, '\n'); idx >= 0 {
-		line = line[:idx]
-	}
-	line = strings.TrimSpace(line)
-	if len(line) > navigationSummaryMaxLen {
-		line = line[:navigationSummaryMaxLen]
-	}
-	return line
+	r.setDiscoveredTools(sess, append(r.getDiscoveredTools(sess), names...), fingerprints)
 }
 
-// toolGroupForNavigation 推断工具的导航分组。
+// invalidateDiscoveredTools 失效指定工具的授权。
 //
-// Python: ProgressiveToolRail._tool_group_for_navigation(tool)
-func toolGroupForNavigation(t cschema.ToolInfoInterface) string {
-	name := strings.ToLower(t.GetName())
-	desc := strings.ToLower(t.GetDescription())
-
-	if containsAny(name, "read", "write", "edit", "file", "bash", "code") {
-		return "runtime"
+// Python: _invalidate_discovered_tools
+func (r *ProgressiveToolRail) invalidateDiscoveredTools(sess sessioninterfaces.SessionFacade, names map[string]struct{}) {
+	if sess == nil || len(names) == 0 {
+		return
 	}
-	if containsAny(name, "pdf", "invoice", "document") {
-		return "document"
+	current := r.getDiscoveredTools(sess)
+	retained := make([]string, 0, len(current))
+	for _, name := range current {
+		if _, drop := names[name]; drop {
+			continue
+		}
+		retained = append(retained, name)
 	}
-	if containsAny(name, "xlsx", "excel", "sheet", "spreadsheet") {
-		return "spreadsheet"
+	if len(retained) != len(current) {
+		r.setDiscoveredTools(sess, retained, nil)
 	}
-	if strings.Contains(name, "skill") {
-		return "skill"
-	}
-	if containsAny(desc, "pdf", "invoice", "document") {
-		return "document"
-	}
-	if containsAny(desc, "xlsx", "excel", "spreadsheet") {
-		return "spreadsheet"
-	}
-	return "general"
 }
 
-// toolGroupToCN 将分组标签翻译为中文。
+// appendTrace 追加发现轨迹。
 //
-// Python: ProgressiveToolRail._tool_group_to_cn(group)
-func toolGroupToCN(group string) string {
-	if cn, ok := toolGroupCN[group]; ok {
-		return cn
+// Python: _append_trace
+func (r *ProgressiveToolRail) appendTrace(sess sessioninterfaces.SessionFacade, event map[string]any) {
+	if sess == nil {
+		return
 	}
-	return "通用"
+	trace := []map[string]any{}
+	if raw, err := sess.GetState(state.StringKey(discoveryTraceKey)); err == nil {
+		if existing, ok := raw.([]map[string]any); ok {
+			trace = existing
+		}
+	}
+	trace = append(trace, event)
+	sess.UpdateState(map[string]any{discoveryTraceKey: trace})
 }
 
-// toolGroupRank 返回工具分组的排序权重。
+// ensureInitialDeferredCatalog 读取或冻结会话初始目录。
 //
-// Python: ProgressiveToolRail._tool_group_rank(tool)
-func toolGroupRank(t cschema.ToolInfoInterface) int {
-	group := toolGroupForNavigation(t)
-	if rank, ok := toolGroupOrder[group]; ok {
-		return rank
+// Python: _ensure_initial_deferred_catalog
+func (r *ProgressiveToolRail) ensureInitialDeferredCatalog(
+	sess sessioninterfaces.SessionFacade,
+	abilityManager agentinterfaces.AbilityManagerInterface,
+) map[string]string {
+	current := r.collectDeferredToolDescriptions(abilityManager)
+	if sess == nil {
+		return current
 	}
-	return 99
+	stateMap := catalogStateOf(sess)
+	if initial, ok := normalizeDeferredCatalog(mapValueOf(stateMap["initial_tools"])); ok {
+		return initial
+	}
+	initial := current
+	if stateMap["initialized"] == true {
+		if previous, ok := normalizeDeferredCatalog(mapValueOf(stateMap["tools"])); ok {
+			initial = previous
+		}
+	}
+	stateMap["initial_tools"] = initial
+	sess.UpdateState(map[string]any{deferredToolCatalogStateKey: stateMap})
+	return initial
 }
 
-// containsAny 检查字符串是否包含任一关键词
-func containsAny(s string, keywords ...string) bool {
-	for _, kw := range keywords {
-		if strings.Contains(s, kw) {
+// abilityManager 返回 rail 持有的注册表引用。
+func (r *ProgressiveToolRail) abilityManager() agentinterfaces.AbilityManagerInterface {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.toolSearchRegistry
+}
+
+// abilityManagerFrom 从回调上下文取注册表，缺失时回落到 rail 引用。
+func (r *ProgressiveToolRail) abilityManagerFrom(cbc *agentinterfaces.AgentCallbackContext) agentinterfaces.AbilityManagerInterface {
+	if cbc != nil && cbc.Agent() != nil {
+		if abilityManager := cbc.Agent().AbilityManager(); abilityManager != nil {
+			return abilityManager
+		}
+	}
+	return r.abilityManager()
+}
+
+// lookupCard 按名取工具卡片。
+func (r *ProgressiveToolRail) lookupCard(cbc *agentinterfaces.AgentCallbackContext, name string) *tool.ToolCard {
+	return lookupCardByName(r.abilityManagerFrom(cbc), name)
+}
+
+// lookupCardByName 从注册表按名取工具卡片。
+func lookupCardByName(abilityManager agentinterfaces.AbilityManagerInterface, name string) *tool.ToolCard {
+	if abilityManager == nil {
+		return nil
+	}
+	card, _ := abilityManager.Get(name).(*tool.ToolCard)
+	return card
+}
+
+// isMetaTool 判断是否为元工具。
+func (r *ProgressiveToolRail) isMetaTool(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, ok := r.metaToolNames[name]
+	return ok
+}
+
+// isCachedTool 判断工具在缓存清单中。
+func (r *ProgressiveToolRail) isCachedTool(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, info := range r.cachedAllToolInfos {
+		if info.GetName() == name {
 			return true
 		}
 	}
 	return false
 }
 
-// parametersToText 将参数摘要和原始 schema 拼接为可搜索文本。
-//
-// Python: ProgressiveToolRail._parameters_to_text(parameters)
-func parametersToText(parameters map[string]any) string {
-	summary := parametersSummary(parameters)
-	raw := safeSerializeParameters(parameters)
-	return summary + " " + raw
+// attachments 取会话级动态提示词管理器。
+func (r *ProgressiveToolRail) attachments(cbc *agentinterfaces.AgentCallbackContext) attachmentManager {
+	if cbc == nil || cbc.Agent() == nil {
+		return nil
+	}
+	provider, ok := cbc.Agent().(promptAttachmentProvider)
+	if !ok {
+		return nil
+	}
+	manager := provider.PromptAttachments()
+	if manager == nil {
+		return nil
+	}
+	return &managerAdapter{manager: manager, history: cbc.ModelContext()}
 }
 
-// parametersSummary 构建参数的简短文本摘要。
+// catalogLanguage 解析目录语言（cn/en）。
 //
-// Python: ProgressiveToolRail._parameters_summary(parameters)
-func parametersSummary(parameters map[string]any) string {
-	if parameters == nil {
-		return "no parameters"
+// Python: _resolve_catalog_language
+func (r *ProgressiveToolRail) catalogLanguage() string {
+	language := ""
+	if r.config != nil {
+		language = strings.ToLower(strings.TrimSpace(r.config.EffectiveLanguage()))
 	}
-	props, ok := parameters["properties"]
-	if ok {
-		if propsMap, ok2 := props.(map[string]any); ok2 && len(propsMap) > 0 {
-			keys := make([]string, 0, len(propsMap))
-			for k := range propsMap {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			return "fields: " + strings.Join(keys, ", ")
-		}
+	if language == "en" {
+		return "en"
 	}
-	if len(parameters) > 0 {
-		keys := make([]string, 0, len(parameters))
-		for k := range parameters {
-			keys = append(keys, k)
+	return "cn"
+}
+
+// toolSearchLimit 返回 tool_search 默认条数（clamp 1..20）。
+func (r *ProgressiveToolRail) toolSearchLimit() int {
+	limit := 0
+	if r.config != nil {
+		limit = r.config.ToolSearchLimit
+	}
+	if limit <= 0 {
+		limit = tool_discovery.DefaultToolSearchLimit
+	}
+	return tool_discovery.NormalizeToolSearchLimit(limit)
+}
+
+// registryRevisionOf 读取注册表版本（无能力时返回 0）。
+func registryRevisionOf(abilityManager agentinterfaces.AbilityManagerInterface) int {
+	if provider, ok := abilityManager.(agentinterfaces.RegistryRevisionProvider); ok {
+		return provider.RegistryRevision()
+	}
+	return 0
+}
+
+// resolveProgressiveDiscovery 解析卡片上的本地化描述与检索别名。
+//
+// Python: _resolve_progressive_discovery
+func resolveProgressiveDiscovery(card *tool.ToolCard, language string) (string, string) {
+	if card.Properties == nil {
+		return "", ""
+	}
+	raw, ok := card.Properties[progressiveDiscoveryProperty].(map[string]any)
+	if !ok {
+		return "", ""
+	}
+	parts := make([]string, 0, 4)
+	displayDescription := ""
+	if display, ok := raw["display"].(map[string]any); ok {
+		keys := make([]string, 0, len(display))
+		for key := range display {
+			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		return "schema keys: " + strings.Join(keys, ", ")
+		for _, key := range keys {
+			if text, ok := display[key].(string); ok && strings.TrimSpace(text) != "" {
+				parts = append(parts, strings.TrimSpace(text))
+			}
+		}
+		displayDescription = localizedDisplay(display, language)
 	}
-	return "empty schema"
+	if aliases, ok := raw["aliases"].([]any); ok {
+		for _, alias := range aliases {
+			if text, ok := alias.(string); ok && strings.TrimSpace(text) != "" {
+				parts = append(parts, strings.TrimSpace(text))
+			}
+		}
+	}
+	return strings.Join(parts, " "), displayDescription
 }
 
-// safeSerializeParameters 安全地将参数 schema 序列化为字符串。
-//
-// Python: ProgressiveToolRail._safe_serialize_parameters(parameters)
-func safeSerializeParameters(parameters map[string]any) string {
-	if parameters == nil {
-		return ""
+// localizedDisplay 按语言候选取本地化描述。
+func localizedDisplay(display map[string]any, language string) string {
+	candidates := []string{language}
+	if language == "cn" {
+		candidates = []string{"cn", "zh"}
+	} else if language == "zh" {
+		candidates = []string{"zh", "cn"}
 	}
-	return fmt.Sprintf("%v", parameters)
+	for _, candidate := range candidates {
+		if text, ok := display[candidate].(string); ok && strings.TrimSpace(text) != "" {
+			return strings.TrimSpace(text)
+		}
+	}
+	return ""
 }
 
-// buildToolSummary 构建结构化工具摘要。
+// containsString 判断切片是否包含目标字符串。
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+// AddSection 写入或覆盖附件。
+func (a *managerAdapter) AddSection(sessionID, section, content string, kind prompts.AttachmentKind, source string, opts ...prompts.AttachmentOption) (*prompts.Attachment, error) {
+	return a.manager.AddSection(sessionID, section, content, kind, source, opts...)
+}
+
+// Find 查询指定 section/source 的附件。
+func (a *managerAdapter) Find(sessionID, section, source string) *prompts.Attachment {
+	return a.manager.Find(sessionID, section, source)
+}
+
+// HasHistorySnapshot 判断会话历史是否已有完整快照。
+func (a *managerAdapter) HasHistorySnapshot(sessionID string) bool {
+	if a.history == nil {
+		return false
+	}
+	return a.manager.HasHistorySnapshot(a.history, sessionID)
+}
+
+// syncDeferredToolAttachment 计算目录差异并写入附件（delta / snapshot）。
 //
-// Python: ProgressiveToolRail._build_tool_summary(tool, detail_level)
-func buildToolSummary(t cschema.ToolInfoInterface, detailLevel int) map[string]any {
-	name := t.GetName()
-	description := t.GetDescription()
-	parameters := t.GetParameters()
+// 首轮未变化不写；无快照、语言变化或连续 delta 达上限时改发全量快照。
+//
+// Python: _sync_deferred_tool_attachment
+func (r *ProgressiveToolRail) syncDeferredToolAttachment(
+	_ context.Context,
+	sess sessioninterfaces.SessionFacade,
+	manager attachmentManager,
+	current map[string]string,
+) error {
+	if sess == nil || manager == nil {
+		return nil
+	}
+	sessionID := sess.GetSessionID()
+	if sessionID == "" {
+		return nil
+	}
+	language := r.catalogLanguage()
+	currentTools, _ := normalizeDeferredCatalog(current)
+	currentFingerprints := r.collectDeferredFingerprints()
 
-	payload := map[string]any{
-		"name":        name,
-		"description": description,
+	catalogState := catalogStateOf(sess)
+	initialTools := initialStateTools(catalogState, currentTools)
+	previousTools := previousStateTools(catalogState)
+	initialized := catalogState["initialized"] == true
+	previousLanguage := stringOf(catalogState["language"])
+	version := intOf(catalogState["version"], 1)
+	deltaCount := intOf(catalogState["delta_count"], 0)
+
+	// 热重载/新 Session：从附件 metadata 恢复上次目录，避免重复推送同一差异
+	if existing := manager.Find(sessionID, deferredToolAttachmentSection, deferredToolAttachmentSource); existing != nil {
+		if recovered, ok := normalizeDeferredCatalog(mapValueOf(existing.Metadata[deferredToolCatalogMetadataKey])); ok {
+			previousTools = recovered
+			initialized = true
+			if fingerprints, ok := normalizeDeferredCatalog(mapValueOf(existing.Metadata[deferredToolCatalogFingerprintsMetadataKey])); ok {
+				_ = fingerprints
+			}
+			if value, ok := existing.Metadata["catalog_language"].(string); ok && value != "" {
+				previousLanguage = value
+			}
+			if value, ok := existing.Metadata["catalog_version"].(int); ok && value > version {
+				version = value
+			}
+			if value, ok := existing.Metadata["delta_count"].(int); ok {
+				deltaCount = value
+			}
+		}
 	}
 
-	if detailLevel >= 2 {
-		payload["parameter_summary"] = parametersSummary(parameters)
+	baseline := initialTools
+	if initialized {
+		baseline = previousTools
+	}
+	added := make(map[string]string)
+	updated := make(map[string]string)
+	for name, description := range currentTools {
+		existing, ok := baseline[name]
+		if !ok {
+			added[name] = description
+			continue
+		}
+		if existing != description {
+			updated[name] = description
+		}
+	}
+	removed := make([]string, 0)
+	for name := range baseline {
+		if _, ok := currentTools[name]; !ok {
+			removed = append(removed, name)
+		}
+	}
+	sort.Strings(removed)
+	changed := len(added) > 0 || len(updated) > 0 || len(removed) > 0
+	nextVersion := version
+	if changed {
+		nextVersion = version + 1
 	}
 
-	if detailLevel >= 3 {
-		payload["parameters"] = parameters
+	// 变更即失效对应授权：旧搜索结果不得复活已修改/删除的工具
+	invalidated := make(map[string]struct{}, len(updated)+len(removed))
+	for name := range updated {
+		invalidated[name] = struct{}{}
+	}
+	for _, name := range removed {
+		invalidated[name] = struct{}{}
+	}
+	if len(invalidated) > 0 {
+		r.invalidateDiscoveredTools(sess, invalidated)
 	}
 
-	return payload
+	if !initialized {
+		// 稳定提示词里的初始目录就是基线；首轮未变化则不写附件
+		if !changed {
+			r.saveCatalogState(sess, initialTools, currentTools, currentFingerprints, version, 0, language)
+			return nil
+		}
+		version = nextVersion
+		content := sections.RenderDeferredToolCatalogDelta(added, updated, removed, language, version)
+		if err := r.writeCatalogAttachment(manager, sessionID, language, version, "delta", content, currentTools, currentFingerprints, 1); err != nil {
+			return err
+		}
+		r.saveCatalogState(sess, initialTools, currentTools, currentFingerprints, version, 1, language)
+		return nil
+	}
+
+	forceSnapshot := !manager.HasHistorySnapshot(sessionID) ||
+		previousLanguage != language ||
+		deltaCount >= fullSnapshotInterval
+	if !forceSnapshot && !changed {
+		return nil
+	}
+
+	version = nextVersion
+	mode := "delta"
+	nextDeltaCount := deltaCount + 1
+	content := sections.RenderDeferredToolCatalogDelta(added, updated, removed, language, version)
+	if forceSnapshot {
+		mode = "snapshot"
+		nextDeltaCount = 0
+		content = sections.RenderDeferredToolCatalogSnapshot(currentTools, language, version)
+	}
+	if err := r.writeCatalogAttachment(manager, sessionID, language, version, mode, content, currentTools, currentFingerprints, nextDeltaCount); err != nil {
+		return err
+	}
+	r.saveCatalogState(sess, initialTools, currentTools, currentFingerprints, version, nextDeltaCount, language)
+	return nil
+}
+
+// saveCatalogState 写回目录状态。
+//
+// Python: _sync_deferred_tool_attachment 末尾的 session.update_state
+func (r *ProgressiveToolRail) saveCatalogState(
+	sess sessioninterfaces.SessionFacade,
+	initialTools map[string]string,
+	currentTools map[string]string,
+	fingerprints map[string]string,
+	version int,
+	deltaCount int,
+	language string,
+) {
+	if sess == nil {
+		return
+	}
+	sess.UpdateState(map[string]any{deferredToolCatalogStateKey: map[string]any{
+		"initialized":                           true,
+		"version":                               version,
+		"delta_count":                           deltaCount,
+		"language":                              language,
+		"initial_tools":                         initialTools,
+		"tools":                                 currentTools,
+		"fingerprints":                          fingerprints,
+		deferredToolRegistryRevisionMetadataKey: registryRevisionOf(r.abilityManager()),
+	}})
+}
+
+// writeCatalogAttachment 写入目录附件（priority 75）。
+//
+// Python: add_section(section=progressive_deferred_tools, kind=TOOL, priority=75)
+func (r *ProgressiveToolRail) writeCatalogAttachment(
+	manager attachmentManager,
+	sessionID string,
+	language string,
+	version int,
+	mode string,
+	content string,
+	currentTools map[string]string,
+	fingerprints map[string]string,
+	deltaCount int,
+) error {
+	_, err := manager.AddSection(
+		sessionID,
+		deferredToolAttachmentSection,
+		content,
+		prompts.AttachmentTool,
+		deferredToolAttachmentSource,
+		prompts.WithAttachmentPriority(75),
+		prompts.WithAttachmentContentKind("text/markdown"),
+		prompts.WithAttachmentMetadata(map[string]any{
+			"catalog_version":                          version,
+			"catalog_mode":                             mode,
+			"catalog_language":                         language,
+			"delta_count":                              deltaCount,
+			deferredToolCatalogMetadataKey:             currentTools,
+			deferredToolCatalogFingerprintsMetadataKey: fingerprints,
+			deferredToolRegistryRevisionMetadataKey:    registryRevisionOf(r.abilityManager()),
+		}),
+	)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "progressive_catalog_attachment").
+			Err(err).
+			Msg("failed to update deferred-tool attachment")
+	}
+	return err
+}
+
+// catalogStateOf 读取会话里的目录状态。
+func catalogStateOf(sess sessioninterfaces.SessionFacade) map[string]any {
+	raw, err := sess.GetState(state.StringKey(deferredToolCatalogStateKey))
+	if err != nil {
+		return map[string]any{}
+	}
+	typed, ok := raw.(map[string]any)
+	if !ok {
+		return map[string]any{}
+	}
+	return typed
+}
+
+// initialStateTools 读取初始目录，缺失时用当前目录播种。
+func initialStateTools(catalogState map[string]any, current map[string]string) map[string]string {
+	if normalized, ok := normalizeDeferredCatalog(mapValueOf(catalogState["initial_tools"])); ok {
+		return normalized
+	}
+	normalized, _ := normalizeDeferredCatalog(current)
+	return normalized
+}
+
+// previousStateTools 读取上次已发布的目录。
+func previousStateTools(catalogState map[string]any) map[string]string {
+	if normalized, ok := normalizeDeferredCatalog(mapValueOf(catalogState["tools"])); ok {
+		return normalized
+	}
+	return map[string]string{}
+}
+
+// normalizeDeferredCatalog 归一化目录：丢弃空名，空目录也视为有效目录。
+//
+// Python: _normalize_deferred_catalog（None 与空字典语义不同）
+func normalizeDeferredCatalog(catalog map[string]string) (map[string]string, bool) {
+	if catalog == nil {
+		return nil, false
+	}
+	normalized := make(map[string]string, len(catalog))
+	for name, description := range catalog {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		normalized[name] = description
+	}
+	return normalized, true
+}
+
+// mapValueOf 把附件/会话状态里的任意值转为字符串目录。
+func mapValueOf(value any) map[string]string {
+	if converted, ok := value.(map[string]string); ok {
+		return converted
+	}
+	if generic, ok := value.(map[string]any); ok {
+		converted := make(map[string]string, len(generic))
+		for key, item := range generic {
+			if text, ok := item.(string); ok {
+				converted[key] = text
+			}
+		}
+		return converted
+	}
+	return nil
+}
+
+// intOf 读取整数值（缺省回落 fallback）。
+func intOf(value any, fallback int) int {
+	if typed, ok := value.(int); ok {
+		return typed
+	}
+	return fallback
+}
+
+// stringOf 读取字符串值。
+func stringOf(value any) string {
+	if typed, ok := value.(string); ok {
+		return typed
+	}
+	return ""
 }

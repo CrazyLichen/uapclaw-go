@@ -67,8 +67,8 @@ func TestNewDeepAgentConfig(t *testing.T) {
 	if cfg.ProgressiveToolEnabled {
 		t.Error("ProgressiveToolEnabled 应为 false")
 	}
-	if cfg.ProgressiveToolMaxLoadedTools != DefaultProgressiveToolMax {
-		t.Errorf("ProgressiveToolMaxLoadedTools 应为 %d（默认值），实际为 %d", DefaultProgressiveToolMax, cfg.ProgressiveToolMaxLoadedTools)
+	if cfg.ToolSearchLimit != DefaultToolSearchLimit {
+		t.Errorf("ToolSearchLimit 应为 %d（默认值），实际为 %d", DefaultToolSearchLimit, cfg.ToolSearchLimit)
 	}
 	if cfg.DefaultMode != AgentModeNormal {
 		t.Errorf("DefaultMode 应为 AgentModeNormal，实际为 %d", cfg.DefaultMode)
@@ -125,16 +125,23 @@ func TestEffectiveLanguage(t *testing.T) {
 	}
 }
 
-// TestEffectiveProgressiveToolMaxLoadedTools 测试 EffectiveProgressiveToolMaxLoadedTools
-func TestEffectiveProgressiveToolMaxLoadedTools(t *testing.T) {
+// TestToolSearchLimit 测试 tool_search 默认条数与旧配置键忽略。
+func TestToolSearchLimit(t *testing.T) {
 	cfg := NewDeepAgentConfig()
-	if got := cfg.EffectiveProgressiveToolMaxLoadedTools(); got != DefaultProgressiveToolMax {
-		t.Errorf("EffectiveProgressiveToolMaxLoadedTools() = %d，期望 %d", got, DefaultProgressiveToolMax)
+	if cfg.ToolSearchLimit != DefaultToolSearchLimit {
+		t.Errorf("ToolSearchLimit = %d，期望 %d", cfg.ToolSearchLimit, DefaultToolSearchLimit)
 	}
 
-	cfg.ProgressiveToolMaxLoadedTools = 20
-	if got := cfg.EffectiveProgressiveToolMaxLoadedTools(); got != 20 {
-		t.Errorf("EffectiveProgressiveToolMaxLoadedTools() = %d，期望 20", got)
+	payload := []byte(`{"progressive_tool_enabled":true,"progressive_tool_max_loaded_tools":99}`)
+	var decoded DeepAgentConfig
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("旧配置键应被静默忽略: %v", err)
+	}
+	if !decoded.ProgressiveToolEnabled {
+		t.Error("progressive_tool_enabled 应生效")
+	}
+	if decoded.ToolSearchLimit != 0 {
+		t.Errorf("未提供 tool_search_limit 时应保持零值，got %d", decoded.ToolSearchLimit)
 	}
 }
 
@@ -362,9 +369,7 @@ func TestDeepAgentConfigJSON(t *testing.T) {
 	cfg.DefaultMode = AgentModePlan
 	cfg.Skills = []string{"skill1", "skill2"}
 	cfg.ProgressiveToolEnabled = true
-	cfg.ProgressiveToolAlwaysVisibleTools = []string{"tool_a"}
-	cfg.ProgressiveToolDefaultVisibleTools = []string{"tool_b"}
-	cfg.ProgressiveToolMaxLoadedTools = 8
+	cfg.ToolSearchLimit = 8
 
 	data, err := json.Marshal(cfg)
 	if err != nil {
@@ -403,8 +408,8 @@ func TestDeepAgentConfigJSON(t *testing.T) {
 	if decoded.ProgressiveToolEnabled != cfg.ProgressiveToolEnabled {
 		t.Errorf("ProgressiveToolEnabled = %v，期望 %v", decoded.ProgressiveToolEnabled, cfg.ProgressiveToolEnabled)
 	}
-	if decoded.ProgressiveToolMaxLoadedTools != cfg.ProgressiveToolMaxLoadedTools {
-		t.Errorf("ProgressiveToolMaxLoadedTools = %d，期望 %d", decoded.ProgressiveToolMaxLoadedTools, cfg.ProgressiveToolMaxLoadedTools)
+	if decoded.ToolSearchLimit != cfg.ToolSearchLimit {
+		t.Errorf("ToolSearchLimit = %d，期望 %d", decoded.ToolSearchLimit, cfg.ToolSearchLimit)
 	}
 	if len(decoded.Skills) != 2 {
 		t.Errorf("Skills 长度 = %d，期望 2", len(decoded.Skills))
@@ -473,8 +478,8 @@ func TestConstants(t *testing.T) {
 	if DefaultCompletionTimeout != 600.0 {
 		t.Errorf("DefaultCompletionTimeout = %f，期望 600.0", DefaultCompletionTimeout)
 	}
-	if DefaultProgressiveToolMax != 12 {
-		t.Errorf("DefaultProgressiveToolMax = %d，期望 12", DefaultProgressiveToolMax)
+	if DefaultToolSearchLimit != 5 {
+		t.Errorf("DefaultToolSearchLimit = %d，期望 5", DefaultToolSearchLimit)
 	}
 	if DefaultLanguage != "cn" {
 		t.Errorf("DefaultLanguage = %q，期望 %q", DefaultLanguage, "cn")

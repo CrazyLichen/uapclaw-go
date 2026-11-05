@@ -219,6 +219,23 @@ var (
 	ErrNoSession = errors.New("deep agent: 无可用会话")
 )
 
+// defaultDirectToolNames 渐进模式下保持直接可调用的工具名集合。
+//
+// Python: deep_agent.py _DEFAULT_DIRECT_TOOL_NAMES（36 项）
+// Go 侧差异：上游 subagent_spawn/wait/list/send_input/close/resume 六项在 Go 侧
+// 分别注册为 sessions_spawn/sessions_list/sessions_cancel；未实现的工具名保留原字符串
+// （策略只对已注册工具生效，多余名字无副作用）。
+var defaultDirectToolNames = []string{
+	"tool_search", "tool_call",
+	"read_file", "write_file", "edit_file", "glob", "grep", "bash",
+	"task_tool", "sessions_spawn", "sessions_list", "sessions_cancel",
+	"ask_user", "todo_create", "todo_list", "todo_get", "todo_modify", "skill_tool",
+	"memory_search", "memory_get", "free_search", "paid_search", "fetch_webpage",
+	"write_memory", "edit_memory", "read_memory", "ltm_search", "ltm_search_summary",
+	"send_file_to_user", "enter_plan_mode", "exit_plan_mode",
+	"skill_branch_explore", "skill_index_build",
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDeepAgent 创建 DeepAgent 实例。
@@ -1484,6 +1501,8 @@ func (d *DeepAgent) initialConfigure(ctx context.Context, config *hschema.DeepAg
 	if config.Card != nil {
 		d.card = config.Card
 	}
+	// 曝光是注册期策略：必须在工厂注册 config.Tools 与 rail 自注册工具之前写入
+	d.applyToolExposurePolicy(config)
 
 	d.reactAgent = d.createReactAgent(ctx)
 	d.queuePendingRails(config)
@@ -1497,6 +1516,8 @@ func (d *DeepAgent) hotReconfigure(ctx context.Context, config *hschema.DeepAgen
 	if config.Card != nil {
 		d.card = config.Card
 	}
+	// 热重配只影响此后注册的卡片（已注册卡片的曝光已锁定）
+	d.applyToolExposurePolicy(config)
 
 	d.hotReloadRails(config)
 
@@ -2020,8 +2041,54 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, err
 
 	// S-01：全部成功后才摘除队列（对齐 Python clear 的位置）
 	d.removePendingRailsByRefs(pendingToRegister)
+
+	// ProgressiveToolRail 持有 BM25 目录：等所有 startup rail 注册完工具后再建首份索引。
+	// Python: deep_agent.py:1518-1528（finalize_startup_async）
+	d.finalizeProgressiveRails(ctx)
+
 	d.initialized = true
 	return ctx, nil
+}
+
+// applyToolExposurePolicy 在工具注册前写入注册期曝光策略。
+//
+// Python: DeepAgent._initial_configure 中的 ability_manager.set_tool_exposure_policy
+func (d *DeepAgent) applyToolExposurePolicy(config *hschema.DeepAgentConfig) {
+	if config == nil || d.abilityManager == nil {
+		return
+	}
+	policy, ok := d.abilityManager.(agentinterfaces.ExposurePolicyController)
+	if !ok {
+		return
+	}
+	policy.SetToolExposurePolicy(config.ProgressiveToolEnabled, defaultDirectToolNames)
+}
+
+// finalizeProgressiveRails 让 ProgressiveToolRail 建立初始 BM25 索引。
+//
+// Python: DeepAgent.ensure_init 末尾遍历 _registered_rails 调用 finalize_startup_async
+func (d *DeepAgent) finalizeProgressiveRails(ctx context.Context) {
+	d.railsMu.Lock()
+	snapshot := append([]agentinterfaces.AgentRail(nil), d.registeredRails...)
+	d.railsMu.Unlock()
+
+	seen := make(map[agentinterfaces.AgentRail]struct{}, len(snapshot))
+	for _, railInst := range snapshot {
+		if _, ok := seen[railInst]; ok {
+			continue
+		}
+		seen[railInst] = struct{}{}
+		progressive, ok := railInst.(*rails.ProgressiveToolRail)
+		if !ok {
+			continue
+		}
+		if err := progressive.FinalizeStartupAsync(ctx, d); err != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "progressive_rail_finalize").
+				Err(err).
+				Msg("failed to finalize progressive tool rail")
+		}
+	}
 }
 
 // needsWorkspaceInit 检查是否需要工作空间初始化。
