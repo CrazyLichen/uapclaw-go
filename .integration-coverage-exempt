@@ -272,3 +272,10 @@ internal/swarm/server/runtime/skill/skill_manager.go#L303-303
 internal/swarm/server/runtime/skill/skill_manager.go#L392-392
 internal/swarm/server/runtime/skill/skill_manager.go#L400-400
 internal/swarm/server/runtime/skill/skill_manager.go#L459-459
+
+# ── 2026-11-06 vector_store 适配器 ──
+# chroma.go / milvus.go 的改动行（switch 分支标签）需要真实 Chroma/Milvus 服务才能
+# 执行，集成套件没有这两个外部服务，改动行在集成剖面里恒为 0%。单测门禁已按同一
+# 理由整文件豁免（.coverage-exempt 中同名条目）。
+internal/agentcore/retrieval/vector_store/chroma.go
+internal/agentcore/retrieval/vector_store/milvus.go
