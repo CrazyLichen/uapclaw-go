@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -136,13 +137,35 @@ func TestInvokeMethodHandler_正常返回true(t *testing.T) {
 
 // ──────────────────────────── 分发顺序（对齐 web_connect.py:2180-2231） ────────────────────────────
 
+// trailRecorder 记录 handler/回调的实际执行时刻（读循环 goroutine 写、测试 goroutine 读）。
+type trailRecorder struct {
+	// mu 保护 items
+	mu sync.Mutex
+	// items 执行序列
+	items []string
+}
+
+// add 追加一条执行记录。
+func (r *trailRecorder) add(tag string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.items = append(r.items, tag)
+}
+
+// snapshot 取当前执行序列的副本。
+func (r *trailRecorder) snapshot() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.items...)
+}
+
 // wrapWithTrail 用包装器替换已注册方法，记录 handler 实际执行时刻。
 //
-// 包装器与被包装 handler 同在读循环 goroutine 上执行，因此 trail 顺序即真实分发顺序。
-func wrapWithTrail(wc *WebChannel, method string, trail *[]string, tag string) {
+// 包装器与被包装 handler 同在读循环 goroutine 上执行，因此记录顺序即真实分发顺序。
+func wrapWithTrail(wc *WebChannel, method string, recorder *trailRecorder, tag string) {
 	orig := wc.methodHandlers[method]
 	wc.registerMethod(method, func(ws wsSender, reqID string, params map[string]any, sid string) {
-		*trail = append(*trail, tag)
+		recorder.add(tag)
 		orig(ws, reqID, params, sid)
 	}, false)
 }
@@ -154,10 +177,10 @@ func TestDispatch_chatSend_先handler后回调(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil, nil)
 	RegisterWebHandlers(&WebHandlersBindParams{Channel: wc})
 
-	var trail []string
-	wrapWithTrail(wc, "chat.send", &trail, "handler")
+	recorder := &trailRecorder{}
+	wrapWithTrail(wc, "chat.send", recorder, "handler")
 	wc.OnMessage(func(*schema.Message) bool {
-		trail = append(trail, "callback")
+		recorder.add("callback")
 		return false
 	})
 
@@ -170,7 +193,7 @@ func TestDispatch_chatSend_先handler后回调(t *testing.T) {
 	assert.Equal(t, true, frame["ok"])
 	payload, _ := frame["payload"].(map[string]any)
 	assert.Equal(t, true, payload["accepted"])
-	assert.Equal(t, []string{"handler", "callback"}, trail, "chat.send 必须先本地 ack 再转发")
+	assert.Equal(t, []string{"handler", "callback"}, recorder.snapshot(), "chat.send 必须先本地 ack 再转发")
 }
 
 // TestDispatch_普通转发方法_先回调后handler chat.interrupt 不在 handler-before-callback 集合。
@@ -180,10 +203,10 @@ func TestDispatch_普通转发方法_先回调后handler(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil, nil)
 	RegisterWebHandlers(&WebHandlersBindParams{Channel: wc})
 
-	var trail []string
-	wrapWithTrail(wc, "chat.interrupt", &trail, "handler")
+	recorder := &trailRecorder{}
+	wrapWithTrail(wc, "chat.interrupt", recorder, "handler")
 	wc.OnMessage(func(*schema.Message) bool {
-		trail = append(trail, "callback")
+		recorder.add("callback")
 		return false
 	})
 
@@ -194,7 +217,7 @@ func TestDispatch_普通转发方法_先回调后handler(t *testing.T) {
 	assert.Equal(t, "res", frame["type"])
 	assert.Equal(t, "r-interrupt", frame["id"])
 	assert.Equal(t, true, frame["ok"])
-	assert.Equal(t, []string{"callback", "handler"}, trail, "非 chat.send 方法必须先回调再 handler")
+	assert.Equal(t, []string{"callback", "handler"}, recorder.snapshot(), "非 chat.send 方法必须先回调再 handler")
 }
 
 // TestDispatch_回调已处理时短路handler 回调返回 true → 不再调用本地 handler。
@@ -204,11 +227,11 @@ func TestDispatch_回调已处理时短路handler(t *testing.T) {
 		wc.sendResponse(ws, reqID, true, map[string]any{"local": true}, "", "")
 	}, false)
 
-	var trail []string
-	wrapWithTrail(wc, "test.shortcircuit", &trail, "handler")
+	recorder := &trailRecorder{}
+	wrapWithTrail(wc, "test.shortcircuit", recorder, "handler")
 	first := true
 	wc.OnMessage(func(*schema.Message) bool {
-		trail = append(trail, "callback")
+		recorder.add("callback")
 		if first {
 			first = false
 			return true
@@ -222,7 +245,7 @@ func TestDispatch_回调已处理时短路handler(t *testing.T) {
 	sendReq(t, conn, "r-after", "no.such.method", nil)
 	frame := readFrame(t, conn, 2*time.Second)
 	assert.Equal(t, "r-after", frame["id"], "回调短路后不应写 local 帧")
-	assert.Equal(t, []string{"callback", "callback"}, trail)
+	assert.Equal(t, []string{"callback", "callback"}, recorder.snapshot())
 	assert.Equal(t, WsErrMethodNotFound, frame["code"])
 }
 
@@ -233,9 +256,9 @@ func TestDispatch_localOnly不转发(t *testing.T) {
 		wc.sendResponse(ws, reqID, true, map[string]any{"local": true}, "", "")
 	}, true)
 
-	var trail []string
+	recorder := &trailRecorder{}
 	wc.OnMessage(func(*schema.Message) bool {
-		trail = append(trail, "callback")
+		recorder.add("callback")
 		return false
 	})
 
@@ -244,7 +267,7 @@ func TestDispatch_localOnly不转发(t *testing.T) {
 
 	frame := readFrame(t, conn, 2*time.Second)
 	assert.Equal(t, true, frame["ok"])
-	assert.Empty(t, trail, "local_only 方法不应进回调")
+	assert.Empty(t, recorder.snapshot(), "local_only 方法不应进回调")
 }
 
 // TestDispatch_localOnly未注册回METHOD_NOT_FOUND 对齐上游 `if handler is None` 分支。

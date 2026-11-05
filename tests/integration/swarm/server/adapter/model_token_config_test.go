@@ -13,7 +13,6 @@ import (
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 	"github.com/uapclaw/uapclaw-go/tests/integration/testhelpers"
@@ -48,8 +47,7 @@ func (s *ModelTokenConfigSuite) SetupTest() {
 func (s *ModelTokenConfigSuite) TestWriteModelTokens_RoundTrip() {
 	s.writeEnvConfig(0, 0, true)
 
-	dispatcher := web.RegisterWebHandlers(nil)
-	_, err := dispatcher.Dispatch("models.replace_all", map[string]any{
+	_, err := testhelpers.CallWebRPC(s.T(), nil, "models.replace_all", map[string]any{
 		"models": []any{map[string]any{
 			"model_name":        "mock-model",
 			"api_base":          "http://127.0.0.1:1",
@@ -59,7 +57,7 @@ func (s *ModelTokenConfigSuite) TestWriteModelTokens_RoundTrip() {
 			"max_output_tokens": 8192,
 			"origin_index":      0,
 		}},
-	}, "")
+	})
 	s.Require().NoError(err)
 
 	// 落盘校验
@@ -69,13 +67,15 @@ func (s *ModelTokenConfigSuite) TestWriteModelTokens_RoundTrip() {
 	s.Require().Contains(text, "max_input_tokens: 32000", "config.yaml 应写入输入上限")
 	s.Require().Contains(text, "max_output_tokens: 8192", "config.yaml 应写入输出上限")
 
-	// 回填校验
-	resp, listErr := dispatcher.Dispatch("models.list", nil, "")
+	// 回填校验（帧经真实 WS 走 JSON，列表解出来是 []any / 数值是 float64）
+	resp, listErr := testhelpers.CallWebRPC(s.T(), nil, "models.list", nil)
 	s.Require().NoError(listErr)
-	models, ok := resp["models"].([]map[string]any)
-	s.Require().True(ok && len(models) == 1, "models.list 应返回 1 条")
-	s.Equal(32000, models[0]["max_input_tokens"])
-	s.Equal(8192, models[0]["max_output_tokens"])
+	models, ok := resp["models"].([]any)
+	s.Require().True(ok && len(models) == 1, "models.list 应返回 1 条，实际 %+v", resp["models"])
+	entry, isMap := models[0].(map[string]any)
+	s.Require().True(isMap, "模型条目应为对象")
+	s.Equal(float64(32000), entry["max_input_tokens"])
+	s.Equal(float64(8192), entry["max_output_tokens"])
 }
 
 // TestContextWindow_FromModelEntry 用例 2：adapter 装配后窗口值进入 ContextEngineConfig，

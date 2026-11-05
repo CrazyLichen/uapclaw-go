@@ -239,6 +239,7 @@ grep 锚点验收：`frame\.`、`RPCDispatcher`、`handleConfigGet` 在 `interna
 | handler 的闭包形态 | 上游 handler 是 `_register_web_handlers(bind)` 内的嵌套闭包，直接捕获 `channel` | Go 无嵌套函数，写成「工厂函数 `xxx(wc, deps) methodHandler` 返回闭包」 | 语言层差异：工厂返回值即闭包，捕获的 `wc` 等价上游 `channel`；注册处仍是一行 `wc.registerMethod(...)`，可逐行对照 |
 | 错误文案语言 | 上游统一英文（`params must be object` / `job not found` / `handler error: ...`） | 本仓历史 handler 多为中文（`会话已存在` / `api_base 是必填项`） | 本期只对**新改到的分支**回填上游文案；剩余中文文案随各自属主批次收敛，不单独开批 |
 | `permissions.*` 的本地回退 | `_forward_permissions_to_agent` 明确 "Gateway never falls back to local state"，E2A 失败即回错 | 本仓在 AgentClient 未就绪/转发失败时回退 `permrpc.DispatchPermissionsConfigRequest` 本地状态 | 与上一条 `permissions.*` 同源；本期保留（单机无 AgentServer 时前端仍可用），多用户形态落地时一并收敛 |
+| `models.get/upsert/delete/references`、`model_groups.*`、`session.selection.set`、`vendors.*`（10） | `_register_config_proxy`：个人版恒走 E2A，企业版才用 local_handler（`app_web_handlers.py:5582-5610`） | 本仓无这些 `ReqMethod`（`internal/` 0 命中），E2A 转发是断路；本地实现需先移植 `model_catalog`(238) + `model_selection`(76) + `model_errors`(30) + config upsert/delete(~150) + `model_vendor_registry`(593) ≈1,200 行 | **本期跳过**（2026-11-05 裁定，见计划 Task 8 节），矩阵保留 `❌`；恢复时拆 8a（catalog 族）/8b（vendors 族），不得用 E2A 假接线 |
 | 矩阵校验的权威上游 | 计划以本地快照 `/home/opensource/jiuwenswarm-develop`（`gateway/…`，6580 行）为准；上游 gitcode HEAD 已无 `gateway/`（代码在 `jiuwenswarm/…`），tag `0.2.5.beta1` 的同一文件为 6380 行 —— 三者不是同一份 | 矩阵与缺口清单由 `cmd/rpc-matrix` 以本地快照生成 | **CI 的「校验 Web RPC 契约矩阵」步骤已删除**（2026-11-05 用户裁定，避免拿降级矩阵误报过期）；漂移改由本地命令核对，后续如需门禁须先 pin 一份可复现快照 |
 
 ---

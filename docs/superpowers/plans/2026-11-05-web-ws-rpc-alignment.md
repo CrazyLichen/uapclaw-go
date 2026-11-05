@@ -16,7 +16,7 @@
 
 **关于「不重抄函数体」:** 本计划不把上游函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
 
-**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。后续从 Task 8（B1b 功能批）开始。
+**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节），B1b 从 Task 9 开始。
 
 **B1a 收口结论（两处遗留偏差已清零，详见 Task 7b）**：① 删除 `unaryHandler`/`wrapUnary`，59 个注册点一律原生 `methodHandler`，失败帧抬到帧级 `ok=false + error + code`；② 分发顺序改为上游四段式（`local_only` → `handler-before-callback`(`chat.send`) → 回调 → handler）。残留差异见 spec §10（错误文案语言、permissions 本地回退、CI 矩阵上游来源）。
 
@@ -1144,7 +1144,34 @@ go run ./cmd/integration-audit -verify
 
 ---
 
-## Task 8: B1b-1 config 代理族（10 个，`local`）
+## Task 8: B1b-1 config 代理族（10 个，`local`）——⤵️ 本期跳过（2026-11-05 裁定）
+
+> **状态：跳过，不实施。** 下面保留原设计供后续独立计划使用；本期继续 Task 9。
+>
+> **跳过原因（读快照源码后的更正）：**
+>
+> 1. **原设计前提有误。** 本 Task 原写"`_register_config_proxy` 在单用户下走 `local_handler`"。快照实际判定（`app_web_handlers.py:5582-5610`）是
+>    `if local_handler is not None and is_enterprise() and use_local_handler:` —— **个人版恒走 E2A**，只有企业版 + 无 client / `RuntimeRoutedAgentClient` /
+>    legacy 共享目录才用本地 handler。`_proxy_config_request` 的 docstring 说"单用户共享目录走本地"，与代码判定自相矛盾，原设计照 docstring 抄错了。
+> 2. **E2A 薄代理在本仓是断路。** `internal/` 下 grep `models.upsert` / `model_groups.*` / `vendors.*` / `session.selection.set` 均 0 命中，
+>    `schema.ReqMethod` 里也没有 `MODELS_*`；转过去 AgentServer 只会回 `unknown method`。所以这 10 个只能本地实现，绕不开模型目录子系统。
+> 3. **"10 个薄 handler"其实是整套子系统移植**（约 1,200 行 Python）：
+>
+>    | 上游文件 | 行数 | 作用 |
+>    |---|---|---|
+>    | `gateway/common/model_selection.py` | 76 | `ModelSelection` 校验（type/id + 引用语义） |
+>    | `gateway/common/model_errors.py` | 30 | `MODEL_SELECTION_NOT_FOUND` / `_REFERENCED` 错误码与载荷 |
+>    | `gateway/common/model_catalog.py` | 238 | `list_public_groups` / `get_public_model_detail` / `find_references` |
+>    | `gateway/common/config.py` | ~150 | `upsert_model_resource` / `upsert_model_group_resource` / `delete_model_resource` |
+>    | `gateway/common/model_vendor_registry.py` | 593 | 厂商预设（plan/endpoint/鉴权/模型域），依赖 core llm 枚举 + 火山端点 |
+>    | `app_web_handlers.py` | ~180 | `_model_resource_rpc` / `_vendors_list` / `_vendors_fetch_models`（含远端 HTTP 拉取与回退） |
+>
+> 4. **可切分。** `model_catalog` 不依赖 `model_vendor_registry`（前者只依赖 config + selection + errors），所以恢复时可拆两批：
+>    **8a** = `models.*` + `model_groups.*` + `session.selection.set`（约 500 行，新建 `gateway/modelcatalog` 子包）；
+>    **8b** = `vendors.list` / `vendors.fetch_models`（约 700 行，含远端拉取与回退语义）。
+>
+> **对验收口径的影响：** 矩阵里这 10 个仍是 `❌ 缺`（`local`），Task 15 的"本层承诺范围 ❌ 归零"改为"除本 Task 10 个之外归零"。
+> 恢复条件：另立计划，先移植 8a 的数据层再分批接 handler；不得用"E2A 薄代理"假接线（会变成绿但不通）。
 
 **Files:**
 - Modify: `web/app_web_handlers.go`
@@ -1165,12 +1192,12 @@ go run ./cmd/integration-audit -verify
 | `vendors.list` | `:5677` | `vendorsList` |
 | `vendors.fetch_models` | `:5678` | `vendorsFetchModels` |
 
-- [ ] **Step 1: 读上游实现**
+- ⤵️ **Step 1: 读上游实现**
 
 Run: `sed -n '5504,5700p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
 要点：`_register_config_proxy(name, req_method, local_handler)` 在**单用户**下走 `local_handler`；AgentOS 多用户才走 `_proxy_config_request`（E2A）。本仓只有单用户路径 → 只实现 local_handler 语义，多用户分支在函数注释标 ⤵️。
 
-- [ ] **Step 2: 写失败测试**
+- ⤵️ **Step 2: 写失败测试**
 
 ```go
 // TestModelsFamily_注册齐全 验证 10 个方法都已注册。
@@ -1215,7 +1242,7 @@ func (f fakeModelsConfigStore) GetModels() (map[string]any, error) { return f.mo
 
 > `modelsConfigStore` 接口其余方法（`UpsertModel` 等）在 fake 上补空实现即可，编译期由接口约束保证签名一致。
 
-- [ ] **Step 3: 实现（模板，其余 9 个同构）**
+- ⤵️ **Step 3: 实现（模板，其余 9 个同构）**
 
 ```go
 // registerModelsFamily 注册 model / model_group / vendor / session 选择族方法。
@@ -1278,12 +1305,12 @@ func modelsGet(wc *WebChannel, cfg modelsConfigStore) methodHandler {
 
 > 其余 9 个 `make*` 同构：只把接口方法与错误分支换成上游对应函数体；`params` 取值键名逐字对齐上游。
 
-- [ ] **Step 4: 跑单测**
+- ⤵️ **Step 4: 跑单测**
 
 Run: `CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run "TestModels" -v`
 Expected: PASS。
 
-- [ ] **Step 5: 更新矩阵并提交**
+- ⤵️ **Step 5: 更新矩阵并提交**
 
 ```bash
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
