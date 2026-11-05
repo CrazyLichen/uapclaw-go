@@ -77,6 +77,19 @@ func (m *Manager) Sync(ctx context.Context, hc HistoryContext) error {
 	return nil
 }
 
+// HasHistorySnapshot 判断会话历史里是否已有完整快照。
+//
+// 运行时 rail 用它决定"上下文压缩/重建后必须改发全量快照"，避免孤立 delta。
+//
+// Python: PromptAttachmentManager.has_history_snapshot
+func (m *Manager) HasHistorySnapshot(hc HistoryContext, sessionID string) bool {
+	if hc == nil {
+		return false
+	}
+	_, hasSnapshot := readHistoryState(hc, sessionID)
+	return hasSnapshot
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // readHistoryState 从历史消息里读最后一次交付账本。

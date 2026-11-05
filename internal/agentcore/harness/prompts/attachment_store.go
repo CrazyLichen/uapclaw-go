@@ -270,6 +270,21 @@ func (m *Manager) ListByFilter(f AttachmentFilter) ([]*Attachment, error) {
 	return out, nil
 }
 
+// Find 查询指定会话内某个来源的 section，返回首条（无则 nil）。
+//
+// 供运行时 rail 恢复"上次已物化的 section"，避免重复推送同一差异。
+func (m *Manager) Find(sessionID, section, source string) *Attachment {
+	items, err := m.ListByFilter(AttachmentFilter{
+		SessionID: sessionID,
+		Section:   section,
+		Source:    source,
+	})
+	if err != nil || len(items) == 0 {
+		return nil
+	}
+	return items[0]
+}
+
 // ClearSession 清空一个会话。
 //
 // Python: clear_session
