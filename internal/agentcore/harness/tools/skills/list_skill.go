@@ -13,6 +13,7 @@ import (
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	ptools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -29,8 +30,8 @@ import (
 type ListSkillTool struct {
 	// card 工具配置卡片
 	card *tool.ToolCard
-	// getSkills 返回当前已启用技能列表的回调函数
-	getSkills func() []*skillpkg.Skill
+	// getSkills 返回会话可见技能视图的回调函数
+	getSkills skillGetter
 	// listSkillModel 用于技能路由的 LLM 模型（可选）
 	listSkillModel *llm.Model
 	// language 语言标识（"cn"/"en"）
@@ -49,7 +50,7 @@ type ListSkillTool struct {
 //
 // Python: ListSkillTool.__init__(get_skills, list_skill_model, language, agent_id)
 func NewListSkillTool(
-	getSkills func() []*skillpkg.Skill,
+	getSkills skillGetter,
 	listSkillModel *llm.Model,
 	language string,
 	agentID string,
@@ -80,6 +81,12 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 	}
 	query = trimSpace(query)
 
+	callOpts := tool.NewToolCallOptions(opts...)
+	var sess sessioninterfaces.SessionFacade
+	if callOpts != nil {
+		sess = callOpts.Session
+	}
+
 	if query == "" {
 		// 一比一复刻 Python: if not query → ToolOutput(success=True, data={"skills": ..., "mode": "all"})
 		logger.Info(logComponent).
@@ -88,7 +95,7 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 		return map[string]any{
 			"success": true,
 			"data": map[string]any{
-				"skills": t.dumpAllSkills(),
+				"skills": t.dumpAllSkills(sess),
 				"mode":   "all",
 			},
 		}, nil
@@ -103,7 +110,7 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 		return map[string]any{
 			"success": true,
 			"data": map[string]any{
-				"skills":  t.dumpAllSkills(),
+				"skills":  t.dumpAllSkills(sess),
 				"mode":    "all",
 				"message": "list_skill_model is not configured, fallback to all skills.",
 			},
@@ -111,7 +118,7 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 	}
 
 	// 一比一复刻 Python: route_skills → select_skills_by_names → filtered result
-	selectedNames, routeErr := t.routeSkills(ctx, query)
+	selectedNames, routeErr := t.routeSkills(ctx, query, sess)
 	if routeErr != nil {
 		logger.Error(logComponent).
 			Str("query", query).
@@ -123,7 +130,7 @@ func (t *ListSkillTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 		}, nil
 	}
 
-	selectedSkills := t.selectSkillsByNames(selectedNames)
+	selectedSkills := t.selectSkillsByNames(selectedNames, sess)
 
 	logger.Info(logComponent).
 		Str("query", query).
@@ -162,8 +169,8 @@ func (t *ListSkillTool) Card() *tool.ToolCard { return t.card }
 // dumpAllSkills 转换所有当前已启用技能为可序列化字典列表。
 //
 // 一比一复刻 Python: ListSkillTool._dump_all_skills()
-func (t *ListSkillTool) dumpAllSkills() []map[string]any {
-	allSkills := t.getSkills()
+func (t *ListSkillTool) dumpAllSkills(sess sessioninterfaces.SessionFacade) []map[string]any {
+	allSkills := t.getSkills(sess)
 	if allSkills == nil {
 		allSkills = []*skillpkg.Skill{}
 	}
@@ -195,8 +202,8 @@ func (t *ListSkillTool) dumpSkills(skills []*skillpkg.Skill) []map[string]any {
 //	Python: response = await self.list_skill_model.invoke(messages=[...])
 //	Python: content = getattr(response, "content", "") or ""
 //	Python: return self._parse_selected_skill_names(content)
-func (t *ListSkillTool) routeSkills(ctx context.Context, query string) ([]string, error) {
-	payload := t.dumpAllSkills()
+func (t *ListSkillTool) routeSkills(ctx context.Context, query string, sess sessioninterfaces.SessionFacade) ([]string, error) {
+	payload := t.dumpAllSkills(sess)
 	payloadJSON, jsonErr := json.Marshal(payload)
 	if jsonErr != nil {
 		logger.Error(logComponent).
@@ -299,12 +306,12 @@ func parseSelectedSkillNames(content string) []string {
 //	Python: if not names → []
 //	Python: skill_map = {skill.name: skill for skill in self.get_skills() or []}
 //	Python: selected = [skill_map.get(name) for name in names if skill_map.get(name) is not None]
-func (t *ListSkillTool) selectSkillsByNames(names []string) []*skillpkg.Skill {
+func (t *ListSkillTool) selectSkillsByNames(names []string, sess sessioninterfaces.SessionFacade) []*skillpkg.Skill {
 	if len(names) == 0 {
 		return []*skillpkg.Skill{}
 	}
 
-	allSkills := t.getSkills()
+	allSkills := t.getSkills(sess)
 	if allSkills == nil {
 		allSkills = []*skillpkg.Skill{}
 	}

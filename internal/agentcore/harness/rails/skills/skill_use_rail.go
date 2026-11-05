@@ -341,22 +341,25 @@ func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 
 	op := r.SysOperation()
 
+	// Python: enable_read_image_multimodal = build_read_image_multimodal_resolver(agent)
+	enableImageMultimodal := true
+	if r.enableImageMultimodal != nil {
+		enableImageMultimodal = *r.enableImageMultimodal
+	}
+
 	var tools []tool.Tool
 
 	// Python: L246-253: 始终注册 SkillTool
 	tools = append(tools, skilltools.NewSkillTool(
 		op,
-		func() []*skillpkg.Skill { return r.skills },
+		func(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill { return r.GetSkillsForSession(sess) },
 		language,
 		agentID,
+		enableImageMultimodal,
 	))
 
 	// Python: L255-271: includeTools 时注册 ReadFileTool/CodeTool/BashTool
 	if r.includeTools {
-		enableImageMultimodal := true
-		if r.enableImageMultimodal != nil {
-			enableImageMultimodal = *r.enableImageMultimodal
-		}
 		tools = append(tools,
 			filesystemtool.NewReadFileTool(op, language, agentID, enableImageMultimodal),
 			codetool.NewCodeTool(op, language, agentID),
@@ -367,7 +370,7 @@ func (r *SkillUseRail) Init(_ context.Context, agent agentinterfaces.BaseAgent) 
 	// Python: L273-281: auto_list 模式注册 ListSkillTool
 	if r.skillMode == SkillModeAutoList {
 		tools = append(tools, skilltools.NewListSkillTool(
-			func() []*skillpkg.Skill { return r.skills },
+			func(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill { return r.GetSkillsForSession(sess) },
 			r.listSkillModel,
 			language,
 			agentID,

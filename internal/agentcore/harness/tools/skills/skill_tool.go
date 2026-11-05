@@ -8,12 +8,18 @@ import (
 
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	ptools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	skillpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// skillGetter 返回会话可见技能视图；session 为 nil 时由 rail 退化为当前加载集合。
+//
+// Python: get_skills=lambda session=None: rail.get_skills_for_session(session)
+type skillGetter func(sess sessioninterfaces.SessionFacade) []*skillpkg.Skill
 
 // SkillTool 查看特定技能内容的工具。
 //
@@ -26,10 +32,13 @@ type SkillTool struct {
 	card *tool.ToolCard
 	// operation 系统操作，用于读取技能文件
 	operation sys_operation.SysOperation
-	// getSkills 返回当前已启用技能列表的回调函数
-	getSkills func() []*skillpkg.Skill
+	// getSkills 返回会话可见技能视图的回调函数
+	getSkills skillGetter
 	// language 语言标识（"cn"/"en"）
 	language string
+	// enableReadImageMultimodal 读图多模态是否可用（决定媒体提示档位）
+	// Python: enable_read_image_multimodal (skill_tool.py:347)
+	enableReadImageMultimodal bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -51,20 +60,23 @@ const (
 
 // NewSkillTool 创建 SkillTool 实例。
 //
-// Python: SkillTool.__init__(operation, get_skills, language, agent_id)
+// Python: SkillTool.__init__(operation, get_skills, language, agent_id,
+// multimodal_skill_mode, enable_read_image_multimodal) (skill_tool.py:337-361)
 func NewSkillTool(
 	operation sys_operation.SysOperation,
-	getSkills func() []*skillpkg.Skill,
+	getSkills skillGetter,
 	language string,
 	agentID string,
+	enableReadImageMultimodal bool,
 ) *SkillTool {
 	card, _ := ptools.BuildToolCard("skill_tool", "SkillTool", language, nil, agentID)
 
 	return &SkillTool{
-		card:      card,
-		operation: operation,
-		getSkills: getSkills,
-		language:  language,
+		card:                      card,
+		operation:                 operation,
+		getSkills:                 getSkills,
+		language:                  language,
+		enableReadImageMultimodal: enableReadImageMultimodal,
 	}
 }
 
@@ -95,7 +107,13 @@ func (t *SkillTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		}
 	}
 
-	skill := t.getSkillByName(skillName)
+	callOpts := tool.NewToolCallOptions(opts...)
+	var sess sessioninterfaces.SessionFacade
+	if callOpts != nil {
+		sess = callOpts.Session
+	}
+
+	skill := t.getSkillByName(skillName, sess)
 	if skill == nil {
 		logger.Warn(logComponent).
 			Str("skill_name", skillName).
@@ -164,20 +182,15 @@ func (t *SkillTool) Card() *tool.ToolCard { return t.card }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// getSkillByName 按名称查找技能。
+// getSkillByName 按名称在会话视图中查找技能。
 //
-// Python: SkillTool._get_skill_by_name(skill_name)
-// 线性遍历 get_skills() 列表查找匹配名称的技能（技能列表较小，O(n) 可接受）
-func (t *SkillTool) getSkillByName(name string) *skillpkg.Skill {
-	if name == "" {
+// Python: SkillTool._get_skill_by_name (skill_tool.py:456-465)
+func (t *SkillTool) getSkillByName(name string, sess sessioninterfaces.SessionFacade) *skillpkg.Skill {
+	if name == "" || t.getSkills == nil {
 		return nil
 	}
-	allSkills := t.getSkills()
-	if allSkills == nil {
-		return nil
-	}
-	for _, s := range allSkills {
-		if s.Name == name {
+	for _, s := range t.getSkills(sess) {
+		if s != nil && s.Name == name {
 			return s
 		}
 	}
