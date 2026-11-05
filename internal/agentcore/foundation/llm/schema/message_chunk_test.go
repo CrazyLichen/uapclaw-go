@@ -1045,3 +1045,29 @@ func TestAssistantMessageChunk_StreamWithParserContent(t *testing.T) {
 		t.Errorf("FinishReason = %q, want %q", result.FinishReason, "stop")
 	}
 }
+
+// ──────────────────────────── 输出 token 判定 ────────────────────────────
+
+// TestAssistantMessageChunk_CarriesOutputToken 验证"是否携带模型输出"的判定，
+// 与 Python carries_output_token 对齐：框架帧（role/usage/finish）不算输出。
+func TestAssistantMessageChunk_CarriesOutputToken(t *testing.T) {
+	cases := []struct {
+		name  string
+		chunk *AssistantMessageChunk
+		want  bool
+	}{
+		{"纯文本", NewAssistantMessageChunk("hi"), true},
+		{"仅推理", &AssistantMessageChunk{AssistantMessage: AssistantMessage{ReasoningContent: "think"}}, true},
+		{"空白文本也算", NewAssistantMessageChunk(" "), true},
+		{"工具名片段", &AssistantMessageChunk{AssistantMessage: AssistantMessage{ToolCalls: []*ToolCall{{Name: "read_file"}}}}, true},
+		{"工具参数片段", &AssistantMessageChunk{AssistantMessage: AssistantMessage{ToolCalls: []*ToolCall{{Arguments: `{"pa`}}}}, true},
+		{"空 chunk", &AssistantMessageChunk{}, false},
+		{"仅 role", &AssistantMessageChunk{AssistantMessage: AssistantMessage{DefaultMessage: DefaultMessage{Role: RoleTypeAssistant}}}, false},
+		{"仅 usage", &AssistantMessageChunk{AssistantMessage: AssistantMessage{UsageMetadata: &UsageMetadata{}}}, false},
+	}
+	for _, c := range cases {
+		if got := c.chunk.CarriesOutputToken(); got != c.want {
+			t.Errorf("%s: 期望 %v，实际 %v", c.name, c.want, got)
+		}
+	}
+}
