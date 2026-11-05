@@ -131,6 +131,10 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	config.Card = card
 	config.SystemPrompt = params.SystemPrompt
 	config.EnableTaskLoop = params.EnableTaskLoop
+	config.ProgressiveToolEnabled = params.ProgressiveToolEnabled
+	if params.ToolSearchLimit > 0 {
+		config.ToolSearchLimit = params.ToolSearchLimit
+	}
 	config.EnableAsyncSubagent = params.EnableAsyncSubagent
 	config.AddGeneralPurposeAgent = params.AddGeneralPurposeAgent
 	config.MaxIterations = params.MaxIterations

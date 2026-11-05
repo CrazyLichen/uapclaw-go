@@ -72,6 +72,10 @@ type CreateDeepAgentParams struct {
 	EnableReadImageMultimodal bool
 	// EnableTaskPlanning 启用任务规划
 	EnableTaskPlanning bool
+	// ProgressiveToolEnabled 启用渐进式工具暴露（deferred 工具目录）
+	ProgressiveToolEnabled bool
+	// ToolSearchLimit tool_search 默认结果条数（0 用默认 5）
+	ToolSearchLimit int
 	// RestrictToWorkDir 限制文件访问到工作空间目录。
 	// 使用 *bool 指针以区分"未设置"(nil)和"显式设为 false"，与 SubagentCreateParams 保持一致。
 	RestrictToWorkDir *bool

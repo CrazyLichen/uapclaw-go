@@ -3,29 +3,32 @@
 package progressive
 
 import (
-	"reflect"
+	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
-	progressive "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/tests/integration/mockllm"
 	isuite "github.com/uapclaw/uapclaw-go/tests/integration/suite"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ProgressiveToolRailSuite 测试 ProgressiveToolRail 渐进式工具。
+// ProgressiveToolRailSuite 测试延迟工具目录的曝光、检索与执行闭环。
 //
 // 覆盖：
-//   - Init 注册 search_tools/load_tools 元工具
-//   - BeforeModelCall 注入导航节和规则节
-//   - Uninit 清理元工具
+//   - 曝光标签映射到系统提示词（目录摘要）与顶层工具过滤
+//   - deferred 工具未经 tool_search 不可直接调用
+//   - tool_search + tool_call 的真实检索与嵌套执行
+//   - 目录变更推送 delta / 同会话不重复推送
+//   - schema 变更后授权失效，必须重新搜索
 //
-// 对齐 Python: tests/unit_tests/harness/test_progressive_tool_rail.py
+// Python: openjiuwen/harness/rails/progressive_tool_rail.py
 type ProgressiveToolRailSuite struct {
 	isuite.AgentSuite
 }
@@ -36,94 +39,205 @@ func TestProgressiveToolRailSuite(t *testing.T) {
 	suite.Run(t, new(ProgressiveToolRailSuite))
 }
 
-// TestProgressiveToolRail_Init注册元工具 测试 NewProgressiveToolRail + Init 注册 search_tools/load_tools。
-// 对齐 Python: ProgressiveToolRail.init() 中元工具注册
-func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_Init注册元工具() {
-	config := hschema.NewDeepAgentConfig()
-	config.ProgressiveToolEnabled = true
-	rail := progressive.NewProgressiveToolRail(config)
-
-	s.MockLLM.SetResponses(mockllm.CreateTextResponse("渐进式测试"))
+// TestProgressive_ExposureMapsToPrompt 验证曝光标签真的决定目录摘要与不可直调。
+func (s *ProgressiveToolRailSuite) TestProgressive_ExposureMapsToPrompt() {
+	var xlsxCalls atomic.Int32
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("完成"))
 
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
-		Rails:         []agentinterfaces.AgentRail{rail},
-		MaxIterations: 3,
+		ToolInstances: []tool.Tool{
+			s.newCountingTool("xlsx_read", "读取 Excel 表格", &xlsxCalls),
+			s.newCountingTool("read_file", "读取文件", nil),
+		},
+		ProgressiveToolEnabled: true,
+		MaxIterations:          3,
 	})
 	s.Require().NoError(err)
 
-	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "渐进式测试"})
-	s.Require().NoError(err, "Invoke 不应返回错误")
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "你好"})
+	s.Require().NoError(err)
 
-	// 验证 ProgressiveToolRail 已注册
-	railType := reflect.TypeOf(&progressive.ProgressiveToolRail{})
-	foundRails := agent.FindRailsByType(railType)
-	s.NotEmpty(foundRails, "应注册 ProgressiveToolRail")
+	abilityManager := agent.AbilityManager()
+	s.Require().NotNil(abilityManager)
 
-	// 验证元工具注册
-	am := agent.AbilityManager()
-	s.Require().NotNil(am)
-	s.NotNil(am.Get("search_tools"), "应注册 search_tools")
-	s.NotNil(am.Get("load_tools"), "应注册 load_tools")
+	deferredCard, ok := abilityManager.Get("xlsx_read").(*tool.ToolCard)
+	s.Require().True(ok)
+	s.Equal(tool.ToolExposureDeferred, deferredCard.EffectiveExposure(), "非名单工具应 deferred")
+
+	directCard, ok := abilityManager.Get("read_file").(*tool.ToolCard)
+	s.Require().True(ok)
+	s.Equal(tool.ToolExposureDirect, directCard.EffectiveExposure(), "名单内工具应 direct")
+
+	builder := agent.SystemPromptBuilder()
+	s.Require().NotNil(builder)
+	rulesSection := builder.GetSection(hsections.SectionProgressiveToolRules)
+	s.Require().NotNil(rulesSection, "应注入渐进式工具规则节")
+	s.Contains(rulesSection.Content["cn"], "- **xlsx_read**: 读取 Excel 表格", "规则节应含初始 deferred 目录")
+	s.False(builder.HasSection(hsections.SectionToolNavigation), "导航节已随旧语义删除")
 }
 
-// TestProgressiveToolRail_BeforeModelCall_注入导航节和规则节 测试 BeforeModelCall 注入 SectionToolNavigation + SectionProgressiveToolRules。
-// 对齐 Python: ProgressiveToolRail.before_model_call() 中 section 注入
-func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_BeforeModelCall_注入导航节和规则节() {
-	config := hschema.NewDeepAgentConfig()
-	config.ProgressiveToolEnabled = true
-	rail := progressive.NewProgressiveToolRail(config)
-
-	s.MockLLM.SetResponses(mockllm.CreateTextResponse("导航节注入测试"))
+// TestProgressive_DirectCallRejected 验证 deferred 工具未搜索直接调用被拒。
+func (s *ProgressiveToolRailSuite) TestProgressive_DirectCallRejected() {
+	var xlsxCalls atomic.Int32
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("xlsx_read", `{"sheet":"S1"}`),
+		mockllm.CreateTextResponse("结束"),
+	)
 
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
-		Rails:         []agentinterfaces.AgentRail{rail},
-		MaxIterations: 3,
+		ToolInstances:          []tool.Tool{s.newCountingTool("xlsx_read", "读取 Excel 表格", &xlsxCalls)},
+		ProgressiveToolEnabled: true,
+		MaxIterations:          3,
 	})
 	s.Require().NoError(err)
 
-	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "导航测试"})
-	s.Require().NoError(err, "Invoke 不应返回错误")
-
-	// 验证导航节和规则节已注入
-	spb := agent.SystemPromptBuilder()
-	s.Require().NotNil(spb)
-	s.True(spb.HasSection(hsections.SectionToolNavigation), "应存在 SectionToolNavigation 节")
-	s.True(spb.HasSection(hsections.SectionProgressiveToolRules), "应存在 SectionProgressiveToolRules 节")
-
-	// 验证节内容非空
-	navSection := spb.GetSection(hsections.SectionToolNavigation)
-	s.Require().NotNil(navSection)
-	s.NotEmpty(navSection.Content, "SectionToolNavigation 内容不应为空")
-
-	rulesSection := spb.GetSection(hsections.SectionProgressiveToolRules)
-	s.Require().NotNil(rulesSection)
-	s.NotEmpty(rulesSection.Content, "SectionProgressiveToolRules 内容不应为空")
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "读 Sheet1"})
+	s.Require().NoError(err)
+	s.Equal(int32(0), xlsxCalls.Load(), "deferred 工具不得被直接执行")
 }
 
-// TestProgressiveToolRail_Uninit清理 测试 Uninit 移除元工具。
-func (s *ProgressiveToolRailSuite) TestProgressiveToolRail_Uninit清理() {
-	config := hschema.NewDeepAgentConfig()
-	config.ProgressiveToolEnabled = true
-	rail := progressive.NewProgressiveToolRail(config)
-
-	s.MockLLM.SetResponses(mockllm.CreateTextResponse("Uninit 测试"))
+// TestProgressive_SearchThenCallClosesLoop 验证 tool_search 检索 + tool_call 执行闭环。
+func (s *ProgressiveToolRailSuite) TestProgressive_SearchThenCallClosesLoop() {
+	var xlsxCalls atomic.Int32
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("tool_search", `{"query":"excel 表格"}`),
+		mockllm.CreateToolCallResponse("tool_call", `{"name":"xlsx_read","args":{"sheet":"S1"}}`),
+		mockllm.CreateTextResponse("已读取 Sheet1"),
+	)
 
 	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
-		Rails:         []agentinterfaces.AgentRail{rail},
-		MaxIterations: 3,
+		ToolInstances:          []tool.Tool{s.newCountingTool("xlsx_read", "读取 Excel 表格", &xlsxCalls)},
+		ProgressiveToolEnabled: true,
+		MaxIterations:          5,
 	})
 	s.Require().NoError(err)
 
-	_, _ = agent.Invoke(s.Ctx, map[string]any{"query": "测试"})
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "帮我读 Sheet1"})
+	s.Require().NoError(err)
+	s.Equal(int32(1), xlsxCalls.Load(), "tool_call 应嵌套执行目标工具一次")
+}
 
-	// Uninit 反初始化
-	s.NotPanics(func() {
-		rail.Uninit(agent)
-	}, "Uninit 不应 panic")
+// TestProgressive_ToolCallWithoutSearchRejected 验证未经搜索的 tool_call 被拒。
+func (s *ProgressiveToolRailSuite) TestProgressive_ToolCallWithoutSearchRejected() {
+	var xlsxCalls atomic.Int32
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("tool_call", `{"name":"xlsx_read","args":{"sheet":"S1"}}`),
+		mockllm.CreateTextResponse("结束"),
+	)
 
-	// 验证元工具已从 AM 注销
-	am := agent.AbilityManager()
-	s.Require().NotNil(am)
-	s.Nil(am.Get("search_tools"), "Uninit 后应注销 search_tools")
-	s.Nil(am.Get("load_tools"), "Uninit 后应注销 load_tools")
+	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
+		ToolInstances:          []tool.Tool{s.newCountingTool("xlsx_read", "读取 Excel 表格", &xlsxCalls)},
+		ProgressiveToolEnabled: true,
+		MaxIterations:          3,
+	})
+	s.Require().NoError(err)
+
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "读 Sheet1"})
+	s.Require().NoError(err)
+	s.Equal(int32(0), xlsxCalls.Load(), "未搜索的 tool_call 不得执行目标工具")
+}
+
+// TestProgressive_CatalogDeltaPushed 验证运行中新增 deferred 工具触发目录 delta。
+func (s *ProgressiveToolRailSuite) TestProgressive_CatalogDeltaPushed() {
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("完成"))
+
+	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
+		ToolInstances:          []tool.Tool{s.newCountingTool("xlsx_read", "读取 Excel 表格", nil)},
+		ProgressiveToolEnabled: true,
+		MaxIterations:          3,
+	})
+	s.Require().NoError(err)
+
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "第一轮"})
+	s.Require().NoError(err)
+
+	// 运行中新增一个 deferred 工具（走注册期策略）
+	newCard := tool.NewToolCardWithID("pdf_read", "pdf_read", "提取 PDF 文本", nil, nil)
+	agent.AbilityManager().Add(newCard)
+
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("完成"))
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "第二轮"})
+	s.Require().NoError(err)
+
+	manager := agent.PromptAttachments()
+	s.Require().NotNil(manager)
+	items, err := manager.ListByFilter(prompts.AttachmentFilter{Section: "progressive_deferred_tools"})
+	s.Require().NoError(err)
+	s.NotEmpty(items, "目录变化应写入附件")
+	s.NotEmpty(items[0].Content, "附件内容不应为空")
+}
+
+// TestProgressive_SessionReuseNoDuplicate 验证同会话复用不重复推送同一差异。
+func (s *ProgressiveToolRailSuite) TestProgressive_SessionReuseNoDuplicate() {
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("完成"))
+
+	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
+		ToolInstances:          []tool.Tool{s.newCountingTool("xlsx_read", "读取 Excel 表格", nil)},
+		ProgressiveToolEnabled: true,
+		MaxIterations:          3,
+	})
+	s.Require().NoError(err)
+
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "第一轮"})
+	s.Require().NoError(err)
+	s.MockLLM.SetResponses(mockllm.CreateTextResponse("完成"))
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "第二轮"})
+	s.Require().NoError(err)
+
+	manager := agent.PromptAttachments()
+	items, err := manager.ListByFilter(prompts.AttachmentFilter{Section: "progressive_deferred_tools"})
+	s.Require().NoError(err)
+	s.Empty(items, "目录未变化时不应重复推送")
+}
+
+// TestProgressive_SchemaChangedRequiresResearch 验证 schema 变更后旧授权失效。
+func (s *ProgressiveToolRailSuite) TestProgressive_SchemaChangedRequiresResearch() {
+	var xlsxCalls atomic.Int32
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("tool_search", `{"query":"excel 表格"}`),
+		mockllm.CreateTextResponse("检索完成"),
+	)
+
+	card := tool.NewToolCardWithID("xlsx_read", "xlsx_read", "读取 Excel 表格", nil, nil)
+	instance, err := tool.NewMapFunction(card, func(_ context.Context, inputs map[string]any) (map[string]any, error) {
+		xlsxCalls.Add(1)
+		sheet, _ := inputs["sheet"].(string)
+		return map[string]any{"content": "sheet=" + sheet}, nil
+	}, nil)
+	s.Require().NoError(err)
+
+	agent, err := s.NewDeepAgentForTest(s.Ctx, hconfig.CreateDeepAgentParams{
+		ToolInstances:          []tool.Tool{instance},
+		ProgressiveToolEnabled: true,
+		MaxIterations:          3,
+	})
+	s.Require().NoError(err)
+
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "先搜一次"})
+	s.Require().NoError(err)
+
+	// 搜索后原地改 schema：指纹变化应使授权失效
+	card.Description = "读取 Excel 工作表内容（新 schema）"
+
+	s.MockLLM.SetResponses(
+		mockllm.CreateToolCallResponse("tool_call", `{"name":"xlsx_read","args":{"sheet":"S1"}}`),
+		mockllm.CreateTextResponse("结束"),
+	)
+	_, err = agent.Invoke(s.Ctx, map[string]any{"query": "再直接调"})
+	s.Require().NoError(err)
+	s.Equal(int32(0), xlsxCalls.Load(), "schema 变更后旧授权必须失效，不得执行目标工具")
+}
+
+// newCountingTool 创建可统计调用次数的测试工具。
+func (s *ProgressiveToolRailSuite) newCountingTool(name, description string, counter *atomic.Int32) tool.Tool {
+	card := tool.NewToolCardWithID(name, name, description, nil, nil)
+	instance, err := tool.NewMapFunction(card, func(_ context.Context, inputs map[string]any) (map[string]any, error) {
+		if counter != nil {
+			counter.Add(1)
+		}
+		sheet, _ := inputs["sheet"].(string)
+		return map[string]any{"content": "sheet=" + sheet}, nil
+	}, nil)
+	s.Require().NoError(err)
+	return instance
 }
