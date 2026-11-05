@@ -2,8 +2,8 @@
 
 > 由 `go run ./cmd/rpc-matrix` 生成，勿手工编辑。
 
-- 方法总数：196（✅ 一致 50 / ⚠️ 漂移 0 / ❌ 缺 138 / ❓ 前端独有 8）
-- 缺口下游分布：local 47 / agent:ok 7 / agent:const-only 2 / agent:missing 65 / dep 17
+- 方法总数：196（✅ 一致 68 / ⚠️ 漂移 0 / ❌ 缺 120 / ❓ 前端独有 8）
+- 缺口下游分布：local 29 / agent:ok 7 / agent:const-only 2 / agent:missing 65 / dep 17
 
 覆盖状态：`一致` 上游有本仓也有；`漂移` 本仓有但上游没有（自造或上游已删）；`缺` 上游有本仓无；`前端独有` 前端在调但两侧都没注册（前端独占能力或上游未实现）。
 
@@ -17,27 +17,27 @@
 | `a4p.authorization.reprepare` | ❌ 缺 | agent:missing | 代理 A4P_AUTHORIZATION_REPREPARE（本仓无该 req method） | — | — | app_web_handlers.py:6376 |
 | `a4p.config.get` | ❌ 缺 | agent:missing | 代理 A4P_CONFIG_GET（本仓无该 req method） | — | — | app_web_handlers.py:6374 |
 | `a4p.config.update` | ❌ 缺 | agent:missing | 代理 A4P_CONFIG_UPDATE（本仓无该 req method） | — | — | app_web_handlers.py:6375 |
-| `channel.dingtalk.get_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5850 |
-| `channel.dingtalk.set_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5851 |
-| `channel.discord.get_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5854 |
-| `channel.discord.set_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5855 |
-| `channel.feishu.get_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5844 |
-| `channel.feishu.set_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5845 |
+| `channel.dingtalk.get_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3317 | app_web_handlers.py:5850 |
+| `channel.dingtalk.set_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3318 | app_web_handlers.py:5851 |
+| `channel.discord.get_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3321 | app_web_handlers.py:5854 |
+| `channel.discord.set_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3322 | app_web_handlers.py:5855 |
+| `channel.feishu.get_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3311 | app_web_handlers.py:5844 |
+| `channel.feishu.set_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3312 | app_web_handlers.py:5845 |
 | `channel.get` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:266 | app_web_handlers.py:5679 |
-| `channel.slack.get_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5856 |
-| `channel.slack.set_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5857 |
-| `channel.telegram.get_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5848 |
-| `channel.telegram.set_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5849 |
-| `channel.wechat.get_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5860 |
-| `channel.wechat.get_login_ui` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:348 | app_web_handlers.py:5862 |
-| `channel.wechat.set_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5861 |
-| `channel.wechat.unbind` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:349 | app_web_handlers.py:5863 |
-| `channel.wecom.get_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5858 |
-| `channel.wecom.set_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5859 |
-| `channel.whatsapp.get_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5852 |
-| `channel.whatsapp.set_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5853 |
-| `channel.xiaoyi.get_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5846 |
-| `channel.xiaoyi.set_conf` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5847 |
+| `channel.slack.get_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3323 | app_web_handlers.py:5856 |
+| `channel.slack.set_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3324 | app_web_handlers.py:5857 |
+| `channel.telegram.get_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3315 | app_web_handlers.py:5848 |
+| `channel.telegram.set_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3316 | app_web_handlers.py:5849 |
+| `channel.wechat.get_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3327 | app_web_handlers.py:5860 |
+| `channel.wechat.get_login_ui` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:345 | app_web_handlers.py:5862 |
+| `channel.wechat.set_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3328 | app_web_handlers.py:5861 |
+| `channel.wechat.unbind` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:346 | app_web_handlers.py:5863 |
+| `channel.wecom.get_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3325 | app_web_handlers.py:5858 |
+| `channel.wecom.set_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3326 | app_web_handlers.py:5859 |
+| `channel.whatsapp.get_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3319 | app_web_handlers.py:5852 |
+| `channel.whatsapp.set_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3320 | app_web_handlers.py:5853 |
+| `channel.xiaoyi.get_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3313 | app_web_handlers.py:5846 |
+| `channel.xiaoyi.set_conf` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:3314 | app_web_handlers.py:5847 |
 | `chat.interrupt` | ✅ 一致 | local | 网关本地实现 | src/features/designer/components/DesignerChatPanel.tsx:267 | gateway/channel_manager/tui/tui_connect.go:263<br>gateway/channel_manager/web/app_web_handlers.go:286 | app_web_handlers.py:5816 |
 | `chat.resume` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/tui/tui_connect.go:262<br>gateway/channel_manager/web/app_web_handlers.go:285 | app_web_handlers.py:5815 |
 | `chat.send` | ✅ 一致 | local | 网关本地实现 | src/features/designer/components/DesignerChatPanel.tsx:282<br>src/features/designer/designerEntry.ts:114<br>src/hooks/useWebSocket.ts:2303 | gateway/channel_manager/tui/tui_connect.go:261<br>gateway/channel_manager/web/app_web_handlers.go:284 | app_web_handlers.py:5803 |
@@ -50,15 +50,15 @@
 | `config.set` | ✅ 一致 | local | config 代理族（单用户走本地配置读写） | src/App.tsx:4218<br>src/App.tsx:4233 | gateway/channel_manager/web/app_web_handlers.go:264 | app_web_handlers.py:5639 |
 | `config.validate_model` | ✅ 一致 | local | config 代理族（单用户走本地配置读写） | src/features/settings/modules/models/ModelDialog.tsx:279<br>src/features/settings/modules/models/ModelsSettings.tsx:479 | gateway/channel_manager/web/app_web_handlers.go:275 | app_web_handlers.py:5641 |
 | `connection.status` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5676 |
-| `cron.job.create` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:358<br>gateway/channel_manager/web/app_web_handlers.go:368 | app_web_handlers.py:5867 |
-| `cron.job.delete` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:360<br>gateway/channel_manager/web/app_web_handlers.go:370 | app_web_handlers.py:5869 |
-| `cron.job.get` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:357 | app_web_handlers.py:5866 |
-| `cron.job.list` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:356<br>gateway/channel_manager/web/app_web_handlers.go:367 | app_web_handlers.py:5864 |
+| `cron.job.create` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:355<br>gateway/channel_manager/web/app_web_handlers.go:365 | app_web_handlers.py:5867 |
+| `cron.job.delete` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:357<br>gateway/channel_manager/web/app_web_handlers.go:367 | app_web_handlers.py:5869 |
+| `cron.job.get` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:354 | app_web_handlers.py:5866 |
+| `cron.job.list` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:353<br>gateway/channel_manager/web/app_web_handlers.go:364 | app_web_handlers.py:5864 |
 | `cron.job.meta` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5865 |
-| `cron.job.preview` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:362 | app_web_handlers.py:5871 |
-| `cron.job.run_now` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:363 | app_web_handlers.py:5872 |
-| `cron.job.toggle` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:361 | app_web_handlers.py:5870 |
-| `cron.job.update` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:359<br>gateway/channel_manager/web/app_web_handlers.go:369 | app_web_handlers.py:5868 |
+| `cron.job.preview` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:359 | app_web_handlers.py:5871 |
+| `cron.job.run_now` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:360 | app_web_handlers.py:5872 |
+| `cron.job.toggle` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:358 | app_web_handlers.py:5870 |
+| `cron.job.update` | ✅ 一致 | local | 网关本地实现 | — | gateway/channel_manager/web/app_web_handlers.go:356<br>gateway/channel_manager/web/app_web_handlers.go:366 | app_web_handlers.py:5868 |
 | `document.formats` | ❌ 缺 | agent:missing | 代理 DOCUMENT_FORMATS（本仓无该 req method） | — | — | app_web_handlers.py:5814 |
 | `document.persist` | ❌ 缺 | agent:missing | 代理 DOCUMENT_PERSIST（本仓无该 req method） | — | — | app_web_handlers.py:5813 |
 | `external_cli.codex_install_status` | ❌ 缺 | local | 网关本地实现 | — | — | app_web_handlers.py:5499 |

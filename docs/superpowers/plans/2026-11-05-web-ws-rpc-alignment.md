@@ -16,7 +16,7 @@
 
 **关于「不重抄函数体」:** 本计划不把上游函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
 
-**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节），B1b 从 Task 9 开始。
+**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**，后续从 Task 10 开始。
 
 **B1a 收口结论（两处遗留偏差已清零，详见 Task 7b）**：① 删除 `unaryHandler`/`wrapUnary`，59 个注册点一律原生 `methodHandler`，失败帧抬到帧级 `ok=false + error + code`；② 分发顺序改为上游四段式（`local_only` → `handler-before-callback`(`chat.send`) → 回调 → handler）。残留差异见 spec §10（错误文案语言、permissions 本地回退、CI 矩阵上游来源）。
 
@@ -1328,7 +1328,7 @@ git commit -m "feat(web): 补齐 models/model_groups/vendors/session.selection �
 
 **方法清单：** `feishu / xiaoyi / telegram / dingtalk / whatsapp / discord / slack / wecom / wechat` 各一对 `channel.<p>.get_conf` / `channel.<p>.set_conf`（上游 `:5844-5861`）。
 
-- [ ] **Step 1: 读上游 9 组实现**
+- [x] **Step 1: 读上游 9 组实现**
 
 ```bash
 cd /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web
@@ -1337,7 +1337,7 @@ grep -n "_channel_.*_set_conf" -A 20 app_web_handlers.py | head -60
 ```
 要点（`_channel_feishu_get_conf` 原文）：`cm is None` → `ok=False`、`error="channel manager not available"`、`code="SERVICE_UNAVAILABLE"`。
 
-- [ ] **Step 2: 写失败测试（注册 + nil 分支 + 正向）**
+- [x] **Step 2: 写失败测试（注册 + nil 分支 + 正向）**
 
 ```go
 // TestChannelConf_九平台齐全 验证 9 平台 × 2 方法全部注册。
@@ -1371,7 +1371,7 @@ func TestChannelConf_无CM时回SERVICE_UNAVAILABLE(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 用平台表驱动实现**
+- [x] **Step 3: 用平台表驱动实现**
 
 ```go
 // channelConfSource 渠道配置读写面（Go 对上游 duck-typed `cm.get_conf/set_conf` 的等价表达）。
@@ -1423,13 +1423,32 @@ func channelConfGet(wc *WebChannel, cm channelConfSource, platform string, ws ws
 
 > 若上游某平台 handler 体确有差异（feishu 归一 `apps`、wechat 多 login 分支），在该平台分支里照抄，不得为了 DRY 合并语义。
 
-- [ ] **Step 4: 测试 + 矩阵 + 提交**
+- [x] **Step 4: 测试 + 矩阵 + 提交**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run TestChannelConf -v
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
 git add -A && git commit -m "feat(web): 补齐九个 IM 平台配置读写 18 个方法"
 ```
+
+---
+
+**实施记录（2026-11-05 完成）：**
+
+- 18 个方法在 `registerChannelConfFamily` 里**逐条字面量注册**（不再用 7 平台 stub 循环）：一是与上游 18 条
+  `register_method` 一一对应，二是 `cmd/rpc-matrix` 是字面量扫描，循环注册会让矩阵看不到（本批踩过一次，缺口数不降）。
+- 普通平台（telegram/dingtalk/whatsapp/discord/slack/wecom/wechat）：`cm.SetConf(platform, params)` → 回读 →
+  `updateChannelInConfig`（逐键并入 `channels.<p>`，round-trip 写回）→ 成功则 `clearAgentConfigCache`。
+- feishu/xiaoyi：`params` 必须含 `apps`（缺失按上游 `KeyError` 兜成 `INTERNAL_ERROR`，文案 `'apps'`）；
+  归一化补 `_FEISHU_APP_DEFAULTS` / `_XIAOYI_APP_DEFAULTS` → `mergeAppsByID` → `cm.SetConf({apps})` →
+  `replaceChannelSubsectionWithCleanup`（替换 `apps` 并清掉旧平铺键，`keepKeys={apps,send_file_allowed}`）。
+- 清缓存时机按上游差异保留：feishu 在响应之后（Python `finally`），xiaoyi 在响应之前。
+- 归一化的已知语义（与上游同构）：合并是 `{**existing, **normalized}`，缺省表里有的键以归一化结果为准（含空串），
+  只有缺省表之外的运行时字段（`last_chat_id` / `bot_open_id`）才真正保留——`_merge_apps_by_id` 的注释与实际效果不符，
+  本仓照实际行为移植，测试 `TestChannelConf_feishu_set_按app_id合并保留运行时字段` 固定这一口径。
+- 偏差：`get_conf` 上游有 `try/except → INTERNAL_ERROR`，Go 的 `cm.GetConf` 无错误返回，故无该分支。
+- 矩阵：`local` 缺口 47 → 29（本批 18 个归零）。
+
 
 ---
 

@@ -340,11 +340,8 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("memory.forbidden.set", memoryForbiddenSet(wc), false)
 
 	// ─── IM 平台配置 ───
-	channelConfStub := stubHandler(wc, map[string]any{})
-	for _, platform := range []string{"feishu", "dingtalk", "telegram", "discord", "whatsapp", "wecom", "xiaoyi"} {
-		wc.registerMethod("channel."+platform+".get_conf", channelConfStub, false)
-		wc.registerMethod("channel."+platform+".set_conf", channelConfStub, false)
-	}
+	// Python: app_web_handlers.py:5844-5863（9 组 channel.<p>.{get,set}_conf）
+	registerChannelConfFamily(wc, channelMgr, agentClient)
 	wc.registerMethod("channel.wechat.get_login_ui", stubHandler(wc, map[string]any{}), false)
 	wc.registerMethod("channel.wechat.unbind", stubHandler(wc, map[string]any{}), false)
 
@@ -2214,6 +2211,57 @@ var availableModelProviders = []string{
 	"intelli_router",
 }
 
+// channelConfPlatforms IM 平台配置族覆盖的平台清单（注册处逐条字面量、见 registerChannelConfFamily）。
+//
+// Python: app_web_handlers.py:5844-5863 的 9 组 channel.<p>.get_conf / set_conf 注册。
+var channelConfPlatforms = []string{
+	"feishu", "xiaoyi", "telegram", "dingtalk", "whatsapp",
+	"discord", "slack", "wecom", "wechat",
+}
+
+// feishuAppDefaults 飞书应用条目缺省值。
+//
+// Python: _FEISHU_APP_DEFAULTS (app_web_handlers.py:1586-1600)。
+var feishuAppDefaults = map[string]any{
+	"name":                 "默认应用",
+	"is_default":           false,
+	"enabled":              true,
+	"app_id":               "",
+	"app_secret":           "",
+	"encrypt_key":          "",
+	"verification_token":   "",
+	"allow_from":           []any{"0.0.0.0/0"},
+	"enable_streaming":     true,
+	"group_digital_avatar": false,
+	"my_user_id":           "",
+	"bot_name":             "",
+	"enable_memory":        false,
+}
+
+// xiaoyiAppDefaults 小艺应用条目缺省值。
+//
+// Python: _XIAOYI_APP_DEFAULTS (app_web_handlers.py:1687-1704)。
+var xiaoyiAppDefaults = map[string]any{
+	"name":                "默认应用",
+	"is_default":          false,
+	"enabled":             true,
+	"ak":                  "",
+	"sk":                  "",
+	"app_id":              "",
+	"api_id":              "",
+	"agent_id":            "",
+	"enable_streaming":    true,
+	"mode":                "xiaoyi_channel",
+	"push_id":             "",
+	"ws_url1":             "wss://hag.cloud.huawei.com/openclaw/v1/ws/link",
+	"ws_url2":             "wss://116.63.174.231/openclaw/v1/ws/link",
+	"phone_tools_enabled": false,
+	"uid":                 "",
+	"api_key":             "",
+	"push_url":            "",
+	"file_upload_url":     "",
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Error 实现 error 接口。
@@ -3250,4 +3298,319 @@ func defaultProcessRSSBytes() (uint64, error) {
 // bytesToMB 字节转 MB，对齐 Python bytes / (1024 * 1024)。
 func bytesToMB(b uint64) float64 {
 	return float64(b) / (1024 * 1024)
+}
+
+// ──────────────────────────── IM 平台配置族（B1b-2） ────────────────────────────
+
+// registerChannelConfFamily 注册 9 个 IM 平台的 get_conf / set_conf。
+//
+// Python: app_web_handlers.py:5844-5863（9 组 channel.<p>.{get,set}_conf 注册）。
+func registerChannelConfFamily(wc *WebChannel, channelMgr *cm.ChannelManager, agentClient *routing.AgentClient) {
+	// 逐条显式注册（与上游 5844-5863 的 18 条 register_method 一一对应，
+	// 也让 cmd/rpc-matrix 的字面量扫描能识别）。
+	wc.registerMethod("channel.feishu.get_conf", channelConfGet(wc, channelMgr, "feishu"), false)
+	wc.registerMethod("channel.feishu.set_conf", channelConfSet(wc, channelMgr, agentClient, "feishu"), false)
+	wc.registerMethod("channel.xiaoyi.get_conf", channelConfGet(wc, channelMgr, "xiaoyi"), false)
+	wc.registerMethod("channel.xiaoyi.set_conf", channelConfSet(wc, channelMgr, agentClient, "xiaoyi"), false)
+	wc.registerMethod("channel.telegram.get_conf", channelConfGet(wc, channelMgr, "telegram"), false)
+	wc.registerMethod("channel.telegram.set_conf", channelConfSet(wc, channelMgr, agentClient, "telegram"), false)
+	wc.registerMethod("channel.dingtalk.get_conf", channelConfGet(wc, channelMgr, "dingtalk"), false)
+	wc.registerMethod("channel.dingtalk.set_conf", channelConfSet(wc, channelMgr, agentClient, "dingtalk"), false)
+	wc.registerMethod("channel.whatsapp.get_conf", channelConfGet(wc, channelMgr, "whatsapp"), false)
+	wc.registerMethod("channel.whatsapp.set_conf", channelConfSet(wc, channelMgr, agentClient, "whatsapp"), false)
+	wc.registerMethod("channel.discord.get_conf", channelConfGet(wc, channelMgr, "discord"), false)
+	wc.registerMethod("channel.discord.set_conf", channelConfSet(wc, channelMgr, agentClient, "discord"), false)
+	wc.registerMethod("channel.slack.get_conf", channelConfGet(wc, channelMgr, "slack"), false)
+	wc.registerMethod("channel.slack.set_conf", channelConfSet(wc, channelMgr, agentClient, "slack"), false)
+	wc.registerMethod("channel.wecom.get_conf", channelConfGet(wc, channelMgr, "wecom"), false)
+	wc.registerMethod("channel.wecom.set_conf", channelConfSet(wc, channelMgr, agentClient, "wecom"), false)
+	wc.registerMethod("channel.wechat.get_conf", channelConfGet(wc, channelMgr, "wechat"), false)
+	wc.registerMethod("channel.wechat.set_conf", channelConfSet(wc, channelMgr, agentClient, "wechat"), false)
+}
+
+// channelConfGet 返回平台通道当前配置。
+//
+// Python: _channel_<p>_get_conf（app_web_handlers.py:4365 起，9 组同构）：
+// cm 缺失 → SERVICE_UNAVAILABLE；否则回 {"config": conf}（feishu/xiaoyi 先归一化）。
+func channelConfGet(wc *WebChannel, channelMgr *cm.ChannelManager, platform string) methodHandler {
+	return func(ws wsSender, reqID string, _ map[string]any, _ string) {
+		if channelMgr == nil {
+			logger.Warn(logComponent).
+				Str("method", "channel."+platform+".get_conf").
+				Str("req_id", reqID).
+				Msg("channel manager not available")
+			wc.sendResponse(ws, reqID, false, nil, "channel manager not available", WsErrServiceUnavailable)
+			return
+		}
+		conf := normalizeChannelConf(platform, channelMgr.GetConf(platform))
+		wc.sendResponse(ws, reqID, true, map[string]any{"config": conf}, "", "")
+	}
+}
+
+// channelConfSet 更新平台通道配置并写回 config.yaml。
+//
+// Python: _channel_<p>_set_conf（app_web_handlers.py:4392 起）：
+// feishu/xiaoyi 走多应用分支（必须含 apps，归一化后按 app_id 合并保留未发送的敏感字段，
+// 整体替换 channels.<p>.apps 并清理旧平铺键）；其余平台整体写入后回读落盘。
+func channelConfSet(wc *WebChannel, channelMgr *cm.ChannelManager, agentClient *routing.AgentClient, platform string) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		method := "channel." + platform + ".set_conf"
+		if channelMgr == nil {
+			logger.Warn(logComponent).
+				Str("method", method).
+				Str("req_id", reqID).
+				Msg("channel manager not available")
+			wc.sendResponse(ws, reqID, false, nil, "channel manager not available", WsErrServiceUnavailable)
+			return
+		}
+		if params == nil {
+			wc.sendResponse(ws, reqID, false, nil, "params must be object", WsErrBadRequest)
+			return
+		}
+
+		// 多应用平台：params 必须含 apps
+		if platform == "feishu" || platform == "xiaoyi" {
+			appsRaw, hasApps := params["apps"]
+			if !hasApps {
+				// Python: params["apps"] 触发 KeyError，被 except Exception 兜成 INTERNAL_ERROR
+				wc.sendResponse(ws, reqID, false, nil, "'apps'", WsErrInternalError)
+				return
+			}
+			apps, isList := appsRaw.([]any)
+			if !isList {
+				logger.Error(logComponent).
+					Str("method", method).
+					Str("req_id", reqID).
+					Msg("apps must be list")
+				wc.sendResponse(ws, reqID, false, nil, "apps must be list", WsErrInternalError)
+				return
+			}
+			normalizedConf := normalizeChannelConf(platform, map[string]any{"apps": apps})
+			normalized, _ := normalizedConf["apps"].([]any)
+			existing := channelMgr.GetConf(platform)
+			existingApps, _ := existing["apps"].([]any)
+			merged := mergeAppsByID(normalized, existingApps)
+			channelMgr.SetConf(platform, map[string]any{"apps": merged})
+
+			clearAfterRespond := false
+			if err := replaceChannelSubsectionWithCleanup(platform, "apps", merged, []string{"apps", "send_file_allowed"}); err != nil {
+				logger.Warn(logComponent).
+					Err(err).
+					Str("method", method).
+					Msg("写回 config.yaml apps 失败")
+			} else if platform == "feishu" {
+				// 对齐 Python：feishu 在 finally 里清缓存（响应之后），xiaoyi 在响应之前
+				clearAfterRespond = true
+			} else {
+				clearAgentConfigCache(agentClient, context.Background())
+			}
+
+			wc.sendResponse(ws, reqID, true, map[string]any{"config": map[string]any{"apps": merged}}, "", "")
+			if clearAfterRespond {
+				clearAgentConfigCache(agentClient, context.Background())
+			}
+			return
+		}
+
+		// 其余平台：整体写入 ChannelManager，回读结果写回 config.yaml 并清 Agent 配置缓存
+		channelMgr.SetConf(platform, params)
+		conf := channelMgr.GetConf(platform)
+		if err := updateChannelInConfig(platform, conf); err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Str("method", method).
+				Msg("写回 config.yaml 失败")
+		} else {
+			clearAgentConfigCache(agentClient, context.Background())
+		}
+		wc.sendResponse(ws, reqID, true, map[string]any{"config": conf}, "", "")
+	}
+}
+
+// normalizeChannelConf 归一化平台配置：feishu/xiaoyi 补 apps 缺省字段，其余平台原样返回。
+//
+// Python: _normalize_feishu_conf / _normalize_xiaoyi_conf（其余平台直接透传 cm.get_conf）。
+func normalizeChannelConf(platform string, raw map[string]any) map[string]any {
+	switch platform {
+	case "feishu":
+		return normalizeFeishuConf(raw)
+	case "xiaoyi":
+		return normalizeXiaoyiConf(raw)
+	default:
+		if raw == nil {
+			return map[string]any{}
+		}
+		return raw
+	}
+}
+
+// normalizeFeishuConf 把 channels.feishu 统一为 apps 格式并为每个 app 补缺省字段。
+//
+// Python: _normalize_feishu_conf (app_web_handlers.py:1646-1672)。
+// 输入可以是旧平铺格式（{"app_id": ...}）或新多应用格式（{"apps": [...]}）；
+// 返回结果始终带 apps 列表。
+func normalizeFeishuConf(raw map[string]any) map[string]any {
+	return normalizeAppsConf(raw, feishuAppDefaults, singleFeishuApp)
+}
+
+// normalizeXiaoyiConf 把 channels.xiaoyi 统一为 apps 格式并为每个 app 补缺省字段。
+//
+// Python: _normalize_xiaoyi_conf (app_web_handlers.py:1711-1737)。
+func normalizeXiaoyiConf(raw map[string]any) map[string]any {
+	return normalizeAppsConf(raw, xiaoyiAppDefaults, singleXiaoyiApp)
+}
+
+// normalizeAppsConf 多应用平台归一化的公共实现（feishu / xiaoyi 同构）。
+//
+// 非 dict 输入 → {"apps": []}；含 apps → 逐项补默认值；无 apps → 旧平铺格式转单 app。
+func normalizeAppsConf(raw map[string]any, defaults map[string]any, single func(map[string]any) map[string]any) map[string]any {
+	if raw == nil {
+		return map[string]any{"apps": []any{}}
+	}
+	if appsRaw, hasApps := raw["apps"]; hasApps {
+		apps := make([]any, 0)
+		if list, isList := appsRaw.([]any); isList {
+			for _, item := range list {
+				if app, isMap := item.(map[string]any); isMap {
+					apps = append(apps, mergeMaps(defaults, app))
+				}
+				// 非对象条目：Python 展开会抛 TypeError → INTERNAL_ERROR；这里跳过以免脏数据阻断整表
+			}
+		}
+		out := mergeMaps(raw, nil)
+		out["apps"] = apps
+		return out
+	}
+	out := mergeMaps(raw, nil)
+	out["apps"] = []any{single(raw)}
+	return out
+}
+
+// singleFeishuApp 把单个平铺飞书配置转成 apps 列表项。
+//
+// Python: _normalize_single_feishu_to_app (app_web_handlers.py:1675-1693)：
+// 默认值 → is_default=True → 各字段取值 → `**raw` 覆盖，等价 默认值 ⊕ {is_default:true} ⊕ raw。
+func singleFeishuApp(raw map[string]any) map[string]any {
+	app := mergeMaps(feishuAppDefaults, raw)
+	if _, hasDefault := raw["is_default"]; !hasDefault {
+		app["is_default"] = true
+	}
+	return app
+}
+
+// singleXiaoyiApp 把单个平铺小艺配置转成 apps 列表项。
+//
+// Python: _normalize_single_xiaoyi_to_app (app_web_handlers.py:1740-1776)，语义同上。
+func singleXiaoyiApp(raw map[string]any) map[string]any {
+	app := mergeMaps(xiaoyiAppDefaults, raw)
+	if _, hasDefault := raw["is_default"]; !hasDefault {
+		app["is_default"] = true
+	}
+	return app
+}
+
+// mergeAppsByID 按 app_id 把新 apps 与已有 apps 合并，保留前端未发送的字段。
+//
+// Python: _merge_apps_by_id (app_web_handlers.py:1603-1643)：
+// 各平台归一化会用默认空值填充前端未发的字段，合并时以已有值为基座、新值覆盖，
+// 避免已配置的敏感字段（app_secret / sk）被空值覆盖丢失。
+func mergeAppsByID(newApps, existingApps []any) []any {
+	if len(existingApps) == 0 {
+		return newApps
+	}
+	existingByID := make(map[string]map[string]any, len(existingApps))
+	for _, item := range existingApps {
+		app, isMap := item.(map[string]any)
+		if !isMap {
+			continue
+		}
+		if appID, _ := app["app_id"].(string); appID != "" {
+			existingByID[appID] = app
+		}
+	}
+	if len(existingByID) == 0 {
+		return newApps
+	}
+	merged := make([]any, 0, len(newApps))
+	for _, item := range newApps {
+		app, isMap := item.(map[string]any)
+		if !isMap {
+			merged = append(merged, item)
+			continue
+		}
+		appID, _ := app["app_id"].(string)
+		if existing, hit := existingByID[appID]; hit && appID != "" {
+			merged = append(merged, mergeMaps(existing, app))
+			continue
+		}
+		merged = append(merged, app)
+	}
+	return merged
+}
+
+// mergeMaps 返回 base 叠加 override 后的新 map（override 覆盖同名键）。base 为 nil 时只拷贝 override。
+func mergeMaps(base, override map[string]any) map[string]any {
+	out := make(map[string]any, len(base)+len(override))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range override {
+		out[k] = v
+	}
+	return out
+}
+
+// updateChannelInConfig 只更新 channels[<platform>] 并写回 config.yaml。
+//
+// Python: update_channel_in_config (gateway/common/config.py:495-506)：
+// 逐键合并进既有 section，round-trip 写回。
+func updateChannelInConfig(platform string, conf map[string]any) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+	raw, err := cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+	section := mapSection(raw, "channels", platform)
+	merged := mergeMaps(section, conf)
+	return cfg.SetRoundTrip("channels."+platform, merged)
+}
+
+// replaceChannelSubsectionWithCleanup 整体替换 channels[<platform>][<subsection>] 并清理旧字段。
+//
+// Python: replace_channel_subsection_with_cleanup (gateway/common/config.py:600-622)：
+// 写入 subsection 后删除 section 下不在 keepKeys 中的键（多应用模式替换 apps、清掉旧平铺字段）。
+func replaceChannelSubsectionWithCleanup(platform, subsection string, value any, keepKeys []string) error {
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+	raw, err := cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+	section := mapSection(raw, "channels", platform)
+	next := make(map[string]any, len(keepKeys)+1)
+	for _, key := range keepKeys {
+		if v, ok := section[key]; ok {
+			next[key] = v
+		}
+	}
+	next[subsection] = value
+	return cfg.SetRoundTrip("channels."+platform, next)
+}
+
+// mapSection 按路径取嵌套 mapping，缺失或类型不符时返回空 map。
+func mapSection(root map[string]any, keys ...string) map[string]any {
+	cur := root
+	for _, key := range keys {
+		next, ok := cur[key].(map[string]any)
+		if !ok {
+			return map[string]any{}
+		}
+		cur = next
+	}
+	return cur
 }

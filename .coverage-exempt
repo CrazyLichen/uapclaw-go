@@ -306,3 +306,9 @@ internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L1300
 # AgentServer 回 ok=false」分支：需要 AgentClient.ServerReady() 为真且对端返回失败帧，
 # 属进程/网络边界，需起假 AgentServer 才能触达。
 internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L1790-L1799
+
+# ── 2026-11-05 27-A B1b-2 九个 IM 平台配置 ──
+# app_web_handlers.go L3569-L3571 / L3587-L3589 — config.New("") 失败分支。默认路径
+# 由 workspace 解析，测试进程下不可能失败（同 config.New 其他调用点的既有口径）。
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L3569-L3571
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L3587-L3589
