@@ -18,9 +18,13 @@
 
 **进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**；**Task 10（health_check ×2 + cron.job.meta + updater ×4）已完成**（updater 按裁定仅保留 handler 回默认）；**Task 11（4 个杂项本地方法）已完成**，后续从 Task 12 开始。
 
-**已知 flake（未修，rerun 绿）**：`tests/integration/swarm/gateway` 的 `TestCliRouteFullChainSuite/TestChatSendFullChain_*` 偶发
-"MockModelClient 未被调用——config.yaml 的 client_provider 未命中"；整包跑（前置 AcpBridgeE2E/SupplementInterrupt/TeamDialog）时偶发，
-单套件 `-count=5` 不复现。CI 两轮红均此例、rerun 绿。**待专门一批排查该套件的全局状态隔离**（provider 注册 / config.yaml / 残留 goroutine）。
+**CI 红灯归属（2026-11-05 记录）**：本计划的 B1b 各批自身门禁（Build/Lint/Unit/改动行覆盖）已通过；Integration 仍红在两处**非本计划文件**：
+
+1. `tests/integration/swarm/gateway` 的 `TestCliRouteFullChainSuite/TestChatSendFullChain_*` —— 偶发
+   "MockModelClient 未被调用"（整包跑偶发，单套件 `-count=5` 不复现，rerun 绿），属既存 flake，待专门一批治理。
+2. `tests/integration/agentcore/evolving` 的 `TestEvolutionConsumptionE2E` —— **自合并 `00d8cbbc`（skill 会话基线 + skill_tool 对齐）
+   起稳定失败**：提示词里只剩 `plain-skill`、`skill_tool` 报 `Skill not found: data-processor`，本地 `-count=1` 可稳定复现，
+   属 skill rail 刷新/注册链路的回归，归该领域会话处理。
 
 **B1a 收口结论（两处遗留偏差已清零，详见 Task 7b）**：① 删除 `unaryHandler`/`wrapUnary`，59 个注册点一律原生 `methodHandler`，失败帧抬到帧级 `ok=false + error + code`；② 分发顺序改为上游四段式（`local_only` → `handler-before-callback`(`chat.send`) → 回调 → handler）。残留差异见 spec §10（错误文案语言、permissions 本地回退、CI 矩阵上游来源）。
 
