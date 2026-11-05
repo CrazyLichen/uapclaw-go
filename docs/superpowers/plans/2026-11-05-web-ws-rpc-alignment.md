@@ -16,7 +16,9 @@
 
 **关于「不重抄函数体」:** 本计划不把上游函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
 
-**进度：Task 1-2（B0）已完成并入库**（`cmd/rpc-matrix` + 两份 sync 文档 + CI 漂移校验），后续任务从 Task 3 开始。
+**进度：Task 1-7 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`）。后续从 Task 8（B1b 功能批）开始。
+
+**B1a 遗留偏差（写进 spec §10）**：① 既有 30 个 handler 仍返回 `(payload, error)`，经 `wrapUnary` 适配成 `methodHandler`，B1b 新方法直接写原生 `methodHandler`；② 分发顺序当前为「回调优先 → 本地 handler」，上游为「local_only / handler-before-callback(`chat.send`) → 回调 → handler」，未改（避免破坏既有行为），待 chat.* 批一并处理。
 
 ---
 
