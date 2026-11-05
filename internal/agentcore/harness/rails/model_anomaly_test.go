@@ -298,3 +298,146 @@ func TestExceptionChain_沿Cause展开(t *testing.T) {
 		t.Fatalf("异常链应为 3 层，实际 %d", len(chain))
 	}
 }
+
+// ──────────────────────────── 重试记账测试 ────────────────────────────
+
+// withException 把异常塞进回调上下文（OnModelException 从 ctx.Exception() 读取）。
+func withException(cbc *agentinterfaces.AgentCallbackContext, err error) *agentinterfaces.AgentCallbackContext {
+	cbc.SetException(err)
+	return cbc
+}
+
+// newTestCBCWithSession 构造带会话 id 的回调上下文。
+func newTestCBCWithSession(id string) *agentinterfaces.AgentCallbackContext {
+	return agentinterfaces.NewAgentCallbackContext(nil, nil, newFakeSession(id))
+}
+
+// repeatErr 构造重复输出异常。
+func repeatErr() error {
+	return exception.BuildError(exception.StatusModelCallFailed,
+		exception.WithMsg(repeatErrorMarker+": field=content"))
+}
+
+// TestOnModelException_重复异常按退避表重试 两次预算、耗尽归零后可重新获得。
+func TestOnModelException_重复异常按退避表重试(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail(WithBackoffSeconds([]float64{0.5, 1.0}))
+	cbc := newTestCBC()
+	r.BeforeInvoke(context.Background(), cbc)
+
+	_ = r.OnModelException(context.Background(), withException(cbc, repeatErr()))
+	req := cbc.ConsumeRetryRequest()
+	if req == nil || req.DelaySeconds != 0.5 {
+		t.Fatalf("第 1 次应请求 0.5s 重试，实际 %+v", req)
+	}
+
+	_ = r.OnModelException(context.Background(), withException(cbc, repeatErr()))
+	req = cbc.ConsumeRetryRequest()
+	if req == nil || req.DelaySeconds != 1.0 {
+		t.Fatalf("第 2 次应请求 1.0s 重试，实际 %+v", req)
+	}
+
+	_ = r.OnModelException(context.Background(), withException(cbc, repeatErr()))
+	if req = cbc.ConsumeRetryRequest(); req != nil {
+		t.Fatalf("超过 max_retries 后不应再重试，实际 %+v", req)
+	}
+
+	_ = r.OnModelException(context.Background(), withException(cbc, repeatErr()))
+	if req = cbc.ConsumeRetryRequest(); req == nil {
+		t.Fatal("计数归零后应重新重试")
+	}
+}
+
+// TestOnModelException_流超时与重复各自计数 两类异常不共享预算。
+func TestOnModelException_流超时与重复各自计数(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail(WithMaxRetries(1), WithBackoffSeconds([]float64{0}))
+	cbc := newTestCBC()
+	r.BeforeInvoke(context.Background(), cbc)
+
+	timeoutErr := exception.BuildError(exception.StatusModelCallFailed,
+		exception.WithMsg("LLM stream timeout: stream frame timeout: stage=idle_token"))
+
+	_ = r.OnModelException(context.Background(), withException(cbc, timeoutErr))
+	if cbc.ConsumeRetryRequest() == nil {
+		t.Fatal("流超时第 1 次应重试")
+	}
+	_ = r.OnModelException(context.Background(), withException(cbc, timeoutErr))
+	if cbc.ConsumeRetryRequest() != nil {
+		t.Fatal("max_retries=1 时第 2 次不应重试")
+	}
+
+	_ = r.OnModelException(context.Background(), withException(cbc, repeatErr()))
+	if cbc.ConsumeRetryRequest() == nil {
+		t.Fatal("重复异常应使用独立计数")
+	}
+}
+
+// TestOnModelException_已输出可见内容时不做瞬时重试 闸门只挡瞬时，不挡重复。
+func TestOnModelException_已输出可见内容时不做瞬时重试(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+	r.BeforeInvoke(context.Background(), cbc)
+	cbc.SetModelVisibleOutputEmitted(true)
+
+	_ = r.OnModelException(context.Background(), withException(cbc, httpErr(429, nil, "429")))
+	if cbc.ConsumeRetryRequest() != nil {
+		t.Fatal("已输出内容后不应做瞬时重试")
+	}
+
+	_ = r.OnModelException(context.Background(), withException(cbc, repeatErr()))
+	if cbc.ConsumeRetryRequest() == nil {
+		t.Fatal("重复异常不受可见输出闸门限制（对齐上游判定顺序）")
+	}
+}
+
+// TestOnModelException_瞬时重试指数退避与耗尽 2s/4s 后耗尽。
+func TestOnModelException_瞬时重试指数退避与耗尽(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail(WithTransientMaxRetries(2), WithTransientBaseDelaySeconds(2))
+	cbc := newTestCBC()
+	r.BeforeInvoke(context.Background(), cbc)
+
+	_ = r.OnModelException(context.Background(), withException(cbc, httpErr(429, nil, "429")))
+	if req := cbc.ConsumeRetryRequest(); req == nil || req.DelaySeconds != 2 {
+		t.Fatalf("第 1 次应为 2s，实际 %+v", req)
+	}
+	_ = r.OnModelException(context.Background(), withException(cbc, httpErr(429, nil, "429")))
+	if req := cbc.ConsumeRetryRequest(); req == nil || req.DelaySeconds != 4 {
+		t.Fatalf("第 2 次应为 4s，实际 %+v", req)
+	}
+	_ = r.OnModelException(context.Background(), withException(cbc, httpErr(429, nil, "429")))
+	if req := cbc.ConsumeRetryRequest(); req != nil {
+		t.Fatal("耗尽后不应重试")
+	}
+}
+
+// TestOnModelException_RetryAfter优先 服务端建议时长覆盖指数退避。
+func TestOnModelException_RetryAfter优先(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail()
+	cbc := newTestCBC()
+	r.BeforeInvoke(context.Background(), cbc)
+
+	_ = r.OnModelException(context.Background(), withException(cbc, httpErr(429, map[string]any{"retry_after": "7"}, "429")))
+	if req := cbc.ConsumeRetryRequest(); req == nil || req.DelaySeconds != 7 {
+		t.Fatalf("应使用 Retry-After=7，实际 %+v", req)
+	}
+}
+
+// TestRetryCounters_按会话隔离且归零即删 分桶互不影响，AfterInvoke 释放条目。
+func TestRetryCounters_按会话隔离且归零即删(t *testing.T) {
+	r, _ := NewModelAnomalyDetectionRail(WithMaxRetries(1), WithBackoffSeconds([]float64{0}))
+	cbcA := newTestCBCWithSession("session-a")
+	cbcB := newTestCBCWithSession("session-b")
+	r.BeforeInvoke(context.Background(), cbcA)
+	r.BeforeInvoke(context.Background(), cbcB)
+
+	_ = r.OnModelException(context.Background(), withException(cbcA, repeatErr()))
+	cbcA.ConsumeRetryRequest()
+
+	if r.counterValue("session-b", "repeat") != 0 {
+		t.Fatal("会话 A 的计数不应影响会话 B")
+	}
+
+	r.AfterInvoke(context.Background(), cbcA)
+	if _, ok := r.counters["session-a"]; ok {
+		t.Fatal("AfterInvoke 应删除该会话条目")
+	}
+}

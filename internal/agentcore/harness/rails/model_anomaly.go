@@ -12,8 +12,10 @@ import (
 	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -323,6 +325,79 @@ func (r *ModelAnomalyDetectionRail) InspectStreamChunk(_ context.Context, cbc *a
 	return nil
 }
 
+
+// GetCallbacks 注册本 Rail 关心的 4 个事件。
+//
+// Python: DeepAgentRail 子类按事件自动注册；Go 必须显式声明。
+func (r *ModelAnomalyDetectionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	callbacks := r.DeepAgentRail.GetCallbacks()
+	callbacks[agentinterfaces.CallbackBeforeInvoke] = func(ctx context.Context, railCtx any) error {
+		r.BeforeInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+		return nil
+	}
+	callbacks[agentinterfaces.CallbackAfterInvoke] = func(ctx context.Context, railCtx any) error {
+		r.AfterInvoke(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+		return nil
+	}
+	callbacks[agentinterfaces.CallbackBeforeModelCall] = func(ctx context.Context, railCtx any) error {
+		return r.BeforeModelCall(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+	callbacks[agentinterfaces.CallbackOnModelException] = func(ctx context.Context, railCtx any) error {
+		return r.OnModelException(ctx, railCtx.(*agentinterfaces.AgentCallbackContext))
+	}
+	return callbacks
+}
+
+// BeforeInvoke 清零本次 invoke 的三类重试计数与压缩计数。
+//
+// Python: before_invoke (L417-422)
+func (r *ModelAnomalyDetectionRail) BeforeInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) {
+	r.resetRetryCounters(cbc)
+	r.resetCompactCount(cbc)
+}
+
+// AfterInvoke 释放本会话条目，避免映射随会话数增长。
+//
+// Python: after_invoke (L424-425) 只清压缩计数；Go 侧一并清重试计数，
+// 因为本实现把重试计数也按会话分桶（只存正计数，归零即删）。
+func (r *ModelAnomalyDetectionRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) {
+	r.resetRetryCounters(cbc)
+	r.resetCompactCount(cbc)
+}
+
+// OnModelException 对可重试的模型异常请求整调用重试。
+//
+// 判定顺序即优先级：重复输出 → 流帧超时 → 可见输出闸门 → 瞬时失败。
+// Python: on_model_exception (L454-481)
+func (r *ModelAnomalyDetectionRail) OnModelException(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+	err := cbc.Exception()
+	if isRepeatException(err) {
+		r.requestRetryOrReset(cbc, "repeat")
+		return nil
+	}
+	if isStreamTimeoutException(err) {
+		r.requestRetryOrReset(cbc, "stream_timeout")
+		return nil
+	}
+	if cbc.ModelVisibleOutputEmitted() {
+		return nil
+	}
+
+	decision := classifyTransientFailure(err)
+	if !decision.retryable && decision.retryAfterSeconds != nil && *decision.retryAfterSeconds > maxRetryAfterSeconds {
+		logger.Warn(logComponent).
+			Str("event_type", "model_anomaly_retry_skipped").
+			Float64("retry_after_seconds", *decision.retryAfterSeconds).
+			Float64("max_retry_after_seconds", maxRetryAfterSeconds).
+			Msg("server requested retry delay beyond the cap; not retrying")
+		return nil
+	}
+	if decision.retryable {
+		r.requestTransientRetry(cbc, decision)
+	}
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // anomalyState 取（或创建）本次模型调用的尾窗状态。
@@ -417,6 +492,162 @@ func (r *ModelAnomalyDetectionRail) detectSingleCharSuffix(runes []rune) (string
 		}
 	}
 	return "", 0, false
+}
+
+
+// requestRetryOrReset 重复输出/流超时共用的重试记账。
+//
+// Python: _request_retry_or_reset (L552-576)
+func (r *ModelAnomalyDetectionRail) requestRetryOrReset(cbc *agentinterfaces.AgentCallbackContext, reason string) {
+	var field, label string
+	switch reason {
+	case "repeat":
+		field, label = "repeat", "repeated stream output"
+	case "stream_timeout":
+		field, label = "stream_timeout", "stream frame timeout"
+	default:
+		return
+	}
+
+	key := sessionKey(cbc)
+	current := r.counterValue(key, field)
+	if current >= r.maxRetries {
+		r.resetCounter(key, field)
+		return
+	}
+	delay := r.BackoffDelay(current)
+	r.setCounterValue(key, field, current+1)
+	logger.Warn(logComponent).
+		Str("event_type", "model_anomaly_retry").
+		Str("reason", label).
+		Int("attempt", current+1).
+		Int("max_retries", r.maxRetries).
+		Float64("delay_seconds", delay).
+		Msg("retrying model call after anomaly")
+	cbc.RequestRetry(delay)
+}
+
+// requestTransientRetry 瞬时失败重试记账（Retry-After 优先，否则指数退避）。
+//
+// Python: _request_transient_retry (L578-600)
+func (r *ModelAnomalyDetectionRail) requestTransientRetry(cbc *agentinterfaces.AgentCallbackContext, decision transientDecision) {
+	key := sessionKey(cbc)
+	current := r.counterValue(key, "transient")
+	if current >= r.transientMaxRetries {
+		r.resetCounter(key, "transient")
+		return
+	}
+	delay := r.transientBaseDelay * float64(int(1)<<current)
+	if decision.retryAfterSeconds != nil {
+		delay = *decision.retryAfterSeconds
+	}
+	r.setCounterValue(key, "transient", current+1)
+
+	status := "none"
+	if decision.statusCode != nil {
+		status = strconv.Itoa(*decision.statusCode)
+	}
+	logger.Warn(logComponent).
+		Str("event_type", "model_anomaly_retry").
+		Str("reason", "transient provider failure").
+		Str("status", status).
+		Int("attempt", current+1).
+		Int("max_retries", r.transientMaxRetries).
+		Float64("delay_seconds", delay).
+		Msg("retrying model call after transient provider failure")
+	cbc.RequestRetry(delay)
+}
+
+// counterValue 读某个会话某类计数。
+func (r *ModelAnomalyDetectionRail) counterValue(key, field string) int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	counters, ok := r.counters[key]
+	if !ok || counters == nil {
+		return 0
+	}
+	switch field {
+	case "repeat":
+		return counters.repeat
+	case "stream_timeout":
+		return counters.streamTimeout
+	default:
+		return counters.transient
+	}
+}
+
+// setCounterValue 写某个会话某类计数（正数才建条目）。
+func (r *ModelAnomalyDetectionRail) setCounterValue(key, field string, value int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	counters, ok := r.counters[key]
+	if !ok {
+		counters = &retryCounters{}
+		r.counters[key] = counters
+	}
+	switch field {
+	case "repeat":
+		counters.repeat = value
+	case "stream_timeout":
+		counters.streamTimeout = value
+	default:
+		counters.transient = value
+	}
+}
+
+// resetCounter 归零某类计数：三类全零时删除条目（只存正计数）。
+func (r *ModelAnomalyDetectionRail) resetCounter(key, field string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	counters, ok := r.counters[key]
+	if !ok {
+		return
+	}
+	switch field {
+	case "repeat":
+		counters.repeat = 0
+	case "stream_timeout":
+		counters.streamTimeout = 0
+	default:
+		counters.transient = 0
+	}
+	if counters.repeat == 0 && counters.streamTimeout == 0 && counters.transient == 0 {
+		delete(r.counters, key)
+	}
+}
+
+// resetRetryCounters 清空某会话全部重试计数。
+func (r *ModelAnomalyDetectionRail) resetRetryCounters(cbc *agentinterfaces.AgentCallbackContext) {
+	key := sessionKey(cbc)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.counters, key)
+}
+
+// resetCompactCount 清空某会话的压缩命中计数。
+func (r *ModelAnomalyDetectionRail) resetCompactCount(cbc *agentinterfaces.AgentCallbackContext) {
+	key := sessionKey(cbc)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.compactCounts, key)
+}
+
+// compactCount 读某会话的压缩命中计数。
+func (r *ModelAnomalyDetectionRail) compactCount(key string) int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.compactCounts[key]
+}
+
+// setCompactCount 写某会话的压缩命中计数（<=0 即删）。
+func (r *ModelAnomalyDetectionRail) setCompactCount(key string, value int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if value <= 0 {
+		delete(r.compactCounts, key)
+		return
+	}
+	r.compactCounts[key] = value
 }
 
 // lastRunes 取末尾 n 个字符（按 rune，与上游按字符切片一致）。
@@ -798,4 +1029,41 @@ func toFloat(value any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// isRepeatException 判断是否为重复输出异常。
+//
+// Python: _is_repeat_exception (L602-604)
+func isRepeatException(err error) bool {
+	return err != nil && strings.Contains(err.Error(), repeatErrorMarker)
+}
+
+// isStreamTimeoutException 判断是否为流帧超时异常。
+//
+// Python: _is_stream_timeout_exception (L606-611)
+func isStreamTimeoutException(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	for _, marker := range streamTimeoutMarkers {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// sessionKey 取会话标识；无会话时用指针兜底（对齐上游 id(session) 兜底）。
+//
+// Python: _tool_loop_compact_session_key (L613-629)
+func sessionKey(cbc *agentinterfaces.AgentCallbackContext) string {
+	sess := cbc.Session()
+	if sess == nil {
+		return ""
+	}
+	if id := sess.GetSessionID(); id != "" {
+		return id
+	}
+	return fmt.Sprintf("session@%p", sess)
 }
