@@ -118,6 +118,7 @@ applyToolExposurePolicy(card):
     card.Exposure = resolved; declared = true
 ```
 
+- **接口落点（实施细化）**：新增两个单方法窄接口 `ExposurePolicyController`（DeepAgent 配置期调用）与 `RegistryRevisionProvider`（rail 索引判据），**不修改** `AbilityManagerInterface`（其已有 `AbilityManager` / `P2PAbilityManager` / 测试 fake 三个实现方）；卡片曝光读取在 rails 内用局部接口断言（`AbilityName()` + `EffectiveExposure()`），不向 `schema.Ability` 加方法。
 - `registryRevision` 递增点对齐上游 `_mark_registry_changed` 7 处：`add` 内 tools(3)/workflows/agents(5 处) + `remove` 的 MCP 两分支。
 - **上游 `remove` 移除普通工具不涨 revision**（既有事实）→ 索引正确性依赖 fingerprint 双判据（§5.5）。
 - direct 名单：上游 36 项（`deep_agent.py:199-242`，已机器核对条数）一比一；Go 侧按实际注册名映射（§10 D-2）：
