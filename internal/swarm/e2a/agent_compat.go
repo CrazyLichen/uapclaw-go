@@ -30,6 +30,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		}
 	}
 
+	// 网关兜底信封不能走这条路径：先识别标记，让调用方改用 legacy 分支
 	internal, hasInternal := ctx[e2aInternalContextKey]
 	if hasInternal {
 		delete(ctx, e2aInternalContextKey)
@@ -42,6 +43,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		}
 	}
 
+	// 渠道上下文整体作为元数据透传（权限上下文也从这里取）
 	var metadata map[string]any
 	if len(ctx) > 0 {
 		metadata = ctx
@@ -53,6 +55,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		permCtx = schema.NewPermissionContextFromDict(metadata)
 	}
 
+	// 方法名必须是已知的请求方法，否则直接报错（不做猜测）
 	methodStr := env.Method
 	var reqMethod schema.ReqMethod
 	if methodStr != "" {
@@ -67,6 +70,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		reqMethod = rm
 	}
 
+	// 参数重新序列化成 JSON；序列化失败时退化成空对象，保证后续解析不炸
 	var params json.RawMessage
 	if env.Params != nil {
 		b, err := json.Marshal(env.Params)
@@ -89,6 +93,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		chatID = &env.ChatID
 	}
 
+	// 渠道缺省按 web 处理，对应原来只走 Web 端的历史行为
 	channelID := env.Channel
 	if channelID == "" {
 		channelID = "web"

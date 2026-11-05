@@ -77,6 +77,8 @@
 //	├── stream_function.go            # StreamFunction[I,O] — 泛型本地函数工具（Stream 模式）
 //	├── map_function.go               # MapFunction — 弱类型 map 降级工具
 //	├── tool_func.go                  # NewTool/NewStreamTool 便捷注册函数 + ToolFuncOption
+//	├── callback_context.go           # ToolCallbackContext 执行期回调上下文契约 + CallbackContextAcceptor/WithToolCallbackContext
+//	├── exposure.go                   # ToolExposure 工具曝光策略 + 生效策略判定/注册期锁定标记
 //	├── auth/
 //	│   ├── doc.go              # 认证子包文档
 //	│   ├── auth.go             # ToolAuthConfig + ToolAuthResult 数据模型

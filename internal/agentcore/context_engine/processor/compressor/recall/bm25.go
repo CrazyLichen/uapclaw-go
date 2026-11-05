@@ -46,7 +46,7 @@ var (
 	asciiTokenRe = regexp.MustCompile(`[a-z0-9_]+`)
 	// cjkSequenceRe CJK 连续片段
 	cjkSequenceRe = regexp.MustCompile(`[\x{3400}-\x{4dbf}\x{4e00}-\x{9fff}]+`)
-	// yamlFrontmatterRe YAML frontmatter
+	// yamlFrontmatterRe 匹配 YAML frontmatter 区块（首尾 --- 之间）
 	yamlFrontmatterRe = regexp.MustCompile(`(?s)\A---\s*\n.*?\n---\s*(?:\n|\z)`)
 	// markdownFenceRe 代码围栏行
 	markdownFenceRe = regexp.MustCompile(`(?m)^\s*\x60\x60\x60[^\n]*$`)

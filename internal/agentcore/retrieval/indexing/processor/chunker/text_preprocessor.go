@@ -98,7 +98,7 @@ var (
 	//
 	// Python: text_preprocessor.py URLEmailRemover.URL_PATTERN L66
 	urlPattern = regexp2.MustCompile(`https?://[^`+sCore+`]+|www\.[^`+sCore+`]+`, regexp2.None)
-	// comPattern Python COM_PATTERN
+	// comPattern 常见域名后缀的正则，对应 Python COM_PATTERN：
 	// r"(?:https?://|www\.)?\S+?\.(?:com|net|org|cn)(?:[/?#]\S*)?\b"。
 	//
 	// \S 同上替换；\b 保留 regexp2 原生语义（偏差 4：No/Nl/Mn/Pc 紧贴
@@ -122,7 +122,7 @@ var (
 	//
 	// Python: text_preprocessor.py SpecialCharacterNormalizer.CONTROL_CHAR_PATTERN L112
 	controlCharPattern = regexp2.MustCompile(`[\x00-\x1F\x7F]`, regexp2.None)
-	// redundantSymbolsPattern Python REDUNDANT_SYMBOLS_PATTERN
+	// redundantSymbolsPattern 连续重复符号的正则，对应 Python REDUNDANT_SYMBOLS_PATTERN：
 	// r"(?![\u4e00-\u9fa5，。！？；：“”‘’（）【】《》、…·])(?![#*\-_]{2,})([^\w\s#*_\-\|]){2,}"
 	//
 	// 双负向前瞻 regexp2 原生支持；[^\w\s#*_\-\|] 内的 \w/\s

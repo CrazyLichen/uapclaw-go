@@ -57,6 +57,7 @@ type externalSessionAliasKey struct {
 	externalID string
 }
 
+// MessageHandler 消息处理器：消费渠道入站消息、转发给 AgentServer，并把出站消息交回渠道。
 type MessageHandler struct {
 	// agentClient AgentServer 客户端（封装 Transport 通信）
 	agentClient *routing.AgentClient

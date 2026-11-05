@@ -97,6 +97,7 @@ func (t *ExperienceTracker) RecordPresented(
 		return
 	}
 
+	// 每条记录的出现次数 +1，并刷新最近展示时间，得分保持不变
 	updates := map[string]*RecordScoreUpdate{}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
@@ -170,10 +171,12 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 		}
 	}()
 
+	// 没有记录 ID 时无事可做
 	if len(recordIDs) == 0 {
 		return
 	}
 
+	// 读取该技能的完整演进日志；失败只记日志，不影响主流程
 	evoLog, err := t.store.LoadFullEvolutionLog(ctx, skillName)
 	if err != nil {
 		logger.Warn(logComponent).
@@ -182,6 +185,7 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 			Msg("[ExperienceTracker] load evolution log for record_presented_records failed")
 		return
 	}
+	// 把请求的 ID 转成集合，便于下面按 ID 过滤正文类记录
 	requestedIDs := map[string]bool{}
 	for _, id := range recordIDs {
 		requestedIDs[id] = true
@@ -226,6 +230,7 @@ func (t *ExperienceTracker) RecordPresentedRecords(
 		return
 	}
 
+	// 写回成功后，把这些记录登记到当前会话的「已展示」清单
 	presentedEntries := []PresentedRecordEntry{}
 	for _, record := range bodyRecords {
 		if update, ok := updates[record.ID]; ok {

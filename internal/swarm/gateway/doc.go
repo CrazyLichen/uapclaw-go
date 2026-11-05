@@ -24,6 +24,7 @@
 //	├── route_config.go     # RouteConfig/GatewayServerConfig + binding 工厂链（BuildACPRouteBinding / BuildRouteConfigMap，对齐 Python L723-752）
 //	├── config_push.go      # 配置热重载回调（onConfigSavedImpl）
 //	├── config_env_map.go   # 配置键→环境变量映射 + browserRuntimeKeys
+//	├── normalize.go        # 转发方法集合（ForwardReqMethods/ForwardNoLocalHandlerMethods）+ NormAndForwardFunc（对齐 Python _normalize_and_forward_message）
 //	├── cron/               # 定时任务调度（11.10：CronSchedulerService 事件堆 + CronController）
 //	├── hooks/              # Gateway Hook（11.13：GatewayHookHandler 4 事件）
 //	├── heartbeat/          # 心跳服务（11.11：GatewayHeartbeatService 旁路定时器）

@@ -26,7 +26,6 @@
 //	├── agent_mode.go       # AgentModeRail plan 模式约束（3个钩子）
 //	├── heartbeat.go        # HeartbeatRail 心跳护栏（3个钩子）
 //	├── mcp_rail.go         # McpRail MCP 资源浏览工具注册（2个钩子：Init/Uninit）
-//	├── attachment_delivery.go # 动态提示词投递助手（rail 内统一走附件，无管理器回落 section）
 //	├── interrupt/          # 中断-恢复（HITL）Rail 子包
 //	│   ├── doc.go              # 包文档
 //	│   ├── interrupt_base.go   # BaseInterruptRail + 决策类型

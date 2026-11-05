@@ -52,6 +52,7 @@ const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// DefaultRegistry 全局的 shell 进程注册表，各处登记的子进程都从这里统一回收。
 var DefaultRegistry = NewShellProcessRegistry()
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -275,6 +275,7 @@ func ChannelContextForChannelReply(env *E2AEnvelope) map[string]any {
 	return ctx
 }
 
+// WithNormTimestamp 指定响应里的时间戳（不传则用当前时间）。
 func WithNormTimestamp(ts string) ResponseNormOption {
 	return func(c *responseNormConfig) { c.timestamp = ts }
 }

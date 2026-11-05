@@ -300,6 +300,7 @@ var builtinCommandsMeta = []map[string]any{
 	},
 }
 
+// ControlMessageTexts 根据当前语言构建的控制类消息提示文案表。
 var ControlMessageTexts = buildControlMessageTexts()
 
 // FirstBatchRegistry 首批注册表

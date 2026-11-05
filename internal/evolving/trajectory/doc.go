@@ -21,6 +21,7 @@
 //	├── store.go         # TrajectoryStore 接口 + InMemoryTrajectoryStore + FileTrajectoryStore
 //	├── aggregator.go    # TeamTrajectoryAggregator + FilterMemberTrajectory + 协作步骤过滤
 //	├── registry.go      # TrajectorySink/Source 接口 + InMemoryTrajectoryRegistry + MemberTrajectorySnapshot
+//	├── messages.go      # TrimPromptToLastUser 提示词裁剪到最后一轮用户消息（对齐 Python trajectory/messages.py）
 //	└── json_safe.go     # JSONSafe + MessageToDict + responseToText
 //
 // 对应 Python 代码：openjiuwen/agent_evolving/trajectory/

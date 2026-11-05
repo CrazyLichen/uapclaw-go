@@ -286,6 +286,7 @@ func (sm *SkillManager) HandleSkillsToggle(ctx context.Context, params map[strin
 // HandleSkillsEvolutionStatus 检查某个 skill 是否存在 evolutions.json
 // Python: SkillManager.handle_skills_evolution_status(params)
 func (sm *SkillManager) HandleSkillsEvolutionStatus(ctx context.Context, params map[string]any) (map[string]any, error) {
+	// 参数校验：必须给 skill 名，并且名字要能用做目录名
 	name := trimSpace(toString(params["name"]))
 	if name == "" {
 		return nil, fmt.Errorf("缺少参数: name")
@@ -299,6 +300,7 @@ func (sm *SkillManager) HandleSkillsEvolutionStatus(ctx context.Context, params 
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 
+	// 读取已有的 evolutions.json，读不到就用一份默认空壳
 	evoPath := sm.getSkillEvolutionPath(safeName)
 	exists := evoPath != "" && fileExists(evoPath)
 	return map[string]any{"name": safeName, "exists": exists}, nil
@@ -387,6 +389,7 @@ func (sm *SkillManager) HandleSkillsEvolutionSave(ctx context.Context, params ma
 		return nil, fmt.Errorf("%s", err.Error())
 	}
 
+	// 加锁后确认这个 skill 存在，再动文件
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -394,6 +397,7 @@ func (sm *SkillManager) HandleSkillsEvolutionSave(ctx context.Context, params ma
 		return nil, fmt.Errorf("未找到 skill: %s", safeName)
 	}
 
+	// entries 必须是数组，且每一项都要有 id 与 change.content
 	entriesVal, ok := params["entries"]
 	if !ok {
 		return nil, fmt.Errorf("参数 entries 必须是数组")
@@ -452,6 +456,7 @@ func (sm *SkillManager) HandleSkillsEvolutionSave(ctx context.Context, params ma
 		evoFile["skill_id"] = safeName
 	}
 
+	// 整体覆盖写回，并回填更新时间与 skill_id
 	if err := os.MkdirAll(filepath.Dir(evoPath), 0o755); err != nil {
 		return nil, fmt.Errorf("创建目录失败: %w", err)
 	}

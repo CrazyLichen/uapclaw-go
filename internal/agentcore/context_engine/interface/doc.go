@@ -11,7 +11,8 @@
 //	├── doc.go          # 包文档
 //	├── types.go        # ModelContext/ContextEngine 接口 + ContextWindow/ContextStats + Option 类型 + ProcessorSpec
 //	├── processor.go    # ContextProcessor/ProcessorConfig 接口 + ContextEvent/ProcessorOption + Option 类型
-//	└── registry.go     # ProcessorFactory 工厂函数类型
+//	├── registry.go     # ProcessorFactory 工厂函数类型
+//	└── window.go       # WindowMutator 窗口投影链 + Option.Extra 中的投影链存取助手
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/base.py + processor/base.py
 package iface

@@ -79,10 +79,12 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 		)
 	}
 
+	// 没有待执行的操作，直接返回
 	if len(operations) == 0 {
 		return nil
 	}
 
+	// 操作必须按 schema_version 升序排列，否则执行顺序不可预期
 	if !validateOperationsOrder(operations) {
 		logger.Error(logComponent).Msg("schema_version is not in ascending order")
 		return exception.BuildError(exception.StatusMemoryMigrateMemoryExecutionError,
@@ -90,6 +92,7 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 		)
 	}
 
+	// 先取当前库里的 schema 版本，决定哪些操作还需要跑
 	currentVersion, err := m.messageStore.GetSchemaVersion(ctx)
 	if err != nil {
 		return err
@@ -109,6 +112,7 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 		return nil
 	}
 
+	// 筛出比当前版本新的操作；已经做过迁移的库在这里就结束了
 	pendingOps := filterPendingOperations(operations, currentVersionPtr)
 	if len(pendingOps) == 0 {
 		return nil
@@ -116,12 +120,14 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 
 	logger.Info(logComponent).Int("pending_count", len(pendingOps)).Msg("found pending operations")
 
+	// 迁移前先备份，失败时按备份回滚
 	backupData, err := m.createBackup(ctx)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("failed to create message backup")
 		return err
 	}
 
+	// 逐个执行操作；任一失败就回滚，并保留原版本号
 	lastVersion := currentVersionPtr
 	for idx, op := range pendingOps {
 		logger.Info(logComponent).Int("idx", idx+1).Int("total", len(pendingOps)).
@@ -144,6 +150,7 @@ func (m *MessageMigrator) TryMigrate(ctx context.Context, entityKey string, oper
 			Msg("operation executed successfully")
 	}
 
+	// 全部成功后才落新的 schema 版本
 	if lastVersion != nil && (currentVersionPtr == nil || *lastVersion != *currentVersionPtr) {
 		if err := m.messageStore.SetSchemaVersion(ctx, int32(*lastVersion)); err != nil {
 			return err

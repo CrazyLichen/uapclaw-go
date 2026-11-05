@@ -11,6 +11,7 @@
 //	├── agent.go       # BaseAgent（基础Agent） 接口、AgentConfig（Agent配置）、AgentOption/AgentOptions（Agent选项）
 //	├── abilitymgr.go  # AbilityManagerInterface（能力管理器接口） 能力管理器接口
 //	├── callback.go    # AgentCallbackEvent/Context/Manager（Agent回调事件/上下文/管理器）、AgentRail/BaseRail（AgentRail/基础Rail）、EventInputs（事件输入） 等
+//	├── exposure.go    # ExposurePolicyController（曝光策略控制）、RegistryRevisionProvider（注册表版本读取） 接口
 //	└── workflow.go    # Workflow（工作流） 接口、WorkflowOption/WorkflowOptions（工作流选项）
 //
 // 核心类型/接口索引：

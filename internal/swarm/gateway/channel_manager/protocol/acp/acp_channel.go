@@ -658,6 +658,7 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 	ts := e2a.UTCNowISO()
 	sequence := c.Sequence
 
+	// 分支一：流式增量，转成一块 chat.delta 下发（推理内容标记为 reasoning）
 	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatDelta {
 		c.Sequence++
 		deltaKind := "text"
@@ -685,6 +686,7 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 		}
 	}
 
+	// 分支二：模型报错，转成一条 JSON-RPC 错误帧并结束本轮
 	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatError {
 		c.Sequence++
 		errText := strVal(payload["error"])
@@ -710,6 +712,7 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 		}
 	}
 
+	// 分支三：本轮结束，转成 prompt_result 结果帧（缺 session_id 时补上）
 	if msg.Type == schema.MessageTypeEvent && msg.EventType == schema.EventTypeChatFinal {
 		c.Sequence++
 		resultBody := cpStrAnyMap(payload)
@@ -732,6 +735,7 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 		}
 	}
 
+	// 分支四：其余事件交给 session_update 组装；组装不出来就丢弃，避免把中间态当成失败
 	if msg.Type == schema.MessageTypeEvent {
 		update := e2aacp.BuildAcpSessionUpdate(msg, payload, &c.State)
 		if update != nil {
@@ -766,6 +770,7 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 		return nil
 	}
 
+	// 分支五：非流式响应，accepted 只是回执不下发，其余作为最终结果
 	if msg.Type == schema.MessageTypeRes && msg.OK {
 		if accepted, _ := payload["accepted"].(bool); accepted {
 			return nil
@@ -791,6 +796,7 @@ func (ch *AcpChannel) messageToE2aResponse(msg *schema.Message, c *acpRequestCtx
 		}
 	}
 
+	// 分支六：兜底，剩下的响应当失败帧处理
 	c.Sequence++
 	errText := strVal(payload["error"])
 	if errText == "" {
