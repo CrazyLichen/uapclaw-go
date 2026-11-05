@@ -31,6 +31,14 @@ type ModelClientConfig struct {
 	APIBase string `json:"api_base"`
 	// Timeout 请求超时时间（秒），必须 > 0，默认 60
 	Timeout float64 `json:"timeout"`
+	// StreamFirstChunkTimeout 首个携带模型输出的流式分片的最长等待（秒）。
+	// nil 表示禁用；默认 300。只有携带输出（content/reasoning/tool_call）的分片
+	// 才算首帧，role-only/heartbeat/usage-only 帧不算。
+	// Python: schema/config.py stream_first_chunk_timeout: Optional[float] = 300.0
+	StreamFirstChunkTimeout *float64 `json:"stream_first_chunk_timeout,omitempty"`
+	// StreamIdleTimeout 相邻两个携带输出分片之间的最长等待（秒）。nil 表示禁用；默认 60。
+	// Python: schema/config.py stream_idle_timeout: Optional[float] = 60.0
+	StreamIdleTimeout *float64 `json:"stream_idle_timeout,omitempty"`
 	// MaxRetries 最大重试次数，默认 3
 	MaxRetries int `json:"max_retries"`
 	// VerifySSL 是否验证 SSL 证书，默认 true
@@ -204,6 +212,16 @@ func WithTimeout(timeout float64) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.Timeout = timeout }
 }
 
+// WithStreamFirstChunkTimeout 设置首帧流超时（秒）；nil 表示禁用。
+func WithStreamFirstChunkTimeout(seconds *float64) ModelClientConfigOption {
+	return func(c *ModelClientConfig) { c.StreamFirstChunkTimeout = seconds }
+}
+
+// WithStreamIdleTimeout 设置空闲流超时（秒）；nil 表示禁用。
+func WithStreamIdleTimeout(seconds *float64) ModelClientConfigOption {
+	return func(c *ModelClientConfig) { c.StreamIdleTimeout = seconds }
+}
+
 // WithMaxRetries 设置最大重试次数。
 func WithMaxRetries(maxRetries int) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.MaxRetries = maxRetries }
@@ -229,17 +247,22 @@ func WithConfigExtra(extra map[string]any) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.Extra = extra }
 }
 
-// NewModelClientConfig 创建模型客户端配置，默认超时 60s、重试 3 次、验证 SSL。
+// NewModelClientConfig 创建模型客户端配置，默认超时 60s、重试 3 次、验证 SSL、
+// 流帧首帧 300s / 空闲 60s（对齐 Python 字段默认值）。
 // 构造完成后自动调用 Validate，校验必填字段并规范化 provider。
 func NewModelClientConfig(provider, apiKey, apiBase string, opts ...ModelClientConfigOption) (*ModelClientConfig, error) {
+	defaultFirstChunk := 300.0
+	defaultIdle := 60.0
 	cfg := &ModelClientConfig{
-		ClientID:       uuid.New().String(),
-		ClientProvider: provider,
-		APIKey:         apiKey,
-		APIBase:        apiBase,
-		Timeout:        60.0,
-		MaxRetries:     3,
-		VerifySSL:      true,
+		ClientID:                uuid.New().String(),
+		ClientProvider:          provider,
+		APIKey:                  apiKey,
+		APIBase:                 apiBase,
+		Timeout:                 60.0,
+		StreamFirstChunkTimeout: &defaultFirstChunk,
+		StreamIdleTimeout:       &defaultIdle,
+		MaxRetries:              3,
+		VerifySSL:               true,
 	}
 	for _, opt := range opts {
 		opt(cfg)

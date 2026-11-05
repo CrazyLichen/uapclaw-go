@@ -618,3 +618,37 @@ func TestModelRequestConfig_Extra_RoundTrip(t *testing.T) {
 		t.Errorf("Extra[custom_param] = %v, want 123", restored.Extra["custom_param"])
 	}
 }
+
+// ──────────────────────────── 流帧超时三态 ────────────────────────────
+
+// TestModelClientConfig_流超时默认值与三态 验证默认 300/60、显式 nil 禁用、自定义值。
+func TestModelClientConfig_流超时默认值与三态(t *testing.T) {
+	base, err := NewModelClientConfig("OpenAI", "k", "http://localhost")
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	if base.StreamFirstChunkTimeout == nil || *base.StreamFirstChunkTimeout != 300 {
+		t.Fatalf("默认首帧超时应为 300，实际 %v", base.StreamFirstChunkTimeout)
+	}
+	if base.StreamIdleTimeout == nil || *base.StreamIdleTimeout != 60 {
+		t.Fatalf("默认空闲超时应为 60，实际 %v", base.StreamIdleTimeout)
+	}
+
+	disabled, err := NewModelClientConfig("OpenAI", "k", "http://localhost",
+		WithStreamFirstChunkTimeout(nil), WithStreamIdleTimeout(nil))
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	if disabled.StreamFirstChunkTimeout != nil || disabled.StreamIdleTimeout != nil {
+		t.Fatal("显式 nil 应表示禁用")
+	}
+
+	custom := 5.5
+	over, err := NewModelClientConfig("OpenAI", "k", "http://localhost", WithStreamIdleTimeout(&custom))
+	if err != nil {
+		t.Fatalf("构造失败: %v", err)
+	}
+	if over.StreamIdleTimeout == nil || *over.StreamIdleTimeout != 5.5 {
+		t.Fatalf("自定义空闲超时应为 5.5，实际 %v", over.StreamIdleTimeout)
+	}
+}
