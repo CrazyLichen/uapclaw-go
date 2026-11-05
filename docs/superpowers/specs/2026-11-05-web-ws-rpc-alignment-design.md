@@ -24,10 +24,10 @@ Web WS 层现在的问题不是"少几个 handler"，而是**两层同时失配*
 
 | 口径 | 数量 | 说明 |
 |---|---|---|
-| 三方方法总数 | **211** | 前端引用 ∪ 本仓注册 ∪ 上游 Web 通道注册（含直接/间接助手/表驱动三种写法） |
+| 三方方法总数 | **196** | 前端引用 ∪ 本仓注册 ∪ 上游 Web 通道注册（含直接/间接助手/表驱动三种写法） |
 | ✅ 一致 | **50** | 上游有、本仓有 |
-| ⚠️ 漂移 | **16** | 本仓有、上游 Web 侧没有（细见 §1.2） |
-| ❓ 前端独有 | **7** | 前端在调，两侧都没注册（前端独占能力或上游未实现） |
+| ⚠️ 漂移 | **0** | 本批归零（原 16 个见 §1.2：删 15、`session.delete` 待 B2 改 HTTP） |
+| ❓ 前端独有 | **8** | 前端在调、两侧都没注册（`session.switch` 由转发路径处理，见 §1.2） |
 | ❌ 缺 | **138** | 见下方下游分布 |
 | 缺口·`local` | **47** | 上游在网关本地实现，**本层补齐即可真跑** |
 | 缺口·`agent:ok` | **7** | `harness.packages/scan/activate/deactivate/delete`（5）+ `session.rename`/`session.plan_status`（2） |
@@ -57,14 +57,16 @@ Web WS 层现在的问题不是"少几个 handler"，而是**两层同时失配*
 > `permissions.*` 曾被误判为漂移——上游用 `_register_perm` 间接注册（`app_web_handlers.py:6260-6275`），
 > 工具已支持"间接助手注册"后归入一致。
 
-| 来源 | 数量 | 方法 | 处置（2026-11-05 用户决定：全部对齐上游） |
-|---|---|---|---|
-| 上游 0.2.0 有、0.2.5 **已删除** | **1** | `heartbeat.get_path` | **删除** |
-| 上游 Web 侧无此方法，但 HTTP 路由有 | **1** | `session.delete`（上游 `DELETE /sessions/{session_id}`，`http_routes/mapped.py:877`） | **改造成 HTTP 路由**，不再注册为 WS 方法 |
-| 上游只有 TUI 本地 handler，Web 侧完全没有 | **1** | `session.switch` | **删除 WS 注册**（TUI 自身 local handler 保留） |
-| 两版上游 Web 侧**都没有**（本仓自造） | **13** | `harness.{list,install,uninstall,enable,disable,get_status,rebuild}`（7）、`cron.job.{disable,enable,run,status}`（4）、`updater.{cancel,install}`（2） | **全部删除**；对应能力改用上游名：`harness.{packages,packages.scan,activate,deactivate,delete,import,export}`、`cron.job.{toggle,run_now,meta}`、`updater.{upgrade,get_conf,set_conf,reset_source}` |
+| 来源 | 数量 | 方法 | 处置（2026-11-05 用户决定：全部对齐上游） | 状态 |
+|---|---|---|---|---|
+| 上游 0.2.0 有、0.2.5 **已删除** | **1** | `heartbeat.get_path` | **删除**（连带 `handleHeartbeatGetPath` 与测试） | ✅ 已删 |
+| 上游 Web 侧无此方法，但 HTTP 路由有 | **1** | `session.delete`（上游 `DELETE /sessions/{session_id}`，`http_routes/mapped.py:877`） | WS 注册**已删**；HTTP 版本等 27-A B2 移植 `http_routes/` 框架时补 | ✅ 已删（HTTP 待 B2） |
+| 上游只有 TUI 本地 handler，Web 侧完全没有 | **1** | `session.switch` | WS stub **删除**；该请求由 `ForwardReqMethods`（`web_normalize.go:35`）转发给 AgentServer，仍可用 | ✅ 已删 |
+| 两版上游 Web 侧**都没有**（本仓自造） | **13** | `harness.{list,install,uninstall,enable,disable,get_status,rebuild}`（7）、`cron.job.{disable,enable,run,status}`（4）、`updater.{cancel,install}`（2） | **全部删除**；对应能力改用上游名：`harness.{packages,packages.scan,activate,deactivate,delete,import,export}`、`cron.job.{toggle,run_now,meta}`、`updater.{upgrade,get_conf,set_conf,reset_source}` | ✅ 已删 |
 
-**结论：16 个漂移里 15 个要删，1 个改 HTTP。** 只有 `heartbeat.get_path` 是"上游更新后删除"，其余是本仓命名/通道与上游不一致。
+**结论：16 个漂移里 15 个删、1 个（`session.delete`）删 WS 注册后待 B2 补 HTTP。** 只有 `heartbeat.get_path` 是"上游更新后删除"，其余是本仓命名/通道与上游不一致。
+
+**门禁**：`-verify` 现在同时要求「本层承诺范围零缺口」和「漂移为 0」——再出现上游没有的方法名会直接失败（对应规则 9.2 的反向约束）。
 
 ---
 

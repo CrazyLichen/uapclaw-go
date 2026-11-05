@@ -67,7 +67,7 @@ func newHeartbeatTestDispatcherWithClient(hb HeartbeatConfService, ac *routing.A
 
 // ──────────────────────────── 注册测试 ────────────────────────────
 
-// TestRegisterHeartbeatHandlers_注入服务 三个方法注册（Dispatch 探测而非直接访问 handlers map）。
+// TestRegisterHeartbeatHandlers_注入服务 两个方法注册（Dispatch 探测而非直接访问 handlers map）。
 func TestRegisterHeartbeatHandlers_注入服务(t *testing.T) {
 	d := newHeartbeatTestDispatcher(&fakeHeartbeatSvc{})
 	// Dispatch 三参数：method, params, sessionID（无 ctx——handler 内部自建 context.Background()）
@@ -75,14 +75,12 @@ func TestRegisterHeartbeatHandlers_注入服务(t *testing.T) {
 	require.NoError(t, err, "get_conf should dispatch")
 	_, err = d.Dispatch("heartbeat.set_conf", map[string]any{}, "")
 	require.NoError(t, err, "set_conf should dispatch")
-	_, err = d.Dispatch("heartbeat.get_path", map[string]any{}, "")
-	require.NoError(t, err, "get_path should dispatch")
 }
 
-// TestRegisterHeartbeatHandlers_无服务 保留三个 stub。
+// TestRegisterHeartbeatHandlers_无服务 保留两个 stub。
 func TestRegisterHeartbeatHandlers_无服务(t *testing.T) {
 	d := RegisterWebHandlers(&WebHandlersBindParams{})
-	for _, m := range []string{"heartbeat.get_conf", "heartbeat.set_conf", "heartbeat.get_path"} {
+	for _, m := range []string{"heartbeat.get_conf", "heartbeat.set_conf"} {
 		res, err := d.Dispatch(m, map[string]any{}, "")
 		require.NoError(t, err, "stub %s should dispatch", m)
 		require.NotNil(t, res, "stub %s should return payload", m)
@@ -251,27 +249,6 @@ func TestHandleHeartbeatSetConf_agentClientNil跳过清缓存(t *testing.T) {
 
 // ──────────────────────────── get_path 获取路径 ────────────────────────────
 
-// TestHandleHeartbeatGetPath_相对路径 返回 agent/workspace/HEARTBEAT.md。
-func TestHandleHeartbeatGetPath_相对路径(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	workspace.SetUserHome(workspace.UserHomeDir())
-
-	d := newHeartbeatTestDispatcher(&fakeHeartbeatSvc{})
-	res, err := d.Dispatch("heartbeat.get_path", map[string]any{}, "")
-	require.NoError(t, err)
-	path, ok := res["path"].(string)
-	require.True(t, ok)
-	assert.True(t, strings.HasSuffix(path, "agent/workspace/HEARTBEAT.md"),
-		"path should be relative, got %q", path)
-	assert.False(t, strings.HasPrefix(path, "/"), "path should not be absolute")
-}
-
-// ──────────────────────────── session.list 过滤（11.11 偏差⑨） ────────────────────────────
-
-// TestHandleSessionList_Heartbeat过滤 heartbeat_ 前缀会话目录不参与列表展示。
-// 对齐 Python session_metadata.py L31 _HEARTBEAT_SESSION_PREFIX = "heartbeat_"。
-// 注意非 heartbeat_ 前缀目录（如 dream7.20 sweeper 管辖的普通目录）不过滤。
 func TestHandleSessionList_Heartbeat过滤(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("UAPCLAW_DATA_DIR", tmpDir)

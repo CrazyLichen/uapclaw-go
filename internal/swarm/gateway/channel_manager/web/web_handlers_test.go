@@ -104,16 +104,15 @@ func TestRegisterWebHandlers_全量注册(t *testing.T) {
 	expectedMethods := []string{
 		"config.get", "config.set",
 		"models.list", "channel.get",
-		"session.list", "session.create", "session.delete",
+		"session.list", "session.create",
 		"chat.send", "chat.resume", "chat.interrupt", "chat.user_answer",
 		"config.save_all", "config.validate_model",
 		"models.replace_all", "models.validate",
-		"session.switch",
 		"path.get", "path.set",
 		"memory.compute",
 		"locale.get_conf", "locale.set_conf",
-		"heartbeat.get_conf", "heartbeat.set_conf", "heartbeat.get_path",
-		"updater.check", "updater.download", "updater.install", "updater.cancel", "updater.get_status",
+		"heartbeat.get_conf", "heartbeat.set_conf",
+		"updater.check", "updater.download", "updater.get_status",
 		"hooks.list",
 		"permissions.owner_scopes.get", "permissions.owner_scopes.set",
 		"memory.forbidden.get", "memory.forbidden.set",
@@ -234,41 +233,6 @@ func TestHandleSessionCreate(t *testing.T) {
 
 func TestHandleSessionCreate_缺少SessionID(t *testing.T) {
 	result, err := handleSessionCreate(context.Background(), map[string]any{}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrBadRequest, result["code"])
-}
-
-func TestHandleSessionDelete(t *testing.T) {
-	tmpDir := t.TempDir()
-	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
-	workspace.SetUserHome(workspace.UserHomeDir())
-
-	// 先创建会话
-	createResult, err := handleSessionCreate(context.Background(), map[string]any{
-		"session_id": "test-del-session",
-	}, "")
-	require.NoError(t, err)
-	sessionID := createResult["session_id"].(string)
-
-	// 删除会话
-	handler := handleSessionDelete(nil)
-	result, err := handler(context.Background(), map[string]any{
-		"session_id": sessionID,
-	}, "")
-	require.NoError(t, err)
-	assert.True(t, result["ok"].(bool))
-	assert.Equal(t, sessionID, result["session_id"])
-
-	// 验证目录已删除
-	sessionsDir := workspace.AgentSessionsDir()
-	assert.NoDirExists(t, filepath.Join(sessionsDir, sessionID))
-}
-
-func TestHandleSessionDelete_缺少SessionID(t *testing.T) {
-	handler := handleSessionDelete(nil)
-	result, err := handler(context.Background(), map[string]any{}, "")
 	require.NoError(t, err)
 	assert.False(t, result["ok"].(bool))
 	assert.Equal(t, WsErrBadRequest, result["code"])
@@ -496,45 +460,6 @@ func TestHandleSessionCreate_含全部字段(t *testing.T) {
 	require.NoError(t, err)
 	// session.create 响应不再包含 "ok"（对齐 Python: payload 中无 ok）
 	assert.NotContains(t, result, "ok")
-}
-
-func TestHandleSessionDelete_不存在的会话(t *testing.T) {
-	tmpDir := t.TempDir()
-	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
-	workspace.SetUserHome(workspace.UserHomeDir())
-
-	// agentClient 为 nil 时，不存在的会话返回 AGENT_UNAVAILABLE
-	// （无法判断是否为 team 模式，对齐 Python 防御性逻辑）
-	handler := handleSessionDelete(nil)
-	result, err := handler(context.Background(), map[string]any{
-		"session_id": "nonexistent-session",
-	}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrAgentUnavailable, result["code"])
-}
-
-func TestHandleSessionDelete_team模式Agent不可用(t *testing.T) {
-	tmpDir := t.TempDir()
-	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
-	workspace.SetUserHome(workspace.UserHomeDir())
-
-	// 创建带 team mode 的 metadata.json
-	sessionsDir := workspace.AgentSessionsDir()
-	sessDir := filepath.Join(sessionsDir, "team-session")
-	require.NoError(t, os.MkdirAll(sessDir, 0o755))
-	metaData, _ := json.Marshal(map[string]any{"mode": "team"})
-	require.NoError(t, os.WriteFile(filepath.Join(sessDir, "metadata.json"), metaData, 0o644))
-
-	handler := handleSessionDelete(nil)
-	result, err := handler(context.Background(), map[string]any{
-		"session_id": "team-session",
-	}, "")
-	require.NoError(t, err)
-	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrAgentUnavailable, result["code"])
 }
 
 func TestHandleConfigSet_params为空(t *testing.T) {
@@ -858,16 +783,6 @@ func TestStrOrEmpty(t *testing.T) {
 	assert.Equal(t, "42", strOrEmpty(42))
 	assert.Equal(t, "", strOrEmpty((*string)(nil)))
 	assert.Equal(t, "3.14", strOrEmpty(3.14))
-}
-
-// TestBuildSessionDeleteEnvelope 测试构建 session.delete 信封
-func TestBuildSessionDeleteEnvelope(t *testing.T) {
-	params := map[string]any{"reason": "cleanup"}
-	envelope := buildSessionDeleteEnvelope("sess-123", params)
-	require.NotNil(t, envelope)
-	assert.Equal(t, "session.delete", envelope.Method)
-	assert.Equal(t, "sess-123", envelope.SessionID)
-	assert.Equal(t, params, envelope.Params)
 }
 
 // fakeCryptoFailDecrypt Decrypt 恒失败的 fake（测试解密失败保留原值语义）

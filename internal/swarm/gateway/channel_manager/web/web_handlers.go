@@ -287,7 +287,6 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("channel.get", handleChannelGet(channelMgr))
 	d.Register("session.list", handleSessionList)
 	d.Register("session.create", handleSessionCreate)
-	d.Register("session.delete", handleSessionDelete(agentClient))
 
 	// ─── 历史辅助方法 ───
 	d.Register("history.get", handleHistoryGet())
@@ -301,7 +300,6 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("models.validate", handleModelsValidate())
 
 	// ─── session 辅助方法 ───
-	d.Register("session.switch", stubHandler("session.switch", map[string]any{"ok": true}))
 
 	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
 	d.Register("chat.send", handleChatSend())
@@ -326,21 +324,17 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	if heartbeatSvc != nil {
 		d.Register("heartbeat.get_conf", handleHeartbeatGetConf(heartbeatSvc))
 		d.Register("heartbeat.set_conf", handleHeartbeatSetConf(heartbeatSvc, agentClient))
-		d.Register("heartbeat.get_path", handleHeartbeatGetPath())
 	} else {
 		d.Register("heartbeat.get_conf", stubHandler("heartbeat.get_conf", map[string]any{
 			"every": 0, "target": "", "active_hours": map[string]any{},
 		}))
 		d.Register("heartbeat.set_conf", stubHandler("heartbeat.set_conf", map[string]any{"ok": true}))
-		d.Register("heartbeat.get_path", stubHandler("heartbeat.get_path", map[string]any{"path": ""}))
 	}
 
 	// ─── 更新器 ───
 	updaterStub := stubHandler("updater", map[string]any{"status": "up_to_date"})
 	d.Register("updater.check", updaterStub)
 	d.Register("updater.download", updaterStub)
-	d.Register("updater.install", updaterStub)
-	d.Register("updater.cancel", updaterStub)
 	d.Register("updater.get_status", updaterStub)
 
 	// ─── 钩子 ───
@@ -395,22 +389,9 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 		d.Register("cron.job.create", cronOkStub)
 		d.Register("cron.job.update", cronOkStub)
 		d.Register("cron.job.delete", cronOkStub)
-		d.Register("cron.job.enable", cronOkStub)
-		d.Register("cron.job.disable", cronOkStub)
-		d.Register("cron.job.run", cronOkStub)
-		d.Register("cron.job.status", stubHandler("cron", map[string]any{}))
 	}
 
 	// ─── 运行时 ───
-	harnessListStub := stubHandler("harness", map[string]any{"packages": []any{}})
-	harnessOkStub := stubHandler("harness", map[string]any{"ok": true})
-	d.Register("harness.list", harnessListStub)
-	d.Register("harness.install", harnessOkStub)
-	d.Register("harness.uninstall", harnessOkStub)
-	d.Register("harness.enable", harnessOkStub)
-	d.Register("harness.disable", harnessOkStub)
-	d.Register("harness.get_status", stubHandler("harness", map[string]any{}))
-	d.Register("harness.rebuild", harnessOkStub)
 
 	// ─── 转发方法（全部 stub）───
 	forwardStubs := map[string]map[string]any{
@@ -1212,88 +1193,6 @@ func handleSessionCreate(_ context.Context, params map[string]any, _ string) (ma
 	return map[string]any{"session_id": sessionID}, nil
 }
 
-// handleSessionDelete 处理 session.delete 请求。
-//
-// Python: _session_delete (app_web_handlers.py L1294-1354)：
-//  1. AgentClient 可用 → 转发到 AgentServer → 成功则直接返回结果
-//  2. 转发失败 → fallback 本地删除
-//  3. AgentClient 不可用 → 本地删除（team 模式返回 AGENT_UNAVAILABLE）
-func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
-	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
-		sessionID, _ := params["session_id"].(string)
-		if sessionID == "" {
-			return map[string]any{"ok": false, "error": "session_id 是必填项", "code": WsErrBadRequest}, nil
-		}
-
-		// 优先转发到 AgentServer（对齐 Python L1313-1336）
-		if agentClient != nil && agentClient.ServerReady() {
-			envelope := buildSessionDeleteEnvelope(sessionID, params)
-			if envelope != nil {
-				resp, err := agentClient.SendRequest(context.Background(), envelope)
-				if err == nil && resp != nil {
-					// 转发成功：直接返回 AgentServer 的响应（对齐 Python L1324-1327）
-					if resp.OK {
-						payload := resp.Payload
-						if payload == nil {
-							payload = map[string]any{}
-						}
-						return payload, nil
-					}
-					// 转发返回失败（对齐 Python L1328-1335）
-					payload := resp.Payload
-					if payload == nil {
-						payload = map[string]any{}
-					}
-					errMsg := "session.delete 失败"
-					if v, ok := payload["error"].(string); ok && v != "" {
-						errMsg = v
-					}
-					code := ""
-					if v, ok := payload["code"].(string); ok {
-						code = v
-					}
-					return map[string]any{"ok": false, "error": errMsg, "code": code}, nil
-				}
-				// 转发异常：fallback 本地删除（对齐 Python L1337-1338）
-				logger.Warn(logComponent).Err(err).Msg("session.delete forward to AgentServer failed, fallback to local delete")
-			}
-		}
-
-		// 本地删除（对齐 Python L1340-：AgentClient 不可用或转发失败时）
-		sessionsDir := workspace.AgentSessionsDir()
-		sessionDir := filepath.Join(sessionsDir, sessionID)
-
-		if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
-			// 判断是否 team 模式 → AGENT_UNAVAILABLE（对齐 Python L1341-1348）
-			if agentClient == nil || !agentClient.ServerReady() {
-				return map[string]any{"ok": false, "error": "团队会话删除需要 AgentServer", "code": WsErrAgentUnavailable}, nil
-			}
-			return map[string]any{"ok": false, "error": "会话未找到", "code": WsErrNotFound}, nil
-		}
-
-		// 读 metadata.json 判断 mode（对齐 Python: 从 metadata 读 mode 而非 params）
-		metaPath := filepath.Join(sessionDir, "metadata.json")
-		if data, err := os.ReadFile(metaPath); err == nil {
-			var meta map[string]any
-			if json.Unmarshal(data, &meta) == nil {
-				if m, ok := meta["mode"].(string); ok && strings.EqualFold(m, "team") {
-					if agentClient == nil || !agentClient.ServerReady() {
-						return map[string]any{"ok": false, "error": "团队会话删除需要 AgentServer", "code": WsErrAgentUnavailable}, nil
-					}
-				}
-			}
-		}
-
-		if err := os.RemoveAll(sessionDir); err != nil {
-			return nil, fmt.Errorf("删除会话目录失败: %w", err)
-		}
-
-		return map[string]any{"ok": true, "session_id": sessionID}, nil
-	}
-}
-
-// handleModelsReplaceAll 处理 models.replace_all 请求。
-//
 // Python: _models_replace_all_handler (app_web_handlers.py L1058-1084)。
 func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv crypto.CryptoProvider) RPCHandlerFunc {
 	return func(ctx context.Context, params map[string]any, _ string) (map[string]any, error) {
@@ -1749,24 +1648,6 @@ func flattenTeamConfig(cfg map[string]any, result map[string]any) {
 	}
 }
 
-// buildSessionDeleteEnvelope 构建 session.delete 的 E2A envelope。
-//
-// 用于转发到 AgentServer，对齐 Python 中 session_delete_handler 的转发逻辑。
-func buildSessionDeleteEnvelope(sessionID string, params map[string]any) *e2a.E2AEnvelope {
-	envelope := e2a.NewE2AEnvelope()
-	envelope.Method = "session.delete"
-	envelope.SessionID = sessionID
-	envelope.Params = params
-	return envelope
-}
-
-// persistEnvUpdates 将更新的环境变量持久化到 .env 文件。
-//
-// Python: _persist_env_updates：
-//  1. 读取现有 .env 所有行
-//  2. 对每个更新的 key，找到 KEY=... 行替换
-//  3. 未找到的 key 追加到文件末尾
-//  4. 值用双引号包裹：KEY="value"
 //  5. 空值写为 KEY=
 func persistEnvUpdates(updated map[string]string) error {
 	envPath := workspace.EnvFile()
@@ -2203,21 +2084,6 @@ func handleHeartbeatSetConf(svc HeartbeatConfService, ac *routing.AgentClient) R
 			clearAgentConfigCache(ac, ctx)
 		}
 		return payload, nil
-	}
-}
-
-// handleHeartbeatGetPath 处理 heartbeat.get_path。
-// Python: _heartbeat_get_path (app_web_handlers.py L1565-1583)。
-func handleHeartbeatGetPath() RPCHandlerFunc {
-	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-		heartbeatPath := workspace.DeepAgentHeartbeatPath()
-		agentRoot := workspace.AgentRootDir()
-		rel, err := filepath.Rel(filepath.Dir(agentRoot), heartbeatPath)
-		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("[heartbeat.get_path] 计算相对路径失败")
-			return heartbeatErrPayload(WsErrInternalError, err.Error()), nil
-		}
-		return map[string]any{"path": rel}, nil
 	}
 }
 

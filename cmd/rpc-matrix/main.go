@@ -94,6 +94,25 @@ func main() {
 		}
 		os.Exit(1)
 	}
+	// 漂移必须为 0：本仓不得出现上游没有的方法名（规则 9.2 的反向约束）。
+	if (*verify || *verifyAll) && len(drifted(rows)) > 0 {
+		fmt.Fprintf(os.Stderr, "存在 %d 个上游 Web 侧没有、本仓自造的方法：\n", len(drifted(rows)))
+		for _, r := range drifted(rows) {
+			fmt.Fprintf(os.Stderr, "  ⚠️ %s\n", r.Method)
+		}
+		os.Exit(1)
+	}
+}
+
+// drifted 返回状态为「漂移」的行。
+func drifted(rows []matrixRow) []matrixRow {
+	var out []matrixRow
+	for _, r := range rows {
+		if r.Status == statusDrift {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // inScope 过滤出本期承诺范围的缺口（网关本地可做，或下游已就绪）。
