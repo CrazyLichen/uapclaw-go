@@ -410,3 +410,70 @@ func TestFirstNonEmpty(t *testing.T) {
 	assert.Equal(t, "b", firstNonEmpty("", "  ", "b", "c"))
 	assert.Equal(t, "", firstNonEmpty("", ""))
 }
+
+// TestExternalCLIDetect_版本偏旧 warning 探测版本低于参考版本时降级 warning 并给上游同款文案。
+func TestExternalCLIDetect_版本偏旧(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "old-claude")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\necho '0.2.100 (Claude Code)'\n"), 0o755))
+
+	payload, err := callHandler(externalCLIDetect(newTestChannel()), map[string]any{
+		"cli_agent": "claude",
+		"cli_path":  script,
+	}, "")
+	require.NoError(t, err)
+	assert.Equal(t, "warning", payload["status"])
+	assert.Equal(t, "0.2.100", payload["version"])
+	assert.Equal(t, "0.2.115", payload["reference_version"])
+	assert.Equal(t, "version 0.2.100 may be incompatible with expected version 0.2.115", payload["message"])
+}
+
+// TestExternalCLIDetect_版本不低于参考 等于或高于参考版本都保持 ok。
+func TestExternalCLIDetect_版本不低于参考(t *testing.T) {
+	for _, ver := range []string{"0.2.115", "0.2.200", "1.0.0"} {
+		script := filepath.Join(t.TempDir(), "claude-"+ver)
+		require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\necho '"+ver+"'\n"), 0o755))
+
+		payload, err := callHandler(externalCLIDetect(newTestChannel()), map[string]any{
+			"cli_agent": "claude",
+			"cli_path":  script,
+		}, "")
+		require.NoError(t, err)
+		assert.Equal(t, "ok", payload["status"], "版本 %s 不应报偏旧", ver)
+		assert.Equal(t, "", payload["message"])
+	}
+}
+
+// TestExternalCLIDetect_参考版本恒返回 codex 的参考版本来自常量表，且路径缺失时也带上。
+func TestExternalCLIDetect_参考版本恒返回(t *testing.T) {
+	payload, err := callHandler(externalCLIDetect(newTestChannel()), map[string]any{
+		"cli_agent": "codex",
+		"cli_path":  filepath.Join(t.TempDir(), "nope"),
+	}, "")
+	require.NoError(t, err)
+	assert.Equal(t, "missing", payload["status"])
+	assert.Equal(t, "0.144.4", payload["reference_version"], "缺路径分支也要带参考版本")
+}
+
+// TestParseVersionTuple 三段/两段/非数字/空串。
+func TestParseVersionTuple(t *testing.T) {
+	got, ok := parseVersionTuple("1.2.3")
+	assert.True(t, ok)
+	assert.Equal(t, [3]int{1, 2, 3}, got)
+
+	got, ok = parseVersionTuple("1.2")
+	assert.True(t, ok, "缺段按 0 补")
+	assert.Equal(t, [3]int{1, 2, 0}, got)
+
+	_, ok = parseVersionTuple("1.x.3")
+	assert.False(t, ok, "非数字段不可解析")
+
+	_, ok = parseVersionTuple("  ")
+	assert.False(t, ok)
+}
+
+// TestCompareVersionTuple 三段逐位比较。
+func TestCompareVersionTuple(t *testing.T) {
+	assert.Equal(t, -1, compareVersionTuple([3]int{0, 2, 100}, [3]int{0, 2, 115}))
+	assert.Equal(t, 0, compareVersionTuple([3]int{1, 0, 0}, [3]int{1, 0, 0}))
+	assert.Equal(t, 1, compareVersionTuple([3]int{1, 10, 0}, [3]int{1, 9, 9}))
+}

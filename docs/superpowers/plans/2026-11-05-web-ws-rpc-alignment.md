@@ -1714,8 +1714,11 @@ git add -A && git commit -m "feat(web): 补齐 external_cli 7 个方法"
   —— 安装器子系统 `gateway/common/external_cli_runtime.py`（1,121 行）+ `external_providers.py`（70 行）
   未移植；`install_status` 保留参数校验（未知种类 BAD_REQUEST），其余回 `{installing:false, installed:false,
   state:"idle", ...}` 默认快照。**偏差已在 spec §10 登记**（面板可渲染、不会真装）。
-- 其它偏差：`reference_version` 上游读 `claude_agent_sdk` / `openai-codex` 包元数据，本仓无该依赖 → 恒空串；
-  `use_builtin` 的托管 CLI 解析依赖 managed runtime → 退回 PATH 搜索。
+- `reference_version`：上游读 `claude_agent_sdk._cli_version` / `openai-codex` 包元数据，本仓无这些依赖 →
+  改用**常量表**（`claude=0.2.115`、`codex=0.144.4`，取上游 `uv.lock` 锁定版本），并按上游语义实现
+  `parseVersionTuple` + `compareVersionTuple`：探测版本 < 参考版本 → `status=warning` +
+  `"version X may be incompatible with expected version Y"`。**上游升版需同步该表**。
+- 仍保留的偏差：`use_builtin` 的托管 CLI 解析依赖 managed runtime（未移植）→ 退回 PATH 搜索。
 - 矩阵：`local` 缺口 18 → 11。
 
 

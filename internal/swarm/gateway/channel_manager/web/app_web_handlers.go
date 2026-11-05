@@ -3815,6 +3815,16 @@ func chatSwarmflowReply(wc *WebChannel) methodHandler {
 // externalCLIAgentKinds 内置外部 CLI 种类（对齐 Python EXTERNAL_CLI_AGENT_KINDS）。
 var externalCLIAgentKinds = []string{"claude", "codex"}
 
+// externalCLIReferenceVersions 各内置 CLI 的参考版本（"期望版本"）。
+//
+// Python: external_cli_reference_version (config_set_handlers.py:330-342) 读安装包元数据
+// （claude_agent_sdk._cli_version / openai-codex dist）；Go 侧无这些 Python 依赖，改用常量表，
+// 取上游 uv.lock 的锁定版本。**上游升版时需同步这里**，否则会把正常版本误报为"偏旧"。
+var externalCLIReferenceVersions = map[string]string{
+	"claude": "0.2.115",
+	"codex":  "0.144.4",
+}
+
 // externalCLIPruneMaxPaths prune 单次最多处理的路径数（对齐 _EXTERNAL_CLI_PRUNE_PATH_HISTORIES_MAX_PATHS）。
 const externalCLIPruneMaxPaths = 50
 
@@ -3988,6 +3998,7 @@ func detectExternalCLIAgent(cliAgent, cliPath string, useBuiltin bool) map[strin
 		}
 	}
 	_ = useBuiltin
+	referenceVersion := externalCLIReferenceVersions[cliAgent]
 
 	resolved, reason, message := resolveExternalCLIPath(cliAgent, cliPath)
 	if resolved == "" {
@@ -4000,7 +4011,7 @@ func detectExternalCLIAgent(cliAgent, cliPath string, useBuiltin bool) map[strin
 			"status":            status,
 			"path":              "",
 			"version":           "",
-			"reference_version": "",
+			"reference_version": referenceVersion,
 			"reason":            reason,
 			"message":           message,
 		}
@@ -4017,7 +4028,7 @@ func detectExternalCLIAgent(cliAgent, cliPath string, useBuiltin bool) map[strin
 			"status":            "unavailable",
 			"path":              resolved,
 			"version":           "",
-			"reference_version": "",
+			"reference_version": referenceVersion,
 			"message":           firstNonEmpty(versionErr, "version command failed"),
 		}
 	}
@@ -4026,13 +4037,19 @@ func detectExternalCLIAgent(cliAgent, cliPath string, useBuiltin bool) map[strin
 	if version == "" {
 		status = "warning"
 		message = "version output could not be parsed"
+	} else if detected, okDetected := parseVersionTuple(version); okDetected {
+		// 只有"探测版本 < 参考版本"才降级为 warning（对齐上游 has_comparable_versions 分支）
+		if reference, okReference := parseVersionTuple(referenceVersion); okReference && compareVersionTuple(detected, reference) < 0 {
+			status = "warning"
+			message = fmt.Sprintf("version %s may be incompatible with expected version %s", version, referenceVersion)
+		}
 	}
 	return map[string]any{
 		"cli_agent":         cliAgent,
 		"status":            status,
 		"path":              resolved,
 		"version":           version,
-		"reference_version": "",
+		"reference_version": referenceVersion,
 		"message":           message,
 	}
 }
@@ -4372,4 +4389,38 @@ func sessionProxyForward(wc *WebChannel, ac *routing.AgentClient, method string)
 		}
 		wc.sendResponse(ws, reqID, false, nil, errMsg, code)
 	}
+}
+
+// parseVersionTuple 把 "x.y.z" 解析成三段整数元组；缺段按 0 补，非数字段视为不可解析。
+//
+// Python: parse_version_tuple (config_set_handlers.py 内部助手)：解析失败返回 None，
+// 上游据此跳过"版本偏旧"比较。
+func parseVersionTuple(version string) ([3]int, bool) {
+	var out [3]int
+	text := strings.TrimSpace(version)
+	if text == "" {
+		return out, false
+	}
+	parts := strings.Split(text, ".")
+	for i := 0; i < len(parts) && i < 3; i++ {
+		n, err := strconv.Atoi(strings.TrimSpace(parts[i]))
+		if err != nil {
+			return out, false
+		}
+		out[i] = n
+	}
+	return out, true
+}
+
+// compareVersionTuple 比较两个三段版本元组：a<b 返回 -1，相等 0，a>b 返回 1。
+func compareVersionTuple(a, b [3]int) int {
+	for i := 0; i < 3; i++ {
+		switch {
+		case a[i] < b[i]:
+			return -1
+		case a[i] > b[i]:
+			return 1
+		}
+	}
+	return 0
 }
