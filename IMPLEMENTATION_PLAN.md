@@ -1206,8 +1206,14 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 
 | 批次 | 状态 | 内容 | 上游 | 估算 |
 |------|------|------|------|------|
-| B0 | ☐ | **RPC 契约矩阵 + 文件映射矩阵**：脚本扫前端 RPC 名 ↔ Go 注册表 ↔ 上游 handler 注册，产出 `docs/sync/web-rpc-matrix.md`；顺带修 `models.*`/`schedule.*`/`heartbeat.*` 命名漂移 | — | 0.5 人日 |
-| B1 | ☐ | `web_connect.py` 单一化：`web_connect.go`+`web_normalize.go`+`frame.go` 合并为 `web_connect.go`，**拆掉 frame DTO**（上游无 frame 类，全程 `dict`），方法归属回 `WebChannel` | `web_connect.py` 2,366 | 3 人日 |
+| B0 | ✅ | **RPC 契约矩阵 + 文件映射矩阵**：脚本扫前端 RPC 名 ↔ Go 注册表 ↔ 上游 handler 注册，产出 `docs/sync/web-rpc-matrix.md`；顺带修 `models.*`/`schedule.*`/`heartbeat.*` 命名漂移 | — | 0.5 人日 |
+| B1 | ✅ | `web_connect.py` 单一化：三文件合并、删 frame DTO、方法归属回 `WebChannel`。**B1a**（`b86278c9`…`c510ab75`）：删 `frame.go`/`RPCDispatcher`、59 个 handler 转原生 `methodHandler`（帧级 `ok=false/error/code`）、分发顺序改上游四段式。**B1b 六批**（`968bafac`…`d430411d`）：补齐 41 个本地方法 —— 9 平台 IM 配置 18、health_check×2 + cron.job.meta + updater×4、杂项 4、external_cli 7、path.select_file 1、session 薄代理 2 | `web_connect.py` 2,366 | 3 人日 |
+
+> **27-A B0/B1 收口口径（2026-11-05）**：矩阵 196 方法，**漂移 0**；本层承诺（`local` + `agent:ok`）剩余缺口
+> 全部为下游或已裁定跳过项 —— `local` 剩 10 个（`models.*`/`model_groups.*`/`vendors.*`/`session.selection.set`，
+> 需先移植 ~1,200 行模型目录子系统，**本期跳过**，见 `docs/superpowers/plans/2026-11-05-web-ws-rpc-alignment.md` Task 8）；
+> `agent:ok` 剩 5 个由 AgentServer 侧补齐。其余 82 个下游缺口见 `docs/sync/web-rpc-downstream-gaps.md`。
+> `updater.*`（7）与 `external_cli.*` 安装族（4）为"保留 handler 回默认"，已在 spec §10 登记。
 | B2 | ☐ | HTTP 路由/鉴权/超时/分发 | `web_http_routes.py`+`web_http_dispatch.py`+`web_http_auth.py`+`web_http_timeouts.py`+`http_routes/*` ≈ 1,554 | 2 人日 |
 | B3 | ☐ | 生命周期/投递/连接适配/传输熔断 | `lifecycle_handlers.py`+`web_channel_app.py`+`web_delivery_registry.py`+`ws_connection_adapter.py`+`transport_stall_guard.py` ≈ 786 | 1.5 人日 |
 | B4 | ☐ | 文件与目录面板 | `file_picker.py`+`directory_picker.py`+`enterprise_files.py`+`container_file_http.py` ≈ 2,485 | 3 人日 |

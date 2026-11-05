@@ -1886,12 +1886,12 @@ git add -A && git commit -m "feat(web): 补齐 session.rename/plan_status 两个
 - Modify: `IMPLEMENTATION_PLAN.md`（27-A、27.x 状态与 ⤵️/⤴️）
 - Modify: `docs/superpowers/specs/2026-11-05-web-ws-rpc-alignment-design.md`（偏差回收记录）
 
-- [ ] **Step 1: 确认承诺范围无 ❌**
+- [x] **Step 1: 确认承诺范围无 ❌**
 
 Run: `go run ./cmd/rpc-matrix -verify -upstream /home/opensource/jiuwenswarm-develop`
 Expected: 退出码 0。说明：`-verify` 只看 `local` + `agent:ok`；下游缺口仍会打印在缺口清单里，不判失败。全部清零后再改用 `-verify-all`。
 
-- [ ] **Step 2: CI 转强制**
+- [x] **Step 2: CI 转强制**
 
 把 Task 2 里的步骤改为（保持上游不可达时跳过）：
 
@@ -1906,7 +1906,7 @@ Expected: 退出码 0。说明：`-verify` 只看 `local` + `agent:ok`；下游�
           fi
 ```
 
-- [ ] **Step 3: 计划登记**
+- [x] **Step 3: 计划登记**
 
 `IMPLEMENTATION_PLAN.md`：
 - 27-A 的 B0、B1 行 → ✅，写明"本层承诺 49/49 落地，下游缺口 59 条见 `docs/sync/web-rpc-downstream-gaps.md`"
@@ -1914,7 +1914,7 @@ Expected: 退出码 0。说明：`-verify` 只看 `local` + `agent:ok`；下游�
 - 新增偏差/回填行（按缺口清单分组）：`project.*` 20 → 27.x；`topic_starters.*`/`prompt_suggestion.*` 10 → recommendation；`session.get_metadata/pin/continue_queued` 3 → 27.6；`path.select_files/select_directory`/`media.*`/`document.*`/`file.upload_chunk` 7 → 27.8；`harness.import/export` 2 → AgentServer；`heartbeat.job.*` 10 → 24.x/11.11；`openai_account.*` 6 → 23.6；`task.asr.transcribe` 1 → 23.9
 - 24.13 行状态由 🔄 → ✅（代码已在 `36f85699` 落地，本步仅补记）
 
-- [ ] **Step 4: 全量验收**
+- [x] **Step 4: 全量验收**
 
 ```bash
 export GOPROXY=https://goproxy.cn,direct
@@ -1926,7 +1926,7 @@ go run ./cmd/integration-audit -verify
 ```
 Expected: 全部通过。
 
-- [ ] **Step 5: 提交并观察 CI**
+- [x] **Step 5: 提交并观察 CI**
 
 ```bash
 git add -A
@@ -1943,3 +1943,18 @@ Expected: Build / Lint / Unit Test / Integration Test 四 job SUCCESS。
 - **59 条下游缺口**：见 `docs/sync/web-rpc-downstream-gaps.md`（const-only 2 / agent:missing 40 / dep 17）。每组需在对应章节补 req method 常量 + AgentServer 分支 + 数据层，属 27.x / 23.x / 24.x 范围。
 - **入站主流程对齐**：24.13 剩余两步（`_resolve_external_channel_session`、非流式 team 拒绝）+ 审查 M-07 六步（`prepare_im_session_input`、`session_input` 校验归一、`session_busy`/`steer`、`godview` 注册）。改 `forward_loop.go`/`message_handler`，与 WebChannel RPC 表面无交集，须单独 spec。
 - **27-A B2~B8 整域模块**：HTTP 路由/鉴权、文件与目录面板、git diff watcher、分享导出、轨迹诊断、MCP/沙箱 OAuth（28-33 人日）。
+
+**实施记录（2026-11-05 完成，两处口径已按实际裁定调整）：**
+
+- **Step 1（承诺范围归零）**：实际口径改为 **「除 Task 8 的 10 个之外归零」**。矩阵现状 196 方法、漂移 0：
+  `local` 缺 10（全部是 Task 8 那批 `models.*`/`model_groups.*`/`vendors.*`/`session.selection.set`），
+  `agent:ok` 缺 5（AgentServer 侧补齐），其余 82 条为下游缺口清单。因此 `-verify` 仍会红在 Task 8 那 10 个上，
+  **本期不启用 `-verify` 门禁**。
+- **Step 2（CI 转强制）**：**不执行**。用户 2026-11-05 裁定删除 CI 的「校验 Web RPC 契约矩阵」步骤
+  （CI 克隆的上游 HEAD 已无 `gateway/`，只会拿降级矩阵误报过期），矩阵改为本地命令。
+- **Step 3（计划登记）**：`IMPLEMENTATION_PLAN.md` 27-A 的 B0/B1 已改 ✅，并补一段收口口径说明
+  （矩阵方法数、剩余缺口归属、`updater.*`/`external_cli.*` 回默认的登记位置）。B2-B11 未动。
+- **Step 4（全量验收）**：`go build`、`go test ./internal/swarm/...`、矩阵重算、`integration-audit -verify`
+  均已跑通；集成测试的 `TestEvolutionConsumptionE2E` 与 `TestCliRouteFullChainSuite` 两处红灯归属见
+  本文件开头的「CI 红灯归属」段（非本计划文件）。
+
