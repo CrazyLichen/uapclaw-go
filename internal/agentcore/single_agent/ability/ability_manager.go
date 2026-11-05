@@ -603,7 +603,7 @@ func (am *AbilityManager) runToolCallSafely(
 	}()
 
 	if cbc == nil {
-		r, err := am.executeSingleToolCall(ctx, toolCall, sess, tag)
+		r, err := am.executeSingleToolCall(ctx, cbc, toolCall, sess, tag)
 		if err != nil {
 			return errorToExecuteResult(err, toolCallIDOf(toolCall))
 		}
@@ -740,7 +740,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 		}
 
 		var err error
-		result, err = am.executeSingleToolCall(ctx, toolCall, sess, tag)
+		result, err = am.executeSingleToolCall(ctx, toolCtx, toolCall, sess, tag)
 
 		// 仅 err == nil 时回填结果到 inputs（D6）
 		// Python: L681-686：after 钩子触发时可通过 inputs 访问执行结果，也可改写
@@ -802,6 +802,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 // 转成 error 后走的是正常异常路径：ON_TOOL_EXCEPTION → AFTER_TOOL_CALL → tool_result。
 func (am *AbilityManager) executeSingleToolCall(
 	ctx context.Context,
+	cbc *interfaces.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
@@ -846,7 +847,7 @@ func (am *AbilityManager) executeSingleToolCall(
 
 	// 路由分发
 	if _, ok := am.tools[toolName]; ok {
-		return am.executeTool(ctx, toolCall, toolName, toolArgs, sess, tag)
+		return am.executeTool(ctx, cbc, toolCall, toolName, toolArgs, sess, tag)
 	}
 	if _, ok := am.workflows[toolName]; ok {
 		return am.executeWorkflow(ctx, toolCall, toolName, toolArgs, sess, tag)
@@ -873,6 +874,7 @@ func (am *AbilityManager) executeSingleToolCall(
 // executeTool 执行 Tool 类型能力。
 func (am *AbilityManager) executeTool(
 	ctx context.Context,
+	cbc *interfaces.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
@@ -917,7 +919,12 @@ func (am *AbilityManager) executeTool(
 	// （emit_before → TransformIO → STARTED → [执行] → FINISHED → TransformIO → emit_after）
 	// Python: _ToolMeta.__call__ 中的自动生命周期注入
 	lt := tool.NewLifecycleTool(t)
-	result, err := lt.Invoke(ctx, toolArgs, tool.WithToolSession(sess))
+	invokeOpts := []tool.ToolOption{tool.WithToolSession(sess)}
+	// 仅对显式声明需要回调上下文的工具注入（对齐 Python getattr 判断）
+	if acceptor, ok := t.(tool.CallbackContextAcceptor); ok && acceptor.AcceptsToolCallbackContext() {
+		invokeOpts = append(invokeOpts, tool.WithToolCallbackContext(cbc))
+	}
+	result, err := lt.Invoke(ctx, toolArgs, invokeOpts...)
 	if err != nil {
 		// 扩展：tool 本身返回 ToolInterruptException → 直接透传
 		var tie *agentschema.ToolInterruptException

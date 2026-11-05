@@ -715,7 +715,7 @@ func TestAbilityManager_ExecuteSingleToolCall_panic转error(t *testing.T) {
 	am := NewAbilityManager(frm)
 	am.Add(toolCard)
 
-	_, err := am.executeSingleToolCall(context.Background(),
+	_, err := am.executeSingleToolCall(context.Background(), nil,
 		llmschema.NewToolCall("call_boom", "boom_tool", `{}`), nil, "")
 
 	if err == nil {
@@ -737,7 +737,7 @@ func TestAbilityManager_ExecuteSingleToolCall_panicError原样上抛(t *testing.
 	am := NewAbilityManager(frm)
 	am.Add(toolCard)
 
-	_, err := am.executeSingleToolCall(context.Background(),
+	_, err := am.executeSingleToolCall(context.Background(), nil,
 		llmschema.NewToolCall("call_boom_err", "boom_err_tool", `{}`), nil, "")
 
 	if !errors.Is(err, boom) {
@@ -757,7 +757,7 @@ func TestAbilityManager_ExecuteSingleToolCall_中断panic保持中断语义(t *t
 	am := NewAbilityManager(frm)
 	am.Add(toolCard)
 
-	_, err := am.executeSingleToolCall(context.Background(),
+	_, err := am.executeSingleToolCall(context.Background(), nil,
 		llmschema.NewToolCall("call_boom_int", "boom_interrupt_tool", `{}`), nil, "")
 
 	var tie *agentschema.ToolInterruptException
