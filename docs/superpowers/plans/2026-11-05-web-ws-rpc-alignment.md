@@ -16,7 +16,7 @@
 
 **关于「不重抄函数体」:** 本计划不把上游函数体重抄一遍。每个 Task 给出 **上游文件:行号 + 函数名 + 完整注册代码 + 完整测试代码 + 至少一个完整 handler 模板**；其余函数体以该行号为准逐行移植。上游行号即权威实现，不是 TODO 占位。
 
-**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**；**Task 10（health_check ×2 + cron.job.meta + updater ×4）已完成**（updater 按裁定仅保留 handler 回默认）；**Task 11（4 个杂项本地方法）已完成**；**Task 12（external_cli 7 个）已完成**（安装器保留 handler 回默认），后续从 Task 13 开始。
+**进度：Task 1-7b 已完成并入库**（B0 工具 + 两份 sync 文档 + CI 校验；B1a 结构归位：删 frame DTO `b86278c9`、三文件合并 `6e624576`、注册表回挂 WebChannel + normalize 迁 gateway + 30 个 handler 改名 `0909d27a`；B1a 收口：59 个注册点全部转原生 `methodHandler` + 帧级错误 + 分发顺序对齐）。Task 8（config 代理族 10 个）经 2026-11-05 裁定**本期跳过**（原因与拆分方案见该节）；**Task 9（九个 IM 平台配置 18 个）已完成**；**Task 10（health_check ×2 + cron.job.meta + updater ×4）已完成**（updater 按裁定仅保留 handler 回默认）；**Task 11（4 个杂项本地方法）已完成**；**Task 12（external_cli 7 个）已完成**（安装器保留 handler 回默认）；**Task 13（path.select_file）+ Task 14（session 薄代理 2 个）已完成**，后续剩 Task 15 收尾。
 
 **CI 红灯归属（2026-11-05 记录）**：本计划的 B1b 各批自身门禁（Build/Lint/Unit/改动行覆盖）已通过；Integration 仍红在两处**非本计划文件**：
 
@@ -1729,12 +1729,12 @@ git add -A && git commit -m "feat(web): 补齐 external_cli 7 个方法"
 
 > `path.select_files` 与 `path.select_directory` 在上游是薄代理（`PATH_SELECT_*` → AgentServer），属下游缺口，**不在本期**。
 
-- [ ] **Step 1: 读上游**
+- [x] **Step %d: 读上游**
 
 Run: `sed -n '3948,4010p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
 要点：先校验 `initial_dir`/`initial_path` 为字符串（非法回 `BAD_REQUEST`），再走本地文件选择。
 
-- [ ] **Step 2: 写失败测试**
+- [x] **Step %d: 写失败测试**
 
 ```go
 // TestPathSelectFile_非法参数回BAD_REQUEST 验证参数校验分支。
@@ -1749,15 +1749,29 @@ func TestPathSelectFile_非法参数回BAD_REQUEST(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 实现 + 注册**
+- [x] **Step %d: 实现 + 注册**
 
-- [ ] **Step 4: 测试 + 矩阵 + 提交**
+- [x] **Step %d: 测试 + 矩阵 + 提交**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run TestPathSelectFile -v
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
 git add -A && git commit -m "feat(web): 补齐 path.select_file（本地选择分支）"
 ```
+
+---
+
+**实施记录（2026-11-05 完成）：**
+
+- 参数校验三条与上游一致：`initial_dir`/`initial_path`/`title` 非字符串 → `BAD_REQUEST`（各自专属文案）；
+  `params` 非对象按空对象处理（上游 `if not isinstance(params, dict): params = {}`）。
+- 起始目录：`initial_path` 优先取其父目录（`Path(initial_path).parent`），否则用 `initial_dir`（strip）。
+- 原生选择器：Python 走 `directory_picker.select_file_native`（tkinter/zenity）；Go 侧按平台尝试
+  **osascript（macOS）/ zenity → kdialog（Linux）**，都不可用 → `UNSUPPORTED`（与上游 headless 下
+  picker 抛异常同码），Windows 构建直接 `UNSUPPORTED`（无原生实现，已登记 spec §10）。
+- 取消（选择器无输出）→ `{path: null, cancelled: true}`；选中 → `{path: 绝对路径, cancelled: false}`。
+- 测试注入点：`selectFileNativeFn`（包级变量，生产值即 `selectFileNative`），避免测试依赖真实对话框。
+
 
 ---
 
@@ -1772,12 +1786,12 @@ git add -A && git commit -m "feat(web): 补齐 path.select_file（本地选择�
 | `session.rename` | `:5693` | `SESSION_RENAME` | `ReqMethodSessionRename` 已有分支 |
 | `session.plan_status` | `:5692` | `SESSION_PLAN_STATUS` | `ReqMethodSessionPlanStatus` 已有分支 |
 
-- [ ] **Step 1: 读上游**
+- [x] **Step 1: 读上游**
 
 Run: `sed -n '3060,3140p' /home/opensource/jiuwenswarm-develop/gateway/channel_manager/web/app_web_handlers.py`
 要点：两个都是 `proxy_unary_request(..., req_method=ReqMethod.SESSION_*)` 薄代理，携带 `session_id` 与 `params`。
 
-- [ ] **Step 2: 写失败测试**
+- [x] **Step 2: 写失败测试**
 
 ```go
 // TestSessionProxy_注册齐全 验证两个代理方法已注册。
@@ -1803,7 +1817,7 @@ func TestSessionProxy_无客户端时回SERVICE_UNAVAILABLE(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 实现薄代理**
+- [x] **Step 3: 实现薄代理**
 
 ```go
 // sessionProxyClient 会话类薄代理所需的单请求转发面。
@@ -1840,13 +1854,28 @@ func SessionProxy(wc *WebChannel, client sessionProxyClient, label, reqMethod st
 }
 ```
 
-- [ ] **Step 4: 测试 + 矩阵 + 提交**
+- [x] **Step 4: 测试 + 矩阵 + 提交**
 
 ```bash
 CGO_ENABLED=1 go test -tags "sqlite_fts5 test" ./internal/swarm/gateway/channel_manager/web/ -run TestSessionProxy -v
 go run ./cmd/rpc-matrix -upstream /home/opensource/jiuwenswarm-develop
 git add -A && git commit -m "feat(web): 补齐 session.rename/plan_status 两个薄代理方法"
 ```
+
+---
+
+**实施记录（2026-11-05 完成）：**
+
+- `session.rename` / `session.plan_status` 统一由 `sessionProxyForward(wc, agentClient, method)` 承担：
+  构造 E2A 信封（`request_id`=帧 ID、`channel_id`=`wc.ChannelID()`、`session_id`、`req_method`、`params`）
+  后 `ac.SendRequest`（对齐 `proxy_unary_request`，e2a_proxy.py:99-175）。
+- 客户端不可用（nil 或 `ServerReady()==false`）→ `SERVICE_UNAVAILABLE` + 上游原文
+  `"AgentServer is unavailable"`；转发异常 → `INTERNAL_ERROR`；失败回包的 `code` 缺失时用
+  `BAD_REQUEST`（上游 `default_error_code`）。
+- 测试：注册齐全 + 无客户端分支；E2A 成功/失败分支需真实 AgentServer 客户端（进程边界），
+  已在 `.coverage-exempt` 登记行级豁免（同 `permissions.*` E2A 分支口径）。
+- 矩阵：`local` 缺口 10 → 9，`agent:ok` 缺口 7 → 5（两个会话代理接上）。
+
 
 ---
 

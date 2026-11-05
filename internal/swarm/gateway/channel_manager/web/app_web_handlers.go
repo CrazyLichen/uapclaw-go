@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -155,6 +157,8 @@ const (
 	WsErrAgentUnavailable = "AGENT_UNAVAILABLE"
 	// wsErrFeishuNoTarget 飞书通道未配置推送目标（上游 error/code 同值）
 	wsErrFeishuNoTarget = "feishuNoTarget"
+	// WsErrUnsupported 能力不支持（如原生文件选择器不可用）
+	WsErrUnsupported = "UNSUPPORTED"
 )
 
 // logComponent 本文件日志组件
@@ -352,6 +356,15 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *WebChannel {
 	wc.registerMethod("commands.list", commandsList(wc), false)
 	wc.registerMethod("config.moa_status", configMoaStatus(wc), false)
 	wc.registerMethod("chat.swarmflow_reply", chatSwarmflowReply(wc), false)
+
+	// ─── session 薄代理（B1b-7） ───
+	// Python: app_web_handlers.py:5692-5693（两个都是 proxy_unary_request 薄代理）
+	wc.registerMethod("session.rename", sessionProxyForward(wc, agentClient, "session.rename"), false)
+	wc.registerMethod("session.plan_status", sessionProxyForward(wc, agentClient, "session.plan_status"), false)
+
+	// ─── 原生文件选择（B1b-6） ───
+	// Python: app_web_handlers.py:3948-3990（path.select_files/select_directory 是薄代理，不在本期）
+	wc.registerMethod("path.select_file", pathSelectFile(wc), false)
 
 	// ─── 钩子 ───
 	wc.registerMethod("hooks.list", stubHandler(wc, map[string]any{"hooks": []any{}}), false)
@@ -4173,4 +4186,187 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// ──────────────────────────── 原生文件选择（B1b-6） ────────────────────────────
+
+// pathSelectFile 弹出原生文件选择框，返回选中的文件路径。
+//
+// Python: _path_select_file (app_web_handlers.py:3948-3990)：
+// 参数类型校验（initial_dir / initial_path / title 必须为字符串）→ 解析起始目录 →
+// select_file_native 打开原生对话框；选择器不可用回 UNSUPPORTED；取消回
+// {path: null, cancelled: true}；选中回 {path: 绝对路径, cancelled: false}。
+func pathSelectFile(wc *WebChannel) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, _ string) {
+		if params == nil {
+			params = map[string]any{}
+		}
+		if v, has := params["initial_dir"]; has && v != nil {
+			if _, ok := v.(string); !ok {
+				wc.sendResponse(ws, reqID, false, nil, "initial_dir must be string", WsErrBadRequest)
+				return
+			}
+		}
+		if v, has := params["initial_path"]; has && v != nil {
+			if _, ok := v.(string); !ok {
+				wc.sendResponse(ws, reqID, false, nil, "initial_path must be string", WsErrBadRequest)
+				return
+			}
+		}
+		if v, has := params["title"]; has && v != nil {
+			if _, ok := v.(string); !ok {
+				wc.sendResponse(ws, reqID, false, nil, "title must be string", WsErrBadRequest)
+				return
+			}
+		}
+
+		resolvedDir := ""
+		if v, ok := params["initial_dir"].(string); ok {
+			resolvedDir = strings.TrimSpace(v)
+		}
+		// initial_path 优先：用其父目录作为起始目录（对齐上游 Path(initial_path).parent）
+		if v, ok := params["initial_path"].(string); ok && strings.TrimSpace(v) != "" {
+			resolvedDir = filepath.Dir(pathutil.ExpandHome(strings.TrimSpace(v)))
+		}
+		title, _ := params["title"].(string)
+
+		selected, err := selectFileNativeFn(resolvedDir, strings.TrimSpace(title))
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("[path.select_file] picker unavailable")
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrUnsupported)
+			return
+		}
+		if selected == "" {
+			wc.sendResponse(ws, reqID, true, map[string]any{"path": nil, "cancelled": true}, "", "")
+			return
+		}
+		wc.sendResponse(ws, reqID, true, map[string]any{"path": selected, "cancelled": false}, "", "")
+	}
+}
+
+// selectFileNativeFn 原生选择器入口（变量形式便于测试注入；生产值为 selectFileNative）。
+var selectFileNativeFn = selectFileNative
+
+// selectFileNative 调用平台原生文件选择器，返回选中路径（空串=用户取消）。
+//
+// Python: directory_picker.select_file_native（tkinter/zenity 等）。
+// Go 侧按平台可用的对话框程序依次尝试：zenity → kdialog（Linux）；osascript（macOS）。
+// 都不可用时返回错误，调用方回 UNSUPPORTED（与上游 headless 下 picker 抛异常一致）。
+func selectFileNative(initialDir, title string) (string, error) {
+	if title == "" {
+		title = "选择文件"
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		script := `POSIX path of (choose file with prompt "` + escapeAppleScript(title) + `")`
+		return runPickerCommand("osascript", "-e", script)
+	case "windows":
+		return "", fmt.Errorf("native file picker is not available on windows builds")
+	default:
+		for _, candidate := range [][]string{
+			{"zenity", "--file-selection", "--title", title, "--filename", pickerInitialPath(initialDir)},
+			{"kdialog", "--getopenfilename", pickerInitialPath(initialDir), title},
+		} {
+			out, err := runPickerCommand(candidate[0], candidate[1:]...)
+			if err == nil {
+				return out, nil
+			}
+			if !isCommandMissing(err) {
+				return "", err
+			}
+		}
+		return "", fmt.Errorf("native file picker is not available (zenity/kdialog not found)")
+	}
+}
+
+// pickerInitialPath 把起始目录转成对话框可用的初始路径（空则留空由对话框决定）。
+func pickerInitialPath(initialDir string) string {
+	if initialDir == "" {
+		return ""
+	}
+	return initialDir
+}
+
+// runPickerCommand 执行对话框命令并返回去空白后的输出（用户取消 → 空串 + nil）。
+func runPickerCommand(name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	out, err := cmd.Output()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		// 用户取消在多数对话框里是非 0 退出且无输出，按取消处理
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && text == "" {
+			return "", nil
+		}
+		return "", err
+	}
+	return text, nil
+}
+
+// isCommandMissing 判断错误是否为"命令不存在"（用于回退到下一个对话框程序）。
+func isCommandMissing(err error) bool {
+	return errors.Is(err, exec.ErrNotFound) || errors.Is(err, fs.ErrNotExist)
+}
+
+// escapeAppleScript 转义 AppleScript 字符串里的双引号与反斜杠。
+func escapeAppleScript(text string) string {
+	text = strings.ReplaceAll(text, `\`, `\\`)
+	return strings.ReplaceAll(text, `"`, `\"`)
+}
+
+// ──────────────────────────── session 薄代理（B1b-7） ────────────────────────────
+
+// sessionProxyForward 把会话类请求经 E2A 原样转发给 AgentServer。
+//
+// Python: _session_rename / _session_plan_status (app_web_handlers.py:5692-5693) →
+// proxy_unary_request (gateway/routing/e2a_proxy.py:99-175)：
+// 客户端不可达 → SERVICE_UNAVAILABLE「AgentServer is unavailable」；失败回包的 code 缺省
+// 用 BAD_REQUEST（default_error_code）。
+func sessionProxyForward(wc *WebChannel, ac *routing.AgentClient, method string) methodHandler {
+	return func(ws wsSender, reqID string, params map[string]any, sessionID string) {
+		if ac == nil || !ac.ServerReady() {
+			logger.Warn(logComponent).
+				Str("method", method).
+				Str("req_id", reqID).
+				Msg("AgentServer is unavailable")
+			wc.sendResponse(ws, reqID, false, nil, "AgentServer is unavailable", WsErrServiceUnavailable)
+			return
+		}
+
+		env := e2a.E2AFromAgentFields(reqID,
+			e2a.WithFieldChannelID(wc.ChannelID()),
+			e2a.WithFieldSessionID(sessionID),
+			e2a.WithFieldReqMethod(method),
+			e2a.WithFieldParams(params),
+		)
+		resp, err := ac.SendRequest(context.Background(), env)
+		if err != nil {
+			logger.Error(logComponent).
+				Err(err).
+				Str("method", method).
+				Msg("session proxy forwarding to AgentServer failed")
+			wc.sendResponse(ws, reqID, false, nil, err.Error(), WsErrInternalError)
+			return
+		}
+		if resp == nil {
+			wc.sendResponse(ws, reqID, false, nil, "AgentServer returned empty response", WsErrInternalError)
+			return
+		}
+		if resp.OK {
+			wc.sendResponse(ws, reqID, true, resp.Payload, "", "")
+			return
+		}
+		errMsg := "request failed"
+		if e, ok := resp.Payload["error"].(string); ok && e != "" {
+			errMsg = e
+		}
+		code := WsErrBadRequest
+		if c, ok := resp.Payload["code"].(string); ok && c != "" {
+			code = c
+		}
+		wc.sendResponse(ws, reqID, false, nil, errMsg, code)
+	}
 }

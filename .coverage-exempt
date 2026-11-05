@@ -339,3 +339,13 @@ internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4055-L4057
 internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4104-L4106
 internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4148-L4150
 internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4153-L4155
+
+# ── 2026-11-05 27-A B1b-6/B1b-7 path.select_file + session 薄代理 ──
+# app_web_handlers.go L4255-L4278 — selectFileNative 的平台分支：darwin 走 osascript、
+# windows 直接不支持、linux 依次拉起 zenity/kdialog。三者都是「依赖外部运行环境」：
+# CI 无 GUI（zenity 会因无 DISPLAY 失败）、本地是否安装对话框不确定，测试无法稳定断言
+# 选中/取消；选择器之后的响应分支（取消 / 选中 / 不可用）已由注入桩全覆盖。
+# L4339-L4370 — sessionProxyForward 的 E2A 转发体：需真实 AgentServer 客户端与进程间
+# 往返（同 permissions.* E2A 分支口径）。
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4255-L4278
+internal/swarm/gateway/channel_manager/web/app_web_handlers.go#L4339-L4370
