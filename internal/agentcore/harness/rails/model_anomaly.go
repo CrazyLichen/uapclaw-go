@@ -2,10 +2,14 @@ package rails
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -542,4 +546,256 @@ func (r *ModelAnomalyDetectionRail) validate() error {
 		r.toolLoopCompact.BailoutThreshold = 0
 	}
 	return nil
+}
+
+// classifyTransientFailure 判定一次 provider 失败是否值得整调用重试。
+//
+// 优先级：client 自带的 details.should_retry > 不可重试文本 > x-should-retry:false
+// > Retry-After 超上限 > x-should-retry:true > 无状态码即重试 > 408/409/429/5xx > 其余不重试。
+// Python: _classify_transient_failure (L195-242)
+func classifyTransientFailure(err error) transientDecision {
+	if err == nil {
+		return transientDecision{}
+	}
+	chain := exceptionChain(err)
+	if decision, ok := clientRetryDecision(chain); ok {
+		return decision
+	}
+
+	var message strings.Builder
+	for _, item := range chain {
+		message.WriteString(item.Error())
+		message.WriteByte(' ')
+	}
+	lowered := strings.ToLower(message.String())
+	for _, marker := range nonRetryableTextMarkers {
+		if strings.Contains(lowered, marker) {
+			return transientDecision{}
+		}
+	}
+
+	shouldRetry := ""
+	var statusCode *int
+	var retryAfter *float64
+	for _, item := range chain {
+		headers := headersOf(item)
+		if shouldRetry == "" {
+			shouldRetry = strings.ToLower(headerValue(headers, "x-should-retry"))
+		}
+		if retryAfter == nil {
+			retryAfter = parseRetryAfterSeconds(headers)
+		}
+		if statusCode == nil {
+			statusCode = statusCodeOf(item)
+		}
+	}
+
+	if shouldRetry == "false" {
+		return transientDecision{statusCode: statusCode}
+	}
+	if retryAfter != nil && *retryAfter > maxRetryAfterSeconds {
+		return transientDecision{statusCode: statusCode, retryAfterSeconds: retryAfter}
+	}
+
+	retryable := false
+	switch {
+	case shouldRetry == "true":
+		retryable = true
+	case statusCode == nil:
+		retryable = true
+	case retryableStatusCodes[*statusCode] || *statusCode >= 500:
+		retryable = true
+	}
+	return transientDecision{retryable: retryable, statusCode: statusCode, retryAfterSeconds: retryAfter}
+}
+
+// clientRetryDecision 采纳模型客户端自己写入的 details.should_retry。
+//
+// Python: _client_retry_decision (L168-192)
+func clientRetryDecision(chain []error) (transientDecision, bool) {
+	for _, item := range chain {
+		details := errorDetails(item)
+		if details == nil {
+			continue
+		}
+		shouldRetry, ok := details["should_retry"].(bool)
+		if !ok {
+			continue
+		}
+		decision := transientDecision{retryable: shouldRetry, statusCode: coerceStatusCode(details["status_code"])}
+		if raw, exists := details["retry_after_seconds"]; exists && raw != nil {
+			if seconds, ok := toFloat(raw); ok && seconds >= 0 {
+				decision.retryAfterSeconds = &seconds
+			}
+		}
+		return decision, true
+	}
+	return transientDecision{}, false
+}
+
+// exceptionChain 沿 Unwrap 展开异常链（最多 16 层，防环）。
+//
+// Python: _exception_chain (L63-77)；Go 的 Unwrap 覆盖 BaseError.Cause
+func exceptionChain(err error) []error {
+	var chain []error
+	for current := err; current != nil && len(chain) < 16; current = errors.Unwrap(current) {
+		chain = append(chain, current)
+	}
+	return chain
+}
+
+// errorDetails 取 BaseError.Details() 的 map 形态。
+func errorDetails(err error) map[string]any {
+	var baseErr *exception.BaseError
+	if !errors.As(err, &baseErr) {
+		return nil
+	}
+	details, _ := baseErr.Details().(map[string]any)
+	return details
+}
+
+// headersOf 汇总错误里携带的重试相关头部（键用标准 HTTP 头名）。
+//
+// Python 走异常对象的 headers/response.headers；Go 的客户端把头部扁平进 params，
+// 故此处只认三个键（见 openai.HandleHTTPError 的 httpErrorParams）。
+func headersOf(err error) map[string]string {
+	var baseErr *exception.BaseError
+	if !errors.As(err, &baseErr) {
+		return nil
+	}
+	params := baseErr.Params()
+	if params == nil {
+		return nil
+	}
+	headers := make(map[string]string, 3)
+	pairs := []struct {
+		param  string
+		header string
+	}{
+		{"retry_after", "retry-after"},
+		{"retry_after_ms", "retry-after-ms"},
+		{"x_should_retry", "x-should-retry"},
+	}
+	for _, pair := range pairs {
+		if value, ok := params[pair.param].(string); ok && value != "" {
+			headers[pair.header] = value
+		}
+	}
+	return headers
+}
+
+// statusCodeOf 从 params/details 中提取 HTTP 状态码。
+//
+// Python: _status_code_of (L127-138)；Go 的状态码落在 params["http_status"]（客户端写入）
+// 或 details["status_code"/"provider_code"]（provider 错误响应）。
+func statusCodeOf(err error) *int {
+	if details := errorDetails(err); details != nil {
+		for _, key := range []string{"status_code", "provider_code"} {
+			if code := coerceStatusCode(details[key]); code != nil {
+				return code
+			}
+		}
+	}
+	var baseErr *exception.BaseError
+	if !errors.As(err, &baseErr) {
+		return nil
+	}
+	params := baseErr.Params()
+	for _, key := range []string{"http_status", "status_code", "provider_code"} {
+		if code := coerceStatusCode(params[key]); code != nil {
+			return code
+		}
+	}
+	return nil
+}
+
+// headerValue 大小写不敏感地取头部值。
+//
+// Python: _header_value (L91-114)
+func headerValue(headers map[string]string, name string) string {
+	if len(headers) == 0 {
+		return ""
+	}
+	wanted := strings.ToLower(name)
+	if value, ok := headers[wanted]; ok {
+		return strings.TrimSpace(value)
+	}
+	for key, value := range headers {
+		if strings.ToLower(key) == wanted {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+// parseRetryAfterSeconds 解析 Retry-After（毫秒优先，其次秒，再次 HTTP-date）。
+//
+// Python: _parse_retry_after_seconds (L141-165)
+func parseRetryAfterSeconds(headers map[string]string) *float64 {
+	if raw := headerValue(headers, "retry-after-ms"); raw != "" {
+		if milliseconds, err := strconv.ParseFloat(raw, 64); err == nil {
+			seconds := milliseconds / 1000
+			if seconds < 0 {
+				seconds = 0
+			}
+			return &seconds
+		}
+	}
+	raw := headerValue(headers, "retry-after")
+	if raw == "" {
+		return nil
+	}
+	if seconds, err := strconv.ParseFloat(raw, 64); err == nil {
+		if seconds < 0 {
+			seconds = 0
+		}
+		return &seconds
+	}
+	parsed, err := http.ParseTime(raw)
+	if err != nil {
+		return nil
+	}
+	delay := time.Until(parsed).Seconds()
+	if delay < 0 {
+		delay = 0
+	}
+	return &delay
+}
+
+// coerceStatusCode 把任意标量转成正整数状态码。
+//
+// Python: _coerce_status_code (L80-88)：bool 与 None 一律视为无状态码。
+func coerceStatusCode(value any) *int {
+	if _, isBool := value.(bool); isBool {
+		return nil
+	}
+	seconds, ok := toFloat(value)
+	if !ok {
+		return nil
+	}
+	code := int(seconds)
+	if code <= 0 {
+		return nil
+	}
+	return &code
+}
+
+// toFloat 兼容 int/int64/float64/数字字符串四种形态。
+func toFloat(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case float64:
+		return typed, true
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
 }

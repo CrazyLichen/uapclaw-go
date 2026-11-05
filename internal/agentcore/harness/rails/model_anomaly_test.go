@@ -2,12 +2,16 @@ package rails
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -199,5 +203,98 @@ func TestInspectStreamChunk_尾窗滚动仍能检出(t *testing.T) {
 	}
 	if err == nil {
 		t.Fatal("滚动窗口内仍应检出")
+	}
+}
+
+// ──────────────────────────── 瞬时失败分类测试 ────────────────────────────
+
+// httpErr 构造带状态码与头部的 provider 错误。
+func httpErr(status int, headers map[string]any, msg string) error {
+	params := map[string]any{"http_status": status}
+	for key, value := range headers {
+		params[key] = value
+	}
+	return exception.BuildError(exception.StatusModelCallFailed,
+		exception.WithMsg(msg), exception.WithParams(params))
+}
+
+// TestClassifyTransientFailure 覆盖上游分类矩阵（L195-242）。
+func TestClassifyTransientFailure(t *testing.T) {
+	cases := []struct {
+		name           string
+		err            error
+		wantRetry      bool
+		wantStatus     int
+		wantRetryAfter float64
+	}{
+		{"429 可重试", httpErr(429, nil, "too many requests"), true, 429, 0},
+		{"408 可重试", httpErr(408, nil, "timeout"), true, 408, 0},
+		{"409 可重试", httpErr(409, nil, "conflict"), true, 409, 0},
+		{"500 可重试", httpErr(500, nil, "boom"), true, 500, 0},
+		{"503 可重试", httpErr(503, nil, "unavailable"), true, 503, 0},
+		{"400 不重试", httpErr(400, nil, "bad request"), false, 400, 0},
+		{"401 不重试", httpErr(401, nil, "unauthorized"), false, 401, 0},
+		{"无状态码（连接断）可重试", errors.New("connection reset by peer"), true, 0, 0},
+		{"配额文本不重试", errors.New("Error: insufficient_quota"), false, 0, 0},
+		{"上下文过长不重试", errors.New("maximum context length exceeded"), false, 0, 0},
+		{"x-should-retry false 挡住 429", httpErr(429, map[string]any{"x_should_retry": "false"}, "429"), false, 429, 0},
+		{"x-should-retry true 放行 400", httpErr(400, map[string]any{"x_should_retry": "true"}, "400"), true, 400, 0},
+		{"retry-after 数字", httpErr(429, map[string]any{"retry_after": "3"}, "429"), true, 429, 3},
+		{"retry-after-ms", httpErr(429, map[string]any{"retry_after_ms": "1500"}, "429"), true, 429, 1.5},
+		{"retry-after 超上限不重试", httpErr(429, map[string]any{"retry_after": "120"}, "429"), false, 429, 120},
+	}
+	for _, c := range cases {
+		decision := classifyTransientFailure(c.err)
+		if decision.retryable != c.wantRetry {
+			t.Errorf("%s: retryable 期望 %v，实际 %v", c.name, c.wantRetry, decision.retryable)
+		}
+		if c.wantStatus != 0 && (decision.statusCode == nil || *decision.statusCode != c.wantStatus) {
+			t.Errorf("%s: status 期望 %d，实际 %v", c.name, c.wantStatus, decision.statusCode)
+		}
+		if c.wantRetryAfter != 0 {
+			if decision.retryAfterSeconds == nil || *decision.retryAfterSeconds != c.wantRetryAfter {
+				t.Errorf("%s: retryAfter 期望 %v，实际 %v", c.name, c.wantRetryAfter, decision.retryAfterSeconds)
+			}
+		}
+	}
+}
+
+// TestClassifyTransientFailure_客户端决策优先 details.should_retry 覆盖文本与状态码判定。
+func TestClassifyTransientFailure_客户端决策优先(t *testing.T) {
+	disabled := exception.BuildError(exception.StatusModelCallFailed,
+		exception.WithMsg("connection reset"),
+		exception.WithDetails(map[string]any{"should_retry": false}))
+	if decision := classifyTransientFailure(disabled); decision.retryable {
+		t.Fatal("details.should_retry=false 应优先")
+	}
+
+	enabled := exception.BuildError(exception.StatusModelCallFailed,
+		exception.WithMsg("boom"),
+		exception.WithDetails(map[string]any{"should_retry": true, "retry_after_seconds": 1.5}))
+	decision := classifyTransientFailure(enabled)
+	if !decision.retryable || decision.retryAfterSeconds == nil || *decision.retryAfterSeconds != 1.5 {
+		t.Fatalf("details.should_retry=true 应被采纳，实际 %+v", decision)
+	}
+}
+
+// TestParseRetryAfterSeconds_HTTP日期 HTTP-date 形态换算为剩余秒数。
+func TestParseRetryAfterSeconds_HTTP日期(t *testing.T) {
+	when := time.Now().Add(5 * time.Second).UTC().Format(http.TimeFormat)
+	got := parseRetryAfterSeconds(map[string]string{"retry-after": when})
+	if got == nil || *got < 3 || *got > 6 {
+		t.Fatalf("HTTP-date 应解析为约 5s，实际 %v", got)
+	}
+}
+
+// TestExceptionChain_沿Cause展开 BaseError.Cause 必须被 Unwrap 展开。
+func TestExceptionChain_沿Cause展开(t *testing.T) {
+	inner := errors.New("inner")
+	middle := exception.BuildError(exception.StatusModelCallFailed,
+		exception.WithMsg("mid"), exception.WithCause(inner))
+	outer := exception.BuildError(exception.StatusModelCallFailed,
+		exception.WithMsg("outer"), exception.WithCause(middle))
+	chain := exceptionChain(outer)
+	if len(chain) != 3 {
+		t.Fatalf("异常链应为 3 层，实际 %d", len(chain))
 	}
 }
